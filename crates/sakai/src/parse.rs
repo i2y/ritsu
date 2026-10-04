@@ -110,14 +110,14 @@ impl Sec {
 
 fn map_order() -> Text {
     tr!(
-        "map のファイルは、見出し、`description`、`use context`、`covers`、`except`、`proto root`、`code` の順に書きます。",
+        "map のファイルは、見出し、`description`、`use context`、`covers`、`except`、`proto root`、`code` の順に書いてください。",
         "A map file goes: the heading, `description`, `use context`, `covers`, `except`, `proto root`, `code`."
     )
 }
 
 fn context_order() -> Text {
     tr!(
-        "context のファイルは、見出し、`description`、`owner`、`also`、`owns`、`published language`、`terms`、関係（`upstream`、`downstream`、`shared kernel with`、`partnership with`、`separate ways from`）の順に書きます。",
+        "context のファイルは、見出し、`description`、`owner`、`also`、`owns`、`published language`、`terms`、関係（`upstream`、`downstream`、`shared kernel with`、`partnership with`、`separate ways from`）の順に書いてください。",
         "A context file goes: the heading, `description`, `owner`, `also`, `owns`, `published language`, `terms`, then the relationships (`upstream`, `downstream`, `shared kernel with`, `partnership with`, `separate ways from`)."
     )
 }
@@ -156,7 +156,7 @@ impl<'a> P<'a> {
             let l = self.line(c);
             let w = l.rest_from(l.tokens[0].col).trim().to_string();
             self.push("E002", l, l.tokens[0].col, tr!("ここに `{w}` は書けません", "`{w}` does not belong here"));
-            self.note(tr!("`{what}` の行の下には、何も書きません。", "Nothing goes under a `{what}` line."));
+            self.note(tr!("`{what}` の行の下には、何も書けません。", "Nothing goes under a `{what}` line."));
         }
     }
 
@@ -171,7 +171,7 @@ impl<'a> P<'a> {
         if name.is_empty() || bad.is_some() {
             let c = bad.map(|(_, c)| c.to_string()).unwrap_or_default();
             self.push("E001", l, col, tr!("名前「{name}」に使えない文字 `{c}` があります", "The name `{name}` has `{c}`, which a name cannot have"));
-            self.note(tr!("名前は文字、数字、`_` で書き、数字では始めません。", "A name is letters, digits and `_`, and does not start with a digit."));
+            self.note(tr!("名前は文字、数字、`_` で書き、数字では始められません。", "A name is letters, digits and `_`, and does not start with a digit."));
             return false;
         }
         true
@@ -186,7 +186,7 @@ impl<'a> P<'a> {
             _ => {
                 self.push("E003", l, l.tokens[0].col, tr!("ファイルが `map` か `context` の行で始まっていません", "The file does not start with a `map` or a `context` line"));
                 self.note(tr!(
-                    "コンテキストマップなら `map 通販(shop) v1`、一つのコンテキストなら `context 在庫(inventory) v1` のように書き始めます。",
+                    "コンテキストマップなら `map 通販(shop) v1`、一つのコンテキストなら `context 在庫(inventory) v1` のように書き始めてください。",
                     "Start a context map like `map 通販(shop) v1`, and one context like `context 在庫(inventory) v1`."
                 ));
                 None
@@ -199,11 +199,11 @@ impl<'a> P<'a> {
         let kw0 = l.tokens[0].word().unwrap_or_default().to_string();
         let Some(t1) = l.tokens.get(1) else {
             self.push("E002", l, l.tokens[0].end, tr!("見出しに名前がありません", "The heading has no name"));
-            self.note(tr!("`{kw0} 名前(<別名>) v1` と書きます。", "Write `{kw0} name(<alias>) v1`."));
+            self.note(tr!("`{kw0} 名前(<別名>) v1` と書いてください。", "Write `{kw0} name(<alias>) v1`."));
             return None;
         };
         let Some(w) = t1.word() else {
-            self.push("E002", l, t1.col, tr!("見出しの名前は引用符なしで書きます", "The name of the heading is written without quotes"));
+            self.push("E002", l, t1.col, tr!("見出しの名前は、引用符なしで書いてください", "The name of the heading is written without quotes"));
             return None;
         };
         let (name, alias) = match w.find('(') {
@@ -224,14 +224,14 @@ impl<'a> P<'a> {
         match &alias {
             None => {
                 if let Some(t2) = l.tokens.get(2).filter(|t| t.word().is_some_and(|w| w.starts_with('('))) {
-                    self.push("E008", l, t2.col, tr!("別名は、名前のすぐあとに空白を入れずに書きます", "The alias goes right after the name, with no space"));
-                    self.note(tr!("`{name}(<別名>)` のように書きます。", "Write `{name}(<alias>)`."));
+                    self.push("E008", l, t2.col, tr!("別名は、名前のすぐあとに空白を入れずに書いてください", "The alias goes right after the name, with no space"));
+                    self.note(tr!("`{name}(<別名>)` のように書いてください。", "Write `{name}(<alias>)`."));
                     return None;
                 }
                 let what = if kw0 == kw::MAP { tr!("地図", "the map") } else { tr!("コンテキスト", "the context") };
                 self.push("E008", l, t1.col, tr!("{}「{name}」に ASCII の別名がありません", "{} {name} has no ASCII alias", what.ja; what.en));
                 self.note(tr!(
-                    "`{name}(<別名>)` のように、名前のすぐあとに丸括弧で書きます。別名は `[A-Za-z_][A-Za-z0-9_]*` の形で、Context Mapper の CML の名前と、import の検査の設定の名前になります。",
+                    "`{name}(<別名>)` のように、名前のすぐあとに丸括弧で書いてください。別名は `[A-Za-z_][A-Za-z0-9_]*` の形で、Context Mapper の CML の名前と、import の検査の設定の名前になります。",
                     "Write it in parentheses right after the name: `{name}(<alias>)`. An alias is of the form `[A-Za-z_][A-Za-z0-9_]*`, and names it in Context Mapper's CML and in the settings of the import linters."
                 ));
                 return None;
@@ -250,7 +250,7 @@ impl<'a> P<'a> {
             }
             _ => {
                 let col = l.tokens.get(next).map(|t| t.col).unwrap_or(t1.end);
-                self.push("E002", l, col, tr!("見出しの終わりに、`v1` のようにバージョンを書きます", "The heading ends with its version, like `v1`"));
+                self.push("E002", l, col, tr!("見出しの終わりに、`v1` のようにバージョンを書いてください", "The heading ends with its version, like `v1`"));
                 return None;
             }
         };
@@ -320,7 +320,7 @@ impl<'a> P<'a> {
         if t.is(kw::MAP) || t.is(kw::CONTEXT) {
             self.push("E004", l, t.col, tr!("見出しが二度あります", "There is a second heading"));
             self.note(tr!(
-                "一つのファイルには、地図か一つのコンテキストのどちらかだけを書きます。",
+                "一つのファイルには、地図か一つのコンテキストのどちらかだけを書いてください。",
                 "A file holds one map or one context, nothing more."
             ));
             return;
@@ -379,11 +379,11 @@ impl<'a> P<'a> {
         if self.diags.len() == before {
             if m.uses.is_empty() {
                 self.push("E004", hl, 1, tr!("`use context` がありません", "There is no `use context`"));
-                self.note(tr!("地図は、コンテキストのファイルを `use context \"<パス>\"` で一つ以上読みます。", "A map reads one or more context files with `use context \"<path>\"`."));
+                self.note(tr!("地図では、コンテキストのファイルを `use context \"<パス>\"` で一つ以上読んでください。", "A map reads one or more context files with `use context \"<path>\"`."));
             }
             if !seen.contains(&Sec::Covers) {
                 self.push("E004", hl, 1, tr!("`covers` がありません", "There is no `covers`"));
-                self.note(tr!("地図が覆う範囲を `covers \".\"` のように書きます。", "Write what the map covers, like `covers \".\"`."));
+                self.note(tr!("地図が覆う範囲を、`covers \".\"` のように書いてください。", "Write what the map covers, like `covers \".\"`."));
             }
         }
         Some(m)
@@ -397,7 +397,7 @@ impl<'a> P<'a> {
             }
             other => {
                 let col = other.map(|t| t.col).unwrap_or_else(|| l.tokens.last().map(|t| t.end).unwrap_or(1));
-                self.push("E002", l, col, tr!("ここには `\"…\"` を一つ書きます", "One `\"…\"` goes here"));
+                self.push("E002", l, col, tr!("ここには `\"…\"` を一つ書いてください", "One `\"…\"` goes here"));
                 None
             }
         }
@@ -412,7 +412,7 @@ impl<'a> P<'a> {
                 Some(Token { tok: Tok::Str(s), col, .. }) => out.push(Str { value: s.clone(), pos: Pos { line: l.no, col: *col } }),
                 other => {
                     let col = other.map(|t| t.col).unwrap_or_else(|| l.tokens.last().map(|t| t.end).unwrap_or(1));
-                    self.push("E002", l, col, tr!("ここにはパスを `\"…\"` で書きます", "A path in `\"…\"` goes here"));
+                    self.push("E002", l, col, tr!("ここにはパスを `\"…\"` で書いてください", "A path in `\"…\"` goes here"));
                     return None;
                 }
             }
@@ -455,7 +455,7 @@ impl<'a> P<'a> {
                             None => {
                                 self.push("E002", l, col, tr!("ここに `{w}` は書けません", "`{w}` does not belong here"));
                                 self.note(tr!(
-                                    "`dir \"<パス>\"` か、`rulec \"<パス>\"` のようにツールの語とパスを書きます。",
+                                    "`dir \"<パス>\"` か、`rulec \"<パス>\"` のようにツールの語とパスを書いてください。",
                                     "Write `dir \"<path>\"`, or a tool and a path, like `rulec \"<path>\"`."
                                 ));
                                 return None;
@@ -467,14 +467,14 @@ impl<'a> P<'a> {
                 }
                 Some(Tok::Str(s)) => {
                     let Some(tl) = tool else {
-                        self.push("E002", l, t.unwrap().col, tr!("パスの前に `dir` かツールの語を書きます", "A path comes after `dir` or a tool"));
+                        self.push("E002", l, t.unwrap().col, tr!("パスの前に、`dir` かツールの語を書いてください", "A path comes after `dir` or a tool"));
                         return None;
                     };
                     out.push(Item { tool: tl, path: Str { value: s.clone(), pos: Pos { line: l.no, col: t.unwrap().col } } });
                 }
                 _ => {
                     let col = t.map(|t| t.col).unwrap_or_else(|| l.tokens.last().map(|t| t.end).unwrap_or(1));
-                    self.push("E002", l, col, tr!("ここにはパスを `\"…\"` で書きます", "A path in `\"…\"` goes here"));
+                    self.push("E002", l, col, tr!("ここにはパスを `\"…\"` で書いてください", "A path in `\"…\"` goes here"));
                     return None;
                 }
             }
@@ -485,7 +485,7 @@ impl<'a> P<'a> {
                     let col = t.col;
                     self.push("E002", l, col, tr!("ここに書けるのはファイルとディレクトリだけで、要素は書けません", "Only files and directories go here, not the things in them"));
                     self.note(tr!(
-                        "コンテキストに属するのはファイルの単位です。項は `,` で区切ります。",
+                        "コンテキストに属するのはファイルの単位です。項は `,` で区切ってください。",
                         "A context owns whole files. Separate the entries with `,`."
                     ));
                     return None;
@@ -501,7 +501,7 @@ impl<'a> P<'a> {
             other => {
                 let col = l.tokens.get(1).map(|t| t.col).unwrap_or(l.tokens[0].end);
                 let w = other.unwrap_or("").to_string();
-                self.push("E002", l, col, tr!("`code` のあとの言語 `{w}` は知りません", "`{w}` after `code` is not a language sakai knows"));
+                self.push("E002", l, col, tr!("`code` のあとに言語 `{w}` は書けません", "`{w}` after `code` is not a language sakai knows"));
                 self.note(tr!("書けるのは python、typescript、java、go、rust です。", "The languages are python, typescript, java, go and rust."));
                 return None;
             }
@@ -561,7 +561,7 @@ impl<'a> P<'a> {
                     self.end(l, 1);
                     if n.children.is_empty() {
                         self.push("E004", l, l.tokens[0].col, tr!("`owns` の下に何もありません", "There is nothing under `owns`"));
-                        self.note(tr!("コンテキストに属するディレクトリとファイルを、`dir \"<パス>\"` のように字下げして並べます。", "List the directories and files the context owns, indented, like `dir \"<path>\"`."));
+                        self.note(tr!("コンテキストに属するディレクトリとファイルを、`dir \"<パス>\"` のように字下げして並べてください。", "List the directories and files the context owns, indented, like `dir \"<path>\"`."));
                     }
                     for ch in &n.children {
                         let cl = self.line(ch);
@@ -596,7 +596,7 @@ impl<'a> P<'a> {
             let hl = &self.lines[nodes[0].line];
             self.push("E004", hl, 1, tr!("`owns` がありません", "There is no `owns`"));
             self.note(tr!(
-                "コンテキストは、属するディレクトリとファイルを `owns` に並べます。成果物は、どれもちょうど一つのコンテキストに属します。",
+                "コンテキストに属するディレクトリとファイルを、`owns` に並べてください。成果物は、どれもちょうど一つのコンテキストに属します。",
                 "A context lists the directories and files it owns under `owns`; every artifact belongs to exactly one context."
             ));
         }
@@ -606,14 +606,14 @@ impl<'a> P<'a> {
     fn published(&mut self, n: &Node) -> Option<Published> {
         let l = self.line(n);
         let Some(t) = l.tokens.get(2) else {
-            self.push("E002", l, l.tokens[1].end, tr!("`published language` のあとに package を書きます", "`published language` is followed by its package"));
+            self.push("E002", l, l.tokens[1].end, tr!("`published language` のあとに package を書いてください", "`published language` is followed by its package"));
             return None;
         };
         let pkg = t.word().unwrap_or("").to_string();
         if !is_package(&pkg) {
-            self.push("E002", l, t.col, tr!("ここには proto の package を書きます", "A proto package goes here"));
+            self.push("E002", l, t.col, tr!("ここには proto の package を書いてください", "A proto package goes here"));
             self.note(tr!(
-                "package は `warehouse.v1` のように、ASCII の名前を `.` でつないだものです。公表された言語は proto の package を単位にします（Rust のクレートなら、コードが書くクレートの名前 `ritsu_ports`）。",
+                "package は `warehouse.v1` のように、ASCII の名前を `.` でつないだものです。公表された言語の単位は proto の package です（Rust のクレートなら、コードの中で書くクレートの名前 `ritsu_ports`）。",
                 "A package is ASCII names joined with `.`, like `warehouse.v1`; a published language is one proto package (for a Rust crate, the crate's name as code writes it, `ritsu_ports`)."
             ));
             return None;
@@ -646,7 +646,7 @@ impl<'a> P<'a> {
             } else if t0.is(kw::OPEN) && cl.tokens.get(1).is_some_and(|t| t.is(kw::HOST)) && cl.tokens.get(2).is_some_and(|t| t.is(kw::SERVICE)) {
                 if said_services {
                     self.push("E004", cl, t0.col, tr!("`open host service` が二度あります", "`open host service` comes twice"));
-                    self.note(tr!("公開ホストサービスは一行に `,` で並べます。", "List the open host services on one line, separated by `,`."));
+                    self.note(tr!("公開ホストサービスは、一行に `,` で並べてください。", "List the open host services on one line, separated by `,`."));
                 } else {
                     said_services = true;
                     p.services = self.idents(cl, 3)?;
@@ -659,7 +659,7 @@ impl<'a> P<'a> {
                 let w = cl.rest_from(t0.col).trim().to_string();
                 self.push("E002", cl, t0.col, tr!("ここに `{w}` は書けません", "`{w}` does not belong here"));
                 self.note(tr!(
-                    "公表された言語の下には、`proto \"<パス>\"` か `rulec \"<パス>\"` か `crate \"<パス>\"`、`open host service <サービス>`、`generated dir \"<パス>\"` を書きます。",
+                    "公表された言語の下に書けるのは、`proto \"<パス>\"` か `rulec \"<パス>\"` か `crate \"<パス>\"`、`open host service <サービス>`、`generated dir \"<パス>\"` です。",
                     "Under a published language go `proto \"<path>\"`, `rulec \"<path>\"` or `crate \"<path>\"`, `open host service <service>`, and `generated dir \"<path>\"`."
                 ));
             }
@@ -669,7 +669,7 @@ impl<'a> P<'a> {
             let pk = p.package.clone();
             self.push("E004", l, l.tokens[0].col, tr!("公表された言語 {pk} に、proto も rulec の規則も Rust のクレートもありません", "The published language {pk} has no proto, no rule and no crate"));
             self.note(tr!(
-                "下に `proto \"<パス>\"`（その package を宣言する proto のファイル）か、`rulec \"<パス>\"`（Connect のサービスを公表する規則）か、`crate \"<パス>\"`（公表する Rust のクレートのディレクトリ）を書きます。",
+                "下に `proto \"<パス>\"`（その package を宣言する proto のファイル）か、`rulec \"<パス>\"`（Connect のサービスを公表する規則）か、`crate \"<パス>\"`（公表する Rust のクレートのディレクトリ）を書いてください。",
                 "Write under it `proto \"<path>\"` (the proto files that declare the package), `rulec \"<path>\"` (a rule whose Connect service it publishes) or `crate \"<path>\"` (the directory of a Rust crate it publishes)."
             ));
         }
@@ -679,7 +679,7 @@ impl<'a> P<'a> {
     fn mixed(&mut self, l: &Line) {
         self.push("E004", l, l.tokens[0].col, tr!("一つの公表された言語に、proto と rulec と Rust のクレートを混ぜたり、規則やクレートを二つ書いたりはできません", "One published language cannot mix proto, rulec and a crate, or hold two rules or two crates"));
         self.note(tr!(
-            "rulec の規則は、規則ごとに一つの Connect のサービスを公表するので、規則ごとに `published language rulec.<別名>.v<版>` を分けます。Rust のクレートも、クレートごとに一つの公表された言語にします。",
+            "rulec の規則は、規則ごとに一つの Connect のサービスを公表するので、規則ごとに `published language rulec.<別名>.v<版>` を分けてください。Rust のクレートも、クレートごとに一つの公表された言語にしてください。",
             "A rule publishes one Connect service of its own, so each rule gets its own `published language rulec.<alias>.v<n>`; a Rust crate, too, is a published language of its own."
         ));
     }
@@ -694,10 +694,10 @@ impl<'a> P<'a> {
                 other => {
                     let col = other.map(|t| t.col).unwrap_or_else(|| l.tokens.last().map(|t| t.end).unwrap_or(1));
                     if dotted {
-                        self.push("E002", l, col, tr!("ここには proto の package を書きます", "A proto package goes here"));
+                        self.push("E002", l, col, tr!("ここには proto の package を書いてください", "A proto package goes here"));
                         self.note(tr!("package は `warehouse.v1` のように、ASCII の名前を `.` でつないだものです。", "A package is ASCII names joined with `.`, like `warehouse.v1`."));
                     } else {
-                        self.push("E002", l, col, tr!("ここには proto のサービスの名前を書きます", "The name of a proto service goes here"));
+                        self.push("E002", l, col, tr!("ここには proto のサービスの名前を書いてください", "The name of a proto service goes here"));
                     }
                     return None;
                 }
@@ -721,7 +721,7 @@ impl<'a> P<'a> {
         let l = self.line(n);
         let t0 = &l.tokens[0];
         let Some(name) = t0.word().map(String::from) else {
-            self.push("E002", l, t0.col, tr!("語の名前は引用符なしで書きます", "A term's name is written without quotes"));
+            self.push("E002", l, t0.col, tr!("語の名前は、引用符なしで書いてください", "A term's name is written without quotes"));
             return None;
         };
         if !self.name(l, t0.col, &name) {
@@ -741,13 +741,13 @@ impl<'a> P<'a> {
             }
             Some(x) if x.is(kw::AS) => {
                 let Some(tw) = l.tokens.get(2) else {
-                    self.push("E002", l, x.end, tr!("`as` のあとに `<コンテキスト>.<語>` を書きます", "`as` is followed by `<context>.<term>`"));
+                    self.push("E002", l, x.end, tr!("`as` のあとに `<コンテキスト>.<語>` を書いてください", "`as` is followed by `<context>.<term>`"));
                     return None;
                 };
                 let w = tw.word().unwrap_or("").to_string();
                 let Some((cx, tm)) = w.split_once('.') else {
-                    self.push("E002", l, tw.col, tr!("`as` のあとに `<コンテキスト>.<語>` を書きます", "`as` is followed by `<context>.<term>`"));
-                    self.note(tr!("`注文 as 受注.注文` のように、相手のコンテキストの名前と語の名前を `.` でつなぎます。", "Join the other context's name and its term with `.`, like `注文 as 受注.注文`."));
+                    self.push("E002", l, tw.col, tr!("`as` のあとに `<コンテキスト>.<語>` を書いてください", "`as` is followed by `<context>.<term>`"));
+                    self.note(tr!("`注文 as 受注.注文` のように、相手のコンテキストの名前と語の名前を `.` でつないでください。", "Join the other context's name and its term with `.`, like `注文 as 受注.注文`."));
                     return None;
                 };
                 if !self.name(l, tw.col, cx) || !self.name(l, tw.col + cx.chars().count() + 1, tm) {
@@ -764,7 +764,7 @@ impl<'a> P<'a> {
             }
             Some(x) => {
                 let col = x.col;
-                self.push("E002", l, col, tr!("語の名前のあとには、定義の文か `as` を書きます", "A term's name is followed by its definition or by `as`"));
+                self.push("E002", l, col, tr!("語の名前のあとには、定義の文か `as` を書いてください", "A term's name is followed by its definition or by `as`"));
                 return None;
             }
             None => {
@@ -787,7 +787,7 @@ impl<'a> P<'a> {
             } else if c0.is(kw::ALSO) {
                 if said_also {
                     self.push("E004", cl, c0.col, tr!("`also` が二度あります", "`also` comes twice"));
-                    self.note(tr!("別の呼び方は一行に `,` で並べます。", "List the other names on one line, separated by `,`."));
+                    self.note(tr!("別の呼び方は、一行に `,` で並べてください。", "List the other names on one line, separated by `,`."));
                 } else {
                     said_also = true;
                     t.also = self.strings(cl, 1).unwrap_or_default();
@@ -795,7 +795,7 @@ impl<'a> P<'a> {
             } else {
                 let w = cl.rest_from(c0.col).trim().to_string();
                 self.push("E002", cl, c0.col, tr!("ここに `{w}` は書けません", "`{w}` does not belong here"));
-                self.note(tr!("語の下には `means <要素>` と `also \"<名前>\"` を書きます。", "Under a term go `means <element>` and `also \"<name>\"`."));
+                self.note(tr!("語の下に書けるのは、`means <要素>` と `also \"<名前>\"` です。", "Under a term go `means <element>` and `also \"<name>\"`."));
             }
             self.leaf(ch, c0.word().unwrap_or(""));
         }
@@ -805,7 +805,7 @@ impl<'a> P<'a> {
     fn both(&mut self, l: &Line, name: &str) {
         self.push("E004", l, l.tokens[0].col, tr!("語「{name}」が、定義の文と `as` の両方を持っています", "The term {name} has both a definition and `as`"));
         self.note(tr!(
-            "`as` で取り入れた語は、相手の定義をそのまま使うので、定義の文を書きません。",
+            "`as` で取り入れた語は、相手の定義をそのまま使うので、定義の文は書けません。",
             "A term taken with `as` keeps the other context's definition, so it has none of its own."
         ));
     }
@@ -814,7 +814,7 @@ impl<'a> P<'a> {
     fn element(&mut self, l: &Line, i: usize) -> Option<Element> {
         let Some(t) = l.tokens.get(i) else {
             let col = l.tokens.last().map(|t| t.end).unwrap_or(1);
-            self.push("E002", l, col, tr!("ここに要素を書きます", "An element goes here"));
+            self.push("E002", l, col, tr!("ここに要素を書いてください", "An element goes here"));
             self.note(element_forms());
             return None;
         };
@@ -880,7 +880,7 @@ impl<'a> P<'a> {
         for (i, w) in ws.iter().enumerate() {
             if !l.tokens.get(i).is_some_and(|t| t.is(w)) {
                 let col = l.tokens.get(i).map(|t| t.col).unwrap_or_else(|| l.tokens.last().map(|t| t.end).unwrap_or(1));
-                self.push("E002", l, col, tr!("`{form}` と書きます", "Write `{form}`"));
+                self.push("E002", l, col, tr!("`{form}` と書いてください", "Write `{form}`"));
                 return false;
             }
         }
@@ -938,7 +938,7 @@ impl<'a> P<'a> {
                         kw::THROUGH => {
                             if said_through {
                                 self.push("E004", cl, c0.col, tr!("`through` が二度あります", "`through` comes twice"));
-                                self.note(tr!("通る package は一行に `,` で並べます。", "List the packages on one line, separated by `,`."));
+                                self.note(tr!("通る package は、一行に `,` で並べてください。", "List the packages on one line, separated by `,`."));
                             } else {
                                 said_through = true;
                                 if let Some(ps) = self.idents_with(cl, 1, true) {
@@ -968,7 +968,7 @@ impl<'a> P<'a> {
                             let w = cl.rest_from(c0.col).trim().to_string();
                             self.push("E002", cl, c0.col, tr!("ここに `{w}` は書けません", "`{w}` does not belong here"));
                             self.note(tr!(
-                                "`upstream` の下には、`through`、`layer`、`enum <上流の列挙> -> <先>`、`term <上流の語> -> <下流の語>` を書きます。",
+                                "`upstream` の下に書けるのは、`through`、`layer`、`enum <上流の列挙> -> <先>`、`term <上流の語> -> <下流の語>` です。",
                                 "Under `upstream` go `through`, `layer`, `enum <upstream enum> -> <target>` and `term <upstream term> -> <term>`."
                             ));
                         }
@@ -977,7 +977,7 @@ impl<'a> P<'a> {
                 if !said_through {
                     self.push("E004", l, t0.col, tr!("`upstream {partner}` の下に `through` がありません", "`upstream {partner}` has no `through` under it"));
                     self.note(tr!(
-                        "上流と下流の関係には、下流が通ってよい上流の公表された言語の package を `through warehouse.v1` のように書きます。",
+                        "上流と下流の関係には、下流が通ってよい上流の公表された言語の package を `through warehouse.v1` のように書いてください。",
                         "An upstream relationship says which of the upstream's published packages the downstream goes through, like `through warehouse.v1`."
                     ));
                 }
@@ -993,7 +993,7 @@ impl<'a> P<'a> {
                         let col = other.map(|t| t.col).unwrap_or(l.tokens[1].end);
                         self.push("E002", l, col, tr!("`downstream {partner}` のあとには supplier だけを書けます", "`downstream {partner}` takes only supplier after it"));
                         self.note(tr!(
-                            "上流と下流の関係は、下流のファイルに `upstream <上流> <役割>` で書きます。上流の側が書くのは、顧客を引き受けるときの `downstream <顧客> supplier` だけです。",
+                            "上流と下流の関係は、下流のファイルに `upstream <上流> <役割>` で書いてください。上流の側が書くのは、顧客を引き受けるときの `downstream <顧客> supplier` だけです。",
                             "An upstream relationship is written in the downstream's file, as `upstream <upstream> <role>`. The upstream writes only `downstream <customer> supplier`, to take a customer on."
                         ));
                         return None;
@@ -1012,7 +1012,7 @@ impl<'a> P<'a> {
                 if n.children.is_empty() {
                     self.push("E004", l, t0.col, tr!("共有カーネルに並べるものがありません", "The shared kernel lists nothing"));
                     self.note(tr!(
-                        "二つのコンテキストが一緒に持つ成果物とディレクトリを、下に字下げして並べます。",
+                        "二つのコンテキストが一緒に持つ成果物とディレクトリを、下に字下げして並べてください。",
                         "List, indented under it, the artifacts and directories the two contexts hold together."
                     ));
                 }
@@ -1049,7 +1049,7 @@ impl<'a> P<'a> {
 
     fn enum_map(&mut self, n: &Node) -> Option<EnumMap> {
         let l = self.line(n);
-        let form = tr!("`enum <上流の列挙> -> <先>` と書きます", "Write `enum <upstream enum> -> <target>`");
+        let form = tr!("`enum <上流の列挙> -> <先>` と書いてください", "Write `enum <upstream enum> -> <target>`");
         let (Some(et), Some(Token { tok: Tok::Arrow, .. }), Some(tt)) = (l.tokens.get(1), l.tokens.get(2), l.tokens.get(3)) else {
             let col = l.tokens.get(1).map(|t| t.col).unwrap_or(l.tokens[0].end);
             self.push("E002", l, col, form);
@@ -1080,7 +1080,7 @@ impl<'a> P<'a> {
         for ch in &n.children {
             let cl = self.line(ch);
             let vform = tr!(
-                "値の行は `<上流の値> -> <下流の値>` か `<上流の値> -> refuse \"<理由>\"` と書きます",
+                "値の行は `<上流の値> -> <下流の値>` か `<上流の値> -> refuse \"<理由>\"` と書いてください",
                 "A value line is `<upstream value> -> <value>` or `<upstream value> -> refuse \"<why>\"`"
             );
             let (Some(vt), Some(Token { tok: Tok::Arrow, .. }), Some(wt)) = (cl.tokens.first(), cl.tokens.get(1), cl.tokens.get(2)) else {
@@ -1123,7 +1123,7 @@ impl<'a> P<'a> {
     }
 
     fn term_map(&mut self, l: &Line) -> Option<TermMap> {
-        let form = tr!("`term <上流の語> -> <下流の語>` と書きます", "Write `term <upstream term> -> <term>`");
+        let form = tr!("`term <上流の語> -> <下流の語>` と書いてください", "Write `term <upstream term> -> <term>`");
         let (Some(a), Some(Token { tok: Tok::Arrow, .. }), Some(b)) = (l.tokens.get(1), l.tokens.get(2), l.tokens.get(3)) else {
             let col = l.tokens.get(1).map(|t| t.col).unwrap_or(l.tokens[0].end);
             self.push("E002", l, col, form);
@@ -1149,7 +1149,7 @@ fn roles_note() -> Text {
 
 fn element_forms() -> Text {
     tr!(
-        "要素は `proto \"<パス>\" message Order` のように名指すか、自分の公表された言語の proto の要素なら `message Order`、`enum Stock value STOCK_SHORT` のように短く書きます。",
+        "要素は `proto \"<パス>\" message Order` のように名指すか、自分の公表された言語の proto の要素なら `message Order`、`enum Stock value STOCK_SHORT` のように短く書いてください。",
         "Name the element like `proto \"<path>\" message Order`, or, for an element of the context's own published language, shortly: `message Order`, `enum Stock value STOCK_SHORT`."
     )
 }

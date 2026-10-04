@@ -13,4 +13,4 @@ booking.flow: 検査を通りました
     26 |   give_seats(event: event, count: count)
   = `count` の範囲が分かりません（`ask_organiser` の結果に範囲がありません）
   = 断られれば、その理由はタスクの宣言したエラーとして返ってきます。宣言していない理由なら `failure` です。
-ritsu check: ファイル 3 個（rulec 1、chobo 1、dandori 1）。どれも検査を通った（警告 2 件）。言語の境目: 確かめた 2 か所、決められない 2 か所
+ritsu check: ファイル 3 個（rulec 1、chobo 1、dandori 1）。どれも検査を通りました（警告 2 件）。言語の境目: 確かめた 2 か所、決められない 2 か所

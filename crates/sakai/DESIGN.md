@@ -803,7 +803,7 @@ rulec には、検査を通る規則にだけ答える事実（`Rules`）を先�
 エラー[E105]: billing/rules/請求の要否.rule:5:1: billing/rules/請求の要否.rule が rulec の検査を通らないか、読めません
      5 | enum 注文の状態(order_status) = 受付(received) | 支払済(paid) | 出荷済(shipped) | 受注で取消(cancelled)
   = rulec の診断: [E032] billing/rules/請求の要否.rule:5: 列挙 注文の状態 が ../../proto/shop/ordering/v1/order.proto の OrderStatus と一致していません
-  = そのファイルが rulec の検査を通るように直します。読めないファイルの参照は、確かめられません。
+  = そのファイルを、rulec の検査を通るように直してください。検査を通らないファイルや読めないファイルからは参照を読み取れないので、sakai はその参照を確かめられません。
 ```
 
 ほかの言語が渡されていないとき（sakai のクレートのバイナリ）は、地図が rulec、koyomi、dandori の成果物を含めば、言語ごとに一つの E104 を、その言語の最初の成果物を持つ `owns` の行に出す。注に、同じコマンドを `ritsu sakai` で走らせる形を書き、exit 2 で終わる（走らせ方の問題で、地図の誤りではないため。ritsu の段階 E の前は、ほかの誤りと同じく exit 1 だった。12.3）。
@@ -993,11 +993,11 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 エラー[E401]: ctx/請求.ctx:17:3: 「請求」の腐敗防止層の対応に、「受注」の列挙 shop.ordering.v1.OrderStatus の値 ORDER_STATUS_RETURNED がありません
     17 |   enum OrderStatus -> enum BillingStatus
   = ORDER_STATUS_RETURNED は proto/shop/ordering/v1/order.proto:16 の値です。
-  = 上流の列挙の値ごとに、下流の値か refuse（断る）を書きます。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。
+  = 上流の列挙の値ごとに、下流の値か refuse（断る）を書いてください。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。
   = 直した行: ORDER_STATUS_RETURNED -> refuse "…"
   関わるもの:
       請求  ctx/請求.ctx:14                                              upstream 受注 anticorruption layer
-      受注  proto "proto/shop/ordering/v1/order.proto" enum OrderStatus  値は 5 個で、対応が無いのは 1 個
+      受注  proto "proto/shop/ordering/v1/order.proto" enum OrderStatus  値は 5 個あり、そのうち 1 個に対応がありません
 ```
 
 在庫の側の `shared kernel with 受注` を消したとき（在庫の `stock.proto` が、共有カーネルの `money.proto` を import している）：
@@ -1005,7 +1005,7 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 ```
 エラー[E307]: ctx/受注.ctx:21:1: 共有カーネルが「受注」の側にしか書かれていません
     21 | shared kernel with 在庫
-  = 共有カーネルは二つのチームが一緒に持つものなので、「在庫」のファイルにも `shared kernel with 受注` を書き、同じものを並べます。
+  = 共有カーネルは二つのチームが一緒に持つものなので、「在庫」のファイルにも `shared kernel with 受注` を書き、同じものを並べてください。
   関わるもの:
       受注  ctx/受注.ctx:21  shared kernel with 在庫
 エラー[E201]: proto/warehouse/v1/stock.proto:5:1: 「在庫」の proto/warehouse/v1/stock.proto が、関係の無い「受注」の proto/shop/common/v1/money.proto を import しています
@@ -1026,7 +1026,7 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
   = 「在庫」の「引当」は「注文の一行のために、棚の在庫を出荷か取消まで押さえておくこと」で、proto "proto/warehouse/v1/stock.proto" message ReserveResponse を指します。
   = 「受注」の「引当」は「客の注文の一行に、届ける日を割り当てること」です。
   = 「受注」は「在庫」の順応者なので、対応を書いて読み替えることはできません。
-  = 直し方: 「受注」の語の名前を変える。同じ意味なら `引当 as 在庫.引当` にする。読み替えるなら、`upstream 在庫` を anticorruption layer にして `term 引当 -> <「受注」の語>` を書く。
+  = 「受注」の語の名前を変えてください。同じ意味なら `引当 as 在庫.引当` にし、読み替えるなら `upstream 在庫` を anticorruption layer にして `term 引当 -> <「受注」の語>` を書いてください。
   関わるもの:
       受注  proto/shop/ordering/v1/fulfillment_lite.proto:5                 import "warehouse/v1/stock.proto"
       在庫  proto "proto/warehouse/v1/stock.proto" message ReserveResponse  「在庫」の語「引当」が指すもの
@@ -1040,11 +1040,11 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 エラー[E401]: contexts/配送.ctx:33:3: 「配送」の腐敗防止層の対応に、「在庫」の列挙 warehouse.v1.PackingStatus の値 PACKING_STATUS_DAMAGED がありません
     33 |   enum PackingStatus -> 出荷の可否
   = PACKING_STATUS_DAMAGED は proto/warehouse/v1/stock.proto:43 の値です。
-  = 上流の列挙の値ごとに、下流の値か refuse（断る）を書きます。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。
+  = 上流の列挙の値ごとに、下流の値か refuse（断る）を書いてください。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。
   = 直した行: PACKING_STATUS_DAMAGED -> refuse "…"
   関わるもの:
       配送  contexts/配送.ctx:29                                       upstream 在庫 anticorruption layer
-      在庫  proto "proto/warehouse/v1/stock.proto" enum PackingStatus  値は 4 個で、対応が無いのは 1 個
+      在庫  proto "proto/warehouse/v1/stock.proto" enum PackingStatus  値は 4 個あり、そのうち 1 個に対応がありません
 ```
 
 例で、受注の用語集に、在庫と違う意味の「引当」を足したとき（受注は在庫の順応者で、受注の生成したコードが在庫の `ReserveResponse` をそのまま使う）：
@@ -1055,7 +1055,7 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
   = 「在庫」の「引当」は「注文の一行のために、棚の在庫を出荷か取消まで押さえておくこと」で、proto "proto/warehouse/v1/stock.proto" message ReserveResponse を指します。
   = 「受注」の「引当」は「客の注文の一行に、届ける日を割り当てること」です。
   = 「受注」は「在庫」の順応者なので、対応を書いて読み替えることはできません。
-  = 直し方: 「受注」の語の名前を変える。同じ意味なら `引当 as 在庫.引当` にする。読み替えるなら、`upstream 在庫` を anticorruption layer にして `term 引当 -> <「受注」の語>` を書く。
+  = 「受注」の語の名前を変えてください。同じ意味なら `引当 as 在庫.引当` にし、読み替えるなら `upstream 在庫` を anticorruption layer にして `term 引当 -> <「受注」の語>` を書いてください。
   関わるもの:
       受注  proto/shop/ordering/v1/fulfillment.proto:15                     import "warehouse/v1/stock.proto"
       在庫  proto "proto/warehouse/v1/stock.proto" message ReserveResponse  「在庫」の語「引当」が指すもの
@@ -1069,7 +1069,7 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 エラー[E105]: billing/rules/請求の要否.rule:5:1: billing/rules/請求の要否.rule が rulec の検査を通らないか、読めません
      5 | enum 注文の状態(order_status) = 受付(received) | 支払済(paid) | 出荷済(shipped) | 受注で取消(cancelled)
   = rulec の診断: [E032] billing/rules/請求の要否.rule:5: 列挙 注文の状態 が ../../proto/shop/ordering/v1/order.proto の OrderStatus と一致していません
-  = そのファイルが rulec の検査を通るように直します。読めないファイルの参照は、確かめられません。
+  = そのファイルを、rulec の検査を通るように直してください。検査を通らないファイルや読めないファイルからは参照を読み取れないので、sakai はその参照を確かめられません。
 ```
 
 例で、請求の側の `shared kernel with 配送` を消したとき（配送の `出荷日.cal` が、共有カーネルに並べた請求のカレンダー `東京の営業日.cal` を読む）。カレンダーは公表された言語にできないので、共有カーネルが崩れると、その参照を許すものが無くなる：
@@ -1077,7 +1077,7 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 ```
 エラー[E307]: contexts/配送.ctx:40:1: 共有カーネルが「配送」の側にしか書かれていません
     40 | shared kernel with 請求
-  = 共有カーネルは二つのチームが一緒に持つものなので、「請求」のファイルにも `shared kernel with 配送` を書き、同じものを並べます。
+  = 共有カーネルは二つのチームが一緒に持つものなので、「請求」のファイルにも `shared kernel with 配送` を書き、同じものを並べてください。
   関わるもの:
       配送  contexts/配送.ctx:40  shared kernel with 請求
 エラー[E201]: delivery/出荷日.cal:3:1: 「配送」の delivery/出荷日.cal が、関係の無い「請求」の calendars/東京の営業日.cal を参照しています（use calendar）
@@ -1095,7 +1095,7 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 ```
 エラー[E202]: ordering/受注.flow:6:1: 「受注」の ordering/受注.flow が、「配送」の内側の delivery/rules/出荷の急ぎ.rule を参照しています（use rule）
      6 | use rule 急ぎ from "../delivery/rules/出荷の急ぎ.rule"
-  = 規則を同梱するか Lambda で呼ぶと、規則そのもの（「配送」の内側）を使います。境界の向こうの規則は、「配送」がその規則を公表された言語（`published language rulec.…`）に入れ、`use rule … connect` で、その Connect のサービスとして呼びます。
+  = 規則を同梱するか Lambda で呼ぶと、規則そのもの（「配送」の内側）を使います。境界の向こうの規則は、「配送」にその規則を公表された言語（`published language rulec.…`）に入れてもらい、`use rule … connect` で、その Connect のサービスとして呼んでください。
   関わるもの:
       受注  ordering/受注.flow:6                    use rule "../delivery/rules/出荷の急ぎ.rule"
       配送  rulec "delivery/rules/出荷の急ぎ.rule"  「配送」の内側のもの
@@ -1107,7 +1107,7 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 エラー[E207]: ordering/受注.flow:47:1: 「受注」の ordering/受注.flow が、「在庫」の公開ホストサービスでない StockService を呼んでいます
     47 |   connect warehouse "StockService/Reserve"
   = 公表された言語 warehouse.v1 の公開ホストサービスは PackingService です。
-  = 境界の向こうのサービスは、相手が `open host service` に並べたものだけを呼びます。
+  = 境界の向こうで呼べるサービスは、相手が `open host service` に並べたものだけです。
   関わるもの:
       受注  ordering/受注.flow:47                                                       connect StockService/Reserve
       在庫  proto "proto/warehouse/v1/stock.proto" service StockService method Reserve  公表された言語 warehouse.v1 のもの
@@ -1118,7 +1118,7 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 ```
 エラー[E209]: ordering/受注.flow:59:1: 「受注」の ordering/受注.flow が、「配送」のワークフロー delivery/配送の手配.flow を子として走らせています
     59 |   flow "../delivery/配送の手配.flow"
-  = 境界の向こうのワークフローを子として走らせてよいのは、二つがパートナーシップのとき、子のフローが二つの共有カーネルにあるとき、子のフローが「配送」の公開ホストサービスを `implements` で実装しているときです。そうでなければ、「配送」が公表したサービスを `connect` で呼びます。
+  = 境界の向こうのワークフローを子として走らせてよいのは、二つがパートナーシップのとき、子のフローが二つの共有カーネルにあるとき、子のフローが「配送」の公開ホストサービスを `implements` で実装しているときです。そうでなければ、「配送」が公表したサービスを `connect` で呼んでください。
   関わるもの:
       受注  ordering/受注.flow:59               flow "../delivery/配送の手配.flow"
       配送  dandori "delivery/配送の手配.flow"  「配送」の内側のもの

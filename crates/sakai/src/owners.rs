@@ -179,7 +179,7 @@ pub fn own(m: &Model) -> (Vec<Artifact>, Vec<Diag>) {
             }
         }
         let note = tr!(
-            "どれかのコンテキストの `owns` に、そのディレクトリかファイルを書きます。成果物は、どれもちょうど一つのコンテキストに属します。",
+            "どれかのコンテキストの `owns` に、そのディレクトリかファイルを書いてください。成果物は、どれもちょうど一つのコンテキストに属します。",
             "Write the directory or the file under the `owns` of a context; every artifact belongs to exactly one context."
         );
         match group {

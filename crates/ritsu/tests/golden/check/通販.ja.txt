@@ -17,4 +17,4 @@ tests/projects/通販/inventory/在庫の引当.book: ok
 tests/projects/通販/delivery/配送の手配.flow: 検査を通りました
 tests/projects/通販/ordering/受注.flow: 検査を通りました
 tests/projects/通販/通販.ctx: ok — コンテキスト 5、関係 7。成果物 79 件は、どれも一つのコンテキストに属する。境界を越える参照 9 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 5）
-ritsu check: ファイル 21 個（rulec 4、koyomi 3、chobo 1、proto 5、dandori 2、sakai 6）。どれも検査を通った。言語の境目: 確かめた 0 か所、決められない 0 か所
+ritsu check: ファイル 21 個（rulec 4、koyomi 3、chobo 1、proto 5、dandori 2、sakai 6）。どれも検査を通りました。言語の境目: 確かめた 0 か所、決められない 0 か所

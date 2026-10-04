@@ -111,7 +111,7 @@ pub fn lex(src: &str) -> Result<Vec<Tok>, Diag> {
                             tr!("文字列がこの行のうちに閉じていません", "the string is not closed on this line"),
                         )
                         .note(tr!(
-                            "文字列は一行のうちに `\"` で開いて閉じます。中の改行は `\\n` と書きます",
+                            "文字列は、一行のうちに `\"` で開いて閉じてください。中の改行は `\\n` と書いてください",
                             "a string opens and closes with `\"` on one line; a line break inside it is written `\\n`",
                         )));
                     }

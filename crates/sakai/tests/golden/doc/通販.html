@@ -248,7 +248,7 @@ h2:target { color: var(--accent); }
 </table>
 <h2>対応</h2>
 <h3>配送 ← 在庫：PackingStatus</h3>
-<p><code>proto &quot;proto/warehouse/v1/stock.proto&quot; enum PackingStatus</code> を <code>出荷の可否</code> に写す。 層は <code>dir &quot;py/delivery/acl/inventory&quot;</code>、<code>dir &quot;ts/delivery/acl/inventory&quot;</code>、<code>dir &quot;java/src/main/java/delivery/acl/inventory&quot;</code>、<code>dir &quot;go/delivery/acl/inventory&quot;</code>。 対応は <code>contexts/配送.ctx</code> に書いたもの。対応の先は名前だけなので、下流の値は確かめていない。</p>
+<p><code>proto &quot;proto/warehouse/v1/stock.proto&quot; enum PackingStatus</code> を <code>出荷の可否</code> に読み替える。 層は <code>dir &quot;py/delivery/acl/inventory&quot;</code>、<code>dir &quot;ts/delivery/acl/inventory&quot;</code>、<code>dir &quot;java/src/main/java/delivery/acl/inventory&quot;</code>、<code>dir &quot;go/delivery/acl/inventory&quot;</code>。 対応は <code>contexts/配送.ctx</code> に書いたもの。対応の先は名前だけなので、下流の値は確かめていない。</p>
 <table>
 <thead><tr><th>上流の値</th><th>下流の値</th></tr></thead>
 <tbody>
@@ -258,7 +258,7 @@ h2:target { color: var(--accent); }
 </tbody>
 </table>
 <h3>請求 ← 受注：OrderStatus</h3>
-<p><code>proto &quot;proto/shop/ordering/v1/order.proto&quot; enum OrderStatus</code> を <code>rulec &quot;billing/rules/請求の要否.rule&quot; enum 注文の状態</code> に写す。 層は <code>rulec &quot;billing/rules/請求の要否.rule&quot;</code>、<code>dir &quot;py/billing/acl/ordering&quot;</code>、<code>dir &quot;ts/billing/acl/ordering&quot;</code>、<code>dir &quot;java/src/main/java/billing/acl/ordering&quot;</code>、<code>dir &quot;go/billing/acl/ordering&quot;</code>。 対応は、規則の <code>import proto</code> から rulec が読んだもの（規則の表は rulec が確かめる）。</p>
+<p><code>proto &quot;proto/shop/ordering/v1/order.proto&quot; enum OrderStatus</code> を <code>rulec &quot;billing/rules/請求の要否.rule&quot; enum 注文の状態</code> に読み替える。 層は <code>rulec &quot;billing/rules/請求の要否.rule&quot;</code>、<code>dir &quot;py/billing/acl/ordering&quot;</code>、<code>dir &quot;ts/billing/acl/ordering&quot;</code>、<code>dir &quot;java/src/main/java/billing/acl/ordering&quot;</code>、<code>dir &quot;go/billing/acl/ordering&quot;</code>。 対応は、規則の <code>import proto</code> から rulec が読んだもの（規則の表は rulec が確かめる）。</p>
 <table>
 <thead><tr><th>上流の値</th><th>下流の値</th></tr></thead>
 <tbody>
@@ -270,7 +270,7 @@ h2:target { color: var(--accent); }
 </table>
 <h2>確かめていないこと</h2>
 <ul>
-<li>腐敗防止層のコードが、書いた対応のとおりに読み替えているか。sakai が確かめるのは、対応が上流の列挙を覆っていることと、対応の先が下流の列挙にあることまで（規則が先のときは、規則の表を rulec が確かめる）。</li>
+<li>腐敗防止層のコードが、書いた対応のとおりに読み替えているか。sakai が確かめるのは、対応が上流の列挙を網羅していることと、対応の先が下流の列挙にあることまで（規則が先のときは、規則の表を rulec が確かめる）。</li>
 <li>実行時にしか見えない呼び出し：URL を文字列で持つ HTTP、メッセージのキュー、データベースの共有、リフレクションと動的な import。</li>
 <li>生成したコードの置き場所のコードが、本当にその公表された言語から生成したものか。</li>
 <li>語の定義の文の中身。</li>

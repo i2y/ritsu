@@ -168,12 +168,12 @@ impl Live {
         let l = diag::cut(line, 80);
         let shape: Text = if call.is_some() {
             tr!(
-                "ドライバーは操作ごとに JSON を一行返します。`{{\"screen\":…}}` か、アプリが操作を拒否したときは `{{\"error\":\"…\",\"screen\":…}}` です",
+                "ドライバーは、操作ごとに JSON を一行返す必要があります。`{{\"screen\":…}}` か、アプリが操作を拒否したときは `{{\"error\":\"…\",\"screen\":…}}` です",
                 "a driver answers each action with one line of JSON: `{{\"screen\":…}}`, or `{{\"error\":\"…\",\"screen\":…}}` when the app refused it",
             )
         } else {
             tr!(
-                "ドライバーは最初の行に `{{\"ok\":true}}` を返します。守れない固定があれば `{{\"error\":\"…\"}}` を返します",
+                "ドライバーは、最初の行に `{{\"ok\":true}}` を返す必要があります。守れない固定があれば、`{{\"error\":\"…\"}}` を返してください",
                 "a driver answers the first line with `{{\"ok\":true}}`, or with `{{\"error\":\"…\"}}` for a pin it cannot keep",
             )
         };

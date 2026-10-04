@@ -27,11 +27,11 @@ impl PathError {
     pub fn text(&self, written: &str) -> Text {
         match self {
             PathError::Absolute => tr!(
-                "`{written}` は絶対パスです。書いたファイルのディレクトリからの相対で書きます",
+                "`{written}` は絶対パスです。書いたファイルのディレクトリからの相対パスで書いてください",
                 "`{written}` is an absolute path; write it from the directory of the file it is in"
             ),
             PathError::Outside => tr!("`{written}` はルートの外に出ます", "`{written}` goes outside the root"),
-            PathError::Empty => tr!("パスが空です。書いたファイルのディレクトリそのものは `\".\"` と書きます", "the path is empty; the directory of the file itself is written `\".\"`"),
+            PathError::Empty => tr!("パスが空です。書いたファイルのディレクトリそのものは、`\".\"` と書いてください", "the path is empty; the directory of the file itself is written `\".\"`"),
         }
     }
 }

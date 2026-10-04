@@ -28,5 +28,5 @@ ordering/fulfillment.flow: 検査を通りました
 エラー[sakai E105]: billing/rules/billing_need.rule:5:1: billing/rules/billing_need.rule が rulec の検査を通らないか、読めません
      5 | enum order_status = received | paid | shipped | cancelled_in_ordering(cancelled)
   = rulec の診断: [E032] billing/rules/billing_need.rule:5: 列挙 order_status が ../../proto/shop/ordering/v1/order.proto の OrderStatus と一致していません
-  = そのファイルが rulec の検査を通るように直します。読めないファイルの参照は、確かめられません。
+  = そのファイルを、rulec の検査を通るように直してください。検査を通らないファイルや読めないファイルからは参照を読み取れないので、sakai はその参照を確かめられません。
 ritsu check: ファイル 21 個（rulec 4、koyomi 3、chobo 1、proto 5、dandori 2、sakai 6）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 0 か所、決められない 0 か所

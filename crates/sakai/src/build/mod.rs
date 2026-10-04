@@ -126,7 +126,7 @@ fn default_dir(c: &Checked, a: &Areas, target: Target) -> Result<String, Box<Dia
     code.test.clone().ok_or_else(|| {
         let line = m.map.ast.code.iter().find(|x| x.language == "java").map(|x| x.pos).unwrap_or_default();
         Box::new(diag::at("E501", &m.map.file, line.line, line.col, tr!("`code java` に `test` の行がありません", "The `code java` line has no `test` line under it")).source(&m.map.src).note(tr!(
-            "ArchUnit の規則は JUnit のテストとして書くので、テストの置き場所を `  test \"<パス>\"` で書きます（`--out` で替えることもできます）。",
+            "sakai は ArchUnit の規則を JUnit のテストとして書くので、テストの置き場所を `  test \"<パス>\"` で書いてください（`--out` で替えることもできます）。",
             "The rules of ArchUnit are a JUnit test, written where the tests are: write it with `  test \"<path>\"` under the line (or give `--out`)."
         )))
     })
@@ -160,7 +160,7 @@ pub fn run_with(root: &Path, map: &str, target: Target, suite: &crate::suite::Su
         let line = m.map.ast.code.iter().find(|x| x.language == "python").map(|x| x.pos).unwrap_or_default();
         let sf = paths::shown(&paths::join(&a.dir, f).unwrap_or_default());
         o.diags.push(diag::at("E501", &m.map.file, line.line, line.col, tr!("{sf} は Python の置き場所の直下のモジュールで、import-linter が読めません", "The module {sf} is right in the place of the Python code, where import-linter cannot read it")).source(&m.map.src).note(tr!(
-            "import-linter（grimp）はパッケージだけをルートとして読みます。モジュールをパッケージのディレクトリに入れるか、`code python` に、パッケージを持つディレクトリを書きます。",
+            "import-linter（grimp）はパッケージだけをルートとして読みます。モジュールをパッケージのディレクトリに入れるか、`code python` に、パッケージを持つディレクトリを書いてください。",
             "Only packages can be the roots import-linter (grimp) reads: put the module in a package's directory, or make `code python` the directory that holds the packages."
         )));
         return Ok(Built { outcome: o, done: None });
@@ -173,7 +173,7 @@ pub fn run_with(root: &Path, map: &str, target: Target, suite: &crate::suite::Su
         let line = m.map.ast.code.iter().find(|x| x.language == "java").map(|x| x.pos).unwrap_or_default();
         let sf = paths::shown(&paths::join(&a.dir, f).unwrap_or_default());
         o.diags.push(diag::at("E501", &m.map.file, line.line, line.col, tr!("{sf} はデフォルトパッケージのクラスで、ArchUnit の規則に書けません", "The class {sf} is in the default package, which no ArchUnit rule can name")).source(&m.map.src).note(tr!(
-            "ArchUnit の規則は、まとまりをパッケージで書きます。クラスに `package` を書き、そのディレクトリに置きます。",
+            "ArchUnit の規則は、まとまりをパッケージで表します。クラスに `package` を書き、そのディレクトリに置いてください。",
             "The rules of ArchUnit name a group by its packages: give the class a `package`, and put it in that directory."
         )));
         return Ok(Built { outcome: o, done: None });
@@ -183,7 +183,7 @@ pub fn run_with(root: &Path, map: &str, target: Target, suite: &crate::suite::Su
         let line = m.map.ast.code.iter().find(|x| x.language == "go").map(|x| x.pos).unwrap_or_default();
         let d = paths::shown(&a.dir);
         o.diags.push(diag::at("E501", &m.map.file, line.line, line.col, tr!("{d} に go.mod がありません", "There is no go.mod in {d}")).source(&m.map.src).note(tr!(
-            "go-arch-lint は、go.mod のあるディレクトリをモジュールのルートとして読みます。`code go` には go.mod のあるディレクトリを書きます。",
+            "go-arch-lint は、go.mod のあるディレクトリをモジュールのルートとして読みます。`code go` には、go.mod のあるディレクトリを書いてください。",
             "go-arch-lint reads the directory with go.mod as the module's root: write that directory in `code go`."
         )));
         return Ok(Built { outcome: o, done: None });
@@ -219,7 +219,7 @@ pub fn run_with(root: &Path, map: &str, target: Target, suite: &crate::suite::Su
             let (f, e) = (file.display().to_string(), e.to_string());
             tr!("{f} に書けません: {e}", "cannot write {f}: {e}")
         })?;
-        Ok(Built { outcome: o, done: Some((file, tr!("書いた（{}）", "written ({})", entries.ja; entries.en))) })
+        Ok(Built { outcome: o, done: Some((file, tr!("書きました（{}）", "written ({})", entries.ja; entries.en))) })
     }
 }
 
@@ -234,7 +234,7 @@ fn stale(target: Target, root: &Path, file: &Path, old: Option<&str>, new: &str,
     let f = paths::shown(&at);
     let t = target.word();
     let Some(old) = old else {
-        return diag::whole("E502", &at, tr!("{f} がありません", "The settings file {f} is not there")).note(tr!("`sakai build --target {t}` で書きます。", "Write it with `sakai build --target {t}`."));
+        return diag::whole("E502", &at, tr!("{f} がありません", "The settings file {f} is not there")).note(tr!("`sakai build --target {t}` で書いてください。", "Write it with `sakai build --target {t}`."));
     };
     let (ol, nl): (Vec<&str>, Vec<&str>) = (old.lines().collect(), new.lines().collect());
     let i = (0..ol.len().max(nl.len())).find(|&i| ol.get(i) != nl.get(i)).unwrap_or(0);
@@ -250,9 +250,9 @@ fn stale(target: Target, root: &Path, file: &Path, old: Option<&str>, new: &str,
     let written_ja = old.lines().next().is_some_and(|l| l.contains("--lang ja"));
     if written_ja != (lang == Lang::Ja) {
         let was = if written_ja { "ja" } else { "en" };
-        d = d.note(tr!("このファイルは --lang {was} で書かれています。確かめるときも同じ --lang を渡します。", "The file was written with --lang {was}; check it with the same --lang."));
+        d = d.note(tr!("このファイルは --lang {was} で書かれています。確かめるときも、同じ --lang を渡してください。", "The file was written with --lang {was}; check it with the same --lang."));
     }
-    d.note(tr!("`sakai build --target {t}` で書き直します。", "Write it again with `sakai build --target {t}`."))
+    d.note(tr!("`sakai build --target {t}` で書き直してください。", "Write it again with `sakai build --target {t}`."))
 }
 
 /// What `build` prints after the diagnostics: the file, from where sakai runs, and what was done.

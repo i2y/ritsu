@@ -1,5 +1,5 @@
-警告[W102]: proto/shop/billing/v1/billing.proto:5:1: proto/shop/billing/v1/billing.proto の import "google/type/money.proto" が見つかりません。範囲の外のものとして扱います
+警告[W102]: proto/shop/billing/v1/billing.proto:5:1: proto/shop/billing/v1/billing.proto の import "google/type/money.proto" が見つかりません。sakai は、範囲の外のものとして扱います
      5 | import "google/type/money.proto";
   = 探した場所: proto/google/type/money.proto、proto/shop/billing/v1/google/type/money.proto
-  = そのファイルの型は分からないものとして、参照の検査から外します。地図の `proto root` に、import を探すディレクトリを書けます。
+  = sakai は、そのファイルの型を分からないものとして、参照の検査から外します。地図の `proto root` に、import を探すディレクトリを書けます。
 basic.ctx: ok — コンテキスト 3、関係 3。成果物 9 件は、どれも一つのコンテキストに属する。境界を越える参照 3 件を確かめた（proto 3）

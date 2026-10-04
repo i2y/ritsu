@@ -1,6 +1,6 @@
 エラー[E206]: proto/audit/v1/record.proto:5:1: 「監査」の proto/audit/v1/record.proto が、別々の道の相手「見積」の proto/quotes/v1/estimate.proto を import しています
      5 | import "quotes/v1/estimate.proto";
-  = 別々の道は、二つのあいだに何の参照も持たないという決定です。参照が要るなら、別々の道をやめて関係を書きます。
+  = 別々の道は、二つのあいだに何の参照も持たないという決定です。参照が要るなら、別々の道をやめて関係を書いてください。
   関わるもの:
       監査  proto/audit/v1/record.proto:5           import "quotes/v1/estimate.proto"
       見積  proto "proto/quotes/v1/estimate.proto"  公表された言語 quotes.v1 のファイル

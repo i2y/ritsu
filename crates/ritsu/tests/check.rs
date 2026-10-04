@@ -192,7 +192,7 @@ fn what_stops_ritsu_check() {
     assert_eq!((code, err.as_str()), (2, "error: unknown flag `--fast`; run `ritsu check --help`\n"));
     let (code, _, err) = ritsu_in(&here(), &["check", SHOP, "--format", "yaml", "--lang", "ja"]);
     assert_eq!(code, 2);
-    assert!(err.starts_with("エラー: `--format yaml` は知らない値です"), "{err}");
+    assert!(err.starts_with("エラー: `--format` に `yaml` は使えません"), "{err}");
     let t = TempDir::new("unreadable");
     std::fs::write(t.path().join("bad.rule"), [0xff, 0xfe, 0x00]).unwrap();
     std::fs::write(t.path().join("ok.cal"), "dates ok v1\n").unwrap();

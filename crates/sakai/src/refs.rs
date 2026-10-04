@@ -342,7 +342,7 @@ pub fn implements(m: &Model, arts: &[Artifact], read: &Read) -> Vec<Diag> {
                 None => tr!("その proto は「{xn}」のどの公表された言語にも入っていません。", "The .proto is in no published language of {xn}."),
             });
             d = d.note(tr!(
-                "ワークフローが実装するサービスは、そのワークフローを持つコンテキストが公表するものです。自分の公表された言語に proto を並べ、`open host service` にサービスを書きます。",
+                "ワークフローが実装するサービスは、そのワークフローを持つコンテキストが公表するものです。自分の公表された言語に proto を並べ、`open host service` にサービスを書いてください。",
                 "A service a workflow implements is one the workflow's context publishes: list the .proto in its published language, and the service under `open host service`."
             ));
             diags.push(d.refer(Ref::line(Some(&xn), from, r.line, Text::same(format!("implements {t}"))).via("implements")));
@@ -472,7 +472,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
         if separate {
             let obj = format!("{sq} of {yn}");
             diags.push(diag("E206", tr!("「{xn}」の {sp} が、別々の道の相手「{yn}」の {sq}{tail_ja}", "The file {sp} of {xn} {}, and the two go separate ways", ; act_en(&obj))).note(tr!(
-                "別々の道は、二つのあいだに何の参照も持たないという決定です。参照が要るなら、別々の道をやめて関係を書きます。",
+                "別々の道は、二つのあいだに何の参照も持たないという決定です。参照が要るなら、別々の道をやめて関係を書いてください。",
                 "Separate ways is the decision that nothing between the two refers to the other; if the reference is needed, write a relationship instead."
             )));
             continue;
@@ -520,7 +520,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
                 d = d.note(n.clone());
             }
             d = d.note(tr!(
-                "境界の向こうのワークフローを子として走らせてよいのは、二つがパートナーシップのとき、子のフローが二つの共有カーネルにあるとき、子のフローが「{yn}」の公開ホストサービスを `implements` で実装しているときです。そうでなければ、「{yn}」が公表したサービスを `connect` で呼びます。",
+                "境界の向こうのワークフローを子として走らせてよいのは、二つがパートナーシップのとき、子のフローが二つの共有カーネルにあるとき、子のフローが「{yn}」の公開ホストサービスを `implements` で実装しているときです。そうでなければ、「{yn}」が公表したサービスを `connect` で呼んでください。",
                 "Another context's workflow may run as a child when the two are partners, when the child is in their shared kernel, or when the child `implements` an open host service of {yn}; else call a service {yn} publishes with `connect`."
             ));
             diags.push(d);
@@ -530,11 +530,11 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
             let mut d = diag("E202", tr!("「{xn}」の {sp} が、「{yn}」の内側の {sq}{tail_ja}", "The file {sp} of {xn} {}, which is inside {yn}", ; act_en(&sq)));
             d = d.note(match &c.kind {
                 Kind::FlowRule { connect: false, .. } => tr!(
-                    "規則を同梱するか Lambda で呼ぶと、規則そのもの（「{yn}」の内側）を使います。境界の向こうの規則は、「{yn}」がその規則を公表された言語（`published language rulec.…`）に入れ、`use rule … connect` で、その Connect のサービスとして呼びます。",
+                    "規則を同梱するか Lambda で呼ぶと、規則そのもの（「{yn}」の内側）を使います。境界の向こうの規則は、「{yn}」にその規則を公表された言語（`published language rulec.…`）に入れてもらい、`use rule … connect` で、その Connect のサービスとして呼んでください。",
                     "A rule bundled, or called as a Lambda function, is the rule itself, inside {yn}; a rule across the boundary is called as its Connect service, with `use rule … connect`, once {yn} puts it in a published language (`published language rulec.…`)."
                 ),
                 Kind::FlowRule { connect: true, .. } => tr!(
-                    "{sq} は「{yn}」の公表された言語に入っていません。規則を Connect で呼ぶには、「{yn}」がその規則を公表された言語（`published language rulec.…`）に入れます。",
+                    "{sq} は「{yn}」の公表された言語に入っていません。規則を Connect で呼ぶには、「{yn}」がその規則を公表された言語（`published language rulec.…`）に入れる必要があります。",
                     "The rule {sq} is in no published language of {yn}; to call it by Connect, {yn} puts it in a published language (`published language rulec.…`)."
                 ),
                 Kind::CalendarUse => tr!(
@@ -546,7 +546,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
                     "The crate at {sq} is in no published language of {yn}; a crate across the boundary is depended on only once {yn} puts it in a published language (`crate \"…\"` under a `published language`), or from the two's shared kernel."
                 ),
                 Kind::RuleApply => tr!(
-                    "`apply` は、呼び先の規則をこの規則の中に展開します。使うのは規則そのもの（「{yn}」の内側）です。境界の向こうの規則は、二つの共有カーネルに並べて展開するか、「{yn}」が公表された言語（`published language rulec.…`）に入れた規則を、ワークフローから `use rule … connect` で呼びます。",
+                    "`apply` は、呼び先の規則をこの規則の中に展開します。使うのは規則そのもの（「{yn}」の内側）です。境界の向こうの規則は、二つの共有カーネルに並べて展開するか、「{yn}」が公表された言語（`published language rulec.…`）に入れた規則を、ワークフローから `use rule … connect` で呼んでください。",
                     "An `apply` expands the rule it names into this one: the rule itself, inside {yn}. A rule across the boundary is expanded from the two's shared kernel, or called from a workflow with `use rule … connect` once {yn} puts it in a published language (`published language rulec.…`)."
                 ),
                 _ => tr!(
@@ -577,7 +577,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
                     tr!("公表された言語 {k} の公開ホストサービスは {ja} です。", "The open host services of the published language {k} are {en}.")
                 });
                 d = d.note(tr!(
-                    "境界の向こうのサービスは、相手が `open host service` に並べたものだけを呼びます。",
+                    "境界の向こうで呼べるサービスは、相手が `open host service` に並べたものだけです。",
                     "Across a boundary a workflow calls only the services the other side lists under `open host service`."
                 ));
                 diags.push(d);
@@ -596,7 +596,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
             let now: Vec<&str> = through.iter().map(|(t, _)| t.as_str()).collect();
             let fix = format!("through {}, {k}", now.join(", "));
             diags.push(diag("E203", tr!("「{xn}」が、`through` に無い package {k} を通って「{yn}」を参照しています", "{xn} refers to {yn} through the package {k}, which its `through` does not list")).note(tr!(
-                "上流と下流の関係は、下流が通ってよい上流の公表された言語を `through` に並べます。",
+                "上流と下流の関係では、下流が通ってよい上流の公表された言語を `through` に並べてください。",
                 "An upstream relationship lists under `through` the upstream's published languages the downstream may go through."
             )).fix_line(fix).refer(rel_ref));
             continue;
@@ -606,7 +606,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
                 let used: Vec<String> = c.uses.iter().map(|s| s.full.clone()).collect();
                 let used = if used.is_empty() { k.clone() } else { used.join(", ") };
                 diags.push(diag("E205", tr!("「{xn}」の公表された言語 {own} に、上流「{yn}」の型が出ています", "The published language {own} of {xn} shows the upstream {yn}'s types")).note(tr!(
-                    "{sp} は {used} を使っています。腐敗防止層の下流は、上流のモデルを自分の公表された言語に出しません。層の中で自分の型に読み替えます。",
+                    "{sp} は {used} を使っています。腐敗防止層の下流の公表された言語には、上流のモデルを出せません。層の中で自分の型に読み替えてください。",
                     "The file {sp} uses {used}. Downstream of an anticorruption layer, the upstream's model stays out of the downstream's own published language; the layer maps it to the downstream's types."
                 )).refer(rel_ref));
                 continue;

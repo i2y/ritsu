@@ -1,2 +1,2 @@
-エラー[E013]: E013-path-without-a-slash.geas:7:17: ページのパスは `/` から始めます（`open("/list")`）
+エラー[E013]: E013-path-without-a-slash.geas:7:17: ページのパスは、`/` から始めてください（`open("/list")`）
      7 |   when web.open("list")

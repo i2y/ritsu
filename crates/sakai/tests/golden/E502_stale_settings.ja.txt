@@ -1,5 +1,5 @@
 エラー[E502]: py/.importlinter:1:1: py/.importlinter が、いまの地図から書く設定と違います
      1 | # Written by `sakai build --target import-linter` from ../basic.ctx.
   = いまの地図から書くと、この行は `# `sakai build --target import-linter --lang ja` が ../basic.ctx から書いた設定。` です。
-  = このファイルは --lang en で書かれています。確かめるときも同じ --lang を渡します。
-  = `sakai build --target import-linter` で書き直します。
+  = このファイルは --lang en で書かれています。確かめるときも、同じ --lang を渡してください。
+  = `sakai build --target import-linter` で書き直してください。

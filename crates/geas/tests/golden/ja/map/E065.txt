@@ -4,6 +4,6 @@ ok 1 - runs
 エラー[E065]: e065/e065.geas:6:3: GEAS_LLVM_BIN は `empty` ですが、そこに `llvm-profdata` がありません
      6 |   when fake.run()
   = コマンド: python3 fake.py
-  = GEAS_LLVM_BIN には llvm-profdata と llvm-cov のあるディレクトリを書きます。これが設定されていると、geas はほかの場所を探しません
+  = GEAS_LLVM_BIN には、llvm-profdata と llvm-cov のあるディレクトリを設定してください。これが設定されていると、geas はほかの場所を探しません
   ここまでの実行:
        6  when fake.run()  →  exit 0

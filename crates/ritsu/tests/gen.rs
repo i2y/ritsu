@@ -494,7 +494,7 @@ fn what_cannot_be_a_package_is_refused() {
     assert_eq!(code, 2);
     assert_eq!(
         err,
-        "エラー: `delivery/配送の手配.flow` と `ordering/受注.flow` が、パッケージの同じ go/flows/workflow/doc.go を書きます。どちらかの名前を変えます（規則と日付のファイルは別名、帳簿は名前、ワークフローは名前かファイルの名前を ASCII で）\n"
+        "エラー: `delivery/配送の手配.flow` と `ordering/受注.flow` が、パッケージの同じ go/flows/workflow/doc.go を書きます。どちらかの名前を変えてください（規則と日付のファイルは別名、帳簿は名前、ワークフローは名前かファイルの名前を ASCII で）\n"
     );
     assert!(!out.exists(), "nothing is written when a package is refused");
     // a rule that does not pass its check

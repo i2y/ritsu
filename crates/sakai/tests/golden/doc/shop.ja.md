@@ -207,7 +207,7 @@ Collects what buyers think and shows it. It has nothing to do with billing
 
 ### Delivery ← Inventory：PackingStatus
 
-`proto "proto/warehouse/v1/stock.proto" enum PackingStatus` を `shipping_decision` に写す。 層は `dir "py/delivery/acl/inventory"`、`dir "ts/delivery/acl/inventory"`、`dir "java/src/main/java/delivery/acl/inventory"`、`dir "go/delivery/acl/inventory"`。 対応は `contexts/delivery.ctx` に書いたもの。対応の先は名前だけなので、下流の値は確かめていない。
+`proto "proto/warehouse/v1/stock.proto" enum PackingStatus` を `shipping_decision` に読み替える。 層は `dir "py/delivery/acl/inventory"`、`dir "ts/delivery/acl/inventory"`、`dir "java/src/main/java/delivery/acl/inventory"`、`dir "go/delivery/acl/inventory"`。 対応は `contexts/delivery.ctx` に書いたもの。対応の先は名前だけなので、下流の値は確かめていない。
 
 | 上流の値 | 下流の値 |
 |---|---|
@@ -217,7 +217,7 @@ Collects what buyers think and shows it. It has nothing to do with billing
 
 ### Billing ← Ordering：OrderStatus
 
-`proto "proto/shop/ordering/v1/order.proto" enum OrderStatus` を `rulec "billing/rules/billing_need.rule" enum order_status` に写す。 層は `rulec "billing/rules/billing_need.rule"`、`dir "py/billing/acl/ordering"`、`dir "ts/billing/acl/ordering"`、`dir "java/src/main/java/billing/acl/ordering"`、`dir "go/billing/acl/ordering"`。 対応は、規則の `import proto` から rulec が読んだもの（規則の表は rulec が確かめる）。
+`proto "proto/shop/ordering/v1/order.proto" enum OrderStatus` を `rulec "billing/rules/billing_need.rule" enum order_status` に読み替える。 層は `rulec "billing/rules/billing_need.rule"`、`dir "py/billing/acl/ordering"`、`dir "ts/billing/acl/ordering"`、`dir "java/src/main/java/billing/acl/ordering"`、`dir "go/billing/acl/ordering"`。 対応は、規則の `import proto` から rulec が読んだもの（規則の表は rulec が確かめる）。
 
 | 上流の値 | 下流の値 |
 |---|---|
@@ -228,7 +228,7 @@ Collects what buyers think and shows it. It has nothing to do with billing
 
 ## 確かめていないこと
 
-- 腐敗防止層のコードが、書いた対応のとおりに読み替えているか。sakai が確かめるのは、対応が上流の列挙を覆っていることと、対応の先が下流の列挙にあることまで（規則が先のときは、規則の表を rulec が確かめる）。
+- 腐敗防止層のコードが、書いた対応のとおりに読み替えているか。sakai が確かめるのは、対応が上流の列挙を網羅していることと、対応の先が下流の列挙にあることまで（規則が先のときは、規則の表を rulec が確かめる）。
 - 実行時にしか見えない呼び出し：URL を文字列で持つ HTTP、メッセージのキュー、データベースの共有、リフレクションと動的な import。
 - 生成したコードの置き場所のコードが、本当にその公表された言語から生成したものか。
 - 語の定義の文の中身。

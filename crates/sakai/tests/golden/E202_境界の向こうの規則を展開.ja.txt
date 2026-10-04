@@ -1,6 +1,6 @@
 エラー[E202]: billing/rules/送料.rule:10:1: 「請求」の billing/rules/送料.rule が、「配送」の内側の delivery/rules/割増.rule を参照しています（apply）
     10 | apply 割増(surcharge) = "../../delivery/rules/割増.rule" sha256:28e28bec2cb1a159
-  = `apply` は、呼び先の規則をこの規則の中に展開します。使うのは規則そのもの（「配送」の内側）です。境界の向こうの規則は、二つの共有カーネルに並べて展開するか、「配送」が公表された言語（`published language rulec.…`）に入れた規則を、ワークフローから `use rule … connect` で呼びます。
+  = `apply` は、呼び先の規則をこの規則の中に展開します。使うのは規則そのもの（「配送」の内側）です。境界の向こうの規則は、二つの共有カーネルに並べて展開するか、「配送」が公表された言語（`published language rulec.…`）に入れた規則を、ワークフローから `use rule … connect` で呼んでください。
   関わるもの:
       請求  billing/rules/送料.rule:10        apply "../../delivery/rules/割増.rule"
       配送  rulec "delivery/rules/割増.rule"  「配送」の内側のもの

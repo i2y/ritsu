@@ -16,9 +16,9 @@ invoice.flow: 検査を通りました（警告 1 件）
 警告[ritsu W205]: invoice.flow:29:1: koyomi の日付 `terms.payment` の `received` に渡す日が、入力の範囲に収まるかを決められません
     29 |   let due = terms.payment(received: now)
   = `now` はどの日にもなりえます。"payment_terms.cal" が `received` に受け取るのは 2026-01-01 から 2026-12-20 までです
-  = 範囲の外の日は、ワークフローを走らせたときに koyomi の生成したコードが断ります。
+  = 範囲の外の日は、ワークフローを走らせたときに、koyomi が生成したコードが断ります。
 警告[ritsu W206]: invoice.flow:31:1: `ship` が案件 `goods` の仮押さえを確定するときに期限が切れているかを決められません
     31 |   goods <- ship(order: order, sku: sku)
   = `ship` は仮押さえを作ってから（27 行目）早くても 17 日 9 時間あとに来ますが、遅いほうには上限がありません（27 行目の `reserve` には `timeout` がありません）。仮押さえは作ってから 60 日で期限が切れます
   = 期限の切れた仮押さえへの呼び出しは、帳簿が `expired` で断ります。フローはここでそれを処理しています。
-ritsu check: ファイル 4 個（koyomi 2、chobo 1、dandori 1）。どれも検査を通った（警告 3 件）。言語の境目: 確かめた 2 か所、決められない 2 か所
+ritsu check: ファイル 4 個（koyomi 2、chobo 1、dandori 1）。どれも検査を通りました（警告 3 件）。言語の境目: 確かめた 2 か所、決められない 2 か所

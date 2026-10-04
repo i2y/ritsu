@@ -124,7 +124,7 @@ impl Misuse {
     /// In ritsu-base's words, for `<tool> <cmd>`.
     pub fn text(&self, tool: &str, cmd: &str) -> Text {
         match self {
-            Misuse::UnknownFlag(name) => tr!("知らないフラグ `{name}` です。`{tool} {cmd} --help` を読んでください", "unknown flag `{name}`; run `{tool} {cmd} --help`"),
+            Misuse::UnknownFlag(name) => tr!("`{name}` というフラグはありません。`{tool} {cmd} --help` を読んでください", "unknown flag `{name}`; run `{tool} {cmd} --help`"),
             Misuse::TakesNoValue { flag, value } => tr!("`{flag}` は値を取りません（`={value}` が付いています）", "`{flag}` takes no value (it was given `={value}`)"),
             Misuse::MissingValue { flag, placeholder } => {
                 let s = format!("{flag} {placeholder}");
@@ -132,7 +132,7 @@ impl Misuse {
             }
             Misuse::NotAChoice { flag, value, choices } => {
                 let cs = choices.join(" | ");
-                tr!("`{flag} {value}` は知らない値です。書けるのは {cs} だけです", "`{flag} {value}` is not a value this flag takes; it takes only {cs}")
+                tr!("`{flag}` に `{value}` は使えません。使えるのは {cs} だけです", "`{flag} {value}` is not a value this flag takes; it takes only {cs}")
             }
             Misuse::Twice(flag) => tr!("`{flag}` が二度書かれています", "`{flag}` is given twice"),
         }

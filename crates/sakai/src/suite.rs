@@ -139,7 +139,7 @@ fn refused(m: &Model, a: &Artifact, said: &[Said]) -> Diag {
         d = d.note(tr!("ほかに {more} 件", "and {more} more"));
     }
     d.note(tr!(
-        "そのファイルが {t} の検査を通るように直します。読めないファイルの参照は、確かめられません。",
+        "そのファイルを、{t} の検査を通るように直してください。検査を通らないファイルや読めないファイルからは参照を読み取れないので、sakai はその参照を確かめられません。",
         "Make the file pass {t}'s check; the references of a file that cannot be read cannot be checked."
     ))
 }
@@ -165,7 +165,7 @@ pub fn read(m: &Model, arts: &[Artifact], suite: &Suite) -> (Read, Vec<Diag>) {
                 diag::at("E104", &c.file, pos.line, pos.col, tr!("この sakai は {t} の成果物を読めません（{n} 件。最初は {f}）", "This sakai cannot read {t} artifacts ({n} of them, the first {f})"))
                     .source(&c.src)
                     .note(tr!(
-                        "sakai のクレートのバイナリは、ほかの言語を持ちません。ほかの言語を読むところは、すべての言語をつないだ `{cmd}` のように ritsu で走らせます。",
+                        "sakai 単独のバイナリには、ほかの言語が入っていません。ほかの言語の成果物まで確かめるには、すべての言語をつないだ ritsu で、`{cmd}` のように走らせてください。",
                         "The binary of sakai's own crate holds no other language; run it with every language joined, through ritsu: `{cmd}`."
                     )),
             );

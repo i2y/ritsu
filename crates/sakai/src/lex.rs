@@ -71,8 +71,8 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
         let mut indent = 0;
         while indent < all.len() && (all[indent] == ' ' || all[indent] == '\t') {
             if all[indent] == '\t' {
-                diags.push(err("E005", indent + 1, tr!("字下げにタブがあります。字下げはスペースで書きます", "The indentation has a tab; indent with spaces")).note(tr!(
-                    "タブの幅はエディタによって違うので、行がそろっているかを決められません。",
+                diags.push(err("E005", indent + 1, tr!("字下げにタブがあります。字下げにはスペースを使ってください", "The indentation has a tab; indent with spaces")).note(tr!(
+                    "タブの幅はエディタによって違うので、行がそろっているかを sakai が決められません。",
                     "How wide a tab is depends on the editor, so whether the lines line up cannot be told."
                 )));
             }
@@ -109,7 +109,7 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
                 continue;
             }
             if c == '\u{3000}' {
-                diags.push(err("E001", col, tr!("全角の空白があります。語と語のあいだは半角のスペースで区切ります", "There is a full-width space; separate words with ASCII spaces")));
+                diags.push(err("E001", col, tr!("全角の空白があります。語と語のあいだは、半角のスペースで区切ってください", "There is a full-width space; separate words with ASCII spaces")));
                 j += 1;
                 continue;
             }
@@ -147,7 +147,7 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
                 }
                 if !closed {
                     diags.push(err("E001", col, tr!("閉じていない文字列があります", "A string is not closed")).note(tr!(
-                        "文字列は同じ行の `\"` で閉じます。",
+                        "文字列は、同じ行の `\"` で閉じてください。",
                         "A string is closed with `\"` on the same line."
                     )));
                     break;
@@ -209,7 +209,7 @@ pub fn tree(file: &str, src: &str, lines: &[Line]) -> (Vec<Node>, Vec<Diag>) {
                     diags.push(
                         diag::at("E005", file, l.no, l.indent + 1, tr!("字下げした行の上に、それを受ける行がありません", "This line is indented, and no line above takes it"))
                             .source(src)
-                            .note(tr!("節の最初の行は字下げしません。", "The first line of a section is not indented.")),
+                            .note(tr!("節の最初の行は、字下げしないでください。", "The first line of a section is not indented.")),
                     );
                     continue;
                 }
@@ -226,7 +226,7 @@ pub fn tree(file: &str, src: &str, lines: &[Line]) -> (Vec<Node>, Vec<Diag>) {
                             diag::at("E005", file, l.no, l.indent + 1, tr!("字下げがそろっていません", "The indentation does not line up"))
                                 .source(src)
                                 .note(tr!(
-                                    "同じ節の行は、同じ幅だけ字下げします。上の行の字下げは {want} 文字です。",
+                                    "同じ節の行は、同じ幅だけ字下げしてください。上の行の字下げは {want} 文字です。",
                                     "The lines of one block are indented alike; the line above is indented by {want}."
                                 )),
                         );

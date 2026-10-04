@@ -1,6 +1,6 @@
 エラー[E307]: ctx/受注.ctx:21:1: 共有カーネルが「受注」の側にしか書かれていません
     21 | shared kernel with 在庫
-  = 共有カーネルは二つのチームが一緒に持つものなので、「在庫」のファイルにも `shared kernel with 受注` を書き、同じものを並べます。
+  = 共有カーネルは二つのチームが一緒に持つものなので、「在庫」のファイルにも `shared kernel with 受注` を書き、同じものを並べてください。
   関わるもの:
       受注  ctx/受注.ctx:21  shared kernel with 在庫
 エラー[E201]: proto/warehouse/v1/stock.proto:5:1: 「在庫」の proto/warehouse/v1/stock.proto が、関係の無い「受注」の proto/shop/common/v1/money.proto を import しています

@@ -86,7 +86,7 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Rea
                     let sf = paths::shown(f);
                     p.at(ci, *at, "E302", tr!("{sf} の package は {got} で、見出しの {k} と違います", "The package of {sf} is {got}, not {k} as the heading says"))
                         .notes
-                        .push(tr!("公表された言語は proto の package を単位にします。その package を宣言するファイルだけを並べます。", "A published language is one proto package; list the files that declare that package."));
+                        .push(tr!("公表された言語の単位は proto の package です。その package を宣言するファイルだけを並べてください。", "A published language is one proto package; list the files that declare that package."));
                 }
             }
             if let Some((f, at)) = &pl.rulec
@@ -100,7 +100,7 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Rea
                     let (me, g) = (&c.name, paths::shown(g));
                     p.at(ci, *at, "E302", tr!("公表された言語 {k} の生成したコードの置き場所 {g} は「{me}」のものではありません", "Where the code made from {k} goes, {g}, is not {me}'s"))
                         .notes
-                        .push(tr!("生成したコードの置き場所は、公表するコンテキストに属するディレクトリにします。", "The code made from a published language goes in a directory of the context that publishes it."));
+                        .push(tr!("生成したコードの置き場所は、公表するコンテキストに属するディレクトリにしてください。", "The code made from a published language goes in a directory of the context that publishes it."));
                 }
             }
             // A rule's published language: the package and the service of its Connect, as rulec
@@ -154,13 +154,13 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Rea
                         Some(None) => {
                             p.at(ci, *at, "E302", tr!("公表された言語 {k} の {sd} は、`code rust` のワークスペースのクレートではありません", "The published language {k} names {sd}, which is no crate of the workspace at the `code rust` place"))
                                 .notes
-                                .push(tr!("`crate` には、Cargo がワークスペースのメンバーと言うクレートの、Cargo.toml のあるディレクトリを書きます。", "A crate line names the directory of the Cargo.toml of a crate Cargo says is a member of the workspace."));
+                                .push(tr!("`crate` には、Cargo がワークスペースのメンバーとして扱うクレートの、Cargo.toml のあるディレクトリを書いてください。", "A crate line names the directory of the Cargo.toml of a crate Cargo says is a member of the workspace."));
                         }
                         Some(Some(cr)) if cr.name.replace('-', "_") != *k => {
                             let got = &cr.name;
                             p.at(ci, *at, "E302", tr!("{sd} のクレートの名前は {got} で、見出しの {k} と違います", "The crate at {sd} is named {got}, not {k} as the heading says"))
                                 .notes
-                                .push(tr!("クレートの公表された言語の名前は、コードが書くクレートの名前（`-` を `_` にしたもの）です。", "The published language of a crate is named as code writes the crate: its name, with `-` written `_`."));
+                                .push(tr!("クレートの公表された言語の名前は、コードの中で書くクレートの名前（`-` を `_` にしたもの）です。", "The published language of a crate is named as code writes the crate: its name, with `-` written `_`."));
                         }
                         Some(Some(_)) => {}
                     }
@@ -168,7 +168,7 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Rea
                 for (s, at) in &pl.services {
                     p.at(ci, *at, "E301", tr!("公開ホストサービス {s} が、Rust のクレートの公表された言語 {k} にあります", "The open host service {s} is under {k}, the published language of a Rust crate"))
                         .notes
-                        .push(tr!("Rust のクレートは、境界の向こうから呼ぶサービスを持ちません。サービスは proto で公表します。", "A Rust crate has no service to call across a boundary; a service is published in a proto."));
+                        .push(tr!("Rust のクレートは、境界の向こうから呼ぶサービスを持ちません。サービスは proto で公表してください。", "A Rust crate has no service to call across a boundary; a service is published in a proto."));
                 }
             }
             if pl.rulec.is_none() && pl.krate.is_none() {
@@ -209,13 +209,13 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Rea
                     if let Some(at) = first_mapping {
                         if has(Role::Conformist) {
                             p.at(ci, at, "E304", tr!("順応者には、対応も `layer` も書けません", "A conformist has no mapping and no `layer`")).notes.push(tr!(
-                                "順応者は上流のモデルをそのまま使います。読み替えるなら、役割を anticorruption layer にします。",
+                                "順応者は上流のモデルをそのまま使います。読み替えるなら、役割を anticorruption layer にしてください。",
                                 "A conformist uses the upstream's model as it is; to map it, make the role anticorruption layer."
                             ));
                         } else if !has(Role::Acl) {
                             p.at(ci, at, "E305", tr!("腐敗防止層でない関係に、対応か `layer` があります", "A relationship that is not an anticorruption layer has a mapping or a `layer`"))
                                 .notes
-                                .push(tr!("対応と層を書けるのは腐敗防止層だけです。`, anticorruption layer` を役割に足します。", "Only an anticorruption layer has mappings and a layer; add `, anticorruption layer` to the role."));
+                                .push(tr!("対応と層を書けるのは腐敗防止層だけです。`, anticorruption layer` を役割に足してください。", "Only an anticorruption layer has mappings and a layer; add `, anticorruption layer` to the role."));
                         }
                     }
                     let published: Vec<&str> = m.contexts[r.partner].published.iter().map(|x| x.package.as_str()).collect();
@@ -244,12 +244,12 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Rea
                             };
                             p.at(ci, o.pos, "E313", tr!("腐敗防止層の {t} は「{me}」のものではありません（{}）", "The layer's {t} is not {me}'s ({})", w.ja; w.en))
                                 .notes
-                                .push(tr!("腐敗防止層は下流の側に置きます。層は、下流のコンテキストに属するディレクトリかファイルです。", "An anticorruption layer is on the downstream's side: a directory or file of the downstream."));
+                                .push(tr!("腐敗防止層は、下流の側に置いてください。層は、下流のコンテキストに属するディレクトリかファイルです。", "An anticorruption layer is on the downstream's side: a directory or file of the downstream."));
                         }
                     }
                     if has(Role::Customer) && !m.writes(r.partner, ci, |k| matches!(k, RelK::Downstream)) {
                         let d = p.at(ci, r.pos, "E303", tr!("「{me}」は「{pn}」の顧客だと書いていますが、「{pn}」の側に `downstream {me} supplier` がありません", "{me} says it is {pn}'s customer, and {pn} has no `downstream {me} supplier`"));
-                        d.notes.push(tr!("顧客／供給者は二つのチームの合意なので、両方のファイルに書きます。", "Customer and supplier is an agreement of two teams, written in both files."));
+                        d.notes.push(tr!("顧客／供給者は二つのチームの合意なので、両方のファイルに書いてください。", "Customer and supplier is an agreement of two teams, written in both files."));
                         d.fix = Some(ritsu_base::diag::Fix::Line(format!("downstream {me} supplier")));
                     }
                 }
@@ -262,13 +262,13 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Rea
                             let rs = roles.join(", ");
                             d.notes.push(tr!("「{pn}」は `upstream {me} {rs}` と書いています。", "{pn} writes `upstream {me} {rs}`."));
                         }
-                        d.notes.push(tr!("顧客／供給者は二つのチームの合意なので、両方のファイルに書きます。", "Customer and supplier is an agreement of two teams, written in both files."));
+                        d.notes.push(tr!("顧客／供給者は二つのチームの合意なので、両方のファイルに書いてください。", "Customer and supplier is an agreement of two teams, written in both files."));
                     }
                 }
                 RelK::Partnership => {
                     if !m.writes(r.partner, ci, |k| matches!(k, RelK::Partnership)) {
                         let d = p.at(ci, r.pos, "E309", tr!("パートナーシップが「{me}」の側にしか書かれていません", "The partnership is written on {me}'s side only"));
-                        d.notes.push(tr!("パートナーシップは二つのチームの合意なので、「{pn}」のファイルにも `partnership with {me}` を書きます。", "A partnership is an agreement of two teams; write `partnership with {me}` in {pn}'s file too."));
+                        d.notes.push(tr!("パートナーシップは二つのチームの合意なので、「{pn}」のファイルにも `partnership with {me}` を書いてください。", "A partnership is an agreement of two teams; write `partnership with {me}` in {pn}'s file too."));
                         d.fix = Some(ritsu_base::diag::Fix::Line(format!("partnership with {me}")));
                     }
                 }
@@ -298,7 +298,7 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Rea
                     let r = p.rel_ref(a, ra);
                     let d = p.at(a, ra.pos, "E307", tr!("共有カーネルが「{me}」の側にしか書かれていません", "The shared kernel is written on {me}'s side only"));
                     d.notes.push(tr!(
-                        "共有カーネルは二つのチームが一緒に持つものなので、「{pn}」のファイルにも `shared kernel with {me}` を書き、同じものを並べます。",
+                        "共有カーネルは二つのチームが一緒に持つものなので、「{pn}」のファイルにも `shared kernel with {me}` を書き、同じものを並べてください。",
                         "A shared kernel is held by two teams together; write `shared kernel with {me}` in {pn}'s file too, with the same entries."
                     ));
                     d.extra.0.push(r);
@@ -352,7 +352,7 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Rea
                                 "No copy on {nb}'s side has the bytes of {na}'s {} ({nb} has {}).",
                                 xs.join("、"), ys.join("、"); xs.join(", "), ys.join(", ")
                             ));
-                            d.notes.push(tr!("写しを両側に置くときは、中身を同じに保ちます。", "When each side keeps a copy, the copies are kept the same."));
+                            d.notes.push(tr!("写しを両側に置くときは、中身を同じに保ってください。", "When each side keeps a copy, the copies are kept the same."));
                             d.extra.0.push(ra_ref);
                             d.extra.0.push(rb_ref);
                         }
@@ -414,7 +414,7 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Rea
             }
             let d = p.at(s, r.pos, "W301", tr!("上流をたどると、元のコンテキストに戻ります: {shown}", "Following the upstreams comes back where it started: {shown}"));
             d.notes.push(tr!(
-                "互いに上流のコンテキストは、どちらも相手の変更に引きずられます。向きを一つにそろえるか、パートナーシップにすることを考えます。",
+                "互いに上流のコンテキストは、どちらも相手の変更に引きずられます。向きを一つにそろえるか、パートナーシップにすることを考えてください。",
                 "Contexts upstream of each other are each dragged along by the other's changes; consider one direction, or a partnership."
             ));
             d.extra.0 = refs;

@@ -223,7 +223,7 @@ fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
         return fail(
             e080(
                 "no command given; geas runs as `geas <command> …`",
-                "コマンドがありません。geas は `geas <コマンド> …` の形で走らせます",
+                "コマンドがありません。geas は、`geas <コマンド> …` の形で走らせてください",
             )
             .note(commands_note()),
         );
@@ -306,7 +306,7 @@ fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
         Cmd::Skill if flags.contains(&"--force") && value("--install").is_none() => {
             return fail(e080(
                 "`--force` goes with `--install <dir>`: it lets geas write over the skill folder there",
-                "`--force` は `--install <dir>` と一緒に使います。そこにあるスキルのフォルダーへの上書きを許すオプションです",
+                "`--force` は、`--install <dir>` と一緒に使ってください。そこにあるスキルのフォルダーへの上書きを許すオプションです",
             ));
         }
         Cmd::Skill => {}
@@ -408,7 +408,7 @@ fn fail(a: &Args, file: &str, diags: &[(String, Diag)], src: &str) {
 fn baseline_problem(e: drift::BaselineError, file: &str, p: &Paths) -> (String, Diag, String) {
     let base = shown(&p.baseline);
     let again = tr!(
-        "ベースラインは `geas snap` が書きます。`geas snap {file}` を走らせると書き直します",
+        "ベースラインは `geas snap` が書きます。`geas snap {file}` を走らせると、ベースラインが書き直されます",
         "`geas snap` writes the baseline; run `geas snap {file}` to write it again",
     );
     match e {
@@ -420,7 +420,7 @@ fn baseline_problem(e: drift::BaselineError, file: &str, p: &Paths) -> (String, 
                 tr!("{base} にベースラインがありません", "there is no baseline at {base}"),
             )
             .note(tr!(
-                "先に `geas snap {file}` を走らせてください。ドリフトは今回の実行を、snap が残したものと比べます",
+                "先に `geas snap {file}` を走らせてください。`geas drift` は、今回の実行を snap が残したものと比べます",
                 "run `geas snap {file}` first; drift compares a run with what snap kept",
             ));
             if p.old_baseline.is_file() {

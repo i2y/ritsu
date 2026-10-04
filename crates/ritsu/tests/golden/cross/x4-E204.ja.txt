@@ -7,6 +7,6 @@ hall.book: ok
 booking.flow: 検査を通りました
 エラー[ritsu E204]: booking.flow:18:1: 帳簿は `assign.do` を `over_capacity` で断ることがありますが、タスク `give_seats` はそれを処理していません
     18 |   give_seats(event: event, count: need.needed)
-  = 額を 30 から 400 まで（呼び出しが渡す額の範囲）に限った chobo の探索が、`assign.do` が `over_capacity` で断られる例を見つけます
+  = 額を 30 から 400 まで（呼び出しが渡す額の範囲）に限った chobo の探索で、`assign.do` が `over_capacity` で断られる例が見つかりました
   = タスクのエラーとして宣言し、処理してください（`errors over_capacity` と `on over_capacity =>`）。
 ritsu check: ファイル 3 個（rulec 1、chobo 1、dandori 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 2 か所、決められない 0 か所

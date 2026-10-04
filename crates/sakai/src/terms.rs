@@ -188,7 +188,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], cros
                                 let dv = &def.value;
                                 dg = dg.note(tr!("「{xn}」の「{to}」は「{dv}」で、「{yn}」の「{tn}」とは違う意味です。", "{xn}'s {to} is \"{dv}\", which is not what {yn}'s {tn} means."));
                             }
-                            dg = dg.note(tr!("読み替えた先には、違う名前を付けます。", "Give what it is mapped to another name."));
+                            dg = dg.note(tr!("読み替えた先には、違う名前を付けてください。", "Give what it is mapped to another name."));
                             diags.push(dg.refer(t_ref).refer(d_ref));
                         }
                         continue;
@@ -209,7 +209,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], cros
                     }
                     if acl {
                         dg = dg.note(tr!(
-                            "「{xn}」は「{yn}」とのあいだに腐敗防止層を置いているので、対応で読み替えます。`term {tn} -> <「{xn}」の語>` を書くか、列挙なら値の行で、違う名前の値に読み替えます。",
+                            "「{xn}」は「{yn}」とのあいだに腐敗防止層を置いているので、対応で読み替えてください。`term {tn} -> <「{xn}」の語>` を書くか、列挙なら値の行で、違う名前の値に読み替えてください。",
                             "{xn} keeps an anticorruption layer toward {yn}: map it, with `term {tn} -> <a term of {xn}>`, or for an enum with the value lines, to a value of another name."
                         ));
                     } else {
@@ -220,7 +220,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], cros
                         };
                         dg = dg.note(tr!("「{xn}」は「{yn}」の{}なので、対応を書いて読み替えることはできません。", "{xn} is {} of {yn}, so it has no mapping to map it with.", role.ja; role.en));
                         dg = dg.note(tr!(
-                            "直し方: 「{xn}」の語の名前を変える。同じ意味なら `{dn} as {yn}.{tn}` にする。読み替えるなら、`upstream {yn}` を anticorruption layer にして `term {tn} -> <「{xn}」の語>` を書く。",
+                            "「{xn}」の語の名前を変えてください。同じ意味なら `{dn} as {yn}.{tn}` にし、読み替えるなら `upstream {yn}` を anticorruption layer にして `term {tn} -> <「{xn}」の語>` を書いてください。",
                             "To fix it: rename {xn}'s term; if it means the same, write `{dn} as {yn}.{tn}`; to map it, make `upstream {yn}` an anticorruption layer and write `term {tn} -> <a term of {xn}>`."
                         ));
                     }
@@ -255,7 +255,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], cros
             if !crossing {
                 let tn = &t.name;
                 diags.push(at(ci, t.pos, "W401", tr!("語「{tn}」は境界を越えません", "The term {tn} crosses no boundary")).note(tr!(
-                    "用語集には、境界を越える語だけを書きます。語が境界を越えるのは、`means` で自分の公表された言語の要素を指すとき、`as` で相手の語を取り入れるとき、腐敗防止層の対応の先になるとき、上流から越えてくる同じ名前の語とぶつかるときです。",
+                    "用語集には、境界を越える語だけを書いてください。語が境界を越えるのは、`means` で自分の公表された言語の要素を指すとき、`as` で相手の語を取り入れるとき、腐敗防止層の対応の先になるとき、上流から越えてくる同じ名前の語とぶつかるときです。",
                     "A glossary holds only the words that cross a boundary: a term that `means` an element of the context's published language, takes another's with `as`, is what an anticorruption layer maps to, or meets a word of the same name crossing from upstream."
                 )));
             }

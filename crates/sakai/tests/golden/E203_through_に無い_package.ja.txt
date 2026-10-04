@@ -1,6 +1,6 @@
 エラー[E203]: proto/shop/ordering/v1/fulfillment_lite.proto:6:1: 「受注」が、`through` に無い package warehouse.v2 を通って「在庫」を参照しています
      6 | import "warehouse/v2/stock.proto";
-  = 上流と下流の関係は、下流が通ってよい上流の公表された言語を `through` に並べます。
+  = 上流と下流の関係では、下流が通ってよい上流の公表された言語を `through` に並べてください。
   = 直した行: through warehouse.v1, warehouse.v2
   関わるもの:
       受注  proto/shop/ordering/v1/fulfillment_lite.proto:6  import "warehouse/v2/stock.proto"

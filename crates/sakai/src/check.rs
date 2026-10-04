@@ -78,11 +78,11 @@ fn proto_diags(m: &Model, issues: &[Issue]) -> Vec<Diag> {
                 let tried: Vec<String> = tried.iter().map(|t| shown(t)).collect();
                 let (tj, te) = (tried.join("、"), tried.join(", "));
                 out.push(
-                    diag::at("W102", file, import.line, import.col, tr!("{f} の import \"{ip}\" が見つかりません。範囲の外のものとして扱います", "The import \"{ip}\" of {f} is not found; it is taken as outside the scope"))
+                    diag::at("W102", file, import.line, import.col, tr!("{f} の import \"{ip}\" が見つかりません。sakai は、範囲の外のものとして扱います", "The import \"{ip}\" of {f} is not found; it is taken as outside the scope"))
                         .source(&src(file))
                         .note(tr!("探した場所: {tj}", "looked for at: {te}"))
                         .note(tr!(
-                            "そのファイルの型は分からないものとして、参照の検査から外します。地図の `proto root` に、import を探すディレクトリを書けます。",
+                            "sakai は、そのファイルの型を分からないものとして、参照の検査から外します。地図の `proto root` に、import を探すディレクトリを書けます。",
                             "The types of that file are not known, and are left out of the check of the references; the map's `proto root` says where imports are looked for."
                         )),
                 );
@@ -298,7 +298,7 @@ pub fn check_args_with(root: &Path, args: &[String], suite: &crate::suite::Suite
                     if !reads.contains(&f) {
                         let sf = shown(&f);
                         let d = diag::at("W103", &f, 1, 1, tr!("{sf} を読む地図がありません", "No map reads {sf}")).source(&src).note(tr!(
-                            "地図の `use context` に足すか、ファイルを消します。どの地図にも読まれないコンテキストは、検査されません。",
+                            "地図の `use context` に足すか、ファイルを消してください。どの地図にも読まれないコンテキストは、検査されません。",
                             "Add it to a map's `use context`, or delete the file; a context no map reads is not checked."
                         ));
                         out.push(Outcome { file: f, diags: vec![d], summary: None, checked: None, reads: vec![] });
@@ -313,7 +313,7 @@ pub fn check_args_with(root: &Path, args: &[String], suite: &crate::suite::Suite
             })?;
             match crate::parse::kind_of(&src) {
                 Some("map") => out.push(check_map_with(root, a, suite)?),
-                Some(_) => return Err(tr!("{sa} は context のファイルです。map のファイルかディレクトリを渡します", "{sa} is a context file; give a map file, or a directory")),
+                Some(_) => return Err(tr!("{sa} は context のファイルです。map のファイルかディレクトリを渡してください", "{sa} is a context file; give a map file, or a directory")),
                 None => {
                     let (_, ds) = crate::parse::parse(a, &src);
                     out.push(Outcome { file: a.clone(), diags: ds, summary: None, checked: None, reads: vec![] });

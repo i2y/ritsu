@@ -3,7 +3,7 @@
   = 「在庫」の「引当」は「注文の一行のために、棚の在庫を出荷か取消まで押さえておくこと」で、proto "proto/warehouse/v1/stock.proto" message ReserveResponse を指します。
   = 「受注」の「引当」は「客の注文の一行に、届ける日を割り当てること」です。
   = 「受注」は「在庫」の順応者なので、対応を書いて読み替えることはできません。
-  = 直し方: 「受注」の語の名前を変える。同じ意味なら `引当 as 在庫.引当` にする。読み替えるなら、`upstream 在庫` を anticorruption layer にして `term 引当 -> <「受注」の語>` を書く。
+  = 「受注」の語の名前を変えてください。同じ意味なら `引当 as 在庫.引当` にし、読み替えるなら `upstream 在庫` を anticorruption layer にして `term 引当 -> <「受注」の語>` を書いてください。
   関わるもの:
       受注  proto/shop/ordering/v1/fulfillment.proto:15                     import "warehouse/v1/stock.proto"
       在庫  proto "proto/warehouse/v1/stock.proto" message ReserveResponse  「在庫」の語「引当」が指すもの

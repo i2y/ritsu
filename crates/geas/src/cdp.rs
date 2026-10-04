@@ -507,7 +507,7 @@ impl Pages<'_> {
                 "the page of `{name}` did not settle within {secs} s",
             ),
             notes: vec![tr!(
-                "geas は操作のたびにページの時刻を進め、その時刻はページのリクエストが終わるまで止まります。サービスが答えないリクエストがあると、時刻は進みません",
+                "geas は操作のたびにページの時刻を進め、その時刻はページのリクエストが終わるまで止まります。レスポンスの返らないリクエストがあると、時刻は進みません",
                 "geas lets a page's clock run after each action, and the clock waits while a fetch is pending: a request the service never answers holds it",
             )],
         })
@@ -543,7 +543,7 @@ impl Pages<'_> {
                         "`{name}` のページ `{path}` が {secs} 秒のうちに読み込まれませんでした",
                         "the page `{path}` of `{name}` did not load within {secs} s",
                     ),
-                    notes: vec![tr!("サービスがページのリクエストに答えませんでした", "the service did not answer the request for the page")],
+                    notes: vec![tr!("サービスが、ページのリクエストにレスポンスを返しませんでした", "the service did not answer the request for the page")],
                 });
             }
             Err(e) => return Err(unanswered("Page.navigate", &e)),

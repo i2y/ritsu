@@ -226,10 +226,10 @@ fn exit_of(diags: &[crate::diag::Diag]) -> u8 {
 /// The one map file a command takes: the root, the map from it, and the paths shown from here.
 fn one_map(a: &Args, cmd: &str, lang: Lang, err: &mut dyn Write) -> Result<(PathBuf, String), u8> {
     let [map] = a.pos.as_slice() else {
-        return Err(refuse(err, tr!("`sakai {cmd}` には map のファイルを一つ渡します", "`sakai {cmd}` takes one map file"), lang));
+        return Err(refuse(err, tr!("`sakai {cmd}` には、map のファイルを一つ渡してください", "`sakai {cmd}` takes one map file"), lang));
     };
     if ritsu_base::fs::is_dir(map) {
-        return Err(refuse(err, tr!("`sakai {cmd}` には map のファイルを渡します（ディレクトリではなく）", "`sakai {cmd}` takes a map file, not a directory"), lang));
+        return Err(refuse(err, tr!("`sakai {cmd}` には、ディレクトリではなく map のファイルを渡してください", "`sakai {cmd}` takes a map file, not a directory"), lang));
     }
     let root = root_of(a, map).map_err(|e| refuse(err, e, lang))?;
     paths::show_from(paths::Shown::new(&root, map));
@@ -264,7 +264,7 @@ fn build_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut
 
 fn export_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     if a.pos.first().map(String::as_str) != Some("cml") {
-        return refuse(err, tr!("`sakai export` のあとには、書き出す形 `cml` を書きます", "`sakai export` is followed by the form to write, `cml`"), lang);
+        return refuse(err, tr!("`sakai export` のあとには、書き出す形 `cml` を書いてください", "`sakai export` is followed by the form to write, `cml`"), lang);
     }
     let rest = Args { got: a.got.clone(), pos: a.pos[1..].to_vec() };
     let (root, map) = match one_map(&rest, "export cml", lang, err) {
@@ -321,7 +321,7 @@ fn doc_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
                 return refuse(err, tr!("{f} に書けません: {e}", "cannot write {f}: {e}"), lang);
             }
             let f = path.display().to_string();
-            let _ = writeln!(out, "{}", tr!("{f}: 書いた", "{f}: Written").get(lang));
+            let _ = writeln!(out, "{}", tr!("{f}: 書きました", "{f}: Written").get(lang));
         }
         None => {
             let _ = write!(out, "{text}");
@@ -332,10 +332,10 @@ fn doc_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
 
 fn api_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     if a.pos.len() != 1 {
-        return refuse(err, tr!("`sakai api` には map のファイルを一つ渡します", "`sakai api` takes one map file"), lang);
+        return refuse(err, tr!("`sakai api` には、map のファイルを一つ渡してください", "`sakai api` takes one map file"), lang);
     }
     if ritsu_base::fs::is_dir(&a.pos[0]) {
-        return refuse(err, tr!("`sakai api` には map のファイルを渡します（ディレクトリではなく）", "`sakai api` takes a map file, not a directory"), lang);
+        return refuse(err, tr!("`sakai api` には、ディレクトリではなく map のファイルを渡してください", "`sakai api` takes a map file, not a directory"), lang);
     }
     let root = match root_of(a, &a.pos[0]) {
         Ok(r) => r,
@@ -379,7 +379,7 @@ fn explain_cmd(a: &Args, lang: Lang, _suite: &Suite, out: &mut dyn Write, err: &
         return 0;
     }
     let [code] = a.pos.as_slice() else {
-        return refuse(err, tr!("`sakai explain` には `E201` のようなコードを一つ渡します", "`sakai explain` takes one code, like `E201`"), lang);
+        return refuse(err, tr!("`sakai explain` には、`E201` のようなコードを一つ渡してください", "`sakai explain` takes one code, like `E201`"), lang);
     };
     match ledger.find(code) {
         Some(e) => {

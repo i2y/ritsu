@@ -897,7 +897,7 @@ pub fn cfr_id(id: &str) -> Result<(String, String), Text> {
     let words: Vec<&str> = id.split_whitespace().collect();
     match words.as_slice() {
         [t, c, part] if c.eq_ignore_ascii_case("cfr") && t.chars().all(|x| x.is_ascii_digit()) && part.chars().all(|x| x.is_ascii_alphanumeric()) => Ok((t.to_string(), part.to_string())),
-        _ => Err(tr!("CFR の ID は `29 CFR 1910` の形（title と part）で書きます: `{id}`", "a CFR id is written `29 CFR 1910`, a title and a part: `{id}`")),
+        _ => Err(tr!("CFR の ID は、`29 CFR 1910` の形（title と part）で書いてください: `{id}`", "a CFR id is written `29 CFR 1910`, a title and a part: `{id}`")),
     }
 }
 

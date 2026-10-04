@@ -283,7 +283,7 @@ impl Parser<'_> {
             bad(
                 open,
                 "`{` starts a count such as `{2}`, `{2,}` or `{2,5}`; write `\\{` for a brace",
-                "`{` は `{2}`、`{2,}`、`{2,5}` のような回数を書き始める記号です。中かっこそのものは `\\{` と書きます",
+                "`{` は `{2}`、`{2,}`、`{2,5}` のような回数を書き始める記号です。中かっこそのものは `\\{` と書いてください",
             )
         };
         self.i += 1;
@@ -316,7 +316,7 @@ impl Parser<'_> {
             return Err(Bad {
                 at: open,
                 why: tr!(
-                    "回数 `{{{min},{m}}}` の大小が逆です。小さいほうを先に書きます",
+                    "回数 `{{{min},{m}}}` の大小が逆です。小さいほうを先に書いてください",
                     "the count `{{{min},{m}}}` runs backwards; the smaller number comes first",
                 ),
             });
@@ -362,19 +362,19 @@ impl Parser<'_> {
             '*' | '+' | '?' => Err(Bad {
                 at,
                 why: tr!(
-                    "`{c}` の前に繰り返すものがありません。文字そのものは `\\{c}` と書きます",
+                    "`{c}` の前に繰り返すものがありません。文字そのものは `\\{c}` と書いてください",
                     "`{c}` repeats nothing before it; write `\\{c}` for the character",
                 ),
             }),
             '{' => Err(bad(
                 at,
                 "`{` repeats nothing before it; write `\\{` for a brace",
-                "`{` の前に繰り返すものがありません。中かっこそのものは `\\{` と書きます",
+                "`{` の前に繰り返すものがありません。中かっこそのものは `\\{` と書いてください",
             )),
             '^' | '$' => Err(Bad {
                 at,
                 why: tr!(
-                    "パターンはいつも値の全体と照らし合わせるので、`{c}` は要りません。文字そのものは `\\{c}` と書きます",
+                    "パターンはいつも値の全体と照らし合わせるので、`{c}` は要りません。文字そのものは `\\{c}` と書いてください",
                     "a pattern always matches the whole value, so it takes no `{c}`; write `\\{c}` for the character",
                 ),
             }),
@@ -438,7 +438,7 @@ impl Parser<'_> {
                     return Err(bad(
                         at,
                         "a class names at least one character; write `\\]` for a bracket",
-                        "文字クラスには少なくとも一つの文字を書きます。角かっこそのものは `\\]` と書きます",
+                        "文字クラスには、少なくとも一つの文字を書いてください。角かっこそのものは `\\]` と書いてください",
                     ));
                 }
                 ']' => break,
@@ -464,7 +464,7 @@ impl Parser<'_> {
                                 return Err(bad(
                                     hi_at,
                                     "a range ends in a character, not in a class such as `\\d`",
-                                    "範囲の終わりには文字を書きます。`\\d` のような文字クラスは書けません",
+                                    "範囲の終わりには文字を書いてください。`\\d` のような文字クラスは書けません",
                                 ));
                             }
                         }
@@ -479,7 +479,7 @@ impl Parser<'_> {
                     return Err(Bad {
                         at,
                         why: tr!(
-                            "範囲 `{lo}-{hi}` の大小が逆です。小さいほうの文字を先に書きます",
+                            "範囲 `{lo}-{hi}` の大小が逆です。小さいほうの文字を先に書いてください",
                             "the range `{lo}-{hi}` runs backwards; the smaller character comes first",
                         ),
                     });

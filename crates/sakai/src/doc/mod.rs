@@ -318,13 +318,13 @@ pub fn page(o: &Outcome, suite: &Suite, lang: Lang) -> Page {
     let before = b.len();
     mappings(c, &mut b, lang);
     if b.len() == before {
-        b.push(Block::Para(t(lang, "列挙を写す腐敗防止層はない。", "No anticorruption layer maps an enum.")));
+        b.push(Block::Para(t(lang, "列挙を読み替える腐敗防止層はない。", "No anticorruption layer maps an enum.")));
     }
 
     // 6. what is not checked
     b.push(Block::Heading(2, t(lang, "確かめていないこと", "What is not checked"), None));
     b.push(Block::List(vec![
-        t(lang, "腐敗防止層のコードが、書いた対応のとおりに読み替えているか。sakai が確かめるのは、対応が上流の列挙を覆っていることと、対応の先が下流の列挙にあることまで（規則が先のときは、規則の表を rulec が確かめる）。", "Whether the code of an anticorruption layer maps as the mapping says. sakai checks that the mapping covers the upstream's enum and that what it maps to is in the downstream's enum (where a rule is the target, rulec checks the rule's tables)."),
+        t(lang, "腐敗防止層のコードが、書いた対応のとおりに読み替えているか。sakai が確かめるのは、対応が上流の列挙を網羅していることと、対応の先が下流の列挙にあることまで（規則が先のときは、規則の表を rulec が確かめる）。", "Whether the code of an anticorruption layer maps as the mapping says. sakai checks that the mapping covers the upstream's enum and that what it maps to is in the downstream's enum (where a rule is the target, rulec checks the rule's tables)."),
         t(lang, "実行時にしか見えない呼び出し：URL を文字列で持つ HTTP、メッセージのキュー、データベースの共有、リフレクションと動的な import。", "Calls seen only at run time: HTTP to a URL held in a string, message queues, a shared database, reflection and dynamic imports."),
         t(lang, "生成したコードの置き場所のコードが、本当にその公表された言語から生成したものか。", "Whether the code where generated code is kept was really generated from the published language."),
         t(lang, "語の定義の文の中身。", "What a term's definition says."),
@@ -620,7 +620,7 @@ fn mappings(c: &Checked, b: &mut Vec<Block>, lang: Lang) {
                 let head = if lang == Lang::Ja { format!("{} ← {}：{}", x.name, up.name, em.from) } else { format!("{} ← {}: {}", x.name, up.name, em.from) };
                 b.push(Block::Heading(3, head, None));
                 let lay: Vec<String> = layer.iter().map(|o| code(&format!("{} \"{}\"", o.tool.map(|t| t.word()).unwrap_or("dir"), rel(m, &o.path)))).collect();
-                let mut says = vec![if lang == Lang::Ja { format!("{} を {} に写す。", code(&from), code(&to)) } else { format!("Maps {} to {}.", code(&from), code(&to)) }];
+                let mut says = vec![if lang == Lang::Ja { format!("{} を {} に読み替える。", code(&from), code(&to)) } else { format!("Maps {} to {}.", code(&from), code(&to)) }];
                 if !lay.is_empty() {
                     says.push(if lang == Lang::Ja { format!("層は {}。", join(lang, &lay)) } else { format!("The layer is {}.", join(lang, &lay)) });
                 }

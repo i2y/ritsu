@@ -277,7 +277,7 @@ pub fn root_and_spec(file: &str, root_flag: Option<&str>) -> Result<(PathBuf, St
             ),
         )
         .note(tr!(
-            "記録のパスはルートからの相対パスなので、主張のファイルはルートの下に置きます",
+            "記録のパスはルートからの相対パスなので、主張のファイルはルートの下に置いてください",
             "the record's paths are relative to the root, so the spec has to be under it",
         ))),
     }

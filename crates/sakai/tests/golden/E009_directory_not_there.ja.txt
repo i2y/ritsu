@@ -1,3 +1,3 @@
 エラー[E009]: ctx/inventory.ctx:6:29: パス "../py/inventry" がありません
      6 |   dir "../proto/warehouse", "../py/inventry"
-  = パスは、この .ctx のあるディレクトリから数えます。書いてあるパスは py/inventry を指します。
+  = パスは、この .ctx のあるディレクトリからの相対パスです。書いてあるパスは py/inventry を指します。

@@ -159,7 +159,7 @@ fn what_stops_a_command_line() {
     let y = yuen();
     let e = read(&y, &["p", "--fromat", "json"]).unwrap_err();
     assert_eq!(e.en, "unknown flag `--fromat`; run `yuen review --help`");
-    assert_eq!(e.ja, "知らないフラグ `--fromat` です。`yuen review --help` を読んでください");
+    assert_eq!(e.ja, "`--fromat` というフラグはありません。`yuen review --help` を読んでください");
     assert_eq!(read(&y, &["p", "--lang", "fr"]).unwrap_err().en, "`--lang fr` is not a value this flag takes; it takes only ja | en");
     assert_eq!(read(&y, &["p", "--by"]).unwrap_err().en, "`--by <role>` is missing its value");
     assert_eq!(read(&y, &["p", "--by", "a", "--by", "b"]).unwrap_err().en, "`--by` is given twice");

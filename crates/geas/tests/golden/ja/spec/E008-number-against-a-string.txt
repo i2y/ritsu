@@ -1,2 +1,2 @@
-エラー[E008]: E008-number-against-a-string.geas:7:16: `exit` は数です。値は `"` で囲まずに書きます（`exit is 0`）
+エラー[E008]: E008-number-against-a-string.geas:7:16: `exit` は数です。値は `"` で囲まずに書いてください（`exit is 0`）
      7 |   then exit is "0"

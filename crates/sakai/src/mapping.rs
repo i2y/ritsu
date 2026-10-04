@@ -87,7 +87,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], read
                                 diag::at("E405", &c.file, at.line, at.col, tr!("{sr} は {vn} を {rv} として取り込んでいますが、対応は {wrote} にしています", "The rule {sr} takes {vn} in as {rv}, and the mapping makes it {wrote}"))
                                     .source(&c.src)
                                     .note(tr!(
-                                        "規則の `import proto` と腐敗防止層の対応は、同じ読み替えを書きます。どちらかを直します。値の行を消せば、規則の取り込みが対応になります。",
+                                        "規則の `import proto` と腐敗防止層の対応には、同じ読み替えを書いてください。どちらかを直すか、値の行を消してください。値の行を消せば、規則の取り込みがそのまま対応になります。",
                                         "A rule's `import proto` and the anticorruption layer's mapping say the same mapping; correct one of them. Without value lines, the rule's import is the mapping."
                                     ))
                                     .refer(rel_ref.clone()),
@@ -110,7 +110,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], read
                                 diag::at("W402", &c.file, vm.from_pos.line, vm.from_pos.col, tr!("値が無いことを表す 0 番の値 {vn} に、対応は要りません", "The value 0, {vn}, says nothing is set and needs no mapping"))
                                     .source(&c.src)
                                     .note(tr!(
-                                        "0 番の値で、名前から列挙の接頭辞を外すと unspecified になるものは、値が設定されていないことを表す印です。rulec の `import proto` と dandori の proto から作る型も、同じ値を外します。",
+                                        "0 番の値で、名前から列挙の接頭辞を外すと unspecified になるものは、値が設定されていないことを表す値です。rulec の `import proto` と dandori の proto から作る型も、同じ値を外します。",
                                         "A value 0 whose name, without the enum's prefix, is unspecified marks that nothing is set; rulec's `import proto` and dandori's types from a .proto leave it out the same way."
                                     )),
                             );
@@ -128,14 +128,14 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], read
                         d = d.note(tr!("{vn} は {fp}:{l} の値です。", "{vn} is the value at {fp}:{l}."));
                     }
                     d = d.note(tr!(
-                        "上流の列挙の値ごとに、下流の値か refuse（断る）を書きます。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。",
+                        "上流の列挙の値ごとに、下流の値か refuse（断る）を書いてください。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。",
                         "Every value of the upstream enum gets a value of the downstream or refuse; when the upstream adds a value, the check fails until someone decides what it becomes."
                     ));
                     let first = names[0];
                     d = d.fix_line(format!("{first} -> refuse \"…\""));
                     let counted = e.values.iter().filter(|v| !proto::is_unset(e, v)).count();
                     let k = missing.len();
-                    d = d.refer(rel_ref.clone()).refer(Ref::name(Some(&yn), from.clone(), tr!("値は {counted} 個で、対応が無いのは {k} 個", "{counted} values, {k} of them unmapped")));
+                    d = d.refer(rel_ref.clone()).refer(Ref::name(Some(&yn), from.clone(), tr!("値は {counted} 個あり、そのうち {k} 個に対応がありません", "{counted} values, {k} of them unmapped")));
                     diags.push(d);
                 }
                 for v in &em.values {
@@ -192,7 +192,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], read
                         diag::at("E404", &c.file, r.pos.line, r.pos.col, tr!("「{xn}」は「{yn}」の列挙 {full} を参照していますが、腐敗防止層に対応がありません", "{xn} refers to {yn}'s enum {full}, and its anticorruption layer has no mapping for it"))
                             .source(&c.src)
                             .note(tr!(
-                                "腐敗防止層の下流は、参照している上流の列挙を、値ごとに自分の値か refuse に読み替えます。",
+                                "腐敗防止層の下流では、参照している上流の列挙を、値ごとに自分の値か refuse に読み替えてください。",
                                 "Downstream of an anticorruption layer, every upstream enum referred to is mapped, value by value, to the downstream's values or refuse."
                             ))
                             .fix_line(format!("enum {short} -> <…>"))

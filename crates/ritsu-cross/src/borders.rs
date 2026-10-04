@@ -78,7 +78,7 @@ pub fn amount_fits(out: &Found<OutputValues>) -> Answer<(i128, Option<Values>)> 
         Found::Undecided(why) => return Answer::Undecided(why.clone()),
     };
     let (Some(lo), Some(hi)) = (o.min, o.max) else {
-        return Answer::Undecided(tr!("出力の範囲に端が無いので、chobo が受け取る額に収まるとは言えません", "the output's range has an open end, so it cannot be shown to stay an amount chobo takes"));
+        return Answer::Undecided(tr!("出力の範囲に上限か下限が無いので、chobo が受け取る額に収まるとは言えません", "the output's range has an open end, so it cannot be shown to stay an amount chobo takes"));
     };
     let bad = if lo < 0 {
         Some(o.values.as_ref().and_then(|vs| vs.iter().copied().find(|v| *v < 0)).unwrap_or(lo))
@@ -123,7 +123,7 @@ pub fn amounts_given(outputs: &[Found<OutputValues>], ranges: &[(Option<i128>, O
             (_, Some(hi)) if *hi > MAX_AMOUNT => return Answer::Fails((*hi, AmountFrom::Range(i))),
             (Some(_), Some(_)) => {}
             _ => {
-                undecided.get_or_insert(tr!("範囲に端が無いので、chobo が受け取る額に収まるとは言えません", "a range has an open end, so it cannot be shown to stay an amount chobo takes"));
+                undecided.get_or_insert(tr!("範囲に上限か下限が無いので、chobo が受け取る額に収まるとは言えません", "a range has an open end, so it cannot be shown to stay an amount chobo takes"));
             }
         }
     }
@@ -190,7 +190,7 @@ pub fn refusals_met(found: &Found<Vec<(String, Vec<String>)>>, op: &str, handled
     }
     let list = unfound.iter().map(|r| format!("`{r}`")).collect::<Vec<_>>().join(", ");
     Answer::Undecided(tr!(
-        "タスクが処理する {list} で断られる例を、chobo の探索は見つけません。探索は chobo の検査と同じ深さまでしかたどらないので、起きないと言えるのはその深さまでです",
+        "タスクが処理する {list} で断られる例は、chobo の探索で見つかりません。探索は chobo の検査と同じ深さまでしかたどらないので、起きないと言えるのはその深さまでです",
         "chobo's search finds no run that is refused with {list}, which the task handles; the search goes only as deep as chobo's check does, so all it shows is that it does not happen within that depth"
     ))
 }

@@ -8,4 +8,4 @@ refund.flow: 検査を通りました（警告 2 件）
     21 |   let decision = check(paid: paid, asked: asked)
   = `asked` の範囲が分かりません（`ask_amount` の結果に範囲がありません）
   = `ritsu dandori build` が書くワークフローのコードが、走らせたときに、値ができたところですぐに確かめます。破る実行は、そこで `Dandori.BrokenPrecondition` で失敗します。
-ritsu check: ファイル 2 個（rulec 1、dandori 1）。どれも検査を通った（警告 3 件）。言語の境目: 確かめた 1 か所、決められない 1 か所
+ritsu check: ファイル 2 個（rulec 1、dandori 1）。どれも検査を通りました（警告 3 件）。言語の境目: 確かめた 1 か所、決められない 1 か所

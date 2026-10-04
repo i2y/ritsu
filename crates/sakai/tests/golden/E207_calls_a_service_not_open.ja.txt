@@ -1,14 +1,14 @@
 エラー[E207]: ordering/fulfillment.flow:47:1: 「Ordering」の ordering/fulfillment.flow が、「Inventory」の公開ホストサービスでない StockService を呼んでいます
     47 |   connect warehouse "StockService/Reserve"
   = 公表された言語 warehouse.v1 の公開ホストサービスは PackingService です。
-  = 境界の向こうのサービスは、相手が `open host service` に並べたものだけを呼びます。
+  = 境界の向こうで呼べるサービスは、相手が `open host service` に並べたものだけです。
   関わるもの:
       Ordering   ordering/fulfillment.flow:47                                                connect StockService/Reserve
       Inventory  proto "proto/warehouse/v1/stock.proto" service StockService method Reserve  公表された言語 warehouse.v1 のもの
 エラー[E207]: ordering/fulfillment.flow:53:1: 「Ordering」の ordering/fulfillment.flow が、「Inventory」の公開ホストサービスでない StockService を呼んでいます
     53 |   connect warehouse "StockService/Release"
   = 公表された言語 warehouse.v1 の公開ホストサービスは PackingService です。
-  = 境界の向こうのサービスは、相手が `open host service` に並べたものだけを呼びます。
+  = 境界の向こうで呼べるサービスは、相手が `open host service` に並べたものだけです。
   関わるもの:
       Ordering   ordering/fulfillment.flow:53                                                connect StockService/Release
       Inventory  proto "proto/warehouse/v1/stock.proto" service StockService method Release  公表された言語 warehouse.v1 のもの

@@ -215,7 +215,7 @@ impl E<'_> {
                         let first = &cands[0];
                         self.err(c, *pos, "E007", tr!("{kind} {name} は二つ以上の package に当たります（{list}）", "The name {kind} {name} is in more than one package ({list_en})"))
                             .notes
-                            .push(tr!("package から書きます（`{kind} {first}`）。", "Write it with its package (`{kind} {first}`)."));
+                            .push(tr!("package から書いてください（`{kind} {first}`）。", "Write it with its package (`{kind} {first}`)."));
                         None
                     }
                 }
@@ -272,7 +272,7 @@ pub fn resolve(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::R
                     };
                     if !ok_kind {
                         e.err(ci, te.pos(), "E011", tr!("対応の先にできるのは、proto の列挙か rulec の規則の列挙です", "A mapping's target is a proto enum or a rule's enum")).notes.push(tr!(
-                            "`proto \"<パス>\" enum <列挙>`、自分の公表された言語の `enum <列挙>`、`rulec \"<パス>\" enum <列挙>` のどれかか、名前だけを書きます。",
+                            "`proto \"<パス>\" enum <列挙>`、自分の公表された言語の `enum <列挙>`、`rulec \"<パス>\" enum <列挙>` のどれかか、名前だけを書いてください。",
                             "Write `proto \"<path>\" enum <enum>`, `enum <enum>` of the context's own published language, `rulec \"<path>\" enum <enum>`, or a name only."
                         ));
                         continue;

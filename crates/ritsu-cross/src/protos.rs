@@ -28,7 +28,7 @@ pub fn unread(project: &Project, lang: Lang) -> Vec<Finding> {
             Err(e) => Diag::whole("E101", &shown, tr!("{shown} を .proto として読めません: {e}", "{shown} does not read as a .proto: {e}")),
         };
         let d = d.rel(&f.rel).note(tr!(
-            "どの言語も、`.proto` を ritsu の一つの読み手で読みます。このファイルは、どの言語からも読めません。",
+            "どの言語も、`.proto` を ritsu の共通のパーサーで読みます。このファイルは、どの言語からも読めません。",
             "Every language reads a `.proto` with ritsu's one reader; none of them can read this file."
         ));
         out.push(Finding::of(&d, Some(f.rel.clone()), lang));

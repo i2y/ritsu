@@ -1,5 +1,5 @@
 エラー[E405]: contexts/billing.ctx:29:31: billing/rules/billing_need.rule は ORDER_STATUS_CANCELLED を cancelled_in_ordering として取り込んでいますが、対応は paid にしています
     29 |     ORDER_STATUS_CANCELLED -> paid
-  = 規則の `import proto` と腐敗防止層の対応は、同じ読み替えを書きます。どちらかを直します。値の行を消せば、規則の取り込みが対応になります。
+  = 規則の `import proto` と腐敗防止層の対応には、同じ読み替えを書いてください。どちらかを直すか、値の行を消してください。値の行を消せば、規則の取り込みがそのまま対応になります。
   関わるもの:
       Billing  contexts/billing.ctx:20  upstream Ordering anticorruption layer

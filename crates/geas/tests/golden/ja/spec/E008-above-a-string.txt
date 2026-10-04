@@ -1,2 +1,2 @@
-エラー[E008]: E008-above-a-string.geas:8:24: `is above` は数を比べます。数を `"` で囲まずに書きます（`is above 199` のように）
+エラー[E008]: E008-above-a-string.geas:8:24: `is above` は数を比べます。数を `"` で囲まずに書いてください（`is above 199` のように）
      8 |   then status is above "199"

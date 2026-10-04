@@ -61,7 +61,7 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
         }
         None => refuse(
             tr!(
-                "ritsu に `{code}` というコードはありません。言語のコードは `ritsu <言語> explain {code}` で引きます（ritsu のコードは `ritsu explain --all`）",
+                "ritsu に `{code}` というコードはありません。言語のコードなら、`ritsu <言語> explain {code}` で引けます（ritsu のコードの一覧は `ritsu explain --all`）",
                 "ritsu has no code `{code}`; a language's code is looked up with `ritsu <language> explain {code}` (`ritsu explain --all` lists ritsu's)"
             ),
             lang,

@@ -299,7 +299,7 @@ pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) 
                     return Err(refusal(
                         1,
                         tr!(
-                            "`{shown}` が読む {other} が、プロジェクトのファイルにありません。パッケージはプロジェクトのファイルから作るので、そのファイルも ritsu gen に渡します",
+                            "`{shown}` が読む {other} が、プロジェクトのファイルにありません。パッケージはプロジェクトのファイルから作るので、そのファイルも ritsu gen に渡してください",
                             "`{shown}` reads {other}, which is not one of the project's files; a package is made of the project's files, so give ritsu gen that file too"
                         ),
                         lang,
@@ -341,7 +341,7 @@ pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) 
         return Err(refusal(
             2,
             tr!(
-                "`{from}` のモジュールの名前 `{name}` は {language} が予約している語なので、パッケージの {kind}/ に置けません。別の名前（別名）にします",
+                "`{from}` のモジュールの名前 `{name}` は {language} が予約している語なので、パッケージの {kind}/ に置けません。別の名前（別名）にしてください",
                 "`{from}` makes the module `{name}`, a word {language} keeps, which the package cannot hold in its {kind}/; give it another name (an alias)"
             ),
             lang,
@@ -605,7 +605,7 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
         return say(refusal(
             2,
             tr!(
-                "`--name {name}` は使えません。小文字の英字で始まり、小文字の英字、数字、`_` だけの名前です（Python の予約語は除く）",
+                "`--name {name}` は使えません。名前は小文字の英字で始め、小文字の英字、数字、`_` だけで書いてください（Python の予約語は使えません）",
                 "`--name {name}` cannot name a package: it starts with a lowercase letter and has only lowercase letters, digits and `_` (and is not a word Python keeps)"
             ),
             lang,
@@ -657,7 +657,7 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
                 return say(refusal(
                     2,
                     tr!(
-                        "`{a1}` と `{b1}` が、パッケージの同じ {at} を書きます。どちらかの名前を変えます（規則と日付のファイルは別名、帳簿は名前、ワークフローは名前かファイルの名前を ASCII で）",
+                        "`{a1}` と `{b1}` が、パッケージの同じ {at} を書きます。どちらかの名前を変えてください（規則と日付のファイルは別名、帳簿は名前、ワークフローは名前かファイルの名前を ASCII で）",
                         "`{a1}` and `{b1}` both write {at} of the package; give one of them another name (a rule or a dates file another alias, a book another name, a workflow a name or a file name in ASCII)"
                     ),
                     lang,

@@ -1,5 +1,5 @@
 エラー[E405]: contexts/請求.ctx:29:31: billing/rules/請求の要否.rule は ORDER_STATUS_CANCELLED を 受注で取消 として取り込んでいますが、対応は 支払済 にしています
     29 |     ORDER_STATUS_CANCELLED -> 支払済
-  = 規則の `import proto` と腐敗防止層の対応は、同じ読み替えを書きます。どちらかを直します。値の行を消せば、規則の取り込みが対応になります。
+  = 規則の `import proto` と腐敗防止層の対応には、同じ読み替えを書いてください。どちらかを直すか、値の行を消してください。値の行を消せば、規則の取り込みがそのまま対応になります。
   関わるもの:
       請求  contexts/請求.ctx:20  upstream 受注 anticorruption layer

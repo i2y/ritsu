@@ -378,7 +378,7 @@ fn read_record(shown: &str, spec_file: &str, spec_rel: &str) -> Result<Rec, Prob
         Err(e) => return Err(e081(shown, e)),
     };
     let again = tr!(
-        "記録は `geas map` が書きます。`geas map {spec_file}` を走らせると書き直します",
+        "記録は `geas map` が書きます。`geas map {spec_file}` を走らせると、記録が書き直されます",
         "the record is written by `geas map`; run `geas map {spec_file}` to write it again",
     );
     let r = match Record::parse(&text) {
@@ -515,7 +515,7 @@ fn e062(rec: &Rec, stale: &[Stale], spec_file: &str) -> Problem {
         d = d.note(tr!("ほかに {} 件", "and {} more", n - SHOWN));
     }
     d = d.note(tr!(
-        "記録が答えられるのは、それを取ったときのコードについてだけです。`geas map {spec_file}` で記録を取り直してください。新しく足したファイルは差分に入れておきます（`git add -N`）",
+        "記録から分かるのは、それを取ったときのコードのことだけです。`geas map {spec_file}` で記録を取り直してください。新しく足したファイルは、差分に入れておいてください（`git add -N`）",
         "a record answers only for the code it was made on: record this code again with `geas map {spec_file}`; a file new to the change has to be in the diff (`git add -N`)",
     ));
     (rec.shown.clone(), d, rec.text.clone())

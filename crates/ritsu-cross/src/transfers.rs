@@ -36,7 +36,7 @@ fn amounts(project: &Project, joined: &Joined, shown: &str, from: &[Origin]) -> 
         match o {
             Origin::Output { rule, output } => {
                 let named = named(project, rule);
-                let values = joined.rulec.output_values(rule, output).unwrap_or_else(|_| Found::Undecided(tr!("rulec が \"{named}\" に答えません", "rulec does not answer for \"{named}\"")));
+                let values = joined.rulec.output_values(rule, output).unwrap_or_else(|_| Found::Undecided(tr!("rulec から \"{named}\" の情報を得られません", "rulec does not answer for \"{named}\"")));
                 a.outputs.push((named, output.clone(), values));
             }
             Origin::Range(lo, hi) => a.ranges.push((*lo, *hi)),
@@ -120,7 +120,7 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                             "chobo takes an amount from 0 to 9223372036854775807 in the unit's smallest step, and a call with any other fails rather than being refused."
                         ))
                         .note(tr!(
-                            "規則の返す額を 0 以上にするか（負の額は向きの違う振替に分けます）、振替の前に分岐してください。",
+                            "規則の返す額を 0 以上にするか（負の額は、向きの違う振替に分けてください）、振替の前に分岐してください。",
                             "Make the rule's amounts 0 or more (a negative one is a transfer the other way), or branch before the transfer."
                         ));
                         out.push(Finding::of(&diag, Some(f.file.rel.clone()), lang));
@@ -153,7 +153,7 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                 (None, None) => Found::Undecided(tr!("渡す額の範囲が分からないか、chobo が受け取る額を含みません", "the range of the amounts given is not known, or holds no amount chobo takes")),
                 (None, Some(range)) => match joined.chobo.refusals(&call.book, transfer, range) {
                     Ok(v) => v,
-                    Err(_) => Found::Undecided(tr!("chobo が \"{}\" に答えません", "chobo does not answer for \"{}\"", named(project, &call.book))),
+                    Err(_) => Found::Undecided(tr!("chobo から \"{}\" の情報を得られません", "chobo does not answer for \"{}\"", named(project, &call.book))),
                 },
             };
             let (lo, hi) = range.unwrap_or((1, borders::MAX_AMOUNT));
@@ -171,12 +171,12 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                     .source(&f.src)
                     .rel(&f.file.rel)
                     .note(tr!(
-                        "額を {lo} から {hi} まで（呼び出しが渡す額の範囲）に限った chobo の探索が、`{transfer}.{op}` が {reasons} で断られる例を見つけます",
+                        "額を {lo} から {hi} まで（呼び出しが渡す額の範囲）に限った chobo の探索で、`{transfer}.{op}` が {reasons} で断られる例が見つかりました",
                         "chobo's search, with the amounts held to {lo} to {hi} (the range of the amounts the call gives), finds runs in which `{transfer}.{op}` is refused with {reasons}"
                     ));
                     if !unmet.unfound.is_empty() {
                         let unfound = listed(&unmet.unfound);
-                        diag = diag.note(tr!("タスクが処理する {unfound} で断られる例は、探索が見つけません", "the search finds no run that is refused with {unfound}, which the task handles"));
+                        diag = diag.note(tr!("タスクが処理する {unfound} で断られる例は、探索で見つかりません", "the search finds no run that is refused with {unfound}, which the task handles"));
                     }
                     let first = &unmet.unhandled[0];
                     diag = diag.note(tr!(

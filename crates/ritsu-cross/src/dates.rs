@@ -47,7 +47,7 @@ fn days(project: &Project, joined: &Joined, shown: &str, from: &[Origin]) -> Day
                 let days = match joined.koyomi.values(file, date) {
                     Ok(Found::Undecided(why)) => Found::Undecided(tr!("koyomi は \"{named}\" の {date} の日を数えません（{}）", "koyomi does not count the days of {date} in \"{named}\": {}", why.ja; why.en)),
                     Ok(v) => v,
-                    Err(_) => Found::Undecided(tr!("koyomi が \"{named}\" に答えません", "koyomi does not answer for \"{named}\"")),
+                    Err(_) => Found::Undecided(tr!("koyomi から \"{named}\" の情報を得られません", "koyomi does not answer for \"{named}\"")),
                 };
                 dates.push(Date { file: named, date: date.clone(), disk: file.clone(), days });
             }
@@ -140,7 +140,7 @@ pub(crate) fn days_to_rules(project: &Project, flows: &[Flow], joined: &Joined, 
                         .rel(&f.file.rel)
                         .note(tr!("`{shown}` は {day} になることがあります（{}）。`{input}` が受け取るのは `{range}` です", "`{shown}` can be {day}, {}, and `{input}` takes `{range}`", from.ja; from.en))
                         .note(tr!(
-                            "規則の生成したコードは、範囲の外の日を入口で断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。koyomi は、入力の範囲のすべてでその日付を数えています。",
+                            "規則から生成したコードは、範囲の外の日を入口で断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。koyomi は、入力の範囲のすべてでその日付を数えています。",
                             "The rule's generated code refuses a day outside its range at its door, so this call fails only when the workflow runs. koyomi counts the days the date comes to over the whole range of its inputs."
                         ))
                         .note(tr!(
@@ -160,7 +160,7 @@ pub(crate) fn days_to_rules(project: &Project, flows: &[Flow], joined: &Joined, 
                         .rel(&f.file.rel)
                         .note(why)
                         .note(tr!(
-                            "規則の生成したコードが、ワークフローを走らせたときに入口で日を確かめます。範囲の外の日なら、この呼び出しはそこで落ちます。",
+                            "規則から生成したコードが、ワークフローを走らせたときに入口で日を確かめます。範囲の外の日なら、この呼び出しはそこで落ちます。",
                             "The rule's generated code checks the day at its door when the workflow runs; a day outside its range fails the call there."
                         ));
                         out.push(Finding::of(&diag, Some(f.file.rel.clone()), lang));
@@ -197,11 +197,11 @@ pub(crate) fn days_to_dates(project: &Project, flows: &[Flow], joined: &Joined, 
                     .rel(&f.file.rel)
                     .note(tr!("`{shown}` は {day} になることがあります（{}）。\"{file}\" が `{input}` に受け取るのは {min} から {max} までです", "`{shown}` can be {day}, {}, and \"{file}\" takes {min} to {max} for `{input}`", from.ja; from.en))
                     .note(tr!(
-                        "koyomi の生成したコードは範囲の外の日を断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。",
+                        "koyomi が生成したコードは、範囲の外の日を断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。",
                         "koyomi's generated code refuses a day outside the range, so this call fails only when the workflow runs."
                     ))
                     .note(tr!(
-                        "\"{file}\" の `{input}` の範囲を広げるか（カレンダーのデータも足します）、範囲に収まる日を渡してください。",
+                        "\"{file}\" の `{input}` の範囲を広げるか（カレンダーのデータも足してください）、範囲に収まる日を渡してください。",
                         "Widen the range of `{input}` in \"{file}\" (and the data of its calendar), or give it a day that stays inside."
                     ));
                     out.push(Finding::of(&diag, Some(f.file.rel.clone()), lang));
@@ -216,7 +216,7 @@ pub(crate) fn days_to_dates(project: &Project, flows: &[Flow], joined: &Joined, 
                     .rel(&f.file.rel)
                     .note(tr!("{}。\"{file}\" が `{input}` に受け取るのは {min} から {max} までです", "{}, and \"{file}\" takes {min} to {max} for `{input}`", why.ja; why.en))
                     .note(tr!(
-                        "範囲の外の日は、ワークフローを走らせたときに koyomi の生成したコードが断ります。",
+                        "範囲の外の日は、ワークフローを走らせたときに、koyomi が生成したコードが断ります。",
                         "koyomi's generated code refuses a day outside the range when the workflow runs."
                     ));
                     out.push(Finding::of(&diag, Some(f.file.rel.clone()), lang));

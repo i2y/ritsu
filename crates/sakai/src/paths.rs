@@ -17,11 +17,11 @@ pub use ritsu_base::paths::{PathError, Shown, SKIPPED, absolute, between, contai
 pub fn error_text(e: PathError, written: &str) -> Text {
     match e {
         PathError::Absolute => tr!(
-            "絶対パス \"{written}\" は書けません。パスは、書いたファイルのディレクトリからの相対で書きます",
+            "絶対パス \"{written}\" は書けません。パスは、書いたファイルのディレクトリからの相対パスで書いてください",
             "the absolute path \"{written}\" cannot be written; a path is written from the directory of the file it is in"
         ),
         PathError::Outside => tr!("パス \"{written}\" はルートの外に出ます", "the path \"{written}\" goes outside the root"),
-        PathError::Empty => tr!("パスが空です。書いたファイルのディレクトリそのものは \".\" と書きます", "the path is empty; the directory of the file itself is written \".\""),
+        PathError::Empty => tr!("パスが空です。書いたファイルのディレクトリそのものは、\".\" と書いてください", "the path is empty; the directory of the file itself is written \".\""),
     }
 }
 

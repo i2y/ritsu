@@ -124,7 +124,7 @@ fn days_kept(dates: &dyn Dates, a: &CallArg, days: &ritsu_ports::DaySet, file: &
                     other.get_or_insert(tr!("koyomi は日付 {d} の日を数えません（{}）", "koyomi does not count the days of the date {d}: {}", why.ja; why.en));
                 }
                 Err(_) => {
-                    other.get_or_insert(tr!("koyomi が日付 {d} に答えません", "koyomi does not answer for the date {d}"));
+                    other.get_or_insert(tr!("koyomi から日付 {d} の情報を得られません", "koyomi does not answer for the date {d}"));
                 }
             },
             Origin::Now => {
@@ -178,7 +178,7 @@ fn decide(rules: &dyn Rules, dates: &dyn Dates, rule: &std::path::Path, p: &Prec
             let (lr, rr) = (l.range.unwrap_or((None, None)), r.range.unwrap_or((None, None)));
             let ranges = [(left.clone(), lr.0, lr.1), (right.clone(), rr.0, rr.1)];
             match rules.preconditions_hold(rule, &ranges, None) {
-                Err(_) => Answer::Undecided(tr!("rulec がこの規則に答えません", "rulec does not answer for this rule")),
+                Err(_) => Answer::Undecided(tr!("rulec からこの規則の情報を得られません", "rulec does not answer for this rule")),
                 Ok(answers) => match answers.into_iter().find(|(q, _)| q == p).map(|(_, a)| a) {
                     Some(Answer::Holds) => Answer::Holds,
                     Some(Answer::Fails(ex)) => {
@@ -194,7 +194,7 @@ fn decide(rules: &dyn Rules, dates: &dyn Dates, rule: &std::path::Path, p: &Prec
                         ))
                     }
                     Some(Answer::Undecided(why)) => Answer::Undecided(why),
-                    None => Answer::Undecided(tr!("rulec がこの前提に答えません", "rulec does not answer for this precondition")),
+                    None => Answer::Undecided(tr!("rulec から、この前提が成り立つかどうかの結果を得られません", "rulec does not answer for this precondition")),
                 },
             }
         }
@@ -252,7 +252,7 @@ pub fn check(project: &Project, joined: &Joined, lang: Lang, borders: &mut Borde
                         .note(why);
                         let d = if let Precondition::Days { file, date, .. } = p {
                             d.note(tr!(
-                                "規則の生成したコードは、前提を破る呼び出しを入口で断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。koyomi は、入力の範囲のすべてで日付の日を数えています。",
+                                "規則から生成したコードは、前提を破る呼び出しを入口で断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。koyomi は、入力の範囲のすべてで日付の日を数えています。",
                                 "The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. koyomi counts the days of a date over the whole range of its inputs."
                             ))
                             .note(tr!(
@@ -261,7 +261,7 @@ pub fn check(project: &Project, joined: &Joined, lang: Lang, borders: &mut Borde
                             ))
                         } else {
                             d.note(tr!(
-                                "規則の生成したコードは、前提を破る呼び出しを入口で断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。値の範囲は、dandori がその値を入れるすべての場所から集めたものです。",
+                                "規則から生成したコードは、前提を破る呼び出しを入口で断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。値の範囲は、dandori がその値を入れるすべての場所から集めたものです。",
                                 "The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. The ranges are dandori's, gathered from every place the values come from."
                             ))
                             .note(tr!(

@@ -1,4 +1,4 @@
 エラー[E061]: .geas/shop.map.jsonl:1: この記録は `tools/shop.geas` のもので、`shop.geas` のものではありません
      1 | {"geas_map":1,"spec":"tools/shop.geas","root":".","claims":[{"name":"lists the items","status":"ok","targets":["api"]},…
   = 記録には、ルートから見た主張のファイルのパスが入っています。別の `--root` で取った記録では、このパスが違います
-  = 記録は `geas map` が書きます。`geas map shop.geas` を走らせると書き直します
+  = 記録は `geas map` が書きます。`geas map shop.geas` を走らせると、記録が書き直されます

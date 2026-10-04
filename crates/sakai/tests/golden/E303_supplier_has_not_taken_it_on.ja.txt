@@ -1,4 +1,4 @@
 エラー[E303]: ctx/quotes.ctx:15:1: 「Quotes」は「Pricing」の顧客だと書いていますが、「Pricing」の側に `downstream Quotes supplier` がありません
     15 | upstream Pricing customer
-  = 顧客／供給者は二つのチームの合意なので、両方のファイルに書きます。
+  = 顧客／供給者は二つのチームの合意なので、両方のファイルに書いてください。
   = 直した行: downstream Quotes supplier

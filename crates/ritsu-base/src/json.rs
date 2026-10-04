@@ -412,7 +412,7 @@ impl P<'_> {
             }
         }
         if matches!(self.b.get(self.i), Some(b'e') | Some(b'E')) {
-            return Err(Error { at: start, what: Problem::Exponent, message: tr!("{n} バイト目: 指数の書き方は読みません", "byte {n}: an exponent is not read") });
+            return Err(Error { at: start, what: Problem::Exponent, message: tr!("{n} バイト目: 指数の書き方は読めません", "byte {n}: an exponent is not read") });
         }
         let text = std::str::from_utf8(&self.b[start..self.i]).unwrap_or_default();
         if frac {
@@ -485,7 +485,7 @@ impl P<'_> {
                         }
                         _ => {
                             let n = self.i;
-                            return Err(Error { at: n - 1, what: Problem::UnknownEscape, message: tr!("{n} バイト目: 知らないエスケープです", "byte {n}: an escape that is not known") });
+                            return Err(Error { at: n - 1, what: Problem::UnknownEscape, message: tr!("{n} バイト目: 使えないエスケープです", "byte {n}: an escape that is not known") });
                         }
                     }
                 }

@@ -117,7 +117,7 @@ pub fn read(m: &Model) -> (Option<Crates>, Vec<Diag>) {
             d = d.note(n);
         }
         d.note(tr!(
-            "`code rust` の場所のワークスペースのクレートとその依存は、`cargo metadata --format-version 1 --no-deps --offline` に尋ねます。マニフェストを読むだけで、ビルドもネットワークへの接続もしません。",
+            "sakai は、`code rust` の場所のワークスペースのクレートとその依存を、`cargo metadata --format-version 1 --no-deps --offline` で読みます。マニフェストを読むだけで、ビルドもネットワークへの接続もしません。",
             "The crates of the workspace at the `code rust` place and their dependencies are asked of `cargo metadata --format-version 1 --no-deps --offline`, which reads the manifests, and neither builds nor reaches the network."
         ))
     };
@@ -125,7 +125,7 @@ pub fn read(m: &Model) -> (Option<Crates>, Vec<Diag>) {
     let manifest = disk.join(MANIFEST);
     if !ritsu_base::fs::is_file(&manifest) {
         let note = tr!(
-            "`code rust` には、ワークスペースの（クレートが一つなら、そのクレートの）`Cargo.toml` のあるディレクトリを書きます。",
+            "`code rust` には、ワークスペースの（クレートが一つなら、そのクレートの）`Cargo.toml` のあるディレクトリを書いてください。",
             "`code rust` names the directory of the workspace's `Cargo.toml` (or, for one crate, of its own)."
         );
         return (None, vec![fail(tr!("Cargo.toml がありません", "there is no Cargo.toml"), Some(note))]);

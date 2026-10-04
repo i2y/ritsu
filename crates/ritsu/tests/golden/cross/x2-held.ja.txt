@@ -1,3 +1,3 @@
 ok refund_check.rule
 refund.flow: 検査を通りました
-ritsu check: ファイル 2 個（rulec 1、dandori 1）。どれも検査を通った。言語の境目: 確かめた 1 か所、決められない 0 か所
+ritsu check: ファイル 2 個（rulec 1、dandori 1）。どれも検査を通りました。言語の境目: 確かめた 1 か所、決められない 0 か所

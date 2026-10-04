@@ -1,9 +1,9 @@
 エラー[E104]: contexts/billing.ctx:6:7: この sakai は rulec の成果物を読めません（4 件。最初は billing/rules/billing_need.rule）
      6 |   dir "../billing", "../calendars"
-  = sakai のクレートのバイナリは、ほかの言語を持ちません。ほかの言語を読むところは、すべての言語をつないだ `ritsu sakai check shop.ctx` のように ritsu で走らせます。
+  = sakai 単独のバイナリには、ほかの言語が入っていません。ほかの言語の成果物まで確かめるには、すべての言語をつないだ ritsu で、`ritsu sakai check shop.ctx` のように走らせてください。
 エラー[E104]: contexts/billing.ctx:6:7: この sakai は koyomi の成果物を読めません（3 件。最初は billing/payment_terms.cal）
      6 |   dir "../billing", "../calendars"
-  = sakai のクレートのバイナリは、ほかの言語を持ちません。ほかの言語を読むところは、すべての言語をつないだ `ritsu sakai check shop.ctx` のように ritsu で走らせます。
+  = sakai 単独のバイナリには、ほかの言語が入っていません。ほかの言語の成果物まで確かめるには、すべての言語をつないだ ritsu で、`ritsu sakai check shop.ctx` のように走らせてください。
 エラー[E104]: contexts/delivery.ctx:6:7: この sakai は dandori の成果物を読めません（2 件。最初は delivery/arrange_delivery.flow）
      6 |   dir "../delivery", "../proto/shop/delivery"
-  = sakai のクレートのバイナリは、ほかの言語を持ちません。ほかの言語を読むところは、すべての言語をつないだ `ritsu sakai check shop.ctx` のように ritsu で走らせます。
+  = sakai 単独のバイナリには、ほかの言語が入っていません。ほかの言語の成果物まで確かめるには、すべての言語をつないだ ritsu で、`ritsu sakai check shop.ctx` のように走らせてください。

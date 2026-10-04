@@ -309,7 +309,7 @@ impl P {
                     s.line,
                     s.col,
                     tr!(
-                        "`{target}` のコマンドが空です。少なくとも、起動するプログラムを書きます",
+                        "`{target}` のコマンドが空です。少なくとも、起動するプログラムを書いてください",
                         "the command of `{target}` is empty: it needs at least the program to start",
                     ),
                 ));
@@ -381,7 +381,7 @@ impl P {
             "tz" => {
                 let v = self.expect(Kind::Str, "a time zone, in quotes", "`\"` で囲んだタイムゾーン")?;
                 if v.text.trim().is_empty() {
-                    self.e011(&v, "a time zone has a name, such as `Asia/Tokyo` or `UTC`", "タイムゾーンには `Asia/Tokyo` や `UTC` のような名前を書きます".into());
+                    self.e011(&v, "a time zone has a name, such as `Asia/Tokyo` or `UTC`", "タイムゾーンには、`Asia/Tokyo` や `UTC` のような名前を書いてください".into());
                 }
                 PinKind::Tz(v.text)
             }
@@ -392,7 +392,7 @@ impl P {
                     let (en, ja) = match pins::locale_meant(l) {
                         Some(m) => (
                             format!("`{l}` is not a locale written as a language and a region; write `{m}`"),
-                            format!("`{l}` は、言語と地域の形で書いたロケールではありません。`{m}` と書きます"),
+                            format!("`{l}` は、言語と地域の形で書いたロケールではありません。`{m}` と書いてください"),
                         ),
                         None => (
                             format!("`{l}` is not a locale written as a language and a region, such as `ja-JP` or `de-DE`"),
@@ -410,7 +410,7 @@ impl P {
                     self.e011(
                         &v,
                         &format!("`{s}` is not a time geas reads: write it as RFC 3339, such as `2026-08-29T09:00:00+09:00` or `2026-08-29T00:00:00Z`"),
-                        format!("`{s}` は geas の読める時刻ではありません。RFC 3339 の形で、`2026-08-29T09:00:00+09:00` や `2026-08-29T00:00:00Z` のように書きます"),
+                        format!("`{s}` は geas の読める時刻ではありません。RFC 3339 の形で、`2026-08-29T09:00:00+09:00` や `2026-08-29T00:00:00Z` のように書いてください"),
                     );
                 }
                 let env = self.pin_env(kw.line)?;
@@ -511,7 +511,7 @@ impl P {
                 kw.line,
                 kw.col,
                 tr!(
-                    "主張 \"{}\" にステップがありません。主張は `when` から始めます",
+                    "主張 \"{}\" にステップがありません。主張は `when` から始めてください",
                     "the claim \"{}\" has no steps; a claim starts with a `when`",
                     name.text,
                 ),
@@ -665,7 +665,7 @@ impl P {
                 Err(self.e001(
                     tok,
                     format!("{fe} is not a whole number, which counts and places are written as"),
-                    format!("{fj} は整数ではありません。個数や何番目かは整数で書きます"),
+                    format!("{fj} は整数ではありません。個数や何番目かは、整数で書いてください"),
                 ))
             }
         }
@@ -758,7 +758,7 @@ impl P {
                         self.e002(
                             n,
                             "`nth:` goes with `into:`, to pick among the fields of one name; a field by its place is `field: n`".to_string(),
-                            "`nth:` は `into:` と一緒に書き、同じ名前のテキストフィールドのどれかを選びます。場所で選ぶなら `field: n` と書きます".to_string(),
+                            "`nth:` は `into:` と一緒に書き、同じ名前のテキストフィールドのどれかを選びます。場所で選ぶなら、`field: n` と書いてください".to_string(),
                         );
                         unknown = true;
                     }
@@ -775,7 +775,7 @@ impl P {
                         self.e002(
                             n,
                             "`nth:` goes with `into:`, to pick among the fields of one name; a field by its place is `field: n`".to_string(),
-                            "`nth:` は `into:` と一緒に書き、同じ名前のテキストフィールドのどれかを選びます。場所で選ぶなら `field: n` と書きます".to_string(),
+                            "`nth:` は `into:` と一緒に書き、同じ名前のテキストフィールドのどれかを選びます。場所で選ぶなら、`field: n` と書いてください".to_string(),
                         );
                         unknown = true;
                     }
@@ -809,7 +809,7 @@ impl P {
                         return Err(self.e001(
                             &tok,
                             format!("`{}` is not a number of milliseconds; write a whole number", tok.text),
-                            format!("`{}` はミリ秒として読めません。整数を書きます", tok.text),
+                            format!("`{}` はミリ秒として読めません。整数を書いてください", tok.text),
                         ));
                     }
                 }
@@ -1046,7 +1046,7 @@ impl P {
                 return Err(self.e001(
                     &e,
                     "a mask takes nodes out of drift and names them without a count: `mask screen text \"clock\"`".to_string(),
-                    "マスクはノードをドリフトから外すもので、数は書きません（`mask screen text \"clock\"`）".to_string(),
+                    "マスクはノードをドリフトから外すもので、数は書けません（`mask screen text \"clock\"`）".to_string(),
                 ));
             }
             let n = self.next();
@@ -1086,7 +1086,7 @@ impl P {
             self.e002(
                 &next,
                 format!("`{}` is not a state; after a node's role come its name, `with value \"…\"`, a state (disabled, enabled, checked or unchecked) and `in <role>`, in that order", next.text),
-                format!("`{}` という状態はありません。ノードのロールの後ろには、名前、`with value \"…\"`、状態（disabled、enabled、checked、unchecked）、`in <ロール>` をこの順に書きます", next.text),
+                format!("`{}` という状態はありません。ノードのロールの後ろには、名前、`with value \"…\"`、状態（disabled、enabled、checked、unchecked）、`in <ロール>` をこの順に書いてください", next.text),
             );
             self.skip_line(next.line);
             return Ok(None);
@@ -1206,7 +1206,7 @@ impl P {
                     tr!("JSON のパスとして読めません: {}", "the JSON path does not read: {}", why.ja(); why.en()),
                 )
                 .note(tr!(
-                    "パスは `.key`、`.a.b`、`.items[0].name` のように書きます",
+                    "パスは `.key`、`.a.b`、`.items[0].name` のように書いてください",
                     "a path is written `.key`, `.a.b` or `.items[0].name`",
                 )),
             );
@@ -1230,7 +1230,7 @@ impl P {
         );
         if "dwsDWS".contains(e) {
             d = d.note(tr!(
-                "`matches` の後ろのパターンなら `\\{e}` をそのまま書けます。それ以外では `\\\\{e}` と書きます",
+                "`matches` の後ろのパターンなら `\\{e}` をそのまま書けます。それ以外では `\\\\{e}` と書いてください",
                 "a pattern, after `matches`, reads `\\{e}` itself; anywhere else write `\\\\{e}`",
             ));
         }
@@ -1332,7 +1332,7 @@ fn misfit(subject: &Subject, raw: &RawMatcher) -> Option<Diag> {
         } else {
             (
                 format!("`{s}` is a text, and a node is what a screen holds; to look for a part of the text, write it in quotes: `{s} {f} \"…\"`"),
-                format!("`{s}` は文字列で、ノードを持つのは画面です。文字列の一部を探すなら、`\"` で囲んで書きます（`{s} {f} \"…\"`）"),
+                format!("`{s}` は文字列で、ノードを持つのは画面です。文字列の一部を探すなら、`\"` で囲んで書いてください（`{s} {f} \"…\"`）"),
             )
         };
         return Some(diag::error("E008", tok.line, tok.col, Text::new(ja, en)));
@@ -1357,7 +1357,7 @@ fn misfit(subject: &Subject, raw: &RawMatcher) -> Option<Diag> {
                     return at_value(
                         0,
                         format!("`{s}` is a number; write the value without quotes: `{s} {f} {n}`"),
-                        format!("`{s}` は数です。値は `\"` で囲まずに書きます（`{s} {f} {n}`）"),
+                        format!("`{s}` は数です。値は `\"` で囲まずに書いてください（`{s} {f} {n}`）"),
                     );
                 }
                 Some(v @ (Value::Bool(_) | Value::Null)) => {
@@ -1365,7 +1365,7 @@ fn misfit(subject: &Subject, raw: &RawMatcher) -> Option<Diag> {
                     return at_value(
                         0,
                         format!("`{s}` is a number, and `{v}` is not one; write a number: `{s} {f} 0`"),
-                        format!("`{s}` は数なので、数でない `{v}` とは比べられません。数を書きます（`{s} {f} 0`）"),
+                        format!("`{s}` は数なので、数でない `{v}` とは比べられません。数を書いてください（`{s} {f} 0`）"),
                     );
                 }
                 _ => {}
@@ -1382,13 +1382,13 @@ fn misfit(subject: &Subject, raw: &RawMatcher) -> Option<Diag> {
         return at_value(
             0,
             format!("`{v}` is a JSON value, and `{s}` is a text; to compare it with the word, write `{s} {f} \"{v}\"`"),
-            format!("`{v}` は JSON の値で、`{s}` は文字列です。その語と比べるなら `{s} {f} \"{v}\"` と書きます"),
+            format!("`{v}` は JSON の値で、`{s}` は文字列です。その語と比べるなら、`{s} {f} \"{v}\"` と書いてください"),
         );
     }
     if matches!(raw.form, Form::Exists | Form::NotExists) && !subject.may_be_absent() {
         return at_word(
             format!("`{f}` asks whether a header was sent or a JSON path leads to a value, and `{s}` is always there; check its value instead"),
-            format!("`{f}` が確かめるのは、ヘッダーが送られたか、JSON のパスの先に値があるかです。`{s}` はいつもあるので、値のほうをチェックします"),
+            format!("`{f}` が確かめるのは、ヘッダーが送られたか、JSON のパスの先に値があるかです。`{s}` はいつもあるので、値のほうをチェックしてください"),
         );
     }
     if raw.form.numeric() {
@@ -1401,7 +1401,7 @@ fn misfit(subject: &Subject, raw: &RawMatcher) -> Option<Diag> {
                 return at_value(
                     i,
                     format!("`{f}` compares numbers; write a number without quotes, as `{f} {n}`"),
-                    format!("`{f}` は数を比べます。数を `\"` で囲まずに書きます（`{f} {n}` のように）"),
+                    format!("`{f}` は数を比べます。数を `\"` で囲まずに書いてください（`{f} {n}` のように）"),
                 );
             }
         }
@@ -1412,7 +1412,7 @@ fn misfit(subject: &Subject, raw: &RawMatcher) -> Option<Diag> {
             return at_value(
                 0,
                 format!("`is between {a} and {b}` holds for no number; write the smaller end first: `is between {b} and {a}`"),
-                format!("`is between {a} and {b}` に当てはまる数はありません。小さいほうを先に書きます（`is between {b} and {a}`）"),
+                format!("`is between {a} and {b}` に当てはまる数はありません。小さいほうを先に書いてください（`is between {b} and {a}`）"),
             );
         }
     }
@@ -1423,7 +1423,7 @@ fn misfit(subject: &Subject, raw: &RawMatcher) -> Option<Diag> {
         return at_value(
             0,
             format!("`{f}` looks for a part of a text; write the value in quotes: `{f} \"{v}\"`"),
-            format!("`{f}` は文字列の一部を探します。値は `\"` で囲んで書きます（`{f} \"{v}\"`）"),
+            format!("`{f}` は文字列の一部を探します。値は `\"` で囲んで書いてください（`{f} \"{v}\"`）"),
         );
     }
     if matches!(raw.form, Form::Matches | Form::NotMatches)
@@ -1604,7 +1604,7 @@ fn target_kind(tg: &RawTarget, pins: Option<&Pins>, diags: &mut Vec<Diag>) -> Op
                         ),
                     )
                     .note(tr!(
-                        "サービスがポート番号を読むところに `{{port}}` を書きます（`serve \"python3 server.py {{port}}\"`、または `env \"PORT\" \"{{port}}\"`）",
+                        "サービスがポート番号を読むところに `{{port}}` を書いてください（`serve \"python3 server.py {{port}}\"`、または `env \"PORT\" \"{{port}}\"`）",
                         "write `{{port}}` where the service reads its port: `serve \"python3 server.py {{port}}\"`, or `env \"PORT\" \"{{port}}\"`",
                     )),
                 );
@@ -1858,7 +1858,7 @@ fn pins_in_effect(raw: &RawSpec, diags: &mut Vec<Diag>) -> HashMap<String, Pins>
                 ),
             )
             .note(tr!(
-                "その環境変数の名前を、同じ行に書きます（`clock \"2026-08-29T09:00:00+09:00\" env \"NOW\"`）",
+                "その環境変数の名前を、同じ行に書いてください（`clock \"2026-08-29T09:00:00+09:00\" env \"NOW\"`）",
                 "name that variable on the same line: `clock \"2026-08-29T09:00:00+09:00\" env \"NOW\"`",
             ))
         } else {
@@ -1872,7 +1872,7 @@ fn pins_in_effect(raw: &RawSpec, diags: &mut Vec<Diag>) -> HashMap<String, Pins>
                 ),
             )
             .note(tr!(
-                "その環境変数の名前を、同じ行に書きます（`seed 7 env \"SEED\"`）",
+                "その環境変数の名前を、同じ行に書いてください（`seed 7 env \"SEED\"`）",
                 "name that variable on the same line: `seed 7 env \"SEED\"`",
             ))
         };
@@ -2153,7 +2153,7 @@ fn gui_checks(claims: &[RawClaim], kinds: &HashMap<&str, Option<TargetKind>>, di
                         "the actions on `{app}` before and after it are on lines {before} and {after}",
                     ))
                     .note(tr!(
-                        "この `when` を、`{app}` への最初の操作の前か、最後の操作のあとに移します",
+                        "この `when` を、`{app}` への最初の操作の前か、最後の操作のあとに移してください",
                         "move this `when` before the first action on `{app}` or after the last",
                     )),
                 );
@@ -2189,7 +2189,7 @@ fn gui_checks(claims: &[RawClaim], kinds: &HashMap<&str, Option<TargetKind>>, di
                 e013(
                     w.arg("ms"),
                     "`advance` moves the app's clock forward by at least 1 ms".into(),
-                    "`advance` はアプリの時刻を 1 ミリ秒以上進めます".into(),
+                    "`advance` で進める時刻は、1 ミリ秒以上にしてください".into(),
                 );
             }
             match k {
@@ -2198,7 +2198,7 @@ fn gui_checks(claims: &[RawClaim], kinds: &HashMap<&str, Option<TargetKind>>, di
                         e013(
                             w.arg("into"),
                             format!("`{tg}` is a pixie app, which reaches a text field by its place among the fields only; write `field: n`"),
-                            format!("`{tg}` は pixie のアプリで、テキストフィールドは何番目かでしか選べません。`field: n` と書きます"),
+                            format!("`{tg}` は pixie のアプリで、テキストフィールドは何番目かでしか選べません。`field: n` と書いてください"),
                         );
                     }
                     match call {
@@ -2210,7 +2210,7 @@ fn gui_checks(claims: &[RawClaim], kinds: &HashMap<&str, Option<TargetKind>>, di
                         Call::Open(None) if acted.contains(&tg) => e013(
                             w.call_pos,
                             format!("`{tg}` is a pixie app, which starts once in a claim: `open()` is its first screen, and comes before the other actions on it"),
-                            format!("`{tg}` は pixie のアプリで、主張の中で一度だけ起動します。`open()` はアプリの最初の画面なので、ほかの操作より前に書きます"),
+                            format!("`{tg}` は pixie のアプリで、主張の中で一度だけ起動します。`open()` はアプリの最初の画面なので、ほかの操作より前に書いてください"),
                         ),
                         _ => {}
                     }
@@ -2220,14 +2220,14 @@ fn gui_checks(claims: &[RawClaim], kinds: &HashMap<&str, Option<TargetKind>>, di
                     Call::Open(Some(p)) if !p.starts_with('/') => e013(
                         w.arg("path"),
                         format!("a page's path starts with `/`: `open(\"/{p}\")`"),
-                        format!("ページのパスは `/` から始めます（`open(\"/{p}\")`）"),
+                        format!("ページのパスは、`/` から始めてください（`open(\"/{p}\")`）"),
                     ),
                     Call::Open(_) => opened.push(tg),
                     Call::Get(_) | Call::Post { .. } | Call::Run(_) => {}
                     _ if !opened.contains(&tg) => e013(
                         w.call_pos,
                         format!("the page of `{tg}` is not open in this claim yet: open it first, `when {tg}.open(\"/\")`"),
-                        format!("この主張では、`{tg}` のページをまだ開いていません。先に `when {tg}.open(\"/\")` で開きます"),
+                        format!("この主張では、`{tg}` のページをまだ開いていません。先に `when {tg}.open(\"/\")` で開いてください"),
                     ),
                     Call::Press(k) if !known_key(k) => {
                         let named = &KEY_NAMES[..KEY_NAMES.len() - 12];

@@ -118,7 +118,7 @@ impl Report<'_> {
             if counts_ja.is_empty() { (ja.to_string(), en.to_string()) } else { (format!("{ja}（{}）", counts_ja.join("、")), format!("{en} ({})", counts_en.join(", "))) }
         };
         let (ja, en) = if fails == 0 && unchecked == 0 {
-            in_brackets("どれも検査を通った", "all pass")
+            in_brackets("どれも検査を通りました", "all pass")
         } else {
             let mut ja = Vec::new();
             let mut en = Vec::new();

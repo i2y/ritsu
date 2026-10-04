@@ -7,6 +7,6 @@ hall.book: ok
 booking.flow: 検査を通りました
 警告[ritsu W204]: booking.flow:19:1: タスク `give_seats` が呼ぶ `assign.do` を、帳簿がどの理由で断りうるかを決められません
     19 |   give_seats(event: event, count: need.needed)
-  = タスクが処理する `over_capacity` で断られる例を、chobo の探索は見つけません。探索は chobo の検査と同じ深さまでしかたどらないので、起きないと言えるのはその深さまでです
+  = タスクが処理する `over_capacity` で断られる例は、chobo の探索で見つかりません。探索は chobo の検査と同じ深さまでしかたどらないので、起きないと言えるのはその深さまでです
   = 断られれば、その理由はタスクの宣言したエラーとして返ってきます。宣言していない理由なら `failure` です。
-ritsu check: ファイル 3 個（rulec 1、chobo 1、dandori 1）。どれも検査を通った（警告 1 件）。言語の境目: 確かめた 2 か所、決められない 1 か所
+ritsu check: ファイル 3 個（rulec 1、chobo 1、dandori 1）。どれも検査を通りました（警告 1 件）。言語の境目: 確かめた 2 か所、決められない 1 か所

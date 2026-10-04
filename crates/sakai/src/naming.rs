@@ -33,7 +33,7 @@ pub fn read(text: &str) -> Result<Written, (usize, Text)> {
     let ws = base::words(text).map_err(|e| (e.at, said(&e.kind, &[])))?;
     let w = base::written(ws, text.chars().count()).ok_or((0, tr!("名指しがありません", "there is no name")))?;
     if w.tool.quoted {
-        return Err((w.tool.at, tr!("名指しはツールの語で始めます", "a name starts with its tool")));
+        return Err((w.tool.at, tr!("名指しは、ツールの語で始めてください", "a name starts with its tool")));
     }
     // The tool, and the path's quotes: what ritsu-base checks first, on the name without its pairs
     // and with a path that is the root itself, which nothing refuses (the path comes last).
@@ -43,7 +43,7 @@ pub fn read(text: &str) -> Result<Written, (usize, Text)> {
     // The pairs: a kind is a word, and has a name after it.
     for pair in w.rest.chunks(2) {
         if pair[0].quoted {
-            return Err((pair[0].at, tr!("ここには種類の語を書きます", "a kind goes here")));
+            return Err((pair[0].at, tr!("ここには種類の語を書いてください", "a kind goes here")));
         }
         if pair.len() == 1 {
             let kind = &pair[0].text;
@@ -65,7 +65,7 @@ pub fn read(text: &str) -> Result<Written, (usize, Text)> {
 fn said(kind: &ErrorKind, rest: &[base::Word]) -> Text {
     match kind {
         ErrorKind::FullWidthSpace => tr!(
-            "文字列の外に全角の空白があります。名前に空白を含めるなら、名前を `\"…\"` で囲みます",
+            "文字列の外に全角の空白があります。名前に空白を含めるなら、名前を `\"…\"` で囲んでください",
             "there is a full-width space outside a string; a name with a blank in it is written in `\"…\"`"
         ),
         ErrorKind::UnclosedString => tr!("閉じていない文字列があります", "a string is not closed"),
@@ -73,19 +73,19 @@ fn said(kind: &ErrorKind, rest: &[base::Word]) -> Text {
             "文字列の中のエスケープ `\\{e}` は使えません。使えるのは `\\\"` と `\\\\` だけです",
             "the escape `\\{e}` is not taken in a string; only `\\\"` and `\\\\` are"
         ),
-        ErrorKind::Hash => tr!("名前に `#` を書くときは、名前を `\"…\"` で囲みます", "a name with `#` in it is written in `\"…\"`"),
+        ErrorKind::Hash => tr!("名前に `#` を書くときは、名前を `\"…\"` で囲んでください", "a name with `#` in it is written in `\"…\"`"),
         ErrorKind::Missing => tr!("名指しがありません", "there is no name"),
         ErrorKind::UnknownTool(w) => tr!(
-            "知らないツールの語 `{w}` です。書けるのは rulec、dandori、koyomi、chobo、geas、proto、file、yuen、sakai です",
+            "`{w}` というツールの語はありません。書けるのは rulec、dandori、koyomi、chobo、geas、proto、file、yuen、sakai です",
             "`{w}` is not a tool; the tools are rulec, dandori, koyomi, chobo, geas, proto, file, yuen and sakai"
         ),
-        ErrorKind::QuotedTool(_) => tr!("名指しはツールの語で始めます", "a name starts with its tool"),
-        ErrorKind::MissingPath => tr!("ツールの語のあとに、パスを `\"…\"` で書きます", "the tool is followed by the path, in `\"…\"`"),
-        ErrorKind::UnquotedPath(_) => tr!("パスは `\"…\"` で囲んで書きます", "the path is written in `\"…\"`"),
+        ErrorKind::QuotedTool(_) => tr!("名指しは、ツールの語で始めてください", "a name starts with its tool"),
+        ErrorKind::MissingPath => tr!("ツールの語のあとに、パスを `\"…\"` で書いてください", "the tool is followed by the path, in `\"…\"`"),
+        ErrorKind::UnquotedPath(_) => tr!("パスは `\"…\"` で囲んで書いてください", "the path is written in `\"…\"`"),
         ErrorKind::EmptyPath => paths::error_text(paths::PathError::Empty, ""),
         ErrorKind::AbsolutePath(p) => paths::error_text(paths::PathError::Absolute, p),
         ErrorKind::OutsideRoot(p) => paths::error_text(paths::PathError::Outside, p),
-        ErrorKind::QuotedKind(_) => tr!("ここには種類の語を書きます", "a kind goes here"),
+        ErrorKind::QuotedKind(_) => tr!("ここには種類の語を書いてください", "a kind goes here"),
         ErrorKind::NoKinds(_) => tr!("`file` には種類を書けません", "`file` has no kinds"),
         ErrorKind::ChildFirst { kind, parent } => tr!("`{kind}` は `{parent}` のすぐあとにだけ書けます", "`{kind}` comes only right after `{parent}`"),
         ErrorKind::UnknownKind { tool, kind } => {

@@ -51,7 +51,7 @@ impl R<'_> {
             Err(_) => {
                 let sp = paths::shown(&p);
                 self.at("E009", file, src, s.pos, tr!("パス \"{v}\" がありません", "The path \"{v}\" is not there")).notes.push(tr!(
-                    "パスは、この .ctx のあるディレクトリから数えます。書いてあるパスは {sp} を指します。",
+                    "パスは、この .ctx のあるディレクトリからの相対パスです。書いてあるパスは {sp} を指します。",
                     "A path counts from the directory of this .ctx; as written, it points at {sp}."
                 ));
                 None
@@ -60,11 +60,11 @@ impl R<'_> {
                 if dir == Some(true) && !m.is_dir() {
                     self.at("E011", file, src, s.pos, tr!("`dir` の先 \"{v}\" はファイルです", "The `dir` \"{v}\" is a file"))
                         .notes
-                        .push(tr!("ファイルは `rulec \"…\"` のように、そのツールの語で書きます。", "A file is written with its tool, like `rulec \"…\"`."));
+                        .push(tr!("ファイルは `rulec \"…\"` のように、そのツールの語で書いてください。", "A file is written with its tool, like `rulec \"…\"`."));
                     return None;
                 }
                 if dir == Some(false) && m.is_dir() {
-                    self.at("E011", file, src, s.pos, tr!("\"{v}\" はディレクトリです", "\"{v}\" is a directory")).notes.push(tr!("ディレクトリは `dir \"…\"` で書きます。", "A directory is written `dir \"…\"`."));
+                    self.at("E011", file, src, s.pos, tr!("\"{v}\" はディレクトリです", "\"{v}\" is a directory")).notes.push(tr!("ディレクトリは `dir \"…\"` で書いてください。", "A directory is written `dir \"…\"`."));
                     return None;
                 }
                 Some(p)
@@ -108,7 +108,7 @@ pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
     r.diags.extend(ds);
     let ast = match f {
         Some(File::Map(m)) => m,
-        Some(File::Context(_)) => return Err(tr!("{shown_map} は context のファイルです。map のファイルを渡します", "{shown_map} is a context file; give a map file")),
+        Some(File::Context(_)) => return Err(tr!("{shown_map} は context のファイルです。map のファイルを渡してください", "{shown_map} is a context file; give a map file")),
         None => return Ok(Loaded { model: None, diags: r.diags, reads }),
     };
     if !r.diags.is_empty() {
@@ -144,7 +144,7 @@ pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
         reads.push(p.clone());
         let sp = paths::shown(&p);
         if files.iter().any(|(f, _, _)| *f == p) {
-            r.at("E010", map, &src, u.pos, tr!("{sp} を二度読んでいます", "The map reads {sp} twice")).notes.push(tr!("`use context` は、同じファイルを一度だけ読みます。", "`use context` names a file once."));
+            r.at("E010", map, &src, u.pos, tr!("{sp} を二度読んでいます", "The map reads {sp} twice")).notes.push(tr!("`use context` で同じファイルを読むのは、一度だけにしてください。", "`use context` names a file once."));
             continue;
         }
         let csrc = match ritsu_base::fs::read_to_string(paths::on_disk(root, &p)) {
@@ -162,7 +162,7 @@ pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
             Some(File::Map(_)) => {
                 r.at("E010", map, &src, u.pos, tr!("`use context` の先 {sp} は、context のファイルではなく map のファイルです", "What `use context` names, {sp}, is a map file, not a context file"))
                     .notes
-                    .push(tr!("地図は、ほかの地図を読みません。", "A map does not read another map."));
+                    .push(tr!("地図から、ほかの地図は読めません。", "A map does not read another map."));
             }
             None => {}
         }
@@ -190,7 +190,7 @@ pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
                 let other = &files[j].2.heading.name;
                 let fj = paths::shown(fj);
                 r.at("E006", f, s, c.heading.name_pos, m).notes.push(tr!(
-                    "{fj} の「{other}」とぶつかります。一つの地図の中で、コンテキストの名前と別名はどれも違うものにします。",
+                    "{fj} の「{other}」とぶつかります。一つの地図の中で、コンテキストの名前と別名はどれも違うものにしてください。",
                     "It collides with {other} of {fj}; in one map, the names and aliases of the contexts all differ."
                 ));
             }
@@ -218,7 +218,7 @@ pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
                 let other = paths::shown(other);
                 r.at("E006", f, s, p.package_pos, tr!("公表された言語 {k} が二度宣言されています", "The published language {k} is declared twice"))
                     .notes
-                    .push(tr!("{other} も同じ package を公表しています。一つの package は一つのコンテキストが公表します。", "The context file {other} publishes the same package; a package is published by one context."));
+                    .push(tr!("{other} も同じ package を公表しています。一つの package を公表できるのは、一つのコンテキストだけです。", "The context file {other} publishes the same package; a package is published by one context."));
                 continue;
             }
             packages.push((p.package.clone(), f.clone()));
@@ -248,7 +248,7 @@ pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
                     let v = &kf.value;
                     r.at("E011", f, s, kf.pos, tr!("crate の行に書けるのは、Rust のクレートのディレクトリです（\"{v}\" はファイルです）", "A crate line names the directory of a Rust crate (\"{v}\" is a file)"))
                         .notes
-                        .push(tr!("`Cargo.toml` のあるディレクトリを書きます。", "Write the directory its `Cargo.toml` is in."));
+                        .push(tr!("`Cargo.toml` のあるディレクトリを書いてください。", "Write the directory its `Cargo.toml` is in."));
                     return None;
                 }
                 Some((x, kf.pos))
@@ -270,7 +270,7 @@ pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
                 if seen.contains(&n) {
                     r.at("E006", f, s, at, tr!("語の名前「{n}」が二度宣言されています", "The term name {n} is declared twice"))
                         .notes
-                        .push(tr!("一つのコンテキストの中で、語の名前と `also` の名前はどれも違うものにします。", "In one context, the names of the terms and their `also` names all differ."));
+                        .push(tr!("一つのコンテキストの中で、語の名前と `also` の名前はどれも違うものにしてください。", "In one context, the names of the terms and their `also` names all differ."));
                 } else {
                     seen.push(n);
                 }

@@ -281,7 +281,7 @@ impl Error {
     pub fn text(&self) -> Text {
         match &self.kind {
             ErrorKind::FullWidthSpace => tr!(
-                "文字列の外に全角の空白があります。名前に空白を含めるなら、名前を `\"…\"` で囲みます",
+                "文字列の外に全角の空白があります。名前に空白を含めるなら、名前を `\"…\"` で囲んでください",
                 "There is a full-width space outside a string; a name with a blank in it is written in `\"…\"`"
             ),
             ErrorKind::UnclosedString => tr!("閉じていない文字列があります", "A string is not closed"),
@@ -289,24 +289,24 @@ impl Error {
                 "文字列の中のエスケープ `\\{e}` は使えません。使えるのは `\\\"` と `\\\\` だけです",
                 "The escape `\\{e}` is not taken in a string; only `\\\"` and `\\\\` are"
             ),
-            ErrorKind::Hash => tr!("名前に `#` を書くときは、名前を `\"…\"` で囲みます", "A name with `#` in it is written in `\"…\"`"),
+            ErrorKind::Hash => tr!("名前に `#` を書くときは、名前を `\"…\"` で囲んでください", "A name with `#` in it is written in `\"…\"`"),
             ErrorKind::Missing => tr!("名指しがありません", "There is no naming"),
             ErrorKind::UnknownTool(t) => tr!(
-                "`{t}` というツールはありません。名指しは {} のどれかで始めます",
+                "`{t}` というツールはありません。名指しは、{} のどれかで始めてください",
                 "`{t}` is not a tool; a naming starts with one of {}",
                 tool_list("、");
                 tool_list(", ")
             ),
-            ErrorKind::QuotedTool(t) => tr!("ツールの語 `{t}` は `\"…\"` で囲まずに書きます", "The tool `{t}` is a word, not a string in quotes"),
+            ErrorKind::QuotedTool(t) => tr!("ツールの語 `{t}` は、`\"…\"` で囲まずに書いてください", "The tool `{t}` is a word, not a string in quotes"),
             ErrorKind::MissingPath => tr!("パスがありません。名指しは `<ツール> \"<パス>\" …` の形です", "The path is missing; a naming is `<tool> \"<path>\" …`"),
-            ErrorKind::UnquotedPath(p) => tr!("パス `{p}` を `\"…\"` で囲みます", "Write the path `{p}` in quotes"),
+            ErrorKind::UnquotedPath(p) => tr!("パス `{p}` を `\"…\"` で囲んでください", "Write the path `{p}` in quotes"),
             ErrorKind::EmptyPath => PathError::Empty.text(""),
             ErrorKind::AbsolutePath(p) => PathError::Absolute.text(p),
             ErrorKind::OutsideRoot(p) => PathError::Outside.text(p),
-            ErrorKind::QuotedKind(k) => tr!("種類 `{k}` は `\"…\"` ではなく語で書きます", "The kind `{k}` is a word, not a string in quotes"),
+            ErrorKind::QuotedKind(k) => tr!("種類 `{k}` は、`\"…\"` で囲まずに語で書いてください", "The kind `{k}` is a word, not a string in quotes"),
             ErrorKind::NoKinds(t) => {
                 let t = t.word();
-                tr!("{t} に種類はありません。{t} はファイルで名指します", "{t} has no kinds; name the file")
+                tr!("{t} に種類はありません。{t} は、ファイルそのものを名指してください", "{t} has no kinds; name the file")
             }
             ErrorKind::ChildFirst { kind, parent } => tr!("`{kind}` は `{parent}` のすぐあとにしか書けません", "`{kind}` comes only right after `{parent}`"),
             ErrorKind::UnknownKind { tool, kind } => {
@@ -323,7 +323,7 @@ impl Error {
                 let t = t.word();
                 tr!("{t} には入れ子の種類がありません。組は一つまでです", "{t} has no nested kinds; a naming of {t} has one pair at most")
             }
-            ErrorKind::NothingUnder(p) => tr!("`{p}` の下には何も書けません。組は一つにします", "Nothing comes under `{p}`; write one pair"),
+            ErrorKind::NothingUnder(p) => tr!("`{p}` の下には何も書けません。組は一つにしてください", "Nothing comes under `{p}`; write one pair"),
             ErrorKind::WrongChild { parent, allowed, .. } => {
                 let (ja, en) = (allowed.join("、"), allowed.join(", "));
                 tr!("`{parent}` の下に書けるのは {ja} だけです", "Only {en} comes under `{parent}`")

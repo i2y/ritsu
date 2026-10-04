@@ -14,4 +14,4 @@ stock.book: ok
       29  3 日 待つ
       30  ship が失敗する（timeout・failure）
 invoice.flow: 検査を通りました（警告 1 件）
-ritsu check: ファイル 4 個（koyomi 2、chobo 1、dandori 1）。どれも検査を通った（警告 1 件）。言語の境目: 確かめた 1 か所、決められない 0 か所
+ritsu check: ファイル 4 個（koyomi 2、chobo 1、dandori 1）。どれも検査を通りました（警告 1 件）。言語の境目: 確かめた 1 か所、決められない 0 か所

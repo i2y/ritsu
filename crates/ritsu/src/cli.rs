@@ -197,7 +197,7 @@ fn footer() -> Vec<Text> {
             "`ritsu <language> …` runs the language's command with the languages it reads joined; called by a language's name (`rulec`), ritsu is that command."
         ),
         tr!(
-            "--lang ja|en で文面の言語を選びます（無ければ環境変数 RITSU_LANG、それも無ければ en）。`ritsu <言語>` では、その言語が選びます。",
+            "--lang ja|en で文面の言語を選べます（無ければ環境変数 RITSU_LANG、それも無ければ en）。`ritsu <言語>` では、その言語のコマンドが自分で選びます。",
             "--lang ja|en chooses the language of the text (else the RITSU_LANG environment variable, else en); after `ritsu <language>`, the language chooses its own."
         ),
         tr!(

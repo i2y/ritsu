@@ -1,6 +1,6 @@
 エラー[E307]: contexts/delivery.ctx:40:1: 共有カーネルが「Delivery」の側にしか書かれていません
     40 | shared kernel with Billing
-  = 共有カーネルは二つのチームが一緒に持つものなので、「Billing」のファイルにも `shared kernel with Delivery` を書き、同じものを並べます。
+  = 共有カーネルは二つのチームが一緒に持つものなので、「Billing」のファイルにも `shared kernel with Delivery` を書き、同じものを並べてください。
   関わるもの:
       Delivery  contexts/delivery.ctx:40  shared kernel with Billing
 エラー[E201]: delivery/ship_date.cal:3:1: 「Delivery」の delivery/ship_date.cal が、関係の無い「Billing」の calendars/tokyo_business_days.cal を参照しています（use calendar）

@@ -438,7 +438,7 @@ fn look_for_llvm() -> Llvm {
                         "GEAS_LLVM_BIN is `{shown}`, and it has no `{n}`",
                     ),
                     vec![tr!(
-                        "GEAS_LLVM_BIN には llvm-profdata と llvm-cov のあるディレクトリを書きます。これが設定されていると、geas はほかの場所を探しません",
+                        "GEAS_LLVM_BIN には、llvm-profdata と llvm-cov のあるディレクトリを設定してください。これが設定されていると、geas はほかの場所を探しません",
                         "GEAS_LLVM_BIN names the directory holding llvm-profdata and llvm-cov; when it is set, geas looks nowhere else",
                     )],
                 );

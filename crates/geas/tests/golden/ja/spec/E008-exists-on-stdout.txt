@@ -1,2 +1,2 @@
-エラー[E008]: E008-exists-on-stdout.geas:7:15: `exists` が確かめるのは、ヘッダーが送られたか、JSON のパスの先に値があるかです。`stdout` はいつもあるので、値のほうをチェックします
+エラー[E008]: E008-exists-on-stdout.geas:7:15: `exists` が確かめるのは、ヘッダーが送られたか、JSON のパスの先に値があるかです。`stdout` はいつもあるので、値のほうをチェックしてください
      7 |   then stdout exists

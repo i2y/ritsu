@@ -188,7 +188,7 @@ pub fn areas(c: &Checked, language: Language) -> Result<Areas, Vec<Diag>> {
             diag::at("E501", &m.map.file, h.pos.line, h.pos.col, tr!("地図に `code {lw}` の行がありません", "The map has no `code {lw}` line"))
                 .source(&m.map.src)
                 .note(tr!(
-                    "その言語のコードの置き場所を `code {lw} \"<パス>\"` で書くと、その下のコードの設定を書けます。",
+                    "その言語のコードの置き場所を `code {lw} \"<パス>\"` で書けば、sakai がその下のコードの設定を書けます。",
                     "Write where the code of the language is with `code {lw} \"<path>\"`; the settings are for the code under it."
                 )),
         ]);
@@ -211,7 +211,7 @@ pub fn areas(c: &Checked, language: Language) -> Result<Areas, Vec<Diag>> {
             &cx.src,
             tr!("{t} はコードのファイルを一つ名指していて、import の検査の設定に書けません", "The entry {t} names one file of code, and the settings of an import linter cannot hold it"),
             tr!(
-                "import の検査の設定は、ディレクトリの単位で書きます（Go と Java では、パッケージがディレクトリです）。`dir \"…\"` で書きます。",
+                "import の検査の設定はディレクトリの単位なので（Go と Java では、パッケージがディレクトリです）、`dir \"…\"` で書いてください。",
                 "The settings of the import linters are written by directories (in Go and Java a package is one); write it with `dir \"…\"`."
             ),
         ));
@@ -311,7 +311,7 @@ pub fn areas(c: &Checked, language: Language) -> Result<Areas, Vec<Diag>> {
             &m.map.src,
             tr!("{sd} の下に、どのコンテキストのコードもありません", "No context has code under {sd}"),
             tr!(
-                "コンテキストの `owns` に、この置き場所の下のディレクトリを書くと、その設定を書けます。",
+                "コンテキストの `owns` に、この置き場所の下のディレクトリを書けば、sakai がその設定を書けます。",
                 "Write directories under it in the `owns` of the contexts; the settings are for those."
             ),
         ));
