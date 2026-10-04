@@ -15,7 +15,7 @@ pub struct Engine;
 fn read(root: &Path, file: &str) -> Result<(String, File), Vec<Said>> {
     let disk = ritsu_base::paths::on_disk(root, file);
     let path = disk.to_string_lossy().to_string();
-    let src = std::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
+    let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
     match crate::parse::parse(file, &src) {
         (Some(f), ds) if !ds.iter().any(|d| d.is_error()) => Ok((src, f)),
         (_, ds) => Err(ds.iter().filter(|d| d.is_error()).map(|d| Said { file: path.clone(), ..Said::of(d) }).collect()),
@@ -117,7 +117,7 @@ impl ritsu_ports::References for Engine {
                     .flat_map(|p| p.protos.iter())
                     .filter_map(|s| {
                         let p = at(s)?;
-                        let src = std::fs::read_to_string(ritsu_base::paths::on_disk(root, &p)).ok()?;
+                        let src = ritsu_base::fs::read_to_string(ritsu_base::paths::on_disk(root, &p)).ok()?;
                         Some((p.clone(), ritsu_proto::read(&p, &src).ok()?))
                     })
                     .collect();

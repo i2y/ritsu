@@ -63,7 +63,7 @@ pub fn manifest_of(dir: &str) -> String {
 
 /// A path Cargo writes, from the root; None when it is outside it.
 fn from_root(root: &Path, p: &str) -> Option<String> {
-    let p = std::fs::canonicalize(p).unwrap_or_else(|_| PathBuf::from(p));
+    let p = ritsu_base::fs::canonicalize(p).unwrap_or_else(|_| PathBuf::from(p));
     let rel = p.strip_prefix(root).ok()?;
     let parts: Vec<String> = rel.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect();
     Some(if parts.is_empty() { ".".to_string() } else { parts.join("/") })
@@ -123,14 +123,14 @@ pub fn read(m: &Model) -> (Option<Crates>, Vec<Diag>) {
     };
     let disk = crate::paths::on_disk(&m.root, &code.path);
     let manifest = disk.join(MANIFEST);
-    if !manifest.is_file() {
+    if !ritsu_base::fs::is_file(&manifest) {
         let note = tr!(
             "`code rust` には、ワークスペースの（クレートが一つなら、そのクレートの）`Cargo.toml` のあるディレクトリを書きます。",
             "`code rust` names the directory of the workspace's `Cargo.toml` (or, for one crate, of its own)."
         );
         return (None, vec![fail(tr!("Cargo.toml がありません", "there is no Cargo.toml"), Some(note))]);
     }
-    let root = std::fs::canonicalize(&m.root).unwrap_or_else(|_| m.root.clone());
+    let root = ritsu_base::fs::canonicalize(&m.root).unwrap_or_else(|_| m.root.clone());
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let out = std::process::Command::new(&cargo).args(["metadata", "--format-version", "1", "--no-deps", "--offline", "--manifest-path"]).arg(&manifest).current_dir(&disk).output();
     let out = match out {
@@ -163,7 +163,7 @@ pub fn read(m: &Model) -> (Option<Crates>, Vec<Diag>) {
         let (Some(name), Some(mp)) = (p["name"].as_str(), p["manifest_path"].as_str()) else { continue };
         let Some(manifest) = from_root(&root, mp) else { continue };
         let dir = crate::paths::parent(&manifest);
-        let src = std::fs::read_to_string(crate::paths::on_disk(&m.root, &manifest)).unwrap_or_default();
+        let src = ritsu_base::fs::read_to_string(crate::paths::on_disk(&m.root, &manifest)).unwrap_or_default();
         let mut deps = Vec::new();
         for d in p["dependencies"].as_array().into_iter().flatten() {
             let table = match d["kind"].as_str() {

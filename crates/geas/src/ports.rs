@@ -15,7 +15,7 @@ pub struct Engine;
 /// A spec's claims, each its name, its line, and the lines of its block.
 fn read(file: &Path) -> Result<(String, Vec<(String, usize, usize)>), Vec<Said>> {
     let path = file.to_string_lossy().to_string();
-    let src = std::fs::read_to_string(file).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
+    let src = ritsu_base::fs::read_to_string(file).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
     let spec = crate::parse::parse(&src).map_err(|ds| ds.iter().filter(|d| d.is_error()).map(|d| Said { file: path.clone(), ..Said::of(d) }).collect::<Vec<_>>())?;
     let lines: Vec<&str> = src.lines().collect();
     let claims = spec
@@ -66,7 +66,7 @@ impl ritsu_ports::Claims for Engine {
         let stem = file.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "spec".into());
         let at = dir.join(".geas").join(format!("{stem}.map.jsonl"));
         let shown = at.to_string_lossy().to_string();
-        let Ok(text) = std::fs::read_to_string(&at) else { return Ok(None) };
+        let Ok(text) = ritsu_base::fs::read_to_string(&at) else { return Ok(None) };
         let r = Record::parse(&text).map_err(|(line, why)| vec![Said { code: String::new(), file: shown.clone(), line: Some(line), message: why }])?;
         let ranges = |ls: &crate::lines::Lines| -> Vec<(usize, usize)> {
             let mut out: Vec<(usize, usize)> = Vec::new();

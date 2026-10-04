@@ -18,7 +18,7 @@ pub struct Engine;
 fn parsed(root: &Path, file: &str) -> Result<(String, Program), Vec<Said>> {
     let disk = ritsu_base::paths::on_disk(root, file);
     let path = disk.to_string_lossy().to_string();
-    let src = std::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
+    let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
     match syntax::parse(&src) {
         Ok(p) => Ok((src, p)),
         Err(d) => Err(vec![Said { code: d.code.to_string(), file: path, line: Some(d.line), message: Text { ja: d.ja, en: d.en } }]),

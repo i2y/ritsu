@@ -234,7 +234,7 @@ pub fn suite_crossings(m: &Model, ps: &Protos, arts: &[Artifact], read: &Read) -
                 let known = r.target.tool == Tool::Proto && crate::owners::is_known_proto(m, &to);
                 if !known && !crate::owners::in_scope(m, &to) {
                     let (f, t, how) = (shown(from), r.target.text(), r.how.clone());
-                    let src = std::fs::read_to_string(crate::paths::on_disk(&m.root, from)).unwrap_or_default();
+                    let src = ritsu_base::fs::read_to_string(crate::paths::on_disk(&m.root, from)).unwrap_or_default();
                     diags.push(diag::at("E103", from, r.line, 1, tr!("{f} が、地図の範囲の外の {t} を参照しています（{how}）", "The file {f} refers to {t}, which is outside the map's scope ({how})")).source(&src).note(crate::owners::scope_note(m)));
                 }
                 continue;
@@ -284,7 +284,7 @@ pub fn crate_crossings(m: &Model, arts: &[Artifact], crates: Option<&crate::carg
             let Some(y) = owner(&to) else {
                 if !crate::owners::in_scope(m, &to) {
                     let (f, t) = (shown(&c.manifest), shown(dir));
-                    let src = std::fs::read_to_string(crate::paths::on_disk(&m.root, &c.manifest)).unwrap_or_default();
+                    let src = ritsu_base::fs::read_to_string(crate::paths::on_disk(&m.root, &c.manifest)).unwrap_or_default();
                     diags.push(
                         diag::at("E103", &c.manifest, d.line, d.col, tr!("{f} が、地図の範囲の外のクレート {t} に依存しています（{}）", "The file {f} depends on the crate at {t}, which is outside the map's scope ({})", d.table; d.table))
                             .source(&src)
@@ -332,7 +332,7 @@ pub fn implements(m: &Model, arts: &[Artifact], read: &Read) -> Vec<Diag> {
                 continue;
             }
             let (xn, sp, t) = (m.contexts[x].name.clone(), shown(from), r.target.text());
-            let src = std::fs::read_to_string(crate::paths::on_disk(&m.root, from)).unwrap_or_default();
+            let src = ritsu_base::fs::read_to_string(crate::paths::on_disk(&m.root, from)).unwrap_or_default();
             let mut d = diag::at("E208", from, r.line, 1, tr!("「{xn}」の {sp} が実装する {t} は、「{xn}」の公表された言語の公開ホストサービスではありません", "The workflow {sp} of {xn} implements {t}, which is no open host service of a published language of {xn}")).source(&src);
             d = d.note(match own {
                 Some(p) => {
@@ -413,7 +413,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
     for c in crossings.iter_mut() {
         let (x, y) = (c.from_ctx, c.to_ctx);
         let (xn, yn) = (m.contexts[x].name.clone(), m.contexts[y].name.clone());
-        let src = std::fs::read_to_string(crate::paths::on_disk(&m.root, &c.from)).unwrap_or_default();
+        let src = ritsu_base::fs::read_to_string(crate::paths::on_disk(&m.root, &c.from)).unwrap_or_default();
         let (p, q) = (c.from.clone(), c.to.clone());
         let krate = matches!(c.kind, Kind::Crate { .. });
         // a crate is shown by its directory, as a dependency by its path writes it

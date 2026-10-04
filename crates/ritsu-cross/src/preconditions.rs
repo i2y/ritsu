@@ -141,7 +141,7 @@ pub fn check(project: &Project, joined: &Joined, lang: Lang, borders: &mut Borde
     for f in project.of(Tool::Dandori) {
         let disk = ritsu_base::paths::on_disk(&project.root, &f.rel);
         let Ok(calls) = joined.dandori.rule_calls(&disk, joined.rules()) else { continue };
-        let src = std::fs::read_to_string(&disk).unwrap_or_default();
+        let src = ritsu_base::fs::read_to_string(&disk).unwrap_or_default();
         for call in calls {
             let Ok(facts) = joined.rulec.facts(&call.rule) else { continue };
             for p in &facts.preconditions {

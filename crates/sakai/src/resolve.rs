@@ -47,7 +47,7 @@ impl R<'_> {
             }
         };
         let v = &s.value;
-        match std::fs::metadata(paths::on_disk(self.root, &p)) {
+        match ritsu_base::fs::metadata(paths::on_disk(self.root, &p)) {
             Err(_) => {
                 let sp = paths::shown(&p);
                 self.at("E009", file, src, s.pos, tr!("パス \"{v}\" がありません", "The path \"{v}\" is not there")).notes.push(tr!(
@@ -98,7 +98,7 @@ fn root_note() -> Text {
 /// Read the map `map` (a path from the root) and the contexts it names.
 pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
     let shown_map = paths::shown(map);
-    let src = std::fs::read_to_string(paths::on_disk(root, map)).map_err(|e| {
+    let src = ritsu_base::fs::read_to_string(paths::on_disk(root, map)).map_err(|e| {
         let e = e.to_string();
         tr!("{shown_map} を読めません: {e}", "{shown_map} cannot be read: {e}")
     })?;
@@ -147,7 +147,7 @@ pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
             r.at("E010", map, &src, u.pos, tr!("{sp} を二度読んでいます", "The map reads {sp} twice")).notes.push(tr!("`use context` は、同じファイルを一度だけ読みます。", "`use context` names a file once."));
             continue;
         }
-        let csrc = match std::fs::read_to_string(paths::on_disk(root, &p)) {
+        let csrc = match ritsu_base::fs::read_to_string(paths::on_disk(root, &p)) {
             Ok(s) => s,
             Err(e) => {
                 let e = e.to_string();
@@ -244,7 +244,7 @@ pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
             });
             let krate = p.krate.as_ref().and_then(|kf| {
                 let x = r.path(f, s, &cdir, kf, None)?;
-                if !paths::on_disk(r.root, &x).is_dir() {
+                if !ritsu_base::fs::is_dir(paths::on_disk(r.root, &x)) {
                     let v = &kf.value;
                     r.at("E011", f, s, kf.pos, tr!("crate の行に書けるのは、Rust のクレートのディレクトリです（\"{v}\" はファイルです）", "A crate line names the directory of a Rust crate (\"{v}\" is a file)"))
                         .notes

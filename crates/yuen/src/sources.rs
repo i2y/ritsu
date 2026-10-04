@@ -118,7 +118,7 @@ fn borrow(p: &Project, fi: usize, s: &SourceDecl, n: &Name, diags: &mut Vec<Diag
     let abs = p.root.join(&n.path);
     let t = n.text();
     let e106 = |msg: Text| p.err(fi, "E106", s.span, msg);
-    if !abs.is_file() {
+    if !ritsu_base::fs::is_file(&abs) {
         diags.push(e106(tr!("{t} の {} がありません", "{} of {t} is not there", p.shown(&n.path))));
         return Resolved::Broken;
     }
@@ -158,7 +158,7 @@ fn borrow(p: &Project, fi: usize, s: &SourceDecl, n: &Name, diags: &mut Vec<Diag
                 let rel = ritsu_base::paths::join(&dir_rel, &format!("{copy_dir}/{file}")).unwrap_or_else(|_| format!("{copy_dir}/{file}"));
                 let copy = dir.join(&file);
                 // the language's check holds the copy to its pin; one that does not match is not read
-                let bytes = std::fs::read(&copy).ok().filter(|b| sha256::short(b) == *pin);
+                let bytes = ritsu_base::fs::read(&copy).ok().filter(|b| sha256::short(b) == *pin);
                 if bytes.is_none() {
                     let (shown, fr) = (p.shown(&rel), fragment);
                     diags.push(e106(tr!("{t} の {fr} の写し {shown} を読めないか、固定と違います", "the copy {shown} of {fr} of {t} cannot be read, or does not match its pin")));
@@ -173,7 +173,7 @@ fn borrow(p: &Project, fi: usize, s: &SourceDecl, n: &Name, diags: &mut Vec<Diag
                 return Resolved::Broken;
             };
             let copy = p.root.join(&rel);
-            let bytes = std::fs::read(&copy).ok().filter(|b| pin.as_deref() == Some(sha256::short(b).as_str()));
+            let bytes = ritsu_base::fs::read(&copy).ok().filter(|b| pin.as_deref() == Some(sha256::short(b).as_str()));
             if bytes.is_none() {
                 let shown = p.shown(&rel);
                 diags.push(e106(tr!("{t} の写し {shown} を読めないか、固定と違います", "the copy {shown} of {t} cannot be read, or does not match its pin")));
@@ -210,7 +210,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                         let mut a = Article { fragment: pl.fragment.clone(), rel, abs: abs.clone(), pin: pl.pin.clone(), bytes: None, span: pl.span };
                         let name = &s.name;
                         let fr = &pl.fragment;
-                        match std::fs::read(&abs) {
+                        match ritsu_base::fs::read(&abs) {
                             Err(_) => diags.push(p.err(fi, "E101", pl.span, tr!("{name} {fr} の写し {shown} がありません", "The copy of {name} {fr} is not there: {shown}")).note(tr!(
                                 "`yuen source fetch` が {} から取ってきて、そこに書きます。check は通信しません。",
                                 "`yuen source fetch` takes it from {} and writes it there; check never reads the network.",
@@ -258,7 +258,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                         let shown = p.shown(&name.path);
                         let sname = &s.name;
                         let mut bytes = None;
-                        match std::fs::read(&abs) {
+                        match ritsu_base::fs::read(&abs) {
                             Err(_) => {
                                 let mut d = p.err(fi, "E101", s.span, tr!("出典「{sname}」の写し {shown} がありません", "The copy of the source {sname} is not there: {shown}"));
                                 d = match url {
@@ -339,7 +339,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                                 let path = f.abs.parent().unwrap().join(copies::copy_dir(id, &asof.to_string())).join(&file);
                                 let indent = pins.first().map(|pl| " ".repeat(pl.span.col - 1)).unwrap_or_else(|| "  ".into());
                                 let shown = if fr.chars().all(|c| c.is_alphanumeric() || c == '_') { fr.clone() } else { crate::names::quote(fr) };
-                                let fix = match std::fs::read(&path) {
+                                let fix = match ritsu_base::fs::read(&path) {
                                     Ok(b) => format!("{indent}{shown} sha256:{}", sha256::short(&b)),
                                     Err(_) => format!("{indent}{shown} sha256:<yuen source fetch, then yuen source pin>"),
                                 };
@@ -491,7 +491,7 @@ pub fn mismatches(p: &Project, s: &Sources) -> Vec<Diag> {
                     if theirs.is_empty() || theirs.iter().any(|x| x.abs == a.abs) {
                         continue;
                     }
-                    let texts: Vec<(&Pinned, String)> = theirs.iter().filter_map(|x| std::fs::read(&x.abs).ok().map(|b| (*x, copies::xml_text(&String::from_utf8_lossy(&b))))).collect();
+                    let texts: Vec<(&Pinned, String)> = theirs.iter().filter_map(|x| ritsu_base::fs::read(&x.abs).ok().map(|b| (*x, copies::xml_text(&String::from_utf8_lossy(&b))))).collect();
                     if texts.iter().any(|(_, t)| *t == mine_text) {
                         continue;
                     }

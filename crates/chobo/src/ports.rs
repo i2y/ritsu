@@ -19,7 +19,7 @@ pub struct Engine;
 fn checked(file: &Path) -> Result<(String, Book, Checked), Vec<Said>> {
     let path = file.to_string_lossy().to_string();
     // read here, so that what cannot be read says why once (check_file's error says it cannot read too)
-    let src = std::fs::read_to_string(file).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
+    let src = ritsu_base::fs::read_to_string(file).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
     let c = check::check_source(&src);
     let errors: Vec<Said> = c.diags.iter().filter(|d| d.is_error()).map(|d| Said { file: path.clone(), ..Said::of(d) }).collect();
     match &c.book {

@@ -342,7 +342,7 @@ impl Loader {
         if let Some(r) = self.done.get(&key) {
             return Loaded { calendar: r.clone().ok(), diags: vec![] };
         }
-        let src = match std::fs::read(path) {
+        let src = match ritsu_base::fs::read(path) {
             Ok(b) => b,
             Err(_) => return Loaded { calendar: None, diags: vec![] },
         };
@@ -591,7 +591,7 @@ impl Loader {
         if self.in_progress(&path) {
             return Err(err(tr!("{p} を読むと、このファイルに戻ってきます（use calendar が循環しています）", "Reading {p} leads back to this file (the use calendar lines go round)")));
         }
-        let Ok(bytes) = std::fs::read(&path) else {
+        let Ok(bytes) = ritsu_base::fs::read(&path) else {
             return Err(Box::new(err(tr!("カレンダー {p} が読めません{where_}", "The calendar {p} cannot be read{where_en}"))
                 .note(tr!("パスは、この .cal のあるディレクトリから数えます。", "The path is relative to the directory this .cal is in."))));
         };

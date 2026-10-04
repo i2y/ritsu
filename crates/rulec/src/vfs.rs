@@ -23,7 +23,7 @@ pub fn with_git_rev<R>(rev: &str, f: impl FnOnce() -> R) -> R {
 /// The bytes of a file, from the working tree or from the revision in force.
 pub fn read(path: &Path) -> std::io::Result<Vec<u8>> {
     let rev = REV.with(|r| r.borrow().clone());
-    let Some(rev) = rev else { return std::fs::read(path) };
+    let Some(rev) = rev else { return ritsu_base::fs::read(path) };
     // git resolves `rev:./p` against the current directory, as the working tree read does.
     let spec = if path.is_absolute() {
         format!("{rev}:{}", path.display())

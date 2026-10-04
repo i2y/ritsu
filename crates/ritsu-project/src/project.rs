@@ -56,14 +56,14 @@ impl Project {
     pub fn load(paths: &[String], root_flag: Option<&str>) -> Result<Project, Text> {
         let given: Vec<String> = if paths.is_empty() { vec![".".to_string()] } else { paths.to_vec() };
         for g in &given {
-            if !Path::new(g).exists() {
+            if !ritsu_base::fs::exists(g) {
                 return Err(tr!("`{g}` がありません", "`{g}` is not there"));
             }
         }
         let root = match root_flag {
             Some(r) => {
                 let p = paths::absolute(Path::new(r));
-                if !p.is_dir() {
+                if !ritsu_base::fs::is_dir(&p) {
                     return Err(tr!("`--root {r}` はディレクトリではありません", "`--root {r}` is not a directory"));
                 }
                 p
@@ -77,7 +77,7 @@ impl Project {
                 let r = shown.root();
                 return Err(tr!("`{g}` はルート {r} の外にあります", "`{g}` is outside the root {r}"));
             };
-            if Path::new(g).is_dir() {
+            if ritsu_base::fs::is_dir(g) {
                 let mut under = Vec::new();
                 paths::walk(&root, &rel, &[], &mut under);
                 rels.extend(under.into_iter().filter_map(|f| kind_of(&f).map(|t| (t, f))));

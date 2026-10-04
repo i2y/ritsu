@@ -182,7 +182,7 @@ fn quotes(laws: &[Law], cite: &Cite, lang: Lang) -> Vec<Quote> {
     let Some(law) = laws.iter().find(|l| l.name == cite.source) else { return out };
     for (fr, _) in &cite.fragments {
         let Some(p) = law.pins.iter().find(|p| &p.fragment == fr) else { continue };
-        let Ok(xml) = std::fs::read_to_string(&p.path) else { continue };
+        let Ok(xml) = ritsu_base::fs::read_to_string(&p.path) else { continue };
         let rev = law.revision.clone().unwrap_or_default();
         let head = match lang {
             Lang::Ja => format!("{} {fr}（e-Gov 法令検索、{} 時点、版 {rev}）", law.name, law.asof),
@@ -310,7 +310,7 @@ struct CalFile {
 fn read_calendar_files(c: &Calendar) -> Vec<CalFile> {
     let mut out = Vec::new();
     for info in std::iter::once(&c.info).chain(c.used.iter()) {
-        let Ok(src) = std::fs::read_to_string(&info.path) else { continue };
+        let Ok(src) = ritsu_base::fs::read_to_string(&info.path) else { continue };
         let parsed = crate::parse::parse(&info.shown, &src);
         let Some(file) = parsed.file else { continue };
         let dir = info.path.parent().unwrap_or(Path::new("")).to_path_buf();

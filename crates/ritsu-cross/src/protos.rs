@@ -16,7 +16,7 @@ pub fn unread(project: &Project, lang: Lang) -> Vec<Finding> {
     for f in project.files.iter().filter(|f| f.tool == ritsu_base::naming::Tool::Proto) {
         let disk = ritsu_base::paths::on_disk(&project.root, &f.rel);
         let shown = f.shown.clone();
-        let d: Diag = match std::fs::read(&disk).map(String::from_utf8) {
+        let d: Diag = match ritsu_base::fs::read(&disk).map(String::from_utf8) {
             Ok(Ok(src)) => match ritsu_proto::read(&f.rel, &src) {
                 Ok(_) => continue,
                 Err(e) => {

@@ -91,7 +91,7 @@ pub fn relative(from: &Path, to: &Path) -> String {
 /// language of ritsu finds it (ritsu-base's `paths::find_root`), then with its symbolic links
 /// followed, as yuen keeps every path of a project.
 pub fn find_root(first: &Path) -> Option<PathBuf> {
-    std::fs::canonicalize(ritsu_base::paths::find_root(first)).ok()
+    ritsu_base::fs::canonicalize(ritsu_base::paths::find_root(first)).ok()
 }
 
 /// The `.req` files a path stands for: itself, or every `.req` under a directory, in path
@@ -99,17 +99,17 @@ pub fn find_root(first: &Path) -> Option<PathBuf> {
 /// `node_modules`, `site-packages`, `__pycache__`).
 pub fn expand(arg: &str) -> Vec<String> {
     let p = Path::new(arg);
-    if !p.is_dir() {
+    if !ritsu_base::fs::is_dir(p) {
         return vec![arg.to_string()];
     }
     let mut out = Vec::new();
     fn walk(d: &Path, out: &mut Vec<String>) {
-        let Ok(rd) = std::fs::read_dir(d) else { return };
+        let Ok(rd) = ritsu_base::fs::read_dir(d) else { return };
         let mut es: Vec<_> = rd.filter_map(|e| e.ok()).map(|e| e.path()).collect();
         es.sort();
         for e in es {
             let name = e.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-            if e.is_dir() {
+            if ritsu_base::fs::is_dir(&e) {
                 if ritsu_base::paths::skipped_name(&name) {
                     continue;
                 }
@@ -135,18 +135,18 @@ pub fn load_with(args: &[String], root_flag: Option<&str>, suite: crate::suite::
         return Err(Refusal(tr!(".req のファイルかディレクトリを渡します", "Give .req files or directories")));
     };
     for a in args {
-        if !Path::new(a).exists() {
+        if !ritsu_base::fs::exists(a) {
             return Err(Refusal(tr!("`{a}` がありません", "`{a}` does not exist")));
         }
     }
     let root = match root_flag {
-        Some(r) => match std::fs::canonicalize(r) {
-            Ok(p) if p.is_dir() => p,
+        Some(r) => match ritsu_base::fs::canonicalize(r) {
+            Ok(p) if ritsu_base::fs::is_dir(&p) => p,
             _ => return Err(Refusal(tr!("`--root {r}` はディレクトリではありません", "`--root {r}` is not a directory"))),
         },
         None => find_root(Path::new(first)).ok_or_else(|| Refusal(tr!("`{first}` のルートを決められません", "Cannot tell the root of `{first}`")))?,
     };
-    let cwd = std::env::current_dir().ok().and_then(|c| std::fs::canonicalize(c).ok()).unwrap_or_default();
+    let cwd = ritsu_base::fs::current_dir().ok().and_then(|c| ritsu_base::fs::canonicalize(c).ok()).unwrap_or_default();
     let root_shown = relative(&cwd, &root);
     let mut files = Vec::new();
     let mut diags = Vec::new();
@@ -158,7 +158,7 @@ pub fn load_with(args: &[String], root_flag: Option<&str>, suite: crate::suite::
             return Err(Refusal(tr!("`{a}` の下に .req のファイルがありません", "There is no .req file under `{a}`")));
         }
         for display in found {
-            let abs = std::fs::canonicalize(&display).map_err(|e| Refusal(tr!("`{display}` を読めません: {e}", "Cannot read `{display}`: {e}")))?;
+            let abs = ritsu_base::fs::canonicalize(&display).map_err(|e| Refusal(tr!("`{display}` を読めません: {e}", "Cannot read `{display}`: {e}")))?;
             if !seen.insert(abs.clone()) {
                 continue;
             }
@@ -168,7 +168,7 @@ pub fn load_with(args: &[String], root_flag: Option<&str>, suite: crate::suite::
             };
             let rel = rel_path.to_string_lossy().replace('\\', "/");
             let dir = rel_path.parent().map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_default();
-            let bytes = std::fs::read(&abs).map_err(|e| Refusal(tr!("`{display}` を読めません: {e}", "Cannot read `{display}`: {e}")))?;
+            let bytes = ritsu_base::fs::read(&abs).map_err(|e| Refusal(tr!("`{display}` を読めません: {e}", "Cannot read `{display}`: {e}")))?;
             let Ok(src) = String::from_utf8(bytes) else {
                 return Err(Refusal(tr!("`{display}` は UTF-8 ではありません", "`{display}` is not UTF-8")));
             };
@@ -214,7 +214,7 @@ impl Project {
     pub fn shown_any(&self, path: &str) -> String {
         let p = std::path::Path::new(path);
         match p.strip_prefix(&self.root) {
-            Ok(rel) if p.is_absolute() => self.shown(&rel.to_string_lossy().replace('\\', "/")),
+            Ok(rel) if ritsu_base::paths::rooted(p) => self.shown(&rel.to_string_lossy().replace('\\', "/")),
             _ => path.to_string(),
         }
     }

@@ -60,7 +60,7 @@ pub fn load_table(o: &Origin, decl: &SourceDecl) -> Result<Table, Vec<Diag>> {
     let (covers, covers_span) = covers.clone().expect("the parser requires `covers`");
     let name = &decl.name;
     let full = o.dir.join(path);
-    let Ok(bytes) = std::fs::read(&full) else {
+    let Ok(bytes) = ritsu_base::fs::read(&full) else {
         let mut d = o.err("E101", decl.span, tr!("出典「{name}」の写し {path} がありません", "The copy of the source {name} is not there: {path}"));
         d = match url {
             Some(_) => d.note(tr!(
@@ -255,7 +255,7 @@ pub fn check_laws(o: &Origin) -> (Vec<Law>, Vec<crate::diag::Diag>) {
         let SourceKind::Law { id, asof, pins } = &s.kind else { continue };
         let dir = copy_dir(o.dir, id, *asof);
         let rel = format!("sources/law/{id}@{asof}");
-        let revision = std::fs::read_to_string(dir.join("revision.txt")).ok().map(|r| r.trim().to_string());
+        let revision = ritsu_base::fs::read_to_string(dir.join("revision.txt")).ok().map(|r| r.trim().to_string());
         let mut law = Law { name: s.name.clone(), id: id.clone(), asof: *asof, dir: dir.clone(), revision, pins: vec![] };
         for p in pins {
             let Some(e) = elm(&p.fragment) else {
@@ -263,7 +263,7 @@ pub fn check_laws(o: &Origin) -> (Vec<Law>, Vec<crate::diag::Diag>) {
                 continue;
             };
             let path = dir.join(format!("{e}.xml"));
-            let Ok(bytes) = std::fs::read(&path) else {
+            let Ok(bytes) = ritsu_base::fs::read(&path) else {
                 diags.push(
                     o.err("E101", p.span, tr!("{} {}の写し {rel}/{e}.xml がありません", "The copy of {} {} is not there: {rel}/{e}.xml", s.name, p.fragment))
                         .note(tr!(
@@ -346,7 +346,7 @@ pub fn check_laws(o: &Origin) -> (Vec<Law>, Vec<crate::diag::Diag>) {
             };
             if !pins.iter().any(|p| &p.fragment == fr) {
                 let path = copy_dir(o.dir, id, *asof).join(format!("{e}.xml"));
-                let fix = match std::fs::read(&path) {
+                let fix = match ritsu_base::fs::read(&path) {
                     Ok(b) => format!("  {fr} sha256:{}", sha256::short(&b)),
                     Err(_) => format!("  {fr} sha256:<koyomi source fetch, then koyomi source pin>"),
                 };
@@ -366,5 +366,5 @@ pub fn check_laws(o: &Origin) -> (Vec<Law>, Vec<crate::diag::Diag>) {
 
 /// The text of a pinned article, from its copy.
 pub fn article_text(p: &Pinned) -> Option<String> {
-    std::fs::read_to_string(&p.path).ok().map(|x| sources::xml_text(&x))
+    ritsu_base::fs::read_to_string(&p.path).ok().map(|x| sources::xml_text(&x))
 }

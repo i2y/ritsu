@@ -117,7 +117,7 @@ fn root_from(flag: Option<&str>, first: &str) -> Result<PathBuf, Text> {
     match flag {
         Some(r) => {
             let p = paths::absolute(Path::new(r));
-            if p.is_dir() {
+            if ritsu_base::fs::is_dir(&p) {
                 Ok(p)
             } else {
                 Err(tr!("`--root {r}` はディレクトリではありません", "`--root {r}` is not a directory"))
@@ -131,7 +131,7 @@ fn root_from(flag: Option<&str>, first: &str) -> Result<PathBuf, Text> {
 fn from_root(root: &Path, args: &[String]) -> Result<Vec<String>, Text> {
     args.iter()
         .map(|f| {
-            if !Path::new(f).exists() {
+            if !ritsu_base::fs::exists(f) {
                 return Err(tr!("`{f}` がありません", "`{f}` is not there"));
             }
             paths::from_root(root, Path::new(f)).ok_or_else(|| {
@@ -227,7 +227,7 @@ fn one_map(a: &Args, cmd: &str, lang: Lang, err: &mut dyn Write) -> Result<(Path
     let [map] = a.pos.as_slice() else {
         return Err(refuse(err, tr!("`sakai {cmd}` には map のファイルを一つ渡します", "`sakai {cmd}` takes one map file"), lang));
     };
-    if Path::new(map).is_dir() {
+    if ritsu_base::fs::is_dir(map) {
         return Err(refuse(err, tr!("`sakai {cmd}` には map のファイルを渡します（ディレクトリではなく）", "`sakai {cmd}` takes a map file, not a directory"), lang));
     }
     let root = root_of(a, map).map_err(|e| refuse(err, e, lang))?;
@@ -299,7 +299,7 @@ fn api_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
     if a.pos.len() != 1 {
         return refuse(err, tr!("`sakai api` には map のファイルを一つ渡します", "`sakai api` takes one map file"), lang);
     }
-    if Path::new(&a.pos[0]).is_dir() {
+    if ritsu_base::fs::is_dir(&a.pos[0]) {
         return refuse(err, tr!("`sakai api` には map のファイルを渡します（ディレクトリではなく）", "`sakai api` takes a map file, not a directory"), lang);
     }
     let root = match root_of(a, &a.pos[0]) {

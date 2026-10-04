@@ -307,7 +307,7 @@ fn pins(p: &Project, sources: &[SourceNode], artifacts: &[Name]) -> Pins {
         let from = match artifacts.iter().position(|a| *a == f) {
             Some(i) => PinFile::Artifact(i),
             None => {
-                let hash = std::fs::read(p.root.join(&f.path)).map(|b| sha256::short(&b)).unwrap_or_default();
+                let hash = ritsu_base::fs::read(p.root.join(&f.path)).map(|b| sha256::short(&b)).unwrap_or_default();
                 out.files.push((f.clone(), hash));
                 PinFile::File(out.files.len() - 1)
             }
@@ -320,7 +320,7 @@ fn pins(p: &Project, sources: &[SourceNode], artifacts: &[Name]) -> Pins {
                     Some(i) => PinSource::More(i),
                     None => {
                         let file = x.abs.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-                        let lines = std::fs::read(&x.abs).ok().and_then(|b| String::from_utf8(b).ok()).map(|t| copies::quote_lines(x.db, &file, &t)).unwrap_or_default();
+                        let lines = ritsu_base::fs::read(&x.abs).ok().and_then(|b| String::from_utf8(b).ok()).map(|t| copies::quote_lines(x.db, &file, &t)).unwrap_or_default();
                         let revision = x.abs.parent().and_then(copies::revision);
                         out.sources.push(SourceNode { key, label: format!("{} {}", x.source, x.fragment), revision, pin: Some(x.pin.clone()), lines, url: None });
                         PinSource::More(out.sources.len() - 1)

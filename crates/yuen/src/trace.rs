@@ -144,7 +144,7 @@ fn pins(p: &Project, m: &Model, file: &Name, r: Option<usize>, depth: usize, o: 
                     return Some(true);
                 }
                 let mine = a.bytes.as_ref()?;
-                let theirs = std::fs::read(&x.abs).ok()?;
+                let theirs = ritsu_base::fs::read(&x.abs).ok()?;
                 Some(copies::xml_text(&String::from_utf8_lossy(mine)) == copies::xml_text(&String::from_utf8_lossy(&theirs)))
             })
         });

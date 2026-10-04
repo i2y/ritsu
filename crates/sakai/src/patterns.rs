@@ -38,14 +38,14 @@ impl P<'_> {
 /// paths and digests of every file under it.
 fn content_key(m: &Model, o: &Own) -> String {
     if !o.is_dir() {
-        return sha256::hex(&std::fs::read(paths::on_disk(&m.root, &o.path)).unwrap_or_default());
+        return sha256::hex(&ritsu_base::fs::read(paths::on_disk(&m.root, &o.path)).unwrap_or_default());
     }
     let mut files = Vec::new();
     paths::walk(&m.root, &o.path, &[], &mut files);
     let mut listing = String::new();
     for f in files {
         let rel = paths::relative(&o.path, &f);
-        let d = sha256::hex(&std::fs::read(paths::on_disk(&m.root, &f)).unwrap_or_default());
+        let d = sha256::hex(&ritsu_base::fs::read(paths::on_disk(&m.root, &f)).unwrap_or_default());
         listing.push_str(&format!("{rel}\0{d}\n"));
     }
     sha256::hex(listing.as_bytes())

@@ -137,13 +137,13 @@ pub enum Unread {
 /// others to its language reading it (`Items`).
 pub fn artifact_end(p: &Project, n: &Name) -> Result<End, Unread> {
     let abs = if n.path == "." { p.root.clone() } else { p.root.join(&n.path) };
-    if abs.is_dir() {
+    if ritsu_base::fs::is_dir(&abs) {
         return Err(Unread::Missing { dir: true });
     }
-    if !abs.is_file() {
+    if !ritsu_base::fs::is_file(&abs) {
         return Err(Unread::Missing { dir: false });
     }
-    let bytes = || std::fs::read(&abs).map(End::of).map_err(|_| Unread::Missing { dir: false });
+    let bytes = || ritsu_base::fs::read(&abs).map(End::of).map_err(|_| Unread::Missing { dir: false });
     match n.tool {
         Tool::File => bytes(),
         Tool::Proto => {

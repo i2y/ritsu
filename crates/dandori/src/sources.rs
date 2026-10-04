@@ -164,11 +164,11 @@ impl Disk {
 
 impl Sources for Disk {
     fn read(&self, path: &Path) -> Result<String, String> {
-        std::fs::read_to_string(path).map_err(|e| e.to_string())
+        ritsu_base::fs::read_to_string(path).map_err(|e| e.to_string())
     }
 
     fn canonical(&self, path: &Path) -> PathBuf {
-        path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+        ritsu_base::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
     }
 
     fn rules(&self) -> &dyn Rules {

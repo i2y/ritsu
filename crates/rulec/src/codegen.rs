@@ -10671,7 +10671,7 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
     // What the module needs from the BSR, over every rule of the run (§15.161).
     let mut module_deps = crate::codegen::BufDeps::default();
     for path in files {
-        let Ok(src) = std::fs::read_to_string(path) else {
+        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
             let _ = writeln!(err, "{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return 2;
         };
@@ -10853,7 +10853,7 @@ struct Emitted {
 /// that failed.
 fn emit(targets: Vec<(String, String)>, check_only: bool, json: bool, st: &mut Emitted, out: &mut dyn std::io::Write, err: &mut dyn std::io::Write) -> Option<u8> {
     for (p, body) in targets {
-        let existing = std::fs::read_to_string(&p).ok();
+        let existing = ritsu_base::fs::read_to_string(&p).ok();
         if existing.as_deref() == Some(body.as_str()) {
             continue;
         }
@@ -10866,9 +10866,9 @@ fn emit(targets: Vec<(String, String)>, check_only: bool, json: bool, st: &mut E
             continue;
         }
         if let Some(dir) = std::path::Path::new(&p).parent() {
-            let _ = std::fs::create_dir_all(dir);
+            let _ = ritsu_base::fs::create_dir_all(dir);
         }
-        if std::fs::write(&p, &body).is_err() {
+        if ritsu_base::fs::write(&p, &body).is_err() {
             let _ = writeln!(err, "{}", tr!("error: `{p}` に書けません", "error: cannot write `{p}`"));
             return Some(2);
         }

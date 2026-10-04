@@ -1131,7 +1131,7 @@ fn cite_section(f: &RuleFile, cite: Option<&Cite>, path: &str, quote: bool) -> S
             // eCFR has no such id: what a copy is, is the text of that date, and the date is
             // already in the line.
             let base = decl.and_then(|d| d.base.as_deref()).unwrap_or(path);
-            let rev = std::fs::read_to_string(crate::sources::copy_dir(base, id, asof).join("revision.txt"))
+            let rev = ritsu_base::fs::read_to_string(crate::sources::copy_dir(base, id, asof).join("revision.txt"))
                 .ok()
                 .and_then(|r| crate::sources::revision_words(r.trim()))
                 .map(|w| tr!("。{w}", "; {w}"))
@@ -1155,7 +1155,7 @@ fn cite_section(f: &RuleFile, cite: Option<&Cite>, path: &str, quote: bool) -> S
             // grid, and the person approving it should be told which they are looking at.
             let base = decl.and_then(|d| d.base.as_deref()).unwrap_or(path);
             let doc = std::path::Path::new(base).parent().unwrap_or(std::path::Path::new(".")).join(p);
-            let by = std::fs::read_to_string(crate::extract::copy_dir(&doc).join("extractor.txt"))
+            let by = ritsu_base::fs::read_to_string(crate::extract::copy_dir(&doc).join("extractor.txt"))
                 .ok()
                 .map(|x| tr!("、{} が読んだ", ", read by {}", x.trim()))
                 .unwrap_or_default();

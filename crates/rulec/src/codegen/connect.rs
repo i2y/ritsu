@@ -143,8 +143,8 @@ const KNOWN: &[(&str, &str)] = &[
 
 /// The `buf.yaml` a contract is built with: the nearest one above it, as buf finds it.
 fn workspace(contract: &Path) -> Option<PathBuf> {
-    let full = std::fs::canonicalize(contract).ok()?;
-    full.ancestors().skip(1).find(|d| d.join("buf.yaml").is_file()).map(Path::to_path_buf)
+    let full = ritsu_base::fs::canonicalize(contract).ok()?;
+    full.ancestors().skip(1).find(|d| ritsu_base::fs::is_file(d.join("buf.yaml"))).map(Path::to_path_buf)
 }
 
 /// What the module needs for the imports of its contracts that are on no disk.
@@ -174,7 +174,7 @@ fn bsr_deps(elsewhere: &[(PathBuf, String)]) -> BufDeps {
             }
             continue;
         };
-        let declared = std::fs::read_to_string(dir.join("buf.yaml")).map(|s| crate::proto::buf_deps(&s)).unwrap_or_default();
+        let declared = ritsu_base::fs::read_to_string(dir.join("buf.yaml")).map(|s| crate::proto::buf_deps(&s)).unwrap_or_default();
         let take: Vec<String> = match known {
             Some(m) if declared.contains(&m) => vec![m],
             _ => declared.clone(),
@@ -188,7 +188,7 @@ fn bsr_deps(elsewhere: &[(PathBuf, String)]) -> BufDeps {
             continue;
         }
         let lock_path = dir.join("buf.lock");
-        let lock = std::fs::read_to_string(&lock_path).map(|s| crate::proto::buf_lock(&s)).ok();
+        let lock = ritsu_base::fs::read_to_string(&lock_path).map(|s| crate::proto::buf_lock(&s)).ok();
         match lock {
             Some((v, pins)) if v == "v2" => {
                 for p in pins {
@@ -354,7 +354,7 @@ impl<'a> Gen<'a> {
             .iter()
             .find(|p| p.kind == EnumSource::Proto && p.target.text == ty)?;
         // `check` has read the contract whole before anything is generated from the rule
-        let read = std::fs::read_to_string(self.dir().join(&im.file)).ok().and_then(|s| crate::proto::read(&im.file, &s).ok());
+        let read = ritsu_base::fs::read_to_string(self.dir().join(&im.file)).ok().and_then(|s| crate::proto::read(&im.file, &s).ok());
         let pkg = read.as_ref().and_then(|f| f.package.clone());
         let decl = read.and_then(|f| f.enums.into_iter().find(|e| e.name == im.source));
         Some(Foreign { file: im.file.clone(), sel: im.source.clone(), import: import_path(&im.file, pkg.as_deref()), pkg, decl })
@@ -426,7 +426,7 @@ impl<'a> Gen<'a> {
             if files.iter().any(|(p, _)| *p == at) {
                 continue;
             }
-            let Ok(text) = std::fs::read_to_string(&disk) else { continue };
+            let Ok(text) = ritsu_base::fs::read_to_string(&disk) else { continue };
             let root = module_root(&disk, &at);
             // a file it imports that does not read brings nothing with it; buf names it
             let imports = crate::proto::read(&at, &text).map(|f| f.imports).unwrap_or_default();
@@ -435,7 +435,7 @@ impl<'a> Gen<'a> {
                 if imp.starts_with("google/protobuf/") {
                     continue;
                 }
-                if p.is_file() {
+                if ritsu_base::fs::is_file(&p) {
                     todo.push((p, imp));
                 } else if !elsewhere.iter().any(|(_, i)| *i == imp) {
                     elsewhere.push((disk.clone(), imp));

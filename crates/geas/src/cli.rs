@@ -451,7 +451,7 @@ fn baseline_problem(e: drift::BaselineError, file: &str, p: &Paths) -> (String, 
 }
 
 fn write_journal(p: &Paths, journal: &[String]) -> Result<(), (String, Diag)> {
-    if let Err(e) = std::fs::create_dir_all(&p.geas) {
+    if let Err(e) = ritsu_base::fs::create_dir_all(&p.geas) {
         return Err((
             shown(&p.geas),
             diag::error(
@@ -462,7 +462,7 @@ fn write_journal(p: &Paths, journal: &[String]) -> Result<(), (String, Diag)> {
             ),
         ));
     }
-    std::fs::write(&p.journal, journal.join("\n") + "\n").map_err(|e| {
+    ritsu_base::fs::write(&p.journal, journal.join("\n") + "\n").map_err(|e| {
         (
             shown(&p.journal),
             diag::error("E081", 0, 0, tr!("ジャーナルを書けません: {e}", "cannot write the journal: {e}")),
@@ -776,7 +776,7 @@ pub fn checked(root: &Path, files: &[String], lang: Lang) -> Vec<ritsu_ports::Ch
     };
     let mut out = Vec::new();
     for file in files {
-        let src = match std::fs::read_to_string(file) {
+        let src = match ritsu_base::fs::read_to_string(file) {
             Ok(s) => s,
             Err(e) => {
                 let d = diag::error("E081", 0, 0, tr!("このファイルを読めません: {e}", "cannot read this file: {e}"));
@@ -793,7 +793,7 @@ pub fn checked(root: &Path, files: &[String], lang: Lang) -> Vec<ritsu_ports::Ch
             }
         };
         let p = paths(file);
-        let geas_dir = std::fs::canonicalize(&p.cwd).map(|d| d.join(".geas")).unwrap_or_else(|_| p.geas.clone());
+        let geas_dir = ritsu_base::fs::canonicalize(&p.cwd).map(|d| d.join(".geas")).unwrap_or_else(|_| p.geas.clone());
         let (results, journal) = run::run_spec(&spec, &p.cwd, &geas_dir, &p.stem, sched::jobs(None));
         let mut parts: Vec<Part> = results
             .iter()

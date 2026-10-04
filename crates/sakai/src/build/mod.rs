@@ -178,7 +178,7 @@ pub fn run_with(root: &Path, map: &str, target: Target, suite: &crate::suite::Su
         )));
         return Ok(Built { outcome: o, done: None });
     }
-    if target == Target::GoArchLint && !paths::on_disk(root, &a.dir).join("go.mod").is_file() {
+    if target == Target::GoArchLint && !ritsu_base::fs::is_file(paths::on_disk(root, &a.dir).join("go.mod")) {
         let m = &c.model;
         let line = m.map.ast.code.iter().find(|x| x.language == "go").map(|x| x.pos).unwrap_or_default();
         let d = paths::shown(&a.dir);
@@ -202,7 +202,7 @@ pub fn run_with(root: &Path, map: &str, target: Target, suite: &crate::suite::Su
     let (text, n) = render(c, &a, target, &file, lang);
     let entries = target.entries(n);
     if check_only {
-        match std::fs::read_to_string(&file) {
+        match ritsu_base::fs::read_to_string(&file) {
             Ok(old) if old == text => Ok(Built { outcome: o, done: Some((file, tr!("いまの地図から書くものと同じ（{}）", "up to date ({})", entries.ja; entries.en))) }),
             got => {
                 let d = stale(target, root, &file, got.ok().as_deref(), &text, lang);
@@ -211,11 +211,11 @@ pub fn run_with(root: &Path, map: &str, target: Target, suite: &crate::suite::Su
             }
         }
     } else {
-        std::fs::create_dir_all(&dir).map_err(|e| {
+        ritsu_base::fs::create_dir_all(&dir).map_err(|e| {
             let (d, e) = (dir.display().to_string(), e.to_string());
             tr!("{d} を作れません: {e}", "cannot create {d}: {e}")
         })?;
-        std::fs::write(&file, &text).map_err(|e| {
+        ritsu_base::fs::write(&file, &text).map_err(|e| {
             let (f, e) = (file.display().to_string(), e.to_string());
             tr!("{f} に書けません: {e}", "cannot write {f}: {e}")
         })?;

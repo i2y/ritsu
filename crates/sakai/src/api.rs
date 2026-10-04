@@ -27,7 +27,7 @@ fn at(file: &str, line: usize) -> String {
 }
 
 fn digest(m: &Model, p: &str) -> String {
-    sha256::hex(&std::fs::read(paths::on_disk(&m.root, p)).unwrap_or_default())
+    sha256::hex(&ritsu_base::fs::read(paths::on_disk(&m.root, p)).unwrap_or_default())
 }
 
 pub fn api(c: &Checked) -> Value {

@@ -458,12 +458,12 @@ fn cmd_build(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     for (name, text) in files {
         let p = dir.join(&name);
         if let Some(parent) = p.parent() {
-            if let Err(e) = std::fs::create_dir_all(parent) {
+            if let Err(e) = ritsu_base::fs::create_dir_all(parent) {
                 let _ = writeln!(err, "cannot create {}: {e}", parent.display());
                 return 2;
             }
         }
-        if let Err(e) = std::fs::write(&p, text) {
+        if let Err(e) = ritsu_base::fs::write(&p, text) {
             let _ = writeln!(err, "cannot write {}: {e}", p.display());
             return 2;
         }
@@ -582,13 +582,13 @@ fn cmd_doc(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let page = if a.format_html { crate::doc::html(&input) } else { crate::doc::markdown(&input) };
     match &a.out {
         Some(dir) => {
-            if let Err(e) = std::fs::create_dir_all(dir) {
+            if let Err(e) = ritsu_base::fs::create_dir_all(dir) {
                 let _ = writeln!(err, "cannot create {}: {e}", dir.display());
                 return 2;
             }
             let stem = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| model.name.clone());
             let p = dir.join(format!("{stem}.{}", if a.format_html { "html" } else { "md" }));
-            if let Err(e) = std::fs::write(&p, page) {
+            if let Err(e) = ritsu_base::fs::write(&p, page) {
                 let _ = writeln!(err, "cannot write {}: {e}", p.display());
                 return 2;
             }

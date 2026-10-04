@@ -69,10 +69,10 @@ impl Project {
     /// Where a naming lands.
     fn land(&self, joined: &Joined, n: &Name) -> Landing {
         let disk = ritsu_base::paths::on_disk(&self.root, &n.path);
-        if !disk.exists() {
+        if !ritsu_base::fs::exists(&disk) {
             return Landing::Missing;
         }
-        if disk.is_dir() {
+        if ritsu_base::fs::is_dir(&disk) {
             return Landing::File;
         }
         match n.tool {
@@ -86,7 +86,7 @@ impl Project {
 /// Whether a `.proto` holds what a naming names (DESIGN 6.2, item 1: `message M [field f]`,
 /// `enum E [value V]`, `service S [method M]`, the names from the file's package).
 fn proto_holds(disk: &std::path::Path, n: &Name) -> Result<bool, Text> {
-    let src = std::fs::read_to_string(disk).map_err(|e| Text::same(e.to_string()))?;
+    let src = ritsu_base::fs::read_to_string(disk).map_err(|e| Text::same(e.to_string()))?;
     let f = ritsu_proto::read(&n.path, &src).map_err(|e| e.message("ritsu"))?;
     let Some((k, name)) = n.items.first() else { return Ok(true) };
     let child = n.items.get(1).map(|(_, c)| c.as_str());

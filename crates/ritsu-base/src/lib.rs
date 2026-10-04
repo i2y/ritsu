@@ -18,12 +18,15 @@
 //! - [`json`]: a JSON value whose objects keep their order and whose integers are exact.
 //! - [`udiff`]: unified diffs, as `git diff` and `diff -u` write them, and whether a file on disk
 //!   is one side of one.
+//! - [`fs`]: where a project's files are read and written: the disk, or files held in memory (the
+//!   project a page in the browser hands over).
 //!
 //! Nothing here depends on anything but std (DESIGN 3.1, P9).
 
 pub mod cli;
 pub mod diag;
 pub mod docpage;
+pub mod fs;
 pub mod json;
 pub mod ledger;
 pub mod naming;

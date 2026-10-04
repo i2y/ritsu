@@ -63,7 +63,7 @@ fn sorted(mut ds: Vec<Diag>) -> Vec<Diag> {
 
 /// The diagnostics of reading the `.proto` files.
 fn proto_diags(m: &Model, issues: &[Issue]) -> Vec<Diag> {
-    let src = |f: &str| std::fs::read_to_string(crate::paths::on_disk(&m.root, f)).unwrap_or_default();
+    let src = |f: &str| ritsu_base::fs::read_to_string(crate::paths::on_disk(&m.root, f)).unwrap_or_default();
     let mut out = Vec::new();
     for i in issues {
         match i {
@@ -253,7 +253,7 @@ pub fn check_args_with(root: &Path, args: &[String], suite: &crate::suite::Suite
     let mut out = Vec::new();
     for a in args {
         let disk = crate::paths::on_disk(root, a);
-        if disk.is_dir() {
+        if ritsu_base::fs::is_dir(&disk) {
             let files = ctx_files(root, a);
             if files.is_empty() {
                 let sa = shown(a);
@@ -267,7 +267,7 @@ pub fn check_args_with(root: &Path, args: &[String], suite: &crate::suite::Suite
             let mut contexts = Vec::new();
             let mut neither = Vec::new();
             for f in &files {
-                let src = std::fs::read_to_string(crate::paths::on_disk(root, f)).map_err(|e| {
+                let src = ritsu_base::fs::read_to_string(crate::paths::on_disk(root, f)).map_err(|e| {
                     let (e, sf) = (e.to_string(), shown(f));
                     tr!("{sf} を読めません: {e}", "{sf} cannot be read: {e}")
                 })?;
@@ -307,7 +307,7 @@ pub fn check_args_with(root: &Path, args: &[String], suite: &crate::suite::Suite
             }
         } else {
             let sa = shown(a);
-            let src = std::fs::read_to_string(&disk).map_err(|e| {
+            let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| {
                 let e = e.to_string();
                 tr!("{sa} を読めません: {e}", "{sa} cannot be read: {e}")
             })?;

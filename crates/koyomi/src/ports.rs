@@ -220,7 +220,7 @@ impl ritsu_ports::Sources for Engine {
         if out.has_errors() || out.checked.is_none() {
             return Err(out.diags.iter().filter(|d| d.is_error()).map(Said::of).collect());
         }
-        let src = std::fs::read_to_string(file).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
+        let src = ritsu_base::fs::read_to_string(file).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
         let p = crate::parse::parse(&path, &src);
         let f = p.file.ok_or_else(|| p.diags.iter().filter(|d| d.is_error()).map(Said::of).collect::<Vec<_>>())?;
         Ok(f.sources
@@ -260,7 +260,7 @@ fn plain(line: &str) -> String {
 fn parsed(root: &Path, file: &str) -> Result<crate::ast::File, Vec<Said>> {
     let disk = ritsu_base::paths::on_disk(root, file);
     let path = disk.to_string_lossy().to_string();
-    let src = std::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
+    let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(&path, &e.to_string())])?;
     let p = crate::parse::parse(&path, &src);
     match p.file {
         Some(f) if !p.diags.iter().any(|d| d.is_error()) => Ok(f),

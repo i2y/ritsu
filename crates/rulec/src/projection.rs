@@ -417,7 +417,7 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
     for d in &f.shapes {
         let p = dir.join(&d.file);
         let at = format!("{rule_path}:{}", d.span.line);
-        match std::fs::read_to_string(&p) {
+        match ritsu_base::fs::read_to_string(&p) {
             Ok(text) => match read(d, &text) {
                 Ok(con) => read_ok.push((d, con)),
                 Err(Unread::Nothing(why)) => out.push(
@@ -2638,7 +2638,7 @@ pub fn proto_paths(f: &RuleFile, rule_path: &str) -> std::collections::HashMap<S
     for i in &f.inputs {
         let Some(pr) = &i.from else { continue };
         let Some(d) = f.shapes.iter().find(|d| d.name.text == pr.root.text && d.source == EnumSource::Proto) else { continue };
-        let Ok(text) = std::fs::read_to_string(dir.join(&d.file)) else { continue };
+        let Ok(text) = ritsu_base::fs::read_to_string(dir.join(&d.file)) else { continue };
         let Ok(con) = read(d, &text) else { continue };
         let steps: Vec<String> = pr.path.iter().map(|n| n.text.clone()).collect();
         let Some(chain) = con.proto_chain(&steps) else { continue };
@@ -2714,7 +2714,7 @@ pub fn contract_certificates(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<
     let dir = std::path::Path::new(rule_path).parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
     let mut out = Vec::new();
     for d in &f.shapes {
-        let Ok(text) = std::fs::read_to_string(dir.join(&d.file)) else { continue };
+        let Ok(text) = ritsu_base::fs::read_to_string(dir.join(&d.file)) else { continue };
         let Ok(con) = read(d, &text) else { continue };
         let ac = con.across(f, c, &d.name.text);
         if ac.terms.is_empty() {

@@ -181,7 +181,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
             SourceKind::File { path, hash, .. } => {
                 let p = dir.join(path);
                 let cited = cited_from(&cites, name);
-                let Ok(bytes) = std::fs::read(&p) else {
+                let Ok(bytes) = ritsu_base::fs::read(&p) else {
                     out.push(
                         Diag::error("E039", tr!("出典 `{name}` の写し `{path}` を読めません", "The copy `{path}` of source `{name}` cannot be read"))
                             .at(at(d.span.line, name))
@@ -234,7 +234,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                         continue;
                     }
                     let fp = cdir.join(crate::extract::fragment_file(frag));
-                    let Ok(fb) = std::fs::read(&fp) else {
+                    let Ok(fb) = ritsu_base::fs::read(&fp) else {
                         // Which of the two it is, the extension already says: a format with no
                         // reader here will never have a copy, and the rule should cite the
                         // document whole until there is an extractor to plug in (§15.82).
@@ -308,7 +308,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                         continue;
                     };
                     let p = cdir.join(fr.file());
-                    let Ok(bytes) = std::fs::read(&p) else {
+                    let Ok(bytes) = ritsu_base::fs::read(&p) else {
                         out.push(
                             Diag::error("E039", tr!("出典 `{name}` の `{frag}` の写しがありません", "There is no copy of fragment `{frag}` of source `{name}`"))
                                 .at(at(d.span.line, name))
@@ -793,7 +793,7 @@ pub fn fragment_text(rule_path: &str, d: &SourceDecl, frag: &str) -> Option<Stri
     match &d.kind {
         SourceKind::Law { db, id, asof } => {
             let fr = fragment(*db, frag)?;
-            let xml = std::fs::read_to_string(copy_dir(base, id, asof).join(fr.file())).ok()?;
+            let xml = ritsu_base::fs::read_to_string(copy_dir(base, id, asof).join(fr.file())).ok()?;
             Some(xml_text(&xml))
         }
         // A document's fragment is a table, and it is quoted as one (§15.82).
@@ -808,7 +808,7 @@ pub fn fragment_grid(rule_path: &str, d: &SourceDecl, frag: &str) -> Option<Vec<
     let SourceKind::File { path, .. } = &d.kind else { return None };
     crate::extract::fragment(frag)?;
     let doc = Path::new(base).parent().unwrap_or(Path::new(".")).join(path);
-    let tsv = std::fs::read_to_string(crate::extract::copy_dir(&doc).join(crate::extract::fragment_file(frag))).ok()?;
+    let tsv = ritsu_base::fs::read_to_string(crate::extract::copy_dir(&doc).join(crate::extract::fragment_file(frag))).ok()?;
     Some(crate::extract::from_tsv(&tsv))
 }
 

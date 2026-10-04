@@ -49,7 +49,7 @@ pub const MANIFEST: &str = "Cargo.toml";
 
 /// Whether the manifest `p` (a path from the root) is a crate's: it has a `[package]` table.
 fn is_crate_manifest(m: &Model, p: &str) -> bool {
-    std::fs::read_to_string(paths::on_disk(&m.root, p)).is_ok_and(|s| s.lines().any(|l| l.trim_start().starts_with("[package]")))
+    ritsu_base::fs::read_to_string(paths::on_disk(&m.root, p)).is_ok_and(|s| s.lines().any(|l| l.trim_start().starts_with("[package]")))
 }
 
 /// Whether a `.proto` is one of the files known without being read (`google/protobuf/…`,

@@ -27,7 +27,7 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
             .unwrap_or(std::path::Path::new("."))
             .join(&im.file);
         let at = format!("{rule_path}:{}", im.span.line);
-        match std::fs::read_to_string(&p) {
+        match ritsu_base::fs::read_to_string(&p) {
             Ok(text) => match wanted(im, &text, &at) {
                 Ok(want) => out.extend(compare(f, c, im, &want, rule_path)),
                 Err(d) => out.push(d),

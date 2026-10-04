@@ -31,12 +31,12 @@ fn skipped(name: &str) -> bool {
 fn files_under(root: &Path, rel: &str, ext: Option<&str>) -> Vec<String> {
     let mut out = Vec::new();
     fn walk(root: &Path, d: &Path, ext: Option<&str>, out: &mut Vec<String>) {
-        let Ok(rd) = std::fs::read_dir(d) else { return };
+        let Ok(rd) = ritsu_base::fs::read_dir(d) else { return };
         let mut es: Vec<_> = rd.filter_map(|e| e.ok()).map(|e| e.path()).collect();
         es.sort();
         for e in es {
             let name = e.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-            if e.is_dir() {
+            if ritsu_base::fs::is_dir(&e) {
                 if !skipped(&name) {
                     walk(root, &e, ext, out);
                 }
@@ -57,10 +57,10 @@ fn files_under(root: &Path, rel: &str, ext: Option<&str>) -> Vec<String> {
 /// itself (DESIGN 3.4).
 pub fn gather(p: &Project, n: &Name, kind: Option<&str>) -> Result<Vec<Name>, Unread> {
     let abs = if n.path == "." { p.root.clone() } else { p.root.join(&n.path) };
-    if !abs.exists() {
+    if !ritsu_base::fs::exists(&abs) {
         return Err(Unread::Missing { dir: false });
     }
-    let files: Vec<String> = if abs.is_dir() { files_under(&p.root, &n.path, n.tool.extension()) } else { vec![n.path.clone()] };
+    let files: Vec<String> = if ritsu_base::fs::is_dir(&abs) { files_under(&p.root, &n.path, n.tool.extension()) } else { vec![n.path.clone()] };
     let Some(kind) = kind else {
         return Ok(files.into_iter().map(|path| Name { tool: n.tool, path, items: vec![] }).collect());
     };

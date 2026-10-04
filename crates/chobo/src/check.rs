@@ -50,7 +50,7 @@ pub struct Report {
 }
 
 pub fn check_file(path: &Path) -> Result<(String, Checked), String> {
-    let src = std::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+    let src = ritsu_base::fs::read_to_string(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     let c = check_source(&src);
     Ok((src, c))
 }

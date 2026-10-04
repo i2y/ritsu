@@ -121,7 +121,7 @@ impl Read {
 fn refused(m: &Model, a: &Artifact, said: &[Said]) -> Diag {
     let (t, f) = (a.tool.word(), shown(&a.path));
     let line = said.iter().find_map(|s| s.line).unwrap_or(1);
-    let src = std::fs::read_to_string(crate::paths::on_disk(&m.root, &a.path)).unwrap_or_default();
+    let src = ritsu_base::fs::read_to_string(crate::paths::on_disk(&m.root, &a.path)).unwrap_or_default();
     let mut d = diag::at("E105", &a.path, line, 1, tr!("{f} が {t} の検査を通らないか、読めません", "The file {f} does not pass {t}'s check, or cannot be read")).source(&src);
     for s in said.iter().take(5) {
         let at = match s.line {

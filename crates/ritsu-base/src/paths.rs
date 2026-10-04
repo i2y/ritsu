@@ -98,10 +98,17 @@ pub fn relative(from: &str, p: &str) -> String {
     if out.is_empty() { ".".to_string() } else { out.join("/") }
 }
 
+/// `Path::is_absolute`, on every target: wasm32-unknown-unknown's std says false of every path,
+/// since it knows no root without a drive, and there a path that starts at the root is absolute
+/// too (the files a page in the browser hands over are under one, `crate::fs::Memory`).
+pub fn rooted(p: &Path) -> bool {
+    if cfg!(target_arch = "wasm32") { p.has_root() } else { p.is_absolute() }
+}
+
 /// A path made absolute against the working directory, `.` and `..` folded by their letters
 /// (a symbolic link is not followed, so the path stays the one the person wrote).
 pub fn absolute(p: &Path) -> PathBuf {
-    let joined = if p.is_absolute() { p.to_path_buf() } else { std::env::current_dir().unwrap_or_default().join(p) };
+    let joined = if rooted(p) { p.to_path_buf() } else { crate::fs::current_dir().unwrap_or_default().join(p) };
     let mut out = PathBuf::new();
     for c in joined.components() {
         match c {
@@ -121,9 +128,9 @@ pub fn absolute(p: &Path) -> PathBuf {
 /// caller's to read first.
 pub fn find_root(start: &Path) -> PathBuf {
     let abs = absolute(start);
-    let dir = if abs.is_dir() { abs.clone() } else { abs.parent().map(Path::to_path_buf).unwrap_or_else(|| abs.clone()) };
+    let dir = if crate::fs::is_dir(&abs) { abs.clone() } else { abs.parent().map(Path::to_path_buf).unwrap_or_else(|| abs.clone()) };
     for d in dir.ancestors() {
-        if d.join(".git").exists() {
+        if crate::fs::exists(d.join(".git")) {
             return d.to_path_buf();
         }
     }
@@ -178,7 +185,7 @@ impl Shown {
 
     /// The same, run in `cwd`.
     pub fn run_in(root: &Path, cwd: &Path, given: &str) -> Shown {
-        Shown { root: absolute(root), cwd: absolute(cwd), absolute: Path::new(given).is_absolute() }
+        Shown { root: absolute(root), cwd: absolute(cwd), absolute: rooted(Path::new(given)) }
     }
 
     /// The root itself, as the run writes it: `.` when the tool runs there, `../..` two above.
@@ -216,7 +223,7 @@ pub fn has_skipped_part(p: &str) -> bool {
 /// [`skipped_name`] names and what `except` holds. Symbolic links are not followed.
 pub fn walk(root: &Path, dir: &str, except: &[String], out: &mut Vec<String>) {
     let disk = on_disk(root, dir);
-    let Ok(meta) = std::fs::symlink_metadata(&disk) else { return };
+    let Ok(meta) = crate::fs::symlink_metadata(&disk) else { return };
     if meta.is_file() {
         if !except.iter().any(|e| contains(e, dir)) && !has_skipped_part(dir) {
             out.push(dir.to_string());
@@ -226,7 +233,7 @@ pub fn walk(root: &Path, dir: &str, except: &[String], out: &mut Vec<String>) {
     if !meta.is_dir() {
         return;
     }
-    let Ok(rd) = std::fs::read_dir(&disk) else { return };
+    let Ok(rd) = crate::fs::read_dir(&disk) else { return };
     let mut names: Vec<String> = rd.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).collect();
     names.sort();
     for n in names {
@@ -237,7 +244,7 @@ pub fn walk(root: &Path, dir: &str, except: &[String], out: &mut Vec<String>) {
         if except.iter().any(|e| contains(e, &p)) {
             continue;
         }
-        let Ok(m) = std::fs::symlink_metadata(on_disk(root, &p)) else { continue };
+        let Ok(m) = crate::fs::symlink_metadata(on_disk(root, &p)) else { continue };
         if m.is_dir() {
             walk(root, &p, except, out);
         } else if m.is_file() {

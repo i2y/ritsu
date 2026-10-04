@@ -242,7 +242,7 @@ pub fn copy_path(dir: &Path, id: &str, asof: &str, file: &str) -> PathBuf {
 
 /// `revision.txt` beside the copies, when there is one: the version of the law e-Gov served.
 pub fn revision(dir: &Path) -> Option<String> {
-    std::fs::read_to_string(dir.join("revision.txt")).ok().map(|r| r.trim().to_string()).filter(|r| !r.is_empty())
+    crate::fs::read_to_string(dir.join("revision.txt")).ok().map(|r| r.trim().to_string()).filter(|r| !r.is_empty())
 }
 
 // ── The text of a copy ──────────────────────────────────────────────────────

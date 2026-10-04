@@ -201,7 +201,7 @@ fn status(rec: Option<&RecordLine>, up: Option<&[EndInfo]>, down: Option<&EndInf
 /// The content of `reviewed/<hash>` beside a file, when it is there (DESIGN 4.4).
 pub fn reviewed_content(p: &Project, fi: usize, hash: &str) -> Option<Vec<u8>> {
     let dir = p.files[fi].abs.parent()?;
-    std::fs::read(dir.join("reviewed").join(hash)).ok()
+    ritsu_base::fs::read(dir.join("reviewed").join(hash)).ok()
 }
 
 /// How deep a requirement is in the chain of `from`s: those it is read from come first.

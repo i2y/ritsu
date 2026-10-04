@@ -111,7 +111,7 @@ impl Outcome {
 
 /// The first line of a `.cal`, for choosing what to do with it before parsing.
 fn read(path: &str) -> Result<Vec<u8>, String> {
-    std::fs::read(path).map_err(|e| e.to_string())
+    ritsu_base::fs::read(path).map_err(|e| e.to_string())
 }
 
 /// Check a file on disk. `Err` is a file that cannot be read at all (exit 2).

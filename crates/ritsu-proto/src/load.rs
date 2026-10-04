@@ -254,7 +254,7 @@ pub fn load(root: &Path, files: &[String], roots: &[String]) -> (Protos, Vec<Iss
     let mut issues = Vec::new();
     let mut unreadable = BTreeSet::new();
     for f in files {
-        let src = std::fs::read_to_string(paths::on_disk(root, f)).unwrap_or_default();
+        let src = ritsu_base::fs::read_to_string(paths::on_disk(root, f)).unwrap_or_default();
         match read(f, &src) {
             Ok(pf) => ps.add(pf),
             Err(err) => {
@@ -274,7 +274,7 @@ pub fn load(root: &Path, files: &[String], roots: &[String]) -> (Protos, Vec<Iss
                 continue;
             }
             let tried = import_candidates(&f, &pf.package, roots, &imp.path);
-            match tried.iter().find(|c| paths::on_disk(root, c).is_file()) {
+            match tried.iter().find(|c| ritsu_base::fs::is_file(paths::on_disk(root, c))) {
                 Some(c) if in_scope.contains(c) && !unreadable.contains(c) => at.push(Some(c.clone())),
                 Some(c) if in_scope.contains(c) => {
                     ps.unread.insert(f.clone());
@@ -307,7 +307,7 @@ pub fn load(root: &Path, files: &[String], roots: &[String]) -> (Protos, Vec<Iss
 pub fn load_from(root: &Path, entry: &str, roots: &[String], embedded: &[(&str, &str)]) -> Result<(Protos, Vec<Issue>), (String, ReadError)> {
     let mut ps = Protos::default();
     let mut issues = Vec::new();
-    let src = std::fs::read_to_string(paths::on_disk(root, entry)).unwrap_or_default();
+    let src = ritsu_base::fs::read_to_string(paths::on_disk(root, entry)).unwrap_or_default();
     follow(root, entry, &src, roots, embedded, &mut ps, &mut issues)?;
     Ok((ps, issues))
 }
@@ -331,7 +331,7 @@ fn follow(root: &Path, file: &str, src: &str, roots: &[String], embedded: &[(&st
             continue;
         }
         let tried = import_candidates(file, &package, roots, &imp.path);
-        let found = tried.iter().find_map(|c| std::fs::read_to_string(paths::on_disk(root, c)).ok().map(|s| (c.clone(), s)));
+        let found = tried.iter().find_map(|c| ritsu_base::fs::read_to_string(paths::on_disk(root, c)).ok().map(|s| (c.clone(), s)));
         match found {
             Some((c, text)) => {
                 if !ps.files.contains_key(&c) {

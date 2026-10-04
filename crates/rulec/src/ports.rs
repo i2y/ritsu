@@ -37,7 +37,7 @@ pub struct Engine {
 
 /// The file a path names, its links followed and `..` folded: how the reports are kept.
 fn the_file(path: &str) -> std::path::PathBuf {
-    std::fs::canonicalize(path).unwrap_or_else(|_| std::path::PathBuf::from(path))
+    ritsu_base::fs::canonicalize(path).unwrap_or_else(|_| std::path::PathBuf::from(path))
 }
 
 /// A rule read and checked, or what check said of it.
@@ -53,7 +53,7 @@ fn rlang(l: Lang) -> RLang {
 /// The file's text, as the caller named it.
 fn read(rule: &Path) -> Result<(String, String), Vec<Said>> {
     let path = rule.to_string_lossy().to_string();
-    match std::fs::read_to_string(rule) {
+    match ritsu_base::fs::read_to_string(rule) {
         Ok(src) => Ok((path, src)),
         Err(e) => Err(vec![Said::unreadable(&path, &e.to_string())]),
     }
@@ -195,7 +195,7 @@ impl Engine {
         files
             .iter()
             .map(|path| {
-                let Ok(src) = std::fs::read_to_string(path) else {
+                let Ok(src) = ritsu_base::fs::read_to_string(path) else {
                     return Checked::unchecked(path, i18n::with(rl, || format!("{}\n", crate::tr!("error: `{path}` を読めません", "error: cannot read `{path}`"))));
                 };
                 let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
@@ -702,7 +702,7 @@ impl ritsu_ports::References for Engine {
         };
         // a `.proto`'s name for a message or an enum, from its package: `shop.v1.Order` is `Order`
         let local = |proto: &str, written: &str| -> String {
-            let package = std::fs::read_to_string(ritsu_base::paths::on_disk(root, proto)).ok().and_then(|s| crate::proto::read(proto, &s).ok()).and_then(|p| p.package);
+            let package = ritsu_base::fs::read_to_string(ritsu_base::paths::on_disk(root, proto)).ok().and_then(|s| crate::proto::read(proto, &s).ok()).and_then(|p| p.package);
             match package {
                 Some(p) => written.strip_prefix(&format!("{p}.")).unwrap_or(written).to_string(),
                 None => written.to_string(),
