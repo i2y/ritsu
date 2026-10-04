@@ -1,5 +1,5 @@
 エラー[E202]: tests/mutants/E202_無いメッセージ/例.req:8:16: tests/mutants/E202_無いメッセージ/a.proto に message Orders はありません
      8 |   satisfied by proto "a.proto" message Orders
-  = 同じ種類のもので、どのリンクも名指していないものです。
+  = 候補は、同じ種類のもののうち、どのリンクも名指していないものです。
   = 候補: proto "a.proto" message Order
 tests/mutants/E202_無いメッセージ: エラー 1 件

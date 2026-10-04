@@ -18,7 +18,7 @@ pub use ritsu_base::sources::{article_lines, copy_dir, copy_path, fragment_file,
 pub fn fragment_shapes(db: LawDb) -> Text {
     match db {
         LawDb::Egov => tr!(
-            "書けるのは `第20条`、`第20条の2`、`第20条第2項`、`第20条第2項第3号`、`別表第一`、`附則第3条`、`附則（令和七年三月三一日法律第一三号）第3条` の形です（漢数字でもよい。丸括弧を含むものは `\"…\"` で囲む）。",
+            "書けるのは `第20条`、`第20条の2`、`第20条第2項`、`第20条第2項第3号`、`別表第一`、`附則第3条`、`附則（令和七年三月三一日法律第一三号）第3条` の形です（漢数字でも書けます。丸括弧を含むものは `\"…\"` で囲んでください）。",
             "The forms are `第20条`, `第20条の2`, `第20条第2項`, `第20条第2項第3号`, `別表第一`, `附則第3条` and `附則（令和七年三月三一日法律第一三号）第3条` (in kanji numerals too; quote one with parentheses)."
         ),
         LawDb::Ecfr => tr!(

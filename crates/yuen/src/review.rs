@@ -174,7 +174,7 @@ pub fn review(args: &[String], root: Option<&str>, c: &Choice, by: &str, date: O
 /// [`review`], reading what another language holds through the ports `suite` joins.
 pub fn review_with(args: &[String], root: Option<&str>, c: &Choice, by: &str, date: Option<&str>, suite: crate::suite::Suite) -> Result<Outcome, Refusal> {
     if c.at.is_empty() && c.requirements.is_empty() && !c.all {
-        return Err(Refusal(tr!("何を確かめたかを `--at`、`--requirement`、`--all` のどれかで選びます", "Choose what was looked at with `--at`, `--requirement` or `--all`")));
+        return Err(Refusal(tr!("何を確かめたかを `--at`、`--requirement`、`--all` のどれかで選んでください", "Choose what was looked at with `--at`, `--requirement` or `--all`")));
     }
     let date = match date {
         Some(d) => Day::parse(d).ok_or_else(|| Refusal(tr!("`--date {d}` は日付（`2026-10-04` の形）ではありません", "`--date {d}` is not a date (`2026-10-04`)")))?,
@@ -183,13 +183,13 @@ pub fn review_with(args: &[String], root: Option<&str>, c: &Choice, by: &str, da
     let checked: Checked = check::check_with(args, root, suite)?;
     let Some(m) = checked.model.as_ref() else {
         let exit = if check::has_unjoined(&checked.diags) { 2 } else { 1 };
-        return Ok(Outcome { lines: vec![tr!("構文か名前にエラーがあるので、何も書きません", "Nothing was written: the words or the names have errors")], diags: checked.diags, exit });
+        return Ok(Outcome { lines: vec![tr!("構文か名前にエラーがあるので、何も書きませんでした", "Nothing was written: the words or the names have errors")], diags: checked.diags, exit });
     };
     let p = checked.project.as_ref().unwrap();
     if !p.files.iter().any(|f| f.ast.roles.iter().any(|r| r.name == by)) {
         let d = diag::error("E008", "--by", "--by", 0, 0, tr!("役割「{by}」はこのプロジェクトで宣言されていません", "The role {by} is not declared in this project"))
-            .note(tr!("確かめた人の役割は、`role {by}` と宣言した役割で書きます。", "Whoever looked is named by a declared role (`role {by}`)."));
-        return Ok(Outcome { lines: vec![tr!("何も書きません", "Nothing was written")], diags: vec![d], exit: 1 });
+            .note(tr!("確かめた人の役割には、`role {by}` のように宣言した役割を書いてください。", "Whoever looked is named by a declared role (`role {by}`)."));
+        return Ok(Outcome { lines: vec![tr!("何も書きませんでした", "Nothing was written")], diags: vec![d], exit: 1 });
     }
     let chosen = choose(p, &m.states, c).map_err(Refusal)?;
     let mut edits: BTreeMap<usize, Vec<Edit>> = BTreeMap::new();
@@ -203,7 +203,7 @@ pub fn review_with(args: &[String], root: Option<&str>, c: &Choice, by: &str, da
         match &st.status {
             Status::Unreadable => {
                 lines.push(tr!(
-                    "{at}: リンクの両端を読めないので書きません（check の診断を先に直します）",
+                    "{at}: リンクの両端を読めないので、書きませんでした（先に check の診断を直してください）",
                     "{at}: not written, since the ends of the link cannot be read (correct what check says first)"
                 ));
                 refused = true;
@@ -211,7 +211,7 @@ pub fn review_with(args: &[String], root: Option<&str>, c: &Choice, by: &str, da
             }
             Status::Ok => {
                 if named {
-                    lines.push(tr!("{at}: 印が無いので書きません（確かめたときのままです）", "{at}: not written, since nothing is marked (it is as it was looked at)"));
+                    lines.push(tr!("{at}: 印が無いので、書きませんでした（確かめたときのままです）", "{at}: not written, since nothing is marked (it is as it was looked at)"));
                 }
                 unmarked += 1;
                 continue;

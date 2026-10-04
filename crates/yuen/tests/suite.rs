@@ -469,7 +469,7 @@ fn affected_follows_requirements_sources_and_rules() {
     let out = affected(&["affected", k, "--root", k, "--diff", "tests/fixtures/koyomi/changes/text.diff"], "koyomi-text.txt", 0, &mut failures);
     assert!(out.contains("  満了日_142条: its text or period changes, so its links are to be looked at again\n"), "{out}");
     let out = affected(&["affected", k, "--root", k, "--diff", "tests/fixtures/koyomi/changes/copy.diff", "--lang", "ja"], "koyomi-copy.ja.txt", 0, &mut failures);
-    assert!(out.contains("（民法 第142条）: 引く要件 満了日_142条。固定している成果物 koyomi \"民法の期間.cal\""), "{out}");
+    assert!(out.contains("（民法 第142条）: 引く要件 満了日_142条、固定している成果物 koyomi \"民法の期間.cal\""), "{out}");
     let r = "tests/fixtures/rulec";
     let out = affected(&["affected", r, "--root", r, "--diff", "tests/fixtures/rulec/changes/rule.diff"], "rulec-rule.txt", 0, &mut failures);
     assert!(out.contains("  rulec \"rules/印紙税の本則と軽減.rule\": met by 本則の税額, 軽減税率\n"), "{out}");

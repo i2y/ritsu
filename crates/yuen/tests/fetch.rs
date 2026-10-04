@@ -157,7 +157,7 @@ fn pin_changes_the_digits_and_nothing_else() {
     std::fs::write(&req, original.replace("第140条 sha256:e880059021fbb67d", "第140条")).unwrap();
     let r = common::yuen(t.path(), &["source", "pin", "period", "--root", "period", "--lang", "ja"]);
     assert_eq!(r.code, 0);
-    assert!(r.stdout.contains("民法: 第140条 の写しが無いので固定できません。先に yuen source fetch を走らせます"), "{}", r.stdout);
+    assert!(r.stdout.contains("民法: 第140条 の写しが無いので固定できません。先に yuen source fetch を走らせてください"), "{}", r.stdout);
 }
 
 #[test]

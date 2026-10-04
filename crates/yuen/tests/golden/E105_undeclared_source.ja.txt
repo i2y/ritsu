@@ -1,7 +1,7 @@
 警告[W101]: tests/mutants/E105_undeclared_source/period_of_months.req:9:3: cfr §1.7 は固定されていますが、どの要件からも引かれていません
      9 |   "§1.7" sha256:01de176ebe4740d7
-  = 引用を消したあとの残りなら、固定の行を消します。
+  = 引用を消したあとの残りなら、固定の行を消してください。
 エラー[E105]: tests/mutants/E105_undeclared_source/period_of_months.req:41:9: 出典「cfr_part」はこのファイルで宣言されていません
     41 |   from @cfr_part "§1.7"
-  = 引く出典は、同じファイルに `source cfr_part = law "<法令ID>" asof <日付>` のように宣言します。出典の名前はファイルごとに分かれます。
+  = 引く出典は、同じファイルに `source cfr_part = law "<法令ID>" asof <日付>` のように宣言してください。出典の名前は、ファイルごとに別々です。
 tests/mutants/E105_undeclared_source: エラー 1 件、警告 1 件

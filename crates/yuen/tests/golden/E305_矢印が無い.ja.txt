@@ -1,5 +1,5 @@
-エラー[E305]: tests/mutants/E305_矢印が無い/支払.req:12:55: 確かめた記録の形が崩れています。ここには `->` を書きます（`sha256:8a668601c703003d` があります）
+エラー[E305]: tests/mutants/E305_矢印が無い/支払.req:12:55: 確かめた記録の形が崩れています。ここには `->` を書いてください（書かれているのは `sha256:8a668601c703003d` です）
     12 |     reviewed 2026-10-03 by 経理 sha256:cdd8998a17be5a4b sha256:8a668601c703003d
-  = 記録は `yuen review` が書くものです。確かめ直して、書き直させます。
+  = 記録は `yuen review` が書くものです。確かめ直してから、`yuen review` で書き直してください。
   = 確かめたら: yuen review tests/mutants/E305_矢印が無い --root tests/mutants/E305_矢印が無い --at tests/mutants/E305_矢印が無い/支払.req:11 --by <役割>
 tests/mutants/E305_矢印が無い: エラー 1 件

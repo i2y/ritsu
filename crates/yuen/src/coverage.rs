@@ -146,11 +146,11 @@ pub fn coverage(p: &Project) -> Vec<Diag> {
             if links == 0 && waivers.is_empty() {
                 diags.push(match side {
                     Side::Satisfied => p.err(fi, "E401", d.span, tr!("{me} には、満たす成果物も、それを置かない見送りもありません", "{me} has nothing that meets it, and no waiver for that")).note(tr!(
-                        "`satisfied by <成果物>` を書くか、満たすものを置かないなら `not satisfied \"<理由>\"` を書いて承認してもらいます。",
+                        "`satisfied by <成果物>` を書くか、満たすものを置かないなら `not satisfied \"<理由>\"` を書いて承認してもらってください。",
                         "Write `satisfied by <artifact>`, or, if nothing is to meet it, `not satisfied \"<why>\"`, and have that approved."
                     )),
                     Side::Verified => p.err(fi, "E402", d.span, tr!("{me} には、確かめる主張も、それを置かない見送りもありません", "{me} has nothing that checks it, and no waiver for that")).note(tr!(
-                        "`verified by <主張>` を書くか、確かめるものを置かないなら `not verified \"<理由>\"` を書いて承認してもらいます。",
+                        "`verified by <主張>` を書くか、確かめるものを置かないなら `not verified \"<理由>\"` を書いて承認してもらってください。",
                         "Write `verified by <claim>`, or, if nothing is to check it, `not verified \"<why>\"`, and have that approved."
                     )),
                 });
@@ -162,7 +162,7 @@ pub fn coverage(p: &Project) -> Vec<Diag> {
                         Side::Verified => ("not verified", "verified by"),
                     };
                     diags.push(p.warn(fi, "W401", w.span, tr!("{me} には `{words}` があるので、この `{word}` は要りません", "{me} has a `{words}`, so this `{word}` is not needed")).note(tr!(
-                        "見送りは、リンクを置かないと決めたときに書くものです。リンクを置いたのなら、見送りを消します。",
+                        "見送りは、リンクを置かないと決めたときに書くものです。リンクを置いたのなら、見送りを消してください。",
                         "A waiver says no link is to be there; now that there is one, delete the waiver."
                     )));
                 }
@@ -186,9 +186,9 @@ pub fn scope_diags(p: &Project, scopes: &[ScopeResult], ran: &Ran) -> Vec<Diag> 
                 let more = reached.len().saturating_sub(5);
                 let (ja, en) = (shown.join("、"), shown.join(", "));
                 d = d.note(if more > 0 {
-                    tr!("範囲のほかのものは辿れます: {ja}、ほか {more} 個", "The rest of the scope is reached: {en}, and {more} more")
+                    tr!("範囲のほかのものは要件に辿れます: {ja}、ほか {more} 個", "The rest of the scope is reached: {en}, and {more} more")
                 } else {
-                    tr!("範囲のほかのものは辿れます: {ja}", "The rest of the scope is reached: {en}")
+                    tr!("範囲のほかのものは要件に辿れます: {ja}", "The rest of the scope is reached: {en}")
                 });
             }
             if a.tool == Tool::File && !ran.unrecorded.is_empty() {
@@ -199,7 +199,7 @@ pub fn scope_diags(p: &Project, scopes: &[ScopeResult], ran: &Ran) -> Vec<Diag> 
                     "{en} has no geas record; with one (`geas map`), the files its claims run trace to their requirements."
                 ));
             }
-            d = d.note(tr!("`satisfied by` か `verified by` でこれを名指す要件を足すか、範囲を狭めます。", "Add a requirement whose `satisfied by` or `verified by` names it, or narrow the scope."));
+            d = d.note(tr!("`satisfied by` か `verified by` でこれを名指す要件を足すか、範囲を狭めてください。", "Add a requirement whose `satisfied by` or `verified by` names it, or narrow the scope."));
             diags.push(d);
         }
     }

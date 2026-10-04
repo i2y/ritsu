@@ -43,9 +43,9 @@ impl Out {
 
 fn period_text(p: &crate::date::Period) -> Text {
     match (p.from, p.to) {
-        (Some(a), Some(b)) => tr!("{a} から {b} まで", "in force from {a} to {b}"),
-        (Some(a), None) => tr!("{a} から", "in force from {a}"),
-        (None, Some(b)) => tr!("{b} まで", "in force until {b}"),
+        (Some(a), Some(b)) => tr!("{a} から {b} まで効く", "in force from {a} to {b}"),
+        (Some(a), None) => tr!("{a} から効く", "in force from {a}"),
+        (None, Some(b)) => tr!("{b} まで効く", "in force until {b}"),
         (None, None) => Text::default(),
     }
 }
@@ -63,9 +63,9 @@ fn status_text(st: &LinkState, rec: Option<&Record>) -> Text {
     match &st.status {
         Status::Ok => {
             if st.is_waiver() {
-                w.then(&tr!("。いまもそのまま", "; as it was approved"))
+                w.then(&tr!("。そのあと変わっていない", "; as it was approved"))
             } else {
-                w.then(&tr!("。いまもそのまま", "; as it was looked at"))
+                w.then(&tr!("。そのあと変わっていない", "; as it was looked at"))
             }
         }
         Status::Unreviewed => tr!("まだ誰も確かめていない", "not looked at yet"),
@@ -96,7 +96,7 @@ fn article(p: &Project, m: &Model, fi: usize, e: &EndInfo) -> (Text, Vec<String>
             };
             let dbt = db.title();
             let head = tr!(
-                "{source} {fragment}（{dbt} {id}、{asof} 時点{}。写しは {shown}）",
+                "{source} {fragment}（{dbt} {id}、{asof} 時点{}、写しは {shown}）",
                 "{source} {fragment} ({dbt} {id} as of {asof}{}; the copy {shown})",
                 rev.ja;
                 rev.en
@@ -150,8 +150,8 @@ fn pins(p: &Project, m: &Model, file: &Name, r: Option<usize>, depth: usize, o: 
         });
         let (t, src, fr, dbt, id, asof, pin) = (file.text(), &x.source, &x.fragment, x.db.title(), &x.id, &x.asof, &x.pin);
         let tail = match same {
-            Some(true) => tr!("。要件の写しと同じ本文", "; the text of the requirement's copy"),
-            Some(false) => tr!("。要件の写しと本文が違う（E107）", "; not the text of the requirement's copy (E107)"),
+            Some(true) => tr!("、要件の写しと同じ本文", "; the text of the requirement's copy"),
+            Some(false) => tr!("、要件の写しと本文が違う（E107）", "; not the text of the requirement's copy (E107)"),
             None => Text::default(),
         };
         o.push(depth, tr!("{t} が固定している条: {src} {fr}（{dbt} {id}、{asof} 時点、sha256:{pin}{}）", "pinned by {t}: {src} {fr} ({dbt} {id} as of {asof}, sha256:{pin}{})", tail.ja; tail.en));

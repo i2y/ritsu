@@ -1,6 +1,6 @@
 # 民法の期間 — 要件の出どころ
 
-このページは yuen 0.23.0 が、下の .req のファイルと、出典の写しと、ほかの言語が成果物について渡すものから作った。
+このページは、下の .req のファイルと、出典の写しと、ほかの言語から読んだ成果物の定義をもとに、yuen 0.23.0 が作った。
 
 - `civil_code_periods_reread.ja.req`（民法の期間 v1、`sha256:810f491b0587c912`）
 
@@ -14,13 +14,13 @@
 |---|---|---|---|---|---|---|
 | `起算日 (first_day)` | 2026-10-01.. | `@民法 第140条` | 法務 | `koyomi "civil_code_period_end.ja.cal" date 起算日` | 見送り | 確かめたまま（見送り 1 件） |
 | `満了日 (last_day)` | 2026-10-01.. | `@民法 第141条, 第143条` | 法務 | `koyomi "civil_code_period_end.ja.cal" date 満了日` | 見送り | 確かめたまま（見送り 1 件） |
-| `満了日_142条 (last_day_142)` | 2026-10-01.. | `@民法 第142条`; 2026-10-03 に 法務 が決めた | 法務 | `koyomi "civil_code_period_end.ja.cal" date 満了日_142条` | `koyomi "civil_code_period_end.ja.cal" claim 142条の満了日は満了日以後` | **印あり（1 本）** |
+| `満了日_142条 (last_day_142)` | 2026-10-01.. | `@民法 第142条`、2026-10-03 に 法務 が決めた | 法務 | `koyomi "civil_code_period_end.ja.cal" date 満了日_142条` | `koyomi "civil_code_period_end.ja.cal" claim 142条の満了日は満了日以後` | **印あり（1 本）** |
 
 ## 出典
 
 ### 民法
 
-e-Gov の法令 `129AC0000000089`、2026-10-01 時点、版 `129AC0000000089_20260624_508AC0000000045`（写しの隣の revision.txt）。 借りた先：`koyomi "civil_code_period_end.ja.cal" source 民法`（写しと固定は、そのファイルのもの。その言語の検査が確かめる）。
+e-Gov の法令 `129AC0000000089`、2026-10-01 時点、版 `129AC0000000089_20260624_508AC0000000045`（写しの隣の revision.txt）。借りた先：`koyomi "civil_code_period_end.ja.cal" source 民法`（写しと固定はそのファイルのもので、その言語の検査が確かめる）。
 
 | 条 | 固定 | 引く要件 | 固定している成果物 |
 |---|---|---|---|
@@ -38,7 +38,7 @@ e-Gov の法令 `129AC0000000089`、2026-10-01 時点、版 `129AC0000000089_202
 - 期間：2026-10-01..
 - 持ち主：法務
 - ファイル：`examples/civil_code_periods_reread/civil_code_periods_reread.ja.req:11`
-- 要件の端：`sha256:a9ebc73907faddc8`
+- 要件のハッシュ：`sha256:a9ebc73907faddc8`
 
 出どころ `@民法 第140条` — 法務 が 2026-10-04 に確かめた（`sha256:e880059021fbb67d` → `sha256:a9ebc73907faddc8`）。状態：確かめたまま
 
@@ -57,7 +57,7 @@ e-Gov の法令 `129AC0000000089`、2026-10-01 時点、版 `129AC0000000089_202
 - 期間：2026-10-01..
 - 持ち主：法務
 - ファイル：`examples/civil_code_periods_reread/civil_code_periods_reread.ja.req:22`
-- 要件の端：`sha256:465b83ed8c251406`
+- 要件のハッシュ：`sha256:465b83ed8c251406`
 
 出どころ `@民法 第141条, 第143条` — 法務 が 2026-10-04 に確かめた（`sha256:0575c131b9f08063, sha256:6950bdfb988439b6` → `sha256:465b83ed8c251406`）。状態：確かめたまま
 
@@ -86,7 +86,7 @@ e-Gov の法令 `129AC0000000089`、2026-10-01 時点、版 `129AC0000000089_202
 - 期間：2026-10-01..
 - 持ち主：法務
 - ファイル：`examples/civil_code_periods_reread/civil_code_periods_reread.ja.req:33`
-- 要件の端：`sha256:d4f2d2a67322df17`
+- 要件のハッシュ：`sha256:d4f2d2a67322df17`
 
 出どころ `@民法 第142条` — 法務 が 2026-10-04 に確かめた（`sha256:fc8c35a0769d3b35` → `sha256:d4f2d2a67322df17`）。状態：確かめたまま
 
@@ -113,7 +113,7 @@ e-Gov の法令 `129AC0000000089`、2026-10-01 時点、版 `129AC0000000089_202
 
 ## 範囲
 
-`scope koyomi "civil_code_period_end.ja.cal" date` — 成果物 3 個。どれも要件に辿れる。
+`scope koyomi "civil_code_period_end.ja.cal" date` — 成果物は 3 個で、どれも要件に辿れる。
 
 ## 確かめた記録
 

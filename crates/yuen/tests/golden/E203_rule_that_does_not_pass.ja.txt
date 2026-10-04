@@ -1,5 +1,5 @@
-エラー[E203]: tests/mutants/E203_rule_that_does_not_pass/example.req:8:16: rulec が rulec "a.rule" table fees について答えられません
+エラー[E203]: tests/mutants/E203_rule_that_does_not_pass/example.req:8:16: rulec から rulec "a.rule" table fees の情報を得られません
      8 |   satisfied by rulec "a.rule" table fees
   = rulec の診断: [E101] tests/mutants/E203_rule_that_does_not_pass/a.rule:9: 完全性の欠落: どの行にも当てはまらない入力があります
-  = そのファイルが rulec の検査を通るように直します。通らないファイルからは、端を作れません。
+  = そのファイルを、rulec の検査を通るように直してください。検査を通らないファイルや読めないファイルからは成果物の定義を読み取れないので、yuen はその成果物のハッシュを取れません。
 tests/mutants/E203_rule_that_does_not_pass: エラー 1 件

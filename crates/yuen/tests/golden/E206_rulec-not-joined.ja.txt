@@ -1,4 +1,4 @@
-エラー[E206]: tests/mutants/E206_rulec-not-joined/shipping.req:8:16: この yuen は rulec の成果物を読めません: rulec "fee.rule" table fees
+エラー[E206]: tests/mutants/E206_rulec-not-joined/shipping.req:8:16: yuen 単独のバイナリは rulec の成果物を読めません: rulec "fee.rule" table fees
      8 |   satisfied by rulec "fee.rule" table fees
-  = yuen のクレートのバイナリは、ほかの言語を持ちません。同じコマンドを、すべての言語をつないだ `ritsu yuen check tests/mutants/E206_rulec-not-joined --root tests/mutants/E206_rulec-not-joined` のように ritsu で走らせます。
+  = yuen 単独のバイナリには、ほかの言語が入っていません。同じコマンドを、すべての言語をつないだ ritsu で、`ritsu yuen check tests/mutants/E206_rulec-not-joined --root tests/mutants/E206_rulec-not-joined` のように走らせてください。
 tests/mutants/E206_rulec-not-joined: エラー 1 件

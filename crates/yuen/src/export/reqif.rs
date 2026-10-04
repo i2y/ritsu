@@ -295,7 +295,7 @@ pub fn write(g: &Graph, time: Option<&str>, version: &str) -> Result<String, Ref
             Some(d) => day_time(d),
             None => {
                 return Err(Refusal(tr!(
-                    "このプロジェクトには、決めた日も確かめた日も一つも無いので、ReqIF の時刻を決められません。`--time 2026-10-03T00:00:00Z` のように渡します",
+                    "このプロジェクトには、決めた日も確かめた日も一つも無いので、ReqIF の時刻を決められません。`--time 2026-10-03T00:00:00Z` のように渡してください",
                     "This project writes down no day anything was decided or looked at, so ReqIF has no time to give; pass one, as `--time 2026-10-03T00:00:00Z`"
                 )));
             }

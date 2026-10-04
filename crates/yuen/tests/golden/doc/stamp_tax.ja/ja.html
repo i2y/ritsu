@@ -37,16 +37,16 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <body>
 <main>
 <h1>印紙税 — 要件の出どころ</h1>
-<p class="lead">このページは yuen 0.23.0 が、下の .req のファイルと、出典の写しと、ほかの言語が成果物について渡すものから作った。</p>
+<p class="lead">このページは、下の .req のファイルと、出典の写しと、ほかの言語から読んだ成果物の定義をもとに、yuen 0.23.0 が作った。</p>
 <ul>
 <li><code>stamp_tax.ja.req</code>（印紙税 v1、<code>sha256:113980ae27ee069c</code>）</li>
 </ul>
-<p>検査の結果：<code>examples/stamp_tax/stamp_tax.ja.req: ok — 要件 1 件（版は 2 個）のリンク 7 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（か、その見送り）があり、範囲の output 1 個は、要件に辿れます。</code></p>
+<p>検査の結果：<code>examples/stamp_tax/stamp_tax.ja.req: ok — 要件 1 件（版は 2 個）のリンク 7 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（無ければ見送り）があり、範囲の output 1 個は、要件に辿れます。</code></p>
 <h2 id="traceability">トレーサビリティ</h2>
 <div class="scroll"><table>
 <thead><tr><th>要件</th><th>期間</th><th>出どころ</th><th>持ち主</th><th>満たすもの</th><th>確かめるもの</th><th>状態</th></tr></thead>
 <tbody>
-<tr><td><code>契約書の印紙税額 v1 (contract_stamp_tax)</code></td><td class="nw">2014-04-01..2027-03-31</td><td><code>@法 別表第一</code>; <code>@措置法 第91条</code></td><td>税務</td><td><code>rulec &quot;印紙税の本則と軽減.rule&quot; output 印紙税額</code></td><td><code>rulec &quot;印紙税の本則と軽減.rule&quot;</code></td><td>確かめたまま</td></tr>
+<tr><td><code>契約書の印紙税額 v1 (contract_stamp_tax)</code></td><td class="nw">2014-04-01..2027-03-31</td><td><code>@法 別表第一</code>、<code>@措置法 第91条</code></td><td>税務</td><td><code>rulec &quot;印紙税の本則と軽減.rule&quot; output 印紙税額</code></td><td><code>rulec &quot;印紙税の本則と軽減.rule&quot;</code></td><td>確かめたまま</td></tr>
 <tr><td><code>契約書の印紙税額 v2 (contract_stamp_tax)</code></td><td class="nw">2027-04-01..</td><td><code>@法 別表第一</code></td><td>税務</td><td><code>rulec &quot;印紙税の本則と軽減.rule&quot; output 印紙税額</code></td><td><code>rulec &quot;印紙税の本則と軽減.rule&quot;</code></td><td>確かめたまま</td></tr>
 </tbody>
 </table></div>
@@ -74,7 +74,7 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <li>期間：2014-04-01..2027-03-31</li>
 <li>持ち主：税務</li>
 <li>ファイル：<code>examples/stamp_tax/stamp_tax.ja.req:14</code></li>
-<li>要件の端：<code>sha256:fb6fc8251c7bd27b</code></li>
+<li>要件のハッシュ：<code>sha256:fb6fc8251c7bd27b</code></li>
 <li>ほかの版：v2 (2027-04-01..)</li>
 </ul>
 <p>出どころ <code>@法 別表第一</code> — 税務 が 2026-10-04 に確かめた（<code>sha256:0ba69792e960021e</code> → <code>sha256:fb6fc8251c7bd27b</code>）。状態：確かめたまま</p>
@@ -353,15 +353,15 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <li>期間：2027-04-01..</li>
 <li>持ち主：税務</li>
 <li>ファイル：<code>examples/stamp_tax/stamp_tax.ja.req:27</code></li>
-<li>要件の端：<code>sha256:836c2c8320d89533</code></li>
+<li>要件のハッシュ：<code>sha256:836c2c8320d89533</code></li>
 <li>ほかの版：v1 (2014-04-01..2027-03-31)</li>
 </ul>
 <p>出どころ <code>@法 別表第一</code> — 税務 が 2026-10-04 に確かめた（<code>sha256:0ba69792e960021e</code> → <code>sha256:836c2c8320d89533</code>）。状態：確かめたまま</p>
-<p>（法 別表第一 の条文は、上に引いた）</p>
+<p>（法 別表第一 の条文は、上に載せた）</p>
 <p>満たすもの <code>rulec &quot;印紙税の本則と軽減.rule&quot; output 印紙税額</code> — 開発 が 2026-10-04 に確かめた（<code>sha256:836c2c8320d89533</code> → <code>sha256:0037ed7e6d91942d</code>）。状態：確かめたまま</p>
 <p>確かめるもの <code>rulec &quot;印紙税の本則と軽減.rule&quot;</code> — 開発 が 2026-10-04 に確かめた（<code>sha256:836c2c8320d89533</code> → <code>sha256:dc176eebd83f26e3</code>）。状態：確かめたまま</p>
 <h2 id="scope">範囲</h2>
-<p><code>scope rulec &quot;印紙税の本則と軽減.rule&quot; output</code> — 成果物 1 個。要件に辿れる。</p>
+<p><code>scope rulec &quot;印紙税の本則と軽減.rule&quot; output</code> — 成果物は 1 個で、要件に辿れる。</p>
 <h2 id="records">確かめた記録</h2>
 <div class="scroll"><table>
 <thead><tr><th>日付</th><th>誰が</th><th>何を</th><th>ハッシュ</th></tr></thead>

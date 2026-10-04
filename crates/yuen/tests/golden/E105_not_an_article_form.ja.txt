@@ -1,6 +1,6 @@
 警告[W101]: tests/mutants/E105_not_an_article_form/period_of_months.req:9:3: cfr §1.7 は固定されていますが、どの要件からも引かれていません
      9 |   "§1.7" sha256:01de176ebe4740d7
-  = 引用を消したあとの残りなら、固定の行を消します。
+  = 引用を消したあとの残りなら、固定の行を消してください。
 エラー[E105]: tests/mutants/E105_not_an_article_form/period_of_months.req:41:13: `section 1.7` は条の書き方になっていません
     41 |   from @cfr "section 1.7"
   = 書けるのは `"§1910.157"` か `"1910.157"` の形です（section の単位）。

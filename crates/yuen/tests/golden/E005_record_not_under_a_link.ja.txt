@@ -1,4 +1,4 @@
 エラー[E005]: tests/mutants/E005_record_not_under_a_link/payment.req:9:5: 確かめた記録の行が、リンクか見送りの下にありません
      9 |     reviewed 2026-10-03 by accounting sha256:0000000000000000 -> sha256:0000000000000000
-  = `reviewed` は `from`・`satisfied by`・`verified by` の行のすぐ下に、`approved` は `not satisfied`・`not verified` の行のすぐ下に、一段深く書きます。
+  = `reviewed` は `from`・`satisfied by`・`verified by` の行のすぐ下に、`approved` は `not satisfied`・`not verified` の行のすぐ下に、一段深く書いてください。
 tests/mutants/E005_record_not_under_a_link: エラー 1 件

@@ -9,12 +9,12 @@
         (b) If the day that is twelve months after the filing date of a provisional application under 35 U.S.C. 111(b) and § 1.53(c) falls on Saturday, Sunday, or on a Federal holiday within the District of Columbia, the period of pendency shall be extended to the next succeeding secular or business day which is not a Saturday, Sunday, or a Federal holiday.
         [65 FR 14871, Mar. 20, 2000, as amended at 78 FR 62395, Oct. 21, 2013]
   = 確かめたら: yuen review tests/mutants/E302_article_changed --root tests/mutants/E302_article_changed --at tests/mutants/E302_article_changed/period_of_months.req:41 --by <役割>
-エラー[E302]: tests/mutants/E302_article_changed/period_of_months.req:44:3: next_business_day の出どころ（cfr §1.7）が変わったので、このリンクを確かめ直します
+エラー[E302]: tests/mutants/E302_article_changed/period_of_months.req:44:3: next_business_day の出どころ（cfr §1.7）が変わったので、このリンクを確かめ直す必要があります
     44 |   satisfied by file "period_of_months.cal"
   = 2026-10-03 に development が確かめたリンクです。
-  = 変わったものは、その診断で先に確かめます。
+  = 変わったものを、その診断で先に確かめてください。
   = 確かめたら: yuen review tests/mutants/E302_article_changed --root tests/mutants/E302_article_changed --at tests/mutants/E302_article_changed/period_of_months.req:44 --by <役割>
-エラー[E304]: tests/mutants/E302_article_changed/period_of_months.req:46:3: next_business_day が変わったので、この見送りを承認し直します（tests/mutants/E302_article_changed/period_of_months.req:44 と同じ変更）
+エラー[E304]: tests/mutants/E302_article_changed/period_of_months.req:46:3: next_business_day が変わったので、この見送りを承認し直す必要があります（tests/mutants/E302_article_changed/period_of_months.req:44 と同じ変更）
     46 |   not verified "koyomi's claim moved_on_or_after_last_day checks it, but this material reads the .cal as a file, so it does not name the claim"
   = 2026-10-03 に legal が承認した見送りです。
   = 確かめたら: yuen review tests/mutants/E302_article_changed --root tests/mutants/E302_article_changed --at tests/mutants/E302_article_changed/period_of_months.req:46 --by <役割>

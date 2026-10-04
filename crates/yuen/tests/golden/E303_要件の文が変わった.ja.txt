@@ -7,11 +7,11 @@
         from law egov 129AC0000000089 第141条 sha256:0575c131b9f08063
         from law egov 129AC0000000089 第143条 sha256:6950bdfb988439b6
   = 確かめたら: yuen review tests/mutants/E303_要件の文が変わった --root tests/mutants/E303_要件の文が変わった --at tests/mutants/E303_要件の文が変わった/民法の期間.req:30 --by <役割>
-エラー[E302]: tests/mutants/E303_要件の文が変わった/民法の期間.req:32:3: 満了日 が変わったので、このリンクを確かめ直します（tests/mutants/E303_要件の文が変わった/民法の期間.req:30 と同じ変更）
+エラー[E302]: tests/mutants/E303_要件の文が変わった/民法の期間.req:32:3: 満了日 が変わったので、このリンクを確かめ直す必要があります（tests/mutants/E303_要件の文が変わった/民法の期間.req:30 と同じ変更）
     32 |   satisfied by file "民法の期間.cal"
   = 2026-10-03 に 開発 が確かめたリンクです。
   = 確かめたら: yuen review tests/mutants/E303_要件の文が変わった --root tests/mutants/E303_要件の文が変わった --at tests/mutants/E303_要件の文が変わった/民法の期間.req:32 --by <役割>
-エラー[E304]: tests/mutants/E303_要件の文が変わった/民法の期間.req:34:3: 満了日 が変わったので、この見送りを承認し直します（tests/mutants/E303_要件の文が変わった/民法の期間.req:30 と同じ変更）
+エラー[E304]: tests/mutants/E303_要件の文が変わった/民法の期間.req:34:3: 満了日 が変わったので、この見送りを承認し直す必要があります（tests/mutants/E303_要件の文が変わった/民法の期間.req:30 と同じ変更）
     34 |   not verified "条文の場合分けをそのまま書いた関数と、起点 2000〜2027 年のすべての日と月数 1〜12 で一致することを、koyomi の設計の段階の試作が確かめた。この材料の中に、それを確かめる条件は無い"
   = 2026-10-03 に 法務 が承認した見送りです。
   = 確かめたら: yuen review tests/mutants/E303_要件の文が変わった --root tests/mutants/E303_要件の文が変わった --at tests/mutants/E303_要件の文が変わった/民法の期間.req:34 --by <役割>

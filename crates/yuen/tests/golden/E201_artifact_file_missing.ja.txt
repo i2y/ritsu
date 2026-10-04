@@ -1,4 +1,4 @@
 エラー[E201]: tests/mutants/E201_artifact_file_missing/payment.req:11:16: file "pay.py" がありません
     11 |   satisfied by file "pay.py"
-  = パスは、この .req のあるディレクトリからの相対で書きます。名前を変えたのなら、リンクも直します。
+  = パスは、この .req のあるディレクトリからの相対パスで書いてください。ファイルの名前を変えたのなら、リンクも直してください。
 tests/mutants/E201_artifact_file_missing: エラー 1 件

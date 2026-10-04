@@ -5,20 +5,20 @@
       - text 受け取った請求書は、締め日ごとにまとめて払う
       + text 受け取った請求書は、締め日ごとにまとめて、翌月に払う
   = 確かめたら: yuen review tests/mutants/E302_元の要件が変わった --root tests/mutants/E302_元の要件が変わった --at tests/mutants/E302_元の要件が変わった/支払.req:11 --by <役割>
-エラー[E304]: tests/mutants/E302_元の要件が変わった/支払.req:13:3: 支払の方針 が変わったので、この見送りを承認し直します（tests/mutants/E302_元の要件が変わった/支払.req:11 と同じ変更）
+エラー[E304]: tests/mutants/E302_元の要件が変わった/支払.req:13:3: 支払の方針 が変わったので、この見送りを承認し直す必要があります（tests/mutants/E302_元の要件が変わった/支払.req:11 と同じ変更）
     13 |   not verified "下の要件が確かめる"
   = 2026-10-03 に 経理 が承認した見送りです。
   = 確かめたら: yuen review tests/mutants/E302_元の要件が変わった --root tests/mutants/E302_元の要件が変わった --at tests/mutants/E302_元の要件が変わった/支払.req:13 --by <役割>
 エラー[E302]: tests/mutants/E302_元の要件が変わった/支払.req:19:3: 支払の方針 は、2026-10-03 に 経理 がこのリンクを確かめたあとで変わりました
     19 |   from 支払の方針
-  = tests/mutants/E302_元の要件が変わった/支払.req:11 と同じ変更です。差分は繰り返しません。
+  = tests/mutants/E302_元の要件が変わった/支払.req:11 と同じ変更です。差分はそちらの診断に出ています。
   = 確かめたら: yuen review tests/mutants/E302_元の要件が変わった --root tests/mutants/E302_元の要件が変わった --at tests/mutants/E302_元の要件が変わった/支払.req:19 --by <役割>
-エラー[E302]: tests/mutants/E302_元の要件が変わった/支払.req:21:3: 支払日 の出どころ（支払の方針）が変わったので、このリンクを確かめ直します
+エラー[E302]: tests/mutants/E302_元の要件が変わった/支払.req:21:3: 支払日 の出どころ（支払の方針）が変わったので、このリンクを確かめ直す必要があります
     21 |   satisfied by file "pay.py"
   = 2026-10-03 に 経理 が確かめたリンクです。
-  = 変わったものは、その診断で先に確かめます。
+  = 変わったものを、その診断で先に確かめてください。
   = 確かめたら: yuen review tests/mutants/E302_元の要件が変わった --root tests/mutants/E302_元の要件が変わった --at tests/mutants/E302_元の要件が変わった/支払.req:21 --by <役割>
-エラー[E304]: tests/mutants/E302_元の要件が変わった/支払.req:23:3: 支払日 が変わったので、この見送りを承認し直します（tests/mutants/E302_元の要件が変わった/支払.req:21 と同じ変更）
+エラー[E304]: tests/mutants/E302_元の要件が変わった/支払.req:23:3: 支払日 が変わったので、この見送りを承認し直す必要があります（tests/mutants/E302_元の要件が変わった/支払.req:21 と同じ変更）
     23 |   not verified "月に一度、経理が照らし合わせる"
   = 2026-10-03 に 経理 が承認した見送りです。
   = 確かめたら: yuen review tests/mutants/E302_元の要件が変わった --root tests/mutants/E302_元の要件が変わった --at tests/mutants/E302_元の要件が変わった/支払.req:23 --by <役割>

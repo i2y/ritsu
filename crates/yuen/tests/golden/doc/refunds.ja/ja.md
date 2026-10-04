@@ -1,16 +1,16 @@
 # 返金 — 要件の出どころ
 
-このページは yuen 0.23.0 が、下の .req のファイルと、出典の写しと、ほかの言語が成果物について渡すものから作った。
+このページは、下の .req のファイルと、出典の写しと、ほかの言語から読んだ成果物の定義をもとに、yuen 0.23.0 が作った。
 
 - `refunds.ja.req`（返金 v1、`sha256:4c3fc1d4ffaf75be`）
 
-検査の結果：`examples/refunds/refunds.ja.req: ok — 要件 1 件のリンク 4 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（か、その見送り）があり、範囲の transfer 2 個は、どれも要件に辿れます。`
+検査の結果：`examples/refunds/refunds.ja.req: ok — 要件 1 件のリンク 4 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（無ければ見送り）があり、範囲の transfer 2 個は、どれも要件に辿れます。`
 
 ## トレーサビリティ
 
 | 要件 | 期間 | 出どころ | 持ち主 | 満たすもの | 確かめるもの | 状態 |
 |---|---|---|---|---|---|---|
-| `売上を超えない (within_sales)` | 2026-10-01.. | 2026-10-04 に 経理 が決めた | 経理 | `chobo "refunds.ja.book" account 返金できる残り`; `chobo "refunds.ja.book" transfer 売上計上`; `chobo "refunds.ja.book" transfer 返金` | `chobo "refunds.ja.book"` | 確かめたまま |
+| `売上を超えない (within_sales)` | 2026-10-01.. | 2026-10-04 に 経理 が決めた | 経理 | `chobo "refunds.ja.book" account 返金できる残り`、`chobo "refunds.ja.book" transfer 売上計上`、`chobo "refunds.ja.book" transfer 返金` | `chobo "refunds.ja.book"` | 確かめたまま |
 
 ## 出典
 
@@ -25,7 +25,7 @@
 - 期間：2026-10-01..
 - 持ち主：経理
 - ファイル：`examples/refunds/refunds.ja.req:9`
-- 要件の端：`sha256:5c5082d4aa498fe8`
+- 要件のハッシュ：`sha256:5c5082d4aa498fe8`
 
 2026-10-04 に 経理 が決めた：注文ごとに、返金の額は売上の額を超えない。この例のために決めたもの
 
@@ -39,7 +39,7 @@
 
 ## 範囲
 
-`scope chobo "refunds.ja.book" transfer` — 成果物 2 個。どれも要件に辿れる。
+`scope chobo "refunds.ja.book" transfer` — 成果物は 2 個で、どれも要件に辿れる。
 
 ## 確かめた記録
 

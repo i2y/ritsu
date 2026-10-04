@@ -180,7 +180,7 @@ pub fn artifact_end(p: &Project, n: &Name) -> Result<End, Unread> {
                     code: String::new(),
                     file: n.path.clone(),
                     line: Some(i.lines.0),
-                    message: tr!("{} は定義の文を渡しません", "{} gives no definition", n.text()),
+                    message: tr!("{} から定義の文を得られません", "{} gives no definition", n.text()),
                 }])),
                 Lookup::Found(Some(i)) => Ok(End::of(i.text.into_bytes())),
                 Lookup::Missing(same) => {

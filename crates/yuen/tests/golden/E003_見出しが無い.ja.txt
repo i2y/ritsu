@@ -1,4 +1,4 @@
-エラー[E003]: tests/mutants/E003_見出しが無い/支払.req:1:1: ファイルは `requirements` の行で始めます
+エラー[E003]: tests/mutants/E003_見出しが無い/支払.req:1:1: ファイルは `requirements` の行で始めてください
      1 | description "テストの材料。例として決めた決まりで、どこかの会社の決まりではない"
-  = 一行目は `requirements 民法の期間 v1` のように、要件の集まりの名前と版を書きます。
+  = 一行目には、`requirements 民法の期間 v1` のように、要件の集まりの名前と版を書いてください。
 tests/mutants/E003_見出しが無い: エラー 1 件

@@ -1,5 +1,5 @@
 エラー[E301]: tests/mutants/E301_not_looked_at/period_of_months.req:21:3: date_of_receipt から file "period_of_months.cal" へのリンクを、まだ誰も確かめていません
     21 |   satisfied by file "period_of_months.cal"
-  = 両端を読んで、つながりが正しいと確かめたら、`yuen review` がリンクの下に、確かめた人と日付と両端のハッシュを書きます。
+  = 両端を読んで、つながりが正しいことを確かめたら、`yuen review` を走らせてください。リンクの下に、確かめた人と日付と両端のハッシュが書かれます。
   = 確かめたら: yuen review tests/mutants/E301_not_looked_at --root tests/mutants/E301_not_looked_at --at tests/mutants/E301_not_looked_at/period_of_months.req:21 --by <役割>
 tests/mutants/E301_not_looked_at: エラー 1 件

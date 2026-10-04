@@ -1,4 +1,4 @@
 エラー[E402]: tests/mutants/E402_確かめるものが無い/支払.req:7:13: 支払日 には、確かめる主張も、それを置かない見送りもありません
      7 | requirement 支払日(payment_day)
-  = `verified by <主張>` を書くか、確かめるものを置かないなら `not verified "<理由>"` を書いて承認してもらいます。
+  = `verified by <主張>` を書くか、確かめるものを置かないなら `not verified "<理由>"` を書いて承認してもらってください。
 tests/mutants/E402_確かめるものが無い: エラー 1 件

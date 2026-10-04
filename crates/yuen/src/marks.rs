@@ -448,13 +448,13 @@ fn mark_diag(p: &Project, ctx: &Ctx, by_req: &BTreeMap<usize, Vec<&LinkState>>, 
             "What was looked at on {date} is not in reviewed/, so what changed cannot be shown"
         ))
         .note(tr!(
-            "{file} の隣の reviewed/{hash} がありません。`yuen review` がリンクを確かめるときに書くファイルで、git に入れておきます。",
+            "{file} の隣の reviewed/{hash} がありません。リンクを確かめたときに `yuen review` が書くファイルなので、git に入れておいてください。",
             "reviewed/{hash} beside {file} is missing: `yuen review` writes it when a link is looked at, and it is kept in git."
         ))
     };
     let same_note = |at: &(String, usize)| {
         let at = format!("{}:{}", at.0, at.1);
-        tr!("{at} と同じ変更です。差分は繰り返しません。", "The same change as at {at}; the diff is not shown again.")
+        tr!("{at} と同じ変更です。差分はそちらの診断に出ています。", "The same change as at {at}; the diff is not shown again.")
     };
     match &st.status {
         Status::Unreviewed => {
@@ -471,7 +471,7 @@ fn mark_diag(p: &Project, ctx: &Ctx, by_req: &BTreeMap<usize, Vec<&LinkState>>, 
             };
             let d = p.err(fi, "E301", span, what)
                 .note(tr!(
-                    "両端を読んで、つながりが正しいと確かめたら、`yuen review` がリンクの下に、確かめた人と日付と両端のハッシュを書きます。",
+                    "両端を読んで、つながりが正しいことを確かめたら、`yuen review` を走らせてください。リンクの下に、確かめた人と日付と両端のハッシュが書かれます。",
                     "Once a person has read both ends and the link holds, `yuen review` writes who looked, when, and the hashes of both ends under the link."
                 ))
                 .fix_command(cmd);
@@ -480,7 +480,7 @@ fn mark_diag(p: &Project, ctx: &Ctx, by_req: &BTreeMap<usize, Vec<&LinkState>>, 
         Status::Unapproved => {
             let d = p.err(fi, "E304", span, tr!("この見送りは、まだ承認されていません", "This waiver has not been approved yet"))
                 .note(tr!(
-                    "見送りも人の判断です。持ち主が理由を読んで承認したら、`yuen review` が、承認した人と日付と要件のハッシュを下に書きます。",
+                    "見送りも、人が決めることです。持ち主が理由を読んで承認したら、`yuen review` を走らせてください。見送りの下に、承認した人と日付と要件のハッシュが書かれます。",
                     "A waiver is a decision too: once the owner has read the reason and approves it, `yuen review` writes who approved it, when, and the requirement's hash under it."
                 ))
                 .fix_command(cmd);
@@ -488,7 +488,7 @@ fn mark_diag(p: &Project, ctx: &Ctx, by_req: &BTreeMap<usize, Vec<&LinkState>>, 
         }
         Status::BadRecord(line, col, why) => {
             let d = p.err(fi, "E305", Span { line: *line, col: *col }, why.clone())
-                .note(tr!("記録は `yuen review` が書くものです。確かめ直して、書き直させます。", "A record is what `yuen review` writes; look again, and let it write the record anew."))
+                .note(tr!("記録は `yuen review` が書くものです。確かめ直してから、`yuen review` で書き直してください。", "A record is what `yuen review` writes; look again, and let it write the record anew."))
                 .fix_command(cmd);
             (d, None)
         }
@@ -614,7 +614,7 @@ fn mark_diag(p: &Project, ctx: &Ctx, by_req: &BTreeMap<usize, Vec<&LinkState>>, 
                                 None => {
                                     let size = ritsu_base::text::count(e.end.bytes.len() as u64);
                                     d = d.note(tr!(
-                                        "テキストではないので、差分は見せません。いまは {size} バイト、sha256:{new} です。確かめたときは sha256:{old}（{} バイト）でした。",
+                                        "テキストではないので、差分を出せません。いまは {size} バイト、sha256:{new} です。確かめたときは sha256:{old}（{} バイト）でした。",
                                         "It is not text, so no diff is shown: it is now {size} bytes, sha256:{new}; it was sha256:{old} ({} bytes) when it was looked at.",
                                         ritsu_base::text::count(b.len() as u64)
                                     ));
@@ -664,9 +664,9 @@ fn req_changed(
     if let Some(at) = shown.get(&key).cloned() {
         let at_s = format!("{}:{}", at.0, at.1);
         let msg = if waiver {
-            tr!("{me} が変わったので、この見送りを承認し直します（{at_s} と同じ変更）", "{me} changed, so this waiver needs approving again (the same change as at {at_s})")
+            tr!("{me} が変わったので、この見送りを承認し直す必要があります（{at_s} と同じ変更）", "{me} changed, so this waiver needs approving again (the same change as at {at_s})")
         } else {
-            tr!("{me} が変わったので、このリンクを確かめ直します（{at_s} と同じ変更）", "{me} changed, so this link needs a look again (the same change as at {at_s})")
+            tr!("{me} が変わったので、このリンクを確かめ直す必要があります（{at_s} と同じ変更）", "{me} changed, so this link needs a look again (the same change as at {at_s})")
         };
         return (p.err(fi, code, span, msg).note(looked), None);
     }
@@ -675,11 +675,11 @@ fn req_changed(
         Why::Upstream(labels) => {
             let (ja, en) = (labels.join("、"), labels.join(", "));
             let msg = if waiver {
-                tr!("{me} の出どころ（{ja}）が変わったので、この見送りを承認し直します", "{me} comes from something that changed ({en}), so this waiver needs approving again")
+                tr!("{me} の出どころ（{ja}）が変わったので、この見送りを承認し直す必要があります", "{me} comes from something that changed ({en}), so this waiver needs approving again")
             } else {
-                tr!("{me} の出どころ（{ja}）が変わったので、このリンクを確かめ直します", "{me} comes from something that changed ({en}), so this link needs a look again")
+                tr!("{me} の出どころ（{ja}）が変わったので、このリンクを確かめ直す必要があります", "{me} comes from something that changed ({en}), so this link needs a look again")
             };
-            (p.err(fi, code, span, msg).note(looked).note(tr!("変わったものは、その診断で先に確かめます。", "Look at what changed first, where its own diagnostic shows it.")), None)
+            (p.err(fi, code, span, msg).note(looked).note(tr!("変わったものを、その診断で先に確かめてください。", "Look at what changed first, where its own diagnostic shows it.")), None)
         }
         Why::Diff(dl, more) => {
             let msg = if waiver {
@@ -701,9 +701,9 @@ fn req_changed(
                 (t, w) => {
                     let l = thing_label(p, t);
                     if w {
-                        tr!("{me} の出どころ（{l}）が変わったので、この見送りを承認し直します", "{me} comes from something that changed ({l}), so this waiver needs approving again")
+                        tr!("{me} の出どころ（{l}）が変わったので、この見送りを承認し直す必要があります", "{me} comes from something that changed ({l}), so this waiver needs approving again")
                     } else {
-                        tr!("{me} の出どころ（{l}）が変わったので、このリンクを確かめ直します", "{me} comes from something that changed ({l}), so this link needs a look again")
+                        tr!("{me} の出どころ（{l}）が変わったので、このリンクを確かめ直す必要があります", "{me} comes from something that changed ({l}), so this link needs a look again")
                     }
                 }
             };
@@ -731,14 +731,14 @@ fn explain_into(
     let key = (Thing::Requirement(t), old.to_string(), new.hash.clone());
     if let Some(prev) = shown.get(&key) {
         let at_s = format!("{}:{}", prev.0, prev.1);
-        return (d.note(tr!("{at_s} と同じ変更です。差分は繰り返しません。", "The same change as at {at_s}; the diff is not shown again.")), None);
+        return (d.note(tr!("{at_s} と同じ変更です。差分はそちらの診断に出ています。", "The same change as at {at_s}; the diff is not shown again.")), None);
     }
     shown.insert(key, (at.0.to_string(), at.1));
     let label = p.req_label(t);
     match explain_req(p, ctx, fi, t, old, new) {
         Why::Upstream(labels) => {
             let (ja, en) = (labels.join("、"), labels.join(", "));
-            d = d.note(tr!("{label} の出どころ（{ja}）が変わりました。変わったものは、その診断で先に確かめます。", "{label} comes from something that changed ({en}); look at that first, where its own diagnostic shows it."));
+            d = d.note(tr!("{label} の出どころ（{ja}）が変わりました。変わったものを、その診断で先に確かめてください。", "{label} comes from something that changed ({en}); look at that first, where its own diagnostic shows it."));
             (d, None)
         }
         Why::Diff(dl, more) => {

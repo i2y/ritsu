@@ -178,7 +178,7 @@ fn checked_paths(paths: &[String], root: Option<&str>, lang: Lang, cmd: &str, su
 fn export_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let what = a.pos.first().map(|s| s.as_str()).unwrap_or("");
     if !matches!(what, "reqif" | "prov") {
-        return refuse(err, tr!("`yuen export reqif <path>...` か `yuen export prov <path>...` です", "It is `yuen export reqif <path>...` or `yuen export prov <path>...`"), lang);
+        return refuse(err, tr!("書き方は `yuen export reqif <path>...` か `yuen export prov <path>...` です", "It is `yuen export reqif <path>...` or `yuen export prov <path>...`"), lang);
     }
     if what == "reqif" && a.has("--format") {
         return refuse(err, tr!("`--format` は prov のときだけ書けます（ReqIF の形は一つです）", "`--format` is for prov only (ReqIF has one form)"), lang);
@@ -190,7 +190,7 @@ fn export_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mu
         None => None,
         Some(t) => match crate::export::reqif::read_time(t) {
             Some(x) => Some(x),
-            None => return refuse(err, tr!("`--time {t}` は RFC 3339 の日時（`2026-10-03T09:00:00+09:00` のように、時差まで）ではありません", "`--time {t}` is not an RFC 3339 date and time (`2026-10-03T09:00:00+09:00`, with its offset)"), lang),
+            None => return refuse(err, tr!("`--time {t}` は RFC 3339 の日時ではありません（`2026-10-03T09:00:00+09:00` のように、時差まで書いてください）", "`--time {t}` is not an RFC 3339 date and time (`2026-10-03T09:00:00+09:00`, with its offset)"), lang),
         },
     };
     let paths: Vec<String> = a.pos[1..].to_vec();
@@ -232,7 +232,7 @@ fn export_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mu
 fn source_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
     let verb = a.pos.first().map(|s| s.as_str()).unwrap_or("");
     if !matches!(verb, "fetch" | "pin" | "outdated") {
-        return refuse(err, tr!("`yuen source fetch|pin|outdated <path>...` です", "It is `yuen source fetch|pin|outdated <path>...`"), lang);
+        return refuse(err, tr!("書き方は `yuen source fetch|pin|outdated <path>...` です", "It is `yuen source fetch|pin|outdated <path>...`"), lang);
     }
     let paths: Vec<String> = a.pos[1..].to_vec();
     if paths.is_empty() {
@@ -301,7 +301,7 @@ fn trace_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut
     .flatten()
     .collect();
     if picks.len() != 1 {
-        return refuse(err, tr!("`--requirement`、`--artifact`、`--source` のどれか一つを渡します", "Give exactly one of `--requirement`, `--artifact` and `--source`"), lang);
+        return refuse(err, tr!("`--requirement`、`--artifact`、`--source` のどれか一つを渡してください", "Give exactly one of `--requirement`, `--artifact` and `--source`"), lang);
     }
     let c = match checked(a, lang, "trace", suite, err) {
         Ok(c) => c,

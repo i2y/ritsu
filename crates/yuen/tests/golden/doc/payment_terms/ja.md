@@ -1,23 +1,23 @@
 # payment_terms — 要件の出どころ
 
-このページは yuen 0.23.0 が、下の .req のファイルと、出典の写しと、ほかの言語が成果物について渡すものから作った。
+このページは、下の .req のファイルと、出典の写しと、ほかの言語から読んだ成果物の定義をもとに、yuen 0.23.0 が作った。
 
 - `payment_terms.req`（payment_terms v1、`sha256:7601e66a63843869`）
 
-検査の結果：`examples/payment_terms/payment_terms.req: ok — 要件 2 件のリンク 6 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（か、その見送り）があり、範囲の date 2 個は、どれも要件に辿れます。`
+検査の結果：`examples/payment_terms/payment_terms.req: ok — 要件 2 件のリンク 6 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（無ければ見送り）があり、範囲の date 2 個は、どれも要件に辿れます。`
 
 ## トレーサビリティ
 
 | 要件 | 期間 | 出どころ | 持ち主 | 満たすもの | 確かめるもの | 状態 |
 |---|---|---|---|---|---|---|
-| `payment_day` | 2026-10-01.. | 2026-10-04 に accounting が決めた | accounting | `koyomi "payment_20th_close_next_10th.cal" date closing`; `koyomi "payment_20th_close_next_10th.cal" date payment` | `koyomi "payment_20th_close_next_10th.cal" claim within_60_days_of_receipt` | 確かめたまま |
+| `payment_day` | 2026-10-01.. | 2026-10-04 に accounting が決めた | accounting | `koyomi "payment_20th_close_next_10th.cal" date closing`、`koyomi "payment_20th_close_next_10th.cal" date payment` | `koyomi "payment_20th_close_next_10th.cal" claim within_60_days_of_receipt` | 確かめたまま |
 | `business_days` | 2026-10-01.. | `@holidays` | accounting | `koyomi "payment_20th_close_next_10th.cal" date payment` | `koyomi "payment_20th_close_next_10th.cal" claim paid_on_a_business_day` | 確かめたまま |
 
 ## 出典
 
 ### holidays
 
-ファイル `calendars/data/syukujitsu.csv`（元は `https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv`）、固定は `sha256:cec37a743c96995c`。 借りた先：`koyomi "calendars/tokyo_business_days.cal" source national_holidays`（写しと固定は、そのファイルのもの。その言語の検査が確かめる）。
+ファイル `calendars/data/syukujitsu.csv`（元は `https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv`）、固定は `sha256:cec37a743c96995c`。借りた先：`koyomi "calendars/tokyo_business_days.cal" source national_holidays`（写しと固定はそのファイルのもので、その言語の検査が確かめる）。
 
 引く要件：`business_days`
 
@@ -30,7 +30,7 @@
 - 期間：2026-10-01..
 - 持ち主：accounting
 - ファイル：`examples/payment_terms/payment_terms.req:11`
-- 要件の端：`sha256:ce2048eb0cb0cf01`
+- 要件のハッシュ：`sha256:ce2048eb0cb0cf01`
 
 2026-10-04 に accounting が決めた：Closing on the 20th and paying on the 10th of the next month keeps every payment within 60 days of receipt. Decided for this example
 
@@ -47,7 +47,7 @@
 - 期間：2026-10-01..
 - 持ち主：accounting
 - ファイル：`examples/payment_terms/payment_terms.req:23`
-- 要件の端：`sha256:d53e37ddddbb71fa`
+- 要件のハッシュ：`sha256:d53e37ddddbb71fa`
 
 出どころ `@holidays` — accounting が 2026-10-04 に確かめた（`sha256:cec37a743c96995c` → `sha256:d53e37ddddbb71fa`）。状態：確かめたまま
 
@@ -57,7 +57,7 @@
 
 ## 範囲
 
-`scope koyomi "payment_20th_close_next_10th.cal" date` — 成果物 2 個。どれも要件に辿れる。
+`scope koyomi "payment_20th_close_next_10th.cal" date` — 成果物は 2 個で、どれも要件に辿れる。
 
 ## 確かめた記録
 

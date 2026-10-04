@@ -1,13 +1,13 @@
 差分: tests/fixtures/geas/changes/change.diff
-差分が触る主張（geas "greeter/greeter.geas"。記録: tests/fixtures/geas/greeter/.geas/greeter.map.jsonl は変更前のもの、tests/fixtures/geas/changes/after.map.jsonl は変更後のもの）:
-  claim "rejects an empty name": tests/fixtures/geas/greeter/server.py の変更後の 26、変更前の 26
+差分が触る主張（geas "greeter/greeter.geas"、記録: tests/fixtures/geas/greeter/.geas/greeter.map.jsonl は変更前のもの、tests/fixtures/geas/changes/after.map.jsonl は変更後のもの）:
+  claim "rejects an empty name": tests/fixtures/geas/greeter/server.py の変更後の 26 行目と変更前の 26 行目
     確かめる要件 rejects_an_empty_name
 要件が名指すファイルで、差分が触るもの:
   file "greeter/server.py": 満たす要件 greets_by_name、rejects_an_empty_name、totals_accumulate、unknown_paths_are_404
 どの要件にも届かない変更: なし
 触る要件:
   greets_by_name（tests/fixtures/geas/greeter.req:11）持ち主 api、出どころ contract
-  rejects_an_empty_name（tests/fixtures/geas/greeter.req:21）持ち主 api、出どころ contract。2026-10-03 に api が決めた「an empty name is a client error, not a greeting」
+  rejects_an_empty_name（tests/fixtures/geas/greeter.req:21）持ち主 api、出どころ contract。2026-10-03 に api が「an empty name is a client error, not a greeting」と決めました
   totals_accumulate（tests/fixtures/geas/greeter.req:32）持ち主 api、出どころ contract
   unknown_paths_are_404（tests/fixtures/geas/greeter.req:42）持ち主 api、出どころ contract
-触る要件は 4 件です。api に見てもらいます
+触る要件は 4 件です。api に見てもらってください

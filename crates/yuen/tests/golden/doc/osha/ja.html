@@ -37,11 +37,11 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <body>
 <main>
 <h1>osha — 要件の出どころ</h1>
-<p class="lead">このページは yuen 0.23.0 が、下の .req のファイルと、出典の写しと、ほかの言語が成果物について渡すものから作った。</p>
+<p class="lead">このページは、下の .req のファイルと、出典の写しと、ほかの言語から読んだ成果物の定義をもとに、yuen 0.23.0 が作った。</p>
 <ul>
 <li><code>osha.req</code>（osha v1、<code>sha256:44a5adbdc4b6cad2</code>）</li>
 </ul>
-<p>検査の結果：<code>examples/osha/osha.req: ok — 要件 1 件のリンク 3 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（か、その見送り）があり、範囲の table 1 個は、要件に辿れます。</code></p>
+<p>検査の結果：<code>examples/osha/osha.req: ok — 要件 1 件のリンク 3 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（無ければ見送り）があり、範囲の table 1 個は、要件に辿れます。</code></p>
 <h2 id="traceability">トレーサビリティ</h2>
 <div class="scroll"><table>
 <thead><tr><th>要件</th><th>期間</th><th>出どころ</th><th>持ち主</th><th>満たすもの</th><th>確かめるもの</th><th>状態</th></tr></thead>
@@ -65,7 +65,7 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <li>期間：2026-01-01..</li>
 <li>持ち主：safety</li>
 <li>ファイル：<code>examples/osha/osha.req:12</code></li>
-<li>要件の端：<code>sha256:849dc53f1d112c23</code></li>
+<li>要件のハッシュ：<code>sha256:849dc53f1d112c23</code></li>
 </ul>
 <p>出どころ <code>@osha §1910.157</code> — safety が 2026-10-04 に確かめた（<code>sha256:c2a9ce966c7e2269</code> → <code>sha256:849dc53f1d112c23</code>）。状態：確かめたまま</p>
 <blockquote class="law">
@@ -160,7 +160,7 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <p>満たすもの <code>rulec &quot;osha_extinguisher.rule&quot; table distance</code> — development が 2026-10-04 に確かめた（<code>sha256:849dc53f1d112c23</code> → <code>sha256:5681500476af8a56</code>）。状態：確かめたまま</p>
 <p>確かめるもの <code>rulec &quot;osha_extinguisher.rule&quot;</code> — development が 2026-10-04 に確かめた（<code>sha256:849dc53f1d112c23</code> → <code>sha256:a52e955b88af88d6</code>）。状態：確かめたまま</p>
 <h2 id="scope">範囲</h2>
-<p><code>scope rulec &quot;osha_extinguisher.rule&quot; table</code> — 成果物 1 個。要件に辿れる。</p>
+<p><code>scope rulec &quot;osha_extinguisher.rule&quot; table</code> — 成果物は 1 個で、要件に辿れる。</p>
 <h2 id="records">確かめた記録</h2>
 <div class="scroll"><table>
 <thead><tr><th>日付</th><th>誰が</th><th>何を</th><th>ハッシュ</th></tr></thead>

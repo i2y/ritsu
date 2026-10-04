@@ -38,7 +38,7 @@ requirement 満了日_142条(last_day_142)
 
 ```console
 $ ritsu yuen check examples/civil_code_periods/civil_code_periods.ja.req --root examples/civil_code_periods --lang ja
-examples/civil_code_periods/civil_code_periods.ja.req: ok — 要件 3 件のリンク 7 本と見送り 2 件が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（か、その見送り）があり、範囲の date 3 個は、どれも要件に辿れます。
+examples/civil_code_periods/civil_code_periods.ja.req: ok — 要件 3 件のリンク 7 本と見送り 2 件が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（無ければ見送り）があり、範囲の date 3 個は、どれも要件に辿れます。
 ```
 
 ## 変わったら止まる
@@ -58,7 +58,7 @@ $ ritsu yuen check examples/civil_code_periods_reread/civil_code_periods_reread.
 examples/civil_code_periods_reread/civil_code_periods_reread.ja.req: エラー 1 件
 ```
 
-止まるのは、書き換えた日付へのつながり一本だけです。日付の端はファイル全体ではなく、その日付の定義の文なので、同じカレンダーのほかの日付と条件へのつながりは止まりません。逆に、条文そのものが改正されれば、要件の端（引いた条のハッシュを含む）が変わり、その要件から先のつながりが全部止まります。
+止まるのは、書き換えた日付へのつながり一本だけです。yuen が日付についてハッシュを取るのはファイル全体ではなく、その日付の定義の文なので、同じカレンダーのほかの日付と条件へのつながりは止まりません。逆に、条文そのものが改正されれば、要件のハッシュ（引いた条のハッシュを含む）が変わり、その要件から先のつながりが全部止まります。
 
 人が差分を読み、カレンダーの書き換えが決めた読み方と合っていると確かめたら、その人の役割で `yuen review` を走らせて、記録を書き直します。合っていなければ、カレンダーを直すか、要件と決めたことを書き直します。
 

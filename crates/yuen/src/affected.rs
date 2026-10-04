@@ -403,7 +403,7 @@ fn answer(c: &Checked, files: &[FileDiff], bytes: &[u8], diff_shown: &str, maps:
         let Some(claims) = &p.suite.claims else {
             let cmd = crate::check::with_ritsu(p);
             return Err(tr!(
-                "この yuen は geas の記録を読めません。ほかの言語を読むところは、すべての言語をつないだ `{cmd}` のように ritsu で走らせます",
+                "yuen 単独のバイナリは geas の記録を読めません。ほかの言語を読むには、すべての言語をつないだ ritsu で、`{cmd}` のように走らせてください",
                 "this yuen cannot read geas's records; run it with every language joined, through ritsu: `{cmd}`"
             ));
         };
@@ -520,12 +520,12 @@ fn record_side(side: &str) -> Text {
 /// `26 (before)`: lines of one file on one side, how they were found.
 fn lines_text(l: &TouchedLines) -> Text {
     let side = side_word(&l.side);
-    let mut t = tr!("{}の {}", "{} ({})", side.ja, l.lines; l.lines, side.en);
+    let mut t = tr!("{}の {} 行目", "{} ({})", side.ja, l.lines; l.lines, side.en);
     if l.how == "near" {
-        t = t.then(&tr!("（消えた行を前後の行から）", " (a removed line, read by the lines around it)"));
+        t = t.then(&tr!("（消えた行なので、前後の行から探した）", " (a removed line, read by the lines around it)"));
     }
     if let Some(target) = &l.startup {
-        t = t.then(&tr!("（{target} を始めるどの主張も走らせる起動のコード）", " (startup code every claim that starts {target} runs)"));
+        t = t.then(&tr!("（{target} を起動する主張がどれも走らせる、起動時のコード）", " (startup code every claim that starts {target} runs)"));
     }
     t
 }
@@ -543,10 +543,10 @@ fn files_lines(p: &Project, ls: &[TouchedLines]) -> Text {
     for f in files {
         let parts: Vec<Text> = ls.iter().filter(|l| l.file == f).map(lines_text).collect();
         let shown = p.shown(f);
-        ja.push(format!("{shown} の{}", parts.iter().map(|t| t.ja.clone()).collect::<Vec<_>>().join("、")));
+        ja.push(format!("{shown} の{}", parts.iter().map(|t| t.ja.clone()).collect::<Vec<_>>().join("と")));
         en.push(format!("{shown} {}", parts.iter().map(|t| t.en.clone()).collect::<Vec<_>>().join(", ")));
     }
-    tr!("{}", "{}", ja.join("。"); en.join("; "))
+    tr!("{}", "{}", ja.join("、"); en.join("; "))
 }
 
 /// `met by a, b; checked by c` for what reaches a thing.
@@ -570,7 +570,7 @@ fn reach_text(p: &Project, reqs: &[Reach]) -> Text {
     }
     let ja: Vec<String> = parts.iter().map(|t| t.ja.clone()).collect();
     let en: Vec<String> = parts.iter().map(|t| t.en.clone()).collect();
-    tr!("{}", "{}", ja.join("。"); en.join("; "))
+    tr!("{}", "{}", ja.join("、"); en.join("; "))
 }
 
 fn said_text(p: &Project, s: &Said) -> Text {
@@ -590,7 +590,7 @@ fn render(p: &Project, a: &Answer, lang: Lang) -> String {
         for (r, wording) in &f.reqs {
             let me = p.req_label(*r);
             lines.push(if *wording {
-                tr!("  {me}: 文か期間が変わるので、この要件のリンクを確かめ直します", "  {me}: its text or period changes, so its links are to be looked at again")
+                tr!("  {me}: 文か期間が変わるので、この要件のリンクを確かめ直す必要があります", "  {me}: its text or period changes, so its links are to be looked at again")
             } else {
                 tr!("  {me}", "  {me}")
             });
@@ -609,7 +609,7 @@ fn render(p: &Project, a: &Answer, lang: Lang) -> String {
             let mut t = tr!("  {shown}（{label}）: {}", "  {shown} ({label}): {}", who.ja; who.en);
             if !c.pinned.is_empty() {
                 let ns: Vec<String> = c.pinned.iter().map(|n| n.text()).collect();
-                t = t.then(&tr!("。固定している成果物 {}", "; pinned by {}", ns.join("、"); ns.join(", ")));
+                t = t.then(&tr!("、固定している成果物 {}", "; pinned by {}", ns.join("、"); ns.join(", ")));
             }
             lines.push(t);
         }
@@ -621,14 +621,14 @@ fn render(p: &Project, a: &Answer, lang: Lang) -> String {
         } else {
             let ja: Vec<String> = s.records.iter().map(|(r, side)| format!("{} は{}", p.shown_any(r), record_side(side).ja)).collect();
             let en: Vec<String> = s.records.iter().map(|(r, side)| format!("{} ({})", p.shown_any(r), record_side(side).en)).collect();
-            lines.push(tr!("差分が触る主張（{spec}。記録: {}）:", "the claims the change touches ({spec}; records: {}):", ja.join("、"); en.join(", ")));
+            lines.push(tr!("差分が触る主張（{spec}、記録: {}）:", "the claims the change touches ({spec}; records: {}):", ja.join("、"); en.join(", ")));
         }
         if let Some(said) = &s.refused {
             for x in said {
                 let t = said_text(p, x);
-                lines.push(tr!("  geas は答えられません: {}", "  geas cannot answer: {}", t.ja; t.en));
+                lines.push(tr!("  geas から答えを得られません: {}", "  geas cannot answer: {}", t.ja; t.en));
             }
-            lines.push(tr!("  記録が変更に合わないので、この spec のコードは主張に届きません", "  the records do not fit the change, so the code of this spec reaches no claim"));
+            lines.push(tr!("  記録が変更に合わないので、この spec のコードから主張に辿れません", "  the records do not fit the change, so the code of this spec reaches no claim"));
             continue;
         }
         if s.claims.is_empty() && s.unclaimed.is_empty() && s.spec_changed.is_empty() {
@@ -644,16 +644,16 @@ fn render(p: &Project, a: &Answer, lang: Lang) -> String {
         }
         if !s.spec_changed.is_empty() {
             let who = reach_text(p, &s.spec_changed);
-            lines.push(tr!("  spec そのものが変わる: {}", "  the spec itself changes: {}", who.ja; who.en));
+            lines.push(tr!("  spec そのものが変わります（{}）", "  the spec itself changes: {}", who.ja; who.en));
         }
         for (u, reqs) in &s.unclaimed {
             let file = p.shown(&u.file);
             let side = side_word(&u.side);
             let why = unclaimed_why(&u.why);
-            let mut t = tr!("  どの主張も走らせない行: {file} の{}の {}（{}）", "  lines no claim runs: {file} {} ({}; {})", side.ja, u.lines, why.ja; u.lines, side.en, why.en);
+            let mut t = tr!("  どの主張も走らせない行: {file} の{}の {} 行目（{}）", "  lines no claim runs: {file} {} ({}; {})", side.ja, u.lines, why.ja; u.lines, side.en, why.en);
             if !reqs.is_empty() {
                 let who = reach_text(p, reqs);
-                t = t.then(&tr!("。ファイルを名指す要件がある: {}", "; the file is named: {}", who.ja; who.en));
+                t = t.then(&tr!("。このファイルを名指す要件があります（{}）", "; the file is named: {}", who.ja; who.en));
             }
             lines.push(t);
         }
@@ -662,7 +662,7 @@ fn render(p: &Project, a: &Answer, lang: Lang) -> String {
             lines.push(if *known { tr!("  消えるファイル: {file}（記録にある）", "  a file the diff deletes: {file} (the records have it)") } else { tr!("  消えるファイル: {file}（記録に無い）", "  a file the diff deletes: {file} (no record has it)") });
         }
         if s.baseline {
-            lines.push(tr!("  spec の基準（baseline）が変わる", "  the spec's baseline changes"));
+            lines.push(tr!("  spec の基準（baseline）が変わります", "  the spec's baseline changes"));
         }
     }
     if !a.named.is_empty() {
@@ -683,7 +683,7 @@ fn render(p: &Project, a: &Answer, lang: Lang) -> String {
                     let file = p.shown(file);
                     let side = side_word(side);
                     let why = unclaimed_why(why);
-                    tr!("  {file} の{}の {}（{}）", "  {file} {} ({}; {})", side.ja, ls, why.ja; ls, side.en, why.en)
+                    tr!("  {file} の{}の {} 行目（{}）", "  {file} {} ({}; {})", side.ja, ls, why.ja; ls, side.en, why.en)
                 }
                 Unreached::Untraced { file, scope } => {
                     let file = p.shown(file);
@@ -711,7 +711,7 @@ fn render(p: &Project, a: &Answer, lang: Lang) -> String {
             if owners.is_empty() {
                 tr!("触る要件は {n} 件です", "{}", ; plural(n, "requirement touched", "requirements touched"))
             } else {
-                tr!("触る要件は {n} 件です。{ja} に見てもらいます", "{}; ask {en}", ; plural(n, "requirement touched", "requirements touched"))
+                tr!("触る要件は {n} 件です。{ja} に見てもらってください", "{}; ask {en}", ; plural(n, "requirement touched", "requirements touched"))
             }
         }
     });
@@ -743,7 +743,7 @@ fn requirement_line(p: &Project, r: usize) -> Text {
     };
     if let Some(dc) = d.decided.iter().max_by_key(|dc| dc.date) {
         let (date, by, why) = (dc.date.to_string(), &dc.by.0, &dc.why);
-        t = t.then(&tr!("。{date} に {by} が決めた「{why}」", "; decided {date} by {by}: \"{why}\""));
+        t = t.then(&tr!("。{date} に {by} が「{why}」と決めました", "; decided {date} by {by}: \"{why}\""));
     }
     t
 }

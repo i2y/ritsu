@@ -1,5 +1,5 @@
 エラー[E103]: tests/mutants/E103_pin_differs/period_of_months.req:9:3: cfr §1.7 の写しが固定と違います（固定は sha256:01de176ebe4740d7、写しは sha256:4b9dea2a1e492f63）
      9 |   "§1.7" sha256:01de176ebe4740d7
-  = 固定したあとで写しが変わりました。条文の何が変わったかを読んでから、固定を書き換えます。
+  = 固定したあとで写しが変わりました。条文の何が変わったかを読んでから、固定を書き換えてください。
   = 直した行: "§1.7" sha256:4b9dea2a1e492f63
 tests/mutants/E103_pin_differs: エラー 1 件

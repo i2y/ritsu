@@ -1,9 +1,9 @@
 エラー[E301]: period_of_months/period_of_months.req:21:3: date_of_receipt から file "period_of_months.cal" へのリンクを、まだ誰も確かめていません
     21 |   satisfied by file "period_of_months.cal"
-  = 両端を読んで、つながりが正しいと確かめたら、`yuen review` がリンクの下に、確かめた人と日付と両端のハッシュを書きます。
+  = 両端を読んで、つながりが正しいことを確かめたら、`yuen review` を走らせてください。リンクの下に、確かめた人と日付と両端のハッシュが書かれます。
   = 確かめたら: yuen review period_of_months --root period_of_months --at period_of_months/period_of_months.req:21 --by <役割>
 エラー[E304]: period_of_months/period_of_months.req:33:3: この見送りは、まだ承認されていません
     33 |   not verified "A function that writes the rule's cases as they are, held against every origin of 2000 to 2027 and every month count of 1 to 12, was checked in koyomi's design stage. This material has no claim that checks it"
-  = 見送りも人の判断です。持ち主が理由を読んで承認したら、`yuen review` が、承認した人と日付と要件のハッシュを下に書きます。
+  = 見送りも、人が決めることです。持ち主が理由を読んで承認したら、`yuen review` を走らせてください。見送りの下に、承認した人と日付と要件のハッシュが書かれます。
   = 確かめたら: yuen review period_of_months --root period_of_months --at period_of_months/period_of_months.req:33 --by <役割>
 period_of_months: エラー 2 件

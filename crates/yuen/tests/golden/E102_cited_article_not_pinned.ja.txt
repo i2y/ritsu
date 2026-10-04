@@ -1,5 +1,5 @@
 エラー[E102]: tests/mutants/E102_cited_article_not_pinned/period_of_months.req:40:13: cfr §1.7 を引いていますが、固定されていません
     40 |   from @cfr "§1.7"
-  = 引く条は、出典の下に固定の行を書きます。どの版の条文を読んで要件を書いたかを、固定で残すためです。
+  = 引く条には、出典の下に固定の行を書いてください。どの版の条文を読んで要件を書いたかを、固定で残すためです。
   = 直した行: "§1.7" sha256:01de176ebe4740d7
 tests/mutants/E102_cited_article_not_pinned: エラー 1 件

@@ -90,11 +90,11 @@ fn state_words(st: &str, lang: Lang) -> String {
         match st {
             "ok" => tr!("確かめたまま", "as looked at"),
             "unreviewed" => tr!("まだ確かめていない", "not looked at yet"),
-            "up_changed" => tr!("確かめたあとで、上の端が変わった", "what it comes from changed after it was looked at"),
+            "up_changed" => tr!("確かめたあとで、リンク元が変わった", "what it comes from changed after it was looked at"),
             "down_changed" => tr!("確かめたあとで、成果物が変わった", "the artifact changed after it was looked at"),
             "unapproved" => tr!("承認されていない", "not approved"),
             "bad_record" => tr!("記録の形が崩れている", "its record is broken"),
-            "unreadable" => tr!("端を読めない", "its ends cannot be read"),
+            "unreadable" => tr!("リンクの両端を読めない", "its ends cannot be read"),
             _ => Text::default(),
         },
         lang,
@@ -183,7 +183,7 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
     }
     out.push(Block::P(vec![t(say(
         tr!(
-            "このページは yuen {version} が、下の .req のファイルと、出典の写しと、ほかの言語が成果物について渡すものから作った。",
+            "このページは、下の .req のファイルと、出典の写しと、ほかの言語から読んだ成果物の定義をもとに、yuen {version} が作った。",
             "yuen {version} made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts."
         ),
         lang,
@@ -217,13 +217,13 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
         let mut from: Para = Vec::new();
         for f in r["from"].as_array().cloned().unwrap_or_default() {
             if !from.is_empty() {
-                from.push(t("; "));
+                from.push(t(say(tr!("、", "; "), lang)));
             }
             from.push(c(from_words(&f)));
         }
         for d in r["decided"].as_array().cloned().unwrap_or_default() {
             if !from.is_empty() {
-                from.push(t("; "));
+                from.push(t(say(tr!("、", "; "), lang)));
             }
             let (by, date) = (s(&d["by"]), s(&d["date"]));
             from.push(t(say(tr!("{date} に {by} が決めた", "decided by {by} on {date}"), lang)));
@@ -233,7 +233,7 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
         for l in r["links"].as_array().cloned().unwrap_or_default() {
             let side = if s(&l["role"]) == "satisfied" { &mut met } else { &mut checked };
             if !side.is_empty() {
-                side.push(t("; "));
+                side.push(t(say(tr!("、", "; "), lang)));
             }
             side.push(c(s(&l["artifact"]["text"])));
         }
@@ -242,7 +242,7 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
             waived += 1;
             let side = if s(&w["role"]) == "satisfied" { &mut met } else { &mut checked };
             if !side.is_empty() {
-                side.push(t("; "));
+                side.push(t(say(tr!("、", "; "), lang)));
             }
             side.push(t(say(tr!("見送り", "waived"), lang)));
         }
@@ -316,9 +316,9 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
             _ => {}
         }
         if !src["borrowed"].is_null() {
-            p.push(t(say(tr!(" 借りた先：", " Borrowed from "), lang)));
+            p.push(t(say(tr!("借りた先：", " Borrowed from "), lang)));
             p.push(c(s(&src["borrowed"]["text"])));
-            p.push(t(say(tr!("（写しと固定は、そのファイルのもの。その言語の検査が確かめる）。", " (the copies and the pins are that file's, and its language's check holds them)."), lang)));
+            p.push(t(say(tr!("（写しと固定はそのファイルのもので、その言語の検査が確かめる）。", " (the copies and the pins are that file's, and its language's check holds them)."), lang)));
         }
         out.push(Block::P(p));
         let file = s(&src["file"]);
@@ -386,7 +386,7 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
         facts.push(vec![t(say(tr!("持ち主：", "Owner: "), lang)), t(s(&r["owner"]))]);
         facts.push(vec![t(say(tr!("ファイル：", "File: "), lang)), c(format!("{}:{}", p.shown(&rel), r["line"].as_u64().unwrap_or(0)))]);
         if let Some(h) = r["sha256"].as_str() {
-            facts.push(vec![t(say(tr!("要件の端：", "The requirement's end: "), lang)), c(short(h))]);
+            facts.push(vec![t(say(tr!("要件のハッシュ：", "The requirement's end: "), lang)), c(short(h))]);
         }
         let replaces: Vec<String> = r["replaces"].as_array().cloned().unwrap_or_default().iter().map(|x| format!("{} v{}", s(&x["name"]), x["version"].as_u64().unwrap_or(1))).collect();
         if !replaces.is_empty() {
@@ -416,7 +416,7 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
                 let Some(a) = articles.iter().find(|a| &a.fragment == frag) else { continue };
                 let key = (fi, source.clone(), frag.clone());
                 if quoted.contains(&key) {
-                    out.push(Block::P(vec![t(say(tr!("（{source} {frag} の条文は、上に引いた）", "(The text of {source} {frag} is quoted above.)"), lang))]));
+                    out.push(Block::P(vec![t(say(tr!("（{source} {frag} の条文は、上に載せた）", "(The text of {source} {frag} is quoted above.)"), lang))]));
                     continue;
                 }
                 let bytes = a.bytes.clone().or_else(|| std::fs::read(&a.abs).ok());
@@ -473,10 +473,10 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
         let untraced: Vec<String> = sc["untraced"].as_array().cloned().unwrap_or_default().iter().map(|x| s(&x["text"])).collect();
         let mut p = vec![c(format!("scope {}", s(&sc["text"]))), t(" — ")];
         if untraced.is_empty() && n == 1 {
-            p.push(t(say(tr!("成果物 1 個。要件に辿れる。", "1 artifact in it, which traces to a requirement."), lang)));
+            p.push(t(say(tr!("成果物は 1 個で、要件に辿れる。", "1 artifact in it, which traces to a requirement."), lang)));
             out.push(Block::P(p));
         } else if untraced.is_empty() {
-            p.push(t(say(tr!("成果物 {n} 個。どれも要件に辿れる。", "{n} artifacts in it, every one tracing to a requirement."), lang)));
+            p.push(t(say(tr!("成果物は {n} 個で、どれも要件に辿れる。", "{n} artifacts in it, every one tracing to a requirement."), lang)));
             out.push(Block::P(p));
         } else {
             let k = untraced.len();

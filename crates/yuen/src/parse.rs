@@ -70,9 +70,9 @@ impl<'a> Cur<'a> {
         match self.peek() {
             Some(t) => {
                 let s = t.spelled();
-                tr!("`{s}` があります", "found `{s}`")
+                tr!("書かれているのは `{s}` です", "found `{s}`")
             }
-            None => tr!("行が終わっています", "the line ends there"),
+            None => tr!("行がそこで終わっています", "the line ends there"),
         }
     }
 
@@ -90,7 +90,7 @@ impl<'a> Cur<'a> {
             Ok(())
         } else {
             let f = self.found();
-            Err(bad("E002", self.col(), tr!("ここには `{w}` を書きます（{}）", "`{w}` belongs here ({})", f.ja; f.en)))
+            Err(bad("E002", self.col(), tr!("ここには `{w}` を書いてください（{}）", "`{w}` belongs here ({})", f.ja; f.en)))
         }
     }
 
@@ -113,7 +113,7 @@ impl<'a> Cur<'a> {
             }
             _ => {
                 let f = self.found();
-                Err(bad("E002", self.col(), tr!("ここには{}の名前を書きます（{}）", "The name of {} belongs here ({})", what.ja, f.ja; what.en, f.en)))
+                Err(bad("E002", self.col(), tr!("ここには{}の名前を書いてください（{}）", "The name of {} belongs here ({})", what.ja, f.ja; what.en, f.en)))
             }
         }
     }
@@ -127,7 +127,7 @@ impl<'a> Cur<'a> {
             }
             _ => {
                 let f = self.found();
-                Err(bad("E002", self.col(), tr!("ここには{}を `\"…\"` で書きます（{}）", "Write {} here, in quotes ({})", what.ja, f.ja; what.en, f.en)))
+                Err(bad("E002", self.col(), tr!("ここには{}を `\"…\"` で囲んで書いてください（{}）", "Write {} here, in quotes ({})", what.ja, f.ja; what.en, f.en)))
             }
         }
     }
@@ -141,7 +141,7 @@ impl<'a> Cur<'a> {
             }
             _ => {
                 let f = self.found();
-                Err(bad("E002", self.col(), tr!("ここには日付（`2026-10-03` の形）を書きます（{}）", "A date (`2026-10-03`) belongs here ({})", f.ja; f.en)))
+                Err(bad("E002", self.col(), tr!("ここには日付（`2026-10-03` の形）を書いてください（{}）", "A date (`2026-10-03`) belongs here ({})", f.ja; f.en)))
             }
         }
     }
@@ -155,7 +155,7 @@ impl<'a> Cur<'a> {
             return Ok(None);
         }
         if d.len() > 1 && d.starts_with('0') || d.len() > 6 {
-            return Err(bad("E001", col, tr!("版 `{w}` の形が崩れています。版は `v1`、`v2` のように書きます", "The version `{w}` is not written right; write `v1`, `v2`")));
+            return Err(bad("E001", col, tr!("版 `{w}` の形が崩れています。版は `v1`、`v2` のように書いてください", "The version `{w}` is not written right; write `v1`, `v2`")));
         }
         let n = d.parse().unwrap_or(0);
         self.bump();
@@ -194,12 +194,12 @@ fn section_rank(w: &str) -> Option<u8> {
 }
 
 const SECTIONS: (&str, &str) = (
-    "ファイルは、見出し（`requirements`）、`description`、`role`、`source`、`scope`、`requirement` の順に書きます。",
+    "ファイルは、見出し（`requirements`）、`description`、`role`、`source`、`scope`、`requirement` の順に書いてください。",
     "A file goes: the heading (`requirements`), `description`, `role`, `source`, `scope`, `requirement`.",
 );
 
 const REQ_LINES: (&str, &str) = (
-    "要件の中は、`text`、`in force`、`owner`、`replaces`、`from`、`decided`、`satisfied by` と `not satisfied`、`verified by` と `not verified` の順に書きます。",
+    "要件の中の行は、`text`、`in force`、`owner`、`replaces`、`from`、`decided`、`satisfied by` と `not satisfied`、`verified by` と `not verified` の順に書いてください。",
     "The lines of a requirement go: `text`, `in force`, `owner`, `replaces`, `from`, `decided`, `satisfied by` and `not satisfied`, `verified by` and `not verified`.",
 );
 
@@ -284,8 +284,8 @@ impl Parser<'_> {
             return None;
         }
         if first.indent > 0 || first_word(first) != Some(kw::REQUIREMENTS) {
-            self.err("E003", first.no, first.tokens[0].col, tr!("ファイルは `requirements` の行で始めます", "A file starts with a `requirements` line")).notes.push(tr!(
-                "一行目は `requirements 民法の期間 v1` のように、要件の集まりの名前と版を書きます。",
+            self.err("E003", first.no, first.tokens[0].col, tr!("ファイルは `requirements` の行で始めてください", "A file starts with a `requirements` line")).notes.push(tr!(
+                "一行目には、`requirements 民法の期間 v1` のように、要件の集まりの名前と版を書いてください。",
                 "The first line names the set of requirements and its version, like `requirements payment_terms v1`."
             ));
             return None;
@@ -298,7 +298,7 @@ impl Parser<'_> {
                 let name = c.name(&tr!("ファイル", "the file"))?;
                 let Some((version, _)) = c.version()? else {
                     let f = c.found();
-                    return Err(bad("E002", c.col(), tr!("見出しの最後には版（`v1` のように）を書きます（{}）", "The heading ends with a version such as `v1` ({})", f.ja; f.en)));
+                    return Err(bad("E002", c.col(), tr!("見出しの最後には版（`v1` のように）を書いてください（{}）", "The heading ends with a version such as `v1` ({})", f.ja; f.en)));
                 };
                 c.done()?;
                 Ok(Header { name, version, span })
@@ -332,7 +332,7 @@ impl Parser<'_> {
                 let w = first_word(line).unwrap_or("");
                 let col = line.tokens[0].col;
                 if w == kw::REQUIREMENTS {
-                    self.err("E004", line.no, col, tr!("見出しの `requirements` は、ファイルの一行目に一度だけ書きます", "The `requirements` heading comes once, on the first line of the file"));
+                    self.err("E004", line.no, col, tr!("見出しの `requirements` は、ファイルの一行目に一度だけ書けます", "The `requirements` heading comes once, on the first line of the file"));
                     block = Block::Skip;
                     continue;
                 }
@@ -371,7 +371,7 @@ impl Parser<'_> {
                 Block::Skip => continue,
                 Block::None => {
                     self.err("E005", line.no, line.indent + 1, tr!(
-                        "この行は字下げされていますが、上に字下げで続く行がありません",
+                        "この行は字下げされていますが、上に、字下げした行を続けられる行がありません",
                         "This line is indented, but nothing above it takes indented lines"
                     ))
                     .notes
@@ -400,7 +400,7 @@ impl Parser<'_> {
                         ))
                         .notes
                         .push(tr!(
-                            "`reviewed` は `from`・`satisfied by`・`verified by` の行のすぐ下に、`approved` は `not satisfied`・`not verified` の行のすぐ下に、一段深く書きます。",
+                            "`reviewed` は `from`・`satisfied by`・`verified by` の行のすぐ下に、`approved` は `not satisfied`・`not verified` の行のすぐ下に、一段深く書いてください。",
                             "`reviewed` goes right under a `from`, `satisfied by` or `verified by` line, and `approved` right under a `not satisfied` or `not verified` line, indented deeper."
                         ));
                         continue;
@@ -419,7 +419,7 @@ impl Parser<'_> {
             if line.indent != i0 {
                 if is_record {
                     self.err("E005", line.no, line.indent + 1, tr!(
-                        "確かめた記録の行は、リンクの行より深く字下げします",
+                        "確かめた記録の行は、リンクの行より深く字下げしてください",
                         "A record is indented deeper than its link"
                     ));
                 } else {
@@ -441,7 +441,7 @@ impl Parser<'_> {
                 Block::Req(ri) => {
                     if is_record {
                         self.err("E005", line.no, line.indent + 1, tr!(
-                            "確かめた記録の行は、リンクの行より深く字下げします",
+                            "確かめた記録の行は、リンクの行より深く字下げしてください",
                             "A record is indented deeper than its link"
                         ));
                         last = Last::Other;
@@ -496,7 +496,7 @@ impl Parser<'_> {
         let name = c.name(&tr!("出典", "a source"))?;
         if c.peek() != Some(&Tok::Eq) {
             let f = c.found();
-            return Err(bad("E002", c.col(), tr!("出典の名前のあとには `=` を書きます（{}）", "`=` follows the name of a source ({})", f.ja; f.en)));
+            return Err(bad("E002", c.col(), tr!("出典の名前のあとには `=` を書いてください（{}）", "`=` follows the name of a source ({})", f.ja; f.en)));
         }
         c.bump();
         if let Some(n) = line.naming {
@@ -537,7 +537,7 @@ impl Parser<'_> {
         // `=` and nothing after it: the lexer did not start a naming.
         let fd = c.found();
         Err(bad("E002", c.col(), tr!(
-            "`=` のあとには `law`、`file`、借りる出典の名指し（`koyomi \"x.cal\" source 民法`）のどれかを書きます（{}）",
+            "`=` のあとには `law`、`file`、借りる出典の名指し（`koyomi \"x.cal\" source 民法`）のどれかを書いてください（{}）",
             "`law`, `file`, or the naming of a source to borrow (`koyomi \"x.cal\" source 民法`) follows `=` ({})",
             fd.ja;
             fd.en
@@ -552,7 +552,7 @@ impl Parser<'_> {
             Some(Tok::Str(w)) => w.clone(),
             _ => {
                 let f = c.found();
-                return Err(bad("E002", c.col(), tr!("固定の行は `<条> sha256:<16 桁>` です（{}）", "A pin line is `<article> sha256:<16 digits>` ({})", f.ja; f.en)));
+                return Err(bad("E002", c.col(), tr!("固定の行は `<条> sha256:<16 桁>` の形です（{}）", "A pin line is `<article> sha256:<16 digits>` ({})", f.ja; f.en)));
             }
         };
         c.bump();
@@ -575,7 +575,7 @@ impl Parser<'_> {
         let span = Span { line: line.no, col: line.tokens[0].col };
         let n = line.naming.unwrap_or(line.tokens.len());
         let Some(w) = crate::names::read(&line.tokens[n..], line.end) else {
-            return Err(bad("E002", line.end, tr!("`scope` のあとに名指しを書きます（`scope file \"src/\"` のように）", "A naming follows `scope` (like `scope file \"src/\"`)")));
+            return Err(bad("E002", line.end, tr!("`scope` のあとに名指しを書いてください（`scope file \"src/\"` のように）", "A naming follows `scope` (like `scope file \"src/\"`)")));
         };
         f.scopes.push(ScopeDecl { naming: w, span });
         Ok(())
@@ -593,12 +593,12 @@ impl Parser<'_> {
                 Some(Tok::Word(w)) => w.clone(),
                 _ => {
                     let f = c.found();
-                    return Err(bad("E001", col, tr!("丸括弧の中には別名を書きます（{}）", "The alias goes in the parentheses ({})", f.ja; f.en)));
+                    return Err(bad("E001", col, tr!("丸括弧の中には別名を書いてください（{}）", "The alias goes in the parentheses ({})", f.ja; f.en)));
                 }
             };
             c.bump();
             if !is_alias(&a) {
-                return Err(bad("E001", col, tr!("別名 `{a}` の形が崩れています。別名は ASCII の小文字で始め、小文字・数字・`_` で書きます", "The alias `{a}` is not written right: it starts with a lowercase ASCII letter and goes on in lowercase letters, digits and `_`")));
+                return Err(bad("E001", col, tr!("別名 `{a}` の形が崩れています。別名は ASCII の小文字で始め、小文字・数字・`_` で書いてください", "The alias `{a}` is not written right: it starts with a lowercase ASCII letter and goes on in lowercase letters, digits and `_`")));
             }
             if c.peek() != Some(&Tok::RParen) {
                 let f = c.found();
@@ -690,7 +690,7 @@ impl Parser<'_> {
                             None if fragments.is_empty() => break,
                             _ => {
                                 let f = c.found();
-                                return Err(bad("E002", c.col(), tr!("ここには引く条を書きます（{}）", "An article belongs here ({})", f.ja; f.en)));
+                                return Err(bad("E002", c.col(), tr!("ここには引く条を書いてください（{}）", "An article belongs here ({})", f.ja; f.en)));
                             }
                         }
                         if c.peek() == Some(&Tok::Comma) {
@@ -721,7 +721,7 @@ impl Parser<'_> {
                 let side = if what == "satisfied by" { Side::Satisfied } else { Side::Verified };
                 let n = line.naming.unwrap_or(line.tokens.len());
                 let Some(w) = crate::names::read(&line.tokens[n..], line.end) else {
-                    return Err(bad("E002", line.end, tr!("`{what}` のあとに成果物の名指しを書きます", "The naming of an artifact follows `{what}`")).note(tr!(
+                    return Err(bad("E002", line.end, tr!("`{what}` のあとに成果物の名指しを書いてください", "The naming of an artifact follows `{what}`")).note(tr!(
                         "名指しは `<ツール> \"<パス>\" [<種類> <名前>]` の形です（`file \"src/app.py\"`、`koyomi \"支払条件.cal\" date 支払日`）。",
                         "A naming is `<tool> \"<path>\" [<kind> <name>]` (`file \"src/app.py\"`, `koyomi \"terms.cal\" date pay_day`)."
                     )));
@@ -771,7 +771,7 @@ fn period(c: &mut Cur) -> Result<Period, Bad> {
     if c.peek() != Some(&Tok::DotDot) {
         let f = c.found();
         return Err(bad("E002", c.col(), tr!(
-            "期間は `2026-10-01..2027-03-31` のように `..` でつなぎます。片方は省けます（{}）",
+            "期間は、`2026-10-01..2027-03-31` のように二つの日付を `..` でつないでください。片方は省けます（{}）",
             "A period joins two dates with `..`, as in `2026-10-01..2027-03-31`; either may be left out ({})",
             f.ja;
             f.en
@@ -813,7 +813,7 @@ fn record(line: &Line, waiver: bool) -> Result<Record, (usize, Text)> {
         let f = c.found();
         // A word of the language is set off with spaces in the Japanese: `ここには `->` を`.
         let w = if what.ja.starts_with('`') { format!(" {} ", what.ja) } else { what.ja.clone() };
-        (c.col(), tr!("確かめた記録の形が崩れています。ここには{}を書きます（{}）", "The record is not written right: {} belongs here ({})", w, f.ja; what.en, f.en))
+        (c.col(), tr!("確かめた記録の形が崩れています。ここには{}を書いてください（{}）", "The record is not written right: {} belongs here ({})", w, f.ja; what.en, f.en))
     };
     let date = match c.peek() {
         Some(Tok::Date(d)) => {

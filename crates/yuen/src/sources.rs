@@ -220,7 +220,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                                 let actual = sha256::short(&bytes);
                                 if let Err(why) = copies::readable(*db, &file, &bytes) {
                                     diags.push(p.err(fi, "E104", pl.span, tr!("{name} {fr} の写し {shown} が読めません: {}", "The copy {shown} of {name} {fr} cannot be read: {}", why.ja; why.en)).note(tr!(
-                                        "写しは {} が配る XML のままにします。手で直さず、`yuen source fetch` で取り直します。",
+                                        "写しは、{} が配る XML のままにしておいてください。手で直さず、`yuen source fetch` で取り直してください。",
                                         "A copy is the XML {} serves, as served; fetch it again with `yuen source fetch` rather than editing it.",
                                         db.title()
                                     )));
@@ -237,7 +237,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                                                 "The copy of {name} {fr} does not match its pin (pinned sha256:{pin}, the copy is sha256:{actual})"
                                             ))
                                             .note(tr!(
-                                                "固定したあとで写しが変わりました。条文の何が変わったかを読んでから、固定を書き換えます。",
+                                                "固定したあとで写しが変わりました。条文の何が変わったかを読んでから、固定を書き換えてください。",
                                                 "The copy changed after it was pinned. Read what changed in the text, then pin it again."
                                             ))
                                             .fix_trimmed(ritsu_base::sources::fixed_pin_line(&line_of(pl.span.line), &actual)),
@@ -266,7 +266,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                                         "`yuen source fetch` が url から取ってきて、そこに書きます。check は通信しません。",
                                         "`yuen source fetch` takes it from the url and writes it there; check never reads the network."
                                     )),
-                                    None => d.note(tr!("写しは .req からの相対パスで探します。ファイルを置くか、パスを直します。", "The copy is looked for from the directory of the .req; put the file there or correct the path.")),
+                                    None => d.note(tr!("yuen は写しを、.req からの相対パスで探します。ファイルを置くか、パスを直してください。", "The copy is looked for from the directory of the .req; put the file there or correct the path.")),
                                 };
                                 diags.push(d);
                             }
@@ -284,7 +284,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                                             "The copy of the source {sname} does not match its pin (pinned sha256:{pn}, the copy is sha256:{actual})"
                                         ))
                                         .note(tr!(
-                                            "固定したあとで写しが変わりました。何が変わったかを読んでから（`yuen source outdated`）、固定を書き換えます。",
+                                            "固定したあとで写しが変わりました。何が変わったかを読んでから（`yuen source outdated`）、固定を書き換えてください。",
                                             "The copy changed after it was pinned. Read what changed (`yuen source outdated`), then pin it again."
                                         ))
                                         .fix_trimmed(ritsu_base::sources::fixed_pin_line(&line_of(s.span.line), &actual)),
@@ -315,7 +315,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                 let FromWhat::Cite { source, source_span, fragments } = &fl.what else { continue };
                 let Some(decl) = f.ast.sources.iter().find(|s| &s.name == source) else {
                     diags.push(p.err(fi, "E105", *source_span, tr!("出典「{source}」はこのファイルで宣言されていません", "The source {source} is not declared in this file")).note(tr!(
-                        "引く出典は、同じファイルに `source {source} = law \"<法令ID>\" asof <日付>` のように宣言します。出典の名前はファイルごとに分かれます。",
+                        "引く出典は、同じファイルに `source {source} = law \"<法令ID>\" asof <日付>` のように宣言してください。出典の名前は、ファイルごとに別々です。",
                         "Declare the source in the same file, like `source {source} = law \"<law id>\" asof <date>`; source names belong to a file."
                     )));
                     continue;
@@ -324,7 +324,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                     SourceKind::Law { db, id, asof, pins } => {
                         if fragments.is_empty() {
                             diags.push(p.err(fi, "E105", *source_span, tr!(
-                                "法令は条の単位で写すので、`@{source} 第140条` のように、どこを引いたかを書きます",
+                                "法令は条の単位で写すので、`@{source} 第140条` のように、どこを引いたかを書いてください",
                                 "A law is copied an article at a time, so say which one: `@{source} 第140条`"
                             )));
                             continue;
@@ -346,7 +346,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                                 diags.push(
                                     p.err(fi, "E102", *sp, tr!("{source} {fr} を引いていますが、固定されていません", "{source} {fr} is cited but not pinned"))
                                         .note(tr!(
-                                            "引く条は、出典の下に固定の行を書きます。どの版の条文を読んで要件を書いたかを、固定で残すためです。",
+                                            "引く条には、出典の下に固定の行を書いてください。どの版の条文を読んで要件を書いたかを、固定で残すためです。",
                                             "Every article cited has a pin line under its source: it records which version of the text the requirement was read from."
                                         ))
                                         .fix_trimmed(fix),
@@ -357,7 +357,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                     SourceKind::File { .. } => {
                         if let Some((fr, sp)) = fragments.first() {
                             diags.push(p.err(fi, "E105", *sp, tr!("出典「{source}」はファイルを丸ごと固定しているので、`{fr}` のように箇所を引けません", "The source {source} pins a whole file, so no part of it such as `{fr}` can be cited")).note(tr!(
-                                "`from @{source}` と丸ごと引き、どの段落かは要件の文に書きます。",
+                                "`from @{source}` と丸ごと引き、どの段落かは要件の文に書いてください。",
                                 "Cite it whole, `from @{source}`, and say which paragraph in the requirement's text."
                             )));
                         }
@@ -366,7 +366,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                         Some(Resolved::Law { articles, borrowed: Some(n), .. }) => {
                             if fragments.is_empty() {
                                 diags.push(p.err(fi, "E105", *source_span, tr!(
-                                    "法令は条の単位で写すので、`@{source} 第140条` のように、どこを引いたかを書きます",
+                                    "法令は条の単位で写すので、`@{source} 第140条` のように、どこを引いたかを書いてください",
                                     "A law is copied an article at a time, so say which one: `@{source} 第140条`"
                                 )));
                                 continue;
@@ -378,7 +378,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                                     diags.push(p.err(fi, "E106", *sp, tr!("{t} は {fr} を固定していません", "{t} does not pin {fr}")).note(if pinned.is_empty() {
                                         tr!("借りた出典の条は、それを宣言しているファイルが固定しているものだけを引けます。", "Only the articles the file that declares the source pins can be cited.")
                                     } else {
-                                        tr!("固定している条: {}。ほかの条を引くなら、そのファイルに固定の行を足します。", "The articles it pins: {}. To cite another, add its pin to that file.", pinned.join("、"); pinned.join(", "))
+                                        tr!("固定している条: {}。ほかの条を引くなら、そのファイルに固定の行を足してください。", "The articles it pins: {}. To cite another, add its pin to that file.", pinned.join("、"); pinned.join(", "))
                                     }));
                                 }
                             }
@@ -400,7 +400,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                     let fr = &pl.fragment;
                     let name = &s.name;
                     diags.push(p.warn(fi, "W101", pl.span, tr!("{name} {fr} は固定されていますが、どの要件からも引かれていません", "{name} {fr} is pinned but no requirement cites it")).note(tr!(
-                        "引用を消したあとの残りなら、固定の行を消します。",
+                        "引用を消したあとの残りなら、固定の行を消してください。",
                         "If it is what is left after a citation was removed, delete the pin line."
                     )));
                 }
@@ -508,7 +508,7 @@ pub fn mismatches(p: &Project, s: &Sources) -> Vec<Diag> {
                         dg = dg.note(tr!("差分はほかに {more} 行あります。", "{more} more lines of the diff are not shown."));
                     }
                     dg = dg.note(tr!(
-                        "どちらかの写しが古いということです。改正を確かめ、古いほうを取り直して固定し直します（yuen source fetch と yuen source pin、または規則やカレンダーの source fetch と source pin）。",
+                        "どちらかの写しが古いということです。改正を確かめ、古いほうを取り直して固定し直してください（yuen source fetch と yuen source pin、または規則やカレンダーの source fetch と source pin）。",
                         "One of the copies is old: check the amendments, and fetch and pin the older one again (yuen source fetch and yuen source pin, or the rule's or the calendar's source fetch and source pin)."
                     ));
                     diags.push(dg);

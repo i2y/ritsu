@@ -11,10 +11,10 @@
   = 確かめたら: yuen review tests/mutants/E303_artifact_changed --root tests/mutants/E303_artifact_changed --at tests/mutants/E303_artifact_changed/period_of_months.req:21 --by <役割>
 エラー[E303]: tests/mutants/E303_artifact_changed/period_of_months.req:32:3: file "period_of_months.cal" は、2026-10-03 に development がこのリンクを確かめたあとで変わりました
     32 |   satisfied by file "period_of_months.cal"
-  = tests/mutants/E303_artifact_changed/period_of_months.req:21 と同じ変更です。差分は繰り返しません。
+  = tests/mutants/E303_artifact_changed/period_of_months.req:21 と同じ変更です。差分はそちらの診断に出ています。
   = 確かめたら: yuen review tests/mutants/E303_artifact_changed --root tests/mutants/E303_artifact_changed --at tests/mutants/E303_artifact_changed/period_of_months.req:32 --by <役割>
 エラー[E303]: tests/mutants/E303_artifact_changed/period_of_months.req:44:3: file "period_of_months.cal" は、2026-10-03 に development がこのリンクを確かめたあとで変わりました
     44 |   satisfied by file "period_of_months.cal"
-  = tests/mutants/E303_artifact_changed/period_of_months.req:21 と同じ変更です。差分は繰り返しません。
+  = tests/mutants/E303_artifact_changed/period_of_months.req:21 と同じ変更です。差分はそちらの診断に出ています。
   = 確かめたら: yuen review tests/mutants/E303_artifact_changed --root tests/mutants/E303_artifact_changed --at tests/mutants/E303_artifact_changed/period_of_months.req:44 --by <役割>
 tests/mutants/E303_artifact_changed: エラー 3 件

@@ -37,16 +37,16 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <body>
 <main>
 <h1>返金 — 要件の出どころ</h1>
-<p class="lead">このページは yuen 0.23.0 が、下の .req のファイルと、出典の写しと、ほかの言語が成果物について渡すものから作った。</p>
+<p class="lead">このページは、下の .req のファイルと、出典の写しと、ほかの言語から読んだ成果物の定義をもとに、yuen 0.23.0 が作った。</p>
 <ul>
 <li><code>refunds.ja.req</code>（返金 v1、<code>sha256:4c3fc1d4ffaf75be</code>）</li>
 </ul>
-<p>検査の結果：<code>examples/refunds/refunds.ja.req: ok — 要件 1 件のリンク 4 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（か、その見送り）があり、範囲の transfer 2 個は、どれも要件に辿れます。</code></p>
+<p>検査の結果：<code>examples/refunds/refunds.ja.req: ok — 要件 1 件のリンク 4 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（無ければ見送り）があり、範囲の transfer 2 個は、どれも要件に辿れます。</code></p>
 <h2 id="traceability">トレーサビリティ</h2>
 <div class="scroll"><table>
 <thead><tr><th>要件</th><th>期間</th><th>出どころ</th><th>持ち主</th><th>満たすもの</th><th>確かめるもの</th><th>状態</th></tr></thead>
 <tbody>
-<tr><td><code>売上を超えない (within_sales)</code></td><td class="nw">2026-10-01..</td><td>2026-10-04 に 経理 が決めた</td><td>経理</td><td><code>chobo &quot;refunds.ja.book&quot; account 返金できる残り</code>; <code>chobo &quot;refunds.ja.book&quot; transfer 売上計上</code>; <code>chobo &quot;refunds.ja.book&quot; transfer 返金</code></td><td><code>chobo &quot;refunds.ja.book&quot;</code></td><td>確かめたまま</td></tr>
+<tr><td><code>売上を超えない (within_sales)</code></td><td class="nw">2026-10-01..</td><td>2026-10-04 に 経理 が決めた</td><td>経理</td><td><code>chobo &quot;refunds.ja.book&quot; account 返金できる残り</code>、<code>chobo &quot;refunds.ja.book&quot; transfer 売上計上</code>、<code>chobo &quot;refunds.ja.book&quot; transfer 返金</code></td><td><code>chobo &quot;refunds.ja.book&quot;</code></td><td>確かめたまま</td></tr>
 </tbody>
 </table></div>
 <h2 id="sources">出典</h2>
@@ -58,7 +58,7 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <li>期間：2026-10-01..</li>
 <li>持ち主：経理</li>
 <li>ファイル：<code>examples/refunds/refunds.ja.req:9</code></li>
-<li>要件の端：<code>sha256:5c5082d4aa498fe8</code></li>
+<li>要件のハッシュ：<code>sha256:5c5082d4aa498fe8</code></li>
 </ul>
 <p>2026-10-04 に 経理 が決めた：注文ごとに、返金の額は売上の額を超えない。この例のために決めたもの</p>
 <p>満たすもの <code>chobo &quot;refunds.ja.book&quot; account 返金できる残り</code> — 開発 が 2026-10-04 に確かめた（<code>sha256:5c5082d4aa498fe8</code> → <code>sha256:9f9b0d74872f62a4</code>）。状態：確かめたまま</p>
@@ -66,7 +66,7 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <p>満たすもの <code>chobo &quot;refunds.ja.book&quot; transfer 返金</code> — 開発 が 2026-10-04 に確かめた（<code>sha256:5c5082d4aa498fe8</code> → <code>sha256:84e9ce254075c697</code>）。状態：確かめたまま</p>
 <p>確かめるもの <code>chobo &quot;refunds.ja.book&quot;</code> — 開発 が 2026-10-04 に確かめた（<code>sha256:5c5082d4aa498fe8</code> → <code>sha256:b2daf81c87ff979e</code>）。状態：確かめたまま</p>
 <h2 id="scope">範囲</h2>
-<p><code>scope chobo &quot;refunds.ja.book&quot; transfer</code> — 成果物 2 個。どれも要件に辿れる。</p>
+<p><code>scope chobo &quot;refunds.ja.book&quot; transfer</code> — 成果物は 2 個で、どれも要件に辿れる。</p>
 <h2 id="records">確かめた記録</h2>
 <div class="scroll"><table>
 <thead><tr><th>日付</th><th>誰が</th><th>何を</th><th>ハッシュ</th></tr></thead>

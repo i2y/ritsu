@@ -1,10 +1,10 @@
 # greeter — 要件の出どころ
 
-このページは yuen 0.23.0 が、下の .req のファイルと、出典の写しと、ほかの言語が成果物について渡すものから作った。
+このページは、下の .req のファイルと、出典の写しと、ほかの言語から読んだ成果物の定義をもとに、yuen 0.23.0 が作った。
 
 - `greeter.req`（greeter v1、`sha256:83c7eff218129a2e`）
 
-検査の結果：`examples/greeter/greeter.req: ok — 要件 4 件のリンク 8 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（か、その見送り）があり、範囲のファイル 1 個は、要件に辿れます。`
+検査の結果：`examples/greeter/greeter.req: ok — 要件 4 件のリンク 8 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（無ければ見送り）があり、範囲のファイル 1 個は、要件に辿れます。`
 
 ## トレーサビリティ
 
@@ -28,7 +28,7 @@
 - 期間：—
 - 持ち主：api
 - ファイル：`examples/greeter/greeter.req:9`
-- 要件の端：`sha256:59d408ab78823210`
+- 要件のハッシュ：`sha256:59d408ab78823210`
 
 2026-10-04 に api が決めた：A greeting names whoever asked for it. Decided for this example
 
@@ -43,7 +43,7 @@
 - 期間：—
 - 持ち主：api
 - ファイル：`examples/greeter/greeter.req:18`
-- 要件の端：`sha256:611723760e60eba7`
+- 要件のハッシュ：`sha256:611723760e60eba7`
 
 2026-10-04 に api が決めた：An empty name is a mistake of the client, not a greeting. Decided for this example
 
@@ -58,7 +58,7 @@
 - 期間：—
 - 持ち主：api
 - ファイル：`examples/greeter/greeter.req:27`
-- 要件の端：`sha256:fd0003d1f89cfc8c`
+- 要件のハッシュ：`sha256:fd0003d1f89cfc8c`
 
 2026-10-04 に api が決めた：The total is kept across requests until it is reset. Decided for this example
 
@@ -73,7 +73,7 @@
 - 期間：—
 - 持ち主：api
 - ファイル：`examples/greeter/greeter.req:36`
-- 要件の端：`sha256:9e53cc1bcdc81167`
+- 要件のハッシュ：`sha256:9e53cc1bcdc81167`
 
 2026-10-04 に api が決めた：The service answers only the paths it knows. Decided for this example
 
@@ -83,7 +83,7 @@
 
 ## 範囲
 
-`scope file "server.py"` — 成果物 1 個。要件に辿れる。
+`scope file "server.py"` — 成果物は 1 個で、要件に辿れる。
 
 ## 確かめた記録
 

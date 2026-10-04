@@ -1,5 +1,5 @@
 エラー[E305]: tests/mutants/E305_hash_count/period_of_months.req:31:5: 記録にはリンク元のハッシュが 1 個ありますが、リンク元は 2 個（cfr §1.8、§1.10）です
     31 |     reviewed 2026-10-03 by legal sha256:fa698e3ea7cb1e49 -> sha256:8d02c6a1f0ad3364
-  = 記録は `yuen review` が書くものです。確かめ直して、書き直させます。
+  = 記録は `yuen review` が書くものです。確かめ直してから、`yuen review` で書き直してください。
   = 確かめたら: yuen review tests/mutants/E305_hash_count --root tests/mutants/E305_hash_count --at tests/mutants/E305_hash_count/period_of_months.req:30 --by <役割>
 tests/mutants/E305_hash_count: エラー 1 件

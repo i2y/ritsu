@@ -143,7 +143,7 @@ fn string_at(cs: &[char], j: usize) -> Result<(String, usize), (usize, Text)> {
 const WIDE_SPACE: char = '\u{3000}';
 
 fn wide_space(col: usize) -> (usize, Text) {
-    (col, tr!("全角の空白があります。語と語のあいだは半角のスペースで区切ります", "There is a full-width space; separate words with ASCII spaces"))
+    (col, tr!("全角の空白があります。語と語のあいだは半角のスペースで区切ってください", "There is a full-width space; separate words with ASCII spaces"))
 }
 
 /// The tokens of a naming from `cs[j..]`: words and strings only (DESIGN 2.4).
@@ -228,7 +228,7 @@ pub fn lex(file: &str, rel: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
             if all[indent] == '\t' && !bad {
                 bad = true;
                 diags.push(
-                    err("E005", indent + 1, tr!("字下げにタブがあります。字下げはスペースで書きます", "The indentation has a tab; indent with spaces")).note(tr!(
+                    err("E005", indent + 1, tr!("字下げにタブがあります。字下げにはスペースを使ってください", "The indentation has a tab; indent with spaces")).note(tr!(
                         "タブの幅はエディタによって違うので、行がそろっているかを決められません。",
                         "How wide a tab is depends on the editor, so whether the lines line up cannot be told."
                     )),
@@ -307,7 +307,7 @@ pub fn lex(file: &str, rel: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
                         }
                         let lit: String = cs[j..e].iter().collect();
                         diags.push(err("E001", col, tr!(
-                            "日付 `{lit}` の形が崩れています。日付は `2026-10-03` のように、年 4 桁・月 2 桁・日 2 桁で書きます",
+                            "日付 `{lit}` の形が崩れています。日付は `2026-10-03` のように、年 4 桁・月 2 桁・日 2 桁で書いてください",
                             "The date `{lit}` is not written right; write a date as `2026-10-03`, with 4, 2 and 2 digits"
                         )));
                         bad = true;
@@ -318,7 +318,7 @@ pub fn lex(file: &str, rel: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
                         Tok::Word(w)
                     } else {
                         diags.push(err("E001", col, tr!(
-                            "`{w}` は読めません。名前は ASCII の数字だけで始められず、数のあとの語にはスペースが要ります",
+                            "`{w}` は読めません。ASCII の名前は数字で始められません。数のあとに語を続けるときは、あいだにスペースを入れてください",
                             "`{w}` cannot be read: a name in ASCII cannot start with a digit, and a number needs a space before the word after it"
                         )));
                         bad = true;
@@ -342,7 +342,7 @@ pub fn lex(file: &str, rel: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
                     if hex.len() != 16 || !hex.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()) {
                         diags.push(
                             err("E001", col, tr!("`sha256:{hex}` の形が崩れています。ハッシュは 16 桁の小文字の 16 進数です", "`sha256:{hex}` is not a hash: it is 16 lowercase hex digits"))
-                                .note(tr!("SHA-256 の先頭 16 桁を書きます（rulec と koyomi の固定と同じ長さ）。", "It is the first 16 digits of a SHA-256, the length of rulec's and koyomi's pins.")),
+                                .note(tr!("SHA-256 の先頭 16 桁を書いてください（rulec と koyomi の固定と同じ長さです）。", "It is the first 16 digits of a SHA-256, the length of rulec's and koyomi's pins.")),
                         );
                         bad = true;
                         break;
@@ -367,8 +367,8 @@ pub fn lex(file: &str, rel: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
                 match t {
                     Some(t) => t,
                     None => {
-                        diags.push(err("E001", col, tr!("`{c}` は yuen の字句にありません", "`{c}` is not part of the language")).note(tr!(
-                            "名前に使えるのは文字・数字・`_` です。ほかの文字を含む条や名前は `\"…\"` で囲みます。",
+                        diags.push(err("E001", col, tr!("`{c}` は yuen で使えない文字です", "`{c}` is not part of the language")).note(tr!(
+                            "名前に使えるのは文字・数字・`_` です。ほかの文字を含む条や名前は `\"…\"` で囲んでください。",
                             "A name is letters, digits and `_`; quote an article or a name with other characters, as `\"…\"`."
                         )));
                         bad = true;

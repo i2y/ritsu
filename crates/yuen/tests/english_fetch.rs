@@ -133,7 +133,7 @@ fn pin_changes_the_digits_and_nothing_else_in_english() {
     std::fs::write(&req, original.replace("\"§1.6\" sha256:6bcdc27c3428886c", "\"§1.6\"")).unwrap();
     let r = common::yuen(t.path(), &["source", "pin", "period_of_months", "--root", "period_of_months", "--lang", "ja"]);
     assert_eq!(r.code, 0);
-    assert!(r.stdout.contains("cfr: §1.6 の写しが無いので固定できません。先に yuen source fetch を走らせます"), "{}", r.stdout);
+    assert!(r.stdout.contains("cfr: §1.6 の写しが無いので固定できません。先に yuen source fetch を走らせてください"), "{}", r.stdout);
 }
 
 #[test]

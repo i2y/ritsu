@@ -11,10 +11,10 @@
   = 確かめたら: yuen review period --root period --at period/民法の期間.req:21 --by <役割>
 エラー[E303]: period/民法の期間.req:32:3: file "民法の期間.cal" は、2026-10-03 に 開発 がこのリンクを確かめたあとで変わりました
     32 |   satisfied by file "民法の期間.cal"
-  = period/民法の期間.req:21 と同じ変更です。差分は繰り返しません。
+  = period/民法の期間.req:21 と同じ変更です。差分はそちらの診断に出ています。
   = 確かめたら: yuen review period --root period --at period/民法の期間.req:32 --by <役割>
 エラー[E303]: period/民法の期間.req:44:3: file "民法の期間.cal" は、2026-10-03 に 開発 がこのリンクを確かめたあとで変わりました
     44 |   satisfied by file "民法の期間.cal"
-  = period/民法の期間.req:21 と同じ変更です。差分は繰り返しません。
+  = period/民法の期間.req:21 と同じ変更です。差分はそちらの診断に出ています。
   = 確かめたら: yuen review period --root period --at period/民法の期間.req:44 --by <役割>
 period: エラー 3 件

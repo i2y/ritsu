@@ -37,22 +37,22 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <body>
 <main>
 <h1>支払条件 — 要件の出どころ</h1>
-<p class="lead">このページは yuen 0.23.0 が、下の .req のファイルと、出典の写しと、ほかの言語が成果物について渡すものから作った。</p>
+<p class="lead">このページは、下の .req のファイルと、出典の写しと、ほかの言語から読んだ成果物の定義をもとに、yuen 0.23.0 が作った。</p>
 <ul>
 <li><code>payment_terms.ja.req</code>（支払条件 v1、<code>sha256:efb13e38decc0120</code>）</li>
 </ul>
-<p>検査の結果：<code>examples/payment_terms/payment_terms.ja.req: ok — 要件 2 件のリンク 6 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（か、その見送り）があり、範囲の date 2 個は、どれも要件に辿れます。</code></p>
+<p>検査の結果：<code>examples/payment_terms/payment_terms.ja.req: ok — 要件 2 件のリンク 6 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（無ければ見送り）があり、範囲の date 2 個は、どれも要件に辿れます。</code></p>
 <h2 id="traceability">トレーサビリティ</h2>
 <div class="scroll"><table>
 <thead><tr><th>要件</th><th>期間</th><th>出どころ</th><th>持ち主</th><th>満たすもの</th><th>確かめるもの</th><th>状態</th></tr></thead>
 <tbody>
-<tr><td><code>支払日 (payment_day)</code></td><td class="nw">2026-10-01..</td><td>2026-10-04 に 経理 が決めた</td><td>経理</td><td><code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date 締め日</code>; <code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date 支払日</code></td><td><code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; claim 受領から60日以内</code></td><td>確かめたまま</td></tr>
+<tr><td><code>支払日 (payment_day)</code></td><td class="nw">2026-10-01..</td><td>2026-10-04 に 経理 が決めた</td><td>経理</td><td><code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date 締め日</code>、<code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date 支払日</code></td><td><code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; claim 受領から60日以内</code></td><td>確かめたまま</td></tr>
 <tr><td><code>営業日 (business_days)</code></td><td class="nw">2026-10-01..</td><td><code>@祝日</code></td><td>経理</td><td><code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date 支払日</code></td><td><code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; claim 営業日に払う</code></td><td>確かめたまま</td></tr>
 </tbody>
 </table></div>
 <h2 id="sources">出典</h2>
 <h3 id="source-祝日">祝日</h3>
-<p>ファイル <code>calendars/data/syukujitsu.csv</code>（元は <code>https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv</code>）、固定は <code>sha256:cec37a743c96995c</code>。 借りた先：<code>koyomi &quot;calendars/東京の営業日.cal&quot; source 祝日</code>（写しと固定は、そのファイルのもの。その言語の検査が確かめる）。</p>
+<p>ファイル <code>calendars/data/syukujitsu.csv</code>（元は <code>https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv</code>）、固定は <code>sha256:cec37a743c96995c</code>。借りた先：<code>koyomi &quot;calendars/東京の営業日.cal&quot; source 祝日</code>（写しと固定はそのファイルのもので、その言語の検査が確かめる）。</p>
 <p>引く要件：<code>営業日 (business_days)</code></p>
 <h2 id="why">要件ごとの「なぜ」</h2>
 <h3 id="why-payment_day">支払日 (payment_day)</h3>
@@ -61,7 +61,7 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <li>期間：2026-10-01..</li>
 <li>持ち主：経理</li>
 <li>ファイル：<code>examples/payment_terms/payment_terms.ja.req:11</code></li>
-<li>要件の端：<code>sha256:5d97c87d3ce26490</code></li>
+<li>要件のハッシュ：<code>sha256:5d97c87d3ce26490</code></li>
 </ul>
 <p>2026-10-04 に 経理 が決めた：20 日に締めて翌月 10 日に払えば、どの支払も受領から 60 日以内に収まる。この例のために決めたもの</p>
 <p>満たすもの <code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date 締め日</code> — 開発 が 2026-10-04 に確かめた（<code>sha256:5d97c87d3ce26490</code> → <code>sha256:74f19beadf2f4043</code>）。状態：確かめたまま</p>
@@ -73,13 +73,13 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <li>期間：2026-10-01..</li>
 <li>持ち主：経理</li>
 <li>ファイル：<code>examples/payment_terms/payment_terms.ja.req:23</code></li>
-<li>要件の端：<code>sha256:cc3109016d422ecd</code></li>
+<li>要件のハッシュ：<code>sha256:cc3109016d422ecd</code></li>
 </ul>
 <p>出どころ <code>@祝日</code> — 経理 が 2026-10-04 に確かめた（<code>sha256:cec37a743c96995c</code> → <code>sha256:cc3109016d422ecd</code>）。状態：確かめたまま</p>
 <p>満たすもの <code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date 支払日</code> — 開発 が 2026-10-04 に確かめた（<code>sha256:cc3109016d422ecd</code> → <code>sha256:feb9535fb9350ecc</code>）。状態：確かめたまま</p>
 <p>確かめるもの <code>koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; claim 営業日に払う</code> — 開発 が 2026-10-04 に確かめた（<code>sha256:cc3109016d422ecd</code> → <code>sha256:3cf8fc3fb2dda9d9</code>）。状態：確かめたまま</p>
 <h2 id="scope">範囲</h2>
-<p><code>scope koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date</code> — 成果物 2 個。どれも要件に辿れる。</p>
+<p><code>scope koyomi &quot;payment_20th_close_next_10th.ja.cal&quot; date</code> — 成果物は 2 個で、どれも要件に辿れる。</p>
 <h2 id="records">確かめた記録</h2>
 <div class="scroll"><table>
 <thead><tr><th>日付</th><th>誰が</th><th>何を</th><th>ハッシュ</th></tr></thead>

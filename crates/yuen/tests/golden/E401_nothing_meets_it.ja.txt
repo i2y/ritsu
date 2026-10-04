@@ -1,4 +1,4 @@
 エラー[E401]: tests/mutants/E401_nothing_meets_it/payment.req:7:13: payment_day には、満たす成果物も、それを置かない見送りもありません
      7 | requirement payment_day
-  = `satisfied by <成果物>` を書くか、満たすものを置かないなら `not satisfied "<理由>"` を書いて承認してもらいます。
+  = `satisfied by <成果物>` を書くか、満たすものを置かないなら `not satisfied "<理由>"` を書いて承認してもらってください。
 tests/mutants/E401_nothing_meets_it: エラー 1 件

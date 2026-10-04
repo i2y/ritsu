@@ -50,7 +50,7 @@ pub fn commands() -> Vec<Cmd> {
             exits: vec![
                 (0, tr!("エラーなし（警告はありうる）", "no errors (there may be warnings)")),
                 (1, tr!("エラーが一つ以上（印の付いたリンクも）", "at least one error (a marked link is one)")),
-                (2, tr!("引数の誤り、読めないファイル、つながっていない言語の成果物（yuen のクレートのバイナリ。ritsu yuen で走らせる）", "bad arguments, a file that cannot be read, or an artifact of a language not joined (the binary of yuen's own crate: run it as ritsu yuen)")),
+                (2, tr!("引数の誤り、読めないファイル、つながっていない言語の成果物（yuen 単独のバイナリのとき。ritsu yuen で走らせる）", "bad arguments, a file that cannot be read, or an artifact of a language not joined (the binary of yuen's own crate: run it as ritsu yuen)")),
             ],
             examples: vec!["yuen check tests/fixtures/period", "yuen check tests/fixtures/period --format json --lang ja"],
             codes: every_code(),
@@ -69,7 +69,7 @@ pub fn commands() -> Vec<Cmd> {
                 flag("--requirement", Some("'<name>[ v<n>]'"), tr!("その要件の、印の付いたリンクと見送りの全部（名前か別名）", "every marked link and waiver of that requirement (its name or alias)")).repeats(),
                 flag("--all", None, tr!("プロジェクトの、印の付いたリンクと見送りの全部", "every marked link and waiver of the project")),
                 flag("--by", Some("<role>"), tr!("確かめた人の役割（宣言した役割）。要る", "the role of whoever looked (a declared role); required")),
-                flag("--date", Some("<YYYY-MM-DD>"), tr!("確かめた日。無ければその日（その機械のタイムゾーン）", "the day it was looked at; without it, today in the machine's time zone")),
+                flag("--date", Some("<YYYY-MM-DD>"), tr!("確かめた日。無ければ今日（そのマシンのタイムゾーンで）", "the day it was looked at; without it, today in the machine's time zone")),
             ],
             exits: vec![
                 (0, tr!("書いた（印の付いたものが無く、何も書かなかったときも）", "written (also when nothing chosen was marked, and nothing was written)")),
@@ -208,7 +208,7 @@ pub fn commands() -> Vec<Cmd> {
             ],
             exits: vec![
                 (0, tr!("書き出した（印や欠けがあっても、状態として書く）", "written (marks and gaps go in as states)")),
-                (1, tr!("構文、名前、出典、成果物にエラーがある（端が決まらないので、何も書かない）", "the words, names, sources or artifacts have errors (some end cannot be made, so nothing is written)")),
+                (1, tr!("構文、名前、出典、成果物にエラーがある（ハッシュを取れないものがあるので、何も書かない）", "the words, names, sources or artifacts have errors (some end cannot be made, so nothing is written)")),
                 (
                     2,
                     tr!(

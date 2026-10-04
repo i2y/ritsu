@@ -118,7 +118,7 @@ pub fn periods(p: &Project) -> Vec<Diag> {
                 let fi = p.reqs[*r].file;
                 let v = p.reqs[*r].version;
                 diags.push(p.err(fi, "E408", p.decl(*r).span, tr!("要件「{name}」の v{v} に `in force` がありません", "{name} v{v} has no `in force`")).note(tr!(
-                    "版が二つ以上ある要件は、どの版にも効力の期間を書きます。期間で、どの日にどの版が効くかが決まります。",
+                    "版が二つ以上ある要件には、どの版にも効力の期間を書いてください。期間から、どの日にどの版が効くかが決まります。",
                     "When a requirement has more than one version, each has a period: the periods say which version holds on which day."
                 )));
                 broken = true;
@@ -153,7 +153,7 @@ pub fn periods(p: &Project) -> Vec<Diag> {
             let v = label(*r);
             if per.to.is_none() && i + 1 < order.len() {
                 diags.push(p.err(fi, "E408", sp, tr!("要件「{name}」の {v} は終わりを開けていますが、最後の版ではありません", "{name} {v} leaves its end open, and it is not the last version")).note(tr!(
-                    "終わりを開けられるのは最後の版だけです。次の版が始まる前の日を、終わりに書きます。",
+                    "終わりを開けられるのは最後の版だけです。次の版が始まる日の前日を、終わりの日に書いてください。",
                     "Only the last version leaves its end open; end it on the day before the next one starts."
                 )));
                 broken = true;
@@ -212,7 +212,7 @@ pub fn periods(p: &Project) -> Vec<Diag> {
             let me = p.req_label(r);
             let Some(end) = p.decl(*t).in_force.and_then(|(per, _)| per.to) else {
                 diags.push(p.err(fi, "E409", rr.span, tr!("置き換えられる要件「{old}」に終わりの日がありません", "{old}, which this replaces, has no end")).note(tr!(
-                    "置き換えられる要件には、`in force …..2027-03-31` のように終わりの日を書きます。置き換える要件は、その翌日から効きます。",
+                    "置き換えられる要件には、`in force …..2027-03-31` のように終わりの日を書いてください。置き換える要件は、その翌日から効きます。",
                     "Give what is replaced an end, as `in force …..2027-03-31`; what replaces it holds from the day after."
                 )));
                 continue;

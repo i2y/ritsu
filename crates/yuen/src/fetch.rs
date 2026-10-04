@@ -158,7 +158,7 @@ pub fn fetch(p: &Project) -> Result<Outcome, Text> {
                 SourceKind::Borrowed { naming } => {
                     let tool = borrowed_from(naming);
                     lines.push(tr!(
-                        "{name}: {tool} のファイルから借りた出典なので、yuen は取りません。{tool} source fetch で取ります",
+                        "{name}: {tool} のファイルから借りた出典なので、yuen は取りません。{tool} source fetch で取ってください",
                         "{name}: borrowed from a {tool} file, so yuen does not fetch it; {tool} source fetch does"
                     ));
                 }
@@ -186,10 +186,10 @@ pub fn fetch(p: &Project) -> Result<Outcome, Text> {
                     lines.push(match pin {
                         Some(pn) if *pn == h => tr!("  固定と合っています", "  it matches the pin"),
                         Some(pn) => tr!(
-                            "  固定は sha256:{pn} です。何が変わったかを読んでから、yuen source pin で固定し直します",
+                            "  固定は sha256:{pn} です。何が変わったかを読んでから、yuen source pin で固定し直してください",
                             "  the pin is sha256:{pn}; read what changed, then pin it again with yuen source pin"
                         ),
-                        None => tr!("  固定がありません。yuen source pin で固定します", "  it has no pin; yuen source pin writes one"),
+                        None => tr!("  固定がありません。yuen source pin で固定してください", "  it has no pin; yuen source pin writes one"),
                     });
                 }
                 SourceKind::Law { db, id, asof, pins } => {
@@ -217,7 +217,7 @@ pub fn fetch(p: &Project) -> Result<Outcome, Text> {
                             (None, _) => tr!("{name}: {fr} を取りました（sha256:{h}）", "{name}: fetched {fr} (sha256:{h})"),
                             (Some(_), true) => tr!("{name}: {fr} の本文は変わっていません（sha256:{h}）", "{name}: the text of {fr} is unchanged (sha256:{h})"),
                             (Some(_), false) => tr!(
-                                "{name}: {fr} の本文が変わりました（いま sha256:{h}）。引いている要件を読み直してから固定します",
+                                "{name}: {fr} の本文が変わりました（いま sha256:{h}）。引いている要件を読み直してから固定してください",
                                 "{name}: the text of {fr} changed (now sha256:{h}); reread the requirements that cite it, then pin it"
                             ),
                         });
@@ -264,7 +264,7 @@ pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
                 SourceKind::Borrowed { naming } => {
                     let tool = borrowed_from(naming);
                     report.push(tr!(
-                        "{name}: {tool} のファイルから借りた出典なので、yuen は固定しません。{tool} source pin で固定します",
+                        "{name}: {tool} のファイルから借りた出典なので、yuen は固定しません。{tool} source pin で固定してください",
                         "{name}: borrowed from a {tool} file, so yuen does not pin it; {tool} source pin does"
                     ));
                 }
@@ -272,7 +272,7 @@ pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
                     let Some(n) = &p.names.sources[fi][si] else { continue };
                     let path = p.shown(&n.path);
                     let Ok(bytes) = std::fs::read(p.root.join(&n.path)) else {
-                        report.push(tr!("{name}: 写し {path} が無いので固定できません。先に yuen source fetch を走らせます", "{name}: there is no copy {path} to pin; run yuen source fetch first"));
+                        report.push(tr!("{name}: 写し {path} が無いので固定できません。先に yuen source fetch を走らせてください", "{name}: there is no copy {path} to pin; run yuen source fetch first"));
                         continue;
                     };
                     let h = sha256::short(&bytes);
@@ -292,7 +292,7 @@ pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
                         let Some(file) = copies::fragment_file(*db, &pl.fragment) else { continue };
                         let Ok(bytes) = std::fs::read(cdir.join(&file)) else {
                             let fr = &pl.fragment;
-                            report.push(tr!("{name}: {fr} の写しが無いので固定できません。先に yuen source fetch を走らせます", "{name}: there is no copy of {fr} to pin; run yuen source fetch first"));
+                            report.push(tr!("{name}: {fr} の写しが無いので固定できません。先に yuen source fetch を走らせてください", "{name}: there is no copy of {fr} to pin; run yuen source fetch first"));
                             continue;
                         };
                         let h = sha256::short(&bytes);
@@ -315,7 +315,7 @@ pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
                     for fr in fragments(&f.ast, name, pins).into_iter().skip(pins.len()) {
                         let Some(file) = copies::fragment_file(*db, &fr) else { continue };
                         let Ok(bytes) = std::fs::read(cdir.join(&file)) else {
-                            report.push(tr!("{name}: {fr} の写しが無いので固定できません。先に yuen source fetch を走らせます", "{name}: there is no copy of {fr} to pin; run yuen source fetch first"));
+                            report.push(tr!("{name}: {fr} の写しが無いので固定できません。先に yuen source fetch を走らせてください", "{name}: there is no copy of {fr} to pin; run yuen source fetch first"));
                             continue;
                         };
                         let h = sha256::short(&bytes);
@@ -484,7 +484,7 @@ fn law_outdated(p: &Project, fi: usize, name: &str, db: LawDb, id: &str, asof: &
     for (fr, file) in files {
         let Ok(mut prev) = std::fs::read(cdir.join(file)) else {
             lines.push(match whose {
-                Whose::Own => tr!("{name}: {fr} の写しが無いので比べられません。先に yuen source fetch を走らせます", "{name}: there is no copy of {fr} to compare; run yuen source fetch first"),
+                Whose::Own => tr!("{name}: {fr} の写しが無いので比べられません。先に yuen source fetch を走らせてください", "{name}: there is no copy of {fr} to compare; run yuen source fetch first"),
                 Whose::Borrowed(n) => {
                     let t = n.text();
                     tr!("{name}: {t} の {fr} の写しが無いので比べられません", "{name}: there is no copy of {fr} of {t} to compare")
@@ -612,11 +612,11 @@ pub fn outdated(p: &Project) -> Result<Outcome, Text> {
                         let at = format!("{}:{}", f.display, s.span.line);
                         let cmd = crate::check::with_ritsu(p);
                         return Err(tr!(
-                            "この yuen は {tool} の出典を読めません: {t}（{at}）。ほかの言語を読むところは、すべての言語をつないだ `{cmd}` のように ritsu で走らせます",
+                            "yuen 単独のバイナリは {tool} の出典を読めません: {t}（{at}）。ほかの言語を読むには、すべての言語をつないだ ritsu で、`{cmd}` のように走らせてください",
                             "this yuen cannot read {tool} sources: {t} ({at}); run it with every language joined, through ritsu: `{cmd}`"
                         ));
                     }
-                    _ => lines.push(tr!("{name}: 借りた出典を読めないので、問えません（理由は yuen check が言います）", "{name}: the borrowed source cannot be read, so it cannot be asked about (yuen check says why)")),
+                    _ => lines.push(tr!("{name}: 借りた出典を読めないので、元が変わったかを問えません（理由は yuen check が示します）", "{name}: the borrowed source cannot be read, so it cannot be asked about (yuen check says why)")),
                 },
                 SourceKind::File { url, pin, .. } => {
                     let Some(n) = &p.names.sources[fi][si] else { continue };

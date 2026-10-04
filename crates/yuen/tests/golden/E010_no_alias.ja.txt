@@ -1,4 +1,4 @@
 エラー[E010]: tests/mutants/E010_no_alias/payment.req:7:13: 要件「PaymentDay」に別名がありません
      7 | requirement PaymentDay
-  = 名前が ASCII の小文字・数字・`_` でない要件には、`PaymentDay(payment_day)` のように別名を付けます。ReqIF と PROV の識別子と、コマンドの引数に使います。
+  = 名前が ASCII の小文字・数字・`_` でない要件には、`PaymentDay(payment_day)` のように別名を付けてください。別名は、ReqIF と PROV の識別子と、コマンドの引数に使われます。
 tests/mutants/E010_no_alias: エラー 1 件

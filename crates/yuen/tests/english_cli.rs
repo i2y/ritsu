@@ -105,7 +105,7 @@ fn the_binary_of_this_crate_reads_no_other_language_in_english() {
         "error[E206]: ./t.req:8:16: this yuen cannot read koyomi artifacts: koyomi \"a.cal\" date next_day\n     8 |   satisfied by koyomi \"a.cal\" date next_day\n  = The binary of yuen's own crate holds no other language; run it with every language joined, through ritsu: `ritsu yuen check . --root .`.\n.: 1 error\n"
     );
     let ja = common::yuen(t.path(), &["check", ".", "--root", ".", "--lang", "ja"]);
-    assert!(ja.stdout.contains("すべての言語をつないだ `ritsu yuen check . --root . --lang ja`"), "{}", ja.stdout);
+    assert!(ja.stdout.contains("すべての言語をつないだ ritsu で、`ritsu yuen check . --root . --lang ja`"), "{}", ja.stdout);
     // the commands built on the check say the same, on standard error, with exit 2
     let api = common::yuen(t.path(), &["api", ".", "--root", "."]);
     assert_eq!(api.code, 2);

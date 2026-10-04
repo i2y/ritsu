@@ -123,8 +123,8 @@ pub fn unjoined(p: &Project, only_sources: bool) -> Vec<Diag> {
         }
         said.push(n.tool);
         let (t, what) = (n.tool.word(), n.text());
-        out.push(p.err(fi, "E206", crate::ast::Span { line, col }, tr!("この yuen は {t} の成果物を読めません: {what}", "this yuen cannot read {t} artifacts: {what}")).note(tr!(
-            "yuen のクレートのバイナリは、ほかの言語を持ちません。同じコマンドを、すべての言語をつないだ `{cmd}` のように ritsu で走らせます。",
+        out.push(p.err(fi, "E206", crate::ast::Span { line, col }, tr!("yuen 単独のバイナリは {t} の成果物を読めません: {what}", "this yuen cannot read {t} artifacts: {what}")).note(tr!(
+            "yuen 単独のバイナリには、ほかの言語が入っていません。同じコマンドを、すべての言語をつないだ ritsu で、`{cmd}` のように走らせてください。",
             "The binary of yuen's own crate holds no other language; run it with every language joined, through ritsu: `{cmd}`."
         )));
     }
@@ -140,7 +140,7 @@ pub fn has_unjoined(diags: &[Diag]) -> bool {
 /// language's check, or does not read — with what the language says (ritsu's DESIGN 6.1).
 pub fn refused(p: &Project, fi: usize, span: crate::ast::Span, n: &Name, said: &[ritsu_ports::Said]) -> Diag {
     let (t, tool) = (n.text(), n.tool.word());
-    let mut d = p.err(fi, "E203", span, tr!("{tool} が {t} について答えられません", "{tool} cannot answer for {t}"));
+    let mut d = p.err(fi, "E203", span, tr!("{tool} から {t} の情報を得られません", "{tool} cannot answer for {t}"));
     for s in said.iter().take(5) {
         let at = match s.line {
             Some(l) => format!("{}:{l}", p.shown_any(&s.file)),
@@ -154,7 +154,7 @@ pub fn refused(p: &Project, fi: usize, span: crate::ast::Span, n: &Name, said: &
         d = d.note(tr!("ほかに {more} 件", "and {more} more"));
     }
     d.note(tr!(
-        "そのファイルが {tool} の検査を通るように直します。通らないファイルからは、端を作れません。",
+        "そのファイルを、{tool} の検査を通るように直してください。検査を通らないファイルや読めないファイルからは成果物の定義を読み取れないので、yuen はその成果物のハッシュを取れません。",
         "Make the file pass {tool}'s check; no end is made from a file that does not."
     ))
 }
@@ -170,7 +170,7 @@ fn unread_diag(p: &Project, fi: usize, line: usize, col: usize, n: &Name, u: &Un
         Unread::Proto(file, why) => {
             let f = p.shown(file);
             p.err(fi, "E205", span, tr!("{f} を proto として読めません: {}", "{f} does not read as a .proto: {}", why.ja; why.en)).note(tr!(
-                "yuen は ritsu の .proto の読み手で読みます。proto3 の `.proto` に直します。",
+                "yuen は、ritsu の .proto のパーサーで読みます。proto3 の `.proto` に直してください。",
                 "yuen reads it with ritsu's reader of .proto files; make it a proto3 `.proto`."
             ))
         }
@@ -189,7 +189,7 @@ fn no_such_name(p: &Project, fi: usize, span: crate::ast::Span, n: &Name, same_k
     let mut d = p.err(fi, "E202", span, tr!("{shown} に {kind} {written} はありません", "{shown} has no {kind} {written}"));
     if let Some(real) = alias_of(p, n) {
         let fixed = Name { items: [&n.items[..n.items.len() - 1], &[(kind.to_string(), real.clone())]].concat(), ..n.clone() };
-        return d.note(tr!("`{name}` は {real} の別名です。名指しはツールの名前で書きます。", "`{name}` is the alias of {real}; a naming writes the tool's name.")).candidates(vec![fixed.text()]);
+        return d.note(tr!("`{name}` は {real} の別名です。名指しには、別名ではなくツールの名前を書いてください。", "`{name}` is the alias of {real}; a naming writes the tool's name.")).candidates(vec![fixed.text()]);
     }
     let named: Vec<&Name> = p.names.links.iter().flatten().flatten().collect();
     let by_hash: Vec<String> = same_kind.iter().filter(|(_, e)| Some(e.hash.as_str()) == recorded).map(|(m, _)| m.text()).collect();
@@ -197,7 +197,7 @@ fn no_such_name(p: &Project, fi: usize, span: crate::ast::Span, n: &Name, same_k
     if !by_hash.is_empty() {
         d = d.note(tr!("名前が変わったようです。確かめたときと同じ定義のものがあります。", "It looks renamed: these have the definition that was looked at.")).candidates(by_hash);
     } else if !unlinked.is_empty() {
-        d = d.note(tr!("同じ種類のもので、どのリンクも名指していないものです。", "The ones of the same kind no link names.")).candidates(unlinked.iter().take(5).map(|(m, _)| m.text()).collect());
+        d = d.note(tr!("候補は、同じ種類のもののうち、どのリンクも名指していないものです。", "The ones of the same kind no link names.")).candidates(unlinked.iter().take(5).map(|(m, _)| m.text()).collect());
         // one candidate, and what was looked at kept: how the two differ (DESIGN 4.5)
         if let ([(m, e)], Some(h)) = (unlinked.as_slice(), recorded)
             && let Some(before) = crate::marks::reviewed_content(p, fi, h)
@@ -340,7 +340,7 @@ fn missing(p: &Project, fi: usize, line: usize, col: usize, n: &Name, dir: bool)
         ))
     } else {
         p.err(fi, "E201", span, tr!("{t} がありません", "{t} is not there")).note(tr!(
-            "パスは、この .req のあるディレクトリからの相対で書きます。名前を変えたのなら、リンクも直します。",
+            "パスは、この .req のあるディレクトリからの相対パスで書いてください。ファイルの名前を変えたのなら、リンクも直してください。",
             "The path is written from the directory of this .req; if the file was renamed, correct the link."
         ))
     }
@@ -397,9 +397,9 @@ pub fn summary(c: &Checked, label: &str) -> Text {
         (0, w) => tr!("見送り {w} 件", "{}", ; plural(w, "waiver", "waivers")),
         (l, w) => tr!("リンク {l} 本と見送り {w} 件", "{} and {}", ; plural(l, "link", "links"), plural(w, "waiver", "waivers")),
     };
-    let warn = if w > 0 { tr!("（警告 {w} 件）", " ({})", ; plural(w, "warning", "warnings")) } else { Text::default() };
+    let warn = if w > 0 { tr!("警告は {w} 件です。", " ({})", ; plural(w, "warning", "warnings")) } else { Text::default() };
     let head = tr!(
-        "{label}: ok — {}の{}が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（か、その見送り）があ",
+        "{label}: ok — {}の{}が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（無ければ見送り）があ",
         "{label}: ok — {}, whose {} are as they were looked at; every requirement is met and checked, or waived",
         reqs.ja, what.ja;
         reqs.en, what.en

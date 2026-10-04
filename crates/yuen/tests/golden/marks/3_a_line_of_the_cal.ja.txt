@@ -11,10 +11,10 @@
   = 確かめたら: yuen review period_of_months --root period_of_months --at period_of_months/period_of_months.req:21 --by <役割>
 エラー[E303]: period_of_months/period_of_months.req:32:3: file "period_of_months.cal" は、2026-10-03 に development がこのリンクを確かめたあとで変わりました
     32 |   satisfied by file "period_of_months.cal"
-  = period_of_months/period_of_months.req:21 と同じ変更です。差分は繰り返しません。
+  = period_of_months/period_of_months.req:21 と同じ変更です。差分はそちらの診断に出ています。
   = 確かめたら: yuen review period_of_months --root period_of_months --at period_of_months/period_of_months.req:32 --by <役割>
 エラー[E303]: period_of_months/period_of_months.req:44:3: file "period_of_months.cal" は、2026-10-03 に development がこのリンクを確かめたあとで変わりました
     44 |   satisfied by file "period_of_months.cal"
-  = period_of_months/period_of_months.req:21 と同じ変更です。差分は繰り返しません。
+  = period_of_months/period_of_months.req:21 と同じ変更です。差分はそちらの診断に出ています。
   = 確かめたら: yuen review period_of_months --root period_of_months --at period_of_months/period_of_months.req:44 --by <役割>
 period_of_months: エラー 3 件

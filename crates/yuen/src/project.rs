@@ -132,7 +132,7 @@ pub fn load(args: &[String], root_flag: Option<&str>) -> Result<(Option<Project>
 /// [`load`], with the languages `suite` joins.
 pub fn load_with(args: &[String], root_flag: Option<&str>, suite: crate::suite::Suite) -> Result<(Option<Project>, Vec<Diag>), Refusal> {
     let Some(first) = args.first() else {
-        return Err(Refusal(tr!(".req のファイルかディレクトリを渡します", "Give .req files or directories")));
+        return Err(Refusal(tr!(".req のファイルかディレクトリを渡してください", "Give .req files or directories")));
     };
     for a in args {
         if !ritsu_base::fs::exists(a) {
@@ -273,7 +273,7 @@ impl Project {
 }
 
 const ROLES_HOW: (&str, &str) = (
-    "役割は `role 法務 \"条文の読み方を決める\"` のように宣言してから使います。書き間違い（`法務部` と `法務`）を止めるためです。",
+    "役割は、`role 法務 \"条文の読み方を決める\"` のように宣言してから使ってください。書き間違い（`法務部` と `法務`）を見つけるためです。",
     "Declare a role with `role legal \"decides how the articles read\"` before it is used; that stops a misspelling (`Legal` for `legal`).",
 );
 
@@ -292,7 +292,7 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
             heads.insert(h.name.clone(), (fi, h.span));
         }
         if h.version == 0 {
-            diags.push(p.err(fi, "E009", h.span, tr!("版は v1 から数えます", "Versions count from v1")));
+            diags.push(p.err(fi, "E009", h.span, tr!("版の番号は v1 から始まります", "Versions count from v1")));
         }
     }
     // Roles.
@@ -332,7 +332,7 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
         let decl = |b: &(usize, usize)| &p.files[b.0].ast.requirements[b.1];
         for b in blocks {
             if let Some((0, s)) = decl(b).version {
-                diags.push(p.err(b.0, "E009", s, tr!("版は v1 から数えます", "Versions count from v1")));
+                diags.push(p.err(b.0, "E009", s, tr!("版の番号は v1 から始まります", "Versions count from v1")));
             }
         }
         if blocks.len() > 1 {
@@ -341,7 +341,7 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
                 let at = format!("{}:{}", p.files[f0].display, p.files[f0].ast.requirements[r0].span.line);
                 for b in &blocks[1..] {
                     diags.push(p.err(b.0, "E007", decl(b).span, tr!("要件「{name}」は {at} でも宣言されています", "The requirement {name} is also declared at {at}")).note(tr!(
-                        "同じ要件の版なら、`v1`、`v2` と書き分け、どの版にも `in force` を書きます。別の要件なら、名前を変えます。",
+                        "同じ要件の版なら、`v1`、`v2` と書き分け、どの版にも `in force` を書いてください。別の要件なら、名前を変えてください。",
                         "If they are versions of one requirement, write `v1` and `v2` and give each an `in force`; if not, rename one."
                     )));
                 }
@@ -350,7 +350,7 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
                 for b in blocks {
                     match decl(b).version {
                         None => diags.push(p.err(b.0, "E009", decl(b).span, tr!(
-                            "要件「{name}」には版が二つ以上あるので、どの版にも `v1`、`v2` のように版を書きます",
+                            "要件「{name}」には版が二つ以上あるので、どの版にも `v1`、`v2` のように版を書いてください",
                             "The requirement {name} has more than one version, so each writes its version, as `v1`, `v2`"
                         ))),
                         Some((n, s)) => {
@@ -410,7 +410,7 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
                 let same_req_other_alias = aliases.iter().find(|(k, (o, _, _))| o == &v.name && *k != a).map(|(k, _)| k.clone());
                 if let Some(o) = same_req_other_alias {
                     diags.push(p.err(v.file, "E007", *s, tr!("要件「{}」に別名が二つあります（{o} と {a}）", "The requirement {} has two aliases ({o} and {a})", v.name)).note(tr!(
-                        "別名は要件に一つで、どの版にも同じ別名を書きます。",
+                        "別名は一つの要件に一つです。どの版にも同じ別名を書いてください。",
                         "A requirement has one alias, written the same on every version."
                     )));
                     continue;
@@ -420,7 +420,7 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
             None if !parse::is_alias(&v.name) => {
                 let name = &v.name;
                 diags.push(p.err(v.file, "E010", d.span, tr!("要件「{name}」に別名がありません", "The requirement {name} has no alias")).note(tr!(
-                    "名前が ASCII の小文字・数字・`_` でない要件には、`{name}(payment_day)` のように別名を付けます。ReqIF と PROV の識別子と、コマンドの引数に使います。",
+                    "名前が ASCII の小文字・数字・`_` でない要件には、`{name}(payment_day)` のように別名を付けてください。別名は、ReqIF と PROV の識別子と、コマンドの引数に使われます。",
                     "A requirement whose name is not lowercase ASCII, digits and `_` gets an alias, as in `{name}(payment_day)`; ReqIF and PROV identify it by the alias, and so can a command line."
                 )));
             }
@@ -437,13 +437,13 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
         let name = p.req_label(r);
         if d.text.is_none() {
             diags.push(p.err(fi, "E010", d.span, tr!("要件「{name}」に `text` がありません", "The requirement {name} has no `text`")).note(tr!(
-                "`text \"…\"` に、求めていることを短い一文で書きます。",
+                "`text \"…\"` に、求めていることを短い一文で書いてください。",
                 "Write what it asks for in a short sentence, as `text \"…\"`."
             )));
         }
         match &d.owner {
             None => diags.push(p.err(fi, "E010", d.span, tr!("要件「{name}」に `owner` がありません", "The requirement {name} has no `owner`")).note(tr!(
-                "持ち主は、要件が変わるときに承認する役割です。`affected` が「誰に聞くか」を答えるのに使います。",
+                "持ち主は、要件が変わるときに承認する役割です。`affected` は、持ち主から「誰に聞くか」を答えます。",
                 "The owner is the role that approves a change to the requirement; `affected` answers whom to ask with it."
             ))),
             Some((o, s)) if !role_known(o) => diags.push(p.err(fi, "E008", *s, tr!("役割「{o}」は宣言されていません", "The role {o} is not declared")).note(tr!("{}", "{}", ROLES_HOW.0; ROLES_HOW.1))),
@@ -451,7 +451,7 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
         }
         if d.from.is_empty() && d.decided.is_empty() {
             diags.push(p.err(fi, "E010", d.span, tr!("要件「{name}」に出どころがありません（`from` も `decided` もありません）", "The requirement {name} has no origin (no `from` and no `decided`)")).note(tr!(
-                "出典から来た要件は `from @<出典> <条>` で、人が決めた要件は `decided <日付> by <役割> \"<理由>\"` で、どこから来たかを書きます。",
+                "出典から来た要件は `from @<出典> <条>` で、人が決めた要件は `decided <日付> by <役割> \"<理由>\"` で、どこから来たかを書いてください。",
                 "A requirement read from a source says `from @<source> <article>`; one people decided says `decided <date> by <role> \"<why>\"`."
             )));
         }
@@ -563,7 +563,7 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
                 },
                 SourceKind::File { path, path_span, .. } => {
                     if path.is_empty() || ritsu_base::paths::is_absolute(path) {
-                        diags.push(p.err(fi, "E013", *path_span, tr!("出典の写しのパス `{path}` は、.req からの相対で書きます", "Write the path `{path}` of the copy from the directory of the .req")));
+                        diags.push(p.err(fi, "E013", *path_span, tr!("出典の写しのパス `{path}` は、.req からの相対パスで書いてください", "Write the path `{path}` of the copy from the directory of the .req")));
                         None
                     } else {
                         match ritsu_base::paths::join(&dir, path).ok() {
@@ -612,7 +612,7 @@ fn resolve_ref(p: &Project, fi: usize, rr: &ReqRef, diags: &mut Vec<Diag>) -> Op
         None => {
             let have: Vec<String> = vs.iter().map(|r| format!("v{}", p.reqs[*r].version)).collect();
             let (ja, en) = (have.join("、"), have.join(", "));
-            diags.push(p.err(fi, "E009", rr.span, tr!("要件「{n}」には版が二つ以上あるので、どの版かを書きます（{ja}）", "The requirement {n} has more than one version, so say which ({en})")));
+            diags.push(p.err(fi, "E009", rr.span, tr!("要件「{n}」には版が二つ以上あるので、どの版かを書いてください（{ja}）", "The requirement {n} has more than one version, so say which ({en})")));
             None
         }
     }
@@ -641,20 +641,20 @@ pub fn placed(n: &Name, place: Place) -> Result<(), Refused> {
                 "Only a source a rule or a calendar pins can be borrowed (`source 民法 = koyomi \"civil_code.cal\" source 民法`)."
             )])),
             _ => Err(("E012", tr!("借りる出典は `rulec` か `koyomi` のファイルの `source` です", "A borrowed source is the `source` of a rulec or a koyomi file"), vec![tr!(
-                "`source 民法 = koyomi \"民法の期間.cal\" source 民法` のように書きます。",
+                "`source 民法 = koyomi \"民法の期間.cal\" source 民法` のように書いてください。",
                 "Write it like `source 民法 = koyomi \"civil_code.cal\" source 民法`."
             )])),
         };
     }
     if n.tool == Tool::Yuen {
         return Err(("E012", tr!("`yuen` の名指しは .req の中には書けません", "A `yuen` naming is not written in a .req"), vec![tr!(
-            "要件どうしは `from <要件>` で、名前だけで書きます。`yuen` の名指しは、ほかの言語が yuen の要件を指すためのものです。",
+            "要件から要件を指すときは、`from <要件>` のように名前だけを書いてください。`yuen` の名指しは、ほかの言語が yuen の要件を指すためのものです。",
             "One requirement points at another with `from <requirement>`, by name; a `yuen` naming is how the other languages point at a requirement."
         )]));
     }
     if n.items.iter().any(|(k, _)| k == "source") {
         return Err(("E012", tr!("出典（`source`）はリンクや範囲に書けません", "A source (`source`) is not written in a link or a scope"), vec![tr!(
-            "出典は要件の出どころで、要件を満たすものではありません。`source <名前> = koyomi \"…\" source <名前>` と借りて、`from @<名前> <条>` で引きます。",
+            "出典は要件の出どころで、要件を満たすものではありません。`source <名前> = koyomi \"…\" source <名前>` と借りて、`from @<名前> <条>` で引いてください。",
             "A source is where a requirement comes from, not what meets it: borrow it with `source <name> = koyomi \"…\" source <name>` and cite it with `from @<name> <article>`."
         )]));
     }
@@ -670,7 +670,7 @@ pub fn placed(n: &Name, place: Place) -> Result<(), Refused> {
                     "確かめる側に書けるのは、geas と koyomi の主張（`claim`）、検査するツールのファイル全体（`rulec \"x.rule\"` なら rulec の検査）、テストのファイル（`file \"…\"`）のような、落ちることのあるものです。",
                     "The side that verifies takes what can fail: a geas or koyomi claim (`claim`), the whole file of a tool that checks it (`rulec \"x.rule\"` stands for rulec's check), or a test file (`file \"…\"`)."
                 ),
-                tr!("満たす成果物なら `satisfied by` に書きます。", "If it is what meets the requirement, it goes after `satisfied by`."),
+                tr!("満たす成果物なら `satisfied by` に書いてください。", "If it is what meets the requirement, it goes after `satisfied by`."),
             ]));
         }
     }

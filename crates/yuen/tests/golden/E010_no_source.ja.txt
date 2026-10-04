@@ -1,4 +1,4 @@
 エラー[E010]: tests/mutants/E010_no_source/payment.req:7:13: 要件「payment_day」に出どころがありません（`from` も `decided` もありません）
      7 | requirement payment_day
-  = 出典から来た要件は `from @<出典> <条>` で、人が決めた要件は `decided <日付> by <役割> "<理由>"` で、どこから来たかを書きます。
+  = 出典から来た要件は `from @<出典> <条>` で、人が決めた要件は `decided <日付> by <役割> "<理由>"` で、どこから来たかを書いてください。
 tests/mutants/E010_no_source: エラー 1 件

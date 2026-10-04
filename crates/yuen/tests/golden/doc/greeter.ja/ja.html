@@ -37,11 +37,11 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <body>
 <main>
 <h1>挨拶 — 要件の出どころ</h1>
-<p class="lead">このページは yuen 0.23.0 が、下の .req のファイルと、出典の写しと、ほかの言語が成果物について渡すものから作った。</p>
+<p class="lead">このページは、下の .req のファイルと、出典の写しと、ほかの言語から読んだ成果物の定義をもとに、yuen 0.23.0 が作った。</p>
 <ul>
 <li><code>greeter.ja.req</code>（挨拶 v1、<code>sha256:cf339bc81c8e313d</code>）</li>
 </ul>
-<p>検査の結果：<code>examples/greeter/greeter.ja.req: ok — 要件 4 件のリンク 8 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（か、その見送り）があり、範囲のファイル 1 個は、要件に辿れます。</code></p>
+<p>検査の結果：<code>examples/greeter/greeter.ja.req: ok — 要件 4 件のリンク 8 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（無ければ見送り）があり、範囲のファイル 1 個は、要件に辿れます。</code></p>
 <h2 id="traceability">トレーサビリティ</h2>
 <div class="scroll"><table>
 <thead><tr><th>要件</th><th>期間</th><th>出どころ</th><th>持ち主</th><th>満たすもの</th><th>確かめるもの</th><th>状態</th></tr></thead>
@@ -61,7 +61,7 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <li>期間：—</li>
 <li>持ち主：窓口</li>
 <li>ファイル：<code>examples/greeter/greeter.ja.req:9</code></li>
-<li>要件の端：<code>sha256:e87a6fee4807cbad</code></li>
+<li>要件のハッシュ：<code>sha256:e87a6fee4807cbad</code></li>
 </ul>
 <p>2026-10-04 に 窓口 が決めた：挨拶には、頼んだ人の名前を入れる。この例のために決めたもの</p>
 <p>満たすもの <code>file &quot;server.py&quot;</code> — 開発 が 2026-10-04 に確かめた（<code>sha256:e87a6fee4807cbad</code> → <code>sha256:331e02e26d128e8c</code>）。状態：確かめたまま</p>
@@ -72,7 +72,7 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <li>期間：—</li>
 <li>持ち主：窓口</li>
 <li>ファイル：<code>examples/greeter/greeter.ja.req:18</code></li>
-<li>要件の端：<code>sha256:2590c87a9ffa99f1</code></li>
+<li>要件のハッシュ：<code>sha256:2590c87a9ffa99f1</code></li>
 </ul>
 <p>2026-10-04 に 窓口 が決めた：空の名前は呼び出す側の誤りで、挨拶ではない。この例のために決めたもの</p>
 <p>満たすもの <code>file &quot;server.py&quot;</code> — 開発 が 2026-10-04 に確かめた（<code>sha256:2590c87a9ffa99f1</code> → <code>sha256:331e02e26d128e8c</code>）。状態：確かめたまま</p>
@@ -83,7 +83,7 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <li>期間：—</li>
 <li>持ち主：窓口</li>
 <li>ファイル：<code>examples/greeter/greeter.ja.req:27</code></li>
-<li>要件の端：<code>sha256:301f01ea03399fc9</code></li>
+<li>要件のハッシュ：<code>sha256:301f01ea03399fc9</code></li>
 </ul>
 <p>2026-10-04 に 窓口 が決めた：合計は、戻すまでリクエストをまたいで持つ。この例のために決めたもの</p>
 <p>満たすもの <code>file &quot;server.py&quot;</code> — 開発 が 2026-10-04 に確かめた（<code>sha256:301f01ea03399fc9</code> → <code>sha256:331e02e26d128e8c</code>）。状態：確かめたまま</p>
@@ -94,13 +94,13 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <li>期間：—</li>
 <li>持ち主：窓口</li>
 <li>ファイル：<code>examples/greeter/greeter.ja.req:36</code></li>
-<li>要件の端：<code>sha256:38b694c45841408b</code></li>
+<li>要件のハッシュ：<code>sha256:38b694c45841408b</code></li>
 </ul>
 <p>2026-10-04 に 窓口 が決めた：サービスは、知っているパスにだけ答える。この例のために決めたもの</p>
 <p>満たすもの <code>file &quot;server.py&quot;</code> — 開発 が 2026-10-04 に確かめた（<code>sha256:38b694c45841408b</code> → <code>sha256:331e02e26d128e8c</code>）。状態：確かめたまま</p>
 <p>確かめるもの <code>geas &quot;greeter.ja.geas&quot; claim &quot;知らないパスには 404 を返す&quot;</code> — 開発 が 2026-10-04 に確かめた（<code>sha256:38b694c45841408b</code> → <code>sha256:8788b539c21c495d</code>）。状態：確かめたまま</p>
 <h2 id="scope">範囲</h2>
-<p><code>scope file &quot;server.py&quot;</code> — 成果物 1 個。要件に辿れる。</p>
+<p><code>scope file &quot;server.py&quot;</code> — 成果物は 1 個で、要件に辿れる。</p>
 <h2 id="records">確かめた記録</h2>
 <div class="scroll"><table>
 <thead><tr><th>日付</th><th>誰が</th><th>何を</th><th>ハッシュ</th></tr></thead>
