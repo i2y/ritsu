@@ -21,6 +21,9 @@ koyomi = { path = "../koyomi" }
 rulec = { path = "../rulec" }
 sakai = { path = "../sakai" }
 yuen = { path = "../yuen" }
+# `ritsu run` reads a scenario and writes a run as dandori's interpreter does, in serde_json's
+# values (DESIGN 3.1, rule 4: an entry may use it)
+serde_json = { version = "1", features = ["preserve_order"] }
 
 [dev-dependencies]
 ritsu-testkit = { path = "../ritsu-testkit" }

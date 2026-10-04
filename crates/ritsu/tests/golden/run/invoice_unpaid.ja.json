@@ -1,0 +1,318 @@
+{
+  "ritsu": "0.1.0",
+  "flow": "invoice.ja.flow",
+  "scenario": "scenarios/invoice_unpaid.ja.json",
+  "target": "reference",
+  "diagnostics": [],
+  "start": "2026-04-15T10:00:00Z",
+  "end": "2026-05-08T09:00:10Z",
+  "elapsed": 1983610,
+  "events": [
+    {
+      "call": "引き当てる",
+      "args": {
+        "注文": "A-1",
+        "sku": "ペン",
+        "数": 3
+      },
+      "by": "chobo",
+      "answer": {
+        "ok": {
+          "result": "done"
+        }
+      }
+    },
+    {
+      "call": "支払方法",
+      "args": {
+        "会員": true,
+        "金額": 120
+      },
+      "by": "rulec",
+      "answer": {
+        "ok": {
+          "方法": "請求書払い"
+        }
+      }
+    },
+    {
+      "call": "支払条件.支払日",
+      "args": {
+        "受領日": "2026-04-15T10:00:00Z"
+      },
+      "by": "koyomi",
+      "answer": {
+        "ok": {
+          "day": "2026-05-08",
+          "at": "2026-05-08T09:00:00Z"
+        }
+      }
+    },
+    {
+      "pass": 1983600,
+      "why": "wait",
+      "until": "2026-05-08T09:00:00Z",
+      "after": "2026-05-08T09:00:00Z"
+    },
+    {
+      "call": "入金を確かめる",
+      "args": {
+        "注文": "A-1",
+        "期日": "2026-05-08"
+      },
+      "by": "scenario",
+      "answer": {
+        "error": "failure"
+      }
+    },
+    {
+      "pass": 10,
+      "why": "retry",
+      "after": "2026-05-08T09:00:10Z"
+    },
+    {
+      "call": "入金を確かめる",
+      "args": {
+        "注文": "A-1",
+        "期日": "2026-05-08"
+      },
+      "by": "scenario",
+      "answer": {
+        "ok": {
+          "済み": false
+        }
+      }
+    },
+    {
+      "call": "棚に戻す",
+      "args": {
+        "注文": "A-1",
+        "sku": "ペン"
+      },
+      "by": "chobo",
+      "answer": {
+        "ok": {
+          "result": "done"
+        }
+      }
+    }
+  ],
+  "trace": {
+    "steps": [
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "transfer": "引当",
+            "op": "hold",
+            "args": {
+              "注文": "A-1",
+              "sku": "ペン",
+              "数": 3
+            }
+          }
+        },
+        "answer": {
+          "ok": {
+            "result": "done"
+          }
+        }
+      },
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "会員": true,
+            "金額": 120
+          }
+        },
+        "answer": {
+          "ok": {
+            "方法": "請求書払い"
+          }
+        }
+      },
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "受領日": "2026-04-15T10:00:00Z"
+          }
+        },
+        "answer": {
+          "ok": {
+            "day": "2026-05-08",
+            "at": "2026-05-08T09:00:00Z"
+          }
+        }
+      },
+      {
+        "wait_until": "2026-05-08T09:00:00Z"
+      },
+      {
+        "call": {
+          "http": "GET",
+          "url": "https://payments.example.com/orders/A-1/payment",
+          "query": {
+            "期日": "2026-05-08"
+          }
+        },
+        "answer": {
+          "error": "failure",
+          "as": "Dandori.Test.Failure"
+        }
+      },
+      {
+        "retry_wait": 10
+      },
+      {
+        "call": {
+          "http": "GET",
+          "url": "https://payments.example.com/orders/A-1/payment",
+          "query": {
+            "期日": "2026-05-08"
+          }
+        },
+        "answer": {
+          "ok": {
+            "済み": false
+          }
+        }
+      },
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "transfer": "引当",
+            "op": "void",
+            "args": {
+              "注文": "A-1",
+              "sku": "ペン"
+            }
+          }
+        },
+        "answer": {
+          "ok": {
+            "result": "done"
+          }
+        }
+      }
+    ],
+    "end": {
+      "succeed": {
+        "結果": "未払い",
+        "期日": "2026-05-08"
+      }
+    }
+  },
+  "books": [
+    {
+      "book": "在庫",
+      "file": "books/在庫.book",
+      "before": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "D-1",
+            "sku": "ペン",
+            "数": 10
+          },
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "棚",
+          "args": [
+            "ペン"
+          ],
+          "posted": 10,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -10,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "引当",
+          "key": [
+            "A-1",
+            "ペン"
+          ],
+          "state": "voided"
+        }
+      ]
+    }
+  ],
+  "replay": {
+    "execution": "invoice-unpaid",
+    "now": "2026-04-15T10:00:00Z",
+    "input": {
+      "受注": {
+        "id": "A-1",
+        "sku": "ペン",
+        "数": 3,
+        "会員": true,
+        "金額": 120
+      }
+    },
+    "books": {
+      "在庫": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "D-1",
+            "sku": "ペン",
+            "数": 10
+          }
+        }
+      ]
+    },
+    "answers": [
+      {
+        "ok": {
+          "result": "done"
+        }
+      },
+      {
+        "ok": {
+          "方法": "請求書払い"
+        }
+      },
+      {
+        "ok": {
+          "day": "2026-05-08",
+          "at": "2026-05-08T09:00:00Z"
+        }
+      },
+      {
+        "error": "failure"
+      },
+      {
+        "ok": {
+          "済み": false
+        }
+      },
+      {
+        "ok": {
+          "result": "done"
+        }
+      }
+    ]
+  }
+}

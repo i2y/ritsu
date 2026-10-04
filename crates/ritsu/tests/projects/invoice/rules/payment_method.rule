@@ -1,0 +1,24 @@
+rule payment_method v1
+description "How an order is paid: a member's order of up to 2,000 GBP by invoice, after the payment terms; any other order before it ships. Written for ritsu's tests"
+
+enum billing = prepay | invoice
+
+inputs
+  member : bool
+  amount : money[GBP, incl_tax]  range >=0GBP <=100000GBP
+
+outputs
+  billing : billing
+
+table decide
+policy unique
+| member | amount    | -> billing |
+| true   | <=2000GBP | invoice    |
+| true   | >2000GBP  | prepay     |
+| false  | -         | prepay     |
+
+examples
+| member | amount  | -> billing |
+| true   | 120GBP  | invoice    |
+| true   | 5000GBP | prepay     |
+| false  | 120GBP  | prepay     |

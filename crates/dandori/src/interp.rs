@@ -40,8 +40,40 @@ enum Ctl {
     Stop,
 }
 
+/// Where a run takes the answers of some of its calls from, in place of the scenario: `ritsu run`
+/// asks rulec for a rule's outputs, koyomi for a date, and chobo for what an operation of a book
+/// comes to (crate::computed; ritsu's DESIGN 7.9). Each answer is written as a scenario writes one
+/// (`{"ok": …}`, `{"error": …}`, with the cause of an error under `cause`), so the run goes on as it
+/// would on a scenario that held it: the same retries, the same names for an error, the same checks
+/// of what comes back. Time is told as it goes by, for a book whose holds expire.
+pub trait Answers {
+    /// The answer to one try of this call, when this side takes the call; None for one the scenario
+    /// answers. Err stops the run: the call cannot be answered at all.
+    fn answer(&mut self, m: &Model, view: View, callee: &Callee, args: &Map<String, Value>) -> Option<Result<Value, String>>;
+
+    /// The scenario answered a try of a call this side does not take.
+    fn scripted(&mut self, _m: &Model, _callee: &Callee, _args: &Map<String, Value>, _answer: &Value) {}
+
+    /// Time goes by: so many seconds of a `wait`, of the wait before a retry, or of a call that timed
+    /// out (its timeout).
+    fn pass(&mut self, _seconds: f64, _why: Passing) {}
+
+    /// The run waits until this moment, as `wait until` is given it.
+    fn wait_until(&mut self, _at: &Value) {}
+}
+
+/// Why time goes by in a run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Passing {
+    Wait,
+    Retry,
+    Timeout,
+}
+
 struct Run<'a> {
     m: &'a Model,
+    /// where the answers come from, besides the scenario
+    hook: Option<&'a mut dyn Answers>,
     view: View,
     execution: String,
     answers: Vec<Value>,
@@ -121,18 +153,24 @@ pub fn run(m: &Model, sc: &Value, view: View) -> Result<Value, String> {
 
 /// The run, and for every answer the calls took, which task took it and how it came out.
 pub fn run_traced(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<CallInfo>), String> {
-    run_all(m, sc, view).map(|r| (r.trace, r.callees))
+    run_all(m, sc, view, None).map(|r| (r.trace, r.callees))
+}
+
+/// The run, with the calls `answers` takes answered by it and the others by the scenario, in order;
+/// and for every answer the calls took, which task took it and how it came out.
+pub fn run_answered(m: &Model, sc: &Value, view: View, answers: &mut dyn Answers) -> Result<(Value, Vec<CallInfo>), String> {
+    run_all(m, sc, view, Some(answers)).map(|r| (r.trace, r.callees))
 }
 
 /// The run, and everything it went through, in order.
 pub fn run_visits(m: &Model, sc: &Value, view: View) -> Result<(Value, Vec<Visit>), String> {
-    run_all(m, sc, view).map(|r| (r.trace, r.visits))
+    run_all(m, sc, view, None).map(|r| (r.trace, r.visits))
 }
 
 /// Each case's state when the run ends, by the case's name: null for a case the run did not
 /// start. What Temporal's query `dandori.status` says of the cases then.
 pub fn cases_at_end(m: &Model, sc: &Value, view: View) -> Result<Map<String, Value>, String> {
-    let vars = run_all(m, sc, view)?.vars;
+    let vars = run_all(m, sc, view, None)?.vars;
     Ok(m.cases
         .iter()
         .map(|c| {
@@ -149,10 +187,11 @@ struct Ran {
     visits: Vec<Visit>,
 }
 
-fn run_all(m: &Model, sc: &Value, view: View) -> Result<Ran, String> {
+fn run_all<'a>(m: &'a Model, sc: &Value, view: View, hook: Option<&'a mut dyn Answers>) -> Result<Ran, String> {
     let answers = sc["answers"].as_array().cloned().unwrap_or_default();
     let mut r = Run {
         m,
+        hook,
         view,
         execution: sc["execution"].as_str().unwrap_or("test").to_string(),
         answers,
@@ -265,12 +304,18 @@ impl<'a> Run<'a> {
                 if self.view == View::Asl {
                     self.steps.push(json!({ "wait": seconds }));
                 }
+                if let Some(h) = self.hook.as_deref_mut() {
+                    h.pass(*seconds as f64, Passing::Wait);
+                }
                 Ctl::Next
             }
             TK::WaitUntil { at } => {
+                let v = self.value(at);
                 if self.view == View::Asl {
-                    let v = self.value(at);
                     self.steps.push(json!({ "wait_until": v }));
+                }
+                if let Some(h) = self.hook.as_deref_mut() {
+                    h.wait_until(&v);
                 }
                 Ctl::Next
             }
@@ -431,6 +476,27 @@ impl<'a> Run<'a> {
         }
     }
 
+    /// The answer to one try of a call: from the side the run takes answers from besides the
+    /// scenario, when it takes the call; else the scenario's next.
+    fn answer_for(&mut self, callee: &Callee, args: &Map<String, Value>, callee_name: &str) -> Option<Value> {
+        let (m, view) = (self.m, self.view);
+        if let Some(h) = self.hook.as_deref_mut() {
+            match h.answer(m, view, callee, args) {
+                Some(Ok(v)) => return Some(v),
+                Some(Err(e)) => {
+                    self.error = Some(e);
+                    return None;
+                }
+                None => {}
+            }
+        }
+        let v = self.take_answer(callee_name)?;
+        if let Some(h) = self.hook.as_deref_mut() {
+            h.scripted(m, callee, args, &v);
+        }
+        Some(v)
+    }
+
     fn call(&mut self, s: &TStmt, target: Option<&Target>, callee: &Callee, args: &[(String, TExpr)], handlers: &[THandler]) -> Ctl {
         let m = self.m;
         let cname = match callee {
@@ -449,7 +515,7 @@ impl<'a> Run<'a> {
         let retry = self.retriers(callee);
         let mut counts = vec![0u32; retry.len()];
         let outcome: Result<Value, CallError> = loop {
-            let ans = match self.take_answer(&cname) {
+            let ans = match self.answer_for(callee, &a, &cname) {
                 Some(x) => x,
                 None => return Ctl::Stop,
             };
@@ -503,7 +569,17 @@ impl<'a> Run<'a> {
                 });
             }
             let kind = ans["error"].as_str().unwrap_or("failure").to_string();
-            let err = self.error_of(callee, &kind);
+            let mut err = self.error_of(callee, &kind);
+            // an answer that says its cause (one rulec, koyomi or chobo gave) keeps it
+            if let Some(c) = ans.get("cause").and_then(|c| c.as_str()) {
+                err.cause = c.to_string();
+            }
+            // a try that timed out took its timeout
+            if let (true, Callee::Task(t), Some(h)) = (kind == "timeout", callee, self.hook.as_deref_mut()) {
+                if let Some(secs) = m.tasks[*t].timeout {
+                    h.pass(secs as f64, Passing::Timeout);
+                }
+            }
             self.steps.push(json!({ "call": wire, "answer": { "error": kind, "as": err.target_name } }));
             // the retriers, in order: the first whose errors match decides
             let mut again = false;
@@ -515,6 +591,9 @@ impl<'a> Run<'a> {
                         if self.view == View::Asl {
                             let d = if delay.fract() == 0.0 { json!(delay as u64) } else { json!(delay) };
                             self.steps.push(json!({ "retry_wait": d }));
+                        }
+                        if let Some(h) = self.hook.as_deref_mut() {
+                            h.pass(delay, Passing::Retry);
                         }
                         again = true;
                     }

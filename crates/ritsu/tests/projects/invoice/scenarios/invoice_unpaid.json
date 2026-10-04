@@ -1,0 +1,36 @@
+{
+  "execution": "invoice-unpaid",
+  "now": "2026-04-15T10:00:00Z",
+  "input": {
+    "order": {
+      "id": "A-1",
+      "sku": "pen",
+      "quantity": 3,
+      "member": true,
+      "amount": 120
+    }
+  },
+  "books": {
+    "stock": [
+      {
+        "op": "do",
+        "kind": "receive",
+        "args": {
+          "delivery": "D-1",
+          "sku": "pen",
+          "qty": 10
+        }
+      }
+    ]
+  },
+  "answers": [
+    {
+      "error": "failure"
+    },
+    {
+      "ok": {
+        "paid": false
+      }
+    }
+  ]
+}

@@ -47,3 +47,40 @@ fn the_words_after_dandori_are_dandori_s() {
     let (code, out, _) = ritsu(&["dandori", "--help"]);
     assert!(code == 0 && out.contains("A workflow that uses rules runs as `ritsu dandori`"), "{out}");
 }
+
+/// A flow that reads a dates file of koyomi's and a book of chobo's (dandori's `examples/invoice`,
+/// in English and in Japanese) passes check, is drawn, gets its scenarios, runs one and is built,
+/// with every language joined: the binary of dandori's own crate stops it at E018.
+#[test]
+fn ritsu_dandori_reads_the_dates_and_the_books_of_a_flow() {
+    let flows = [("examples/invoice/invoice.flow", "en", "ok"), ("examples/invoice/invoice.ja.flow", "ja", "検査を通りました")];
+    for (flow, lang, passed) in flows {
+        assert_eq!(ritsu(&["dandori", "check", flow, "--lang", lang]), (0, String::new(), format!("{flow}: {passed}\n")));
+        let (code, md, err) = ritsu(&["dandori", "doc", flow, "--lang", lang]);
+        assert!(code == 0 && md.contains("```mermaid"), "{flow}: {err}");
+        let (code, out, err) = ritsu(&["dandori", "scenarios", flow]);
+        assert_eq!(code, 0, "{flow}: {err}");
+        let scenarios: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let first = scenarios.as_array().and_then(|a| a.first()).cloned().unwrap_or_else(|| panic!("{flow}: no scenario"));
+        let t = ritsu_testkit::TempDir::new("invoice");
+        let scenario = t.path().join("001.json");
+        std::fs::write(&scenario, first.to_string()).unwrap();
+        let (code, trace, err) = ritsu(&["dandori", "run", flow, "--scenario", &scenario.to_string_lossy()]);
+        assert!(code == 0 && trace.contains("\"end\""), "{flow}: {err}");
+        let out_dir = t.path().join("out");
+        let (code, written, err) = ritsu(&["dandori", "build", flow, "--target", "temporal", "--out", &out_dir.to_string_lossy()]);
+        assert!(code == 0 && written.contains("workflow.ts") && written.contains("rules.ts"), "{flow}: {written}{err}");
+    }
+}
+
+/// `ritsu check` joins koyomi and chobo for dandori as well: the flows of `examples/invoice` pass,
+/// and what ritsu-cross cannot decide about them (`now` against the range of the dates file, the
+/// expiry of the hold against the waits) comes as warnings.
+#[test]
+fn ritsu_check_reads_the_dates_and_the_books_of_a_flow() {
+    let (code, out, err) = ritsu(&["check", "examples/invoice"]);
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(out.contains("examples/invoice/invoice.flow: ok\n") && out.contains("examples/invoice/invoice.ja.flow: ok\n"), "{out}");
+    // the borders the languages share are ritsu-cross's to count; the files are what is held here
+    assert!(out.lines().last().is_some_and(|l| l.starts_with("ritsu check: 8 files (koyomi 4, chobo 2, dandori 2): all pass (8 warnings); ")), "{out}");
+}

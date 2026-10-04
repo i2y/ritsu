@@ -204,7 +204,7 @@ impl ritsu_ports::Books for Engine {
 
     fn open(&self, file: &Path) -> Result<Box<dyn Ledger>, Vec<Said>> {
         let (_, book, _) = checked(file)?;
-        Ok(Box::new(Run { book, state: State::default() }))
+        Ok(Box::new(Run { book, state: State::default(), named: Vec::new() }))
     }
 }
 
@@ -212,6 +212,9 @@ impl ritsu_ports::Books for Engine {
 struct Run {
     book: Book,
     state: State,
+    /// every account a `do` or a `hold` has named, done or refused: what `chobo run` lists at the
+    /// end of a scenario (`scenario::named_accounts`)
+    named: Vec<AccountId>,
 }
 
 impl Ledger for Run {
@@ -250,6 +253,14 @@ impl Ledger for Run {
         // what is wrong with a call is chobo's own words, which are English
         crate::interp::validate(book, &c).map_err(Text::same)?;
         let out = self.state.apply(book, &c).map_err(Text::same)?;
+        if matches!(c.op, Op::Do | Op::Hold) {
+            for id in c.accounts(book) {
+                if !self.named.contains(&id) {
+                    self.named.push(id);
+                }
+            }
+            self.named.sort();
+        }
         Ok(match out {
             Outcome::Done => BookOutcome::Done,
             Outcome::DoneBefore => BookOutcome::DoneBefore,
@@ -265,6 +276,20 @@ impl Ledger for Run {
         let kind = self.book.account(account).ok_or_else(|| ritsu_base::tr!("勘定 `{account}` はありません", "there is no account `{account}`"))?;
         let b = self.state.balance(&AccountId { kind, args: args.to_vec() });
         Ok(Balance { posted: b.posted, held_in: b.held_in, held_out: b.held_out })
+    }
+
+    fn accounts(&self) -> Vec<(String, Vec<String>, Balance)> {
+        self.named
+            .iter()
+            .map(|id| {
+                let b = self.state.balance(id);
+                (self.book.accounts[id.kind].name.clone(), id.args.clone(), Balance { posted: b.posted, held_in: b.held_in, held_out: b.held_out })
+            })
+            .collect()
+    }
+
+    fn holds(&self) -> Vec<(String, Vec<String>, String)> {
+        self.state.holds.iter().map(|((k, key), h)| (self.book.transfers[*k].name.clone(), key.clone(), h.state.name().to_string())).collect()
     }
 }
 

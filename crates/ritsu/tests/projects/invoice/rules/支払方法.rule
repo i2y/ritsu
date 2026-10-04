@@ -1,0 +1,24 @@
+rule 支払方法(payment_method_ja) v1
+description "注文の支払い方。会員の 2,000 ポンドまでの注文は、支払条件のとおりに払う請求書払い。それ以外の注文は、出荷の前に払う前払い。ritsu のテストのための例"
+
+enum 方法(billing) = 前払い(prepay) | 請求書払い(invoice)
+
+inputs
+  会員(member) : bool
+  金額(amount) : money[GBP, incl_tax]  range >=0GBP <=100000GBP
+
+outputs
+  方法(billing) : 方法
+
+table 判定(decide)
+policy unique
+| 会員  | 金額      | -> 方法    |
+| true  | <=2000GBP | 請求書払い |
+| true  | >2000GBP  | 前払い     |
+| false | -         | 前払い     |
+
+examples
+| 会員  | 金額    | -> 方法    |
+| true  | 120GBP  | 請求書払い |
+| true  | 5000GBP | 前払い     |
+| false | 120GBP  | 前払い     |

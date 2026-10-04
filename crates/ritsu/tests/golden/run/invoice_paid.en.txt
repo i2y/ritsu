@@ -1,0 +1,18 @@
+invoice.flow (scenario scenarios/invoice_paid.json, from 2026-04-15T10:00:00Z)
+before the run, book stock:
+  receive.do(delivery: "D-1", sku: "pen", qty: 10)  done
+the run:
+  reserve(order: "A-1", sku: "pen", qty: 3)        chobo     done
+  method(member: true, amount: 120)                rulec     {"billing":"invoice"}
+  terms.payment(received: "2026-04-15T10:00:00Z")  koyomi    {"day":"2026-05-08","at":"2026-05-08T09:00:00Z"}
+  wait until 2026-05-08T09:00:00Z                            22 days 23:00:00, to 2026-05-08T09:00:00Z
+  check_payment(order: "A-1", due: "2026-05-08")   scenario  {"paid":true}
+  ship(order: "A-1", sku: "pen")                   chobo     done
+end: succeed {"outcome":"shipped","due":"2026-05-08"}
+book stock (books/stock.book) at the end:
+  accounts:
+    shelf(pen)  posted 7, held out 0, held in 0
+    suppliers   posted -10, held out 0, held in 0
+    customers   posted 3, held out 0, held in 0
+  holds:
+    reserve(A-1, pen)  posted

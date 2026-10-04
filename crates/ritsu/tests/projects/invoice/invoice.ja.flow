@@ -1,0 +1,96 @@
+# 店の注文。品を在庫から押さえ、支払い方を規則で決める。前払いなら、その場でカードに請求する。請求書払
+# いなら、注文を受けた時刻から支払条件で数えた支払期日まで品を押さえたままにし、期日に入金を確かめる。
+# 支払われたら出荷し、支払われなければ棚に戻す。押さえておけるのは 30 日までで、請求書の期日はそれより
+# 遅いことがある。そのときは、期日より前に品が棚に戻る。規則は rulec、期日は koyomi、在庫は chobo の帳簿。
+workflow 請求 v1
+description "注文の品を押さえ、規則が決めたとおり前払いか請求書払いで支払いを受け、支払われたら出荷する"
+
+use rule 支払方法 from "rules/支払方法.rule"
+use dates 支払条件 from "dates/支払条件.cal"
+use book 在庫 from "books/在庫.book"
+
+record 注文
+  id   : string
+  sku  : string
+  数   : int  range >=1 <=100
+  会員 : bool
+  金額 : money[GBP, incl_tax]  range >=0 <=100000
+
+record 支払
+  済み : bool
+
+enum 終わり方 = 出荷済 | 未払い | 在庫切れ | 押さえの期限切れ
+
+inputs
+  受注 : 注文
+
+outputs
+  結果 : 終わり方
+  期日 : date?
+
+task 引き当てる(注文: string, sku: string, 数: int) -> 在庫.引当
+  book 在庫.引当.hold
+  starts 在庫.引当
+  errors 在庫切れ
+
+task 出荷する(注文: string, sku: string) -> 在庫.引当
+  book 在庫.引当.post
+  sends post
+  errors expired
+
+task 棚に戻す(注文: string, sku: string) -> 在庫.引当
+  book 在庫.引当.void
+  sends void
+  errors expired, already_posted
+
+# 前払いの注文は、その場でカードに請求する。
+task 代金を受け取る(注文: string, 金額: money[GBP, incl_tax]) -> 支払
+  http POST "https://payments.example.com/orders/{注文}/charges"
+  key
+
+# 請求書の期日までに入金があったか。
+task 入金を確かめる(注文: string, 期日: date) -> 支払
+  http GET "https://payments.example.com/orders/{注文}/payment"
+  retry 2 times every 10 seconds
+  idempotent
+
+case 押さえ : 在庫.引当 follows 在庫.引当
+
+flow
+  押さえ <- 引き当てる(注文: 受注.id, sku: 受注.sku, 数: 受注.数)
+    on 在庫切れ => succeed 結果 = 在庫切れ, 期日 = none
+  let 払い方 = 支払方法(会員: 受注.会員, 金額: 受注.金額)
+  match 払い方.方法
+    前払い =>
+      let 入金 = 代金を受け取る(注文: 受注.id, 金額: 受注.金額)
+      match 入金.済み
+        true =>
+          押さえ <- 出荷する(注文: 受注.id, sku: 受注.sku)
+            on expired => succeed 結果 = 押さえの期限切れ, 期日 = none
+          succeed 結果 = 出荷済, 期日 = none
+        false =>
+          押さえ <- 棚に戻す(注文: 受注.id, sku: 受注.sku)
+            on expired => pass
+          succeed 結果 = 未払い, 期日 = none
+    請求書払い =>
+      let 期限 = 支払条件.支払日(受領日: now)
+      wait until 期限.at
+      let 入金 = 入金を確かめる(注文: 受注.id, 期日: 期限.day)
+      match 入金.済み
+        true =>
+          押さえ <- 出荷する(注文: 受注.id, sku: 受注.sku)
+            on expired => succeed 結果 = 押さえの期限切れ, 期日 = 期限.day
+          succeed 結果 = 出荷済, 期日 = 期限.day
+        false =>
+          押さえ <- 棚に戻す(注文: 受注.id, sku: 受注.sku)
+            on expired => pass
+          succeed 結果 = 未払い, 期日 = 期限.day
+
+on failure
+  match 押さえ.state
+    none => pass
+    held =>
+      押さえ <- 棚に戻す(注文: 受注.id, sku: 受注.sku)
+        on expired => pass
+        on already_posted => pass
+        on failure => fail 戻せない "注文のために押さえた品を棚に戻せませんでした" leaving 押さえ

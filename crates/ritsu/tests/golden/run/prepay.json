@@ -1,0 +1,244 @@
+{
+  "ritsu": "0.1.0",
+  "flow": "invoice.flow",
+  "scenario": "scenarios/prepay.json",
+  "target": "reference",
+  "diagnostics": [],
+  "start": "2026-04-15T10:00:00Z",
+  "end": "2026-04-15T10:00:00Z",
+  "elapsed": 0,
+  "events": [
+    {
+      "call": "reserve",
+      "args": {
+        "order": "A-1",
+        "sku": "pen",
+        "qty": 3
+      },
+      "by": "chobo",
+      "answer": {
+        "ok": {
+          "result": "done"
+        }
+      }
+    },
+    {
+      "call": "method",
+      "args": {
+        "member": false,
+        "amount": 120
+      },
+      "by": "rulec",
+      "answer": {
+        "ok": {
+          "billing": "prepay"
+        }
+      }
+    },
+    {
+      "call": "charge",
+      "args": {
+        "order": "A-1",
+        "amount": 120
+      },
+      "by": "scenario",
+      "answer": {
+        "ok": {
+          "paid": true
+        }
+      }
+    },
+    {
+      "call": "ship",
+      "args": {
+        "order": "A-1",
+        "sku": "pen"
+      },
+      "by": "chobo",
+      "answer": {
+        "ok": {
+          "result": "done"
+        }
+      }
+    }
+  ],
+  "trace": {
+    "steps": [
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "transfer": "reserve",
+            "op": "hold",
+            "args": {
+              "order": "A-1",
+              "sku": "pen",
+              "qty": 3
+            }
+          }
+        },
+        "answer": {
+          "ok": {
+            "result": "done"
+          }
+        }
+      },
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "member": false,
+            "amount": 120
+          }
+        },
+        "answer": {
+          "ok": {
+            "billing": "prepay"
+          }
+        }
+      },
+      {
+        "call": {
+          "http": "POST",
+          "url": "https://payments.example.com/orders/A-1/charges",
+          "headers": {
+            "Idempotency-Key": "prepay/5"
+          },
+          "body": {
+            "amount": 120
+          }
+        },
+        "answer": {
+          "ok": {
+            "paid": true
+          }
+        }
+      },
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "transfer": "reserve",
+            "op": "post",
+            "args": {
+              "order": "A-1",
+              "sku": "pen"
+            }
+          }
+        },
+        "answer": {
+          "ok": {
+            "result": "done"
+          }
+        }
+      }
+    ],
+    "end": {
+      "succeed": {
+        "outcome": "shipped",
+        "due": null
+      }
+    }
+  },
+  "books": [
+    {
+      "book": "stock",
+      "file": "books/stock.book",
+      "before": [
+        {
+          "op": "do",
+          "kind": "receive",
+          "args": {
+            "delivery": "D-1",
+            "sku": "pen",
+            "qty": 10
+          },
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "shelf",
+          "args": [
+            "pen"
+          ],
+          "posted": 7,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -10,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 3,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "reserve",
+          "key": [
+            "A-1",
+            "pen"
+          ],
+          "state": "posted"
+        }
+      ]
+    }
+  ],
+  "replay": {
+    "execution": "prepay",
+    "now": "2026-04-15T10:00:00Z",
+    "input": {
+      "order": {
+        "id": "A-1",
+        "sku": "pen",
+        "quantity": 3,
+        "member": false,
+        "amount": 120
+      }
+    },
+    "books": {
+      "stock": [
+        {
+          "op": "do",
+          "kind": "receive",
+          "args": {
+            "delivery": "D-1",
+            "sku": "pen",
+            "qty": 10
+          }
+        }
+      ]
+    },
+    "answers": [
+      {
+        "ok": {
+          "result": "done"
+        }
+      },
+      {
+        "ok": {
+          "billing": "prepay"
+        }
+      },
+      {
+        "ok": {
+          "paid": true
+        }
+      },
+      {
+        "ok": {
+          "result": "done"
+        }
+      }
+    ]
+  }
+}

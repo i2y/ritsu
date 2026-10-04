@@ -1,0 +1,23 @@
+dates 支払条件(payment_terms_ja) v1
+description "20 日締め翌月 10 日の 9 時払い。支払日が休みなら前の営業日"
+use calendar "../calendars/平日.cal"
+
+inputs
+  受領日(received) : date  range >=2026-01-01 <=2027-12-31
+
+date 締め日(closing) = 受領日
+  close day 20          # 「20 日締め」
+
+date 支払日(payment) = 締め日
+  day 10 of month +1    # 「翌月 10 日払い」
+  roll preceding        # 「支払日が休みなら前の営業日」
+  at 09:00
+
+claims
+  営業日に払う       : 支払日 is open
+  遅い受領は遅い支払 : 支払日 is monotonic
+
+examples
+| 受領日     | -> 締め日  | -> 支払日  |
+| 2026-04-01 | 2026-04-20 | 2026-05-08 |
+| 2026-12-21 | 2027-01-20 | 2027-02-10 |

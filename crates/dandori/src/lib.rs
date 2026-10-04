@@ -17,6 +17,7 @@ pub mod check;
 pub mod codes;
 pub mod cli;
 pub mod commands;
+pub mod computed;
 pub mod contract;
 pub mod crossings;
 pub mod diag;

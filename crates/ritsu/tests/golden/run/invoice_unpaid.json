@@ -1,0 +1,318 @@
+{
+  "ritsu": "0.1.0",
+  "flow": "invoice.flow",
+  "scenario": "scenarios/invoice_unpaid.json",
+  "target": "reference",
+  "diagnostics": [],
+  "start": "2026-04-15T10:00:00Z",
+  "end": "2026-05-08T09:00:10Z",
+  "elapsed": 1983610,
+  "events": [
+    {
+      "call": "reserve",
+      "args": {
+        "order": "A-1",
+        "sku": "pen",
+        "qty": 3
+      },
+      "by": "chobo",
+      "answer": {
+        "ok": {
+          "result": "done"
+        }
+      }
+    },
+    {
+      "call": "method",
+      "args": {
+        "member": true,
+        "amount": 120
+      },
+      "by": "rulec",
+      "answer": {
+        "ok": {
+          "billing": "invoice"
+        }
+      }
+    },
+    {
+      "call": "terms.payment",
+      "args": {
+        "received": "2026-04-15T10:00:00Z"
+      },
+      "by": "koyomi",
+      "answer": {
+        "ok": {
+          "day": "2026-05-08",
+          "at": "2026-05-08T09:00:00Z"
+        }
+      }
+    },
+    {
+      "pass": 1983600,
+      "why": "wait",
+      "until": "2026-05-08T09:00:00Z",
+      "after": "2026-05-08T09:00:00Z"
+    },
+    {
+      "call": "check_payment",
+      "args": {
+        "order": "A-1",
+        "due": "2026-05-08"
+      },
+      "by": "scenario",
+      "answer": {
+        "error": "failure"
+      }
+    },
+    {
+      "pass": 10,
+      "why": "retry",
+      "after": "2026-05-08T09:00:10Z"
+    },
+    {
+      "call": "check_payment",
+      "args": {
+        "order": "A-1",
+        "due": "2026-05-08"
+      },
+      "by": "scenario",
+      "answer": {
+        "ok": {
+          "paid": false
+        }
+      }
+    },
+    {
+      "call": "put_back",
+      "args": {
+        "order": "A-1",
+        "sku": "pen"
+      },
+      "by": "chobo",
+      "answer": {
+        "ok": {
+          "result": "done"
+        }
+      }
+    }
+  ],
+  "trace": {
+    "steps": [
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "transfer": "reserve",
+            "op": "hold",
+            "args": {
+              "order": "A-1",
+              "sku": "pen",
+              "qty": 3
+            }
+          }
+        },
+        "answer": {
+          "ok": {
+            "result": "done"
+          }
+        }
+      },
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "member": true,
+            "amount": 120
+          }
+        },
+        "answer": {
+          "ok": {
+            "billing": "invoice"
+          }
+        }
+      },
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "received": "2026-04-15T10:00:00Z"
+          }
+        },
+        "answer": {
+          "ok": {
+            "day": "2026-05-08",
+            "at": "2026-05-08T09:00:00Z"
+          }
+        }
+      },
+      {
+        "wait_until": "2026-05-08T09:00:00Z"
+      },
+      {
+        "call": {
+          "http": "GET",
+          "url": "https://payments.example.com/orders/A-1/payment",
+          "query": {
+            "due": "2026-05-08"
+          }
+        },
+        "answer": {
+          "error": "failure",
+          "as": "Dandori.Test.Failure"
+        }
+      },
+      {
+        "retry_wait": 10
+      },
+      {
+        "call": {
+          "http": "GET",
+          "url": "https://payments.example.com/orders/A-1/payment",
+          "query": {
+            "due": "2026-05-08"
+          }
+        },
+        "answer": {
+          "ok": {
+            "paid": false
+          }
+        }
+      },
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "transfer": "reserve",
+            "op": "void",
+            "args": {
+              "order": "A-1",
+              "sku": "pen"
+            }
+          }
+        },
+        "answer": {
+          "ok": {
+            "result": "done"
+          }
+        }
+      }
+    ],
+    "end": {
+      "succeed": {
+        "outcome": "not_paid",
+        "due": "2026-05-08"
+      }
+    }
+  },
+  "books": [
+    {
+      "book": "stock",
+      "file": "books/stock.book",
+      "before": [
+        {
+          "op": "do",
+          "kind": "receive",
+          "args": {
+            "delivery": "D-1",
+            "sku": "pen",
+            "qty": 10
+          },
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "shelf",
+          "args": [
+            "pen"
+          ],
+          "posted": 10,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "suppliers",
+          "args": [],
+          "posted": -10,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "customers",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": [
+        {
+          "kind": "reserve",
+          "key": [
+            "A-1",
+            "pen"
+          ],
+          "state": "voided"
+        }
+      ]
+    }
+  ],
+  "replay": {
+    "execution": "invoice-unpaid",
+    "now": "2026-04-15T10:00:00Z",
+    "input": {
+      "order": {
+        "id": "A-1",
+        "sku": "pen",
+        "quantity": 3,
+        "member": true,
+        "amount": 120
+      }
+    },
+    "books": {
+      "stock": [
+        {
+          "op": "do",
+          "kind": "receive",
+          "args": {
+            "delivery": "D-1",
+            "sku": "pen",
+            "qty": 10
+          }
+        }
+      ]
+    },
+    "answers": [
+      {
+        "ok": {
+          "result": "done"
+        }
+      },
+      {
+        "ok": {
+          "billing": "invoice"
+        }
+      },
+      {
+        "ok": {
+          "day": "2026-05-08",
+          "at": "2026-05-08T09:00:00Z"
+        }
+      },
+      {
+        "error": "failure"
+      },
+      {
+        "ok": {
+          "paid": false
+        }
+      },
+      {
+        "ok": {
+          "result": "done"
+        }
+      }
+    ]
+  }
+}

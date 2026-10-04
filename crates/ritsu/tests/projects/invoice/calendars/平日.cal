@@ -1,0 +1,5 @@
+calendar 平日(weekdays_ja) v1
+description "UTC で日を数え、月曜から金曜まで営業する店。祝日の表は持たない（例は、どのカレンダーにもあることだけを使う）"
+offset +00:00
+
+closed weekly sat, sun

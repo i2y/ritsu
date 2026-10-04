@@ -75,9 +75,9 @@ fn definition(lines: &[&str], from: usize, to: usize) -> String {
 
 impl Engine {
     /// `dandori check` of each file, as `ritsu check` prints it (ritsu's DESIGN 8.3), the rules the
-    /// flows use read through `rules`: every finding, as the command prints it and as its
-    /// `--format json` prints it, then the line that says a file passes. `files` are as the person
-    /// gave them, from where the program runs; `root` is the project's.
+    /// flows use read through `rules`, and no dates file or book: every finding, as the command
+    /// prints it and as its `--format json` prints it, then the line that says a file passes.
+    /// `files` are as the person gave them, from where the program runs; `root` is the project's.
     pub fn checked(&self, root: &Path, files: &[String], rules: std::rc::Rc<dyn ritsu_ports::Rules>, lang: ritsu_base::text::Lang) -> Vec<ritsu_ports::Checked> {
         let ports = ritsu_ports::Ports { rules, dates: std::rc::Rc::new(crate::sources::NoDates), books: std::rc::Rc::new(crate::sources::NoBooks) };
         self.checked_with(root, files, &ports, lang)

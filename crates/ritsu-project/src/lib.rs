@@ -3,9 +3,9 @@
 //! the index of what each file holds and names outside itself, through which every reference
 //! between files is resolved.
 //!
-//! - [`Joined`]: the seven languages, each made once. It hands dandori the port of rules, and
-//!   yuen and sakai the ports they read with the project's [`ritsu_ports::Index`], so that a rule
-//!   the three of them read is read once, and a naming is looked up in one place.
+//! - [`Joined`]: the seven languages, each made once. It hands dandori the ports of rules, dates
+//!   and books, and yuen and sakai the ports they read with the project's [`ritsu_ports::Index`],
+//!   so that a rule the three of them read is read once, and a naming is looked up in one place.
 //! - [`Project`]: the files under the paths given, each with its language (by its extension), in
 //!   the order the languages are checked: the ones that give facts first (rulec, koyomi, chobo,
 //!   geas, `.proto`), then the ones that receive them (dandori, then yuen and sakai).

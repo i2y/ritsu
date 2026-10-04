@@ -17,7 +17,10 @@ pub const LANGUAGES: [&str; 7] = ["rulec", "dandori", "koyomi", "chobo", "geas",
 fn language(name: &'static str) -> Cmd {
     let purpose = match name {
         "rulec" => tr!("rulec のコマンド（業務の規則）", "rulec's commands (business rules)"),
-        "dandori" => tr!("dandori のコマンド（ワークフロー）。フローが使う規則を、同じプロセスの中で読む", "dandori's commands (workflows), reading the rules a flow uses in the same process"),
+        "dandori" => tr!(
+            "dandori のコマンド（ワークフロー）。フローが使う規則、日付のファイル、帳簿を、同じプロセスの中で読む",
+            "dandori's commands (workflows), reading the rules, dates files and books a flow uses in the same process"
+        ),
         "koyomi" => tr!("koyomi のコマンド（締め日、支払日、営業日）", "koyomi's commands (closing days, payment days, business days)"),
         "chobo" => tr!("chobo のコマンド（在庫、お金、ポイント、予約の枠の帳簿）", "chobo's commands (books of stock, money, points and booking slots)"),
         "geas" => tr!("geas のコマンド（人が読んだ主張に、コードを従わせる）", "geas's commands (claims a person has read, held over the code)"),
@@ -54,6 +57,41 @@ fn root_flag() -> Flag {
     )
 }
 
+/// `ritsu run` (DESIGN 7.9): a workflow run with its rules, dates and books computed.
+fn run() -> Cmd {
+    Cmd {
+        usage: Some("ritsu run <file.flow> --scenario <file.json> [--target reference|asl|temporal|temporal-python|temporal-go|durable|argo|pydantic-graph] [--format json]"),
+        name: "run",
+        args: "<file.flow> --scenario <file.json>",
+        purpose: tr!(
+            "ワークフローを dandori の参照インタプリタで流す。規則は rulec が、期日は koyomi が、帳簿の振替は chobo が計算し（帳簿は動きを覚え、仮押さえは時間がたてば期限が切れる）、ほかのタスクの結果はシナリオから取る",
+            "run a workflow in dandori's reference interpreter, its rules computed by rulec, its dates by koyomi and the operations of its books by chobo (a book keeps what was done, and a hold expires as the run's time goes by); every other task is answered by the scenario"
+        ),
+        params: vec![("<file.flow>", tr!("流す .flow のファイル", "the .flow file to run"))],
+        flags: vec![
+            flag(
+                "--scenario",
+                Some("<file.json>"),
+                tr!(
+                    "流すシナリオ（必ず書く）。`dandori run` のシナリオ（入力、`now`、ほかのタスクの結果）に、走らせる前に帳簿にした操作（`books`）を足せる",
+                    "the scenario to run (required): `dandori run`'s (the input, `now`, the other tasks' answers), with what was done to the books before the run (`books`)"
+                ),
+            ),
+            flag("--target", Some("<target>"), tr!("呼び出しを、どのプラットフォームの形で出すか", "the platform whose calls the trace shows"))
+                .choices(dandori::cli::RUN_TARGETS)
+                .default("reference"),
+            flag("--format", Some("json"), tr!("一つの JSON で出す", "print one JSON object")).choices(&["json"]),
+        ],
+        exits: vec![
+            (0, tr!("最後まで流れた（成功、失敗、キャンセルのどれで終わっても）", "the run came to its end (it succeeded, failed or was cancelled)")),
+            (1, tr!("フローにエラーがある、または流れが途中で止まった（シナリオに結果が足りないなど）", "the flow has errors, or the run could not go on (the scenario ran out of answers, say)")),
+            (2, tr!("引数の誤り、読めないファイル、流せないシナリオ", "bad arguments, a file that cannot be read, or a scenario that cannot be run")),
+        ],
+        examples: vec!["ritsu run invoice.flow --scenario scenarios/paid.json", "ritsu run invoice.flow --scenario scenarios/paid.json --target temporal --format json"],
+        codes: vec![],
+    }
+}
+
 pub fn commands() -> Vec<Cmd> {
     let mut cmds = vec![Cmd {
         usage: None,
@@ -79,6 +117,7 @@ pub fn commands() -> Vec<Cmd> {
         examples: vec!["ritsu check", "ritsu check rules/ flows/order.flow --format json", "ritsu check . --lang ja"],
         codes: ritsu_cross::codes::codes(),
     }];
+    cmds.push(run());
     cmds.push(Cmd {
         usage: Some("ritsu explain <CODE> | --all [--format markdown|json]"),
         name: "explain",

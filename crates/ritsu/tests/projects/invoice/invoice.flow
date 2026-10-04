@@ -1,0 +1,98 @@
+# An order of a shop: its goods are held in stock, and a rule says how it is paid. Paid first, the
+# card is charged at once. Paid by invoice, the goods stay held until the payment is due, counted
+# by the payment terms from the moment the order came in, and the payment is looked up then. Paid,
+# the goods ship; unpaid, they go back on the shelves. A hold lasts 30 days, and an invoice can
+# fall due later than that: then the goods are back on the shelves before it does. The rule is
+# rulec's, the due date koyomi's, and the stock a book of chobo's.
+workflow invoice v1
+description "An order holds its goods, is paid first or by invoice as a rule says, and ships once it is paid"
+
+use rule method from "rules/payment_method.rule"
+use dates terms from "dates/payment_terms.cal"
+use book stock from "books/stock.book"
+
+record Order
+  id       : string
+  sku      : string
+  quantity : int  range >=1 <=100
+  member   : bool
+  amount   : money[GBP, incl_tax]  range >=0 <=100000
+
+record Payment
+  paid : bool
+
+enum Outcome = shipped | not_paid | out_of_stock | hold_expired
+
+inputs
+  order : Order
+
+outputs
+  outcome : Outcome
+  due     : date?
+
+task reserve(order: string, sku: string, qty: int) -> stock.reserve
+  book stock.reserve.hold
+  starts stock.reserve
+  errors out_of_stock
+
+task ship(order: string, sku: string) -> stock.reserve
+  book stock.reserve.post
+  sends post
+  errors expired
+
+task put_back(order: string, sku: string) -> stock.reserve
+  book stock.reserve.void
+  sends void
+  errors expired, already_posted
+
+# The card is charged at once, for an order paid first.
+task charge(order: string, amount: money[GBP, incl_tax]) -> Payment
+  http POST "https://payments.example.com/orders/{order}/charges"
+  key
+
+# What came in for an invoice, by the day it was due.
+task check_payment(order: string, due: date) -> Payment
+  http GET "https://payments.example.com/orders/{order}/payment"
+  retry 2 times every 10 seconds
+  idempotent
+
+case hold : stock.reserve follows stock.reserve
+
+flow
+  hold <- reserve(order: order.id, sku: order.sku, qty: order.quantity)
+    on out_of_stock => succeed outcome = out_of_stock, due = none
+  let how = method(member: order.member, amount: order.amount)
+  match how.billing
+    prepay =>
+      let payment = charge(order: order.id, amount: order.amount)
+      match payment.paid
+        true =>
+          hold <- ship(order: order.id, sku: order.sku)
+            on expired => succeed outcome = hold_expired, due = none
+          succeed outcome = shipped, due = none
+        false =>
+          hold <- put_back(order: order.id, sku: order.sku)
+            on expired => pass
+          succeed outcome = not_paid, due = none
+    invoice =>
+      let due = terms.payment(received: now)
+      wait until due.at
+      let payment = check_payment(order: order.id, due: due.day)
+      match payment.paid
+        true =>
+          hold <- ship(order: order.id, sku: order.sku)
+            on expired => succeed outcome = hold_expired, due = due.day
+          succeed outcome = shipped, due = due.day
+        false =>
+          hold <- put_back(order: order.id, sku: order.sku)
+            on expired => pass
+          succeed outcome = not_paid, due = due.day
+
+on failure
+  match hold.state
+    none => pass
+    held =>
+      hold <- put_back(order: order.id, sku: order.sku)
+        on expired => pass
+        on already_posted => pass
+        on failure => fail NotPutBack "the goods held for the order could not be put back" leaving hold

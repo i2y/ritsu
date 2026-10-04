@@ -1,0 +1,33 @@
+{
+  "execution": "invoice-expired",
+  "now": "2026-04-21T10:00:00Z",
+  "input": {
+    "order": {
+      "id": "A-1",
+      "sku": "pen",
+      "quantity": 3,
+      "member": true,
+      "amount": 120
+    }
+  },
+  "books": {
+    "stock": [
+      {
+        "op": "do",
+        "kind": "receive",
+        "args": {
+          "delivery": "D-1",
+          "sku": "pen",
+          "qty": 10
+        }
+      }
+    ]
+  },
+  "answers": [
+    {
+      "ok": {
+        "paid": true
+      }
+    }
+  ]
+}

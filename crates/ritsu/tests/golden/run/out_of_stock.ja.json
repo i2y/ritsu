@@ -1,0 +1,129 @@
+{
+  "ritsu": "0.1.0",
+  "flow": "invoice.ja.flow",
+  "scenario": "scenarios/out_of_stock.ja.json",
+  "target": "reference",
+  "diagnostics": [],
+  "start": "2026-04-15T10:00:00Z",
+  "end": "2026-04-15T10:00:00Z",
+  "elapsed": 0,
+  "events": [
+    {
+      "call": "引き当てる",
+      "args": {
+        "注文": "A-1",
+        "sku": "ペン",
+        "数": 20
+      },
+      "by": "chobo",
+      "answer": {
+        "error": "在庫切れ",
+        "cause": "在庫切れ"
+      }
+    }
+  ],
+  "trace": {
+    "steps": [
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "transfer": "引当",
+            "op": "hold",
+            "args": {
+              "注文": "A-1",
+              "sku": "ペン",
+              "数": 20
+            }
+          }
+        },
+        "answer": {
+          "error": "在庫切れ",
+          "as": "在庫切れ"
+        }
+      }
+    ],
+    "end": {
+      "succeed": {
+        "結果": "在庫切れ",
+        "期日": null
+      }
+    }
+  },
+  "books": [
+    {
+      "book": "在庫",
+      "file": "books/在庫.book",
+      "before": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "D-1",
+            "sku": "ペン",
+            "数": 10
+          },
+          "result": "done"
+        }
+      ],
+      "accounts": [
+        {
+          "account": "棚",
+          "args": [
+            "ペン"
+          ],
+          "posted": 10,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "仕入先",
+          "args": [],
+          "posted": -10,
+          "held_in": 0,
+          "held_out": 0
+        },
+        {
+          "account": "客",
+          "args": [],
+          "posted": 0,
+          "held_in": 0,
+          "held_out": 0
+        }
+      ],
+      "holds": []
+    }
+  ],
+  "replay": {
+    "execution": "out-of-stock",
+    "now": "2026-04-15T10:00:00Z",
+    "input": {
+      "受注": {
+        "id": "A-1",
+        "sku": "ペン",
+        "数": 20,
+        "会員": true,
+        "金額": 120
+      }
+    },
+    "books": {
+      "在庫": [
+        {
+          "op": "do",
+          "kind": "入荷",
+          "args": {
+            "納品書": "D-1",
+            "sku": "ペン",
+            "数": 10
+          }
+        }
+      ]
+    },
+    "answers": [
+      {
+        "error": "在庫切れ",
+        "cause": "在庫切れ"
+      }
+    ]
+  }
+}

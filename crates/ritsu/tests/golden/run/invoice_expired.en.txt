@@ -1,0 +1,19 @@
+invoice.flow (scenario scenarios/invoice_expired.json, from 2026-04-21T10:00:00Z)
+before the run, book stock:
+  receive.do(delivery: "D-1", sku: "pen", qty: 10)  done
+the run:
+  reserve(order: "A-1", sku: "pen", qty: 3)        chobo     done
+  method(member: true, amount: 120)                rulec     {"billing":"invoice"}
+  terms.payment(received: "2026-04-21T10:00:00Z")  koyomi    {"day":"2026-06-10","at":"2026-06-10T09:00:00Z"}
+  wait until 2026-06-10T09:00:00Z                            49 days 23:00:00, to 2026-06-10T09:00:00Z
+  the hold reserve(A-1, pen) of the book stock               expired
+  check_payment(order: "A-1", due: "2026-06-10")   scenario  {"paid":true}
+  ship(order: "A-1", sku: "pen")                   chobo     refused: expired
+end: succeed {"outcome":"hold_expired","due":"2026-06-10"}
+book stock (books/stock.book) at the end:
+  accounts:
+    shelf(pen)  posted 10, held out 0, held in 0
+    suppliers   posted -10, held out 0, held in 0
+    customers   posted 0, held out 0, held in 0
+  holds:
+    reserve(A-1, pen)  expired

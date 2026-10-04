@@ -174,6 +174,15 @@ pub trait Ledger {
 
     /// One account's balance, by its kind and the values of its parameters.
     fn balance(&self, account: &str, args: &[String]) -> Result<Balance, Text>;
+
+    /// Every account a `do` or a `hold` has named so far, done or refused, by its kind and the
+    /// values of its parameters, with its balance: the accounts `chobo run` lists at the end of a
+    /// scenario, in its order.
+    fn accounts(&self) -> Vec<(String, Vec<String>, Balance)>;
+
+    /// Every hold so far: its transfer, the values of its key, and its state now (`held`,
+    /// `posted`, `voided` or `expired`), in the order `chobo run` lists the holds.
+    fn holds(&self) -> Vec<(String, Vec<String>, String)>;
 }
 
 /// What chobo answers for a book. `file` is the book, as the caller reaches it.
