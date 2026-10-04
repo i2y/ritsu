@@ -89,12 +89,16 @@ token.
 In a draft of calls to Stripe and to a stock service
 ([tests/fixtures/api_calls.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/api_calls.flow)):
 
+<div class="dd-term" markdown>
+
 ```text
 error[E016]: tests/fixtures/api_calls.flow:23:1: what `stripe` POST /v1/payment_intents answers is not `PaymentIntent`: in `created`, an integer is not `timestamp`
     23 | task create_intent(amount: int, currency: string, capture_method: CaptureMethod) -> PaymentIntent
 error[E016]: tests/fixtures/api_calls.flow:26:1: what `warehouse` StockService/Reserve answers is not `Reservation`: in `count`, a 64-bit integer comes as a string in protobuf's JSON; declare it `string`
     26 | task reserve_stock(sku: string, quantity: int) -> Reservation
 ```
+
+</div>
 
 protobuf's JSON leaves out a field without presence when it holds its zero value (an empty string,
 0, false, an enum's first value, an empty list or map), and whoever reads it with protobuf reads the
@@ -169,11 +173,15 @@ description: the table that makes a type is the one the task is held to.
 - A name the `.proto` does not have is E002, with the names it has. A service's name is E002 too, and
   so is a name after an OpenAPI document or a Smithy model, which make no types.
 
+<div class="dd-term" markdown>
+
 ```text
 error[E002]: tests/fixtures/proto_types.flow:27:11: there is no type `types.Stok`
     27 |   stock : types.Stok
   = the messages and enums of `types` are Box, Everything, Everything.Nested, GetRequest, Line, Mode, Status, Ticket
 ```
+
+</div>
 
 - A number's range is what Protovalidate says of it: `gte`, `gt`, `lte`, `lt` and `const` under
   `(buf.validate.field).int32`, written in one option or one by one, and `repeated.items` for the
@@ -184,12 +192,16 @@ error[E002]: tests/fixtures/proto_types.flow:27:11: there is no type `types.Stok
   E016. A field that says whether it is set is `T`, not `T?`, when it is `required`. The other rules
   (the length of a string, the count of a list, CEL) are read as not there.
 
+<div class="dd-term" markdown>
+
 ```text
 error[E014]: tests/fixtures/proto_ranges.flow:35:1: `line.quantity` can be outside `>=1 <=5`, the range of the parameter `n` of `few`: it is `>=1 <=99`
     35 |   few(n: line.quantity)
 error[E014]: tests/fixtures/proto_ranges.flow:41:1: `many` can be outside `>=1 <=10`, the range of the field `count` of `types.Box`: it is `>=1 <=200`
     41 |   let too_many: types.Box = {count: many}
 ```
+
+</div>
 
 - An enum's zero value is left out when its name says nothing was set: with the enum's own name in
   capitals in front (`STOCK_`) taken off, it is `unspecified`, in any case. That is protobuf's mark of a
@@ -210,11 +222,15 @@ error[E014]: tests/fixtures/proto_ranges.flow:41:1: `many` can be outside `>=1 <
   made (E002), a method that takes or answers one cannot be held to a task (E016), and the diagnostic
   names the files that were not read.
 
+<div class="dd-term" markdown>
+
 ```text
 error[E002]: tests/fixtures/proto_unread.flow:11:12: `catalog.Priced` cannot be made: its field `price` is of the type `google.type.Money`, which is not known; write the record yourself, with `json` for `price`
     11 |   priced : catalog.Priced
   = `google/api/annotations.proto`, `google/type/money.proto` and `shop/v2/cancel.proto` could not be read, so the types in them cannot be used
 ```
+
+</div>
 
 ## A rule as a service
 
@@ -233,10 +249,14 @@ use rule urgency from "../rules/urgency.rule"
 Task calls it through, and it goes only with `connect`. A rule is called by `lambda` or by `connect`,
 not by both (E007); `local` still makes it a local activity on Temporal.
 
+<div class="dd-term" markdown>
+
 ```text
 error[E007]: tests/fixtures/rule_connect.flow:6:3: the rule is already called another way (line 5); a rule is called by `lambda` or by `connect`
      6 |   connect "https://rules.example.com"
 ```
+
+</div>
 
 dandori reads the service as it reads the rest of the rule, from what rulec says of it, and not from
 the `.proto` that `rulec gen` writes: the path of the method, the fields of its request and its response, and what
@@ -333,7 +353,7 @@ may be none (`T?`): the code dandori writes passes a rule no null, and reads non
 
 The order example for AWS calls its urgency rule this way
 ([order.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/order/aws/order.flow)), and the tests
-send the services `rulec gen` writes what dandori sends them ([How it is checked](https://i2y.github.io/dandori/assurance/)).
+send the services `rulec gen` writes what dandori sends them ([How it is checked](assurance.md)).
 
 ## Child flows
 
@@ -348,12 +368,16 @@ direction the values go.
 In a draft of the fulfillment whose delivery task does not fit its child
 ([tests/fixtures/fulfillment_child.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/fulfillment_child.flow)):
 
+<div class="dd-term" markdown>
+
 ```text
 error[E015]: tests/fixtures/fulfillment_child.flow:18:1: the parameter `carrier` is not what `arrange_delivery` takes as its input `carrier`: `drone` of `Carrier` is not a value of `carrier`
     18 | task arrange_delivery(order_id: string, carrier: Carrier, recipient: string?, extra: json) -> Delivery
 error[E015]: tests/fixtures/fulfillment_child.flow:18:1: `arrange_delivery` answers `tracking_number` with what the field `tracking_number` of `Delivery` does not take: `string` is not `int`
     18 | task arrange_delivery(order_id: string, carrier: Carrier, recipient: string?, extra: json) -> Delivery
 ```
+
+</div>
 
 The child's names come from its `.flow`: on Temporal the task starts the child's workflow type
 (`arrange_delivery_v1`) on its task queue (the same name, where the child's generated worker polls),

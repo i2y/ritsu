@@ -35,9 +35,9 @@ skill run dandori without a prompt each time, add this to the project's settings
 ## Rebuilding it
 
 `SKILL.md` is written by hand. Everything else is a copy of an English page of the site
-(`website/docs`), made by `skills/sync.sh`, with the links rewritten so that none leaves the skill
-directory: a copied skill sits in someone else's project, where a link back into this repository
-leads nowhere.
+(`website/dandori/docs`, at the root of ritsu's repository), made by `skills/sync.sh`, with the
+links rewritten so that none leaves the skill directory: a copied skill sits in someone else's
+project, where a link back into this repository leads nowhere.
 
 ```console
 $ skills/sync.sh

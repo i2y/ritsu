@@ -377,7 +377,7 @@ cargo install --git https://github.com/i2y/ritsu --locked rulec
   [sakai](crates/sakai/README.ja.md)（rulec と dandori は英語だけ）
 - `crates/ritsu-*`：共通の土台、単位、口、プロジェクトの読み込み、言語をまたぐ検査、`.proto` の読み手、生成の共通部分、ブラウザ向けのビルド
 - `proofs/`：Lean のモデル
-- `website/`：ブラウザで試すページ
+- `website/`：サイト（ritsu のページ、ブラウザで試すページ、`website/dandori` に置いた dandori のサイト）
 - `DESIGN.md`、`PLAN.md`：全体の設計（日本語）
 
 ## ライセンス

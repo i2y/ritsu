@@ -32,7 +32,7 @@ fn the_references_are_the_pages_as_sync_copies_them() {
     let committed: Vec<String> = names(&skill()).into_iter().filter(|n| n != "SKILL.md").collect();
     assert_eq!(committed, built, "skills/dandori holds other files than skills/sync.sh builds, besides SKILL.md");
     let stale: Vec<&String> = built.iter().filter(|n| fs::read_to_string(scratch.join(n)).unwrap() != fs::read_to_string(skill().join(n)).unwrap()).collect();
-    assert!(stale.is_empty(), "not what skills/sync.sh builds from website/docs; run skills/sync.sh: {stale:?}");
+    assert!(stale.is_empty(), "not what skills/sync.sh builds from website/dandori/docs; run skills/sync.sh: {stale:?}");
 }
 
 /// The targets of the Markdown links in a text, outside fenced code and inline code.

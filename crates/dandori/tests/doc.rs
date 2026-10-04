@@ -1,6 +1,7 @@
 //! `doc` draws what the checker knows. Its Markdown for the examples, the flows of tests/flows and a
 //! first draft with errors is word for word the golden files in tests/doc, and the site's pages of
-//! the examples (website/docs/doc, website/docs-ja/doc) are what it writes now. On every scenario, a
+//! the examples (website/dandori/docs/doc and docs-ja/doc, at the root of ritsu's workspace) are what
+//! it writes now. On every scenario, a
 //! run lights up a way that holds together: every statement it passed is on the picture, and every
 //! step it lit but the first is reached by an edge it lit. Every Mermaid chart draws, in Mermaid 11
 //! and 12 in headless Chrome; and in Chrome, a page lights up what its data says.
@@ -26,8 +27,19 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+/// The root of ritsu's workspace, two directories above this crate.
+fn repo() -> PathBuf {
+    root().parent().and_then(Path::parent).expect("the crate is in crates/ of the workspace").to_path_buf()
+}
+
+/// dandori's site, which ritsu's site holds at website/dandori.
+fn site() -> PathBuf {
+    repo().join("website/dandori")
+}
+
+/// A file as the messages name it: from the crate, or else from the root of the workspace.
 fn rel(p: &Path) -> String {
-    p.strip_prefix(root()).unwrap_or(p).display().to_string()
+    p.strip_prefix(root()).or_else(|_| p.strip_prefix(repo())).unwrap_or(p).display().to_string()
 }
 
 /// Run `f` reading the rules through rulec's own answer to the port, as `ritsu dandori` reads them:
@@ -155,10 +167,10 @@ fn the_site_shows_the_pages_doc_writes_now() {
     let mut wrong = Vec::new();
     for ex in EXAMPLES {
         // the Japanese site draws the Japanese version of each example
-        for (lang, dir, version) in [(Lang::En, "website/docs/doc", ""), (Lang::Ja, "website/docs-ja/doc", ".ja")] {
+        for (lang, dir, version) in [(Lang::En, "docs/doc", ""), (Lang::Ja, "docs-ja/doc", ".ja")] {
             let f = example(ex, version);
             let page = written(&f, lang, true);
-            let at = root().join(format!("{dir}/{ex}.html"));
+            let at = site().join(format!("{dir}/{ex}.html"));
             if ritsu_testkit::golden::check(&at, &page).is_err() {
                 wrong.push(format!("{} is not what `dandori doc {} --format html` writes now; rewrite it with DANDORI_BLESS=1", rel(&at), rel(&f)));
             }
@@ -350,7 +362,7 @@ fn a_page_lights_up_what_its_data_says() {
     let Some(chrome) = chrome() else {
         return;
     };
-    let page = root().join("website/docs/doc/hotel.html");
+    let page = site().join("docs/doc/hotel.html");
     let text = std::fs::read_to_string(&page).expect("the site's page of the hotel booking");
     let data: Value = serde_json::from_str(text.split("<script type=\"application/json\" id=\"dd-data\">").nth(1).unwrap().split("</script>").next().unwrap().replace("<\\/", "</").as_str()).unwrap();
     let runs = data["runs"].as_array().unwrap();

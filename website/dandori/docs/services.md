@@ -80,12 +80,16 @@ The checker holds the workflow to the service (E017), one difference at a time:
 In a draft whose service and workflow have drifted apart
 ([tests/fixtures/service.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/service.flow)):
 
+<div class="dd-term" markdown>
+
 ```text
 error[E017]: tests/fixtures/service.flow:1:36: the workflow fails with `PackingLate`, which `fails` of `Fulfill` does not list
      1 | workflow fulfillment v1 implements shop.FulfillmentService
 error[E017]: tests/fixtures/service.flow:1:36: `fails` of `Fulfill` lists `Lost`, and the workflow never fails with it
      1 | workflow fulfillment v1 implements shop.FulfillmentService
 ```
+
+</div>
 
 The types are compared by shape, not by name. An input can be a message of the `.proto`
 (`shop.Order`), and then it fits as it is; or a record of the `.flow`, as the fulfillment's order

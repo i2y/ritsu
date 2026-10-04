@@ -205,6 +205,15 @@ jobs:
         if: matrix.group == 'dandori'
         run: cd crates/dandori/tools/temporal-go && go mod download
 
+      # ritsu's tests/website.rs builds the site (ritsu's pages and dandori's) with website/build.sh,
+      # which runs the Zensical of website/.venv.
+      - name: "ritsu: Zensical, for the site"
+        if: matrix.group == 'dandori'
+        run: |
+          set -eu
+          uv venv --python 3.13 website/.venv
+          uv pip install --python website/.venv/bin/python zensical
+
       # protoc builds the .proto of every service of dandori's examples with dandori's options
       # (tests/protos.rs). The release's archive, held to the checksum it had when this was
       # written; it carries the well-known types beside the compiler.
@@ -298,7 +307,7 @@ jobs:
       - name: Copy in the pages the sites share
         run: |
           crates/rulec/website/sync.sh
-          crates/dandori/website/sync.sh
+          website/dandori/sync.sh
 
       # The steps after the tests run the workspace's binaries (`target/debug/rulec` and the like).
       - name: Build

@@ -23,7 +23,8 @@ retries, and drives things like a Stripe PaymentIntent from state to state.
   case whose expiry the checker counts.
 
 **Documentation: <https://i2y.github.io/dandori/>**, in English and Japanese. The pages are also
-readable here, in [website/docs](website/docs) and [website/docs-ja](website/docs-ja).
+readable here, in [website/dandori/docs](../../website/dandori/docs) and
+[website/dandori/docs-ja](../../website/dandori/docs-ja).
 
 **Try it in the browser: <https://i2y.github.io/dandori/playground/>**. The checker, the builds
 and `dandori doc`, compiled to wasm32 and run in the page, on the examples or on a flow you edit,

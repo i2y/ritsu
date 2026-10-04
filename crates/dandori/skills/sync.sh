@@ -1,9 +1,11 @@
 #!/bin/sh
-# Build the references bundled with the dandori skill from the site's English pages.
+# Build the references bundled with the dandori skill from the site's English pages, which are in
+# website/dandori/docs at the root of ritsu's workspace.
 #
 # The skill is for people and agents who use dandori in their own projects, so no link in it may
 # leave the skill directory: the pages are copied flat, their links to one another are rewritten
-# to the copies, and a link to a page that is not bundled goes to the published site. SKILL.md is
+# to the copies, and a link to a page that is not bundled goes to the published site (dandori's
+# own, until ritsu's site that holds dandori's at /ritsu/dandori/ is published). SKILL.md is
 # written by hand and is not touched here. tests/skill.rs runs this into a scratch directory and
 # fails if the committed copies have drifted from the pages.
 #
@@ -11,7 +13,7 @@
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 out=${1:-$here/dandori}
-docs=$here/../website/docs
+docs=$here/../../../website/dandori/docs
 site=https://i2y.github.io/dandori
 mkdir -p "$out"
 

@@ -67,10 +67,14 @@ travels, so the value goes to a rule as it is.
 Jev writes no text, so an answer of another type is refused
 ([tests/fixtures/jev.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/jev.flow)):
 
+<div class="dd-term" markdown>
+
 ```text
 error[E007]: tests/fixtures/jev.flow:38:3: Jev answers a choice among an enum's values, a place on a scale of them (`score`), yes or no (`bool`), or a record of such answers; it writes no text; the answer is `string`
     38 |   jev "要点は何か"
 ```
+
+</div>
 
 ## How sure is sure enough
 
@@ -112,10 +116,14 @@ How sure one version of Jev is means something else to the next, so a task that 
 reads one names the version it was set for. `jev-latest` and `jev-preview` are aliases, which move
 to a new version by themselves, and the checker warns of them:
 
+<div class="dd-term" markdown>
+
 ```text
 warning[W032]: tests/fixtures/jev.flow:192:3: `jev-latest` is an alias, which moves to a new version of Jev without a change here, and how sure one version is means something else to the next; name the version the confidence is set for, as `model "jev-1.13.0"`
    192 |   model "jev-latest"
 ```
+
+</div>
 
 ## Who is called
 
@@ -145,4 +153,4 @@ a choice without its confidence, does not fit the type, and ends the run as any 
   ask Jev for the judgement.
 - The tests answer Jev's calls with a stand-in, in the shape of TypeSafe's API reference, and check
   the default `Transport`'s requests on this machine. With `TYPESAFE_API_KEY` set, they also send each
-  Jev task once to TypeSafe for real ([How it is checked](https://i2y.github.io/dandori/assurance/)).
+  Jev task once to TypeSafe for real ([How it is checked](assurance.md)).

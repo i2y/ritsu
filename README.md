@@ -432,7 +432,7 @@ Linux, `.deb` and `.rpm` packages, and a Homebrew formula.
 - `crates/ritsu-*` — the shared base, units, ports, project reading, the checks across
   languages, the `.proto` reader, the emitters, the browser build
 - `proofs/` — the Lean models
-- `website/` — the playground
+- `website/` — the site: ritsu's pages and the playground, with dandori's site in `website/dandori`
 - `DESIGN.md`, `PLAN.md` — the design of the whole (in Japanese)
 
 ## License

@@ -1,4 +1,5 @@
-//! The playground on the site (website/docs/playground): what it reads the examples from is what
+//! The playground on the site (website/dandori/docs/playground, at the root of ritsu's workspace):
+//! what it reads the examples from is what
 //! the command reads, the module it runs answers what the binary answers, and the page starts in
 //! Chrome and shows what `check` prints.
 //!
@@ -6,7 +7,7 @@
 //! files they read, and what rulec, koyomi and chobo answered for their rules, dates files and
 //! books through ritsu's ports, read in this process; `DANDORI_BLESS=1` records it anew), and
 //! dandori.wasm, built by
-//! website/tools/make_wasm.sh. Both can go stale, and these tests are what says so. Node drives
+//! website/dandori/tools/make_wasm.sh. Both can go stale, and these tests are what says so. Node drives
 //! the module, and Chrome the page (ritsu-testkit's: `RITSU_CHROME` or `DANDORI_CHROME`, else where
 //! macOS keeps it, else on the PATH). A test that cannot find what it needs prints `SKIP:
 //! dandori: …` and passes.
@@ -32,8 +33,14 @@ fn rel(p: &Path) -> String {
     sources::key(p.strip_prefix(root()).unwrap_or(p))
 }
 
+/// The root of ritsu's workspace, two directories above this crate.
+fn repo() -> PathBuf {
+    root().parent().and_then(Path::parent).expect("the crate is in crates/ of the workspace").to_path_buf()
+}
+
+/// The playground in dandori's site, which ritsu's site holds at website/dandori.
 fn site() -> PathBuf {
-    root().join("website/docs/playground")
+    repo().join("website/dandori/docs/playground")
 }
 
 /// rulec's own answer to ritsu's port of rules, one a thread: what `ritsu dandori` reads the rules
@@ -181,7 +188,7 @@ fn laid_out(v: &Value, depth: usize, indent: usize) -> String {
 }
 
 fn committed() -> (Value, Rc<Bundle>) {
-    let text = std::fs::read_to_string(site().join("presets.json")).expect("website/docs/playground/presets.json");
+    let text = std::fs::read_to_string(site().join("presets.json")).expect("website/dandori/docs/playground/presets.json");
     let v: Value = serde_json::from_str(&text).unwrap();
     let b = Bundle::from_json(&v).unwrap();
     (v, Rc::new(b))
@@ -212,7 +219,7 @@ fn presets_are_what_the_examples_read() {
         std::fs::write(&file, &now).unwrap();
         return;
     }
-    assert!(was == now, "website/docs/playground/presets.json is not what the examples read now; record it anew with DANDORI_BLESS=1 cargo test --test playground");
+    assert!(was == now, "website/dandori/docs/playground/presets.json is not what the examples read now; record it anew with DANDORI_BLESS=1 cargo test -p dandori --test playground");
     let v: Value = serde_json::from_str(&now).unwrap();
     for k in v["files"].as_object().unwrap().keys().chain(v["rules"].as_object().unwrap().keys()) {
         assert!(!k.starts_with('/') && !k.starts_with(".."), "presets.json names a file outside the repository: {k}");
@@ -379,7 +386,7 @@ fn edits() -> Vec<(String, String, &'static str)> {
 #[test]
 fn the_module_answers_as_the_library_does() {
     let wasm = site().join("dandori.wasm");
-    if !ready(Need::Node, || node_available() && wasm.exists(), "node or website/docs/playground/dandori.wasm is missing") {
+    if !ready(Need::Node, || node_available() && wasm.exists(), "node or website/dandori/docs/playground/dandori.wasm is missing") {
         return;
     }
     let (v, bundle) = committed();
@@ -416,7 +423,7 @@ fn the_module_answers_as_the_library_does() {
     assert!(o.status.success(), "the driver failed: {}", String::from_utf8_lossy(&o.stderr));
     let got: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("answers.json")).unwrap()).unwrap();
 
-    assert_eq!(got["version"], env!("CARGO_PKG_VERSION"), "website/docs/playground/dandori.wasm is of another version; run website/tools/make_wasm.sh");
+    assert_eq!(got["version"], env!("CARGO_PKG_VERSION"), "website/dandori/docs/playground/dandori.wasm is of another version; run website/dandori/tools/make_wasm.sh");
     assert!(got["before"].as_str().unwrap().contains("the bundle has not been handed over"), "before the bundle: {}", got["before"]);
     assert_eq!(got["kept"], "", "the module did not keep the bundle");
     let answers = got["answers"].as_array().unwrap();
@@ -431,7 +438,7 @@ fn the_module_answers_as_the_library_does() {
     }
     assert!(
         stale.is_empty(),
-        "website/docs/playground/dandori.wasm answers otherwise than the library now; run website/tools/make_wasm.sh:\n{}",
+        "website/dandori/docs/playground/dandori.wasm answers otherwise than the library now; run website/dandori/tools/make_wasm.sh:\n{}",
         stale.join("\n")
     );
     eprintln!("compared: {} requests answered by the module as by the library", requests.len());
@@ -506,18 +513,18 @@ fn the_page_starts_in_chrome() {
         return;
     };
     if !site().join("dandori.wasm").exists() {
-        skip("website/docs/playground/dandori.wasm is missing; run website/tools/make_wasm.sh");
+        skip("website/dandori/docs/playground/dandori.wasm is missing; run website/dandori/tools/make_wasm.sh");
         return;
     }
     let (_, bundle) = committed();
     let draft = "tests/fixtures/hotel_naive.flow";
     let mut looked = 0;
     for (tag, page, hotel, order) in [
-        ("en", "website/docs/playground.md", "examples/hotel/temporal/hotel.flow", "examples/order/temporal/order.flow"),
-        ("ja", "website/docs-ja/playground.md", "examples/hotel/temporal/hotel.ja.flow", "examples/order/temporal/order.ja.flow"),
+        ("en", "website/dandori/docs/playground.md", "examples/hotel/temporal/hotel.flow", "examples/order/temporal/order.flow"),
+        ("ja", "website/dandori/docs-ja/playground.md", "examples/hotel/temporal/hotel.ja.flow", "examples/order/temporal/order.ja.flow"),
     ] {
         // the widget as the page has it, with the script served from here
-        let md = std::fs::read_to_string(root().join(page)).unwrap();
+        let md = std::fs::read_to_string(repo().join(page)).unwrap();
         let from = md.find("<div class=\"pg\"").expect("the page has no playground");
         let tail = "<script src=\"playground/playground.js\" defer></script>";
         let to = md[from..].find(tail).expect("the page does not load playground.js") + from + tail.len();

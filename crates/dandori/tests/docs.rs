@@ -1,4 +1,5 @@
-//! The README, the site (website/docs, website/docs-ja) and the agent skill (skills/dandori) show
+//! The README, the site (website/dandori/docs and docs-ja, at the root of ritsu's workspace) and the
+//! agent skill (skills/dandori) show
 //! what the tool does: every diagnostic on them is word for word in a golden file of
 //! tests/fixtures, which the fixtures test holds to the checker; every Mermaid chart on them is word
 //! for word in a golden file of tests/doc, which tests/doc.rs holds to `dandori doc`; every line of
@@ -13,6 +14,16 @@ use std::path::{Path, PathBuf};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+/// The root of ritsu's workspace, two directories above this crate.
+fn repo() -> PathBuf {
+    root().parent().and_then(Path::parent).expect("the crate is in crates/ of the workspace").to_path_buf()
+}
+
+/// dandori's site, which ritsu's site holds at website/dandori.
+fn site() -> PathBuf {
+    repo().join("website/dandori")
 }
 
 /// The files under `dir` with the extension `ext`, in a stable order.
@@ -37,8 +48,8 @@ fn files(dir: &Path, ext: &str) -> Vec<PathBuf> {
 fn pages() -> Vec<(String, Vec<PathBuf>)> {
     vec![
         ("README.md".into(), vec![root().join("README.md")]),
-        ("website/docs".into(), files(&root().join("website/docs"), "md")),
-        ("website/docs-ja".into(), files(&root().join("website/docs-ja"), "md")),
+        ("website/dandori/docs".into(), files(&site().join("docs"), "md")),
+        ("website/dandori/docs-ja".into(), files(&site().join("docs-ja"), "md")),
         ("skills/dandori".into(), files(&root().join("skills/dandori"), "md")),
     ]
 }
@@ -61,8 +72,9 @@ fn fenced(text: &str) -> Vec<(String, Vec<String>)> {
     blocks
 }
 
+/// A file as the messages name it: from the crate, or else from the root of the workspace.
 fn shown(f: &Path) -> String {
-    f.strip_prefix(root()).unwrap().display().to_string()
+    f.strip_prefix(root()).or_else(|_| f.strip_prefix(repo())).unwrap().display().to_string()
 }
 
 #[test]
@@ -201,8 +213,8 @@ fn codes() -> BTreeSet<String> {
 #[test]
 fn the_codes_pages_list_every_code_and_no_other() {
     let codes = codes();
-    for page in ["website/docs/reference/codes.md", "website/docs-ja/reference/codes.md"] {
-        let listed: BTreeSet<String> = fs::read_to_string(root().join(page))
+    for page in ["website/dandori/docs/reference/codes.md", "website/dandori/docs-ja/reference/codes.md"] {
+        let listed: BTreeSet<String> = fs::read_to_string(repo().join(page))
             .unwrap()
             .lines()
             .filter_map(|l| l.strip_prefix("| ")?.split(' ').next())
@@ -213,11 +225,11 @@ fn the_codes_pages_list_every_code_and_no_other() {
     }
     let n = codes.len();
     for (page, says) in [
-        ("README.md", format!("all {n} codes")),
-        ("website/docs/checks.md", format!("lists all {n}")),
-        ("website/docs-ja/checks.md", format!("{n} 種類すべて")),
+        ("crates/dandori/README.md", format!("all {n} codes")),
+        ("website/dandori/docs/checks.md", format!("lists all {n}")),
+        ("website/dandori/docs-ja/checks.md", format!("{n} 種類すべて")),
     ] {
-        let text = fs::read_to_string(root().join(page)).unwrap().split_whitespace().collect::<Vec<_>>().join(" ");
+        let text = fs::read_to_string(repo().join(page)).unwrap().split_whitespace().collect::<Vec<_>>().join(" ");
         assert!(text.contains(&says), "{page} must say how many codes there are: {says:?}");
     }
 }
@@ -232,7 +244,7 @@ fn quoted(text: &str, start: &str, end: &str) -> Vec<String> {
 #[test]
 fn the_site_highlights_the_keywords_of_the_language() {
     let ours = quoted(&fs::read_to_string(root().join("src/syntax.rs")).unwrap(), "const KEYWORDS: &[&str] = &[", "];");
-    let site = quoted(&fs::read_to_string(root().join("website/tools/flowlexer.py")).unwrap(), "KEYWORDS = (", ")");
+    let lexer = quoted(&fs::read_to_string(site().join("tools/flowlexer.py")).unwrap(), "KEYWORDS = (", ")");
     assert!(ours.len() > 50, "src/syntax.rs's KEYWORDS were not found");
-    assert_eq!(site, ours, "website/tools/flowlexer.py's KEYWORDS must be src/syntax.rs's, word for word");
+    assert_eq!(lexer, ours, "website/dandori/tools/flowlexer.py's KEYWORDS must be src/syntax.rs's, word for word");
 }

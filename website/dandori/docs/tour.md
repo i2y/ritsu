@@ -216,12 +216,16 @@ and counted in the type's unit: `>=1kg` is 1000 of `mass[g]`.
 In a draft of the hotel booking whose stays run longer than the rule for the hold takes
 ([tests/fixtures/hotel_ranges.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/hotel_ranges.flow)):
 
+<div class="dd-term" markdown>
+
 ```text
 error[E014]: tests/fixtures/hotel_ranges.flow:20:1: `booking.nights` can be outside `>=1 <=30`, the range of `nights` of the rule `hold`: it is `>=1 <=60`
     20 |   let quote = hold(room: booking.room, nights: booking.nights)
 warning[W104]: tests/fixtures/hotel_ranges.flow:21:1: nothing says what range `extension` is in (the input `extension` has no range), and `nights` of the rule `hold` takes `>=1 <=30`
     21 |   let longer = hold(room: booking.room, nights: extension)
 ```
+
+</div>
 
 A variable's range is that of every value put in it, anywhere in the flow. Since a `.flow` has no
 arithmetic, a range travels as it is, from where a value comes to where it goes. On Temporal, adding
@@ -230,6 +234,6 @@ ships as a new version or through Worker Deployment Versioning.
 
 ## See it drawn
 
-`dandori doc` draws the workflow this page has read: [the hotel booking, drawn](https://i2y.github.io/dandori/doc/hotel.html),
+`dandori doc` draws the workflow this page has read: [the hotel booking, drawn](doc/hotel.html),
 where each scenario lights up the way its run goes. [Draw a workflow](diagrams.md) says what is on
 the picture.

@@ -1,0 +1,6 @@
+build/
+.venv/
+.cache/
+
+# Copied in from docs/ by sync.sh: both languages run the same playground.
+docs-ja/playground/

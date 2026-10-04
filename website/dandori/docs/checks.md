@@ -10,6 +10,8 @@ In a hotel booking that holds a card and captures at check-out
 ([tests/fixtures/hotel_naive.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/hotel_naive.flow),
 a first draft of the example):
 
+<div class="dd-term" markdown>
+
 ```text
 error[E020]: tests/fixtures/hotel_naive.flow:95:1: the workflow can end here with the case `pi` in requires_payment_method, processing, which is not final (succeeded, canceled are)
     95 |   succeed outcome = stayed
@@ -24,6 +26,8 @@ error[E020]: tests/fixtures/hotel_naive.flow:95:1: the workflow can end here wit
           `settle` happens on the other side: pi processing → requires_payment_method
       95  succeed
 ```
+
+</div>
 
 The transitions come from `payment_intent.rule`, a transcription of Stripe's documents into a
 rulec state machine. The workflow says which events happen on their own
@@ -100,4 +104,4 @@ loop, or one round that is too large, and the diagnostic says which.
 
 ## Every code
 
-[Diagnostics](codes.md) lists all 31, with what each one finds.
+[Diagnostics](reference/codes.md) lists all 31, with what each one finds.
