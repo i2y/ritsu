@@ -12,10 +12,69 @@
 use super::{Graph, PinFile, PinSource, RelKind, SourceKey, SourceNode, Target, digits};
 use serde_json::{Map, Value, json};
 
-/// yuen's types and attributes.
-pub const YUEN_NS: &str = "https://github.com/i2y/yuen/ns#";
+/// yuen's types and attributes. A word's IRI is this and the word (`…/ns/yuen#Requirement`), and
+/// opening it leads to the word's entry on ritsu's site: `website/docs/ns/yuen.md` (in Japanese,
+/// `website/docs-ja/ns/yuen.md`), published at `https://i2y.github.io/ritsu/ns/yuen/`. The words
+/// are [`TERMS`]; ritsu's `tests/website.rs` holds the pages to the list, and yuen's
+/// `tests/export.rs` holds the list to what the export writes.
+pub const YUEN_NS: &str = "https://i2y.github.io/ritsu/ns/yuen#";
 /// The identifiers of the things of a project.
 pub const ID_NS: &str = "urn:yuen:";
+
+/// What a word of [`YUEN_NS`] is to PROV.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    /// The type of a record: the value of `prov:type` of an `entity`, an `agent` or an `activity`.
+    Type,
+    /// The sort of a relation: the value of `prov:type` of a `wasAttributedTo` or a `wasInfluencedBy`.
+    Relation,
+    /// An attribute of a record, written with a string value.
+    Attribute,
+}
+
+/// One word of [`YUEN_NS`], and where it is written.
+#[derive(Clone, Copy, Debug)]
+pub struct Term {
+    /// The word, as it follows `yuen:`.
+    pub name: &'static str,
+    pub kind: Kind,
+    /// Where it is written. A type: the PROV record it is the type of (`entity`). A relation: the
+    /// PROV record it is the sort of (`wasInfluencedBy`). An attribute: the types of the records
+    /// that carry it.
+    pub on: &'static [&'static str],
+}
+
+/// Every word the export writes in [`YUEN_NS`], in the order the page of the namespace gives them.
+pub const TERMS: &[Term] = &[
+    Term { name: "Requirement", kind: Kind::Type, on: &["entity"] },
+    Term { name: "Source", kind: Kind::Type, on: &["entity"] },
+    Term { name: "Artifact", kind: Kind::Type, on: &["entity"] },
+    Term { name: "Role", kind: Kind::Type, on: &["agent"] },
+    Term { name: "Decision", kind: Kind::Type, on: &["activity"] },
+    Term { name: "Review", kind: Kind::Type, on: &["activity"] },
+    Term { name: "Waiver", kind: Kind::Type, on: &["activity"] },
+    Term { name: "owner", kind: Kind::Relation, on: &["wasAttributedTo"] },
+    Term { name: "satisfies", kind: Kind::Relation, on: &["wasInfluencedBy"] },
+    Term { name: "verifies", kind: Kind::Relation, on: &["wasInfluencedBy"] },
+    Term { name: "pins", kind: Kind::Relation, on: &["wasInfluencedBy"] },
+    Term { name: "version", kind: Kind::Attribute, on: &["Requirement"] },
+    Term { name: "text", kind: Kind::Attribute, on: &["Requirement"] },
+    Term { name: "inForce", kind: Kind::Attribute, on: &["Requirement"] },
+    Term { name: "law", kind: Kind::Attribute, on: &["Source"] },
+    Term { name: "asof", kind: Kind::Attribute, on: &["Source"] },
+    Term { name: "revision", kind: Kind::Attribute, on: &["Source"] },
+    Term { name: "file", kind: Kind::Attribute, on: &["Source"] },
+    Term { name: "url", kind: Kind::Attribute, on: &["Source"] },
+    Term { name: "end", kind: Kind::Attribute, on: &["Artifact"] },
+    Term { name: "description", kind: Kind::Attribute, on: &["Role"] },
+    Term { name: "why", kind: Kind::Attribute, on: &["Decision", "Waiver"] },
+    Term { name: "side", kind: Kind::Attribute, on: &["Waiver"] },
+    Term { name: "link", kind: Kind::Attribute, on: &["Review"] },
+    Term { name: "up", kind: Kind::Attribute, on: &["Review"] },
+    Term { name: "down", kind: Kind::Attribute, on: &["Review"] },
+    Term { name: "status", kind: Kind::Attribute, on: &["Review", "Waiver"] },
+    Term { name: "sha256", kind: Kind::Attribute, on: &["Requirement", "Source", "Artifact", "Waiver"] },
+];
 
 /// An attribute's value: a string, or a qualified name (`'yuen:Requirement'`).
 #[derive(Clone)]

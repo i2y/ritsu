@@ -1,5 +1,5 @@
 document
-  prefix yuen <https://github.com/i2y/yuen/ns#>
+  prefix yuen <https://i2y.github.io/ritsu/ns/yuen#>
   prefix y <urn:yuen:>
 
   agent(y:role/legal, [prov:type='yuen:Role', prov:label="legal", yuen:description="Decides how the words of a regulation are read"])

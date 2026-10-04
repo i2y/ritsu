@@ -1370,7 +1370,8 @@ HTML は一枚で、script も外のファイル（フォント、画像、ス�
 
 - 決めたことを、要件の生成（`wasGeneratedBy`）ではなく影響（`wasInfluencedBy`）で書くのは、決めたことが、要件の版を一度だけ作る行いではなく、あとから何度でも重ねる記録だからである。
 - `hadPrimarySource` は PROV-DM の関係の名前だが、PROV-JSON には同じ名前の項が無い（Python の `prov` は `'hadPrimarySource' is not a recognised PROV-N record-type keyword` と言って読まなかった。19 章）。`wasDerivedFrom` に `prov:type='prov:PrimarySource'` を付けて書く。
-- 名前空間は二つ置く。型と属性の `yuen`（`https://github.com/i2y/yuen/ns#`）と、ものの識別子の `y`（`urn:yuen:`）。要件は別名で `y:requirement/<別名>/v<n>`、役割は名前で `y:role/<名前>`（名前に、PROV-N の修飾名に書けない文字があればハッシュ）とする。出典の条と成果物は、名前に PROV-N で使えない文字（空白、`"`）を含むので、ReqIF と同じ作り方のハッシュで `y:source/<32 桁>`、`y:artifact/<32 桁>` とする。決めたこと、確かめたこと、見送りは、その中身（要件、日付、役割、理由、記録のハッシュ）のハッシュで `y:decision/…`、`y:review/…`、`y:waiver/…` とする。確かめ直したり承認し直したりすれば、別の行いとして別の識別子になる。entity と agent には `prov:label` に名前を書く。
+- 名前空間は二つ置く。型と属性の `yuen`（`https://i2y.github.io/ritsu/ns/yuen#`）と、ものの識別子の `y`（`urn:yuen:`）。要件は別名で `y:requirement/<別名>/v<n>`、役割は名前で `y:role/<名前>`（名前に、PROV-N の修飾名に書けない文字があればハッシュ）とする。出典の条と成果物は、名前に PROV-N で使えない文字（空白、`"`）を含むので、ReqIF と同じ作り方のハッシュで `y:source/<32 桁>`、`y:artifact/<32 桁>` とする。決めたこと、確かめたこと、見送りは、その中身（要件、日付、役割、理由、記録のハッシュ）のハッシュで `y:decision/…`、`y:review/…`、`y:waiver/…` とする。確かめ直したり承認し直したりすれば、別の行いとして別の識別子になる。entity と agent には `prov:label` に名前を書く。
+- `yuen` の IRI は、リポジトリの URL ではなく、ritsu のサイトの URL にした。理由は二つある。配るのは ritsu だけで、yuen のリポジトリは作らないこと。語の IRI を開いたときに、その語の説明が読めるようにしたいこと。配る前に決めたので、替えて困る文書は無い。ページは `website/docs/ns/yuen.md`（日本語は `website/docs-ja/ns/yuen.md`）で、公開先は `https://i2y.github.io/ritsu/ns/yuen/` である。語の IRI は名前空間に語を続けたもの（`https://i2y.github.io/ritsu/ns/yuen#Requirement`）で、`#` の前に `/` が無い。そのためサーバーは `…/ns/yuen` を `…/ns/yuen/` へ 301 で送り（GitHub Pages がディレクトリの URL にそうすることは、rulec のサイトで確かめた）、ブラウザは `#Requirement` を持ち越す。id の照合は大文字小文字を区別するので、Zensical の既定の id（小文字）では `#inForce` が着かない。そこで見出しは `### inForce { #inForce }` のように書き、id を語の綴りそのままにしてある。ローカルに建てたサイトを Chrome で開いて、`#Requirement` と `#inForce` がその語の項に着き、`#inforce` は着かないことを確かめた。語の一覧は `src/export/prov.rs` の `TERMS`（型、関係の種類、属性と、書かれる先）で、yuen の `tests/export.rs` が、全プロジェクトの書き出しにある語と一覧が同じことを、ritsu の `tests/website.rs` が、一覧とページ（英語と日本語）の語が同じことと、ページの例がコマンドの出力であることを確かめる。
 - 関係の記録には識別子を付けない。PROV-JSON では `_:r1` のような空白ノードの名前で並べ、`prov` はそれを識別子の無い記録として読む（PROV-N の識別子の無い記録と等しくなる）。
 - 時刻は、yuen の日付に `T00:00:00` を付けたもの（タイムゾーンを書かない）。
 
@@ -1379,7 +1380,7 @@ HTML は一枚で、script も外のファイル（フォント、画像、ス�
 ```
 $ yuen export prov tests/fixtures/ecfr --root tests/fixtures/ecfr
 document
-  prefix yuen <https://github.com/i2y/yuen/ns#>
+  prefix yuen <https://i2y.github.io/ritsu/ns/yuen#>
   prefix y <urn:yuen:>
 
   agent(y:role/safety, [prov:type='yuen:Role', prov:label="safety", yuen:description="decides how the regulation reads"])

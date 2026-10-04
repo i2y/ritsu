@@ -11,6 +11,7 @@ use common::TempDir;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::process::Command;
+use yuen::export::prov::{Kind, TERMS, YUEN_NS};
 
 /// Every test project: the ones of yuen's own requirements alone (sources copied by yuen,
 /// artifacts that are files), and the ones that name the things of another language — a rule, a
@@ -296,6 +297,100 @@ fn every_prov_reads_as_one_document_in_both_forms() {
         let got: BTreeMap<String, usize> = v["counts"].as_object().unwrap().iter().map(|(k, n)| (k.clone(), n.as_u64().unwrap() as usize)).collect();
         assert_eq!(got, prov_counts(&api(dir)), "{name}: the records of each type are the ones api counts");
         println!("compared: {name} PROV-N and PROV-JSON read by prov as one document of {} records", got.values().sum::<usize>());
+    }
+}
+
+/// The words of yuen's namespace, as every project writes them in PROV-JSON: for each word, what
+/// it is and where it is written (`Term::on`).
+fn words_written() -> BTreeMap<String, (Kind, BTreeSet<String>)> {
+    let mut words: BTreeMap<String, (Kind, BTreeSet<String>)> = BTreeMap::new();
+    let mut note = |name: &str, kind: Kind, on: &str, failures: &mut Vec<String>| {
+        let entry = words.entry(name.to_string()).or_insert((kind, BTreeSet::new()));
+        if entry.0 != kind {
+            failures.push(format!("yuen:{name} is written as a {:?} and as a {kind:?}", entry.0));
+        }
+        entry.1.insert(on.to_string());
+    };
+    let mut failures = Vec::new();
+    for (name, dir) in PROJECTS {
+        let doc: Value = serde_json::from_str(&export("prov", dir, &["--format", "json"])).unwrap();
+        for (record, group) in doc.as_object().unwrap() {
+            if record == "prefix" {
+                continue;
+            }
+            for body in group.as_object().unwrap().values() {
+                // `prov:type` is a qualified name: `{"$": "yuen:Role", "type": "prov:QUALIFIED_NAME"}`.
+                let ty = body.get("prov:type").and_then(|t| t["$"].as_str()).and_then(|t| t.strip_prefix("yuen:"));
+                if ["entity", "agent", "activity"].contains(&record.as_str()) {
+                    let Some(ty) = ty else {
+                        failures.push(format!("{name}: a {record} without a type of yuen's"));
+                        continue;
+                    };
+                    note(ty, Kind::Type, record, &mut failures);
+                    for key in body.as_object().unwrap().keys().filter_map(|k| k.strip_prefix("yuen:")) {
+                        note(key, Kind::Attribute, ty, &mut failures);
+                    }
+                } else if let Some(ty) = ty {
+                    note(ty, Kind::Relation, record, &mut failures);
+                    // A relation carries no attribute of yuen's.
+                    if body.as_object().unwrap().keys().any(|k| k.starts_with("yuen:")) {
+                        failures.push(format!("{name}: a {record} carries an attribute of yuen's"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    words
+}
+
+/// The words of yuen's namespace (`yuen::export::prov::TERMS`, which the pages of the namespace on
+/// ritsu's site are held to) are the ones the export writes: every word that a project writes is
+/// on the list, as the kind of word it is and on the records the list says, and every word on the
+/// list is written by some project. A word the code spells that no project reaches would pass
+/// that, so the spelling in the source is held to the list as well.
+#[test]
+fn the_words_of_the_namespace_are_the_ones_the_export_writes() {
+    let written = words_written();
+    let mut listed: BTreeMap<String, (Kind, BTreeSet<String>)> = BTreeMap::new();
+    for t in TERMS {
+        let was = listed.insert(t.name.to_string(), (t.kind, t.on.iter().map(|s| s.to_string()).collect()));
+        assert!(was.is_none(), "TERMS lists {} twice", t.name);
+    }
+    let mut wrong = Vec::new();
+    for (name, (kind, on)) in &written {
+        match listed.get(name) {
+            None => wrong.push(format!("the export writes yuen:{name} ({kind:?}, on {on:?}), which TERMS does not list")),
+            Some(l) if l != &(*kind, on.clone()) => wrong.push(format!("yuen:{name}: the export writes it as {kind:?} on {on:?}, TERMS lists {:?} on {:?}", l.0, l.1)),
+            _ => {}
+        }
+    }
+    for name in listed.keys().filter(|n| !written.contains_key(*n)) {
+        wrong.push(format!("TERMS lists yuen:{name}, which no project of the tests writes"));
+    }
+    // A word the code spells and the projects do not reach would pass the comparison above.
+    let code = include_str!("../src/export/prov.rs");
+    let mut spelled: BTreeSet<String> = BTreeSet::new();
+    let mut rest = code;
+    while let Some(i) = rest.find("yuen:") {
+        let after = &rest[i + 5..];
+        let word: String = after.chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
+        if !word.is_empty() && !rest[..i].ends_with("urn:") {
+            spelled.insert(word);
+        }
+        rest = after;
+    }
+    for name in spelled.iter().filter(|n| !listed.contains_key(*n)) {
+        wrong.push(format!("src/export/prov.rs spells yuen:{name}, which TERMS does not list"));
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    // The namespace is one IRI, and a word is it and the word.
+    assert!(YUEN_NS.ends_with("/ns/yuen#"), "{YUEN_NS}");
+    for (name, dir) in PROJECTS {
+        let n = export("prov", dir, &[]);
+        assert!(n.contains(&format!("  prefix yuen <{YUEN_NS}>\n")), "{name}: PROV-N declares the prefix yuen");
+        let j: Value = serde_json::from_str(&export("prov", dir, &["--format", "json"])).unwrap();
+        assert_eq!(j["prefix"]["yuen"], YUEN_NS, "{name}: PROV-JSON declares the prefix yuen");
     }
 }
 

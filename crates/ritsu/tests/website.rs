@@ -18,6 +18,11 @@
 //! - the configurations name the URL each site is published at, under /ritsu/, and ritsu's
 //!   repository;
 //! - .github/workflows/docs.yml runs only by hand;
+//! - the pages of a language's namespace (website/docs/ns/yuen.md and website/docs-ja/ns/yuen.md,
+//!   which the IRIs of yuen's PROV words open: `https://i2y.github.io/ritsu/ns/yuen#Requirement`)
+//!   say every word yuen writes and no other, each once, under the heading of its kind, with the
+//!   types it is written on, as the id the IRI's `#` names; and the example on them is what the
+//!   command prints;
 //! - and, when Zensical is in website/.venv, build.sh builds the tree that is published, in a copy
 //!   of website/: the index pages of ritsu's site and of each language's, in both languages, the
 //!   playgrounds, and a file of the tree for every link of ritsu's built pages that stays in the
@@ -27,11 +32,13 @@
 
 mod common;
 
-use common::{Page, code_from_files, commands_named, link_targets, page, root, run_the_consoles};
+use common::{Page, code_from_files, commands_named, inline_code, link_targets, page, root, run_the_consoles};
 use ritsu_testkit::{Need, TempDir, ready};
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use yuen::export::prov::{Kind, TERMS, YUEN_NS};
 
 /// Where the site is published.
 const PUBLISHED: &str = "https://i2y.github.io/ritsu/";
@@ -58,15 +65,24 @@ fn sites() -> Vec<String> {
 }
 
 /// ritsu's pages, each with the path of its directory in the built site (`/`, `/playground/`,
-/// `/ja/`, …).
+/// `/ns/yuen/`, `/ja/`, …). A page in a directory of `docs` is published under that directory
+/// (`ns/yuen.md` at `/ns/yuen/`).
 fn pages() -> Vec<(Page, String)> {
     let mut out = Vec::new();
     for (dir, at) in [("docs", "/"), ("docs-ja", "/ja/")] {
-        for e in fs::read_dir(website().join(dir)).unwrap().flatten() {
-            let name = e.file_name().to_string_lossy().into_owned();
-            let Some(stem) = name.strip_suffix(".md") else { continue };
-            let url = if stem == "index" { at.to_string() } else { format!("{at}{stem}/") };
-            out.push((page(&format!("website/{dir}/{name}")), url));
+        let mut todo = vec![PathBuf::new()];
+        while let Some(under) = todo.pop() {
+            for e in fs::read_dir(website().join(dir).join(&under)).unwrap().flatten() {
+                let name = e.file_name().to_string_lossy().into_owned();
+                if e.file_type().unwrap().is_dir() {
+                    todo.push(under.join(&name));
+                    continue;
+                }
+                let Some(stem) = name.strip_suffix(".md") else { continue };
+                let path = under.join(stem).to_string_lossy().into_owned();
+                let url = if stem == "index" { format!("{at}{}", if under.as_os_str().is_empty() { String::new() } else { format!("{}/", under.display()) }) } else { format!("{at}{path}/") };
+                out.push((page(&format!("website/{dir}/{}", under.join(&name).display())), url));
+            }
         }
     }
     out.sort_by(|a, b| a.0.name.cmp(&b.0.name));
@@ -296,6 +312,172 @@ fn the_workflow_that_publishes_the_site_runs_only_by_hand() {
     assert!(text.contains("./build.sh") && text.contains("path: website/build"), "docs.yml builds with website/build.sh and publishes website/build");
 }
 
+/// The pages of yuen's namespace, in English and in Japanese: what the IRI of a word of yuen's
+/// PROV opens (`https://i2y.github.io/ritsu/ns/yuen#Requirement`, which the server sends on to
+/// `…/ns/yuen/#Requirement`).
+const NAMESPACE_PAGES: [&str; 2] = ["website/docs/ns/yuen.md", "website/docs-ja/ns/yuen.md"];
+
+/// One word's entry on the page of a namespace.
+struct Entry {
+    /// The id the heading is given (`{ #Requirement }`), which is what the IRI's `#` names.
+    id: String,
+    /// The id of the `##` heading it is under: `types`, `relations` or `attributes`.
+    section: String,
+    /// Where the heading is, from 1.
+    line: usize,
+    /// What is in code in the first paragraph under the heading: `yuen:<word>`, then where it is
+    /// written.
+    signature: Vec<String>,
+    /// The `#anchor` links in the entry.
+    links: BTreeSet<String>,
+}
+
+/// The id of a heading written `## Text { #id }`.
+fn explicit_id(heading: &str) -> Option<String> {
+    let h = heading.trim_start_matches('#').trim();
+    let open = h.rfind(" { #")?;
+    h.ends_with(" }").then(|| h[open + 4..h.len() - 2].trim().to_string())
+}
+
+/// The entries of a page of a namespace: every `###` heading with an id, under the `##` heading
+/// whose id names its section. What is between a `##` heading and the next `###` belongs to none.
+fn entries(p: &Page) -> Vec<Entry> {
+    let mut out: Vec<Entry> = Vec::new();
+    let mut section = String::new();
+    let mut body: Vec<String> = Vec::new();
+    let mut open = false;
+    let mut fence = false;
+    // The entry that is open takes what has been read since its heading.
+    let close = |out: &mut Vec<Entry>, body: &mut Vec<String>, open: &mut bool| {
+        if let (true, Some(e)) = (*open, out.last_mut()) {
+            let text = body.join("\n");
+            // The first paragraph, which a long signature takes two lines of.
+            let first: Vec<&str> = body.iter().map(String::as_str).skip_while(|l| l.trim().is_empty()).take_while(|l| !l.trim().is_empty()).collect();
+            e.signature = first.join(" ").split('`').skip(1).step_by(2).map(String::from).collect();
+            e.links = link_targets(&text).into_iter().filter_map(|(_, t)| t.strip_prefix('#').map(String::from)).collect();
+        }
+        *open = false;
+        body.clear();
+    };
+    for (i, line) in p.text.lines().enumerate() {
+        if line.trim_start().starts_with("```") {
+            fence = !fence;
+        }
+        if !fence && line.starts_with("### ") {
+            close(&mut out, &mut body, &mut open);
+            if let Some(id) = explicit_id(line) {
+                out.push(Entry { id, section: section.clone(), line: i + 1, signature: Vec::new(), links: BTreeSet::new() });
+                open = true;
+            }
+        } else if !fence && line.starts_with("## ") {
+            close(&mut out, &mut body, &mut open);
+            section = explicit_id(line).unwrap_or_default();
+        } else {
+            body.push(line.to_string());
+        }
+    }
+    close(&mut out, &mut body, &mut open);
+    out
+}
+
+#[test]
+fn the_pages_of_yuens_namespace_say_every_word_yuen_writes_and_no_other() {
+    // The namespace is the page's address and a `#`, so that a word's IRI is the address of its entry.
+    assert_eq!(YUEN_NS, format!("{PUBLISHED}ns/yuen#"), "yuen writes its words in the namespace that ritsu's site publishes at ns/yuen/");
+    let section = |k: Kind| match k {
+        Kind::Type => "types",
+        Kind::Relation => "relations",
+        Kind::Attribute => "attributes",
+    };
+    let mut wrong = Vec::new();
+    for name in NAMESPACE_PAGES {
+        let p = page(name);
+        if !p.text.contains(&format!("`{YUEN_NS}`")) {
+            wrong.push(format!("{name}: does not say the namespace, `{YUEN_NS}`"));
+        }
+        let entries = entries(&p);
+        for t in TERMS {
+            let found: Vec<&Entry> = entries.iter().filter(|e| e.id == t.name).collect();
+            let [e] = found[..] else {
+                wrong.push(format!("{name}: {} entries for `{}`, which yuen writes ({:?}): one `### … {{ #{} }}` is wanted", found.len(), t.name, t.kind, t.name));
+                continue;
+            };
+            let at = format!("{name}:{}", e.line);
+            if e.section != section(t.kind) {
+                wrong.push(format!("{at}: `{}` is a {:?} and is under `{}`, not `{}`", t.name, t.kind, e.section, section(t.kind)));
+            }
+            // The first paragraph under the heading: the word, and where it is written.
+            if e.signature.first().map(String::as_str) != Some(&format!("yuen:{}", t.name)) {
+                wrong.push(format!("{at}: the first paragraph under `{}` does not start with `yuen:{}` in code", t.name, t.name));
+            }
+            let got: BTreeSet<&str> = e.signature.iter().skip(1).map(String::as_str).collect();
+            let want: BTreeSet<&str> = t.on.iter().copied().collect();
+            if got != want {
+                wrong.push(format!("{at}: `{}` is written on {want:?}, and the first paragraph under it names {got:?}", t.name));
+            }
+            // A type says which attributes it has, as links to them.
+            if t.kind == Kind::Type {
+                let want: BTreeSet<&str> = TERMS.iter().filter(|a| a.kind == Kind::Attribute && a.on.contains(&t.name)).map(|a| a.name).collect();
+                let got: BTreeSet<&str> = TERMS.iter().filter(|a| a.kind == Kind::Attribute && e.links.contains(a.name)).map(|a| a.name).collect();
+                if got != want {
+                    wrong.push(format!("{at}: `{}` has the attributes {want:?}, and its entry links to {got:?}", t.name));
+                }
+            }
+        }
+        for e in &entries {
+            if !TERMS.iter().any(|t| t.name == e.id) {
+                wrong.push(format!("{name}:{}: an entry for `{}`, which yuen does not write", e.line, e.id));
+            }
+        }
+        // The three sections are headings whose ids are the ones the entries are filed under.
+        for id in ["types", "relations", "attributes"] {
+            if !p.anchors.iter().any(|a| a == id) {
+                wrong.push(format!("{name}: no `## … {{ #{id} }}` heading"));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    eprintln!("compared: {} words of yuen's namespace with the entries of {} pages", TERMS.len(), NAMESPACE_PAGES.len());
+}
+
+#[test]
+fn the_example_on_the_pages_of_yuens_namespace_is_what_the_command_prints() {
+    let pages: Vec<Page> = NAMESPACE_PAGES.iter().map(|n| page(n)).collect();
+    let (ran, wrong) = run_the_consoles(&pages);
+    // One export on each of the two pages.
+    assert!(ran >= 2, "{ran} commands run: were the fences changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    let (_, wrong) = commands_named(&pages);
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    // Every word the example shows is one yuen writes: a typo in a word would not show otherwise.
+    let mut shown = 0;
+    for p in &pages {
+        for b in p.blocks.iter().filter(|b| b.info == "console") {
+            for l in &b.lines {
+                let mut rest = l.as_str();
+                while let Some(i) = rest.find("yuen:") {
+                    let after = &rest[i + 5..];
+                    let word: String = after.chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
+                    if !word.is_empty() && !rest[..i].ends_with("urn:") {
+                        shown += 1;
+                        assert!(TERMS.iter().any(|t| t.name == word), "{}:{}: the example shows yuen:{word}, which yuen does not write", p.name, b.at);
+                    }
+                    rest = after;
+                }
+            }
+        }
+    }
+    assert!(shown >= 20, "{shown} words in the examples");
+    // The words in code on the pages that look like words of the namespace are words of it.
+    for p in &pages {
+        for (line, code) in inline_code(&p.text) {
+            if let Some(word) = code.strip_prefix("yuen:").filter(|w| w.chars().all(|c| c.is_ascii_alphanumeric())) {
+                assert!(TERMS.iter().any(|t| t.name == word), "{}:{line}: `{code}` is no word of the namespace", p.name);
+            }
+        }
+    }
+}
+
 /// `from` copied to `to`, without what a build, Zensical's cache or the virtual environment left.
 fn copy_tree(from: &Path, to: &Path) {
     fs::create_dir_all(to).unwrap();
@@ -344,7 +526,7 @@ fn build_sh_builds_the_tree_that_is_published() {
     assert!(o.status.success(), "build.sh failed:\n{}\n{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
     let built = copy.join("build");
 
-    let mut want: Vec<String> = ["index.html", "ja/index.html", "playground/index.html", "playground/ritsu.wasm", "ja/playground/index.html", "ja/playground/projects.json"].map(String::from).to_vec();
+    let mut want: Vec<String> = ["index.html", "ja/index.html", "playground/index.html", "playground/ritsu.wasm", "ja/playground/index.html", "ja/playground/projects.json", "ns/yuen/index.html", "ja/ns/yuen/index.html"].map(String::from).to_vec();
     for s in sites() {
         want.extend([format!("{s}/index.html"), format!("{s}/ja/index.html")]);
         if website().join(&s).join("docs/playground.md").is_file() {
@@ -353,6 +535,19 @@ fn build_sh_builds_the_tree_that_is_published() {
     }
     let missing: Vec<&String> = want.iter().filter(|w| !built.join(w).is_file()).collect();
     assert!(missing.is_empty(), "build.sh built no {missing:?}");
+
+    // The page of yuen's namespace is built with an element for every word, the id of which is the
+    // word as it follows the `#` of its IRI: `…/ns/yuen#Requirement`, which the server sends on to
+    // `…/ns/yuen/#Requirement`, leads to `id="Requirement"` and no other (an id is case-sensitive).
+    for file in ["ns/yuen/index.html", "ja/ns/yuen/index.html"] {
+        let html = read(&built.join(file));
+        let ids: BTreeSet<String> = html.split(" id=\"").skip(1).filter_map(|r| r.split('"').next().map(String::from)).collect();
+        let missing: Vec<&str> = TERMS.iter().map(|t| t.name).filter(|n| !ids.contains(*n)).collect();
+        assert!(missing.is_empty(), "{file}: built with no element whose id is {missing:?}");
+        for id in ["types", "relations", "attributes"] {
+            assert!(ids.contains(id), "{file}: built with no element whose id is {id}");
+        }
+    }
 
     // Every link of ritsu's built pages that stays in the site leads to a file of the tree.
     let mut wrong = Vec::new();

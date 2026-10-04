@@ -340,7 +340,10 @@ Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be re
   one file that reads nothing from anywhere else, with a light and a dark palette.
 - `api <path>...`: the whole graph as JSON (below).
 - `export reqif|prov <path>... [--format provn|json] [--time <RFC 3339>] [--out <file>]`: ReqIF
-  1.2 for requirements tools, or W3C PROV (PROV-N, or PROV-JSON with `--format json`).
+  1.2 for requirements tools, or W3C PROV (PROV-N, or PROV-JSON with `--format json`). The words
+  yuen adds to PROV (`yuen:Requirement`, `yuen:sha256`, …) are in the namespace
+  `https://i2y.github.io/ritsu/ns/yuen#`: opening a word's IRI shows what it says, on the page
+  <https://i2y.github.io/ritsu/ns/yuen/>.
 - `source fetch|pin|outdated <path>...`: fetch the copies of the sources a project copies itself,
   pin their hashes in the `.req`, or ask whether the originals moved on. Only `fetch` and
   `outdated` read the network (e-Gov's API v2, the eCFR's versioner API, and a `file` source's

@@ -1,5 +1,5 @@
 document
-  prefix yuen <https://github.com/i2y/yuen/ns#>
+  prefix yuen <https://i2y.github.io/ritsu/ns/yuen#>
   prefix y <urn:yuen:>
 
   agent(y:role/accounting, [prov:type='yuen:Role', prov:label="accounting", yuen:description="Decides the refund policy"])

@@ -1,6 +1,6 @@
 {
   "prefix": {
-    "yuen": "https://github.com/i2y/yuen/ns#",
+    "yuen": "https://i2y.github.io/ritsu/ns/yuen#",
     "y": "urn:yuen:"
   },
   "agent": {

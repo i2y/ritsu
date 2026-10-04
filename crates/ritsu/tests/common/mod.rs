@@ -33,7 +33,8 @@ pub struct Page {
     pub name: String,
     pub text: String,
     pub blocks: Vec<Block>,
-    /// The headings as GitHub anchors them.
+    /// The headings as GitHub anchors them, or as the id the site's `attr_list` gives them
+    /// (`## Types { #types }`).
     pub anchors: Vec<String>,
 }
 
@@ -53,6 +54,16 @@ pub fn anchor(heading: &str) -> String {
         .collect()
 }
 
+/// The anchor of a heading: the id written after it as `{ #id }`, which the site's pages use where
+/// the id has to be a word's own spelling (`### Requirement { #Requirement }`), else GitHub's.
+pub fn heading_anchor(heading: &str) -> String {
+    let h = heading.trim();
+    match (h.rfind(" { #"), h.strip_suffix(" }")) {
+        (Some(open), Some(_)) => h[open + 4..h.len() - 2].trim().to_string(),
+        _ => anchor(h),
+    }
+}
+
 /// The page at `name`, a path from the root of the repository.
 pub fn page(name: &str) -> Page {
     let text = fs::read_to_string(root().join(name)).unwrap_or_else(|e| panic!("{name}: {e}"));
@@ -69,7 +80,7 @@ pub fn page(name: &str) -> Page {
             }
             (None, None) => {
                 if let Some(h) = line.strip_prefix('#') {
-                    anchors.push(anchor(h.trim_start_matches('#')));
+                    anchors.push(heading_anchor(h.trim_start_matches('#')));
                 }
             }
         }
