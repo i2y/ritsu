@@ -63,6 +63,15 @@ case without a `key` is a warning (W103).
 **Ranges.** A value given to a rule, a task, a record or an output fits the range there (E014), and
 a value whose range nothing says is a warning (W104). [Ranges](tour.md#ranges)
 
+**A rule's precondition.** Some of what a rule takes for granted its inputs' types cannot say: that
+one input stays at or below another (`constraint asked <= paid`), or that a day is one of the days a
+koyomi date comes to (`range from koyomi`). `ritsu check` holds each such precondition to the values
+the call can give (ritsu's E201, with an example that breaks it), and says when nothing decides it
+(W201). What it cannot decide, the code that `ritsu dandori build` writes checks when the workflow
+runs, as soon as the values are made: right after the task whose answer they are, or later, where
+the run can no longer go another way before the call. A run whose values break it fails there with
+`Dandori.BrokenPrecondition`, on every platform.
+
 **What a task calls.** A task that runs another `.flow` fits the child's inputs, outputs and failures
 (E015), and a task that calls a described API fits the description (E016). A Jev task answers what
 Jev can answer (E007), and one that relies on how sure Jev is names the version it relies on (W032).

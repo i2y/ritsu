@@ -706,6 +706,50 @@ flow
 
 `tests/flows/dates_and_books.flow` は、日本語の名前で、すぐに確定する振替（`do`）、一部の確定、時刻を言わない二つの日付（一つは整数の入力も取る）をローカルアクティビティで呼ぶこと、`now` を日付の入力と文字列に書くこと、日付をタスクに渡すことと、タスクの結果の日付を日付に渡すことを、どのプラットフォームでも走らせる。
 
+### 1.17 規則の前提を、走らせるときに確かめる
+
+rulec の規則は、入力の形だけでは書けない前提を持つことがある。二つの入力の関係（`constraint asked <= paid`）と、日付の入力が koyomi の日付のとる日に限られること（`range from koyomi`）である（rulec の §15.116 と §15.174）。規則の生成したコードは、前提を破る呼び出しを入口で断る。
+
+`ritsu check` は、フローが規則を呼ぶところごとに、dandori が求めた値の範囲（1.3）で前提が保たれるかを決める（ritsu の DESIGN 7.4 の X2）。成り立つと示せれば何も言わず、破る例があれば E201、決められなければ W201 を出す。決められないのは、渡す値に範囲の無いところから来るものがあるとき（範囲を書いていないタスクの結果など）、範囲の端が開いているとき、前提が koyomi の日であるとき（dandori は日付の範囲を運ばない）である。
+
+**決定**：決められなかった前提は、生成したコードが、ワークフローを走らせたときに確かめる。`ritsu dandori` は、ritsu-cross が決められなかった前提を、ritsu の口 `Undecided` で渡す（`dandori::cli::run_with_undecided`）。`build`・`run`・`scenarios`・`doc` は、それを確かめる文（`TK::Check`、`src/prechecks.rs`）をフローに入れてから、生成し、走らせ、描く。`check` は入れない（診断は変わらない）。dandori のクレートのバイナリは何も渡さないので、確かめる文は入らない（規則を使うフローは、そもそも E018 で止まる）。決められた前提（成り立つと示したもの、例があるもの）しか持たない呼び出しの生成物は、これまでと一字も変わらない。
+
+**どこで確かめるか**：値ができたところで、すぐに確かめる。ただし、その呼び出しに必ず届く場所に限る。規則を呼ぶところから同じブロックの文を前へたどり、前提が読む値を変えず、次の文へ進むか実行を失敗させるかしかない文（ほかの変数への `let`、待ち、`pass`、ハンドラーがどれも `succeed` も `break` もしない呼び出し）を越えて、その前に置く。値を作る文（たいていは、その値を結果として返すタスク）か、ほかへ進むことがある文（`match`、ループ、実行を成功で終えるかループを抜けるハンドラーを持つ呼び出し）に当たれば、その直後で止まる。ブロックの頭まで来れば、ブロックの頭に置く。
+
+```
+  let asked = ask_amount(order: order)
+  note_request(order: order)
+  let decision = check(paid: paid, asked: asked)
+  let day = pick_day(order: order)
+  match decision.route
+    at_once =>
+      let run = settle(pay_day: day)
+```
+
+`tests/flows/preconditions.flow` の一部である。`asked <= paid` は、`ask_amount` が答えた直後、`note_request` を呼ぶ前に確かめる。`note_request` は `asked` を変えず、失敗すれば実行も失敗するので、越えてよい。日の前提（`settle` の `pay_day` は koyomi の支払日だけを取る）は、`pick_day` の直後ではなく、`at_once` の分岐の頭で確かめる。`review` に進む実行は、`settle` に日を渡さないからである。
+
+これより前で確かめると、規則を呼ばない実行まで落とすことになる。上の例で `pick_day` の直後に確かめると、`review` に進む実行も、規則に渡さない日のせいで失敗する。逆に、規則を呼ぶ直前まで待つと、前提を破ると分かっている値のまま、そのあいだのタスクを呼ぶことになる。P5（外部のサービスが返したものは境界で確かめ、外れたらその場で失敗させる）に合わせて、値ができた直後に寄せた。越えるのは、失敗すれば実行も失敗する呼び出しだけなので、変わるのは、どのエラーで失敗するかと、そのタスクを呼ぶかどうかだけである。
+
+**破ったとき**：実行は `Dandori.BrokenPrecondition` で失敗する。理由は `line <呼び出しの行>: the values given to the rule <規則> break its precondition <前提>` で、どのプラットフォームでも同じ文にした。`Dandori.BadResponse` と同じく、リトライせず、`on` でも `on failure` でも処理しない。値は何度呼んでも変わらず、タスクのハンドラーはそのタスクのエラーのために書くものだからである。並列のイテレーションの中では、`fail` と同じくそのイテレーションが終わり、ほかのイテレーションが終わってからループが失敗する。
+
+前は、規則の生成したコードが入口で断っていた。規則のアクティビティや Lambda の失敗になり、規則のリトライ（2 回、1 秒後と 2 秒後）を経て `failure` になって、`on failure` があればそれが走った。Connect で呼ぶ規則なら、サービスが `invalid_argument` で答えていた。規則の入口で断ることは、そのまま残る。規則の生成したコードは、だれが呼ぶかを知らないからである。
+
+**プラットフォームでの書き方**（4 章の各節にも書いた）：
+- Step Functions：条件を JSONata で書いた Choice と、破ったときに進む Fail。日は `in` と日の並びで比べる。
+- Temporal（TypeScript・Python・Go）と durable functions：ワークフローのコードの `if` と `dd.fail`（Python は `raise dd.fail`、Go は `return nil, ddFail`）。日は `includes`、`in`、`switch` で比べる。
+- Argo：値を計算するテンプレート一つ。成り立たなければ `dd_ctl` を `fail` にし、`dd_error` にエラーを入れる（4.4 の、グローバル出力パラメータを読み書きする置き方のまま）。
+- pydantic-graph：確かめる節点一つ。成り立たなければ `dd.Failure` を投げる。
+
+E040 の見積もりには、Step Functions で 4 件（Choice と Fail）、Argo で 4 ノード（値を計算するテンプレート）を足す。ほかのプラットフォームはワークフローのコードの中で確かめるので、履歴も操作も増えない。整数の比べと日の並びはどのプラットフォームでも書けるので、E050 にしたものは無い。
+
+Temporal では、確かめる文が増えても減ってもコマンドは変わらないので、走っている実行の再生は食い違わない。ただし、範囲を足したときと同じく（1.3）、走っている実行のうち値が前提を破るものは、新しいコードでは失敗に変わる。範囲を書き足して ritsu が前提を決められるようになれば、確かめる文は消える。
+
+**確かめ方**：参照インタプリタは、確かめる文で前提を計算し、破れば実行をそのエラーで終える（どのプラットフォームでも、呼び出しは何も出ず、終わり方だけが変わるので、`View` は変えていない）。シナリオの生成は、確かめる文ごとに、前提が保たれる実行と破れる実行を選ぶ。シナリオが作る数と日を決めずに残しておき、確かめる文が、範囲の中で、あとで作った値から書き換える。図（`dandori doc`）は、確かめる文を、その場所のノード（一行目に `check asked <= paid`、二行目にどの規則の前提か）として描き、そこで失敗した実行はそのノードで終わる。
+
+`tests/flows/preconditions.flow`（英語）と `preconditions.ja.flow`（日本語）は、範囲の無いタスクの結果から来る額の関係と、koyomi の日（`tests/flows/rules/settlement.rule`、日本語は `精算.rule`）の二種類の前提を、タスクの直後、分岐の頭、順に回すループと並列のループのイテレーションの頭で確かめる。dandori のテストは、フローが呼ぶ規則の前提をすべて決められなかったものとして渡し（ritsu-cross も、この二つのフローの前提は一つも決められない）、どのプラットフォームでも参照インタプリタと突き合わせる。ritsu のテスト（`crates/ritsu/tests/dandori.rs`）は、`ritsu dandori build` が七つのプラットフォームで同じものを書くこと、決められる呼び出し（成り立つもの、E201 の例があるもの）の生成物が ritsu-cross を通さないときと一字も違わないことを確かめる。
+
+あわせて、規則の日付の入力と出力を、つなぐコードで日の番号に直すようにした。rulec の生成したコードは、日付を 1970-01-01 からの日数で受け取り、返す。つなぐコード（`rules.ts`、`rules.py`、Lambda の Python、`rules.go`）は、それを数として読んでいた（Lambda の Python は `int("2026-02-10")` で止まり、`rules.ts` は `tsc --strict` を通らなかった）。日付の入力を持つ規則が例とテストに無かったので、表に出ていなかった。
+
 ## 2. 案件とステートマシン
 
 ### 2.1 案件の状態を追う
@@ -844,7 +888,7 @@ chobo の DESIGN 5 章の案は、案件に `external expire` と `refused when 
 
 診断には、そうなる例（その点までの短い流れ）が付く。例は、状態・変数・`match` で絞った値ごとに持っているので、例の中で値が途中で変わることはない。
 
-実行履歴の件数は、一回の呼び出し、再試行、Choice、Wait、並列のイテレーションなどごとに多めに見積もった件数を足して出す（`check.rs` の `ASL_COST`・`TEMPORAL_COST`・`DURABLE_COST`・`ARGO_COST`）。多めに見積もるので、上限の近くでは言い過ぎる側に倒れる。`for` は上限の数だけ回るとして数える。サービスを実装するフロー（1.14）は、Step Functions では入力を埋める Pass が一つ増えるので、その 2 件を足す。
+実行履歴の件数は、一回の呼び出し、再試行、Choice、Wait、並列のイテレーションなどごとに多めに見積もった件数を足して出す（`check.rs` の `ASL_COST`・`TEMPORAL_COST`・`DURABLE_COST`・`ARGO_COST`）。多めに見積もるので、上限の近くでは言い過ぎる側に倒れる。`for` は上限の数だけ回るとして数える。サービスを実装するフロー（1.14）は、Step Functions では入力を埋める Pass が一つ増えるので、その 2 件を足す。決められなかった規則の前提を確かめる文（1.17）は、Step Functions で 4 件（Choice と Fail）、Argo で 4 ノードを足す。
 
 E040 は `check` ではなく、プラットフォームごとのビルドで出す。上限はプラットフォームごとに違い、Temporal だけに出すワークフローが Step Functions の上限で拒否されることのないようにするためである。Temporal では、フローの一番外のループが履歴の長くなったところで新しい実行で続ける（4.2）ので、そのループは、続ける目安の 10,000 件にループの一回分を足した件数と、回り切ったときの件数の小さいほうで数える。それでも上限を超えるのは、ループの外の部分か、ループの一回が大きすぎるときで、診断はそう言う（`tests/fixtures/history_parallel.flow` と `history_round.flow`）。
 
@@ -879,6 +923,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - **日付**（1.16）は、規則と同じく Lambda の Task にする。呼ばれる日付ごとに、koyomi が生成した Python を呼ぶ Lambda 関数のコード（`lambda/<ファイルの別名>_<日付の別名>_handler.py`）を出す。時刻の入力は、カレンダーのオフセットでその日に読み、日付と `at`（時刻を言う日付なら）を返す。
 - **帳簿の操作**（1.16）は、`use book` の `lambda` の Lambda 関数を呼ぶ Task にする。payload は `{transfer, op, args, amounts?}`。帳簿ごとに、chobo の Python のクライアントで操作する Lambda 関数のコード（`lambda/book_<帳簿>_handler.py`）を出す。利用者は `handler = make_handler(lambda: tigerbeetle(ClientSync(…)))` のように、帳簿の値を作る関数を渡す。断られたら、理由を名前にした例外を投げる。Lambda はその名前を `errorType` に入れ、Step Functions はそれをエラーの名前として Catch に渡す（宣言したエラーの名前は、帳簿の理由そのもの）。通ったら、仮押さえのレコードを Task の Assign の JSONata で、渡した引数から作る。Retry は書いたとおりで、キーで冪等なので、二度目は `done_before` で通る。
 - **`now`**（1.16）は、`($substring($states.context.State.EnteredTime, 0, 19) & "Z")`。そのステートに入った時刻を秒までにしたもので、Retry のあいだも変わらない。
+- **規則の前提の確かめ**（1.17）は、条件を JSONata で書いた Choice（日は `$v in ["2026-02-10", …]`）で、成り立たなければ `Dandori.BrokenPrecondition` の Fail へ進む。並列のイテレーションの中では、`fail` と同じく失敗をイテレーションの結果にして運ぶ。
 
 ### 4.2 Temporal
 
@@ -916,6 +961,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - **日付**（1.16）は、規則と同じ proxy で呼ぶアクティビティ `dates_<ファイル>_<日付>` にする（`local` ならローカルアクティビティ）。`rules.ts` が、koyomi が生成した TypeScript（`koyomi/typescript/<別名>.ts`）の関数を、入力を位置の順に並べて呼ぶ。時刻の入力は、カレンダーのオフセットでその日に読む（`day`）。`at` は koyomi の `<日付>_at` が返す。
 - **帳簿の操作**（1.16）は、dandori が書くアクティビティ（名前はタスクの名前）にし、`Transport` の `book` で chobo のクライアントを呼ぶ。`io.ts` は、フローが帳簿を使うときだけ、`BookCall`・`BookResult`・`book`、帳簿ごとの名前の表（振替のメンバーと数の引数）と、既定の `Transport` の実装を持つ。既定の実装は、利用者が渡す帳簿の値（`transport({ books: { stock: postgres(pool, { tenant }) } })`。chobo の TypeScript のクライアントが作るもの）のメンバーを呼び、数の引数を bigint にする。答えは `io.booked` が読み、断られたら理由の名前の宣言したエラー（無ければ `Dandori.Failure.<理由>`）として失敗させ、通れば仮押さえのレコードを引数から作る。
 - **`now`**（1.16）は、ワークフローの `Date.now()`（再生でも同じ時刻を返す）を秒までにした `dd.now()`。
+- **規則の前提の確かめ**（1.17）は、ワークフローのコードの `if (!(asked! <= paid)) throw dd.fail("Dandori.BrokenPrecondition", …)`（日は `[…].includes(day!)`）。アクティビティもタイマーも使わないので、履歴は増えない。
 
 **Python SDK 向け**（`--target temporal-python`）も出す。ワークフローの名前のパッケージに、`types.py`、`activities.py`（`make_activities(own, transport)`）、`io.py`、`rules.py`、`runtime.py`、`workflow.py`（ワークフローのクラスと、ワーカーに渡す `workflows`）を置く。`worker.py`（`worker_options` と `make_worker`）と `client.py`（`start`・`answer`・`status`）も同じ形で出す。意味は TypeScript 版と同じで、線に乗る名前もそろえた。ワークフローの型、アクティビティの名前、コールバックの Update とシグナル、クエリ、search attribute、子ワークフローとコールバックの ID が同じなので、TypeScript のワーカーが持つアクティビティを Python のワークフローから呼べ、その逆もできる（5 章で、全部のシナリオを両方向に走らせて確かめている）。書き方が違うのは次のところ。
 
@@ -928,6 +974,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - 新しい実行で続けるのは `workflow.continue_as_new` で、履歴の長さとサーバーの勧めは `workflow.info()` の `get_current_history_length()` と `is_continue_as_new_suggested()` で読む。続きの実行に渡すものは TypeScript 版と同じ形の `dict` で、`run` の二つ目の引数で受け取る。
 - `connect` で呼ぶ規則は、`activities.py` の `make_activities` の中に、名前 `rule_<名前>` のアクティビティとして書く。サービスを実装するフローの `client.py` のメソッドの名前の関数は、snake case（`answer_packing`）にする。
 - 日付は `rules.py` が `.koyomi.python.<別名>` から読み、`{"day": …, "at": …}` を返す。帳簿の操作は `io.py` の `book`（帳簿の値は `transport(books=…)`。chobo の Python のクライアントは同期なので `asyncio.to_thread` で呼ぶ）。`now` は `workflow.now()`。
+- 規則の前提の確かめ（1.17）は、`if not (…): raise dd.fail("Dandori.BrokenPrecondition", …)`（日は `in` と日のタプル）。
 
 **Go SDK 向け**（`--target temporal-go`）も出す（2026-10-02）。ワークフローの名前の Go のパッケージ一つに、`doc.go`（パッケージの説明と、前提にするモジュールのバージョン）、`types.go`、`values.go`（JSON の値を読み書きする部品）、`activities.go`（`OwnTasks` と `Activities(own, transport)`）、`io.go`（と、フローが使うときだけ `io_aws.go`・`io_openai.go`・`io_claude.go`）、`rules.go`、`runtime.go`、`workflow.go`（`Workflow`）、`client.go`（`Start`・`Answer`・`Send`・`Status`・`Histories`）、`worker.go`（`NewWorker`・`Replay`）を置く。線に乗る名前は TypeScript 版と同じなので、ワークフローとアクティビティを TypeScript や Python のワーカーと分け合える（5 章で、Go と TypeScript の組み合わせを両方向に走らせて確かめている）。書き方が違うのは次のところ。
 
@@ -945,6 +992,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - **gofmt のとおりに書く。** 構造体のフィールドと、一行に一つずつ書いた複合リテラルのキーと値を、gofmt の規則（キーが 40 バイトを超えるときの比の規則も）でそろえ、長くなる関数リテラルは初めから行を分ける。テストは、生成したコードが `go vet` を通り、`gofmt -l` が何も言わないことを確かめる。
 - **Go のバージョン。** Temporal の Go SDK 1.49.0 は `go 1.26.0` を求めるので、生成したコードを使うには Go 1.26 が要る（手元の Go が古ければ、go コマンドが 1.26 のツールチェーンを取ってくる）。
 - **日付と帳簿。** 日付は `rules.go` が koyomi の Go のパッケージ（`koyomi/go/<パッケージ>`。日付のファイルごとのモジュールで、規則と同じく利用者の `go.mod` で require して replace する）を呼ぶ。帳簿の操作は、フローが帳簿を使うときだけ書く `io_books.go` の `Book`（`BookTransport`）で、`TransportOptions.Books` の値（chobo の Go のクライアントの `*Book`）を呼ぶ。Go 版はクライアントの型を知らないまま書くので、振替のフィールド、操作のメソッド（`Do`・`Hold`・`Post`・`Void`）、引数の構造体を、chobo の口が渡す名前でリフレクションで引く。`now` は `workflow.Now(ctx)`。
+- **規則の前提の確かめ**（1.17）は、`if !(ddNum(asked) <= ddNum(paid)) { return nil, ddFail("Dandori.BrokenPrecondition", …) }`。日は `switch ddStr(day) { case "2026-02-10", …: default: return nil, ddFail(…) }` で、gofmt のとおりに書く。
 
 ### 4.3 Lambda durable functions
 
@@ -963,6 +1011,7 @@ Temporal と同じく、コードを書き、チェックポイントと再生�
 - 一回の実行で使える操作は 3,000 回まで（引き上げられない）。E040 はこれも見積もる。
 - `connect` で呼ぶ規則は、`context.invoke` ではなく、dandori が書く実装（`tasks.ts` の `rule_<名前>`）を step の中で呼ぶ。`lambda` は要らない。サービスを実装するフローでは、ハンドラが入力の型を確かめる前にゼロ値を埋め、サービスに書かれたコールバックの応答も埋める。`status` のメソッドを持つサービスは E050。
 - 日付は、規則と同じく `context.invoke` で Lambda を呼ぶ（Step Functions と同じ関数）。帳簿の操作は、dandori が書く実装（`tasks.ts`）を step の中で呼び、`Transport` の `book` で chobo のクライアントを呼ぶ（Temporal と同じ `io.ts`）。`now` は、その文の前の step（`<行> clock`）で読む。答えはチェックポイントに残るので、再生でも同じ時刻になる。step は操作を一回使うので、E040 の見積もりは `now` を読む文ごとに 1 を足す。
+- 規則の前提の確かめ（1.17）は、Temporal と同じワークフローのコードの `if` で、step を使わないので操作は増えない。
 
 ### 4.4 Argo Workflows
 
@@ -985,6 +1034,7 @@ Temporal と同じく、コードを書き、チェックポイントと再生�
 - `connect` で呼ぶ規則も、ほかの規則と同じく caller のコンテナ（`node /app/call.ts rule_<名前>`）で動く。中身は `tasks.ts` の `makeTasks` に書く、`Transport` の `http` で送る実装で、`call.ts` は同梱の規則だけを `rules.ts` から読む。
 - サービスを実装するフローでは、始まりのテンプレートの出力の式が、入力のゼロ値を `sprig.set` で埋めてから確かめる。表はビルドのときに分かるので、メッセージの入れ子とメッセージのリストの形に合わせて式を書く。`sprig.set` は map をその場で書き換えて返すので、式は「フィールドごとの `sprig.set` と、中のメッセージを埋める式と、リストの各項目を埋める `map` を並べたリストのあとに、値そのものを置き、その最後を読む」形にした（`[sprig.set(x, "k", x["k"] ?? 0), …, x][n]`）。中のメッセージは map のときだけ、リストは配列のときだけ埋め、無いものに鍵を足さない。`sprig.set` を入れ子に重ねる形では、無いメッセージにも `null` の鍵ができ、`json` のフィールドがあるかどうかの判定が参照インタプリタと変わる。リストの項目は `map` の `#` で、項目の中のリストはその内側の `map` の `#` で埋めるので、内側の `#` が外側の項目を指すことはない。この形が、null の項目を埋め、宣言していない鍵と、map でない値を残し、中のメッセージとリストの中のリストでも埋め、無いメッセージに鍵を足さないことを、kind の上の v4.1.4 で確かめた（2026-10-01）。サービスに書かれたコールバックの応答も、それを読む式で埋める。`status` のメソッドを持つサービスは E050。
 - 日付は、ほかの規則と同じく caller のコンテナで、`caller/rules.ts` が koyomi の TypeScript を呼ぶ（読み込みは `.ts` を付けて書く）。帳簿の操作も caller のコンテナで、`transport.ts` で利用者が渡す帳簿の値を `Transport` の `book` が呼ぶ。`now` は、値を計算するテンプレートの出力の式の `now().UTC().Format("2006-01-02T15:04:05Z")` で、そのテンプレートに来たときに一度だけ評価される（上の項）。
+- 規則の前提の確かめ（1.17）は、値を計算するテンプレート一つ（`s<場所>-check`）で、出力の式が前提を計算し、成り立たなければ `dd_ctl` を `fail` に、`dd_error` を `Dandori.BrokenPrecondition` のエラーにし、`go` を `false` にする。成り立てば、どちらも元の値を書き戻す。ノードは 4 個で、E040 の見積もりに足す。
 
 ### 4.5 pydantic-graph
 
@@ -997,6 +1047,7 @@ Temporal と同じく、コードを書き、チェックポイントと再生�
 - **実行はプロセスの中にしかない。** pydantic-graph 2.x は状態をどこにも残さない（1.x にあった `FileStatePersistence` などは無くなった）ので、プロセスが止まれば実行は失われる。何日もの `wait` やコールバックも書けるが、そのあいだプロセスが生きている必要がある。止まっても続く実行が要るなら、ほかのプラットフォームを使う。
 - `connect` で呼ぶ規則は、`tasks.py` の `make_tasks(own, transport)` に書く関数（`rule_<名前>`）で、グラフは `Deps.tasks` から呼ぶ（`Deps.rules` は同梱の規則だけ）。サービスを実装するフローでは、グラフの最初の節点が入力のゼロ値を埋めてから確かめ、サービスに書かれたコールバックの応答も埋める。`status` のメソッドを持つサービスは E050。
 - 日付は `rules.py` の関数が koyomi の Python を呼ぶ（Temporal の Python 版と同じ形）。帳簿の操作は `tasks.py` の関数が `Transport` の `book` を呼ぶ（Temporal の Python 版と同じ `io.py`）。`now` は `Deps.clock` から読む。
+- 規則の前提の確かめ（1.17）は、確かめる節点一つ（`S<場所>_check`）で、成り立たなければ `dd.Failure("Dandori.BrokenPrecondition", …)` を投げ、成り立てば次の節点へ進む。
 
 ### 4.6 五つのプラットフォームでそろえたこと
 
@@ -1024,6 +1075,7 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
 | 日付（1.16） | Lambda と、koyomi の Python をつなぐコード | アクティビティ（`local` ならローカルアクティビティ）と、koyomi の TypeScript・Python・Go をつなぐコード | `context.invoke` と、Step Functions と同じ Lambda | コンテナと、koyomi の TypeScript をつなぐコード | 関数と、koyomi の Python をつなぐコード |
 | 帳簿の操作（1.16） | 帳簿の Lambda と、chobo の Python のクライアントで操作するコード。仮押さえは Task の Assign で引数から作る | dandori が書くアクティビティ（`Transport` の `book` で chobo のクライアントを呼ぶ。Go 版はリフレクションで） | dandori が書く実装を step の中で | dandori が書く実装を caller のコンテナで | dandori が書く関数（`Transport` の `book`） |
 | `now`（1.16） | `$states.context.State.EnteredTime` を秒まで | ワークフローの時計（`Date.now()`、`workflow.now()`、`workflow.Now`） | 時計を読む step（チェックポイントに残る） | 値を計算するテンプレートの式の `now()` | `Deps.clock` |
+| 決められなかった規則の前提（1.17） | Choice と Fail（`Dandori.BrokenPrecondition`） | ワークフローのコードの `if` と `dd.fail` | Temporal と同じ | 値を計算するテンプレート（`dd_ctl` と `dd_error`） | 確かめる節点と `dd.Failure` |
 
 実行中の案件と規則のバージョンの関係は、どのプラットフォームでも同じになる。規則は Lambda かアクティビティとして呼ぶので、規則を直すと、実行中の案件も途中から新しいバージョンで判定される。
 
@@ -1083,6 +1135,7 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
 - **つなぐコード**：Lambda の Python、`rules.ts`、Python の二つのプラットフォームの `rules.py`、`rules.go` を、rulec が生成した Python と TypeScript と Go と一緒に動かし、`rulec vectors` の全件で rulec の期待値と比べる。例が呼ぶ規則はすべて比べ、Step Functions に出せない例の規則も外さない（審査の規則は Step Functions に出せない例にしか無く、前は外れていた）。出力が一つの規則は、rulec の関数がその値をそのまま返す（二つ以上なら `Output` のレコード）。つなぐコードはこれを知らずにフィールドを読んでいて、審査の規則を足したときに `tsc` がそれを見つけた。durable functions 向けに出す規則の Lambda が、Step Functions 向けのものと一字も違わないことも確かめる。
 - **日付と帳簿の突き合わせ**（1.16）：日付と帳簿の操作には、どのプラットフォームでも、規則やタスクと同じくシナリオが答える。日付には、一つの実行の中でどれも違う日付（と、時刻を言う日付なら時刻）で答える。帳簿の操作には、通った（`{"ok": {"result": "done"}}`）、前に通った（`done_before`）、帳簿の行の理由ごとの断り（宣言したエラー）、失敗、タイムアウトで答える。帳簿は答えの形を決めているので、型の合わない答えやありえない状態の答えは選ばない（`done` と `done_before` のどちらでも、仮押さえは引数から作る）。ランナーは、日付のアクティビティと `Transport` の `book` をスタブにし、走らせるコードの時計を `2026-03-31T15:30:00Z` に替える。Temporal の三つ・durable functions・pydantic-graph ではコードのコピーの時計の関数を書き換え、Step Functions では `tools/asl-run.mjs` がステートに入った時刻をその時刻にし、LocalStack の定義とテンプレートの `now()`（Argo）は、その時刻の文字列に置き換える。参照インタプリタも、シナリオの `now` にその時刻を読む。
 - **日付のつなぐコード**（1.16）：Lambda の Python、`rules.ts`、Python の二つのプラットフォームの `rules.py`、`rules.go` の日付のアクティビティを、koyomi が生成したコード（koyomi のライブラリで、テストのプロセスの中で作る）と一緒に動かし、koyomi の `vectors` の全件（入力の範囲のすべて）で、日付と `at` を koyomi の期待値と比べる。カレンダーがオフセットを言うファイルでは、七件に一件、日付の代わりに、その日の 0 時 30 分（オフセットで）を UTC にした時刻を渡し、同じ日として読むことも確かめる。
+- **規則の前提の確かめ**（1.17）：テストは、フローが呼ぶ規則の前提をすべて決められなかったものとして渡すので、前提を持つ規則を呼ぶ `tests/flows/preconditions.flow` と `preconditions.ja.flow` には、確かめる文が四つずつ入る。シナリオは、確かめる文ごとに、前提が保たれる実行と破れる実行を持ち、どのプラットフォームも、破れる実行を `Dandori.BrokenPrecondition` と同じ理由で、同じ場所で終えなければならない（タスクの直後で終わる実行は、次のタスクを呼ばない）。日の前提は、koyomi の日の並びを書き込んだコードで比べる。規則の日付の入力を日の番号に直すつなぐコードは、上の「つなぐコード」の確かめが、rulec の `vectors` の全件で確かめる。ritsu の側（`ritsu dandori build` が ritsu-cross の答えで同じものを書くこと）は、ritsu のテストが確かめる。
 - **帳簿を本物のデータベースで**（1.16）：例とテストのフローの実行が出す帳簿の操作の並び（参照インタプリタが Temporal に見せる形で、違う並びを一つずつ）を、dandori が書く `Transport` の `book`（TypeScript の `io.ts`、Python の `io.py`、Go の `io_books.go`）と、Step Functions 向けに書く Lambda 関数のコードから、chobo が書くクライアントに通し、PostgreSQL と TigerBeetle の上で動かす（`books_run_on_postgres_and_tigerbeetle`）。サーバーは chobo のテストと同じく ritsu-testkit が立て、PostgreSQL には chobo が書く SQL を入れる。クライアントの依存（`pg`、`tigerbeetle-node`、psycopg、tigerbeetle、pgx、tigerbeetle-go）は、chobo の `tools/runner` のものを読むだけで使う。並びごとに、空の帳簿で、帳簿の外から入れる振替（`receive`）で満たしてから、そのあと同じ帳簿でもう一度（どの操作も前にした）の三通りで流し、どの答えも、同じ操作に chobo の参照インタプリタ（帳簿の口の `open`）が返すものと同じでなければならない。durable functions と Argo の caller の `io.ts` が Temporal のものと、pydantic-graph の `io.py` が Temporal の Python 版のものと、頭の注のほかは同じであることも確かめるので、ほかのプラットフォームの実装もこれで確かめたことになる。サーバーかツールが無ければ SKIP にする。
 - **サービスを実装するフローのシナリオ**（1.14）：start の入力から、入力の型が受け取るゼロ値（空の文字列、範囲に入る 0、false、空のリスト、ゼロ値を持つ列挙のゼロ値）のフィールドを省いた実行を足す。中のメッセージはゼロ値のメッセージにし、メッセージのリストには、ゼロ値のメッセージを一つ入れて、どの深さでも省く。サービスに書かれた `event` の値と `callback` の応答にも、同じように省いたものを選べる。参照インタプリタは、省かれたものを埋めてから読むので、埋めないプラットフォームは食い違う。また、設定されているかどうかが分かるフィールド（メッセージ、`optional`、`oneof` の一つ）を `T?` でない入力で読むなら、その最初の一つを省いた入力の実行を一本足す。どのプラットフォームも、何も呼ばずに `Dandori.BadInput` で終えなければならない（`json` の入力は選ばない。無ければ null として読んで進むので、拒否の試験にならない）。型が受け取らないゼロ値（ゼロ値を持たない列挙）は省かない。省いても、埋めても埋めなくても型の検査で落ち、埋める誤りと区別がつかないからである。形の合わない値として選ぶのは、`connect` のタスクと同じく `[]` にした。`{}` は、ゼロ値をすべて省いたメッセージとして読め、埋めると形が合ってしまう（作る途中で、参照インタプリタがシナリオに無い次の呼び出しへ進んで分かった）。
 - **入力が無い `json` のシナリオ**（1.2）：`json` を入力に、または入力のレコードのフィールドに持つフローには、呼び出しがいちばん多い実行と同じ結果の並びで、その入力から無くてよいもの（`json` と、値の無い `T?`）を全部省いた実行を一本足す。どのプラットフォームも、それを null として読み、参照インタプリタと同じ呼び出しを、同じ引数（`json` は `null`）で出して、同じに終わらなければならない。サービスを実装するフローに限らない（Temporal のクライアントが、入力のフィールドを省いて始めることもある）。
@@ -1374,7 +1427,6 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
 - API の記述（1.10）の、まだ読まないところ。OpenAPI の YAML と、記述の外を指す `$ref`、文字列の長さや `pattern`（Smithy の `@length` や `@pattern` も）、Stripe の `expand` で展開を頼んだときのレスポンス、protobuf のバイナリの符号化と、Connect の GET とストリーム、Connect のエラーの `details`。
 - ネストした実行が宣言したエラーを、Step Functions で見分けること（AWS の上で Cause の形を確かめてから）。
 - ワークフローが自分で持つ案件（rulec の生成した関数を呼んで次の状態を得る形）。
-- 規則の前提（rulec の `preconditions`）を、判断に渡す値を作ったタスクの直後で確かめること。
 - 変数の範囲を、流れに沿って（値を入れた場所ごとに）求めること。いまは、変数に入れるすべての値の範囲を合わせる（1.3）。
 - 子の `.flow`（1.9）を、本物の子と親で走らせる確かめを、Temporal のほかのプラットフォームでもすること（いまは子のスタブで突き合わせ、本物どうしは Temporal だけ）。pydantic-graph で、子のグラフを親のプロセスの中でそのまま走らせること（いまは利用者が書く関数）。
 - 規則を ASL の中に JSONata として埋めること。rulec の側の新しいプラットフォームになり、数を 2^53 までに収める証明が要る。

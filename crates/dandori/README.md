@@ -131,7 +131,10 @@ dandori <command> --help
 dandori --version
 ```
 
-For a workflow that uses rules, run each as `ritsu dandori <command>`. `dandori <command> --help`
+For a workflow that uses rules, run each as `ritsu dandori <command>`; then `build`, `run`,
+`scenarios` and `doc` also check, when the workflow runs, a rule's precondition that `ritsu check`
+cannot decide where the flow calls the rule (its W201): as soon as the values are made, a run whose
+values break it fails with `Dandori.BrokenPrecondition`. `dandori <command> --help`
 prints what one command takes, and what its exit codes mean; `dandori explain E014` says when a
 diagnostic comes, how to fix it, and the smallest `.flow` that gets it. `--lang ja`
 prints the messages in Japanese (else `DANDORI_LANG`, then `RITSU_LANG`). `build` refuses what its platform cannot do (E050),
@@ -191,8 +194,7 @@ names outside ASCII come through all five platforms as identifiers, keys and URL
 Early. Not yet: Parallel with different branches, OpenAPI documents in YAML, types made from an
 OpenAPI document or a Smithy model (a `.proto` makes them), protobuf's binary encoding and Connect's
 streams, the clients of a service a workflow implements written, for the languages dandori does not
-build for, by a plugin of protoc, cases the workflow holds itself, a rule that walks a list of elements, a rule's preconditions
-checked at the task that produced the value, runs on AWS and on a production Temporal cluster or Temporal
+build for, by a plugin of protoc, cases the workflow holds itself, a rule that walks a list of elements, runs on AWS and on a production Temporal cluster or Temporal
 Cloud (the tests run on the Temporal CLI's dev server), the caller image run against real Lambda,
 HTTP and AWS endpoints from Argo, agents run against OpenAI and Anthropic themselves, and the checks
 that cross into koyomi and chobo: a hold's expiry against the waits before it is posted, and the days
