@@ -102,6 +102,7 @@ fn run_command(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dy
         "build" => build_cmd(&a, lang, suite, out, err),
         "export" => export_cmd(&a, lang, suite, out, err),
         "api" => api_cmd(&a, lang, suite, out, err),
+        "doc" => doc_cmd(&a, lang, suite, out, err),
         "explain" => explain_cmd(&a, lang, suite, out, err),
         _ => unreachable!("every command in the table is dispatched"),
     }
@@ -287,6 +288,40 @@ fn export_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mu
                 let e = e.to_string();
                 return refuse(err, tr!("{f} に書けません: {e}", "cannot write {f}: {e}"), lang);
             }
+        }
+        None => {
+            let _ = write!(out, "{text}");
+        }
+    }
+    0
+}
+
+fn doc_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let (root, map) = match one_map(a, "doc", lang, err) {
+        Ok(x) => x,
+        Err(code) => return code,
+    };
+    let o = match check::check_map_with(&root, &map, suite) {
+        Ok(o) => o,
+        Err(e) => return refuse(err, e, lang),
+    };
+    if o.has_errors() {
+        let _ = write!(err, "{}", check::render(&o, lang));
+        return exit_of(&o.diags);
+    }
+    let format = if a.get("--format") == Some("html") { crate::doc::Format::Html } else { crate::doc::Format::Markdown };
+    let text = crate::doc::write(&o, suite, lang, format);
+    match a.get("--out") {
+        Some(dir) => {
+            let stem = Path::new(&map).file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let ext = if format == crate::doc::Format::Html { "html" } else { "md" };
+            let path = Path::new(dir).join(format!("{stem}.{ext}"));
+            if let Err(e) = std::fs::create_dir_all(dir).and_then(|_| std::fs::write(&path, &text)) {
+                let (f, e) = (path.display().to_string(), e.to_string());
+                return refuse(err, tr!("{f} に書けません: {e}", "cannot write {f}: {e}"), lang);
+            }
+            let f = path.display().to_string();
+            let _ = writeln!(out, "{}", tr!("{f}: 書いた", "{f}: Written").get(lang));
         }
         None => {
             let _ = write!(out, "{text}");

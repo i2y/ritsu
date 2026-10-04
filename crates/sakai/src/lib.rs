@@ -34,3 +34,5 @@ pub mod build;
 pub mod cli;
 pub mod cml;
 pub mod codes;
+/// The page `sakai doc` writes (DESIGN 10).
+pub mod doc;

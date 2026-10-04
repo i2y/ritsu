@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="sakai 0.23.0">
+<title>Context map: Shop (shop) v1</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", sans-serif; }
+main { max-width: 1120px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 8px 0 12px; }
+h2 { font-size: 20px; margin: 40px 0 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+h3 { font-size: 16px; margin: 24px 0 8px; }
+p, li { max-width: 80ch; }
+code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; }
+a { color: var(--accent); }
+table { border-collapse: collapse; margin: 8px 0 16px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+th { background: var(--soft); }
+figure { margin: 16px 0; overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+svg.map { display: block; max-width: none; }
+svg.map rect { fill: var(--bg); stroke: var(--accent); stroke-width: 2; }
+svg.map a.ctx:hover rect, svg.map a.ctx:focus rect { fill: var(--soft); stroke-width: 3; }
+svg.map text { fill: var(--fg); font: 11px system-ui, -apple-system, "Hiragino Sans", sans-serif; }
+svg.map text.name { font-size: 15px; font-weight: 600; }
+svg.map text.alias { fill: var(--dim); }
+svg.map text.label { paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
+svg.map line.rel { stroke: var(--dim); stroke-width: 1.6; }
+svg.map line.dotted { stroke-dasharray: 6 5; }
+svg.map path.head { fill: var(--dim); }
+:target { scroll-margin-top: 8px; }
+h2:target { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+<h1>Context map: Shop (shop) v1</h1>
+<p>A small online shop that takes orders, holds stock, delivers and bills</p>
+<p>Written from <code>shop.ctx</code>. <code>sakai check</code> says: 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5).</p>
+<figure>
+<svg class="map" viewBox="0 0 1140 304" width="1140" height="304" role="img" aria-label="Context map: Shop (shop) v1">
+<defs><marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head"/></marker></defs>
+<g class="edge" data-from="inventory" data-to="ordering"><line class="rel" x1="224.0" y1="67.0" x2="476.0" y2="67.0" marker-end="url(#head)"/><text class="label" x="350.0" y="57.0" text-anchor="middle">open host service</text><text class="label" x="350.0" y="71.0" text-anchor="middle">published language warehouse.v1</text><text class="label" x="350.0" y="85.0" text-anchor="middle">→ conformist</text></g>
+<g class="edge" data-from="ordering" data-to="delivery"><line class="rel both" x1="570.0" y1="98.0" x2="570.0" y2="206.0" marker-start="url(#head)" marker-end="url(#head)"/><text class="label" x="570.0" y="156.0" text-anchor="middle">partnership</text></g>
+<g class="edge" data-from="inventory" data-to="delivery"><line class="rel" x1="210.2" y1="98.0" x2="489.8" y2="206.0" marker-end="url(#head)"/><text class="label" x="350.0" y="142.0" text-anchor="middle">open host service</text><text class="label" x="350.0" y="156.0" text-anchor="middle">published language warehouse.v1</text><text class="label" x="350.0" y="170.0" text-anchor="middle">→ anticorruption layer</text></g>
+<g class="edge" data-from="delivery" data-to="billing"><line class="rel both" x1="644.8" y1="192.0" x2="924.4" y2="84.0" marker-start="url(#head)" marker-end="url(#head)"/><text class="label" x="714.7" y="169.0" text-anchor="middle">shared kernel</text></g>
+<g class="edge" data-from="ordering" data-to="billing"><line class="rel" x1="664.0" y1="67.0" x2="916.0" y2="67.0" marker-end="url(#head)"/><text class="label" x="790.0" y="57.0" text-anchor="middle">open host service</text><text class="label" x="790.0" y="71.0" text-anchor="middle">published language shop.ordering.v1</text><text class="label" x="790.0" y="85.0" text-anchor="middle">→ anticorruption layer</text></g>
+<g class="edge" data-from="delivery" data-to="billing"><line class="rel" x1="655.6" y1="220.0" x2="935.2" y2="112.0" marker-end="url(#head)"/><text class="label" x="865.3" y="122.0" text-anchor="middle">supplier</text><text class="label" x="865.3" y="136.0" text-anchor="middle">open host service</text><text class="label" x="865.3" y="150.0" text-anchor="middle">published language shop.delivery.v1</text><text class="label" x="865.3" y="164.0" text-anchor="middle">→ customer</text></g>
+<g class="edge" data-from="reviews" data-to="billing"><line class="rel dotted" x1="1010.0" y1="206.0" x2="1010.0" y2="98.0"/><text class="label" x="1010.0" y="156.0" text-anchor="middle">separate ways</text></g>
+<a class="ctx" href="#ctx-ordering" data-alias="ordering"><rect x="480.0" y="40.0" width="180" height="54" rx="8"/><text class="name" x="570.0" y="64.0" text-anchor="middle">Ordering</text><text class="alias" x="570.0" y="82.0" text-anchor="middle">ordering</text></a>
+<a class="ctx" href="#ctx-inventory" data-alias="inventory"><rect x="40.0" y="40.0" width="180" height="54" rx="8"/><text class="name" x="130.0" y="64.0" text-anchor="middle">Inventory</text><text class="alias" x="130.0" y="82.0" text-anchor="middle">inventory</text></a>
+<a class="ctx" href="#ctx-delivery" data-alias="delivery"><rect x="480.0" y="210.0" width="180" height="54" rx="8"/><text class="name" x="570.0" y="234.0" text-anchor="middle">Delivery</text><text class="alias" x="570.0" y="252.0" text-anchor="middle">delivery</text></a>
+<a class="ctx" href="#ctx-billing" data-alias="billing"><rect x="920.0" y="40.0" width="180" height="54" rx="8"/><text class="name" x="1010.0" y="64.0" text-anchor="middle">Billing</text><text class="alias" x="1010.0" y="82.0" text-anchor="middle">billing</text></a>
+<a class="ctx" href="#ctx-reviews" data-alias="reviews"><rect x="920.0" y="210.0" width="180" height="54" rx="8"/><text class="name" x="1010.0" y="234.0" text-anchor="middle">Reviews</text><text class="alias" x="1010.0" y="252.0" text-anchor="middle">reviews</text></a>
+</svg>
+</figure>
+<p>An arrow goes from the upstream to the downstream, with the upstream&#39;s roles, the published language the relationship goes through, and the downstream&#39;s role. A line with two heads is a shared kernel or a partnership; a dotted line is separate ways.</p>
+<h2>Contexts</h2>
+<table>
+<thead><tr><th>Context</th><th>Alias</th><th>Owner</th><th>Artifacts</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><a href="#ctx-ordering">Ordering</a></td><td><code>ordering</code></td><td>Ordering team</td><td>17</td><td>Takes orders, holds stock for them, hands them to delivery, and sees them through to arrival</td></tr>
+<tr><td><a href="#ctx-inventory">Inventory</a></td><td><code>inventory</code></td><td>Warehouse team</td><td>17</td><td>Keeps the counts on the warehouse shelves, holds stock for each line of an order, and answers how packing is going</td></tr>
+<tr><td><a href="#ctx-delivery">Delivery</a></td><td><code>delivery</code></td><td>Delivery team</td><td>19</td><td>Decides the day to ship, chooses how to carry, and arranges delivery of the parcel</td></tr>
+<tr><td><a href="#ctx-billing">Billing</a></td><td><code>billing</code></td><td>Accounting team</td><td>21</td><td>Decides whether to bill an order, works out the fee and the shipping charge, and sets the day payment is due</td></tr>
+<tr><td><a href="#ctx-reviews">Reviews</a></td><td><code>reviews</code></td><td>Ordering team</td><td>5</td><td>Collects what buyers think and shows it. It has nothing to do with billing</td></tr>
+</tbody>
+</table>
+<h2 id="ctx-ordering">Ordering (ordering)</h2>
+<p>Takes orders, holds stock for them, hands them to delivery, and sees them through to arrival</p>
+<ul>
+<li>Owner: Ordering team</li>
+<li>Written in: <code>contexts/ordering.ctx</code></li>
+</ul>
+<h3>Artifacts</h3>
+<table>
+<thead><tr><th>Tool</th><th>File</th><th>What it holds</th></tr></thead>
+<tbody>
+<tr><td><code>dandori</code></td><td><code>ordering/fulfillment.flow</code></td><td>implements <code>FulfillmentService</code>; child flows <code>delivery/arrange_delivery.flow</code></td></tr>
+<tr><td><code>proto</code></td><td><code>proto/shop/ordering/v1/fulfillment.proto</code></td><td>messages <code>FulfillRequest</code>, <code>FulfillmentOrder</code>, <code>Line</code>, <code>Gift</code>, <code>FulfillResponse</code>, <code>AnswerPackingRequest</code>, <code>AnswerPackingResponse</code>; services <code>FulfillmentService</code></td></tr>
+<tr><td><code>proto</code></td><td><code>proto/shop/ordering/v1/order.proto</code></td><td>messages <code>Order</code>, <code>GetOrderRequest</code>, <code>GetOrderResponse</code>; enums <code>OrderStatus</code>; services <code>OrderService</code></td></tr>
+<tr><td><code>file</code></td><td>14 files (code)</td><td></td></tr>
+</tbody>
+</table>
+<h3>Published language</h3>
+<ul>
+<li><code>shop.ordering.v1</code>: written in <code>proto/shop/ordering/v1/order.proto</code>, <code>proto/shop/ordering/v1/fulfillment.proto</code>; open host service <code>OrderService</code> (<code>GetOrder</code>); open host service <code>FulfillmentService</code> (<code>Fulfill</code>, <code>AnswerPacking</code>), implemented by <code>ordering/fulfillment.flow</code>; generated code in <code>py/shop/ordering/v1</code>, <code>ts/shop/ordering/v1</code>, <code>java/src/main/java/shop/ordering/v1</code>, <code>go/shop/ordering/v1</code></li>
+</ul>
+<h3>Glossary</h3>
+<table>
+<thead><tr><th>Term</th><th>Definition</th><th>Means</th><th>Crosses into</th></tr></thead>
+<tbody>
+<tr><td><code>order</code></td><td>A purchase the customer has confirmed. It does not disappear when it is cancelled</td><td><code>proto &quot;proto/shop/ordering/v1/order.proto&quot; message Order</code></td><td>—</td></tr>
+<tr><td><code>cancel</code></td><td>Cancelling an order before it ships, at the customer&#39;s request</td><td><code>proto &quot;proto/shop/ordering/v1/order.proto&quot; enum OrderStatus value ORDER_STATUS_CANCELLED</code></td><td><a href="#ctx-billing">Billing</a> (as <code>cancelled_in_ordering</code>)</td></tr>
+</tbody>
+</table>
+<h3>Relationships</h3>
+<ul>
+<li>Upstream <a href="#ctx-inventory">Inventory</a>: open host service, published language <code>warehouse.v1</code> → conformist. References that cross: <code>proto/shop/ordering/v1/fulfillment.proto:16</code> (proto import) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/fulfillment.flow:9</code> (use proto) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/fulfillment.flow:47</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Reserve</code>; <code>ordering/fulfillment.flow:53</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Release</code></li>
+<li>Partnership with <a href="#ctx-delivery">Delivery</a>. References that cross: <code>ordering/fulfillment.flow:6</code> (use rule … connect) → <code>rulec &quot;delivery/rules/urgency.rule&quot;</code>; <code>ordering/fulfillment.flow:59</code> (flow) → <code>dandori &quot;delivery/arrange_delivery.flow&quot;</code></li>
+<li>Downstream <a href="#ctx-billing">Billing</a>: open host service, published language <code>shop.ordering.v1</code> → anticorruption layer. References that cross: <code>billing/rules/billing_need.rule:4</code> (import proto) → <code>proto &quot;proto/shop/ordering/v1/order.proto&quot; enum OrderStatus</code></li>
+</ul>
+<h2 id="ctx-inventory">Inventory (inventory)</h2>
+<p>Keeps the counts on the warehouse shelves, holds stock for each line of an order, and answers how packing is going</p>
+<ul>
+<li>Owner: Warehouse team</li>
+<li>Also called: stock control</li>
+<li>Written in: <code>contexts/inventory.ctx</code></li>
+</ul>
+<h3>Artifacts</h3>
+<table>
+<thead><tr><th>Tool</th><th>File</th><th>What it holds</th></tr></thead>
+<tbody>
+<tr><td><code>chobo</code></td><td><code>inventory/inventory.book</code></td><td>accounts <code>stock</code>, <code>suppliers</code>, <code>customers</code>; transfers <code>receive</code>, <code>reserve</code>, <code>take_back</code></td></tr>
+<tr><td><code>proto</code></td><td><code>proto/warehouse/v1/stock.proto</code></td><td>messages <code>ReserveRequest</code>, <code>ReserveResponse</code>, <code>ReleaseRequest</code>, <code>ReleaseResponse</code>, <code>GetPackingRequest</code>, <code>GetPackingResponse</code>; enums <code>Stock</code>, <code>PackingStatus</code>; services <code>StockService</code>, <code>PackingService</code></td></tr>
+<tr><td><code>file</code></td><td>15 files (code)</td><td></td></tr>
+</tbody>
+</table>
+<h3>Published language</h3>
+<ul>
+<li><code>warehouse.v1</code>: written in <code>proto/warehouse/v1/stock.proto</code>; open host service <code>StockService</code> (<code>Reserve</code>, <code>Release</code>); open host service <code>PackingService</code> (<code>GetPacking</code>); generated code in <code>py/warehouse/v1</code>, <code>ts/warehouse/v1</code>, <code>java/src/main/java/warehouse/v1</code>, <code>go/warehouse/v1</code></li>
+</ul>
+<h3>Glossary</h3>
+<table>
+<thead><tr><th>Term</th><th>Definition</th><th>Means</th><th>Crosses into</th></tr></thead>
+<tbody>
+<tr><td><code>reservation</code></td><td>Holding shelf stock for one line of an order until it ships or is cancelled</td><td><code>proto &quot;proto/warehouse/v1/stock.proto&quot; message ReserveResponse</code></td><td><a href="#ctx-ordering">Ordering</a></td></tr>
+<tr><td><code>out_of_stock</code></td><td>The count asked for is not on the shelf</td><td><code>proto &quot;proto/warehouse/v1/stock.proto&quot; enum Stock value STOCK_SHORT</code></td><td><a href="#ctx-ordering">Ordering</a></td></tr>
+<tr><td><code>packing_status</code></td><td>Whether the goods of an order are in the box. A shortage can turn up part-way through packing</td><td><code>proto &quot;proto/warehouse/v1/stock.proto&quot; enum PackingStatus</code></td><td><a href="#ctx-ordering">Ordering</a></td></tr>
+</tbody>
+</table>
+<h3>Relationships</h3>
+<ul>
+<li>Downstream <a href="#ctx-ordering">Ordering</a>: open host service, published language <code>warehouse.v1</code> → conformist. References that cross: <code>proto/shop/ordering/v1/fulfillment.proto:16</code> (proto import) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/fulfillment.flow:9</code> (use proto) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot;</code>; <code>ordering/fulfillment.flow:47</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Reserve</code>; <code>ordering/fulfillment.flow:53</code> (connect) → <code>proto &quot;proto/warehouse/v1/stock.proto&quot; service StockService method Release</code></li>
+<li>Downstream <a href="#ctx-delivery">Delivery</a>: open host service, published language <code>warehouse.v1</code> → anticorruption layer</li>
+</ul>
+<h2 id="ctx-delivery">Delivery (delivery)</h2>
+<p>Decides the day to ship, chooses how to carry, and arranges delivery of the parcel</p>
+<ul>
+<li>Owner: Delivery team</li>
+<li>Written in: <code>contexts/delivery.ctx</code></li>
+</ul>
+<h3>Artifacts</h3>
+<table>
+<thead><tr><th>Tool</th><th>File</th><th>What it holds</th></tr></thead>
+<tbody>
+<tr><td><code>dandori</code></td><td><code>delivery/arrange_delivery.flow</code></td><td></td></tr>
+<tr><td><code>rulec</code></td><td><code>delivery/rules/urgency.rule</code></td><td>inputs <code>member</code>, <code>amount</code>; outputs <code>urgent</code>, <code>carrier</code></td></tr>
+<tr><td><code>koyomi</code></td><td><code>delivery/ship_date.cal</code></td><td>dates <code>ship</code>; calendar <code>tokyo_business_days</code>, its data 1955-01-01..2027-12-31</td></tr>
+<tr><td><code>proto</code></td><td><code>proto/shop/delivery/v1/shipment.proto</code></td><td>messages <code>CreateShipmentRequest</code>, <code>Destination</code>, <code>Parcel</code>, <code>CreateShipmentResponse</code>; enums <code>Handling</code>; services <code>DeliveryService</code></td></tr>
+<tr><td><code>file</code></td><td>15 files (code)</td><td></td></tr>
+</tbody>
+</table>
+<h3>Published language</h3>
+<ul>
+<li><code>shop.delivery.v1</code>: written in <code>proto/shop/delivery/v1/shipment.proto</code>; open host service <code>DeliveryService</code> (<code>CreateShipment</code>); generated code in <code>py/shop/delivery/v1</code>, <code>ts/shop/delivery/v1</code>, <code>java/src/main/java/shop/delivery/v1</code>, <code>go/shop/delivery/v1</code></li>
+<li><code>rulec.urgency.v1</code>: written in <code>delivery/rules/urgency.rule</code>; open host service <code>UrgencyService</code></li>
+</ul>
+<h3>Glossary</h3>
+<table>
+<thead><tr><th>Term</th><th>Definition</th><th>Means</th><th>Crosses into</th></tr></thead>
+<tbody>
+<tr><td><code>shipment</code></td><td>Handing a parcel over from the warehouse to a carrier</td><td><code>proto &quot;proto/shop/delivery/v1/shipment.proto&quot; message CreateShipmentRequest</code></td><td><a href="#ctx-billing">Billing</a></td></tr>
+<tr><td><code>fragile</code></td><td>A parcel that nothing is put on top of while it travels</td><td><code>proto &quot;proto/shop/delivery/v1/shipment.proto&quot; enum Handling value HANDLING_FRAGILE</code></td><td><a href="#ctx-billing">Billing</a></td></tr>
+<tr><td><code>urgent</code></td><td>Whether to carry by the next-day service</td><td><code>rulec &quot;delivery/rules/urgency.rule&quot; output urgent</code></td><td><a href="#ctx-ordering">Ordering</a></td></tr>
+</tbody>
+</table>
+<h3>Relationships</h3>
+<ul>
+<li>Partnership with <a href="#ctx-ordering">Ordering</a>. References that cross: <code>ordering/fulfillment.flow:6</code> (use rule … connect) → <code>rulec &quot;delivery/rules/urgency.rule&quot;</code>; <code>ordering/fulfillment.flow:59</code> (flow) → <code>dandori &quot;delivery/arrange_delivery.flow&quot;</code></li>
+<li>Upstream <a href="#ctx-inventory">Inventory</a>: open host service, published language <code>warehouse.v1</code> → anticorruption layer</li>
+<li>Shared kernel with <a href="#ctx-billing">Billing</a>: <code>koyomi &quot;calendars/tokyo_business_days.cal&quot;</code>, <code>dir &quot;py/calendars&quot;</code>, <code>dir &quot;ts/calendars&quot;</code>, <code>dir &quot;java/src/main/java/calendars&quot;</code>, <code>dir &quot;go/calendars&quot;</code>. References that cross: <code>delivery/ship_date.cal:3</code> (use calendar) → <code>koyomi &quot;calendars/tokyo_business_days.cal&quot;</code></li>
+<li>Downstream <a href="#ctx-billing">Billing</a>: supplier, open host service, published language <code>shop.delivery.v1</code> → customer. References that cross: <code>billing/rules/shipment_fee.rule:7</code> (shape) → <code>proto &quot;proto/shop/delivery/v1/shipment.proto&quot; message CreateShipmentRequest</code></li>
+</ul>
+<h2 id="ctx-billing">Billing (billing)</h2>
+<p>Decides whether to bill an order, works out the fee and the shipping charge, and sets the day payment is due</p>
+<ul>
+<li>Owner: Accounting team</li>
+<li>Written in: <code>contexts/billing.ctx</code></li>
+</ul>
+<h3>Artifacts</h3>
+<table>
+<thead><tr><th>Tool</th><th>File</th><th>What it holds</th></tr></thead>
+<tbody>
+<tr><td><code>koyomi</code></td><td><code>billing/payment_terms.cal</code></td><td>dates <code>closing</code>, <code>payment</code>; calendar <code>tokyo_business_days</code>, its data 1955-01-01..2027-12-31</td></tr>
+<tr><td><code>rulec</code></td><td><code>billing/rules/billing_need.rule</code></td><td>inputs <code>status</code>; outputs <code>handling</code></td></tr>
+<tr><td><code>rulec</code></td><td><code>billing/rules/payment_fee.rule</code></td><td>inputs <code>amount</code>, <code>rate</code>, <code>small</code>; outputs <code>fee</code></td></tr>
+<tr><td><code>rulec</code></td><td><code>billing/rules/shipment_fee.rule</code></td><td>inputs <code>destination</code>, <code>fragile</code>, <code>parcels</code>, <code>declared</code>, <code>window</code>; outputs <code>fee</code></td></tr>
+<tr><td><code>koyomi</code></td><td><code>calendars/tokyo_business_days.cal</code></td><td>calendar <code>tokyo_business_days</code>, its data 1955-01-01..2027-12-31</td></tr>
+<tr><td><code>file</code></td><td>16 files (code)</td><td></td></tr>
+</tbody>
+</table>
+<h3>Published language</h3>
+<ul>
+<li><code>rulec.payment_fee.v1</code>: written in <code>billing/rules/payment_fee.rule</code>; open host service <code>PaymentFeeService</code></li>
+</ul>
+<h3>Glossary</h3>
+<table>
+<thead><tr><th>Term</th><th>Definition</th><th>Means</th><th>Crosses into</th></tr></thead>
+<tbody>
+<tr><td><code>fee</code></td><td>The amount for each payment, worked out from the rate in the contract</td><td><code>rulec &quot;billing/rules/payment_fee.rule&quot; output fee</code></td><td>—</td></tr>
+<tr><td><code>cancel</code></td><td>Voiding an invoice after it was confirmed, and refunding it</td><td>—</td><td>—</td></tr>
+</tbody>
+</table>
+<h3>Relationships</h3>
+<ul>
+<li>Shared kernel with <a href="#ctx-delivery">Delivery</a>: <code>koyomi &quot;calendars/tokyo_business_days.cal&quot;</code>, <code>dir &quot;py/calendars&quot;</code>, <code>dir &quot;ts/calendars&quot;</code>, <code>dir &quot;java/src/main/java/calendars&quot;</code>, <code>dir &quot;go/calendars&quot;</code>. References that cross: <code>delivery/ship_date.cal:3</code> (use calendar) → <code>koyomi &quot;calendars/tokyo_business_days.cal&quot;</code></li>
+<li>Upstream <a href="#ctx-ordering">Ordering</a>: open host service, published language <code>shop.ordering.v1</code> → anticorruption layer. References that cross: <code>billing/rules/billing_need.rule:4</code> (import proto) → <code>proto &quot;proto/shop/ordering/v1/order.proto&quot; enum OrderStatus</code></li>
+<li>Upstream <a href="#ctx-delivery">Delivery</a>: supplier, open host service, published language <code>shop.delivery.v1</code> → customer. References that cross: <code>billing/rules/shipment_fee.rule:7</code> (shape) → <code>proto &quot;proto/shop/delivery/v1/shipment.proto&quot; message CreateShipmentRequest</code></li>
+<li>Separate ways from <a href="#ctx-reviews">Reviews</a> (no reference crosses, as checked)</li>
+</ul>
+<h2 id="ctx-reviews">Reviews (reviews)</h2>
+<p>Collects what buyers think and shows it. It has nothing to do with billing</p>
+<ul>
+<li>Owner: Ordering team</li>
+<li>Written in: <code>contexts/reviews.ctx</code></li>
+</ul>
+<h3>Artifacts</h3>
+<table>
+<thead><tr><th>Tool</th><th>File</th><th>What it holds</th></tr></thead>
+<tbody>
+<tr><td><code>file</code></td><td>5 files (code)</td><td></td></tr>
+</tbody>
+</table>
+<h3>Relationships</h3>
+<ul>
+<li>Separate ways from <a href="#ctx-billing">Billing</a> (no reference crosses, as checked)</li>
+</ul>
+<h2>Glossary index</h2>
+<table>
+<thead><tr><th>Term</th><th>Context</th><th>Definition</th><th>Across a boundary</th></tr></thead>
+<tbody>
+<tr><td><code>cancel</code></td><td><a href="#ctx-ordering">Ordering</a></td><td>Cancelling an order before it ships, at the customer&#39;s request</td><td><a href="#ctx-billing">Billing</a> (as <code>cancelled_in_ordering</code>); a term of the same name is in <a href="#ctx-billing">Billing</a></td></tr>
+<tr><td><code>cancel</code></td><td><a href="#ctx-billing">Billing</a></td><td>Voiding an invoice after it was confirmed, and refunding it</td><td>a term of the same name is in <a href="#ctx-ordering">Ordering</a></td></tr>
+<tr><td><code>fee</code></td><td><a href="#ctx-billing">Billing</a></td><td>The amount for each payment, worked out from the rate in the contract</td><td>—</td></tr>
+<tr><td><code>fragile</code></td><td><a href="#ctx-delivery">Delivery</a></td><td>A parcel that nothing is put on top of while it travels</td><td><a href="#ctx-billing">Billing</a></td></tr>
+<tr><td><code>order</code></td><td><a href="#ctx-ordering">Ordering</a></td><td>A purchase the customer has confirmed. It does not disappear when it is cancelled</td><td>—</td></tr>
+<tr><td><code>out_of_stock</code></td><td><a href="#ctx-inventory">Inventory</a></td><td>The count asked for is not on the shelf</td><td><a href="#ctx-ordering">Ordering</a></td></tr>
+<tr><td><code>packing_status</code></td><td><a href="#ctx-inventory">Inventory</a></td><td>Whether the goods of an order are in the box. A shortage can turn up part-way through packing</td><td><a href="#ctx-ordering">Ordering</a></td></tr>
+<tr><td><code>reservation</code></td><td><a href="#ctx-inventory">Inventory</a></td><td>Holding shelf stock for one line of an order until it ships or is cancelled</td><td><a href="#ctx-ordering">Ordering</a></td></tr>
+<tr><td><code>shipment</code></td><td><a href="#ctx-delivery">Delivery</a></td><td>Handing a parcel over from the warehouse to a carrier</td><td><a href="#ctx-billing">Billing</a></td></tr>
+<tr><td><code>urgent</code></td><td><a href="#ctx-delivery">Delivery</a></td><td>Whether to carry by the next-day service</td><td><a href="#ctx-ordering">Ordering</a></td></tr>
+</tbody>
+</table>
+<h2>Mappings</h2>
+<h3>Delivery ← Inventory: PackingStatus</h3>
+<p>Maps <code>proto &quot;proto/warehouse/v1/stock.proto&quot; enum PackingStatus</code> to <code>shipping_decision</code>. The layer is <code>dir &quot;py/delivery/acl/inventory&quot;</code>, <code>dir &quot;ts/delivery/acl/inventory&quot;</code>, <code>dir &quot;java/src/main/java/delivery/acl/inventory&quot;</code>, <code>dir &quot;go/delivery/acl/inventory&quot;</code>. The mapping is written in <code>contexts/delivery.ctx</code>. Its target is only a name, so the downstream values are not checked.</p>
+<table>
+<thead><tr><th>Upstream value</th><th>Downstream value</th></tr></thead>
+<tbody>
+<tr><td><code>PACKING_STATUS_WAITING</code></td><td><code>wait</code></td></tr>
+<tr><td><code>PACKING_STATUS_PACKED</code></td><td><code>ship</code></td></tr>
+<tr><td><code>PACKING_STATUS_SHORT</code></td><td>refused: A box with an item missing is not shipped. It goes back to ordering</td></tr>
+</tbody>
+</table>
+<h3>Billing ← Ordering: OrderStatus</h3>
+<p>Maps <code>proto &quot;proto/shop/ordering/v1/order.proto&quot; enum OrderStatus</code> to <code>rulec &quot;billing/rules/billing_need.rule&quot; enum order_status</code>. The layer is <code>rulec &quot;billing/rules/billing_need.rule&quot;</code>, <code>dir &quot;py/billing/acl/ordering&quot;</code>, <code>dir &quot;ts/billing/acl/ordering&quot;</code>, <code>dir &quot;java/src/main/java/billing/acl/ordering&quot;</code>, <code>dir &quot;go/billing/acl/ordering&quot;</code>. The mapping is read from the rule&#39;s <code>import proto</code> by rulec (rulec checks the rule&#39;s tables).</p>
+<table>
+<thead><tr><th>Upstream value</th><th>Downstream value</th></tr></thead>
+<tbody>
+<tr><td><code>ORDER_STATUS_RECEIVED</code></td><td><code>received</code></td></tr>
+<tr><td><code>ORDER_STATUS_PAID</code></td><td><code>paid</code></td></tr>
+<tr><td><code>ORDER_STATUS_SHIPPED</code></td><td><code>shipped</code></td></tr>
+<tr><td><code>ORDER_STATUS_CANCELLED</code></td><td><code>cancelled_in_ordering</code></td></tr>
+</tbody>
+</table>
+<h2>What is not checked</h2>
+<ul>
+<li>Whether the code of an anticorruption layer maps as the mapping says. sakai checks that the mapping covers the upstream&#39;s enum and that what it maps to is in the downstream&#39;s enum (where a rule is the target, rulec checks the rule&#39;s tables).</li>
+<li>Calls seen only at run time: HTTP to a URL held in a string, message queues, a shared database, reflection and dynamic imports.</li>
+<li>Whether the code where generated code is kept was really generated from the published language.</li>
+<li>What a term&#39;s definition says.</li>
+<li>The imports of the code: the settings <code>sakai build</code> writes have import-linter, dependency-cruiser, ArchUnit and go-arch-lint check them in CI.</li>
+</ul>
+<p>Written by sakai 0.23.0 from <code>shop.ctx</code>.</p>
+</main>
+</body>
+</html>

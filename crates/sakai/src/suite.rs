@@ -2,7 +2,7 @@
 //! rule's enums, its Connect service and its names (`Rules`), what a rule, a calendar and a
 //! workflow name outside themselves and what a rule holds, looked up in the project's index
 //! (`Index`, which keeps every language's `References` and `Items`), and the accounts and
-//! transfers of a book (`Books`, for the pages of `doc`).
+//! transfers of a book (`Books`) and the dates of a dates file (`Dates`), for the pages of `doc`.
 //!
 //! sakai holds none of those languages: they are handed to it. The binary of sakai's own crate is
 //! handed none, and where a map holds what only another language reads, it says so (E104);
@@ -14,7 +14,7 @@ use crate::model::Model;
 use crate::naming::Tool;
 use crate::owners::Artifact;
 use crate::paths::shown;
-use ritsu_ports::{BookFacts, Books, Index, Reference, RuleFacts, Rules, Said};
+use ritsu_ports::{BookFacts, Books, Dates, Index, Reference, RuleFacts, Rules, Said};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -28,6 +28,9 @@ pub struct Suite {
     /// by the naming of ritsu's DESIGN 6.2.
     pub index: Rc<Index>,
     pub books: Option<Rc<dyn Books>>,
+    /// What koyomi knows of a dates file: its dates and the days its calendar's data covers, for
+    /// the pages of `doc`.
+    pub dates: Option<Rc<dyn Dates>>,
     asked: Rc<Asked>,
 }
 

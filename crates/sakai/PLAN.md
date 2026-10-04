@@ -171,7 +171,7 @@ README.md  README.ja.md（D）
 
 ### B.1 土台
 
-- `Cargo.toml`：name `sakai`、version `0.1.0`、edition 2024、license `MIT OR Apache-2.0`、description（英語の一文。看板の案に合わせる）、repository `https://github.com/i2y/sakai`、依存は serde_json だけ。`[profile.release] strip = true`。lib と bin の両方を持つ。
+- `Cargo.toml`：name `sakai`、version `0.1.0`、edition 2024、license `MIT OR Apache-2.0`、description（英語の一文。看板の案に合わせる）、repository（B の段階では sakai だけのリポジトリを書いた。ritsu の F.2 で ritsu のリポジトリにした）、依存は serde_json だけ。`[profile.release] strip = true`。lib と bin の両方を持つ。
 - `src/i18n.rs`：`Lang { En, Ja }`。`--lang` があればそれ、無ければ `SAKAI_LANG`、無ければ英語。システムのロケールは見ない。`tr!("日本語", "English")` は `Text { ja, en }` を返し、描くときに `Lang` を渡す（プロセス全体の言語を持たない）。日本語の文で ASCII の名前と日本語のあいだに空白を入れる処理も、描くときに一か所でする（koyomi の 4.1 と同じ）。
 - `src/kw.rs`：DESIGN 1.2 のキーワードを一枚で持つ（複数の語のキーワード `published language`、`open host service`、`anticorruption layer`、`shared kernel`、`separate ways`、`proto root`、`generated dir`、`use context` も）。名前として書けない語の判定と、`explain` と docs の一覧はここから引く。
 - `src/sha256.rs`：SHA-256。FIPS 180-4 の既知の値でテストする（空、`abc`、448 ビットの文、`a` を 1,000,000 個。値は koyomi の PLAN B.5 にある）。
@@ -790,7 +790,7 @@ public class Validate {
 
 - README.md は英語、README.ja.md は日本語で、英語の写しではなく一から書き起こす。koyomi と chobo の README の組み立て（何をするか、検査が言うこと、例、入れ方、コマンド、どう確かめているか、状態、ライセンス）にそろえる。
 - 載せる `.ctx` の行、コマンドの出力、診断、設定の抜粋は、どれも実物。`tests/docs.rs` が、README と `docs/` とスキルに載せた `.ctx` の行が例か fixture の行であること、`$ sakai …` の出力が実際の出力と同じこと、診断が `check` の出力にあることを確かめる（koyomi の `tests/docs.rs` と同じ）。
-- 入れ方は `https://github.com/i2y/sakai` を取ってきて `cargo install --path .`。
+- 入れ方は ritsu と同じ（`cargo install --git https://github.com/i2y/ritsu --locked ritsu`）。コマンドは `ritsu sakai …` で、リンクの名前 `sakai` でも呼べる。sakai だけのリポジトリの URL は書かない（ritsu の F.2 で直した）。
 - dependency-cruiser と TypeScript の版の注意（TypeScript 7 では黙って通る）と、四つのツールで捕まえるものの違い（ArchUnit はクラスファイルの依存、ほかは import の文）を書く。
 - 「どう確かめているか」の時間とテストの件数は、一度走らせたときのもので、テストは確かめない。比べた数（四つのツールの変異の数など）は確かめる。
 
@@ -887,3 +887,18 @@ sakai が ritsu に取り込まれ、一式の言語を一つの処理系にま�
 - 例を土台にした変異とテスト（`tests/build.rs`、`tests/imports.rs`、`tests/cml.rs`）は、ツールの有無で変わらない。一式の言語は `[dev-dependencies]` で、テストは `tests/common/mod.rs` の `suite()` で同じプロセスにつなぐからで、SKIP にすることも、地図を移すことも要らなかった。
 
 変異は、例を土台に九つ足した（`E104_ほかの言語がつながっていない`、`E105_取り込みが合わない規則`、`E202_境界の向こうの規則を同梱`、`E202_境界の向こうの規則を展開`、`E207_公開していないサービスを呼ぶ`、`E208_公開していないサービスを実装`、`E209_境界の向こうの子のフロー`、`E307_片側だけの共有カーネルとカレンダー`、`E405_規則と違う対応`）。B と C の変異の golden は、一字も変わらない。
+
+### 5.5 ritsu の F.2 で（段階 D）
+
+段階 D（D.1〜D.6）を、ritsu の中で作った（ritsu の PLAN の F.2）。D.7 の完了の条件を満たす。作ったものと変わった振る舞いは DESIGN の 10 章、11 章、12.5 にある。この計画から変えたことは次のとおり。
+
+- doc の HTML の枠は ritsu-base の `docpage`、テストの道具は ritsu-testkit（`TempDir`、`need` の SKIP、golden の BLESS、Chrome と Mermaid）を使った。ほかの言語のものは口で読む（koyomi の `Dates` を `Suite` に足した。DESIGN 4.4）。
+- 例は、英語を先にする段階で `examples/shop/`（英語）と `examples/shop.ja/`（日本語。もとの `通販`）に分かれていたので、D.2 の英語の地図はもうあった。例の README は、英語の例に `README.md`、日本語の例に `README.ja.md` を置いた。D.2 のテストは `tests/examples.rs` の `the_two_maps_say_the_same_but_for_the_names` で、参照は行の番号を比べない（英語の `fulfillment.proto` は頭のコメントが一行多い）。
+- doc の golden は、二つの地図の Markdown を英語と日本語で四つ、HTML を地図の言語で二つ（`tests/golden/doc/`）。
+- `tests/docs.rs` は、診断を `check` で走らせ直すのではなく、変異の golden（`tests/golden/*.txt`。`tests/mutants.rs` が実物と突き合わせる）にあることで確かめる。sakai の診断は地図を一時ディレクトリに組んで出すので、README に貼るためだけの壊れた地図を置かないためである。
+- README の「どう確かめているか」の数のうち、変異の数（132、日本語の名前 64、Rust 4）と import の検査の写しの数（56、ツールごとに 14）は `tests/docs.rs` が数え直す。テストの件数と時間（179 件、31 秒）は一度走らせたときのもので、確かめない。
+
+ritsu で残すこと：
+
+- `tools/mermaid/node_modules` は git に入れない。`npm ci --prefix crates/sakai/tools/mermaid` で入れる（chobo と同じ版）。無ければ Mermaid のテストは SKIP する。
+- ritsu の根の README（ritsu の F.3）から、sakai の README と例へ案内する。sakai の README は ritsu の根の README.md と README.ja.md へリンクしている。

@@ -261,13 +261,14 @@ jobs:
           uv pip install --python crates/yuen/tools/.venv/bin/python -r crates/yuen/tools/requirements.txt
           sh crates/yuen/tools/reqif/fetch.sh
 
-      - name: "sakai: the four linters and Context Mapper"
+      - name: "sakai: the four linters, Context Mapper and Mermaid"
         if: matrix.group == 'the others'
         run: |
           set -eu
           uv venv --python 3.13 crates/sakai/tools/.venv
           uv pip install --python crates/sakai/tools/.venv/bin/python --require-hashes -r crates/sakai/tools/requirements.txt
           npm ci --prefix crates/sakai/tools
+          npm ci --prefix crates/sakai/tools/mermaid
           sh crates/sakai/tools/java/fetch.sh
           sh crates/sakai/tools/cml/fetch.sh
           sh crates/sakai/tools/go/install.sh

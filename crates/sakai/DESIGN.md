@@ -4,7 +4,7 @@
 
 名前は境（さかい）から取った。
 
-この文書は設計の段階（A）で書き、言語の芯と地図の検査を作った段階（B）と、例とコードの import の検査の設定と CML を作った段階（C の一部）で、作ったものに合わせて直した。C の段階のうち、一式の成果物を読むところ（PLAN の C.1〜C.5）は、一式の言語を一つの処理系（ritsu）にまとめると決まってから、子プロセスと JSON ではなく ritsu の口で作った（ritsu の D.8。4.1、4.7、12.2）。作ったもの（`.ctx` の構文、`check`、`api`、`explain`、`build`、`export cml`、診断）について貼った sakai の出力と、7 章のツールの出力は、どれも実際に出したもので、`tests/design.rs` が実物と同じかを確かめる。D の段階の doc の形は、まだ案である。一方、一式のツール（rulec 0.22.1、koyomi 0.1.0、chobo 0.1.0、geas 0.0.1、dandori 0.1.0）と外のツール（import-linter 2.15、dependency-cruiser 16.10.4、ArchUnit 1.5.1、go-arch-lint v1.19.0、depguard v2.2.1、Spring Modulith 2.1.1、Context Mapper CLI 6.12.0、buf 1.54.0）の振る舞いとして書いたことは、2026-10-03 にこの機械（macOS arm64）で実際に走らせて確かめたもので、出力を貼るときは版を添える。外のツールの出力からは、この機械の場所を示すパスと、端末の色の制御文字と、行頭の字下げを省いた。Rust のクレートの依存（7.7）のために試した cargo 1.94.1 と cargo-deny 0.20.2 は、2026-10-04 に同じ機械で走らせた。
+この文書は設計の段階（A）で書き、言語の芯と地図の検査を作った段階（B）と、例とコードの import の検査の設定と CML を作った段階（C の一部）で、作ったものに合わせて直した。C の段階のうち、一式の成果物を読むところ（PLAN の C.1〜C.5）は、一式の言語を一つの処理系（ritsu）にまとめると決まってから、子プロセスと JSON ではなく ritsu の口で作った（ritsu の D.8。4.1、4.7、12.2）。作ったもの（`.ctx` の構文、`check`、`api`、`explain`、`build`、`export cml`、診断）について貼った sakai の出力と、7 章のツールの出力は、どれも実際に出したもので、`tests/design.rs` が実物と同じかを確かめる。D の段階（ritsu の F.2）で、doc、例の README、`docs/`、README、スキルを作った（10 章、11 章、12.5）。doc のページと README に貼った出力も実際に出したもので、`tests/doc.rs` と `tests/docs.rs` が確かめる。一方、一式のツール（rulec 0.22.1、koyomi 0.1.0、chobo 0.1.0、geas 0.0.1、dandori 0.1.0）と外のツール（import-linter 2.15、dependency-cruiser 16.10.4、ArchUnit 1.5.1、go-arch-lint v1.19.0、depguard v2.2.1、Spring Modulith 2.1.1、Context Mapper CLI 6.12.0、buf 1.54.0）の振る舞いとして書いたことは、2026-10-03 にこの機械（macOS arm64）で実際に走らせて確かめたもので、出力を貼るときは版を添える。外のツールの出力からは、この機械の場所を示すパスと、端末の色の制御文字と、行頭の字下げを省いた。Rust のクレートの依存（7.7）のために試した cargo 1.94.1 と cargo-deny 0.20.2 は、2026-10-04 に同じ機械で走らせた。
 
 ## 0. 全体像
 
@@ -783,16 +783,17 @@ sakai が一式の成果物から読むものは、どれも ritsu の口（rits
 
 | 言語 | 口 | 読むもの | 使うところ |
 |---|---|---|---|
-| rulec | `Rules`（`facts`） | Connect のパス（package とサービス）、Connect の列挙（値の名前と、ワイヤでの名前と番号、取り込んだ proto のファイルと列挙の完全な名前） | 公表された言語の rulec の塊（E302、E301）、対応の先が規則の列挙のとき（E403、E405、E407）、`use rule … connect` が呼ぶサービス（E207） |
+| rulec | `Rules`（`facts`） | Connect のパス（package とサービス）、Connect の列挙（値の名前と、ワイヤでの名前と番号、取り込んだ proto のファイルと列挙の完全な名前）、入力と出力の名前 | 公表された言語の rulec の塊（E302、E301）、対応の先が規則の列挙のとき（E403、E405、E407）、`use rule … connect` が呼ぶサービス（E207）、doc の成果物の表と対応の表 |
 | rulec | `Items`（索引で） | 入力、出力、列挙と値の名前 | 語の `means` の先（E007） |
 | rulec | `References`（索引で） | `import proto`、`shape`、`apply`（3.3） | 境界を越える参照 |
 | koyomi | `References`（索引で） | `use calendar`（3.3） | 境界を越える参照 |
 | dandori | `References`（索引で） | `use rule`、`use proto`、`connect`、`flow`、`implements`（4.7） | 境界を越える参照、E207〜E209 |
+| koyomi | `Dates`（`facts`） | 日付の名前と、使うカレンダーの名前とデータの範囲 | doc のコンテキストのページ（4.4） |
 | chobo | `Books`（`facts`） | 勘定と振替の名前 | doc のコンテキストのページ（4.5） |
 | geas | 読まない | | 属し方だけ（4.6） |
 | proto | ritsu-proto でファイルを直接読む | `package`、`import`、メッセージ、フィールド、列挙と値、サービスとメソッド、サービスのオプション | 4.2 |
 
-一つの実行で、同じファイルには一度だけ問う（規則を参照のもとと対応の先で二度問わない）。問う相手のファイルは、`References` にはルートとルートからのパスで、`Rules` と `Books` にはファイルのパスで渡す。
+一つの実行で、同じファイルには一度だけ問う（規則を参照のもとと対応の先で二度問わない）。問う相手のファイルは、`References` にはルートとルートからのパスで、`Rules`、`Dates`、`Books` にはファイルのパスで渡す。
 
 参照（`References`）と、規則が持つもの（rulec の `Items`）は、sakai が言語ごとに尋ねるのではなく、プロジェクトの索引（ritsu の DESIGN 6.4 の `Index`）で引く。索引は、各言語の答えをファイルごとに一度だけ尋ねて持つ。`ritsu sakai` と `ritsu check` では、索引は ritsu-project が一つ作り、yuen や言語をまたぐ検査と分け合う。語の `means` が規則の入力、出力、列挙、列挙の値を名指すときは、rulec がその規則に答えた（`Rules` の事実がある）うえで、索引で引く（規則が自分のファイルに書いたものを引く。`apply` で展開したものは、その規則のファイルで名指す）。無ければ、これまでどおり sakai の E007 と文で言う。引き方を索引に替えただけで、sakai の出力は変わらない（ritsu の PLAN の E.1）。
 
@@ -843,9 +844,11 @@ proto は sakai が直接読む（P2）。読み手は自分で書いた（依�
 
 dates のファイルとカレンダーは、属し方と、参照のもと（`use calendar`）として現れる。カレンダーは公表された言語にできない（1.4）ので、カレンダーを境界の向こうから読めるのは、共有カーネルに並べたときだけである。11 章の例では、請求の支払条件と配送の出荷日が同じ `東京の営業日.cal` を読み、二つのコンテキストがそれを共有カーネルに並べる。
 
+doc のコンテキストのページには、koyomi の口（`Dates`）の事実から、dates のファイルの日付の名前と、使うカレンダーの名前とデータの範囲（例では `東京の営業日`、1955-01-01..2027-12-31）を並べる。カレンダーのファイルそのものには `Dates` は答えない（日付のファイルではないので）。そこで、カレンダーのファイルには、地図の中でそれを `use calendar` で読む dates のファイルが聞いた、カレンダーの名前とデータの範囲を並べる。口は D の段階（ritsu の F.2）で `Suite` に足し、`ritsu sakai` は ritsu-project が koyomi のものを渡す。`check` は `Dates` に問わない。
+
 ### 4.5 chobo
 
-帳簿はほかの成果物を読まないので、参照のもとにならない。帳簿をほかのコンテキストから使うのは、帳簿の後ろに立つサービス（proto）を通すときで、そのときの参照はサービスへの参照になる。chobo の口（`Books`）の事実から、勘定と振替の名前を doc のコンテキストのページに並べる。doc は D の段階で作る。読むところ（`suite::book_names`）は ritsu の D.8 で作り、例の `在庫の引当.book` から勘定 `在庫`、`仕入先`、`客` と振替 `入荷`、`引当`、`返品` を読むことを `tests/examples.rs` が確かめる。`check` は chobo に問わない。
+帳簿はほかの成果物を読まないので、参照のもとにならない。帳簿をほかのコンテキストから使うのは、帳簿の後ろに立つサービス（proto）を通すときで、そのときの参照はサービスへの参照になる。chobo の口（`Books`）の事実から、勘定と振替の名前を doc のコンテキストのページに並べる（10 章）。読むところ（`suite::book_names`）は ritsu の D.8 で作り、例の `在庫の引当.book` から勘定 `在庫`、`仕入先`、`客` と振替 `入荷`、`引当`、`返品` を読むことを `tests/examples.rs` が確かめる。`check` は chobo に問わない。
 
 ### 4.6 geas
 
@@ -1128,7 +1131,7 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 | `sakai check <map.ctx \| dir>... [--format json] [--root <dir>]` | 検査（3 章）。ディレクトリを渡すと、その下の map のファイルを全部（パスの順に）。どの地図にも読まれない context のファイルがあれば、ディレクトリを渡したときだけ W103 を出す |
 | `sakai build <map.ctx> --target import-linter\|dependency-cruiser\|archunit\|go-arch-lint [--out <dir>] [--check] [--root <dir>]` | コードの import の検査の設定を書く（7 章）。検査を通らない地図からは書かない（診断を出して exit 1）。`--out` の既定は、その言語の `code` の置き場所（ArchUnit は `test` の置き場所）。書けば `examples/shop/py/.importlinter: Written (11 contracts)` のように一行で言う。`--check` は、書く代わりに、いまの設定が地図から書くものと同じかを確かめる（同じなら `Up to date (11 contracts)`、違えば E502）。書けない地図は E501 |
 | `sakai export cml <map.ctx> [--out <file>] [--root <dir>]` | Context Mapper の CML を書く（8 章）。既定は標準出力。検査を通らない地図からは書かない（診断は標準エラーに出して exit 1） |
-| `sakai doc <map.ctx> [--format markdown\|html] [--out <dir>]` | コンテキストマップの図、コンテキストごとの用語集、関係と対応の表（10 章）。既定は Markdown を標準出力に |
+| `sakai doc <map.ctx> [--format markdown\|html] [--out <dir>] [--root <dir>]` | コンテキストマップの図、コンテキストごとの成果物と用語集、関係と越える参照、対応の表（10 章）。既定は Markdown を標準出力に。`--out` があれば、地図のファイルの名前から `<名前>.md` か `<名前>.html` を書き、`site/shop.html: Written` のように一行で言う。検査を通らない地図からは書かない（診断は標準エラーに出して exit 1） |
 | `sakai api <map.ctx> [--root <dir>]` | 地図、属し方、境界を越える参照を JSON で（9 章） |
 | `sakai explain <コード>`、`sakai explain --all [--format markdown]` | 診断のコードを引く |
 
@@ -1545,16 +1548,28 @@ BoundedContext ordering {
 
 ## 10. doc
 
-**決定**：`sakai doc` は、設計する人とドメインの専門家が読むページを出す。Markdown（GitHub がそのまま描く Mermaid の図を入れる）と、一枚の HTML（sakai が描く SVG の図）の二つ。中身は同じで、次の順に並べる。
+**決定**：`sakai doc` は、コードが実現すべきものを理解し、確かめる人が読むページを出す。読み手は、事業を回す人、システムを運用する人、コードを読む開発者である。Markdown（GitHub がそのまま描く Mermaid の図を入れる）と、一枚の HTML（sakai が描く SVG の図）の二つで、中身は同じ。検査を通った地図にだけ書く（`api` と `export cml` と同じ。検査を通らなければ診断を標準エラーに出して exit 1、ほかの言語がつながっていなければ E104 で exit 2）。次の順に並べる。
 
-1. 地図の説明と、コンテキストマップの図。コンテキストを四角に、関係を線にし、線にパターンの名前（`公開ホストサービス・公表された言語 warehouse.v1 → 腐敗防止層` のように、上流の役割と下流の役割）を書く。共有カーネルとパートナーシップは両向きの線、別々の道は点線。
-2. コンテキストの一覧（名前、別名、説明、持ち主、成果物の数）。
-3. コンテキストごとのページ：説明、持ち主、別名、属する成果物（ツールごとに、口から読んだ名前を添えて。規則なら入力と出力、帳簿なら勘定と振替、カレンダーなら名前とデータの範囲）、公表された言語（proto、公開ホストサービスとメソッド、dandori のワークフローが実装するサービスはその名前）、用語集（語、定義、指す要素、どのコンテキストに越えていくか、越えた先でどう読み替えられるか）、上流と下流との関係と、その関係を通る参照。
-4. 用語集の索引：全部のコンテキストの語を名前の順に並べ、同じ名前の語が二つ以上のコンテキストにあれば並べて、境界を越えるときにどう読み替えられるかを書く。
-5. 対応の表：腐敗防止層ごとに、上流の値、下流の値（断るなら理由）。rulec の規則から読んだ対応にはそう書く。名前だけの先には「下流の値は確かめていない」と書く。
-6. 確かめていないこと（実行時の呼び出し。3.7）。
+1. 見出し（`Context map: Shop (shop) v1`、`コンテキストマップ：通販（shop）v1`）、地図の説明、`check` の要約の一行、コンテキストマップの図。コンテキストを四角に、関係を線にし、線に上流の役割（一つに一行）、通る package、`→ 下流の役割` を書く（`open host service` / `published language warehouse.v1` / `→ conformist`）。共有カーネルとパートナーシップは両向きの線、別々の道は点線。図の読み方を一段落で添える。
+2. コンテキストの一覧（名前、別名、持ち主、成果物の数、説明）。名前は、そのコンテキストの節へのリンクにする（Markdown では見出しへ、HTML では節の `id` へ）。
+3. コンテキストごとの節：説明、持ち主、ほかの呼び名、書いたファイル。成果物の表（ツール、ファイル、口から読んだ中身。規則は入力と出力、帳簿は勘定と振替、dates のファイルは日付と、使うカレンダーの名前とデータの範囲、カレンダーはそのデータの範囲、`.proto` はメッセージと列挙とサービス、ワークフローは実装するサービスと子のフロー。コードは数だけを一行で）。公表された言語（書いたもの、公開ホストサービスとメソッド、それを実装するワークフロー、生成したコードの置き場所）。用語集（語、定義、指すもの、越えていく先。越えた先で値か語に読み替えられるなら「`cancelled_in_ordering` として」と添える）。関係（相手、役割、通る package、その関係を通る参照を `ファイル:行 (読み方) → 名指し` で）。
+4. 用語集の索引：全部のコンテキストの語を名前の順に並べる。同じ名前の語がほかのコンテキストにもあれば、そう書く。
+5. 対応の表：腐敗防止層の列挙の対応ごとに、上流の値と下流の値（断るなら理由）。対応がどこで決まっているかを一文で書く。規則の `import proto` が対応なら「規則から rulec が読んだ」、対応の先が下流の列挙なら「下流の値は対応の先の列挙にあることを確かめた」、名前だけなら「下流の値は確かめていない」。
+6. 確かめていないこと（3.7 のうち、読み手に関わるもの）。最後に、書いた sakai の版と地図のファイル。
 
-`--lang ja` で日本語のページになる。HTML は外のものを読み込まない一枚にし、図のコンテキストを押すとそのコンテキストのページに移る。ページの文面は golden に固定し、Mermaid の図はテストで Mermaid に描かせて確かめ、HTML は Chrome で開いて画面を撮って確かめる（chobo と koyomi と同じ）。
+パスは、地図のファイルのディレクトリからの相対で書く（`contexts/ordering.ctx`、`billing/rules/billing_need.rule`）。ページはどこで `doc` を走らせても同じになり、例のディレクトリを開いた人がそのままたどれる。名指しも同じ形にする（`proto "proto/warehouse/v1/stock.proto" enum PackingStatus`）。
+
+図の置き方（HTML）：上流を下流の左に置く。列は、上流から下流への矢印をたどった一番長い鎖で決める。上流も下流も持たないコンテキスト（例のレビュー）は、関係のある相手の列に置く。同じ二つのコンテキストのあいだの二つの関係（例の配送と請求の、顧客／供給者と共有カーネル）は、線を並べ、ラベルを線の上でずらす。四角は、そのコンテキストの節へのリンクである。
+
+HTML の枠は ritsu-base の `docpage`（頭、配色の変数、明るい配色と暗い配色）を使い、外のものを何も読まない（スクリプトも無い）。`--lang ja` で日本語のページになる。`--out <dir>` で、地図のファイルの名前から `<名前>.md` か `<名前>.html` を書く。
+
+テスト（`tests/doc.rs`）：例の二つの地図（英語の名前の `shop.ctx` と日本語の名前の `通販.ctx`）について、Markdown を英語と日本語で、HTML を地図の言語で書き、golden（`tests/golden/doc/`）と一字も違わないこと。HTML が外のものを読まず、図の五つの四角がどれも節に行くこと。Markdown のリンクがどれも見出しに行くこと。sakai のクレートのバイナリが例では E104 で止まり、ほかの言語を含まない地図では `ritsu sakai` と同じページを書くこと。Mermaid 11 と 12 が四つの図をどれも描けること（`tools/mermaid`。無ければ SKIP）。Chrome で二つの HTML を開いて画面を撮り、図の四角（請求と在庫）を押すと、その節に移ること（無ければ SKIP）。
+
+**捨てたもの**：
+
+- ページを `api` の JSON から別のツールで組むこと。sakai が `check` のあとに持っているもの（成果物、参照、口の答え）をそのまま使えるのに、JSON を読み直す手間が増える。
+- 図の配置をグラフの配置の一般のアルゴリズム（交差を減らす並べ替え）で決めること。コンテキストマップは数個から十数個の四角で、上流を左に置く決まりだけで読める図になり、golden が配置の細かい揺れで変わらない。
+- 対応の表に、対応の無い上流の値（0 番の「設定されていない」）を並べること。対応に要らない値で、表が読みにくくなる。
 
 ## 11. 例
 
@@ -1610,7 +1625,7 @@ error[E032]: Enum 注文の状態 does not agree with OrderStatus in ../../proto
 
 コードは、Python（`py/`）、TypeScript（`ts/`）、Java（`java/`）、Go（`go/`）の四つに、同じ形の小さなものを置く。公表された言語から生成したコードと、chobo と koyomi と rulec が書くコードは、本物の代わりに数行の手書きのものにする（頭のコメントに、どのコマンドが本物を書くかを書く）。import の検査で見るのは境界で、中身ではないからである。本物の protobuf のコードは、各言語の protobuf のライブラリが無いと組めず、テストに外の依存が増える。
 
-C の段階で、この例を作った（日本語の名前の `通販.ctx` と五つのコンテキストのファイル）。英語の名前の例は、英語を先にする段階（12.4）で、日本語の例の名前を英語に直した版として足し、日本語の例は `通販` から `shop.ja` に名前を替えた（中身は、`支払条件.cal` の頭のコメントが指す koyomi の例の名前を、koyomi が例の名前を替えたのに合わせて直したほかは、変えていない）。例の README は、まだ無い。写したファイルには、頭のコメントに写した元と直したところを書いた（祝日の表と dandori の `options.proto` は、写した元のまま）。PLAN の C.0 の直し方のほかに、`受注.flow` のコメントと説明の中の、在庫の値の名前と子の `.flow` のファイルの名前を、直したあとのものに合わせた。写したものと例のために書いたものは、どれもそれぞれのツールの検査を通る（rulec 0.22.1 で規則 4 本、koyomi 0.1.0 でカレンダー 3 本、chobo 0.1.0 で帳簿 1 本、dandori 0.1.0 でワークフロー 2 本。`tests/examples.rs` が確かめる。ritsu の D.8 から、それぞれの言語の口で確かめる）。
+C の段階で、この例を作った（日本語の名前の `通販.ctx` と五つのコンテキストのファイル）。英語の名前の例は、英語を先にする段階（12.4）で、日本語の例の名前を英語に直した版として足し、日本語の例は `通販` から `shop.ja` に名前を替えた（中身は、`支払条件.cal` の頭のコメントが指す koyomi の例の名前を、koyomi が例の名前を替えたのに合わせて直したほかは、変えていない）。例の README は、D の段階で書いた（英語の例の `examples/shop/README.md` と、日本語の例の `examples/shop.ja/README.ja.md`。コンテキストと関係の表、写した元、コードが本物の代わりであること）。写したファイルには、頭のコメントに写した元と直したところを書いた（祝日の表と dandori の `options.proto` は、写した元のまま）。PLAN の C.0 の直し方のほかに、`受注.flow` のコメントと説明の中の、在庫の値の名前と子の `.flow` のファイルの名前を、直したあとのものに合わせた。写したものと例のために書いたものは、どれもそれぞれのツールの検査を通る（rulec 0.22.1 で規則 4 本、koyomi 0.1.0 でカレンダー 3 本、chobo 0.1.0 で帳簿 1 本、dandori 0.1.0 でワークフロー 2 本。`tests/examples.rs` が確かめる。ritsu の D.8 から、それぞれの言語の口で確かめる）。
 
 四つの言語のコードの置き場所には、sakai が書いた設定（`py/.importlinter`、`ts/.dependency-cruiser.cjs`、`java/src/test/java/SakaiContextsTest.java`、`go/.go-arch-lint.yml`。英語の例には `--lang en`、日本語の例には `--lang ja`）も置く。CI で `sakai build --check` を走らせる使い方そのままの形で、`tests/build.rs` が、いまの地図から書くものと一字も違わないことを確かめる。四つのツールは、例のままでは何も言わず、7.6 の四つの import のどれも捕まえる。
 
@@ -1623,7 +1638,7 @@ ritsu の D.8 から、`ritsu sakai check` は上の表の参照を全部読む�
 - proto の読み手は ritsu-proto（4.2。ritsu の C.9 で、sakai の読み手を元に作った）。sakai に残したのは、要素の名指し方と、何も設定していないことを言う列挙の値の決め方（1.7）である。テストは、buf があれば、例と fixture の proto を `buf build -o -#format=json` の結果と比べる（package、import、メッセージ、列挙と値、サービスとメソッド）。`buf/validate` を import する proto は、buf が BSR の依存なしに組めないので比べない。
 - 一式の言語は、ritsu の口で読む（`src/suite.rs`。4.1）。口は `Suite`（`Rules`、プロジェクトの索引 `Index`、`Books`）にまとめて渡され、同じファイルには一度の実行で一度だけ問う。コマンドは `src/run.rs` の `run(引数, 口, 標準出力, 標準エラー)` で、sakai のクレートのバイナリ（`src/main.rs`）は何もつながない口を、`ritsu sakai` はすべてをつないだ口を渡す。E104 の注に書く「同じコマンドを `ritsu sakai` で」は、`run` が受け取った引数から作る（スレッドに置く。`suite::COMMAND`）。診断の文面のパスの基点（2.4）も、`run` がスレッドに置いて決め、終わったら戻す（`paths::show_from`。前は `main.rs` が一度だけ決めていた。同じプロセスで何度もコマンドを走らせるテストと ritsu のため）。
 - 診断の文面は `tr!` で英語と日本語を隣に書く。台帳は `src/codes.rs`。
-- コードの import の検査の設定は `src/build/`（`areas.rs` が 7.1 の表を作り、`import_linter.rs`、`depcruise.rs`、`archunit.rs`、`go_arch_lint.rs` がツールごとの言葉に写し、`mod.rs` が頭と書き出しと `--check` を受け持つ）。CML は `src/cml.rs`。doc は `src/doc/`（D の段階）。
+- コードの import の検査の設定は `src/build/`（`areas.rs` が 7.1 の表を作り、`import_linter.rs`、`depcruise.rs`、`archunit.rs`、`go_arch_lint.rs` がツールごとの言葉に写し、`mod.rs` が頭と書き出しと `--check` を受け持つ）。CML は `src/cml.rs`。doc は `src/doc/`（`mod.rs` がページの中身を言語ごとに塊の並びに組み、`markdown.rs` と `html.rs` が書き、`draw.rs` が HTML の図を描く。10 章）。
 - 外のツールは、版を固定して `tools/` に置く。import-linter は `tools/requirements.txt`（2.15。`uv venv --python 3.13 tools/.venv`）、dependency-cruiser と TypeScript は `tools/package.json` と `tools/package-lock.json`（16.10.4 と 5.9.3）、ArchUnit と JUnit は `tools/java/fetch.sh`（Maven Central から取って SHA-256 を確かめる）、go-arch-lint は `tools/go/install.sh`（`go install …@v1.19.0`、`-trimpath`）、Context Mapper は `tools/cml/fetch.sh` と `tools/cml/Validate.java`、Mermaid は `tools/mermaid/`。どれも、取ってきたものは git に入れない。
 
 モジュールの分け方と、各段階の作業は PLAN.md にある。
@@ -1684,6 +1699,19 @@ sakai は ritsu（七つの言語を一つにまとめる処理系）に取り�
 - **テスト**：日本語の地図、変異、例を読むテストは、名前もコードも終了コードも変えず、英語の地図、変異、例を読む同じ振る舞いのテストを `…_in_english` として足した。日本語でしか確かめられないもの（`columns_after_japanese_count_characters`、全角の空白の E001 など）は、日本語のまま持ち、英語のテストは同じ振る舞い（桁が文字で数えられること）を英語の材料で確かめる。
 
 **`explain` の再現**：台帳の項（`ritsu_base::ledger::Entry`）が、再現を二つ持てるようにした。英語の出力は英語の名前の再現（`map.ctx`、`alpha.ctx`、`beta.ctx`。コンテキストは `Alpha(a)` と `Beta(b)`）を、日本語の出力は日本語の名前の再現（`地図.ctx`、`甲.ctx`、`乙.ctx`）を見せる。決めて変えたことで、sakai の `explain` の英語の出力の再現と、英語の説明文の中の日本語の名前の例（E003 の `map 通販(shop) v1`、E008 の `受注(ordering)`）が英語の名前になる。ほかの言語の出力は変わらない。再現は `tests/codes.rs` が両方とも走らせて、そのコードが出ることを確かめる。診断そのものの文（`check` の出力）は変えていない。
+
+### 12.5 段階 D（ritsu の F.2）で作ったもの
+
+sakai の段階 D を、ritsu の中で作った（ritsu の PLAN の F.2）。作ったものは、doc（10 章）、例の README（11 章）、`docs/`（`reference.md` と `targets.md` は英語、`codes.md` と `codes.ja.md` は `sakai explain --all --format markdown` の出力そのもの）、`README.md`（英語）と `README.ja.md`（日本語で一から書いたもの）、エージェントのスキル（`skills/sakai/`。`SKILL.md` は手で書き、ほかは `skills/sync.sh` が `docs/` から写す）、`THIRD_PARTY_NOTICES.md`（例の中の内閣府の祝日の表の写し）である。
+
+コマンドの振る舞いは、次のところが変わった。どれも決めて変えたもので、ほかのコマンドの出力は変えていない。
+
+- `doc` のコマンドが加わった（6 章）。`sakai --help` のコマンドの一覧に一行増える。
+- 口のまとまり（`Suite`）に、koyomi の `Dates` が加わった（4.1、4.4）。doc の成果物の表のためで、`check`、`api`、`build`、`export` は問わない。`ritsu sakai` には ritsu-project が koyomi のものを渡す（ritsu-project の `Joined::sakai`）。
+- `Cargo.toml` の `repository` を ritsu のリポジトリにした。sakai は ritsu の一部として配る（入れ方は `cargo install --git https://github.com/i2y/ritsu --locked ritsu`）。
+- Mermaid の版を固定した `tools/mermaid/package.json` と `package-lock.json` を足した（chobo の `tools/mermaid` と同じ版。`npm ci --prefix tools/mermaid` で入れ、`node_modules` は git に入れない）。`.gitignore` の行は、`node_modules` がディレクトリでもリンクでも外すよう、末尾の `/` を取った。
+
+テストは四つのファイルに増えた。`tests/doc.rs`（10 章）、`tests/docs.rs`（README、例の README、`docs/`、スキルに載せた `.ctx` の行、`$ sakai …` の出力、診断、設定の抜粋、ツールが言うこと、比べた数、リンク、キーワードの一覧が本物であること。koyomi と chobo の `tests/docs.rs` の形で、コマンドは `ritsu sakai` と同じにすべての言語をつないで走らせ、診断は変異の golden にあることを確かめる）、`tests/skill.rs`（写しが `docs/` と同じ、スキルのリンクが外に出ない、frontmatter の形）、`tests/examples.rs` の `the_two_maps_say_the_same_but_for_the_names`（二つの地図の境界を越える参照が、コンテキストを別名で読めば同じで、CML がコメントと文字列のほかは同じ）。
 
 ## 13. 捨てたもの
 

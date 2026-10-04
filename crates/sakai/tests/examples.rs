@@ -332,3 +332,60 @@ fn a_change_to_the_example_is_caught_in_english() {
     assert_eq!(common::codes(&os), ["E007"]);
     assert!(os[0].diags[0].message.en.contains("There is no output fee_amount in billing/rules/payment_fee.rule"), "{}", os[0].diags[0].message.en);
 }
+
+/// CML without its comments (`// …` and `/* … */`) and strings (`"…"`): what Context Mapper reads
+/// as the map's structure.
+fn bare(cml: &str) -> String {
+    let mut out = String::new();
+    let mut rest = cml;
+    while !rest.is_empty() {
+        if let Some(r) = rest.strip_prefix("//") {
+            rest = r.split_once('\n').map(|x| x.1).unwrap_or("");
+            out.push('\n');
+        } else if let Some(r) = rest.strip_prefix("/*") {
+            rest = r.split_once("*/").map(|x| x.1).unwrap_or("");
+        } else if let Some(r) = rest.strip_prefix('"') {
+            rest = r.split_once('"').map(|x| x.1).unwrap_or("");
+            out.push_str("\"\"");
+        } else {
+            let c = rest.chars().next().unwrap();
+            out.push(c);
+            rest = &rest[c.len_utf8()..];
+        }
+    }
+    out
+}
+
+/// The two maps of the example are the same map in two languages (PLAN D.2): read with each
+/// context's name in place of the other's (the aliases are the same), every crossing goes from
+/// the same context to the same context, the same way, to an artifact of the same language,
+/// through the same relationship; and the CML they export is the same, but for its comments and
+/// strings.
+#[test]
+fn the_two_maps_say_the_same_but_for_the_names() {
+    let read = |example: &str, map: &str| {
+        let ex = std::fs::canonicalize(example).unwrap();
+        let o = sakai::check::check_map_with(&ex, map, &common::suite()).unwrap();
+        assert!(!o.has_errors(), "{example}/{map}");
+        o
+    };
+    let (en, ja) = (read(common::EXAMPLE_EN, "shop.ctx"), read(common::EXAMPLE, "通販.ctx"));
+    let (en, ja) = (en.checked.as_ref().unwrap(), ja.checked.as_ref().unwrap());
+    let alias = |c: &sakai::check::Checked, name: &str| c.model.contexts.iter().find(|x| x.name == name).unwrap().alias.clone();
+    let crossings = |c: &sakai::check::Checked| {
+        let mut v: Vec<String> = c
+            .crossings
+            .iter()
+            .map(|x| format!("{} -> {} {} {:?} {}", alias(c, &c.model.contexts[x.from_ctx].name), alias(c, &c.model.contexts[x.to_ctx].name), x.kind.via(), x.allowed, x.target.tool.word()))
+            .collect();
+        v.sort();
+        v
+    };
+    assert_eq!(crossings(en).len(), 9);
+    assert_eq!(crossings(en), crossings(ja));
+    for lang in [ritsu_base::text::Lang::En, ritsu_base::text::Lang::Ja] {
+        let (a, b) = (sakai::cml::render(en, "shop.ctx", lang), sakai::cml::render(ja, "通販.ctx", lang));
+        assert_ne!(a, b, "the comments and strings differ");
+        assert_eq!(bare(&a), bare(&b), "the CML of the two maps, without comments and strings ({lang:?})");
+    }
+}

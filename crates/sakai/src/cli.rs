@@ -104,6 +104,35 @@ pub fn commands() -> Vec<Cmd> {
         },
         Cmd {
             usage: None,
+            name: "doc",
+            args: "<map.ctx>",
+            purpose: tr!(
+                "地図のページを書く。コンテキストマップの図、コンテキストごとの成果物と用語集、関係と越える参照、対応の表",
+                "write the map's page: the context map, each context's artifacts and glossary, the relationships and what crosses them, the mappings"
+            ),
+            params: vec![("<map.ctx>", tr!("検査を通る map のファイル", "a map file that passes check"))],
+            flags: vec![
+                flag("--format", Some("markdown|html"), tr!("ページの形（既定は markdown）", "the form of the page (markdown unless given)")).choices(&["markdown", "html"]),
+                flag(
+                    "--out",
+                    Some("<dir>"),
+                    tr!(
+                        "書くディレクトリ。地図のファイルの名前から <名前>.md か <名前>.html を書く。無ければ標準出力",
+                        "the directory to write to, as <name>.md or <name>.html after the map file's name; else standard output"
+                    ),
+                ),
+                root_flag(),
+            ],
+            exits: vec![
+                (0, tr!("書いた", "written")),
+                (1, tr!("地図にエラーがある（診断は標準エラーに出す）", "the map has errors (the diagnostics go to standard error)")),
+                (2, tr!("引数の誤り、読めないファイル、つながっていない言語の成果物（E104）", "bad arguments, a file that cannot be read, or an artifact of a language not joined (E104)")),
+            ],
+            examples: vec!["sakai doc examples/shop/shop.ctx", "sakai doc examples/shop.ja/通販.ctx --format html --out site --lang ja"],
+            codes: vec![],
+        },
+        Cmd {
+            usage: None,
             name: "api",
             args: "<map.ctx>",
             purpose: tr!(

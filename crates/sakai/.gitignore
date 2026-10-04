@@ -6,6 +6,6 @@
 /tools/go/cache/
 /tools/cml/context-mapper-cli-6.12.0/
 /tools/cml/*.zip
-/tools/mermaid/node_modules/
+/tools/mermaid/node_modules
 __pycache__/
 .import_linter_cache/

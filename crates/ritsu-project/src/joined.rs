@@ -87,12 +87,14 @@ impl Joined {
 
     /// Every language sakai reads (sakai's DESIGN 4.1): a rule's enums, its Connect service and
     /// its names (`Rules`), what a rule, a calendar and a workflow name outside themselves and
-    /// what a rule holds, through the index, and a book's accounts and transfers (`Books`).
+    /// what a rule holds, through the index, a book's accounts and transfers (`Books`), and a dates
+    /// file's dates and its calendar's data (`Dates`).
     pub fn sakai(&self) -> sakai::suite::Suite {
         let mut s = sakai::suite::Suite::default();
         s.index = self.index.clone();
         s.rules = Some(self.rulec.clone());
         s.books = Some(self.chobo.clone());
+        s.dates = Some(self.koyomi.clone());
         s
     }
 }

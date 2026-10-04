@@ -2,8 +2,8 @@
 
 `sakai build` writes the settings of four import linters, and `sakai export cml` writes Context
 Mapper's CML. sakai itself runs none of these tools. Its tests do: `tests/imports.rs` runs each
-linter on the settings sakai writes for the example, and `tests/cml.rs` runs Context Mapper's
-validator on the CML. A test whose tool is not here prints `SKIP: <why>` and passes.
+linter on the settings sakai writes for the example, `tests/cml.rs` runs Context Mapper's
+validator on the CML, and `tests/doc.rs` has Mermaid draw the maps `sakai doc` writes, in headless Chrome. A test whose tool is not here prints `SKIP: <why>` and passes.
 
 Everything these scripts fetch stays out of git (see `.gitignore`); only the files that pin the
 versions are kept.
@@ -15,6 +15,7 @@ versions are kept.
 | ArchUnit, JUnit Platform Console | 1.5.1, 6.1.3 | `tools/java/fetch.sh` (checks each jar's SHA-256) | `SAKAI_ARCHUNIT_LIB`, else `tools/java/lib`; Java from `SAKAI_JAVA` and `SAKAI_JAVAC`, else `JAVA_HOME`, else the PATH |
 | go-arch-lint | v1.19.0 | `tools/go/install.sh` (builds with `-trimpath`) | `SAKAI_GO_ARCH_LINT`, else `tools/go/bin/go-arch-lint`; go from `SAKAI_GO`, else the PATH |
 | Context Mapper CLI | 6.12.0 | `tools/cml/fetch.sh` (checks the zip's SHA-256) | `SAKAI_CML_LIB`, else `tools/cml/context-mapper-cli-6.12.0/lib` |
+| Mermaid | 11.17.2, 12.1.0 | `npm ci --prefix tools/mermaid` | `tools/mermaid/node_modules`; Chrome from `RITSU_CHROME` or `SAKAI_CHROME`, else Google Chrome where macOS keeps it, else the PATH |
 
 `tools/requirements.txt` is `tools/requirements.in` compiled with hashes:
 `uv pip compile --python 3.13 --generate-hashes --no-header tools/requirements.in -o tools/requirements.txt`.

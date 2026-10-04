@@ -39,6 +39,7 @@ pub fn suite() -> sakai::suite::Suite {
     s.index = Rc::new(index);
     s.rules = Some(rules);
     s.books = Some(std::rc::Rc::new(chobo::ports::Engine));
+    s.dates = Some(std::rc::Rc::new(koyomi::ports::Engine));
     s
 }
 
