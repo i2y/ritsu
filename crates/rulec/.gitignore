@@ -19,3 +19,7 @@
 # The OPA measurement rebuilds its inputs from `rulec gen` (`run.sh`); the policies, the
 # case builder and the report it printed are what is kept.
 /experiments/opa/out
+
+# The TypeScript compiler tests/threeway.rs type-checks the generated TypeScript with is
+# installed with `npm ci --prefix tools`; only its package files are kept.
+/tools/node_modules

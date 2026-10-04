@@ -3403,6 +3403,15 @@ impl<'a> Gen<'a> {
             }
             format!("[{}]", out.join(", "))
         };
+        // An array of an enum's members has the type of those members only (`Event.SHIP` is
+        // the literal `"出荷"`, since the enum's object is `as const`), and `includes` takes an
+        // element of the array's type: `[Event.SHIP].includes(event)` does not pass
+        // `tsc --strict` for an `event` of the whole enum. The array is widened to the
+        // column's type; the cast goes with the other types, so the JavaScript only gains the
+        // parentheses (§15.171).
+        let widened = |arr: String| -> String {
+            if matches!(inner, Ty::Enum(_)) { format!("({arr} as Array<{}>)", self.ts_ty(ty)) } else { arr }
+        };
         // `===` on a bigint and on a string are both value comparisons, so one spelling does
         // for every type here.
         Some(match cell {
@@ -3419,12 +3428,12 @@ impl<'a> Gen<'a> {
             Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("!{var}"),
             Cell::Lit(l) => format!("{var} === {}", lit(l)),
-            Cell::Set(ls) => format!("{}.includes({var})", members(ls)),
+            Cell::Set(ls) => format!("{}.includes({var})", widened(members(ls))),
             Cell::Not(ls) if ls.len() == 1 && matches!(&ls[0], Lit::Word(w) if self.c.groups.contains_key(w)) => {
                 let Lit::Word(w) = &ls[0] else { unreachable!() };
                 format!("!_{}.has({var})", self.ident(w))
             }
-            Cell::Not(ls) => format!("!{}.includes({var})", members(ls)),
+            Cell::Not(ls) => format!("!{}.includes({var})", widened(members(ls))),
             Cell::Cmp(cs) => cs
                 .iter()
                 .map(|(o, l)| {

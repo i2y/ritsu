@@ -90,7 +90,7 @@ $ ./target/release/rulec --help
 - **`rulec test`** — 生成した Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java・SQL・Wasm・NumPy を実際に走らせて、参照評価器（rulec の中にある「正解」の実装）と突き合わせます。`python3`・`node`・`rustc`・`ruby`・`go`・`swiftc` が要ります（SQL は同じ `python3` の中の `sqlite3` で走ります）。無ければ「どれを飛ばしたか」を言って、落ちはしません。
 - **`rulec verify`** — アダプタを子プロセスとして起動するので、そのアダプタを書いた言語が要ります。
 
-生成物を**型検査したい**場合だけ、さらにツールが要ります。生成 Python は `mypy --strict` を通り、生成 Ruby には `steep` が読む `.rbs` が付いてきます。どちらも**使うのに必要ではありません** — 生成物はそれ自体でそのまま動きます。
+生成物を**型検査したい**場合だけ、さらにツールが要ります。生成 Python は `mypy --strict` を、生成 TypeScript は `tsc --strict` を通り、生成 Ruby には `steep` が読む `.rbs` が付いてきます。どれも**使うのに必要ではありません** — 生成物はそれ自体でそのまま動きます。
 
 ## エージェントスキル
 

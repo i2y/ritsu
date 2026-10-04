@@ -383,7 +383,7 @@ D の二つ目の部分で、あわせてしたこと（作者が D で直すと
 - 断る範囲の外：rulec の生成したコードと出力先の言語そのもの（予約語、組み込みの名前、標準ライブラリ）のぶつかりは、rulec の W121（警告）が言うので、dandori は断らない（dandori の DESIGN 1.15）。
 - `dandori explain` と台帳：E006 の文を `explain` で読めるように、dandori に診断の台帳（`src/codes.rs`、30 のコードの全部）と `explain` を足した（★。台帳が無かったので、一つのコードだけを載せる形にはしなかった）。どのコードにも最小の再現があり、`tests/codes.rs` が、どの再現も自分のコードを出すこと（E040 と E050 は `build` で）を確かめる。
 - テスト：`tests/names.rs`（六本）が、四つの表のどの名前にも E006 が出ること、列挙の別名、Go の `ok`、`rule_<規則>`、別名の同じ二つの規則、タスクと規則のアクティビティ、Connect で呼ぶ規則は断らないこと、表の名前がどれもそのファイルに書かれることを確かめる。断らない名前で全部の出力先の生成物が通ることは、`tests/flows/names.flow`（規則二つを `tests/flows/rules/` に足した）を、ほかのテストのフローと同じに全部のプラットフォームで走らせて確かめる。rulec の例を規則のまわりのコードに答えさせる二本（`rule_glue_answers_the_rulec_vectors`、`python_rules_answer_the_rulec_vectors`）は、例のフローだけでなく `tests/flows` のフローの規則も見るようにした。
-- 見つけた rulec のこと：order_state.rule の TypeScript（rulec の生成したもの）は `tsc --strict`（TypeScript 7）を通らない（列挙の値の絞り込み）。どのフローも order_state を関数として呼んでいなかったので、これまで表に出なかった。`names.flow` では別の規則にした（7.7）。
+- 見つけた rulec のこと：order_state.rule の TypeScript（rulec の生成したもの）は `tsc --strict`（TypeScript 7）を通らない（列挙の値の絞り込み）。どのフローも order_state を関数として呼んでいなかったので、これまで表に出なかった。`names.flow` では別の規則にした（7.7）。D の最後の部分で rulec の生成器を直し（rulec の §15.171）、`names.flow` は order_state を関数として呼ぶ形にした（D.11）。
 
 ### D.4 dandori の単位
 
@@ -674,6 +674,6 @@ DESIGN 11 章。`crates/rulec/proofs/` を根の `proofs/` に移し、rulec の
   - 生成するコードの予約語の表を一つにするとき（7.5）は、dandori の生成器の `AROUND_RULES`（四つのファイルで、規則の名前と並べて読み込む dandori の名前）も入れるか、dandori の側の名前を替える。替えると、どの出力先の生成物も変わる。
   - rulec の W121（別名が出力先の言語の予約語や標準ライブラリとぶつかる）を、dandori は断らない。`ritsu check` で規則の警告をフローの側にも見せるかを決める。
   - ブラウザで試すページは、記録から答える口（dandori の `src/record.rs` と `sources::Recorded`）で規則を読む。F.5 で rulec と一つの wasm にすれば要らなくなる。
-- 見つけたこと（直していない）：rulec が order_state.rule のために生成する TypeScript は、`tsc --strict`（TypeScript 7）を通らない（`Event` を、絞り込んだ値の型に渡しているところが三つ）。dandori のフローで order_state を関数として呼ぶものが無かったので、表に出ていなかった。rulec の生成器の問題である。
+- 見つけたこと（直していない）：rulec が order_state.rule のために生成する TypeScript は、`tsc --strict`（TypeScript 7）を通らない（`Event` を、絞り込んだ値の型に渡しているところが三つ）。dandori のフローで order_state を関数として呼ぶものが無かったので、表に出ていなかった。rulec の生成器の問題である。（D の最後の部分で直した。rulec の §15.171、PLAN の D.11）
 - 片づけ：`env-full.sh` が `DANDORI_RULEC` を書いているが、dandori はもう読まない（害は無い）。テストのあとの OS の一時ディレクトリは、この部分の報告に前と後の数を書いた。
 - テストの回し方：7.5 と同じ。dandori のテストは rulec のバイナリを要らない（ライブラリの口で読む）。`cargo xtask test --level platforms -p dandori -- --exact <名前>` で重いテストを一つずつ回す。sakai の `what_was_copied_passes_the_suite` は、dandori のワークフローを `ritsu dandori check` で確かめるようになった（dandori のクレートのバイナリは規則を読まないため。D.3 のあとで落ちていたのを、この部分の終わりに直した）。`SAKAI_DANDORI` の代わりに `SAKAI_RITSU` を読み、無ければワークスペースの `target/debug/ritsu` を使う。CI の `tools` も `SAKAI_RITSU` を渡す。

@@ -294,8 +294,9 @@ The pieces, in the order they are usually written:
    documents to the registry starts requiring the prose to name it.
 
 Whatever the language's own type system can carry, carry it — and say plainly what it cannot.
-Rust, Swift and Go hold the unit in the type; TypeScript brands a `bigint`; Python declares a
-`NewType` that a type checker enforces and `mypy --strict` is run over the output to prove it;
+Rust, Swift and Go hold the unit in the type; TypeScript brands a `bigint` and `tsc --strict` is
+run over the output; Python declares a `NewType` that a type checker enforces and
+`mypy --strict` is run over the output to prove it;
 Ruby, PHP, JavaScript, Java and SQL cannot hold a unit at all, so there it is documented
 instead, and the `.rbs` that ships with the Ruby module says so too; the Wasm module is the
 Rust one, so the unit rides in it and the `.wit` states it for the wire; the NumPy plan has no

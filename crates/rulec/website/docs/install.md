@@ -118,9 +118,10 @@ Two steps reach outside:
 - **`rulec verify`** starts your adapter as a child process, so it needs
   whatever that adapter is written in.
 
-Two more, and only if you want to **type-check** the output: the generated Python passes
-`mypy --strict`, and the generated Ruby ships an `.rbs` that `steep` reads. Neither is
-needed to use what comes out — it runs as it stands.
+Three more, and only if you want to **type-check** the output: the generated Python passes
+`mypy --strict`, the generated TypeScript passes `tsc --strict`, and the generated Ruby ships
+an `.rbs` that `steep` reads. None of them is needed to use what comes out — it runs as it
+stands.
 
 ## The agent skill
 

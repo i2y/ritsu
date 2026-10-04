@@ -129,6 +129,12 @@ jobs:
         if: matrix.group == 'rulec'
         run: gem install rbs steep
 
+      # Node runs the generated TypeScript with its types stripped; tsc checks them (rulec's
+      # DESIGN §15.171), at the version in rulec's tools/package-lock.json.
+      - name: "rulec: tsc, for the generated TypeScript's types"
+        if: matrix.group == 'rulec'
+        run: npm ci --prefix crates/rulec/tools
+
       - uses: shivammathur/setup-php@v2
         if: matrix.group == 'rulec'
         with:
@@ -278,6 +284,7 @@ jobs:
             ruby --version && php --version && swiftc --version
             wasmtime --version && psql --version && lean --version
             protoc-gen-py --version && protoc-gen-connectrpc --version
+            crates/rulec/tools/node_modules/.bin/tsc --version
             psql -c 'select version()'
           fi
           if [ "${{ matrix.group }}" = dandori ]; then protoc --version; fi

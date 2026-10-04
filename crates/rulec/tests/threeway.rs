@@ -455,6 +455,60 @@ fn 生成pythonはmypy_strictを通る() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// `tsc`: named by `RITSU_TSC` or `RULEC_TSC`, else the one `npm ci --prefix tools` puts beside
+/// the tests, else on the PATH.
+fn tsc() -> Option<PathBuf> {
+    ritsu_testkit::tools::find("TSC", Some(Path::new("tools/node_modules/.bin/tsc")), "tsc", &["--version"])
+}
+
+/// The TypeScript is held to `tsc --strict` the way the Python is held to `mypy --strict`.
+/// Node runs the generated TypeScript with its types stripped, so the agreement across the
+/// languages passes whatever the types say; `order_state` and five more rules of the corpus did
+/// not type, because an array of an enum's members did not take a value of the whole enum
+/// (§15.171). It came out in a workflow that compiles a rule's module with its own code. The
+/// module, the runner (the worked example of a call) and the MCP server, of every rule.
+#[test]
+fn 生成typescriptはtsc_strictを通る() {
+    if !need(Need::Node) {
+        return;
+    }
+    let Some(tsc) = tsc() else {
+        skip("tsc が無いので飛ばした（npm ci --prefix tools で入る）");
+        return;
+    };
+    let tmp = TempDir::new("tsc");
+    let dir = tmp.path().to_path_buf();
+    let mut args: Vec<String> = vec!["gen".into()];
+    args.extend(CORPUS.iter().map(|(f, _)| (*f).to_string()));
+    args.push("--out".into());
+    args.push(dir.to_string_lossy().into_owned());
+    rulec(&args.iter().map(|s| s.as_str()).collect::<Vec<_>>());
+    let ts = dir.join("typescript");
+    // node reads the runner's `import … from "./x.ts"` inside a package of ES modules
+    std::fs::write(ts.join("package.json"), "{\"type\": \"module\"}\n").unwrap();
+    let mut files: Vec<PathBuf> = Vec::new();
+    for (_, alias) in CORPUS {
+        for f in [format!("{alias}.ts"), format!("{alias}_runner.ts"), format!("{alias}_mcp.ts")] {
+            let p = ts.join(&f);
+            assert!(p.is_file(), "{f} が生成されていない");
+            files.push(p);
+        }
+    }
+    let mut c = Command::new(&tsc);
+    c.args(["--strict", "--noEmit", "--allowImportingTsExtensions", "--erasableSyntaxOnly", "--module", "nodenext", "--target", "es2022", "--types", "node"]);
+    if let Ok(types) = std::fs::canonicalize("tools/node_modules/@types") {
+        c.arg("--typeRoots").arg(types);
+    }
+    let o = c.args(&files).current_dir(&ts).output().expect("tsc を起動できない");
+    assert!(
+        o.status.success(),
+        "生成した TypeScript が tsc --strict を通らない:\n{}{}",
+        String::from_utf8_lossy(&o.stdout),
+        String::from_utf8_lossy(&o.stderr)
+    );
+    println!("typescript: {} 本の規則の {} のファイルが tsc --strict を通る（{}）", CORPUS.len(), files.len(), ritsu_testkit::tools::version(&tsc, "--version"));
+}
+
 /// `steep`, if it is installed. There is no `uvx` for gems, so this is all or nothing.
 fn steep() -> bool {
     have("steep") && have("rbs")

@@ -1,5 +1,5 @@
 workflow 名前 v1
-description "生成するコードの名前を試す：rulec が規則のために生成するコードの名前を、dandori がまわりに書くコードと一つのファイルに並べても、ぶつからないもの。単位の型が同じ規則が二つ（urgency と記録の要否が money[JPY, incl_tax] を受け取る）、同じ名前の列挙を受け取る規則が二つ（hold_amount と部屋の扱いが客室の列挙 Room を受け取る）、dandori の名前に近い別名の規則が二つ（rule と activities）。どれも E006 にならず、どのプラットフォームでも動く"
+description "生成するコードの名前を試す：rulec が規則のために生成するコードの名前を、dandori がまわりに書くコードと一つのファイルに並べても、ぶつからないもの。単位の型が同じ規則が二つ（urgency と記録の要否が money[JPY, incl_tax] を受け取る）、同じ名前の列挙を受け取る規則が二つ（hold_amount と部屋の扱いが客室の列挙 Room を受け取る）、dandori の名前に近い別名の規則が二つ（rule と activities）。ステートマシンの規則 order_state も関数として呼び、返金の額で記録の要否を決める（列挙の値の集合を行に書く規則の TypeScript は、rulec の §15.171 から tsc --strict を通る）。どれも E006 にならず、どのプラットフォームでも動く"
 
 use rule 急ぎ from "../../examples/order/rules/urgency.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:urgency"
@@ -13,6 +13,9 @@ use rule 扱い from "rules/部屋の扱い.rule"
 use rule 要否 from "rules/記録の要否.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:log-needed"
 
+use rule 状態 from "../../examples/order/rules/order_state.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:order-state"
+
 record 注文
   id     : string
   会員   : bool
@@ -20,6 +23,8 @@ record 注文
   客室   : 与信.room
   部屋   : 扱い.客室
   泊数   : int  range >=1 <=30
+  状態   : 状態.state
+  出来事 : 状態.event
 
 inputs
   注文 : 注文
@@ -36,5 +41,6 @@ flow
   let 見積 = 与信(room: 注文.客室, nights: 注文.泊数)
   let 部屋 = 扱い(客室: 注文.部屋)
   知らせる(注文ID: 注文.id, 便: 判定.carrier, 与信の扱い: 見積.handling, 部屋の扱い: 部屋.扱い)
-  let 記録 = 要否(急ぎ: 判定.urgent, 返金: 注文.金額)
+  let 次 = 状態(state: 注文.状態, event: 注文.出来事, amount_paid: 注文.金額)
+  let 記録 = 要否(急ぎ: 判定.urgent, 返金: 次.refund)
   succeed 残す = 記録.記録

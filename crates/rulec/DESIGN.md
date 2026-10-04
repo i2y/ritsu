@@ -2288,6 +2288,20 @@ count 一致数(hits) over 候補 where 照合結果 = 一致  range >=0 <=50
 
 **変わること**：無い。コーパスの 50 本の `gen`（書いたファイルと、標準出力と標準エラー）を含む rulec の出力（1,725 回）は、移す前と一字も違わなかった。
 
+### 15.171 生成した TypeScript を `tsc --strict` で確かめ、列挙の値の集合を列の型に広げる（2026-10-04）
+
+**きっかけ**：ritsu の dandori のテストは、ワークフローのコードと一緒に、規則のために rulec が生成した TypeScript を `tsc --strict`（TypeScript 7）で型検査する。そこで、ステートマシンの例の `order_state`（コーパスの `注文の状態.rule`）の TypeScript が通らなかった（ritsu の PLAN の D.3）。表の行のセルに列挙の値の集合（`出荷, 配達`）を書くと、生成した TypeScript は `[Event.SHIP, Event.DELIVER].includes(event)` と書く。列挙のオブジェクトは `as const` なので、配列の型はその二つの値の型（`"出荷" | "配達"`）だけになり、`includes` は列挙全体の型の `event` を受け取らない（TS2345）。rulec のテストは、生成した TypeScript を node が型を外して走らせ、参照評価器と突き合わせるだけで、型は確かめていなかった。生成 Python には `mypy --strict` をかけている（§15.22）のに、TypeScript には何もかけていなかったので、コーパスの 50 本のうち 6 本（`order_state`、`payment_intent`、`cancel_verdict`、`compensation`、`retirement_allowance`、`return_eligibility`）の 17 か所が通らないことが見えていなかった。
+
+**決定**：
+
+- 列挙の列で、セルに値の集合を書いた行（`出荷, 配達`、`not 入金`）は、配列を列の型の配列に広げてから `includes` を呼ぶ：`([Event.SHIP, Event.DELIVER] as Array<Event>).includes(event)`。無いことがある列なら `Array<Window | null>` である。数と文字列の集合は、リテラルの配列がもともと広い型（`bigint[]`、`string[]`）になるので変えない。グループ（`_遠隔地.has(…)`）は `ReadonlySet<string>` なので変えない。
+- 型を外す変換（§15.36）は `as Array<…>` をほかの型と同じく外すので、JavaScript は括弧が一組増えるだけである（`([Event.SHIP, Event.DELIVER]).includes(event)`）。
+- `tests/threeway.rs` に、コーパスの全部の規則の TypeScript（モジュール、呼び出しの手本になるランナー、MCP サーバー）を `tsc --strict --erasableSyntaxOnly` にかけるテストを足した。tsc は koyomi と同じ版（TypeScript 7.0.2 と `@types/node`）を `tools/package.json` と `tools/package-lock.json` に固定し、`npm ci --prefix tools` で入れる（`RITSU_TSC` か `RULEC_TSC` でほかの場所のものも使える。無ければ SKIP）。ritsu の CI の tools のジョブでも、rulec の組で入れる。入れ方の文書（サイトの入れ方のページ、`docs/backends.md`）にも、生成 TypeScript が `tsc --strict` を通ることを書いた。
+
+**変わること**：列挙の列に値の集合を書いた規則の、TypeScript と JavaScript の生成物と、それを中に入れたページ。コーパスでは 8 本で、上の 6 本と、もともと通っていた `shipment_fee`（無いことがある列挙の列）と `part_time_allowance` である。それぞれ `typescript/<別名>.ts`、`javascript/<別名>.mjs`、三つの `<別名>_page.html`（JavaScript を中に持つ）と、`rulec doc --format html` の出力（英語と日本語）が変わった。ほかの出力（`check`、`certificate`、`api`、`schema`、`graph`、`vectors`、`coverage`、`fmt`、`adapter`、Markdown の `doc`、ほかの十の言語の生成物）は、コーパスと変異とほかの規則の 1,675 回の出力で一字も変わらない。ritsu の dandori の承認のページ（HTML）は規則のページを中に入れるので、dandori のサイトの例のページ（hotel と order の、英語と日本語）も括弧のぶんだけ変わった。
+
+**確かめたこと**：足したテストは、直す前の生成器では上の 6 本で TS2345 を出して落ち、直したあとは 50 本の 150 のファイルが通る。全言語の突き合わせ（`評価器と生成コードが全言語で一致する`）とほかのテストも通る。dandori の `tests/flows/names.flow` は、`order_state` を関数として呼ぶ形にして、Temporal（TypeScript）を含む全部のプラットフォームで走らせた。
+
 ## 16. この設計で最も危うい点
 
 第一に、**rulec が消したかった二重実装が、一段上で小さく再発する**。
