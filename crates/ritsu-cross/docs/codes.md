@@ -309,9 +309,9 @@ See also: [E202](#e202)
 
 ## E203 — A rule's output can be an amount chobo does not take
 
-**When**: Where a workflow gives a rule's numeric output to a chobo transfer as its amount, the output can be below 1 or above 2⁶³ − 1 (X4, DESIGN 7.6). rulec counts what the output comes to (the numbers the rows write, or its intervals). chobo fails such a call rather than refusing it as a business outcome. The notes give an input of the rule that comes to that amount, from the rule's vectors.
+**When**: Where a workflow gives a rule's numeric output to a chobo transfer as its amount, the output can be below 0 or above 2⁶³ − 1 (X4, DESIGN 7.6; chobo takes 0 to 2⁶³ − 1). rulec counts what the output comes to (the numbers the rows write, or its intervals). chobo fails such a call rather than refusing it as a business outcome. The notes give an input of the rule that comes to that amount, from the rule's vectors.
 
-**Fix**: Make the rule's amounts 1 or more (a negative one, such as a refund, is a transfer the other way), or branch before the transfer.
+**Fix**: Make the rule's amounts 0 or more (a negative one, such as a refund, is a transfer the other way), or branch before the transfer.
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 
@@ -319,9 +319,9 @@ See also: [E202](#e202)
 
 ```rule
 rule seats v1
-description "How many seats an event of a kind needs"
+description "How many seats an event of a kind needs; a handback gives seats back"
 
-enum kind = webinar | workshop | talk
+enum kind = handback | workshop | talk
 
 inputs
   event_kind : kind
@@ -332,7 +332,7 @@ outputs
 table pick
 policy unique
 | event_kind | -> needed : number |
-| webinar    | 0                  |
+| handback   | -20                |
 | workshop   | 30                 |
 | talk       | 80                 |
 ```

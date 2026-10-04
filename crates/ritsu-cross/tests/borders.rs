@@ -68,12 +68,14 @@ fn x4_a_rules_output_as_an_amount() {
     // by where an amount can come from: rules' outputs, ranges dandori knows, places that say nothing
     assert_eq!(amounts_given(&[fee.clone()], &[(Some(1), Some(100))], None), Answer::Holds);
     assert!(matches!(amounts_given(&[fee.clone(), adjust.clone()], &[], None), Answer::Fails((-300, AmountFrom::Output(1, Some(_))))));
-    assert_eq!(amounts_given(&[fee.clone()], &[(Some(0), Some(100))], None), Answer::Fails((0, AmountFrom::Range(0))));
+    // chobo takes 0 (a transfer that moves nothing); a negative amount is the first it does not take
+    assert_eq!(amounts_given(&[fee.clone()], &[(Some(0), Some(100))], None), Answer::Holds);
+    assert_eq!(amounts_given(&[fee.clone()], &[(Some(-1), Some(100))], None), Answer::Fails((-1, AmountFrom::Range(0))));
     let open = ritsu_base::tr!("範囲が無い", "no range");
     assert_eq!(amounts_given(&[fee.clone()], &[], Some(&open)), Answer::Undecided(open.clone()));
     assert!(matches!(amounts_given(&[fee.clone()], &[(Some(1), None)], None), Answer::Undecided(_)));
     assert_eq!(amounts_hull(&[fee.clone()], &[(Some(1), Some(100))]), Some((1, 800)));
-    assert_eq!(amounts_hull(&[adjust.clone()], &[]), Some((1, 300)));
+    assert_eq!(amounts_hull(&[adjust.clone()], &[]), Some((0, 300)));
     assert_eq!(amounts_hull(&[fee.clone()], &[(Some(1), None)]), None);
     // the refusals chobo's search finds with the amounts in the output's range, against the task
     let b = chobo::ports::Engine;
@@ -97,7 +99,8 @@ fn x4_a_rules_output_as_an_amount() {
         other => panic!("{other:?}"),
     }
     // a range with no amount chobo takes is not decided
-    assert!(matches!(b.refusals(&book, "reserve", (-5, 0)).unwrap(), Found::Undecided(_)));
+    assert!(matches!(b.refusals(&book, "reserve", (-5, -1)).unwrap(), Found::Undecided(_)));
+    assert!(matches!(b.refusals(&book, "reserve", (-5, 0)).unwrap(), Found::Value(_)));
     assert!(matches!(refusals_met(&found, "nothing", &[], &bounds), Answer::Undecided(_)));
     // a refusal the task handles that the search finds no run for is not decided
     let mut more = hold.clone();

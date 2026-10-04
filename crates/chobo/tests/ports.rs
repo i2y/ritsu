@@ -166,7 +166,7 @@ fn a_ledger_runs_every_scenario_as_the_interpreter_does() {
         other => panic!("{other:?}"),
     }
     // a range with no amount chobo takes, and a transfer the book does not have
-    assert!(matches!(Engine.refusals(&root().join("tests/books/在庫.book"), &t.name, (-10, 0)).unwrap(), ritsu_ports::Found::Undecided(_)));
+    assert!(matches!(Engine.refusals(&root().join("tests/books/在庫.book"), &t.name, (-10, -1)).unwrap(), ritsu_ports::Found::Undecided(_)));
     assert!(Engine.refusals(&root().join("tests/books/在庫.book"), "無い", (1, 10)).is_err());
 }
 
@@ -212,7 +212,7 @@ fn a_call_that_does_not_fit_the_english_book_is_said_so() {
         ritsu_ports::Found::Value(ops) => assert_eq!(ops, t.refusals, "{}", t.name),
         other => panic!("{other:?}"),
     }
-    assert!(matches!(Engine.refusals(&root().join("tests/books/stock_reservation.book"), &t.name, (-10, 0)).unwrap(), ritsu_ports::Found::Undecided(_)));
+    assert!(matches!(Engine.refusals(&root().join("tests/books/stock_reservation.book"), &t.name, (-10, -1)).unwrap(), ritsu_ports::Found::Undecided(_)));
     assert!(Engine.refusals(&root().join("tests/books/stock_reservation.book"), "nothing", (1, 10)).is_err());
 }
 
@@ -232,5 +232,32 @@ fn refusals_with_amounts_held_below_a_partial_post_come_at_once() {
     match rx.recv_timeout(std::time::Duration::from_secs(60)) {
         Ok(answer) => assert_eq!(answer.ok(), Some(true), "the refusals of reserve with every amount 1"),
         Err(_) => panic!("the refusals of reserve with every amount 1 did not come within 60 seconds"),
+    }
+}
+
+/// A range that is only 0 (chobo takes an amount of 0, which moves nothing; chobo's DESIGN 1.5):
+/// the search runs with 0 rather than with an empty range, finds no refusal of a bound, since a
+/// move of 0 crosses none an account is inside, and answers at once.
+#[test]
+fn refusals_with_every_amount_0_come_at_once() {
+    let book = root().join("tests/books/stock_reservation.book");
+    let f = Engine.facts(&book).unwrap();
+    let bounds: Vec<String> = f.accounts.iter().flat_map(|a| a.lower.iter().chain(a.upper.iter()).map(|x| x.refusal.clone())).collect();
+    assert!(!bounds.is_empty(), "stock_reservation.book has bounds");
+    for t in f.transfers {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (b, name) = (book.clone(), t.name.clone());
+        std::thread::spawn(move || {
+            let _ = tx.send(Engine.refusals(&b, &name, (0, 0)));
+        });
+        match rx.recv_timeout(std::time::Duration::from_secs(60)) {
+            Ok(Ok(ritsu_ports::Found::Value(ops))) => {
+                for (op, reasons) in ops {
+                    assert!(reasons.iter().all(|r| !bounds.contains(r)), "{} {op}: a move of 0 refused for a bound: {reasons:?}", t.name);
+                }
+            }
+            Ok(other) => panic!("{}: the refusals with every amount 0: {other:?}", t.name),
+            Err(_) => panic!("{}: the refusals with every amount 0 did not come within 60 seconds", t.name),
+        }
     }
 }

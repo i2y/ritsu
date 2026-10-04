@@ -7,7 +7,7 @@
     date input's, or a koyomi date's input's (`inputRange`). The value can be the day of koyomi
     dates, each of whose days koyomi counts exactly, or come from somewhere that says nothing of
     what day it is. The example is the first day outside, of the first koyomi date that has one.
-  - `amountFits`, `amountsGiven` (X4): every amount a value can be is one chobo takes, 1 to
+  - `amountFits`, `amountsGiven` (X4): every amount a value can be is one chobo takes, 0 to
     2⁶³ − 1: the outputs of rules (their fewest and most, as rulec counts them) and the numbers
     dandori knows the range of. `amountsHull` is what chobo's search for the refusals is held to.
   - `refusalsMet` (X4): the refusals chobo's search finds that turn on the amounts (the reasons of
@@ -16,8 +16,9 @@
     seconds the call can come after the hold, against the seconds it expires after.
 
   Each is written as `borders.rs` writes it, and each theorem below says what an answer settles.
-  `amountFits_chobo_takes` ties X4 to `ChoboModel` (an amount the check lets through is one chobo's
-  interpreter takes; the other way is not true: chobo takes 0, and the check refuses it), and
+  `amountFits_chobo_takes` and `amountFits_fails_chobo` tie X4 to `ChoboModel` (an amount the check
+  lets through is one chobo's interpreter takes, and the amount it gives as an example is one the
+  interpreter does not take), and
   `heldUntil_fails_expired`, `heldUntil_holds_held` tie X5 to it (a hold the check says expires is
   one `ChoboModel.expiredAt` says has expired when the call comes, and the other way round).
 -/
@@ -176,7 +177,7 @@ def amountFits {α : Type} (out : Found (OutputValues α)) : Answer (Int × Opti
     match o.min, o.max with
     | some lo, some hi =>
       let bad : Option Int :=
-        if lo < 1 then some ((o.values.bind (fun vs => vs.find? (fun v => decide (v < 1)))).getD lo)
+        if lo < 0 then some ((o.values.bind (fun vs => vs.find? (fun v => decide (v < 0)))).getD lo)
         else if hi > maxAmount then some hi
         else none
       match bad with
@@ -188,7 +189,7 @@ def amountFits {α : Type} (out : Found (OutputValues α)) : Answer (Int × Opti
     one at most 2⁶³ − 1. -/
 theorem amountFits_holds_iff {α : Type} {o : OutputValues α} :
     amountFits (.value o) = .holds ↔
-      ∃ lo hi, o.min = some lo ∧ o.max = some hi ∧ 1 ≤ lo ∧ hi ≤ maxAmount := by
+      ∃ lo hi, o.min = some lo ∧ o.max = some hi ∧ 0 ≤ lo ∧ hi ≤ maxAmount := by
   simp only [amountFits]
   constructor
   · intro h
@@ -207,14 +208,14 @@ theorem amountFits_holds_iff {α : Type} {o : OutputValues α} :
     · exact absurd h (by simp)
   · rintro ⟨lo, hi, hlo, hhi, h1, h2⟩
     simp only [hlo, hhi]
-    have e1 : ¬ lo < 1 := by omega
+    have e1 : ¬ lo < 0 := by omega
     have e2 : ¬ hi > maxAmount := by omega
     simp [e1, e2]
 
-/-- **When X4's amounts hold**, every value of the output's range is an amount from 1 to 2⁶³ − 1. -/
+/-- **When X4's amounts hold**, every value of the output's range is an amount from 0 to 2⁶³ − 1. -/
 theorem amountFits_holds {α : Type} {o : OutputValues α} {lo hi : Int}
     (h : amountFits (.value o) = .holds) (hlo : o.min = some lo) (hhi : o.max = some hi) :
-    ∀ v, lo ≤ v → v ≤ hi → 1 ≤ v ∧ v ≤ maxAmount := by
+    ∀ v, lo ≤ v → v ≤ hi → 0 ≤ v ∧ v ≤ maxAmount := by
   obtain ⟨lo', hi', h1, h2, h3, h4⟩ := amountFits_holds_iff.1 h
   rw [hlo] at h1
   rw [hhi] at h2
@@ -223,12 +224,12 @@ theorem amountFits_holds {α : Type} {o : OutputValues α} {lo hi : Int}
   intro v hv1 hv2
   exact ⟨by omega, by omega⟩
 
-/-- **When X4's amounts give an example**, it is outside 1 to 2⁶³ − 1, it is one of the numbers the
+/-- **When X4's amounts give an example**, it is outside 0 to 2⁶³ − 1, it is one of the numbers the
     rows write or an end of the output's range, and the input beside it is the one the rule's
     vectors give for it. -/
 theorem amountFits_fails {α : Type} {o : OutputValues α} {v : Int} {ex : Option α}
     (h : amountFits (.value o) = .fails (v, ex)) :
-    (v < 1 ∨ maxAmount < v) ∧
+    (v < 0 ∨ maxAmount < v) ∧
       ((∃ vs, o.values = some vs ∧ v ∈ vs) ∨ o.min = some v ∨ o.max = some v) ∧
       ex = (o.examples.find? (fun e => e.1 == v)).map (·.2) := by
   simp only [amountFits] at h
@@ -244,7 +245,7 @@ theorem amountFits_fails {α : Type} {o : OutputValues α} {v : Int} {ex : Optio
         · next h1 =>
           simp only [Option.some.injEq] at hb
           subst hb
-          cases hv : o.values.bind (fun vs => vs.find? (fun v => decide (v < 1))) with
+          cases hv : o.values.bind (fun vs => vs.find? (fun v => decide (v < 0))) with
           | none => simp only [Option.getD_none]; exact Or.inl h1
           | some w =>
             simp only [Option.getD_some]
@@ -263,7 +264,7 @@ theorem amountFits_fails {α : Type} {o : OutputValues α} {v : Int} {ex : Optio
       · split at hb
         · simp only [Option.some.injEq] at hb
           subst hb
-          cases hv : o.values.bind (fun vs => vs.find? (fun v => decide (v < 1))) with
+          cases hv : o.values.bind (fun vs => vs.find? (fun v => decide (v < 0))) with
           | none => simp only [Option.getD_none]; exact Or.inr (Or.inl hlo)
           | some w =>
             simp only [Option.getD_some]
@@ -292,6 +293,21 @@ theorem amountFits_chobo_takes {α : Type} {o : OutputValues α} {lo hi a : Int}
   have hm : a ≤ ChoboModel.maxAmount := by unfold ChoboModel.maxAmount; omega
   simp [h0, hm]
 
+/-- **X4, held to chobo's interpreter, the other way**: the amount X4 gives as an example is one
+    `ChoboModel.fits` does not take as an amount argument (below 0 or above 2⁶³ − 1), so the check
+    refuses exactly what the interpreter does not take. -/
+theorem amountFits_fails_chobo {α : Type} {o : OutputValues α} {v : Int} {ex : Option α}
+    (h : amountFits (.value o) = .fails (v, ex)) :
+    (decide (0 ≤ v) && decide (v ≤ ChoboModel.maxAmount)) = false := by
+  obtain ⟨hv, -, -⟩ := amountFits_fails h
+  simp only [maxAmount] at hv
+  cases h1 : decide (0 ≤ v) with
+  | false => rfl
+  | true =>
+    have h0 : 0 ≤ v := of_decide_eq_true h1
+    have hm : ¬ v ≤ ChoboModel.maxAmount := by unfold ChoboModel.maxAmount; omega
+    simp [hm]
+
 /-- Where the amount of an example of `amountsGiven` comes from: an output of a rule, by its place,
     with an input that comes to it; or a range dandori knows, by its place. -/
 inductive AmountFrom (α : Type) where
@@ -319,7 +335,7 @@ where
     | r :: rs, i, und =>
       match r with
       | (some lo, _) =>
-        if lo < 1 then .fails (lo, .range i)
+        if lo < 0 then .fails (lo, .range i)
         else match r.2 with
           | some hi => if hi > maxAmount then .fails (hi, .range i) else goRange rs (i + 1) und
           | none => goRange rs (i + 1) true
@@ -329,7 +345,7 @@ where
 theorem amountsGiven_goRange_holds {α : Type} {ranges0 : List (Option Int × Option Int)} :
     ∀ {rs : List (Option Int × Option Int)} {i : Nat} {und : Bool},
       amountsGiven.goRange (α := α) rs i und = .holds →
-        und = false ∧ ∀ r ∈ rs, ∃ lo hi, r = (some lo, some hi) ∧ 1 ≤ lo ∧ hi ≤ maxAmount
+        und = false ∧ ∀ r ∈ rs, ∃ lo hi, r = (some lo, some hi) ∧ 0 ≤ lo ∧ hi ≤ maxAmount
   | [], i, und, h => by
     simp only [amountsGiven.goRange] at h
     cases und <;> simp_all
@@ -365,7 +381,7 @@ theorem amountsGiven_goOut_holds {α : Type} {ranges : List (Option Int × Optio
     ∀ {os : List (Found (OutputValues α))} {i : Nat} {und : Bool},
       amountsGiven.goOut ranges os i und = .holds →
         und = false ∧ (∀ o ∈ os, amountFits o = .holds) ∧
-          ∀ r ∈ ranges, ∃ lo hi, r = (some lo, some hi) ∧ 1 ≤ lo ∧ hi ≤ maxAmount
+          ∀ r ∈ ranges, ∃ lo hi, r = (some lo, some hi) ∧ 0 ≤ lo ∧ hi ≤ maxAmount
   | [], i, und, h => by
     simp only [amountsGiven.goOut] at h
     obtain ⟨hu, hall⟩ := amountsGiven_goRange_holds (ranges0 := ranges) h
@@ -385,14 +401,14 @@ theorem amountsGiven_goOut_holds {α : Type} {ranges : List (Option Int × Optio
 
 /-- **When X4's amounts hold**, the value comes from nowhere that says nothing, and every amount it
     can be — any value of each output's range, any number of each range dandori knows — is one
-    chobo takes, from 1 to 2⁶³ − 1. -/
+    chobo takes, from 0 to 2⁶³ − 1. -/
 theorem amountsGiven_holds {α : Type} {outputs : List (Found (OutputValues α))}
     {ranges : List (Option Int × Option Int)} {other : Bool}
     (h : amountsGiven outputs ranges other = .holds) :
     other = false ∧
       (∀ o ∈ outputs, ∃ out lo hi, o = .value out ∧ out.min = some lo ∧ out.max = some hi ∧
-        ∀ v, lo ≤ v → v ≤ hi → 1 ≤ v ∧ v ≤ maxAmount) ∧
-      (∀ r ∈ ranges, ∃ lo hi, r = (some lo, some hi) ∧ ∀ v, lo ≤ v → v ≤ hi → 1 ≤ v ∧ v ≤ maxAmount) := by
+        ∀ v, lo ≤ v → v ≤ hi → 0 ≤ v ∧ v ≤ maxAmount) ∧
+      (∀ r ∈ ranges, ∃ lo hi, r = (some lo, some hi) ∧ ∀ v, lo ≤ v → v ≤ hi → 0 ≤ v ∧ v ≤ maxAmount) := by
   obtain ⟨hu, hout, hr⟩ := amountsGiven_goOut_holds h
   refine ⟨hu, fun o ho => ?_, fun r hr' => ?_⟩
   · have hf := hout o ho
@@ -421,7 +437,7 @@ def amountsHull {α : Type} (outputs : List (Found (OutputValues α))) (ranges :
   | some a, some b =>
     match (a ++ b).map (·.1), (a ++ b).map (·.2) with
     | l :: ls, h :: hs =>
-      let lo := max (ls.foldl min l) 1
+      let lo := max (ls.foldl min l) 0
       let hi := min (hs.foldl max h) maxAmount
       if lo ≤ hi then some (lo, hi) else none
     | _, _ => none
@@ -468,15 +484,15 @@ theorem mapM_some_mem {β γ : Type} {f : β → Option γ} :
           exact ⟨y, hy, List.mem_cons_of_mem _ hm⟩
 
 /-- **What chobo's search is held to covers every amount chobo takes that the value can be**: the
-    hull lies within 1 to 2⁶³ − 1, and any value of an output's range or a range dandori knows that
+    hull lies within 0 to 2⁶³ − 1, and any value of an output's range or a range dandori knows that
     chobo takes lies inside it. -/
 theorem amountsHull_covers {α : Type} {outputs : List (Found (OutputValues α))}
     {ranges : List (Option Int × Option Int)} {lo hi : Int} (h : amountsHull outputs ranges = some (lo, hi)) :
-    1 ≤ lo ∧ hi ≤ maxAmount ∧
+    0 ≤ lo ∧ hi ≤ maxAmount ∧
       (∀ o ∈ outputs, ∃ out a b, o = .value out ∧ out.min = some a ∧ out.max = some b ∧
-        ∀ v, a ≤ v → v ≤ b → 1 ≤ v → v ≤ maxAmount → lo ≤ v ∧ v ≤ hi) ∧
+        ∀ v, a ≤ v → v ≤ b → 0 ≤ v → v ≤ maxAmount → lo ≤ v ∧ v ≤ hi) ∧
       (∀ r ∈ ranges, ∃ a b, r = (some a, some b) ∧
-        ∀ v, a ≤ v → v ≤ b → 1 ≤ v → v ≤ maxAmount → lo ≤ v ∧ v ≤ hi) := by
+        ∀ v, a ≤ v → v ≤ b → 0 ≤ v → v ≤ maxAmount → lo ≤ v ∧ v ≤ hi) := by
   unfold amountsHull at h
   simp only at h
   split at h
@@ -487,7 +503,7 @@ theorem amountsHull_covers {α : Type} {outputs : List (Found (OutputValues α))
       · next hle =>
         simp only [Option.some.injEq, Prod.mk.injEq] at h
         obtain ⟨rfl, rfl⟩ := h
-        have hlo : ∀ p ∈ A ++ B, max (ls.foldl min l) 1 ≤ max p.1 1 := by
+        have hlo : ∀ p ∈ A ++ B, max (ls.foldl min l) 0 ≤ max p.1 0 := by
           intro p hp
           have : p.1 ∈ l :: ls := by rw [← heqL]; exact List.mem_map.2 ⟨p, hp, rfl⟩
           have := foldl_min_le this

@@ -309,9 +309,9 @@ flow
 
 ## E203 — 規則の出力が、chobo の受け取らない額になることがあります
 
-**いつ出るか**: ワークフローが規則の数の出力を chobo の振替の額に渡すとき、その出力が 1 未満か 2⁶³ − 1 を超えることがあるとき（X4、DESIGN 7.6）。出力の値は rulec が数えます（表の行が書く数か、区間の計算）。chobo は範囲の外の額を、断る（業務の結果）のではなく呼び出しの失敗にします。注に、その額になる規則の入力の例（規則のベクタから）を書きます。
+**いつ出るか**: ワークフローが規則の数の出力を chobo の振替の額に渡すとき、その出力が負か 2⁶³ − 1 を超えることがあるとき（X4、DESIGN 7.6。chobo は 0 から 2⁶³ − 1 までを受け取ります）。出力の値は rulec が数えます（表の行が書く数か、区間の計算）。chobo は範囲の外の額を、断る（業務の結果）のではなく呼び出しの失敗にします。注に、その額になる規則の入力の例（規則のベクタから）を書きます。
 
-**直し方**: 規則が返す額を 1 以上にするか（返金などの負の額は、向きの違う振替に分けます）、振替に渡す前に分岐します。
+**直し方**: 規則が返す額を 0 以上にするか（返金などの負の額は、向きの違う振替に分けます）、振替に渡す前に分岐します。
 
 **再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
 
@@ -319,9 +319,9 @@ flow
 
 ```rule
 rule seats v1
-description "How many seats an event of a kind needs"
+description "How many seats an event of a kind needs; a handback gives seats back"
 
-enum kind = webinar | workshop | talk
+enum kind = handback | workshop | talk
 
 inputs
   event_kind : kind
@@ -332,7 +332,7 @@ outputs
 table pick
 policy unique
 | event_kind | -> needed : number |
-| webinar    | 0                  |
+| handback   | -20                |
 | workshop   | 30                 |
 | talk       | 80                 |
 ```

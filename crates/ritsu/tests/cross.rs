@@ -17,7 +17,8 @@
 //!   precondition (X2): the same date's days (held), the closing days (E201), the day received
 //!   (W201).
 //! - X4 (a rule's output as a transfer's amount): `booking` — the seats an event needs given to the
-//!   hall at once: every kind fits (held), a webinar needs 0 (E203), the seats can come from an
+//!   hall at once: every kind fits (held), a handback gives 20 seats back (−20, E203: chobo takes 0
+//!   to 2⁶³ − 1, so a negative amount is a transfer the other way), the seats can come from an
 //!   answer with no range (W203), a concert needs more than the hall holds (E204), the task handles
 //!   the hall being full, which no kind comes to (W204).
 //! - X6 (the day given to a koyomi date): `reminding` — the payment day given to a reminder whose

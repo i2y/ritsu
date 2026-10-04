@@ -56,6 +56,7 @@ const THEOREMS: &[&str] = &[
     "RitsuCross.amountFits_holds",
     "RitsuCross.amountFits_fails",
     "RitsuCross.amountFits_chobo_takes",
+    "RitsuCross.amountFits_fails_chobo",
     "RitsuCross.refusalsMet_holds",
     "RitsuCross.refusalsMet_fails",
     "RitsuCross.daysGiven_holds",

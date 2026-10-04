@@ -43,8 +43,9 @@ const BILLING_FLOW_EITHER: &str = "workflow billing v1\ndescription \"Bills an o
 /// The rule of X4: the seats an event of a kind needs.
 const SEATS_RULE: &str = "rule seats v1\ndescription \"How many seats an event of a kind needs\"\n\nenum kind = workshop | talk\n\ninputs\n  event_kind : kind\n\noutputs\n  needed : number  round down(1)\n\ntable pick\npolicy unique\n| event_kind | -> needed : number |\n| workshop   | 30                 |\n| talk       | 80                 |\n";
 
-/// The rule of E203: a webinar needs no seats, and 0 is no amount chobo takes.
-const SEATS_RULE_WEBINAR: &str = "rule seats v1\ndescription \"How many seats an event of a kind needs\"\n\nenum kind = webinar | workshop | talk\n\ninputs\n  event_kind : kind\n\noutputs\n  needed : number  round down(1)\n\ntable pick\npolicy unique\n| event_kind | -> needed : number |\n| webinar    | 0                  |\n| workshop   | 30                 |\n| talk       | 80                 |\n";
+/// The rule of E203: a handback gives seats back, and a negative amount is none chobo takes (chobo
+/// takes 0 to 2⁶³ − 1; an amount of 0 moves nothing).
+const SEATS_RULE_HANDBACK: &str = "rule seats v1\ndescription \"How many seats an event of a kind needs; a handback gives seats back\"\n\nenum kind = handback | workshop | talk\n\ninputs\n  event_kind : kind\n\noutputs\n  needed : number  round down(1)\n\ntable pick\npolicy unique\n| event_kind | -> needed : number |\n| handback   | -20                |\n| workshop   | 30                 |\n| talk       | 80                 |\n";
 
 /// The rule of E204: a concert needs more seats than the hall holds.
 const SEATS_RULE_CONCERT: &str = "rule seats v1\ndescription \"How many seats an event of a kind needs\"\n\nenum kind = workshop | talk | concert\n\ninputs\n  event_kind : kind\n\noutputs\n  needed : number  round down(1)\n\ntable pick\npolicy unique\n| event_kind | -> needed : number |\n| workshop   | 30                 |\n| talk       | 80                 |\n| concert    | 400                |\n";
@@ -163,14 +164,14 @@ pub fn ledger() -> Ledger {
             "E203",
             tr!("規則の出力が、chobo の受け取らない額になることがあります", "A rule's output can be an amount chobo does not take"),
             tr!(
-                "ワークフローが規則の数の出力を chobo の振替の額に渡すとき、その出力が 1 未満か 2⁶³ − 1 を超えることがあるとき（X4、DESIGN 7.6）。出力の値は rulec が数えます（表の行が書く数か、区間の計算）。chobo は範囲の外の額を、断る（業務の結果）のではなく呼び出しの失敗にします。注に、その額になる規則の入力の例（規則のベクタから）を書きます。",
-                "Where a workflow gives a rule's numeric output to a chobo transfer as its amount, the output can be below 1 or above 2⁶³ − 1 (X4, DESIGN 7.6). rulec counts what the output comes to (the numbers the rows write, or its intervals). chobo fails such a call rather than refusing it as a business outcome. The notes give an input of the rule that comes to that amount, from the rule's vectors."
+                "ワークフローが規則の数の出力を chobo の振替の額に渡すとき、その出力が負か 2⁶³ − 1 を超えることがあるとき（X4、DESIGN 7.6。chobo は 0 から 2⁶³ − 1 までを受け取ります）。出力の値は rulec が数えます（表の行が書く数か、区間の計算）。chobo は範囲の外の額を、断る（業務の結果）のではなく呼び出しの失敗にします。注に、その額になる規則の入力の例（規則のベクタから）を書きます。",
+                "Where a workflow gives a rule's numeric output to a chobo transfer as its amount, the output can be below 0 or above 2⁶³ − 1 (X4, DESIGN 7.6; chobo takes 0 to 2⁶³ − 1). rulec counts what the output comes to (the numbers the rows write, or its intervals). chobo fails such a call rather than refusing it as a business outcome. The notes give an input of the rule that comes to that amount, from the rule's vectors."
             ),
             tr!(
-                "規則が返す額を 1 以上にするか（返金などの負の額は、向きの違う振替に分けます）、振替に渡す前に分岐します。",
-                "Make the rule's amounts 1 or more (a negative one, such as a refund, is a transfer the other way), or branch before the transfer."
+                "規則が返す額を 0 以上にするか（返金などの負の額は、向きの違う振替に分けます）、振替に渡す前に分岐します。",
+                "Make the rule's amounts 0 or more (a negative one, such as a refund, is a transfer the other way), or branch before the transfer."
             ),
-            Repro::Dir { files: vec![("seats.rule", SEATS_RULE_WEBINAR), ("hall.book", HALL_BOOK), ("booking.flow", BOOKING_FLOW)], command: CHECK.to_vec() },
+            Repro::Dir { files: vec![("seats.rule", SEATS_RULE_HANDBACK), ("hall.book", HALL_BOOK), ("booking.flow", BOOKING_FLOW)], command: CHECK.to_vec() },
             &["W203", "E204"],
         ),
         Entry::new(

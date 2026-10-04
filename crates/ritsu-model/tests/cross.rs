@@ -632,11 +632,12 @@ fn x4_the_refusals_of_every_transfer_are_the_models() {
             refusal_rows(&Found::Value(t.refusals.clone()), &bounds, &mut rows);
         }
     }
-    // and what it finds with the amounts held to a rule's output: inside a range, and a range with
-    // no amount chobo takes, which it does not decide
+    // and what it finds with the amounts held to a rule's output: inside a range, a range that is
+    // only 0 (chobo takes a transfer of 0, which moves nothing), and a range with no amount chobo
+    // takes, which it does not decide
     let inventory = crates().join("chobo/examples/inventory/inventory.book");
     let bounds = bounds_of(&b.facts(&inventory).unwrap());
-    for amounts in [(300, 800), (-5, 0)] {
+    for amounts in [(300, 800), (0, 0), (-5, -1)] {
         let found = b.refusals(&inventory, "reserve", amounts).unwrap_or_else(|e| panic!("{e:?}"));
         refusal_rows(&found, &bounds, &mut rows);
     }

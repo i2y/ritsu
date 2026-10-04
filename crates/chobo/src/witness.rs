@@ -268,8 +268,10 @@ impl<'b> Builder<'b> {
             for (p, v) in free.iter().zip(&combo) {
                 f.insert(*p, Val::Amt(*v));
             }
+            // past the four shown, the least the range allows (1 when the amounts are not held)
+            let least = held_to().map_or(min.max(1), |(lo, _)| min.max(lo));
             for p in free.iter().skip(shown) {
-                f.insert(*p, Val::Amt(min.max(1)));
+                f.insert(*p, Val::Amt(least));
             }
             tries.push(f);
         }
@@ -363,9 +365,10 @@ thread_local! {
     static WITHIN: std::cell::Cell<Option<(i128, i128)>> = const { std::cell::Cell::new(None) };
 }
 
-/// Runs `f` with every amount the search tries held to `lo..=hi` (at least 1).
+/// Runs `f` with every amount the search tries held to `lo..=hi` (at least 0: chobo takes an
+/// amount of 0, which moves nothing, so a range that is only 0 is searched with 0).
 pub fn within<R>(lo: i128, hi: i128, f: impl FnOnce() -> R) -> R {
-    let old = WITHIN.with(|w| w.replace(Some((lo.max(1), hi))));
+    let old = WITHIN.with(|w| w.replace(Some((lo.max(0), hi))));
     struct Back(Option<(i128, i128)>);
     impl Drop for Back {
         fn drop(&mut self) {

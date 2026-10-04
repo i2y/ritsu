@@ -1,7 +1,7 @@
 //! A rule's output given to a chobo transfer as its amount (DESIGN 7.6, X4). For each operation a
 //! flow runs on a transfer with an amount that can be the output of a rule:
 //!
-//! - each such amount is a border, held to the amounts chobo takes, 1 to 2⁶³ − 1
+//! - each such amount is a border, held to the amounts chobo takes, 0 to 2⁶³ − 1
 //!   ([`borders::amounts_given`]: E203 and W203). chobo fails a call with any other amount rather
 //!   than refusing it, so the call would fail only when the workflow runs.
 //! - for `do` and `hold`, whose refusals can turn on the amounts (an account's bound), the
@@ -116,12 +116,12 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                         .rel(&f.file.rel)
                         .note(from)
                         .note(tr!(
-                            "chobo が受け取る額は、単位のいちばん小さい刻みで 1 から 9223372036854775807 までです。それ以外の額の呼び出しは、断られるのではなく失敗します。",
-                            "chobo takes an amount from 1 to 9223372036854775807 in the unit's smallest step, and a call with any other fails rather than being refused."
+                            "chobo が受け取る額は、単位のいちばん小さい刻みで 0 から 9223372036854775807 までです。それ以外の額の呼び出しは、断られるのではなく失敗します。",
+                            "chobo takes an amount from 0 to 9223372036854775807 in the unit's smallest step, and a call with any other fails rather than being refused."
                         ))
                         .note(tr!(
-                            "規則の返す額を 1 以上にするか（負の額は向きの違う振替に分けます）、振替の前に分岐してください。",
-                            "Make the rule's amounts 1 or more (a negative one is a transfer the other way), or branch before the transfer."
+                            "規則の返す額を 0 以上にするか（負の額は向きの違う振替に分けます）、振替の前に分岐してください。",
+                            "Make the rule's amounts 0 or more (a negative one is a transfer the other way), or branch before the transfer."
                         ));
                         out.push(Finding::of(&diag, Some(f.file.rel.clone()), lang));
                     }

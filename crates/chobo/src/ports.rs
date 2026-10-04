@@ -183,15 +183,15 @@ impl ritsu_ports::Books for Engine {
     /// to `amounts` (its ends, the steps in from them, its middle, and the fixed candidates inside
     /// it): the same search the check makes, to the same depth, so a reason it finds comes with a
     /// run that ends in it, and a reason it does not find is one it found no run for within that
-    /// depth. An empty range, or one wholly below 1 (chobo's amounts are 1 or more), is not
+    /// depth. An empty range, or one wholly below 0 (chobo's amounts are 0 or more), is not
     /// decided.
     fn refusals(&self, file: &Path, transfer: &str, amounts: (i128, i128)) -> Result<Found<Vec<(String, Vec<String>)>>, Vec<Said>> {
         let (_, book, _) = checked(file)?;
         let (lo, hi) = amounts;
-        if hi < lo.max(1) {
+        if hi < lo.max(0) {
             return Ok(Found::Undecided(ritsu_base::tr!(
-                "額の範囲 {lo}〜{hi} には、chobo が受け取る額（1 以上）がありません",
-                "the range of amounts {lo} to {hi} holds no amount chobo takes (1 or more)"
+                "額の範囲 {lo}〜{hi} には、chobo が受け取る額（0 以上）がありません",
+                "the range of amounts {lo} to {hi} holds no amount chobo takes (0 or more)"
             )));
         }
         let Some(k) = book.transfers.iter().position(|t| t.name == transfer) else {

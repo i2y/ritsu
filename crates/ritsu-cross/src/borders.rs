@@ -9,7 +9,7 @@
 //!   come from somewhere that says nothing of what day it is (an input, `now`). An example is the
 //!   first day outside, of the first koyomi date that has one; with none, a place that says nothing
 //!   leaves it undecided. [`days_fit`] is the decision for one set of days.
-//! - [`amounts_given`] (X4): whether every amount a value can be is one chobo takes, 1 to 2⁶³ − 1
+//! - [`amounts_given`] (X4): whether every amount a value can be is one chobo takes, 0 to 2⁶³ − 1
 //!   (an amount outside is a failure of the call, not a refusal: chobo's DESIGN 1.5). The value can
 //!   be the output of rules, whose fewest and most rulec counts (`Rules::output_values`, with an
 //!   input from the rule's vectors for each value), or a number dandori knows the range of.
@@ -66,8 +66,8 @@ pub fn days_given(dates: &[Found<DaySet>], other: Option<&Text>, range: (Option<
     }
 }
 
-/// The largest amount chobo takes (chobo's DESIGN 1.5): an amount is a whole number from 1 to
-/// 2⁶³ − 1 in the unit's smallest step.
+/// The largest amount chobo takes (chobo's DESIGN 1.5): an amount is a whole number from 0 to
+/// 2⁶³ − 1 in the unit's smallest step (an amount of 0 moves nothing, and chobo takes it).
 pub const MAX_AMOUNT: i128 = i64::MAX as i128;
 
 /// X4: whether every value a rule's output comes to is an amount chobo takes. The example is the
@@ -80,8 +80,8 @@ pub fn amount_fits(out: &Found<OutputValues>) -> Answer<(i128, Option<Values>)> 
     let (Some(lo), Some(hi)) = (o.min, o.max) else {
         return Answer::Undecided(tr!("出力の範囲に端が無いので、chobo が受け取る額に収まるとは言えません", "the output's range has an open end, so it cannot be shown to stay an amount chobo takes"));
     };
-    let bad = if lo < 1 {
-        Some(o.values.as_ref().and_then(|vs| vs.iter().copied().find(|v| *v < 1)).unwrap_or(lo))
+    let bad = if lo < 0 {
+        Some(o.values.as_ref().and_then(|vs| vs.iter().copied().find(|v| *v < 0)).unwrap_or(lo))
     } else if hi > MAX_AMOUNT {
         Some(hi)
     } else {
@@ -119,7 +119,7 @@ pub fn amounts_given(outputs: &[Found<OutputValues>], ranges: &[(Option<i128>, O
     }
     for (i, r) in ranges.iter().enumerate() {
         match r {
-            (Some(lo), _) if *lo < 1 => return Answer::Fails((*lo, AmountFrom::Range(i))),
+            (Some(lo), _) if *lo < 0 => return Answer::Fails((*lo, AmountFrom::Range(i))),
             (_, Some(hi)) if *hi > MAX_AMOUNT => return Answer::Fails((*hi, AmountFrom::Range(i))),
             (Some(_), Some(_)) => {}
             _ => {
@@ -150,7 +150,7 @@ pub fn amounts_hull(outputs: &[Found<OutputValues>], ranges: &[(Option<i128>, Op
             _ => return None,
         }
     }
-    let lo = ends.iter().map(|e| e.0).min()?.max(1);
+    let lo = ends.iter().map(|e| e.0).min()?.max(0);
     let hi = ends.iter().map(|e| e.1).max()?.min(MAX_AMOUNT);
     (lo <= hi).then_some((lo, hi))
 }
