@@ -14,7 +14,7 @@ Net 30: due 30 days after the invoice date, moved to the next business day in En
 
 ## 計算のしかた
 
-日付ごとに、.cal に書いた操作を上から順に普通の言葉で書きます。後ろのコードは .cal の行そのままです（`#` から後ろはコメント）。
+日付ごとに、.cal に書いた操作を上から順に、普通の言葉で書いています。後ろのコードは .cal の行そのままです（`#` から後ろはコメント）。
 
 ### due
 

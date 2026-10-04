@@ -68,7 +68,7 @@ pub fn load_table(o: &Origin, decl: &SourceDecl) -> Result<Table, Vec<Diag>> {
                 "`koyomi source fetch` takes it from the url and writes it there; check never reads the network."
             )),
             None => d.note(tr!(
-                "写しは .cal からの相対パスで探します。ファイルを置くか、パスを直します。",
+                "koyomi は写しを、.cal からの相対パスで探します。ファイルを置くか、パスを直してください。",
                 "The copy is looked for relative to the .cal; put the file there or correct the path."
             )),
         };
@@ -82,7 +82,7 @@ pub fn load_table(o: &Origin, decl: &SourceDecl) -> Result<Table, Vec<Diag>> {
             return Err(vec![
                 o.err("E102", decl.span, tr!("出典「{name}」が固定されていません（`sha256:` がありません）", "The source {name} is not pinned (it has no `sha256:`)"))
                     .note(tr!(
-                        "写しのバイト列の SHA-256 の先頭 16 桁を書いて固定します。いまの写しなら sha256:{actual} です（`koyomi source pin` でも書けます）。",
+                        "写しのバイト列の SHA-256 の先頭 16 桁を書いて、固定してください。いまの写しなら sha256:{actual} です（`koyomi source pin` でも書けます）。",
                         "Pin it with the first 16 digits of the SHA-256 of the copy's bytes; for the copy as it is, that is sha256:{actual} (`koyomi source pin` writes it too)."
                     ))
                     .fix_line(sources::fixed_pin_line(&line_text, actual)),
@@ -95,7 +95,7 @@ pub fn load_table(o: &Origin, decl: &SourceDecl) -> Result<Table, Vec<Diag>> {
                     "The copy of the source {name} does not match its pin (pinned sha256:{p}, the copy is sha256:{actual})"
                 ))
                 .note(tr!(
-                    "固定したあとで写しが変わりました。何が変わったかを読んでから（`koyomi source outdated`）、固定を書き換えます。",
+                    "固定したあとで写しが変わりました。何が変わったかを読んでから（`koyomi source outdated`）、固定を書き換えてください。",
                     "The copy changed after it was pinned. Read what changed (`koyomi source outdated`), then pin it again."
                 ))
                 .fix_line(sources::fixed_pin_line(&line_text, actual)),
@@ -143,7 +143,7 @@ pub fn load_table(o: &Origin, decl: &SourceDecl) -> Result<Table, Vec<Diag>> {
                 let (y0, y1) = (first.year(), last.year());
                 d = d
                     .note(tr!(
-                        "`covers` は、表が休みを全部載せている範囲です。表が延びたのなら範囲も延ばします。表の行は {first}〜{last} にあります。",
+                        "`covers` は、表が休みを全部載せている範囲です。表が延びたのなら、範囲も延ばしてください。表の行は {first}〜{last} にあります。",
                         "`covers` is the span the table lists every closed day of; when the table grew, so does the span. The table's rows run from {first} to {last}."
                     ))
                     .fix_line(format!("  covers {}..{}", a.min(Day::from_ymd(y0 as i64, 1, 1).unwrap()), b.max(Day::from_ymd(y1 as i64, 12, 31).unwrap())));
@@ -164,7 +164,7 @@ pub fn load_table(o: &Origin, decl: &SourceDecl) -> Result<Table, Vec<Diag>> {
                         "`covers listed years`, but the table {name} has no rows in {shown}"
                     ))
                     .note(tr!(
-                        "行の無い年が休みの無い年なのか、表から落ちた年なのかを、koyomi は決められません。範囲を日付で書きます（`covers {y0}-01-01..{y1}-12-31` のように）。",
+                        "行の無い年が休みの無い年なのか、表から落ちた年なのかを、koyomi は決められません。範囲を日付で書いてください（`covers {y0}-01-01..{y1}-12-31` のように）。",
                         "koyomi cannot tell a year with no closed days from a year missing from the table; write the span as dates (like `covers {y0}-01-01..{y1}-12-31`)."
                     )),
                 ]);
@@ -292,7 +292,7 @@ pub fn check_laws(o: &Origin) -> (Vec<Law>, Vec<crate::diag::Diag>) {
                             p.fragment
                         ))
                         .note(tr!(
-                            "固定したあとで写しが変わりました。条文の何が変わったかを読んでから、固定を書き換えます。",
+                            "固定したあとで写しが変わりました。条文の何が変わったかを読んでから、固定を書き換えてください。",
                             "The copy changed after it was pinned. Read what changed in the text, then pin it again."
                         ))
                         .fix_line(sources::fixed_pin_line(&line_text, &actual)),
@@ -307,7 +307,7 @@ pub fn check_laws(o: &Origin) -> (Vec<Law>, Vec<crate::diag::Diag>) {
             if !cited {
                 diags.push(
                     o.warn("W102", p.span, tr!("{} {}は固定されていますが、どこからも引かれていません", "{} {} is pinned but cited nowhere", s.name, p.fragment))
-                        .note(tr!("引用を消したあとの残りです。固定の行を消します。", "It is what is left after a citation was removed; delete the pin line.")),
+                        .note(tr!("引用を消したあとに残った固定です。固定の行を消してください。", "It is what is left after a citation was removed; delete the pin line.")),
                 );
             }
         }
@@ -317,7 +317,7 @@ pub fn check_laws(o: &Origin) -> (Vec<Law>, Vec<crate::diag::Diag>) {
     for c in cites {
         let Some(s) = f.sources.iter().find(|s| s.name == c.source) else {
             diags.push(o.err("E111", c.span, tr!("出典「{}」は宣言されていません", "The source {} is not declared", c.source)).note(tr!(
-                "引く法令は `source {} = law \"<法令ID>\" asof <日付>` で宣言し、その下に引く条を固定します。",
+                "引く法令は `source {} = law \"<法令ID>\" asof <日付>` で宣言し、その下に引く条を固定してください。",
                 "Declare the law with `source {} = law \"<law id>\" asof <date>`, and pin the articles cited under it.",
                 c.source
             )));
@@ -333,7 +333,7 @@ pub fn check_laws(o: &Origin) -> (Vec<Law>, Vec<crate::diag::Diag>) {
         };
         if c.fragments.is_empty() {
             diags.push(o.err("E111", c.span, tr!(
-                "法令は条の単位で写すので、`@{} 第143条` のように、どこを引いたかを書きます",
+                "koyomi は法令を条の単位で写すので、`@{} 第143条` のように、どこを引いたかを書いてください",
                 "A law is copied an article at a time, so say which one: `@{} 第143条`",
                 c.source
             )));
@@ -353,7 +353,7 @@ pub fn check_laws(o: &Origin) -> (Vec<Law>, Vec<crate::diag::Diag>) {
                 diags.push(
                     o.err("E111", *sp, tr!("{} {fr}を引いていますが、固定されていません", "{} {fr} is cited but not pinned", c.source))
                         .note(tr!(
-                            "引く条は、出典の下に固定の行を書きます。どの版の条文を見て書いたかを、固定で残すためです。",
+                            "引く条は、出典の下に固定の行を書いてください。どの版の条文を見て書いたかを、固定で残すためです。",
                             "Every article cited has a pin line under its source, which records the version of the text the line was written against."
                         ))
                         .fix_line(fix),

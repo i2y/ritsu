@@ -1,5 +1,5 @@
 エラー[E105]: tests/mutants/E105_row_outside_covers.cal:5:3: 表「bank_holidays」に `covers 2019-01-01..2027-12-31` の外の行が 8 行あります
      5 |   covers 2019-01-01..2027-12-31
   = 外にある行: 2028-01-03 New Year’s Day (Substitute day)、2028-04-14 Good Friday、2028-04-17 Easter Monday、2028-05-01 Early May bank holiday、2028-05-29 Spring bank holiday、2028-08-28 Summer bank holiday、ほか 2 行
-  = `covers` は、表が休みを全部載せている範囲です。表が延びたのなら範囲も延ばします。表の行は 2019-01-01〜2028-12-26 にあります。
+  = `covers` は、表が休みを全部載せている範囲です。表が延びたのなら、範囲も延ばしてください。表の行は 2019-01-01〜2028-12-26 にあります。
   = 直した行: covers 2019-01-01..2028-12-31

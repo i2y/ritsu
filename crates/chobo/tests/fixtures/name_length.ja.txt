@@ -1,4 +1,4 @@
 エラー[E061]: name_length.book:15:10: 関数の名前 `take_the_ordered_goods_off_the_warehouse_shelf_and_ship_them_out_do` は 67 バイトあります。PostgreSQL の名前は 63 バイトまでで、それより長い名前は黙って切り詰められます
     15 | transfer take_the_ordered_goods_off_the_warehouse_shelf_and_ship_them_out(order: string, sku: string, qty: item)
-  ヒント: 名前を短くします。日本語は一字 3 バイトなので、63 バイトは 21 字です（関数の名前は、後ろに付く `_hold` なども含めて数えます）
+  ヒント: 名前を短くしてください。日本語は一字 3 バイトなので、63 バイトは 21 字です（関数の名前は、後ろに付く `_hold` なども含めて数えます）
 name_length.book: エラー 1 件、警告 0 件

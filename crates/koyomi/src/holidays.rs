@@ -113,7 +113,7 @@ pub fn read_csv(bytes: &[u8], shift_jis: bool) -> Result<Vec<Row>, ReadError> {
                 return Err(at(
                     line_of(bytes, off),
                     tr!(
-                        "{nth} バイト目から UTF-8 として読めません。Shift_JIS なら `format csv shift_jis` と書きます",
+                        "{nth} バイト目から UTF-8 として読めません。Shift_JIS なら `format csv shift_jis` と書いてください",
                         "the bytes from byte {nth} on are not UTF-8; for Shift_JIS, write `format csv shift_jis`"
                     ),
                 ));

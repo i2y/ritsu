@@ -33,7 +33,7 @@ flowchart LR
 ### deposit
 
 - 移動: `bank` から `wallet(member)` へ `amount`。
-- キー: `deposit_id` ごとに一回。同じ呼び出しの二度目は何もせず、`done_before` を返す。`member` か `amount` だけが違う二度目は `key_conflict` で断られる。
+- キー: `deposit_id` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `member`、`amount` のどれかが違う二度目の呼び出しは、`key_conflict` で断られる。
 - すぐに動かす（`do`）。
 
 | 操作 | 断られうる理由 | いつ |
@@ -48,7 +48,7 @@ flowchart LR
 
 ```text
  1  deposit.do(deposit_id: deposit_id-1, member: member-2, amount: 100000)  通る
- 2  deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1)       over_the_limit で断られる（1 つ目の移動が wallet(member-2) へ 1 を入れる。確定 100000、入ってくる仮押さえ 0）
+ 2  deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1)       over_the_limit で断られる（1 つ目の移動が wallet(member-2) へ 1 を入れようとしたときの残高は、確定 100000、入ってくる仮押さえ 0）
 ```
 
 #### deposit.do: key_conflict
@@ -62,7 +62,7 @@ flowchart LR
 
 ```text
  1  deposit.do(deposit_id: deposit_id-1, member: member-2, amount: 100000)  通る
- 2  deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1)       over_the_limit で断られる（1 つ目の移動が wallet(member-2) へ 1 を入れる。確定 100000、入ってくる仮押さえ 0）
+ 2  deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1)       over_the_limit で断られる（1 つ目の移動が wallet(member-2) へ 1 を入れようとしたときの残高は、確定 100000、入ってくる仮押さえ 0）
  3  deposit.do(deposit_id: deposit_id-3, member: member-2, amount: 1)       already_refused で断られる
 ```
 
@@ -73,7 +73,7 @@ flowchart LR
 posted when the order ships, voided when it is cancelled; only the caller ends the hold
 
 - 移動: `wallet(member)` から `shop` へ `amount`。
-- キー: `order` ごとに一回。同じ呼び出しの二度目は何もせず、`done_before` を返す。`member` か `amount` だけが違う二度目は `key_conflict` で断られる。押さえが終わったあとに同じキーで押さえ直すと `done_before` になり、何も押さえない。
+- キー: `order` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `member`、`amount` のどれかが違う二度目の呼び出しは、`key_conflict` で断られる。仮押さえが終わったあとに同じキーでもう一度押さえると、`done_before` を返し、何も押さえない。
 - 仮押さえ: まず押さえる。確定と取消は呼ぶ側がする。期限は無く、どちらかが来るまで押さえたまま。
 
 ```mermaid
@@ -113,7 +113,7 @@ stateDiagram-v2
 #### payment.hold: insufficient_balance
 
 ```text
- 1  payment.hold(order: order-1, member: member-2, amount: 1)  insufficient_balance で断られる（1 つ目の移動が wallet(member-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
+ 1  payment.hold(order: order-1, member: member-2, amount: 1)  insufficient_balance で断られる（1 つ目の移動が wallet(member-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
 ```
 
 #### payment.hold: key_conflict
@@ -127,7 +127,7 @@ stateDiagram-v2
 #### payment.hold: already_refused
 
 ```text
- 1  payment.hold(order: order-1, member: member-2, amount: 1)  insufficient_balance で断られる（1 つ目の移動が wallet(member-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
+ 1  payment.hold(order: order-1, member: member-2, amount: 1)  insufficient_balance で断られる（1 つ目の移動が wallet(member-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
  2  payment.hold(order: order-1, member: member-2, amount: 1)  already_refused で断られる
 ```
 
@@ -183,7 +183,7 @@ stateDiagram-v2
 ### refund
 
 - 移動: `wallet(member)` から `bank` へ `amount`。
-- キー: `refund_id` ごとに一回。同じ呼び出しの二度目は何もせず、`done_before` を返す。`member` か `amount` だけが違う二度目は `key_conflict` で断られる。
+- キー: `refund_id` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `member`、`amount` のどれかが違う二度目の呼び出しは、`key_conflict` で断られる。
 - すぐに動かす（`do`）。
 
 | 操作 | 断られうる理由 | いつ |
@@ -197,7 +197,7 @@ stateDiagram-v2
 #### refund.do: insufficient_balance
 
 ```text
- 1  refund.do(refund_id: refund_id-1, member: member-2, amount: 1)  insufficient_balance で断られる（1 つ目の移動が wallet(member-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
+ 1  refund.do(refund_id: refund_id-1, member: member-2, amount: 1)  insufficient_balance で断られる（1 つ目の移動が wallet(member-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
 ```
 
 #### refund.do: key_conflict
@@ -211,7 +211,7 @@ stateDiagram-v2
 #### refund.do: already_refused
 
 ```text
- 1  refund.do(refund_id: refund_id-1, member: member-2, amount: 1)  insufficient_balance で断られる（1 つ目の移動が wallet(member-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
+ 1  refund.do(refund_id: refund_id-1, member: member-2, amount: 1)  insufficient_balance で断られる（1 つ目の移動が wallet(member-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
  2  refund.do(refund_id: refund_id-1, member: member-2, amount: 1)  already_refused で断られる
 ```
 
@@ -219,9 +219,9 @@ stateDiagram-v2
 
 ## シナリオ
 
-`chobo scenarios` が帳簿から作ったシナリオ 29 本。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、二つの呼び出し元が同時に最後の一つを取りに来るもの、などがある。どれも参照インタプリタで流し、ステップごとに、そのあとの残高を載せる。残高は確定した量で、仮押さえがあれば括弧の中に書く。
+`chobo scenarios` が帳簿から作ったシナリオ 29 本。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、二つの呼び出し元が同時に最後の一つを取りに来るもの、などがある。どれも参照インタプリタで流したもので、ステップごとに、そのあとの残高を載せている。残高は確定した量で、仮押さえがあれば、その量を括弧の中に添えている。
 
-<details><summary>1. 境界: deposit.do が wallet(member) を 99999 まで増やす。<code>at most 100000</code> の 1 つ手前</summary>
+<details><summary>1. 境界: deposit.do が wallet(member) を 99999 まで増やす（<code>at most 100000</code> の 1 つ手前）</summary>
 
 | # | 操作 | 結果 | wallet(member-2) | bank |
 |---|---|---|---|---|
@@ -230,7 +230,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>2. 境界: deposit.do が wallet(member) をちょうど 100000 まで増やす。<code>at most 100000</code> ちょうど</summary>
+<details><summary>2. 境界: deposit.do が wallet(member) をちょうど 100000 まで増やす（<code>at most 100000</code> ちょうど）</summary>
 
 | # | 操作 | 結果 | wallet(member-2) | bank |
 |---|---|---|---|---|
@@ -239,7 +239,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>3. 境界: deposit.do は wallet(member) を 100001 まで増やすので断られる。<code>at most 100000</code> を超える</summary>
+<details><summary>3. 境界: deposit.do は wallet(member) を 100001 まで増やすので断られる（<code>at most 100000</code> を超える）</summary>
 
 | # | 操作 | 結果 | wallet(member-2) | bank |
 |---|---|---|---|---|
@@ -248,7 +248,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>4. 境界: payment.hold が wallet(member) を 1 まで減らす。<code>at least 0</code> の 1 つ手前</summary>
+<details><summary>4. 境界: payment.hold が wallet(member) を 1 まで減らす（<code>at least 0</code> の 1 つ手前）</summary>
 
 | # | 操作 | 結果 | wallet(member-2) | bank | shop |
 |---|---|---|---|---|---|
@@ -257,7 +257,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>5. 境界: payment.hold が wallet(member) をちょうど 0 まで減らす。<code>at least 0</code> ちょうど</summary>
+<details><summary>5. 境界: payment.hold が wallet(member) をちょうど 0 まで減らす（<code>at least 0</code> ちょうど）</summary>
 
 | # | 操作 | 結果 | wallet(member-2) | bank | shop |
 |---|---|---|---|---|---|
@@ -266,7 +266,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>6. 境界: payment.hold は wallet(member) を -1 まで減らすので断られる。<code>at least 0</code> を割る</summary>
+<details><summary>6. 境界: payment.hold は wallet(member) を -1 まで減らすので断られる（<code>at least 0</code> を割る）</summary>
 
 | # | 操作 | 結果 | wallet(member-2) | bank | shop |
 |---|---|---|---|---|---|
@@ -275,7 +275,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>7. 境界: refund.do が wallet(member) を 1 まで減らす。<code>at least 0</code> の 1 つ手前</summary>
+<details><summary>7. 境界: refund.do が wallet(member) を 1 まで減らす（<code>at least 0</code> の 1 つ手前）</summary>
 
 | # | 操作 | 結果 | wallet(member-2) | bank |
 |---|---|---|---|---|
@@ -284,7 +284,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>8. 境界: refund.do が wallet(member) をちょうど 0 まで減らす。<code>at least 0</code> ちょうど</summary>
+<details><summary>8. 境界: refund.do が wallet(member) をちょうど 0 まで減らす（<code>at least 0</code> ちょうど）</summary>
 
 | # | 操作 | 結果 | wallet(member-2) | bank |
 |---|---|---|---|---|
@@ -293,7 +293,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>9. 境界: refund.do は wallet(member) を -1 まで減らすので断られる。<code>at least 0</code> を割る</summary>
+<details><summary>9. 境界: refund.do は wallet(member) を -1 まで減らすので断られる（<code>at least 0</code> を割る）</summary>
 
 | # | 操作 | 結果 | wallet(member-2) | bank |
 |---|---|---|---|---|
@@ -320,7 +320,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>12. キー: deposit.do が over_the_limit で断られ、同じ引数でもう一度呼ぶ</summary>
+<details><summary>12. キー: deposit.do が over_the_limit で断られたあと、同じ引数でもう一度呼ぶ</summary>
 
 | # | 操作 | 結果 | wallet(member-2) | bank |
 |---|---|---|---|---|
@@ -350,7 +350,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>15. キー: payment.hold が insufficient_balance で断られ、同じ引数でもう一度、wallet(member) が足りるようになってからもう一度呼ぶ</summary>
+<details><summary>15. キー: payment.hold が insufficient_balance で断られたあと、同じ引数ですぐにもう一度呼び、wallet(member) が足りるようになってからもう一度呼ぶ</summary>
 
 | # | 操作 | 結果 | wallet(member-2) | bank | shop |
 |---|---|---|---|---|---|
@@ -381,7 +381,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>18. キー: refund.do が insufficient_balance で断られ、同じ引数でもう一度、wallet(member) が足りるようになってからもう一度呼ぶ</summary>
+<details><summary>18. キー: refund.do が insufficient_balance で断られたあと、同じ引数ですぐにもう一度呼び、wallet(member) が足りるようになってからもう一度呼ぶ</summary>
 
 | # | 操作 | 結果 | wallet(member-2) | bank |
 |---|---|---|---|---|
@@ -466,7 +466,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>26. 仮押さえ: payment を二度確定する。同じ額で、そして違う額で</summary>
+<details><summary>26. 仮押さえ: payment を確定したあと、同じ額でもう一度、違う額でもう一度確定する</summary>
 
 | # | 操作 | 結果 | wallet(member-2) | bank | shop |
 |---|---|---|---|---|---|

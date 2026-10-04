@@ -2,8 +2,8 @@ ok seats.rule
 hall.book: ok
   assign.do   断られうる理由: over_capacity（given(event) at most 300）、key_conflict、already_refused
   release.do  断られうる理由: not_given（given(event) at least 0）、key_conflict、already_refused
-  キー: assign は event ごとに一回。count だけが違う二度目は key_conflict で断られる
-  キー: release は event ごとに一回。count だけが違う二度目は key_conflict で断られる
+  キー: assign は、event ごとに一度だけ動きます。キーが同じで count が違う二度目の呼び出しは、key_conflict で断られます。
+  キー: release は、event ごとに一度だけ動きます。キーが同じで count が違う二度目の呼び出しは、key_conflict で断られます。
 booking.flow: 検査を通りました
 警告[ritsu W204]: booking.flow:19:1: タスク `give_seats` が呼ぶ `assign.do` を、帳簿がどの理由で断りうるかを決められません
     19 |   give_seats(event: event, count: need.needed)

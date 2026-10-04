@@ -52,7 +52,7 @@ flowchart LR
     1. `buyers` から `shop_sales(shop)` へ `price`
     2. `shop_sales(shop)` から `fee_income` へ `fee`
     3. `shop_sales(shop)` から `shipping` へ `100`
-- キー: `order` ごとに一回。同じ呼び出しの二度目は何もせず、`done_before` を返す。`shop`、`price` か `fee` だけが違う二度目は `key_conflict` で断られる。
+- キー: `order` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `shop`、`price`、`fee` のどれかが違う二度目の呼び出しは、`key_conflict` で断られる。
 - すぐに動かす（`do`）。
 
 | 操作 | 断られうる理由 | いつ |
@@ -66,7 +66,7 @@ flowchart LR
 #### sale.do: insufficient_sales
 
 ```text
- 1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 2)  insufficient_sales で断られる（2 つ目の移動が shop_sales(shop-2) から 2 を取る。確定 1、出ていく仮押さえ 0）
+ 1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 2)  insufficient_sales で断られる（2 つ目の移動が shop_sales(shop-2) から 2 を取ろうとしたときの残高は、確定 1、出ていく仮押さえ 0）
 ```
 
 #### sale.do: key_conflict
@@ -79,7 +79,7 @@ flowchart LR
 #### sale.do: already_refused
 
 ```text
- 1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 2)  insufficient_sales で断られる（2 つ目の移動が shop_sales(shop-2) から 2 を取る。確定 1、出ていく仮押さえ 0）
+ 1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 2)  insufficient_sales で断られる（2 つ目の移動が shop_sales(shop-2) から 2 を取ろうとしたときの残高は、確定 1、出ていく仮押さえ 0）
  2  sale.do(order: order-1, shop: shop-2, price: 1, fee: 2)  already_refused で断られる
 ```
 
@@ -92,7 +92,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 - 移動は 2 つ。書いた順に行い、どれか一つでも断られたら、どれも行わない:
     1. `shop_sales(shop)` から `jpy_exchange` へ `jpy_amount`
     2. `usd_exchange` から `usd_account(shop)` へ `usd_amount`
-- キー: `payout_id` ごとに一回。同じ呼び出しの二度目は何もせず、`done_before` を返す。`shop`、`jpy_amount` か `usd_amount` だけが違う二度目は `key_conflict` で断られる。
+- キー: `payout_id` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `shop`、`jpy_amount`、`usd_amount` のどれかが違う二度目の呼び出しは、`key_conflict` で断られる。
 - すぐに動かす（`do`）。
 
 | 操作 | 断られうる理由 | いつ |
@@ -106,7 +106,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 #### usd_payout.do: insufficient_sales
 
 ```text
- 1  usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02)  insufficient_sales で断られる（1 つ目の移動が shop_sales(shop-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
+ 1  usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02)  insufficient_sales で断られる（1 つ目の移動が shop_sales(shop-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
 ```
 
 #### usd_payout.do: key_conflict
@@ -120,7 +120,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 #### usd_payout.do: already_refused
 
 ```text
- 1  usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02)  insufficient_sales で断られる（1 つ目の移動が shop_sales(shop-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
+ 1  usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02)  insufficient_sales で断られる（1 つ目の移動が shop_sales(shop-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
  2  usd_payout.do(payout_id: payout_id-1, shop: shop-2, jpy_amount: 1, usd_amount: 0.02)  already_refused で断られる
 ```
 
@@ -131,7 +131,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 - 移動は 2 つ。書いた順に行い、どれか一つでも断られたら、どれも行わない:
     1. `usd_account(shop)` から `overseas_bank` へ `amount`
     2. `usd_account(shop)` から `remittance_fee` へ `1.50`
-- キー: `transfer_id` ごとに一回。同じ呼び出しの二度目は何もせず、`done_before` を返す。`shop` か `amount` だけが違う二度目は `key_conflict` で断られる。
+- キー: `transfer_id` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `shop`、`amount` のどれかが違う二度目の呼び出しは、`key_conflict` で断られる。
 - すぐに動かす（`do`）。
 
 | 操作 | 断られうる理由 | いつ |
@@ -145,7 +145,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 #### usd_transfer.do: insufficient_usd
 
 ```text
- 1  usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01)  insufficient_usd で断られる（1 つ目の移動が usd_account(shop-2) から 0.01 を取る。確定 0.00、出ていく仮押さえ 0.00）
+ 1  usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01)  insufficient_usd で断られる（1 つ目の移動が usd_account(shop-2) から 0.01 を取ろうとしたときの残高は、確定 0.00、出ていく仮押さえ 0.00）
 ```
 
 #### usd_transfer.do: key_conflict
@@ -160,7 +160,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 #### usd_transfer.do: already_refused
 
 ```text
- 1  usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01)  insufficient_usd で断られる（1 つ目の移動が usd_account(shop-2) から 0.01 を取る。確定 0.00、出ていく仮押さえ 0.00）
+ 1  usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01)  insufficient_usd で断られる（1 つ目の移動が usd_account(shop-2) から 0.01 を取ろうとしたときの残高は、確定 0.00、出ていく仮押さえ 0.00）
  2  usd_transfer.do(transfer_id: transfer_id-1, shop: shop-2, amount: 0.01)  already_refused で断られる
 ```
 
@@ -168,9 +168,9 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 
 ## シナリオ
 
-`chobo scenarios` が帳簿から作ったシナリオ 17 本。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、二つの呼び出し元が同時に最後の一つを取りに来るもの、などがある。どれも参照インタプリタで流し、ステップごとに、そのあとの残高を載せる。残高は確定した量で、仮押さえがあれば括弧の中に書く。
+`chobo scenarios` が帳簿から作ったシナリオ 17 本。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、二つの呼び出し元が同時に最後の一つを取りに来るもの、などがある。どれも参照インタプリタで流したもので、ステップごとに、そのあとの残高を載せている。残高は確定した量で、仮押さえがあれば、その量を括弧の中に添えている。
 
-<details><summary>1. 境界: usd_payout.do の 1 つ目の移動が shop_sales(shop) を 1 まで減らす。<code>at least 0</code> の 1 つ手前</summary>
+<details><summary>1. 境界: usd_payout.do の 1 つ目の移動が shop_sales(shop) を 1 まで減らす（<code>at least 0</code> の 1 つ手前）</summary>
 
 | # | 操作 | 結果 | buyers | fee_income | shipping | shop_sales(shop-2) | jpy_exchange | usd_exchange | usd_account(shop-2) |
 |---|---|---|---|---|---|---|---|---|---|
@@ -179,7 +179,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 
 </details>
 
-<details><summary>2. 境界: usd_payout.do の 1 つ目の移動が shop_sales(shop) をちょうど 0 まで減らす。<code>at least 0</code> ちょうど</summary>
+<details><summary>2. 境界: usd_payout.do の 1 つ目の移動が shop_sales(shop) をちょうど 0 まで減らす（<code>at least 0</code> ちょうど）</summary>
 
 | # | 操作 | 結果 | buyers | fee_income | shipping | shop_sales(shop-2) | jpy_exchange | usd_exchange | usd_account(shop-2) |
 |---|---|---|---|---|---|---|---|---|---|
@@ -188,7 +188,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 
 </details>
 
-<details><summary>3. 境界: usd_payout.do の 1 つ目の移動は shop_sales(shop) を -1 まで減らすので断られる。<code>at least 0</code> を割る</summary>
+<details><summary>3. 境界: usd_payout.do の 1 つ目の移動は shop_sales(shop) を -1 まで減らすので断られる（<code>at least 0</code> を割る）</summary>
 
 | # | 操作 | 結果 | buyers | fee_income | shipping | shop_sales(shop-2) | jpy_exchange | usd_exchange | usd_account(shop-2) |
 |---|---|---|---|---|---|---|---|---|---|
@@ -215,7 +215,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 
 </details>
 
-<details><summary>6. キー: sale.do が insufficient_sales で断られ、同じ引数でもう一度、shop_sales(shop) が足りるようになってからもう一度呼ぶ</summary>
+<details><summary>6. キー: sale.do が insufficient_sales で断られたあと、同じ引数ですぐにもう一度呼び、shop_sales(shop) が足りるようになってからもう一度呼ぶ</summary>
 
 | # | 操作 | 結果 | buyers | fee_income | shipping | shop_sales(shop-2) |
 |---|---|---|---|---|---|---|
@@ -246,7 +246,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 
 </details>
 
-<details><summary>9. キー: usd_payout.do が insufficient_sales で断られ、同じ引数でもう一度、shop_sales(shop) が足りるようになってからもう一度呼ぶ</summary>
+<details><summary>9. キー: usd_payout.do が insufficient_sales で断られたあと、同じ引数ですぐにもう一度呼び、shop_sales(shop) が足りるようになってからもう一度呼ぶ</summary>
 
 | # | 操作 | 結果 | buyers | fee_income | shipping | shop_sales(shop-2) | jpy_exchange | usd_exchange | usd_account(shop-2) |
 |---|---|---|---|---|---|---|---|---|---|
@@ -279,7 +279,7 @@ the caller sets the rate of the exchange, and gives both the yen and the dollar 
 
 </details>
 
-<details><summary>12. キー: usd_transfer.do が insufficient_usd で断られ、同じ引数でもう一度、usd_account(shop) が足りるようになってからもう一度呼ぶ</summary>
+<details><summary>12. キー: usd_transfer.do が insufficient_usd で断られたあと、同じ引数ですぐにもう一度呼び、usd_account(shop) が足りるようになってからもう一度呼ぶ</summary>
 
 | # | 操作 | 結果 | buyers | fee_income | shipping | shop_sales(shop-2) | jpy_exchange | usd_exchange | usd_account(shop-2) | overseas_bank | remittance_fee |
 |---|---|---|---|---|---|---|---|---|---|---|---|

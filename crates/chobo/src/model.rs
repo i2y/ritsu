@@ -297,7 +297,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
             Err(()) => {
                 let (n, (w, sp)) = (&u.name.text, u.tax.as_ref().expect("a tax was written"));
                 d.push(diag::error("E014", sp.line, sp.col, tr!("単位 `{n}` はお金の単位ではないので、`{w}` を書けません", "the unit `{n}` is not money, so it takes no `{w}`")).hint(tr!(
-                    "`{w}` を外します。税込か税抜かを書けるのは、通貨の名前の単位（円と JPY は scale 0、ほかの通貨は scale 0 か 2）だけです",
+                    "`{w}` を外してください。税込か税抜かを書けるのは、通貨の名前の単位（円と JPY は scale 0、ほかの通貨は scale 0 か 2）だけです",
                     "take `{w}` off: only a unit named for a currency says whether it is with tax or without (yen and JPY with scale 0, any other currency with scale 0 or 2)"
                 )));
                 ritsu_units::Unit::count(&u.name.text)
@@ -323,7 +323,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                 "E001",
                 a.name.span.line,
                 a.name.span.col,
-                tr!("引数の無い勘定は括弧を書きません（`account {name} : …`）", "an account without parameters is written without parentheses (`account {name} : …`)"),
+                tr!("引数の無い勘定は、括弧を付けずに書いてください（`account {name} : …`）", "an account without parameters is written without parentheses (`account {name} : …`)"),
             )),
             Some(ps) => {
                 for p in ps {
@@ -705,7 +705,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                                     n.span.line,
                                     n.span.col,
                                     tr!(
-                                        "string の引数 `{pn}` は移動の額に使えません。額には、単位を型にした引数か数を書きます",
+                                        "string の引数 `{pn}` は移動の額に使えません。額には、単位を型にした引数か数を書いてください",
                                         "`{pn}` is a string and cannot be the amount of a move; the amount is a parameter whose type is a unit, or a number"
                                     ),
                                 ));

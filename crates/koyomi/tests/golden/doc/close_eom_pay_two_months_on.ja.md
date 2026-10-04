@@ -16,7 +16,7 @@ Closes at the end of the month; pays at the end of the month two months later, o
 
 ## 計算のしかた
 
-日付ごとに、.cal に書いた操作を上から順に普通の言葉で書きます。後ろのコードは .cal の行そのままです（`#` から後ろはコメント）。
+日付ごとに、.cal に書いた操作を上から順に、普通の言葉で書いています。後ろのコードは .cal の行そのままです（`#` から後ろはコメント）。
 
 ### closing
 

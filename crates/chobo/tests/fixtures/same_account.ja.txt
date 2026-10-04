@@ -1,6 +1,6 @@
-エラー[E012]: same_account.book:13:3: この移動は stock(sku) から stock(sku) へ動かします。元と先がいつも同じ勘定なので、`stocktake` はどう呼んでも same_account で断られます
+エラー[E012]: same_account.book:13:3: この移動の元と先は、どちらも stock(sku) です。元と先がいつも同じ勘定なので、`stocktake` はどう呼んでも same_account で断られます
     13 |   move qty from stock(sku) to stock(sku)
   そうなる例:
        1  stocktake.do(slip: slip-1, sku: sku-2, qty: 1)  same_account で断られる
-  ヒント: 動かす先を別の勘定にするか、同じ種類の勘定なら引数を変えます
+  ヒント: 動かす先を別の勘定にするか、同じ種類の勘定なら引数を変えてください
 same_account.book: エラー 1 件、警告 0 件

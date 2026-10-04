@@ -99,13 +99,13 @@ pub fn compare(old: &Book, new: &Book, rev: &str) -> Vec<Diag> {
                     na.line,
                     na.col,
                     tr!(
-                        "勘定 `{n}` の{{what}}が {rev} のときと違います。すでにある勘定は前の定義のまま残るので、この変更は扱えません",
+                        "勘定 `{n}` の{{what}}が {rev} のときと違います。すでにある勘定は前の定義のまま残るので、chobo はこの変更を扱えません",
                         "the account `{n}` differs from {rev} in {{what}}: the accounts that already exist keep the old definition, so chobo cannot make this change"
                     )
                     .sub("what", &what),
                 )
                 .hint(tr!(
-                    "新しい名前の勘定を宣言し、残高を移す振替を書きます",
+                    "新しい名前の勘定を宣言し、残高を移す振替を書いてください",
                     "declare an account under a new name, and write a transfer that moves the balances over"
                 )),
             );
@@ -163,7 +163,7 @@ pub fn compare(old: &Book, new: &Book, rev: &str) -> Vec<Diag> {
         d.push(
             diag::error("E051", nt.line, nt.col, msg.sub("what", &what))
             .hint(tr!(
-                "新しい名前の振替を宣言し、前の振替は、その仮押さえがどれも終わるまで残しておきます",
+                "新しい名前の振替を宣言し、前の振替は、その仮押さえがどれも終わるまで残しておいてください",
                 "declare the new form under a new name, and keep the old one until every hold it made has ended"
             )),
         );

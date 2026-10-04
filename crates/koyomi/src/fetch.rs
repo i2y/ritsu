@@ -88,10 +88,10 @@ pub fn fetch(f: &File, dir: &Path) -> Result<Outcome, Text> {
                 lines.push(match pin {
                     Some(p) if *p == h => tr!("  固定と合っています", "  it matches the pin"),
                     Some(p) => tr!(
-                        "  固定は sha256:{p} です。何が変わったかを読んでから（git diff など）、koyomi source pin で固定し直します",
+                        "  固定は sha256:{p} です。何が変わったかを読んでから（git diff など）、koyomi source pin で固定し直してください",
                         "  the pin is sha256:{p}; read what changed (git diff, say), then pin it again with koyomi source pin"
                     ),
-                    None => tr!("  固定がありません。koyomi source pin で固定します", "  it has no pin; koyomi source pin writes one"),
+                    None => tr!("  固定がありません。koyomi source pin で固定してください", "  it has no pin; koyomi source pin writes one"),
                 });
             }
             SourceKind::Law { id, asof, pins } => {
@@ -125,7 +125,7 @@ pub fn fetch(f: &File, dir: &Path) -> Result<Outcome, Text> {
                         (Some(_), false) => {
                             changed = true;
                             tr!(
-                                "{name}: {fr} の本文が変わりました（いま sha256:{h}）。引いている行を読み直してから固定します",
+                                "{name}: {fr} の本文が変わりました（いま sha256:{h}）。引いている行を読み直してから、固定し直してください",
                                 "{name}: the text of {fr} changed (now sha256:{h}); reread the lines that cite it, then pin it"
                             )
                         }
@@ -173,7 +173,7 @@ pub fn pin(f: &File, dir: &Path, src: &str) -> Result<(String, Outcome), Text> {
         match &s.kind {
             SourceKind::File { path, pin, format, covers, .. } => {
                 let Ok(bytes) = std::fs::read(dir.join(path)) else {
-                    report.push(tr!("{name}: 写し {path} が無いので固定できません。先に koyomi source fetch を走らせます", "{name}: there is no copy {path} to pin; run koyomi source fetch first"));
+                    report.push(tr!("{name}: 写し {path} が無いので固定できません。先に koyomi source fetch を走らせてください", "{name}: there is no copy {path} to pin; run koyomi source fetch first"));
                     continue;
                 };
                 let h = short(&bytes);
@@ -194,7 +194,7 @@ pub fn pin(f: &File, dir: &Path, src: &str) -> Result<(String, Outcome), Text> {
                 for p in pins {
                     let Some(e) = elm(&p.fragment) else { continue };
                     let Ok(bytes) = std::fs::read(cdir.join(format!("{e}.xml"))) else {
-                        report.push(tr!("{name}: {} の写しが無いので固定できません。先に koyomi source fetch を走らせます", "{name}: there is no copy of {} to pin; run koyomi source fetch first", p.fragment));
+                        report.push(tr!("{name}: {} の写しが無いので固定できません。先に koyomi source fetch を走らせてください", "{name}: there is no copy of {} to pin; run koyomi source fetch first", p.fragment));
                         continue;
                     };
                     let h = short(&bytes);
@@ -217,7 +217,7 @@ pub fn pin(f: &File, dir: &Path, src: &str) -> Result<(String, Outcome), Text> {
                 for fr in fragments(f, name, pins).into_iter().skip(pins.len()) {
                     let Some(e) = elm(&fr) else { continue };
                     let Ok(bytes) = std::fs::read(cdir.join(format!("{e}.xml"))) else {
-                        report.push(tr!("{name}: {fr} の写しが無いので固定できません。先に koyomi source fetch を走らせます", "{name}: there is no copy of {fr} to pin; run koyomi source fetch first"));
+                        report.push(tr!("{name}: {fr} の写しが無いので固定できません。先に koyomi source fetch を走らせてください", "{name}: there is no copy of {fr} to pin; run koyomi source fetch first"));
                         continue;
                     };
                     let h = short(&bytes);
@@ -319,7 +319,7 @@ fn table_diff(name: &str, old: &[Row], new: &[Row], covers: &Covers) -> (Vec<Tex
                 let b2 = (*b).max(Day::from_ymd(y1 as i64, 12, 31).unwrap());
                 if (a2, b2) != (*a, *b) {
                     lines.push(tr!(
-                        "  表が延びるので、covers も延ばします: `covers {a2}..{b2}`（いまは {a}..{b}）",
+                        "  表が延びるので、covers も延ばしてください: `covers {a2}..{b2}`（いまは {a}..{b}）",
                         "  the table grew, so does covers: `covers {a2}..{b2}` (now {a}..{b})"
                     ));
                 }
@@ -394,7 +394,7 @@ pub fn outdated(f: &File, dir: &Path) -> Result<Outcome, Text> {
                 }
                 lines.extend(more);
                 lines.push(tr!(
-                    "  読んでから koyomi source fetch で取り直し、koyomi source pin で固定します",
+                    "  読んでから koyomi source fetch で取り直し、koyomi source pin で固定してください",
                     "  read it, then koyomi source fetch takes it and koyomi source pin pins it"
                 ));
             }
@@ -411,7 +411,7 @@ pub fn outdated(f: &File, dir: &Path) -> Result<Outcome, Text> {
                 for fr in fragments(f, name, pins) {
                     let Some(e) = elm(&fr) else { continue };
                     let Ok(mut prev) = std::fs::read(cdir.join(format!("{e}.xml"))) else {
-                        lines.push(tr!("{name}: {fr} の写しが無いので比べられません。先に koyomi source fetch を走らせます", "{name}: there is no copy of {fr} to compare; run koyomi source fetch first"));
+                        lines.push(tr!("{name}: {fr} の写しが無いので比べられません。先に koyomi source fetch を走らせてください", "{name}: there is no copy of {fr} to compare; run koyomi source fetch first"));
                         continue;
                     };
                     for (date, _) in &later {
@@ -429,7 +429,7 @@ pub fn outdated(f: &File, dir: &Path) -> Result<Outcome, Text> {
                             changed = true;
                             let names: Vec<&str> = frs.iter().map(|(f, _)| f.as_str()).collect();
                             lines.push(tr!(
-                                "{name}: {date} 施行の版（{rid}）で {} が変わります。その日から効く計算を読み直します",
+                                "{name}: {date} 施行の版（{rid}）で {} が変わります。その日から効く計算を読み直してください",
                                 "{name}: the revision in force from {date} ({rid}) changes {}; reread what the lines that cite it compute from that day",
                                 names.join("、");
                                 names.join(", ")

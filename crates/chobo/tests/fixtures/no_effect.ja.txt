@@ -2,4 +2,4 @@
      7 |   at most 0 refused as overpaid
 no_effect.book: ok、警告 1 件
   pay_later.do  断られうる理由: over_credit_limit（credit(member) at least -1000）、key_conflict、already_refused
-  キー: pay_later は slip ごとに一回。member か amount だけが違う二度目は key_conflict で断られる
+  キー: pay_later は、slip ごとに一度だけ動きます。キーが同じで member、amount のどれかが違う二度目の呼び出しは、key_conflict で断られます。

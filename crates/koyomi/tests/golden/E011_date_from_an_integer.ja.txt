@@ -1,2 +1,2 @@
-エラー[E011]: tests/mutants/E011_date_from_an_integer.cal:8:16: 入力「closing_day」は整数です。日付は、日付の入力かほかの日付から始めます
+エラー[E011]: tests/mutants/E011_date_from_an_integer.cal:8:16: 入力「closing_day」は整数です。日付は、日付の入力かほかの日付から始めてください
      8 | date closing = closing_day

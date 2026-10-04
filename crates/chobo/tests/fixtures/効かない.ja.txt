@@ -2,4 +2,4 @@
      7 |   at most 0 refused as 前払い超過
 効かない.book: ok、警告 1 件
   後払い.do  断られうる理由: 与信枠超え（与信(会員) at least -1000）、key_conflict、already_refused
-  キー: 後払い は 伝票 ごとに一回。会員 か 額 だけが違う二度目は key_conflict で断られる
+  キー: 後払い は、伝票 ごとに一度だけ動きます。キーが同じで 会員、額 のどれかが違う二度目の呼び出しは、key_conflict で断られます。

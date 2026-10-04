@@ -1,6 +1,6 @@
 エラー[E005]: types.book:4:33: 勘定の引数の型は string だけです。`item` は単位なので、勘定の引数には使えません
      4 | account stock(sku: string, qty: item) : item
-エラー[E005]: types.book:10:8: string の引数 `sku` は移動の額に使えません。額には、単位を型にした引数か数を書きます
+エラー[E005]: types.book:10:8: string の引数 `sku` は移動の額に使えません。額には、単位を型にした引数か数を書いてください
     10 |   move sku from stock(sku, sku) to customer
 エラー[E005]: types.book:11:23: 額の引数 `qty` は勘定の引数に使えません。勘定の引数は string です
     11 |   move qty from stock(qty, sku) to customer

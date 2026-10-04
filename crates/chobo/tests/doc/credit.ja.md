@@ -32,7 +32,7 @@ flowchart LR
 ### pay_later
 
 - 移動: `credit(member)` から `shop` へ `amount`。
-- キー: `order` ごとに一回。同じ呼び出しの二度目は何もせず、`done_before` を返す。`member` か `amount` だけが違う二度目は `key_conflict` で断られる。押さえが終わったあとに同じキーで押さえ直すと `done_before` になり、何も押さえない。
+- キー: `order` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `member`、`amount` のどれかが違う二度目の呼び出しは、`key_conflict` で断られる。仮押さえが終わったあとに同じキーでもう一度押さえると、`done_before` を返し、何も押さえない。
 - 仮押さえ: まず押さえる。確定と取消は呼ぶ側がする。押さえてから 1 日で期限が切れ、押さえた量は元に戻る。
 
 ```mermaid
@@ -78,7 +78,7 @@ stateDiagram-v2
 #### pay_later.hold: over_the_credit_line
 
 ```text
- 1  pay_later.hold(order: order-1, member: member-2, amount: 50001)  over_the_credit_line で断られる（1 つ目の移動が credit(member-2) から 50001 を取る。確定 0、出ていく仮押さえ 0）
+ 1  pay_later.hold(order: order-1, member: member-2, amount: 50001)  over_the_credit_line で断られる（1 つ目の移動が credit(member-2) から 50001 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
 ```
 
 #### pay_later.hold: key_conflict
@@ -91,7 +91,7 @@ stateDiagram-v2
 #### pay_later.hold: already_refused
 
 ```text
- 1  pay_later.hold(order: order-1, member: member-2, amount: 50001)  over_the_credit_line で断られる（1 つ目の移動が credit(member-2) から 50001 を取る。確定 0、出ていく仮押さえ 0）
+ 1  pay_later.hold(order: order-1, member: member-2, amount: 50001)  over_the_credit_line で断られる（1 つ目の移動が credit(member-2) から 50001 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
  2  pay_later.hold(order: order-1, member: member-2, amount: 50001)  already_refused で断られる
 ```
 
@@ -159,7 +159,7 @@ stateDiagram-v2
 ### repayment
 
 - 移動: `bank` から `credit(member)` へ `amount`。
-- キー: `repayment_id` ごとに一回。同じ呼び出しの二度目は何もせず、`done_before` を返す。`member` か `amount` だけが違う二度目は `key_conflict` で断られる。
+- キー: `repayment_id` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `member`、`amount` のどれかが違う二度目の呼び出しは、`key_conflict` で断られる。
 - すぐに動かす（`do`）。
 
 | 操作 | 断られうる理由 | いつ |
@@ -174,7 +174,7 @@ stateDiagram-v2
 
 ```text
  1  repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 10000)  通る
- 2  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)      over_prepayment で断られる（1 つ目の移動が credit(member-2) へ 1 を入れる。確定 10000、入ってくる仮押さえ 0）
+ 2  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)      over_prepayment で断られる（1 つ目の移動が credit(member-2) へ 1 を入れようとしたときの残高は、確定 10000、入ってくる仮押さえ 0）
 ```
 
 #### repayment.do: key_conflict
@@ -188,7 +188,7 @@ stateDiagram-v2
 
 ```text
  1  repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 10000)  通る
- 2  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)      over_prepayment で断られる（1 つ目の移動が credit(member-2) へ 1 を入れる。確定 10000、入ってくる仮押さえ 0）
+ 2  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)      over_prepayment で断られる（1 つ目の移動が credit(member-2) へ 1 を入れようとしたときの残高は、確定 10000、入ってくる仮押さえ 0）
  3  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)      already_refused で断られる
 ```
 
@@ -196,9 +196,9 @@ stateDiagram-v2
 
 ## シナリオ
 
-`chobo scenarios` が帳簿から作ったシナリオ 24 本。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、二つの呼び出し元が同時に最後の一つを取りに来るもの、などがある。どれも参照インタプリタで流し、ステップごとに、そのあとの残高を載せる。残高は確定した量で、仮押さえがあれば括弧の中に書く。
+`chobo scenarios` が帳簿から作ったシナリオ 24 本。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、二つの呼び出し元が同時に最後の一つを取りに来るもの、などがある。どれも参照インタプリタで流したもので、ステップごとに、そのあとの残高を載せている。残高は確定した量で、仮押さえがあれば、その量を括弧の中に添えている。
 
-<details><summary>1. 境界: pay_later.hold が credit(member) を -49999 まで減らす。<code>at least -50000</code> の 1 つ手前</summary>
+<details><summary>1. 境界: pay_later.hold が credit(member) を -49999 まで減らす（<code>at least -50000</code> の 1 つ手前）</summary>
 
 | # | 操作 | 結果 | credit(member-2) | shop | bank |
 |---|---|---|---|---|---|
@@ -207,7 +207,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>2. 境界: pay_later.hold が credit(member) をちょうど -50000 まで減らす。<code>at least -50000</code> ちょうど</summary>
+<details><summary>2. 境界: pay_later.hold が credit(member) をちょうど -50000 まで減らす（<code>at least -50000</code> ちょうど）</summary>
 
 | # | 操作 | 結果 | credit(member-2) | shop | bank |
 |---|---|---|---|---|---|
@@ -216,7 +216,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>3. 境界: pay_later.hold は credit(member) を -50001 まで減らすので断られる。<code>at least -50000</code> を割る</summary>
+<details><summary>3. 境界: pay_later.hold は credit(member) を -50001 まで減らすので断られる（<code>at least -50000</code> を割る）</summary>
 
 | # | 操作 | 結果 | credit(member-2) | shop | bank |
 |---|---|---|---|---|---|
@@ -225,7 +225,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>4. 境界: repayment.do が credit(member) を 9999 まで増やす。<code>at most 10000</code> の 1 つ手前</summary>
+<details><summary>4. 境界: repayment.do が credit(member) を 9999 まで増やす（<code>at most 10000</code> の 1 つ手前）</summary>
 
 | # | 操作 | 結果 | credit(member-2) | bank |
 |---|---|---|---|---|
@@ -234,7 +234,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>5. 境界: repayment.do が credit(member) をちょうど 10000 まで増やす。<code>at most 10000</code> ちょうど</summary>
+<details><summary>5. 境界: repayment.do が credit(member) をちょうど 10000 まで増やす（<code>at most 10000</code> ちょうど）</summary>
 
 | # | 操作 | 結果 | credit(member-2) | bank |
 |---|---|---|---|---|
@@ -243,7 +243,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>6. 境界: repayment.do は credit(member) を 10001 まで増やすので断られる。<code>at most 10000</code> を超える</summary>
+<details><summary>6. 境界: repayment.do は credit(member) を 10001 まで増やすので断られる（<code>at most 10000</code> を超える）</summary>
 
 | # | 操作 | 結果 | credit(member-2) | bank |
 |---|---|---|---|---|
@@ -270,7 +270,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>9. キー: pay_later.hold が over_the_credit_line で断られ、同じ引数でもう一度、credit(member) が足りるようになってからもう一度呼ぶ</summary>
+<details><summary>9. キー: pay_later.hold が over_the_credit_line で断られたあと、同じ引数ですぐにもう一度呼び、credit(member) が足りるようになってからもう一度呼ぶ</summary>
 
 | # | 操作 | 結果 | credit(member-2) | shop | bank |
 |---|---|---|---|---|---|
@@ -299,7 +299,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>12. キー: repayment.do が over_prepayment で断られ、同じ引数でもう一度呼ぶ</summary>
+<details><summary>12. キー: repayment.do が over_prepayment で断られたあと、同じ引数でもう一度呼ぶ</summary>
 
 | # | 操作 | 結果 | credit(member-2) | bank |
 |---|---|---|---|---|
@@ -376,7 +376,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>20. 仮押さえ: pay_later を二度確定する。同じ額で、そして違う額で</summary>
+<details><summary>20. 仮押さえ: pay_later を確定したあと、同じ額でもう一度、違う額でもう一度確定する</summary>
 
 | # | 操作 | 結果 | credit(member-2) | shop |
 |---|---|---|---|---|

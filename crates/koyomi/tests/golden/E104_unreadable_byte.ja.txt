@@ -1,2 +1,2 @@
-エラー[E104]: tests/mutants/E104_unreadable_byte.cal:4:8: 出典「company_holidays」の写し ../fixtures/data/utf8-broken.csv の 2 行目が読めません: 48 バイト目から UTF-8 として読めません。Shift_JIS なら `format csv shift_jis` と書きます
+エラー[E104]: tests/mutants/E104_unreadable_byte.cal:4:8: 出典「company_holidays」の写し ../fixtures/data/utf8-broken.csv の 2 行目が読めません: 48 バイト目から UTF-8 として読めません。Shift_JIS なら `format csv shift_jis` と書いてください
      4 | source company_holidays = file "../fixtures/data/utf8-broken.csv" sha256:1ceb9da7f664e1c9

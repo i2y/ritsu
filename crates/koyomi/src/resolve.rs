@@ -208,14 +208,14 @@ fn alias_checks(c: &mut Ctx, n: &Name, what: &Text, module: bool) {
     if kw::is_reserved(&n.text) {
         c.err("E009", n.span, tr!("{}の名前「{}」は koyomi の予約語です", "The name {} of {} is a word of the language", what.ja, n.text; n.text, what.en))
             .notes
-            .push(tr!("別の名前を付けます。", "Choose another name."));
+            .push(tr!("別の名前を付けてください。", "Choose another name."));
     }
     match &n.alias {
         Some((a, s)) if !is_alias(a) => {
             c.err("E010", *s, tr!("別名 {a} の形が違います。別名は `[a-z][a-z0-9_]*` です", "The alias {a} is not of the form `[a-z][a-z0-9_]*`"))
                 .notes
                 .push(tr!(
-                    "別名は、生成したコードの識別子になります。五つの出力先のどれでも使える形に限っています。",
+                    "別名は、生成したコードの識別子になります。koyomi は、五つの出力先のどれでも使える形に限っています。",
                     "An alias becomes an identifier in the generated code, so it takes a form all five targets accept."
                 ));
             return;
@@ -224,7 +224,7 @@ fn alias_checks(c: &mut Ctx, n: &Name, what: &Text, module: bool) {
             c.err("E010", n.span, tr!("公開する名前「{}」に ASCII の別名がありません", "The public name {} has no ASCII alias", n.text))
                 .notes
                 .push(tr!(
-                    "生成したコードの識別子になる名前には、`{}(alias)` のように丸括弧で別名を付けます。名前がもとから `[a-z][a-z0-9_]*` の形なら要りません。",
+                    "生成したコードの識別子になる名前には、`{}(alias)` のように丸括弧で別名を付けてください。名前がもとから `[a-z][a-z0-9_]*` の形なら要りません。",
                     "A name that becomes an identifier in the generated code takes an alias in parentheses, like `{}(alias)`; a name already of the form `[a-z][a-z0-9_]*` needs none.",
                     n.text
                 ));
@@ -247,14 +247,14 @@ fn alias_checks(c: &mut Ctx, n: &Name, what: &Text, module: bool) {
         let list = Text::list(&refusing.iter().map(|t| Text::same(t.to_string())).collect::<Vec<_>>());
         c.err("E009", span, tr!("別名 {a} は {} の予約語で、生成したコードで使えません", "The alias {a} is a reserved word of {}, so the generated code cannot use it", list.ja; list.en))
             .notes
-            .push(tr!("別の別名を付けます。", "Choose another alias."));
+            .push(tr!("別の別名を付けてください。", "Choose another alias."));
         return;
     }
     if module && naming::MODULES.contains(&a) {
         c.err("E009", span, tr!("別名 {a} は、生成したコードが読み込むモジュールやスキーマの名前とぶつかります", "The alias {a} collides with a module or schema the generated code reads"))
             .notes
             .push(tr!(
-                "ファイルの別名は、Python と Rust のモジュール、PostgreSQL のスキーマの名前になります。Python の `datetime`・`json`・`sys`・`typing`、Rust の `std`・`core`・`alloc`、PostgreSQL の `pg_catalog` などとは別の名前にします。",
+                "ファイルの別名は、Python と Rust のモジュール、PostgreSQL のスキーマの名前になります。Python の `datetime`・`json`・`sys`・`typing`、Rust の `std`・`core`・`alloc`、PostgreSQL の `pg_catalog` などとは別の名前にしてください。",
                 "A file's alias names a Python and a Rust module and a PostgreSQL schema; keep it apart from Python's `datetime`, `json`, `sys` and `typing`, Rust's `std`, `core` and `alloc`, and PostgreSQL's `pg_catalog` and its kin."
             ));
     }
@@ -333,7 +333,7 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
     if date_inputs.len() != 1 && !f.inputs.is_empty() {
         let s = date_inputs.get(1).map(|i| i.span).unwrap_or(f.inputs[0].span);
         let n = date_inputs.len();
-        c.err("E012", s, tr!("`date` の入力が {n} 個あります。ちょうど一つにします", "There are {n} `date` inputs; there must be exactly one"))
+        c.err("E012", s, tr!("`date` の入力が {n} 個あります。ちょうど一つにしてください", "There are {n} `date` inputs; there must be exactly one"))
             .notes
             .push(tr!(
                 "総当たりで確かめられる大きさに抑えるためです。日付が二つあると、100 年どうしで 13 億通りを超えます。二つめの日付が要る計算は、日数を整数の入力として受け取れば書けます（DESIGN 1.3）。",
@@ -360,7 +360,7 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
                     ))
                     .notes
                     .push(tr!(
-                        "どの入力にも範囲の両端を書きます（`{example}` のように）。範囲は、総当たりで計算する範囲で、生成したコードの入口のガードにもなります。",
+                        "どの入力にも、範囲の両端を書いてください（`{example}` のように）。範囲は、総当たりで計算する範囲で、生成したコードの入口のガードにもなります。",
                         "Every input has both ends of its range (like `{example}`): the range is what the check walks, and the guard at the entrance of the generated code."
                     ));
                 }
@@ -370,12 +370,12 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
                         (Ty::Int, Lit::Int(n)) => *n,
                         (Ty::Date, Lit::Int(_)) => {
                             ok = false;
-                            c.err("E011", *s, tr!("入力「{}」は日付なので、範囲の端も日付で書きます", "The input {} is a date, so the ends of its range are dates", i.name.text; i.name.text));
+                            c.err("E011", *s, tr!("入力「{}」は日付なので、範囲の端も日付で書いてください", "The input {} is a date, so the ends of its range are dates", i.name.text; i.name.text));
                             continue;
                         }
                         (Ty::Int, Lit::Date(_)) => {
                             ok = false;
-                            c.err("E011", *s, tr!("入力「{}」は整数なので、範囲の端も数で書きます", "The input {} is an integer, so the ends of its range are numbers", i.name.text; i.name.text));
+                            c.err("E011", *s, tr!("入力「{}」は整数なので、範囲の端も数で書いてください", "The input {} is an integer, so the ends of its range are numbers", i.name.text; i.name.text));
                             continue;
                         }
                     };
@@ -422,13 +422,13 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
         let start = match (input_ix.get(sname.as_str()), date_ix.get(sname.as_str())) {
             (Some(k), _) if f.inputs[*k].ty == Ty::Date => Start::Input,
             (Some(_), _) => {
-                c.err("E011", *sspan, tr!("入力「{sname}」は整数です。日付は、日付の入力かほかの日付から始めます", "The input {sname} is an integer; a date starts from the date input or another date"));
+                c.err("E011", *sspan, tr!("入力「{sname}」は整数です。日付は、日付の入力かほかの日付から始めてください", "The input {sname} is an integer; a date starts from the date input or another date"));
                 Start::Input
             }
             (None, Some(k)) => Start::Date(*k),
             (None, None) => {
                 c.err("E008", *sspan, tr!("「{sname}」は宣言されていません", "The name {sname} is not declared")).notes.push(tr!(
-                    "日付は、`inputs` の日付か、`date` で宣言したほかの日付から始めます。",
+                    "日付は、`inputs` の日付か、`date` で宣言したほかの日付から始めてください。",
                     "A date starts from the date under `inputs` or from another date declared with `date`."
                 ));
                 Start::Input
@@ -491,7 +491,7 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
                 let s = dates[cy[0]].span;
                 c.err("E014", s, tr!("日付が循環しています: {}", "The dates go round in a circle: {}", names.join(" ← "); names.join(" <- ")))
                     .notes
-                    .push(tr!("どの日付も、最後は `inputs` の日付から始まるようにします。", "Every date has to start, in the end, from the date under `inputs`."));
+                    .push(tr!("どの日付も、最後は `inputs` の日付から始まるようにしてください。", "Every date has to start, in the end, from the date under `inputs`."));
             }
             cycle_found = true;
             break;
@@ -550,7 +550,7 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
             ClaimKind::Monotonic(n, s) => match date_ix.get(n.as_str()) {
                 Some(k) => Some(CK::Monotonic(*k)),
                 None if input_ix.contains_key(n.as_str()) => {
-                    c.err("E011", *s, tr!("「{n}」は入力です。`is monotonic` は日付について書きます", "{n} is an input; `is monotonic` is said of a date"));
+                    c.err("E011", *s, tr!("「{n}」は入力です。`is monotonic` は日付について書いてください", "{n} is an input; `is monotonic` is said of a date"));
                     None
                 }
                 None => {
@@ -592,7 +592,7 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
                     cols.push(None);
                 }
                 (false, _, Some(_)) => {
-                    c.err("E011", col.span, tr!("「{n}」は日付です。日付の列には `-> {n}` と書きます", "{n} is a date; its column is written `-> {n}`"));
+                    c.err("E011", col.span, tr!("「{n}」は日付です。日付の列には `-> {n}` と書いてください", "{n} is a date; its column is written `-> {n}`"));
                     cols.push(None);
                 }
                 _ => {
@@ -611,7 +611,7 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
             c.err("E304", ex.span, tr!("例に {list_ja} の列がありません", "The examples have no column for {list}"))
                 .notes
                 .push(tr!(
-                    "例には、入力と日付の列を全部書きます。参照インタプリタと生成したコードが同じ誤りを持てば突き合わせは通るので、それを破れるのは人が書いた値だけです（DESIGN 1.11）。",
+                    "例には、入力と日付の列を全部書いてください。参照インタプリタと生成したコードが同じ誤りを持てば突き合わせは通るので、その誤りを見つけられるのは人が書いた値だけです（DESIGN 1.11）。",
                     "Examples have a column for every input and every date: if the reference interpreter and the generated code shared a mistake, comparing them would pass, and only values a person wrote can catch it (DESIGN 1.11)."
                 ));
         }
@@ -686,7 +686,7 @@ impl Names<'_> {
                             ))
                             .notes
                             .push(tr!(
-                                "足す・引く数は 0 以上で、向きは `+` と `-` で書きます（DESIGN 1.6）。",
+                                "足す数と引く数は 0 以上にし、向きは `+` と `-` で書いてください（DESIGN 1.6）。",
                                 "The number added is 0 or more; the direction is written with `+` or `-` (DESIGN 1.6)."
                             ));
                         }
@@ -702,11 +702,11 @@ impl Names<'_> {
                     A::Input(*k)
                 }
                 Some(_) => {
-                    c.err("E011", *s, tr!("「{n}」は日付です。ここには数か整数の入力を書きます", "{n} is a date; a number or an integer input goes here"));
+                    c.err("E011", *s, tr!("「{n}」は日付です。ここには数か整数の入力を書いてください", "{n} is a date; a number or an integer input goes here"));
                     A::Lit(0)
                 }
                 None if self.date_ix.contains_key(n.as_str()) => {
-                    c.err("E011", *s, tr!("「{n}」は日付です。ここには数か整数の入力を書きます", "{n} is a date; a number or an integer input goes here"));
+                    c.err("E011", *s, tr!("「{n}」は日付です。ここには数か整数の入力を書いてください", "{n} is a date; a number or an integer input goes here"));
                     A::Lit(0)
                 }
                 None => {

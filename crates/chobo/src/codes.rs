@@ -384,11 +384,11 @@ pub fn ledger() -> Vec<Entry> {
             "E001",
             tr!("読めない行があります", "A line that does not read"),
             tr!(
-                "知らない語がある、字下げがそろっていない、文字列が閉じていない、行が決まった形になっていないときに出ます。ファイルの先頭の BOM、タブ、結合文字（濁点やアクセントを別の文字として付けたもの）もここで止めます。読めない行があると、そこから先は推測になるので、名前の解決やほかの検査はしません。",
+                "知らない語がある、字下げがそろっていない、文字列が閉じていない、行が決まった形になっていないときに出ます。ファイルの先頭の BOM、タブ、結合文字（濁点やアクセントを別の文字として付けたもの）も、このコードになります。読めない行があると、そこから先は推測になるので、chobo は名前の解決やほかの検査をしません。",
                 "A word chobo does not know, an indentation that does not line up, a string left open, or a line that is not in one of the forms. A byte order mark, a tab and a combining mark (a voiced sound mark or an accent written as a character of its own) stop here too. With a line it cannot read, anything after would be a guess, so the names are not resolved and nothing else is checked."
             ),
             tr!(
-                "メッセージが示す形に書き直します。勘定の下に書けるのは `description`、`at least`、`at most`、振替の下に書けるのは `description`、`key`、`pending`、`move` です。結合文字は、合成済みの一文字（「か」と濁点ではなく「が」）で書き直します。",
+                "メッセージが示す形に書き直してください。勘定の下に書けるのは `description`、`at least`、`at most`、振替の下に書けるのは `description`、`key`、`pending`、`move` です。結合文字は、合成済みの一文字（「か」と濁点ではなく「が」）で書き直してください。",
                 "Rewrite the line in the form the message gives. Under an account go `description`, `at least` and `at most`; under a transfer go `description`, `key`, `pending` and `move`. Write a letter with a combining mark as the one precomposed character."
             ),
             X_E001,
@@ -398,11 +398,11 @@ pub fn ledger() -> Vec<Entry> {
             "E002",
             tr!("名前が見つかりません", "A name that is not declared"),
             tr!(
-                "単位、勘定、型、振替の引数の名前が、宣言されたどれとも合わないときに出ます。名前は書いたとおりに比べます。",
+                "単位、勘定、型、振替の引数の名前が、宣言されたどれとも合わないときに出ます。chobo は名前を、書いたとおりに比べます。",
                 "A unit, an account, a type or a parameter of the transfer is named that nothing declares. Names are compared exactly as written."
             ),
             tr!(
-                "宣言を足すか、宣言にある名前に直します。外の世界を表す勘定（仕入先、客）も `account 仕入先 : 個 outside` のように宣言します。",
+                "宣言を足すか、宣言にある名前に直してください。外の世界を表す勘定（仕入先、客）も、`account 仕入先 : 個 outside` のように宣言してください。",
                 "Declare it, or correct the name to one that is declared. An account for the world outside the book (a supplier, the customers) is declared too: `account supplier : pcs outside`."
             ),
             X_E002,
@@ -415,7 +415,7 @@ pub fn ledger() -> Vec<Entry> {
                 "同じ名前の単位、勘定、振替、引数を二度宣言したときに出ます。一つの勘定や振替の下に `description`、`at least`、`at most`、`key`、`pending` を二度書いたとき、キーに同じ引数を二度並べたときも出ます。",
                 "A unit, an account, a transfer or a parameter is declared twice under one name; or `description`, `at least`, `at most`, `key` or `pending` appears twice under one account or transfer; or the key lists a parameter twice."
             ),
-            tr!("どちらかを消すか、別の名前にします。キーは一行にまとめて書きます。", "Remove one, or give it another name. The key goes on one line."),
+            tr!("どちらかを消すか、別の名前にしてください。キーは一行にまとめて書いてください。", "Remove one, or give it another name. The key goes on one line."),
             X_E003,
             &[],
         ),
@@ -423,11 +423,11 @@ pub fn ledger() -> Vec<Entry> {
             "E004",
             tr!("勘定に渡す引数の数が合いません", "The wrong number of arguments for an account"),
             tr!(
-                "移動に書いた勘定の引数の数が、勘定の宣言と違うときに出ます。引数は宣言の順に、位置で渡します。",
+                "移動に書いた勘定の引数の数が、勘定の宣言と違うときに出ます。引数は、宣言の順に位置で渡す決まりです。",
                 "A move gives an account more or fewer arguments than the account declares. Arguments are passed by position, in the order they are declared."
             ),
             tr!(
-                "宣言の数だけ渡します。`account 在庫(sku: string)` なら `在庫(sku)` です。引数の無い勘定は、括弧を書かずに `客` と書きます。",
+                "宣言の数だけ渡してください。`account 在庫(sku: string)` なら `在庫(sku)` です。引数の無い勘定は、括弧を書かずに `客` と書いてください。",
                 "Give as many as the account declares: `stock(sku)` for `account stock(sku: string)`. An account without parameters is written with no parentheses at all: `customers`."
             ),
             X_E004,
@@ -441,7 +441,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A string parameter is the amount of a move, an amount parameter is an account's argument, or an account declares a parameter of a type other than string."
             ),
             tr!(
-                "額には、単位を型にした引数（`数: 個`）か数を書きます。勘定の引数には、string の引数か文字列を書きます。",
+                "額には、単位を型にした引数（`数: 個`）か数を書いてください。勘定の引数には、string の引数か文字列を書いてください。",
                 "An amount is a parameter whose type is a unit (`qty: pcs`), or a number; an account's argument is a string parameter, or a string."
             ),
             X_E005,
@@ -455,7 +455,7 @@ pub fn ledger() -> Vec<Entry> {
                 "The account a move takes from, the account it puts into and its amount are not all in one unit. chobo does not convert."
             ),
             tr!(
-                "単位をそろえます。両替や換算は、単位ごとに外の勘定を置いて、単位の違う二つの移動で書きます。換算した額は呼ぶ側が計算して渡します。",
+                "単位をそろえてください。両替や換算は、単位ごとに外の勘定を置いて、単位の違う二つの移動で書いてください。換算した額は、呼ぶ側が計算して渡します。",
                 "Make them one unit. To exchange one unit for another, write two moves, each through an outside account of its own unit, with amounts the caller works out."
             ),
             X_E010,
@@ -469,7 +469,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A number written in the book (a bound, or the amount of a move) has more decimal places than the unit's `scale`, an amount is negative, or a number is outside −(2⁶³ − 1) to 2⁶³ − 1, counted in the unit's smallest step."
             ),
             tr!(
-                "単位の `scale` に合う桁数で書きます。小数の要る単位は `unit USD scale 2` のように宣言します。向きを変えたい移動は、`from` と `to` を入れ替えます。",
+                "単位の `scale` に合う桁数で書いてください。小数の要る単位は、`unit USD scale 2` のように宣言してください。向きを変えたい移動は、`from` と `to` を入れ替えてください。",
                 "Write it with no more decimal places than the unit's `scale`, and declare a unit that needs them as `unit USD scale 2`. To move the other way, swap `from` and `to`."
             ),
             X_E011,
@@ -483,7 +483,7 @@ pub fn ledger() -> Vec<Entry> {
                 "One move names the same account with the same arguments in `from` and in `to`. Every call is refused with same_account."
             ),
             tr!(
-                "動かす先を別の勘定にします。同じ種類の勘定のあいだで動かすなら、別の引数にします（`在庫(元) to 在庫(先)`）。",
+                "動かす先を別の勘定にしてください。同じ種類の勘定のあいだで動かすなら、別の引数にしてください（`在庫(元) to 在庫(先)`）。",
                 "Move to another account; to move between two accounts of one kind, give them different arguments (`stock(from_sku) to stock(to_sku)`)."
             ),
             X_E012,
@@ -494,7 +494,7 @@ pub fn ledger() -> Vec<Entry> {
             tr!("振替に移動がありません", "A transfer with no move"),
             tr!("振替の下に `move` の行が一つも無いときに出ます。", "A transfer has no `move` line."),
             tr!(
-                "`move <額> from <勘定> to <勘定>` で、どこからどこへ動かすかを書きます。",
+                "`move <額> from <勘定> to <勘定>` で、どこからどこへ動かすかを書いてください。",
                 "Write where it moves from and to: `move <amount> from <account> to <account>`."
             ),
             X_E013,
@@ -508,7 +508,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A `unit` line ends with `incl_tax` or `excl_tax`, and the unit is not money. A unit of money is named for a currency (`円`, `JPY`, an ISO 4217 code): yen and JPY with scale 0, any other currency with scale 0 or 2. Any other unit (`pcs`, `kg`, yen with scale 2) is neither with tax nor without."
             ),
             tr!(
-                "`incl_tax` か `excl_tax` を外すか、通貨の名前の単位にします（`unit 円 incl_tax`、`unit USD scale 2 excl_tax`）。税込か税抜かは、規則やワークフローから額を受け取るときに、同じ区別の額だけを受け取るために書きます。",
+                "`incl_tax` か `excl_tax` を外すか、通貨の名前の単位にしてください（`unit 円 incl_tax`、`unit USD scale 2 excl_tax`）。税込か税抜かは、規則やワークフローから額を受け取るときに、同じ区別の額だけを受け取るために書くものです。",
                 "Take `incl_tax` or `excl_tax` off, or name the unit for a currency (`unit JPY incl_tax`, `unit USD scale 2 excl_tax`). Whether it is with tax or without is written so that an amount handed over from a rule or a workflow is taken only when it says the same."
             ),
             X_E014,
@@ -522,7 +522,7 @@ pub fn ledger() -> Vec<Entry> {
                 "An account not marked `outside` has neither `at least` nor `at most`. The bounds of accounts are all chobo keeps, so such an account would keep nothing."
             ),
             tr!(
-                "`at least 0 refused as 在庫切れ` のように境界を書きます。外の世界を表す勘定（仕入先、客、銀行）なら `outside` を付けます。",
+                "`at least 0 refused as 在庫切れ` のように境界を書いてください。外の世界を表す勘定（仕入先、客、銀行）なら、`outside` を付けてください。",
                 "Give it a bound, like `at least 0 refused as out_of_stock`; or mark it `outside` if it stands for the world outside the book (a supplier, the customers, a bank)."
             ),
             X_E020,
@@ -536,7 +536,7 @@ pub fn ledger() -> Vec<Entry> {
                 "An account marked `outside` has `at least` or `at most`. An outside account stands for the world outside the book, and may go below 0."
             ),
             tr!(
-                "境界を消します。その勘定の残高を守りたいなら、`outside` を外して中の勘定にします。",
+                "境界を消してください。その勘定の残高を守りたいなら、`outside` を外して中の勘定にしてください。",
                 "Remove the bound; or, to keep that balance, remove `outside` so that the book keeps the account."
             ),
             X_E021,
@@ -549,7 +549,7 @@ pub fn ledger() -> Vec<Entry> {
                 "下限が上限より大きいとき、上限が 0 より小さいときに出ます。勘定は残高 0 から始まるので、上限が 0 より小さいと何も入れられません。",
                 "The lower bound is above the upper bound, or the upper bound is below 0. An account starts at 0, so below 0 nothing could ever be put into it."
             ),
-            tr!("下限を上限以下にし、上限を 0 以上にします。", "Make the lower bound no higher than the upper bound, and the upper bound 0 or more."),
+            tr!("下限を上限以下にし、上限を 0 以上にしてください。", "Make the lower bound no higher than the upper bound, and the upper bound 0 or more."),
             X_E022,
             &["E011"],
         ),
@@ -561,7 +561,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A bound has no `refused as <reason>`, or its reason is one of the names chobo gives itself (key_conflict, already_refused, same_account, no_such_hold, already_posted, already_voided, expired, over_hold). The reason is what a caller gets back when the bound refuses, and it is the name of the error of a dandori task."
             ),
             tr!(
-                "業務の言葉で理由を付けます（`at least 0 refused as 在庫切れ`）。",
+                "業務の言葉で理由を付けてください（`at least 0 refused as 在庫切れ`）。",
                 "Name it in the business's words: `at least 0 refused as out_of_stock`."
             ),
             X_E023,
@@ -571,11 +571,11 @@ pub fn ledger() -> Vec<Entry> {
             "E030",
             tr!("振替にキーがありません", "A transfer with no key"),
             tr!(
-                "振替に `key` の行が無いとき、またはキーに書いた名前が振替の引数に無いときに出ます。どの振替にも冪等のキーが要ります。同じキーで同じ中身の二度目は何もせず、中身が違えば断ります。",
+                "振替に `key` の行が無いとき、またはキーに書いた名前が振替の引数に無いときに出ます。どの振替にも冪等のキーが要ります。同じキーで同じ中身の二度目の呼び出しは何もせず、中身が違えば断られます。",
                 "A transfer has no `key` line, or the key names something that is not one of its parameters. Every transfer needs an idempotency key: a second call with the same key and the same content does nothing, and one with other content is refused."
             ),
             tr!(
-                "一度だけにしたい単位を、引数で並べます。注文と SKU ごとに一度なら `key 注文, sku` です。",
+                "一度だけにしたい単位を、引数で並べてください。注文と SKU の組ごとに一度なら `key 注文, sku` です。",
                 "List the parameters it is to happen once for: once per order and SKU is `key order, sku`."
             ),
             X_E030,
@@ -589,7 +589,7 @@ pub fn ledger() -> Vec<Entry> {
                 "The key lists a parameter whose type is a unit. A retry with another amount would then go through as a second transfer, and move twice."
             ),
             tr!(
-                "キーから額を外します。額だけが違う二度目は、key_conflict で断られるようになります。",
+                "キーから額を外してください。額だけが違う二度目の呼び出しは、key_conflict で断られるようになります。",
                 "Take the amount out of the key; a second call that differs only in the amount is then refused with key_conflict."
             ),
             X_E031,
@@ -603,7 +603,7 @@ pub fn ledger() -> Vec<Entry> {
                 "`pending` stands alone, with neither an expiry nor `never expires`. A hold ends when it is posted, voided or expires."
             ),
             tr!(
-                "`pending expires after 30 minutes` か `pending never expires` と書きます。`never expires` の仮押さえを終わらせるのは、呼ぶ側だけです。",
+                "`pending expires after 30 minutes` か `pending never expires` と書いてください。`never expires` の仮押さえを終わらせるのは、呼ぶ側だけです。",
                 "Write `pending expires after 30 minutes` or `pending never expires`. Only the caller ends a hold that never expires."
             ),
             X_E040,
@@ -617,7 +617,7 @@ pub fn ledger() -> Vec<Entry> {
                 "The expiry is under 1 second, over 4294967295 seconds (2³² − 1 seconds, about 136 years), or not a whole number. TigerBeetle's timeout is 32 bits of seconds."
             ),
             tr!(
-                "1 秒から 2³² − 1 秒までの整数で書きます。それより長く押さえるなら `never expires` にします。",
+                "1 秒から 2³² − 1 秒までの整数で書いてください。それより長く押さえるなら、`never expires` にしてください。",
                 "Write a whole number from 1 second to 2³² − 1 seconds; to hold for longer than that, use `never expires`."
             ),
             X_E041,
@@ -633,7 +633,7 @@ pub fn ledger() -> Vec<Entry> {
                     "An account kind of the revision given to `--diff-base` has a new unit, `scale`, parameters or bound, or is outside where it was not (or the other way round). The book's version is not part of an account's identity, so the accounts that exist keep the old definition."
                 ),
                 tr!(
-                    "新しい名前の勘定を宣言し、残高を移す振替を書きます。変わりうる限度は、はじめから勘定にしておきます（会員ごとの与信枠なら「使える枠」の勘定）。",
+                    "新しい名前の勘定を宣言し、残高を移す振替を書いてください。変わりうる限度は、はじめから勘定にしておいてください（会員ごとの与信枠なら「使える枠」の勘定）。",
                     "Declare an account under a new name, and write a transfer that moves the balances over. Make a limit that may change an account from the start (a member's credit limit becomes an account of credit left)."
                 ),
                 X_E050,
@@ -650,7 +650,7 @@ pub fn ledger() -> Vec<Entry> {
                     "A transfer kind of the revision given to `--diff-base` has new parameters, a new key, a new way for its holds to end, or new moves. A retry in flight would be refused with key_conflict, and a hold still held could not be posted."
                 ),
                 tr!(
-                    "新しい名前の振替を宣言し、前の振替は残しておきます。前の振替の仮押さえがどれも終わってから、前の振替を消します。",
+                    "新しい名前の振替を宣言し、前の振替は残しておいてください。前の振替の仮押さえがどれも終わってから、前の振替を消してください。",
                     "Declare the new form under a new name and keep the old one; remove the old one once every hold it made has ended."
                 ),
                 X_E051,
@@ -667,7 +667,7 @@ pub fn ledger() -> Vec<Entry> {
                     "With a TigerBeetle target of `chobo build`: one operation of a transfer kind sends a chain of more than 253 transfers. The chain has to go in one request to go through whole or not at all, and a replica started with `--development` takes at most 253 in one (8189 without it). A move between bounded accounts takes up to 6 transfers."
                 ),
                 tr!(
-                    "振替の種類を、移動の少ないいくつかの種類に分けます。分けた振替はそれぞれが一度の書き込みになるので、全部か無しにしたい移動は同じ種類に残します。",
+                    "振替の種類を、移動の少ないいくつかの種類に分けてください。分けた振替はそれぞれが一度の書き込みになるので、全部か無しにしたい移動は同じ種類に残してください。",
                     "Split the transfer kind into kinds with fewer moves. Each kind is a write of its own, so keep together the moves that have to go through all or none."
                 ),
                 X_E060,
@@ -683,7 +683,7 @@ pub fn ledger() -> Vec<Entry> {
                     "`chobo build` の PostgreSQL のターゲットで、スキーマ（帳簿の名前）、関数（`<振替>_<操作>`、`balance_<勘定>`）、関数の引数（`p_<引数>`）の名前が 63 バイトを超えるときに出ます。PostgreSQL はそれより長い名前を黙って切り詰めるので、二つの関数が同じ名前になりえます。日本語は一字 3 バイトです。",
                     "With a PostgreSQL target of `chobo build`: the name of the schema (the book's), of a function (`<transfer>_<operation>`, `balance_<account>`) or of a function's parameter (`p_<parameter>`) is longer than 63 bytes. PostgreSQL cuts a longer name short without a word, so two functions could end up with one name. A Japanese character is 3 bytes."
                 ),
-                tr!("名前を短くします。ASCII なら 63 字、日本語なら 21 字までです（関数の名前は、後ろに付く `_hold` などの分を引きます）。", "Make the name shorter: 63 ASCII letters, or 21 Japanese characters, less what follows it in a function's name (`_hold`, …)."),
+                tr!("名前を短くしてください。ASCII なら 63 字、日本語なら 21 字までです（関数の名前では、後ろに付く `_hold` などの分を引いた字数です）。", "Make the name shorter: 63 ASCII letters, or 21 Japanese characters, less what follows it in a function's name (`_hold`, …)."),
                 X_E061,
                 &["E060"],
             )
@@ -696,7 +696,7 @@ pub fn ledger() -> Vec<Entry> {
                 "Moves put into an account the book keeps, and no move anywhere takes out of it: whatever goes in stays."
             ),
             tr!(
-                "取り出す振替を書きます。外の世界を表す勘定なら `outside` にします。",
+                "取り出す振替を書いてください。外の世界を表す勘定なら、`outside` を付けてください。",
                 "Write a transfer that takes out of it, or mark it `outside` if it stands for the world outside the book."
             ),
             X_W101,
@@ -709,7 +709,7 @@ pub fn ledger() -> Vec<Entry> {
                 "振替が取る元の勘定に、入れる移動がどこにも無く、その勘定の下限が 0 以上のときに出ます。0 より多く動かせば、いつも断られます。",
                 "What a transfer takes from has a lower bound of 0 or more, and nothing anywhere puts into it: whenever the transfer moves more than 0, it is refused."
             ),
-            tr!("その勘定へ入れる振替（入荷、入金）を書きます。", "Write a transfer that puts into that account (a delivery, a top-up)."),
+            tr!("その勘定へ入れる振替（入荷、入金）を書いてください。", "Write a transfer that puts into that account (a delivery, a top-up)."),
             X_W102,
             &["W101"],
         ),
@@ -717,11 +717,11 @@ pub fn ledger() -> Vec<Entry> {
             "W103",
             tr!("移動の順序のせいで断られる振替", "A transfer refused for the order of its moves"),
             tr!(
-                "すぐに確定する振替で、前の移動が勘定から取り、後の移動が同じ勘定へ入れるとき（下限）、または前の移動が入れ、後の移動が取るとき（上限）に出ます。移動は書いた順に一つずつ確かめるので、合わせれば収まる場合でも、前の移動で断られます。",
+                "すぐに確定する振替で、前の移動が勘定から取り、後の移動が同じ勘定へ入れるとき（下限）、または前の移動が入れ、後の移動が取るとき（上限）に出ます。chobo は移動を書いた順に一つずつ確かめるので、合わせれば収まる場合でも、前の移動で断られます。",
                 "In a transfer that posts at once, an earlier move takes from an account that a later move puts into (a lower bound), or puts into one that a later move takes from (an upper bound). Moves are checked one at a time in the order they are written, so the earlier move is refused even when the two together would fit."
             ),
             tr!(
-                "頼られる側の移動を先に書きます。下限なら入れる移動を、上限なら取る移動を先にします。",
+                "頼られる側の移動を先に書いてください。下限なら入れる移動を、上限なら取る移動を先にしてください。",
                 "Write first the move the other one counts on: for a lower bound the one that puts in, for an upper bound the one that takes out."
             ),
             X_W103,
@@ -735,7 +735,7 @@ pub fn ledger() -> Vec<Entry> {
                 "In a hold, one move takes from an account another move of the same hold puts into (or puts into one another move takes from). What is held cannot be spent where it comes in, nor makes room where it goes out, so changing the order does not help."
             ),
             tr!(
-                "取る分をはじめからその勘定に入れておくか、確定のあとで動かす別の振替に分けます。",
+                "取る分をはじめからその勘定に入れておくか、確定のあとで動かす別の振替に分けてください。",
                 "Have the amount in that account beforehand, or move it in another transfer after the hold is posted."
             ),
             X_W104,
@@ -748,7 +748,7 @@ pub fn ledger() -> Vec<Entry> {
                 "どの勘定にも引数にも使われない単位、どの移動にも出てこない勘定、キーにも移動にも使われない引数があるときに出ます。",
                 "A unit that no account or parameter uses, an account no move names, or a parameter that is in neither the key nor any move."
             ),
-            tr!("消すか、使うところを書きます。", "Remove it, or write where it is used."),
+            tr!("消すか、使うところを書いてください。", "Remove it, or write where it is used."),
             X_W105,
             &["W106"],
         ),
@@ -756,10 +756,10 @@ pub fn ledger() -> Vec<Entry> {
             "W106",
             tr!("効かない境界", "A bound that never matters"),
             tr!(
-                "上限のある勘定へ入れる移動がどこにも無いとき（下限のある勘定から取る移動が無いときも）に出ます。その境界で断ることがありません。",
+                "上限のある勘定へ入れる移動がどこにも無いとき（下限のある勘定から取る移動が無いときも）に出ます。その境界で断られる振替がありません。",
                 "Nothing puts into an account with an upper bound (or takes out of one with a lower bound), so the bound never refuses anything."
             ),
-            tr!("境界を消すか、その境界で確かめるはずだった振替を書きます。", "Remove the bound, or write the transfer it was meant to check."),
+            tr!("境界を消すか、その境界で確かめるはずだった振替を書いてください。", "Remove the bound, or write the transfer it was meant to check."),
             X_W106,
             &["W101", "W105"],
         ),
@@ -773,7 +773,7 @@ pub fn ledger() -> Vec<Entry> {
                     "An account or transfer kind of the revision given to `--diff-base` is gone, or the book has a new name. Its balances and holds stay in the database."
                 ),
                 tr!(
-                    "残高を移す振替を書いてから消すか、残しておきます。",
+                    "残高を移す振替を書いてから消すか、残しておいてください。",
                     "Move the balances out with a transfer before removing it, or keep it."
                 ),
                 X_W107,
@@ -850,7 +850,7 @@ pub fn render_markdown(e: &Entry, lang: Lang) -> String {
 pub fn markdown_all(lang: Lang) -> String {
     let all = ledger();
     let mut o = tr!(
-        "<!-- `chobo explain --all --format markdown --lang ja` の出力です。手で編集しないでください。 -->\n\n# chobo の診断\n\nchobo が出すコードの全部と、いつ出るか、どう直すか。一件だけ読むには `chobo explain E020`。\n\n| コード | 種別 | 見出し |\n|---|---|---|\n",
+        "<!-- `chobo explain --all --format markdown --lang ja` の出力です。手で編集しないでください。 -->\n\n# chobo の診断\n\nchobo が出すコードの全部について、いつ出るかと、どう直すかを書いています。一件だけ読むには `chobo explain E020` を使ってください。\n\n| コード | 種別 | 見出し |\n|---|---|---|\n",
         "<!-- The output of `chobo explain --all --format markdown --lang en`. Do not edit by hand. -->\n\n# chobo diagnostics\n\nEvery code chobo prints, when it appears, and how to fix it. For one of them: `chobo explain E020`.\n\n| Code | Severity | Title |\n|---|---|---|\n"
     )
     .get(lang)

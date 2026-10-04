@@ -5,8 +5,8 @@ stock.book: ok
   reserve.hold  断られうる理由: out_of_stock（shelf(sku) at least 0）、key_conflict、already_refused
   reserve.post  断られうる理由: key_conflict、already_voided、expired、over_hold、no_such_hold
   reserve.void  断られうる理由: already_posted、expired、no_such_hold
-  キー: receive は delivery, sku ごとに一回。qty だけが違う二度目は key_conflict で断られる
-  キー: reserve は order, sku ごとに一回。qty だけが違う二度目は key_conflict で断られる。押さえが終わったあとに同じキーで押さえ直すと done_before になり、何も押さえない
+  キー: receive は、delivery と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で断られます。
+  キー: reserve は、order と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で断られます。仮押さえが終わったあとに同じキーでもう一度押さえると、done_before が返り、何も押さえません。
 警告[dandori W101]: invoice.flow:30:1: `ship` が失敗すると、案件 `goods` が held のままワークフローが失敗します。そうなる呼び出しは 1 か所です。呼び出しでエラーを処理するか、`on failure` を足して案件を片付けてください
     30 |   goods <- ship(order: order, sku: sku)
   そうなる例:

@@ -1,8 +1,8 @@
 警告[W103]: split.book:13:3: 1 つ目の移動が shop_balance(shop) から取るのは、2 つ目の移動が shop_balance(shop) へ入れるより前です。そのとき shop_balance(shop) が足りないと、二つの移動を合わせれば足りる場合でも insufficient_balance で断られます
     13 |   move fee from shop_balance(shop) to fees
   そうなる例:
-       1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  insufficient_balance で断られる（1 つ目の移動が shop_balance(shop-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
-  ヒント: shop_balance(shop) へ入れる移動を先に書きます
+       1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  insufficient_balance で断られる（1 つ目の移動が shop_balance(shop-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
+  ヒント: shop_balance(shop) へ入れる移動を先に書いてください
 split.book: ok、警告 1 件
   sale.do  断られうる理由: insufficient_balance（shop_balance(shop) at least 0.00）、already_refused
-  キー: sale は order ごとに一回
+  キー: sale は、order ごとに一度だけ動きます。

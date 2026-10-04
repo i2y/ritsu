@@ -99,7 +99,7 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
         while indent < all.len() && (all[indent] == ' ' || all[indent] == '\t') {
             if all[indent] == '\t' {
                 diags.push(
-                    err("E005", indent + 1, tr!("字下げにタブがあります。字下げはスペースで書きます", "The indentation has a tab; indent with spaces"))
+                    err("E005", indent + 1, tr!("字下げにタブがあります。字下げはスペースで書いてください", "The indentation has a tab; indent with spaces"))
                         .note(tr!(
                             "タブの幅はエディタによって違うので、行がそろっているかを決められません。",
                             "How wide a tab is depends on the editor, so whether the lines line up cannot be told."
@@ -144,7 +144,7 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
                 diags.push(err(
                     "E001",
                     col,
-                    tr!("全角の空白があります。語と語のあいだは半角のスペースで区切ります", "There is a full-width space; separate words with ASCII spaces"),
+                    tr!("全角の空白があります。語と語のあいだは、半角のスペースで区切ってください", "There is a full-width space; separate words with ASCII spaces"),
                 ));
                 j += 1;
                 continue;
@@ -207,7 +207,7 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
                     j += 5;
                     if h > 23 || mi > 59 {
                         diags.push(err("E006", col, tr!("{h:02}:{mi:02} という時刻はありません", "There is no time {h:02}:{mi:02}"))
-                            .note(tr!("時刻は 00:00〜23:59 です。その日の終わりは `at end of day` と書きます。", "A time is 00:00 to 23:59; the end of the day is `at end of day`.")));
+                            .note(tr!("時刻は 00:00〜23:59 です。その日の終わりは `at end of day` と書いてください。", "A time is 00:00 to 23:59; the end of the day is `at end of day`.")));
                         continue;
                     }
                     Tok::Time(h, mi)
@@ -226,7 +226,7 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
                                 e += 1;
                             }
                             let lit: String = cs[start..e].iter().collect();
-                            diags.push(err("E001", col, tr!("日付 `{lit}` の形が崩れています。日付は `2026-01-01` のように、年 4 桁・月 2 桁・日 2 桁で書きます", "The date `{lit}` is not written right; write a date as `2026-01-01`, with 4, 2 and 2 digits")));
+                            diags.push(err("E001", col, tr!("日付 `{lit}` の形が崩れています。日付は `2026-01-01` のように、年 4 桁・月 2 桁・日 2 桁で書いてください", "The date `{lit}` is not written right; write a date as `2026-01-01`, with 4, 2 and 2 digits")));
                             j = e;
                             continue;
                         }
@@ -260,7 +260,7 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
                     j = e;
                     if hex.len() != 16 || !hex.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()) {
                         diags.push(err("E001", col, tr!("`sha256:{hex}` の形が崩れています。固定は 16 桁の小文字の 16 進数です", "`sha256:{hex}` is not a pin: a pin is 16 lowercase hex digits"))
-                            .note(tr!("写しの SHA-256 の先頭 16 桁を書きます（rulec と同じ長さ）。", "It is the first 16 digits of the SHA-256 of the copy, the length rulec uses.")));
+                            .note(tr!("固定には、写しの SHA-256 の先頭 16 桁を書いてください（rulec と同じ長さです）。", "It is the first 16 digits of the SHA-256 of the copy, the length rulec uses.")));
                         continue;
                     }
                     Tok::Sha(hex)

@@ -1,3 +1,3 @@
 エラー[E015]: tests/mutants/E015_無いカレンダー.cal:3:14: カレンダー ../../examples/calendars/大阪の営業日.cal が読めません（examples/calendars/大阪の営業日.cal）
      3 | use calendar "../../examples/calendars/大阪の営業日.cal"
-  = パスは、この .cal のあるディレクトリから数えます。
+  = パスは、この .cal のあるディレクトリからの相対パスです。

@@ -1,10 +1,10 @@
 警告[W104]: hold_order.book:14:3: 仮押さえでは、1 つ目の移動が held(order) へ入れる額は入ってくる仮押さえになり、2 つ目の移動が held(order) から取るときに数えられません。held(order) にはじめから足りるだけの残高が無ければ、held_short で断られます
     14 |   move price from held(order) to shop_payout
   そうなる例:
-       1  settle.hold(order: order-1, price: 1)  held_short で断られる（2 つ目の移動が held(order-1) から 1 を取る。確定 0、出ていく仮押さえ 0、入ってくる仮押さえ 1）
-  ヒント: 取る分をはじめから held(order) に入れておくか、確定のあとで取る別の振替にします
+       1  settle.hold(order: order-1, price: 1)  held_short で断られる（2 つ目の移動が held(order-1) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0、入ってくる仮押さえ 1）
+  ヒント: 取る分をはじめから held(order) に入れておくか、確定のあとで取る別の振替にしてください
 hold_order.book: ok、警告 1 件
   settle.hold  断られうる理由: held_short（held(order) at least 0）、already_refused
   settle.post  断られうる理由: no_such_hold
   settle.void  断られうる理由: no_such_hold
-  キー: settle は order ごとに一回
+  キー: settle は、order ごとに一度だけ動きます。

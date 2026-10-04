@@ -481,7 +481,7 @@ impl Loader {
                 offset_text(mine),
                 offset_text(theirs)
             ))
-            .note(tr!("オフセットは一つのカレンダーに一つです。どちらかに合わせます。", "A calendar has one offset; make the two agree.")));
+            .note(tr!("オフセットは一つのカレンダーに一つです。どちらかに合わせてください。", "A calendar has one offset; make the two agree.")));
             return (None, diags);
         }
         if offset.is_some() {
@@ -593,7 +593,7 @@ impl Loader {
         }
         let Ok(bytes) = ritsu_base::fs::read(&path) else {
             return Err(Box::new(err(tr!("カレンダー {p} が読めません{where_}", "The calendar {p} cannot be read{where_en}"))
-                .note(tr!("パスは、この .cal のあるディレクトリから数えます。", "The path is relative to the directory this .cal is in."))));
+                .note(tr!("パスは、この .cal のあるディレクトリからの相対パスです。", "The path is relative to the directory this .cal is in."))));
         };
         let Ok(text) = std::str::from_utf8(&bytes) else {
             return Err(err(tr!("カレンダー {p} が UTF-8 ではありません", "The calendar {p} is not UTF-8")));
@@ -631,7 +631,7 @@ pub fn parse_offset(text: &str) -> Result<i32, (&'static str, Text, Vec<Text>)> 
     if upper == "UTC" || upper == "GMT" || upper == "Z" {
         return Err((
             "E107",
-            tr!("オフセットは `±HH:MM` の形で書きます（`{t}` ではなく `+00:00`）", "Write the offset as `±HH:MM`: `+00:00`, not `{t}`"),
+            tr!("オフセットは `±HH:MM` の形で書いてください（`{t}` ではなく `+00:00`）", "Write the offset as `±HH:MM`: `+00:00`, not `{t}`"),
             vec![],
         ));
     }
@@ -642,17 +642,17 @@ pub fn parse_offset(text: &str) -> Result<i32, (&'static str, Text, Vec<Text>)> 
             tr!("オフセットにタイムゾーンの名前 `{t}` が書かれています。koyomi は固定の UTC オフセットだけを扱います", "The offset is a time zone name, `{t}`; koyomi takes only a fixed UTC offset"),
             vec![
                 tr!(
-                    "夏時間のあるタイムゾーンでは、同じ 09:00 でも季節でオフセットが変わり、固定のオフセットでは一年の半分で一時間ずれます。どのタイムゾーンに夏時間があるかを知るには tz データベースが要るので、名前は全部断ります（DESIGN 1.9）。",
+                    "夏時間のあるタイムゾーンでは、同じ 09:00 でも季節でオフセットが変わり、固定のオフセットでは一年の半分で一時間ずれます。どのタイムゾーンに夏時間があるかを知るには tz データベースが要るので、koyomi は名前を全部断ります（DESIGN 1.9）。",
                     "In a time zone with daylight saving time, the same 09:00 has a different offset in summer, and a fixed offset is an hour off for half the year. Knowing which zones have it takes the tz database, so every name is refused (DESIGN 1.9)."
                 ),
                 tr!(
-                    "夏時間の無い地域なら、`offset +09:00` のように数で書けば足ります。夏時間のある地域では、時刻を出さず日付だけにします。",
+                    "夏時間の無い地域なら、`offset +09:00` のように数で書けば足ります。夏時間のある地域では、時刻を出さず日付だけにしてください。",
                     "For a place without daylight saving time, write the number, like `offset +09:00`. For a place with it, leave times out and give dates only."
                 ),
             ],
         ));
     }
-    Err(("E107", tr!("オフセット `{t}` は `±HH:MM` の形ではありません（`+09:00` のように書きます）", "The offset `{t}` is not `±HH:MM` (write it like `+09:00`)"), vec![]))
+    Err(("E107", tr!("オフセット `{t}` は `±HH:MM` の形ではありません（`+09:00` のように書いてください）", "The offset `{t}` is not `±HH:MM` (write it like `+09:00`)"), vec![]))
 }
 
 /// The calendar a dates file is checked against has a kind: a calendar file checked on its own

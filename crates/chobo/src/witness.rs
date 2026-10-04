@@ -438,14 +438,14 @@ pub fn at_text(book: &Book, at: &At) -> Text {
     let b = at.bal;
     let (p, o, i) = (b.posted, b.held_out, b.held_in);
     if !at.upper {
-        let mut t = tr!("{n} つ目の移動が {acct} から {a} を取る。確定 {p}、出ていく仮押さえ {o}", "move {n} takes {a} from {acct}: posted {p}, held out {o}");
+        let mut t = tr!("{n} つ目の移動が {acct} から {a} を取ろうとしたときの残高は、確定 {p}、出ていく仮押さえ {o}", "move {n} takes {a} from {acct}: posted {p}, held out {o}");
         if i != 0 {
             t.ja.push_str(&format!("、入ってくる仮押さえ {i}"));
             t.en.push_str(&format!(", held in {i}"));
         }
         t
     } else {
-        let mut t = tr!("{n} つ目の移動が {acct} へ {a} を入れる。確定 {p}、入ってくる仮押さえ {i}", "move {n} puts {a} into {acct}: posted {p}, held in {i}");
+        let mut t = tr!("{n} つ目の移動が {acct} へ {a} を入れようとしたときの残高は、確定 {p}、入ってくる仮押さえ {i}", "move {n} puts {a} into {acct}: posted {p}, held in {i}");
         if o != 0 {
             t.ja.push_str(&format!("、出ていく仮押さえ {o}"));
             t.en.push_str(&format!(", held out {o}"));

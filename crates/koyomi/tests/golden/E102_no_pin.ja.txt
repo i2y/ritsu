@@ -1,4 +1,4 @@
 エラー[E102]: tests/mutants/E102_no_pin.cal:4:8: 出典「company_holidays」が固定されていません（`sha256:` がありません）
      4 | source company_holidays = file "../fixtures/data/holidays.en.csv"
-  = 写しのバイト列の SHA-256 の先頭 16 桁を書いて固定します。いまの写しなら sha256:86cb32774217a66f です（`koyomi source pin` でも書けます）。
+  = 写しのバイト列の SHA-256 の先頭 16 桁を書いて、固定してください。いまの写しなら sha256:86cb32774217a66f です（`koyomi source pin` でも書けます）。
   = 直した行: source company_holidays = file "../fixtures/data/holidays.en.csv" sha256:86cb32774217a66f

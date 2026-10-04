@@ -12,16 +12,16 @@
 警告[W103]: tests/fixtures/order.book:15:3: 1 つ目の移動が shop_sales(shop) から取るのは、2 つ目の移動が shop_sales(shop) へ入れるより前です。そのとき shop_sales(shop) が足りないと、二つの移動を合わせれば足りる場合でも sales_short で断られます
     15 |   move fee from shop_sales(shop) to fee_income
   そうなる例:
-       1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  sales_short で断られる（1 つ目の移動が shop_sales(shop-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
-  ヒント: shop_sales(shop) へ入れる移動を先に書きます
+       1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  sales_short で断られる（1 つ目の移動が shop_sales(shop-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
+  ヒント: shop_sales(shop) へ入れる移動を先に書いてください
 ```
 
 ```text
 警告[W103]: tests/fixtures/order.book:19:3: 1 つ目の移動が slots(day) へ入れるのは、2 つ目の移動が slots(day) から取るより前です。そのとき slots(day) に空きが無いと、二つの移動を合わせれば上限に収まる場合でも over_limit で断られます
     19 |   move amount from slot_source to slots(day)
   そうなる例:
-       1  move_over.do(slip: slip-1, day: day-2, amount: 101)  over_limit で断られる（1 つ目の移動が slots(day-2) へ 101 を入れる。確定 0、入ってくる仮押さえ 0）
-  ヒント: slots(day) から取る移動を先に書きます
+       1  move_over.do(slip: slip-1, day: day-2, amount: 101)  over_limit で断られる（1 つ目の移動が slots(day-2) へ 101 を入れようとしたときの残高は、確定 0、入ってくる仮押さえ 0）
+  ヒント: slots(day) から取る移動を先に書いてください
 ```
 
 ## 勘定
@@ -58,7 +58,7 @@ flowchart LR
 - 移動は 2 つ。書いた順に行い、どれか一つでも断られたら、どれも行わない:
     1. `shop_sales(shop)` から `fee_income` へ `fee`
     2. `buyers` から `shop_sales(shop)` へ `price`
-- キー: `order` ごとに一回。同じ呼び出しの二度目は何もせず、`done_before` を返す。
+- キー: `order` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。
 - すぐに動かす（`do`）。
 
 | 操作 | 断られうる理由 | いつ |
@@ -71,13 +71,13 @@ flowchart LR
 #### sale.do: sales_short
 
 ```text
- 1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  sales_short で断られる（1 つ目の移動が shop_sales(shop-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
+ 1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  sales_short で断られる（1 つ目の移動が shop_sales(shop-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
 ```
 
 #### sale.do: already_refused
 
 ```text
- 1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  sales_short で断られる（1 つ目の移動が shop_sales(shop-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
+ 1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  sales_short で断られる（1 つ目の移動が shop_sales(shop-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
  2  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  already_refused で断られる
 ```
 
@@ -88,7 +88,7 @@ flowchart LR
 - 移動は 2 つ。書いた順に行い、どれか一つでも断られたら、どれも行わない:
     1. `slot_source` から `slots(day)` へ `amount`
     2. `slots(day)` から `slot_source` へ `amount`
-- キー: `slip` ごとに一回。同じ呼び出しの二度目は何もせず、`done_before` を返す。`day` か `amount` だけが違う二度目は `key_conflict` で断られる。
+- キー: `slip` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `day`、`amount` のどれかが違う二度目の呼び出しは、`key_conflict` で断られる。
 - すぐに動かす（`do`）。
 
 | 操作 | 断られうる理由 | いつ |
@@ -102,7 +102,7 @@ flowchart LR
 #### move_over.do: over_limit
 
 ```text
- 1  move_over.do(slip: slip-1, day: day-2, amount: 101)  over_limit で断られる（1 つ目の移動が slots(day-2) へ 101 を入れる。確定 0、入ってくる仮押さえ 0）
+ 1  move_over.do(slip: slip-1, day: day-2, amount: 101)  over_limit で断られる（1 つ目の移動が slots(day-2) へ 101 を入れようとしたときの残高は、確定 0、入ってくる仮押さえ 0）
 ```
 
 #### move_over.do: key_conflict
@@ -115,7 +115,7 @@ flowchart LR
 #### move_over.do: already_refused
 
 ```text
- 1  move_over.do(slip: slip-1, day: day-2, amount: 101)  over_limit で断られる（1 つ目の移動が slots(day-2) へ 101 を入れる。確定 0、入ってくる仮押さえ 0）
+ 1  move_over.do(slip: slip-1, day: day-2, amount: 101)  over_limit で断られる（1 つ目の移動が slots(day-2) へ 101 を入れようとしたときの残高は、確定 0、入ってくる仮押さえ 0）
  2  move_over.do(slip: slip-1, day: day-2, amount: 101)  already_refused で断られる
 ```
 
@@ -123,7 +123,7 @@ flowchart LR
 
 ## シナリオ
 
-`chobo scenarios` が帳簿から作ったシナリオ 5 本。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、二つの呼び出し元が同時に最後の一つを取りに来るもの、などがある。どれも参照インタプリタで流し、ステップごとに、そのあとの残高を載せる。残高は確定した量で、仮押さえがあれば括弧の中に書く。
+`chobo scenarios` が帳簿から作ったシナリオ 5 本。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、二つの呼び出し元が同時に最後の一つを取りに来るもの、などがある。どれも参照インタプリタで流したもので、ステップごとに、そのあとの残高を載せている。残高は確定した量で、仮押さえがあれば、その量を括弧の中に添えている。
 
 <details><summary>1. キー: move_over.do を同じ引数で二度呼ぶ</summary>
 
@@ -143,7 +143,7 @@ flowchart LR
 
 </details>
 
-<details><summary>3. キー: move_over.do が over_limit で断られ、同じ引数でもう一度呼ぶ</summary>
+<details><summary>3. キー: move_over.do が over_limit で断られたあと、同じ引数でもう一度呼ぶ</summary>
 
 | # | 操作 | 結果 | slots(day-2) | slot_source |
 |---|---|---|---|---|

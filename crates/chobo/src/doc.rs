@@ -92,14 +92,14 @@ pub fn at_text(book: &Book, at: &At) -> Text {
     let k = at.account.kind;
     let (a, p, o, i) = (on(book, k, at.amount), on(book, k, at.bal.posted), on(book, k, at.bal.held_out), on(book, k, at.bal.held_in));
     if !at.upper {
-        let mut t = tr!("{n} つ目の移動が {acct} から {a} を取る。確定 {p}、出ていく仮押さえ {o}", "move {n} takes {a} from {acct}: posted {p}, held out {o}");
+        let mut t = tr!("{n} つ目の移動が {acct} から {a} を取ろうとしたときの残高は、確定 {p}、出ていく仮押さえ {o}", "move {n} takes {a} from {acct}: posted {p}, held out {o}");
         if at.bal.held_in != 0 {
             t.ja.push_str(&format!("、入ってくる仮押さえ {i}"));
             t.en.push_str(&format!(", held in {i}"));
         }
         t
     } else {
-        let mut t = tr!("{n} つ目の移動が {acct} へ {a} を入れる。確定 {p}、入ってくる仮押さえ {i}", "move {n} puts {a} into {acct}: posted {p}, held in {i}");
+        let mut t = tr!("{n} つ目の移動が {acct} へ {a} を入れようとしたときの残高は、確定 {p}、入ってくる仮押さえ {i}", "move {n} puts {a} into {acct}: posted {p}, held in {i}");
         if at.bal.held_out != 0 {
             t.ja.push_str(&format!("、出ていく仮押さえ {o}"));
             t.en.push_str(&format!(", held out {o}"));
@@ -151,13 +151,14 @@ fn and_list(items: &[String], lang: Lang) -> String {
     }
 }
 
-/// `a`, `a か b`; `a`, `a or b`.
+/// `a `, `a、b のどれか` (what is followed by `が`); `a`, `a or b`.
 fn or_list(items: &[String], lang: Lang) -> String {
     match items {
         [] => String::new(),
+        [one] if lang == Lang::Ja => format!("{one} "),
         [one] => one.clone(),
         [init @ .., last] => match lang {
-            Lang::Ja => format!("{} か {last}", init.join("、")),
+            Lang::Ja => format!("{}、{last} のどれか", init.join("、")),
             Lang::En => format!("{} or {last}", init.join(", ")),
         },
     }
@@ -590,16 +591,18 @@ pub fn transfer_facts(i: &Input, k: usize) -> Vec<String> {
     }
     let ps: Vec<String> = t.key.iter().map(|p| code(&t.params[*p].name)).collect();
     let key = and_list(&ps, lang);
-    let mut kt = tr!("キー: {key} ごとに一回。同じ呼び出しの二度目は何もせず、`done_before` を返す", "Key: once per {key}. The same call again does nothing, and answers `done_before`");
+    // `` `order` ごとに ``, `` `delivery` と `sku` の組ごとに ``
+    let per = if ps.len() > 1 { format!("{} の組", and_list(&ps, Lang::Ja)) } else { format!("{} ", and_list(&ps, Lang::Ja)) };
+    let mut kt = tr!("キー: {per}ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す", "Key: once per {key}. The same call again does nothing, and answers `done_before`");
     if let Some(kn) = i.report.keys.iter().find(|n| n.kind == k) {
         if !kn.outside.is_empty() {
             let others: Vec<String> = kn.outside.iter().map(|(p, _)| code(&t.params[*p].name)).collect();
             let (oj, oe) = (or_list(&others, Lang::Ja), or_list(&others, Lang::En));
-            kt.ja.push_str(&format!("。{oj} だけが違う二度目は `key_conflict` で断られる"));
+            kt.ja.push_str(&format!("。キーが同じで {oj}が違う二度目の呼び出しは、`key_conflict` で断られる"));
             kt.en.push_str(&format!("; one that differs only in {oe} is refused with `key_conflict`"));
         }
         if kn.again.is_some() {
-            kt.ja.push_str("。押さえが終わったあとに同じキーで押さえ直すと `done_before` になり、何も押さえない");
+            kt.ja.push_str("。仮押さえが終わったあとに同じキーでもう一度押さえると、`done_before` を返し、何も押さえない");
             kt.en.push_str("; holding again with the same key after the hold has ended answers `done_before`, and holds nothing");
         }
     }
@@ -710,7 +713,7 @@ fn scenarios_md(i: &Input) -> String {
     let mut o = format!("## {}\n\n", tr!("シナリオ", "Scenarios").get(lang));
     o.push_str(
         tr!(
-            "`chobo scenarios` が帳簿から作ったシナリオ {n} 本。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、二つの呼び出し元が同時に最後の一つを取りに来るもの、などがある。どれも参照インタプリタで流し、ステップごとに、そのあとの残高を載せる。残高は確定した量で、仮押さえがあれば括弧の中に書く。\n\n",
+            "`chobo scenarios` が帳簿から作ったシナリオ {n} 本。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、二つの呼び出し元が同時に最後の一つを取りに来るもの、などがある。どれも参照インタプリタで流したもので、ステップごとに、そのあとの残高を載せている。残高は確定した量で、仮押さえがあれば、その量を括弧の中に添えている。\n\n",
             "{n} scenarios, which `chobo scenarios` makes from the book: among them each bound just before, at and past it, each key used twice, every way a hold ends, and two callers after the last of something at the same time. The reference interpreter ran each one; after each step come the balances it left. A balance is what is posted, with what is held in brackets.\n\n"
         )
         .get(lang),

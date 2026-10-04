@@ -1,4 +1,4 @@
-警告[W202]: tests/mutants/W202_短い書き方.cal:12:3: `day 31 of month +2 else end_of_month` は `end of month +2` と同じです。短いほうで書きます
+警告[W202]: tests/mutants/W202_短い書き方.cal:12:3: `day 31 of month +2 else end_of_month` は `end of month +2` と同じです。短いほうで書いてください
     12 |   day 31 of month +2 else end_of_month
   = 同じ意味の書き方が二つあると、grep と diff の両方で困ります（DESIGN 1.2）。
 エラー[E301]: tests/mutants/W202_短い書き方.cal:16:3: 条件「受領から60日以内」が、受領日 669 日のうち 648 日で成り立ちません

@@ -8,7 +8,7 @@
     10 |   description "not closed
 エラー[E001]: syntax.book:11:31: 読めない文字 `@` があります
     11 | account ledger : item outside @
-エラー[E001]: syntax.book:14:1: 字下げがそろっていません。同じブロックの行は同じ数の空白で字下げします
+エラー[E001]: syntax.book:14:1: 字下げがそろっていません。同じブロックの行は、同じ数の空白で字下げしてください
     14 |     at most 10 refused as full
 エラー[E001]: syntax.book:15:9: 数のすぐあとに文字が続いています
     15 | account 1st : item outside

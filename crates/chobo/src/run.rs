@@ -633,7 +633,7 @@ fn cmd_explain(a: &Args) -> u8 {
             0
         }
         None => {
-            eprintln!("{}", tr!("`{code}` というコードはありません。一覧は `chobo explain --all`", "there is no code `{code}`; `chobo explain --all` lists them").get(a.lang));
+            eprintln!("{}", tr!("`{code}` というコードはありません。一覧は `chobo explain --all` で出ます", "there is no code `{code}`; `chobo explain --all` lists them").get(a.lang));
             2
         }
     }

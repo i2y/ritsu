@@ -96,13 +96,13 @@ pub fn findings(book: &Book) -> Vec<Diag> {
                     m.line,
                     m.col,
                     tr!(
-                        "この移動は {r} から {r} へ動かします。元と先がいつも同じ勘定なので、`{}` はどう呼んでも same_account で断られます",
+                        "この移動の元と先は、どちらも {r} です。元と先がいつも同じ勘定なので、`{}` はどう呼んでも same_account で断られます",
                         "this move goes from {r} to {r}: the same account whatever it is called with, so every call of `{}` is refused with same_account",
                         t.name
                     ),
                 )
                 .with_ops(b.op_lines())
-                .hint(tr!("動かす先を別の勘定にするか、同じ種類の勘定なら引数を変えます", "move to another account, or to the same kind with other arguments")),
+                .hint(tr!("動かす先を別の勘定にするか、同じ種類の勘定なら引数を変えてください", "move to another account, or to the same kind with other arguments")),
             );
         }
     }
@@ -135,7 +135,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
             )
             .with_ops(b.op_lines())
             .hint(tr!(
-                "`{n}` から取る振替を書きます。外の世界を表す勘定なら `outside` を付けます",
+                "`{n}` から取る振替を書いてください。外の世界を表す勘定なら `outside` を付けてください",
                 "write a transfer that takes out of `{n}`, or mark it `outside` if it stands for the world outside the book"
             )),
         );
@@ -162,7 +162,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
                     ),
                 )
                 .with_ops(b.op_lines())
-                .hint(tr!("`{n}` へ入れる振替を書きます", "write a transfer that puts into `{n}`")),
+                .hint(tr!("`{n}` へ入れる振替を書いてください", "write a transfer that puts into `{n}`")),
             );
             break;
         }
@@ -193,7 +193,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
                                         "in a hold, what move {pn} puts into {rt} is held coming in, and does not count when move {tn} takes from {rt}: unless {rt} has enough already, the hold is refused with {reason}"
                                     ),
                                     tr!(
-                                        "取る分をはじめから {rt} に入れておくか、確定のあとで取る別の振替にします",
+                                        "取る分をはじめから {rt} に入れておくか、確定のあとで取る別の振替にしてください",
                                         "have what it takes in {rt} beforehand, or take it in another transfer after the hold is posted"
                                     ),
                                 )
@@ -204,7 +204,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
                                         "{tn} つ目の移動が {rt} から取るのは、{pn} つ目の移動が {rt} へ入れるより前です。そのとき {rt} が足りないと、二つの移動を合わせれば足りる場合でも {reason} で断られます",
                                         "move {tn} takes from {rt} before move {pn} puts into it: when {rt} is short at that point, the call is refused with {reason}, even when the two moves together would leave enough"
                                     ),
-                                    tr!("{rt} へ入れる移動を先に書きます", "write the move that puts into {rt} first"),
+                                    tr!("{rt} へ入れる移動を先に書いてください", "write the move that puts into {rt} first"),
                                 )
                             };
                             d.push(diag::warning(code, tm.line, tm.col, msg).with_ops(b.op_lines()).hint(hint));
@@ -224,7 +224,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
                                         "in a hold, what move {tn} takes from {rt} is held going out, and makes no room when move {pn} puts into {rt}: unless {rt} has room already, the hold is refused with {reason}"
                                     ),
                                     tr!(
-                                        "{rt} の空きをはじめから作っておくか、確定のあとで入れる別の振替にします",
+                                        "{rt} の空きをはじめから作っておくか、確定のあとで入れる別の振替にしてください",
                                         "make the room in {rt} beforehand, or put it in another transfer after the hold is posted"
                                     ),
                                 )
@@ -235,7 +235,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
                                         "{pn} つ目の移動が {rt} へ入れるのは、{tn} つ目の移動が {rt} から取るより前です。そのとき {rt} に空きが無いと、二つの移動を合わせれば上限に収まる場合でも {reason} で断られます",
                                         "move {pn} puts into {rt} before move {tn} takes from it: when {rt} has no room at that point, the call is refused with {reason}, even when the two moves together would stay within its bound"
                                     ),
-                                    tr!("{rt} から取る移動を先に書きます", "write the move that takes from {rt} first"),
+                                    tr!("{rt} から取る移動を先に書いてください", "write the move that takes from {rt} first"),
                                 )
                             };
                             d.push(diag::warning(code, pm.line, pm.col, msg).with_ops(b.op_lines()).hint(hint));
@@ -418,14 +418,15 @@ pub fn report(book: &Book) -> Report {
     Report { ops, keys }
 }
 
-/// `a`, `a か b`, `a、b か c`; `a or b`, `a, b or c`.
+/// `a `, `a、b のどれか`, `a、b、c のどれか` (what is followed by `が`); `a`, `a or b`, `a, b or c`.
 fn or_list(names: &[String], lang: Lang) -> String {
     match names {
         [] => String::new(),
+        [one] if lang == Lang::Ja => format!("{one} "),
         [one] => one.clone(),
         [init @ .., last] => {
             if lang == Lang::Ja {
-                format!("{} か {last}", init.join("、"))
+                format!("{}、{last} のどれか", init.join("、"))
             } else {
                 format!("{} or {last}", init.join(", "))
             }
@@ -461,17 +462,23 @@ pub fn render_report(book: &Book, rep: &Report, lang: Lang) -> String {
         let t = &book.transfers[kn.kind];
         let params: Vec<&str> = t.key.iter().map(|i| t.params[*i].name.as_str()).collect();
         let (name, ps) = (&t.name, params.join(", "));
-        let mut line = tr!("キー: {name} は {ps} ごとに一回", "key: {name} once per {ps}");
+        // `order ごとに`, `delivery と sku の組ごとに`
+        let per = match params.as_slice() {
+            [init @ .., last] if !init.is_empty() => format!("{} と {last} の組ごとに", init.join("、")),
+            _ => format!("{ps} ごとに"),
+        };
+        let mut line = tr!("キー: {name} は、{per}一度だけ動きます", "key: {name} once per {ps}");
         if !kn.outside.is_empty() {
             let others: Vec<String> = kn.outside.iter().map(|(i, _)| t.params[*i].name.clone()).collect();
             let (oj, oe) = (or_list(&others, Lang::Ja), or_list(&others, Lang::En));
-            line.ja.push_str(&format!("。{oj} だけが違う二度目は key_conflict で断られる"));
+            line.ja.push_str(&format!("。キーが同じで {oj}が違う二度目の呼び出しは、key_conflict で断られます"));
             line.en.push_str(&format!("; a second call that differs only in {oe} is refused with key_conflict"));
         }
         if kn.again.is_some() {
-            line.ja.push_str("。押さえが終わったあとに同じキーで押さえ直すと done_before になり、何も押さえない");
+            line.ja.push_str("。仮押さえが終わったあとに同じキーでもう一度押さえると、done_before が返り、何も押さえません");
             line.en.push_str("; holding again with the same key after the hold has ended answers done_before and holds nothing");
         }
+        line.ja.push('。');
         out.push_str(&format!("  {}\n", line.get(lang)));
     }
     out

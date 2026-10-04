@@ -132,12 +132,12 @@ fn bounds(book: &Book, k: usize, out: &mut Titled) {
                     let (ok, title) = match delta {
                         1 => (
                             last_is(&b, &Outcome::Done),
-                            tr!("境界: {gj} {r} を {left} まで減らす。`at least {lv}` の 1 つ手前", "bound: {ae} takes {r} to {left}, one above `at least {lv}`"),
+                            tr!("境界: {gj} {r} を {left} まで減らす（`at least {lv}` の 1 つ手前）", "bound: {ae} takes {r} to {left}, one above `at least {lv}`"),
                         ),
-                        0 => (last_is(&b, &Outcome::Done), tr!("境界: {gj} {r} をちょうど {lv} まで減らす。`at least {lv}` ちょうど", "bound: {ae} takes {r} to exactly {lv}, its `at least {lv}`")),
+                        0 => (last_is(&b, &Outcome::Done), tr!("境界: {gj} {r} をちょうど {lv} まで減らす（`at least {lv}` ちょうど）", "bound: {ae} takes {r} to exactly {lv}, its `at least {lv}`")),
                         _ => (
                             refused_at(&b, &l.refusal, i, false),
-                            tr!("境界: {wj} {r} を {left} まで減らすので断られる。`at least {lv}` を割る", "bound: {ae} would take {r} to {left}, below `at least {lv}`"),
+                            tr!("境界: {wj} {r} を {left} まで減らすので断られる（`at least {lv}` を割る）", "bound: {ae} would take {r} to {left}, below `at least {lv}`"),
                         ),
                     };
                     if ok {
@@ -180,12 +180,12 @@ fn bounds(book: &Book, k: usize, out: &mut Titled) {
                     let (ok, title) = match delta {
                         -1 => (
                             last_is(&b, &Outcome::Done),
-                            tr!("境界: {gj} {r} を {to} まで増やす。`at most {uv}` の 1 つ手前", "bound: {ae} fills {r} to {to}, one below `at most {uv}`"),
+                            tr!("境界: {gj} {r} を {to} まで増やす（`at most {uv}` の 1 つ手前）", "bound: {ae} fills {r} to {to}, one below `at most {uv}`"),
                         ),
-                        0 => (last_is(&b, &Outcome::Done), tr!("境界: {gj} {r} をちょうど {uv} まで増やす。`at most {uv}` ちょうど", "bound: {ae} fills {r} to exactly {uv}, its `at most {uv}`")),
+                        0 => (last_is(&b, &Outcome::Done), tr!("境界: {gj} {r} をちょうど {uv} まで増やす（`at most {uv}` ちょうど）", "bound: {ae} fills {r} to exactly {uv}, its `at most {uv}`")),
                         _ => (
                             refused_at(&b, &u.refusal, i, true),
-                            tr!("境界: {wj} {r} を {to} まで増やすので断られる。`at most {uv}` を超える", "bound: {ae} would fill {r} to {to}, past `at most {uv}`"),
+                            tr!("境界: {wj} {r} を {to} まで増やすので断られる（`at most {uv}` を超える）", "bound: {ae} would fill {r} to {to}, past `at most {uv}`"),
                         ),
                     };
                     if ok {
@@ -241,13 +241,13 @@ fn keys(book: &Book, k: usize, out: &mut Titled) {
                     out,
                     &b,
                     tr!(
-                        "キー: {tn}.{op} が {reason} で断られ、同じ引数でもう一度、{xr} が足りるようになってからもう一度呼ぶ",
+                        "キー: {tn}.{op} が {reason} で断られたあと、同じ引数ですぐにもう一度呼び、{xr} が足りるようになってからもう一度呼ぶ",
                         "key: {tn}.{op} refused with {reason}, then again, and again once {xr} has enough"
                     ),
                 );
             } else {
                 let tn = &t.name;
-                push(out, &b, tr!("キー: {tn}.{op} が {reason} で断られ、同じ引数でもう一度呼ぶ", "key: {tn}.{op} refused with {reason}, then again"));
+                push(out, &b, tr!("キー: {tn}.{op} が {reason} で断られたあと、同じ引数でもう一度呼ぶ", "key: {tn}.{op} refused with {reason}, then again"));
             }
             break 'found;
         }
@@ -312,7 +312,7 @@ fn holds(book: &Book, k: usize, out: &mut Titled) {
             }
         }
     }
-    try_one(out, tr!("仮押さえ: {name} を二度確定する。同じ額で、そして違う額で", "hold: {name} posted twice, with the same amounts and with others"), &|b, c| {
+    try_one(out, tr!("仮押さえ: {name} を確定したあと、同じ額でもう一度、違う額でもう一度確定する", "hold: {name} posted twice, with the same amounts and with others"), &|b, c| {
         let full = b.follow(c, Op::Post, None);
         let mut ok = is(b.call(&full), "done") && is(b.call(&full), "done_before");
         if let Some(same) = witness::amounts_of(book, c, |h| h) {

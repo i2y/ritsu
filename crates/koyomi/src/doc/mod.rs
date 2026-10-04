@@ -521,7 +521,7 @@ fn dates_page(m: &Model, rep: &Report, diags: &[Diag], ok: Option<&Text>, lang: 
     b.push(Block::H2(s(tr!("計算のしかた", "How the dates are computed"))));
     b.push(Block::P(vec![
         t(s(tr!(
-            "日付ごとに、.cal に書いた操作を上から順に普通の言葉で書きます。後ろのコードは .cal の行そのままです（",
+            "日付ごとに、.cal に書いた操作を上から順に、普通の言葉で書いています。後ろのコードは .cal の行そのままです（",
             "Each date, operation by operation from the top, in words. The code after each is the line as the .cal writes it ("
         ))),
         c("#"),
@@ -730,7 +730,7 @@ fn dates_page(m: &Model, rep: &Report, diags: &[Diag], ok: Option<&Text>, lang: 
                     let who = inputs_text(m, vals);
                     let missing = interp::ymd(*y, *mm, *dd);
                     p.push(t(s(tr!(
-                        "最初は{} のときで、{missing} が無いので {gave} にします。",
+                        "最初は{} のときで、{missing} が無いので {gave} になります。",
                         " The first is {}: {missing} does not exist, and {gave} is taken.",
                         who.ja;
                         who.en

@@ -33,7 +33,7 @@ flowchart LR
 ### receive
 
 - 移動: `suppliers` から `stock(sku)` へ `qty`。
-- キー: `delivery` と `sku` ごとに一回。同じ呼び出しの二度目は何もせず、`done_before` を返す。`qty` だけが違う二度目は `key_conflict` で断られる。
+- キー: `delivery` と `sku` の組ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `qty` が違う二度目の呼び出しは、`key_conflict` で断られる。
 - すぐに動かす（`do`）。
 
 | 操作 | 断られうる理由 | いつ |
@@ -56,7 +56,7 @@ flowchart LR
 posted when the order ships, voided when it is cancelled
 
 - 移動: `stock(sku)` から `customers` へ `qty`。
-- キー: `order` と `sku` ごとに一回。同じ呼び出しの二度目は何もせず、`done_before` を返す。`qty` だけが違う二度目は `key_conflict` で断られる。押さえが終わったあとに同じキーで押さえ直すと `done_before` になり、何も押さえない。
+- キー: `order` と `sku` の組ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `qty` が違う二度目の呼び出しは、`key_conflict` で断られる。仮押さえが終わったあとに同じキーでもう一度押さえると、`done_before` を返し、何も押さえない。
 - 仮押さえ: まず押さえる。確定と取消は呼ぶ側がする。押さえてから 30 分で期限が切れ、押さえた量は元に戻る。
 
 ```mermaid
@@ -102,7 +102,7 @@ stateDiagram-v2
 #### reserve.hold: out_of_stock
 
 ```text
- 1  reserve.hold(order: order-1, sku: sku-2, qty: 1)  out_of_stock で断られる（1 つ目の移動が stock(sku-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
+ 1  reserve.hold(order: order-1, sku: sku-2, qty: 1)  out_of_stock で断られる（1 つ目の移動が stock(sku-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
 ```
 
 #### reserve.hold: key_conflict
@@ -116,7 +116,7 @@ stateDiagram-v2
 #### reserve.hold: already_refused
 
 ```text
- 1  reserve.hold(order: order-1, sku: sku-2, qty: 1)  out_of_stock で断られる（1 つ目の移動が stock(sku-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
+ 1  reserve.hold(order: order-1, sku: sku-2, qty: 1)  out_of_stock で断られる（1 つ目の移動が stock(sku-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
  2  reserve.hold(order: order-1, sku: sku-2, qty: 1)  already_refused で断られる
 ```
 
@@ -190,7 +190,7 @@ stateDiagram-v2
 ### take_back
 
 - 移動: `customers` から `stock(sku)` へ `qty`。
-- キー: `return_slip` と `sku` ごとに一回。同じ呼び出しの二度目は何もせず、`done_before` を返す。`qty` だけが違う二度目は `key_conflict` で断られる。
+- キー: `return_slip` と `sku` の組ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `qty` が違う二度目の呼び出しは、`key_conflict` で断られる。
 - すぐに動かす（`do`）。
 
 | 操作 | 断られうる理由 | いつ |
@@ -210,9 +210,9 @@ stateDiagram-v2
 
 ## シナリオ
 
-`chobo scenarios` が帳簿から作ったシナリオ 21 本。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、二つの呼び出し元が同時に最後の一つを取りに来るもの、などがある。どれも参照インタプリタで流し、ステップごとに、そのあとの残高を載せる。残高は確定した量で、仮押さえがあれば括弧の中に書く。
+`chobo scenarios` が帳簿から作ったシナリオ 21 本。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、二つの呼び出し元が同時に最後の一つを取りに来るもの、などがある。どれも参照インタプリタで流したもので、ステップごとに、そのあとの残高を載せている。残高は確定した量で、仮押さえがあれば、その量を括弧の中に添えている。
 
-<details><summary>1. 境界: reserve.hold が stock(sku) を 1 まで減らす。<code>at least 0</code> の 1 つ手前</summary>
+<details><summary>1. 境界: reserve.hold が stock(sku) を 1 まで減らす（<code>at least 0</code> の 1 つ手前）</summary>
 
 | # | 操作 | 結果 | stock(sku-2) | suppliers | customers |
 |---|---|---|---|---|---|
@@ -221,7 +221,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>2. 境界: reserve.hold が stock(sku) をちょうど 0 まで減らす。<code>at least 0</code> ちょうど</summary>
+<details><summary>2. 境界: reserve.hold が stock(sku) をちょうど 0 まで減らす（<code>at least 0</code> ちょうど）</summary>
 
 | # | 操作 | 結果 | stock(sku-2) | suppliers | customers |
 |---|---|---|---|---|---|
@@ -230,7 +230,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>3. 境界: reserve.hold は stock(sku) を -1 まで減らすので断られる。<code>at least 0</code> を割る</summary>
+<details><summary>3. 境界: reserve.hold は stock(sku) を -1 まで減らすので断られる（<code>at least 0</code> を割る）</summary>
 
 | # | 操作 | 結果 | stock(sku-2) | suppliers | customers |
 |---|---|---|---|---|---|
@@ -277,7 +277,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>8. キー: reserve.hold が out_of_stock で断られ、同じ引数でもう一度、stock(sku) が足りるようになってからもう一度呼ぶ</summary>
+<details><summary>8. キー: reserve.hold が out_of_stock で断られたあと、同じ引数ですぐにもう一度呼び、stock(sku) が足りるようになってからもう一度呼ぶ</summary>
 
 | # | 操作 | 結果 | stock(sku-2) | suppliers | customers |
 |---|---|---|---|---|---|
@@ -380,7 +380,7 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>18. 仮押さえ: reserve を二度確定する。同じ額で、そして違う額で</summary>
+<details><summary>18. 仮押さえ: reserve を確定したあと、同じ額でもう一度、違う額でもう一度確定する</summary>
 
 | # | 操作 | 結果 | stock(sku-2) | suppliers | customers |
 |---|---|---|---|---|---|

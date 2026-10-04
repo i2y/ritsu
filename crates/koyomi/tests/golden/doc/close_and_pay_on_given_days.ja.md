@@ -14,7 +14,7 @@ Takes the closing day, the month of payment and the day of payment as integers, 
 
 ## 計算のしかた
 
-日付ごとに、.cal に書いた操作を上から順に普通の言葉で書きます。後ろのコードは .cal の行そのままです（`#` から後ろはコメント）。
+日付ごとに、.cal に書いた操作を上から順に、普通の言葉で書いています。後ろのコードは .cal の行そのままです（`#` から後ろはコメント）。
 
 ### closing
 
@@ -47,13 +47,13 @@ received 2027-01-01〜2028-10-01、closing_day 1〜31、payment_month 1〜2、pa
 
 - `close day closing_day else end_of_month`（closing）
 
-  872,960 通りのうち 15,664 通りで無い日に当たり、`else end_of_month` を使います。最初は received 2027-01-30、closing_day 29、payment_month 1、payment_day 10 のときで、2027-02-29 が無いので 2027-02-28 にします。
+  872,960 通りのうち 15,664 通りで無い日に当たり、`else end_of_month` を使います。最初は received 2027-01-30、closing_day 29、payment_month 1、payment_day 10 のときで、2027-02-29 が無いので 2027-02-28 になります。
 
   扱いを `else start_of_next_month` に替えると、872,960 通りのうち 16,192 通りで closing が変わります。扱いを `else reject` に替えると、872,960 通りのうち 15,664 通りで計算が止まります。
 
 - `day payment_day of month +payment_month else end_of_month`（payment）
 
-  872,960 通りのうち 19,844 通りで無い日に当たり、`else end_of_month` を使います。最初は received 2027-01-01、closing_day 1、payment_month 1、payment_day 29 のときで、2027-02-29 が無いので 2027-02-28 にします。
+  872,960 通りのうち 19,844 通りで無い日に当たり、`else end_of_month` を使います。最初は received 2027-01-01、closing_day 1、payment_month 1、payment_day 29 のときで、2027-02-29 が無いので 2027-02-28 になります。
 
   扱いを `else start_of_next_month` に替えると、872,960 通りのうち 12,372 通りで payment が変わります。扱いを `else reject` に替えると、872,960 通りのうち 19,844 通りで計算が止まります。
 

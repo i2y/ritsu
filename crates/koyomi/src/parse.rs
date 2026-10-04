@@ -129,7 +129,7 @@ impl<'a> Cur<'a> {
 
     fn found(&self) -> Text {
         match self.peek() {
-            Some(t) => tr!("`{}` があります", "found `{}`", show(t)),
+            Some(t) => tr!("書かれているのは `{}` です", "found `{}`", show(t)),
             None => tr!("行が終わっています", "the line ends"),
         }
     }
@@ -167,7 +167,7 @@ impl<'a> Cur<'a> {
                 self.i += 1;
                 Ok(s.clone())
             }
-            _ => Err(bad(self.col(), tr!("ここには{}を `\"…\"` で書きます（{}）", "{} goes here in quotes, `\"…\"` ({})", what.ja, what.en; self.found().ja, self.found().en))),
+            _ => Err(bad(self.col(), tr!("ここには{}を `\"…\"` で書いてください（{}）", "{} goes here in quotes, `\"…\"` ({})", what.ja, what.en; self.found().ja, self.found().en))),
         }
     }
 
@@ -242,7 +242,7 @@ fn missing(c: &mut Cur) -> Result<Option<(Missing, Span)>, Bad> {
         Some(Tok::Word(w)) if w == kw::REJECT => Missing::Reject,
         _ => {
             return Err(bad(span.col, tr!(
-                "`else` のあとには、無い日の扱い（`end_of_month`、`start_of_next_month`、`reject` のどれか）を書きます（{}）",
+                "`else` のあとには、無い日の扱い（`end_of_month`、`start_of_next_month`、`reject` のどれか）を書いてください（{}）",
                 "`else` is followed by what to do with a missing day: `end_of_month`, `start_of_next_month` or `reject` ({})",
                 c.found().ja;
                 c.found().en
@@ -297,7 +297,7 @@ fn op(c: &mut Cur, nested: bool) -> Result<Op, Bad> {
             let n = arg(c, &tr!("足す数", "the number to add"))?;
             if c.eat_word(kw::BUSINESS) {
                 if !unit_day(c) {
-                    return Err(bad(c.col(), tr!("`business` のあとには `days` を書きます", "`business` is followed by `days`")));
+                    return Err(bad(c.col(), tr!("`business` のあとには `days` を書いてください", "`business` is followed by `days`")));
                 }
                 return Ok(Op::BusinessDays(sign, n));
             }
@@ -311,7 +311,7 @@ fn op(c: &mut Cur, nested: bool) -> Result<Op, Bad> {
                 return Ok(Op::Years(sign, n, missing(c)?));
             }
             Err(bad(c.col(), tr!(
-                "数のあとには単位（`days`、`business days`、`months`、`years`）を書きます（{}）",
+                "数のあとには単位（`days`、`business days`、`months`、`years`）を書いてください（{}）",
                 "the number is followed by its unit: `days`, `business days`, `months` or `years` ({})",
                 c.found().ja;
                 c.found().en
@@ -354,7 +354,7 @@ fn op(c: &mut Cur, nested: bool) -> Result<Op, Bad> {
                     if modified { Conv::ModifiedPreceding } else { Conv::Preceding }
                 } else {
                     return Err(bad(c.col(), tr!(
-                        "`roll` のあとには `following`、`preceding`、`modified following`、`modified preceding` のどれかを書きます（{}）",
+                        "`roll` のあとには `following`、`preceding`、`modified following`、`modified preceding` のどれかを書いてください（{}）",
                         "`roll` is followed by `following`, `preceding`, `modified following` or `modified preceding` ({})",
                         c.found().ja;
                         c.found().en
@@ -365,12 +365,12 @@ fn op(c: &mut Cur, nested: bool) -> Result<Op, Bad> {
             kw::IF => {
                 if nested {
                     return Err(bad(col, tr!("`if closed` は入れ子にできません。続けられる操作は一つです", "`if closed` cannot be nested; it takes one operation"))
-                        .note(tr!("一般の条件分岐は持たず、「休みなら」だけを入れています（DESIGN 1.8）。", "There is no general branching, only \"if it is closed\" (DESIGN 1.8).")));
+                        .note(tr!("koyomi は一般の条件分岐を持たず、「休みなら」だけを入れています（DESIGN 1.8）。", "There is no general branching, only \"if it is closed\" (DESIGN 1.8).")));
                 }
                 c.bump();
                 c.want_word(kw::CLOSED)?;
                 if c.at_end() || c.peek() == Some(&Tok::At) {
-                    return Err(bad(c.col(), tr!("`if closed` のあとには、休みのときにする操作を一つ書きます", "`if closed` is followed by the one operation to do on a closed day")));
+                    return Err(bad(c.col(), tr!("`if closed` のあとには、休みのときにする操作を一つ書いてください", "`if closed` is followed by the one operation to do on a closed day")));
                 }
                 Ok(Op::IfClosed(Box::new(op(c, true)?)))
             }
@@ -382,7 +382,7 @@ fn op(c: &mut Cur, nested: bool) -> Result<Op, Bad> {
 }
 
 fn unknown_op(col: usize, c: &Cur) -> Bad {
-    bad(col, tr!("ここには日付の操作を書きます（{}）", "an operation on the date goes here ({})", c.found().ja; c.found().en)).note(tr!(
+    bad(col, tr!("ここには日付の操作を書いてください（{}）", "an operation on the date goes here ({})", c.found().ja; c.found().en)).note(tr!(
         "書ける操作: `+ 30 days`、`+ 5 business days`、`+ 1 month else …`、`+ 1 year else …`、`day 10 of month +1`、`start of month +1`、`end of month +1`、`close day 20`、`close end of month`、`roll following`、`roll preceding`、`roll modified following`、`roll modified preceding`、`if closed <操作>`、最後の行に `at 09:00` か `at end of day`",
         "The operations: `+ 30 days`, `+ 5 business days`, `+ 1 month else …`, `+ 1 year else …`, `day 10 of month +1`, `start of month +1`, `end of month +1`, `close day 20`, `close end of month`, `roll following`, `roll preceding`, `roll modified following`, `roll modified preceding`, `if closed <operation>`, and on the last line `at 09:00` or `at end of day`."
     ))
@@ -433,7 +433,7 @@ fn claim_body(c: &mut Cur) -> Result<ClaimKind, Bad> {
         if c.eat_word(kw::OPEN) {
             return Ok(ClaimKind::IsOpen(a));
         }
-        return Err(bad(c.col(), tr!("`is` のあとには `open` か `monotonic` を書きます（{}）", "`is` is followed by `open` or `monotonic` ({})", c.found().ja; c.found().en)));
+        return Err(bad(c.col(), tr!("`is` のあとには `open` か `monotonic` を書いてください（{}）", "`is` is followed by `open` or `monotonic` ({})", c.found().ja; c.found().en)));
     }
     let cmp = match c.peek() {
         Some(Tok::Eq) => Cmp::Eq,
@@ -464,14 +464,14 @@ fn bound(c: &mut Cur, lo: &mut Option<(Lit, Span)>, hi: &mut Option<(Lit, Span)>
         Some(Tok::Gt) => (true, true),
         Some(Tok::Le) => (false, false),
         Some(Tok::Lt) => (false, true),
-        _ => return Err(bad(span.col, tr!("範囲の端は `>=` か `<=` で書きます（{}）", "an end of a range is written with `>=` or `<=` ({})", c.found().ja; c.found().en))),
+        _ => return Err(bad(span.col, tr!("範囲の端は `>=` か `<=` で書いてください（{}）", "an end of a range is written with `>=` or `<=` ({})", c.found().ja; c.found().en))),
     };
     c.bump();
     let neg = c.eat(&Tok::Minus);
     let lit = match c.peek() {
         Some(Tok::Date(d)) if !neg => Lit::Date(*d),
         Some(Tok::Int(n)) => Lit::Int(if neg { -*n } else { *n }),
-        _ => return Err(bad(c.col(), tr!("範囲の端には日付か数を書きます（{}）", "an end of a range is a date or a number ({})", c.found().ja; c.found().en))),
+        _ => return Err(bad(c.col(), tr!("範囲の端には日付か数を書いてください（{}）", "an end of a range is a date or a number ({})", c.found().ja; c.found().en))),
     };
     c.bump();
     if strict {
@@ -484,9 +484,9 @@ fn bound(c: &mut Cur, lo: &mut Option<(Lit, Span)>, hi: &mut Option<(Lit, Span)>
         return Err(Bad {
             col: span.col,
             code: "E013",
-            msg: tr!("範囲の端は `>=` と `<=` で書きます（`{sym}` は使いません）", "Write the ends of a range with `>=` and `<=`, not `{sym}`"),
+            msg: tr!("範囲の端は `>=` と `<=` で書いてください（`{sym}` は使えません）", "Write the ends of a range with `>=` and `<=`, not `{sym}`"),
             notes: vec![tr!(
-                "両端を含む書き方に一つにそろえています。この端なら `{fixed}` です。",
+                "koyomi は、範囲を両端を含む書き方一つにそろえています。この端なら `{fixed}` です。",
                 "The ends are always written inclusive; this one is `{fixed}`."
             )],
         });
@@ -527,11 +527,11 @@ fn rank(kind: Kind, w: &str) -> Option<u8> {
 fn order_text(kind: Kind) -> Text {
     match kind {
         Kind::Calendar => tr!(
-            "calendar のファイルは、見出し、`description`、`offset`、`use calendar`、`source`、`closed` と `open` の順に書きます",
+            "calendar のファイルは、見出し、`description`、`offset`、`use calendar`、`source`、`closed` と `open` の順に書いてください",
             "a calendar file goes: the heading, `description`, `offset`, `use calendar`, `source`, then `closed` and `open`"
         ),
         Kind::Dates => tr!(
-            "dates のファイルは、見出し、`description`、`use calendar`、`source`、`inputs`、`date`、`claims`、`examples` の順に書きます",
+            "dates のファイルは、見出し、`description`、`use calendar`、`source`、`inputs`、`date`、`claims`、`examples` の順に書いてください",
             "a dates file goes: the heading, `description`, `use calendar`, `source`, `inputs`, `date`, `claims`, `examples`"
         ),
     }
@@ -595,12 +595,12 @@ impl<'a> Parser<'a> {
             _ => {
                 if !bad_lines.contains(&first.no) {
                     self.err("E003", first.no, first.tokens[0].col, tr!(
-                        "ファイルは `calendar` か `dates` の行で始めます",
+                        "ファイルは `calendar` か `dates` の行で始めてください",
                         "A file starts with a `calendar` or a `dates` line"
                     ))
                     .notes
                     .push(tr!(
-                        "カレンダー（休みの決まり）は `calendar 東京の営業日(tokyo) v1`、日付の関数は `dates 支払条件(payment_terms) v1` のように書き始めます。",
+                        "カレンダー（休みの決まり）は `calendar 東京の営業日(tokyo) v1`、日付の関数は `dates 支払条件(payment_terms) v1` のように書き始めてください。",
                         "A calendar (which days are closed) starts like `calendar tokyo v1`; date functions start like `dates payment_terms v1`."
                     ));
                 }
@@ -615,7 +615,7 @@ impl<'a> Parser<'a> {
             let v = match c.peek() {
                 Some(Tok::Word(v)) if v.len() > 1 && v.starts_with('v') && v[1..].chars().all(|ch| ch.is_ascii_digit()) => v[1..].to_string(),
                 _ => {
-                    return Err(bad(vcol, tr!("見出しの最後には版（`v1` のように）を書きます（{}）", "the heading ends with a version such as `v1` ({})", c.found().ja; c.found().en)));
+                    return Err(bad(vcol, tr!("見出しの最後には、`v1` のようなバージョンを書いてください（{}）", "the heading ends with a version such as `v1` ({})", c.found().ja; c.found().en)));
                 }
             };
             c.bump();
@@ -716,9 +716,9 @@ impl<'a> Parser<'a> {
                 let other = rank(if kind == Kind::Calendar { Kind::Dates } else { Kind::Calendar }, w).is_some();
                 if other {
                     let msg = match kind {
-                        Kind::Calendar => tr!("calendar のファイルには `{w}` を書けません。日付の関数は dates のファイルに書きます", "A calendar file has no `{w}`; date functions go in a dates file"),
-                        Kind::Dates if w == kw::OFFSET => tr!("dates のファイルには `offset` を書けません。オフセットはカレンダーに書きます", "A dates file has no `offset`; the offset belongs to the calendar"),
-                        Kind::Dates => tr!("dates のファイルには `{w}` を書けません。休みの決まりはカレンダーのファイルに書き、`use calendar` で読みます", "A dates file has no `{w}`; which days are closed is written in a calendar file and read with `use calendar`"),
+                        Kind::Calendar => tr!("calendar のファイルには `{w}` を書けません。日付の関数は dates のファイルに書いてください", "A calendar file has no `{w}`; date functions go in a dates file"),
+                        Kind::Dates if w == kw::OFFSET => tr!("dates のファイルには `offset` を書けません。オフセットはカレンダーに書いてください", "A dates file has no `offset`; the offset belongs to the calendar"),
+                        Kind::Dates => tr!("dates のファイルには `{w}` を書けません。休みの決まりはカレンダーのファイルに書き、`use calendar` で読んでください", "A dates file has no `{w}`; which days are closed is written in a calendar file and read with `use calendar`"),
                     };
                     self.err("E004", line.no, t0.col, msg);
                 } else if [kw::CALENDAR, kw::DATES].contains(&w) {
@@ -765,7 +765,7 @@ impl<'a> Parser<'a> {
                     ))
                     .notes
                     .push(tr!(
-                        "下の行に `  format csv shift_jis` か `  format govuk \"england-and-wales\"` のように書きます。",
+                        "下の行に `  format csv shift_jis` か `  format govuk \"england-and-wales\"` のように書いてください。",
                         "Write it under the source, like `  format csv shift_jis` or `  format govuk \"england-and-wales\"`."
                     ));
                 }
@@ -777,7 +777,7 @@ impl<'a> Parser<'a> {
                     ))
                     .notes
                     .push(tr!(
-                        "表が休みを全部載せている範囲を、`  covers 1955-01-01..2027-12-31` か `  covers listed years` と書きます。範囲は推しません（DESIGN 1.5）。",
+                        "表が休みを全部載せている範囲を、`  covers 1955-01-01..2027-12-31` か `  covers listed years` と書いてください。koyomi は範囲を推測しません（DESIGN 1.5）。",
                         "Write the span the table lists every closed day of: `  covers 1955-01-01..2027-12-31` or `  covers listed years`. It is never guessed (DESIGN 1.5)."
                     ));
                 }
@@ -786,7 +786,7 @@ impl<'a> Parser<'a> {
         if kind == Kind::Dates && f.inputs.is_empty() && bad_lines.is_empty() && !self.diags.iter().any(|d| d.is_error()) {
             let line = f.name.span.line;
             self.err("E004", line, 1, tr!("`inputs` の節がありません", "There is no `inputs` section")).notes.push(tr!(
-                "日付の関数は、日付を一つ（と整数をいくつか）受け取ります。`inputs` の下に `受領日(received) : date  range >=2026-01-01 <=2026-12-31` のように書きます。",
+                "日付の関数は、日付を一つ（と整数をいくつか）受け取ります。`inputs` の下に `受領日(received) : date  range >=2026-01-01 <=2026-12-31` のように書いてください。",
                 "Date functions take one date (and some integers). Write it under `inputs`, like `received : date  range >=2026-01-01 <=2026-12-31`."
             ));
         }
@@ -843,9 +843,9 @@ impl<'a> Parser<'a> {
                         return Err(Bad {
                             col: span.col,
                             code: "E004",
-                            msg: tr!("祝日の表はカレンダーのファイルに書きます", "A table of holidays belongs in a calendar file"),
+                            msg: tr!("祝日の表はカレンダーのファイルに書いてください", "A table of holidays belongs in a calendar file"),
                             notes: vec![tr!(
-                                "dates のファイルに書ける出典は法令（`= law`）だけです。表は `use calendar` で読むカレンダーに書きます。",
+                                "dates のファイルに書ける出典は法令（`= law`）だけです。表は `use calendar` で読むカレンダーに書いてください。",
                                 "The only source a dates file declares is a law (`= law`); tables go in the calendar it reads with `use calendar`."
                             )],
                         });
@@ -858,7 +858,7 @@ impl<'a> Parser<'a> {
                     c.done()?;
                     SourceKind::Law { id, asof, pins: vec![] }
                 } else {
-                    return Err(bad(c.col(), tr!("`=` のあとには `file` か `law` を書きます（{}）", "`=` is followed by `file` or `law` ({})", c.found().ja; c.found().en)));
+                    return Err(bad(c.col(), tr!("`=` のあとには `file` か `law` を書いてください（{}）", "`=` is followed by `file` or `law` ({})", c.found().ja; c.found().en)));
                 };
                 f.sources.push(SourceDecl { name, span: Span { line: line.no, col: line.tokens[1].col }, kind });
                 *block = Block::Source(f.sources.len() - 1);
@@ -875,7 +875,7 @@ impl<'a> Parser<'a> {
                             _ => None,
                         };
                         let Some(d) = d else {
-                            return Err(bad(col, tr!("曜日は `mon` `tue` `wed` `thu` `fri` `sat` `sun` で書きます（{}）", "a day of the week is `mon`, `tue`, `wed`, `thu`, `fri`, `sat` or `sun` ({})", c.found().ja; c.found().en)));
+                            return Err(bad(col, tr!("曜日は `mon` `tue` `wed` `thu` `fri` `sat` `sun` で書いてください（{}）", "a day of the week is `mon`, `tue`, `wed`, `thu`, `fri`, `sat` or `sun` ({})", c.found().ja; c.found().en)));
                         };
                         c.bump();
                         if days.contains(&d) {
@@ -895,7 +895,7 @@ impl<'a> Parser<'a> {
                                 c.bump();
                                 Ok(r)
                             }
-                            _ => Err(bad(c.col(), tr!("毎年の休みは月日（`12-29` の形）で書きます（{}）", "a closure of every year is a month and day, like `12-29` ({})", c.found().ja; c.found().en))),
+                            _ => Err(bad(c.col(), tr!("毎年の休みは月日（`12-29` の形）で書いてください（{}）", "a closure of every year is a month and day, like `12-29` ({})", c.found().ja; c.found().en))),
                         }
                     };
                     let from = md(&mut c)?;
@@ -926,10 +926,10 @@ impl<'a> Parser<'a> {
                     let (n, s) = c.name(&tr!("表", "the table"))?;
                     RuleKind::Table(n, s)
                 } else if open {
-                    return Err(bad(c.col(), tr!("`open` のあとには日付（`2026-12-28` の形）を書きます（{}）", "`open` is followed by a date, like `2026-12-28` ({})", c.found().ja; c.found().en)));
+                    return Err(bad(c.col(), tr!("`open` のあとには日付（`2026-12-28` の形）を書いてください（{}）", "`open` is followed by a date, like `2026-12-28` ({})", c.found().ja; c.found().en)));
                 } else {
                     return Err(bad(c.col(), tr!(
-                        "`closed` のあとには `weekly`、`every`、日付、表の名前のどれかを書きます（{}）",
+                        "`closed` のあとには `weekly`、`every`、日付、表の名前のどれかを書いてください（{}）",
                         "`closed` is followed by `weekly`, `every`, a date, or the name of a table ({})",
                         c.found().ja;
                         c.found().en
@@ -1019,7 +1019,7 @@ impl<'a> Parser<'a> {
                             *covers = Some((cv, span));
                             Ok(())
                         } else {
-                            Err(bad(span.col, tr!("表の出典の下には `format` と `covers` の行を書きます（{}）", "the lines under a table are `format` and `covers` ({})", c.found().ja; c.found().en)))
+                            Err(bad(span.col, tr!("表の出典の下には `format` と `covers` の行を書いてください（{}）", "the lines under a table are `format` and `covers` ({})", c.found().ja; c.found().en)))
                         }
                     }
                     SourceKind::Law { pins, .. } => {
@@ -1081,7 +1081,7 @@ impl<'a> Parser<'a> {
                             c.want_word(kw::DAY)?;
                             At::EndOfDay
                         }
-                        _ => return Err(bad(c.col(), tr!("`at` のあとには時刻（`09:00`）か `end of day` を書きます（{}）", "`at` is followed by a time (`09:00`) or `end of day` ({})", c.found().ja; c.found().en))),
+                        _ => return Err(bad(c.col(), tr!("`at` のあとには時刻（`09:00`）か `end of day` を書いてください（{}）", "`at` is followed by a time (`09:00`) or `end of day` ({})", c.found().ja; c.found().en))),
                     };
                     let ci = cite(&mut c)?;
                     c.done()?;
@@ -1131,7 +1131,7 @@ impl<'a> Parser<'a> {
         if let Some(c) = cur
             && !c.is_empty()
         {
-            return Err(bad(c[0].col, tr!("表の行は `|` で終えます", "a table row ends with `|`")));
+            return Err(bad(c[0].col, tr!("表の行は `|` で終えてください", "a table row ends with `|`")));
         }
         let span = Span { line: line.no, col: line.tokens[0].col };
         if heading {
@@ -1148,7 +1148,7 @@ impl<'a> Parser<'a> {
                     _ => {
                         let col = cell.first().map(|t| t.col).unwrap_or(span.col);
                         return Err(bad(col, tr!(
-                            "表の見出しには、入力の名前か、`-> <日付の名前>` を書きます",
+                            "表の見出しには、入力の名前か、`-> <日付の名前>` を書いてください",
                             "a heading of the table is the name of an input, or `-> <date>`"
                         )));
                     }
@@ -1178,7 +1178,7 @@ impl<'a> Parser<'a> {
                     _ => return Err(bad(col, tr!("表の値は日付か数です", "a value in the table is a date or a number"))),
                 },
                 [] => return Err(bad(col, tr!("表の値が空です", "a value in the table is empty"))),
-                _ => return Err(bad(col, tr!("表の値は一つずつ書きます", "a cell of the table holds one value"))),
+                _ => return Err(bad(col, tr!("表の値は、一つのセルに一つずつ書いてください", "a cell of the table holds one value"))),
             };
             row.cells.push((lit, Span { line: line.no, col }));
         }

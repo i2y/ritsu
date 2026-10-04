@@ -131,7 +131,7 @@ fn form_description() -> Text {
 }
 fn form_unit() -> Text {
     tr!(
-        "`unit <名前>`、`unit <名前> scale <小数の桁数>`。お金の単位は、最後に税込か税抜（`incl_tax`、`excl_tax`）を書ける",
+        "`unit <名前>` か `unit <名前> scale <小数の桁数>`（お金の単位は、最後に税込か税抜の `incl_tax`、`excl_tax` を書ける）",
         "`unit <name>` or `unit <name> scale <decimal places>`; a unit of money may end with whether it is with tax or without (`incl_tax`, `excl_tax`)"
     )
 }
@@ -366,7 +366,7 @@ pub fn parse(lines: &[Line]) -> (Option<Book>, Vec<Diag>) {
     let head = (|| -> Result<(Name, u32), Diag> {
         let mut c = Cur::new(first, form_book());
         if first.indent != 0 {
-            return Err(diag::error("E001", first.no, 1, tr!("`book` の行は字下げしません", "the `book` line is not indented")));
+            return Err(diag::error("E001", first.no, 1, tr!("`book` の行は字下げしないでください", "the `book` line is not indented")));
         }
         c.word("book")?;
         let name = c.name()?;
@@ -378,7 +378,7 @@ pub fn parse(lines: &[Line]) -> (Option<Book>, Vec<Diag>) {
             _ => None,
         };
         let Some(version) = version else {
-            return Err(diag::error("E001", vspan.line, vspan.col, tr!("バージョンは `v1` のように v と 1 以上の数で書きます", "the version is a v and a number from 1, like `v1`")));
+            return Err(diag::error("E001", vspan.line, vspan.col, tr!("バージョンは `v1` のように、v と 1 以上の数で書いてください", "the version is a v and a number from 1, like `v1`")));
         };
         c.i += 1;
         c.end()?;
@@ -423,7 +423,7 @@ pub fn parse(lines: &[Line]) -> (Option<Book>, Vec<Diag>) {
                     "E001",
                     l.no,
                     1,
-                    tr!("字下げがそろっていません。同じブロックの行は同じ数の空白で字下げします", "the indentation does not line up with the lines above it in the same block"),
+                    tr!("字下げがそろっていません。同じブロックの行は、同じ数の空白で字下げしてください", "the indentation does not line up with the lines above it in the same block"),
                 ));
                 continue;
             }
@@ -472,13 +472,13 @@ pub fn parse(lines: &[Line]) -> (Option<Book>, Vec<Diag>) {
                 }
                 Err(d) => diags.push(d),
             },
-            "book" => diags.push(diag::error("E001", l.no, 1, tr!("`book` の行は先頭に一度だけ書きます", "`book` comes once, on the first line"))),
+            "book" => diags.push(diag::error("E001", l.no, 1, tr!("`book` の行は、先頭に一度だけ書いてください", "`book` comes once, on the first line"))),
             "description" => diags.push(diag::error(
                 "E001",
                 l.no,
                 1,
                 tr!(
-                    "帳簿の `description` は `book` の行のすぐ下に書きます。勘定や振替の説明は、その下に字下げして書きます",
+                    "帳簿の `description` は、`book` の行のすぐ下に書いてください。勘定や振替の説明は、その下に字下げして書いてください",
                     "the book's `description` goes right under the `book` line; an account's or a transfer's goes indented under it"
                 ),
             )),
@@ -486,7 +486,7 @@ pub fn parse(lines: &[Line]) -> (Option<Book>, Vec<Diag>) {
                 "E001",
                 l.no,
                 1,
-                tr!("`{head_word}` の行は、`account` か `transfer` の下に字下げして書きます", "a `{head_word}` line goes indented under an `account` or a `transfer`"),
+                tr!("`{head_word}` の行は、`account` か `transfer` の下に字下げして書いてください", "a `{head_word}` line goes indented under an `account` or a `transfer`"),
             )),
             _ => {
                 let s = l.toks.first().map(|t| show(&t.tok)).unwrap_or_default();

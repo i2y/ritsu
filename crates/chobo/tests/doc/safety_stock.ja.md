@@ -32,7 +32,7 @@ flowchart LR
 ### replenish
 
 - 移動: `suppliers` から `shelf(sku)` へ `qty`。
-- キー: `slip` と `sku` ごとに一回。同じ呼び出しの二度目は何もせず、`done_before` を返す。`qty` だけが違う二度目は `key_conflict` で断られる。
+- キー: `slip` と `sku` の組ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `qty` が違う二度目の呼び出しは、`key_conflict` で断られる。
 - すぐに動かす（`do`）。
 
 | 操作 | 断られうる理由 | いつ |
@@ -53,7 +53,7 @@ flowchart LR
 ### ship
 
 - 移動: `shelf(sku)` から `customers` へ `qty`。
-- キー: `order` と `sku` ごとに一回。同じ呼び出しの二度目は何もせず、`done_before` を返す。`qty` だけが違う二度目は `key_conflict` で断られる。
+- キー: `order` と `sku` の組ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `qty` が違う二度目の呼び出しは、`key_conflict` で断られる。
 - すぐに動かす（`do`）。
 
 | 操作 | 断られうる理由 | いつ |
@@ -67,7 +67,7 @@ flowchart LR
 #### ship.do: below_safety_stock
 
 ```text
- 1  ship.do(order: order-1, sku: sku-2, qty: 1)  below_safety_stock で断られる（1 つ目の移動が shelf(sku-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
+ 1  ship.do(order: order-1, sku: sku-2, qty: 1)  below_safety_stock で断られる（1 つ目の移動が shelf(sku-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
 ```
 
 #### ship.do: key_conflict
@@ -81,7 +81,7 @@ flowchart LR
 #### ship.do: already_refused
 
 ```text
- 1  ship.do(order: order-1, sku: sku-2, qty: 1)  below_safety_stock で断られる（1 つ目の移動が shelf(sku-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
+ 1  ship.do(order: order-1, sku: sku-2, qty: 1)  below_safety_stock で断られる（1 つ目の移動が shelf(sku-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
  2  ship.do(order: order-1, sku: sku-2, qty: 1)  already_refused で断られる
 ```
 
@@ -89,9 +89,9 @@ flowchart LR
 
 ## シナリオ
 
-`chobo scenarios` が帳簿から作ったシナリオ 9 本。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、二つの呼び出し元が同時に最後の一つを取りに来るもの、などがある。どれも参照インタプリタで流し、ステップごとに、そのあとの残高を載せる。残高は確定した量で、仮押さえがあれば括弧の中に書く。
+`chobo scenarios` が帳簿から作ったシナリオ 9 本。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、二つの呼び出し元が同時に最後の一つを取りに来るもの、などがある。どれも参照インタプリタで流したもので、ステップごとに、そのあとの残高を載せている。残高は確定した量で、仮押さえがあれば、その量を括弧の中に添えている。
 
-<details><summary>1. 境界: ship.do が shelf(sku) を 4 まで減らす。<code>at least 3</code> の 1 つ手前</summary>
+<details><summary>1. 境界: ship.do が shelf(sku) を 4 まで減らす（<code>at least 3</code> の 1 つ手前）</summary>
 
 | # | 操作 | 結果 | shelf(sku-2) | suppliers | customers |
 |---|---|---|---|---|---|
@@ -100,7 +100,7 @@ flowchart LR
 
 </details>
 
-<details><summary>2. 境界: ship.do が shelf(sku) をちょうど 3 まで減らす。<code>at least 3</code> ちょうど</summary>
+<details><summary>2. 境界: ship.do が shelf(sku) をちょうど 3 まで減らす（<code>at least 3</code> ちょうど）</summary>
 
 | # | 操作 | 結果 | shelf(sku-2) | suppliers | customers |
 |---|---|---|---|---|---|
@@ -109,7 +109,7 @@ flowchart LR
 
 </details>
 
-<details><summary>3. 境界: ship.do は shelf(sku) を 2 まで減らすので断られる。<code>at least 3</code> を割る</summary>
+<details><summary>3. 境界: ship.do は shelf(sku) を 2 まで減らすので断られる（<code>at least 3</code> を割る）</summary>
 
 | # | 操作 | 結果 | shelf(sku-2) | suppliers | customers |
 |---|---|---|---|---|---|
@@ -156,7 +156,7 @@ flowchart LR
 
 </details>
 
-<details><summary>8. キー: ship.do が below_safety_stock で断られ、同じ引数でもう一度、shelf(sku) が足りるようになってからもう一度呼ぶ</summary>
+<details><summary>8. キー: ship.do が below_safety_stock で断られたあと、同じ引数ですぐにもう一度呼び、shelf(sku) が足りるようになってからもう一度呼ぶ</summary>
 
 | # | 操作 | 結果 | shelf(sku-2) | suppliers | customers |
 |---|---|---|---|---|---|

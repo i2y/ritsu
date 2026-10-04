@@ -62,7 +62,7 @@ fn too_long(name: &str, what: Text, line: usize, col: usize) -> Option<Diag> {
     )
     .sub("what", &what);
     Some(diag::error("E061", line, col, msg).hint(tr!(
-        "名前を短くします。日本語は一字 3 バイトなので、63 バイトは 21 字です（関数の名前は、後ろに付く `_hold` なども含めて数えます）",
+        "名前を短くしてください。日本語は一字 3 バイトなので、63 バイトは 21 字です（関数の名前は、後ろに付く `_hold` なども含めて数えます）",
         "Make the name shorter: 63 bytes are 63 ASCII letters, or 21 Japanese characters (a function's name counts what follows it too, `_hold` and the like)"
     )))
 }

@@ -1,2 +1,2 @@
-エラー[E002]: tests/mutants/E002_知らない慣行.cal:13:8: `roll` のあとには `following`、`preceding`、`modified following`、`modified preceding` のどれかを書きます（`nearest` があります）
+エラー[E002]: tests/mutants/E002_知らない慣行.cal:13:8: `roll` のあとには `following`、`preceding`、`modified following`、`modified preceding` のどれかを書いてください（書かれているのは `nearest` です）
     13 |   roll nearest

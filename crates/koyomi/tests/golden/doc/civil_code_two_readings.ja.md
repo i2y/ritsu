@@ -19,7 +19,7 @@ Breaks its claims on purpose. It writes the day after of Article 142 of the Civi
 
 ## 計算のしかた
 
-日付ごとに、.cal に書いた操作を上から順に普通の言葉で書きます。後ろのコードは .cal の行そのままです（`#` から後ろはコメント）。
+日付ごとに、.cal に書いた操作を上から順に、普通の言葉で書いています。後ろのコードは .cal の行そのままです（`#` から後ろはコメント）。
 
 ### first_day
 
@@ -155,13 +155,13 @@ months_added  2026-03-28（土）  1 か月後の同じ日（month_count = 1。�
 
 - `+ month_count months else start_of_next_month`（last_day）
 
-  4,380 通りのうち 57 通りで無い日に当たり、`else start_of_next_month` を使います。最初は origin 2026-01-28、month_count 1 のときで、2026-02-29 が無いので 2026-03-01 にします。
+  4,380 通りのうち 57 通りで無い日に当たり、`else start_of_next_month` を使います。最初は origin 2026-01-28、month_count 1 のときで、2026-02-29 が無いので 2026-03-01 になります。
 
   扱いを `else end_of_month` に替えると、4,380 通りのうち 57 通りで last_day が変わります。扱いを `else reject` に替えると、4,380 通りのうち 57 通りで計算が止まります。
 
 - `+ month_count months else end_of_month`（months_added）
 
-  4,380 通りのうち 57 通りで無い日に当たり、`else end_of_month` を使います。最初は origin 2026-01-29、month_count 1 のときで、2026-02-29 が無いので 2026-02-28 にします。
+  4,380 通りのうち 57 通りで無い日に当たり、`else end_of_month` を使います。最初は origin 2026-01-29、month_count 1 のときで、2026-02-29 が無いので 2026-02-28 になります。
 
   扱いを `else start_of_next_month` に替えると、4,380 通りのうち 57 通りで months_added が変わります。扱いを `else reject` に替えると、4,380 通りのうち 57 通りで計算が止まります。
 

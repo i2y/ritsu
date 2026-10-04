@@ -240,7 +240,7 @@ fn needs_calendar(m: &Model) -> Vec<Diag> {
             .map(|c| c.span);
         let s = first_op.or(first_claim).unwrap_or_default();
         out.push(err("E109", s, tr!("この行は休みかどうかを調べますが、カレンダーがありません（`use calendar` がありません）", "This line asks which days are closed, and there is no calendar (no `use calendar`)")).note(tr!(
-            "見出しのあとに `use calendar \"calendars/東京の営業日.cal\"` のように、読むカレンダーを書きます。",
+            "見出しのあとに `use calendar \"calendars/東京の営業日.cal\"` のように、読むカレンダーを書いてください。",
             "Name the calendar after the heading, like `use calendar \"calendars/tokyo.cal\"`."
         )));
     }
@@ -258,7 +258,7 @@ fn needs_calendar(m: &Model) -> Vec<Diag> {
                 None => tr!("`at` で時刻を出すには、オフセットのあるカレンダーが要ります", "`at` gives a time, which needs a calendar with an offset"),
             };
             out.push(err("E110", s, msg).note(tr!(
-                "カレンダーに `offset +09:00` のように書きます。夏時間のある地域なら、時刻は出さず日付だけにします（DESIGN 1.9）。",
+                "カレンダーに `offset +09:00` のように書いてください。夏時間のある地域なら、時刻は出さず日付だけにしてください（DESIGN 1.9）。",
                 "Write the calendar's offset, like `offset +09:00`. For a place with daylight saving time, give dates only (DESIGN 1.9)."
             )));
         }
@@ -391,7 +391,7 @@ fn statics(m: &Model, opts: &Options) -> Vec<Diag> {
                         o.text
                     ))
                     .source(&f.src)
-                    .note(tr!("`else …` を消します。", "Delete the `else …`.")),
+                    .note(tr!("`else …` を消してください。", "Delete the `else …`.")),
                 );
             }
             let Some(written) = written_missing(inner) else { continue };
@@ -407,7 +407,7 @@ fn statics(m: &Model, opts: &Options) -> Vec<Diag> {
                             o.text
                         ))
                         .source(&f.src)
-                        .note(tr!("`else …` を消します。", "Delete the `else …`.")),
+                        .note(tr!("`else …` を消してください。", "Delete the `else …`.")),
                     );
                 }
                 (None, true) => out.push(e201(m, di, oi, inner, opts)),
@@ -425,7 +425,7 @@ fn statics(m: &Model, opts: &Options) -> Vec<Diag> {
                 let indent = " ".repeat(o.span.col - 1);
                 out.push(
                     Diag::warning("W202", &f.path, o.span.line, o.span.col, tr!(
-                        "`{}` は `{s}` と同じです。短いほうで書きます",
+                        "`{}` は `{s}` と同じです。短いほうで書いてください",
                         "`{}` means the same as `{s}`; write the shorter one",
                         o.text;
                         o.text
@@ -498,7 +498,7 @@ fn e201(m: &Model, di: usize, oi: usize, inner: &ROp, opts: &Options) -> Diag {
             d = d
                 .note(tr!("{} なら {missing} になります", "for {} it would be {missing}", who.ja; who.en))
                 .note(tr!(
-                    "直し方: 次のどれかを書きます。`{base} else end_of_month`（{eom} にする）、`{base} else start_of_next_month`（{sonm} にする）、`{base} else reject`（範囲の中で起きないことを検査が確かめる）",
+                    "直し方: 次のどれかを書いてください。`{base} else end_of_month`（{eom} にする）、`{base} else start_of_next_month`（{sonm} にする）、`{base} else reject`（範囲の中で起きないことを検査が確かめる）",
                     "To fix it, write one of: `{base} else end_of_month` (giving {eom}), `{base} else start_of_next_month` (giving {sonm}), `{base} else reject` (the check makes sure it never happens in the range)"
                 ));
             let mut steps = interp::trace(m, &vals, &[di], false).steps;
@@ -1043,7 +1043,7 @@ fn e202(m: &Model, s: &Stopped) -> Diag {
     .source(&f.src);
     let runs = runs_text(m, &s.runs, s.more_runs);
     d = d.note(tr!("当たる入力: {}", "It does on {}", runs.ja; runs.en)).note(tr!(
-        "`else reject` は、範囲の中で一度も当たらないことを確かめる書き方です。当たるなら、`else end_of_month` か `else start_of_next_month` で扱いを書くか、範囲を狭めます。",
+        "`else reject` は、範囲の中で一度も当たらないことを確かめる書き方です。当たるなら、`else end_of_month` か `else start_of_next_month` で扱いを書くか、範囲を狭めてください。",
         "`else reject` says it never happens in the range. Since it does, say what to do with `else end_of_month` or `else start_of_next_month`, or narrow the range."
     ));
     let t = interp::trace(m, &s.first, &[s.stop.date], false);
@@ -1113,18 +1113,18 @@ fn e203(m: &Model, s: &Stopped) -> Diag {
         }
     }
     let fetch = tr!(
-        "または、新しい表が出てから写しを取り直す（koyomi source fetch）",
+        "または、新しい表が出てから写しを取り直してください（koyomi source fetch）",
         "or take the copy again once a newer table is out (koyomi source fetch)"
     );
     if ok && new_lo <= new_hi {
         let range = format!("range >={} <={}", Day(new_lo as i32), Day(new_hi as i32));
-        d = d.note(tr!("直し方: 範囲を `{range}` にする。{}", "To fix it: make the range `{range}`, {}", fetch.ja; fetch.en));
+        d = d.note(tr!("直し方: 範囲を `{range}` にしてください。{}", "To fix it: make the range `{range}`, {}", fetch.ja; fetch.en));
         let line = f.src.lines().nth(di.span.line - 1).unwrap_or("");
         if let Some(pos) = line.find("range") {
             d = d.fix_in_notes(format!("{}{range}", &line[..pos]));
         }
     } else {
-        d = d.note(tr!("直し方: 範囲を、表の分かっている日に収まるよう狭める。{}", "To fix it: narrow the range to what the table knows, {}", fetch.ja; fetch.en));
+        d = d.note(tr!("直し方: 範囲を、表の分かっている日に収まるよう狭めてください。{}", "To fix it: narrow the range to what the table knows, {}", fetch.ja; fetch.en));
     }
     let mut steps = match s.claim {
         None => interp::trace(m, &s.first, &[s.stop.date], false).steps,
@@ -1206,7 +1206,7 @@ fn e305(m: &Model, combos: u128, budget: u64) -> Diag {
     .source(&f.src)
     .note(tr!("内訳: {}", "That is {}", parts_ja.join(" × "); parts.join(" × ")))
     .note(tr!(
-        "一部の入力だけを試して通すことはしません。範囲を狭めるか、ファイルを分けるか、`--budget` で予算を上げます（DESIGN 3.2）。",
+        "koyomi は、一部の入力だけを試して通すことはしません。範囲を狭めるか、ファイルを分けるか、`--budget` で予算を上げてください（DESIGN 3.2）。",
         "It never tries some of the inputs and passes; narrow a range, split the file, or raise the budget with `--budget` (DESIGN 3.2)."
     ))
 }

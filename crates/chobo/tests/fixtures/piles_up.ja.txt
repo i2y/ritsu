@@ -2,7 +2,7 @@
      5 | account points(member: string) : pt
   そうなる例:
        1  grant.do(slip: slip-1, member: member-2, amount: 1)  通る
-  ヒント: `points` から取る振替を書きます。外の世界を表す勘定なら `outside` を付けます
+  ヒント: `points` から取る振替を書いてください。外の世界を表す勘定なら `outside` を付けてください
 piles_up.book: ok、警告 1 件
   grant.do  断られうる理由: key_conflict
-  キー: grant は slip ごとに一回。member か amount だけが違う二度目は key_conflict で断られる
+  キー: grant は、slip ごとに一度だけ動きます。キーが同じで member、amount のどれかが違う二度目の呼び出しは、key_conflict で断られます。

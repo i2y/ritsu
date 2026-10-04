@@ -7,5 +7,5 @@
 使われない.book: ok、警告 3 件
   入荷.do  断られうる理由: key_conflict
   出荷.do  断られうる理由: 在庫切れ（在庫(sku) at least 0）、key_conflict、already_refused
-  キー: 入荷 は 伝票 ごとに一回。sku、数 か 担当 だけが違う二度目は key_conflict で断られる
-  キー: 出荷 は 注文 ごとに一回。sku か 数 だけが違う二度目は key_conflict で断られる
+  キー: 入荷 は、伝票 ごとに一度だけ動きます。キーが同じで sku、数、担当 のどれかが違う二度目の呼び出しは、key_conflict で断られます。
+  キー: 出荷 は、注文 ごとに一度だけ動きます。キーが同じで sku、数 のどれかが違う二度目の呼び出しは、key_conflict で断られます。

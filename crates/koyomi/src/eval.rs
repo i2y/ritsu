@@ -70,7 +70,7 @@ pub fn eval_dates(m: &Model, vals: &[i64], lang: Lang, as_json: bool) -> (String
             let (holds, why) = match &c.kind {
                 CK::Monotonic(k) => {
                     if vals[m.date_input] <= m.date_in().lo {
-                        (None, tr!("範囲の最初の日なので、比べる前の日がありません", "the first day of the range has no day before it to compare with"))
+                        (None, tr!("範囲の最初の日なので、比べる前の日が無い", "the first day of the range has no day before it to compare with"))
                     } else {
                         let mut before = vals.to_vec();
                         before[m.date_input] -= 1;
@@ -81,7 +81,7 @@ pub fn eval_dates(m: &Model, vals: &[i64], lang: Lang, as_json: bool) -> (String
                                 let n = &m.dates[*k].name;
                                 (Some(*q >= p), tr!("前の日 {d0} なら{n}は {p}", "for the day before, {d0}, {n} is {p}"))
                             }
-                            _ => (None, tr!("前の日の計算が止まります", "the day before does not compute")),
+                            _ => (None, tr!("前の日の計算が止まる", "the day before does not compute")),
                         }
                     }
                 }

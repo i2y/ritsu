@@ -183,7 +183,7 @@ fn eval_cmd(a: &Args, lang: Lang) -> ExitCode {
     let mut loader = Loader::default();
     if is_calendar {
         let [day] = &a.pos[1..] else {
-            return refuse(tr!("カレンダーには日付を一つ渡します（`koyomi eval {path} 2026-05-04`）", "give a calendar one date (`koyomi eval {path} 2026-05-04`)"), lang);
+            return refuse(tr!("カレンダーには日付を一つ渡してください（`koyomi eval {path} 2026-05-04`）", "give a calendar one date (`koyomi eval {path} 2026-05-04`)"), lang);
         };
         let Some(d) = crate::date::parse(day) else {
             return refuse(tr!("`{day}` は日付（`2026-05-04` の形）ではありません", "`{day}` is not a date (`2026-05-04`)"), lang);
@@ -258,7 +258,7 @@ fn explain_cmd(a: &Args, lang: Lang) -> ExitCode {
 
 fn api_cmd(a: &Args, lang: Lang) -> ExitCode {
     let [path] = a.pos.as_slice() else {
-        return refuse(tr!("`koyomi api` には .cal のファイルを一つ渡します", "`koyomi api` takes one .cal file"), lang);
+        return refuse(tr!("`koyomi api` には .cal のファイルを一つ渡してください", "`koyomi api` takes one .cal file"), lang);
     };
     let mut loader = Loader::default();
     let o = match check::check_file(path, &Options::default(), &mut loader) {
@@ -318,7 +318,7 @@ fn gen_cmd(a: &Args, lang: Lang) -> ExitCode {
                     if let Some((_, _, from)) = planned.iter().find(|(p, _, _)| *p == rel) {
                         return refuse(
                             tr!(
-                                "`{f}` と `{from}` が同じ {rel} を書きます。どちらかの別名を変えます",
+                                "`{f}` と `{from}` が同じ {rel} を書き出します。どちらかの別名を変えてください",
                                 "`{f}` and `{from}` both write {rel}; give one of them another alias"
                             ),
                             lang,
@@ -362,7 +362,7 @@ fn gen_cmd(a: &Args, lang: Lang) -> ExitCode {
 fn vectors_cmd(a: &Args, lang: Lang) -> ExitCode {
     use std::io::Write;
     let [path] = a.pos.as_slice() else {
-        return refuse(tr!("`koyomi vectors` には .cal のファイルを一つ渡します", "`koyomi vectors` takes one .cal file"), lang);
+        return refuse(tr!("`koyomi vectors` には .cal のファイルを一つ渡してください", "`koyomi vectors` takes one .cal file"), lang);
     };
     let mut loader = Loader::default();
     let o = match check::check_file(path, &Options::default(), &mut loader) {
@@ -394,7 +394,7 @@ fn vectors_cmd(a: &Args, lang: Lang) -> ExitCode {
 
 fn doc_cmd(a: &Args, lang: Lang) -> ExitCode {
     let [path] = a.pos.as_slice() else {
-        return refuse(tr!("`koyomi doc` には .cal のファイルを一つ渡します", "`koyomi doc` takes one .cal file"), lang);
+        return refuse(tr!("`koyomi doc` には .cal のファイルを一つ渡してください", "`koyomi doc` takes one .cal file"), lang);
     };
     let months = match a.get("--months") {
         None => None,
