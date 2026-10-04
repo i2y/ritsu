@@ -1,0 +1,6 @@
+エラー[E307]: ctx/inventory.ctx:18:1: 「Ordering」と「Inventory」の共有カーネルの並びが、両側で違います
+    18 | shared kernel with Ordering
+  = 「Inventory」の側にだけあるもの: dir "py/inventory"
+  関わるもの:
+      Ordering   ctx/ordering.ctx:21   shared kernel with Inventory
+      Inventory  ctx/inventory.ctx:18  shared kernel with Ordering

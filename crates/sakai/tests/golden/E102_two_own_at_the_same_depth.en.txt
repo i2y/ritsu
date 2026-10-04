@@ -1,0 +1,6 @@
+error[E102]: ctx/billing.ctx:6:69: Both Ordering and Billing own dir "proto/shop/common", at the same depth
+     6 |   dir "../proto/shop/billing", "../proto/billing", "../py/billing", "../proto/shop/common"
+  = An artifact belongs to the context of the deepest entry that holds it; two entries at the same depth leave it undecided.
+  involved:
+      Ordering  ctx/ordering.ctx:6  dir "proto/shop/common"
+      Billing   ctx/billing.ctx:6   dir "proto/shop/common"

@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package notices.v1;
+
+import "quotes/v1/estimate.proto";
+
+// A partner of quotes, so it uses quotes' published language.
+message Notice {
+  quotes.v1.Estimate estimate = 1;
+}

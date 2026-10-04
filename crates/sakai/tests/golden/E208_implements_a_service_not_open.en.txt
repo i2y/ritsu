@@ -1,0 +1,6 @@
+error[E208]: ordering/fulfillment.flow:3:1: The workflow ordering/fulfillment.flow of Ordering implements proto "proto/shop/ordering/v1/fulfillment.proto" service FulfillmentService, which is no open host service of a published language of Ordering
+     3 | workflow fulfillment v1 implements shop.FulfillmentService
+  = The .proto is in Ordering's published language shop.ordering.v1, and its `open host service` does not list FulfillmentService.
+  = A service a workflow implements is one the workflow's context publishes: list the .proto in its published language, and the service under `open host service`.
+  involved:
+      Ordering  ordering/fulfillment.flow:3  implements proto "proto/shop/ordering/v1/fulfillment.proto" service FulfillmentService

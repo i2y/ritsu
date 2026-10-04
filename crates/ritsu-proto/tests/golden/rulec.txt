@@ -384,7 +384,7 @@ message AnswerPackingRequest
   boxes int32 json_name="箱の数"
   checked bool json_name="検品済み"
 message AnswerPackingResponse
-== ../sakai/examples/通販/proto/dandori/v1/options.proto
+== ../sakai/examples/shop/proto/dandori/v1/options.proto
 package Some("dandori.v1") imports ["google/protobuf/descriptor.proto", "google/protobuf/struct.proto"]
 message WorkflowOptions
   name string
@@ -399,7 +399,7 @@ message StatusOptions
 message Status
   at int32 optional
   events string repeated
-== ../sakai/examples/通販/proto/shop/delivery/v1/shipment.proto
+== ../sakai/examples/shop/proto/shop/delivery/v1/shipment.proto
 package Some("shop.delivery.v1") imports ["buf/validate/validate.proto"]
 enum Handling HANDLING_STANDARD=0 HANDLING_FRAGILE=1
 message CreateShipmentRequest
@@ -415,7 +415,90 @@ message Parcel
   handling Handling
 message CreateShipmentResponse
   tracking_number string
-== ../sakai/examples/通販/proto/shop/ordering/v1/fulfillment.proto
+== ../sakai/examples/shop/proto/shop/ordering/v1/fulfillment.proto
+package Some("shop.ordering.v1") imports ["dandori/v1/options.proto", "google/protobuf/struct.proto", "warehouse/v1/stock.proto"]
+message FulfillRequest
+  order FulfillmentOrder
+message FulfillmentOrder
+  id string
+  member bool
+  amount int32
+  lines Line repeated
+  gift Gift
+  extra google.protobuf.Value
+message Line
+  sku string
+  quantity int32
+message Gift
+  recipient string
+  message string optional
+message FulfillResponse
+  reservations warehouse.v1.ReserveResponse repeated
+  tracking_number string json_name="tracking_number"
+message AnswerPackingRequest
+  boxes int32
+message AnswerPackingResponse
+== ../sakai/examples/shop/proto/shop/ordering/v1/order.proto
+package Some("shop.ordering.v1") imports []
+enum OrderStatus ORDER_STATUS_UNSPECIFIED=0 ORDER_STATUS_RECEIVED=1 ORDER_STATUS_PAID=2 ORDER_STATUS_SHIPPED=3 ORDER_STATUS_CANCELLED=4
+message Order
+  id string
+  status OrderStatus
+  amount_jpy int64
+message GetOrderRequest
+  id string
+message GetOrderResponse
+  order Order
+== ../sakai/examples/shop/proto/warehouse/v1/stock.proto
+package Some("warehouse.v1") imports []
+enum Stock STOCK_UNSPECIFIED=0 STOCK_SECURED=1 STOCK_SHORT=2
+enum PackingStatus PACKING_STATUS_UNSPECIFIED=0 PACKING_STATUS_WAITING=1 PACKING_STATUS_PACKED=2 PACKING_STATUS_SHORT=3
+message ReserveRequest
+  sku string
+  quantity int32
+message ReserveResponse
+  sku string
+  stock Stock
+  id string optional
+message ReleaseRequest
+  id string
+message ReleaseResponse
+message GetPackingRequest
+  order_id string
+message GetPackingResponse
+  status PackingStatus
+== ../sakai/examples/shop.ja/proto/dandori/v1/options.proto
+package Some("dandori.v1") imports ["google/protobuf/descriptor.proto", "google/protobuf/struct.proto"]
+message WorkflowOptions
+  name string
+  version uint32
+message StartOptions
+  fails string repeated
+message EventOptions
+  task string
+message AnswerOptions
+  task string
+message StatusOptions
+message Status
+  at int32 optional
+  events string repeated
+== ../sakai/examples/shop.ja/proto/shop/delivery/v1/shipment.proto
+package Some("shop.delivery.v1") imports ["buf/validate/validate.proto"]
+enum Handling HANDLING_STANDARD=0 HANDLING_FRAGILE=1
+message CreateShipmentRequest
+  destination Destination required
+  parcels Parcel repeated min_items=1 max_items=20
+  declared_value_jpy int64 gte=0 lte=1000000
+  delivery_window string optional str_in=["morning", "evening"]
+message Destination
+  region string str_in=["honshu", "hokkaido", "okinawa"]
+  postcode string
+message Parcel
+  weight_g int64 gte=1 lte=30000
+  handling Handling
+message CreateShipmentResponse
+  tracking_number string
+== ../sakai/examples/shop.ja/proto/shop/ordering/v1/fulfillment.proto
 package Some("shop.ordering.v1") imports ["dandori/v1/options.proto", "google/protobuf/struct.proto", "warehouse/v1/stock.proto"]
 message FulfillRequest
   order FulfillmentOrder json_name="注文"
@@ -438,7 +521,7 @@ message FulfillResponse
 message AnswerPackingRequest
   boxes int32 json_name="箱の数"
 message AnswerPackingResponse
-== ../sakai/examples/通販/proto/shop/ordering/v1/order.proto
+== ../sakai/examples/shop.ja/proto/shop/ordering/v1/order.proto
 package Some("shop.ordering.v1") imports []
 enum OrderStatus ORDER_STATUS_UNSPECIFIED=0 ORDER_STATUS_RECEIVED=1 ORDER_STATUS_PAID=2 ORDER_STATUS_SHIPPED=3 ORDER_STATUS_CANCELLED=4
 message Order
@@ -449,7 +532,7 @@ message GetOrderRequest
   id string
 message GetOrderResponse
   order Order
-== ../sakai/examples/通販/proto/warehouse/v1/stock.proto
+== ../sakai/examples/shop.ja/proto/warehouse/v1/stock.proto
 package Some("warehouse.v1") imports []
 enum Stock STOCK_UNSPECIFIED=0 STOCK_SECURED=1 STOCK_SHORT=2
 enum PackingStatus PACKING_STATUS_UNSPECIFIED=0 PACKING_STATUS_WAITING=1 PACKING_STATUS_PACKED=2 PACKING_STATUS_SHORT=3
@@ -563,6 +646,94 @@ message ReserveResponse
 message ReleaseRequest
   id string
 message ReleaseResponse
+== ../sakai/tests/maps/basic/proto/billing/acl/v1/order_view.proto
+package Some("billing.acl.v1") imports ["shop/ordering/v1/order.proto"]
+message OrderView
+  status shop.ordering.v1.OrderStatus
+== ../sakai/tests/maps/basic/proto/shop/billing/v1/billing.proto
+package Some("shop.billing.v1") imports []
+enum BillingStatus BILLING_STATUS_UNSPECIFIED=0 BILLING_STATUS_WAIT=1 BILLING_STATUS_BILL=2 BILLING_STATUS_SKIP=3
+== ../sakai/tests/maps/basic/proto/shop/common/v1/money.proto
+package Some("shop.common.v1") imports []
+message Money
+  amount_jpy int64
+== ../sakai/tests/maps/basic/proto/shop/ordering/v1/fulfillment_lite.proto
+package Some("shop.ordering.v1") imports ["warehouse/v1/stock.proto"]
+message FulfillResponse
+  reservations warehouse.v1.ReserveResponse repeated
+== ../sakai/tests/maps/basic/proto/shop/ordering/v1/order.proto
+package Some("shop.ordering.v1") imports []
+enum OrderStatus ORDER_STATUS_UNSPECIFIED=0 ORDER_STATUS_RECEIVED=1 ORDER_STATUS_PAID=2 ORDER_STATUS_SHIPPED=3 ORDER_STATUS_CANCELLED=4
+message Order
+  id string
+  status OrderStatus
+  amount_jpy int64
+message GetOrderRequest
+  id string
+message GetOrderResponse
+  order Order
+== ../sakai/tests/maps/basic/proto/warehouse/v1/stock.proto
+package Some("warehouse.v1") imports ["shop/common/v1/money.proto"]
+enum Stock STOCK_UNSPECIFIED=0 STOCK_SECURED=1 STOCK_SHORT=2
+enum PackingStatus PACKING_STATUS_UNSPECIFIED=0 PACKING_STATUS_WAITING=1 PACKING_STATUS_PACKED=2 PACKING_STATUS_SHORT=3
+message ReserveRequest
+  sku string
+  quantity int32
+message ReserveResponse
+  sku string
+  stock Stock
+  id string optional
+  price shop.common.v1.Money
+message ReleaseRequest
+  id string
+message ReleaseResponse
+message GetPackingRequest
+  order_id string
+message GetPackingResponse
+  status PackingStatus
+== ../sakai/tests/maps/nested/proto/warehouse/v1/stock.proto
+package Some("warehouse.v1") imports []
+message Stock
+  count int32
+== ../sakai/tests/maps/patterns/proto/audit/v1/record.proto
+package Some("audit.v1") imports []
+message Record
+  contract_id string
+== ../sakai/tests/maps/patterns/proto/contracts/acl/v1/plan_view.proto
+package Some("contracts.acl.v1") imports ["pricing/v1/price.proto"]
+message PlanView
+  plan pricing.v1.Plan
+== ../sakai/tests/maps/patterns/proto/contracts/kernel/units.proto
+package Some("kernel") imports []
+message Days
+  count int32
+== ../sakai/tests/maps/patterns/proto/contracts/v1/contract.proto
+package Some("contracts.v1") imports ["contracts/kernel/units.proto"]
+enum ContractClass CONTRACT_CLASS_UNSPECIFIED=0 CONTRACT_CLASS_STANDARD=1 CONTRACT_CLASS_PREMIUM=2
+message Contract
+  class ContractClass
+  term kernel.Days
+== ../sakai/tests/maps/patterns/proto/notices/v1/notice.proto
+package Some("notices.v1") imports ["quotes/v1/estimate.proto"]
+message Notice
+  estimate quotes.v1.Estimate
+== ../sakai/tests/maps/patterns/proto/pricing/v1/price.proto
+package Some("pricing.v1") imports []
+enum Plan PLAN_UNSPECIFIED=0 PLAN_FREE=1 PLAN_BASIC=2 PLAN_PRO=3
+message Quote
+  plan Plan
+  monthly_jpy int64
+message QuoteRequest
+  plan Plan
+== ../sakai/tests/maps/patterns/proto/quotes/kernel/units.proto
+package Some("kernel") imports []
+message Days
+  count int32
+== ../sakai/tests/maps/patterns/proto/quotes/v1/estimate.proto
+package Some("quotes.v1") imports ["pricing/v1/price.proto", "quotes/kernel/units.proto"]
+message Estimate
+  quote pricing.v1.Quote
+  valid_for kernel.Days
 == ../sakai/tests/maps/パターン/proto/audit/v1/record.proto
 package Some("audit.v1") imports []
 message Record
@@ -651,6 +822,17 @@ message GetPackingRequest
   order_id string
 message GetPackingResponse
   status PackingStatus
+== ../sakai/tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.proto
+package Some("shop.ordering.v1") imports []
+enum OrderStatus ORDER_STATUS_UNSPECIFIED=0 ORDER_STATUS_RECEIVED=1 ORDER_STATUS_PAID=2 ORDER_STATUS_SHIPPED=3 ORDER_STATUS_CANCELLED=4 ORDER_STATUS_RETURNED=5
+message Order
+  id string
+  status OrderStatus
+  amount_jpy int64
+message GetOrderRequest
+  id string
+message GetOrderResponse
+  order Order
 == ../sakai/tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto
 package Some("shop.ordering.v1") imports []
 enum OrderStatus ORDER_STATUS_UNSPECIFIED=0 ORDER_STATUS_RECEIVED=1 ORDER_STATUS_PAID=2 ORDER_STATUS_SHIPPED=3 ORDER_STATUS_CANCELLED=4 ORDER_STATUS_RETURNED=5
@@ -662,11 +844,26 @@ message GetOrderRequest
   id string
 message GetOrderResponse
   order Order
+== ../sakai/tests/mutants/E201_reference_to_an_unrelated_inventory/proto/shop/billing/v1/billing.proto
+package Some("shop.billing.v1") imports ["warehouse/v1/stock.proto"]
+enum BillingStatus BILLING_STATUS_UNSPECIFIED=0 BILLING_STATUS_WAIT=1 BILLING_STATUS_BILL=2 BILLING_STATUS_SKIP=3
+message StockSeen
+  stock warehouse.v1.Stock
 == ../sakai/tests/mutants/E201_関係の無い在庫を参照/proto/shop/billing/v1/billing.proto
 package Some("shop.billing.v1") imports ["warehouse/v1/stock.proto"]
 enum BillingStatus BILLING_STATUS_UNSPECIFIED=0 BILLING_STATUS_WAIT=1 BILLING_STATUS_BILL=2 BILLING_STATUS_SKIP=3
 message StockSeen
   stock warehouse.v1.Stock
+== ../sakai/tests/mutants/E202_inside_of_inventory_referred_to/proto/shop/ordering/v1/fulfillment_lite.proto
+package Some("shop.ordering.v1") imports ["warehouse/v1/stock.proto", "warehouse/internal/v1/ledger.proto"]
+message FulfillResponse
+  reservations warehouse.v1.ReserveResponse repeated
+  shelves warehouse.internal.v1.Shelf repeated
+== ../sakai/tests/mutants/E202_inside_of_inventory_referred_to/proto/warehouse/internal/v1/ledger.proto
+package Some("warehouse.internal.v1") imports []
+message Shelf
+  sku string
+  count int32
 == ../sakai/tests/mutants/E202_在庫の内側を参照/proto/shop/ordering/v1/fulfillment_lite.proto
 package Some("shop.ordering.v1") imports ["warehouse/v1/stock.proto", "warehouse/internal/v1/ledger.proto"]
 message FulfillResponse
@@ -677,6 +874,15 @@ package Some("warehouse.internal.v1") imports []
 message Shelf
   sku string
   count int32
+== ../sakai/tests/mutants/E203_package_not_in_through/proto/shop/ordering/v1/fulfillment_lite.proto
+package Some("shop.ordering.v1") imports ["warehouse/v1/stock.proto", "warehouse/v2/stock.proto"]
+message FulfillResponse
+  reservations warehouse.v1.ReserveResponse repeated
+  reservations_v2 warehouse.v2.Reservation repeated
+== ../sakai/tests/mutants/E203_package_not_in_through/proto/warehouse/v2/stock.proto
+package Some("warehouse.v2") imports []
+message Reservation
+  sku string
 == ../sakai/tests/mutants/E203_through_に無い_package/proto/shop/ordering/v1/fulfillment_lite.proto
 package Some("shop.ordering.v1") imports ["warehouse/v1/stock.proto", "warehouse/v2/stock.proto"]
 message FulfillResponse
@@ -686,24 +892,71 @@ message FulfillResponse
 package Some("warehouse.v2") imports []
 message Reservation
   sku string
+== ../sakai/tests/mutants/E204_outside_the_anticorruption_layer/proto/billing/report/v1/report.proto
+package Some("billing.report.v1") imports ["shop/ordering/v1/order.proto"]
+message MonthlyRow
+  status shop.ordering.v1.OrderStatus
 == ../sakai/tests/mutants/E204_腐敗防止層の外/proto/billing/report/v1/report.proto
 package Some("billing.report.v1") imports ["shop/ordering/v1/order.proto"]
 message MonthlyRow
   status shop.ordering.v1.OrderStatus
+== ../sakai/tests/mutants/E205_upstream_type_in_a_published_language/proto/shop/billing/v1/billing.proto
+package Some("shop.billing.v1") imports ["shop/ordering/v1/order.proto"]
+enum BillingStatus BILLING_STATUS_UNSPECIFIED=0 BILLING_STATUS_WAIT=1 BILLING_STATUS_BILL=2 BILLING_STATUS_SKIP=3
+message Invoice
+  order shop.ordering.v1.Order
 == ../sakai/tests/mutants/E205_公表された言語に上流の型/proto/shop/billing/v1/billing.proto
 package Some("shop.billing.v1") imports ["shop/ordering/v1/order.proto"]
 enum BillingStatus BILLING_STATUS_UNSPECIFIED=0 BILLING_STATUS_WAIT=1 BILLING_STATUS_BILL=2 BILLING_STATUS_SKIP=3
 message Invoice
   order shop.ordering.v1.Order
+== ../sakai/tests/mutants/E206_reference_to_a_separate_ways_partner/proto/audit/v1/record.proto
+package Some("audit.v1") imports ["quotes/v1/estimate.proto"]
+message Record
+  contract_id string
+  estimate quotes.v1.Estimate
 == ../sakai/tests/mutants/E206_別々の道の相手を参照/proto/audit/v1/record.proto
 package Some("audit.v1") imports ["quotes/v1/estimate.proto"]
 message Record
   contract_id string
   estimate quotes.v1.Estimate
+== ../sakai/tests/mutants/E308_copies_differ/proto/contracts/kernel/units.proto
+package Some("kernel") imports []
+message Days
+  count int64
 == ../sakai/tests/mutants/E308_写しの中身が違う/proto/contracts/kernel/units.proto
 package Some("kernel") imports []
 message Days
   count int64
+== ../sakai/tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto
+package Some("shop.ordering.v1") imports []
+enum OrderStatus ORDER_STATUS_UNSPECIFIED=0 ORDER_STATUS_RECEIVED=1 ORDER_STATUS_PAID=2 ORDER_STATUS_SHIPPED=3 ORDER_STATUS_CANCELLED=4 ORDER_STATUS_RETURNED=5
+message Order
+  id string
+  status OrderStatus
+  amount_jpy int64
+message GetOrderRequest
+  id string
+message GetOrderResponse
+  order Order
+== ../sakai/tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto
+package Some("warehouse.v1") imports []
+enum Stock STOCK_UNSPECIFIED=0 STOCK_SECURED=1 STOCK_SHORT=2
+enum PackingStatus PACKING_STATUS_UNSPECIFIED=0 PACKING_STATUS_WAITING=1 PACKING_STATUS_PACKED=2 PACKING_STATUS_SHORT=3 PACKING_STATUS_DAMAGED=4
+message ReserveRequest
+  sku string
+  quantity int32
+message ReserveResponse
+  sku string
+  stock Stock
+  id string optional
+message ReleaseRequest
+  id string
+message ReleaseResponse
+message GetPackingRequest
+  order_id string
+message GetPackingResponse
+  status PackingStatus
 == ../sakai/tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto
 package Some("warehouse.v1") imports []
 enum Stock STOCK_UNSPECIFIED=0 STOCK_SECURED=1 STOCK_SHORT=2
@@ -733,6 +986,9 @@ message GetOrderRequest
   id string
 message GetOrderResponse
   order Order
+== ../sakai/tests/mutants/W102_import_not_found/proto/shop/billing/v1/billing.proto
+package Some("shop.billing.v1") imports ["google/type/money.proto"]
+enum BillingStatus BILLING_STATUS_UNSPECIFIED=0 BILLING_STATUS_WAIT=1 BILLING_STATUS_BILL=2 BILLING_STATUS_SKIP=3
 == ../sakai/tests/mutants/W102_見つからない_import/proto/shop/billing/v1/billing.proto
 package Some("shop.billing.v1") imports ["google/type/money.proto"]
 enum BillingStatus BILLING_STATUS_UNSPECIFIED=0 BILLING_STATUS_WAIT=1 BILLING_STATUS_BILL=2 BILLING_STATUS_SKIP=3

@@ -1,0 +1,3 @@
+error[E304]: ctx/ordering.ctx:20:3: A conformist has no mapping and no `layer`
+    20 |   enum Stock -> stock_presence
+  = A conformist uses the upstream's model as it is; to map it, make the role anticorruption layer.

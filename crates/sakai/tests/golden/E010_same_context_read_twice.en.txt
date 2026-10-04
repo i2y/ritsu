@@ -1,0 +1,3 @@
+error[E010]: basic.ctx:8:13: The map reads ctx/ordering.ctx twice
+     8 | use context "ctx/ordering.ctx"
+  = `use context` names a file once.

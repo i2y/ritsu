@@ -1,0 +1,4 @@
+error[E303]: ctx/quotes.ctx:15:1: Quotes says it is Pricing's customer, and Pricing has no `downstream Quotes supplier`
+    15 | upstream Pricing customer
+  = Customer and supplier is an agreement of two teams, written in both files.
+  = The line, fixed: downstream Quotes supplier

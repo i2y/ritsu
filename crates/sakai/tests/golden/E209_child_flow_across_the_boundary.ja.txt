@@ -1,0 +1,6 @@
+エラー[E209]: ordering/fulfillment.flow:59:1: 「Ordering」の ordering/fulfillment.flow が、「Delivery」のワークフロー delivery/arrange_delivery.flow を子として走らせています
+    59 |   flow "../delivery/arrange_delivery.flow"
+  = 境界の向こうのワークフローを子として走らせてよいのは、二つがパートナーシップのとき、子のフローが二つの共有カーネルにあるとき、子のフローが「Delivery」の公開ホストサービスを `implements` で実装しているときです。そうでなければ、「Delivery」が公表したサービスを `connect` で呼びます。
+  関わるもの:
+      Ordering  ordering/fulfillment.flow:59              flow "../delivery/arrange_delivery.flow"
+      Delivery  dandori "delivery/arrange_delivery.flow"  「Delivery」の内側のもの

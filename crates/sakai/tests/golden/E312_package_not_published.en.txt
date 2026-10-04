@@ -1,0 +1,3 @@
+error[E312]: ctx/ordering.ctx:19:25: Inventory does not publish the package warehouse.v9
+    19 |   through warehouse.v1, warehouse.v9
+  = Inventory publishes warehouse.v1.

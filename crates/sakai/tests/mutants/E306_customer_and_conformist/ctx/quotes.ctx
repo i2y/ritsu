@@ -1,0 +1,22 @@
+context Quotes(quotes) v1
+description "Gives customers a quote with an expiry"
+owner "Sales team"
+
+owns
+  dir "../proto/quotes"
+
+published language quotes.v1
+  proto "../proto/quotes/v1/estimate.proto"
+
+terms
+  estimate "A forecast of the price, with an expiry, given to a customer"
+    means message Estimate
+
+upstream Pricing customer, conformist
+  through pricing.v1
+
+partnership with Notices
+
+# Contracts keeps a copy of the unit of days, too.
+shared kernel with Contracts
+  proto "../proto/quotes/kernel/units.proto"

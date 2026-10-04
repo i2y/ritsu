@@ -71,3 +71,66 @@ fn two_contexts_writing_one_entry() {
     assert_eq!(codes(&os), ["E102"]);
     assert_eq!(os[0].diags[0].extra.0.len(), 2);
 }
+
+// ── The English twins: the same checks on the English map ──
+
+#[test]
+fn the_deepest_entry_wins_in_english() {
+    // Ordering owns the whole repository; Inventory and Billing cut their directories out of it.
+    let dir = variant("basic", &[("ctx/ordering.ctx", "dir \"../proto/shop/ordering\", \"../proto/shop/common\", \"../py/ordering\"", "dir \"..\"")]);
+    let os = check_dir(dir.path());
+    assert_eq!(codes(&os), Vec::<&str>::new());
+    assert_eq!(owner_of(&os, "proto/warehouse/v1/stock.proto"), "Inventory");
+    assert_eq!(owner_of(&os, "proto/shop/billing/v1/billing.proto"), "Billing");
+    assert_eq!(owner_of(&os, "proto/shop/ordering/v1/order.proto"), "Ordering");
+    assert_eq!(owner_of(&os, "py/ordering/fulfill.py"), "Ordering");
+    // A file named is deeper than any directory.
+    let dir = variant("basic", &[("ctx/ordering.ctx", "dir \"../proto/shop/ordering\", \"../proto/shop/common\", \"../py/ordering\"", "dir \"../proto/shop/ordering\", \"../proto/shop/common\", \"../py/ordering\"\n  file \"../py/inventory/service.py\"")]);
+    let os = check_dir(dir.path());
+    assert_eq!(owner_of(&os, "py/inventory/service.py"), "Ordering");
+}
+
+#[test]
+fn what_the_scope_leaves_out_in_english() {
+    let dir = variant(
+        "basic",
+        &[
+            (".venv/lib/site.py", "", "x = 1\n"),
+            ("py/node_modules/left.py", "", "x = 1\n"),
+            ("py/ordering/__pycache__/fulfill.py", "", "x = 1\n"),
+            ("target/out.proto", "", "syntax = \"proto3\";\n"),
+            ("proto/google/protobuf/empty.proto", "", "syntax = \"proto3\";\npackage google.protobuf;\nmessage Empty {}\n"),
+            ("proto/buf/validate/validate.proto", "", "syntax = \"proto3\";\npackage buf.validate;\n"),
+            ("proto/dandori/v1/options.proto", "", "syntax = \"proto3\";\npackage dandori.v1;\n"),
+            ("tools/gen.py", "", "x = 1\n"),
+            ("basic.ctx", "covers \".\"\n", "covers \".\"\nexcept \"tools\"\n"),
+            ("notes/readme.txt", "", "not an artifact\n"),
+        ],
+    );
+    let os = check_dir(dir.path());
+    assert_eq!(codes(&os), Vec::<&str>::new());
+    assert_eq!(os[0].checked.as_ref().unwrap().artifacts.len(), 9);
+}
+
+#[test]
+fn files_no_context_owns_are_told_once_a_directory_in_english() {
+    let mut edits: Vec<(String, String)> = (1..=12).map(|i| (format!("py/scripts/s{i:02}.py"), "x = 1\n".to_string())).collect();
+    edits.push(("py/ordering/stray/one.proto".into(), "syntax = \"proto3\";\n".into()));
+    let e: Vec<(&str, &str, &str)> = edits.iter().map(|(p, b)| (p.as_str(), "", b.as_str())).collect();
+    let dir = variant("basic", &e);
+    let os = check_dir(dir.path());
+    assert_eq!(codes(&os), ["E101"], "{}", common::text(&os, ritsu_base::text::Lang::En));
+    let d = &os[0].diags[0];
+    assert_eq!(d.file, "py/scripts/");
+    assert!(d.message.en.contains("the 12 files"), "{}", d.message.en);
+    // The stray file is in Ordering's directory, so it is owned and nothing is said of it.
+    assert!(os[0].diags.iter().all(|d| !d.file.contains("stray")));
+}
+
+#[test]
+fn two_contexts_writing_one_entry_in_english() {
+    let dir = common::mutant("E102_two_own_at_the_same_depth");
+    let os = check_dir(dir.path());
+    assert_eq!(codes(&os), ["E102"]);
+    assert_eq!(os[0].diags[0].extra.0.len(), 2);
+}

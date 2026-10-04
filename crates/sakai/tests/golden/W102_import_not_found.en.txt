@@ -1,0 +1,5 @@
+warning[W102]: proto/shop/billing/v1/billing.proto:5:1: The import "google/type/money.proto" of proto/shop/billing/v1/billing.proto is not found; it is taken as outside the scope
+     5 | import "google/type/money.proto";
+  = Looked for at: proto/google/type/money.proto, proto/shop/billing/v1/google/type/money.proto
+  = The types of that file are not known, and are left out of the check of the references; the map's `proto root` says where imports are looked for.
+basic.ctx: ok — 3 contexts, 3 relationships; 9 artifacts, each in one context; 3 crossings checked (proto 3)

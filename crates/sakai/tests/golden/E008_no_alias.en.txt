@@ -1,0 +1,3 @@
+error[E008]: ctx/inventory.ctx:1:9: The context Inventory has no ASCII alias
+     1 | context Inventory v1
+  = Write it in parentheses right after the name: `Inventory(<alias>)`. An alias is of the form `[A-Za-z_][A-Za-z0-9_]*`, and names it in Context Mapper's CML and in the settings of the import linters.

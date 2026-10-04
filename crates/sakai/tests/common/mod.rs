@@ -67,10 +67,19 @@ pub fn golden(path: &str, got: &str) -> Option<String> {
     ritsu_testkit::golden::check(Path::new(path), got).err()
 }
 
-/// The base a mutant names: a map of `tests/maps/`, or the example (`examples/通販`).
+/// The base a mutant names: a map of `tests/maps/`, or an example (`examples/shop`, or
+/// `examples/shop.ja`). The example of Japanese names was `examples/通販` and is `examples/shop.ja`
+/// since the English one took its place; the files `base` of the Japanese mutants still say
+/// `examples/通販` (they are kept as they were), and this is where it is read as the new name.
 pub fn base_dir(base: &str) -> PathBuf {
     let base = base.trim();
-    if base.starts_with("examples/") { PathBuf::from(base) } else { Path::new("tests/maps").join(base) }
+    if let Some(rest) = base.strip_prefix("examples/通販") {
+        PathBuf::from(format!("examples/shop.ja{rest}"))
+    } else if base.starts_with("examples/") {
+        PathBuf::from(base)
+    } else {
+        Path::new("tests/maps").join(base)
+    }
 }
 
 /// The mutant `name` of `tests/mutants/` laid out in a temporary directory: its base fixture
@@ -157,8 +166,11 @@ pub fn skip(why: &str) {
     ritsu_testkit::skip(why);
 }
 
-/// The example of the repository.
-pub const EXAMPLE: &str = "examples/通販";
+/// The Japanese example of the repository (its twin, `EXAMPLE_EN`, is the English one).
+pub const EXAMPLE: &str = "examples/shop.ja";
+
+/// The English example of the repository: the same example, with its names in English.
+pub const EXAMPLE_EN: &str = "examples/shop";
 
 /// A program named by `RITSU_<TOOL>` or `SAKAI_<TOOL>`, else at `fallback` (relative to the
 /// repository), else on the PATH when `name probe…` runs (ritsu-testkit's).

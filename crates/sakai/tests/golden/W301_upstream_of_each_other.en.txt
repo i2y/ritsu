@@ -1,0 +1,7 @@
+warning[W301]: ctx/ordering.ctx:18:1: Following the upstreams comes back where it started: Ordering → Inventory → Ordering
+    18 | upstream Inventory conformist
+  = Contexts upstream of each other are each dragged along by the other's changes; consider one direction, or a partnership.
+  involved:
+      Ordering   ctx/ordering.ctx:18   upstream Inventory conformist
+      Inventory  ctx/inventory.ctx:18  upstream Ordering conformist
+basic.ctx: ok — 3 contexts, 4 relationships; 9 artifacts, each in one context; 3 crossings checked (proto 3)

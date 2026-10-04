@@ -1,0 +1,12 @@
+# A map of three contexts, ordering, inventory and billing, with only protos and Python code.
+map Basic(basic) v1
+description "Takes orders, holds stock, and decides whether to bill"
+
+use context "ctx/ordering.ctx"
+use context "ctx/inventory.ctx"
+use context "ctx/billing.ctx"
+
+covers "."
+proto root "proto"
+
+code python "py"

@@ -1,0 +1,13 @@
+error[E307]: contexts/delivery.ctx:40:1: The shared kernel is written on Delivery's side only
+    40 | shared kernel with Billing
+  = A shared kernel is held by two teams together; write `shared kernel with Delivery` in Billing's file too, with the same entries.
+  involved:
+      Delivery  contexts/delivery.ctx:40  shared kernel with Billing
+error[E201]: delivery/ship_date.cal:3:1: The file delivery/ship_date.cal of Delivery refers to calendars/tokyo_business_days.cal of Billing (use calendar), which Delivery has no relationship with
+     3 | use calendar "../calendars/tokyo_business_days.cal"
+  = Billing is downstream of Delivery, the other way round: an upstream relationship lets the downstream refer to the upstream.
+  = The shared kernel of the two is written on Delivery's side only (E307 is told too).
+  = A reference across the boundary needs a relationship: upstream and downstream (the downstream writes `upstream`), a partnership, or a shared kernel.
+  involved:
+      Delivery  delivery/ship_date.cal:3                    use calendar "../calendars/tokyo_business_days.cal"
+      Billing   koyomi "calendars/tokyo_business_days.cal"  a part of the inside of Billing

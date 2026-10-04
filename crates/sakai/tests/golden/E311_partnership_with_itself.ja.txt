@@ -1,0 +1,2 @@
+エラー[E311]: ctx/inventory.ctx:18:18: 自分自身との関係は書けません
+    18 | partnership with Inventory

@@ -1,0 +1,11 @@
+context Audit(audit) v1
+description "Keeps the record of contracts. It has nothing to do with quotes"
+owner "Audit team"
+
+owns
+  dir "../proto/audit"
+
+upstream Quotes conformist
+  through quotes.v1
+
+separate ways from Quotes

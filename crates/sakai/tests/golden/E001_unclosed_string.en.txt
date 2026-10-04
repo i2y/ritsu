@@ -1,0 +1,3 @@
+error[E001]: ctx/inventory.ctx:2:13: A string is not closed
+     2 | description "Keeps the counts on the warehouse shelves, holds stock for each line of an order, and answers how packing is going
+  = A string is closed with `"` on the same line.

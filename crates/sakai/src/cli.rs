@@ -81,7 +81,7 @@ pub fn commands() -> Vec<Cmd> {
                 (1, tr!("地図にエラーがある、書けない（E501）、違う（E502）", "the map has errors, the settings cannot be written (E501), or differ (E502)")),
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],
-            examples: vec!["sakai build examples/通販/通販.ctx --target import-linter", "sakai build examples/通販/通販.ctx --target go-arch-lint --check --lang ja"],
+            examples: vec!["sakai build examples/shop/shop.ctx --target import-linter", "sakai build examples/shop/shop.ctx --target go-arch-lint --check --lang ja"],
             codes: vec!["E501", "E502"],
         },
         Cmd {
@@ -99,7 +99,7 @@ pub fn commands() -> Vec<Cmd> {
                 (1, tr!("地図にエラーがある（診断は標準エラーに出す）", "the map has errors (the diagnostics go to standard error)")),
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],
-            examples: vec!["sakai export cml examples/通販/通販.ctx --out shop.cml"],
+            examples: vec!["sakai export cml examples/shop/shop.ctx --out shop.cml"],
             codes: vec![],
         },
         Cmd {

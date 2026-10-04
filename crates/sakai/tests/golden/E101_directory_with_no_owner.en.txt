@@ -1,0 +1,6 @@
+error[E101]: py/scripts/: No context owns the 3 files under it
+  = Write the directory or the file under the `owns` of a context; every artifact belongs to exactly one context.
+  involved:
+      file "py/scripts/backfill.py"
+      file "py/scripts/export.py"
+      file "py/scripts/report.py"

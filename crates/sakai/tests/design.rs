@@ -137,18 +137,25 @@ fn files_in(dir: &str, ext: &str) -> Vec<String> {
 }
 
 /// What chapters 7 and 8 show is cut from what was written: the settings (```ini, ```js, ```java,
-/// ```yaml) from the example's settings files, which `tests/build.rs` holds to what sakai writes;
+/// ```yaml) from the examples' settings files, which `tests/build.rs` holds to what sakai writes;
 /// the CML (```cml) from its golden files; the tools' output (```text) from
 /// `tests/golden/imports`, which `tests/imports.rs` holds to what the tools say.
 #[test]
 fn the_settings_cml_and_tool_output_design_shows_are_what_was_written() {
-    let ex = common::EXAMPLE;
-    let settings = read_all(&[
-        format!("{ex}/py/.importlinter"),
-        format!("{ex}/ts/.dependency-cruiser.cjs"),
-        format!("{ex}/java/src/test/java/SakaiContextsTest.java"),
-        format!("{ex}/go/.go-arch-lint.yml"),
-    ]);
+    // the settings of both examples, the one with English names and the one with Japanese names
+    let settings = read_all(
+        &[common::EXAMPLE, common::EXAMPLE_EN]
+            .iter()
+            .flat_map(|ex| {
+                [
+                    format!("{ex}/py/.importlinter"),
+                    format!("{ex}/ts/.dependency-cruiser.cjs"),
+                    format!("{ex}/java/src/test/java/SakaiContextsTest.java"),
+                    format!("{ex}/go/.go-arch-lint.yml"),
+                ]
+            })
+            .collect::<Vec<_>>(),
+    );
     let cml = read_all(&files_in("tests/golden/cml", ".cml"));
     let outputs = read_all(&files_in("tests/golden/imports", ".txt"));
     let mut n = 0;

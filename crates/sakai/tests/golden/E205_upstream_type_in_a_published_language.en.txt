@@ -1,0 +1,7 @@
+error[E205]: proto/shop/billing/v1/billing.proto:5:1: The published language shop.billing.v1 of Billing shows the upstream Ordering's types
+     5 | import "shop/ordering/v1/order.proto";
+  = The file proto/shop/billing/v1/billing.proto uses shop.ordering.v1.Order. Downstream of an anticorruption layer, the upstream's model stays out of the downstream's own published language; the layer maps it to the downstream's types.
+  involved:
+      Billing   proto/shop/billing/v1/billing.proto:5       import "shop/ordering/v1/order.proto"
+      Ordering  proto "proto/shop/ordering/v1/order.proto"  a file of the published language shop.ordering.v1
+      Billing   ctx/billing.ctx:14                          upstream Ordering anticorruption layer

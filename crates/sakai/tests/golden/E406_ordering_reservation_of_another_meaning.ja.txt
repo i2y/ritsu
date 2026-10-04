@@ -1,0 +1,11 @@
+エラー[E406]: contexts/ordering.ctx:22:3: 「Inventory」の「reservation」が、「Ordering」の違う意味の「reservation」とぶつかったまま、境界を越えています
+    22 |   reservation "Giving a line of a customer's order the day it will be delivered"
+  = 「Inventory」の「reservation」は「Holding shelf stock for one line of an order until it ships or is cancelled」で、proto "proto/warehouse/v1/stock.proto" message ReserveResponse を指します。
+  = 「Ordering」の「reservation」は「Giving a line of a customer's order the day it will be delivered」です。
+  = 「Ordering」は「Inventory」の順応者なので、対応を書いて読み替えることはできません。
+  = 直し方: 「Ordering」の語の名前を変える。同じ意味なら `reservation as Inventory.reservation` にする。読み替えるなら、`upstream Inventory` を anticorruption layer にして `term reservation -> <「Ordering」の語>` を書く。
+  関わるもの:
+      Ordering   proto/shop/ordering/v1/fulfillment.proto:16                     import "warehouse/v1/stock.proto"
+      Inventory  proto "proto/warehouse/v1/stock.proto" message ReserveResponse  「Inventory」の語「reservation」が指すもの
+      Inventory  contexts/inventory.ctx:19                                       reservation "Holding shelf stock for one line of an order until it ships or is cancelled"
+      Ordering   contexts/ordering.ctx:22                                        reservation "Giving a line of a customer's order the day it will be delivered"

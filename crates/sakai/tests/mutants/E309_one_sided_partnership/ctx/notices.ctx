@@ -1,0 +1,6 @@
+context Notices(notices) v1
+description "Tells the customers whose quote is about to expire"
+owner "Sales team"
+
+owns
+  dir "../proto/notices"

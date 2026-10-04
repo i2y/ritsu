@@ -1,0 +1,3 @@
+error[E501]: basic.ctx:2:1: The map has no `code go` line
+     2 | map Basic(basic) v1
+  = Write where the code of the language is with `code go "<path>"`; the settings are for the code under it.

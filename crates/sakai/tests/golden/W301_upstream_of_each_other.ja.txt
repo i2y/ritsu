@@ -1,0 +1,7 @@
+警告[W301]: ctx/ordering.ctx:18:1: 上流をたどると、元のコンテキストに戻ります: Ordering → Inventory → Ordering
+    18 | upstream Inventory conformist
+  = 互いに上流のコンテキストは、どちらも相手の変更に引きずられます。向きを一つにそろえるか、パートナーシップにすることを考えます。
+  関わるもの:
+      Ordering   ctx/ordering.ctx:18   upstream Inventory conformist
+      Inventory  ctx/inventory.ctx:18  upstream Ordering conformist
+basic.ctx: ok — コンテキスト 3、関係 4。成果物 9 件は、どれも一つのコンテキストに属する。境界を越える参照 3 件を確かめた（proto 3）

@@ -1,0 +1,20 @@
+rule billing_need v1
+description "From the status of an order in ordering, whether to bill it, to wait, or not to bill"
+
+import proto "../../proto/shop/ordering/v1/order.proto" OrderStatus -> order_status
+enum order_status = received | paid | shipped | cancelled_in_ordering(cancelled)
+enum handling = wait | bill | skip
+
+inputs
+  status : order_status
+
+outputs
+  handling : handling
+
+table handling_table
+policy unique
+| status                | -> handling : handling |
+| received              | wait                   |
+| paid                  | bill                   |
+| shipped               | bill                   |
+| cancelled_in_ordering | skip                   |

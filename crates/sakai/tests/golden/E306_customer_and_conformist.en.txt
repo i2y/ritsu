@@ -1,0 +1,3 @@
+error[E306]: ctx/quotes.ctx:15:18: Conformist and customer cannot go together
+    15 | upstream Pricing customer, conformist
+  = A conformist takes the upstream's model as it is; that rules out a customer, who can move the upstream, and a layer that maps the upstream's model.

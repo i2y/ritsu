@@ -1,0 +1,20 @@
+context Contracts(contracts) v1
+description "Signs contracts with customers and keeps the class of each contract"
+owner "Contracts team"
+
+owns
+  dir "../proto/contracts"
+
+published language contracts.v1
+  proto "../proto/contracts/v1/contract.proto"
+
+terms
+  contract_class "How pricing treats a contract, as each contract decides"
+    means enum ContractClass
+
+upstream Pricing customer, anticorruption layer
+  through pricing.v1
+  layer dir "../proto/contracts/acl"
+
+shared kernel with Quotes
+  proto "../proto/contracts/kernel/units.proto"

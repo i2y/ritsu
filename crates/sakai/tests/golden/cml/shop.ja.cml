@@ -1,0 +1,63 @@
+/* `sakai export cml --lang ja` が shop.ctx から書いた。直すときは .ctx を直して書き直す。 */
+ContextMap shop {
+  type = SYSTEM_LANDSCAPE
+  state = AS_IS
+  contains ordering, inventory, delivery, billing, reviews
+
+  // 「Ordering」は「Inventory」に順応する
+  ordering [D,CF]<-[U,OHS,PL] inventory {
+    implementationTechnology = "Connect: warehouse.v1.StockService, warehouse.v1.PackingService"
+  }
+
+  // 「Ordering」と「Delivery」のパートナーシップ
+  ordering [P]<->[P] delivery
+
+  // 「Delivery」は「Inventory」のモデルを腐敗防止層で読み替える
+  delivery [D,ACL]<-[U,OHS,PL] inventory {
+    implementationTechnology = "Connect: warehouse.v1.StockService, warehouse.v1.PackingService"
+  }
+
+  // 「Delivery」と「Billing」の共有カーネル
+  delivery [SK]<->[SK] billing
+
+  // 「Billing」は「Ordering」のモデルを腐敗防止層で読み替える
+  billing [D,ACL]<-[U,OHS,PL] ordering {
+    implementationTechnology = "Connect: shop.ordering.v1.OrderService, shop.ordering.v1.FulfillmentService"
+  }
+
+  // 「Billing」は「Delivery」の顧客で、「Delivery」はそれを供給者として引き受ける
+  billing [D,C]<-[U,S,PL] delivery {
+    implementationTechnology = "Connect: shop.delivery.v1.DeliveryService"
+  }
+
+  // 「Reviews」(reviews) と「Billing」(billing) は別々の道（CML には書く形が無い）
+}
+
+// 「Ordering」(ordering)。持ち主: Ordering team
+BoundedContext ordering {
+  domainVisionStatement = "Takes orders, holds stock for them, hands them to delivery, and sees them through to arrival"
+  responsibilities = "order", "cancel"
+}
+
+// 「Inventory」(inventory)。持ち主: Warehouse team
+BoundedContext inventory {
+  domainVisionStatement = "Keeps the counts on the warehouse shelves, holds stock for each line of an order, and answers how packing is going"
+  responsibilities = "reservation", "out_of_stock", "packing_status"
+}
+
+// 「Delivery」(delivery)。持ち主: Delivery team
+BoundedContext delivery {
+  domainVisionStatement = "Decides the day to ship, chooses how to carry, and arranges delivery of the parcel"
+  responsibilities = "shipment", "fragile", "urgent"
+}
+
+// 「Billing」(billing)。持ち主: Accounting team
+BoundedContext billing {
+  domainVisionStatement = "Decides whether to bill an order, works out the fee and the shipping charge, and sets the day payment is due"
+  responsibilities = "fee", "cancel"
+}
+
+// 「Reviews」(reviews)。持ち主: Ordering team
+BoundedContext reviews {
+  domainVisionStatement = "Collects what buyers think and shows it. It has nothing to do with billing"
+}

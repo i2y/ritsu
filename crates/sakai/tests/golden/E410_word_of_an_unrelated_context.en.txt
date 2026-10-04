@@ -1,0 +1,3 @@
+error[E410]: ctx/billing.ctx:13:18: Billing has no relationship with Inventory, so the term reservation cannot be taken with `as`
+    13 |   reservation as Inventory.reservation
+  = `as` takes a term, with its meaning, from a context there is a relationship with.

@@ -1,0 +1,6 @@
+error[E202]: ordering/fulfillment.flow:6:1: The file ordering/fulfillment.flow of Ordering refers to delivery/rules/urgency.rule (use rule), which is inside Delivery
+     6 | use rule urgency from "../delivery/rules/urgency.rule"
+  = A rule bundled, or called as a Lambda function, is the rule itself, inside Delivery; a rule across the boundary is called as its Connect service, with `use rule … connect`, once Delivery puts it in a published language (`published language rulec.…`).
+  involved:
+      Ordering  ordering/fulfillment.flow:6          use rule "../delivery/rules/urgency.rule"
+      Delivery  rulec "delivery/rules/urgency.rule"  a part of the inside of Delivery

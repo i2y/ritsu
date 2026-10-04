@@ -1,0 +1,4 @@
+warning[W401]: ctx/inventory.ctx:17:3: The term shelf crosses no boundary
+    17 |   shelf "A place in the warehouse where goods are put"
+  = A glossary holds only the words that cross a boundary: a term that `means` an element of the context's published language, takes another's with `as`, is what an anticorruption layer maps to, or meets a word of the same name crossing from upstream.
+basic.ctx: ok — 3 contexts, 3 relationships; 9 artifacts, each in one context; 3 crossings checked (proto 3)

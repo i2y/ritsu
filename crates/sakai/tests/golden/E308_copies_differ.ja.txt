@@ -1,0 +1,7 @@
+エラー[E308]: ctx/contracts.ctx:23:1: 「Quotes」と「Contracts」の共有カーネルの写しの中身が違います
+    23 | shared kernel with Quotes
+  = 「Quotes」の proto "proto/quotes/kernel/units.proto" と同じ中身の写しが、「Contracts」の側にありません（「Contracts」の側は proto "proto/contracts/kernel/units.proto"）。
+  = 写しを両側に置くときは、中身を同じに保ちます。
+  関わるもの:
+      Quotes     ctx/quotes.ctx:21     shared kernel with Contracts
+      Contracts  ctx/contracts.ctx:23  shared kernel with Quotes

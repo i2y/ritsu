@@ -1,0 +1,1 @@
+build basic.ctx --target go-arch-lint

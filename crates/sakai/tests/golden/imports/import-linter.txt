@@ -1,15 +1,30 @@
-== examples/通販 1_在庫の内側
+== examples/shop.ja 1_在庫の内側
 Illegal imports of protected package inventory:
 - ordering.bad_internals -> inventory.ledger (l.2)
-== examples/通販 2_層の外から受注の公表された言語
+== examples/shop.ja 2_層の外から受注の公表された言語
 Illegal imports of protected package shop.ordering.v1:
 - billing.bad_outside_layer -> shop.ordering.v1.order_pb2 (l.2)
-== examples/通販 3_共有カーネルを外から
+== examples/shop.ja 3_共有カーネルを外から
 Illegal imports of protected package calendars:
 - ordering.bad_kernel -> calendars.tokyo (l.2)
-== examples/通販 4_別々の道の相手
+== examples/shop.ja 4_別々の道の相手
 Illegal imports of protected package billing.invoice:
 - reviews.bad_separate -> billing.invoice (l.2)
 == tests/maps/入れ子 1_生成したコードを囲む内側
+Illegal imports of protected package warehouse.ledger:
+- ordering.bad -> warehouse.ledger (l.2)
+== examples/shop 1_inside_of_inventory
+Illegal imports of protected package inventory:
+- ordering.bad_internals -> inventory.ledger (l.2)
+== examples/shop 2_outside_the_layer_ordering_published_language
+Illegal imports of protected package shop.ordering.v1:
+- billing.bad_outside_layer -> shop.ordering.v1.order_pb2 (l.2)
+== examples/shop 3_shared_kernel_from_outside
+Illegal imports of protected package calendars:
+- ordering.bad_kernel -> calendars.tokyo (l.2)
+== examples/shop 4_separate_ways_partner
+Illegal imports of protected package billing.invoice:
+- reviews.bad_separate -> billing.invoice (l.2)
+== tests/maps/nested 1_inside_around_generated_code
 Illegal imports of protected package warehouse.ledger:
 - ordering.bad -> warehouse.ledger (l.2)

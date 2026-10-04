@@ -1,0 +1,4 @@
+basic.ctx: ok — コンテキスト 3、関係 3。成果物 9 件は、どれも一つのコンテキストに属する。境界を越える参照 3 件を確かめた（proto 3）
+警告[W103]: ctx/shipping.ctx:1:1: ctx/shipping.ctx を読む地図がありません
+     1 | context Shipping(shipping) v1
+  = 地図の `use context` に足すか、ファイルを消します。どの地図にも読まれないコンテキストは、検査されません。

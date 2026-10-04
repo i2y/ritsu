@@ -730,7 +730,7 @@ tests/flows/protos/shipping.proto sees
   ShippingService.Ship: shipping.v1.ShipRequest (tests/flows/protos/shipping.proto) -> shipping.v1.ShipResponse (tests/flows/protos/shipping.proto)
   ShippingService.AnswerPacking: shipping.v1.AnswerPackingRequest (tests/flows/protos/shipping.proto) -> shipping.v1.AnswerPackingResponse (tests/flows/protos/shipping.proto)
 #### ../sakai
-== examples/通販/proto/dandori/v1/options.proto
+== examples/shop/proto/dandori/v1/options.proto
 syntax proto3
 package dandori.v1
 import google/protobuf/descriptor.proto 36:1 public=false weak=false
@@ -749,7 +749,7 @@ message Status 69
   field at 1 Optional Scalar("int32") json=None oneof=None line=71
   field cases 2 None Map("string", Named("google.protobuf.Value")) json=None oneof=None line=73
   field events 3 Repeated Scalar("string") json=None oneof=None line=75
-== examples/通販/proto/shop/delivery/v1/shipment.proto
+== examples/shop/proto/shop/delivery/v1/shipment.proto
 syntax proto3
 package shop.delivery.v1
 import buf/validate/validate.proto 6:1 public=false weak=false
@@ -771,7 +771,131 @@ enum Handling 30
   value HANDLING_FRAGILE 1 32
 service DeliveryService 8
   method CreateShipment CreateShipmentRequest CreateShipmentResponse false false 9
-== examples/通販/proto/shop/ordering/v1/fulfillment.proto
+== examples/shop/proto/shop/ordering/v1/fulfillment.proto
+syntax proto3
+package shop.ordering.v1
+import dandori/v1/options.proto 14:1 public=false weak=false
+import google/protobuf/struct.proto 15:1 public=false weak=false
+import warehouse/v1/stock.proto 16:1 public=false weak=false
+message FulfillRequest 32
+  field order 1 None Named("FulfillmentOrder") json=None oneof=None line=33
+message FulfillmentOrder 36
+  field id 1 None Scalar("string") json=None oneof=None line=37
+  field member 2 None Scalar("bool") json=None oneof=None line=38
+  field amount 3 None Scalar("int32") json=None oneof=None line=40
+  field lines 4 Repeated Named("Line") json=None oneof=None line=41
+  field gift 5 None Named("Gift") json=None oneof=None line=42
+  field extra 6 None Named("google.protobuf.Value") json=None oneof=None line=44
+message Line 47
+  field sku 1 None Scalar("string") json=None oneof=None line=48
+  field quantity 2 None Scalar("int32") json=None oneof=None line=49
+message Gift 52
+  field recipient 1 None Scalar("string") json=None oneof=None line=53
+  field message 2 Optional Scalar("string") json=None oneof=None line=54
+message FulfillResponse 57
+  field reservations 1 Repeated Named("warehouse.v1.ReserveResponse") json=None oneof=None line=58
+  field tracking_number 2 None Scalar("string") json=Some("tracking_number") oneof=None line=59
+message AnswerPackingRequest 62
+  field boxes 1 None Scalar("int32") json=None oneof=None line=63
+message AnswerPackingResponse 66
+service FulfillmentService 18
+  option (dandori.v1.workflow) = {name: "fulfillment", version: 1}
+  method Fulfill FulfillRequest FulfillResponse false false 22
+    option (dandori.v1.start) = {fails: ["OutOfStock", "DeliveryFailed", "PackingLate"]}
+  method AnswerPacking AnswerPackingRequest AnswerPackingResponse false false 27
+    option (dandori.v1.answer) = {task: "wait_for_packing"}
+== examples/shop/proto/shop/ordering/v1/order.proto
+syntax proto3
+package shop.ordering.v1
+message Order 18
+  field id 1 None Scalar("string") json=None oneof=None line=19
+  field status 2 None Named("OrderStatus") json=None oneof=None line=20
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=21
+message GetOrderRequest 24
+  field id 1 None Scalar("string") json=None oneof=None line=25
+message GetOrderResponse 28
+  field order 1 None Named("Order") json=None oneof=None line=29
+enum OrderStatus 10
+  value ORDER_STATUS_UNSPECIFIED 0 11
+  value ORDER_STATUS_RECEIVED 1 12
+  value ORDER_STATUS_PAID 2 13
+  value ORDER_STATUS_SHIPPED 3 14
+  value ORDER_STATUS_CANCELLED 4 15
+service OrderService 6
+  method GetOrder GetOrderRequest GetOrderResponse false false 7
+== examples/shop/proto/warehouse/v1/stock.proto
+syntax proto3
+package warehouse.v1
+message ReserveRequest 15
+  field sku 1 None Scalar("string") json=None oneof=None line=16
+  field quantity 2 None Scalar("int32") json=None oneof=None line=17
+message ReserveResponse 26
+  field sku 1 None Scalar("string") json=None oneof=None line=27
+  field stock 2 None Named("Stock") json=None oneof=None line=28
+  field id 3 Optional Scalar("string") json=None oneof=None line=29
+message ReleaseRequest 32
+  field id 1 None Scalar("string") json=None oneof=None line=33
+message ReleaseResponse 36
+message GetPackingRequest 45
+  field order_id 1 None Scalar("string") json=None oneof=None line=46
+message GetPackingResponse 49
+  field status 1 None Named("PackingStatus") json=None oneof=None line=50
+enum Stock 20
+  value STOCK_UNSPECIFIED 0 21
+  value STOCK_SECURED 1 22
+  value STOCK_SHORT 2 23
+enum PackingStatus 38
+  value PACKING_STATUS_UNSPECIFIED 0 39
+  value PACKING_STATUS_WAITING 1 40
+  value PACKING_STATUS_PACKED 2 41
+  value PACKING_STATUS_SHORT 3 42
+service StockService 6
+  method Reserve ReserveRequest ReserveResponse false false 7
+  method Release ReleaseRequest ReleaseResponse false false 8
+service PackingService 11
+  method GetPacking GetPackingRequest GetPackingResponse false false 12
+== examples/shop.ja/proto/dandori/v1/options.proto
+syntax proto3
+package dandori.v1
+import google/protobuf/descriptor.proto 36:1 public=false weak=false
+import google/protobuf/struct.proto 37:1 public=false weak=false
+message WorkflowOptions 40
+  field name 1 None Scalar("string") json=None oneof=None line=42
+  field version 2 None Scalar("uint32") json=None oneof=None line=44
+message StartOptions 48
+  field fails 1 Repeated Scalar("string") json=None oneof=None line=50
+message EventOptions 54
+  field task 1 None Scalar("string") json=None oneof=None line=56
+message AnswerOptions 60
+  field task 1 None Scalar("string") json=None oneof=None line=62
+message StatusOptions 66
+message Status 69
+  field at 1 Optional Scalar("int32") json=None oneof=None line=71
+  field cases 2 None Map("string", Named("google.protobuf.Value")) json=None oneof=None line=73
+  field events 3 Repeated Scalar("string") json=None oneof=None line=75
+== examples/shop.ja/proto/shop/delivery/v1/shipment.proto
+syntax proto3
+package shop.delivery.v1
+import buf/validate/validate.proto 6:1 public=false weak=false
+message CreateShipmentRequest 13
+  field destination 1 None Named("Destination") json=None oneof=None line=14
+  field parcels 2 Repeated Named("Parcel") json=None oneof=None line=15
+  field declared_value_jpy 3 None Scalar("int64") json=None oneof=None line=16
+  field delivery_window 4 Optional Scalar("string") json=None oneof=None line=17
+message Destination 20
+  field region 1 None Scalar("string") json=None oneof=None line=21
+  field postcode 2 None Scalar("string") json=None oneof=None line=22
+message Parcel 25
+  field weight_g 1 None Scalar("int64") json=None oneof=None line=26
+  field handling 2 None Named("Handling") json=None oneof=None line=27
+message CreateShipmentResponse 35
+  field tracking_number 1 None Scalar("string") json=None oneof=None line=36
+enum Handling 30
+  value HANDLING_STANDARD 0 31
+  value HANDLING_FRAGILE 1 32
+service DeliveryService 8
+  method CreateShipment CreateShipmentRequest CreateShipmentResponse false false 9
+== examples/shop.ja/proto/shop/ordering/v1/fulfillment.proto
 syntax proto3
 package shop.ordering.v1
 import dandori/v1/options.proto 13:1 public=false weak=false
@@ -804,7 +928,7 @@ service FulfillmentService 17
     option (dandori.v1.start) = {fails: ["在庫不足", "配送の手配の失敗", "梱包の遅れ"]}
   method AnswerPacking AnswerPackingRequest AnswerPackingResponse false false 26
     option (dandori.v1.answer) = {task: "梱包を待つ"}
-== examples/通販/proto/shop/ordering/v1/order.proto
+== examples/shop.ja/proto/shop/ordering/v1/order.proto
 syntax proto3
 package shop.ordering.v1
 message Order 18
@@ -823,7 +947,7 @@ enum OrderStatus 10
   value ORDER_STATUS_CANCELLED 4 15
 service OrderService 6
   method GetOrder GetOrderRequest GetOrderResponse false false 7
-== examples/通販/proto/warehouse/v1/stock.proto
+== examples/shop.ja/proto/warehouse/v1/stock.proto
 syntax proto3
 package warehouse.v1
 message ReserveRequest 15
@@ -998,6 +1122,149 @@ enum Stock 23
 service StockService 7
   method Reserve ReserveRequest ReserveResponse false false 10
   method Release ReleaseRequest ReleaseResponse false false 12
+== tests/maps/basic/proto/billing/acl/v1/order_view.proto
+syntax proto3
+package billing.acl.v1
+import shop/ordering/v1/order.proto 5:1 public=false weak=false
+message OrderView 8
+  field status 1 None Named("shop.ordering.v1.OrderStatus") json=None oneof=None line=9
+== tests/maps/basic/proto/shop/billing/v1/billing.proto
+syntax proto3
+package shop.billing.v1
+enum BillingStatus 6
+  value BILLING_STATUS_UNSPECIFIED 0 7
+  value BILLING_STATUS_WAIT 1 8
+  value BILLING_STATUS_BILL 2 9
+  value BILLING_STATUS_SKIP 3 10
+== tests/maps/basic/proto/shop/common/v1/money.proto
+syntax proto3
+package shop.common.v1
+message Money 6
+  field amount_jpy 1 None Scalar("int64") json=None oneof=None line=7
+== tests/maps/basic/proto/shop/ordering/v1/fulfillment_lite.proto
+syntax proto3
+package shop.ordering.v1
+import warehouse/v1/stock.proto 5:1 public=false weak=false
+message FulfillResponse 8
+  field reservations 1 Repeated Named("warehouse.v1.ReserveResponse") json=None oneof=None line=9
+== tests/maps/basic/proto/shop/ordering/v1/order.proto
+syntax proto3
+package shop.ordering.v1
+message Order 18
+  field id 1 None Scalar("string") json=None oneof=None line=19
+  field status 2 None Named("OrderStatus") json=None oneof=None line=20
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=21
+message GetOrderRequest 24
+  field id 1 None Scalar("string") json=None oneof=None line=25
+message GetOrderResponse 28
+  field order 1 None Named("Order") json=None oneof=None line=29
+enum OrderStatus 10
+  value ORDER_STATUS_UNSPECIFIED 0 11
+  value ORDER_STATUS_RECEIVED 1 12
+  value ORDER_STATUS_PAID 2 13
+  value ORDER_STATUS_SHIPPED 3 14
+  value ORDER_STATUS_CANCELLED 4 15
+service OrderService 6
+  method GetOrder GetOrderRequest GetOrderResponse false false 7
+== tests/maps/basic/proto/warehouse/v1/stock.proto
+syntax proto3
+package warehouse.v1
+import shop/common/v1/money.proto 5:1 public=false weak=false
+message ReserveRequest 17
+  field sku 1 None Scalar("string") json=None oneof=None line=18
+  field quantity 2 None Scalar("int32") json=None oneof=None line=19
+message ReserveResponse 28
+  field sku 1 None Scalar("string") json=None oneof=None line=29
+  field stock 2 None Named("Stock") json=None oneof=None line=30
+  field id 3 Optional Scalar("string") json=None oneof=None line=31
+  field price 4 None Named("shop.common.v1.Money") json=None oneof=None line=32
+message ReleaseRequest 35
+  field id 1 None Scalar("string") json=None oneof=None line=36
+message ReleaseResponse 39
+message GetPackingRequest 48
+  field order_id 1 None Scalar("string") json=None oneof=None line=49
+message GetPackingResponse 52
+  field status 1 None Named("PackingStatus") json=None oneof=None line=53
+enum Stock 22
+  value STOCK_UNSPECIFIED 0 23
+  value STOCK_SECURED 1 24
+  value STOCK_SHORT 2 25
+enum PackingStatus 41
+  value PACKING_STATUS_UNSPECIFIED 0 42
+  value PACKING_STATUS_WAITING 1 43
+  value PACKING_STATUS_PACKED 2 44
+  value PACKING_STATUS_SHORT 3 45
+service StockService 8
+  method Reserve ReserveRequest ReserveResponse false false 9
+  method Release ReleaseRequest ReleaseResponse false false 10
+service PackingService 13
+  method GetPacking GetPackingRequest GetPackingResponse false false 14
+== tests/maps/nested/proto/warehouse/v1/stock.proto
+syntax proto3
+package warehouse.v1
+message Stock 5
+  field count 1 None Scalar("int32") json=None oneof=None line=6
+== tests/maps/patterns/proto/audit/v1/record.proto
+syntax proto3
+package audit.v1
+message Record 6
+  field contract_id 1 None Scalar("string") json=None oneof=None line=7
+== tests/maps/patterns/proto/contracts/acl/v1/plan_view.proto
+syntax proto3
+package contracts.acl.v1
+import pricing/v1/price.proto 5:1 public=false weak=false
+message PlanView 8
+  field plan 1 None Named("pricing.v1.Plan") json=None oneof=None line=9
+== tests/maps/patterns/proto/contracts/kernel/units.proto
+syntax proto3
+package kernel
+message Days 6
+  field count 1 None Scalar("int32") json=None oneof=None line=7
+== tests/maps/patterns/proto/contracts/v1/contract.proto
+syntax proto3
+package contracts.v1
+import contracts/kernel/units.proto 5:1 public=false weak=false
+message Contract 14
+  field class 1 None Named("ContractClass") json=None oneof=None line=15
+  field term 2 None Named("kernel.Days") json=None oneof=None line=16
+enum ContractClass 8
+  value CONTRACT_CLASS_UNSPECIFIED 0 9
+  value CONTRACT_CLASS_STANDARD 1 10
+  value CONTRACT_CLASS_PREMIUM 2 11
+== tests/maps/patterns/proto/notices/v1/notice.proto
+syntax proto3
+package notices.v1
+import quotes/v1/estimate.proto 5:1 public=false weak=false
+message Notice 8
+  field estimate 1 None Named("quotes.v1.Estimate") json=None oneof=None line=9
+== tests/maps/patterns/proto/pricing/v1/price.proto
+syntax proto3
+package pricing.v1
+message Quote 13
+  field plan 1 None Named("Plan") json=None oneof=None line=14
+  field monthly_jpy 2 None Scalar("int64") json=None oneof=None line=15
+message QuoteRequest 18
+  field plan 1 None Named("Plan") json=None oneof=None line=19
+enum Plan 6
+  value PLAN_UNSPECIFIED 0 7
+  value PLAN_FREE 1 8
+  value PLAN_BASIC 2 9
+  value PLAN_PRO 3 10
+service PricingService 22
+  method GetQuote QuoteRequest Quote false false 23
+== tests/maps/patterns/proto/quotes/kernel/units.proto
+syntax proto3
+package kernel
+message Days 6
+  field count 1 None Scalar("int32") json=None oneof=None line=7
+== tests/maps/patterns/proto/quotes/v1/estimate.proto
+syntax proto3
+package quotes.v1
+import pricing/v1/price.proto 5:1 public=false weak=false
+import quotes/kernel/units.proto 6:1 public=false weak=false
+message Estimate 9
+  field quote 1 None Named("pricing.v1.Quote") json=None oneof=None line=10
+  field valid_for 2 None Named("kernel.Days") json=None oneof=None line=11
 == tests/maps/パターン/proto/audit/v1/record.proto
 syntax proto3
 package audit.v1
@@ -1141,6 +1408,26 @@ service StockService 8
   method Release ReleaseRequest ReleaseResponse false false 10
 service PackingService 13
   method GetPacking GetPackingRequest GetPackingResponse false false 14
+== tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.proto
+syntax proto3
+package shop.ordering.v1
+message Order 19
+  field id 1 None Scalar("string") json=None oneof=None line=20
+  field status 2 None Named("OrderStatus") json=None oneof=None line=21
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=22
+message GetOrderRequest 25
+  field id 1 None Scalar("string") json=None oneof=None line=26
+message GetOrderResponse 29
+  field order 1 None Named("Order") json=None oneof=None line=30
+enum OrderStatus 10
+  value ORDER_STATUS_UNSPECIFIED 0 11
+  value ORDER_STATUS_RECEIVED 1 12
+  value ORDER_STATUS_PAID 2 13
+  value ORDER_STATUS_SHIPPED 3 14
+  value ORDER_STATUS_CANCELLED 4 15
+  value ORDER_STATUS_RETURNED 5 16
+service OrderService 6
+  method GetOrder GetOrderRequest GetOrderResponse false false 7
 == tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto
 syntax proto3
 package shop.ordering.v1
@@ -1161,8 +1448,21 @@ enum OrderStatus 10
   value ORDER_STATUS_RETURNED 5 16
 service OrderService 6
   method GetOrder GetOrderRequest GetOrderResponse false false 7
+== tests/mutants/E106_unreadable_proto/proto/shop/billing/v1/billing.proto
+error 11:1 `;` is expected where `}` is | `;` が要るところに `}` があります
 == tests/mutants/E106_読めない_proto/proto/shop/billing/v1/billing.proto
 error 11:1 `;` is expected where `}` is | `;` が要るところに `}` があります
+== tests/mutants/E201_reference_to_an_unrelated_inventory/proto/shop/billing/v1/billing.proto
+syntax proto3
+package shop.billing.v1
+import warehouse/v1/stock.proto 5:1 public=false weak=false
+message StockSeen 7
+  field stock 1 None Named("warehouse.v1.Stock") json=None oneof=None line=8
+enum BillingStatus 12
+  value BILLING_STATUS_UNSPECIFIED 0 13
+  value BILLING_STATUS_WAIT 1 14
+  value BILLING_STATUS_BILL 2 15
+  value BILLING_STATUS_SKIP 3 16
 == tests/mutants/E201_関係の無い在庫を参照/proto/shop/billing/v1/billing.proto
 syntax proto3
 package shop.billing.v1
@@ -1174,6 +1474,20 @@ enum BillingStatus 12
   value BILLING_STATUS_WAIT 1 14
   value BILLING_STATUS_BILL 2 15
   value BILLING_STATUS_SKIP 3 16
+== tests/mutants/E202_inside_of_inventory_referred_to/proto/shop/ordering/v1/fulfillment_lite.proto
+syntax proto3
+package shop.ordering.v1
+import warehouse/v1/stock.proto 5:1 public=false weak=false
+import warehouse/internal/v1/ledger.proto 6:1 public=false weak=false
+message FulfillResponse 9
+  field reservations 1 Repeated Named("warehouse.v1.ReserveResponse") json=None oneof=None line=10
+  field shelves 2 Repeated Named("warehouse.internal.v1.Shelf") json=None oneof=None line=11
+== tests/mutants/E202_inside_of_inventory_referred_to/proto/warehouse/internal/v1/ledger.proto
+syntax proto3
+package warehouse.internal.v1
+message Shelf 6
+  field sku 1 None Scalar("string") json=None oneof=None line=7
+  field count 2 None Scalar("int32") json=None oneof=None line=8
 == tests/mutants/E202_在庫の内側を参照/proto/shop/ordering/v1/fulfillment_lite.proto
 syntax proto3
 package shop.ordering.v1
@@ -1188,6 +1502,19 @@ package warehouse.internal.v1
 message Shelf 6
   field sku 1 None Scalar("string") json=None oneof=None line=7
   field count 2 None Scalar("int32") json=None oneof=None line=8
+== tests/mutants/E203_package_not_in_through/proto/shop/ordering/v1/fulfillment_lite.proto
+syntax proto3
+package shop.ordering.v1
+import warehouse/v1/stock.proto 5:1 public=false weak=false
+import warehouse/v2/stock.proto 6:1 public=false weak=false
+message FulfillResponse 9
+  field reservations 1 Repeated Named("warehouse.v1.ReserveResponse") json=None oneof=None line=10
+  field reservations_v2 2 Repeated Named("warehouse.v2.Reservation") json=None oneof=None line=11
+== tests/mutants/E203_package_not_in_through/proto/warehouse/v2/stock.proto
+syntax proto3
+package warehouse.v2
+message Reservation 5
+  field sku 1 None Scalar("string") json=None oneof=None line=6
 == tests/mutants/E203_through_に無い_package/proto/shop/ordering/v1/fulfillment_lite.proto
 syntax proto3
 package shop.ordering.v1
@@ -1201,12 +1528,29 @@ syntax proto3
 package warehouse.v2
 message Reservation 5
   field sku 1 None Scalar("string") json=None oneof=None line=6
+== tests/mutants/E204_outside_the_anticorruption_layer/proto/billing/report/v1/report.proto
+syntax proto3
+package billing.report.v1
+import shop/ordering/v1/order.proto 5:1 public=false weak=false
+message MonthlyRow 8
+  field status 1 None Named("shop.ordering.v1.OrderStatus") json=None oneof=None line=9
 == tests/mutants/E204_腐敗防止層の外/proto/billing/report/v1/report.proto
 syntax proto3
 package billing.report.v1
 import shop/ordering/v1/order.proto 5:1 public=false weak=false
 message MonthlyRow 8
   field status 1 None Named("shop.ordering.v1.OrderStatus") json=None oneof=None line=9
+== tests/mutants/E205_upstream_type_in_a_published_language/proto/shop/billing/v1/billing.proto
+syntax proto3
+package shop.billing.v1
+import shop/ordering/v1/order.proto 5:1 public=false weak=false
+message Invoice 7
+  field order 1 None Named("shop.ordering.v1.Order") json=None oneof=None line=8
+enum BillingStatus 12
+  value BILLING_STATUS_UNSPECIFIED 0 13
+  value BILLING_STATUS_WAIT 1 14
+  value BILLING_STATUS_BILL 2 15
+  value BILLING_STATUS_SKIP 3 16
 == tests/mutants/E205_公表された言語に上流の型/proto/shop/billing/v1/billing.proto
 syntax proto3
 package shop.billing.v1
@@ -1218,6 +1562,13 @@ enum BillingStatus 12
   value BILLING_STATUS_WAIT 1 14
   value BILLING_STATUS_BILL 2 15
   value BILLING_STATUS_SKIP 3 16
+== tests/mutants/E206_reference_to_a_separate_ways_partner/proto/audit/v1/record.proto
+syntax proto3
+package audit.v1
+import quotes/v1/estimate.proto 5:1 public=false weak=false
+message Record 8
+  field contract_id 1 None Scalar("string") json=None oneof=None line=9
+  field estimate 2 None Named("quotes.v1.Estimate") json=None oneof=None line=10
 == tests/mutants/E206_別々の道の相手を参照/proto/audit/v1/record.proto
 syntax proto3
 package audit.v1
@@ -1225,11 +1576,68 @@ import quotes/v1/estimate.proto 5:1 public=false weak=false
 message Record 8
   field contract_id 1 None Scalar("string") json=None oneof=None line=9
   field estimate 2 None Named("quotes.v1.Estimate") json=None oneof=None line=10
+== tests/mutants/E308_copies_differ/proto/contracts/kernel/units.proto
+syntax proto3
+package kernel
+message Days 6
+  field count 1 None Scalar("int64") json=None oneof=None line=7
 == tests/mutants/E308_写しの中身が違う/proto/contracts/kernel/units.proto
 syntax proto3
 package kernel
 message Days 6
   field count 1 None Scalar("int64") json=None oneof=None line=7
+== tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto
+syntax proto3
+package shop.ordering.v1
+message Order 19
+  field id 1 None Scalar("string") json=None oneof=None line=20
+  field status 2 None Named("OrderStatus") json=None oneof=None line=21
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=22
+message GetOrderRequest 25
+  field id 1 None Scalar("string") json=None oneof=None line=26
+message GetOrderResponse 29
+  field order 1 None Named("Order") json=None oneof=None line=30
+enum OrderStatus 10
+  value ORDER_STATUS_UNSPECIFIED 0 11
+  value ORDER_STATUS_RECEIVED 1 12
+  value ORDER_STATUS_PAID 2 13
+  value ORDER_STATUS_SHIPPED 3 14
+  value ORDER_STATUS_CANCELLED 4 15
+  value ORDER_STATUS_RETURNED 5 16
+service OrderService 6
+  method GetOrder GetOrderRequest GetOrderResponse false false 7
+== tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto
+syntax proto3
+package warehouse.v1
+message ReserveRequest 15
+  field sku 1 None Scalar("string") json=None oneof=None line=16
+  field quantity 2 None Scalar("int32") json=None oneof=None line=17
+message ReserveResponse 26
+  field sku 1 None Scalar("string") json=None oneof=None line=27
+  field stock 2 None Named("Stock") json=None oneof=None line=28
+  field id 3 Optional Scalar("string") json=None oneof=None line=29
+message ReleaseRequest 32
+  field id 1 None Scalar("string") json=None oneof=None line=33
+message ReleaseResponse 36
+message GetPackingRequest 46
+  field order_id 1 None Scalar("string") json=None oneof=None line=47
+message GetPackingResponse 50
+  field status 1 None Named("PackingStatus") json=None oneof=None line=51
+enum Stock 20
+  value STOCK_UNSPECIFIED 0 21
+  value STOCK_SECURED 1 22
+  value STOCK_SHORT 2 23
+enum PackingStatus 38
+  value PACKING_STATUS_UNSPECIFIED 0 39
+  value PACKING_STATUS_WAITING 1 40
+  value PACKING_STATUS_PACKED 2 41
+  value PACKING_STATUS_SHORT 3 42
+  value PACKING_STATUS_DAMAGED 4 43
+service StockService 6
+  method Reserve ReserveRequest ReserveResponse false false 7
+  method Release ReleaseRequest ReleaseResponse false false 8
+service PackingService 11
+  method GetPacking GetPackingRequest GetPackingResponse false false 12
 == tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto
 syntax proto3
 package warehouse.v1
@@ -1282,6 +1690,15 @@ enum OrderStatus 10
   value ORDER_STATUS_RETURNED 5 16
 service OrderService 6
   method GetOrder GetOrderRequest GetOrderResponse false false 7
+== tests/mutants/W102_import_not_found/proto/shop/billing/v1/billing.proto
+syntax proto3
+package shop.billing.v1
+import google/type/money.proto 5:1 public=false weak=false
+enum BillingStatus 8
+  value BILLING_STATUS_UNSPECIFIED 0 9
+  value BILLING_STATUS_WAIT 1 10
+  value BILLING_STATUS_BILL 2 11
+  value BILLING_STATUS_SKIP 3 12
 == tests/mutants/W102_見つからない_import/proto/shop/billing/v1/billing.proto
 syntax proto3
 package shop.billing.v1
@@ -1292,39 +1709,72 @@ enum BillingStatus 8
   value BILLING_STATUS_BILL 2 11
   value BILLING_STATUS_SKIP 3 12
 == together
+unreadable tests/mutants/E106_unreadable_proto/proto/shop/billing/v1/billing.proto 11:1
 unreadable tests/mutants/E106_読めない_proto/proto/shop/billing/v1/billing.proto 11:1
+not found tests/mutants/E201_reference_to_an_unrelated_inventory/proto/shop/billing/v1/billing.proto warehouse/v1/stock.proto 5:1 tried tests/mutants/E201_reference_to_an_unrelated_inventory/proto/warehouse/v1/stock.proto tests/mutants/E201_reference_to_an_unrelated_inventory/proto/shop/billing/v1/warehouse/v1/stock.proto
 not found tests/mutants/E201_関係の無い在庫を参照/proto/shop/billing/v1/billing.proto warehouse/v1/stock.proto 5:1 tried tests/mutants/E201_関係の無い在庫を参照/proto/warehouse/v1/stock.proto tests/mutants/E201_関係の無い在庫を参照/proto/shop/billing/v1/warehouse/v1/stock.proto
+not found tests/mutants/E202_inside_of_inventory_referred_to/proto/shop/ordering/v1/fulfillment_lite.proto warehouse/v1/stock.proto 5:1 tried tests/mutants/E202_inside_of_inventory_referred_to/proto/warehouse/v1/stock.proto tests/mutants/E202_inside_of_inventory_referred_to/proto/shop/ordering/v1/warehouse/v1/stock.proto
 not found tests/mutants/E202_在庫の内側を参照/proto/shop/ordering/v1/fulfillment_lite.proto warehouse/v1/stock.proto 5:1 tried tests/mutants/E202_在庫の内側を参照/proto/warehouse/v1/stock.proto tests/mutants/E202_在庫の内側を参照/proto/shop/ordering/v1/warehouse/v1/stock.proto
+not found tests/mutants/E203_package_not_in_through/proto/shop/ordering/v1/fulfillment_lite.proto warehouse/v1/stock.proto 5:1 tried tests/mutants/E203_package_not_in_through/proto/warehouse/v1/stock.proto tests/mutants/E203_package_not_in_through/proto/shop/ordering/v1/warehouse/v1/stock.proto
 not found tests/mutants/E203_through_に無い_package/proto/shop/ordering/v1/fulfillment_lite.proto warehouse/v1/stock.proto 5:1 tried tests/mutants/E203_through_に無い_package/proto/warehouse/v1/stock.proto tests/mutants/E203_through_に無い_package/proto/shop/ordering/v1/warehouse/v1/stock.proto
+not found tests/mutants/E204_outside_the_anticorruption_layer/proto/billing/report/v1/report.proto shop/ordering/v1/order.proto 5:1 tried tests/mutants/E204_outside_the_anticorruption_layer/proto/shop/ordering/v1/order.proto tests/mutants/E204_outside_the_anticorruption_layer/proto/billing/report/v1/shop/ordering/v1/order.proto
 not found tests/mutants/E204_腐敗防止層の外/proto/billing/report/v1/report.proto shop/ordering/v1/order.proto 5:1 tried tests/mutants/E204_腐敗防止層の外/proto/shop/ordering/v1/order.proto tests/mutants/E204_腐敗防止層の外/proto/billing/report/v1/shop/ordering/v1/order.proto
+not found tests/mutants/E205_upstream_type_in_a_published_language/proto/shop/billing/v1/billing.proto shop/ordering/v1/order.proto 5:1 tried tests/mutants/E205_upstream_type_in_a_published_language/proto/shop/ordering/v1/order.proto tests/mutants/E205_upstream_type_in_a_published_language/proto/shop/billing/v1/shop/ordering/v1/order.proto
 not found tests/mutants/E205_公表された言語に上流の型/proto/shop/billing/v1/billing.proto shop/ordering/v1/order.proto 5:1 tried tests/mutants/E205_公表された言語に上流の型/proto/shop/ordering/v1/order.proto tests/mutants/E205_公表された言語に上流の型/proto/shop/billing/v1/shop/ordering/v1/order.proto
+not found tests/mutants/E206_reference_to_a_separate_ways_partner/proto/audit/v1/record.proto quotes/v1/estimate.proto 5:1 tried tests/mutants/E206_reference_to_a_separate_ways_partner/proto/quotes/v1/estimate.proto tests/mutants/E206_reference_to_a_separate_ways_partner/proto/audit/v1/quotes/v1/estimate.proto
 not found tests/mutants/E206_別々の道の相手を参照/proto/audit/v1/record.proto quotes/v1/estimate.proto 5:1 tried tests/mutants/E206_別々の道の相手を参照/proto/quotes/v1/estimate.proto tests/mutants/E206_別々の道の相手を参照/proto/audit/v1/quotes/v1/estimate.proto
+not found tests/mutants/W102_import_not_found/proto/shop/billing/v1/billing.proto google/type/money.proto 5:1 tried tests/mutants/W102_import_not_found/proto/google/type/money.proto tests/mutants/W102_import_not_found/proto/shop/billing/v1/google/type/money.proto
 not found tests/mutants/W102_見つからない_import/proto/shop/billing/v1/billing.proto google/type/money.proto 5:1 tried tests/mutants/W102_見つからない_import/proto/google/type/money.proto tests/mutants/W102_見つからない_import/proto/shop/billing/v1/google/type/money.proto
-examples/通販/proto/dandori/v1/options.proto sees 
+examples/shop.ja/proto/dandori/v1/options.proto sees 
   Status.cases: known google.protobuf.Value
-examples/通販/proto/shop/delivery/v1/shipment.proto sees 
-  CreateShipmentRequest.destination: shop.delivery.v1.Destination (examples/通販/proto/shop/delivery/v1/shipment.proto)
-  CreateShipmentRequest.parcels: shop.delivery.v1.Parcel (examples/通販/proto/shop/delivery/v1/shipment.proto)
-  Parcel.handling: shop.delivery.v1.Handling (examples/通販/proto/shop/delivery/v1/shipment.proto, enum)
-  DeliveryService.CreateShipment: shop.delivery.v1.CreateShipmentRequest (examples/通販/proto/shop/delivery/v1/shipment.proto) -> shop.delivery.v1.CreateShipmentResponse (examples/通販/proto/shop/delivery/v1/shipment.proto)
-examples/通販/proto/shop/ordering/v1/fulfillment.proto sees examples/通販/proto/warehouse/v1/stock.proto
-  FulfillRequest.order: shop.ordering.v1.FulfillmentOrder (examples/通販/proto/shop/ordering/v1/fulfillment.proto)
-  FulfillmentOrder.lines: shop.ordering.v1.Line (examples/通販/proto/shop/ordering/v1/fulfillment.proto)
-  FulfillmentOrder.gift: shop.ordering.v1.Gift (examples/通販/proto/shop/ordering/v1/fulfillment.proto)
+examples/shop.ja/proto/shop/delivery/v1/shipment.proto sees 
+  CreateShipmentRequest.destination: shop.delivery.v1.Destination (examples/shop.ja/proto/shop/delivery/v1/shipment.proto)
+  CreateShipmentRequest.parcels: shop.delivery.v1.Parcel (examples/shop.ja/proto/shop/delivery/v1/shipment.proto)
+  Parcel.handling: shop.delivery.v1.Handling (examples/shop.ja/proto/shop/delivery/v1/shipment.proto, enum)
+  DeliveryService.CreateShipment: shop.delivery.v1.CreateShipmentRequest (examples/shop.ja/proto/shop/delivery/v1/shipment.proto) -> shop.delivery.v1.CreateShipmentResponse (examples/shop.ja/proto/shop/delivery/v1/shipment.proto)
+examples/shop.ja/proto/shop/ordering/v1/fulfillment.proto sees examples/shop.ja/proto/warehouse/v1/stock.proto
+  FulfillRequest.order: shop.ordering.v1.FulfillmentOrder (examples/shop.ja/proto/shop/ordering/v1/fulfillment.proto)
+  FulfillmentOrder.lines: shop.ordering.v1.Line (examples/shop.ja/proto/shop/ordering/v1/fulfillment.proto)
+  FulfillmentOrder.gift: shop.ordering.v1.Gift (examples/shop.ja/proto/shop/ordering/v1/fulfillment.proto)
   FulfillmentOrder.extra: known google.protobuf.Value
-  FulfillResponse.reservations: warehouse.v1.ReserveResponse (examples/通販/proto/warehouse/v1/stock.proto)
-  FulfillmentService.Fulfill: shop.ordering.v1.FulfillRequest (examples/通販/proto/shop/ordering/v1/fulfillment.proto) -> shop.ordering.v1.FulfillResponse (examples/通販/proto/shop/ordering/v1/fulfillment.proto)
-  FulfillmentService.AnswerPacking: shop.ordering.v1.AnswerPackingRequest (examples/通販/proto/shop/ordering/v1/fulfillment.proto) -> shop.ordering.v1.AnswerPackingResponse (examples/通販/proto/shop/ordering/v1/fulfillment.proto)
-examples/通販/proto/shop/ordering/v1/order.proto sees 
-  Order.status: shop.ordering.v1.OrderStatus (examples/通販/proto/shop/ordering/v1/order.proto, enum)
-  GetOrderResponse.order: shop.ordering.v1.Order (examples/通販/proto/shop/ordering/v1/order.proto)
-  OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (examples/通販/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (examples/通販/proto/shop/ordering/v1/order.proto)
-examples/通販/proto/warehouse/v1/stock.proto sees 
-  ReserveResponse.stock: warehouse.v1.Stock (examples/通販/proto/warehouse/v1/stock.proto, enum)
-  GetPackingResponse.status: warehouse.v1.PackingStatus (examples/通販/proto/warehouse/v1/stock.proto, enum)
-  StockService.Reserve: warehouse.v1.ReserveRequest (examples/通販/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (examples/通販/proto/warehouse/v1/stock.proto)
-  StockService.Release: warehouse.v1.ReleaseRequest (examples/通販/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (examples/通販/proto/warehouse/v1/stock.proto)
-  PackingService.GetPacking: warehouse.v1.GetPackingRequest (examples/通販/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (examples/通販/proto/warehouse/v1/stock.proto)
+  FulfillResponse.reservations: warehouse.v1.ReserveResponse (examples/shop.ja/proto/warehouse/v1/stock.proto)
+  FulfillmentService.Fulfill: shop.ordering.v1.FulfillRequest (examples/shop.ja/proto/shop/ordering/v1/fulfillment.proto) -> shop.ordering.v1.FulfillResponse (examples/shop.ja/proto/shop/ordering/v1/fulfillment.proto)
+  FulfillmentService.AnswerPacking: shop.ordering.v1.AnswerPackingRequest (examples/shop.ja/proto/shop/ordering/v1/fulfillment.proto) -> shop.ordering.v1.AnswerPackingResponse (examples/shop.ja/proto/shop/ordering/v1/fulfillment.proto)
+examples/shop.ja/proto/shop/ordering/v1/order.proto sees 
+  Order.status: shop.ordering.v1.OrderStatus (examples/shop.ja/proto/shop/ordering/v1/order.proto, enum)
+  GetOrderResponse.order: shop.ordering.v1.Order (examples/shop.ja/proto/shop/ordering/v1/order.proto)
+  OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (examples/shop.ja/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (examples/shop.ja/proto/shop/ordering/v1/order.proto)
+examples/shop.ja/proto/warehouse/v1/stock.proto sees 
+  ReserveResponse.stock: warehouse.v1.Stock (examples/shop.ja/proto/warehouse/v1/stock.proto, enum)
+  GetPackingResponse.status: warehouse.v1.PackingStatus (examples/shop.ja/proto/warehouse/v1/stock.proto, enum)
+  StockService.Reserve: warehouse.v1.ReserveRequest (examples/shop.ja/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (examples/shop.ja/proto/warehouse/v1/stock.proto)
+  StockService.Release: warehouse.v1.ReleaseRequest (examples/shop.ja/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (examples/shop.ja/proto/warehouse/v1/stock.proto)
+  PackingService.GetPacking: warehouse.v1.GetPackingRequest (examples/shop.ja/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (examples/shop.ja/proto/warehouse/v1/stock.proto)
+examples/shop/proto/dandori/v1/options.proto sees 
+  Status.cases: known google.protobuf.Value
+examples/shop/proto/shop/delivery/v1/shipment.proto sees 
+  CreateShipmentRequest.destination: shop.delivery.v1.Destination (examples/shop/proto/shop/delivery/v1/shipment.proto)
+  CreateShipmentRequest.parcels: shop.delivery.v1.Parcel (examples/shop/proto/shop/delivery/v1/shipment.proto)
+  Parcel.handling: shop.delivery.v1.Handling (examples/shop/proto/shop/delivery/v1/shipment.proto, enum)
+  DeliveryService.CreateShipment: shop.delivery.v1.CreateShipmentRequest (examples/shop/proto/shop/delivery/v1/shipment.proto) -> shop.delivery.v1.CreateShipmentResponse (examples/shop/proto/shop/delivery/v1/shipment.proto)
+examples/shop/proto/shop/ordering/v1/fulfillment.proto sees examples/shop/proto/warehouse/v1/stock.proto
+  FulfillRequest.order: shop.ordering.v1.FulfillmentOrder (examples/shop/proto/shop/ordering/v1/fulfillment.proto)
+  FulfillmentOrder.lines: shop.ordering.v1.Line (examples/shop/proto/shop/ordering/v1/fulfillment.proto)
+  FulfillmentOrder.gift: shop.ordering.v1.Gift (examples/shop/proto/shop/ordering/v1/fulfillment.proto)
+  FulfillmentOrder.extra: known google.protobuf.Value
+  FulfillResponse.reservations: warehouse.v1.ReserveResponse (examples/shop/proto/warehouse/v1/stock.proto)
+  FulfillmentService.Fulfill: shop.ordering.v1.FulfillRequest (examples/shop/proto/shop/ordering/v1/fulfillment.proto) -> shop.ordering.v1.FulfillResponse (examples/shop/proto/shop/ordering/v1/fulfillment.proto)
+  FulfillmentService.AnswerPacking: shop.ordering.v1.AnswerPackingRequest (examples/shop/proto/shop/ordering/v1/fulfillment.proto) -> shop.ordering.v1.AnswerPackingResponse (examples/shop/proto/shop/ordering/v1/fulfillment.proto)
+examples/shop/proto/shop/ordering/v1/order.proto sees 
+  Order.status: shop.ordering.v1.OrderStatus (examples/shop/proto/shop/ordering/v1/order.proto, enum)
+  GetOrderResponse.order: shop.ordering.v1.Order (examples/shop/proto/shop/ordering/v1/order.proto)
+  OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (examples/shop/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (examples/shop/proto/shop/ordering/v1/order.proto)
+examples/shop/proto/warehouse/v1/stock.proto sees 
+  ReserveResponse.stock: warehouse.v1.Stock (examples/shop/proto/warehouse/v1/stock.proto, enum)
+  GetPackingResponse.status: warehouse.v1.PackingStatus (examples/shop/proto/warehouse/v1/stock.proto, enum)
+  StockService.Reserve: warehouse.v1.ReserveRequest (examples/shop/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (examples/shop/proto/warehouse/v1/stock.proto)
+  StockService.Release: warehouse.v1.ReleaseRequest (examples/shop/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (examples/shop/proto/warehouse/v1/stock.proto)
+  PackingService.GetPacking: warehouse.v1.GetPackingRequest (examples/shop/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (examples/shop/proto/warehouse/v1/stock.proto)
 tests/fixtures/proto-dandori/warehouse.proto sees 
   ReserveResponse.stock: warehouse.v1.Stock (tests/fixtures/proto-dandori/warehouse.proto, enum)
   StockService.Reserve: warehouse.v1.ReserveRequest (tests/fixtures/proto-dandori/warehouse.proto) -> warehouse.v1.ReserveResponse (tests/fixtures/proto-dandori/warehouse.proto)
@@ -1354,6 +1804,41 @@ tests/fixtures/proto/warehouse/v1/stock.proto sees
   StockService.Reserve: warehouse.v1.ReserveRequest (tests/fixtures/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (tests/fixtures/proto/warehouse/v1/stock.proto)
   StockService.Release: warehouse.v1.ReleaseRequest (tests/fixtures/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (tests/fixtures/proto/warehouse/v1/stock.proto)
   PackingService.GetPacking: warehouse.v1.GetPackingRequest (tests/fixtures/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (tests/fixtures/proto/warehouse/v1/stock.proto)
+tests/maps/basic/proto/billing/acl/v1/order_view.proto sees tests/maps/basic/proto/shop/ordering/v1/order.proto
+  OrderView.status: shop.ordering.v1.OrderStatus (tests/maps/basic/proto/shop/ordering/v1/order.proto, enum)
+tests/maps/basic/proto/shop/billing/v1/billing.proto sees 
+tests/maps/basic/proto/shop/common/v1/money.proto sees 
+tests/maps/basic/proto/shop/ordering/v1/fulfillment_lite.proto sees tests/maps/basic/proto/warehouse/v1/stock.proto
+  FulfillResponse.reservations: warehouse.v1.ReserveResponse (tests/maps/basic/proto/warehouse/v1/stock.proto)
+tests/maps/basic/proto/shop/ordering/v1/order.proto sees 
+  Order.status: shop.ordering.v1.OrderStatus (tests/maps/basic/proto/shop/ordering/v1/order.proto, enum)
+  GetOrderResponse.order: shop.ordering.v1.Order (tests/maps/basic/proto/shop/ordering/v1/order.proto)
+  OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (tests/maps/basic/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (tests/maps/basic/proto/shop/ordering/v1/order.proto)
+tests/maps/basic/proto/warehouse/v1/stock.proto sees tests/maps/basic/proto/shop/common/v1/money.proto
+  ReserveResponse.stock: warehouse.v1.Stock (tests/maps/basic/proto/warehouse/v1/stock.proto, enum)
+  ReserveResponse.price: shop.common.v1.Money (tests/maps/basic/proto/shop/common/v1/money.proto)
+  GetPackingResponse.status: warehouse.v1.PackingStatus (tests/maps/basic/proto/warehouse/v1/stock.proto, enum)
+  StockService.Reserve: warehouse.v1.ReserveRequest (tests/maps/basic/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (tests/maps/basic/proto/warehouse/v1/stock.proto)
+  StockService.Release: warehouse.v1.ReleaseRequest (tests/maps/basic/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (tests/maps/basic/proto/warehouse/v1/stock.proto)
+  PackingService.GetPacking: warehouse.v1.GetPackingRequest (tests/maps/basic/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (tests/maps/basic/proto/warehouse/v1/stock.proto)
+tests/maps/nested/proto/warehouse/v1/stock.proto sees 
+tests/maps/patterns/proto/audit/v1/record.proto sees 
+tests/maps/patterns/proto/contracts/acl/v1/plan_view.proto sees tests/maps/patterns/proto/pricing/v1/price.proto
+  PlanView.plan: pricing.v1.Plan (tests/maps/patterns/proto/pricing/v1/price.proto, enum)
+tests/maps/patterns/proto/contracts/kernel/units.proto sees 
+tests/maps/patterns/proto/contracts/v1/contract.proto sees tests/maps/patterns/proto/contracts/kernel/units.proto
+  Contract.class: contracts.v1.ContractClass (tests/maps/patterns/proto/contracts/v1/contract.proto, enum)
+  Contract.term: kernel.Days (tests/maps/patterns/proto/contracts/kernel/units.proto)
+tests/maps/patterns/proto/notices/v1/notice.proto sees tests/maps/patterns/proto/quotes/v1/estimate.proto
+  Notice.estimate: quotes.v1.Estimate (tests/maps/patterns/proto/quotes/v1/estimate.proto)
+tests/maps/patterns/proto/pricing/v1/price.proto sees 
+  Quote.plan: pricing.v1.Plan (tests/maps/patterns/proto/pricing/v1/price.proto, enum)
+  QuoteRequest.plan: pricing.v1.Plan (tests/maps/patterns/proto/pricing/v1/price.proto, enum)
+  PricingService.GetQuote: pricing.v1.QuoteRequest (tests/maps/patterns/proto/pricing/v1/price.proto) -> pricing.v1.Quote (tests/maps/patterns/proto/pricing/v1/price.proto)
+tests/maps/patterns/proto/quotes/kernel/units.proto sees 
+tests/maps/patterns/proto/quotes/v1/estimate.proto sees tests/maps/patterns/proto/pricing/v1/price.proto tests/maps/patterns/proto/quotes/kernel/units.proto
+  Estimate.quote: pricing.v1.Quote (tests/maps/patterns/proto/pricing/v1/price.proto)
+  Estimate.valid_for: kernel.Days (tests/maps/patterns/proto/quotes/kernel/units.proto)
 tests/maps/パターン/proto/audit/v1/record.proto sees 
 tests/maps/パターン/proto/contracts/acl/v1/plan_view.proto sees tests/maps/パターン/proto/pricing/v1/price.proto
   PlanView.plan: pricing.v1.Plan (tests/maps/パターン/proto/pricing/v1/price.proto, enum)
@@ -1389,27 +1874,58 @@ tests/maps/基本/proto/warehouse/v1/stock.proto sees tests/maps/基本/proto/sh
   StockService.Reserve: warehouse.v1.ReserveRequest (tests/maps/基本/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (tests/maps/基本/proto/warehouse/v1/stock.proto)
   StockService.Release: warehouse.v1.ReleaseRequest (tests/maps/基本/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (tests/maps/基本/proto/warehouse/v1/stock.proto)
   PackingService.GetPacking: warehouse.v1.GetPackingRequest (tests/maps/基本/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (tests/maps/基本/proto/warehouse/v1/stock.proto)
+tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.proto sees 
+  Order.status: shop.ordering.v1.OrderStatus (tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.proto, enum)
+  GetOrderResponse.order: shop.ordering.v1.Order (tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.proto)
+  OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.proto)
 tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto sees 
   Order.status: shop.ordering.v1.OrderStatus (tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto, enum)
   GetOrderResponse.order: shop.ordering.v1.Order (tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto)
   OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto)
+tests/mutants/E201_reference_to_an_unrelated_inventory/proto/shop/billing/v1/billing.proto sees 
+  StockSeen.stock: unknown
 tests/mutants/E201_関係の無い在庫を参照/proto/shop/billing/v1/billing.proto sees 
   StockSeen.stock: unknown
+tests/mutants/E202_inside_of_inventory_referred_to/proto/shop/ordering/v1/fulfillment_lite.proto sees tests/mutants/E202_inside_of_inventory_referred_to/proto/warehouse/internal/v1/ledger.proto
+  FulfillResponse.reservations: unknown
+  FulfillResponse.shelves: warehouse.internal.v1.Shelf (tests/mutants/E202_inside_of_inventory_referred_to/proto/warehouse/internal/v1/ledger.proto)
+tests/mutants/E202_inside_of_inventory_referred_to/proto/warehouse/internal/v1/ledger.proto sees 
 tests/mutants/E202_在庫の内側を参照/proto/shop/ordering/v1/fulfillment_lite.proto sees tests/mutants/E202_在庫の内側を参照/proto/warehouse/internal/v1/ledger.proto
   FulfillResponse.reservations: unknown
   FulfillResponse.shelves: warehouse.internal.v1.Shelf (tests/mutants/E202_在庫の内側を参照/proto/warehouse/internal/v1/ledger.proto)
 tests/mutants/E202_在庫の内側を参照/proto/warehouse/internal/v1/ledger.proto sees 
+tests/mutants/E203_package_not_in_through/proto/shop/ordering/v1/fulfillment_lite.proto sees tests/mutants/E203_package_not_in_through/proto/warehouse/v2/stock.proto
+  FulfillResponse.reservations: unknown
+  FulfillResponse.reservations_v2: warehouse.v2.Reservation (tests/mutants/E203_package_not_in_through/proto/warehouse/v2/stock.proto)
+tests/mutants/E203_package_not_in_through/proto/warehouse/v2/stock.proto sees 
 tests/mutants/E203_through_に無い_package/proto/shop/ordering/v1/fulfillment_lite.proto sees tests/mutants/E203_through_に無い_package/proto/warehouse/v2/stock.proto
   FulfillResponse.reservations: unknown
   FulfillResponse.reservations_v2: warehouse.v2.Reservation (tests/mutants/E203_through_に無い_package/proto/warehouse/v2/stock.proto)
 tests/mutants/E203_through_に無い_package/proto/warehouse/v2/stock.proto sees 
+tests/mutants/E204_outside_the_anticorruption_layer/proto/billing/report/v1/report.proto sees 
+  MonthlyRow.status: unknown
 tests/mutants/E204_腐敗防止層の外/proto/billing/report/v1/report.proto sees 
   MonthlyRow.status: unknown
+tests/mutants/E205_upstream_type_in_a_published_language/proto/shop/billing/v1/billing.proto sees 
+  Invoice.order: unknown
 tests/mutants/E205_公表された言語に上流の型/proto/shop/billing/v1/billing.proto sees 
   Invoice.order: unknown
+tests/mutants/E206_reference_to_a_separate_ways_partner/proto/audit/v1/record.proto sees 
+  Record.estimate: unknown
 tests/mutants/E206_別々の道の相手を参照/proto/audit/v1/record.proto sees 
   Record.estimate: unknown
+tests/mutants/E308_copies_differ/proto/contracts/kernel/units.proto sees 
 tests/mutants/E308_写しの中身が違う/proto/contracts/kernel/units.proto sees 
+tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto sees 
+  Order.status: shop.ordering.v1.OrderStatus (tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto, enum)
+  GetOrderResponse.order: shop.ordering.v1.Order (tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto)
+  OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto)
+tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto sees 
+  ReserveResponse.stock: warehouse.v1.Stock (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto, enum)
+  GetPackingResponse.status: warehouse.v1.PackingStatus (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto, enum)
+  StockService.Reserve: warehouse.v1.ReserveRequest (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto)
+  StockService.Release: warehouse.v1.ReleaseRequest (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto)
+  PackingService.GetPacking: warehouse.v1.GetPackingRequest (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto)
 tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto sees 
   ReserveResponse.stock: warehouse.v1.Stock (tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto, enum)
   GetPackingResponse.status: warehouse.v1.PackingStatus (tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto, enum)
@@ -1420,6 +1936,7 @@ tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/orde
   Order.status: shop.ordering.v1.OrderStatus (tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto, enum)
   GetOrderResponse.order: shop.ordering.v1.Order (tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto)
   OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (tests/mutants/E401_注文の状態に値が増えた/proto/shop/ordering/v1/order.proto)
+tests/mutants/W102_import_not_found/proto/shop/billing/v1/billing.proto sees 
 tests/mutants/W102_見つからない_import/proto/shop/billing/v1/billing.proto sees 
 #### tests/fixtures
 == dandori/bad/specs/money.proto

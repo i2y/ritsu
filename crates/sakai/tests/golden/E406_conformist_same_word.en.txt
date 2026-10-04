@@ -1,0 +1,11 @@
+error[E406]: ctx/ordering.ctx:17:3: Inventory's reservation crosses into Ordering, where reservation means something else, unmapped
+    17 |   reservation "Giving a line of a customer's order the day it will be delivered"
+  = Inventory's reservation is "Holding shelf stock for one line of an order until it ships or is cancelled", and means proto "proto/warehouse/v1/stock.proto" message ReserveResponse.
+  = Ordering's reservation is "Giving a line of a customer's order the day it will be delivered".
+  = Ordering is a conformist of Inventory, so it has no mapping to map it with.
+  = To fix it: rename Ordering's term; if it means the same, write `reservation as Inventory.reservation`; to map it, make `upstream Inventory` an anticorruption layer and write `term reservation -> <a term of Ordering>`.
+  involved:
+      Ordering   proto/shop/ordering/v1/fulfillment_lite.proto:5                 import "warehouse/v1/stock.proto"
+      Inventory  proto "proto/warehouse/v1/stock.proto" message ReserveResponse  what Inventory's term reservation means
+      Inventory  ctx/inventory.ctx:13                                            reservation "Holding shelf stock for one line of an order until it ships or is cancelled"
+      Ordering   ctx/ordering.ctx:17                                             reservation "Giving a line of a customer's order the day it will be delivered"

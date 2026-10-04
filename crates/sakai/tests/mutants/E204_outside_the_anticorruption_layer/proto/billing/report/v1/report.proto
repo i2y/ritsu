@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package billing.report.v1;
+
+import "shop/ordering/v1/order.proto";
+
+// Inside billing, outside the anticorruption layer.
+message MonthlyRow {
+  shop.ordering.v1.OrderStatus status = 1;
+}

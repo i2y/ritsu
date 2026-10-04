@@ -128,7 +128,7 @@ fn check_exit_codes_and_formats() {
     assert_eq!(code(&o), 0, "{}", err(&o));
     let lines: Vec<serde_json::Value> = out(&o).lines().map(|l| serde_json::from_str(l).unwrap()).collect();
     let files: Vec<&str> = lines.iter().map(|v| v["file"].as_str().unwrap()).collect();
-    assert_eq!(files, ["rust/shop.ctx", "パターン/パターン.ctx", "入れ子/入れ子.ctx", "基本/基本.ctx"]);
+    assert_eq!(files, ["basic/basic.ctx", "nested/nested.ctx", "patterns/patterns.ctx", "rust/shop.ctx", "パターン/パターン.ctx", "入れ子/入れ子.ctx", "基本/基本.ctx"]);
     assert!(lines.iter().all(|v| v["root"] == "tests/maps"));
     assert!(lines.iter().all(|v| v["ok"] == true && v["diagnostics"].as_array().unwrap().is_empty()));
 }
@@ -227,7 +227,10 @@ fn explain_gives_the_reproduction() {
     assert_eq!(code(&o), 0);
     let t = out(&o);
     assert!(t.starts_with("E401 (error) — "), "{t}");
-    assert!(t.contains("  地図.ctx:") && t.contains("enum Kind -> 甲の種類"), "{t}");
+    assert!(t.contains("  map.ctx:") && t.contains("enum Kind -> alpha_kind"), "{t}");
+    // the Japanese output shows the example with Japanese names
+    let ja = out(&sakai(&["explain", "e401", "--lang", "ja"]));
+    assert!(ja.contains("  地図.ctx:") && ja.contains("enum Kind -> 甲の種類"), "{ja}");
     let o = sakai(&["explain", "E104", "--lang", "ja"]);
     assert!(out(&o).contains("`sakai check .` を走らせます"), "{}", out(&o));
     // a code that reads another language comes out with every language joined
@@ -248,5 +251,147 @@ fn api_prints_the_map() {
     assert_eq!(code(&o), 0, "{}", err(&o));
     let v: serde_json::Value = serde_json::from_str(&out(&o)).unwrap();
     assert_eq!(v["map"]["file"], "基本.ctx");
+    assert_eq!(v["contexts"].as_array().unwrap().len(), 3);
+}
+
+// ── The English twins: the same checks on the English map ──
+
+const MAP_EN: &str = "tests/maps/basic/basic.ctx";
+const ROOT_EN: &str = "tests/maps/basic";
+
+#[test]
+fn what_is_refused_with_exit_2_in_english() {
+    for args in [
+        vec!["check", MAP_EN, "--frmat", "json"],
+        vec!["check", MAP_EN, "--format", "yaml"],
+        vec!["check", MAP_EN, "--format"],
+        vec!["check", MAP_EN, "--format", "json", "--format", "json"],
+        vec!["check", MAP_EN, "--root"],
+        vec!["check", MAP_EN, "--root", "tests/maps/none"],
+        vec!["check", MAP_EN, "--root", "tests/maps/patterns"],
+        vec!["check", MAP_EN, "--lang", "fr"],
+        vec!["check", "tests/maps/none.ctx"],
+        vec!["check", "tests/maps/basic/ctx/ordering.ctx"],
+        vec!["api", ROOT_EN],
+        vec!["api", MAP_EN, MAP_EN],
+        vec!["api", MAP_EN, "--format", "json"],
+        vec!["build", MAP_EN],
+        vec!["build", MAP_EN, "--target", "depguard"],
+        vec!["build", MAP_EN, MAP_EN, "--target", "import-linter"],
+        vec!["build", ROOT_EN, "--target", "import-linter"],
+        vec!["export", MAP_EN],
+        vec!["export", "plantuml", MAP_EN],
+    ] {
+        let o = sakai(&args);
+        assert_eq!(code(&o), 2, "{args:?}: {}{}", out(&o), err(&o));
+        assert!(!err(&o).is_empty(), "{args:?} says why");
+    }
+}
+
+#[test]
+fn check_exit_codes_and_formats_in_english() {
+    let o = sakai(&["check", MAP_EN, "--root", ROOT_EN]);
+    assert_eq!(code(&o), 0, "{}", err(&o));
+    assert_eq!(out(&o), "tests/maps/basic/basic.ctx: ok — 3 contexts, 3 relationships; 9 artifacts, each in one context; 3 crossings checked (proto 3)\n");
+    let dir = common::TempDir::new("root-en");
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+    let here = dir.path().join("a/b");
+    common::copy_dir(std::path::Path::new(ROOT_EN), &here.join("basic"));
+    let o = common::sakai_in(&here, &["check", "basic/basic.ctx"]);
+    assert_eq!(code(&o), 0, "{}", err(&o));
+    assert_eq!(out(&o), "basic/basic.ctx: ok — 3 contexts, 3 relationships; 9 artifacts, each in one context; 3 crossings checked (proto 3)\n");
+    let o = common::sakai_in(&here, &["api", "basic/basic.ctx"]);
+    assert_eq!(code(&o), 0, "{}", err(&o));
+    let v: serde_json::Value = serde_json::from_str(&out(&o)).unwrap();
+    assert_eq!(v["map"]["file"], "a/b/basic/basic.ctx");
+    std::fs::remove_dir(dir.path().join(".git")).unwrap();
+    let o = common::sakai_in(&here, &["api", "basic/basic.ctx"]);
+    let v: serde_json::Value = serde_json::from_str(&out(&o)).unwrap();
+    assert_eq!(v["map"]["file"], "basic.ctx");
+}
+
+#[test]
+fn the_paths_of_a_diagnostic_are_written_from_where_sakai_runs_in_english() {
+    let dir = common::mutant("E401_value_added_to_the_order_status");
+    let parent = dir.path().parent().unwrap();
+    let base = dir.path().file_name().unwrap().to_string_lossy().to_string();
+    let o = common::sakai_in(parent, &["check", &format!("{base}/basic.ctx"), "--root", &base]);
+    assert_eq!(code(&o), 1);
+    let t = out(&o);
+    assert!(t.starts_with(&format!("error[E401]: {base}/ctx/billing.ctx:17:3:")), "{t}");
+    assert!(t.contains(&format!("= ORDER_STATUS_RETURNED is the value at {base}/proto/shop/ordering/v1/order.proto:16.")), "{t}");
+    assert!(t.contains("Ordering  proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus"), "{t}");
+    let o = common::sakai_in(&dir.path().join("ctx"), &["check", "../basic.ctx", "--root", ".."]);
+    let t = out(&o);
+    assert!(t.starts_with("error[E401]: billing.ctx:17:3:"), "{t}");
+    assert!(t.contains("Billing   billing.ctx:14 "), "{t}");
+    assert!(t.contains("Ordering  proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus"), "{t}");
+    assert!(t.contains("= ORDER_STATUS_RETURNED is the value at ../proto/shop/ordering/v1/order.proto:16."), "{t}");
+    let abs = dir.path().join("basic.ctx");
+    let o = common::sakai_in(parent, &["check", abs.to_str().unwrap()]);
+    let t = out(&o);
+    let want = dir.path().join("ctx/billing.ctx");
+    assert!(t.starts_with(&format!("error[E401]: {}:17:3:", want.display())), "{t}");
+    let o = common::sakai_in(parent, &["check", &format!("{base}/basic.ctx"), "--root", &base, "--format", "json"]);
+    let v: serde_json::Value = serde_json::from_str(out(&o).trim()).unwrap();
+    assert_eq!(v["root"], base);
+    assert_eq!(v["file"], "basic.ctx");
+    let d = &v["diagnostics"][0];
+    assert_eq!(d["file"], "ctx/billing.ctx");
+    assert_eq!(d["references"][0]["file"], "ctx/billing.ctx");
+    assert_eq!(d["references"][1]["name"]["text"], "proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus");
+    assert_eq!(d["references"][1]["name"]["path"], "proto/shop/ordering/v1/order.proto");
+}
+
+#[test]
+fn a_map_with_errors_exits_1_in_english() {
+    let dir = common::mutant("E401_value_added_to_the_order_status");
+    let o = common::sakai_in(dir.path(), &["check", "."]);
+    assert_eq!(code(&o), 1);
+    assert!(out(&o).starts_with("error[E401]: ctx/billing.ctx:17:3:"), "{}", out(&o));
+    let o = common::sakai_in(dir.path(), &["api", "basic.ctx"]);
+    assert_eq!(code(&o), 1);
+    assert!(out(&o).is_empty());
+    assert!(err(&o).contains("error[E401]"), "{}", err(&o));
+}
+
+#[test]
+fn build_on_the_command_line_in_english() {
+    let dir = common::mutant("E401_value_added_to_the_order_status");
+    let o = common::sakai_in(dir.path(), &["build", "basic.ctx", "--target", "import-linter"]);
+    assert_eq!(code(&o), 1);
+    assert!(out(&o).starts_with("error[E401]: ctx/billing.ctx:17:3:"), "{}", out(&o));
+    assert!(!dir.path().join("py/.importlinter").exists());
+    let dir = common::variant("basic", &[]);
+    let o = common::sakai_in(dir.path(), &["build", "basic.ctx", "--target", "import-linter", "--check"]);
+    assert_eq!(code(&o), 1);
+    assert!(out(&o).starts_with("error[E502]: py/.importlinter: The settings file py/.importlinter is not there"), "{}", out(&o));
+    let o = common::sakai_in(dir.path(), &["build", "basic.ctx", "--target", "import-linter"]);
+    assert_eq!(code(&o), 0);
+    assert_eq!(out(&o), "py/.importlinter: Written (3 contracts)\n");
+    let o = common::sakai_in(dir.path(), &["build", "basic.ctx", "--target", "import-linter", "--check", "--lang", "ja"]);
+    assert_eq!(code(&o), 1, "the file was written in English");
+    let o = common::sakai_in(dir.path(), &["build", "basic.ctx", "--target", "import-linter", "--check"]);
+    assert_eq!(out(&o), "py/.importlinter: Up to date (3 contracts)\n");
+    let o = common::sakai_in(dir.path(), &["build", "basic.ctx", "--target", "import-linter", "--out", "lint"]);
+    assert_eq!(out(&o), "lint/.importlinter: Written (3 contracts)\n");
+    let written = std::fs::read_to_string(dir.path().join("lint/.importlinter")).unwrap();
+    assert!(written.starts_with("# Written by `sakai build --target import-linter` from ../basic.ctx."), "{written}");
+}
+
+#[test]
+fn the_language_from_the_flag_or_the_environment_in_english() {
+    let ja = Command::new(env!("CARGO_BIN_EXE_sakai")).args(["check", MAP_EN, "--root", ROOT_EN]).env("SAKAI_LANG", "ja").output().unwrap();
+    assert!(out(&ja).contains("コンテキスト 3、関係 3。"), "{}", out(&ja));
+    let en = Command::new(env!("CARGO_BIN_EXE_sakai")).args(["check", MAP_EN, "--root", ROOT_EN, "--lang", "en"]).env("SAKAI_LANG", "ja").output().unwrap();
+    assert!(out(&en).contains("3 contexts"), "--lang wins over SAKAI_LANG: {}", out(&en));
+}
+
+#[test]
+fn api_prints_the_map_in_english() {
+    let o = sakai(&["api", MAP_EN, "--root", ROOT_EN]);
+    assert_eq!(code(&o), 0, "{}", err(&o));
+    let v: serde_json::Value = serde_json::from_str(&out(&o)).unwrap();
+    assert_eq!(v["map"]["file"], "basic.ctx");
     assert_eq!(v["contexts"].as_array().unwrap().len(), 3);
 }

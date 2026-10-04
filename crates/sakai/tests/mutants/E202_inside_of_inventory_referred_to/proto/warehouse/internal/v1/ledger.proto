@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package warehouse.internal.v1;
+
+// The inside of inventory. Not a published language.
+message Shelf {
+  string sku = 1;
+  int32 count = 2;
+}

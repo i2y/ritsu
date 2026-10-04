@@ -1,0 +1,6 @@
+error[E307]: ctx/inventory.ctx:18:1: The shared kernel of Ordering and Inventory lists different things on each side
+    18 | shared kernel with Ordering
+  = Only on Inventory's side: dir "py/inventory"
+  involved:
+      Ordering   ctx/ordering.ctx:21   shared kernel with Inventory
+      Inventory  ctx/inventory.ctx:18  shared kernel with Ordering

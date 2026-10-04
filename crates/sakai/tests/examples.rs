@@ -12,9 +12,9 @@ use std::time::Duration;
 
 #[test]
 fn the_example_passes_check() {
-    let (code, out, err) = common::joined(&["check", "examples/通販/通販.ctx"]);
+    let (code, out, err) = common::joined(&["check", "examples/shop.ja/通販.ctx"]);
     assert_eq!(code, 0, "{out}{err}");
-    assert_eq!(out, "examples/通販/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)\n");
+    assert_eq!(out, "examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)\n");
     // What crosses: ordering's code takes inventory's types, as a conformist may; billing's rules
     // take ordering's order status in its layer and delivery's shipment as delivery's customer;
     // delivery's dates read billing's calendar from their shared kernel; ordering's workflow calls
@@ -51,15 +51,15 @@ fn the_example_passes_check() {
 /// exit 2 (where sakai runs, not what the map says).
 #[test]
 fn the_binary_of_this_crate_says_what_it_cannot_read() {
-    let o = common::sakai(&["check", "examples/通販/通販.ctx"]);
+    let o = common::sakai(&["check", "examples/shop.ja/通販.ctx"]);
     assert_eq!(o.status.code(), Some(2));
-    for cmd in [vec!["api", "examples/通販/通販.ctx"], vec!["export", "cml", "examples/通販/通販.ctx"], vec!["build", "examples/通販/通販.ctx", "--target", "import-linter", "--check"]] {
+    for cmd in [vec!["api", "examples/shop.ja/通販.ctx"], vec!["export", "cml", "examples/shop.ja/通販.ctx"], vec!["build", "examples/shop.ja/通販.ctx", "--target", "import-linter", "--check"]] {
         assert_eq!(common::sakai(&cmd).status.code(), Some(2), "{cmd:?}");
     }
     let out = String::from_utf8_lossy(&o.stdout).to_string();
     assert_eq!(common::printed_codes(&out), ["E104", "E104", "E104"], "{out}");
-    assert!(out.contains("This sakai cannot read rulec artifacts (4 of them, the first examples/通販/billing/rules/出荷の送料.rule)"), "{out}");
-    assert!(out.contains("`ritsu sakai check examples/通販/通販.ctx`"), "{out}");
+    assert!(out.contains("This sakai cannot read rulec artifacts (4 of them, the first examples/shop.ja/billing/rules/出荷の送料.rule)"), "{out}");
+    assert!(out.contains("`ritsu sakai check examples/shop.ja/通販.ctx`"), "{out}");
 }
 
 /// What was copied from the suite still passes each language's own check, read through ritsu's
@@ -124,15 +124,20 @@ fn buf_lints_the_protos_written_for_the_example() {
 }
 
 fn changed(edits: &[(&str, &str, &str)]) -> Vec<sakai::check::Outcome> {
+    changed_in(common::EXAMPLE, "通販.ctx", edits)
+}
+
+/// A copy of an example with each edit made, its map checked.
+fn changed_in(example: &str, map: &str, edits: &[(&str, &str, &str)]) -> Vec<sakai::check::Outcome> {
     let dir = common::TempDir::new("example");
-    common::copy_dir(Path::new(common::EXAMPLE), dir.path());
+    common::copy_dir(Path::new(example), dir.path());
     for (f, old, new) in edits {
         let p = dir.path().join(f);
         let s = std::fs::read_to_string(&p).unwrap();
         assert!(s.contains(old), "{f} has no {old:?}");
         std::fs::write(&p, s.replacen(old, new, 1)).unwrap();
     }
-    sakai::check::check_args_with(dir.path(), &["通販.ctx".to_string()], &common::suite()).unwrap()
+    sakai::check::check_args_with(dir.path(), &[map.to_string()], &common::suite()).unwrap()
 }
 
 /// PLAN C.15: inventory adds a value to the packing status (E401), ordering's glossary gains a
@@ -177,4 +182,153 @@ fn a_change_to_the_example_is_caught() {
     let os = changed(&[("contexts/請求.ctx", "output 手数料\n", "output 手数料の額\n")]);
     assert_eq!(common::codes(&os), ["E007"]);
     assert!(os[0].diags[0].message.en.contains("There is no output 手数料の額 in billing/rules/決済手数料.rule"), "{}", os[0].diags[0].message.en);
+}
+
+// ── The English example (examples/shop): the same checks on the same example with its names in
+// English, which passes with the same numbers and is caught by the same changes ──
+
+#[test]
+fn the_example_passes_check_in_english() {
+    let (code, out, err) = common::joined(&["check", "examples/shop/shop.ctx"]);
+    assert_eq!(code, 0, "{out}{err}");
+    assert_eq!(out, "examples/shop/shop.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)\n");
+    // The crossings are the Japanese example's, in the order of their files' names.
+    let ex = std::fs::canonicalize(common::EXAMPLE_EN).unwrap();
+    let out = sakai::check::check_map_with(&ex, "shop.ctx", &common::suite()).unwrap();
+    let c = out.checked.as_ref().unwrap();
+    let crossings: Vec<(String, String, String, String, String)> = c
+        .crossings
+        .iter()
+        .map(|x| (x.from.clone(), x.kind.via(), x.to_name().text(), c.model.contexts[x.from_ctx].name.clone(), c.model.contexts[x.to_ctx].name.clone()))
+        .collect();
+    let want: Vec<(String, String, String, String, String)> = [
+        ("proto/shop/ordering/v1/fulfillment.proto", "proto import", "proto \"proto/warehouse/v1/stock.proto\"", "Ordering", "Inventory"),
+        ("billing/rules/billing_need.rule", "import proto", "proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus", "Billing", "Ordering"),
+        ("billing/rules/shipment_fee.rule", "shape", "proto \"proto/shop/delivery/v1/shipment.proto\" message CreateShipmentRequest", "Billing", "Delivery"),
+        ("delivery/ship_date.cal", "use calendar", "koyomi \"calendars/tokyo_business_days.cal\"", "Delivery", "Billing"),
+        ("ordering/fulfillment.flow", "use rule … connect", "rulec \"delivery/rules/urgency.rule\"", "Ordering", "Delivery"),
+        ("ordering/fulfillment.flow", "use proto", "proto \"proto/warehouse/v1/stock.proto\"", "Ordering", "Inventory"),
+        ("ordering/fulfillment.flow", "connect", "proto \"proto/warehouse/v1/stock.proto\" service StockService method Reserve", "Ordering", "Inventory"),
+        ("ordering/fulfillment.flow", "connect", "proto \"proto/warehouse/v1/stock.proto\" service StockService method Release", "Ordering", "Inventory"),
+        ("ordering/fulfillment.flow", "flow", "dandori \"delivery/arrange_delivery.flow\"", "Ordering", "Delivery"),
+    ]
+    .iter()
+    .map(|(a, b, c, d, e)| (a.to_string(), b.to_string(), c.to_string(), d.to_string(), e.to_string()))
+    .collect();
+    assert_eq!(crossings, want);
+    assert_eq!(c.crossings[0].allowed, Some(sakai::refs::Allowed::Upstream(0)));
+    assert_eq!(c.crossings[8].allowed, Some(sakai::refs::Allowed::Partnership));
+    // The two examples say the same, but for the names: every crossing is of the same kind, from
+    // a context to a context, in the same relationship.
+    let ja = std::fs::canonicalize(common::EXAMPLE).unwrap();
+    let ja = sakai::check::check_map_with(&ja, "通販.ctx", &common::suite()).unwrap();
+    let ja = ja.checked.as_ref().unwrap();
+    let kinds = |c: &sakai::check::Checked| {
+        let mut v: Vec<String> = c.crossings.iter().map(|x| format!("{} {:?}", x.kind.via(), x.allowed)).collect();
+        v.sort();
+        v
+    };
+    assert_eq!(kinds(c), kinds(ja));
+}
+
+#[test]
+fn the_binary_of_this_crate_says_what_it_cannot_read_in_english() {
+    let o = common::sakai(&["check", "examples/shop/shop.ctx"]);
+    assert_eq!(o.status.code(), Some(2));
+    for cmd in [vec!["api", "examples/shop/shop.ctx"], vec!["export", "cml", "examples/shop/shop.ctx"], vec!["build", "examples/shop/shop.ctx", "--target", "import-linter", "--check"]] {
+        assert_eq!(common::sakai(&cmd).status.code(), Some(2), "{cmd:?}");
+    }
+    let out = String::from_utf8_lossy(&o.stdout).to_string();
+    assert_eq!(common::printed_codes(&out), ["E104", "E104", "E104"], "{out}");
+    assert!(out.contains("This sakai cannot read rulec artifacts (4 of them, the first examples/shop/billing/rules/billing_need.rule)"), "{out}");
+    assert!(out.contains("`ritsu sakai check examples/shop/shop.ctx`"), "{out}");
+}
+
+#[test]
+fn what_was_copied_passes_the_suite_in_english() {
+    use ritsu_ports::{Books, Dates, Rules};
+    let ex = std::fs::canonicalize(common::EXAMPLE_EN).unwrap();
+    let rules = rulec::ports::Engine::new();
+    let mut failures = Vec::new();
+    for f in ["billing/rules/payment_fee.rule", "billing/rules/shipment_fee.rule", "billing/rules/billing_need.rule", "delivery/rules/urgency.rule"] {
+        if let Err(said) = rules.facts(&ex.join(f)) {
+            failures.push(format!("rulec {f}: {said:?}"));
+        }
+    }
+    for f in ["billing/payment_terms.cal", "delivery/ship_date.cal"] {
+        if let Err(said) = koyomi::ports::Engine.facts(&ex.join(f)) {
+            failures.push(format!("koyomi {f}: {said:?}"));
+        }
+    }
+    if let Err(said) = ritsu_ports::Sources::sources(&koyomi::ports::Engine, &ex.join("calendars/tokyo_business_days.cal")) {
+        failures.push(format!("koyomi calendars/tokyo_business_days.cal: {said:?}"));
+    }
+    if let Err(said) = chobo::ports::Engine.facts(&ex.join("inventory/inventory.book")) {
+        failures.push(format!("chobo inventory/inventory.book: {said:?}"));
+    }
+    for f in ["ordering/fulfillment.flow", "delivery/arrange_delivery.flow"] {
+        let args = vec!["check".to_string(), ex.join(f).to_string_lossy().to_string()];
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = dandori::cli::run(&args, std::rc::Rc::new(rulec::ports::Engine::new()), &mut out, &mut err);
+        if code != 0 {
+            failures.push(format!("dandori check {f}:\n{}{}", String::from_utf8_lossy(&out), String::from_utf8_lossy(&err)));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    let (accounts, transfers) = sakai::suite::book_names(&common::suite(), &ex.join("inventory/inventory.book")).unwrap().unwrap();
+    assert_eq!(accounts, ["stock", "suppliers", "customers"]);
+    assert_eq!(transfers, ["receive", "reserve", "take_back"]);
+}
+
+#[test]
+fn buf_lints_the_protos_written_for_the_example_in_english() {
+    if !ritsu_testkit::need(ritsu_testkit::Need::Buf) {
+        return;
+    }
+    let Some(buf) = common::program("BUF", "", "buf", &["--version"]) else {
+        common::skip("buf is not there (SAKAI_BUF or the PATH)");
+        return;
+    };
+    let dir = common::TempDir::new("buf-lint-en");
+    for f in ["shop/ordering/v1/order.proto", "warehouse/v1/stock.proto"] {
+        dir.write(f, &std::fs::read_to_string(Path::new(common::EXAMPLE_EN).join("proto").join(f)).unwrap());
+    }
+    let r = common::run(Command::new(&buf).arg("lint").current_dir(dir.path()).env("BUF_CACHE_DIR", dir.path().join(".cache")), Duration::from_secs(120));
+    assert!(r.ok, "{}{}", r.stdout, r.stderr);
+}
+
+/// The changes of `a_change_to_the_example_is_caught`, made to the English example: the same
+/// codes.
+#[test]
+fn a_change_to_the_example_is_caught_in_english() {
+    let changed = |edits: &[(&str, &str, &str)]| changed_in(common::EXAMPLE_EN, "shop.ctx", edits);
+    let os = changed(&[("proto/warehouse/v1/stock.proto", "  PACKING_STATUS_SHORT = 3;\n", "  PACKING_STATUS_SHORT = 3;\n  PACKING_STATUS_DAMAGED = 4;\n")]);
+    assert_eq!(common::codes(&os), ["E401"]);
+    assert!(os[0].diags[0].message.en.contains("PACKING_STATUS_DAMAGED"));
+    let os = changed(&[("contexts/ordering.ctx", "\nupstream Inventory conformist", "  reservation \"Giving a line of a customer's order the day it will be delivered\"\n\nupstream Inventory conformist")]);
+    assert_eq!(common::codes(&os), ["E406"]);
+    let os = changed(&[(
+        "contexts/billing.ctx",
+        "\nshared kernel with Delivery\n  koyomi \"../calendars/tokyo_business_days.cal\"\n  dir \"../py/calendars\", \"../ts/calendars\", \"../java/src/main/java/calendars\", \"../go/calendars\"\n",
+        "\n",
+    )]);
+    assert_eq!(common::codes(&os), ["E307", "E201"]);
+    let os = changed(&[("proto/shop/ordering/v1/order.proto", "  ORDER_STATUS_CANCELLED = 4;\n", "  ORDER_STATUS_CANCELLED = 4;\n  ORDER_STATUS_RETURNED = 5;\n")]);
+    assert_eq!(common::codes(&os), ["E105"]);
+    assert!(os[0].diags[0].notes.iter().any(|n| n.en.contains("[E032]")), "{:?}", os[0].diags[0].notes);
+    let os = changed(&[
+        ("billing/rules/billing_need.rule", "cancelled_in_ordering(cancelled)", "cancel(cancelled)"),
+        ("billing/rules/billing_need.rule", "| cancelled_in_ordering |", "| cancel |"),
+    ]);
+    assert_eq!(common::codes(&os), ["E407"]);
+    let os = changed(&[("contexts/billing.ctx", "enum order_status\n", "enum order_status\n    ORDER_STATUS_RECEIVED  -> received\n    ORDER_STATUS_PAID      -> paid\n    ORDER_STATUS_SHIPPED   -> shipped\n    ORDER_STATUS_CANCELLED -> paid\n")]);
+    assert_eq!(common::codes(&os), ["E405"]);
+    let os = changed(&[("contexts/billing.ctx", "published language rulec.payment_fee.v1", "published language rulec.fee.v1")]);
+    assert_eq!(common::codes(&os), ["E302"]);
+    assert!(os[0].diags[0].message.en.contains("rulec.payment_fee.v1"), "{}", os[0].diags[0].message.en);
+    let os = changed(&[("contexts/billing.ctx", "open host service PaymentFeeService", "open host service FeeService")]);
+    assert_eq!(common::codes(&os), ["E301"]);
+    let os = changed(&[("contexts/billing.ctx", "output fee\n", "output fee_amount\n")]);
+    assert_eq!(common::codes(&os), ["E007"]);
+    assert!(os[0].diags[0].message.en.contains("There is no output fee_amount in billing/rules/payment_fee.rule"), "{}", os[0].diags[0].message.en);
 }

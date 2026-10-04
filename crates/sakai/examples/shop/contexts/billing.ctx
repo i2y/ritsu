@@ -1,0 +1,32 @@
+context Billing(billing) v1
+description "Decides whether to bill an order, works out the fee and the shipping charge, and sets the day payment is due"
+owner "Accounting team"
+
+owns
+  dir "../billing", "../calendars"
+  dir "../py/billing", "../py/calendars", "../ts/billing", "../ts/calendars"
+  dir "../java/src/main/java/billing", "../java/src/main/java/calendars"
+  dir "../go/billing", "../go/calendars"
+
+published language rulec.payment_fee.v1
+  rulec "../billing/rules/payment_fee.rule"
+  open host service PaymentFeeService
+
+terms
+  fee "The amount for each payment, worked out from the rate in the contract"
+    means rulec "../billing/rules/payment_fee.rule" output fee
+  cancel "Voiding an invoice after it was confirmed, and refunding it"
+
+upstream Ordering anticorruption layer
+  through shop.ordering.v1
+  layer rulec "../billing/rules/billing_need.rule"
+  layer dir "../py/billing/acl/ordering", "../ts/billing/acl/ordering"
+  layer dir "../java/src/main/java/billing/acl/ordering", "../go/billing/acl/ordering"
+  enum OrderStatus -> rulec "../billing/rules/billing_need.rule" enum order_status
+
+upstream Delivery customer
+  through shop.delivery.v1
+
+shared kernel with Delivery
+  koyomi "../calendars/tokyo_business_days.cal"
+  dir "../py/calendars", "../ts/calendars", "../java/src/main/java/calendars", "../go/calendars"

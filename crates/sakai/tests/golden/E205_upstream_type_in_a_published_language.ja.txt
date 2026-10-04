@@ -1,0 +1,7 @@
+エラー[E205]: proto/shop/billing/v1/billing.proto:5:1: 「Billing」の公表された言語 shop.billing.v1 に、上流「Ordering」の型が出ています
+     5 | import "shop/ordering/v1/order.proto";
+  = proto/shop/billing/v1/billing.proto は shop.ordering.v1.Order を使っています。腐敗防止層の下流は、上流のモデルを自分の公表された言語に出しません。層の中で自分の型に読み替えます。
+  関わるもの:
+      Billing   proto/shop/billing/v1/billing.proto:5       import "shop/ordering/v1/order.proto"
+      Ordering  proto "proto/shop/ordering/v1/order.proto"  公表された言語 shop.ordering.v1 のファイル
+      Billing   ctx/billing.ctx:14                          upstream Ordering anticorruption layer

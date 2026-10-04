@@ -1,0 +1,7 @@
+error[E407]: ctx/billing.ctx:21:31: Ordering's term cancel is mapped to cancel, the name of Billing's word of another meaning
+    21 |     ORDER_STATUS_CANCELLED -> cancel
+  = Billing's cancel is "Voiding an invoice after it was confirmed, and refunding it", which is not what Ordering's cancel means.
+  = Give what it is mapped to another name.
+  involved:
+      Ordering  ctx/ordering.ctx:15  cancel "Cancelling an order before it ships, at the customer's request"
+      Billing   ctx/billing.ctx:12   cancel "Voiding an invoice after it was confirmed, and refunding it"

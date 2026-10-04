@@ -130,8 +130,12 @@ fn e501(base: &str, edits: &[(&str, &str, &str)], map: &str, t: Target) -> Strin
 }
 
 fn example_variant(edits: &[(&str, &str, &str)]) -> common::TempDir {
+    example_variant_of(&example(), edits)
+}
+
+fn example_variant_of(example: &Path, edits: &[(&str, &str, &str)]) -> common::TempDir {
     let dir = common::TempDir::new("example");
-    common::copy_dir(&example(), dir.path());
+    common::copy_dir(example, dir.path());
     for (file, old, new) in edits {
         let p = dir.path().join(file);
         if old.is_empty() && new.is_empty() {
@@ -175,6 +179,120 @@ fn what_cannot_be_written() {
             dir.write("java/src/main/java/Main.java", "public class Main {}\n");
         }
         let b = build::run_with(dir.path(), "通販.ctx", t, &common::suite(), None, false, Lang::En).unwrap();
+        let text: String = b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect();
+        assert!(text.contains("error[E501]") && text.contains(says), "{text}");
+    }
+}
+
+// ── The English twins: the same groups and settings, written from the English example and map ──
+
+fn example_en() -> PathBuf {
+    std::fs::canonicalize(common::EXAMPLE_EN).unwrap()
+}
+
+/// The groups are named by the aliases, which the two examples share, so the table is the one of
+/// `the_groups_of_the_example_and_who_may_import_them`.
+#[test]
+fn the_groups_of_the_example_and_who_may_import_them_in_english() {
+    let want = "\
+sakai-ordering [ordering] <- sakai-ordering, sakai-ordering-pl-shop.ordering.v1
+sakai-ordering-pl-shop.ordering.v1 [shop/ordering/v1] <- sakai-ordering, sakai-ordering-pl-shop.ordering.v1, sakai-delivery, sakai-delivery-layer-inventory, sakai-billing-layer-ordering
+sakai-inventory [inventory] <- sakai-inventory, sakai-inventory-pl-warehouse.v1
+sakai-inventory-pl-warehouse.v1 [warehouse/v1] <- sakai-ordering, sakai-ordering-pl-shop.ordering.v1, sakai-inventory, sakai-inventory-pl-warehouse.v1, sakai-delivery-layer-inventory
+sakai-delivery [delivery] <- sakai-delivery, sakai-delivery-pl-shop.delivery.v1, sakai-delivery-layer-inventory
+sakai-delivery-pl-shop.delivery.v1 [shop/delivery/v1] <- sakai-ordering, sakai-delivery, sakai-delivery-pl-shop.delivery.v1, sakai-delivery-layer-inventory, sakai-billing, sakai-billing-layer-ordering
+sakai-delivery-layer-inventory [delivery/acl/inventory] <- sakai-delivery, sakai-delivery-pl-shop.delivery.v1, sakai-delivery-layer-inventory
+sakai-billing [billing] <- sakai-billing, sakai-billing-layer-ordering
+sakai-billing-layer-ordering [billing/acl/ordering] <- sakai-billing, sakai-billing-layer-ordering
+sakai-billing-kernel-delivery [calendars] <- sakai-delivery, sakai-delivery-pl-shop.delivery.v1, sakai-delivery-layer-inventory, sakai-billing, sakai-billing-layer-ordering, sakai-billing-kernel-delivery
+sakai-reviews [reviews] <- sakai-reviews
+";
+    for language in [Language::Python, Language::TypeScript, Language::Java, Language::Go] {
+        assert_eq!(table(&example_en(), "shop.ctx", language), want, "{}", language.word());
+    }
+}
+
+#[test]
+fn a_published_language_inside_the_inside_in_english() {
+    let dir = std::fs::canonicalize("tests/maps/nested").unwrap();
+    let want = "\
+sakai-inventory [warehouse] <- sakai-inventory, sakai-inventory-pl-warehouse.v1
+sakai-inventory-pl-warehouse.v1 [warehouse/v1] <- sakai-inventory, sakai-inventory-pl-warehouse.v1, sakai-ordering
+sakai-ordering [ordering] <- sakai-ordering
+";
+    assert_eq!(table(&dir, "nested.ctx", Language::Python), want);
+}
+
+/// The settings the English example keeps are what sakai writes from its map (`--lang en`).
+#[test]
+fn the_settings_of_the_example_are_what_the_map_writes_in_english() {
+    let ex = example_en();
+    let bless = ritsu_testkit::golden::bless();
+    let mut failures = Vec::new();
+    for t in Target::ALL {
+        let b = build::run_with(&ex, "shop.ctx", t, &common::suite(), None, !bless, Lang::En).unwrap();
+        if b.outcome.has_errors() || b.done.is_none() {
+            failures.push(b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect::<String>());
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// `--check` says it when the map changed after the settings were written, here in English: the
+/// words of the settings differ with `--lang`, and the note says which language the file was
+/// written in.
+#[test]
+fn check_says_when_the_map_moved_on_in_english() {
+    let dir = common::TempDir::new("check-en");
+    common::copy_dir(&example_en(), dir.path());
+    for t in Target::ALL {
+        let b = build::run_with(dir.path(), "shop.ctx", t, &common::suite(), None, true, Lang::En).unwrap();
+        assert!(!b.outcome.has_errors(), "{} is up to date in the copy", t.word());
+        let b = build::run_with(dir.path(), "shop.ctx", t, &common::suite(), None, true, Lang::Ja).unwrap();
+        let text: String = b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect();
+        assert!(text.contains("error[E502]") && text.contains("The file was written with --lang en"), "{text}");
+    }
+    let p = dir.path().join("contexts/reviews.ctx");
+    let s = std::fs::read_to_string(&p).unwrap();
+    std::fs::write(&p, format!("{s}\nupstream Ordering conformist\n  through shop.ordering.v1\n")).unwrap();
+    for t in Target::ALL {
+        let b = build::run_with(dir.path(), "shop.ctx", t, &common::suite(), None, true, Lang::En).unwrap();
+        let codes: Vec<&str> = b.outcome.diags.iter().map(|d| d.code).collect();
+        assert_eq!(codes, ["E502"], "{}", t.word());
+        assert!(b.done.is_none());
+    }
+    for t in Target::ALL {
+        assert!(build::run_with(dir.path(), "shop.ctx", t, &common::suite(), None, false, Lang::En).unwrap().done.is_some());
+        let b = build::run_with(dir.path(), "shop.ctx", t, &common::suite(), None, true, Lang::En).unwrap();
+        assert!(b.outcome.diags.is_empty(), "{}", t.word());
+    }
+}
+
+#[test]
+fn what_cannot_be_written_in_english() {
+    let t = e501("basic", &[], "basic.ctx", Target::GoArchLint);
+    assert!(t.contains("The map has no `code go` line"), "{t}");
+    let t = e501(
+        "basic",
+        &[("ctx/ordering.ctx", "\"../py/ordering\"", "\"../py/ordering\", \"../py/my-pkg\""), ("py/my-pkg/x.py", "", "X = 1\n")],
+        "basic.ctx",
+        Target::ImportLinter,
+    );
+    assert!(t.contains("`my-pkg` is not a name a Python module can have"), "{t}");
+    let t = e501("basic", &[("ctx/ordering.ctx", "\"../py/ordering\"\n", "\"../py/ordering\"\n  file \"../py/ordering/fulfill.py\"\n")], "basic.ctx", Target::ImportLinter);
+    assert!(t.contains("names one file of code"), "{t}");
+    let t = e501("basic", &[("ctx/ordering.ctx", "\"../py/ordering\"", "\"../py/ordering\", \"../py\""), ("py/top.py", "", "X = 1\n")], "basic.ctx", Target::ImportLinter);
+    assert!(t.contains("The module py/top.py is right in the place of the Python code"), "{t}");
+    for (edits, t, says) in [
+        (vec![("shop.ctx", "code java \"java/src/main/java\"\n  test \"java/src/test/java\"\n", "code java \"java/src/main/java\"\n")], Target::ArchUnit, "has no `test` line under it"),
+        (vec![("go/go.mod", "", "")], Target::GoArchLint, "There is no go.mod in"),
+        (vec![("contexts/reviews.ctx", "\"../java/src/main/java/reviews\"", "\"../java/src/main/java\"")], Target::ArchUnit, "is in the default package"),
+    ] {
+        let dir = example_variant_of(&example_en(), &edits);
+        if says.contains("default package") {
+            dir.write("java/src/main/java/Main.java", "public class Main {}\n");
+        }
+        let b = build::run_with(dir.path(), "shop.ctx", t, &common::suite(), None, false, Lang::En).unwrap();
         let text: String = b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect();
         assert!(text.contains("error[E501]") && text.contains(says), "{text}");
     }

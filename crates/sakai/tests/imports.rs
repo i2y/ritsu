@@ -4,7 +4,9 @@
 //! in silence: import-linter analyzed every module, dependency-cruiser cruised every file and read
 //! TypeScript, ArchUnit found every rule, go-arch-lint held every file to a component. The nested
 //! map (`tests/maps/入れ子`) goes the same way. What the tools say about the imports they catch
-//! is held in `tests/golden/imports/<tool>.txt`.
+//! is held in `tests/golden/imports/<tool>.txt`. Each of the four cases has its English twin (the
+//! English example, with its settings written in English, and the nested map in English), whose
+//! imports are in the directories of the English names beside the Japanese ones.
 //!
 //! A tool that is not there is told with `SKIP:` and its test passes; `tools/README.md` says how
 //! to put each in `tools/`.
@@ -23,11 +25,16 @@ struct Case {
     dir: &'static str,
     map: &'static str,
     mutants: &'static str,
+    /// The language the settings are written in: the Japanese cases' imports are in the
+    /// directories of Japanese names, the English cases' in those of English names.
+    lang: Lang,
 }
 
-const CASES: [Case; 2] = [
-    Case { dir: common::EXAMPLE, map: "通販.ctx", mutants: "tests/code" },
-    Case { dir: "tests/maps/入れ子", map: "入れ子.ctx", mutants: "tests/code/入れ子" },
+const CASES: [Case; 4] = [
+    Case { dir: common::EXAMPLE, map: "通販.ctx", mutants: "tests/code", lang: Lang::Ja },
+    Case { dir: "tests/maps/入れ子", map: "入れ子.ctx", mutants: "tests/code/入れ子", lang: Lang::Ja },
+    Case { dir: common::EXAMPLE_EN, map: "shop.ctx", mutants: "tests/code", lang: Lang::En },
+    Case { dir: "tests/maps/nested", map: "nested.ctx", mutants: "tests/code/nested", lang: Lang::En },
 ];
 
 fn code_dir(t: Target) -> &'static str {
@@ -60,7 +67,13 @@ fn extension(t: Target) -> &'static str {
 /// The imports a case does not allow, in a language: the name, and the files to lay over the code.
 fn mutants(case: &Case, t: Target) -> Vec<(String, PathBuf)> {
     let d = Path::new(case.mutants).join(language(t));
-    let mut v: Vec<(String, PathBuf)> = std::fs::read_dir(&d).unwrap().filter_map(|e| e.ok()).filter(|e| e.path().is_dir()).map(|e| (e.file_name().to_string_lossy().to_string(), e.path())).collect();
+    let mut v: Vec<(String, PathBuf)> = std::fs::read_dir(&d)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .map(|e| (e.file_name().to_string_lossy().to_string(), e.path()))
+        .filter(|(name, _)| name.is_ascii() == (case.lang == Lang::En))
+        .collect();
     v.sort();
     v
 }
@@ -79,12 +92,12 @@ fn count(dir: &Path, ext: &str) -> usize {
     n
 }
 
-/// A copy of the case with the settings sakai writes (`--lang ja`), and the mutant's files over
-/// its code, added after the settings were written.
+/// A copy of the case with the settings sakai writes (in the case's language), and the mutant's
+/// files over its code, added after the settings were written.
 fn prepared(case: &Case, t: Target, mutant: Option<&Path>) -> TempDir {
     let dir = TempDir::new(case.dir.rsplit('/').next().unwrap_or("case"));
     common::copy_dir(Path::new(case.dir), dir.path());
-    let b = build::run_with(dir.path(), case.map, t, &common::suite(), None, false, Lang::Ja).unwrap();
+    let b = build::run_with(dir.path(), case.map, t, &common::suite(), None, false, case.lang).unwrap();
     let text: String = b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect();
     assert!(!b.outcome.has_errors() && b.done.is_some(), "{}: {text}", t.word());
     if let Some(m) = mutant {

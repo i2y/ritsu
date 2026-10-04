@@ -1,0 +1,6 @@
+error[E209]: ordering/fulfillment.flow:59:1: The workflow ordering/fulfillment.flow of Ordering runs Delivery's workflow delivery/arrange_delivery.flow as its child
+    59 |   flow "../delivery/arrange_delivery.flow"
+  = Another context's workflow may run as a child when the two are partners, when the child is in their shared kernel, or when the child `implements` an open host service of Delivery; else call a service Delivery publishes with `connect`.
+  involved:
+      Ordering  ordering/fulfillment.flow:59              flow "../delivery/arrange_delivery.flow"
+      Delivery  dandori "delivery/arrange_delivery.flow"  a part of the inside of Delivery

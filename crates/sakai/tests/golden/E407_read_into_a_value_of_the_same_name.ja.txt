@@ -1,0 +1,7 @@
+エラー[E407]: ctx/billing.ctx:21:31: 「Ordering」の語「cancel」を、「Billing」の違う意味の語と同じ名前の「cancel」に読み替えています
+    21 |     ORDER_STATUS_CANCELLED -> cancel
+  = 「Billing」の「cancel」は「Voiding an invoice after it was confirmed, and refunding it」で、「Ordering」の「cancel」とは違う意味です。
+  = 読み替えた先には、違う名前を付けます。
+  関わるもの:
+      Ordering  ctx/ordering.ctx:15  cancel "Cancelling an order before it ships, at the customer's request"
+      Billing   ctx/billing.ctx:12   cancel "Voiding an invoice after it was confirmed, and refunding it"

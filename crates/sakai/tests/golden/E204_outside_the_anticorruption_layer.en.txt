@@ -1,0 +1,7 @@
+error[E204]: proto/billing/report/v1/report.proto:5:1: The file proto/billing/report/v1/report.proto refers to Ordering's published language shop.ordering.v1 from outside the anticorruption layer
+     5 | import "shop/ordering/v1/order.proto";
+  = Billing writes a `layer`, so only the layer (dir "proto/billing/acl") may refer to the upstream's published language.
+  involved:
+      Billing   proto/billing/report/v1/report.proto:5      import "shop/ordering/v1/order.proto"
+      Ordering  proto "proto/shop/ordering/v1/order.proto"  a file of the published language shop.ordering.v1
+      Billing   ctx/billing.ctx:14                          upstream Ordering anticorruption layer

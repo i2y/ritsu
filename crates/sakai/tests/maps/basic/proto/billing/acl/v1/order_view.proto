@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package billing.acl.v1;
+
+import "shop/ordering/v1/order.proto";
+
+// Inside billing's anticorruption layer, takes in the status of an order from ordering.
+message OrderView {
+  shop.ordering.v1.OrderStatus status = 1;
+}

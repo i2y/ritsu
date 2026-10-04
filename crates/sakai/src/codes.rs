@@ -29,6 +29,22 @@ pub const BASE: &[(&str, &str)] = &[
     ),
 ];
 
+/// The same map with its names in English: Alpha and Beta, Beta publishing `b.v1`, and no
+/// relationship. It passes check too.
+pub const BASE_EN: &[(&str, &str)] = &[
+    ("map.ctx", "map Map(m) v1\nuse context \"alpha.ctx\"\nuse context \"beta.ctx\"\ncovers \".\"\n"),
+    ("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n"),
+    (
+        "beta.ctx",
+        "context Beta(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService\n\nterms\n  kind \"The kind of thing Beta deals with\"\n    means enum Kind\n",
+    ),
+    ("a/a.proto", "syntax = \"proto3\";\npackage a;\nmessage A {}\n"),
+    (
+        "b/v1/b.proto",
+        "syntax = \"proto3\";\npackage b.v1;\nenum Kind {\n  KIND_UNSPECIFIED = 0;\n  KIND_ONE = 1;\n  KIND_TWO = 2;\n}\nmessage B { Kind kind = 1; }\nmessage Plain { string id = 1; }\nservice BService { rpc Get(B) returns (B); }\n",
+    ),
+];
+
 /// A map of one context whose Rust code has no workspace manifest at its `code rust` place
 /// (E107): the reproduction of the one code that reads Rust's crates.
 const RUST: &[(&str, &str)] = &[
@@ -41,6 +57,8 @@ const RUST: &[(&str, &str)] = &[
 const A_USES_B: (&str, &str) = ("a/a.proto", "syntax = \"proto3\";\npackage a;\nimport \"b/v1/b.proto\";\nmessage A { b.v1.B b = 1; }\n");
 const A_USES_PLAIN: (&str, &str) = ("a/a.proto", "syntax = \"proto3\";\npackage a;\nimport \"b/v1/b.proto\";\nmessage A { b.v1.Plain p = 1; }\n");
 const A_CONFORMS: (&str, &str) = ("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 conformist\n  through b.v1\n");
+/// The same, with its names in English.
+const A_CONFORMS_EN: (&str, &str) = ("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta conformist\n  through b.v1\n");
 const A_PUBLISHES: (&str, &str) = ("a/v1/a1.proto", "syntax = \"proto3\";\npackage a.v1;\nenum AKind {\n  A_KIND_UNSPECIFIED = 0;\n  A_KIND_X = 1;\n}\nmessage A1 {}\n");
 /// A rule of 甲 whose table leaves an amount out: rulec does not answer for it (E105).
 const A_RULE_WITH_A_GAP: (&str, &str) = (
@@ -51,6 +69,11 @@ const A_RULE_WITH_A_GAP: (&str, &str) = (
 const A_RULE_TAKES_KIND: (&str, &str) = (
     "a/x.rule",
     "rule x(x) v1\n\nimport proto \"../b/v1/b.proto\" Kind -> 種類\nenum 種類(kind) = 一(one) | 二(two)\n\ninputs\n  k : 種類\n\noutputs\n  n : 種類\n\ntable t\npolicy unique\n| k  | -> n |\n| 一 | 一   |\n| 二 | 二   |\n",
+);
+/// The same, with its names in English.
+const A_RULE_TAKES_KIND_EN: (&str, &str) = (
+    "a/x.rule",
+    "rule x v1\n\nimport proto \"../b/v1/b.proto\" Kind -> kind\nenum kind = one | two\n\ninputs\n  k : kind\n\noutputs\n  n : kind\n\ntable t\npolicy unique\n| k   | -> n |\n| one | one  |\n| two | two  |\n",
 );
 /// A workflow of 甲 that calls 乙's `BService` by Connect.
 const A_CALLS_B: (&str, &str) = (
@@ -64,6 +87,30 @@ fn laid(files: &'static [(&'static str, &'static str)]) -> Vec<(&'static str, &'
     let mut out: Vec<(&str, &str)> = BASE.iter().map(|(p, b)| files.iter().find(|(q, _)| q == p).copied().unwrap_or((*p, *b))).collect();
     out.extend(files.iter().filter(|(q, _)| !BASE.iter().any(|(p, _)| p == q)).copied());
     out
+}
+
+/// The files of a reproduction with English names: [`BASE_EN`] in its order, each replaced by the
+/// entry's file of the same path, then the entry's other files.
+fn laid_en(files: &'static [(&'static str, &'static str)]) -> Vec<(&'static str, &'static str)> {
+    let mut out: Vec<(&str, &str)> = BASE_EN.iter().map(|(p, b)| files.iter().find(|(q, _)| q == p).copied().unwrap_or((*p, *b))).collect();
+    out.extend(files.iter().filter(|(q, _)| !BASE_EN.iter().any(|(p, _)| p == q)).copied());
+    out
+}
+
+/// An entry that shows a reproduction with English names where it had one with Japanese names:
+/// `explain` shows the English one in English and the Japanese one in Japanese, and the tests run both.
+trait English {
+    fn en(self, files: &'static [(&'static str, &'static str)]) -> Entry;
+}
+
+impl English for Entry {
+    fn en(self, files: &'static [(&'static str, &'static str)]) -> Entry {
+        let command = match &self.repro {
+            Repro::Dir { command, .. } => command.iter().map(|w| if *w == "地図.ctx" { "map.ctx" } else { *w }).collect(),
+            _ => vec!["check", "."],
+        };
+        self.english(Repro::Dir { files: laid_en(files), command })
+    }
 }
 
 /// An entry whose reproduction is `files` laid over [`BASE`], checked with `sakai check .`, or
@@ -120,7 +167,8 @@ pub fn ledger() -> Ledger {
             tr!("示された位置を直します。文字列は同じ行の `\"` で閉じ、エスケープは `\\\"` と `\\\\` だけを使います。", "Correct it where it points: close the string with `\"` on the same line, and use no escape but `\\\"` and `\\\\`."),
             &[("甲.ctx", "context 甲(a) v1\ndescription \"閉じていない\nowns\n  dir \"a\"\n")],
             &["E002"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\ndescription \"not closed\nowns\n  dir \"a\"\n")]),
         e(
             "E002",
             tr!("この位置に書けない語があります", "A word is written where it does not belong"),
@@ -131,18 +179,20 @@ pub fn ledger() -> Ledger {
             tr!("注に挙がる書き方のどれかにします。", "Use one of the forms the note gives."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙\n  through b.v1\n")],
             &["E004"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta\n  through b.v1\n")]),
         e(
             "E003",
             tr!("ファイルが `map` か `context` の行で始まっていません", "The file does not start with a `map` or a `context` line"),
             tr!("コメントと空行を除いた最初の行が、`map …` でも `context …` でもないとき。", "The first line that is not a comment or blank is neither `map …` nor `context …`."),
             tr!(
                 "コンテキストマップなら `map 通販(shop) v1`、一つのコンテキストなら `context 在庫(inventory) v1` のように書き始めます。",
-                "Start a context map like `map 通販(shop) v1`, and one context like `context 在庫(inventory) v1`."
+                "Start a context map like `map Shop(shop) v1`, and one context like `context Inventory(inventory) v1`."
             ),
             &[("甲.ctx", "owns\n  dir \"a\"\n")],
             &["E004"],
-        ),
+        )
+        .en(&[("alpha.ctx", "owns\n  dir \"a\"\n")]),
         e(
             "E004",
             tr!("節の順序か数が違います", "A section is out of order, repeated, missing, or in the wrong kind of file"),
@@ -156,7 +206,8 @@ pub fn ledger() -> Ledger {
             ),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\nowner \"甲のチーム\"\n")],
             &["E002", "E003"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\nowner \"Alpha's team\"\n")]),
         e(
             "E005",
             tr!("字下げが合いません", "The indentation does not line up"),
@@ -167,7 +218,8 @@ pub fn ledger() -> Ledger {
             tr!("スペースで、同じ節の行は同じ幅に字下げします。", "Indent with spaces, every line of a block by the same amount."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n\tdir \"a\"\n")],
             &[],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n\tdir \"a\"\n")]),
         e(
             "E006",
             tr!("同じ名前を二度宣言しています", "A name is declared twice"),
@@ -181,6 +233,11 @@ pub fn ledger() -> Ledger {
                 "context 甲(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService\n\nterms\n  種類 \"乙が扱うものの種類\"\n    means enum Kind\n",
             )],
             &["E007"],
+        )
+        .en(&[(
+                    "beta.ctx",
+                    "context Alpha(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService\n\nterms\n  kind \"The kind of thing Beta deals with\"\n    means enum Kind\n",
+                )],
         ),
         e(
             "E007",
@@ -192,7 +249,8 @@ pub fn ledger() -> Ledger {
             tr!("名前の書き違いを直すか、`use context` を足します。二つの package に当たる名前は package から書きます（`message warehouse.v1.ReserveResponse`）。", "Correct the spelling, or add the `use context`. Write a name two packages have with its package (`message warehouse.v1.ReserveResponse`)."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 丙 conformist\n  through b.v1\n")],
             &["E006", "E410"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Gamma conformist\n  through b.v1\n")]),
         e(
             "E008",
             tr!("地図かコンテキストに ASCII の別名がありません", "A map or a context has no ASCII alias"),
@@ -200,10 +258,11 @@ pub fn ledger() -> Ledger {
                 "見出しの名前のすぐあとに `(alias)` が無いとき、または別名が `[A-Za-z_][A-Za-z0-9_]*` の形でないとき。別名は CML の名前と、import の検査の設定の名前になります。",
                 "The heading's name has no `(alias)` right after it, or the alias is not of the form `[A-Za-z_][A-Za-z0-9_]*`. The alias names it in CML and in the settings of the import linters."
             ),
-            tr!("`受注(ordering)` のように、名前のすぐあとに丸括弧で書きます。", "Write it in parentheses right after the name, like `受注(ordering)`."),
+            tr!("`受注(ordering)` のように、名前のすぐあとに丸括弧で書きます。", "Write it in parentheses right after the name, like `Ordering(ordering)`."),
             &[("甲.ctx", "context 甲 v1\nowns\n  dir \"a\"\n")],
             &[],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha v1\nowns\n  dir \"a\"\n")]),
         e(
             "E009",
             tr!("書いたパスがありません", "A path written is not there"),
@@ -214,7 +273,8 @@ pub fn ledger() -> Ledger {
             tr!("パスを直します。", "Correct the path."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\", \"nowhere\"\n")],
             &["E012"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\", \"nowhere\"\n")]),
         e(
             "E010",
             tr!("`use context` の先が使えません", "What `use context` names cannot be used"),
@@ -222,7 +282,8 @@ pub fn ledger() -> Ledger {
             tr!("context のファイルを一度ずつ読みます。", "Name each context file once."),
             &[("地図.ctx", "map 地図(m) v1\nuse context \"甲.ctx\"\nuse context \"乙.ctx\"\nuse context \"甲.ctx\"\ncovers \".\"\n")],
             &[],
-        ),
+        )
+        .en(&[("map.ctx", "map Map(m) v1\nuse context \"alpha.ctx\"\nuse context \"beta.ctx\"\nuse context \"alpha.ctx\"\ncovers \".\"\n")]),
         e(
             "E011",
             tr!("成果物の名指しの形が違います", "The name of an artifact is not of the right form"),
@@ -233,7 +294,8 @@ pub fn ledger() -> Ledger {
             tr!("`<ツール> \"<パス>\" [<種類> <名前>]…` の形で書きます。", "Write it in the form `<tool> \"<path>\" [<kind> <name>]...`."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  rulec \"a/a.proto\"\n")],
             &["E012"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  rulec \"a/a.proto\"\n")]),
         e(
             "E012",
             tr!("絶対パスか、ルートの外に出るパスか、空のパスです", "A path is absolute, goes outside the root, or is empty"),
@@ -247,7 +309,8 @@ pub fn ledger() -> Ledger {
             ),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\", \"../outside\"\n")],
             &["E009"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\", \"../outside\"\n")]),
         // ── Who owns what, and reading the artifacts ──
         e(
             "E101",
@@ -259,7 +322,8 @@ pub fn ledger() -> Ledger {
             tr!("どれかのコンテキストの `owns` に、そのディレクトリかファイルを書きます。", "Write the directory or the file under the `owns` of a context."),
             &[("c/c.proto", "syntax = \"proto3\";\npackage c;\nmessage C {}\n")],
             &["E102"],
-        ),
+        )
+        .en(&[("c/c.proto", "syntax = \"proto3\";\npackage c;\nmessage C {}\n")]),
         e(
             "E102",
             tr!("二つのコンテキストが同じ深さで持つ成果物があります", "Two contexts own an artifact at the same depth"),
@@ -270,6 +334,11 @@ pub fn ledger() -> Ledger {
                 "context 乙(b) v1\nowns\n  dir \"b\", \"a\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService\n\nterms\n  種類 \"乙が扱うものの種類\"\n    means enum Kind\n",
             )],
             &["E101"],
+        )
+        .en(&[(
+                    "beta.ctx",
+                    "context Beta(b) v1\nowns\n  dir \"b\", \"a\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService\n\nterms\n  kind \"The kind of thing Beta deals with\"\n    means enum Kind\n",
+                )],
         ),
         e(
             "E103",
@@ -285,6 +354,12 @@ pub fn ledger() -> Ledger {
                 ("c/c.proto", "syntax = \"proto3\";\npackage c;\nmessage C {}\n"),
             ],
             &[],
+        )
+        .en(&[
+                    ("map.ctx", "map Map(m) v1\nuse context \"alpha.ctx\"\nuse context \"beta.ctx\"\ncovers \".\"\nexcept \"c\"\n"),
+                    ("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\", \"c\"\n"),
+                    ("c/c.proto", "syntax = \"proto3\";\npackage c;\nmessage C {}\n"),
+                ],
         ),
         e(
             "E104",
@@ -296,7 +371,8 @@ pub fn ledger() -> Ledger {
             tr!("すべての言語をつないだ `ritsu sakai` で走らせます。", "Run it as `ritsu sakai`, which joins every language."),
             &[A_RULE_TAKES_KIND],
             &["E105"],
-        ),
+        )
+        .en(&[A_RULE_TAKES_KIND_EN]),
         e(
             "E105",
             tr!("成果物が、その言語の検査を通らないか、読めません", "An artifact does not pass its language's check, or cannot be read"),
@@ -307,7 +383,8 @@ pub fn ledger() -> Ledger {
             tr!("その成果物を、その言語の検査が通るように直します。", "Fix the artifact until its language's check passes."),
             &[A_RULE_WITH_A_GAP],
             &["E104"],
-        ),
+        )
+        .en(&[A_RULE_WITH_A_GAP]),
         e(
             "E106",
             tr!("proto が読めません", "A proto cannot be read"),
@@ -315,7 +392,8 @@ pub fn ledger() -> Ledger {
             tr!("示された位置を直します。", "Correct it where it points."),
             &[("b/v1/b.proto", "syntax = \"proto3\";\npackage b.v1;\nenum Kind {\n  KIND_UNSPECIFIED = 0;\n  KIND_ONE = 1;\n  KIND_TWO = 2;\n}\nmessage B { Kind kind = ; }\nmessage Plain { string id = 1; }\nservice BService { rpc Get(B) returns (B); }\n")],
             &[],
-        ),
+        )
+        .en(&[("b/v1/b.proto", "syntax = \"proto3\";\npackage b.v1;\nenum Kind {\n  KIND_UNSPECIFIED = 0;\n  KIND_ONE = 1;\n  KIND_TWO = 2;\n}\nmessage B { Kind kind = ; }\nmessage Plain { string id = 1; }\nservice BService { rpc Get(B) returns (B); }\n")]),
         Entry::new(
             "E107",
             tr!("Cargo から Rust のクレートを読めません", "Cargo cannot say the crates of the Rust code"),
@@ -337,7 +415,8 @@ pub fn ledger() -> Ledger {
             tr!("パスを直すか、項を消します。", "Correct the path, or delete the entry."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\", \"empty\"\n"), ("empty/README.txt", "nothing here is an artifact\n")],
             &[],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\", \"empty\"\n"), ("empty/README.txt", "nothing here is an artifact\n")]),
         e(
             "W102",
             tr!("proto の import が見つかりません", "A proto's import is not found"),
@@ -348,7 +427,8 @@ pub fn ledger() -> Ledger {
             tr!("地図に `proto root` を書くか、import を直します。範囲の外の契約なら、そのままでかまいません（その型は参照の検査から外れます）。", "Write a `proto root` in the map, or correct the import; a contract outside the scope may stay so (its types are left out of the check of the references)."),
             &[("a/a.proto", "syntax = \"proto3\";\npackage a;\nimport \"elsewhere/v1/x.proto\";\nmessage A {}\n")],
             &[],
-        ),
+        )
+        .en(&[("a/a.proto", "syntax = \"proto3\";\npackage a;\nimport \"elsewhere/v1/x.proto\";\nmessage A {}\n")]),
         e(
             "W103",
             tr!("どの地図にも読まれない context のファイルがあります", "A context file no map reads"),
@@ -356,7 +436,8 @@ pub fn ledger() -> Ledger {
             tr!("地図の `use context` に足すか、ファイルを消します。", "Add it to a map's `use context`, or delete the file."),
             &[("丙.ctx", "context 丙(c) v1\nowns\n  dir \"a\"\n")],
             &[],
-        ),
+        )
+        .en(&[("gamma.ctx", "context Gamma(c) v1\nowns\n  dir \"a\"\n")]),
         e(
             "N101",
             tr!("dandori の参照を確かめていません", "The references of dandori are not checked"),
@@ -377,7 +458,8 @@ pub fn ledger() -> Ledger {
             tr!("参照する側に `upstream <相手> <役割>` と `through <package>` を書くか、参照を消します。", "Write `upstream <context> <role>` and `through <package>` in the referring context, or delete the reference."),
             &[A_USES_B],
             &["E202", "E206"],
-        ),
+        )
+        .en(&[A_USES_B]),
         e(
             "E202",
             tr!("相手の内側への参照です", "A reference to the inside of another context"),
@@ -389,6 +471,12 @@ pub fn ledger() -> Ledger {
                 ("b/internal/v1/x.proto", "syntax = \"proto3\";\npackage b.internal.v1;\nmessage X {}\n"),
             ],
             &["E201"],
+        )
+        .en(&[
+                    A_CONFORMS_EN,
+                    ("a/a.proto", "syntax = \"proto3\";\npackage a;\nimport \"b/internal/v1/x.proto\";\nmessage A { b.internal.v1.X x = 1; }\n"),
+                    ("b/internal/v1/x.proto", "syntax = \"proto3\";\npackage b.internal.v1;\nmessage X {}\n"),
+                ],
         ),
         e(
             "E203",
@@ -405,6 +493,16 @@ pub fn ledger() -> Ledger {
                 ("a/a.proto", "syntax = \"proto3\";\npackage a;\nimport \"b/v2/b2.proto\";\nmessage A { b.v2.B2 b = 1; }\n"),
             ],
             &["E312"],
+        )
+        .en(&[
+                    A_CONFORMS_EN,
+                    (
+                        "beta.ctx",
+                        "context Beta(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService\n\npublished language b.v2\n  proto \"b/v2/b2.proto\"\n\nterms\n  kind \"The kind of thing Beta deals with\"\n    means enum Kind\n",
+                    ),
+                    ("b/v2/b2.proto", "syntax = \"proto3\";\npackage b.v2;\nmessage B2 {}\n"),
+                    ("a/a.proto", "syntax = \"proto3\";\npackage a;\nimport \"b/v2/b2.proto\";\nmessage A { b.v2.B2 b = 1; }\n"),
+                ],
         ),
         e(
             "E204",
@@ -417,6 +515,12 @@ pub fn ledger() -> Ledger {
                 A_USES_PLAIN,
             ],
             &["E205"],
+        )
+        .en(&[
+                    ("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta anticorruption layer\n  through b.v1\n  layer dir \"a/acl\"\n"),
+                    ("a/acl/v1/acl.proto", "syntax = \"proto3\";\npackage a.acl.v1;\nmessage Seen {}\n"),
+                    A_USES_PLAIN,
+                ],
         ),
         e(
             "E205",
@@ -431,6 +535,14 @@ pub fn ledger() -> Ledger {
                 ("a/v1/a1.proto", "syntax = \"proto3\";\npackage a.v1;\nimport \"b/v1/b.proto\";\nmessage A1 { b.v1.Plain p = 1; }\n"),
             ],
             &["E204"],
+        )
+        .en(&[
+                    (
+                        "alpha.ctx",
+                        "context Alpha(a) v1\nowns\n  dir \"a\"\n\npublished language a.v1\n  proto \"a/v1/a1.proto\"\n\nupstream Beta anticorruption layer\n  through b.v1\n",
+                    ),
+                    ("a/v1/a1.proto", "syntax = \"proto3\";\npackage a.v1;\nimport \"b/v1/b.proto\";\nmessage A1 { b.v1.Plain p = 1; }\n"),
+                ],
         ),
         e(
             "E206",
@@ -439,7 +551,8 @@ pub fn ledger() -> Ledger {
             tr!("参照を消すか、別々の道をやめて関係を書きます。", "Delete the reference, or replace separate ways with a relationship."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nseparate ways from 乙\n"), A_USES_PLAIN],
             &["E310"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nseparate ways from Beta\n"), A_USES_PLAIN]),
         e(
             "E207",
             tr!("ワークフローが、相手の公開ホストサービスでないサービスを呼んでいます", "A workflow calls a service that is no open host service of the other side"),
@@ -450,7 +563,8 @@ pub fn ledger() -> Ledger {
             tr!("相手がそのサービスを `open host service` に並べるか、相手が並べたサービスを呼びます。", "The other side lists the service under `open host service`, or the workflow calls one it lists."),
             &[A_CONFORMS, ("乙.ctx", "context 乙(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n\nterms\n  種類 \"乙が扱うものの種類\"\n    means enum Kind\n"), A_CALLS_B],
             &["E202", "E301"],
-        ),
+        )
+        .en(&[A_CONFORMS_EN, ("beta.ctx", "context Beta(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n\nterms\n  kind \"The kind of thing Beta deals with\"\n    means enum Kind\n"), A_CALLS_B]),
         e(
             "E208",
             tr!("ワークフローが実装するサービスが、自分の公表された言語にありません", "The service a workflow implements is not in its own published language"),
@@ -465,6 +579,12 @@ pub fn ledger() -> Ledger {
                 ("a/w.flow", "workflow w v1 implements a1.AService\n\nuse proto a1 from \"v1/a.proto\"\n\ninputs\n  id : string\n\noutputs\n  id : string\n\nflow\n  succeed id = id\n"),
             ],
             &["E301"],
+        )
+        .en(&[
+                    ("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\npublished language a.v1\n  proto \"a/v1/a.proto\"\n"),
+                    ("a/v1/a.proto", "syntax = \"proto3\";\npackage a.v1;\nimport \"dandori/v1/options.proto\";\nservice AService {\n  option (dandori.v1.workflow) = {name: \"w\", version: 1};\n  rpc Start(StartRequest) returns (StartResponse) {\n    option (dandori.v1.start) = {};\n  }\n}\nmessage StartRequest { string id = 1; }\nmessage StartResponse { string id = 1; }\n"),
+                    ("a/w.flow", "workflow w v1 implements a1.AService\n\nuse proto a1 from \"v1/a.proto\"\n\ninputs\n  id : string\n\noutputs\n  id : string\n\nflow\n  succeed id = id\n"),
+                ],
         ),
         e(
             "E209",
@@ -480,6 +600,12 @@ pub fn ledger() -> Ledger {
                 ("a/p.flow", "workflow p v1\n\nrecord 答え\n  id : string\n\ninputs\n  id : string\n\ntask run_child(id: string) -> 答え\n  flow \"../b/c.flow\"\n\nflow\n  let r = run_child(id: id)\n  succeed\n"),
             ],
             &["E202", "E207"],
+        )
+        .en(&[
+                    A_CONFORMS_EN,
+                    ("b/c.flow", "workflow c v1\n\ninputs\n  id : string\n\noutputs\n  id : string\n\nflow\n  succeed id = id\n"),
+                    ("a/p.flow", "workflow p v1\n\nrecord Answer\n  id : string\n\ninputs\n  id : string\n\ntask run_child(id: string) -> Answer\n  flow \"../b/c.flow\"\n\nflow\n  let r = run_child(id: id)\n  succeed\n"),
+                ],
         ),
         // ── The patterns ──
         e(
@@ -492,6 +618,11 @@ pub fn ledger() -> Ledger {
                 "context 乙(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService, NoService\n\nterms\n  種類 \"乙が扱うものの種類\"\n    means enum Kind\n",
             )],
             &["E302"],
+        )
+        .en(&[(
+                    "beta.ctx",
+                    "context Beta(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService, NoService\n\nterms\n  kind \"The kind of thing Beta deals with\"\n    means enum Kind\n",
+                )],
         ),
         e(
             "E302",
@@ -506,6 +637,11 @@ pub fn ledger() -> Ledger {
                 "context 乙(b) v1\nowns\n  dir \"b\"\n\npublished language b.v2\n  proto \"b/v1/b.proto\"\n  open host service BService\n",
             )],
             &["E301"],
+        )
+        .en(&[(
+                    "beta.ctx",
+                    "context Beta(b) v1\nowns\n  dir \"b\"\n\npublished language b.v2\n  proto \"b/v1/b.proto\"\n  open host service BService\n",
+                )],
         ),
         e(
             "E303",
@@ -514,7 +650,8 @@ pub fn ledger() -> Ledger {
             tr!("もう片方のファイルにも書きます。", "Write it in the other file too."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 customer\n  through b.v1\n")],
             &["E306"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta customer\n  through b.v1\n")]),
         e(
             "E304",
             tr!("順応者に対応か `layer` があります", "A conformist has a mapping or a `layer`"),
@@ -522,7 +659,8 @@ pub fn ledger() -> Ledger {
             tr!("読み替えるなら役割を anticorruption layer にし、そうでなければ対応と層を消します。", "To map the model, make the role anticorruption layer; otherwise delete the mappings and the layer."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 conformist\n  through b.v1\n  layer dir \"a\"\n")],
             &["E305"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta conformist\n  through b.v1\n  layer dir \"a\"\n")]),
         e(
             "E305",
             tr!("腐敗防止層でないのに、対応か `layer` があります", "A relationship that is not an anticorruption layer has a mapping or a `layer`"),
@@ -536,6 +674,14 @@ pub fn ledger() -> Ledger {
                 ),
             ],
             &["E304"],
+        )
+        .en(&[
+                    ("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta customer\n  through b.v1\n  layer dir \"a\"\n"),
+                    (
+                        "beta.ctx",
+                        "context Beta(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService\n\nterms\n  kind \"The kind of thing Beta deals with\"\n    means enum Kind\n\ndownstream Alpha supplier\n",
+                    ),
+                ],
         ),
         e(
             "E306",
@@ -550,6 +696,14 @@ pub fn ledger() -> Ledger {
                 ),
             ],
             &["E303"],
+        )
+        .en(&[
+                    ("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta conformist, customer\n  through b.v1\n"),
+                    (
+                        "beta.ctx",
+                        "context Beta(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService\n\nterms\n  kind \"The kind of thing Beta deals with\"\n    means enum Kind\n\ndownstream Alpha supplier\n",
+                    ),
+                ],
         ),
         e(
             "E307",
@@ -561,7 +715,8 @@ pub fn ledger() -> Ledger {
             tr!("両方のファイルに `shared kernel with <相手>` を書き、同じものを並べます。", "Write `shared kernel with <context>` in both files, with the same entries."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nshared kernel with 乙\n  proto \"a/a.proto\"\n")],
             &["E308", "E202"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nshared kernel with Beta\n  proto \"a/a.proto\"\n")]),
         e(
             "E308",
             tr!("共有カーネルの写しの中身が違います", "The copies of a shared kernel differ"),
@@ -577,6 +732,16 @@ pub fn ledger() -> Ledger {
                 ("b/k/units.proto", "syntax = \"proto3\";\npackage k;\nmessage Yen { int32 amount = 1; }\n"),
             ],
             &["E307"],
+        )
+        .en(&[
+                    ("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nshared kernel with Beta\n  proto \"a/k/units.proto\"\n"),
+                    ("a/k/units.proto", "syntax = \"proto3\";\npackage k;\nmessage Yen { int64 amount = 1; }\n"),
+                    (
+                        "beta.ctx",
+                        "context Beta(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService\n\nterms\n  kind \"The kind of thing Beta deals with\"\n    means enum Kind\n\nshared kernel with Alpha\n  proto \"b/k/units.proto\"\n",
+                    ),
+                    ("b/k/units.proto", "syntax = \"proto3\";\npackage k;\nmessage Yen { int32 amount = 1; }\n"),
+                ],
         ),
         e(
             "E309",
@@ -585,7 +750,8 @@ pub fn ledger() -> Ledger {
             tr!("もう片方のファイルにも書きます。", "Write it in the other file too."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\npartnership with 乙\n")],
             &["E201"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\npartnership with Beta\n")]),
         e(
             "E310",
             tr!("別々の道とほかの関係が両立しません", "Separate ways and another relationship cannot go together"),
@@ -593,7 +759,8 @@ pub fn ledger() -> Ledger {
             tr!("どちらかを消します。", "Delete one of them."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 conformist\n  through b.v1\n\nseparate ways from 乙\n")],
             &["E206"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta conformist\n  through b.v1\n\nseparate ways from Beta\n")]),
         e(
             "E311",
             tr!("自分自身との関係です", "A relationship with itself"),
@@ -601,7 +768,8 @@ pub fn ledger() -> Ledger {
             tr!("相手の名前を直します。", "Correct the other context's name."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\npartnership with 甲\n")],
             &[],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\npartnership with Alpha\n")]),
         e(
             "E312",
             tr!("上流が `through` の package を公表していません", "The upstream does not publish a package of `through`"),
@@ -609,7 +777,8 @@ pub fn ledger() -> Ledger {
             tr!("上流が公表している package を書きます。", "Write a package the upstream publishes."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 conformist\n  through b.v9\n")],
             &["E203"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta conformist\n  through b.v9\n")]),
         e(
             "E313",
             tr!("腐敗防止層の `layer` が下流のものではありません", "The `layer` of an anticorruption layer is not the downstream's"),
@@ -617,7 +786,8 @@ pub fn ledger() -> Ledger {
             tr!("下流に属するディレクトリを書きます。", "Write a directory of the downstream."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 anticorruption layer\n  through b.v1\n  layer dir \"b\"\n")],
             &[],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta anticorruption layer\n  through b.v1\n  layer dir \"b\"\n")]),
         e(
             "W301",
             tr!("上流をたどると、元のコンテキストに戻ります", "Following the upstreams comes back where it started"),
@@ -635,6 +805,18 @@ pub fn ledger() -> Ledger {
                 ),
             ],
             &[],
+        )
+        .en(&[
+                    (
+                        "alpha.ctx",
+                        "context Alpha(a) v1\nowns\n  dir \"a\"\n\npublished language a.v1\n  proto \"a/v1/a1.proto\"\n\nupstream Beta conformist\n  through b.v1\n",
+                    ),
+                    A_PUBLISHES,
+                    (
+                        "beta.ctx",
+                        "context Beta(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService\n\nterms\n  kind \"The kind of thing Beta deals with\"\n    means enum Kind\n\nupstream Alpha conformist\n  through a.v1\n",
+                    ),
+                ],
         ),
         // ── The mappings and the words ──
         e(
@@ -644,7 +826,8 @@ pub fn ledger() -> Ledger {
             tr!("値ごとに `<上流の値> -> <下流の値>` か `<上流の値> -> refuse \"<理由>\"` を書きます。", "Write `<upstream value> -> <value>` or `<upstream value> -> refuse \"<why>\"` for each."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 anticorruption layer\n  through b.v1\n  enum Kind -> 甲の種類\n    KIND_ONE -> 一つめ\n")],
             &["E402", "W402"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta anticorruption layer\n  through b.v1\n  enum Kind -> alpha_kind\n    KIND_ONE -> first\n")]),
         e(
             "E402",
             tr!("対応に、上流の列挙に無い値があります", "A mapping has a value the upstream enum lacks"),
@@ -655,6 +838,11 @@ pub fn ledger() -> Ledger {
                 "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 anticorruption layer\n  through b.v1\n  enum Kind -> 甲の種類\n    KIND_ONE -> 一つめ\n    KIND_TWO -> 二つめ\n    KIND_THREE -> 三つめ\n",
             )],
             &["E401"],
+        )
+        .en(&[(
+                    "alpha.ctx",
+                    "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta anticorruption layer\n  through b.v1\n  enum Kind -> alpha_kind\n    KIND_ONE -> first\n    KIND_TWO -> second\n    KIND_THREE -> third\n",
+                )],
         ),
         e(
             "E403",
@@ -669,6 +857,14 @@ pub fn ledger() -> Ledger {
                 A_PUBLISHES,
             ],
             &["E401"],
+        )
+        .en(&[
+                    (
+                        "alpha.ctx",
+                        "context Alpha(a) v1\nowns\n  dir \"a\"\n\npublished language a.v1\n  proto \"a/v1/a1.proto\"\n\nupstream Beta anticorruption layer\n  through b.v1\n  enum Kind -> enum AKind\n    KIND_ONE -> A_KIND_X\n    KIND_TWO -> A_KIND_Y\n",
+                    ),
+                    A_PUBLISHES,
+                ],
         ),
         e(
             "E404",
@@ -677,7 +873,8 @@ pub fn ledger() -> Ledger {
             tr!("`enum <上流の列挙> -> <先>` と値の行を書きます。", "Write `enum <upstream enum> -> <target>` and its value lines."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 anticorruption layer\n  through b.v1\n"), A_USES_B],
             &["E401"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta anticorruption layer\n  through b.v1\n"), A_USES_B]),
         e(
             "E405",
             tr!("rulec の規則の取り込みと、`.ctx` に書いた対応が食い違います", "A rule's import and the mapping of the `.ctx` disagree"),
@@ -691,6 +888,11 @@ pub fn ledger() -> Ledger {
                 A_RULE_TAKES_KIND,
             ],
             &["E401"],
+        )
+        .en(&[
+                    ("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta anticorruption layer\n  through b.v1\n  layer rulec \"a/x.rule\"\n  enum Kind -> rulec \"a/x.rule\" enum kind\n    KIND_ONE -> two\n    KIND_TWO -> two\n"),
+                    A_RULE_TAKES_KIND_EN,
+                ],
         ),
         e(
             "E406",
@@ -705,6 +907,11 @@ pub fn ledger() -> Ledger {
                 A_USES_B,
             ],
             &["E407"],
+        )
+        .en(&[
+                    ("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nterms\n  kind \"The kind Alpha gives to customers\"\n\nupstream Beta conformist\n  through b.v1\n"),
+                    A_USES_B,
+                ],
         ),
         e(
             "E407",
@@ -719,6 +926,14 @@ pub fn ledger() -> Ledger {
                 A_USES_B,
             ],
             &["E406"],
+        )
+        .en(&[
+                    (
+                        "alpha.ctx",
+                        "context Alpha(a) v1\nowns\n  dir \"a\"\n\nterms\n  kind \"The kind Alpha gives to customers\"\n\nupstream Beta anticorruption layer\n  through b.v1\n  enum Kind -> kind\n    KIND_ONE -> first\n    KIND_TWO -> second\n",
+                    ),
+                    A_USES_B,
+                ],
         ),
         e(
             "E408",
@@ -727,7 +942,8 @@ pub fn ledger() -> Ledger {
             tr!("自分の公表された言語の要素を指すか、`means` を消します。", "Point at an element of the context's own published language, or delete the `means`."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nterms\n  品 \"甲が売るもの\"\n    means proto \"b/v1/b.proto\" message Plain\n")],
             &["E007"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nterms\n  goods \"What Alpha sells\"\n    means proto \"b/v1/b.proto\" message Plain\n")]),
         e(
             "E409",
             tr!("`term` の対応の語が、用語集にありません", "A word of a `term` mapping is not in the glossary"),
@@ -735,7 +951,8 @@ pub fn ledger() -> Ledger {
             tr!("語の名前を直すか、用語集に語を足します。", "Correct the word, or add it to the glossary."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 anticorruption layer\n  through b.v1\n  term 無い語 -> 何か\n")],
             &["E410"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta anticorruption layer\n  through b.v1\n  term no_such_word -> something\n")]),
         e(
             "E410",
             tr!("`as` で取り入れる語が使えません", "What `as` takes cannot be taken"),
@@ -743,7 +960,8 @@ pub fn ledger() -> Ledger {
             tr!("語の名前を直すか、相手との関係を書きます。", "Correct the term, or write a relationship with the other context."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nterms\n  種類 as 乙.種類\n")],
             &["E007"],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nterms\n  kind as Beta.kind\n")]),
         e(
             "W401",
             tr!("境界を越えない語です", "A term crosses no boundary"),
@@ -751,7 +969,8 @@ pub fn ledger() -> Ledger {
             tr!("境界を越える語にするか、用語集から消します。", "Make it a word that crosses, or delete it from the glossary."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nterms\n  孤立 \"どこにも出ていかない語\"\n")],
             &[],
-        ),
+        )
+        .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nterms\n  stranded \"A word that goes out nowhere\"\n")]),
         e(
             "W402",
             tr!("値が無いことを表す 0 番の値に対応を書いています", "The value 0 that says nothing is set is mapped"),
@@ -762,6 +981,11 @@ pub fn ledger() -> Ledger {
                 "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 anticorruption layer\n  through b.v1\n  enum Kind -> 甲の種類\n    KIND_UNSPECIFIED -> 無し\n    KIND_ONE -> 一つめ\n    KIND_TWO -> 二つめ\n",
             )],
             &["E401"],
+        )
+        .en(&[(
+                    "alpha.ctx",
+                    "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta anticorruption layer\n  through b.v1\n  enum Kind -> alpha_kind\n    KIND_UNSPECIFIED -> nothing\n    KIND_ONE -> first\n    KIND_TWO -> second\n",
+                )],
         ),
         // ── Building the settings ──
         e(
@@ -775,7 +999,8 @@ pub fn ledger() -> Ledger {
             &[],
             &["E502"],
         )
-        .running(&["build", "地図.ctx", "--target", "import-linter"]),
+        .running(&["build", "地図.ctx", "--target", "import-linter"])
+        .en(&[]),
         e(
             "E502",
             tr!("書いてある設定が、いまの地図から書くものと違います", "The settings on the disk differ from what the map writes now"),
@@ -795,7 +1020,14 @@ pub fn ledger() -> Ledger {
             ],
             &["E501"],
         )
-        .running(&["build", "地図.ctx", "--target", "import-linter", "--check"]),
+        .running(&["build", "地図.ctx", "--target", "import-linter", "--check"])
+        .en(&[
+                    ("map.ctx", "map Map(m) v1\nuse context \"alpha.ctx\"\nuse context \"beta.ctx\"\ncovers \".\"\ncode python \"py\"\n"),
+                    ("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\", \"py\"\n"),
+                    ("py/k/x.py", "X = 1\n"),
+                    ("py/.importlinter", "# written by hand\n"),
+                ],
+        ),
     ];
     Ledger {
         tool: "sakai",

@@ -1,0 +1,2 @@
+error[E106]: proto/shop/billing/v1/billing.proto:11:1: The file proto/shop/billing/v1/billing.proto cannot be read: `;` is expected where `}` is
+    11 | }

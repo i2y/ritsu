@@ -1,0 +1,3 @@
+error[E002]: ctx/ordering.ctx:18:19: `upstream Inventory` has no role
+    18 | upstream Inventory
+  = The role is conformist, anticorruption layer or customer; customer may take anticorruption layer beside it, after a `,`.

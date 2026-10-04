@@ -1,0 +1,7 @@
+error[E308]: ctx/contracts.ctx:23:1: The copies of the shared kernel of Quotes and Contracts differ
+    23 | shared kernel with Quotes
+  = No copy on Contracts's side has the bytes of Quotes's proto "proto/quotes/kernel/units.proto" (Contracts has proto "proto/contracts/kernel/units.proto").
+  = When each side keeps a copy, the copies are kept the same.
+  involved:
+      Quotes     ctx/quotes.ctx:21     shared kernel with Contracts
+      Contracts  ctx/contracts.ctx:23  shared kernel with Quotes

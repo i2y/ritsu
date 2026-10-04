@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package shop.common.v1;
+
+// The shared kernel of ordering and inventory. It is in ordering's files, and inventory lists it too.
+message Money {
+  int64 amount_jpy = 1;
+}

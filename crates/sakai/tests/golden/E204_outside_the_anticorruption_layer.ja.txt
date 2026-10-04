@@ -1,0 +1,7 @@
+エラー[E204]: proto/billing/report/v1/report.proto:5:1: 腐敗防止層の外から、「Ordering」の公表された言語 shop.ordering.v1 を参照しています
+     5 | import "shop/ordering/v1/order.proto";
+  = 「Billing」は `layer` を書いているので、上流の公表された言語を参照できるのは層（dir "proto/billing/acl"）の中だけです。
+  関わるもの:
+      Billing   proto/billing/report/v1/report.proto:5      import "shop/ordering/v1/order.proto"
+      Ordering  proto "proto/shop/ordering/v1/order.proto"  公表された言語 shop.ordering.v1 のファイル
+      Billing   ctx/billing.ctx:14                          upstream Ordering anticorruption layer

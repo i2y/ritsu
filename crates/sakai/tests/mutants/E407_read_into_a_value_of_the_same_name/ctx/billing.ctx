@@ -1,0 +1,21 @@
+context Billing(billing) v1
+description "Decides whether to bill an order, to wait, or not to bill"
+owner "Accounting team"
+
+owns
+  dir "../proto/shop/billing", "../proto/billing", "../py/billing"
+
+published language shop.billing.v1
+  proto "../proto/shop/billing/v1/billing.proto"
+
+terms
+  cancel "Voiding an invoice after it was confirmed, and refunding it"
+
+upstream Ordering anticorruption layer
+  through shop.ordering.v1
+  layer dir "../proto/billing/acl"
+  enum OrderStatus -> billing_handling
+    ORDER_STATUS_RECEIVED  -> wait
+    ORDER_STATUS_PAID      -> bill
+    ORDER_STATUS_SHIPPED   -> bill
+    ORDER_STATUS_CANCELLED -> cancel

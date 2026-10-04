@@ -1,0 +1,4 @@
+error[E502]: py/.importlinter:11:1: The settings file py/.importlinter differs from what the map writes now
+    11 | name = The inside of Ordering (ordering) is imported only by Ordering and Billing
+  = From the map as it is now, the line is `name = The inside of Ordering (ordering) is imported only by Ordering`.
+  = Write it again with `sakai build --target import-linter`.

@@ -1,0 +1,44 @@
+context Delivery(delivery) v1
+description "Decides the day to ship, chooses how to carry, and arranges delivery of the parcel"
+owner "Delivery team"
+
+owns
+  dir "../delivery", "../proto/shop/delivery"
+  dir "../py/delivery", "../py/shop/delivery", "../ts/delivery", "../ts/shop/delivery"
+  dir "../java/src/main/java/delivery", "../java/src/main/java/shop/delivery"
+  dir "../go/delivery", "../go/shop/delivery"
+
+published language shop.delivery.v1
+  proto "../proto/shop/delivery/v1/shipment.proto"
+  open host service DeliveryService
+  generated dir "../py/shop/delivery/v1", "../ts/shop/delivery/v1"
+  generated dir "../java/src/main/java/shop/delivery/v1", "../go/shop/delivery/v1"
+
+published language rulec.urgency.v1
+  rulec "../delivery/rules/urgency.rule"
+  open host service UrgencyService
+
+terms
+  shipment "Handing a parcel over from the warehouse to a carrier"
+    means message CreateShipmentRequest
+  fragile "A parcel that nothing is put on top of while it travels"
+    means enum Handling value HANDLING_FRAGILE
+  urgent "Whether to carry by the next-day service"
+    means rulec "../delivery/rules/urgency.rule" output urgent
+
+upstream Inventory anticorruption layer
+  through warehouse.v1
+  layer dir "../py/delivery/acl/inventory", "../ts/delivery/acl/inventory"
+  layer dir "../java/src/main/java/delivery/acl/inventory", "../go/delivery/acl/inventory"
+  enum PackingStatus -> shipping_decision
+    PACKING_STATUS_WAITING -> wait
+    PACKING_STATUS_PACKED  -> ship
+    PACKING_STATUS_SHORT   -> refuse "A box with an item missing is not shipped. It goes back to ordering"
+
+downstream Billing supplier
+
+shared kernel with Billing
+  koyomi "../calendars/tokyo_business_days.cal"
+  dir "../py/calendars", "../ts/calendars", "../java/src/main/java/calendars", "../go/calendars"
+
+downstream Ordering supplier

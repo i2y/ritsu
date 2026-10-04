@@ -85,3 +85,34 @@ fn columns_after_japanese_count_characters() {
     assert_eq!(ds[0].code, "E002");
     assert_eq!((ds[0].line, ds[0].col), (Some(5), Some(14)));
 }
+
+// ── The English twins ──
+
+#[test]
+fn a_map_and_a_context_read_into_their_parts_in_english() {
+    let (f, ds) = parse("m.ctx", "map Shop(shop) v1\ndescription \"d\"\nuse context \"a.ctx\"\ncovers \".\"\nproto root \"proto\"\ncode java \"java/src/main/java\"\n  test \"java/src/test/java\"\n");
+    assert!(ds.is_empty(), "{ds:?}");
+    let Some(File::Map(m)) = f else { panic!() };
+    assert_eq!(m.heading.name, "Shop");
+    assert_eq!(m.heading.alias.as_deref(), Some("shop"));
+    assert_eq!(m.code[0].test.as_ref().unwrap().value, "java/src/test/java");
+    let src = "context Billing(billing) v1\nowns\n  dir \"../a\", rulec \"../b.rule\"\nterms\n  cancel \"Refunding it\"\n  order as Ordering.order\nupstream Ordering customer, anticorruption layer\n  through shop.ordering.v1\n  enum OrderStatus -> rulec \"../b.rule\" enum order_status\n  enum Packing -> shipping_decision\n    A -> wait\n    B -> refuse \"short\"\n  term reservation -> hold\n";
+    let (f, ds) = parse("c.ctx", src);
+    assert!(ds.is_empty(), "{ds:?}");
+    let Some(File::Context(c)) = f else { panic!() };
+    assert_eq!(c.owns.len(), 2);
+    assert_eq!(c.owns[1].tool, Some(sakai::naming::Tool::Rulec));
+    assert_eq!(c.terms[1].as_term.as_ref().unwrap().term, "order");
+    let sakai::ast::RelKind::Upstream(u) = &c.relations[0].kind else { panic!() };
+    assert_eq!(u.roles.len(), 2);
+    assert_eq!(u.enums.len(), 2);
+    assert_eq!(u.enums[1].values.len(), 2);
+    assert_eq!(u.terms[0].to, "hold");
+}
+
+#[test]
+fn columns_count_characters_in_english() {
+    let (_, ds) = parse("c.ctx", "context Billing(billing) v1\nowns\n  dir \"a\"\nterms\n  cancel \"refund\" extra\n");
+    assert_eq!(ds[0].code, "E002");
+    assert_eq!((ds[0].line, ds[0].col), (Some(5), Some(19)));
+}

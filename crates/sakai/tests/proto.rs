@@ -216,3 +216,62 @@ fn an_import_that_is_not_there_is_told() {
     assert!(matches!(&issues[0], proto::Issue::NotFound { import, .. } if import.path == "google/api/annotations.proto" && import.line == 3));
     assert_eq!(ps.resolve("a/v1/a.proto", "a.v1.A", "c.v1.C"), Resolved::Unknown);
 }
+
+// ── The English twins: the same reader, on the protos of the English example ──
+
+#[test]
+fn sakai_reads_what_buf_reads_in_english() {
+    if !ritsu_testkit::need(ritsu_testkit::Need::Buf) {
+        return;
+    }
+    let Some(buf) = common::program("BUF", "", "buf", &["--version"]) else {
+        common::skip("buf is not installed (SAKAI_BUF or the PATH); the reader of .proto files is not compared with it");
+        return;
+    };
+    let cases = [
+        ("examples/shop/proto", "shop/ordering/v1/order.proto"),
+        ("examples/shop/proto", "warehouse/v1/stock.proto"),
+        ("examples/shop/proto", "shop/ordering/v1/fulfillment.proto"),
+    ];
+    for (root, file) in cases {
+        let root = Path::new(root);
+        let ours = sakai_reads(root, file);
+        let theirs = buf_reads(&buf, root, file);
+        assert_eq!(ours, theirs, "{file}");
+        println!("compared {file} with buf: {} facts", ours.len());
+    }
+}
+
+#[test]
+fn a_file_that_imports_buf_validate_reads_without_its_import_in_english() {
+    let root = Path::new("examples/shop/proto");
+    let (ps, issues) = proto::load(root, &protos_under(root), &[".".to_string()]);
+    assert!(issues.is_empty(), "{issues:?}");
+    let f = &ps.files["shop/delivery/v1/shipment.proto"];
+    assert_eq!(f.package, "shop.delivery.v1");
+    assert_eq!(f.message("CreateShipmentRequest").unwrap().fields.len(), 4);
+    assert!(!ps.unread.contains("shop/delivery/v1/shipment.proto"));
+    let ff = "shop/ordering/v1/fulfillment.proto";
+    let Resolved::Found(rr) = ps.resolve(ff, "shop.ordering.v1.FulfillResponse", "warehouse.v1.ReserveResponse") else { panic!() };
+    assert_eq!((rr.full.as_str(), rr.file.as_str()), ("warehouse.v1.ReserveResponse", "warehouse/v1/stock.proto"));
+    assert_eq!(ps.resolve(ff, "shop.ordering.v1.FulfillmentOrder", "google.protobuf.Value"), Resolved::Known("google.protobuf.Value".into()));
+    let Resolved::Found(fr) = ps.resolve(ff, "shop.ordering.v1", "FulfillResponse") else { panic!() };
+    let reached: Vec<String> = ps.reach(&[fr]).into_iter().map(|s| s.full).collect();
+    assert_eq!(reached, vec!["shop.ordering.v1.FulfillResponse", "warehouse.v1.ReserveResponse", "warehouse.v1.Stock"]);
+}
+
+#[test]
+fn the_value_zero_that_says_nothing_is_set_on_real_files_in_english() {
+    let read = |p: &str| proto::read(p, &std::fs::read_to_string(p).unwrap()).unwrap();
+    let order = read("examples/shop/proto/shop/ordering/v1/order.proto");
+    let e = order.enumeration("OrderStatus").unwrap();
+    assert!(proto::is_unset(e, &e.values[0]));
+    assert!(!proto::is_unset(e, &e.values[1]));
+    let stock = read("examples/shop/proto/warehouse/v1/stock.proto");
+    let e = stock.enumeration("Stock").unwrap();
+    assert!(proto::is_unset(e, &e.values[0]));
+    let ship = read("examples/shop/proto/shop/delivery/v1/shipment.proto");
+    let e = ship.enumeration("Handling").unwrap();
+    assert_eq!(e.values[0].name, "HANDLING_STANDARD");
+    assert!(!proto::is_unset(e, &e.values[0]), "HANDLING_STANDARD = 0 is a value like the rest");
+}

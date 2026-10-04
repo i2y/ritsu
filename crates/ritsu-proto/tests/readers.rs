@@ -15,10 +15,10 @@ use std::path::Path;
 /// The three crates, and this crate's copies of the examples the readers' own tests used.
 const ROOTS: [&str; 4] = ["../rulec", "../dandori", "../sakai", "tests/fixtures"];
 
-/// The files no reader reads whole: a statement left open (sakai's E106 mutant, and dandori's
+/// The files no reader reads whole: a statement left open (sakai's E106 mutant, in English and in Japanese, and dandori's
 /// file that is not a `.proto`), and a proto2 `group`. ritsu-proto says where the file is wrong
 /// (rulec's reader passed over what it did not understand and gave what it found in them).
-const REFUSED: [&str; 3] = ["../sakai/tests/mutants/E106_読めない_proto/proto/shop/billing/v1/billing.proto", "tests/fixtures/dandori/bad/specs/money.proto", "tests/fixtures/sakai/group.proto"];
+const REFUSED: [&str; 4] = ["../sakai/tests/mutants/E106_unreadable_proto/proto/shop/billing/v1/billing.proto", "../sakai/tests/mutants/E106_読めない_proto/proto/shop/billing/v1/billing.proto", "tests/fixtures/dandori/bad/specs/money.proto", "tests/fixtures/sakai/group.proto"];
 
 /// Every `.proto` under a root, as paths from it, in path order; the tools a crate installs
 /// (`tools/`) are not its files.

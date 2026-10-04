@@ -80,3 +80,79 @@ published language shop.common.v1
     );
     assert_eq!(codes(&check_dir(dir.path())), ["E406"]);
 }
+
+// ── The English twins ──
+
+#[test]
+fn the_cancel_of_ordering_is_mapped_by_billing_and_passes_in_english() {
+    assert_eq!(codes(&check_dir(variant("basic", &[]).path())), Vec::<&str>::new());
+}
+
+#[test]
+fn without_the_mapping_the_same_word_crosses_unmapped_in_english() {
+    let dir = variant(
+        "basic",
+        &[("ctx/billing.ctx", "  enum OrderStatus -> enum BillingStatus\n    ORDER_STATUS_RECEIVED  -> BILLING_STATUS_WAIT\n    ORDER_STATUS_PAID      -> BILLING_STATUS_BILL\n    ORDER_STATUS_SHIPPED   -> BILLING_STATUS_BILL\n    ORDER_STATUS_CANCELLED -> BILLING_STATUS_SKIP\n", "")],
+    );
+    let os = check_dir(dir.path());
+    // E404 too: the layer refers to OrderStatus, now with no mapping.
+    assert_eq!(codes(&os), ["E406", "E404"]);
+    let d = &os[0].diags[0];
+    assert!(d.notes.iter().any(|n| n.en.contains("`term cancel -> <a term of Billing>`")), "{:?}", d.notes);
+}
+
+#[test]
+fn a_value_mapped_to_the_same_name_and_a_conformist_with_the_same_word_in_english() {
+    let os = check_dir(common::mutant("E407_read_into_a_value_of_the_same_name").path());
+    assert_eq!(codes(&os), ["E407"]);
+    let os = check_dir(common::mutant("E406_conformist_same_word").path());
+    assert_eq!(codes(&os), ["E406"]);
+    let notes: Vec<&str> = os[0].diags[0].notes.iter().map(|n| n.en.as_str()).collect();
+    assert!(notes.iter().any(|n| n.contains("make `upstream Inventory` an anticorruption layer")), "{notes:?}");
+    assert!(notes.iter().any(|n| n.contains("`reservation as Inventory.reservation`")), "{notes:?}");
+}
+
+#[test]
+fn a_term_mapping_maps_the_word_too_in_english() {
+    let cancel = "  cancel \"Voiding an invoice after it was confirmed, and refunding it\"\n";
+    let dir = variant(
+        "basic",
+        &[
+            ("ctx/billing.ctx", cancel, &format!("{cancel}  ordering_cancel \"An order cancelled before it ships, at the customer's request\"\n")),
+            ("ctx/billing.ctx", "    ORDER_STATUS_CANCELLED -> BILLING_STATUS_SKIP\n", "    ORDER_STATUS_CANCELLED -> BILLING_STATUS_SKIP\n  term cancel -> ordering_cancel\n"),
+        ],
+    );
+    assert_eq!(codes(&check_dir(dir.path())), Vec::<&str>::new());
+}
+
+#[test]
+fn a_term_taken_with_as_from_a_context_there_is_a_relationship_with_in_english() {
+    let cancel = "  cancel \"Voiding an invoice after it was confirmed, and refunding it\"\n";
+    let dir = variant("basic", &[("ctx/billing.ctx", cancel, &format!("{cancel}  order as Ordering.order\n"))]);
+    assert_eq!(codes(&check_dir(dir.path())), Vec::<&str>::new());
+}
+
+#[test]
+fn what_crosses_through_a_shared_kernel_is_not_held_to_the_words_in_english() {
+    // Ordering publishes the kernel's Money and calls it amount; Inventory has an amount of its
+    // own. Money crosses into Inventory through the shared kernel only: the kernel is the two
+    // teams' model together, and its words are theirs to agree on (DESIGN 1.6).
+    let dir = variant(
+        "basic",
+        &[
+            ("ctx/ordering.ctx", "  open host service OrderService\n", "  open host service OrderService\n\npublished language shop.common.v1\n  proto \"../proto/shop/common/v1/money.proto\"\n"),
+            ("ctx/ordering.ctx", "    means enum OrderStatus value ORDER_STATUS_CANCELLED\n", "    means enum OrderStatus value ORDER_STATUS_CANCELLED\n  amount \"Yen, tax included\"\n    means message Money\n"),
+            ("ctx/inventory.ctx", "    means enum PackingStatus\n", "    means enum PackingStatus\n  amount \"The answer to how packing is going\"\n    means message GetPackingResponse\n"),
+        ],
+    );
+    assert_eq!(codes(&check_dir(dir.path())), Vec::<&str>::new());
+    // Through the conformist's reference, the same word is told.
+    let dir = variant(
+        "basic",
+        &[
+            ("ctx/ordering.ctx", "    means enum OrderStatus value ORDER_STATUS_CANCELLED\n", "    means enum OrderStatus value ORDER_STATUS_CANCELLED\n  amount \"Yen, tax included\"\n    means message Order field amount_jpy\n"),
+            ("ctx/inventory.ctx", "    means enum PackingStatus\n", "    means enum PackingStatus\n  amount \"The cost price of an item on the shelf\"\n    means message ReserveResponse field price\n"),
+        ],
+    );
+    assert_eq!(codes(&check_dir(dir.path())), ["E406"]);
+}

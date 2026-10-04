@@ -47,28 +47,41 @@ fn codes_of(e: &ritsu_base::ledger::Entry) -> (Vec<String>, String) {
 
 #[test]
 fn the_base_of_the_reproductions_passes() {
-    let os = run(sakai::codes::BASE);
-    let ds: Vec<String> = os.iter().flat_map(|o| o.diags.iter().map(|d| d.render(Lang::En))).collect();
-    assert!(ds.is_empty(), "{}", ds.join(""));
-    assert!(os.iter().any(|o| o.summary.is_some()));
+    // both the base with Japanese names and the one with English names
+    for base in [sakai::codes::BASE, sakai::codes::BASE_EN] {
+        let os = run(base);
+        let ds: Vec<String> = os.iter().flat_map(|o| o.diags.iter().map(|d| d.render(Lang::En))).collect();
+        assert!(ds.is_empty(), "{}", ds.join(""));
+        assert!(os.iter().any(|o| o.summary.is_some()));
+    }
 }
 
+/// Every reproduction gives its code, in the names it is written in: the English one, which
+/// `explain` shows in English, and the Japanese one, which it shows in Japanese.
 #[test]
 fn every_reproduction_gives_its_code() {
     let mut failures = Vec::new();
-    let mut n = 0;
+    let (mut n, mut japanese) = (0, 0);
     for e in sakai::codes::ledger().entries {
         if !sakai::codes::implemented(&e) {
             continue;
         }
-        let (codes, text) = codes_of(&e);
-        if !codes.iter().any(|c| c == e.code) {
-            failures.push(format!("{}: got {:?}\n{text}", e.code, codes));
+        let mut shown = vec![(e.shown_in(Lang::En), "en")];
+        if e.repro_ja.is_some() {
+            shown.push((e.shown_in(Lang::Ja), "ja"));
         }
-        n += 1;
+        for (entry, tag) in shown {
+            let (codes, text) = codes_of(&entry);
+            if !codes.iter().any(|c| c == e.code) {
+                failures.push(format!("{} ({tag}): got {:?}\n{text}", e.code, codes));
+            }
+            n += 1;
+            japanese += (tag == "ja") as usize;
+        }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(n >= 58, "{n} reproductions");
+    assert_eq!(japanese, 58, "every reproduction has its Japanese twin");
 }
 
 /// Every code is printed and reproduced, but the one retired (N101): its entry stays, with why it
@@ -97,4 +110,28 @@ fn the_ledger_has_each_code_of_design_once_and_in_order() {
     let design = std::fs::read_to_string("DESIGN.md").unwrap();
     let table: Vec<&str> = design.lines().filter_map(|l| l.strip_prefix("| ")).filter_map(|l| l.split(" |").next()).filter(|c| c.len() == 4 && c[1..].chars().all(|d| d.is_ascii_digit()) && "EWN".contains(&c[..1])).collect();
     assert_eq!(codes, table, "the ledger and the table of DESIGN 5.2");
+}
+
+/// Every mutant with a Japanese name has an English one that gives the same code, beside it
+/// (the pairs are told by the code the names start with): a code has at least as many mutants of
+/// English names as of Japanese ones.
+#[test]
+fn every_japanese_mutant_has_an_english_one() {
+    let names = common::mutants();
+    let mut codes: Vec<&str> = names.iter().map(|n| n.split('_').next().unwrap()).collect();
+    codes.sort();
+    codes.dedup();
+    let mut failures = Vec::new();
+    let mut japanese = 0;
+    for code in codes {
+        let of_code: Vec<&String> = names.iter().filter(|n| n.starts_with(&format!("{code}_"))).collect();
+        let ja = of_code.iter().filter(|n| !n.is_ascii()).count();
+        let en = of_code.iter().filter(|n| n.is_ascii()).count();
+        japanese += ja;
+        if en < ja {
+            failures.push(format!("{code}: {ja} mutants of Japanese names, {en} of English ones"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    assert_eq!(japanese, 64, "the Japanese mutants are all kept");
 }

@@ -1,0 +1,1 @@
+"""Counts the months."""

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package pricing.v1;
+
+// Pricing's published language.
+enum Plan {
+  PLAN_UNSPECIFIED = 0;
+  PLAN_FREE = 1;
+  PLAN_BASIC = 2;
+  PLAN_PRO = 3;
+}
+
+message Quote {
+  Plan plan = 1;
+  int64 monthly_jpy = 2;
+}
+
+message QuoteRequest {
+  Plan plan = 1;
+}
+
+service PricingService {
+  rpc GetQuote(QuoteRequest) returns (Quote);
+}

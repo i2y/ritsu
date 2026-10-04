@@ -1,0 +1,6 @@
+エラー[E202]: billing/rules/shipping_fee.rule:10:1: 「Billing」の billing/rules/shipping_fee.rule が、「Delivery」の内側の delivery/rules/surcharge.rule を参照しています（apply）
+    10 | apply surcharge = "../../delivery/rules/surcharge.rule" sha256:d412cf576db77d00
+  = `apply` は、呼び先の規則をこの規則の中に展開します。使うのは規則そのもの（「Delivery」の内側）です。境界の向こうの規則は、二つの共有カーネルに並べて展開するか、「Delivery」が公表された言語（`published language rulec.…`）に入れた規則を、ワークフローから `use rule … connect` で呼びます。
+  関わるもの:
+      Billing   billing/rules/shipping_fee.rule:10     apply "../../delivery/rules/surcharge.rule"
+      Delivery  rulec "delivery/rules/surcharge.rule"  「Delivery」の内側のもの

@@ -1,0 +1,22 @@
+context Ordering(ordering) v1
+description "Takes orders, holds stock for them, and sees them through to arrival"
+owner "Ordering team"
+
+owns
+  dir "../proto/shop/ordering", "../proto/shop/common", "../py/ordering"
+
+published language shop.ordering.v1
+  proto "../proto/shop/ordering/v1/order.proto", "../proto/shop/ordering/v1/fulfillment_lite.proto"
+  open host service OrderService
+
+terms
+  order "A purchase the customer has confirmed. It does not disappear when it is cancelled"
+    means proto "../proto/shop/common/v1/money.proto" message Money
+  cancel "Cancelling an order before it ships, at the customer's request"
+    means enum OrderStatus value ORDER_STATUS_CANCELLED
+
+upstream Inventory conformist
+  through warehouse.v1
+
+shared kernel with Inventory
+  proto "../proto/shop/common/v1/money.proto"

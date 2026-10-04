@@ -1,0 +1,11 @@
+error[E309]: ctx/quotes.ctx:18:1: The partnership is written on Quotes's side only
+    18 | partnership with Notices
+  = A partnership is an agreement of two teams; write `partnership with Quotes` in Notices's file too.
+  = The line, fixed: partnership with Quotes
+error[E201]: proto/notices/v1/notice.proto:5:1: The file proto/notices/v1/notice.proto of Notices imports proto/quotes/v1/estimate.proto of Quotes, which Notices has no relationship with
+     5 | import "quotes/v1/estimate.proto";
+  = The partnership of the two is written on one side only (E309 is told too).
+  = A reference across the boundary needs a relationship: upstream and downstream (the downstream writes `upstream`), a partnership, or a shared kernel.
+  involved:
+      Notices  proto/notices/v1/notice.proto:5         import "quotes/v1/estimate.proto"
+      Quotes   proto "proto/quotes/v1/estimate.proto"  a file of the published language quotes.v1

@@ -1,0 +1,5 @@
+context Shipping(shipping) v1
+description "Hands parcels over to a carrier"
+
+owns
+  dir "../py/shipping"

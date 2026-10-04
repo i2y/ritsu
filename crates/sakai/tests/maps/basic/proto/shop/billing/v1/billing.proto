@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package shop.billing.v1;
+
+// Billing's published language.
+enum BillingStatus {
+  BILLING_STATUS_UNSPECIFIED = 0;
+  BILLING_STATUS_WAIT = 1;
+  BILLING_STATUS_BILL = 2;
+  BILLING_STATUS_SKIP = 3;
+}

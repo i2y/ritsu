@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package shop.ordering.v1;
+
+import "warehouse/v1/stock.proto";
+import "warehouse/internal/v1/ledger.proto";
+
+// Ordering's published language uses inventory's types as they are (ordering is inventory's conformist).
+message FulfillResponse {
+  repeated warehouse.v1.ReserveResponse reservations = 1;
+  repeated warehouse.internal.v1.Shelf shelves = 2;
+}

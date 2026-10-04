@@ -1,0 +1,8 @@
+error[E401]: contexts/delivery.ctx:33:3: The anticorruption layer of Delivery maps no value for PACKING_STATUS_DAMAGED of Inventory's enum warehouse.v1.PackingStatus
+    33 |   enum PackingStatus -> shipping_decision
+  = PACKING_STATUS_DAMAGED is the value at proto/warehouse/v1/stock.proto:43.
+  = Every value of the upstream enum gets a value of the downstream or refuse; when the upstream adds a value, the check fails until someone decides what it becomes.
+  = The line, fixed: PACKING_STATUS_DAMAGED -> refuse "…"
+  involved:
+      Delivery   contexts/delivery.ctx:29                                   upstream Inventory anticorruption layer
+      Inventory  proto "proto/warehouse/v1/stock.proto" enum PackingStatus  4 values, 1 of them unmapped

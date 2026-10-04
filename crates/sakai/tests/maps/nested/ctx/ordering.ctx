@@ -1,0 +1,8 @@
+context Ordering(ordering) v1
+description "Takes orders"
+
+owns
+  dir "../py/ordering", "../ts/ordering", "../java/src/main/java/ordering", "../go/ordering"
+
+upstream Inventory conformist
+  through warehouse.v1

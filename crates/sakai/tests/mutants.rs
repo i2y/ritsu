@@ -92,3 +92,25 @@ fn every_golden_file_has_its_mutant() {
         assert!(ms.iter().any(|m| m == stem), "tests/golden/{n} has no mutant");
     }
 }
+
+/// The JSON of a diagnostic of the English twin of the mutant above.
+#[test]
+fn the_json_of_a_diagnostic_in_english() {
+    let dir = common::mutant("E401_value_added_to_the_order_status");
+    let os = check_args(dir.path(), &[".".to_string()]).unwrap();
+    for lang in [Lang::En, Lang::Ja] {
+        let v = to_json(&os[0], lang);
+        let keys: Vec<&String> = v.as_object().unwrap().keys().collect();
+        assert_eq!(keys, ["root", "file", "ok", "summary", "diagnostics"]);
+        let d = &v["diagnostics"][0];
+        let keys: Vec<&String> = d.as_object().unwrap().keys().collect();
+        assert_eq!(keys, ["code", "severity", "file", "line", "col", "message", "notes", "references", "fix"]);
+        assert_eq!(d["code"], "E401");
+        assert_eq!(d["file"], "ctx/billing.ctx");
+        assert_eq!(d["fix"], "ORDER_STATUS_RETURNED -> refuse \"…\"");
+        let r = &d["references"][1];
+        assert_eq!(r["context"], "Ordering");
+        assert_eq!(r["name"]["text"], "proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus");
+        assert_eq!(v["ok"], false);
+    }
+}

@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package contracts.v1;
+
+import "contracts/kernel/units.proto";
+
+// Contracts' published language. It puts out no type of pricing, but reads each into a class of its own.
+enum ContractClass {
+  CONTRACT_CLASS_UNSPECIFIED = 0;
+  CONTRACT_CLASS_STANDARD = 1;
+  CONTRACT_CLASS_PREMIUM = 2;
+}
+
+message Contract {
+  ContractClass class = 1;
+  kernel.Days term = 2;
+}

@@ -640,7 +640,7 @@ service shipping.v1.ShippingService imports_options=true
   method AnswerPacking in=shipping.v1.AnswerPackingRequest out=shipping.v1.AnswerPackingResponse streams=false
     option dandori.v1.answer = {"task":"梱包を待つ"}
 unread
-== ../sakai/examples/通販/proto/dandori/v1/options.proto
+== ../sakai/examples/shop/proto/dandori/v1/options.proto
 package dandori.v1
 message dandori.v1.AnswerOptions
   field task json=task ty=Scalar("string") repeated=false presence=false rules=null
@@ -657,7 +657,7 @@ message dandori.v1.WorkflowOptions
   field name json=name ty=Scalar("string") repeated=false presence=false rules=null
   field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
 unread
-== ../sakai/examples/通販/proto/shop/delivery/v1/shipment.proto
+== ../sakai/examples/shop/proto/shop/delivery/v1/shipment.proto
 package shop.delivery.v1
 message shop.delivery.v1.CreateShipmentRequest
   field destination json=destination ty=Named("shop.delivery.v1.Destination") repeated=false presence=true rules={"required":true}
@@ -676,7 +676,146 @@ enum shop.delivery.v1.Handling = HANDLING_STANDARD HANDLING_FRAGILE
 service shop.delivery.v1.DeliveryService imports_options=false
   method CreateShipment in=shop.delivery.v1.CreateShipmentRequest out=shop.delivery.v1.CreateShipmentResponse streams=false
 unread
-== ../sakai/examples/通販/proto/shop/ordering/v1/fulfillment.proto
+== ../sakai/examples/shop/proto/shop/ordering/v1/fulfillment.proto
+package shop.ordering.v1
+message dandori.v1.AnswerOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.EventOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.StartOptions
+  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.Status
+  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
+  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
+  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.StatusOptions
+message dandori.v1.WorkflowOptions
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
+message shop.ordering.v1.AnswerPackingRequest
+  field boxes json=boxes ty=Scalar("int32") repeated=false presence=false rules=null
+message shop.ordering.v1.AnswerPackingResponse
+message shop.ordering.v1.FulfillRequest
+  field order json=order ty=Named("shop.ordering.v1.FulfillmentOrder") repeated=false presence=true rules=null
+message shop.ordering.v1.FulfillResponse
+  field reservations json=reservations ty=Named("warehouse.v1.ReserveResponse") repeated=true presence=false rules=null
+  field tracking_number json=tracking_number ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.FulfillmentOrder
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field member json=member ty=Scalar("bool") repeated=false presence=false rules=null
+  field amount json=amount ty=Scalar("int32") repeated=false presence=false rules=null
+  field lines json=lines ty=Named("shop.ordering.v1.Line") repeated=true presence=false rules=null
+  field gift json=gift ty=Named("shop.ordering.v1.Gift") repeated=false presence=true rules=null
+  field extra json=extra ty=Named("google.protobuf.Value") repeated=false presence=true rules=null
+message shop.ordering.v1.Gift
+  field recipient json=recipient ty=Scalar("string") repeated=false presence=false rules=null
+  field message json=message ty=Scalar("string") repeated=false presence=true rules=null
+message shop.ordering.v1.Line
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingRequest
+  field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingResponse
+  field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseResponse
+message warehouse.v1.ReserveRequest
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+message warehouse.v1.ReserveResponse
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
+  field id json=id ty=Scalar("string") repeated=false presence=true rules=null
+enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+service shop.ordering.v1.FulfillmentService imports_options=true
+  option dandori.v1.workflow = {"name":"fulfillment","version":1}
+  method Fulfill in=shop.ordering.v1.FulfillRequest out=shop.ordering.v1.FulfillResponse streams=false
+    option dandori.v1.start = {"fails":["OutOfStock","DeliveryFailed","PackingLate"]}
+  method AnswerPacking in=shop.ordering.v1.AnswerPackingRequest out=shop.ordering.v1.AnswerPackingResponse streams=false
+    option dandori.v1.answer = {"task":"wait_for_packing"}
+service warehouse.v1.StockService imports_options=false
+  method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
+  method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+service warehouse.v1.PackingService imports_options=false
+  method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
+unread
+== ../sakai/examples/shop/proto/shop/ordering/v1/order.proto
+package shop.ordering.v1
+message shop.ordering.v1.GetOrderRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.GetOrderResponse
+  field order json=order ty=Named("shop.ordering.v1.Order") repeated=false presence=true rules=null
+message shop.ordering.v1.Order
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED
+service shop.ordering.v1.OrderService imports_options=false
+  method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
+unread
+== ../sakai/examples/shop/proto/warehouse/v1/stock.proto
+package warehouse.v1
+message warehouse.v1.GetPackingRequest
+  field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingResponse
+  field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseResponse
+message warehouse.v1.ReserveRequest
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+message warehouse.v1.ReserveResponse
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
+  field id json=id ty=Scalar("string") repeated=false presence=true rules=null
+enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+service warehouse.v1.StockService imports_options=false
+  method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
+  method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+service warehouse.v1.PackingService imports_options=false
+  method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
+unread
+== ../sakai/examples/shop.ja/proto/dandori/v1/options.proto
+package dandori.v1
+message dandori.v1.AnswerOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.EventOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.StartOptions
+  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.Status
+  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
+  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
+  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.StatusOptions
+message dandori.v1.WorkflowOptions
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
+unread
+== ../sakai/examples/shop.ja/proto/shop/delivery/v1/shipment.proto
+package shop.delivery.v1
+message shop.delivery.v1.CreateShipmentRequest
+  field destination json=destination ty=Named("shop.delivery.v1.Destination") repeated=false presence=true rules={"required":true}
+  field parcels json=parcels ty=Named("shop.delivery.v1.Parcel") repeated=true presence=false rules={"repeated":{"min_items":1,"max_items":20}}
+  field declared_value_jpy json=declaredValueJpy ty=Scalar("int64") repeated=false presence=false rules={"int64":{"gte":0,"lte":1000000}}
+  field delivery_window json=deliveryWindow ty=Scalar("string") repeated=false presence=true rules={"string":{"in":["morning","evening"]}}
+message shop.delivery.v1.CreateShipmentResponse
+  field tracking_number json=trackingNumber ty=Scalar("string") repeated=false presence=false rules=null
+message shop.delivery.v1.Destination
+  field region json=region ty=Scalar("string") repeated=false presence=false rules={"string":{"in":["honshu","hokkaido","okinawa"]}}
+  field postcode json=postcode ty=Scalar("string") repeated=false presence=false rules=null
+message shop.delivery.v1.Parcel
+  field weight_g json=weightG ty=Scalar("int64") repeated=false presence=false rules={"int64":{"gte":1,"lte":30000}}
+  field handling json=handling ty=Named("shop.delivery.v1.Handling") repeated=false presence=false rules=null
+enum shop.delivery.v1.Handling = HANDLING_STANDARD HANDLING_FRAGILE
+service shop.delivery.v1.DeliveryService imports_options=false
+  method CreateShipment in=shop.delivery.v1.CreateShipmentRequest out=shop.delivery.v1.CreateShipmentResponse streams=false
+unread
+== ../sakai/examples/shop.ja/proto/shop/ordering/v1/fulfillment.proto
 package shop.ordering.v1
 message dandori.v1.AnswerOptions
   field task json=task ty=Scalar("string") repeated=false presence=false rules=null
@@ -741,7 +880,7 @@ service warehouse.v1.StockService imports_options=false
 service warehouse.v1.PackingService imports_options=false
   method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
 unread
-== ../sakai/examples/通販/proto/shop/ordering/v1/order.proto
+== ../sakai/examples/shop.ja/proto/shop/ordering/v1/order.proto
 package shop.ordering.v1
 message shop.ordering.v1.GetOrderRequest
   field id json=id ty=Scalar("string") repeated=false presence=false rules=null
@@ -755,7 +894,7 @@ enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIV
 service shop.ordering.v1.OrderService imports_options=false
   method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
 unread
-== ../sakai/examples/通販/proto/warehouse/v1/stock.proto
+== ../sakai/examples/shop.ja/proto/warehouse/v1/stock.proto
 package warehouse.v1
 message warehouse.v1.GetPackingRequest
   field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
@@ -934,6 +1073,188 @@ enum warehouse.v1.Stock = unspecified secured short
 service warehouse.v1.StockService imports_options=false
   method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
   method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+unread
+== ../sakai/tests/maps/basic/proto/billing/acl/v1/order_view.proto
+package billing.acl.v1
+message billing.acl.v1.OrderView
+  field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
+message shop.ordering.v1.GetOrderRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.GetOrderResponse
+  field order json=order ty=Named("shop.ordering.v1.Order") repeated=false presence=true rules=null
+message shop.ordering.v1.Order
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED
+service shop.ordering.v1.OrderService imports_options=false
+  method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
+unread
+== ../sakai/tests/maps/basic/proto/shop/billing/v1/billing.proto
+package shop.billing.v1
+enum shop.billing.v1.BillingStatus = BILLING_STATUS_UNSPECIFIED BILLING_STATUS_WAIT BILLING_STATUS_BILL BILLING_STATUS_SKIP
+unread
+== ../sakai/tests/maps/basic/proto/shop/common/v1/money.proto
+package shop.common.v1
+message shop.common.v1.Money
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+unread
+== ../sakai/tests/maps/basic/proto/shop/ordering/v1/fulfillment_lite.proto
+package shop.ordering.v1
+message shop.common.v1.Money
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+message shop.ordering.v1.FulfillResponse
+  field reservations json=reservations ty=Named("warehouse.v1.ReserveResponse") repeated=true presence=false rules=null
+message warehouse.v1.GetPackingRequest
+  field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingResponse
+  field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseResponse
+message warehouse.v1.ReserveRequest
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+message warehouse.v1.ReserveResponse
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
+  field id json=id ty=Scalar("string") repeated=false presence=true rules=null
+  field price json=price ty=Named("shop.common.v1.Money") repeated=false presence=true rules=null
+enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+service warehouse.v1.StockService imports_options=false
+  method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
+  method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+service warehouse.v1.PackingService imports_options=false
+  method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
+unread
+== ../sakai/tests/maps/basic/proto/shop/ordering/v1/order.proto
+package shop.ordering.v1
+message shop.ordering.v1.GetOrderRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.GetOrderResponse
+  field order json=order ty=Named("shop.ordering.v1.Order") repeated=false presence=true rules=null
+message shop.ordering.v1.Order
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED
+service shop.ordering.v1.OrderService imports_options=false
+  method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
+unread
+== ../sakai/tests/maps/basic/proto/warehouse/v1/stock.proto
+package warehouse.v1
+message shop.common.v1.Money
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingRequest
+  field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingResponse
+  field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseResponse
+message warehouse.v1.ReserveRequest
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+message warehouse.v1.ReserveResponse
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
+  field id json=id ty=Scalar("string") repeated=false presence=true rules=null
+  field price json=price ty=Named("shop.common.v1.Money") repeated=false presence=true rules=null
+enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+service warehouse.v1.StockService imports_options=false
+  method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
+  method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+service warehouse.v1.PackingService imports_options=false
+  method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
+unread
+== ../sakai/tests/maps/nested/proto/warehouse/v1/stock.proto
+package warehouse.v1
+message warehouse.v1.Stock
+  field count json=count ty=Scalar("int32") repeated=false presence=false rules=null
+unread
+== ../sakai/tests/maps/patterns/proto/audit/v1/record.proto
+package audit.v1
+message audit.v1.Record
+  field contract_id json=contractId ty=Scalar("string") repeated=false presence=false rules=null
+unread
+== ../sakai/tests/maps/patterns/proto/contracts/acl/v1/plan_view.proto
+package contracts.acl.v1
+message contracts.acl.v1.PlanView
+  field plan json=plan ty=Named("pricing.v1.Plan") repeated=false presence=false rules=null
+message pricing.v1.Quote
+  field plan json=plan ty=Named("pricing.v1.Plan") repeated=false presence=false rules=null
+  field monthly_jpy json=monthlyJpy ty=Scalar("int64") repeated=false presence=false rules=null
+message pricing.v1.QuoteRequest
+  field plan json=plan ty=Named("pricing.v1.Plan") repeated=false presence=false rules=null
+enum pricing.v1.Plan = PLAN_UNSPECIFIED PLAN_FREE PLAN_BASIC PLAN_PRO
+service pricing.v1.PricingService imports_options=false
+  method GetQuote in=pricing.v1.QuoteRequest out=pricing.v1.Quote streams=false
+unread
+== ../sakai/tests/maps/patterns/proto/contracts/kernel/units.proto
+package kernel
+message kernel.Days
+  field count json=count ty=Scalar("int32") repeated=false presence=false rules=null
+unread
+== ../sakai/tests/maps/patterns/proto/contracts/v1/contract.proto
+package contracts.v1
+message contracts.v1.Contract
+  field class json=class ty=Named("contracts.v1.ContractClass") repeated=false presence=false rules=null
+  field term json=term ty=Named("kernel.Days") repeated=false presence=true rules=null
+message kernel.Days
+  field count json=count ty=Scalar("int32") repeated=false presence=false rules=null
+enum contracts.v1.ContractClass = CONTRACT_CLASS_UNSPECIFIED CONTRACT_CLASS_STANDARD CONTRACT_CLASS_PREMIUM
+unread
+== ../sakai/tests/maps/patterns/proto/notices/v1/notice.proto
+package notices.v1
+message kernel.Days
+  field count json=count ty=Scalar("int32") repeated=false presence=false rules=null
+message notices.v1.Notice
+  field estimate json=estimate ty=Named("quotes.v1.Estimate") repeated=false presence=true rules=null
+message pricing.v1.Quote
+  field plan json=plan ty=Named("pricing.v1.Plan") repeated=false presence=false rules=null
+  field monthly_jpy json=monthlyJpy ty=Scalar("int64") repeated=false presence=false rules=null
+message pricing.v1.QuoteRequest
+  field plan json=plan ty=Named("pricing.v1.Plan") repeated=false presence=false rules=null
+message quotes.v1.Estimate
+  field quote json=quote ty=Named("pricing.v1.Quote") repeated=false presence=true rules=null
+  field valid_for json=validFor ty=Named("kernel.Days") repeated=false presence=true rules=null
+enum pricing.v1.Plan = PLAN_UNSPECIFIED PLAN_FREE PLAN_BASIC PLAN_PRO
+service pricing.v1.PricingService imports_options=false
+  method GetQuote in=pricing.v1.QuoteRequest out=pricing.v1.Quote streams=false
+unread
+== ../sakai/tests/maps/patterns/proto/pricing/v1/price.proto
+package pricing.v1
+message pricing.v1.Quote
+  field plan json=plan ty=Named("pricing.v1.Plan") repeated=false presence=false rules=null
+  field monthly_jpy json=monthlyJpy ty=Scalar("int64") repeated=false presence=false rules=null
+message pricing.v1.QuoteRequest
+  field plan json=plan ty=Named("pricing.v1.Plan") repeated=false presence=false rules=null
+enum pricing.v1.Plan = PLAN_UNSPECIFIED PLAN_FREE PLAN_BASIC PLAN_PRO
+service pricing.v1.PricingService imports_options=false
+  method GetQuote in=pricing.v1.QuoteRequest out=pricing.v1.Quote streams=false
+unread
+== ../sakai/tests/maps/patterns/proto/quotes/kernel/units.proto
+package kernel
+message kernel.Days
+  field count json=count ty=Scalar("int32") repeated=false presence=false rules=null
+unread
+== ../sakai/tests/maps/patterns/proto/quotes/v1/estimate.proto
+package quotes.v1
+message kernel.Days
+  field count json=count ty=Scalar("int32") repeated=false presence=false rules=null
+message pricing.v1.Quote
+  field plan json=plan ty=Named("pricing.v1.Plan") repeated=false presence=false rules=null
+  field monthly_jpy json=monthlyJpy ty=Scalar("int64") repeated=false presence=false rules=null
+message pricing.v1.QuoteRequest
+  field plan json=plan ty=Named("pricing.v1.Plan") repeated=false presence=false rules=null
+message quotes.v1.Estimate
+  field quote json=quote ty=Named("pricing.v1.Quote") repeated=false presence=true rules=null
+  field valid_for json=validFor ty=Named("kernel.Days") repeated=false presence=true rules=null
+enum pricing.v1.Plan = PLAN_UNSPECIFIED PLAN_FREE PLAN_BASIC PLAN_PRO
+service pricing.v1.PricingService imports_options=false
+  method GetQuote in=pricing.v1.QuoteRequest out=pricing.v1.Quote streams=false
 unread
 == ../sakai/tests/maps/パターン/proto/audit/v1/record.proto
 package audit.v1
@@ -1117,6 +1438,20 @@ service warehouse.v1.StockService imports_options=false
 service warehouse.v1.PackingService imports_options=false
   method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
 unread
+== ../sakai/tests/mutants/E105_rule_that_does_not_take_it_in/proto/shop/ordering/v1/order.proto
+package shop.ordering.v1
+message shop.ordering.v1.GetOrderRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.GetOrderResponse
+  field order json=order ty=Named("shop.ordering.v1.Order") repeated=false presence=true rules=null
+message shop.ordering.v1.Order
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED ORDER_STATUS_RETURNED
+service shop.ordering.v1.OrderService imports_options=false
+  method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
+unread
 == ../sakai/tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto
 package shop.ordering.v1
 message shop.ordering.v1.GetOrderRequest
@@ -1131,14 +1466,37 @@ enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIV
 service shop.ordering.v1.OrderService imports_options=false
   method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
 unread
+== ../sakai/tests/mutants/E106_unreadable_proto/proto/shop/billing/v1/billing.proto
+error: tests/mutants/E106_unreadable_proto/proto/shop/billing/v1/billing.proto:11:1: `;` is expected where `}` is
 == ../sakai/tests/mutants/E106_読めない_proto/proto/shop/billing/v1/billing.proto
 error: tests/mutants/E106_読めない_proto/proto/shop/billing/v1/billing.proto:11:1: `;` is expected where `}` is
+== ../sakai/tests/mutants/E201_reference_to_an_unrelated_inventory/proto/shop/billing/v1/billing.proto
+package shop.billing.v1
+message shop.billing.v1.StockSeen
+  field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=true rules=null
+enum shop.billing.v1.BillingStatus = BILLING_STATUS_UNSPECIFIED BILLING_STATUS_WAIT BILLING_STATUS_BILL BILLING_STATUS_SKIP
+unread warehouse/v1/stock.proto
 == ../sakai/tests/mutants/E201_関係の無い在庫を参照/proto/shop/billing/v1/billing.proto
 package shop.billing.v1
 message shop.billing.v1.StockSeen
   field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=true rules=null
 enum shop.billing.v1.BillingStatus = BILLING_STATUS_UNSPECIFIED BILLING_STATUS_WAIT BILLING_STATUS_BILL BILLING_STATUS_SKIP
 unread warehouse/v1/stock.proto
+== ../sakai/tests/mutants/E202_inside_of_inventory_referred_to/proto/shop/ordering/v1/fulfillment_lite.proto
+package shop.ordering.v1
+message shop.ordering.v1.FulfillResponse
+  field reservations json=reservations ty=Named("warehouse.v1.ReserveResponse") repeated=true presence=false rules=null
+  field shelves json=shelves ty=Named("warehouse.internal.v1.Shelf") repeated=true presence=false rules=null
+message warehouse.internal.v1.Shelf
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field count json=count ty=Scalar("int32") repeated=false presence=false rules=null
+unread warehouse/v1/stock.proto
+== ../sakai/tests/mutants/E202_inside_of_inventory_referred_to/proto/warehouse/internal/v1/ledger.proto
+package warehouse.internal.v1
+message warehouse.internal.v1.Shelf
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field count json=count ty=Scalar("int32") repeated=false presence=false rules=null
+unread
 == ../sakai/tests/mutants/E202_在庫の内側を参照/proto/shop/ordering/v1/fulfillment_lite.proto
 package shop.ordering.v1
 message shop.ordering.v1.FulfillResponse
@@ -1154,6 +1512,19 @@ message warehouse.internal.v1.Shelf
   field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
   field count json=count ty=Scalar("int32") repeated=false presence=false rules=null
 unread
+== ../sakai/tests/mutants/E203_package_not_in_through/proto/shop/ordering/v1/fulfillment_lite.proto
+package shop.ordering.v1
+message shop.ordering.v1.FulfillResponse
+  field reservations json=reservations ty=Named("warehouse.v1.ReserveResponse") repeated=true presence=false rules=null
+  field reservations_v2 json=reservationsV2 ty=Named("warehouse.v2.Reservation") repeated=true presence=false rules=null
+message warehouse.v2.Reservation
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+unread warehouse/v1/stock.proto
+== ../sakai/tests/mutants/E203_package_not_in_through/proto/warehouse/v2/stock.proto
+package warehouse.v2
+message warehouse.v2.Reservation
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+unread
 == ../sakai/tests/mutants/E203_through_に無い_package/proto/shop/ordering/v1/fulfillment_lite.proto
 package shop.ordering.v1
 message shop.ordering.v1.FulfillResponse
@@ -1167,10 +1538,21 @@ package warehouse.v2
 message warehouse.v2.Reservation
   field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
 unread
+== ../sakai/tests/mutants/E204_outside_the_anticorruption_layer/proto/billing/report/v1/report.proto
+package billing.report.v1
+message billing.report.v1.MonthlyRow
+  field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=true rules=null
+unread shop/ordering/v1/order.proto
 == ../sakai/tests/mutants/E204_腐敗防止層の外/proto/billing/report/v1/report.proto
 package billing.report.v1
 message billing.report.v1.MonthlyRow
   field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=true rules=null
+unread shop/ordering/v1/order.proto
+== ../sakai/tests/mutants/E205_upstream_type_in_a_published_language/proto/shop/billing/v1/billing.proto
+package shop.billing.v1
+message shop.billing.v1.Invoice
+  field order json=order ty=Named("shop.ordering.v1.Order") repeated=false presence=true rules=null
+enum shop.billing.v1.BillingStatus = BILLING_STATUS_UNSPECIFIED BILLING_STATUS_WAIT BILLING_STATUS_BILL BILLING_STATUS_SKIP
 unread shop/ordering/v1/order.proto
 == ../sakai/tests/mutants/E205_公表された言語に上流の型/proto/shop/billing/v1/billing.proto
 package shop.billing.v1
@@ -1178,16 +1560,65 @@ message shop.billing.v1.Invoice
   field order json=order ty=Named("shop.ordering.v1.Order") repeated=false presence=true rules=null
 enum shop.billing.v1.BillingStatus = BILLING_STATUS_UNSPECIFIED BILLING_STATUS_WAIT BILLING_STATUS_BILL BILLING_STATUS_SKIP
 unread shop/ordering/v1/order.proto
+== ../sakai/tests/mutants/E206_reference_to_a_separate_ways_partner/proto/audit/v1/record.proto
+package audit.v1
+message audit.v1.Record
+  field contract_id json=contractId ty=Scalar("string") repeated=false presence=false rules=null
+  field estimate json=estimate ty=Named("quotes.v1.Estimate") repeated=false presence=true rules=null
+unread quotes/v1/estimate.proto
 == ../sakai/tests/mutants/E206_別々の道の相手を参照/proto/audit/v1/record.proto
 package audit.v1
 message audit.v1.Record
   field contract_id json=contractId ty=Scalar("string") repeated=false presence=false rules=null
   field estimate json=estimate ty=Named("quotes.v1.Estimate") repeated=false presence=true rules=null
 unread quotes/v1/estimate.proto
+== ../sakai/tests/mutants/E308_copies_differ/proto/contracts/kernel/units.proto
+package kernel
+message kernel.Days
+  field count json=count ty=Scalar("int64") repeated=false presence=false rules=null
+unread
 == ../sakai/tests/mutants/E308_写しの中身が違う/proto/contracts/kernel/units.proto
 package kernel
 message kernel.Days
   field count json=count ty=Scalar("int64") repeated=false presence=false rules=null
+unread
+== ../sakai/tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto
+package shop.ordering.v1
+message shop.ordering.v1.GetOrderRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.GetOrderResponse
+  field order json=order ty=Named("shop.ordering.v1.Order") repeated=false presence=true rules=null
+message shop.ordering.v1.Order
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED ORDER_STATUS_RETURNED
+service shop.ordering.v1.OrderService imports_options=false
+  method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
+unread
+== ../sakai/tests/mutants/E401_value_added_to_the_packing_status/proto/warehouse/v1/stock.proto
+package warehouse.v1
+message warehouse.v1.GetPackingRequest
+  field order_id json=orderId ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.GetPackingResponse
+  field status json=status ty=Named("warehouse.v1.PackingStatus") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message warehouse.v1.ReleaseResponse
+message warehouse.v1.ReserveRequest
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int32") repeated=false presence=false rules=null
+message warehouse.v1.ReserveResponse
+  field sku json=sku ty=Scalar("string") repeated=false presence=false rules=null
+  field stock json=stock ty=Named("warehouse.v1.Stock") repeated=false presence=false rules=null
+  field id json=id ty=Scalar("string") repeated=false presence=true rules=null
+enum warehouse.v1.PackingStatus = PACKING_STATUS_UNSPECIFIED PACKING_STATUS_WAITING PACKING_STATUS_PACKED PACKING_STATUS_SHORT PACKING_STATUS_DAMAGED
+enum warehouse.v1.Stock = STOCK_UNSPECIFIED STOCK_SECURED STOCK_SHORT
+service warehouse.v1.StockService imports_options=false
+  method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
+  method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
+service warehouse.v1.PackingService imports_options=false
+  method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
 unread
 == ../sakai/tests/mutants/E401_梱包の状態に値が増えた/proto/warehouse/v1/stock.proto
 package warehouse.v1
@@ -1227,6 +1658,10 @@ enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIV
 service shop.ordering.v1.OrderService imports_options=false
   method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
 unread
+== ../sakai/tests/mutants/W102_import_not_found/proto/shop/billing/v1/billing.proto
+package shop.billing.v1
+enum shop.billing.v1.BillingStatus = BILLING_STATUS_UNSPECIFIED BILLING_STATUS_WAIT BILLING_STATUS_BILL BILLING_STATUS_SKIP
+unread google/type/money.proto
 == ../sakai/tests/mutants/W102_見つからない_import/proto/shop/billing/v1/billing.proto
 package shop.billing.v1
 enum shop.billing.v1.BillingStatus = BILLING_STATUS_UNSPECIFIED BILLING_STATUS_WAIT BILLING_STATUS_BILL BILLING_STATUS_SKIP

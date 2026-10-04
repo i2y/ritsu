@@ -1,0 +1,19 @@
+context Inventory v1
+description "Keeps the counts on the warehouse shelves, holds stock for each line of an order, and answers how packing is going"
+owner "Warehouse team"
+
+owns
+  dir "../proto/warehouse", "../py/inventory"
+
+published language warehouse.v1
+  proto "../proto/warehouse/v1/stock.proto"
+  open host service StockService, PackingService
+
+terms
+  reservation "Holding shelf stock for one line of an order until it ships or is cancelled"
+    means message ReserveResponse
+  packing_status "Whether the goods of an order are in the box. A shortage can turn up part-way through packing"
+    means enum PackingStatus
+
+shared kernel with Ordering
+  proto "../proto/shop/common/v1/money.proto"

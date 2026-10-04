@@ -1,0 +1,8 @@
+エラー[E401]: contexts/delivery.ctx:33:3: 「Delivery」の腐敗防止層の対応に、「Inventory」の列挙 warehouse.v1.PackingStatus の値 PACKING_STATUS_DAMAGED がありません
+    33 |   enum PackingStatus -> shipping_decision
+  = PACKING_STATUS_DAMAGED は proto/warehouse/v1/stock.proto:43 の値です。
+  = 上流の列挙の値ごとに、下流の値か refuse（断る）を書きます。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。
+  = 直した行: PACKING_STATUS_DAMAGED -> refuse "…"
+  関わるもの:
+      Delivery   contexts/delivery.ctx:29                                   upstream Inventory anticorruption layer
+      Inventory  proto "proto/warehouse/v1/stock.proto" enum PackingStatus  値は 4 個で、対応が無いのは 1 個

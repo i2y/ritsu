@@ -1,0 +1,3 @@
+error[E007]: ctx/billing.ctx:14:10: There is no context OrderDesk in the map
+    14 | upstream OrderDesk anticorruption layer
+  = The map reads the contexts Ordering, Inventory, Billing.

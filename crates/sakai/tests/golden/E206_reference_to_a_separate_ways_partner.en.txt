@@ -1,0 +1,6 @@
+error[E206]: proto/audit/v1/record.proto:5:1: The file proto/audit/v1/record.proto of Audit imports proto/quotes/v1/estimate.proto of Quotes, and the two go separate ways
+     5 | import "quotes/v1/estimate.proto";
+  = Separate ways is the decision that nothing between the two refers to the other; if the reference is needed, write a relationship instead.
+  involved:
+      Audit   proto/audit/v1/record.proto:5           import "quotes/v1/estimate.proto"
+      Quotes  proto "proto/quotes/v1/estimate.proto"  a file of the published language quotes.v1

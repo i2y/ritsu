@@ -1,0 +1,63 @@
+/* Written by `sakai export cml` from shop.ctx. Edit the .ctx files and write it again. */
+ContextMap shop {
+  type = SYSTEM_LANDSCAPE
+  state = AS_IS
+  contains ordering, inventory, delivery, billing, reviews
+
+  // Ordering conforms to Inventory
+  ordering [D,CF]<-[U,OHS,PL] inventory {
+    implementationTechnology = "Connect: warehouse.v1.StockService, warehouse.v1.PackingService"
+  }
+
+  // The partnership of Ordering and Delivery
+  ordering [P]<->[P] delivery
+
+  // Delivery maps Inventory's model in an anticorruption layer
+  delivery [D,ACL]<-[U,OHS,PL] inventory {
+    implementationTechnology = "Connect: warehouse.v1.StockService, warehouse.v1.PackingService"
+  }
+
+  // The shared kernel of Delivery and Billing
+  delivery [SK]<->[SK] billing
+
+  // Billing maps Ordering's model in an anticorruption layer
+  billing [D,ACL]<-[U,OHS,PL] ordering {
+    implementationTechnology = "Connect: shop.ordering.v1.OrderService, shop.ordering.v1.FulfillmentService"
+  }
+
+  // Billing is Delivery's customer, and Delivery its supplier
+  billing [D,C]<-[U,S,PL] delivery {
+    implementationTechnology = "Connect: shop.delivery.v1.DeliveryService"
+  }
+
+  // Reviews (reviews) and Billing (billing) go separate ways (CML has no way to write it)
+}
+
+// Ordering (ordering), owned by Ordering team
+BoundedContext ordering {
+  domainVisionStatement = "Takes orders, holds stock for them, hands them to delivery, and sees them through to arrival"
+  responsibilities = "order", "cancel"
+}
+
+// Inventory (inventory), owned by Warehouse team
+BoundedContext inventory {
+  domainVisionStatement = "Keeps the counts on the warehouse shelves, holds stock for each line of an order, and answers how packing is going"
+  responsibilities = "reservation", "out_of_stock", "packing_status"
+}
+
+// Delivery (delivery), owned by Delivery team
+BoundedContext delivery {
+  domainVisionStatement = "Decides the day to ship, chooses how to carry, and arranges delivery of the parcel"
+  responsibilities = "shipment", "fragile", "urgent"
+}
+
+// Billing (billing), owned by Accounting team
+BoundedContext billing {
+  domainVisionStatement = "Decides whether to bill an order, works out the fee and the shipping charge, and sets the day payment is due"
+  responsibilities = "fee", "cancel"
+}
+
+// Reviews (reviews), owned by Ordering team
+BoundedContext reviews {
+  domainVisionStatement = "Collects what buyers think and shows it. It has nothing to do with billing"
+}

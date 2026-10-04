@@ -1,0 +1,3 @@
+error[E408]: ctx/ordering.ctx:14:11: What the term order `means`, proto "proto/shop/common/v1/money.proto" message Money, is not in a published language of Ordering
+    14 |     means proto "../proto/shop/common/v1/money.proto" message Money
+  = `means` points at an element of the context's own published language, which crosses the boundary with the term; a published language is a proto package or a rule (its Connect service).

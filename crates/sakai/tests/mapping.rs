@@ -65,3 +65,63 @@ fn a_rule_as_the_target_is_read_from_rulec() {
     let d = os.iter().flat_map(|o| o.diags.iter()).find(|d| d.code == "E403").unwrap();
     assert!(d.message.en.contains("The mapping maps to 受取, which is not a value of the enum 注文の状態"), "{}", d.message.en);
 }
+
+// ── The English twins ──
+
+#[test]
+fn a_value_the_upstream_adds_is_named_in_english() {
+    let dir = common::mutant("E401_value_added_to_the_order_status");
+    let os = check_dir(dir.path());
+    assert_eq!(codes(&os), ["E401"]);
+    let d = &os[0].diags[0];
+    assert!(d.message.en.contains("ORDER_STATUS_RETURNED"), "{}", d.message.en);
+    for other in ["ORDER_STATUS_RECEIVED", "ORDER_STATUS_PAID", "ORDER_STATUS_SHIPPED", "ORDER_STATUS_CANCELLED", "ORDER_STATUS_UNSPECIFIED"] {
+        assert!(!d.message.en.contains(other), "{other} is mapped");
+    }
+    assert_eq!(d.fixed_line(), Some("ORDER_STATUS_RETURNED -> refuse \"…\""));
+}
+
+#[test]
+fn the_value_zero_that_says_nothing_is_set_needs_no_mapping_and_a_real_zero_does_in_english() {
+    let dir = common::mutant("W402_value_that_says_nothing_is_set");
+    assert_eq!(codes(&check_dir(dir.path())), ["W402"]);
+    let dir = variant("basic", &[("proto/shop/ordering/v1/order.proto", "ORDER_STATUS_UNSPECIFIED = 0;", "ORDER_STATUS_NEW = 0;")]);
+    let os = check_dir(dir.path());
+    assert_eq!(codes(&os), ["E401"]);
+    assert!(os[0].diags[0].message.en.contains("ORDER_STATUS_NEW"));
+}
+
+#[test]
+fn every_value_missing_is_named_in_the_order_of_the_proto_in_english() {
+    let dir = variant("basic", &[("ctx/billing.ctx", "    ORDER_STATUS_RECEIVED  -> BILLING_STATUS_WAIT\n    ORDER_STATUS_PAID      -> BILLING_STATUS_BILL\n", "")]);
+    let os = check_dir(dir.path());
+    assert_eq!(codes(&os), ["E401"]);
+    assert!(os[0].diags[0].message.en.contains("ORDER_STATUS_RECEIVED, ORDER_STATUS_PAID of"), "{}", os[0].diags[0].message.en);
+}
+
+#[test]
+fn a_target_that_is_a_name_only_is_taken_as_written_in_english() {
+    let dir = variant("basic", &[("ctx/billing.ctx", "enum OrderStatus -> enum BillingStatus", "enum OrderStatus -> billing_handling")]);
+    let os = check_dir(dir.path());
+    assert_eq!(codes(&os), Vec::<&str>::new());
+    let api = sakai::api::api(os[0].checked.as_ref().unwrap());
+    let e = &api["relationships"][2]["enums"][0];
+    assert_eq!(e["to"], serde_json::json!({"name": "billing_handling"}));
+    assert_eq!(e["checked"], false);
+}
+
+#[test]
+fn a_rule_as_the_target_is_read_from_rulec_in_english() {
+    let rule = "rule billing_need v1\n\nenum order_status = received | paid\nenum handling = wait | bill\n\ninputs\n  status : order_status\n\noutputs\n  handling : handling\n\ntable t\npolicy unique\n| status   | -> handling |\n| received | wait        |\n| paid     | bill        |\n";
+    let dir = variant(
+        "basic",
+        &[
+            ("proto/billing/acl/rules/billing_need.rule", "", rule),
+            ("ctx/billing.ctx", "enum OrderStatus -> enum BillingStatus\n    ORDER_STATUS_RECEIVED  -> BILLING_STATUS_WAIT\n", "enum OrderStatus -> rulec \"../proto/billing/acl/rules/billing_need.rule\" enum order_status\n    ORDER_STATUS_RECEIVED  -> taken\n"),
+        ],
+    );
+    let os = check_dir(dir.path());
+    assert!(codes(&os).contains(&"E403"), "{:?}", codes(&os));
+    let d = os.iter().flat_map(|o| o.diags.iter()).find(|d| d.code == "E403").unwrap();
+    assert!(d.message.en.contains("The mapping maps to taken, which is not a value of the enum order_status"), "{}", d.message.en);
+}

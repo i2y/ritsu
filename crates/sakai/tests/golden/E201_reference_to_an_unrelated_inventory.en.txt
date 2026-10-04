@@ -1,0 +1,6 @@
+error[E201]: proto/shop/billing/v1/billing.proto:5:1: The file proto/shop/billing/v1/billing.proto of Billing imports proto/warehouse/v1/stock.proto of Inventory, which Billing has no relationship with
+     5 | import "warehouse/v1/stock.proto";
+  = A reference across the boundary needs a relationship: upstream and downstream (the downstream writes `upstream`), a partnership, or a shared kernel.
+  involved:
+      Billing    proto/shop/billing/v1/billing.proto:5   import "warehouse/v1/stock.proto"
+      Inventory  proto "proto/warehouse/v1/stock.proto"  a file of the published language warehouse.v1

@@ -1,0 +1,13 @@
+エラー[E307]: ctx/ordering.ctx:21:1: 共有カーネルが「Ordering」の側にしか書かれていません
+    21 | shared kernel with Inventory
+  = 共有カーネルは二つのチームが一緒に持つものなので、「Inventory」のファイルにも `shared kernel with Ordering` を書き、同じものを並べます。
+  関わるもの:
+      Ordering  ctx/ordering.ctx:21  shared kernel with Inventory
+エラー[E201]: proto/warehouse/v1/stock.proto:5:1: 「Inventory」の proto/warehouse/v1/stock.proto が、関係の無い「Ordering」の proto/shop/common/v1/money.proto を import しています
+     5 | import "shop/common/v1/money.proto";
+  = 「Ordering」が「Inventory」の下流で、参照の向きが逆です。上流と下流の関係が許すのは、下流から上流への参照です。
+  = 二つのあいだの共有カーネルは、「Ordering」の側にしか書かれていません（E307 も出ています）。
+  = 境界を越えて参照するには、上流と下流（下流が `upstream` を書く）、パートナーシップ、共有カーネルのどれかの関係が要ります。
+  関わるもの:
+      Inventory  proto/warehouse/v1/stock.proto:5          import "shop/common/v1/money.proto"
+      Ordering   proto "proto/shop/common/v1/money.proto"  「Ordering」の内側のファイル

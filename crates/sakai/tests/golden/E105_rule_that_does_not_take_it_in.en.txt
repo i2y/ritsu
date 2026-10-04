@@ -1,0 +1,4 @@
+error[E105]: billing/rules/billing_need.rule:5:1: The file billing/rules/billing_need.rule does not pass rulec's check, or cannot be read
+     5 | enum order_status = received | paid | shipped | cancelled_in_ordering(cancelled)
+  = What rulec says: [E032] billing/rules/billing_need.rule:5: Enum order_status does not agree with OrderStatus in ../../proto/shop/ordering/v1/order.proto
+  = Make the file pass rulec's check; the references of a file that cannot be read cannot be checked.

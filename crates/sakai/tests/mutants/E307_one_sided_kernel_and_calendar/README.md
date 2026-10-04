@@ -1,0 +1,1 @@
+Billing's side of the shared kernel is gone. A shared kernel written on one side only allows no reference, so the calendar that delivery's ship date reads from billing becomes a reference with no relationship (billing is downstream of delivery, the other way round): E201.

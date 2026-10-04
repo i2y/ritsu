@@ -1,0 +1,133 @@
+# Written by `sakai build --target import-linter` from ../shop.ctx.
+# Edit the .ctx files and write it again; `sakai build --check` says whether it is up to date.
+
+[importlinter]
+root_packages =
+    billing
+    calendars
+    delivery
+    inventory
+    ordering
+    reviews
+    shop.delivery.v1
+    shop.ordering.v1
+    warehouse.v1
+
+[importlinter:contract:sakai-ordering]
+name = The inside of Ordering (ordering) is imported only by Ordering
+type = protected
+protected_modules =
+    ordering
+allowed_importers =
+    ordering
+    shop.ordering.v1
+
+[importlinter:contract:sakai-ordering-pl-shop.ordering.v1]
+name = The code made from Ordering's published language shop.ordering.v1 is imported only by Ordering, the inside of Delivery (delivery), Delivery's anticorruption layer toward Inventory and Billing's anticorruption layer toward Ordering
+type = protected
+protected_modules =
+    shop.ordering.v1
+allowed_importers =
+    billing.acl.ordering
+    delivery
+    ordering
+    shop.ordering.v1
+
+[importlinter:contract:sakai-inventory]
+name = The inside of Inventory (inventory) is imported only by Inventory
+type = protected
+protected_modules =
+    inventory
+allowed_importers =
+    inventory
+    warehouse.v1
+
+[importlinter:contract:sakai-inventory-pl-warehouse.v1]
+name = The code made from Inventory's published language warehouse.v1 is imported only by Ordering, Inventory and Delivery's anticorruption layer toward Inventory
+type = protected
+protected_modules =
+    warehouse.v1
+allowed_importers =
+    delivery.acl.inventory
+    inventory
+    ordering
+    shop.ordering.v1
+    warehouse.v1
+
+[importlinter:contract:sakai-delivery]
+name = The inside of Delivery (delivery) is imported only by Delivery
+type = protected
+as_packages = False
+protected_modules =
+    delivery
+    delivery.acl
+    delivery.ship
+allowed_importers =
+    delivery
+    delivery.acl
+    delivery.acl.inventory
+    delivery.acl.inventory.packing
+    delivery.ship
+    shop.delivery.v1.shipment_pb2
+
+[importlinter:contract:sakai-delivery-pl-shop.delivery.v1]
+name = The code made from Delivery's published language shop.delivery.v1 is imported only by the inside of Ordering (ordering), Delivery and Billing
+type = protected
+protected_modules =
+    shop.delivery.v1
+allowed_importers =
+    billing
+    delivery
+    ordering
+    shop.delivery.v1
+
+[importlinter:contract:sakai-delivery-layer-inventory]
+name = Delivery's anticorruption layer toward Inventory is imported only by Delivery
+type = protected
+protected_modules =
+    delivery.acl.inventory
+allowed_importers =
+    delivery
+    shop.delivery.v1
+
+[importlinter:contract:sakai-billing]
+name = The inside of Billing (billing) is imported only by Billing
+type = protected
+as_packages = False
+protected_modules =
+    billing
+    billing.acl
+    billing.invoice
+allowed_importers =
+    billing
+    billing.acl
+    billing.acl.ordering
+    billing.acl.ordering.status
+    billing.invoice
+
+[importlinter:contract:sakai-billing-layer-ordering]
+name = Billing's anticorruption layer toward Ordering is imported only by Billing
+type = protected
+protected_modules =
+    billing.acl.ordering
+allowed_importers =
+    billing
+
+[importlinter:contract:sakai-billing-kernel-delivery]
+name = The shared kernel of Billing and Delivery is imported only by Delivery and Billing
+type = protected
+protected_modules =
+    calendars
+allowed_importers =
+    billing
+    calendars
+    delivery
+    shop.delivery.v1
+
+[importlinter:contract:sakai-reviews]
+name = The inside of Reviews (reviews) is imported only by Reviews
+type = protected
+protected_modules =
+    reviews
+allowed_importers =
+    reviews

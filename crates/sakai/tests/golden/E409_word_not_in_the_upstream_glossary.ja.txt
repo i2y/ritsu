@@ -1,0 +1,2 @@
+エラー[E409]: ctx/billing.ctx:22:8: `term` の対応の「dispatch」が、「Ordering」の用語集にありません
+    22 |   term dispatch -> cancel

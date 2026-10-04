@@ -1,0 +1,17 @@
+context Pricing(pricing) v1
+description "Sets the monthly price of each plan"
+owner "Pricing team"
+
+owns
+  dir "../proto/pricing"
+
+published language pricing.v1
+  proto "../proto/pricing/v1/price.proto"
+  open host service PricingService
+
+terms
+  plan "How the price of each month is set"
+    means enum Plan
+
+# Takes in the two customers, quotes and contracts.
+downstream Contracts supplier

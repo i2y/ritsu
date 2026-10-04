@@ -1,0 +1,611 @@
+{
+  "sakai": "0.1.0",
+  "map": {
+    "name": "Patterns",
+    "alias": "patterns",
+    "version": "1",
+    "file": "patterns.ctx",
+    "source_sha256": "d15e5f271014fc277fa6d2ab720733b6313924d70fcddf915e37a23945685aae",
+    "description": "Sets prices, makes quotes, signs contracts, sends notices and audits"
+  },
+  "covers": [
+    "."
+  ],
+  "except": [],
+  "contexts": [
+    {
+      "name": "Pricing",
+      "alias": "pricing",
+      "version": "1",
+      "file": "ctx/pricing.ctx",
+      "source_sha256": "acbc45547fcd806e6da5a77074c322bb6a8633c1e4600197f52304b75ec3c26d",
+      "description": "Sets the monthly price of each plan",
+      "owner": "Pricing team",
+      "also": [],
+      "owns": [
+        {
+          "dir": "proto/pricing"
+        }
+      ],
+      "published": [
+        {
+          "package": "pricing.v1",
+          "from": [
+            {
+              "text": "proto \"proto/pricing/v1/price.proto\"",
+              "tool": "proto",
+              "path": "proto/pricing/v1/price.proto",
+              "items": []
+            }
+          ],
+          "services": [
+            "PricingService"
+          ],
+          "generated": []
+        }
+      ],
+      "terms": [
+        {
+          "name": "plan",
+          "definition": "How the price of each month is set",
+          "also": [],
+          "means": [
+            {
+              "text": "proto \"proto/pricing/v1/price.proto\" enum Plan",
+              "tool": "proto",
+              "path": "proto/pricing/v1/price.proto",
+              "items": [
+                [
+                  "enum",
+                  "Plan"
+                ]
+              ]
+            }
+          ],
+          "as": null
+        }
+      ]
+    },
+    {
+      "name": "Quotes",
+      "alias": "quotes",
+      "version": "1",
+      "file": "ctx/quotes.ctx",
+      "source_sha256": "f9cc05d888c2b08563904d241686736a1ec6a0e6f1d1343c6a78cadc458b4e05",
+      "description": "Gives customers a quote with an expiry",
+      "owner": "Sales team",
+      "also": [],
+      "owns": [
+        {
+          "dir": "proto/quotes"
+        }
+      ],
+      "published": [
+        {
+          "package": "quotes.v1",
+          "from": [
+            {
+              "text": "proto \"proto/quotes/v1/estimate.proto\"",
+              "tool": "proto",
+              "path": "proto/quotes/v1/estimate.proto",
+              "items": []
+            }
+          ],
+          "services": [],
+          "generated": []
+        }
+      ],
+      "terms": [
+        {
+          "name": "estimate",
+          "definition": "A forecast of the price, with an expiry, given to a customer",
+          "also": [],
+          "means": [
+            {
+              "text": "proto \"proto/quotes/v1/estimate.proto\" message Estimate",
+              "tool": "proto",
+              "path": "proto/quotes/v1/estimate.proto",
+              "items": [
+                [
+                  "message",
+                  "Estimate"
+                ]
+              ]
+            }
+          ],
+          "as": null
+        }
+      ]
+    },
+    {
+      "name": "Contracts",
+      "alias": "contracts",
+      "version": "1",
+      "file": "ctx/contracts.ctx",
+      "source_sha256": "865fe7aff40443be7cac1560796ce1eaa6929693ff223f10f5801a09374cd7c7",
+      "description": "Signs contracts with customers and keeps the class of each contract",
+      "owner": "Contracts team",
+      "also": [],
+      "owns": [
+        {
+          "dir": "proto/contracts"
+        }
+      ],
+      "published": [
+        {
+          "package": "contracts.v1",
+          "from": [
+            {
+              "text": "proto \"proto/contracts/v1/contract.proto\"",
+              "tool": "proto",
+              "path": "proto/contracts/v1/contract.proto",
+              "items": []
+            }
+          ],
+          "services": [],
+          "generated": []
+        }
+      ],
+      "terms": [
+        {
+          "name": "contract_class",
+          "definition": "How pricing treats a contract, as each contract decides",
+          "also": [],
+          "means": [
+            {
+              "text": "proto \"proto/contracts/v1/contract.proto\" enum ContractClass",
+              "tool": "proto",
+              "path": "proto/contracts/v1/contract.proto",
+              "items": [
+                [
+                  "enum",
+                  "ContractClass"
+                ]
+              ]
+            }
+          ],
+          "as": null
+        }
+      ]
+    },
+    {
+      "name": "Notices",
+      "alias": "notices",
+      "version": "1",
+      "file": "ctx/notices.ctx",
+      "source_sha256": "1dd6955e1fe6ef8010b1d2f7a6e94b4f588cd3b6842112f74111898483f38230",
+      "description": "Tells the customers whose quote is about to expire",
+      "owner": "Sales team",
+      "also": [],
+      "owns": [
+        {
+          "dir": "proto/notices"
+        }
+      ],
+      "published": [],
+      "terms": []
+    },
+    {
+      "name": "Audit",
+      "alias": "audit",
+      "version": "1",
+      "file": "ctx/audit.ctx",
+      "source_sha256": "9e729c5d5fc4acbff15fa6ec1f7e3bbf878d7bc55a10fd50a146b0991408ab0d",
+      "description": "Keeps the record of contracts. It has nothing to do with quotes",
+      "owner": "Audit team",
+      "also": [],
+      "owns": [
+        {
+          "dir": "proto/audit"
+        }
+      ],
+      "published": [],
+      "terms": []
+    }
+  ],
+  "relationships": [
+    {
+      "kind": "upstream_downstream",
+      "upstream": "Pricing",
+      "downstream": "Quotes",
+      "roles": {
+        "upstream": [
+          "supplier",
+          "open_host_service",
+          "published_language"
+        ],
+        "downstream": [
+          "customer"
+        ]
+      },
+      "through": [
+        "pricing.v1"
+      ],
+      "layer": [],
+      "enums": [],
+      "terms": [],
+      "declared": [
+        "ctx/quotes.ctx:15",
+        "ctx/pricing.ctx:17"
+      ]
+    },
+    {
+      "kind": "partnership",
+      "between": [
+        "Quotes",
+        "Notices"
+      ],
+      "declared": [
+        "ctx/quotes.ctx:18",
+        "ctx/notices.ctx:8"
+      ]
+    },
+    {
+      "kind": "shared_kernel",
+      "between": [
+        "Quotes",
+        "Contracts"
+      ],
+      "sides": [
+        {
+          "context": "Quotes",
+          "items": [
+            {
+              "name": {
+                "text": "proto \"proto/quotes/kernel/units.proto\"",
+                "tool": "proto",
+                "path": "proto/quotes/kernel/units.proto",
+                "items": []
+              }
+            }
+          ]
+        },
+        {
+          "context": "Contracts",
+          "items": [
+            {
+              "name": {
+                "text": "proto \"proto/contracts/kernel/units.proto\"",
+                "tool": "proto",
+                "path": "proto/contracts/kernel/units.proto",
+                "items": []
+              }
+            }
+          ]
+        }
+      ],
+      "declared": [
+        "ctx/quotes.ctx:21",
+        "ctx/contracts.ctx:23"
+      ]
+    },
+    {
+      "kind": "upstream_downstream",
+      "upstream": "Pricing",
+      "downstream": "Contracts",
+      "roles": {
+        "upstream": [
+          "supplier",
+          "open_host_service",
+          "published_language"
+        ],
+        "downstream": [
+          "customer",
+          "anticorruption_layer"
+        ]
+      },
+      "through": [
+        "pricing.v1"
+      ],
+      "layer": [
+        {
+          "dir": "proto/contracts/acl"
+        }
+      ],
+      "enums": [
+        {
+          "from": {
+            "text": "proto \"proto/pricing/v1/price.proto\" enum Plan",
+            "tool": "proto",
+            "path": "proto/pricing/v1/price.proto",
+            "items": [
+              [
+                "enum",
+                "Plan"
+              ]
+            ]
+          },
+          "to": {
+            "text": "proto \"proto/contracts/v1/contract.proto\" enum ContractClass",
+            "tool": "proto",
+            "path": "proto/contracts/v1/contract.proto",
+            "items": [
+              [
+                "enum",
+                "ContractClass"
+              ]
+            ]
+          },
+          "checked": true,
+          "values": [
+            {
+              "from": "PLAN_FREE",
+              "refuse": "No contract is made on the free plan"
+            },
+            {
+              "from": "PLAN_BASIC",
+              "to": "CONTRACT_CLASS_STANDARD"
+            },
+            {
+              "from": "PLAN_PRO",
+              "to": "CONTRACT_CLASS_PREMIUM"
+            }
+          ]
+        }
+      ],
+      "terms": [],
+      "declared": [
+        "ctx/contracts.ctx:15",
+        "ctx/pricing.ctx:18"
+      ]
+    },
+    {
+      "kind": "separate_ways",
+      "between": [
+        "Audit",
+        "Quotes"
+      ],
+      "declared": [
+        "ctx/audit.ctx:8"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "name": {
+        "text": "proto \"proto/audit/v1/record.proto\"",
+        "tool": "proto",
+        "path": "proto/audit/v1/record.proto",
+        "items": []
+      },
+      "context": "Audit",
+      "by": "ctx/audit.ctx:6",
+      "sha256": "33e07434e87b8e54"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/contracts/acl/v1/plan_view.proto\"",
+        "tool": "proto",
+        "path": "proto/contracts/acl/v1/plan_view.proto",
+        "items": []
+      },
+      "context": "Contracts",
+      "by": "ctx/contracts.ctx:6",
+      "sha256": "fc7309f4dff87d5c"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/contracts/kernel/units.proto\"",
+        "tool": "proto",
+        "path": "proto/contracts/kernel/units.proto",
+        "items": []
+      },
+      "context": "Contracts",
+      "by": "ctx/contracts.ctx:6",
+      "sha256": "67725b8eabe52f32"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/contracts/v1/contract.proto\"",
+        "tool": "proto",
+        "path": "proto/contracts/v1/contract.proto",
+        "items": []
+      },
+      "context": "Contracts",
+      "by": "ctx/contracts.ctx:6",
+      "sha256": "470bc229928e0974"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/notices/v1/notice.proto\"",
+        "tool": "proto",
+        "path": "proto/notices/v1/notice.proto",
+        "items": []
+      },
+      "context": "Notices",
+      "by": "ctx/notices.ctx:6",
+      "sha256": "7f7b41d4420041e4"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/pricing/v1/price.proto\"",
+        "tool": "proto",
+        "path": "proto/pricing/v1/price.proto",
+        "items": []
+      },
+      "context": "Pricing",
+      "by": "ctx/pricing.ctx:6",
+      "sha256": "81af2f5edaebeedb"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/quotes/kernel/units.proto\"",
+        "tool": "proto",
+        "path": "proto/quotes/kernel/units.proto",
+        "items": []
+      },
+      "context": "Quotes",
+      "by": "ctx/quotes.ctx:6",
+      "sha256": "67725b8eabe52f32"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/quotes/v1/estimate.proto\"",
+        "tool": "proto",
+        "path": "proto/quotes/v1/estimate.proto",
+        "items": []
+      },
+      "context": "Quotes",
+      "by": "ctx/quotes.ctx:6",
+      "sha256": "2ae50dd6fb0d746e"
+    }
+  ],
+  "crossings": [
+    {
+      "from": {
+        "text": "proto \"proto/contracts/acl/v1/plan_view.proto\"",
+        "tool": "proto",
+        "path": "proto/contracts/acl/v1/plan_view.proto",
+        "items": []
+      },
+      "line": 5,
+      "to": {
+        "text": "proto \"proto/pricing/v1/price.proto\"",
+        "tool": "proto",
+        "path": "proto/pricing/v1/price.proto",
+        "items": []
+      },
+      "from_context": "Contracts",
+      "to_context": "Pricing",
+      "via": "proto import",
+      "elements": [
+        {
+          "text": "proto \"proto/pricing/v1/price.proto\" enum Plan",
+          "tool": "proto",
+          "path": "proto/pricing/v1/price.proto",
+          "items": [
+            [
+              "enum",
+              "Plan"
+            ]
+          ]
+        }
+      ],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "customer",
+          "anticorruption_layer"
+        ],
+        "declared": "ctx/contracts.ctx:15"
+      }
+    },
+    {
+      "from": {
+        "text": "proto \"proto/notices/v1/notice.proto\"",
+        "tool": "proto",
+        "path": "proto/notices/v1/notice.proto",
+        "items": []
+      },
+      "line": 5,
+      "to": {
+        "text": "proto \"proto/quotes/v1/estimate.proto\"",
+        "tool": "proto",
+        "path": "proto/quotes/v1/estimate.proto",
+        "items": []
+      },
+      "from_context": "Notices",
+      "to_context": "Quotes",
+      "via": "proto import",
+      "elements": [
+        {
+          "text": "proto \"proto/quotes/v1/estimate.proto\" message Estimate",
+          "tool": "proto",
+          "path": "proto/quotes/v1/estimate.proto",
+          "items": [
+            [
+              "message",
+              "Estimate"
+            ]
+          ]
+        },
+        {
+          "text": "proto \"proto/pricing/v1/price.proto\" message Quote",
+          "tool": "proto",
+          "path": "proto/pricing/v1/price.proto",
+          "items": [
+            [
+              "message",
+              "Quote"
+            ]
+          ]
+        },
+        {
+          "text": "proto \"proto/pricing/v1/price.proto\" enum Plan",
+          "tool": "proto",
+          "path": "proto/pricing/v1/price.proto",
+          "items": [
+            [
+              "enum",
+              "Plan"
+            ]
+          ]
+        },
+        {
+          "text": "proto \"proto/quotes/kernel/units.proto\" message Days",
+          "tool": "proto",
+          "path": "proto/quotes/kernel/units.proto",
+          "items": [
+            [
+              "message",
+              "Days"
+            ]
+          ]
+        }
+      ],
+      "allowed_by": {
+        "relationship": "partnership",
+        "declared": "ctx/notices.ctx:8"
+      }
+    },
+    {
+      "from": {
+        "text": "proto \"proto/quotes/v1/estimate.proto\"",
+        "tool": "proto",
+        "path": "proto/quotes/v1/estimate.proto",
+        "items": []
+      },
+      "line": 5,
+      "to": {
+        "text": "proto \"proto/pricing/v1/price.proto\"",
+        "tool": "proto",
+        "path": "proto/pricing/v1/price.proto",
+        "items": []
+      },
+      "from_context": "Quotes",
+      "to_context": "Pricing",
+      "via": "proto import",
+      "elements": [
+        {
+          "text": "proto \"proto/pricing/v1/price.proto\" message Quote",
+          "tool": "proto",
+          "path": "proto/pricing/v1/price.proto",
+          "items": [
+            [
+              "message",
+              "Quote"
+            ]
+          ]
+        },
+        {
+          "text": "proto \"proto/pricing/v1/price.proto\" enum Plan",
+          "tool": "proto",
+          "path": "proto/pricing/v1/price.proto",
+          "items": [
+            [
+              "enum",
+              "Plan"
+            ]
+          ]
+        }
+      ],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "customer"
+        ],
+        "declared": "ctx/quotes.ctx:15"
+      }
+    }
+  ]
+}

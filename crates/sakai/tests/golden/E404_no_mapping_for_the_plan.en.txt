@@ -1,0 +1,7 @@
+error[E404]: ctx/contracts.ctx:15:1: Contracts refers to Pricing's enum pricing.v1.Plan, and its anticorruption layer has no mapping for it
+    15 | upstream Pricing customer, anticorruption layer
+  = Downstream of an anticorruption layer, every upstream enum referred to is mapped, value by value, to the downstream's values or refuse.
+  = The line, fixed: enum Plan -> <…>
+  involved:
+      Contracts  proto/contracts/acl/v1/plan_view.proto:5        import "pricing/v1/price.proto"
+      Pricing    proto "proto/pricing/v1/price.proto" enum Plan

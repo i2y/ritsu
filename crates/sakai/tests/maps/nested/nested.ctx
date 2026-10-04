@@ -1,0 +1,16 @@
+# Code made from inventory's published language lies inside a directory of inventory's own inside.
+# Ordering conforms to inventory: it may import the generated code, but not the inside of inventory around it.
+map Nested(nested) v1
+description "The code made from a published language lies inside the inside of inventory"
+
+use context "ctx/inventory.ctx"
+use context "ctx/ordering.ctx"
+
+covers "."
+proto root "proto"
+
+code python "py"
+code typescript "ts"
+code java "java/src/main/java"
+  test "java/src/test/java"
+code go "go"

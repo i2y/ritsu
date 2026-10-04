@@ -102,7 +102,103 @@ Method <shop.ordering.domain.Order.place(shop.inventory.api.Reservations)> calls
 - `map`：コンテキストマップ。どのコンテキストのファイルを集めるか、地図がどの範囲のファイルを覆うか、コードの言語ごとの置き場所。
 - `context`：一つの境界づけられたコンテキスト。説明、持ち主、属する成果物とディレクトリ、公表された言語、用語集、ほかのコンテキストとの関係、腐敗防止層での対応。
 
-11 章の例から、地図と在庫と配送のファイルを抜き出す（どれも A の段階の案。B で構文を作ったら、`tests/design.rs` がこの文書の `.ctx` の塊を構文に通す）。
+11 章の例から、地図と在庫と配送のファイルを抜き出す。英語の名前で書いた例（`examples/shop/`）を先に、同じ例を日本語の名前で書いた例（`examples/shop.ja/`）をあとに並べる（`tests/design.rs` が、この文書の `.ctx` の塊を構文に通す）。
+
+```ctx
+map Shop(shop) v1
+description "A small online shop that takes orders, holds stock, delivers and bills"
+
+use context "contexts/ordering.ctx"
+use context "contexts/inventory.ctx"
+use context "contexts/delivery.ctx"
+use context "contexts/billing.ctx"
+use context "contexts/reviews.ctx"
+
+covers "."
+proto root "proto"
+
+code python "py"
+code typescript "ts"
+code java "java/src/main/java"
+  test "java/src/test/java"
+code go "go"
+```
+
+```ctx
+context Inventory(inventory) v1
+description "Keeps the counts on the warehouse shelves, holds stock for each line of an order, and answers how packing is going"
+owner "Warehouse team"
+also "stock control"
+
+owns
+  dir "../inventory", "../proto/warehouse"
+  dir "../py/inventory", "../py/warehouse", "../ts/inventory", "../ts/warehouse"
+  dir "../java/src/main/java/inventory", "../java/src/main/java/warehouse"
+  dir "../go/inventory", "../go/warehouse"
+
+published language warehouse.v1
+  proto "../proto/warehouse/v1/stock.proto"
+  open host service StockService, PackingService
+  generated dir "../py/warehouse/v1", "../ts/warehouse/v1"
+  generated dir "../java/src/main/java/warehouse/v1", "../go/warehouse/v1"
+
+terms
+  reservation "Holding shelf stock for one line of an order until it ships or is cancelled"
+    means message ReserveResponse
+  out_of_stock "The count asked for is not on the shelf"
+    means enum Stock value STOCK_SHORT
+  packing_status "Whether the goods of an order are in the box. A shortage can turn up part-way through packing"
+    means enum PackingStatus
+```
+
+```ctx
+context Delivery(delivery) v1
+description "Decides the day to ship, chooses how to carry, and arranges delivery of the parcel"
+owner "Delivery team"
+
+owns
+  dir "../delivery", "../proto/shop/delivery"
+  dir "../py/delivery", "../py/shop/delivery", "../ts/delivery", "../ts/shop/delivery"
+  dir "../java/src/main/java/delivery", "../java/src/main/java/shop/delivery"
+  dir "../go/delivery", "../go/shop/delivery"
+
+published language shop.delivery.v1
+  proto "../proto/shop/delivery/v1/shipment.proto"
+  open host service DeliveryService
+  generated dir "../py/shop/delivery/v1", "../ts/shop/delivery/v1"
+  generated dir "../java/src/main/java/shop/delivery/v1", "../go/shop/delivery/v1"
+
+published language rulec.urgency.v1
+  rulec "../delivery/rules/urgency.rule"
+  open host service UrgencyService
+
+terms
+  shipment "Handing a parcel over from the warehouse to a carrier"
+    means message CreateShipmentRequest
+  fragile "A parcel that nothing is put on top of while it travels"
+    means enum Handling value HANDLING_FRAGILE
+  urgent "Whether to carry by the next-day service"
+    means rulec "../delivery/rules/urgency.rule" output urgent
+
+upstream Inventory anticorruption layer
+  through warehouse.v1
+  layer dir "../py/delivery/acl/inventory", "../ts/delivery/acl/inventory"
+  layer dir "../java/src/main/java/delivery/acl/inventory", "../go/delivery/acl/inventory"
+  enum PackingStatus -> shipping_decision
+    PACKING_STATUS_WAITING -> wait
+    PACKING_STATUS_PACKED  -> ship
+    PACKING_STATUS_SHORT   -> refuse "A box with an item missing is not shipped. It goes back to ordering"
+
+downstream Billing supplier
+
+shared kernel with Billing
+  koyomi "../calendars/tokyo_business_days.cal"
+  dir "../py/calendars", "../ts/calendars", "../java/src/main/java/calendars", "../go/calendars"
+
+partnership with Ordering
+```
+
+日本語の名前で書いた例（`examples/shop.ja/`）では、次のとおりである。
 
 ```ctx
 map 通販(shop) v1
@@ -577,7 +673,16 @@ B の段階のあとで、二つの言語の細かい形をもう一度そろえ
 
 段 3 から後は、前の段にエラーがあっても、どの段も走らせる。読めない成果物があっても、読めた成果物の参照だけを確かめ、読めなかったものは E105（proto なら E106）として言う（読めない規則が一つあるだけで、地図の検査が全部止まると、直す順序が分からない）。ほかの言語が渡されていなければ（sakai のクレートのバイナリ）、その言語の成果物は読まずに、言語ごとに一つの E104 を言う（4.1）。パターンの誤りも後の段を止めない。5.3 の二つめの例のように、片側だけの共有カーネル（E307）と、それで許されなくなった参照（E201）は、一緒に言う。
 
-通ったときは、一行で要約を言う。コンテキストと関係の数、成果物の数（どれもちょうど一つのコンテキストに属すること）、確かめた境界を越える参照の数と、それを何から読んだかを並べる。B の段階の地図（`tests/maps/基本/`）では次のとおり。
+通ったときは、一行で要約を言う。コンテキストと関係の数、成果物の数（どれもちょうど一つのコンテキストに属すること）、確かめた境界を越える参照の数と、それを何から読んだかを並べる。B の段階の地図には、英語の名前のもの（`tests/maps/basic/`）と日本語の名前のもの（`tests/maps/基本/`）があり、中身は同じである。英語の名前のものでは次のとおり。
+
+```
+$ sakai check tests/maps/basic/basic.ctx --root tests/maps/basic
+tests/maps/basic/basic.ctx: ok — 3 contexts, 3 relationships; 9 artifacts, each in one context; 3 crossings checked (proto 3)
+$ sakai check tests/maps/basic/basic.ctx --root tests/maps/basic --lang ja
+tests/maps/basic/basic.ctx: ok — コンテキスト 3、関係 3。成果物 9 件は、どれも一つのコンテキストに属する。境界を越える参照 3 件を確かめた（proto 3）
+```
+
+日本語の名前のものでは次のとおり。
 
 ```
 $ sakai check tests/maps/基本/基本.ctx --root tests/maps/基本
@@ -591,13 +696,15 @@ tests/maps/基本/基本.ctx: ok — コンテキスト 3、関係 3。成果物
 11 章の例の地図では次のとおり。成果物の 79 件は、proto 4、規則 4、カレンダー 3、帳簿 1、ワークフロー 2 と、四つの言語のコード 65 である。例は規則とカレンダーとワークフローを含むので、すべての言語をつないだ `ritsu sakai` で走らせる。
 
 ```
-$ ritsu sakai check examples/通販/通販.ctx
-examples/通販/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)
-$ ritsu sakai check examples/通販/通販.ctx --lang ja
-examples/通販/通販.ctx: ok — コンテキスト 5、関係 7。成果物 79 件は、どれも一つのコンテキストに属する。境界を越える参照 9 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 5）
+$ ritsu sakai check examples/shop/shop.ctx
+examples/shop/shop.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)
+$ ritsu sakai check examples/shop/shop.ctx --lang ja
+examples/shop/shop.ctx: ok — コンテキスト 5、関係 7。成果物 79 件は、どれも一つのコンテキストに属する。境界を越える参照 9 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 5）
+$ ritsu sakai check examples/shop.ja/通販.ctx
+examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)
 ```
 
-境界を越える参照の 9 件は、proto の import が一つ（受注の `fulfillment.proto` から在庫の `stock.proto` へ）、rulec が二つ（請求の `請求の要否.rule` の `import proto` が受注の `OrderStatus` へ、`出荷の送料.rule` の `shape` が配送の `CreateShipmentRequest` へ）、koyomi が一つ（配送の `出荷日.cal` が、請求と配送の共有カーネルの `東京の営業日.cal` を `use calendar` で読む）、dandori が五つ（受注の `受注.flow` が、配送の規則 `出荷の急ぎ` を `use rule … connect` で、在庫の `stock.proto` を `use proto` で読み、その `StockService` の `Reserve` と `Release` を `connect` で呼び、配送の `配送の手配.flow` を子として走らせる）である。括弧の中は、参照のもとの言語ごとの数で、proto、rulec、koyomi、dandori、rust（Rust のクレートのマニフェスト。7.7）の順に並べ、一つも無い言語は書かない。
+境界を越える参照の 9 件は、proto の import が一つ（Ordering の `fulfillment.proto` から Inventory の `stock.proto` へ）、rulec が二つ（Billing の `billing_need.rule` の `import proto` が Ordering の `OrderStatus` へ、`shipment_fee.rule` の `shape` が Delivery の `CreateShipmentRequest` へ）、koyomi が一つ（Delivery の `ship_date.cal` が、Billing と Delivery の共有カーネルの `tokyo_business_days.cal` を `use calendar` で読む）、dandori が五つ（Ordering の `fulfillment.flow` が、Delivery の規則 `urgency` を `use rule … connect` で、Inventory の `stock.proto` を `use proto` で読み、その `StockService` の `Reserve` と `Release` を `connect` で呼び、Delivery の `arrange_delivery.flow` を子として走らせる）である。日本語の名前で書いた例では、同じ九つが、受注の `受注.flow`、請求の `請求の要否.rule` と `出荷の送料.rule`、配送の `出荷日.cal`、`配送の手配.flow` などの上にある。括弧の中は、参照のもとの言語ごとの数で、proto、rulec、koyomi、dandori、rust（Rust のクレートのマニフェスト。7.7）の順に並べ、一つも無い言語は書かない。
 
 ### 3.2 属し方
 
@@ -701,16 +808,16 @@ rulec には、検査を通る規則にだけ答える事実（`Rules`）を先�
 ほかの言語が渡されていないとき（sakai のクレートのバイナリ）は、地図が rulec、koyomi、dandori の成果物を含めば、言語ごとに一つの E104 を、その言語の最初の成果物を持つ `owns` の行に出す。注に、同じコマンドを `ritsu sakai` で走らせる形を書き、exit 2 で終わる（走らせ方の問題で、地図の誤りではないため。ritsu の段階 E の前は、ほかの誤りと同じく exit 1 だった。12.3）。
 
 ```
-$ sakai check examples/通販/通販.ctx
-error[E104]: examples/通販/contexts/請求.ctx:6:7: This sakai cannot read rulec artifacts (4 of them, the first examples/通販/billing/rules/出荷の送料.rule)
+$ sakai check examples/shop/shop.ctx
+error[E104]: examples/shop/contexts/billing.ctx:6:7: This sakai cannot read rulec artifacts (4 of them, the first examples/shop/billing/rules/billing_need.rule)
      6 |   dir "../billing", "../calendars"
-  = The binary of sakai's own crate holds no other language; run it with every language joined, through ritsu: `ritsu sakai check examples/通販/通販.ctx`.
-error[E104]: examples/通販/contexts/請求.ctx:6:7: This sakai cannot read koyomi artifacts (3 of them, the first examples/通販/billing/支払条件.cal)
+  = The binary of sakai's own crate holds no other language; run it with every language joined, through ritsu: `ritsu sakai check examples/shop/shop.ctx`.
+error[E104]: examples/shop/contexts/billing.ctx:6:7: This sakai cannot read koyomi artifacts (3 of them, the first examples/shop/billing/payment_terms.cal)
      6 |   dir "../billing", "../calendars"
-  = The binary of sakai's own crate holds no other language; run it with every language joined, through ritsu: `ritsu sakai check examples/通販/通販.ctx`.
-error[E104]: examples/通販/contexts/配送.ctx:6:7: This sakai cannot read dandori artifacts (2 of them, the first examples/通販/delivery/配送の手配.flow)
+  = The binary of sakai's own crate holds no other language; run it with every language joined, through ritsu: `ritsu sakai check examples/shop/shop.ctx`.
+error[E104]: examples/shop/contexts/delivery.ctx:6:7: This sakai cannot read dandori artifacts (2 of them, the first examples/shop/delivery/arrange_delivery.flow)
      6 |   dir "../delivery", "../proto/shop/delivery"
-  = The binary of sakai's own crate holds no other language; run it with every language joined, through ritsu: `ritsu sakai check examples/通販/通販.ctx`.
+  = The binary of sakai's own crate holds no other language; run it with every language joined, through ritsu: `ritsu sakai check examples/shop/shop.ctx`.
 ```
 
 **決定**：E104 は、ほかの言語がつながっていないことを言うコードにする（前は「ツールが無い」）。ritsu の決まりで、言語のクレートはほかの言語のクレートに依存しない（ritsu の DESIGN 3.1）ので、sakai のクレートのバイナリは一式の言語を持てない。そのバイナリで例を確かめるとき、規則やワークフローを属し方でだけ扱って通すこともできるが、それは確かめていない参照を黙って通すことになる（P7）。言語ごとに一つにしたのは、成果物ごとに言うと例でも九つになり、言うことは同じだからである。`check` のほかに `api`、`build`、`export` も、地図の検査を通らなければ出さないので、同じ E104 で止まる。
@@ -1019,7 +1126,7 @@ B の段階の地図（`tests/maps/基本/`）と 11 章の例を一か所だけ
 | コマンド | すること |
 |---|---|
 | `sakai check <map.ctx \| dir>... [--format json] [--root <dir>]` | 検査（3 章）。ディレクトリを渡すと、その下の map のファイルを全部（パスの順に）。どの地図にも読まれない context のファイルがあれば、ディレクトリを渡したときだけ W103 を出す |
-| `sakai build <map.ctx> --target import-linter\|dependency-cruiser\|archunit\|go-arch-lint [--out <dir>] [--check] [--root <dir>]` | コードの import の検査の設定を書く（7 章）。検査を通らない地図からは書かない（診断を出して exit 1）。`--out` の既定は、その言語の `code` の置き場所（ArchUnit は `test` の置き場所）。書けば `examples/通販/py/.importlinter: Written (11 contracts)` のように一行で言う。`--check` は、書く代わりに、いまの設定が地図から書くものと同じかを確かめる（同じなら `Up to date (11 contracts)`、違えば E502）。書けない地図は E501 |
+| `sakai build <map.ctx> --target import-linter\|dependency-cruiser\|archunit\|go-arch-lint [--out <dir>] [--check] [--root <dir>]` | コードの import の検査の設定を書く（7 章）。検査を通らない地図からは書かない（診断を出して exit 1）。`--out` の既定は、その言語の `code` の置き場所（ArchUnit は `test` の置き場所）。書けば `examples/shop/py/.importlinter: Written (11 contracts)` のように一行で言う。`--check` は、書く代わりに、いまの設定が地図から書くものと同じかを確かめる（同じなら `Up to date (11 contracts)`、違えば E502）。書けない地図は E501 |
 | `sakai export cml <map.ctx> [--out <file>] [--root <dir>]` | Context Mapper の CML を書く（8 章）。既定は標準出力。検査を通らない地図からは書かない（診断は標準エラーに出して exit 1） |
 | `sakai doc <map.ctx> [--format markdown\|html] [--out <dir>]` | コンテキストマップの図、コンテキストごとの用語集、関係と対応の表（10 章）。既定は Markdown を標準出力に |
 | `sakai api <map.ctx> [--root <dir>]` | 地図、属し方、境界を越える参照を JSON で（9 章） |
@@ -1078,7 +1185,7 @@ C の段階で作ったときに、表だけでは決まらないことが三つ
 | `sakai-billing-kernel-delivery` | `calendars` | 請求、配送 |
 | `sakai-reviews` | `reviews` | 無し |
 
-設定は四つとも、どのツールでも同じ扱いにする。地図から書く、頭に元の地図と書いたコマンドを書く、`--check` で古くなったかを言う、テストで本物のツールを走らせ、地図に無い import を捕まえ、地図どおりの import を通すことを確かめる（7.6）。頭の地図は、設定のファイルのディレクトリから見たパスで書く（`../通販.ctx`）。ルートに依らないので、どこで書いても同じ文字になる。設定の説明の文（契約の名前、規則の説明）は `--lang` の言語で書き、頭のコマンドにも `--lang ja` を書き残す。違う `--lang` で `--check` すると説明の文が違って E502 になるので、そのときは注で、ファイルがどの言語で書かれているかを言う。
+設定は四つとも、どのツールでも同じ扱いにする。地図から書く、頭に元の地図と書いたコマンドを書く、`--check` で古くなったかを言う、テストで本物のツールを走らせ、地図に無い import を捕まえ、地図どおりの import を通すことを確かめる（7.6）。頭の地図は、設定のファイルのディレクトリから見たパスで書く（英語の例では `../shop.ctx`、日本語の例では `../通販.ctx`）。ルートに依らないので、どこで書いても同じ文字になる。設定の説明の文（契約の名前、規則の説明）は `--lang` の言語で書き、頭のコマンドにも `--lang ja` を書き残す。違う `--lang` で `--check` すると説明の文が違って E502 になるので、そのときは注で、ファイルがどの言語で書かれているかを言う。
 
 **捨てたもの**：設定の頭に `.ctx` のファイルの SHA-256 を書くこと（A の段階の案）。`.ctx` をどこか一字でも直すと（コメントでも）ハッシュが変わり、`--check` が、中身の変わらない設定を全部書き直させることになる。古くなったかは、ツールが読む中身を一行ずつ比べて言う。
 
@@ -1297,7 +1404,7 @@ Cargo に尋ねる形なら、依存を足したマニフェストの行を名�
 
 名前は別名で書く（CML の名前は ASCII の識別子に限られる。0.4）。顧客／供給者には OHS を付けない。Context Mapper の規則（顧客／供給者に OHS は付けない）に合わせたもので、sakai の公開ホストサービスは「境界の向こうから呼べるサービス」の意味なので、顧客も同じサービスを呼ぶ。そのことは `implementationTechnology` に残る。持ち主を CML のチーム（`type = TEAM` のコンテキスト）にしないのは、`SYSTEM_LANDSCAPE` の地図にチームを入れられないからである。`state` を `AS_IS` にしたのは、sakai の地図が実物と突き合わせたものだからである。関係は地図に書いた順（`use context` の順のコンテキストの、ファイルの中の順）に出し、両側に書く関係は先に出てきたほうで一度だけ出す。コメントは `--lang` の言語で書く。頭のコメントに元の地図の名前と書いたコマンドを書き、`.ctx` のハッシュは書かない（7.1 と同じ理由）。
 
-例の地図から sakai が書いた CML（`--lang ja`。全文は `tests/golden/cml/通販.ja.cml`）の頭の部分を抜き出す。
+日本語の名前の例の地図から sakai が書いた CML（`--lang ja`。全文は `tests/golden/cml/通販.ja.cml`）の頭の部分を抜き出す。英語の名前の例の CML は `tests/golden/cml/shop.cml`（英語）と `shop.ja.cml`（日本語）で、コンテキストの名前の違いのほかは同じである。
 
 ```cml
 /* `sakai export cml --lang ja` が 通販.ctx から書いた。直すときは .ctx を直して書き直す。 */
@@ -1451,29 +1558,43 @@ BoundedContext ordering {
 
 ## 11. 例
 
-**決定**：一式の例を写して、五つのコンテキストからなる小さな通販を `examples/通販/` に作る。地図は日本語の名前の `通販.ctx` と、同じ成果物を英語の名前で書いた `shop.ctx` の二つを置く（英語の README には英語の地図を載せる）。
+**決定**：一式の例を写して、五つのコンテキストからなる小さな通販を作る。同じ例を二つ置く。英語の名前で書いた `examples/shop/`（地図は `shop.ctx`）を先に、日本語の名前で書いた `examples/shop.ja/`（地図は `通販.ctx`）を並べる。二つは、コンテキスト、語、規則、カレンダー、フロー、帳簿、コードの識別子の名前が違うだけで、成果物の中身と関係は同じである。どちらも同じ数の境界を越える参照（9 件）を出し、同じ診断が出る（`tests/examples.rs` が両方を確かめる）。日本語の例の名前は、英語の例の名前の順に次の表の括弧に書く。
 
 | コンテキスト | 成果物（写した元） |
 |---|---|
-| 受注（ordering） | dandori の `受注.flow`（dandori の例の引当と発送の日本語の版を写して直す）、`proto/shop/ordering/v1/`（`order.proto` は例のために書く。`fulfillment.proto` は dandori の例を写して直す） |
-| 在庫（inventory） | chobo の `在庫の引当.book`（chobo の例の `inventory.ja.book`）、`proto/warehouse/v1/stock.proto`（dandori の例の `warehouse.proto` に梱包のサービスを足す） |
-| 配送（delivery） | dandori の `配送の手配.flow`（dandori の例を写して直す）、rulec の `出荷の急ぎ.rule`（dandori の例）、koyomi の `出荷日.cal`（例のために書く）、`proto/shop/delivery/v1/shipment.proto`（rulec の corpus の契約を写し、package とサービスを足す） |
-| 請求（billing） | rulec の `決済手数料.rule`（rulec の corpus）、`出荷の送料.rule`（rulec の corpus を写して `shape` の先を直す）、`請求の要否.rule`（例のために書く）、koyomi の `支払条件.cal`（koyomi の例）と `calendars/東京の営業日.cal`（koyomi の例。祝日の表の写しも） |
-| レビュー（reviews） | コードだけ |
+| Ordering（受注） | dandori の `fulfillment.flow`（日本語の例では `受注.flow`。dandori の例の引当と発送を写して直す）、`proto/shop/ordering/v1/`（`order.proto` は例のために書く。`fulfillment.proto` は dandori の例を写して直す） |
+| Inventory（在庫） | chobo の `inventory.book`（日本語の例では `在庫の引当.book`。chobo の例の `inventory.ja.book`）、`proto/warehouse/v1/stock.proto`（dandori の例の `warehouse.proto` に梱包のサービスを足す） |
+| Delivery（配送） | dandori の `arrange_delivery.flow`（`配送の手配.flow`。dandori の例）、rulec の `urgency.rule`（`出荷の急ぎ.rule`。dandori の例）、koyomi の `ship_date.cal`（`出荷日.cal`。例のために書く）、`proto/shop/delivery/v1/shipment.proto`（rulec の corpus の契約を写し、package とサービスを足す） |
+| Billing（請求） | rulec の `payment_fee.rule`（`決済手数料.rule`。rulec の corpus）、`shipment_fee.rule`（`出荷の送料.rule`。rulec の corpus を写して `shape` の先を直す）、`billing_need.rule`（`請求の要否.rule`。例のために書く）、koyomi の `payment_terms.cal`（`支払条件.cal`。koyomi の例）と `calendars/tokyo_business_days.cal`（`東京の営業日.cal`。koyomi の例。祝日の表の写しも） |
+| Reviews（レビュー） | コードだけ |
 
 関係は七つで、六つのパターンがどれも現れる（腐敗防止層は、rulec の規則が先の対応と、値ごとに書く対応の二つ）。
 
 | 関係 | パターン | 境界を越える参照（sakai が読めるもの） |
 |---|---|---|
-| 受注 → 在庫 | 順応者、`through warehouse.v1` | `fulfillment.proto` が `stock.proto` を import する（受注の公表された言語が在庫の型をそのまま使う。順応者なので許す）。`受注.flow` が `stock.proto` を `use proto` で読み、`StockService` の `Reserve` と `Release` を `connect` で呼ぶ（在庫の公開ホストサービス） |
-| 請求 → 受注 | 腐敗防止層、`through shop.ordering.v1`、層は `請求の要否.rule` と各言語の `billing/acl/ordering` | `請求の要否.rule` が `import proto` で `OrderStatus` を取り込む。対応の先はその規則の列挙で、値の対応は rulec が決める。受注の「キャンセル」（`ORDER_STATUS_CANCELLED`）は、請求の違う意味の「キャンセル」とぶつかるが、規則の値「受注で取消」に読み替えられている |
-| 配送 → 在庫 | 腐敗防止層、`through warehouse.v1`、層は各言語の `delivery/acl/inventory` | 対応は `.ctx` に値ごとに書く（`PACKING_STATUS_SHORT` は断る） |
-| 請求 → 配送 | 顧客／供給者、`through shop.delivery.v1` | `出荷の送料.rule` の `shape` が `CreateShipmentRequest` を読む |
-| 請求 ＝ 配送 | 共有カーネル（`東京の営業日.cal` と、koyomi がそれから書くコードの置き場所） | `支払条件.cal` と `出荷日.cal` が同じカレンダーを読む |
-| 受注 ＝ 配送 | パートナーシップ | `受注.flow` が、規則 `出荷の急ぎ` を Connect で呼び（`use rule … connect`。規則は配送の公表された言語 `rulec.urgency.v1`）、子の `配送の手配.flow` を走らせる（パートナーシップなので許す。4.7） |
-| レビュー ／ 請求 | 別々の道 | 何も無いことを確かめる |
+| Ordering → Inventory | 順応者、`through warehouse.v1` | `fulfillment.proto` が `stock.proto` を import する（Ordering の公表された言語が Inventory の型をそのまま使う。順応者なので許す）。`fulfillment.flow` が `stock.proto` を `use proto` で読み、`StockService` の `Reserve` と `Release` を `connect` で呼ぶ（Inventory の公開ホストサービス） |
+| Billing → Ordering | 腐敗防止層、`through shop.ordering.v1`、層は `billing_need.rule` と各言語の `billing/acl/ordering` | `billing_need.rule` が `import proto` で `OrderStatus` を取り込む。対応の先はその規則の列挙で、値の対応は rulec が決める。Ordering の `cancel`（`ORDER_STATUS_CANCELLED`）は、Billing の違う意味の `cancel` とぶつかるが、規則の値 `cancelled_in_ordering` に読み替えられている（日本語の例では、受注の「キャンセル」が、規則の値「受注で取消」に） |
+| Delivery → Inventory | 腐敗防止層、`through warehouse.v1`、層は各言語の `delivery/acl/inventory` | 対応は `.ctx` に値ごとに書く（`PACKING_STATUS_SHORT` は断る） |
+| Billing → Delivery | 顧客／供給者、`through shop.delivery.v1` | `shipment_fee.rule` の `shape` が `CreateShipmentRequest` を読む |
+| Billing ＝ Delivery | 共有カーネル（`tokyo_business_days.cal` と、koyomi がそれから書くコードの置き場所） | `payment_terms.cal` と `ship_date.cal` が同じカレンダーを読む |
+| Ordering ＝ Delivery | パートナーシップ | `fulfillment.flow` が、規則 `urgency` を Connect で呼び（`use rule … connect`。規則は Delivery の公表された言語 `rulec.urgency.v1`）、子の `arrange_delivery.flow` を走らせる（パートナーシップなので許す。4.7） |
+| Reviews ／ Billing | 別々の道 | 何も無いことを確かめる |
 
-A の段階で、例のために書く規則とカレンダーと proto の下書きを、一式のツールに通した（2026-10-03）。`請求の要否.rule` は rulec 0.22.1 で `ok`。`order.proto` に `ORDER_STATUS_RETURNED = 5;` を足すと、rulec が次を出して止めた（上流が値を足すと、規則の側で止まる。sakai の E105 は、rulec が言うこの診断を注に添える。4.1）。
+A の段階で、例のために書く規則とカレンダーと proto の下書きを、一式のツールに通した（2026-10-03）。`billing_need.rule` は rulec で `ok`。`order.proto` に `ORDER_STATUS_RETURNED = 5;` を足すと、rulec が次を出して止める（上流が値を足すと、規則の側で止まる。sakai の E105 は、rulec が言うこの診断を注に添える。4.1。2026-10-04 に、英語の例で走らせた出力）。
+
+```
+error[E032]: Enum order_status does not agree with OrderStatus in ../../proto/shop/ordering/v1/order.proto
+  --> billing_need.rule:5
+  |
+5 | enum order_status = received | paid | shipped | cancelled_in_ordering(cancelled)
+  |      ^^^^^^^^^^^^
+  |
+ In ../../proto/shop/ordering/v1/order.proto but not in this enum: returned
+ The form to add: `<name>(returned)`. The name is yours to decide — the file carries no Japanese.
+ A value appeared through the contract, not through this rule. What the new value costs is a decision nobody has made yet (§15.59).
+```
+
+日本語の例の `請求の要否.rule` では、A の段階で次だった。
 
 ```
 error[E032]: Enum 注文の状態 does not agree with OrderStatus in ../../proto/shop/ordering/v1/order.proto
@@ -1485,15 +1606,15 @@ error[E032]: Enum 注文の状態 does not agree with OrderStatus in ../../proto
  In ../../proto/shop/ordering/v1/order.proto but not in this enum: returned
 ```
 
-`出荷の送料.rule`（`shape` の先を `shop.delivery.v1.CreateShipmentRequest` にしたもの）は `ok`。`出荷日.cal` は koyomi 0.1.0 で「2 claims hold on all 719 days of 受注日 (2026-01-01..2027-12-20)」、`支払条件.cal`（`use calendar` を直したもの）は「3 claims hold on all 689 days of 受領日」。`order.proto` と `stock.proto` は buf 1.54.0 の lint を通った。
+`shipment_fee.rule`（`shape` の先を `shop.delivery.v1.CreateShipmentRequest` にしたもの）は `ok`。`ship_date.cal` は koyomi で「2 claims hold on all 719 days of ordered (2026-01-01..2027-12-20)」、`payment_terms.cal`（`use calendar` を直したもの）は「3 claims hold on all 689 days of received」（日本語の例の `出荷日.cal` と `支払条件.cal` は、受注日と受領日の同じ日数で、同じ数を言う）。`order.proto` と `stock.proto` は buf 1.54.0 の lint を通った。
 
 コードは、Python（`py/`）、TypeScript（`ts/`）、Java（`java/`）、Go（`go/`）の四つに、同じ形の小さなものを置く。公表された言語から生成したコードと、chobo と koyomi と rulec が書くコードは、本物の代わりに数行の手書きのものにする（頭のコメントに、どのコマンドが本物を書くかを書く）。import の検査で見るのは境界で、中身ではないからである。本物の protobuf のコードは、各言語の protobuf のライブラリが無いと組めず、テストに外の依存が増える。
 
-C の段階で、この例を作った（`通販.ctx` と五つのコンテキストのファイル。英語の地図 `shop.ctx` と例の README は D の段階）。写したファイルには、頭のコメントに写した元と直したところを書いた（祝日の表と dandori の `options.proto` は、写した元のまま）。PLAN の C.0 の直し方のほかに、`受注.flow` のコメントと説明の中の、在庫の値の名前と子の `.flow` のファイルの名前を、直したあとのものに合わせた。写したものと例のために書いたものは、どれもそれぞれのツールの検査を通る（rulec 0.22.1 で規則 4 本、koyomi 0.1.0 でカレンダー 3 本、chobo 0.1.0 で帳簿 1 本、dandori 0.1.0 でワークフロー 2 本。`tests/examples.rs` が確かめる。ritsu の D.8 から、それぞれの言語の口で確かめる）。
+C の段階で、この例を作った（日本語の名前の `通販.ctx` と五つのコンテキストのファイル）。英語の名前の例は、英語を先にする段階（12.4）で、日本語の例の名前を英語に直した版として足し、日本語の例は `通販` から `shop.ja` に名前を替えた（中身は、`支払条件.cal` の頭のコメントが指す koyomi の例の名前を、koyomi が例の名前を替えたのに合わせて直したほかは、変えていない）。例の README は、まだ無い。写したファイルには、頭のコメントに写した元と直したところを書いた（祝日の表と dandori の `options.proto` は、写した元のまま）。PLAN の C.0 の直し方のほかに、`受注.flow` のコメントと説明の中の、在庫の値の名前と子の `.flow` のファイルの名前を、直したあとのものに合わせた。写したものと例のために書いたものは、どれもそれぞれのツールの検査を通る（rulec 0.22.1 で規則 4 本、koyomi 0.1.0 でカレンダー 3 本、chobo 0.1.0 で帳簿 1 本、dandori 0.1.0 でワークフロー 2 本。`tests/examples.rs` が確かめる。ritsu の D.8 から、それぞれの言語の口で確かめる）。
 
-四つの言語のコードの置き場所には、sakai が書いた設定（`py/.importlinter`、`ts/.dependency-cruiser.cjs`、`java/src/test/java/SakaiContextsTest.java`、`go/.go-arch-lint.yml`。`--lang ja`）も置く。CI で `sakai build --check` を走らせる使い方そのままの形で、`tests/build.rs` が、いまの地図から書くものと一字も違わないことを確かめる。四つのツールは、例のままでは何も言わず、7.6 の四つの import のどれも捕まえる。
+四つの言語のコードの置き場所には、sakai が書いた設定（`py/.importlinter`、`ts/.dependency-cruiser.cjs`、`java/src/test/java/SakaiContextsTest.java`、`go/.go-arch-lint.yml`。英語の例には `--lang en`、日本語の例には `--lang ja`）も置く。CI で `sakai build --check` を走らせる使い方そのままの形で、`tests/build.rs` が、いまの地図から書くものと一字も違わないことを確かめる。四つのツールは、例のままでは何も言わず、7.6 の四つの import のどれも捕まえる。
 
-ritsu の D.8 から、`ritsu sakai check` は上の表の参照を全部読む。境界を越える参照は 9 件で（3.1）、どれも関係が許す。
+ritsu の D.8 から、`ritsu sakai check` は上の表の参照を全部読む。境界を越える参照は 9 件で（3.1）、どれも関係が許す。英語の例では、境界を越える参照を、参照元のファイルの名前の順に並べるので、規則の二つ（`billing_need.rule` と `shipment_fee.rule`）の順が、日本語の例（`出荷の送料.rule` と `請求の要否.rule`）と逆になる。言語ごとの数と、関係と、診断は同じである。
 
 ## 12. 実装
 
@@ -1550,6 +1671,19 @@ sakai は ritsu（七つの言語を一つにまとめる処理系）に取り�
 - E104 で止まったときの exit code を 1 から 2 にした（`check`、`api`、`build`、`export`。4.1）。ritsu の受け取る側の三つの言語（dandori の E018、yuen の E206）と同じ断り方にそろえた（ritsu の DESIGN 2.3）。sakai のクレートのバイナリで、規則、カレンダー、ワークフローを含む地図を渡したときの終了コードだけが変わる。台帳の E104 の説明と、`check --help` と `sakai --help` の終了コードの行にも書いた。
 - api から `not_checked` を消した（9 章に理由）。api の JSON のキーが一つ減る。`tests/golden/api/` の二つを取り直した。
 - Rust のクレートの依存を確かめるようにした（ritsu の PLAN の E.8。ritsu の地図 `ritsu.ctx` のため）。地図の `code rust`、公表された言語の `crate "…"`、成果物の `.rs` とクレートの `Cargo.toml`、Cargo に尋ねる `cargo metadata` の一回（6 章の例外）、E107（7.7）。キーワードに `rust` と `crate` が増え、名前に使えなくなった（`code` の後の言語を誤ったときの注と、公表された言語の下に書けるものの注に、Rust を足した）。Rust のコードを書かない地図の振る舞いは変えていない。テストの土台の地図に `tests/maps/rust`（英語の名前で書いた、四つのクレートのワークスペース）を足し、変異を四つ（E107、E201、E202、E302）足した。
+
+### 12.4 英語の版と日本語の版（例、テストの材料、explain の再現）
+
+例、テストの材料、golden、文書の例は、英語を先にする。日本語のものは消さず、中身も変えず、日本語の版として残して、英語の版を足した。名前の付け方は、次の一つの決まりにそろえた。
+
+- **例**（`examples/`）：英語の名前の版が `examples/shop/`、日本語の名前の版が `examples/shop.ja/` である。もとの `通販` は、`git mv` で名前だけを替えた（中身は、`billing/支払条件.cal` の頭のコメントが指す koyomi の例の名前を、koyomi が例の名前を替えたのに合わせて直したほかは、一字も変えていない）。英語の版は、dandori、koyomi、chobo、rulec の英語の例を写して、コンテキスト、語、フロー、規則、カレンダー、帳簿、コードの識別子の名前を英語にしたもの（92 ファイル。祝日の表は写しのまま）で、日本語の版と同じ数の境界を越える参照（9 件）と、同じ診断を出す（`tests/examples.rs`）。コンテキストの別名は日本語の版と同じなので、設定の中のグループの名前（`sakai-ordering` など）も同じになり、設定の説明の文だけが英語になる。
+- **テストの地図**（`tests/maps/`）：日本語の名前の `基本`、`入れ子`、`パターン` はそのまま残し、英語の名前の `basic`、`nested`、`patterns`（コンテキストのファイル 13 本、proto、コード）を足した。診断の同じコードを出す。
+- **変異**（`tests/mutants/`）：日本語の名前の 64 本はそのまま残し、同じコードを出す英語の名前のものを 64 本足した。名前は診断のコードで始め（`E001_閉じていない文字列` と `E001_unclosed_string`）、`base` は英語の地図か英語の例を指す。日本語の変異の `base` のうち、例を指す 11 本は、`examples/通販` と書いたまま残した（日本語の名前のものの中身は変えない）。テストの道具（`tests/common/mod.rs` の `base_dir`）が、それを `examples/shop.ja` と読み替える。一つのコードに、英語の名前の変異が日本語の名前のものと同じ数かそれ以上あることは、`tests/codes.rs` の `every_japanese_mutant_has_an_english_one` が確かめる。もとから英語の名前だった 4 本（Rust の地図のもの）は、そのままである。
+- **import の検査のコード**（`tests/code/`）：日本語の名前のディレクトリ（`1_在庫の内側` など）はそのまま残し、同じ import を英語の名前のディレクトリ（`1_inside_of_inventory` など、入れ子の地図のものは `nested/`）に足した。`tests/imports.rs` は、英語の例と英語の入れ子の地図でも、四つのツールを走らせる。
+- **golden**：日本語の名前のものは、名前も中身もそのまま残した。足したもの：英語の変異ごとの `.en.txt` と `.ja.txt`、`api/basic.json` と `api/patterns.json`、`cml/shop.cml` と `cml/shop.ja.cml`。`imports/*.txt` は、日本語の例のラベルが例の名前の変更に合わせて `examples/shop.ja` になり、英語の例の分が足された。
+- **テスト**：日本語の地図、変異、例を読むテストは、名前もコードも終了コードも変えず、英語の地図、変異、例を読む同じ振る舞いのテストを `…_in_english` として足した。日本語でしか確かめられないもの（`columns_after_japanese_count_characters`、全角の空白の E001 など）は、日本語のまま持ち、英語のテストは同じ振る舞い（桁が文字で数えられること）を英語の材料で確かめる。
+
+**`explain` の再現**：台帳の項（`ritsu_base::ledger::Entry`）が、再現を二つ持てるようにした。英語の出力は英語の名前の再現（`map.ctx`、`alpha.ctx`、`beta.ctx`。コンテキストは `Alpha(a)` と `Beta(b)`）を、日本語の出力は日本語の名前の再現（`地図.ctx`、`甲.ctx`、`乙.ctx`）を見せる。決めて変えたことで、sakai の `explain` の英語の出力の再現と、英語の説明文の中の日本語の名前の例（E003 の `map 通販(shop) v1`、E008 の `受注(ordering)`）が英語の名前になる。ほかの言語の出力は変わらない。再現は `tests/codes.rs` が両方とも走らせて、そのコードが出ることを確かめる。診断そのものの文（`check` の出力）は変えていない。
 
 ## 13. 捨てたもの
 

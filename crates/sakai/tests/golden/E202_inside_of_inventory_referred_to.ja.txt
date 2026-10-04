@@ -1,0 +1,6 @@
+エラー[E202]: proto/shop/ordering/v1/fulfillment_lite.proto:6:1: 「Ordering」の proto/shop/ordering/v1/fulfillment_lite.proto が、「Inventory」の内側の proto/warehouse/internal/v1/ledger.proto を import しています
+     6 | import "warehouse/internal/v1/ledger.proto";
+  = proto/warehouse/internal/v1/ledger.proto は「Inventory」の公表された言語に入っていません。境界の向こうから参照できるのは、公表された言語と共有カーネルだけです。
+  関わるもの:
+      Ordering   proto/shop/ordering/v1/fulfillment_lite.proto:6   import "warehouse/internal/v1/ledger.proto"
+      Inventory  proto "proto/warehouse/internal/v1/ledger.proto"  「Inventory」の内側のファイル

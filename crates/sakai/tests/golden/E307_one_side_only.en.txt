@@ -1,0 +1,13 @@
+error[E307]: ctx/ordering.ctx:21:1: The shared kernel is written on Ordering's side only
+    21 | shared kernel with Inventory
+  = A shared kernel is held by two teams together; write `shared kernel with Ordering` in Inventory's file too, with the same entries.
+  involved:
+      Ordering  ctx/ordering.ctx:21  shared kernel with Inventory
+error[E201]: proto/warehouse/v1/stock.proto:5:1: The file proto/warehouse/v1/stock.proto of Inventory imports proto/shop/common/v1/money.proto of Ordering, which Inventory has no relationship with
+     5 | import "shop/common/v1/money.proto";
+  = Ordering is downstream of Inventory, the other way round: an upstream relationship lets the downstream refer to the upstream.
+  = The shared kernel of the two is written on Ordering's side only (E307 is told too).
+  = A reference across the boundary needs a relationship: upstream and downstream (the downstream writes `upstream`), a partnership, or a shared kernel.
+  involved:
+      Inventory  proto/warehouse/v1/stock.proto:5          import "shop/common/v1/money.proto"
+      Ordering   proto "proto/shop/common/v1/money.proto"  a file inside Ordering

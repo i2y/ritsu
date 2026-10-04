@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package kernel;
+
+// The unit of days that quotes and contracts each keep a copy of.
+message Days {
+  int64 count = 1;
+}

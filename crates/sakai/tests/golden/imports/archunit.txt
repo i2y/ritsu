@@ -1,17 +1,34 @@
-== examples/通販 1_在庫の内側
+== examples/shop.ja 1_在庫の内側
 Rule '「在庫」(inventory) の内側は、「在庫」だけが使う' was violated (1 times):
 Method <ordering.BadInternals.take(java.lang.String, java.lang.String)> calls method <inventory.Ledger.hold(java.lang.String, java.lang.String, int)> in (BadInternals.java:6)
-== examples/通販 2_層の外から受注の公表された言語
+== examples/shop.ja 2_層の外から受注の公表された言語
 Rule '「受注」の公表された言語 shop.ordering.v1 から生成したコードは、「受注」、「配送」(delivery) の内側、「配送」の「在庫」に向けた腐敗防止層、「請求」の「受注」に向けた腐敗防止層だけが使う' was violated (2 times):
 Method <billing.BadOutsideLayer.cancelled(int)> calls method <shop.ordering.v1.OrderStatus.values()> in (BadOutsideLayer.java:6)
 Method <billing.BadOutsideLayer.cancelled(int)> gets field <shop.ordering.v1.OrderStatus.ORDER_STATUS_CANCELLED> in (BadOutsideLayer.java:6)
-== examples/通販 3_共有カーネルを外から
+== examples/shop.ja 3_共有カーネルを外から
 Rule '「請求」と「配送」の共有カーネルは、「配送」、「請求」だけが使う' was violated (1 times):
 Method <ordering.BadKernel.promised(java.lang.String)> calls method <calendars.Tokyo.nextBusinessDay(java.lang.String)> in (BadKernel.java:6)
-== examples/通販 4_別々の道の相手
+== examples/shop.ja 4_別々の道の相手
 Rule '「請求」(billing) の内側は、「請求」だけが使う' was violated (2 times):
 Method <reviews.BadSeparate.billed(java.lang.String)> calls constructor <billing.Invoice.<init>()> in (BadSeparate.java:6)
 Method <reviews.BadSeparate.billed(java.lang.String)> calls method <billing.Invoice.due(int, shop.delivery.v1.CreateShipmentRequest, java.lang.String)> in (BadSeparate.java:6)
 == tests/maps/入れ子 1_生成したコードを囲む内側
 Rule '「在庫」(inventory) の内側は、「在庫」だけが使う' was violated (1 times):
+Method <ordering.Bad.twice()> calls method <warehouse.Ledger.count()> in (Bad.java:6)
+== examples/shop 1_inside_of_inventory
+Rule 'The inside of Inventory (inventory) is used only by Inventory' was violated (1 times):
+Method <ordering.BadInternals.take(java.lang.String, java.lang.String)> calls method <inventory.Ledger.hold(java.lang.String, java.lang.String, int)> in (BadInternals.java:6)
+== examples/shop 2_outside_the_layer_ordering_published_language
+Rule 'The code made from Ordering's published language shop.ordering.v1 is used only by Ordering, the inside of Delivery (delivery), Delivery's anticorruption layer toward Inventory and Billing's anticorruption layer toward Ordering' was violated (2 times):
+Method <billing.BadOutsideLayer.cancelled(int)> calls method <shop.ordering.v1.OrderStatus.values()> in (BadOutsideLayer.java:6)
+Method <billing.BadOutsideLayer.cancelled(int)> gets field <shop.ordering.v1.OrderStatus.ORDER_STATUS_CANCELLED> in (BadOutsideLayer.java:6)
+== examples/shop 3_shared_kernel_from_outside
+Rule 'The shared kernel of Billing and Delivery is used only by Delivery and Billing' was violated (1 times):
+Method <ordering.BadKernel.promised(java.lang.String)> calls method <calendars.Tokyo.nextBusinessDay(java.lang.String)> in (BadKernel.java:6)
+== examples/shop 4_separate_ways_partner
+Rule 'The inside of Billing (billing) is used only by Billing' was violated (2 times):
+Method <reviews.BadSeparate.billed(java.lang.String)> calls constructor <billing.Invoice.<init>()> in (BadSeparate.java:6)
+Method <reviews.BadSeparate.billed(java.lang.String)> calls method <billing.Invoice.due(int, shop.delivery.v1.CreateShipmentRequest, java.lang.String)> in (BadSeparate.java:6)
+== tests/maps/nested 1_inside_around_generated_code
+Rule 'The inside of Inventory (inventory) is used only by Inventory' was violated (1 times):
 Method <ordering.Bad.twice()> calls method <warehouse.Ledger.count()> in (Bad.java:6)

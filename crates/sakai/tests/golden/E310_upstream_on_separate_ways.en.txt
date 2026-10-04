@@ -1,0 +1,3 @@
+error[E310]: ctx/audit.ctx:11:1: Audit and Quotes go separate ways, and also have `upstream` between them
+    11 | separate ways from Quotes
+  = Separate ways is the decision to have no relationship; it cannot go with another.

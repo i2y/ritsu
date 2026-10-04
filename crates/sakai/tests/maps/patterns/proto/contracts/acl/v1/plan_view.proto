@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package contracts.acl.v1;
+
+import "pricing/v1/price.proto";
+
+// Inside the anticorruption layer of contracts, takes in the plan of pricing.
+message PlanView {
+  pricing.v1.Plan plan = 1;
+}

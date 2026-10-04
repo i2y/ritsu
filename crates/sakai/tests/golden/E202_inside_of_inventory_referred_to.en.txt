@@ -1,0 +1,6 @@
+error[E202]: proto/shop/ordering/v1/fulfillment_lite.proto:6:1: The file proto/shop/ordering/v1/fulfillment_lite.proto of Ordering imports proto/warehouse/internal/v1/ledger.proto, which is inside Inventory
+     6 | import "warehouse/internal/v1/ledger.proto";
+  = The file proto/warehouse/internal/v1/ledger.proto is in no published language of Inventory; across a boundary only the published languages and a shared kernel can be referred to.
+  involved:
+      Ordering   proto/shop/ordering/v1/fulfillment_lite.proto:6   import "warehouse/internal/v1/ledger.proto"
+      Inventory  proto "proto/warehouse/internal/v1/ledger.proto"  a file inside Inventory

@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package quotes.v1;
+
+import "pricing/v1/price.proto";
+import "quotes/kernel/units.proto";
+
+// Quotes' published language. A customer of pricing, so it uses pricing's types as they are.
+message Estimate {
+  pricing.v1.Quote quote = 1;
+  kernel.Days valid_for = 2;
+}

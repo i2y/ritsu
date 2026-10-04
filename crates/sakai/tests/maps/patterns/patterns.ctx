@@ -1,0 +1,13 @@
+# A map in which customer and supplier, customer and anticorruption layer, partnership, separate ways, and
+# a shared kernel with a copy on each side all pass.
+map Patterns(patterns) v1
+description "Sets prices, makes quotes, signs contracts, sends notices and audits"
+
+use context "ctx/pricing.ctx"
+use context "ctx/quotes.ctx"
+use context "ctx/contracts.ctx"
+use context "ctx/notices.ctx"
+use context "ctx/audit.ctx"
+
+covers "."
+proto root "proto"

@@ -1,0 +1,6 @@
+error[E202]: billing/rules/shipping_fee.rule:10:1: The file billing/rules/shipping_fee.rule of Billing refers to delivery/rules/surcharge.rule (apply), which is inside Delivery
+    10 | apply surcharge = "../../delivery/rules/surcharge.rule" sha256:d412cf576db77d00
+  = An `apply` expands the rule it names into this one: the rule itself, inside Delivery. A rule across the boundary is expanded from the two's shared kernel, or called from a workflow with `use rule … connect` once Delivery puts it in a published language (`published language rulec.…`).
+  involved:
+      Billing   billing/rules/shipping_fee.rule:10     apply "../../delivery/rules/surcharge.rule"
+      Delivery  rulec "delivery/rules/surcharge.rule"  a part of the inside of Delivery

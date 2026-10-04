@@ -1,0 +1,597 @@
+{
+  "sakai": "0.1.0",
+  "map": {
+    "name": "Basic",
+    "alias": "basic",
+    "version": "1",
+    "file": "basic.ctx",
+    "source_sha256": "6a6597d9c6f5edb281f071122bd9b6290f1dfbb65ea1209a4b4f749425ba5dc8",
+    "description": "Takes orders, holds stock, and decides whether to bill"
+  },
+  "covers": [
+    "."
+  ],
+  "except": [],
+  "contexts": [
+    {
+      "name": "Ordering",
+      "alias": "ordering",
+      "version": "1",
+      "file": "ctx/ordering.ctx",
+      "source_sha256": "7c971e95cbc124ac663b7a8a99563e25c0f422f3290a3d25bddd4b62e2dd5a54",
+      "description": "Takes orders, holds stock for them, and sees them through to arrival",
+      "owner": "Ordering team",
+      "also": [],
+      "owns": [
+        {
+          "dir": "proto/shop/ordering"
+        },
+        {
+          "dir": "proto/shop/common"
+        },
+        {
+          "dir": "py/ordering"
+        }
+      ],
+      "published": [
+        {
+          "package": "shop.ordering.v1",
+          "from": [
+            {
+              "text": "proto \"proto/shop/ordering/v1/order.proto\"",
+              "tool": "proto",
+              "path": "proto/shop/ordering/v1/order.proto",
+              "items": []
+            },
+            {
+              "text": "proto \"proto/shop/ordering/v1/fulfillment_lite.proto\"",
+              "tool": "proto",
+              "path": "proto/shop/ordering/v1/fulfillment_lite.proto",
+              "items": []
+            }
+          ],
+          "services": [
+            "OrderService"
+          ],
+          "generated": []
+        }
+      ],
+      "terms": [
+        {
+          "name": "order",
+          "definition": "A purchase the customer has confirmed. It does not disappear when it is cancelled",
+          "also": [],
+          "means": [
+            {
+              "text": "proto \"proto/shop/ordering/v1/order.proto\" message Order",
+              "tool": "proto",
+              "path": "proto/shop/ordering/v1/order.proto",
+              "items": [
+                [
+                  "message",
+                  "Order"
+                ]
+              ]
+            }
+          ],
+          "as": null
+        },
+        {
+          "name": "cancel",
+          "definition": "Cancelling an order before it ships, at the customer's request",
+          "also": [],
+          "means": [
+            {
+              "text": "proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus value ORDER_STATUS_CANCELLED",
+              "tool": "proto",
+              "path": "proto/shop/ordering/v1/order.proto",
+              "items": [
+                [
+                  "enum",
+                  "OrderStatus"
+                ],
+                [
+                  "value",
+                  "ORDER_STATUS_CANCELLED"
+                ]
+              ]
+            }
+          ],
+          "as": null
+        }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "alias": "inventory",
+      "version": "1",
+      "file": "ctx/inventory.ctx",
+      "source_sha256": "7c71fe0d050e4941ac6337c5decce4f795c2852a46dd90bbb685e560d4a2dd92",
+      "description": "Keeps the counts on the warehouse shelves, holds stock for each line of an order, and answers how packing is going",
+      "owner": "Warehouse team",
+      "also": [],
+      "owns": [
+        {
+          "dir": "proto/warehouse"
+        },
+        {
+          "dir": "py/inventory"
+        }
+      ],
+      "published": [
+        {
+          "package": "warehouse.v1",
+          "from": [
+            {
+              "text": "proto \"proto/warehouse/v1/stock.proto\"",
+              "tool": "proto",
+              "path": "proto/warehouse/v1/stock.proto",
+              "items": []
+            }
+          ],
+          "services": [
+            "StockService",
+            "PackingService"
+          ],
+          "generated": []
+        }
+      ],
+      "terms": [
+        {
+          "name": "reservation",
+          "definition": "Holding shelf stock for one line of an order until it ships or is cancelled",
+          "also": [],
+          "means": [
+            {
+              "text": "proto \"proto/warehouse/v1/stock.proto\" message ReserveResponse",
+              "tool": "proto",
+              "path": "proto/warehouse/v1/stock.proto",
+              "items": [
+                [
+                  "message",
+                  "ReserveResponse"
+                ]
+              ]
+            }
+          ],
+          "as": null
+        },
+        {
+          "name": "packing_status",
+          "definition": "Whether the goods of an order are in the box. A shortage can turn up part-way through packing",
+          "also": [],
+          "means": [
+            {
+              "text": "proto \"proto/warehouse/v1/stock.proto\" enum PackingStatus",
+              "tool": "proto",
+              "path": "proto/warehouse/v1/stock.proto",
+              "items": [
+                [
+                  "enum",
+                  "PackingStatus"
+                ]
+              ]
+            }
+          ],
+          "as": null
+        }
+      ]
+    },
+    {
+      "name": "Billing",
+      "alias": "billing",
+      "version": "1",
+      "file": "ctx/billing.ctx",
+      "source_sha256": "60a10b265fffc5b3b794cb515e86c8052af25c2005fac0cf5ac80add6fa6e333",
+      "description": "Decides whether to bill an order, to wait, or not to bill",
+      "owner": "Accounting team",
+      "also": [],
+      "owns": [
+        {
+          "dir": "proto/shop/billing"
+        },
+        {
+          "dir": "proto/billing"
+        },
+        {
+          "dir": "py/billing"
+        }
+      ],
+      "published": [
+        {
+          "package": "shop.billing.v1",
+          "from": [
+            {
+              "text": "proto \"proto/shop/billing/v1/billing.proto\"",
+              "tool": "proto",
+              "path": "proto/shop/billing/v1/billing.proto",
+              "items": []
+            }
+          ],
+          "services": [],
+          "generated": []
+        }
+      ],
+      "terms": [
+        {
+          "name": "cancel",
+          "definition": "Voiding an invoice after it was confirmed, and refunding it",
+          "also": [],
+          "means": [],
+          "as": null
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "kind": "upstream_downstream",
+      "upstream": "Inventory",
+      "downstream": "Ordering",
+      "roles": {
+        "upstream": [
+          "open_host_service",
+          "published_language"
+        ],
+        "downstream": [
+          "conformist"
+        ]
+      },
+      "through": [
+        "warehouse.v1"
+      ],
+      "layer": [],
+      "enums": [],
+      "terms": [],
+      "declared": [
+        "ctx/ordering.ctx:18"
+      ]
+    },
+    {
+      "kind": "shared_kernel",
+      "between": [
+        "Ordering",
+        "Inventory"
+      ],
+      "sides": [
+        {
+          "context": "Ordering",
+          "items": [
+            {
+              "name": {
+                "text": "proto \"proto/shop/common/v1/money.proto\"",
+                "tool": "proto",
+                "path": "proto/shop/common/v1/money.proto",
+                "items": []
+              }
+            }
+          ]
+        },
+        {
+          "context": "Inventory",
+          "items": [
+            {
+              "name": {
+                "text": "proto \"proto/shop/common/v1/money.proto\"",
+                "tool": "proto",
+                "path": "proto/shop/common/v1/money.proto",
+                "items": []
+              }
+            }
+          ]
+        }
+      ],
+      "declared": [
+        "ctx/ordering.ctx:21",
+        "ctx/inventory.ctx:18"
+      ]
+    },
+    {
+      "kind": "upstream_downstream",
+      "upstream": "Ordering",
+      "downstream": "Billing",
+      "roles": {
+        "upstream": [
+          "open_host_service",
+          "published_language"
+        ],
+        "downstream": [
+          "anticorruption_layer"
+        ]
+      },
+      "through": [
+        "shop.ordering.v1"
+      ],
+      "layer": [
+        {
+          "dir": "proto/billing/acl"
+        }
+      ],
+      "enums": [
+        {
+          "from": {
+            "text": "proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus",
+            "tool": "proto",
+            "path": "proto/shop/ordering/v1/order.proto",
+            "items": [
+              [
+                "enum",
+                "OrderStatus"
+              ]
+            ]
+          },
+          "to": {
+            "text": "proto \"proto/shop/billing/v1/billing.proto\" enum BillingStatus",
+            "tool": "proto",
+            "path": "proto/shop/billing/v1/billing.proto",
+            "items": [
+              [
+                "enum",
+                "BillingStatus"
+              ]
+            ]
+          },
+          "checked": true,
+          "values": [
+            {
+              "from": "ORDER_STATUS_RECEIVED",
+              "to": "BILLING_STATUS_WAIT"
+            },
+            {
+              "from": "ORDER_STATUS_PAID",
+              "to": "BILLING_STATUS_BILL"
+            },
+            {
+              "from": "ORDER_STATUS_SHIPPED",
+              "to": "BILLING_STATUS_BILL"
+            },
+            {
+              "from": "ORDER_STATUS_CANCELLED",
+              "to": "BILLING_STATUS_SKIP"
+            }
+          ]
+        }
+      ],
+      "terms": [],
+      "declared": [
+        "ctx/billing.ctx:14"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "name": {
+        "text": "proto \"proto/billing/acl/v1/order_view.proto\"",
+        "tool": "proto",
+        "path": "proto/billing/acl/v1/order_view.proto",
+        "items": []
+      },
+      "context": "Billing",
+      "by": "ctx/billing.ctx:6",
+      "sha256": "4e4f94b8c3040a76"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/shop/billing/v1/billing.proto\"",
+        "tool": "proto",
+        "path": "proto/shop/billing/v1/billing.proto",
+        "items": []
+      },
+      "context": "Billing",
+      "by": "ctx/billing.ctx:6",
+      "sha256": "b5a2904bfbd71f69"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/shop/common/v1/money.proto\"",
+        "tool": "proto",
+        "path": "proto/shop/common/v1/money.proto",
+        "items": []
+      },
+      "context": "Ordering",
+      "by": "ctx/ordering.ctx:6",
+      "sha256": "9c4eefedb1c6bdea"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/shop/ordering/v1/fulfillment_lite.proto\"",
+        "tool": "proto",
+        "path": "proto/shop/ordering/v1/fulfillment_lite.proto",
+        "items": []
+      },
+      "context": "Ordering",
+      "by": "ctx/ordering.ctx:6",
+      "sha256": "11ad6bc73bff150b"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/shop/ordering/v1/order.proto\"",
+        "tool": "proto",
+        "path": "proto/shop/ordering/v1/order.proto",
+        "items": []
+      },
+      "context": "Ordering",
+      "by": "ctx/ordering.ctx:6",
+      "sha256": "1ee16be516be64db"
+    },
+    {
+      "name": {
+        "text": "proto \"proto/warehouse/v1/stock.proto\"",
+        "tool": "proto",
+        "path": "proto/warehouse/v1/stock.proto",
+        "items": []
+      },
+      "context": "Inventory",
+      "by": "ctx/inventory.ctx:6",
+      "sha256": "5b2a4ce3c76c0ced"
+    },
+    {
+      "name": {
+        "text": "file \"py/billing/invoice.py\"",
+        "tool": "file",
+        "path": "py/billing/invoice.py",
+        "items": []
+      },
+      "context": "Billing",
+      "by": "ctx/billing.ctx:6",
+      "sha256": "872fa1610b83e009"
+    },
+    {
+      "name": {
+        "text": "file \"py/inventory/service.py\"",
+        "tool": "file",
+        "path": "py/inventory/service.py",
+        "items": []
+      },
+      "context": "Inventory",
+      "by": "ctx/inventory.ctx:6",
+      "sha256": "48d9b8646501dfbf"
+    },
+    {
+      "name": {
+        "text": "file \"py/ordering/fulfill.py\"",
+        "tool": "file",
+        "path": "py/ordering/fulfill.py",
+        "items": []
+      },
+      "context": "Ordering",
+      "by": "ctx/ordering.ctx:6",
+      "sha256": "37fb4feca9caa5a1"
+    }
+  ],
+  "crossings": [
+    {
+      "from": {
+        "text": "proto \"proto/billing/acl/v1/order_view.proto\"",
+        "tool": "proto",
+        "path": "proto/billing/acl/v1/order_view.proto",
+        "items": []
+      },
+      "line": 5,
+      "to": {
+        "text": "proto \"proto/shop/ordering/v1/order.proto\"",
+        "tool": "proto",
+        "path": "proto/shop/ordering/v1/order.proto",
+        "items": []
+      },
+      "from_context": "Billing",
+      "to_context": "Ordering",
+      "via": "proto import",
+      "elements": [
+        {
+          "text": "proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus",
+          "tool": "proto",
+          "path": "proto/shop/ordering/v1/order.proto",
+          "items": [
+            [
+              "enum",
+              "OrderStatus"
+            ]
+          ]
+        }
+      ],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "anticorruption_layer"
+        ],
+        "declared": "ctx/billing.ctx:14"
+      }
+    },
+    {
+      "from": {
+        "text": "proto \"proto/shop/ordering/v1/fulfillment_lite.proto\"",
+        "tool": "proto",
+        "path": "proto/shop/ordering/v1/fulfillment_lite.proto",
+        "items": []
+      },
+      "line": 5,
+      "to": {
+        "text": "proto \"proto/warehouse/v1/stock.proto\"",
+        "tool": "proto",
+        "path": "proto/warehouse/v1/stock.proto",
+        "items": []
+      },
+      "from_context": "Ordering",
+      "to_context": "Inventory",
+      "via": "proto import",
+      "elements": [
+        {
+          "text": "proto \"proto/warehouse/v1/stock.proto\" message ReserveResponse",
+          "tool": "proto",
+          "path": "proto/warehouse/v1/stock.proto",
+          "items": [
+            [
+              "message",
+              "ReserveResponse"
+            ]
+          ]
+        },
+        {
+          "text": "proto \"proto/warehouse/v1/stock.proto\" enum Stock",
+          "tool": "proto",
+          "path": "proto/warehouse/v1/stock.proto",
+          "items": [
+            [
+              "enum",
+              "Stock"
+            ]
+          ]
+        },
+        {
+          "text": "proto \"proto/shop/common/v1/money.proto\" message Money",
+          "tool": "proto",
+          "path": "proto/shop/common/v1/money.proto",
+          "items": [
+            [
+              "message",
+              "Money"
+            ]
+          ]
+        }
+      ],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "conformist"
+        ],
+        "declared": "ctx/ordering.ctx:18"
+      }
+    },
+    {
+      "from": {
+        "text": "proto \"proto/warehouse/v1/stock.proto\"",
+        "tool": "proto",
+        "path": "proto/warehouse/v1/stock.proto",
+        "items": []
+      },
+      "line": 5,
+      "to": {
+        "text": "proto \"proto/shop/common/v1/money.proto\"",
+        "tool": "proto",
+        "path": "proto/shop/common/v1/money.proto",
+        "items": []
+      },
+      "from_context": "Inventory",
+      "to_context": "Ordering",
+      "via": "proto import",
+      "elements": [
+        {
+          "text": "proto \"proto/shop/common/v1/money.proto\" message Money",
+          "tool": "proto",
+          "path": "proto/shop/common/v1/money.proto",
+          "items": [
+            [
+              "message",
+              "Money"
+            ]
+          ]
+        }
+      ],
+      "allowed_by": {
+        "relationship": "shared_kernel",
+        "declared": "ctx/inventory.ctx:18"
+      }
+    }
+  ]
+}

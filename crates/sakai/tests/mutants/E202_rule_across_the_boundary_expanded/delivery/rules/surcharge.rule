@@ -1,0 +1,14 @@
+rule surcharge v1
+description "The surcharge for a heavy parcel. Written for the mutant"
+
+inputs
+  weight : number  range >=0 <=100
+
+outputs
+  surcharge : money[JPY, incl_tax]  round down(1JPY)
+
+table surcharge_table
+policy unique
+| weight | -> surcharge |
+| <=10   | 0JPY         |
+| >10    | 500JPY       |

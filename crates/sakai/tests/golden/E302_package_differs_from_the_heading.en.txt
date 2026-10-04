@@ -1,0 +1,3 @@
+error[E302]: ctx/billing.ctx:9:9: The package of proto/shop/billing/v1/billing.proto is shop.billing.v1, not shop.billing.v2 as the heading says
+     9 |   proto "../proto/shop/billing/v1/billing.proto"
+  = A published language is one proto package; list the files that declare that package.

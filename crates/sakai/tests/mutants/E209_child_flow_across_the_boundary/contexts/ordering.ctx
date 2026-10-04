@@ -1,0 +1,27 @@
+context Ordering(ordering) v1
+description "Takes orders, holds stock for them, hands them to delivery, and sees them through to arrival"
+owner "Ordering team"
+
+owns
+  dir "../ordering", "../proto/shop/ordering"
+  dir "../py/ordering", "../py/shop/ordering", "../ts/ordering", "../ts/shop/ordering"
+  dir "../java/src/main/java/ordering", "../java/src/main/java/shop/ordering"
+  dir "../go/ordering", "../go/shop/ordering"
+
+published language shop.ordering.v1
+  proto "../proto/shop/ordering/v1/order.proto", "../proto/shop/ordering/v1/fulfillment.proto"
+  open host service OrderService, FulfillmentService
+  generated dir "../py/shop/ordering/v1", "../ts/shop/ordering/v1"
+  generated dir "../java/src/main/java/shop/ordering/v1", "../go/shop/ordering/v1"
+
+terms
+  order "A purchase the customer has confirmed. It does not disappear when it is cancelled"
+    means message Order
+  cancel "Cancelling an order before it ships, at the customer's request"
+    means enum OrderStatus value ORDER_STATUS_CANCELLED
+
+upstream Inventory conformist
+  through warehouse.v1
+
+upstream Delivery customer
+  through rulec.urgency.v1

@@ -1,0 +1,4 @@
+エラー[E105]: billing/rules/billing_need.rule:5:1: billing/rules/billing_need.rule が rulec の検査を通らないか、読めません
+     5 | enum order_status = received | paid | shipped | cancelled_in_ordering(cancelled)
+  = rulec の診断: [E032] billing/rules/billing_need.rule:5: 列挙 order_status が ../../proto/shop/ordering/v1/order.proto の OrderStatus と一致していません
+  = そのファイルが rulec の検査を通るように直します。読めないファイルの参照は、確かめられません。
