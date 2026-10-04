@@ -28,7 +28,7 @@ Obj(
                     "両方に当てはまる例: bulk = true, member = platinum",
                 ),
                 Str(
-                    "この例を作る入力: dest = 北海道, member = platinum, total = 30000, weight = 1",
+                    "この例を作る入力: dest = Hokkaido, member = platinum, total = 30000, weight = 1",
                 ),
                 Str(
                     "`policy first` のため 行1 が勝ちます。意図通りですか。",
@@ -169,7 +169,7 @@ Obj(
                     "両方に当てはまる例: bulk = true, member = basic",
                 ),
                 Str(
-                    "この例を作る入力: dest = 北海道, member = basic, total = 30000, weight = 1",
+                    "この例を作る入力: dest = Hokkaido, member = basic, total = 30000, weight = 1",
                 ),
                 Str(
                     "`policy first` のため 行1 が勝ちます。意図通りですか。",
@@ -310,7 +310,7 @@ Obj(
                     "両方に当てはまる例: bulk = true, member = platinum",
                 ),
                 Str(
-                    "この例を作る入力: dest = 北海道, member = platinum, total = 0, weight = 1",
+                    "この例を作る入力: dest = Hokkaido, member = platinum, total = 0, weight = 1",
                 ),
                 Str(
                     "`policy first` のため 行2 が勝ちます。意図通りですか。",

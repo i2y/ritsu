@@ -35,8 +35,9 @@ fn have(cmd: &str) -> bool {
 }
 
 const RULE: &str = "tests/corpus/ゆうパック運賃.rule";
-/// The rule the English page shows: a parcel tariff written in English, whose inputs name no
-/// prefecture (the English twin of the rule above still takes one of `std/都道府県`).
+/// The rule the English page shows: a parcel tariff written in English. (It was chosen when the
+/// English twin of the rule above still took its prefecture in Japanese; the twin spells it in
+/// English now, from `std/jp/prefectures`, DESIGN §15.182.)
 const RULE_EN: &str = "tests/corpus/parcel_rate.rule";
 
 /// The same kind of fake legacy implementation, for that rule: it charges a dollar more for every
