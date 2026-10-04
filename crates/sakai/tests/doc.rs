@@ -12,7 +12,6 @@
 
 mod common;
 use common::*;
-use std::path::Path;
 use std::time::Duration;
 
 /// The maps, and the stem of their golden files.
