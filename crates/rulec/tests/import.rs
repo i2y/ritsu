@@ -68,6 +68,25 @@ fn 表引きのcsvは列挙と表になり_そのままcheckを通る() {
     assert_eq!(c, 0, "下書きが check を通らない:\n{o}{e}");
 }
 
+/// A sheet that writes its amounts in JPY gets a draft in JPY: the currency is spelled as the
+/// sheet spells it, in the type as in the rounding, and nothing in the draft is Japanese.
+#[test]
+fn an_amount_in_jpy_stays_in_jpy() {
+    let (_tmp, d) = dir("jpy");
+    let csv = d.join("fees.csv");
+    std::fs::write(&csv, "weight,fee\n1000g,800JPY\n2000g,800JPY\n5000g,1100JPY\n").unwrap();
+    let (c, out, e) = run(&["import", "csv", csv.to_str().unwrap(), "--name", "parcel_fee", "--lang", "en"]);
+    assert_eq!(c, 0, "{e}");
+    assert!(out.contains("fee : money[JPY, incl_tax]  round down(1JPY)"), "{out}");
+    assert!(!out.contains('円'), "a JPY sheet writes no 円: {out}");
+    // and a sheet in 円 still writes 円
+    let csv = d.join("fees_ja.csv");
+    std::fs::write(&csv, "weight,fee\n1000g,800円\n2000g,800円\n").unwrap();
+    let (c, out, e) = run(&["import", "csv", csv.to_str().unwrap(), "--name", "parcel_fee_ja"]);
+    assert_eq!(c, 0, "{e}");
+    assert!(out.contains("money[円, incl_tax]  round down(1円)"), "{out}");
+}
+
 #[test]
 fn 数値の列は範囲つきの入力になり_等値で写したと断る() {
     let (_tmp, d) = dir("numeric");

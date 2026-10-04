@@ -167,7 +167,8 @@ fn canonical_unit(u: &str) -> &str {
 fn num_type(unit: &str, decimal: bool) -> (String, Option<String>) {
     let unit = canonical_unit(unit);
     match unit {
-        "円" | "JPY" => ("money[円, incl_tax]".into(), Some(tr!("推定: 税込か税抜かは出典で確かめること", "guess: whether tax is included has to come from the source"))),
+        // the currency spelled as the sheet spells it: 円 and JPY are the same to rulec
+        "円" | "JPY" => (format!("money[{unit}, incl_tax]"), Some(tr!("推定: 税込か税抜かは出典で確かめること", "guess: whether tax is included has to come from the source"))),
         "%" => (
             if decimal { "rate[step 0.1%]" } else { "rate[step 1%]" }.into(),
             Some(tr!("推定: 刻みは見た値から", "guess: the step is taken from the values seen")),
