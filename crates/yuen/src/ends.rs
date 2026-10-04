@@ -12,6 +12,7 @@ use crate::names::{Name, Tool};
 use crate::project::Project;
 use ritsu_base::sha256;
 use crate::sources::{Cited, Sources};
+use ritsu_ports::Lookup;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct End {
@@ -129,7 +130,8 @@ pub enum Unread {
 }
 
 /// The end of an artifact (DESIGN 3.2): a file's bytes; a thing of a file of rulec, koyomi,
-/// chobo, geas, dandori or sakai, its definition as its language gives it (`Items`); an element
+/// chobo, geas, dandori or sakai, its definition as its language gives it (`Items`, found in the
+/// project's index); an element
 /// of a `.proto`, the text of DESIGN 3.4. A file of rulec or koyomi is held to its language's
 /// check first (`Sources`, which answers only for a file that passes it), and a file of the
 /// others to its language reading it (`Items`).
@@ -167,31 +169,22 @@ pub fn artifact_end(p: &Project, n: &Name) -> Result<End, Unread> {
             {
                 return Err(Unread::Refused(said));
             }
-            let items = match p.suite.items(t, &p.root, &n.path) {
-                Some(Ok(items)) => items,
-                Some(Err(said)) => return Err(Unread::Refused(said)),
-                None => return Err(Unread::NoPort(t)),
-            };
-            if n.items.is_empty() {
-                return bytes();
-            }
-            match items.iter().find(|i| i.naming == *n) {
+            // looked up in the project's index, which asks the language of the file once in a run
+            // (ritsu's DESIGN 6.4, X10); what is wrong, yuen says in its own codes
+            match p.suite.index.find(&p.root, n) {
+                Lookup::NotJoined => Err(Unread::NoPort(t)),
+                Lookup::Refused(said) => Err(Unread::Refused(said)),
+                Lookup::Found(None) => bytes(),
                 // a definition with nothing in it is no end to hold a link to (ritsu's PLAN 7.6)
-                Some(i) if i.text.is_empty() => Err(Unread::Refused(vec![ritsu_ports::Said {
+                Lookup::Found(Some(i)) if i.text.is_empty() => Err(Unread::Refused(vec![ritsu_ports::Said {
                     code: String::new(),
                     file: n.path.clone(),
                     line: Some(i.lines.0),
                     message: tr!("{} は定義の文を渡しません", "{} gives no definition", n.text()),
                 }])),
-                Some(i) => Ok(End::of(i.text.clone().into_bytes())),
-                None => {
-                    let parent = &n.items[..n.items.len() - 1];
-                    let kind = n.kind().unwrap_or("");
-                    let same_kind = items
-                        .iter()
-                        .filter(|i| i.naming.items.len() == n.items.len() && i.naming.items[..parent.len()] == *parent && i.kind() == kind && !i.text.is_empty())
-                        .map(|i| (i.naming.clone(), End::of(i.text.clone().into_bytes())))
-                        .collect();
+                Lookup::Found(Some(i)) => Ok(End::of(i.text.into_bytes())),
+                Lookup::Missing(same) => {
+                    let same_kind = same.into_iter().filter(|i| !i.text.is_empty()).map(|i| (i.naming, End::of(i.text.into_bytes()))).collect();
                     Err(Unread::NoSuchName { same_kind })
                 }
             }

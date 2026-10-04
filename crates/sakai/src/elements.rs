@@ -2,8 +2,9 @@
 //! `means`, the upstream enum of a mapping and its target. A proto element is looked up in the
 //! files read (E007 when it is not there); the short forms are looked up in the context's own
 //! published language or, for the enum of a mapping, in the upstream's `through` packages. A
-//! rule's element is looked up in what rulec says of the rule (`Rules`): its inputs, outputs and
-//! enums with their values.
+//! rule's element — an input, an output, an enum or a value of one — is looked up in what rulec
+//! says the rule holds (its `Items`, kept in the project's index), once rulec has answered for
+//! the rule (`Rules`).
 
 use crate::ast::{Element, Pos, Target};
 use crate::diag::{self, Diag};
@@ -13,6 +14,7 @@ use crate::naming::{Name, Tool};
 use crate::owners::Artifact;
 use crate::paths;
 use crate::proto::{ProtoFile, Protos};
+use ritsu_ports::{Index, Lookup};
 use std::collections::BTreeMap;
 
 /// Where an element is named: a term's `means`, or a mapping of an upstream relationship.
@@ -111,22 +113,23 @@ struct E<'a> {
     diags: Vec<Diag>,
 }
 
-/// Whether a rule has the element the pairs name: an input, an output, an enum, or a value of one.
-fn rule_has(f: &ritsu_ports::RuleFacts, path: &str, items: &[(String, String)]) -> Result<(), Text> {
-    let (k, n) = &items[0];
-    let sf = paths::shown(path);
+/// Whether a rule has the element a name names — an input, an output, an enum, or a value of one —
+/// looked up in the project's index, where rulec says what the rule holds (its `Items`; ritsu's
+/// DESIGN 6.4, X10). What is not there is sakai's E007, in sakai's words.
+fn rule_has(index: &Index, root: &std::path::Path, name: &Name) -> Result<(), Text> {
+    let (k, n) = &name.items[0];
+    let sf = paths::shown(&name.path);
     let missing = || tr!("{sf} に {k} {n} はありません", "There is no {k} {n} in {sf}");
-    match k.as_str() {
-        "input" => f.inputs.iter().any(|c| c.name == *n).then_some(()).ok_or_else(missing),
-        "output" => f.outputs.iter().any(|c| c.name == *n).then_some(()).ok_or_else(missing),
-        "enum" => {
-            let e = f.enums.iter().find(|e| e.name == *n).ok_or_else(missing)?;
-            match items.get(1) {
-                Some((ck, cn)) if !e.values.iter().any(|v| v.name == *cn) => Err(tr!("enum {n} に {ck} {cn} はありません", "The enum {n} has no {ck} {cn}")),
-                _ => Ok(()),
-            }
-        }
-        _ => Err(missing()),
+    if !matches!(k.as_str(), "input" | "output" | "enum") {
+        return Err(missing());
+    }
+    let found = |nm: &Name| matches!(index.find(root, nm), Lookup::Found(Some(_)));
+    if !found(&Name { items: name.items[..1].to_vec(), ..name.clone() }) {
+        return Err(missing());
+    }
+    match name.items.get(1) {
+        Some((ck, cn)) if !found(name) => Err(tr!("enum {n} に {ck} {cn} はありません", "The enum {n} has no {ck} {cn}")),
+        _ => Ok(()),
     }
 }
 
@@ -148,8 +151,8 @@ impl E<'_> {
                 if written.tool == Tool::Rulec && !name.items.is_empty() {
                     // A rule's names, as rulec says them; a rule rulec did not answer for is told
                     // as E104 or E105 already, and its names are taken as written.
-                    if let Some(f) = self.read.facts.get(&path)
-                        && let Err(msg) = rule_has(f, &path, &name.items)
+                    if self.read.facts.contains_key(&path)
+                        && let Err(msg) = rule_has(&self.read.index, &self.m.root, &name)
                     {
                         self.err(c, *pos, "E007", msg);
                         return None;

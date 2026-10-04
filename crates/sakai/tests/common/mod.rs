@@ -25,13 +25,18 @@ pub fn sakai(args: &[&str]) -> std::process::Output {
 }
 
 /// Every language sakai reads, joined through the ports, each language's own engine (ritsu's
-/// DESIGN 3.3): what `ritsu sakai` hands it.
+/// DESIGN 3.3): what `ritsu sakai` hands it, what the files name and hold in one index.
 pub fn suite() -> sakai::suite::Suite {
-    let rules = std::rc::Rc::new(rulec::ports::Engine::new());
+    use ritsu_base::naming::Tool;
+    use std::rc::Rc;
+    let rules = Rc::new(rulec::ports::Engine::new());
+    let index = ritsu_ports::Index::new()
+        .with_items(Tool::Rulec, rules.clone())
+        .with_references(Tool::Rulec, rules.clone())
+        .with_references(Tool::Koyomi, Rc::new(koyomi::ports::Engine))
+        .with_references(Tool::Dandori, Rc::new(dandori::ports::Engine));
     let mut s = sakai::suite::Suite::default();
-    s.references.insert("rulec".into(), rules.clone());
-    s.references.insert("koyomi".into(), std::rc::Rc::new(koyomi::ports::Engine));
-    s.references.insert("dandori".into(), std::rc::Rc::new(dandori::ports::Engine));
+    s.index = Rc::new(index);
     s.rules = Some(rules);
     s.books = Some(std::rc::Rc::new(chobo::ports::Engine));
     s

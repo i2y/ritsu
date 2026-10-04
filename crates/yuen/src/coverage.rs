@@ -53,7 +53,8 @@ fn files_under(root: &Path, rel: &str, ext: Option<&str>) -> Vec<String> {
 /// What a scope gathers (DESIGN 1.8). Without a kind, the files: the file named, or every file
 /// of the tool under the directory (`file` takes any). With a kind, the things of that kind in
 /// those files, under the pairs written before it (`scope proto "x.proto" service S method`):
-/// read through the tool's language (`Items`), or for a `.proto` by yuen itself (DESIGN 3.4).
+/// read through the tool's language (`Items`, in the project's index), or for a `.proto` by yuen
+/// itself (DESIGN 3.4).
 pub fn gather(p: &Project, n: &Name, kind: Option<&str>) -> Result<Vec<Name>, Unread> {
     let abs = if n.path == "." { p.root.clone() } else { p.root.join(&n.path) };
     if !abs.exists() {
@@ -75,7 +76,7 @@ pub fn gather(p: &Project, n: &Name, kind: Option<&str>) -> Result<Vec<Name>, Un
         return Err(Unread::NoPort(n.tool));
     }
     for f in &files {
-        let items = match p.suite.items(n.tool, &p.root, f) {
+        let items = match p.suite.index.items(n.tool, &p.root, f) {
             Some(Ok(items)) => items,
             Some(Err(said)) => return Err(Unread::Refused(said)),
             None => return Err(Unread::NoPort(n.tool)),

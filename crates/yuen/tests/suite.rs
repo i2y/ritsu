@@ -65,12 +65,12 @@ impl Items for Counting {
     }
 }
 
-/// Each file is asked once in a run, however many links name what is in it.
+/// Each file is asked once in a run, however many links name what is in it: the index keeps what
+/// its language answered (ritsu's DESIGN 6.4).
 #[test]
 fn each_file_is_asked_once() {
     let counting = Rc::new(Counting { inner: Rc::new(rulec::ports::Engine::new()), asked: RefCell::new(BTreeMap::new()) });
-    let mut suite = common::suite();
-    suite.items.insert("rulec".into(), counting.clone());
+    let suite = common::suite_where(Some((Tool::Rulec, counting.clone())));
     let dir = "tests/fixtures/rulec".to_string();
     let c = yuen::check::check_with(std::slice::from_ref(&dir), Some(&dir), suite).unwrap();
     assert!(!c.has_errors());
@@ -95,8 +95,7 @@ fn an_empty_definition_is_no_end() {
     let t = common::TempDir::new("empty");
     t.write("a.rule", b"rule a v1\n");
     t.write("t.req", "requirements t v1\nrole 開発\n\nrequirement r1\n  text \"x\"\n  owner 開発\n  decided 2026-10-03 by 開発 \"y\"\n  satisfied by rulec \"a.rule\" table 空\n  not verified \"z\"\n".as_bytes());
-    let mut suite = common::suite();
-    suite.items.insert("rulec".into(), Rc::new(Empty));
+    let mut suite = common::suite_where(Some((Tool::Rulec, Rc::new(Empty))));
     // what answers for the rule's sources: a stand-in that says it pins nothing
     struct NoSources;
     impl ritsu_ports::Sources for NoSources {
@@ -235,7 +234,7 @@ fn the_accounts_and_transfers_of_a_book() {
     assert_eq!(hash_of(&e, &format!("{book} transfer 売上計上")), "851ab806078168fe");
     assert_eq!(hash_of(&e, &format!("{book} account 返金できる残り")), "9f9b0d74872f62a4");
     assert_eq!(hash_of(&e, &format!("{book} account 返金済み")), "35a4ec5a2ee5eb06");
-    let items = common::suite().items(Tool::Chobo, Path::new("tests/fixtures/chobo"), "refunds.ja.book").unwrap().unwrap();
+    let items = common::suite().index.items(Tool::Chobo, Path::new("tests/fixtures/chobo"), "refunds.ja.book").unwrap().unwrap();
     let sales = items.iter().find(|i| i.naming.text() == format!("{book} account 売上")).unwrap();
     assert_eq!(ritsu_base::sha256::short(sales.text.as_bytes()), "35a4ec5a2ee5eb06");
     let mut failures = Vec::new();

@@ -109,6 +109,7 @@ dependencies = [
  "geas",
  "koyomi",
  "ritsu-base",
+ "ritsu-project",
  "ritsu-testkit",
  "rulec",
  "sakai",
@@ -137,6 +138,23 @@ version = "0.1.0"
 dependencies = [
  "ritsu-base",
  "ritsu-units",
+]
+
+[[package]]
+name = "ritsu-project"
+version = "0.1.0"
+dependencies = [
+ "chobo",
+ "dandori",
+ "geas",
+ "koyomi",
+ "ritsu-base",
+ "ritsu-ports",
+ "ritsu-proto",
+ "ritsu-testkit",
+ "rulec",
+ "sakai",
+ "yuen",
 ]
 
 [[package]]

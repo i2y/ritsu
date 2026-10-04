@@ -1,0 +1,25 @@
+[package]
+name = "ritsu-project"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+repository.workspace = true
+description = "A project of ritsu read as one: its files found and sorted by language, every language made once and joined to the languages that read it, and the index of what each file holds and names"
+publish = false
+
+# The connecting layer (DESIGN 3.1): the base layer and the seven languages. It makes each
+# language's engine once and hands the ports to the languages that read others.
+[dependencies]
+ritsu-base = { path = "../ritsu-base" }
+ritsu-ports = { path = "../ritsu-ports" }
+ritsu-proto = { path = "../ritsu-proto" }
+chobo = { path = "../chobo" }
+dandori = { path = "../dandori" }
+geas = { path = "../geas" }
+koyomi = { path = "../koyomi" }
+rulec = { path = "../rulec" }
+sakai = { path = "../sakai" }
+yuen = { path = "../yuen" }
+
+[dev-dependencies]
+ritsu-testkit = { path = "../ritsu-testkit" }

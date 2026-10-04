@@ -1,18 +1,20 @@
 //! The languages sakai reads through ritsu's ports (ritsu's DESIGN 3.2, sakai's DESIGN 4.1): a
 //! rule's enums, its Connect service and its names (`Rules`), what a rule, a calendar and a
-//! workflow name outside themselves (`References`), and the accounts and transfers of a book
-//! (`Books`, for the pages of `doc`).
+//! workflow name outside themselves and what a rule holds, looked up in the project's index
+//! (`Index`, which keeps every language's `References` and `Items`), and the accounts and
+//! transfers of a book (`Books`, for the pages of `doc`).
 //!
 //! sakai holds none of those languages: they are handed to it. The binary of sakai's own crate is
 //! handed none, and where a map holds what only another language reads, it says so (E104);
-//! `ritsu sakai` hands it every one (ritsu's DESIGN 2.3, 8.6). Each file is asked once in a run.
+//! `ritsu sakai` hands it every one, joined once for the whole run (ritsu's DESIGN 2.3, 6, 8.6).
+//! Each file is asked once in a run: what it names and holds by the index, rulec's facts here.
 
 use crate::diag::{self, Diag};
 use crate::model::Model;
 use crate::naming::Tool;
 use crate::owners::Artifact;
 use crate::paths::shown;
-use ritsu_ports::{BookFacts, Books, Reference, References, RuleFacts, Rules, Said};
+use ritsu_ports::{BookFacts, Books, Index, Reference, RuleFacts, Rules, Said};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -22,8 +24,9 @@ use std::rc::Rc;
 #[derive(Default, Clone)]
 pub struct Suite {
     pub rules: Option<Rc<dyn Rules>>,
-    /// By the language's tool word: `rulec`, `koyomi`, `dandori`.
-    pub references: BTreeMap<String, Rc<dyn References>>,
+    /// What the files of rulec, koyomi and dandori name outside themselves, and what a rule holds,
+    /// by the naming of ritsu's DESIGN 6.2.
+    pub index: Rc<Index>,
     pub books: Option<Rc<dyn Books>>,
     asked: Rc<Asked>,
 }
@@ -31,7 +34,6 @@ pub struct Suite {
 #[derive(Default)]
 struct Asked {
     facts: RefCell<BTreeMap<PathBuf, Result<RuleFacts, Vec<Said>>>>,
-    refs: RefCell<BTreeMap<(String, PathBuf), Result<Vec<Reference>, Vec<Said>>>>,
 }
 
 impl Suite {
@@ -41,8 +43,8 @@ impl Suite {
     /// Whether sakai is handed what it needs to read the artifacts of `tool`.
     pub fn reads(&self, tool: Tool) -> bool {
         match tool {
-            Tool::Rulec => self.rules.is_some() && self.references.contains_key("rulec"),
-            Tool::Koyomi | Tool::Dandori => self.references.contains_key(tool.word()),
+            Tool::Rulec => self.rules.is_some() && self.index.reads_references(Tool::Rulec),
+            Tool::Koyomi | Tool::Dandori => self.index.reads_references(tool),
             Tool::Chobo => self.books.is_some(),
             _ => true,
         }
@@ -61,14 +63,7 @@ impl Suite {
 
     /// What a file of `tool` names outside itself (`file` from `root`), asked once in a run.
     pub fn references(&self, tool: Tool, root: &Path, file: &str) -> Option<Result<Vec<Reference>, Vec<Said>>> {
-        let port = self.references.get(tool.word())?;
-        let key = (tool.word().to_string(), root.join(file));
-        if let Some(r) = self.asked.refs.borrow().get(&key) {
-            return Some(r.clone());
-        }
-        let r = port.references(root, file);
-        self.asked.refs.borrow_mut().insert(key, r.clone());
-        Some(r)
+        self.index.references(tool, root, file)
     }
 
     /// What chobo knows of a book (`abs`, absolute): its accounts and transfers, for `doc`.
@@ -104,6 +99,8 @@ pub fn with_ritsu(m: &Model) -> String {
 pub struct Read {
     /// rulec's facts of each rule it answers for, by the rule's path from the root.
     pub facts: BTreeMap<String, RuleFacts>,
+    /// The project's index, where the things a rule holds are looked up.
+    pub index: Rc<Index>,
     /// What each artifact of a rule, a calendar or a workflow names outside itself: the artifact,
     /// its tool, and the references.
     pub refs: Vec<(String, Tool, Vec<Reference>)>,
@@ -149,7 +146,7 @@ fn refused(m: &Model, a: &Artifact, said: &[Said]) -> Diag {
 /// joined is E104 once, at the first of its artifacts; a file its language cannot answer for is
 /// E105.
 pub fn read(m: &Model, arts: &[Artifact], suite: &Suite) -> (Read, Vec<Diag>) {
-    let mut out = Read { complete: true, ..Read::default() };
+    let mut out = Read { complete: true, index: suite.index.clone(), ..Read::default() };
     let mut diags = Vec::new();
     for tool in Suite::READ {
         let mine: Vec<&Artifact> = arts.iter().filter(|a| a.tool == tool).collect();

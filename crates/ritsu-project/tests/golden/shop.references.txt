@@ -1,0 +1,119 @@
+billing/rules/出荷の送料.rule:7 shape -> proto "proto/shop/delivery/v1/shipment.proto" message CreateShipmentRequest (in the project): the .proto holds it
+billing/rules/請求の要否.rule:4 import proto -> proto "proto/shop/ordering/v1/order.proto" enum OrderStatus (in the project): the .proto holds it
+billing/支払条件.cal:4 use calendar -> koyomi "calendars/東京の営業日.cal" (in the project): the file, read
+calendars/東京の営業日.cal:6 source -> file "calendars/data/syukujitsu.csv" (outside it): a file
+delivery/出荷日.cal:3 use calendar -> koyomi "calendars/東京の営業日.cal" (in the project): the file, read
+ordering/受注.flow:3 implements -> proto "proto/shop/ordering/v1/fulfillment.proto" service FulfillmentService (in the project): the .proto holds it
+ordering/受注.flow:6 use rule … connect -> rulec "delivery/rules/出荷の急ぎ.rule" (in the project): the file, read
+ordering/受注.flow:8 use proto -> proto "proto/shop/ordering/v1/fulfillment.proto" (in the project): the .proto holds it
+ordering/受注.flow:9 use proto -> proto "proto/warehouse/v1/stock.proto" (in the project): the .proto holds it
+ordering/受注.flow:47 connect -> proto "proto/warehouse/v1/stock.proto" service StockService method Reserve (in the project): the .proto holds it
+ordering/受注.flow:53 connect -> proto "proto/warehouse/v1/stock.proto" service StockService method Release (in the project): the .proto holds it
+ordering/受注.flow:59 flow -> dandori "delivery/配送の手配.flow" (in the project): the file, read
+contexts/レビュー.ctx:6 owns -> file "py/reviews" (outside it): a file
+contexts/レビュー.ctx:6 owns -> file "ts/reviews" (outside it): a file
+contexts/レビュー.ctx:6 owns -> file "java/src/main/java/reviews" (outside it): a file
+contexts/レビュー.ctx:6 owns -> file "go/reviews" (outside it): a file
+contexts/受注.ctx:6 owns -> file "ordering" (outside it): a file
+contexts/受注.ctx:6 owns -> file "proto/shop/ordering" (outside it): a file
+contexts/受注.ctx:7 owns -> file "py/ordering" (outside it): a file
+contexts/受注.ctx:7 owns -> file "py/shop/ordering" (outside it): a file
+contexts/受注.ctx:7 owns -> file "ts/ordering" (outside it): a file
+contexts/受注.ctx:7 owns -> file "ts/shop/ordering" (outside it): a file
+contexts/受注.ctx:8 owns -> file "java/src/main/java/ordering" (outside it): a file
+contexts/受注.ctx:8 owns -> file "java/src/main/java/shop/ordering" (outside it): a file
+contexts/受注.ctx:9 owns -> file "go/ordering" (outside it): a file
+contexts/受注.ctx:9 owns -> file "go/shop/ordering" (outside it): a file
+contexts/受注.ctx:12 published language -> proto "proto/shop/ordering/v1/order.proto" (in the project): the .proto holds it
+contexts/受注.ctx:12 published language -> proto "proto/shop/ordering/v1/fulfillment.proto" (in the project): the .proto holds it
+contexts/受注.ctx:13 open host service -> proto "proto/shop/ordering/v1/order.proto" service OrderService (in the project): the .proto holds it
+contexts/受注.ctx:13 open host service -> proto "proto/shop/ordering/v1/fulfillment.proto" service FulfillmentService (in the project): the .proto holds it
+contexts/受注.ctx:14 generated -> file "py/shop/ordering/v1" (outside it): a file
+contexts/受注.ctx:14 generated -> file "ts/shop/ordering/v1" (outside it): a file
+contexts/受注.ctx:15 generated -> file "java/src/main/java/shop/ordering/v1" (outside it): a file
+contexts/受注.ctx:15 generated -> file "go/shop/ordering/v1" (outside it): a file
+contexts/受注.ctx:19 means -> proto "proto/shop/ordering/v1/order.proto" message Order (in the project): the .proto holds it
+contexts/受注.ctx:21 means -> proto "proto/shop/ordering/v1/order.proto" enum OrderStatus value ORDER_STATUS_CANCELLED (in the project): the .proto holds it
+contexts/在庫.ctx:7 owns -> file "inventory" (outside it): a file
+contexts/在庫.ctx:7 owns -> file "proto/warehouse" (outside it): a file
+contexts/在庫.ctx:8 owns -> file "py/inventory" (outside it): a file
+contexts/在庫.ctx:8 owns -> file "py/warehouse" (outside it): a file
+contexts/在庫.ctx:8 owns -> file "ts/inventory" (outside it): a file
+contexts/在庫.ctx:8 owns -> file "ts/warehouse" (outside it): a file
+contexts/在庫.ctx:9 owns -> file "java/src/main/java/inventory" (outside it): a file
+contexts/在庫.ctx:9 owns -> file "java/src/main/java/warehouse" (outside it): a file
+contexts/在庫.ctx:10 owns -> file "go/inventory" (outside it): a file
+contexts/在庫.ctx:10 owns -> file "go/warehouse" (outside it): a file
+contexts/在庫.ctx:13 published language -> proto "proto/warehouse/v1/stock.proto" (in the project): the .proto holds it
+contexts/在庫.ctx:14 open host service -> proto "proto/warehouse/v1/stock.proto" service StockService (in the project): the .proto holds it
+contexts/在庫.ctx:14 open host service -> proto "proto/warehouse/v1/stock.proto" service PackingService (in the project): the .proto holds it
+contexts/在庫.ctx:15 generated -> file "py/warehouse/v1" (outside it): a file
+contexts/在庫.ctx:15 generated -> file "ts/warehouse/v1" (outside it): a file
+contexts/在庫.ctx:16 generated -> file "java/src/main/java/warehouse/v1" (outside it): a file
+contexts/在庫.ctx:16 generated -> file "go/warehouse/v1" (outside it): a file
+contexts/在庫.ctx:20 means -> proto "proto/warehouse/v1/stock.proto" message ReserveResponse (in the project): the .proto holds it
+contexts/在庫.ctx:22 means -> proto "proto/warehouse/v1/stock.proto" enum Stock value STOCK_SHORT (in the project): the .proto holds it
+contexts/在庫.ctx:24 means -> proto "proto/warehouse/v1/stock.proto" enum PackingStatus (in the project): the .proto holds it
+contexts/請求.ctx:6 owns -> file "billing" (outside it): a file
+contexts/請求.ctx:6 owns -> file "calendars" (outside it): a file
+contexts/請求.ctx:7 owns -> file "py/billing" (outside it): a file
+contexts/請求.ctx:7 owns -> file "py/calendars" (outside it): a file
+contexts/請求.ctx:7 owns -> file "ts/billing" (outside it): a file
+contexts/請求.ctx:7 owns -> file "ts/calendars" (outside it): a file
+contexts/請求.ctx:8 owns -> file "java/src/main/java/billing" (outside it): a file
+contexts/請求.ctx:8 owns -> file "java/src/main/java/calendars" (outside it): a file
+contexts/請求.ctx:9 owns -> file "go/billing" (outside it): a file
+contexts/請求.ctx:9 owns -> file "go/calendars" (outside it): a file
+contexts/請求.ctx:12 published language -> rulec "billing/rules/決済手数料.rule" (in the project): the file, read
+contexts/請求.ctx:17 means -> rulec "billing/rules/決済手数料.rule" output 手数料 (in the project): found at line 11
+contexts/請求.ctx:22 layer -> rulec "billing/rules/請求の要否.rule" (in the project): the file, read
+contexts/請求.ctx:23 layer -> file "py/billing/acl/ordering" (outside it): a file
+contexts/請求.ctx:23 layer -> file "ts/billing/acl/ordering" (outside it): a file
+contexts/請求.ctx:24 layer -> file "java/src/main/java/billing/acl/ordering" (outside it): a file
+contexts/請求.ctx:24 layer -> file "go/billing/acl/ordering" (outside it): a file
+contexts/請求.ctx:25 enum -> rulec "billing/rules/請求の要否.rule" enum 注文の状態 (in the project): found at line 5
+contexts/請求.ctx:31 shared kernel -> koyomi "calendars/東京の営業日.cal" (in the project): the file, read
+contexts/請求.ctx:32 shared kernel -> file "py/calendars" (outside it): a file
+contexts/請求.ctx:32 shared kernel -> file "ts/calendars" (outside it): a file
+contexts/請求.ctx:32 shared kernel -> file "java/src/main/java/calendars" (outside it): a file
+contexts/請求.ctx:32 shared kernel -> file "go/calendars" (outside it): a file
+contexts/配送.ctx:6 owns -> file "delivery" (outside it): a file
+contexts/配送.ctx:6 owns -> file "proto/shop/delivery" (outside it): a file
+contexts/配送.ctx:7 owns -> file "py/delivery" (outside it): a file
+contexts/配送.ctx:7 owns -> file "py/shop/delivery" (outside it): a file
+contexts/配送.ctx:7 owns -> file "ts/delivery" (outside it): a file
+contexts/配送.ctx:7 owns -> file "ts/shop/delivery" (outside it): a file
+contexts/配送.ctx:8 owns -> file "java/src/main/java/delivery" (outside it): a file
+contexts/配送.ctx:8 owns -> file "java/src/main/java/shop/delivery" (outside it): a file
+contexts/配送.ctx:9 owns -> file "go/delivery" (outside it): a file
+contexts/配送.ctx:9 owns -> file "go/shop/delivery" (outside it): a file
+contexts/配送.ctx:12 published language -> proto "proto/shop/delivery/v1/shipment.proto" (in the project): the .proto holds it
+contexts/配送.ctx:13 open host service -> proto "proto/shop/delivery/v1/shipment.proto" service DeliveryService (in the project): the .proto holds it
+contexts/配送.ctx:14 generated -> file "py/shop/delivery/v1" (outside it): a file
+contexts/配送.ctx:14 generated -> file "ts/shop/delivery/v1" (outside it): a file
+contexts/配送.ctx:15 generated -> file "java/src/main/java/shop/delivery/v1" (outside it): a file
+contexts/配送.ctx:15 generated -> file "go/shop/delivery/v1" (outside it): a file
+contexts/配送.ctx:18 published language -> rulec "delivery/rules/出荷の急ぎ.rule" (in the project): the file, read
+contexts/配送.ctx:23 means -> proto "proto/shop/delivery/v1/shipment.proto" message CreateShipmentRequest (in the project): the .proto holds it
+contexts/配送.ctx:25 means -> proto "proto/shop/delivery/v1/shipment.proto" enum Handling value HANDLING_FRAGILE (in the project): the .proto holds it
+contexts/配送.ctx:27 means -> rulec "delivery/rules/出荷の急ぎ.rule" output 急ぎ (in the project): found at line 12
+contexts/配送.ctx:31 layer -> file "py/delivery/acl/inventory" (outside it): a file
+contexts/配送.ctx:31 layer -> file "ts/delivery/acl/inventory" (outside it): a file
+contexts/配送.ctx:32 layer -> file "java/src/main/java/delivery/acl/inventory" (outside it): a file
+contexts/配送.ctx:32 layer -> file "go/delivery/acl/inventory" (outside it): a file
+contexts/配送.ctx:41 shared kernel -> koyomi "calendars/東京の営業日.cal" (in the project): the file, read
+contexts/配送.ctx:42 shared kernel -> file "py/calendars" (outside it): a file
+contexts/配送.ctx:42 shared kernel -> file "ts/calendars" (outside it): a file
+contexts/配送.ctx:42 shared kernel -> file "java/src/main/java/calendars" (outside it): a file
+contexts/配送.ctx:42 shared kernel -> file "go/calendars" (outside it): a file
+通販.ctx:4 use context -> sakai "contexts/受注.ctx" (in the project): the file, read
+通販.ctx:5 use context -> sakai "contexts/在庫.ctx" (in the project): the file, read
+通販.ctx:6 use context -> sakai "contexts/配送.ctx" (in the project): the file, read
+通販.ctx:7 use context -> sakai "contexts/請求.ctx" (in the project): the file, read
+通販.ctx:8 use context -> sakai "contexts/レビュー.ctx" (in the project): the file, read
+通販.ctx:10 covers -> file "." (outside it): a file
+通販.ctx:11 proto root -> file "proto" (outside it): a file
+通販.ctx:13 code -> file "py" (outside it): a file
+通販.ctx:14 code -> file "ts" (outside it): a file
+通販.ctx:15 code -> file "java/src/main/java" (outside it): a file
+通販.ctx:17 code -> file "go" (outside it): a file

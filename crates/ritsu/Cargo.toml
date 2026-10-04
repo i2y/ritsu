@@ -7,11 +7,11 @@ repository.workspace = true
 description = "The one command of ritsu: the languages run with every port joined, so that what one language checks, the next reads as it is"
 publish = false
 
-# An entry may depend on every layer (DESIGN 3.1). In stage D it holds the languages the receiving
-# ones read: the least of `ritsu <language>` that runs dandori, yuen and sakai with every port
-# joined (DESIGN 8.6).
+# An entry may depend on every layer (DESIGN 3.1). The languages are joined once by ritsu-project,
+# which hands the receiving ones the ports they read (DESIGN 6, 8.6).
 [dependencies]
 ritsu-base = { path = "../ritsu-base" }
+ritsu-project = { path = "../ritsu-project" }
 chobo = { path = "../chobo" }
 dandori = { path = "../dandori" }
 geas = { path = "../geas" }

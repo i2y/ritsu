@@ -524,6 +524,24 @@ D.11 でしたこと（2026-10-04、D の最後の部分）：
 
 DESIGN 6 章。プロジェクトを歩いて種類を分け、一度ずつ読み、索引を作り、ファイルをまたぐ参照を解決し、出す側の実装を作って受け取る側に渡す。テストのプロジェクトには、sakai の `examples/通販/`（rulec の規則、koyomi のカレンダー、chobo の帳簿、dandori のフロー、`.proto`、コードを持つ）を使い、`crates/ritsu/tests/projects/通販/` に写す。
 
+**したこと**（E の最初の部分）：
+
+- `ritsu-ports` に索引 `Index` と、名指しを引いた答え `Lookup` を置いた（DESIGN 6.4）。各言語の `Items` と `References` の答えを、ツールとルートとファイルで一度だけ尋ねて持ち、`find` で名指しを引く。
+- `crates/ritsu-project` を作った（DESIGN 6.1）。`Joined` が言語を一度だけ作って索引でつなぎ、dandori・yuen・sakai に口を渡す。`Project::load` がプロジェクトを歩いて言語を分け、`Project::references` が参照を索引で解く。
+- `crates/ritsu/src/main.rs` の `yuen_suite` と `sakai_suite` を消し、`ritsu dandori`・`ritsu yuen`・`ritsu sakai` は `Joined` から口を受け取る。三つが別々に rulec の `Engine` を作ることは無くなった（7.8）。
+- 名指しを索引で引く形にした（DESIGN 7.10 の X10）。yuen は `src/ends.rs` と `src/coverage.rs`、sakai は `src/suite.rs` と `src/elements.rs`。口のまとまり（`yuen::suite::Suite`、`sakai::suite::Suite`）は、言語ごとの `Items`・`References` の表に代えて索引を持つ。言語ごとのコードと文は変えていない。
+- sakai の例を `crates/ritsu/tests/projects/通販/` に写した（92 ファイル。祝日の表は Shift_JIS で改行が CRLF のまま）。
+
+**決めたこと**：
+
+- 索引は `ritsu-ports` に置いた（ritsu-project ではなく）。受け取る側の言語が型として持つもので、ritsu-project に置くと言語がつなぎの層に依存することになる（DESIGN 3.1 の決まり 3）。中身はどの言語の意味も持たない。
+- 索引に yuen の `Items` と `References` は入れない。yuen の `Engine` がこの索引を含む口を持つので、入れると輪になる。yuen の要件を名指す言語は、いまは無い（DESIGN 6.4）。
+- sakai の語の `means` が名指す規則の要素は、rulec が規則に答えた（`Rules` の事実がある）うえで索引で引く。索引が渡すのは、規則が自分のファイルに書いたもの（rulec の `Items`）で、前の `RuleFacts` の列挙は `apply` で展開したものも含んでいた。どの例とテストにも、その違いが出るものは無い（sakai の DESIGN 4.1）。
+- プロジェクトに言語のファイルが一つも無ければ、使い方の誤りとして止める（何も確かめずに通ったように見せない）。名前で渡したファイルが言語のファイルでないときも止める。ディレクトリの下の、言語のファイルでないものは読まない（sakai が地図で読むコードなど）。
+- テストのプロジェクトの参照の全部を golden にした（`crates/ritsu-project/tests/golden/shop.references.txt`、119 行）。
+
+**確かめたこと**：触ったクレート（ritsu-ports、ritsu-project、yuen、sakai、ritsu）のテストを、ツールを全部つないだ環境で一度回した（228 件が通り、SKIP 0）。yuen と sakai のコマンドの出力を、替える前のバイナリと突き合わせた。yuen は 1,026 回、sakai は 238 回で、クレートのバイナリでも `ritsu yuen`・`ritsu sakai` でも、一字も違わなかった。
+
 ### E.2 `ritsu check`
 
 DESIGN 8.1、8.3、8.4。テキストと JSON の形を決めて golden にし、英語と日本語で取る。各言語の `check` と同じ診断が出ること（ファイルごとに、その言語の `check` の出力と突き合わせる）、見出しにツールの語が入ること、終了コード。

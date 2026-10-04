@@ -1,0 +1,17 @@
+map 通販(shop) v1
+description "注文を受け、在庫を押さえ、届け、請求する小さな通販"
+
+use context "contexts/受注.ctx"
+use context "contexts/在庫.ctx"
+use context "contexts/配送.ctx"
+use context "contexts/請求.ctx"
+use context "contexts/レビュー.ctx"
+
+covers "."
+proto root "proto"
+
+code python "py"
+code typescript "ts"
+code java "java/src/main/java"
+  test "java/src/test/java"
+code go "go"

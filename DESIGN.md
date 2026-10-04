@@ -221,7 +221,7 @@ ritsu/
 | `ritsu-emit` | 生成先の言語ごとの予約語、識別子、文字列のリテラル、生成物の頭（9.2） | rulec の `src/backend.rs`、koyomi の `src/reserved.rs` と `src/naming.rs`、dandori と chobo の予約語の表 |
 | `ritsu-testkit` | テストの共通部分（10 章） | 五つの `tests/common` と、dandori の `tests/` の中の同じ役目のコード |
 | `rulec` `dandori` `koyomi` `chobo` `geas` `yuen` `sakai` | 言語 | 元のリポジトリ。パッケージの名前もバイナリの名前も変えない（yuen だけは、取り込んだときの yurai から C の最初に改めた。下の段落） |
-| `ritsu-project` | プロジェクトの読み込み、索引、名前の解決、口の実装をつなぐ（6 章） | 新しく書く |
+| `ritsu-project` | プロジェクトの読み込み、名前の解決、口の実装をつなぐ（6 章）。索引の型は `ritsu-ports` に置き、ここで言語の答えをつなぐ | 新しく書いた（E.1） |
 | `ritsu-cross` | 言語をまたぐ検査と、その診断の台帳（7 章） | 新しく書く |
 | `ritsu` | バイナリ `ritsu`（CLI と `ritsu lsp`） | 新しく書く |
 | `ritsu-wasm` | ブラウザで動かす wasm32 のモジュール | rulec と dandori の `src/wasm.rs` |
@@ -275,6 +275,7 @@ ritsu/
 | `Items` | 七つ全部 | yuen、sakai、LSP | 中のもの（種類、名前、行の範囲、定義の文）。6.4 |
 | `References` | 七つ全部 | sakai、yuen、LSP | 参照（行、先の名指し、参照の仕方）。6.4 |
 | `Sources` | rulec、koyomi | yuen | ファイルが宣言して写している出典（法令の ID と時点と条ごとの固定、文書のパスと url と固定）。検査を通るファイルにだけ答える。D.7 で足した（下の段落） |
+| 索引（`Index`） | （口ではなく、`Items` と `References` の答えを持つもの） | yuen、sakai、ritsu-cross、LSP | 各言語の `Items` と `References` の答えをファイルごとに一度だけ尋ねて持ち、名指しで引く。E.1 で足した（6.4） |
 
 どの問いの答えも、P5 の三つのどれかになる。値を尋ねる問い（koyomi の日付がとりうる値の集合など）は、その値か、決められない理由かの二つになる。
 
@@ -573,6 +574,12 @@ chobo の額は 0 から 2⁶³ − 1 までで、rulec の値は負にもなり
 
 一回の実行の中では、同じファイルを二度読まない。実行をまたぐキャッシュは作らない（測ってから考える。15 章）。
 
+**E.1 で作った形**（`crates/ritsu-project`。PLAN の E.1）。
+
+- `Project::load(パス, --root)` が、渡したパス（無ければ `.`）の下のファイルを、土台の `paths::walk`（4.7 の名前を飛ばす）で歩き、拡張子で言語を決める。ルートは `--root`、無ければ最初のパスの上でいちばん近い `.git` のあるディレクトリ、それも無ければ最初のパスである（6.2 の 3）。並びは、上の 3 の順の言語（rulec、koyomi、chobo、geas、`.proto`、dandori、yuen、sakai。`ORDER`）、言語の中ではパスの順である。止めるのは四つで、どれも使う人が直すもの（使い方の誤り。8.4 の exit 2）である。無いパス、ルートの外のパス、名前で渡した言語の無いファイル（`.py` など）、言語のファイルが一つも無いプロジェクト。最後のものを止めるのは、何も確かめずに通ったように見せないためである（rulec の `check` が、無いディレクトリを空のまま通さないのと同じ考え）。
+- 言語は `Joined` が一度だけ作る。rulec の `Engine`（確かめた規則を覚える）、koyomi・chobo・geas・dandori・sakai の `Engine`、その上の索引（6.4）である。`ritsu dandori` には規則の口を、`ritsu yuen` と `ritsu sakai` には索引を含む口のまとまりを、ここから渡す。D の入口では三つがそれぞれ rulec の `Engine` を作り、同じ規則を別々に読んでいた（PLAN の 7.8）。
+- ファイルをまたぐ参照（上の 2）は `Project::references` が解く。各ファイルの言語が `References` で言う名指しごとに、行き着くファイル、そのファイルがプロジェクトのものか、行き着き方（`Landing`：ファイルが無い、索引が読むファイルならその言語の答え、`.proto` なら ritsu-proto で読んでその要素があるか、索引が読まないファイル）を返す。参照の誤りは、これまでどおり各言語が自分の `check` と自分のコードで言う（7.10）ので、これは言語をまたぐ検査（E.4）と LSP（F）が読む、プロジェクトの一枚の見取り図である。テストは、sakai の例を写した `crates/ritsu/tests/projects/通販` の参照の全部（`crates/ritsu-project/tests/golden/shop.references.txt`）を golden にする。
+
 ### 6.2 名指しを処理系全体のものにする
 
 `ritsu-base` の名指しは、yuen と sakai の DESIGN.md の 2 章で決め、二つのリポジトリの `tests/fixtures/naming.tsv`（36 行の試しの表）で確かめているものを、そのまま処理系全体の決まりにする。決まりは次のとおり。
@@ -617,6 +624,24 @@ D の二つ目の部分で、これを足した（PLAN の D.6）。表は、dan
 yuen の端は、いまはファイル全体のもの（rulec、koyomi の日付、geas、dandori）がある（yuen の DESIGN 3.2）。定義の文が出れば、表や日付の関数やタスクの一つ一つが端になる（7.10）。端の中身が変わるので、yuen のテストと例の確かめた記録（`.req` のハッシュ）は D の段階で取り直す。
 
 **参照**（`References`）は、参照のある行、先の名指し、参照の仕方を持つ。dandori の `use rule … from`（同梱、Lambda、Connect の URL、`local`）、`use proto|openapi|smithy`、`connect`、`implements`、子の `flow "…"`、rulec の `import proto`、`shape`、`source … file`、koyomi の `use calendar` と `source`、yuen と sakai の名指しを出す。sakai はこれで全部の言語の参照を行番号つきで確かめ（7.10）、yuen は `trace` と `affected` でたどる。
+
+**E.1 で作った形**（PLAN の E.1）。索引は `ritsu-ports` の `Index` である。言語の口（`Items`、`References`）をツールの語ごとに持ち、ファイルごとの答えを、ツールとルートとルートからのパスで一度だけ尋ねて覚える（名指しのパスはルートからなので、ルートが違えば別の答えになる）。名指しを渡せば `find` が引く。答えは四つのどれかで（`Lookup`）、その言語がつながっていない、その言語がファイルに答えない（言うこと `Said` を添える）、ある（ファイルそのものの名指しなら、言語がファイルを読めたこと）、無い（同じ親の下の同じ種類のものを添える）である。何が誤りかは言わない。言うのは、名指しを書いた言語である（yuen の E202、sakai の E007）。
+
+索引を言語の層ではなく口の層に置いたのは、受け取る側（yuen、sakai）が型として持つものだからである。ritsu-project に置けば、言語のクレートがつなぎの層に依存することになる（3.1 の決まり 3）。中身は、どの言語の意味も持たない、答えを覚えて名指しで引くだけのものである。
+
+| | `Items` | `References` |
+|---|---|---|
+| rulec | 索引に入れる | 入れる |
+| koyomi | 入れる | 入れる |
+| chobo | 入れる | （答えない） |
+| geas | 入れる | （答えない） |
+| dandori | 入れる | 入れる |
+| sakai | 入れる | 入れる |
+| yuen | 入れない | 入れない |
+
+yuen を入れていないのは、yuen の `Engine` が、借りた出典の端を作るためにほかの言語の口（この索引を含む）を持つので、索引が yuen を持つと輪になるからである。yuen の要件を名指す言語は、いまは無い（LSP が要るようになったら、ritsu-project で輪にならない持ち方を決める）。
+
+yuen と sakai は、名指しを自分で言語ごとに引くのをやめ、この索引で引く（7.10）。yuen は `ends.rs`（リンクの端）と `coverage.rs`（範囲が集めるもの）、sakai は `suite.rs`（参照を読む）と `elements.rs`（語の `means` が名指す規則の入力、出力、列挙、値）である。どちらも出力は変わらない（PLAN の E.1 の突き合わせ）。
 
 ## 7. 言語をまたぐ検査
 
@@ -724,7 +749,7 @@ dandori に、期日と帳簿を読む宣言を足す（E の段階。dandori �
 
 - **yuen**：段階 C で止めていた「一式の読み込み」（yuen の PLAN の C.1〜C.9）を、子プロセスと JSON ではなく、`Rules`・`Dates`・`Books`・`Claims`・`Items` の口で作る。端は 6.4 の定義の文になり、表や日付の関数や主張の一つ一つを追える。借りた出典は土台の出典（4.6）から読み、E107 も同じ手続きで比べる。`affected` は geas の記録を geas の口で読む。D の最後の部分で、そう作った（PLAN の D.7）。読むのは `Items`（中のものと定義の文）、`Sources`（規則とカレンダーの出典。D.7 で足した口）、`Rules` と `Dates`（別名だけ）、`Claims`（記録と、D.7 で足した `affected`）で、`Books` は読まない（chobo の中のものと定義の文は `Items` が渡す）。E203 は「名指したものの言語が、そのファイルについて答えられない」に意味を替え、E204 と、記録で主張の名前を確かめていた W201 を退かせた（yuen の DESIGN 6.2）。
 - **sakai**：止めていた C.1〜C.5 を、`References` と `Rules` の列挙（`connect.enums` にあたるもの）で作る。dandori の参照も読めるので、N101 は要らなくなる。sakai の DESIGN 4.7 が挙げていた四つの検査（規則の同梱が境界を越える、`connect` で呼ぶサービスが上流の公開ホストサービスでない、`implements` するサービスが自分の公表された言語に無い、子の `.flow` が境界の向こうのもの）を足す。子の `.flow` の扱い（sakai の DESIGN 4.7 の最後の段落）は、そのとき sakai の DESIGN に決める。D の最後の部分で、そう作った（PLAN の D.8）。読むのは rulec の `Rules`（Connect のパスと列挙、入力と出力の名前）と `References`（`import proto`、`shape`、`apply`）、koyomi の `References`（`use calendar`）、dandori の `References`（`use rule`、`use proto`、`connect`、`flow`、`implements`）、chobo の `Books`（doc のための勘定と振替の名前）である。四つの検査は E202（規則の同梱と `apply`）、E207、E208、E209 になった。子の `.flow` は、パートナーシップ、共有カーネル、子が相手の公開ホストサービスを実装しているときだけ許す（sakai の DESIGN 4.7）。E104 は「地図が含む成果物の言語がつながっていない」、E105 は「成果物が、その言語の検査を通らないか、読めない」に意味を替え、N101 を退かせた（sakai の DESIGN 5.2）。
-- **名指し**：プロジェクトのどこに書いた名指しも、索引のものを指すかを確かめる。いまは yuen と sakai がそれぞれ確かめている（yuen の E202 など）。言語ごとのコードと文はそのまま残し、引き方だけを索引に替える。子プロセスと JSON のためのコード（yuen の E203「ツールがファイルを読めない」と E204「ツールの JSON が知らない形」、sakai の E104「ツールが無い」と E105「ツールの api が失敗した」）は、出す側の検査のエラーを名指すもの（6.1）に意味を替えるか、退かせる。退かせるコードは台帳に退いたと書いて残し、番号を使い回さない（rulec の docs/compatibility.md と同じ決まり）。
+- **名指し**：プロジェクトのどこに書いた名指しも、索引のものを指すかを確かめる。いまは yuen と sakai がそれぞれ確かめている（yuen の E202 など）。言語ごとのコードと文はそのまま残し、引き方だけを索引に替える。E.1 でそうした（6.4）。ritsu の台帳には、この検査のコードを足していない。名指しを書いた言語が、自分のコードで言うからである。子プロセスと JSON のためのコード（yuen の E203「ツールがファイルを読めない」と E204「ツールの JSON が知らない形」、sakai の E104「ツールが無い」と E105「ツールの api が失敗した」）は、出す側の検査のエラーを名指すもの（6.1）に意味を替えるか、退かせる。退かせるコードは台帳に退いたと書いて残し、番号を使い回さない（rulec の docs/compatibility.md と同じ決まり）。
 
 ### 7.11 同じ条の写し（X11）
 

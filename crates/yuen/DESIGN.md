@@ -481,14 +481,16 @@ ritsu-base の `tests/fixtures/naming.tsv` は、この決まりを試す表で�
 
 **決定**：成果物は、それぞれの言語が ritsu の口（ritsu の DESIGN 3.2）で渡すものから、同じプロセスの中で読む（P2）。yuen はほかの言語のクレートを知らず、口のトレイトだけを持つ。口は、yuen を走らせる側が渡す。`ritsu yuen` は全部の言語をつないで渡し、yuen のクレートのバイナリは何も渡さない（ritsu の DESIGN 2.3）。一回の実行の中では、一つのファイルを一つの口に一度だけ尋ねる。
 
+中のもの（`Items`）は、yuen が言語ごとに尋ねるのではなく、プロジェクトの索引（ritsu の DESIGN 6.4 の `Index`）で引く。索引は、各言語の `Items` の答えをファイルごとに一度だけ尋ねて持ち、名指しから中のものを引く（あれば中のもの、無ければ同じ親の同じ種類のもの、言語が答えなければその言語が言うこと）。`ritsu yuen` と `ritsu check` では、索引は ritsu-project が一つ作り、sakai や言語をまたぐ検査と分け合う。名指したものが無いときの E202 や、言語が答えないときの E203 は、これまでどおり yuen のコードと文で言う。引き方を索引に替えただけで、yuen の出力は変わらない（ritsu の PLAN の E.1）。
+
 | ツール | 読む口 | 読むもの |
 |---|---|---|
-| rulec | `Items`、`Sources`、`Rules` | 中のもの（名指しの種類、名前、行、定義の文）。規則が写して固定している出典（法令の ID と時点と条ごとの固定、`file` の出典のパスと url と固定）。名前の別名（E202 の注のため） |
-| koyomi | `Items`、`Sources`、`Dates` | 中のもの。日付のファイルとカレンダーのファイルが固定している出典。名前の別名 |
-| chobo | `Items` | 中のもの（単位、勘定、振替） |
-| geas | `Items`、`Claims` | spec の主張。`geas map` の記録（範囲の 4、5.3）と、差分が主張に何をもたらすか（`affected`、8 章） |
-| dandori | `Items` | 中のもの（構文だけから。規則は要らない） |
-| sakai | `Items` | コンテキストと語 |
+| rulec | `Items`（索引で）、`Sources`、`Rules` | 中のもの（名指しの種類、名前、行、定義の文）。規則が写して固定している出典（法令の ID と時点と条ごとの固定、`file` の出典のパスと url と固定）。名前の別名（E202 の注のため） |
+| koyomi | `Items`（索引で）、`Sources`、`Dates` | 中のもの。日付のファイルとカレンダーのファイルが固定している出典。名前の別名 |
+| chobo | `Items`（索引で） | 中のもの（単位、勘定、振替） |
+| geas | `Items`（索引で）、`Claims` | spec の主張。`geas map` の記録（範囲の 4、5.3）と、差分が主張に何をもたらすか（`affected`、8 章） |
+| dandori | `Items`（索引で） | 中のもの（構文だけから。規則は要らない） |
+| sakai | `Items`（索引で） | コンテキストと語 |
 | proto | 口は使わない | ritsu の `.proto` の読み手（ritsu-proto）で yuen が読む（3.4） |
 | file | 口は使わない | バイト列 |
 
@@ -1339,7 +1341,7 @@ exit code は rulec と koyomi と同じにする。`fetch` と `pin` は済め�
 - SHA-256 と base64（e-Gov の `law_full_text`）は ritsu-base のもの（依存を足さずに書いたもので、SHA-256 は FIPS 180-4 の既知の値でテストしている）を使う（16.1）。
 - 法令の写しの XML から本文を取り出す読み手は ritsu-base のもの（rulec の `xml_text` と koyomi の `article_lines` を一つにしたもの）を使う。`.proto` は ritsu の読み手（ritsu-proto）で読む（3.4）。ReqIF と PROV は、エスケープを自前でして書く。
 - 見せる差分は、行の LCS で自前で作る（統一形式、前後二行、40 行を超えれば「ほか N 行」）。`affected` が読む統一形式の差分は、ritsu-base の読み手（geas と同じもの）で読む。
-- ほかの言語は、ritsu の口で、同じプロセスの中で読む。口は yuen を走らせる側が渡す（`src/suite.rs` の `Suite`。`ritsu yuen` はすべての言語を渡し、yuen のクレートのバイナリは何も渡さない）。コマンドは関数（`yuen::run::run(引数, Suite, 標準出力, 標準エラー)`）で、クレートのバイナリはそれを呼ぶだけである。通信は `curl` を子プロセスで（`source fetch` と `source outdated` だけ）。
+- ほかの言語は、ritsu の口で、同じプロセスの中で読む。口は yuen を走らせる側が渡す（`src/suite.rs` の `Suite`。中のものはプロジェクトの索引 `Index` で引く。`ritsu yuen` は ritsu-project が一度つないだすべての言語を渡し、yuen のクレートのバイナリは何も渡さない）。コマンドは関数（`yuen::run::run(引数, Suite, 標準出力, 標準エラー)`）で、クレートのバイナリはそれを呼ぶだけである。通信は `curl` を子プロセスで（`source fetch` と `source outdated` だけ）。
 - 診断の文面は `tr!` で英語と日本語を隣に書く。台帳は `src/codes.rs`。
 - テストの共通の部分（一時ディレクトリ、golden、SKIP、ツールの探し方、テストの中の HTTP サーバー）は ritsu-testkit のものを使う。ほかの言語は、出す側のクレート（rulec、koyomi、chobo、geas、dandori、sakai）を dev-dependency に持ち、`ritsu yuen` と同じにつないで、同じプロセスの中で走らせる（ritsu の DESIGN 3.3。SKIP しない）。geas の記録は、`geas map` で一度だけ取ってテストの材料に置いた（`tests/fixtures/geas`）。テストのための外のツール：xmllint（`YUEN_XMLLINT`、無ければ PATH）と `tools/reqif/fetch.sh` が取る 24 個のスキーマ（`YUEN_REQIF_XSD`、無ければ `tools/reqif/xsd`。無ければ SKIP）、curl（`source fetch` と `outdated` のテスト。無ければ SKIP）、`tools/requirements.txt` の `prov==3.2.2` と `reqif==0.1.0`（`uv venv --python 3.13 tools/.venv` に入れる。`YUEN_PYTHON` でほかの場所も使える。無ければ SKIP）、Chrome（`doc` の HTML の画面。`YUEN_CHROME`、無ければ macOS の Google Chrome、PATH の `google-chrome` か `chromium`。無ければ SKIP）。
 - 文書は `docs/`（英語の `reference.md`、`yuen explain --all --format markdown` の出力そのものの `codes.md` と `codes.ja.md`）、README.md、README.ja.md、`skills/yuen`（`SKILL.md` は手で書き、ほかは `skills/sync.sh` が `docs/` から写す）。README とスキルに載せた `.req` の行、コマンドの出力、診断は、テストが実物と照らし合わせる。

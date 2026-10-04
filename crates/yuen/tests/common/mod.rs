@@ -10,18 +10,30 @@ use std::process::Command;
 use std::rc::Rc;
 
 /// Every language yuen reads, joined through the ports, each language's own engine (ritsu's
-/// DESIGN 3.3): what `ritsu yuen` hands it.
+/// DESIGN 3.3): what `ritsu yuen` hands it, the things of every file in one index.
 pub fn suite() -> yuen::suite::Suite {
+    suite_where(None)
+}
+
+/// [`suite`], with what the files of one language hold answered by `port` instead of the
+/// language's engine.
+pub fn suite_where(instead: Option<(ritsu_base::naming::Tool, Rc<dyn ritsu_ports::Items>)>) -> yuen::suite::Suite {
+    use ritsu_base::naming::Tool;
     let rules = Rc::new(rulec::ports::Engine::new());
     let dates = Rc::new(koyomi::ports::Engine);
     let claims = Rc::new(geas::ports::Engine);
+    let mut index = ritsu_ports::Index::new()
+        .with_items(Tool::Rulec, rules.clone())
+        .with_items(Tool::Koyomi, dates.clone())
+        .with_items(Tool::Chobo, Rc::new(chobo::ports::Engine))
+        .with_items(Tool::Geas, claims.clone())
+        .with_items(Tool::Dandori, Rc::new(dandori::ports::Engine))
+        .with_items(Tool::Sakai, Rc::new(sakai::ports::Engine));
+    if let Some((tool, port)) = instead {
+        index = index.with_items(tool, port);
+    }
     let mut s = yuen::suite::Suite::default();
-    s.items.insert("rulec".into(), rules.clone());
-    s.items.insert("koyomi".into(), dates.clone());
-    s.items.insert("chobo".into(), Rc::new(chobo::ports::Engine));
-    s.items.insert("geas".into(), claims.clone());
-    s.items.insert("dandori".into(), Rc::new(dandori::ports::Engine));
-    s.items.insert("sakai".into(), Rc::new(sakai::ports::Engine));
+    s.index = Rc::new(index);
     s.sources.insert("rulec".into(), rules.clone());
     s.sources.insert("koyomi".into(), dates.clone());
     s.rules = Some(rules);

@@ -2,57 +2,21 @@
 //! (DESIGN 8.6): the languages that read others run with the ports joined — `ritsu dandori …`
 //! with rulec's answer to the port of rules, so that a workflow reads its rules in the same
 //! process, `ritsu yuen …` with every language yuen reads, and `ritsu sakai …` with every
-//! language sakai reads. What the binaries of their own crates cannot do, since those crates hold
-//! no other language (DESIGN 2.3). The rest of DESIGN
-//! 8.1 (`ritsu check`, `ritsu run`, `ritsu gen`, `ritsu explain`, `ritsu <language>` for every
-//! language) comes in stage E.
+//! language sakai reads, each language made once by ritsu-project (DESIGN 6). What the binaries
+//! of their own crates cannot do, since those crates hold no other language (DESIGN 2.3). The
+//! rest of DESIGN 8.1 (`ritsu check`, `ritsu run`, `ritsu gen`, `ritsu explain`, `ritsu
+//! <language>` for every language) comes in stage E.
 
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
+use ritsu_project::Joined;
 use std::io::Write;
 use std::process::ExitCode;
-use std::rc::Rc;
 
 /// The languages whose commands `ritsu <language>` will run (DESIGN 8.2), but for the ones that
 /// read others (dandori, yuen, sakai), run as their own commands until stage E: they read no other
 /// language, so their own binaries do all they do.
 const ON_THEIR_OWN: [&str; 4] = ["rulec", "koyomi", "chobo", "geas"];
-
-/// Every language yuen reads, joined through the ports (yuen's DESIGN 3.1): what a file holds
-/// (`Items`), the sources a rule or a calendar pins (`Sources`), the aliases of a rule's and a dates
-/// file's names (`Rules`, `Dates`), and the claims of a spec with their records (`Claims`).
-fn yuen_suite() -> yuen::suite::Suite {
-    let rules = Rc::new(rulec::ports::Engine::new());
-    let dates = Rc::new(koyomi::ports::Engine);
-    let claims = Rc::new(geas::ports::Engine);
-    let mut s = yuen::suite::Suite::default();
-    s.items.insert("rulec".into(), rules.clone());
-    s.items.insert("koyomi".into(), dates.clone());
-    s.items.insert("chobo".into(), Rc::new(chobo::ports::Engine));
-    s.items.insert("geas".into(), claims.clone());
-    s.items.insert("dandori".into(), Rc::new(dandori::ports::Engine));
-    s.items.insert("sakai".into(), Rc::new(sakai::ports::Engine));
-    s.sources.insert("rulec".into(), rules.clone());
-    s.sources.insert("koyomi".into(), dates.clone());
-    s.rules = Some(rules);
-    s.dates = Some(dates);
-    s.claims = Some(claims);
-    s
-}
-
-/// Every language sakai reads, joined through the ports (sakai's DESIGN 4.1): a rule's enums, its
-/// Connect service and its names (`Rules`), what a rule, a calendar and a workflow name outside
-/// themselves (`References`), and a book's accounts and transfers (`Books`).
-fn sakai_suite() -> sakai::suite::Suite {
-    let rules = Rc::new(rulec::ports::Engine::new());
-    let mut s = sakai::suite::Suite::default();
-    s.references.insert("rulec".into(), rules.clone());
-    s.references.insert("koyomi".into(), Rc::new(koyomi::ports::Engine));
-    s.references.insert("dandori".into(), Rc::new(dandori::ports::Engine));
-    s.rules = Some(rules);
-    s.books = Some(Rc::new(chobo::ports::Engine));
-    s
-}
 
 fn help(lang: Lang) -> String {
     let v = env!("CARGO_PKG_VERSION");
@@ -117,21 +81,20 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         "dandori" => {
-            let rules = Rc::new(rulec::ports::Engine::new());
             let (mut out, mut err) = (std::io::stdout(), std::io::stderr());
-            let code = dandori::cli::run(&args[at + 1..], rules, &mut out, &mut err);
+            let code = dandori::cli::run(&args[at + 1..], Joined::new().rules(), &mut out, &mut err);
             let _ = out.flush();
             ExitCode::from(code)
         }
         "yuen" => {
             let (mut out, mut err) = (std::io::stdout(), std::io::stderr());
-            let code = yuen::run::run(&args[at + 1..], yuen_suite(), &mut out, &mut err);
+            let code = yuen::run::run(&args[at + 1..], Joined::new().yuen(), &mut out, &mut err);
             let _ = out.flush();
             ExitCode::from(code)
         }
         "sakai" => {
             let (mut out, mut err) = (std::io::stdout(), std::io::stderr());
-            let code = sakai::run::run(&args[at + 1..], sakai_suite(), &mut out, &mut err);
+            let code = sakai::run::run(&args[at + 1..], Joined::new().sakai(), &mut out, &mut err);
             let _ = out.flush();
             ExitCode::from(code)
         }

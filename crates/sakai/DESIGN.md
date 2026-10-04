@@ -672,15 +672,18 @@ sakai が一式の成果物から読むものは、どれも ritsu の口（rits
 
 | 言語 | 口 | 読むもの | 使うところ |
 |---|---|---|---|
-| rulec | `Rules`（`facts`） | Connect のパス（package とサービス）、Connect の列挙（値の名前と、ワイヤでの名前と番号、取り込んだ proto のファイルと列挙の完全な名前）、入力と出力と列挙の名前 | 公表された言語の rulec の塊（E302、E301）、対応の先が規則の列挙のとき（E403、E405、E407）、語の `means` の先（E007）、`use rule … connect` が呼ぶサービス（E207） |
-| rulec | `References` | `import proto`、`shape`、`apply`（3.3） | 境界を越える参照 |
-| koyomi | `References` | `use calendar`（3.3） | 境界を越える参照 |
-| dandori | `References` | `use rule`、`use proto`、`connect`、`flow`、`implements`（4.7） | 境界を越える参照、E207〜E209 |
+| rulec | `Rules`（`facts`） | Connect のパス（package とサービス）、Connect の列挙（値の名前と、ワイヤでの名前と番号、取り込んだ proto のファイルと列挙の完全な名前） | 公表された言語の rulec の塊（E302、E301）、対応の先が規則の列挙のとき（E403、E405、E407）、`use rule … connect` が呼ぶサービス（E207） |
+| rulec | `Items`（索引で） | 入力、出力、列挙と値の名前 | 語の `means` の先（E007） |
+| rulec | `References`（索引で） | `import proto`、`shape`、`apply`（3.3） | 境界を越える参照 |
+| koyomi | `References`（索引で） | `use calendar`（3.3） | 境界を越える参照 |
+| dandori | `References`（索引で） | `use rule`、`use proto`、`connect`、`flow`、`implements`（4.7） | 境界を越える参照、E207〜E209 |
 | chobo | `Books`（`facts`） | 勘定と振替の名前 | doc のコンテキストのページ（4.5） |
 | geas | 読まない | | 属し方だけ（4.6） |
 | proto | ritsu-proto でファイルを直接読む | `package`、`import`、メッセージ、フィールド、列挙と値、サービスとメソッド、サービスのオプション | 4.2 |
 
 一つの実行で、同じファイルには一度だけ問う（規則を参照のもとと対応の先で二度問わない）。問う相手のファイルは、`References` にはルートとルートからのパスで、`Rules` と `Books` にはファイルのパスで渡す。
+
+参照（`References`）と、規則が持つもの（rulec の `Items`）は、sakai が言語ごとに尋ねるのではなく、プロジェクトの索引（ritsu の DESIGN 6.4 の `Index`）で引く。索引は、各言語の答えをファイルごとに一度だけ尋ねて持つ。`ritsu sakai` と `ritsu check` では、索引は ritsu-project が一つ作り、yuen や言語をまたぐ検査と分け合う。語の `means` が規則の入力、出力、列挙、列挙の値を名指すときは、rulec がその規則に答えた（`Rules` の事実がある）うえで、索引で引く（規則が自分のファイルに書いたものを引く。`apply` で展開したものは、その規則のファイルで名指す）。無ければ、これまでどおり sakai の E007 と文で言う。引き方を索引に替えただけで、sakai の出力は変わらない（ritsu の PLAN の E.1）。
 
 rulec には、検査を通る規則にだけ答える事実（`Rules`）を先に問い、答えた規則にだけ参照を問う。koyomi と dandori は、構文を読めるファイルに参照を答える（カレンダーとワークフローがそれぞれの検査を通るかは、それぞれの `check` が言う。参照を読むのに要るのは構文だけである）。答えないとき（規則が rulec の検査を通らない、構文を読めない、ファイルが無い）は E105 で、その言語が言うこと（`Said`。コードと行と文）を注に五つまで並べる。その成果物の参照は確かめない。11 章の例で、受注が注文の状態に値を足したとき（`order.proto` に `ORDER_STATUS_RETURNED = 5;`）は、次のようになる。
 
@@ -1456,7 +1459,7 @@ ritsu の D.8 から、`ritsu sakai check` は上の表の参照を全部読む�
 - Rust（edition 2024、手元の stable 1.94.1 で通ること）。依存は serde_json だけ（`preserve_order` の機能を使う）。
 - SHA-256 は ritsu-base のもの（FIPS 180-4 の既知の値でテストしてある）。地図とコンテキストのファイルのハッシュ（api）と、共有カーネルの写しの比べ合わせ（E308）に使う。
 - proto の読み手は ritsu-proto（4.2。ritsu の C.9 で、sakai の読み手を元に作った）。sakai に残したのは、要素の名指し方と、何も設定していないことを言う列挙の値の決め方（1.7）である。テストは、buf があれば、例と fixture の proto を `buf build -o -#format=json` の結果と比べる（package、import、メッセージ、列挙と値、サービスとメソッド）。`buf/validate` を import する proto は、buf が BSR の依存なしに組めないので比べない。
-- 一式の言語は、ritsu の口で読む（`src/suite.rs`。4.1）。口は `Suite`（`Rules`、言語ごとの `References`、`Books`）にまとめて渡され、同じファイルには一度の実行で一度だけ問う。コマンドは `src/run.rs` の `run(引数, 口, 標準出力, 標準エラー)` で、sakai のクレートのバイナリ（`src/main.rs`）は何もつながない口を、`ritsu sakai` はすべてをつないだ口を渡す。E104 の注に書く「同じコマンドを `ritsu sakai` で」は、`run` が受け取った引数から作る（スレッドに置く。`suite::COMMAND`）。診断の文面のパスの基点（2.4）も、`run` がスレッドに置いて決め、終わったら戻す（`paths::show_from`。前は `main.rs` が一度だけ決めていた。同じプロセスで何度もコマンドを走らせるテストと ritsu のため）。
+- 一式の言語は、ritsu の口で読む（`src/suite.rs`。4.1）。口は `Suite`（`Rules`、プロジェクトの索引 `Index`、`Books`）にまとめて渡され、同じファイルには一度の実行で一度だけ問う。コマンドは `src/run.rs` の `run(引数, 口, 標準出力, 標準エラー)` で、sakai のクレートのバイナリ（`src/main.rs`）は何もつながない口を、`ritsu sakai` はすべてをつないだ口を渡す。E104 の注に書く「同じコマンドを `ritsu sakai` で」は、`run` が受け取った引数から作る（スレッドに置く。`suite::COMMAND`）。診断の文面のパスの基点（2.4）も、`run` がスレッドに置いて決め、終わったら戻す（`paths::show_from`。前は `main.rs` が一度だけ決めていた。同じプロセスで何度もコマンドを走らせるテストと ritsu のため）。
 - 診断の文面は `tr!` で英語と日本語を隣に書く。台帳は `src/codes.rs`。
 - コードの import の検査の設定は `src/build/`（`areas.rs` が 7.1 の表を作り、`import_linter.rs`、`depcruise.rs`、`archunit.rs`、`go_arch_lint.rs` がツールごとの言葉に写し、`mod.rs` が頭と書き出しと `--check` を受け持つ）。CML は `src/cml.rs`。doc は `src/doc/`（D の段階）。
 - 外のツールは、版を固定して `tools/` に置く。import-linter は `tools/requirements.txt`（2.15。`uv venv --python 3.13 tools/.venv`）、dependency-cruiser と TypeScript は `tools/package.json` と `tools/package-lock.json`（16.10.4 と 5.9.3）、ArchUnit と JUnit は `tools/java/fetch.sh`（Maven Central から取って SHA-256 を確かめる）、go-arch-lint は `tools/go/install.sh`（`go install …@v1.19.0`、`-trimpath`）、Context Mapper は `tools/cml/fetch.sh` と `tools/cml/Validate.java`、Mermaid は `tools/mermaid/`。どれも、取ってきたものは git に入れない。
