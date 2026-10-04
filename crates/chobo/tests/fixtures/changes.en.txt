@@ -1,0 +1,16 @@
+warning[W107]: changes.book:1:1: the account `returns_shelf` of HEAD is gone: its balances stay in the database
+     1 | book changes v2
+warning[W107]: changes.book:1:1: the transfer `take_back` of HEAD is gone: a retry of it still in flight can no longer be made
+     1 | book changes v2
+warning[W107]: changes.book:1:1: the transfer `restock` of HEAD is gone: a retry of it still in flight can no longer be made
+     1 | book changes v2
+error[E050]: changes.book:5:9: the account `stock` differs from HEAD in its lower bound (0 → 3), its upper bound (none → 1000): the accounts that already exist keep the old definition, so chobo cannot make this change
+     5 | account stock(sku: string) : item
+  hint: declare an account under a new name, and write a transfer that moves the balances over
+error[E051]: changes.book:11:10: the transfer `receive` differs from HEAD in its key: a retry in flight would be refused with key_conflict
+    11 | transfer receive(slip: string, sku: string, qty: item)
+  hint: declare the new form under a new name, and keep the old one until every hold it made has ended
+error[E051]: changes.book:14:10: the transfer `reserve` differs from HEAD in how its holds end: a retry in flight would be refused with key_conflict, and a hold still held could not be posted
+    14 | transfer reserve(order: string, sku: string, qty: item)
+  hint: declare the new form under a new name, and keep the old one until every hold it made has ended
+changes.book: 3 error(s), 3 warning(s)

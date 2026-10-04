@@ -1,0 +1,20 @@
+# W103: for a lower bound, the move that takes comes first; for an upper bound, the move that puts
+book order v1
+unit USD
+
+account buyers : USD outside
+account fee_income : USD outside
+account shop_sales(shop: string) : USD
+  at least 0 refused as sales_short
+account slots(day: string) : USD
+  at most 100 refused as over_limit
+account slot_source : USD outside
+
+transfer sale(order: string, shop: string, price: USD, fee: USD)
+  key order
+  move fee from shop_sales(shop) to fee_income
+  move price from buyers to shop_sales(shop)
+transfer move_over(slip: string, day: string, amount: USD)
+  key slip
+  move amount from slot_source to slots(day)
+  move amount from slots(day) to slot_source

@@ -1,0 +1,3 @@
+エラー[E013]: no_moves.book:7:10: 振替 `count` に `move` の行がありません。`move <額> from <勘定> to <勘定>` で、どこからどこへ動かすかを書いてください
+     7 | transfer count(slip: string)
+no_moves.book: エラー 1 件、警告 0 件

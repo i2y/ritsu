@@ -1,0 +1,24 @@
+book tax_kinds v1
+description "Only a unit of money says whether it is with tax or without. An item is a unit that only counts, with no tax either way"
+unit USD scale 2 incl_tax
+unit item incl_tax
+
+account wallet(member: string) : USD
+  at least 0 refused as insufficient_balance
+account payer : USD outside
+account stock(sku: string) : item
+  at least 0 refused as out_of_stock
+account supplier : item outside
+
+transfer top_up(slip: string, member: string, amount: USD)
+  key slip
+  move amount from payer to wallet(member)
+transfer pay(slip: string, member: string, amount: USD)
+  key slip
+  move amount from wallet(member) to payer
+transfer receive(slip: string, sku: string, qty: item)
+  key slip
+  move qty from supplier to stock(sku)
+transfer ship(slip: string, sku: string, qty: item)
+  key slip
+  move qty from stock(sku) to supplier

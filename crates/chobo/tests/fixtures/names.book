@@ -1,0 +1,11 @@
+book names v1
+unit item
+
+account stock(sku: string) : item
+  at least 0 refused as out_of_stock
+account customer : box outside
+
+transfer ship(order: string, sku: string, qty: item, memo: text)
+  key order, sku
+  move qty from stock(part_no) to client
+  move amount from stock(sku) to customer

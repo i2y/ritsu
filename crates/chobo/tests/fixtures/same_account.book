@@ -1,0 +1,13 @@
+book same_account v1
+unit item
+
+account stock(sku: string) : item
+  at least 0 refused as out_of_stock
+account supplier : item outside
+
+transfer receive(slip: string, sku: string, qty: item)
+  key slip
+  move qty from supplier to stock(sku)
+transfer stocktake(slip: string, sku: string, qty: item)
+  key slip
+  move qty from stock(sku) to stock(sku)

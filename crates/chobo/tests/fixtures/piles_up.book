@@ -1,0 +1,11 @@
+# W101: moves only put in; none takes out
+book piles_up v1
+unit pt
+
+account points(member: string) : pt
+  at least 0 refused as points_short
+account shop : pt outside
+
+transfer grant(slip: string, member: string, amount: pt)
+  key slip
+  move amount from shop to points(member)

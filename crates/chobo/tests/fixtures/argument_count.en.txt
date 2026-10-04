@@ -1,0 +1,9 @@
+error[E004]: argument_count.book:10:17: the account `stock` takes 2 arguments, and is given 1
+    10 |   move qty from stock(sku) to customer
+error[E004]: argument_count.book:13:17: the account `customer` takes no arguments; write `customer` without parentheses
+    13 |   move qty from customer(sku) to stock("main", sku)
+error[E004]: argument_count.book:16:17: the account `stock` takes 2 arguments, and is given none
+    16 |   move qty from stock to stock("main", sku, "shelf")
+error[E004]: argument_count.book:16:26: the account `stock` takes 2 arguments, and is given 3
+    16 |   move qty from stock to stock("main", sku, "shelf")
+argument_count.book: 4 error(s), 0 warning(s)

@@ -1,0 +1,17 @@
+エラー[E001]: syntax.book:5:3: `keep` は読めません。勘定の下に書けるのは `description`、`at least`、`at most` の行です
+     5 |   keep 3
+エラー[E001]: syntax.book:7:1: タブがあります。字下げと区切りには空白を使ってください
+     7 | 	transfer x
+エラー[E001]: syntax.book:8:9: `to` はキーワードなので名前に使えません
+     8 | account to : item outside
+エラー[E001]: syntax.book:10:15: 文字列が閉じていません
+    10 |   description "not closed
+エラー[E001]: syntax.book:11:31: 読めない文字 `@` があります
+    11 | account ledger : item outside @
+エラー[E001]: syntax.book:14:1: 字下げがそろっていません。同じブロックの行は同じ数の空白で字下げします
+    14 |     at most 10 refused as full
+エラー[E001]: syntax.book:15:9: 数のすぐあとに文字が続いています
+    15 | account 1st : item outside
+エラー[E001]: syntax.book:16:13: 名前に結合文字 U+0301 があります。濁点やアクセントを組み合わせた一文字（合成済みの文字）で書いてください
+    16 | account café : item outside
+syntax.book: エラー 8 件、警告 0 件

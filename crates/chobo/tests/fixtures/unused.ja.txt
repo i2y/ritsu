@@ -1,0 +1,11 @@
+警告[W105]: unused.book:4:6: 単位 `box` はどこにも使われていません
+     4 | unit box
+警告[W105]: unused.book:8:9: 勘定 `returns_shelf` を使う振替がありません
+     8 | account returns_shelf(sku: string) : item
+警告[W105]: unused.book:13:56: 引数 `staff` はキーにも移動にも使われていません
+    13 | transfer receive(slip: string, sku: string, qty: item, staff: string)
+unused.book: ok、警告 3 件
+  receive.do  断られうる理由: key_conflict
+  ship.do     断られうる理由: out_of_stock（stock(sku) at least 0）、key_conflict、already_refused
+  キー: receive は slip ごとに一回。sku、qty か staff だけが違う二度目は key_conflict で断られる
+  キー: ship は order ごとに一回。sku か qty だけが違う二度目は key_conflict で断られる

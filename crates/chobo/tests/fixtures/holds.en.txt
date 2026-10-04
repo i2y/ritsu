@@ -1,0 +1,9 @@
+error[E040]: holds.book:10:3: `pending` does not say how a hold ends; write `pending expires after 30 minutes` or `pending never expires`
+    10 |   pending
+error[E041]: holds.book:14:25: the expiry must be from 1 second to 4294967295 seconds (about 136 years); this is 0 seconds
+    14 |   pending expires after 0 seconds
+error[E041]: holds.book:18:25: the expiry must be from 1 second to 4294967295 seconds (about 136 years); this is 4320000000 seconds
+    18 |   pending expires after 50000 days
+error[E041]: holds.book:22:25: the expiry is a whole number, from 1 second to 4294967295 seconds (about 136 years)
+    22 |   pending expires after 1.5 hours
+holds.book: 4 error(s), 0 warning(s)

@@ -1,0 +1,17 @@
+book changes v2
+
+unit item
+
+account stock(sku: string) : item
+  at least 3 refused as out_of_stock
+  at most 1000 refused as no_room
+account supplier : item outside
+account customer : item outside
+
+transfer receive(slip: string, sku: string, qty: item)
+  key slip
+  move qty from supplier to stock(sku)
+transfer reserve(order: string, sku: string, qty: item)
+  key order, sku
+  pending expires after 1 hour
+  move qty from stock(sku) to customer

@@ -1,0 +1,12 @@
+# W106: the upper bound of an account no move puts into
+book no_effect v1
+unit USD
+
+account credit(member: string) : USD
+  at least -1000 refused as over_credit_limit
+  at most 0 refused as overpaid
+account shop : USD outside
+
+transfer pay_later(slip: string, member: string, amount: USD)
+  key slip
+  move amount from credit(member) to shop

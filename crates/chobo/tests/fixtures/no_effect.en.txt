@@ -1,0 +1,5 @@
+warning[W106]: no_effect.book:7:3: `at most 0` never matters: nothing puts into `credit`
+     7 |   at most 0 refused as overpaid
+no_effect.book: ok, 1 warning(s)
+  pay_later.do  may be refused: over_credit_limit (credit(member) at least -1000), key_conflict, already_refused
+  key: pay_later once per slip; a second call that differs only in member or amount is refused with key_conflict

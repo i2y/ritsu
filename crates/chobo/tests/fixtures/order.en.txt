@@ -1,0 +1,15 @@
+warning[W103]: order.book:15:3: move 1 takes from shop_sales(shop) before move 2 puts into it: when shop_sales(shop) is short at that point, the call is refused with sales_short, even when the two moves together would leave enough
+    15 |   move fee from shop_sales(shop) to fee_income
+  the operations that get there:
+       1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  refused: sales_short (move 1 takes 1 from shop_sales(shop-2): posted 0, held out 0)
+  hint: write the move that puts into shop_sales(shop) first
+warning[W103]: order.book:19:3: move 1 puts into slots(day) before move 2 takes from it: when slots(day) has no room at that point, the call is refused with over_limit, even when the two moves together would stay within its bound
+    19 |   move amount from slot_source to slots(day)
+  the operations that get there:
+       1  move_over.do(slip: slip-1, day: day-2, amount: 101)  refused: over_limit (move 1 puts 101 into slots(day-2): posted 0, held in 0)
+  hint: write the move that takes from slots(day) first
+order.book: ok, 2 warning(s)
+  sale.do       may be refused: sales_short (shop_sales(shop) at least 0), already_refused
+  move_over.do  may be refused: over_limit (slots(day) at most 100), key_conflict, already_refused
+  key: sale once per order
+  key: move_over once per slip; a second call that differs only in day or amount is refused with key_conflict

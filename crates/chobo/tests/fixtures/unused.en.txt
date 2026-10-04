@@ -1,0 +1,11 @@
+warning[W105]: unused.book:4:6: the unit `box` is not used anywhere
+     4 | unit box
+warning[W105]: unused.book:8:9: no transfer moves into or out of the account `returns_shelf`
+     8 | account returns_shelf(sku: string) : item
+warning[W105]: unused.book:13:56: the parameter `staff` is in neither the key nor any move
+    13 | transfer receive(slip: string, sku: string, qty: item, staff: string)
+unused.book: ok, 3 warning(s)
+  receive.do  may be refused: key_conflict
+  ship.do     may be refused: out_of_stock (stock(sku) at least 0), key_conflict, already_refused
+  key: receive once per slip; a second call that differs only in sku, qty or staff is refused with key_conflict
+  key: ship once per order; a second call that differs only in sku or qty is refused with key_conflict

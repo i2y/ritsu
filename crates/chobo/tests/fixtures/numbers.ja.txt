@@ -1,0 +1,11 @@
+エラー[E011]: numbers.book:6:12: 単位 `item` には小数を書けません（`0.5`）
+     6 |   at least 0.5 refused as out_of_stock
+エラー[E011]: numbers.book:9:11: `10.505` の小数は 3 桁ですが、単位 `USD` で書けるのは 2 桁までです
+     9 |   at most 10.505 refused as over_limit
+エラー[E011]: numbers.book:11:12: `-9223372036854775808` は書ける範囲を超えています。いちばん小さい単位で数えて、−(2⁶³ − 1) から 2⁶³ − 1 までです
+    11 |   at least -9223372036854775808 refused as over_allowance
+エラー[E011]: numbers.book:17:8: 移動の額に負の数は書けません。向きを変えるなら from と to を入れ替えてください
+    17 |   move -1 from stock(sku) to customer
+エラー[E011]: numbers.book:20:8: `0.125` の小数は 3 桁ですが、単位 `USD` で書けるのは 2 桁までです
+    20 |   move 0.125 from wallet(member) to bank
+numbers.book: エラー 5 件、警告 0 件

@@ -1,0 +1,8 @@
+warning[W101]: piles_up.book:5:9: moves put into `points`, and no move takes out of it anywhere: whatever goes in stays there
+     5 | account points(member: string) : pt
+  the operations that get there:
+       1  grant.do(slip: slip-1, member: member-2, amount: 1)  done
+  hint: write a transfer that takes out of `points`, or mark it `outside` if it stands for the world outside the book
+piles_up.book: ok, 1 warning(s)
+  grant.do  may be refused: key_conflict
+  key: grant once per slip; a second call that differs only in member or amount is refused with key_conflict

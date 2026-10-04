@@ -1,0 +1,11 @@
+エラー[E002]: names.book:6:20: 単位 `box` が宣言されていません
+     6 | account customer : box outside
+エラー[E002]: names.book:8:60: 型 `text` がありません。型は string か、宣言した単位の名前です
+     8 | transfer ship(order: string, sku: string, qty: item, memo: text)
+エラー[E002]: names.book:10:23: 振替 `ship` に引数 `part_no` がありません
+    10 |   move qty from stock(part_no) to client
+エラー[E002]: names.book:10:35: 勘定 `client` が宣言されていません
+    10 |   move qty from stock(part_no) to client
+エラー[E002]: names.book:11:8: 振替 `ship` に引数 `amount` がありません
+    11 |   move amount from stock(sku) to customer
+names.book: エラー 5 件、警告 0 件

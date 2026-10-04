@@ -1,0 +1,17 @@
+# E061: a name in PostgreSQL is 63 bytes at most; an ASCII letter is one byte, so a function's name of more than 63 letters does not fit
+book name_length v1
+
+unit item
+
+account stock(sku: string) : item
+  at least 0 refused as out_of_stock
+account supplier : item outside
+account customer : item outside
+
+transfer receive(slip: string, sku: string, qty: item)
+  key slip, sku
+  move qty from supplier to stock(sku)
+
+transfer take_the_ordered_goods_off_the_warehouse_shelf_and_ship_them_out(order: string, sku: string, qty: item)
+  key order, sku
+  move qty from stock(sku) to customer

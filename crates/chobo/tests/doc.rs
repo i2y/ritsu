@@ -65,6 +65,10 @@ fn pages() -> Vec<Page> {
     let warned = root().join("tests/fixtures/順序.book");
     out.push(Page { book: warned.clone(), lang: Lang::En, md: root().join("tests/doc/順序.en.md"), html: None });
     out.push(Page { book: warned, lang: Lang::Ja, md: root().join("tests/doc/順序.ja.md"), html: None });
+    // and the same book in English
+    let warned = root().join("tests/fixtures/order.book");
+    out.push(Page { book: warned.clone(), lang: Lang::En, md: root().join("tests/doc/order.en.md"), html: None });
+    out.push(Page { book: warned, lang: Lang::Ja, md: root().join("tests/doc/order.ja.md"), html: None });
     out
 }
 
@@ -108,6 +112,8 @@ fn every_example_and_test_book_is_drawn_without_warnings_but_the_one_that_has_th
     // the page of the book with warnings shows them, as `chobo check` prints them
     let text = written(&root().join("tests/fixtures/順序.book"), Lang::En, false);
     assert!(text.contains("warning[W103]: tests/fixtures/順序.book:15:3:"), "the warnings are not on the page");
+    let text = written(&root().join("tests/fixtures/order.book"), Lang::En, false);
+    assert!(text.contains("warning[W103]: tests/fixtures/order.book:15:3:"), "the warnings are not on the English page");
 }
 
 #[test]

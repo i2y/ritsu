@@ -1,0 +1,23 @@
+book holds v1
+unit item
+
+account stock(sku: string) : item
+  at least 0 refused as out_of_stock
+account customer : item outside
+
+transfer reserve(order: string, sku: string, qty: item)
+  key order
+  pending
+  move qty from stock(sku) to customer
+transfer hold_back(order: string, sku: string, qty: item)
+  key order
+  pending expires after 0 seconds
+  move qty from stock(sku) to customer
+transfer booking(order: string, sku: string, qty: item)
+  key order
+  pending expires after 50000 days
+  move qty from stock(sku) to customer
+transfer long_booking(order: string, sku: string, qty: item)
+  key order
+  pending expires after 1.5 hours
+  move qty from stock(sku) to customer

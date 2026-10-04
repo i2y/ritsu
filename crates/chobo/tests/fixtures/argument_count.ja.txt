@@ -1,0 +1,9 @@
+エラー[E004]: argument_count.book:10:17: 勘定 `stock` は引数を 2 つ取りますが、渡しているのは 1 つです
+    10 |   move qty from stock(sku) to customer
+エラー[E004]: argument_count.book:13:17: 勘定 `customer` は引数を取りません。括弧を書かずに `customer` と書いてください
+    13 |   move qty from customer(sku) to stock("main", sku)
+エラー[E004]: argument_count.book:16:17: 勘定 `stock` は引数を 2 つ取りますが、渡していません
+    16 |   move qty from stock to stock("main", sku, "shelf")
+エラー[E004]: argument_count.book:16:26: 勘定 `stock` は引数を 2 つ取りますが、渡しているのは 3 つです
+    16 |   move qty from stock to stock("main", sku, "shelf")
+argument_count.book: エラー 4 件、警告 0 件

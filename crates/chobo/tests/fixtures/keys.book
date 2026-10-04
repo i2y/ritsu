@@ -1,0 +1,16 @@
+book keys v1
+unit item
+
+account stock(sku: string) : item
+  at least 0 refused as out_of_stock
+account supplier : item outside
+account customer : item outside
+
+transfer receive(slip: string, sku: string, qty: item)
+  move qty from supplier to stock(sku)
+transfer ship(order: string, sku: string, qty: item)
+  key order, qty
+  move qty from stock(sku) to customer
+transfer take_back(slip: string, sku: string, qty: item)
+  key slip_no
+  move qty from customer to stock(sku)

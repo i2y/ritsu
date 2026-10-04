@@ -1,0 +1,16 @@
+book syntax v1
+unit item
+account stock(sku: string) : item
+  at least 0 refused as out_of_stock
+  keep 3
+account customer : item outside
+	transfer x
+account to : item outside
+account supplier : item outside
+  description "not closed
+account ledger : item outside @
+account warehouse(sku: string) : item
+  at least 0 refused as stock_short
+    at most 10 refused as full
+account 1st : item outside
+account café : item outside

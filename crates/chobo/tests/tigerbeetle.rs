@@ -150,3 +150,17 @@ fn what_only_tigerbeetle_has() {
         bounds_changed(&tb, lang, &w, &v1, &v2, (go1.as_ref(), go2.as_ref()));
     }
 }
+
+/// What `what_only_tigerbeetle_has` checks first, with the English book: an operation too big for
+/// one request stops the build.
+#[test]
+fn an_operation_too_big_for_one_request_in_english() {
+    if !need(Need::TigerBeetle) {
+        return;
+    }
+    let out_dir = TempDir::new("e060-en");
+    let out = chobo().args(["build", root().join("tests/fixtures/requests.book").to_str().unwrap(), "--target", "tigerbeetle-typescript", "--out", out_dir.path().to_str().unwrap()]).output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.code() == Some(1) && err.contains("error[E060]"), "{err}");
+    assert_eq!(std::fs::read_dir(out_dir.path()).unwrap().count(), 0, "nothing is written");
+}

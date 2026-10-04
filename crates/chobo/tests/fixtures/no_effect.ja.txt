@@ -1,0 +1,5 @@
+警告[W106]: no_effect.book:7:3: `at most 0` は効きません。`credit` へ入れる移動がどこにも無いからです
+     7 |   at most 0 refused as overpaid
+no_effect.book: ok、警告 1 件
+  pay_later.do  断られうる理由: over_credit_limit（credit(member) at least -1000）、key_conflict、already_refused
+  キー: pay_later は slip ごとに一回。member か amount だけが違う二度目は key_conflict で断られる

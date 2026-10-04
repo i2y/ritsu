@@ -1,0 +1,7 @@
+error[E010]: units.book:12:3: the units of this move do not match: the account it moves from, `stock`, is in `item`, the one it moves to, `customer`, in `USD`, and the amount `qty` in `item`; to exchange one unit for another, write two moves, each through an outside account of its unit
+    12 |   move qty from stock(sku) to customer
+error[E010]: units.book:15:3: the units of this move do not match: the account it moves from, `supplier`, is in `item`, the one it moves to, `stock`, in `item`, and the amount `amount` in `USD`; to exchange one unit for another, write two moves, each through an outside account of its unit
+    15 |   move amount from supplier to stock(sku)
+error[E010]: units.book:18:3: the units of this move do not match: the account it moves from, `customer`, is in `USD`, the one it moves to, `supplier`, in `item`; to exchange one unit for another, write two moves, each through an outside account of its unit
+    18 |   move 500 from customer to supplier
+units.book: 3 error(s), 0 warning(s)

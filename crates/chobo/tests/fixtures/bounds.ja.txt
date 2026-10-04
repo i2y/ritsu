@@ -1,0 +1,13 @@
+エラー[E020]: bounds.book:4:9: 勘定 `stock` に境界がありません。`at least` か `at most` を書いてください。外の世界を表す勘定なら `outside` を付けてください
+     4 | account stock(sku: string) : item
+エラー[E021]: bounds.book:6:3: 外の勘定 `supplier` には境界を書けません。外の勘定は外の世界を表し、マイナスにもなります
+     6 |   at least 0 refused as supplier_short
+エラー[E022]: bounds.book:8:3: 下限 10 が上限 5 より大きく、残高の取りうる値がありません
+     8 |   at least 10 refused as below_safety_stock
+エラー[E022]: bounds.book:11:3: 上限 -1 は 0 より小さくできません。勘定は残高 0 から始まるので、0 より小さい上限では何も入れられません
+    11 |   at most -1 refused as fully_booked
+エラー[E023]: bounds.book:13:3: 境界に `refused as <理由>` がありません。この境界で断ったときに返す理由の名前を付けてください
+    13 |   at least 0
+エラー[E023]: bounds.book:15:25: `expired` は chobo が自分で返す理由の名前なので、境界の理由には使えません
+    15 |   at least 0 refused as expired
+bounds.book: エラー 6 件、警告 0 件

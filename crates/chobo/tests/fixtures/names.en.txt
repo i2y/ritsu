@@ -1,0 +1,11 @@
+error[E002]: names.book:6:20: no unit `box` is declared
+     6 | account customer : box outside
+error[E002]: names.book:8:60: there is no type `text`; a type is string or a declared unit
+     8 | transfer ship(order: string, sku: string, qty: item, memo: text)
+error[E002]: names.book:10:23: the transfer `ship` has no parameter `part_no`
+    10 |   move qty from stock(part_no) to client
+error[E002]: names.book:10:35: no account `client` is declared
+    10 |   move qty from stock(part_no) to client
+error[E002]: names.book:11:8: the transfer `ship` has no parameter `amount`
+    11 |   move amount from stock(sku) to customer
+names.book: 5 error(s), 0 warning(s)

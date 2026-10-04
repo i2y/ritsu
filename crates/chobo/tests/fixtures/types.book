@@ -1,0 +1,11 @@
+book types v1
+unit item
+
+account stock(sku: string, qty: item) : item
+  at least 0 refused as out_of_stock
+account customer : item outside
+
+transfer ship(order: string, sku: string, qty: item)
+  key order
+  move sku from stock(sku, sku) to customer
+  move qty from stock(qty, sku) to customer

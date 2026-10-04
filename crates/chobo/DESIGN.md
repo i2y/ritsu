@@ -77,7 +77,38 @@ chobo との違いは三つある。一つ、境界は勘定に一度だけ書�
 
 ### 1.1 ファイルの形
 
-在庫の引当の帳簿（テストの帳簿 `tests/books/在庫.book`。例の `examples/inventory` は、同じ形の帳簿を英語の版 `inventory.book` と日本語の版 `inventory.ja.book` で書いたもの。7 章）。
+在庫の引当の帳簿（例の英語の版 `examples/inventory/inventory.book`。7 章）。
+
+```
+# Stock held for an order: within 30 minutes it ships or is cancelled.
+book inventory v1
+description "Stock per SKU. A delivery adds to it, an order holds what it takes for 30 minutes, shipping posts the hold, cancelling voids it, and a return puts the goods back on the shelves"
+
+unit pcs
+
+account stock(sku: string) : pcs
+  description "what is on the shelves"
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, sku: string, qty: pcs)
+  key delivery, sku
+  move qty from suppliers to stock(sku)
+
+transfer reserve(order: string, sku: string, qty: pcs)
+  description "posted when the order ships, voided when it is cancelled"
+  key order, sku
+  pending expires after 30 minutes
+  move qty from stock(sku) to customers
+
+transfer take_back(return_id: string, sku: string, qty: pcs)
+  description "what a customer sent back, on the shelves again"
+  key return_id, sku
+  move qty from customers to stock(sku)
+```
+
+同じ形の帳簿を日本語の名前で書いたもの（テストの帳簿 `tests/books/在庫.book`。例の日本語の版 `inventory.ja.book` も同じ形）：
 
 ```
 book 在庫 v1
@@ -397,7 +428,23 @@ E013 は段階 B で足した。移動の無い振替は構文としては読め
 
 **捨てたもの（8189 件で止める）**：本番の構成でしか動かない帳簿を通してしまい、その帳簿が正しく動くかを確かめる手段が無い。
 
-実際の出力（`tests/fixtures` の帳簿から。golden に固定してある）：
+実際の出力（`tests/fixtures` の帳簿から。golden に固定してある）。英語の名前の帳簿 `order.book` と、同じ帳簿を日本語の名前で書いた `順序.book`：
+
+```
+warning[W103]: order.book:15:3: move 1 takes from shop_sales(shop) before move 2 puts into it: when shop_sales(shop) is short at that point, the call is refused with sales_short, even when the two moves together would leave enough
+    15 |   move fee from shop_sales(shop) to fee_income
+  the operations that get there:
+       1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  refused: sales_short (move 1 takes 1 from shop_sales(shop-2): posted 0, held out 0)
+  hint: write the move that puts into shop_sales(shop) first
+```
+
+```
+warning[W104]: hold_order.book:14:3: in a hold, what move 1 puts into held(order) is held coming in, and does not count when move 2 takes from held(order): unless held(order) has enough already, the hold is refused with held_short
+    14 |   move price from held(order) to shop_payout
+  the operations that get there:
+       1  settle.hold(order: order-1, price: 1)  refused: held_short (move 2 takes 1 from held(order-1): posted 0, held out 0, held in 1)
+  hint: have what it takes in held(order) beforehand, or take it in another transfer after the hold is posted
+```
 
 ```
 warning[W103]: 順序.book:15:3: move 1 takes from 店の売上(店) before move 2 puts into it: when 店の売上(店) is short at that point, the call is refused with 売上不足, even when the two moves together would leave enough
@@ -824,7 +871,7 @@ task 引き当てる(注文: string, sku: string, 数: int) -> 引当
 - **PostgreSQL だけのもの**（`tests/postgres.rs`）：反対の向きの移し替えを四つのセッションから百回ずつ同時に流してデッドロックが起きないこと。REPEATABLE READ の接続で、四つの呼び出し元が 50 回ずつ同じ勘定に入れ、三つの言語のクライアントがどれもシリアライズの失敗をリトライして、200 回の呼び出しが全部 `done` になること（シリアライズの失敗は、一回の実行で言語ごとに 12〜17 回起きた。四回の実行から）。関数を通らない UPDATE を CHECK が止めること。境界を書き換えた行で `CB001` になること。`expire()` が戻した数と、残高と `entries`。PLAN 0.3 の ID の表を `chobo_id` で求めて一致すること。長い名前の帳簿が E061 でビルドされないこと。
 - **TigerBeetle だけのもの**（`tests/tigerbeetle.rs`）：上限を変えた帳簿を同じテナントで呼ぶと、開始の振替の額が違ってエラーになること。無い仮押さえの確定が、読むだけで何も送らずに `no_such_hold` になり、そのあと仮押さえを作れば同じキーで確定できること。どちらも三つの言語で確かめる。ほかに、移動の多い帳簿が E060 でビルドされないこと。
 - **生成したコード**（`tests/generated.rs`）：TypeScript を `tsc --strict`（typescript 7.0.2、`erasableSyntaxOnly` と `noUnusedLocals` も）に、Python を `py_compile` に、Go を `gofmt -l`（何も言わないこと）と `go vet` に通す。
-- **診断**：テストの帳簿の診断を、英語と日本語の両方で golden に固定する（`CHOBO_BLESS=1` で書き直す）。どの診断コードにも走る最小の再現を `chobo explain` に持たせ、テストがそのコードが出ることを確かめる。E060 と E061 は、`tests/fixtures` の帳簿の横の `<名前>.target` に書いたターゲットでビルドしたときの出力を golden にする。診断の帳簿は 22 冊で（段階 D で、README が見せる英語の名前の W103 の帳簿 `split.book` を足した）、28 のコード全部が両方の言語で golden に出る。
+- **診断**：テストの帳簿の診断を、英語と日本語の両方で golden に固定する（`CHOBO_BLESS=1` で書き直す）。どの診断コードにも走る最小の再現を `chobo explain` に持たせ、テストがそのコードが出ることを確かめる。E060 と E061 は、`tests/fixtures` の帳簿の横の `<名前>.target` に書いたターゲットでビルドしたときの出力を golden にする。診断の帳簿は日本語の名前の 22 冊と、同じ帳簿を英語の名前で書いた 22 冊と、README が見せる英語の名前の W103 の帳簿 `split.book`（段階 D で足した）で、28 のコード全部が両方の言語で golden に出る。英語の名前の帳簿が、対になる日本語の名前の帳簿と同じコードを出し、同じくエラーで止まるか通ることを、`tests/check.rs` の `every_japanese_fixture_has_an_english_one` が確かめる（10.1）。
 - **ページ**（`tests/doc.rs`）：`chobo doc` のページを golden に固定し、残高を参照インタプリタと、図を Mermaid と、HTML を Chrome で確かめる（7 章）。
 - **文書**（`tests/docs.rs`、`tests/skill.rs`）：README.md、README.ja.md、`docs/`、`skills/` の診断の抜粋が `tests/fixtures` の golden にそのまま含まれること。` ```book ` のブロックのどの行も、例かテストの帳簿か `chobo explain` の再現の帳簿の行であること。` ```console ` のブロックに出力つきで書いた `chobo` のコマンドを、リポジトリの根で実際に走らせ、書いた行が書いた順に出ること（`…` の行は、省いた行を表す）。文書の中の相対リンクの先があること。`docs/codes.md` と `codes.ja.md` が `chobo explain --all --format markdown` の出力と同じであること。README に書いたコードの数とシナリオの数が実際の数であること。`docs/reference.md` のキーワードの表が `src/syntax.rs` の `KEYWORDS` と同じ順で同じであること。スキルの中のページのコピーが `skills/sync.sh` の作るものと同じで、スキルの中のリンクがスキルの外を指さず、`SKILL.md` の frontmatter が Agent Skills の形に合うこと。
 - **外の道具**：PostgreSQL、TigerBeetle、node、python、go、Chrome、`tools/mermaid` の Mermaid、それぞれの依存が無ければ、`SKIP: <理由>` の行を出して通す。
@@ -936,6 +983,16 @@ chobo は ritsu（七つの言語を一つにまとめる処理系）に取り�
 
 chobo は帳簿から取った。拡張子 `.book` も同じ。
 
+### 10.1 英語の版と日本語の版の名前
+
+**決定**（英語を先にした段階。koyomi の DESIGN 10.1 と同じ決まり）：例、テストの材料、文書は英語を先にする。日本語のものは消さず、中身も変えず、日本語の版として残す。英語の版と日本語の版の対は、名前で分かるようにする。
+
+- **例（`examples/`）**：dandori と同じ形で、英語の版を `<名前>.book`、日本語の版を `<名前>.ja.book` とする。chobo の例は段階 D からこの形なので、変えていない。
+- **テストの材料（`tests/fixtures/`）**：日本語の名前の帳簿は、名前も中身もそのまま残す。日本語の名前で日本語の版だと分かるからである。同じ振る舞いを確かめる英語の版を、日本語の名前を英語に訳した名前で足した（`型.book` と `types.book`、`名前の長さ.book` と `name_length.book`）。横に置く `<名前>.before.book`（`--diff-base` で比べる前の版）と `<名前>.target`（ビルドするターゲット）も、英語の版の横に同じものを置く。対の一覧は `tests/check.rs` の `TWINS` にあり、テストが、二つが同じコードを出し、同じくエラーで止まるか通ることを確かめる。golden は帳簿ごとに英語と日本語の出力の二つで、英語の版の帳簿にも二つある。テストは両方を回す。
+- 英語の名前は、キーワード（`account`、`from`、`to`、`move`、`refused` など）を避けて訳した。`口座` は `wallet`、`移動` は `relocate`、断られる帳簿の名前は `refusals` にした。
+
+日本語でしか確かめられない振る舞いは、日本語の帳簿のまま持ち、同じ振る舞いを英語の帳簿でも確かめる。PostgreSQL の名前の長さ（E061）は、日本語では一字 3 バイトなので 21 字で、英語では 64 字で超える（`name_length.book` の関数の名前は 67 バイト）。名前に分かれた結合文字（E001）は、日本語では「か」と濁点（U+3099）、英語では `e` と鋭アクセント（U+0301）で確かめる。
+
 ## 11. まだやっていないこと
 
 段階 A から D までで残したことを、まとめて書く。
@@ -959,6 +1016,8 @@ chobo は帳簿から取った。拡張子 `.book` も同じ。
 - Python のクライアントの、名前の NFKC。Python はソースの識別子を NFKC で正規化するので、正規化で変わる文字（全角の英字、半角のカナ）を含む名前は、Python の中では正規化した形になる。ソースに書いた呼び出しも同じく正規化されるので通るが、名前を文字列で渡す呼び方（`getattr`、`**args`）では合わない。chobo は名前を正規化しない（1.6）。
 
 ### 11.4 確かめていないこと
+
+- テストの帳簿（`tests/books/` の 6 冊。シナリオの結果 `<帳簿>.runs.json` と TigerBeetle へのチェーン `<帳簿>.chains.json` を固定しているもの）の英語の版は、まだ無い。英語を先にした段階は、診断の帳簿（`tests/fixtures/`）までにした。突き合わせの英語の帳簿は、例の英語の版（8 冊のうち 4 冊）が受け持っている。
 
 - TigerBeetle の本番の構成（六つのレプリカ、一つのリクエストに 8189 件）での確認。テストは `--development` のレプリカ一つで流す（3.1 の E060）。
 - TigerBeetle が、移動が二つ以上ある仮押さえを期限切れで戻すあいだに、ほかの操作が入ること（4.2）。参照インタプリタは、`expire` を一度に起きるものとして扱う。

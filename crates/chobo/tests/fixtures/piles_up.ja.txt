@@ -1,0 +1,8 @@
+警告[W101]: piles_up.book:5:9: 勘定 `points` へ入れる移動はありますが、`points` から取る移動がどこにもありません。入ったものは出ていけず、残高はたまる一方です
+     5 | account points(member: string) : pt
+  そうなる例:
+       1  grant.do(slip: slip-1, member: member-2, amount: 1)  通る
+  ヒント: `points` から取る振替を書きます。外の世界を表す勘定なら `outside` を付けます
+piles_up.book: ok、警告 1 件
+  grant.do  断られうる理由: key_conflict
+  キー: grant は slip ごとに一回。member か amount だけが違う二度目は key_conflict で断られる

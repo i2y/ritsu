@@ -1,0 +1,15 @@
+警告[W103]: order.book:15:3: 1 つ目の移動が shop_sales(shop) から取るのは、2 つ目の移動が shop_sales(shop) へ入れるより前です。そのとき shop_sales(shop) が足りないと、二つの移動を合わせれば足りる場合でも sales_short で断られます
+    15 |   move fee from shop_sales(shop) to fee_income
+  そうなる例:
+       1  sale.do(order: order-1, shop: shop-2, price: 1, fee: 1)  sales_short で断られる（1 つ目の移動が shop_sales(shop-2) から 1 を取る。確定 0、出ていく仮押さえ 0）
+  ヒント: shop_sales(shop) へ入れる移動を先に書きます
+警告[W103]: order.book:19:3: 1 つ目の移動が slots(day) へ入れるのは、2 つ目の移動が slots(day) から取るより前です。そのとき slots(day) に空きが無いと、二つの移動を合わせれば上限に収まる場合でも over_limit で断られます
+    19 |   move amount from slot_source to slots(day)
+  そうなる例:
+       1  move_over.do(slip: slip-1, day: day-2, amount: 101)  over_limit で断られる（1 つ目の移動が slots(day-2) へ 101 を入れる。確定 0、入ってくる仮押さえ 0）
+  ヒント: slots(day) から取る移動を先に書きます
+order.book: ok、警告 2 件
+  sale.do       断られうる理由: sales_short（shop_sales(shop) at least 0）、already_refused
+  move_over.do  断られうる理由: over_limit（slots(day) at most 100）、key_conflict、already_refused
+  キー: sale は order ごとに一回
+  キー: move_over は slip ごとに一回。day か amount だけが違う二度目は key_conflict で断られる

@@ -86,3 +86,53 @@ fn the_design_book_checks() {
     let c = check::check_source(src);
     assert!(c.diags.is_empty(), "{:?}", c.diags.iter().map(|d| d.message.en.clone()).collect::<Vec<_>>());
 }
+
+/// Every fixture with a Japanese name has one with an English name (DESIGN 10.1): the same book
+/// written in English, which gives the same codes, and fails or passes as the Japanese one does.
+const TWINS: &[(&str, &str)] = &[
+    ("型", "types"),
+    ("数", "numbers"),
+    ("キー", "keys"),
+    ("二度", "twice"),
+    ("単位", "units"),
+    ("名前", "names"),
+    ("境界", "bounds"),
+    ("変更", "changes"),
+    ("構文", "syntax"),
+    ("順序", "order"),
+    ("たまる", "piles_up"),
+    ("税区分", "tax_kinds"),
+    ("仮押さえ", "holds"),
+    ("効かない", "no_effect"),
+    ("同じ勘定", "same_account"),
+    ("引数の数", "argument_count"),
+    ("断られる", "refused"),
+    ("移動なし", "no_moves"),
+    ("リクエスト", "requests"),
+    ("使われない", "unused"),
+    ("名前の長さ", "name_length"),
+    ("仮押さえの順序", "hold_order"),
+];
+
+#[test]
+fn every_japanese_fixture_has_an_english_one() {
+    let said = |name: &str| -> (Vec<String>, bool) {
+        let text = render(&root().join(format!("tests/fixtures/{name}.book")), Lang::En);
+        let mut codes: Vec<String> = text.match_indices('[').filter_map(|(i, _)| text.get(i + 1..i + 5)).filter(|c| c.len() == 4 && (c.starts_with('E') || c.starts_with('W')) && c[1..].chars().all(|d| d.is_ascii_digit())).map(str::to_string).collect();
+        codes.sort();
+        codes.dedup();
+        (codes, text.contains("error["))
+    };
+    let japanese: Vec<String> = books_in("tests/fixtures").iter().map(|p| stem(p)).filter(|s| !s.is_ascii()).collect();
+    for j in &japanese {
+        let Some((_, e)) = TWINS.iter().find(|(a, _)| a == j) else { panic!("{j}.book has no English fixture in TWINS") };
+        assert_eq!(said(j), said(e), "{j}.book and {e}.book do not say the same");
+        if root().join(format!("tests/fixtures/{j}.before.book")).exists() {
+            assert!(root().join(format!("tests/fixtures/{e}.before.book")).exists(), "{e}.before.book");
+        }
+        if root().join(format!("tests/fixtures/{j}.target")).exists() {
+            assert_eq!(std::fs::read_to_string(root().join(format!("tests/fixtures/{j}.target"))).unwrap(), std::fs::read_to_string(root().join(format!("tests/fixtures/{e}.target"))).unwrap());
+        }
+    }
+    assert_eq!(japanese.len(), TWINS.len());
+}

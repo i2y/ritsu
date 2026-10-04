@@ -1,0 +1,16 @@
+book argument_count v1
+unit item
+
+account stock(warehouse: string, sku: string) : item
+  at least 0 refused as out_of_stock
+account customer : item outside
+
+transfer ship(order: string, sku: string, qty: item)
+  key order
+  move qty from stock(sku) to customer
+transfer take_back(slip: string, sku: string, qty: item)
+  key slip
+  move qty from customer(sku) to stock("main", sku)
+transfer relocate(slip: string, sku: string, qty: item)
+  key slip
+  move qty from stock to stock("main", sku, "shelf")

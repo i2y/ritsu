@@ -1,0 +1,20 @@
+book numbers v1
+unit item
+unit USD scale 2
+
+account stock(sku: string) : item
+  at least 0.5 refused as out_of_stock
+account wallet(member: string) : USD
+  at least 0 refused as insufficient_balance
+  at most 10.505 refused as over_limit
+account held(member: string) : USD
+  at least -9223372036854775808 refused as over_allowance
+account customer : item outside
+account bank : USD outside
+
+transfer ship(order: string, sku: string)
+  key order
+  move -1 from stock(sku) to customer
+transfer fee(slip: string, member: string)
+  key slip
+  move 0.125 from wallet(member) to bank

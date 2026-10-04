@@ -1,0 +1,11 @@
+# W102: no move puts into the account taken from
+book refusals v1
+unit item
+
+account stock(sku: string) : item
+  at least 0 refused as out_of_stock
+account customer : item outside
+
+transfer ship(order: string, sku: string, qty: item)
+  key order, sku
+  move qty from stock(sku) to customer

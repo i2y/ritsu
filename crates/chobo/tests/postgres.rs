@@ -402,3 +402,18 @@ fn what_only_postgres_has() {
     expire(&pg);
     repeatable_read(&pg, work.path());
 }
+
+/// What `too_long` checks in `what_only_postgres_has`, with the English book: a name of more than 63
+/// ASCII letters stops the build.
+#[test]
+fn a_name_too_long_for_postgres_in_english() {
+    if !need(Need::Postgres) {
+        return;
+    }
+    let work = TempDir::new("e061-en");
+    let out = chobo().args(["build", root().join("tests/fixtures/name_length.book").to_str().unwrap(), "--target", "postgres", "--out", work.path().to_str().unwrap()]).output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{err}");
+    assert!(err.contains("error[E061]") && err.contains("is 67 bytes long"), "{err}");
+    assert_eq!(std::fs::read_dir(work.path()).unwrap().count(), 0, "nothing is written");
+}

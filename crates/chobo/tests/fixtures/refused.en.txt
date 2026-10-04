@@ -1,0 +1,8 @@
+warning[W102]: refused.book:11:3: nothing in the book puts into `stock`, so `ship` is refused with out_of_stock whenever it moves more than 0
+    11 |   move qty from stock(sku) to customer
+  the operations that get there:
+       1  ship.do(order: order-1, sku: sku-2, qty: 1)  refused: out_of_stock (move 1 takes 1 from stock(sku-2): posted 0, held out 0)
+  hint: write a transfer that puts into `stock`
+refused.book: ok, 1 warning(s)
+  ship.do  may be refused: out_of_stock (stock(sku) at least 0), already_refused
+  key: ship once per order, sku

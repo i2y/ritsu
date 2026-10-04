@@ -1,0 +1,4 @@
+error[E061]: name_length.book:15:10: The function's name `take_the_ordered_goods_off_the_warehouse_shelf_and_ship_them_out_do` is 67 bytes long; PostgreSQL keeps a name to 63 bytes, and cuts a longer one short without a word
+    15 | transfer take_the_ordered_goods_off_the_warehouse_shelf_and_ship_them_out(order: string, sku: string, qty: item)
+  hint: Make the name shorter: 63 bytes are 63 ASCII letters, or 21 Japanese characters (a function's name counts what follows it too, `_hold` and the like)
+name_length.book: 1 error(s), 0 warning(s)

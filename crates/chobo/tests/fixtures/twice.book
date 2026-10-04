@@ -1,0 +1,22 @@
+book twice v1
+unit item
+unit item
+
+account stock(sku: string, sku: string) : item
+  description "shelf"
+  description "warehouse"
+  at least 0 refused as out_of_stock
+  at least 1 refused as below_safety_stock
+account stock(sku: string) : item
+  at least 0 refused as out_of_stock
+account customer : item outside
+
+transfer ship(order: string, sku: string, qty: item)
+  key order, order
+  key sku
+  pending never expires
+  pending expires after 1 hour
+  move qty from stock(sku, sku) to customer
+transfer ship(order: string, qty: item)
+  key order
+  move qty from stock(order, order) to customer

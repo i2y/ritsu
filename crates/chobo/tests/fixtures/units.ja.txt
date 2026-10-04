@@ -1,0 +1,7 @@
+エラー[E010]: units.book:12:3: この移動の単位が合いません。元の勘定 `stock` は `item`、先の勘定 `customer` は `USD`、額の `qty` は `item` です。別の単位へ替えるなら、単位ごとに外の勘定を置き、二つの移動で書いてください
+    12 |   move qty from stock(sku) to customer
+エラー[E010]: units.book:15:3: この移動の単位が合いません。元の勘定 `supplier` は `item`、先の勘定 `stock` は `item`、額の `amount` は `USD` です。別の単位へ替えるなら、単位ごとに外の勘定を置き、二つの移動で書いてください
+    15 |   move amount from supplier to stock(sku)
+エラー[E010]: units.book:18:3: この移動の単位が合いません。元の勘定 `customer` は `USD`、先の勘定 `supplier` は `item` です。別の単位へ替えるなら、単位ごとに外の勘定を置き、二つの移動で書いてください
+    18 |   move 500 from customer to supplier
+units.book: エラー 3 件、警告 0 件

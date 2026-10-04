@@ -1,0 +1,8 @@
+book no_moves v1
+unit item
+
+account stock(sku: string) : item
+  at least 0 refused as out_of_stock
+
+transfer count(slip: string)
+  key slip

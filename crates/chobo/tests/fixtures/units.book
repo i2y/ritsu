@@ -1,0 +1,18 @@
+book units v1
+unit item
+unit USD
+
+account stock(sku: string) : item
+  at least 0 refused as out_of_stock
+account customer : USD outside
+account supplier : item outside
+
+transfer ship(order: string, sku: string, qty: item)
+  key order
+  move qty from stock(sku) to customer
+transfer price(slip: string, sku: string, amount: USD)
+  key slip
+  move amount from supplier to stock(sku)
+transfer postage(slip: string)
+  key slip
+  move 500 from customer to supplier

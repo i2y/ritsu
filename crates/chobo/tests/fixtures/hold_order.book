@@ -1,0 +1,14 @@
+# W104: in a pending transfer, a move cannot use what another move of the same transfer put in
+book hold_order v1
+unit USD
+
+account buyers : USD outside
+account shop_payout : USD outside
+account held(order: string) : USD
+  at least 0 refused as held_short
+
+transfer settle(order: string, price: USD)
+  key order
+  pending expires after 1 hour
+  move price from buyers to held(order)
+  move price from held(order) to shop_payout

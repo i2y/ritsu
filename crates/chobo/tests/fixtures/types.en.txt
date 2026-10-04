@@ -1,0 +1,7 @@
+error[E005]: types.book:4:33: an account's parameters are strings; `item` is a unit and cannot be one
+     4 | account stock(sku: string, qty: item) : item
+error[E005]: types.book:10:8: `sku` is a string and cannot be the amount of a move; the amount is a parameter whose type is a unit, or a number
+    10 |   move sku from stock(sku, sku) to customer
+error[E005]: types.book:11:23: `qty` is an amount and cannot be an account's argument; an account's arguments are strings
+    11 |   move qty from stock(qty, sku) to customer
+types.book: 3 error(s), 0 warning(s)

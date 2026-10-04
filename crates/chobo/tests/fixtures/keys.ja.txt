@@ -1,0 +1,7 @@
+エラー[E030]: keys.book:9:10: 振替 `receive` に `key` の行がありません。どの振替にも冪等のキーが要ります。同じ注文で一度だけ動かすなら `key 注文` のように、一度だけにしたい引数を並べてください
+     9 | transfer receive(slip: string, sku: string, qty: item)
+エラー[E031]: keys.book:12:14: 額の引数 `qty` はキーに入れられません。入れると、額だけが違う二つの呼び出しが、別々の振替として両方通ってしまいます
+    12 |   key order, qty
+エラー[E030]: keys.book:15:7: キーの `slip_no` は振替 `take_back` の引数にありません
+    15 |   key slip_no
+keys.book: エラー 3 件、警告 0 件

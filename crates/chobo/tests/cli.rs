@@ -254,3 +254,25 @@ fn doc_writes_the_pages_beside_the_examples() {
     assert_eq!((code, out.is_empty()), (1, true), "{err}");
     assert!(err.contains("error[E020]"), "{err}");
 }
+
+/// What the end of `scenarios_api_and_run` and of the build test check, with the English book:
+/// a book with errors is refused, and nothing is made from it.
+#[test]
+fn a_book_with_errors_is_refused_in_english() {
+    let tmp = TempDir::new("cli-bad-en");
+    let bad = root().join("tests/fixtures/bounds.book");
+    let bad = bad.to_str().unwrap();
+    assert_eq!(run(&["check", bad]).0, 1);
+    for cmd in [vec!["scenarios", bad], vec!["api", bad]] {
+        let (code, out, err) = run(&cmd);
+        assert_eq!(code, 1, "{cmd:?}");
+        assert!(out.is_empty() && err.contains("E020"), "{cmd:?}");
+    }
+    let (code, _, err) = run(&["build", bad, "--target", "postgres", "--out", tmp.path().join("bad").to_str().unwrap()]);
+    assert_eq!(code, 1);
+    assert!(err.contains("E020") && !tmp.path().join("bad").exists());
+    let out = chobo().current_dir(root()).args(["doc", "tests/fixtures/bounds.book"]).output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr).to_string();
+    assert_eq!((out.status.code(), out.stdout.is_empty()), (Some(1), true), "{err}");
+    assert!(err.contains("error[E020]"), "{err}");
+}

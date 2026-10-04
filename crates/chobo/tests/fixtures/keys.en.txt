@@ -1,0 +1,7 @@
+error[E030]: keys.book:9:10: the transfer `receive` has no `key` line; every transfer needs an idempotency key. List the parameters it happens once for, like `key order`
+     9 | transfer receive(slip: string, sku: string, qty: item)
+error[E031]: keys.book:12:14: the amount `qty` cannot be part of the key: two calls that differ only in the amount would both go through, as two transfers
+    12 |   key order, qty
+error[E030]: keys.book:15:7: `slip_no` in the key is not a parameter of `take_back`
+    15 |   key slip_no
+keys.book: 3 error(s), 0 warning(s)

@@ -1,0 +1,19 @@
+error[E003]: twice.book:3:6: the unit `item` is already declared on line 2
+     3 | unit item
+error[E003]: twice.book:5:28: the parameter `sku` appears twice
+     5 | account stock(sku: string, sku: string) : item
+error[E003]: twice.book:7:3: a second `description` line
+     7 |   description "warehouse"
+error[E003]: twice.book:9:3: a second `at least` line
+     9 |   at least 1 refused as below_safety_stock
+error[E003]: twice.book:10:9: the account `stock` is already declared on line 5
+    10 | account stock(sku: string) : item
+error[E003]: twice.book:15:14: `order` appears twice in the key
+    15 |   key order, order
+error[E003]: twice.book:16:3: a second `key` line; write the whole key on one line
+    16 |   key sku
+error[E003]: twice.book:18:3: a second `pending` line
+    18 |   pending expires after 1 hour
+error[E003]: twice.book:20:10: the transfer `ship` is already declared on line 14
+    20 | transfer ship(order: string, qty: item)
+twice.book: 9 error(s), 0 warning(s)

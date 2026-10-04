@@ -1,0 +1,6 @@
+エラー[E060]: requests.book:22:10: spread.do は 43 個の移動を、258 件の振替のチェーンとして TigerBeetle に一つのリクエストで送ります。--development で立てたレプリカは、一つのリクエストで 253 件までしか受け取りません
+    22 | transfer spread(slip: string, payer: string, payee: string, amount: USD)
+  そうなる例:
+       1  spread.do(slip: slip-1, payer: payer-2, payee: payee-3, amount: 1)  一つのリクエストで 258 件の振替を送る
+  ヒント: 振替の種類を、移動の少ないいくつかの種類に分けます。境界のある勘定のあいだの移動は、一つで最大 6 件の振替になります
+requests.book: エラー 1 件、警告 0 件

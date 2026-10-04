@@ -1,0 +1,66 @@
+# E060: one operation does not fit in one request of TigerBeetle. A move between a wallet and an allowance is 6 transfers, and 43 of them are 258
+book requests v1
+
+unit USD
+
+account wallet(id: string) : USD
+  at least 1 refused as wallet_short
+  at most 1000000 refused as wallet_over_limit
+account allowance(id: string) : USD
+  at least -1000 refused as over_allowance
+  at most 1000 refused as overpaid
+account bank : USD outside
+
+transfer deposit(slip: string, id: string, amount: USD)
+  key slip
+  move amount from bank to wallet(id)
+
+transfer repay(slip: string, id: string, amount: USD)
+  key slip
+  move amount from allowance(id) to bank
+
+transfer spread(slip: string, payer: string, payee: string, amount: USD)
+  key slip
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)
+  move amount from wallet(payer) to allowance(payee)

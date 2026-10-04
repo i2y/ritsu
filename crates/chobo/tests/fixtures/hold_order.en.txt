@@ -1,0 +1,10 @@
+warning[W104]: hold_order.book:14:3: in a hold, what move 1 puts into held(order) is held coming in, and does not count when move 2 takes from held(order): unless held(order) has enough already, the hold is refused with held_short
+    14 |   move price from held(order) to shop_payout
+  the operations that get there:
+       1  settle.hold(order: order-1, price: 1)  refused: held_short (move 2 takes 1 from held(order-1): posted 0, held out 0, held in 1)
+  hint: have what it takes in held(order) beforehand, or take it in another transfer after the hold is posted
+hold_order.book: ok, 1 warning(s)
+  settle.hold  may be refused: held_short (held(order) at least 0), already_refused
+  settle.post  may be refused: no_such_hold
+  settle.void  may be refused: no_such_hold
+  key: settle once per order

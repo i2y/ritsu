@@ -1,0 +1,15 @@
+book bounds v1
+unit item
+
+account stock(sku: string) : item
+account supplier : item outside
+  at least 0 refused as supplier_short
+account shelf(sku: string) : item
+  at least 10 refused as below_safety_stock
+  at most 5 refused as full
+account slots(day: string) : item
+  at most -1 refused as fully_booked
+account warehouse(sku: string) : item
+  at least 0
+account held(sku: string) : item
+  at least 0 refused as expired
