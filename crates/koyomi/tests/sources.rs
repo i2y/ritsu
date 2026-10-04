@@ -178,3 +178,65 @@ fn citing_a_law() {
     let o = check_text("examples/t.cal", &format!("dates t v1\n{src}\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate x = d    @民法 第143条, 第142条\n  + 1 day\n"), &Options::default());
     assert_eq!(o.diags[0].fixed_line(), Some("  第142条 sha256:fc8c35a0769d3b35"));
 }
+
+// ── In English: tables of holidays in English, and a law cited by English names ────────────────
+
+#[test]
+fn an_english_csv_table() {
+    let b = "Date,Holiday\r\n2026/12/28,\"Boxing Day, substitute\"\r\n2026/1/1,New Year's Day\r\n2026/12/25,Christmas Day\r\n";
+    let rows = read_csv(b.as_bytes(), false).unwrap();
+    assert_eq!(rows.len(), 3);
+    assert_eq!((rows[0].day.to_string(), rows[0].name.as_str()), ("2026-01-01".into(), "New Year's Day"));
+    let last = rows.last().unwrap();
+    assert_eq!((last.day.to_string(), last.name.as_str()), ("2026-12-28".into(), "Boxing Day, substitute"));
+    assert_eq!(last.line, 2, "the line of the copy it came from");
+}
+
+/// What `bytes_that_are_not_shift_jis` shows, for a table read as UTF-8: one saved as
+/// Windows-1252, its apostrophe the byte 0x92, is not read, and the place is said.
+#[test]
+fn bytes_that_are_not_utf8() {
+    let b = std::fs::read("tests/fixtures/data/utf8-broken.csv").unwrap();
+    let e = read_csv(&b, false).unwrap_err();
+    assert_eq!(e.line, Some(2));
+    assert!(e.why.en.contains("are not UTF-8"), "{}", e.why.en);
+}
+
+/// A calendar of the English tables of the fixtures, checked: the codes it gives.
+fn calendar_codes_en(source_line: &str, format: &str, covers: &str) -> Vec<&'static str> {
+    let src = format!("calendar t v1\n\n{source_line}\n  {format}\n  {covers}\n\nclosed holidays\n");
+    let o = check_text("tests/fixtures/t.cal", &src, &Options::default());
+    o.diags.iter().map(|d| d.code).collect()
+}
+
+#[test]
+fn what_is_wrong_with_a_table_in_english() {
+    let ok = "source holidays = file \"data/holidays.en.csv\" sha256:86cb32774217a66f";
+    assert_eq!(calendar_codes_en(ok, "format csv", "covers 2026-01-01..2026-12-31"), Vec::<&str>::new());
+    assert_eq!(calendar_codes_en("source holidays = file \"data/none.csv\" sha256:86cb32774217a66f", "format csv", "covers 2026-01-01..2026-12-31"), vec!["E101"]);
+    assert_eq!(calendar_codes_en("source holidays = file \"data/holidays.en.csv\"", "format csv", "covers 2026-01-01..2026-12-31"), vec!["E102"]);
+    assert_eq!(calendar_codes_en("source holidays = file \"data/holidays.en.csv\" sha256:0123456789abcdef", "format csv", "covers 2026-01-01..2026-12-31"), vec!["E103"]);
+    assert_eq!(calendar_codes_en("source holidays = file \"data/broken.en.csv\" sha256:3ae3e9825beae644", "format csv", "covers 2026-01-01..2026-12-31"), vec!["E104"]);
+    assert_eq!(calendar_codes_en("source holidays = file \"data/utf8-broken.csv\" sha256:1ceb9da7f664e1c9", "format csv", "covers 2026-01-01..2026-12-31"), vec!["E104"]);
+    assert_eq!(calendar_codes_en("source holidays = file \"data/sjis-broken.csv\" sha256:5b9c45915a5110af", "format csv shift_jis", "covers 2026-01-01..2026-12-31"), vec!["E104"]);
+    assert_eq!(calendar_codes_en(ok, "format csv", "covers 2026-01-01..2026-03-31"), vec!["E105"]);
+    assert_eq!(calendar_codes_en("source holidays = file \"data/gap.en.csv\" sha256:cf519bbe72d28ea7", "format csv", "covers listed years"), vec!["E106"]);
+    // E102's fix is the line with the copy's own pin.
+    let o = check_text("tests/fixtures/t.cal", "calendar t v1\n\nsource holidays = file \"data/holidays.en.csv\"\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed holidays\n", &Options::default());
+    assert_eq!(o.diags[0].fixed_line(), Some("source holidays = file \"data/holidays.en.csv\" sha256:86cb32774217a66f"));
+}
+
+/// What `citing_a_law` shows, with English names: the source and the dates are named in English,
+/// and the articles as e-Gov names them (`第143条`), since only e-Gov's laws can be cited.
+#[test]
+fn citing_a_law_by_an_english_name() {
+    let src = "source civil_code = law \"129AC0000000089\" asof 2026-10-01\n  第143条 sha256:6950bdfb988439b6";
+    assert_eq!(law_codes(src, "@civil_code 第143条"), Vec::<&str>::new());
+    assert_eq!(law_codes(src, "@civil_code 第143条, 第142条"), vec!["E111"]);
+    assert_eq!(law_codes(src, "@civil_code"), vec!["W102", "E111"]);
+    assert_eq!(law_codes(src, "@penal_code 第1条"), vec!["W102", "E111"]);
+    assert_eq!(law_codes(src, ""), vec!["W102"]);
+    assert_eq!(law_codes("source civil_code = law \"129AC0000000089\" asof 2026-10-01\n  第143条", "@civil_code 第143条"), vec!["E102"]);
+    let o = check_text("examples/t.cal", &format!("dates t v1\n{src}\n\ninputs\n  d : date  range >=2026-01-01 <=2026-01-31\n\ndate x = d    @civil_code 第143条, 第142条\n  + 1 day\n"), &Options::default());
+    assert_eq!(o.diags[0].fixed_line(), Some("  第142条 sha256:fc8c35a0769d3b35"));
+}

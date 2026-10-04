@@ -1,0 +1,7 @@
+error[E201]: tests/mutants/E201_no_way_for_a_missing_day.cal:7:3: `+ 1 month` can land on a day the month does not have, and the line does not say what to do then
+     7 |   + 1 month
+  = For received 2026-01-29 it would be 2026-02-29
+  = To fix it, write one of: `+ 1 month else end_of_month` (giving 2026-02-28), `+ 1 month else start_of_next_month` (giving 2026-03-01), `+ 1 month else reject` (the check makes sure it never happens in the range)
+  the input that gets there:
+      received     2026-01-29 Thu
+      month_later                  + 1 month: 2026-02-29 does not exist

@@ -2,7 +2,7 @@
 
 **期日を書く。全部の日で確かめる。コードにする。**
 
-koyomi は、締め日や支払日、営業日、月の足し算を書くための小さな言語です。「20 日締め翌月 10 日払い。支払日が休みなら前の営業日」のような支払条件を、`.cal` のファイルに数行で書きます。どの日が休みかはカレンダーのファイルに書きます。祝日は、内閣府が公開している祝日の CSV のような表から読み、その写しを SHA-256 で固定します。
+koyomi は、締め日や支払日、営業日、月の足し算を書くための小さな言語です。「20 日締め翌月 10 日払い。支払日が休みなら前の営業日」のような支払条件を、`.cal` のファイルに数行で書きます。どの日が休みかはカレンダーのファイルに書きます。祝日は、内閣府の祝日の CSV や GOV.UK の bank holidays のような公開されている表から読み、その写しを SHA-256 で固定します。
 
 ファイルには、計算した日付が満たすべき条件も書きます。支払日は営業日である、受領から 60 日以内に払う、受領が遅くなっても支払日は早くならない、といった条件です。koyomi は、これを宣言した範囲のすべての日について確かめます。100 年分でも 3 万 7 千日に満たないので、一部の日を選んで試すのではなく、全部の日を計算できます。成り立たない日があれば全部挙げ、最初の日がどう計算されたかを一段ずつ見せます。
 
@@ -36,8 +36,8 @@ examples
 ```
 
 ```console
-$ koyomi check examples/支払_20日締め翌月10日払い.cal --lang ja
-examples/支払_20日締め翌月10日払い.cal: ok — 3 つの条件が、受領日 2026-01-01〜2027-11-20 の 689 日のすべてで成り立ちます。例 2 行も合っています
+$ koyomi check examples/payment_20th_close_next_10th.ja.cal --lang ja
+examples/payment_20th_close_next_10th.ja.cal: ok — 3 つの条件が、受領日 2026-01-01〜2027-11-20 の 689 日のすべてで成り立ちます。例 2 行も合っています
 ```
 
 カレンダーの `東京の営業日.cal` は、土日と、内閣府の表にある国民の祝日と休日、12 月 29 日から 1 月 3 日までを休みにします。表には 2027 年の分までしか載っていないので、受領日の範囲は 2027-11-20 で終わります。翌日の 2027-11-21 に受領すると支払日は 2028 年 1 月 10 日になり、その日が休みかどうかはまだ分からないからです。範囲を広げると、検査は推測せずにそう言います（E203）。
@@ -45,7 +45,7 @@ examples/支払_20日締め翌月10日払い.cal: ok — 3 つの条件が、受
 一つの受領日でどう計算されるかは、`koyomi eval` で見られます。
 
 ```console
-$ koyomi eval examples/支払_20日締め翌月10日払い.cal 受領日=2026-04-01 --lang ja
+$ koyomi eval examples/payment_20th_close_next_10th.ja.cal 受領日=2026-04-01 --lang ja
 受領日  2026-04-01（水）
 締め日  2026-04-20（月）  20 日締め: 2026-03-21〜2026-04-20 の期間の締め日
 支払日  2026-05-10（日）  翌月 10 日
@@ -60,8 +60,8 @@ $ koyomi eval examples/支払_20日締め翌月10日払い.cal 受領日=2026-04
 支払条件を「月末締め翌々月末払い」に変えると、「受領から60日以内」は範囲のほとんどの日で成り立たなくなります。
 
 ```console
-$ koyomi check examples/支払_月末締め翌々月末払い.cal --lang ja
-エラー[E301]: examples/支払_月末締め翌々月末払い.cal:16:3: 条件「受領から60日以内」が、受領日 669 日のうち 648 日で成り立ちません
+$ koyomi check examples/eom_close_two_months_later.ja.cal --lang ja
+エラー[E301]: examples/eom_close_two_months_later.ja.cal:16:3: 条件「受領から60日以内」が、受領日 669 日のうち 648 日で成り立ちません
     16 |   受領から60日以内 : 支払日 <= 受領日 + 60 days
   = 成り立たない日: 2026-01-01〜2026-01-29（29 日）、2026-02-01〜2026-03-29（57 日）、2026-04-01〜2026-08-30（152 日）、2026-09-01〜2026-10-28（58 日）、2026-11-01〜2026-11-29（29 日）、2026-12-01〜2026-12-27（27 日）、ほか 4 か所。全部は --format json で出ます
   = いちばん外れるのは受領日 2026-05-01 のときで、支払日 2026-07-31 は受領日の 91 日後
@@ -152,7 +152,7 @@ $ koyomi gen examples/net30.cal --out generated  # --target typescript|python|go
 $ koyomi vectors examples/net30.cal              # すべての入力の結果を JSON Lines で
 $ koyomi doc examples/net30.cal --format html    # 承認する人のページ
 $ koyomi api examples/net30.cal                  # 生成したコードの呼び方を JSON で
-$ koyomi source fetch|pin|outdated examples/calendars/東京の営業日.cal
+$ koyomi source fetch|pin|outdated examples/calendars/england_and_wales.cal
 $ koyomi explain E201 --lang ja                  # いつ出るか、どう直すか、最小の再現
 ```
 
@@ -160,32 +160,42 @@ $ koyomi explain E201 --lang ja                  # いつ出るか、どう直�
 
 ## 例
 
+日本の暦の例は、日本語の版 `<名前>.ja.cal` と、同じ条件を英語の名前で書いた英語の版 `<名前>.cal` が並んでいます。二つは同じ結果になります。日本語の版は日本語のカレンダー（`calendars/東京の営業日.cal`、`calendars/民法142条の休日.cal`）を、英語の版は同じカレンダーの英語の版（`calendars/tokyo_business_days.cal`、`calendars/civil_code_142_days.cal`）を読みます。
+
+| 日本語の版 | 英語の版 | 書いてあること | `koyomi check` |
+|---|---|---|---|
+| [`payment_20th_close_next_10th.ja.cal`](examples/payment_20th_close_next_10th.ja.cal) | [`payment_20th_close_next_10th.cal`](examples/payment_20th_close_next_10th.cal) | 上の例 | 通る |
+| [`eom_close_two_months_later.ja.cal`](examples/eom_close_two_months_later.ja.cal) | [`eom_close_two_months_later.cal`](examples/eom_close_two_months_later.cal) | 月末締め翌々月末払い | わざと通らないようにした例。648 日で「受領から60日以内」が成り立たない |
+| [`closing_and_payment_days_as_inputs.ja.cal`](examples/closing_and_payment_days_as_inputs.ja.cal) | [`closing_and_payment_days_as_inputs.cal`](examples/closing_and_payment_days_as_inputs.cal) | 締め日、支払の月、支払の日を整数の入力で受け取る。871,596 通り | 通る |
+| [`civil_code_period_end.ja.cal`](examples/civil_code_period_end.ja.cal) | [`civil_code_period_end.cal`](examples/civil_code_period_end.cal) | 民法 140〜143 条による期間の満了日。どの日付も e-Gov から写した条文を引く | 通る |
+| [`civil_code_two_readings.ja.cal`](examples/civil_code_two_readings.ja.cal) | [`civil_code_two_readings.cal`](examples/civil_code_two_readings.cal) | 142 条の二つの読み方と、143 条と「月数を足して月末に寄せる」書き方を、それぞれ並べる | わざと通らないようにした例。二つの読み方が分かれるのは 121 通り、もう一組は 39 通り |
+
+England and Wales のカレンダー（GOV.UK の bank holidays を読む [`calendars/england_and_wales.cal`](examples/calendars/england_and_wales.cal)）で書いた英語の例もあります。英語の README はこちらを先に見せます。England and Wales には夏時間があって固定のオフセットを書けないので、この例は日付だけを出します。
+
 | ファイル | 書いてあること | `koyomi check` |
 |---|---|---|
-| [`支払_20日締め翌月10日払い.cal`](examples/支払_20日締め翌月10日払い.cal) | 上の例 | 通る |
-| [`支払_月末締め翌々月末払い.cal`](examples/支払_月末締め翌々月末払い.cal) | 月末締め翌々月末払い | わざと通らないようにした例。648 日で「受領から60日以内」が成り立たない |
-| [`締め日と支払日を受け取る.cal`](examples/締め日と支払日を受け取る.cal) | 締め日、支払の月、支払の日を整数の入力で受け取る。871,596 通り | 通る |
-| [`民法の期間.cal`](examples/民法の期間.cal) | 民法 140〜143 条による期間の満了日。どの日付も e-Gov から写した条文を引く | 通る |
-| [`民法の期間_読み方の比較.cal`](examples/民法の期間_読み方の比較.cal) | 142 条の二つの読み方と、143 条と「月数を足して月末に寄せる」書き方を、それぞれ並べる | わざと通らないようにした例。二つの読み方が分かれるのは 121 通り、もう一組は 39 通り |
-| [`net30.cal`](examples/net30.cal) | England and Wales の Net 30（GOV.UK の bank holidays） | 通る |
-| [`payment_20th_close_next_10th.cal`](examples/payment_20th_close_next_10th.cal) | 最初の例の英語版 | 通る |
-| [`eom_close_two_months_later.cal`](examples/eom_close_two_months_later.cal) | 二つめの例の英語版 | わざと通らないようにした例 |
+| [`close_20th_pay_10th.cal`](examples/close_20th_pay_10th.cal) | 20 日締め翌月 10 日払い | 通る |
+| [`close_eom_pay_two_months_on.cal`](examples/close_eom_pay_two_months_on.cal) | 月末締め翌々月末払い | わざと通らないようにした例。1,008 日で受領から 60 日以内という条件が成り立たない |
+| [`net30.cal`](examples/net30.cal) | Net 30。請求日の 30 日後で、休みなら翌営業日 | 通る |
+| [`close_and_pay_on_given_days.cal`](examples/close_and_pay_on_given_days.cal) | 締め日、支払の月、支払の日を整数の入力で受け取る。872,960 通り | 通る |
+| [`period_of_months.cal`](examples/period_of_months.cal) | 月で数える期間の満了日。初日を数えず、応当する日の前日に満了し、休みに当たれば翌日に動かす | 通る |
+| [`period_of_months_two_readings.cal`](examples/period_of_months_two_readings.cal) | 休みに当たった満了日を動かす先の二つの読み方（翌日と翌営業日）と、「応当する日の前日」と「月数を足して月末に寄せる」書き方を、それぞれ並べる | わざと通らないようにした例。二つの読み方が分かれるのは 709 通り、もう一組は 39 通り |
 
-カレンダーは [`examples/calendars/`](examples/calendars) にあります。東京の営業日、民法 142 条が名指しする日だけを休みにしたもの、England and Wales の三つです。内閣府の祝日の表、GOV.UK の bank holidays、民法の条文の写しは、配られたものをそのまま置いています（[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）。
+内閣府の祝日の表、GOV.UK の bank holidays、民法の条文の写しは、配られたものをそのまま置いています（[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）。
 
-民法の二つの例は、条文を文字どおりに書いて、読み方が分かれる日を見せるためのものです。条文の読み方を一つに決めるものではありません。わざと通らないようにした例が三つあるので、`koyomi check examples/` は 1 で終わります。
+期間の例は、決まりや条文を文字どおりに書いて、読み方が分かれる日を見せるためのものです。読み方を一つに決めるものではありません。わざと通らないようにした例が六つあるので、`koyomi check examples/` は 1 で終わります。
 
 ## どう確かめているか
 
-`.cal` の意味を決めるのは参照インタプリタで、`check`、`eval`、`vectors`、`doc` はどれもそれを通して計算します。テストは、検査を通る例と、すべての操作を 1900〜2100 年に使う七つのファイルを、五つの出力先それぞれで生成し、出力先の言語のツールで確かめてから、`koyomi vectors` のすべての行をランナーに流して一行ずつ比べます。範囲のすべての入力と、範囲のすぐ外の入力で、行を間引いていません。macOS（Apple シリコン）で `cargo test -- --nocapture` を一度走らせた結果（テスト 99 件、40 秒）は次のとおりです。時間は、五つの出力先を同時に走らせたときのものです。
+`.cal` の意味を決めるのは参照インタプリタで、`check`、`eval`、`vectors`、`doc` はどれもそれを通して計算します。テストは、検査を通る例と、すべての操作を 1900〜2100 年に使う十四のファイル（英語の七つと、同じものを日本語で書いた七つ）を、五つの出力先それぞれで生成し、出力先の言語のツールで確かめてから、`koyomi vectors` のすべての行をランナーに流して一行ずつ比べます。範囲のすべての入力と、範囲のすぐ外の入力で、行を間引いていません。macOS（Apple シリコン）で `cargo test -- --nocapture` を一度走らせた結果（テスト 156 件、77 秒）は次のとおりです。時間は、五つの出力先を同時に走らせたときのものです。
 
 | 出力先 | ツール | 比べた行 | 時間 |
 |---|---|---|---|
-| TypeScript | Node v23.11.0、tsc 7.0.2 | 5,341,318 | 6.6 秒 |
-| Python | Python 3.14.6、mypy 2.4.0 | 5,341,318 | 16.3 秒 |
-| Go | go 1.25.5 | 5,341,318 | 7.3 秒 |
-| Rust | rustc 1.94.1 | 5,341,318 | 7.7 秒 |
-| SQL | PostgreSQL 18.0 | 5,341,318 | 26.3 秒 |
+| TypeScript | Node v23.11.0、tsc 7.0.2 | 11,554,942 | 13.7 秒 |
+| Python | Python 3.14.6、mypy 2.4.0 | 11,554,942 | 28.8 秒 |
+| Go | go 1.25.5 | 11,554,942 | 14.5 秒 |
+| Rust | rustc 1.94.1 | 11,554,942 | 14.9 秒 |
+| SQL | PostgreSQL 18.0 | 11,554,942 | 46.9 秒 |
 
 ツールが無ければ、そのテストは `SKIP:` の行を出して通ります。ツールの場所は `KOYOMI_TSC`、`KOYOMI_MYPY`、`KOYOMI_PG_BIN`、`KOYOMI_PG_SOCKET_DIR`、`KOYOMI_CHROME` で渡せます（tsc と mypy は `tools/` に入れます。入れ方は `tools/package.json` と `tools/requirements.txt` にあります）。例ごとの診断、ページ、api は golden のファイルと比べ、このページと docs とスキルに載せたコード、診断、出力は、ツールが実際に出すものと同じかをテストで確かめています。
 

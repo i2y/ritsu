@@ -142,10 +142,15 @@ fn compare(s: &Subject, mut cmd: Command) -> Result<usize, String> {
     Ok(n)
 }
 
-/// The files the `--lang ja` code is run on as well: one with the rows outside the range
-/// (`range`), one with the days outside the data range (`data`). The Japanese code differs from
-/// the English only in its comments and in the messages of its errors.
-const JA_FILES: &[&str] = &["examples/支払_20日締め翌月10日払い.cal", "examples/calendars/東京の営業日.cal"];
+/// The files the `--lang ja` code is run on as well: in English and in Japanese, one with the rows
+/// outside the range (`range`) and one with the days outside the data range (`data`). The Japanese
+/// code differs from the English only in its comments and in the messages of its errors.
+const JA_FILES: &[&str] = &[
+    "examples/payment_20th_close_next_10th.cal",
+    "examples/calendars/england_and_wales.cal",
+    "examples/payment_20th_close_next_10th.ja.cal",
+    "examples/calendars/東京の営業日.cal",
+];
 
 /// Run the `--lang ja` runners of `JA_FILES` and fail if one disagrees.
 fn compare_ja(target: &str, ss: &[Subject], job: impl Fn(&Subject) -> Command + Sync) {

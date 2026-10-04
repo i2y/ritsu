@@ -1,0 +1,4 @@
+error[E107]: tests/mutants/E107_time_zone_name.cal:2:8: The offset is a time zone name, `Europe/London`; koyomi takes only a fixed UTC offset
+     2 | offset Europe/London
+  = In a time zone with daylight saving time, the same 09:00 has a different offset in summer, and a fixed offset is an hour off for half the year. Knowing which zones have it takes the tz database, so every name is refused (DESIGN 1.9).
+  = For a place without daylight saving time, write the number, like `offset +09:00`. For a place with it, leave times out and give dates only.

@@ -1,0 +1,4 @@
+calendar weekends_no_offset v1
+description "Closes Saturdays and Sundays. It has no offset"
+
+closed weekly sat, sun

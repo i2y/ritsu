@@ -1,0 +1,3 @@
+error[E010]: tests/mutants/E010_no_alias.cal:6:3: The public name Received has no ASCII alias
+     6 |   Received : date  range >=2026-01-01 <=2028-11-20
+  = A name that becomes an identifier in the generated code takes an alias in parentheses, like `Received(alias)`; a name already of the form `[a-z][a-z0-9_]*` needs none.

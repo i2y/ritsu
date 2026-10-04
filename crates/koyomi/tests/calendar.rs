@@ -121,3 +121,94 @@ fn england_and_wales() {
     assert_eq!(c.offset, None);
     assert_eq!(c.reasons(d("2026-12-28")), vec![Reason::Holiday { table: "bank_holidays".into(), name: "Boxing Day (Substitute day)".into() }]);
 }
+
+// ── In English: the English version of the Tokyo calendar (the same table, read in Shift_JIS,
+// with English names), the English fixtures, and England and Wales ─────────────────────────────
+
+#[test]
+fn tokyo_in_english() {
+    let c = load("examples/calendars/tokyo_business_days.cal");
+    assert_eq!(c.tables[0].rows.len(), 1067);
+    assert_eq!((c.data.0.to_string(), c.data.1.to_string()), ("1955-01-01".into(), "2027-12-31".into()));
+    assert_eq!(c.open_days_in_year(2026), Ok(240));
+    assert_eq!(c.longest_closed_run(d("2026-01-01"), d("2027-12-31")), Some((d("2026-12-29"), d("2027-01-03"))));
+    assert_eq!(c.is_open(d("2026-05-04")), Ok(false));
+    // The names of the days are the table's, in Japanese as the Cabinet Office writes them.
+    assert_eq!(c.reasons(d("2026-05-04")), vec![Reason::Holiday { table: "national_holidays".into(), name: "みどりの日".into() }]);
+    assert_eq!(c.is_open(d("2026-05-08")), Ok(true));
+    assert_eq!(c.reasons(d("2026-05-03")).len(), 2);
+    assert_eq!(c.is_open(d("2028-01-10")), Err(Outside(d("2028-01-10"))));
+    assert_eq!(c.offset_text().as_deref(), Some("+09:00"));
+    assert_eq!(c.reasons(d("2026-12-31")), vec![Reason::Every { name: Some("New Year holidays".into()), text: "12-29..01-03".into() }]);
+}
+
+#[test]
+fn business_days_on_a_calendar_without_a_table_in_english() {
+    let c = load("tests/fixtures/calendars/weekends.cal");
+    assert_eq!((c.data.0, c.data.1), (koyomi::date::MIN, koyomi::date::MAX));
+    assert_eq!(c.add_business(d("2026-10-03"), 1, true).unwrap(), d("2026-10-05"));
+    assert_eq!(c.add_business(d("2026-10-02"), 1, true).unwrap(), d("2026-10-05"));
+    assert_eq!(c.add_business(d("2026-10-03"), 0, true).unwrap(), d("2026-10-05"));
+    assert_eq!(c.add_business(d("2026-10-03"), 0, false).unwrap(), d("2026-10-02"));
+    assert_eq!(c.add_business(d("2026-10-05"), 0, true).unwrap(), d("2026-10-05"));
+    assert_eq!(c.add_business(d("2026-10-05"), 2, false).unwrap(), d("2026-10-01"));
+    assert_eq!(c.add_business(d("2026-10-02"), 5, true).unwrap(), d("2026-10-09"));
+}
+
+#[test]
+fn the_four_conventions_in_english() {
+    let c = load("tests/fixtures/calendars/weekends.cal");
+    assert_eq!(c.roll(d("2026-01-31"), Conv::Following).unwrap(), d("2026-02-02"));
+    assert_eq!(c.roll(d("2026-01-31"), Conv::ModifiedFollowing).unwrap(), d("2026-01-30"));
+    assert_eq!(c.roll(d("2026-01-31"), Conv::Preceding).unwrap(), d("2026-01-30"));
+    assert_eq!(c.roll(d("2026-08-01"), Conv::Preceding).unwrap(), d("2026-07-31"));
+    assert_eq!(c.roll(d("2026-08-01"), Conv::ModifiedPreceding).unwrap(), d("2026-08-03"));
+    for conv in [Conv::Following, Conv::Preceding, Conv::ModifiedFollowing, Conv::ModifiedPreceding] {
+        assert_eq!(c.roll(d("2026-10-02"), conv).unwrap(), d("2026-10-02"));
+    }
+    // Asking past the data range is an error, never a guess: 2028-12-31 is a Sunday, and GOV.UK's
+    // table ends that day.
+    let t = load("examples/calendars/england_and_wales.cal");
+    assert_eq!(t.roll(d("2028-12-31"), Conv::Following), Err(koyomi::calendar::CalError::Outside(d("2029-01-01"))));
+}
+
+#[test]
+fn what_is_wrong_with_a_calendar_in_english() {
+    let p = "tests/fixtures/calendars/t.cal";
+    assert_eq!(codes(p, "calendar t v1\noffset Europe/London\n\nclosed weekly sat, sun\n"), vec!["E107"]);
+    assert_eq!(codes(p, "calendar t v1\n\nclosed weekly sat, sun\nopen 2026-12-28 \"Extra business day\"\n"), vec!["W101"]);
+    assert_eq!(codes(p, "calendar t v1\n\nclosed weekly sat, sun\nopen 2026-12-26 \"Extra business day\"\n"), Vec::<&str>::new());
+    assert_eq!(codes(p, "calendar t v1\n\nclosed holidays\n"), vec!["E008"]);
+}
+
+#[test]
+fn a_calendar_read_with_use_calendar_in_english() {
+    let p = "tests/fixtures/calendars/t.cal";
+    let o = check_text(p, "calendar summer v1\nuse calendar \"weekends.cal\"\n\nclosed 2026-08-13..2026-08-15 \"Summer closure\"\nopen 2026-08-15 \"Working Saturday\"\n", &Options::default());
+    assert!(!o.has_errors(), "{:?}", o.diags.iter().map(|d| d.render(ritsu_base::text::Lang::En)).collect::<Vec<_>>());
+    let Some(Checked::Calendar(c)) = o.checked else { panic!() };
+    assert_eq!(c.offset, Some(9 * 60));
+    assert_eq!(c.used.len(), 1);
+    assert_eq!(c.is_open(d("2026-08-13")), Ok(false));
+    assert_eq!(c.is_open(d("2026-08-15")), Ok(true), "open wins: 2026-08-15 is a Saturday and closed for summer, and opened");
+    assert_eq!(c.is_open(d("2026-08-16")), Ok(false));
+    assert_eq!(codes(p, "calendar t v1\noffset +08:00\nuse calendar \"weekends.cal\"\n"), vec!["E015"]);
+}
+
+/// What `tokyo` shows of a table in Shift_JIS, on GOV.UK's table in English: the business days of
+/// a year, the longest run of closed days, the reasons a day is closed, and no answer past the
+/// table.
+#[test]
+fn england_and_wales_counts_its_days() {
+    let c = load("examples/calendars/england_and_wales.cal");
+    assert_eq!(c.tables[0].rows.len(), 83);
+    assert_eq!(c.open_days_in_year(2026), Ok(253));
+    assert_eq!(c.longest_closed_run(d("2026-01-01"), d("2027-12-31")), Some((d("2026-04-03"), d("2026-04-06"))));
+    assert_eq!(c.is_open(d("2026-05-04")), Ok(false));
+    assert_eq!(c.reasons(d("2026-05-04")), vec![Reason::Holiday { table: "bank_holidays".into(), name: "Early May bank holiday".into() }]);
+    assert_eq!(c.is_open(d("2026-05-08")), Ok(true));
+    assert_eq!(c.is_open(d("2029-01-10")), Err(Outside(d("2029-01-10"))));
+    let c = load("tests/fixtures/calendars/every_way_to_close.cal");
+    assert_eq!(c.offset_text().as_deref(), Some("+05:45"));
+    assert_eq!(c.reasons(d("2026-12-31")), vec![Reason::Every { name: Some("New Year break".into()), text: "12-29..01-03".into() }]);
+}

@@ -1,0 +1,12 @@
+calendar every_way_to_close v1
+description "A calendar with no table that uses every way of writing a closed day. It is there to hold the generated code to the reference interpreter, and copies no one's holidays"
+offset +05:45
+
+closed weekly sat, sun
+closed every 12-29..01-03 "New Year break"
+closed every 05-01 "Founding day"
+closed every 02-29 "Leap day"
+closed 2000-08-14..2000-08-16 "Summer closure"
+closed 2099-12-30 "The day before the last business day"
+open 2000-01-03 "Extra business day"
+open 1999-12-31 "Open on New Year's Eve"

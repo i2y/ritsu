@@ -1,0 +1,6 @@
+error[E204]: tests/mutants/E204_past_the_last_date.cal:7:3: `+ 30 days` goes outside 0001-01-01..9999-12-31 for 30 inputs
+     7 |   + 30 days
+  = It does on 9999-12-02..9999-12-31
+  the first input it happens on:
+      received  9999-12-02 Thu
+      due                       + 30 days: it goes outside 0001-01-01..9999-12-31

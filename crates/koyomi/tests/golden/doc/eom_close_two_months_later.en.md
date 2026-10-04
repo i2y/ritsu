@@ -1,10 +1,10 @@
 # eom_close_two_months_later v1
 
-Closes at the end of the month; pays at the end of the month two months later, or on the business day before when that day is closed. The English twin of 支払_月末締め翌々月末払い.cal. It breaks the claim within_60_days_of_receipt on purpose: the claim is this example's own, written as it reads, and does not say how any law is read
+Closes at the end of the month; pays at the end of the month two months later, or on the business day before when that day is closed. The English version of eom_close_two_months_later.ja.cal. It breaks the claim within_60_days_of_receipt on purpose: the claim is this example's own, written as it reads, and does not say how any law is read
 
-- File: `eom_close_two_months_later.cal` (dates eom_close_two_months_later v1, sha256:b4e102e04ec50dee)
-- Calendar: `calendars/東京の営業日.cal` (calendar 東京の営業日 v1, sha256:d7b6134e23a8cb9f)
-- Table: 祝日 = `calendars/data/syukujitsu.csv` (sha256:cec37a743c96995c, a copy of https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv, covers 1955-01-01..2027-12-31)
+- File: `eom_close_two_months_later.cal` (dates eom_close_two_months_later v1, sha256:0e16bdf8d3db5f22)
+- Calendar: `calendars/tokyo_business_days.cal` (calendar tokyo_business_days v1, sha256:37af228cf6ba7b95)
+- Table: national_holidays = `calendars/data/syukujitsu.csv` (sha256:cec37a743c96995c, a copy of https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv, covers 1955-01-01..2027-12-31)
 - koyomi: 0.1.0
 
 koyomi 0.1.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
@@ -65,7 +65,7 @@ Inputs koyomi picked from the range: month ends, closed days and the days around
 
 | received | closing | payment | Why |
 |---|---|---|---|
-| 2026-01-01 Thu | 2026-01-31 Sat | 2026-03-31 Tue | the claim within_60_days_of_receipt fails; received is 元日, a closed day; received falls in 年末年始 |
+| 2026-01-01 Thu | 2026-01-31 Sat | 2026-03-31 Tue | the claim within_60_days_of_receipt fails; received is 元日, a closed day; received falls in New Year holidays |
 | 2026-01-13 Tue | 2026-01-31 Sat | 2026-03-31 Tue | received is the day after 成人の日 |
 | 2026-01-31 Sat | 2026-01-31 Sat | 2026-03-31 Tue | received is the 31st, the end of its month |
 | 2026-02-10 Tue | 2026-02-28 Sat | 2026-04-30 Thu | received is the day before 建国記念の日 |
@@ -74,26 +74,26 @@ Inputs koyomi picked from the range: month ends, closed days and the days around
 | 2026-04-30 Thu | 2026-04-30 Thu | 2026-06-30 Tue | received is the 30th, the end of its month |
 | 2026-05-01 Fri | 2026-05-31 Sun | 2026-07-31 Fri | the most days from received to payment (91) |
 | 2026-08-01 Sat | 2026-08-31 Mon | 2026-10-30 Fri | payment falls on a Saturday and moves to the business day before |
-| 2026-10-01 Thu | 2026-10-31 Sat | 2026-12-28 Mon | payment falls on 年末年始 and moves to the business day before; payment moves the most (3 days) |
+| 2026-10-01 Thu | 2026-10-31 Sat | 2026-12-28 Mon | payment falls on New Year holidays and moves to the business day before; payment moves the most (3 days) |
 | 2026-12-31 Thu | 2026-12-31 Thu | 2027-02-26 Fri | the fewest days from received to payment (57) |
 
 ## Calendar
 
-The file reads the calendar 東京の営業日 v1 (`calendars/東京の営業日.cal`).
+The file reads the calendar tokyo_business_days v1 (`calendars/tokyo_business_days.cal`).
 
-Its description: 土日、国民の祝日と休日、12 月 29 日から 1 月 3 日までを休む
+Its description: Saturdays, Sundays, Japan's national holidays and other days off, and 29 December to 3 January are closed. The English version of 東京の営業日.cal
 
 ### Closed days
 
 These days are closed.
 
 - every Saturday and Sunday `closed weekly sat, sun`
-- the days the table 祝日 lists `closed 祝日`
-- every year, from 29 December to 3 January (年末年始) `closed every 12-29..01-03 "年末年始"`
+- the days the table national_holidays lists `closed national_holidays`
+- every year, from 29 December to 3 January (New Year holidays) `closed every 12-29..01-03 "New Year holidays"`
 
 ### Sources and the days the calendar knows
 
-- 祝日: 1,067 rows, a copy of https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv, pinned at sha256:cec37a743c96995c; it lists every closed day from 1955-01-01 to 2027-12-31.
+- national_holidays: 1,067 rows, a copy of https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv, pinned at sha256:cec37a743c96995c; it lists every closed day from 1955-01-01 to 2027-12-31.
 
 The calendar knows 1955-01-01..2027-12-31. A computation that asks whether a day outside it is a business day stops, in the check and in the generated code alike.
 
@@ -113,7 +113,7 @@ In the tables, a day in parentheses is closed; a day in bold is an input a claim
 | **19** | **20** | **21** | **22** | **23** | **(24)** | **(25)** |
 | **26** | **27** | **28** | **29** | 30 | (31)◆ |  |
 
-Named closed days: 1 元日 and 年末年始, 2–3 年末年始, 12 成人の日
+Named closed days: 1 元日 and New Year holidays, 2–3 New Year holidays, 12 成人の日
 
 **February 2026**
 
@@ -246,7 +246,7 @@ Named closed days: 3 文化の日, 23 勤労感謝の日
 | **21** | **22** | **23** | **24** | **25** | **(26)** | **(27)** |
 | 28 | (29) | (30) | (31)◆ |  |  |  |
 
-Named closed days: 29–31 年末年始
+Named closed days: 29–31 New Year holidays
 
 **January 2027**
 
@@ -258,7 +258,7 @@ Named closed days: 29–31 年末年始
 | **18** | **19** | **20** | **21** | **22** | **(23)** | **(24)** |
 | **25** | **26** | **27** | **28** | **29** | (30) | (31) |
 
-Named closed days: 1 元日 and 年末年始, 2–3 年末年始, 11 成人の日
+Named closed days: 1 元日 and New Year holidays, 2–3 New Year holidays, 11 成人の日
 
 **February 2027**
 
@@ -389,4 +389,4 @@ Named closed days: 3 文化の日, 23 勤労感謝の日
 | 20 | 21 | 22 | 23 | 24 | (25) | (26) |
 | 27 | 28 | (29) | (30) | (31) |  |  |
 
-Named closed days: 29–31 年末年始
+Named closed days: 29–31 New Year holidays

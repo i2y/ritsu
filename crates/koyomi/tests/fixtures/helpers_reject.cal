@@ -1,0 +1,10 @@
+dates rejecting v1
+description "else reject, on a range where no missing day is ever met (on a range with a 29 February in it, one is met inside the range and the check stops). It is there to hold the generated code to the reference interpreter"
+
+inputs
+  origin : date  range >=2001-03-01 <=2003-12-31
+
+date year_later = origin
+  + 12 months else reject
+date year_before = origin
+  - 1 year else reject

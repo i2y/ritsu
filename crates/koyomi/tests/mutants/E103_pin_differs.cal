@@ -1,0 +1,9 @@
+calendar company v1
+offset +00:00
+
+source company_holidays = file "../fixtures/data/holidays.en.csv" sha256:538b3482c28b85ec
+  format csv
+  covers 2026-01-01..2026-12-31
+
+closed weekly sat, sun
+closed company_holidays

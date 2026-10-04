@@ -1,0 +1,7 @@
+error[E204]: tests/mutants/E204_claim_past_the_last_date.cal:10:3: `due <= received + 100 days` goes outside 0001-01-01..9999-12-31 for 30 inputs
+    10 |   within_100_days : due <= received + 100 days
+  = It does on 9999-12-01..9999-12-30
+  the first input it happens on:
+      received  9999-12-01 Wed
+      due       9999-12-02 Thu  + 1 day
+                claim within_100_days: it goes outside 0001-01-01..9999-12-31

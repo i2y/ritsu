@@ -1,0 +1,410 @@
+{
+  "koyomi": "0.1.0",
+  "kind": "dates",
+  "name": "close_and_pay_on_given_days",
+  "alias": "close_and_pay_on_given_days",
+  "version": "1",
+  "source_sha256": "f5323722663873b098b6acac36c52ac754565b1843ef1c96ad66d7f1dd03d7c1",
+  "description": "Takes the closing day, the month of payment and the day of payment as integers, as when the closing day comes from a rule. A payment day that is closed in England and Wales moves to the business day before. The claims are this example's own, written as they read",
+  "calendar": {
+    "name": "england_and_wales",
+    "alias": "england_and_wales",
+    "version": "1",
+    "file": "calendars/england_and_wales.cal",
+    "source_sha256": "00a0d8a87344f4f45c2ebbcfe348c82bd794024454c54aae2544b2cfb52c4465",
+    "offset": null,
+    "uses": [],
+    "closed": [
+      {
+        "weekly": [
+          "sat",
+          "sun"
+        ]
+      },
+      {
+        "table": "bank_holidays"
+      }
+    ],
+    "open": [],
+    "sources": [
+      {
+        "name": "bank_holidays",
+        "kind": "file",
+        "file": "calendars/data/bank-holidays.json",
+        "url": "https://www.gov.uk/bank-holidays.json",
+        "sha256": "538b3482c28b85ec",
+        "format": "govuk",
+        "division": "england-and-wales",
+        "covers": {
+          "listed_years": true,
+          "from": "2019-01-01",
+          "to": "2028-12-31"
+        },
+        "rows": 83
+      }
+    ],
+    "data_range": {
+      "from": "2019-01-01",
+      "to": "2028-12-31"
+    }
+  },
+  "sources": [],
+  "inputs": [
+    {
+      "name": "received",
+      "alias": "received",
+      "type": "date",
+      "range": {
+        "min": "2027-01-01",
+        "max": "2028-10-01"
+      }
+    },
+    {
+      "name": "closing_day",
+      "alias": "closing_day",
+      "type": "int",
+      "range": {
+        "min": 1,
+        "max": 31
+      }
+    },
+    {
+      "name": "payment_month",
+      "alias": "payment_month",
+      "type": "int",
+      "range": {
+        "min": 1,
+        "max": 2
+      }
+    },
+    {
+      "name": "payment_day",
+      "alias": "payment_day",
+      "type": "int",
+      "range": {
+        "min": 10,
+        "max": 31
+      }
+    }
+  ],
+  "dates": [
+    {
+      "name": "closing",
+      "alias": "closing",
+      "params": [
+        "received",
+        "closing_day"
+      ]
+    },
+    {
+      "name": "payment",
+      "alias": "payment",
+      "params": [
+        "received",
+        "closing_day",
+        "payment_month",
+        "payment_day"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "name": "paid_on_a_business_day",
+      "text": "payment is open"
+    },
+    {
+      "name": "paid_after_closing",
+      "text": "payment > closing"
+    },
+    {
+      "name": "later_receipt_later_payment",
+      "text": "payment is monotonic"
+    }
+  ],
+  "wire": {
+    "date": "YYYY-MM-DD",
+    "int": "a JSON number",
+    "at": "RFC 3339 in UTC, ending in Z, as dandori's timestamp",
+    "errors": [
+      "range",
+      "data",
+      "reject",
+      "date"
+    ]
+  },
+  "typescript": {
+    "file": "typescript/close_and_pay_on_given_days.ts",
+    "module": "close_and_pay_on_given_days",
+    "date_type": "string",
+    "functions": [
+      {
+        "name": "closing",
+        "function": "closing",
+        "signature": "export function closing(received: string, closing_day: number): string",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "string"
+          },
+          {
+            "name": "closing_day",
+            "alias": "closing_day",
+            "type": "number"
+          }
+        ]
+      },
+      {
+        "name": "payment",
+        "function": "payment",
+        "signature": "export function payment(received: string, closing_day: number, payment_month: number, payment_day: number): string",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "string"
+          },
+          {
+            "name": "closing_day",
+            "alias": "closing_day",
+            "type": "number"
+          },
+          {
+            "name": "payment_month",
+            "alias": "payment_month",
+            "type": "number"
+          },
+          {
+            "name": "payment_day",
+            "alias": "payment_day",
+            "type": "number"
+          }
+        ]
+      }
+    ],
+    "is_open": "export function is_open(day: string): boolean",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "python": {
+    "file": "python/close_and_pay_on_given_days.py",
+    "module": "close_and_pay_on_given_days",
+    "date_type": "datetime.date",
+    "functions": [
+      {
+        "name": "closing",
+        "function": "closing",
+        "signature": "def closing(received: date, closing_day: int) -> date",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "date"
+          },
+          {
+            "name": "closing_day",
+            "alias": "closing_day",
+            "type": "int"
+          }
+        ]
+      },
+      {
+        "name": "payment",
+        "function": "payment",
+        "signature": "def payment(received: date, closing_day: int, payment_month: int, payment_day: int) -> date",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "date"
+          },
+          {
+            "name": "closing_day",
+            "alias": "closing_day",
+            "type": "int"
+          },
+          {
+            "name": "payment_month",
+            "alias": "payment_month",
+            "type": "int"
+          },
+          {
+            "name": "payment_day",
+            "alias": "payment_day",
+            "type": "int"
+          }
+        ]
+      }
+    ],
+    "is_open": "def is_open(day: date) -> bool",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "go": {
+    "file": "go/closeandpayongivendays/closeandpayongivendays.go",
+    "module": "closeandpayongivendays",
+    "date_type": "Date",
+    "functions": [
+      {
+        "name": "closing",
+        "function": "Closing",
+        "signature": "func Closing(received Date, closing_day int) (Date, error)",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "Date"
+          },
+          {
+            "name": "closing_day",
+            "alias": "closing_day",
+            "type": "int"
+          }
+        ]
+      },
+      {
+        "name": "payment",
+        "function": "Payment",
+        "signature": "func Payment(received Date, closing_day int, payment_month int, payment_day int) (Date, error)",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "Date"
+          },
+          {
+            "name": "closing_day",
+            "alias": "closing_day",
+            "type": "int"
+          },
+          {
+            "name": "payment_month",
+            "alias": "payment_month",
+            "type": "int"
+          },
+          {
+            "name": "payment_day",
+            "alias": "payment_day",
+            "type": "int"
+          }
+        ]
+      }
+    ],
+    "is_open": "func IsOpen(day Date) (bool, error)",
+    "errors": [
+      "*KoyomiError"
+    ]
+  },
+  "rust": {
+    "file": "rust/close_and_pay_on_given_days.rs",
+    "module": "close_and_pay_on_given_days",
+    "date_type": "Date",
+    "functions": [
+      {
+        "name": "closing",
+        "function": "closing",
+        "signature": "pub fn closing(received: Date, closing_day: i64) -> Result<Date, KoyomiError>",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "Date"
+          },
+          {
+            "name": "closing_day",
+            "alias": "closing_day",
+            "type": "i64"
+          }
+        ]
+      },
+      {
+        "name": "payment",
+        "function": "payment",
+        "signature": "pub fn payment(received: Date, closing_day: i64, payment_month: i64, payment_day: i64) -> Result<Date, KoyomiError>",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "Date"
+          },
+          {
+            "name": "closing_day",
+            "alias": "closing_day",
+            "type": "i64"
+          },
+          {
+            "name": "payment_month",
+            "alias": "payment_month",
+            "type": "i64"
+          },
+          {
+            "name": "payment_day",
+            "alias": "payment_day",
+            "type": "i64"
+          }
+        ]
+      }
+    ],
+    "is_open": "pub fn is_open(day: Date) -> Result<bool, KoyomiError>",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "sql": {
+    "file": "sql/close_and_pay_on_given_days.sql",
+    "module": "close_and_pay_on_given_days",
+    "date_type": "date",
+    "functions": [
+      {
+        "name": "closing",
+        "function": "closing",
+        "signature": "close_and_pay_on_given_days.closing(received date, closing_day integer) RETURNS date",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "date"
+          },
+          {
+            "name": "closing_day",
+            "alias": "closing_day",
+            "type": "integer"
+          }
+        ]
+      },
+      {
+        "name": "payment",
+        "function": "payment",
+        "signature": "close_and_pay_on_given_days.payment(received date, closing_day integer, payment_month integer, payment_day integer) RETURNS date",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "date"
+          },
+          {
+            "name": "closing_day",
+            "alias": "closing_day",
+            "type": "integer"
+          },
+          {
+            "name": "payment_month",
+            "alias": "payment_month",
+            "type": "integer"
+          },
+          {
+            "name": "payment_day",
+            "alias": "payment_day",
+            "type": "integer"
+          }
+        ]
+      }
+    ],
+    "is_open": "close_and_pay_on_given_days.is_open(day date) RETURNS boolean",
+    "errors": [
+      "SQLSTATE 22023"
+    ]
+  }
+}

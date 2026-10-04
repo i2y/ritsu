@@ -1,0 +1,11 @@
+dates taking_months_away v1
+description "Taking months away, rounding down to the end of the month and on to the 1st of the next, on 0 to 24 months and every day of 1900 to 2100. It is there to hold the small functions of the generated code to the reference interpreter"
+
+inputs
+  origin      : date  range >=1900-01-01 <=2100-12-31
+  month_count : int   range >=0 <=24
+
+date to_month_end = origin
+  - month_count months else end_of_month
+date to_next_month = origin
+  - month_count months else start_of_next_month

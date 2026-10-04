@@ -1,0 +1,31 @@
+dates days_of_months v1
+description "The n-th of the month k months on, closing on the n-th, the start and the end of a month, and adding and taking away years, on the days 27 to 31 and every day of 1900 to 2100. It is there to hold the small functions of the generated code to the reference interpreter"
+
+inputs
+  origin : date  range >=1900-01-01 <=2100-12-31
+  nth    : int   range >=27 <=31
+
+date next_month_nth = origin
+  day nth of month +1 else end_of_month
+date previous_month_nth = origin
+  day nth of month -1 else start_of_next_month
+date same_month_nth = origin
+  day nth of month else end_of_month
+date fifteenth_next_month = origin
+  day 15 of month +1
+date closing_to_month_end = origin
+  close day nth else end_of_month
+date closing_to_next_month = origin
+  close day nth else start_of_next_month
+date closing_20th = origin
+  close day 20
+date closing_month_end = origin
+  close end of month
+date previous_month_start = origin
+  start of month -1
+date month_end_two_later = origin
+  end of month +2
+date next_year = origin
+  + 1 year else start_of_next_month
+date two_years_before = origin
+  - 2 years else end_of_month

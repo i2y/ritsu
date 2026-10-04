@@ -1,0 +1,7 @@
+error[E202]: tests/mutants/E202_reject_is_reached.cal:7:3: `+ 1 month else reject` lands on a day the month does not have, for 7 inputs in the range
+     7 |   + 1 month else reject
+  = It does on 2026-01-29..2026-01-31 (3 days), 2026-03-31, 2026-05-31, 2026-08-31, 2026-10-31
+  = `else reject` says it never happens in the range. Since it does, say what to do with `else end_of_month` or `else start_of_next_month`, or narrow the range.
+  the first input it happens on:
+      received     2026-01-29 Thu
+      month_later                  + 1 month else reject: 2026-02-29 does not exist, and the line says `else reject`

@@ -1,0 +1,4 @@
+警告[W101]: tests/mutants/W101_open_anyway.cal:9:1: `open` に書いた 2026-12-24（木）は、もともと営業日です
+     9 | open 2026-12-24 "Christmas Eve opening"
+  = どの `closed` にも当たらない日です。日付の書き違いでなければ、この行は要りません。
+tests/mutants/W101_open_anyway.cal: ok — カレンダー england_and_wales。表 bank_holidays 83 行、データの範囲 2019-01-01〜2028-12-31

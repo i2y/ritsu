@@ -1,0 +1,9 @@
+calendar company v1
+offset +00:00
+
+source company_holidays = file "../fixtures/data/gap.en.csv" sha256:cf519bbe72d28ea7
+  format csv
+  covers listed years
+
+closed weekly sat, sun
+closed company_holidays

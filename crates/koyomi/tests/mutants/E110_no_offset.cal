@@ -1,0 +1,10 @@
+dates net30_at_nine v1
+use calendar "../fixtures/calendars/weekends_no_offset.cal"
+
+inputs
+  received : date  range >=2026-01-01 <=2026-12-31
+
+date payment = received
+  + 30 days
+  roll following
+  at 09:00

@@ -4,7 +4,7 @@
 
 名前は暦（こよみ）から取った。
 
-この文書は設計の段階（A）で書き、言語の芯を作った段階（B）、出力先を作った段階（C）、承認する人のページと文書を作った段階（D）で直した。B で作ったのは、字句と構文、名前と型、カレンダー、参照インタプリタ、検査、診断、`check`・`eval`・`explain`・`api` のコマンドである。C で作ったのは、五つの出力先の生成（`gen`）、`vectors`、生成したコードと参照インタプリタの突き合わせ、`source fetch`・`pin`・`outdated` である。D で作ったのは、`doc`（7 章）、例の仕上げと英語の版（10 章）、`docs/`、README.md と README.ja.md、エージェント向けのスキル（`skills/koyomi`）、THIRD_PARTY_NOTICES.md である。3〜10 章に載せた出力とコードは、その段階の koyomi が実際に出したものに差し替えた。
+この文書は設計の段階（A）で書き、言語の芯を作った段階（B）、出力先を作った段階（C）、承認する人のページと文書を作った段階（D）で直した。B で作ったのは、字句と構文、名前と型、カレンダー、参照インタプリタ、検査、診断、`check`・`eval`・`explain`・`api` のコマンドである。C で作ったのは、五つの出力先の生成（`gen`）、`vectors`、生成したコードと参照インタプリタの突き合わせ、`source fetch`・`pin`・`outdated` である。D で作ったのは、`doc`（7 章）、例の仕上げと英語の版（10 章）、`docs/`、README.md と README.ja.md、エージェント向けのスキル（`skills/koyomi`）、THIRD_PARTY_NOTICES.md である。3〜10 章に載せた出力とコードは、その段階の koyomi が実際に出したものに差し替えた。そのあと ritsu に移ってから、例とテストの材料を英語を先にした（England and Wales の例、日本の暦の例の英語の版、英語の名前のテストの材料と変異を足し、日本語のものは日本語の版として残した。10.1）。
 
 文書に出てくる日付と日数は、A の段階で、使い捨ての試作（Python）が内閣府と GOV.UK の祝日の表から計算したものである。B の参照インタプリタが同じ数を出すことを、`tests/check.rs` が確かめている（一つも食い違わなかった）。
 
@@ -80,6 +80,51 @@
 
 - `calendar`：カレンダーを書く。どの日が休みか（休みの曜日、毎年の休み、祝日の表、特定の日）、例外の営業日、UTC オフセット。
 - `dates`：日付の関数を書く。一つの日付（と整数）を受け取り、そこから決まる日付を返す。条件と例もここに書く。カレンダーは `use calendar "<ファイル>"` で読む。
+
+例は英語の版を先に置き、日本語の版を並べる（10.1）。英語の版：
+
+```
+calendar tokyo_business_days v1
+description "Saturdays, Sundays, Japan's national holidays and other days off, and 29 December to 3 January are closed. The English version of 東京の営業日.cal"
+offset +09:00
+
+source national_holidays = file "data/syukujitsu.csv" url "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv" sha256:cec37a743c96995c
+  format csv shift_jis
+  covers 1955-01-01..2027-12-31
+
+closed weekly sat, sun
+closed national_holidays
+closed every 12-29..01-03 "New Year holidays"
+```
+
+```
+dates payment_20th_close_next_10th v1
+description "Closes on the 20th; pays on the 10th of the next month, or on the business day before when that day is closed. The English version of payment_20th_close_next_10th.ja.cal. The claim within_60_days_of_receipt is this example's own, written as it reads; it does not say how any law is read"
+use calendar "calendars/tokyo_business_days.cal"
+
+inputs
+  received : date  range >=2026-01-01 <=2027-11-20
+
+date closing = received
+  close day 20          # "closes on the 20th"
+
+date payment = closing
+  day 10 of month +1    # "pays on the 10th of the next month"
+  roll preceding        # "on the business day before when that day is closed"
+  at 09:00
+
+claims
+  paid_on_a_business_day      : payment is open
+  within_60_days_of_receipt   : payment <= received + 60 days
+  later_receipt_later_payment : payment is monotonic
+
+examples
+| received   | -> closing | -> payment |
+| 2026-04-01 | 2026-04-20 | 2026-05-08 |
+| 2026-12-21 | 2027-01-20 | 2027-02-10 |
+```
+
+日本語の版（名前を日本語で書き、ASCII の別名を付けたもの。計算と結果は英語の版と同じ）：
 
 ```
 calendar 東京の営業日(tokyo) v1
@@ -353,6 +398,19 @@ A の段階で、2026-10-01 時点の民法 140〜143 条を e-Gov 法令 API v2
 
 この二つを文字どおりに書くと、次になる。応当する日が無いときは、次の月の 1 日に送ってから前日にすると、ちょうどその月の末日になる。
 
+英語の版（`civil_code_period_end.cal`）では次のとおり。
+
+```
+date first_day = origin
+  + 1 day                                        # the first day is not counted
+date last_day = first_day
+  + month_count months else start_of_next_month  # the corresponding day of the last month; with none, the 1st of the month after
+  - 1 day                                        # the day before it: the last day of the last month when it had no corresponding day
+date last_day_142 = last_day
+```
+
+日本語の版（`civil_code_period_end.ja.cal`）：
+
 ```
 date 起算日(first_day) = 起点
   + 1 day                                 # 140 条：初日は算入しない
@@ -452,6 +510,18 @@ koyomi は QuantLib と同じ結果になるようにした。数え方が「そ
 
 ```
 claims
+  paid_on_a_business_day      : payment is open
+  within_60_days_of_receipt   : payment <= received + 60 days
+  within_40_business_days     : payment <= received + 40 business days
+  paid_after_closing          : payment > closing
+  later_receipt_later_payment : payment is monotonic
+  the_same_when_rewritten     : payment = payment_old
+```
+
+日本語の名前で書けば次のとおり。
+
+```
+claims
   営業日に払う       : 支払日 is open
   受領から60日以内   : 支払日 <= 受領日 + 60 days
   40営業日以内       : 支払日 <= 受領日 + 40 business days
@@ -541,10 +611,17 @@ claims
 通れば、何を確かめたかを一行で言う（B の段階の実際の出力）。
 
 ```
-$ koyomi check examples/支払_20日締め翌月10日払い.cal
-examples/支払_20日締め翌月10日払い.cal: ok — 3 claims hold on all 689 days of 受領日 (2026-01-01..2027-11-20); 2 examples match
-$ koyomi check examples/支払_20日締め翌月10日払い.cal --lang ja
-examples/支払_20日締め翌月10日払い.cal: ok — 3 つの条件が、受領日 2026-01-01〜2027-11-20 の 689 日のすべてで成り立ちます。例 2 行も合っています
+$ koyomi check examples/close_20th_pay_10th.cal
+examples/close_20th_pay_10th.cal: ok — 3 claims hold on all 1,055 days of received (2026-01-01..2028-11-20); 2 examples match
+$ koyomi check examples/payment_20th_close_next_10th.cal
+examples/payment_20th_close_next_10th.cal: ok — 3 claims hold on all 689 days of received (2026-01-01..2027-11-20); 2 examples match
+```
+
+```
+$ koyomi check examples/payment_20th_close_next_10th.ja.cal
+examples/payment_20th_close_next_10th.ja.cal: ok — 3 claims hold on all 689 days of 受領日 (2026-01-01..2027-11-20); 2 examples match
+$ koyomi check examples/payment_20th_close_next_10th.ja.cal --lang ja
+examples/payment_20th_close_next_10th.ja.cal: ok — 3 つの条件が、受領日 2026-01-01〜2027-11-20 の 689 日のすべてで成り立ちます。例 2 行も合っています
 ```
 
 ### 3.2 総当たりと予算
@@ -555,7 +632,7 @@ examples/支払_20日締め翌月10日払い.cal: ok — 3 つの条件が、受
 
 | ファイル | 組み合わせ | 時間 |
 |---|---|---|
-| `締め日と支払日を受け取る.cal`（10 章） | 871,596 | 0.07 秒 |
+| `closing_and_payment_days_as_inputs.ja.cal`（10 章） | 871,596 | 0.07 秒 |
 | 100 年（1926〜2025 年）の日付 × 締め日 31 × 支払の月 12。締め、翌月の N 日、`roll preceding`、条件三つ | 13,587,300 | 0.92 秒 |
 | 同じものに「支払日 <= 受領日 + 60 business days」の条件を足したもの | 13,587,300 | 3.5 秒 |
 
@@ -658,6 +735,43 @@ exit code は 0（エラーなし。警告はあってよい）、1（エラー�
 
 10 章の月末締め翌々月末払いは、わざと「受領から60日以内」を破る例である。ファイルは次のとおり。
 
+英語の版（`eom_close_two_months_later.cal`）：
+
+```
+ 1  dates eom_close_two_months_later v1
+ 2  description "Closes at the end of the month; pays at the end of the month two months later, or on the business day before when that day is closed. The English version of eom_close_two_months_later.ja.cal. It breaks the claim within_60_days_of_receipt on purpose: the claim is this example's own, written as it reads, and does not say how any law is read"
+ 3  use calendar "calendars/tokyo_business_days.cal"
+ 4
+ 5  inputs
+ 6    received : date  range >=2026-01-01 <=2027-10-31
+ 7
+ 8  date closing = received
+ 9    close end of month    # "closes at the end of the month"
+10
+11  date payment = closing
+12    end of month +2       # "pays at the end of the month two months later"
+13    roll preceding        # "on the business day before when that day is closed"
+14
+15  claims
+16    within_60_days_of_receipt : payment <= received + 60 days
+```
+
+```
+$ koyomi check examples/eom_close_two_months_later.cal
+error[E301]: examples/eom_close_two_months_later.cal:16:3: The claim within_60_days_of_receipt fails for 648 of the 669 days of received
+    16 |   within_60_days_of_receipt : payment <= received + 60 days
+  = It fails on 2026-01-01..2026-01-29 (29 days), 2026-02-01..2026-03-29 (57 days), 2026-04-01..2026-08-30 (152 days), 2026-09-01..2026-10-28 (58 days), 2026-11-01..2026-11-29 (29 days), 2026-12-01..2026-12-27 (27 days), and 4 more runs; --format json lists them all
+  = The farthest is received 2026-05-01, where payment 2026-07-31 is 91 days after received
+  the first input it fails on:
+      received  2026-01-01 Thu
+      closing   2026-01-31 Sat  close end of month
+      payment   2026-03-31 Tue  end of month +2
+                2026-03-31 Tue  roll preceding: a business day, stays
+                payment is 89 days after received, and the claim allows at most 60 days after
+```
+
+日本語の版（`eom_close_two_months_later.ja.cal`）：
+
 ```
  1  dates 月末締め翌々月末払い(eom_two_months) v1
  2  description "月末締め翌々月末払い。支払日が休みなら前の営業日。条件「受領から60日以内」をわざと破る例で、この条件は例のために文字どおりに書いたもの。法令の読み方を示すものではない"
@@ -680,8 +794,8 @@ exit code は 0（エラーなし。警告はあってよい）、1（エラー�
 検査すると、次のようになる（B の段階の実際の出力）。
 
 ```
-$ koyomi check examples/支払_月末締め翌々月末払い.cal
-error[E301]: examples/支払_月末締め翌々月末払い.cal:16:3: The claim 受領から60日以内 fails for 648 of the 669 days of 受領日
+$ koyomi check examples/eom_close_two_months_later.ja.cal
+error[E301]: examples/eom_close_two_months_later.ja.cal:16:3: The claim 受領から60日以内 fails for 648 of the 669 days of 受領日
     16 |   受領から60日以内 : 支払日 <= 受領日 + 60 days
   = It fails on 2026-01-01..2026-01-29 (29 days), 2026-02-01..2026-03-29 (57 days), 2026-04-01..2026-08-30 (152 days), 2026-09-01..2026-10-28 (58 days), 2026-11-01..2026-11-29 (29 days), 2026-12-01..2026-12-27 (27 days), and 4 more runs; --format json lists them all
   = The farthest is 受領日 2026-05-01, where 支払日 2026-07-31 is 91 days after 受領日
@@ -694,8 +808,8 @@ error[E301]: examples/支払_月末締め翌々月末払い.cal:16:3: The claim 
 ```
 
 ```
-$ koyomi check examples/支払_月末締め翌々月末払い.cal --lang ja
-エラー[E301]: examples/支払_月末締め翌々月末払い.cal:16:3: 条件「受領から60日以内」が、受領日 669 日のうち 648 日で成り立ちません
+$ koyomi check examples/eom_close_two_months_later.ja.cal --lang ja
+エラー[E301]: examples/eom_close_two_months_later.ja.cal:16:3: 条件「受領から60日以内」が、受領日 669 日のうち 648 日で成り立ちません
     16 |   受領から60日以内 : 支払日 <= 受領日 + 60 days
   = 成り立たない日: 2026-01-01〜2026-01-29（29 日）、2026-02-01〜2026-03-29（57 日）、2026-04-01〜2026-08-30（152 日）、2026-09-01〜2026-10-28（58 日）、2026-11-01〜2026-11-29（29 日）、2026-12-01〜2026-12-27（27 日）、ほか 4 か所。全部は --format json で出ます
   = いちばん外れるのは受領日 2026-05-01 のときで、支払日 2026-07-31 は受領日の 91 日後
@@ -705,6 +819,21 @@ $ koyomi check examples/支払_月末締め翌々月末払い.cal --lang ja
       支払日  2026-03-31（火）  2 か月後の月末
               2026-03-31（火）  休みなら前営業日: 営業日なので動かない
               支払日は受領日の 89 日後で、条件は 60 日後まで
+```
+
+England and Wales の例の受領日の範囲を、GOV.UK の表の終わり 2028-12-31 まで広げると（`tests/mutants/E203_past_the_table.cal`）、次になる。
+
+```
+$ koyomi check tests/mutants/E203_past_the_table.cal
+error[E203]: tests/mutants/E203_past_the_table.cal:6:3: The computation for received 2028-11-21 asks whether 2029-01-10 is a business day, and the table bank_holidays knows only 2019-01-01..2028-12-31
+     6 |   received : date  range >=2026-01-01 <=2028-12-31
+  = The same happens for 41 days of received: 2028-11-21..2028-12-31
+  = To fix it: make the range `range >=2026-01-01 <=2028-11-20`, or take the copy again once a newer table is out (koyomi source fetch)
+  the first input it happens on:
+      received  2028-11-21 Tue
+      closing   2028-12-20 Wed  close day 20
+      payment   2029-01-10 Wed  day 10 of month +1
+                                roll preceding: whether 2029-01-10 is a business day is outside what the calendar knows
 ```
 
 1.1 の例の受領日の範囲を 2027-12-31 まで広げると（`tests/mutants/E203_表の外.cal`）、次になる。
@@ -722,7 +851,32 @@ $ koyomi check tests/mutants/E203_表の外.cal --lang ja
                                 休みなら前営業日: 2028-01-10 が営業日かは、表の外なので分からない
 ```
 
-無い日の扱いを書き忘れた次のファイルでは、
+無い日の扱いを書き忘れた英語のファイル（`tests/mutants/E201_no_way_for_a_missing_day.cal`）
+
+```
+1  dates month_later_example v1
+2
+3  inputs
+4    received : date  range >=2026-01-01 <=2026-12-31
+5
+6  date month_later = received
+7    + 1 month
+```
+
+では、次になる。
+
+```
+$ koyomi check tests/mutants/E201_no_way_for_a_missing_day.cal
+error[E201]: tests/mutants/E201_no_way_for_a_missing_day.cal:7:3: `+ 1 month` can land on a day the month does not have, and the line does not say what to do then
+     7 |   + 1 month
+  = For received 2026-01-29 it would be 2026-02-29
+  = To fix it, write one of: `+ 1 month else end_of_month` (giving 2026-02-28), `+ 1 month else start_of_next_month` (giving 2026-03-01), `+ 1 month else reject` (the check makes sure it never happens in the range)
+  the input that gets there:
+      received     2026-01-29 Thu
+      month_later                  + 1 month: 2026-02-29 does not exist
+```
+
+日本語の名前で書いた同じファイルでは、
 
 ```
 1  dates 一か月後の例(month_later_example) v1
@@ -767,7 +921,22 @@ $ koyomi check tests/mutants/E201_無い日の扱いが無い.cal --lang ja
 `eval` の例（1.1 のファイル。B の段階の実際の出力）：
 
 ```
-$ koyomi eval examples/支払_20日締め翌月10日払い.cal 受領日=2026-04-01 --lang ja
+$ koyomi eval examples/payment_20th_close_next_10th.cal received=2026-04-01
+received  2026-04-01 Wed
+closing   2026-04-20 Mon  close day 20: closes the period 2026-03-21..2026-04-20
+payment   2026-05-10 Sun  day 10 of month +1
+          2026-05-08 Fri  roll preceding: 2026-05-10 (Sunday) and 2026-05-09 (Saturday) are closed
+          time 2026-05-08T09:00:00+09:00 (2026-05-08T00:00:00Z in UTC)
+
+claim paid_on_a_business_day: holds
+claim within_60_days_of_receipt: holds (payment is 37 days after received, and the claim allows at most 60 days after)
+claim later_receipt_later_payment: holds (for the day before, 2026-03-31, payment is 2026-05-08)
+```
+
+日本語の版を `--lang ja` で：
+
+```
+$ koyomi eval examples/payment_20th_close_next_10th.ja.cal 受領日=2026-04-01 --lang ja
 受領日  2026-04-01（水）
 締め日  2026-04-20（月）  20 日締め: 2026-03-21〜2026-04-20 の期間の締め日
 支払日  2026-05-10（日）  翌月 10 日
@@ -782,6 +951,11 @@ $ koyomi eval examples/支払_20日締め翌月10日払い.cal 受領日=2026-04
 計算の段は A の段階のスケッチと同じになった。条件の行は B の段階で足した。`is monotonic` は隣り合う二日を比べる条件なので、`eval` はその前の日も計算して比べる。範囲の外の入力は計算せず、生成したコードの入口のガードと同じく断る（exit 1）。
 
 カレンダーには日付を一つ渡す。
+
+```
+$ koyomi eval examples/calendars/england_and_wales.cal 2026-05-04
+2026-05-04 Mon  closed: Early May bank holiday
+```
 
 ```
 $ koyomi eval examples/calendars/東京の営業日.cal 2026-05-04 --lang ja
@@ -808,11 +982,20 @@ $ koyomi eval examples/calendars/東京の営業日.cal 2026-05-04 --lang ja
 
 書き出す先は `--out`（既定は `generated`）。calendar のファイルからは `is_open` だけの生成物を、dates のファイルからは日付ごとの関数と、カレンダーを読んでいれば `is_open` を書く。中身が変わらないファイルは書き直さない。`--check` は書かずに比べ、違うファイルと無いファイルを挙げて exit 1 にする（CI 用）。二つの `.cal` が同じ別名で同じ場所に書こうとしたら、何も書かずに exit 2 で止める。
 
-頭には、どの `.cal` のどの版から作ったかを書く。`koyomi gen examples/支払_20日締め翌月10日払い.cal` の TypeScript の頭（実際の出力）：
+頭には、どの `.cal` のどの版から作ったかを書く。`koyomi gen examples/payment_20th_close_next_10th.cal` の TypeScript の頭（実際の出力）：
 
 ```ts
 // Code generated by koyomi 0.1.0. DO NOT EDIT.
-// Source: 支払_20日締め翌月10日払い.cal (dates 支払条件 v1, sha256:75482b2e796019d0)
+// Source: payment_20th_close_next_10th.cal (dates payment_20th_close_next_10th v1, sha256:9973542043dbee17)
+// Calendar: calendars/tokyo_business_days.cal (calendar tokyo_business_days v1, sha256:37af228cf6ba7b95)
+// Cites: national_holidays = file calendars/data/syukujitsu.csv sha256:cec37a743c96995c (https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv), covers 1955-01-01..2027-12-31
+```
+
+日本語の版 `koyomi gen examples/payment_20th_close_next_10th.ja.cal` では次のとおり。
+
+```ts
+// Code generated by koyomi 0.1.0. DO NOT EDIT.
+// Source: payment_20th_close_next_10th.ja.cal (dates 支払条件 v1, sha256:75482b2e796019d0)
 // Calendar: calendars/東京の営業日.cal (calendar 東京の営業日 v1, sha256:d7b6134e23a8cb9f)
 // Cites: 祝日 = file calendars/data/syukujitsu.csv sha256:cec37a743c96995c (https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv), covers 1955-01-01..2027-12-31
 ```
@@ -825,7 +1008,28 @@ $ koyomi eval examples/calendars/東京の営業日.cal 2026-05-04 --lang ja
 
 公開する関数は、日付ごとに一つ（名前は別名。Go はパスカルケース）と、`at` のある日付の時刻の関数（`<別名>_at`）と、カレンダーを読んでいれば `is_open` である。名前と署名は `src/naming.rs` が決めていて、`koyomi api` が出すものと一字一句同じになる（生成物の中に api の署名がそのままあることを `tests/api.rs` が確かめる）。日付の関数は、始まりの日付から自分までの操作を順に並べ、ほかの日付の関数を呼ばない。`<別名>_at` だけは、自分の日付の関数を呼んでから時刻にする。関数の中の変数は `day` 一つで、これは koyomi のキーワードなので、どの別名ともぶつからない。
 
-同じファイルの TypeScript から、支払日の二つの関数（実際の出力）：
+同じファイルの TypeScript から、payment の二つの関数（実際の出力）：
+
+```ts
+/**
+ * Gives payment.
+ * It takes received 2026-01-01..2027-11-20, the range koyomi check checked every input of; outside it, the error is a KoyomiError of kind range.
+ */
+export function payment(received: string): string {
+  let day = _inputDate(received, "received", 20454, 21142); // range >=2026-01-01 <=2027-11-20
+  day = _closeDay(day, 20, "none"); // close day 20  (closing)
+  day = _dayOfMonth(day, 10, 1, "none"); // day 10 of month +1
+  day = _roll(day, "preceding"); // roll preceding
+  return _formatDate(day);
+}
+
+/** Gives the time of payment's day (at 09:00, offset +09:00) in RFC 3339, in UTC, ending in Z. */
+export function payment_at(received: string): string {
+  return _at(payment(received), 540, 540);
+}
+```
+
+日本語の版の、支払日の二つの関数：
 
 ```ts
 /**
@@ -895,7 +1099,13 @@ export function payment_at(received: string): string {
 
 ### 6.3 vectors
 
-`koyomi vectors <file.cal>` は、範囲のすべての入力について、一行に一つの JSON を出す。キーは名前（rulec の vectors と同じ）。`koyomi vectors examples/支払_20日締め翌月10日払い.cal` の 91 行目（実際の出力）：
+`koyomi vectors <file.cal>` は、範囲のすべての入力について、一行に一つの JSON を出す。キーは名前（rulec の vectors と同じ）。`koyomi vectors examples/payment_20th_close_next_10th.cal` の 91 行目（実際の出力）：
+
+```jsonl
+{"in":{"received":"2026-04-01"},"out":{"closing":"2026-04-20","payment":"2026-05-08","payment.at":"2026-05-08T00:00:00Z"}}
+```
+
+日本語の版 `koyomi vectors examples/payment_20th_close_next_10th.ja.cal` の 91 行目：
 
 ```jsonl
 {"in":{"受領日":"2026-04-01"},"out":{"締め日":"2026-04-20","支払日":"2026-05-08","支払日.at":"2026-05-08T00:00:00Z"}}
@@ -906,22 +1116,27 @@ export function payment_at(received: string): string {
 範囲の行のあとに、範囲のすぐ外の入力を足し、そこでは `"error":"range"` を期待する。日付の範囲の最初の日の前日と最後の日の翌日（整数の入力は最小の値）、続いて整数の入力ごとに、最小の値の一つ下と最大の値の一つ上（日付は範囲の最初の日）である。どの日付の関数も受け取らない入力（条件だけが使う整数）は、生成したコードにガードが無いので、外の行を出さない。0001-01-01 の前日のように日付にならない値も出さない。
 
 ```jsonl
+{"in":{"received":"2025-12-31"},"error":"range"}
+{"in":{"received":"2027-11-21"},"error":"range"}
+```
+
+```jsonl
 {"in":{"受領日":"2025-12-31"},"error":"range"}
 {"in":{"受領日":"2027-11-21"},"error":"range"}
 ```
 
 calendar のファイルの vectors は、データの範囲のすべての日について `{"in":{"date":"…"},"out":{"open":true}}` を出し、データの範囲の前日と翌日で `"error":"data"` を期待する。表の無いカレンダーはどの日のことも分かるので、1900〜2100 年（73,414 日）に限って出し、外の行は無い。
 
-行の数（PLAN C.8 の数と同じ）は、`支払_20日締め翌月10日払い` 691、`民法の期間` 4,384、`締め日と支払日を受け取る` 871,604、`net30` 1,066、`東京の営業日` と `民法142条の休日` 26,665、`england_and_wales` 3,655 である（`tests/vectors.rs`）。検査を通らないファイルには出さない（診断を出して exit 1。`gen` と同じ）。
+行の数（PLAN C.8 の数と同じ）は、`england_and_wales` 3,655、`net30` 1,066、`close_20th_pay_10th` 1,057、`close_and_pay_on_given_days` 872,968、`period_of_months` 4,384、日本の暦の例は英語の版と日本語の版で同じで、`payment_20th_close_next_10th` 691、`civil_code_period_end` 4,384、`closing_and_payment_days_as_inputs` 871,604、`tokyo_business_days`（`東京の営業日`）と `civil_code_142_days`（`民法142条の休日`）26,665 である（`tests/vectors.rs`）。検査を通らないファイルには出さない（診断を出して exit 1。`gen` と同じ）。
 
 ### 6.4 突き合わせ
 
 **決定**：生成したコードを、範囲のすべての入力で参照インタプリタと突き合わせる（P1）。
 
 - ランナーは vectors の行を標準入力から読み、一行ごとに生成した関数を呼んで、結果を一行に書く。日付の値と時刻を `out` と同じ順に空白で区切って並べ（calendar なら `true` か `false`）、例外が出たら、最初に出た例外の種類で `error <種類>` と書く。
-- `tests/targets.rs` は、出力先ごとに、`examples/` の検査を通るファイル全部（calendar の三つと dates の五つ）と `tests/fixtures/` の七つのファイルを生成し、その出力先のツールで生成物を確かめてから（6.2 の表の右の列）、ランナーに vectors の全部の行を流して一行ずつ比べる。vectors はテストの中で作りながらパイプで流し、ディスクには書かない。合わない行があれば、最初の五行の入力と、参照インタプリタの結果と、生成したコードの結果を出して落ちる。合えば `compared <出力先> <ファイル>: <行数> lines` を一行出す。ツールが無ければ `SKIP: <理由>` の行を出して通す。
-- `--lang ja` の生成物も、同じツールで確かめる（型の検査、gofmt と go vet、二つのエディションの rustc、PostgreSQL への読み込み）。日本語の生成物が英語と違うのはコメントとエラーのメッセージだけだが、メッセージの文字列がその言語の構文を壊していないことと、エラーのときに実際に組み立てられることを確かめるため、`支払_20日締め翌月10日払い.cal`（範囲の外の行で `range`）と `東京の営業日.cal`（データの範囲の外の行で `data`）は日本語の生成物でも全部の行を突き合わせる。
-- `tests/fixtures/` のファイルは、表の無いカレンダー `calendars/休みの書き方を全部使う.cal`（休みの曜日、年をまたぐ毎年の休み、一日だけの毎年の休み、2 月 29 日の毎年の休み、特定の日、例外の営業日を全部使い、オフセットは +05:45）と、それを使う、または使わない六つの dates のファイルである。月の足し算と引き算をそれぞれ月数 0〜24 で（`helpers_月を足す`、`helpers_月を引く`、各 1,835,350 通り）、k か月後の N 日・N 日締め・月初と月末・年の足し引きを日 27〜31 で（`helpers_月の日と締め`、367,070 通り）、営業日の数え方・四つの慣行・`if closed`・`at 09:00` と `at end of day` を日数 0〜3 で（`helpers_営業日`、293,656 通り）、どれも 1900〜2100 年のすべての日に使う。`else reject` は 2 月 29 日を含む範囲では検査が止めるので、無い日に当たらない 2001-03-01〜2003-12-31 で使う（`helpers_断る`）。`date` を一つも宣言しないファイル（`helpers_日付が一つも無い`）も検査を通るので、生成したコードが動くことを確かめる。PLAN C.8 は helpers を Python のランナーで一つ 60 秒以内に収まる大きさに分けることにしていたが、いちばん大きいファイルでも 11 秒ほどだった。
+- `tests/targets.rs` は、出力先ごとに、`examples/` の検査を通るファイル全部（英語を先にした段階から、calendar の五つと dates の十。England and Wales の例、日本の暦の例の英語の版と日本語の版）と `tests/fixtures/` の十四のファイル（英語の七つと、同じものを日本語で書いた七つ）を生成し、その出力先のツールで生成物を確かめてから（6.2 の表の右の列）、ランナーに vectors の全部の行を流して一行ずつ比べる。vectors はテストの中で作りながらパイプで流し、ディスクには書かない。合わない行があれば、最初の五行の入力と、参照インタプリタの結果と、生成したコードの結果を出して落ちる。合えば `compared <出力先> <ファイル>: <行数> lines` を一行出す。ツールが無ければ `SKIP: <理由>` の行を出して通す。
+- `--lang ja` の生成物も、同じツールで確かめる（型の検査、gofmt と go vet、二つのエディションの rustc、PostgreSQL への読み込み）。日本語の生成物が英語と違うのはコメントとエラーのメッセージだけだが、メッセージの文字列がその言語の構文を壊していないことと、エラーのときに実際に組み立てられることを確かめるため、`payment_20th_close_next_10th.ja.cal` と英語の版 `payment_20th_close_next_10th.cal`（範囲の外の行で `range`）、`東京の営業日.cal` と `england_and_wales.cal`（データの範囲の外の行で `data`）は、日本語の生成物でも全部の行を突き合わせる。
+- `tests/fixtures/` のファイルは、表の無いカレンダー `calendars/休みの書き方を全部使う.cal`（休みの曜日、年をまたぐ毎年の休み、一日だけの毎年の休み、2 月 29 日の毎年の休み、特定の日、例外の営業日を全部使い、オフセットは +05:45）と、それを使う、または使わない六つの dates のファイルである。月の足し算と引き算をそれぞれ月数 0〜24 で（`helpers_月を足す`、`helpers_月を引く`、各 1,835,350 通り）、k か月後の N 日・N 日締め・月初と月末・年の足し引きを日 27〜31 で（`helpers_月の日と締め`、367,070 通り）、営業日の数え方・四つの慣行・`if closed`・`at 09:00` と `at end of day` を日数 0〜3 で（`helpers_営業日`、293,656 通り）、どれも 1900〜2100 年のすべての日に使う（英語を先にした段階で、同じものを英語の名前で書いた `calendars/every_way_to_close.cal`、`helpers_add_months`、`helpers_subtract_months`、`helpers_days_of_months`、`helpers_business_days`、`helpers_reject`、`helpers_no_dates` を足した。vectors は名前のほかは一行も違わない）。`else reject` は 2 月 29 日を含む範囲では検査が止めるので、無い日に当たらない 2001-03-01〜2003-12-31 で使う（`helpers_断る`）。`date` を一つも宣言しないファイル（`helpers_日付が一つも無い`）も検査を通るので、生成したコードが動くことを確かめる。PLAN C.8 は helpers を Python のランナーで一つ 60 秒以内に収まる大きさに分けることにしていたが、いちばん大きいファイルでも 11 秒ほどだった。
 
 D の段階の終わりに、この機械（macOS、Apple シリコン、14 コア）で `cargo test -- --nocapture` を走らせた結果（C の段階の終わりから、英語の版の例 `payment_20th_close_next_10th.cal` の 691 行が増えた）：
 
@@ -935,7 +1150,19 @@ D の段階の終わりに、この機械（macOS、Apple シリコン、14 コ�
 
 五つの出力先のテストは並んで走り、一つの出力先の中ではランナーを四つずつ同時に走らせる（SQL は一つのクラスタに四つの psql）。時間は、その出力先の生成物を確かめ終えてから、全部のファイルを突き合わせ終えるまでで、ほかの出力先と同時に走っているときのものである。`cargo test` 全体は 99 のテストで 40 秒だった（C の段階の終わりは 82 のテストで 41 秒。走らせるたびに数秒は変わる）。どの出力先でも vectors の全部の行を突き合わせ、行を間引いていない。
 
-テストが違いを見つけることは、手で一度確かめた。TypeScript の生成器の `_monthLen` で 11 月を 31 日にすると、`締め日と支払日を受け取る.cal` で 4,637 行、`helpers_月の日と締め.cal` で 66,531 行が違うと言って落ちた。
+英語を先にした段階の終わりに、同じ機械で `cargo test -p koyomi -p chobo -- --nocapture` を走らせた結果（突き合わせるファイルが 29 になり、行は倍を超えた）：
+
+| 出力先 | 突き合わせた行 | 突き合わせの時間 |
+|---|---|---|
+| TypeScript | 11,554,942 | 13.7 秒 |
+| Python | 11,554,942 | 28.8 秒 |
+| Go | 11,554,942 | 14.5 秒 |
+| Rust | 11,554,942 | 14.9 秒 |
+| SQL | 11,554,942 | 46.9 秒 |
+
+koyomi のテストは 156 で、テストのバイナリの時間を足して 77 秒だった。
+
+テストが違いを見つけることは、手で一度確かめた。TypeScript の生成器の `_monthLen` で 11 月を 31 日にすると、`closing_and_payment_days_as_inputs.ja.cal` で 4,637 行、`helpers_月の日と締め.cal` で 66,531 行が違うと言って落ちた。
 
 どれも、範囲のすべての入力で一致することを確かめるテストであって、一致の証明ではない（3.4）。
 
@@ -958,7 +1185,7 @@ dates のファイルのページは、次の順に並ぶ。
 
 calendar のファイルのページは、見出し、休みの決まり、出典とデータの範囲、営業日の数（表の月を含む年のうち、カレンダーが一年まるごと知っている年）、表の月でいちばん長い連休、月の表である。東京の営業日の 2026 年は 240 日が営業日で、2026-01〜2027-12 でいちばん長い連休は 2026-12-29〜2027-01-03 の 6 日になる（`tests/doc.rs`）。
 
-D の段階の実際の出力から、`koyomi doc examples/支払_月末締め翌々月末払い.cal --lang ja` の一部を引く。
+D の段階の実際の出力から、`koyomi doc examples/eom_close_two_months_later.ja.cal --lang ja` の一部を引く。
 
 ```markdown
 > [!WARNING]
@@ -1030,7 +1257,7 @@ D の段階の実際の出力から、`koyomi doc examples/支払_月末締め�
 
 **理由**：承認する人が見たいのは、決まりが効く日である。月末や祝日の前後は、人が手で確かめるときにまず試す日で、koyomi は範囲を全部計算しているので、その中から最初のものを選べば足りる。日数のいちばん多い入力と少ない入力を結果の日付に限ったのは、締め日のような途中の日付まで並べると、同じ入力が同じ理由で何度も出て表が読めなくなったからである（A の段階の計画では日付ごとにしていた）。
 
-**ほかの扱いに替えたときの数**：`else` のある操作ごとに、範囲のすべての入力で、その操作だけをほかの扱いに替えて日付を計算し直し、元の日付と比べる。無い日に当たった入力だけを計算し直せば足りるように見えるが、`close day` は違う。`close day 31 else start_of_next_month` で 2026-05-01 を締めると、4 月の締め日が 5 月 1 日に送られるのでその日に締まり（無い日に当たる）、`else end_of_month` なら 4 月の締め日は 4 月 30 日で、5 月 1 日は 5 月 31 日に締まる（無い日に当たらない）。扱いを替えると、無い日に当たるかどうか自体が変わる。だから全部の入力を計算し直す。`締め日と支払日を受け取る.cal` の 871,596 通りでも、ページ全体が 0.3 秒ほどで出る（release のビルド）。
+**ほかの扱いに替えたときの数**：`else` のある操作ごとに、範囲のすべての入力で、その操作だけをほかの扱いに替えて日付を計算し直し、元の日付と比べる。無い日に当たった入力だけを計算し直せば足りるように見えるが、`close day` は違う。`close day 31 else start_of_next_month` で 2026-05-01 を締めると、4 月の締め日が 5 月 1 日に送られるのでその日に締まり（無い日に当たる）、`else end_of_month` なら 4 月の締め日は 4 月 30 日で、5 月 1 日は 5 月 31 日に締まる（無い日に当たらない）。扱いを替えると、無い日に当たるかどうか自体が変わる。だから全部の入力を計算し直す。`closing_and_payment_days_as_inputs.ja.cal` の 871,596 通りでも、ページ全体が 0.3 秒ほどで出る（release のビルド）。
 
 ### 7.4 検査を通らないファイル
 
@@ -1137,7 +1364,7 @@ D の段階の実際の出力から、`koyomi doc examples/支払_月末締め�
 }
 ```
 
-上は B の段階の実際の出力を、ハッシュと、TypeScript 以外の出力先と、締め日の関数を省いて載せたもの。出力先の項の名前と署名は `src/naming.rs` が決め、C の段階の生成器も同じ関数を使う（署名が生成物の中にそのままあることを `tests/api.rs` が確かめる。6.1）。`is_open` の引数は `day` にした（Python の `date` 型の名前とぶつからないように）。`wire.errors` は、生成したコードのエラーの種類（入力が範囲の外、データの範囲の外、無い日、0001〜9999 の外）。
+上は B の段階の実際の出力を、ハッシュと、TypeScript 以外の出力先と、締め日の関数を省いて載せたもの（日本語の版。英語の版 `payment_20th_close_next_10th.cal` の api は、名前が英語で、別名が `payment_20th_close_next_10th` になるほかは同じ形）。出力先の項の名前と署名は `src/naming.rs` が決め、C の段階の生成器も同じ関数を使う（署名が生成物の中にそのままあることを `tests/api.rs` が確かめる。6.1）。`is_open` の引数は `day` にした（Python の `date` 型の名前とぶつからないように）。`wire.errors` は、生成したコードのエラーの種類（入力が範囲の外、データの範囲の外、無い日、0001〜9999 の外）。
 
 法令の出典は、dates のファイルの `sources` に `{"name": "民法", "kind": "law", "db": "egov", "id": "129AC0000000089", "asof": "2026-10-01", "revision": "129AC0000000089_20260624_508AC0000000045", "pins": [{"fragment": "第140条", "sha256": "e880059021fbb67d"}, …]}` の形で出る（rulec の `api` の `sources` と同じ形に、写しの版を足したもの）。
 
@@ -1153,9 +1380,13 @@ calendar のファイルの `api` は、`calendar` の項と出力先ごとの `
 - `koyomi source pin <file.cal>`：写しの SHA-256 の先頭 16 桁を、`source` の行の `sha256:`（法令なら条の固定の行）に書く。変えるのはその 16 桁だけで、ほかの文字は、行の終わりの CR LF も含めて一字も変えない。固定の無い `source` の行には、コメントの前に ` sha256:…` を足す。引いているのに固定の行が無い条には、その出典の最後の固定の行のあとに一行を足す。表なら、行の数と `covers` も言う。
 
 ```
+$ koyomi source pin examples/calendars/england_and_wales.cal
+bank_holidays: already pinned at sha256:538b3482c28b85ec; the table has 83 rows, covers listed years = 2019-01-01..2028-12-31
+$ koyomi source pin examples/civil_code_period_end.cal
+civil_code: all 4 articles already pinned
 $ koyomi source pin examples/calendars/東京の営業日.cal
 祝日: already pinned at sha256:cec37a743c96995c; the table has 1,067 rows, covers 1955-01-01..2027-12-31
-$ koyomi source pin examples/民法の期間.cal --lang ja
+$ koyomi source pin examples/civil_code_period_end.ja.cal --lang ja
 民法: 4 条とも固定済みです
 ```
 
@@ -1177,7 +1408,7 @@ $ koyomi source outdated examples/calendars/東京の営業日.cal
 祝日: unchanged (https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv is sha256:cec37a743c96995c, as pinned)
 $ koyomi source outdated examples/calendars/england_and_wales.cal
 bank_holidays: unchanged (https://www.gov.uk/bank-holidays.json is sha256:538b3482c28b85ec, as pinned)
-$ koyomi source outdated examples/民法の期間.cal
+$ koyomi source outdated examples/civil_code_period_end.ja.cal
 民法: the revision in force from 2027-06-23 (129AC0000000089_20270623_508AC0000000045) leaves the cited articles as they are
 民法: the revision in force from 2027-12-05 (129AC0000000089_20271205_507AC0000000057) leaves the cited articles as they are
 民法: the revision in force from 2028-06-13 (129AC0000000089_20280613_505AC0000000053) leaves the cited articles as they are
@@ -1193,44 +1424,64 @@ exit code は rulec と同じにした。`fetch` と `pin` は済めば 0、`out
 
 ## 10. 例
 
-`examples/` に置いた。どれも公開されている出典（内閣府の祝日の表、GOV.UK の bank holidays、e-Gov の民法）だけを使う。数は A の段階の試作で計算し、B の段階の参照インタプリタが同じ数を出すことを `tests/check.rs` が確かめている（一つも食い違わなかった）。
+`examples/` に置いた。どれも公開されている出典（GOV.UK の bank holidays、内閣府の祝日の表、e-Gov の民法）だけを使う。英語の例を先に置く。England and Wales のカレンダーで書いた英語の例と、日本の暦で書いた例の英語の版と日本語の版である。日本の暦の例の数は A の段階の試作で、England and Wales の例の数は英語を先にした段階の試作（Python の `datetime` と GOV.UK の表で書いた使い捨てのもの）で計算し、参照インタプリタが同じ数を出すことを `tests/check.rs` が確かめている（どちらも一つも食い違わなかった）。
 
 カレンダー（`examples/calendars/`）：
 
-- `東京の営業日.cal`：土日、内閣府の表、年末年始（12-29..01-03）。データの範囲 1955-01-01〜2027-12-31。2026 年の営業日は 240 日。
-- `民法142条の休日.cal`：142 条が名指しする日（日曜日と、国民の祝日に関する法律に規定する休日）だけを休みにしたカレンダー。「その他の休日」に何が入るかは、この例では決めない（description にそう書く）。
-- `england_and_wales.cal`：土日と GOV.UK の表（`england-and-wales`、`covers listed years`、2019〜2028 年）。オフセットは書かない（夏時間があるため。1.9）。
-- `data/syukujitsu.csv`、`data/bank-holidays.json`：配られているバイト列のままの写し。
+- `england_and_wales.cal`：土日と GOV.UK の表（`england-and-wales`、`covers listed years`、2019〜2028 年）。オフセットは書かない（夏時間があるため。1.9）。2026 年の営業日は 253 日。
+- `tokyo_business_days.cal` と `東京の営業日.cal`：土日、内閣府の表、年末年始（12-29..01-03）。データの範囲 1955-01-01〜2027-12-31。2026 年の営業日は 240 日。前者が英語の版、後者が日本語の版で、同じ表を読み、どの日も同じ結果になる。
+- `civil_code_142_days.cal` と `民法142条の休日.cal`：142 条が名指しする日（日曜日と、国民の祝日に関する法律に規定する休日）だけを休みにしたカレンダー。「その他の休日」に何が入るかは、この例では決めない（description にそう書く）。前者が英語の版。
+- `data/bank-holidays.json`、`data/syukujitsu.csv`：配られているバイト列のままの写し。
 
 法令の写し：`examples/sources/law/129AC0000000089@2026-10-01/`（民法 140〜143 条の XML と `revision.txt`。1.5）。
 
-期日の決まり：
+England and Wales の例（英語）：
 
 | ファイル | 書いてあること | 検査の結果 |
 |---|---|---|
-| `支払_20日締め翌月10日払い.cal` | 1.1 の例。20 日締め、翌月 10 日、休みなら前営業日、09:00。条件は営業日・受領から 60 日以内・単調 | 受領日 2026-01-01〜2027-11-20 の 689 日すべてで成り立つ。いちばん長いのは 51 日 |
-| `支払_月末締め翌々月末払い.cal` | わざと破る例。月末締め、2 か月後の月末、休みなら前営業日。条件は受領から 60 日以内 | 受領日 2026-01-01〜2027-10-31 の 669 日のうち 648 日で成り立たない（4.3）。いちばん外れるのは受領日 2026-05-01 の 91 日。2026-12-31（木）の支払は年末年始で 2026-12-28（月）に動く |
-| `民法の期間.cal` | 140 条・143 条を文字どおりに書き（1.7）、142 条を文字どおり「休みならその翌日」（`if closed + 1 day`）で書く。どの日付も `@民法 第140条` などで条文を引く（1.5 の法令の出典）。入力は起点と月数（1〜12）。条件は単調、満了日が起点より後 | 起点 2026 年の 4,380 通りのすべてで成り立つ。結果は 2027-12-31 までで、データの範囲に収まる |
-| `民法の期間_読み方の比較.cal` | わざと破る例。142 条の二つの読み方（`if closed + 1 day` と `roll following`）が等しいという条件と、143 条と月数を足して月末に寄せる書き方が等しいという条件 | 前者は 4,380 通りのうち 121 通り、後者は 39 通りで成り立たない（1.7、1.8） |
-| `締め日と支払日を受け取る.cal` | 締め日（1〜31）、支払の月（1〜2）、支払の日（10〜31）を整数で受け取る。締め日を規則から受け取る形。条件は営業日・締めのあとに払う・単調 | 受領日 2026-01-01〜2027-10-01 と三つの整数の 871,596 通りのすべてで成り立つ |
-| `net30.cal` | 英語の例。請求日の 30 日後、休みなら翌営業日（England and Wales）。条件は営業日・30 日以上後・単調 | 請求日 2026-01-01〜2028-11-29 の 1,064 日すべてで成り立つ。いちばん長いのは 34 日で、30 日後が Good Friday かクリスマスの前後に当たる請求日（六日）である |
-| `payment_20th_close_next_10th.cal` | `支払_20日締め翌月10日払い.cal` の英語の版。日付の名前を日本語の版の別名と同じにしたので、生成した関数の名前も同じになる | 日本語の版と同じく、689 日すべてで成り立つ。vectors は、名前を読み替えれば一行も違わない（`tests/vectors.rs`） |
-| `eom_close_two_months_later.cal` | `支払_月末締め翌々月末払い.cal` の英語の版 | わざと破る例。成り立たない入力は日本語の版と同じ 10 か所の 648 日（`tests/vectors.rs`） |
+| `close_20th_pay_10th.cal` | 20 日締め、翌月 10 日、休みなら前営業日。条件は営業日・受領から 60 日以内・単調 | 受領日 2026-01-01〜2028-11-20 の 1,055 日すべてで成り立つ。いちばん長いのは 51 日（受領日 2026-07-21、2026-12-21、2027-07-21、2027-12-21）、いちばん短いのは 18 日。休みなら前営業日で動く支払日は 9 日 |
+| `close_eom_pay_two_months_on.cal` | わざと破る例。月末締め、2 か月後の月末、休みなら前営業日。条件は受領から 60 日以内 | 受領日 2026-01-01〜2028-10-31 の 1,035 日のうち 1,008 日で成り立たない（15 か所）。いちばん外れるのは受領日 2026-05-01 の 91 日。2027-05-31（月、Spring bank holiday）の支払は 2027-05-28（金）に動く |
+| `net30.cal` | 請求日の 30 日後、休みなら翌営業日。条件は営業日・30 日以上後・単調 | 請求日 2026-01-01〜2028-11-29 の 1,064 日すべてで成り立つ。いちばん長いのは 34 日で、30 日後が Good Friday かクリスマスの前後に当たる請求日（六日）である |
+| `close_and_pay_on_given_days.cal` | 締め日（1〜31）、支払の月（1〜2）、支払の日（10〜31）を整数で受け取る。条件は営業日・締めのあとに払う・単調 | 受領日 2027-01-01〜2028-10-01 と三つの整数の 872,960 通りのすべてで成り立つ（受領日は 2027 年からにした。日本の暦の版と同じくらいの数にして、生成したコードと突き合わせる時間を抑えるため） |
+| `period_of_months.cal` | 月で数える期間。初日を数えず、最後の月の応当する日の前日に満了し（無ければ月末）、休みに当たれば翌日に動かす。この例の読み方として書いたもので、法令の読み方ではない | 起点 2026 年の 4,380 通りのすべてで成り立つ。結果は 2027-12-31 までで、データの範囲に収まる |
+| `period_of_months_two_readings.cal` | わざと破る例。休みに当たった満了日を動かす先の二つの読み方（`if closed + 1 day` と `roll following`）が等しいという条件と、応当する日の前日と月数を足して月末に寄せる書き方が等しいという条件 | 前者は 4,380 通りのうち 709 通り（土曜に当たる満了日と、Good Friday から Easter Monday まで）、後者は 39 通りで成り立たない |
 
 `net30.cal` の請求日の範囲の終わり 2028-11-29 も、表（2028 年まで）から決まる。2028-11-30 の 30 日後は 2028-12-30（土）で、翌営業日を探して 2029-01-01 を問うと表の外になる。同じ例に `roll modified following` の日付を足すと、following と 21 日で結果が分かれる（月末をまたぐ日）。
 
-「受領から60日以内」は、例の条件として文字どおりに書いたもので、法令の読み方を示すものではない。民法の例も、条文を文字どおりに書いたもので、条文の読み方を一つに決めるものではない。二つの読み方を並べた例は、読み方が分かれる日を見せるためにある。どちらの例の description にも、そう書く。
+日本の暦の例（英語の版と日本語の版）：
 
-わざと破る例は英語の版を含めて三つあり、`koyomi check examples/` は exit 1 で終わる。README にそう書き、`tests/check.rs` がその三つだけが落ちることを確かめる。三つの診断は README と承認する人のページに載せ、`tests/docs.rs` と `tests/doc.rs` が実際の出力と同じかを確かめる。
+| 英語の版 / 日本語の版 | 書いてあること | 検査の結果 |
+|---|---|---|
+| `payment_20th_close_next_10th.cal` / `.ja.cal` | 1.1 の例。20 日締め、翌月 10 日、休みなら前営業日、09:00。条件は営業日・受領から 60 日以内・単調 | 受領日 2026-01-01〜2027-11-20 の 689 日すべてで成り立つ。いちばん長いのは 51 日 |
+| `eom_close_two_months_later.cal` / `.ja.cal` | わざと破る例。月末締め、2 か月後の月末、休みなら前営業日。条件は受領から 60 日以内 | 受領日 2026-01-01〜2027-10-31 の 669 日のうち 648 日で成り立たない（4.3）。いちばん外れるのは受領日 2026-05-01 の 91 日。2026-12-31（木）の支払は年末年始で 2026-12-28（月）に動く |
+| `civil_code_period_end.cal` / `.ja.cal` | 140 条・143 条を文字どおりに書き（1.7）、142 条を文字どおり「休みならその翌日」（`if closed + 1 day`）で書く。どの日付も条文を引く（英語の版は `@civil_code 第140条`、日本語の版は `@民法 第140条`。1.5 の法令の出典）。入力は起点と月数（1〜12）。条件は単調、満了日が起点より後 | 起点 2026 年の 4,380 通りのすべてで成り立つ。結果は 2027-12-31 までで、データの範囲に収まる |
+| `civil_code_two_readings.cal` / `.ja.cal` | わざと破る例。142 条の二つの読み方（`if closed + 1 day` と `roll following`）が等しいという条件と、143 条と月数を足して月末に寄せる書き方が等しいという条件 | 前者は 4,380 通りのうち 121 通り、後者は 39 通りで成り立たない（1.7、1.8） |
+| `closing_and_payment_days_as_inputs.cal` / `.ja.cal` | 締め日（1〜31）、支払の月（1〜2）、支払の日（10〜31）を整数で受け取る。締め日を規則から受け取る形。条件は営業日・締めのあとに払う・単調 | 受領日 2026-01-01〜2027-10-01 と三つの整数の 871,596 通りのすべてで成り立つ |
 
-**決定**（D の段階）：操作の行末に、その行が何にあたるかをコメントで書いた。支払の例は、支払条件の言葉のどれにあたるか（`# 「20 日締め」`、`# "closes on the 20th"`）。民法の例は、条文の言葉か、二つの読み方のどちらにあたるか（`# 読み方の一つめ: 「その翌日」を、文字どおり翌日とする`）で、どちらの読み方が正しいかは書かない。コメントは、承認する人のページにその行と一緒に出る（7 章）。
+英語の版と日本語の版は、名前のほかは同じ決まりで、同じ結果になる。vectors は、名前を読み替えれば一行も違わない（`tests/vectors.rs`）。名前が計算に効かないことのテストにもなる。
 
-**決定**（D の段階）：最初の二つの例に英語の版を置いた。英語の README に載せる例は、英語を読む人が名前を読めるほうがよい。同じ決まりを英語の名前で書いたものが、名前を読み替えれば同じ vectors を出すことは、名前が計算に効かないことのテストにもなる。
+「受領から60日以内」は、例の条件として文字どおりに書いたもので、法令の読み方を示すものではない。期間の例も、決まりや条文を文字どおりに書いたもので、読み方を一つに決めるものではない。二つの読み方を並べた例は、読み方が分かれる日を見せるためにある。どの例の description にも、そう書く。
+
+わざと破る例は六つ（England and Wales の二つ、日本の暦の二つの英語の版と日本語の版）あり、`koyomi check examples/` は exit 1 で終わる。README にそう書き、`tests/check.rs` がその六つだけが落ちることを確かめる。診断は README と承認する人のページに載せ、`tests/docs.rs` と `tests/doc.rs` が実際の出力と同じかを確かめる。
+
+**決定**（D の段階）：操作の行末に、その行が何にあたるかをコメントで書いた。支払の例は、支払条件の言葉のどれにあたるか（`# "closes on the 20th"`、`# 「20 日締め」`）。民法の例は、条文の言葉か、二つの読み方のどちらにあたるか（`# the first reading: the day after is the very next day`、`# 読み方の一つめ: 「その翌日」を、文字どおり翌日とする`）で、どちらの読み方が正しいかは書かない。コメントは、承認する人のページにその行と一緒に出る（7 章）。
+
+### 10.1 英語の版と日本語の版の名前
+
+**決定**（英語を先にした段階）：例、テストの材料、文書は英語を先にする。日本語のものは消さず、中身も変えず、日本語の版として残す。英語のものは足して先に見せる。英語の版と日本語の版の対は、名前で分かるようにする。決まりは次の三つで、chobo と同じにした。
+
+- **例（`examples/`）**：dandori と同じ形にする。英語の版を `<英語の名前>.cal`、日本語の版を `<英語の名前>.ja.cal` とする。もとからあった日本語の例は、中身を一字も変えずに `<英語の名前>.ja.cal` へ名前だけを替え（`git mv`）、英語に訳した版を足した。英語の名前は、日本語の版の別名と違うものにする（`payment_20th_close_next_10th` と `payment_terms`）。テストは全部の例を一つのディレクトリに生成するので、別名が同じだと生成物がぶつかる。
+- **カレンダー（`examples/calendars/`）**：`use calendar` で読まれるので、日本語の版は名前を替えない（`東京の営業日.cal`）。替えれば、それを読む日本語の版の `use calendar` の行を書き換えることになる。dandori の日本語の規則（`宿泊の与信額.rule`）も名前を替えていない。英語の版は英語の名前で足し（`tokyo_business_days.cal`）、description の最後に「The English version of 東京の営業日.cal」と書いて対を示す。
+- **テストの材料、変異、golden（`tests/`）**：日本語の名前のものは、名前も中身もそのまま残す。日本語の名前で日本語の版だと分かるからである。同じ振る舞いを確かめる英語のものを、英語の名前で足す。変異の対は、診断のコードを頭に付けた名前でそろえる（`E001_閉じていない文字列.cal` と `E001_unclosed_string.cal`）。どちらも同じ診断のコードと終了コードを出すことを、`tests/mutants.rs` の `every_japanese_mutant_has_an_english_one` が確かめる。テストの材料は、英語の名前の版を足す（`helpers_月を足す.cal` と `helpers_add_months.cal`、`calendars/土日.cal` と `calendars/weekends.cal`）。名前が英語で中身が日本語のデータ（`data/holidays.csv`）には、`.en` を挟んだ英語の版を足す（`data/holidays.en.csv`）。例の golden は、例の名前に合わせて名前を替えた（中身は変えていない）。
+
+日本語でしか確かめられない振る舞い（内閣府の Shift_JIS の CSV、e-Gov の条文、漢数字の条、全角の幅、数字から始まり日本語が続く名前）のテストは、日本語の材料のまま持つ。そのうえで、同じ振る舞いを英語の材料でも確かめるテストを足した。英語の名前の版でも e-Gov の条は `第143条` と書く（引けるのは e-Gov の法令だけで、条の名前は e-Gov のものだから）。Shift_JIS の読み方に当たる英語の材料は無いので、UTF-8 として読めない表（Windows-1252 で保存された表）で、読めないバイトの場所を言う振る舞いを確かめる。テストは英語と日本語の両方を回す。
 
 **捨てたもの**：
 
 - 英語の README に、日本語の名前の例を載せること。英語を読む人には名前が読めない。
-- dandori のように、もう一方の言語の版を、同じ名前に言語を足したファイル（dandori の `hotel.ja.flow`）として隣に置くこと。koyomi の例は日本語の版が先にあってファイル名も日本語なので、`支払_20日締め翌月10日払い.en.cal` では英語を読む人がファイルを探せない。英語の版は、英語の名前のファイルにした。
+- 日本語の例やテストの材料を、英語に訳して置き換えること。日本語の版が無くなる。日本語で読む人にも、同じものが要る。
+- `tests/` の下の日本語の名前のファイルにも `.ja` を付けること。日本語の名前で日本語の版だと分かり、名前を替えると、そのファイルを名指すテストや文書を全部直すことになる。
+- 英語の例を日本の暦だけで書くこと。英語を読む人の多くにとって身近な暦（GOV.UK の bank holidays）を先に見せる。米国の連邦の祝日は、そのまま読める公開の表（CSV か GOV.UK の形）が見つからず、手で書いた表は出典を固定できないので、まだ置かない。
 
 ## 11. 実装
 
@@ -1263,7 +1514,7 @@ koyomi は ritsu（七つの言語を一つにまとめる処理系）に取り�
 
 続く C.10 で、生成先の言語の表面にかかわるところを、ritsu の生成器が共に使うクレート（ritsu-emit）のものに替えた。五つの出力先の予約語の表（E009 が断る語。ECMAScript 2025、Python 3.14.6、Go 1.25、Rust 1.94、PostgreSQL 18.0 のもの）、Go の名前の作り方（`PaymentAt`、`paymentterms`）、文字列のリテラル（四つの出力先は JSON の文字列、SQL は `'…'`）、生成物の頭の一行（`Code generated by koyomi 0.1.0. DO NOT EDIT.`）とそれを書くコメントである。koyomi に残したのは、生成物が使う名前（`GENERATED`、`MODULES`）と、各出力先の生成器の中身である。例の全部の `.cal` を五つの出力先に生成したファイル（80 個）が一バイトも変わらないこと、五つの出力先の突き合わせのテストと golden が通ることを確かめた。
 
-段階 D の最初の部分で、ritsu の口（ritsu の DESIGN 3.2）に答える `src/ports.rs` を足した。`ritsu_ports::Dates` の事実（関数、入力とその範囲、カレンダーとデータの範囲、`at` の時刻と UTC オフセット、条件の名前と文）は、`koyomi api` と同じものを型で渡す。日付がとりうる値の集合と、日付の入力からの日数の最小と最大は、`koyomi check` と同じく範囲のすべての入力で計算して渡す。入力の組み合わせが `check` の確かめる数を超えるとき、途中で計算が止まる入力があるときは、決められないと言う。評価は参照インタプリタのものである。`.cal` が持つもの（入力、日付、条件、出典）の定義の文は、日付なら `date … =` の塊の行（操作の行と `at` を含む）、条件ならその行で、どの行もコメントと前後の空白を除く。外を名指すものは、`use calendar` の先と、出典の写しのファイルである。ritsu の DESIGN 7.5 の例（`支払_20日締め翌月10日払い.cal` の `支払日` は 23 通り、受領日から 18〜51 日）は、口から数えても同じだった（`tests/ports.rs`）。コマンドの振る舞いは変えていない（例と fixture の全部のコマンドの 352 回の出力が一字も違わない）。
+段階 D の最初の部分で、ritsu の口（ritsu の DESIGN 3.2）に答える `src/ports.rs` を足した。`ritsu_ports::Dates` の事実（関数、入力とその範囲、カレンダーとデータの範囲、`at` の時刻と UTC オフセット、条件の名前と文）は、`koyomi api` と同じものを型で渡す。日付がとりうる値の集合と、日付の入力からの日数の最小と最大は、`koyomi check` と同じく範囲のすべての入力で計算して渡す。入力の組み合わせが `check` の確かめる数を超えるとき、途中で計算が止まる入力があるときは、決められないと言う。評価は参照インタプリタのものである。`.cal` が持つもの（入力、日付、条件、出典）の定義の文は、日付なら `date … =` の塊の行（操作の行と `at` を含む）、条件ならその行で、どの行もコメントと前後の空白を除く。外を名指すものは、`use calendar` の先と、出典の写しのファイルである。ritsu の DESIGN 7.5 の例（`payment_20th_close_next_10th.ja.cal` の `支払日` は 23 通り、受領日から 18〜51 日）は、口から数えても同じだった（`tests/ports.rs`）。コマンドの振る舞いは変えていない（例と fixture の全部のコマンドの 352 回の出力が一字も違わない）。
 
 段階 D の最後の部分で、`ritsu_ports::Sources` にも答えるようにした（ritsu の DESIGN 3.2）。yuen が、日付のファイルとカレンダーのファイルが写して固定している出典を借り、要件の写しと比べるためである（yuen の DESIGN 1.4、3.3）。出典ごとに、名前、行、法令ならデータベースと ID と時点と条ごとの固定、ファイルならパス（そのファイルからの相対）と url と固定を渡す。答えるのは `koyomi check` を通るファイルだけで、通らないファイルには検査の診断を返す。コマンドの振る舞いは変えていない。
 

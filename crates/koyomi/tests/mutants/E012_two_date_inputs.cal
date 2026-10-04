@@ -1,0 +1,8 @@
+dates acceptance v1
+
+inputs
+  received : date  range >=2026-01-01 <=2026-12-31
+  accepted : date  range >=2026-01-01 <=2026-12-31
+
+date due = accepted
+  + 30 days

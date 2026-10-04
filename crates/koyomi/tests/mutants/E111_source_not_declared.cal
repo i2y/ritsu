@@ -1,0 +1,8 @@
+dates last_day v1
+use calendar "../../examples/calendars/england_and_wales.cal"
+
+inputs
+  origin : date  range >=2026-01-01 <=2026-12-31
+
+date first_day = origin    @civil_code 第140条
+  + 1 day

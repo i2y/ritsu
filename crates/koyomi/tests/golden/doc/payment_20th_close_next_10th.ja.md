@@ -1,10 +1,10 @@
 # payment_20th_close_next_10th v1
 
-Closes on the 20th; pays on the 10th of the next month, or on the business day before when that day is closed. The English twin of 支払_20日締め翌月10日払い.cal. The claim within_60_days_of_receipt is this example's own, written as it reads; it does not say how any law is read
+Closes on the 20th; pays on the 10th of the next month, or on the business day before when that day is closed. The English version of payment_20th_close_next_10th.ja.cal. The claim within_60_days_of_receipt is this example's own, written as it reads; it does not say how any law is read
 
-- ファイル: `payment_20th_close_next_10th.cal`（dates payment_20th_close_next_10th v1、sha256:977edcf4588aec25）
-- カレンダー: `calendars/東京の営業日.cal`（calendar 東京の営業日 v1、sha256:d7b6134e23a8cb9f）
-- 表: 祝日 = `calendars/data/syukujitsu.csv`（sha256:cec37a743c96995c、https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv の写し、covers 1955-01-01..2027-12-31）
+- ファイル: `payment_20th_close_next_10th.cal`（dates payment_20th_close_next_10th v1、sha256:9973542043dbee17）
+- カレンダー: `calendars/tokyo_business_days.cal`（calendar tokyo_business_days v1、sha256:37af228cf6ba7b95）
+- 表: national_holidays = `calendars/data/syukujitsu.csv`（sha256:cec37a743c96995c、https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv の写し、covers 1955-01-01..2027-12-31）
 - koyomi: 0.1.0
 
 上のファイルを koyomi 0.1.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
@@ -53,7 +53,7 @@ received 2026-01-01〜2027-11-20 の 689 日のすべてで日付を計算し、
 
 | received | closing | payment | なぜ選んだか |
 |---|---|---|---|
-| 2026-01-01（木） | 2026-01-20（火） | 2026-02-10（火） | received が元日で休み。received が年末年始に当たる |
+| 2026-01-01（木） | 2026-01-20（火） | 2026-02-10（火） | received が元日で休み。received が New Year holidays に当たる |
 | 2026-01-13（火） | 2026-01-20（火） | 2026-02-10（火） | received が成人の日の翌日 |
 | 2026-01-31（土） | 2026-02-20（金） | 2026-03-10（火） | received が月末（31 日） |
 | 2026-02-10（火） | 2026-02-20（金） | 2026-03-10（火） | received が建国記念の日の前日 |
@@ -75,21 +75,21 @@ received 2026-01-01〜2027-11-20 の 689 日のすべてで日付を計算し、
 
 ## カレンダー
 
-このファイルは、カレンダー「東京の営業日」v1（`calendars/東京の営業日.cal`）を読みます。
+このファイルは、カレンダー「tokyo_business_days」v1（`calendars/tokyo_business_days.cal`）を読みます。
 
-カレンダーの説明: 土日、国民の祝日と休日、12 月 29 日から 1 月 3 日までを休む
+カレンダーの説明: Saturdays, Sundays, Japan's national holidays and other days off, and 29 December to 3 January are closed. The English version of 東京の営業日.cal
 
 ### 休みの決まり
 
 次の日を休みにします。
 
 - 毎週土曜と日曜 `closed weekly sat, sun`
-- 表「祝日」に載っている日 `closed 祝日`
-- 毎年 12 月 29 日〜1 月 3 日（年末年始） `closed every 12-29..01-03 "年末年始"`
+- 表「national_holidays」に載っている日 `closed national_holidays`
+- 毎年 12 月 29 日〜1 月 3 日（New Year holidays） `closed every 12-29..01-03 "New Year holidays"`
 
 ### 出典とデータの範囲
 
-- 祝日: 1,067 行。https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv の写しを、sha256:cec37a743c96995c で固定しています。休みを全部載せているのは 1955-01-01〜2027-12-31 です。
+- national_holidays: 1,067 行。https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv の写しを、sha256:cec37a743c96995c で固定しています。休みを全部載せているのは 1955-01-01〜2027-12-31 です。
 
 このカレンダーが休みかどうかを知っているのは 1955-01-01〜2027-12-31 です。その外の日が営業日かを問う計算は、検査でも生成したコードでも止まります。
 
@@ -109,7 +109,7 @@ received と、そこから計算した日付が入る 2026-01-01〜2027-12-10 �
 | 19 | 20 | 21 | 22 | 23 | (24) | (25) |
 | 26 | 27 | 28 | 29 | 30 | (31)◆ |  |
 
-休みの名前: 1 日 元日と年末年始、2〜3 日 年末年始、12 日 成人の日
+休みの名前: 1 日 元日とNew Year holidays、2〜3 日 New Year holidays、12 日 成人の日
 
 **2026 年 2 月**
 
@@ -242,7 +242,7 @@ received と、そこから計算した日付が入る 2026-01-01〜2027-12-10 �
 | 21 | 22 | 23 | 24 | 25 | (26) | (27) |
 | 28 | (29) | (30) | (31) |  |  |  |
 
-休みの名前: 29〜31 日 年末年始
+休みの名前: 29〜31 日 New Year holidays
 
 **2027 年 1 月**
 
@@ -254,7 +254,7 @@ received と、そこから計算した日付が入る 2026-01-01〜2027-12-10 �
 | 18 | 19 | 20 | 21 | 22 | (23) | (24) |
 | 25 | 26 | 27 | 28 | 29 | (30) | (31) |
 
-休みの名前: 1 日 元日と年末年始、2〜3 日 年末年始、11 日 成人の日
+休みの名前: 1 日 元日とNew Year holidays、2〜3 日 New Year holidays、11 日 成人の日
 
 **2027 年 2 月**
 
@@ -385,4 +385,4 @@ received と、そこから計算した日付が入る 2026-01-01〜2027-12-10 �
 | 20 | 21 | 22 | 23 | 24 | (25) | (26) |
 | 27 | 28 | (29) | (30) | (31) |  |  |
 
-休みの名前: 29〜31 日 年末年始
+休みの名前: 29〜31 日 New Year holidays

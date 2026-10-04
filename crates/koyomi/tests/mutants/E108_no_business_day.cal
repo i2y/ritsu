@@ -1,0 +1,4 @@
+calendar always_closed v1
+
+closed weekly mon, tue, wed, thu, fri
+closed weekly sat, sun

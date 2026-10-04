@@ -1,0 +1,2 @@
+error[E011]: tests/mutants/E011_date_from_an_integer.cal:8:16: The input closing_day is an integer; a date starts from the date input or another date
+     8 | date closing = closing_day

@@ -1,0 +1,11 @@
+dates three_days_later v1
+use calendar "../fixtures/calendars/weekends.cal"
+
+inputs
+  received : date  range >=2026-01-01 <=2026-03-31
+
+date due = received
+  if closed + 3 days
+
+claims
+  later_receipt_later_due : due is monotonic

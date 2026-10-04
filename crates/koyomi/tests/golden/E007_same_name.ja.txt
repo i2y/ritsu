@@ -1,0 +1,2 @@
+エラー[E007]: tests/mutants/E007_same_name.cal:11:6: 名前「closing」が二度宣言されています（8 行目にもあります）
+    11 | date closing = received

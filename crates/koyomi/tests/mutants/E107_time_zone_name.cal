@@ -1,0 +1,9 @@
+calendar england_and_wales v1
+offset Europe/London
+
+source bank_holidays = file "../../examples/calendars/data/bank-holidays.json" sha256:538b3482c28b85ec
+  format govuk "england-and-wales"
+  covers listed years
+
+closed weekly sat, sun
+closed bank_holidays

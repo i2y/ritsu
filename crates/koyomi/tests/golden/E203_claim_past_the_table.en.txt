@@ -1,0 +1,10 @@
+error[E203]: tests/mutants/E203_claim_past_the_table.cal:6:3: The computation for received 2028-11-02 asks whether 2029-01-01 is a business day, and the table bank_holidays knows only 2019-01-01..2028-12-31
+     6 |   received : date  range >=2026-01-01 <=2028-11-20
+  = The same happens for 19 days of received: 2028-11-02..2028-11-20
+  = To fix it: make the range `range >=2026-01-01 <=2028-11-01`, or take the copy again once a newer table is out (koyomi source fetch)
+  the first input it happens on:
+      received  2028-11-02 Thu
+      closing   2028-11-20 Mon  close day 20
+      payment   2028-12-10 Sun  day 10 of month +1
+                2028-12-08 Fri  roll preceding: 2028-12-10 (Sunday) and 2028-12-09 (Saturday) are closed
+                claim within_40_business_days: whether 2029-01-01 is a business day is outside what the calendar knows

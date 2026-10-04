@@ -1,0 +1,4 @@
+warning[W201]: tests/mutants/W201_else_never_used.cal:12:27: `day 10 of month +1 else end_of_month` takes a day of 28 or less, which every month has, so its `else` does nothing
+    12 |   day 10 of month +1 else end_of_month
+  = Delete the `else …`.
+tests/mutants/W201_else_never_used.cal: ok — 3 claims hold on all 1,055 days of received (2026-01-01..2028-11-20); 2 examples match

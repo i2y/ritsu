@@ -1,0 +1,28 @@
+dates civil_code_two_readings v1
+description "Breaks its claims on purpose. It writes the day after of Article 142 of the Civil Code in two ways, as the very next day and as the day the days off end, and lists the inputs they part on; and it holds Article 143 against adding the months and rounding down to the end of the month. It does not choose a reading. The English version of civil_code_two_readings.ja.cal"
+use calendar "calendars/civil_code_142_days.cal"
+source civil_code = law "129AC0000000089" asof 2026-10-01
+  第140条 sha256:e880059021fbb67d
+  第141条 sha256:0575c131b9f08063
+  第142条 sha256:fc8c35a0769d3b35
+  第143条 sha256:6950bdfb988439b6
+
+inputs
+  origin      : date  range >=2026-01-01 <=2026-12-31
+  month_count : int   range >=1 <=12
+
+date first_day = origin                                       @civil_code 第140条
+  + 1 day                                        # the first day is not counted
+date last_day = first_day                                     @civil_code 第141条, 第143条
+  + month_count months else start_of_next_month  # the corresponding day of the last month; with none, the 1st of the month after
+  - 1 day                                        # the day before it: the last day of the last month when it had no corresponding day
+date next_day = last_day                                      @civil_code 第142条
+  if closed + 1 day                              # the first reading: the day after is the very next day
+date next_business_day = last_day                             @civil_code 第142条
+  roll following                                 # the second reading: on to the day the days off end
+date months_added = origin
+  + month_count months else end_of_month         # another way to write it than Article 143: add the months to the origin, rounding down to the end of the month
+
+claims
+  the_two_readings_agree    : next_day = next_business_day
+  rounding_to_the_month_end : last_day = months_added

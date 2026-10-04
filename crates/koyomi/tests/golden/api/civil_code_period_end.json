@@ -1,0 +1,436 @@
+{
+  "koyomi": "0.1.0",
+  "kind": "dates",
+  "name": "civil_code_period_end",
+  "alias": "civil_code_period_end",
+  "version": "1",
+  "source_sha256": "88e7b68f48f76570acc56aa5ae30900ddebebd305b89cc25d619aa2751616aef",
+  "description": "The last day of a period, computed by writing Articles 140, 141 and 143 of the Civil Code as they read, with the day after of Article 142 written as it reads too. It does not settle how the articles are read. The English version of civil_code_period_end.ja.cal",
+  "calendar": {
+    "name": "civil_code_142_days",
+    "alias": "civil_code_142_days",
+    "version": "1",
+    "file": "calendars/civil_code_142_days.cal",
+    "source_sha256": "dd534a7343411409f47c49d9a01c78b06238b415241f3fa8ad1c2a35ff59c47d",
+    "offset": null,
+    "uses": [],
+    "closed": [
+      {
+        "weekly": [
+          "sun"
+        ]
+      },
+      {
+        "table": "national_holidays"
+      }
+    ],
+    "open": [],
+    "sources": [
+      {
+        "name": "national_holidays",
+        "kind": "file",
+        "file": "calendars/data/syukujitsu.csv",
+        "url": "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv",
+        "sha256": "cec37a743c96995c",
+        "format": "csv",
+        "encoding": "shift_jis",
+        "covers": {
+          "from": "1955-01-01",
+          "to": "2027-12-31"
+        },
+        "rows": 1067
+      }
+    ],
+    "data_range": {
+      "from": "1955-01-01",
+      "to": "2027-12-31"
+    }
+  },
+  "sources": [
+    {
+      "name": "civil_code",
+      "kind": "law",
+      "db": "egov",
+      "id": "129AC0000000089",
+      "asof": "2026-10-01",
+      "revision": "129AC0000000089_20260624_508AC0000000045",
+      "pins": [
+        {
+          "fragment": "第140条",
+          "sha256": "e880059021fbb67d"
+        },
+        {
+          "fragment": "第141条",
+          "sha256": "0575c131b9f08063"
+        },
+        {
+          "fragment": "第142条",
+          "sha256": "fc8c35a0769d3b35"
+        },
+        {
+          "fragment": "第143条",
+          "sha256": "6950bdfb988439b6"
+        }
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "name": "origin",
+      "alias": "origin",
+      "type": "date",
+      "range": {
+        "min": "2026-01-01",
+        "max": "2026-12-31"
+      }
+    },
+    {
+      "name": "month_count",
+      "alias": "month_count",
+      "type": "int",
+      "range": {
+        "min": 1,
+        "max": 12
+      }
+    }
+  ],
+  "dates": [
+    {
+      "name": "first_day",
+      "alias": "first_day",
+      "params": [
+        "origin"
+      ]
+    },
+    {
+      "name": "last_day",
+      "alias": "last_day",
+      "params": [
+        "origin",
+        "month_count"
+      ]
+    },
+    {
+      "name": "last_day_142",
+      "alias": "last_day_142",
+      "params": [
+        "origin",
+        "month_count"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "name": "last_day_is_monotonic",
+      "text": "last_day is monotonic"
+    },
+    {
+      "name": "last_day_142_is_monotonic",
+      "text": "last_day_142 is monotonic"
+    },
+    {
+      "name": "last_day_after_origin",
+      "text": "last_day > origin"
+    },
+    {
+      "name": "last_day_142_on_or_after_last",
+      "text": "last_day_142 >= last_day"
+    }
+  ],
+  "wire": {
+    "date": "YYYY-MM-DD",
+    "int": "a JSON number",
+    "at": "RFC 3339 in UTC, ending in Z, as dandori's timestamp",
+    "errors": [
+      "range",
+      "data",
+      "reject",
+      "date"
+    ]
+  },
+  "typescript": {
+    "file": "typescript/civil_code_period_end.ts",
+    "module": "civil_code_period_end",
+    "date_type": "string",
+    "functions": [
+      {
+        "name": "first_day",
+        "function": "first_day",
+        "signature": "export function first_day(origin: string): string",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "last_day",
+        "function": "last_day",
+        "signature": "export function last_day(origin: string, month_count: number): string",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "string"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "number"
+          }
+        ]
+      },
+      {
+        "name": "last_day_142",
+        "function": "last_day_142",
+        "signature": "export function last_day_142(origin: string, month_count: number): string",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "string"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "number"
+          }
+        ]
+      }
+    ],
+    "is_open": "export function is_open(day: string): boolean",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "python": {
+    "file": "python/civil_code_period_end.py",
+    "module": "civil_code_period_end",
+    "date_type": "datetime.date",
+    "functions": [
+      {
+        "name": "first_day",
+        "function": "first_day",
+        "signature": "def first_day(origin: date) -> date",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "date"
+          }
+        ]
+      },
+      {
+        "name": "last_day",
+        "function": "last_day",
+        "signature": "def last_day(origin: date, month_count: int) -> date",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "date"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "int"
+          }
+        ]
+      },
+      {
+        "name": "last_day_142",
+        "function": "last_day_142",
+        "signature": "def last_day_142(origin: date, month_count: int) -> date",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "date"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "int"
+          }
+        ]
+      }
+    ],
+    "is_open": "def is_open(day: date) -> bool",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "go": {
+    "file": "go/civilcodeperiodend/civilcodeperiodend.go",
+    "module": "civilcodeperiodend",
+    "date_type": "Date",
+    "functions": [
+      {
+        "name": "first_day",
+        "function": "FirstDay",
+        "signature": "func FirstDay(origin Date) (Date, error)",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "Date"
+          }
+        ]
+      },
+      {
+        "name": "last_day",
+        "function": "LastDay",
+        "signature": "func LastDay(origin Date, month_count int) (Date, error)",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "Date"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "int"
+          }
+        ]
+      },
+      {
+        "name": "last_day_142",
+        "function": "LastDay142",
+        "signature": "func LastDay142(origin Date, month_count int) (Date, error)",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "Date"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "int"
+          }
+        ]
+      }
+    ],
+    "is_open": "func IsOpen(day Date) (bool, error)",
+    "errors": [
+      "*KoyomiError"
+    ]
+  },
+  "rust": {
+    "file": "rust/civil_code_period_end.rs",
+    "module": "civil_code_period_end",
+    "date_type": "Date",
+    "functions": [
+      {
+        "name": "first_day",
+        "function": "first_day",
+        "signature": "pub fn first_day(origin: Date) -> Result<Date, KoyomiError>",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "Date"
+          }
+        ]
+      },
+      {
+        "name": "last_day",
+        "function": "last_day",
+        "signature": "pub fn last_day(origin: Date, month_count: i64) -> Result<Date, KoyomiError>",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "Date"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "i64"
+          }
+        ]
+      },
+      {
+        "name": "last_day_142",
+        "function": "last_day_142",
+        "signature": "pub fn last_day_142(origin: Date, month_count: i64) -> Result<Date, KoyomiError>",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "Date"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "i64"
+          }
+        ]
+      }
+    ],
+    "is_open": "pub fn is_open(day: Date) -> Result<bool, KoyomiError>",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "sql": {
+    "file": "sql/civil_code_period_end.sql",
+    "module": "civil_code_period_end",
+    "date_type": "date",
+    "functions": [
+      {
+        "name": "first_day",
+        "function": "first_day",
+        "signature": "civil_code_period_end.first_day(origin date) RETURNS date",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "date"
+          }
+        ]
+      },
+      {
+        "name": "last_day",
+        "function": "last_day",
+        "signature": "civil_code_period_end.last_day(origin date, month_count integer) RETURNS date",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "date"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "integer"
+          }
+        ]
+      },
+      {
+        "name": "last_day_142",
+        "function": "last_day_142",
+        "signature": "civil_code_period_end.last_day_142(origin date, month_count integer) RETURNS date",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "date"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "integer"
+          }
+        ]
+      }
+    ],
+    "is_open": "civil_code_period_end.is_open(day date) RETURNS boolean",
+    "errors": [
+      "SQLSTATE 22023"
+    ]
+  }
+}

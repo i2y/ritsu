@@ -1,0 +1,3 @@
+error[E101]: tests/mutants/E101_no_copy.cal:4:8: The copy of the source company_holidays is not there: ../fixtures/data/none.csv
+     4 | source company_holidays = file "../fixtures/data/none.csv" sha256:86cb32774217a66f
+  = The copy is looked for relative to the .cal; put the file there or correct the path.

@@ -1,0 +1,9 @@
+calendar civil_code_142_days v1
+description "Only the days Article 142 of the Civil Code names are closed: Sundays, and the days off under the Act on National Holidays. This example does not decide what the other days off of the article are. The English version of 民法142条の休日.cal"
+
+source national_holidays = file "data/syukujitsu.csv" url "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv" sha256:cec37a743c96995c
+  format csv shift_jis
+  covers 1955-01-01..2027-12-31
+
+closed weekly sun
+closed national_holidays

@@ -21,17 +21,27 @@ use std::process::Command;
 use std::time::Duration;
 
 const EXAMPLES: &[&str] = &[
-    "examples/calendars/東京の営業日.cal",
-    "examples/calendars/民法142条の休日.cal",
     "examples/calendars/england_and_wales.cal",
-    "examples/支払_20日締め翌月10日払い.cal",
-    "examples/支払_月末締め翌々月末払い.cal",
-    "examples/民法の期間.cal",
-    "examples/民法の期間_読み方の比較.cal",
-    "examples/締め日と支払日を受け取る.cal",
     "examples/net30.cal",
+    "examples/close_20th_pay_10th.cal",
+    "examples/close_eom_pay_two_months_on.cal",
+    "examples/close_and_pay_on_given_days.cal",
+    "examples/period_of_months.cal",
+    "examples/period_of_months_two_readings.cal",
+    "examples/calendars/tokyo_business_days.cal",
+    "examples/calendars/civil_code_142_days.cal",
     "examples/payment_20th_close_next_10th.cal",
     "examples/eom_close_two_months_later.cal",
+    "examples/closing_and_payment_days_as_inputs.cal",
+    "examples/civil_code_period_end.cal",
+    "examples/civil_code_two_readings.cal",
+    "examples/calendars/東京の営業日.cal",
+    "examples/calendars/民法142条の休日.cal",
+    "examples/payment_20th_close_next_10th.ja.cal",
+    "examples/eom_close_two_months_later.ja.cal",
+    "examples/closing_and_payment_days_as_inputs.ja.cal",
+    "examples/civil_code_period_end.ja.cal",
+    "examples/civil_code_two_readings.ja.cal",
 ];
 
 fn page(path: &str, lang: Lang, f: Format) -> String {
@@ -151,7 +161,7 @@ fn the_html_loads_nothing_and_shows_what_the_check_found() {
     }
     assert_eq!(looked, EXAMPLES.len() * 2);
     // The examples that break a claim on purpose are marked where the check says.
-    let html = page("examples/支払_月末締め翌々月末払い.cal", Lang::Ja, Format::Html);
+    let html = page("examples/eom_close_two_months_later.ja.cal", Lang::Ja, Format::Html);
     assert_eq!(attrs(&html, "td", "class").iter().filter(|c| c.contains("fail")).count(), 648);
     assert!(html.contains("data-day=\"2026-05-03\" title=\"2026-05-03（日）\n休み（日曜、憲法記念日）\n条件「受領から60日以内」が成り立たない\""), "the title of a failing holiday");
 }
@@ -163,13 +173,13 @@ fn koyomi(args: &[&str]) -> std::process::Output {
 #[test]
 fn the_command() {
     // A page on standard output, Markdown unless asked otherwise.
-    let o = koyomi(&["doc", "examples/支払_20日締め翌月10日払い.cal"]);
+    let o = koyomi(&["doc", "examples/payment_20th_close_next_10th.ja.cal"]);
     assert_eq!(o.status.code(), Some(0));
-    assert_eq!(String::from_utf8(o.stdout).unwrap(), page("examples/支払_20日締め翌月10日払い.cal", Lang::En, Format::Markdown));
-    let o = koyomi(&["doc", "examples/支払_20日締め翌月10日払い.cal", "--format", "html", "--lang", "ja"]);
-    assert_eq!(String::from_utf8(o.stdout).unwrap(), page("examples/支払_20日締め翌月10日払い.cal", Lang::Ja, Format::Html));
+    assert_eq!(String::from_utf8(o.stdout).unwrap(), page("examples/payment_20th_close_next_10th.ja.cal", Lang::En, Format::Markdown));
+    let o = koyomi(&["doc", "examples/payment_20th_close_next_10th.ja.cal", "--format", "html", "--lang", "ja"]);
+    assert_eq!(String::from_utf8(o.stdout).unwrap(), page("examples/payment_20th_close_next_10th.ja.cal", Lang::Ja, Format::Html));
     // A claim that fails: the page shows it, and doc has done its job.
-    let o = koyomi(&["doc", "examples/支払_月末締め翌々月末払い.cal"]);
+    let o = koyomi(&["doc", "examples/eom_close_two_months_later.ja.cal"]);
     assert_eq!(o.status.code(), Some(0));
     assert!(String::from_utf8_lossy(&o.stdout).contains("> [!WARNING]"));
     // Any other error: no page, the diagnostics on standard error.
@@ -209,11 +219,11 @@ fn what_the_pages_say() {
     assert!(md.contains("| 2026 | 240 | 125 |"), "{md}");
     assert!(md.contains("2026-01〜2027-12 でいちばん長い連休は 2026-12-29〜2027-01-03 の 6 日です。"));
     // The article a date cites, quoted from its copy, with the version.
-    let md = page("examples/民法の期間.cal", Lang::Ja, Format::Markdown);
+    let md = page("examples/civil_code_period_end.ja.cal", Lang::Ja, Format::Markdown);
     assert!(md.contains("> **民法 第143条（e-Gov 法令検索、2026-10-01 時点、版 129AC0000000089_20260624_508AC0000000045）**"));
     assert!(md.contains("> ２　週、月又は年の初めから期間を起算しないときは、その期間は、最後の週、月又は年においてその起算日に応当する日の前日に満了する。ただし、月又は年によって期間を定めた場合において、最後の月に応当する日がないときは、その月の末日に満了する。"));
     // The other ways of handling a missing day, counted on every input (DESIGN 1.7).
-    let md = page("examples/民法の期間.cal", Lang::En, Format::Markdown);
+    let md = page("examples/civil_code_period_end.ja.cal", Lang::En, Format::Markdown);
     assert!(md.contains("With `else end_of_month` instead, 満了日 would differ on 57 of the 4,380 input combinations."), "{md}");
     // net30 runs over 36 months; only those with an edge case are shown.
     let md = page("examples/net30.cal", Lang::En, Format::Markdown);
@@ -238,10 +248,10 @@ struct Shot {
 const MONTHS_ONLY: &str = "header,.alert,section:not(:last-of-type),section:last-of-type>h2,section:last-of-type>p,section:last-of-type>ul:not(.legend),section:last-of-type>h3:not(:last-of-type){display:none}";
 
 const SHOTS: &[Shot] = &[
-    Shot { path: "examples/eom_close_two_months_later.cal", lang: Lang::En, name: "doc-top.en.png", theme: "light", size: (1100, 1250), css: "" },
-    Shot { path: "examples/eom_close_two_months_later.cal", lang: Lang::En, name: "doc-months.en.png", theme: "dark", size: (1100, 1350), css: MONTHS_ONLY },
-    Shot { path: "examples/支払_月末締め翌々月末払い.cal", lang: Lang::Ja, name: "doc-top.ja.png", theme: "light", size: (1100, 1250), css: "" },
-    Shot { path: "examples/支払_月末締め翌々月末払い.cal", lang: Lang::Ja, name: "doc-months.ja.png", theme: "dark", size: (1100, 1350), css: MONTHS_ONLY },
+    Shot { path: "examples/close_eom_pay_two_months_on.cal", lang: Lang::En, name: "doc-top.en.png", theme: "light", size: (1100, 1250), css: "" },
+    Shot { path: "examples/close_eom_pay_two_months_on.cal", lang: Lang::En, name: "doc-months.en.png", theme: "dark", size: (1100, 1350), css: MONTHS_ONLY },
+    Shot { path: "examples/eom_close_two_months_later.ja.cal", lang: Lang::Ja, name: "doc-top.ja.png", theme: "light", size: (1100, 1250), css: "" },
+    Shot { path: "examples/eom_close_two_months_later.ja.cal", lang: Lang::Ja, name: "doc-months.ja.png", theme: "dark", size: (1100, 1350), css: MONTHS_ONLY },
 ];
 
 #[test]
@@ -293,4 +303,70 @@ fn the_pages_in_chrome() {
     for Shot { name, .. } in SHOTS {
         assert!(std::path::Path::new(&format!("docs/images/{name}")).is_file(), "docs/images/{name} is missing; KOYOMI_BLESS=1 cargo test --test doc draws it");
     }
+}
+
+/// What `the_html_loads_nothing_and_shows_what_the_check_found` checks at its end, in English: the
+/// examples that break a claim on purpose are marked where the check says, and a failing holiday
+/// says why it is closed.
+#[test]
+fn the_html_marks_what_the_check_found_in_english() {
+    let html = page("examples/eom_close_two_months_later.cal", Lang::En, Format::Html);
+    assert_eq!(attrs(&html, "td", "class").iter().filter(|c| c.contains("fail")).count(), 648);
+    assert!(html.contains("data-day=\"2026-05-03\" title=\"2026-05-03 Sun\nclosed (Sunday, 憲法記念日)\nThe claim within_60_days_of_receipt fails\""), "the title of a failing holiday");
+    let html = page("examples/close_eom_pay_two_months_on.cal", Lang::En, Format::Html);
+    assert_eq!(attrs(&html, "td", "class").iter().filter(|c| c.contains("fail")).count(), 1008);
+    assert!(html.contains("data-day=\"2026-05-04\" title=\"2026-05-04 Mon\nclosed (Early May bank holiday)\nThe claim within_60_days_of_receipt fails\""), "the title of a failing bank holiday");
+}
+
+#[test]
+fn the_command_in_english() {
+    let o = koyomi(&["doc", "examples/payment_20th_close_next_10th.cal"]);
+    assert_eq!(o.status.code(), Some(0));
+    assert_eq!(String::from_utf8(o.stdout).unwrap(), page("examples/payment_20th_close_next_10th.cal", Lang::En, Format::Markdown));
+    let o = koyomi(&["doc", "examples/close_20th_pay_10th.cal", "--format", "html", "--lang", "ja"]);
+    assert_eq!(String::from_utf8(o.stdout).unwrap(), page("examples/close_20th_pay_10th.cal", Lang::Ja, Format::Html));
+    let o = koyomi(&["doc", "examples/close_eom_pay_two_months_on.cal"]);
+    assert_eq!(o.status.code(), Some(0));
+    assert!(String::from_utf8_lossy(&o.stdout).contains("> [!WARNING]"));
+    for (f, code) in [("tests/mutants/E201_no_way_for_a_missing_day.cal", "E201"), ("tests/mutants/E203_past_the_table.cal", "E203"), ("tests/mutants/E101_no_copy.cal", "E101")] {
+        let o = koyomi(&["doc", f]);
+        assert_eq!(o.status.code(), Some(1), "{f}");
+        assert!(o.stdout.is_empty(), "{f} has no page");
+        assert!(String::from_utf8_lossy(&o.stderr).contains(&format!("error[{code}]")), "{f}");
+    }
+    assert_eq!(koyomi(&["doc", "tests/mutants/E303_example_differs.cal"]).status.code(), Some(0));
+    let o = koyomi(&["doc", "examples/calendars/england_and_wales.cal", "--months", "2027-04..2028-03"]);
+    let md = String::from_utf8(o.stdout).unwrap();
+    assert!(md.contains("**April 2027**") && md.contains("**March 2028**") && !md.contains("**March 2027**") && !md.contains("**April 2028**"));
+    let o = koyomi(&["doc", "examples/calendars/tokyo_business_days.cal", "--months", "2026-04..2027-03"]);
+    let md = String::from_utf8(o.stdout).unwrap();
+    assert!(md.contains("**April 2026**") && md.contains("**March 2027**") && !md.contains("**March 2026**") && !md.contains("**April 2027**"));
+    for bad in ["2026-13..2027-01", "2027-01..2026-12", "2026-1..2026-12", "2026-01", "2026-01..2026-12x"] {
+        let o = koyomi(&["doc", "examples/calendars/england_and_wales.cal", "--months", bad]);
+        assert_eq!(o.status.code(), Some(2), "--months {bad}");
+    }
+    let o = koyomi(&["doc", "tests/fixtures/calendars/weekends.cal"]);
+    assert_eq!(o.status.code(), Some(0));
+    let md = String::from_utf8(o.stdout).unwrap();
+    assert!(md.contains("--months 2026-01..2026-12") && !md.contains("| Mon |"), "{md}");
+    let o = koyomi(&["doc", "tests/fixtures/calendars/weekends.cal", "--months", "2026-10..2026-10"]);
+    assert!(String::from_utf8(o.stdout).unwrap().contains("**October 2026**"));
+}
+
+#[test]
+fn what_the_pages_say_in_english() {
+    let md = page("examples/calendars/tokyo_business_days.cal", Lang::En, Format::Markdown);
+    assert!(md.contains("| 2026 | 240 | 125 |"), "{md}");
+    assert!(md.contains("The longest run of closed days in 2026-01..2027-12 is 2026-12-29..2027-01-03, 6 days."), "{md}");
+    let md = page("examples/calendars/england_and_wales.cal", Lang::En, Format::Markdown);
+    assert!(md.contains("| 2027 | 253 | 112 |"), "{md}");
+    assert!(md.contains("The longest run of closed days in 2027-01..2028-12 is 2027-03-26..2027-03-29, 4 days."), "{md}");
+    // The article a date cites, quoted from its copy, with the version: in Japanese, as e-Gov
+    // serves it, under the English name of its source.
+    let md = page("examples/civil_code_period_end.cal", Lang::En, Format::Markdown);
+    assert!(md.contains("> **civil_code 第143条 (e-Gov, as of 2026-10-01, revision 129AC0000000089_20260624_508AC0000000045)**"), "{md}");
+    assert!(md.contains("> ２　週、月又は年の初めから期間を起算しないときは、その期間は、最後の週、月又は年においてその起算日に応当する日の前日に満了する。"));
+    assert!(md.contains("With `else end_of_month` instead, last_day would differ on 57 of the 4,380 input combinations."), "{md}");
+    let md = page("examples/period_of_months.cal", Lang::En, Format::Markdown);
+    assert!(md.contains("With `else end_of_month` instead, last_day would differ on 57 of the 4,380 input combinations."), "{md}");
 }

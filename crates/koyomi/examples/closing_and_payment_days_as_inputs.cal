@@ -1,0 +1,21 @@
+dates closing_and_payment_days_as_inputs v1
+description "Takes the closing day, the month of payment and the day of payment as integers, as when the closing day comes from a rule. A payment day that is closed moves to the business day before. The claims are this example's own, written as they read. The English version of closing_and_payment_days_as_inputs.ja.cal"
+use calendar "calendars/tokyo_business_days.cal"
+
+inputs
+  received      : date  range >=2026-01-01 <=2027-10-01
+  closing_day   : int   range >=1 <=31
+  payment_month : int   range >=1 <=2
+  payment_day   : int   range >=10 <=31
+
+date closing = received
+  close day closing_day else end_of_month                     # closes on closing_day; in a month without that day (the 31st and the like), at the end of the month
+
+date payment = closing
+  day payment_day of month +payment_month else end_of_month  # payment_day of the month payment_month later; at the end of the month when it has no such day
+  roll preceding                                             # on the business day before when that day is closed
+
+claims
+  paid_on_a_business_day      : payment is open
+  paid_after_closing          : payment > closing
+  later_receipt_later_payment : payment is monotonic

@@ -1,0 +1,13 @@
+警告[W202]: tests/mutants/W202_shorter_form.cal:12:3: `day 31 of month +2 else end_of_month` は `end of month +2` と同じです。短いほうで書きます
+    12 |   day 31 of month +2 else end_of_month
+  = 同じ意味の書き方が二つあると、grep と diff の両方で困ります（DESIGN 1.2）。
+エラー[E301]: tests/mutants/W202_shorter_form.cal:16:3: 条件「within_60_days_of_receipt」が、received 1,035 日のうち 1,008 日で成り立ちません
+    16 |   within_60_days_of_receipt : payment <= received + 60 days
+  = 成り立たない日: 2026-01-01〜2026-01-29（29 日）、2026-02-01〜2026-03-29（57 日）、2026-04-01〜2026-06-28（89 日）、2026-07-01〜2026-08-30（61 日）、2026-09-01〜2026-11-29（90 日）、2026-12-01〜2026-12-27（27 日）、ほか 9 か所。全部は --format json で出ます
+  = いちばん外れるのは received 2026-05-01 のときで、payment 2026-07-31 は received の 91 日後
+  そうなる例（最初の入力）:
+      received  2026-01-01（木）
+      closing   2026-01-31（土）  月末締め
+      payment   2026-03-31（火）  2 か月後の 31 日（無ければ月末）
+                2026-03-31（火）  休みなら前営業日: 営業日なので動かない
+                payment は received の 89 日後で、条件は 60 日後まで

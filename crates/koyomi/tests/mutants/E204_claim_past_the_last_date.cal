@@ -1,0 +1,10 @@
+dates due v1
+
+inputs
+  received : date  range >=9999-12-01 <=9999-12-30
+
+date due = received
+  + 1 day
+
+claims
+  within_100_days : due <= received + 100 days

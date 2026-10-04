@@ -1,0 +1,8 @@
+エラー[E201]: tests/mutants/E201_closing_on_the_31st.cal:8:3: `close day closing_day` はその月に無い日に当たることがありますが、そのときどうするかが書かれていません
+     8 |   close day closing_day
+  = received 2026-01-30、closing_day 29 なら 2026-02-29 になります
+  = 直し方: 次のどれかを書きます。`close day closing_day else end_of_month`（2026-02-28 にする）、`close day closing_day else start_of_next_month`（2026-03-01 にする）、`close day closing_day else reject`（範囲の中で起きないことを検査が確かめる）
+  そうなる例:
+      received  2026-01-30（金）
+                closing_day = 29
+      closing                     29 日締め（closing_day = 29）: 2026-02-29 は無い

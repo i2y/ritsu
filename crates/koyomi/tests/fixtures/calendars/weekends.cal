@@ -1,0 +1,5 @@
+calendar weekends v1
+description "Closes Saturdays and Sundays. It has no table, so it knows every day"
+offset +09:00
+
+closed weekly sat, sun

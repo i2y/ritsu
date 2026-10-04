@@ -316,7 +316,9 @@ fn check_reads_no_network() {
     let dir = std::env::current_dir().unwrap();
     for args in [
         vec!["check", "examples/calendars", "examples/net30.cal"],
-        vec!["api", "examples/民法の期間.cal"],
+        vec!["api", "examples/civil_code_period_end.ja.cal"],
+        vec!["api", "examples/civil_code_period_end.cal"],
+        vec!["api", "examples/close_20th_pay_10th.cal"],
         vec!["eval", "examples/net30.cal", "invoice_date=2026-03-04"],
     ] {
         let o = Command::new(env!("CARGO_BIN_EXE_koyomi")).args(&args).current_dir(&dir).env("PATH", "").output().unwrap();
@@ -342,8 +344,113 @@ fn the_real_sources_when_asked() {
     }
     // The Civil Code: none of the five later revisions changes 140–143 (checked on
     // 2026-10-02). If this fails, the Code was amended, and DESIGN 1.5 is to be rewritten.
-    let o = koyomi(&dir, &["source", "outdated", "examples/民法の期間.cal"]);
-    println!("$ koyomi source outdated examples/民法の期間.cal\n{}", text(&o));
+    let o = koyomi(&dir, &["source", "outdated", "examples/civil_code_period_end.ja.cal"]);
+    println!("$ koyomi source outdated examples/civil_code_period_end.ja.cal\n{}", text(&o));
+    assert_eq!(code(&o), 0, "{}", text(&o));
+    assert_eq!(text(&o).matches("leaves the cited articles as they are").count(), 5, "{}", text(&o));
+}
+
+// ── In English: a table of holidays in English, and a law cited by English names ───────────────
+
+#[test]
+fn an_english_csv_table_moves_on() {
+    if no_curl() {
+        return;
+    }
+    let t = TempDir::new("fetch-csv-en");
+    let dir = t.path();
+    std::fs::create_dir_all(dir.join("data")).unwrap();
+    let old = "Date,Holiday\n2026-01-01,New Year's Day\n2026-12-25,Christmas Day\n".as_bytes().to_vec();
+    let new = "Date,Holiday\n2026-01-01,New Year's Day\n2026-12-25,Christmas Day\n2027-01-01,New Year's Day\n2027-12-24,Christmas Day (observed)\n".as_bytes().to_vec();
+    std::fs::write(dir.join("data/holidays.csv"), &old).unwrap();
+    std::fs::write(dir.join("data/new.csv"), &new).unwrap();
+    let url = format!("file://{}", dir.join("data/new.csv").display());
+    let cal = format!(
+        "calendar company v1\n\nsource company_holidays = file \"data/holidays.csv\" url \"{url}\" sha256:{}\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed weekly sat, sun\nclosed company_holidays\n",
+        short(&old)
+    );
+    std::fs::write(dir.join("company.cal"), &cal).unwrap();
+    assert_eq!(code(&koyomi(dir, &["check", "company.cal"])), 0, "the old copy passes");
+    let o = koyomi(dir, &["source", "outdated", "company.cal"]);
+    assert_eq!(code(&o), 1, "{}", text(&o));
+    let out = text(&o);
+    assert!(out.contains("2 days are added (2 in 2027): 2027-01-01 New Year's Day, 2027-12-24 Christmas Day (observed)"), "{out}");
+    assert!(out.contains("`covers 2026-01-01..2027-12-31` (now 2026-01-01..2026-12-31)"), "{out}");
+    assert_eq!(code(&koyomi(dir, &["source", "fetch", "company.cal"])), 0);
+    assert_eq!(std::fs::read(dir.join("data/holidays.csv")).unwrap(), new, "fetch writes the bytes as they came");
+    assert_eq!(code(&koyomi(dir, &["source", "pin", "company.cal"])), 0);
+    let pinned = std::fs::read_to_string(dir.join("company.cal")).unwrap();
+    assert_eq!(pinned, cal.replace(&short(&old), &short(&new)), "pin changes the 16 digits and nothing else");
+    assert!(text(&koyomi(dir, &["check", "company.cal"])).contains("E105"), "the rows of 2027 are outside the covers written for the old table");
+    std::fs::write(dir.join("company.cal"), pinned.replace("covers 2026-01-01..2026-12-31", "covers 2026-01-01..2027-12-31")).unwrap();
+    assert_eq!(code(&koyomi(dir, &["check", "company.cal"])), 0);
+    let o = koyomi(dir, &["source", "outdated", "company.cal"]);
+    assert_eq!(code(&o), 0, "{}", text(&o));
+    assert!(text(&o).contains("company_holidays: unchanged"), "{}", text(&o));
+}
+
+#[test]
+fn pin_changes_only_the_digits_in_english() {
+    let t = TempDir::new("pin-en");
+    let dir = t.path();
+    std::fs::create_dir_all(dir.join("data")).unwrap();
+    std::fs::write(dir.join("data/h.csv"), "2026-01-01,New Year's Day\r\n2026-05-04,Early May bank holiday\r\n").unwrap();
+    let h = short(&std::fs::read(dir.join("data/h.csv")).unwrap());
+    // A source line with no pin and a comment after it, in a file with CR LF line endings.
+    let cal = "calendar test v1\r\n\r\nsource holidays = file \"data/h.csv\"   # a table written by hand\r\n  format csv\r\n  covers 2026-01-01..2026-12-31\r\n\r\nclosed holidays\r\n";
+    std::fs::write(dir.join("test.cal"), cal).unwrap();
+    let o = koyomi(dir, &["source", "pin", "test.cal"]);
+    assert_eq!(code(&o), 0, "{}", text(&o));
+    let after = std::fs::read(dir.join("test.cal")).unwrap();
+    assert_eq!(String::from_utf8(after).unwrap(), cal.replace("\"data/h.csv\"   #", &format!("\"data/h.csv\" sha256:{h}   #")));
+    // Run again: nothing to change, and the file keeps its bytes.
+    let o = koyomi(dir, &["source", "pin", "test.cal", "--lang", "ja"]);
+    assert!(text(&o).contains(&format!("holidays: sha256:{h} で固定済みです。表は 2 行、covers 2026-01-01..2026-12-31")), "{}", text(&o));
+    assert_eq!(code(&koyomi(dir, &["check", "test.cal"])), 0);
+    // A pin that is wrong is rewritten in place.
+    let wrong = String::from_utf8(std::fs::read(dir.join("test.cal")).unwrap()).unwrap().replace(&h, "0123456789abcdef");
+    std::fs::write(dir.join("test.cal"), &wrong).unwrap();
+    assert_eq!(code(&koyomi(dir, &["source", "pin", "test.cal"])), 0);
+    assert_eq!(String::from_utf8(std::fs::read(dir.join("test.cal")).unwrap()).unwrap(), wrong.replace("0123456789abcdef", &h));
+}
+
+/// What `a_law_from_egov` shows, with English names: the dates and the source named in English,
+/// the articles as e-Gov names them.
+#[test]
+fn a_law_from_egov_cited_by_english_names() {
+    if no_curl() {
+        return;
+    }
+    let server = Egov::start();
+    let t = TempDir::new("egov-en");
+    let dir = t.path();
+    let period = "dates period v1
+source civil_code = law \"129AC0000000089\" asof 2026-10-01
+  第140条 sha256:e880059021fbb67d
+  第143条 sha256:6950bdfb988439b6
+
+inputs
+  origin      : date  range >=2026-01-01 <=2026-12-31
+  month_count : int   range >=1 <=12
+
+date first_day = origin                 @civil_code 第140条
+  + 1 day
+date last_day = first_day               @civil_code 第141条, 第143条
+  + month_count months else start_of_next_month
+  - 1 day
+";
+    std::fs::write(dir.join("period.cal"), period).unwrap();
+    assert!(text(&koyomi(dir, &["check", "period.cal"])).contains("E101"));
+    let o = egov_run(dir, &server, &["source", "fetch", "period.cal"]);
+    assert_eq!(code(&o), 0, "{}", text(&o));
+    let o = koyomi(dir, &["check", "period.cal"]);
+    assert!(text(&o).contains("E111") && text(&o).contains("第141条"), "{}", text(&o));
+    let o = koyomi(dir, &["source", "pin", "period.cal"]);
+    assert_eq!(code(&o), 0, "{}", text(&o));
+    assert!(text(&o).contains("civil_code: added a pin line for the cited 第141条 (sha256:0575c131b9f08063)"), "{}", text(&o));
+    assert_eq!(std::fs::read_to_string(dir.join("period.cal")).unwrap(), period.replace("  第143条 sha256:6950bdfb988439b6\n", "  第143条 sha256:6950bdfb988439b6\n  第141条 sha256:0575c131b9f08063\n"));
+    assert_eq!(code(&koyomi(dir, &["check", "period.cal"])), 0);
+    let o = egov_run(dir, &server, &["source", "outdated", "period.cal"]);
     assert_eq!(code(&o), 0, "{}", text(&o));
     assert_eq!(text(&o).matches("leaves the cited articles as they are").count(), 5, "{}", text(&o));
 }

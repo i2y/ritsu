@@ -118,7 +118,7 @@ fn an_empty_definition_is_no_end() {
 fn a_calendar_that_does_not_pass_its_check_makes_no_end() {
     let t = common::fixture("koyomi");
     let k = t.path().join("koyomi");
-    std::fs::copy("../koyomi/examples/民法の期間_読み方の比較.cal", k.join("比較.cal")).unwrap();
+    std::fs::copy("../koyomi/examples/civil_code_two_readings.ja.cal", k.join("比較.cal")).unwrap();
     let req = std::fs::read_to_string(k.join("民法の期間.req")).unwrap();
     std::fs::write(k.join("民法の期間.req"), req.replacen("  verified by koyomi \"民法の期間.cal\" claim 満了日は起点より後", "  verified by koyomi \"比較.cal\" claim 満了日は起点より後", 1)).unwrap();
     let c = common::check(&k.to_string_lossy());

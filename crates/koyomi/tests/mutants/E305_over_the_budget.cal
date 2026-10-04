@@ -1,0 +1,15 @@
+dates a_hundred_years v1
+use calendar "../fixtures/calendars/weekends.cal"
+
+inputs
+  received      : date  range >=1926-01-01 <=2025-12-31
+  closing_day   : int   range >=1 <=31
+  payment_month : int   range >=1 <=12
+  payment_day   : int   range >=1 <=28
+
+date closing = received
+  close day closing_day else end_of_month
+
+date payment = closing
+  day payment_day of month +payment_month
+  roll preceding

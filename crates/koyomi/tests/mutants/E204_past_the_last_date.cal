@@ -1,0 +1,7 @@
+dates due v1
+
+inputs
+  received : date  range >=9999-11-01 <=9999-12-31
+
+date due = received
+  + 30 days

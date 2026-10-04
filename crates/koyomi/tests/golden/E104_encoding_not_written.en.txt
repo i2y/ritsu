@@ -1,0 +1,2 @@
+error[E104]: tests/mutants/E104_encoding_not_written.cal:4:8: The copy ../../examples/calendars/data/syukujitsu.csv of the source national_holidays cannot be read at line 1: the bytes from byte 1 on are not UTF-8; for Shift_JIS, write `format csv shift_jis`
+     4 | source national_holidays = file "../../examples/calendars/data/syukujitsu.csv" sha256:cec37a743c96995c

@@ -1,0 +1,29 @@
+dates business_days v1
+description "Counting business days, the four conventions, if closed, and at (a time and end of day), on 0 to 3 days and every day of 1900 to 2100. The calendar is the one without a table that uses every way of writing a closed day. It is there to hold the small functions of the generated code to the reference interpreter"
+use calendar "calendars/every_way_to_close.cal"
+
+inputs
+  origin    : date  range >=1900-01-01 <=2100-12-31
+  day_count : int   range >=0 <=3
+
+date business_days_later = origin
+  + day_count business days
+date business_days_earlier = origin
+  - day_count business days
+date next_business_day = origin
+  roll following
+  at 09:00
+date previous_business_day = origin
+  roll preceding
+date modified_following_day = origin
+  roll modified following
+date modified_preceding_day = origin
+  roll modified preceding
+  at end of day
+date day_after_if_closed = origin
+  if closed + 1 day
+date month_end_if_closed = origin
+  if closed end of month +1
+date day_before_days_later = origin
+  + day_count days
+  - 1 day

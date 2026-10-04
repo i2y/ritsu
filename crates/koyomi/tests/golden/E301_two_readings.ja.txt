@@ -1,0 +1,27 @@
+エラー[E301]: tests/mutants/E301_two_readings.cal:22:3: 条件「the_two_readings_agree」が、origin と month_count の 4,380 通りのうち 709 通りで成り立ちません
+    22 |   the_two_readings_agree    : next_day = next_business_day
+  = 成り立たない入力: month_count 1 の 2026-01-07、2026-01-14、2026-01-21、2026-01-28〜2026-01-31（4 日）、2026-02-07、2026-02-14、ほか 608 か所。全部は --format json で出ます
+  = 入力の組み合わせごとの数: month_count 1 で 61、month_count 2 で 58、month_count 3 で 61、month_count 4 で 58、month_count 5 で 60、month_count 6 で 57、month_count 7 で 60、month_count 8 で 59、month_count 9 で 58、month_count 10 で 60、month_count 11 で 57、month_count 12 で 60
+  = いちばん外れるのは origin 2026-03-03、month_count 1 のときで、next_day 2026-04-04 は next_business_day の 3 日前
+  そうなる例（最初の入力）:
+      origin             2026-01-07（水）
+                         month_count = 1
+      first_day          2026-01-08（木）  翌日
+      last_day           2026-02-08（日）  1 か月後の同じ日（month_count = 1。無ければ次の月の 1 日）
+                         2026-02-07（土）  前日
+      next_day           2026-02-08（日）  休みなら翌日: 2026-02-07 は土曜で休み
+      next_business_day  2026-02-09（月）  休みなら翌営業日: 2026-02-07 は土曜、2026-02-08 は日曜で休み
+                         next_day は next_business_day の 1 日前
+エラー[E301]: tests/mutants/E301_two_readings.cal:23:3: 条件「rounding_to_the_month_end」が、origin と month_count の 4,380 通りのうち 39 通りで成り立ちません
+    23 |   rounding_to_the_month_end : last_day = months_added
+  = 成り立たない入力: month_count 1 の 2026-02-28、2026-04-30、2026-06-30、2026-09-30、2026-11-30、month_count 2 の 2026-02-28、ほか 33 か所。全部は --format json で出ます
+  = 入力の組み合わせごとの数: month_count 1 で 5、month_count 2 で 3、month_count 3 で 3、month_count 4 で 5、month_count 5 で 1、month_count 6 で 5、month_count 7 で 2、month_count 8 で 4、month_count 9 で 4、month_count 10 で 2、month_count 11 で 5
+  = いちばん外れるのは origin 2026-02-28、month_count 1 のときで、last_day 2026-03-31 は months_added の 3 日後
+  そうなる例（最初の入力）:
+      origin        2026-02-28（土）
+                    month_count = 1
+      first_day     2026-03-01（日）  翌日
+      last_day      2026-04-01（水）  1 か月後の同じ日（month_count = 1。無ければ次の月の 1 日）
+                    2026-03-31（火）  前日
+      months_added  2026-03-28（土）  1 か月後の同じ日（month_count = 1。無ければ月末）
+                    last_day は months_added の 3 日後

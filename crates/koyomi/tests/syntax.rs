@@ -180,7 +180,26 @@ fn the_listings_of_design_are_the_examples() {
     let blocks = design_blocks();
     let find = |head: &str| blocks.iter().find(|b| b.trim_start().starts_with(head)).cloned().unwrap_or_else(|| panic!("DESIGN shows {head}"));
     assert_eq!(find("calendar 東京の営業日(tokyo) v1"), std::fs::read_to_string("examples/calendars/東京の営業日.cal").unwrap());
-    assert_eq!(find("dates 支払条件(payment_terms) v1"), std::fs::read_to_string("examples/支払_20日締め翌月10日払い.cal").unwrap());
+    assert_eq!(find("dates 支払条件(payment_terms) v1"), std::fs::read_to_string("examples/payment_20th_close_next_10th.ja.cal").unwrap());
     let numbered = blocks.iter().find(|b| b.contains("  dates 月末締め翌々月末払い(eom_two_months) v1")).unwrap();
-    assert_eq!(unnumber(numbered), std::fs::read_to_string("examples/支払_月末締め翌々月末払い.cal").unwrap());
+    assert_eq!(unnumber(numbered), std::fs::read_to_string("examples/eom_close_two_months_later.ja.cal").unwrap());
+    // and the English versions, which DESIGN shows first
+    assert_eq!(find("calendar tokyo_business_days v1"), std::fs::read_to_string("examples/calendars/tokyo_business_days.cal").unwrap());
+    assert_eq!(find("dates payment_20th_close_next_10th v1"), std::fs::read_to_string("examples/payment_20th_close_next_10th.cal").unwrap());
+    let numbered = blocks.iter().find(|b| b.contains("  dates eom_close_two_months_later v1")).unwrap();
+    assert_eq!(unnumber(numbered), std::fs::read_to_string("examples/eom_close_two_months_later.cal").unwrap());
+}
+
+/// What `what_is_read` reads, written in English: a closure of every year across the new year,
+/// and a comment after a string that has a `#` in it.
+#[test]
+fn what_is_read_in_english() {
+    let p = parse("t.cal", "calendar t v1\nclosed every 12-29..01-03 \"New Year break\"\nclosed every 02-29\n");
+    assert!(p.diags.is_empty());
+    let p = parse("t.cal", "calendar t v1\noffset Europe/London\n");
+    assert!(p.diags.is_empty());
+    assert_eq!(p.file.unwrap().offset.unwrap().0, "Europe/London");
+    let p = parse("t.cal", "calendar t v1\ndescription \"#1 closing\" # a comment\n");
+    assert!(p.diags.is_empty());
+    assert_eq!(p.file.unwrap().description.unwrap(), "#1 closing");
 }

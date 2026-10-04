@@ -1,0 +1,411 @@
+{
+  "koyomi": "0.1.0",
+  "kind": "dates",
+  "name": "period_of_months",
+  "alias": "period_of_months",
+  "version": "1",
+  "source_sha256": "0f1a06d9b71a39f6e404d463b336275d58478c1b31c37d19f0229385c55cdbb2",
+  "description": "The end of a period of months counted from a day, written as this example reads it: the day itself is not counted, the period ends on the day before the corresponding day of the last month, or on the last day of that month when it has no such day, and an end that falls on a day closed in England and Wales moves to the day after. It says nothing of how any law is read",
+  "calendar": {
+    "name": "england_and_wales",
+    "alias": "england_and_wales",
+    "version": "1",
+    "file": "calendars/england_and_wales.cal",
+    "source_sha256": "00a0d8a87344f4f45c2ebbcfe348c82bd794024454c54aae2544b2cfb52c4465",
+    "offset": null,
+    "uses": [],
+    "closed": [
+      {
+        "weekly": [
+          "sat",
+          "sun"
+        ]
+      },
+      {
+        "table": "bank_holidays"
+      }
+    ],
+    "open": [],
+    "sources": [
+      {
+        "name": "bank_holidays",
+        "kind": "file",
+        "file": "calendars/data/bank-holidays.json",
+        "url": "https://www.gov.uk/bank-holidays.json",
+        "sha256": "538b3482c28b85ec",
+        "format": "govuk",
+        "division": "england-and-wales",
+        "covers": {
+          "listed_years": true,
+          "from": "2019-01-01",
+          "to": "2028-12-31"
+        },
+        "rows": 83
+      }
+    ],
+    "data_range": {
+      "from": "2019-01-01",
+      "to": "2028-12-31"
+    }
+  },
+  "sources": [],
+  "inputs": [
+    {
+      "name": "origin",
+      "alias": "origin",
+      "type": "date",
+      "range": {
+        "min": "2026-01-01",
+        "max": "2026-12-31"
+      }
+    },
+    {
+      "name": "month_count",
+      "alias": "month_count",
+      "type": "int",
+      "range": {
+        "min": 1,
+        "max": 12
+      }
+    }
+  ],
+  "dates": [
+    {
+      "name": "first_day",
+      "alias": "first_day",
+      "params": [
+        "origin"
+      ]
+    },
+    {
+      "name": "last_day",
+      "alias": "last_day",
+      "params": [
+        "origin",
+        "month_count"
+      ]
+    },
+    {
+      "name": "last_day_moved",
+      "alias": "last_day_moved",
+      "params": [
+        "origin",
+        "month_count"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "name": "last_day_is_monotonic",
+      "text": "last_day is monotonic"
+    },
+    {
+      "name": "moved_last_day_is_monotonic",
+      "text": "last_day_moved is monotonic"
+    },
+    {
+      "name": "last_day_after_origin",
+      "text": "last_day > origin"
+    },
+    {
+      "name": "moved_on_or_after_last_day",
+      "text": "last_day_moved >= last_day"
+    }
+  ],
+  "wire": {
+    "date": "YYYY-MM-DD",
+    "int": "a JSON number",
+    "at": "RFC 3339 in UTC, ending in Z, as dandori's timestamp",
+    "errors": [
+      "range",
+      "data",
+      "reject",
+      "date"
+    ]
+  },
+  "typescript": {
+    "file": "typescript/period_of_months.ts",
+    "module": "period_of_months",
+    "date_type": "string",
+    "functions": [
+      {
+        "name": "first_day",
+        "function": "first_day",
+        "signature": "export function first_day(origin: string): string",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "last_day",
+        "function": "last_day",
+        "signature": "export function last_day(origin: string, month_count: number): string",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "string"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "number"
+          }
+        ]
+      },
+      {
+        "name": "last_day_moved",
+        "function": "last_day_moved",
+        "signature": "export function last_day_moved(origin: string, month_count: number): string",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "string"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "number"
+          }
+        ]
+      }
+    ],
+    "is_open": "export function is_open(day: string): boolean",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "python": {
+    "file": "python/period_of_months.py",
+    "module": "period_of_months",
+    "date_type": "datetime.date",
+    "functions": [
+      {
+        "name": "first_day",
+        "function": "first_day",
+        "signature": "def first_day(origin: date) -> date",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "date"
+          }
+        ]
+      },
+      {
+        "name": "last_day",
+        "function": "last_day",
+        "signature": "def last_day(origin: date, month_count: int) -> date",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "date"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "int"
+          }
+        ]
+      },
+      {
+        "name": "last_day_moved",
+        "function": "last_day_moved",
+        "signature": "def last_day_moved(origin: date, month_count: int) -> date",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "date"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "int"
+          }
+        ]
+      }
+    ],
+    "is_open": "def is_open(day: date) -> bool",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "go": {
+    "file": "go/periodofmonths/periodofmonths.go",
+    "module": "periodofmonths",
+    "date_type": "Date",
+    "functions": [
+      {
+        "name": "first_day",
+        "function": "FirstDay",
+        "signature": "func FirstDay(origin Date) (Date, error)",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "Date"
+          }
+        ]
+      },
+      {
+        "name": "last_day",
+        "function": "LastDay",
+        "signature": "func LastDay(origin Date, month_count int) (Date, error)",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "Date"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "int"
+          }
+        ]
+      },
+      {
+        "name": "last_day_moved",
+        "function": "LastDayMoved",
+        "signature": "func LastDayMoved(origin Date, month_count int) (Date, error)",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "Date"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "int"
+          }
+        ]
+      }
+    ],
+    "is_open": "func IsOpen(day Date) (bool, error)",
+    "errors": [
+      "*KoyomiError"
+    ]
+  },
+  "rust": {
+    "file": "rust/period_of_months.rs",
+    "module": "period_of_months",
+    "date_type": "Date",
+    "functions": [
+      {
+        "name": "first_day",
+        "function": "first_day",
+        "signature": "pub fn first_day(origin: Date) -> Result<Date, KoyomiError>",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "Date"
+          }
+        ]
+      },
+      {
+        "name": "last_day",
+        "function": "last_day",
+        "signature": "pub fn last_day(origin: Date, month_count: i64) -> Result<Date, KoyomiError>",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "Date"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "i64"
+          }
+        ]
+      },
+      {
+        "name": "last_day_moved",
+        "function": "last_day_moved",
+        "signature": "pub fn last_day_moved(origin: Date, month_count: i64) -> Result<Date, KoyomiError>",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "Date"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "i64"
+          }
+        ]
+      }
+    ],
+    "is_open": "pub fn is_open(day: Date) -> Result<bool, KoyomiError>",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "sql": {
+    "file": "sql/period_of_months.sql",
+    "module": "period_of_months",
+    "date_type": "date",
+    "functions": [
+      {
+        "name": "first_day",
+        "function": "first_day",
+        "signature": "period_of_months.first_day(origin date) RETURNS date",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "date"
+          }
+        ]
+      },
+      {
+        "name": "last_day",
+        "function": "last_day",
+        "signature": "period_of_months.last_day(origin date, month_count integer) RETURNS date",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "date"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "integer"
+          }
+        ]
+      },
+      {
+        "name": "last_day_moved",
+        "function": "last_day_moved",
+        "signature": "period_of_months.last_day_moved(origin date, month_count integer) RETURNS date",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "date"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "integer"
+          }
+        ]
+      }
+    ],
+    "is_open": "period_of_months.is_open(day date) RETURNS boolean",
+    "errors": [
+      "SQLSTATE 22023"
+    ]
+  }
+}

@@ -1,0 +1,2 @@
+error[E007]: tests/mutants/E007_same_name.cal:11:6: The name closing is declared twice (line 8 too)
+    11 | date closing = received

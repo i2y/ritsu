@@ -40,7 +40,11 @@ pub fn commands() -> Vec<Cmd> {
                 (1, tr!("エラーが一つ以上", "at least one error")),
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],
-            examples: vec!["koyomi check examples/", "koyomi check examples/支払_月末締め翌々月末払い.cal --format json --lang ja"],
+            examples: vec![
+                "koyomi check examples/",
+                "koyomi check examples/close_eom_pay_two_months_on.cal --format json",
+                "koyomi check examples/eom_close_two_months_later.ja.cal --format json --lang ja",
+            ],
             codes: every_code(),
         },
         Cmd {
@@ -68,7 +72,9 @@ pub fn commands() -> Vec<Cmd> {
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],
             examples: vec![
-                "koyomi eval examples/支払_20日締め翌月10日払い.cal 受領日=2026-04-01 --lang ja",
+                "koyomi eval examples/close_20th_pay_10th.cal received=2026-04-01",
+                "koyomi eval examples/calendars/england_and_wales.cal 2026-05-04",
+                "koyomi eval examples/payment_20th_close_next_10th.ja.cal 受領日=2026-04-01 --lang ja",
                 "koyomi eval examples/calendars/東京の営業日.cal 2026-05-04",
             ],
             codes: vec![],
@@ -94,7 +100,7 @@ pub fn commands() -> Vec<Cmd> {
                 (2, tr!("引数の誤り、読めないファイル、書けないファイル", "bad arguments, or a file that cannot be read or written")),
             ],
             examples: vec![
-                "koyomi gen examples/支払_20日締め翌月10日払い.cal --out generated",
+                "koyomi gen examples/close_20th_pay_10th.cal --out generated",
                 "koyomi gen examples/net30.cal --target python --lang ja",
                 "koyomi gen examples/net30.cal --check",
             ],
@@ -111,7 +117,7 @@ pub fn commands() -> Vec<Cmd> {
             params: vec![("<file.cal>", tr!("検査を通る dates か calendar のファイル", "a dates or calendar file that passes check"))],
             flags: vec![],
             exits: vec![(0, tr!("出した", "printed")), (1, tr!("ファイルにエラーがある", "the file has errors")), (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read"))],
-            examples: vec!["koyomi vectors examples/支払_20日締め翌月10日払い.cal", "koyomi vectors examples/calendars/東京の営業日.cal"],
+            examples: vec!["koyomi vectors examples/close_20th_pay_10th.cal", "koyomi vectors examples/calendars/england_and_wales.cal", "koyomi vectors examples/payment_20th_close_next_10th.ja.cal"],
             codes: vec![],
         },
         Cmd {
@@ -151,7 +157,9 @@ pub fn commands() -> Vec<Cmd> {
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],
             examples: vec![
-                "koyomi doc examples/支払_月末締め翌々月末払い.cal --lang ja",
+                "koyomi doc examples/close_eom_pay_two_months_on.cal",
+                "koyomi doc examples/calendars/england_and_wales.cal --format html --months 2027-04..2028-03",
+                "koyomi doc examples/eom_close_two_months_later.ja.cal --lang ja",
                 "koyomi doc examples/calendars/東京の営業日.cal --format html --months 2026-04..2027-03",
             ],
             codes: vec![],
@@ -167,7 +175,7 @@ pub fn commands() -> Vec<Cmd> {
             params: vec![("<file.cal>", tr!("検査を通る dates か calendar のファイル", "a dates or calendar file that passes check"))],
             flags: vec![],
             exits: vec![(0, tr!("出した", "printed")), (1, tr!("ファイルにエラーがある", "the file has errors")), (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read"))],
-            examples: vec!["koyomi api examples/支払_20日締め翌月10日払い.cal", "koyomi api examples/calendars/東京の営業日.cal"],
+            examples: vec!["koyomi api examples/close_20th_pay_10th.cal", "koyomi api examples/calendars/england_and_wales.cal", "koyomi api examples/payment_20th_close_next_10th.ja.cal"],
             codes: vec![],
         },
         Cmd {
@@ -195,9 +203,11 @@ pub fn commands() -> Vec<Cmd> {
                 (2, tr!("引数の誤り、読めないファイル、curl の失敗", "bad arguments, a file that cannot be read, or curl failing")),
             ],
             examples: vec![
+                "koyomi source fetch examples/calendars/england_and_wales.cal",
+                "koyomi source pin examples/calendars/england_and_wales.cal",
+                "koyomi source outdated examples/civil_code_period_end.cal",
                 "koyomi source fetch examples/calendars/東京の営業日.cal",
-                "koyomi source pin examples/calendars/東京の営業日.cal",
-                "koyomi source outdated examples/民法の期間.cal",
+                "koyomi source outdated examples/civil_code_period_end.ja.cal",
             ],
             codes: vec![],
         },

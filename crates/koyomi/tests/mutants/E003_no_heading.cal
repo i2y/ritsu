@@ -1,0 +1,5 @@
+# the heading was forgotten
+use calendar "../../examples/calendars/england_and_wales.cal"
+
+inputs
+  received : date  range >=2026-01-01 <=2026-12-31

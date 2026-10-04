@@ -1,0 +1,4 @@
+error[E102]: tests/mutants/E102_no_pin.cal:4:8: The source company_holidays is not pinned (it has no `sha256:`)
+     4 | source company_holidays = file "../fixtures/data/holidays.en.csv"
+  = Pin it with the first 16 digits of the SHA-256 of the copy's bytes; for the copy as it is, that is sha256:86cb32774217a66f (`koyomi source pin` writes it too).
+  = The line, fixed: source company_holidays = file "../fixtures/data/holidays.en.csv" sha256:86cb32774217a66f

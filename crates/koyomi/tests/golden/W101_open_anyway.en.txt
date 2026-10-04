@@ -1,0 +1,4 @@
+warning[W101]: tests/mutants/W101_open_anyway.cal:9:1: 2026-12-24 Thu written under `open` is a business day anyway
+     9 | open 2026-12-24 "Christmas Eve opening"
+  = No `closed` line names it. Unless the date is a slip, the line is not needed.
+tests/mutants/W101_open_anyway.cal: ok — calendar england_and_wales: table bank_holidays 83 rows, data range 2019-01-01..2028-12-31

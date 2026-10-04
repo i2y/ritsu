@@ -1,0 +1,5 @@
+error[E105]: tests/mutants/E105_row_outside_covers.cal:5:3: The table bank_holidays has 8 rows outside `covers 2019-01-01..2027-12-31`
+     5 |   covers 2019-01-01..2027-12-31
+  = Outside: 2028-01-03 New Year’s Day (Substitute day), 2028-04-14 Good Friday, 2028-04-17 Easter Monday, 2028-05-01 Early May bank holiday, 2028-05-29 Spring bank holiday, 2028-08-28 Summer bank holiday, and 2 more
+  = `covers` is the span the table lists every closed day of; when the table grew, so does the span. The table's rows run from 2019-01-01 to 2028-12-26.
+  = The line, fixed: covers 2019-01-01..2028-12-31

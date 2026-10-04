@@ -1,0 +1,10 @@
+error[E301]: tests/mutants/E301_over_60_days.cal:16:3: The claim within_60_days_of_receipt fails for 1,008 of the 1,035 days of received
+    16 |   within_60_days_of_receipt : payment <= received + 60 days
+  = It fails on 2026-01-01..2026-01-29 (29 days), 2026-02-01..2026-03-29 (57 days), 2026-04-01..2026-06-28 (89 days), 2026-07-01..2026-08-30 (61 days), 2026-09-01..2026-11-29 (90 days), 2026-12-01..2026-12-27 (27 days), and 9 more runs; --format json lists them all
+  = The farthest is received 2026-05-01, where payment 2026-07-31 is 91 days after received
+  the first input it fails on:
+      received  2026-01-01 Thu
+      closing   2026-01-31 Sat  close end of month
+      payment   2026-03-31 Tue  end of month +2
+                2026-03-31 Tue  roll preceding: a business day, stays
+                payment is 89 days after received, and the claim allows at most 60 days after

@@ -71,3 +71,48 @@ fn every_golden_file_has_its_mutant() {
         assert!(ms.iter().any(|m| m == stem), "tests/golden/{n} has no mutant");
     }
 }
+
+/// What `the_json_of_a_diagnostic` checks, on the English mutant: the keys, and every failing run.
+#[test]
+fn the_json_of_a_diagnostic_in_english() {
+    let o = check("tests/mutants/E301_over_60_days.cal").unwrap();
+    for lang in [Lang::En, Lang::Ja] {
+        let v = koyomi::check::to_json(&o, lang);
+        let d = &v["diagnostics"][0];
+        for key in ["code", "severity", "file", "line", "col", "message", "notes", "inputs", "steps", "fails", "fix"] {
+            assert!(d.get(key).is_some(), "{key} is missing");
+        }
+        assert_eq!(d["fails"].as_array().unwrap().len(), 15);
+        assert_eq!(d["inputs"]["received"], "2026-01-01");
+        assert_eq!(v["ok"], false);
+    }
+}
+
+/// Every mutant with a Japanese name has one with an English name beside it, under the same code
+/// (`E001_閉じていない文字列.cal` and `E001_unclosed_string.cal`), that gives the same codes and
+/// the same exit code: the English one shows the same behavior in English.
+#[test]
+fn every_japanese_mutant_has_an_english_one() {
+    let said = |name: &str| -> (Vec<&'static str>, i32) {
+        let o = check(&format!("tests/mutants/{name}")).unwrap();
+        let mut codes: Vec<&'static str> = o.diags.iter().map(|d| d.code).collect();
+        codes.sort();
+        codes.dedup();
+        (codes, if o.has_errors() { 1 } else { 0 })
+    };
+    let all = mutants();
+    let english = |n: &str| n.trim_end_matches(".cal").split_once('_').is_some_and(|(_, what)| what.is_ascii());
+    let mut missing = Vec::new();
+    let mut pairs = 0;
+    for j in all.iter().filter(|n| !english(n)) {
+        let code = j.split('_').next().unwrap();
+        let want = said(j);
+        let twin = all.iter().filter(|n| english(n) && n.starts_with(&format!("{code}_"))).find(|n| said(n) == want);
+        match twin {
+            Some(_) => pairs += 1,
+            None => missing.push(format!("{j} ({:?}, exit {})", want.0, want.1)),
+        }
+    }
+    assert!(missing.is_empty(), "Japanese mutants with no English mutant that says the same:\n{}", missing.join("\n"));
+    assert!(pairs >= 45, "{pairs} pairs");
+}

@@ -1,0 +1,27 @@
+error[E301]: tests/mutants/E301_two_readings.cal:22:3: The claim the_two_readings_agree fails for 709 of the 4,380 combinations of origin and month_count
+    22 |   the_two_readings_agree    : next_day = next_business_day
+  = It fails on month_count 1: 2026-01-07, 2026-01-14, 2026-01-21, 2026-01-28..2026-01-31 (4 days), 2026-02-07, 2026-02-14, and 608 more runs; --format json lists them all
+  = By input: month_count 1 → 61, month_count 2 → 58, month_count 3 → 61, month_count 4 → 58, month_count 5 → 60, month_count 6 → 57, month_count 7 → 60, month_count 8 → 59, month_count 9 → 58, month_count 10 → 60, month_count 11 → 57, month_count 12 → 60
+  = The farthest is origin 2026-03-03, month_count 1, where next_day 2026-04-04 is 3 days before next_business_day
+  the first input it fails on:
+      origin             2026-01-07 Wed
+                         month_count = 1
+      first_day          2026-01-08 Thu  + 1 day
+      last_day           2026-02-08 Sun  + month_count months else start_of_next_month (month_count = 1)
+                         2026-02-07 Sat  - 1 day
+      next_day           2026-02-08 Sun  if closed + 1 day: 2026-02-07 (Saturday) is closed
+      next_business_day  2026-02-09 Mon  roll following: 2026-02-07 (Saturday) and 2026-02-08 (Sunday) are closed
+                         next_day is 1 day before next_business_day
+error[E301]: tests/mutants/E301_two_readings.cal:23:3: The claim rounding_to_the_month_end fails for 39 of the 4,380 combinations of origin and month_count
+    23 |   rounding_to_the_month_end : last_day = months_added
+  = It fails on month_count 1: 2026-02-28, 2026-04-30, 2026-06-30, 2026-09-30, 2026-11-30; month_count 2: 2026-02-28, and 33 more runs; --format json lists them all
+  = By input: month_count 1 → 5, month_count 2 → 3, month_count 3 → 3, month_count 4 → 5, month_count 5 → 1, month_count 6 → 5, month_count 7 → 2, month_count 8 → 4, month_count 9 → 4, month_count 10 → 2, month_count 11 → 5
+  = The farthest is origin 2026-02-28, month_count 1, where last_day 2026-03-31 is 3 days after months_added
+  the first input it fails on:
+      origin        2026-02-28 Sat
+                    month_count = 1
+      first_day     2026-03-01 Sun  + 1 day
+      last_day      2026-04-01 Wed  + month_count months else start_of_next_month (month_count = 1)
+                    2026-03-31 Tue  - 1 day
+      months_added  2026-03-28 Sat  + month_count months else end_of_month (month_count = 1)
+                    last_day is 3 days after months_added

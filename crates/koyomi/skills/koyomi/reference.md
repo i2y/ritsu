@@ -16,28 +16,26 @@ A `.cal` file is one of two kinds, told apart by its first line.
 A calendar from the examples, whole:
 
 ```cal
-calendar 東京の営業日(tokyo) v1
-description "土日、国民の祝日と休日、12 月 29 日から 1 月 3 日までを休む"
-offset +09:00
+calendar england_and_wales v1
+description "Saturdays, Sundays and the bank holidays of England and Wales, as GOV.UK lists them. No offset: England and Wales has daylight saving time, so this calendar gives dates only"
 
-source 祝日 = file "data/syukujitsu.csv" url "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv" sha256:cec37a743c96995c
-  format csv shift_jis
-  covers 1955-01-01..2027-12-31
+source bank_holidays = file "data/bank-holidays.json" url "https://www.gov.uk/bank-holidays.json" sha256:538b3482c28b85ec
+  format govuk "england-and-wales"
+  covers listed years
 
 closed weekly sat, sun
-closed 祝日
-closed every 12-29..01-03 "年末年始"
+closed bank_holidays
 ```
 
 And a dates file that reads it:
 
 ```cal
-dates payment_20th_close_next_10th v1
-description "Closes on the 20th; pays on the 10th of the next month, or on the business day before when that day is closed. The English twin of 支払_20日締め翌月10日払い.cal. The claim within_60_days_of_receipt is this example's own, written as it reads; it does not say how any law is read"
-use calendar "calendars/東京の営業日.cal"
+dates close_20th_pay_10th v1
+description "Closes on the 20th; pays on the 10th of the next month, or on the business day before when that day is closed in England and Wales. The claim within_60_days_of_receipt is this example's own, written as it reads; it does not say how any law is read"
+use calendar "calendars/england_and_wales.cal"
 
 inputs
-  received : date  range >=2026-01-01 <=2027-11-20
+  received : date  range >=2026-01-01 <=2028-11-20
 
 date closing = received
   close day 20          # "closes on the 20th"
@@ -45,7 +43,6 @@ date closing = received
 date payment = closing
   day 10 of month +1    # "pays on the 10th of the next month"
   roll preceding        # "on the business day before when that day is closed"
-  at 09:00
 
 claims
   paid_on_a_business_day      : payment is open
@@ -83,11 +80,15 @@ names of a file, its inputs and its dates become identifiers in five languages, 
 ASCII alias in parentheses, `[a-z][a-z0-9_]*`, unless the name is already of that form:
 
 ```cal
+dates net30 v1
+  received : date  range >=2026-01-01 <=2028-11-20
 dates 支払条件(payment_terms) v1
   受領日(received) : date  range >=2026-01-01 <=2027-11-20
 date 支払日(payment) = 締め日
-dates net30 v1
 ```
+
+The last three lines are from the Japanese version of an example. A name in English that is not of
+that form takes an alias too (`InvoiceDate(invoice_date)`).
 
 Claims and sources are not in the generated code and need no alias. A name or an alias cannot be
 a keyword, a reserved word of a target language, or a name the generated code uses itself
@@ -117,10 +118,10 @@ included), `@` (a citation of a law) and `#` (a comment).
 | Line | What it says |
 |---|---|
 | `closed weekly sat, sun` | those days of every week are closed |
-| `closed every 12-29..01-03 "年末年始"` | those days of every year are closed; the span may cross the new year, and may be one day (`closed every 05-01 "創立記念日"`) |
-| `closed 2000-08-14..2000-08-16 "夏季休業"` | those days are closed (one day: `closed 2099-12-30 "最後の営業日の前"`) |
-| `closed 祝日` | the days of the table `祝日` are closed |
-| `open 2000-01-03 "臨時営業"` | the day is open, whatever closes it |
+| `closed every 12-29..01-03 "New Year break"` | those days of every year are closed; the span may cross the new year, and may be one day (`closed every 05-01 "Founding day"`) |
+| `closed 2000-08-14..2000-08-16 "Summer closure"` | those days are closed (one day: `closed 2099-12-30 "The day before the last business day"`) |
+| `closed bank_holidays` | the days of the table `bank_holidays` are closed |
+| `open 2000-01-03 "Extra business day"` | the day is open, whatever closes it |
 | `offset +09:00` | the UTC offset the times are given at |
 | `use calendar "<file>"` | another calendar, which this one adds to |
 
@@ -143,13 +144,15 @@ error of kind `data`. A calendar with no business day at all is E108.
 ### Tables of holidays
 
 ```cal
-source 祝日 = file "data/syukujitsu.csv" url "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv" sha256:cec37a743c96995c
-  format csv shift_jis
-  covers 1955-01-01..2027-12-31
 source bank_holidays = file "data/bank-holidays.json" url "https://www.gov.uk/bank-holidays.json" sha256:538b3482c28b85ec
   format govuk "england-and-wales"
   covers listed years
+source national_holidays = file "data/syukujitsu.csv" url "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv" sha256:cec37a743c96995c
+  format csv shift_jis
+  covers 1955-01-01..2027-12-31
 ```
+
+The second is the Cabinet Office's table of Japan's holidays, in Shift_JIS.
 
 - `file`: the copy, from the `.cal`'s directory. `url`: where `koyomi source fetch` and
   `koyomi source outdated` take it from. `sha256:`: the first 16 hex digits of the SHA-256 of the
@@ -174,16 +177,17 @@ cannot be read E104, and a row outside `covers` E105. `koyomi check` never reads
 
 ### Laws
 
-A law is cited from e-Gov, an article, a paragraph or an item at a time:
+A law is cited from e-Gov, an article, a paragraph or an item at a time. The articles are named as
+e-Gov names them, whatever the language of the rest of the file:
 
 ```cal
-source 民法 = law "129AC0000000089" asof 2026-10-01
+source civil_code = law "129AC0000000089" asof 2026-10-01
   第140条 sha256:e880059021fbb67d
   第141条 sha256:0575c131b9f08063
   第142条 sha256:fc8c35a0769d3b35
   第143条 sha256:6950bdfb988439b6
-date 起算日(first_day) = 起点                            @民法 第140条
-date 満了日(last_day) = 起算日                           @民法 第141条, 第143条
+date first_day = origin                                       @civil_code 第140条
+date last_day = first_day                                     @civil_code 第141条, 第143条
 ```
 
 The copies are `sources/law/<law id>@<asof>/<element>.xml` beside the `.cal` (what e-Gov law API
@@ -206,10 +210,10 @@ later revision changes it.
 
 ```cal
 inputs
-  受領日(received)        : date  range >=2026-01-01 <=2027-10-01
-  締め日(closing_day)     : int   range >=1 <=31
-  支払の月(payment_month) : int   range >=1 <=2
-  支払の日(payment_day)   : int   range >=10 <=31
+  received      : date  range >=2026-01-01 <=2027-10-01
+  closing_day   : int   range >=1 <=31
+  payment_month : int   range >=1 <=2
+  payment_day   : int   range >=10 <=31
 ```
 
 The types are `date` and `int`. A dates file has exactly one `date` input (E012) and any number
@@ -224,9 +228,9 @@ A date starts from an input or another date, and the operations under it apply o
 top to bottom, a line each:
 
 ```cal
-date 支払(payment) = 締め
-  day 支払の日 of month +支払の月 else end_of_month  # 支払の月だけ後の月の、支払の日。無い日なら月末
-  roll preceding                                     # 支払日が休みなら前の営業日
+date payment = closing
+  day payment_day of month +payment_month else end_of_month  # payment_day of the month payment_month later; at the end of the month when it has no such day
+  roll preceding                                             # on the business day before when that day is closed
 ```
 
 | Operation | What it gives | Needs a calendar | Needs `else` |
@@ -242,8 +246,8 @@ date 支払(payment) = 締め
 | `roll following`, `roll preceding`, `roll modified following`, `roll modified preceding` | a closed day moved to a business day | yes | no |
 | `if closed <operation>` | the operation, on a closed day only | yes | as the operation |
 
-A number in an operation can be the name of an integer input (`close day 締め日 else end_of_month`,
-`+ 日数 business days`); whether the operation needs `else` is then decided by the input's range.
+A number in an operation can be the name of an integer input (`close day closing_day else end_of_month`,
+`+ day_count business days`); whether the operation needs `else` is then decided by the input's range.
 Numbers are 0 or more, and `+` and `-` give the direction.
 
 Exactly what each operation does, for a day `z` with year, month and day `(y, m, d)`:
@@ -290,21 +294,23 @@ should give the same dates, say so with a claim, and the check finds every day i
 `at 09:00` or `at end of day`, after a date's operations, gives that date's time too: 09:00 of
 that day at the calendar's offset, or the end of the day (00:00 of the next). The calendar needs
 an offset (E110). A time is written in UTC, ending in `Z` (`2026-05-08T00:00:00Z`), the form
-dandori's `timestamp` takes, so it can be handed to a workflow's `wait until`.
+dandori's `timestamp` takes, so it can be handed to a workflow's `wait until`. A place that changes
+its clocks has no one offset to give, so the examples on England and Wales give dates only; the
+examples on Tokyo's business days, which keep +09:00, pay at 09:00.
 
 ### Claims
 
 ```cal
 claims
-  営業日に払う       : 支払日 is open
-  受領から60日以内   : 支払日 <= 受領日 + 60 days
-  遅い受領は遅い支払 : 支払日 is monotonic
+  paid_on_a_business_day      : payment is open
+  within_60_days_of_receipt   : payment <= received + 60 days
+  later_receipt_later_payment : payment is monotonic
 ```
 
 | Claim | Holds when |
 |---|---|
 | `X is open` | `X` is a business day |
-| `A <= B`, `A < B`, `A = B`, `A > B`, `A >= B` | the comparison holds; either side can add or take away days or business days (`受領日 + 60 days`, `受領日 + 40 business days`) |
+| `A <= B`, `A < B`, `A = B`, `A > B`, `A >= B` | the comparison holds; either side can add or take away days or business days (`received + 60 days`, `received + 40 business days`) |
 | `X is monotonic` | a later input date never gives an earlier `X`, for each value of the integer inputs |
 
 Every claim is checked on every input of the range. A claim that fails on any is E301, a date that
@@ -316,7 +322,7 @@ every pair of adjacent days, which covers every pair of days, since `<=` chains.
 
 ```cal
 examples
-| 受領日     | -> 締め日  | -> 支払日  |
+| received   | -> closing | -> payment |
 | 2026-04-01 | 2026-04-20 | 2026-05-08 |
 | 2026-12-21 | 2027-01-20 | 2027-02-10 |
 ```
@@ -340,8 +346,8 @@ outside 0001–9999) is reported, and then the claims are not checked, since the
 every input. When nothing fails:
 
 ```console
-$ koyomi check examples/payment_20th_close_next_10th.cal
-examples/payment_20th_close_next_10th.cal: ok — 3 claims hold on all 689 days of received (2026-01-01..2027-11-20); 2 examples match
+$ koyomi check examples/close_20th_pay_10th.cal
+examples/close_20th_pay_10th.cal: ok — 3 claims hold on all 1,055 days of received (2026-01-01..2028-11-20); 2 examples match
 ```
 
 What the check shows is that the file, as written, keeps its claims on every input of its range.
@@ -396,6 +402,21 @@ file whose claims or examples fail; any other error leaves it without a page, wi
 URL three times. Every other command, `check` among them, reads only the files.
 
 `koyomi eval` shows one input's computation, line by line, and what each claim says of it:
+
+```console
+$ koyomi eval examples/close_20th_pay_10th.cal received=2026-04-01
+received  2026-04-01 Wed
+closing   2026-04-20 Mon  close day 20: closes the period 2026-03-21..2026-04-20
+payment   2026-05-10 Sun  day 10 of month +1
+          2026-05-08 Fri  roll preceding: 2026-05-10 (Sunday) and 2026-05-09 (Saturday) are closed
+
+claim paid_on_a_business_day: holds
+claim within_60_days_of_receipt: holds (payment is 37 days after received, and the claim allows at most 60 days after)
+claim later_receipt_later_payment: holds (for the day before, 2026-03-31, payment is 2026-05-08)
+```
+
+A date with `at` has a line more, its time at the calendar's offset and in UTC; here the same terms
+on Tokyo's business days:
 
 ```console
 $ koyomi eval examples/payment_20th_close_next_10th.cal received=2026-04-01

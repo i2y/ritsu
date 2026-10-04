@@ -4,14 +4,14 @@
   "name": "payment_20th_close_next_10th",
   "alias": "payment_20th_close_next_10th",
   "version": "1",
-  "source_sha256": "977edcf4588aec2561f37e5ccb0d44dab88be66e441ab1e0557151accc319d38",
-  "description": "Closes on the 20th; pays on the 10th of the next month, or on the business day before when that day is closed. The English twin of 支払_20日締め翌月10日払い.cal. The claim within_60_days_of_receipt is this example's own, written as it reads; it does not say how any law is read",
+  "source_sha256": "9973542043dbee17ad415e26f6cf9f78fccffebf31f065d9a440e3e785112f83",
+  "description": "Closes on the 20th; pays on the 10th of the next month, or on the business day before when that day is closed. The English version of payment_20th_close_next_10th.ja.cal. The claim within_60_days_of_receipt is this example's own, written as it reads; it does not say how any law is read",
   "calendar": {
-    "name": "東京の営業日",
-    "alias": "tokyo",
+    "name": "tokyo_business_days",
+    "alias": "tokyo_business_days",
     "version": "1",
-    "file": "calendars/東京の営業日.cal",
-    "source_sha256": "d7b6134e23a8cb9f65c27840e79e6fd52fb0acfbb5babb93732c3504f9427406",
+    "file": "calendars/tokyo_business_days.cal",
+    "source_sha256": "37af228cf6ba7b9563facb31a7dcdc0b398fffebc025a5ec14ce4fe0571aec66",
     "offset": "+09:00",
     "uses": [],
     "closed": [
@@ -22,17 +22,17 @@
         ]
       },
       {
-        "table": "祝日"
+        "table": "national_holidays"
       },
       {
         "every": "12-29..01-03",
-        "name": "年末年始"
+        "name": "New Year holidays"
       }
     ],
     "open": [],
     "sources": [
       {
-        "name": "祝日",
+        "name": "national_holidays",
         "kind": "file",
         "file": "calendars/data/syukujitsu.csv",
         "url": "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv",

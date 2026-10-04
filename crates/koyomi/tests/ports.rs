@@ -86,7 +86,7 @@ fn the_facts_are_what_koyomi_api_says() {
 /// from 受領日 to it.
 #[test]
 fn a_dates_values_and_its_days_are_counted_exactly() {
-    let file = Path::new("examples/支払_20日締め翌月10日払い.cal");
+    let file = Path::new("examples/payment_20th_close_next_10th.ja.cal");
     let Found::Value(set) = Engine.values(file, "支払日").unwrap() else { panic!("undecided") };
     assert_eq!(set.len(), 23);
     assert_eq!(*set.first().unwrap(), day("2026-02-10"));
@@ -150,7 +150,7 @@ fn an_evaluation_is_what_the_vectors_say() {
 /// naming; a date's definition is its block without the comments; the calendar a file reads.
 #[test]
 fn a_cal_names_its_items_and_its_references() {
-    let file = "examples/支払_20日締め翌月10日払い.cal";
+    let file = "examples/payment_20th_close_next_10th.ja.cal";
     let items = Engine.items(&root(), file).unwrap();
     let kinds: Vec<(&str, &str)> = items.iter().map(|i| (i.kind(), i.name())).collect();
     assert!(kinds.contains(&("input", "受領日")), "{kinds:?}");
@@ -176,5 +176,48 @@ fn a_cal_names_its_items_and_its_references() {
             assert_eq!(ritsu_base::naming::parse_one(&it.naming.text()).map(|x| x.text()).ok(), Some(it.naming.text()), "{f}");
         }
         Engine.references(&root(), f).unwrap();
+    }
+}
+
+/// What `a_dates_values_and_its_days_are_counted_exactly` counts, on the English version: the same
+/// 23 days over the same 689 days of received, and on England and Wales, 35 days over 1,055.
+#[test]
+fn a_dates_values_and_its_days_are_counted_exactly_in_english() {
+    let file = Path::new("examples/payment_20th_close_next_10th.cal");
+    let Found::Value(set) = Engine.values(file, "payment").unwrap() else { panic!("undecided") };
+    assert_eq!(set.len(), 23);
+    assert_eq!(*set.first().unwrap(), day("2026-02-10"));
+    assert_eq!(*set.last().unwrap(), day("2027-12-10"));
+    assert_eq!(Engine.days(file, "payment").unwrap(), Found::Value((18, 51)));
+    assert!(Engine.values(file, "no_such_date").is_err());
+    let file = Path::new("examples/close_20th_pay_10th.cal");
+    let Found::Value(set) = Engine.values(file, "payment").unwrap() else { panic!("undecided") };
+    assert_eq!(set.len(), 35);
+    assert_eq!(*set.first().unwrap(), day("2026-02-10"));
+    assert_eq!(*set.last().unwrap(), day("2028-12-08"));
+    for d in &set {
+        let (_, _, dd) = koyomi::date::Day(*d as i32).ymd();
+        assert!([8, 9, 10].contains(&dd), "{dd}");
+    }
+    assert_eq!(Engine.days(file, "payment").unwrap(), Found::Value((18, 51)));
+}
+
+#[test]
+fn a_cal_names_its_items_and_its_references_in_english() {
+    let file = "examples/payment_20th_close_next_10th.cal";
+    let items = Engine.items(&root(), file).unwrap();
+    let kinds: Vec<(&str, &str)> = items.iter().map(|i| (i.kind(), i.name())).collect();
+    assert!(kinds.contains(&("input", "received")), "{kinds:?}");
+    assert!(kinds.contains(&("date", "payment")), "{kinds:?}");
+    assert!(items.iter().any(|i| i.kind() == "claim"), "{kinds:?}");
+    let pay = items.iter().find(|i| i.name() == "payment").unwrap();
+    assert!(pay.text.starts_with("date payment"), "{}", pay.text);
+    assert!(!pay.text.contains('#'), "{}", pay.text);
+    assert_eq!(pay.naming.text(), format!("koyomi \"{file}\" date payment"));
+    let refs = Engine.references(&root(), file).unwrap();
+    assert!(refs.iter().any(|r| r.how == "use calendar" && r.target.tool == ritsu_base::naming::Tool::Koyomi), "{refs:?}");
+    for cal in ["examples/calendars/tokyo_business_days.cal", "examples/calendars/england_and_wales.cal"] {
+        let refs = Engine.references(&root(), cal).unwrap();
+        assert!(refs.iter().any(|r| r.how == "source" && r.target.tool == ritsu_base::naming::Tool::File), "{cal}: {refs:?}");
     }
 }

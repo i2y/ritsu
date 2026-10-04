@@ -1,0 +1,23 @@
+dates payment_20th_close_next_10th v1
+description "Closes on the 20th; pays on the 10th of the next month, or on the business day before when that day is closed in England and Wales. The claim within_60_days_of_receipt is this example's own, written as it reads; it does not say how any law is read"
+use calendar "../../examples/calendars/england_and_wales.cal"
+
+inputs
+  received : date  range >=2026-01-01 <=2028-11-20
+
+date closing = received
+  close day 20
+
+date payment = closing
+  day 10 of month +1
+  roll preceding
+
+claims
+  paid_on_a_business_day      : payment is open
+  within_60_days_of_receipt   : payment <= received + 60 days
+  later_receipt_later_payment : payment is monotonic
+
+examples
+| received   | -> closing | -> payment |
+| 2026-04-01 | 2026-04-20 | 2026-05-08 |
+| 2026-12-21 | 2027-01-20 | 2027-02-09 |

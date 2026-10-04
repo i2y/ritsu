@@ -1,0 +1,8 @@
+error[E303]: tests/mutants/E303_example_differs.cal:23:29: Example row 2 says payment is 2027-02-09, and it computes to 2027-02-10
+    23 | | 2026-12-21 | 2027-01-20 | 2027-02-09 |
+  = The line, fixed: | 2026-12-21 | 2027-01-20 | 2027-02-10 |
+  the computation:
+      received  2026-12-21 Mon
+      closing   2027-01-20 Wed  close day 20
+      payment   2027-02-10 Wed  day 10 of month +1
+                2027-02-10 Wed  roll preceding: a business day, stays

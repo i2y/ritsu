@@ -17,14 +17,21 @@ fn lines(path: &str) -> Vec<String> {
 fn the_number_of_lines_of_every_example() {
     // PLAN C.8: the range, and the inputs just outside it.
     for (path, n) in [
-        ("examples/支払_20日締め翌月10日払い.cal", 691),
-        ("examples/民法の期間.cal", 4_384),
-        ("examples/締め日と支払日を受け取る.cal", 871_604),
+        ("examples/calendars/england_and_wales.cal", 3_655),
         ("examples/net30.cal", 1_066),
+        ("examples/close_20th_pay_10th.cal", 1_057),
+        ("examples/close_and_pay_on_given_days.cal", 872_968),
+        ("examples/period_of_months.cal", 4_384),
+        ("examples/calendars/tokyo_business_days.cal", 26_665),
+        ("examples/calendars/civil_code_142_days.cal", 26_665),
+        ("examples/payment_20th_close_next_10th.cal", 691),
+        ("examples/closing_and_payment_days_as_inputs.cal", 871_604),
+        ("examples/civil_code_period_end.cal", 4_384),
+        ("examples/payment_20th_close_next_10th.ja.cal", 691),
+        ("examples/civil_code_period_end.ja.cal", 4_384),
+        ("examples/closing_and_payment_days_as_inputs.ja.cal", 871_604),
         ("examples/calendars/東京の営業日.cal", 26_665),
         ("examples/calendars/民法142条の休日.cal", 26_665),
-        ("examples/calendars/england_and_wales.cal", 3_655),
-        ("examples/payment_20th_close_next_10th.cal", 691),
     ] {
         assert_eq!(lines(path).len(), n, "{path}");
     }
@@ -34,7 +41,7 @@ fn the_number_of_lines_of_every_example() {
 fn the_english_twins_say_what_the_japanese_examples_say() {
     // PLAN D.2: the same terms with English names give the same dates on every input, line for
     // line, once the names are read across.
-    let ja = lines("examples/支払_20日締め翌月10日払い.cal");
+    let ja = lines("examples/payment_20th_close_next_10th.ja.cal");
     let en = lines("examples/payment_20th_close_next_10th.cal");
     assert_eq!(ja.len(), en.len());
     for (a, b) in ja.iter().zip(&en) {
@@ -51,14 +58,14 @@ fn the_english_twins_say_what_the_japanese_examples_say() {
         assert_eq!(v["diagnostics"][0]["line"], 16);
         v["diagnostics"][0]["fails"].as_array().unwrap().clone()
     };
-    let (a, b) = (fails("examples/支払_月末締め翌々月末払い.cal"), fails("examples/eom_close_two_months_later.cal"));
+    let (a, b) = (fails("examples/eom_close_two_months_later.ja.cal"), fails("examples/eom_close_two_months_later.cal"));
     assert_eq!(a.len(), 10);
     assert_eq!(a, b);
 }
 
 #[test]
 fn what_a_line_says() {
-    let ls = lines("examples/支払_20日締め翌月10日払い.cal");
+    let ls = lines("examples/payment_20th_close_next_10th.ja.cal");
     assert_eq!(ls[0], r#"{"in":{"受領日":"2026-01-01"},"out":{"締め日":"2026-01-20","支払日":"2026-02-10","支払日.at":"2026-02-10T00:00:00Z"}}"#);
     // The line DESIGN 6.3 shows.
     assert!(ls.contains(&r#"{"in":{"受領日":"2026-04-01"},"out":{"締め日":"2026-04-20","支払日":"2026-05-08","支払日.at":"2026-05-08T00:00:00Z"}}"#.to_string()));
@@ -74,7 +81,7 @@ fn what_a_line_says() {
 #[test]
 fn the_order_is_the_check_s() {
     // The integer inputs outside, the date inside: 月数 1 for the 365 days of 2026, then 2.
-    let ls = lines("examples/民法の期間.cal");
+    let ls = lines("examples/civil_code_period_end.ja.cal");
     assert!(ls[0].starts_with(r#"{"in":{"起点":"2026-01-01","月数":1}"#), "{}", ls[0]);
     assert!(ls[364].starts_with(r#"{"in":{"起点":"2026-12-31","月数":1}"#), "{}", ls[364]);
     assert!(ls[365].starts_with(r#"{"in":{"起点":"2026-01-01","月数":2}"#), "{}", ls[365]);
@@ -91,7 +98,7 @@ fn the_order_is_the_check_s() {
         ]
     );
     // Several integers: the last declared turns fastest.
-    let o = koyomi(&["vectors", "examples/締め日と支払日を受け取る.cal"]);
+    let o = koyomi(&["vectors", "examples/closing_and_payment_days_as_inputs.ja.cal"]);
     let text = String::from_utf8(o.stdout).unwrap();
     let second_combination: Vec<&str> = text.lines().skip(639).take(1).collect();
     assert!(second_combination[0].starts_with(r#"{"in":{"受領日":"2026-01-01","締め日":1,"支払の月":1,"支払の日":11}"#), "{}", second_combination[0]);
@@ -124,10 +131,73 @@ fn the_library_and_the_command_agree() {
 
 #[test]
 fn no_vectors_from_a_file_that_fails() {
-    let o = koyomi(&["vectors", "examples/支払_月末締め翌々月末払い.cal"]);
+    let o = koyomi(&["vectors", "examples/eom_close_two_months_later.ja.cal"]);
     assert_eq!(o.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&o.stdout).starts_with("error[E301]"), "{}", String::from_utf8_lossy(&o.stdout));
     assert!(String::from_utf8_lossy(&o.stderr).contains("does not pass check, so it has no vectors"));
     assert_eq!(koyomi(&["vectors"]).status.code(), Some(2));
     assert_eq!(koyomi(&["vectors", "examples/net30.cal", "examples/net30.cal"]).status.code(), Some(2));
+}
+
+// ── In English: the English versions of the Japanese examples, and England and Wales ──────────
+
+#[test]
+fn what_a_line_says_in_english() {
+    let ls = lines("examples/payment_20th_close_next_10th.cal");
+    assert_eq!(ls[0], r#"{"in":{"received":"2026-01-01"},"out":{"closing":"2026-01-20","payment":"2026-02-10","payment.at":"2026-02-10T00:00:00Z"}}"#);
+    assert!(ls.contains(&r#"{"in":{"received":"2026-04-01"},"out":{"closing":"2026-04-20","payment":"2026-05-08","payment.at":"2026-05-08T00:00:00Z"}}"#.to_string()));
+    assert_eq!(ls[689], r#"{"in":{"received":"2025-12-31"},"error":"range"}"#);
+    assert_eq!(ls[690], r#"{"in":{"received":"2027-11-21"},"error":"range"}"#);
+    // On England and Wales, which has no offset, the dates have no times beside them.
+    let ls = lines("examples/close_20th_pay_10th.cal");
+    assert_eq!(ls[0], r#"{"in":{"received":"2026-01-01"},"out":{"closing":"2026-01-20","payment":"2026-02-10"}}"#);
+    assert_eq!(ls[1055], r#"{"in":{"received":"2025-12-31"},"error":"range"}"#);
+    assert_eq!(ls[1056], r#"{"in":{"received":"2028-11-21"},"error":"range"}"#);
+}
+
+#[test]
+fn the_order_is_the_check_s_in_english() {
+    let ls = lines("examples/civil_code_period_end.cal");
+    assert!(ls[0].starts_with(r#"{"in":{"origin":"2026-01-01","month_count":1}"#), "{}", ls[0]);
+    assert!(ls[364].starts_with(r#"{"in":{"origin":"2026-12-31","month_count":1}"#), "{}", ls[364]);
+    assert!(ls[365].starts_with(r#"{"in":{"origin":"2026-01-01","month_count":2}"#), "{}", ls[365]);
+    assert_eq!(ls[21], r#"{"in":{"origin":"2026-01-22","month_count":1},"out":{"first_day":"2026-01-23","last_day":"2026-02-22","last_day_142":"2026-02-23"}}"#);
+    assert_eq!(
+        ls[4380..].to_vec(),
+        [
+            r#"{"in":{"origin":"2025-12-31","month_count":1},"error":"range"}"#,
+            r#"{"in":{"origin":"2027-01-01","month_count":1},"error":"range"}"#,
+            r#"{"in":{"origin":"2026-01-01","month_count":0},"error":"range"}"#,
+            r#"{"in":{"origin":"2026-01-01","month_count":13},"error":"range"}"#,
+        ]
+    );
+    let o = koyomi(&["vectors", "examples/closing_and_payment_days_as_inputs.cal"]);
+    let text = String::from_utf8(o.stdout).unwrap();
+    let second_combination: Vec<&str> = text.lines().skip(639).take(1).collect();
+    assert!(second_combination[0].starts_with(r#"{"in":{"received":"2026-01-01","closing_day":1,"payment_month":1,"payment_day":11}"#), "{}", second_combination[0]);
+}
+
+#[test]
+fn a_calendar_s_vectors_in_english() {
+    let ls = lines("examples/calendars/tokyo_business_days.cal");
+    assert_eq!(ls[0], r#"{"in":{"date":"1955-01-01"},"out":{"open":false}}"#);
+    assert!(ls.contains(&r#"{"in":{"date":"2026-05-06"},"out":{"open":false}}"#.to_string()));
+    assert_eq!(ls[26664], r#"{"in":{"date":"2028-01-01"},"error":"data"}"#);
+    let ls = lines("examples/calendars/england_and_wales.cal");
+    assert_eq!(ls[0], r#"{"in":{"date":"2019-01-01"},"out":{"open":false}}"#);
+    assert!(ls.contains(&r#"{"in":{"date":"2026-05-08"},"out":{"open":true}}"#.to_string()));
+    assert!(ls.contains(&r#"{"in":{"date":"2026-05-04"},"out":{"open":false}}"#.to_string()));
+    assert_eq!(ls[3653], r#"{"in":{"date":"2018-12-31"},"error":"data"}"#);
+    assert_eq!(ls[3654], r#"{"in":{"date":"2029-01-01"},"error":"data"}"#);
+    let ls = lines("tests/fixtures/calendars/every_way_to_close.cal");
+    assert_eq!(ls.len(), 73_414);
+    assert!(ls[0].starts_with(r#"{"in":{"date":"1900-01-01"}"#));
+}
+
+#[test]
+fn no_vectors_from_a_file_that_fails_in_english() {
+    let o = koyomi(&["vectors", "examples/eom_close_two_months_later.cal"]);
+    assert_eq!(o.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&o.stdout).starts_with("error[E301]"), "{}", String::from_utf8_lossy(&o.stdout));
+    assert!(String::from_utf8_lossy(&o.stderr).contains("does not pass check, so it has no vectors"));
 }

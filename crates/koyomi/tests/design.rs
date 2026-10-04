@@ -75,13 +75,21 @@ fn the_code_design_shows_is_the_code_gen_writes() {
     // vectors of one: DESIGN quotes real output, not a sketch.
     let text = std::fs::read_to_string("DESIGN.md").unwrap();
     let examples = [
-        "examples/支払_20日締め翌月10日払い.cal",
-        "examples/民法の期間.cal",
-        "examples/締め日と支払日を受け取る.cal",
+        "examples/calendars/england_and_wales.cal",
         "examples/net30.cal",
+        "examples/close_20th_pay_10th.cal",
+        "examples/close_and_pay_on_given_days.cal",
+        "examples/period_of_months.cal",
+        "examples/calendars/tokyo_business_days.cal",
+        "examples/calendars/civil_code_142_days.cal",
+        "examples/payment_20th_close_next_10th.cal",
+        "examples/closing_and_payment_days_as_inputs.cal",
+        "examples/civil_code_period_end.cal",
+        "examples/payment_20th_close_next_10th.ja.cal",
+        "examples/civil_code_period_end.ja.cal",
+        "examples/closing_and_payment_days_as_inputs.ja.cal",
         "examples/calendars/東京の営業日.cal",
         "examples/calendars/民法142条の休日.cal",
-        "examples/calendars/england_and_wales.cal",
     ];
     let mut generated: Vec<(String, String)> = Vec::new();
     let mut vectors: Vec<String> = Vec::new();

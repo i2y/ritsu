@@ -1,0 +1,12 @@
+dates last_day v1
+use calendar "../../examples/calendars/england_and_wales.cal"
+source civil_code = law "129AC0000000089" asof 2026-10-01
+  第140条 sha256:e880059021fbb67d
+
+inputs
+  origin : date  range >=2026-01-01 <=2026-12-31
+
+date first_day = origin    @civil_code 第140条
+  + 1 day
+date last_day_moved = first_day    @civil_code 第142条
+  if closed + 1 day

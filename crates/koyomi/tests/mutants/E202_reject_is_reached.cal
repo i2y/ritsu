@@ -1,0 +1,7 @@
+dates month_later_example v1
+
+inputs
+  received : date  range >=2026-01-01 <=2026-12-31
+
+date month_later = received
+  + 1 month else reject

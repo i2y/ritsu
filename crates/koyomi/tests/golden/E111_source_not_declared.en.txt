@@ -1,0 +1,3 @@
+error[E111]: tests/mutants/E111_source_not_declared.cal:7:28: The source civil_code is not declared
+     7 | date first_day = origin    @civil_code 第140条
+  = Declare the law with `source civil_code = law "<law id>" asof <date>`, and pin the articles cited under it.

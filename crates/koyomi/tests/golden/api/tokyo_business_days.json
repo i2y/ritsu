@@ -1,0 +1,109 @@
+{
+  "koyomi": "0.1.0",
+  "kind": "calendar",
+  "name": "tokyo_business_days",
+  "alias": "tokyo_business_days",
+  "version": "1",
+  "source_sha256": "37af228cf6ba7b9563facb31a7dcdc0b398fffebc025a5ec14ce4fe0571aec66",
+  "calendar": {
+    "name": "tokyo_business_days",
+    "alias": "tokyo_business_days",
+    "version": "1",
+    "file": "tokyo_business_days.cal",
+    "source_sha256": "37af228cf6ba7b9563facb31a7dcdc0b398fffebc025a5ec14ce4fe0571aec66",
+    "offset": "+09:00",
+    "uses": [],
+    "closed": [
+      {
+        "weekly": [
+          "sat",
+          "sun"
+        ]
+      },
+      {
+        "table": "national_holidays"
+      },
+      {
+        "every": "12-29..01-03",
+        "name": "New Year holidays"
+      }
+    ],
+    "open": [],
+    "sources": [
+      {
+        "name": "national_holidays",
+        "kind": "file",
+        "file": "data/syukujitsu.csv",
+        "url": "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv",
+        "sha256": "cec37a743c96995c",
+        "format": "csv",
+        "encoding": "shift_jis",
+        "covers": {
+          "from": "1955-01-01",
+          "to": "2027-12-31"
+        },
+        "rows": 1067
+      }
+    ],
+    "data_range": {
+      "from": "1955-01-01",
+      "to": "2027-12-31"
+    }
+  },
+  "wire": {
+    "date": "YYYY-MM-DD",
+    "int": "a JSON number",
+    "at": "RFC 3339 in UTC, ending in Z, as dandori's timestamp",
+    "errors": [
+      "range",
+      "data",
+      "reject",
+      "date"
+    ]
+  },
+  "typescript": {
+    "file": "typescript/tokyo_business_days.ts",
+    "module": "tokyo_business_days",
+    "date_type": "string",
+    "is_open": "export function is_open(day: string): boolean",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "python": {
+    "file": "python/tokyo_business_days.py",
+    "module": "tokyo_business_days",
+    "date_type": "datetime.date",
+    "is_open": "def is_open(day: date) -> bool",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "go": {
+    "file": "go/tokyobusinessdays/tokyobusinessdays.go",
+    "module": "tokyobusinessdays",
+    "date_type": "Date",
+    "is_open": "func IsOpen(day Date) (bool, error)",
+    "errors": [
+      "*KoyomiError"
+    ]
+  },
+  "rust": {
+    "file": "rust/tokyo_business_days.rs",
+    "module": "tokyo_business_days",
+    "date_type": "Date",
+    "is_open": "pub fn is_open(day: Date) -> Result<bool, KoyomiError>",
+    "errors": [
+      "KoyomiError"
+    ]
+  },
+  "sql": {
+    "file": "sql/tokyo_business_days.sql",
+    "module": "tokyo_business_days",
+    "date_type": "date",
+    "is_open": "tokyo_business_days.is_open(day date) RETURNS boolean",
+    "errors": [
+      "SQLSTATE 22023"
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+error[E305]: tests/mutants/E305_over_the_budget.cal:5:3: Checking needs 380,444,400 input combinations, over the budget of 100,000,000, so nothing was checked
+     5 |   received      : date  range >=1926-01-01 <=2025-12-31
+  = That is received 36,525 days × closing_day 31 × payment_month 12 × payment_day 28
+  = It never tries some of the inputs and passes; narrow a range, split the file, or raise the budget with `--budget` (DESIGN 3.2).

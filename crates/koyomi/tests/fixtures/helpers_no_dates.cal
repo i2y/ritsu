@@ -1,0 +1,6 @@
+dates no_dates v1
+description "A file without a single date. It passes check, so its generated code has to work too: it has only the calendar's is_open"
+use calendar "calendars/every_way_to_close.cal"
+
+inputs
+  origin : date  range >=2026-01-01 <=2026-01-03

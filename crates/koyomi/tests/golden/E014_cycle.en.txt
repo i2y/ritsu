@@ -1,0 +1,3 @@
+error[E014]: tests/mutants/E014_cycle.cal:8:6: The dates go round in a circle: closing <- payment <- closing
+     8 | date closing = payment
+  = Every date has to start, in the end, from the date under `inputs`.

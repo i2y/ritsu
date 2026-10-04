@@ -66,12 +66,12 @@ There is no step where you have to read koyomi's source.
 A whole dates file, from the examples:
 
 ```cal
-dates payment_20th_close_next_10th v1
-description "Closes on the 20th; pays on the 10th of the next month, or on the business day before when that day is closed. The English twin of 支払_20日締め翌月10日払い.cal. The claim within_60_days_of_receipt is this example's own, written as it reads; it does not say how any law is read"
-use calendar "calendars/東京の営業日.cal"
+dates close_20th_pay_10th v1
+description "Closes on the 20th; pays on the 10th of the next month, or on the business day before when that day is closed in England and Wales. The claim within_60_days_of_receipt is this example's own, written as it reads; it does not say how any law is read"
+use calendar "calendars/england_and_wales.cal"
 
 inputs
-  received : date  range >=2026-01-01 <=2027-11-20
+  received : date  range >=2026-01-01 <=2028-11-20
 
 date closing = received
   close day 20          # "closes on the 20th"
@@ -79,7 +79,6 @@ date closing = received
 date payment = closing
   day 10 of month +1    # "pays on the 10th of the next month"
   roll preceding        # "on the business day before when that day is closed"
-  at 09:00
 
 claims
   paid_on_a_business_day      : payment is open
@@ -95,45 +94,22 @@ examples
 And the calendar it reads:
 
 ```cal
-calendar 東京の営業日(tokyo) v1
-description "土日、国民の祝日と休日、12 月 29 日から 1 月 3 日までを休む"
-offset +09:00
+calendar england_and_wales v1
+description "Saturdays, Sundays and the bank holidays of England and Wales, as GOV.UK lists them. No offset: England and Wales has daylight saving time, so this calendar gives dates only"
 
-source 祝日 = file "data/syukujitsu.csv" url "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv" sha256:cec37a743c96995c
-  format csv shift_jis
-  covers 1955-01-01..2027-12-31
+source bank_holidays = file "data/bank-holidays.json" url "https://www.gov.uk/bank-holidays.json" sha256:538b3482c28b85ec
+  format govuk "england-and-wales"
+  covers listed years
 
 closed weekly sat, sun
-closed 祝日
-closed every 12-29..01-03 "年末年始"
+closed bank_holidays
 ```
 
-Indentation (spaces) makes the blocks; `#` starts a comment. The keywords are English; names can
-be in any script, and the names of the file, its inputs and its dates need an ASCII alias in
-parentheses unless they are already `[a-z][a-z0-9_]*` (`受領日(received)`).
-
-### Inputs
-
-Exactly one `date` input, and any number of `int` inputs, each with both ends of its range:
-`締め日(closing_day) : int range >=1 <=31`. The check computes every combination, up to 10⁸
-(`--budget`), and the generated code refuses inputs outside the range.
-
-### Operations
-
-One a line, applied top to bottom. A number can be an integer input's name.
-
-```text
-+ 30 days, - 1 day                 days
-+ 5 business days                  business days, counted from the day after (Saturday + 1 is Monday)
-+ 1 month else …, - 2 years else … months and years; needs else, always
-day 10 of month +1 [else …]        the 10th of the month +k away; else when the day can be 29+
-start of month +1, end of month +2 the first or the last day of a month
-close day 20 [else …]              closing on the 20th: the closing day of the day's period
-close end of month                 the last day of the day's month
-roll following | preceding | modified following | modified preceding
-if closed <operation>              the operation, on a closed day only, once
-at 09:00 | at end of day           (last line) the date's time too, at the calendar's offset
-```
+A calendar for a place that changes its clocks has no offset, so dates on it have no time. The
+examples written for Japan read Tokyo's business days, which keep +09:00 and so let a date say
+`at 09:00`; each of them is there in English and in Japanese (`<name>.cal` and `<name>.ja.cal`,
+the same terms with the same results), since a name of a file, an input or a date can be written in
+any script, with an ASCII alias for the generated code (`受領日(received)`).
 
 `else` says what happens on a day the month does not have: `else end_of_month` (the last day of
 that month), `else start_of_next_month` (the first of the next), or `else reject` (the check
@@ -179,13 +155,13 @@ A diagnostic names the code, the place, what is wrong, how to fix it, and the in
 there:
 
 ```text
-error[E201]: tests/mutants/E201_無い日の扱いが無い.cal:7:3: `+ 1 month` can land on a day the month does not have, and the line does not say what to do then
+error[E201]: tests/mutants/E201_no_way_for_a_missing_day.cal:7:3: `+ 1 month` can land on a day the month does not have, and the line does not say what to do then
      7 |   + 1 month
-  = For 受領日 2026-01-29 it would be 2026-02-29
+  = For received 2026-01-29 it would be 2026-02-29
   = To fix it, write one of: `+ 1 month else end_of_month` (giving 2026-02-28), `+ 1 month else start_of_next_month` (giving 2026-03-01), `+ 1 month else reject` (the check makes sure it never happens in the range)
   the input that gets there:
-      受領日    2026-01-29 Thu
-      一か月後                  + 1 month: 2026-02-29 does not exist
+      received     2026-01-29 Thu
+      month_later                  + 1 month: 2026-02-29 does not exist
 ```
 
 | Code | What it finds | The usual fix |
