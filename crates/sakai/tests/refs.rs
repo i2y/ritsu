@@ -83,3 +83,40 @@ fn every_code_of_the_crossings_points_at_the_import() {
         assert!(d.extra.0.len() >= 2, "{name}");
     }
 }
+
+/// A child workflow across the boundary that implements an open host service of the other side
+/// crosses as that service (DESIGN 4.7): the relationship and its `through` hold it, as they hold a
+/// reference to the service's `.proto` (E203 when `through` does not list its package); with no
+/// service implemented, the same child is E209.
+#[test]
+fn a_child_that_implements_an_open_host_service_crosses_as_the_service() {
+    let dir = common::TempDir::new("child");
+    for (name, body) in sakai::codes::BASE {
+        dir.write(name, body);
+    }
+    dir.write(
+        "乙.ctx",
+        "context 乙(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService\n\npublished language b.run.v1\n  proto \"b/run/v1/run.proto\"\n  open host service RunService\n\nterms\n  種類 \"乙が扱うものの種類\"\n    means enum Kind\n",
+    );
+    dir.write(
+        "b/run/v1/run.proto",
+        "syntax = \"proto3\";\npackage b.run.v1;\nimport \"dandori/v1/options.proto\";\nservice RunService {\n  option (dandori.v1.workflow) = {name: \"c\", version: 1};\n  rpc Start(StartRequest) returns (StartResponse) {\n    option (dandori.v1.start) = {};\n  }\n}\nmessage StartRequest { string id = 1; }\nmessage StartResponse { string id = 1; }\n",
+    );
+    dir.write("b/c.flow", "workflow c v1 implements r1.RunService\n\nuse proto r1 from \"run/v1/run.proto\"\n\ninputs\n  id : string\n\noutputs\n  id : string\n\nflow\n  succeed id = id\n");
+    dir.write("a/p.flow", "workflow p v1\n\nrecord 答え\n  id : string\n\ninputs\n  id : string\n\ntask run_child(id: string) -> 答え\n  flow \"../b/c.flow\"\n\nflow\n  let r = run_child(id: id)\n  succeed\n");
+    let ctx = |through: &str| format!("context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 conformist\n  through {through}\n");
+    dir.write("甲.ctx", &ctx("b.run.v1"));
+    let os = check_dir(dir.path());
+    assert!(codes(&os).is_empty(), "{:?}", codes(&os));
+    let c = os[0].checked.as_ref().unwrap();
+    let child: Vec<_> = c.crossings.iter().filter(|x| x.kind == sakai::refs::Kind::FlowChild).collect();
+    assert_eq!(child.len(), 1);
+    assert_eq!(child[0].allowed, Some(Allowed::Upstream(0)));
+    // the service's package is what `through` has to list
+    dir.write("甲.ctx", &ctx("b.v1"));
+    assert_eq!(codes(&check_dir(dir.path())), ["E203"]);
+    // a child that implements nothing is the other side's own workflow
+    dir.write("甲.ctx", &ctx("b.run.v1"));
+    dir.write("b/c.flow", "workflow c v1\n\ninputs\n  id : string\n\noutputs\n  id : string\n\nflow\n  succeed id = id\n");
+    assert_eq!(codes(&check_dir(dir.path())), ["E209"]);
+}

@@ -7,20 +7,32 @@ mod common;
 use sakai::check::check_args;
 use ritsu_base::text::Lang;
 
-fn run(files: &[(&str, &str)]) -> Vec<sakai::check::Outcome> {
+/// `check .` of the files, with every language joined (`ritsu sakai`), or with none for E104,
+/// which only the binary of sakai's own crate gives.
+fn run_joined(files: &[(&str, &str)], joined: bool) -> Vec<sakai::check::Outcome> {
     let dir = common::TempDir::new("check");
     for (name, body) in files {
         dir.write(name, body);
     }
-    check_args(dir.path(), &[".".to_string()]).unwrap()
+    if joined { common::check_dir(dir.path()) } else { check_args(dir.path(), &[".".to_string()]).unwrap() }
 }
 
-/// The codes a reproduction gives, and what it printed: `check .` in the library, another command
+fn run(files: &[(&str, &str)]) -> Vec<sakai::check::Outcome> {
+    run_joined(files, true)
+}
+
+/// The codes a reproduction gives, and what it printed: `check .` in the library, with no other
+/// language joined (`sakai check .`) or every one (`ritsu sakai check .`); another command
 /// (`build …`) with the binary in the reproduction's directory.
 fn codes_of(e: &ritsu_base::ledger::Entry) -> (Vec<String>, String) {
     let (command, files) = sakai::codes::reproduction(e);
-    if command == ["check", "."] {
-        let os = run(&files);
+    let joined = match command.as_slice() {
+        ["check", "."] => Some(false),
+        ["ritsu", "sakai", "check", "."] => Some(true),
+        _ => None,
+    };
+    if let Some(joined) = joined {
+        let os = run_joined(&files, joined);
         let codes = os.iter().flat_map(|o| o.diags.iter().map(|d| d.code.to_string())).collect();
         return (codes, os.iter().flat_map(|o| o.diags.iter().map(|d| d.render(Lang::En))).collect());
     }
@@ -56,17 +68,20 @@ fn every_reproduction_gives_its_code() {
         n += 1;
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    assert!(n >= 51, "{n} reproductions");
+    assert!(n >= 58, "{n} reproductions");
 }
 
-/// The codes with no reproduction are those of the suite's tools, which sakai does not read yet
-/// (PLAN C.1 to C.5); every other code is printed, and reproduced.
+/// Every code is printed and reproduced, but the one retired (N101): its entry stays, with why it
+/// was retired, and its number is given to nothing else (ritsu's DESIGN 7.10).
 #[test]
-fn the_codes_not_printed_yet_are_the_suites() {
-    let later = ["E104", "E105", "N101", "E405"];
+fn the_retired_code_stays_in_the_ledger() {
     for e in sakai::codes::ledger().entries {
-        assert_eq!(sakai::codes::implemented(&e), !later.contains(&e.code), "{}", e.code);
+        assert_eq!(sakai::codes::implemented(&e), e.code != "N101", "{}", e.code);
+        assert_eq!(e.is_retired(), e.code == "N101", "{}", e.code);
     }
+    let ledger = sakai::codes::ledger();
+    let text = ledger.render_text(ledger.find("N101").unwrap(), Lang::En);
+    assert!(text.contains("Retired in ritsu 0.23.0"), "{text}");
 }
 
 #[test]

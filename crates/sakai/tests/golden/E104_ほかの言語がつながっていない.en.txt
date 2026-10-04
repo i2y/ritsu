@@ -1,0 +1,9 @@
+error[E104]: contexts/請求.ctx:6:7: This sakai cannot read rulec artifacts (4 of them, the first billing/rules/出荷の送料.rule)
+     6 |   dir "../billing", "../calendars"
+  = The binary of sakai's own crate holds no other language; run it with every language joined, through ritsu: `ritsu sakai check 通販.ctx`.
+error[E104]: contexts/請求.ctx:6:7: This sakai cannot read koyomi artifacts (3 of them, the first billing/支払条件.cal)
+     6 |   dir "../billing", "../calendars"
+  = The binary of sakai's own crate holds no other language; run it with every language joined, through ritsu: `ritsu sakai check 通販.ctx`.
+error[E104]: contexts/配送.ctx:6:7: This sakai cannot read dandori artifacts (2 of them, the first delivery/配送の手配.flow)
+     6 |   dir "../delivery", "../proto/shop/delivery"
+  = The binary of sakai's own crate holds no other language; run it with every language joined, through ritsu: `ritsu sakai check 通販.ctx`.

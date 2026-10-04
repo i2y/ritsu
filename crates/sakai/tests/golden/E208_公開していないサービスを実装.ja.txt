@@ -1,0 +1,6 @@
+エラー[E208]: ordering/受注.flow:3:1: 「受注」の ordering/受注.flow が実装する proto "proto/shop/ordering/v1/fulfillment.proto" service FulfillmentService は、「受注」の公表された言語の公開ホストサービスではありません
+     3 | workflow 引当と発送 v1 implements 店.FulfillmentService
+  = その proto は「受注」の公表された言語 shop.ordering.v1 にありますが、`open host service` に FulfillmentService がありません。
+  = ワークフローが実装するサービスは、そのワークフローを持つコンテキストが公表するものです。自分の公表された言語に proto を並べ、`open host service` にサービスを書きます。
+  関わるもの:
+      受注  ordering/受注.flow:3  implements proto "proto/shop/ordering/v1/fulfillment.proto" service FulfillmentService

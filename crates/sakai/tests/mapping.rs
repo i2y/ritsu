@@ -46,15 +46,22 @@ fn a_target_that_is_a_name_only_is_taken_as_written() {
     assert_eq!(e["checked"], false);
 }
 
+/// A rule's enum as the target is read from what rulec says of the rule (DESIGN 1.7): a rule that
+/// does not take the upstream enum in needs the value lines, each to a value of the rule's enum
+/// (E403); one that takes it in with `import proto` is the mapping, and lines beside it agree with
+/// it (E405, in the example's tests).
 #[test]
-fn a_rule_as_the_target_is_not_read_until_stage_c() {
-    // A rule's values come from `rulec api` (stage C): until then sakai says nothing of them.
+fn a_rule_as_the_target_is_read_from_rulec() {
+    let rule = "rule 請求の要否(billing_need) v1\n\nenum 注文の状態(order_status) = 受付(received) | 支払済(paid)\nenum 扱い(handling) = 待つ(wait) | 請求する(bill)\n\ninputs\n  状態(status) : 注文の状態\n\noutputs\n  扱い(handling) : 扱い\n\ntable t\npolicy unique\n| 状態   | -> 扱い  |\n| 受付   | 待つ     |\n| 支払済 | 請求する |\n";
     let dir = variant(
         "基本",
         &[
-            ("proto/billing/acl/rules/請求の要否.rule", "", "rule 請求の要否(billing_need) v1\n"),
-            ("ctx/請求.ctx", "enum OrderStatus -> enum BillingStatus\n    ORDER_STATUS_RECEIVED  -> BILLING_STATUS_WAIT\n", "enum OrderStatus -> rulec \"../proto/billing/acl/rules/請求の要否.rule\" enum 注文の状態\n"),
+            ("proto/billing/acl/rules/請求の要否.rule", "", rule),
+            ("ctx/請求.ctx", "enum OrderStatus -> enum BillingStatus\n    ORDER_STATUS_RECEIVED  -> BILLING_STATUS_WAIT\n", "enum OrderStatus -> rulec \"../proto/billing/acl/rules/請求の要否.rule\" enum 注文の状態\n    ORDER_STATUS_RECEIVED  -> 受取\n"),
         ],
     );
-    assert_eq!(codes(&check_dir(dir.path())), Vec::<&str>::new());
+    let os = check_dir(dir.path());
+    assert!(codes(&os).contains(&"E403"), "{:?}", codes(&os));
+    let d = os.iter().flat_map(|o| o.diags.iter()).find(|d| d.code == "E403").unwrap();
+    assert!(d.message.en.contains("The mapping maps to 受取, which is not a value of the enum 注文の状態"), "{}", d.message.en);
 }

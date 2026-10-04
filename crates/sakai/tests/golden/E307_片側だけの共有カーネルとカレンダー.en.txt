@@ -1,0 +1,13 @@
+error[E307]: contexts/配送.ctx:40:1: The shared kernel is written on 配送's side only
+    40 | shared kernel with 請求
+  = A shared kernel is held by two teams together; write `shared kernel with 配送` in 請求's file too, with the same entries.
+  involved:
+      配送  contexts/配送.ctx:40  shared kernel with 請求
+error[E201]: delivery/出荷日.cal:3:1: The file delivery/出荷日.cal of 配送 refers to calendars/東京の営業日.cal of 請求 (use calendar), which 配送 has no relationship with
+     3 | use calendar "../calendars/東京の営業日.cal"
+  = 請求 is downstream of 配送, the other way round: an upstream relationship lets the downstream refer to the upstream.
+  = The shared kernel of the two is written on 配送's side only (E307 is told too).
+  = A reference across the boundary needs a relationship: upstream and downstream (the downstream writes `upstream`), a partnership, or a shared kernel.
+  involved:
+      配送  delivery/出荷日.cal:3                use calendar "../calendars/東京の営業日.cal"
+      請求  koyomi "calendars/東京の営業日.cal"  a part of the inside of 請求

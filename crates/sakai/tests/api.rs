@@ -42,3 +42,36 @@ fn the_command_prints_the_same() {
     let want = std::fs::read_to_string("tests/golden/api/基本.json").unwrap();
     assert_eq!(String::from_utf8_lossy(&o.stdout), want);
 }
+
+/// Each crossing says how its file refers to the other side, in the words of the file's language
+/// (DESIGN 9): the example's map, with every language joined, as `ritsu sakai api`.
+#[test]
+fn each_crossing_says_how_it_refers() {
+    let (code, out, err) = common::joined(&["api", "examples/通販/通販.ctx", "--root", "examples/通販"]);
+    assert_eq!(code, 0, "{err}");
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let got: Vec<String> = v["crossings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| format!("{} {} -> {} ({}, {})", c["from"]["text"].as_str().unwrap(), c["line"], c["to"]["text"].as_str().unwrap(), c["via"].as_str().unwrap(), c["allowed_by"]["relationship"].as_str().unwrap()))
+        .collect();
+    assert_eq!(
+        got,
+        [
+            "proto \"proto/shop/ordering/v1/fulfillment.proto\" 15 -> proto \"proto/warehouse/v1/stock.proto\" (proto import, upstream_downstream)",
+            "rulec \"billing/rules/出荷の送料.rule\" 7 -> proto \"proto/shop/delivery/v1/shipment.proto\" message CreateShipmentRequest (shape, upstream_downstream)",
+            "rulec \"billing/rules/請求の要否.rule\" 4 -> proto \"proto/shop/ordering/v1/order.proto\" enum OrderStatus (import proto, upstream_downstream)",
+            "koyomi \"delivery/出荷日.cal\" 3 -> koyomi \"calendars/東京の営業日.cal\" (use calendar, shared_kernel)",
+            "dandori \"ordering/受注.flow\" 6 -> rulec \"delivery/rules/出荷の急ぎ.rule\" (use rule … connect, partnership)",
+            "dandori \"ordering/受注.flow\" 9 -> proto \"proto/warehouse/v1/stock.proto\" (use proto, upstream_downstream)",
+            "dandori \"ordering/受注.flow\" 47 -> proto \"proto/warehouse/v1/stock.proto\" service StockService method Reserve (connect, upstream_downstream)",
+            "dandori \"ordering/受注.flow\" 53 -> proto \"proto/warehouse/v1/stock.proto\" service StockService method Release (connect, upstream_downstream)",
+            "dandori \"ordering/受注.flow\" 59 -> dandori \"delivery/配送の手配.flow\" (flow, partnership)",
+        ]
+    );
+    // a rule's enum and a shape's message cross with what they reach
+    let shape = &v["crossings"][1]["elements"];
+    assert_eq!(shape.as_array().unwrap().len(), 4, "{shape}");
+    assert!(v["not_checked"].as_array().unwrap().is_empty());
+}

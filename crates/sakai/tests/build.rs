@@ -11,7 +11,7 @@ use ritsu_base::text::Lang;
 use std::path::{Path, PathBuf};
 
 fn checked(dir: &Path, map: &str) -> sakai::check::Outcome {
-    let o = sakai::check::check_map(dir, map).unwrap();
+    let o = sakai::check::check_map_with(dir, map, &common::suite()).unwrap();
     let text: String = o.diags.iter().map(|d| d.render(Lang::En)).collect();
     assert!(!o.has_errors(), "{text}");
     o
@@ -78,7 +78,7 @@ fn the_settings_of_the_example_are_what_the_map_writes() {
     let bless = ritsu_testkit::golden::bless();
     let mut failures = Vec::new();
     for t in Target::ALL {
-        let b = build::run(&ex, "通販.ctx", t, None, !bless, Lang::Ja).unwrap();
+        let b = build::run_with(&ex, "通販.ctx", t, &common::suite(), None, !bless, Lang::Ja).unwrap();
         if b.outcome.has_errors() || b.done.is_none() {
             failures.push(b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect::<String>());
         }
@@ -86,35 +86,34 @@ fn the_settings_of_the_example_are_what_the_map_writes() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-/// `--check` says it when the map changed after the settings were written: here, the partnership
-/// of ordering and delivery is gone, and each tool's settings would change.
+/// `--check` says it when the map changed after the settings were written: here, reviews becomes
+/// a conformist of ordering, and each tool's settings would change.
 #[test]
 fn check_says_when_the_map_moved_on() {
     let dir = common::TempDir::new("check");
     common::copy_dir(&example(), dir.path());
     for t in Target::ALL {
-        let b = build::run(dir.path(), "通販.ctx", t, None, true, Lang::Ja).unwrap();
+        let b = build::run_with(dir.path(), "通販.ctx", t, &common::suite(), None, true, Lang::Ja).unwrap();
         assert!(!b.outcome.has_errors(), "{} is up to date in the copy", t.word());
         // Checked in another language, the words differ, and the note says why.
-        let b = build::run(dir.path(), "通販.ctx", t, None, true, Lang::En).unwrap();
+        let b = build::run_with(dir.path(), "通販.ctx", t, &common::suite(), None, true, Lang::En).unwrap();
         let text: String = b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect();
         assert!(text.contains("error[E502]") && text.contains("The file was written with --lang ja"), "{text}");
     }
-    for (f, line) in [("contexts/受注.ctx", "partnership with 配送\n"), ("contexts/配送.ctx", "partnership with 受注\n")] {
-        let p = dir.path().join(f);
-        let s = std::fs::read_to_string(&p).unwrap();
-        std::fs::write(&p, s.replace(line, "")).unwrap();
-    }
+    // reviews becomes a conformist of ordering: its code may now import ordering's
+    let p = dir.path().join("contexts/レビュー.ctx");
+    let s = std::fs::read_to_string(&p).unwrap();
+    std::fs::write(&p, format!("{s}\nupstream 受注 conformist\n  through shop.ordering.v1\n")).unwrap();
     for t in Target::ALL {
-        let b = build::run(dir.path(), "通販.ctx", t, None, true, Lang::Ja).unwrap();
+        let b = build::run_with(dir.path(), "通販.ctx", t, &common::suite(), None, true, Lang::Ja).unwrap();
         let codes: Vec<&str> = b.outcome.diags.iter().map(|d| d.code).collect();
         assert_eq!(codes, ["E502"], "{}", t.word());
         assert!(b.done.is_none());
     }
     // Written again, it is up to date.
     for t in Target::ALL {
-        assert!(build::run(dir.path(), "通販.ctx", t, None, false, Lang::Ja).unwrap().done.is_some());
-        let b = build::run(dir.path(), "通販.ctx", t, None, true, Lang::Ja).unwrap();
+        assert!(build::run_with(dir.path(), "通販.ctx", t, &common::suite(), None, false, Lang::Ja).unwrap().done.is_some());
+        let b = build::run_with(dir.path(), "通販.ctx", t, &common::suite(), None, true, Lang::Ja).unwrap();
         assert!(b.outcome.diags.is_empty(), "{}", t.word());
     }
 }
@@ -122,7 +121,7 @@ fn check_says_when_the_map_moved_on() {
 /// What `build` says when it cannot write the settings, for each reason.
 fn e501(base: &str, edits: &[(&str, &str, &str)], map: &str, t: Target) -> String {
     let dir = common::variant(base, edits);
-    let b = build::run(dir.path(), map, t, None, false, Lang::En).unwrap();
+    let b = build::run_with(dir.path(), map, t, &common::suite(), None, false, Lang::En).unwrap();
     let text: String = b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect();
     let codes: Vec<&str> = b.outcome.diags.iter().map(|d| d.code).collect();
     assert_eq!(codes, ["E501"], "{text}");
@@ -175,7 +174,7 @@ fn what_cannot_be_written() {
         if says.contains("default package") {
             dir.write("java/src/main/java/Main.java", "public class Main {}\n");
         }
-        let b = build::run(dir.path(), "通販.ctx", t, None, false, Lang::En).unwrap();
+        let b = build::run_with(dir.path(), "通販.ctx", t, &common::suite(), None, false, Lang::En).unwrap();
         let text: String = b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect();
         assert!(text.contains("error[E501]") && text.contains(says), "{text}");
     }

@@ -3,12 +3,12 @@
 DESIGN.md が仕様で、この計画はそれを作る順序と、段階ごとの完了の条件を決める。段階は三つある。
 
 - **B**：言語の芯（字句・構文・名前）、proto の読み手、地図の検査（属し方、パターンどうしの整合、対応の網羅、同じ語）、診断（英語と日本語）、CLI の `check`・`api`・`explain`
-- **C**：一式の読み込み（rulec・koyomi・chobo の JSON。dandori は C.4）、コードの import の検査の設定の出力と、本物のツールでの突き合わせ、CML の出力
+- **C**：一式の読み込み（rulec・koyomi・dandori・chobo。ritsu の D.8 で、ritsu の口で作った。C.1〜C.5）、コードの import の検査の設定の出力と、本物のツールでの突き合わせ、CML の出力
 - **D**：`doc`、例の仕上げ、README.md と README.ja.md、エージェント向けのスキル（`skills/sakai`）
 
 どの段階も、ここに書いた順に進め、各段階の最後にある完了の条件のテストが全部通ったら終わりにする。実装して DESIGN.md の決定が成り立たないと分かったら、黙って変えずに、DESIGN.md を理由と捨てた形ごと直し、報告で言う。0 章の約束（名指しの形、api の形、診断のコード、コマンドの表、環境変数、外のツールの版）を変えるときも同じで、変えたら、それを使う段階のテストも直す。
 
-proto の読み込みは、一式の読み込みと一緒に C に置く分け方もあるが、この計画では proto の読み手を B に置いた。B の検査のうち、公表された言語（package、サービス）と対応の網羅（上流の列挙の値）と同じ語（越えてくる要素）は、proto を読まないと決められないからである。C に残したのは、rulec・koyomi・chobo の JSON と、dandori の扱いである。
+proto の読み込みは、一式の読み込みと一緒に C に置く分け方もあるが、この計画では proto の読み手を B に置いた。B の検査のうち、公表された言語（package、サービス）と対応の網羅（上流の列挙の値）と同じ語（越えてくる要素）は、proto を読まないと決められないからである。C に残したのは、一式の言語の読み込み（ritsu の D.8 から、ritsu の口で読む）と、dandori の扱いである。
 
 この計画を書いた A の段階では、本体のコードは書いていない。リポジトリにあるのは DESIGN.md とこの PLAN.md（と、前からある LICENSE-MIT と LICENSE-APACHE）だけである。例のために書く規則、カレンダー、proto、ワークフローの下書きは、A の段階に作業場所で作り、一式のツールに通した（DESIGN 4.7、11 章）。その本文と、写す元と直し方を C.0 に書いた。外のツール（import-linter、dependency-cruiser、ArchUnit、go-arch-lint、depguard、Spring Modulith、Context Mapper）も A の段階に小さな例で走らせ、その結果を DESIGN の 0.4、7 章、8 章に貼った。
 
@@ -21,7 +21,7 @@ proto の読み込みは、一式の読み込みと一緒に C に置く分け�
 - 一式のツールを入れるときは `cargo install --locked --path ~/<名前> --root <作業場所> --target-dir <作業場所>/target` とし、`--target-dir` を必ず付ける。cargo 1.94.1 の `cargo help install` のとおり、`--path` で入れるときは、`--target-dir` が無いとそのクレートの木の `target/` でビルドする（ほかの木に書くことになる）。
 - Rust は edition 2024 で、手元の stable 1.94.1 で通すこと。依存は `serde_json = { version = "1", features = ["preserve_order"] }` だけ。
 - 診断は英語が既定で、`--lang ja` か `SAKAI_LANG=ja` で日本語。golden は両方の言語で取る。
-- テストは `cargo test`。外のツール（rulec、koyomi、chobo、dandori、buf、python と import-linter、node と dependency-cruiser、Java と ArchUnit、go と go-arch-lint、Context Mapper、Chrome、Mermaid）が無いときは、`SKIP: <理由>` を一行出して通す。報告の前に `cargo test -- --nocapture 2>&1 | grep SKIP` で SKIP の行を読み、数を報告に書く。
+- テストは `cargo test`。外のツール（buf、python と import-linter、node と dependency-cruiser、Java と ArchUnit、go と go-arch-lint、Context Mapper、Chrome、Mermaid）が無いときは、`SKIP: <理由>` を一行出して通す。報告の前に `cargo test -- --nocapture 2>&1 | grep SKIP` で SKIP の行を読み、数を報告に書く。
 - golden の取り直しは `SAKAI_BLESS=1 cargo test`。取り直したら差分を読んでから報告する。
 - 一時ファイルは、テストの一時ディレクトリ（`std::env::temp_dir()` の下の `sakai-test-<pid>-<番号>`）に置き、`Drop` で消す。テストのプロセスは最初に、終わったプロセスの残した `sakai-test-*` を消す（dandori で、誰も消さずに 6.8 GB たまったことがある）。sakai のテストはサーバーを立てない。Chrome を使うテストは、時間を区切って止め、`--user-data-dir` の一時ディレクトリを消す。
 - 成果物（文書、golden、生成物、例）に、手元の絶対パス、ユーザー名、マシン名を入れない。ツールの出力を golden にするときは、一時ディレクトリのパスを `<tmp>` に置き換える。
@@ -37,7 +37,7 @@ proto の読み込みは、一式の読み込みと一緒に C に置く分け�
 - Java は OpenJDK 27 が入っているが、PATH には無い（場所は段階ごとの指示書にある）。テストは `SAKAI_JAVA` と `SAKAI_JAVAC`（無ければ `JAVA_HOME/bin`、それも無ければ PATH）で受け取るので、この機械でテストを回すときはその二つを付ける。クラスは `--release 21` で組む（ArchUnit 1.5.1 で確かめた形）。
 - Chrome は `SAKAI_CHROME`、無ければ macOS が Google Chrome を入れる場所（`/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`）、それも無ければ PATH の `google-chrome` か `chromium`（dandori、koyomi、chobo と同じ順。OS の既定の場所は手元の機械に固有のパスではないので、リポジトリに書いてよい）。
 - buf 1.54.0 と protoc 35.1 は PATH にある。
-- 一式のツール：rulec 0.22.1 は、段階ごとの指示書が言う場所に写してあるものを `SAKAI_RULEC` で渡す。koyomi、chobo、dandori は 0.1 のとおり作業場所に入れて、`SAKAI_KOYOMI`、`SAKAI_CHOBO`、`SAKAI_DANDORI` で渡す。
+- 一式の言語：ritsu の D.8 から、テストは rulec、koyomi、chobo、dandori を `[dev-dependencies]` に持ち、同じプロセスでつなぐ。入れるツールは無い（前は `SAKAI_RULEC`、`SAKAI_KOYOMI`、`SAKAI_CHOBO`、`SAKAI_DANDORI` でバイナリを渡していた）。
 - ディスクの空きは 48 GB ほど。ビルドの中間物や大きな一時ファイルを残さない（`tools/` の下の venv、node_modules、jar、go のキャッシュは git に入れず、終わったら消してよい）。
 
 ### 0.3 手本にしてよいもの（読むだけ）
@@ -63,7 +63,7 @@ B で `check`、`api`、`explain` と `--help`、`--version`、`--lang`、`--for
 
 B で作るもの：E001〜E012、E101〜E103、E106、W101〜W103、E201〜E206（proto の import から読む参照のぶん）、E301〜E313、W301、E401〜E404、E406〜E410、W401、W402（E403 は proto の列挙と名前だけの先のぶん）。
 
-C で作るもの：E104、E105、N101、E405、E501、E502、および rulec と koyomi から読む参照のぶんの E201〜E204・E403・E406・E407。E501 と E502 は C の段階で作った。ほかは一式の読み込み（C.1〜C.5）を待つ。
+C で作るもの：E104、E105、N101、E405、E501、E502、および rulec と koyomi から読む参照のぶんの E201〜E204・E403・E406・E407。E501 と E502 は C の段階で作った。ほかは ritsu の D.8 で、一式の読み込み（C.1〜C.5）を口で作ったときに作った。そのとき、E104 と E105 の意味を替え、N101 を退かせ、dandori の参照のぶんの E207、E208、E209 を足した（DESIGN 5.2、12.2）。
 
 台帳は B で全部のコードを `src/codes.rs` に書く（C のコードも、見出しと説明と直し方は B で書き、再現と変異は C で足す）。
 
@@ -72,8 +72,6 @@ C で作るもの：E104、E105、N101、E405、E501、E502、および rulec �
 | 変数 | 意味 | 既定 |
 |---|---|---|
 | `SAKAI_LANG` | 文面の言語 | 英語 |
-| `SAKAI_RULEC`、`SAKAI_KOYOMI`、`SAKAI_CHOBO` | 一式のツール（`check` も使う） | PATH の `rulec` など |
-| `SAKAI_RITSU` | dandori のワークフローを確かめる `ritsu dandori`（テスト。ritsu の D の二つ目の部分から。前は `SAKAI_DANDORI`） | ワークスペースの `target/debug/ritsu`、次に PATH の `ritsu` |
 | `SAKAI_BLESS` | golden を書き直す（テスト） | |
 | `SAKAI_BUF` | proto の読み手の比べ合わせ（テスト） | PATH の `buf` |
 | `SAKAI_LINT_IMPORTS` | import-linter（テスト） | `tools/.venv/bin/lint-imports` |
@@ -113,7 +111,7 @@ e62b96ac475dbcde8599ea905d088f65d90778f86e259b856a49fa5c4ea256ec  junit-platform
 
 #### api の形（DESIGN 9 章）
 
-キーはこの順に出す：`sakai`、`map`、`covers`、`except`、`contexts`、`relationships`、`artifacts`、`crossings`、`not_checked`。名前は名指しの形の JSON。`relationships[].kind` は `upstream_downstream`、`shared_kernel`、`partnership`、`separate_ways`。役割の語は `conformist`、`anticorruption_layer`、`customer`、`supplier`、`open_host_service`、`published_language`。B で形を決め、`tests/golden/api/` に固定する。C と D は、キーを足すことはあっても、名前を変えない。
+キーはこの順に出す：`sakai`、`map`、`covers`、`except`、`contexts`、`relationships`、`artifacts`、`crossings`、`not_checked`（ritsu の D.8 から、`crossings[].via` は参照の種類ごとの語で、`not_checked` はいつも空。DESIGN 9 章）。名前は名指しの形の JSON。`relationships[].kind` は `upstream_downstream`、`shared_kernel`、`partnership`、`separate_ways`。役割の語は `conformist`、`anticorruption_layer`、`customer`、`supplier`、`open_host_service`、`published_language`。B で形を決め、`tests/golden/api/` に固定する。C と D は、キーを足すことはあっても、名前を変えない。
 
 ## 1. ディレクトリ
 
@@ -121,6 +119,8 @@ e62b96ac475dbcde8599ea905d088f65d90778f86e259b856a49fa5c4ea256ec  junit-platform
 Cargo.toml  .gitignore  LICENSE-MIT  LICENSE-APACHE
 src/
   main.rs  lib.rs
+  run.rs          コマンドを関数にしたもの：run(引数, 口, 標準出力, 標準エラー)（ritsu の D.8）
+  ports.rs        ritsu の口に答える（Items、References。ritsu の D.2）
   cli.rs          コマンドとフラグの表、--help、引数の読み取り（B。C と D が足す）
   i18n.rs         Lang と tr!（文の組を返す）（B）
   kw.rs           キーワードの表（DESIGN 1.2）（B）
@@ -140,14 +140,14 @@ src/
   diag.rs  codes.rs                                      （B）
   api.rs                                                 （B）
   sha256.rs                                              （B）
-  suite/          mod.rs（子プロセスと時間の上限とツールの探し方）、rulec.rs、koyomi.rs、chobo.rs、dandori.rs（C）
+  suite.rs        ritsu の口のまとまり、ほかの言語に問うこと、E104 と E105（C.1〜C.5。ritsu の D.8）
   build/          mod.rs（--check と頭の書き方）、areas.rs（DESIGN 7.1 の表）、import_linter.rs、depcruise.rs、archunit.rs、go_arch_lint.rs（C）
   cml.rs                                                 （C）
   doc/            mod.rs（ページの中身）、markdown.rs、html.rs、draw.rs（SVG）（D）
 tests/
   common/mod.rs   一時ディレクトリ、ツールの探し方、時間の上限、golden、例の一覧（B、C、D）
   naming.rs syntax.rs resolve.rs owners.rs proto.rs patterns.rs refs.rs mapping.rs terms.rs codes.rs mutants.rs cli.rs api.rs design.rs  （B）
-  imports.rs build.rs cml.rs examples.rs（C）、suite.rs（C.1〜C.5。止めてある）
+  imports.rs build.rs cml.rs examples.rs（C）。C.1〜C.5 のテストは examples.rs、api.rs、mapping.rs、codes.rs、mutants.rs に置いた（ritsu の D.8）
   doc.rs docs.rs skill.rs                                                                                                 （D）
   maps/           検査を通る地図（B、C）
   mutants/        <コード>_<内容>/ ごとに一つの地図の組（B、C）
@@ -603,46 +603,44 @@ Python（`py/`）の import は次のとおり。TypeScript（`ts/`。相対パ�
 | 3 | `ordering/bad_kernel.py` | `from calendars import tokyo` | 請求と配送の共有カーネル |
 | 4 | `reviews/bad_separate.py` | `from billing import invoice` | 請求の内側 |
 
-### C.1 子プロセスとツール（`src/suite/mod.rs`）
+### C.1 口のまとまり（`src/suite.rs`、`src/run.rs`）
 
-**止めてある**：C.1〜C.5（一式のツールの JSON の読み込み）は、一式の言語を一つの処理系にまとめるかを作者が決めるまで作らない。まとめるなら、一式の読み込みは JSON ではなく型付きの呼び出しになる。決まったら、この節からの計画を、その形に合わせて直してから作る。
+**ritsu の D.8 で、口で作るように書き直してから作った**。C の段階では、一式のツールを子プロセスで呼び、`rulec api` などの JSON を読む計画で、一式の言語を一つの処理系にまとめるかが決まるまで止めてあった。まとめると決まったので、ritsu の口（ritsu の DESIGN 3.2）で読む（DESIGN 4.1）。子プロセス、ツールの探し方（環境変数と PATH）、版の確かめ、時間の上限は、どれも作らない。
 
-- ツールの探し方：環境変数（0.4）、無ければ PATH。版を `--version` で読み、rulec は 0.22.0 より古ければ E104。
-- 呼び方：成果物のディレクトリを作業ディレクトリにし、ファイルの名前だけを渡す（DESIGN 4.1）。時間の上限は 60 秒で、超えたら kill して E105（「時間内に終わらなかった」）。
-- 失敗（exit が 0 でない）は E105 で、標準エラーの最初の 12 行を注に添える。
-- 地図がそのツールの成果物を含まなければ、ツールを呼ばず、無くてもエラーにしない。
-- テスト（`tests/suite.rs`）：存在しない実行ファイルを `SAKAI_RULEC` に渡すと、規則を含む地図で E104。時間の上限（眠るだけの小さなスクリプトを渡して、上限を短くして確かめる）。
+- `Suite`：`rules`（rulec の `Rules`）、`references`（rulec、koyomi、dandori の `References`）、`books`（chobo の `Books`）。一つの実行で、同じファイルには一度だけ問う（`Suite::facts`、`Suite::references`）。
+- `run(引数, 口, 標準出力, 標準エラー) -> 終了コード`（`src/run.rs`）。sakai のクレートのバイナリ（`src/main.rs`）は何もつながない `Suite::default()` を、ritsu の `ritsu sakai` はすべてをつないだ口を渡す。ライブラリの入口は `check::check_map_with`、`check::check_args_with`、`build::run_with` で、口を受け取る。
+- 段 3（DESIGN 3.1）で `suite::read` を呼ぶ。地図が rulec・koyomi・dandori の成果物を含むのに、その言語の口が無ければ E104（言語ごとに一度、その言語の最初の成果物を持つ `owns` の行で。注に `ritsu sakai <同じ引数>`）。言語がファイルに答えなければ E105（その言語の `Said` を注に五つまで）。どちらのときも W401 は出さない（何が越えるかが分からない）。
+- テスト：`tests/examples.rs` の `the_binary_of_this_crate_says_what_it_cannot_read`（クレートのバイナリが例で E104 を三つ出し、`ritsu sakai check examples/通販/通販.ctx` を言う）。`tests/codes.rs`（E104 の再現は何もつながずに、ほかの言語の成果物を含む再現は、すべてをつないで走らせる）。テストは rulec、koyomi、chobo、dandori を `[dev-dependencies]` に持ち、`tests/common/mod.rs` の `suite()` が `ritsu sakai` と同じにつなぐ。
 
-### C.2 rulec（`src/suite/rulec.rs`）
+### C.2 rulec（`Rules` と `References`）
 
-- `rulec api` を、地図の規則ごとに一度だけ呼ぶ（同じ規則を参照のもとと対応の先で二度呼ばない）。読むもの（DESIGN 4.1）を型にする。
-- 参照：`connect.enums[]` で `contract` が null でないもの（もと：規則、先：`contract.file` を規則のディレクトリから読んだ proto のファイルの、`alias` の列挙と、`values` の全部の値）、`projection.shapes[]` で `kind` が `proto` のもの（先：`file` の proto の `at` のメッセージと、そこからたどれる型の全部）。`kind` が `jsonschema` の `shape` は、公表された言語にならないファイルへの参照として、属し方だけを確かめる（相手の内側なら E202）。
-- 公表された言語の rulec の塊：`connect.package` と見出しの突き合わせ（E302）、`connect.service` と `open host service`（E301）。語の `means` の先の規則の要素（`input`、`output`、`enum`、`value`）が `python.params`・`outputs`・`enums` にあること（E408）。
-- 対応の先が rulec の列挙（DESIGN 1.7）：規則の列挙が、対応の左辺と同じ proto の同じ列挙を取り込んでいれば（`contract.file` が同じファイルで、`alias` が列挙の完全な名前）、値の対応を `values` から読む。値の行が書いてあれば突き合わせ、違えば E405。取り込んでいなければ値の行が要り、右辺が規則の列挙の値であること（E403）。
-- 同じ語：rulec から読んだ越えてくる要素も、B.9 の検査に入れる。
-- テスト（`tests/suite.rs`。rulec が無ければ SKIP）：
-  - `請求の要否.rule` から、参照が一つ（先は `proto/shop/ordering/v1/order.proto` の `shop.ordering.v1.OrderStatus` と四つの値）。対応は `ORDER_STATUS_RECEIVED → 受付`、`ORDER_STATUS_PAID → 支払済`、`ORDER_STATUS_SHIPPED → 出荷済`、`ORDER_STATUS_CANCELLED → 受注で取消`。
-  - `出荷の送料.rule` から、参照が一つ（先は `shop.delivery.v1.CreateShipmentRequest` と、たどれる `Destination`、`Parcel`、`Handling`）。
-  - `決済手数料.rule` の塊の package が `rulec.payment_fee.v1`、サービスが `PaymentFeeService`。
-  - 変異：`order.proto` に `ORDER_STATUS_RETURNED = 5;` を足すと、`請求の要否.rule` で E105（注に rulec の E032 の行がある）。`請求の要否.rule` の値 `受注で取消(cancelled)` を `キャンセル(cancelled)` にすると E407。`.ctx` の値の行を一つ食い違わせると E405。
+- 事実（`Rules::facts`）を、地図の規則ごとに一度だけ問う。答えた規則には参照（`References`）も問う。答えなければ E105。
+- 参照：`import proto`（先：proto の列挙。越える要素はその列挙）、`shape`（先：proto のメッセージ。越える要素は、そのメッセージとたどれる型の全部）、`apply`（先：規則。規則そのものを使う参照で、共有カーネルの中でなければ E202）。`import jsonschema`、JSON Schema の `shape`、`source` の写しは、規則の一部として数えない（DESIGN 3.3）。
+- 公表された言語の rulec の塊：事実の Connect のパスの package と見出しの突き合わせ（E302）、パスのサービスと `open host service`（E301）。語の `means` の先の規則の要素（`input`、`output`、`enum`、`value`）が事実にあること。無ければ E007（★proto の要素と同じ。前のこの計画は E408 と書いていたが、E408 は公表された言語に無い要素のコードで、名指した先に無いことは proto でも E007 なので、そろえた）。
+- 対応の先が rulec の列挙（DESIGN 1.7）：規則の Connect の列挙が、対応の左辺と同じ proto の同じ列挙を取り込んでいれば（取り込んだファイルが同じで、別名が列挙の完全な名前）、値の対応を事実から読む。値の行が書いてあれば突き合わせ、違えば E405。値の行が無ければ、規則の取り込みが対応になる。取り込んでいなければ値の行が要り、右辺が規則の列挙の値であること（E403）。
+- 同じ語：rulec から読んだ越えてくる要素も、B.9 の検査に入れる。規則の取り込みの対応も、E407 の対応の先にする。
+- テスト（`tests/examples.rs`、`tests/api.rs`、`tests/mapping.rs`、`tests/mutants/`）：
+  - 例の `請求の要否.rule` から参照が一つ（`import proto`、先は `proto/shop/ordering/v1/order.proto` の `OrderStatus`）、`出荷の送料.rule` から一つ（`shape`、先は `CreateShipmentRequest` で、越える要素は `Destination`、`Parcel`、`Handling` と合わせて四つ）。`決済手数料.rule` の塊の package が `rulec.payment_fee.v1`、サービスが `PaymentFeeService`（見出しを替えると E302、サービスを替えると E301）。
+  - 変異：`order.proto` に `ORDER_STATUS_RETURNED = 5;` を足すと、`請求の要否.rule` で E105（注に rulec の E032）。`請求の要否.rule` の値 `受注で取消(cancelled)` を `キャンセル(cancelled)` にすると E407。`.ctx` の値の行を一つ食い違わせると E405。語の `means` を規則に無い出力にすると E007。請求の規則が配送の規則を `apply` すると E202（`E202_境界の向こうの規則を展開`）。
+  - 取り込んでいない規則の列挙を対応の先にし、右辺がその値でなければ E403（`tests/mapping.rs`）。
 
-### C.3 koyomi（`src/suite/koyomi.rs`）
+### C.3 koyomi（`References`）
 
-- `koyomi api` を、地図の `.cal` ごとに一度だけ呼ぶ。dates のファイルの `calendar.file` と `calendar.uses[].file`、カレンダーのファイルの `calendar.uses[].file` を、api に渡したファイルのディレクトリから読んで参照にする（DESIGN 4.1）。先はカレンダーで、公表された言語にならないので、共有カーネルの中でなければ E202 か E201。
-- テスト（koyomi が無ければ SKIP）：`出荷日.cal`（配送）から `calendars/東京の営業日.cal`（請求のもの）への参照が一つで、共有カーネルが許す。`支払条件.cal` から同じカレンダーへの参照は、同じコンテキストの中で、境界を越えない。変異：請求の `shared kernel with 配送` を消すと E307 と E202。
+- dates のファイルとカレンダーの `use calendar` を参照にする（先はカレンダー）。カレンダーは公表された言語にならないので、共有カーネルの中でなければ E202（関係が無ければ E201）。koyomi の `source`（祝日の表）は、カレンダーの一部として数えない。
+- テスト：例の `出荷日.cal`（配送）から `calendars/東京の営業日.cal`（請求のもの）への参照が一つで、共有カーネルが許す。`支払条件.cal` から同じカレンダーへの参照は、同じコンテキストの中で、境界を越えない。変異：請求の `shared kernel with 配送` を消すと E307 と E201（`E307_片側だけの共有カーネルとカレンダー`）。前のこの計画は E202 と書いていたが、共有カーネルが片側だけになると、二つのあいだに参照を許す関係が無い（請求が配送の顧客で、配送から請求へは向きが逆）ので、DESIGN 3.3 の順で E201 になる。
 
-### C.4 dandori（`src/suite/dandori.rs`）
+### C.4 dandori（`References`）
 
-dandori の api の扱いは作者が決める（DESIGN 4.7）。
+作者の決定を待っていた dandori の api は、ritsu で dandori が口（`References`）に答えるようになって決着した（DESIGN 4.7 の「これまでの形」）。N101 は退かせた（台帳に残し、番号を使い回さない）。
 
-- **dandori に api が無いとき（A の段階の時点）**：`.flow` は属し方だけを確かめ、地図が `.flow` を含めば N101 を一つ出す（`.flow` の数と最初の一つを言う）。`check` の要約と api の `not_checked` に並べる。dandori が PATH に無くても同じで、エラーにしない（dandori を呼ばないので）。
-- **dandori に api が入ったとき**：`dandori api <file.flow>` が exit 0 で JSON を出すかで見分ける（exit 2 で `unknown command` なら、まだ無いものとして上の形で動く）。入っていれば、DESIGN 4.7 の A に挙げたものを読み、四つの検査（規則の同梱が境界を越える、`connect` で呼ぶサービスが上流の公開ホストサービスでない、`implements` するサービスが自分の公表された言語に無い、子の `.flow` が境界の向こうのもの）を足し、台帳に E21x のコードを足す。子の `.flow` の扱い（DESIGN 4.7 の最後の段落）は、そのとき DESIGN に決定を書いてから作る。
-- テスト：例の二つの `.flow` で N101 が一つ出て、exit は 0 のまま。
+- 参照：`use rule`（呼び方の語つき）、`use proto`、`connect`、`flow`、`implements`（DESIGN 4.7 の表）。`use openapi` と `use smithy` は数えない。
+- 四つの検査：規則の同梱が境界を越える（E202。`connect` の無い `use rule`）、`connect` で呼ぶサービスが相手の公開ホストサービスでない（E207。`use rule … connect` の規則のサービスも）、`implements` するサービスが自分の公表された言語の公開ホストサービスでない（E208）、子の `.flow` が境界の向こうのもの（E209。パートナーシップ、共有カーネル、子が相手の公開ホストサービスを実装しているときは許す。DESIGN 4.7 の決定）。
+- テスト：例の `受注.flow` から五つの参照が境界を越え、どれも関係が許す（`tests/examples.rs`、`tests/api.rs`）。例を土台にした変異：`use rule` の `connect` を消すと E202、在庫の `open host service` から `StockService` を外すと E207 が二つ、受注の `open host service` から `FulfillmentService` を外すと E208、受注と配送のパートナーシップを顧客と供給者に替えると E209。台帳の再現（甲と乙が土台）も四つにある。
 
-### C.5 chobo（`src/suite/chobo.rs`）
+### C.5 chobo（`Books`）
 
-- `chobo api` を読む部分（`book`、`accounts`、`transfers`、`units` の名前）を作る。`check` は chobo を呼ばない（帳簿は参照のもとにならない。DESIGN 4.5）。D の doc がこれを使う。
-- テスト（chobo が無ければ SKIP）：`在庫の引当.book` から、勘定 `在庫`、`仕入先`、`客`、振替 `入荷`、`引当`、`返品` を読む。
+- `Books::facts` から勘定と振替の名前を読む（`suite::book_names`）。`check` は chobo に問わない（帳簿は参照のもとにならない。DESIGN 4.5）。D の doc がこれを使う。
+- テスト（`tests/examples.rs`）：`在庫の引当.book` から、勘定 `在庫`、`仕入先`、`客`、振替 `入荷`、`引当`、`返品` を読む。
 
 ### C.6 import のまとまりと向き（`src/build/areas.rs`）
 
@@ -753,9 +751,9 @@ public class Validate {
 
 | 対象 | 成り立つこと |
 |---|---|
-| 例の `check` | exit 0。要約が「5 contexts, 7 relationships」で、境界を越える参照は proto 1（`fulfillment.proto` → `stock.proto`）、rulec 2（`請求の要否.rule`、`出荷の送料.rule`）、koyomi 1（`出荷日.cal`）。N101 が一つ（dandori の 2 ファイル） |
-| 一式のツール | C.2、C.3、C.5 のテストの値が出る。C.0 の写したものが、それぞれのツールの検査を通る |
-| 変異 | `PACKING_STATUS_DAMAGED` で E401、`ORDER_STATUS_RETURNED` で E105、値の名前を `キャンセル` にして E407、共有カーネルを片側消して E307 と E202、受注の用語集に違う意味の「引当」を足して E406 |
+| 例の `check` | すべての言語をつないで exit 0。要約が「5 contexts, 7 relationships」で、境界を越える参照は 9 件：proto 1（`fulfillment.proto` → `stock.proto`）、rulec 2（`請求の要否.rule`、`出荷の送料.rule`）、koyomi 1（`出荷日.cal`）、dandori 5（`受注.flow` の `use rule … connect`、`use proto`、`connect` 二つ、`flow`）。sakai のクレートのバイナリでは E104 が三つ（rulec、koyomi、dandori） |
+| 一式の言語 | C.2〜C.5 のテストの値が出る。C.0 の写したものが、それぞれの言語の検査を通る（口で確かめる） |
+| 変異 | `PACKING_STATUS_DAMAGED` で E401、`ORDER_STATUS_RETURNED` で E105、値の名前を `キャンセル` にして E407、共有カーネルを片側消して E307 と E201、受注の用語集に違う意味の「引当」を足して E406、C.4 の四つ（E202、E207、E208、E209） |
 | 四つのツール | 例のままで通り、四つの変異をそれぞれ捕まえ、黙って通っていない（C.13） |
 | build | 四つの設定の golden と一致し、`--check` が地図の変更を E502 で言う |
 | CML | golden と一致し、Context Mapper 6.12.0 の検査器が何も言わない |
@@ -764,9 +762,9 @@ public class Validate {
 
 報告には、四つのツールの版と、変異を捕まえたときの出力の一行ずつを書く。
 
-**C の段階（C.0、C.6〜C.14）で満たしたもの**：四つのツール、build、CML、文書（7 章と 8 章、3.1 の例の要約、5.3 の E401 と E406）、台帳（E501 と E502 に変異と golden と再現）、変異のうち `PACKING_STATUS_DAMAGED` の E401、違う意味の「引当」の E406、片側の共有カーネルの E307、「C.0 の写したものが、それぞれのツールの検査を通る」。この機械では、ツールを入れて環境変数（`SAKAI_JAVA`、`SAKAI_JAVAC`、`SAKAI_RULEC`、`SAKAI_KOYOMI`、`SAKAI_CHOBO`、`SAKAI_DANDORI`）を渡せば SKIP は 0。
+**C の段階（C.0、C.6〜C.14）で満たしたもの**：四つのツール、build、CML、文書（7 章と 8 章、3.1 の例の要約、5.3 の E401 と E406）、台帳（E501 と E502 に変異と golden と再現）、変異のうち `PACKING_STATUS_DAMAGED` の E401、違う意味の「引当」の E406、片側の共有カーネルの E307、「C.0 の写したものが、それぞれのツールの検査を通る」。この機械では、ツールを入れて環境変数（`SAKAI_JAVA`、`SAKAI_JAVAC`、当時は `SAKAI_RULEC`、`SAKAI_KOYOMI`、`SAKAI_CHOBO`、`SAKAI_DANDORI` も）を渡せば SKIP は 0。
 
-**一式の読み込み（C.1〜C.5）を待つもの**：例の `check` の要約は「5 contexts, 7 relationships」で、境界を越える参照はいまは proto 1 だけ（rulec 2、koyomi 1、N101 は C.2〜C.4）。C.2、C.3、C.5 のテストの値。変異のうち `ORDER_STATUS_RETURNED` の E105、値の名前を `キャンセル` にした E407、片側の共有カーネルで出る E202。台帳の E104、E105、N101、E405 の再現。DESIGN 5.3 の E202 の例。
+**ritsu の D.8 で満たしたもの**（一式の読み込み。5.4）：例の `check` の要約（9 件）、C.2〜C.5 のテストの値、変異のうち `ORDER_STATUS_RETURNED` の E105、値の名前を `キャンセル` にした E407、片側の共有カーネルで出る E201（前は E202 と書いていた。C.3）、C.4 の四つ、台帳の E104、E105、E405、E207、E208、E209 の再現と、退いた N101 の項、DESIGN 3.1 と 5.3 の例。この機械では、外のツールを入れて `SAKAI_JAVA` と `SAKAI_JAVAC` を渡せば SKIP は 0（一式の言語はテストが同じプロセスでつなぐ）。
 
 ## 4. 段階 D：doc、例、README、スキル
 
@@ -869,3 +867,23 @@ C.1〜C.5 を作るときに気をつけること（5.2 の申し送りに足す
 - 例の要約に rulec 2 と koyomi 1 が足され、N101 が出ると、`tests/examples.rs` の要約の行と、DESIGN 3.1 と 11 章の数を直す。
 - 例をもとにした変異（`E401_梱包の状態に値が増えた`、`E406_受注に違う意味の引当`）は、一式のツールを呼ぶようになると、ツールが無い機械で E104 を出すようになる。そのときの変異とテストの扱い（ツールが無ければ SKIP にするか、一式のツールを使わない地図に移すか）を決める。
 - `tests/build.rs` と `tests/imports.rs` と `tests/cml.rs` も例の `check` を通すので、同じことが起きる。
+
+### 5.4 ritsu の D.8 で（一式の読み込み）
+
+sakai が ritsu に取り込まれ、一式の言語を一つの処理系にまとめると決まったので、止めていた C.1〜C.5 を口で作るように書き直し、そのとおりに作った（ritsu の PLAN の D.8）。DESIGN の 4.1、4.7、12.2 に、読むもの、決めたこと、変わった振る舞いを書いた。
+
+決めたこと：
+
+- E104 は「ほかの言語がつながっていない」、E105 は「成果物が、その言語の検査を通らないか、読めない」に意味を替えた。E104 は言語ごとに一度、その言語の最初の成果物を持つ `owns` の行で言う。N101 は退かせた。
+- 子の `.flow` を境界の向こうから走らせてよいのは、パートナーシップ、共有カーネル、子が相手の公開ホストサービスを実装しているときだけ（E209。DESIGN 4.7）。
+- 規則の同梱、Lambda、ローカル、`apply` は、規則そのものを使う参照で、共有カーネルの中でなければ E202。`use openapi` と `use smithy` の記述、JSON Schema、出典の写しは、それを読む成果物の一部で、参照に数えない（DESIGN 3.3）。
+- koyomi と dandori は、構文を読めるファイルに参照を答える（rulec は検査を通る規則にだけ事実を答える）。
+- sakai のクレートのバイナリは、地図が規則、カレンダー、ワークフローを含むと、`check`、`api`、`build`、`export` のどれでも E104 で止まる。
+- api の `not_checked` は、いつも空のまま残した。
+
+5.3 の申し送りの「C.1〜C.5 を作るときに気をつけること」は、次のとおりにした。
+
+- 例の要約と、DESIGN 3.1 と 11 章の数を直した（9 件。`tests/examples.rs`、`tests/design.rs`）。
+- 例を土台にした変異とテスト（`tests/build.rs`、`tests/imports.rs`、`tests/cml.rs`）は、ツールの有無で変わらない。一式の言語は `[dev-dependencies]` で、テストは `tests/common/mod.rs` の `suite()` で同じプロセスにつなぐからで、SKIP にすることも、地図を移すことも要らなかった。
+
+変異は、例を土台に九つ足した（`E104_ほかの言語がつながっていない`、`E105_取り込みが合わない規則`、`E202_境界の向こうの規則を同梱`、`E202_境界の向こうの規則を展開`、`E207_公開していないサービスを呼ぶ`、`E208_公開していないサービスを実装`、`E209_境界の向こうの子のフロー`、`E307_片側だけの共有カーネルとカレンダー`、`E405_規則と違う対応`）。B と C の変異の golden は、一字も変わらない。

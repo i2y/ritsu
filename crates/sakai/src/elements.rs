@@ -2,7 +2,8 @@
 //! `means`, the upstream enum of a mapping and its target. A proto element is looked up in the
 //! files read (E007 when it is not there); the short forms are looked up in the context's own
 //! published language or, for the enum of a mapping, in the upstream's `through` packages. A
-//! rule's element is checked from stage C, with `rulec api`.
+//! rule's element is looked up in what rulec says of the rule (`Rules`): its inputs, outputs and
+//! enums with their values.
 
 use crate::ast::{Element, Pos, Target};
 use crate::diag::{self, Diag};
@@ -106,7 +107,27 @@ struct E<'a> {
     m: &'a Model,
     ps: &'a Protos,
     arts: &'a [Artifact],
+    read: &'a crate::suite::Read,
     diags: Vec<Diag>,
+}
+
+/// Whether a rule has the element the pairs name: an input, an output, an enum, or a value of one.
+fn rule_has(f: &ritsu_ports::RuleFacts, path: &str, items: &[(String, String)]) -> Result<(), Text> {
+    let (k, n) = &items[0];
+    let sf = paths::shown(path);
+    let missing = || tr!("{sf} に {k} {n} はありません", "There is no {k} {n} in {sf}");
+    match k.as_str() {
+        "input" => f.inputs.iter().any(|c| c.name == *n).then_some(()).ok_or_else(missing),
+        "output" => f.outputs.iter().any(|c| c.name == *n).then_some(()).ok_or_else(missing),
+        "enum" => {
+            let e = f.enums.iter().find(|e| e.name == *n).ok_or_else(missing)?;
+            match items.get(1) {
+                Some((ck, cn)) if !e.values.iter().any(|v| v.name == *cn) => Err(tr!("enum {n} に {ck} {cn} はありません", "The enum {n} has no {ck} {cn}")),
+                _ => Ok(()),
+            }
+        }
+        _ => Err(missing()),
+    }
 }
 
 impl E<'_> {
@@ -124,9 +145,19 @@ impl E<'_> {
                 let path = paths::join(&self.m.contexts[c].dir, &written.path).ok()?;
                 let items: Vec<(String, String)> = written.items.iter().map(|(k, _, n, _)| (k.clone(), n.clone())).collect();
                 let name = Name { tool: written.tool, path: path.clone(), items };
+                if written.tool == Tool::Rulec && !name.items.is_empty() {
+                    // A rule's names, as rulec says them; a rule rulec did not answer for is told
+                    // as E104 or E105 already, and its names are taken as written.
+                    if let Some(f) = self.read.facts.get(&path)
+                        && let Err(msg) = rule_has(f, &path, &name.items)
+                    {
+                        self.err(c, *pos, "E007", msg);
+                        return None;
+                    }
+                    return Some(name);
+                }
                 if written.tool != Tool::Proto {
-                    // A rule's names are read from `rulec api`, from stage C; the other tools' names
-                    // are taken as written (DESIGN 2.2).
+                    // The other tools' names are taken as written (DESIGN 2.2).
                     return Some(name);
                 }
                 match self.ps.files.get(&path) {
@@ -205,8 +236,8 @@ fn packages_text(ps: &[String]) -> Text {
 }
 
 /// Resolve every element the map names.
-pub fn resolve(m: &Model, ps: &Protos, arts: &[Artifact]) -> (Elements, Vec<Diag>) {
-    let mut e = E { m, ps, arts, diags: Vec::new() };
+pub fn resolve(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Read) -> (Elements, Vec<Diag>) {
+    let mut e = E { m, ps, arts, read, diags: Vec::new() };
     let mut out = Elements { complete: true, ..Elements::default() };
     for (ci, c) in m.contexts.iter().enumerate() {
         let own = own_published(m, ci);

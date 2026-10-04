@@ -1117,6 +1117,20 @@ service warehouse.v1.StockService imports_options=false
 service warehouse.v1.PackingService imports_options=false
   method GetPacking in=warehouse.v1.GetPackingRequest out=warehouse.v1.GetPackingResponse streams=false
 unread
+== ../sakai/tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto
+package shop.ordering.v1
+message shop.ordering.v1.GetOrderRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message shop.ordering.v1.GetOrderResponse
+  field order json=order ty=Named("shop.ordering.v1.Order") repeated=false presence=true rules=null
+message shop.ordering.v1.Order
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field status json=status ty=Named("shop.ordering.v1.OrderStatus") repeated=false presence=false rules=null
+  field amount_jpy json=amountJpy ty=Scalar("int64") repeated=false presence=false rules=null
+enum shop.ordering.v1.OrderStatus = ORDER_STATUS_UNSPECIFIED ORDER_STATUS_RECEIVED ORDER_STATUS_PAID ORDER_STATUS_SHIPPED ORDER_STATUS_CANCELLED ORDER_STATUS_RETURNED
+service shop.ordering.v1.OrderService imports_options=false
+  method GetOrder in=shop.ordering.v1.GetOrderRequest out=shop.ordering.v1.GetOrderResponse streams=false
+unread
 == ../sakai/tests/mutants/E106_読めない_proto/proto/shop/billing/v1/billing.proto
 error: tests/mutants/E106_読めない_proto/proto/shop/billing/v1/billing.proto:11:1: `;` is expected where `}` is
 == ../sakai/tests/mutants/E201_関係の無い在庫を参照/proto/shop/billing/v1/billing.proto

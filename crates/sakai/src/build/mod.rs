@@ -133,8 +133,14 @@ fn default_dir(c: &Checked, a: &Areas, target: Target) -> Result<String, Box<Dia
 }
 
 /// `sakai build <map> --target <tool> [--out <dir>] [--check]`. `out` is a directory on the disk.
+/// The map is checked first, with no other language joined.
 pub fn run(root: &Path, map: &str, target: Target, out: Option<&Path>, check_only: bool, lang: Lang) -> Result<Built, Text> {
-    let mut o = check::check_map(root, map)?;
+    run_with(root, map, target, &crate::suite::Suite::default(), out, check_only, lang)
+}
+
+/// [`run`], the map checked with the languages `suite` joins.
+pub fn run_with(root: &Path, map: &str, target: Target, suite: &crate::suite::Suite, out: Option<&Path>, check_only: bool, lang: Lang) -> Result<Built, Text> {
+    let mut o = check::check_map_with(root, map, suite)?;
     if o.has_errors() {
         return Ok(Built { outcome: o, done: None });
     }

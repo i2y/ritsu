@@ -202,8 +202,7 @@ fn the_levels() {
 }
 
 /// `ready` asks the level first (a SKIP of the level, and the machine is not asked), then the
-/// machine (a SKIP for what is missing). The binaries of the other languages and pixie's greeter
-/// are tools.
+/// machine (a SKIP for what is missing). sakai's linters and pixie's greeter are tools.
 #[test]
 fn ready_asks_the_level_then_the_machine() {
     use level::{Level, Need};
@@ -211,19 +210,19 @@ fn ready_asks_the_level_then_the_machine() {
         let fast = std::env::var("RITSU_TEST_LEVEL").as_deref() == Ok("fast");
         let mut asked = false;
         let went = level::ready(
-            Need::Suite,
+            Need::Linters,
             || {
                 asked = true;
                 false
             },
-            "no binaries of the suite here",
+            "no linters here",
         );
         assert!(!went);
         assert_eq!(asked, !fast, "at the fast level the machine is not asked");
         assert_eq!(level::ready(Need::Pixie, || true, "not said"), !fast);
         return;
     }
-    for n in [Need::Suite, Need::Pixie] {
+    for n in [Need::Linters, Need::Pixie] {
         assert_eq!(n.level(), Level::Tools, "{n:?}");
     }
     let t = TempDir::new("readylog");

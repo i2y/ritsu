@@ -12,7 +12,7 @@ use std::time::Duration;
 
 fn example_cml(lang: Lang) -> String {
     let ex = std::fs::canonicalize(common::EXAMPLE).unwrap();
-    let o = sakai::check::check_map(&ex, "通販.ctx").unwrap();
+    let o = sakai::check::check_map_with(&ex, "通販.ctx", &common::suite()).unwrap();
     assert!(!o.has_errors());
     sakai::cml::render(o.checked.as_ref().unwrap(), "通販.ctx", lang)
 }
@@ -33,11 +33,12 @@ fn the_cml_of_the_example_is_its_golden_file() {
 fn export_cml_on_the_command_line() {
     let dir = common::TempDir::new("export");
     let out = dir.path().join("shop.cml");
-    let o = common::sakai(&["export", "cml", "examples/通販/通販.ctx", "--out", out.to_str().unwrap(), "--root", "examples/通販"]);
-    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    // the example holds rules, calendars and workflows: every language joined, as `ritsu sakai`
+    let (code, _, err) = common::joined(&["export", "cml", "examples/通販/通販.ctx", "--out", out.to_str().unwrap(), "--root", "examples/通販"]);
+    assert_eq!(code, 0, "{err}");
     assert_eq!(std::fs::read_to_string(&out).unwrap(), example_cml(Lang::En));
-    let o = common::sakai(&["export", "cml", "examples/通販/通販.ctx", "--lang", "ja", "--root", "examples/通販"]);
-    assert_eq!(String::from_utf8_lossy(&o.stdout), example_cml(Lang::Ja));
+    let (_, got, _) = common::joined(&["export", "cml", "examples/通販/通販.ctx", "--lang", "ja", "--root", "examples/通販"]);
+    assert_eq!(got, example_cml(Lang::Ja));
     // `export` names the form it writes; a map with errors writes nothing.
     assert_eq!(common::sakai(&["export", "examples/通販/通販.ctx"]).status.code(), Some(2));
     let bad = common::mutant("E401_注文の状態に値が増えた");

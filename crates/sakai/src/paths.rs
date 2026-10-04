@@ -25,21 +25,29 @@ pub fn error_text(e: PathError, written: &str) -> Text {
     }
 }
 
-static SHOWN: std::sync::OnceLock<Shown> = std::sync::OnceLock::new();
+thread_local! {
+    static SHOWN: std::cell::RefCell<Option<Shown>> = const { std::cell::RefCell::new(None) };
+}
 
-/// Said once, by the command line, before anything is checked. The library and the tests that
-/// call it leave it unsaid, and their paths are written from the root: the same paths, when the
-/// command is run at the root.
+/// Said by the command, before anything is checked, for the run (`run::run` takes it back when
+/// it is done, so a program that runs the command more than once shows each run's paths). The
+/// library and the tests that call it leave it unsaid, and their paths are written from the
+/// root: the same paths, when the command is run at the root.
 pub fn show_from(s: Shown) {
-    let _ = SHOWN.set(s);
+    SHOWN.with(|x| *x.borrow_mut() = Some(s));
+}
+
+/// Forget how the last run showed its paths.
+pub fn show_from_the_root() {
+    SHOWN.with(|x| *x.borrow_mut() = None);
 }
 
 /// A path from the root, as the diagnostics write it.
 pub fn shown(p: &str) -> String {
-    match SHOWN.get() {
+    SHOWN.with(|x| match x.borrow().as_ref() {
         Some(s) => s.path(p),
         None => p.to_string(),
-    }
+    })
 }
 
 /// The root as the run writes it, for the JSON: `.` when sakai runs there.

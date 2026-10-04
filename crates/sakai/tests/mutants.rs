@@ -29,7 +29,9 @@ fn every_mutant_gives_its_code_and_says_what_its_golden_files_say() {
                 (common::printed_codes(&en), vec![en, ja])
             }
             None => {
-                let os = check_args(dir.path(), &[".".to_string()]).unwrap();
+                // with every language joined, as `ritsu sakai` checks; E104 is what the binary of
+                // sakai's own crate says, joining none
+                let os = if code == "E104" { check_args(dir.path(), &[".".to_string()]).unwrap() } else { common::check_dir(dir.path()) };
                 let codes = os.iter().flat_map(|o| o.diags.iter().map(|d| d.code.to_string())).collect();
                 (codes, [Lang::En, Lang::Ja].iter().map(|&lang| os.iter().map(|o| render(o, lang)).collect()).collect())
             }

@@ -84,7 +84,7 @@ fn count(dir: &Path, ext: &str) -> usize {
 fn prepared(case: &Case, t: Target, mutant: Option<&Path>) -> TempDir {
     let dir = TempDir::new(case.dir.rsplit('/').next().unwrap_or("case"));
     common::copy_dir(Path::new(case.dir), dir.path());
-    let b = build::run(dir.path(), case.map, t, None, false, Lang::Ja).unwrap();
+    let b = build::run_with(dir.path(), case.map, t, &common::suite(), None, false, Lang::Ja).unwrap();
     let text: String = b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect();
     assert!(!b.outcome.has_errors() && b.done.is_some(), "{}: {text}", t.word());
     if let Some(m) = mutant {

@@ -1,12 +1,11 @@
 //! What DESIGN.md shows sakai printing is what sakai prints (PLAN B.11, 0.1): every fenced block
-//! that starts with `$ sakai …` is run from the root of the repository and compared; every block
+//! that starts with `$ sakai …` (the binary of sakai's own crate) or `$ ritsu sakai …` (every
+//! language joined) is run in sakai's directory and compared; every block
 //! of sakai's diagnostics is a golden file of a mutant (or part of one); the ```json block of
 //! chapter 9 is cut from the golden file of `sakai api`; and the name of 2.6 is what the name it
 //! spells gives.
 
 mod common;
-
-use std::process::Command;
 
 /// The fenced blocks of DESIGN.md: the info string, and the text.
 fn blocks() -> Vec<(String, String)> {
@@ -33,7 +32,7 @@ fn blocks() -> Vec<(String, String)> {
 fn every_command_in_design_prints_what_design_shows() {
     let mut n = 0;
     let mut failures = Vec::new();
-    for (_, b) in blocks().iter().filter(|(_, b)| b.starts_with("$ sakai ")) {
+    for (_, b) in blocks().iter().filter(|(_, b)| b.starts_with("$ sakai ") || b.starts_with("$ ritsu sakai ")) {
         let mut runs: Vec<(String, String)> = Vec::new();
         for l in b.lines() {
             if let Some(cmd) = l.strip_prefix("$ ") {
@@ -44,9 +43,14 @@ fn every_command_in_design_prints_what_design_shows() {
             }
         }
         for (cmd, want) in runs {
-            let args: Vec<&str> = cmd.split_whitespace().skip(1).collect();
-            let o = Command::new(env!("CARGO_BIN_EXE_sakai")).args(&args).env_remove("SAKAI_LANG").env_remove("RITSU_LANG").output().unwrap();
-            let got = String::from_utf8_lossy(&o.stdout).to_string();
+            // `ritsu sakai` with every language joined, in this process; `sakai` is the binary
+            // of sakai's own crate, which holds no other language
+            let words: Vec<&str> = cmd.split_whitespace().collect();
+            let got = match words.as_slice() {
+                ["ritsu", "sakai", args @ ..] => common::joined(args).1,
+                ["sakai", args @ ..] => String::from_utf8_lossy(&common::sakai(args).stdout).into_owned(),
+                _ => panic!("DESIGN.md runs something other than sakai: $ {cmd}"),
+            };
             if got != want {
                 failures.push(format!("$ {cmd}\n--- DESIGN.md shows\n{want}--- it prints\n{got}"));
             }

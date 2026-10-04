@@ -24,6 +24,38 @@ pub fn sakai(args: &[&str]) -> std::process::Output {
     sakai_in(Path::new("."), args)
 }
 
+/// Every language sakai reads, joined through the ports, each language's own engine (ritsu's
+/// DESIGN 3.3): what `ritsu sakai` hands it.
+pub fn suite() -> sakai::suite::Suite {
+    let rules = std::rc::Rc::new(rulec::ports::Engine::new());
+    let mut s = sakai::suite::Suite::default();
+    s.references.insert("rulec".into(), rules.clone());
+    s.references.insert("koyomi".into(), std::rc::Rc::new(koyomi::ports::Engine));
+    s.references.insert("dandori".into(), std::rc::Rc::new(dandori::ports::Engine));
+    s.rules = Some(rules);
+    s.books = Some(std::rc::Rc::new(chobo::ports::Engine));
+    s
+}
+
+/// The command, in this process, with every language joined (`ritsu sakai`), run where the tests
+/// run (the crate's directory): the exit code, standard output and standard error. English unless
+/// the arguments say otherwise, whatever the environment says.
+pub fn joined(args: &[&str]) -> (i32, String, String) {
+    let mut args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+    if !args.iter().any(|a| a == "--lang" || a.starts_with("--lang=")) {
+        args.extend(["--lang".to_string(), "en".to_string()]);
+    }
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = sakai::run::run(&args, suite(), &mut out, &mut err);
+    (code as i32, String::from_utf8_lossy(&out).to_string(), String::from_utf8_lossy(&err).to_string())
+}
+
+/// `sakai check .` of a directory in the library, with the directory as the root and every
+/// language joined.
+pub fn check_dir(dir: &Path) -> Vec<sakai::check::Outcome> {
+    sakai::check::check_args_with(dir, &[".".to_string()], &suite()).unwrap()
+}
+
 /// Hold `got` to the golden file `path`; `SAKAI_BLESS=1` (or `RITSU_BLESS=1`) writes it instead
 /// (ritsu-testkit's). The failure, if any, is returned for the caller to collect.
 pub fn golden(path: &str, got: &str) -> Option<String> {
@@ -104,11 +136,6 @@ pub fn variant(base: &str, edits: &[(&str, &str, &str)]) -> TempDir {
     dir
 }
 
-/// `sakai check` on a directory, with the directory as the root.
-pub fn check_dir(dir: &Path) -> Vec<sakai::check::Outcome> {
-    sakai::check::check_args(dir, &[".".to_string()]).unwrap()
-}
-
 /// The codes the outcomes give, in order.
 pub fn codes(os: &[sakai::check::Outcome]) -> Vec<&'static str> {
     os.iter().flat_map(|o| o.diags.iter().map(|d| d.code)).collect()
@@ -184,18 +211,6 @@ pub fn go() -> Option<String> {
 
 pub fn go_arch_lint() -> Option<String> {
     program("GO_ARCH_LINT", "tools/go/bin/go-arch-lint", "go-arch-lint", &["version"])
-}
-
-/// A tool of the suite (rulec, koyomi, chobo): `RITSU_<NAME>` or `SAKAI_<NAME>`, else
-/// the PATH.
-pub fn suite(name: &str) -> Option<String> {
-    program(&name.to_uppercase(), "", name, &["--version"])
-}
-
-/// `ritsu`, which runs dandori with the rules a workflow uses read in the same process: `RITSU_RITSU`
-/// or `SAKAI_RITSU`, else the workspace's build of it, else the PATH.
-pub fn ritsu() -> Option<String> {
-    program("RITSU", "../../target/debug/ritsu", "ritsu", &["--version"])
 }
 
 /// The codes of the diagnostics a run printed, in order: `error[E501]: …` gives `E501`.

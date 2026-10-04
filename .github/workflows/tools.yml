@@ -298,15 +298,9 @@ jobs:
           crates/rulec/website/sync.sh
           crates/dandori/website/sync.sh
 
-      # sakai's tests check what its example copied from rulec, koyomi, chobo and dandori with
-      # each one's own `check`: the workspace's binaries (dandori's as `ritsu dandori`, which reads
-      # the rules a workflow uses).
+      # The steps after the tests run the workspace's binaries (`target/debug/rulec` and the like).
       - name: Build
-        run: |
-          cargo build --workspace --locked
-          for t in rulec koyomi chobo ritsu; do
-            echo "SAKAI_$(echo "$t" | tr a-z A-Z)=$GITHUB_WORKSPACE/target/debug/$t" >> "$GITHUB_ENV"
-          done
+        run: cargo build --workspace --locked
 
       - name: The tests of the tools level
         run: cargo xtask test --level tools ${{ matrix.crates }}

@@ -3,9 +3,10 @@
 //!
 //! 1. the words, the sections, the names and the paths (E001 to E012);
 //! 2. who owns what (E101 to E103, W101);
-//! 3. the `.proto` files (E106, W102, E103), then the elements the map names (E007, E011);
+//! 3. the `.proto` files (E106, W102, E103), what the other languages say of their artifacts
+//!    through ritsu's ports (E104, E105), then the elements the map names (E007, E011);
 //! 4. the patterns (E301 to E313, W301);
-//! 5. the references that cross a boundary (E201 to E206);
+//! 5. the references that cross a boundary (E201 to E209);
 //! 6. the mappings and the glossaries (E401 to E410, W401, W402).
 //!
 //! An error of stage 1 or 2 stops the stages after it: without the names, or without knowing
@@ -50,6 +51,8 @@ pub struct Checked {
     pub protos: Protos,
     pub elements: Elements,
     pub crossings: Vec<Crossing>,
+    /// What the other languages said of their artifacts.
+    pub read: crate::suite::Read,
 }
 
 fn sorted(mut ds: Vec<Diag>) -> Vec<Diag> {
@@ -123,26 +126,41 @@ fn plural(n: usize, one: &str, many: &str) -> String {
     if n == 1 { format!("1 {one}") } else { format!("{n} {many}") }
 }
 
-/// The line `check` prints when nothing is wrong (DESIGN 3.1).
+/// The line `check` prints when nothing is wrong (DESIGN 3.1): the crossings counted by the
+/// language of the artifact that refers, in the order proto, rulec, koyomi, dandori.
 pub fn summary(m: &Model, arts: &[Artifact], crossings: &[Crossing]) -> Text {
+    use crate::naming::Tool;
     let (c, r, a, x) = (m.contexts.len(), relationship_count(m), arts.len(), crossings.len());
-    let p = crossings.iter().filter(|c| c.tool() == crate::naming::Tool::Proto).count();
+    let by: Vec<String> = [Tool::Proto, Tool::Rulec, Tool::Koyomi, Tool::Dandori]
+        .iter()
+        .filter_map(|t| {
+            let n = crossings.iter().filter(|c| c.tool() == *t).count();
+            (n > 0).then(|| format!("{} {n}", t.word()))
+        })
+        .collect();
+    let by = by.join(", ");
+    let by_ja = by.replace(", ", "、");
     let en = format!(
         "{}, {}; {}, each in one context; {}",
         plural(c, "context", "contexts"),
         plural(r, "relationship", "relationships"),
         plural(a, "artifact", "artifacts"),
-        if x == 0 { "no crossing to check".to_string() } else { format!("{} checked (proto {p})", plural(x, "crossing", "crossings")) }
+        if x == 0 { "no crossing to check".to_string() } else { format!("{} checked ({by})", plural(x, "crossing", "crossings")) }
     );
     let ja = format!(
         "コンテキスト {c}、関係 {r}。成果物 {a} 件は、どれも一つのコンテキストに属する。{}",
-        if x == 0 { "境界を越える参照は無い".to_string() } else { format!("境界を越える参照 {x} 件を確かめた（proto {p}）") }
+        if x == 0 { "境界を越える参照は無い".to_string() } else { format!("境界を越える参照 {x} 件を確かめた（{by_ja}）") }
     );
     Text::new(ja, en)
 }
 
-/// Check the map `map` (a path from `root`).
+/// Check the map `map` (a path from `root`), with no other language joined.
 pub fn check_map(root: &Path, map: &str) -> Result<Outcome, Text> {
+    check_map_with(root, map, &crate::suite::Suite::default())
+}
+
+/// [`check_map`], reading what the other languages hold through the ports `suite` joins.
+pub fn check_map_with(root: &Path, map: &str, suite: &crate::suite::Suite) -> Result<Outcome, Text> {
     let loaded = resolve::load(root, map)?;
     let reads = loaded.reads;
     let Some(m) = loaded.model else {
@@ -160,19 +178,26 @@ pub fn check_map(root: &Path, map: &str) -> Result<Outcome, Text> {
     let proto_files: Vec<String> = arts.iter().filter(|a| a.tool == crate::naming::Tool::Proto).map(|a| a.path.clone()).collect();
     let (ps, issues) = proto::load(&m.root, &proto_files, &m.map.proto_roots);
     diags.extend(sorted(proto_diags(&m, &issues)));
-    let (el, d3) = elements::resolve(&m, &ps, &arts);
+    let (read, d3b) = crate::suite::read(&m, &arts, suite);
+    diags.extend(sorted(d3b));
+    let (el, d3) = elements::resolve(&m, &ps, &arts, &read);
     diags.extend(sorted(d3));
     // 4. The patterns.
-    diags.extend(sorted(patterns::check(&m, &ps, &arts)));
+    diags.extend(sorted(patterns::check(&m, &ps, &arts, &read)));
     // 5. The crossings.
     let mut crossings = refs::proto_crossings(&ps, &arts);
-    diags.extend(sorted(refs::check(&m, &mut crossings)));
+    let (more, d5) = refs::suite_crossings(&m, &ps, &arts, &read);
+    crossings.extend(more);
+    let mut d5 = d5;
+    d5.extend(refs::check(&m, &mut crossings, &read));
+    d5.extend(refs::implements(&m, &arts, &read));
+    diags.extend(sorted(d5));
     // 6. The mappings and the glossaries.
-    let mut d6 = mapping::check(&m, &ps, &el, &crossings);
-    d6.extend(terms::check(&m, &ps, &el, &crossings, terms::unread_references(&arts).is_empty()));
+    let mut d6 = mapping::check(&m, &ps, &el, &crossings, &read);
+    d6.extend(terms::check(&m, &ps, &el, &crossings, read.complete, &read));
     diags.extend(sorted(d6));
     let summary = (!has_errors(&diags)).then(|| summary(&m, &arts, &crossings));
-    Ok(Outcome { file: map.to_string(), diags, summary, checked: Some(Checked { model: m, artifacts: arts, protos: ps, elements: el, crossings }), reads })
+    Ok(Outcome { file: map.to_string(), diags, summary, checked: Some(Checked { model: m, artifacts: arts, protos: ps, elements: el, crossings, read }), reads })
 }
 
 /// What a person reads.
@@ -209,6 +234,11 @@ fn ctx_files(root: &Path, dir: &str) -> Vec<String> {
 /// that is neither a map nor a context gets what reading it says (E003). `args` are paths from
 /// the root.
 pub fn check_args(root: &Path, args: &[String]) -> Result<Vec<Outcome>, Text> {
+    check_args_with(root, args, &crate::suite::Suite::default())
+}
+
+/// [`check_args`], reading what the other languages hold through the ports `suite` joins.
+pub fn check_args_with(root: &Path, args: &[String], suite: &crate::suite::Suite) -> Result<Vec<Outcome>, Text> {
     let mut out = Vec::new();
     for a in args {
         let disk = crate::paths::on_disk(root, a);
@@ -239,7 +269,7 @@ pub fn check_args(root: &Path, args: &[String]) -> Result<Vec<Outcome>, Text> {
             let mut reads: Vec<String> = Vec::new();
             let mut all_read = true;
             for m in &maps {
-                let o = check_map(root, m)?;
+                let o = check_map_with(root, m, suite)?;
                 all_read &= !(o.checked.is_none() && o.reads.is_empty());
                 reads.extend(o.reads.iter().cloned());
                 out.push(o);
@@ -271,7 +301,7 @@ pub fn check_args(root: &Path, args: &[String]) -> Result<Vec<Outcome>, Text> {
                 tr!("{sa} を読めません: {e}", "{sa} cannot be read: {e}")
             })?;
             match crate::parse::kind_of(&src) {
-                Some("map") => out.push(check_map(root, a)?),
+                Some("map") => out.push(check_map_with(root, a, suite)?),
                 Some(_) => return Err(tr!("{sa} は context のファイルです。map のファイルかディレクトリを渡します", "{sa} is a context file; give a map file, or a directory")),
                 None => {
                     let (_, ds) = crate::parse::parse(a, &src);

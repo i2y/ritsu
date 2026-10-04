@@ -651,6 +651,17 @@ message GetPackingRequest
   order_id string
 message GetPackingResponse
   status PackingStatus
+== ../sakai/tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto
+package Some("shop.ordering.v1") imports []
+enum OrderStatus ORDER_STATUS_UNSPECIFIED=0 ORDER_STATUS_RECEIVED=1 ORDER_STATUS_PAID=2 ORDER_STATUS_SHIPPED=3 ORDER_STATUS_CANCELLED=4 ORDER_STATUS_RETURNED=5
+message Order
+  id string
+  status OrderStatus
+  amount_jpy int64
+message GetOrderRequest
+  id string
+message GetOrderResponse
+  order Order
 == ../sakai/tests/mutants/E201_関係の無い在庫を参照/proto/shop/billing/v1/billing.proto
 package Some("shop.billing.v1") imports ["warehouse/v1/stock.proto"]
 enum BillingStatus BILLING_STATUS_UNSPECIFIED=0 BILLING_STATUS_WAIT=1 BILLING_STATUS_BILL=2 BILLING_STATUS_SKIP=3

@@ -2,7 +2,10 @@
 //! PLAN B.8): every value of the upstream enum has a value or `refuse` (E401), no value is
 //! there that the enum lacks (E402), a proto target has the values on the right (E403), and an
 //! upstream enum the downstream's artifacts refer to has a mapping (E404). The value 0 that says
-//! nothing is set needs none (W402). A rule as the target is read from stage C.
+//! nothing is set needs none (W402). A rule's enum as the target is read from what rulec says of
+//! the rule (`Rules`): when it takes the upstream enum in with `import proto`, its values are the
+//! mapping, and value lines written beside it agree with it (E405); when it does not, the value
+//! lines are needed, and map to the rule's values (E403).
 
 use crate::ast::{Role, Target, ValueTo};
 use crate::diag::{self, Diag, DiagExt, Ref};
@@ -26,7 +29,18 @@ fn enum_of<'a>(ps: &'a Protos, n: &Name) -> Option<(&'a proto::Enum, String, &'a
     Some((f.enumeration(e)?, f.full(e), f))
 }
 
-pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing]) -> Vec<Diag> {
+/// How a rule takes an upstream enum in (`import proto`, DESIGN 1.7): each value of the `.proto`
+/// with the rule's value it becomes, when the rule's enum `name` takes in the enum `full` of the
+/// file `proto`.
+pub fn rule_import(read: &crate::suite::Read, rule: &str, name: &str, proto: &str, full: &str) -> Option<Vec<(String, String)>> {
+    let f = read.facts.get(rule)?;
+    let w = f.connect.as_ref()?.enums.iter().find(|w| w.name == name)?;
+    let (file, _) = w.contract.as_ref()?;
+    let at = crate::paths::join(&crate::paths::parent(rule), file).ok()?;
+    (at == proto && w.alias == full).then(|| w.values.iter().map(|(rule_value, wire, _)| (wire.clone(), rule_value.clone())).collect())
+}
+
+pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], read: &crate::suite::Read) -> Vec<Diag> {
     let mut diags = Vec::new();
     for (ci, c) in m.contexts.iter().enumerate() {
         for (ri, r) in c.rels.iter().enumerate() {
@@ -39,15 +53,51 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing]) -> V
             for (ei, em) in enums.iter().enumerate() {
                 let Some(from) = el.get(At::From(ci, ri, ei)) else { continue };
                 let Some((e, full, f)) = enum_of(ps, from) else { continue };
-                // A rule's enum as the target: its values are read from `rulec api` (stage C).
+                // A rule's enum as the target: what rulec says of the rule.
+                let mut rule: Option<(String, String)> = None;
                 let target = match &em.target {
                     Target::Name(..) => None,
                     Target::Element(_) => match el.get(At::To(ci, ri, ei)) {
-                        Some(n) if n.tool == Tool::Rulec => continue,
+                        Some(n) if n.tool == Tool::Rulec => {
+                            let Some((_, name)) = n.items.first() else { continue };
+                            if !read.facts.contains_key(&n.path) {
+                                continue;
+                            }
+                            rule = Some((n.path.clone(), name.clone()));
+                            None
+                        }
                         Some(n) => enum_of(ps, n),
                         None => continue,
                     },
                 };
+                let imported = rule.as_ref().and_then(|(r, name)| rule_import(read, r, name, &f.path, &full));
+                if let Some(taken) = &imported {
+                    // The rule's import is the mapping: lines written beside it agree with it.
+                    let (r, _) = rule.as_ref().unwrap();
+                    let sr = crate::paths::shown(r);
+                    for v in &em.values {
+                        let Some((_, rv)) = taken.iter().find(|(wire, _)| *wire == v.from) else { continue };
+                        let (wrote, at) = match &v.to {
+                            ValueTo::Value(x, at) => (x.clone(), *at),
+                            ValueTo::Refuse(_, at) => ("refuse".to_string(), *at),
+                        };
+                        if wrote != *rv {
+                            let vn = &v.from;
+                            diags.push(
+                                diag::at("E405", &c.file, at.line, at.col, tr!("{sr} は {vn} を {rv} として取り込んでいますが、対応は {wrote} にしています", "The rule {sr} takes {vn} in as {rv}, and the mapping makes it {wrote}"))
+                                    .source(&c.src)
+                                    .note(tr!(
+                                        "規則の `import proto` と腐敗防止層の対応は、同じ読み替えを書きます。どちらかを直します。値の行を消せば、規則の取り込みが対応になります。",
+                                        "A rule's `import proto` and the anticorruption layer's mapping say the same mapping; correct one of them. Without value lines, the rule's import is the mapping."
+                                    ))
+                                    .refer(rel_ref.clone()),
+                            );
+                        }
+                    }
+                    if em.values.is_empty() {
+                        continue;
+                    }
+                }
                 let written: Vec<&str> = em.values.iter().map(|v| v.from.as_str()).collect();
                 let mut missing = Vec::new();
                 for v in &e.values {
@@ -98,6 +148,19 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing]) -> V
                                 .note(tr!("{full} の値は {} です。", "The values of {full} are {}.", have.join("、"); have.join(", "))),
                         );
                     }
+                    // A rule that does not take the enum in: the lines map to the rule's values.
+                    if let (Some((r, name)), None, ValueTo::Value(x, at)) = (&rule, &imported, &v.to)
+                        && let Some(re) = read.facts.get(r).and_then(|f| f.enums.iter().find(|e| e.name == *name))
+                        && !re.values.iter().any(|y| y.name == *x)
+                    {
+                        let have: Vec<&str> = re.values.iter().map(|y| y.name.as_str()).collect();
+                        let sr = crate::paths::shown(r);
+                        diags.push(
+                            diag::at("E403", &c.file, at.line, at.col, tr!("対応の先の {x} は、{sr} の列挙 {name} にありません", "The mapping maps to {x}, which is not a value of the enum {name} of {sr}"))
+                                .source(&c.src)
+                                .note(tr!("{name} の値は {} です。", "The values of {name} are {}.", have.join("、"); have.join(", "))),
+                        );
+                    }
                     if let (Some((te, tfull, _)), ValueTo::Value(x, at)) = (&target, &v.to)
                         && !te.values.iter().any(|y| y.name == *x)
                     {
@@ -124,7 +187,6 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing]) -> V
                         continue;
                     }
                     said.push(full.clone());
-                    let (p, l, imp) = (&cr.from, cr.line, &cr.import);
                     let short = sym.name.clone();
                     diags.push(
                         diag::at("E404", &c.file, r.pos.line, r.pos.col, tr!("「{xn}」は「{yn}」の列挙 {full} を参照していますが、腐敗防止層に対応がありません", "{xn} refers to {yn}'s enum {full}, and its anticorruption layer has no mapping for it"))
@@ -134,7 +196,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing]) -> V
                                 "Downstream of an anticorruption layer, every upstream enum referred to is mapped, value by value, to the downstream's values or refuse."
                             ))
                             .fix_line(format!("enum {short} -> <…>"))
-                            .refer(Ref::line(Some(&xn), p, l, Text::same(format!("import \"{imp}\""))).via("proto import"))
+                            .refer(cr.from_ref(&xn))
                             .refer(Ref::name(Some(&yn), Name::file(Tool::Proto, sym.file.clone()).with("enum", short.clone()), Text::default())),
                     );
                 }

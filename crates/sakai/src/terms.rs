@@ -34,8 +34,8 @@ fn crosses(ps: &Protos, n: &Name, reach: &[Symbol]) -> bool {
 }
 
 /// `crossings_known` says whether sakai read every reference that could make a word cross: it is
-/// false while the map holds artifacts whose references are not read yet (`unread_references`).
-pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], crossings_known: bool) -> Vec<Diag> {
+/// false while a language is not joined, or did not answer for one of its files (E104, E105).
+pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], crossings_known: bool, read: &crate::suite::Read) -> Vec<Diag> {
     let mut diags = Vec::new();
     let at = |c: usize, p: crate::ast::Pos, code: &'static str, msg: Text| {
         let cx = &m.contexts[c];
@@ -131,7 +131,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], cros
                     let acl = rel.is_some_and(|r| r.has(Role::Acl));
                     let t_ref = Ref::line(Some(&yc.name), &yc.file, t.pos.line, Text::same(line_of(&yc.src, t.pos.line)));
                     let d_ref = Ref::line(Some(&xc.name), &xc.file, d.pos.line, Text::same(line_of(&xc.src, d.pos.line)));
-                    let from_ref = Ref::line(Some(&xc.name), &cr.from, cr.line, Text::same(format!("import \"{}\"", cr.import))).via("proto import");
+                    let from_ref = cr.from_ref(&xc.name);
                     let el_ref = Ref::name(Some(&yc.name), n.clone(), tr!("「{}」の語「{}」が指すもの", "what {}'s term {} means", yc.name, t.name; yc.name, t.name));
                     // How the layer maps it, if it does.
                     let mut mapped_to: Option<(String, crate::ast::Pos)> = None;
@@ -147,10 +147,18 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], cros
                                 mapped = true;
                                 match n.items.get(1) {
                                     Some((_, v)) => {
-                                        if let Some(vm) = em.values.iter().find(|vm| vm.from == *v)
-                                            && let ValueTo::Value(to, p) = &vm.to
+                                        if let Some(vm) = em.values.iter().find(|vm| vm.from == *v) {
+                                            if let ValueTo::Value(to, p) = &vm.to {
+                                                mapped_to = Some((to.clone(), *p));
+                                            }
+                                        } else if let Some(tn) = el.get(At::To(x, ri.unwrap(), ei))
+                                            && tn.tool == Tool::Rulec
+                                            && let (Some((_, rule_enum)), Some(pf), Some((_, e))) = (tn.items.first(), ps.files.get(&from.path), from.items.first())
+                                            && let Some(taken) = crate::mapping::rule_import(read, &tn.path, rule_enum, &from.path, &pf.full(e))
+                                            && let Some((_, rv)) = taken.iter().find(|(wire, _)| wire == v)
                                         {
-                                            mapped_to = Some((to.clone(), *p));
+                                            // the rule's `import proto` is the mapping (DESIGN 1.7)
+                                            mapped_to = Some((rv.clone(), em.pos));
                                         }
                                     }
                                     None => {
@@ -254,18 +262,4 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], cros
         }
     }
     diags
-}
-
-/// The tools of the map's artifacts whose references sakai does not read yet, and that could
-/// make a word cross a boundary unseen: a rule's `import proto` and `shape` (read from `rulec
-/// api`, stage C.2) and a workflow's (dandori prints none; DESIGN 4.7). While one is in the map,
-/// W401 waits (P7: what is not checked is not told as checked).
-pub fn unread_references(arts: &[crate::owners::Artifact]) -> Vec<Tool> {
-    let mut out: Vec<Tool> = Vec::new();
-    for a in arts {
-        if matches!(a.tool, Tool::Rulec | Tool::Dandori) && !out.contains(&a.tool) {
-            out.push(a.tool);
-        }
-    }
-    out
 }

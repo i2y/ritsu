@@ -1,0 +1,4 @@
+error[E105]: billing/rules/請求の要否.rule:5:1: The file billing/rules/請求の要否.rule does not pass rulec's check, or cannot be read
+     5 | enum 注文の状態(order_status) = 受付(received) | 支払済(paid) | 出荷済(shipped) | 受注で取消(cancelled)
+  = What rulec says: [E032] billing/rules/請求の要否.rule:5: Enum 注文の状態 does not agree with OrderStatus in ../../proto/shop/ordering/v1/order.proto
+  = Make the file pass rulec's check; the references of a file that cannot be read cannot be checked.

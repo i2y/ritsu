@@ -1,0 +1,6 @@
+error[E202]: ordering/受注.flow:6:1: The file ordering/受注.flow of 受注 refers to delivery/rules/出荷の急ぎ.rule (use rule), which is inside 配送
+     6 | use rule 急ぎ from "../delivery/rules/出荷の急ぎ.rule"
+  = A rule bundled, or called as a Lambda function, is the rule itself, inside 配送; a rule across the boundary is called as its Connect service, with `use rule … connect`, once 配送 puts it in a published language (`published language rulec.…`).
+  involved:
+      受注  ordering/受注.flow:6                    use rule "../delivery/rules/出荷の急ぎ.rule"
+      配送  rulec "delivery/rules/出荷の急ぎ.rule"  a part of the inside of 配送

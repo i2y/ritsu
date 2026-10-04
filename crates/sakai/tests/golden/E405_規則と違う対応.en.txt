@@ -1,0 +1,5 @@
+error[E405]: contexts/請求.ctx:29:31: The rule billing/rules/請求の要否.rule takes ORDER_STATUS_CANCELLED in as 受注で取消, and the mapping makes it 支払済
+    29 |     ORDER_STATUS_CANCELLED -> 支払済
+  = A rule's `import proto` and the anticorruption layer's mapping say the same mapping; correct one of them. Without value lines, the rule's import is the mapping.
+  involved:
+      請求  contexts/請求.ctx:20  upstream 受注 anticorruption layer

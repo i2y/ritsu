@@ -73,10 +73,6 @@ pub enum Need {
     Lean,
     /// sakai's import-linter, dependency-cruiser, ArchUnit, Context Mapper, go-arch-lint.
     Linters,
-    /// The binaries of rulec, koyomi, chobo and dandori, which sakai's tests check the files its
-    /// example copied from them with (`SAKAI_RULEC` and the like), until sakai reads them in
-    /// the same process (PLAN D.8).
-    Suite,
     /// A greeter built with pixie (`GEAS_PIXIE_GREETER`), which geas's tests drive.
     Pixie,
     Temporal,
@@ -116,7 +112,6 @@ impl Need {
             Need::Xmllint => "xmllint",
             Need::Lean => "lean",
             Need::Linters => "linters",
-            Need::Suite => "rulec, koyomi, chobo and dandori",
             Need::Pixie => "pixie's greeter",
             Need::Temporal => "temporal",
             Need::Argo => "argo",

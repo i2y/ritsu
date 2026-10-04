@@ -2,6 +2,8 @@
 //! and terms as items, and the namings a `.ctx` writes as references — a short name of the
 //! context's published language named in full, as `sakai api` names it.
 
+mod common;
+
 use ritsu_ports::{Items, References};
 use sakai::ports::Engine;
 use std::path::PathBuf;
@@ -28,9 +30,10 @@ fn a_context_and_its_terms_are_its_items() {
 /// the example's map reads.
 #[test]
 fn what_a_term_means_is_named_as_sakai_api_names_it() {
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_sakai")).current_dir(root()).args(["api", "通販.ctx", "--root", "."]).output().unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    let api: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    // the example holds rules, calendars and workflows: every language joined, as `ritsu sakai`
+    let (code, out, err) = common::joined(&["api", "examples/通販/通販.ctx", "--root", "examples/通販"]);
+    assert_eq!(code, 0, "{err}");
+    let api: serde_json::Value = serde_json::from_str(&out).unwrap();
     let mut means = 0;
     for c in api["contexts"].as_array().unwrap() {
         let file = c["file"].as_str().unwrap();

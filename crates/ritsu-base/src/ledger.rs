@@ -119,12 +119,14 @@ impl Ledger {
         self.entries.iter().find(|e| e.code == code)
     }
 
+    /// The sentence that says how to run a reproduction. A command that starts with `ritsu`
+    /// (`ritsu sakai check .`, with every language joined) is given in full; any other is the
+    /// words after the tool's command.
     fn run_sentence(&self, command: &[&str], lang: Lang) -> String {
-        let cmd = command.join(" ");
-        let tool = self.tool;
+        let cmd = if command.first() == Some(&"ritsu") { command.join(" ") } else { format!("{} {}", self.tool, command.join(" ")) };
         match lang {
-            Lang::Ja => format!("下のファイルを一つのディレクトリに置き、そこで `{tool} {cmd}` を走らせます"),
-            Lang::En => format!("put the files below in one directory, and run `{tool} {cmd}` there"),
+            Lang::Ja => format!("下のファイルを一つのディレクトリに置き、そこで `{cmd}` を走らせます"),
+            Lang::En => format!("put the files below in one directory, and run `{cmd}` there"),
         }
     }
 

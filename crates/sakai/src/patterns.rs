@@ -1,5 +1,6 @@
 //! The patterns, held to each other (DESIGN 1.4, 1.5, 3.4; PLAN B.6): E301 to E313 and W301.
-//! Most of it is read from the `.ctx` files; E301 and E302 read the `.proto` files, E302 and
+//! Most of it is read from the `.ctx` files; E301 and E302 read the `.proto` files and, for a
+//! rule's published language, the rule's Connect service as rulec says it (`Rules`), E302 and
 //! E313 the owners, and E308 the bytes of the shared kernel's copies.
 
 use crate::ast::{Pos, Role};
@@ -57,7 +58,7 @@ fn kernel(m: &Model, a: usize, b: usize) -> Option<(&Rel, &Vec<Own>)> {
     })
 }
 
-pub fn check(m: &Model, ps: &Protos, arts: &[Artifact]) -> Vec<Diag> {
+pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Read) -> Vec<Diag> {
     let mut p = P { m, diags: Vec::new() };
     let owner = |path: &str| arts.iter().find(|a| a.path == path).and_then(|a| a.ctx());
     // E301 and E302: the published languages.
@@ -100,6 +101,29 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact]) -> Vec<Diag> {
                     p.at(ci, *at, "E302", tr!("公表された言語 {k} の生成したコードの置き場所 {g} は「{me}」のものではありません", "Where the code made from {k} goes, {g}, is not {me}'s"))
                         .notes
                         .push(tr!("生成したコードの置き場所は、公表するコンテキストに属するディレクトリにします。", "The code made from a published language goes in a directory of the context that publishes it."));
+                }
+            }
+            // A rule's published language: the package and the service of its Connect, as rulec
+            // says them (DESIGN 1.4), when rulec answers for the rule.
+            if let Some((f, at)) = &pl.rulec
+                && read.facts.contains_key(f)
+            {
+                let sf = paths::shown(f);
+                if let Some(got) = crate::refs::rule_package(read, f)
+                    && got != *k
+                {
+                    p.at(ci, *at, "E302", tr!("{sf} の Connect の package は {got} で、見出しの {k} と違います", "The package of the Connect of {sf} is {got}, not {k} as the heading says"))
+                        .notes
+                        .push(tr!("規則の公表された言語の package は、rulec が規則の別名と版から作る `rulec.<別名>.v<版>` です。", "The package of a rule's published language is the one rulec makes from the rule's alias and version, `rulec.<alias>.v<version>`."));
+                }
+                if let Some(svc) = crate::refs::rule_service(read, f) {
+                    for (s, at) in &pl.services {
+                        if *s != svc {
+                            p.at(ci, *at, "E301", tr!("公開ホストサービス {s} は、{sf} の Connect のサービスではありません", "The open host service {s} is not the Connect service of {sf}"))
+                                .notes
+                                .push(tr!("{sf} の Connect のサービスは {svc} です。", "The Connect service of {sf} is {svc}."));
+                        }
+                    }
                 }
             }
             if pl.rulec.is_none() {

@@ -1141,6 +1141,26 @@ service StockService 8
   method Release ReleaseRequest ReleaseResponse false false 10
 service PackingService 13
   method GetPacking GetPackingRequest GetPackingResponse false false 14
+== tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto
+syntax proto3
+package shop.ordering.v1
+message Order 19
+  field id 1 None Scalar("string") json=None oneof=None line=20
+  field status 2 None Named("OrderStatus") json=None oneof=None line=21
+  field amount_jpy 3 None Scalar("int64") json=None oneof=None line=22
+message GetOrderRequest 25
+  field id 1 None Scalar("string") json=None oneof=None line=26
+message GetOrderResponse 29
+  field order 1 None Named("Order") json=None oneof=None line=30
+enum OrderStatus 10
+  value ORDER_STATUS_UNSPECIFIED 0 11
+  value ORDER_STATUS_RECEIVED 1 12
+  value ORDER_STATUS_PAID 2 13
+  value ORDER_STATUS_SHIPPED 3 14
+  value ORDER_STATUS_CANCELLED 4 15
+  value ORDER_STATUS_RETURNED 5 16
+service OrderService 6
+  method GetOrder GetOrderRequest GetOrderResponse false false 7
 == tests/mutants/E106_読めない_proto/proto/shop/billing/v1/billing.proto
 error 11:1 `;` is expected where `}` is | `;` が要るところに `}` があります
 == tests/mutants/E201_関係の無い在庫を参照/proto/shop/billing/v1/billing.proto
@@ -1369,6 +1389,10 @@ tests/maps/基本/proto/warehouse/v1/stock.proto sees tests/maps/基本/proto/sh
   StockService.Reserve: warehouse.v1.ReserveRequest (tests/maps/基本/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReserveResponse (tests/maps/基本/proto/warehouse/v1/stock.proto)
   StockService.Release: warehouse.v1.ReleaseRequest (tests/maps/基本/proto/warehouse/v1/stock.proto) -> warehouse.v1.ReleaseResponse (tests/maps/基本/proto/warehouse/v1/stock.proto)
   PackingService.GetPacking: warehouse.v1.GetPackingRequest (tests/maps/基本/proto/warehouse/v1/stock.proto) -> warehouse.v1.GetPackingResponse (tests/maps/基本/proto/warehouse/v1/stock.proto)
+tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto sees 
+  Order.status: shop.ordering.v1.OrderStatus (tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto, enum)
+  GetOrderResponse.order: shop.ordering.v1.Order (tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto)
+  OrderService.GetOrder: shop.ordering.v1.GetOrderRequest (tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto) -> shop.ordering.v1.GetOrderResponse (tests/mutants/E105_取り込みが合わない規則/proto/shop/ordering/v1/order.proto)
 tests/mutants/E201_関係の無い在庫を参照/proto/shop/billing/v1/billing.proto sees 
   StockSeen.stock: unknown
 tests/mutants/E202_在庫の内側を参照/proto/shop/ordering/v1/fulfillment_lite.proto sees tests/mutants/E202_在庫の内側を参照/proto/warehouse/internal/v1/ledger.proto

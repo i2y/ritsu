@@ -173,10 +173,14 @@ dependencies = [
 name = "sakai"
 version = "0.1.0"
 dependencies = [
+ "chobo",
+ "dandori",
+ "koyomi",
  "ritsu-base",
  "ritsu-ports",
  "ritsu-proto",
  "ritsu-testkit",
+ "rulec",
  "serde_json",
 ]
 

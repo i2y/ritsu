@@ -22,6 +22,10 @@ pub mod patterns;
 pub mod ports;
 pub mod refs;
 pub mod resolve;
+/// The `sakai` command, as a function.
+pub mod run;
+/// The languages sakai reads through ritsu's ports.
+pub mod suite;
 pub mod terms;
 pub mod api;
 pub mod build;

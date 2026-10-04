@@ -1,0 +1,24 @@
+context 在庫(inventory) v1
+description "倉庫の棚にある数を持ち、注文の一行ごとに押さえ、梱包の進みを答える"
+owner "倉庫チーム"
+also "在庫管理"
+
+owns
+  dir "../inventory", "../proto/warehouse"
+  dir "../py/inventory", "../py/warehouse", "../ts/inventory", "../ts/warehouse"
+  dir "../java/src/main/java/inventory", "../java/src/main/java/warehouse"
+  dir "../go/inventory", "../go/warehouse"
+
+published language warehouse.v1
+  proto "../proto/warehouse/v1/stock.proto"
+  open host service PackingService
+  generated dir "../py/warehouse/v1", "../ts/warehouse/v1"
+  generated dir "../java/src/main/java/warehouse/v1", "../go/warehouse/v1"
+
+terms
+  引当 "注文の一行のために、棚の在庫を出荷か取消まで押さえておくこと"
+    means message ReserveResponse
+  在庫切れ "押さえようとした数が棚に無いこと"
+    means enum Stock value STOCK_SHORT
+  梱包の状態 "注文の品を箱に詰め終えたか。詰める途中で欠品が分かることがある"
+    means enum PackingStatus

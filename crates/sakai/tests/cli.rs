@@ -229,9 +229,14 @@ fn explain_gives_the_reproduction() {
     assert!(t.starts_with("E401 (error) — "), "{t}");
     assert!(t.contains("  地図.ctx:") && t.contains("enum Kind -> 甲の種類"), "{t}");
     let o = sakai(&["explain", "E104", "--lang", "ja"]);
-    assert!(out(&o).contains("まだ出さない"), "{}", out(&o));
+    assert!(out(&o).contains("`sakai check .` を走らせます"), "{}", out(&o));
+    // a code that reads another language comes out with every language joined
+    let o = sakai(&["explain", "E105"]);
+    assert!(out(&o).contains("run `ritsu sakai check .` there"), "{}", out(&o));
+    let o = sakai(&["explain", "N101"]);
+    assert!(out(&o).contains("Retired in ritsu 0.23.0"), "{}", out(&o));
     let all = out(&sakai(&["explain", "--all"]));
-    assert!(all.contains("E001 (error)") && all.contains("W402 (warning)") && all.contains("N101 (note)"));
+    assert!(all.contains("E001 (error)") && all.contains("W402 (warning)") && all.contains("N101 (note)") && all.contains("E209 (error)"));
     let md = out(&sakai(&["explain", "--all", "--format", "markdown", "--lang", "ja"]));
     assert!(md.starts_with("# 診断のコード\n"), "{md}");
     assert!(md.contains("<a id=\"e401\"></a>") && md.contains("```ctx\n"));

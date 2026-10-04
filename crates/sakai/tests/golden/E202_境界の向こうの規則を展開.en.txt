@@ -1,0 +1,6 @@
+error[E202]: billing/rules/送料.rule:10:1: The file billing/rules/送料.rule of 請求 refers to delivery/rules/割増.rule (apply), which is inside 配送
+    10 | apply 割増(surcharge) = "../../delivery/rules/割増.rule" sha256:28e28bec2cb1a159
+  = An `apply` expands the rule it names into this one: the rule itself, inside 配送. A rule across the boundary is expanded from the two's shared kernel, or called from a workflow with `use rule … connect` once 配送 puts it in a published language (`published language rulec.…`).
+  involved:
+      請求  billing/rules/送料.rule:10        apply "../../delivery/rules/割増.rule"
+      配送  rulec "delivery/rules/割増.rule"  a part of the inside of 配送

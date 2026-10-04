@@ -1,0 +1,36 @@
+context 請求(billing) v1
+description "注文に請求するかを決め、手数料と送料を出し、支払の期日を決める"
+owner "経理チーム"
+
+owns
+  dir "../billing", "../calendars"
+  dir "../py/billing", "../py/calendars", "../ts/billing", "../ts/calendars"
+  dir "../java/src/main/java/billing", "../java/src/main/java/calendars"
+  dir "../go/billing", "../go/calendars"
+
+published language rulec.payment_fee.v1
+  rulec "../billing/rules/決済手数料.rule"
+  open host service PaymentFeeService
+
+terms
+  手数料 "決済の一件ごとに、契約の率から決まる額"
+    means rulec "../billing/rules/決済手数料.rule" output 手数料
+  キャンセル "請求を確定したあとに請求を取り消し、返金すること"
+
+upstream 受注 anticorruption layer
+  through shop.ordering.v1
+  layer rulec "../billing/rules/請求の要否.rule"
+  layer dir "../py/billing/acl/ordering", "../ts/billing/acl/ordering"
+  layer dir "../java/src/main/java/billing/acl/ordering", "../go/billing/acl/ordering"
+  enum OrderStatus -> rulec "../billing/rules/請求の要否.rule" enum 注文の状態
+    ORDER_STATUS_RECEIVED  -> 受付
+    ORDER_STATUS_PAID      -> 支払済
+    ORDER_STATUS_SHIPPED   -> 出荷済
+    ORDER_STATUS_CANCELLED -> 支払済
+
+upstream 配送 customer
+  through shop.delivery.v1
+
+shared kernel with 配送
+  koyomi "../calendars/東京の営業日.cal"
+  dir "../py/calendars", "../ts/calendars", "../java/src/main/java/calendars", "../go/calendars"

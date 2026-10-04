@@ -13,5 +13,11 @@ ritsu-proto = { path = "../ritsu-proto" }
 # preserve_order: `sakai api` and `--format json` print their keys in the order DESIGN.md writes them
 serde_json = { version = "1", features = ["preserve_order"] }
 
+# The languages sakai reads, each through its own engine of ritsu's ports: the tests join them
+# as `ritsu sakai` does (ritsu's DESIGN 3.3). sakai's own code holds none of them.
 [dev-dependencies]
 ritsu-testkit = { path = "../ritsu-testkit" }
+chobo = { path = "../chobo" }
+dandori = { path = "../dandori" }
+koyomi = { path = "../koyomi" }
+rulec = { path = "../rulec" }

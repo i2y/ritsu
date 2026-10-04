@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package shop.ordering.v1;
+
+// 受注の公表された言語。注文の状態と、注文を引くサービス。
+service OrderService {
+  rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+}
+
+enum OrderStatus {
+  ORDER_STATUS_UNSPECIFIED = 0;
+  ORDER_STATUS_RECEIVED = 1;
+  ORDER_STATUS_PAID = 2;
+  ORDER_STATUS_SHIPPED = 3;
+  ORDER_STATUS_CANCELLED = 4;
+  ORDER_STATUS_RETURNED = 5;
+}
+
+message Order {
+  string id = 1;
+  OrderStatus status = 2;
+  int64 amount_jpy = 3;
+}
+
+message GetOrderRequest {
+  string id = 1;
+}
+
+message GetOrderResponse {
+  Order order = 1;
+}

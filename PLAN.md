@@ -457,6 +457,22 @@ sakai の PLAN の C.1〜C.5 を、口で作るように書き直してから作
 - E104（ツールが無い）と E105（ツールの api が失敗した）は、意味を替えるか退かせる。
 - 例の `check` の要約に、rulec 2、koyomi 1 と、dandori の参照の数が出る（sakai の PLAN の C.15 の表の値を、dandori の分を足して直す）。
 
+D.8 でしたこと（2026-10-04、D の最後の部分）：
+
+- sakai の PLAN の C.1〜C.5 を、口で作る計画に書き直してから作った（子プロセス、ツールの探し方、版の確かめ、時間の上限は作らない）。sakai は読む言語を `sakai::suite::Suite`（rulec の `Rules`、rulec・koyomi・dandori の `References`、chobo の `Books`）として渡され、コマンドを関数（`sakai::run::run`）にした。`ritsu sakai`（DESIGN 8.6）がすべての言語をつなぎ、sakai のクレートのバイナリは何もつながない。
+- 境界を越える参照に、rulec の `import proto`・`shape`・`apply`、koyomi の `use calendar`、dandori の `use rule`・`use proto`・`connect`・`flow` を足した。dandori の `implements` は、自分の公表された言語の公開ホストサービスであることを確かめる。例の `check` の要約は「9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)」になった（sakai の PLAN の C.15 の表を直した）。
+- 台帳：E104 は「地図が含む成果物の言語がつながっていない」、E105 は「成果物が、その言語の検査を通らないか、読めない」に意味を替え、N101 を退かせた（台帳に残す）。DESIGN 7.10 の四つの検査を E202（同梱、`apply`）、E207、E208、E209 として足した。ほかの言語の成果物を含む再現は、`sakai explain` が `ritsu sakai check .` で走らせると言う（ritsu-base の台帳で、`ritsu` で始まるコマンドをそのまま書くようにした。DESIGN 4.3）。
+- テスト：sakai のテストは rulec、koyomi、chobo、dandori を dev-dependency に持ち、同じプロセスでつなぐ。一式のバイナリを走らせるところ（`SAKAI_RITSU` と、例の写しを確かめる `what_was_copied_passes_the_suite`）を口に替え、ritsu-testkit の `Need::Suite` と CI（`tools.yml`）の `SAKAI_*` を消した。例を土台にした変異を九つ足した（sakai の PLAN の 5.4）。
+- 決めたこと（★）：
+  - E104 は言語ごとに一度、その言語の最初の成果物を持つ `owns` の行で言う診断にした（exit 1）。yuen のクレートのバイナリは exit 2 で断るが、sakai は地図の検査の診断として言う（sakai の診断の台帳にあったコードの意味を替える形で、検査の段と一緒に出せるため）。
+  - 子の `.flow` を境界の向こうから走らせてよいのは、パートナーシップ、共有カーネル、子が相手の公開ホストサービスを `implements` で実装しているときだけ（E209。sakai の DESIGN 4.7）。
+  - 規則の `apply` も境界を越える参照にした（規則そのものを使うので、共有カーネルの中でなければ E202）。`use openapi`・`use smithy`、JSON Schema、出典の写しは、それを読む成果物の一部として数えない。
+  - koyomi と dandori は、構文を読めるファイルに参照を答える。rulec は、検査を通る規則にだけ事実を答え、sakai は事実を答えた規則にだけ参照を問う。
+  - 規則の `means` の先に無い要素は E007（sakai の PLAN は E408 と書いていた。E408 は公表された言語に無い要素のコード）。
+  - 片側だけの共有カーネルで、境界を越えて読むカレンダーは E201 になる（sakai の PLAN は E202 と書いていた。関係の向きが逆なので E201 が先に決まる）。
+  - api の `not_checked` は、いつも空のまま残した。`crossings[].via` は参照の種類ごとの語にした。
+- 確かめたこと：sakai のテストは全部通り、SKIP は 0。例と fixture の `.ctx` に対する 238 回の出力を、替える前の sakai のバイナリと `ritsu sakai` で比べ、違った 13 回は、どれも決めて変えたもの（例の `check` の 6 回と `api`、`explain --all` の 4 回、`check --help` の 2 回）だった。sakai のクレートのバイナリでは、ほかに例の `build` の 4 回と `export cml` が E104 で止まる（18 回）。B と C の変異の golden は一字も変わらない。
+
 ### D.9 chobo の単位
 
 DESIGN 5.4。chobo の単位を単位の型に載せ、お金の単位に税込と税抜の区別（`unit 円 incl_tax`）を書けるようにする。区別の無い chobo の単位は、区別の無い額だけを受け取る。chobo の README（英語と日本語）、DESIGN.md、スキル、`explain` の台帳に、新しい書き方を載せる。

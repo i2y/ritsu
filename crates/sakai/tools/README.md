@@ -28,7 +28,8 @@ Two things to know:
 - `tools/cml/Validate.java` runs Context Mapper's Xtext validator with every check. The CLI's own
   `cm validate` reports the syntax only, and exits 0 whatever it finds.
 
-The suite's tools (rulec 0.22 or later, koyomi, chobo, dandori) are found by `SAKAI_RULEC`,
-`SAKAI_KOYOMI`, `SAKAI_CHOBO` and `SAKAI_DANDORI`, else on the PATH; `tests/examples.rs` checks the
-files the example copied from them with each one's own `check`. buf (`SAKAI_BUF`, else the PATH)
-lints the two protos written for the example and is compared with sakai's proto reader.
+The languages of the suite (rulec, koyomi, chobo, dandori) are no tools to install: sakai's tests
+join them in the same process, through ritsu's ports, as `ritsu sakai` does, and
+`tests/examples.rs` checks the files the example copied from them through the same ports. buf
+(`SAKAI_BUF`, else the PATH) lints the two protos written for the example and is compared with
+sakai's proto reader.

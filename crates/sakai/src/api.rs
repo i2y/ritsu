@@ -118,7 +118,7 @@ pub fn api(c: &Checked) -> Value {
                 "to": value(&cr.to_name().to_json()),
                 "from_context": x.name,
                 "to_context": m.contexts[cr.to_ctx].name,
-                "via": "proto import",
+                "via": cr.kind.via(),
                 "elements": cr.reach.iter().map(|s| value(&s.naming().to_json())).collect::<Vec<_>>(),
                 "allowed_by": allowed,
             })

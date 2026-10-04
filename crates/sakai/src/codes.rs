@@ -4,8 +4,10 @@
 //!
 //! A reproduction is a directory of files: the files of [`BASE`] (a map of two contexts, each
 //! with a `.proto`) with the entry's own files laid over them. `sakai check` on that directory
-//! gives the code (`sakai build …` for the codes of the settings). The codes of the suite's tools
-//! (E104, E105, N101, E405) have no reproduction yet.
+//! gives the code (`sakai build …` for the codes of the settings). The codes that read another
+//! language (E105, E207, E208, E209, E405) come out of `ritsu sakai check`, with every language
+//! joined; E104 comes out of the binary of sakai's own crate, which joins none. N101 is retired:
+//! its entry stays, and its number is given to nothing else.
 
 use ritsu_base::ledger::{Entry, Ledger, Repro};
 use ritsu_base::text::Text;
@@ -30,6 +32,21 @@ const A_USES_B: (&str, &str) = ("a/a.proto", "syntax = \"proto3\";\npackage a;\n
 const A_USES_PLAIN: (&str, &str) = ("a/a.proto", "syntax = \"proto3\";\npackage a;\nimport \"b/v1/b.proto\";\nmessage A { b.v1.Plain p = 1; }\n");
 const A_CONFORMS: (&str, &str) = ("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 conformist\n  through b.v1\n");
 const A_PUBLISHES: (&str, &str) = ("a/v1/a1.proto", "syntax = \"proto3\";\npackage a.v1;\nenum AKind {\n  A_KIND_UNSPECIFIED = 0;\n  A_KIND_X = 1;\n}\nmessage A1 {}\n");
+/// A rule of 甲 whose table leaves an amount out: rulec does not answer for it (E105).
+const A_RULE_WITH_A_GAP: (&str, &str) = (
+    "a/fee.rule",
+    "rule fee v1\n\ninputs\n  amount : money[JPY]  range >=0JPY <=10000JPY\n\noutputs\n  fee : money[JPY]  round down(1JPY)\n\ntable fees\n| amount       | -> fee  |\n| <5000JPY     | 500JPY  |\n| >5000JPY     | 0JPY    |\n",
+);
+/// A rule of 甲 that takes 乙's `Kind` in (`import proto`): `KIND_ONE` as 一, `KIND_TWO` as 二.
+const A_RULE_TAKES_KIND: (&str, &str) = (
+    "a/x.rule",
+    "rule x(x) v1\n\nimport proto \"../b/v1/b.proto\" Kind -> 種類\nenum 種類(kind) = 一(one) | 二(two)\n\ninputs\n  k : 種類\n\noutputs\n  n : 種類\n\ntable t\npolicy unique\n| k  | -> n |\n| 一 | 一   |\n| 二 | 二   |\n",
+);
+/// A workflow of 甲 that calls 乙's `BService` by Connect.
+const A_CALLS_B: (&str, &str) = (
+    "a/w.flow",
+    "workflow w v1\n\nuse proto b from \"../b/v1/b.proto\"\n  url \"https://b.example.com\"\n\ninputs\n  kind : b.Kind\n\ntask get(kind: b.Kind) -> b.B\n  connect b \"BService/Get\"\n\nflow\n  let r = get(kind: kind)\n  succeed\n",
+);
 
 /// The files of a reproduction: [`BASE`] in its order, each replaced by the entry's file of the
 /// same path, then the entry's other files.
@@ -39,10 +56,14 @@ fn laid(files: &'static [(&'static str, &'static str)]) -> Vec<(&'static str, &'
     out
 }
 
-/// An entry whose reproduction is `files` laid over [`BASE`], checked with `sakai check .`; one
-/// with no files is a code sakai does not print yet, and has no reproduction.
+/// An entry whose reproduction is `files` laid over [`BASE`], checked with `sakai check .`, or
+/// with `ritsu sakai check .` when the files hold an artifact of another language (but for E104,
+/// which is what the binary of sakai's own crate says of one); one with no files is a code sakai
+/// does not print yet, and has no reproduction.
 fn e(code: &'static str, title: Text, when: Text, fix: Text, files: &'static [(&'static str, &'static str)], related: &'static [&'static str]) -> Entry {
-    let repro = if files.is_empty() { Repro::Later } else { Repro::Dir { files: laid(files), command: vec!["check", "."] } };
+    let other = files.iter().any(|(p, _)| [".rule", ".cal", ".flow"].iter().any(|x| p.ends_with(x)));
+    let command = if other && code != "E104" { vec!["ritsu", "sakai", "check", "."] } else { vec!["check", "."] };
+    let repro = if files.is_empty() { Repro::Later } else { Repro::Dir { files: laid(files), command } };
     Entry::new(code, title, when, fix, repro, related)
 }
 
@@ -62,12 +83,13 @@ impl Running for Entry {
     }
 }
 
-/// Whether sakai prints a code yet: a code with a reproduction.
+/// Whether sakai prints a code: a code with a reproduction (not one retired).
 pub fn implemented(e: &Entry) -> bool {
-    !matches!(e.repro, Repro::Later)
+    matches!(e.repro, Repro::Dir { .. })
 }
 
-/// The command a reproduction is run with, after `sakai`, and its files.
+/// The command a reproduction is run with (the words after `sakai`, or the whole command when it
+/// is `ritsu sakai …`), and its files.
 pub fn reproduction(e: &Entry) -> (Vec<&'static str>, Vec<(&'static str, &'static str)>) {
     match &e.repro {
         Repro::Dir { files, command } => (command.clone(), files.clone()),
@@ -256,21 +278,24 @@ pub fn ledger() -> Ledger {
         ),
         e(
             "E104",
-            tr!("地図が含む成果物のツールがありません", "The tool of an artifact the map holds is not there"),
+            tr!("ほかの言語の成果物を読めません（言語がつながっていません）", "Another language's artifacts cannot be read: the language is not joined"),
             tr!(
-                "地図が rulec か koyomi の成果物を含むのに、そのツールが見つからないとき（`SAKAI_RULEC`、`SAKAI_KOYOMI` か PATH）、または版が古いとき。確かめていないことを黙って通しません。",
-                "The map holds rulec or koyomi artifacts and the tool is not found (`SAKAI_RULEC`, `SAKAI_KOYOMI`, or the PATH), or is too old. What is not checked is not passed in silence."
+                "地図が rulec、koyomi、dandori の成果物を含むのに、その言語を読む ritsu の口がつながっていないとき（sakai のクレートのバイナリ）。言語ごとに一度、その最初の成果物を持つ `owns` の行で言います。確かめていないことを黙って通しません。",
+                "The map holds rulec, koyomi or dandori artifacts, and the ports of ritsu that read that language are not joined (the binary of sakai's own crate). Told once a language, at the line of `owns` that holds its first artifact. What is not checked is not passed in silence."
             ),
-            tr!("ツールを入れるか、環境変数でその場所を渡します。", "Install the tool, or give its place in the environment variable."),
-            &[],
+            tr!("すべての言語をつないだ `ritsu sakai` で走らせます。", "Run it as `ritsu sakai`, which joins every language."),
+            &[A_RULE_TAKES_KIND],
             &["E105"],
         ),
         e(
             "E105",
-            tr!("ツールが成果物を読めません", "A tool cannot read an artifact"),
-            tr!("一式のツールの api が失敗したとき（成果物がそのツールの検査を通らないと、どのツールも api を出しません）。注にツールの診断の最初の行を添えます。", "A tool's api failed: no tool prints its api for an artifact that does not pass its own check. The note gives the first lines of the tool's diagnostics."),
-            tr!("その成果物を、そのツールの検査が通るように直します。", "Fix the artifact until its tool's check passes."),
-            &[],
+            tr!("成果物が、その言語の検査を通らないか、読めません", "An artifact does not pass its language's check, or cannot be read"),
+            tr!(
+                "rulec が規則について答えないとき（規則が rulec の検査を通らない）、koyomi と dandori がファイルを読めないとき。注に、その言語の診断を並べます。その成果物の参照は確かめられません。",
+                "rulec does not answer for a rule (it does not pass rulec's check), or koyomi or dandori cannot read the file. The notes give what the language says; the references of the artifact cannot be checked."
+            ),
+            tr!("その成果物を、その言語の検査が通るように直します。", "Fix the artifact until its language's check passes."),
+            &[A_RULE_WITH_A_GAP],
             &["E104"],
         ),
         e(
@@ -311,11 +336,15 @@ pub fn ledger() -> Ledger {
         e(
             "N101",
             tr!("dandori の参照を確かめていません", "The references of dandori are not checked"),
-            tr!("地図が `.flow` を含むとき。dandori は参照を JSON で出さないので、sakai は `.flow` の属し方だけを確かめます。", "The map holds `.flow` files. dandori does not print its references as JSON, so sakai checks only who owns a `.flow`."),
-            tr!("直すものはありません。dandori が api を持てば、確かめるようになります。", "Nothing to fix; once dandori has an api, sakai checks them."),
+            tr!("出しません。dandori が参照を JSON で出さないので、地図が `.flow` を含むときに、属し方だけを確かめたと言うためのコードでした。", "Never: it was for a map that holds `.flow` files, when sakai checked only who owns them, dandori printing no references as JSON."),
+            tr!("直すものはありません。", "Nothing to fix."),
             &[],
-            &[],
-        ),
+            &["E202", "E207", "E208", "E209"],
+        )
+        .retired(tr!(
+            "ritsu 0.23.0 で退きました。dandori の参照は ritsu の口（`References`）で読み、境界を越えるものを確かめます（E202、E207〜E209）。",
+            "Retired in ritsu 0.23.0: dandori's references are read through ritsu's ports (`References`), and those that cross a boundary are checked (E202, E207 to E209)."
+        )),
         // ── The references that cross a boundary ──
         e(
             "E201",
@@ -386,6 +415,47 @@ pub fn ledger() -> Ledger {
             tr!("参照を消すか、別々の道をやめて関係を書きます。", "Delete the reference, or replace separate ways with a relationship."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nseparate ways from 乙\n"), A_USES_PLAIN],
             &["E310"],
+        ),
+        e(
+            "E207",
+            tr!("ワークフローが、相手の公開ホストサービスでないサービスを呼んでいます", "A workflow calls a service that is no open host service of the other side"),
+            tr!(
+                "ワークフローが境界の向こうのサービスを `connect` で呼ぶか、規則を `use rule … connect` で呼ぶのに、そのサービスが、相手の公表された言語の `open host service` に無いとき。",
+                "A workflow calls a service across a boundary with `connect`, or a rule with `use rule … connect`, and the service is not under `open host service` of the other side's published language."
+            ),
+            tr!("相手がそのサービスを `open host service` に並べるか、相手が並べたサービスを呼びます。", "The other side lists the service under `open host service`, or the workflow calls one it lists."),
+            &[A_CONFORMS, ("乙.ctx", "context 乙(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n\nterms\n  種類 \"乙が扱うものの種類\"\n    means enum Kind\n"), A_CALLS_B],
+            &["E202", "E301"],
+        ),
+        e(
+            "E208",
+            tr!("ワークフローが実装するサービスが、自分の公表された言語にありません", "The service a workflow implements is not in its own published language"),
+            tr!(
+                "ワークフローが `implements` で実装するサービスが、そのワークフローを持つコンテキストの公表された言語の `open host service` に無いとき（proto が公表された言語に無いときも）。",
+                "The service a workflow `implements` is not under `open host service` of a published language of the workflow's context (nor when the .proto is in no published language)."
+            ),
+            tr!("自分の公表された言語に proto を並べ、`open host service` にサービスを書きます。", "List the .proto in the context's published language, and the service under `open host service`."),
+            &[
+                ("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\npublished language a.v1\n  proto \"a/v1/a.proto\"\n"),
+                ("a/v1/a.proto", "syntax = \"proto3\";\npackage a.v1;\nimport \"dandori/v1/options.proto\";\nservice AService {\n  option (dandori.v1.workflow) = {name: \"w\", version: 1};\n  rpc Start(StartRequest) returns (StartResponse) {\n    option (dandori.v1.start) = {};\n  }\n}\nmessage StartRequest { string id = 1; }\nmessage StartResponse { string id = 1; }\n"),
+                ("a/w.flow", "workflow w v1 implements a1.AService\n\nuse proto a1 from \"v1/a.proto\"\n\ninputs\n  id : string\n\noutputs\n  id : string\n\nflow\n  succeed id = id\n"),
+            ],
+            &["E301"],
+        ),
+        e(
+            "E209",
+            tr!("ワークフローが、境界の向こうのワークフローを子として走らせています", "A workflow runs another context's workflow as its child"),
+            tr!(
+                "ワークフローが `flow` で走らせる子のフローが別のコンテキストのもので、二つがパートナーシップでなく、子のフローが共有カーネルになく、子のフローが相手の公開ホストサービスを実装していないとき。",
+                "A child workflow a workflow runs with `flow` belongs to another context, the two are not partners, the child is in no shared kernel of theirs, and it implements no open host service of the other side."
+            ),
+            tr!("相手が公表したサービスを `connect` で呼ぶか、二つをパートナーシップにするか、子のフローを共有カーネルに並べるか、子のフローに相手の公開ホストサービスを実装させます。", "Call a service the other side publishes with `connect`; or make the two partners; or list the child in their shared kernel; or have the child implement an open host service of the other side."),
+            &[
+                A_CONFORMS,
+                ("b/c.flow", "workflow c v1\n\ninputs\n  id : string\n\noutputs\n  id : string\n\nflow\n  succeed id = id\n"),
+                ("a/p.flow", "workflow p v1\n\nrecord 答え\n  id : string\n\ninputs\n  id : string\n\ntask run_child(id: string) -> 答え\n  flow \"../b/c.flow\"\n\nflow\n  let r = run_child(id: id)\n  succeed\n"),
+            ],
+            &["E202", "E207"],
         ),
         // ── The patterns ──
         e(
@@ -584,9 +654,15 @@ pub fn ledger() -> Ledger {
         e(
             "E405",
             tr!("rulec の規則の取り込みと、`.ctx` に書いた対応が食い違います", "A rule's import and the mapping of the `.ctx` disagree"),
-            tr!("対応の先が上流の列挙を `import proto` で取り込む規則の列挙なのに、`.ctx` の値の行が、規則の対応（`rulec api` の `connect.enums`）と違うとき。", "The target is the enum of a rule that imports the upstream enum with `import proto`, and a value line of the `.ctx` differs from the rule's mapping (`connect.enums` of `rulec api`)."),
-            tr!("値の行を消して規則の対応に任せるか、規則と同じにします。", "Delete the value lines and leave the mapping to the rule, or make them the rule's."),
-            &[],
+            tr!(
+                "対応の先が、上流の列挙を `import proto` で取り込む規則の列挙なのに、`.ctx` の値の行が、規則の取り込み（rulec が渡す、値ごとの proto での名前）と違うとき。",
+                "The target is the enum of a rule that takes the upstream enum in with `import proto`, and a value line of the `.ctx` differs from the rule's import (each value's name on the wire, as rulec says it)."
+            ),
+            tr!("値の行を消して規則の取り込みに任せるか、規則と同じにします。", "Delete the value lines and leave the mapping to the rule, or make them the rule's."),
+            &[
+                ("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 anticorruption layer\n  through b.v1\n  layer rulec \"a/x.rule\"\n  enum Kind -> rulec \"a/x.rule\" enum 種類\n    KIND_ONE -> 二\n    KIND_TWO -> 二\n"),
+                A_RULE_TAKES_KIND,
+            ],
             &["E401"],
         ),
         e(

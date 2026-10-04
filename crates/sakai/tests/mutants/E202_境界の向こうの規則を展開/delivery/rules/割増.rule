@@ -1,0 +1,14 @@
+rule 割増(surcharge) v1
+description "重い荷物の割増。変異のために書いたもの"
+
+inputs
+  重さ(weight) : number  range >=0 <=100
+
+outputs
+  割増(surcharge) : money[円, incl_tax]  round down(1円)
+
+table 割増の表(surcharge_table)
+policy unique
+| 重さ | -> 割増 |
+| <=10 | 0円     |
+| >10  | 500円   |

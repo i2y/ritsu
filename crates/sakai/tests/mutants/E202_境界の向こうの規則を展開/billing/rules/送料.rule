@@ -1,0 +1,16 @@
+rule 送料(fee) v1
+description "配送の割増を展開して足した送料。変異のために書いたもの"
+
+inputs
+  荷の重さ(weight) : number  range >=0 <=100
+
+outputs
+  送料(fee) : money[円, incl_tax]  round down(1円)
+
+apply 割増(surcharge) = "../../delivery/rules/割増.rule" sha256:28e28bec2cb1a159
+  重さ = 荷の重さ
+  割増 -> 割増額
+
+define 送料の計算(sum) : money[円, incl_tax] = 割増額 + 800円
+
+result 送料 = 送料の計算

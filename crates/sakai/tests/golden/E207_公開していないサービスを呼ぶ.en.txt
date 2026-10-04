@@ -1,0 +1,14 @@
+error[E207]: ordering/受注.flow:47:1: The workflow ordering/受注.flow of 受注 calls StockService, which is no open host service of 在庫
+    47 |   connect warehouse "StockService/Reserve"
+  = The open host services of the published language warehouse.v1 are PackingService.
+  = Across a boundary a workflow calls only the services the other side lists under `open host service`.
+  involved:
+      受注  ordering/受注.flow:47                                                       connect StockService/Reserve
+      在庫  proto "proto/warehouse/v1/stock.proto" service StockService method Reserve  a part of the published language warehouse.v1
+error[E207]: ordering/受注.flow:53:1: The workflow ordering/受注.flow of 受注 calls StockService, which is no open host service of 在庫
+    53 |   connect warehouse "StockService/Release"
+  = The open host services of the published language warehouse.v1 are PackingService.
+  = Across a boundary a workflow calls only the services the other side lists under `open host service`.
+  involved:
+      受注  ordering/受注.flow:53                                                       connect StockService/Release
+      在庫  proto "proto/warehouse/v1/stock.proto" service StockService method Release  a part of the published language warehouse.v1
