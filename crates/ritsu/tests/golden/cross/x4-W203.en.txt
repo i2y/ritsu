@@ -1,0 +1,16 @@
+ok seats.rule
+hall.book: ok
+  assign.do   may be refused: over_capacity (given(event) at most 300), key_conflict, already_refused
+  release.do  may be refused: not_given (given(event) at least 0), key_conflict, already_refused
+  key: assign once per event; a second call that differs only in count is refused with key_conflict
+  key: release once per event; a second call that differs only in count is refused with key_conflict
+booking.flow: ok
+warning[ritsu W203]: booking.flow:26:1: Whether chobo takes the amount the task `give_seats` gives `count` cannot be decided
+    26 |   give_seats(event: event, count: count)
+  = nothing says what range `count` is in (the answer of `ask_organiser` has no range)
+  = chobo fails a call with an amount it does not take when the workflow runs.
+warning[ritsu W204]: booking.flow:26:1: Which reasons the book can refuse `assign.do` with, as the task `give_seats` calls it, cannot be decided
+    26 |   give_seats(event: event, count: count)
+  = nothing says what range `count` is in (the answer of `ask_organiser` has no range)
+  = A refusal comes back as the error of the task its reason names; a reason the task does not declare comes back as `failure`.
+ritsu check: 3 files (rulec 1, chobo 1, dandori 1): all pass (2 warnings); borders between the languages: 2 checked, 2 undecided

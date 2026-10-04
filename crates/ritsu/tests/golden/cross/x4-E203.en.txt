@@ -1,0 +1,13 @@
+ok seats.rule
+hall.book: ok
+  assign.do   may be refused: over_capacity (given(event) at most 300), key_conflict, already_refused
+  release.do  may be refused: not_given (given(event) at least 0), key_conflict, already_refused
+  key: assign once per event; a second call that differs only in count is refused with key_conflict
+  key: release once per event; a second call that differs only in count is refused with key_conflict
+booking.flow: ok
+error[ritsu E203]: booking.flow:18:1: The task `give_seats` can give `count` the amount 0, which chobo does not take
+    18 |   give_seats(event: event, count: need.needed)
+  = `need.needed` is the output `needed` of the rule "seats.rule", which comes to 0 at event_kind = webinar
+  = chobo takes an amount from 1 to 9223372036854775807 in the unit's smallest step, and a call with any other fails rather than being refused.
+  = Make the rule's amounts 1 or more (a negative one is a transfer the other way), or branch before the transfer.
+ritsu check: 3 files (rulec 1, chobo 1, dandori 1): 1 fail (1 error); borders between the languages: 2 checked, 0 undecided

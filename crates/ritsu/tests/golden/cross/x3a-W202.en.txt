@@ -1,0 +1,12 @@
+ok batch.rule
+payment_terms.cal: ok — every date computes on all 354 days of received (2026-01-01..2026-12-20)
+billing.flow: ok
+warning[ritsu W202]: billing.flow:23:1: Whether the day given to `pay_day` of the rule `batch` stays inside its range cannot be decided
+    23 |   let pick = batch(pay_day: day)
+  = nothing says what day `day` is (the input `received` gives no range of days)
+  = The rule's generated code checks the day at its door when the workflow runs; a day outside its range fails the call there.
+warning[ritsu W205]: billing.flow:19:1: Whether the day given to `received` of the koyomi date `terms.payment` stays inside the input's range cannot be decided
+    19 |   let due = terms.payment(received: received)
+  = nothing says what day `received` is (the input `received` gives no range of days), and "payment_terms.cal" takes 2026-01-01 to 2026-12-20 for `received`
+  = koyomi's generated code refuses a day outside the range when the workflow runs.
+ritsu check: 3 files (rulec 1, koyomi 1, dandori 1): all pass (2 warnings); borders between the languages: 2 checked, 2 undecided

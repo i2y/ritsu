@@ -1,0 +1,17 @@
+ok settlement.rule
+payment_terms.cal: ok — received 2026-01-01〜2026-12-20 の 354 日のすべてで、どの日付も計算できます
+billing.flow: 検査を通りました
+エラー[ritsu E201]: billing.flow:20:1: 規則 settlement を呼ぶところで、前提 `pay_day in koyomi "payment_terms.cal" date payment` を破る値を渡すことがあります
+    20 |   let pick = settlement(pay_day: close.day)
+  = `close.day` は koyomi の日付 closing の日で、2026-01-20 になることがありますが、2026-01-20 は koyomi "payment_terms.cal" date payment の日ではありません
+  = 規則の生成したコードは、前提を破る呼び出しを入口で断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。koyomi は、入力の範囲のすべてで日付の日を数えています。
+  = koyomi "payment_terms.cal" date payment の日を渡すか、規則の範囲を直してください。
+警告[ritsu W205]: billing.flow:18:1: koyomi の日付 `terms.payment` の `received` に渡す日が、入力の範囲に収まるかを決められません
+    18 |   let due = terms.payment(received: received)
+  = `received` が何日になるかは分かりません（入力 `received` には日付の範囲がありません）。"payment_terms.cal" が `received` に受け取るのは 2026-01-01 から 2026-12-20 までです
+  = 範囲の外の日は、ワークフローを走らせたときに koyomi の生成したコードが断ります。
+警告[ritsu W205]: billing.flow:19:1: koyomi の日付 `terms.closing` の `received` に渡す日が、入力の範囲に収まるかを決められません
+    19 |   let close = terms.closing(received: received)
+  = `received` が何日になるかは分かりません（入力 `received` には日付の範囲がありません）。"payment_terms.cal" が `received` に受け取るのは 2026-01-01 から 2026-12-20 までです
+  = 範囲の外の日は、ワークフローを走らせたときに koyomi の生成したコードが断ります。
+ritsu check: ファイル 3 個（rulec 1、koyomi 1、dandori 1）。検査を通らないもの 1 個（エラー 1 件、警告 2 件）。言語の境目: 確かめた 4 か所、決められない 2 か所

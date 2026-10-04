@@ -1,0 +1,13 @@
+payment_terms.cal: ok — every date computes on all 354 days of received (2026-01-01..2026-12-20)
+reminders.cal: ok — every date computes on all 334 days of due (2026-02-01..2026-12-31)
+reminding.flow: ok
+warning[ritsu W205]: reminding.flow:18:1: Whether the day given to `received` of the koyomi date `terms.payment` stays inside the input's range cannot be decided
+    18 |   let due = terms.payment(received: received)
+  = nothing says what day `received` is (the input `received` gives no range of days), and "payment_terms.cal" takes 2026-01-01 to 2026-12-20 for `received`
+  = koyomi's generated code refuses a day outside the range when the workflow runs.
+error[ritsu E205]: reminding.flow:19:1: The day given to `due` of the koyomi date `reminders.reminder` can be outside the input's range
+    19 |   let note = reminders.reminder(due: due.day)
+  = `due.day` can be 2027-01-10, a day koyomi "payment_terms.cal" date payment comes to (at received = 2026-11-21), and "reminders.cal" takes 2026-02-01 to 2026-12-31 for `due`
+  = koyomi's generated code refuses a day outside the range, so this call fails only when the workflow runs.
+  = Widen the range of `due` in "reminders.cal" (and the data of its calendar), or give it a day that stays inside.
+ritsu check: 3 files (koyomi 2, dandori 1): 1 fail (1 error, 1 warning); borders between the languages: 2 checked, 1 undecided

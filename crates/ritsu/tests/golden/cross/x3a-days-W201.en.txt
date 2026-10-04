@@ -1,0 +1,12 @@
+ok settlement.rule
+payment_terms.cal: ok — every date computes on all 354 days of received (2026-01-01..2026-12-20)
+billing.flow: ok
+warning[ritsu W201]: billing.flow:19:1: Whether the call of the rule settlement keeps its precondition `pay_day in koyomi "payment_terms.cal" date payment` cannot be decided
+    19 |   let pick = settlement(pay_day: received)
+  = nothing says what day `received` is (the input `received` gives no range of days)
+  = The rule's generated code checks it at its door when the workflow runs; a call that breaks it fails there.
+warning[ritsu W205]: billing.flow:18:1: Whether the day given to `received` of the koyomi date `terms.payment` stays inside the input's range cannot be decided
+    18 |   let due = terms.payment(received: received)
+  = nothing says what day `received` is (the input `received` gives no range of days), and "payment_terms.cal" takes 2026-01-01 to 2026-12-20 for `received`
+  = koyomi's generated code refuses a day outside the range when the workflow runs.
+ritsu check: 3 files (rulec 1, koyomi 1, dandori 1): all pass (2 warnings); borders between the languages: 3 checked, 2 undecided

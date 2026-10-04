@@ -8,20 +8,27 @@
 //! to hold, an example where it does not, or undecided — and [`Borders`] counts them.
 //!
 //! The checks: the `.proto` files of a project, which no language checks on its own, read with
-//! ritsu's one reader (E101); and the borders between the languages (DESIGN 7.2). Of those, X2
-//! (a rule's preconditions where a workflow calls it, E201 and W201) reaches a project now; X3 (a),
-//! X4 and X6 ([`borders`]) are decided over what koyomi, chobo and rulec hand over, and reach a
-//! project once dandori calls koyomi and chobo (PLAN E.5). X1, the units at a border, is the
-//! languages' own check (dandori's E003, rulec's E065), and X3 (b) is rulec's (`range from
-//! koyomi`, rulec's §15.174).
+//! ritsu's one reader (E101); and the borders between the languages (DESIGN 7.2), where a workflow
+//! calls a rule, a koyomi date or a chobo transfer: a rule's preconditions (X2, E201 and W201), the
+//! days of a koyomi date given to a rule (X3 (a), E202 and W202), a rule's output given to a
+//! transfer as its amount and the refusals that amount can meet (X4, E203–W204), the day given to a
+//! koyomi date (X6, E205 and W205), and how long a hold of a book is held before a call its expiry
+//! can refuse (X5, E206 and W206). What each decides is in [`borders`] (and X2's in its module);
+//! the checks gather the facts from what dandori says a flow calls (`Flows::crossings`) and what
+//! rulec, koyomi and chobo say of it. X1, the units at a border, is the languages' own check
+//! (dandori's E003, rulec's E065), and X3 (b) is rulec's (`range from koyomi`, rulec's §15.174).
 
 pub mod borders;
 pub mod codes;
+mod dates;
+mod holds;
 mod preconditions;
 mod protos;
+mod transfers;
 
+use ritsu_base::naming::Tool;
 use ritsu_base::text::Lang;
-use ritsu_ports::Finding;
+use ritsu_ports::{Crossings, Finding, Flows};
 use ritsu_project::{Joined, Project};
 
 /// What the checks of the borders between the languages came to (DESIGN 7.1, P5): each border
@@ -56,7 +63,46 @@ pub fn check(project: &Project, joined: &Joined, lang: Lang) -> Crossed {
     findings.extend(protos::unread(project, lang));
     findings.extend(preconditions::check(project, joined, lang, &mut borders));
     days_held(project, joined, &mut borders);
+    let flows = flows(project, joined);
+    findings.extend(dates::days_to_rules(project, &flows, joined, lang, &mut borders));
+    findings.extend(transfers::check(project, &flows, joined, lang, &mut borders));
+    findings.extend(dates::days_to_dates(project, &flows, joined, lang, &mut borders));
+    findings.extend(holds::check(project, &flows, joined, lang, &mut borders));
     Crossed { findings, borders }
+}
+
+/// A flow of the project that passes dandori's check, with what it calls across the borders.
+struct Flow<'a> {
+    file: &'a ritsu_project::File,
+    src: String,
+    calls: Crossings,
+}
+
+/// Every flow of the project that passes dandori's check, read with the rules, the dates files and
+/// the books through the ports. A flow that does not pass is dandori's to say.
+fn flows<'a>(project: &'a Project, joined: &Joined) -> Vec<Flow<'a>> {
+    let ports = joined.ports();
+    project
+        .of(Tool::Dandori)
+        .into_iter()
+        .filter_map(|f| {
+            let disk = ritsu_base::paths::on_disk(&project.root, &f.rel);
+            let calls = joined.dandori.crossings(&disk, &ports).ok()?;
+            Some(Flow { file: f, src: ritsu_base::fs::read_to_string(&disk).unwrap_or_default(), calls })
+        })
+        .collect()
+}
+
+/// Japanese with a space after a piece that ends in code, as the Japanese of the suite writes it:
+/// `` 入力 `received` `` and `には` make `` 入力 `received` には ``, `` `count` の結果 `` and `に` make
+/// `` `count` の結果に ``.
+fn then_ja(piece: &str, rest: &str) -> String {
+    if piece.ends_with('`') { format!("{piece} {rest}") } else { format!("{piece}{rest}") }
+}
+
+/// A file a flow reaches, as the project names it: from the root, else as dandori reached it.
+fn named(project: &Project, path: &std::path::Path) -> String {
+    ritsu_base::paths::from_root(&project.root, path).unwrap_or_else(|| path.to_string_lossy().to_string())
 }
 
 /// X3 (b): each rule input of the project whose range is a koyomi date (`range from koyomi`,

@@ -1,0 +1,17 @@
+payment_terms.cal: ok — every date computes on all 354 days of received (2026-01-01..2026-12-20)
+weekdays.cal: ok — calendar weekdays: no table, so the data range is 0001-01-01..9999-12-31
+stock.book: ok
+  receive.do    may be refused: key_conflict
+  reserve.hold  may be refused: out_of_stock (shelf(sku) at least 0), key_conflict, already_refused
+  reserve.post  may be refused: key_conflict, already_voided, expired, over_hold, no_such_hold
+  reserve.void  may be refused: already_posted, expired, no_such_hold
+  key: receive once per delivery, sku; a second call that differs only in qty is refused with key_conflict
+  key: reserve once per order, sku; a second call that differs only in qty is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
+warning[dandori W101]: invoice.flow:30:1: if `ship` fails, the workflow fails with the case `goods` in held; 1 call(s) can fail like this. Handle the error at the call, or add `on failure` to settle the case
+    30 |   goods <- ship(order: order, sku: sku)
+  the run that gets there:
+      27  reserve: goods starts in held
+      29  wait 3 days
+      30  ship fails (timeout, failure)
+invoice.flow: ok (1 warning(s))
+ritsu check: 4 files (koyomi 2, chobo 1, dandori 1): all pass (1 warning); borders between the languages: 1 checked, 0 undecided

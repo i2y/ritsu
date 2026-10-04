@@ -1,0 +1,24 @@
+payment_terms.cal: ok — every date computes on all 354 days of received (2026-01-01..2026-12-20)
+weekdays.cal: ok — calendar weekdays: no table, so the data range is 0001-01-01..9999-12-31
+stock.book: ok
+  receive.do    may be refused: key_conflict
+  reserve.hold  may be refused: out_of_stock (shelf(sku) at least 0), key_conflict, already_refused
+  reserve.post  may be refused: key_conflict, already_voided, expired, over_hold, no_such_hold
+  reserve.void  may be refused: already_posted, expired, no_such_hold
+  key: receive once per delivery, sku; a second call that differs only in qty is refused with key_conflict
+  key: reserve once per order, sku; a second call that differs only in qty is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
+warning[dandori W101]: invoice.flow:29:1: if `terms.payment` fails, the workflow fails with the case `goods` in held; 2 call(s) can fail like this. Handle the error at the call, or add `on failure` to settle the case
+    29 |   let due = terms.payment(received: now)
+  the run that gets there:
+      27  reserve: goods starts in held
+      29  terms.payment fails (timeout, failure)
+invoice.flow: ok (1 warning(s))
+warning[ritsu W205]: invoice.flow:29:1: Whether the day given to `received` of the koyomi date `terms.payment` stays inside the input's range cannot be decided
+    29 |   let due = terms.payment(received: now)
+  = `now` can be any day, and "payment_terms.cal" takes 2026-01-01 to 2026-12-20 for `received`
+  = koyomi's generated code refuses a day outside the range when the workflow runs.
+warning[ritsu W206]: invoice.flow:31:1: Whether the hold of the case `goods` has expired when `ship` posts it cannot be decided
+    31 |   goods <- ship(order: order, sku: sku)
+  = `ship` comes 17 days 9 hours or more after the hold is made (line 27), and nothing bounds how much more: `reserve` (line 27) has no `timeout`; the hold expires 60 days after it is made
+  = The book refuses a call on an expired hold with `expired`, which the flow handles here.
+ritsu check: 4 files (koyomi 2, chobo 1, dandori 1): all pass (3 warnings); borders between the languages: 2 checked, 2 undecided

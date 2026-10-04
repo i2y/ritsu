@@ -1,0 +1,17 @@
+payment_terms.cal: ok — received 2026-01-01〜2026-12-20 の 354 日のすべてで、どの日付も計算できます
+weekdays.cal: ok — カレンダー weekdays。表を使わないので、データの範囲は 0001-01-01〜9999-12-31 です
+stock.book: ok
+  receive.do    断られうる理由: key_conflict
+  reserve.hold  断られうる理由: out_of_stock（shelf(sku) at least 0）、key_conflict、already_refused
+  reserve.post  断られうる理由: key_conflict、already_voided、expired、over_hold、no_such_hold
+  reserve.void  断られうる理由: already_posted、expired、no_such_hold
+  キー: receive は delivery, sku ごとに一回。qty だけが違う二度目は key_conflict で断られる
+  キー: reserve は order, sku ごとに一回。qty だけが違う二度目は key_conflict で断られる。押さえが終わったあとに同じキーで押さえ直すと done_before になり、何も押さえない
+警告[dandori W101]: invoice.flow:30:1: `ship` が失敗すると、案件 `goods` が held のままワークフローが失敗します。そうなる呼び出しは 1 か所です。呼び出しでエラーを処理するか、`on failure` を足して案件を片付けてください
+    30 |   goods <- ship(order: order, sku: sku)
+  そうなる例:
+      27  reserve: goods が held で始まる
+      29  3 日 待つ
+      30  ship が失敗する（timeout・failure）
+invoice.flow: 検査を通りました（警告 1 件）
+ritsu check: ファイル 4 個（koyomi 2、chobo 1、dandori 1）。どれも検査を通った（警告 1 件）。言語の境目: 確かめた 1 か所、決められない 0 か所

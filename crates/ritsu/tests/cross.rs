@@ -11,6 +11,22 @@
 //! - X3 (b) (`range from koyomi`, rulec's own check): `settlement` — a rule over the days a koyomi
 //!   date comes to, checked by `ritsu check` with koyomi joined, passing and with a payment day no
 //!   row takes (rulec's E101 with that day).
+//! - X3 (a) (the days of a koyomi date given to a rule): `billing` — the payment day given to a rule
+//!   whose range holds every payment day (held), starts after the first (E202), or a day that can
+//!   also be the day received (W202). With `range from koyomi`, the days are the rule's
+//!   precondition (X2): the same date's days (held), the closing days (E201), the day received
+//!   (W201).
+//! - X4 (a rule's output as a transfer's amount): `booking` — the seats an event needs given to the
+//!   hall at once: every kind fits (held), a webinar needs 0 (E203), the seats can come from an
+//!   answer with no range (W203), a concert needs more than the hall holds (E204), the task handles
+//!   the hall being full, which no kind comes to (W204).
+//! - X6 (the day given to a koyomi date): `reminding` — the payment day given to a reminder whose
+//!   range holds every payment day (held), ends before the last (E205), or the day received (W205).
+//! - X5 (a hold against its expiry): `invoice` — goods held three days, with timeouts (held), until
+//!   the payment day at 09:00 when the hold lasts 14 days (E206), or 60 days (W206).
+//!
+//! The day a flow's date call is given from its own input says nothing of what day it is (W205):
+//! the projects of X3 (a) and X5 show it alongside what they are about.
 
 use ritsu_testkit::TempDir;
 use std::path::{Path, PathBuf};
@@ -96,5 +112,93 @@ fn x3b_a_rule_over_koyomis_days() {
     run("x3b-held", &[("payment_terms.cal", cal.clone()), ("settlement.rule", rule.clone())], 0, (1, 0, 0), &mut failures);
     let gap = rule.replace(">=2026-07-10 <=2026-12-10", ">=2026-07-11 <=2026-12-10").replace("| 2026-07-10 | second_half |\n", "");
     run("x3b-E101", &[("payment_terms.cal", cal), ("settlement.rule", gap)], 1, (0, 0, 0), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// A reproduction's files, each with a change made to it.
+fn changed(code: &str, edits: &[(&str, &str, &str)]) -> Vec<(&'static str, String)> {
+    repro(code)
+        .into_iter()
+        .map(|(name, body)| {
+            let mut body = body.to_string();
+            for (file, from, to) in edits {
+                if *file == name {
+                    assert!(body.contains(from), "{code}: {name} has no {from:?}");
+                    body = body.replacen(from, to, 1);
+                }
+            }
+            (name, body)
+        })
+        .collect()
+}
+
+#[test]
+fn x3a_the_days_of_a_koyomi_date_given_to_a_rule() {
+    let mut failures = Vec::new();
+    let held = changed("E202", &[("batch.rule", ">=2026-03-01 <=2027-01-31", ">=2026-02-01 <=2027-01-31")]);
+    run("x3a-held", &held, 0, (1, 0, 1), &mut failures);
+    run("x3a-E202", &changed("E202", &[]), 1, (0, 1, 1), &mut failures);
+    run("x3a-W202", &changed("W202", &[]), 0, (0, 0, 2), &mut failures);
+    // with `range from koyomi`, the days are a precondition of the rule (X2), held a day at a time;
+    // rulec checks the rule over the days itself (X3 (b)), one border more held
+    let days = here().join("../rulec/tests/days");
+    let rule = std::fs::read_to_string(days.join("settlement.rule")).unwrap();
+    let flow = changed("E202", &[])
+        .into_iter()
+        .find(|(n, _)| *n == "billing.flow")
+        .unwrap()
+        .1
+        .replace("use rule batch from \"batch.rule\"", "use rule settlement from \"settlement.rule\"")
+        .replace("run: batch.run", "run: settlement.run")
+        .replace("let pick = batch(pay_day: due.day)", "let pick = settlement(pay_day: due.day)")
+        .replace("function:batch", "function:settlement");
+    let cal = changed("E202", &[]).into_iter().find(|(n, _)| *n == "payment_terms.cal").unwrap().1;
+    let files = |flow: String| vec![("payment_terms.cal", cal.clone()), ("settlement.rule", rule.clone()), ("billing.flow", flow)];
+    run("x3a-days-held", &files(flow.clone()), 0, (2, 0, 1), &mut failures);
+    let closing = flow.replace("let pick = settlement(pay_day: due.day)", "let close = terms.closing(received: received)\n  let pick = settlement(pay_day: close.day)");
+    run("x3a-days-E201", &files(closing), 1, (1, 1, 2), &mut failures);
+    let received = flow.replace("settlement(pay_day: due.day)", "settlement(pay_day: received)");
+    run("x3a-days-W201", &files(received), 0, (1, 0, 2), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn x4_a_rules_output_as_a_transfers_amount() {
+    let mut failures = Vec::new();
+    let held = changed("E204", &[("seats.rule", "enum kind = workshop | talk | concert", "enum kind = workshop | talk"), ("seats.rule", "| concert    | 400                |\n", "")]);
+    run("x4-held", &held, 0, (2, 0, 0), &mut failures);
+    run("x4-E203", &changed("E203", &[]), 1, (1, 1, 0), &mut failures);
+    run("x4-W203", &changed("W203", &[]), 0, (0, 0, 2), &mut failures);
+    run("x4-E204", &changed("E204", &[]), 1, (1, 1, 0), &mut failures);
+    run("x4-W204", &changed("W204", &[]), 0, (1, 0, 1), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn x6_the_day_given_to_a_koyomi_date() {
+    let mut failures = Vec::new();
+    run("x6-held", &changed("W205", &[]), 0, (1, 0, 1), &mut failures);
+    run("x6-E205", &changed("E205", &[]), 1, (0, 1, 1), &mut failures);
+    let open = changed("W205", &[("reminding.flow", "reminders.reminder(due: due.day)", "reminders.reminder(due: received)")]);
+    run("x6-W205", &open, 0, (0, 0, 2), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn x5_a_hold_against_its_expiry() {
+    let mut failures = Vec::new();
+    // held three days, every call with a timeout: the post comes before the 14 days are up
+    let held = changed(
+        "E206",
+        &[
+            ("invoice.flow", "use dates terms from \"payment_terms.cal\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:payment-terms\"\n", ""),
+            ("invoice.flow", "  errors out_of_stock\n", "  errors out_of_stock\n  timeout 30 seconds\n"),
+            ("invoice.flow", "  errors expired\n", "  errors expired\n  timeout 30 seconds\n"),
+            ("invoice.flow", "  let due = terms.payment(received: now)\n  wait until due.at\n", "  wait 3 days\n"),
+        ],
+    );
+    run("x5-held", &held, 0, (1, 0, 0), &mut failures);
+    run("x5-E206", &changed("E206", &[]), 1, (0, 1, 1), &mut failures);
+    run("x5-W206", &changed("W206", &[]), 0, (0, 0, 2), &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

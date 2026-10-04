@@ -13,10 +13,15 @@
 //! - an example where it does not (E201): the values at the corner of the two ranges that breaks
 //!   it, which dandori's ranges say the call can give, as dandori's own E014 reads them (each value
 //!   from the places it comes from, taken one at a time);
-//! - undecided (W201): a value with a place it comes from that has no range, a bound on a list
-//!   (dandori calls no rule that walks one, E005, and knows no list's length), or a set of days
-//!   (dandori carries no range of dates). The rule's generated code still refuses the call at its
-//!   door when the workflow runs, and the warning says so.
+//! - undecided (W201): a value with a place it comes from that has no range, or a bound on a list
+//!   (dandori calls no rule that walks one, E005, and knows no list's length). The rule's generated
+//!   code still refuses the call at its door when the workflow runs, and the warning says so.
+//!
+//! A precondition that a date input takes only the days of a koyomi date (`range from koyomi`) is
+//! decided over the days the value given can be (X3 (a), DESIGN 7.5): when it can only be the day
+//! of koyomi dates, each of their days must be one of the rule's; the example is the first that is
+//! not. A value that can also come from an input, a task's answer or `now` says nothing of what day
+//! it is, and leaves it undecided.
 //!
 //! A value given to both inputs of a relation (`x` to `a` and to `b`) is the same value on both
 //! sides: `<=` and `>=` hold, `<` and `>` break at any value it takes.
@@ -26,7 +31,7 @@ use ritsu_base::diag::Diag;
 use ritsu_base::naming::Tool;
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
-use ritsu_ports::{Answer, CallArg, Finding, Flows, Precondition, Rules, Value};
+use ritsu_ports::{day_text, Answer, CallArg, Dates, Finding, Flows, Found, Origin, Precondition, Rules, Value};
 use ritsu_project::{Joined, Project};
 
 /// What a value on the wire reads as in a message.
@@ -54,8 +59,52 @@ fn range_text(r: (Option<i128>, Option<i128>)) -> String {
     if parts.is_empty() { "any".into() } else { parts.join(" ") }
 }
 
+/// A precondition that a date input takes only the days of a koyomi date, at one call: the value
+/// given can be the day of koyomi dates (`from`), each of whose days must be one of `days`.
+fn days_kept(dates: &dyn Dates, a: &CallArg, days: &ritsu_ports::DaySet, file: &str, date: &str) -> Answer<Text> {
+    let shown = &a.shown;
+    let mut other: Option<Text> = None;
+    if a.from.is_empty() {
+        other = Some(tr!("`{shown}` が何日になるかは分かりません", "nothing says what day `{shown}` is"));
+    }
+    for o in &a.from {
+        match o {
+            Origin::Day { file: from, date: d } => match dates.values(from, d) {
+                Ok(Found::Value(set)) => {
+                    if let Some(day) = set.iter().copied().find(|x| !days.contains(x)) {
+                        let day = day_text(day);
+                        return Answer::Fails(tr!(
+                            "`{shown}` は koyomi の日付 {d} の日で、{day} になることがありますが、{day} は koyomi \"{file}\" date {date} の日ではありません",
+                            "`{shown}` is a day of the koyomi date {d} and can be {day}, which is not a day of koyomi \"{file}\" date {date}"
+                        ));
+                    }
+                }
+                Ok(Found::Undecided(why)) => {
+                    other.get_or_insert(tr!("koyomi は日付 {d} の日を数えません（{}）", "koyomi does not count the days of the date {d}: {}", why.ja; why.en));
+                }
+                Err(_) => {
+                    other.get_or_insert(tr!("koyomi が日付 {d} に答えません", "koyomi does not answer for the date {d}"));
+                }
+            },
+            Origin::Now => {
+                other.get_or_insert(if shown == "now" { tr!("`now` はどの日にもなりえます", "`now` can be any day") } else { tr!("`{shown}` は `now` のことがあり、どの日にもなりえます", "`{shown}` can be `now`, which can be any day") });
+            }
+            Origin::Unknown(t) => {
+                other.get_or_insert(tr!("`{shown}` が何日になるかは分かりません（{}）", "nothing says what day `{shown}` is ({} gives no range of days)", crate::then_ja(&t.ja, "には日付の範囲がありません"); t.en));
+            }
+            Origin::Output { .. } | Origin::Range(..) => {
+                other.get_or_insert(tr!("`{shown}` は koyomi の日付でないところから来ることがあります", "`{shown}` can come from somewhere other than a koyomi date"));
+            }
+        }
+    }
+    match other {
+        Some(why) => Answer::Undecided(why),
+        None => Answer::Holds,
+    }
+}
+
 /// One precondition at one call, decided.
-fn decide(rules: &dyn Rules, rule: &std::path::Path, p: &Precondition, args: &[CallArg]) -> Answer<Text> {
+fn decide(rules: &dyn Rules, dates: &dyn Dates, rule: &std::path::Path, p: &Precondition, args: &[CallArg]) -> Answer<Text> {
     let arg = |n: &str| args.iter().find(|a| a.input == n);
     match p {
         Precondition::Relation { left, op, right } => {
@@ -116,10 +165,10 @@ fn decide(rules: &dyn Rules, rule: &std::path::Path, p: &Precondition, args: &[C
             "並び `{sequence}` の長さの上限ですが、dandori は並びの長さを知りません",
             "it bounds the length of the list `{sequence}`, and dandori knows no list's length"
         )),
-        Precondition::Days { input, file, date, .. } => Answer::Undecided(tr!(
-            "`{input}` がとるのは koyomi \"{file}\" date {date} の日だけですが、dandori は日付の範囲を運びません",
-            "`{input}` takes only the days of koyomi \"{file}\" date {date}, and dandori carries no range of dates"
-        )),
+        Precondition::Days { input, file, date, days } => match arg(input) {
+            Some(a) => days_kept(dates, a, days, file, date),
+            None => Answer::Undecided(tr!("呼び出しが `{input}` を渡していません", "the call does not give `{input}`")),
+        },
     }
 }
 
@@ -140,14 +189,16 @@ pub fn check(project: &Project, joined: &Joined, lang: Lang, borders: &mut Borde
     let mut out = Vec::new();
     for f in project.of(Tool::Dandori) {
         let disk = ritsu_base::paths::on_disk(&project.root, &f.rel);
-        let Ok(calls) = joined.dandori.rule_calls(&disk, joined.rules()) else { continue };
+        // read with the dates files and the books too, so that a flow that uses them is checked, and
+        // the days a value can be are known
+        let Ok(calls) = joined.dandori.crossings(&disk, &joined.ports()).map(|c| c.rules) else { continue };
         let src = ritsu_base::fs::read_to_string(&disk).unwrap_or_default();
         for call in calls {
             let Ok(facts) = joined.rulec.facts(&call.rule) else { continue };
             for p in &facts.preconditions {
                 let pre = said(p);
                 let rule = &call.name;
-                match decide(joined.rulec.as_ref(), &call.rule, p, &call.args) {
+                match decide(joined.rulec.as_ref(), joined.koyomi.as_ref(), &call.rule, p, &call.args) {
                     Answer::Holds => borders.held += 1,
                     Answer::Fails(why) => {
                         borders.failed += 1;
@@ -157,15 +208,26 @@ pub fn check(project: &Project, joined: &Joined, lang: Lang, borders: &mut Borde
                         ))
                         .source(&src)
                         .rel(&f.rel)
-                        .note(why)
-                        .note(tr!(
-                            "規則の生成したコードは、前提を破る呼び出しを入口で断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。値の範囲は、dandori がその値を入れるすべての場所から集めたものです。",
-                            "The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. The ranges are dandori's, gathered from every place the values come from."
-                        ))
-                        .note(tr!(
-                            "値を渡す前に前提を保つよう分岐するか、範囲を狭めてください（入力やタスクの結果の `range`）。",
-                            "Branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or a task's result)."
-                        ));
+                        .note(why);
+                        let d = if let Precondition::Days { file, date, .. } = p {
+                            d.note(tr!(
+                                "規則の生成したコードは、前提を破る呼び出しを入口で断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。koyomi は、入力の範囲のすべてで日付の日を数えています。",
+                                "The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. koyomi counts the days of a date over the whole range of its inputs."
+                            ))
+                            .note(tr!(
+                                "koyomi \"{file}\" date {date} の日を渡すか、規則の範囲を直してください。",
+                                "Give it the days of koyomi \"{file}\" date {date}, or correct the rule's range."
+                            ))
+                        } else {
+                            d.note(tr!(
+                                "規則の生成したコードは、前提を破る呼び出しを入口で断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。値の範囲は、dandori がその値を入れるすべての場所から集めたものです。",
+                                "The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. The ranges are dandori's, gathered from every place the values come from."
+                            ))
+                            .note(tr!(
+                                "値を渡す前に前提を保つよう分岐するか、範囲を狭めてください（入力やタスクの結果の `range`）。",
+                                "Branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or a task's result)."
+                            ))
+                        };
                         out.push(Finding::of(&d, Some(f.rel.clone()), lang));
                     }
                     Answer::Undecided(why) => {
