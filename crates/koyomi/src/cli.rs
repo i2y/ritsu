@@ -125,8 +125,8 @@ pub fn commands() -> Vec<Cmd> {
             name: "doc",
             args: "<file.cal>",
             purpose: tr!(
-                "承認する人（経理、法務、会社のカレンダーを決める人）が読むページを出す。Markdown か、一枚の HTML",
-                "print the page for whoever approves the file (accounting, legal, whoever keeps the calendar): Markdown, or one HTML file"
+                "人が読むページを出す（経理、法務、会社のカレンダーを決める人、コードをレビューする開発者が読む）。Markdown か、一枚の HTML",
+                "print the page for people (accounting, legal, whoever keeps the calendar, the developers reviewing the code): Markdown, or one HTML file"
             ),
             params: vec![(
                 "<file.cal>",

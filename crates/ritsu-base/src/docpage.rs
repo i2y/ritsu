@@ -1,4 +1,4 @@
-//! The frame of an approver's page (DESIGN 4.8): what rulec's, dandori's, koyomi's and chobo's
+//! The frame of a page for people (DESIGN 4.8): what rulec's, dandori's, koyomi's and chobo's
 //! `doc` pages each wrote around their content.
 //!
 //! - HTML: `<!doctype html>`, the language, the viewport, a `generator` that names the tool and

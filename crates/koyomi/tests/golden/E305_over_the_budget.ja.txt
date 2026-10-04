@@ -1,4 +1,4 @@
 エラー[E305]: tests/mutants/E305_over_the_budget.cal:5:3: 検査には入力の組み合わせ 380,444,400 通りの計算が要り、予算の 100,000,000 を超えるので、何も確かめていません
      5 |   received      : date  range >=1926-01-01 <=2025-12-31
   = 内訳: received 36,525 日 × closing_day 31 × payment_month 12 × payment_day 28
-  = koyomi は、一部の入力だけを試して通すことはしません。範囲を狭めるか、ファイルを分けるか、`--budget` で予算を上げてください（DESIGN 3.2）。
+  = koyomi は、一部の入力だけを試して通すことはしません。範囲を狭めるか、ファイルを分けるか、`--budget` で予算を上げてください。

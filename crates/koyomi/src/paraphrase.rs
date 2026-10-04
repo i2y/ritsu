@@ -1,6 +1,6 @@
 //! Saying an operation in words (DESIGN 7.1). Two forms, from one table:
 //!
-//! - the sentence the approver's page writes for a line of the `.cal` (stage D), and
+//! - the sentence the page for people writes for a line of the `.cal` (stage D), and
 //! - the short label a step of a computation carries in `eval` and in a diagnostic.
 //!
 //! In English the label is the line of the `.cal` itself, which is English already; in
@@ -66,7 +66,7 @@ fn ordinal(n: &str) -> String {
     }
 }
 
-/// The sentence of DESIGN 7.1 for an operation, for the approver's page.
+/// The sentence of DESIGN 7.1 for an operation, for the page for people.
 pub fn sentence(m: &Model, op: &ROp) -> Text {
     match op {
         ROp::Days(s, n) => {

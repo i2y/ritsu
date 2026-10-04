@@ -1,4 +1,4 @@
-//! `koyomi doc` (PLAN D.1, DESIGN 7): the page whoever approves a `.cal` reads.
+//! `koyomi doc` (PLAN D.1, DESIGN 7): the page for the people who read a `.cal`.
 //!
 //! - Every example's page, in Markdown, in English and in Japanese, is its golden file in
 //!   `tests/golden/doc/`. `KOYOMI_BLESS=1 cargo test --test doc` writes them again; read the

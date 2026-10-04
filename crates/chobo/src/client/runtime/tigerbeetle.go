@@ -2,7 +2,7 @@ package {{PKG}}
 
 // What follows is the same in every book chobo writes for TigerBeetle.
 //
-// A call is one chain of transfers in one request (DESIGN 4.2): TigerBeetle takes the chain
+// A call is one chain of transfers in one request: TigerBeetle takes the chain
 // whole or not at all. The bounds TigerBeetle cannot keep with an account's flags are kept by
 // more transfers in the chain (a probe for a lower bound above 0, the room and floor accounts
 // for an upper bound and a lower bound below 0), laid out as PLAN 0.3 says.
@@ -148,7 +148,7 @@ type id128 [16]byte
 
 var idMax = id128{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 
-// chID is an ID (DESIGN 4.3): the first 16 bytes of a SHA-256 over the parts, each with its UTF-8 length in front.
+// chID is an ID: the first 16 bytes of a SHA-256 over the parts, each with its UTF-8 length in front.
 func chID(parts ...string) id128 {
 	h := sha256.New()
 	for _, p := range append([]string{"chobo/1"}, parts...) {
@@ -528,7 +528,7 @@ func (r *tbRuntime) send(ctx context.Context, kind, op string, chain []planned) 
 	return r.read(kind, op, chain, results)
 }
 
-// read reads what a chain's results answer: the first that is neither created nor linked_event_failed decides (DESIGN 4.2).
+// read reads what a chain's results answer: the first that is neither created nor linked_event_failed decides.
 func (r *tbRuntime) read(kind, op string, chain []planned, results []tb.CreateTransferResult) (Result, error) {
 	t := r.book.transfers[kind]
 	for i, res := range results {

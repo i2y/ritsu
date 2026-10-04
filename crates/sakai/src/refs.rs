@@ -538,8 +538,8 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
                     "The rule {sq} is in no published language of {yn}; to call it by Connect, {yn} puts it in a published language (`published language rulec.…`)."
                 ),
                 Kind::CalendarUse => tr!(
-                    "カレンダーは公表された言語にできません（DESIGN 1.4）。境界の向こうのカレンダーを読めるのは、二つの共有カーネルに並べたときだけです。",
-                    "A calendar cannot be a published language (DESIGN 1.4); a calendar across the boundary is read only from the two's shared kernel."
+                    "カレンダーは公表された言語にできません。境界の向こうのカレンダーを読めるのは、二つの共有カーネルに並べたときだけです。",
+                    "A calendar cannot be a published language; a calendar across the boundary is read only from the two's shared kernel."
                 ),
                 Kind::Crate { .. } => tr!(
                     "{sq} のクレートは「{yn}」の公表された言語に入っていません。境界の向こうのクレートに依存できるのは、「{yn}」がそのクレートを公表された言語（`published language` の下の `crate \"…\"`）に入れたときと、二つの共有カーネルに並べたときだけです。",

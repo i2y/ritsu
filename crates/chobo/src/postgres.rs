@@ -157,7 +157,7 @@ pub fn build(book: &Book, origin: &crate::target::Origin) -> Result<String, Vec<
     o.push_str(&format!(
         "-- The schema and the functions of the book {} v{} on PostgreSQL.\n\
          -- It can run any number of times: it makes what is missing and replaces the functions.\n\
-         -- Each function does one call in one transaction; READ COMMITTED is enough (DESIGN 4.1).\n\n",
+         -- Each function does one call in one transaction; READ COMMITTED is enough.\n\n",
         book.name, book.version
     ));
     o.push_str(&format!("create schema if not exists {s};\n\n"));
@@ -202,7 +202,7 @@ fn tables(s: &str) -> String {
 
 fn chobo_id(s: &str) -> String {
     format!(
-        "-- an ID as chobo and its TigerBeetle clients make it (DESIGN 4.3): the first 16 bytes of a SHA-256\n\
+        "-- an ID as chobo and its TigerBeetle clients make it: the first 16 bytes of a SHA-256\n\
          -- over the parts, each with its UTF-8 length in front\n\
          create or replace function {s}.chobo_id(parts text[]) returns uuid\nlanguage sql immutable strict as $chobo$\n  \
          select case encode(x.h, 'hex')\n           when '00000000000000000000000000000000' then '00000000-0000-0000-0000-000000000001'::uuid\n           when 'ffffffffffffffffffffffffffffffff' then 'ffffffff-ffff-ffff-ffff-fffffffffffe'::uuid\n           else encode(x.h, 'hex')::uuid\n         end\n    \

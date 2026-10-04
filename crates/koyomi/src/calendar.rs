@@ -642,8 +642,8 @@ pub fn parse_offset(text: &str) -> Result<i32, (&'static str, Text, Vec<Text>)> 
             tr!("オフセットにタイムゾーンの名前 `{t}` が書かれています。koyomi は固定の UTC オフセットだけを扱います", "The offset is a time zone name, `{t}`; koyomi takes only a fixed UTC offset"),
             vec![
                 tr!(
-                    "夏時間のあるタイムゾーンでは、同じ 09:00 でも季節でオフセットが変わり、固定のオフセットでは一年の半分で一時間ずれます。どのタイムゾーンに夏時間があるかを知るには tz データベースが要るので、koyomi は名前を全部断ります（DESIGN 1.9）。",
-                    "In a time zone with daylight saving time, the same 09:00 has a different offset in summer, and a fixed offset is an hour off for half the year. Knowing which zones have it takes the tz database, so every name is refused (DESIGN 1.9)."
+                    "夏時間のあるタイムゾーンでは、同じ 09:00 でも季節でオフセットが変わり、固定のオフセットでは一年の半分で一時間ずれます。どのタイムゾーンに夏時間があるかを知るには tz データベースが要るので、koyomi は名前を全部断ります。",
+                    "In a time zone with daylight saving time, the same 09:00 has a different offset in summer, and a fixed offset is an hour off for half the year. Knowing which zones have it takes the tz database, so every name is refused."
                 ),
                 tr!(
                     "夏時間の無い地域なら、`offset +09:00` のように数で書けば足ります。夏時間のある地域では、時刻を出さず日付だけにしてください。",

@@ -382,8 +382,8 @@ pub fn ledger() -> Ledger {
             "E206",
             tr!("名指したものの言語がつながっていません", "The language of what a line names is not joined"),
             tr!(
-                "yuen のクレートのバイナリ（`yuen`）が、ほかの言語のもの（規則、カレンダー、帳簿、主張、ワークフロー、コンテキスト）を名指すプロジェクトを渡されたとき。このバイナリはほかの言語を持たず（ritsu の DESIGN 2.3）、それを読めません。言語ごとに一つ、最初に名指したところで言い、そこで止めます。exit code は 2（走らせ方の問題で、プロジェクトの誤りではないため）。",
-                "The binary of yuen's own crate (`yuen`), given a project that names a thing of another language (a rule, a calendar, a book, a claim, a workflow, a context), which it holds none of (ritsu's DESIGN 2.3) and cannot read. It is said once for each language, where the first thing of it is named, and the check stops there. The exit code is 2: it is how the command is run, not what the project says."
+                "yuen のクレートのバイナリ（`yuen`）が、ほかの言語のもの（規則、カレンダー、帳簿、主張、ワークフロー、コンテキスト）を名指すプロジェクトを渡されたとき。このバイナリはほかの言語を持たず、それを読めません。言語ごとに一つ、最初に名指したところで言い、そこで止めます。exit code は 2（走らせ方の問題で、プロジェクトの誤りではないため）。",
+                "The binary of yuen's own crate (`yuen`), given a project that names a thing of another language (a rule, a calendar, a book, a claim, a workflow, a context), which it holds none of and cannot read. It is said once for each language, where the first thing of it is named, and the check stops there. The exit code is 2: it is how the command is run, not what the project says."
             ),
             tr!(
                 "同じコマンドを `ritsu yuen` で走らせます（`ritsu yuen check .`）。すべての言語をつないで、同じプロセスの中で読みます。",

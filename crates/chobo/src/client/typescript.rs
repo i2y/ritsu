@@ -19,7 +19,7 @@ pub fn members(book: &Book) -> Vec<String> {
 fn reason_type(book: &Book) -> String {
     let rs: Vec<String> = reasons(book).iter().map(|r| q(r)).collect();
     format!(
-        "/** Why a call of {} can be refused: the bounds' own reasons, then the ones chobo gives itself (DESIGN 2.7). */\nexport type Reason = {};\n\n\
+        "/** Why a call of {} can be refused: the bounds' own reasons, then the ones chobo gives itself. */\nexport type Reason = {};\n\n\
          /** What a call answers. A refusal is an answer, not an error: nothing has changed, and the reason says why. */\nexport type Result = {{ result: \"done\" }} | {{ result: \"done_before\" }} | {{ result: \"refused\"; reason: Reason }};\n\n",
         book.name,
         rs.join(" | ")
@@ -81,7 +81,7 @@ fn book_interface(book: &Book, pg: bool) -> String {
     let bs: Vec<String> = book.accounts.iter().map(|a| if a.params.is_empty() { format!("{}(): Promise<Balance>", a.name) } else { format!("{0}(args: {0}Account): Promise<Balance>", a.name) }).collect();
     o.push_str(&format!("  balance: {{ {} }};\n", bs.join("; ")));
     if pg {
-        o.push_str("  /** Give back what the holds past their expiry hold; call it from a job (DESIGN 4.1). */\n  expire(): Promise<number>;\n");
+        o.push_str("  /** Give back what the holds past their expiry hold; call it from a job. */\n  expire(): Promise<number>;\n");
     }
     o.push_str("}\n\n");
     o
@@ -170,7 +170,7 @@ fn split(runtime: &str) -> (&str, &str) {
 pub fn tigerbeetle(book: &Book, origin: &Origin) -> String {
     let (head, tail) = split(TB_RUNTIME);
     let mut o = super::head(book, origin, Comment::Slashes);
-    o.push_str("// It calls the book on TigerBeetle through tigerbeetle-node 0.17.9 (DESIGN 4.2, 4.3).\n\n");
+    o.push_str("// It calls the book on TigerBeetle through tigerbeetle-node 0.17.9.\n\n");
     o.push_str(head);
     o.push('\n');
     o.push_str(&reason_type(book));
@@ -178,7 +178,7 @@ pub fn tigerbeetle(book: &Book, origin: &Origin) -> String {
     o.push_str(&book_interface(book, false));
     let names = members(book);
     o.push_str(&format!(
-        "/** The book on TigerBeetle. A tenant is a set of balances of its own (DESIGN 4.3); \"\" when not given. */\nexport function tigerbeetle(client: TigerBeetleClient, options: {{ tenant?: string }} = {{}}): Book {{\n  const r = new Runtime(BOOK, client, options.tenant ?? \"\");\n  return {{\n"
+        "/** The book on TigerBeetle. A tenant is a set of balances of its own; \"\" when not given. */\nexport function tigerbeetle(client: TigerBeetleClient, options: {{ tenant?: string }} = {{}}): Book {{\n  const r = new Runtime(BOOK, client, options.tenant ?? \"\");\n  return {{\n"
     ));
     for (t, n) in book.transfers.iter().zip(&names) {
         let all: Vec<usize> = (0..t.params.len()).collect();
@@ -212,7 +212,7 @@ pub fn postgres(book: &Book, origin: &Origin) -> String {
     let (head, tail) = split(PG_RUNTIME);
     let mut o = super::head(book, origin, Comment::Slashes);
     o.push_str(&format!(
-        "// It calls the SQL functions of `chobo build --target postgres` (schema {}) through a connection such as pg's (DESIGN 4.1, 4.3).\n\n",
+        "// It calls the SQL functions of `chobo build --target postgres` (schema {}) through a connection such as pg's.\n\n",
         postgres::ident(&book.name)
     ));
     o.push_str(head);
@@ -221,7 +221,7 @@ pub fn postgres(book: &Book, origin: &Origin) -> String {
     o.push_str(&book_interface(book, true));
     let names = members(book);
     o.push_str(
-        "/** The book on PostgreSQL. A tenant is a set of balances of its own (DESIGN 4.3); \"\" when not given. Each call is a transaction of its own, unless `db` is in one of the caller's. */\nexport function postgres(db: Queryable, options: { tenant?: string } = {}): Book {\n  const r = new Runtime(db, options.tenant ?? \"\");\n  return {\n",
+        "/** The book on PostgreSQL. A tenant is a set of balances of its own; \"\" when not given. Each call is a transaction of its own, unless `db` is in one of the caller's. */\nexport function postgres(db: Queryable, options: { tenant?: string } = {}): Book {\n  const r = new Runtime(db, options.tenant ?? \"\");\n  return {\n",
     );
     let sql = |t: &TransferKind, op: &str, n: usize| q(&format!("select * from {}({})", postgres::qualified(book, &postgres::op_function(t, op)), (1..=n).map(|i| format!("${i}")).collect::<Vec<_>>().join(", ")));
     for (t, n) in book.transfers.iter().zip(&names) {

@@ -14,7 +14,7 @@
 //!   project, and paths from it and from where a tool runs.
 //! - [`sources`]: the copies of a law's articles, their text, their pins, and the requests to
 //!   e-Gov and the eCFR that bring them.
-//! - [`docpage`]: the frame of an approver's page — the HTML head and the palette.
+//! - [`docpage`]: the frame of a page for people — the HTML head and the palette.
 //! - [`json`]: a JSON value whose objects keep their order and whose integers are exact.
 //! - [`udiff`]: unified diffs, as `git diff` and `diff -u` write them, and whether a file on disk
 //!   is one side of one.

@@ -201,7 +201,7 @@ is W102.
 
 koyomi does not read a law to decide a computation. The person who writes the `.cal` writes the
 computation the article is read as, and the citation records which text it was written against:
-the approver's page quotes it beside the computation, and `koyomi source outdated` says when a
+the page for people quotes it beside the computation, and `koyomi source outdated` says when a
 later revision changes it.
 
 ## Dates files
@@ -368,7 +368,7 @@ Usage:
   koyomi eval <file.cal> <name>=<value>...     compute every date on one input and show each step; for a calendar, whether a day is open or closed
   koyomi gen <file.cal>...                     generate TypeScript, Python, Go, Rust and SQL, each with a runner; nothing is generated from a file that does not pass check
   koyomi vectors <file.cal>                    print the reference interpreter's result for every input of the range as JSON Lines, with the inputs just outside it
-  koyomi doc <file.cal>                        print the page for whoever approves the file (accounting, legal, whoever keeps the calendar): Markdown, or one HTML file
+  koyomi doc <file.cal>                        print the page for people (accounting, legal, whoever keeps the calendar, the developers reviewing the code): Markdown, or one HTML file
   koyomi api <file.cal>                        print the functions, their inputs, the calendar, the data range and the sources' digests as JSON, for other tools
   koyomi source fetch|pin|outdated <file.cal>  handle the copies of the sources: fetch brings them beside the .cal, pin writes their digests into it, outdated asks whether the originals moved on
   koyomi explain <CODE>                        look a diagnostic code up: when it comes, how to fix it, the smallest reproduction

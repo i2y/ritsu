@@ -1,7 +1,7 @@
 //@@BOOK@@
 // ── What follows is the same in every book chobo writes for PostgreSQL ───────
 //
-// A call is one SQL function, which does it in one transaction (DESIGN 4.1). The function
+// A call is one SQL function, which does it in one transaction. The function
 // answers a refusal as a row; an error is a mistake in the call, or the database's own.
 
 /** What a client needs of a PostgreSQL connection: pg's `Client`, `Pool` and `PoolClient` have it. */
@@ -82,7 +82,7 @@ class Runtime {
     return { posted: BigInt(r.posted), held_in: BigInt(r.held_in), held_out: BigInt(r.held_out) };
   }
 
-  /** Give back what the holds past their expiry hold (DESIGN 4.1); answers how many holds it ended. */
+  /** Give back what the holds past their expiry hold; answers how many holds it ended. */
   async expire(sql: string): Promise<number> {
     const r = await this.row(sql, []);
     return Number(r.expired);

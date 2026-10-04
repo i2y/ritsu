@@ -99,7 +99,7 @@ export function payment(received: string): string {
 
 ずれやすいところの一つめは月の足し算です。2023-01-31 の 1 か月後は、Python の dateutil、Java、PostgreSQL、Temporal では 2023-02-28 ですが、Go と JavaScript の `Date` では 2023-03-03 になります。二つめは祝日です。祝日は法律で変わり、内閣府の表には毎年 2 月に翌年の分が載ります。三つめは、書く人と決める人が違うことです。コードを書くのは開発者で、支払条件を決めるのは経理や法務です。決める人が読むのは、ふつうはコードではなく契約書です。
 
-koyomi は、[rulec](https://github.com/i2y/ritsu/tree/main/crates/rulec)（業務ルールのための小さな言語。条件を表に書き、抜けと重なりが無いことを証明する）と [dandori](https://github.com/i2y/ritsu/tree/main/crates/dandori)（rulec の規則を呼ぶワークフローの言語）の兄弟にあたります。rulec は日付を前後の比較にだけ使い、dandori は渡された時刻まで待つだけなので、期日の計算はどちらにも書けません。作り方は二つにそろえました。もとにした文書を固定し、コードにする前に検査し、承認する人が読めるページを出し、生成したコードをすべての入力で参照インタプリタと突き合わせます。
+koyomi は、[rulec](https://github.com/i2y/ritsu/tree/main/crates/rulec)（業務ルールのための小さな言語。条件を表に書き、抜けと重なりが無いことを証明する）と [dandori](https://github.com/i2y/ritsu/tree/main/crates/dandori)（rulec の規則を呼ぶワークフローの言語）の兄弟にあたります。rulec は日付を前後の比較にだけ使い、dandori は渡された時刻まで待つだけなので、期日の計算はどちらにも書けません。作り方は二つにそろえました。もとにした文書を固定し、コードにする前に検査し、人が読んで確かめられるページを出し、生成したコードをすべての入力で参照インタプリタと突き合わせます。
 
 ## 確かめること、確かめないこと
 
@@ -117,9 +117,9 @@ koyomi は、[rulec](https://github.com/i2y/ritsu/tree/main/crates/rulec)（業�
 
 生成したコードが参照インタプリタと同じ結果を返すことは、範囲のすべての入力で突き合わせるテストで確かめています。証明ではありません。
 
-## 承認する人のページ
+## 人が読むページ
 
-`koyomi doc` は、支払条件やカレンダーを承認する人（経理、法務、会社の休みを決める人）が読むページを出します。プルリクエストにそのまま載せられる Markdown か、外のファイルを何も読まない一枚の HTML で、HTML には明るい配色と暗い配色があります。ページには次のものが載ります。
+`koyomi doc` は、支払条件やカレンダーを読んで、コードが実現すべきものを理解し、確かめる人（経理、法務、会社の休みを決める人、コードをレビューする開発者）のためのページを出します。プルリクエストにそのまま載せられる Markdown か、外のファイルを何も読まない一枚の HTML で、HTML には明るい配色と暗い配色があります。ページには次のものが載ります。
 
 - 計算のしかた。操作を一つずつ普通の言葉で書き、隣に `.cal` の行を置きます。法令を引いた行には、写しから引いた条文と、何年何月何日時点のどの版かを添えます。
 - 条件ごとの結果と、余裕がいちばん少ない入力（成り立たなければ、いちばん外れる入力）。
@@ -156,7 +156,7 @@ $ koyomi check examples/                         # 下の .cal を全部。--for
 $ koyomi eval examples/net30.cal invoice_date=2026-03-04   # 一つの入力の計算を一段ずつ
 $ koyomi gen examples/net30.cal --out generated  # --target typescript|python|go|rust|sql、--check
 $ koyomi vectors examples/net30.cal              # すべての入力の結果を JSON Lines で
-$ koyomi doc examples/net30.cal --format html    # 承認する人のページ
+$ koyomi doc examples/net30.cal --format html    # 人が読むページ
 $ koyomi api examples/net30.cal                  # 生成したコードの呼び方を JSON で
 $ koyomi source fetch|pin|outdated examples/calendars/england_and_wales.cal
 $ koyomi explain E201 --lang ja                  # いつ出るか、どう直すか、最小の再現

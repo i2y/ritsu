@@ -1,4 +1,4 @@
-// geas's coverage hook for Node (DESIGN §7.2). While `geas map` runs, geas
+// geas's coverage hook for Node. While `geas map` runs, geas
 // preloads it with --require in NODE_OPTIONS. V8 writes NODE_V8_COVERAGE when a
 // process exits normally, and not when a signal ends it, so on SIGTERM this exits
 // with 143, a normal exit, unless the program handles SIGTERM itself, in which case

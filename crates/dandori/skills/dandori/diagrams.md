@@ -84,8 +84,8 @@ workflow; the mark lights up in a run where that happens. The address keeps what
 ## The rules it calls
 
 A call of a rule is one box on the picture, and what the rule decides is in the rule. So `doc` shows
-each rule the workflow uses as rulec draws it: what `rulec doc` renders for whoever approves the
-rule, put in as it is, in the language of the page.
+each rule the workflow uses as rulec draws it: the page for people that `rulec doc` renders, put in
+as it is, in the language of the page.
 
 - **The Markdown** ends with a section of the rules, each folded in a `<details>` that a pull request
   opens.

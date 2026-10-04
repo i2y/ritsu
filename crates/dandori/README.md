@@ -142,7 +142,7 @@ and a workflow whose one run can outgrow the platform (E040). `doc` draws the wo
 person who reviews it: Mermaid charts that GitHub draws in a pull request, with tables of every
 call and every way the workflow can end, or one HTML page on which each scenario lights up the way
 its run goes ([the hotel booking, drawn](https://i2y.github.io/dandori/doc/hotel.html)). The rules
-it calls come with it, as `rulec doc` renders them for whoever approves them.
+it calls come with it, each as the page for people that `rulec doc` renders.
 
 | Target | What `build` writes |
 |---|---|

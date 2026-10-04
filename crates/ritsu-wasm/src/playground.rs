@@ -11,7 +11,7 @@
 //! - [`generate`]: one file's generator: `rulec gen`, `koyomi gen`, `chobo build`, `dandori build`,
 //!   `sakai export cml`, `yuen export` (the last two given the project's root, as `ritsu check` gives
 //!   it them). geas and `.proto` files generate nothing.
-//! - [`doc`]: one file's page for whoever approves it, as HTML and as Markdown: `rulec doc`,
+//! - [`doc`]: one file's page for the people who read it, as HTML and as Markdown: `rulec doc`,
 //!   `koyomi doc`, `chobo doc`, `dandori doc`.
 //!
 //! Each answer is what the command prints (`out`, `err`), its exit code, and what it writes. Where
@@ -192,7 +192,7 @@ pub fn generate(r: &Request) -> Value {
     v
 }
 
-/// One file's page for whoever approves it, by its language: `{"tool", "html": {…}, "markdown":
+/// One file's page for the people who read it, by its language: `{"tool", "html": {…}, "markdown":
 /// {…}}`, each what the command prints, the page on `out`. `{"tool", "none": true}` for a language
 /// that draws no page.
 pub fn doc(r: &Request) -> Value {
@@ -274,8 +274,8 @@ fn rulec_doc(path: &str, l: Lang, html: bool) -> Ran {
                 r.out.push('\n');
             }
             r.err = say(tr!(
-                "error: `{path}` は検査を通っていないので資料を書き出しません（§1.6）",
-                "error: `{path}` does not pass check, so it is not rendered (§1.6)"
+                "error: `{path}` は検査を通っていないので資料を書き出しません",
+                "error: `{path}` does not pass check, so it is not rendered"
             ));
             r.code = 1;
             return r;

@@ -1,7 +1,7 @@
 # The koyomi agent skill
 
 `koyomi/` is an [Agent Skill](https://agentskills.io) for **using koyomi**: writing a `.cal`,
-getting it past `koyomi check`, showing it to the person who approves it, generating its code,
+getting it past `koyomi check`, showing it to the people who read it, generating its code,
 and knowing what to ask a person. It is not about working on koyomi itself.
 
 ## Install

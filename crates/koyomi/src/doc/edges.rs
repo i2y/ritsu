@@ -1,4 +1,4 @@
-//! What the approver's page learns by computing every input of the range once more (DESIGN
+//! What the page for people learns by computing every input of the range once more (DESIGN
 //! 7): the edge cases it shows, how often each `else` is used and what the other two ways
 //! of handling a missing day would change, and how far the calendar moves the days.
 //!

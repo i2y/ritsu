@@ -660,7 +660,7 @@ See also: [E201](#e201)
 
 ## E206 — The language of what a line names is not joined
 
-**When**: The binary of yuen's own crate (`yuen`), given a project that names a thing of another language (a rule, a calendar, a book, a claim, a workflow, a context), which it holds none of (ritsu's DESIGN 2.3) and cannot read. It is said once for each language, where the first thing of it is named, and the check stops there. The exit code is 2: it is how the command is run, not what the project says.
+**When**: The binary of yuen's own crate (`yuen`), given a project that names a thing of another language (a rule, a calendar, a book, a claim, a workflow, a context), which it holds none of and cannot read. It is said once for each language, where the first thing of it is named, and the check stops there. The exit code is 2: it is how the command is run, not what the project says.
 
 **Fix**: Run the same command as `ritsu yuen` (`ritsu yuen check .`), which joins every language and reads them in the same process.
 

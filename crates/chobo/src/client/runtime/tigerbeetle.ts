@@ -4,7 +4,7 @@ import type { Account, CreateAccountResult, CreateTransferResult, Transfer } fro
 //@@BOOK@@
 // ── What follows is the same in every book chobo writes for TigerBeetle ──────
 //
-// A call is one chain of transfers in one request (DESIGN 4.2): TigerBeetle takes the chain
+// A call is one chain of transfers in one request: TigerBeetle takes the chain
 // whole or not at all. The bounds TigerBeetle cannot keep with an account's flags are kept by
 // more transfers in the chain (a probe for a lower bound above 0, the room and floor accounts
 // for an upper bound and a lower bound below 0), laid out as PLAN 0.3 says.
@@ -51,7 +51,7 @@ const REQUEST_MAX = 253;
 const AMOUNT_LIMIT = (1n << 63n) - 1n;
 const ID_LIMIT = (1n << 128n) - 1n;
 
-/** An ID (DESIGN 4.3): the first 16 bytes of a SHA-256 over the parts, each with its UTF-8 length in front. */
+/** An ID: the first 16 bytes of a SHA-256 over the parts, each with its UTF-8 length in front. */
 function chId(...parts: string[]): bigint {
   const h = createHash("sha256");
   for (const p of ["chobo/1", ...parts]) {
@@ -273,7 +273,7 @@ class Runtime {
     }
   }
 
-  /** What a chain's results answer: the first that is neither created nor linked_event_failed decides (DESIGN 4.2). */
+  /** What a chain's results answer: the first that is neither created nor linked_event_failed decides. */
   private read(kind: string, op: string, chain: Planned[], results: CreateTransferResult[]): Result {
     const t = this.book.transfers[kind];
     for (const [i, r] of results.entries()) {

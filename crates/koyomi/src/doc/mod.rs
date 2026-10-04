@@ -1,4 +1,4 @@
-//! `koyomi doc` (DESIGN 7): the page whoever approves a `.cal` reads (accounting, legal, the
+//! `koyomi doc` (DESIGN 7): the page for the people who read a `.cal` (accounting, legal, the
 //! people who keep the company calendar), as Markdown or as one HTML file.
 //!
 //! The page is built once, as blocks of text ([`Page`]), from the `.cal` and from what the

@@ -1283,7 +1283,7 @@ service BService { rpc Get(B) returns (B); }
 
 ## E107 — Cargo から Rust のクレートを読めません
 
-**いつ出るか**: 地図が `code rust` を書いていて、その場所に `Cargo.toml` が無いか、`cargo metadata` が失敗したとき（cargo が無い、マニフェストが読めない、など）。sakai は、Rust のクレートとその依存を Cargo から読みます（DESIGN 7.7）。読めなければ、Rust のクレートの依存は確かめられません。
+**いつ出るか**: 地図が `code rust` を書いていて、その場所に `Cargo.toml` が無いか、`cargo metadata` が失敗したとき（cargo が無い、マニフェストが読めない、など）。sakai は、Rust のクレートとその依存を Cargo から読みます。読めなければ、Rust のクレートの依存は確かめられません。
 
 **直し方**: `code rust` には、ワークスペースの（クレートが一つなら、そのクレートの）`Cargo.toml` のあるディレクトリを書いてください。そのディレクトリで `cargo metadata --no-deps --offline` が通ることも確かめてください。
 

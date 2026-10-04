@@ -5,8 +5,8 @@ error[rulec E032]: 列挙 order_status が ../../proto/shop/ordering/v1/order.pr
   |      ^^^^^^^^^^^^
   |
  ../../proto/shop/ordering/v1/order.proto にあって、この列挙に無い値: returned
- 足す形: `<名前>(returned)`。名前は自分で決めます — 日本語はそのファイルに入っていません。
- 値が増えたのは、この規則ではなく契約の側の変更です。増えた値にいくら付けるかは、まだ誰も決めていません（§15.59）。
+ この列挙に `returned` を足します。
+ 契約（../../proto/shop/ordering/v1/order.proto）に値が増えました。この規則がその値をどう扱うかは、まだ決まっていません。
 
 ok billing/rules/payment_fee.rule
 ok billing/rules/shipment_fee.rule

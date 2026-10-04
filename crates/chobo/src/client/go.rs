@@ -194,13 +194,13 @@ fn header(book: &Book, origin: &Origin, what: &str, pkg: &str) -> String {
 
 pub fn tigerbeetle(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, String)> {
     let pkg = package(book, stem);
-    let mut o = header(book, origin, "on TigerBeetle, through tigerbeetle-go v0.17.9 (DESIGN 4.2, 4.3).", &pkg);
+    let mut o = header(book, origin, "on TigerBeetle, through tigerbeetle-go v0.17.9.", &pkg);
     o.push_str(&arg_types(book));
     o.push_str(&book_struct(book, "TigerBeetle", false));
     let names = members(book);
     let inits: Vec<String> = book.transfers.iter().zip(&names).map(|(t, f)| format!("{f}: {}Calls{{r}}", go_name(&t.name))).collect();
     o.push_str(&format!(
-        "// TigerBeetle is the book on TigerBeetle. A tenant is a set of balances of its own (DESIGN 4.3); \"\" for one.\nfunc TigerBeetle(c TigerBeetleClient, tenant string) *Book {{\n\tr := newTbRuntime(&theBook, c, tenant)\n\treturn &Book{{{}, Balance: Balances{{r}}}}\n}}\n\n",
+        "// TigerBeetle is the book on TigerBeetle. A tenant is a set of balances of its own; \"\" for one.\nfunc TigerBeetle(c TigerBeetleClient, tenant string) *Book {{\n\tr := newTbRuntime(&theBook, c, tenant)\n\treturn &Book{{{}, Balance: Balances{{r}}}}\n}}\n\n",
         inits.join(", ")
     ));
     for t in &book.transfers {
@@ -283,7 +283,7 @@ pub fn postgres(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, String
     let mut o = header(
         book,
         origin,
-        &format!("on PostgreSQL, through the SQL functions of `chobo build --target postgres` (schema {}) and pgx v5 (DESIGN 4.1, 4.3).", postgres::ident(&book.name)),
+        &format!("on PostgreSQL, through the SQL functions of `chobo build --target postgres` (schema {}) and pgx v5.", postgres::ident(&book.name)),
         &pkg,
     );
     o.push_str(&arg_types(book));
@@ -291,11 +291,11 @@ pub fn postgres(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, String
     let names = members(book);
     let inits: Vec<String> = book.transfers.iter().zip(&names).map(|(t, f)| format!("{f}: {}Calls{{r}}", go_name(&t.name))).collect();
     o.push_str(&format!(
-        "// Postgres is the book on PostgreSQL. A tenant is a set of balances of its own (DESIGN 4.3); \"\" for one. Each call is a\n// transaction of its own, unless q is a transaction of the caller's.\nfunc Postgres(q Querier, tenant string) *Book {{\n\tr := &pgRuntime{{q: q, tenant: tenant}}\n\treturn &Book{{{}, Balance: Balances{{r}}, r: r}}\n}}\n\n",
+        "// Postgres is the book on PostgreSQL. A tenant is a set of balances of its own; \"\" for one. Each call is a\n// transaction of its own, unless q is a transaction of the caller's.\nfunc Postgres(q Querier, tenant string) *Book {{\n\tr := &pgRuntime{{q: q, tenant: tenant}}\n\treturn &Book{{{}, Balance: Balances{{r}}, r: r}}\n}}\n\n",
         inits.join(", ")
     ));
     o.push_str(&format!(
-        "// Expire gives back what the holds past their expiry hold; call it from a job (DESIGN 4.1).\nfunc (b *Book) Expire(ctx context.Context) (int, error) {{\n\treturn b.r.expire(ctx, {})\n}}\n\n",
+        "// Expire gives back what the holds past their expiry hold; call it from a job.\nfunc (b *Book) Expire(ctx context.Context) (int, error) {{\n\treturn b.r.expire(ctx, {})\n}}\n\n",
         raw(&postgres::expire_sql(book))
     ));
     let sql = |t: &TransferKind, op: &str, n: usize| raw(&format!("select * from {}({})", postgres::qualified(book, &postgres::op_function(t, op)), (1..=n).map(|i| format!("${i}")).collect::<Vec<_>>().join(", ")));

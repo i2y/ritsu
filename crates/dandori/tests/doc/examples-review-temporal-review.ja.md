@@ -60,12 +60,12 @@ flowchart TD
 
 ## 規則
 
-このワークフローが呼ぶ規則を、`rulec doc` が承認する人向けに描いたものです。
+このワークフローが呼ぶ規則です。`rulec doc` が描いた、人が読むページをそのまま載せています。
 
 <details>
 <summary><code>policy</code> · review_policy v1 · <code>../rules/review_policy.rule</code></summary>
 
-<!-- rulec 0.23.0 が review_policy.rule (sha256:d71c8b54077c) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
+<!-- rulec 0.23.0 が review_policy.rule (sha256:d71c8b54077c) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません。 -->
 # 規則 review_policy v1
 
 Whether the scoring's verdict on an application is acted on at once or goes to a person, by how sure the scoring is of it: approving at once asks more certainty than rejecting at once. Written for the example

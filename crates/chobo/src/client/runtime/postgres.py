@@ -8,7 +8,7 @@ from typing import Any, Optional, Sequence
 #@@BOOK@@
 # ── What follows is the same in every book chobo writes for PostgreSQL ───────
 #
-# A call is one SQL function, which does it in one transaction (DESIGN 4.1). The function
+# A call is one SQL function, which does it in one transaction. The function
 # answers a refusal as a row; an error is a mistake in the call, or the database's own.
 
 
@@ -115,5 +115,5 @@ class _Postgres:
         return Balance(int(posted), int(held_in), int(held_out))
 
     def expire(self, sql: str) -> int:
-        """Give back what the holds past their expiry hold (DESIGN 4.1); answers how many holds it ended."""
+        """Give back what the holds past their expiry hold; answers how many holds it ended."""
         return int(self._row(sql, [])[0])

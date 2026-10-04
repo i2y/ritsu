@@ -1605,9 +1605,11 @@ error[E032]: Enum order_status does not agree with OrderStatus in ../../proto/sh
   |      ^^^^^^^^^^^^
   |
  In ../../proto/shop/ordering/v1/order.proto but not in this enum: returned
- The form to add: `<name>(returned)`. The name is yours to decide — the file carries no Japanese.
- A value appeared through the contract, not through this rule. What the new value costs is a decision nobody has made yet (§15.59).
+ Add `returned` to this enum.
+ The contract (../../proto/shop/ordering/v1/order.proto) has gained a value. How this rule treats it has not been decided yet.
 ```
+
+（rulec の E032 の注は 2026-10-04 に直した。上は直したあとの出力。）
 
 日本語の例の `請求の要否.rule` では、A の段階で次だった。
 

@@ -1,6 +1,6 @@
 ---
 name: koyomi
-description: Write, check and compile koyomi files (`.cal`), the rules of due dates — closing days, payment days, business days and month arithmetic, such as closing on the 20th and paying on the 10th of the next month or on the business day before when that is a holiday — with calendars of closed days read from published tables of holidays, claims checked on every day of a declared range, and code generated for TypeScript, Python, Go, Rust and PostgreSQL. Use when payment terms, a deadline or a calendar of business days has to be written or changed as a `.cal`; when a koyomi diagnostic (E001-E305, W101-W202) has to be fixed; when such a rule has to be shown to the person who approves it; or when its generated code has to be called.
+description: Write, check and compile koyomi files (`.cal`), the rules of due dates — closing days, payment days, business days and month arithmetic, such as closing on the 20th and paying on the 10th of the next month or on the business day before when that is a holiday — with calendars of closed days read from published tables of holidays, claims checked on every day of a declared range, and code generated for TypeScript, Python, Go, Rust and PostgreSQL. Use when payment terms, a deadline or a calendar of business days has to be written or changed as a `.cal`; when a koyomi diagnostic (E001-E305, W101-W202) has to be fixed; when such a rule has to be shown to the people who read it; or when its generated code has to be called.
 compatibility: Requires the `koyomi` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked koyomi`, or `ritsu` in its place for all seven languages, where it is run as `ritsu koyomi …`). `koyomi source fetch` and `koyomi source outdated` also need `curl`.
 license: MIT OR Apache-2.0
 ---
@@ -11,7 +11,7 @@ The job is a **rule of dates**: a date computed from another by closing, adding 
 days or months, taking a day of a month, and moving off closed days. Payment terms ("closes on the
 20th, pays on the 10th of the next month, on the business day before when that day is closed"),
 Net 30, a deadline counted in business days, the end of a period under a statute. koyomi writes
-it once as a `.cal`, checks it on every input of a range, shows it to the person who approves it,
+it once as a `.cal`, checks it on every input of a range, shows it to the people who read it,
 and generates the same function for five languages.
 
 It does not apply to decisions made from tables of conditions (a fee schedule, an eligibility
@@ -53,7 +53,7 @@ There is no step where you have to read koyomi's source.
 5. **Look at one input:** `koyomi eval <file.cal> <input>=<date>` prints every date of that input,
    a step a line, and what each claim says of it.
 6. **Show it to a person:** `koyomi doc <file.cal> > <file>.md` (or `--format html`) writes the page
-   for whoever approves the terms: every operation in words beside its line, the claims and their
+   for the people who read the terms: every operation in words beside its line, the claims and their
    least room, the edge cases, the months with the holidays named and the failing input days
    marked. A file whose claims fail still gets its page; the failing days are the point of it.
 7. **Generate the code:** `koyomi gen <file.cal> --out generated` writes TypeScript, Python, Go,

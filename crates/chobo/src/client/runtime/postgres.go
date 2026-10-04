@@ -2,7 +2,7 @@ package {{PKG}}
 
 // What follows is the same in every book chobo writes for PostgreSQL.
 //
-// A call is one SQL function, which does it in one transaction (DESIGN 4.1). The function
+// A call is one SQL function, which does it in one transaction. The function
 // answers a refusal as a row; an error is a mistake in the call, or the database's own.
 
 import (
@@ -150,7 +150,7 @@ func (r *pgRuntime) balance(ctx context.Context, sql string, args []any) (Balanc
 	return b, err
 }
 
-// expire gives back what the holds past their expiry hold (DESIGN 4.1); it answers how many holds it ended.
+// expire gives back what the holds past their expiry hold; it answers how many holds it ended.
 func (r *pgRuntime) expire(ctx context.Context, sql string) (int, error) {
 	var n int
 	err := r.row(ctx, sql, nil, &n)

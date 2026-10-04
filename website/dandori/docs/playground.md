@@ -49,9 +49,9 @@ in it.
    drawn even with errors, and the run of each error lights up on the flow.
 4. **Read the rules.** *rules* shows the rules the flow calls, as the repository has them: `hold`,
    which decides how much to hold on the card and whether the front desk looks first, and
-   `payment_intent`, the PaymentIntent's state machine. *open the rule's page* opens what
-   `rulec doc` renders for whoever approves the rule, and a case can be tried on it, as on rulec's
-   playground. The page `dandori doc` writes opens it too, from the list of rules on its left.
+   `payment_intent`, the PaymentIntent's state machine. *open the rule's page* opens the page for
+   people that `rulec doc` renders, and a case can be tried on it, as on rulec's playground. The
+   page `dandori doc` writes opens it too, from the list of rules on its left.
 5. **Open a version of an example.**
    [*Hotel booking · for Temporal*](#flow=examples/hotel/temporal/hotel.flow&view=build) passes
    check, and *build* shows what Temporal runs: the workflow, the activities, the client and the

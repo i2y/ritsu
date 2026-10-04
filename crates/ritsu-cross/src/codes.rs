@@ -108,8 +108,8 @@ pub fn ledger() -> Ledger {
             "E201",
             tr!("規則を呼ぶところで、前提を破る値を渡すことがあります", "A call can give a rule values that break its precondition"),
             tr!(
-                "ワークフローが規則を呼ぶところで、dandori が知っている値の範囲の中に、規則の前提（入力どうしの関係 `constraint`）を破る組み合わせがあるとき（X2、DESIGN 7.4）。範囲は dandori が値を入れるすべての場所から集めたもので、dandori の E014 と同じ読み方です。範囲を `range from koyomi` にした日付の入力では、渡す値が koyomi の日付の日なら、その日のどれかが規則の日でないときも、このエラーです（X3 の (a)）。前提を破る呼び出しは、規則から生成したコードが入口で断るので、ワークフローを走らせたときに初めて落ちます。注には、値の範囲と、前提を破る組み合わせや日が出ます。",
-                "Where a workflow calls a rule, the ranges dandori knows for the values it gives hold a combination that breaks one of the rule's preconditions, a relation between two inputs (`constraint`) (X2, DESIGN 7.4). The ranges are dandori's, gathered from every place a value comes from, read as dandori's E014 reads them. A date input whose range is `range from koyomi` and is given the day of a koyomi date is this error too when one of those days is not one of the rule's (X3 (a)). The rule's generated code refuses such a call at its door, so it would fail only when the workflow runs. The notes give the ranges and the combination or the day that breaks it."
+                "ワークフローが規則を呼ぶところで、dandori が知っている値の範囲の中に、規則の前提（入力どうしの関係 `constraint`）を破る組み合わせがあるとき。範囲は dandori が値を入れるすべての場所から集めたもので、dandori の E014 と同じ読み方です。範囲を `range from koyomi` にした日付の入力では、渡す値が koyomi の日付の日なら、その日のどれかが規則の日でないときも、このエラーです。前提を破る呼び出しは、規則から生成したコードが入口で断るので、ワークフローを走らせたときに初めて落ちます。注には、値の範囲と、前提を破る組み合わせや日が出ます。",
+                "Where a workflow calls a rule, the ranges dandori knows for the values it gives hold a combination that breaks one of the rule's preconditions, a relation between two inputs (`constraint`). The ranges are dandori's, gathered from every place a value comes from, read as dandori's E014 reads them. A date input whose range is `range from koyomi` and is given the day of a koyomi date is this error too when one of those days is not one of the rule's. The rule's generated code refuses such a call at its door, so it would fail only when the workflow runs. The notes give the ranges and the combination or the day that breaks it."
             ),
             tr!(
                 "呼ぶ前に前提が保たれるよう分岐するか、値の範囲を狭めてください（入力やタスクの結果の `range`）。前提のほうが業務に合っていないなら、規則の `constraint` を直してください。",
@@ -122,8 +122,8 @@ pub fn ledger() -> Ledger {
             "W201",
             tr!("規則を呼ぶところで、前提が保たれるかを決められません", "Whether a call keeps a rule's precondition cannot be decided"),
             tr!(
-                "ワークフローが規則を呼ぶところで、前提が保たれるかを決められないとき（X2）。渡す値に範囲の無いところから来るものがある（タスクの結果に `range` が無い、など）、前提が並びの合計や長さの上限である（dandori は並びの長さを知りません）、前提が koyomi の日付の日で、渡す値が何日かを言わないところ（ワークフローの入力、タスクの結果、`now`）からも来る、のどれかです。決められない前提は、`ritsu dandori build` が書くワークフローのコードが実行時に確かめます。値ができたところですぐに確かめ、前提を破る実行を `Dandori.BrokenPrecondition` で失敗させます（dandori の DESIGN 1.17）。",
-                "Where a workflow calls a rule, whether a precondition holds cannot be decided (X2): a value comes from a place with no range (a task's result without `range`, say), the precondition bounds the total or the length of a list (dandori knows no list's length), or it is the days of a koyomi date and the value can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`). The workflow's code that `ritsu dandori build` writes checks such a precondition when the workflow runs, as soon as the values are made, and fails a run that breaks it with `Dandori.BrokenPrecondition` (dandori's DESIGN 1.17)."
+                "ワークフローが規則を呼ぶところで、前提が保たれるかを決められないとき。渡す値に範囲の無いところから来るものがある（タスクの結果に `range` が無い、など）、前提が並びの合計や長さの上限である（dandori は並びの長さを知りません）、前提が koyomi の日付の日で、渡す値が何日かを言わないところ（ワークフローの入力、タスクの結果、`now`）からも来る、のどれかです。決められない前提は、`ritsu dandori build` が書くワークフローのコードが実行時に確かめます。値ができたところですぐに確かめ、前提を破る実行を `Dandori.BrokenPrecondition` で失敗させます。",
+                "Where a workflow calls a rule, whether a precondition holds cannot be decided: a value comes from a place with no range (a task's result without `range`, say), the precondition bounds the total or the length of a list (dandori knows no list's length), or it is the days of a koyomi date and the value can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`). The workflow's code that `ritsu dandori build` writes checks such a precondition when the workflow runs, as soon as the values are made, and fails a run that breaks it with `Dandori.BrokenPrecondition`."
             ),
             tr!(
                 "値の来るところに範囲を書いてください（タスクの結果やワークフローの入力の `range`）。範囲を書けないなら、このままで構いません。ワークフローのコードが実行時に確かめます。",
@@ -136,12 +136,12 @@ pub fn ledger() -> Ledger {
             "E202",
             tr!("koyomi の日付がとる日が、規則の入力の範囲を外れます", "The days a koyomi date comes to fall outside a rule input's range"),
             tr!(
-                "ワークフローが koyomi の日付の日（`due.day`）を規則の日付の入力に渡すとき、koyomi がその日付について数えた日のどれかが、規則が宣言した入力の範囲の外にあるとき（X3 の (a)、DESIGN 7.5）。koyomi は入力の範囲のすべてで日付を計算するので、外れる日は例として一つに決まります。注には、その日と、koyomi がその日を返す入力が出ます。範囲を `range from koyomi` にした入力では、日は規則の前提なので、E201 と W201 が確かめます。",
-                "Where a workflow gives the day of a koyomi date (`due.day`) to a rule's date input, a day koyomi counts that date coming to lies outside the range the rule declares for the input (X3 (a), DESIGN 7.5). koyomi computes the date on every input of its range, so the day outside is an exact example; the notes give it, with the input at which koyomi comes to it. An input whose range is `range from koyomi` takes the days as a precondition of the rule, which E201 and W201 hold the call to."
+                "ワークフローが koyomi の日付の日（`due.day`）を規則の日付の入力に渡すとき、koyomi がその日付について数えた日のどれかが、規則が宣言した入力の範囲の外にあるとき。koyomi は入力の範囲のすべてで日付を計算するので、外れる日は例として一つに決まります。注には、その日と、koyomi がその日を返す入力が出ます。範囲を `range from koyomi` にした入力では、日は規則の前提なので、E201 と W201 が確かめます。",
+                "Where a workflow gives the day of a koyomi date (`due.day`) to a rule's date input, a day koyomi counts that date coming to lies outside the range the rule declares for the input. koyomi computes the date on every input of its range, so the day outside is an exact example; the notes give it, with the input at which koyomi comes to it. An input whose range is `range from koyomi` takes the days as a precondition of the rule, which E201 and W201 hold the call to."
             ),
             tr!(
-                "規則の入力の範囲を広げるか、規則の範囲を `range from koyomi` にして、koyomi の日をそのまま範囲にしてください（rulec の §15.174）。",
-                "Widen the rule input's range, or make it `range from koyomi`, so that koyomi's days are the range (rulec's §15.174)."
+                "規則の入力の範囲を広げるか、規則の範囲を `range from koyomi` にして、koyomi の日をそのまま範囲にしてください。",
+                "Widen the rule input's range, or make it `range from koyomi`, so that koyomi's days are the range."
             ),
             Repro::Dir { files: vec![("payment_terms.cal", TERMS_CAL), ("batch.rule", BATCH_RULE), ("billing.flow", BILLING_FLOW)], command: CHECK.to_vec() },
             &["W202", "E205"],
@@ -150,8 +150,8 @@ pub fn ledger() -> Ledger {
             "W202",
             tr!("koyomi の日付がとる日が、規則の入力の範囲に収まるかを決められません", "Whether the days of a koyomi date stay inside a rule input's range cannot be decided"),
             tr!(
-                "規則の日付の入力に渡す値が、koyomi の日付の日のほかに、何日かを言わないところ（ワークフローの入力、タスクの結果、`now`）からも来ることがあるとき、または koyomi がその日付の日を数えないとき（入力の組み合わせが確かめる数を超える、途中で計算が止まる入力がある）（X3 の (a)）。規則から生成したコードが、ワークフローを走らせたときに入口で日を確かめます。",
-                "The value given to a rule's date input can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`) as well as from a koyomi date, or koyomi does not count the days of the date (more input combinations than it checks, or an input where the computation stops) (X3 (a)). The rule's generated code checks the day at its door when the workflow runs."
+                "規則の日付の入力に渡す値が、koyomi の日付の日のほかに、何日かを言わないところ（ワークフローの入力、タスクの結果、`now`）からも来ることがあるとき、または koyomi がその日付の日を数えないとき（入力の組み合わせが確かめる数を超える、途中で計算が止まる入力がある）。規則から生成したコードが、ワークフローを走らせたときに入口で日を確かめます。",
+                "The value given to a rule's date input can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`) as well as from a koyomi date, or koyomi does not count the days of the date (more input combinations than it checks, or an input where the computation stops). The rule's generated code checks the day at its door when the workflow runs."
             ),
             tr!(
                 "値を koyomi の日付の日だけから渡せば、決められるようになります。koyomi が日を数えないなら、koyomi のファイルの入力の範囲を狭めてください。",
@@ -164,8 +164,8 @@ pub fn ledger() -> Ledger {
             "E203",
             tr!("規則の出力が、chobo の受け取らない額になることがあります", "A rule's output can be an amount chobo does not take"),
             tr!(
-                "ワークフローが規則の数の出力を chobo の振替の額に渡すとき、その出力が負か 2⁶³ − 1 を超えることがあるとき（X4、DESIGN 7.6。chobo は 0 から 2⁶³ − 1 までを受け取ります）。出力の値は rulec が求めます（表の行に書いた数か、区間の計算から）。chobo は範囲の外の額を、断る（業務の結果）のではなく呼び出しの失敗にします。注には、その額になる規則の入力の例（規則のベクタから取ったもの）が出ます。",
-                "Where a workflow gives a rule's numeric output to a chobo transfer as its amount, the output can be below 0 or above 2⁶³ − 1 (X4, DESIGN 7.6; chobo takes 0 to 2⁶³ − 1). rulec counts what the output comes to (the numbers the rows write, or its intervals). chobo fails such a call rather than refusing it as a business outcome. The notes give an input of the rule that comes to that amount, from the rule's vectors."
+                "ワークフローが規則の数の出力を chobo の振替の額に渡すとき、その出力が負か 2⁶³ − 1 を超えることがあるとき（chobo は 0 から 2⁶³ − 1 までを受け取ります）。出力の値は rulec が求めます（表の行に書いた数か、区間の計算から）。chobo は範囲の外の額を、断る（業務の結果）のではなく呼び出しの失敗にします。注には、その額になる規則の入力の例（規則のベクタから取ったもの）が出ます。",
+                "Where a workflow gives a rule's numeric output to a chobo transfer as its amount, the output can be below 0 or above 2⁶³ − 1 (chobo takes 0 to 2⁶³ − 1). rulec counts what the output comes to (the numbers the rows write, or its intervals). chobo fails such a call rather than refusing it as a business outcome. The notes give an input of the rule that comes to that amount, from the rule's vectors."
             ),
             tr!(
                 "規則が返す額を 0 以上にするか（返金などの負の額は、向きの違う振替に分けてください）、振替に渡す前に分岐してください。",
@@ -178,8 +178,8 @@ pub fn ledger() -> Ledger {
             "W203",
             tr!("規則の出力を、chobo が額として受け取るかを決められません", "Whether chobo takes a rule's output as an amount cannot be decided"),
             tr!(
-                "ワークフローが規則の数の出力を振替の額に渡すとき、出力の範囲に上限か下限が無いか、値が範囲の分からないところ（範囲の無いタスクの結果など）からも来ることがあるとき（X4）。chobo が受け取らない額なら、ワークフローを走らせたときに呼び出しが失敗します。",
-                "Where a workflow gives a rule's numeric output to a transfer as its amount, the output's range has an open end, or the value can also come from somewhere with no range (a task's answer without one, say) (X4). An amount chobo does not take fails the call when the workflow runs."
+                "ワークフローが規則の数の出力を振替の額に渡すとき、出力の範囲に上限か下限が無いか、値が範囲の分からないところ（範囲の無いタスクの結果など）からも来ることがあるとき。chobo が受け取らない額なら、ワークフローを走らせたときに呼び出しが失敗します。",
+                "Where a workflow gives a rule's numeric output to a transfer as its amount, the output's range has an open end, or the value can also come from somewhere with no range (a task's answer without one, say). An amount chobo does not take fails the call when the workflow runs."
             ),
             tr!(
                 "値の来るところに範囲を書いてください（タスクの結果やワークフローの入力の `range`）。",
@@ -192,8 +192,8 @@ pub fn ledger() -> Ledger {
             "E204",
             tr!("振替が断られうる理由を、タスクが処理していません", "The task does not handle a refusal the transfer can come to"),
             tr!(
-                "規則の出力を額に渡す `do` か `hold` の呼び出しで、操作が断られうる理由を、タスクが宣言したエラーとして処理していないとき（X4）。断られうる理由とは、額を呼び出しが渡す範囲に限った chobo の探索で、断られる例が見つかった理由です。比べるのは帳簿の境界の理由（勘定の `refused as`）、つまり額で決まる断りだけです。同じキーを別の引数で使い直すことのように、前の呼び出しで決まる断りは比べません。探索は chobo の検査と同じ深さまでたどります。`post` と `void` は仮押さえの状態で断られ、dandori が案件の状態ごとに確かめます（dandori の E022）。",
-                "Where a `do` or a `hold` is given a rule's output as its amount, chobo's search, with the amounts held to the range the call gives, finds a run in which the operation is refused for a reason the task does not handle as an error it declares (X4). Only the reasons of the book's bounds (an account's `refused as`) are compared, the refusals that turn on the amounts; one that turns on the calls made before, such as a key used again with other arguments, is not. The search goes as deep as chobo's check goes. A `post` and a `void` are refused for the state their hold is in, which dandori follows with the case (dandori's E022)."
+                "規則の出力を額に渡す `do` か `hold` の呼び出しで、操作が断られうる理由を、タスクが宣言したエラーとして処理していないとき。断られうる理由とは、額を呼び出しが渡す範囲に限った chobo の探索で、断られる例が見つかった理由です。比べるのは帳簿の境界の理由（勘定の `refused as`）、つまり額で決まる断りだけです。同じキーを別の引数で使い直すことのように、前の呼び出しで決まる断りは比べません。探索は chobo の検査と同じ深さまでたどります。`post` と `void` は仮押さえの状態で断られ、dandori が案件の状態ごとに確かめます（dandori の E022）。",
+                "Where a `do` or a `hold` is given a rule's output as its amount, chobo's search, with the amounts held to the range the call gives, finds a run in which the operation is refused for a reason the task does not handle as an error it declares. Only the reasons of the book's bounds (an account's `refused as`) are compared, the refusals that turn on the amounts; one that turns on the calls made before, such as a key used again with other arguments, is not. The search goes as deep as chobo's check goes. A `post` and a `void` are refused for the state their hold is in, which dandori follows with the case (dandori's E022)."
             ),
             tr!(
                 "その理由をタスクのエラーとして宣言し、処理してください。",
@@ -206,8 +206,8 @@ pub fn ledger() -> Ledger {
             "W204",
             tr!("振替がどの理由で断られうるかを決められません", "Which refusals a transfer can come to cannot be decided"),
             tr!(
-                "タスクが帳簿の境界の理由を処理しているのに、額を呼び出しが渡す範囲に限った chobo の探索で、その理由で断られる例が見つからないとき（X4）。探索は chobo の検査と同じ深さまでしかたどらないので、起きないと言えるのはその深さまでです。額の範囲が分からないときや、chobo から帳簿の情報を得られないときも、この警告で「決められない」と知らせます。",
-                "The task handles a reason of the book's bounds, and chobo's search, with the amounts held to the range the call gives, finds no run that comes to it (X4). The search goes only as deep as chobo's check does, so all it shows is that the reason does not come within that depth. A case that cannot be decided at all (no range for the amounts, a book that does not answer) is this warning too."
+                "タスクが帳簿の境界の理由を処理しているのに、額を呼び出しが渡す範囲に限った chobo の探索で、その理由で断られる例が見つからないとき。探索は chobo の検査と同じ深さまでしかたどらないので、起きないと言えるのはその深さまでです。額の範囲が分からないときや、chobo から帳簿の情報を得られないときも、この警告で「決められない」と知らせます。",
+                "The task handles a reason of the book's bounds, and chobo's search, with the amounts held to the range the call gives, finds no run that comes to it. The search goes only as deep as chobo's check does, so all it shows is that the reason does not come within that depth. A case that cannot be decided at all (no range for the amounts, a book that does not answer) is this warning too."
             ),
             tr!(
                 "起きない理由なら、タスクのエラーから外してください。深い手順でしか起きないなら、そのままで構いません。",
@@ -220,8 +220,8 @@ pub fn ledger() -> Ledger {
             "E205",
             tr!("koyomi の日付に渡す日が、入力の範囲を外れます", "A day given to a koyomi date is outside its input's range"),
             tr!(
-                "ワークフローが koyomi の日付を呼ぶとき、日付の入力に渡す日が、koyomi の入力の範囲を外れることがあるとき（X6、DESIGN 7.8）。渡す日がほかの koyomi の日付の日なら、koyomi が数えたその日の全部で確かめます。範囲の中の日なら、カレンダーに問い合わせる日がデータの範囲に収まることを、koyomi の検査が確かめています（koyomi の E203）。注には、外れる日と、koyomi がその日を返す入力が出ます。",
-                "Where a workflow calls a koyomi date, the day it gives the date input can be outside the range of that input (X6, DESIGN 7.8). A day of another koyomi date is held to it with every day koyomi counts for that date. A day inside the range is one koyomi's own check has held to the data of its calendar wherever it asks the calendar (koyomi's E203). The notes give the day outside and the input at which koyomi comes to it."
+                "ワークフローが koyomi の日付を呼ぶとき、日付の入力に渡す日が、koyomi の入力の範囲を外れることがあるとき。渡す日がほかの koyomi の日付の日なら、koyomi が数えたその日の全部で確かめます。範囲の中の日なら、カレンダーに問い合わせる日がデータの範囲に収まることを、koyomi の検査が確かめています（koyomi の E203）。注には、外れる日と、koyomi がその日を返す入力が出ます。",
+                "Where a workflow calls a koyomi date, the day it gives the date input can be outside the range of that input. A day of another koyomi date is held to it with every day koyomi counts for that date. A day inside the range is one koyomi's own check has held to the data of its calendar wherever it asks the calendar (koyomi's E203). The notes give the day outside and the input at which koyomi comes to it."
             ),
             tr!(
                 "koyomi の入力の範囲を広げるか（カレンダーのデータも足してください）、範囲に収まる日を渡してください。",
@@ -234,8 +234,8 @@ pub fn ledger() -> Ledger {
             "W205",
             tr!("koyomi の日付に渡す日が、範囲に収まるかを決められません", "Whether a day given to a koyomi date stays inside its range cannot be decided"),
             tr!(
-                "ワークフローが koyomi の日付の入力に渡す日を、dandori が知らないとき（X6）。ワークフローの入力、タスクの結果、`now` から来る日は、何日かを言いません。dandori には、日付の範囲を書く書き方がまだありません。範囲の外の日は、ワークフローを走らせたときに、koyomi が生成したコードが断ります。",
-                "dandori does not know the day a workflow gives a koyomi date's input (X6): a day that comes from an input of the workflow, a task's answer or `now` says nothing of what day it is, and dandori has no way yet to write the range of a date. koyomi's generated code refuses a day outside its range when the workflow runs."
+                "ワークフローが koyomi の日付の入力に渡す日を、dandori が知らないとき。ワークフローの入力、タスクの結果、`now` から来る日は、何日かを言いません。dandori には、日付の範囲を書く書き方がまだありません。範囲の外の日は、ワークフローを走らせたときに、koyomi が生成したコードが断ります。",
+                "dandori does not know the day a workflow gives a koyomi date's input: a day that comes from an input of the workflow, a task's answer or `now` says nothing of what day it is, and dandori has no way yet to write the range of a date. koyomi's generated code refuses a day outside its range when the workflow runs."
             ),
             tr!(
                 "ほかの koyomi の日付の日を渡せば、決められるようになります。そうでなければ、このままで構いません。範囲の外の日は、koyomi が実行時に断ります。",
@@ -248,8 +248,8 @@ pub fn ledger() -> Ledger {
             "E206",
             tr!("仮押さえの期限が、確定や取消のときには必ず切れています", "A hold has always expired when a call on it comes"),
             tr!(
-                "ワークフローが chobo の仮押さえを案件として追い（`case … follows <帳簿>.<振替>`）、確定か取消をするところで、仮押さえを作ってからその呼び出しまでの長さの下限が、有効期限（振替の `pending expires after`）以上のとき（X5、DESIGN 7.7）。帳簿はどの実行でもその呼び出しを `expired` で断り、通ったあとの流れは動きません。長さは dandori がフローの文から数えます。決まった長さの `wait` はその長さです。koyomi の日付の時刻までの `wait until` は、日付の入力に仮押さえのあとで読んだ `now` を渡したものなら、koyomi が数えた入力から日付までの日数の最小と最大と、日付の時刻から出ます。注には、下限と、その下限になる文が出ます。",
-                "Where a workflow follows a chobo hold as a case (`case … follows <book>.<transfer>`) and posts or voids it, the fewest seconds from making the hold to the call are at least the hold's expiry (the transfer's `pending expires after`) (X5, DESIGN 7.7). The book refuses the call with `expired` on every run, and what follows it going through never runs. dandori counts the time from the statements of the flow: a `wait` of a fixed time takes that time, and a `wait until` the time of a koyomi date, whose date input was given `now` read after the hold, takes from the fewest to the most days koyomi counts from the input to the date, at the date's time. The notes give the fewest and the statements that make them up."
+                "ワークフローが chobo の仮押さえを案件として追い（`case … follows <帳簿>.<振替>`）、確定か取消をするところで、仮押さえを作ってからその呼び出しまでの長さの下限が、有効期限（振替の `pending expires after`）以上のとき。帳簿はどの実行でもその呼び出しを `expired` で断り、通ったあとの流れは動きません。長さは dandori がフローの文から数えます。決まった長さの `wait` はその長さです。koyomi の日付の時刻までの `wait until` は、日付の入力に仮押さえのあとで読んだ `now` を渡したものなら、koyomi が数えた入力から日付までの日数の最小と最大と、日付の時刻から出ます。注には、下限と、その下限になる文が出ます。",
+                "Where a workflow follows a chobo hold as a case (`case … follows <book>.<transfer>`) and posts or voids it, the fewest seconds from making the hold to the call are at least the hold's expiry (the transfer's `pending expires after`). The book refuses the call with `expired` on every run, and what follows it going through never runs. dandori counts the time from the statements of the flow: a `wait` of a fixed time takes that time, and a `wait until` the time of a koyomi date, whose date input was given `now` read after the hold, takes from the fewest to the most days koyomi counts from the input to the date, at the date's time. The notes give the fewest and the statements that make them up."
             ),
             tr!(
                 "仮押さえの期限を延ばすか（振替の `pending expires after`）、もっと早く呼んでください。",
@@ -262,8 +262,8 @@ pub fn ledger() -> Ledger {
             "W206",
             tr!("仮押さえの期限が、確定や取消のときに切れているかを決められません", "Whether a hold has expired when a call on it comes cannot be decided"),
             tr!(
-                "仮押さえを作ってから確定か取消までの長さが、有効期限の前にも後にもなりうるとき、または長さの上限が分からないとき（X5）。上限は、仮押さえを作るタスクと、あいだのタスクの `timeout` とリトライの回数から出ます。`timeout` の無いタスク、規則や日付の呼び出し（`.flow` に時間の上限がありません）、上限の分からない `wait until` があれば、上限はありません。期限が切れていれば帳簿が `expired` で断り、フローはそれを処理しています（dandori の E022）。期限が切れないと示せたとき（上限が有効期限より短いとき）は、何も出しません。",
-                "The time from making a hold to posting or voiding it can fall either side of the hold's expiry, or nothing bounds it (X5). The most comes from the `timeout` and the retries of the task that makes the hold and of the tasks between; a task with no `timeout`, a call of a rule or a date (the flow gives them no limit), or a `wait until` a time nothing bounds leaves no most. An expired hold is refused with `expired`, which the flow handles (dandori's E022). When the call is shown to come before the hold expires (the most is shorter than the expiry), nothing is said."
+                "仮押さえを作ってから確定か取消までの長さが、有効期限の前にも後にもなりうるとき、または長さの上限が分からないとき。上限は、仮押さえを作るタスクと、あいだのタスクの `timeout` とリトライの回数から出ます。`timeout` の無いタスク、規則や日付の呼び出し（`.flow` に時間の上限がありません）、上限の分からない `wait until` があれば、上限はありません。期限が切れていれば帳簿が `expired` で断り、フローはそれを処理しています（dandori の E022）。期限が切れないと示せたとき（上限が有効期限より短いとき）は、何も出しません。",
+                "The time from making a hold to posting or voiding it can fall either side of the hold's expiry, or nothing bounds it. The most comes from the `timeout` and the retries of the task that makes the hold and of the tasks between; a task with no `timeout`, a call of a rule or a date (the flow gives them no limit), or a `wait until` a time nothing bounds leaves no most. An expired hold is refused with `expired`, which the flow handles (dandori's E022). When the call is shown to come before the hold expires (the most is shorter than the expiry), nothing is said."
             ),
             tr!(
                 "仮押さえを作るタスクとあいだのタスクに `timeout` を書くと、上限が決まります。書けないなら、このままで構いません。",

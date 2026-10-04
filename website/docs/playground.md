@@ -101,8 +101,8 @@ the English versions, and the Japanese page the Japanese ones.
    as it is, and three errors are left.
 4. **Change a rule a flow calls.** A flow's rules are files of its project, each in a tab of its own.
    dandori's playground could only show them; here, change one, and the flow's check reads the rule
-   as you left it. The page for people of a rule is what `rulec doc` renders for whoever approves
-   it, and a case can be tried on it.
+   as you left it. A rule's page for people is what `rulec doc` renders, and a case can be tried on
+   it.
 5. **Build a version for its platform.** *Hotel booking · for Temporal* opens on its flow; press
    *generate*, and the list beside it starts on Temporal. Pick Step Functions, and nothing is written:
    the version waits for Stripe's webhook as an event sent to the workflow and releases the hold in

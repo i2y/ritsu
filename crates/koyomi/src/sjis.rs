@@ -4,7 +4,7 @@
 //! check a pin with `curl <url> | shasum -a 256`. koyomi reads those bytes itself, with the
 //! table in `sjis_table.rs`. A byte sequence it cannot read is an error with its position,
 //! never a replacement character: a holiday whose name came out wrong would be shown on the
-//! approver's page as if it were right.
+//! page for people as if it were right.
 
 use std::sync::OnceLock;
 

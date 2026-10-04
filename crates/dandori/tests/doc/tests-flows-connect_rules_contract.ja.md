@@ -48,12 +48,12 @@ flowchart TD
 
 ## 規則
 
-このワークフローが呼ぶ規則を、`rulec doc` が承認する人向けに描いたものです。
+このワークフローが呼ぶ規則です。`rulec doc` が描いた、人が読むページをそのまま載せています。
 
 <details>
 <summary><code>手数料</code> · 口座の手数料 v1 · <code>../fixtures/rules/account_fee.rule</code></summary>
 
-<!-- rulec 0.23.0 が account_fee.rule (sha256:bdb2f090c3a1) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
+<!-- rulec 0.23.0 が account_fee.rule (sha256:bdb2f090c3a1) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません。 -->
 # 規則 口座の手数料 v1
 
 口座の月の手数料と、次の月の状態。状態の列挙は契約（account.proto）から取り込む。契約の値には接頭辞が無く、0 番も「有効」という状態の一つである。書き下ろしの例

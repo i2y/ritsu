@@ -1283,7 +1283,7 @@ service BService { rpc Get(B) returns (B); }
 
 ## E107 — Cargo cannot say the crates of the Rust code
 
-**When**: The map writes `code rust`, and there is no `Cargo.toml` at its place, or `cargo metadata` fails (cargo is not there, a manifest does not read, and the like). sakai reads Rust's crates and their dependencies from Cargo (DESIGN 7.7); when it cannot, the dependencies of the crates are not checked.
+**When**: The map writes `code rust`, and there is no `Cargo.toml` at its place, or `cargo metadata` fails (cargo is not there, a manifest does not read, and the like). sakai reads Rust's crates and their dependencies from Cargo; when it cannot, the dependencies of the crates are not checked.
 
 **Fix**: Write under `code rust` the directory of the workspace's `Cargo.toml` (for one crate, of its own), and see that `cargo metadata --no-deps --offline` passes there.
 

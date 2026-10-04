@@ -123,7 +123,7 @@ pub fn book(path: &Path) -> Result<BookFacts, Vec<Said>> {
 }
 
 /// The page `rulec doc` draws for a rule, in a language: Markdown, or with `html` the page on which
-/// whoever approves the rule tries a case. It names the file alone, not where this machine keeps
+/// a reader of the rule tries a case. It names the file alone, not where this machine keeps
 /// it, and is shown as rulec drew it.
 pub fn rule_doc(path: &Path, html: bool, lang: Lang) -> Result<String, Vec<Said>> {
     let shown = path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();

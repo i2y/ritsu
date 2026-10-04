@@ -293,7 +293,7 @@ pub trait Rules {
     /// code refuses.
     fn eval(&self, rule: &Path, inputs: &Values) -> Result<Values, RuleError>;
 
-    /// The approver's page, as `rulec doc` draws it — Markdown, or with `html` the page that
+    /// The page for people, as `rulec doc` draws it — Markdown, or with `html` the page that
     /// tries a case — in `lang`, naming the file `shown` (dandori names the file alone).
     fn doc(&self, rule: &Path, shown: &str, html: bool, lang: Lang) -> Result<String, Vec<Said>>;
 

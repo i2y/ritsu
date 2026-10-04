@@ -1,4 +1,4 @@
-# geas's coverage hook for Python (DESIGN §7.2). While `geas map` runs, geas puts
+# geas's coverage hook for Python. While `geas map` runs, geas puts
 # the directory holding this file first on PYTHONPATH, so every Python process a
 # target starts imports it as its sitecustomize. It records with sys.monitoring
 # the lines that run in the files under the root, writes them into GEAS_COVER_OUT

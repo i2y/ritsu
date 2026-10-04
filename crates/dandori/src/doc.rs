@@ -429,7 +429,7 @@ fn rule_path(i: &Input, r: &RuleUse) -> String {
 }
 
 /// Each rule the workflow uses, with what `rulec doc` renders for it in the page's language:
-/// Markdown, or the page on which whoever approves the rule tries a case. rulec draws its rules;
+/// Markdown, or the page on which a reader of the rule tries a case. rulec draws its rules;
 /// the page shows them as it drew them.
 fn rule_docs<'a>(i: &Input<'a>, html: bool) -> Vec<(&'a RuleUse, Result<String, String>)> {
     let said = |s: Vec<ritsu_ports::Said>| crate::sources::said_notes(&s).iter().map(|t| t.get(i.lang).to_string()).collect::<Vec<_>>().join("\n");
@@ -1128,7 +1128,7 @@ pub fn markdown(i: &Input) -> String {
     let docs = rule_docs(i, false);
     if !docs.is_empty() {
         let _ = writeln!(o, "## {}\n", tr(lang, "Rules", "規則"));
-        let _ = writeln!(o, "{}\n", tr(lang, "The rules this workflow calls, as `rulec doc` renders them for whoever approves them.", "このワークフローが呼ぶ規則を、`rulec doc` が承認する人向けに描いたものです。"));
+        let _ = writeln!(o, "{}\n", tr(lang, "The rules this workflow calls, each as the page for people that `rulec doc` renders.", "このワークフローが呼ぶ規則です。`rulec doc` が描いた、人が読むページをそのまま載せています。"));
         for (r, text) in docs {
             let _ = writeln!(o, "<details>\n<summary><code>{}</code> · {} v{} · <code>{}</code></summary>\n", esc(&r.name), esc(&r.info.rule), esc(&r.info.version), esc(&rule_path(i, r)));
             match text {
@@ -1937,7 +1937,7 @@ pub fn html(i: &Input) -> String {
             o,
             "<section><h2>{}</h2><p class=\"note\">{}</p><ul class=\"rules\">",
             tr(lang, "Rules", "規則"),
-            tr(lang, "Each as <code>rulec doc</code> renders it for whoever approves it; a case can be tried on it.", "<code>rulec doc</code> が承認する人向けに描いたページです。ケースを入力して試せます。")
+            tr(lang, "Each as the page for people that <code>rulec doc</code> renders; a case can be tried on it.", "<code>rulec doc</code> が描いた、人が読むページです。ケースを入力して試せます。")
         );
         for (k, (r, _)) in docs.iter().enumerate() {
             let _ = write!(o, "<li><button class=\"rule\" type=\"button\" data-rule=\"{k}\"><code>{}</code> <span class=\"dl\">{} v{}</span></button></li>", esc(&r.name), esc(&r.info.rule), esc(&r.info.version));

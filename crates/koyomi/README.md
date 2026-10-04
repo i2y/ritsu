@@ -103,8 +103,8 @@ koyomi takes what its siblings [rulec](https://github.com/i2y/ritsu/tree/main/cr
 it proves complete) and [dandori](https://github.com/i2y/ritsu/tree/main/crates/dandori) (typed workflows that call
 them) leave outside on purpose: rulec keeps dates ordered and nothing more, and dandori waits
 until a time it is given. The way of working is theirs: pin the documents a file is written
-against, check it before anything is generated, give the person who approves it a page they can
-read, and hold the generated code to a reference interpreter on every input.
+against, check it before anything is generated, give the people who check it a page they can read,
+and hold the generated code to a reference interpreter on every input.
 
 ## What it checks, and what it does not
 
@@ -129,10 +129,11 @@ that the table matches the world (only that the copy is the file the source serv
 anything outside the range. That the generated code gives what the reference interpreter gives
 is a test over every input of the range, not a proof.
 
-## The page for whoever approves it
+## The page for people
 
-`koyomi doc` writes the page for the people who decide the terms: accounting, legal, whoever
-keeps the company calendar. It is Markdown, which a pull request shows as it is, or one HTML file
+`koyomi doc` writes the page for the people who read the terms to understand and check what the
+code is to carry out: accounting, legal, whoever keeps the company calendar, the developers
+reviewing the code. It is Markdown, which a pull request shows as it is, or one HTML file
 that loads nothing from anywhere, in a light and a dark palette. Every operation is said in words,
 next to its line of the `.cal`; the article a line cites is quoted from its copy, with the date
 and the revision it is from; every claim's result is there, with the input it has the least room
@@ -175,7 +176,7 @@ $ koyomi check examples/                         # every .cal under it; --format
 $ koyomi eval examples/net30.cal invoice_date=2026-03-04   # one input, step by step
 $ koyomi gen examples/net30.cal --out generated  # --target typescript|python|go|rust|sql, --check
 $ koyomi vectors examples/net30.cal              # the result for every input, as JSON Lines
-$ koyomi doc examples/net30.cal --format html    # the page for whoever approves it
+$ koyomi doc examples/net30.cal --format html    # the page for people
 $ koyomi api examples/net30.cal                  # how to call the generated code, as JSON
 $ koyomi source fetch|pin|outdated examples/calendars/england_and_wales.cal
 $ koyomi explain E201                            # when it appears, how to fix it, a repro

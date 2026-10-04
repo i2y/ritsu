@@ -336,8 +336,8 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
         c.err("E012", s, tr!("`date` の入力が {n} 個あります。ちょうど一つにしてください", "There are {n} `date` inputs; there must be exactly one"))
             .notes
             .push(tr!(
-                "総当たりで確かめられる大きさに抑えるためです。日付が二つあると、100 年どうしで 13 億通りを超えます。二つめの日付が要る計算は、日数を整数の入力として受け取れば書けます（DESIGN 1.3）。",
-                "This keeps the check exhaustive: two dates of 100 years each are over 1.3 billion combinations. A computation that needs a second date can take the number of days between as an integer input (DESIGN 1.3)."
+                "総当たりで確かめられる大きさに抑えるためです。日付が二つあると、100 年どうしで 13 億通りを超えます。二つめの日付が要る計算は、日数を整数の入力として受け取れば書けます。",
+                "This keeps the check exhaustive: two dates of 100 years each are over 1.3 billion combinations. A computation that needs a second date can take the number of days between as an integer input."
             ));
     }
     let mut inputs: Vec<In> = Vec::new();
@@ -611,8 +611,8 @@ pub fn resolve(f: File, path: PathBuf, sha256: String) -> Result<Model, Vec<Diag
             c.err("E304", ex.span, tr!("例に {list_ja} の列がありません", "The examples have no column for {list}"))
                 .notes
                 .push(tr!(
-                    "例には、入力と日付の列を全部書いてください。参照インタプリタと生成したコードが同じ誤りを持てば突き合わせは通るので、その誤りを見つけられるのは人が書いた値だけです（DESIGN 1.11）。",
-                    "Examples have a column for every input and every date: if the reference interpreter and the generated code shared a mistake, comparing them would pass, and only values a person wrote can catch it (DESIGN 1.11)."
+                    "例には、入力と日付の列を全部書いてください。参照インタプリタと生成したコードが同じ誤りを持てば突き合わせは通るので、その誤りを見つけられるのは人が書いた値だけです。",
+                    "Examples have a column for every input and every date: if the reference interpreter and the generated code shared a mistake, comparing them would pass, and only values a person wrote can catch it."
                 ));
         }
         for row in &ex.rows {
@@ -686,8 +686,8 @@ impl Names<'_> {
                             ))
                             .notes
                             .push(tr!(
-                                "足す数と引く数は 0 以上にし、向きは `+` と `-` で書いてください（DESIGN 1.6）。",
-                                "The number added is 0 or more; the direction is written with `+` or `-` (DESIGN 1.6)."
+                                "足す数と引く数は 0 以上にし、向きは `+` と `-` で書いてください。",
+                                "The number added is 0 or more; the direction is written with `+` or `-`."
                             ));
                         }
                         Use::DayOfMonth if inp.lo < 1 || inp.hi > 31 => {

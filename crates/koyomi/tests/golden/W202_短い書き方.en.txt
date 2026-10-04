@@ -1,6 +1,6 @@
 warning[W202]: tests/mutants/W202_短い書き方.cal:12:3: `day 31 of month +2 else end_of_month` means the same as `end of month +2`; write the shorter one
     12 |   day 31 of month +2 else end_of_month
-  = Two ways to write one thing get in the way of both grep and diff (DESIGN 1.2).
+  = Two ways to write one thing get in the way of both grep and diff.
 error[E301]: tests/mutants/W202_短い書き方.cal:16:3: The claim 受領から60日以内 fails for 648 of the 669 days of 受領日
     16 |   受領から60日以内 : 支払日 <= 受領日 + 60 days
   = It fails on 2026-01-01..2026-01-29 (29 days), 2026-02-01..2026-03-29 (57 days), 2026-04-01..2026-08-30 (152 days), 2026-09-01..2026-10-28 (58 days), 2026-11-01..2026-11-29 (29 days), 2026-12-01..2026-12-27 (27 days), and 4 more runs; --format json lists them all

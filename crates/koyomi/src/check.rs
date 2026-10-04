@@ -258,8 +258,8 @@ fn needs_calendar(m: &Model) -> Vec<Diag> {
                 None => tr!("`at` で時刻を出すには、オフセットのあるカレンダーが要ります", "`at` gives a time, which needs a calendar with an offset"),
             };
             out.push(err("E110", s, msg).note(tr!(
-                "カレンダーに `offset +09:00` のように書いてください。夏時間のある地域なら、時刻は出さず日付だけにしてください（DESIGN 1.9）。",
-                "Write the calendar's offset, like `offset +09:00`. For a place with daylight saving time, give dates only (DESIGN 1.9)."
+                "カレンダーに `offset +09:00` のように書いてください。夏時間のある地域なら、時刻は出さず日付だけにしてください。",
+                "Write the calendar's offset, like `offset +09:00`. For a place with daylight saving time, give dates only."
             )));
         }
     }
@@ -432,8 +432,8 @@ fn statics(m: &Model, opts: &Options) -> Vec<Diag> {
                     ))
                     .source(&f.src)
                     .note(tr!(
-                        "同じ意味の書き方が二つあると、grep と diff の両方で困ります（DESIGN 1.2）。",
-                        "Two ways to write one thing get in the way of both grep and diff (DESIGN 1.2)."
+                        "同じ意味の書き方が二つあると、grep と diff の両方で困ります。",
+                        "Two ways to write one thing get in the way of both grep and diff."
                     ))
                     .fix_in_notes(format!("{indent}{fix}")),
                 );
@@ -1206,8 +1206,8 @@ fn e305(m: &Model, combos: u128, budget: u64) -> Diag {
     .source(&f.src)
     .note(tr!("内訳: {}", "That is {}", parts_ja.join(" × "); parts.join(" × ")))
     .note(tr!(
-        "koyomi は、一部の入力だけを試して通すことはしません。範囲を狭めるか、ファイルを分けるか、`--budget` で予算を上げてください（DESIGN 3.2）。",
-        "It never tries some of the inputs and passes; narrow a range, split the file, or raise the budget with `--budget` (DESIGN 3.2)."
+        "koyomi は、一部の入力だけを試して通すことはしません。範囲を狭めるか、ファイルを分けるか、`--budget` で予算を上げてください。",
+        "It never tries some of the inputs and passes; narrow a range, split the file, or raise the budget with `--budget`."
     ))
 }
 

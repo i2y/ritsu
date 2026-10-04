@@ -150,7 +150,7 @@ fn balances(book: &Book, call: impl Fn(&AccountKind, String) -> String) -> Strin
 
 pub fn tigerbeetle(book: &Book, origin: &Origin) -> String {
     let (head, tail) = split(TB_RUNTIME);
-    let mut o = header(book, origin, "It calls the book on TigerBeetle through the tigerbeetle package 0.17.9 (DESIGN 4.2, 4.3).");
+    let mut o = header(book, origin, "It calls the book on TigerBeetle through the tigerbeetle package 0.17.9.");
     o.push_str(head.trim_end());
     o.push('\n');
     for t in &book.transfers {
@@ -177,7 +177,7 @@ pub fn tigerbeetle(book: &Book, origin: &Origin) -> String {
     }
     o.push_str("        self.balance = _Balances(r)\n");
     o.push_str(
-        "\n\ndef tigerbeetle(client: Any, tenant: str = \"\") -> Book:\n    \"\"\"The book on TigerBeetle, through a tigerbeetle.ClientSync. A tenant is a set of balances of\n    its own (DESIGN 4.3).\"\"\"\n    return Book(_TigerBeetle(_BOOK, client, tenant))\n\n\n",
+        "\n\ndef tigerbeetle(client: Any, tenant: str = \"\") -> Book:\n    \"\"\"The book on TigerBeetle, through a tigerbeetle.ClientSync. A tenant is a set of balances of\n    its own.\"\"\"\n    return Book(_TigerBeetle(_BOOK, client, tenant))\n\n\n",
     );
     o.push_str(&plan_literal(book));
     o.push_str("\n\n");
@@ -191,7 +191,7 @@ pub fn postgres(book: &Book, origin: &Origin) -> String {
     let mut o = header(
         book,
         origin,
-        &format!("It calls the SQL functions of `chobo build --target postgres` (schema {}) through a DB-API connection (DESIGN 4.1, 4.3).", postgres::ident(&book.name)),
+        &format!("It calls the SQL functions of `chobo build --target postgres` (schema {}) through a DB-API connection.", postgres::ident(&book.name)),
     );
     o.push_str(head.trim_end());
     o.push('\n');
@@ -241,11 +241,11 @@ pub fn postgres(book: &Book, origin: &Origin) -> String {
     }
     o.push_str("        self.balance = _Balances(r)\n");
     o.push_str(&format!(
-        "\n    def expire(self) -> int:\n        \"\"\"Give back what the holds past their expiry hold; call it from a job (DESIGN 4.1).\"\"\"\n        return self._r.expire({})\n",
+        "\n    def expire(self) -> int:\n        \"\"\"Give back what the holds past their expiry hold; call it from a job.\"\"\"\n        return self._r.expire({})\n",
         q(&postgres::expire_sql(book))
     ));
     o.push_str(
-        "\n\ndef postgres(conn: Any, tenant: str = \"\") -> Book:\n    \"\"\"The book on PostgreSQL, through a DB-API connection. A tenant is a set of balances of its\n    own (DESIGN 4.3). The client neither commits nor rolls back: with autocommit on, each call\n    is a transaction of its own; with it off, the call is part of the caller's transaction.\"\"\"\n    return Book(_Postgres(conn, tenant))\n\n\n",
+        "\n\ndef postgres(conn: Any, tenant: str = \"\") -> Book:\n    \"\"\"The book on PostgreSQL, through a DB-API connection. A tenant is a set of balances of its\n    own. The client neither commits nor rolls back: with autocommit on, each call\n    is a transaction of its own; with it off, the call is part of the caller's transaction.\"\"\"\n    return Book(_Postgres(conn, tenant))\n\n\n",
     );
     o.push_str(tail);
     // what the calls run on, by its type, so that what they answer is typed too

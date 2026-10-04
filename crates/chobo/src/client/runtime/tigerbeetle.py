@@ -11,7 +11,7 @@ import tigerbeetle as tb
 #@@BOOK@@
 # ── What follows is the same in every book chobo writes for TigerBeetle ──────
 #
-# A call is one chain of transfers in one request (DESIGN 4.2): TigerBeetle takes the chain
+# A call is one chain of transfers in one request: TigerBeetle takes the chain
 # whole or not at all. The bounds TigerBeetle cannot keep with an account's flags are kept by
 # more transfers in the chain (a probe for a lower bound above 0, the room and floor accounts
 # for an upper bound and a lower bound below 0), laid out as PLAN 0.3 says.
@@ -45,7 +45,7 @@ _S = tb.CreateTransferStatus
 
 
 def _id(*parts: str) -> int:
-    """An ID (DESIGN 4.3): the first 16 bytes of a SHA-256 over the parts, each with its UTF-8 length in front."""
+    """An ID: the first 16 bytes of a SHA-256 over the parts, each with its UTF-8 length in front."""
     h = hashlib.sha256()
     for p in ("chobo/1",) + parts:
         b = p.encode("utf-8")
@@ -254,7 +254,7 @@ class _TigerBeetle:
                 self._made.update(x.id for x in batch)
 
     def _read(self, kind: str, op: str, chain: list[Any], results: list[Any]) -> Result:
-        """What a chain's results answer: the first that is neither created nor linked_event_failed decides (DESIGN 4.2)."""
+        """What a chain's results answer: the first that is neither created nor linked_event_failed decides."""
         t = self._book["transfers"][kind]
         for i, r in enumerate(results):
             s = r.status

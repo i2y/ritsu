@@ -1,4 +1,4 @@
-//! The month tables of the approver's page (DESIGN 7): every day of a month, Monday first,
+//! The month tables of the page for people (DESIGN 7): every day of a month, Monday first,
 //! with what closes it, whether a claim fails on it as an input, and whether an edge case
 //! starts from it. Which months are shown is decided here too, without today's date, so a
 //! page does not change with the day it is made.

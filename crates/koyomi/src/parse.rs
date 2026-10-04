@@ -365,7 +365,7 @@ fn op(c: &mut Cur, nested: bool) -> Result<Op, Bad> {
             kw::IF => {
                 if nested {
                     return Err(bad(col, tr!("`if closed` は入れ子にできません。続けられる操作は一つです", "`if closed` cannot be nested; it takes one operation"))
-                        .note(tr!("koyomi は一般の条件分岐を持たず、「休みなら」だけを入れています（DESIGN 1.8）。", "There is no general branching, only \"if it is closed\" (DESIGN 1.8).")));
+                        .note(tr!("koyomi は一般の条件分岐を持たず、「休みなら」だけを入れています。", "There is no general branching, only \"if it is closed\".")));
                 }
                 c.bump();
                 c.want_word(kw::CLOSED)?;
@@ -777,8 +777,8 @@ impl<'a> Parser<'a> {
                     ))
                     .notes
                     .push(tr!(
-                        "表が休みを全部載せている範囲を、`  covers 1955-01-01..2027-12-31` か `  covers listed years` と書いてください。koyomi は範囲を推測しません（DESIGN 1.5）。",
-                        "Write the span the table lists every closed day of: `  covers 1955-01-01..2027-12-31` or `  covers listed years`. It is never guessed (DESIGN 1.5)."
+                        "表が休みを全部載せている範囲を、`  covers 1955-01-01..2027-12-31` か `  covers listed years` と書いてください。koyomi は範囲を推測しません。",
+                        "Write the span the table lists every closed day of: `  covers 1955-01-01..2027-12-31` or `  covers listed years`. It is never guessed."
                     ));
                 }
             }

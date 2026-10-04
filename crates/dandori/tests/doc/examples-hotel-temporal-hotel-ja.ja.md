@@ -165,12 +165,12 @@ flowchart TD
 
 ## 規則
 
-このワークフローが呼ぶ規則を、`rulec doc` が承認する人向けに描いたものです。
+このワークフローが呼ぶ規則です。`rulec doc` が描いた、人が読むページをそのまま載せています。
 
 <details>
 <summary><code>与信</code> · 宿泊の与信額 v1 · <code>../rules/宿泊の与信額.rule</code></summary>
 
-<!-- rulec 0.23.0 が 宿泊の与信額.rule (sha256:7c4298374720) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
+<!-- rulec 0.23.0 が 宿泊の与信額.rule (sha256:7c4298374720) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません。 -->
 # 規則 宿泊の与信額 v1
 
 予約のときにカードで押さえる額と、フロントの確認に回すかどうか。客室の一泊の額に泊数を掛ける。15 泊以上は確認に回す。書き下ろしの例
@@ -255,7 +255,7 @@ flowchart TD
 <details>
 <summary><code>payment_intent</code> · payment_intent v1 · <code>../rules/payment_intent.rule</code></summary>
 
-<!-- rulec 0.23.0 が payment_intent.rule (sha256:ec6477bfd9ec) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
+<!-- rulec 0.23.0 が payment_intent.rule (sha256:ec6477bfd9ec) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません。 -->
 # 規則 payment_intent v1
 
 Where a Stripe PaymentIntent's status goes when it is confirmed, authenticated, captured or canceled, and when a delayed payment settles. Transcribed from Stripe's documentation

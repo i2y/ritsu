@@ -73,12 +73,12 @@ flowchart TD
 
 ## 規則
 
-このワークフローが呼ぶ規則を、`rulec doc` が承認する人向けに描いたものです。
+このワークフローが呼ぶ規則です。`rulec doc` が描いた、人が読むページをそのまま載せています。
 
 <details>
 <summary><code>check</code> · refund_check v1 · <code>rules/refund_check.rule</code></summary>
 
-<!-- rulec 0.23.0 が refund_check.rule (sha256:e7003e2fa202) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
+<!-- rulec 0.23.0 が refund_check.rule (sha256:e7003e2fa202) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません。 -->
 # 規則 refund_check v1
 
 Whether a refund is paid back at once or reviewed. A refund never asks for more than was paid, which the rule takes for granted: a precondition dandori cannot show where the amount asked comes from a task with no range, so the workflow checks it when it runs (tests/flows/preconditions.flow)
@@ -141,7 +141,7 @@ Whether a refund is paid back at once or reviewed. A refund never asks for more 
 <details>
 <summary><code>settle</code> · settlement v1 · <code>rules/settlement.rule</code></summary>
 
-<!-- rulec 0.23.0 が settlement.rule (sha256:524fd7442add) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません（§1.6）。 -->
+<!-- rulec 0.23.0 が settlement.rule (sha256:524fd7442add) から生成。これは読み取り専用の資料で、本物は .rule のほうです。編集しても戻せません。 -->
 # 規則 settlement v1
 
 The settlement run a payment day falls in. The days are the ones payment_terms.cal pays on, so the table names those and nothing in between; dandori carries no range of days, so the workflow checks the day it gives when it runs (tests/flows/preconditions.flow)
