@@ -15,7 +15,7 @@
   <div class="pg-tabs">
     <button data-view="check" class="on" type="button">ritsu check</button>
     <button data-view="gen" type="button">生成</button>
-    <button data-view="doc" type="button">承認する人のページ</button>
+    <button data-view="doc" type="button">人が読むページ</button>
     <select class="pg-target" aria-label="生成先" hidden></select>
     <select class="pg-picker" aria-label="書いたファイル" hidden></select>
   </div>
@@ -35,7 +35,7 @@
 3. **規則の側で直す。** 「編集を取り消す」を押してから、`billing/rules/billing_need.rule` の列挙の最後に `| returned` を足します。rulec は「取り込んだ列挙 order_status の値に、行も `default` もありません」と言います。`cancelled` の行の下に `| returned  | skip        |` を足すと rulec は通りますが、今度は yuen が、表が「2026-10-04 に accounts がこのリンクを確かめたあとで変わりました」と言い、増えた行を見せます。検査を通った規則が、そのまま誰かの確かめた規則になるわけではありません。
 4. **ワークフローと規則の境目を壊す。** `ordering/rules/urgency.rule` の出力 `carrier` を、`outputs` と、表と例の見出しで `courier` に変えます。rulec は通ります。dandori は規則の出力を同じプロセスの中で rulec から読むので、`ordering/ship_order.flow` でその出力を読む二つの行に「`urgency.outputs` にフィールド `carrier` はありません（urgent・courier）」と言います。
 5. **生成する。** `ordering/ship_order.flow` を開いて「生成」を押すと、Temporal が動かすもの（TypeScript の八つのファイル）が出ます。横のリストで Step Functions を選ぶと、何も書きません。このフローはワークフローに送られるイベントを待ち、`on cancel` で後始末をしますが、Step Functions ではどちらもできません。倉庫を呼ぶための接続も、タスクに書いていません。生成する言語は、どれもここで生成できます。規則は 12 の言語のコード、カレンダーは 5 つの言語のコード、帳簿は SQL とクライアント、地図は Context Mapper の CML、要件は ReqIF か W3C PROV です。
-6. **承認する人のページを開く。** 規則、カレンダー、帳簿、フローのどれでも開けます。ウィンドウ全体を使うページなので、別のタブで開きます。それぞれがプルリクエスト向けに書く Markdown は、リンクの下にあります。
+6. **人が読むページを開く。** コードが実現すべきものを理解し、確かめる人のためのページです。規則、カレンダー、帳簿、フローのどれでも開けます。ウィンドウ全体を使うページなので、別のタブで開きます。それぞれがプルリクエスト向けに書く Markdown は、リンクの下にあります。
 
 リストの「小さな通販（日本語）」は、同じプロジェクトの名前を日本語にしたもので、同じ手順をそのまま試せます。
 

@@ -18,7 +18,7 @@ the browser.
   <div class="pg-tabs">
     <button data-view="check" class="on" type="button">ritsu check</button>
     <button data-view="gen" type="button">generate</button>
-    <button data-view="doc" type="button">the approver's page</button>
+    <button data-view="doc" type="button">the page for people</button>
     <select class="pg-target" aria-label="The target" hidden></select>
     <select class="pg-picker" aria-label="The file written" hidden></select>
   </div>
@@ -64,9 +64,9 @@ billing's layer against ordering. One line in one file, and three languages say 
    and its tasks name no connection to call the warehouse through. Every language that generates
    does it here: a rule its code in twelve languages, a calendar in five, the book its SQL and its
    clients, the map its Context Mapper CML, the requirements ReqIF or W3C PROV.
-6. **Open the approver's page** of a rule, a calendar, the book or the flow. It is laid out for a
-   whole window, so it opens in a tab of its own; the Markdown each writes for a pull request is
-   below the link.
+6. **Open the page for people** of a rule, a calendar, the book or the flow: the page for those who
+   read to understand and check what the code is to carry out. It is laid out for a whole window,
+   so it opens in a tab of its own; the Markdown each writes for a pull request is below the link.
 
 *A small shop, in Japanese* in the list is the same project with Japanese names, and the same steps
 work there.
