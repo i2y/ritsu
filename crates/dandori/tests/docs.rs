@@ -50,7 +50,7 @@ fn pages() -> Vec<(String, Vec<PathBuf>)> {
         ("README.md".into(), vec![root().join("README.md")]),
         ("website/dandori/docs".into(), files(&site().join("docs"), "md")),
         ("website/dandori/docs-ja".into(), files(&site().join("docs-ja"), "md")),
-        ("skills/dandori".into(), files(&root().join("skills/dandori"), "md")),
+        ("../../skills/dandori".into(), files(&root().join("../../skills/dandori"), "md")),
     ]
 }
 

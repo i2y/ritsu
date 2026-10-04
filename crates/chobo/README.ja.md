@@ -114,7 +114,7 @@ $ chobo build examples/refunds/refunds.ja.book --target postgres --out db
 
 ## AI エージェント向け
 
-[skills/chobo](skills/chobo) は、chobo を使うための [Agent Skill](https://agentskills.io) です。最初の下書きからビルドまでの手順、一ページにまとめた言語、人に聞くこと（境界の数と理由の名前、キー、仮押さえの有効期限、どの勘定を外の勘定にするか）、診断ごとの直し方が入っています。`~/.claude/skills/` か、プロジェクトの `.claude/skills/` にコピーして使います。くわしくは [skills/README.md](skills/README.md) にあります。
+[skills/chobo](../../skills/chobo) は、chobo を使うための [Agent Skill](https://agentskills.io) です。最初の下書きからビルドまでの手順、一ページにまとめた言語、人に聞くこと（境界の数と理由の名前、キー、仮押さえの有効期限、どの勘定を外の勘定にするか）、診断ごとの直し方が入っています。`~/.claude/skills/` か、プロジェクトの `.claude/skills/` にコピーして使います。くわしくは [skills/README.md](skills/README.md) にあります。
 
 ## インストール
 

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn skill() -> PathBuf {
-    root().join("skills/geas")
+    root().join("../../skills/geas")
 }
 
 /// The names of the files in a directory, sorted.
@@ -27,7 +27,7 @@ fn geas_skill_prints_skill_md() {
     let s = Scratch::new("skill-print");
     let (out, err, code) = run(s.path(), &["skill"], &[]);
     assert_eq!((err.as_str(), code), ("", 0));
-    assert_eq!(out, repo_file("skills/geas/SKILL.md"));
+    assert_eq!(out, repo_file("../../skills/geas/SKILL.md"));
 }
 
 /// What `geas skill --install` writes is the folder, file for file and byte for byte; a second
@@ -55,7 +55,7 @@ fn the_install_writes_the_folder_as_it_is() {
     assert_eq!(s.read("here/skills/geas/SKILL.md"), "changed\n", "a refused install wrote over the folder");
     let (_, err, code) = run(s.path(), &["skill", "--install", "here/skills", "--force"], &[]);
     assert_eq!((err.as_str(), code), ("", 0));
-    assert_eq!(s.read("here/skills/geas/SKILL.md"), repo_file("skills/geas/SKILL.md"));
+    assert_eq!(s.read("here/skills/geas/SKILL.md"), repo_file("../../skills/geas/SKILL.md"));
     assert_eq!(s.read("here/skills/geas/notes.md"), "mine\n");
     // what the command does not take
     let (_, err, code) = run(s.path(), &["skill", "--force"], &[]);
@@ -78,8 +78,8 @@ fn codes_md_is_what_sync_writes() {
     assert!(out.status.success(), "skills/sync.sh failed: {}", String::from_utf8_lossy(&out.stderr));
     assert_eq!(names(s.path()), ["codes.md"]);
     assert!(
-        s.read("codes.md") == repo_file("skills/geas/codes.md"),
-        "skills/geas/codes.md is not what `geas explain --all` prints now; run `cargo build` and `skills/sync.sh`"
+        s.read("codes.md") == repo_file("../../skills/geas/codes.md"),
+        "../../skills/geas/codes.md is not what `geas explain --all` prints now; run `cargo build` and `skills/sync.sh`"
     );
 }
 
@@ -129,7 +129,7 @@ fn no_link_leaves_the_skill() {
 
 #[test]
 fn skill_md_says_what_it_is() {
-    let text = repo_file("skills/geas/SKILL.md");
+    let text = repo_file("../../skills/geas/SKILL.md");
     let front = text
         .strip_prefix("---\n")
         .and_then(|t| t.split_once("\n---\n"))
@@ -158,7 +158,7 @@ fn the_driver_in_gui_md_runs() {
     if !python3("the driver in skills/geas/gui.md") {
         return;
     }
-    let page = repo_file("skills/geas/gui.md");
+    let page = repo_file("../../skills/geas/gui.md");
     let block = |info: &str, holding: &str| -> String {
         let mut found = None;
         let mut open: Option<(String, Vec<&str>)> = None;

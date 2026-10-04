@@ -14,7 +14,7 @@ use std::collections::BTreeSet;
 /// The pages, each with the name the messages give it.
 fn pages() -> Vec<PathBuf> {
     let mut out = vec![root().join("README.md"), root().join("README.ja.md"), root().join("skills/README.md")];
-    for dir in ["docs", "skills/chobo"] {
+    for dir in ["docs", "../../skills/chobo"] {
         let mut more: Vec<PathBuf> = std::fs::read_dir(root().join(dir)).unwrap().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "md")).collect();
         more.sort();
         out.extend(more);
@@ -67,7 +67,7 @@ fn the_diagnostics_on_the_pages_are_what_the_checker_prints() {
             }
         }
     }
-    for must in ["README.md", "README.ja.md", "skills/chobo/SKILL.md"] {
+    for must in ["README.md", "README.ja.md", "../../skills/chobo/SKILL.md"] {
         assert!(seen.contains(must), "no diagnostic on {must}: were the fences changed?");
     }
     assert!(wrong.is_empty(), "not what any golden file in tests/fixtures holds:\n{}", wrong.join("\n"));
@@ -126,7 +126,7 @@ fn the_book_on_the_pages_is_from_the_books() {
             }
         }
     }
-    for must in ["README.md", "README.ja.md", "docs/reference.md", "skills/chobo/SKILL.md"] {
+    for must in ["README.md", "README.ja.md", "docs/reference.md", "../../skills/chobo/SKILL.md"] {
         assert!(seen.contains(must), "no book on {must}: were the fences changed?");
     }
     assert!(wrong.is_empty(), "not a line of any book:\n{}", wrong.join("\n"));

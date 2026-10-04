@@ -11,13 +11,13 @@ use std::path::{Path, PathBuf};
 
 /// The skill's files, `SKILL.md` first, as they are in `skills/geas/`.
 pub const FILES: &[(&str, &str)] = &[
-    ("SKILL.md", include_str!("../skills/geas/SKILL.md")),
-    ("language.md", include_str!("../skills/geas/language.md")),
-    ("commands.md", include_str!("../skills/geas/commands.md")),
-    ("gui.md", include_str!("../skills/geas/gui.md")),
-    ("map.md", include_str!("../skills/geas/map.md")),
-    ("examples.md", include_str!("../skills/geas/examples.md")),
-    ("codes.md", include_str!("../skills/geas/codes.md")),
+    ("SKILL.md", include_str!("../../../skills/geas/SKILL.md")),
+    ("language.md", include_str!("../../../skills/geas/language.md")),
+    ("commands.md", include_str!("../../../skills/geas/commands.md")),
+    ("gui.md", include_str!("../../../skills/geas/gui.md")),
+    ("map.md", include_str!("../../../skills/geas/map.md")),
+    ("examples.md", include_str!("../../../skills/geas/examples.md")),
+    ("codes.md", include_str!("../../../skills/geas/codes.md")),
 ];
 
 /// What `geas skill` prints.

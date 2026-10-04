@@ -9,7 +9,7 @@ use common::*;
 use std::process::Command;
 
 fn skill() -> PathBuf {
-    root().join("skills/chobo")
+    root().join("../../skills/chobo")
 }
 
 /// The names of the files in a directory, sorted.

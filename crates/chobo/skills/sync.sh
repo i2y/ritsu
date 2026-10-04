@@ -7,10 +7,10 @@
 # tests/skill.rs runs this into a scratch directory and fails if the committed copies have
 # drifted from the pages.
 #
-#   $ skills/sync.sh [<directory>]      (skills/chobo unless given)
+#   $ skills/sync.sh [<directory>]      (the root skills/chobo unless given)
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
-out=${1:-$here/chobo}
+out=${1:-$here/../../../skills/chobo}
 docs=$here/../docs
 repo=https://github.com/i2y/ritsu/blob/main/crates/chobo
 mkdir -p "$out"

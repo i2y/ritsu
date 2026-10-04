@@ -202,7 +202,7 @@ verdict, only where a reviewer looks.
 | Go | `GOCOVERDIR` | be built with `go build -cover`; as a service, return from `main` on SIGTERM |
 | Rust | `LLVM_PROFILE_FILE` | be built with `-C instrument-coverage`; as a service, exit normally on SIGTERM |
 
-[skills/geas/map.md](skills/geas/map.md) says how each part of the report is decided, and how to
+[skills/geas/map.md](../../skills/geas/map.md) says how each part of the report is decided, and how to
 run both halves on a pull request.
 
 ## Screens
@@ -305,7 +305,7 @@ ok 4 - the note is a field of its own
 
 Any other GUI (an accessibility API, an emulator) is reached through a driver: a program that takes
 the actions as JSON lines and answers each with the screen.
-[skills/geas/gui.md](skills/geas/gui.md) has the actions and the protocol.
+[skills/geas/gui.md](../../skills/geas/gui.md) has the actions and the protocol.
 
 ## The language
 
@@ -338,7 +338,7 @@ fixes it, and the smallest claims file that gives it; there are 34 codes, and `-
 them all in Japanese. `--jobs 4` runs up to four claims at once, each service on a port of its own
 (`port auto`); the report, the journal and the baseline come out in claim order, the same bytes as
 with one, and `serial` keeps a target's claims apart when they share state geas cannot see.
-[skills/geas/language.md](skills/geas/language.md) has every form.
+[skills/geas/language.md](../../skills/geas/language.md) has every form.
 
 ## For AI agents
 
@@ -352,7 +352,7 @@ $ geas skill --install .claude/skills
 wrote the geas skill to .claude/skills/geas (7 files)
 ```
 
-The same folder is [skills/geas](skills/geas); [skills/README.md](skills/README.md) says more.
+The same folder is [skills/geas](../../skills/geas); [skills/README.md](skills/README.md) says more.
 
 ## Install
 
@@ -413,7 +413,7 @@ exit: 0 all held, or nothing to report · 1 something failed or changed · 2 the
 | `GEAS_CHROME` | the Chrome to start for pages, instead of looking for one |
 | `GEAS_LLVM_BIN` | where `llvm-profdata` and `llvm-cov` are, for Rust in `geas map` |
 
-[skills/geas/commands.md](skills/geas/commands.md) has every option, the exit codes, and the files
+[skills/geas/commands.md](../../skills/geas/commands.md) has every option, the exit codes, and the files
 and JSON geas writes.
 
 ## Examples

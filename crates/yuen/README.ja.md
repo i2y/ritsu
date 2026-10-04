@@ -82,7 +82,7 @@ $ ritsu yuen doc examples/civil_code_periods_reread/civil_code_periods_reread.ja
 
 ## エージェント向け
 
-[skills/yuen](skills/yuen) は、yuen を使うためのエージェントのスキルです。`.req` を書く、`yuen check` を通す、印の差分を読む、人に何を聞くか。エージェントが自分の判断で `yuen review` を走らせることはしません。記録は、人が確かめたという印だからです。入れ方は [skills/README.md](skills/README.md) にあります。
+[skills/yuen](../../skills/yuen) は、yuen を使うためのエージェントのスキルです。`.req` を書く、`yuen check` を通す、印の差分を読む、人に何を聞くか。エージェントが自分の判断で `yuen review` を走らせることはしません。記録は、人が確かめたという印だからです。入れ方は [skills/README.md](skills/README.md) にあります。
 
 ## 入れ方
 

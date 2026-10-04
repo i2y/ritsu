@@ -7,10 +7,10 @@
 # tests/skill.rs runs this into a scratch directory and fails if the committed copies have drifted
 # from the pages.
 #
-#   $ skills/sync.sh [<directory>]      (skills/yuen unless given)
+#   $ skills/sync.sh [<directory>]      (the root skills/yuen unless given)
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
-out=${1:-$here/yuen}
+out=${1:-$here/../../../skills/yuen}
 docs=$here/../docs
 mkdir -p "$out"
 

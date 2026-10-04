@@ -9,10 +9,10 @@
 # written by hand and is not touched here. tests/skill.rs runs this into a scratch directory and
 # fails if the committed copies have drifted from the pages.
 #
-#   $ skills/sync.sh [<directory>]      (skills/dandori unless given)
+#   $ skills/sync.sh [<directory>]      (the root skills/dandori unless given)
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
-out=${1:-$here/dandori}
+out=${1:-$here/../../../skills/dandori}
 docs=$here/../../../website/dandori/docs
 site=https://i2y.github.io/dandori
 mkdir -p "$out"

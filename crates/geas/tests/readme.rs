@@ -231,7 +231,7 @@ fn commands_story(lang: &str, flag: &str) {
     t.status(2);
     assert_eq!(t.geas(&format!("geas skill --install .claude/skills --force{flag}")), 0);
     t.keep(&format!("{lang}/readme/skill.txt"));
-    assert_eq!(t.s.read(".claude/skills/geas/SKILL.md"), repo_file("skills/geas/SKILL.md"));
+    assert_eq!(t.s.read(".claude/skills/geas/SKILL.md"), repo_file("../../skills/geas/SKILL.md"));
 }
 
 #[test]

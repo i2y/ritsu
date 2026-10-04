@@ -207,7 +207,7 @@ England and Wales のカレンダー（GOV.UK の bank holidays を読む [`cale
 
 ## AI エージェント向けのスキル
 
-[skills/koyomi](skills/koyomi) は、koyomi を使うための [Agent Skill](https://agentskills.io) です。最初の下書きから生成したコードまでの進め方、言語の要点、人に聞くべきこと、診断ごとの直し方が入っています。`~/.claude/skills/` か、プロジェクトの `.claude/skills/` にコピーして使います。詳しくは [skills/README.md](skills/README.md) にあります。
+[skills/koyomi](../../skills/koyomi) は、koyomi を使うための [Agent Skill](https://agentskills.io) です。最初の下書きから生成したコードまでの進め方、言語の要点、人に聞くべきこと、診断ごとの直し方が入っています。`~/.claude/skills/` か、プロジェクトの `.claude/skills/` にコピーして使います。詳しくは [skills/README.md](skills/README.md) にあります。
 
 ## 次に読むもの
 

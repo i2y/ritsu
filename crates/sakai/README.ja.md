@@ -97,7 +97,7 @@ examples/shop.ja/go/.go-arch-lint.yml: いまの地図から書くものと同�
 
 ## AI エージェント向けのスキル
 
-[skills/sakai](skills/sakai/SKILL.md) は、地図を書いたり直したりするエージェントのためのスキルです。書く流れ、言語の一枚の要約、人に聞くこと、診断ごとの直し方への案内があります。
+[skills/sakai](../../skills/sakai/SKILL.md) は、地図を書いたり直したりするエージェントのためのスキルです。書く流れ、言語の一枚の要約、人に聞くこと、診断ごとの直し方への案内があります。
 `SKILL.md` のほかのページは `docs/` の写しで、`skills/sync.sh` が写します。
 
 ## インストール

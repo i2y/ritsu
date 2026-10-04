@@ -4,13 +4,13 @@
 # written by hand. tests/skill.rs runs this into a scratch directory and fails
 # when the committed codes.md is not what it writes.
 #
-#   $ skills/sync.sh [<directory>]      (skills/geas unless given)
+#   $ skills/sync.sh [<directory>]      (the root skills/geas unless given)
 #
 # The geas it runs is $GEAS when that is set, else target/debug/geas after a
 # `cargo build`, else the geas on PATH.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
-out=${1:-$here/geas}
+out=${1:-$here/../../../skills/geas}
 geas=${GEAS:-}
 if [ -z "$geas" ]; then
   if [ -x "$here/../target/debug/geas" ]; then

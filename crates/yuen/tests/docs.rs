@@ -48,7 +48,7 @@ fn files(dir: &Path, ext: &str) -> Vec<PathBuf> {
 fn pages() -> Vec<PathBuf> {
     let mut out = vec![root().join("README.md"), root().join("README.ja.md"), root().join("skills/README.md")];
     out.extend(files(&root().join("docs"), "md"));
-    out.extend(files(&root().join("skills/yuen"), "md"));
+    out.extend(files(&root().join("../../skills/yuen"), "md"));
     out.extend(files(&root().join("examples"), "md"));
     out.retain(|p| p.file_name().is_none_or(|n| n != "codes.md" && n != "codes.ja.md"));
     out

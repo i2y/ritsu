@@ -94,7 +94,7 @@ Run `--check` in CI with the `--lang` the settings were written with: the settin
 
 ## For AI agents
 
-[skills/sakai](skills/sakai/SKILL.md) is a skill for an agent that writes or fixes a map: the flow, the language on one page, what to ask a person, and how to fix each diagnostic.
+[skills/sakai](../../skills/sakai/SKILL.md) is a skill for an agent that writes or fixes a map: the flow, the language on one page, what to ask a person, and how to fix each diagnostic.
 Its pages besides `SKILL.md` are copies of `docs/`, made by `skills/sync.sh`.
 
 ## Install

@@ -156,7 +156,7 @@ charts chobo draws itself and whose scenarios can be stepped through, in English
 
 ## For AI agents
 
-[skills/chobo](skills/chobo) is an [Agent Skill](https://agentskills.io) for using chobo: the
+[skills/chobo](../../skills/chobo) is an [Agent Skill](https://agentskills.io) for using chobo: the
 loop from a first draft to a build, the language on one page, what to ask a person (the bounds
 and the names of their reasons, the keys, how long a hold lasts, which accounts are outside the
 book), and the fix for each diagnostic. Copy it into `~/.claude/skills/`, or into a project's

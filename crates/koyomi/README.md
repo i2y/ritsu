@@ -251,7 +251,7 @@ outputs on this page, the reference and the skill are held to what the tool prin
 
 ## For AI agents
 
-[skills/koyomi](skills/koyomi) is an [Agent Skill](https://agentskills.io) for using koyomi: the
+[skills/koyomi](../../skills/koyomi) is an [Agent Skill](https://agentskills.io) for using koyomi: the
 loop from a first draft to generated code, the language on one page, what to ask a person, and
 the fix for each diagnostic. Copy it into `~/.claude/skills/`, or into a project's
 `.claude/skills/`; [skills/README.md](skills/README.md) says more.

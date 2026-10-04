@@ -174,13 +174,13 @@ one.
 
 | Language | Files | Skill | Read it to |
 |---|---|---|---|
-| rulec | `.rule` | `crates/rulec/skills/rulec/` | write a rule, fix rulec's diagnostics, call the generated function |
-| dandori | `.flow` | `crates/dandori/skills/dandori/` | write a workflow, write scenarios, build for Temporal, Step Functions, Argo and the others |
-| koyomi | `.cal` | `crates/koyomi/skills/koyomi/` | write a date and a calendar, fix koyomi's diagnostics |
-| chobo | `.book` | `crates/chobo/skills/chobo/` | write a ledger, fix chobo's diagnostics, call the client |
-| geas | `.geas` | `crates/geas/skills/geas/` | write claims about code an agent wrote |
-| yuen | `.req` | `crates/yuen/skills/yuen/` | write requirements and what they come from |
-| sakai | `.ctx` | `crates/sakai/skills/sakai/` | write a map of bounded contexts |
+| rulec | `.rule` | `skills/rulec/` | write a rule, fix rulec's diagnostics, call the generated function |
+| dandori | `.flow` | `skills/dandori/` | write a workflow, write scenarios, build for Temporal, Step Functions, Argo and the others |
+| koyomi | `.cal` | `skills/koyomi/` | write a date and a calendar, fix koyomi's diagnostics |
+| chobo | `.book` | `skills/chobo/` | write a ledger, fix chobo's diagnostics, call the client |
+| geas | `.geas` | `skills/geas/` | write claims about code an agent wrote |
+| yuen | `.req` | `skills/yuen/` | write requirements and what they come from |
+| sakai | `.ctx` | `skills/sakai/` | write a map of bounded contexts |
 
 ## 6. A language that reads another
 

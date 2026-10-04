@@ -10,6 +10,8 @@
 #   $ skills/sync.sh
 set -eu
 cd "$(dirname "$0")"
+# The skill itself sits with the other seven at the root of the workspace.
+out=../../../skills/rulec
 
 # The body: everything in AGENTS.md above its own "where to look" table.
 body=$(sed -n '1,/^## 7\. Where to look$/p' ../AGENTS.md | sed '$d')
@@ -28,25 +30,25 @@ body=$(sed -n '1,/^## 7\. Where to look$/p' ../AGENTS.md | sed '$d')
     -e 's|\[docs/generated-code\.md\]|[generated-code.md]|g' \
     -e 's|\[docs/backends\.md\]|[backends.md]|g'
   cat footer.md
-} > rulec/SKILL.md
+} > "$out/SKILL.md"
 
 # The ledger is not bundled: `rulec explain` prints it and is always current.
 sed -e 's|\[codes\.md\](codes\.md)|`rulec explain --all`|g' \
-    ../docs/reference.md > rulec/reference.md
-cp ../docs/formats.md        rulec/formats.md
-cp ../docs/generated-code.md rulec/generated-code.md
-cp ../docs/compatibility.md  rulec/compatibility.md
+    ../docs/reference.md > "$out/reference.md"
+cp ../docs/formats.md        "$out/formats.md"
+cp ../docs/generated-code.md "$out/generated-code.md"
+cp ../docs/compatibility.md  "$out/compatibility.md"
 # The worked example points at a rule in this repository; inside someone else's project
 # that path leads nowhere, so the link becomes the plain name of the rule.
 sed -e 's|\[`tests/corpus/ec261.rule`\](../tests/corpus/ec261.rule)|`ec261.rule`|g' \
     -e 's|\[codes\.md\](codes\.md)|`rulec explain --all`|g' \
-    ../docs/backends.md > rulec/backends.md
+    ../docs/backends.md > "$out/backends.md"
 # The examples page ends in the site's own navigation buttons, which lead nowhere here.
 # Matched by where they point, not by what they are labelled: the label has been renamed
 # once already, and the cut failed silently when it was. The page is rulec's site's, which
 # ritsu's site holds at website/rulec, at the root of the workspace.
 sed -e '/^\[.*\](tour\.md)/,$d' ../../../website/rulec/docs/examples.md \
   | awk '{ a[n++] = $0 } END { while (n > 0 && (a[n-1] == "" || a[n-1] == "---")) n--
-           for (i = 0; i < n; i++) print a[i] }' > rulec/examples.md
+           for (i = 0; i < n; i++) print a[i] }' > "$out/examples.md"
 
-echo "built skills/rulec/ ($(wc -l < rulec/SKILL.md | tr -d ' ') lines of SKILL.md)"
+echo "built skills/rulec/ ($(wc -l < "$out/SKILL.md" | tr -d ' ') lines of SKILL.md)"

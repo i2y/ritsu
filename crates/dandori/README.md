@@ -113,7 +113,7 @@ answer.
 
 ## For AI agents
 
-[skills/dandori](skills/dandori) is an [Agent Skill](https://agentskills.io) for using dandori: the
+[skills/dandori](../../skills/dandori) is an [Agent Skill](https://agentskills.io) for using dandori: the
 loop from a first draft to a build, the language on one page, what to ask a person, and the fix for
 each diagnostic, with the reference pages it needs. Copy it into `~/.claude/skills/`, or into a
 project's `.claude/skills/`; [skills/README.md](skills/README.md) says more.

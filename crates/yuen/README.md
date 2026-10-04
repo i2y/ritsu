@@ -128,7 +128,7 @@ $ ritsu yuen doc examples/civil_code_periods_reread/civil_code_periods_reread.ja
 
 ## For AI agents
 
-[skills/yuen](skills/yuen) is an agent skill for using yuen: writing a `.req`, getting it past
+[skills/yuen](../../skills/yuen) is an agent skill for using yuen: writing a `.req`, getting it past
 `yuen check`, reading a mark's diff, and what to ask a person. An agent never runs `yuen review` on
 its own judgment: a record says a person looked. See [skills/README.md](skills/README.md) to install
 it.

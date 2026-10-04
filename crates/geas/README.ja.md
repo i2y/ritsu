@@ -172,7 +172,7 @@ $ echo $?
 | Go | `GOCOVERDIR` | `go build -cover` でビルドする。サービスなら、SIGTERM で `main` から戻る |
 | Rust | `LLVM_PROFILE_FILE` | `-C instrument-coverage` でビルドする。サービスなら、SIGTERM で普通に終わる |
 
-報告の各部分がどう決まるか、プルリクエストで二つをどう走らせるかは [skills/geas/map.md](skills/geas/map.md)（英語）にあります。
+報告の各部分がどう決まるか、プルリクエストで二つをどう走らせるかは [skills/geas/map.md](../../skills/geas/map.md)（英語）にあります。
 
 ## 画面
 
@@ -255,7 +255,7 @@ ok 4 - the note is a field of its own
 主張 4 件 · 成り立った 4 件 · 成り立たなかった 0 件 · ジャーナル: examples/pixie-greeter/.geas/greeter.journal.jsonl
 ```
 
-ほかの GUI（デスクトップのアクセシビリティ API やエミュレーター）は、ドライバーを通して操作します。ドライバーは、操作を JSON の行で受け取り、そのたびに画面を返すプログラムです。操作と、ドライバーとのやりとりの形は [skills/geas/gui.md](skills/geas/gui.md)（英語）にあります。
+ほかの GUI（デスクトップのアクセシビリティ API やエミュレーター）は、ドライバーを通して操作します。ドライバーは、操作を JSON の行で受け取り、そのたびに画面を返すプログラムです。操作と、ドライバーとのやりとりの形は [skills/geas/gui.md](../../skills/geas/gui.md)（英語）にあります。
 
 ## 言語
 
@@ -279,7 +279,7 @@ ok 4 - the note is a field of its own
 
 どの診断にも、コードと場所と、そうなる例が付きます。最後まで走れなかった主張なら、上の E035 のように、そこまでの実行が例になります。`geas explain <code>` は、そのコードがいつ出るか、ふつうはどう直すか、そのコードが出る最小の主張のファイルを出します。診断のコードは全部で 34 種類あり、`geas explain --all --lang ja` で全部を日本語で読めます。
 
-`--jobs 4` を付けると、主張を四つまで並列に走らせます。`port auto` のサービスはそれぞれ別のポートで動きます。報告もジャーナルもベースラインも主張の順に書くので、一つずつ走らせたときとバイト単位で同じです。あるターゲットを使う主張どうしが、geas から見えない状態（ファイルやデータベース）を共有しているなら、`serial` を書いて並列に走らないようにします。言語の全体は [skills/geas/language.md](skills/geas/language.md)（英語）にあります。
+`--jobs 4` を付けると、主張を四つまで並列に走らせます。`port auto` のサービスはそれぞれ別のポートで動きます。報告もジャーナルもベースラインも主張の順に書くので、一つずつ走らせたときとバイト単位で同じです。あるターゲットを使う主張どうしが、geas から見えない状態（ファイルやデータベース）を共有しているなら、`serial` を書いて並列に走らないようにします。言語の全体は [skills/geas/language.md](../../skills/geas/language.md)（英語）にあります。
 
 ## AI エージェント向け
 
@@ -290,7 +290,7 @@ $ geas skill --install .claude/skills --lang ja
 geas のスキルを .claude/skills/geas に書きました（ファイル 7 個）
 ```
 
-同じフォルダーが [skills/geas](skills/geas) にあります。くわしくは [skills/README.md](skills/README.md)（英語）を見てください。
+同じフォルダーが [skills/geas](../../skills/geas) にあります。くわしくは [skills/README.md](skills/README.md)（英語）を見てください。
 
 ## インストール
 
@@ -346,7 +346,7 @@ geas: エージェントが書いたコードに、人が読んで確かめた�
 | `GEAS_CHROME` | ページを開くのに使う Chrome。指定すると、ほかは探さない |
 | `GEAS_LLVM_BIN` | `geas map` で Rust の記録を読む `llvm-profdata` と `llvm-cov` の場所 |
 
-オプションの全部、終了コード、geas が書くファイルと JSON の形は [skills/geas/commands.md](skills/geas/commands.md)（英語）にあります。
+オプションの全部、終了コード、geas が書くファイルと JSON の形は [skills/geas/commands.md](../../skills/geas/commands.md)（英語）にあります。
 
 ## 例
 

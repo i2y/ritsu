@@ -14,7 +14,7 @@ fn root() -> PathBuf {
 }
 
 fn skill() -> PathBuf {
-    root().join("skills/sakai")
+    root().join("../../skills/sakai")
 }
 
 /// The names of the files in a directory, sorted.

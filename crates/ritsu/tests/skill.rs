@@ -81,7 +81,7 @@ fn no_link_leaves_the_skill() {
 fn the_skills_of_the_languages_are_where_it_says() {
     let p = skill_page();
     for name in LANGUAGES {
-        let at = format!("crates/{name}/skills/{name}/");
+        let at = format!("skills/{name}/");
         assert!(p.text.contains(&format!("`{at}`")), "SKILL.md does not give `{at}`");
         // The skill of a language is that language's own, by name. (yuen's and sakai's are written
         // by their stage D, PLAN F.1 and F.2: where there is none yet, there is nothing to hold.)

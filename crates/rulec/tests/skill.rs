@@ -47,9 +47,9 @@ fn built_skill_md() -> String {
 #[test]
 fn スキルはいまの文書から組み立てたものと同じ() {
     assert_eq!(
-        read("skills/rulec/SKILL.md"),
+        read("../../skills/rulec/SKILL.md"),
         built_skill_md(),
-        "skills/rulec/SKILL.md が古いか手で編集されています。`skills/sync.sh` で作り直してください"
+        "../../skills/rulec/SKILL.md が古いか手で編集されています。`skills/sync.sh` で作り直してください"
     );
     for (bundled, source) in [
         ("formats.md", "docs/formats.md"),
@@ -57,25 +57,25 @@ fn スキルはいまの文書から組み立てたものと同じ() {
         ("compatibility.md", "docs/compatibility.md"),
     ] {
         assert_eq!(
-            read(&format!("skills/rulec/{bundled}")),
+            read(&format!("../../skills/rulec/{bundled}")),
             read(source),
-            "skills/rulec/{bundled} が {source} と違います。`skills/sync.sh` で作り直してください"
+            "../../skills/rulec/{bundled} が {source} と違います。`skills/sync.sh` で作り直してください"
         );
     }
     // The grammar loses its one link to the ledger, which is not bundled.
     assert_eq!(
-        read("skills/rulec/reference.md"),
+        read("../../skills/rulec/reference.md"),
         read("docs/reference.md").replace("[codes.md](codes.md)", "`rulec explain --all`"),
-        "skills/rulec/reference.md が古いです。`skills/sync.sh` で作り直してください"
+        "../../skills/rulec/reference.md が古いです。`skills/sync.sh` で作り直してください"
     );
     // backends.md loses the ledger the same way, and the link to the corpus rule its worked
     // example is built from: inside someone else's project that path leads nowhere.
     assert_eq!(
-        read("skills/rulec/backends.md"),
+        read("../../skills/rulec/backends.md"),
         read("docs/backends.md")
             .replace("[`tests/corpus/ec261.rule`](../tests/corpus/ec261.rule)", "`ec261.rule`")
             .replace("[codes.md](codes.md)", "`rulec explain --all`"),
-        "skills/rulec/backends.md が古いです。`skills/sync.sh` で作り直してください"
+        "../../skills/rulec/backends.md が古いです。`skills/sync.sh` で作り直してください"
     );
     // The examples page loses the site's own navigation buttons.
     // Cut where the buttons point, not at what they are labelled: the label has been
@@ -88,15 +88,15 @@ fn スキルはいまの文書から組み立てたものと同じ() {
         .join("\n");
     let want = want.as_str();
     assert_eq!(
-        read("skills/rulec/examples.md").trim_end(),
+        read("../../skills/rulec/examples.md").trim_end(),
         want.trim_end().trim_end_matches("---").trim_end(),
-        "skills/rulec/examples.md が古いです。`skills/sync.sh` で作り直してください"
+        "../../skills/rulec/examples.md が古いです。`skills/sync.sh` で作り直してください"
     );
 }
 
 #[test]
 fn スキルのfrontmatterは配布できる形をしている() {
-    let s = read("skills/rulec/SKILL.md");
+    let s = read("../../skills/rulec/SKILL.md");
     assert!(s.starts_with("---\n"), "先頭行が `---` でないと frontmatter として読まれません");
     let fm = s[4..].split("\n---\n").next().expect("frontmatter が閉じていない");
     // Only the six fields of the Agent Skills spec, so the same directory can be uploaded
@@ -122,7 +122,7 @@ fn スキルのfrontmatterは配布できる形をしている() {
 #[test]
 fn スキルの中のリンクはスキルの中で閉じている() {
     for f in BUNDLED {
-        let body = read(&format!("skills/rulec/{f}"));
+        let body = read(&format!("../../skills/rulec/{f}"));
         let mut rest = body.as_str();
         while let Some(i) = rest.find("](") {
             let target = &rest[i + 2..];
@@ -145,7 +145,7 @@ fn スキルの中のリンクはスキルの中で閉じている() {
 /// documented ceiling is 500 lines.
 #[test]
 fn skill_mdは十分に短い() {
-    let n = read("skills/rulec/SKILL.md").lines().count();
+    let n = read("../../skills/rulec/SKILL.md").lines().count();
     assert!(n < 500, "SKILL.md が {n} 行あります。詳しいものは横のファイルへ出してください");
 }
 
@@ -154,7 +154,7 @@ fn skill_mdは十分に短い() {
 /// be reached for.
 #[test]
 fn スキルのdescriptionが名指しする範囲に全コードが入る() {
-    let s = read("skills/rulec/SKILL.md");
+    let s = read("../../skills/rulec/SKILL.md");
     let desc = s
         .lines()
         .find(|l| l.starts_with("description:"))

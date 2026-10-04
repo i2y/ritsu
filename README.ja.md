@@ -338,7 +338,7 @@ rulec の証明書は、Lean 4 で検査し直します。chobo、koyomi、dando
 
 ## AI エージェント向け
 
-[skills/ritsu](skills/ritsu) は、ritsu を使うための [Agent Skill](https://agentskills.io) です。`ritsu check` から、ワークフローの実行とパッケージの生成までの手順、言語をまたぐ診断の読み方と直し方、残りは言語ごとのどのスキルを読むか、が入っています。各言語のスキルは `crates/<言語>/skills/<言語>/` にあります。必要なフォルダーを `~/.claude/skills/` か、プロジェクトの `.claude/skills/` にコピーして使います。
+[skills/ritsu](skills/ritsu) は、ritsu を使うための [Agent Skill](https://agentskills.io) です。`ritsu check` から、ワークフローの実行とパッケージの生成までの手順、言語をまたぐ診断の読み方と直し方、残りは言語ごとのどのスキルを読むか、が入っています。各言語のスキルは `skills/<言語>/` にあります。必要なフォルダーを `~/.claude/skills/` か、プロジェクトの `.claude/skills/` にコピーして使います。
 
 ## コマンド
 

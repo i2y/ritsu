@@ -43,7 +43,7 @@ fn files(dir: &Path, ext: &str) -> Vec<PathBuf> {
 fn pages() -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = ["README.md", "README.ja.md", "examples/shop/README.md", "examples/shop.ja/README.ja.md", "skills/README.md"].iter().map(PathBuf::from).collect();
     out.extend(files(Path::new("docs"), "md"));
-    out.extend(files(Path::new("skills/sakai"), "md"));
+    out.extend(files(Path::new("../../skills/sakai"), "md"));
     out.retain(|p| p.file_name().is_none_or(|n| n != "codes.md" && n != "codes.ja.md"));
     out
 }

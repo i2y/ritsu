@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 /// The pages: the READMEs, the skill's, and each example's.
 fn pages() -> Vec<PathBuf> {
     let mut out = vec![root().join("README.md"), root().join("README.ja.md"), root().join("skills/README.md")];
-    out.extend(files_in(&root().join("skills/geas"), "md"));
+    out.extend(files_in(&root().join("../../skills/geas"), "md"));
     for dir in files_in(&root().join("examples"), "") {
         if dir.join("README.md").is_file() {
             out.push(dir.join("README.md"));
@@ -189,7 +189,7 @@ fn every_output_on_the_pages_is_in_a_golden_file() {
             }
         }
     }
-    for must in ["README.md", "README.ja.md", "skills/geas/SKILL.md", "skills/geas/codes.md"] {
+    for must in ["README.md", "README.ja.md", "../../skills/geas/SKILL.md", "../../skills/geas/codes.md"] {
         assert!(seen.contains(must), "no output on {must}: were the fences changed?");
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n\n"));

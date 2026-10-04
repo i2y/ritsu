@@ -387,7 +387,7 @@ axiom of its own.
 [skills/ritsu](skills/ritsu) is an [Agent Skill](https://agentskills.io) for using ritsu: the loop
 from `ritsu check` to a run and a package, how to read each diagnostic across the languages and fix
 it, and which language's skill to read for the rest. Each language has a skill of its own, in
-`crates/<language>/skills/<language>/`. Copy the folders you need into `~/.claude/skills/`, or into
+`skills/<language>/`. Copy the folders you need into `~/.claude/skills/`, or into
 a project's `.claude/skills/`.
 
 ## Commands
