@@ -624,7 +624,9 @@ const SCRIPT: &str = r#"
   }
   function writeHash() {
     var s = '#scenario=' + (at.sc + 1) + '&step=' + at.step + (data.scenarios[at.sc].outcomes.length > 1 ? '&outcome=' + (at.out + 1) : '');
-    if (location.hash !== s) history.replaceState(null, '', s);
+    // A page opened where the address cannot be rewritten (a sandboxed frame) still steps; it just
+    // cannot be linked.
+    if (location.hash !== s) { try { history.replaceState(null, '', s); } catch (e) {} }
   }
   function render() {
     var sc = data.scenarios[at.sc];
