@@ -7,9 +7,10 @@
 #   sh packaging/linux.sh 0.23.0 x86_64-unknown-linux-musl target/x86_64-unknown-linux-musl/release/ritsu dist/
 #
 # It needs docker and nothing else. nfpm writes the packages from packaging/nfpm.yaml and runs from
-# its image, pinned by digest as CI pins its other tools. Each package is installed with no
-# network, run under all seven names (packaging/smoke.sh), and removed, and what it put in
-# /usr/bin has to go with it.
+# its image, pinned by digest as CI pins its other tools. Each package has to hold the two licenses
+# and THIRD_PARTY_NOTICES in /usr/share/doc/ritsu, as its own list of files says (the slim Debian
+# image leaves /usr/share/doc out when it installs), and is installed with no network, run under
+# all seven names (packaging/smoke.sh), and removed, and what it put in /usr/bin has to go with it.
 set -eu
 
 version=$1
@@ -47,6 +48,9 @@ pack rpm "$rpm"
 # examples as release.yml asks of the archive, and has to take all eight away again when removed.
 docker run --rm --network none --platform "linux/$arch" -v "$out:/out:ro" -v "$root/crates:/crates:ro" -v "$root/packaging:/packaging:ro" \
   -e DEBIAN_FRONTEND=noninteractive debian:stable-slim sh -euc '
+    for f in LICENSE-MIT LICENSE-APACHE THIRD_PARTY_NOTICES; do
+      dpkg-deb -c "/out/$1" | grep -q " ./usr/share/doc/ritsu/$f\$"
+    done
     apt-get install -y -qq "/out/$1" > /dev/null
     ritsu --version
     sh /packaging/smoke.sh - /crates
@@ -56,6 +60,9 @@ docker run --rm --network none --platform "linux/$arch" -v "$out:/out:ro" -v "$r
     done' sh "$deb"
 docker run --rm --network none --platform "linux/$arch" -v "$out:/out:ro" -v "$root/crates:/crates:ro" -v "$root/packaging:/packaging:ro" \
   fedora:latest sh -euc '
+    for f in LICENSE-MIT LICENSE-APACHE THIRD_PARTY_NOTICES; do
+      rpm -qlp "/out/$1" | grep -qx "/usr/share/doc/ritsu/$f"
+    done
     dnf install -y -q --disablerepo="*" "/out/$1" > /dev/null
     ritsu --version
     sh /packaging/smoke.sh - /crates

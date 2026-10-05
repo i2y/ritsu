@@ -2,7 +2,8 @@
 name = "koyomi"
 version.workspace = true
 edition = "2024"
-license = "MIT OR Apache-2.0"
+# src/sjis_table.rs is made from the WHATWG Encoding Standard (THIRD_PARTY_NOTICES.md).
+license = "(MIT OR Apache-2.0) AND BSD-3-Clause"
 description = "A small language for closing days, payment days, business days and month arithmetic, checked on every day of its range and compiled to TypeScript, Python, Go, Rust and SQL"
 repository.workspace = true
 

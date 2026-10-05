@@ -139,3 +139,13 @@ the same flow here.
   page cannot run Cargo.
 - **Writing into the project.** `rulec fmt` and `yuen review` change the files they are given. Here
   nothing changes the files but you.
+
+The module this page loads, `playground/ritsu.wasm`, is built from ritsu's code (MIT OR
+Apache-2.0) and, like the `ritsu` binary, holds the work of others: names from Unicode CLDR
+(Unicode-3.0), a table made from the WHATWG Encoding Standard (BSD-3-Clause), eight crates from
+crates.io, and copies of laws for the examples of `explain`.
+[THIRD_PARTY_NOTICES](https://github.com/i2y/ritsu/blob/main/THIRD_PARTY_NOTICES) gives where
+each comes from and the text of its license or its terms. dandori's examples in the list carry
+cut-down copies of Stripe's OpenAPI document and of the Smithy models of Amazon SNS and SQS,
+under their own licenses
+([crates/dandori/THIRD_PARTY_NOTICES.md](https://github.com/i2y/ritsu/blob/main/crates/dandori/THIRD_PARTY_NOTICES.md)).

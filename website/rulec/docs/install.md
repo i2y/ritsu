@@ -86,15 +86,18 @@ $ v=v0.23.0; t=aarch64-apple-darwin
 $ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/$v/ritsu-$v-$t.tar.gz"
 $ curl -fsSL "https://github.com/i2y/ritsu/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
 ritsu-v0.23.0-aarch64-apple-darwin.tar.gz: OK
-$ tar -xzf "ritsu-$v-$t.tar.gz" -C ~/.local/bin --exclude 'LICENSE-*'
+$ tar -xzf "ritsu-$v-$t.tar.gz" -C ~/.local/bin --exclude 'LICENSE-*' --exclude THIRD_PARTY_NOTICES
 $ rulec --version
 rulec 0.23.0
 ```
 
 The archive holds `ritsu`, a link to it for each language (`rulec`, `dandori`,
-`koyomi`, `chobo`, `geas`, `yuen`, `sakai`) and the two licenses, side by side.
-The links are relative, so unpacking it into a directory on the path is the
-whole install; `--exclude 'LICENSE-*'` leaves the licenses in the archive.
+`koyomi`, `chobo`, `geas`, `yuen`, `sakai`) and the two licenses, side by side;
+the releases after 0.23.0 add THIRD_PARTY_NOTICES, the notices and licenses of
+what the binary holds from others. The links are relative, so unpacking it into a
+directory on the path is the whole install;
+`--exclude 'LICENSE-*' --exclude THIRD_PARTY_NOTICES` leaves the licenses and the
+notices in the archive.
 `t` is one of `aarch64-apple-darwin`, `x86_64-apple-darwin`,
 `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl`; the Linux
 two are linked statically and run on any distribution. On Linux the check

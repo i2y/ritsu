@@ -1,0 +1,498 @@
+Third-party notices for ritsu
+=============================
+
+ritsu's own code is under the MIT License or the Apache License, Version 2.0, at your option
+(LICENSE-MIT, LICENSE-APACHE). The `ritsu` binary of a release, with the links `rulec`,
+`dandori`, `koyomi`, `chobo`, `geas`, `yuen` and `sakai` beside it, and `ritsu.wasm`, the module
+loaded by the page that runs ritsu in the browser, also hold the work of others:
+
+  Unicode CLDR 48.2             the names of rulec's built-in divisions  Unicode-3.0
+  The WHATWG Encoding Standard  koyomi's Shift_JIS table                 BSD-3-Clause
+  Laws from e-Gov and the eCFR  the examples of explain                  PDL1.0; US government work
+  equivalent 1.0.2              a crate from crates.io                   Apache-2.0 OR MIT
+  hashbrown 0.17.1              a crate from crates.io                   MIT OR Apache-2.0
+  indexmap 2.14.2               a crate from crates.io                   Apache-2.0 OR MIT
+  itoa 1.0.18                   a crate from crates.io                   MIT OR Apache-2.0
+  memchr 2.8.3                  a crate from crates.io                   Unlicense OR MIT
+  serde_core 1.0.229            a crate from crates.io                   MIT OR Apache-2.0
+  serde_json 1.0.151            a crate from crates.io                   MIT OR Apache-2.0
+  zmij 1.0.23                   a crate from crates.io                   MIT
+  Żmij, by Victor Zverovich     the code zmij is a port of               MIT
+
+Each has a section below that says where it comes from and gives the text of its license, or its
+terms, as its source gives it. ritsu's own code and the names and the table above are under
+(MIT OR Apache-2.0) AND Unicode-3.0 AND BSD-3-Clause, the license Cargo.toml, the .deb, the .rpm
+and the Homebrew formula give. The copies of laws are left out of it: e-Gov's terms, PDL1.0,
+which has no SPDX identifier, ask that the source be given, which their section does, and the
+CFR is under no copyright in the United States. The crates are compiled in under their own
+licenses: ritsu takes each under the MIT License, which all eight offer, and the section of a
+crate gives the crate's LICENSE-MIT as it is.
+
+--------------------------------------------------------------------------------
+Unicode CLDR 48.2
+--------------------------------------------------------------------------------
+
+In rulec, and so in `ritsu` and `ritsu.wasm`. The text is crates/rulec/THIRD_PARTY_NOTICES
+without its title (crates.io receives the file with rulec); its paths are under crates/rulec.
+
+rulec's built-in namespace of first-level divisions (src/prelude.rs, DESIGN.md §15.182)
+holds names taken from the Unicode Common Locale Data Repository:
+
+  Unicode CLDR 48.2 (release-48-2, 2026-03-17), https://github.com/unicode-org/cldr
+    common/subdivisions/en.xml       English names of the subdivisions
+    common/subdivisions/{zh,ko,hi,fr,es,it,de,pt}.xml
+                                     the names in each country's language
+    common/subdivisions/{ca,eu,gl,cy}.xml
+                                     co-official names (Catalonia, the Balearic Islands, the
+                                     Valencian Community, the Basque Country, Navarre,
+                                     Galicia, Wales)
+    common/subdivisions/ja.xml       held against the prefectures rulec already had
+    common/supplemental/subdivisions.xml
+                                     which subdivisions belong to which country
+    common/main/en.xml               the names of the five US territories, which the
+                                     subdivisions file leaves to the territory names
+
+The names were written into src/prelude.rs (with spaces and hyphens as `_`, and the English
+names folded to ASCII) and held against ISO 3166-2 and each government's list; DESIGN.md
+§15.182 lists where the table departs from CLDR and why. rulec reads nothing at run time.
+
+The CLDR data is distributed under the following license.
+
+UNICODE LICENSE V3
+
+COPYRIGHT AND PERMISSION NOTICE
+
+Copyright © 2004-2026 Unicode, Inc.
+
+NOTICE TO USER: Carefully read the following legal agreement. BY
+DOWNLOADING, INSTALLING, COPYING OR OTHERWISE USING DATA FILES, AND/OR
+SOFTWARE, YOU UNEQUIVOCALLY ACCEPT, AND AGREE TO BE BOUND BY, ALL OF THE
+TERMS AND CONDITIONS OF THIS AGREEMENT. IF YOU DO NOT AGREE, DO NOT
+DOWNLOAD, INSTALL, COPY, DISTRIBUTE OR USE THE DATA FILES OR SOFTWARE.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of data files and any associated documentation (the "Data Files") or
+software and any associated documentation (the "Software") to deal in the
+Data Files or Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, and/or sell
+copies of the Data Files or Software, and to permit persons to whom the
+Data Files or Software are furnished to do so, provided that either (a)
+this copyright and permission notice appear with all copies of the Data
+Files or Software, or (b) this copyright and permission notice appear in
+associated Documentation.
+
+THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF
+THIRD PARTY RIGHTS.
+
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE
+BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL DAMAGES,
+OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE DATA
+FILES OR SOFTWARE.
+
+Except as contained in this notice, the name of a copyright holder shall
+not be used in advertising or otherwise to promote the sale, use or other
+dealings in these Data Files or Software without prior written
+authorization of the copyright holder.
+
+SPDX-License-Identifier: Unicode-3.0
+
+--------------------------------------------------------------------------------
+The WHATWG Encoding Standard
+--------------------------------------------------------------------------------
+
+In koyomi, and so in `ritsu` and `ritsu.wasm`. The text is the section "The Shift_JIS table,
+from the WHATWG Encoding Standard" of crates/koyomi/THIRD_PARTY_NOTICES.md, in its Markdown;
+its paths are under crates/koyomi.
+
+[src/sjis_table.rs](src/sjis_table.rs) holds, for every pointer of the index jis0208 of the WHATWG
+Encoding Standard (<https://encoding.spec.whatwg.org/index-jis0208.txt>, Identifier
+`cbaa91f3deb7d0841faf5c33041fc15a285da0e87e64ab802c4bf04b7c4da861`, Date 2024-09-18), the
+character it decodes to. [tools/sjis/make_table.py](tools/sjis/make_table.py) makes it from the
+index, which the repository does not keep. koyomi reads the Cabinet Office's table with it, and
+the table is compiled into the `koyomi` binary.
+
+The Encoding Standard says:
+
+```
+Copyright © WHATWG (Apple, Google, Mozilla, Microsoft).
+
+This work is licensed under a Creative Commons Attribution 4.0 International
+License. To the extent portions of it are incorporated into source code,
+such portions in the source code are licensed under the BSD 3-Clause License instead.
+```
+
+The table is such a portion. The BSD 3-Clause License, as the standard gives it:
+
+```
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+--------------------------------------------------------------------------------
+Laws from e-Gov and the eCFR
+--------------------------------------------------------------------------------
+
+In koyomi and yuen, and so in `ritsu` and `ritsu.wasm`.
+
+`koyomi explain` and `yuen explain` give, for each code, the smallest input that makes it, and
+some of those inputs read an article of a law. For them, the ledgers of the two languages
+(src/codes.rs of each) hold these copies, as the repository keeps them:
+
+  crates/koyomi/examples/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml
+  crates/yuen/tests/fixtures/period/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml
+  crates/yuen/tests/mutants/E107_同じ条の違う本文/cal/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml
+  crates/yuen/tests/mutants/E107_同じ条の違う本文/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml
+  crates/yuen/tests/fixtures/period_of_months/sources/law/37-CFR-1@2026-01-01/1.7.xml
+  crates/yuen/tests/mutants/E107_same_article_different_text/rules/sources/law/29-CFR-1910@2026-01-01/1910.157.xml
+  crates/yuen/tests/mutants/E107_same_article_different_text/sources/law/29-CFR-1910@2026-01-01/1910.157.xml
+
+The first four are Article 142 of the Civil Code of Japan (民法, 明治二十九年法律第八十九号, law ID
+`129AC0000000089`) as of 2026-10-01, revision `129AC0000000089_20260624_508AC0000000045`, as
+e-Gov's law API, version 2, served it on 2026-10-02. The terms of use of the e-Gov Law Search
+(e-Gov 法令検索 利用規約, <https://laws.e-gov.go.jp/terms/>) put its content under the Public Data
+License, version 1.0 (公共データ利用規約（第1.0版）, PDL1.0,
+<https://www.digital.go.jp/resources/open_data/public_data_license_v1.0>), and ask that the
+source be given, in the form of their examples:
+
+出典：e-Gov法令検索（https://laws.e-gov.go.jp/）の「民法」（明治二十九年法律第八十九号）第百四十二条（2026年10月1日時点、版 129AC0000000089_20260624_508AC0000000045）、法令API Version2 で2026年10月2日に取得、PDL1.0
+
+They also ask that content which was edited say so, apart from the source, and that it not be
+presented as if the government had made it. The fourth copy is edited: it changes 翌日 to 翌々日
+in the article on purpose, so that yuen's E107 (one article with two texts) has an example. The
+other three are as e-Gov served them.
+
+The last three are 37 CFR 1.7 and 29 CFR 1910.157 as of 2026-01-01, as the eCFR's versioner API
+served them. The Code of Federal Regulations is a work of the United States government and is
+not subject to copyright in the United States (17 U.S.C. 105). The last copy is edited: it
+changes 75 feet to 70 feet on purpose, for the English example of E107.
+
+--------------------------------------------------------------------------------
+equivalent 1.0.2
+--------------------------------------------------------------------------------
+
+Source:     https://crates.io/crates/equivalent/1.0.2
+Repository: https://github.com/indexmap-rs/equivalent
+License:    Apache-2.0 OR MIT, taken under MIT
+Text:       LICENSE-MIT, as the crate has it
+
+Copyright (c) 2016--2023
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+hashbrown 0.17.1
+--------------------------------------------------------------------------------
+
+Source:     https://crates.io/crates/hashbrown/0.17.1
+Repository: https://github.com/rust-lang/hashbrown
+License:    MIT OR Apache-2.0, taken under MIT
+Text:       LICENSE-MIT, as the crate has it
+
+Copyright (c) 2016 Amanieu d'Antras
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+indexmap 2.14.2
+--------------------------------------------------------------------------------
+
+Source:     https://crates.io/crates/indexmap/2.14.2
+Repository: https://github.com/indexmap-rs/indexmap
+License:    Apache-2.0 OR MIT, taken under MIT
+Text:       LICENSE-MIT, as the crate has it
+
+Copyright (c) 2016--2017
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+itoa 1.0.18
+--------------------------------------------------------------------------------
+
+Source:     https://crates.io/crates/itoa/1.0.18
+Repository: https://github.com/dtolnay/itoa
+Authors:    David Tolnay <dtolnay@gmail.com>
+License:    MIT OR Apache-2.0, taken under MIT
+Text:       LICENSE-MIT, as the crate has it
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+memchr 2.8.3
+--------------------------------------------------------------------------------
+
+Source:     https://crates.io/crates/memchr/2.8.3
+Repository: https://github.com/BurntSushi/memchr
+Authors:    Andrew Gallant <jamslam@gmail.com>, bluss
+License:    Unlicense OR MIT, taken under MIT
+Text:       LICENSE-MIT, as the crate has it
+
+The MIT License (MIT)
+
+Copyright (c) 2015 Andrew Gallant
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+serde_core 1.0.229
+--------------------------------------------------------------------------------
+
+Source:     https://crates.io/crates/serde_core/1.0.229
+Repository: https://github.com/serde-rs/serde
+Authors:    Erick Tryzelaar <erick.tryzelaar@gmail.com>, David Tolnay <dtolnay@gmail.com>
+License:    MIT OR Apache-2.0, taken under MIT
+Text:       LICENSE-MIT, as the crate has it
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+serde_json 1.0.151
+--------------------------------------------------------------------------------
+
+Source:     https://crates.io/crates/serde_json/1.0.151
+Repository: https://github.com/serde-rs/json
+Authors:    Erick Tryzelaar <erick.tryzelaar@gmail.com>, David Tolnay <dtolnay@gmail.com>
+License:    MIT OR Apache-2.0, taken under MIT
+Text:       LICENSE-MIT, as the crate has it
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+zmij 1.0.23
+--------------------------------------------------------------------------------
+
+Source:     https://crates.io/crates/zmij/1.0.23
+Repository: https://github.com/dtolnay/zmij
+Authors:    David Tolnay <dtolnay@gmail.com>
+License:    MIT
+Text:       LICENSE-MIT, as the crate has it
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+--------------------------------------------------------------------------------
+Żmij, by Victor Zverovich
+--------------------------------------------------------------------------------
+
+zmij 1.0.23 says in its README that it is a line-by-line port of Victor Zverovich's
+implementation in C++:
+Source:     https://github.com/vitaut/zmij/tree/b32688a1849d1b8f092c1740c61a6b05ea4679ae
+License:    MIT
+Text:       LICENSE at that commit
+
+MIT License
+
+Copyright (c) 2025 Victor Zverovich
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

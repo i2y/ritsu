@@ -288,7 +288,7 @@ source 祝日 = file "data/syukujitsu.csv" url "https://www8.cao.go.jp/chosei/sh
 
 #### 文字コード
 
-**決定**：コピーは配られているバイト列のまま置き、koyomi が自分で Shift_JIS を読む。変換表は、WHATWG の Encoding Standard の `index-jis0208.txt`（Identifier `cbaa91f3deb7d0841faf5c33041fc15a285da0e87e64ab802c4bf04b7c4da861`、Date 2024-09-18、7,724 個の符号）から作って koyomi に埋める。Encoding Standard は CC BY 4.0 で、ソースコードに取り込んだ部分は BSD 3-Clause License になる（その文面と著作権の表示は THIRD_PARTY_NOTICES.md）。
+**決定**：コピーは配られているバイト列のまま置き、koyomi が自分で Shift_JIS を読む。変換表は、WHATWG の Encoding Standard の `index-jis0208.txt`（Identifier `cbaa91f3deb7d0841faf5c33041fc15a285da0e87e64ab802c4bf04b7c4da861`、Date 2024-09-18、7,724 個の符号）から作って koyomi に埋める。Encoding Standard は CC BY 4.0 で、ソースコードに取り込んだ部分は BSD 3-Clause License になる（その文面と著作権の表示は THIRD_PARTY_NOTICES.md）。2026-10-06 に `Cargo.toml` の `license` を `(MIT OR Apache-2.0) AND BSD-3-Clause` にした。表は koyomi を含む `ritsu` のバイナリにも入るので、それを配るもの（リリースのアーカイブ、`.deb`・`.rpm`、Homebrew）には根の `THIRD_PARTY_NOTICES` が入る。THIRD_PARTY_NOTICES.md のこの表の節は、その中にそのまま載っている（ritsu の DESIGN 13.2。`crates/ritsu/tests/release.rs` が、一字も違わないことを確かめる）。
 
 理由は、固定するハッシュを、誰がどの機械で取り直しても同じにするためである。`curl -s <url> | shasum -a 256` の先頭 16 桁が `.cal` の固定と同じなら、コピーが配られているファイルそのものだと誰でも確かめられる。取ってくるときに UTF-8 に変換し、そのコピーを固定する案では、固定するのは変換したもののハッシュになる。変換に使うツールの表（`〜` を U+301C にするか U+FF5E にするか、など）で値が変わりうるので、機械によって固定が合わなくなる。
 

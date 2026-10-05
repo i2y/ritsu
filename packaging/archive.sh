@@ -1,14 +1,16 @@
 #!/bin/sh
 # Writes the archive of one release for one platform: `ritsu`, a link to it named for each of the
-# seven languages, and the two licenses (DESIGN 2.3, 13.2). release.yml runs it on each of the four
-# platforms, and crates/ritsu/tests/release.rs on the binary of the test.
+# seven languages, the two licenses, and THIRD_PARTY_NOTICES, the notices and licenses of what the
+# binary holds from others (DESIGN 2.3, 13.2). release.yml runs it on each of the four platforms,
+# and crates/ritsu/tests/release.rs on the binary of the test.
 #
 #   sh packaging/archive.sh v0.23.0 aarch64-apple-darwin target/aarch64-apple-darwin/release/ritsu dist/
 #
 # The archive is flat, with the links beside the binary. They are relative (`rulec -> ritsu`), so
 # the directory they are unpacked into can be anywhere, and unpacking into a directory on the PATH
 # is the whole install: `tar -xzf ritsu-v0.23.0-aarch64-apple-darwin.tar.gz -C ~/.local/bin`. That
-# puts LICENSE-MIT and LICENSE-APACHE there too; `--exclude 'LICENSE-*'` leaves them in the archive.
+# puts LICENSE-MIT, LICENSE-APACHE and THIRD_PARTY_NOTICES there too;
+# `--exclude 'LICENSE-*' --exclude THIRD_PARTY_NOTICES` leaves them in the archive.
 set -eu
 
 tag=$1
@@ -18,9 +20,9 @@ out=$4
 
 # The names of the links: the seven languages (crates/ritsu/src/cli.rs says the same).
 languages="rulec dandori koyomi chobo geas yuen sakai"
-# The licenses sit at the root of the repository, one up from this script.
+# The licenses and the notices sit at the root of the repository, one up from this script.
 root=$(cd "$(dirname "$0")/.." && pwd)
-licenses="LICENSE-MIT LICENSE-APACHE"
+licenses="LICENSE-MIT LICENSE-APACHE THIRD_PARTY_NOTICES"
 
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT

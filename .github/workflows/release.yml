@@ -1,12 +1,12 @@
 name: release
 
 # A tag `v*` builds `ritsu` once per platform (static on Linux; on macOS linked only to the system
-# library), puts it in an archive with a link to it for each of the seven languages and the two
-# licenses, checks that the tag is the version every one of the eight names says, and publishes the
-# archives with their SHA-256 sums as a GitHub Release (DESIGN 13.2). `action.yml` at the root of
-# the repository installs one of them onto a runner, and the install page says which lines to run
-# by hand. Before anything is built, audit.yml looks up every dependency's known vulnerabilities
-# (DESIGN 3.6).
+# library), puts it in an archive with a link to it for each of the seven languages, the two
+# licenses and THIRD_PARTY_NOTICES, checks that the tag is the version every one of the eight names
+# says, and publishes the archives with their SHA-256 sums as a GitHub Release (DESIGN 13.2).
+# `action.yml` at the root of the repository installs one of them onto a runner, and the install
+# page says which lines to run by hand. Before anything is built, audit.yml looks up every
+# dependency's known vulnerabilities (DESIGN 3.6).
 #
 # The same binaries reach the package managers. The Linux ones go out as a .deb and an .rpm as well,
 # beside the archives and in the same SHA256SUMS. Once the release is up, the Homebrew formula is
@@ -23,7 +23,9 @@ name: release
 #   SHA256SUMS
 #
 # An archive holds `ritsu` and, beside it, `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `yuen` and
-# `sakai`, links to it, and LICENSE-MIT and LICENSE-APACHE (packaging/archive.sh). The zip holds the
+# `sakai`, links to it, LICENSE-MIT and LICENSE-APACHE, and THIRD_PARTY_NOTICES, the notices and
+# licenses of what the binary holds from others (packaging/archive.sh). The .deb and the .rpm put
+# the same three files in /usr/share/doc/ritsu, and the formula in the keg. The zip holds the
 # eight Agent Skills of skills/, a folder each, and the two licenses (packaging/skills.sh): the same
 # files `ritsu skills install` writes, for an agent that is given folders rather than the binary.
 

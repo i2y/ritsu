@@ -456,4 +456,12 @@ With Homebrew it is `brew install i2y/tap/ritsu`, and in GitHub Actions `uses: i
 
 ## License
 
-MIT OR Apache-2.0
+MIT OR Apache-2.0 ([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)). Two of the
+languages hold data from others: rulec the names of its built-in divisions, from Unicode CLDR
+(Unicode-3.0), and koyomi a Shift_JIS table made from the WHATWG Encoding Standard
+(BSD-3-Clause). So the `ritsu` binary is under
+`(MIT OR Apache-2.0) AND Unicode-3.0 AND BSD-3-Clause`. It also holds eight crates from
+crates.io, under their own licenses, and, for the examples of `explain`, copies of an article of
+Japan's Civil Code from e-Gov (PDL1.0) and of two sections of the US Code of Federal Regulations.
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) gives where each comes from and the text of its
+license or its terms, and every archive and package of a release carries it.

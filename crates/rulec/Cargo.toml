@@ -2,7 +2,8 @@
 name = "rulec"
 version.workspace = true
 description = "A little language for business rules: each rule is proved free of gaps and contradictions before it compiles to plain code in twelve languages."
-license = "MIT OR Apache-2.0"
+# The names of the built-in divisions are Unicode CLDR's (THIRD_PARTY_NOTICES, DESIGN §15.182).
+license = "(MIT OR Apache-2.0) AND Unicode-3.0"
 edition = "2024"
 repository.workspace = true
 homepage = "https://i2y.github.io/ritsu/rulec/"

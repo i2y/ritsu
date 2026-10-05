@@ -2,9 +2,9 @@
 # Prints the Homebrew formula for one release, from the SHA256SUMS published with it (DESIGN
 # 13.2). The formula installs the release archives themselves, so what `brew install
 # i2y/tap/ritsu` puts on the path is the binary the release page offers, held to the same sums,
-# with the seven links beside it. release.yml runs this once the release is up, has brew audit,
-# install and test what it printed on macOS and on Linux, and only then pushes it to the tap,
-# i2y/homebrew-tap.
+# with the seven links beside it; the keg holds the two licenses and THIRD_PARTY_NOTICES.
+# release.yml runs this once the release is up, has brew audit, install and test what it printed
+# on macOS and on Linux, and only then pushes it to the tap, i2y/homebrew-tap.
 #
 #   sh packaging/homebrew.sh v0.23.0 SHA256SUMS > Formula/ritsu.rb
 set -eu
@@ -32,7 +32,13 @@ cat <<EOT
 class Ritsu < Formula
   desc "Seven small languages, one toolchain: what one checks, the next can build on"
   homepage "https://github.com/i2y/ritsu"
-  license any_of: ["MIT", "Apache-2.0"]
+  # ritsu's own code with the data it holds (crates/ritsu/Cargo.toml); brew's audit asks for a
+  # nested license on lines of its own
+  license all_of: [
+    { any_of: ["MIT", "Apache-2.0"] },
+    "Unicode-3.0",
+    "BSD-3-Clause",
+  ]
 
   on_macos do
     on_arm do
@@ -62,9 +68,15 @@ class Ritsu < Formula
     %w[rulec dandori koyomi chobo geas yuen sakai].each do |language|
       bin.install_symlink "ritsu" => language
     end
+    # brew puts LICENSE-MIT and LICENSE-APACHE in the keg by their names; the notices of what the
+    # binary holds from others go beside them
+    prefix.install "THIRD_PARTY_NOTICES"
   end
 
   test do
+    %w[LICENSE-MIT LICENSE-APACHE THIRD_PARTY_NOTICES].each do |file|
+      assert_path_exists prefix/file
+    end
     assert_equal "ritsu #{version}", shell_output("#{bin}/ritsu --version").strip
     %w[rulec dandori koyomi chobo geas yuen sakai].each do |language|
       assert_equal "#{language} #{version}", shell_output("#{bin}/#{language} --version").strip

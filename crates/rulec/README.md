@@ -195,13 +195,14 @@ Every release carries a `.deb` and an `.rpm` as well, which replace the package 
 
 By hand: every release publishes a binary for macOS (arm64, x64) and Linux (x64, arm64), with
 the SHA-256 of each beside it. The Linux ones are statically linked; the macOS ones link only
-the system library every Mac has. The archive holds `ritsu`, the links and the two licenses:
+the system library every Mac has. The archive holds `ritsu`, the links and the two licenses (the
+releases after 0.23.0 add THIRD_PARTY_NOTICES, the notices of what the binary holds from others):
 
 ```console
 $ v=v0.23.0; t=aarch64-apple-darwin     # or x86_64-apple-darwin, x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
 $ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/$v/ritsu-$v-$t.tar.gz"
 $ curl -fsSL "https://github.com/i2y/ritsu/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
-$ tar -xzf "ritsu-$v-$t.tar.gz" -C ~/.local/bin --exclude 'LICENSE-*'
+$ tar -xzf "ritsu-$v-$t.tar.gz" -C ~/.local/bin --exclude 'LICENSE-*' --exclude THIRD_PARTY_NOTICES
 $ rulec --version
 rulec 0.23.0
 ```

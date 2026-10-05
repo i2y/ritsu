@@ -94,8 +94,9 @@ fn skill_md_says_what_it_is() {
         // A plain YAML scalar ends a key at ": ", so a value must not hold one.
         assert!(!v.contains(": ") && !v.starts_with(['"', '\'', '>', '|']), "the {k} must stay a plain YAML scalar");
     }
-    // The repository's own license, as Cargo.toml names it.
+    // The repository's own license, as Cargo.toml names it: the crate's, but for the table made from
+    // the WHATWG Encoding Standard (THIRD_PARTY_NOTICES.md), which the skill does not hold.
     assert_eq!(field("license").as_deref(), Some("MIT OR Apache-2.0"), "SKILL.md names the repository's license");
     let cargo = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml")).unwrap();
-    assert!(cargo.contains("license = \"MIT OR Apache-2.0\""), "Cargo.toml names the same license");
+    assert!(cargo.contains("license = \"(MIT OR Apache-2.0) AND BSD-3-Clause\""), "Cargo.toml names the same license, and the table's");
 }

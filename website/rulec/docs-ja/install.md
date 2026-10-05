@@ -60,12 +60,12 @@ $ v=v0.23.0; t=aarch64-apple-darwin
 $ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/$v/ritsu-$v-$t.tar.gz"
 $ curl -fsSL "https://github.com/i2y/ritsu/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
 ritsu-v0.23.0-aarch64-apple-darwin.tar.gz: OK
-$ tar -xzf "ritsu-$v-$t.tar.gz" -C ~/.local/bin --exclude 'LICENSE-*'
+$ tar -xzf "ritsu-$v-$t.tar.gz" -C ~/.local/bin --exclude 'LICENSE-*' --exclude THIRD_PARTY_NOTICES
 $ rulec --version
 rulec 0.23.0
 ```
 
-アーカイブには、`ritsu` と、言語ごとにそれを指すリンク（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`）と、二つのライセンスが、同じ階層に入っています。リンクは相対なので、PATH にあるディレクトリに展開するだけで入ります。`--exclude 'LICENSE-*'` を付けると、ライセンスは展開しません。`t` は `aarch64-apple-darwin`・`x86_64-apple-darwin`・`x86_64-unknown-linux-musl`・`aarch64-unknown-linux-musl` のどれかです。Linux の二つは静的リンクなので、どのディストリビューションでも動きます。Linux では `sha256sum -c` を使います。走らせる前に `SHA256SUMS` と突き合わせる、この一行が検証の全部なので、ここは飛ばさないでください。
+アーカイブには、`ritsu` と、言語ごとにそれを指すリンク（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`）と、二つのライセンスが、同じ階層に入っています。0.23.0 より後のリリースには、バイナリが含む他者のものの通知とライセンスの文（THIRD_PARTY_NOTICES）も入ります。リンクは相対なので、PATH にあるディレクトリに展開するだけで入ります。`--exclude 'LICENSE-*' --exclude THIRD_PARTY_NOTICES` を付けると、ライセンスと通知は展開しません。`t` は `aarch64-apple-darwin`・`x86_64-apple-darwin`・`x86_64-unknown-linux-musl`・`aarch64-unknown-linux-musl` のどれかです。Linux の二つは静的リンクなので、どのディストリビューションでも動きます。Linux では `sha256sum -c` を使います。走らせる前に `SHA256SUMS` と突き合わせる、この一行が検証の全部なので、ここは飛ばさないでください。
 
 ## rulec 自身のリリースから移る
 

@@ -24,8 +24,11 @@ ignore = []
 
 [licenses]
 # The workspace is MIT OR Apache-2.0, and so are the crates it builds from outside, but memchr,
-# which is "Unlicense OR MIT" (MIT is enough).
-allow = ["MIT", "Apache-2.0"]
+# which is "Unlicense OR MIT" (MIT is enough), and zmij, which is MIT. rulec holds names from
+# Unicode CLDR (Unicode-3.0) and koyomi a table made from the WHATWG Encoding Standard
+# (BSD-3-Clause), so their crates, and ritsu and ritsu-wasm, which build them in, say so
+# (THIRD_PARTY_NOTICES).
+allow = ["MIT", "Apache-2.0", "Unicode-3.0", "BSD-3-Clause"]
 # An allowed license that nothing uses any more is an error, so the list stays the one the tree needs.
 unused-allowed-license = "deny"
 

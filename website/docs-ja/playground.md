@@ -65,3 +65,5 @@
 - **ネットワーク。** `source fetch` と `outdated` は、e-Gov、eCFR、出典が名指す URL に問い合わせます。
 - **地図の Rust のワークスペース。** sakai は、地図の `code rust "…"` のクレートを Cargo に尋ねます。ページの中では Cargo を走らせられません。
 - **プロジェクトへの書き込み。** `rulec fmt` と `yuen review` は、渡したファイルを書き換えます。ここでは、ファイルは編集したときにだけ変わります。
+
+このページが読み込む `playground/ritsu.wasm` は ritsu のコード（MIT OR Apache-2.0）から作ったもので、`ritsu` のバイナリと同じく、他者のものを含みます。Unicode CLDR の区分の名前（Unicode-3.0）、WHATWG の Encoding Standard から作った表（BSD-3-Clause）、crates.io のクレート 8 個と、`explain` の例のための法令のコピーです。それぞれの出どころと、ライセンスの文または利用の条件は [THIRD_PARTY_NOTICES](https://github.com/i2y/ritsu/blob/main/THIRD_PARTY_NOTICES) にあります。リストの dandori の例には、Stripe の OpenAPI の文書と、Amazon SNS・SQS の Smithy のモデルから、例が呼ぶところだけを残したコピーが入っていて、ライセンスはそれぞれの元のものです（[crates/dandori/THIRD_PARTY_NOTICES.md](https://github.com/i2y/ritsu/blob/main/crates/dandori/THIRD_PARTY_NOTICES.md)）。

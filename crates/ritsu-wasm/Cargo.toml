@@ -2,7 +2,9 @@
 name = "ritsu-wasm"
 version.workspace = true
 edition = "2024"
-license.workspace = true
+# The workspace's, with the data rulec and koyomi hold, which this crate builds in: the module of
+# the page in the browser is under this, as the binary is (THIRD_PARTY_NOTICES at the root).
+license = "(MIT OR Apache-2.0) AND Unicode-3.0 AND BSD-3-Clause"
 repository.workspace = true
 description = "ritsu in a page in the browser: ritsu check on the files of a small project the reader edits, and each language's gen and doc on one of them, compiled to wasm32 with no bindgen and no JavaScript toolchain"
 publish = false

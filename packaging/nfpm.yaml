@@ -1,7 +1,11 @@
 # The .deb and the .rpm of one release (DESIGN 13.2). packaging/linux.sh fills in the three
 # variables from the static binary in the release archive. That binary needs no library, so the
 # packages depend on nothing and install the same file the archive holds, with the same seven links
-# beside it (/usr/bin/rulec -> ritsu, and so on).
+# beside it (/usr/bin/rulec -> ritsu, and so on), and the two licenses and THIRD_PARTY_NOTICES in
+# /usr/share/doc/ritsu.
+#
+# The license is ritsu's (crates/ritsu/Cargo.toml): its own code, with the data rulec and koyomi
+# hold; THIRD_PARTY_NOTICES gives those and the crates compiled in.
 #
 # ritsu holds the rulec command, so the packages replace the package rulec of the releases before
 # ritsu: installing one over the other takes the old one away, and a package that depends on
@@ -15,7 +19,7 @@ section: devel
 priority: optional
 maintainer: Yasushi Itoh <6240399+i2y@users.noreply.github.com>
 homepage: https://github.com/i2y/ritsu
-license: MIT OR Apache-2.0
+license: (MIT OR Apache-2.0) AND Unicode-3.0 AND BSD-3-Clause
 description: |-
   Seven small languages, one toolchain: rulec, dandori, koyomi, chobo, geas, yuen and sakai.
   What one checks, the next can build on. One static binary, no runtime and no dependencies;
@@ -61,5 +65,9 @@ contents:
       mode: 0644
   - src: LICENSE-APACHE
     dst: /usr/share/doc/ritsu/LICENSE-APACHE
+    file_info:
+      mode: 0644
+  - src: THIRD_PARTY_NOTICES
+    dst: /usr/share/doc/ritsu/THIRD_PARTY_NOTICES
     file_info:
       mode: 0644

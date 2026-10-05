@@ -389,4 +389,4 @@ cargo install --git https://github.com/i2y/ritsu --locked rulec
 
 ## ライセンス
 
-MIT OR Apache-2.0
+MIT OR Apache-2.0 です（[LICENSE-MIT](LICENSE-MIT)、[LICENSE-APACHE](LICENSE-APACHE)）。二つの言語は、他者のデータを含みます。rulec の組み込みの区分の名前は Unicode CLDR から取ったもの（Unicode-3.0）で、koyomi の Shift_JIS の変換表は WHATWG の Encoding Standard から作ったもの（BSD-3-Clause）です。そのため `ritsu` のバイナリのライセンスは `(MIT OR Apache-2.0) AND Unicode-3.0 AND BSD-3-Clause` です。バイナリには crates.io のクレートも 8 個入っていて、ライセンスはそれぞれのクレートのものです。`explain` の例のために、e-Gov から取った民法の条文（PDL1.0）と、eCFR から取った米国の連邦規則集（CFR）の二つの節のコピーも入っています。それぞれの出どころと、ライセンスの文または利用の条件は [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) にあり、このファイルはリリースのアーカイブとパッケージのどれにも入っています。

@@ -2,7 +2,9 @@
 name = "ritsu"
 version.workspace = true
 edition = "2024"
-license.workspace = true
+# The workspace's, with the data rulec and koyomi hold, which this crate builds in: what a release
+# hands out is under this (THIRD_PARTY_NOTICES at the root, DESIGN 2.3).
+license = "(MIT OR Apache-2.0) AND Unicode-3.0 AND BSD-3-Clause"
 repository.workspace = true
 description = "The one command of ritsu: the languages run with every port joined, so that what one language checks, the next reads as it is"
 publish = false
