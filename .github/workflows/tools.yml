@@ -293,7 +293,8 @@ jobs:
           if [ "${{ matrix.group }}" = rulec ]; then
             python3 -c 'import numpy; print("numpy", numpy.__version__)'
             ruby --version && php --version && swiftc --version
-            wasmtime --version && psql --version && lean --version
+            wasmtime --version && psql --version
+            (cd proofs && lean --version)
             protoc-gen-py --version && protoc-gen-connectrpc --version
             crates/rulec/tools/node_modules/.bin/tsc --version
             psql -c 'select version()'
