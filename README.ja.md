@@ -372,7 +372,7 @@ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 cargo install --git https://github.com/i2y/ritsu --locked rulec
 ```
 
-リリースは 0.23.0 から（rulec の番号の続き）で、macOS と Linux のアーカイブ、`.deb` と `.rpm`、Homebrew の formula を出す予定です。
+リリースは 0.23.0 から（rulec の番号の続き）で、リリースごとに macOS と Linux のアーカイブと、`.deb` と `.rpm` を[リリースのページ](https://github.com/i2y/ritsu/releases)に置いています。Homebrew なら `brew install i2y/tap/ritsu`、GitHub Actions なら `uses: i2y/ritsu@v0.23.0` で入ります。
 
 ## リポジトリ
 

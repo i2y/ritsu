@@ -4,9 +4,10 @@ name: check
 # code matches a fresh generation, and the generated code answers like the
 # reference evaluator in every language the runner has.
 #
-# `uses: i2y/rulec@<tag>` installs that release (rulec's action.yml). The
-# rules here cite supplementary provisions and rely on `Cites:` headers, which
-# ship in the release after 0.5.0; pin that tag once it exists.
+# `uses: i2y/ritsu@<tag>` installs that release of ritsu (ritsu's action.yml),
+# which puts `rulec` on the PATH as a link to `ritsu`; rulec's releases are
+# ritsu's from 0.23.0 on. The rules here cite supplementary provisions and rely
+# on `Cites:` headers, which every release since 0.6.0 has.
 
 on:
   push:
@@ -32,7 +33,7 @@ jobs:
       PGDATABASE: rulec
     steps:
       - uses: actions/checkout@v7
-      - uses: i2y/rulec@v0.22.1
+      - uses: i2y/ritsu@v0.23.0
       - run: rulec fmt --check rules/
       - run: rulec check rules/
       - run: rulec gen rules/ --out generated/ --check

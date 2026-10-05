@@ -8,8 +8,7 @@
 //!   that build.sh builds, and every `#anchor` to a heading of the page it names;
 //! - every link into ritsu's repository, on ritsu's pages and on the pages of every language's
 //!   site, names a file or a directory that is there, and no page links to the repository of one
-//!   language by itself (only to its releases, which still hand out rulec until ritsu's first
-//!   release takes them over);
+//!   language by itself, its releases included (ritsu's releases hand out every language);
 //! - the code on the index pages is the lines of files of the languages, `ritsu check` prints what
 //!   they show under it, and a command the prose names is one;
 //! - build.sh builds rulec's site and dandori's; both index pages link to the site of every
@@ -224,13 +223,12 @@ fn the_links_into_the_repository_name_what_is_there() {
                 }
             }
             // The repository of a language by itself is not where the language is: only ritsu's is
-            // named. Its releases are another thing: until ritsu's first release takes them over,
-            // rulec's binaries, packages and action are still rulec's own releases (its install page).
+            // named. Its releases neither: ritsu's releases hand out every language, rulec's binary,
+            // packages and action among them (rulec's install page, DESIGN 13.2).
             let mut rest = line;
             while let Some(i) = rest.find("github.com/i2y/") {
                 let repo: String = rest[i + 15..].chars().take_while(|c| c.is_alphanumeric() || *c == '-').collect();
-                let releases = rest[i + 15 + repo.len()..].starts_with("/releases");
-                if repo != "ritsu" && !releases {
+                if repo != "ritsu" {
                     wrong.push(format!("{name}:{}: names github.com/i2y/{repo}", n + 1));
                 }
                 rest = &rest[i + 15..];

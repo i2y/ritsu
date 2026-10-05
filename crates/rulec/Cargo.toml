@@ -40,16 +40,3 @@ ritsu-testkit = { path = "../ritsu-testkit" }
 # The tests of `range from koyomi` join koyomi as `ritsu rulec` does (ritsu's DESIGN 3.3: the
 # receiving side's tests hold the giving side as a dev-dependency).
 koyomi = { path = "../koyomi" }
-
-# `cargo binstall rulec` takes the release archive instead of building. Linux has only the
-# static musl binaries, which run on a glibc system as well.
-[package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-{ target }{ archive-suffix }"
-bin-dir = "{ bin }{ binary-ext }"
-pkg-fmt = "tgz"
-
-[package.metadata.binstall.overrides.x86_64-unknown-linux-gnu]
-pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-x86_64-unknown-linux-musl{ archive-suffix }"
-
-[package.metadata.binstall.overrides.aarch64-unknown-linux-gnu]
-pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-aarch64-unknown-linux-musl{ archive-suffix }"

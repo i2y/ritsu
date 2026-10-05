@@ -177,35 +177,39 @@ What is **not** proved matters just as much.
 
 ## Install
 
-One binary, no runtime. On macOS or Linux, with Homebrew:
+One binary, no runtime, handed out as part of [ritsu](https://github.com/i2y/ritsu): a release of
+ritsu holds `ritsu` with a link to it named for each language, and called as `rulec` it is rulec.
+On macOS or Linux, with Homebrew:
 
 ```console
-$ brew install i2y/tap/rulec
+$ brew install i2y/tap/ritsu
 ```
 
-Every release carries a `.deb` and an `.rpm` as well ([how](https://i2y.github.io/ritsu/rulec/install/)).
+Every release carries a `.deb` and an `.rpm` as well, which replace the package `rulec`
+([how](https://i2y.github.io/ritsu/rulec/install/)).
 
-<!-- crates.io is on hold (DESIGN §15.158). Once the crate is published, this replaces the line above:
-`cargo install rulec` builds it, `cargo binstall rulec` takes the release binary, and every
-release carries a `.deb` and an `.rpm` as well ([how](https://i2y.github.io/ritsu/rulec/install/)).
+<!-- crates.io is on hold (DESIGN §15.158, and ritsu's DESIGN 13.2). Once the crate is published, this replaces the line above:
+`cargo install rulec` builds it, and every release carries a `.deb` and an `.rpm` as well
+([how](https://i2y.github.io/ritsu/rulec/install/)).
 -->
 
 By hand: every release publishes a binary for macOS (arm64, x64) and Linux (x64, arm64), with
 the SHA-256 of each beside it. The Linux ones are statically linked; the macOS ones link only
-the system library every Mac has:
+the system library every Mac has. The archive holds `ritsu`, the links and the two licenses:
 
 ```console
-$ v=v0.22.1; t=aarch64-apple-darwin     # or x86_64-apple-darwin, x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
-$ curl -fsSLO "https://github.com/i2y/rulec/releases/download/$v/rulec-$v-$t.tar.gz"
-$ curl -fsSL "https://github.com/i2y/rulec/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
-$ tar -xzf "rulec-$v-$t.tar.gz" && install -m 755 rulec ~/.local/bin/
+$ v=v0.23.0; t=aarch64-apple-darwin     # or x86_64-apple-darwin, x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
+$ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/$v/ritsu-$v-$t.tar.gz"
+$ curl -fsSL "https://github.com/i2y/ritsu/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
+$ tar -xzf "ritsu-$v-$t.tar.gz" -C ~/.local/bin --exclude 'LICENSE-*'
 $ rulec --version
-rulec 0.22.1
+rulec 0.23.0
 ```
 
-Homebrew, the `.deb` and `.rpm`, the release archives and the action below are still rulec's own
-releases. rulec is now one of the languages of [ritsu](https://github.com/i2y/ritsu), whose first
-release continues rulec's numbering (0.23.0) and will take over what is handed out here.
+ritsu's first release continues rulec's numbering (0.23.0); rulec's own releases end at 0.22.1.
+With one of those from Homebrew, `brew install i2y/tap/ritsu`, `brew migrate ritsu` and
+`brew upgrade ritsu` move it over; the install page says how to move from the packages and the
+archive ([how](https://i2y.github.io/ritsu/rulec/install/#from-rulecs-own-releases)).
 
 Or from source, with a recent stable Rust, from ritsu's repository:
 
@@ -216,7 +220,7 @@ $ cargo install --git https://github.com/i2y/ritsu --locked rulec
 That builds rulec alone, which needs no other language and fetches nothing, because there are no
 dependencies. With the package `ritsu` in its place, you have `ritsu` and every language of it, and
 `ritsu rulec <command>` is every command below; a rule over the days of a koyomi date
-(`range from koyomi`) is checked by `ritsu rulec check`. In CI, `uses: i2y/rulec@v0.22.1` does the
+(`range from koyomi`) is checked by `ritsu rulec check`. In CI, `uses: i2y/ritsu@v0.23.0` does the
 download and the check ([In CI](#in-ci)).
 
 ## Using it
@@ -249,7 +253,7 @@ once, in `src/codes.rs`, and [`docs/codes.md`](docs/codes.md) is literally the
 
 ```yaml
 - uses: actions/checkout@v7                  # with fetch-depth: 0, so --diff-base can read origin/main
-- uses: i2y/rulec@v0.22.1                     # the release binary, verified against its checksum
+- uses: i2y/ritsu@v0.23.0                     # ritsu's release with the link rulec, verified against its checksums
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main
 - run: rulec gen rules/ --out generated/ --check

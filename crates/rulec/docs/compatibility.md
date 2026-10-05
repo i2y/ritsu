@@ -32,7 +32,7 @@ the same thing, and its generated code is called the same way and answers the sa
 7. **Machine-readable formats.** Every `--format json` output, the vectors, the fixtures and
    the replay manifest, the `adapter/1` and `extract/1` protocols, the certificate, the MCP
    tools with their arguments and resources, the GitHub Action's inputs, and the names of the
-   release archives and of the packages beside them (`i2y/tap/rulec` in Homebrew, the `.deb`
+   release archives and of the packages beside them (`i2y/tap/ritsu` in Homebrew, the `.deb`
    and the `.rpm`) keep every field they have at 1.0, with the same meaning. A 1.x may add a
    field, and may add a value to a set of values the documentation lists — a new diagnostic
    code, a new `what` in the `domain` of `diff`. **A reader should skip a key it does not know,
@@ -42,7 +42,7 @@ the same thing, and its generated code is called the same way and answers the sa
    for, as `tools/recheck.py` and the Lean program in `proofs/` do.
 
 <!-- crates.io is on hold (DESIGN §15.158). Once the crate is published, name it in item 7
-as well: "the crate `rulec`", after `i2y/tap/rulec` in Homebrew. -->
+as well: "the crate `rulec`", after `i2y/tap/ritsu` in Homebrew. -->
 
 ## What a 1.x may change
 
@@ -51,7 +51,7 @@ as well: "the crate `rulec`", after `i2y/tap/rulec` in Homebrew. -->
 - **The text of the generated code.** Its layout, comments and local names, and its header,
   which names the version of rulec that wrote it. Upgrading rulec therefore means running
   `rulec gen` again and committing what changed; `rulec gen --check` fails until you do. CI
-  installs one exact release (`uses: i2y/rulec@v1.0.0`), and there is no moving tag such as
+  installs one exact release (`uses: i2y/ritsu@v1.0.0`), and there is no moving tag such as
   `@v1`: the generated files would go stale under it without a change of yours.
 - **A pass that should have been a failure.** When a 1.x finds that an earlier version let
   through something this page or [what it proves](https://i2y.github.io/ritsu/rulec/checks/) says

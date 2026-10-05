@@ -434,8 +434,9 @@ Only one language — rulec, say, which needs no other:
 cargo install --git https://github.com/i2y/ritsu --locked rulec
 ```
 
-Releases, from 0.23.0 on (continuing rulec's numbering), will carry archives for macOS and
-Linux, `.deb` and `.rpm` packages, and a Homebrew formula.
+Every release, from 0.23.0 on (continuing rulec's numbering), carries archives for macOS and
+Linux and `.deb` and `.rpm` packages, on the [releases page](https://github.com/i2y/ritsu/releases).
+With Homebrew it is `brew install i2y/tap/ritsu`, and in GitHub Actions `uses: i2y/ritsu@v0.23.0`.
 
 ## Repository
 

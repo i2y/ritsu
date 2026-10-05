@@ -1,32 +1,41 @@
 # Install
 
-rulec is one binary with no runtime and no external dependencies. Every
-release publishes a binary for macOS (arm64, x64) and Linux (x64, arm64),
-with the SHA-256 of each beside it, on the
-[releases page](https://github.com/i2y/rulec/releases). The Linux ones are
+rulec is one binary with no runtime and no external dependencies, handed out
+as part of [ritsu](https://github.com/i2y/ritsu): a release of ritsu holds one
+binary, `ritsu`, with a link to it named for each of its languages, and called
+as `rulec` it is rulec. Every release publishes it for macOS (arm64,
+x64) and Linux (x64, arm64), with the SHA-256 of each beside it, on ritsu's
+[releases page](https://github.com/i2y/ritsu/releases). The Linux ones are
 statically linked; the macOS ones link only the system library every Mac has.
 The same binaries come through Homebrew and as `.deb` and `.rpm` packages, so
 rulec can arrive the way everything else on the machine did.
 
-Homebrew, the `.deb` and `.rpm`, the release archives and the action in CI are
-still rulec's own releases. rulec is now one of the languages of
-[ritsu](https://github.com/i2y/ritsu), whose first release continues rulec's
-numbering (0.23.0) and will take over what is handed out here. From source,
-rulec is built from ritsu's repository ([From source](#from-source)).
+ritsu's first release, 0.23.0, continues rulec's numbering: rulec's own
+releases end at 0.22.1, and [From rulec's own releases](#from-rulecs-own-releases)
+says how to move from one of them. From source, rulec is built from ritsu's
+repository ([From source](#from-source)).
 
 ## Homebrew
 
 On macOS and on Linux:
 
 ```console
-$ brew install i2y/tap/rulec
+$ brew install i2y/tap/ritsu
 $ rulec --version
-rulec 0.22.1
+rulec 0.23.0
 ```
 
-The formula installs the release archive for your platform, held to its line in
-`SHA256SUMS`. Each release rewrites it, and only after brew has installed it and
-run its test on macOS and on Linux; `brew upgrade rulec` takes the next one.
+That puts `ritsu` on the path with the seven links beside it, so `rulec` is a
+command just as before. The old name, `i2y/tap/rulec`, leads to the same
+formula, but Homebrew 7 takes it only once that formula is trusted: by itself,
+`brew install i2y/tap/rulec` stops with
+`Refusing to load formula i2y/tap/ritsu from untrusted tap i2y/tap`, and after
+`brew trust --formula i2y/tap/ritsu` the old name installs ritsu.
+
+The formula installs the release archive for your platform, held to its line
+in `SHA256SUMS`. Each release rewrites it, and only after brew has installed it
+and run its test on macOS and on Linux, which calls all eight names;
+`brew upgrade ritsu` takes the next one.
 
 ## Debian, Ubuntu, Fedora, RHEL
 
@@ -34,58 +43,91 @@ Every release carries a `.deb` and an `.rpm` for x64 and arm64. They hold the
 same static binary as the archives, so they depend on nothing:
 
 ```console
-$ v=0.22.1; a=amd64                  # arm64 on ARM
-$ curl -fsSLO "https://github.com/i2y/rulec/releases/download/v$v/rulec_$v-1_$a.deb"
-$ curl -fsSL "https://github.com/i2y/rulec/releases/download/v$v/SHA256SUMS" | grep "rulec_$v-1_$a.deb" | sha256sum -c
-rulec_0.22.1-1_amd64.deb: OK
-$ sudo apt install "./rulec_$v-1_$a.deb"
+$ v=0.23.0; a=amd64                  # arm64 on ARM
+$ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/v$v/ritsu_$v-1_$a.deb"
+$ curl -fsSL "https://github.com/i2y/ritsu/releases/download/v$v/SHA256SUMS" | grep "ritsu_$v-1_$a.deb" | sha256sum -c
+ritsu_0.23.0-1_amd64.deb: OK
+$ sudo apt install "./ritsu_$v-1_$a.deb"
 ```
 
 ```console
-$ v=0.22.1; a=x86_64                 # aarch64 on ARM
-$ curl -fsSLO "https://github.com/i2y/rulec/releases/download/v$v/rulec-$v-1.$a.rpm"
-$ curl -fsSL "https://github.com/i2y/rulec/releases/download/v$v/SHA256SUMS" | grep "rulec-$v-1.$a.rpm" | sha256sum -c
-rulec-0.22.1-1.x86_64.rpm: OK
-$ sudo dnf install "./rulec-$v-1.$a.rpm"
+$ v=0.23.0; a=x86_64                 # aarch64 on ARM
+$ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/v$v/ritsu-$v-1.$a.rpm"
+$ curl -fsSL "https://github.com/i2y/ritsu/releases/download/v$v/SHA256SUMS" | grep "ritsu-$v-1.$a.rpm" | sha256sum -c
+ritsu-0.23.0-1.x86_64.rpm: OK
+$ sudo dnf install "./ritsu-$v-1.$a.rpm"
 ```
+
+The package installs `/usr/bin/ritsu` with the seven links beside it
+(`/usr/bin/rulec -> ritsu`, and so on), and replaces the package `rulec` of
+rulec's own releases.
 
 The packages are not signed: as with the archives, their line in `SHA256SUMS`
 is the check. No package repository stands behind them, so `apt upgrade` and
 `dnf upgrade` do not see a new release — install the next one the same way.
 
-<!-- crates.io is on hold (DESIGN §15.158). Once the crate is published, uncomment this
-section and say "and through Cargo" in the first paragraph again.
+<!-- crates.io is on hold (DESIGN §15.158, and ritsu's DESIGN 13.2). Once the crate is published,
+uncomment this section and say "and through Cargo" in the first paragraph again.
 
 ## Cargo
 
 ```console
 $ cargo install rulec          # builds it; there is nothing else to fetch
-$ cargo binstall rulec         # takes the release archive instead of building
 ```
 
 `cargo install` needs a recent stable Rust and nothing more, because rulec has
-no dependencies. `cargo binstall` downloads the archive the releases page
-offers — on Linux the static binary, which runs on glibc and musl alike — but
-does not hold it to `SHA256SUMS`, as Homebrew and the steps on this page do.
+no dependencies.
 -->
 
 ## The release binary
 
 ```console
-$ v=v0.22.1; t=aarch64-apple-darwin
-$ curl -fsSLO "https://github.com/i2y/rulec/releases/download/$v/rulec-$v-$t.tar.gz"
-$ curl -fsSL "https://github.com/i2y/rulec/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
-rulec-v0.22.1-aarch64-apple-darwin.tar.gz: OK
-$ tar -xzf "rulec-$v-$t.tar.gz" && install -m 755 rulec ~/.local/bin/
+$ v=v0.23.0; t=aarch64-apple-darwin
+$ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/$v/ritsu-$v-$t.tar.gz"
+$ curl -fsSL "https://github.com/i2y/ritsu/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
+ritsu-v0.23.0-aarch64-apple-darwin.tar.gz: OK
+$ tar -xzf "ritsu-$v-$t.tar.gz" -C ~/.local/bin --exclude 'LICENSE-*'
 $ rulec --version
-rulec 0.22.1
+rulec 0.23.0
 ```
 
+The archive holds `ritsu`, a link to it for each language (`rulec`, `dandori`,
+`koyomi`, `chobo`, `geas`, `yuen`, `sakai`) and the two licenses, side by side.
+The links are relative, so unpacking it into a directory on the path is the
+whole install; `--exclude 'LICENSE-*'` leaves the licenses in the archive.
 `t` is one of `aarch64-apple-darwin`, `x86_64-apple-darwin`,
 `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl`; the Linux
 two are linked statically and run on any distribution. On Linux the check
 is `sha256sum -c`. Holding the archive to `SHA256SUMS` before running it
 is the whole of the verification, so that line is not the one to skip.
+
+## From rulec's own releases
+
+Up to 0.22.1, rulec had releases of its own. ritsu's releases carry `rulec`
+as a link, so moving changes the name of what is installed, not the command.
+
+With Homebrew, the tap renamed the formula `rulec` to `ritsu`, which lets brew
+move an installed rulec over to ritsu. Homebrew 7 reads a formula from a tap
+other than its own only once that tap is trusted, and naming the formula with
+its tap trusts it. `brew install` then says that rulec is installed but not
+migrated; `brew migrate ritsu` moves it over, and `brew upgrade ritsu` takes it
+to 0.23.0:
+
+```console
+$ brew install i2y/tap/ritsu
+$ brew migrate ritsu
+$ brew upgrade ritsu
+$ rulec --version
+rulec 0.23.0
+```
+
+`brew trust --formula i2y/tap/ritsu` followed by `brew upgrade` does the same:
+the upgrade migrates rulec and takes it to 0.23.0 in one go.
+
+Installing ritsu's `.deb` or `.rpm` as above removes the package `rulec`, and
+`/usr/bin/rulec` becomes a link to `ritsu`. ritsu's archive, unpacked into the
+directory that holds the old `rulec`, puts the link in place of the old binary. In CI, the line `uses: i2y/rulec@v0.22.1` becomes
+`uses: i2y/ritsu@v0.23.0` ([In CI](#in-ci)).
 
 ## From source
 
@@ -208,13 +250,15 @@ it runs on.
 
 ## In CI
 
-`uses: i2y/rulec@v0.22.1` puts that release on the runner's `PATH`,
-verified against the checksums published with it. The ref the action is
-referenced with is the release, so by default the two cannot drift apart
-(`with: { version: v0.4.0 }` is how you ask for another one on purpose).
-The check against `SHA256SUMS` **always runs** — a missing line for the
-archive is itself a failure. To pin the archive's hash in the workflow as
-well, add `with: { sha256: … }`: one more check, not a different one.
+`uses: i2y/ritsu@v0.23.0` puts that release of ritsu on the runner's `PATH`,
+`rulec` and the other links with it, verified against the checksums
+published with it. The ref the action is referenced with is the release, so
+by default the two cannot drift apart (`with: { version: … }` is how you ask
+for another one on purpose). The check against `SHA256SUMS` **always runs** —
+a missing line for the archive is itself a failure. To pin the archive's hash
+in the workflow as well, add `with: { sha256: … }`: one more check, not a
+different one. A workflow that still says `uses: i2y/rulec@v0.22.1`, rulec's
+own last release, keeps working for as long as rulec's repository is there.
 
 **That one line is the whole install**, but it needs `actions/checkout`
 before it: what rulec reads is the `rules/` in your repository. As a job:
@@ -226,7 +270,7 @@ check:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0                   # --diff-base reads origin/main
-    - uses: i2y/rulec@v0.22.1
+    - uses: i2y/ritsu@v0.23.0
     - run: rulec fmt --check rules/
     - run: rulec check rules/ --diff-base origin/main
     - run: rulec gen rules/ --out generated/ --check
@@ -236,7 +280,7 @@ check:
 
 It runs on the Linux (x86_64, aarch64) and macOS (x86_64, arm64) runners.
 Those are the four releases there are, so any other runner stops with
-`no rulec release is built for …`.
+`no ritsu release is built for …`.
 
 Those five `run:` lines are the gate. Replaying past records belongs in a separate
 job, one that has the records, and it is the job that makes a change
@@ -264,7 +308,7 @@ replay:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0                   # origin/main is where the old version is read from
-    - uses: i2y/rulec@v0.22.1
+    - uses: i2y/ritsu@v0.23.0
     # a step of your own puts the records at $FIXTURES: an artifact, or protected storage
     - run: rulec diff rules/shipping_fee.rule@origin/main rules/shipping_fee.rule --fixtures "$FIXTURES" --format markdown --terse > diff.md || [ $? -eq 1 ]
       env:

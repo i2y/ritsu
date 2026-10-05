@@ -1252,7 +1252,7 @@ replay は fixtures を持つ環境だけの別ジョブとし、`rulec replay` 
 `--lang` はどのコマンドにも付けられる。CI では言語を明示する（環境に `RULEC_LANG` を置くか、各行に `--lang`）。生成物と PR コメントの文面が機械で変わらないためである（§11 原則 7）。
 レポート整形まで rulec が持ち、投稿は CI の一行に任せて CI ベンダ非依存を保つ。
 
-配布は `.github/workflows/release.yml` が担う。`v*` のタグを押すと四つの静的バイナリを作り、タグが Cargo.toml の版と一致することを確かめ、`SHA256SUMS` と一緒に GitHub Releases に置く。リポジトリ直下の `action.yml` は、その一つを `SHA256SUMS` と突き合わせて runner の PATH に置くだけの composite action で、`uses: i2y/rulec@v0.1.0` の一行で入る（§15.42）。リリースが出たあと、同じワークフローが Homebrew の formula を書いて tap に置く（§15.158）。
+配布は ritsu のリリースが担う（ritsu の DESIGN 13.2、§15.186）。ritsu のリリースは、`ritsu` と、言語ごとにそれを指すリンクを入れたアーカイブ四つ（macOS の arm64 と x64、Linux の x64 と arm64。Linux は musl で静的にリンク）と、`.deb`・`.rpm` を、`SHA256SUMS` と一緒に GitHub Releases に置き、formula を tap に置く（`i2y/tap/ritsu`）。`rulec` のリンクから呼ぶと、`ritsu` は rulec として動く。CI では、ritsu の根の `action.yml` が、そのリリースのアーカイブを `SHA256SUMS` と突き合わせて runner の PATH に置く（`uses: i2y/ritsu@v0.23.0`）。0.22.1 までは、このクレートの `.github/workflows/release.yml` と `action.yml` が rulec だけのリリースを作っていた（§15.42、§15.158）。
 
 **捨てたもの**：
 
@@ -2629,6 +2629,27 @@ count 一致数(hits) over 候補 where 照合結果 = 一致  range >=0 <=50
 - **ナビとボタンを転送のページに向けること。** 読む人が毎回、移ったことを告げるページを通ることになる。
 
 **確かめたこと**：`cargo test -p ritsu -p rulec -p dandori`（dandori のプラットフォームのテストを除く）の全体で 959 件が通った（rulec 774、ritsu 96、dandori 89。落ちたもの 0、ignored 2、12 分 55 秒）。SKIP の 15 行は、どれも rulec の Lean の確かめ直しで、`proofs/` を組まずに回したためだった。`proofs/` で `lake build` してから `tests/lean.rs`・`days.rs`・`machine.rs` を回し直し、42 件が SKIP なしで通った。`rulec explain --all` から `docs/codes.md` と `codes.ja.md` を作り直すと、変わるのは E129 の一行ずつだった。ritsu の `website/build.sh` で組んだサイトを `/ritsu/` の下で配り、英語と日本語の転送のページを headless の Chrome で開いて、ハッシュ無しのリンクが一行足りない表を、ritsu のページの共有のリンク（`#project=rulec/full&view=gen`）がそのままの中身を開くことを見た。
+
+### 15.186 配り方を ritsu のリリースに移し、rulec だけのリリースのファイルを消す（2026-10-05）
+
+**きっかけ**：ritsu の最初のリリース（0.23.0）が出た。アーカイブ、`.deb`・`.rpm`、formula（`i2y/tap/ritsu`）、action（`uses: i2y/ritsu@v0.23.0`）のどれもが、`rulec` を `ritsu` へのリンクとして持つ。tap は `Formula/rulec.rb` を消し、`formula_renames.json` で `rulec` を `ritsu` に付け替えた（ritsu の DESIGN 13.2）。一方で README と入れ方のページは、Homebrew、`.deb`・`.rpm`、アーカイブ、action を rulec 自身のリリースのものとして案内し、ritsu の最初のリリースが引き継ぐと書いていた（§15.181）。このクレートには、rulec だけのリリースを作るファイル（`release.yml`、`ci.yml`、`packaging/`、`action.yml`）も残っていた。
+
+**決定**：
+
+- **入れ方の案内を ritsu のリリースにした。** README、入れ方のページ（英日）、互換の約束（`docs/compatibility.md`・`compatibility.ja.md` とスキルのコピー）を直した。Homebrew は `brew install i2y/tap/ritsu`、パッケージは `ritsu_<版>-1_<arch>.deb` と `ritsu-<版>-1.<arch>.rpm`（`rulec` のパッケージを置き換える）、アーカイブは `ritsu-v<版>-<target>.tar.gz`（`ritsu`、リンク七つ、ライセンス二つ。PATH にあるディレクトリに `tar -xzf … --exclude 'LICENSE-*'` で展開する）、CI は `uses: i2y/ritsu@v0.23.0` である。入れ方のページには「rulec 自身のリリースから移る」の節を足した。Homebrew の移り方（`brew install i2y/tap/ritsu` のあと `brew migrate ritsu` と `brew upgrade ritsu`、または `brew trust --formula i2y/tap/ritsu` のあと `brew upgrade`）、パッケージとアーカイブで古い `rulec` がどう置き換わるか、`uses: i2y/rulec@v0.22.1` が rulec のリポジトリが残るあいだは動くこと、を書いた。互換の約束の 7 の名前と CI の例も、`i2y/tap/ritsu` と `uses: i2y/ritsu@v1.0.0` にした。ページから rulec のリポジトリのリリースへのリンクは無くなり、ritsu の `tests/website.rs` は、言語のリポジトリのリリースへのリンクも落とすようになった。
+- **貼った出力は、0.23.0 のリリースの実物で取った。** アーカイブ（macOS の arm64）は、ページのコマンドでダウンロードし、`SHA256SUMS` と突き合わせ、使い捨てのディレクトリに展開して `rulec --version` を走らせた。`.deb`・`.rpm` は、ダウンロードと、Debian のコンテナの GNU の `sha256sum -c` での突き合わせまでを走らせた（macOS の `sha256sum` は、標準入力から `-c` の一覧を読めない）。`apt install` と `dnf install` は走らせていないので、出力を貼っていない。Homebrew は、作者の Homebrew とは別の場所に置いた使い捨ての Homebrew 7.0.6（`HOME` も別）で、三つの場合を走らせた。何も入っていないところへの `brew install i2y/tap/ritsu`。tap を rulec 0.22.1 の時点に戻して rulec を入れ、tap を今の状態に進めたあとの `brew install i2y/tap/ritsu`・`brew migrate ritsu`・`brew upgrade ritsu`。同じ状態からの `brew trust --formula i2y/tap/ritsu`・`brew upgrade`。どれも最後の `rulec --version` が `rulec 0.23.0` を返した。二つ目の `brew install` は formula を信頼し、rulec がすでに入っていて移していないと警告して、`brew migrate ritsu` を案内する。古い名前の `brew install i2y/tap/rulec` は、formula を信頼する前は `Refusing to load formula i2y/tap/ritsu from untrusted tap i2y/tap` と言って止まり（名前を変えた先の formula は、古い名前で指しても自動では信頼されない）、`brew trust --formula i2y/tap/ritsu` のあとなら ritsu を入れる。ページの Homebrew の節に、そう書いた。古い `rulec` のファイルがある場所にアーカイブを展開すると、リンクに置き換わることは、macOS の tar と GNU tar の両方で確かめた。
+- **rulec だけのリリースのファイルを消した。** `.github/workflows/release.yml`、`.github/workflows/ci.yml`、`packaging/`（`homebrew.sh`、`linux.sh`、`nfpm.yaml`）、`action.yml` である。`ci.yml` は丸ごと消した。GitHub はクレートの中のワークフローを走らせず、中身は ritsu の根の `tools`・`proofs`・`kani`・`packages` に移してある（ritsu の DESIGN 10.5）。もう無い `./website/sync.sh` を呼んでいたので、走らせても落ちる。テストと文書でこれらを読むものは無かった。`experiments/kani/README.md` が名指していた `ci.yml` の段だけを、ritsu の `kani.yml` の同じ段に替えた。
+- **`Cargo.toml` の `[package.metadata.binstall]` を外した。** `pkg-url` は `{ repo }`（いまは ritsu のリポジトリ）の `rulec-v<版>-<target>.tar.gz` を指していて、ritsu のリリースにその名前のアーカイブは無い。ritsu のアーカイブの `rulec` は `ritsu` へのリンクなので、`rulec` だけを取り出しても動かない。crates.io にも出さない（ritsu の DESIGN 13.2。このクレートは、出していない ritsu の中のクレートに依存する）。入れ方のページと README のコメントの中の `cargo binstall` も消した。
+- **`experiments/library/` の CI の見本を `uses: i2y/ritsu@v0.23.0` にした。** 規則のライブラリを外のリポジトリに出したときに走らせる見本で、ritsu の CI ではない。rulec のリリースのたびに README と一緒に版を上げてきた行で、新しい rulec はもう ritsu のリリースにしか入らない。`uses: i2y/rulec@v0.22.1` のままでも動くが、ライブラリが 0.22.1 から上がれなくなる。リリースの rulec 0.23.0 が、ライブラリの五つの規則で `fmt --check` と `check` を通すことを確かめた。`check.yml` の頭のコメント（rulec の `action.yml`、0.5.0 のあとのリリース）も直した。
+- §15.181 の「Homebrew、`.deb` と `.rpm`、リリースのアーカイブ、`uses: i2y/rulec@v0.22.1` は、いまの rulec のリリースのものとして残し」は、これで替わった。§12 の配布の段落も、ritsu のリリースの形に書き直した。§15.42 と §15.158 は、0.22.1 までの形の記録として残す。
+
+**捨てたもの**：
+
+- **`ci.yml` の `packages` のジョブだけを消し、ほかのジョブを残すこと。** 残るジョブも GitHub は走らせず、同じことを根のワークフローがしている。残すと、読む人がどちらを正とするかで迷う。
+- **binstall の `pkg-url` を ritsu のアーカイブに向け直すこと。** `rulec` の名前の中身はリンクで、`ritsu` がそばに無ければ動かない。binstall で入れられるようにするなら、crates.io に出すと決めたときに、`ritsu` のクレートの側で決める。
+- **ページに rulec のリポジトリのリリースへのリンクを残すこと。** ページは、これから入れる人のためのもので、0.22.1 を取りに行く人はそのリポジトリを知っている。
+
+**確かめたこと**：`cargo test -p rulec -p ritsu`（`proofs/` を組み、PostgreSQL を立てて）の全体で、872 件のうち 871 件が通った。落ちた 1 件は `tests/website.rs` の `言語の数を書いた文は登録簿と合っている` で、入れ方のページに書いた「seven languages」（ritsu の言語の数）を、生成先の言語の数を書いた文として読んだ。ページを言語の数を言わない文に直し、ページと DESIGN を読む六つのテスト（rulec の `website`・`docs`・`skill`、ritsu の `website`・`readme`・`skill`）を回し直して、全部通った。SKIP の行は 0 だった。
 
 ## 16. この設計で最も危うい点
 

@@ -40,4 +40,4 @@ $ cargo build --release
 $ sh experiments/kani/run.sh
 ```
 
-CI は同じことを毎回やる（`.github/workflows/ci.yml` の「The proofs hold, for every rule in the corpus」）。手元では `rulec test --proofs` が同じことをする。
+CI は同じことを、毎晩と、Rust を書く部分やコーパスが変わったときにやる（ritsu の根の `.github/workflows/kani.yml` の「The proofs hold, for every rule in the corpus」）。手元では `rulec test --proofs` が同じことをする。
