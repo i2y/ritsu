@@ -22,9 +22,14 @@ fn line_of(src: &str, l: usize) -> String {
     src.lines().nth(l - 1).unwrap_or("").trim().to_string()
 }
 
-/// Whether the element a name points at crosses with `reach` (DESIGN 2.5: an enum that crosses
-/// takes its values along, a message its fields).
-fn crosses(ps: &Protos, n: &Name, reach: &[Symbol]) -> bool {
+/// Whether the element a name points at crosses with a crossing (DESIGN 2.5: an enum that
+/// crosses takes its values along, a message its fields; DESIGN 15.6: an element of a document
+/// crosses when a `$ref` reaches it).
+fn crosses(ps: &Protos, n: &Name, cr: &Crossing) -> bool {
+    if let Some((f, p)) = crate::elements::as_contract(n) {
+        return cr.elements.iter().any(|(ef, ep)| ef == f && ep == p);
+    }
+    let reach: &[Symbol] = &cr.reach;
     if n.tool != Tool::Proto {
         return false;
     }
@@ -35,7 +40,7 @@ fn crosses(ps: &Protos, n: &Name, reach: &[Symbol]) -> bool {
 
 /// `crossings_known` says whether sakai read every reference that could make a word cross: it is
 /// false while a language is not joined, or did not answer for one of its files (E104, E105).
-pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], crossings_known: bool, read: &crate::suite::Read) -> Vec<Diag> {
+pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[crate::owners::Artifact], el: &Elements, crossings: &[Crossing], crossings_known: bool, read: &crate::suite::Read) -> Vec<Diag> {
     let mut diags = Vec::new();
     let at = |c: usize, p: crate::ast::Pos, code: &'static str, msg: Text| {
         let cx = &m.contexts[c];
@@ -49,10 +54,11 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], cros
                 let ok = match n.tool {
                     Tool::Proto => c.published.iter().any(|p| p.protos.iter().any(|(f, _)| *f == n.path)),
                     Tool::Rulec => c.published.iter().any(|p| p.rulec.as_ref().is_some_and(|(f, _)| *f == n.path)),
+                    Tool::File if crate::elements::as_contract(n).is_some() => crate::elements::published_contracts(m, cs, arts, ci, None).contains(&n.path),
                     _ => false,
                 };
                 if !ok {
-                    let (tn, cn, nt) = (&t.name, &c.name, n.text());
+                    let (tn, cn, nt) = (&t.name, &c.name, crate::elements::display(n));
                     let mut d = at(ci, me.pos(), "E408", tr!("語「{tn}」の `means` の {nt} は、「{cn}」の公表された言語にありません", "What the term {tn} `means`, {nt}, is not in a published language of {cn}"));
                     d = d.note(tr!(
                         "`means` は、語とともに境界を越えていく、自分の公表された言語の要素を指します。公表された言語にできるのは、proto の package と rulec の規則（Connect のサービス）です。",
@@ -114,7 +120,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], cros
         for (ti, t) in yc.ast.terms.iter().enumerate() {
             for mi in 0..t.means.len() {
                 let Some(n) = el.get(At::Means(y, ti, mi)) else { continue };
-                if !crosses(ps, n, &cr.reach) {
+                if !crosses(ps, n, cr) {
                     continue;
                 }
                 for (di, d) in xc.ast.terms.iter().enumerate() {
@@ -132,13 +138,14 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], cros
                     let t_ref = Ref::line(Some(&yc.name), &yc.file, t.pos.line, Text::same(line_of(&yc.src, t.pos.line)));
                     let d_ref = Ref::line(Some(&xc.name), &xc.file, d.pos.line, Text::same(line_of(&xc.src, d.pos.line)));
                     let from_ref = cr.from_ref(&xc.name);
-                    let el_ref = Ref::name(Some(&yc.name), n.clone(), tr!("「{}」の語「{}」が指すもの", "what {}'s term {} means", yc.name, t.name; yc.name, t.name));
+                    let el_ref = crate::elements::refer(cs, Some(&yc.name), n, tr!("「{}」の語「{}」が指すもの", "what {}'s term {} means", yc.name, t.name; yc.name, t.name));
                     // How the layer maps it, if it does.
                     let mut mapped_to: Option<(String, crate::ast::Pos)> = None;
                     let mut mapped = false;
                     if acl && let Some(r) = rel {
                         let RelK::Upstream { enums, terms, .. } = &r.kind else { unreachable!() };
-                        if n.items.first().is_some_and(|(k, _)| k == "enum") {
+                        let is_enum = n.items.first().is_some_and(|(k, _)| k == "enum") || crate::elements::as_contract(n).is_some_and(|(f, p)| cs.enum_values(f, p).is_some());
+                        if is_enum {
                             for (ei, em) in enums.iter().enumerate() {
                                 let Some(from) = el.get(At::From(x, ri.unwrap(), ei)) else { continue };
                                 if from.path != n.path || from.items.first() != n.items.first() {
@@ -195,7 +202,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], cros
                     }
                     let (yn, xn, tn, dn) = (&yc.name, &xc.name, &t.name, &d.name);
                     let mut dg = at(x, d.pos, "E406", tr!("「{yn}」の「{w}」が、「{xn}」の違う意味の「{w}」とぶつかったまま、境界を越えています", "{yn}'s {w} crosses into {xn}, where {w} means something else, unmapped"));
-                    let what = n.text();
+                    let what = crate::elements::display(n);
                     match &t.definition {
                         Some(def) => {
                             let dv = &def.value;

@@ -271,7 +271,8 @@ h2:target { color: var(--accent); }
 <h2>What is not checked</h2>
 <ul>
 <li>Whether the code of an anticorruption layer maps as the mapping says. sakai checks that the mapping covers the upstream&#39;s enum and that what it maps to is in the downstream&#39;s enum (where a rule is the target, rulec checks the rule&#39;s tables).</li>
-<li>Calls seen only at run time: HTTP to a URL held in a string, message queues, a shared database, reflection and dynamic imports.</li>
+<li>Calls no contract writes: HTTP to a URL held in a string with no OpenAPI document, a message queue with no AsyncAPI document, a shared database, reflection and dynamic imports. The HTTP operations and the channels written in OpenAPI and AsyncAPI documents are checked like any other artifact.</li>
+<li>Whether the code calls HTTP, and sends to and receives from the channels, as the OpenAPI and AsyncAPI documents say: sakai checks the documents against each other and against the map.</li>
 <li>Whether the code where generated code is kept was really generated from the published language.</li>
 <li>What a term&#39;s definition says.</li>
 <li>The imports of the code: the settings <code>sakai build</code> writes have import-linter, dependency-cruiser, ArchUnit and go-arch-lint check them in CI.</li>

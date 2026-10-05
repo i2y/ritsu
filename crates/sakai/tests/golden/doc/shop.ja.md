@@ -229,7 +229,8 @@ Collects what buyers think and shows it. It has nothing to do with billing
 ## 確かめていないこと
 
 - 腐敗防止層のコードが、書いた対応のとおりに読み替えているか。sakai が確かめるのは、対応が上流の列挙を網羅していることと、対応の先が下流の列挙にあることまで（規則が先のときは、規則の表を rulec が確かめる）。
-- 実行時にしか見えない呼び出し：URL を文字列で持つ HTTP、メッセージのキュー、データベースの共有、リフレクションと動的な import。
+- 契約に書いていない呼び出し：OpenAPI の文書の無い HTTP（URL を文字列で持つもの）、AsyncAPI の文書の無いメッセージのキュー、データベースの共有、リフレクションと動的な import。OpenAPI と AsyncAPI の文書に書いた HTTP の操作とチャネルは、ほかの成果物と同じく確かめる。
+- コードが、OpenAPI と AsyncAPI の文書のとおりに HTTP を呼び、チャネルに送り、チャネルから受けているか。sakai が確かめるのは、文書どうしと、文書と地図が合っていることまで。
 - 生成したコードの置き場所のコードが、本当にその公表された言語から生成したものか。
 - 語の定義の文の中身。
 - コードの import。これは sakai build が書く設定で、import-linter、dependency-cruiser、ArchUnit、go-arch-lint が CI で確かめる。

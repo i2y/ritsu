@@ -1,0 +1,3 @@
+error[E108]: payments/api/payments.yaml:4:1: The OpenAPI document payments/api/payments.yaml cannot be read: a tab in the indentation; YAML indents with spaces
+     4 | 	version: 1.0.0
+  = The YAML sakai reads is the YAML 1.2 that goes to JSON and back (RFC 9512, section 3.4, as OpenAPI 3.2 and AsyncAPI 3.1 ask); what goes beyond it (tags, keys written with `?`, a second document) is not read.

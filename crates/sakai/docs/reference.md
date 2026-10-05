@@ -76,14 +76,14 @@ owns
   dir "../py/inventory", "../py/warehouse", "../ts/inventory", "../ts/warehouse"
 ```
 
-`owns` lists directories (`dir "…"`) and files, a file named by the tool that reads it (`rulec "…"`, `koyomi "…"`, `dandori "…"`, `chobo "…"`, `proto "…"`).
+`owns` lists directories (`dir "…"`) and files, a file named by the tool that reads it (`rulec "…"`, `koyomi "…"`, `dandori "…"`, `chobo "…"`, `proto "…"`), or for an OpenAPI or AsyncAPI document by its kind (`openapi "…"`, `asyncapi "…"`).
 An artifact belongs to the context that wrote the deepest entry holding it; an entry that names the file is deeper than any directory.
 That lets a map give most of a repository to one context and carve a directory out of it for another.
 An artifact no entry holds is E101; two contexts writing entries of the same depth for it is E102; an entry that holds no artifact is W101.
 
-These files are artifacts: `.rule`, `.flow`, `.cal`, `.book`, `.geas`, `.proto`, and the code of a language the map declares, under its directory (`.py`; `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`; `.java`; `.go`; `.rs` and a crate's `Cargo.toml`).
+These files are artifacts: `.rule`, `.flow`, `.cal`, `.book`, `.geas`, `.proto`, the OpenAPI and AsyncAPI documents (a `.yaml`, `.yml` or `.json` whose top holds `openapi`, `asyncapi` or `swagger`) with the files of YAML or JSON they reach by `$ref`, and the code of a language the map declares, under its directory (`.py`; `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`; `.java`; `.go`; `.rs` and a crate's `Cargo.toml`).
 A `.ctx` is not.
-What an artifact reads as part of itself (a calendar's table of holidays, a copy of a law, an OpenAPI description) does not need an owner.
+What an artifact reads as part of itself (a calendar's table of holidays, a copy of a law, a Smithy model) does not need an owner.
 A `.proto` that is distributed elsewhere (`google/protobuf/…`, `buf/validate/…`, dandori's `dandori/v1/options.proto`) is not an artifact, even when a copy is in the repository.
 
 ### Published language and open host service
@@ -116,6 +116,19 @@ A published language is a protobuf package, written as a block `published langua
 
 What a published language holds is everything its `.proto` files define (messages and their fields, enums and their values, services and their methods), or, for a rule, what rulec names of it (inputs, outputs, enums and values).
 A reference that calls a service needs the service to be an open host service; a reference that only uses types needs the published language.
+
+```ctx
+published language payments.v1
+  openapi "../payments/api/payments.yaml"
+  asyncapi "../payments/events/payments.yaml"
+  open host service createCharge, getCharge, paymentSucceeded, paymentFailed
+```
+
+A published language may be OpenAPI and AsyncAPI documents (`openapi "…"`, `asyncapi "…"`, any number of each), which mix with no `.proto`, rule or crate (E004).
+sakai reads OpenAPI 3.0, 3.1 and 3.2, and AsyncAPI 3.0 and 3.1, in JSON or in YAML; of YAML, what goes to JSON and back (RFC 9512, section 3.4), and E108 stops at the rest, at OpenAPI 2.0 and at AsyncAPI 2.x.
+The heading is the name the context gives the language, as a document has no package; no two published languages share one (E006).
+Its open host services are the HTTP operations, by their `operationId` (or, with none, a method and a path in quotes, `"GET /orders"`), and the channels, by their keys under `channels`, that anyone may use (each must be in the block's documents, else E301).
+A part of a document that a listed document reaches by `$ref`, and that belongs to the same context, is in the published language too.
 
 ### Terms
 
@@ -203,10 +216,19 @@ A rule bundled, deployed or applied across a boundary is a use of the rule itsel
 ```
 
 `enum <upstream enum> -> <target>` maps each value of the upstream's enum, read from its `.proto`, to a value downstream or to `refuse` (with a reason).
+The upstream enum may be a schema with `enum` under `components/schemas` of the upstream's OpenAPI or AsyncAPI documents: its values are the strings as they are written (in any case, no prefix taken off; a value with a blank in it is written in quotes, `"in transit" -> …`), and a `null` among them marks that nothing is set (W402 if a line is written for it).
+
+```ctx
+  enum ChargeStatus -> enum ShipmentGate
+    pending   -> hold
+    succeeded -> release
+    failed    -> refuse "An order whose charge failed is not shipped"
+    refunded  -> refuse "A refunded order is not shipped"
+```
 
 - A value of the upstream with no line is E401, naming every missing value: that is what an upstream adding a value meets. A line for a value the enum does not have is E402.
 - The value 0 whose name, without the enum's prefix, is `unspecified` marks that nothing is set and needs no line (W402 if one is written), as with rulec's `import proto` and dandori's types from a `.proto`. Any other value 0 is a value like the rest.
-- The target is one of three: a rule's enum (`rulec "…" enum …`), where a rule that takes the upstream's enum in with `import proto` is the mapping itself (lines written beside it must agree, E405; rulec keeps it complete with its E032 and E033), and a rule that does not needs value lines whose values are the rule's (E403); a downstream `.proto` enum, whose values the lines must use (E403); or only a name, whose values are taken as written and not checked (`doc` says so).
+- The target is one of three: a rule's enum (`rulec "…" enum …`), where a rule that takes the upstream's enum in with `import proto` is the mapping itself (lines written beside it must agree, E405; rulec keeps it complete with its E032 and E033), and a rule that does not needs value lines whose values are the rule's (E403); a downstream enum of a `.proto` or of the context's own documents, whose values the lines must use (E403); or only a name, whose values are taken as written and not checked (`doc` says so).
 - `term <upstream term> -> <downstream term>` says which downstream term receives an upstream one; both glossaries must have it (E409).
 - An upstream enum that the downstream's artifacts refer to, with no mapping, is E404.
 
@@ -229,13 +251,16 @@ In JSON, a path is from the root: the nearest directory above the first path giv
 
 The tool words and the kind words are keywords: no map, context, term or downstream value can be named with one (E002).
 
+The elements of an OpenAPI or AsyncAPI document have no name of this form yet. In a context file they are written short, in the context's own published language (`means`, the target of a mapping) or in the upstream's (the enum of a mapping): `schema <name>` and `enum <name>` (with `value <value>` under it) for `components/schemas`, `message <name>`, `channel <name>`, and `operation <name>` (an `operationId`, or a key of AsyncAPI's `operations`).
+`sakai api` and the diagnostics write them as their file and JSON Pointer, `payments/api/payments.yaml#/components/schemas/Charge`, the way a `$ref` points at them.
+
 ## What `check` checks, in order
 
 1. The words, the sections, the names, the aliases and the paths (E001 to E012).
 2. Who owns what: every artifact covered belongs to exactly one context (E101 to E103, W101, W103).
-3. What the artifacts say: the `.proto` files, what rulec, koyomi and dandori answer of their files through ritsu's ports, the crates of the Rust code as Cargo says them; then the elements the map names (E104 to E107, W102, E007, E011).
+3. What the artifacts say: the `.proto` files, what rulec, koyomi and dandori answer of their files through ritsu's ports, the crates of the Rust code as Cargo says them, the OpenAPI and AsyncAPI documents and their `$ref`s; then the elements the map names (E104 to E108, W102, W104, E007, E011).
 4. The patterns agree with each other (E301 to E313, W301).
-5. The references that cross a boundary (E201 to E209).
+5. The references that cross a boundary (E201 to E210): a document's `$ref` to another context's, and an AsyncAPI operation on another context's channel, among them.
 6. The mappings and the glossaries (E401 to E410, W401, W402).
 
 An error in stage 1 or 2 stops what follows; from stage 3 on every stage runs on what could be read.
@@ -244,7 +269,8 @@ Each code, with when it comes, how to fix it and the smallest reproduction, is i
 ## What is not checked
 
 - Whether the code of an anticorruption layer maps as its mapping says.
-- Calls seen only at run time: HTTP to a URL in a string, queues, a shared database, reflection and dynamic imports.
+- Calls no contract writes: HTTP to a URL in a string with no OpenAPI document, a queue with no AsyncAPI document, a shared database, reflection and dynamic imports. What OpenAPI and AsyncAPI documents write is checked.
+- Whether the code calls HTTP, and sends to and receives from channels, as its documents say.
 - Whether generated code really was generated from its published language.
 - What a definition says.
 - The imports of the code: the settings `sakai build` writes have the import linters check them ([targets.md](targets.md)). Rust is the exception: `check` holds a crate's dependencies to the map itself, as Cargo states them.
@@ -256,10 +282,10 @@ Every keyword has one English spelling and no synonym.
 | Where | Keywords |
 |---|---|
 | map file | `map`, `description`, `use context`, `covers`, `except`, `proto root`, `code`, `python`, `typescript`, `java`, `go`, `rust`, `test` |
-| context file | `context`, `description`, `owner`, `also`, `owns`, `dir`, `published language`, `crate`, `open host service`, `generated dir`, `terms`, `means`, `as` |
+| context file | `context`, `description`, `owner`, `also`, `owns`, `dir`, `published language`, `crate`, `openapi`, `asyncapi`, `open host service`, `generated dir`, `terms`, `means`, `as` |
 | relationship | `upstream`, `downstream`, `conformist`, `anticorruption layer`, `customer`, `supplier`, `through`, `layer`, `enum`, `term`, `refuse`, `shared kernel with`, `partnership with`, `separate ways from` |
 | tool | `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `proto`, `file`, `yuen`, `sakai` |
-| kind | `input`, `output`, `enum`, `value`, `table`, `clause`, `define`, `derive`, `machine`, `source`, `date`, `claim`, `unit`, `account`, `transfer`, `service`, `method`, `message`, `field`, `requirement`, `context`, `term`, `task`, `case`, `record` |
+| kind | `input`, `output`, `enum`, `value`, `table`, `clause`, `define`, `derive`, `machine`, `source`, `date`, `claim`, `unit`, `account`, `transfer`, `service`, `method`, `message`, `field`, `requirement`, `context`, `term`, `task`, `case`, `record`, `schema`, `channel`, `operation` |
 
 ## Commands
 

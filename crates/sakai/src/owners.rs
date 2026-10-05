@@ -18,6 +18,9 @@ pub struct Artifact {
     pub tool: Tool,
     /// The context, and the entry of its `owns` that decided it.
     pub owner: Option<(usize, usize)>,
+    /// An OpenAPI or AsyncAPI document, and whether it is a part of one that another reaches by
+    /// `$ref` (DESIGN 15.2); its tool is `file`.
+    pub contract: Option<(crate::contracts::Kind, bool)>,
 }
 
 impl Artifact {
@@ -75,16 +78,40 @@ pub fn artifact_tool(m: &Model, p: &str) -> Option<Tool> {
     m.map.code.iter().any(|c| paths::contains(&c.path, p) && (code_extensions(&c.language).contains(&ext) || (manifest && c.language == "rust" && is_crate_manifest(m, p)))).then_some(Tool::File)
 }
 
+/// An artifact of the scope: its path, its tool, and for an OpenAPI or AsyncAPI document its
+/// kind and whether it is a part of one.
+pub type InScope = (String, Tool, Option<(crate::contracts::Kind, bool)>);
+
 /// Every artifact of the scope, in path order: under `covers`, not under `except`, and with no
-/// part of its path that the scope always leaves out.
-pub fn scope(m: &Model) -> Vec<(String, Tool)> {
+/// part of its path that the scope always leaves out. A file of YAML or JSON is one when it is an
+/// OpenAPI or AsyncAPI document, or a part of one that a document reaches by `$ref` (DESIGN 15.2).
+pub fn scope(m: &Model) -> Vec<InScope> {
     let mut files = Vec::new();
     for c in &m.map.covers {
         paths::walk(&m.root, c, &m.map.except, &mut files);
     }
     files.sort();
     files.dedup();
-    files.into_iter().filter_map(|p| artifact_tool(m, &p).map(|t| (p, t))).collect()
+    let mut out: Vec<InScope> = Vec::new();
+    let mut docs: Vec<(String, crate::contracts::Kind)> = Vec::new();
+    for p in files {
+        if let Some(t) = artifact_tool(m, &p) {
+            out.push((p, t, None));
+        } else if crate::contracts::may_be(&p)
+            && let Ok(text) = ritsu_base::fs::read_to_string(paths::on_disk(&m.root, &p))
+            && let Some(k) = crate::contracts::sniff(&text, p.ends_with(".json"))
+        {
+            docs.push((p.clone(), k));
+            out.push((p, Tool::File, Some((k, false))));
+        }
+    }
+    for (p, k) in crate::contracts::parts(m, &docs) {
+        if !out.iter().any(|(q, _, _)| *q == p) {
+            out.push((p, Tool::File, Some((k, true))));
+        }
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
 }
 
 /// Whether a path is in the scope of the map.
@@ -118,7 +145,7 @@ pub fn context_of(m: &Model, p: &str) -> Option<usize> {
 /// The artifacts and their owners, and what is wrong with the entries of `owns`.
 pub fn own(m: &Model) -> (Vec<Artifact>, Vec<Diag>) {
     let mut diags = Vec::new();
-    let arts: Vec<Artifact> = scope(m).into_iter().map(|(p, t)| Artifact { owner: owner_of(m, &p), path: p, tool: t }).collect();
+    let arts: Vec<Artifact> = scope(m).into_iter().map(|(p, t, contract)| Artifact { owner: owner_of(m, &p), path: p, tool: t, contract }).collect();
     // E102: one entry written by two contexts. Said once, at the later one.
     for (ci, c) in m.contexts.iter().enumerate() {
         for o in &c.owns {
@@ -151,8 +178,8 @@ pub fn own(m: &Model) -> (Vec<Artifact>, Vec<Diag>) {
                     diag::at("W101", &c.file, o.pos.line, o.pos.col, tr!("{t} は成果物を一つも含みません", "The entry {t} holds no artifact"))
                         .source(&c.src)
                         .note(tr!(
-                            "パスの書き誤りかもしれません。成果物は、.rule、.flow、.cal、.book、.geas、.proto のファイルと、地図の `code` に書いた言語の、その置き場所の下のコードです。",
-                            "The path may be mistyped. The artifacts are the .rule, .flow, .cal, .book, .geas and .proto files, and the code of the languages the map's `code` lines name, under the places they give."
+                            "パスの書き誤りかもしれません。成果物は、.rule、.flow、.cal、.book、.geas、.proto のファイル、OpenAPI と AsyncAPI の文書、地図の `code` に書いた言語の、その置き場所の下のコードです。",
+                            "The path may be mistyped. The artifacts are the .rule, .flow, .cal, .book, .geas and .proto files, the OpenAPI and AsyncAPI documents, and the code of the languages the map's `code` lines name, under the places they give."
                         )),
                 );
             }

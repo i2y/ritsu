@@ -1,0 +1,23 @@
+context Shipping(shipping) v1
+description "Ships an order once its charge has gone through"
+owner "Shipping team"
+
+owns
+  dir "../shipping"
+
+published language shipping.v1
+  openapi "../shipping/api/shipping.yaml"
+  open host service getShipment
+
+terms
+  shipment_gate "Whether an order may leave the warehouse"
+    means enum ShipmentGate
+
+upstream Payments anticorruption layer
+  through payments.v1
+  layer dir "../shipping/acl"
+  enum ChargeStatus -> enum ShipmentGate
+    pending   -> hold
+    succeeded -> release
+    failed    -> refuse "An order whose charge failed is not shipped"
+    refunded  -> refuse "A refunded order is not shipped"

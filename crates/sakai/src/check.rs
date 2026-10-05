@@ -54,6 +54,8 @@ pub struct Checked {
     pub crossings: Vec<Crossing>,
     /// What the other languages said of their artifacts.
     pub read: crate::suite::Read,
+    /// The OpenAPI and AsyncAPI documents (DESIGN 15).
+    pub contracts: crate::contracts::Contracts,
 }
 
 fn sorted(mut ds: Vec<Diag>) -> Vec<Diag> {
@@ -133,13 +135,23 @@ fn plural(n: usize, one: &str, many: &str) -> String {
 pub fn summary(m: &Model, arts: &[Artifact], crossings: &[Crossing]) -> Text {
     use crate::naming::Tool;
     let (c, r, a, x) = (m.contexts.len(), relationship_count(m), arts.len(), crossings.len());
-    let mut by: Vec<String> = [Tool::Proto, Tool::Rulec, Tool::Koyomi, Tool::Dandori]
-        .iter()
-        .filter_map(|t| {
-            let n = crossings.iter().filter(|c| c.tool() == *t).count();
-            (n > 0).then(|| format!("{} {n}", t.word()))
-        })
-        .collect();
+    let mut by: Vec<String> = Vec::new();
+    let count = |t: Tool| crossings.iter().filter(|c| c.tool() == t).count();
+    if count(Tool::Proto) > 0 {
+        by.push(format!("proto {}", count(Tool::Proto)));
+    }
+    // the OpenAPI and AsyncAPI documents, after the `.proto` files (DESIGN 15.5)
+    for k in [crate::contracts::Kind::OpenApi, crate::contracts::Kind::AsyncApi] {
+        let n = crossings.iter().filter(|c| c.from_contract == Some(k)).count();
+        if n > 0 {
+            by.push(format!("{} {n}", k.word()));
+        }
+    }
+    for t in [Tool::Rulec, Tool::Koyomi, Tool::Dandori] {
+        if count(t) > 0 {
+            by.push(format!("{} {}", t.word(), count(t)));
+        }
+    }
     let rust = crossings.iter().filter(|c| matches!(c.kind, crate::refs::Kind::Crate { .. })).count();
     if rust > 0 {
         by.push(format!("rust {rust}"));
@@ -167,6 +179,13 @@ pub fn check_map(root: &Path, map: &str) -> Result<Outcome, Text> {
 
 /// [`check_map`], reading what the other languages hold through the ports `suite` joins.
 pub fn check_map_with(root: &Path, map: &str, suite: &crate::suite::Suite) -> Result<Outcome, Text> {
+    crate::contracts::forget();
+    let out = check_map_once(root, map, suite);
+    crate::contracts::forget();
+    out
+}
+
+fn check_map_once(root: &Path, map: &str, suite: &crate::suite::Suite) -> Result<Outcome, Text> {
     let loaded = resolve::load(root, map)?;
     let reads = loaded.reads;
     let Some(m) = loaded.model else {
@@ -188,27 +207,30 @@ pub fn check_map_with(root: &Path, map: &str, suite: &crate::suite::Suite) -> Re
     diags.extend(sorted(d3b));
     let (crates, d3c) = crate::cargo::read(&m);
     diags.extend(sorted(d3c));
-    let (el, d3) = elements::resolve(&m, &ps, &arts, &read);
+    let (cs, d3d) = crate::contracts::load(&m, &arts);
+    diags.extend(sorted(d3d));
+    let (el, d3) = elements::resolve(&m, &ps, &cs, &arts, &read);
     diags.extend(sorted(d3));
     // 4. The patterns.
-    diags.extend(sorted(patterns::check(&m, &ps, &arts, &read, crates.as_ref())));
+    diags.extend(sorted(patterns::check(&m, &ps, &cs, &arts, &read, crates.as_ref())));
     // 5. The crossings.
     let mut crossings = refs::proto_crossings(&ps, &arts);
+    crossings.extend(refs::contract_crossings(&cs, &arts));
     let (more, d5) = refs::suite_crossings(&m, &ps, &arts, &read);
     crossings.extend(more);
     let (more, d5c) = refs::crate_crossings(&m, &arts, crates.as_ref());
     crossings.extend(more);
     let mut d5 = d5;
     d5.extend(d5c);
-    d5.extend(refs::check(&m, &mut crossings, &read));
+    d5.extend(refs::check(&m, &mut crossings, &read, &cs, &arts));
     d5.extend(refs::implements(&m, &arts, &read));
     diags.extend(sorted(d5));
     // 6. The mappings and the glossaries.
-    let mut d6 = mapping::check(&m, &ps, &el, &crossings, &read);
-    d6.extend(terms::check(&m, &ps, &el, &crossings, read.complete, &read));
+    let mut d6 = mapping::check(&m, &ps, &cs, &el, &crossings, &read, &arts);
+    d6.extend(terms::check(&m, &ps, &cs, &arts, &el, &crossings, read.complete && cs.unread.is_empty(), &read));
     diags.extend(sorted(d6));
     let summary = (!has_errors(&diags)).then(|| summary(&m, &arts, &crossings));
-    Ok(Outcome { file: map.to_string(), diags, summary, checked: Some(Checked { model: m, artifacts: arts, protos: ps, elements: el, crossings, read }), reads })
+    Ok(Outcome { file: map.to_string(), diags, summary, checked: Some(Checked { model: m, artifacts: arts, protos: ps, elements: el, crossings, read, contracts: cs }), reads })
 }
 
 /// What a person reads.

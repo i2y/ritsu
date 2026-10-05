@@ -1,0 +1,11 @@
+openapi: 3.1.0
+info:
+  title: 受注の内側
+  version: 1.0.0
+components:
+  schemas:
+    Audit:
+      type: object
+      properties:
+        by:
+          type: string

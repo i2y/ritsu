@@ -1,0 +1,23 @@
+context 決済(payments) v1
+description "入った注文の代金を客のカードに課金し、課金がどうなったかを知らせる"
+owner "決済チーム"
+
+owns
+  dir "../payments"
+
+published language payments.v1
+  openapi "../payments/api/payments.yaml"
+  asyncapi "../payments/events/payments.yaml"
+  open host service createCharge, getCharge, paymentSucceeded, paymentFailed
+
+terms
+  課金 "注文一つ分の代金を、客のカードから受け取ること"
+    means schema Charge
+  課金の状態 "課金がどこまで進んだか。カードの返事待ち、受け取った、通らなかった、返した"
+    means enum ChargeStatus
+
+upstream 受注 conformist
+  through ordering.v1
+
+shared kernel with 受注
+  dir "../common"

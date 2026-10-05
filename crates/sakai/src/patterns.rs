@@ -58,7 +58,7 @@ fn kernel(m: &Model, a: usize, b: usize) -> Option<(&Rel, &Vec<Own>)> {
     })
 }
 
-pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Read, crates: Option<&crate::cargo::Crates>) -> Vec<Diag> {
+pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[Artifact], read: &crate::suite::Read, crates: Option<&crate::cargo::Crates>) -> Vec<Diag> {
     let mut p = P { m, diags: Vec::new() };
     let owner = |path: &str| arts.iter().find(|a| a.path == path).and_then(|a| a.ctx());
     // E301 and E302: the published languages.
@@ -171,7 +171,45 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Rea
                         .push(tr!("Rust のクレートは、境界の向こうから呼ぶサービスを持ちません。サービスは proto で公表してください。", "A Rust crate has no service to call across a boundary; a service is published in a proto."));
                 }
             }
-            if pl.rulec.is_none() && pl.krate.is_none() {
+            // The OpenAPI and AsyncAPI documents (DESIGN 15.4): the context's own, and what their open
+            // host services are, the operations and the channels.
+            for (_, f, at) in &pl.contracts {
+                match owner(f) {
+                    Some(o) if o == ci => {}
+                    o => {
+                        let whose = match o {
+                            Some(o) => tr!("「{}」のものです", "it belongs to {}", m.contexts[o].name; m.contexts[o].name),
+                            None => tr!("どのコンテキストにも属しません", "it belongs to no context"),
+                        };
+                        let (me, sf) = (&c.name, paths::shown(f));
+                        p.at(ci, *at, "E302", tr!("公表された言語 {k} の {sf} は「{me}」のものではありません（{}）", "The published language {k} lists {sf}, which is not {me}'s ({})", whose.ja; whose.en))
+                            .notes
+                            .push(tr!("公表された言語のファイルは、それを公表するコンテキストに属します。", "The files of a published language belong to the context that publishes it."));
+                    }
+                }
+            }
+            if !pl.contracts.is_empty() && pl.contracts.iter().all(|(_, f, _)| cs.docs.contains_key(f)) {
+                let mut open: Vec<String> = Vec::new();
+                for (_, f, _) in &pl.contracts {
+                    open.extend(cs.operations(f).iter().map(|o| o.name()));
+                    open.extend(cs.channels(f).iter().map(|c| c.id.clone()));
+                }
+                for (s, at) in &pl.services {
+                    if !open.contains(s) {
+                        let there = if open.is_empty() {
+                            tr!("その文書に、HTTP の操作もチャネルもありません。", "Its documents have no HTTP operation and no channel.")
+                        } else {
+                            tr!("その文書の HTTP の操作とチャネルは {} です。", "The HTTP operations and channels of its documents are {}.", open.join("、"); open.join(", "))
+                        };
+                        p.at(ci, *at, "E301", tr!("公開ホストサービス {s} が、公表された言語 {k} の文書にありません", "The open host service {s} is not in the documents of the published language {k}")).notes.push(there);
+                        p.diags.last_mut().unwrap().notes.push(tr!(
+                            "OpenAPI と AsyncAPI の文書の公表された言語では、`open host service` に OpenAPI の operationId（無ければ `\"GET /orders\"` のようにメソッドとパス）か、AsyncAPI のチャネル（`channels` のキー）を書いてください。",
+                            "Under a published language of OpenAPI and AsyncAPI documents, `open host service` lists OpenAPI operationIds (or, with none, a method and a path, like `\"GET /orders\"`) and AsyncAPI channels (the keys under `channels`)."
+                        ));
+                    }
+                }
+            }
+            if pl.rulec.is_none() && pl.krate.is_none() && pl.contracts.is_empty() {
                 let services: Vec<&str> = pl.protos.iter().filter_map(|(f, _)| ps.files.get(f)).flat_map(|pf| pf.services.iter().map(|s| s.name.as_str())).collect();
                 for (s, at) in &pl.services {
                     if !services.contains(&s.as_str()) && pl.protos.iter().all(|(f, _)| ps.files.contains_key(f)) {

@@ -1,0 +1,20 @@
+# 配送の、決済に向けた腐敗防止層。決済から受け取るもの。層のコードが、課金の状態を出荷の可否に
+# 読み替える（contexts/配送.ctx）。
+asyncapi: 3.0.0
+info:
+  title: 配送が決済から受け取るもの
+  version: 1.0.0
+channels:
+  paymentSucceeded:
+    $ref: '../../payments/events/payments.yaml#/channels/paymentSucceeded'
+  paymentFailed:
+    $ref: '../../payments/events/payments.yaml#/channels/paymentFailed'
+operations:
+  receivePaymentSucceeded:
+    action: receive
+    channel:
+      $ref: '#/channels/paymentSucceeded'
+  receivePaymentFailed:
+    action: receive
+    channel:
+      $ref: '#/channels/paymentFailed'

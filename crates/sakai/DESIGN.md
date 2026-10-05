@@ -4,7 +4,7 @@
 
 名前は境（さかい）から取った。
 
-この文書は設計の段階（A）で書き、言語の芯と地図の検査を作った段階（B）と、例とコードの import の検査の設定と CML を作った段階（C の一部）で、作ったものに合わせて直した。C の段階のうち、一式の成果物を読むところ（PLAN の C.1〜C.5）は、一式の言語を一つの処理系（ritsu）にまとめると決まってから、子プロセスと JSON ではなく ritsu の口で作った（ritsu の D.8。4.1、4.7、12.2）。作ったもの（`.ctx` の構文、`check`、`api`、`explain`、`build`、`export cml`、診断）について貼った sakai の出力と、7 章のツールの出力は、どれも実際に出したもので、`tests/design.rs` が実物と同じかを確かめる。D の段階（ritsu の F.2）で、doc、例の README、`docs/`、README、スキルを作った（10 章、11 章、12.5）。doc のページと README に貼った出力も実際に出したもので、`tests/doc.rs` と `tests/docs.rs` が確かめる。一方、一式のツール（rulec 0.22.1、koyomi 0.1.0、chobo 0.1.0、geas 0.0.1、dandori 0.1.0）と外のツール（import-linter 2.15、dependency-cruiser 16.10.4、ArchUnit 1.5.1、go-arch-lint v1.19.0、depguard v2.2.1、Spring Modulith 2.1.1、Context Mapper CLI 6.12.0、buf 1.54.0）の振る舞いとして書いたことは、2026-10-03 にこの機械（macOS arm64）で実際に走らせて確かめたもので、出力を貼るときは版を添える。外のツールの出力からは、この機械の場所を示すパスと、端末の色の制御文字と、行頭の字下げを省いた。Rust のクレートの依存（7.7）のために試した cargo 1.94.1 と cargo-deny 0.20.2 は、2026-10-04 に同じ機械で走らせた。
+この文書は設計の段階（A）で書き、言語の芯と地図の検査を作った段階（B）と、例とコードの import の検査の設定と CML を作った段階（C の一部）で、作ったものに合わせて直した。C の段階のうち、一式の成果物を読むところ（PLAN の C.1〜C.5）は、一式の言語を一つの処理系（ritsu）にまとめると決まってから、子プロセスと JSON ではなく ritsu の口で作った（ritsu の D.8。4.1、4.7、12.2）。作ったもの（`.ctx` の構文、`check`、`api`、`explain`、`build`、`export cml`、診断）について貼った sakai の出力と、7 章のツールの出力は、どれも実際に出したもので、`tests/design.rs` が実物と同じかを確かめる。D の段階（ritsu の F.2）で、doc、例の README、`docs/`、README、スキルを作った（10 章、11 章、12.5）。doc のページと README に貼った出力も実際に出したもので、`tests/doc.rs` と `tests/docs.rs` が確かめる。一方、一式のツール（rulec 0.22.1、koyomi 0.1.0、chobo 0.1.0、geas 0.0.1、dandori 0.1.0）と外のツール（import-linter 2.15、dependency-cruiser 16.10.4、ArchUnit 1.5.1、go-arch-lint v1.19.0、depguard v2.2.1、Spring Modulith 2.1.1、Context Mapper CLI 6.12.0、buf 1.54.0）の振る舞いとして書いたことは、2026-10-03 にこの機械（macOS arm64）で実際に走らせて確かめたもので、出力を貼るときは版を添える。外のツールの出力からは、この機械の場所を示すパスと、端末の色の制御文字と、行頭の字下げを省いた。Rust のクレートの依存（7.7）のために試した cargo 1.94.1 と cargo-deny 0.20.2 は、2026-10-04 に同じ機械で走らせた。15 章（OpenAPI と AsyncAPI の契約）は ritsu 0.23.0 のあとに足した。そこに書いた仕様の版は 2026-10-05 に仕様の文書を読んで確かめ、例の文書を確かめた Redocly CLI 2.58.1 と AsyncAPI の parser 3.6.3、YAML の読み手を確かめた yaml-test-suite の data-2022-01-17 は、2026-10-06 に同じ機械で走らせた。
 
 ## 0. 全体像
 
@@ -13,6 +13,7 @@
    │
    ├── 範囲のファイルを歩く ──────── 属し方：どの成果物も、ちょうど一つのコンテキストに属する
    ├── proto を直接読む ─────────── 公表された言語の中身、列挙の値、proto どうしの import
+   ├── OpenAPI と AsyncAPI の文書を読む ── 公表された言語の中身、列挙の値、チャネルと操作、ファイルをまたぐ $ref（15 章）
    ├── 一式の言語に口で問う ──────── rulec・koyomi・dandori の参照、rulec の列挙と Connect のサービス、chobo の勘定と振替（4.1）
    │
    ├── check：属し方、境界を越える参照、パターンどうしの整合、対応の網羅、同じ語
@@ -45,11 +46,11 @@ sakai は、コンテキストマップのうち、実物と突き合わせら�
 
 - **P1**：成果物は、ファイルの単位でコンテキストに属する。属し方はディレクトリとファイルで書き、いちばん深く書いたコンテキストに属する（1.3）。
 - **P2**：一式の成果物の中身は、その言語が ritsu の口（ritsu の DESIGN 3.2）で答えるものだけから読む。sakai は一式のどの言語の構文も持たず、どの言語のクレートにも依存しない。口を実装するのは出す側の言語で、それをつないで sakai に渡すのは ritsu である（4.1）。proto は標準の形式なので、ritsu の一つの読み手（ritsu-proto）でファイルを直接読む。どの言語も sakai を知らない。一式を ritsu にまとめる前は、それぞれの CLI の出力（JSON）だけから読む決まりだった。ほかの言語の構文を二か所で持たない、という考えは同じで、渡し方が口になった。
-- **P3**：境界を越えて参照してよいのは、公表された言語（proto の package と、rulec が規則ごとに書く Connect のサービス）の要素と、共有カーネルに並べた成果物だけである。
+- **P3**：境界を越えて参照してよいのは、公表された言語（proto の package と、rulec が規則ごとに書く Connect のサービスと、OpenAPI と AsyncAPI の文書。15 章）の要素と、共有カーネルに並べた成果物だけである。
 - **P4**：上流と下流の関係は、下流のファイルに書く。下流が、上流のモデルをどう扱うか（そのまま使う順応者か、読み替える腐敗防止層か、要望を出せる顧客か）を決めるのは下流だからである。二つのコンテキストが合意して成り立つパターン（顧客／供給者、共有カーネル、パートナーシップ）は、両方のファイルに書き、検査が食い違いを言う。
 - **P5**：語の意味は確かめない。二つの語が同じ意味かは、書いた人の宣言（`as` で上流の語を取り入れる）だけで決め、定義の文を比べない。
 - **P6**：コードの import は sakai が読まない。各言語の既存のツールの設定を書き、そのツールで確かめる。書いた設定が地図に合っているかは、`sakai build --check` が言う。
-- **P7**：確かめていないことは、確かめていないと言う。ほかの言語が渡されていないとき（sakai のクレートのバイナリ）は、その言語の成果物を読めないと言って止める（E104）。言語がファイルに答えないとき（その言語の検査を通らない、読めない）も、そう言う（E105）。実行時にしか見えない呼び出し（URL を文字列で持つ HTTP、キュー、データベースの共有）は、doc に「確かめていない」と出す（3.7）。黙って通さない。
+- **P7**：確かめていないことは、確かめていないと言う。ほかの言語が渡されていないとき（sakai のクレートのバイナリ）は、その言語の成果物を読めないと言って止める（E104）。言語がファイルに答えないとき（その言語の検査を通らない、読めない）も、そう言う（E105）。契約の文書に書いていない呼び出し（OpenAPI の文書の無い HTTP、AsyncAPI の文書の無いキュー、データベースの共有）は、doc に「確かめていない」と出す（3.7）。黙って通さない。OpenAPI と AsyncAPI の文書に書いた HTTP の操作とチャネルは、ほかの成果物と同じく確かめる（15 章。ritsu 0.23.0 までは、これも「確かめていない」に入れていた）。
 
 ### 0.3 なぜ別の言語にするか
 
@@ -348,9 +349,10 @@ owns
 
 - 一式の成果物：`.rule`、`.flow`、`.cal`、`.book`、`.geas`
 - `.proto`
+- OpenAPI と AsyncAPI の文書：範囲の `.yaml`、`.yml`、`.json` のうち、いちばん上のマップに `openapi`、`asyncapi`、`swagger` のキーを持つもの（中身で見分ける）と、それらが `$ref` でたどるファイル（文書の一部）。15.2
 - 地図の `code` で宣言した言語のコードで、その言語の置き場所の下にあるもの：Python は `.py`、TypeScript は `.ts`・`.tsx`・`.mts`・`.cts`・`.js`・`.jsx`・`.mjs`・`.cjs`、Java は `.java`、Go は `.go`、Rust は `.rs` と、クレートのマニフェスト（`[package]` のある `Cargo.toml`。ワークスペースのためだけのマニフェストは、どのクレートのものでもないので成果物にしない。7.7）
 
-`.ctx` は成果物にしない。祝日の表（koyomi の `data/`）、法令のコピー（rulec と koyomi の `sources/`）、OpenAPI や Smithy の記述（dandori の `specs/`）も、それを読む成果物の一部として扱い、属し方を問わない。
+`.ctx` は成果物にしない。祝日の表（koyomi の `data/`）、法令のコピー（rulec と koyomi の `sources/`）、Smithy の記述（dandori の `specs/`）も、それを読む成果物の一部として扱い、属し方を問わない。OpenAPI の記述も ritsu 0.23.0 まではそうしていたが、いまは文書として成果物にする（15.2）。
 
 範囲は地図の `covers` で決め、`except` で除く。どちらも地図のファイルのディレクトリから読む。さらに、パスのどこかに `.` で始まる名前（`.git`、`.venv`、`.geas`）、`node_modules`、`site-packages`、`__pycache__`、`target` があるファイルは、いつも範囲の外にする。ツールの状態、入れた依存、生成物の置き場所で、geas の `map` が外すものとそろえた（`.` で始まる名前を全部外すのは、`.venv` のような仮想環境を拾わないため）。
 
@@ -396,7 +398,7 @@ published language rulec.urgency.v1
 **捨てたもの**：
 
 - 公表された言語を、名前を付けた成果物の集まりにすること（`published language 在庫API`）。proto がすでに package という名前を持っていて、名前が二つになる。
-- OpenAPI の記述や JSON Schema を公表された言語に入れること。対応の網羅に使う列挙を proto から読むと決めてある。rulec は JSON Schema の列挙も取り込める（rulec の DESIGN 15.60）ので、要れば同じ形で足せる（14 章）。
+- OpenAPI の記述や JSON Schema を公表された言語に入れること。対応の網羅に使う列挙を proto から読むと決めてある。rulec は JSON Schema の列挙も取り込める（rulec の DESIGN 15.60）ので、要れば同じ形で足せる（14 章）。（ritsu 0.23.0 のあとに、OpenAPI と AsyncAPI の文書を公表された言語に入れられるようにした。15 章。OpenAPI でも AsyncAPI でもない JSON Schema だけのファイルは、いまも入れない）
 - chobo の帳簿や koyomi のカレンダーを、そのまま公表された言語にすること。どちらも生成したコードを呼ぶ側に同梱する形で、境界の向こうから呼ぶ口（サービスと型の契約）を持たない。ほかのコンテキストに見せたければ、proto のサービスの後ろに置く（在庫の例の `StockService` は、chobo の帳簿の後ろに立つ）。二つのコンテキストで同じカレンダーを使うなら、共有カーネルに並べる（1.5）。
 
 ### 1.5 関係とパターン
@@ -666,9 +668,9 @@ B の段階のあとで、二つの言語の細かい形をもう一度そろえ
 |---|---|---|
 | 1 | 字句、構文、節の順序、名前、別名、パスがあるか | E001〜E012 |
 | 2 | 属し方：範囲の成果物がどれもちょうど一つのコンテキストに属するか | E101、E102、E103、W101、W103 |
-| 3 | 成果物を読む：proto と、rulec・koyomi・dandori が口で答えるもの（4.1）と、Rust のクレートとその依存（Cargo が言うもの。7.7）。そのあとで、地図が名指す要素（`means`、対応の列挙）を、読んだ proto と rulec の事実で引く | E104、E105、E106、E107、W102、E103（範囲の外の import や参照）、E007・E011（要素） |
+| 3 | 成果物を読む：proto と、rulec・koyomi・dandori が口で答えるもの（4.1）と、Rust のクレートとその依存（Cargo が言うもの。7.7）と、OpenAPI と AsyncAPI の文書とその `$ref`（15 章）。そのあとで、地図が名指す要素（`means`、対応の列挙）を、読んだ proto と文書と rulec の事実で引く | E104、E105、E106、E107、E108、W102、W104、E103（範囲の外の import や参照）、E007・E011（要素） |
 | 4 | パターンどうしの整合 | E301〜E313、W301 |
-| 5 | 境界を越える参照 | E201〜E209 |
+| 5 | 境界を越える参照 | E201〜E210 |
 | 6 | 対応の網羅と同じ語 | E401〜E410、W401、W402 |
 
 段 3 から後は、前の段にエラーがあっても、どの段も走らせる。読めない成果物があっても、読めた成果物の参照だけを確かめ、読めなかったものは E105（proto なら E106）として言う（読めない規則が一つあるだけで、地図の検査が全部止まると、直す順序が分からない）。ほかの言語が渡されていなければ（sakai のクレートのバイナリ）、その言語の成果物は読まずに、言語ごとに一つの E104 を言う（4.1）。パターンの誤りも後の段を止めない。5.3 の二つめの例のように、片側だけの共有カーネル（E307）と、それで許されなくなった参照（E201）は、一緒に言う。
@@ -724,9 +726,10 @@ examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, e
 | dandori のワークフロー | dandori の `References` の `use rule`（呼び方の語を添えて）、`use proto`、`connect`（proto のサービスとメソッド）、`flow`（子の `.flow`）、`implements`（proto のサービス）。4.7 | 規則、proto のファイルとサービスとメソッド、ワークフロー |
 | chobo の帳簿、geas の主張 | 参照を持たない（chobo の帳簿はほかの成果物を読まない。geas の主張はプログラムを外から叩く） | |
 | Rust のクレート（`[package]` のある `Cargo.toml`） | Cargo が言う、パスで書いたほかのクレートへの依存（`[dependencies]` と `[build-dependencies]`。行は依存を書いたマニフェストの行）。7.7 | クレート（その `Cargo.toml`） |
+| OpenAPI と AsyncAPI の文書 | ファイルをまたぐ `$ref`（行と列）。AsyncAPI のチャネルを指すものは、その上の操作の `send` か `receive`。15.5 | 文書の要素（ファイルと JSON Pointer） |
 | ほかの言語のコード | sakai は読まない。7 章の設定で各ツールが確かめる | |
 
-ほかの言語が口で言う参照のうち、ここに無いもの（rulec の `import jsonschema` と JSON Schema の `shape`、rulec と koyomi の `source` のコピー、dandori の `use openapi` と `use smithy`）は、境界を越える参照に数えない。JSON Schema、出典のコピー、祝日の表、OpenAPI と Smithy の記述は、それを読む成果物の一部として扱い、属し方を問わない（1.3）からである。範囲の外にあっても何も言わない。
+ほかの言語が口で言う参照のうち、ここに無いもの（rulec の `import jsonschema` と JSON Schema の `shape`、rulec と koyomi の `source` のコピー、dandori の `use openapi` と `use smithy`）は、境界を越える参照に数えない。JSON Schema、出典のコピー、祝日の表、Smithy の記述は、それを読む成果物の一部として扱い、属し方を問わない（1.3）からである。範囲の外にあっても何も言わない。ただし、dandori の `use openapi` と、rulec の `import jsonschema` と JSON Schema の `shape` は、先が OpenAPI か AsyncAPI の文書（成果物）なら、その文書への参照として数える（15.5）。
 
 参照のもとと先が別のコンテキストに属するとき、境界を越える参照になる。そのとき、次のどれかでなければ診断を出す。
 
@@ -769,7 +772,8 @@ proto のフィールドやメソッドが使うメッセージと、rulec の `
 ### 3.7 確かめないこと
 
 - 腐敗防止層のコードが、書いた対応どおりに読み替えているか。sakai が確かめるのは、対応が上流の列挙を覆っているかと、対応の先が下流の列挙にあるかまでである（rulec の規則が先のときは、rulec が規則の表を確かめる）。
-- 実行時にしか見えない呼び出し：URL を文字列で持つ HTTP、メッセージのキュー、データベースの共有、リフレクションと動的な import。どれも成果物にも import にも現れない。
+- 契約の文書に書いていない呼び出し：OpenAPI の文書の無い HTTP（URL を文字列で持つもの）、AsyncAPI の文書の無いメッセージのキュー、データベースの共有、リフレクションと動的な import。どれも成果物にも import にも現れない。OpenAPI と AsyncAPI の文書に書いた HTTP の操作とチャネルは確かめる（15 章）。
+- コードが、OpenAPI と AsyncAPI の文書のとおりに HTTP を呼び、チャネルに送り、チャネルから受けているか。sakai が確かめるのは、文書どうしと、文書と地図が合っていることまでである。
 - 公表された言語から生成したコード（`generated dir`）が、本当にその proto から生成したものか。
 - 語の定義の文の中身（P5）。
 - Rust の `[dev-dependencies]`（テスト、例、ベンチマークだけが使い、クレートの中には入らない。ritsu では、受け取る側のクレートのテストが、出す側のクレートを本物のままつなぐために dev-dependency に持つ。ritsu の DESIGN 3.3）と、レジストリや git のクレートへの依存（どのコンテキストのものでもない）。7.7。
@@ -865,7 +869,8 @@ dandori のワークフローは、境界を越える参照をいちばん多く
 | `connect` | proto のサービスとメソッド | サービスを呼ぶ参照。サービスが相手の `open host service` に並ぶこと（E207） |
 | `flow` | 子の `.flow` | 下の決定（E209） |
 | `implements` | proto のサービス | 境界を越える参照ではない。そのワークフローを持つコンテキストの公表された言語の `open host service` に並ぶこと（E208） |
-| `use openapi`、`use smithy` | 記述のファイル | 記述は、それを読むワークフローの一部（1.3）なので、参照として数えない |
+| `use openapi` | OpenAPI の文書 | 文書がほかのコンテキストの成果物なら、その文書への参照として、ほかの参照と同じ決まりで確かめる（15.5）。文書が成果物でなければ、それを読むワークフローの一部（1.3） |
+| `use smithy` | 記述のファイル | 記述は、それを読むワークフローの一部（1.3）なので、参照として数えない |
 
 11 章の例では、受注の `受注.flow` から五つの参照が境界を越え（3.1）、`implements 店.FulfillmentService` は受注の公表された言語 `shop.ordering.v1` の公開ホストサービスなので通る。
 
@@ -939,9 +944,11 @@ error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
 | E105 | 成果物が、その言語の検査を通らないか、読めない（その言語の診断を注に添える） |
 | E106 | proto が読めない |
 | E107 | 地図が `code rust` を書いていて、その場所のクレートを Cargo から読めない（`Cargo.toml` が無い、`cargo metadata` が失敗する。7.7） |
+| E108 | OpenAPI か AsyncAPI の文書を読めない（YAML か JSON として読めない、JSON と行き来できない YAML の書き方、sakai が読まない版、たどれない `$ref`。15 章） |
 | W101 | `owns` の項が成果物を一つも含まない |
 | W102 | 見つからない proto の import（範囲の外のものとして扱う） |
 | W103 | どの地図にも読まれない context のファイル（`check` にディレクトリを渡したときだけ） |
+| W104 | URL を指す `$ref`（読まずに、範囲の外のものとして扱う。15.5） |
 | N101 | 退いたコード（ritsu 0.23.0）。dandori の参照を確かめていない、と言うためのものだった |
 | E201 | 関係の無いコンテキストへの参照（関係が逆向き、つまり参照の先が下流のときも） |
 | E202 | 相手の内側への参照（公表された言語でない proto、公表された言語に無い規則、規則そのもの（同梱、Lambda、ローカル、`apply`）、カレンダー） |
@@ -952,6 +959,7 @@ error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
 | E207 | ワークフローが、境界の向こうの、相手の公開ホストサービスでないサービスを呼んでいる（`connect`、`use rule … connect`） |
 | E208 | ワークフローが `implements` で実装するサービスが、自分の公表された言語の公開ホストサービスでない |
 | E209 | ワークフローが、境界の向こうのワークフローを子として走らせている（パートナーでなく、共有カーネルになく、子が相手の公開ホストサービスを実装していない） |
+| E210 | 文書が、境界の向こうの、相手の公開ホストサービスでないチャネルか HTTP の操作を使っている（15.5） |
 | E301 | 公開ホストサービスのサービスが、公表された言語に無い（Rust のクレートの公表された言語に `open host service` を書いたときも） |
 | E302 | 公表された言語の proto や規則やクレートや生成したコードの置き場所が、そのコンテキストのものでない、package やクレートの名前が見出しと違う、`crate` の先がワークスペースのクレートでない、地図に `code rust` が無いのにクレートを公表している |
 | E303 | 顧客／供給者が片側だけ |
@@ -1405,7 +1413,7 @@ Cargo に尋ねる形なら、依存を足したマニフェストの行を名�
 | パートナーシップ | `<一方> [P]<->[P] <他方>` |
 | 別々の道 | CML に書く形が無いので、コメント |
 | 上流の役割 | `through` の package に公開ホストサービスがあれば `OHS,PL`、無ければ `PL` |
-| `through` の package と公開ホストサービス | 関係の `implementationTechnology`（`"Connect: warehouse.v1.StockService, warehouse.v1.PackingService"`。サービスの無い package は名前だけ） |
+| `through` の package と公開ホストサービス | 関係の `implementationTechnology`（`"Connect: warehouse.v1.StockService, warehouse.v1.PackingService"`。サービスの無い package は名前だけ。OpenAPI と AsyncAPI の文書の公表された言語は `"OpenAPI: payments.v1 (createCharge, getCharge); AsyncAPI: payments.v1 (paymentSucceeded, paymentFailed)"`。15.7） |
 
 名前は別名で書く（CML の名前は ASCII の識別子に限られる。0.4）。顧客／供給者には OHS を付けない。Context Mapper の規則（顧客／供給者に OHS は付けない）に合わせたもので、sakai の公開ホストサービスは「境界の向こうから呼べるサービス」の意味なので、顧客も同じサービスを呼ぶ。そのことは `implementationTechnology` に残る。持ち主を CML のチーム（`type = TEAM` のコンテキスト）にしないのは、`SYSTEM_LANDSCAPE` の地図にチームを入れられないからである。`state` を `AS_IS` にしたのは、sakai の地図が実物と突き合わせたものだからである。関係は地図に書いた順（`use context` の順のコンテキストの、ファイルの中の順）に出し、両側に書く関係は先に出てきたほうで一度だけ出す。コメントは `--lang` の言語で書く。頭のコメントに元の地図の名前と書いたコマンドを書き、`.ctx` のハッシュは書かない（7.1 と同じ理由）。
 
@@ -1546,6 +1554,7 @@ BoundedContext ordering {
 - `relationships[]`：`kind` は `upstream_downstream`、`shared_kernel`、`partnership`、`separate_ways`。上流と下流の関係は、`roles` の `upstream`（`supplier`、`open_host_service`、`published_language`）と `downstream`（`conformist`、`anticorruption_layer`、`customer`）、`through`、`layer`、`enums`（上流の列挙の名指し、先、`checked`、値の対応）、`terms`、`declared`（宣言した `.ctx` の行）を持つ。対応の先が名前だけなら `"to": {"name": "出荷の可否"}` で、`checked` は false になる。共有カーネルは `sides` に両側の並びを持つ。
 - `artifacts[]`：範囲の成果物の全部。名指しと、属するコンテキストと、それを決めた `owns` の行と、ファイルの SHA-256（先頭 16 桁）。yuen が、成果物の定義が変わったかを知るのに使える。
 - `crossings[]`：境界を越える参照の全部。もとと先の名指し、行、二つのコンテキスト、参照の仕方（`via`。proto の import は `proto import`、Rust のクレートの依存は、依存を書いた表の名前の `dependencies` か `build-dependencies`、ほかは、もとの言語が口で言う語：`import proto`、`shape`、`apply`、`use calendar`、`use rule`、`use rule … connect` など、`use proto`、`connect`、`flow`）、越えていく要素（使う型と、そこからフィールドでたどれる型。3.3。proto の import と、規則の `import proto` と `shape` のほかは空）、許した関係（`allowed_by`）。
+- OpenAPI と AsyncAPI の文書（15.7）：`published` の `from` に文書を `file "…"` の名指しで並べ、文書のある塊にだけ `contracts`（ファイル、種類、仕様の版、題、文書の版）を足す。`owns` と `layer` と共有カーネルの文書の項は `{"name": …, "contract": "openapi"}`。文書の要素は名指しの形を持たない（15.10）ので、`means` と `enums` の `from` と `to` は `{"pointer": "<ルートからのパス>#<JSON Pointer>"}` で書く。文書の `$ref` の `crossings` にだけ、`pointer`（`$ref` が指す先）と `pointers`（そこからたどる要素の全部）を足す。どれも、文書の無い地図の api は変えない。
 - 確かめていない成果物を並べる `not_checked[]` は、ritsu の段階 E で消した。ritsu の口で一式を読むようになってから、いつも空の並びだったからである。ほかの言語の成果物を読めなければ、検査が E104 か E105 を出し、api は検査を通らない地図には出さないので、api を出すときには、確かめていない成果物は無い。言語をまたいで決められなかったこと（ritsu の口の答えの `Undecided`）は、sakai が尋ねる口（`Rules` の事実、索引の `References` と `Items`、`Books` の事実）には無く、言語の境目の検査（ritsu の DESIGN 7 章）の結果として `ritsu check` が言う（要約の境目の数と JSON の `borders`、`tool` が `ritsu` の診断）。実行のときにしか見えない呼び出し（3.7）は成果物ごとのものではなく、doc の「確かめていないこと」に書く（10 章）。いつも空のキーを残すと、読む人がそこに何かが入ると思って待つことになる。
 
 ## 10. doc
@@ -1554,7 +1563,7 @@ BoundedContext ordering {
 
 1. 見出し（`Context map: Shop (shop) v1`、`コンテキストマップ：通販（shop）v1`）、地図の説明、`check` の要約の一行、コンテキストマップの図。コンテキストを四角に、関係を線にし、線に上流の役割（一つに一行）、通る package、`→ 下流の役割` を書く（`open host service` / `published language warehouse.v1` / `→ conformist`）。共有カーネルとパートナーシップは両向きの線、別々の道は点線。図の読み方を一段落で添える。
 2. コンテキストの一覧（名前、別名、持ち主、成果物の数、説明）。名前は、そのコンテキストの節へのリンクにする（Markdown では見出しへ、HTML では節の `id` へ）。
-3. コンテキストごとの節：説明、持ち主、ほかの呼び名、書いたファイル。成果物の表（ツール、ファイル、口から読んだ中身。規則は入力と出力、帳簿は勘定と振替、dates のファイルは日付と、使うカレンダーの名前とデータの範囲、カレンダーはそのデータの範囲、`.proto` はメッセージと列挙とサービス、ワークフローは実装するサービスと子のフロー。コードは数だけを一行で）。公表された言語（書いたもの、公開ホストサービスとメソッド、それを実装するワークフロー、生成したコードの置き場所）。用語集（語、定義、指すもの、越えていく先。越えた先で値か語に読み替えられるなら「`cancelled_in_ordering` として」と添える）。関係（相手、役割、通る package、その関係を通る参照を `ファイル:行 (読み方) → 名指し` で）。
+3. コンテキストごとの節：説明、持ち主、ほかの呼び名、書いたファイル。成果物の表（ツール、ファイル、口から読んだ中身。規則は入力と出力、帳簿は勘定と振替、dates のファイルは日付と、使うカレンダーの名前とデータの範囲、カレンダーはそのデータの範囲、`.proto` はメッセージと列挙とサービス、ワークフローは実装するサービスと子のフロー、OpenAPI と AsyncAPI の文書は仕様と題と版、HTTP の操作、チャネル、送受信、スキーマ、列挙。コードは数だけを一行で）。公表された言語（書いたもの、公開ホストサービスとメソッド、それを実装するワークフロー、生成したコードの置き場所）。用語集（語、定義、指すもの、越えていく先。越えた先で値か語に読み替えられるなら「`cancelled_in_ordering` として」と添える）。関係（相手、役割、通る package、その関係を通る参照を `ファイル:行 (読み方) → 名指し` で）。
 4. 用語集の索引：全部のコンテキストの語を名前の順に並べる。同じ名前の語がほかのコンテキストにもあれば、そう書く。
 5. 対応の表：腐敗防止層の列挙の対応ごとに、上流の値と下流の値（拒否なら理由）。対応がどこで決まっているかを一文で書く。規則の `import proto` が対応なら「規則から rulec が読んだ」、対応の先が下流の列挙なら「下流の値は対応の先の列挙にあることを確かめた」、名前だけなら「下流の値は確かめていない」。
 6. 確かめていないこと（3.7 のうち、読み手に関わるもの）。最後に、書いた sakai の版と地図のファイル。
@@ -1635,11 +1644,14 @@ C の段階で、この例を作った（日本語の名前の `通販.ctx` と�
 
 ritsu の D.8 から、`ritsu sakai check` は上の表の参照を全部読む。境界を越える参照は 9 件で（3.1）、どれも関係が許す。英語の例では、境界を越える参照を、参照元のファイルの名前の順に並べるので、規則の二つ（`billing_need.rule` と `shipment_fee.rule`）の順が、日本語の例（`出荷の送料.rule` と `請求の要否.rule`）と逆になる。言語ごとの数と、関係と、診断は同じである。
 
+OpenAPI と AsyncAPI の文書でやりとりするサービスの例は、別に `examples/webshop`（英語の名前）と `examples/webshop.ja`（日本語の名前）に置いた（15.9）。
+
 ## 12. 実装
 
 - Rust（edition 2024、手元の stable 1.94.1 で通ること）。依存は serde_json だけ（`preserve_order` の機能を使う）。
 - SHA-256 は ritsu-base のもの（FIPS 180-4 の既知の値でテストしてある）。地図とコンテキストのファイルのハッシュ（api）と、共有カーネルのコピーの比べ合わせ（E308）に使う。
 - proto の読み手は ritsu-proto（4.2。ritsu の C.9 で、sakai の読み手を元に作った）。sakai に残したのは、要素の名指し方と、何も設定していないことを言う列挙の値の決め方（1.7）である。テストは、buf があれば、例と fixture の proto を `buf build -o -#format=json` の結果と比べる（package、import、メッセージ、列挙と値、サービスとメソッド）。`buf/validate` を import する proto は、buf が BSR の依存なしに組めないので比べない。
+- OpenAPI と AsyncAPI の文書は `src/contracts.rs` が読む（どれが文書か、要素の場所、列挙の値、`$ref` が指す先、チャネルと操作）。YAML と JSON を値と位置に読むのは、ritsu の土台の `ritsu_base::yaml` である（15.3）。
 - 一式の言語は、ritsu の口で読む（`src/suite.rs`。4.1）。口は `Suite`（`Rules`、プロジェクトの索引 `Index`、`Books`）にまとめて渡され、同じファイルには一度の実行で一度だけ問う。コマンドは `src/run.rs` の `run(引数, 口, 標準出力, 標準エラー)` で、sakai のクレートのバイナリ（`src/main.rs`）は何もつながない口を、`ritsu sakai` はすべてをつないだ口を渡す。E104 の注に書く「同じコマンドを `ritsu sakai` で」は、`run` が受け取った引数から作る（スレッドに置く。`suite::COMMAND`）。診断の文面のパスの基点（2.4）も、`run` がスレッドに置いて決め、終わったら戻す（`paths::show_from`。前は `main.rs` が一度だけ決めていた。同じプロセスで何度もコマンドを走らせるテストと ritsu のため）。
 - 診断の文面は `tr!` で英語と日本語を隣に書く。台帳は `src/codes.rs`。
 - コードの import の検査の設定は `src/build/`（`areas.rs` が 7.1 の表を作り、`import_linter.rs`、`depcruise.rs`、`archunit.rs`、`go_arch_lint.rs` がツールごとの言葉に置き換え、`mod.rs` が頭と書き出しと `--check` を受け持つ）。CML は `src/cml.rs`。doc は `src/doc/`（`mod.rs` がページの中身を言語ごとに塊の並びに組み、`markdown.rs` と `html.rs` が書き、`draw.rs` が HTML の図を描く。10 章）。
@@ -1717,6 +1729,25 @@ sakai の段階 D を、ritsu の中で作った（ritsu の PLAN の F.2）。�
 
 テストは四つのファイルに増えた。`tests/doc.rs`（10 章）、`tests/docs.rs`（README、例の README、`docs/`、スキルに載せた `.ctx` の行、`$ sakai …` の出力、診断、設定の抜粋、ツールが言うこと、比べた数、リンク、キーワードの一覧が本物であること。koyomi と chobo の `tests/docs.rs` の形で、コマンドは `ritsu sakai` と同じにすべての言語をつないで走らせ、診断は変異の golden にあることを確かめる）、`tests/skill.rs`（コピーが `docs/` と同じ、スキルのリンクが外に出ない、frontmatter の形）、`tests/examples.rs` の `the_two_maps_say_the_same_but_for_the_names`（二つの地図の境界を越える参照が、コンテキストを別名で読めば同じで、CML がコメントと文字列のほかは同じ）。
 
+### 12.6 OpenAPI と AsyncAPI の文書を足したときに変えたこと（15 章）
+
+文書の無い地図の出力は、次のところだけが変わった。どれも決めて変えたもので、ほかの出力は変えていない（変異、api、CML、build の設定、doc の golden がそのまま通る）。
+
+- W101 の注：成果物の種類に「OpenAPI と AsyncAPI の文書」が加わった（golden の 4 ファイル）。
+- doc の「確かめていないこと」：実行時にしか見えない呼び出しの項を、契約に書いていない呼び出しの項に書き直し、コードが文書のとおりに呼ぶかを確かめていないことの項を足した（通販の例のページの 6 ファイル）。
+- キーワード：`openapi`、`asyncapi`、`schema`、`channel`、`operation` が加わり、地図、コンテキスト、語、下流の値の名前にできなくなった（E002）。例とテストに、この五つを名前にしたものは無かった。
+- 書けるものが増えた：公表された言語と `owns`、`layer`、`shared kernel with` の `openapi "…"` と `asyncapi "…"`、短い書き方の `schema`、`channel`、`operation`、値の行の左の `"…"`、文書の公表された言語の `open host service` の、ASCII の識別子でない名前と `"…"`。前はどれも E002 だった。proto の公表された言語の `open host service` は、これまでどおり ASCII の識別子に限る。
+- 文の言い方：公表された言語を混ぜたときの E004、何も無い公表された言語の E004 の注、公表された言語の下に書けないものの E002 の注、`owns` に書けない `yuen` と `sakai` の E002 の注に、文書のことを足した。どれも、いまの golden には当たるものが無かった。
+- 要約：文書から越える参照を、proto のあとに `openapi N`、`asyncapi N` と数える。文書の無い地図では変わらない。
+- api：文書の塊と文書の参照にだけ、キーを足した（9 章）。
+
+範囲に文書を置いている地図では、次の二つが変わる。どちらも決めて変えたことで、確かめていない契約を黙って通さないためである（P7）。
+
+- 範囲の OpenAPI と AsyncAPI の文書は成果物になり、どれかのコンテキストに属さなければ E101 になる。属させたくない文書（ほかのシステムから取ってきた文書のコピーを置いたディレクトリなど）は、地図の `except` で範囲から外す。
+- OpenAPI 2.0（Swagger）と AsyncAPI 2.x の文書は、範囲にあるだけで E108 になる。変換するか、`except` で外す。
+
+ritsu の地図 `ritsu.ctx` は、範囲に文書が無く、`ritsu check ritsu.ctx` の要約（12 contexts、27 relationships、406 artifacts、59 crossings）は変わらない。
+
 ## 13. 捨てたもの
 
 ここまでの節に書いたもののほかに、次を捨てた。
@@ -1743,9 +1774,9 @@ sakai の段階 D を、ritsu の中で作った（ritsu の PLAN の F.2）。�
 言語：
 
 - 持ち主を CODEOWNERS と突き合わせること。CODEOWNERS の照合の決まりを正しく再現する必要がある。
-- OpenAPI と JSON Schema の列挙を、対応の網羅に使うこと（rulec の `import jsonschema` と同じ形で）。外のシステム（Stripe、AWS）を、OpenAPI や Smithy の記述を公表された言語に持つコンテキストとして書くこと。
+- OpenAPI でも AsyncAPI でもない JSON Schema だけのファイルと、Smithy の記述を、公表された言語にすること。OpenAPI と AsyncAPI の文書は 15 章で入れた（外のシステムを、その OpenAPI の文書を公表された言語に持つコンテキストとして書くこともできる）。
 - 腐敗防止層の対応から、翻訳のコードを生成すること（1.7）。
-- 実行時の呼び出し（HTTP の URL、キュー、データベース）を成果物として書くこと。
+- 契約の文書に書いていない実行時の呼び出し（HTTP の URL、キュー、データベース）を成果物として書くこと。
 - Rust のクレートの中の、モジュールの単位の境界（7.7。いまはクレートの単位で確かめる）。
 
 出力：
@@ -1758,3 +1789,204 @@ sakai の段階 D を、ritsu の中で作った（ritsu の PLAN の F.2）。�
 公開：
 
 - リリースとバイナリ、crates.io。今の入れ方は、リポジトリを取ってきて `cargo install --path .` である。
+
+## 15. OpenAPI と AsyncAPI の契約
+
+ritsu 0.23.0 のあとに足した（2026-10-05）。サービスのあいだの HTTP とメッセージのキューは、これまで成果物にも import にも現れないものとして、doc に「確かめていない」と出すだけだった（P7、3.7）。この章は、それを契約の文書から確かめる形にしたときの決定である。
+
+### 15.1 芯
+
+HTTP の API は OpenAPI の文書に、イベントでつながるサービスは AsyncAPI の文書に書かれることが多い。どちらも公開された標準の形式で、proto と同じく、ほかのコンテキストに見せる型と、やりとりの口を、ファイルに書いたものである。
+
+**決定**：OpenAPI と AsyncAPI の文書を、proto と同じく公表された言語に入れられる成果物にする（P3）。
+
+- 文書に書いた参照（ファイルをまたぐ `$ref`、AsyncAPI の操作が送ったり受けたりするチャネル）は、ほかの成果物の参照と同じ決まりで、関係が許すときだけ通す（15.5）。
+- 腐敗防止層は、文書のスキーマの列挙を、proto の列挙と同じく `enum … -> …` で値ごとに読み替え、網羅を確かめる（15.6）。
+- 契約の文書に書いた呼び出しは確かめたもの、文書に書いていない呼び出し（URL を文字列で持つ HTTP、文書の無いキュー）は確かめていないもの、と分けて doc に出す（P7）。
+
+### 15.2 読む文書と版
+
+2026-10-05 に、次の仕様を読んで確かめた。
+
+- OpenAPI 3.2.0（2025-09-19、https://spec.openapis.org/oas/v3.2.0.html ）。3.1 と互換で、道具はパッチの版を見ないことになっている（"The patch version SHOULD NOT be considered by tooling."）。3.1.x と 3.0.x も同じ形で読める範囲を使う。
+- AsyncAPI 3.1.0（2026-01-31、https://www.asyncapi.com/docs/reference/specification/v3.1.0 ）。3.0.0（2023-12）と互換で、足されたのはバインディング（ROS 2）である（https://www.asyncapi.com/blog/release-notes-3.1.0 ）。操作の `channel` は「ルートの `channels` のチャネルを指さなければならない」とあり、ルートの `channels` の項は、ほかのファイルを指す `$ref`（Reference Object）でもよい。
+- YAML：OpenAPI 3.2 は YAML 1.2 と「RFC 9512 の 3.4 節の制約」を勧める。AsyncAPI 3.1 は、タグを JSON Schema の決まりのものに、マップのキーをフェイルセーフのスキーマの文字列に限ると書く。RFC 9512（https://www.rfc-editor.org/rfc/rfc9512.html ）の 3.4 節は、JSON と行き来する YAML が避けるものとして、複数の文書のストリーム、UTF-8 でない文字コード、文字列でないキー、アンカーで書いた循環、`.inf` と `.nan`、JSON の型に当たらないタグを挙げ、エイリアスは静的な値に置き換えると書く。
+
+**決定**：読むのは、`openapi` の値が `3.0.`、`3.1.`、`3.2.` で始まる文書と、`asyncapi` の値が `3.0.`、`3.1.` で始まる文書である。`swagger: "2.0"`（OpenAPI 2.0）と AsyncAPI 2.x の文書は、読まずに E108 で止め、注に変換の仕方を書く。
+
+**理由**：AsyncAPI 2.x の `publish` と `subscribe` は、文書が書くアプリケーションではなく、相手の側から見た言い方である。3.0 でアプリケーションがすること（`send` と `receive`）に替わった。二つの版を読み分けると、版を取り違えたときに参照の向きが逆になる。2.x から 3.0 への変換は AsyncAPI の道具（AsyncAPI CLI の `asyncapi convert`）が持っている。OpenAPI 2.0 も型の置き場所（`definitions`）が違い、3 系への変換の道具がある。
+
+文書かどうかは中身で決める。範囲の `.yaml`、`.yml`、`.json` のファイルのうち、いちばん上のマップに `openapi`、`asyncapi`、`swagger` のキーを持つものが成果物になり、どれもちょうど一つのコンテキストに属する（1.3、E101）。拡張子だけでは、契約の文書とほかの設定のファイルを見分けられないからである。
+
+### 15.3 読み手（YAML と JSON）
+
+**決定**：YAML の読み手を、ritsu の土台（`ritsu-base` の `yaml`）に std だけで書く。読むのは、RFC 9512 の 3.4 節の言う「JSON と行き来できる YAML 1.2」で、その外の書き方は読まずに、どの行の何が読めないかを言って止める（E108）。
+
+- 読むもの：ブロックのマップとシーケンス、フローのマップとシーケンス、四つの書き方のスカラー（プレーン、一重引用符、二重引用符、ブロックの `|` と `>`。字下げとチョンプの指示も）、コメント、`---` と `...`、`%YAML 1.2`、アンカーとエイリアス（エイリアスは、アンカーを付けた値のコピーとして読む）、JSON Schema の決まりのタグ（`!!str`、`!!int`、`!!float`、`!!bool`、`!!null`、`!!seq`、`!!map`）と `!`。
+- 値の型は、YAML 1.2 のコアスキーマで決める（`true`、`null`、`~`、`0x1F`、`1e3`）。マップのキーは、フェイルセーフのスキーマのとおり、書いたままの文字列にする（OpenAPI の `200:` は文字列の `"200"`）。
+- 読まないもの：二つ目の文書、`%YAML 1.1` と `%TAG`、ほかのタグ（`!!binary`、`!local` など）、`?` で書くキー、スカラーでないキー、同じキーの二度書き、自分の中を指すエイリアス、`.inf` と `.nan`、字下げのタブ、YAML に書けない文字（タブと改行のほかの制御文字など）。
+- `.json` のファイルは JSON の決まりで読む。どちらの読み手も、値ごとに行と列を持つ。診断が `$ref` の行や列挙の値の行を指すためである。
+
+**確かめ方**：YAML の公式のテストスイート（yaml-test-suite の `data-2022-01-17`、MIT ライセンス）の全部のケースにかける。期待する JSON があるケースでは、読んだ値がそれと同じか、読まずに止めるかのどちらかで、違う値を返したケースが一つも無いこと。誤りのケースは、どれも止めること。ケースは `crates/ritsu-base/tests/fixtures/yaml-test-suite.json` に一つのファイルにして持つ（テストはネットワークを使わない。スイートのライセンスの文は隣の `yaml-test-suite.LICENSE`）。
+
+2026-10-06 に走らせると、402 ケース（番号の下に分かれたものは一つずつ数える）のうち、204 ケースはスイートの JSON と同じ値に読み、104 ケースは読まずに止め、YAML でない 94 ケースはどれも止めた。違う値を返したケースは無い。止めた 104 ケースの理由は、`?` で書くキーが 23、二つ目の文書が 12、タグ（`%TAG`、JSON の型に当たらないタグ、値の無いタグ）が 20、そのほかのキーの書き方（フローのシーケンスの中の `キー: 値`、無いキー、二行にわたるキー、スカラーでないキー、`:` の無いフローのキー、エイリアスのキー）が 28、`%YAML 1.1` などの指示が 8、文書が無いのが 5、残り（字下げのタブ、一つの値に二つのアンカー、`:` で始まる値、マップと同じ字下げのシーケンスの項）が 8 である。どれも OpenAPI と AsyncAPI の文書がふつう使わない書き方である。読めるものを広げるときは、そのたびにこのスイートで、違う値を返さないことを確かめる。
+
+実際の文書でも、手で一度確かめた（2026-10-06、テストには入れない）。Stripe の OpenAPI の文書（GitHub の `stripe/openapi` の `openapi/spec3.yaml`、6.6 MB）、GitHub の REST API の文書（`github/rest-api-description` の `descriptions/api.github.com/api.github.com.yaml`、9.9 MB）、OpenAPI の例の petstore（`OAI/learn.openapis.org` の `examples/v3.0/petstore.yaml`）、AsyncAPI の例の streetlights（`asyncapi/spec` の `examples/streetlights-kafka-asyncapi.yml`）を読み、どれも js-yaml 4.3.2 がコアスキーマで読んだ値と同じだった。リリースのビルドで、Stripe の文書は 59 ms、GitHub の文書は 93 ms で読んだ。二つを公表された言語に持つ地図の `ritsu sakai check` は、デバッグのビルドで 2.8 秒だった。一つの検査の中では、文書の一部を探す段で読んだ値を、文書を読む段がそのまま使い、同じ文書を二度は読まない。
+
+E108 は、読めない文書を、どの行の何が読めないかとともに言う。AsyncAPI 2.x の文書なら、次のとおりである（日本語の名前の例の変異）。
+
+```
+エラー[E108]: notifications/events/notifications.yaml:1:1: notifications/events/notifications.yaml は AsyncAPI 2.6.0 の文書なので、sakai は読みません
+     1 | asyncapi: 2.6.0
+  = AsyncAPI 3 に変換してください（`asyncapi convert notifications/events/notifications.yaml`）。2.x の publish と subscribe は相手の側から見た言い方で、3.0 からアプリケーションがすること（send と receive）になりました。sakai が読むのは AsyncAPI 3.0 と 3.1 です。
+```
+
+**理由**：rulec は、JSON Schema の列挙を取り込むときに YAML を読まない（rulec の `src/jsonschema.rs`）。そのファイルがたまたま使う部分だけを読む読み手は、次のファイルで黙って読み違える、というのがその理由である。sakai が読むのも列挙の値の集合で、黙って違う集合を読むことがいちばん困る。そこで、読む部分を、仕様が勧める部分（JSON と行き来できる YAML 1.2）にはっきり決め、その外は止め、公式のテストスイートで、違う値を返さないことを確かめる。
+
+**置き場**：ritsu の土台（`ritsu-base`）に置いた。YAML と JSON を、位置の付いた値に読むことは、どの言語の意味も持たない（ritsu の DESIGN 4.11）。rulec の `import jsonschema` と dandori の `use openapi` も同じ文書を読む（二つとも、いまは JSON だけを読む）。土台は std だけで書く決まり（ritsu の P9）なので、外のクレートは使わない。OpenAPI と AsyncAPI の意味（どこがスキーマか、チャネルか、操作か）は sakai に置いた（`src/contracts.rs`）。
+
+**捨てたもの**：
+
+- YAML のクレートを足すこと。2026-10-05 に crates.io で見ると、保守されているのは yaml-rust2 0.13.0（2026-09-11。arraydeque と hashlink に依存）、saphyr 0.1.0（2026-09-19。hashlink、ordered-float、thiserror に依存し、thiserror の手続きマクロが syn などを連れてくる）、serde-saphyr 1.3.0 だった。serde_yaml は 2024 年に保守を終え、serde_yml は 0.0.13 で非推奨になっている。どれも YAML の全部を読むので、rulec の心配は当たらない。ただ、言語のクレートの外のクレートは serde_json だけという決まり（ritsu の DESIGN 3.1 の 4）を破り、土台にも置けない（rulec と dandori が同じ読み手を使えない）。さらに、YAML 1.1 の値、タグ、スカラーでないキーまで読むので、読んだあとで、JSON と行き来できないものを止めるコードが別に要る。
+- 拡張子や名前で文書を見分けること（`*.openapi.yaml`）。決まった名付けの習慣が無い。
+- sakai の中に読み手を置くこと。上の置き場の理由。
+
+### 15.4 `.ctx` の書き方
+
+```ctx
+published language payments.v1
+  openapi "../payments/api/payments.yaml"
+  asyncapi "../payments/events/payments.yaml"
+  open host service createCharge, getCharge, paymentSucceeded, paymentFailed
+```
+
+**決定**：
+
+- `published language <名前>` の下に、`openapi "…"` と `asyncapi "…"` を並べる（いくつでも。二つの種類を混ぜてもよい）。proto、rulec の規則、Rust のクレートとは混ぜない（E004）。文書はそのコンテキストに属すること（E302）。`generated dir` も書ける。
+- 見出しの名前は、コンテキストがその公表された言語に付ける名前で、文書の中のものとは比べない。OpenAPI と AsyncAPI の文書には、proto の package に当たる名前が無いからである（`info.title` は人が読む題）。形は package と同じ（`payments.v1`）で、地図の中で重ならないこと（E006）。
+- `open host service` には、OpenAPI の `operationId` と、AsyncAPI のチャネル（`channels` のキー）を並べる。だれでも呼べる HTTP の操作と、だれでも送ったり受けたりできるチャネルである。文書に無い名前は E301。名前に空白などがあれば `"…"` で書ける。`operationId` の無い操作は、メソッドとパスで `"GET /orders/{id}"` と書く。
+- 腐敗防止層の対応と語の `means` は、短い書き方で文書の要素を指す。`enum <名前>`（`components/schemas` のうち `enum` を持つスキーマ）と、その下の `value <値>`、`schema <名前>`（`components/schemas` のスキーマ）、`message <名前>`（AsyncAPI の `components/messages`）、`channel <名前>`、`operation <名前>`（OpenAPI の `operationId` か、AsyncAPI の `operations` のキー）である。`openapi`、`asyncapi`、`schema`、`channel`、`operation` はキーワードになり、名前には使えない（E002）。
+- `owns`、`layer`、`shared kernel with` の項にも、`openapi "…"` と `asyncapi "…"` でファイルを書ける（`rulec "…"` と同じく、ファイルを名指す項）。
+
+名指しの形（2 章）には、`openapi` と `asyncapi` のツールの語を足していない（15.10）。
+
+### 15.5 境界を越える参照
+
+| 参照のもと | 何を読むか | 参照の先 | `via` |
+|---|---|---|---|
+| OpenAPI と AsyncAPI の文書 | ファイルをまたぐ `$ref`（行と列） | 別の文書の要素（スキーマ、メッセージ、パスの項など） | `$ref` |
+| AsyncAPI の文書 | ルートの `channels` の項が、ファイルをまたぐ `$ref` で別の文書のチャネルを指すもの | チャネル | 操作が使えば、その `action`（`send`、`receive`）。使わなければ `$ref` |
+| dandori のワークフロー | `use openapi` | OpenAPI の文書 | `use openapi` |
+| rulec の規則 | `import jsonschema` と、JSON Schema の `shape` | OpenAPI と AsyncAPI の文書 | `import jsonschema`、`shape` |
+
+`$ref` の先は、ファイルと JSON Pointer（`#/components/schemas/Charge`）で決める。ポインタの途中に `$ref` があれば、それもたどる（AsyncAPI の `#/channels/orderPlaced/messages/orderPlaced` で、`orderPlaced` のチャネルがほかのファイルへの `$ref` のとき）。URL の `$ref`（`https://…`）は読まず、範囲の外のものとして扱う（W104。proto の見つからない import の W102 と同じ考え）。ファイルが無い `$ref` と、ポインタが何も指さない `$ref` は E108、範囲の外のファイルは E103 である。
+
+診断の決め方は 3.3 と同じで、一つの参照に一つを出す。足したことは三つある。
+
+1. 先が相手の公表された言語の文書の要素なら、公表された言語のものである。公表された言語に無い文書なら E202。
+2. AsyncAPI のチャネルを使う参照と、OpenAPI のパスの項（`#/paths/…`）を指す参照は、やりとりの口を使う参照で、そのチャネルか操作が相手の `open host service` に並んでいること（無ければ E210）。proto のサービスを呼ぶ参照（E207）と同じ考えで、コードを分けたのは、呼ぶのがワークフローではなく文書だからである。
+3. 腐敗防止層の下流の公表された言語の文書が、上流の文書を `$ref` で指すと E205（上流の型を、自分の公表された言語に出している）。
+
+越えていく要素は、`$ref` の先の要素と、そこから `$ref` でたどれる要素の全部である（チャネルなら、そのメッセージと、メッセージのペイロードのスキーマ）。proto のメッセージのフィールドをたどるのと同じく多めに数える（3.3）。`$ref` を集めるとき、`example` と `x-` で始まるキーの下と、Example Object の値は、データなので読まない。`default` の下は読む（OpenAPI の既定のレスポンスでもあるため）。`properties` や `responses` のように名前を並べるマップのキーは、名前として扱う（`example` や `default` という名前のプロパティの `$ref` も読み、`$ref` という名前のプロパティを参照とは読まない）。同じ文書から同じ要素への `$ref` が二つあっても、一つの参照と数える（proto が同じファイルを一度 import するのと同じ）。
+
+15.9 の例で、決済がチャネル `paymentFailed` を公開ホストサービスから外すと、そこから受け取っている配送の層が、次のように言う。
+
+```
+エラー[E210]: shipping/acl/payments.yaml:11:5: 「配送」の shipping/acl/payments.yaml が、「決済」の公開ホストサービスでないチャネル paymentFailed を使っています（receive）
+    11 |     $ref: '../../payments/events/payments.yaml#/channels/paymentFailed'
+  = 公表された言語 payments.v1 の公開ホストサービスは createCharge、getCharge、paymentSucceeded です。
+  = 境界の向こうのチャネルに送ったりそこから受けたりできるのは、相手が `open host service` に並べたチャネルだけです（HTTP の操作も同じです）。相手の公表された言語の `open host service` に足してもらうか、相手が開いたものを使ってください。
+  関わるもの:
+      配送  shipping/acl/payments.yaml:11     $ref: ../../payments/events/payments.yaml#/channels/paymentFailed
+      決済  payments/events/payments.yaml:14  #/channels/paymentFailed（公表された言語 payments.v1 のもの）
+```
+
+関わるものの行は、文書の要素を、ファイルの行と JSON Pointer で書く（名指しの形を持たないため。15.10）。
+
+**捨てたもの**：
+
+- チャネルを使うことを、型を使うことと同じに扱うこと（公表された言語だけを求める）。チャネルに送ることと、チャネルから受けることは、相手とのやりとりそのもので、相手がだれにでも開いたチャネルかどうかが関係の中身である。
+
+### 15.6 対応と語
+
+```ctx
+upstream Payments anticorruption layer
+  through payments.v1
+  layer dir "../shipping/acl"
+  enum ChargeStatus -> enum ShipmentGate
+    pending   -> hold
+    succeeded -> release
+    failed    -> refuse "An order whose charge failed is not shipped"
+    refunded  -> refuse "A refunded order is not shipped"
+```
+
+**決定**：
+
+- 上流の列挙には、`through` の公表された言語の文書の、`enum` を持つスキーマも使える。値は `enum` の並びで、書いたとおりの文字列で比べる（大文字と小文字を区別し、接頭辞も外さない。rulec の `import jsonschema` と同じ）。
+- 並びの中の `null` は、値が無いことを表すもので、対応は要らない（proto の 0 番の `…_UNSPECIFIED` と同じ扱い）。数と真偽の値は、JSON に書く形（`1`、`true`）で値の行に書く。
+- 対応の先には、自分の公表された言語の文書の列挙（`enum <名前>`）も使え、右辺はその値であること（E403）。E401、E402、E404 は proto のときと同じに出る。
+- 語の `means` は、自分の公表された言語の文書の要素を指せる。同じ語の検査（E406、E407）は、`$ref` とチャネルで越えていく要素を使う。
+
+15.9 の例で、決済が課金の状態に `disputed` を足すと、配送の腐敗防止層は、新しい値をどう扱うかを決めるまで通らない。
+
+```
+エラー[E401]: contexts/配送.ctx:19:3: 「配送」の腐敗防止層の対応に、「決済」の列挙 payments/api/payments.yaml#/components/schemas/ChargeStatus の値 disputed がありません
+    19 |   enum ChargeStatus -> enum ShipmentGate
+  = 値 disputed は payments/api/payments.yaml:65 にあります。
+  = 上流の列挙の値ごとに、下流の値か refuse（拒否）を書いてください。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。
+  = 直した行: disputed -> refuse "…"
+  関わるもの:
+      配送  contexts/配送.ctx:16           upstream 決済 anticorruption layer
+      決済  payments/api/payments.yaml:63  #/components/schemas/ChargeStatus（値は 5 個あり、そのうち 1 個に対応がありません）
+```
+
+値の注は、proto のとき（「PACKING_STATUS_DAMAGED は … の値です。」）と違い、値で文を始めない（英語の文の頭を大文字にすると、大文字と小文字を区別する値が別の値に見えるため）。
+
+### 15.7 出すところ
+
+- **doc**：成果物の表に、文書の題と版、操作（OpenAPI はメソッドとパスと `operationId`、AsyncAPI は `send` か `receive` とチャネル）、チャネル、列挙を出す。公表された言語の節に文書と公開ホストサービスを、関係の節に越える参照を出す。「確かめていないこと」の節は、契約に書いた呼び出しは確かめた、契約に書いていない呼び出しは確かめていない、と書き直した。
+- **CML**：関係の `implementationTechnology` に、通る公表された言語の文書と、その公開ホストサービスを書く（`"OpenAPI: payments.v1 (createCharge, getCharge); AsyncAPI: payments.v1 (paymentSucceeded, paymentFailed)"`）。上流の役割に `OHS` が付くのは、proto と同じく、`through` の公表された言語に公開ホストサービスがあるときである。
+- **api**：`published` の `from` に文書を `file "…"` の名指しで出し、`contracts` に文書の種類と版を添える。`crossings` の `via` は 15.5 の表の語で、文書の要素は、名指しの代わりに `<ルートからのパス>#<ポインタ>` の文字列で `pointers` に出す。
+
+### 15.8 診断
+
+コードを三つ足した（5.2 の表）。
+
+- **E108**：OpenAPI か AsyncAPI の文書を読めない。YAML か JSON として読めない、JSON と行き来できない YAML の書き方をしている、sakai が読まない版である、`$ref` の先のファイルが無いかポインタが何も指さない、のどれか。proto の E106 にあたる。
+- **W104**：URL を指す `$ref`。読まずに、範囲の外のものとして扱う。proto の W102 にあたる。
+- **E210**：文書が、境界の向こうの、相手の公開ホストサービスでないチャネルか HTTP の操作を使っている。ワークフローの E207 にあたる。
+
+ほかは、いまのコードを、文書にも同じ意味で出す（E004、E103、E201〜E206、E301、E302、E401〜E404、E406〜E408、W402）。
+
+### 15.9 例
+
+`examples/webshop`（英語の名前、地図は `webshop.ctx`）と、同じものを日本語の名前で書いた `examples/webshop.ja`（地図は `ネットショップ.ctx`）を置いた。HTTP とイベントでやりとりする四つのサービス（Ordering、Payments、Shipping、Notifications。日本語の例では受注、決済、配送、通知）で、どれも OpenAPI か AsyncAPI の文書を持つ。11 章の通販の例には足さず、別の例にした。通販の例に文書を足すと、その例のページ、CML、設定、README と DESIGN に貼った出力を全部取り直すことになり、二つの例が見せたいもの（一式の言語をまたぐ参照と、サービスの契約をまたぐ参照）が一つの地図に混ざるからである。
+
+| 関係 | パターン | 境界を越えるもの |
+|---|---|---|
+| Payments → Ordering | 順応者、`through ordering.v1` | Payments の AsyncAPI の文書が、Ordering のチャネル `orderPlaced` を受け取る（`receive`） |
+| Shipping → Payments | 腐敗防止層、`through payments.v1`、層は `shipping/acl` | 層の AsyncAPI の文書が `paymentSucceeded` と `paymentFailed` を受け取る。`ChargeStatus` を Shipping の `ShipmentGate` に値ごとに読み替え、`failed` と `refunded` は拒否する |
+| Notifications → Ordering | 順応者、`through ordering.v1` | `orderPlaced` と `orderCancelled` を受け取る。ワークフローが Ordering の OpenAPI の文書を `use openapi` で読む |
+| Ordering ＝ Payments | 共有カーネル（`common/money.yaml`。文書の一部） | Payments のスキーマが `Money` を `$ref` で使う |
+| Notifications ／ Payments | 別々の道 | 何も無いことを確かめる |
+
+```
+$ ritsu sakai check examples/webshop/webshop.ctx
+examples/webshop/webshop.ctx: ok — 4 contexts, 5 relationships; 9 artifacts, each in one context; 7 crossings checked (openapi 1, asyncapi 5, dandori 1)
+$ ritsu sakai check examples/webshop.ja/ネットショップ.ctx --lang ja
+examples/webshop.ja/ネットショップ.ctx: ok — コンテキスト 4、関係 5。成果物 9 件は、どれも一つのコンテキストに属する。境界を越える参照 7 件を確かめた（openapi 1、asyncapi 5、dandori 1）
+```
+
+文書の版は、OpenAPI の 3.0.3、3.1.0、3.2.0 と、AsyncAPI の 3.0.0、3.1.0 を混ぜ、どの版も読めることを確かめる。Ordering の OpenAPI の文書は、dandori が読む（`use openapi`）ので JSON にした。2026-10-06 に手で、Redocly CLI 2.58.1（`redocly lint --extends minimal`）が三つの OpenAPI の文書を正しいと言い（警告は、servers、summary、security が無いことだけ）、AsyncAPI の parser 3.6.3（`@asyncapi/parser`）が四つの AsyncAPI の文書を誤りなく読んだ（3.0.0 の文書には、新しい版があるという知らせだけ）。どちらもテストでは走らせない（テストはネットワークを使わない）。
+
+変異は、この例を一か所ずつ変えた 10 組（英語の名前と日本語の名前の対）である。新しい三つのコード（E108 を二つ、W104、E210）と、文書で出る E202、E204、E205、E206、E301、E401 を一つずつ持つ。`tests/contracts.rs` は、例の要約、越える参照ごとの `via` と許した関係、チャネルがたどる要素、二つの地図が名前のほかは同じこと、api と CML の golden、Context Mapper の検査器を確かめる。doc のページの golden は `tests/doc.rs` が持つ。
+
+### 15.10 まだやらないこと
+
+- 名指しの形（2 章）に、`openapi` と `asyncapi` のツールの語を足すこと。yuen と同じ決まり（ritsu-base の `naming.tsv`）を変えることになり、yuen の診断の文（書けるツールの語の並び）も変わるので、yuen と一緒に決める。それまでは、`.ctx` では短い書き方で文書の要素を指し、api と診断では `file "…"` の名指しと JSON Pointer で書く。
+- dandori の `http` のタスクが呼ぶ操作を、境界を越える参照に数えること。dandori が口で操作の単位に言うようになれば、E210 で確かめる。
+- rulec の `import jsonschema` の列挙を、対応の先として読むこと。rulec の口が、取り込んだポインタを言うようになれば、`import proto` と同じく rulec の対応を読む（1.7）。
+- rulec と dandori が、土台の YAML の読み手で YAML の文書も読むこと。
+- OpenAPI 2.0 と AsyncAPI 2.x を読むこと（15.2）。
+- OpenAPI の `links` の `operationRef`、discriminator の `mapping` の値（`$ref` と同じく文書を指す文字列）、`callbacks`、AsyncAPI の `reply` を参照に数えること。
+- 文書の `$ref` から、生成したコードどうしの import を許すこと（7.1 の表の最後の行は、いまは proto の import だけから作る）。

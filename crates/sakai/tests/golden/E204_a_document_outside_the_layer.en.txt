@@ -1,0 +1,7 @@
+error[E204]: shipping/events/shipping.yaml:7:5: The file shipping/events/shipping.yaml refers to Payments's published language payments.v1 from outside the anticorruption layer
+     7 |     $ref: '../../payments/events/payments.yaml#/channels/paymentSucceeded'
+  = Shipping writes a `layer`, so only the layer (dir "shipping/acl") may refer to the upstream's published language.
+  involved:
+      Shipping  shipping/events/shipping.yaml:7  $ref: ../../payments/events/payments.yaml#/channels/paymentSucceeded
+      Payments  payments/events/payments.yaml:9  #/channels/paymentSucceeded, a part of the published language payments.v1
+      Shipping  contexts/shipping.ctx:16         upstream Payments anticorruption layer

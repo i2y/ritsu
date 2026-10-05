@@ -16,9 +16,28 @@ use ritsu_base::sha256;
 use serde_json::{Value, json};
 
 fn own(o: &Own) -> Value {
-    match o.tool {
-        None => json!({"dir": o.path}),
-        Some(t) => json!({"name": value(&Name::file(t, o.path.clone()).to_json())}),
+    match (o.tool, o.contract) {
+        (None, _) => json!({"dir": o.path}),
+        (Some(t), None) => json!({"name": value(&Name::file(t, o.path.clone()).to_json())}),
+        // an OpenAPI or AsyncAPI document: a file, and its kind (DESIGN 15.7)
+        (Some(t), Some(k)) => json!({"name": value(&Name::file(t, o.path.clone()).to_json()), "contract": k.word()}),
+    }
+}
+
+/// An element the map names: a name of DESIGN 2.6, or an element of an OpenAPI or AsyncAPI
+/// document as its file and JSON Pointer (`{"pointer": "payments/api.yaml#/components/schemas/Charge"}`,
+/// with the value of an enum beside it), since a document's elements have no name of DESIGN 2
+/// yet (DESIGN 15.7, 15.10).
+fn element(n: &Name) -> Value {
+    match crate::elements::as_contract(n) {
+        Some((f, p)) => {
+            let mut v = json!({"pointer": crate::contracts::shown(f, p)});
+            if let Some((_, value)) = n.items.get(1) {
+                v["value"] = json!(value);
+            }
+            v
+        }
+        None => value(&n.to_json()),
     }
 }
 
@@ -57,18 +76,33 @@ pub fn api(c: &Checked) -> Value {
                     if let Some((d, _)) = &p.krate {
                         from.push(value(&Name::file(Tool::File, crate::cargo::manifest_of(d)).to_json()));
                     }
-                    json!({
+                    from.extend(p.contracts.iter().map(|(_, f, _)| value(&Name::file(Tool::File, f.clone()).to_json())));
+                    let mut v = json!({
                         "package": p.package,
                         "from": from,
                         "services": p.services.iter().map(|(s, _)| s.clone()).collect::<Vec<_>>(),
                         "generated": p.generated.iter().map(|(g, _)| g.clone()).collect::<Vec<_>>(),
-                    })
+                    });
+                    // the OpenAPI and AsyncAPI documents: their kind, and the versions they say (DESIGN 15.7)
+                    if !p.contracts.is_empty() {
+                        v["contracts"] = json!(p.contracts.iter().map(|(k, f, _)| {
+                            let d = c.contracts.docs.get(f);
+                            json!({
+                                "file": f,
+                                "kind": k.word(),
+                                "spec": d.map(|d| d.spec.clone()),
+                                "title": d.map(|d| d.title.clone()),
+                                "version": d.map(|d| d.version.clone()),
+                            })
+                        }).collect::<Vec<_>>());
+                    }
+                    v
                 }).collect::<Vec<_>>(),
                 "terms": a.terms.iter().enumerate().map(|(ti, t)| json!({
                     "name": t.name,
                     "definition": t.definition.as_ref().map(|s| s.value.clone()),
                     "also": t.also.iter().map(|s| s.value.clone()).collect::<Vec<_>>(),
-                    "means": (0..t.means.len()).filter_map(|mi| c.elements.get(At::Means(ci, ti, mi))).map(|n| value(&n.to_json())).collect::<Vec<_>>(),
+                    "means": (0..t.means.len()).filter_map(|mi| c.elements.get(At::Means(ci, ti, mi))).map(element).collect::<Vec<_>>(),
                     "as": t.as_term.as_ref().map(|x| json!({"context": x.context, "term": x.term})),
                 })).collect::<Vec<_>>(),
             })
@@ -115,7 +149,7 @@ pub fn api(c: &Checked) -> Value {
                 }
                 None => Value::Null,
             };
-            json!({
+            let mut v = json!({
                 "from": value(&cr.from_name().to_json()),
                 "line": cr.line,
                 "to": value(&cr.to_name().to_json()),
@@ -124,7 +158,13 @@ pub fn api(c: &Checked) -> Value {
                 "via": cr.kind.via(),
                 "elements": cr.reach.iter().map(|s| value(&s.naming().to_json())).collect::<Vec<_>>(),
                 "allowed_by": allowed,
-            })
+            });
+            // a document's `$ref`: where it lands and what it reaches, as files and JSON Pointers
+            if let Some(p) = &cr.pointer {
+                v["pointer"] = json!(crate::contracts::shown(&cr.to, p));
+                v["pointers"] = json!(cr.elements.iter().map(|(f, p)| crate::contracts::shown(f, p)).collect::<Vec<_>>());
+            }
+            v
         }).collect::<Vec<_>>(),
     })
 }
@@ -155,14 +195,14 @@ fn relationships(c: &Checked) -> Vec<Value> {
                         .iter()
                         .enumerate()
                         .map(|(ei, em)| {
-                            let from = c.elements.get(At::From(ci, ri, ei)).map(|n| value(&n.to_json())).unwrap_or(Value::Null);
+                            let from = c.elements.get(At::From(ci, ri, ei)).map(element).unwrap_or(Value::Null);
                             let (to, checked) = match &em.target {
                                 Target::Name(n, _) => (json!({"name": n}), false),
                                 Target::Element(e) => {
                                     let n = c.elements.get(At::To(ci, ri, ei));
-                                    let checked = n.is_some_and(|n| n.tool == Tool::Proto);
+                                    let checked = n.is_some_and(|n| n.tool == Tool::Proto || crate::elements::as_contract(n).is_some());
                                     let v = match (n, e) {
-                                        (Some(n), _) => value(&n.to_json()),
+                                        (Some(n), _) => element(n),
                                         (None, Element::Long { .. } | Element::Short { .. }) => Value::Null,
                                     };
                                     (v, checked)

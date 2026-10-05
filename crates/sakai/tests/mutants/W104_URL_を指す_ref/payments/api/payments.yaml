@@ -1,0 +1,65 @@
+openapi: 3.2.0
+info:
+  title: 決済の API
+  version: 1.0.0
+  description: 注文の代金をカードに課金し、課金がどうなったかを答える。
+paths:
+  /charges:
+    post:
+      operationId: createCharge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewCharge'
+      responses:
+        '201':
+          description: 課金
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Charge'
+  /charges/{id}:
+    get:
+      operationId: getCharge
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 課金
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Charge'
+components:
+  schemas:
+    NewCharge:
+      type: object
+      required: [orderId, card, amount]
+      properties:
+        orderId:
+          type: string
+        card:
+          type: string
+        amount:
+          $ref: 'https://example.com/schemas/money.yaml#/Money'
+    Charge:
+      type: object
+      required: [id, orderId, status, amount]
+      properties:
+        id:
+          type: string
+        orderId:
+          type: string
+        status:
+          $ref: '#/components/schemas/ChargeStatus'
+        amount:
+          $ref: '../../common/money.yaml#/Money'
+    ChargeStatus:
+      type: string
+      enum: [pending, succeeded, failed, refunded]

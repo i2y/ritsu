@@ -229,7 +229,8 @@ Maps `proto "proto/shop/ordering/v1/order.proto" enum OrderStatus` to `rulec "bi
 ## What is not checked
 
 - Whether the code of an anticorruption layer maps as the mapping says. sakai checks that the mapping covers the upstream's enum and that what it maps to is in the downstream's enum (where a rule is the target, rulec checks the rule's tables).
-- Calls seen only at run time: HTTP to a URL held in a string, message queues, a shared database, reflection and dynamic imports.
+- Calls no contract writes: HTTP to a URL held in a string with no OpenAPI document, a message queue with no AsyncAPI document, a shared database, reflection and dynamic imports. The HTTP operations and the channels written in OpenAPI and AsyncAPI documents are checked like any other artifact.
+- Whether the code calls HTTP, and sends to and receives from the channels, as the OpenAPI and AsyncAPI documents say: sakai checks the documents against each other and against the map.
 - Whether the code where generated code is kept was really generated from the published language.
 - What a term's definition says.
 - The imports of the code: the settings `sakai build` writes have import-linter, dependency-cruiser, ArchUnit and go-arch-lint check them in CI.

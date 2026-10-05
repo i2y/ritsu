@@ -1,0 +1,731 @@
+{
+  "sakai": "0.23.0",
+  "map": {
+    "name": "Webshop",
+    "alias": "webshop",
+    "version": "1",
+    "file": "webshop.ctx",
+    "source_sha256": "c5956a7cfec826d405fded8a6f35a19780435446858d0a76168b625c2a7992f4",
+    "description": "Four services of a small shop that talk over HTTP and events, each with its contract"
+  },
+  "covers": [
+    "."
+  ],
+  "except": [],
+  "contexts": [
+    {
+      "name": "Ordering",
+      "alias": "ordering",
+      "version": "1",
+      "file": "contexts/ordering.ctx",
+      "source_sha256": "450b044b61e504d4e5f99aef007c964e9535cb43492c412021cfcd72a5021d62",
+      "description": "Takes the customer's orders, and tells the other services when an order is placed or cancelled",
+      "owner": "Ordering team",
+      "also": [],
+      "owns": [
+        {
+          "dir": "ordering"
+        },
+        {
+          "dir": "common"
+        }
+      ],
+      "published": [
+        {
+          "package": "ordering.v1",
+          "from": [
+            {
+              "text": "file \"ordering/api/ordering.json\"",
+              "tool": "file",
+              "path": "ordering/api/ordering.json",
+              "items": []
+            },
+            {
+              "text": "file \"ordering/events/ordering.yaml\"",
+              "tool": "file",
+              "path": "ordering/events/ordering.yaml",
+              "items": []
+            }
+          ],
+          "services": [
+            "createOrder",
+            "getOrder",
+            "orderPlaced",
+            "orderCancelled"
+          ],
+          "generated": [],
+          "contracts": [
+            {
+              "file": "ordering/api/ordering.json",
+              "kind": "openapi",
+              "spec": "3.1.0",
+              "title": "Ordering API",
+              "version": "1.0.0"
+            },
+            {
+              "file": "ordering/events/ordering.yaml",
+              "kind": "asyncapi",
+              "spec": "3.0.0",
+              "title": "Ordering events",
+              "version": "1.0.0"
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "name": "order",
+          "definition": "A customer's confirmed request to buy. A cancelled order stays",
+          "also": [],
+          "means": [
+            {
+              "pointer": "ordering/api/ordering.json#/components/schemas/Order"
+            }
+          ],
+          "as": null
+        },
+        {
+          "name": "order_placed",
+          "definition": "The event that an order has been placed",
+          "also": [],
+          "means": [
+            {
+              "pointer": "ordering/events/ordering.yaml#/channels/orderPlaced"
+            }
+          ],
+          "as": null
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "alias": "payments",
+      "version": "1",
+      "file": "contexts/payments.ctx",
+      "source_sha256": "19b9202bada18a7422f1f01d21e19f8659d5326936c9cda925d6a9f2ea663380",
+      "description": "Charges the customer's card for a placed order, and tells how the charge went",
+      "owner": "Payments team",
+      "also": [],
+      "owns": [
+        {
+          "dir": "payments"
+        }
+      ],
+      "published": [
+        {
+          "package": "payments.v1",
+          "from": [
+            {
+              "text": "file \"payments/api/payments.yaml\"",
+              "tool": "file",
+              "path": "payments/api/payments.yaml",
+              "items": []
+            },
+            {
+              "text": "file \"payments/events/payments.yaml\"",
+              "tool": "file",
+              "path": "payments/events/payments.yaml",
+              "items": []
+            }
+          ],
+          "services": [
+            "createCharge",
+            "getCharge",
+            "paymentSucceeded",
+            "paymentFailed"
+          ],
+          "generated": [],
+          "contracts": [
+            {
+              "file": "payments/api/payments.yaml",
+              "kind": "openapi",
+              "spec": "3.2.0",
+              "title": "Payments API",
+              "version": "1.0.0"
+            },
+            {
+              "file": "payments/events/payments.yaml",
+              "kind": "asyncapi",
+              "spec": "3.1.0",
+              "title": "Payments events",
+              "version": "1.0.0"
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "name": "charge",
+          "definition": "Taking the money for one order from the customer's card",
+          "also": [],
+          "means": [
+            {
+              "pointer": "payments/api/payments.yaml#/components/schemas/Charge"
+            }
+          ],
+          "as": null
+        },
+        {
+          "name": "charge_status",
+          "definition": "Where a charge is: waiting for the card's answer, taken, refused, or given back",
+          "also": [],
+          "means": [
+            {
+              "pointer": "payments/api/payments.yaml#/components/schemas/ChargeStatus"
+            }
+          ],
+          "as": null
+        }
+      ]
+    },
+    {
+      "name": "Shipping",
+      "alias": "shipping",
+      "version": "1",
+      "file": "contexts/shipping.ctx",
+      "source_sha256": "85a64f362ca87e7bc564c12cacdc4db777956654adbd04addf0a48b61d3b1f8b",
+      "description": "Ships an order once its charge has gone through",
+      "owner": "Shipping team",
+      "also": [],
+      "owns": [
+        {
+          "dir": "shipping"
+        }
+      ],
+      "published": [
+        {
+          "package": "shipping.v1",
+          "from": [
+            {
+              "text": "file \"shipping/api/shipping.yaml\"",
+              "tool": "file",
+              "path": "shipping/api/shipping.yaml",
+              "items": []
+            }
+          ],
+          "services": [
+            "getShipment"
+          ],
+          "generated": [],
+          "contracts": [
+            {
+              "file": "shipping/api/shipping.yaml",
+              "kind": "openapi",
+              "spec": "3.0.3",
+              "title": "Shipping API",
+              "version": "1.0.0"
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "name": "shipment_gate",
+          "definition": "Whether an order may leave the warehouse",
+          "also": [],
+          "means": [
+            {
+              "pointer": "shipping/api/shipping.yaml#/components/schemas/ShipmentGate"
+            }
+          ],
+          "as": null
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "alias": "notifications",
+      "version": "1",
+      "file": "contexts/notifications.ctx",
+      "source_sha256": "a4517faee3b284c25bb29b18094a0fc137b3902077a70d7bc442efc9cb2c15bb",
+      "description": "Tells the customer by mail what happened to an order",
+      "owner": "Customer care team",
+      "also": [],
+      "owns": [
+        {
+          "dir": "notifications"
+        }
+      ],
+      "published": [],
+      "terms": [
+        {
+          "name": "order",
+          "definition": null,
+          "also": [],
+          "means": [],
+          "as": {
+            "context": "Ordering",
+            "term": "order"
+          }
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "kind": "shared_kernel",
+      "between": [
+        "Ordering",
+        "Payments"
+      ],
+      "sides": [
+        {
+          "context": "Ordering",
+          "items": [
+            {
+              "dir": "common"
+            }
+          ]
+        },
+        {
+          "context": "Payments",
+          "items": [
+            {
+              "dir": "common"
+            }
+          ]
+        }
+      ],
+      "declared": [
+        "contexts/ordering.ctx:19",
+        "contexts/payments.ctx:22"
+      ]
+    },
+    {
+      "kind": "upstream_downstream",
+      "upstream": "Ordering",
+      "downstream": "Payments",
+      "roles": {
+        "upstream": [
+          "open_host_service",
+          "published_language"
+        ],
+        "downstream": [
+          "conformist"
+        ]
+      },
+      "through": [
+        "ordering.v1"
+      ],
+      "layer": [],
+      "enums": [],
+      "terms": [],
+      "declared": [
+        "contexts/payments.ctx:19"
+      ]
+    },
+    {
+      "kind": "upstream_downstream",
+      "upstream": "Payments",
+      "downstream": "Shipping",
+      "roles": {
+        "upstream": [
+          "open_host_service",
+          "published_language"
+        ],
+        "downstream": [
+          "anticorruption_layer"
+        ]
+      },
+      "through": [
+        "payments.v1"
+      ],
+      "layer": [
+        {
+          "dir": "shipping/acl"
+        }
+      ],
+      "enums": [
+        {
+          "from": {
+            "pointer": "payments/api/payments.yaml#/components/schemas/ChargeStatus"
+          },
+          "to": {
+            "pointer": "shipping/api/shipping.yaml#/components/schemas/ShipmentGate"
+          },
+          "checked": true,
+          "values": [
+            {
+              "from": "pending",
+              "to": "hold"
+            },
+            {
+              "from": "succeeded",
+              "to": "release"
+            },
+            {
+              "from": "failed",
+              "refuse": "An order whose charge failed is not shipped"
+            },
+            {
+              "from": "refunded",
+              "refuse": "A refunded order is not shipped"
+            }
+          ]
+        }
+      ],
+      "terms": [],
+      "declared": [
+        "contexts/shipping.ctx:16"
+      ]
+    },
+    {
+      "kind": "upstream_downstream",
+      "upstream": "Ordering",
+      "downstream": "Notifications",
+      "roles": {
+        "upstream": [
+          "open_host_service",
+          "published_language"
+        ],
+        "downstream": [
+          "conformist"
+        ]
+      },
+      "through": [
+        "ordering.v1"
+      ],
+      "layer": [],
+      "enums": [],
+      "terms": [],
+      "declared": [
+        "contexts/notifications.ctx:11"
+      ]
+    },
+    {
+      "kind": "separate_ways",
+      "between": [
+        "Notifications",
+        "Payments"
+      ],
+      "declared": [
+        "contexts/notifications.ctx:14"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "name": {
+        "text": "file \"common/money.yaml\"",
+        "tool": "file",
+        "path": "common/money.yaml",
+        "items": []
+      },
+      "context": "Ordering",
+      "by": "contexts/ordering.ctx:6",
+      "sha256": "f48e6949cf6f0b51"
+    },
+    {
+      "name": {
+        "text": "file \"notifications/events/notifications.yaml\"",
+        "tool": "file",
+        "path": "notifications/events/notifications.yaml",
+        "items": []
+      },
+      "context": "Notifications",
+      "by": "contexts/notifications.ctx:6",
+      "sha256": "2b4633451d7ef60a"
+    },
+    {
+      "name": {
+        "text": "dandori \"notifications/notify.flow\"",
+        "tool": "dandori",
+        "path": "notifications/notify.flow",
+        "items": []
+      },
+      "context": "Notifications",
+      "by": "contexts/notifications.ctx:6",
+      "sha256": "4aa79fa6b6da7138"
+    },
+    {
+      "name": {
+        "text": "file \"ordering/api/ordering.json\"",
+        "tool": "file",
+        "path": "ordering/api/ordering.json",
+        "items": []
+      },
+      "context": "Ordering",
+      "by": "contexts/ordering.ctx:6",
+      "sha256": "4bc08dffa7500c1b"
+    },
+    {
+      "name": {
+        "text": "file \"ordering/events/ordering.yaml\"",
+        "tool": "file",
+        "path": "ordering/events/ordering.yaml",
+        "items": []
+      },
+      "context": "Ordering",
+      "by": "contexts/ordering.ctx:6",
+      "sha256": "f0f0d577c5da0cd8"
+    },
+    {
+      "name": {
+        "text": "file \"payments/api/payments.yaml\"",
+        "tool": "file",
+        "path": "payments/api/payments.yaml",
+        "items": []
+      },
+      "context": "Payments",
+      "by": "contexts/payments.ctx:6",
+      "sha256": "fd4d57c891c6e61f"
+    },
+    {
+      "name": {
+        "text": "file \"payments/events/payments.yaml\"",
+        "tool": "file",
+        "path": "payments/events/payments.yaml",
+        "items": []
+      },
+      "context": "Payments",
+      "by": "contexts/payments.ctx:6",
+      "sha256": "c105f3b3bd2c96ce"
+    },
+    {
+      "name": {
+        "text": "file \"shipping/acl/payments.yaml\"",
+        "tool": "file",
+        "path": "shipping/acl/payments.yaml",
+        "items": []
+      },
+      "context": "Shipping",
+      "by": "contexts/shipping.ctx:6",
+      "sha256": "96c4f8219d15d4b9"
+    },
+    {
+      "name": {
+        "text": "file \"shipping/api/shipping.yaml\"",
+        "tool": "file",
+        "path": "shipping/api/shipping.yaml",
+        "items": []
+      },
+      "context": "Shipping",
+      "by": "contexts/shipping.ctx:6",
+      "sha256": "bf58eeb84203d430"
+    }
+  ],
+  "crossings": [
+    {
+      "from": {
+        "text": "file \"notifications/events/notifications.yaml\"",
+        "tool": "file",
+        "path": "notifications/events/notifications.yaml",
+        "items": []
+      },
+      "line": 8,
+      "to": {
+        "text": "file \"ordering/events/ordering.yaml\"",
+        "tool": "file",
+        "path": "ordering/events/ordering.yaml",
+        "items": []
+      },
+      "from_context": "Notifications",
+      "to_context": "Ordering",
+      "via": "receive",
+      "elements": [],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "conformist"
+        ],
+        "declared": "contexts/notifications.ctx:11"
+      },
+      "pointer": "ordering/events/ordering.yaml#/channels/orderPlaced",
+      "pointers": [
+        "ordering/events/ordering.yaml#/channels/orderPlaced",
+        "ordering/events/ordering.yaml#/components/messages/OrderPlaced",
+        "ordering/api/ordering.json#/components/schemas/Order",
+        "common/money.yaml#/Money",
+        "ordering/api/ordering.json#/components/schemas/Line",
+        "ordering/api/ordering.json#/components/schemas/OrderStatus"
+      ]
+    },
+    {
+      "from": {
+        "text": "file \"notifications/events/notifications.yaml\"",
+        "tool": "file",
+        "path": "notifications/events/notifications.yaml",
+        "items": []
+      },
+      "line": 10,
+      "to": {
+        "text": "file \"ordering/events/ordering.yaml\"",
+        "tool": "file",
+        "path": "ordering/events/ordering.yaml",
+        "items": []
+      },
+      "from_context": "Notifications",
+      "to_context": "Ordering",
+      "via": "receive",
+      "elements": [],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "conformist"
+        ],
+        "declared": "contexts/notifications.ctx:11"
+      },
+      "pointer": "ordering/events/ordering.yaml#/channels/orderCancelled",
+      "pointers": [
+        "ordering/events/ordering.yaml#/channels/orderCancelled",
+        "ordering/events/ordering.yaml#/components/messages/OrderCancelled"
+      ]
+    },
+    {
+      "from": {
+        "text": "file \"payments/api/payments.yaml\"",
+        "tool": "file",
+        "path": "payments/api/payments.yaml",
+        "items": []
+      },
+      "line": 50,
+      "to": {
+        "text": "file \"common/money.yaml\"",
+        "tool": "file",
+        "path": "common/money.yaml",
+        "items": []
+      },
+      "from_context": "Payments",
+      "to_context": "Ordering",
+      "via": "$ref",
+      "elements": [],
+      "allowed_by": {
+        "relationship": "shared_kernel",
+        "declared": "contexts/payments.ctx:22"
+      },
+      "pointer": "common/money.yaml#/Money",
+      "pointers": [
+        "common/money.yaml#/Money"
+      ]
+    },
+    {
+      "from": {
+        "text": "file \"payments/events/payments.yaml\"",
+        "tool": "file",
+        "path": "payments/events/payments.yaml",
+        "items": []
+      },
+      "line": 8,
+      "to": {
+        "text": "file \"ordering/events/ordering.yaml\"",
+        "tool": "file",
+        "path": "ordering/events/ordering.yaml",
+        "items": []
+      },
+      "from_context": "Payments",
+      "to_context": "Ordering",
+      "via": "receive",
+      "elements": [],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "conformist"
+        ],
+        "declared": "contexts/payments.ctx:19"
+      },
+      "pointer": "ordering/events/ordering.yaml#/channels/orderPlaced",
+      "pointers": [
+        "ordering/events/ordering.yaml#/channels/orderPlaced",
+        "ordering/events/ordering.yaml#/components/messages/OrderPlaced",
+        "ordering/api/ordering.json#/components/schemas/Order",
+        "common/money.yaml#/Money",
+        "ordering/api/ordering.json#/components/schemas/Line",
+        "ordering/api/ordering.json#/components/schemas/OrderStatus"
+      ]
+    },
+    {
+      "from": {
+        "text": "file \"shipping/acl/payments.yaml\"",
+        "tool": "file",
+        "path": "shipping/acl/payments.yaml",
+        "items": []
+      },
+      "line": 9,
+      "to": {
+        "text": "file \"payments/events/payments.yaml\"",
+        "tool": "file",
+        "path": "payments/events/payments.yaml",
+        "items": []
+      },
+      "from_context": "Shipping",
+      "to_context": "Payments",
+      "via": "receive",
+      "elements": [],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "anticorruption_layer"
+        ],
+        "declared": "contexts/shipping.ctx:16"
+      },
+      "pointer": "payments/events/payments.yaml#/channels/paymentSucceeded",
+      "pointers": [
+        "payments/events/payments.yaml#/channels/paymentSucceeded",
+        "payments/events/payments.yaml#/components/messages/PaymentResult",
+        "payments/api/payments.yaml#/components/schemas/Charge",
+        "common/money.yaml#/Money",
+        "payments/api/payments.yaml#/components/schemas/ChargeStatus"
+      ]
+    },
+    {
+      "from": {
+        "text": "file \"shipping/acl/payments.yaml\"",
+        "tool": "file",
+        "path": "shipping/acl/payments.yaml",
+        "items": []
+      },
+      "line": 11,
+      "to": {
+        "text": "file \"payments/events/payments.yaml\"",
+        "tool": "file",
+        "path": "payments/events/payments.yaml",
+        "items": []
+      },
+      "from_context": "Shipping",
+      "to_context": "Payments",
+      "via": "receive",
+      "elements": [],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "anticorruption_layer"
+        ],
+        "declared": "contexts/shipping.ctx:16"
+      },
+      "pointer": "payments/events/payments.yaml#/channels/paymentFailed",
+      "pointers": [
+        "payments/events/payments.yaml#/channels/paymentFailed",
+        "payments/events/payments.yaml#/components/messages/PaymentResult",
+        "payments/api/payments.yaml#/components/schemas/Charge",
+        "common/money.yaml#/Money",
+        "payments/api/payments.yaml#/components/schemas/ChargeStatus"
+      ]
+    },
+    {
+      "from": {
+        "text": "dandori \"notifications/notify.flow\"",
+        "tool": "dandori",
+        "path": "notifications/notify.flow",
+        "items": []
+      },
+      "line": 4,
+      "to": {
+        "text": "file \"ordering/api/ordering.json\"",
+        "tool": "file",
+        "path": "ordering/api/ordering.json",
+        "items": []
+      },
+      "from_context": "Notifications",
+      "to_context": "Ordering",
+      "via": "use openapi",
+      "elements": [],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "conformist"
+        ],
+        "declared": "contexts/notifications.ctx:11"
+      }
+    }
+  ]
+}

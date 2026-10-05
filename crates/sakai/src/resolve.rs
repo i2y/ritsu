@@ -75,6 +75,13 @@ impl R<'_> {
     /// A file or directory of `owns`, `layer` or `shared kernel with`.
     fn item(&mut self, file: &str, src: &str, base: &str, it: &Item) -> Option<Own> {
         let p = self.path(file, src, base, &it.path, Some(it.tool.is_none()))?;
+        if let Some(k) = it.contract
+            && !crate::contracts::may_be(&p)
+        {
+            let (w, v) = (k.word(), &it.path.value);
+            self.at("E011", file, src, it.path.pos, tr!("{w} の行に書けるのは、.yaml、.yml、.json のファイルです（\"{v}\"）", "A {w} line names a .yaml, .yml or .json file (\"{v}\")"));
+            return None;
+        }
         if let Some(t) = it.tool
             && let Some(ext) = t.extension()
             && !p.ends_with(&format!(".{ext}"))
@@ -84,7 +91,7 @@ impl R<'_> {
             self.at("E011", file, src, it.path.pos, tr!("{w} の成果物は .{ext} のファイルです（\"{v}\"）", "A {w} artifact is a .{ext} file (\"{v}\")"));
             return None;
         }
-        Some(Own { path: p, tool: it.tool, pos: it.path.pos })
+        Some(Own { path: p, tool: it.tool, pos: it.path.pos, contract: it.contract })
     }
 }
 
@@ -253,13 +260,24 @@ pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
                 }
                 Some((x, kf.pos))
             });
+            let mut contracts = Vec::new();
+            for (k, cf) in &p.contracts {
+                if let Some(x) = r.path(f, s, &cdir, cf, Some(false)) {
+                    if !crate::contracts::may_be(&x) {
+                        let (w, v) = (k.word(), &cf.value);
+                        r.at("E011", f, s, cf.pos, tr!("{w} の行に書けるのは、.yaml、.yml、.json のファイルです（\"{v}\"）", "A {w} line names a .yaml, .yml or .json file (\"{v}\")"));
+                        continue;
+                    }
+                    contracts.push((*k, x, cf.pos));
+                }
+            }
             let mut generated = Vec::new();
             for g in &p.generated {
                 if let Some(x) = r.path(f, s, &cdir, g, Some(true)) {
                     generated.push((x, g.pos));
                 }
             }
-            published.push(Pub { package: p.package.clone(), pos: p.pos, package_pos: p.package_pos, protos, rulec, krate, services: p.services.clone(), generated });
+            published.push(Pub { package: p.package.clone(), pos: p.pos, package_pos: p.package_pos, protos, rulec, krate, contracts, services: p.services.clone(), generated });
         }
         // E006: the terms and their other names all differ.
         let mut seen: Vec<String> = Vec::new();

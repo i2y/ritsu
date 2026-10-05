@@ -18,6 +18,8 @@
 //! - [`json`]: a JSON value whose objects keep their order and whose integers are exact.
 //! - [`udiff`]: unified diffs, as `git diff` and `diff -u` write them, and whether a file on disk
 //!   is one side of one.
+//! - [`yaml`]: YAML (the part of YAML 1.2 that goes to JSON and back) and JSON, read into values
+//!   that know where they were written.
 //! - [`fs`]: where a project's files are read and written: the disk, or files held in memory (the
 //!   project a page in the browser hands over).
 //! - [`openspec`]: OpenSpec's specs and changes, read as OpenSpec reads them: a spec's requirements
@@ -38,3 +40,4 @@ pub mod sha256;
 pub mod sources;
 pub mod text;
 pub mod udiff;
+pub mod yaml;

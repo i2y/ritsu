@@ -1,0 +1,14 @@
+context 通知(notifications) v1
+description "注文がどうなったかを、客にメールで知らせる"
+owner "顧客対応チーム"
+
+owns
+  dir "../notifications"
+
+terms
+  注文 as 受注.注文
+
+upstream 受注 conformist
+  through ordering.v1
+
+separate ways from 決済

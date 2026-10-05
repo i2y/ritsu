@@ -13,6 +13,7 @@ use crate::model::{Model, RelK};
 use crate::naming::{Name, Tool};
 use crate::owners::Artifact;
 use crate::paths;
+use crate::contracts::Contracts;
 use crate::proto::{ProtoFile, Protos};
 use ritsu_ports::{Index, Lookup};
 use std::collections::BTreeMap;
@@ -108,9 +109,58 @@ fn lookup(ps: &Protos, files: &[String], kind: &str, name: &str) -> Vec<(String,
 struct E<'a> {
     m: &'a Model,
     ps: &'a Protos,
+    cs: &'a Contracts,
     arts: &'a [Artifact],
     read: &'a crate::suite::Read,
     diags: Vec<Diag>,
+}
+
+/// An element of an OpenAPI or AsyncAPI document, as sakai holds it (DESIGN 15.4): the file, and
+/// the JSON Pointer as its one pair (`#`), with a value of an enum after it.
+pub fn contract_name(file: &str, pointer: &str) -> Name {
+    Name::file(Tool::File, file.to_string()).with("#", pointer.to_string())
+}
+
+/// The file and the pointer of an element of a document, if the name is one.
+pub fn as_contract(n: &Name) -> Option<(&str, &str)> {
+    match (n.tool, n.items.first()) {
+        (Tool::File, Some((k, p))) if k == "#" => Some((&n.path, p)),
+        _ => None,
+    }
+}
+
+/// An element as a person reads it: a name of DESIGN 2, or an element of a document as its file
+/// and its JSON Pointer (`payments/api.yaml#/components/schemas/Charge value refunded`).
+pub fn display(n: &Name) -> String {
+    match as_contract(n) {
+        Some((f, p)) => {
+            let mut s = crate::contracts::shown(f, p);
+            for (k, v) in &n.items[1..] {
+                s.push_str(&format!(" {k} {}", ritsu_base::naming::word_or_quote(v)));
+            }
+            s
+        }
+        None => n.text(),
+    }
+}
+
+/// What a diagnostic says is involved, for an element: its name, or for an element of a
+/// document the line its key is at.
+pub fn refer(cs: &Contracts, context: Option<&str>, n: &Name, what: Text) -> crate::diag::Ref {
+    match as_contract(n) {
+        Some((f, p)) => {
+            let line = cs.key_line(f, p).unwrap_or(1);
+            // the file is the place the line names; what is there is its pointer
+            let mut shown = format!("#{p}");
+            for (k, v) in &n.items[1..] {
+                shown.push_str(&format!(" {k} {}", ritsu_base::naming::word_or_quote(v)));
+            }
+            let (wj, we) = (what.ja.clone(), what.en.clone());
+            let what = if wj.is_empty() { Text::same(shown.clone()) } else { tr!("{shown}（{wj}）", "{shown}, {we}") };
+            crate::diag::Ref::line(context, f, line, what)
+        }
+        None => crate::diag::Ref::name(context, n.clone(), what),
+    }
 }
 
 /// Whether a rule has the element a name names — an input, an output, an enum, or a value of one —
@@ -140,9 +190,10 @@ impl E<'_> {
         self.diags.last_mut().unwrap()
     }
 
-    /// An element in its long or short form; `files` are where a short one is looked up, and
-    /// `where_` says what those files are, for the message when it is not there.
-    fn element(&mut self, c: usize, e: &Element, files: &[String], where_: &Text) -> Option<Name> {
+    /// An element in its long or short form; `files` and `contract_files` (the `.proto` files and
+    /// the OpenAPI and AsyncAPI documents) are where a short one is looked up, and `where_` says
+    /// what those files are, for the message when it is not there.
+    fn element(&mut self, c: usize, e: &Element, files: &[String], contract_files: &[String], where_: &Text) -> Option<Name> {
         match e {
             Element::Long { written, pos } => {
                 let path = paths::join(&self.m.contexts[c].dir, &written.path).ok()?;
@@ -187,7 +238,43 @@ impl E<'_> {
                 }
             }
             Element::Short { kind, name, child, pos } => {
-                let found = lookup(self.ps, files, kind, name);
+                let found = if matches!(kind.as_str(), "message" | "enum" | "service") { lookup(self.ps, files, kind, name) } else { vec![] };
+                // the elements of the OpenAPI and AsyncAPI documents (DESIGN 15.4)
+                let docs: Vec<(String, String)> = self.cs.find(contract_files, kind, name);
+                if found.is_empty() && docs.len() == 1 {
+                    let (f, p) = &docs[0];
+                    let mut n = contract_name(f, p);
+                    if let Some((ck, cn)) = child {
+                        if ck != "value" || kind != "enum" {
+                            self.err(c, *pos, "E011", tr!("`{ck}` は `{kind}` の下に書けません", "`{ck}` cannot come under `{kind}`"));
+                            return None;
+                        }
+                        let have = self.cs.enum_values(f, p).map(|e| e.values.iter().any(|v| v.name == *cn)).unwrap_or(false);
+                        if !have {
+                            self.err(c, *pos, "E007", tr!("enum {name} に value {cn} はありません", "The enum {name} has no value {cn}"));
+                            return None;
+                        }
+                        n = n.with("value", cn.clone());
+                    }
+                    return Some(n);
+                }
+                // a name that is in a document and somewhere else (a `.proto`, or another document);
+                // one that two packages of `.proto` files have is told below, as before
+                if !docs.is_empty() && found.len() + docs.len() > 1 {
+                    let mut cands: Vec<String> = found.iter().map(|(p, r)| self.ps.files[p].full(r)).collect();
+                    cands.extend(docs.iter().map(|(f, p)| crate::contracts::shown(f, p)));
+                    let list = cands.join("、");
+                    let list_en = cands.join(", ");
+                    self.err(c, *pos, "E007", tr!("{kind} {name} は、公表された言語の二つ以上の要素に当たります（{list}）", "The name {kind} {name} is in more than one place of the published languages ({list_en})")).notes.push(tr!(
+                        "どれか一つに決まるように、名前を変えるか、要素を一つの公表された言語にまとめてください。",
+                        "Rename one of them, or keep the element in one published language, so that the name finds one."
+                    ));
+                    return None;
+                }
+                if found.is_empty() && contract_files.iter().any(|f| self.cs.unread.contains(f)) {
+                    // a document that could not be read is told as E108 already
+                    return None;
+                }
                 match found.len() {
                     // A file that could not be read is told as E106 already; what is in it is not known.
                     0 if files.iter().any(|f| !self.ps.files.contains_key(f)) => None,
@@ -238,17 +325,26 @@ fn packages_text(ps: &[String]) -> Text {
     tr!("公表された言語 {j}", "the published language {e}")
 }
 
+/// The OpenAPI and AsyncAPI documents of a context's published languages named `packages` (all of
+/// them for None), with the parts they reach that are the context's.
+pub fn published_contracts(m: &Model, cs: &Contracts, arts: &[Artifact], c: usize, packages: Option<&[String]>) -> Vec<String> {
+    let owner = |p: &str| arts.iter().find(|a| a.path == p).and_then(|a| a.ctx());
+    let listed: Vec<String> = m.contexts[c].published.iter().filter(|p| packages.is_none_or(|ks| ks.contains(&p.package))).flat_map(|p| p.contracts.iter().map(|(_, f, _)| f.clone())).collect();
+    cs.published_files(&listed, &owner, c).into_iter().collect()
+}
+
 /// Resolve every element the map names.
-pub fn resolve(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Read) -> (Elements, Vec<Diag>) {
-    let mut e = E { m, ps, arts, read, diags: Vec::new() };
+pub fn resolve(m: &Model, ps: &Protos, cs: &Contracts, arts: &[Artifact], read: &crate::suite::Read) -> (Elements, Vec<Diag>) {
+    let mut e = E { m, ps, cs, arts, read, diags: Vec::new() };
     let mut out = Elements { complete: true, ..Elements::default() };
     for (ci, c) in m.contexts.iter().enumerate() {
         let own = own_published(m, ci);
-        let own_pkgs: Vec<String> = c.published.iter().filter(|p| !p.protos.is_empty()).map(|p| p.package.clone()).collect();
+        let own_docs = published_contracts(m, cs, arts, ci, None);
+        let own_pkgs: Vec<String> = c.published.iter().filter(|p| !p.protos.is_empty() || !p.contracts.is_empty()).map(|p| p.package.clone()).collect();
         let own_text = packages_text(&own_pkgs);
         for (ti, t) in c.ast.terms.iter().enumerate() {
             for (mi, me) in t.means.iter().enumerate() {
-                if let Some(n) = e.element(ci, me, &own, &own_text) {
+                if let Some(n) = e.element(ci, me, &own, &own_docs, &own_text) {
                     out.found.insert(At::Means(ci, ti, mi), n);
                 }
             }
@@ -258,10 +354,11 @@ pub fn resolve(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::R
             let up = &m.contexts[r.partner];
             let pkgs: Vec<String> = through.iter().map(|(p, _)| p.clone()).collect();
             let files: Vec<String> = up.published.iter().filter(|p| pkgs.contains(&p.package)).flat_map(|p| p.protos.iter().map(|(f, _)| f.clone())).collect();
+            let docs = published_contracts(m, cs, arts, r.partner, Some(&pkgs));
             let through_text = packages_text(&pkgs);
             for (ei, em) in enums.iter().enumerate() {
                 let from = Element::Short { kind: "enum".into(), name: em.from.clone(), child: None, pos: em.from_pos };
-                if let Some(n) = e.element(ci, &from, &files, &through_text) {
+                if let Some(n) = e.element(ci, &from, &files, &docs, &through_text) {
                     out.found.insert(At::From(ci, ri, ei), n);
                 }
                 if let Target::Element(te) = &em.target {
@@ -277,13 +374,15 @@ pub fn resolve(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::R
                         ));
                         continue;
                     }
-                    if let Some(n) = e.element(ci, te, &own, &own_text) {
+                    if let Some(n) = e.element(ci, te, &own, &own_docs, &own_text) {
                         out.found.insert(At::To(ci, ri, ei), n);
                     }
                 }
             }
         }
     }
-    out.complete = e.diags.is_empty() && !m.contexts.iter().flat_map(|c| c.published.iter()).flat_map(|p| p.protos.iter()).any(|(f, _)| !ps.files.contains_key(f));
+    out.complete = e.diags.is_empty()
+        && !m.contexts.iter().flat_map(|c| c.published.iter()).flat_map(|p| p.protos.iter()).any(|(f, _)| !ps.files.contains_key(f))
+        && cs.unread.is_empty();
     (out, e.diags)
 }

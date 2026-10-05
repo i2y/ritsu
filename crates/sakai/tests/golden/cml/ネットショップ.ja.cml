@@ -1,0 +1,49 @@
+/* `sakai export cml --lang ja` が ネットショップ.ctx から書いた。直すときは .ctx を直して書き直す。 */
+ContextMap webshop {
+  type = SYSTEM_LANDSCAPE
+  state = AS_IS
+  contains ordering, payments, shipping, notifications
+
+  // 「受注」と「決済」の共有カーネル
+  ordering [SK]<->[SK] payments
+
+  // 「決済」は「受注」に順応する
+  payments [D,CF]<-[U,OHS,PL] ordering {
+    implementationTechnology = "OpenAPI: ordering.v1 (createOrder, getOrder); AsyncAPI: ordering.v1 (orderPlaced, orderCancelled)"
+  }
+
+  // 「配送」は「決済」のモデルを腐敗防止層で読み替える
+  shipping [D,ACL]<-[U,OHS,PL] payments {
+    implementationTechnology = "OpenAPI: payments.v1 (createCharge, getCharge); AsyncAPI: payments.v1 (paymentSucceeded, paymentFailed)"
+  }
+
+  // 「通知」は「受注」に順応する
+  notifications [D,CF]<-[U,OHS,PL] ordering {
+    implementationTechnology = "OpenAPI: ordering.v1 (createOrder, getOrder); AsyncAPI: ordering.v1 (orderPlaced, orderCancelled)"
+  }
+
+  // 「通知」(notifications) と「決済」(payments) は別々の道（CML には書く形が無い）
+}
+
+// 「受注」(ordering)。持ち主: 受注チーム
+BoundedContext ordering {
+  domainVisionStatement = "客の注文を受け、注文が入ったことと取り消されたことを、ほかのサービスに知らせる"
+  responsibilities = "注文", "注文の受付"
+}
+
+// 「決済」(payments)。持ち主: 決済チーム
+BoundedContext payments {
+  domainVisionStatement = "入った注文の代金を客のカードに課金し、課金がどうなったかを知らせる"
+  responsibilities = "課金", "課金の状態"
+}
+
+// 「配送」(shipping)。持ち主: 配送チーム
+BoundedContext shipping {
+  domainVisionStatement = "課金が済んだ注文を出荷する"
+  responsibilities = "出荷の可否"
+}
+
+// 「通知」(notifications)。持ち主: 顧客対応チーム
+BoundedContext notifications {
+  domainVisionStatement = "注文がどうなったかを、客にメールで知らせる"
+}

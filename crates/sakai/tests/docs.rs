@@ -41,7 +41,10 @@ fn files(dir: &Path, ext: &str) -> Vec<PathBuf> {
 /// The pages: the READMEs (the crate's and the examples'), `docs/` and the skill, without the
 /// codes pages, which are the output of `explain` and are held to it whole.
 fn pages() -> Vec<PathBuf> {
-    let mut out: Vec<PathBuf> = ["README.md", "README.ja.md", "examples/shop/README.md", "examples/shop.ja/README.ja.md", "skills/README.md"].iter().map(PathBuf::from).collect();
+    let mut out: Vec<PathBuf> = ["README.md", "README.ja.md", "examples/shop/README.md", "examples/shop.ja/README.ja.md", "examples/webshop/README.md", "examples/webshop.ja/README.ja.md", "skills/README.md"]
+        .iter()
+        .map(PathBuf::from)
+        .collect();
     out.extend(files(Path::new("docs"), "md"));
     out.extend(files(Path::new("../../skills/sakai"), "md"));
     out.retain(|p| p.file_name().is_none_or(|n| n != "codes.md" && n != "codes.ja.md"));

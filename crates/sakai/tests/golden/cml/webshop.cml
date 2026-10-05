@@ -1,0 +1,49 @@
+/* Written by `sakai export cml` from webshop.ctx. Edit the .ctx files and write it again. */
+ContextMap webshop {
+  type = SYSTEM_LANDSCAPE
+  state = AS_IS
+  contains ordering, payments, shipping, notifications
+
+  // The shared kernel of Ordering and Payments
+  ordering [SK]<->[SK] payments
+
+  // Payments conforms to Ordering
+  payments [D,CF]<-[U,OHS,PL] ordering {
+    implementationTechnology = "OpenAPI: ordering.v1 (createOrder, getOrder); AsyncAPI: ordering.v1 (orderPlaced, orderCancelled)"
+  }
+
+  // Shipping maps Payments's model in an anticorruption layer
+  shipping [D,ACL]<-[U,OHS,PL] payments {
+    implementationTechnology = "OpenAPI: payments.v1 (createCharge, getCharge); AsyncAPI: payments.v1 (paymentSucceeded, paymentFailed)"
+  }
+
+  // Notifications conforms to Ordering
+  notifications [D,CF]<-[U,OHS,PL] ordering {
+    implementationTechnology = "OpenAPI: ordering.v1 (createOrder, getOrder); AsyncAPI: ordering.v1 (orderPlaced, orderCancelled)"
+  }
+
+  // Notifications (notifications) and Payments (payments) go separate ways (CML has no way to write it)
+}
+
+// Ordering (ordering), owned by Ordering team
+BoundedContext ordering {
+  domainVisionStatement = "Takes the customer's orders, and tells the other services when an order is placed or cancelled"
+  responsibilities = "order", "order_placed"
+}
+
+// Payments (payments), owned by Payments team
+BoundedContext payments {
+  domainVisionStatement = "Charges the customer's card for a placed order, and tells how the charge went"
+  responsibilities = "charge", "charge_status"
+}
+
+// Shipping (shipping), owned by Shipping team
+BoundedContext shipping {
+  domainVisionStatement = "Ships an order once its charge has gone through"
+  responsibilities = "shipment_gate"
+}
+
+// Notifications (notifications), owned by Customer care team
+BoundedContext notifications {
+  domainVisionStatement = "Tells the customer by mail what happened to an order"
+}

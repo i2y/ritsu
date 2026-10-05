@@ -55,6 +55,15 @@ pub enum Kind {
     /// A Rust crate's dependency on another crate by its path, in its manifest's
     /// `[dependencies]` or `[build-dependencies]` (the table's name).
     Crate { table: &'static str },
+    /// A `$ref` of an OpenAPI or AsyncAPI document to another file (DESIGN 15.5). `via` is `$ref`,
+    /// or for a channel the actions of the operations on it (`send`, `receive`); `channel` is the
+    /// channel it uses, `operations` the HTTP operations of a path item it points at.
+    Contract { via: String, channel: Option<String>, operations: Vec<String> },
+    /// A workflow's `use openapi`: the OpenAPI document its tasks call.
+    FlowOpenApi,
+    /// A rule's `import jsonschema`, or its `shape` of a JSON Schema, from an OpenAPI or AsyncAPI
+    /// document.
+    RuleJsonSchema { how: String },
 }
 
 impl Kind {
@@ -71,7 +80,15 @@ impl Kind {
             Kind::FlowConnect => "connect".into(),
             Kind::FlowChild => "flow".into(),
             Kind::Crate { table } => table.to_string(),
+            Kind::Contract { via, .. } => via.clone(),
+            Kind::FlowOpenApi => "use openapi".into(),
+            Kind::RuleJsonSchema { how } => how.clone(),
         }
+    }
+
+    /// Whether what it refers to is an OpenAPI or AsyncAPI document.
+    pub fn to_contract(&self) -> bool {
+        matches!(self, Kind::Contract { .. } | Kind::FlowOpenApi | Kind::RuleJsonSchema { .. })
     }
 }
 
@@ -96,6 +113,12 @@ pub struct Crossing {
     /// Those and everything they reach through fields (DESIGN 3.3).
     pub reach: Vec<Symbol>,
     pub allowed: Option<Allowed>,
+    /// For a document's `$ref`: the JSON Pointer it lands on, and every element of the documents
+    /// it reaches from there, as (file, pointer) (DESIGN 15.5).
+    pub pointer: Option<String>,
+    pub elements: Vec<(String, String)>,
+    /// The kind of the referring artifact, when it is an OpenAPI or AsyncAPI document.
+    pub from_contract: Option<crate::contracts::Kind>,
 }
 
 impl Crossing {
@@ -196,7 +219,7 @@ pub fn proto_crossings(ps: &Protos, arts: &[Artifact]) -> Vec<Crossing> {
             let via = through_import(ps, q);
             let uses: Vec<Symbol> = named.iter().filter(|n| via.contains(&n.file)).cloned().collect();
             let reach = ps.reach(&uses);
-            out.push(Crossing { from: file.clone(), from_tool: Tool::Proto, from_ctx: x, to: q.clone(), to_ctx: y, target: Name::file(Tool::Proto, q.clone()), kind: Kind::ProtoImport, line: imp.line, col: imp.col, import: imp.path.clone(), uses, reach, allowed: None });
+            out.push(Crossing { from: file.clone(), from_tool: Tool::Proto, from_ctx: x, to: q.clone(), to_ctx: y, target: Name::file(Tool::Proto, q.clone()), kind: Kind::ProtoImport, line: imp.line, col: imp.col, import: imp.path.clone(), uses, reach, allowed: None, pointer: None, elements: vec![], from_contract: None });
         }
     }
     out
@@ -211,6 +234,7 @@ pub fn proto_crossings(ps: &Protos, arts: &[Artifact]) -> Vec<Crossing> {
 /// is no crossing: it is held to the workflow's own published language (E208) by [`implements`].
 pub fn suite_crossings(m: &Model, ps: &Protos, arts: &[Artifact], read: &Read) -> (Vec<Crossing>, Vec<Diag>) {
     let owner = |p: &str| arts.iter().find(|a| a.path == p).and_then(|a| a.ctx());
+    let is_contract = |p: &str| arts.iter().any(|a| a.path == p && a.contract.is_some());
     let mut out = Vec::new();
     let mut diags = Vec::new();
     for (from, tool, refs) in &read.refs {
@@ -225,6 +249,11 @@ pub fn suite_crossings(m: &Model, ps: &Protos, arts: &[Artifact], read: &Read) -
                 (Tool::Dandori, "use proto") => Kind::FlowProto,
                 (Tool::Dandori, "connect") => Kind::FlowConnect,
                 (Tool::Dandori, "flow") => Kind::FlowChild,
+                // an OpenAPI document a workflow calls, a JSON Schema a rule reads from a document:
+                // a crossing when the file is a document another context owns (DESIGN 15.5)
+                (Tool::Dandori, "use openapi") if is_contract(&r.target.path) => Kind::FlowOpenApi,
+                (Tool::Rulec, "import jsonschema") if is_contract(&r.target.path) => Kind::RuleJsonSchema { how: "import jsonschema".into() },
+                (Tool::Rulec, "shape") if r.target.tool == Tool::File && is_contract(&r.target.path) => Kind::RuleJsonSchema { how: "shape".into() },
                 _ => continue,
             };
             let to = r.target.path.clone();
@@ -263,7 +292,7 @@ pub fn suite_crossings(m: &Model, ps: &Protos, arts: &[Artifact], read: &Read) -
                 Kind::FlowConnect => format!("connect {}", r.target.items.iter().map(|(_, v)| v.as_str()).collect::<Vec<_>>().join("/")),
                 k => format!("{} {}", k.via(), crate::naming::quote(&ritsu_base::paths::relative(&ritsu_base::paths::parent(from), &to))),
             };
-            out.push(Crossing { from: from.clone(), from_tool: *tool, from_ctx: x, to, to_ctx: y, target: r.target.clone(), kind, line: r.line, col: 1, import, uses, reach, allowed: None });
+            out.push(Crossing { from: from.clone(), from_tool: *tool, from_ctx: x, to, to_ctx: y, target: r.target.clone(), kind, line: r.line, col: 1, import, uses, reach, allowed: None, pointer: None, elements: vec![], from_contract: None });
         }
     }
     (out, diags)
@@ -310,10 +339,85 @@ pub fn crate_crossings(m: &Model, arts: &[Artifact], crates: Option<&crate::carg
                 uses: vec![],
                 reach: vec![],
                 allowed: None,
+                pointer: None,
+                elements: vec![],
+                from_contract: None,
             });
         }
     }
     (out, diags)
+}
+
+/// The `$ref`s of the OpenAPI and AsyncAPI documents that land in a file another context owns
+/// (DESIGN 15.5). A `$ref` to a channel is the use of the channel: its `via` is what the
+/// operations on it do (`send`, `receive`), or `$ref` when none is on it. A `$ref` into `paths`
+/// uses the HTTP operations of the path item.
+pub fn contract_crossings(cs: &crate::contracts::Contracts, arts: &[Artifact]) -> Vec<Crossing> {
+    let owner = |p: &str| arts.iter().find(|a| a.path == p).and_then(|a| a.ctx());
+    let mut out = Vec::new();
+    for r in &cs.refs {
+        let Some((to, ptr)) = &r.to else { continue };
+        let (Some(x), Some(y)) = (owner(&r.from), owner(to)) else { continue };
+        if x == y || !cs.docs.contains_key(to) || cs.locate(to, ptr).is_none() {
+            continue;
+        }
+        // the same element of the same file, pointed at again from the same document, is the
+        // same reference (as one `.proto` imports another once)
+        if out.iter().any(|c: &Crossing| c.from == r.from && c.to == *to && c.pointer.as_deref() == Some(ptr.as_str())) {
+            continue;
+        }
+        let tokens = ritsu_base::yaml::pointer_tokens(ptr).unwrap_or_default();
+        let kind_to = cs.docs[to].kind;
+        let channel = (kind_to == crate::contracts::Kind::AsyncApi && tokens.first().map(String::as_str) == Some("channels")).then(|| tokens.get(1).cloned()).flatten();
+        let operations: Vec<String> = if tokens.first().map(String::as_str) == Some("paths") || tokens.first().map(String::as_str) == Some("webhooks") {
+            cs.operations(to).into_iter().filter(|o| o.pointer == *ptr || o.pointer.starts_with(&format!("{ptr}/"))).map(|o| o.name()).collect()
+        } else {
+            vec![]
+        };
+        // what the operations of the referring document do on the channel
+        let mut actions: Vec<String> = Vec::new();
+        if channel.is_some() {
+            let at: Vec<String> = ritsu_base::yaml::pointer_tokens(&r.at).unwrap_or_default();
+            for a in cs.actions(&r.from) {
+                let on_it = match at.first().map(String::as_str) {
+                    Some("channels") => at.len() == 2 && a.channel.as_deref() == at.get(1).map(String::as_str),
+                    Some("operations") => at.get(1) == Some(&a.id),
+                    _ => false,
+                };
+                if on_it && !a.action.is_empty() && !actions.contains(&a.action) {
+                    actions.push(a.action.clone());
+                }
+            }
+            actions.sort();
+        }
+        let via = if actions.is_empty() { "$ref".to_string() } else { actions.join(", ") };
+        out.push(Crossing {
+            from: r.from.clone(),
+            from_tool: Tool::File,
+            from_ctx: x,
+            to: to.clone(),
+            to_ctx: y,
+            target: Name::file(Tool::File, to.clone()),
+            kind: Kind::Contract { via, channel, operations },
+            line: r.line,
+            col: r.col,
+            import: format!("$ref: {}", r.written),
+            uses: vec![],
+            reach: vec![],
+            allowed: None,
+            pointer: Some(ptr.clone()),
+            elements: cs.reach(to, ptr),
+            from_contract: arts.iter().find(|a| a.path == r.from).and_then(|a| a.contract).map(|(k, _)| k),
+        });
+    }
+    out
+}
+
+/// The published language of a context that holds an OpenAPI or AsyncAPI document: the block that
+/// lists it, or one of whose documents reaches it, as a part of the same context (DESIGN 15.5).
+pub fn contract_package(m: &Model, cs: &crate::contracts::Contracts, arts: &[Artifact], c: usize, file: &str) -> Option<String> {
+    let owner = |p: &str| arts.iter().find(|a| a.path == p).and_then(|a| a.ctx());
+    m.contexts[c].published.iter().find(|p| !p.contracts.is_empty() && cs.published_files(&p.contracts.iter().map(|(_, f, _)| f.clone()).collect::<Vec<_>>(), &owner, c).contains(file)).map(|p| p.package.clone())
 }
 
 /// A workflow's `implements` (DESIGN 4.7): the service it implements is an open host service of a
@@ -408,7 +512,7 @@ pub fn rule_package(read: &Read, rule: &str) -> Option<String> {
 }
 
 /// Hold every crossing to the map (DESIGN 3.3, 4.7): fill `allowed`, and say what is not allowed.
-pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
+pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::contracts::Contracts, arts: &[Artifact]) -> Vec<Diag> {
     let mut diags = Vec::new();
     for c in crossings.iter_mut() {
         let (x, y) = (c.from_ctx, c.to_ctx);
@@ -418,6 +522,11 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
         let krate = matches!(c.kind, Kind::Crate { .. });
         // a crate is shown by its directory, as a dependency by its path writes it
         let (sp, sq) = (shown(&p), if krate { shown(&ritsu_base::paths::parent(&q)) } else { shown(&q) });
+        // a document's `$ref` names what it lands on: the file and the pointer
+        let sq = match &c.pointer {
+            Some(ptr) if !ptr.is_empty() => format!("{sq}#{ptr}"),
+            _ => sq,
+        };
         let from_ref = c.from_ref(&xn);
         // what a reference does, after what it refers to: a `.proto` imports, a crate depends,
         // the rest refer
@@ -447,6 +556,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
             Kind::FlowRule { connect: false, .. } | Kind::RuleApply | Kind::CalendarUse => None,
             Kind::FlowChild if !child_published => None,
             Kind::Crate { .. } => published_crate(m, y, &q),
+            k if k.to_contract() => contract_package(m, cs, arts, y, &q),
             _ => published_package(m, y, &lands),
         };
         let to_what = match &pkg {
@@ -466,7 +576,14 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
         } else {
             to_what
         };
-        let to_ref = Ref::name(Some(&yn), c.to_name(), to_what);
+        let to_ref = match (&c.kind, &c.pointer) {
+            (Kind::Contract { .. }, Some(ptr)) => {
+                let line = cs.key_line(&q, ptr).unwrap_or(1);
+                let shown_ptr = if ptr.is_empty() { "#".to_string() } else { format!("#{ptr}") };
+                Ref::line(Some(&yn), &q, line, tr!("{shown_ptr}（{}）", "{shown_ptr}, {}", to_what.ja; to_what.en))
+            }
+            _ => Ref::name(Some(&yn), c.to_name(), to_what),
+        };
         let diag = |code: &'static str, msg: Text| diag::at(code, &p, c.line, c.col, msg).source(&src).refer(from_ref.clone()).refer(to_ref.clone());
         let separate = m.writes(x, y, |k| matches!(k, RelK::Separate)) || m.writes(y, x, |k| matches!(k, RelK::Separate));
         if separate {
@@ -566,6 +683,34 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
             Kind::FlowRule { connect: true, .. } => rule_service(read, &q),
             _ => None,
         };
+        // A channel or an HTTP operation a document uses is one the other side opens (E210).
+        let used: Vec<String> = match &c.kind {
+            Kind::Contract { channel: Some(ch), .. } => vec![ch.clone()],
+            Kind::Contract { operations, .. } => operations.clone(),
+            _ => vec![],
+        };
+        if !used.is_empty() {
+            let offered: Vec<String> = m.contexts[y].published.iter().filter(|pl| pl.package == k).flat_map(|pl| pl.services.iter().map(|(s, _)| s.clone())).collect();
+            let missing: Vec<&String> = used.iter().filter(|u| !offered.contains(u)).collect();
+            if !missing.is_empty() {
+                let what = missing.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+                let (wj, we) = (what.join("、"), what.join(", "));
+                let (ja_kind, en_kind) = if matches!(&c.kind, Kind::Contract { channel: Some(_), .. }) { ("チャネル", "the channel") } else { ("HTTP の操作", "the HTTP operation") };
+                let mut d = diag("E210", tr!("「{xn}」の {sp} が、「{yn}」の公開ホストサービスでない{ja_kind} {wj} を使っています（{via}）", "The document {sp} of {xn} uses {en_kind} {we} of {yn} ({via}), which is no open host service of {yn}"));
+                let (oj, oe) = (offered.join("、"), offered.join(", "));
+                d = d.note(if offered.is_empty() {
+                    tr!("公表された言語 {k} に、公開ホストサービスはありません。", "The published language {k} has no open host service.")
+                } else {
+                    tr!("公表された言語 {k} の公開ホストサービスは {oj} です。", "The open host services of the published language {k} are {oe}.")
+                });
+                d = d.note(tr!(
+                    "境界の向こうのチャネルに送ったりそこから受けたりできるのは、相手が `open host service` に並べたチャネルだけです（HTTP の操作も同じです）。相手の公表された言語の `open host service` に足してもらうか、相手が開いたものを使ってください。",
+                    "Across a boundary, a document sends to and receives from only the channels the other side lists under `open host service` (and the same for HTTP operations): have it listed there, or use what the other side opens."
+                ));
+                diags.push(d);
+                continue;
+            }
+        }
         if let Some(svc) = called {
             let offered: Vec<String> = m.contexts[y].published.iter().filter(|pl| pl.package == k).flat_map(|pl| pl.services.iter().map(|(s, _)| s.clone())).collect();
             if !offered.contains(&svc) {
@@ -602,8 +747,12 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read) -> Vec<Diag> {
             continue;
         }
         if r.has(Role::Acl) {
-            if let Some(own) = published_package_any(m, x, &p) {
-                let used: Vec<String> = c.uses.iter().map(|s| s.full.clone()).collect();
+            let own_pl = published_package_any(m, x, &p).or_else(|| if c.from_contract.is_some() { contract_package(m, cs, arts, x, &p) } else { None });
+            if let Some(own) = own_pl {
+                let mut used: Vec<String> = c.uses.iter().map(|s| s.full.clone()).collect();
+                if let Some(ptr) = &c.pointer {
+                    used.push(crate::contracts::shown(&q, ptr));
+                }
                 let used = if used.is_empty() { k.clone() } else { used.join(", ") };
                 diags.push(diag("E205", tr!("「{xn}」の公表された言語 {own} に、上流「{yn}」の型が出ています", "The published language {own} of {xn} shows the upstream {yn}'s types")).note(tr!(
                     "{sp} は {used} を使っています。腐敗防止層の下流の公表された言語には、上流のモデルを出せません。層の中で自分の型に読み替えてください。",

@@ -1,0 +1,35 @@
+openapi: 3.0.3
+info:
+  title: Shipping API
+  version: 1.0.0
+  description: Tells whether an order may leave the warehouse.
+paths:
+  /shipments/{orderId}:
+    get:
+      operationId: getShipment
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The shipment of the order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shipment'
+components:
+  schemas:
+    Shipment:
+      type: object
+      required: [orderId, gate]
+      properties:
+        orderId:
+          type: string
+        gate:
+          $ref: '#/components/schemas/ShipmentGate'
+    ShipmentGate:
+      type: string
+      enum: [hold, release]

@@ -1,0 +1,86 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ordering API",
+    "version": "1.0.0",
+    "description": "Places an order and tells where it is."
+  },
+  "paths": {
+    "/orders": {
+      "post": {
+        "operationId": "createOrder",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/NewOrder" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The order, placed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Order" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "operationId": "getOrder",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "The order",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Order" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "NewOrder": {
+        "type": "object",
+        "required": ["customer", "lines"],
+        "properties": {
+          "customer": { "type": "string" },
+          "lines": { "type": "array", "items": { "$ref": "#/components/schemas/Line" } }
+        }
+      },
+      "Line": {
+        "type": "object",
+        "required": ["sku", "quantity", "price"],
+        "properties": {
+          "sku": { "type": "string" },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "price": { "$ref": "../../common/money.yaml#/Money" }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "required": ["id", "status", "lines", "total"],
+        "properties": {
+          "id": { "type": "string" },
+          "status": { "$ref": "#/components/schemas/OrderStatus" },
+          "lines": { "type": "array", "items": { "$ref": "#/components/schemas/Line" } },
+          "total": { "$ref": "../../common/money.yaml#/Money" }
+        }
+      },
+      "OrderStatus": {
+        "type": "string",
+        "enum": ["placed", "paid", "shipped", "cancelled"]
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+openapi: 3.0.3
+info:
+  title: 配送の API
+  version: 1.0.0
+  description: 注文を倉庫から出してよいかを答える。
+paths:
+  /shipments/{orderId}:
+    get:
+      operationId: getShipment
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 注文の出荷
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shipment'
+components:
+  schemas:
+    Shipment:
+      type: object
+      required: [orderId, gate]
+      properties:
+        orderId:
+          type: string
+        gate:
+          $ref: '#/components/schemas/ShipmentGate'
+        charge:
+          $ref: '../../payments/api/payments.yaml#/components/schemas/Charge'
+    ShipmentGate:
+      type: string
+      enum: [hold, release]

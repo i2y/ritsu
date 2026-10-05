@@ -1,0 +1,7 @@
+workflow notify v1
+description "Mails the customer about an order, reading the order from Ordering's HTTP API"
+
+use openapi ordering from "../ordering/api/ordering.json"
+
+flow
+  pass

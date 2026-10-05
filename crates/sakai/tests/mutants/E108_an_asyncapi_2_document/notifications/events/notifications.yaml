@@ -1,0 +1,9 @@
+asyncapi: 2.6.0
+info:
+  title: Notifications, from Ordering
+  version: 1.0.0
+channels:
+  shop.ordering.order.placed:
+    subscribe:
+      message:
+        $ref: '../../ordering/events/ordering.yaml#/components/messages/OrderPlaced'

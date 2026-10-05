@@ -1,0 +1,39 @@
+asyncapi: 3.0.0
+info:
+  title: 受注のイベント
+  version: 1.0.0
+  description: 受注が、注文についてほかのサービスに知らせること。
+channels:
+  orderPlaced:
+    address: shop.ordering.order.placed
+    messages:
+      orderPlaced:
+        $ref: '#/components/messages/OrderPlaced'
+  orderCancelled:
+    address: shop.ordering.order.cancelled
+    messages:
+      orderCancelled:
+        $ref: '#/components/messages/OrderCancelled'
+operations:
+  sendOrderPlaced:
+    action: send
+    channel:
+      $ref: '#/channels/orderPlaced'
+  sendOrderCancelled:
+    action: send
+    channel:
+      $ref: '#/channels/orderCancelled'
+components:
+  messages:
+    OrderPlaced:
+      payload:
+        $ref: '../api/ordering.json#/components/schemas/Order'
+    OrderCancelled:
+      payload:
+        type: object
+        required: [orderId, reason]
+        properties:
+          orderId:
+            type: string
+          reason:
+            type: string

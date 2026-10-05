@@ -1,0 +1,3 @@
+error[E108]: notifications/events/notifications.yaml:1:1: The file notifications/events/notifications.yaml is an AsyncAPI 2.6.0 document, which sakai does not read
+     1 | asyncapi: 2.6.0
+  = Convert it to AsyncAPI 3 (`asyncapi convert notifications/events/notifications.yaml`): the publish and subscribe of 2.x are said from the other side, and since 3.0 an operation says what the application does (send, receive). sakai reads AsyncAPI 3.0 and 3.1.

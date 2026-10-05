@@ -1,0 +1,11 @@
+# An amount of money, which Ordering and Payments keep together (their shared kernel).
+Money:
+  type: object
+  required: [amount, currency]
+  properties:
+    amount:
+      type: integer
+      description: In the currency's smallest unit (yen, cents)
+    currency:
+      type: string
+      enum: [JPY, USD, EUR]

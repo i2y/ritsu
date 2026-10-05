@@ -1,0 +1,7 @@
+workflow notify v1
+description "注文について客にメールを送る。注文は受注の HTTP の API から読む"
+
+use openapi ordering from "../ordering/api/ordering.json"
+
+flow
+  pass

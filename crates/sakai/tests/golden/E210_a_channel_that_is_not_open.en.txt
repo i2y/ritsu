@@ -1,0 +1,7 @@
+error[E210]: shipping/acl/payments.yaml:11:5: The document shipping/acl/payments.yaml of Shipping uses the channel paymentFailed of Payments (receive), which is no open host service of Payments
+    11 |     $ref: '../../payments/events/payments.yaml#/channels/paymentFailed'
+  = The open host services of the published language payments.v1 are createCharge, getCharge, paymentSucceeded.
+  = Across a boundary, a document sends to and receives from only the channels the other side lists under `open host service` (and the same for HTTP operations): have it listed there, or use what the other side opens.
+  involved:
+      Shipping  shipping/acl/payments.yaml:11     $ref: ../../payments/events/payments.yaml#/channels/paymentFailed
+      Payments  payments/events/payments.yaml:14  #/channels/paymentFailed, a part of the published language payments.v1

@@ -1,0 +1,4 @@
+warning[W104]: payments/api/payments.yaml:50:11: The `$ref` of payments/api/payments.yaml is a URL (https://example.com/schemas/money.yaml); sakai does not read it, and takes it as outside the scope
+    50 |           $ref: 'https://example.com/schemas/money.yaml#/Money'
+  = What it points at is left out of the checks of the boundaries too; for another context's document, point at its file in the repository by a relative path.
+ネットショップ.ctx: ok — 4 contexts, 5 relationships; 9 artifacts, each in one context; 7 crossings checked (openapi 1, asyncapi 5, dandori 1)

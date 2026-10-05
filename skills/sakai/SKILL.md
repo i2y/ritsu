@@ -1,6 +1,6 @@
 ---
 name: sakai
-description: Write, check and fix sakai files (`.ctx`), the checkable part of a context map — which bounded context owns each artifact, which relationships (conformist, anticorruption layer, customer and supplier, shared kernel, partnership, separate ways) let a reference cross a boundary, and how an anticorruption layer maps the enum values and terms that cross — held to real rules, workflows, calendars, books, `.proto` files and code. Use when a context map has to be written or changed as `.ctx` files; when a sakai diagnostic (E001-E502, W101-W402) has to be fixed; when the settings of import-linter, dependency-cruiser, ArchUnit or go-arch-lint have to be written from the map; or when the map's page has to be shown to the people who check what the code is to do.
+description: Write, check and fix sakai files (`.ctx`), the checkable part of a context map — which bounded context owns each artifact, which relationships (conformist, anticorruption layer, customer and supplier, shared kernel, partnership, separate ways) let a reference cross a boundary, and how an anticorruption layer maps the enum values and terms that cross — held to real rules, workflows, calendars, books, `.proto` files, OpenAPI and AsyncAPI documents and code. Use when a context map has to be written or changed as `.ctx` files; when services that talk over HTTP or events have to be held to their OpenAPI and AsyncAPI contracts; when a sakai diagnostic (E001-E502, W101-W402) has to be fixed; when the settings of import-linter, dependency-cruiser, ArchUnit or go-arch-lint have to be written from the map; or when the map's page has to be shown to the people who check what the code is to do.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run sakai as `ritsu sakai <command>`, or as `sakai <command>` through a link to ritsu named for it. The import linters themselves run in the project's CI, not in sakai.
 license: MIT OR Apache-2.0
 ---
@@ -10,8 +10,8 @@ license: MIT OR Apache-2.0
 The job is a **context map that the code is held to**: which team's context owns which files, which context may use which other context's published language or call its services, and what an anticorruption layer does with each value that crosses.
 sakai writes it as `.ctx` files beside the artifacts and checks every artifact against it.
 
-It does not apply to what the code does inside a context, to the meaning of a definition, or to calls made only at run time (a URL in a string, a queue, a shared database).
-sakai checks none of those.
+It does not apply to what the code does inside a context, to the meaning of a definition, or to calls no contract writes (a URL in a string with no OpenAPI document, a queue with no AsyncAPI document, a shared database).
+sakai checks none of those. The HTTP operations and the channels that OpenAPI and AsyncAPI documents write, it checks.
 
 The files bundled with this skill are `reference.md` (the whole language and the commands), `targets.md` (the import linters and CML) and `codes.md` (every diagnostic).
 Read them when you need them, not all up front.
@@ -93,6 +93,19 @@ separate ways from Billing
 - A term with `means` crosses with its element; `as <context>.<term>` takes another context's term with the same meaning.
 - An enum mapping gives every upstream value a downstream value or `refuse`. Where a rule takes the enum in with `import proto`, point the mapping at the rule's enum and write no lines: the rule is the mapping.
 
+Services that talk over HTTP and events publish their OpenAPI and AsyncAPI documents as a published language, and open the HTTP operations (by `operationId`) and the channels (their keys under `channels`) anyone may use:
+
+```ctx
+published language payments.v1
+  openapi "../payments/api/payments.yaml"
+  asyncapi "../payments/events/payments.yaml"
+  open host service createCharge, getCharge, paymentSucceeded, paymentFailed
+```
+
+- A document is found by its top (`openapi`, `asyncapi`), in JSON or YAML, and belongs to one context like any artifact. sakai reads OpenAPI 3.0 to 3.2 and AsyncAPI 3.0 and 3.1; convert AsyncAPI 2.x with `asyncapi convert`.
+- What crosses is what the documents write: a `$ref` to another context's document, and an operation that sends to or receives from another context's channel (the downstream writes `upstream`, as for any reference).
+- Name a document's element short, in the context's own published language or the upstream's: `schema Charge`, `enum ChargeStatus`, `channel orderPlaced`, `message OrderPlaced`, `operation createCharge`. An enum's values are its strings, as written.
+
 ## 3. What to ask a person
 
 - Which team owns a directory that no context owns yet (E101), or that two contexts both claim (E102).
@@ -114,6 +127,8 @@ The usual ones:
 | E202 | a reference to the inside of another context | use what the other context publishes, or publish what is used |
 | E203 | a reference through a package `through` does not list | add the package to `through`, or use one it lists |
 | E207 | a call to a service that is not an open host service | the upstream lists it under `open host service`, or the call goes |
+| E108 | an OpenAPI or AsyncAPI document that does not read | fix where it points; YAML beyond what goes to JSON and back (tags, `?` keys) is not read |
+| E210 | a document uses a channel or an HTTP operation that is not an open host service | the upstream opens it under `open host service`, or the document stops using it (ask) |
 | E401 | an upstream value with no mapping | add the line the note shows, with the value the team decides |
 | E406, E407 | one word in two meanings crosses | rename, `as`, or map it in an anticorruption layer (ask) |
 | E502 | the linter's settings are not what the map writes | run `ritsu sakai build` again with the same `--lang`, and commit |

@@ -433,6 +433,7 @@ impl<'a> P<'a> {
         let mut out = Vec::new();
         let mut j = i;
         let mut tool: Option<Option<Tool>> = None;
+        let mut contract: Option<crate::contracts::Kind> = None;
         loop {
             let t = l.tokens.get(j);
             match t.map(|t| &t.tok) {
@@ -441,13 +442,18 @@ impl<'a> P<'a> {
                     let col = t.unwrap().col;
                     if w == kw::DIR {
                         tool = Some(None);
+                        contract = None;
+                    } else if let Some(k) = crate::contracts::Kind::from_word(&w) {
+                        tool = Some(Some(Tool::File));
+                        contract = Some(k);
                     } else {
+                        contract = None;
                         match Tool::from_word(&w) {
                             Some(Tool::Yuen | Tool::Sakai) => {
                                 self.push("E002", l, col, tr!("ここに `{w}` のファイルは書けません", "A `{w}` file does not go here"));
                                 self.note(tr!(
-                                    "書けるのは成果物（rulec、dandori、koyomi、chobo、geas、proto、file）とディレクトリ（dir）です。",
-                                    "Artifacts (rulec, dandori, koyomi, chobo, geas, proto, file) and directories (dir) go here."
+                                    "書けるのは成果物（rulec、dandori、koyomi、chobo、geas、proto、file、openapi、asyncapi）とディレクトリ（dir）です。",
+                                    "Artifacts (rulec, dandori, koyomi, chobo, geas, proto, file, openapi, asyncapi) and directories (dir) go here."
                                 ));
                                 return None;
                             }
@@ -470,7 +476,7 @@ impl<'a> P<'a> {
                         self.push("E002", l, t.unwrap().col, tr!("パスの前に、`dir` かツールの語を書いてください", "A path comes after `dir` or a tool"));
                         return None;
                     };
-                    out.push(Item { tool: tl, path: Str { value: s.clone(), pos: Pos { line: l.no, col: t.unwrap().col } } });
+                    out.push(Item { tool: tl, path: Str { value: s.clone(), pos: Pos { line: l.no, col: t.unwrap().col } }, contract });
                 }
                 _ => {
                     let col = t.map(|t| t.col).unwrap_or_else(|| l.tokens.last().map(|t| t.end).unwrap_or(1));
@@ -619,26 +625,33 @@ impl<'a> P<'a> {
             return None;
         }
         self.end(l, 3);
-        let mut p = Published { package: pkg, pos: pos(l, &l.tokens[0]), package_pos: pos(l, t), protos: vec![], rulec: None, krate: None, services: vec![], generated: vec![] };
+        let mut p = Published { package: pkg, pos: pos(l, &l.tokens[0]), package_pos: pos(l, t), protos: vec![], rulec: None, krate: None, contracts: vec![], services: vec![], generated: vec![] };
         let mut said_services = false;
         let before = self.diags.len();
         for ch in &n.children {
             let cl = self.line(ch);
             let t0 = &cl.tokens[0];
-            if t0.is("proto") {
-                if p.rulec.is_some() || p.krate.is_some() {
+            let contract = t0.word().and_then(crate::contracts::Kind::from_word);
+            if let Some(k) = contract {
+                if !p.protos.is_empty() || p.rulec.is_some() || p.krate.is_some() {
+                    self.mixed(cl);
+                } else if let Some(ss) = self.strings(cl, 1) {
+                    p.contracts.extend(ss.into_iter().map(|s| (k, s)));
+                }
+            } else if t0.is("proto") {
+                if p.rulec.is_some() || p.krate.is_some() || !p.contracts.is_empty() {
                     self.mixed(cl);
                 } else if let Some(ss) = self.strings(cl, 1) {
                     p.protos.extend(ss);
                 }
             } else if t0.is("rulec") {
-                if !p.protos.is_empty() || p.rulec.is_some() || p.krate.is_some() {
+                if !p.protos.is_empty() || p.rulec.is_some() || p.krate.is_some() || !p.contracts.is_empty() {
                     self.mixed(cl);
                 } else {
                     p.rulec = self.one_string(cl, 1);
                 }
             } else if t0.is(kw::CRATE) {
-                if !p.protos.is_empty() || p.rulec.is_some() || p.krate.is_some() {
+                if !p.protos.is_empty() || p.rulec.is_some() || p.krate.is_some() || !p.contracts.is_empty() {
                     self.mixed(cl);
                 } else {
                     p.krate = self.one_string(cl, 1);
@@ -649,7 +662,7 @@ impl<'a> P<'a> {
                     self.note(tr!("公開ホストサービスは、一行に `,` で並べてください。", "List the open host services on one line, separated by `,`."));
                 } else {
                     said_services = true;
-                    p.services = self.idents(cl, 3)?;
+                    p.services = self.service_names(cl, 3)?;
                 }
             } else if t0.is(kw::GENERATED) && cl.tokens.get(1).is_some_and(|t| t.is(kw::DIR)) {
                 if let Some(ss) = self.strings(cl, 2) {
@@ -659,25 +672,63 @@ impl<'a> P<'a> {
                 let w = cl.rest_from(t0.col).trim().to_string();
                 self.push("E002", cl, t0.col, tr!("ここに `{w}` は書けません", "`{w}` does not belong here"));
                 self.note(tr!(
-                    "公表された言語の下に書けるのは、`proto \"<パス>\"` か `rulec \"<パス>\"` か `crate \"<パス>\"`、`open host service <サービス>`、`generated dir \"<パス>\"` です。",
-                    "Under a published language go `proto \"<path>\"`, `rulec \"<path>\"` or `crate \"<path>\"`, `open host service <service>`, and `generated dir \"<path>\"`."
+                    "公表された言語の下に書けるのは、`proto \"<パス>\"`、`rulec \"<パス>\"`、`crate \"<パス>\"`、`openapi \"<パス>\"`、`asyncapi \"<パス>\"` のどれかと、`open host service <サービス>`、`generated dir \"<パス>\"` です。",
+                    "Under a published language go `proto \"<path>\"`, `rulec \"<path>\"`, `crate \"<path>\"`, `openapi \"<path>\"` or `asyncapi \"<path>\"`, `open host service <service>`, and `generated dir \"<path>\"`."
                 ));
             }
             self.leaf(ch, cl.tokens[0].word().unwrap_or(""));
         }
-        if p.protos.is_empty() && p.rulec.is_none() && p.krate.is_none() && self.diags.len() == before {
+        // A service of a .proto or a rule is an ASCII name; an operation of OpenAPI or a channel of
+        // AsyncAPI may be any string (DESIGN 15.4).
+        if p.contracts.is_empty()
+            && let Some((_, at)) = p.services.iter().find(|(s, _)| !ascii_ident(s))
+        {
+            let at = *at;
+            let cl = n.children.iter().map(|ch| self.line(ch)).find(|cl| cl.no == at.line).unwrap();
+            self.push("E002", cl, at.col, tr!("ここには proto のサービスの名前を書いてください", "The name of a proto service goes here"));
+            return None;
+        }
+        if p.protos.is_empty() && p.rulec.is_none() && p.krate.is_none() && p.contracts.is_empty() && self.diags.len() == before {
             let pk = p.package.clone();
             self.push("E004", l, l.tokens[0].col, tr!("公表された言語 {pk} に、proto も rulec の規則も Rust のクレートもありません", "The published language {pk} has no proto, no rule and no crate"));
             self.note(tr!(
                 "下に `proto \"<パス>\"`（その package を宣言する proto のファイル）か、`rulec \"<パス>\"`（Connect のサービスを公表する規則）か、`crate \"<パス>\"`（公表する Rust のクレートのディレクトリ）を書いてください。",
                 "Write under it `proto \"<path>\"` (the proto files that declare the package), `rulec \"<path>\"` (a rule whose Connect service it publishes) or `crate \"<path>\"` (the directory of a Rust crate it publishes)."
             ));
+            self.note(tr!(
+                "OpenAPI と AsyncAPI の文書なら、`openapi \"<パス>\"` と `asyncapi \"<パス>\"` を書いてください。",
+                "For OpenAPI and AsyncAPI documents, write `openapi \"<path>\"` and `asyncapi \"<path>\"`."
+            ));
         }
         Some(p)
     }
 
+    /// `A, B, "c d"`: the names under `open host service`, words or strings.
+    fn service_names(&mut self, l: &Line, i: usize) -> Option<Vec<(String, Pos)>> {
+        let mut out = Vec::new();
+        let mut j = i;
+        loop {
+            match l.tokens.get(j) {
+                Some(t @ Token { tok: Tok::Word(w), .. }) | Some(t @ Token { tok: Tok::Str(w), .. }) => out.push((w.clone(), pos(l, t))),
+                other => {
+                    let col = other.map(|t| t.col).unwrap_or_else(|| l.tokens.last().map(|t| t.end).unwrap_or(1));
+                    self.push("E002", l, col, tr!("ここには proto のサービスの名前を書いてください", "The name of a proto service goes here"));
+                    return None;
+                }
+            }
+            match l.tokens.get(j + 1) {
+                None => return Some(out),
+                Some(Token { tok: Tok::Comma, .. }) => j += 2,
+                Some(_) => {
+                    self.end(l, j + 1);
+                    return None;
+                }
+            }
+        }
+    }
+
     fn mixed(&mut self, l: &Line) {
-        self.push("E004", l, l.tokens[0].col, tr!("一つの公表された言語に、proto と rulec と Rust のクレートを混ぜたり、規則やクレートを二つ書いたりはできません", "One published language cannot mix proto, rulec and a crate, or hold two rules or two crates"));
+        self.push("E004", l, l.tokens[0].col, tr!("一つの公表された言語に、proto と rulec と Rust のクレートと、OpenAPI と AsyncAPI の文書を混ぜたり、規則やクレートを二つ書いたりはできません", "One published language cannot mix proto, rulec, a crate and OpenAPI or AsyncAPI documents, or hold two rules or two crates"));
         self.note(tr!(
             "rulec の規則は、規則ごとに一つの Connect のサービスを公表するので、規則ごとに `published language rulec.<別名>.v<版>` を分けてください。Rust のクレートも、クレートごとに一つの公表された言語にしてください。",
             "A rule publishes one Connect service of its own, so each rule gets its own `published language rulec.<alias>.v<n>`; a Rust crate, too, is a published language of its own."
@@ -713,9 +764,6 @@ impl<'a> P<'a> {
         }
     }
 
-    fn idents(&mut self, l: &Line, i: usize) -> Option<Vec<(String, Pos)>> {
-        self.idents_with(l, i, false)
-    }
 
     fn term(&mut self, n: &Node) -> Option<Term> {
         let l = self.line(n);
@@ -829,7 +877,7 @@ impl<'a> P<'a> {
                 }
             };
         }
-        if matches!(w, "message" | "enum" | "service") {
+        if matches!(w, "message" | "enum" | "service" | "schema" | "channel" | "operation") {
             let Some(nt) = l.tokens.get(i + 1).filter(|x| x.word().is_some()) else {
                 self.push("E002", l, t.end, tr!("`{w}` のあとに名前がありません", "`{w}` has no name after it"));
                 return None;
@@ -1087,9 +1135,13 @@ impl<'a> P<'a> {
                 self.push("E002", cl, cl.tokens[0].col, vform);
                 continue;
             };
-            let Some(v) = vt.word().map(String::from) else {
-                self.push("E002", cl, vt.col, vform);
-                continue;
+            // a value of OpenAPI or AsyncAPI may hold blanks: `"in transit" -> …` (DESIGN 15.6)
+            let v = match &vt.tok {
+                Tok::Word(w) | Tok::Str(w) => w.clone(),
+                _ => {
+                    self.push("E002", cl, vt.col, vform);
+                    continue;
+                }
             };
             let to = if wt.is(kw::REFUSE) {
                 let reason = match cl.tokens.get(3) {

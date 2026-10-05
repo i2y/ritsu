@@ -1321,6 +1321,83 @@ edition = "2021"
 pub fn reserve() {}
 ```
 
+<a id="e108"></a>
+
+## E108 — An OpenAPI or AsyncAPI document cannot be read
+
+**When**: An OpenAPI or AsyncAPI document of the scope (a `.yaml`, `.yml` or `.json` whose top holds `openapi`, `asyncapi` or `swagger`), or a file a document points at by `$ref`, cannot be read: it does not read as YAML or JSON, it writes YAML that does not go to JSON and back (a tag, a key with `?`, a second document), it is of a version sakai does not read (OpenAPI 2.0, AsyncAPI 2.x), or a `$ref` points at no file or at nothing in one.
+
+**Fix**: Correct it where it points. Convert OpenAPI 2.0 to OpenAPI 3, and AsyncAPI 2.x to AsyncAPI 3 with `asyncapi convert`.
+
+**Reproduction**: put the files below in one directory, and run `sakai check .` there.
+
+`map.ctx`:
+
+```ctx
+map Map(m) v1
+use context "alpha.ctx"
+use context "beta.ctx"
+covers "."
+```
+
+`alpha.ctx`:
+
+```ctx
+context Alpha(a) v1
+owns
+  dir "a"
+```
+
+`beta.ctx`:
+
+```ctx
+context Beta(b) v1
+owns
+  dir "b"
+
+published language b.v1
+  proto "b/v1/b.proto"
+  open host service BService
+
+terms
+  kind "The kind of thing Beta deals with"
+    means enum Kind
+```
+
+`a/a.proto`:
+
+```proto
+syntax = "proto3";
+package a;
+message A {}
+```
+
+`b/v1/b.proto`:
+
+```proto
+syntax = "proto3";
+package b.v1;
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_ONE = 1;
+  KIND_TWO = 2;
+}
+message B { Kind kind = 1; }
+message Plain { string id = 1; }
+service BService { rpc Get(B) returns (B); }
+```
+
+`b/api.yaml`:
+
+```
+openapi: 3.1.0
+info:
+	title: B
+  version: 1.0.0
+```
+
+See also: [W104](#w104)
+
 <a id="w101"></a>
 
 ## W101 — An entry of `owns` holds no artifact
@@ -1534,6 +1611,87 @@ owns
   dir "a"
 ```
 
+<a id="w104"></a>
+
+## W104 — A `$ref` points at a URL
+
+**When**: A `$ref` of an OpenAPI or AsyncAPI document points at a URL, like `https://…`. sakai does not go to the network: what it points at is not read, and is taken as outside the scope (its types are left out of the checks of the boundaries).
+
+**Fix**: For another context's document, point at its file in the repository by a relative path; a contract of a system outside may stay so.
+
+**Reproduction**: put the files below in one directory, and run `sakai check .` there.
+
+`map.ctx`:
+
+```ctx
+map Map(m) v1
+use context "alpha.ctx"
+use context "beta.ctx"
+covers "."
+```
+
+`alpha.ctx`:
+
+```ctx
+context Alpha(a) v1
+owns
+  dir "a"
+```
+
+`beta.ctx`:
+
+```ctx
+context Beta(b) v1
+owns
+  dir "b"
+
+published language b.v1
+  proto "b/v1/b.proto"
+  open host service BService
+
+terms
+  kind "The kind of thing Beta deals with"
+    means enum Kind
+```
+
+`a/a.proto`:
+
+```proto
+syntax = "proto3";
+package a;
+message A {}
+```
+
+`b/v1/b.proto`:
+
+```proto
+syntax = "proto3";
+package b.v1;
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_ONE = 1;
+  KIND_TWO = 2;
+}
+message B { Kind kind = 1; }
+message Plain { string id = 1; }
+service BService { rpc Get(B) returns (B); }
+```
+
+`b/api.yaml`:
+
+```
+openapi: 3.1.0
+info:
+  title: B
+  version: 1.0.0
+components:
+  schemas:
+    Price:
+      $ref: 'https://example.com/schemas/money.yaml#/Money'
+```
+
+See also: [E108](#e108)
+
 <a id="n101"></a>
 
 ## N101 — The references of dandori are not checked
@@ -1619,7 +1777,7 @@ See also: [E202](#e202), [E206](#e206)
 
 ## E202 — A reference to the inside of another context
 
-**When**: What a reference crosses to is in no published language of the other context and in no shared kernel of the two: a proto that is not published, a rule or a calendar itself.
+**When**: What a reference crosses to is in no published language of the other context and in no shared kernel of the two: a proto or an OpenAPI or AsyncAPI document that is not published, a rule or a calendar itself.
 
 **Fix**: Refer through the other context's published language, or list it in a shared kernel of the two.
 
@@ -1863,7 +2021,7 @@ See also: [E205](#e205)
 
 ## E205 — The published language of a layer's downstream shows the upstream's types
 
-**When**: Downstream of an anticorruption layer, a proto of the downstream's own published language imports the upstream's published language: the upstream's model goes out past the layer.
+**When**: Downstream of an anticorruption layer, a proto of the downstream's own published language imports the upstream's published language (or a document of it points at the upstream's documents by `$ref`): the upstream's model goes out past the layer.
 
 **Fix**: Map it to the downstream's own types in the layer, and publish those only.
 
@@ -2311,11 +2469,123 @@ flow
 
 See also: [E202](#e202), [E207](#e207)
 
+<a id="e210"></a>
+
+## E210 — A document uses a channel or an HTTP operation that is no open host service of the other side
+
+**When**: An AsyncAPI document sends to or receives from a channel across a boundary (an entry of its `channels` is a `$ref` to a channel of another context's document), and the channel is not under `open host service` of the other side's published language; and the same for the HTTP operations of an entry of `paths` an OpenAPI document points at across a boundary.
+
+**Fix**: The other side lists the channel or the operation under `open host service`, or the document uses one it lists.
+
+**Reproduction**: put the files below in one directory, and run `sakai check .` there.
+
+`map.ctx`:
+
+```ctx
+map Map(m) v1
+use context "alpha.ctx"
+use context "beta.ctx"
+covers "."
+```
+
+`alpha.ctx`:
+
+```ctx
+context Alpha(a) v1
+owns
+  dir "a"
+
+upstream Beta conformist
+  through b.events.v1
+```
+
+`beta.ctx`:
+
+```ctx
+context Beta(b) v1
+owns
+  dir "b"
+
+published language b.v1
+  proto "b/v1/b.proto"
+  open host service BService
+
+published language b.events.v1
+  asyncapi "b/events.yaml"
+
+terms
+  kind "The kind of thing Beta deals with"
+    means enum Kind
+```
+
+`a/a.proto`:
+
+```proto
+syntax = "proto3";
+package a;
+message A {}
+```
+
+`b/v1/b.proto`:
+
+```proto
+syntax = "proto3";
+package b.v1;
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_ONE = 1;
+  KIND_TWO = 2;
+}
+message B { Kind kind = 1; }
+message Plain { string id = 1; }
+service BService { rpc Get(B) returns (B); }
+```
+
+`b/events.yaml`:
+
+```
+asyncapi: 3.0.0
+info:
+  title: B events
+  version: 1.0.0
+channels:
+  done:
+    address: b.done
+    messages:
+      done:
+        payload:
+          type: string
+operations:
+  sendDone:
+    action: send
+    channel:
+      $ref: '#/channels/done'
+```
+
+`a/events.yaml`:
+
+```
+asyncapi: 3.0.0
+info:
+  title: A, from B
+  version: 1.0.0
+channels:
+  done:
+    $ref: '../b/events.yaml#/channels/done'
+operations:
+  receiveDone:
+    action: receive
+    channel:
+      $ref: '#/channels/done'
+```
+
+See also: [E207](#e207), [E301](#e301)
+
 <a id="e301"></a>
 
 ## E301 — An open host service is not in the published language
 
-**When**: A service under `open host service` is not in the proto files of the published language; also any under the published language of a Rust crate, which has no service.
+**When**: A service under `open host service` is not in the proto files of the published language; for a published language of OpenAPI and AsyncAPI documents, a name that is no HTTP operation (operationId) and no channel of its documents; also any under the published language of a Rust crate, which has no service.
 
 **Fix**: Correct the service's name, or add the service to the proto.
 
@@ -3337,7 +3607,7 @@ message A1 {}
 
 ## E401 — A mapping leaves values of the upstream enum out
 
-**When**: An anticorruption layer's `enum` mapping gives neither a value nor refuse for some value of the upstream enum: what comes when the upstream adds a value. The value 0 that says nothing is set needs none.
+**When**: An anticorruption layer's `enum` mapping gives neither a value nor refuse for some value of the upstream enum (a proto's enum, or a schema with `enum` of OpenAPI and AsyncAPI documents): what comes when the upstream adds a value. The value that says nothing is set (a proto's value 0 `…_UNSPECIFIED`, a document's `null`) needs none.
 
 **Fix**: Write `<upstream value> -> <value>` or `<upstream value> -> refuse "<why>"` for each.
 

@@ -14,8 +14,19 @@ mod common;
 use common::*;
 use std::time::Duration;
 
-/// The maps, and the stem of their golden files.
-const MAPS: [(&str, &str); 2] = [("examples/shop/shop.ctx", "shop"), ("examples/shop.ja/通販.ctx", "通販")];
+/// The maps, and the stem of their golden files: the shop, and the services of the web shop that
+/// talk by OpenAPI and AsyncAPI documents (DESIGN 15), each with English names and with Japanese.
+const MAPS: [(&str, &str); 4] = [
+    ("examples/shop/shop.ctx", "shop"),
+    ("examples/shop.ja/通販.ctx", "通販"),
+    ("examples/webshop/webshop.ctx", "webshop"),
+    ("examples/webshop.ja/ネットショップ.ctx", "ネットショップ"),
+];
+
+/// How many contexts a map's page draws, and two of them a test presses.
+fn boxes_of(stem: &str) -> (usize, [&'static str; 2]) {
+    if matches!(stem, "shop" | "通販") { (5, ["billing", "inventory"]) } else { (4, ["payments", "shipping"]) }
+}
 
 /// Each golden page: the map, the arguments after it, and the golden file.
 fn pages() -> Vec<(&'static str, Vec<&'static str>, String)> {
@@ -23,7 +34,7 @@ fn pages() -> Vec<(&'static str, Vec<&'static str>, String)> {
     for (map, stem) in MAPS {
         out.push((map, vec!["--lang", "en"], format!("tests/golden/doc/{stem}.en.md")));
         out.push((map, vec!["--lang", "ja"], format!("tests/golden/doc/{stem}.ja.md")));
-        let lang = if stem == "shop" { "en" } else { "ja" };
+        let lang = if stem.is_ascii() { "en" } else { "ja" };
         out.push((map, vec!["--format", "html", "--lang", lang], format!("tests/golden/doc/{stem}.html")));
     }
     out
@@ -59,7 +70,7 @@ fn the_html_reads_nothing_from_outside_and_its_boxes_link_to_the_contexts() {
         }
         assert!(html.contains("@media (prefers-color-scheme: dark)") && html.contains("name=\"viewport\""), "{stem}: no dark colours or no viewport");
         let boxes: Vec<&str> = html.split("<a class=\"ctx\" href=\"#").skip(1).map(|r| r.split('"').next().unwrap()).collect();
-        assert_eq!(boxes.len(), 5, "{stem}: the map has {} boxes", boxes.len());
+        assert_eq!(boxes.len(), boxes_of(stem).0, "{stem}: the map has {} boxes", boxes.len());
         for id in boxes {
             assert!(html.contains(&format!("<h2 id=\"{id}\">")), "{stem}: the box #{id} goes nowhere");
         }
@@ -144,7 +155,7 @@ fn every_mermaid_chart_draws() {
             all.push((file.clone(), c));
         }
     }
-    assert_eq!(all.len(), 4, "a chart on each of the four Markdown pages");
+    assert_eq!(all.len(), 8, "a chart on each of the eight Markdown pages");
     let sources: Vec<String> = all.iter().map(|(_, c)| c.clone()).collect();
     for (major, script) in scripts {
         let results = ritsu_testkit::mermaid::draw(&chrome, &script, &sources).unwrap_or_default();
@@ -171,7 +182,7 @@ fn chrome_shows_the_map_and_a_box_goes_to_its_context() {
         assert_eq!(size, Some((1280, 900)), "{stem}: the picture");
         // a box: pressed, the page goes to the context's part
         let html = std::fs::read_to_string(&page).unwrap();
-        for alias in ["billing", "inventory"] {
+        for alias in boxes_of(stem).1 {
             let press = format!(
                 "<script>window.addEventListener('load', () => {{ const a = document.querySelector('svg a.ctx[data-alias=\"{alias}\"]'); a.dispatchEvent(new MouseEvent('click', {{bubbles: true, cancelable: true, view: window}})); setTimeout(() => {{ const t = document.getElementById('ctx-{alias}'); const o = document.createElement('pre'); o.id = 'pressed'; o.textContent = location.hash + ' ' + Math.round(t.getBoundingClientRect().top); document.body.appendChild(o); }}, 300); }});</script>\n</body>"
             );

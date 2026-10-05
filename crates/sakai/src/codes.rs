@@ -81,6 +81,21 @@ const A_CALLS_B: (&str, &str) = (
     "workflow w v1\n\nuse proto b from \"../b/v1/b.proto\"\n  url \"https://b.example.com\"\n\ninputs\n  kind : b.Kind\n\ntask get(kind: b.Kind) -> b.B\n  connect b \"BService/Get\"\n\nflow\n  let r = get(kind: kind)\n  succeed\n",
 );
 
+/// An OpenAPI document of 乙's (DESIGN 15) with a tab in its indentation: it does not read (E108).
+const B_API_WITH_A_TAB: (&str, &str) = ("b/api.yaml", "openapi: 3.1.0\ninfo:\n\ttitle: B\n  version: 1.0.0\n");
+/// An OpenAPI document of 乙's whose schema is a `$ref` to a URL (W104).
+const B_API_WITH_A_URL: (&str, &str) = ("b/api.yaml", "openapi: 3.1.0\ninfo:\n  title: B\n  version: 1.0.0\ncomponents:\n  schemas:\n    Price:\n      $ref: 'https://example.com/schemas/money.yaml#/Money'\n");
+/// 乙's events, a channel `done` it sends on (AsyncAPI 3.0).
+const B_EVENTS: (&str, &str) = (
+    "b/events.yaml",
+    "asyncapi: 3.0.0\ninfo:\n  title: B events\n  version: 1.0.0\nchannels:\n  done:\n    address: b.done\n    messages:\n      done:\n        payload:\n          type: string\noperations:\n  sendDone:\n    action: send\n    channel:\n      $ref: '#/channels/done'\n",
+);
+/// 甲's events: it receives on 乙's channel `done`.
+const A_RECEIVES_DONE: (&str, &str) = (
+    "a/events.yaml",
+    "asyncapi: 3.0.0\ninfo:\n  title: A, from B\n  version: 1.0.0\nchannels:\n  done:\n    $ref: '../b/events.yaml#/channels/done'\noperations:\n  receiveDone:\n    action: receive\n    channel:\n      $ref: '#/channels/done'\n",
+);
+
 /// The files of a reproduction: [`BASE`] in its order, each replaced by the entry's file of the
 /// same path, then the entry's other files.
 fn laid(files: &'static [(&'static str, &'static str)]) -> Vec<(&'static str, &'static str)> {
@@ -409,6 +424,21 @@ pub fn ledger() -> Ledger {
             &[],
         ),
         e(
+            "E108",
+            tr!("OpenAPI か AsyncAPI の文書を読めません", "An OpenAPI or AsyncAPI document cannot be read"),
+            tr!(
+                "範囲の OpenAPI か AsyncAPI の文書（一番上に `openapi`、`asyncapi`、`swagger` のある `.yaml`、`.yml`、`.json`）か、文書が `$ref` で指すファイルを読めないとき。YAML か JSON として読めないとき、JSON と行き来できない YAML の書き方（タグ、`?` のキー、二つ目の文書など）をしているとき、sakai が読まない版（OpenAPI 2.0、AsyncAPI 2.x）のとき、`$ref` の先のファイルが無いか、ポインタが何も指さないときに出ます。",
+                "An OpenAPI or AsyncAPI document of the scope (a `.yaml`, `.yml` or `.json` whose top holds `openapi`, `asyncapi` or `swagger`), or a file a document points at by `$ref`, cannot be read: it does not read as YAML or JSON, it writes YAML that does not go to JSON and back (a tag, a key with `?`, a second document), it is of a version sakai does not read (OpenAPI 2.0, AsyncAPI 2.x), or a `$ref` points at no file or at nothing in one."
+            ),
+            tr!(
+                "示された位置を直してください。OpenAPI 2.0 は OpenAPI 3 に、AsyncAPI 2.x は `asyncapi convert` で AsyncAPI 3 に変換してください。",
+                "Correct it where it points. Convert OpenAPI 2.0 to OpenAPI 3, and AsyncAPI 2.x to AsyncAPI 3 with `asyncapi convert`."
+            ),
+            &[B_API_WITH_A_TAB],
+            &["W104"],
+        )
+        .en(&[B_API_WITH_A_TAB]),
+        e(
             "W101",
             tr!("`owns` の項が成果物を一つも含みません", "An entry of `owns` holds no artifact"),
             tr!("`owns` のディレクトリかファイルに、成果物が一つも無いとき。たいていはパスの書き誤りです。", "A directory or file under `owns` holds no artifact; the path is often mistyped."),
@@ -439,6 +469,21 @@ pub fn ledger() -> Ledger {
         )
         .en(&[("gamma.ctx", "context Gamma(c) v1\nowns\n  dir \"a\"\n")]),
         e(
+            "W104",
+            tr!("`$ref` が URL を指しています", "A `$ref` points at a URL"),
+            tr!(
+                "OpenAPI か AsyncAPI の文書の `$ref` が、`https://…` のような URL を指すとき。sakai はネットワークに出ないので、その先を読まず、範囲の外のものとして扱います（その先の型は、境界の検査から外れます）。",
+                "A `$ref` of an OpenAPI or AsyncAPI document points at a URL, like `https://…`. sakai does not go to the network: what it points at is not read, and is taken as outside the scope (its types are left out of the checks of the boundaries)."
+            ),
+            tr!(
+                "ほかのコンテキストの文書なら、リポジトリの中のファイルを相対パスで指してください。外のシステムの契約なら、そのままでかまいません。",
+                "For another context's document, point at its file in the repository by a relative path; a contract of a system outside may stay so."
+            ),
+            &[B_API_WITH_A_URL],
+            &["E108"],
+        )
+        .en(&[B_API_WITH_A_URL]),
+        e(
             "N101",
             tr!("dandori の参照を確かめていません", "The references of dandori are not checked"),
             tr!("いまは出ません。dandori が参照を JSON で出さなかったころに、地図が `.flow` を含むとき、属し方だけを確かめたことを伝えるためのコードでした。", "Never: it was for a map that holds `.flow` files, when sakai checked only who owns them, dandori printing no references as JSON."),
@@ -463,7 +508,7 @@ pub fn ledger() -> Ledger {
         e(
             "E202",
             tr!("相手の内側への参照です", "A reference to the inside of another context"),
-            tr!("参照の先が、相手の公表された言語にも、二つの共有カーネルにも入っていないとき（公表された言語でない proto、規則やカレンダーそのもの）。", "What a reference crosses to is in no published language of the other context and in no shared kernel of the two: a proto that is not published, a rule or a calendar itself."),
+            tr!("参照の先が、相手の公表された言語にも、二つの共有カーネルにも入っていないとき（公表された言語でない proto や OpenAPI と AsyncAPI の文書、規則やカレンダーそのもの）。", "What a reference crosses to is in no published language of the other context and in no shared kernel of the two: a proto or an OpenAPI or AsyncAPI document that is not published, a rule or a calendar itself."),
             tr!("相手の公表された言語を通して参照するか、二つの共有カーネルに並べてください。", "Refer through the other context's published language, or list it in a shared kernel of the two."),
             &[
                 A_CONFORMS,
@@ -525,7 +570,7 @@ pub fn ledger() -> Ledger {
         e(
             "E205",
             tr!("腐敗防止層の下流の公表された言語に、上流の型が出ています", "The published language of a layer's downstream shows the upstream's types"),
-            tr!("腐敗防止層の下流が、自分の公表された言語の proto で、上流の公表された言語を import しているとき。上流のモデルが、層を通らずに下流の外へ出ていきます。", "Downstream of an anticorruption layer, a proto of the downstream's own published language imports the upstream's published language: the upstream's model goes out past the layer."),
+            tr!("腐敗防止層の下流が、自分の公表された言語の proto で、上流の公表された言語を import しているとき（OpenAPI と AsyncAPI の文書なら、上流の文書を `$ref` で指しているとき）。上流のモデルが、層を通らずに下流の外へ出ていきます。", "Downstream of an anticorruption layer, a proto of the downstream's own published language imports the upstream's published language (or a document of it points at the upstream's documents by `$ref`): the upstream's model goes out past the layer."),
             tr!("層の中で自分の型に読み替え、公表された言語には自分の型だけを出してください。", "Map it to the downstream's own types in the layer, and publish those only."),
             &[
                 (
@@ -607,11 +652,42 @@ pub fn ledger() -> Ledger {
                     ("a/p.flow", "workflow p v1\n\nrecord Answer\n  id : string\n\ninputs\n  id : string\n\ntask run_child(id: string) -> Answer\n  flow \"../b/c.flow\"\n\nflow\n  let r = run_child(id: id)\n  succeed\n"),
                 ],
         ),
+        e(
+            "E210",
+            tr!("文書が、相手の公開ホストサービスでないチャネルか HTTP の操作を使っています", "A document uses a channel or an HTTP operation that is no open host service of the other side"),
+            tr!(
+                "AsyncAPI の文書が境界の向こうのチャネルに送るか、そこから受ける（ルートの `channels` の項が、ほかのコンテキストの文書のチャネルを `$ref` で指す）のに、そのチャネルが相手の公表された言語の `open host service` に無いとき。OpenAPI の文書が、境界の向こうの `paths` の項を `$ref` で指すとき、その HTTP の操作についても同じです。",
+                "An AsyncAPI document sends to or receives from a channel across a boundary (an entry of its `channels` is a `$ref` to a channel of another context's document), and the channel is not under `open host service` of the other side's published language; and the same for the HTTP operations of an entry of `paths` an OpenAPI document points at across a boundary."
+            ),
+            tr!(
+                "相手にそのチャネルか操作を `open host service` に並べてもらうか、相手が並べたものを使ってください。",
+                "The other side lists the channel or the operation under `open host service`, or the document uses one it lists."
+            ),
+            &[
+                ("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 conformist\n  through b.events.v1\n"),
+                (
+                    "乙.ctx",
+                    "context 乙(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService\n\npublished language b.events.v1\n  asyncapi \"b/events.yaml\"\n\nterms\n  種類 \"乙が扱うものの種類\"\n    means enum Kind\n",
+                ),
+                B_EVENTS,
+                A_RECEIVES_DONE,
+            ],
+            &["E207", "E301"],
+        )
+        .en(&[
+            ("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nupstream Beta conformist\n  through b.events.v1\n"),
+            (
+                "beta.ctx",
+                "context Beta(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService\n\npublished language b.events.v1\n  asyncapi \"b/events.yaml\"\n\nterms\n  kind \"The kind of thing Beta deals with\"\n    means enum Kind\n",
+            ),
+            B_EVENTS,
+            A_RECEIVES_DONE,
+        ]),
         // ── The patterns ──
         e(
             "E301",
             tr!("公開ホストサービスが、公表された言語に無いサービスです", "An open host service is not in the published language"),
-            tr!("`open host service` に並べたサービスが、その公表された言語の proto に無いとき。Rust のクレートの公表された言語に `open host service` を書いたときにも出ます（クレートはサービスを持ちません）。", "A service under `open host service` is not in the proto files of the published language; also any under the published language of a Rust crate, which has no service."),
+            tr!("`open host service` に並べたサービスが、その公表された言語の proto に無いとき。OpenAPI と AsyncAPI の文書の公表された言語では、並べた名前が、文書の HTTP の操作（operationId）にもチャネルにも無いとき。Rust のクレートの公表された言語に `open host service` を書いたときにも出ます（クレートはサービスを持ちません）。", "A service under `open host service` is not in the proto files of the published language; for a published language of OpenAPI and AsyncAPI documents, a name that is no HTTP operation (operationId) and no channel of its documents; also any under the published language of a Rust crate, which has no service."),
             tr!("サービスの名前を直すか、proto にサービスを足してください。", "Correct the service's name, or add the service to the proto."),
             &[(
                 "乙.ctx",
@@ -628,7 +704,7 @@ pub fn ledger() -> Ledger {
             "E302",
             tr!("公表された言語のファイルが、そのコンテキストのものでないか、package が違います", "A file of a published language is not the context's, or has another package"),
             tr!(
-                "公表された言語の proto、規則、Rust のクレート、生成したコードの置き場所が、そのコンテキストに属さないとき。proto の package やクレートの名前（`-` を `_` にしたもの）が見出しと違うとき、`crate` の先が地図の `code rust` のワークスペースのクレートでないとき、地図に `code rust` が無いのにクレートを公表したときにも出ます。",
+                "公表された言語の proto、規則、Rust のクレート、OpenAPI と AsyncAPI の文書、生成したコードの置き場所が、そのコンテキストに属さないとき。proto の package やクレートの名前（`-` を `_` にしたもの）が見出しと違うとき、`crate` の先が地図の `code rust` のワークスペースのクレートでないとき、地図に `code rust` が無いのにクレートを公表したときにも出ます。",
                 "A proto, a rule, a Rust crate or the place of the generated code of a published language does not belong to the context; or a proto's package, or a crate's name (with `-` written `_`), is not what the heading names; or a `crate` is no crate of the workspace at the map's `code rust` place, or the map has no `code rust`."
             ),
             tr!("見出しの package を直すか、そのコンテキストのファイルを並べてください。", "Correct the heading's package, or list the context's own files."),
@@ -822,7 +898,7 @@ pub fn ledger() -> Ledger {
         e(
             "E401",
             tr!("対応に、上流の列挙の値が抜けています", "A mapping leaves values of the upstream enum out"),
-            tr!("腐敗防止層の `enum` の対応に、上流の列挙の値で下流の値も refuse も書いていないものがあるとき。上流が値を足すと、これが出ます。値が無いことを表す 0 番の値には、対応は要りません。", "An anticorruption layer's `enum` mapping gives neither a value nor refuse for some value of the upstream enum: what comes when the upstream adds a value. The value 0 that says nothing is set needs none."),
+            tr!("腐敗防止層の `enum` の対応に、上流の列挙（proto の列挙か、OpenAPI と AsyncAPI の文書の `enum` のスキーマ）の値で、下流の値も refuse も書いていないものがあるとき。上流が値を足すと、これが出ます。値が無いことを表す値（proto の 0 番の `…_UNSPECIFIED`、文書の `null`）には、対応は要りません。", "An anticorruption layer's `enum` mapping gives neither a value nor refuse for some value of the upstream enum (a proto's enum, or a schema with `enum` of OpenAPI and AsyncAPI documents): what comes when the upstream adds a value. The value that says nothing is set (a proto's value 0 `…_UNSPECIFIED`, a document's `null`) needs none."),
             tr!("値ごとに `<上流の値> -> <下流の値>` か `<上流の値> -> refuse \"<理由>\"` を書いてください。", "Write `<upstream value> -> <value>` or `<upstream value> -> refuse \"<why>\"` for each."),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 anticorruption layer\n  through b.v1\n  enum Kind -> 甲の種類\n    KIND_ONE -> 一つめ\n")],
             &["E402", "W402"],

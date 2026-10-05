@@ -1,0 +1,23 @@
+context 配送(shipping) v1
+description "課金が済んだ注文を出荷する"
+owner "配送チーム"
+
+owns
+  dir "../shipping"
+
+published language shipping.v1
+  openapi "../shipping/api/shipping.yaml"
+  open host service getShipment
+
+terms
+  出荷の可否 "注文を倉庫から出してよいか"
+    means enum ShipmentGate
+
+upstream 決済 anticorruption layer
+  through payments.v1
+  layer dir "../shipping/acl"
+  enum ChargeStatus -> enum ShipmentGate
+    pending   -> hold
+    succeeded -> release
+    failed    -> refuse "課金に失敗した注文は出荷しない"
+    refunded  -> refuse "返金した注文は出荷しない"

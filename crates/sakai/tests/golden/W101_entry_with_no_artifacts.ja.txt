@@ -1,4 +1,4 @@
 警告[W101]: ctx/inventory.ctx:6:48: dir "docs" は成果物を一つも含みません
      6 |   dir "../proto/warehouse", "../py/inventory", "../docs"
-  = パスの書き誤りかもしれません。成果物は、.rule、.flow、.cal、.book、.geas、.proto のファイルと、地図の `code` に書いた言語の、その置き場所の下のコードです。
+  = パスの書き誤りかもしれません。成果物は、.rule、.flow、.cal、.book、.geas、.proto のファイル、OpenAPI と AsyncAPI の文書、地図の `code` に書いた言語の、その置き場所の下のコードです。
 basic.ctx: ok — コンテキスト 3、関係 3。成果物 9 件は、どれも一つのコンテキストに属する。境界を越える参照 3 件を確かめた（proto 3）

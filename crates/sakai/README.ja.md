@@ -2,7 +2,7 @@
 
 コンテキストマップのうち、成果物と突き合わせて確かめられる部分だけを書く小さな言語です。
 どの成果物がどの境界づけられたコンテキストに属するか、関係が境界を越える参照をどこまで許すか、腐敗防止層が越えてくる値と語をどう読み替えるか、を書きます。
-sakai は [ritsu](../../README.ja.md) の七つの言語の一つで、ほかの言語の成果物（規則、ワークフロー、カレンダー、帳簿、`.proto`）を ritsu を通して読みます。
+sakai は [ritsu](../../README.ja.md) の七つの言語の一つで、ほかの言語の成果物（規則、ワークフロー、カレンダー、帳簿、`.proto`）を ritsu を通して読みます。サービスが OpenAPI と AsyncAPI の文書に書いた契約も読みます。
 
 コンテキストマップはたいてい図で描かれ、描いた翌週にはコードと合わなくなります。
 sakai では、地図を成果物の隣に、コンテキストごとに一つのファイルとして置きます。ファイルはそのコンテキストのチームが持ちます。そのうえで、どの成果物もこの地図と突き合わせます。
@@ -68,6 +68,54 @@ sakai はこれを、それぞれの言語が自分のファイルを読んだ�
 ほかに確かめることは次のとおりです。範囲の成果物がどれもちょうど一つのコンテキストに属すること。参照が、関係の許すところでだけ境界を越えること（順応者は上流の公表された言語を読める、腐敗防止層は層の中からだけ、サービスを呼べるのは公開ホストサービスだけ）。パターンどうしが食い違わないこと（顧客には供給者の同意が要る、共有カーネルは両側が同じものを並べる）。別々の道では何も越えないこと。
 診断のコードは、いつ出るか、どう直すか、最小の再現とともに [docs/codes.ja.md](docs/codes.ja.md) にあります（`sakai explain E401 --lang ja`）。
 
+## サービスのあいだの契約：OpenAPI と AsyncAPI
+
+HTTP やイベントでやりとりするサービスは、やりとりの中身を契約の文書に書きます。HTTP の API なら OpenAPI の文書、サービスが送ったり受けたりするチャネルなら AsyncAPI の文書です。
+sakai は、これらの文書を `.proto` と同じく成果物として扱います。コンテキストは自分の文書を公表された言語にし、だれでも使ってよい HTTP の操作とチャネルを公開ホストサービスに並べます。
+
+```ctx
+published language payments.v1
+  openapi "../payments/api/payments.yaml"
+  asyncapi "../payments/events/payments.yaml"
+  open host service createCharge, getCharge, paymentSucceeded, paymentFailed
+```
+
+境界を越える参照になるのは、文書に書いてあるものです。ほかのコンテキストの文書を指す `$ref` と、ほかのコンテキストのチャネルに送ったりそこから受けたりする操作です。
+どれも、ほかの参照と同じ決まりで関係と突き合わせます。腐敗防止層は、文書の列挙も、`.proto` の列挙と同じく値ごとに読み替えます。
+
+```ctx
+upstream 決済 anticorruption layer
+  through payments.v1
+  layer dir "../shipping/acl"
+  enum ChargeStatus -> enum ShipmentGate
+    pending   -> hold
+    succeeded -> release
+    failed    -> refuse "課金に失敗した注文は出荷しない"
+    refunded  -> refuse "返金した注文は出荷しない"
+```
+
+```console
+$ sakai check examples/webshop.ja/ネットショップ.ctx --lang ja
+examples/webshop.ja/ネットショップ.ctx: ok — コンテキスト 4、関係 5。成果物 9 件は、どれも一つのコンテキストに属する。境界を越える参照 7 件を確かめた（openapi 1、asyncapi 5、dandori 1）
+```
+
+決済が、配送の受け取っているチャネルを開くのをやめると、次のように言います。
+
+```text
+エラー[E210]: shipping/acl/payments.yaml:11:5: 「配送」の shipping/acl/payments.yaml が、「決済」の公開ホストサービスでないチャネル paymentFailed を使っています（receive）
+    11 |     $ref: '../../payments/events/payments.yaml#/channels/paymentFailed'
+  = 公表された言語 payments.v1 の公開ホストサービスは createCharge、getCharge、paymentSucceeded です。
+  = 境界の向こうのチャネルに送ったりそこから受けたりできるのは、相手が `open host service` に並べたチャネルだけです（HTTP の操作も同じです）。相手の公表された言語の `open host service` に足してもらうか、相手が開いたものを使ってください。
+  関わるもの:
+      配送  shipping/acl/payments.yaml:11     $ref: ../../payments/events/payments.yaml#/channels/paymentFailed
+      決済  payments/events/payments.yaml:14  #/channels/paymentFailed（公表された言語 payments.v1 のもの）
+```
+
+読める文書は、OpenAPI の 3.0、3.1、3.2 と、AsyncAPI の 3.0、3.1 で、JSON でも YAML でもかまいません。
+YAML は、JSON と行き来できる書き方（RFC 9512 の 3.4 節。OpenAPI 3.2 と AsyncAPI 3.1 が勧めるもの）を読みます。その外の書き方（タグ、`?` で書くキー、二つ目の文書など）は、一部だけを読むことはせず、E108 で止めます。
+契約に書いていない呼び出し（URL を文字列で持つ HTTP、文書の無いキュー）は、これまでどおり確かめず、`doc` のページにそう書きます。コードが契約のとおりに呼んでいるかも、sakai は確かめません。
+このやりとりをする四つのサービスの地図が [examples/webshop.ja](examples/webshop.ja/README.ja.md) です。
+
 ## 地図のページ
 
 `sakai doc` は、コードが実現すべきものを理解し、確かめる人のためのページを書きます。事業を回す人、システムを運用する人、コードを読む開発者が読み手です。
@@ -131,16 +179,18 @@ $ sakai explain E401 --lang ja
 
 - [examples/shop.ja](examples/shop.ja/README.ja.md)：五つのコンテキストと七つの関係からなる小さな通販です。六つのパターンが全部出てきます。本物のワークフロー、規則、カレンダー、帳簿、`.proto` があり、コードは Python、TypeScript、Java、Go の四つです。
 - [examples/shop](examples/shop/README.md)：同じ通販を英語の名前で書いたものです。
+- [examples/webshop.ja](examples/webshop.ja/README.ja.md)：HTTP とイベントでやりとりするネットショップの四つのサービスを、OpenAPI と AsyncAPI の文書でつないだ地図です。腐敗防止層が、文書の列挙を値ごとに読み替えます。[examples/webshop](examples/webshop/README.md) は、同じものを英語の名前で書いたものです。
 - ritsu の根の [ritsu.ctx](../../ritsu.ctx) と [contexts/](../../contexts)：ritsu 自身のクレートを十二のコンテキストに分けた地図です。CI が `ritsu check ritsu.ctx` で、クレートの依存をこの地図と突き合わせています。
 
 ## どう確かめているか
 
 `cargo test -p sakai` が、言語を fixture と例に当て、本物のツールを走らせます。
-macOS（Apple シリコン）で `cargo test -p sakai -- --nocapture` を一度走らせた結果は、ツールが全部そろい SKIP の無い状態で、テスト 179 件、ビルドのあと 31 秒でした。
+macOS（Apple シリコン）で `cargo test -p sakai -- --nocapture` を一度走らせた結果は、ツールが全部そろい SKIP の無い状態で、テスト 191 件、ビルドのあと 26 秒でした。
 
-- 132 の変異（fixture か例を一か所だけ変えたもの）が出す診断を、英語と日本語の両方で golden と突き合わせます。日本語の名前のもの 64 には、それぞれ英語の名前の対があり、ほかに Rust のものが 4 あります。
+- 152 の変異（fixture か例を一か所だけ変えたもの）が出す診断を、英語と日本語の両方で golden と突き合わせます。日本語の名前のもの 74 には、それぞれ英語の名前の対があり、ほかに Rust のものが 4 あります。
 - 四つの import の検査のツールを、56 のコピー（ツールごとに 14）で走らせます。コピーは、例と、生成したコードがコンテキストの内側にある地図の二つを、そのままのものと、地図が許さない import を足したものにし、日本語と英語の名前の両方で作ります。どのツールも、そのままのコピーを通し、足した import をどれも捕まえます。
 - 例の CML を、Context Mapper 6.12.0 の検証に全部の検査で通し、何も言われないことを確かめます。
+- ritsu の YAML の読み手を、YAML のテストスイート（data-2022-01-17 の版、402 ケース）にかけます。204 ケースはスイートの JSON と同じ値に読み、JSON と行き来できる書き方の外の 104 ケースは読まずに止め、YAML でない 94 ケースはどれも読みません。違う値に読んだケースはありません。
 - 例と fixture の `.proto` を sakai が読んだ結果を、buf の結果と比べます。
 - `doc` のページは golden です。Mermaid 11 と 12 で図を描き、Chrome で HTML を開いて、図のコンテキストを押すとその節に移ることを確かめます。
 - この README と `docs/` とスキルに載せた出力、診断、設定、`.ctx` の行は本物です。`tests/docs.rs` が走らせて突き合わせます。
@@ -148,7 +198,7 @@ macOS（Apple シリコン）で `cargo test -p sakai -- --nocapture` を一度�
 ## 状態
 
 言語、`check`、`build`、`export cml`、`doc`、`api`、`explain` はできています（[DESIGN.md](DESIGN.md)）。
-まだ作っていないもの：持ち主を CODEOWNERS と突き合わせること、OpenAPI と JSON Schema の列挙を対応に使うこと、対応から読み替えのコードを生成すること、実行時の呼び出しを成果物として書くこと（DESIGN の 14 章）。
+まだ作っていないもの：持ち主を CODEOWNERS と突き合わせること、規則の `import jsonschema` を対応の先にすること、対応から読み替えのコードを生成すること、契約に書いていない実行時の呼び出しを成果物として書くこと、OpenAPI と AsyncAPI の文書の要素を、ほかの言語と同じ名指しの形で書くこと（DESIGN の 14 章と 15.10）。
 
 ## ライセンス
 

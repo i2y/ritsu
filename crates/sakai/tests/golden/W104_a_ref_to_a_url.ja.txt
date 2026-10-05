@@ -1,0 +1,4 @@
+警告[W104]: payments/api/payments.yaml:50:11: payments/api/payments.yaml の `$ref` は URL（https://example.com/schemas/money.yaml）なので、sakai は読まずに、範囲の外のものとして扱います
+    50 |           $ref: 'https://example.com/schemas/money.yaml#/Money'
+  = その先の型は、境界の検査からも外れます。ほかのコンテキストの文書なら、リポジトリの中のファイルを相対パスで指してください。
+webshop.ctx: ok — コンテキスト 4、関係 5。成果物 9 件は、どれも一つのコンテキストに属する。境界を越える参照 7 件を確かめた（openapi 1、asyncapi 5、dandori 1）

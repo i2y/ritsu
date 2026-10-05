@@ -1,0 +1,12 @@
+asyncapi: 3.0.0
+info:
+  title: Shipping events
+  version: 1.0.0
+channels:
+  paymentSucceeded:
+    $ref: '../../payments/events/payments.yaml#/channels/paymentSucceeded'
+operations:
+  receivePaymentSucceeded:
+    action: receive
+    channel:
+      $ref: '#/channels/paymentSucceeded'

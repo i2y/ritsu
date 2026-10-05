@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="sakai 0.23.0">
+<title>コンテキストマップ：ネットショップ（webshop）v1</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", sans-serif; }
+main { max-width: 1120px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 8px 0 12px; }
+h2 { font-size: 20px; margin: 40px 0 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+h3 { font-size: 16px; margin: 24px 0 8px; }
+p, li { max-width: 80ch; }
+code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; }
+a { color: var(--accent); }
+table { border-collapse: collapse; margin: 8px 0 16px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+th { background: var(--soft); }
+figure { margin: 16px 0; overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+svg.map { display: block; max-width: none; }
+svg.map rect { fill: var(--bg); stroke: var(--accent); stroke-width: 2; }
+svg.map a.ctx:hover rect, svg.map a.ctx:focus rect { fill: var(--soft); stroke-width: 3; }
+svg.map text { fill: var(--fg); font: 11px system-ui, -apple-system, "Hiragino Sans", sans-serif; }
+svg.map text.name { font-size: 15px; font-weight: 600; }
+svg.map text.alias { fill: var(--dim); }
+svg.map text.label { paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
+svg.map line.rel { stroke: var(--dim); stroke-width: 1.6; }
+svg.map line.dotted { stroke-dasharray: 6 5; }
+svg.map path.head { fill: var(--dim); }
+:target { scroll-margin-top: 8px; }
+h2:target { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+<h1>コンテキストマップ：ネットショップ（webshop）v1</h1>
+<p>HTTP とイベントでやりとりする、小さな店の四つのサービス。どれも契約の文書を持つ</p>
+<p><code>ネットショップ.ctx</code> から書いた。<code>sakai check</code> の結果：コンテキスト 4、関係 5。成果物 9 件は、どれも一つのコンテキストに属する。境界を越える参照 7 件を確かめた（openapi 1、asyncapi 5、dandori 1）。</p>
+<figure>
+<svg class="map" viewBox="0 0 1140 304" width="1140" height="304" role="img" aria-label="コンテキストマップ：ネットショップ（webshop）v1">
+<defs><marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head"/></marker></defs>
+<g class="edge" data-from="ordering" data-to="payments"><line class="rel both" x1="224.0" y1="52.0" x2="476.0" y2="52.0" marker-start="url(#head)" marker-end="url(#head)"/><text class="label" x="287.0" y="56.0" text-anchor="middle">共有カーネル</text></g>
+<g class="edge" data-from="ordering" data-to="payments"><line class="rel" x1="224.0" y1="82.0" x2="476.0" y2="82.0" marker-end="url(#head)"/><text class="label" x="413.0" y="72.0" text-anchor="middle">公開ホストサービス</text><text class="label" x="413.0" y="86.0" text-anchor="middle">公表された言語 ordering.v1</text><text class="label" x="413.0" y="100.0" text-anchor="middle">→ 順応者</text></g>
+<g class="edge" data-from="payments" data-to="shipping"><line class="rel" x1="664.0" y1="67.0" x2="916.0" y2="67.0" marker-end="url(#head)"/><text class="label" x="790.0" y="57.0" text-anchor="middle">公開ホストサービス</text><text class="label" x="790.0" y="71.0" text-anchor="middle">公表された言語 payments.v1</text><text class="label" x="790.0" y="85.0" text-anchor="middle">→ 腐敗防止層</text></g>
+<g class="edge" data-from="ordering" data-to="notifications"><line class="rel" x1="210.2" y1="98.0" x2="489.8" y2="206.0" marker-end="url(#head)"/><text class="label" x="350.0" y="142.0" text-anchor="middle">公開ホストサービス</text><text class="label" x="350.0" y="156.0" text-anchor="middle">公表された言語 ordering.v1</text><text class="label" x="350.0" y="170.0" text-anchor="middle">→ 順応者</text></g>
+<g class="edge" data-from="notifications" data-to="payments"><line class="rel dotted" x1="570.0" y1="206.0" x2="570.0" y2="98.0"/><text class="label" x="570.0" y="156.0" text-anchor="middle">別々の道</text></g>
+<a class="ctx" href="#ctx-ordering" data-alias="ordering"><rect x="40.0" y="40.0" width="180" height="54" rx="8"/><text class="name" x="130.0" y="64.0" text-anchor="middle">受注</text><text class="alias" x="130.0" y="82.0" text-anchor="middle">ordering</text></a>
+<a class="ctx" href="#ctx-payments" data-alias="payments"><rect x="480.0" y="40.0" width="180" height="54" rx="8"/><text class="name" x="570.0" y="64.0" text-anchor="middle">決済</text><text class="alias" x="570.0" y="82.0" text-anchor="middle">payments</text></a>
+<a class="ctx" href="#ctx-shipping" data-alias="shipping"><rect x="920.0" y="40.0" width="180" height="54" rx="8"/><text class="name" x="1010.0" y="64.0" text-anchor="middle">配送</text><text class="alias" x="1010.0" y="82.0" text-anchor="middle">shipping</text></a>
+<a class="ctx" href="#ctx-notifications" data-alias="notifications"><rect x="480.0" y="210.0" width="180" height="54" rx="8"/><text class="name" x="570.0" y="234.0" text-anchor="middle">通知</text><text class="alias" x="570.0" y="252.0" text-anchor="middle">notifications</text></a>
+</svg>
+</figure>
+<p>矢印は上流から下流へ向かい、上流の役割と、通る公表された言語と、下流の役割を書く。両向きの線は共有カーネルかパートナーシップ、点線は別々の道。</p>
+<h2>コンテキスト</h2>
+<table>
+<thead><tr><th>コンテキスト</th><th>別名</th><th>持ち主</th><th>成果物</th><th>説明</th></tr></thead>
+<tbody>
+<tr><td><a href="#ctx-ordering">受注</a></td><td><code>ordering</code></td><td>受注チーム</td><td>3</td><td>客の注文を受け、注文が入ったことと取り消されたことを、ほかのサービスに知らせる</td></tr>
+<tr><td><a href="#ctx-payments">決済</a></td><td><code>payments</code></td><td>決済チーム</td><td>2</td><td>入った注文の代金を客のカードに課金し、課金がどうなったかを知らせる</td></tr>
+<tr><td><a href="#ctx-shipping">配送</a></td><td><code>shipping</code></td><td>配送チーム</td><td>2</td><td>課金が済んだ注文を出荷する</td></tr>
+<tr><td><a href="#ctx-notifications">通知</a></td><td><code>notifications</code></td><td>顧客対応チーム</td><td>2</td><td>注文がどうなったかを、客にメールで知らせる</td></tr>
+</tbody>
+</table>
+<h2 id="ctx-ordering">受注（ordering）</h2>
+<p>客の注文を受け、注文が入ったことと取り消されたことを、ほかのサービスに知らせる</p>
+<ul>
+<li>持ち主：受注チーム</li>
+<li>書いたファイル：<code>contexts/受注.ctx</code></li>
+</ul>
+<h3>成果物</h3>
+<table>
+<thead><tr><th>ツール</th><th>ファイル</th><th>持っているもの</th></tr></thead>
+<tbody>
+<tr><td><code>openapi</code></td><td><code>common/money.yaml</code></td><td>文書の一部 <code>Money</code></td></tr>
+<tr><td><code>openapi</code></td><td><code>ordering/api/ordering.json</code></td><td>OpenAPI 3.1.0「受注の API」、バージョン 1.0.0／操作 <code>createOrder</code>（POST /orders）、<code>getOrder</code>（GET /orders/{id}）／スキーマ <code>NewOrder</code>、<code>Line</code>、<code>Order</code>／列挙 <code>OrderStatus</code></td></tr>
+<tr><td><code>asyncapi</code></td><td><code>ordering/events/ordering.yaml</code></td><td>AsyncAPI 3.0.0「受注のイベント」、バージョン 1.0.0／チャネル <code>orderPlaced</code>（<code>shop.ordering.order.placed</code>）、<code>orderCancelled</code>（<code>shop.ordering.order.cancelled</code>）／送受信 <code>sendOrderPlaced</code>（send <code>orderPlaced</code>）、<code>sendOrderCancelled</code>（send <code>orderCancelled</code>）</td></tr>
+</tbody>
+</table>
+<h3>公表された言語</h3>
+<ul>
+<li><code>ordering.v1</code>：書いたもの OpenAPI <code>ordering/api/ordering.json</code>、AsyncAPI <code>ordering/events/ordering.yaml</code>。公開ホストサービス <code>createOrder</code>（HTTP の操作 POST /orders）。公開ホストサービス <code>getOrder</code>（HTTP の操作 GET /orders/{id}）。公開ホストサービス <code>orderPlaced</code>（チャネル shop.ordering.order.placed）。公開ホストサービス <code>orderCancelled</code>（チャネル shop.ordering.order.cancelled）</li>
+</ul>
+<h3>用語集</h3>
+<table>
+<thead><tr><th>語</th><th>定義</th><th>指すもの</th><th>越えていく先</th></tr></thead>
+<tbody>
+<tr><td><code>注文</code></td><td>客が確定させた購入の申し込み。取り消されても消えない</td><td><code>ordering/api/ordering.json#/components/schemas/Order</code></td><td><a href="#ctx-notifications">通知</a>、<a href="#ctx-payments">決済</a></td></tr>
+<tr><td><code>注文の受付</code></td><td>注文が入ったという知らせ</td><td><code>ordering/events/ordering.yaml#/channels/orderPlaced</code></td><td><a href="#ctx-notifications">通知</a>、<a href="#ctx-payments">決済</a></td></tr>
+</tbody>
+</table>
+<h3>関係</h3>
+<ul>
+<li><a href="#ctx-payments">決済</a> と共有カーネル：<code>dir &quot;common&quot;</code>。越える参照：<code>payments/api/payments.yaml:50</code> ($ref) → <code>common/money.yaml#/Money</code></li>
+<li>下流 <a href="#ctx-payments">決済</a>：公開ホストサービス・公表された言語 <code>ordering.v1</code> → 順応者。越える参照：<code>payments/events/payments.yaml:8</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderPlaced</code></li>
+<li>下流 <a href="#ctx-notifications">通知</a>：公開ホストサービス・公表された言語 <code>ordering.v1</code> → 順応者。越える参照：<code>notifications/events/notifications.yaml:8</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderPlaced</code>; <code>notifications/events/notifications.yaml:10</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderCancelled</code>; <code>notifications/notify.flow:4</code> (use openapi) → <code>file &quot;ordering/api/ordering.json&quot;</code></li>
+</ul>
+<h2 id="ctx-payments">決済（payments）</h2>
+<p>入った注文の代金を客のカードに課金し、課金がどうなったかを知らせる</p>
+<ul>
+<li>持ち主：決済チーム</li>
+<li>書いたファイル：<code>contexts/決済.ctx</code></li>
+</ul>
+<h3>成果物</h3>
+<table>
+<thead><tr><th>ツール</th><th>ファイル</th><th>持っているもの</th></tr></thead>
+<tbody>
+<tr><td><code>openapi</code></td><td><code>payments/api/payments.yaml</code></td><td>OpenAPI 3.2.0「決済の API」、バージョン 1.0.0／操作 <code>createCharge</code>（POST /charges）、<code>getCharge</code>（GET /charges/{id}）／スキーマ <code>NewCharge</code>、<code>Charge</code>／列挙 <code>ChargeStatus</code></td></tr>
+<tr><td><code>asyncapi</code></td><td><code>payments/events/payments.yaml</code></td><td>AsyncAPI 3.1.0「決済のイベント」、バージョン 1.0.0／チャネル <code>orderPlaced</code>（<code>ordering/events/ordering.yaml</code> のもの）、<code>paymentSucceeded</code>（<code>shop.payments.payment.succeeded</code>）、<code>paymentFailed</code>（<code>shop.payments.payment.failed</code>）／送受信 <code>receiveOrderPlaced</code>（receive <code>orderPlaced</code>）、<code>sendPaymentSucceeded</code>（send <code>paymentSucceeded</code>）、<code>sendPaymentFailed</code>（send <code>paymentFailed</code>）</td></tr>
+</tbody>
+</table>
+<h3>公表された言語</h3>
+<ul>
+<li><code>payments.v1</code>：書いたもの OpenAPI <code>payments/api/payments.yaml</code>、AsyncAPI <code>payments/events/payments.yaml</code>。公開ホストサービス <code>createCharge</code>（HTTP の操作 POST /charges）。公開ホストサービス <code>getCharge</code>（HTTP の操作 GET /charges/{id}）。公開ホストサービス <code>paymentSucceeded</code>（チャネル shop.payments.payment.succeeded）。公開ホストサービス <code>paymentFailed</code>（チャネル shop.payments.payment.failed）</li>
+</ul>
+<h3>用語集</h3>
+<table>
+<thead><tr><th>語</th><th>定義</th><th>指すもの</th><th>越えていく先</th></tr></thead>
+<tbody>
+<tr><td><code>課金</code></td><td>注文一つ分の代金を、客のカードから受け取ること</td><td><code>payments/api/payments.yaml#/components/schemas/Charge</code></td><td><a href="#ctx-shipping">配送</a></td></tr>
+<tr><td><code>課金の状態</code></td><td>課金がどこまで進んだか。カードの返事待ち、受け取った、通らなかった、返した</td><td><code>payments/api/payments.yaml#/components/schemas/ChargeStatus</code></td><td><a href="#ctx-shipping">配送</a></td></tr>
+</tbody>
+</table>
+<h3>関係</h3>
+<ul>
+<li><a href="#ctx-ordering">受注</a> と共有カーネル：<code>dir &quot;common&quot;</code>。越える参照：<code>payments/api/payments.yaml:50</code> ($ref) → <code>common/money.yaml#/Money</code></li>
+<li>上流 <a href="#ctx-ordering">受注</a>：公開ホストサービス・公表された言語 <code>ordering.v1</code> → 順応者。越える参照：<code>payments/events/payments.yaml:8</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderPlaced</code></li>
+<li>下流 <a href="#ctx-shipping">配送</a>：公開ホストサービス・公表された言語 <code>payments.v1</code> → 腐敗防止層。越える参照：<code>shipping/acl/payments.yaml:9</code> (receive) → <code>payments/events/payments.yaml#/channels/paymentSucceeded</code>; <code>shipping/acl/payments.yaml:11</code> (receive) → <code>payments/events/payments.yaml#/channels/paymentFailed</code></li>
+<li><a href="#ctx-notifications">通知</a> と別々の道（越える参照が無いことを確かめた）</li>
+</ul>
+<h2 id="ctx-shipping">配送（shipping）</h2>
+<p>課金が済んだ注文を出荷する</p>
+<ul>
+<li>持ち主：配送チーム</li>
+<li>書いたファイル：<code>contexts/配送.ctx</code></li>
+</ul>
+<h3>成果物</h3>
+<table>
+<thead><tr><th>ツール</th><th>ファイル</th><th>持っているもの</th></tr></thead>
+<tbody>
+<tr><td><code>asyncapi</code></td><td><code>shipping/acl/payments.yaml</code></td><td>AsyncAPI 3.0.0「配送が決済から受け取るもの」、バージョン 1.0.0／チャネル <code>paymentSucceeded</code>（<code>payments/events/payments.yaml</code> のもの）、<code>paymentFailed</code>（<code>payments/events/payments.yaml</code> のもの）／送受信 <code>receivePaymentSucceeded</code>（receive <code>paymentSucceeded</code>）、<code>receivePaymentFailed</code>（receive <code>paymentFailed</code>）</td></tr>
+<tr><td><code>openapi</code></td><td><code>shipping/api/shipping.yaml</code></td><td>OpenAPI 3.0.3「配送の API」、バージョン 1.0.0／操作 <code>getShipment</code>（GET /shipments/{orderId}）／スキーマ <code>Shipment</code>／列挙 <code>ShipmentGate</code></td></tr>
+</tbody>
+</table>
+<h3>公表された言語</h3>
+<ul>
+<li><code>shipping.v1</code>：書いたもの OpenAPI <code>shipping/api/shipping.yaml</code>。公開ホストサービス <code>getShipment</code>（HTTP の操作 GET /shipments/{orderId}）</li>
+</ul>
+<h3>用語集</h3>
+<table>
+<thead><tr><th>語</th><th>定義</th><th>指すもの</th><th>越えていく先</th></tr></thead>
+<tbody>
+<tr><td><code>出荷の可否</code></td><td>注文を倉庫から出してよいか</td><td><code>shipping/api/shipping.yaml#/components/schemas/ShipmentGate</code></td><td>—</td></tr>
+</tbody>
+</table>
+<h3>関係</h3>
+<ul>
+<li>上流 <a href="#ctx-payments">決済</a>：公開ホストサービス・公表された言語 <code>payments.v1</code> → 腐敗防止層。越える参照：<code>shipping/acl/payments.yaml:9</code> (receive) → <code>payments/events/payments.yaml#/channels/paymentSucceeded</code>; <code>shipping/acl/payments.yaml:11</code> (receive) → <code>payments/events/payments.yaml#/channels/paymentFailed</code></li>
+</ul>
+<h2 id="ctx-notifications">通知（notifications）</h2>
+<p>注文がどうなったかを、客にメールで知らせる</p>
+<ul>
+<li>持ち主：顧客対応チーム</li>
+<li>書いたファイル：<code>contexts/通知.ctx</code></li>
+</ul>
+<h3>成果物</h3>
+<table>
+<thead><tr><th>ツール</th><th>ファイル</th><th>持っているもの</th></tr></thead>
+<tbody>
+<tr><td><code>dandori</code></td><td><code>notifications/notify.flow</code></td><td></td></tr>
+<tr><td><code>asyncapi</code></td><td><code>notifications/events/notifications.yaml</code></td><td>AsyncAPI 3.0.0「通知が受注から受け取るもの」、バージョン 1.0.0／チャネル <code>orderPlaced</code>（<code>ordering/events/ordering.yaml</code> のもの）、<code>orderCancelled</code>（<code>ordering/events/ordering.yaml</code> のもの）／送受信 <code>receiveOrderPlaced</code>（receive <code>orderPlaced</code>）、<code>receiveOrderCancelled</code>（receive <code>orderCancelled</code>）</td></tr>
+</tbody>
+</table>
+<h3>用語集</h3>
+<table>
+<thead><tr><th>語</th><th>定義</th><th>指すもの</th><th>越えていく先</th></tr></thead>
+<tbody>
+<tr><td><code>注文</code></td><td></td><td>—</td><td>—</td></tr>
+</tbody>
+</table>
+<h3>関係</h3>
+<ul>
+<li>上流 <a href="#ctx-ordering">受注</a>：公開ホストサービス・公表された言語 <code>ordering.v1</code> → 順応者。越える参照：<code>notifications/events/notifications.yaml:8</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderPlaced</code>; <code>notifications/events/notifications.yaml:10</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderCancelled</code>; <code>notifications/notify.flow:4</code> (use openapi) → <code>file &quot;ordering/api/ordering.json&quot;</code></li>
+<li><a href="#ctx-payments">決済</a> と別々の道（越える参照が無いことを確かめた）</li>
+</ul>
+<h2>用語集の索引</h2>
+<table>
+<thead><tr><th>語</th><th>コンテキスト</th><th>定義</th><th>境界を越えるとき</th></tr></thead>
+<tbody>
+<tr><td><code>出荷の可否</code></td><td><a href="#ctx-shipping">配送</a></td><td>注文を倉庫から出してよいか</td><td>—</td></tr>
+<tr><td><code>注文</code></td><td><a href="#ctx-ordering">受注</a></td><td>客が確定させた購入の申し込み。取り消されても消えない</td><td><a href="#ctx-notifications">通知</a>、<a href="#ctx-payments">決済</a>。同じ名前の語が <a href="#ctx-notifications">通知</a> にもある</td></tr>
+<tr><td><code>注文</code></td><td><a href="#ctx-notifications">通知</a></td><td></td><td>同じ名前の語が <a href="#ctx-ordering">受注</a> にもある</td></tr>
+<tr><td><code>注文の受付</code></td><td><a href="#ctx-ordering">受注</a></td><td>注文が入ったという知らせ</td><td><a href="#ctx-notifications">通知</a>、<a href="#ctx-payments">決済</a></td></tr>
+<tr><td><code>課金</code></td><td><a href="#ctx-payments">決済</a></td><td>注文一つ分の代金を、客のカードから受け取ること</td><td><a href="#ctx-shipping">配送</a></td></tr>
+<tr><td><code>課金の状態</code></td><td><a href="#ctx-payments">決済</a></td><td>課金がどこまで進んだか。カードの返事待ち、受け取った、通らなかった、返した</td><td><a href="#ctx-shipping">配送</a></td></tr>
+</tbody>
+</table>
+<h2>対応</h2>
+<h3>配送 ← 決済：ChargeStatus</h3>
+<p><code>payments/api/payments.yaml#/components/schemas/ChargeStatus</code> を <code>shipping/api/shipping.yaml#/components/schemas/ShipmentGate</code> に読み替える。 層は <code>dir &quot;shipping/acl&quot;</code>。 対応は <code>contexts/配送.ctx</code> に書いたもの。下流の値は、対応の先の列挙にあることを確かめた。</p>
+<table>
+<thead><tr><th>上流の値</th><th>下流の値</th></tr></thead>
+<tbody>
+<tr><td><code>pending</code></td><td><code>hold</code></td></tr>
+<tr><td><code>succeeded</code></td><td><code>release</code></td></tr>
+<tr><td><code>failed</code></td><td>拒否：課金に失敗した注文は出荷しない</td></tr>
+<tr><td><code>refunded</code></td><td>拒否：返金した注文は出荷しない</td></tr>
+</tbody>
+</table>
+<h2>確かめていないこと</h2>
+<ul>
+<li>腐敗防止層のコードが、書いた対応のとおりに読み替えているか。sakai が確かめるのは、対応が上流の列挙を網羅していることと、対応の先が下流の列挙にあることまで（規則が先のときは、規則の表を rulec が確かめる）。</li>
+<li>契約に書いていない呼び出し：OpenAPI の文書の無い HTTP（URL を文字列で持つもの）、AsyncAPI の文書の無いメッセージのキュー、データベースの共有、リフレクションと動的な import。OpenAPI と AsyncAPI の文書に書いた HTTP の操作とチャネルは、ほかの成果物と同じく確かめる。</li>
+<li>コードが、OpenAPI と AsyncAPI の文書のとおりに HTTP を呼び、チャネルに送り、チャネルから受けているか。sakai が確かめるのは、文書どうしと、文書と地図が合っていることまで。</li>
+<li>生成したコードの置き場所のコードが、本当にその公表された言語から生成したものか。</li>
+<li>語の定義の文の中身。</li>
+<li>コードの import。これは sakai build が書く設定で、import-linter、dependency-cruiser、ArchUnit、go-arch-lint が CI で確かめる。</li>
+</ul>
+<p>sakai 0.23.0 が <code>ネットショップ.ctx</code> から書いた。</p>
+</main>
+</body>
+</html>

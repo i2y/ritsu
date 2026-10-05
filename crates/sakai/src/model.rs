@@ -39,6 +39,8 @@ pub struct Own {
     /// None for `dir`.
     pub tool: Option<Tool>,
     pub pos: Pos,
+    /// `openapi "…"` or `asyncapi "…"`.
+    pub contract: Option<crate::contracts::Kind>,
 }
 
 impl Own {
@@ -48,7 +50,12 @@ impl Own {
 
     /// As the `.ctx` writes it, with the path from the root: `dir "proto/warehouse"`.
     pub fn text(&self) -> String {
-        format!("{} {}", self.tool.map(|t| t.word()).unwrap_or("dir"), crate::naming::quote(&self.path))
+        let word = match (self.contract, self.tool) {
+            (Some(k), _) => k.word(),
+            (None, Some(t)) => t.word(),
+            (None, None) => "dir",
+        };
+        format!("{word} {}", crate::naming::quote(&self.path))
     }
 
 
@@ -69,6 +76,8 @@ pub struct Pub {
     pub rulec: Option<(String, Pos)>,
     /// The directory of a Rust crate (DESIGN 1.4, 7.7).
     pub krate: Option<(String, Pos)>,
+    /// The OpenAPI and AsyncAPI documents (DESIGN 15.4).
+    pub contracts: Vec<(crate::contracts::Kind, String, Pos)>,
     pub services: Vec<(String, Pos)>,
     pub generated: Vec<(String, Pos)>,
 }

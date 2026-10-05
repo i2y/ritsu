@@ -1,0 +1,20 @@
+# The anticorruption layer of Shipping toward Payments: what it receives from Payments. The code of
+# the layer maps the charge's status to whether the order may leave (contexts/shipping.ctx).
+asyncapi: 3.0.0
+info:
+  title: Shipping, from Payments
+  version: 1.0.0
+channels:
+  paymentSucceeded:
+    $ref: '../../payments/events/payments.yaml#/channels/paymentSucceeded'
+  paymentFailed:
+    $ref: '../../payments/events/payments.yaml#/channels/paymentFailed'
+operations:
+  receivePaymentSucceeded:
+    action: receive
+    channel:
+      $ref: '#/channels/paymentSucceeded'
+  receivePaymentFailed:
+    action: receive
+    channel:
+      $ref: '#/channels/paymentFailed'

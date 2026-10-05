@@ -1,0 +1,11 @@
+# 金額。受注と決済が一緒に持つ（二つの共有カーネル）。
+Money:
+  type: object
+  required: [amount, currency]
+  properties:
+    amount:
+      type: integer
+      description: 通貨のいちばん小さい単位で（円、セント）
+    currency:
+      type: string
+      enum: [JPY, USD, EUR]

@@ -1,0 +1,49 @@
+/* `sakai export cml --lang ja` が webshop.ctx から書いた。直すときは .ctx を直して書き直す。 */
+ContextMap webshop {
+  type = SYSTEM_LANDSCAPE
+  state = AS_IS
+  contains ordering, payments, shipping, notifications
+
+  // 「Ordering」と「Payments」の共有カーネル
+  ordering [SK]<->[SK] payments
+
+  // 「Payments」は「Ordering」に順応する
+  payments [D,CF]<-[U,OHS,PL] ordering {
+    implementationTechnology = "OpenAPI: ordering.v1 (createOrder, getOrder); AsyncAPI: ordering.v1 (orderPlaced, orderCancelled)"
+  }
+
+  // 「Shipping」は「Payments」のモデルを腐敗防止層で読み替える
+  shipping [D,ACL]<-[U,OHS,PL] payments {
+    implementationTechnology = "OpenAPI: payments.v1 (createCharge, getCharge); AsyncAPI: payments.v1 (paymentSucceeded, paymentFailed)"
+  }
+
+  // 「Notifications」は「Ordering」に順応する
+  notifications [D,CF]<-[U,OHS,PL] ordering {
+    implementationTechnology = "OpenAPI: ordering.v1 (createOrder, getOrder); AsyncAPI: ordering.v1 (orderPlaced, orderCancelled)"
+  }
+
+  // 「Notifications」(notifications) と「Payments」(payments) は別々の道（CML には書く形が無い）
+}
+
+// 「Ordering」(ordering)。持ち主: Ordering team
+BoundedContext ordering {
+  domainVisionStatement = "Takes the customer's orders, and tells the other services when an order is placed or cancelled"
+  responsibilities = "order", "order_placed"
+}
+
+// 「Payments」(payments)。持ち主: Payments team
+BoundedContext payments {
+  domainVisionStatement = "Charges the customer's card for a placed order, and tells how the charge went"
+  responsibilities = "charge", "charge_status"
+}
+
+// 「Shipping」(shipping)。持ち主: Shipping team
+BoundedContext shipping {
+  domainVisionStatement = "Ships an order once its charge has gone through"
+  responsibilities = "shipment_gate"
+}
+
+// 「Notifications」(notifications)。持ち主: Customer care team
+BoundedContext notifications {
+  domainVisionStatement = "Tells the customer by mail what happened to an order"
+}

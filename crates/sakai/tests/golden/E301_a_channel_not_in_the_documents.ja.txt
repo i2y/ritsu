@@ -1,0 +1,4 @@
+エラー[E301]: contexts/ordering.ctx:11:73: 公開ホストサービス orderShipped が、公表された言語 ordering.v1 の文書にありません
+    11 |   open host service createOrder, getOrder, orderPlaced, orderCancelled, orderShipped
+  = その文書の HTTP の操作とチャネルは createOrder、getOrder、orderPlaced、orderCancelled です。
+  = OpenAPI と AsyncAPI の文書の公表された言語では、`open host service` に OpenAPI の operationId（無ければ `"GET /orders"` のようにメソッドとパス）か、AsyncAPI のチャネル（`channels` のキー）を書いてください。

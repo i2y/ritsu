@@ -26,10 +26,33 @@ fn string(s: &str) -> String {
 /// The upstream's role and what the relationship goes through: `OHS,PL` when a package it goes
 /// through has an open host service, else `PL`; and the packages, with the services as
 /// `Connect: <package>.<service>`.
-fn upstream_side(m: &Model, up: usize, through: &[(String, crate::ast::Pos)]) -> (bool, String) {
+fn upstream_side(m: &Model, cs: &crate::contracts::Contracts, up: usize, through: &[(String, crate::ast::Pos)]) -> (bool, String) {
     let mut ohs = false;
     let mut tech: Vec<String> = Vec::new();
     for (pkg, _) in through {
+        // a published language of OpenAPI and AsyncAPI documents (DESIGN 15.7): `OpenAPI: <package>
+        // (<operations>)`, `AsyncAPI: <package> (<channels>)`
+        if let Some(pl) = m.contexts[up].published.iter().find(|p| p.package == *pkg && !p.contracts.is_empty()) {
+            for kind in [crate::contracts::Kind::OpenApi, crate::contracts::Kind::AsyncApi] {
+                let docs: Vec<&String> = pl.contracts.iter().filter(|(k, _, _)| *k == kind).map(|(_, f, _)| f).collect();
+                if docs.is_empty() {
+                    continue;
+                }
+                let mut here: Vec<String> = Vec::new();
+                for f in &docs {
+                    here.extend(cs.operations(f).iter().map(|o| o.name()));
+                    here.extend(cs.channels(f).iter().map(|c| c.id.clone()));
+                }
+                let open: Vec<String> = pl.services.iter().map(|(s, _)| s.clone()).filter(|s| here.contains(s)).collect();
+                if open.is_empty() {
+                    tech.push(format!("{}: {pkg}", kind.title()));
+                } else {
+                    ohs = true;
+                    tech.push(format!("{}: {pkg} ({})", kind.title(), open.join(", ")));
+                }
+            }
+            continue;
+        }
         let services: Vec<String> = m.contexts[up].published.iter().filter(|p| p.package == *pkg).flat_map(|p| p.services.iter().map(|(s, _)| format!("{pkg}.{s}"))).collect();
         if services.is_empty() {
             tech.push(pkg.clone());
@@ -41,14 +64,14 @@ fn upstream_side(m: &Model, up: usize, through: &[(String, crate::ast::Pos)]) ->
     (ohs, tech.join("; "))
 }
 
-fn relationship(m: &Model, ci: usize, r: &Rel, lang: Lang) -> Option<String> {
+fn relationship(m: &Model, cs: &crate::contracts::Contracts, ci: usize, r: &Rel, lang: Lang) -> Option<String> {
     let me = &m.contexts[ci];
     let other = &m.contexts[r.partner];
     let (a, b) = (&me.alias, &other.alias);
     let (an, bn) = (&me.name, &other.name);
     match &r.kind {
         RelK::Upstream { through, .. } => {
-            let (ohs, tech) = upstream_side(m, r.partner, through);
+            let (ohs, tech) = upstream_side(m, cs, r.partner, through);
             let roles = r.roles();
             let customer = roles.contains(&Role::Customer);
             let acl = roles.contains(&Role::Acl);
@@ -92,7 +115,7 @@ pub fn render(c: &Checked, from: &str, lang: Lang) -> String {
                 }
                 pairs.push(key);
             }
-            if let Some(t) = relationship(m, ci, r, lang) {
+            if let Some(t) = relationship(m, &c.contracts, ci, r, lang) {
                 s.push('\n');
                 s.push_str(&t);
             }

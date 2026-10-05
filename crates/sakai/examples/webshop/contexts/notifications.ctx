@@ -1,0 +1,14 @@
+context Notifications(notifications) v1
+description "Tells the customer by mail what happened to an order"
+owner "Customer care team"
+
+owns
+  dir "../notifications"
+
+terms
+  order as Ordering.order
+
+upstream Ordering conformist
+  through ordering.v1
+
+separate ways from Payments

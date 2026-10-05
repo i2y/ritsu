@@ -1,0 +1,19 @@
+asyncapi: 3.0.0
+info:
+  title: 通知が受注から受け取るもの
+  version: 1.0.0
+  description: 通知は、注文が入ったときと取り消されたときに、客にメールを送る。
+channels:
+  orderPlaced:
+    $ref: '../../ordering/events/ordering.yaml#/channels/orderPlaced'
+  orderCancelled:
+    $ref: '../../ordering/events/ordering.yaml#/channels/orderCancelled'
+operations:
+  receiveOrderPlaced:
+    action: receive
+    channel:
+      $ref: '#/channels/orderPlaced'
+  receiveOrderCancelled:
+    action: receive
+    channel:
+      $ref: '#/channels/orderCancelled'

@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="sakai 0.23.0">
+<title>Context map: Webshop (webshop) v1</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", sans-serif; }
+main { max-width: 1120px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 8px 0 12px; }
+h2 { font-size: 20px; margin: 40px 0 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+h3 { font-size: 16px; margin: 24px 0 8px; }
+p, li { max-width: 80ch; }
+code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; }
+a { color: var(--accent); }
+table { border-collapse: collapse; margin: 8px 0 16px; display: block; overflow-x: auto; }
+th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+th { background: var(--soft); }
+figure { margin: 16px 0; overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+svg.map { display: block; max-width: none; }
+svg.map rect { fill: var(--bg); stroke: var(--accent); stroke-width: 2; }
+svg.map a.ctx:hover rect, svg.map a.ctx:focus rect { fill: var(--soft); stroke-width: 3; }
+svg.map text { fill: var(--fg); font: 11px system-ui, -apple-system, "Hiragino Sans", sans-serif; }
+svg.map text.name { font-size: 15px; font-weight: 600; }
+svg.map text.alias { fill: var(--dim); }
+svg.map text.label { paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
+svg.map line.rel { stroke: var(--dim); stroke-width: 1.6; }
+svg.map line.dotted { stroke-dasharray: 6 5; }
+svg.map path.head { fill: var(--dim); }
+:target { scroll-margin-top: 8px; }
+h2:target { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+<h1>Context map: Webshop (webshop) v1</h1>
+<p>Four services of a small shop that talk over HTTP and events, each with its contract</p>
+<p>Written from <code>webshop.ctx</code>. <code>sakai check</code> says: 4 contexts, 5 relationships; 9 artifacts, each in one context; 7 crossings checked (openapi 1, asyncapi 5, dandori 1).</p>
+<figure>
+<svg class="map" viewBox="0 0 1140 304" width="1140" height="304" role="img" aria-label="Context map: Webshop (webshop) v1">
+<defs><marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="head"/></marker></defs>
+<g class="edge" data-from="ordering" data-to="payments"><line class="rel both" x1="224.0" y1="52.0" x2="476.0" y2="52.0" marker-start="url(#head)" marker-end="url(#head)"/><text class="label" x="287.0" y="56.0" text-anchor="middle">shared kernel</text></g>
+<g class="edge" data-from="ordering" data-to="payments"><line class="rel" x1="224.0" y1="82.0" x2="476.0" y2="82.0" marker-end="url(#head)"/><text class="label" x="413.0" y="72.0" text-anchor="middle">open host service</text><text class="label" x="413.0" y="86.0" text-anchor="middle">published language ordering.v1</text><text class="label" x="413.0" y="100.0" text-anchor="middle">→ conformist</text></g>
+<g class="edge" data-from="payments" data-to="shipping"><line class="rel" x1="664.0" y1="67.0" x2="916.0" y2="67.0" marker-end="url(#head)"/><text class="label" x="790.0" y="57.0" text-anchor="middle">open host service</text><text class="label" x="790.0" y="71.0" text-anchor="middle">published language payments.v1</text><text class="label" x="790.0" y="85.0" text-anchor="middle">→ anticorruption layer</text></g>
+<g class="edge" data-from="ordering" data-to="notifications"><line class="rel" x1="210.2" y1="98.0" x2="489.8" y2="206.0" marker-end="url(#head)"/><text class="label" x="350.0" y="142.0" text-anchor="middle">open host service</text><text class="label" x="350.0" y="156.0" text-anchor="middle">published language ordering.v1</text><text class="label" x="350.0" y="170.0" text-anchor="middle">→ conformist</text></g>
+<g class="edge" data-from="notifications" data-to="payments"><line class="rel dotted" x1="570.0" y1="206.0" x2="570.0" y2="98.0"/><text class="label" x="570.0" y="156.0" text-anchor="middle">separate ways</text></g>
+<a class="ctx" href="#ctx-ordering" data-alias="ordering"><rect x="40.0" y="40.0" width="180" height="54" rx="8"/><text class="name" x="130.0" y="64.0" text-anchor="middle">Ordering</text><text class="alias" x="130.0" y="82.0" text-anchor="middle">ordering</text></a>
+<a class="ctx" href="#ctx-payments" data-alias="payments"><rect x="480.0" y="40.0" width="180" height="54" rx="8"/><text class="name" x="570.0" y="64.0" text-anchor="middle">Payments</text><text class="alias" x="570.0" y="82.0" text-anchor="middle">payments</text></a>
+<a class="ctx" href="#ctx-shipping" data-alias="shipping"><rect x="920.0" y="40.0" width="180" height="54" rx="8"/><text class="name" x="1010.0" y="64.0" text-anchor="middle">Shipping</text><text class="alias" x="1010.0" y="82.0" text-anchor="middle">shipping</text></a>
+<a class="ctx" href="#ctx-notifications" data-alias="notifications"><rect x="480.0" y="210.0" width="180" height="54" rx="8"/><text class="name" x="570.0" y="234.0" text-anchor="middle">Notifications</text><text class="alias" x="570.0" y="252.0" text-anchor="middle">notifications</text></a>
+</svg>
+</figure>
+<p>An arrow goes from the upstream to the downstream, with the upstream&#39;s roles, the published language the relationship goes through, and the downstream&#39;s role. A line with two heads is a shared kernel or a partnership; a dotted line is separate ways.</p>
+<h2>Contexts</h2>
+<table>
+<thead><tr><th>Context</th><th>Alias</th><th>Owner</th><th>Artifacts</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><a href="#ctx-ordering">Ordering</a></td><td><code>ordering</code></td><td>Ordering team</td><td>3</td><td>Takes the customer&#39;s orders, and tells the other services when an order is placed or cancelled</td></tr>
+<tr><td><a href="#ctx-payments">Payments</a></td><td><code>payments</code></td><td>Payments team</td><td>2</td><td>Charges the customer&#39;s card for a placed order, and tells how the charge went</td></tr>
+<tr><td><a href="#ctx-shipping">Shipping</a></td><td><code>shipping</code></td><td>Shipping team</td><td>2</td><td>Ships an order once its charge has gone through</td></tr>
+<tr><td><a href="#ctx-notifications">Notifications</a></td><td><code>notifications</code></td><td>Customer care team</td><td>2</td><td>Tells the customer by mail what happened to an order</td></tr>
+</tbody>
+</table>
+<h2 id="ctx-ordering">Ordering (ordering)</h2>
+<p>Takes the customer&#39;s orders, and tells the other services when an order is placed or cancelled</p>
+<ul>
+<li>Owner: Ordering team</li>
+<li>Written in: <code>contexts/ordering.ctx</code></li>
+</ul>
+<h3>Artifacts</h3>
+<table>
+<thead><tr><th>Tool</th><th>File</th><th>What it holds</th></tr></thead>
+<tbody>
+<tr><td><code>openapi</code></td><td><code>common/money.yaml</code></td><td>a part of a document: <code>Money</code></td></tr>
+<tr><td><code>openapi</code></td><td><code>ordering/api/ordering.json</code></td><td>OpenAPI 3.1.0 &quot;Ordering API&quot;, version 1.0.0; operations <code>createOrder</code> (POST /orders), <code>getOrder</code> (GET /orders/{id}); schemas <code>NewOrder</code>, <code>Line</code>, <code>Order</code>; enums <code>OrderStatus</code></td></tr>
+<tr><td><code>asyncapi</code></td><td><code>ordering/events/ordering.yaml</code></td><td>AsyncAPI 3.0.0 &quot;Ordering events&quot;, version 1.0.0; channels <code>orderPlaced</code> (<code>shop.ordering.order.placed</code>), <code>orderCancelled</code> (<code>shop.ordering.order.cancelled</code>); sends and receives <code>sendOrderPlaced</code> (send <code>orderPlaced</code>), <code>sendOrderCancelled</code> (send <code>orderCancelled</code>)</td></tr>
+</tbody>
+</table>
+<h3>Published language</h3>
+<ul>
+<li><code>ordering.v1</code>: written in OpenAPI <code>ordering/api/ordering.json</code>, AsyncAPI <code>ordering/events/ordering.yaml</code>; open host service <code>createOrder</code> (the HTTP operation POST /orders); open host service <code>getOrder</code> (the HTTP operation GET /orders/{id}); open host service <code>orderPlaced</code> (the channel shop.ordering.order.placed); open host service <code>orderCancelled</code> (the channel shop.ordering.order.cancelled)</li>
+</ul>
+<h3>Glossary</h3>
+<table>
+<thead><tr><th>Term</th><th>Definition</th><th>Means</th><th>Crosses into</th></tr></thead>
+<tbody>
+<tr><td><code>order</code></td><td>A customer&#39;s confirmed request to buy. A cancelled order stays</td><td><code>ordering/api/ordering.json#/components/schemas/Order</code></td><td><a href="#ctx-notifications">Notifications</a>, <a href="#ctx-payments">Payments</a></td></tr>
+<tr><td><code>order_placed</code></td><td>The event that an order has been placed</td><td><code>ordering/events/ordering.yaml#/channels/orderPlaced</code></td><td><a href="#ctx-notifications">Notifications</a>, <a href="#ctx-payments">Payments</a></td></tr>
+</tbody>
+</table>
+<h3>Relationships</h3>
+<ul>
+<li>Shared kernel with <a href="#ctx-payments">Payments</a>: <code>dir &quot;common&quot;</code>. References that cross: <code>payments/api/payments.yaml:50</code> ($ref) → <code>common/money.yaml#/Money</code></li>
+<li>Downstream <a href="#ctx-payments">Payments</a>: open host service, published language <code>ordering.v1</code> → conformist. References that cross: <code>payments/events/payments.yaml:8</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderPlaced</code></li>
+<li>Downstream <a href="#ctx-notifications">Notifications</a>: open host service, published language <code>ordering.v1</code> → conformist. References that cross: <code>notifications/events/notifications.yaml:8</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderPlaced</code>; <code>notifications/events/notifications.yaml:10</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderCancelled</code>; <code>notifications/notify.flow:4</code> (use openapi) → <code>file &quot;ordering/api/ordering.json&quot;</code></li>
+</ul>
+<h2 id="ctx-payments">Payments (payments)</h2>
+<p>Charges the customer&#39;s card for a placed order, and tells how the charge went</p>
+<ul>
+<li>Owner: Payments team</li>
+<li>Written in: <code>contexts/payments.ctx</code></li>
+</ul>
+<h3>Artifacts</h3>
+<table>
+<thead><tr><th>Tool</th><th>File</th><th>What it holds</th></tr></thead>
+<tbody>
+<tr><td><code>openapi</code></td><td><code>payments/api/payments.yaml</code></td><td>OpenAPI 3.2.0 &quot;Payments API&quot;, version 1.0.0; operations <code>createCharge</code> (POST /charges), <code>getCharge</code> (GET /charges/{id}); schemas <code>NewCharge</code>, <code>Charge</code>; enums <code>ChargeStatus</code></td></tr>
+<tr><td><code>asyncapi</code></td><td><code>payments/events/payments.yaml</code></td><td>AsyncAPI 3.1.0 &quot;Payments events&quot;, version 1.0.0; channels <code>orderPlaced</code> (from <code>ordering/events/ordering.yaml</code>), <code>paymentSucceeded</code> (<code>shop.payments.payment.succeeded</code>), <code>paymentFailed</code> (<code>shop.payments.payment.failed</code>); sends and receives <code>receiveOrderPlaced</code> (receive <code>orderPlaced</code>), <code>sendPaymentSucceeded</code> (send <code>paymentSucceeded</code>), <code>sendPaymentFailed</code> (send <code>paymentFailed</code>)</td></tr>
+</tbody>
+</table>
+<h3>Published language</h3>
+<ul>
+<li><code>payments.v1</code>: written in OpenAPI <code>payments/api/payments.yaml</code>, AsyncAPI <code>payments/events/payments.yaml</code>; open host service <code>createCharge</code> (the HTTP operation POST /charges); open host service <code>getCharge</code> (the HTTP operation GET /charges/{id}); open host service <code>paymentSucceeded</code> (the channel shop.payments.payment.succeeded); open host service <code>paymentFailed</code> (the channel shop.payments.payment.failed)</li>
+</ul>
+<h3>Glossary</h3>
+<table>
+<thead><tr><th>Term</th><th>Definition</th><th>Means</th><th>Crosses into</th></tr></thead>
+<tbody>
+<tr><td><code>charge</code></td><td>Taking the money for one order from the customer&#39;s card</td><td><code>payments/api/payments.yaml#/components/schemas/Charge</code></td><td><a href="#ctx-shipping">Shipping</a></td></tr>
+<tr><td><code>charge_status</code></td><td>Where a charge is: waiting for the card&#39;s answer, taken, refused, or given back</td><td><code>payments/api/payments.yaml#/components/schemas/ChargeStatus</code></td><td><a href="#ctx-shipping">Shipping</a></td></tr>
+</tbody>
+</table>
+<h3>Relationships</h3>
+<ul>
+<li>Shared kernel with <a href="#ctx-ordering">Ordering</a>: <code>dir &quot;common&quot;</code>. References that cross: <code>payments/api/payments.yaml:50</code> ($ref) → <code>common/money.yaml#/Money</code></li>
+<li>Upstream <a href="#ctx-ordering">Ordering</a>: open host service, published language <code>ordering.v1</code> → conformist. References that cross: <code>payments/events/payments.yaml:8</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderPlaced</code></li>
+<li>Downstream <a href="#ctx-shipping">Shipping</a>: open host service, published language <code>payments.v1</code> → anticorruption layer. References that cross: <code>shipping/acl/payments.yaml:9</code> (receive) → <code>payments/events/payments.yaml#/channels/paymentSucceeded</code>; <code>shipping/acl/payments.yaml:11</code> (receive) → <code>payments/events/payments.yaml#/channels/paymentFailed</code></li>
+<li>Separate ways from <a href="#ctx-notifications">Notifications</a> (no reference crosses, as checked)</li>
+</ul>
+<h2 id="ctx-shipping">Shipping (shipping)</h2>
+<p>Ships an order once its charge has gone through</p>
+<ul>
+<li>Owner: Shipping team</li>
+<li>Written in: <code>contexts/shipping.ctx</code></li>
+</ul>
+<h3>Artifacts</h3>
+<table>
+<thead><tr><th>Tool</th><th>File</th><th>What it holds</th></tr></thead>
+<tbody>
+<tr><td><code>asyncapi</code></td><td><code>shipping/acl/payments.yaml</code></td><td>AsyncAPI 3.0.0 &quot;Shipping, from Payments&quot;, version 1.0.0; channels <code>paymentSucceeded</code> (from <code>payments/events/payments.yaml</code>), <code>paymentFailed</code> (from <code>payments/events/payments.yaml</code>); sends and receives <code>receivePaymentSucceeded</code> (receive <code>paymentSucceeded</code>), <code>receivePaymentFailed</code> (receive <code>paymentFailed</code>)</td></tr>
+<tr><td><code>openapi</code></td><td><code>shipping/api/shipping.yaml</code></td><td>OpenAPI 3.0.3 &quot;Shipping API&quot;, version 1.0.0; operations <code>getShipment</code> (GET /shipments/{orderId}); schemas <code>Shipment</code>; enums <code>ShipmentGate</code></td></tr>
+</tbody>
+</table>
+<h3>Published language</h3>
+<ul>
+<li><code>shipping.v1</code>: written in OpenAPI <code>shipping/api/shipping.yaml</code>; open host service <code>getShipment</code> (the HTTP operation GET /shipments/{orderId})</li>
+</ul>
+<h3>Glossary</h3>
+<table>
+<thead><tr><th>Term</th><th>Definition</th><th>Means</th><th>Crosses into</th></tr></thead>
+<tbody>
+<tr><td><code>shipment_gate</code></td><td>Whether an order may leave the warehouse</td><td><code>shipping/api/shipping.yaml#/components/schemas/ShipmentGate</code></td><td>—</td></tr>
+</tbody>
+</table>
+<h3>Relationships</h3>
+<ul>
+<li>Upstream <a href="#ctx-payments">Payments</a>: open host service, published language <code>payments.v1</code> → anticorruption layer. References that cross: <code>shipping/acl/payments.yaml:9</code> (receive) → <code>payments/events/payments.yaml#/channels/paymentSucceeded</code>; <code>shipping/acl/payments.yaml:11</code> (receive) → <code>payments/events/payments.yaml#/channels/paymentFailed</code></li>
+</ul>
+<h2 id="ctx-notifications">Notifications (notifications)</h2>
+<p>Tells the customer by mail what happened to an order</p>
+<ul>
+<li>Owner: Customer care team</li>
+<li>Written in: <code>contexts/notifications.ctx</code></li>
+</ul>
+<h3>Artifacts</h3>
+<table>
+<thead><tr><th>Tool</th><th>File</th><th>What it holds</th></tr></thead>
+<tbody>
+<tr><td><code>dandori</code></td><td><code>notifications/notify.flow</code></td><td></td></tr>
+<tr><td><code>asyncapi</code></td><td><code>notifications/events/notifications.yaml</code></td><td>AsyncAPI 3.0.0 &quot;Notifications, from Ordering&quot;, version 1.0.0; channels <code>orderPlaced</code> (from <code>ordering/events/ordering.yaml</code>), <code>orderCancelled</code> (from <code>ordering/events/ordering.yaml</code>); sends and receives <code>receiveOrderPlaced</code> (receive <code>orderPlaced</code>), <code>receiveOrderCancelled</code> (receive <code>orderCancelled</code>)</td></tr>
+</tbody>
+</table>
+<h3>Glossary</h3>
+<table>
+<thead><tr><th>Term</th><th>Definition</th><th>Means</th><th>Crosses into</th></tr></thead>
+<tbody>
+<tr><td><code>order</code></td><td></td><td>—</td><td>—</td></tr>
+</tbody>
+</table>
+<h3>Relationships</h3>
+<ul>
+<li>Upstream <a href="#ctx-ordering">Ordering</a>: open host service, published language <code>ordering.v1</code> → conformist. References that cross: <code>notifications/events/notifications.yaml:8</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderPlaced</code>; <code>notifications/events/notifications.yaml:10</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderCancelled</code>; <code>notifications/notify.flow:4</code> (use openapi) → <code>file &quot;ordering/api/ordering.json&quot;</code></li>
+<li>Separate ways from <a href="#ctx-payments">Payments</a> (no reference crosses, as checked)</li>
+</ul>
+<h2>Glossary index</h2>
+<table>
+<thead><tr><th>Term</th><th>Context</th><th>Definition</th><th>Across a boundary</th></tr></thead>
+<tbody>
+<tr><td><code>charge</code></td><td><a href="#ctx-payments">Payments</a></td><td>Taking the money for one order from the customer&#39;s card</td><td><a href="#ctx-shipping">Shipping</a></td></tr>
+<tr><td><code>charge_status</code></td><td><a href="#ctx-payments">Payments</a></td><td>Where a charge is: waiting for the card&#39;s answer, taken, refused, or given back</td><td><a href="#ctx-shipping">Shipping</a></td></tr>
+<tr><td><code>order</code></td><td><a href="#ctx-ordering">Ordering</a></td><td>A customer&#39;s confirmed request to buy. A cancelled order stays</td><td><a href="#ctx-notifications">Notifications</a>, <a href="#ctx-payments">Payments</a>; a term of the same name is in <a href="#ctx-notifications">Notifications</a></td></tr>
+<tr><td><code>order</code></td><td><a href="#ctx-notifications">Notifications</a></td><td></td><td>a term of the same name is in <a href="#ctx-ordering">Ordering</a></td></tr>
+<tr><td><code>order_placed</code></td><td><a href="#ctx-ordering">Ordering</a></td><td>The event that an order has been placed</td><td><a href="#ctx-notifications">Notifications</a>, <a href="#ctx-payments">Payments</a></td></tr>
+<tr><td><code>shipment_gate</code></td><td><a href="#ctx-shipping">Shipping</a></td><td>Whether an order may leave the warehouse</td><td>—</td></tr>
+</tbody>
+</table>
+<h2>Mappings</h2>
+<h3>Shipping ← Payments: ChargeStatus</h3>
+<p>Maps <code>payments/api/payments.yaml#/components/schemas/ChargeStatus</code> to <code>shipping/api/shipping.yaml#/components/schemas/ShipmentGate</code>. The layer is <code>dir &quot;shipping/acl&quot;</code>. The mapping is written in <code>contexts/shipping.ctx</code>; the downstream values are checked to be in the target enum.</p>
+<table>
+<thead><tr><th>Upstream value</th><th>Downstream value</th></tr></thead>
+<tbody>
+<tr><td><code>pending</code></td><td><code>hold</code></td></tr>
+<tr><td><code>succeeded</code></td><td><code>release</code></td></tr>
+<tr><td><code>failed</code></td><td>refused: An order whose charge failed is not shipped</td></tr>
+<tr><td><code>refunded</code></td><td>refused: A refunded order is not shipped</td></tr>
+</tbody>
+</table>
+<h2>What is not checked</h2>
+<ul>
+<li>Whether the code of an anticorruption layer maps as the mapping says. sakai checks that the mapping covers the upstream&#39;s enum and that what it maps to is in the downstream&#39;s enum (where a rule is the target, rulec checks the rule&#39;s tables).</li>
+<li>Calls no contract writes: HTTP to a URL held in a string with no OpenAPI document, a message queue with no AsyncAPI document, a shared database, reflection and dynamic imports. The HTTP operations and the channels written in OpenAPI and AsyncAPI documents are checked like any other artifact.</li>
+<li>Whether the code calls HTTP, and sends to and receives from the channels, as the OpenAPI and AsyncAPI documents say: sakai checks the documents against each other and against the map.</li>
+<li>Whether the code where generated code is kept was really generated from the published language.</li>
+<li>What a term&#39;s definition says.</li>
+<li>The imports of the code: the settings <code>sakai build</code> writes have import-linter, dependency-cruiser, ArchUnit and go-arch-lint check them in CI.</li>
+</ul>
+<p>Written by sakai 0.23.0 from <code>webshop.ctx</code>.</p>
+</main>
+</body>
+</html>

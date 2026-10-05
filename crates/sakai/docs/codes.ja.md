@@ -1321,6 +1321,83 @@ edition = "2021"
 pub fn reserve() {}
 ```
 
+<a id="e108"></a>
+
+## E108 — OpenAPI か AsyncAPI の文書を読めません
+
+**いつ出るか**: 範囲の OpenAPI か AsyncAPI の文書（一番上に `openapi`、`asyncapi`、`swagger` のある `.yaml`、`.yml`、`.json`）か、文書が `$ref` で指すファイルを読めないとき。YAML か JSON として読めないとき、JSON と行き来できない YAML の書き方（タグ、`?` のキー、二つ目の文書など）をしているとき、sakai が読まない版（OpenAPI 2.0、AsyncAPI 2.x）のとき、`$ref` の先のファイルが無いか、ポインタが何も指さないときに出ます。
+
+**直し方**: 示された位置を直してください。OpenAPI 2.0 は OpenAPI 3 に、AsyncAPI 2.x は `asyncapi convert` で AsyncAPI 3 に変換してください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `sakai check .` を走らせます。
+
+`地図.ctx`:
+
+```ctx
+map 地図(m) v1
+use context "甲.ctx"
+use context "乙.ctx"
+covers "."
+```
+
+`甲.ctx`:
+
+```ctx
+context 甲(a) v1
+owns
+  dir "a"
+```
+
+`乙.ctx`:
+
+```ctx
+context 乙(b) v1
+owns
+  dir "b"
+
+published language b.v1
+  proto "b/v1/b.proto"
+  open host service BService
+
+terms
+  種類 "乙が扱うものの種類"
+    means enum Kind
+```
+
+`a/a.proto`:
+
+```proto
+syntax = "proto3";
+package a;
+message A {}
+```
+
+`b/v1/b.proto`:
+
+```proto
+syntax = "proto3";
+package b.v1;
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_ONE = 1;
+  KIND_TWO = 2;
+}
+message B { Kind kind = 1; }
+message Plain { string id = 1; }
+service BService { rpc Get(B) returns (B); }
+```
+
+`b/api.yaml`:
+
+```
+openapi: 3.1.0
+info:
+	title: B
+  version: 1.0.0
+```
+
+関連: [W104](#w104)
+
 <a id="w101"></a>
 
 ## W101 — `owns` の項が成果物を一つも含みません
@@ -1534,6 +1611,87 @@ owns
   dir "a"
 ```
 
+<a id="w104"></a>
+
+## W104 — `$ref` が URL を指しています
+
+**いつ出るか**: OpenAPI か AsyncAPI の文書の `$ref` が、`https://…` のような URL を指すとき。sakai はネットワークに出ないので、その先を読まず、範囲の外のものとして扱います（その先の型は、境界の検査から外れます）。
+
+**直し方**: ほかのコンテキストの文書なら、リポジトリの中のファイルを相対パスで指してください。外のシステムの契約なら、そのままでかまいません。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `sakai check .` を走らせます。
+
+`地図.ctx`:
+
+```ctx
+map 地図(m) v1
+use context "甲.ctx"
+use context "乙.ctx"
+covers "."
+```
+
+`甲.ctx`:
+
+```ctx
+context 甲(a) v1
+owns
+  dir "a"
+```
+
+`乙.ctx`:
+
+```ctx
+context 乙(b) v1
+owns
+  dir "b"
+
+published language b.v1
+  proto "b/v1/b.proto"
+  open host service BService
+
+terms
+  種類 "乙が扱うものの種類"
+    means enum Kind
+```
+
+`a/a.proto`:
+
+```proto
+syntax = "proto3";
+package a;
+message A {}
+```
+
+`b/v1/b.proto`:
+
+```proto
+syntax = "proto3";
+package b.v1;
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_ONE = 1;
+  KIND_TWO = 2;
+}
+message B { Kind kind = 1; }
+message Plain { string id = 1; }
+service BService { rpc Get(B) returns (B); }
+```
+
+`b/api.yaml`:
+
+```
+openapi: 3.1.0
+info:
+  title: B
+  version: 1.0.0
+components:
+  schemas:
+    Price:
+      $ref: 'https://example.com/schemas/money.yaml#/Money'
+```
+
+関連: [E108](#e108)
+
 <a id="n101"></a>
 
 ## N101 — dandori の参照を確かめていません
@@ -1619,7 +1777,7 @@ service BService { rpc Get(B) returns (B); }
 
 ## E202 — 相手の内側への参照です
 
-**いつ出るか**: 参照の先が、相手の公表された言語にも、二つの共有カーネルにも入っていないとき（公表された言語でない proto、規則やカレンダーそのもの）。
+**いつ出るか**: 参照の先が、相手の公表された言語にも、二つの共有カーネルにも入っていないとき（公表された言語でない proto や OpenAPI と AsyncAPI の文書、規則やカレンダーそのもの）。
 
 **直し方**: 相手の公表された言語を通して参照するか、二つの共有カーネルに並べてください。
 
@@ -1863,7 +2021,7 @@ message Seen {}
 
 ## E205 — 腐敗防止層の下流の公表された言語に、上流の型が出ています
 
-**いつ出るか**: 腐敗防止層の下流が、自分の公表された言語の proto で、上流の公表された言語を import しているとき。上流のモデルが、層を通らずに下流の外へ出ていきます。
+**いつ出るか**: 腐敗防止層の下流が、自分の公表された言語の proto で、上流の公表された言語を import しているとき（OpenAPI と AsyncAPI の文書なら、上流の文書を `$ref` で指しているとき）。上流のモデルが、層を通らずに下流の外へ出ていきます。
 
 **直し方**: 層の中で自分の型に読み替え、公表された言語には自分の型だけを出してください。
 
@@ -2311,11 +2469,123 @@ flow
 
 関連: [E202](#e202), [E207](#e207)
 
+<a id="e210"></a>
+
+## E210 — 文書が、相手の公開ホストサービスでないチャネルか HTTP の操作を使っています
+
+**いつ出るか**: AsyncAPI の文書が境界の向こうのチャネルに送るか、そこから受ける（ルートの `channels` の項が、ほかのコンテキストの文書のチャネルを `$ref` で指す）のに、そのチャネルが相手の公表された言語の `open host service` に無いとき。OpenAPI の文書が、境界の向こうの `paths` の項を `$ref` で指すとき、その HTTP の操作についても同じです。
+
+**直し方**: 相手にそのチャネルか操作を `open host service` に並べてもらうか、相手が並べたものを使ってください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `sakai check .` を走らせます。
+
+`地図.ctx`:
+
+```ctx
+map 地図(m) v1
+use context "甲.ctx"
+use context "乙.ctx"
+covers "."
+```
+
+`甲.ctx`:
+
+```ctx
+context 甲(a) v1
+owns
+  dir "a"
+
+upstream 乙 conformist
+  through b.events.v1
+```
+
+`乙.ctx`:
+
+```ctx
+context 乙(b) v1
+owns
+  dir "b"
+
+published language b.v1
+  proto "b/v1/b.proto"
+  open host service BService
+
+published language b.events.v1
+  asyncapi "b/events.yaml"
+
+terms
+  種類 "乙が扱うものの種類"
+    means enum Kind
+```
+
+`a/a.proto`:
+
+```proto
+syntax = "proto3";
+package a;
+message A {}
+```
+
+`b/v1/b.proto`:
+
+```proto
+syntax = "proto3";
+package b.v1;
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_ONE = 1;
+  KIND_TWO = 2;
+}
+message B { Kind kind = 1; }
+message Plain { string id = 1; }
+service BService { rpc Get(B) returns (B); }
+```
+
+`b/events.yaml`:
+
+```
+asyncapi: 3.0.0
+info:
+  title: B events
+  version: 1.0.0
+channels:
+  done:
+    address: b.done
+    messages:
+      done:
+        payload:
+          type: string
+operations:
+  sendDone:
+    action: send
+    channel:
+      $ref: '#/channels/done'
+```
+
+`a/events.yaml`:
+
+```
+asyncapi: 3.0.0
+info:
+  title: A, from B
+  version: 1.0.0
+channels:
+  done:
+    $ref: '../b/events.yaml#/channels/done'
+operations:
+  receiveDone:
+    action: receive
+    channel:
+      $ref: '#/channels/done'
+```
+
+関連: [E207](#e207), [E301](#e301)
+
 <a id="e301"></a>
 
 ## E301 — 公開ホストサービスが、公表された言語に無いサービスです
 
-**いつ出るか**: `open host service` に並べたサービスが、その公表された言語の proto に無いとき。Rust のクレートの公表された言語に `open host service` を書いたときにも出ます（クレートはサービスを持ちません）。
+**いつ出るか**: `open host service` に並べたサービスが、その公表された言語の proto に無いとき。OpenAPI と AsyncAPI の文書の公表された言語では、並べた名前が、文書の HTTP の操作（operationId）にもチャネルにも無いとき。Rust のクレートの公表された言語に `open host service` を書いたときにも出ます（クレートはサービスを持ちません）。
 
 **直し方**: サービスの名前を直すか、proto にサービスを足してください。
 
@@ -2383,7 +2653,7 @@ service BService { rpc Get(B) returns (B); }
 
 ## E302 — 公表された言語のファイルが、そのコンテキストのものでないか、package が違います
 
-**いつ出るか**: 公表された言語の proto、規則、Rust のクレート、生成したコードの置き場所が、そのコンテキストに属さないとき。proto の package やクレートの名前（`-` を `_` にしたもの）が見出しと違うとき、`crate` の先が地図の `code rust` のワークスペースのクレートでないとき、地図に `code rust` が無いのにクレートを公表したときにも出ます。
+**いつ出るか**: 公表された言語の proto、規則、Rust のクレート、OpenAPI と AsyncAPI の文書、生成したコードの置き場所が、そのコンテキストに属さないとき。proto の package やクレートの名前（`-` を `_` にしたもの）が見出しと違うとき、`crate` の先が地図の `code rust` のワークスペースのクレートでないとき、地図に `code rust` が無いのにクレートを公表したときにも出ます。
 
 **直し方**: 見出しの package を直すか、そのコンテキストのファイルを並べてください。
 
@@ -3337,7 +3607,7 @@ message A1 {}
 
 ## E401 — 対応に、上流の列挙の値が抜けています
 
-**いつ出るか**: 腐敗防止層の `enum` の対応に、上流の列挙の値で下流の値も refuse も書いていないものがあるとき。上流が値を足すと、これが出ます。値が無いことを表す 0 番の値には、対応は要りません。
+**いつ出るか**: 腐敗防止層の `enum` の対応に、上流の列挙（proto の列挙か、OpenAPI と AsyncAPI の文書の `enum` のスキーマ）の値で、下流の値も refuse も書いていないものがあるとき。上流が値を足すと、これが出ます。値が無いことを表す値（proto の 0 番の `…_UNSPECIFIED`、文書の `null`）には、対応は要りません。
 
 **直し方**: 値ごとに `<上流の値> -> <下流の値>` か `<上流の値> -> refuse "<理由>"` を書いてください。
 

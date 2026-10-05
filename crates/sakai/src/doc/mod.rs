@@ -106,8 +106,16 @@ fn rel(m: &Model, p: &str) -> String {
     format!("{}{p}", "../".repeat(ups))
 }
 
-/// A naming as the page shows it: the tool, the file from the map's directory, the pairs.
+/// A naming as the page shows it: the tool, the file from the map's directory, the pairs. An
+/// element of an OpenAPI or AsyncAPI document is its file and its JSON Pointer.
 fn naming(m: &Model, n: &Name) -> String {
+    if let Some((f, ptr)) = crate::elements::as_contract(n) {
+        let mut s = format!("{}#{ptr}", rel(m, f));
+        for (k, v) in &n.items[1..] {
+            s.push_str(&format!(" {k} {}", ritsu_base::naming::word_or_quote(v)));
+        }
+        return s;
+    }
     let mut s = format!("{} \"{}\"", n.tool.word(), rel(m, &n.path));
     for (k, v) in &n.items {
         s.push_str(&format!(" {k} {}", ritsu_base::naming::word_or_quote(v)));
@@ -325,7 +333,8 @@ pub fn page(o: &Outcome, suite: &Suite, lang: Lang) -> Page {
     b.push(Block::Heading(2, t(lang, "確かめていないこと", "What is not checked"), None));
     b.push(Block::List(vec![
         t(lang, "腐敗防止層のコードが、書いた対応のとおりに読み替えているか。sakai が確かめるのは、対応が上流の列挙を網羅していることと、対応の先が下流の列挙にあることまで（規則が先のときは、規則の表を rulec が確かめる）。", "Whether the code of an anticorruption layer maps as the mapping says. sakai checks that the mapping covers the upstream's enum and that what it maps to is in the downstream's enum (where a rule is the target, rulec checks the rule's tables)."),
-        t(lang, "実行時にしか見えない呼び出し：URL を文字列で持つ HTTP、メッセージのキュー、データベースの共有、リフレクションと動的な import。", "Calls seen only at run time: HTTP to a URL held in a string, message queues, a shared database, reflection and dynamic imports."),
+        t(lang, "契約に書いていない呼び出し：OpenAPI の文書の無い HTTP（URL を文字列で持つもの）、AsyncAPI の文書の無いメッセージのキュー、データベースの共有、リフレクションと動的な import。OpenAPI と AsyncAPI の文書に書いた HTTP の操作とチャネルは、ほかの成果物と同じく確かめる。", "Calls no contract writes: HTTP to a URL held in a string with no OpenAPI document, a message queue with no AsyncAPI document, a shared database, reflection and dynamic imports. The HTTP operations and the channels written in OpenAPI and AsyncAPI documents are checked like any other artifact."),
+        t(lang, "コードが、OpenAPI と AsyncAPI の文書のとおりに HTTP を呼び、チャネルに送り、チャネルから受けているか。sakai が確かめるのは、文書どうしと、文書と地図が合っていることまで。", "Whether the code calls HTTP, and sends to and receives from the channels, as the OpenAPI and AsyncAPI documents say: sakai checks the documents against each other and against the map."),
         t(lang, "生成したコードの置き場所のコードが、本当にその公表された言語から生成したものか。", "Whether the code where generated code is kept was really generated from the published language."),
         t(lang, "語の定義の文の中身。", "What a term's definition says."),
         t(lang, "コードの import。これは sakai build が書く設定で、import-linter、dependency-cruiser、ArchUnit、go-arch-lint が CI で確かめる。", "The imports of the code: the settings `sakai build` writes have import-linter, dependency-cruiser, ArchUnit and go-arch-lint check them in CI."),
@@ -347,7 +356,11 @@ fn artifacts(c: &Checked, suite: &Suite, ci: usize, lang: Lang) -> Block {
     for x in mine.iter().filter(|x| x.tool != Tool::File) {
         rows.push(vec![code(x.tool.word()), code(&rel(m, &x.path)), holds(c, suite, x, lang)]);
     }
-    let files = mine.iter().filter(|x| x.tool == Tool::File).count();
+    for x in mine.iter().filter(|x| x.contract.is_some()) {
+        let (k, _) = x.contract.unwrap();
+        rows.push(vec![code(k.word()), code(&rel(m, &x.path)), contract_holds(c, &x.path, lang)]);
+    }
+    let files = mine.iter().filter(|x| x.tool == Tool::File && x.contract.is_none()).count();
     if files > 0 {
         let what = if lang == Lang::Ja { format!("{files} 個のファイル（コード）") } else { format!("{files} files (code)") };
         rows.push(vec![code("file"), what, String::new()]);
@@ -413,6 +426,78 @@ fn holds(c: &Checked, suite: &Suite, x: &crate::owners::Artifact, lang: Lang) ->
     }
 }
 
+/// What an OpenAPI or AsyncAPI document holds (DESIGN 15.7): the specification and the API it
+/// describes, its HTTP operations, its channels and its operations on them, and its schemas and
+/// enums; for a part of a document, the schemas in it.
+fn contract_holds(c: &Checked, path: &str, lang: Lang) -> String {
+    let cs = &c.contracts;
+    let Some(d) = cs.docs.get(path) else { return String::new() };
+    let names = |v: Vec<String>| join(lang, &v.iter().map(|n| code(n)).collect::<Vec<_>>());
+    let sep = if lang == Lang::Ja { "／" } else { "; " };
+    let mut parts = Vec::new();
+    if d.part {
+        let keys: Vec<String> = d.root.as_map().unwrap_or_default().iter().map(|(k, _)| k.name.clone()).collect();
+        parts.push(if lang == Lang::Ja { format!("文書の一部 {}", names(keys)) } else { format!("a part of a document: {}", names(keys)) });
+        return parts.join(sep);
+    }
+    let title = if d.title.is_empty() { String::new() } else if lang == Lang::Ja { format!("「{}」", d.title) } else { format!(" \"{}\"", d.title) };
+    let version = match (d.version.is_empty(), lang) {
+        (true, _) => String::new(),
+        (false, Lang::Ja) => format!("、バージョン {}", d.version),
+        (false, _) => format!(", version {}", d.version),
+    };
+    parts.push(format!("{} {}{title}{version}", d.kind.title(), d.spec));
+    let ops: Vec<String> = cs.operations(path).iter().map(|o| if o.id.is_empty() { code(&format!("{} {}", o.method, o.path)) } else if lang == Lang::Ja { format!("{}（{} {}）", code(&o.id), o.method, o.path) } else { format!("{} ({} {})", code(&o.id), o.method, o.path) }).collect();
+    if !ops.is_empty() {
+        parts.push(format!("{} {}", t(lang, "操作", "operations"), join(lang, &ops)));
+    }
+    let chans: Vec<String> = cs
+        .channels(path)
+        .iter()
+        .map(|ch| {
+            let what = match &ch.elsewhere {
+                Some(f) => {
+                    let m = &c.model;
+                    if lang == Lang::Ja { format!("{} のもの", code(&rel(m, f))) } else { format!("from {}", code(&rel(m, f))) }
+                }
+                None => code(&ch.address),
+            };
+            if lang == Lang::Ja { format!("{}（{what}）", code(&ch.id)) } else { format!("{} ({what})", code(&ch.id)) }
+        })
+        .collect();
+    if !chans.is_empty() {
+        parts.push(format!("{} {}", t(lang, "チャネル", "channels"), join(lang, &chans)));
+    }
+    let acts: Vec<String> = cs
+        .actions(path)
+        .iter()
+        .map(|a| {
+            let on = a.channel.clone().unwrap_or_default();
+            if lang == Lang::Ja { format!("{}（{} {}）", code(&a.id), a.action, code(&on)) } else { format!("{} ({} {})", code(&a.id), a.action, code(&on)) }
+        })
+        .collect();
+    if !acts.is_empty() {
+        parts.push(format!("{} {}", t(lang, "送受信", "sends and receives"), join(lang, &acts)));
+    }
+    let schemas: Vec<(String, bool)> = d
+        .root
+        .get("components")
+        .and_then(|x| x.get("schemas"))
+        .and_then(|x| x.as_map())
+        .unwrap_or_default()
+        .iter()
+        .map(|(k, _)| (k.name.clone(), cs.enum_values(path, &format!("/components/schemas/{}", crate::contracts::escape(&k.name))).is_some()))
+        .collect();
+    let (enums, others): (Vec<_>, Vec<_>) = schemas.into_iter().partition(|(_, e)| *e);
+    if !others.is_empty() {
+        parts.push(format!("{} {}", t(lang, "スキーマ", "schemas"), names(others.into_iter().map(|(n, _)| n).collect())));
+    }
+    if !enums.is_empty() {
+        parts.push(format!("{} {}", t(lang, "列挙", "enums"), names(enums.into_iter().map(|(n, _)| n).collect())));
+    }
+    parts.join(sep)
+}
+
 /// What koyomi says of a `.cal`: a dates file's dates, and the calendar it uses with the days its
 /// data covers; a calendar, the days its data covers, as a dates file that uses it is told.
 fn calendar(c: &Checked, suite: &Suite, path: &str, lang: Lang) -> String {
@@ -450,9 +535,41 @@ fn calendar(c: &Checked, suite: &Suite, path: &str, lang: Lang) -> String {
 fn published(c: &Checked, p: &crate::model::Pub, lang: Lang) -> String {
     let m = &c.model;
     let mut parts = Vec::new();
-    let from: Vec<String> = p.protos.iter().map(|(f, _)| code(&rel(m, f))).chain(p.rulec.iter().map(|(f, _)| code(&rel(m, f)))).chain(p.krate.iter().map(|(d, _)| code(&rel(m, d)))).collect();
+    let from: Vec<String> = p
+        .protos
+        .iter()
+        .map(|(f, _)| code(&rel(m, f)))
+        .chain(p.rulec.iter().map(|(f, _)| code(&rel(m, f))))
+        .chain(p.krate.iter().map(|(d, _)| code(&rel(m, d))))
+        .chain(p.contracts.iter().map(|(k, f, _)| format!("{} {}", k.title(), code(&rel(m, f)))))
+        .collect();
     if !from.is_empty() {
         parts.push(format!("{}{}", t(lang, "書いたもの ", "written in "), join(lang, &from)));
+    }
+    // the open host services of OpenAPI and AsyncAPI documents: HTTP operations and channels
+    if !p.contracts.is_empty() {
+        let cs = &c.contracts;
+        for (s, _) in &p.services {
+            let mut what = None;
+            for (_, f, _) in &p.contracts {
+                if let Some(o) = cs.operations(f).into_iter().find(|o| o.name() == *s) {
+                    what = Some(if lang == Lang::Ja { format!("HTTP の操作 {} {}", o.method, o.path) } else { format!("the HTTP operation {} {}", o.method, o.path) });
+                }
+                if let Some(ch) = cs.channels(f).into_iter().find(|ch| ch.id == *s) {
+                    what = Some(if lang == Lang::Ja { format!("チャネル {}", ch.address) } else { format!("the channel {}", ch.address) });
+                }
+            }
+            let mut one = format!("{}{}", t(lang, "公開ホストサービス ", "open host service "), code(s));
+            if let Some(w) = what {
+                one.push_str(&if lang == Lang::Ja { format!("（{w}）") } else { format!(" ({w})") });
+            }
+            parts.push(one);
+        }
+        if !p.generated.is_empty() {
+            let g: Vec<String> = p.generated.iter().map(|(d, _)| code(&rel(m, d))).collect();
+            parts.push(format!("{}{}", t(lang, "生成したコード ", "generated code in "), join(lang, &g)));
+        }
+        return if lang == Lang::Ja { format!("{}：{}", code(&p.package), parts.join("。")) } else { format!("{}: {}", code(&p.package), parts.join("; ")) };
     }
     for (s, _) in &p.services {
         let methods: Vec<String> = p
@@ -498,6 +615,12 @@ fn term_row(c: &Checked, rels: &[Value], crossings: &[Value], ci: usize, ti: usi
             continue;
         }
         let mut reached: Vec<Name> = cr["elements"].as_array().map(|a| a.iter().filter_map(name_of).collect()).unwrap_or_default();
+        // what a document's `$ref` reaches, as files and JSON Pointers
+        for p in cr["pointers"].as_array().into_iter().flatten().filter_map(|p| p.as_str()) {
+            if let Some((f, ptr)) = p.split_once('#') {
+                reached.push(crate::elements::contract_name(f, ptr));
+            }
+        }
         if let Some(to) = name_of(&cr["to"]) {
             reached.push(to);
         }
@@ -553,7 +676,10 @@ fn term_row(c: &Checked, rels: &[Value], crossings: &[Value], ci: usize, ti: usi
 fn values_across(c: &Checked, _rels: &[Value], e: &Name, v: &str) -> Vec<(String, String)> {
     let m = &c.model;
     let mut out = Vec::new();
-    let enum_of = e.whole_file().with("enum", e.items[0].1.clone());
+    let enum_of = match crate::elements::as_contract(e) {
+        Some((f, p)) => crate::elements::contract_name(f, p),
+        None => e.whole_file().with("enum", e.items[0].1.clone()),
+    };
     for (ci, x) in m.contexts.iter().enumerate() {
         for (ri, r) in x.rels.iter().enumerate() {
             let RelK::Upstream { enums, .. } = &r.kind else { continue };
@@ -619,7 +745,7 @@ fn mappings(c: &Checked, b: &mut Vec<Block>, lang: Lang) {
                 };
                 let head = if lang == Lang::Ja { format!("{} ← {}：{}", x.name, up.name, em.from) } else { format!("{} ← {}: {}", x.name, up.name, em.from) };
                 b.push(Block::Heading(3, head, None));
-                let lay: Vec<String> = layer.iter().map(|o| code(&format!("{} \"{}\"", o.tool.map(|t| t.word()).unwrap_or("dir"), rel(m, &o.path)))).collect();
+                let lay: Vec<String> = layer.iter().map(|o| code(&format!("{} \"{}\"", o.contract.map(|k| k.word()).or(o.tool.map(|t| t.word())).unwrap_or("dir"), rel(m, &o.path)))).collect();
                 let mut says = vec![if lang == Lang::Ja { format!("{} を {} に読み替える。", code(&from), code(&to)) } else { format!("Maps {} to {}.", code(&from), code(&to)) }];
                 if !lay.is_empty() {
                     says.push(if lang == Lang::Ja { format!("層は {}。", join(lang, &lay)) } else { format!("The layer is {}.", join(lang, &lay)) });
@@ -669,7 +795,10 @@ fn relationship(m: &Model, r: &Value, crossings: &[Value], me: &str, lang: Lang)
         .filter(|cr| cr["from_context"].as_str() == Some(me) || cr["to_context"].as_str() == Some(me))
         .map(|cr| {
             let from = name_of(&cr["from"]).map(|n| rel(m, &n.path)).unwrap_or_default();
-            let to = name_of(&cr["to"]).map(|n| naming(m, &n)).unwrap_or_default();
+            let to = match cr["pointer"].as_str().and_then(|p| p.split_once('#')) {
+                Some((f, ptr)) => format!("{}#{ptr}", rel(m, f)),
+                None => name_of(&cr["to"]).map(|n| naming(m, &n)).unwrap_or_default(),
+            };
             format!("{} ({}) → {}", code(&format!("{from}:{}", cr["line"])), cr["via"].as_str().unwrap_or(""), code(&to))
         })
         .collect();
@@ -700,9 +829,10 @@ fn relationship(m: &Model, r: &Value, crossings: &[Value], me: &str, lang: Lang)
                         .as_array()
                         .into_iter()
                         .flatten()
-                        .map(|i| match i.get("dir") {
-                            Some(d) => code(&format!("dir \"{}\"", rel(m, d.as_str().unwrap_or("")))),
-                            None => name_of(&i["name"]).map(|n| code(&naming(m, &n))).unwrap_or_default(),
+                        .map(|i| match (i.get("dir"), i.get("contract").and_then(|k| k.as_str())) {
+                            (Some(d), _) => code(&format!("dir \"{}\"", rel(m, d.as_str().unwrap_or("")))),
+                            (None, Some(k)) => name_of(&i["name"]).map(|n| code(&format!("{k} \"{}\"", rel(m, &n.path)))).unwrap_or_default(),
+                            (None, None) => name_of(&i["name"]).map(|n| code(&naming(m, &n))).unwrap_or_default(),
                         })
                         .collect();
                     if lang == Lang::Ja { format!("{} と共有カーネル：{}", link(m, &other), join(lang, &items)) } else { format!("Shared kernel with {}: {}", link(m, &other), join(lang, &items)) }

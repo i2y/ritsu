@@ -73,6 +73,8 @@ pub struct Item {
     /// None for `dir`.
     pub tool: Option<Tool>,
     pub path: Str,
+    /// `openapi "…"` or `asyncapi "…"` (DESIGN 15.4): a file of the tool `file`.
+    pub contract: Option<crate::contracts::Kind>,
 }
 
 /// `published language <package>` and the lines under it (DESIGN 1.4): the `.proto` files that
@@ -86,6 +88,8 @@ pub struct Published {
     pub protos: Vec<Str>,
     pub rulec: Option<Str>,
     pub krate: Option<Str>,
+    /// OpenAPI and AsyncAPI documents (DESIGN 15.4).
+    pub contracts: Vec<(crate::contracts::Kind, Str)>,
     pub services: Vec<(String, Pos)>,
     pub generated: Vec<Str>,
 }

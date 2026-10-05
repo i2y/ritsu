@@ -1,0 +1,20 @@
+context 受注(ordering) v1
+description "客の注文を受け、注文が入ったことと取り消されたことを、ほかのサービスに知らせる"
+owner "受注チーム"
+
+owns
+  dir "../ordering", "../common"
+
+published language ordering.v1
+  openapi "../ordering/api/ordering.json"
+  asyncapi "../ordering/events/ordering.yaml"
+  open host service createOrder, getOrder, orderPlaced, orderCancelled
+
+terms
+  注文 "客が確定させた購入の申し込み。取り消されても消えない"
+    means schema Order
+  注文の受付 "注文が入ったという知らせ"
+    means channel orderPlaced
+
+shared kernel with 決済
+  dir "../common"

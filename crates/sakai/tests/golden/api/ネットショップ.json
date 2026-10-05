@@ -1,0 +1,731 @@
+{
+  "sakai": "0.23.0",
+  "map": {
+    "name": "ネットショップ",
+    "alias": "webshop",
+    "version": "1",
+    "file": "ネットショップ.ctx",
+    "source_sha256": "ef22222e14a68d262c5c07924c562c97a2c5119a2f528a7c97eac0b9b47919a4",
+    "description": "HTTP とイベントでやりとりする、小さな店の四つのサービス。どれも契約の文書を持つ"
+  },
+  "covers": [
+    "."
+  ],
+  "except": [],
+  "contexts": [
+    {
+      "name": "受注",
+      "alias": "ordering",
+      "version": "1",
+      "file": "contexts/受注.ctx",
+      "source_sha256": "d86d7a3d6aa7dfd97ae1b19cf0bdbce5ee227bb24e0648e0f6ad1a4c7f2b2e46",
+      "description": "客の注文を受け、注文が入ったことと取り消されたことを、ほかのサービスに知らせる",
+      "owner": "受注チーム",
+      "also": [],
+      "owns": [
+        {
+          "dir": "ordering"
+        },
+        {
+          "dir": "common"
+        }
+      ],
+      "published": [
+        {
+          "package": "ordering.v1",
+          "from": [
+            {
+              "text": "file \"ordering/api/ordering.json\"",
+              "tool": "file",
+              "path": "ordering/api/ordering.json",
+              "items": []
+            },
+            {
+              "text": "file \"ordering/events/ordering.yaml\"",
+              "tool": "file",
+              "path": "ordering/events/ordering.yaml",
+              "items": []
+            }
+          ],
+          "services": [
+            "createOrder",
+            "getOrder",
+            "orderPlaced",
+            "orderCancelled"
+          ],
+          "generated": [],
+          "contracts": [
+            {
+              "file": "ordering/api/ordering.json",
+              "kind": "openapi",
+              "spec": "3.1.0",
+              "title": "受注の API",
+              "version": "1.0.0"
+            },
+            {
+              "file": "ordering/events/ordering.yaml",
+              "kind": "asyncapi",
+              "spec": "3.0.0",
+              "title": "受注のイベント",
+              "version": "1.0.0"
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "name": "注文",
+          "definition": "客が確定させた購入の申し込み。取り消されても消えない",
+          "also": [],
+          "means": [
+            {
+              "pointer": "ordering/api/ordering.json#/components/schemas/Order"
+            }
+          ],
+          "as": null
+        },
+        {
+          "name": "注文の受付",
+          "definition": "注文が入ったという知らせ",
+          "also": [],
+          "means": [
+            {
+              "pointer": "ordering/events/ordering.yaml#/channels/orderPlaced"
+            }
+          ],
+          "as": null
+        }
+      ]
+    },
+    {
+      "name": "決済",
+      "alias": "payments",
+      "version": "1",
+      "file": "contexts/決済.ctx",
+      "source_sha256": "c5fb7ea82a83a0fe891e8b2cdae9497ce6c043ad76d44becf53fc05c939e8825",
+      "description": "入った注文の代金を客のカードに課金し、課金がどうなったかを知らせる",
+      "owner": "決済チーム",
+      "also": [],
+      "owns": [
+        {
+          "dir": "payments"
+        }
+      ],
+      "published": [
+        {
+          "package": "payments.v1",
+          "from": [
+            {
+              "text": "file \"payments/api/payments.yaml\"",
+              "tool": "file",
+              "path": "payments/api/payments.yaml",
+              "items": []
+            },
+            {
+              "text": "file \"payments/events/payments.yaml\"",
+              "tool": "file",
+              "path": "payments/events/payments.yaml",
+              "items": []
+            }
+          ],
+          "services": [
+            "createCharge",
+            "getCharge",
+            "paymentSucceeded",
+            "paymentFailed"
+          ],
+          "generated": [],
+          "contracts": [
+            {
+              "file": "payments/api/payments.yaml",
+              "kind": "openapi",
+              "spec": "3.2.0",
+              "title": "決済の API",
+              "version": "1.0.0"
+            },
+            {
+              "file": "payments/events/payments.yaml",
+              "kind": "asyncapi",
+              "spec": "3.1.0",
+              "title": "決済のイベント",
+              "version": "1.0.0"
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "name": "課金",
+          "definition": "注文一つ分の代金を、客のカードから受け取ること",
+          "also": [],
+          "means": [
+            {
+              "pointer": "payments/api/payments.yaml#/components/schemas/Charge"
+            }
+          ],
+          "as": null
+        },
+        {
+          "name": "課金の状態",
+          "definition": "課金がどこまで進んだか。カードの返事待ち、受け取った、通らなかった、返した",
+          "also": [],
+          "means": [
+            {
+              "pointer": "payments/api/payments.yaml#/components/schemas/ChargeStatus"
+            }
+          ],
+          "as": null
+        }
+      ]
+    },
+    {
+      "name": "配送",
+      "alias": "shipping",
+      "version": "1",
+      "file": "contexts/配送.ctx",
+      "source_sha256": "441b177977bfe3cebede17a012cfadda1ec87b5a650a90a4d935fc296a816b26",
+      "description": "課金が済んだ注文を出荷する",
+      "owner": "配送チーム",
+      "also": [],
+      "owns": [
+        {
+          "dir": "shipping"
+        }
+      ],
+      "published": [
+        {
+          "package": "shipping.v1",
+          "from": [
+            {
+              "text": "file \"shipping/api/shipping.yaml\"",
+              "tool": "file",
+              "path": "shipping/api/shipping.yaml",
+              "items": []
+            }
+          ],
+          "services": [
+            "getShipment"
+          ],
+          "generated": [],
+          "contracts": [
+            {
+              "file": "shipping/api/shipping.yaml",
+              "kind": "openapi",
+              "spec": "3.0.3",
+              "title": "配送の API",
+              "version": "1.0.0"
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "name": "出荷の可否",
+          "definition": "注文を倉庫から出してよいか",
+          "also": [],
+          "means": [
+            {
+              "pointer": "shipping/api/shipping.yaml#/components/schemas/ShipmentGate"
+            }
+          ],
+          "as": null
+        }
+      ]
+    },
+    {
+      "name": "通知",
+      "alias": "notifications",
+      "version": "1",
+      "file": "contexts/通知.ctx",
+      "source_sha256": "7739b1830f2b77cea889e222af271e1a89bf01d5712e30b5a15d675f6442c11a",
+      "description": "注文がどうなったかを、客にメールで知らせる",
+      "owner": "顧客対応チーム",
+      "also": [],
+      "owns": [
+        {
+          "dir": "notifications"
+        }
+      ],
+      "published": [],
+      "terms": [
+        {
+          "name": "注文",
+          "definition": null,
+          "also": [],
+          "means": [],
+          "as": {
+            "context": "受注",
+            "term": "注文"
+          }
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "kind": "shared_kernel",
+      "between": [
+        "受注",
+        "決済"
+      ],
+      "sides": [
+        {
+          "context": "受注",
+          "items": [
+            {
+              "dir": "common"
+            }
+          ]
+        },
+        {
+          "context": "決済",
+          "items": [
+            {
+              "dir": "common"
+            }
+          ]
+        }
+      ],
+      "declared": [
+        "contexts/受注.ctx:19",
+        "contexts/決済.ctx:22"
+      ]
+    },
+    {
+      "kind": "upstream_downstream",
+      "upstream": "受注",
+      "downstream": "決済",
+      "roles": {
+        "upstream": [
+          "open_host_service",
+          "published_language"
+        ],
+        "downstream": [
+          "conformist"
+        ]
+      },
+      "through": [
+        "ordering.v1"
+      ],
+      "layer": [],
+      "enums": [],
+      "terms": [],
+      "declared": [
+        "contexts/決済.ctx:19"
+      ]
+    },
+    {
+      "kind": "upstream_downstream",
+      "upstream": "決済",
+      "downstream": "配送",
+      "roles": {
+        "upstream": [
+          "open_host_service",
+          "published_language"
+        ],
+        "downstream": [
+          "anticorruption_layer"
+        ]
+      },
+      "through": [
+        "payments.v1"
+      ],
+      "layer": [
+        {
+          "dir": "shipping/acl"
+        }
+      ],
+      "enums": [
+        {
+          "from": {
+            "pointer": "payments/api/payments.yaml#/components/schemas/ChargeStatus"
+          },
+          "to": {
+            "pointer": "shipping/api/shipping.yaml#/components/schemas/ShipmentGate"
+          },
+          "checked": true,
+          "values": [
+            {
+              "from": "pending",
+              "to": "hold"
+            },
+            {
+              "from": "succeeded",
+              "to": "release"
+            },
+            {
+              "from": "failed",
+              "refuse": "課金に失敗した注文は出荷しない"
+            },
+            {
+              "from": "refunded",
+              "refuse": "返金した注文は出荷しない"
+            }
+          ]
+        }
+      ],
+      "terms": [],
+      "declared": [
+        "contexts/配送.ctx:16"
+      ]
+    },
+    {
+      "kind": "upstream_downstream",
+      "upstream": "受注",
+      "downstream": "通知",
+      "roles": {
+        "upstream": [
+          "open_host_service",
+          "published_language"
+        ],
+        "downstream": [
+          "conformist"
+        ]
+      },
+      "through": [
+        "ordering.v1"
+      ],
+      "layer": [],
+      "enums": [],
+      "terms": [],
+      "declared": [
+        "contexts/通知.ctx:11"
+      ]
+    },
+    {
+      "kind": "separate_ways",
+      "between": [
+        "通知",
+        "決済"
+      ],
+      "declared": [
+        "contexts/通知.ctx:14"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "name": {
+        "text": "file \"common/money.yaml\"",
+        "tool": "file",
+        "path": "common/money.yaml",
+        "items": []
+      },
+      "context": "受注",
+      "by": "contexts/受注.ctx:6",
+      "sha256": "7dc401c30fa85477"
+    },
+    {
+      "name": {
+        "text": "file \"notifications/events/notifications.yaml\"",
+        "tool": "file",
+        "path": "notifications/events/notifications.yaml",
+        "items": []
+      },
+      "context": "通知",
+      "by": "contexts/通知.ctx:6",
+      "sha256": "a49d9579a6d0f45b"
+    },
+    {
+      "name": {
+        "text": "dandori \"notifications/notify.flow\"",
+        "tool": "dandori",
+        "path": "notifications/notify.flow",
+        "items": []
+      },
+      "context": "通知",
+      "by": "contexts/通知.ctx:6",
+      "sha256": "e5dcd541f8f23a07"
+    },
+    {
+      "name": {
+        "text": "file \"ordering/api/ordering.json\"",
+        "tool": "file",
+        "path": "ordering/api/ordering.json",
+        "items": []
+      },
+      "context": "受注",
+      "by": "contexts/受注.ctx:6",
+      "sha256": "0a1e098f9591d48e"
+    },
+    {
+      "name": {
+        "text": "file \"ordering/events/ordering.yaml\"",
+        "tool": "file",
+        "path": "ordering/events/ordering.yaml",
+        "items": []
+      },
+      "context": "受注",
+      "by": "contexts/受注.ctx:6",
+      "sha256": "96634bc41c579c34"
+    },
+    {
+      "name": {
+        "text": "file \"payments/api/payments.yaml\"",
+        "tool": "file",
+        "path": "payments/api/payments.yaml",
+        "items": []
+      },
+      "context": "決済",
+      "by": "contexts/決済.ctx:6",
+      "sha256": "7e2b359de95c943d"
+    },
+    {
+      "name": {
+        "text": "file \"payments/events/payments.yaml\"",
+        "tool": "file",
+        "path": "payments/events/payments.yaml",
+        "items": []
+      },
+      "context": "決済",
+      "by": "contexts/決済.ctx:6",
+      "sha256": "1f469a55e0318272"
+    },
+    {
+      "name": {
+        "text": "file \"shipping/acl/payments.yaml\"",
+        "tool": "file",
+        "path": "shipping/acl/payments.yaml",
+        "items": []
+      },
+      "context": "配送",
+      "by": "contexts/配送.ctx:6",
+      "sha256": "17827b93f46979a0"
+    },
+    {
+      "name": {
+        "text": "file \"shipping/api/shipping.yaml\"",
+        "tool": "file",
+        "path": "shipping/api/shipping.yaml",
+        "items": []
+      },
+      "context": "配送",
+      "by": "contexts/配送.ctx:6",
+      "sha256": "64807fb6cb45ded2"
+    }
+  ],
+  "crossings": [
+    {
+      "from": {
+        "text": "file \"notifications/events/notifications.yaml\"",
+        "tool": "file",
+        "path": "notifications/events/notifications.yaml",
+        "items": []
+      },
+      "line": 8,
+      "to": {
+        "text": "file \"ordering/events/ordering.yaml\"",
+        "tool": "file",
+        "path": "ordering/events/ordering.yaml",
+        "items": []
+      },
+      "from_context": "通知",
+      "to_context": "受注",
+      "via": "receive",
+      "elements": [],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "conformist"
+        ],
+        "declared": "contexts/通知.ctx:11"
+      },
+      "pointer": "ordering/events/ordering.yaml#/channels/orderPlaced",
+      "pointers": [
+        "ordering/events/ordering.yaml#/channels/orderPlaced",
+        "ordering/events/ordering.yaml#/components/messages/OrderPlaced",
+        "ordering/api/ordering.json#/components/schemas/Order",
+        "common/money.yaml#/Money",
+        "ordering/api/ordering.json#/components/schemas/Line",
+        "ordering/api/ordering.json#/components/schemas/OrderStatus"
+      ]
+    },
+    {
+      "from": {
+        "text": "file \"notifications/events/notifications.yaml\"",
+        "tool": "file",
+        "path": "notifications/events/notifications.yaml",
+        "items": []
+      },
+      "line": 10,
+      "to": {
+        "text": "file \"ordering/events/ordering.yaml\"",
+        "tool": "file",
+        "path": "ordering/events/ordering.yaml",
+        "items": []
+      },
+      "from_context": "通知",
+      "to_context": "受注",
+      "via": "receive",
+      "elements": [],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "conformist"
+        ],
+        "declared": "contexts/通知.ctx:11"
+      },
+      "pointer": "ordering/events/ordering.yaml#/channels/orderCancelled",
+      "pointers": [
+        "ordering/events/ordering.yaml#/channels/orderCancelled",
+        "ordering/events/ordering.yaml#/components/messages/OrderCancelled"
+      ]
+    },
+    {
+      "from": {
+        "text": "file \"payments/api/payments.yaml\"",
+        "tool": "file",
+        "path": "payments/api/payments.yaml",
+        "items": []
+      },
+      "line": 50,
+      "to": {
+        "text": "file \"common/money.yaml\"",
+        "tool": "file",
+        "path": "common/money.yaml",
+        "items": []
+      },
+      "from_context": "決済",
+      "to_context": "受注",
+      "via": "$ref",
+      "elements": [],
+      "allowed_by": {
+        "relationship": "shared_kernel",
+        "declared": "contexts/決済.ctx:22"
+      },
+      "pointer": "common/money.yaml#/Money",
+      "pointers": [
+        "common/money.yaml#/Money"
+      ]
+    },
+    {
+      "from": {
+        "text": "file \"payments/events/payments.yaml\"",
+        "tool": "file",
+        "path": "payments/events/payments.yaml",
+        "items": []
+      },
+      "line": 8,
+      "to": {
+        "text": "file \"ordering/events/ordering.yaml\"",
+        "tool": "file",
+        "path": "ordering/events/ordering.yaml",
+        "items": []
+      },
+      "from_context": "決済",
+      "to_context": "受注",
+      "via": "receive",
+      "elements": [],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "conformist"
+        ],
+        "declared": "contexts/決済.ctx:19"
+      },
+      "pointer": "ordering/events/ordering.yaml#/channels/orderPlaced",
+      "pointers": [
+        "ordering/events/ordering.yaml#/channels/orderPlaced",
+        "ordering/events/ordering.yaml#/components/messages/OrderPlaced",
+        "ordering/api/ordering.json#/components/schemas/Order",
+        "common/money.yaml#/Money",
+        "ordering/api/ordering.json#/components/schemas/Line",
+        "ordering/api/ordering.json#/components/schemas/OrderStatus"
+      ]
+    },
+    {
+      "from": {
+        "text": "file \"shipping/acl/payments.yaml\"",
+        "tool": "file",
+        "path": "shipping/acl/payments.yaml",
+        "items": []
+      },
+      "line": 9,
+      "to": {
+        "text": "file \"payments/events/payments.yaml\"",
+        "tool": "file",
+        "path": "payments/events/payments.yaml",
+        "items": []
+      },
+      "from_context": "配送",
+      "to_context": "決済",
+      "via": "receive",
+      "elements": [],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "anticorruption_layer"
+        ],
+        "declared": "contexts/配送.ctx:16"
+      },
+      "pointer": "payments/events/payments.yaml#/channels/paymentSucceeded",
+      "pointers": [
+        "payments/events/payments.yaml#/channels/paymentSucceeded",
+        "payments/events/payments.yaml#/components/messages/PaymentResult",
+        "payments/api/payments.yaml#/components/schemas/Charge",
+        "common/money.yaml#/Money",
+        "payments/api/payments.yaml#/components/schemas/ChargeStatus"
+      ]
+    },
+    {
+      "from": {
+        "text": "file \"shipping/acl/payments.yaml\"",
+        "tool": "file",
+        "path": "shipping/acl/payments.yaml",
+        "items": []
+      },
+      "line": 11,
+      "to": {
+        "text": "file \"payments/events/payments.yaml\"",
+        "tool": "file",
+        "path": "payments/events/payments.yaml",
+        "items": []
+      },
+      "from_context": "配送",
+      "to_context": "決済",
+      "via": "receive",
+      "elements": [],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "anticorruption_layer"
+        ],
+        "declared": "contexts/配送.ctx:16"
+      },
+      "pointer": "payments/events/payments.yaml#/channels/paymentFailed",
+      "pointers": [
+        "payments/events/payments.yaml#/channels/paymentFailed",
+        "payments/events/payments.yaml#/components/messages/PaymentResult",
+        "payments/api/payments.yaml#/components/schemas/Charge",
+        "common/money.yaml#/Money",
+        "payments/api/payments.yaml#/components/schemas/ChargeStatus"
+      ]
+    },
+    {
+      "from": {
+        "text": "dandori \"notifications/notify.flow\"",
+        "tool": "dandori",
+        "path": "notifications/notify.flow",
+        "items": []
+      },
+      "line": 4,
+      "to": {
+        "text": "file \"ordering/api/ordering.json\"",
+        "tool": "file",
+        "path": "ordering/api/ordering.json",
+        "items": []
+      },
+      "from_context": "通知",
+      "to_context": "受注",
+      "via": "use openapi",
+      "elements": [],
+      "allowed_by": {
+        "relationship": "upstream_downstream",
+        "roles": [
+          "conformist"
+        ],
+        "declared": "contexts/通知.ctx:11"
+      }
+    }
+  ]
+}

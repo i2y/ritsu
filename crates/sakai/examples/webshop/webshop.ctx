@@ -1,0 +1,9 @@
+map Webshop(webshop) v1
+description "Four services of a small shop that talk over HTTP and events, each with its contract"
+
+use context "contexts/ordering.ctx"
+use context "contexts/payments.ctx"
+use context "contexts/shipping.ctx"
+use context "contexts/notifications.ctx"
+
+covers "."

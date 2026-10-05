@@ -1,0 +1,7 @@
+error[E205]: shipping/api/shipping.yaml:34:11: The published language shipping.v1 of 配送 shows the upstream 決済's types
+    34 |           $ref: '../../payments/api/payments.yaml#/components/schemas/Charge'
+  = The file shipping/api/shipping.yaml uses payments/api/payments.yaml#/components/schemas/Charge. Downstream of an anticorruption layer, the upstream's model stays out of the downstream's own published language; the layer maps it to the downstream's types.
+  involved:
+      配送  shipping/api/shipping.yaml:34  $ref: ../../payments/api/payments.yaml#/components/schemas/Charge
+      決済  payments/api/payments.yaml:51  #/components/schemas/Charge, a part of the published language payments.v1
+      配送  contexts/配送.ctx:16           upstream 決済 anticorruption layer

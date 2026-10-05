@@ -60,7 +60,7 @@ pub const LANGUAGES: &[&str] = &["python", "typescript", "java", "go", "rust"];
 /// one entry.
 pub const TABLE: &[(&str, &[&str])] = &[
     ("map file", &["map", "description", "use context", "covers", "except", "proto root", "code", "python", "typescript", "java", "go", "rust", "test"]),
-    ("context file", &["context", "description", "owner", "also", "owns", "dir", "published language", "crate", "open host service", "generated dir", "terms", "means", "as"]),
+    ("context file", &["context", "description", "owner", "also", "owns", "dir", "published language", "crate", "openapi", "asyncapi", "open host service", "generated dir", "terms", "means", "as"]),
     (
         "relationship",
         &[
@@ -85,7 +85,7 @@ pub const TABLE: &[(&str, &[&str])] = &[
         "kind",
         &[
             "input", "output", "enum", "value", "table", "clause", "define", "derive", "machine", "source", "date", "claim", "unit", "account", "transfer", "service",
-            "method", "message", "field", "requirement", "context", "term", "task", "case", "record",
+            "method", "message", "field", "requirement", "context", "term", "task", "case", "record", "schema", "channel", "operation",
         ],
     ),
 ];

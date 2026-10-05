@@ -1,4 +1,4 @@
 warning[W101]: ctx/在庫.ctx:6:48: The entry dir "docs" holds no artifact
      6 |   dir "../proto/warehouse", "../py/inventory", "../docs"
-  = The path may be mistyped. The artifacts are the .rule, .flow, .cal, .book, .geas and .proto files, and the code of the languages the map's `code` lines name, under the places they give.
+  = The path may be mistyped. The artifacts are the .rule, .flow, .cal, .book, .geas and .proto files, the OpenAPI and AsyncAPI documents, and the code of the languages the map's `code` lines name, under the places they give.
 基本.ctx: ok — 3 contexts, 3 relationships; 9 artifacts, each in one context; 3 crossings checked (proto 3)

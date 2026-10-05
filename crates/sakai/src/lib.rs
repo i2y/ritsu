@@ -15,6 +15,8 @@ pub mod proto;
 /// The crates of the map's Rust code, as Cargo says them (DESIGN 7.7).
 pub mod cargo;
 pub mod check;
+/// OpenAPI and AsyncAPI documents (DESIGN 15).
+pub mod contracts;
 pub mod elements;
 pub mod mapping;
 pub mod model;

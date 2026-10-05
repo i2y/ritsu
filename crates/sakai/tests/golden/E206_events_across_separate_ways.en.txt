@@ -1,0 +1,6 @@
+error[E206]: notifications/events/notifications.yaml:12:5: The file notifications/events/notifications.yaml of Notifications refers to payments/events/payments.yaml#/channels/paymentSucceeded of Payments (receive), and the two go separate ways
+    12 |     $ref: '../../payments/events/payments.yaml#/channels/paymentSucceeded'
+  = Separate ways is the decision that nothing between the two refers to the other; if the reference is needed, write a relationship instead.
+  involved:
+      Notifications  notifications/events/notifications.yaml:12  $ref: ../../payments/events/payments.yaml#/channels/paymentSucceeded
+      Payments       payments/events/payments.yaml:9             #/channels/paymentSucceeded, a part of the published language payments.v1

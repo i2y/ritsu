@@ -1,7 +1,7 @@
 # sakai
 
 A small language for the part of a context map that can be checked: which bounded context owns each artifact, which references the relationships let cross a boundary, and how an anticorruption layer maps the values and words that cross.
-sakai is one of the seven languages of [ritsu](../../README.md), and reads the artifacts of the others (rules, workflows, calendars, books, `.proto` files) through ritsu.
+sakai is one of the seven languages of [ritsu](../../README.md), and reads the artifacts of the others (rules, workflows, calendars, books, `.proto` files) through ritsu, and the contracts services keep in OpenAPI and AsyncAPI documents.
 
 A context map usually lives in a drawing, and the drawing stops matching the code the week after it is drawn.
 sakai writes the map next to the artifacts, one file per context, owned by that context's team, and holds every artifact to it:
@@ -64,6 +64,54 @@ error[E406]: contexts/ordering.ctx:22:3: Inventory's reservation crosses into Or
 sakai never decides that two definitions mean the same; only `as` says so.
 The other checks: every artifact covered belongs to exactly one context; a reference crosses only where a relationship allows it (a conformist reads the upstream's published language, an anticorruption layer only from inside its layer, a service is called only when it is an open host service); the patterns agree (a customer needs its supplier to agree, a shared kernel lists the same files on both sides); and separate ways means nothing crosses.
 Every code is in [docs/codes.md](docs/codes.md), with when it comes, how to fix it, and the smallest reproduction (`sakai explain E401`).
+
+## Contracts between services: OpenAPI and AsyncAPI
+
+Services that talk over HTTP and events write what they say in contracts: an OpenAPI document for an HTTP API, an AsyncAPI document for the channels a service sends to and receives from.
+sakai holds them as artifacts, as it holds a `.proto`: a context publishes its documents as a published language, and opens the HTTP operations and the channels anyone may use.
+
+```ctx
+published language payments.v1
+  openapi "../payments/api/payments.yaml"
+  asyncapi "../payments/events/payments.yaml"
+  open host service createCharge, getCharge, paymentSucceeded, paymentFailed
+```
+
+What crosses a boundary is what the documents write: a `$ref` to another context's document, and an operation that sends to or receives from another context's channel.
+Each is held to the relationships as any reference is, and an anticorruption layer maps an enum of a document value by value, as it maps a `.proto`'s:
+
+```ctx
+upstream Payments anticorruption layer
+  through payments.v1
+  layer dir "../shipping/acl"
+  enum ChargeStatus -> enum ShipmentGate
+    pending   -> hold
+    succeeded -> release
+    failed    -> refuse "An order whose charge failed is not shipped"
+    refunded  -> refuse "A refunded order is not shipped"
+```
+
+```console
+$ sakai check examples/webshop/webshop.ctx
+examples/webshop/webshop.ctx: ok — 4 contexts, 5 relationships; 9 artifacts, each in one context; 7 crossings checked (openapi 1, asyncapi 5, dandori 1)
+```
+
+When Payments stops opening the channel Shipping receives from:
+
+```text
+error[E210]: shipping/acl/payments.yaml:11:5: The document shipping/acl/payments.yaml of Shipping uses the channel paymentFailed of Payments (receive), which is no open host service of Payments
+    11 |     $ref: '../../payments/events/payments.yaml#/channels/paymentFailed'
+  = The open host services of the published language payments.v1 are createCharge, getCharge, paymentSucceeded.
+  = Across a boundary, a document sends to and receives from only the channels the other side lists under `open host service` (and the same for HTTP operations): have it listed there, or use what the other side opens.
+  involved:
+      Shipping  shipping/acl/payments.yaml:11     $ref: ../../payments/events/payments.yaml#/channels/paymentFailed
+      Payments  payments/events/payments.yaml:14  #/channels/paymentFailed, a part of the published language payments.v1
+```
+
+sakai reads OpenAPI 3.0, 3.1 and 3.2, and AsyncAPI 3.0 and 3.1, written in JSON or in YAML.
+Of YAML it reads what goes to JSON and back (RFC 9512, section 3.4, as OpenAPI 3.2 and AsyncAPI 3.1 ask), and stops with E108 at the rest (a tag, a key written with `?`, a second document) rather than read part of it.
+A call no contract writes (HTTP to a URL held in a string, a queue with no document) is still not checked, and the page of `doc` says so; nor does sakai check that the code calls what its contract says.
+[examples/webshop](examples/webshop/README.md) is a map of four services that talk this way.
 
 ## The page of the map
 
@@ -128,16 +176,18 @@ The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file 
 
 - [examples/shop](examples/shop/README.md): a small shop in five contexts and seven relationships, with every pattern, over real workflows, rules, calendars, a book and `.proto` files, and code in Python, TypeScript, Java and Go.
 - [examples/shop.ja](examples/shop.ja/README.ja.md): the same shop with Japanese names.
+- [examples/webshop](examples/webshop/README.md): four services of a web shop that talk over HTTP and events, by their OpenAPI and AsyncAPI documents, with an anticorruption layer that maps an enum of a document; [examples/webshop.ja](examples/webshop.ja/README.ja.md) is the same with Japanese names.
 - [ritsu.ctx](../../ritsu.ctx) and [contexts/](../../contexts) at the root of ritsu: ritsu's own crates, in twelve contexts, their dependencies held to the map by `ritsu check ritsu.ctx` in CI.
 
 ## How it is checked
 
 `cargo test -p sakai` runs the language on its fixtures and on the example, and runs the real tools.
-On one run of `cargo test -p sakai -- --nocapture` on macOS on Apple silicon, with every tool there and no test skipped: 179 tests, 31 seconds once built.
+On one run of `cargo test -p sakai -- --nocapture` on macOS on Apple silicon, with every tool there and no test skipped: 191 tests, 26 seconds once built.
 
-- 132 mutants, each a fixture or the example with one change, are held to the diagnostics they give, in English and in Japanese (64 of them with Japanese names, each with an English twin, and 4 for Rust).
+- 152 mutants, each a fixture or an example with one change, are held to the diagnostics they give, in English and in Japanese (74 of them with Japanese names, each with an English twin, and 4 for Rust).
 - The four import linters run on 56 copies (14 for each tool): the example and a map whose generated code sits inside a context, each as it is and with imports added that the map forbids, with English and Japanese names. Every tool passes the copies as they are and catches each added import.
-- Context Mapper 6.12.0's validator, with every check, finds nothing in the example's CML.
+- Context Mapper 6.12.0's validator, with every check, finds nothing in the CML of the examples.
+- ritsu's reader of YAML is held to the YAML test suite (its release data-2022-01-17, 402 cases): it reads 204 as the suite's JSON, does not read 104 that go beyond what goes to JSON and back, does not read any of the 94 that are no YAML, and reads none of them as another value.
 - buf compares sakai's reading of every `.proto` of the example and the fixtures.
 - The pages of `doc` are golden files; Mermaid 11 and 12 draw every chart, and Chrome opens the HTML page, where a box of the map goes to its context.
 - The outputs, diagnostics, settings and `.ctx` lines in this README, `docs/` and the skill are real: `tests/docs.rs` runs and compares them.
@@ -145,7 +195,7 @@ On one run of `cargo test -p sakai -- --nocapture` on macOS on Apple silicon, wi
 ## Status
 
 The language, `check`, `build`, `export cml`, `doc`, `api` and `explain` are done, as in [DESIGN.md](DESIGN.md).
-Not yet: checking owners against CODEOWNERS, OpenAPI and JSON Schema enums for the mappings, generating the code of a mapping, and run-time calls as artifacts (DESIGN 14).
+Not yet: checking owners against CODEOWNERS, a rule's `import jsonschema` as the target of a mapping, generating the code of a mapping, run-time calls that no contract writes as artifacts, and names of the elements of OpenAPI and AsyncAPI documents in the form other languages name things by (DESIGN 14, 15.10).
 
 ## License
 

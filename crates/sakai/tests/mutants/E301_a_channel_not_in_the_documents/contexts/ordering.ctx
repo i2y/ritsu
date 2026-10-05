@@ -1,0 +1,20 @@
+context Ordering(ordering) v1
+description "Takes the customer's orders, and tells the other services when an order is placed or cancelled"
+owner "Ordering team"
+
+owns
+  dir "../ordering", "../common"
+
+published language ordering.v1
+  openapi "../ordering/api/ordering.json"
+  asyncapi "../ordering/events/ordering.yaml"
+  open host service createOrder, getOrder, orderPlaced, orderCancelled, orderShipped
+
+terms
+  order "A customer's confirmed request to buy. A cancelled order stays"
+    means schema Order
+  order_placed "The event that an order has been placed"
+    means channel orderPlaced
+
+shared kernel with Payments
+  dir "../common"

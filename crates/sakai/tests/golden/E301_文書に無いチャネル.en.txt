@@ -1,0 +1,4 @@
+error[E301]: contexts/受注.ctx:11:73: The open host service orderShipped is not in the documents of the published language ordering.v1
+    11 |   open host service createOrder, getOrder, orderPlaced, orderCancelled, orderShipped
+  = The HTTP operations and channels of its documents are createOrder, getOrder, orderPlaced, orderCancelled.
+  = Under a published language of OpenAPI and AsyncAPI documents, `open host service` lists OpenAPI operationIds (or, with none, a method and a path, like `"GET /orders"`) and AsyncAPI channels (the keys under `channels`).

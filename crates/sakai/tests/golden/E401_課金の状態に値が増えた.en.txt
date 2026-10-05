@@ -1,0 +1,8 @@
+error[E401]: contexts/配送.ctx:19:3: The anticorruption layer of 配送 maps no value for disputed of 決済's enum payments/api/payments.yaml#/components/schemas/ChargeStatus
+    19 |   enum ChargeStatus -> enum ShipmentGate
+  = The value disputed is written at payments/api/payments.yaml:65.
+  = Every value of the upstream enum gets a value of the downstream or refuse; when the upstream adds a value, the check fails until someone decides what it becomes.
+  = The line, fixed: disputed -> refuse "…"
+  involved:
+      配送  contexts/配送.ctx:16           upstream 決済 anticorruption layer
+      決済  payments/api/payments.yaml:63  #/components/schemas/ChargeStatus, 5 values, 1 of them unmapped

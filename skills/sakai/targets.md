@@ -176,7 +176,14 @@ A crate a context publishes is written `crate "…"` in a `published language` b
 | partnership | `<one> [P]<->[P] <other>` |
 | separate ways | a comment: CML has no form for it |
 | the upstream's roles | `OHS,PL` when a package in `through` has an open host service, else `PL` |
-| the packages and services | the relationship's `implementationTechnology` |
+| the packages and services | the relationship's `implementationTechnology`: `Connect: <package>.<service>` for a `.proto`, `OpenAPI: <name> (<operations>)` and `AsyncAPI: <name> (<channels>)` for OpenAPI and AsyncAPI documents, with their open host services |
 
 Names are the aliases, since CML takes ASCII identifiers only.
-The example's CML is `tests/golden/cml/shop.cml`; the tests have Context Mapper 6.12.0's validator, with every check, find nothing in it.
+The examples' CML is `tests/golden/cml/shop.cml` and `tests/golden/cml/webshop.cml`; the tests have Context Mapper 6.12.0's validator, with every check, find nothing in them.
+The relationship of the web shop's Shipping and Payments, which talk by OpenAPI and AsyncAPI documents, is written:
+
+```cml
+  shipping [D,ACL]<-[U,OHS,PL] payments {
+    implementationTechnology = "OpenAPI: payments.v1 (createCharge, getCharge); AsyncAPI: payments.v1 (paymentSucceeded, paymentFailed)"
+  }
+```
