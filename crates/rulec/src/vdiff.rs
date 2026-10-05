@@ -1675,7 +1675,7 @@ fn machine_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), d: &VDiff, b
 fn migration_text(state: &str, kind: &str) -> String {
     match kind {
         "removed" => tr!(
-            "{state}: 新しい版にこの状態はありません。この状態にいる案件は、新しい版の入口で断られます",
+            "{state}: 新しい版にこの状態はありません。この状態にいる案件は、新しい版では入口でエラーになります",
             "{state}: the new version has no such state; a case in it is refused at the door"
         ),
         "stranded" => tr!(

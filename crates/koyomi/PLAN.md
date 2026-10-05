@@ -4,7 +4,7 @@ DESIGN.md を仕様として、koyomi を三つの段階（B・C・D）で作る
 
 B、C、D の三つの段階は終わった（どれも 2026-10-03）。各段階で決めたことと測ったことは、DESIGN.md の該当の節と、下の B、C、D の項に書き足してある。
 
-この計画を書いた A の段階では、本体のコードは書いていない。意味を確かめるための Python の試作を作業場所で書いて走らせ、その数を DESIGN.md と下の完了の条件に写した。試作はリポジトリに残していない（B の参照インタプリタが同じ数を出すことを、完了の条件にした）。リポジトリに置いたのは、DESIGN.md、この PLAN.md、試作が読んだ祝日の表の写し二つ（`examples/calendars/data/`）、民法の例が引く 140〜143 条の写し（`examples/sources/law/129AC0000000089@2026-10-01/`）だけである。
+この計画を書いた A の段階では、本体のコードは書いていない。意味を確かめるための Python の試作を作業場所で書いて走らせ、その数を DESIGN.md と下の完了の条件に転記した。試作はリポジトリに残していない（B の参照インタプリタが同じ数を出すことを、完了の条件にした）。リポジトリに置いたのは、DESIGN.md、この PLAN.md、試作が読んだ祝日の表のコピー二つ（`examples/calendars/data/`）、民法の例が引く 140〜143 条のコピー（`examples/sources/law/129AC0000000089@2026-10-01/`）だけである。
 
 ## 0. 全部の段階に共通の決まり
 
@@ -35,7 +35,7 @@ B、C、D の三つの段階は終わった（どれも 2026-10-03）。各段�
 ### 0.3 手本にしてよいもの（読むだけ）
 
 - dandori：`src/diag.rs`（診断の形と、二つの言語の文を持つ Diag）、`src/main.rs`（使い方の表と引数）、`skills/`（D のスキル）、`tests/docs.rs` と `tests/skill.rs`（D の文書のテスト）。
-- rulec：`src/sha256.rs`（SHA-256）、`src/i18n.rs`（`tr!` の考え。ただし koyomi は言語をプロセス全体に持たない。DESIGN 4.1）、`src/codes.rs`（台帳と再現）、`src/sources.rs`（curl の呼び方と取り直し）、`src/codegen/sql.rs`（PostgreSQL の生成）、`src/main.rs`（CLI の表）、`src/kw.rs`（キーワードの表）。写すときは koyomi の DESIGN に合わせて書き直す。
+- rulec：`src/sha256.rs`（SHA-256）、`src/i18n.rs`（`tr!` の考え。ただし koyomi は言語をプロセス全体に持たない。DESIGN 4.1）、`src/codes.rs`（台帳と再現）、`src/sources.rs`（curl の呼び方と取り直し）、`src/codegen/sql.rs`（PostgreSQL の生成）、`src/main.rs`（CLI の表）、`src/kw.rs`（キーワードの表）。取り込むときは koyomi の DESIGN に合わせて書き直す。
 
 ## 1. ディレクトリ
 
@@ -52,7 +52,7 @@ src/
   date.rs          通算日、年月日、月の足し算、無い日の扱い、締め、月初と月末（B）
   sha256.rs  sjis.rs  sjis_table.rs                              （B）
   holidays.rs      csv と govuk の読み取り、covers（B）
-  sources.rs       写しと固定（B）。fetch・pin・outdated（C）
+  sources.rs       コピーと固定（B）。fetch・pin・outdated（C）
   calendar.rs      営業日の判定、データの範囲、慣行、営業日の数え方、休みの理由（B）
   interp.rs        参照インタプリタ（計算の段、時刻、条件）（B）
   paraphrase.rs    操作の言い直し（DESIGN 7.1）。eval・診断・doc が使う（B）
@@ -111,7 +111,7 @@ docs/  skills/  README.md  README.ja.md  THIRD_PARTY_NOTICES.md、LICENSE-MIT、
 - 名前の表と別名の決まり（DESIGN 1.2）、E007〜E015。
 - `use calendar`：`.cal` からの相対パス、calendar のファイルであること、循環、オフセットの食い違い（E015）。
 - 日付の引数：始まりをたどって使う入力（DESIGN 1.3）。
-- 出力先の予約語（`src/reserved.rs`）：TypeScript（ECMAScript の予約語と strict mode の予約語）、Python（`keyword.kwlist` と `keyword.softkwlist`）、Go（25 のキーワードと事前宣言の識別子）、Rust（strict と reserved のキーワード）、PostgreSQL（文書の付録 C の reserved）。表の頭に、どの版のどの文書から写したかを書く。生成物が使う名前（`is_open`、`Date`、`KoyomiError`、`<別名>_at`）とぶつかる別名も E009。
+- 出力先の予約語（`src/reserved.rs`）：TypeScript（ECMAScript の予約語と strict mode の予約語）、Python（`keyword.kwlist` と `keyword.softkwlist`）、Go（25 のキーワードと事前宣言の識別子）、Rust（strict と reserved のキーワード）、PostgreSQL（文書の付録 C の reserved）。表の頭に、どの版のどの文書から転記したかを書く。生成物が使う名前（`is_open`、`Date`、`KoyomiError`、`<別名>_at`）とぶつかる別名も E009。
 - 書いたものから決まること（DESIGN 3.1 の 4 段め）：E201、W201、W202。E201 の例の入力は、その操作の前までを範囲の入力で順に計算して探す（DESIGN 4.3）。
 - テスト：E007〜E015、E201、W201、W202 の変異ファイル。E201 は DESIGN 4.3 のファイルで、例の入力が 2026-01-29 になること。
 
@@ -127,20 +127,20 @@ docs/  skills/  README.md  README.ja.md  THIRD_PARTY_NOTICES.md、LICENSE-MIT、
 - 形式（`src/holidays.rs`）：
   - `csv`：UTF-8 か Shift_JIS。一行目の最初の値が日付でなければ見出しとして飛ばす。`"…"` の引用、CR LF と LF、`YYYY-MM-DD` と `YYYY/M/D`、名前は無くてもよい。同じ日付が二度あれば E104。
   - `govuk`：serde_json で読み、地域を選ぶ。名前は `title` に、`notes` があれば括弧で添える（`Boxing Day (Substitute day)`）。
-- `covers`（日付の区間と `listed years`）、E101〜E106（`src/sources.rs`）。E102 の直し方は、写しから計算した `sha256:…` そのもの。
-- 法令の出典（DESIGN 1.5 の「法令の出典」）：`source <名前> = law "<法令ID>" asof <日付>` と、その下の条の固定の行（`第143条 sha256:…`）。条の名前（条・項・号。算用数字と漢数字）から e-Gov の要素（`MainProvision-Article_143-Paragraph_2-Item_1`）と写しのファイル名を作る（rulec の `src/sources.rs` の `egov_fragment` と同じ写し方。附則と別表は E111 で断る）。写しは `.cal` の隣の `sources/law/<法令ID>@<日付>/<要素>.xml`。引用 `@<出典> <条>[, <条>…]` は、`date` の宣言・操作・`at`・条件・`closed`・`open` の行の末尾。E111、W102、写しの無い条は E101、固定と違えば E103。写しの XML からタグを落として本文にする関数（rulec の `xml_text` と同じ考え。段落と文ごとに改行）も、ここで書く（D の doc が使う）。
-- 祝日の表の写し：`examples/calendars/data/syukujitsu.csv`（SHA-256 `cec37a743c96995cdb9cb52b685c9003634682a9b0e1a640a6b9b96881fe964a`）と `examples/calendars/data/bank-holidays.json`（SHA-256 `538b3482c28b85ecd2db606a0d5ae6ad17248900b6498700ce0a48d26a3ecde6`）は、A の段階で 2026-10-02 に取って置いた。DESIGN の数はこのバイト列から出したので、取り直さずに使う（内閣府は 2027 年 2 月に 2028 年の分を足し、GOV.UK は古い年を落とすので、取り直すと数が変わる）。
+- `covers`（日付の区間と `listed years`）、E101〜E106（`src/sources.rs`）。E102 の直し方は、コピーから計算した `sha256:…` そのもの。
+- 法令の出典（DESIGN 1.5 の「法令の出典」）：`source <名前> = law "<法令ID>" asof <日付>` と、その下の条の固定の行（`第143条 sha256:…`）。条の名前（条・項・号。算用数字と漢数字）から e-Gov の要素（`MainProvision-Article_143-Paragraph_2-Item_1`）とコピーのファイル名を作る（rulec の `src/sources.rs` の `egov_fragment` と同じ作り方。附則と別表は E111 でエラーにする）。コピーは `.cal` の隣の `sources/law/<法令ID>@<日付>/<要素>.xml`。引用 `@<出典> <条>[, <条>…]` は、`date` の宣言・操作・`at`・条件・`closed`・`open` の行の末尾。E111、W102、コピーの無い条は E101、固定と違えば E103。コピーの XML からタグを落として本文にする関数（rulec の `xml_text` と同じ考え。段落と文ごとに改行）も、ここで書く（D の doc が使う）。
+- 祝日の表のコピー：`examples/calendars/data/syukujitsu.csv`（SHA-256 `cec37a743c96995cdb9cb52b685c9003634682a9b0e1a640a6b9b96881fe964a`）と `examples/calendars/data/bank-holidays.json`（SHA-256 `538b3482c28b85ecd2db606a0d5ae6ad17248900b6498700ce0a48d26a3ecde6`）は、A の段階で 2026-10-02 に取って置いた。DESIGN の数はこのバイト列から出したので、取り直さずに使う（内閣府は 2027 年 2 月に 2028 年の分を足し、GOV.UK は古い年を落とすので、取り直すと数が変わる）。
 - テスト（`tests/sources.rs`）：
   - 内閣府の CSV：1,067 行。1955〜2027 年の 73 年で、どの年にも行がある。最初の行は 1955-01-01 元日、最後の行は 2027-11-23 勤労感謝の日。名前が「休日」の行は 116。
   - python3 があれば、CSV 全体を Python の `cp932` で読んだ文字列と koyomi が読んだ文字列が一致し、7,724 個の符号のどれもが `cp932` と同じ文字になる（無ければ SKIP）。
   - GOV.UK：`england-and-wales` は 83 件、2019〜2028 年、土日の日付は 0 件。
-  - E101〜E106 の変異（写しが無い、固定が無い、固定が違う、読めないバイト、`covers` の外の行、行の無い年）。
-  - 法令：`examples/sources/law/129AC0000000089@2026-10-01/` の四つの写しの固定が、140 条 `e880059021fbb67d`、141 条 `0575c131b9f08063`、142 条 `fc8c35a0769d3b35`、143 条 `6950bdfb988439b6` になる。143 条の本文が「週、月又は年によって期間を定めたときは、その期間は、暦に従って計算する。」で始まる。条の名前の写し方（`第143条`、`第百四十三条第二項`、`第20条の2第3項第4号`）。E111 と W102 の変異。
+  - E101〜E106 の変異（コピーが無い、固定が無い、固定が違う、読めないバイト、`covers` の外の行、行の無い年）。
+  - 法令：`examples/sources/law/129AC0000000089@2026-10-01/` の四つのコピーの固定が、140 条 `e880059021fbb67d`、141 条 `0575c131b9f08063`、142 条 `fc8c35a0769d3b35`、143 条 `6950bdfb988439b6` になる。143 条の本文が「週、月又は年によって期間を定めたときは、その期間は、暦に従って計算する。」で始まる。条の名前から e-Gov の要素の名前を作ること（`第143条`、`第百四十三条第二項`、`第20条の2第3項第4号`）。E111 と W102 の変異。
 
 ### B.6 カレンダー（`src/calendar.rs`）
 
 - DESIGN 1.4：休みの曜日、毎年の休み（年をまたぐ区間）、特定の日、表、例外の営業日、`use calendar` で合わせる、オフセット。
-- E107：`offset` の値が `±HH:MM` でなければ断る。`Asia/Tokyo` のように `/` を含むもの、`UTC` と `GMT` 以外の英字のものは「タイムゾーンの名前」として、DESIGN 1.9 の理由を言う。E108、W101。
+- E107：`offset` の値が `±HH:MM` でなければエラーにする。`Asia/Tokyo` のように `/` を含むもの、`UTC` と `GMT` 以外の英字のものは「タイムゾーンの名前」として、DESIGN 1.9 の理由を言う。E108、W101。
 - `is_open(day) -> Result<bool, Outside>` と、休みの理由（曜日、表の行の名前、毎年の休みの名前、特定の日の名前）。
 - 四つの慣行と、営業日の数え方（DESIGN 1.8 と 2.2。0 のときは寄せる）。問い合わせるたびにデータの範囲を確かめる。
 - いちばん長い連休と、年ごとの営業日の数（D の doc が使う。ここで書いてテストする）。
@@ -170,7 +170,7 @@ docs/  skills/  README.md  README.ja.md  THIRD_PARTY_NOTICES.md、LICENSE-MIT、
 ### B.9 診断と台帳（`src/diag.rs`、`src/codes.rs`）
 
 - `Diag`：code、severity、line、col、message（`Text`）、notes（`Text` の並び）、inputs、steps、fails、fix。文面と JSON は DESIGN 4.1 の形（dandori の `src/diag.rs` の描き方を手本にする）。
-- `src/codes.rs`：DESIGN 4.2 の全コード。各コードに、見出し、いつ出るか、どう直すか（英語と日本語）、走る最小の再現（`.cal` の本文。写しが要るコードは、小さな CSV の本文も持つ）。
+- `src/codes.rs`：DESIGN 4.2 の全コード。各コードに、見出し、いつ出るか、どう直すか（英語と日本語）、走る最小の再現（`.cal` の本文。コピーが要るコードは、小さな CSV の本文も持つ）。
 - `koyomi explain <CODE>`、`koyomi explain --all`、`--format markdown`。
 - テスト：`tests/codes.rs`（全コードの再現が、そのコードを出す。台帳のどのコードにも変異ファイルが一つ以上ある）、`tests/mutants.rs`（`tests/mutants/<CODE>_<内容>.cal` ごとに、英語と日本語の golden `tests/golden/<同じ名前>.en.txt`・`.ja.txt` と一致する）。
 
@@ -188,11 +188,11 @@ DESIGN 10 章の例を `examples/` に書く。D の段階で仕上げるが、B
 
 - `examples/calendars/東京の営業日.cal`（DESIGN 1.1 のまま）、`民法142条の休日.cal`（`closed weekly sun` と `closed 祝日`。description に「142 条が名指しする日だけを休みにした。『その他の休日』に何が入るかは、この例では決めない」）、`england_and_wales.cal`（`closed weekly sat, sun`、`source` は `format govuk "england-and-wales"` と `covers listed years`、オフセットは書かない）。
 - `examples/支払_20日締め翌月10日払い.cal`（DESIGN 1.1 のまま）、`支払_月末締め翌々月末払い.cal`（DESIGN 4.3 のまま）。
-- `examples/民法の期間.cal`：カレンダーは `民法142条の休日.cal`。`source 民法 = law "129AC0000000089" asof 2026-10-01` と、140・141・142・143 条の固定の行（値は B.5 のテストのとおり。写しは A の段階で置いてある）。入力は `起点 : date range >=2026-01-01 <=2026-12-31` と `月数 : int range >=1 <=12`。日付は `起算日`（`@民法 第140条`）、`満了日`（DESIGN 1.7 の書き方。`@民法 第141条, 第143条`）、`満了日_142条`（`満了日` から `if closed + 1 day`。`@民法 第142条`）。`at end of day` は書かない（カレンダーにオフセットが無い）。条件は `満了日 is monotonic`、`満了日_142条 is monotonic`、`満了日 > 起点`、`満了日_142条 >= 満了日`。
+- `examples/民法の期間.cal`：カレンダーは `民法142条の休日.cal`。`source 民法 = law "129AC0000000089" asof 2026-10-01` と、140・141・142・143 条の固定の行（値は B.5 のテストのとおり。コピーは A の段階で置いてある）。入力は `起点 : date range >=2026-01-01 <=2026-12-31` と `月数 : int range >=1 <=12`。日付は `起算日`（`@民法 第140条`）、`満了日`（DESIGN 1.7 の書き方。`@民法 第141条, 第143条`）、`満了日_142条`（`満了日` から `if closed + 1 day`。`@民法 第142条`）。`at end of day` は書かない（カレンダーにオフセットが無い）。条件は `満了日 is monotonic`、`満了日_142条 is monotonic`、`満了日 > 起点`、`満了日_142条 >= 満了日`。
 - `examples/民法の期間_読み方の比較.cal`：同じカレンダー、同じ出典、同じ入力。`満了日`、`満了日_翌日`（`if closed + 1 day`）、`満了日_翌営業日`（`roll following`）、`月数を足して寄せる`（`起点` から `+ 月数 months else end_of_month`）。条件は `二つの読み方 : 満了日_翌日 = 満了日_翌営業日` と `月末に寄せる書き方 : 満了日 = 月数を足して寄せる`。
 - `examples/締め日と支払日を受け取る.cal`：カレンダーは `東京の営業日.cal`。入力は `受領日 : date range >=2026-01-01 <=2027-10-01`、`締め日 : int range >=1 <=31`、`支払の月 : int range >=1 <=2`、`支払の日 : int range >=10 <=31`。`締め`（`close day 締め日 else end_of_month`）、`支払`（`締め` から `day 支払の日 of month +支払の月 else end_of_month`、`roll preceding`）。条件は `支払 is open`、`支払 > 締め`、`支払 is monotonic`。
 - `examples/net30.cal`：英語の名前。`invoice_date : date range >=2026-01-01 <=2028-11-29`、`due`（`+ 30 days`、`roll following`）、条件は `due is open`、`due >= invoice_date + 30 days`、`due is monotonic`。カレンダーは `england_and_wales.cal`。
-- どの description にも、DESIGN 10 章の断り（例の条件として文字どおりに書いた。法令の読み方を決めない）を入れる。
+- どの description にも、DESIGN 10 章の注意書き（例の条件として文字どおりに書いた。法令の読み方を決めない）を入れる。
 
 ### B.12 B の完了の条件
 
@@ -222,7 +222,7 @@ B の結果：上の表の数は、どれも参照インタプリタが試作と
 
 ### C.1 生成の共通の部分（`src/gen/mod.rs`）
 
-- DESIGN 6.1 のとおり。生成物の中に書く小さな関数と内部の名前は `_` で始める（B で決めた。別名は `[a-z]` で始まるのでぶつからず、E009 は公開する名前だけを予約している。`src/naming.rs` の `GENERATED`）。生成物の中に書く小さな関数は、B の `src/date.rs` と `src/calendar.rs` の手順を一つずつ写す：`days_from_civil`、`civil_from_days`、`month_len`、`weekday`、`parse_date`、`format_date`、`shift_month`、`place`、`add_months`、`day_of_month`、`start_of_month`、`end_of_month`、`close_day`、`close_end_of_month`、`is_open`、`roll`、`add_business`、`at_utc`、入口のガード。言語ごとの綴りは `src/naming.rs`。
+- DESIGN 6.1 のとおり。生成物の中に書く小さな関数と内部の名前は `_` で始める（B で決めた。別名は `[a-z]` で始まるのでぶつからず、E009 は公開する名前だけを予約している。`src/naming.rs` の `GENERATED`）。生成物の中に書く小さな関数は、B の `src/date.rs` と `src/calendar.rs` の手順を一つずつ移植する：`days_from_civil`、`civil_from_days`、`month_len`、`weekday`、`parse_date`、`format_date`、`shift_month`、`place`、`add_months`、`day_of_month`、`start_of_month`、`end_of_month`、`close_day`、`close_end_of_month`、`is_open`、`roll`、`add_business`、`at_utc`、入口のガード。言語ごとの綴りは `src/naming.rs`。
 - エラーの種類を四つに分ける：`range`（入力が範囲の外）、`data`（データの範囲の外）、`reject`（無い日）、`date`（0001〜9999 の外）。どの言語でも、エラーから種類が取れるようにする。
 - 頭（DESIGN 6.1）。生成物は決まった形にする（時刻、機械のパス、並びの揺れを含めない）。`--lang` でコメントの言語を変える。
 - カレンダーの埋め込み：祝日は通算日の昇順の配列で、一行に一日、行末のコメントに `YYYY-MM-DD 名前`。
@@ -280,9 +280,9 @@ B の結果：上の表の数は、どれも参照インタプリタが試作と
 - DESIGN 9 章。curl は `-fsSL` で、三度まで試す。`file://` も読める。
 - `pin` は `sha256:` の 16 桁だけを書き換え、ほかは一字も変えない（テストでバイト列を比べる）。固定の無い `source` の行には ` sha256:…` を足す。
 - `outdated` の文面（英語と日本語）：増えた日・消えた日・名前の変わった日（六件まで並べ、全部の数を言う）、`covers` の書き換え案、exit 1。変わっていなければ exit 0。
-- テスト（`tests/fetch.rs`）：一時ディレクトリに、内閣府の CSV の写しから 2027 年の行を除いた版（旧）と、元の写し（新）を置く。`url` を新への `file://` にし、旧を固定した `.cal` で、`outdated` が 2027 年の 17 日が増えることと `covers` の案を言って exit 1、`fetch` が新のバイト列をそのまま書き、`pin` が固定を書き換え、`check` が通る。GOV.UK の JSON でも同じ形で（2028 年の 8 件を除いた旧を作る）。`KOYOMI_NET=1` のときだけ、本物の二つの url に `outdated` を走らせる（中身は問わず、走ること）。
-- 法令（DESIGN 9 章）：`fetch` は引いている条ごとに `<KOYOMI_EGOV か https://laws.e-gov.go.jp/api/2>/law_data/<法令ID>?asof=<日付>&elm=<要素>&law_full_text_format=xml` を引き、JSON の `law_full_text`（base64）を戻した XML を写しに、`revision_info.law_revision_id` を `revision.txt` に書く。本文（タグを落としたもの）が前の写しと同じなら書き換えない。`outdated` は `law_revisions/<法令ID>` の `amendment_enforcement_date` が `asof` より後の版ごとに、その日を `asof` にして条を取り、本文を比べる。
-- 法令のテスト（`tests/fetch.rs`）：テストの中に `std::net::TcpListener`（`127.0.0.1:0`）で小さな HTTP サーバーを立て、e-Gov の二つの API（`law_data` と `law_revisions`）に用意したレスポンスを返し、`KOYOMI_EGOV` にその場所を渡す。サーバーはテストの終わりに止める。用意するレスポンス：民法の 140〜143 条（`examples/sources/law/` の写しを base64 にしたもの）と、後の版が五つある `law_revisions`。確かめること：`fetch` が写しと同じバイト列を書く、`outdated` が五つの版で変わらないと言って exit 0、ある版の 143 条の本文を一文字変えたレスポンスにすると、その施行日と条を言って exit 1、属性だけを変えたレスポンスでは exit 0（本文で比べる）。`KOYOMI_NET=1` のときは、本物の e-Gov に `outdated` を走らせ、五つの版のどれでも変わらないと言うこと（2026-10-02 に確かめた結果。これが変われば、民法が改正されたということなので、DESIGN 1.5 の事実を書き直す）。
+- テスト（`tests/fetch.rs`）：一時ディレクトリに、内閣府の CSV のコピーから 2027 年の行を除いた版（旧）と、元のコピー（新）を置く。`url` を新への `file://` にし、旧を固定した `.cal` で、`outdated` が 2027 年の 17 日が増えることと `covers` の案を言って exit 1、`fetch` が新のバイト列をそのまま書き、`pin` が固定を書き換え、`check` が通る。GOV.UK の JSON でも同じ形で（2028 年の 8 件を除いた旧を作る）。`KOYOMI_NET=1` のときだけ、本物の二つの url に `outdated` を走らせる（中身は問わず、走ること）。
+- 法令（DESIGN 9 章）：`fetch` は引いている条ごとに `<KOYOMI_EGOV か https://laws.e-gov.go.jp/api/2>/law_data/<法令ID>?asof=<日付>&elm=<要素>&law_full_text_format=xml` を引き、JSON の `law_full_text`（base64）を戻した XML をコピーのファイルに、`revision_info.law_revision_id` を `revision.txt` に書く。本文（タグを落としたもの）が前のコピーと同じなら書き換えない。`outdated` は `law_revisions/<法令ID>` の `amendment_enforcement_date` が `asof` より後の版ごとに、その日を `asof` にして条を取り、本文を比べる。
+- 法令のテスト（`tests/fetch.rs`）：テストの中に `std::net::TcpListener`（`127.0.0.1:0`）で小さな HTTP サーバーを立て、e-Gov の二つの API（`law_data` と `law_revisions`）に用意したレスポンスを返し、`KOYOMI_EGOV` にその場所を渡す。サーバーはテストの終わりに止める。用意するレスポンス：民法の 140〜143 条（`examples/sources/law/` のコピーを base64 にしたもの）と、後の版が五つある `law_revisions`。確かめること：`fetch` がコピーと同じバイト列を書く、`outdated` が五つの版で変わらないと言って exit 0、ある版の 143 条の本文を一文字変えたレスポンスにすると、その施行日と条を言って exit 1、属性だけを変えたレスポンスでは exit 0（本文で比べる）。`KOYOMI_NET=1` のときは、本物の e-Gov に `outdated` を走らせ、五つの版のどれでも変わらないと言うこと（2026-10-02 に確かめた結果。これが変われば、民法が改正されたということなので、DESIGN 1.5 の事実を書き直す）。
 - `check` が通信しないこと：PATH から curl を外しても `check` が通る。
 - CLI の表に `source` を足す。
 
@@ -302,25 +302,25 @@ C.1〜C.10 を書いた順に作り、C.10 の条件を全部満たした（2026
 
 - C.1：生成器のモジュールは `src/codegen/`（`gen` は Rust 2024 の予約語）。小さな関数は、そのファイルの操作が使うものだけを書く。無い日の扱いと慣行は `.cal` の語を文字列で渡し、当たりえない操作には `"none"` を渡す。ランナーの出力は、日付の値と時刻を空白で区切った一行か `error <種類>`。
 - C.1：小さな関数の言語ごとの綴り（`_closeDay` と `_close_day`）は、`src/naming.rs` ではなく出力先ごとの生成器に書いた。公開しない名前で、api と突き合わせる必要が無いからである。`src/naming.rs` は公開する名前と署名だけを持つ。
-- C.1：生成物が使う名前を E009 で断る範囲を広げた。Go の `err`、Python の生成物が呼ぶ組み込みの関数（`range`、`str` など）、PL/pgSQL の予約語（`begin`、`declare` など）、ファイルの別名にはモジュールとスキーマの名前（`json`、`std`、`pg_catalog` など）。B の `src/naming.rs` の `GENERATED` と `src/reserved.rs` に足し、`src/naming.rs` に `MODULES` を置いた。
+- C.1：生成物が使う名前を E009 でエラーにする範囲を広げた。Go の `err`、Python の生成物が呼ぶ組み込みの関数（`range`、`str` など）、PL/pgSQL の予約語（`begin`、`declare` など）、ファイルの別名にはモジュールとスキーマの名前（`json`、`std`、`pg_catalog` など）。B の `src/naming.rs` の `GENERATED` と `src/reserved.rs` に足し、`src/naming.rs` に `MODULES` を置いた。
 - C.4：Go のランナーは別のディレクトリではなく、同じパッケージのテストのファイル `go/<パッケージ名>/<パッケージ名>_runner_test.go`（`TestMain` が `KOYOMI_RUNNER` を見る）。import のパスが要らない。テストは一時ディレクトリに go.mod を一つ書き、`go test -c -trimpath -o bin/ ./...` で全部のパッケージを一度にビルドする。
 - C.6：式一つの小さな関数は SQL 標準の関数本体にし、`STRICT` を付けない（付けるとプランナーが展開しない）。`STRICT` を外して SQL の突き合わせは 33.7 秒から 22.5 秒になった。
 - C.7：範囲の外の行は、どれかの日付の関数が受け取る入力にだけ出す（受け取らない入力にはガードが無い）。
-- C.8：helpers は `tests/fixtures/` の七つ（表の無いカレンダー `calendars/休みの書き方を全部使う.cal`、`helpers_月を足す`、`helpers_月を引く`、`helpers_月の日と締め`、`helpers_営業日`、`helpers_断る`、`helpers_日付が一つも無い`）。Python のランナーでいちばん長いものも 11 秒ほどで、60 秒の目安より十分短い。`else reject` は 2 月 29 日を含む範囲では検査が止めるので、`helpers_断る` だけ範囲を 2001-03-01〜2003-12-31 にした。
+- C.8：helpers は `tests/fixtures/` の七つ（表の無いカレンダー `calendars/休みの書き方を全部使う.cal`、`helpers_月を足す`、`helpers_月を引く`、`helpers_月の日と締め`、`helpers_営業日`、`helpers_エラーにする`、`helpers_日付が一つも無い`）。Python のランナーでいちばん長いものも 11 秒ほどで、60 秒の目安より十分短い。`else reject` は 2 月 29 日を含む範囲では検査が止めるので、`helpers_エラーにする` だけ範囲を 2001-03-01〜2003-12-31 にした。
 - C.8：`--lang ja` の生成物も同じツールで確かめ、二つのファイル（`支払_20日締め翌月10日払い.cal` と `東京の営業日.cal`）はそのランナーでも全部の行を突き合わせる（計画には無かった。日本語のメッセージの文字列が構文を壊していないことを確かめるため）。この行は `compared` ではなく `<出力先> --lang ja: … agrees on its <n> lines` と出す。
 - C.8：tsc は TypeScript 7.0.2 で、`--erasableSyntaxOnly` も付けて、型を剥がすだけで走る形を確かめる。mypy の venv は、作者の機械では作業場所に作り、`KOYOMI_MYPY` で渡した（`tools/.venv` に作れば何も渡さずに見つかる）。
-- C.9：`fetch` は、引いている条に加えて固定している条も取る（固定だけが残った条（W102）の写しも、check が読むため）。`pin` は、引いているのに固定の行が無い条（E111）に、固定の行を足す。`KOYOMI_NET=1` でないときの本物への問い合わせは、`SKIP:` ではなく `not asked:` の行を出す（ツールが無いのではなく、通信しないことを既定にしているから）。本物の内閣府、GOV.UK、e-Gov には C の段階で一度だけ問い合わせた（DESIGN 9 章）。
+- C.9：`fetch` は、引いている条に加えて固定している条も取る（固定だけが残った条（W102）のコピーも、check が読むため）。`pin` は、引いているのに固定の行が無い条（E111）に、固定の行を足す。`KOYOMI_NET=1` でないときの本物への問い合わせは、`SKIP:` ではなく `not asked:` の行を出す（ツールが無いのではなく、通信しないことを既定にしているから）。本物の内閣府、GOV.UK、e-Gov には C の段階で一度だけ問い合わせた（DESIGN 9 章）。
 
 ## 4. 段階 D：doc、例、README、スキル
 
 ### D.1 doc（`src/doc/`）
 
 - DESIGN 7 章のとおり、Markdown と HTML（`--format html`）。HTML は一枚で外のファイルを読まず、明るい配色と暗い配色（`prefers-color-scheme`）を持つ。
-- 言い直しは `src/paraphrase.rs` からだけ作る（B で書いたもの）。法令を引いている日付・操作・条件には、写しの本文（B.5 のタグを落とす関数）と、時点と版（`revision.txt`）を添える。HTML では `<blockquote>`。
+- 言い直しは `src/paraphrase.rs` からだけ作る（B で書いたもの）。法令を引いている日付・操作・条件には、コピーの本文（B.5 のタグを落とす関数）と、時点と版（`revision.txt`）を添える。HTML では `<blockquote>`。
 - エッジケースの選び方（`src/doc/edges.rs`）と月の表（`src/doc/months.rs`）は DESIGN 7 章のとおり。今日の日付を使わない。
 - 検査を通らないファイルの扱い（E301〜E303 だけならページを作って光らせ、ほかのエラーなら作らない）。
 - CLI の表に `doc` を足す（`--months`）。
-- テスト（`tests/doc.rs`）：例ごとの Markdown を英語と日本語の golden で比べる。HTML は、外の URL を読まないこと、成り立たない日の印の数が検査の数と合うこと、どの祝日の名前も写しの表にあること、どの言い直しの文も `paraphrase.rs` の表にあること。Chrome があれば、`支払_月末締め翌々月末払い.cal` のページの明るい配色と暗い配色のスクリーンショットを撮り（時間を区切って kill する）、README に使う（`docs/images/`）。無ければ SKIP。
+- テスト（`tests/doc.rs`）：例ごとの Markdown を英語と日本語の golden で比べる。HTML は、外の URL を読まないこと、成り立たない日の印の数が検査の数と合うこと、どの祝日の名前も、コピーした表にあること、どの言い直しの文も `paraphrase.rs` の表にあること。Chrome があれば、`支払_月末締め翌々月末払い.cal` のページの明るい配色と暗い配色のスクリーンショットを撮り（時間を区切って kill する）、README に使う（`docs/images/`）。無ければ SKIP。
 
 ### D.2 例
 
@@ -338,19 +338,19 @@ C.1〜C.10 を書いた順に作り、C.10 の条件を全部満たした（2026
 ### D.4 README.md と README.ja.md
 
 - README.md（英語）：rulec の README の並びにならう。看板（DESIGN 0.1）、何か、`.cal` の例（英語の版）、わざと破る例の診断（本物の出力）、生成したコード（本物の抜き出し）、確かめることと確かめないこと（DESIGN 3.4）、入れ方（`cargo install --path .`）、コマンド、例の一覧、どう確かめているか（突き合わせと SKIP）、承認する人のページ（スクリーンショット）、DESIGN.md への案内、ライセンス。
-- README.ja.md：英語の写しではなく、普通の日本語で一から書く。例は日本語の版。
-- どちらも、法令に触れる例について DESIGN 10 章の断りを書く。
+- README.ja.md：英語の訳ではなく、普通の日本語で一から書く。例は日本語の版。
+- どちらも、法令に触れる例について DESIGN 10 章の注意書きを書く。
 
 ### D.5 スキル（`skills/koyomi/`）
 
 - dandori の `skills/dandori` を手本にする。`SKILL.md` は手で書く（frontmatter に name、description、compatibility、license。いつ使うか、ループ（書く → check → 直す → eval → doc で人に見せる → gen）、言語の一ページ、人に聞くこと（無い日の扱い、どの休みのカレンダーか、法令の読み方、範囲）、診断から直し方、出力先）。
-- ほかのファイルは `skills/sync.sh` が `docs/` から写す（リンクはスキルのディレクトリの外へ出ないように書き換える）。`skills/README.md` に入れ方。
-- テスト（`tests/skill.rs`）：sync.sh を一時ディレクトリに走らせて写しと同じか、スキルの中のリンクが外へ出ないか、frontmatter。
+- ほかのファイルは `skills/sync.sh` が `docs/` からコピーする（リンクはスキルのディレクトリの外へ出ないように書き換える）。`skills/README.md` に入れ方。
+- テスト（`tests/skill.rs`）：sync.sh を一時ディレクトリに走らせた結果が、スキルに置いたコピーと同じか、スキルの中のリンクが外へ出ないか、frontmatter。
 
 ### D.6 ライセンスと出典
 
 - ライセンスは作者が決めた（2026-10-03）。rulec と dandori と同じ MIT OR Apache-2.0 で、LICENSE-MIT と LICENSE-APACHE を置き、`Cargo.toml` の `license`、README の「ライセンス」の節、スキルの frontmatter にも書く。決まるまでは、どれも置かずにいた。
-- `THIRD_PARTY_NOTICES.md`：内閣府の祝日の CSV（公共データ利用規約（第1.0版）、出典の書き方）、GOV.UK の bank holidays（Open Government Licence v3.0）、WHATWG の `index-jis0208.txt` から作った表（CC BY 4.0）、e-Gov から取った民法の条文の写し（e-Gov の利用規約をこの段階で読み、書き方を決める。dandori の THIRD_PARTY_NOTICES.md の書き方にそろえる）。
+- `THIRD_PARTY_NOTICES.md`：内閣府の祝日の CSV（公共データ利用規約（第1.0版）、出典の書き方）、GOV.UK の bank holidays（Open Government Licence v3.0）、WHATWG の `index-jis0208.txt` から作った表（CC BY 4.0）、e-Gov から取った民法の条文のコピー（e-Gov の利用規約をこの段階で読み、書き方を決める。dandori の THIRD_PARTY_NOTICES.md の書き方にそろえる）。
 
 ### D.7 D の完了の条件
 
@@ -370,11 +370,11 @@ D.1〜D.7 を書いた順に作り、D.7 の条件を全部満たした（2026-1
 - D.1：ページは一度ブロックの並び（`Page`）に組み、Markdown と HTML はそれを書き出すだけにした（DESIGN 7 章）。月の表は月曜から始める。エッジケースの日数のいちばん多い入力と少ない入力は、ほかの日付の始まりにならない日付（結果）に限り、同じ入力で同じ日数の日付はまとめて言う（DESIGN 7.3）。24 か月を超える dates のファイルでは、エッジケースの入力の月に加えて、エッジケースの計算した日付の月も出す（DESIGN 7.2）。表を読まないカレンダーは `--months` を書いたときだけ月の表を出す。
 - D.1：`koyomi doc` は、条件が成り立たなくてもページを出せば exit 0、ページを作れないときは診断を標準エラーに出して exit 1（DESIGN 7.4）。`--format` は `markdown|html`（既定は markdown）。
 - D.1：法令の条文は、`xml_text`（文ごとに一行。`source outdated` が比べる）ではなく、項ごとに一行の `sources::article_lines` で引く（DESIGN 7.5）。
-- D.1：スクリーンショットは、ヘッドレスの Chrome がフラグで暗い配色に替わらなかったので、ページの写しの `<html>` に `data-theme` を書いて撮る。わざと破る二つの例（英語の版と日本語の版）の、ページの先頭（明るい配色）と月の表（暗い配色）の四枚を `docs/images/` に置いた。
+- D.1：スクリーンショットは、ヘッドレスの Chrome がフラグで暗い配色に替わらなかったので、ページをコピーし、その `<html>` に `data-theme` を書いて撮る。わざと破る二つの例（英語の版と日本語の版）の、ページの先頭（明るい配色）と月の表（暗い配色）の四枚を `docs/images/` に置いた。
 - D.2：例の行末のコメントを、支払の例は支払条件の言葉、民法の例は条文の言葉か読み方の名前にした。英語の版の日付の名前は、日本語の版の別名と同じにした（生成した関数の名前が同じになる）。生成したコードの説明は、名前が別名と同じときは別名を繰り返さないようにした（`Gives payment.`。`codegen::named`）。
 - D.3：README と `docs/` とスキルの `.cal` の塊は、`examples/` か `tests/` の `.cal` の行でなければならない（`…` で切ってよい）。コマンドの塊は、出力を載せたものだけを走らせて比べ、出力の無い一覧は、コマンドの名前があることだけを確かめる。比べた行の数は、テストが走らせる vectors の行の数を、行を作らずに数えて確かめる（`tests/docs.rs`）。DESIGN の ```` ```markdown ```` の塊も、`tests/design.rs` がページの golden の抜き出しかを確かめる。
 - D.5：スキルの frontmatter の `license` は、作者がライセンスを決めるまで書かなかった。決まったあと（2026-10-03）に MIT OR Apache-2.0 と書き、`tests/skill.rs` は、それが `Cargo.toml` と同じであることを確かめる。
-- D.6：WHATWG の索引は CC BY 4.0 だが、ソースコードに取り込んだ部分は BSD 3-Clause License になる、と Encoding Standard が書いているので、`src/sjis_table.rs` の頭（`tools/sjis/make_table.py` が書く）と THIRD_PARTY_NOTICES.md をそう書いた。頭の文を書き換えるため、索引を作業場所に一度取り、スクリプトで表を作り直して、表の中身が一字も変わらないことを確かめた（索引はリポジトリに置かない）。データの写し（内閣府、GOV.UK、e-Gov）は取り直していない。
+- D.6：WHATWG の索引は CC BY 4.0 だが、ソースコードに取り込んだ部分は BSD 3-Clause License になる、と Encoding Standard が書いているので、`src/sjis_table.rs` の頭（`tools/sjis/make_table.py` が書く）と THIRD_PARTY_NOTICES.md をそう書いた。頭の文を書き換えるため、索引を作業場所に一度取り、スクリプトで表を作り直して、表の中身が一字も変わらないことを確かめた（索引はリポジトリに置かない）。データのコピー（内閣府、GOV.UK、e-Gov）は取り直していない。
 
 D の終わりの実行：`cargo test -- --nocapture` は 99 のテスト（`tests/` の 16 のファイルと、ライブラリの中のテスト）が通り、SKIP は 0（`not asked:` が一行。`KOYOMI_NET=1` でないので本物の内閣府、GOV.UK、e-Gov には問い合わせない）。`compared` の行は 75（五つの出力先 × 15 のファイル）で、出力先ごとに 5,341,318 行、合わせて 26,706,590 行を突き合わせた。全体は 40 秒。Chrome のスクリーンショットも撮れた（`KOYOMI_CHROME`）。
 
@@ -392,14 +392,14 @@ D の終わりの実行：`cargo test -- --nocapture` は 99 のテスト（`tes
 
 - 生成したコードの本物の抜き出しは、`koyomi::codegen::unit_of` と `koyomi::codegen::files` で作れる。DESIGN の ```` ```ts ```` などの塊は、`tests/design.rs` が生成物の抜き出しかを確かめる（D の docs/ と README の塊にも、同じ確かめを広げられる）。```` ```jsonl ```` の行は vectors の行かを確かめる。
 - `koyomi gen` の既定の書き出し先は `generated/`（`.gitignore` に入れた）。README の例を書くときに、リポジトリの中に生成物を残さない。
-- D.3 の `docs/generated-code.md` には、DESIGN 6.1 と 6.2 の事実（ファイルの名前、関数の名前と署名、エラーの四つの種類、ランナーの形、出力先ごとのツール）を使う。言い回しは DESIGN から写さない。
+- D.3 の `docs/generated-code.md` には、DESIGN 6.1 と 6.2 の事実（ファイルの名前、関数の名前と署名、エラーの四つの種類、ランナーの形、出力先ごとのツール）を使う。言い回しは DESIGN から借りない。
 - 突き合わせのテストが要るツールの場所は、環境変数で渡せる：`KOYOMI_TSC`（無ければ `tools/node_modules/.bin/tsc`）、`KOYOMI_MYPY`（無ければ `tools/.venv/bin/mypy`）、`KOYOMI_PG_BIN`、`KOYOMI_PG_SOCKET_DIR`、`KOYOMI_EGOV`（e-Gov の場所）、`KOYOMI_NET=1`（本物に問い合わせる）。README の「どう確かめているか」には、DESIGN 6.4 の表の数を `cargo test -- --nocapture` で取り直して貼る。
 - `tests/cli.rs` の「まだ無いコマンド」は `doc` だけになった。D で `doc` を表に足したら消す。
 - `koyomi source outdated` の本物への問い合わせの出力は DESIGN 9 章にある（2026-10-03）。README に載せるなら取り直さず、その日付のものとして引く。
 
 ### 5.2 B から C へ（B の段階で書いた）
 
-- 意味の原本は `src/interp.rs`。`apply`（一つの操作）、`run`（一つの入力のすべての日付）、`trace`（計算の段つき）、`time`（`at` の時刻。ローカルの形と `Z` の形）。生成物の小さな関数は、`src/date.rs` と `src/calendar.rs`（`roll`、`add_business`、`is_open`）の手順を写す。
+- 意味の原本は `src/interp.rs`。`apply`（一つの操作）、`run`（一つの入力のすべての日付）、`trace`（計算の段つき）、`time`（`at` の時刻。ローカルの形と `Z` の形）。生成物の小さな関数は、`src/date.rs` と `src/calendar.rs`（`roll`、`add_business`、`is_open`）の手順を移植する。
 - 入力を回す順は `check::Inputs`（整数の入力が外側で、最後に宣言したものがいちばん速く回り、日付が内側）。vectors もこの順に出すと、`check` の報告と行が対応する。
 - エラーの種類（C.1）と参照インタプリタの対応：入力が範囲の外 → `range`、`interp::OpFail::Outside` → `data`、`OpFail::Missing` → `reject`、`OpFail::OutOfRange` → `date`。`api` の `wire.errors` がこの四つを言っている。
 - 名前と署名は `src/naming.rs`（`Target::signature`、`Target::is_open`、`Target::file`、`Target::module`）。`api` はもうこれを使っているので、生成器が同じ関数を使えば C.8 の「api の署名が生成物の中に一字一句ある」が通る。`is_open` の引数は `day`。
@@ -412,5 +412,5 @@ D の終わりの実行：`cargo test -- --nocapture` は 99 のテスト（`tes
 ### 5.3 A から B へ（A の段階で書いた）
 
 - DESIGN の数は、A の段階の試作で出した。B の参照インタプリタが違う数を出したら、まず DESIGN 2.2 の定義に照らす。試作は `close day`、`roll`、営業日の数え方、民法の書き方を DESIGN と同じに実装していたが、`+ 0 business days` は試作ではその日のままにしていた（例では使わないので数に影響しない）。
-- 祝日の表の写し（`examples/calendars/data/`）と民法の写し（`examples/sources/law/`）は A の段階で取ったものを使い、取り直さない（B.5）。
+- 祝日の表のコピー（`examples/calendars/data/`）と民法のコピー（`examples/sources/law/`）は A の段階で取ったものを使い、取り直さない（B.5）。
 - 作者が決めるべきだったかもしれないこと（A の報告で挙げたもの）：看板の言い方、ファイルの見出しの語（`calendar` と `dates`）、`+ 0 business days` を寄せること、日付の入力を一つに限ること、ライセンス（2026-10-03 に MIT OR Apache-2.0 に決まった）。作者の返事で変わったら、DESIGN と、この計画の該当の項を直してから進める。

@@ -1,4 +1,4 @@
-エラー[E103]: tests/mutants/E103_pin_differs.cal:4:8: 出典「company_holidays」の写しが固定と違います（固定は sha256:538b3482c28b85ec、写しは sha256:86cb32774217a66f）
+エラー[E103]: tests/mutants/E103_pin_differs.cal:4:8: 出典「company_holidays」のコピーが固定と違います（固定は sha256:538b3482c28b85ec、コピーは sha256:86cb32774217a66f）
      4 | source company_holidays = file "../fixtures/data/holidays.en.csv" sha256:538b3482c28b85ec
-  = 固定したあとで写しが変わりました。何が変わったかを読んでから（`koyomi source outdated`）、固定を書き換えてください。
+  = 固定したあとでコピーが変わりました。何が変わったかを読んでから（`koyomi source outdated`）、固定を書き換えてください。
   = 直した行: source company_holidays = file "../fixtures/data/holidays.en.csv" sha256:86cb32774217a66f

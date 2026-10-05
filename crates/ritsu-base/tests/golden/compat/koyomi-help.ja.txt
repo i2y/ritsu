@@ -9,7 +9,7 @@ koyomi 0.1.0
   koyomi vectors <file.cal>                    範囲のすべての入力について、参照インタプリタの結果を JSON Lines で出す（範囲の両端の外の行も）
   koyomi doc <file.cal>                        承認する人（経理、法務、会社のカレンダーを決める人）が読むページを出す。Markdown か、一枚の HTML
   koyomi api <file.cal>                        関数・引数・カレンダー・データの範囲・出典のハッシュを JSON で出す（ほかのツールが読む形）
-  koyomi source fetch|pin|outdated <file.cal>  出典の写しを扱う。fetch は写しを取ってきて .cal の隣に置き、pin は写しのハッシュを .cal に書き、outdated は元が変わったかを問う
+  koyomi source fetch|pin|outdated <file.cal>  出典のコピーを扱う。fetch は出典を取ってきて .cal の隣に保存し、pin はコピーのハッシュを .cal に書き、outdated は元が変わったかを問う
   koyomi explain <CODE>                        診断のコードを引く。いつ出るか、どう直すか、最小の再現
 
 一つのコマンドの詳しい説明は `koyomi <cmd> --help`（`koyomi help <cmd>` も同じ）。

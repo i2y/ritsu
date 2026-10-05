@@ -216,7 +216,7 @@ inputs
 outputs
   利用料(fee) : money[USDc, excl_tax]  round half_up(1USDc)
 
-# 単価は百万トークンあたり。ページの表をそのまま写している。
+# 単価は百万トークンあたり。ページの表をそのまま転記している。
 table 単価表(unit_price)
 policy unique
 | モデル     | 種類                | -> 単価(price) : money[USDc, excl_tax] |
@@ -398,7 +398,7 @@ elements 明細(lines)
   金額(amount) : money[円]  range >=0円 <=100000円
 
 # 歩いたあとに残るのは合計だけ。範囲は完全性の全体集合であり、走っている途中の合計が
-# ここを出た時点で入口が断る境目でもある
+# ここを出た時点で入口が受け付けなくなる境目でもある
 sum 合計(total) over 明細 of 金額  range >=0円 <=1000000円
 
 outputs

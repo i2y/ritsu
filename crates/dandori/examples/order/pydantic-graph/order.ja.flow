@@ -29,15 +29,15 @@ task 注文を見る(id: string, expand: string) -> 注文
 task 出荷を頼む(id: string, 便: 急ぎ.便) -> 注文
   http POST "https://warehouse.example.com/v1/orders/{id}/shipments"
   sends 出荷
-  errors 断られた = 409
-  refused as 断られた
+  errors 拒否された = 409
+  refused as 拒否された
   key
 
 task 取消を頼む(id: string) -> 注文
   http POST "https://warehouse.example.com/v1/orders/{id}/cancellations"
   sends 取消依頼
-  errors 断られた = 409
-  refused as 断られた
+  errors 拒否された = 409
+  refused as 拒否された
   key
 
 # お店の通知サービス。自分で書くコードから呼ぶ。
@@ -70,14 +70,14 @@ flow
   match 受注.状態
     受付 =>
       受注 <- 取消を頼む(id: 受注.id)
-        on 断られた => pass
+        on 拒否された => pass
       fail 未入金 "三日たっても入金がありませんでした"
     取消 => fail 取消済み "取り消された注文です"
     出荷済, 配達済 => fail 既に出荷 "もう出荷されています" leaving 受注
     入金済 => pass
   let 判定 = 急ぎ(会員: 受注.会員, 金額: 受注.金額)
   受注 <- 出荷を頼む(id: 受注.id, 便: 判定.便)
-    on 断られた => fail 取消済み "出荷の前に取り消されました"
+    on 拒否された => fail 取消済み "出荷の前に取り消されました"
   match 判定.急ぎ
     true => let 出荷の控え = 知らせる(注文ID: 受注.id, 本文: "翌日便で出荷しました")
     false => pass

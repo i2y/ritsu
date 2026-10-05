@@ -15,14 +15,14 @@ billing/payment_terms.cal: ok — 3 つの条件が、received 2026-01-01〜2027
 calendars/tokyo_business_days.cal: ok — カレンダー tokyo_business_days。表 national_holidays 1,067 行、データの範囲 1955-01-01〜2027-12-31
 delivery/ship_date.cal: ok — 2 つの条件が、ordered 2026-01-01〜2027-12-20 の 719 日のすべてで成り立ちます
 inventory/inventory.book: ok
-  receive.do    断られうる理由: key_conflict
-  reserve.hold  断られうる理由: out_of_stock（stock(sku) at least 0）、key_conflict、already_refused
-  reserve.post  断られうる理由: key_conflict、already_voided、expired、over_hold、no_such_hold
-  reserve.void  断られうる理由: already_posted、expired、no_such_hold
-  take_back.do  断られうる理由: key_conflict
-  キー: receive は、delivery と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で断られます。
-  キー: reserve は、order と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で断られます。仮押さえが終わったあとに同じキーでもう一度押さえると、done_before が返り、何も押さえません。
-  キー: take_back は、return_id と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で断られます。
+  receive.do    拒否されうる理由: key_conflict
+  reserve.hold  拒否されうる理由: out_of_stock（stock(sku) at least 0）、key_conflict、already_refused
+  reserve.post  拒否されうる理由: key_conflict、already_voided、expired、over_hold、no_such_hold
+  reserve.void  拒否されうる理由: already_posted、expired、no_such_hold
+  take_back.do  拒否されうる理由: key_conflict
+  キー: receive は、delivery と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: reserve は、order と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。仮押さえが終わったあとに同じキーでもう一度押さえると、done_before が返り、何も押さえません。
+  キー: take_back は、return_id と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。
 delivery/arrange_delivery.flow: 検査を通りました
 ordering/fulfillment.flow: 検査を通りました
 エラー[sakai E105]: billing/rules/billing_need.rule:5:1: billing/rules/billing_need.rule が rulec の検査を通らないか、読めません

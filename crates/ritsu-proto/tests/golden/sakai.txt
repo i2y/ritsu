@@ -1581,7 +1581,7 @@ syntax proto3
 package kernel
 message Days 6
   field count 1 None Scalar("int64") json=None oneof=None line=7
-== tests/mutants/E308_写しの中身が違う/proto/contracts/kernel/units.proto
+== tests/mutants/E308_コピーの中身が違う/proto/contracts/kernel/units.proto
 syntax proto3
 package kernel
 message Days 6
@@ -1915,7 +1915,7 @@ tests/mutants/E206_reference_to_a_separate_ways_partner/proto/audit/v1/record.pr
 tests/mutants/E206_別々の道の相手を参照/proto/audit/v1/record.proto sees 
   Record.estimate: unknown
 tests/mutants/E308_copies_differ/proto/contracts/kernel/units.proto sees 
-tests/mutants/E308_写しの中身が違う/proto/contracts/kernel/units.proto sees 
+tests/mutants/E308_コピーの中身が違う/proto/contracts/kernel/units.proto sees 
 tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto sees 
   Order.status: shop.ordering.v1.OrderStatus (tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto, enum)
   GetOrderResponse.order: shop.ordering.v1.Order (tests/mutants/E401_value_added_to_the_order_status/proto/shop/ordering/v1/order.proto)

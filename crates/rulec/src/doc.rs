@@ -282,7 +282,7 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
             let shown = d.shown();
             let listed = if shown.len() <= 24 { shown.join(", ") } else { format!("{}, …, {}", shown[..3].join(", "), shown[shown.len() - 1]) };
             note.push(tr!(
-                "`{from}` がとる日だけ（{} 日: {listed}）。`rulec check` は表をこの日についてだけ確かめ、ほかの日は生成コードが入口で断ります",
+                "`{from}` がとる日だけ（{} 日: {listed}）。`rulec check` は表をこの日についてだけ確かめ、ほかの日は生成コードが入口で受け付けません",
                 "Only the days `{from}` comes to ({} days: {listed}). The tables are checked over these days; the generated code refuses any other day at its door",
                 shown.len()
             ));
@@ -457,7 +457,7 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
     if !f.constraints.is_empty() {
         o.push_str(&tr!("\n## 起きない組み合わせ\n\n", "\n## Combinations that do not happen\n\n"));
         o.push_str(&tr!(
-            "呼び出し側が保証する、入力どうしの関係です。**検査はこれを信じて、満たさない組み合わせには行を要求していません。** 生成コードは、満たさない入力を入口で断ります。\n\n",
+            "呼び出し側が保証する、入力どうしの関係です。**検査はこれを信じて、満たさない組み合わせには行を要求していません。** 生成コードは、満たさない入力を入口で受け付けません。\n\n",
             "Relations between inputs that the caller guarantees. **The checks believed them and demanded no row for the combinations they exclude**, and the generated code refuses such an input at the door.\n\n"
         ));
         for k in &f.constraints {
@@ -2930,7 +2930,7 @@ fn transcribed(f: &RuleFile, t: &Table, path: &str) -> String {
         return String::new();
     }
     let mut out = tr!(
-        "- この表の金額は、引いた写し（{} {}）に出てくる値です（E116）\n",
+        "- この表の金額は、引いた出典のコピー（{} {}）に出てくる値です（E116）\n",
         "- Every amount in this table is a value the copy it cites ({} {}) shows (E116)\n",
         cite.source,
         frags.join(sep())
@@ -2941,7 +2941,7 @@ fn transcribed(f: &RuleFile, t: &Table, path: &str) -> String {
     let held = crate::sources::boundaries_held(path, d, &frags, t);
     if held > 0 {
         out += &tr!(
-            "- この表の境界 {held} 個は、写しが書いている側と同じです（E119）\n",
+            "- この表の境界 {held} 個は、出典のコピーが書いている側と同じです（E119）\n",
             "- {held} of this table's boundaries fall on the side the copy puts them on (E119)\n"
         );
     }

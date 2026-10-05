@@ -423,7 +423,7 @@ pub fn fail_text(f: &OpFail) -> Text {
     match f {
         OpFail::Missing { y, m, d } => {
             let day = ymd(*y, *m, *d);
-            tr!("{day} は無い日で、`else reject` なので断る", "{day} does not exist, and the line says `else reject`")
+            tr!("{day} は無い日で、`else reject` なのでエラーにする", "{day} does not exist, and the line says `else reject`")
         }
         OpFail::Outside(d) => tr!("{d} が営業日かは、表の外なので分からない", "whether {d} is a business day is outside what the calendar knows"),
         OpFail::OutOfRange => tr!("0001-01-01〜9999-12-31 の外に出る", "it goes outside 0001-01-01..9999-12-31"),

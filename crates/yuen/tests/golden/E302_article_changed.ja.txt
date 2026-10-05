@@ -1,7 +1,7 @@
 エラー[E302]: tests/mutants/E302_article_changed/period_of_months.req:41:3: cfr §1.7 は、2026-10-03 に legal がこのリンクを確かめたあとで変わりました
     41 |   from @cfr "§1.7"
   = cfr §1.7 はいま sha256:4b9dea2a1e492f63 です。確かめたときは sha256:01de176ebe4740d7 でした。
-  条文の変わったところ（写しは tests/mutants/E302_article_changed/sources/law/37-CFR-1@2026-01-01/1.7.xml）:
+  条文の変わったところ（コピーは tests/mutants/E302_article_changed/sources/law/37-CFR-1@2026-01-01/1.7.xml）:
       @@ -1,4 +1,4 @@
         § 1.7 Times for taking action; Expiration on Saturday, Sunday or Federal holiday.
       - (a) Whenever periods of time are specified in this part in days, calendar days are intended. When the day, or the last day fixed by statute or by or under this part for taking any action or paying any fee in the United States Patent and Trademark Office falls on Saturday, Sunday, or on a Federal holiday within the District of Columbia, the action may be taken, or the fee paid, on the next succeeding business day which is not a Saturday, Sunday, or a Federal holiday. See § 90.3 of this chapter for time for appeal or for commencing civil action.

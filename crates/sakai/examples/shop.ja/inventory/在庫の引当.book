@@ -1,4 +1,4 @@
-# 写した元: chobo の examples/inventory/inventory.ja.book（変えていない）
+# コピー元: chobo の examples/inventory/inventory.ja.book（変えていない）
 # 注文のために在庫を押さえる。30 分のうちに出荷するか、キャンセルする
 book 在庫の引当 v1
 description "SKU ごとの在庫。入荷で増え、注文のために 30 分押さえ、出荷で確定し、キャンセルで取り消す。返品は棚に戻す"

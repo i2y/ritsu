@@ -15,14 +15,14 @@ billing/支払条件.cal: ok — 3 つの条件が、受領日 2026-01-01〜2027
 calendars/東京の営業日.cal: ok — カレンダー 東京の営業日。表 祝日 1,067 行、データの範囲 1955-01-01〜2027-12-31
 delivery/出荷日.cal: ok — 2 つの条件が、受注日 2026-01-01〜2027-12-20 の 719 日のすべてで成り立ちます
 inventory/在庫の引当.book: ok
-  入荷.do    断られうる理由: key_conflict
-  引当.hold  断られうる理由: 在庫切れ（在庫(sku) at least 0）、key_conflict、already_refused
-  引当.post  断られうる理由: key_conflict、already_voided、expired、over_hold、no_such_hold
-  引当.void  断られうる理由: already_posted、expired、no_such_hold
-  返品.do    断られうる理由: key_conflict
-  キー: 入荷 は、納品書 と sku の組ごとに一度だけ動きます。キーが同じで 数 が違う二度目の呼び出しは、key_conflict で断られます。
-  キー: 引当 は、注文 と sku の組ごとに一度だけ動きます。キーが同じで 数 が違う二度目の呼び出しは、key_conflict で断られます。仮押さえが終わったあとに同じキーでもう一度押さえると、done_before が返り、何も押さえません。
-  キー: 返品 は、返品番号 と sku の組ごとに一度だけ動きます。キーが同じで 数 が違う二度目の呼び出しは、key_conflict で断られます。
+  入荷.do    拒否されうる理由: key_conflict
+  引当.hold  拒否されうる理由: 在庫切れ（在庫(sku) at least 0）、key_conflict、already_refused
+  引当.post  拒否されうる理由: key_conflict、already_voided、expired、over_hold、no_such_hold
+  引当.void  拒否されうる理由: already_posted、expired、no_such_hold
+  返品.do    拒否されうる理由: key_conflict
+  キー: 入荷 は、納品書 と sku の組ごとに一度だけ動きます。キーが同じで 数 が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: 引当 は、注文 と sku の組ごとに一度だけ動きます。キーが同じで 数 が違う二度目の呼び出しは、key_conflict で拒否されます。仮押さえが終わったあとに同じキーでもう一度押さえると、done_before が返り、何も押さえません。
+  キー: 返品 は、返品番号 と sku の組ごとに一度だけ動きます。キーが同じで 数 が違う二度目の呼び出しは、key_conflict で拒否されます。
 delivery/配送の手配.flow: 検査を通りました
 ordering/受注.flow: 検査を通りました
 エラー[sakai E105]: billing/rules/請求の要否.rule:5:1: billing/rules/請求の要否.rule が rulec の検査を通らないか、読めません

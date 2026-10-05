@@ -32,7 +32,7 @@ outputs
 
 最初の行で、ワークフローの名前とバージョンを決めます（`workflow hotel_stay v1`）。Temporal では、バージョンがワークフローの型とタスクキューの名前（`hotel_stay_v1`）に入ります。そのため新しいバージョンは古いバージョンと並んで動き、走っている実行のコードが入れ替わることはありません。ワークフローの入口を `.proto` のサービスとして書いたときは、この行に続けて `implements <API>.<サービス>` と書きます（[サービスを実装する](services.md)）。
 
-`use rule` は [rulec](https://github.com/i2y/ritsu/tree/main/crates/rulec) で書いた規則を読みます。`hold` は与信の額と、フロントが先に見るかどうかを決める規則です。もう一つの `payment_intent` には、Stripe の PaymentIntent を rulec のステートマシンとして書き写してあります。規則の列挙とレコードは、ここでそのまま型として使えます（`hold.room`）。規則は、rulec が書く Connect のサービスとして呼ぶこともできます（[規則をサービスとして呼ぶ](tasks.md#規則をサービスとして呼ぶ)）。
+`use rule` は [rulec](https://github.com/i2y/ritsu/tree/main/crates/rulec) で書いた規則を読みます。`hold` は与信の額と、フロントが先に見るかどうかを決める規則です。もう一つの `payment_intent` には、Stripe の文書から PaymentIntent の状態の変わり方を、rulec のステートマシンとして転記してあります。規則の列挙とレコードは、ここでそのまま型として使えます（`hold.room`）。規則は、rulec が書く Connect のサービスとして呼ぶこともできます（[規則をサービスとして呼ぶ](tasks.md#規則をサービスとして呼ぶ)）。
 
 `use openapi` は API の記述を読みます。その API を呼ぶタスクは、記述と合っているかを検査されます（[API の記述](tasks.md#api-の記述)）。`inputs` と `outputs` は、一回の実行が受け取るものと返すものです。
 
@@ -143,7 +143,7 @@ on failure
     processing => fail SettlementUnclear "Failed in the middle of the capture; handing it over to staff" leaving pi
 ```
 
-Stripe が取消を断ったときは、失敗したように見えた売上の確定が、実は通っているかもしれません。`pi` のレコードは `requires_capture` のままでも、Stripe の側では `processing` になっていることがあります。検査は、ワークフローが最後に聞いた案件の状態と、案件が実際にいるかもしれない状態の両方を持っています。そのため、ここを `on unexpected_state => pass` にすると、`pi` が `processing` のまま失敗しうると言います（E020）。そこで、断られたら担当者に引き渡します（`leaving pi`）。
+Stripe が取消を拒否したときは、失敗したように見えた売上の確定が、実は通っているかもしれません。`pi` のレコードは `requires_capture` のままでも、Stripe の側では `processing` になっていることがあります。検査は、ワークフローが最後に聞いた案件の状態と、案件が実際にいるかもしれない状態の両方を持っています。そのため、ここを `on unexpected_state => pass` にすると、`pi` が `processing` のまま失敗しうると言います（E020）。そこで、拒否されたら担当者に引き渡します（`leaving pi`）。
 
 タスクが失敗し、そのエラーをどこでも処理しなかったときは、`on failure` が走って案件を片付けます。そのあと実行は同じエラーで失敗します。
 

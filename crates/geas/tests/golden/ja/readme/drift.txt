@@ -3,14 +3,14 @@ $ geas snap examples/greeter/greeter.ja.geas --lang ja
 $ cp examples/greeter/server_refactored.py examples/greeter/server.py
 $ geas check examples/greeter/greeter.ja.geas --lang ja
 ok 1 - 名前で挨拶する
-ok 2 - 空の名前は断る
+ok 2 - 空の名前は受け付けない
 ok 3 - 足した数が積み上がる
 ok 4 - 知らないパスには 404 を返す
 主張 4 件 · 成り立った 4 件 · 成り立たなかった 0 件 · ジャーナル: examples/greeter/.geas/greeter.ja.journal.jsonl
 $ geas drift examples/greeter/greeter.ja.geas --lang ja
 主張 "名前で挨拶する" の when#1 api.get("/greet?name=Alice")
   + body json ".debug": 現れた: {"handler":"greet_v2"}   [主張なし]
-主張 "空の名前は断る" の when#1 api.get("/greet?name=")
+主張 "空の名前は受け付けない" の when#1 api.get("/greet?name=")
   ~ header `content-type`: "text/plain" → "text/plain; charset=utf-8"   [主張なし]
 主張 "足した数が積み上がる" の when#1 api.post("/reset")
   ~ header `content-type`: "text/plain" → "text/plain; charset=utf-8"   [主張なし]

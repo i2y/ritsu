@@ -116,7 +116,7 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                         .rel(&f.file.rel)
                         .note(from)
                         .note(tr!(
-                            "chobo が受け取る額は、単位のいちばん小さい刻みで 0 から 9223372036854775807 までです。それ以外の額の呼び出しは、断られるのではなく失敗します。",
+                            "chobo が受け取る額は、単位のいちばん小さい刻みで 0 から 9223372036854775807 までです。それ以外の額の呼び出しは、拒否されるのではなく失敗します。",
                             "chobo takes an amount from 0 to 9223372036854775807 in the unit's smallest step, and a call with any other fails rather than being refused."
                         ))
                         .note(tr!(
@@ -165,18 +165,18 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                     borders.failed += 1;
                     let reasons = listed(&unmet.unhandled);
                     let mut diag: Diag = Diag::at("E204", &f.file.shown, call.line, 1, tr!(
-                        "帳簿は `{transfer}.{op}` を {reasons} で断ることがありますが、タスク `{task}` はそれを処理していません",
+                        "帳簿は `{transfer}.{op}` を {reasons} で拒否することがありますが、タスク `{task}` はそれを処理していません",
                         "The book can refuse `{transfer}.{op}` with {reasons}, which the task `{task}` does not handle"
                     ))
                     .source(&f.src)
                     .rel(&f.file.rel)
                     .note(tr!(
-                        "額を {lo} から {hi} まで（呼び出しが渡す額の範囲）に限った chobo の探索で、`{transfer}.{op}` が {reasons} で断られる例が見つかりました",
+                        "額を {lo} から {hi} まで（呼び出しが渡す額の範囲）に限った chobo の探索で、`{transfer}.{op}` が {reasons} で拒否される例が見つかりました",
                         "chobo's search, with the amounts held to {lo} to {hi} (the range of the amounts the call gives), finds runs in which `{transfer}.{op}` is refused with {reasons}"
                     ));
                     if !unmet.unfound.is_empty() {
                         let unfound = listed(&unmet.unfound);
-                        diag = diag.note(tr!("タスクが処理する {unfound} で断られる例は、探索で見つかりません", "the search finds no run that is refused with {unfound}, which the task handles"));
+                        diag = diag.note(tr!("タスクが処理する {unfound} で拒否される例は、探索で見つかりません", "the search finds no run that is refused with {unfound}, which the task handles"));
                     }
                     let first = &unmet.unhandled[0];
                     diag = diag.note(tr!(
@@ -188,14 +188,14 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                 Answer::Undecided(why) => {
                     borders.undecided += 1;
                     let diag: Diag = Diag::at("W204", &f.file.shown, call.line, 1, tr!(
-                        "タスク `{task}` が呼ぶ `{transfer}.{op}` を、帳簿がどの理由で断りうるかを決められません",
+                        "タスク `{task}` が呼ぶ `{transfer}.{op}` を、帳簿がどの理由で拒否しうるかを決められません",
                         "Which reasons the book can refuse `{transfer}.{op}` with, as the task `{task}` calls it, cannot be decided"
                     ))
                     .source(&f.src)
                     .rel(&f.file.rel)
                     .note(why)
                     .note(tr!(
-                        "断られれば、その理由はタスクの宣言したエラーとして返ってきます。宣言していない理由なら `failure` です。",
+                        "拒否されれば、その理由はタスクの宣言したエラーとして返ってきます。宣言していない理由なら `failure` です。",
                         "A refusal comes back as the error of the task its reason names; a reason the task does not declare comes back as `failure`."
                     ));
                     out.push(Finding::of(&diag, Some(f.file.rel.clone()), lang));

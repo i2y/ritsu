@@ -1,2 +1,2 @@
-エラー[E104]: tests/mutants/E104_unreadable_shift_jis.cal:4:8: 出典「company_holidays」の写し ../fixtures/data/sjis-broken.csv の 2 行目が読めません: 25 バイト目の 0x81 0x7F は Shift_JIS として読めません
+エラー[E104]: tests/mutants/E104_unreadable_shift_jis.cal:4:8: 出典「company_holidays」のコピー ../fixtures/data/sjis-broken.csv の 2 行目が読めません: 25 バイト目の 0x81 0x7F は Shift_JIS として読めません
      4 | source company_holidays = file "../fixtures/data/sjis-broken.csv" sha256:5b9c45915a5110af

@@ -220,12 +220,12 @@ pub fn ledger() -> Ledger {
         // ── The calendar and the sources ──
         e(
             "E101",
-            tr!("出典の写しがありません", "The copy of a source is not there"),
+            tr!("出典のコピーがありません", "The copy of a source is not there"),
             tr!(
-                "表の出典の `file`、または固定した法令の条の写し（`sources/law/<法令ID>@<日付>/`）が無いとき。check は通信しません。",
+                "表の出典の `file`、または固定した法令の条のコピー（`sources/law/<法令ID>@<日付>/`）が無いとき。check は通信しません。",
                 "The `file` of a table, or the copy of a pinned article of a law (under `sources/law/<law id>@<date>/`), is missing. check never reads the network."
             ),
-            tr!("`koyomi source fetch` で写しを取ってくるか、パスを直してください。", "Take the copy with `koyomi source fetch`, or correct the path."),
+            tr!("`koyomi source fetch` で出典を取ってきて保存するか、パスを直してください。", "Take the copy with `koyomi source fetch`, or correct the path."),
             "calendar t v1\n\nsource 休み = file \"holidays.csv\" sha256:56ebcd2f1e91e0a1\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed 休み\n",
             &["E102", "E103"],
         )
@@ -234,7 +234,7 @@ pub fn ledger() -> Ledger {
             "E102",
             tr!("出典が固定されていません", "A source is not pinned"),
             tr!("表の出典の行か、法令の条の固定の行に `sha256:` が無いとき。", "A table's line, or the pin line of a law's article, has no `sha256:`."),
-            tr!("写しの SHA-256 の先頭 16 桁を `sha256:` で書いてください（直し方に、いまの写しの値を書いた行が出ます）。", "Pin it with the first 16 digits of the copy's SHA-256; the fix gives the line with the copy's own."),
+            tr!("コピーの SHA-256 の先頭 16 桁を `sha256:` で書いてください（直し方に、いまのコピーの値を書いた行が出ます）。", "Pin it with the first 16 digits of the copy's SHA-256; the fix gives the line with the copy's own."),
             "calendar t v1\n\nsource 休み = file \"holidays.csv\"\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed 休み\n",
             &["E101", "E103"],
         )
@@ -242,8 +242,8 @@ pub fn ledger() -> Ledger {
         .english(Repro::File { body: "calendar t v1\n\nsource holidays = file \"holidays.csv\"\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed holidays\n", beside: &[HOLIDAYS_EN] }),
         e(
             "E103",
-            tr!("写しが固定と違います", "A copy does not match its pin"),
-            tr!("写しのバイト列の SHA-256 の先頭 16 桁が、固定した値と違うとき。固定したあとで写しが変わっています。", "The first 16 digits of the copy's SHA-256 differ from the pin: the copy changed after it was pinned."),
+            tr!("コピーが固定と違います", "A copy does not match its pin"),
+            tr!("コピーのバイト列の SHA-256 の先頭 16 桁が、固定した値と違うとき。固定したあとでコピーが変わっています。", "The first 16 digits of the copy's SHA-256 differ from the pin: the copy changed after it was pinned."),
             tr!("何が変わったかを読んでから（`koyomi source outdated`）、固定を書き換えてください。", "Read what changed (`koyomi source outdated`), then pin it again."),
             "calendar t v1\n\nsource 休み = file \"holidays.csv\" sha256:0123456789abcdef\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed 休み\n",
             &["E102"],
@@ -252,9 +252,9 @@ pub fn ledger() -> Ledger {
         .english(Repro::File { body: "calendar t v1\n\nsource holidays = file \"holidays.csv\" sha256:0123456789abcdef\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed holidays\n", beside: &[HOLIDAYS_EN] }),
         e(
             "E104",
-            tr!("写しが読めません", "A copy cannot be read"),
+            tr!("コピーが読めません", "A copy cannot be read"),
             tr!(
-                "写しの文字コードが違うとき（Shift_JIS として読めないバイト、UTF-8 でないバイト）、行の最初の値が日付でないとき、値が多すぎるとき、同じ日付が二度あるとき、JSON として読めないとき、地域が無いとき、行が一つも無いとき。",
+                "コピーの文字コードが違うとき（Shift_JIS として読めないバイト、UTF-8 でないバイト）、行の最初の値が日付でないとき、値が多すぎるとき、同じ日付が二度あるとき、JSON として読めないとき、地域が無いとき、行が一つも無いとき。",
                 "The copy is not in its encoding (bytes Shift_JIS or UTF-8 does not have), a line does not start with a date, has too many values or repeats a date, the JSON cannot be read or lacks the division, or there are no rows."
             ),
             tr!("示された行を直すか、`format` の文字コードを直してください。", "Correct the line it names, or the encoding under `format`."),
@@ -382,7 +382,7 @@ pub fn ledger() -> Ledger {
                 "入力が範囲の中でも、計算の先がカレンダーの表の外に出て、その日が営業日かを問うとき。表はその日を知りません。",
                 "For an input in the range, the computation goes past what the calendar's tables know and asks whether that day is a business day."
             ),
-            tr!("入力の範囲を、直し方に出る範囲まで狭めるか、新しい表が出てから写しを取り直してください。", "Narrow the input's range to the one the fix gives, or take the copy again when a newer table is out."),
+            tr!("入力の範囲を、直し方に出る範囲まで狭めるか、新しい表が出てからコピーを取り直してください。", "Narrow the input's range to the one the fix gives, or take the copy again when a newer table is out."),
             "dates t v1\nuse calendar \"closed_days.cal\"\n\ninputs\n  d : date  range >=2026-12-01 <=2026-12-31\n\ndate x = d\n  + 5 business days\n",
             &["E108"],
         )

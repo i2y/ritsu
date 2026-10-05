@@ -13,8 +13,8 @@ task 注文を見る(id: string) -> 注文
 
 task 取消を頼む(id: string) -> 注文
   sends 取消依頼
-  errors 断られた
-  refused as 断られた
+  errors 拒否された
+  refused as 拒否された
   key
 
 case 受注 : 注文 follows 注文の状態.注文
@@ -34,5 +34,5 @@ on cancel
     none => pass
     受付, 入金済 =>
       受注 <- 取消を頼む(id: 受注.id)
-        on 断られた => pass
+        on 拒否された => pass
     出荷済, 配達済, 取消 => pass

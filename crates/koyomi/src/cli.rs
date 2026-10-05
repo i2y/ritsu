@@ -183,7 +183,7 @@ pub fn commands() -> Vec<Cmd> {
             name: "source",
             args: "fetch|pin|outdated <file.cal>",
             purpose: tr!(
-                "出典の写しを扱う。fetch は写しを取ってきて .cal の隣に置き、pin は写しのハッシュを .cal に書き、outdated は元が変わったかを問う",
+                "出典のコピーを扱う。fetch は出典を取ってきて .cal の隣に保存し、pin はコピーのハッシュを .cal に書き、outdated は元が変わったかを問う",
                 "handle the copies of the sources: fetch brings them beside the .cal, pin writes their digests into it, outdated asks whether the originals moved on"
             ),
             params: vec![

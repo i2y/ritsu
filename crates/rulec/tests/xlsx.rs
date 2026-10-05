@@ -208,7 +208,7 @@ fn 一九〇四年のブックも読める() {
 }
 
 #[test]
-fn xlsxでないファイルは断る() {
+fn xlsxでないファイルはエラーにする() {
     let (_tmp, d) = dir("bad");
     let p = d.join("not.xlsx");
     std::fs::write(&p, b"this is not a zip at all").unwrap();

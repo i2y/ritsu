@@ -1,6 +1,6 @@
 # payment_terms — 要件の出どころ
 
-このページは、下の .req のファイルと、出典の写しと、ほかの言語から読んだ成果物の定義をもとに、yuen 0.23.0 が作った。
+このページは、下の .req のファイルと、出典のコピーと、ほかの言語から読んだ成果物の定義をもとに、yuen 0.23.0 が作った。
 
 - `payment_terms.req`（payment_terms v1、`sha256:7601e66a63843869`）
 
@@ -17,7 +17,7 @@
 
 ### holidays
 
-ファイル `calendars/data/syukujitsu.csv`（元は `https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv`）、固定は `sha256:cec37a743c96995c`。借りた先：`koyomi "calendars/tokyo_business_days.cal" source national_holidays`（写しと固定はそのファイルのもので、その言語の検査が確かめる）。
+ファイル `calendars/data/syukujitsu.csv`（元は `https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv`）、固定は `sha256:cec37a743c96995c`。借りた先：`koyomi "calendars/tokyo_business_days.cal" source national_holidays`（コピーと固定はそのファイルのもので、その言語の検査が確かめる）。
 
 引く要件：`business_days`
 

@@ -87,19 +87,19 @@ golden!(e035_指す先が無い, "E035", "tests/mutants/m_e035.rule", "E035");
 golden!(w117_効かない例外, "W117", "tests/mutants/m_w117.rule", "W117");
 golden!(e046_節の形, "E046", "tests/mutants/m_e046.rule", "E046");
 golden!(e037_固定が無い, "E037", "tests/mutants/m_e037.rule", "E037");
-golden!(e038_写しが変わった, "E038", "tests/mutants/m_e038.rule", "E038");
-golden!(e039_写しが無い, "E039", "tests/mutants/m_e039.rule", "E039");
+golden!(e038_コピーが変わった, "E038", "tests/mutants/m_e038.rule", "E038");
+golden!(e039_コピーが無い, "E039", "tests/mutants/m_e039.rule", "E039");
 golden!(w119_引かれていない固定, "W119", "tests/mutants/m_w119.rule", "W119");
 
 // The rows against the copy they were transcribed from (§15.82).
 golden!(e049_桁区切りのカンマ, "E049", "tests/mutants/m_e049.rule", "E049");
-golden!(e116_写しに無い金額, "E116", "tests/mutants/m_e116.rule", "E116");
-golden!(w120_写し忘れた行, "W120", "tests/mutants/m_w120.rule", "W120");
+golden!(e116_コピーに無い金額, "E116", "tests/mutants/m_e116.rule", "E116");
+golden!(w120_転記し忘れた行, "W120", "tests/mutants/m_w120.rule", "W120");
 golden!(e119_境界の側, "E119", "tests/mutants/m_e119.rule", "E119");
 golden!(e119_列の見出しの側, "E119-col", "tests/mutants/m_e119col.rule", "E119");
 golden!(e120_射影の型, "E120", "tests/mutants/m_e120.rule", "E120");
 golden!(e121_契約に無いパス, "E121", "tests/mutants/m_e121.rule", "E121");
-golden!(e122_契約が通すのに規則が断る, "E122", "tests/mutants/m_e122.rule", "E122");
+golden!(e122_契約が通すのに規則が受け付けない, "E122", "tests/mutants/m_e122.rule", "E122");
 golden!(w123_契約が送らない値でしか当たらない行, "W123", "tests/mutants/m_w123.rule", "W123");
 golden!(e123_契約が制約を約束しない, "E123", "tests/mutants/m_e123.rule", "E123");
 golden!(w124_契約が送らない組み合わせでしか当たらない行, "W124", "tests/mutants/m_w124.rule", "W124");

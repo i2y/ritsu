@@ -1,6 +1,6 @@
 date_of_receipt（tests/fixtures/period_of_months/period_of_months.req:15）持ち主 legal、2026-10-01 から効く
   「Correspondence received in the Patent and Trademark Office is stamped with the date of receipt」
-  出どころ: cfr §1.6（eCFR 37 CFR 1、2026-01-01 時点、写しは tests/fixtures/period_of_months/sources/law/37-CFR-1@2026-01-01/1.6.xml）
+  出どころ: cfr §1.6（eCFR 37 CFR 1、2026-01-01 時点、コピーは tests/fixtures/period_of_months/sources/law/37-CFR-1@2026-01-01/1.6.xml）
     > § 1.6 Receipt of correspondence.
     > (a) Date of receipt and Priority Mail Express® date of deposit. Correspondence received in the Patent and Trademark Office is stamped with the date of receipt except as follows:
     > (1) The Patent and Trademark Office is not open for the filing of correspondence on any day that is a Saturday, Sunday, or Federal holiday within the District of Columbia. Except for correspondence transmitted by facsimile under paragraph (a)(3) of this section, or filed electronically under paragraph (a)(4) of this section, no correspondence is received in the Office on Saturdays, Sundays, or Federal holidays within the District of Columbia.

@@ -1,5 +1,5 @@
 calendar 店の休み(shop_days) v1
-description "お店の事務所が休む日。土曜と日曜、年末年始。書き下ろしの例で、どこかの休みを写したものではない"
+description "お店の事務所が休む日。土曜と日曜、年末年始。書き下ろしの例で、どこかの休みをそのまま使ったものではない"
 
 closed weekly sat, sun
 closed every 12-29..01-03 "年末年始"

@@ -600,7 +600,7 @@ fn render(p: &Project, a: &Answer, lang: Lang) -> String {
         }
     }
     if !a.copies.is_empty() {
-        lines.push(tr!("差分が触る出典の写し:", "copies of sources the diff touches:"));
+        lines.push(tr!("差分が触る出典のコピー:", "copies of sources the diff touches:"));
         for c in &a.copies {
             let shown = p.shown(&c.path);
             let label = &c.label;

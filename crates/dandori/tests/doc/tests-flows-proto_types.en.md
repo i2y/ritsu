@@ -26,7 +26,7 @@ flowchart TD
     s1 -.->|"on 無い注文"| s2
     s1 --> s3
     s3 -->|"paid"| s4
-    s4 -.->|"on 断られた"| s5
+    s4 -.->|"on 拒否された"| s5
     s4 --> s8
     s5 --> s8
     s3 -->|"received, shipped, delivered, cancelled"| s8
@@ -64,7 +64,7 @@ flowchart TD
 | Line | Call | Calls | Retries | Timeout | When it fails | Case after |
 |---:|---|---|---|---|---|---|
 | 51 | `受注 ← 注文を見る(…)` | `connect 注文 OrderService/Get`, `observes`, `idempotent` | — | — | `無い注文` → line 52<br>`timeout`, `failure` → `on failure` | `受注`: `received`, `paid`, `shipped`, `delivered`, `cancelled` |
-| 55 | `受注 ← 出荷を頼む(…)` | `connect 注文 OrderService/Ship`, `sends ship`, `key` | — | — | `断られた` → line 56<br>`timeout`, `failure` → `on failure` | `受注`: `shipped` |
+| 55 | `受注 ← 出荷を頼む(…)` | `connect 注文 OrderService/Ship`, `sends ship`, `key` | — | — | `拒否された` → line 56<br>`timeout`, `failure` → `on failure` | `受注`: `shipped` |
 | 56 | `受注 ← 注文を見る(…)` | `connect 注文 OrderService/Get`, `observes`, `idempotent` | — | — | `無い注文`, `timeout`, `failure` → `on failure` | `受注`: `cancelled` |
 | 59 | `取った = 棚から取る(…)` | `connect 注文 OrderService/Pick`, `key` | 2 times every 1 second (failure, timeout) | — | `timeout`, `failure` → `on failure` | — |
 | 62 | `一言を残す(…)` | `POST https://notes.example.com/notes`, `idempotent` | — | — | `timeout`, `failure` → `on failure` | — |

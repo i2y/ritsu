@@ -40,7 +40,7 @@ const PAIRS: [(&str, &str); 66] = [
     ("E012_出典をリンクに", "E012_source_as_a_link"),
     ("E013_ルートの外", "E013_outside_the_root"),
     ("E013_絶対パス", "E013_absolute_path"),
-    ("E101_写しが無い", "E101_copy_missing"),
+    ("E101_コピーが無い", "E101_copy_missing"),
     ("E102_固定の行にハッシュが無い", "E102_pin_without_a_hash"),
     ("E102_引いた条の固定が無い", "E102_cited_article_not_pinned"),
     ("E103_固定と違う", "E103_pin_differs"),

@@ -4,7 +4,7 @@ Breaks its claims on purpose. It writes the day after of Article 142 of the Civi
 
 - ファイル: `civil_code_two_readings.cal`（dates civil_code_two_readings v1、sha256:51e1c96cb2705bf6）
 - カレンダー: `calendars/civil_code_142_days.cal`（calendar civil_code_142_days v1、sha256:dd534a7343411409）
-- 表: national_holidays = `calendars/data/syukujitsu.csv`（sha256:cec37a743c96995c、https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv の写し、covers 1955-01-01..2027-12-31）
+- 表: national_holidays = `calendars/data/syukujitsu.csv`（sha256:cec37a743c96995c、https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv のコピー、covers 1955-01-01..2027-12-31）
 - 法令: civil_code = e-Gov 法令検索の 129AC0000000089、2026-10-01 時点（版 129AC0000000089_20260624_508AC0000000045）。第140条 sha256:e880059021fbb67d、第141条 sha256:0575c131b9f08063、第142条 sha256:fc8c35a0769d3b35、第143条 sha256:6950bdfb988439b6
 - koyomi: 0.23.0
 
@@ -203,7 +203,7 @@ months_added  2026-03-28（土）  1 か月後の同じ日（month_count = 1。�
 
 ### 出典とデータの範囲
 
-- national_holidays: 1,067 行。https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv の写しを、sha256:cec37a743c96995c で固定しています。休みを全部載せているのは 1955-01-01〜2027-12-31 です。
+- national_holidays: 1,067 行。https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv のコピーを、sha256:cec37a743c96995c で固定しています。休みを全部載せているのは 1955-01-01〜2027-12-31 です。
 
 このカレンダーが休みかどうかを知っているのは 1955-01-01〜2027-12-31 です。その外の日が営業日かを問う計算は、検査でも生成したコードでも止まります。
 

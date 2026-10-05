@@ -39,7 +39,7 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <h1>挨拶 — where the requirements come from</h1>
 <p class="lead">yuen 0.23.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.</p>
 <ul>
-<li><code>greeter.ja.req</code> (挨拶 v1, <code>sha256:cf339bc81c8e313d</code>)</li>
+<li><code>greeter.ja.req</code> (挨拶 v1, <code>sha256:56bec55280e19241</code>)</li>
 </ul>
 <p>The check: <code>examples/greeter/greeter.ja.req: ok — 4 requirements, whose 8 links are as they were looked at; every requirement is met and checked, or waived; the file in scope traces to a requirement</code></p>
 <h2 id="traceability">Traceability</h2>
@@ -47,7 +47,7 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <thead><tr><th>Requirement</th><th>In force</th><th>Comes from</th><th>Owner</th><th>Met by</th><th>Checked by</th><th>State</th></tr></thead>
 <tbody>
 <tr><td><code>名前で挨拶する (greets_by_name)</code></td><td>—</td><td>decided by 窓口 on 2026-10-04</td><td>窓口</td><td><code>file &quot;server.py&quot;</code></td><td><code>geas &quot;greeter.ja.geas&quot; claim 名前で挨拶する</code></td><td>as looked at</td></tr>
-<tr><td><code>空の名前は断る (rejects_an_empty_name)</code></td><td>—</td><td>decided by 窓口 on 2026-10-04</td><td>窓口</td><td><code>file &quot;server.py&quot;</code></td><td><code>geas &quot;greeter.ja.geas&quot; claim 空の名前は断る</code></td><td>as looked at</td></tr>
+<tr><td><code>空の名前は受け付けない (rejects_an_empty_name)</code></td><td>—</td><td>decided by 窓口 on 2026-10-04</td><td>窓口</td><td><code>file &quot;server.py&quot;</code></td><td><code>geas &quot;greeter.ja.geas&quot; claim 空の名前は受け付けない</code></td><td>as looked at</td></tr>
 <tr><td><code>足した数が積み上がる (totals_accumulate)</code></td><td>—</td><td>decided by 窓口 on 2026-10-04</td><td>窓口</td><td><code>file &quot;server.py&quot;</code></td><td><code>geas &quot;greeter.ja.geas&quot; claim 足した数が積み上がる</code></td><td>as looked at</td></tr>
 <tr><td><code>知らないパスは404 (unknown_paths_are_404)</code></td><td>—</td><td>decided by 窓口 on 2026-10-04</td><td>窓口</td><td><code>file &quot;server.py&quot;</code></td><td><code>geas &quot;greeter.ja.geas&quot; claim &quot;知らないパスには 404 を返す&quot;</code></td><td>as looked at</td></tr>
 </tbody>
@@ -66,7 +66,7 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <p>Decided by 窓口 on 2026-10-04: 挨拶には、頼んだ人の名前を入れる。この例のために決めたもの</p>
 <p>Met by <code>file &quot;server.py&quot;</code> — looked at by 開発 on 2026-10-04 (<code>sha256:e87a6fee4807cbad</code> → <code>sha256:331e02e26d128e8c</code>). State: as looked at</p>
 <p>Checked by <code>geas &quot;greeter.ja.geas&quot; claim 名前で挨拶する</code> — looked at by 開発 on 2026-10-04 (<code>sha256:e87a6fee4807cbad</code> → <code>sha256:23771933ab7071aa</code>). State: as looked at</p>
-<h3 id="why-rejects_an_empty_name">空の名前は断る (rejects_an_empty_name)</h3>
+<h3 id="why-rejects_an_empty_name">空の名前は受け付けない (rejects_an_empty_name)</h3>
 <p><strong>名前が空の GET /greet は 400 を返す</strong></p>
 <ul>
 <li>In force: —</li>
@@ -76,7 +76,7 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 </ul>
 <p>Decided by 窓口 on 2026-10-04: 空の名前は呼び出す側の誤りで、挨拶ではない。この例のために決めたもの</p>
 <p>Met by <code>file &quot;server.py&quot;</code> — looked at by 開発 on 2026-10-04 (<code>sha256:2590c87a9ffa99f1</code> → <code>sha256:331e02e26d128e8c</code>). State: as looked at</p>
-<p>Checked by <code>geas &quot;greeter.ja.geas&quot; claim 空の名前は断る</code> — looked at by 開発 on 2026-10-04 (<code>sha256:2590c87a9ffa99f1</code> → <code>sha256:e973e18f878e1f9e</code>). State: as looked at</p>
+<p>Checked by <code>geas &quot;greeter.ja.geas&quot; claim 空の名前は受け付けない</code> — looked at by 開発 on 2026-10-04 (<code>sha256:2590c87a9ffa99f1</code> → <code>sha256:cfde1ffad5721517</code>). State: as looked at</p>
 <h3 id="why-totals_accumulate">足した数が積み上がる (totals_accumulate)</h3>
 <p><strong>POST /add は本文の数を合計に足し、GET /total が合計を返し、POST /reset が合計を 0 に戻す</strong></p>
 <ul>
@@ -107,8 +107,8 @@ blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; 
 <tbody>
 <tr><td class="nw">2026-10-04</td><td>開発</td><td><code>名前で挨拶する (greets_by_name)</code> → <code>file &quot;server.py&quot;</code></td><td><code>sha256:e87a6fee4807cbad -&gt; sha256:331e02e26d128e8c</code></td></tr>
 <tr><td class="nw">2026-10-04</td><td>開発</td><td><code>名前で挨拶する (greets_by_name)</code> → <code>geas &quot;greeter.ja.geas&quot; claim 名前で挨拶する</code></td><td><code>sha256:e87a6fee4807cbad -&gt; sha256:23771933ab7071aa</code></td></tr>
-<tr><td class="nw">2026-10-04</td><td>開発</td><td><code>空の名前は断る (rejects_an_empty_name)</code> → <code>file &quot;server.py&quot;</code></td><td><code>sha256:2590c87a9ffa99f1 -&gt; sha256:331e02e26d128e8c</code></td></tr>
-<tr><td class="nw">2026-10-04</td><td>開発</td><td><code>空の名前は断る (rejects_an_empty_name)</code> → <code>geas &quot;greeter.ja.geas&quot; claim 空の名前は断る</code></td><td><code>sha256:2590c87a9ffa99f1 -&gt; sha256:e973e18f878e1f9e</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>開発</td><td><code>空の名前は受け付けない (rejects_an_empty_name)</code> → <code>file &quot;server.py&quot;</code></td><td><code>sha256:2590c87a9ffa99f1 -&gt; sha256:331e02e26d128e8c</code></td></tr>
+<tr><td class="nw">2026-10-04</td><td>開発</td><td><code>空の名前は受け付けない (rejects_an_empty_name)</code> → <code>geas &quot;greeter.ja.geas&quot; claim 空の名前は受け付けない</code></td><td><code>sha256:2590c87a9ffa99f1 -&gt; sha256:cfde1ffad5721517</code></td></tr>
 <tr><td class="nw">2026-10-04</td><td>開発</td><td><code>足した数が積み上がる (totals_accumulate)</code> → <code>file &quot;server.py&quot;</code></td><td><code>sha256:301f01ea03399fc9 -&gt; sha256:331e02e26d128e8c</code></td></tr>
 <tr><td class="nw">2026-10-04</td><td>開発</td><td><code>足した数が積み上がる (totals_accumulate)</code> → <code>geas &quot;greeter.ja.geas&quot; claim 足した数が積み上がる</code></td><td><code>sha256:301f01ea03399fc9 -&gt; sha256:851003f8a61e8af4</code></td></tr>
 <tr><td class="nw">2026-10-04</td><td>開発</td><td><code>知らないパスは404 (unknown_paths_are_404)</code> → <code>file &quot;server.py&quot;</code></td><td><code>sha256:38b694c45841408b -&gt; sha256:331e02e26d128e8c</code></td></tr>

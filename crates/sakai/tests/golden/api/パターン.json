@@ -5,7 +5,7 @@
     "alias": "patterns",
     "version": "1",
     "file": "パターン.ctx",
-    "source_sha256": "79ae26949d9f9fb8a2e1c69b95b13df3e68c7817e80520c28dc5460370b0058d",
+    "source_sha256": "351f5749b930d5ef8b35dc2190ce38170f5cfb15d3e4274935c50a85e95356c9",
     "description": "料金を決め、見積を出し、契約を結び、知らせ、監査する"
   },
   "covers": [
@@ -71,7 +71,7 @@
       "alias": "quotes",
       "version": "1",
       "file": "ctx/見積.ctx",
-      "source_sha256": "99e0d8a8671be48367841b2032bee79ff63d1fccbe9fb1d652532be27db0eab0",
+      "source_sha256": "61ac9b647ff8b0dfb946121b08ad598952fd596bd4c71ada0a94db4a21e1303b",
       "description": "客に、期限つきの見積を出す",
       "owner": "営業チーム",
       "also": [],
@@ -392,7 +392,7 @@
       },
       "context": "契約",
       "by": "ctx/契約.ctx:6",
-      "sha256": "da5f95d1dce75ba1"
+      "sha256": "400bcf9e2b372e0a"
     },
     {
       "name": {
@@ -436,7 +436,7 @@
       },
       "context": "見積",
       "by": "ctx/見積.ctx:6",
-      "sha256": "da5f95d1dce75ba1"
+      "sha256": "400bcf9e2b372e0a"
     },
     {
       "name": {

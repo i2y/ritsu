@@ -62,7 +62,7 @@ task エージェントが無い(本文: string) -> string
 task 宣言する(本文: string) -> string
   agent "読んでください。"
   model "gpt-5.4-mini"
-  errors 断った
+  errors 拒否した
 
 task 待つ(本文: string) -> string
   agent "読んでください。"

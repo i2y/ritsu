@@ -5,7 +5,7 @@ error[E007]: tests/fixtures/agents.flow:56:3: an agent needs the model it uses; 
 error[E007]: tests/fixtures/agents.flow:60:3: `model` says which model an agent or Jev uses; this task has neither `agent` nor `jev`
     60 |   model "gpt-5.4-mini"
 error[E007]: tests/fixtures/agents.flow:65:10: an agent declares no errors of its own: when the model refuses or the call fails it is `failure`, and past its time `timeout`
-    65 |   errors 断った
+    65 |   errors 拒否した
 error[E007]: tests/fixtures/agents.flow:70:3: a `callback` task hands its token over by `lambda` or by `aws sqs:sendMessage`
     70 |   callback
 error[E007]: tests/fixtures/agents.flow:75:3: an agent changes nothing on the other side, so it takes no `key`

@@ -1577,7 +1577,7 @@ package kernel
 message kernel.Days
   field count json=count ty=Scalar("int64") repeated=false presence=false rules=null
 unread
-== ../sakai/tests/mutants/E308_写しの中身が違う/proto/contracts/kernel/units.proto
+== ../sakai/tests/mutants/E308_コピーの中身が違う/proto/contracts/kernel/units.proto
 package kernel
 message kernel.Days
   field count json=count ty=Scalar("int64") repeated=false presence=false rules=null

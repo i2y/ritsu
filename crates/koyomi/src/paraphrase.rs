@@ -250,7 +250,7 @@ fn short_ja(m: &Model, op: &ROp, vals: &[i64]) -> String {
     let else_ja = |p: &Option<Missing>| match p {
         Some(Missing::EndOfMonth) => Some("無ければ月末".to_string()),
         Some(Missing::StartOfNextMonth) => Some("無ければ次の月の 1 日".to_string()),
-        Some(Missing::Reject) => Some("無ければ断る".to_string()),
+        Some(Missing::Reject) => Some("無ければエラーにする".to_string()),
         _ => None,
     };
     let (base, missing) = match op {

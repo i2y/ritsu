@@ -1,4 +1,4 @@
-# 写した元: koyomi の examples/calendars/東京の営業日.cal と data/syukujitsu.csv（変えていない）
+# コピー元: koyomi の examples/calendars/東京の営業日.cal と data/syukujitsu.csv（変えていない）
 calendar 東京の営業日(tokyo) v1
 description "土日、国民の祝日と休日、12 月 29 日から 1 月 3 日までを休む"
 offset +09:00

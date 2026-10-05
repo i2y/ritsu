@@ -108,7 +108,7 @@ fn helpers(u: &Unit) -> String {
     o.push_str(&format!(
         "// {}\n",
         u.t(tr!(
-            "日付は 1970-01-01 からの通算日で計算する。どの関数も koyomi の date.rs と calendar.rs の同じ名前の手順を写したもの",
+            "日付は 1970-01-01 からの通算日で計算する。どの関数も koyomi の date.rs と calendar.rs の同じ名前の手順を移植したもの",
             "Dates are computed as days since 1970-01-01. Each function follows the procedure of the same name in koyomi's date.rs and calendar.rs"
         ))
     ));

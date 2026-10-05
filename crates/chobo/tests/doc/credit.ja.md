@@ -4,13 +4,13 @@
 
 A pay-later line for each member. It can be used down to minus 50000 yen, and prepaid up to 10000 yen
 
-`chobo doc` が `tests/books/credit.book` から作ったページ。勘定ごとに残高を持ち、残高は入った量から出た量を引いたもの。どの振替も勘定の下限と上限を守り、守れない振替は、その境界に付けた名前で断られて、どの移動も行われない。振替には、すぐに動かすもの（`do`）と、動かす量をまず押さえるもの（`hold`）がある。押さえた分は、あとで確定される（`post`。全部か一部）か、取り消される（`void`）か、有効期限で切れる。
+`chobo doc` が `tests/books/credit.book` から作ったページ。勘定ごとに残高を持ち、残高は入った量から出た量を引いたもの。どの振替も勘定の下限と上限を守り、守れない振替は、その境界に付けた名前で拒否されて、どの移動も行われない。振替には、すぐに動かすもの（`do`）と、動かす量をまず押さえるもの（`hold`）がある。押さえた分は、あとで確定される（`post`。全部か一部）か、取り消される（`void`）か、有効期限で切れる。
 
 ## 勘定
 
 | 勘定 | 分け方 | 単位 | 境界 | 説明 |
 |---|---|---|---|---|
-| `credit` | `member` ごと | JPY | -50000 以上。下回る振替は `over_the_credit_line` で断る<br>10000 以下。超える振替は `over_prepayment` で断る |  |
+| `credit` | `member` ごと | JPY | -50000 以上。下回る振替は `over_the_credit_line` で拒否される<br>10000 以下。超える振替は `over_prepayment` で拒否される |  |
 | `shop` | 一つだけ | JPY | 外の勘定。境界は無く、マイナスにもなる |  |
 | `bank` | 一つだけ | JPY | 外の勘定。境界は無く、マイナスにもなる |  |
 
@@ -32,7 +32,7 @@ flowchart LR
 ### pay_later
 
 - 移動: `credit(member)` から `shop` へ `amount`。
-- キー: `order` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `member`、`amount` のどれかが違う二度目の呼び出しは、`key_conflict` で断られる。仮押さえが終わったあとに同じキーでもう一度押さえると、`done_before` を返し、何も押さえない。
+- キー: `order` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `member`、`amount` のどれかが違う二度目の呼び出しは、`key_conflict` で拒否される。仮押さえが終わったあとに同じキーでもう一度押さえると、`done_before` を返し、何も押さえない。
 - 仮押さえ: まず押さえる。確定と取消は呼ぶ側がする。押さえてから 1 日で期限が切れ、押さえた量は元に戻る。
 
 ```mermaid
@@ -53,17 +53,17 @@ stateDiagram-v2
 
 | 仮押さえの状態 | post（確定） | void（取消） |
 |---|---|---|
-| 押さえ中 | 確定する。額を渡せばその額、渡さなければ全額で、残りは元に戻る。押さえた額を超えれば `over_hold` で断る。押さえてから 1 日たっていれば `expired` で断る | 取り消す。押さえた量は元に戻る。押さえてから 1 日たっていれば `expired` で断る |
-| 確定 | 同じ額なら `done_before`、違う額なら `key_conflict` で断る | `already_posted` で断る |
-| 取消 | `already_voided` で断る | `done_before` |
-| 期限切れ | `expired` で断る | `expired` で断る |
-| 仮押さえが無い | `no_such_hold` で断る | `no_such_hold` で断る |
+| 押さえ中 | 確定する。額を渡せばその額、渡さなければ全額で、残りは元に戻る。押さえた額を超えれば `over_hold` で拒否される。押さえてから 1 日たっていれば `expired` で拒否される | 取り消す。押さえた量は元に戻る。押さえてから 1 日たっていれば `expired` で拒否される |
+| 確定 | 同じ額なら `done_before`、違う額なら `key_conflict` で拒否される | `already_posted` で拒否される |
+| 取消 | `already_voided` で拒否される | `done_before` |
+| 期限切れ | `expired` で拒否される | `expired` で拒否される |
+| 仮押さえが無い | `no_such_hold` で拒否される | `no_such_hold` で拒否される |
 
-| 操作 | 断られうる理由 | いつ |
+| 操作 | 拒否されうる理由 | いつ |
 |---|---|---|
 | `pay_later.hold` | `over_the_credit_line` | `credit(member)` が -50000 を下回る |
 | `pay_later.hold` | `key_conflict` | `order` が同じで、ほかの引数が違う呼び出しが、前に済んでいる |
-| `pay_later.hold` | `already_refused` | `order` が同じ呼び出しが、前に境界で断られている。境界で断られたキーは、あとで足りるようになっても通らない |
+| `pay_later.hold` | `already_refused` | `order` が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない |
 | `pay_later.post` | `key_conflict` | 仮押さえは、違う額で確定済み |
 | `pay_later.post` | `already_voided` | 仮押さえはもう取り消されている |
 | `pay_later.post` | `expired` | 仮押さえの期限が切れている |
@@ -73,26 +73,26 @@ stateDiagram-v2
 | `pay_later.void` | `expired` | 仮押さえの期限が切れている |
 | `pay_later.void` | `no_such_hold` | その `order` の仮押さえが無い |
 
-<details><summary>断られる例</summary>
+<details><summary>拒否される例</summary>
 
 #### pay_later.hold: over_the_credit_line
 
 ```text
- 1  pay_later.hold(order: order-1, member: member-2, amount: 50001)  over_the_credit_line で断られる（1 つ目の移動が credit(member-2) から 50001 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
+ 1  pay_later.hold(order: order-1, member: member-2, amount: 50001)  over_the_credit_line で拒否される（1 つ目の移動が credit(member-2) から 50001 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
 ```
 
 #### pay_later.hold: key_conflict
 
 ```text
  1  pay_later.hold(order: order-1, member: member-2, amount: 1)  通る
- 2  pay_later.hold(order: order-1, member: member-2, amount: 2)  key_conflict で断られる
+ 2  pay_later.hold(order: order-1, member: member-2, amount: 2)  key_conflict で拒否される
 ```
 
 #### pay_later.hold: already_refused
 
 ```text
- 1  pay_later.hold(order: order-1, member: member-2, amount: 50001)  over_the_credit_line で断られる（1 つ目の移動が credit(member-2) から 50001 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
- 2  pay_later.hold(order: order-1, member: member-2, amount: 50001)  already_refused で断られる
+ 1  pay_later.hold(order: order-1, member: member-2, amount: 50001)  over_the_credit_line で拒否される（1 つ目の移動が credit(member-2) から 50001 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
+ 2  pay_later.hold(order: order-1, member: member-2, amount: 50001)  already_refused で拒否される
 ```
 
 #### pay_later.post: key_conflict
@@ -100,7 +100,7 @@ stateDiagram-v2
 ```text
  1  pay_later.hold(order: order-1, member: member-2, amount: 2)  通る
  2  pay_later.post(order: order-1)                               通る
- 3  pay_later.post(order: order-1, amount: 1)                    key_conflict で断られる
+ 3  pay_later.post(order: order-1, amount: 1)                    key_conflict で拒否される
 ```
 
 #### pay_later.post: already_voided
@@ -108,7 +108,7 @@ stateDiagram-v2
 ```text
  1  pay_later.hold(order: order-1, member: member-2, amount: 2)  通る
  2  pay_later.void(order: order-1)                               通る
- 3  pay_later.post(order: order-1)                               already_voided で断られる
+ 3  pay_later.post(order: order-1)                               already_voided で拒否される
 ```
 
 #### pay_later.post: expired
@@ -116,20 +116,20 @@ stateDiagram-v2
 ```text
  1  pay_later.hold(order: order-1, member: member-2, amount: 2)  通る
  2  pass 1 日                                                    pay_later(order-1) が期限切れ
- 3  pay_later.post(order: order-1)                               expired で断られる
+ 3  pay_later.post(order: order-1)                               expired で拒否される
 ```
 
 #### pay_later.post: over_hold
 
 ```text
  1  pay_later.hold(order: order-1, member: member-2, amount: 2)  通る
- 2  pay_later.post(order: order-1, amount: 3)                    over_hold で断られる
+ 2  pay_later.post(order: order-1, amount: 3)                    over_hold で拒否される
 ```
 
 #### pay_later.post: no_such_hold
 
 ```text
- 1  pay_later.post(order: order-1)  no_such_hold で断られる
+ 1  pay_later.post(order: order-1)  no_such_hold で拒否される
 ```
 
 #### pay_later.void: already_posted
@@ -137,7 +137,7 @@ stateDiagram-v2
 ```text
  1  pay_later.hold(order: order-1, member: member-2, amount: 2)  通る
  2  pay_later.post(order: order-1)                               通る
- 3  pay_later.void(order: order-1)                               already_posted で断られる
+ 3  pay_later.void(order: order-1)                               already_posted で拒否される
 ```
 
 #### pay_later.void: expired
@@ -145,13 +145,13 @@ stateDiagram-v2
 ```text
  1  pay_later.hold(order: order-1, member: member-2, amount: 2)  通る
  2  pass 1 日                                                    pay_later(order-1) が期限切れ
- 3  pay_later.void(order: order-1)                               expired で断られる
+ 3  pay_later.void(order: order-1)                               expired で拒否される
 ```
 
 #### pay_later.void: no_such_hold
 
 ```text
- 1  pay_later.void(order: order-1)  no_such_hold で断られる
+ 1  pay_later.void(order: order-1)  no_such_hold で拒否される
 ```
 
 </details>
@@ -159,37 +159,37 @@ stateDiagram-v2
 ### repayment
 
 - 移動: `bank` から `credit(member)` へ `amount`。
-- キー: `repayment_id` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `member`、`amount` のどれかが違う二度目の呼び出しは、`key_conflict` で断られる。
+- キー: `repayment_id` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `member`、`amount` のどれかが違う二度目の呼び出しは、`key_conflict` で拒否される。
 - すぐに動かす（`do`）。
 
-| 操作 | 断られうる理由 | いつ |
+| 操作 | 拒否されうる理由 | いつ |
 |---|---|---|
 | `repayment.do` | `over_prepayment` | `credit(member)` が 10000 を超える |
 | `repayment.do` | `key_conflict` | `repayment_id` が同じで、ほかの引数が違う呼び出しが、前に済んでいる |
-| `repayment.do` | `already_refused` | `repayment_id` が同じ呼び出しが、前に境界で断られている。境界で断られたキーは、あとで足りるようになっても通らない |
+| `repayment.do` | `already_refused` | `repayment_id` が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない |
 
-<details><summary>断られる例</summary>
+<details><summary>拒否される例</summary>
 
 #### repayment.do: over_prepayment
 
 ```text
  1  repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 10000)  通る
- 2  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)      over_prepayment で断られる（1 つ目の移動が credit(member-2) へ 1 を入れようとしたときの残高は、確定 10000、入ってくる仮押さえ 0）
+ 2  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)      over_prepayment で拒否される（1 つ目の移動が credit(member-2) へ 1 を入れようとしたときの残高は、確定 10000、入ってくる仮押さえ 0）
 ```
 
 #### repayment.do: key_conflict
 
 ```text
  1  repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 1)  通る
- 2  repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 2)  key_conflict で断られる
+ 2  repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 2)  key_conflict で拒否される
 ```
 
 #### repayment.do: already_refused
 
 ```text
  1  repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 10000)  通る
- 2  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)      over_prepayment で断られる（1 つ目の移動が credit(member-2) へ 1 を入れようとしたときの残高は、確定 10000、入ってくる仮押さえ 0）
- 3  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)      already_refused で断られる
+ 2  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)      over_prepayment で拒否される（1 つ目の移動が credit(member-2) へ 1 を入れようとしたときの残高は、確定 10000、入ってくる仮押さえ 0）
+ 3  repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)      already_refused で拒否される
 ```
 
 </details>
@@ -216,12 +216,12 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>3. 境界: pay_later.hold は credit(member) を -50001 まで減らすので断られる（<code>at least -50000</code> を割る）</summary>
+<details><summary>3. 境界: pay_later.hold は credit(member) を -50001 まで減らすので拒否される（<code>at least -50000</code> を割る）</summary>
 
 | # | 操作 | 結果 | credit(member-2) | shop | bank |
 |---|---|---|---|---|---|
 | 1 | repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 2) | 通る | 2 | 0 | -2 |
-| 2 | pay_later.hold(order: order-3, member: member-2, amount: 50003) | over_the_credit_line で断られる | 2 | 0 | -2 |
+| 2 | pay_later.hold(order: order-3, member: member-2, amount: 50003) | over_the_credit_line で拒否される | 2 | 0 | -2 |
 
 </details>
 
@@ -243,12 +243,12 @@ stateDiagram-v2
 
 </details>
 
-<details><summary>6. 境界: repayment.do は credit(member) を 10001 まで増やすので断られる（<code>at most 10000</code> を超える）</summary>
+<details><summary>6. 境界: repayment.do は credit(member) を 10001 まで増やすので拒否される（<code>at most 10000</code> を超える）</summary>
 
 | # | 操作 | 結果 | credit(member-2) | bank |
 |---|---|---|---|---|
 | 1 | repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 9998) | 通る | 9998 | -9998 |
-| 2 | repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 3) | over_prepayment で断られる | 9998 | -9998 |
+| 2 | repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 3) | over_prepayment で拒否される | 9998 | -9998 |
 
 </details>
 
@@ -266,18 +266,18 @@ stateDiagram-v2
 | # | 操作 | 結果 | credit(member-2) | shop |
 |---|---|---|---|---|
 | 1 | pay_later.hold(order: order-1, member: member-2, amount: 1) | 通る | 0（出ていく仮押さえ 1） | 0（入ってくる仮押さえ 1） |
-| 2 | pay_later.hold(order: order-1, member: member-2, amount: 2) | key_conflict で断られる | 0（出ていく仮押さえ 1） | 0（入ってくる仮押さえ 1） |
+| 2 | pay_later.hold(order: order-1, member: member-2, amount: 2) | key_conflict で拒否される | 0（出ていく仮押さえ 1） | 0（入ってくる仮押さえ 1） |
 
 </details>
 
-<details><summary>9. キー: pay_later.hold が over_the_credit_line で断られたあと、同じ引数ですぐにもう一度呼び、credit(member) が足りるようになってからもう一度呼ぶ</summary>
+<details><summary>9. キー: pay_later.hold が over_the_credit_line で拒否されたあと、同じ引数ですぐにもう一度呼び、credit(member) が足りるようになってからもう一度呼ぶ</summary>
 
 | # | 操作 | 結果 | credit(member-2) | shop | bank |
 |---|---|---|---|---|---|
-| 1 | pay_later.hold(order: order-1, member: member-2, amount: 50001) | over_the_credit_line で断られる | 0 | 0 | 0 |
-| 2 | pay_later.hold(order: order-1, member: member-2, amount: 50001) | already_refused で断られる | 0 | 0 | 0 |
+| 1 | pay_later.hold(order: order-1, member: member-2, amount: 50001) | over_the_credit_line で拒否される | 0 | 0 | 0 |
+| 2 | pay_later.hold(order: order-1, member: member-2, amount: 50001) | already_refused で拒否される | 0 | 0 | 0 |
 | 3 | repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1) | 通る | 1 | 0 | -1 |
-| 4 | pay_later.hold(order: order-1, member: member-2, amount: 50001) | already_refused で断られる | 1 | 0 | -1 |
+| 4 | pay_later.hold(order: order-1, member: member-2, amount: 50001) | already_refused で拒否される | 1 | 0 | -1 |
 
 </details>
 
@@ -295,17 +295,17 @@ stateDiagram-v2
 | # | 操作 | 結果 | credit(member-2) | bank |
 |---|---|---|---|---|
 | 1 | repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 1) | 通る | 1 | -1 |
-| 2 | repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 2) | key_conflict で断られる | 1 | -1 |
+| 2 | repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 2) | key_conflict で拒否される | 1 | -1 |
 
 </details>
 
-<details><summary>12. キー: repayment.do が over_prepayment で断られたあと、同じ引数でもう一度呼ぶ</summary>
+<details><summary>12. キー: repayment.do が over_prepayment で拒否されたあと、同じ引数でもう一度呼ぶ</summary>
 
 | # | 操作 | 結果 | credit(member-2) | bank |
 |---|---|---|---|---|
 | 1 | repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 10000) | 通る | 10000 | -10000 |
-| 2 | repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1) | over_prepayment で断られる | 10000 | -10000 |
-| 3 | repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1) | already_refused で断られる | 10000 | -10000 |
+| 2 | repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1) | over_prepayment で拒否される | 10000 | -10000 |
+| 3 | repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1) | already_refused で拒否される | 10000 | -10000 |
 
 </details>
 
@@ -342,7 +342,7 @@ stateDiagram-v2
 |---|---|---|---|---|
 | 1 | pay_later.hold(order: order-1, member: member-2, amount: 2) | 通る | 0（出ていく仮押さえ 2） | 0（入ってくる仮押さえ 2） |
 | 2 | pay_later.post(order: order-1) | 通る | -2 | 2 |
-| 3 | pay_later.void(order: order-1) | already_posted で断られる | -2 | 2 |
+| 3 | pay_later.void(order: order-1) | already_posted で拒否される | -2 | 2 |
 
 </details>
 
@@ -352,7 +352,7 @@ stateDiagram-v2
 |---|---|---|---|---|
 | 1 | pay_later.hold(order: order-1, member: member-2, amount: 2) | 通る | 0（出ていく仮押さえ 2） | 0（入ってくる仮押さえ 2） |
 | 2 | pay_later.void(order: order-1) | 通る | 0 | 0 |
-| 3 | pay_later.post(order: order-1) | already_voided で断られる | 0 | 0 |
+| 3 | pay_later.post(order: order-1) | already_voided で拒否される | 0 | 0 |
 
 </details>
 
@@ -361,7 +361,7 @@ stateDiagram-v2
 | # | 操作 | 結果 | credit(member-2) | shop |
 |---|---|---|---|---|
 | 1 | pay_later.hold(order: order-1, member: member-2, amount: 2) | 通る | 0（出ていく仮押さえ 2） | 0（入ってくる仮押さえ 2） |
-| 2 | pay_later.post(order: order-1, amount: 3) | over_hold で断られる | 0（出ていく仮押さえ 2） | 0（入ってくる仮押さえ 2） |
+| 2 | pay_later.post(order: order-1, amount: 3) | over_hold で拒否される | 0（出ていく仮押さえ 2） | 0（入ってくる仮押さえ 2） |
 | 3 | pay_later.post(order: order-1, amount: 2) | 通る | -2 | 2 |
 
 </details>
@@ -370,7 +370,7 @@ stateDiagram-v2
 
 | # | 操作 | 結果 | credit(member-2) | shop |
 |---|---|---|---|---|
-| 1 | pay_later.post(order: order-1) | no_such_hold で断られる | 0 | 0 |
+| 1 | pay_later.post(order: order-1) | no_such_hold で拒否される | 0 | 0 |
 | 2 | pay_later.hold(order: order-1, member: member-2, amount: 1) | 通る | 0（出ていく仮押さえ 1） | 0（入ってくる仮押さえ 1） |
 | 3 | pay_later.post(order: order-1) | 通る | -1 | 1 |
 
@@ -384,7 +384,7 @@ stateDiagram-v2
 | 2 | pay_later.post(order: order-1) | 通る | -2 | 2 |
 | 3 | pay_later.post(order: order-1) | done_before（前に済んでいる） | -2 | 2 |
 | 4 | pay_later.post(order: order-1, amount: 2) | done_before（前に済んでいる） | -2 | 2 |
-| 5 | pay_later.post(order: order-1, amount: 1) | key_conflict で断られる | -2 | 2 |
+| 5 | pay_later.post(order: order-1, amount: 1) | key_conflict で拒否される | -2 | 2 |
 
 </details>
 
@@ -394,8 +394,8 @@ stateDiagram-v2
 |---|---|---|---|---|
 | 1 | pay_later.hold(order: order-1, member: member-2, amount: 2) | 通る | 0（出ていく仮押さえ 2） | 0（入ってくる仮押さえ 2） |
 | 2 | pass 1441 分 | pay_later(order-1) が期限切れ | 0 | 0 |
-| 3 | pay_later.post(order: order-1) | expired で断られる | 0 | 0 |
-| 4 | pay_later.void(order: order-1) | expired で断られる | 0 | 0 |
+| 3 | pay_later.post(order: order-1) | expired で拒否される | 0 | 0 |
+| 4 | pay_later.void(order: order-1) | expired で拒否される | 0 | 0 |
 
 </details>
 
@@ -417,13 +417,13 @@ stateDiagram-v2
 
 | # | 操作 | 結果 | credit(member-2) | shop |
 |---|---|---|---|---|
-| 1 | together<br>呼び出し元 1: pay_later.hold(order: order-1, member: member-2, amount: 50000)<br>呼び出し元 2: pay_later.hold(order: order-3, member: member-2, amount: 50000) | <br>通る<br>over_the_credit_line で断られる | 0（出ていく仮押さえ 50000） | 0（入ってくる仮押さえ 50000） |
+| 1 | together<br>呼び出し元 1: pay_later.hold(order: order-1, member: member-2, amount: 50000)<br>呼び出し元 2: pay_later.hold(order: order-3, member: member-2, amount: 50000) | <br>通る<br>over_the_credit_line で拒否される | 0（出ていく仮押さえ 50000） | 0（入ってくる仮押さえ 50000） |
 
 結果 2:
 
 | # | 操作 | 結果 | credit(member-2) | shop |
 |---|---|---|---|---|
-| 1 | together<br>呼び出し元 1: pay_later.hold(order: order-1, member: member-2, amount: 50000)<br>呼び出し元 2: pay_later.hold(order: order-3, member: member-2, amount: 50000) | <br>over_the_credit_line で断られる<br>通る | 0（出ていく仮押さえ 50000） | 0（入ってくる仮押さえ 50000） |
+| 1 | together<br>呼び出し元 1: pay_later.hold(order: order-1, member: member-2, amount: 50000)<br>呼び出し元 2: pay_later.hold(order: order-3, member: member-2, amount: 50000) | <br>over_the_credit_line で拒否される<br>通る | 0（出ていく仮押さえ 50000） | 0（入ってくる仮押さえ 50000） |
 
 </details>
 
@@ -436,14 +436,14 @@ stateDiagram-v2
 | # | 操作 | 結果 | credit(member-2) | bank |
 |---|---|---|---|---|
 | 1 | repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 9999) | 通る | 9999 | -9999 |
-| 2 | together<br>呼び出し元 1: repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)<br>呼び出し元 2: repayment.do(repayment_id: repayment_id-4, member: member-2, amount: 1) | <br>通る<br>over_prepayment で断られる | 10000 | -10000 |
+| 2 | together<br>呼び出し元 1: repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)<br>呼び出し元 2: repayment.do(repayment_id: repayment_id-4, member: member-2, amount: 1) | <br>通る<br>over_prepayment で拒否される | 10000 | -10000 |
 
 結果 2:
 
 | # | 操作 | 結果 | credit(member-2) | bank |
 |---|---|---|---|---|
 | 1 | repayment.do(repayment_id: repayment_id-1, member: member-2, amount: 9999) | 通る | 9999 | -9999 |
-| 2 | together<br>呼び出し元 1: repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)<br>呼び出し元 2: repayment.do(repayment_id: repayment_id-4, member: member-2, amount: 1) | <br>over_prepayment で断られる<br>通る | 10000 | -10000 |
+| 2 | together<br>呼び出し元 1: repayment.do(repayment_id: repayment_id-3, member: member-2, amount: 1)<br>呼び出し元 2: repayment.do(repayment_id: repayment_id-4, member: member-2, amount: 1) | <br>over_prepayment で拒否される<br>通る | 10000 | -10000 |
 
 </details>
 

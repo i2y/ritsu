@@ -159,7 +159,7 @@ fn the_language_comes_from_the_flag_then_the_environment() {
     let book = root().join("tests/books/在庫.book");
     let b = book.to_str().unwrap();
     let out = chobo().args(["check", b]).env("CHOBO_LANG", "ja").output().unwrap();
-    assert!(String::from_utf8_lossy(&out.stdout).contains("断られうる理由"));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("拒否されうる理由"));
     let out = chobo().args(["check", b, "--lang", "en"]).env("CHOBO_LANG", "ja").output().unwrap();
     assert!(String::from_utf8_lossy(&out.stdout).contains("may be refused"));
 }
@@ -363,7 +363,7 @@ fn the_language_comes_from_the_flag_then_the_environment_in_english() {
     let book = root().join("tests/books/stock_reservation.book");
     let b = book.to_str().unwrap();
     let out = chobo().args(["check", b]).env("CHOBO_LANG", "ja").output().unwrap();
-    assert!(String::from_utf8_lossy(&out.stdout).contains("断られうる理由"));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("拒否されうる理由"));
     let out = chobo().args(["check", b, "--lang", "en"]).env("CHOBO_LANG", "ja").output().unwrap();
     assert!(String::from_utf8_lossy(&out.stdout).contains("may be refused"));
 }

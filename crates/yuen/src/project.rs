@@ -571,7 +571,7 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
                 },
                 SourceKind::File { path, path_span, .. } => {
                     if path.is_empty() || ritsu_base::paths::is_absolute(path) {
-                        diags.push(p.err(fi, "E013", *path_span, tr!("出典の写しのパス `{path}` は、.req からの相対パスで書いてください", "Write the path `{path}` of the copy from the directory of the .req")));
+                        diags.push(p.err(fi, "E013", *path_span, tr!("出典のコピーのパス `{path}` は、.req からの相対パスで書いてください", "Write the path `{path}` of the copy from the directory of the .req")));
                         None
                     } else {
                         match ritsu_base::paths::join(&dir, path).ok() {

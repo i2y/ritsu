@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package kernel;
 
-// 見積と契約が、それぞれ写しを持つ日数の単位。
+// 見積と契約が、それぞれコピーを持つ日数の単位。
 message Days {
   int32 count = 1;
 }

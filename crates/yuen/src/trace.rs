@@ -96,7 +96,7 @@ fn article(p: &Project, m: &Model, fi: usize, e: &EndInfo) -> (Text, Vec<String>
             };
             let dbt = db.title();
             let head = tr!(
-                "{source} {fragment}（{dbt} {id}、{asof} 時点{}、写しは {shown}）",
+                "{source} {fragment}（{dbt} {id}、{asof} 時点{}、コピーは {shown}）",
                 "{source} {fragment} ({dbt} {id} as of {asof}{}; the copy {shown})",
                 rev.ja;
                 rev.en
@@ -150,8 +150,8 @@ fn pins(p: &Project, m: &Model, file: &Name, r: Option<usize>, depth: usize, o: 
         });
         let (t, src, fr, dbt, id, asof, pin) = (file.text(), &x.source, &x.fragment, x.db.title(), &x.id, &x.asof, &x.pin);
         let tail = match same {
-            Some(true) => tr!("、要件の写しと同じ本文", "; the text of the requirement's copy"),
-            Some(false) => tr!("、要件の写しと本文が違う（E107）", "; not the text of the requirement's copy (E107)"),
+            Some(true) => tr!("、要件のコピーと同じ本文", "; the text of the requirement's copy"),
+            Some(false) => tr!("、要件のコピーと本文が違う（E107）", "; not the text of the requirement's copy (E107)"),
             None => Text::default(),
         };
         o.push(depth, tr!("{t} が固定している条: {src} {fr}（{dbt} {id}、{asof} 時点、sha256:{pin}{}）", "pinned by {t}: {src} {fr} ({dbt} {id} as of {asof}, sha256:{pin}{})", tail.ja; tail.en));
@@ -198,7 +198,7 @@ fn requirement(p: &Project, m: &Model, r: usize, depth: usize, o: &mut Out, seen
                     let FromWhat::Cite { source, fragments, .. } = &f.what else { unreachable!() };
                     let frs: Vec<&str> = fragments.iter().map(|x| x.0.as_str()).collect();
                     let l = format!("{source} {}", frs.join(", "));
-                    o.push(depth + 1, tr!("出どころ: {l}（写しを読めない）", "comes from {l} (its copy cannot be read)"));
+                    o.push(depth + 1, tr!("出どころ: {l}（コピーを読めない）", "comes from {l} (its copy cannot be read)"));
                 }
                 let mut arts = Vec::new();
                 for e in &ends {
@@ -423,7 +423,7 @@ pub fn trace(c: &Checked, start: &Start) -> Result<Traced, Refusal> {
                                 o.push(0, tr!("固定している成果物:", "pinned by:"));
                             }
                             let (t, pin, copy) = (file.text(), &x.pin, p.shown(&x.rel));
-                            o.push(1, tr!("{t}（sha256:{pin}、写しは {copy}）", "{t} (sha256:{pin}; the copy {copy})"));
+                            o.push(1, tr!("{t}（sha256:{pin}、コピーは {copy}）", "{t} (sha256:{pin}; the copy {copy})"));
                             pinned_by.push(json!({"artifact": crate::diag::value(&file.to_json()), "sha256": pin, "copy": x.rel}));
                         }
                     }

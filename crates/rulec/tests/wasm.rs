@@ -199,10 +199,10 @@ fn genが書くファイルがコマンドと一字一句同じ() {
         let (code, _) = rulec(&d, "en", &["gen", "playground.rule", "--out", "out"]);
         if !yes(&got, "ok") {
             // The page refuses exactly where the command refuses (§1.6).
-            assert_ne!(code, 0, "{name}: wasm は断ったのにコマンドは生成した");
+            assert_ne!(code, 0, "{name}: wasm はエラーにしたのにコマンドは生成した");
             continue;
         }
-        assert_eq!(code, 0, "{name}: コマンドは断ったのに wasm は生成した");
+        assert_eq!(code, 0, "{name}: コマンドはエラーにしたのに wasm は生成した");
         let files = arr(&got, "files");
         let mut seen = 0usize;
         for f in files {

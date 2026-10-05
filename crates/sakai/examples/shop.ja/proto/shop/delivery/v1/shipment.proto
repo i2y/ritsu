@@ -1,4 +1,4 @@
-// 写した元: rulec の tests/corpus/contracts/shipment.proto。package を shop.delivery.v1 にし、配送のサービスと、その応答のメッセージを足した。
+// コピー元: rulec の tests/corpus/contracts/shipment.proto。package を shop.delivery.v1 にし、配送のサービスと、その応答のメッセージを足した。
 syntax = "proto3";
 
 package shop.delivery.v1;

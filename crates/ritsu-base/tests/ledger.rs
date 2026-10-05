@@ -62,7 +62,7 @@ fn koyomi() -> Ledger {
             "E102",
             tr!("出典が固定されていません", "A source is not pinned"),
             tr!("表の出典の行か、法令の条の固定の行に `sha256:` が無いとき。", "A table's line, or the pin line of a law's article, has no `sha256:`."),
-            tr!("写しの SHA-256 の先頭 16 桁を `sha256:` で書きます（直し方に、いまの写しの値を書いた行が出ます）。", "Pin it with the first 16 digits of the copy's SHA-256; the fix gives the line with the copy's own."),
+            tr!("コピーの SHA-256 の先頭 16 桁を `sha256:` で書きます（直し方に、いまのコピーの値を書いた行が出ます）。", "Pin it with the first 16 digits of the copy's SHA-256; the fix gives the line with the copy's own."),
             "calendar t v1\n\nsource 休み = file \"holidays.csv\"\n  format csv\n  covers 2026-01-01..2026-12-31\n\nclosed 休み\n",
             &["E101", "E103"],
                 ),
@@ -89,7 +89,7 @@ fn yuen() -> Ledger {
         repro_heading: tr!("再現", "Example"),
         later_text: later_note.clone(),
         later_markdown: later_note,
-        entries: vec![later(e("E107", tr!("要件と成果物が、同じ条の違う本文を読んでいます", "A requirement and what meets it read different texts of one article"), tr!("要件が引く条を、それを満たす成果物も固定していて、どの写しも要件の写しと本文が違うとき。どちらかが古い写しです。", "What meets a requirement pins an article the requirement cites, and none of its copies has the text of the requirement's copy: one of them is old."), tr!("本文の差分を読み、古いほうの写しを取り直して固定し直します。", "Read the diff of the texts, then fetch and pin the older copy again."), "", &["E103"]))],
+        entries: vec![later(e("E107", tr!("要件と成果物が、同じ条の違う本文を読んでいます", "A requirement and what meets it read different texts of one article"), tr!("要件が引く条を、それを満たす成果物も固定していて、どのコピーも要件のコピーと本文が違うとき。どちらかが古いコピーです。", "What meets a requirement pins an article the requirement cites, and none of its copies has the text of the requirement's copy: one of them is old."), tr!("本文の差分を読み、古いほうのコピーを取り直して固定し直します。", "Read the diff of the texts, then fetch and pin the older copy again."), "", &["E103"]))],
     }
 }
 

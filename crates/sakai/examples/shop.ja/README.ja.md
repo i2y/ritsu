@@ -30,7 +30,7 @@ examples/shop.ja/通販.ctx: ok — コンテキスト 5、関係 7。成果物 
 |---|---|---|
 | 受注 → 在庫 | 順応者。`warehouse.v1` を通る | `fulfillment.proto` が `stock.proto` を import する。`受注.flow` が `stock.proto` を読み、`StockService` の `Reserve` と `Release` を呼ぶ |
 | 請求 → 受注 | 腐敗防止層。`shop.ordering.v1` を通り、層は `請求の要否.rule` と各言語の `billing/acl/ordering` | `請求の要否.rule` が `import proto` で `OrderStatus` を取り込む。受注の「キャンセル」は規則の値「受注で取消」になり、請求の「キャンセル」とは別のものとして読まれる |
-| 配送 → 在庫 | 腐敗防止層。`warehouse.v1` を通り、層は各言語の `delivery/acl/inventory` | 言語の成果物の参照は無い。`PackingStatus` の対応は `配送.ctx` に値ごとに書き、`PACKING_STATUS_SHORT` は断る |
+| 配送 → 在庫 | 腐敗防止層。`warehouse.v1` を通り、層は各言語の `delivery/acl/inventory` | 言語の成果物の参照は無い。`PackingStatus` の対応は `配送.ctx` に値ごとに書き、`PACKING_STATUS_SHORT` は拒否する |
 | 請求 → 配送 | 顧客と供給者。`shop.delivery.v1` を通る | `出荷の送料.rule` の `shape` が `CreateShipmentRequest` を読む |
 | 請求と配送 | 共有カーネル。`東京の営業日.cal` と、koyomi がそれから書くコード | `出荷日.cal` がそのカレンダーを使う |
 | 受注と配送 | パートナーシップ | `受注.flow` が規則 `出荷の急ぎ` を Connect で呼び、`配送の手配.flow` を子として走らせる |
@@ -38,7 +38,7 @@ examples/shop.ja/通販.ctx: ok — コンテキスト 5、関係 7。成果物 
 
 ## ファイルの出どころ
 
-成果物は、ritsu の各言語の例を写し、パスをこの例の置き方に合わせたものです。写したファイルは、頭のコメントに、写した元と直したところを書いています。
+成果物は、ritsu の各言語の例をコピーし、パスをこの例の置き方に合わせたものです。コピーしたファイルは、頭のコメントに、コピー元と直したところを書いています。
 
 - `ordering/受注.flow`、`delivery/配送の手配.flow`、`delivery/rules/出荷の急ぎ.rule`、`proto/dandori/v1/options.proto`：dandori の例。
 - `inventory/在庫の引当.book`：chobo の例。

@@ -816,7 +816,7 @@ mod tests {
     }
 
     #[test]
-    fn 構文は丸ごと断る() {
+    fn 読めない式は丸ごと受け付けない() {
         assert!(parse("this.a <= ").is_err());
         assert!(parse("{'a': 1}").is_err());
         assert!(parse("1e3 > this.a").is_err());

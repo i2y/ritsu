@@ -1,4 +1,4 @@
-# 写した元: rulec の tests/corpus/出荷の送料.rule。shape の先を、この例の配送の公表された言語（shop.delivery.v1）に直した
+# コピー元: rulec の tests/corpus/出荷の送料.rule。shape の先を、この例の配送の公表された言語（shop.delivery.v1）に直した
 rule 出荷の送料(shipment_fee) v1
 description "出荷の要求（.proto）から送料を決める。Protovalidate の注釈と入力の宣言をそろえた例（§15.132、§15.133）"
 

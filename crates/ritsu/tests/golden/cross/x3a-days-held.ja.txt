@@ -4,5 +4,5 @@ billing.flow: 検査を通りました
 警告[ritsu W205]: billing.flow:18:1: koyomi の日付 `terms.payment` の `received` に渡す日が、入力の範囲に収まるかを決められません
     18 |   let due = terms.payment(received: received)
   = `received` が何日になるかは分かりません（入力 `received` には日付の範囲がありません）。"payment_terms.cal" が `received` に受け取るのは 2026-01-01 から 2026-12-20 までです
-  = 範囲の外の日は、ワークフローを走らせたときに、koyomi が生成したコードが断ります。
+  = 範囲の外の日は、ワークフローを走らせたときに、koyomi が生成したコードが受け付けません。
 ritsu check: ファイル 3 個（rulec 1、koyomi 1、dandori 1）。どれも検査を通りました（警告 1 件）。言語の境目: 確かめた 3 か所、決められない 1 か所

@@ -31,8 +31,8 @@ task 出荷を頼む(id: string) -> 注文.Order
   connect 注文 "OrderService/Ship"
   connection "arn:aws:events:ap-northeast-1:123456789012:connection/orders/1a2b3c"
   sends ship
-  errors 断られた = failed_precondition
-  refused as 断られた
+  errors 拒否された = failed_precondition
+  refused as 拒否された
   key
 
 # The range of quantity is the .proto's, which the line's own quantity fits.
@@ -53,7 +53,7 @@ flow
   match 受注.state
     paid =>
       受注 <- 出荷を頼む(id: 受注.id)
-        on 断られた => 受注 <- 注文を見る(id: 受注.id)
+        on 拒否された => 受注 <- 注文を見る(id: 受注.id)
     received, shipped, delivered, cancelled => pass
   let 票 = for 一品 in 受注.lines at most 5
     let 取った = 棚から取る(sku: 一品.sku, quantity: 一品.quantity)

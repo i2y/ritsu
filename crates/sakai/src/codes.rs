@@ -709,7 +709,7 @@ pub fn ledger() -> Ledger {
             "E307",
             tr!("共有カーネルが片側だけか、両側の並びが違います", "A shared kernel is written on one side only, or lists different things"),
             tr!(
-                "共有カーネルを片側にしか書いていないとき、両側の並びが違うとき（写しを両側に置くときを除く）、並べたものが二つのどちらのものでもないとき。",
+                "共有カーネルを片側にしか書いていないとき、両側の並びが違うとき（コピーを両側に置くときを除く）、並べたものが二つのどちらのものでもないとき。",
                 "A shared kernel is written on one side only, the two sides list different things (other than each keeping a copy), or what it lists belongs to neither of the two."
             ),
             tr!("両方のファイルに `shared kernel with <相手>` を書き、同じものを並べてください。", "Write `shared kernel with <context>` in both files, with the same entries."),
@@ -719,9 +719,9 @@ pub fn ledger() -> Ledger {
         .en(&[("alpha.ctx", "context Alpha(a) v1\nowns\n  dir \"a\"\n\nshared kernel with Beta\n  proto \"a/a.proto\"\n")]),
         e(
             "E308",
-            tr!("共有カーネルの写しの中身が違います", "The copies of a shared kernel differ"),
-            tr!("両側がそれぞれの写しを共有カーネルに並べているのに、写しのバイト列が違うとき。", "Each side lists its own copy in the shared kernel, and the copies' bytes differ."),
-            tr!("両側の写しの中身をそろえてください。", "Make the copies the same."),
+            tr!("共有カーネルのコピーの中身が違います", "The copies of a shared kernel differ"),
+            tr!("両側がそれぞれのコピーを共有カーネルに並べているのに、コピーのバイト列が違うとき。", "Each side lists its own copy in the shared kernel, and the copies' bytes differ."),
+            tr!("両側のコピーの中身をそろえてください。", "Make the copies the same."),
             &[
                 ("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nshared kernel with 乙\n  proto \"a/k/units.proto\"\n"),
                 ("a/k/units.proto", "syntax = \"proto3\";\npackage k;\nmessage Yen { int64 amount = 1; }\n"),

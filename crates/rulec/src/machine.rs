@@ -1324,7 +1324,7 @@ pub fn check_scenarios(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                         .at(at(row.span.line))
                         .mark(row.span.clone(), "")
                         .note(tr!(
-                            "制約は「この組み合わせは起きない」という宣言で、生成コードは入口で断ります。手順の例の値を直すか、その組み合わせが本当に起きるなら制約のほうを消してください。",
+                            "制約は「この組み合わせは起きない」という宣言で、生成コードはその組み合わせを入口で受け付けません。手順の例の値を直すか、その組み合わせが本当に起きるなら制約のほうを消してください。",
                             "A constraint says the combination does not happen, and the generated code refuses it at the door. Correct the scenario's values, or drop the constraint if the combination really does happen."
                         )),
                 );

@@ -4,10 +4,10 @@ reminding.flow: 検査を通りました
 警告[ritsu W205]: reminding.flow:18:1: koyomi の日付 `terms.payment` の `received` に渡す日が、入力の範囲に収まるかを決められません
     18 |   let due = terms.payment(received: received)
   = `received` が何日になるかは分かりません（入力 `received` には日付の範囲がありません）。"payment_terms.cal" が `received` に受け取るのは 2026-01-01 から 2026-12-20 までです
-  = 範囲の外の日は、ワークフローを走らせたときに、koyomi が生成したコードが断ります。
+  = 範囲の外の日は、ワークフローを走らせたときに、koyomi が生成したコードが受け付けません。
 エラー[ritsu E205]: reminding.flow:19:1: koyomi の日付 `reminders.reminder` の `due` に渡す日が、入力の範囲を外れることがあります
     19 |   let note = reminders.reminder(due: due.day)
   = `due.day` は 2027-01-10 になることがあります（koyomi "payment_terms.cal" date payment が received = 2026-11-21 のときに返す日）。"reminders.cal" が `due` に受け取るのは 2026-02-01 から 2026-12-31 までです
-  = koyomi が生成したコードは、範囲の外の日を断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。
+  = koyomi が生成したコードは、範囲の外の日を受け付けません。この呼び出しは、ワークフローを走らせたときに初めて落ちます。
   = "reminders.cal" の `due` の範囲を広げるか（カレンダーのデータも足してください）、範囲に収まる日を渡してください。
 ritsu check: ファイル 3 個（koyomi 2、dandori 1）。検査を通らないもの 1 個（エラー 1 件、警告 1 件）。言語の境目: 確かめた 2 か所、決められない 1 か所

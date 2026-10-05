@@ -174,14 +174,14 @@ pub fn fetch(p: &Project) -> Result<Outcome, Text> {
                     let before = std::fs::read(&dest).ok();
                     let h = sha256::short(&body);
                     if before.as_deref() == Some(body.as_slice()) {
-                        lines.push(tr!("{name}: 写し {path} は変わっていません（sha256:{h}）", "{name}: the copy {path} is unchanged (sha256:{h})"));
+                        lines.push(tr!("{name}: コピー {path} は変わっていません（sha256:{h}）", "{name}: the copy {path} is unchanged (sha256:{h})"));
                         continue;
                     }
                     write_file(&dest, &body, p)?;
                     lines.push(if before.is_some() {
-                        tr!("{name}: 写し {path} を取り直しました（sha256:{h}）", "{name}: fetched the copy {path} again (sha256:{h})")
+                        tr!("{name}: 取り直して {path} に保存しました（sha256:{h}）", "{name}: fetched the copy {path} again (sha256:{h})")
                     } else {
-                        tr!("{name}: 写し {path} を取りました（sha256:{h}）", "{name}: fetched the copy {path} (sha256:{h})")
+                        tr!("{name}: 取ってきて {path} に保存しました（sha256:{h}）", "{name}: fetched the copy {path} (sha256:{h})")
                     });
                     lines.push(match pin {
                         Some(pn) if *pn == h => tr!("  固定と合っています", "  it matches the pin"),
@@ -272,7 +272,7 @@ pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
                     let Some(n) = &p.names.sources[fi][si] else { continue };
                     let path = p.shown(&n.path);
                     let Ok(bytes) = std::fs::read(p.root.join(&n.path)) else {
-                        report.push(tr!("{name}: 写し {path} が無いので固定できません。先に yuen source fetch を走らせてください", "{name}: there is no copy {path} to pin; run yuen source fetch first"));
+                        report.push(tr!("{name}: コピー {path} が無いので固定できません。先に yuen source fetch を走らせてください", "{name}: there is no copy {path} to pin; run yuen source fetch first"));
                         continue;
                     };
                     let h = sha256::short(&bytes);
@@ -292,7 +292,7 @@ pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
                         let Some(file) = copies::fragment_file(*db, &pl.fragment) else { continue };
                         let Ok(bytes) = std::fs::read(cdir.join(&file)) else {
                             let fr = &pl.fragment;
-                            report.push(tr!("{name}: {fr} の写しが無いので固定できません。先に yuen source fetch を走らせてください", "{name}: there is no copy of {fr} to pin; run yuen source fetch first"));
+                            report.push(tr!("{name}: {fr} のコピーが無いので固定できません。先に yuen source fetch を走らせてください", "{name}: there is no copy of {fr} to pin; run yuen source fetch first"));
                             continue;
                         };
                         let h = sha256::short(&bytes);
@@ -315,7 +315,7 @@ pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
                     for fr in fragments(&f.ast, name, pins).into_iter().skip(pins.len()) {
                         let Some(file) = copies::fragment_file(*db, &fr) else { continue };
                         let Ok(bytes) = std::fs::read(cdir.join(&file)) else {
-                            report.push(tr!("{name}: {fr} の写しが無いので固定できません。先に yuen source fetch を走らせてください", "{name}: there is no copy of {fr} to pin; run yuen source fetch first"));
+                            report.push(tr!("{name}: {fr} のコピーが無いので固定できません。先に yuen source fetch を走らせてください", "{name}: there is no copy of {fr} to pin; run yuen source fetch first"));
                             continue;
                         };
                         let h = sha256::short(&bytes);
@@ -484,10 +484,10 @@ fn law_outdated(p: &Project, fi: usize, name: &str, db: LawDb, id: &str, asof: &
     for (fr, file) in files {
         let Ok(mut prev) = std::fs::read(cdir.join(file)) else {
             lines.push(match whose {
-                Whose::Own => tr!("{name}: {fr} の写しが無いので比べられません。先に yuen source fetch を走らせてください", "{name}: there is no copy of {fr} to compare; run yuen source fetch first"),
+                Whose::Own => tr!("{name}: {fr} のコピーが無いので比べられません。先に yuen source fetch を走らせてください", "{name}: there is no copy of {fr} to compare; run yuen source fetch first"),
                 Whose::Borrowed(n) => {
                     let t = n.text();
-                    tr!("{name}: {t} の {fr} の写しが無いので比べられません", "{name}: there is no copy of {fr} of {t} to compare")
+                    tr!("{name}: {t} の {fr} のコピーが無いので比べられません", "{name}: there is no copy of {fr} of {t} to compare")
                 }
             });
             continue;
@@ -565,7 +565,7 @@ fn file_outdated(p: &Project, fi: usize, name: &str, url: Option<&str>, pin: Opt
         && new.len() <= 1 << 20
     {
         let path = p.shown(copy_rel);
-        lines.push(tr!("  写し {path} からの差分:", "  what changed from the copy {path}:"));
+        lines.push(tr!("  コピー {path} からの差分:", "  what changed from the copy {path}:"));
         diff_lines(old, new, lines);
     }
     reach_lines(p, &reach(p, fi, name, None), lines);

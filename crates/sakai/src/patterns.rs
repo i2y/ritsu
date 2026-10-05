@@ -346,13 +346,13 @@ pub fn check(m: &Model, ps: &Protos, arts: &[Artifact], read: &crate::suite::Rea
                             let rb_ref = p.rel_ref(b, rb);
                             let xs: Vec<String> = alone_a.iter().map(|o| o.text()).collect();
                             let ys: Vec<String> = kb.iter().map(|(_, o)| o.text()).collect();
-                            let d = p.at(b, rb.pos, "E308", tr!("「{na}」と「{nb}」の共有カーネルの写しの中身が違います", "The copies of the shared kernel of {na} and {nb} differ"));
+                            let d = p.at(b, rb.pos, "E308", tr!("「{na}」と「{nb}」の共有カーネルのコピーの中身が違います", "The copies of the shared kernel of {na} and {nb} differ"));
                             d.notes.push(tr!(
-                                "「{na}」の {} と同じ中身の写しが、「{nb}」の側にありません（「{nb}」の側は {}）。",
+                                "「{na}」の {} と同じ中身のコピーが、「{nb}」の側にありません（「{nb}」の側は {}）。",
                                 "No copy on {nb}'s side has the bytes of {na}'s {} ({nb} has {}).",
                                 xs.join("、"), ys.join("、"); xs.join(", "), ys.join(", ")
                             ));
-                            d.notes.push(tr!("写しを両側に置くときは、中身を同じに保ってください。", "When each side keeps a copy, the copies are kept the same."));
+                            d.notes.push(tr!("コピーを両側に置くときは、中身を同じに保ってください。", "When each side keeps a copy, the copies are kept the same."));
                             d.extra.0.push(ra_ref);
                             d.extra.0.push(rb_ref);
                         }

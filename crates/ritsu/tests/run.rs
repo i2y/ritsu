@@ -294,7 +294,7 @@ fn what_stops_ritsu_run() {
     s["books"]["stock"].as_array_mut().unwrap().push(json!({ "op": "do", "kind": "receive", "args": { "delivery": "D-1", "sku": "pen", "qty": 4 } }));
     let f = write("refused_before.json", s);
     let (code, _, err) = ritsu_in(&p, &["run", "invoice.flow", "--scenario", &f, "--lang", "ja"]);
-    assert!(code == 2 && err == format!("エラー: シナリオ `{f}` を流せません: 帳簿 `stock` は、走らせる前の 2 番目の操作を `key_conflict` で断ります\n"), "{err}");
+    assert!(code == 2 && err == format!("エラー: シナリオ `{f}` を流せません: 帳簿 `stock` は、走らせる前の 2 番目の操作を `key_conflict` で拒否します\n"), "{err}");
     // an operation that does not fit the book
     let mut s = paid.clone();
     s["books"]["stock"] = json!([{ "op": "do", "kind": "receive", "args": { "delivery": "D-1", "sku": "pen", "qty": "ten" } }]);

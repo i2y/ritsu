@@ -128,7 +128,7 @@ pub fn check(m: &Model, ps: &Protos, el: &Elements, crossings: &[Crossing], read
                         d = d.note(tr!("{vn} は {fp}:{l} の値です。", "{vn} is the value at {fp}:{l}."));
                     }
                     d = d.note(tr!(
-                        "上流の列挙の値ごとに、下流の値か refuse（断る）を書いてください。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。",
+                        "上流の列挙の値ごとに、下流の値か refuse（拒否）を書いてください。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。",
                         "Every value of the upstream enum gets a value of the downstream or refuse; when the upstream adds a value, the check fails until someone decides what it becomes."
                     ));
                     let first = names[0];

@@ -337,7 +337,7 @@ fn stamp_calendar(cal: &Calendar, base: &Path, include_self: bool, lang: Lang) -
         let covers = if tb.listed_years { format!("covers listed years = {}..{}", tb.covers.0, tb.covers.1) } else { format!("covers {}..{}", tb.covers.0, tb.covers.1) };
         let mut cell = vec![t(format!("{} = ", tb.name)), c(p)];
         cell.push(t(match (&tb.url, lang) {
-            (Some(u), Lang::Ja) => format!("（sha256:{}、{u} の写し、{covers}）", tb.pin),
+            (Some(u), Lang::Ja) => format!("（sha256:{}、{u} のコピー、{covers}）", tb.pin),
             (Some(u), Lang::En) => format!(" (sha256:{}, a copy of {u}, {covers})", tb.pin),
             (None, Lang::Ja) => format!("（sha256:{}、{covers}）", tb.pin),
             (None, Lang::En) => format!(" (sha256:{}, {covers})", tb.pin),
@@ -423,7 +423,7 @@ fn sources_blocks(cal: &Calendar, lang: Lang, out: &mut Vec<Block>) {
         let rows = count(tb.rows.len() as u64);
         let (a, b) = tb.covers;
         let from = match &tb.url {
-            Some(u) => tr!("{u} の写しを、", "a copy of {u}, "),
+            Some(u) => tr!("{u} のコピーを、", "a copy of {u}, "),
             None => tr!("", ""),
         };
         let listed = if tb.listed_years { tr!("（行のある最初の年から最後の年まで）", " (from the first year with a row to the last)") } else { tr!("", "") };

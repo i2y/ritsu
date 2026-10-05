@@ -403,7 +403,7 @@ pub fn draft_rows(
     }
     if cols[..n_in].iter().any(|c| matches!(c, Column::Num { .. })) {
         o.push_str(&tr!(
-            "# {guess}: 数値の列のセルは、書いてあった値との等値で写した。閾値の意味なら `<=60cm` のような比較に書き換えること\n",
+            "# {guess}: 数値の列のセルは、書いてあった値との等値として転記した。閾値の意味なら `<=60cm` のような比較に書き換えること\n",
             "# {guess}: a cell in a numeric column was copied as equality with the value written; if it means a threshold, rewrite it as a comparison such as `<=60cm`\n"
         ));
     }

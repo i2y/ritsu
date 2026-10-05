@@ -81,7 +81,7 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
     let hello = parse_line(&line, &tr!("ハンドシェイクの応答", "answer to the handshake"))?;
     if hello.get("ok") != Some(&Json::Bool(true)) {
         return Err(tr!(
-            "アダプタがハンドシェイクを断りました: {}",
+            "アダプタがハンドシェイクを受け付けませんでした: {}",
             "The adapter refused the handshake: {}",
             line.trim()
         ));
@@ -523,7 +523,7 @@ pub fn schema(f: &RuleFile, c: &Checked, alias: bool) -> String {
         match pre_kinds(f, c) {
             None => String::new(),
             Some(kinds) => tr!(
-                ",\n  \"$comment\": \"入力の形だけでは足りません。ここに書けない条件（{kinds}）は、入口で断られます。`rulec api` の `preconditions` に並びます。\"",
+                ",\n  \"$comment\": \"入力の形だけでは足りません。ここに書けない条件（{kinds}）を満たさない入力は、生成コードが入口で受け付けません。その条件は `rulec api` の `preconditions` に並びます。\"",
                 ",\n  \"$comment\": \"The shape is not the whole contract. What it cannot say is refused at the door instead: {kinds}. `rulec api` lists these under `preconditions`.\""
             ),
         }

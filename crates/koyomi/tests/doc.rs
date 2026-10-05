@@ -183,7 +183,7 @@ fn the_command() {
     assert_eq!(o.status.code(), Some(0));
     assert!(String::from_utf8_lossy(&o.stdout).contains("> [!WARNING]"));
     // Any other error: no page, the diagnostics on standard error.
-    for (f, code) in [("tests/mutants/E201_無い日の扱いが無い.cal", "E201"), ("tests/mutants/E203_表の外.cal", "E203"), ("tests/mutants/E101_写しが無い.cal", "E101")] {
+    for (f, code) in [("tests/mutants/E201_無い日の扱いが無い.cal", "E201"), ("tests/mutants/E203_表の外.cal", "E203"), ("tests/mutants/E101_コピーが無い.cal", "E101")] {
         let o = koyomi(&["doc", f]);
         assert_eq!(o.status.code(), Some(1), "{f}");
         assert!(o.stdout.is_empty(), "{f} has no page");

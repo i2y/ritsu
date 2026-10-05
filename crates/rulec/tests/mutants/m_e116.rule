@@ -1,5 +1,5 @@
 rule 文書運賃(doc_fee) v1
-description "文書から写した基本運賃。行3 の金額が写しと違う（E116 の変異）"
+description "文書から転記した基本運賃。行3 の金額がコピーと違う（E116 の変異）"
 
 source 料金表 = file "sources/料金表.md" sha256:620345ff7729d6dd
   表1 sha256:a583ec8586bbf596

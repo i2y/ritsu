@@ -537,7 +537,7 @@ fn mark_diag(p: &Project, ctx: &Ctx, by_req: &BTreeMap<usize, Vec<&LinkState>>, 
                             _ => None,
                         };
                         let head = match copy {
-                            Some(c) => tr!("条文の変わったところ（写しは {c}）", "what changed in the text (the copy {c})"),
+                            Some(c) => tr!("条文の変わったところ（コピーは {c}）", "what changed in the text (the copy {c})"),
                             None => tr!("変わったところ", "what changed"),
                         };
                         d = d.diff(head, lines);

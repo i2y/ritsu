@@ -397,7 +397,7 @@ fn the_words_of_the_namespace_are_the_ones_the_export_writes() {
 #[test]
 fn what_stops_an_export_and_what_does_not() {
     // An error of the first four stages: nothing is written.
-    let m = "tests/mutants/E101_写しが無い";
+    let m = "tests/mutants/E101_コピーが無い";
     for what in ["reqif", "prov"] {
         let r = run(&["export", what, m, "--root", m]);
         assert_eq!(r.code, 1, "{what}: {}", r.stderr);

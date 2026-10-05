@@ -252,7 +252,7 @@ pub fn check(project: &Project, joined: &Joined, lang: Lang, borders: &mut Borde
                         .note(why);
                         let d = if let Precondition::Days { file, date, .. } = p {
                             d.note(tr!(
-                                "規則から生成したコードは、前提を破る呼び出しを入口で断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。koyomi は、入力の範囲のすべてで日付の日を数えています。",
+                                "規則から生成したコードは、前提を破る呼び出しを入口で受け付けません。この呼び出しは、ワークフローを走らせたときに初めて落ちます。koyomi は、入力の範囲のすべてで日付の日を数えています。",
                                 "The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. koyomi counts the days of a date over the whole range of its inputs."
                             ))
                             .note(tr!(
@@ -261,7 +261,7 @@ pub fn check(project: &Project, joined: &Joined, lang: Lang, borders: &mut Borde
                             ))
                         } else {
                             d.note(tr!(
-                                "規則から生成したコードは、前提を破る呼び出しを入口で断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。値の範囲は、dandori がその値を入れるすべての場所から集めたものです。",
+                                "規則から生成したコードは、前提を破る呼び出しを入口で受け付けません。この呼び出しは、ワークフローを走らせたときに初めて落ちます。値の範囲は、dandori がその値を入れるすべての場所から集めたものです。",
                                 "The rule's generated code refuses a call that breaks a precondition at its door, so this call fails only when the workflow runs. The ranges are dandori's, gathered from every place the values come from."
                             ))
                             .note(tr!(

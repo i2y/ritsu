@@ -1,4 +1,4 @@
-# 写した元: rulec の tests/corpus/決済手数料.rule（変えていない）
+# コピー元: rulec の tests/corpus/決済手数料.rule（変えていない）
 rule 決済手数料(payment_fee) v1
 description "契約ごとに決まる手数料率から取引一件の手数料を出す。率が 1% より細かい刻みで決まる例"
 

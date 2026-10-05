@@ -1,4 +1,4 @@
-dates 断る(reject_test) v1
+dates エラーにする(reject_test) v1
 description "else reject を、無い日に一度も当たらない範囲で使う（2 月 29 日を含む範囲では、範囲の中で当たって検査が止める）。生成したコードを参照インタプリタと突き合わせるためのもの"
 
 inputs

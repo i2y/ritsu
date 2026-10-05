@@ -4,13 +4,13 @@
 
 Moving stock between warehouses
 
-`chobo doc` が `tests/books/to_itself.book` から作ったページ。勘定ごとに残高を持ち、残高は入った量から出た量を引いたもの。どの振替も勘定の下限と上限を守り、守れない振替は、その境界に付けた名前で断られて、どの移動も行われない。振替には、すぐに動かすもの（`do`）と、動かす量をまず押さえるもの（`hold`）がある。押さえた分は、あとで確定される（`post`。全部か一部）か、取り消される（`void`）か、有効期限で切れる。
+`chobo doc` が `tests/books/to_itself.book` から作ったページ。勘定ごとに残高を持ち、残高は入った量から出た量を引いたもの。どの振替も勘定の下限と上限を守り、守れない振替は、その境界に付けた名前で拒否されて、どの移動も行われない。振替には、すぐに動かすもの（`do`）と、動かす量をまず押さえるもの（`hold`）がある。押さえた分は、あとで確定される（`post`。全部か一部）か、取り消される（`void`）か、有効期限で切れる。
 
 ## 勘定
 
 | 勘定 | 分け方 | 単位 | 境界 | 説明 |
 |---|---|---|---|---|
-| `warehouse` | `place` と `sku` ごと | pcs | 0 以上。下回る振替は `insufficient_stock` で断る |  |
+| `warehouse` | `place` と `sku` ごと | pcs | 0 以上。下回る振替は `insufficient_stock` で拒否される |  |
 | `suppliers` | 一つだけ | pcs | 外の勘定。境界は無く、マイナスにもなる |  |
 | `customers` | 一つだけ | pcs | 外の勘定。境界は無く、マイナスにもなる |  |
 
@@ -34,20 +34,20 @@ flowchart LR
 ### stock_in
 
 - 移動: `suppliers` から `warehouse(place, sku)` へ `qty`。
-- キー: `slip` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `place`、`sku`、`qty` のどれかが違う二度目の呼び出しは、`key_conflict` で断られる。
+- キー: `slip` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `place`、`sku`、`qty` のどれかが違う二度目の呼び出しは、`key_conflict` で拒否される。
 - すぐに動かす（`do`）。
 
-| 操作 | 断られうる理由 | いつ |
+| 操作 | 拒否されうる理由 | いつ |
 |---|---|---|
 | `stock_in.do` | `key_conflict` | `slip` が同じで、ほかの引数が違う呼び出しが、前に済んでいる |
 
-<details><summary>断られる例</summary>
+<details><summary>拒否される例</summary>
 
 #### stock_in.do: key_conflict
 
 ```text
  1  stock_in.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1)  通る
- 2  stock_in.do(slip: slip-1, place: place-2, sku: sku-3, qty: 2)  key_conflict で断られる
+ 2  stock_in.do(slip: slip-1, place: place-2, sku: sku-3, qty: 2)  key_conflict で拒否される
 ```
 
 </details>
@@ -55,22 +55,22 @@ flowchart LR
 ### move_stock
 
 - 移動: `warehouse(from_place, sku)` から `warehouse(to_place, sku)` へ `qty`。
-- キー: `slip` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `from_place`、`to_place`、`sku`、`qty` のどれかが違う二度目の呼び出しは、`key_conflict` で断られる。
+- キー: `slip` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `from_place`、`to_place`、`sku`、`qty` のどれかが違う二度目の呼び出しは、`key_conflict` で拒否される。
 - すぐに動かす（`do`）。
 
-| 操作 | 断られうる理由 | いつ |
+| 操作 | 拒否されうる理由 | いつ |
 |---|---|---|
 | `move_stock.do` | `insufficient_stock` | `warehouse(from_place, sku)` が 0 を下回る |
 | `move_stock.do` | `key_conflict` | `slip` が同じで、ほかの引数が違う呼び出しが、前に済んでいる |
-| `move_stock.do` | `already_refused` | `slip` が同じ呼び出しが、前に境界で断られている。境界で断られたキーは、あとで足りるようになっても通らない |
+| `move_stock.do` | `already_refused` | `slip` が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない |
 | `move_stock.do` | `same_account` | 移動の元と先が同じ勘定になる |
 
-<details><summary>断られる例</summary>
+<details><summary>拒否される例</summary>
 
 #### move_stock.do: insufficient_stock
 
 ```text
- 1  move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1)  insufficient_stock で断られる（1 つ目の移動が warehouse(from_place-2, sku-4) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
+ 1  move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1)  insufficient_stock で拒否される（1 つ目の移動が warehouse(from_place-2, sku-4) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
 ```
 
 #### move_stock.do: key_conflict
@@ -78,20 +78,20 @@ flowchart LR
 ```text
  1  stock_in.do(slip: slip-1, place: from_place-2, sku: sku-3, qty: 1)                               通る
  2  move_stock.do(slip: slip-4, from_place: from_place-2, to_place: to_place-5, sku: sku-3, qty: 1)  通る
- 3  move_stock.do(slip: slip-4, from_place: from_place-2, to_place: to_place-5, sku: sku-3, qty: 2)  key_conflict で断られる
+ 3  move_stock.do(slip: slip-4, from_place: from_place-2, to_place: to_place-5, sku: sku-3, qty: 2)  key_conflict で拒否される
 ```
 
 #### move_stock.do: already_refused
 
 ```text
- 1  move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1)  insufficient_stock で断られる（1 つ目の移動が warehouse(from_place-2, sku-4) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
- 2  move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1)  already_refused で断られる
+ 1  move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1)  insufficient_stock で拒否される（1 つ目の移動が warehouse(from_place-2, sku-4) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
+ 2  move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1)  already_refused で拒否される
 ```
 
 #### move_stock.do: same_account
 
 ```text
- 1  move_stock.do(slip: slip-1, from_place: from_place-2, to_place: from_place-2, sku: sku-3, qty: 1)  same_account で断られる
+ 1  move_stock.do(slip: slip-1, from_place: from_place-2, to_place: from_place-2, sku: sku-3, qty: 1)  same_account で拒否される
 ```
 
 </details>
@@ -99,22 +99,22 @@ flowchart LR
 ### to_main
 
 - 移動: `warehouse(from_place, sku)` から `warehouse("main", sku)` へ `qty`。
-- キー: `slip` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `from_place`、`sku`、`qty` のどれかが違う二度目の呼び出しは、`key_conflict` で断られる。
+- キー: `slip` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `from_place`、`sku`、`qty` のどれかが違う二度目の呼び出しは、`key_conflict` で拒否される。
 - すぐに動かす（`do`）。
 
-| 操作 | 断られうる理由 | いつ |
+| 操作 | 拒否されうる理由 | いつ |
 |---|---|---|
 | `to_main.do` | `insufficient_stock` | `warehouse(from_place, sku)` が 0 を下回る |
 | `to_main.do` | `key_conflict` | `slip` が同じで、ほかの引数が違う呼び出しが、前に済んでいる |
-| `to_main.do` | `already_refused` | `slip` が同じ呼び出しが、前に境界で断られている。境界で断られたキーは、あとで足りるようになっても通らない |
+| `to_main.do` | `already_refused` | `slip` が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない |
 | `to_main.do` | `same_account` | 移動の元と先が同じ勘定になる |
 
-<details><summary>断られる例</summary>
+<details><summary>拒否される例</summary>
 
 #### to_main.do: insufficient_stock
 
 ```text
- 1  to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1)  insufficient_stock で断られる（1 つ目の移動が warehouse(from_place-2, sku-3) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
+ 1  to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1)  insufficient_stock で拒否される（1 つ目の移動が warehouse(from_place-2, sku-3) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
 ```
 
 #### to_main.do: key_conflict
@@ -122,20 +122,20 @@ flowchart LR
 ```text
  1  stock_in.do(slip: slip-1, place: from_place-2, sku: sku-3, qty: 1)      通る
  2  to_main.do(slip: slip-4, from_place: from_place-2, sku: sku-3, qty: 1)  通る
- 3  to_main.do(slip: slip-4, from_place: from_place-2, sku: sku-3, qty: 2)  key_conflict で断られる
+ 3  to_main.do(slip: slip-4, from_place: from_place-2, sku: sku-3, qty: 2)  key_conflict で拒否される
 ```
 
 #### to_main.do: already_refused
 
 ```text
- 1  to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1)  insufficient_stock で断られる（1 つ目の移動が warehouse(from_place-2, sku-3) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
- 2  to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1)  already_refused で断られる
+ 1  to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1)  insufficient_stock で拒否される（1 つ目の移動が warehouse(from_place-2, sku-3) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
+ 2  to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1)  already_refused で拒否される
 ```
 
 #### to_main.do: same_account
 
 ```text
- 1  to_main.do(slip: slip-1, from_place: main, sku: sku-2, qty: 1)  same_account で断られる
+ 1  to_main.do(slip: slip-1, from_place: main, sku: sku-2, qty: 1)  same_account で拒否される
 ```
 
 </details>
@@ -143,21 +143,21 @@ flowchart LR
 ### stock_out
 
 - 移動: `warehouse(place, sku)` から `customers` へ `qty`。
-- キー: `slip` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `place`、`sku`、`qty` のどれかが違う二度目の呼び出しは、`key_conflict` で断られる。
+- キー: `slip` ごとに一度だけ動く。同じ呼び出しの二度目は何もせず、`done_before` を返す。キーが同じで `place`、`sku`、`qty` のどれかが違う二度目の呼び出しは、`key_conflict` で拒否される。
 - すぐに動かす（`do`）。
 
-| 操作 | 断られうる理由 | いつ |
+| 操作 | 拒否されうる理由 | いつ |
 |---|---|---|
 | `stock_out.do` | `insufficient_stock` | `warehouse(place, sku)` が 0 を下回る |
 | `stock_out.do` | `key_conflict` | `slip` が同じで、ほかの引数が違う呼び出しが、前に済んでいる |
-| `stock_out.do` | `already_refused` | `slip` が同じ呼び出しが、前に境界で断られている。境界で断られたキーは、あとで足りるようになっても通らない |
+| `stock_out.do` | `already_refused` | `slip` が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない |
 
-<details><summary>断られる例</summary>
+<details><summary>拒否される例</summary>
 
 #### stock_out.do: insufficient_stock
 
 ```text
- 1  stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1)  insufficient_stock で断られる（1 つ目の移動が warehouse(place-2, sku-3) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
+ 1  stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1)  insufficient_stock で拒否される（1 つ目の移動が warehouse(place-2, sku-3) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
 ```
 
 #### stock_out.do: key_conflict
@@ -165,14 +165,14 @@ flowchart LR
 ```text
  1  stock_in.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1)   通る
  2  stock_out.do(slip: slip-4, place: place-2, sku: sku-3, qty: 1)  通る
- 3  stock_out.do(slip: slip-4, place: place-2, sku: sku-3, qty: 2)  key_conflict で断られる
+ 3  stock_out.do(slip: slip-4, place: place-2, sku: sku-3, qty: 2)  key_conflict で拒否される
 ```
 
 #### stock_out.do: already_refused
 
 ```text
- 1  stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1)  insufficient_stock で断られる（1 つ目の移動が warehouse(place-2, sku-3) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
- 2  stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1)  already_refused で断られる
+ 1  stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1)  insufficient_stock で拒否される（1 つ目の移動が warehouse(place-2, sku-3) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
+ 2  stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1)  already_refused で拒否される
 ```
 
 </details>
@@ -199,12 +199,12 @@ flowchart LR
 
 </details>
 
-<details><summary>3. 境界: move_stock.do は warehouse(from_place, sku) を -1 まで減らすので断られる（<code>at least 0</code> を割る）</summary>
+<details><summary>3. 境界: move_stock.do は warehouse(from_place, sku) を -1 まで減らすので拒否される（<code>at least 0</code> を割る）</summary>
 
 | # | 操作 | 結果 | warehouse(from_place-2, sku-3) | warehouse(to_place-5, sku-3) | suppliers |
 |---|---|---|---|---|---|
 | 1 | stock_in.do(slip: slip-1, place: from_place-2, sku: sku-3, qty: 2) | 通る | 2 | 0 | -2 |
-| 2 | move_stock.do(slip: slip-4, from_place: from_place-2, to_place: to_place-5, sku: sku-3, qty: 3) | insufficient_stock で断られる | 2 | 0 | -2 |
+| 2 | move_stock.do(slip: slip-4, from_place: from_place-2, to_place: to_place-5, sku: sku-3, qty: 3) | insufficient_stock で拒否される | 2 | 0 | -2 |
 
 </details>
 
@@ -226,12 +226,12 @@ flowchart LR
 
 </details>
 
-<details><summary>6. 境界: to_main.do は warehouse(from_place, sku) を -1 まで減らすので断られる（<code>at least 0</code> を割る）</summary>
+<details><summary>6. 境界: to_main.do は warehouse(from_place, sku) を -1 まで減らすので拒否される（<code>at least 0</code> を割る）</summary>
 
 | # | 操作 | 結果 | warehouse(from_place-2, sku-3) | warehouse(main, sku-3) | suppliers |
 |---|---|---|---|---|---|
 | 1 | stock_in.do(slip: slip-1, place: from_place-2, sku: sku-3, qty: 2) | 通る | 2 | 0 | -2 |
-| 2 | to_main.do(slip: slip-4, from_place: from_place-2, sku: sku-3, qty: 3) | insufficient_stock で断られる | 2 | 0 | -2 |
+| 2 | to_main.do(slip: slip-4, from_place: from_place-2, sku: sku-3, qty: 3) | insufficient_stock で拒否される | 2 | 0 | -2 |
 
 </details>
 
@@ -253,12 +253,12 @@ flowchart LR
 
 </details>
 
-<details><summary>9. 境界: stock_out.do は warehouse(place, sku) を -1 まで減らすので断られる（<code>at least 0</code> を割る）</summary>
+<details><summary>9. 境界: stock_out.do は warehouse(place, sku) を -1 まで減らすので拒否される（<code>at least 0</code> を割る）</summary>
 
 | # | 操作 | 結果 | warehouse(place-2, sku-3) | suppliers | customers |
 |---|---|---|---|---|---|
 | 1 | stock_in.do(slip: slip-1, place: place-2, sku: sku-3, qty: 2) | 通る | 2 | -2 | 0 |
-| 2 | stock_out.do(slip: slip-4, place: place-2, sku: sku-3, qty: 3) | insufficient_stock で断られる | 2 | -2 | 0 |
+| 2 | stock_out.do(slip: slip-4, place: place-2, sku: sku-3, qty: 3) | insufficient_stock で拒否される | 2 | -2 | 0 |
 
 </details>
 
@@ -276,7 +276,7 @@ flowchart LR
 | # | 操作 | 結果 | warehouse(place-2, sku-3) | suppliers |
 |---|---|---|---|---|
 | 1 | stock_in.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1) | 通る | 1 | -1 |
-| 2 | stock_in.do(slip: slip-1, place: place-2, sku: sku-3, qty: 2) | key_conflict で断られる | 1 | -1 |
+| 2 | stock_in.do(slip: slip-1, place: place-2, sku: sku-3, qty: 2) | key_conflict で拒否される | 1 | -1 |
 
 </details>
 
@@ -296,18 +296,18 @@ flowchart LR
 |---|---|---|---|---|---|
 | 1 | stock_in.do(slip: slip-1, place: from_place-2, sku: sku-3, qty: 1) | 通る | 1 | 0 | -1 |
 | 2 | move_stock.do(slip: slip-4, from_place: from_place-2, to_place: to_place-5, sku: sku-3, qty: 1) | 通る | 0 | 1 | -1 |
-| 3 | move_stock.do(slip: slip-4, from_place: from_place-2, to_place: to_place-5, sku: sku-3, qty: 2) | key_conflict で断られる | 0 | 1 | -1 |
+| 3 | move_stock.do(slip: slip-4, from_place: from_place-2, to_place: to_place-5, sku: sku-3, qty: 2) | key_conflict で拒否される | 0 | 1 | -1 |
 
 </details>
 
-<details><summary>14. キー: move_stock.do が insufficient_stock で断られたあと、同じ引数ですぐにもう一度呼び、warehouse(from_place, sku) が足りるようになってからもう一度呼ぶ</summary>
+<details><summary>14. キー: move_stock.do が insufficient_stock で拒否されたあと、同じ引数ですぐにもう一度呼び、warehouse(from_place, sku) が足りるようになってからもう一度呼ぶ</summary>
 
 | # | 操作 | 結果 | warehouse(from_place-2, sku-4) | warehouse(to_place-3, sku-4) | suppliers |
 |---|---|---|---|---|---|
-| 1 | move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1) | insufficient_stock で断られる | 0 | 0 | 0 |
-| 2 | move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1) | already_refused で断られる | 0 | 0 | 0 |
+| 1 | move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1) | insufficient_stock で拒否される | 0 | 0 | 0 |
+| 2 | move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1) | already_refused で拒否される | 0 | 0 | 0 |
 | 3 | stock_in.do(slip: slip-5, place: from_place-2, sku: sku-4, qty: 1) | 通る | 1 | 0 | -1 |
-| 4 | move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1) | already_refused で断られる | 1 | 0 | -1 |
+| 4 | move_stock.do(slip: slip-1, from_place: from_place-2, to_place: to_place-3, sku: sku-4, qty: 1) | already_refused で拒否される | 1 | 0 | -1 |
 
 </details>
 
@@ -327,18 +327,18 @@ flowchart LR
 |---|---|---|---|---|---|
 | 1 | stock_in.do(slip: slip-1, place: from_place-2, sku: sku-3, qty: 1) | 通る | 1 | 0 | -1 |
 | 2 | to_main.do(slip: slip-4, from_place: from_place-2, sku: sku-3, qty: 1) | 通る | 0 | 1 | -1 |
-| 3 | to_main.do(slip: slip-4, from_place: from_place-2, sku: sku-3, qty: 2) | key_conflict で断られる | 0 | 1 | -1 |
+| 3 | to_main.do(slip: slip-4, from_place: from_place-2, sku: sku-3, qty: 2) | key_conflict で拒否される | 0 | 1 | -1 |
 
 </details>
 
-<details><summary>17. キー: to_main.do が insufficient_stock で断られたあと、同じ引数ですぐにもう一度呼び、warehouse(from_place, sku) が足りるようになってからもう一度呼ぶ</summary>
+<details><summary>17. キー: to_main.do が insufficient_stock で拒否されたあと、同じ引数ですぐにもう一度呼び、warehouse(from_place, sku) が足りるようになってからもう一度呼ぶ</summary>
 
 | # | 操作 | 結果 | warehouse(from_place-2, sku-3) | warehouse(main, sku-3) | suppliers |
 |---|---|---|---|---|---|
-| 1 | to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1) | insufficient_stock で断られる | 0 | 0 | 0 |
-| 2 | to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1) | already_refused で断られる | 0 | 0 | 0 |
+| 1 | to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1) | insufficient_stock で拒否される | 0 | 0 | 0 |
+| 2 | to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1) | already_refused で拒否される | 0 | 0 | 0 |
 | 3 | stock_in.do(slip: slip-4, place: from_place-2, sku: sku-3, qty: 1) | 通る | 1 | 0 | -1 |
-| 4 | to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1) | already_refused で断られる | 1 | 0 | -1 |
+| 4 | to_main.do(slip: slip-1, from_place: from_place-2, sku: sku-3, qty: 1) | already_refused で拒否される | 1 | 0 | -1 |
 
 </details>
 
@@ -358,18 +358,18 @@ flowchart LR
 |---|---|---|---|---|---|
 | 1 | stock_in.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1) | 通る | 1 | -1 | 0 |
 | 2 | stock_out.do(slip: slip-4, place: place-2, sku: sku-3, qty: 1) | 通る | 0 | -1 | 1 |
-| 3 | stock_out.do(slip: slip-4, place: place-2, sku: sku-3, qty: 2) | key_conflict で断られる | 0 | -1 | 1 |
+| 3 | stock_out.do(slip: slip-4, place: place-2, sku: sku-3, qty: 2) | key_conflict で拒否される | 0 | -1 | 1 |
 
 </details>
 
-<details><summary>20. キー: stock_out.do が insufficient_stock で断られたあと、同じ引数ですぐにもう一度呼び、warehouse(place, sku) が足りるようになってからもう一度呼ぶ</summary>
+<details><summary>20. キー: stock_out.do が insufficient_stock で拒否されたあと、同じ引数ですぐにもう一度呼び、warehouse(place, sku) が足りるようになってからもう一度呼ぶ</summary>
 
 | # | 操作 | 結果 | warehouse(place-2, sku-3) | suppliers | customers |
 |---|---|---|---|---|---|
-| 1 | stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1) | insufficient_stock で断られる | 0 | 0 | 0 |
-| 2 | stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1) | already_refused で断られる | 0 | 0 | 0 |
+| 1 | stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1) | insufficient_stock で拒否される | 0 | 0 | 0 |
+| 2 | stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1) | already_refused で拒否される | 0 | 0 | 0 |
 | 3 | stock_in.do(slip: slip-4, place: place-2, sku: sku-3, qty: 1) | 通る | 1 | -1 | 0 |
-| 4 | stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1) | already_refused で断られる | 1 | -1 | 0 |
+| 4 | stock_out.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1) | already_refused で拒否される | 1 | -1 | 0 |
 
 </details>
 
@@ -382,14 +382,14 @@ flowchart LR
 | # | 操作 | 結果 | warehouse(from_place-2, sku-3) | warehouse(to_place-5, sku-3) | warehouse(to_place-7, sku-3) | suppliers |
 |---|---|---|---|---|---|---|
 | 1 | stock_in.do(slip: slip-1, place: from_place-2, sku: sku-3, qty: 1) | 通る | 1 | 0 | 0 | -1 |
-| 2 | together<br>呼び出し元 1: move_stock.do(slip: slip-4, from_place: from_place-2, to_place: to_place-5, sku: sku-3, qty: 1)<br>呼び出し元 2: move_stock.do(slip: slip-6, from_place: from_place-2, to_place: to_place-7, sku: sku-3, qty: 1) | <br>通る<br>insufficient_stock で断られる | 0 | 1 | 0 | -1 |
+| 2 | together<br>呼び出し元 1: move_stock.do(slip: slip-4, from_place: from_place-2, to_place: to_place-5, sku: sku-3, qty: 1)<br>呼び出し元 2: move_stock.do(slip: slip-6, from_place: from_place-2, to_place: to_place-7, sku: sku-3, qty: 1) | <br>通る<br>insufficient_stock で拒否される | 0 | 1 | 0 | -1 |
 
 結果 2:
 
 | # | 操作 | 結果 | warehouse(from_place-2, sku-3) | warehouse(to_place-5, sku-3) | warehouse(to_place-7, sku-3) | suppliers |
 |---|---|---|---|---|---|---|
 | 1 | stock_in.do(slip: slip-1, place: from_place-2, sku: sku-3, qty: 1) | 通る | 1 | 0 | 0 | -1 |
-| 2 | together<br>呼び出し元 1: move_stock.do(slip: slip-4, from_place: from_place-2, to_place: to_place-5, sku: sku-3, qty: 1)<br>呼び出し元 2: move_stock.do(slip: slip-6, from_place: from_place-2, to_place: to_place-7, sku: sku-3, qty: 1) | <br>insufficient_stock で断られる<br>通る | 0 | 0 | 1 | -1 |
+| 2 | together<br>呼び出し元 1: move_stock.do(slip: slip-4, from_place: from_place-2, to_place: to_place-5, sku: sku-3, qty: 1)<br>呼び出し元 2: move_stock.do(slip: slip-6, from_place: from_place-2, to_place: to_place-7, sku: sku-3, qty: 1) | <br>insufficient_stock で拒否される<br>通る | 0 | 0 | 1 | -1 |
 
 </details>
 
@@ -402,14 +402,14 @@ flowchart LR
 | # | 操作 | 結果 | warehouse(from_place-2, sku-3) | warehouse(main, sku-3) | suppliers |
 |---|---|---|---|---|---|
 | 1 | stock_in.do(slip: slip-1, place: from_place-2, sku: sku-3, qty: 1) | 通る | 1 | 0 | -1 |
-| 2 | together<br>呼び出し元 1: to_main.do(slip: slip-4, from_place: from_place-2, sku: sku-3, qty: 1)<br>呼び出し元 2: to_main.do(slip: slip-5, from_place: from_place-2, sku: sku-3, qty: 1) | <br>通る<br>insufficient_stock で断られる | 0 | 1 | -1 |
+| 2 | together<br>呼び出し元 1: to_main.do(slip: slip-4, from_place: from_place-2, sku: sku-3, qty: 1)<br>呼び出し元 2: to_main.do(slip: slip-5, from_place: from_place-2, sku: sku-3, qty: 1) | <br>通る<br>insufficient_stock で拒否される | 0 | 1 | -1 |
 
 結果 2:
 
 | # | 操作 | 結果 | warehouse(from_place-2, sku-3) | warehouse(main, sku-3) | suppliers |
 |---|---|---|---|---|---|
 | 1 | stock_in.do(slip: slip-1, place: from_place-2, sku: sku-3, qty: 1) | 通る | 1 | 0 | -1 |
-| 2 | together<br>呼び出し元 1: to_main.do(slip: slip-4, from_place: from_place-2, sku: sku-3, qty: 1)<br>呼び出し元 2: to_main.do(slip: slip-5, from_place: from_place-2, sku: sku-3, qty: 1) | <br>insufficient_stock で断られる<br>通る | 0 | 1 | -1 |
+| 2 | together<br>呼び出し元 1: to_main.do(slip: slip-4, from_place: from_place-2, sku: sku-3, qty: 1)<br>呼び出し元 2: to_main.do(slip: slip-5, from_place: from_place-2, sku: sku-3, qty: 1) | <br>insufficient_stock で拒否される<br>通る | 0 | 1 | -1 |
 
 </details>
 
@@ -422,14 +422,14 @@ flowchart LR
 | # | 操作 | 結果 | warehouse(place-2, sku-3) | suppliers | customers |
 |---|---|---|---|---|---|
 | 1 | stock_in.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1) | 通る | 1 | -1 | 0 |
-| 2 | together<br>呼び出し元 1: stock_out.do(slip: slip-4, place: place-2, sku: sku-3, qty: 1)<br>呼び出し元 2: stock_out.do(slip: slip-5, place: place-2, sku: sku-3, qty: 1) | <br>通る<br>insufficient_stock で断られる | 0 | -1 | 1 |
+| 2 | together<br>呼び出し元 1: stock_out.do(slip: slip-4, place: place-2, sku: sku-3, qty: 1)<br>呼び出し元 2: stock_out.do(slip: slip-5, place: place-2, sku: sku-3, qty: 1) | <br>通る<br>insufficient_stock で拒否される | 0 | -1 | 1 |
 
 結果 2:
 
 | # | 操作 | 結果 | warehouse(place-2, sku-3) | suppliers | customers |
 |---|---|---|---|---|---|
 | 1 | stock_in.do(slip: slip-1, place: place-2, sku: sku-3, qty: 1) | 通る | 1 | -1 | 0 |
-| 2 | together<br>呼び出し元 1: stock_out.do(slip: slip-4, place: place-2, sku: sku-3, qty: 1)<br>呼び出し元 2: stock_out.do(slip: slip-5, place: place-2, sku: sku-3, qty: 1) | <br>insufficient_stock で断られる<br>通る | 0 | -1 | 1 |
+| 2 | together<br>呼び出し元 1: stock_out.do(slip: slip-4, place: place-2, sku: sku-3, qty: 1)<br>呼び出し元 2: stock_out.do(slip: slip-5, place: place-2, sku: sku-3, qty: 1) | <br>insufficient_stock で拒否される<br>通る | 0 | -1 | 1 |
 
 </details>
 
@@ -437,7 +437,7 @@ flowchart LR
 
 | # | 操作 | 結果 | warehouse(from_place-2, sku-3) |
 |---|---|---|---|
-| 1 | move_stock.do(slip: slip-1, from_place: from_place-2, to_place: from_place-2, sku: sku-3, qty: 1) | same_account で断られる | 0 |
+| 1 | move_stock.do(slip: slip-1, from_place: from_place-2, to_place: from_place-2, sku: sku-3, qty: 1) | same_account で拒否される | 0 |
 
 </details>
 
@@ -445,7 +445,7 @@ flowchart LR
 
 | # | 操作 | 結果 | warehouse(main, sku-2) |
 |---|---|---|---|
-| 1 | to_main.do(slip: slip-1, from_place: main, sku: sku-2, qty: 1) | same_account で断られる | 0 |
+| 1 | to_main.do(slip: slip-1, from_place: main, sku: sku-2, qty: 1) | same_account で拒否される | 0 |
 
 </details>
 

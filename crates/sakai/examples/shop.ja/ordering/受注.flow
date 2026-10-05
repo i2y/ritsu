@@ -1,4 +1,4 @@
-# 写した元: dandori の examples/fulfillment/temporal/fulfillment.ja.flow。規則を Connect で呼ぶようにし、proto と子の .flow の
+# コピー元: dandori の examples/fulfillment/temporal/fulfillment.ja.flow。規則を Connect で呼ぶようにし、proto と子の .flow の
 # パスをこの例の置き場所に、在庫の値の名前を stock.proto のものに直した
 workflow 引当と発送 v1 implements 店.FulfillmentService
 description "注文の明細ごとに在庫を引き当て、配送を手配し、倉庫の梱包を待ってから、お客さまに知らせる。明細は並べて引き当て、足りない明細があれば、引き当てたぶんを戻す。Temporal 向けの版：倉庫の呼び出しは dandori が Connect で生成するアクティビティ。配送チームのワークフローが専用のタスクキューで配送を手配し（子ワークフロー、配送の手配.flow）、翌日便の車がなければ通常便で頼み直す。梱包の依頼、お知らせ、記録は自分で書くアクティビティで、梱包の担当者は、生成したクライアントが送る Update でコールバックに応答する"

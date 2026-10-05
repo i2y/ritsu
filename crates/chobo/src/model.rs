@@ -393,7 +393,7 @@ pub fn resolve(b: &parse::Book) -> (Option<Book>, Vec<Diag>) {
                         bl.span.line,
                         bl.span.col,
                         tr!(
-                            "境界に `refused as <理由>` がありません。この境界で断ったときに返す理由の名前を付けてください",
+                            "境界に `refused as <理由>` がありません。この境界で呼び出しが拒否されたときに返す理由の名前を付けてください",
                             "the bound has no `refused as <reason>`: name the reason a call refused here is given"
                         ),
                     ));

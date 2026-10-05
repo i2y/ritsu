@@ -42,7 +42,7 @@ fn commands() -> Vec<Cmd> {
             usage: Some("chobo check <file.book>... [--format json] [--diff-base <rev>]"),
             args: "",
             purpose: tr!(
-                "帳簿を検査する。書き方の誤り、呼ぶと分かること（そうなる例つき）、使われない宣言と効かない境界。そのあと、振替の種類と操作ごとに断られうる理由を並べる",
+                "帳簿を検査する。書き方の誤り、呼ぶと分かること（そうなる例つき）、使われない宣言と効かない境界。そのあと、振替の種類と操作ごとに拒否されうる理由を並べる",
                 "check a book: how it is written, what only shows when it is called (with the operations that get there), what is never used and what never matters; then list what each operation of each transfer can be refused with"
             ),
             params: vec![book(true)],
@@ -93,7 +93,7 @@ fn commands() -> Vec<Cmd> {
             usage: Some("chobo scenarios <file.book> [--out <dir>]"),
             args: "",
             purpose: tr!(
-                "帳簿からシナリオを作る。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、移動の途中での断り、二つの呼び出し元の取り合い",
+                "帳簿からシナリオを作る。境界の手前・ちょうど・超える、同じキーの二度目、仮押さえの終わり方、移動の途中での拒否、二つの呼び出し元の取り合い",
                 "write scenarios for a book: each bound just before, at and past it, each key used twice, every way a hold ends, a refusal partway through the moves, and two callers after the last of something"
             ),
             params: vec![book(false)],
@@ -128,7 +128,7 @@ fn commands() -> Vec<Cmd> {
             usage: Some("chobo doc <file.book> [--format html] [--out <dir>]"),
             args: "",
             purpose: tr!(
-                "帳簿を、経理や運用の人が読むページにする。勘定と境界、勘定のあいだの流れの図、振替ごとの移動とキーと断られうる理由（そうなる例つき）、仮押さえのライフサイクルの図、シナリオとステップごとの残高",
+                "帳簿を、経理や運用の人が読むページにする。勘定と境界、勘定のあいだの流れの図、振替ごとの移動とキーと拒否されうる理由（そうなる例つき）、仮押さえのライフサイクルの図、シナリオとステップごとの残高",
                 "write the book as a page for the people who keep the accounts and run the operations: the accounts and their bounds, a chart of how things move between them, each transfer's moves, key and what it can be refused with (with the operations that get there), the life of a hold as a chart, and the scenarios with the balances after each step"
             ),
             params: vec![book(false)],
@@ -145,7 +145,7 @@ fn commands() -> Vec<Cmd> {
             usage: Some("chobo api <file.book>"),
             args: "",
             purpose: tr!(
-                "呼び方、操作ごとに断られうる理由、仮押さえのステートマシン、ID の決め方を JSON で出す（dandori のようなツールが読む）",
+                "呼び方、操作ごとに拒否されうる理由、仮押さえのステートマシン、ID の決め方を JSON で出す（dandori のようなツールが読む）",
                 "print how to call the book, what each operation can be refused with, the life of a hold as a state machine, and how IDs are made, as JSON (for tools such as dandori)"
             ),
             params: vec![book(false)],

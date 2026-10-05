@@ -565,7 +565,7 @@
             <ATTRIBUTE-VALUE-STRING THE-VALUE="1">
               <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_4d29b822c24952edd439e093b5d3165a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
             </ATTRIBUTE-VALUE-STRING>
-            <ATTRIBUTE-VALUE-STRING THE-VALUE="koyomi の例「民法の期間.cal」の日付が、民法のどの条から来たかを書いたテストの材料。出典は自分で写して固定し、成果物はファイルとして読む。例として書いたもので、法令の読み方を示すものではない">
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="koyomi の例「民法の期間.cal」の日付が、民法のどの条から来たかを書いたテストの材料。出典は自分で保存して固定し、成果物はファイルとして読む。例として書いたもので、法令の読み方を示すものではない">
               <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a839768f26076ff8651b726d23c1ccaa</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
             </ATTRIBUTE-VALUE-STRING>
           </VALUES>

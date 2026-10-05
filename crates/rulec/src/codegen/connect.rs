@@ -583,7 +583,7 @@ impl<'a> Gen<'a> {
         o.push_str(&tr!(
             "\n// 規則 {} v{} の入力。\n\
              // 省いたフィールドと、0 や false を入れたフィールドを区別するため、どれも optional にしてある。\n\
-             // 規則が要るものを省いたリクエストは invalid_argument で断る。省いてよいものは、注釈にそう書いてある。\n",
+             // 規則が要るものを省いたリクエストには、invalid_argument を返す。省いてよいものは、注釈にそう書いてある。\n",
             "\n// The inputs of rule {} v{}.\n\
              // Every field is optional on the wire, so that one left out is told apart from one set\n\
              // to zero or false; a request that leaves out one the rule needs is refused with\n\
@@ -901,8 +901,8 @@ impl<'a> Gen<'a> {
                 "@DATES@",
                 if self.has_date(Dir::In) || self.has_date(Dir::Out) { PY_SERVICE_DATES } else { "" },
             )
-            .replace("@D_CODECS@", &tr!("JSON のパーサーは、知らないフィールドと列挙の値を断る。Connect の既定はそれを捨てるので、\n# 綴りを誤った入力が、ゼロ値として判断されてしまう。", "The JSON reader refuses a field or an enum value it does not know. Connect's default\n# drops it, and a misspelt input would then be decided as if it were zero."))
-            .replace("@D_REQUIRED@", &tr!("規則が要るフィールドが省かれていたら断る。proto3 は省かれたフィールドをゼロ値として\n    読むので、これが無いと、何も指定しなかったリクエストが、0 と false を指定したものとして判断される。", "Refuse a request that left out a field the rule needs. proto3 reads a field left out\n    as its zero, so without this a request that named nothing would be decided as 0 and false."))
+            .replace("@D_CODECS@", &tr!("JSON のパーサーは、知らないフィールドと列挙の値を受け付けない。Connect の既定はそれを捨てるので、\n# 綴りを誤った入力が、ゼロ値として判断されてしまう。", "The JSON reader refuses a field or an enum value it does not know. Connect's default\n# drops it, and a misspelt input would then be decided as if it were zero."))
+            .replace("@D_REQUIRED@", &tr!("規則が要るフィールドが省かれていたら、リクエストを受け付けない。proto3 は省かれたフィールドをゼロ値として\n    読むので、これが無いと、何も指定しなかったリクエストが、0 と false を指定したものとして判断される。", "Refuse a request that left out a field the rule needs. proto3 reads a field left out\n    as its zero, so without this a request that named nothing would be decided as 0 and false."))
             .replace("@M_REQUIRED@", &tr!("設定されていません", "not set"))
             .replace("@D_SHA@", &tr!("どの版の表が答えたか。答えを保存しておく呼び出し側のために、レスポンスのヘッダーに入れる。", "Which version of the table answered; it goes in a response header for a caller that keeps the answer."))
             .replace("@D_MEMBER@", &tr!("列挙の値一つ。契約に無い番号は、呼び出し側の契約違反である。", "One value of an enum. A number the contract does not have is a contract violation by the caller."))

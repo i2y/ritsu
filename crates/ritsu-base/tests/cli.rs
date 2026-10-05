@@ -106,7 +106,7 @@ fn koyomi() -> Table {
                 "print the functions, their inputs, the calendar, the data range and the sources' digests as JSON, for other tools"
             )),
         cmd("source", "fetch|pin|outdated <file.cal>", tr!(
-                "出典の写しを扱う。fetch は写しを取ってきて .cal の隣に置き、pin は写しのハッシュを .cal に書き、outdated は元が変わったかを問う",
+                "出典のコピーを扱う。fetch は出典を取ってきて .cal の隣に保存し、pin はコピーのハッシュを .cal に書き、outdated は元が変わったかを問う",
                 "handle the copies of the sources: fetch brings them beside the .cal, pin writes their digests into it, outdated asks whether the originals moved on"
             )),
         cmd("explain", "<CODE>", tr!("診断のコードを引く。いつ出るか、どう直すか、最小の再現", "look a diagnostic code up: when it comes, how to fix it, the smallest reproduction")),

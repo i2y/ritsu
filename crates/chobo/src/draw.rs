@@ -426,12 +426,12 @@ pub fn life_svg(t: &TransferKind, lang: Lang) -> String {
         (
             H::Posted,
             tr!("確定（post）", "post").get(lang).to_string(),
-            vec![tr!("取消は already_posted で断る", "void is refused: already_posted").get(lang).to_string(), tr!("違う額の確定は key_conflict で断る", "post for other amounts: key_conflict").get(lang).to_string()],
+            vec![tr!("取消は already_posted で拒否される", "void is refused: already_posted").get(lang).to_string(), tr!("違う額の確定は key_conflict で拒否される", "post for other amounts: key_conflict").get(lang).to_string()],
         ),
-        (H::Voided, tr!("取消（void）", "void").get(lang).to_string(), vec![tr!("確定は already_voided で断る", "post is refused: already_voided").get(lang).to_string()]),
+        (H::Voided, tr!("取消（void）", "void").get(lang).to_string(), vec![tr!("確定は already_voided で拒否される", "post is refused: already_voided").get(lang).to_string()]),
     ];
     if expiring {
-        ends.push((H::Expired, doc::expiry_text(t, lang).unwrap_or_default(), vec![tr!("確定も取消も expired で断る", "post and void are refused: expired").get(lang).to_string()]));
+        ends.push((H::Expired, doc::expiry_text(t, lang).unwrap_or_default(), vec![tr!("確定も取消も expired で拒否される", "post and void are refused: expired").get(lang).to_string()]));
     }
     let hold_label = format!("{}.hold", t.name);
     let held_w = text_w(&st(H::Held), FONT + 1.0).max(60.0) + 36.0;
@@ -818,12 +818,12 @@ pub fn page(i: &Input) -> String {
             let rows: Vec<Vec<String>> = doc::life_rows(t, lang).into_iter().map(|r| r.to_vec()).collect();
             o.push_str(&table_html(&head, &rows).replacen("<table>", "<table class=\"states\">", 1));
         }
-        let head: Vec<String> = [tr!("操作", "Operation"), tr!("断られうる理由", "May be refused with"), tr!("いつ", "When")].into_iter().map(words).collect();
+        let head: Vec<String> = [tr!("操作", "Operation"), tr!("拒否されうる理由", "May be refused with"), tr!("いつ", "When")].into_iter().map(words).collect();
         let rows: Vec<Vec<String>> = doc::refusal_rows(i, k).into_iter().map(|r| r.to_vec()).collect();
         o.push_str(&table_html(&head, &rows));
         let examples = doc::examples_of(i, k);
         if !examples.is_empty() {
-            o.push_str(&format!("<details><summary>{}</summary>\n", words(tr!("断られる例", "How each refusal comes about"))));
+            o.push_str(&format!("<details><summary>{}</summary>\n", words(tr!("拒否される例", "How each refusal comes about"))));
             for (head, lines) in examples {
                 o.push_str(&format!("<h4>{}</h4>\n<pre>{}</pre>\n", html_escape(&head), html_escape(&lines.join("\n"))));
             }
@@ -840,7 +840,7 @@ pub fn page(i: &Input) -> String {
     o.push_str(&format!(
         "<p>{}</p>\n",
         inline(tr!(
-            "`chobo scenarios` が帳簿から作ったシナリオ {count} 本。一つ選び、ステップを一つずつ進めると、そのあとの残高と仮押さえが見られる。図では、そのステップで呼んだ振替の矢印に色が付く（断られたものは赤）。",
+            "`chobo scenarios` が帳簿から作ったシナリオ {count} 本。一つ選び、ステップを一つずつ進めると、そのあとの残高と仮押さえが見られる。図では、そのステップで呼んだ振替の矢印に色が付く（拒否されたものは赤）。",
             "{count} scenarios, which `chobo scenarios` makes from the book. Pick one and step through it: after each step come the balances and the holds it left, and on the chart the arrows of the transfers it called light up (red when refused)."
         ).get(lang))
     ));

@@ -643,7 +643,7 @@
             <ATTRIBUTE-VALUE-STRING THE-VALUE="1">
               <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_4d29b822c24952edd439e093b5d3165a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
             </ATTRIBUTE-VALUE-STRING>
-            <ATTRIBUTE-VALUE-STRING THE-VALUE="rulec のコーパスの規則「印紙税の本則と軽減.rule」の表が、印紙税法と租税特別措置法のどこから来たかを書いたテストの材料。出典は自分で写して固定し（写しは規則の写しと同じバイト列）、成果物は規則の表と節を一つずつ名指す。例として書いたもので、法令の読み方を示すものではない">
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="rulec のコーパスの規則「印紙税の本則と軽減.rule」の表が、印紙税法と租税特別措置法のどこから来たかを書いたテストの材料。出典は自分で保存して固定し（コピーは規則のコピーと同じバイト列）、成果物は規則の表と節を一つずつ名指す。例として書いたもので、法令の読み方を示すものではない">
               <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a839768f26076ff8651b726d23c1ccaa</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
             </ATTRIBUTE-VALUE-STRING>
           </VALUES>

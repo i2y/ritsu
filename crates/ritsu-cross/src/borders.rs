@@ -190,7 +190,7 @@ pub fn refusals_met(found: &Found<Vec<(String, Vec<String>)>>, op: &str, handled
     }
     let list = unfound.iter().map(|r| format!("`{r}`")).collect::<Vec<_>>().join(", ");
     Answer::Undecided(tr!(
-        "タスクが処理する {list} で断られる例は、chobo の探索で見つかりません。探索は chobo の検査と同じ深さまでしかたどらないので、起きないと言えるのはその深さまでです",
+        "タスクが処理する {list} で拒否される例は、chobo の探索で見つかりません。探索は chobo の検査と同じ深さまでしかたどらないので、起きないと言えるのはその深さまでです",
         "chobo's search finds no run that is refused with {list}, which the task handles; the search goes only as deep as chobo's check does, so all it shows is that it does not happen within that depth"
     ))
 }

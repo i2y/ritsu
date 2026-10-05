@@ -880,7 +880,7 @@ pub fn render(a: &Audit, vs: &[Vector], refused: &[Vector]) -> String {
     let mut o = tr!("ベクタ {} 件\n", "{} vectors\n", vs.len());
     if !refused.is_empty() {
         o.push_str(&tr!(
-            "  うち断る入力 {} 件（答えではなく、断ることが期待値）\n",
+            "  うち受け付けない入力 {} 件（答えではなく、受け付けないことが期待値）\n",
             "  plus {} refused inputs (the expected answer is a refusal)\n",
             refused.len()
         ));

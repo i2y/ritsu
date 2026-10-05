@@ -1,6 +1,6 @@
 # 支払条件 — 要件の出どころ
 
-このページは、下の .req のファイルと、出典の写しと、ほかの言語から読んだ成果物の定義をもとに、yuen 0.23.0 が作った。
+このページは、下の .req のファイルと、出典のコピーと、ほかの言語から読んだ成果物の定義をもとに、yuen 0.23.0 が作った。
 
 - `payment_terms.ja.req`（支払条件 v1、`sha256:efb13e38decc0120`）
 
@@ -17,7 +17,7 @@
 
 ### 祝日
 
-ファイル `calendars/data/syukujitsu.csv`（元は `https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv`）、固定は `sha256:cec37a743c96995c`。借りた先：`koyomi "calendars/東京の営業日.cal" source 祝日`（写しと固定はそのファイルのもので、その言語の検査が確かめる）。
+ファイル `calendars/data/syukujitsu.csv`（元は `https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv`）、固定は `sha256:cec37a743c96995c`。借りた先：`koyomi "calendars/東京の営業日.cal" source 祝日`（コピーと固定はそのファイルのもので、その言語の検査が確かめる）。
 
 引く要件：`営業日 (business_days)`
 

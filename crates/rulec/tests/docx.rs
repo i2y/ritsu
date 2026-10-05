@@ -85,7 +85,7 @@ fn ワードの表を読む() {
 }
 
 #[test]
-fn ワードの表を引いて写しにする() {
+fn ワードの表を引いてコピーを保存する() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }

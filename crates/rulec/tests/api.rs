@@ -88,7 +88,7 @@ const RULES: &[(&str, &str)] = &[
 /// satisfies the whole schema and breaks only that entry is actually refused, and the same
 /// input just inside the bound is taken.
 #[test]
-fn 形だけでは足りない前提が_目録に並び_実際に断られる() {
+fn 形だけでは足りない前提が_目録に並び_実際にエラーになる() {
     if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
@@ -176,17 +176,17 @@ fn 形だけでは足りない前提が_目録に並び_実際に断られる() 
         let inside = run_one(under);
         assert!(
             inside.status.success(),
-            "{rule}: 境目の内側が断られた:\n{}",
+            "{rule}: 境目の内側でエラーになった:\n{}",
             String::from_utf8_lossy(&inside.stderr)
         );
         let outside = run_one(over);
         assert!(
             !outside.status.success(),
             "{rule}: 形には合っているのに前提を破った入力が通ってしまった。\
-             目録に並べた前提が、生成コードの断りと結びついていない"
+             目録に並べた前提が、生成コードのエラーと結びついていない"
         );
         let said = String::from_utf8_lossy(&outside.stderr);
-        assert!(said.contains("RuleInputError"), "{rule}: 入口で断ったのではない:\n{said}");
+        assert!(said.contains("RuleInputError"), "{rule}: 入口でのエラーではない:\n{said}");
     }
 }
 
@@ -198,7 +198,7 @@ fn 前提の無い規則は_空の一覧を出す() {
     assert!(arr(&inv, "preconditions").is_empty(), "前提が無いのに並んでいる");
     let (c, out, _) = run(&["schema", "tests/corpus/送料.rule"]);
     assert_eq!(c, 0);
-    assert!(!out.contains("$comment"), "前提が無いのに schema が断り書きを付けている");
+    assert!(!out.contains("$comment"), "前提が無いのに schema が注記を付けている");
     let (c, out, _) = run(&["schema", "tests/corpus/買物かごの送料.rule"]);
     assert_eq!(c, 0);
     assert!(

@@ -59,7 +59,7 @@ fn scratch(tag: &str) -> (TempDir, PathBuf) {
 /// copy is pinned, and everything downstream — including the amounts check — works as it does
 /// for a format this program reads itself.
 #[test]
-fn 抽出器を通して写しを取る() {
+fn 抽出器を通してコピーを取る() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
@@ -101,7 +101,7 @@ fn 抽出器を通して写しを取る() {
 /// three stop the command rather than leaving a copy that looks like a reading of the
 /// document. A half-read stream is the dangerous one — `表3` would quietly be another table.
 #[test]
-fn 途中で終わった抽出は写しにしない() {
+fn 途中で終わった抽出は保存しない() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }

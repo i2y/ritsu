@@ -362,7 +362,7 @@ pub fn outcome_text(o: &Outcome) -> Text {
         Outcome::DoneBefore => tr!("done_before（前に済んでいる）", "done_before"),
         Outcome::Refused(r) => {
             let reason = &r.reason;
-            tr!("{reason} で断られる", "refused: {reason}")
+            tr!("{reason} で拒否される", "refused: {reason}")
         }
     }
 }

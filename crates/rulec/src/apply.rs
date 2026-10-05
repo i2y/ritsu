@@ -187,7 +187,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         if parsed.file.as_ref().is_some_and(|cf| !cf.applies.is_empty()) {
             out.push(e044(
                 tr!("`{}` 自身が `{}` を持っています", "`{}` itself has an `{}`", a.path, crate::kw::APPLY),
-                tr!("準用できるのは一段までです。準用している規則をさらに準用するときは、元の規則の中身をこの規則に書き写してください。", "An apply goes one level. A provision applied through another is written expanded."),
+                tr!("準用できるのは一段までです。準用している規則をさらに準用するときは、元の規則の中身を、この規則の中に書いてください。", "An apply goes one level. A provision applied through another is written expanded."),
             ));
             done.push(a);
             continue;

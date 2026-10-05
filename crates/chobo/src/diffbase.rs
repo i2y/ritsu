@@ -151,12 +151,12 @@ pub fn compare(old: &Book, new: &Book, rev: &str) -> Vec<Diag> {
         let what = Text::join(&changes, "、", ", ");
         let msg = if ot.is_pending() {
             tr!(
-                "振替 `{n}` の{{what}}が {rev} のときと違います。呼んでいる途中の操作をリトライすると key_conflict で断られ、押さえ中の仮押さえを確定できなくなります",
+                "振替 `{n}` の{{what}}が {rev} のときと違います。呼んでいる途中の操作をリトライすると key_conflict で拒否され、押さえ中の仮押さえを確定できなくなります",
                 "the transfer `{n}` differs from {rev} in {{what}}: a retry in flight would be refused with key_conflict, and a hold still held could not be posted"
             )
         } else {
             tr!(
-                "振替 `{n}` の{{what}}が {rev} のときと違います。呼んでいる途中の操作をリトライすると key_conflict で断られます",
+                "振替 `{n}` の{{what}}が {rev} のときと違います。呼んでいる途中の操作をリトライすると key_conflict で拒否されます",
                 "the transfer `{n}` differs from {rev} in {{what}}: a retry in flight would be refused with key_conflict"
             )
         };

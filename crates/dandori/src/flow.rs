@@ -932,7 +932,7 @@ impl<'a> Flow<'a> {
                             let (names, names_ja) = joined(self.names(c, now.keys().cloned()));
                             let p = now.values().next().cloned().unwrap_or_default();
                             let msg = if hold {
-                                tr!("ここで `{cn}` がとりうる状態（{names_ja}）では、帳簿はいつも `{event}` を断ります", "`{cn}` can be in {names} here, and the book refuses `{event}` in every one of them")
+                                tr!("ここで `{cn}` がとりうる状態（{names_ja}）では、帳簿はいつも `{event}` を拒否します", "`{cn}` can be in {names} here, and the book refuses `{event}` in every one of them")
                             } else {
                                 tr!("ここで `{cn}` がとりうる状態（{names_ja}）では、ステートマシンはいつも `{event}` を拒否します", "`{cn}` can be in {names} here, and the machine refuses `{event}` in every one of them")
                             };
@@ -957,7 +957,7 @@ impl<'a> Flow<'a> {
                                         "E022",
                                         s.line,
                                         1,
-                                        tr!("ここでは帳簿が `{event}` を `{err}` で断ることがあります（`{cn}` が {names_ja} のとき）。`{}` の `errors` に `{err}` を書き、`on {err} =>` で処理してください", "the book may refuse `{event}` here with `{err}` (when `{cn}` is in {names}); declare `{err}` in the `errors` of `{}`, and handle it with `on {err} =>`", t.name),
+                                        tr!("ここでは帳簿が `{event}` を `{err}` で拒否することがあります（`{cn}` が {names_ja} のとき）。`{}` の `errors` に `{err}` を書き、`on {err} =>` で処理してください", "the book may refuse `{event}` here with `{err}` (when `{cn}` is in {names}); declare `{err}` in the `errors` of `{}`, and handle it with `on {err} =>`", t.name),
                                     )
                                     .with_path(p),
                                 ),
@@ -973,7 +973,7 @@ impl<'a> Flow<'a> {
                                 Some(err) => {
                                     if !handles(&HErr::Declared(err.clone())) {
                                         let msg = if hold {
-                                            tr!("ここでは帳簿が `{event}` を `{err}` で断ることがあります（`{cn}` が {names_ja} のとき）。`on {err} =>` で処理してください", "the book may refuse `{event}` here with `{err}` (when `{cn}` is in {names}); handle it with `on {err} =>`")
+                                            tr!("ここでは帳簿が `{event}` を `{err}` で拒否することがあります（`{cn}` が {names_ja} のとき）。`on {err} =>` で処理してください", "the book may refuse `{event}` here with `{err}` (when `{cn}` is in {names}); handle it with `on {err} =>`")
                                         } else {
                                             tr!("ここではステートマシンが `{event}` を拒否することがあります（`{cn}` が {names_ja} のとき）。`on {err} =>` で処理してください", "the machine may refuse `{event}` here, when `{cn}` is in {names}; handle it with `on {err} =>`")
                                         };

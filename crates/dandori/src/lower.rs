@@ -1377,13 +1377,13 @@ impl<'a> Lowerer<'a> {
                 }
                 if let Some(Binding::Book(b)) = &binding {
                     if er.status.is_some() || er.exception.is_some() {
-                        self.push(e("E007", *esp, tr!("帳簿の操作のエラーは、帳簿が断る理由の名前そのものです。`= …` は外してください", "an error of a book's operation is the name of the reason the book refuses it with; leave out `= …`")));
+                        self.push(e("E007", *esp, tr!("帳簿の操作のエラーは、帳簿が拒否する理由の名前そのものです。`= …` は外してください", "an error of a book's operation is the name of the reason the book refuses it with; leave out `= …`")));
                         continue;
                     }
                     let reasons = self.book_reasons(b);
                     if !reasons.contains(en) {
                         let (tn, op) = (&b.transfer, &b.op);
-                        self.push(e("E016", *esp, tr!("`{en}` は、帳簿が `{tn}.{op}` を断る理由ではありません（理由は {}）", "`{en}` is not a reason the book refuses `{tn}.{op}` with ({})", reasons.join("・"); reasons.join(", "))));
+                        self.push(e("E016", *esp, tr!("`{en}` は、帳簿が `{tn}.{op}` を拒否する理由ではありません（理由は {}）", "`{en}` is not a reason the book refuses `{tn}.{op}` with ({})", reasons.join("・"); reasons.join(", "))));
                         continue;
                     }
                     errors.push(ErrDef { name: en.clone(), status: None, exception: None });
@@ -1579,7 +1579,7 @@ impl<'a> Lowerer<'a> {
                 MachineUse::Observes => Some(TaskMachine::Observes),
             });
             if let (Some(Binding::Book(_)), Some((_, rsp))) = (&binding, &t.refused_as) {
-                self.push(e("E007", *rsp, tr!("帳簿は、仮押さえの状態ごとに理由を付けて断ります。`refused as` は外し、理由を `errors` に書いてください", "a book refuses with a reason for each state of the hold; leave out `refused as`, and declare the reasons in `errors`")));
+                self.push(e("E007", *rsp, tr!("帳簿は、仮押さえの状態ごとに理由を付けて拒否します。`refused as` は外し、理由を `errors` に書いてください", "a book refuses with a reason for each state of the hold; leave out `refused as`, and declare the reasons in `errors`")));
             } else if t.refused_as.is_some() && !matches!(machine, Some(TaskMachine::Sends { .. })) {
                 self.push(e("E007", t.refused_as.as_ref().unwrap().1, tr!("`refused as` を書けるのは、イベントを送る（`sends`）タスクだけです", "`refused as` belongs to a task that `sends` an event")));
             }
@@ -2454,7 +2454,7 @@ impl<'a> Lowerer<'a> {
                     external.push((*a, mc.axes[*a].coords.iter().position(|x| x == "expire").unwrap(), "expire".to_string()));
                 }
                 if let Some(((_, osp), _)) = &c.refused_when {
-                    self.push(e("E008", *osp, tr!("仮押さえを断るのは帳簿で、理由は状態ごとに決まっています。`refused when` は外してください", "a hold is refused by the book, with a reason for each state; leave out `refused when`")));
+                    self.push(e("E008", *osp, tr!("仮押さえを拒否するのは帳簿で、理由は状態ごとに決まっています。`refused when` は外してください", "a hold is refused by the book, with a reason for each state; leave out `refused when`")));
                 }
             }
             for (ev, esp) in c.external.iter().filter(|_| !hold) {

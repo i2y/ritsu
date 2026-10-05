@@ -565,7 +565,7 @@ fn 手順のベクタはheldの入力を保つ() {
 /// A record that changes a held input is not a call of the same case: the version refuses
 /// the case there.
 #[test]
-fn heldの入力が変わる案件は断る() {
+fn heldの入力が変わる案件はエラーにする() {
     let (_tmp, d) = scratch("fixed-replay");
     let log = write(
         &d,

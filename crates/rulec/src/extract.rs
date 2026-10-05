@@ -825,7 +825,7 @@ pub fn via(cmd: &[String], doc: &Path) -> Result<(String, Vec<(Option<i64>, Vec<
     }
     if impl_id.is_empty() || !done {
         return Err(tr!(
-            "抽出器が最後まで出していません（`{{\"done\":true}}` で終わります）。途中までの表を写しにすると、`表3` が別の表になります",
+            "抽出器が最後まで出していません（`{{\"done\":true}}` で終わります）。途中までの表をコピーとして保存すると、`表3` が別の表になります",
             "The extractor did not finish (the stream ends with `{{\"done\":true}}`). Copying what arrived would make `table3` a different table"
         ));
     }
@@ -864,7 +864,7 @@ fn body(rule_path: &str) -> String {
          import json, sys\n\n\
          path = sys.argv[1]\n\n\
          # ここを好きな抽出器に差し替える（docling・marker・MinerU・クラウドの API など）。\n\
-         # 名乗りの impl はそのまま写しの隣に残るので、バージョンまで書く。\n\
+         # 名乗りの impl はそのままコピーの隣に残るので、バージョンまで書く。\n\
          from docling.document_converter import DocumentConverter  # type: ignore\n\
          import docling  # type: ignore\n\n\
          print(json.dumps({{\"rulec\": \"extract/1\", \"impl\": f\"docling {{docling.__version__}}\"}}), flush=True)\n\n\

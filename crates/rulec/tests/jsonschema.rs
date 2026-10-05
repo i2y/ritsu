@@ -136,7 +136,7 @@ fn 届かないポインタは_そこにある鍵を並べる() {
 }
 
 #[test]
-fn 列挙でないものと_名前でない値は断る() {
+fn 列挙でないものと_名前でない値はエラーにする() {
     let r = rule("一般(basic) | ゴールド(gold) default", "| - | 400円 |\n")
         .replace("#/components/schemas/MemberTier", "#/components/schemas/Order");
     let (_tmp, p) = pair("notenum", DOC, &r);
@@ -154,7 +154,7 @@ fn 列挙でないものと_名前でない値は断る() {
 }
 
 #[test]
-fn yamlは名前で断る() {
+fn yamlは名前を見てエラーにする() {
     let yaml = "openapi: 3.1.0\ncomponents:\n  schemas:\n    MemberTier:\n      enum: [basic, gold]\n";
     let (_tmp, d) = dir("yaml");
     std::fs::write(d.join("api.yaml"), yaml).unwrap();

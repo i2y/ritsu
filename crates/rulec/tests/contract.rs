@@ -342,7 +342,7 @@ fn oneofの二つが同時に来る行はw124() {
 }
 
 #[test]
-fn optionalに付いたrequiredは0を断らない() {
+fn optionalに付いたrequiredは0を通す() {
     let body = proto("message Order {\n  optional int64 n = 1 [(buf.validate.field).required = true, (buf.validate.field).int64.lte = 100];\n}");
     let f = check("opt-req", &rule("a(a) : number  range >=1 <=100  from 注文.n"), "order.proto", &body);
     assert_eq!(codes(&f), vec!["E122"], "{f:?}");

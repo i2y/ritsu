@@ -307,7 +307,7 @@ fn commands() -> Vec<Cmd> {
             name: "source",
             args: "fetch|pin|outdated <file.rule>",
             purpose: tr!(
-                "出典の写しを扱う。fetch は写しを取ってきて規則の隣に置き（法令の引用箇所は e-Gov から、ファイルの出典はその `url` から、引いている表は文書そのものから取り出して）、pin は写しのハッシュを規則に書き込み、outdated は元の文書が変わったかを問い合わせる（法令なら後の改正、ファイルなら `url` の先。コミットで固定した GitHub の URL なら、どのコミットがいつ変えたかまで出す）",
+                "出典のコピーを扱う。fetch は出典を取ってきて、コピーを規則の隣に保存し（法令の引用箇所は e-Gov から、ファイルの出典はその `url` から、引いている表は文書そのものから取り出して）、pin はコピーのハッシュを規則に書き込み、outdated は元の文書が変わったかを問い合わせる（法令なら後の改正、ファイルなら `url` の先。コミットで固定した GitHub の URL なら、どのコミットがいつ変えたかまで出す）",
                 "handle the copies of a rule's sources: fetch brings them to the rule's side — a law's cited fragments from e-Gov, a file source from its url, a cited table out of the document itself — pin writes the copies' digests into the rule, and outdated asks whether the original moved on (a later amendment for a law; what is at the url for a file, and for a GitHub URL pinned to a commit, what changed that path since and when)"
             ),
             params: vec![

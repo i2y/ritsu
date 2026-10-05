@@ -1113,7 +1113,7 @@ fn e203(m: &Model, s: &Stopped) -> Diag {
         }
     }
     let fetch = tr!(
-        "または、新しい表が出てから写しを取り直してください（koyomi source fetch）",
+        "または、新しい表が出てからコピーを取り直してください（koyomi source fetch）",
         "or take the copy again once a newer table is out (koyomi source fetch)"
     );
     if ok && new_lo <= new_hi {

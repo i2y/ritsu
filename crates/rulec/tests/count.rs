@@ -138,7 +138,7 @@ fn 数えた結果は表の列になる() {
 /// The range is the universe the completeness check quantifies over. Without it the check
 /// would ask for a row covering a count of −1, so it is required rather than guessed.
 #[test]
-fn 範囲の無い数え上げは断る() {
+fn 範囲の無い数え上げはエラーにする() {
     let (_tmp, d) = dir("range");
     let p = write(&d, "r.rule", &RULE.replace("  range >=0 <=100", ""));
     let (code, said, _) = run(&["check", &p, "--format", "json"]);
@@ -202,7 +202,7 @@ fn 使われない数え上げは注意される() {
 /// The declared range caps the sequence: a longer one leaves the universe the proof was made
 /// over, so the generated code refuses it at the door — and the vectors say the same.
 #[test]
-fn 上限を超えた並びは断られる() {
+fn 上限を超えた並びはエラーになる() {
     if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
@@ -263,5 +263,5 @@ fn sqlには生成しない() {
     let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
     assert_eq!(code, 0, "{said}{e}");
     assert!(!out.join("sql").exists(), "SQL を書いてしまった");
-    assert!(said.contains("SQL"), "断ったことを言っていない:\n{said}");
+    assert!(said.contains("SQL"), "生成しなかったことを言っていない:\n{said}");
 }

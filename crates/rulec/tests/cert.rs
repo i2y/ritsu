@@ -638,7 +638,7 @@ fn 数の集合の箱は値から組み直される() {
 /// rather than checking something else (§15.156). An absent `v` is the first shape, as it is
 /// for every output of rulec.
 #[test]
-fn 知らない形式の版の証明書は断る() {
+fn 知らない形式の版の証明書は受け付けない() {
     if !ready(Need::Python, have_python, "python3 が無い") {
         return;
     }

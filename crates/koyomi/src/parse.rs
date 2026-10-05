@@ -826,7 +826,7 @@ impl<'a> Parser<'a> {
                 let (name, _) = c.name(&tr!("出典", "the source"))?;
                 c.want(&Tok::Eq, "=")?;
                 let kind = if c.eat_word(kw::FILE) {
-                    let path = c.string(&tr!("写しのファイル", "the copy's file"))?;
+                    let path = c.string(&tr!("コピーのファイル", "the copy's file"))?;
                     let mut url = None;
                     let mut pin = None;
                     while !c.at_end() {

@@ -1185,7 +1185,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 .at(at(n.span.line))
                 .mark(n.span.clone(), tr!("別名", "the alias"))
                 .note(tr!(
-                    "Connect: {why}。`.proto` がその名前を二度書くので、protoc が断ります。",
+                    "Connect: {why}。`.proto` がその名前を二度書くので、protoc がエラーにします。",
                     "Connect: {why}, so the `.proto` would write that name twice and protoc refuses it."
                 ))
                 .note(tr!(
@@ -2169,7 +2169,7 @@ impl Checked {
                                         .at(format!("{path}:{}", sp.line))
                                         .mark(sp.clone(), tr!("{n} の範囲が 0 を含みます", "the range of {n} includes 0"))
                                         .note(tr!(
-                                            "`range >=1円 …` のように、下限を正にしてください。0 で割った答えは決まっていないので、実行時に落ちる前に、検査の時点で断ります。",
+                                            "`range >=1円 …` のように、下限を正にしてください。0 で割った答えは決まっていないので、rulec は実行時に落ちる前に、検査の時点でエラーにします。",
                                             "Declare it with a positive lower bound, as in `range >=1JPY …`. Dividing by zero has no answer, so it is refused here rather than at run time."
                                         )),
                                 );
@@ -2535,7 +2535,7 @@ impl Checked {
                 self,
                 tr!("{col} は負になりえます", "{col} can be negative"),
                 tr!(
-                    "合計する列には `range >=0…` が要ります。負の値が混じると途中の合計が上下するので、宣言した範囲を出た時点で断ることができません。差を取りたいなら、正の列を二つ合計して引いてください。",
+                    "合計する列には `range >=0…` が要ります。負の値が混じると途中の合計が上下するので、生成コードは、合計が宣言した範囲を出た時点でエラーにすることができません。差を取りたいなら、正の列を二つ合計して引いてください。",
                     "A summed column needs `range >=0…`. With negative values the running total moves both ways, and the guard cannot refuse the moment it leaves the declared range. To take a difference, sum two non-negative columns and subtract."
                 ),
             ),
@@ -2612,7 +2612,7 @@ impl Checked {
                         .at(at.clone())
                         .mark(d.span.clone(), what)
                         .note(tr!(
-                            "`range >=0 <=100` の形で書いてください。この範囲には二つの役割があります。数えた結果を列に使ったときに完全性の検査が見る値の全体であり、並びの長さの上限でもあります。生成コードは、これより長い並びを入口で断ります。",
+                            "`range >=0 <=100` の形で書いてください。この範囲には二つの役割があります。数えた結果を列に使ったときに完全性の検査が見る値の全体であり、並びの長さの上限でもあります。生成コードは、これより長い並びを入口で受け付けません。",
                             "Write it as `range >=0 <=100`. The range means two things: the universe the completeness check quantifies over once the count is a column, and **the cap on the sequence** — the generated code refuses a longer one at the door."
                         )),
                 );
@@ -3998,7 +3998,7 @@ fn empty_range(r: &crate::ast::Range, ty: &Ty, at: String) -> Option<Diag> {
             .at(at)
             .mark(r.span.clone(), tr!("この範囲に入る値は一つもありません", "no value lies in this range"))
             .note(tr!(
-                "下限が上限を超えています。取りうる値が無いと、完全性の証明は空の集合について「漏れなし」と判定し、生成コードの入口はどの呼び出しも断ります。",
+                "下限が上限を超えています。取りうる値が無いと、完全性の証明は空の集合について「漏れなし」と判定し、生成コードの入口はどの呼び出しも受け付けません。",
                 "The lower end is past the upper one. With no value to take, the completeness proof answers \"complete\" over nothing, and the generated code's entry refuses every call."
             ))
     })

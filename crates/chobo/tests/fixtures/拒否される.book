@@ -1,5 +1,5 @@
 # W102：取る元へ入れる移動がどこにも無い
-book 断られる v1
+book 拒否される v1
 unit 個
 
 account 在庫(sku: string) : 個

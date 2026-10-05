@@ -245,7 +245,7 @@ fn the_numbers_the_readmes_compare_are_counted_again() {
         (mutants.len(), format!("{} mutants", mutants.len()), format!("{} の変異", mutants.len())),
         (japanese, format!("{japanese} of them with Japanese names"), format!("日本語の名前のもの {japanese}")),
         (rust, format!("{rust} for Rust"), format!("Rust のものが {rust}")),
-        (copies, format!("{copies} copies ({} for each tool)", per_tool[0]), format!("{copies} の写し（ツールごとに {}）", per_tool[0])),
+        (copies, format!("{copies} copies ({} for each tool)", per_tool[0]), format!("{copies} のコピー（ツールごとに {}）", per_tool[0])),
     ] {
         assert!(en.contains(&en_says), "README.md does not say `{en_says}` ({want} counted)");
         assert!(ja.contains(&ja_says), "README.ja.md does not say `{ja_says}` ({want} counted)");

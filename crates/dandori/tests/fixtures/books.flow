@@ -1,5 +1,5 @@
 workflow 帳簿の間違い v1
-description "帳簿を使う書き方の間違い：読めない帳簿、二度読む名前、無い帳簿と振替、振替に無い操作、帳簿の操作に付けられないもの（エラーの = …、key、refused as）、引数と返り値の食い違い、帳簿が断らない理由、案件に合わない操作、仮押さえに書けない external と refused when"
+description "帳簿を使う書き方の間違い：読めない帳簿、二度読む名前、無い帳簿と振替、振替に無い操作、帳簿の操作に付けられないもの（エラーの = …、key、refused as）、引数と返り値の食い違い、帳簿が拒否するときの理由でない名前、案件に合わない操作、仮押さえに書けない external と refused when"
 
 use book 倉庫 from "../flows/books/倉庫.book"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:warehouse"
@@ -55,7 +55,7 @@ task 確定する(注文: string, sku: string) -> 倉庫.引当
 task 取り消す(注文: string, sku: string) -> 倉庫.引当
   book 倉庫.引当.void
   sends void
-  refused as 断られた
+  refused as 拒否された
 
 task 押さえ直す(注文: string, sku: string, 数: int) -> 倉庫.引当
   book 倉庫.引当.hold

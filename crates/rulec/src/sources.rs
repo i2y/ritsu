@@ -39,11 +39,11 @@ fn said(t: &Text) -> String {
 fn cite_shape(db: LawDb, name: &str) -> String {
     match db {
         LawDb::Egov => tr!(
-            "法令は条や別表の単位で写すので、`@{name} 第20条` のように、どこを引いたかを書いてください。",
+            "法令は条や別表の単位で保存するので、`@{name} 第20条` のように、どこを引いたかを書いてください。",
             "A law is copied an article at a time, so say which one: `@{name} 第20条`."
         ),
         LawDb::Ecfr => tr!(
-            "CFR は section の単位で写すので、`@{name} §1910.157` のように、どこを引いたかを書いてください。",
+            "CFR は section の単位で保存するので、`@{name} §1910.157` のように、どこを引いたかを書いてください。",
             "The CFR is copied a section at a time, so say which one: `@{name} §1910.157`."
         ),
     }
@@ -57,7 +57,7 @@ fn fragment_shapes(db: LawDb) -> String {
             "The forms are `第20条`, `第20条の2`, `第20条第2項`, `第20条第2項第3号`, `別表第一`, `附則第3条` and `附則（令和七年三月三一日法律第一三号）第3条`. Sub-items are not read yet."
         ),
         LawDb::Ecfr => tr!(
-            "書けるのは `§1910.157` か `1910.157` の形です。項（`(d)(2)`）には、まだ対応していません。eCFR は section の単位でしか返さないので、rulec の側で写しを切り分けることになるからです。",
+            "書けるのは `§1910.157` か `1910.157` の形です。項（`(d)(2)`）には、まだ対応していません。eCFR は section の単位でしか返さないので、rulec の側でコピーを切り分けることになるからです。",
             "The forms are `§1910.157` and `1910.157`. A paragraph of one (`(d)(2)`) is not read yet: the eCFR API serves a section at a time, so it would mean cutting the copy up here."
         ),
     }
@@ -183,7 +183,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                 let cited = cited_from(&cites, name);
                 let Ok(bytes) = ritsu_base::fs::read(&p) else {
                     out.push(
-                        Diag::error("E039", tr!("出典 `{name}` の写し `{path}` を読めません", "The copy `{path}` of source `{name}` cannot be read"))
+                        Diag::error("E039", tr!("出典 `{name}` のコピー `{path}` を読めません", "The copy `{path}` of source `{name}` cannot be read"))
                             .at(at(d.span.line, name))
                             .mark(d.span.clone(), "")
                             .note(tr!("パスは規則ファイルのある場所からたどります（探した先: {}）。", "The path is followed from the directory of the rule file (looked for: {}).", p.display())),
@@ -197,20 +197,20 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                         Diag::error("E037", tr!("出典 `{name}` のハッシュが固定されていません", "The digest of source `{name}` is not pinned"))
                             .at(at(d.span.line, name))
                             .mark(d.span.clone(), "")
-                            .note(tr!("いまの写しのハッシュは sha256:{h} です。この内容で承認するなら、次のとおり書き換えてください。", "The copy's digest is sha256:{h}. To pin it as the one approved, rewrite the line as follows."))
+                            .note(tr!("いまのコピーのハッシュは sha256:{h} です。この内容で承認するなら、次のとおり書き換えてください。", "The copy's digest is sha256:{h}. To pin it as the one approved, rewrite the line as follows."))
                             .fix(crate::diag::FixKind::PinSource, file_line(d, &h)),
                     ),
                     Some(p) if *p != h => out.push(
-                        Diag::error("E038", tr!("出典 `{name}` の写しが変わっています", "The copy of source `{name}` has changed"))
+                        Diag::error("E038", tr!("出典 `{name}` のコピーが変わっています", "The copy of source `{name}` has changed"))
                             .at(at(d.span.line, name))
                             .mark(d.span.clone(), tr!("固定: sha256:{p}", "pinned: sha256:{p}"))
-                            .note(tr!("いまの写し: sha256:{h}", "The copy now: sha256:{h}"))
+                            .note(tr!("いまのコピー: sha256:{h}", "The copy now: sha256:{h}"))
                             .note(if whos.is_empty() {
                                 tr!("この出典を引いている定義はありません。", "No definition cites this source.")
                             } else {
                                 tr!("読み直す定義: {}", "Definitions to reread: {}", whos_text(&whos))
                             })
-                            .note(tr!("元の文書を読み直し、写した行がまだ正しければ、次の行に書き換えて固定し直してください。", "Reread the document; if what was transcribed still holds, rewrite the line as follows to pin the new copy."))
+                            .note(tr!("元の文書を読み直し、転記した行がまだ正しければ、次の行に書き換えて固定し直してください。", "Reread the document; if what was transcribed still holds, rewrite the line as follows to pin the new copy."))
                             .fix(crate::diag::FixKind::PinSource, file_line(d, &h)),
                     ),
                     _ => {}
@@ -249,7 +249,7 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                             ),
                         };
                         out.push(
-                            Diag::error("E039", tr!("出典 `{name}` の `{frag}` の写しがありません", "There is no copy of fragment `{frag}` of source `{name}`"))
+                            Diag::error("E039", tr!("出典 `{name}` の `{frag}` のコピーがありません", "There is no copy of fragment `{frag}` of source `{name}`"))
                                 .at(at(d.span.line, name))
                                 .mark(d.span.clone(), "")
                                 .note(tr!("探した先: {}", "Looked for: {}", fp.display()))
@@ -265,16 +265,16 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                                 .at(at(d.span.line, name))
                                 .mark(d.span.clone(), "")
                                 .note(tr!("引いている: {}", "Cited by: {}", whos_text(whos)))
-                                .note(tr!("写しのハッシュは sha256:{fh} です。この内容で承認するなら、`{}` の行の下に次の行を足してください（`rulec source pin` でも書けます）。", "The copy's digest is sha256:{fh}. To pin it as the one approved, add the following line under the `{}` line (`rulec source pin` writes it too).", crate::kw::SOURCE))
+                                .note(tr!("コピーのハッシュは sha256:{fh} です。この内容で承認するなら、`{}` の行の下に次の行を足してください（`rulec source pin` でも書けます）。", "The copy's digest is sha256:{fh}. To pin it as the one approved, add the following line under the `{}` line (`rulec source pin` writes it too).", crate::kw::SOURCE))
                                 .fix(crate::diag::FixKind::PinSource, pin_line(frag, &fh)),
                         ),
                         Some(pin) if pin.hash != fh => out.push(
                             Diag::error("E038", tr!("出典 `{name}` の `{frag}` が変わっています", "Fragment `{frag}` of source `{name}` has changed"))
                                 .at(at(pin.span.line, name))
                                 .mark(pin.span.clone(), tr!("固定: sha256:{}", "pinned: sha256:{}", pin.hash))
-                                .note(tr!("いまの写し: sha256:{fh}", "The copy now: sha256:{fh}"))
+                                .note(tr!("いまのコピー: sha256:{fh}", "The copy now: sha256:{fh}"))
                                 .note(tr!("読み直す定義: {}", "Definitions to reread: {}", whos_text(whos)))
-                                .note(tr!("写しの差分（{}）を読み、写した行がまだ正しければ、この行を次のとおり書き換えて固定し直してください。", "Read the copy's diff ({}), and if what was transcribed still holds, rewrite this line as follows to pin the new copy.", fp.display()))
+                                .note(tr!("コピーの差分（{}）を読み、転記した行がまだ正しければ、この行を次のとおり書き換えて固定し直してください。", "Read the copy's diff ({}), and if what was transcribed still holds, rewrite this line as follows to pin the new copy.", fp.display()))
                                 .fix(crate::diag::FixKind::PinSource, pin_line(frag, &fh)),
                         ),
                         _ => {}
@@ -310,12 +310,12 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                     let p = cdir.join(fr.file());
                     let Ok(bytes) = ritsu_base::fs::read(&p) else {
                         out.push(
-                            Diag::error("E039", tr!("出典 `{name}` の `{frag}` の写しがありません", "There is no copy of fragment `{frag}` of source `{name}`"))
+                            Diag::error("E039", tr!("出典 `{name}` の `{frag}` のコピーがありません", "There is no copy of fragment `{frag}` of source `{name}`"))
                                 .at(at(d.span.line, name))
                                 .mark(d.span.clone(), "")
                                 .note(tr!("探した先: {}", "Looked for: {}", p.display()))
                                 .note(tr!(
-                                    "`rulec source fetch {rule_path}` を走らせると、{d} から取ってきて写しとして置きます。check は通信しません。",
+                                    "`rulec source fetch {rule_path}` を走らせると、{d} から取ってきて、コピーとして保存します。check は通信しません。",
                                     "`rulec source fetch {rule_path}` fetches it from {d} into the copies. check never reads the network.",
                                     d = db.title()
                                 ))
@@ -330,16 +330,16 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                                 .at(at(d.span.line, name))
                                 .mark(d.span.clone(), "")
                                 .note(tr!("引いている: {}", "Cited by: {}", whos_text(whos)))
-                                .note(tr!("写しのハッシュは sha256:{h} です。この内容で承認するなら、`{}` の行の下に次の行を足してください（`rulec source pin` でも書けます）。", "The copy's digest is sha256:{h}. To pin it as the one approved, add the following line under the `{}` line (`rulec source pin` writes it too).", crate::kw::SOURCE))
+                                .note(tr!("コピーのハッシュは sha256:{h} です。この内容で承認するなら、`{}` の行の下に次の行を足してください（`rulec source pin` でも書けます）。", "The copy's digest is sha256:{h}. To pin it as the one approved, add the following line under the `{}` line (`rulec source pin` writes it too).", crate::kw::SOURCE))
                                 .fix(crate::diag::FixKind::PinSource, pin_line(frag, &h)),
                         ),
                         Some(pin) if pin.hash != h => out.push(
                             Diag::error("E038", tr!("出典 `{name}` の `{frag}` が変わっています", "Fragment `{frag}` of source `{name}` has changed"))
                                 .at(at(pin.span.line, name))
                                 .mark(pin.span.clone(), tr!("固定: sha256:{}", "pinned: sha256:{}", pin.hash))
-                                .note(tr!("いまの写し: sha256:{h}", "The copy now: sha256:{h}"))
+                                .note(tr!("いまのコピー: sha256:{h}", "The copy now: sha256:{h}"))
                                 .note(tr!("読み直す定義: {}", "Definitions to reread: {}", whos_text(whos)))
-                                .note(tr!("写しの差分（{}）を読み、写した行がまだ正しければ、この行を次のとおり書き換えて固定し直してください。", "Read the copy's diff ({}), and if what was transcribed still holds, rewrite this line as follows to pin the new copy.", p.display()))
+                                .note(tr!("コピーの差分（{}）を読み、転記した行がまだ正しければ、この行を次のとおり書き換えて固定し直してください。", "Read the copy's diff ({}), and if what was transcribed still holds, rewrite this line as follows to pin the new copy.", p.display()))
                                 .fix(crate::diag::FixKind::PinSource, pin_line(frag, &h)),
                         ),
                         _ => {}
@@ -448,37 +448,37 @@ fn transcription(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
                 .collect();
             let mark = if elsewhere.len() == missing.len() {
                 let heads = elsewhere[0].1.join(sep());
-                tr!("写しの {heads} の行にも列にも無い: {values}", "not in the row or the column of {heads} in the copy: {values}")
+                tr!("コピーの {heads} の行にも列にも無い: {values}", "not in the row or the column of {heads} in the copy: {values}")
             } else {
-                tr!("写しに無い: {values}", "not in the copy: {values}")
+                tr!("コピーに無い: {values}", "not in the copy: {values}")
             };
             let title = if elsewhere.len() == missing.len() {
-                tr!("{rn} の値が、写しでは別の見出しの下にあります", "The amount of {rn} stands under another heading in the copy it cites")
+                tr!("{rn} の値が、出典のコピーでは別の見出しの下にあります", "The amount of {rn} stands under another heading in the copy it cites")
             } else {
-                tr!("{rn} の値が、引いた写しにありません", "The amount of {rn} is not in the copy it cites")
+                tr!("{rn} の値が、引いた出典のコピーにありません", "The amount of {rn} is not in the copy it cites")
             };
             let mut d = Diag::error("E116", title)
                 .at(tr!("{rule_path}:{} {word} {name} {rn}", "{rule_path}:{} {word} {name} {rn}", r.span.line))
                 .table(name.clone())
                 .row(r.index)
                 .mark(missing[0].2.clone(), mark)
-                .note(tr!("引いた写し: {} {frags}", "The copy cited: {} {frags}", c.source));
+                .note(tr!("引いた出典のコピー: {} {frags}", "The copy cited: {} {frags}", c.source));
             for (t, heads, at) in &elsewhere {
                 let heads = heads.join(sep());
                 d = d.note(match at {
                     Some(h) => tr!(
-                        "{t} は写しにありますが、{heads} の行でも列でもなく、{h} の行にあります。行を取り違えていないか確かめてください。",
+                        "{t} はコピーにありますが、{heads} の行でも列でもなく、{h} の行にあります。行を取り違えていないか確かめてください。",
                         "{t} is in the copy, but not in the row or the column of {heads}: it is in the row of {h}. Check that the rows were not mixed up."
                     ),
                     None => tr!(
-                        "{t} は写しにありますが、{heads} の行でも列でもないところにあります。行を取り違えていないか確かめてください。",
+                        "{t} はコピーにありますが、{heads} の行でも列でもないところにあります。行を取り違えていないか確かめてください。",
                         "{t} is in the copy, but outside the row and the column of {heads}. Check that the rows were not mixed up."
                     ),
                 });
             }
             if elsewhere.len() < missing.len() {
                 d = d.note(tr!(
-                    "値は写すときに書き換わらないので、これは写し間違いか、その値が別のところから来たかのどちらかです。別のところから来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。",
+                    "値は転記するときに書き換わらないので、これは転記の誤りか、その値が別のところから来たかのどちらかです。別のところから来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。",
                     "An amount is not rewritten as it is transcribed, so either it was mistyped or it came from somewhere else. If it came from somewhere else, take the citation off this row and say in a comment at the end of it where the value came from."
                 ));
             }
@@ -508,13 +508,13 @@ fn transcription(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
             let list = names[..shown_n].join(sep())
                 + &if more > 0 { tr!("（あと {more} 個）", " ({more} more)") } else { String::new() };
             out.push(
-                Diag::warning("W120", tr!("写しの {frag} の値を、どの行も使っていません", "The copy of {frag} states values no row uses"))
+                Diag::warning("W120", tr!("{frag} のコピーにある値を、どの行も使っていません", "The copy of {frag} states values no row uses"))
                     .at(tr!("{rule_path}:{} {word} {name}", "{rule_path}:{} {word} {name}", t.span.line))
                     .table(name.clone())
                     .mark(c.span.clone(), "")
                     .note(tr!("どの行にも出てこない値: {list}", "Stated in the copy, used by no row: {list}"))
                     .note(tr!(
-                        "行を落としていないか確かめてください。{frag} のうち一部だけを写したのなら、引用を `table` の行から、写した行それぞれの末尾へ移すと、残りは問われなくなります。",
+                        "行を落としていないか確かめてください。{frag} のうち一部だけを転記したのなら、引用を `table` の行から、転記した行それぞれの末尾へ移すと、残りは問われなくなります。",
                         "Check that no row was left out. If this table transcribes only part of {frag}, moving the citation from the table onto the rows that came from it leaves the rest unasked."
                     )),
             );
@@ -602,14 +602,14 @@ fn boundaries(
             let here = format!("{}{}", op.word(), n.raw);
             let span = r.cell_spans.get(k).cloned().unwrap_or_else(|| r.span.clone());
             out.push(
-                Diag::error("E119", tr!("{rn} の境界が、引いた写しと反対側です", "The boundary of {rn} falls on the other side from the copy it cites"))
+                Diag::error("E119", tr!("{rn} の境界が、引いた出典のコピーと反対側です", "The boundary of {rn} falls on the other side from the copy it cites"))
                     .at(tr!("{rule_path}:{} {word} {table} {rn}", "{rule_path}:{} {word} {table} {rn}", r.span.line))
                     .table(table.to_string())
                     .row(r.index)
-                    .mark(span, tr!("写し: {}", "the copy: {}", quote(first)))
-                    .note(tr!("引いた写し: {src} {frags}", "The copy cited: {src} {frags}"))
+                    .mark(span, tr!("コピー: {}", "the copy: {}", quote(first)))
+                    .note(tr!("引いた出典のコピー: {src} {frags}", "The copy cited: {src} {frags}"))
                     .note(tr!(
-                        "ちょうど {} のとき、写しの{}は{}に入れ、`{here}` は{}に入れます。変わるのはこの一点だけです。",
+                        "ちょうど {} のとき、コピーの{}は{}に入れ、`{here}` は{}に入れます。変わるのはこの一点だけです。",
                         "At exactly {}, the copy's {} takes it with {}, and `{here}` takes it with {}. That one point is the whole of the difference.",
                         n.raw,
                         quote(first),
@@ -617,7 +617,7 @@ fn boundaries(
                         sides(mine)
                     ))
                     .note(tr!(
-                        "閾値は写すときに書き換わる（`60cmまで` は `<=60cm` になる）ので、比べているのは境界の値がどちらに入るかだけです。写し間違いなら向きを直してください。境界が別のところ（後の通知、本文の但し書き）から来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。",
+                        "閾値は転記するときに書き換わる（`60cmまで` は `<=60cm` になる）ので、比べているのは境界の値がどちらに入るかだけです。転記の誤りなら向きを直してください。境界が別のところ（後の通知、本文の但し書き）から来たのなら、この行の引用を外し、どこから来たかを行末のコメントに書いてください。",
                         "A threshold is rewritten as it is transcribed (`up to 60cm` becomes `<=60cm`), so the one thing held to the copy here is which side the boundary value falls on. If it was mistyped, correct it. If the boundary came from somewhere else — a later notice, a proviso in the text — take the citation off this row and say in a comment at the end of it where it came from."
                     ))
                     .fix(crate::diag::FixKind::FlipBound, fixed),
@@ -999,7 +999,7 @@ pub fn fetch(f: &RuleFile, rule_path: &str, via: &[String]) -> Result<Outcome, S
         });
         if base::raw_on_a_branch(url) {
             lines.push(tr!(
-                "  この URL はブランチを指しています。コミットを指す URL なら、来年取り直しても同じ写しが返ります",
+                "  この URL はブランチを指しています。コミットを指す URL なら、来年取り直しても同じ内容が返ります",
                 "  this URL names a branch; one that names a commit answers with the same copy next year"
             ));
         }
@@ -1152,7 +1152,7 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
                             if let Some(p) = d.pins.iter().find(|p| p.fragment == frag) {
                                 new_pins.push(pin_line(&frag, &p.hash));
                             }
-                            report.push(tr!("{}: {frag} の写しがありません。先に `rulec source fetch` を走らせてください", "{}: no copy of {frag}; run `rulec source fetch` first", d.name.text));
+                            report.push(tr!("{}: {frag} のコピーがありません。先に `rulec source fetch` を走らせてください", "{}: no copy of {frag}; run `rulec source fetch` first", d.name.text));
                         }
                     }
                 }
@@ -1182,7 +1182,7 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
                             if let Some(p) = d.pins.iter().find(|p| p.fragment == frag) {
                                 new_pins.push(pin_line(&frag, &p.hash));
                             }
-                            report.push(tr!("{}: {frag} の写しがありません。先に `rulec source fetch` を走らせてください", "{}: no copy of {frag}; run `rulec source fetch` first", d.name.text));
+                            report.push(tr!("{}: {frag} のコピーがありません。先に `rulec source fetch` を走らせてください", "{}: no copy of {frag}; run `rulec source fetch` first", d.name.text));
                         }
                     }
                 }
@@ -1311,7 +1311,7 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
                         x => format!(" {}", x.word()),
                     };
                     lines.push(tr!(
-                        "  `{} {name} = {}{which} \"{id}\" {} {date}` を足し、{rows}をそこから写してください",
+                        "  `{} {name} = {}{which} \"{id}\" {} {date}` を足し、{rows}をそこから転記してください",
                         "  add `{} {name} = {}{which} \"{id}\" {} {date}` and transcribe {rows} from it",
                         crate::kw::SOURCE,
                         crate::kw::LAW,
@@ -1413,7 +1413,7 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
                     .or_else(|| std::fs::read(dir.join(path)).ok().map(|b| crate::sha256::short(&b)));
                 match before {
                     None => lines.push(tr!(
-                        "{name}: 固定も写しも無いので比べられません（いま sha256:{now}）",
+                        "{name}: 固定もコピーも無いので比べられません（いま sha256:{now}）",
                         "{name}: nothing to compare against, neither a pin nor a copy (it is sha256:{now} now)"
                     )),
                     Some(b) if b == now => {
@@ -1490,7 +1490,7 @@ fn fragment_lines(moved: Option<Vec<String>>) -> Vec<String> {
     match moved {
         None => Vec::new(),
         Some(fs) if fs.is_empty() => vec![tr!(
-            "  引いている表は変わっていません。動いたのは、この規則が写していないところです",
+            "  引いている表は変わっていません。動いたのは、この規則が転記していないところです",
             "  the tables it cites are unchanged: what moved is somewhere this rule does not transcribe"
         )],
         Some(fs) => vec![tr!(

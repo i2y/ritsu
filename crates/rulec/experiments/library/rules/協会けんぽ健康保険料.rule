@@ -3,7 +3,7 @@ description "協会けんぽの健康保険料と子ども・子育て支援金�
 
 import std/都道府県
 
-source 協会けんぽ = file "../sources/kyoukaikenpo/令和8年度都道府県単位保険料率.html" sha256:dba91a5b4fdbaaa4  # https://www.kyoukaikenpo.or.jp/about/business/insurance_rate/rate_prefectures/r08 を 2026-09-19 に写した
+source 協会けんぽ = file "../sources/kyoukaikenpo/令和8年度都道府県単位保険料率.html" sha256:dba91a5b4fdbaaa4  # https://www.kyoukaikenpo.or.jp/about/business/insurance_rate/rate_prefectures/r08 を 2026-09-19 に保存した
 source 保険料額表 = file "../sources/kyoukaikenpo/令和8年3月分からの保険料額表_東京支部.pdf" sha256:1c5abc10951aeb94  # https://www.kyoukaikenpo.or.jp/assets/R8_13tokyo.pdf 同日。率の当て方と端数の注記の出典
 
 inputs

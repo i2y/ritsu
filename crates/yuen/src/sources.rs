@@ -161,7 +161,7 @@ fn borrow(p: &Project, fi: usize, s: &SourceDecl, n: &Name, diags: &mut Vec<Diag
                 let bytes = ritsu_base::fs::read(&copy).ok().filter(|b| sha256::short(b) == *pin);
                 if bytes.is_none() {
                     let (shown, fr) = (p.shown(&rel), fragment);
-                    diags.push(e106(tr!("{t} の {fr} の写し {shown} を読めないか、固定と違います", "the copy {shown} of {fr} of {t} cannot be read, or does not match its pin")));
+                    diags.push(e106(tr!("{t} の {fr} のコピー {shown} を読めないか、固定と違います", "the copy {shown} of {fr} of {t} cannot be read, or does not match its pin")));
                 }
                 articles.push(Article { fragment: fragment.clone(), rel, abs: copy, pin: Some(pin.clone()), bytes, span: s.span });
             }
@@ -169,14 +169,14 @@ fn borrow(p: &Project, fi: usize, s: &SourceDecl, n: &Name, diags: &mut Vec<Diag
         }
         ritsu_ports::SourceKind::File { path, url, pin } => {
             let Ok(rel) = ritsu_base::paths::join(&dir_rel, path) else {
-                diags.push(e106(tr!("{t} の写しのパス `{path}` はルートの外に出ます", "the path `{path}` of the copy of {t} goes outside the root")));
+                diags.push(e106(tr!("{t} のコピーのパス `{path}` はルートの外に出ます", "the path `{path}` of the copy of {t} goes outside the root")));
                 return Resolved::Broken;
             };
             let copy = p.root.join(&rel);
             let bytes = ritsu_base::fs::read(&copy).ok().filter(|b| pin.as_deref() == Some(sha256::short(b).as_str()));
             if bytes.is_none() {
                 let shown = p.shown(&rel);
-                diags.push(e106(tr!("{t} の写し {shown} を読めないか、固定と違います", "the copy {shown} of {t} cannot be read, or does not match its pin")));
+                diags.push(e106(tr!("{t} のコピー {shown} を読めないか、固定と違います", "the copy {shown} of {t} cannot be read, or does not match its pin")));
             }
             Resolved::File { name: Name { tool: crate::names::Tool::File, path: rel, items: vec![] }, abs: copy, url: url.clone(), pin: pin.clone(), bytes, borrowed: Some(n.clone()) }
         }
@@ -211,7 +211,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                         let name = &s.name;
                         let fr = &pl.fragment;
                         match ritsu_base::fs::read(&abs) {
-                            Err(_) => diags.push(p.err(fi, "E101", pl.span, tr!("{name} {fr} の写し {shown} がありません", "The copy of {name} {fr} is not there: {shown}")).note(tr!(
+                            Err(_) => diags.push(p.err(fi, "E101", pl.span, tr!("{name} {fr} のコピー {shown} がありません", "The copy of {name} {fr} is not there: {shown}")).note(tr!(
                                 "`yuen source fetch` が {} から取ってきて、そこに書きます。check は通信しません。",
                                 "`yuen source fetch` takes it from {} and writes it there; check never reads the network.",
                                 db.title()
@@ -219,8 +219,8 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                             Ok(bytes) => {
                                 let actual = sha256::short(&bytes);
                                 if let Err(why) = copies::readable(*db, &file, &bytes) {
-                                    diags.push(p.err(fi, "E104", pl.span, tr!("{name} {fr} の写し {shown} が読めません: {}", "The copy {shown} of {name} {fr} cannot be read: {}", why.ja; why.en)).note(tr!(
-                                        "写しは、{} が配る XML のままにしておいてください。手で直さず、`yuen source fetch` で取り直してください。",
+                                    diags.push(p.err(fi, "E104", pl.span, tr!("{name} {fr} のコピー {shown} が読めません: {}", "The copy {shown} of {name} {fr} cannot be read: {}", why.ja; why.en)).note(tr!(
+                                        "コピーは、{} が配る XML のままにしておいてください。手で直さず、`yuen source fetch` で取り直してください。",
                                         "A copy is the XML {} serves, as served; fetch it again with `yuen source fetch` rather than editing it.",
                                         db.title()
                                     )));
@@ -228,16 +228,16 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                                     match &pl.pin {
                                         None => diags.push(
                                             p.err(fi, "E102", pl.span, tr!("{name} {fr} が固定されていません（`sha256:` がありません）", "{name} {fr} is not pinned (it has no `sha256:`)"))
-                                                .note(tr!("いまの写しなら sha256:{actual} です（`yuen source pin` でも書けます）。", "For the copy as it is, that is sha256:{actual} (`yuen source pin` writes it too)."))
+                                                .note(tr!("いまのコピーなら sha256:{actual} です（`yuen source pin` でも書けます）。", "For the copy as it is, that is sha256:{actual} (`yuen source pin` writes it too)."))
                                                 .fix_trimmed(ritsu_base::sources::fixed_pin_line(&line_of(pl.span.line), &actual)),
                                         ),
                                         Some(pin) if *pin != actual => diags.push(
                                             p.err(fi, "E103", pl.span, tr!(
-                                                "{name} {fr} の写しが固定と違います（固定は sha256:{pin}、写しは sha256:{actual}）",
+                                                "{name} {fr} のコピーが固定と違います（固定は sha256:{pin}、コピーは sha256:{actual}）",
                                                 "The copy of {name} {fr} does not match its pin (pinned sha256:{pin}, the copy is sha256:{actual})"
                                             ))
                                             .note(tr!(
-                                                "固定したあとで写しが変わりました。条文の何が変わったかを読んでから、固定を書き換えてください。",
+                                                "固定したあとでコピーが変わりました。条文の何が変わったかを読んでから、固定を書き換えてください。",
                                                 "The copy changed after it was pinned. Read what changed in the text, then pin it again."
                                             ))
                                             .fix_trimmed(ritsu_base::sources::fixed_pin_line(&line_of(pl.span.line), &actual)),
@@ -260,13 +260,13 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                         let mut bytes = None;
                         match ritsu_base::fs::read(&abs) {
                             Err(_) => {
-                                let mut d = p.err(fi, "E101", s.span, tr!("出典「{sname}」の写し {shown} がありません", "The copy of the source {sname} is not there: {shown}"));
+                                let mut d = p.err(fi, "E101", s.span, tr!("出典「{sname}」のコピー {shown} がありません", "The copy of the source {sname} is not there: {shown}"));
                                 d = match url {
                                     Some(_) => d.note(tr!(
                                         "`yuen source fetch` が url から取ってきて、そこに書きます。check は通信しません。",
                                         "`yuen source fetch` takes it from the url and writes it there; check never reads the network."
                                     )),
-                                    None => d.note(tr!("yuen は写しを、.req からの相対パスで探します。ファイルを置くか、パスを直してください。", "The copy is looked for from the directory of the .req; put the file there or correct the path.")),
+                                    None => d.note(tr!("yuen はコピーを、.req からの相対パスで探します。ファイルを置くか、パスを直してください。", "The copy is looked for from the directory of the .req; put the file there or correct the path.")),
                                 };
                                 diags.push(d);
                             }
@@ -275,16 +275,16 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                                 match pin {
                                     None => diags.push(
                                         p.err(fi, "E102", s.span, tr!("出典「{sname}」が固定されていません（`sha256:` がありません）", "The source {sname} is not pinned (it has no `sha256:`)"))
-                                            .note(tr!("いまの写しなら sha256:{actual} です（`yuen source pin` でも書けます）。", "For the copy as it is, that is sha256:{actual} (`yuen source pin` writes it too)."))
+                                            .note(tr!("いまのコピーなら sha256:{actual} です（`yuen source pin` でも書けます）。", "For the copy as it is, that is sha256:{actual} (`yuen source pin` writes it too)."))
                                             .fix_trimmed(ritsu_base::sources::fixed_pin_line(&line_of(s.span.line), &actual)),
                                     ),
                                     Some(pn) if *pn != actual => diags.push(
                                         p.err(fi, "E103", s.span, tr!(
-                                            "出典「{sname}」の写しが固定と違います（固定は sha256:{pn}、写しは sha256:{actual}）",
+                                            "出典「{sname}」のコピーが固定と違います（固定は sha256:{pn}、コピーは sha256:{actual}）",
                                             "The copy of the source {sname} does not match its pin (pinned sha256:{pn}, the copy is sha256:{actual})"
                                         ))
                                         .note(tr!(
-                                            "固定したあとで写しが変わりました。何が変わったかを読んでから（`yuen source outdated`）、固定を書き換えてください。",
+                                            "固定したあとでコピーが変わりました。何が変わったかを読んでから（`yuen source outdated`）、固定を書き換えてください。",
                                             "The copy changed after it was pinned. Read what changed (`yuen source outdated`), then pin it again."
                                         ))
                                         .fix_trimmed(ritsu_base::sources::fixed_pin_line(&line_of(s.span.line), &actual)),
@@ -324,7 +324,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                     SourceKind::Law { db, id, asof, pins } => {
                         if fragments.is_empty() {
                             diags.push(p.err(fi, "E105", *source_span, tr!(
-                                "法令は条の単位で写すので、`@{source} 第140条` のように、どこを引いたかを書いてください",
+                                "法令は条の単位で保存するので、`@{source} 第140条` のように、どこを引いたかを書いてください",
                                 "A law is copied an article at a time, so say which one: `@{source} 第140条`"
                             )));
                             continue;
@@ -366,7 +366,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                         Some(Resolved::Law { articles, borrowed: Some(n), .. }) => {
                             if fragments.is_empty() {
                                 diags.push(p.err(fi, "E105", *source_span, tr!(
-                                    "法令は条の単位で写すので、`@{source} 第140条` のように、どこを引いたかを書いてください",
+                                    "法令は条の単位で保存するので、`@{source} 第140条` のように、どこを引いたかを書いてください",
                                     "A law is copied an article at a time, so say which one: `@{source} 第140条`"
                                 )));
                                 continue;
@@ -502,13 +502,13 @@ pub fn mismatches(p: &Project, s: &Sources) -> Vec<Diag> {
                     let (dl, more) = crate::diff::unified(&mine_text, other);
                     let mut dg = p
                         .err(fi, "E107", *sp, tr!("{me} が読んだ {source} {fr} と、{t} が固定している {fr} の本文が違います", "{me} reads {source} {fr}, and {t} pins {fr} with another text"))
-                        .note(tr!("要件の写しは {mine_shown}、{t} の写しは {theirs_shown}（{} 時点）です。", "The requirement's copy is {mine_shown}; the copy of {t} is {theirs_shown} (as of {}).", first.asof; first.asof))
-                        .diff(tr!("要件の写しから {t} の写しへの差分", "from the requirement's copy to the copy of {t}"), dl);
+                        .note(tr!("要件のコピーは {mine_shown}、{t} のコピーは {theirs_shown}（{} 時点）です。", "The requirement's copy is {mine_shown}; the copy of {t} is {theirs_shown} (as of {}).", first.asof; first.asof))
+                        .diff(tr!("要件のコピーから {t} のコピーへの差分", "from the requirement's copy to the copy of {t}"), dl);
                     if more > 0 {
                         dg = dg.note(tr!("差分はほかに {more} 行あります。", "{more} more lines of the diff are not shown."));
                     }
                     dg = dg.note(tr!(
-                        "どちらかの写しが古いということです。改正を確かめ、古いほうを取り直して固定し直してください（yuen source fetch と yuen source pin、または規則やカレンダーの source fetch と source pin）。",
+                        "どちらかのコピーが古いということです。改正を確かめ、古いほうを取り直して固定し直してください（yuen source fetch と yuen source pin、または規則やカレンダーの source fetch と source pin）。",
                         "One of the copies is old: check the amendments, and fetch and pin the older one again (yuen source fetch and yuen source pin, or the rule's or the calendar's source fetch and source pin)."
                     ));
                     diags.push(dg);

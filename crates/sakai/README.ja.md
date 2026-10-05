@@ -49,7 +49,7 @@ sakai はこれを、それぞれの言語が自分のファイルを読んだ�
 エラー[E401]: contexts/配送.ctx:33:3: 「配送」の腐敗防止層の対応に、「在庫」の列挙 warehouse.v1.PackingStatus の値 PACKING_STATUS_DAMAGED がありません
     33 |   enum PackingStatus -> 出荷の可否
   = PACKING_STATUS_DAMAGED は proto/warehouse/v1/stock.proto:43 の値です。
-  = 上流の列挙の値ごとに、下流の値か refuse（断る）を書いてください。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。
+  = 上流の列挙の値ごとに、下流の値か refuse（拒否）を書いてください。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。
   = 直した行: PACKING_STATUS_DAMAGED -> refuse "…"
 ```
 
@@ -98,7 +98,7 @@ examples/shop.ja/go/.go-arch-lint.yml: いまの地図から書くものと同�
 ## AI エージェント向けのスキル
 
 [skills/sakai](../../skills/sakai/SKILL.md) は、地図を書いたり直したりするエージェントのためのスキルです。書く流れ、言語の一枚の要約、人に聞くこと、診断ごとの直し方への案内があります。
-`SKILL.md` のほかのページは `docs/` の写しで、`skills/sync.sh` が写します。
+`SKILL.md` のほかのページは `docs/` からコピーしたもので、`skills/sync.sh` がコピーします。
 
 ## インストール
 
@@ -139,7 +139,7 @@ $ sakai explain E401 --lang ja
 macOS（Apple シリコン）で `cargo test -p sakai -- --nocapture` を一度走らせた結果は、ツールが全部そろい SKIP の無い状態で、テスト 179 件、ビルドのあと 31 秒でした。
 
 - 132 の変異（fixture か例を一か所だけ変えたもの）が出す診断を、英語と日本語の両方で golden と突き合わせます。日本語の名前のもの 64 には、それぞれ英語の名前の対があり、ほかに Rust のものが 4 あります。
-- 四つの import の検査のツールを、56 の写し（ツールごとに 14）で走らせます。写しは、例と、生成したコードがコンテキストの内側にある地図の二つを、そのままのものと、地図が許さない import を足したものにし、日本語と英語の名前の両方で作ります。どのツールも、そのままの写しを通し、足した import をどれも捕まえます。
+- 四つの import の検査のツールを、56 のコピー（ツールごとに 14）で走らせます。コピーは、例と、生成したコードがコンテキストの内側にある地図の二つを、そのままのものと、地図が許さない import を足したものにし、日本語と英語の名前の両方で作ります。どのツールも、そのままのコピーを通し、足した import をどれも捕まえます。
 - 例の CML を、Context Mapper 6.12.0 の検証に全部の検査で通し、何も言われないことを確かめます。
 - 例と fixture の `.proto` を sakai が読んだ結果を、buf の結果と比べます。
 - `doc` のページは golden です。Mermaid 11 と 12 で図を描き、Chrome で HTML を開いて、図のコンテキストを押すとその節に移ることを確かめます。
@@ -153,4 +153,4 @@ macOS（Apple シリコン）で `cargo test -p sakai -- --nocapture` を一度�
 ## ライセンス
 
 [Apache License, Version 2.0](LICENSE-APACHE) と [MIT license](LICENSE-MIT) のどちらかを選んで使えます。
-例の中にある内閣府の祝日の表の写しは、それ自身の条件に従います（[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）。
+例の中にある内閣府の祝日の表のコピーは、それ自身の条件に従います（[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）。

@@ -520,7 +520,7 @@ impl Parser<'_> {
         }
         if c.word(kw::FILE) {
             let path_span = c.span(line.no);
-            let path = c.string(&tr!("写しのパス", "the path of the copy"))?;
+            let path = c.string(&tr!("コピーのパス", "the path of the copy"))?;
             let url = if c.word(kw::URL) { Some(c.string(&tr!("URL", "the URL"))?) } else { None };
             let pin = match c.peek() {
                 Some(Tok::Sha(h)) => {

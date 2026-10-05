@@ -27,7 +27,7 @@ claim "名前で挨拶する" {
   and  body json ".message" is "Hello, Alice"
 }
 
-claim "空の名前は断る" {
+claim "空の名前は受け付けない" {
   when api.get("/greet?name=")
   then status is 400
 }
@@ -58,12 +58,12 @@ claim "知らないパスには 404 を返す" {
 
 ## ループ
 
-[examples/greeter](examples/greeter) は小さな HTTP サービスです。最初の `server.py` は、エージェントがよく書くようなコードでした。もっともらしく、きれいで、空の名前を断るチェックだけが抜けています。主張がそれを見つけます。
+[examples/greeter](examples/greeter) は小さな HTTP サービスです。最初の `server.py` は、エージェントがよく書くようなコードでした。もっともらしく、きれいで、空の名前を受け付けないチェックだけが抜けています。主張がそれを見つけます。
 
 ```console
 $ geas check examples/greeter/greeter.ja.geas --lang ja
 ok 1 - 名前で挨拶する
-not ok 2 - 空の名前は断る
+not ok 2 - 空の名前は受け付けない
     examples/greeter/greeter.ja.geas:21: status is 400 のはずが、実際は 200
         21 |   then status is 400
       ここまでの実行:
@@ -80,7 +80,7 @@ $ echo $?
 ```console
 $ geas check examples/greeter/greeter.ja.geas --lang ja
 ok 1 - 名前で挨拶する
-ok 2 - 空の名前は断る
+ok 2 - 空の名前は受け付けない
 ok 3 - 足した数が積み上がる
 ok 4 - 知らないパスには 404 を返す
 主張 4 件 · 成り立った 4 件 · 成り立たなかった 0 件 · ジャーナル: examples/greeter/.geas/greeter.ja.journal.jsonl
@@ -102,14 +102,14 @@ $ geas snap examples/greeter/greeter.ja.geas --lang ja
 $ cp examples/greeter/server_refactored.py examples/greeter/server.py
 $ geas check examples/greeter/greeter.ja.geas --lang ja
 ok 1 - 名前で挨拶する
-ok 2 - 空の名前は断る
+ok 2 - 空の名前は受け付けない
 ok 3 - 足した数が積み上がる
 ok 4 - 知らないパスには 404 を返す
 主張 4 件 · 成り立った 4 件 · 成り立たなかった 0 件 · ジャーナル: examples/greeter/.geas/greeter.ja.journal.jsonl
 $ geas drift examples/greeter/greeter.ja.geas --lang ja
 主張 "名前で挨拶する" の when#1 api.get("/greet?name=Alice")
   + body json ".debug": 現れた: {"handler":"greet_v2"}   [主張なし]
-主張 "空の名前は断る" の when#1 api.get("/greet?name=")
+主張 "空の名前は受け付けない" の when#1 api.get("/greet?name=")
   ~ header `content-type`: "text/plain" → "text/plain; charset=utf-8"   [主張なし]
 主張 "足した数が積み上がる" の when#1 api.post("/reset")
   ~ header `content-type`: "text/plain" → "text/plain; charset=utf-8"   [主張なし]
@@ -138,7 +138,7 @@ JSON のボディはパスごとに比べるので、`.message` の主張があ�
 ```console
 $ geas map examples/greeter/greeter.ja.geas --lang ja
 ok 1 - 名前で挨拶する
-ok 2 - 空の名前は断る
+ok 2 - 空の名前は受け付けない
 ok 3 - 足した数が積み上がる
 ok 4 - 知らないパスには 404 を返す
 主張 4 件 · 成り立った 4 件 · 成り立たなかった 0 件 · ジャーナル: examples/greeter/.geas/greeter.ja.journal.jsonl
@@ -148,7 +148,7 @@ $ git diff | geas affected examples/greeter/greeter.ja.geas - --lang ja
 この変更が関わる主張:
   1 - 名前で挨拶する
       examples/greeter/server.py: 21
-  2 - 空の名前は断る
+  2 - 空の名前は受け付けない
       examples/greeter/server.py: 21
   4 - 知らないパスには 404 を返す
       examples/greeter/server.py: 29
@@ -163,7 +163,7 @@ $ echo $?
 
 21 行目（名前の空白を取る行）は、名前を送る二つの主張が通る行なので、読み直すのはこの二つです。30 行目（`/health` への応答）は、どの主張も通りません。誰も約束していない振る舞いなので、エージェントは次に、これを確かめる主張を人に提案します。削除した 2 行は、サービスを起動したときにどの主張も通る行に挟まれていました。
 
-記録には、ソースファイルごとに git の blob ハッシュが入っています。`affected` は、別のコードで取った記録を推測で使うことはせず、断ります（E062）。記録は判定を変えません。変えるのは、レビューでどこを読むかだけです。
+記録には、ソースファイルごとに git の blob ハッシュが入っています。`affected` は、別のコードで取った記録を推測で使うことはせず、エラーにします（E062）。記録は判定を変えません。変えるのは、レビューでどこを読むかだけです。
 
 | 言語 | geas が有効にするもの | プログラムの側に要ること |
 |---|---|---|

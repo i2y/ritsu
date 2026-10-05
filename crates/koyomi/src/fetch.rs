@@ -71,7 +71,7 @@ pub fn fetch(f: &File, dir: &Path) -> Result<Outcome, Text> {
                 let before = std::fs::read(&dest).ok();
                 let h = short(&body);
                 if before.as_deref() == Some(body.as_slice()) {
-                    lines.push(tr!("{name}: 写し {path} は変わっていません（sha256:{h}）", "{name}: the copy {path} is unchanged (sha256:{h})"));
+                    lines.push(tr!("{name}: コピー {path} は変わっていません（sha256:{h}）", "{name}: the copy {path} is unchanged (sha256:{h})"));
                     continue;
                 }
                 if let Some(parent) = dest.parent() {
@@ -80,9 +80,9 @@ pub fn fetch(f: &File, dir: &Path) -> Result<Outcome, Text> {
                 std::fs::write(&dest, &body).map_err(|e| tr!("{} に書けません: {e}", "cannot write {}: {e}", dest.display()))?;
                 changed |= before.is_some();
                 let what = if before.is_some() {
-                    tr!("{name}: 写し {path} を取り直しました（sha256:{h}）", "{name}: fetched the copy {path} again (sha256:{h})")
+                    tr!("{name}: 取り直して {path} に保存しました（sha256:{h}）", "{name}: fetched the copy {path} again (sha256:{h})")
                 } else {
-                    tr!("{name}: 写し {path} を取りました（sha256:{h}）", "{name}: fetched the copy {path} (sha256:{h})")
+                    tr!("{name}: 取ってきて {path} に保存しました（sha256:{h}）", "{name}: fetched the copy {path} (sha256:{h})")
                 };
                 lines.push(what);
                 lines.push(match pin {
@@ -173,7 +173,7 @@ pub fn pin(f: &File, dir: &Path, src: &str) -> Result<(String, Outcome), Text> {
         match &s.kind {
             SourceKind::File { path, pin, format, covers, .. } => {
                 let Ok(bytes) = std::fs::read(dir.join(path)) else {
-                    report.push(tr!("{name}: 写し {path} が無いので固定できません。先に koyomi source fetch を走らせてください", "{name}: there is no copy {path} to pin; run koyomi source fetch first"));
+                    report.push(tr!("{name}: コピー {path} が無いので固定できません。先に koyomi source fetch を走らせてください", "{name}: there is no copy {path} to pin; run koyomi source fetch first"));
                     continue;
                 };
                 let h = short(&bytes);
@@ -194,7 +194,7 @@ pub fn pin(f: &File, dir: &Path, src: &str) -> Result<(String, Outcome), Text> {
                 for p in pins {
                     let Some(e) = elm(&p.fragment) else { continue };
                     let Ok(bytes) = std::fs::read(cdir.join(format!("{e}.xml"))) else {
-                        report.push(tr!("{name}: {} の写しが無いので固定できません。先に koyomi source fetch を走らせてください", "{name}: there is no copy of {} to pin; run koyomi source fetch first", p.fragment));
+                        report.push(tr!("{name}: {} のコピーが無いので固定できません。先に koyomi source fetch を走らせてください", "{name}: there is no copy of {} to pin; run koyomi source fetch first", p.fragment));
                         continue;
                     };
                     let h = short(&bytes);
@@ -217,7 +217,7 @@ pub fn pin(f: &File, dir: &Path, src: &str) -> Result<(String, Outcome), Text> {
                 for fr in fragments(f, name, pins).into_iter().skip(pins.len()) {
                     let Some(e) = elm(&fr) else { continue };
                     let Ok(bytes) = std::fs::read(cdir.join(format!("{e}.xml"))) else {
-                        report.push(tr!("{name}: {fr} の写しが無いので固定できません。先に koyomi source fetch を走らせてください", "{name}: there is no copy of {fr} to pin; run koyomi source fetch first"));
+                        report.push(tr!("{name}: {fr} のコピーが無いので固定できません。先に koyomi source fetch を走らせてください", "{name}: there is no copy of {fr} to pin; run koyomi source fetch first"));
                         continue;
                     };
                     let h = short(&bytes);
@@ -384,7 +384,7 @@ pub fn outdated(f: &File, dir: &Path) -> Result<Outcome, Text> {
                 let old = match std::fs::read(dir.join(path)) {
                     Ok(b) => read_rows(&b, fmt).unwrap_or_default(),
                     Err(_) => {
-                        lines.push(tr!("  写し {path} が無いので、行を比べられません", "  there is no copy {path}, so the rows cannot be compared"));
+                        lines.push(tr!("  コピー {path} が無いので、行を比べられません", "  there is no copy {path}, so the rows cannot be compared"));
                         continue;
                     }
                 };
@@ -411,7 +411,7 @@ pub fn outdated(f: &File, dir: &Path) -> Result<Outcome, Text> {
                 for fr in fragments(f, name, pins) {
                     let Some(e) = elm(&fr) else { continue };
                     let Ok(mut prev) = std::fs::read(cdir.join(format!("{e}.xml"))) else {
-                        lines.push(tr!("{name}: {fr} の写しが無いので比べられません。先に koyomi source fetch を走らせてください", "{name}: there is no copy of {fr} to compare; run koyomi source fetch first"));
+                        lines.push(tr!("{name}: {fr} のコピーが無いので比べられません。先に koyomi source fetch を走らせてください", "{name}: there is no copy of {fr} to compare; run koyomi source fetch first"));
                         continue;
                     };
                     for (date, _) in &later {

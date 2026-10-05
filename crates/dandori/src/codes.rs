@@ -178,7 +178,7 @@ pub fn ledger() -> Ledger {
             "E016",
             tr!("API の記述や帳簿と合いません", "A task that does not fit the API or the book it calls"),
             tr!(
-                "タスクが、呼ぶ API の記述（OpenAPI、Smithy、`.proto`）と合わないとき。無い操作、受け取らない引数、要る引数の不足、型・範囲・列挙の違い、レスポンスが省きうるのに `T?` でないフィールド、返さないステータスや例外、冪等トークンでない `key`、ストリームのメソッドなどです。記述が読めないとき、`connect` で呼ぶ `.proto` に `url` が無いとき、メソッドやメッセージが、読めなかった import にある型を使っているときにも出ます。帳簿の操作のタスクでは、操作が受け取るもの（名前と型）と違う引数、仮押さえでない結果（do は何も返しません）、帳簿がその操作を断る理由でないエラーで出ます。",
+                "タスクが、呼ぶ API の記述（OpenAPI、Smithy、`.proto`）と合わないとき。無い操作、受け取らない引数、要る引数の不足、型・範囲・列挙の違い、レスポンスが省きうるのに `T?` でないフィールド、返さないステータスや例外、冪等トークンでない `key`、ストリームのメソッドなどです。記述が読めないとき、`connect` で呼ぶ `.proto` に `url` が無いとき、メソッドやメッセージが、読めなかった import にある型を使っているときにも出ます。帳簿の操作のタスクでは、操作が受け取るもの（名前と型）と違う引数、仮押さえでない結果（do は何も返しません）、帳簿がその操作を拒否する理由でないエラーで出ます。",
                 "A task that does not fit the description of the API it calls (OpenAPI, Smithy, `.proto`): an operation that is not there, a parameter it does not take or one it needs left out, a type, range or enum that differs, a field the answer may leave out that is not `T?`, a status or an exception it does not answer with, a `key` that is not its idempotency token, a method that streams; a description that cannot be read, a `.proto` without `url` that a `connect` task calls, or a method whose message has a type from a file that could not be read, too. For a task that runs an operation of a book: parameters other than what the operation takes (by name and type), an answer that is not the hold (a do answers nothing), an error that is not a reason the book refuses the operation with."
             ),
             tr!("タスクを記述や帳簿に合わせるか、記述のパスを直してください。", "Make the task fit the description or the book, or correct the description's path."),
@@ -218,7 +218,7 @@ pub fn ledger() -> Ledger {
         Entry::new(
             "E021",
             tr!("どの状態でも拒否されるイベントを送っています", "An event sent that every state refuses"),
-            tr!("案件がその場所でとりうるどの状態でも、ステートマシンが拒否するイベントを送るとき。帳簿の仮押さえでは、帳簿がどの状態でも断る操作で出ます。", "An event sent that the machine refuses in every state the case can be in at that point; for a book's hold, an operation the book refuses in every one."),
+            tr!("案件がその場所でとりうるどの状態でも、ステートマシンが拒否するイベントを送るとき。帳簿の仮押さえでは、帳簿がどの状態でも拒否する操作で出ます。", "An event sent that the machine refuses in every state the case can be in at that point; for a book's hold, an operation the book refuses in every one."),
             tr!("送るイベントか送る場所を直してください。その場所で案件がとりうる状態は、メッセージに出ます。", "Correct the event, or where it is sent; the message says the states the case can be in there."),
             Repro::File { body: "workflow w v1\n\nuse rule door from \"door.rule\"\n\nrecord Door\n  id    : string\n  state : door.state\n\ntask open_door(id: string) -> Door\n  starts door.door\n  key\n\ntask reopen(id: string) -> Door\n  sends open_it\n\ncase d : Door follows door.door\n  refused when accepted = false\n\nflow\n  d <- open_door(id: \"x\")\n  d <- reopen(id: \"x\")\n", beside: &[DOOR] },
             &["E022"],
@@ -226,7 +226,7 @@ pub fn ledger() -> Ledger {
         Entry::new(
             "E022",
             tr!("拒否されうるイベントの拒否を処理していません", "An event that can be refused, with nothing to handle the refusal"),
-            tr!("案件がその場所でとりうる状態のどれかでステートマシンが拒否するイベントを送るのに、拒否されたときの処理が無いとき。拒否はタスクの `refused as <エラー>` で宣言したエラーとして返ってきます。帳簿の仮押さえでは、帳簿が断る理由そのものがエラーです（仮押さえはワークフローの外で期限が切れるので、押さえたあとの post と void は `expired` で断られることがあります）。", "An event sent that the machine refuses in some state the case can be in there, with nothing to handle the refusal; a refusal comes back as the error the task's `refused as <error>` declares. For a book's hold, the error is the reason the book refuses with (a hold expires on its own, so a post or a void after a hold may be refused with `expired`)."),
+            tr!("案件がその場所でとりうる状態のどれかでステートマシンが拒否するイベントを送るのに、拒否されたときの処理が無いとき。拒否はタスクの `refused as <エラー>` で宣言したエラーとして返ってきます。帳簿の仮押さえでは、帳簿が拒否する理由そのものがエラーです（仮押さえはワークフローの外で期限が切れるので、押さえたあとの post と void は `expired` で拒否されることがあります）。", "An event sent that the machine refuses in some state the case can be in there, with nothing to handle the refusal; a refusal comes back as the error the task's `refused as <error>` declares. For a book's hold, the error is the reason the book refuses with (a hold expires on its own, so a post or a void after a hold may be refused with `expired`)."),
             tr!("タスクに `refused as <エラー>` を書き、呼び出しの下に `on <エラー> =>` を書くか、案件の状態を `match` で見てから送ってください。帳簿の操作なら、理由を `errors` に書き、`on <理由> =>` を書いてください。", "Write `refused as <error>` on the task, and `on <error> =>` under the call; or look at the case's state with `match` before sending it. For a book's operation, declare the reason in `errors`, and write `on <reason> =>`."),
             Repro::File { body: "workflow w v1\n\nuse rule door from \"door.rule\"\n\nrecord Door\n  id    : string\n  state : door.state\n\ninputs\n  hurry : bool\n\ntask open_door(id: string) -> Door\n  starts door.door\n  key\n\ntask shut(id: string) -> Door\n  sends shut_it\n\ncase d : Door follows door.door\n  refused when accepted = false\n\nflow\n  d <- open_door(id: \"x\")\n  match hurry\n    true => d <- shut(id: \"x\")\n    false => pass\n  d <- shut(id: \"x\")\n", beside: &[DOOR] },
             &["E021", "W102"],

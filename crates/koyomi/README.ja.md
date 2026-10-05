@@ -2,7 +2,7 @@
 
 **期日を書く。全部の日で確かめる。コードにする。**
 
-koyomi は、締め日や支払日、営業日、月の足し算を書くための小さな言語です。「20 日締め翌月 10 日払い。支払日が休みなら前の営業日」のような支払条件を、`.cal` のファイルに数行で書きます。どの日が休みかはカレンダーのファイルに書きます。祝日は、内閣府の祝日の CSV や GOV.UK の bank holidays のような公開されている表から読み、その写しを SHA-256 で固定します。
+koyomi は、締め日や支払日、営業日、月の足し算を書くための小さな言語です。「20 日締め翌月 10 日払い。支払日が休みなら前の営業日」のような支払条件を、`.cal` のファイルに数行で書きます。どの日が休みかはカレンダーのファイルに書きます。祝日は、内閣府の祝日の CSV や GOV.UK の bank holidays のような公開されている表から読み、手元に保存したコピーを SHA-256 で固定します。
 
 ファイルには、計算した日付が満たすべき条件も書きます。支払日は営業日である、受領から 60 日以内に払う、受領が遅くなっても支払日は早くならない、といった条件です。koyomi は、これを宣言した範囲のすべての日について確かめます。100 年分でも 3 万 7 千日に満たないので、一部の日を選んで試すのではなく、全部の日を計算できます。成り立たない日があれば全部挙げ、最初の日がどう計算されたかを一段ずつ見せます。
 
@@ -105,14 +105,14 @@ koyomi は、[rulec](https://github.com/i2y/ritsu/tree/main/crates/rulec)（業�
 
 範囲のすべての入力で、ファイルのすべての日付を計算し、条件と例を確かめます。そのほかに、次の三つも検査で決まります。
 
-- その月に無い日の扱いは、書かなければ通りません。1 月 31 日に 1 か月を足す、4 月の 31 日を指す、2 月に 30 日で締める、といった計算は、その月に無い日に当たることがあります。そのときどうするか（`else end_of_month` で月末に寄せる、`else start_of_next_month` で次の月の 1 日に送る、`else reject` で断る）を書かなければ、検査は止まります（E201）。既定の扱いはありません。契約がどれを意味するかは、koyomi が決めることではないからです。`else reject` と書いた計算は、範囲の中で一度も無い日に当たらないことを検査が確かめます。
+- その月に無い日の扱いは、書かなければ通りません。1 月 31 日に 1 か月を足す、4 月の 31 日を指す、2 月に 30 日で締める、といった計算は、その月に無い日に当たることがあります。そのときどうするか（`else end_of_month` で月末に寄せる、`else start_of_next_month` で次の月の 1 日に送る、`else reject` でエラーにする）を書かなければ、検査は止まります（E201）。既定の扱いはありません。契約がどれを意味するかは、koyomi が決めることではないからです。`else reject` と書いた計算は、範囲の中で一度も無い日に当たらないことを検査が確かめます。
 - カレンダーが知らない日は問えません。祝日の表が載せている範囲の外の日が休みかを問う計算は、検査でも生成したコードでも止まります。検査は、その日を問わずに済む範囲を示します（E203）。
-- もとにした文書は固定します。祝日の表や、引いた法令の条文は、写しを SHA-256 で固定します。写しが変われば、読み直して固定し直すまでエラーです。何が変わったか（増えた日、消えた日、名前の変わった日、条文の変わり方）は `koyomi source outdated` が言います。`koyomi check` は通信しません。
+- もとにした文書は固定します。祝日の表や、引いた法令の条文は、手元のコピーを SHA-256 で固定します。コピーが変われば、読み直して固定し直すまでエラーです。何が変わったか（増えた日、消えた日、名前の変わった日、条文の変わり方）は `koyomi source outdated` が言います。`koyomi check` は通信しません。
 
 検査で言えないことは次の三つです。
 
 - ファイルが、契約や約款や法令の言っていることと合っているか
-- 祝日の表が現実と合っているか（言えるのは、写しが配られたファイルそのものであることまで）
+- 祝日の表が現実と合っているか（言えるのは、コピーが配られたファイルそのものであることまで）
 - 範囲の外の入力で、条件が成り立つか
 
 生成したコードが参照インタプリタと同じ結果を返すことは、範囲のすべての入力で突き合わせるテストで確かめています。証明ではありません。
@@ -121,7 +121,7 @@ koyomi は、[rulec](https://github.com/i2y/ritsu/tree/main/crates/rulec)（業�
 
 `koyomi doc` は、支払条件やカレンダーを読んで、コードが実現すべきものを理解し、確かめる人（経理、法務、会社の休みを決める人、コードをレビューする開発者）のためのページを出します。プルリクエストにそのまま載せられる Markdown か、外のファイルを何も読まない一枚の HTML で、HTML には明るい配色と暗い配色があります。ページには次のものが載ります。
 
-- 計算のしかた。操作を一つずつ普通の言葉で書き、隣に `.cal` の行を置きます。法令を引いた行には、写しから引いた条文と、何年何月何日時点のどの版かを添えます。
+- 計算のしかた。操作を一つずつ普通の言葉で書き、隣に `.cal` の行を置きます。法令を引いた行には、コピーから引いた条文と、何年何月何日時点のどの版かを添えます。
 - 条件ごとの結果と、余裕がいちばん少ない入力（成り立たなければ、いちばん外れる入力）。
 - 無い日の扱いごとに、範囲の中で使われる数と、ほかの扱いに替えたら結果が変わる数。
 - koyomi が範囲から選んだエッジケース。月末の日、休みの日とその前後、受領から支払までの日数がいちばん多い入力と少ない入力などです。
@@ -173,7 +173,7 @@ $ koyomi explain E201 --lang ja                  # いつ出るか、どう直�
 | [`payment_20th_close_next_10th.ja.cal`](examples/payment_20th_close_next_10th.ja.cal) | [`payment_20th_close_next_10th.cal`](examples/payment_20th_close_next_10th.cal) | 上の例 | 通る |
 | [`eom_close_two_months_later.ja.cal`](examples/eom_close_two_months_later.ja.cal) | [`eom_close_two_months_later.cal`](examples/eom_close_two_months_later.cal) | 月末締め翌々月末払い | わざと通らないようにした例。648 日で「受領から60日以内」が成り立たない |
 | [`closing_and_payment_days_as_inputs.ja.cal`](examples/closing_and_payment_days_as_inputs.ja.cal) | [`closing_and_payment_days_as_inputs.cal`](examples/closing_and_payment_days_as_inputs.cal) | 締め日、支払の月、支払の日を整数の入力で受け取る。871,596 通り | 通る |
-| [`civil_code_period_end.ja.cal`](examples/civil_code_period_end.ja.cal) | [`civil_code_period_end.cal`](examples/civil_code_period_end.cal) | 民法 140〜143 条による期間の満了日。どの日付も e-Gov から写した条文を引く | 通る |
+| [`civil_code_period_end.ja.cal`](examples/civil_code_period_end.ja.cal) | [`civil_code_period_end.cal`](examples/civil_code_period_end.cal) | 民法 140〜143 条による期間の満了日。どの日付も e-Gov から取って保存した条文を引く | 通る |
 | [`civil_code_two_readings.ja.cal`](examples/civil_code_two_readings.ja.cal) | [`civil_code_two_readings.cal`](examples/civil_code_two_readings.cal) | 142 条の二つの読み方と、143 条と「月数を足して月末に寄せる」書き方を、それぞれ並べる | わざと通らないようにした例。二つの読み方が分かれるのは 121 通り、もう一組は 39 通り |
 
 England and Wales のカレンダー（GOV.UK の bank holidays を読む [`calendars/england_and_wales.cal`](examples/calendars/england_and_wales.cal)）で書いた英語の例もあります。英語の README はこちらを先に見せます。England and Wales には夏時間があって固定のオフセットを書けないので、この例は日付だけを出します。
@@ -187,7 +187,7 @@ England and Wales のカレンダー（GOV.UK の bank holidays を読む [`cale
 | [`period_of_months.cal`](examples/period_of_months.cal) | 月で数える期間の満了日。初日を数えず、応当する日の前日に満了し、休みに当たれば翌日に動かす | 通る |
 | [`period_of_months_two_readings.cal`](examples/period_of_months_two_readings.cal) | 休みに当たった満了日を動かす先の二つの読み方（翌日と翌営業日）と、「応当する日の前日」と「月数を足して月末に寄せる」書き方を、それぞれ並べる | わざと通らないようにした例。二つの読み方が分かれるのは 709 通り、もう一組は 39 通り |
 
-内閣府の祝日の表、GOV.UK の bank holidays、民法の条文の写しは、配られたものをそのまま置いています（[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）。
+内閣府の祝日の表、GOV.UK の bank holidays、民法の条文のコピーは、配られたものをそのまま置いています（[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）。
 
 期間の例は、決まりや条文を文字どおりに書いて、読み方が分かれる日を見せるためのものです。読み方を一つに決めるものではありません。わざと通らないようにした例が六つあるので、`koyomi check examples/` は 1 で終わります。
 
@@ -221,4 +221,4 @@ England and Wales のカレンダー（GOV.UK の bank holidays を読む [`cale
 
 ## ライセンス
 
-[Apache License, Version 2.0](LICENSE-APACHE) と [MIT License](LICENSE-MIT) のどちらかを選んで使えます。`examples/` に置いた内閣府の祝日の表、GOV.UK の bank holidays、民法の条文の写しと、WHATWG の索引から作った変換表 `src/sjis_table.rs` は、それぞれの条件に従います（[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）。
+[Apache License, Version 2.0](LICENSE-APACHE) と [MIT License](LICENSE-MIT) のどちらかを選んで使えます。`examples/` に置いた内閣府の祝日の表、GOV.UK の bank holidays、民法の条文のコピーと、WHATWG の索引から作った変換表 `src/sjis_table.rs` は、それぞれの条件に従います（[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）。

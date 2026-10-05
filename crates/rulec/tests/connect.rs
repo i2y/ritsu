@@ -148,7 +148,7 @@ fn 取り込んだ列挙は宣言し直さずに_import_する() {
     assert_eq!(
         std::fs::read_to_string(out.join("proto/shop/v1/order.proto")).ok(),
         std::fs::read_to_string(d.join("order.proto")).ok(),
-        "契約が写されていない"
+        "契約がコピーされていない"
     );
     // The field's type is the contract's, package and all — not a second enum meaning the same.
     assert!(body.contains("optional shop.v1.MemberTier m = 1;"), "{body}");
@@ -256,7 +256,7 @@ fn 生成した_proto_は_buf_が受け取る() {
         );
         // `buf build` reads the same module and says whether protoc would accept it at all.
         let o = Command::new("buf").current_dir(&proto).args(["build", "-o", "/dev/null"]).output().expect("buf を起動できない");
-        assert!(o.status.success(), "buf build が断りました:\n{}", String::from_utf8_lossy(&o.stderr));
+        assert!(o.status.success(), "buf build が失敗しました:\n{}", String::from_utf8_lossy(&o.stderr));
     }
     let files: Vec<String> = walk(&proto).iter().map(|p| p.strip_prefix(&proto).unwrap().to_string_lossy().into_owned()).collect();
     assert_eq!(files.len(), rules.len(), "規則ごとに一つのはずです: {files:?}");
@@ -539,7 +539,7 @@ fn 名前は_buf_と同じに切る() {
 /// Two rules may import one contract, but not two different files under one path: the second
 /// would overwrite the first, and one of the two services would speak the other's enum.
 #[test]
-fn 同じパスに違う契約は写さない() {
+fn 同じパスに違う契約はコピーしない() {
     let tmp = TempDir::new("connect-clash");
     let d = tmp.path().to_path_buf();
     for (sub, extra) in [("a", ""), ("b", "  MEMBER_TIER_PLATINUM = 3;\n")] {
@@ -582,7 +582,7 @@ fn 同じパスに違う契約は写さない() {
 /// field was decided as that value (§15.160). `rulec test` drives the same service over the
 /// vectors.
 #[test]
-fn 生成したまま立ち_名前の誤りと省いた入力を断る() {
+fn 生成したまま立ち_名前の誤りと省いた入力を受け付けない() {
     let importable = |m: &str| {
         Command::new("python3").args(["-c", &format!("import {m}")]).output().map(|o| o.status.success()).unwrap_or(false)
     };
@@ -875,7 +875,7 @@ fn 依存のある契約のサービスが立つ() {
         skip(&format!("BSR に届かないので飛ばします: {said}"));
         return;
     }
-    assert!(o.status.success(), "buf build が断りました:\n{said}");
+    assert!(o.status.success(), "buf build が失敗しました:\n{said}");
     for e in std::fs::read_dir(&out).unwrap().flatten() {
         let n = e.file_name().to_string_lossy().into_owned();
         if !["python", "proto", "vectors"].contains(&n.as_str()) {

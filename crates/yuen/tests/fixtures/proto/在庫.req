@@ -1,5 +1,5 @@
 requirements 在庫 v1
-description "dandori の例 fulfillment の倉庫と出荷のサービスの約束を、.proto の要素で名指したテストの材料。出典は約束の文書を写して固定する"
+description "dandori の例 fulfillment の倉庫と出荷のサービスの約束を、.proto の要素で名指したテストの材料。出典は約束の文書を保存して固定する"
 
 role 倉庫 "在庫のサービスの約束を決める"
 role 開発 ".proto を書いて直す"

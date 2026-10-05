@@ -883,7 +883,7 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
                     .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
                     .mark(row.span.clone(), tr!("{name} = {shown} は {range} の外です", "{name} = {shown} is outside {range}"))
                     .note(tr!(
-                        "範囲の外の入力は、生成コードが入口で断ります。例はその入力に答えがあると言っていることになり、検査もその入力には行を求めていません。",
+                        "範囲の外の入力は、生成コードが入口で受け付けません。例はその入力に答えがあると言っていることになり、検査もその入力には行を求めていません。",
                         "The generated code refuses an input outside the range at its door. The example claims an answer for it, and the checks never asked a row to cover it."
                     ))
                     .note(tr!(
@@ -905,7 +905,7 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
                     .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
                     .mark(row.span.clone(), tr!("{name} = {shown} は {from} がとる日ではありません", "{name} = {shown} is not a day {from} comes to"))
                     .note(tr!(
-                        "{name} がとるのは koyomi が数えた日だけで、ほかの日は生成コードが入口で断ります。例はその日に答えがあると言っていることになり、検査もその日には行を求めていません。",
+                        "{name} がとるのは koyomi が数えた日だけで、ほかの日は生成コードが入口で受け付けません。例はその日に答えがあると言っていることになり、検査もその日には行を求めていません。",
                         "{name} takes only the days koyomi counted, and the generated code refuses any other at its door. The example claims an answer for that day, and the checks never asked a row to cover it."
                     ))
                     .note(tr!("例の日付を、koyomi のファイルがとる日に直してください。", "Correct the example's date to a day the koyomi file comes to.")),
@@ -939,7 +939,7 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
                     out.push(
                         d
                             .note(tr!(
-                                "制約は「この組み合わせは起きない」という宣言で、検査はそれを信じて行を要求していません。生成コードも入口で断ります。",
+                                "制約は「この組み合わせは起きない」という宣言で、検査はそれを信じて行を要求していません。生成コードも入口で受け付けません。",
                                 "A constraint declares that a combination does not happen; the checks believed it and demanded no row, and the generated code refuses it at the door."
                             ))
                             .note(tr!(

@@ -175,7 +175,7 @@ mod tests {
     }
 
     #[test]
-    fn 壊れた行は位置つきで断る() {
+    fn 壊れた行は位置つきでエラーにする() {
         for bad in [r#"{"a":1"#, r#"{"a":}"#, r#"{"a":1}x"#, r#"{"a":1e3}"#, r#"{"a":1,"a":2}"#] {
             assert!(parse(bad).is_err(), "parsed although it should have failed: {bad}");
         }

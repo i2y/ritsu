@@ -2,7 +2,7 @@
 
 エージェントのエッジケース：リスト・単位・時刻・オプショナルな値・範囲のある数を持つ応答、応答を読まない呼び出し、並列のイテレーションの中のエージェント、大文字と小文字の違う列挙の値で応答する Claude のエージェント、OpenAI のほかの Open Responses のサーバーで読むエージェント
 
-`tests/flows/agents.flow` を `dandori doc` で描いたものです。入力は `写し: list[string]`、出力は `領収書: list[領収書]`・`急ぎ: 急ぎ`・`印: list[急ぎ]` です。
+`tests/flows/agents.flow` を `dandori doc` で描いたものです。入力は `文字起こし: list[string]`、出力は `領収書: list[領収書]`・`急ぎ: 急ぎ`・`印: list[急ぎ]` です。
 
 ## flow
 
@@ -10,7 +10,7 @@
 flowchart TD
     start(["経費 v1"])
     s1["確かめる(…)<br>agent openai · gpt-5.4-mini<br>timeout 30 seconds"]
-    subgraph L2 ["let 領収書 = for 一枚 in 写し at most 3 in parallel · yield r"]
+    subgraph L2 ["let 領収書 = for 一枚 in 文字起こし at most 3 in parallel · yield r"]
         s3["r = 読み取る(…)<br>agent · gpt-oss:20b · https://llm.example.com/v1<br>retry 1 times every 5 seconds"]
     end
     s4["仕 = 仕分ける(…)<br>agent claude · claude-sonnet-5<br>retry 1 times every 5 seconds · timeout 1 minute"]

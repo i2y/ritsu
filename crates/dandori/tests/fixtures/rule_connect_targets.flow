@@ -1,5 +1,5 @@
 workflow rule_connect_targets v1
-description "Connect で呼ぶ規則を出せないプラットフォーム：Step Functions に出すには connection が要り、サービスの URL は https でなければならない。Step Functions と durable functions では、lambda も connect も無い規則を呼べない。検査は通り、ビルドが断る"
+description "Connect で呼ぶ規則を出せないプラットフォーム：Step Functions に出すには connection が要り、サービスの URL は https でなければならない。Step Functions と durable functions では、lambda も connect も無い規則を呼べない。検査は通り、ビルドがエラーにする"
 
 use rule 接続なし from "../../examples/order/rules/出荷の急ぎ.rule"
   connect "https://rules.example.com"

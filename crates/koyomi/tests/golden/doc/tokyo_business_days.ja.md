@@ -3,7 +3,7 @@
 Saturdays, Sundays, Japan's national holidays and other days off, and 29 December to 3 January are closed. The English version of 東京の営業日.cal
 
 - ファイル: `tokyo_business_days.cal`（calendar tokyo_business_days v1、sha256:37af228cf6ba7b95）
-- 表: national_holidays = `data/syukujitsu.csv`（sha256:cec37a743c96995c、https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv の写し、covers 1955-01-01..2027-12-31）
+- 表: national_holidays = `data/syukujitsu.csv`（sha256:cec37a743c96995c、https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv のコピー、covers 1955-01-01..2027-12-31）
 - koyomi: 0.23.0
 
 上のファイルを koyomi 0.23.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
@@ -20,7 +20,7 @@ Saturdays, Sundays, Japan's national holidays and other days off, and 29 Decembe
 
 ## 出典とデータの範囲
 
-- national_holidays: 1,067 行。https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv の写しを、sha256:cec37a743c96995c で固定しています。休みを全部載せているのは 1955-01-01〜2027-12-31 です。
+- national_holidays: 1,067 行。https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv のコピーを、sha256:cec37a743c96995c で固定しています。休みを全部載せているのは 1955-01-01〜2027-12-31 です。
 
 このカレンダーが休みかどうかを知っているのは 1955-01-01〜2027-12-31 です。その外の日が営業日かを問う計算は、検査でも生成したコードでも止まります。
 

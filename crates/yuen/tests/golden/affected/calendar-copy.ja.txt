@@ -1,5 +1,5 @@
 差分: tests/fixtures/calendar_sources/changes/copy.diff
-差分が触る出典の写し:
+差分が触る出典のコピー:
   tests/fixtures/calendar_sources/calendars/data/bank-holidays.json（bank_holidays）: 引く要件 last_day_moved
 どの要件にも届かない変更: なし
 触る要件:

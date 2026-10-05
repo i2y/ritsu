@@ -348,7 +348,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
                     for (k, line) in refused.iter().enumerate() {
                         let one = dir.join("vectors").join(format!(".{alias}.refused.{k}.jsonl"));
                         if std::fs::write(&one, format!("{line}\n")).is_err() {
-                            diff = Some(broken(tr!("断る入力を書けません", "cannot write the refused input")));
+                            diff = Some(broken(tr!("受け付けない入力を書けません", "cannot write the refused input")));
                             break;
                         }
                         let got = exec(plan, Some(&one));
@@ -362,7 +362,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
                             }
                             Ok(said) => {
                                 diff = Some(Failure::Lines(tr!(
-                                    "参照評価器が、断るはずの入力に答えを返しました（{}行目）: {}",
+                                    "参照評価器が受け付けない入力に、答えを返しました（{}行目）: {}",
                                     "answered an input the reference evaluator refuses (line {}): {}",
                                     k + 1,
                                     said.trim()
@@ -575,7 +575,7 @@ fn via_mcp(
             .and_then(|t| t.as_str())
             .ok_or_else(|| broken(tr!("tools/call のレスポンスに本文がありません", "the tools/call answer has no text")))?;
         if r.get("isError") == Some(&crate::json::Json::Bool(true)) {
-            return Err(broken(tr!("tools/call が {} 件目で断りました: {text}", "tools/call refused record {}: {text}", k + 1)));
+            return Err(broken(tr!("tools/call が {} 件目でエラーを返しました: {text}", "tools/call refused record {}: {text}", k + 1)));
         }
         got.push_str(text);
         got.push('\n');
@@ -585,7 +585,7 @@ fn via_mcp(
     for (k, line) in refused.iter().enumerate() {
         let one = crate::json::parse(line).map_err(broken)?;
         let Some(inp) = one.get("in") else {
-            return Err(broken(tr!("断る入力に in がありません", "a refused input has no in")));
+            return Err(broken(tr!("受け付けない入力に in がありません", "a refused input has no in")));
         };
         let r = wire.ask(&format!(
             "{{\"jsonrpc\":\"2.0\",\"id\":{},\"method\":\"tools/call\",\"params\":{{\"name\":{},\"arguments\":{}}}}}",
@@ -595,7 +595,7 @@ fn via_mcp(
         ))?;
         if r.get("isError") != Some(&crate::json::Json::Bool(true)) {
             return Err(Failure::Lines(tr!(
-                "参照評価器が、断るはずの入力に答えを返しました（{}行目）",
+                "参照評価器が受け付けない入力に、答えを返しました（{}行目）",
                 "answered an input the reference evaluator refuses (line {})",
                 k + 1
             )));
@@ -704,7 +704,7 @@ fn result_of(line: &str) -> Result<crate::json::Json, Failure> {
         ))
     })?;
     if let Some(e) = j.get("error") {
-        return Err(broken(tr!("MCP サーバが断りました: {}", "the MCP server refused: {}", crate::json::unparse(e))));
+        return Err(broken(tr!("MCP サーバがエラーを返しました: {}", "the MCP server refused: {}", crate::json::unparse(e))));
     }
     match j.get("result") {
         Some(r) => Ok(r.clone()),
@@ -855,7 +855,7 @@ pub fn render(r: &Run) -> String {
                     tr!("単体ベクタ", "unit vectors")
                 };
                 if x.refused > 0 {
-                    n.push_str(&tr!("、断る入力 {} 件", ", {} refused", x.refused));
+                    n.push_str(&tr!("、受け付けない入力 {} 件", ", {} refused", x.refused));
                 }
                 if x.calls > 0 {
                     n.push_str(&tr!("、手順の呼び出し {} 回", ", {} calls in traces", x.calls));

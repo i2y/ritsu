@@ -42,7 +42,7 @@ pub fn commands() -> Vec<Cmd> {
             name: "check",
             args: "<path>...",
             purpose: tr!(
-                "検査する。名前、出典の写しと固定、確かめた記録と今のハッシュ、版の期間、カバレッジ、範囲",
+                "検査する。名前、出典のコピーと固定、確かめた記録と今のハッシュ、版の期間、カバレッジ、範囲",
                 "check the names, the copies of the sources against their pins, every record against the hashes now, the periods, the coverage and the scope"
             ),
             params: vec![("<path>...", tr!("{}", "{}", PATHS.0; PATHS.1))],
@@ -136,7 +136,7 @@ pub fn commands() -> Vec<Cmd> {
                         "some change no requirement reaches (code no claim runs and no link names, a file of a scope no requirement leads to); or the words or names have errors"
                     ),
                 ),
-                (2, tr!("引数の誤り、読めない差分、geas が記録を断った、読めないファイル", "bad arguments, a diff that cannot be read, geas refusing a record, or a file that cannot be read")),
+                (2, tr!("引数の誤り、読めない差分、geas が受け付けなかった記録、読めないファイル", "bad arguments, a diff that cannot be read, geas refusing a record, or a file that cannot be read")),
             ],
             examples: vec![
                 "yuen affected tests/fixtures/geas --diff tests/fixtures/geas/changes/change.diff --map tests/fixtures/geas/greeter/greeter.geas=tests/fixtures/geas/greeter/.geas/greeter.map.jsonl --map tests/fixtures/geas/greeter/greeter.geas=tests/fixtures/geas/changes/after.map.jsonl",
@@ -225,14 +225,14 @@ pub fn commands() -> Vec<Cmd> {
             name: "source",
             args: "fetch|pin|outdated <path>...",
             purpose: tr!(
-                "出典の写しを取る（fetch）、写しのハッシュを固定の行に書く（pin）、元が変わったかを問う（outdated）。通信するのは fetch と outdated だけ",
+                "出典を取ってきて保存する（fetch）、コピーのハッシュを固定の行に書く（pin）、元が変わったかを問う（outdated）。通信するのは fetch と outdated だけ",
                 "fetch the copies of the sources, pin their hashes, or ask whether the originals moved on (only fetch and outdated read the network)"
             ),
             params: vec![
                 (
                     "fetch|pin|outdated",
                     tr!(
-                        "fetch は e-Gov か eCFR か url から写しを取る。pin は写しの SHA-256 の先頭 16 桁を書く（ほかは一字も変えない）。outdated は asof より後の版と url を問う",
+                        "fetch は e-Gov か eCFR か url から取ってきて保存する。pin はコピーの SHA-256 の先頭 16 桁を書く（ほかは一字も変えない）。outdated は asof より後の版と url を問う",
                         "fetch takes the copies from e-Gov, the eCFR or the url; pin writes the first 16 digits of each copy's SHA-256 (and changes nothing else); outdated asks about the revisions after asof, and about each url"
                     ),
                 ),

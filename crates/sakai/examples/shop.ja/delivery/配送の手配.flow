@@ -1,4 +1,4 @@
-# 写した元: dandori の examples/fulfillment/arrange_delivery.ja.flow（変えていない）
+# コピー元: dandori の examples/fulfillment/arrange_delivery.ja.flow（変えていない）
 workflow 配送の手配 v1
 description "注文の配送を、急ぎの規則が選んだ便で頼み、追跡番号を返す。呼び出しはどれも、dandori がプラットフォームごとに生成する HTTP の呼び出しなので、すべてのプラットフォーム向けにこの一つだけを書く（`connection` は Step Functions のためのもの）。引当と発送のどの版も、これを子として走らせる。Temporal では子ワークフロー、Lambda durable functions では invoke する durable function、Argo ではこの WorkflowTemplate のワークフロー、Step Functions ではネストした実行になる"
 

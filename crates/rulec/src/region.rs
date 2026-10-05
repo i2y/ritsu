@@ -2205,7 +2205,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                 .table(set.members[e.winner].clone())
                 .mark(e.span.clone(), "")
                 .note(tr!(
-                    "`{}` は、両方に当てはまる入力があるときに、どちらが勝つかを決めます。交わる行が一つも無いので、この行は何も決めていません。ただし書が本文の一部を切り出す形になっていないときは、規則を写すときに誤ったことが多いです。",
+                    "`{}` は、両方に当てはまる入力があるときに、どちらが勝つかを決めます。交わる行が一つも無いので、この行は何も決めていません。ただし書が本文の一部を切り出す形になっていないときは、規則を転記するときに誤ったことが多いです。",
                     "`{}` decides which wins when an input matches both. No rows meet, so the line decides nothing. That is the usual sign of a proviso transcribed so that it no longer carves out part of the main rule.",
                     crate::kw::OVERRIDES
                 )),
@@ -2357,7 +2357,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                 match reg.row_text(&hole, t) {
                     Some(row) if !merged => d
                         .note(tr!(
-                            "足す行の形: `{row}`。出力の値は表の一行目から写した仮の値で、正しい値とは限りません。規約か Excel か、いま動いている実装か、どれが出どころかを決めて、そこから書いてください。この一行で埋まるのは、いま出た入力の穴だけです。ほかにも抜けがあれば、次の入力が出ます。",
+                            "足す行の形: `{row}`。出力の値は表の一行目からコピーした仮の値で、正しい値とは限りません。規約か Excel か、いま動いている実装か、どれが出どころかを決めて、そこから書いてください。この一行で埋まるのは、いま出た入力の穴だけです。ほかにも抜けがあれば、次の入力が出ます。",
                             "The shape of the row to add: `{row}`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one."
                         ))
                         .fix(crate::diag::FixKind::AddRow, row),

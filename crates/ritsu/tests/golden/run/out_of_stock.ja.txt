@@ -2,7 +2,7 @@ invoice.ja.flow（シナリオ scenarios/out_of_stock.ja.json、2026-04-15T10:00
 走らせる前の帳簿 在庫:
   入荷.do(納品書: "D-1", sku: "ペン", 数: 10)  通る
 実行:
-  引き当てる(注文: "A-1", sku: "ペン", 数: 20)  chobo  在庫切れ で断られる
+  引き当てる(注文: "A-1", sku: "ペン", 数: 20)  chobo  在庫切れ で拒否される
 終わり: succeed {"結果":"在庫切れ","期日":null}
 終わりの帳簿 在庫（books/在庫.book）:
   勘定:

@@ -52,7 +52,7 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                     }
                     let diag = diag
                         .note(tr!(
-                            "帳簿はどの実行でもこれを `expired` で断るので、`{task}` が通ったあとの流れは動きません。",
+                            "帳簿はどの実行でもこれを `expired` で拒否するので、`{task}` が通ったあとの流れは動きません。",
                             "The book refuses it with `expired` on every run, so what follows `{task}` going through never runs."
                         ))
                         .note(tr!(
@@ -92,7 +92,7 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                     .rel(&f.file.rel)
                     .note(note)
                     .note(tr!(
-                        "期限の切れた仮押さえへの呼び出しは、帳簿が `expired` で断ります。フローはここでそれを処理しています。",
+                        "期限の切れた仮押さえへの呼び出しは、帳簿が `expired` で拒否します。フローはここでそれを処理しています。",
                         "The book refuses a call on an expired hold with `expired`, which the flow handles here."
                     ));
                     out.push(Finding::of(&diag, Some(f.file.rel.clone()), lang));

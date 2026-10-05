@@ -529,7 +529,7 @@ pub fn cases_text(cs: &Cases) -> String {
         o.push_str(&tr!("  途中で答えが変わる: {} 件{}\n", "  answered differently partway: {}{}\n", cs.diverged.len(), first(&cs.diverged)));
     }
     if !cs.refused.is_empty() {
-        o.push_str(&tr!("  途中で断られる: {} 件{}\n", "  refused partway: {}{}\n", cs.refused.len(), first(&cs.refused)));
+        o.push_str(&tr!("  途中でエラーになる: {} 件{}\n", "  refused partway: {}{}\n", cs.refused.len(), first(&cs.refused)));
     }
     if !cs.stranded.is_empty() {
         let (t, st) = &cs.stranded[0];

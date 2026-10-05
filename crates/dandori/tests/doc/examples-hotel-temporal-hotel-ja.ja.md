@@ -84,7 +84,7 @@ flowchart TD
     onf(["on failure"])
     s30{{"match 決済.status"}}
     s32["決済 ← 与信を取り消す(…)<br>POST stripe /v1/payment_intents/{intent}/cancel<br>sends cancel"]
-    s33(["fail 取消の失敗<br>#quot;Stripe が与信の取消を断りました。売上が確定しているかもしれません。担当者に引き渡しま…<br>leaving 決済"])
+    s33(["fail 取消の失敗<br>#quot;Stripe が与信の取消を拒否しました。売上が確定しているかもしれません。担当者に引き渡し…<br>leaving 決済"])
     s34(["fail 取消の失敗<br>#quot;与信を取り消せませんでした。担当者に引き渡します#quot;<br>leaving 決済"])
     s35(["fail 確定の結果不明<br>#quot;売上の確定の途中で失敗しました。担当者に引き渡します#quot;<br>leaving 決済"])
     onfEnd(["同じエラーで失敗する"])
@@ -109,7 +109,7 @@ flowchart TD
     onc(["on cancel"])
     s36{{"match 決済.status"}}
     s38["決済 ← 与信を取り消す(…)<br>POST stripe /v1/payment_intents/{intent}/cancel<br>sends cancel"]
-    s39(["fail 取消の失敗<br>#quot;Stripe が与信の取消を断りました。売上が確定しているかもしれません。担当者に引き渡しま…<br>leaving 決済"])
+    s39(["fail 取消の失敗<br>#quot;Stripe が与信の取消を拒否しました。売上が確定しているかもしれません。担当者に引き渡し…<br>leaving 決済"])
     s40(["fail 取消の失敗<br>#quot;与信を取り消せませんでした。担当者に引き渡します#quot;<br>leaving 決済"])
     s41(["fail 確定の結果不明<br>#quot;売上の確定の途中でキャンセルされました。担当者に引き渡します#quot;<br>leaving 決済"])
     oncEnd(["キャンセルで終わる"])
@@ -154,11 +154,11 @@ flowchart TD
 | 96 | `succeed 結果 = 宿泊済` | `succeeded` |
 | 105 | `succeed 結果 = 宿泊済` | `succeeded` |
 | 106 | `fail 確定の結果不明` "売上の確定の結果が分かりません。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded` |
-| 113 | `fail 取消の失敗` "Stripe が与信の取消を断りました。売上が確定しているかもしれません。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded`・`canceled` |
+| 113 | `fail 取消の失敗` "Stripe が与信の取消を拒否しました。売上が確定しているかもしれません。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded`・`canceled` |
 | 114 | `fail 取消の失敗` "与信を取り消せませんでした。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`・`requires_confirmation`・`requires_action`・`processing`・`requires_capture`・`succeeded`・`canceled` |
 | 115 | `fail 確定の結果不明` "売上の確定の途中で失敗しました。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded` |
 | 115 | `on failure` が最後まで走り、ワークフローは元のエラーで失敗する | 始まっていないか、`canceled` |
-| 123 | `fail 取消の失敗` "Stripe が与信の取消を断りました。売上が確定しているかもしれません。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded`・`canceled` |
+| 123 | `fail 取消の失敗` "Stripe が与信の取消を拒否しました。売上が確定しているかもしれません。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded`・`canceled` |
 | 124 | `fail 取消の失敗` "与信を取り消せませんでした。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`・`requires_confirmation`・`requires_action`・`processing`・`requires_capture`・`succeeded`・`canceled` |
 | 125 | `fail 確定の結果不明` "売上の確定の途中でキャンセルされました。担当者に引き渡します" `leaving 決済` | そのまま引き渡す: `requires_payment_method`・`processing`・`succeeded` |
 | 125 | `on cancel` が最後まで走り、ワークフローはキャンセルで終わる | 始まっていないか、`canceled` |

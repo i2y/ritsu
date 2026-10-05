@@ -140,7 +140,7 @@ pub(crate) fn days_to_rules(project: &Project, flows: &[Flow], joined: &Joined, 
                         .rel(&f.file.rel)
                         .note(tr!("`{shown}` は {day} になることがあります（{}）。`{input}` が受け取るのは `{range}` です", "`{shown}` can be {day}, {}, and `{input}` takes `{range}`", from.ja; from.en))
                         .note(tr!(
-                            "規則から生成したコードは、範囲の外の日を入口で断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。koyomi は、入力の範囲のすべてでその日付を数えています。",
+                            "規則から生成したコードは、範囲の外の日を入口で受け付けません。この呼び出しは、ワークフローを走らせたときに初めて落ちます。koyomi は、入力の範囲のすべてでその日付を数えています。",
                             "The rule's generated code refuses a day outside its range at its door, so this call fails only when the workflow runs. koyomi counts the days the date comes to over the whole range of its inputs."
                         ))
                         .note(tr!(
@@ -197,7 +197,7 @@ pub(crate) fn days_to_dates(project: &Project, flows: &[Flow], joined: &Joined, 
                     .rel(&f.file.rel)
                     .note(tr!("`{shown}` は {day} になることがあります（{}）。\"{file}\" が `{input}` に受け取るのは {min} から {max} までです", "`{shown}` can be {day}, {}, and \"{file}\" takes {min} to {max} for `{input}`", from.ja; from.en))
                     .note(tr!(
-                        "koyomi が生成したコードは、範囲の外の日を断ります。この呼び出しは、ワークフローを走らせたときに初めて落ちます。",
+                        "koyomi が生成したコードは、範囲の外の日を受け付けません。この呼び出しは、ワークフローを走らせたときに初めて落ちます。",
                         "koyomi's generated code refuses a day outside the range, so this call fails only when the workflow runs."
                     ))
                     .note(tr!(
@@ -216,7 +216,7 @@ pub(crate) fn days_to_dates(project: &Project, flows: &[Flow], joined: &Joined, 
                     .rel(&f.file.rel)
                     .note(tr!("{}。\"{file}\" が `{input}` に受け取るのは {min} から {max} までです", "{}, and \"{file}\" takes {min} to {max} for `{input}`", why.ja; why.en))
                     .note(tr!(
-                        "範囲の外の日は、ワークフローを走らせたときに、koyomi が生成したコードが断ります。",
+                        "範囲の外の日は、ワークフローを走らせたときに、koyomi が生成したコードが受け付けません。",
                         "koyomi's generated code refuses a day outside the range when the workflow runs."
                     ));
                     out.push(Finding::of(&diag, Some(f.file.rel.clone()), lang));

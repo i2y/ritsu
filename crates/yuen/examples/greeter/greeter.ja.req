@@ -15,14 +15,14 @@ requirement 名前で挨拶する(greets_by_name)
   verified by geas "greeter.ja.geas" claim 名前で挨拶する
     reviewed 2026-10-04 by 開発 sha256:e87a6fee4807cbad -> sha256:23771933ab7071aa
 
-requirement 空の名前は断る(rejects_an_empty_name)
+requirement 空の名前は受け付けない(rejects_an_empty_name)
   text "名前が空の GET /greet は 400 を返す"
   owner 窓口
   decided 2026-10-04 by 窓口 "空の名前は呼び出す側の誤りで、挨拶ではない。この例のために決めたもの"
   satisfied by file "server.py"
     reviewed 2026-10-04 by 開発 sha256:2590c87a9ffa99f1 -> sha256:331e02e26d128e8c
-  verified by geas "greeter.ja.geas" claim 空の名前は断る
-    reviewed 2026-10-04 by 開発 sha256:2590c87a9ffa99f1 -> sha256:e973e18f878e1f9e
+  verified by geas "greeter.ja.geas" claim 空の名前は受け付けない
+    reviewed 2026-10-04 by 開発 sha256:2590c87a9ffa99f1 -> sha256:cfde1ffad5721517
 
 requirement 足した数が積み上がる(totals_accumulate)
   text "POST /add は本文の数を合計に足し、GET /total が合計を返し、POST /reset が合計を 0 に戻す"

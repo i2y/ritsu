@@ -54,7 +54,7 @@ fn 表引きのcsvは列挙と表になり_そのままcheckを通る() {
     assert!(out.contains("enum あて先の値(c1_kind) = 近畿圏(v1) | 遠隔地(v2)"), "{out}");
     assert!(out.contains("enum サイズの値(c2_kind) = S60 | S80"), "ASCII の値に別名は要らない: {out}");
     assert!(out.contains("  運賃(o1) : money[円, incl_tax]  round down(1円)  # 推定"), "{out}");
-    assert!(has_row(&out, &["近畿圏", "S80", "1310円"]), "桁区切りを外して写す: {out}");
+    assert!(has_row(&out, &["近畿圏", "S80", "1310円"]), "桁区切りを外して転記する: {out}");
     assert!(out.contains("# 出典: "), "出典の列が用意される: {out}");
     // A draft is honest about itself: every guess is marked.
     assert!(out.matches("推定").count() >= 4, "{out}");
@@ -88,7 +88,7 @@ fn an_amount_in_jpy_stays_in_jpy() {
 }
 
 #[test]
-fn 数値の列は範囲つきの入力になり_等値で写したと断る() {
+fn 数値の列は範囲つきの入力になり_等値として転記したと注記する() {
     let (_tmp, d) = dir("numeric");
     let csv = d.join("wt.csv");
     std::fs::write(&csv, "weight,fee\n1000g,800円\n2000g,800円\n5000g,1100円\n").unwrap();
@@ -97,7 +97,7 @@ fn 数値の列は範囲つきの入力になり_等値で写したと断る() {
     assert!(out.starts_with("rule 重さ運賃(imported) v1\n"), "{out}");
     assert!(out.contains("  weight : mass[g]  range >=1000g <=5000g  # 推定"), "{out}");
     assert!(has_row(&out, &["1000g", "800円"]), "{out}");
-    assert!(out.contains("等値で写した"), "閾値かもしれないと断る: {out}");
+    assert!(out.contains("等値として転記した"), "閾値かもしれないと注記する: {out}");
     // It parses, and check says what a person has to decide: the gaps between the values.
     let rule = d.join("wt.rule");
     std::fs::write(&rule, &out).unwrap();
@@ -120,7 +120,7 @@ fn 日付と率の列() {
 }
 
 #[test]
-fn 表の形でないcsvは断る() {
+fn 表の形でないcsvはエラーにする() {
     let (_tmp, d) = dir("bad");
     let csv = d.join("one.csv");
     std::fs::write(&csv, "only\n1\n2\n").unwrap();

@@ -1,5 +1,5 @@
 workflow apis v1
-description "API の記述との突き合わせ：OpenAPI（Stripe の写し）、Smithy（SNS の写し）、.proto と connect"
+description "API の記述との突き合わせ：OpenAPI（Stripe の記述のコピー）、Smithy（SNS の記述のコピー）、.proto と connect"
 
 use openapi stripe from "../../examples/hotel/specs/stripe.json"
 use smithy sns from "../../examples/fulfillment/specs/sns.json"
@@ -36,7 +36,7 @@ inputs
 
 task 作る(amount: int, currency: string, capture_method: 取り方, amout: int) -> 支払い
   http POST stripe "/v1/payment_intents"
-  errors 断り = 402
+  errors 拒否 = 402
 
 task 金額だけで作る(amount: int) -> 請求
   http POST stripe "/v1/payment_intents"

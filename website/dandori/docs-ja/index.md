@@ -122,7 +122,7 @@ dandori build hotel.flow --target pydantic-graph
 
 ### 一つの .flow から、使っているプラットフォーム向けに
 
-主なプラットフォームは Temporal です。dandori は、ワークフローと、HTTP や AWS などの呼び出しを受け持つアクティビティ、ワーカー、クライアントを、TypeScript、Python、Go のどれかで生成します。同じ `.flow` から AWS Step Functions、Lambda durable functions、Argo Workflows、pydantic-graph 向けにもビルドでき、生成したコードはどれも同じリクエストを送ります。プラットフォームにできないことは、ビルドが断ります。[プラットフォーム別のビルド](platforms.md)
+主なプラットフォームは Temporal です。dandori は、ワークフローと、HTTP や AWS などの呼び出しを受け持つアクティビティ、ワーカー、クライアントを、TypeScript、Python、Go のどれかで生成します。同じ `.flow` から AWS Step Functions、Lambda durable functions、Argo Workflows、pydantic-graph 向けにもビルドでき、生成したコードはどれも同じリクエストを送ります。プラットフォームにできないことは、ビルドがエラーにします。[プラットフォーム別のビルド](platforms.md)
 
 </div>
 </div>

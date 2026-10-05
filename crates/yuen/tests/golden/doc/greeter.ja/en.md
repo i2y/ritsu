@@ -2,7 +2,7 @@
 
 yuen 0.23.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
 
-- `greeter.ja.req` (挨拶 v1, `sha256:cf339bc81c8e313d`)
+- `greeter.ja.req` (挨拶 v1, `sha256:56bec55280e19241`)
 
 The check: `examples/greeter/greeter.ja.req: ok — 4 requirements, whose 8 links are as they were looked at; every requirement is met and checked, or waived; the file in scope traces to a requirement`
 
@@ -11,7 +11,7 @@ The check: `examples/greeter/greeter.ja.req: ok — 4 requirements, whose 8 link
 | Requirement | In force | Comes from | Owner | Met by | Checked by | State |
 |---|---|---|---|---|---|---|
 | `名前で挨拶する (greets_by_name)` | — | decided by 窓口 on 2026-10-04 | 窓口 | `file "server.py"` | `geas "greeter.ja.geas" claim 名前で挨拶する` | as looked at |
-| `空の名前は断る (rejects_an_empty_name)` | — | decided by 窓口 on 2026-10-04 | 窓口 | `file "server.py"` | `geas "greeter.ja.geas" claim 空の名前は断る` | as looked at |
+| `空の名前は受け付けない (rejects_an_empty_name)` | — | decided by 窓口 on 2026-10-04 | 窓口 | `file "server.py"` | `geas "greeter.ja.geas" claim 空の名前は受け付けない` | as looked at |
 | `足した数が積み上がる (totals_accumulate)` | — | decided by 窓口 on 2026-10-04 | 窓口 | `file "server.py"` | `geas "greeter.ja.geas" claim 足した数が積み上がる` | as looked at |
 | `知らないパスは404 (unknown_paths_are_404)` | — | decided by 窓口 on 2026-10-04 | 窓口 | `file "server.py"` | `geas "greeter.ja.geas" claim "知らないパスには 404 を返す"` | as looked at |
 
@@ -36,7 +36,7 @@ Met by `file "server.py"` — looked at by 開発 on 2026-10-04 (`sha256:e87a6fe
 
 Checked by `geas "greeter.ja.geas" claim 名前で挨拶する` — looked at by 開発 on 2026-10-04 (`sha256:e87a6fee4807cbad` → `sha256:23771933ab7071aa`). State: as looked at
 
-### 空の名前は断る (rejects_an_empty_name)
+### 空の名前は受け付けない (rejects_an_empty_name)
 
 **名前が空の GET /greet は 400 を返す**
 
@@ -49,7 +49,7 @@ Decided by 窓口 on 2026-10-04: 空の名前は呼び出す側の誤りで、�
 
 Met by `file "server.py"` — looked at by 開発 on 2026-10-04 (`sha256:2590c87a9ffa99f1` → `sha256:331e02e26d128e8c`). State: as looked at
 
-Checked by `geas "greeter.ja.geas" claim 空の名前は断る` — looked at by 開発 on 2026-10-04 (`sha256:2590c87a9ffa99f1` → `sha256:e973e18f878e1f9e`). State: as looked at
+Checked by `geas "greeter.ja.geas" claim 空の名前は受け付けない` — looked at by 開発 on 2026-10-04 (`sha256:2590c87a9ffa99f1` → `sha256:cfde1ffad5721517`). State: as looked at
 
 ### 足した数が積み上がる (totals_accumulate)
 
@@ -91,8 +91,8 @@ Checked by `geas "greeter.ja.geas" claim "知らないパスには 404 を返す
 |---|---|---|---|
 | 2026-10-04 | 開発 | `名前で挨拶する (greets_by_name)` → `file "server.py"` | `sha256:e87a6fee4807cbad -> sha256:331e02e26d128e8c` |
 | 2026-10-04 | 開発 | `名前で挨拶する (greets_by_name)` → `geas "greeter.ja.geas" claim 名前で挨拶する` | `sha256:e87a6fee4807cbad -> sha256:23771933ab7071aa` |
-| 2026-10-04 | 開発 | `空の名前は断る (rejects_an_empty_name)` → `file "server.py"` | `sha256:2590c87a9ffa99f1 -> sha256:331e02e26d128e8c` |
-| 2026-10-04 | 開発 | `空の名前は断る (rejects_an_empty_name)` → `geas "greeter.ja.geas" claim 空の名前は断る` | `sha256:2590c87a9ffa99f1 -> sha256:e973e18f878e1f9e` |
+| 2026-10-04 | 開発 | `空の名前は受け付けない (rejects_an_empty_name)` → `file "server.py"` | `sha256:2590c87a9ffa99f1 -> sha256:331e02e26d128e8c` |
+| 2026-10-04 | 開発 | `空の名前は受け付けない (rejects_an_empty_name)` → `geas "greeter.ja.geas" claim 空の名前は受け付けない` | `sha256:2590c87a9ffa99f1 -> sha256:cfde1ffad5721517` |
 | 2026-10-04 | 開発 | `足した数が積み上がる (totals_accumulate)` → `file "server.py"` | `sha256:301f01ea03399fc9 -> sha256:331e02e26d128e8c` |
 | 2026-10-04 | 開発 | `足した数が積み上がる (totals_accumulate)` → `geas "greeter.ja.geas" claim 足した数が積み上がる` | `sha256:301f01ea03399fc9 -> sha256:851003f8a61e8af4` |
 | 2026-10-04 | 開発 | `知らないパスは404 (unknown_paths_are_404)` → `file "server.py"` | `sha256:38b694c45841408b -> sha256:331e02e26d128e8c` |

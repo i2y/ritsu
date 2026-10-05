@@ -191,7 +191,7 @@ fn takeは一意か先頭かを書かせる() {
 /// produce a file that cannot run (§15.56). SQL is the one that cannot: a single query has
 /// nowhere to carry a value from row to row and stop early.
 #[test]
-fn 十言語に生成し_SQLは名指しで断る() {
+fn 十言語に生成し_SQLは名指しで生成しない() {
     let (_tmp, d) = dir("gen");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
@@ -436,7 +436,7 @@ fn 並びの書き方の間違いは名指しされる() {
 /// raising on it (§15.56). Without this the walk's last transition — a take after a take —
 /// would be named as uncovered forever.
 #[test]
-fn 断る入力は生成コードにも断らせる() {
+fn 受け付けない入力は生成コードでもエラーになる() {
     if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
         return;
     }
@@ -446,9 +446,9 @@ fn 断る入力は生成コードにも断らせる() {
     let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
     assert_eq!(code, 0, "{said}{e}");
 
-    let body = std::fs::read_to_string(out.join("vectors/freight.refused.jsonl")).expect("断る入力の一覧が無い");
+    let body = std::fs::read_to_string(out.join("vectors/freight.refused.jsonl")).expect("受け付けない入力の一覧が無い");
     let lines: Vec<&str> = body.lines().filter(|l| !l.trim().is_empty()).collect();
-    assert_eq!(lines.len(), 1, "断る入力は一件のはず: {body}");
+    assert_eq!(lines.len(), 1, "受け付けない入力は一件のはず: {body}");
     let j = rulec::json::parse(lines[0]).unwrap();
     assert_eq!(j.get("refused").and_then(|v| v.as_str()), Some("contradiction"), "{body}");
     assert!(j.get("in").and_then(|i| i.get("運賃行")).is_some(), "入力が読めない形: {body}");
@@ -465,7 +465,7 @@ fn 断る入力は生成コードにも断らせる() {
             continue;
         }
         assert_eq!(r.get("ok"), Some(&rulec::json::Json::Bool(true)), "{said}");
-        assert_eq!(r.get("refused").and_then(|v| v.as_int()), Some(1), "断る入力が試されていない: {said}");
+        assert_eq!(r.get("refused").and_then(|v| v.as_int()), Some(1), "受け付けない入力が試されていない: {said}");
         checked += 1;
     }
     assert!(checked >= 1, "どの言語も走らなかった: {said}");
@@ -473,7 +473,7 @@ fn 断る入力は生成コードにも断らせる() {
     // And a language that answers instead of raising is caught, by name.
     answer_instead_of_raising(&out);
     let (code, said, _) = run_tmp(&tmpdir_in(&out), &["test", out.to_str().unwrap()]);
-    assert_eq!(code, 1, "断らなくなったのに緑のまま: {said}");
+    assert_eq!(code, 1, "受け付けるようになったのに緑のまま: {said}");
     assert!(
         said.contains("answered an input") || said.contains("答えを返しました"),
         "何が起きたか言っていない: {said}"
@@ -583,7 +583,7 @@ fn 生成されたたどり方は参照評価器と一致する() {
 }
 
 #[test]
-fn 並びは一つで_二本目は断る() {
+fn 並びは一つで_二本目はエラーにする() {
     let (_tmp, d) = dir("two");
     let p = write(&d, "two.rule", &RULE.replace("outputs\n", "elements 別の列(others)\n  m(m) : number  range >=0 <=9\n\noutputs\n"));
     let (code, out, _) = run(&["check", &p, "--format", "json"]);
@@ -631,6 +631,6 @@ fn たどり方はベクタで覆われる() {
     let total = fold.get("total").and_then(|v| v.as_int()).unwrap();
     let met = fold.get("satisfied").and_then(|v| v.as_int()).unwrap();
     assert_eq!(total, 21, "義務は ゼロ件 + 判定4 + 対16");
-    assert_eq!(met, 21, "断る入力も義務を果たす");
-    assert_eq!(j.get("refused").and_then(|v| v.as_int()), Some(1), "断る入力が数えられていない: {cov}");
+    assert_eq!(met, 21, "受け付けない入力も義務を果たす");
+    assert_eq!(j.get("refused").and_then(|v| v.as_int()), Some(1), "受け付けない入力が数えられていない: {cov}");
 }

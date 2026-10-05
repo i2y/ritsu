@@ -16,7 +16,7 @@ claim "名前で挨拶する" {
   and  body json ".message" is "Hello, Alice"
 }
 
-claim "空の名前は断る" {
+claim "空の名前は受け付けない" {
   when api.get("/greet?name=")
   then status is 400
 }

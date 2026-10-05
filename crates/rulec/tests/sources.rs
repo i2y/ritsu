@@ -51,7 +51,7 @@ fn rulec(dir: &Path, args: &[&str]) -> (i32, String) {
 }
 
 #[test]
-fn 写しと固定が合っていれば通る() {
+fn コピーと固定が合っていれば通る() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
     let src = std::fs::read_to_string(root().join(RULE)).unwrap();
     let cs = codes(&src, &root().join(RULE));
@@ -59,7 +59,7 @@ fn 写しと固定が合っていれば通る() {
 }
 
 #[test]
-fn 固定の欠け_写しの変化_写しの欠け_余った固定() {
+fn 固定の欠け_コピーの変化_コピーの欠け_余った固定() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (_tmp, d) = scratch("diags");
     let src = std::fs::read_to_string(d.join("a.rule")).unwrap();
@@ -177,7 +177,7 @@ fn ファイルは丸ごと引用でき_法令は箇所が要る() {
 /// (§15.82): `fetch` takes them out of the document, `pin` writes their digests, `check`
 /// reads the copies and never the document, and `doc` quotes the table under the rows.
 #[test]
-fn 文書の表を引いて写しに固定する() {
+fn 文書の表を引いてコピーに固定する() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (_tmp, d) = scratch("fragments");
     let doc = "# 料金表\n\n前書き。\n\n| あて先 | S60 |\n|---|---|\n| 近畿 | 990円 |\n| 関東 | 880円 |\n";
@@ -292,7 +292,7 @@ fn ファイルの出典はurlを持ち_それが下流まで届く() {
 /// together are what a mistyped digit looks like. What the table rewrote on the way in — a
 /// range over rows the copy lists one by one — is neither.
 #[test]
-fn 写した金額と写しを突き合わせる() {
+fn 転記した金額とコピーを突き合わせる() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (_tmp, d) = scratch("transcribe");
     let doc = "# 料金表\n\n| あて先 | S60 | S80 |\n|---|---|---|\n| 近畿 | 990円 | 1210円 |\n| 関東 | 880円 | 1100円 |\n";
@@ -425,7 +425,7 @@ fn 金額は行の見出しの下で探す() {
 /// format**: the same table in four containers pins to the same digest, because the copy is
 /// the table, not the file.
 #[test]
-fn 四つの形式が同じ写しと同じ固定になる() {
+fn 四つの形式が同じコピーと同じ固定になる() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
@@ -492,8 +492,8 @@ fn 四つの形式が同じ写しと同じ固定になる() {
         let (c, out) = rulec(&d, &["source", "fetch", "a.rule"]);
         assert_eq!(c, 0, "{name}: {out}");
         let tsv = std::fs::read_to_string(d.join(format!("{name}.fragments/表1.tsv")))
-            .unwrap_or_else(|e| panic!("{name}: 写しが無い: {e}"));
-        assert_eq!(tsv, WANT, "{name}: 写しが表そのものになっていない");
+            .unwrap_or_else(|e| panic!("{name}: コピーが無い: {e}"));
+        assert_eq!(tsv, WANT, "{name}: コピーが表そのものになっていない");
 
         let (c, out) = rulec(&d, &["source", "pin", "a.rule"]);
         assert_eq!(c, 0, "{name}: {out}");
@@ -541,7 +541,7 @@ fn have(cmd: &str) -> bool {
 /// three was exercised (§15.91); the copies in the corpus are all present and correct, so the
 /// error side of `sources::check` was reached only where a mutant seeded it.
 #[test]
-fn 写しが無い_固定が無い_引用が読めない() {
+fn コピーが無い_固定が無い_引用が読めない() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (_tmp, d) = scratch("sources-errors");
     let rule = |src: &str, cite: &str| {
@@ -559,7 +559,7 @@ fn 写しが無い_固定が無い_引用が読めない() {
     let missing = rule("無い文書.md", "表1");
     std::fs::write(&p, &missing).unwrap();
     let ds = rulec::check_source(&missing, &p.to_string_lossy());
-    let e039 = ds.iter().find(|x| x.code == "E039").expect("写しが無ければ E039");
+    let e039 = ds.iter().find(|x| x.code == "E039").expect("コピーが無ければ E039");
     assert!(
         e039.notes.join(" ").contains("無い文書.md"),
         "探した先を言わない: {:?}",
@@ -608,7 +608,7 @@ fn 写しが無い_固定が無い_引用が読めない() {
 /// `source pin` writes a fragment's digest, and writes it **again** when the document has
 /// moved on — replacing the line rather than adding a second one.
 #[test]
-fn pinは変わった写しの固定を書き換える() {
+fn pinは変わったコピーの固定を書き換える() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (_tmp, d) = scratch("sources-repin");
     let doc = |fee: &str| format!("| あて先 | 運賃 |\n|---|---|\n| 近畿 | {fee} |\n");
@@ -631,7 +631,7 @@ fn pinは変わった写しの固定を書き換える() {
     std::fs::write(d.join("料金表.md"), doc("1100円")).unwrap();
     let after_edit = std::fs::read_to_string(&p).unwrap();
     let cs = codes(&after_edit, &p);
-    assert!(cs.contains(&"E038".to_string()), "写しが変わったのに言わない: {cs:?}");
+    assert!(cs.contains(&"E038".to_string()), "コピーが変わったのに言わない: {cs:?}");
     for cmd in [["source", "fetch", "a.rule"], ["source", "pin", "a.rule"]] {
         let (c, out) = rulec(&d, &cmd);
         assert_eq!(c, 0, "{out}");
@@ -661,14 +661,14 @@ fn ecfrの出典は引用からピンまで通る() {
     // The copy is where the id says, with the spaces of a citation made into a path.
     assert!(
         d.join("sources/law/29-CFR-1910@2026-01-01/1910.157.xml").exists(),
-        "写しの置き場所が違います"
+        "コピーの置き場所が違います"
     );
     // And with it there, the rule checks clean: the citation, the pin and the copy agree.
     assert!(codes(&src, &d.join("a.rule")).iter().all(|c| !c.starts_with('E')), "{:?}", codes(&src, &d.join("a.rule")));
 
     // A pin whose digest is not the copy's is E038, as it is for a law on e-Gov.
     let wrong = src.replace("sha256:c2a9ce966c7e2269", "sha256:0000000000000000");
-    assert!(codes(&wrong, &d.join("a.rule")).contains(&"E038".to_string()), "写しと違うピンが通ってしまいます");
+    assert!(codes(&wrong, &d.join("a.rule")).contains(&"E038".to_string()), "コピーと違うピンが通ってしまいます");
 
     // A fragment that is not a section of that part cannot be read.
     let bad = src.replace("\"§1910.157\"", "\"§(d)(2)\"");

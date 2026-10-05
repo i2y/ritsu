@@ -179,11 +179,11 @@ pub fn bounds_lines(book: &Book, k: usize, lang: Lang) -> Vec<String> {
     let mut out = Vec::new();
     if let Some(l) = &a.lower {
         let (v, r) = (on(book, k, l.value), code(&l.refusal));
-        out.push(tr!("{v} 以上。下回る振替は {r} で断る", "at least {v}; a transfer that would go below is refused with {r}").get(lang).to_string());
+        out.push(tr!("{v} 以上。下回る振替は {r} で拒否される", "at least {v}; a transfer that would go below is refused with {r}").get(lang).to_string());
     }
     if let Some(u) = &a.upper {
         let (v, r) = (on(book, k, u.value), code(&u.refusal));
-        out.push(tr!("{v} 以下。超える振替は {r} で断る", "at most {v}; a transfer that would go above is refused with {r}").get(lang).to_string());
+        out.push(tr!("{v} 以下。超える振替は {r} で拒否される", "at most {v}; a transfer that would go above is refused with {r}").get(lang).to_string());
     }
     out
 }
@@ -216,7 +216,7 @@ pub fn reason_meaning(book: &Book, t: &TransferKind, op: Op, r: &crate::check::R
         ("key_conflict", Op::Post) => tr!("仮押さえは、違う額で確定済み", "the hold was posted before, for other amounts"),
         ("key_conflict", _) => tr!("{key} が同じで、ほかの引数が違う呼び出しが、前に済んでいる", "a call with the same {key} and other arguments came before"),
         ("already_refused", _) => tr!(
-            "{key} が同じ呼び出しが、前に境界で断られている。境界で断られたキーは、あとで足りるようになっても通らない",
+            "{key} が同じ呼び出しが、前に境界で拒否されている。境界で拒否されたキーは、あとで足りるようになっても通らない",
             "a call with the same {key} was refused by a bound before; a key a bound refused stays refused, even once there is enough"
         ),
         ("same_account", _) => tr!("移動の元と先が同じ勘定になる", "a move would go from an account to itself"),
@@ -347,13 +347,13 @@ pub fn life_rows(t: &TransferKind, lang: Lang) -> Vec<[String; 3]> {
     let expiring = matches!(t.pending, Some(Expiry::After(_)));
     let mut rows = Vec::new();
     let mut held_post = tr!(
-        "確定する。額を渡せばその額、渡さなければ全額で、残りは元に戻る。押さえた額を超えれば `over_hold` で断る",
+        "確定する。額を渡せばその額、渡さなければ全額で、残りは元に戻る。押さえた額を超えれば `over_hold` で拒否される",
         "posts it: the amounts given, or all of it, and the rest goes back; more than it holds is refused with `over_hold`"
     );
     let mut held_void = tr!("取り消す。押さえた量は元に戻る", "voids it: what it holds goes back");
     if let Some(Expiry::After(s)) = t.pending {
         let (dj, de) = (duration(s, Lang::Ja), duration(s, Lang::En));
-        let extra = tr!("。押さえてから {dj}たっていれば `expired` で断る", "; once {de} have passed since it was held, refused with `expired`");
+        let extra = tr!("。押さえてから {dj}たっていれば `expired` で拒否される", "; once {de} have passed since it was held, refused with `expired`");
         held_post.ja.push_str(&extra.ja);
         held_post.en.push_str(&extra.en);
         held_void.ja.push_str(&extra.ja);
@@ -362,19 +362,19 @@ pub fn life_rows(t: &TransferKind, lang: Lang) -> Vec<[String; 3]> {
     rows.push([scenario::state_text(HoldState::Held).get(lang).to_string(), held_post.get(lang).to_string(), held_void.get(lang).to_string()]);
     rows.push([
         scenario::state_text(HoldState::Posted).get(lang).to_string(),
-        tr!("同じ額なら `done_before`、違う額なら `key_conflict` で断る", "`done_before` with the same amounts; refused with `key_conflict` with others").get(lang).to_string(),
-        tr!("`already_posted` で断る", "refused with `already_posted`").get(lang).to_string(),
+        tr!("同じ額なら `done_before`、違う額なら `key_conflict` で拒否される", "`done_before` with the same amounts; refused with `key_conflict` with others").get(lang).to_string(),
+        tr!("`already_posted` で拒否される", "refused with `already_posted`").get(lang).to_string(),
     ]);
     rows.push([
         scenario::state_text(HoldState::Voided).get(lang).to_string(),
-        tr!("`already_voided` で断る", "refused with `already_voided`").get(lang).to_string(),
+        tr!("`already_voided` で拒否される", "refused with `already_voided`").get(lang).to_string(),
         "`done_before`".to_string(),
     ]);
     if expiring {
-        let e = tr!("`expired` で断る", "refused with `expired`").get(lang).to_string();
+        let e = tr!("`expired` で拒否される", "refused with `expired`").get(lang).to_string();
         rows.push([scenario::state_text(HoldState::Expired).get(lang).to_string(), e.clone(), e]);
     }
-    let none = tr!("`no_such_hold` で断る", "refused with `no_such_hold`").get(lang).to_string();
+    let none = tr!("`no_such_hold` で拒否される", "refused with `no_such_hold`").get(lang).to_string();
     rows.push([tr!("仮押さえが無い", "no hold with the key").get(lang).to_string(), none.clone(), none]);
     rows
 }
@@ -504,7 +504,7 @@ pub fn intro(i: &Input) -> String {
     let mut o = tr!("`chobo doc` が `{file}` から作ったページ。", "`{file}`, as `chobo doc` writes it. ").get(i.lang).to_string();
     o.push_str(
         tr!(
-            "勘定ごとに残高を持ち、残高は入った量から出た量を引いたもの。どの振替も勘定の下限と上限を守り、守れない振替は、その境界に付けた名前で断られて、どの移動も行われない。振替には、すぐに動かすもの（`do`）と、動かす量をまず押さえるもの（`hold`）がある。押さえた分は、あとで確定される（`post`。全部か一部）か、取り消される（`void`）か、有効期限で切れる。",
+            "勘定ごとに残高を持ち、残高は入った量から出た量を引いたもの。どの振替も勘定の下限と上限を守り、守れない振替は、その境界に付けた名前で拒否されて、どの移動も行われない。振替には、すぐに動かすもの（`do`）と、動かす量をまず押さえるもの（`hold`）がある。押さえた分は、あとで確定される（`post`。全部か一部）か、取り消される（`void`）か、有効期限で切れる。",
             "Each account keeps a balance: what came in, less what went out. Every transfer keeps the bounds of the accounts: one that would break a bound is refused with the name the book gives that bound, and nothing of it moves. A transfer either moves at once (`do`), or first holds what it moves (`hold`); a hold is then posted (`post`, all of it or part), voided (`void`), or expires."
         )
         .get(i.lang),
@@ -586,7 +586,7 @@ pub fn transfer_facts(i: &Input, k: usize) -> Vec<String> {
     } else {
         let list: Vec<String> = t.moves.iter().enumerate().map(|(n, m)| format!("{}. {}", n + 1, move_text(book, t, m, lang))).collect();
         let n = t.moves.len();
-        let head = tr!("移動は {n} つ。書いた順に行い、どれか一つでも断られたら、どれも行わない:", "{n} moves, made in this order, all or none:").get(lang).to_string();
+        let head = tr!("移動は {n} つ。書いた順に行い、どれか一つでも拒否されたら、どれも行わない:", "{n} moves, made in this order, all or none:").get(lang).to_string();
         facts.push(format!("{head}\n{}", list.join("\n")));
     }
     let ps: Vec<String> = t.key.iter().map(|p| code(&t.params[*p].name)).collect();
@@ -598,7 +598,7 @@ pub fn transfer_facts(i: &Input, k: usize) -> Vec<String> {
         if !kn.outside.is_empty() {
             let others: Vec<String> = kn.outside.iter().map(|(p, _)| code(&t.params[*p].name)).collect();
             let (oj, oe) = (or_list(&others, Lang::Ja), or_list(&others, Lang::En));
-            kt.ja.push_str(&format!("。キーが同じで {oj}が違う二度目の呼び出しは、`key_conflict` で断られる"));
+            kt.ja.push_str(&format!("。キーが同じで {oj}が違う二度目の呼び出しは、`key_conflict` で拒否される"));
             kt.en.push_str(&format!("; one that differs only in {oe} is refused with `key_conflict`"));
         }
         if kn.again.is_some() {
@@ -644,7 +644,7 @@ pub fn refusal_rows(i: &Input, k: usize) -> Vec<[String; 3]> {
     for op in i.report.ops.iter().filter(|o| o.kind == k) {
         let name = format!("{}.{}", t.name, op.op.name());
         if op.refusals.is_empty() {
-            rows.push([code(&name), "—".into(), tr!("断られない", "never refused").get(lang).to_string()]);
+            rows.push([code(&name), "—".into(), tr!("拒否されない", "never refused").get(lang).to_string()]);
         }
         for r in &op.refusals {
             rows.push([code(&name), code(&r.name), reason_meaning(book, t, op.op, r, lang)]);
@@ -675,13 +675,13 @@ fn transfer_md(i: &Input, k: usize, t: &TransferKind) -> String {
         o.push_str(&md_table(&head, &rows));
         o.push('\n');
     }
-    let head: Vec<String> = [tr!("操作", "Operation"), tr!("断られうる理由", "May be refused with"), tr!("いつ", "When")].iter().map(|x| x.get(lang).to_string()).collect();
+    let head: Vec<String> = [tr!("操作", "Operation"), tr!("拒否されうる理由", "May be refused with"), tr!("いつ", "When")].iter().map(|x| x.get(lang).to_string()).collect();
     let rows: Vec<Vec<String>> = refusal_rows(i, k).into_iter().map(|r| r.to_vec()).collect();
     o.push_str(&md_table(&head, &rows));
     o.push('\n');
     let examples: Vec<(String, Vec<String>)> = examples_of(i, k);
     if !examples.is_empty() {
-        o.push_str(&format!("<details><summary>{}</summary>\n\n", tr!("断られる例", "How each refusal comes about").get(lang)));
+        o.push_str(&format!("<details><summary>{}</summary>\n\n", tr!("拒否される例", "How each refusal comes about").get(lang)));
         for (head, lines) in examples {
             o.push_str(&format!("#### {head}\n\n```text\n{}\n```\n\n", lines.join("\n")));
         }

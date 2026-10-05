@@ -106,7 +106,7 @@ fn ベクタは制約を満たすものだけ() {
 }
 
 #[test]
-fn 生成物は制約を破る入力を断る() {
+fn 生成物は制約を破る入力を受け付けない() {
     if !ready(Need::Python, || have("python3"), "python3 が無い") {
         return;
     }
@@ -147,7 +147,7 @@ fn 生成物は制約を破る入力を断る() {
         .output()
         .expect("python3 を起動できない");
     let said = String::from_utf8_lossy(&o.stdout).into_owned();
-    assert!(said.starts_with("refused:"), "断っていない: {said}{}", String::from_utf8_lossy(&o.stderr));
+    assert!(said.starts_with("refused:"), "エラーにしていない: {said}{}", String::from_utf8_lossy(&o.stderr));
     assert!(said.contains("全条件一致数 <= 会社名一致数"), "何を破ったか言っていない: {said}");
 }
 
@@ -161,7 +161,7 @@ fn 制約を破る例は誤り() {
 }
 
 #[test]
-fn 形と型が違えば断る() {
+fn 形と型が違えばエラーにする() {
     let (_tmp, d) = dir("bad");
     // No comparison at all.
     let a = write(&d, "a.rule", &RULE.replace("constraint 全条件一致数 <= 会社名一致数", "constraint 全条件一致数"));
@@ -244,7 +244,7 @@ fn 刻みの違う率どうしの制約を門が正しく比べる() {
         .expect("python3 を起動できない");
     let said = String::from_utf8_lossy(&o.stdout).into_owned();
     assert!(said.contains("50 100 refused"), "50% ≤ 10% を通している: {said}{}", String::from_utf8_lossy(&o.stderr));
-    assert!(said.contains("5 200 ok") && said.contains("30 300 ok"), "成り立つ組を断っている: {said}");
+    assert!(said.contains("5 200 ok") && said.contains("30 300 ok"), "成り立つ組を受け付けていない: {said}");
 }
 
 /// A rate passed in with no step counted whole units of 100%, so `10%` in its range became

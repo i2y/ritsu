@@ -34,7 +34,7 @@ error[E016]: tests/fixtures/books.flow:48:1: `入荷.do` answers nothing; leave 
 error[E008]: tests/fixtures/books.flow:53:3: what `引当.post` does to the hold is `sends post`
     53 |   sends void
 error[E007]: tests/fixtures/books.flow:58:14: a book refuses with a reason for each state of the hold; leave out `refused as`, and declare the reasons in `errors`
-    58 |   refused as 断られた
+    58 |   refused as 拒否された
 error[E008]: tests/fixtures/books.flow:62:3: what `引当.hold` does to the hold is `starts 倉庫.引当`
     62 |   sends post
 error[E008]: tests/fixtures/books.flow:75:12: what happens to a hold on its own is `expire`, of a transfer whose holds expire

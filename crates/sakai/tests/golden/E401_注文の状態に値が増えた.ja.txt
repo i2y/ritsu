@@ -1,7 +1,7 @@
 エラー[E401]: ctx/請求.ctx:17:3: 「請求」の腐敗防止層の対応に、「受注」の列挙 shop.ordering.v1.OrderStatus の値 ORDER_STATUS_RETURNED がありません
     17 |   enum OrderStatus -> enum BillingStatus
   = ORDER_STATUS_RETURNED は proto/shop/ordering/v1/order.proto:16 の値です。
-  = 上流の列挙の値ごとに、下流の値か refuse（断る）を書いてください。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。
+  = 上流の列挙の値ごとに、下流の値か refuse（拒否）を書いてください。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。
   = 直した行: ORDER_STATUS_RETURNED -> refuse "…"
   関わるもの:
       請求  ctx/請求.ctx:14                                              upstream 受注 anticorruption layer

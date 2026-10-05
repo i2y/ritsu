@@ -61,14 +61,14 @@ pub fn load_table(o: &Origin, decl: &SourceDecl) -> Result<Table, Vec<Diag>> {
     let name = &decl.name;
     let full = o.dir.join(path);
     let Ok(bytes) = ritsu_base::fs::read(&full) else {
-        let mut d = o.err("E101", decl.span, tr!("出典「{name}」の写し {path} がありません", "The copy of the source {name} is not there: {path}"));
+        let mut d = o.err("E101", decl.span, tr!("出典「{name}」のコピー {path} がありません", "The copy of the source {name} is not there: {path}"));
         d = match url {
             Some(_) => d.note(tr!(
                 "`koyomi source fetch` が url から取ってきて、そこに書きます。check は通信しません。",
                 "`koyomi source fetch` takes it from the url and writes it there; check never reads the network."
             )),
             None => d.note(tr!(
-                "koyomi は写しを、.cal からの相対パスで探します。ファイルを置くか、パスを直してください。",
+                "koyomi はコピーを、.cal からの相対パスで探します。ファイルを置くか、パスを直してください。",
                 "The copy is looked for relative to the .cal; put the file there or correct the path."
             )),
         };
@@ -82,7 +82,7 @@ pub fn load_table(o: &Origin, decl: &SourceDecl) -> Result<Table, Vec<Diag>> {
             return Err(vec![
                 o.err("E102", decl.span, tr!("出典「{name}」が固定されていません（`sha256:` がありません）", "The source {name} is not pinned (it has no `sha256:`)"))
                     .note(tr!(
-                        "写しのバイト列の SHA-256 の先頭 16 桁を書いて、固定してください。いまの写しなら sha256:{actual} です（`koyomi source pin` でも書けます）。",
+                        "コピーのバイト列の SHA-256 の先頭 16 桁を書いて、固定してください。いまのコピーなら sha256:{actual} です（`koyomi source pin` でも書けます）。",
                         "Pin it with the first 16 digits of the SHA-256 of the copy's bytes; for the copy as it is, that is sha256:{actual} (`koyomi source pin` writes it too)."
                     ))
                     .fix_line(sources::fixed_pin_line(&line_text, actual)),
@@ -91,11 +91,11 @@ pub fn load_table(o: &Origin, decl: &SourceDecl) -> Result<Table, Vec<Diag>> {
         Some(p) if p != actual => {
             return Err(vec![
                 o.err("E103", decl.span, tr!(
-                    "出典「{name}」の写しが固定と違います（固定は sha256:{p}、写しは sha256:{actual}）",
+                    "出典「{name}」のコピーが固定と違います（固定は sha256:{p}、コピーは sha256:{actual}）",
                     "The copy of the source {name} does not match its pin (pinned sha256:{p}, the copy is sha256:{actual})"
                 ))
                 .note(tr!(
-                    "固定したあとで写しが変わりました。何が変わったかを読んでから（`koyomi source outdated`）、固定を書き換えてください。",
+                    "固定したあとでコピーが変わりました。何が変わったかを読んでから（`koyomi source outdated`）、固定を書き換えてください。",
                     "The copy changed after it was pinned. Read what changed (`koyomi source outdated`), then pin it again."
                 ))
                 .fix_line(sources::fixed_pin_line(&line_text, actual)),
@@ -111,14 +111,14 @@ pub fn load_table(o: &Origin, decl: &SourceDecl) -> Result<Table, Vec<Diag>> {
         Ok(r) => r,
         Err(e) => {
             let msg = match e.line {
-                Some(l) => tr!("出典「{name}」の写し {path} の {l} 行目が読めません: {}", "The copy {path} of the source {name} cannot be read at line {l}: {}", e.why.ja; e.why.en),
-                None => tr!("出典「{name}」の写し {path} が読めません: {}", "The copy {path} of the source {name} cannot be read: {}", e.why.ja; e.why.en),
+                Some(l) => tr!("出典「{name}」のコピー {path} の {l} 行目が読めません: {}", "The copy {path} of the source {name} cannot be read at line {l}: {}", e.why.ja; e.why.en),
+                None => tr!("出典「{name}」のコピー {path} が読めません: {}", "The copy {path} of the source {name} cannot be read: {}", e.why.ja; e.why.en),
             };
             return Err(vec![o.err("E104", decl.span, msg)]);
         }
     };
     if rows.is_empty() {
-        return Err(vec![o.err("E104", decl.span, tr!("出典「{name}」の写し {path} に行が一つもありません", "The copy {path} of the source {name} has no rows"))]);
+        return Err(vec![o.err("E104", decl.span, tr!("出典「{name}」のコピー {path} に行が一つもありません", "The copy {path} of the source {name} has no rows"))]);
     }
     let (lo, hi, listed) = match covers {
         Covers::Range(a, b) => {
@@ -265,7 +265,7 @@ pub fn check_laws(o: &Origin) -> (Vec<Law>, Vec<crate::diag::Diag>) {
             let path = dir.join(format!("{e}.xml"));
             let Ok(bytes) = ritsu_base::fs::read(&path) else {
                 diags.push(
-                    o.err("E101", p.span, tr!("{} {}の写し {rel}/{e}.xml がありません", "The copy of {} {} is not there: {rel}/{e}.xml", s.name, p.fragment))
+                    o.err("E101", p.span, tr!("{} {}のコピー {rel}/{e}.xml がありません", "The copy of {} {} is not there: {rel}/{e}.xml", s.name, p.fragment))
                         .note(tr!(
                             "`koyomi source fetch` が e-Gov から取ってきて、そこに書きます。check は通信しません。",
                             "`koyomi source fetch` takes it from e-Gov and writes it there; check never reads the network."
@@ -279,20 +279,20 @@ pub fn check_laws(o: &Origin) -> (Vec<Law>, Vec<crate::diag::Diag>) {
                 None => {
                     diags.push(
                         o.err("E102", p.span, tr!("{} {}が固定されていません（`sha256:` がありません）", "{} {} is not pinned (it has no `sha256:`)", s.name, p.fragment))
-                            .note(tr!("いまの写しなら sha256:{actual} です。", "For the copy as it is, that is sha256:{actual}."))
+                            .note(tr!("いまのコピーなら sha256:{actual} です。", "For the copy as it is, that is sha256:{actual}."))
                             .fix_line(sources::fixed_pin_line(&line_text, &actual)),
                     );
                 }
                 Some(pin) if *pin != actual => {
                     diags.push(
                         o.err("E103", p.span, tr!(
-                            "{} {}の写しが固定と違います（固定は sha256:{pin}、写しは sha256:{actual}）",
+                            "{} {}のコピーが固定と違います（固定は sha256:{pin}、コピーは sha256:{actual}）",
                             "The copy of {} {} does not match its pin (pinned sha256:{pin}, the copy is sha256:{actual})",
                             s.name,
                             p.fragment
                         ))
                         .note(tr!(
-                            "固定したあとで写しが変わりました。条文の何が変わったかを読んでから、固定を書き換えてください。",
+                            "固定したあとでコピーが変わりました。条文の何が変わったかを読んでから、固定を書き換えてください。",
                             "The copy changed after it was pinned. Read what changed in the text, then pin it again."
                         ))
                         .fix_line(sources::fixed_pin_line(&line_text, &actual)),
@@ -333,7 +333,7 @@ pub fn check_laws(o: &Origin) -> (Vec<Law>, Vec<crate::diag::Diag>) {
         };
         if c.fragments.is_empty() {
             diags.push(o.err("E111", c.span, tr!(
-                "koyomi は法令を条の単位で写すので、`@{} 第143条` のように、どこを引いたかを書いてください",
+                "koyomi は法令を条の単位で保存するので、`@{} 第143条` のように、どこを引いたかを書いてください",
                 "A law is copied an article at a time, so say which one: `@{} 第143条`",
                 c.source
             )));

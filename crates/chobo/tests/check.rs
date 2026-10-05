@@ -106,7 +106,7 @@ const TWINS: &[(&str, &str)] = &[
     ("効かない", "no_effect"),
     ("同じ勘定", "same_account"),
     ("引数の数", "argument_count"),
-    ("断られる", "refused"),
+    ("拒否される", "refused"),
     ("移動なし", "no_moves"),
     ("リクエスト", "requests"),
     ("使われない", "unused"),

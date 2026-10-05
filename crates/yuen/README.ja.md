@@ -34,7 +34,7 @@ requirement 満了日_142条(last_day_142)
     reviewed 2026-10-04 by 開発 sha256:d4f2d2a67322df17 -> sha256:7c616f5dcc9503a8
 ```
 
-出典の民法は、カレンダーが写して固定しているものを借りています（`source 民法 = koyomi … source 民法`）。同じ条を二か所で写して固定すると、片方だけ取り直したときに食い違うからです。`reviewed` の行は人が書くのではなく、確かめた人の役割を渡して `yuen review` が書きます。行には、誰がいつ確かめたかと、そのときの両端のハッシュが入ります。
+出典の民法は、カレンダーが保存して固定しているものを借りています（`source 民法 = koyomi … source 民法`）。同じ条を二か所で保存して固定すると、片方だけ取り直したときに食い違うからです。`reviewed` の行は人が書くのではなく、確かめた人の役割を渡して `yuen review` が書きます。行には、誰がいつ確かめたかと、そのときの両端のハッシュが入ります。
 
 ```console
 $ ritsu yuen check examples/civil_code_periods/civil_code_periods.ja.req --root examples/civil_code_periods --lang ja
@@ -64,13 +64,13 @@ examples/civil_code_periods_reread/civil_code_periods_reread.ja.req: エラー 1
 
 ## 確かめること、確かめないこと
 
-yuen が確かめるのは、つながりとハッシュと期間です。名前がどれも何かを指していること、法令の写しが固定と同じこと、確かめた記録が今のハッシュと合うこと、どの要件にも満たすものと確かめるもの（か、人が承認した見送りと、その理由）があること、宣言した範囲の成果物がどれも要件に辿れること、要件の版の期間が隙間も重なりもなく並ぶこと、要件が自分自身から読み出されていないこと。通信するのは `source fetch` と `source outdated` だけで、主張もテストも走らせません。
+yuen が確かめるのは、つながりとハッシュと期間です。名前がどれも何かを指していること、法令のコピーが固定と同じこと、確かめた記録が今のハッシュと合うこと、どの要件にも満たすものと確かめるもの（か、人が承認した見送りと、その理由）があること、宣言した範囲の成果物がどれも要件に辿れること、要件の版の期間が隙間も重なりもなく並ぶこと、要件が自分自身から読み出されていないこと。通信するのは `source fetch` と `source outdated` だけで、主張もテストも走らせません。
 
 要件の意味は確かめません。要件の文が条文を正しく読めているか、規則が本当に要件を満たしているか、主張が要件を確かめるのに足りるかは、人が読んで決めることです。yuen がするのは、人が読んだものが、誰にも読み直されないまま変わることがないようにすることと、読むべきものを読む順に並べることです。
 
 ## ページ
 
-`yuen doc` は、コードが実現すべきものを理解し、確かめる人（事業を回す人、経理や法務、運用する人、コードを見る開発者）が読むページを作ります。検査の結果、トレーサビリティの表、出典と、要件が引く条文（固定した写しから引用）、要件ごとの「なぜ」（決めたこと、つながり、確かめた記録、印があればその差分）、範囲、日付の順の確かめた記録を載せます。Markdown か、外のファイルを何も読まない一枚の HTML で、明るい配色と暗い配色があります。
+`yuen doc` は、コードが実現すべきものを理解し、確かめる人（事業を回す人、経理や法務、運用する人、コードを見る開発者）が読むページを作ります。検査の結果、トレーサビリティの表、出典と、要件が引く条文（固定したコピーから引用）、要件ごとの「なぜ」（決めたこと、つながり、確かめた記録、印があればその差分）、範囲、日付の順の確かめた記録を載せます。Markdown か、外のファイルを何も読まない一枚の HTML で、明るい配色と暗い配色があります。
 
 ```console
 $ ritsu yuen doc examples/civil_code_periods_reread/civil_code_periods_reread.ja.req --root examples/civil_code_periods_reread --format html --lang ja --out site
@@ -116,7 +116,7 @@ $ ritsu yuen explain E303 --lang ja
 
 | 例 | 見せるもの |
 |---|---|
-| [osha](examples/osha) | 29 CFR 1910.157（eCFR）から読んだ要件。出典は yuen が写して固定し、rulec の表が満たす（英語） |
+| [osha](examples/osha) | 29 CFR 1910.157（eCFR）から読んだ要件。出典は yuen が保存して固定し、rulec の表が満たす（英語） |
 | [greeter](examples/greeter) | 決めた要件を `server.py` が満たし、geas の主張が確かめる。変更への `affected`（英語と日本語） |
 | [payment_terms](examples/payment_terms) | 例として決めた支払日と、koyomi のカレンダーが固定する祝日の表から借りた営業日（英語と日本語） |
 | [refunds](examples/refunds) | 「返金は売上を超えない」を、chobo の帳簿の勘定一つと振替二つが満たす（英語と日本語） |
@@ -140,4 +140,4 @@ $ ritsu yuen explain E303 --lang ja
 
 ## ライセンス
 
-MIT OR Apache-2.0 のどちらかを選べます（[LICENSE-MIT](LICENSE-MIT)、[LICENSE-APACHE](LICENSE-APACHE)）。例とテストに入れた法令と祝日の表の写しについては、[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) に書きました。
+MIT OR Apache-2.0 のどちらかを選べます（[LICENSE-MIT](LICENSE-MIT)、[LICENSE-APACHE](LICENSE-APACHE)）。例とテストに入れた法令と祝日の表のコピーについては、[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) に書きました。

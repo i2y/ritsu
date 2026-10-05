@@ -4,7 +4,7 @@ Closes on the 20th; pays on the 10th of the next month, or on the business day b
 
 - ファイル: `close_20th_pay_10th.cal`（dates close_20th_pay_10th v1、sha256:38bfa1df75d69ac1）
 - カレンダー: `calendars/england_and_wales.cal`（calendar england_and_wales v1、sha256:00a0d8a87344f4f4）
-- 表: bank_holidays = `calendars/data/bank-holidays.json`（sha256:538b3482c28b85ec、https://www.gov.uk/bank-holidays.json の写し、covers listed years = 2019-01-01..2028-12-31）
+- 表: bank_holidays = `calendars/data/bank-holidays.json`（sha256:538b3482c28b85ec、https://www.gov.uk/bank-holidays.json のコピー、covers listed years = 2019-01-01..2028-12-31）
 - koyomi: 0.23.0
 
 上のファイルを koyomi 0.23.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
@@ -87,7 +87,7 @@ received 2026-01-01〜2028-11-20 の 1,055 日のすべてで日付を計算し�
 
 ### 出典とデータの範囲
 
-- bank_holidays: 83 行。https://www.gov.uk/bank-holidays.json の写しを、sha256:538b3482c28b85ec で固定しています。休みを全部載せているのは 2019-01-01〜2028-12-31（行のある最初の年から最後の年まで） です。
+- bank_holidays: 83 行。https://www.gov.uk/bank-holidays.json のコピーを、sha256:538b3482c28b85ec で固定しています。休みを全部載せているのは 2019-01-01〜2028-12-31（行のある最初の年から最後の年まで） です。
 
 このカレンダーが休みかどうかを知っているのは 2019-01-01〜2028-12-31 です。その外の日が営業日かを問う計算は、検査でも生成したコードでも止まります。
 

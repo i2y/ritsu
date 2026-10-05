@@ -2,7 +2,7 @@
 
 DESIGN.md を仕様として、ritsu を五つの段階（B〜F）で作る。どの段階も、ここに書いた順に進め、各段階の最後にある完了の条件が全部成り立ったら終わりにする。DESIGN.md と違うことをしたくなったら、先に DESIGN.md に決定と理由と捨てたものを書き、報告で言う。
 
-この計画は段階 A（設計）で書いた。コードは書いていない。DESIGN.md の 1 章の数と 12.5 の試しは、A の段階に作業場所で測ったもので、試しに使った写しは残していない。
+この計画は段階 A（設計）で書いた。コードは書いていない。DESIGN.md の 1 章の数と 12.5 の試しは、A の段階に作業場所で測ったもので、試しに使ったコピーは残していない。
 
 | 段階 | すること | 主に読む DESIGN の章 |
 |---|---|---|
@@ -18,7 +18,7 @@ DESIGN.md を仕様として、ritsu を五つの段階（B〜F）で作る。�
 
 - 作者の決まり（段階ごとの指示書が挙げるもの）を先に読み、従う。日本語（DESIGN.md、PLAN.md、`--lang ja` の診断、README.ja.md、報告）は、英語の概念語を漢字に直訳しない。カタカナ英語が普通の語はカタカナで書く（ツール、バージョン、イベント、リトライ、タイムアウトなど）。
 - git のコミットと push をしない。例外は B の取り込みのマージ（B.2）で、それも指示する側が許したときだけ行う。
-- 元のリポジトリ（`~/rulec`、`~/dandori`、`~/koyomi`、`~/chobo`、`~/geas`、`~/yurai`（yuen の前の名前のまま）、`~/sakai`）に書かない、そこでビルドしない、git の状態を変えない。履歴や古いバージョンが要るときは、作業場所に `git clone --no-local` で写して使う。ほかの木（`~/pixie` など）も同じ。
+- 元のリポジトリ（`~/rulec`、`~/dandori`、`~/koyomi`、`~/chobo`、`~/geas`、`~/yurai`（yuen の前の名前のまま）、`~/sakai`）に書かない、そこでビルドしない、git の状態を変えない。履歴や古いバージョンが要るときは、作業場所に `git clone --no-local` でコピーして使う。ほかの木（`~/pixie` など）も同じ。
 - Rust は手元の stable 1.94.1 で通すこと。言語のクレートの edition は変えない（dandori は 2021、ほかは 2024）。新しいクレートは 2024。
 - 依存は DESIGN 3.1 の表のとおり。外のクレートは serde_json だけで、土台の層と rulec と geas は外のクレートに依存しない。
 - 各言語のコマンドの振る舞い（コマンド、フラグ、終了コード、診断のコード、`--format json` と `api` の形）を変えるときは、その言語の DESIGN.md に理由を書き、報告に並べる（DESIGN の P6）。
@@ -44,7 +44,7 @@ DESIGN.md を仕様として、ritsu を五つの段階（B〜F）で作る。�
 
 - クレートの名前と置き場所は DESIGN 2.2 のとおり。言語のクレートのパッケージの名前とバイナリの名前は変えない。
 - 依存の決まりは DESIGN 3.1。C の段階からは `cargo xtask deps` が確かめる。
-- `naming.tsv`（36 行。D.6 で 42 行になった）は、C から `crates/ritsu-base/tests/fixtures/naming.tsv` にあり、yuen と sakai の写しは消す。表を直すときは、この一つを直す。
+- `naming.tsv`（36 行。D.6 で 42 行になった）は、C から `crates/ritsu-base/tests/fixtures/naming.tsv` にあり、yuen と sakai のコピーは消す。表を直すときは、この一つを直す。
 - バージョンは F まで各クレートのいまのまま（DESIGN 13.1）。
 - 段階の報告は、指示書の「報告の形」の六項目で返す。
 
@@ -85,11 +85,11 @@ ritsu/
 
 取り込む先のコミットは、次の三つの段になった。A の段階では、根の `Cargo.toml`、`Cargo.lock`、`tools/import.sh` をマージのあとの別のコミットにする案だったが、根のファイルは全部、最初のコミットに入れた。`tools/import.sh` は取り込む先のリポジトリに置くスクリプトで、作業ツリーに変更があると止まる作りなので、どのみちマージより前にコミットしておくことになる。
 
-1. 最初のコミット：`LICENSE-MIT`、`LICENSE-APACHE`（dandori のものを写した。著作権者は同じ）、`DESIGN.md`、`PLAN.md`（A の段階の二つ）、`.gitignore`（`/target`）、ワークスペースの根の `Cargo.toml`、`Cargo.lock`、`tools/import.sh`（B.3）。題は `build: start ritsu, one workspace for seven small languages`。
+1. 最初のコミット：`LICENSE-MIT`、`LICENSE-APACHE`（dandori のものをコピーした。著作権者は同じ）、`DESIGN.md`、`PLAN.md`（A の段階の二つ）、`.gitignore`（`/target`）、ワークスペースの根の `Cargo.toml`、`Cargo.lock`、`tools/import.sh`（B.3）。題は `build: start ritsu, one workspace for seven small languages`。
 2. 七つのマージ。題は `chore: bring <名前> into the workspace with its history`。
 3. yuen の二つのテストの直し（B.7 の (i) と (ii) の間をとったもの）：`tests/cli.rs` の `the_json_of_check` と、DESIGN.md の `$ yuen check tests/mutants/E302_条が変わった` とその直し方の三行に `--root .` を足した。題は `test(yurai): pass --root . where the root was taken to be the crate`。回り道の表示は C.0 に残した。
 
-まず作業場所の写し（`<作業場所>/ritsu-try`）で、全部を通して走らせる。そこで次を確かめる。
+まず作業場所のコピー（`<作業場所>/ritsu-try`）で、全部を通して走らせる。そこで次を確かめる。
 
 - コミットの数が、七つの元のコミットの数（355、52、2、1、6、1、1 で 418。B.1 で増えていれば足す）に、マージの七つと、最初と最後のコミットの二つを足した数（427）になる（実際に 427 になった）。
 - タグが 29（`rulec/v0.1.0`〜`rulec/v0.22.1` の 28 と `dandori/v0.1.0`）で、根の名前空間に `v0.1.0` などが無い。
@@ -97,7 +97,7 @@ ritsu/
 - 各クレートで三つのファイルについて、`git log --format=%h -- crates/<名前>/<パス> | wc -l` が、元のリポジトリの `git log --format=%h -- <パス> | wc -l` と同じ（`--follow` なしで）。
 - 作者と日時が元のまま（`git log --format='%an %ae %ad'` の並びが元と同じ）。
 
-`~/ritsu` に対しては、指示する側が許したときに、同じスクリプトを走らせる（作者の決まりで、コミットは勤務時間の外に、実際の時刻で行う。日時を書き換えない）。許しが出るまでは、作業場所の写しで B.3〜B.6 を済ませておく。
+`~/ritsu` に対しては、指示する側が許したときに、同じスクリプトを走らせる（作者の決まりで、コミットは勤務時間の外に、実際の時刻で行う。日時を書き換えない）。許しが出るまでは、作業場所のコピーで B.3〜B.6 を済ませておく。
 
 ### B.3 ワークスペースの根
 
@@ -129,7 +129,7 @@ opt-level = 2
 
 ### B.5 外のツールを入れ直す
 
-gitignore したもの（各クレートの `tools/` の `node_modules` と venv、Java の jar、TigerBeetle、`go-arch-lint`、ReqIF のスキーマ、rulec の `website/` の写し、dandori の `website/docs-ja/` の写し、rulec の `proofs/.lake`）は、取り込んでも来ない。各クレートの README、PLAN、`tools/` の README と `requirements.txt` の頭に書いてある手順で、`crates/<名前>/` の下に入れ直す。元のリポジトリに入っているものを指して使わない（元の木の venv を走らせると `__pycache__` を書くことがある）。
+gitignore したもの（各クレートの `tools/` の `node_modules` と venv、Java の jar、TigerBeetle、`go-arch-lint`、ReqIF のスキーマ、rulec の `website/` のコピー、dandori の `website/docs-ja/` のコピー、rulec の `proofs/.lake`）は、取り込んでも来ない。各クレートの README、PLAN、`tools/` の README と `requirements.txt` の頭に書いてある手順で、`crates/<名前>/` の下に入れ直す。元のリポジトリに入っているものを指して使わない（元の木の venv を走らせると `__pycache__` を書くことがある）。
 
 | クレート | 入れるもの |
 |---|---|
@@ -144,8 +144,8 @@ gitignore したもの（各クレートの `tools/` の `node_modules` と venv
 ### B.6 テストを回す
 
 - 一つのクレートずつ、そのクレートのディレクトリで回す：`cd crates/<名前> && cargo test --no-fail-fast -- --nocapture`。rulec の `.cargo/config.toml`（`RULEC_LANG=ja` を強いる）は、そのディレクトリで走らせたときだけ読まれる（DESIGN 12.4）。dandori は、ほかと同時に回さない。
-- テストの並びを元と比べる：各元のリポジトリを作業場所に写し（`git clone --no-local`）、`cargo test --target-dir <作業場所>/target-base -- --list` で、走らせずにテストの名前の一覧を取る。取り込んだクレートの `cargo test -- --list` と、同じでなければならない。
-- 落ちたテストがあれば、作業場所の元の写しで同じテストを走らせ、元でも落ちるか（揺れか、元からか）、取り込んだせいかを分ける。dandori の Argo と Temporal の揺れは、DESIGN 10.6 のとおり一度だけ回し直してよく、回し直したことを報告に書く。
+- テストの並びを元と比べる：各元のリポジトリを作業場所にコピーし（`git clone --no-local`）、`cargo test --target-dir <作業場所>/target-base -- --list` で、走らせずにテストの名前の一覧を取る。取り込んだクレートの `cargo test -- --list` と、同じでなければならない。
+- 落ちたテストがあれば、作業場所の元のコピーで同じテストを走らせ、元でも落ちるか（揺れか、元からか）、取り込んだせいかを分ける。dandori の Argo と Temporal の揺れは、DESIGN 10.6 のとおり一度だけ回し直してよく、回し直したことを報告に書く。
 - 各クレートの通った数、SKIP の行と理由、かかった時間を報告に書く。
 
 ### B.7 分かっている食い違い
@@ -157,8 +157,8 @@ A の段階に測ったもの（DESIGN 12.4、12.5）。
   - (ii) B では直さず、二つを「ルートが移ったために落ちる」と報告し、C.0 で直す（表示のパスの回り道も一緒に）。
   勧めは (ii) で、B の「中身を直さない」を字のとおりに保ち、落ちる理由が取り込みにあることを報告で示す。
 - **sakai の `tests/cli.rs` の `check_exit_codes_and_formats`**：通るが、`--root` なしの形を確かめる部分を、クレートのディレクトリに `.git` が無いので黙って飛ばす。報告に書き、C.0 で直す。
-- **dandori が使う rulec**：dandori の golden は rulec 0.22.0 で取ってある。ワークスペースの rulec（0.22.1）ではなく、0.22.0 を `DANDORI_RULEC` で渡す。作り方は、作業場所に rulec を `git clone --no-local` で写して `v0.22.0` を `cargo build --release --target-dir <作業場所>/…` で作るか、GitHub のリリースのバイナリを取る。
-- **rulec と dandori のサイトの写し**：rulec は `website/sync.sh`、dandori は `website/build.sh` が写すページを、テストの前に作る（それぞれの CI と同じ）。
+- **dandori が使う rulec**：dandori の golden は rulec 0.22.0 で取ってある。ワークスペースの rulec（0.22.1）ではなく、0.22.0 を `DANDORI_RULEC` で渡す。作り方は、作業場所に rulec を `git clone --no-local` でコピーして `v0.22.0` を `cargo build --release --target-dir <作業場所>/…` で作るか、GitHub のリリースのバイナリを取る。
+- **rulec と dandori のサイトのコピー**：rulec は `website/sync.sh`、dandori は `website/build.sh` がコピーするページを、テストの前に作る（それぞれの CI と同じ）。
 
 ### B.8 B の完了の条件
 
@@ -167,7 +167,7 @@ A の段階に測ったもの（DESIGN 12.4、12.5）。
 3. `cargo build --workspace --locked --offline` が通る。
 4. 各クレートの `cargo test -- --list` が、元のものと同じ。
 5. 各クレートのテストが、そのディレクトリで全部通る。SKIP は 0。ただし、次は許す：`TYPESAFE_API_KEY` を空にしたときの Jev の SKIP、Ollama が無いときの SKIP（どちらも dandori）。B.7 で (ii) を選んだときの yuen の二つは、落ちたまま報告する。
-6. 立てたものが残っていない（`ps` で、Temporal の dev server、テストが立てたヘッドレスの Chrome（`--user-data-dir` が一時ディレクトリのもの）、PostgreSQL、TigerBeetle が無い。kind の上にワークフローが無い。LocalStack のコンテナが無い）。作業場所の写し（`import/`、`ritsu-try/`、`target-base/` など）を消した。
+6. 立てたものが残っていない（`ps` で、Temporal の dev server、テストが立てたヘッドレスの Chrome（`--user-data-dir` が一時ディレクトリのもの）、PostgreSQL、TigerBeetle が無い。kind の上にワークフローが無い。LocalStack のコンテナが無い）。作業場所のコピー（`import/`、`ritsu-try/`、`target-base/` など）を消した。
 7. 報告に、元のリポジトリの先頭のコミット、取り込みの確かめの結果、クレートごとの通った数と SKIP と時間、警告の数を書く。
 
 ## 3. 段階 C：土台
@@ -188,7 +188,7 @@ C.0 でしたこと：
 
 ### C.1 `ritsu-base`
 
-DESIGN 4 章のモジュールを作る。どれも std だけで書く。C の最初の部分で作った（形と決めたことは DESIGN 4.12）。koyomi・yuen・sakai の `explain`（テキストと Markdown）、koyomi の `--help`、yuen の `review --help` の出力を `tests/golden/compat/` に写し、土台で組み直したものと一字も違わないことをテストで確かめた。`naming.tsv` は `crates/ritsu-base/tests/fixtures/naming.tsv` に写し、yuen と sakai の写しと同じバイト列であることもテストで確かめる（C.7 と C.8 で二つの写しを消すまで）。
+DESIGN 4 章のモジュールを作る。どれも std だけで書く。C の最初の部分で作った（形と決めたことは DESIGN 4.12）。koyomi・yuen・sakai の `explain`（テキストと Markdown）、koyomi の `--help`、yuen の `review --help` の出力を `tests/golden/compat/` に保存し、土台で組み直したものと一字も違わないことをテストで確かめた。`naming.tsv` は `crates/ritsu-base/tests/fixtures/naming.tsv` にコピーし、yuen と sakai のコピーと同じバイト列であることもテストで確かめる（C.7 と C.8 で二つのコピーを消すまで）。
 
 | モジュール | 元にするもの | テスト |
 |---|---|---|
@@ -198,7 +198,7 @@ DESIGN 4 章のモジュールを作る。どれも std だけで書く。C の�
 | `cli`（`Flag`、`Cmd`、`--help`、読み取り） | koyomi・yuen・sakai の `src/cli.rs` | 知らないフラグ、閉じた集合の外の値、値の無いフラグ、二度目のフラグがどれも exit 2 |
 | `sha256` | koyomi の `src/sha256.rs` | FIPS 180-4 の既知の値（空、`abc`、長い入力） |
 | `naming`、`paths` | yuen の `src/names.rs`、sakai の `src/naming.rs` と `src/paths.rs` | `naming.tsv` の 36 行が全部、yuen と sakai のいまの表と同じ結果。ルートの決め方。表示のパスがいちばん短い相対になる |
-| `sources`（引用から要素の名前、写しの場所と本文、固定、固定の行の書き換え、curl、e-Gov、eCFR、base64） | rulec の `src/sources.rs` の 20〜313 行と 1047〜2142 行、koyomi の `src/fetch.rs` と `src/sources.rs`、yuen の `src/fetch.rs`・`src/copies.rs`・`src/base64.rs` | 三つのリポジトリのテストにある、要素の名前と本文の例を全部。通信は小さな HTTP サーバーで（yuen の `tests/fetch.rs` の形）。本物の e-Gov と eCFR には、`RITSU_TEST_LEVEL=platforms` のときだけ問い合わせる |
+| `sources`（引用から要素の名前、コピーの場所と本文、固定、固定の行の書き換え、curl、e-Gov、eCFR、base64） | rulec の `src/sources.rs` の 20〜313 行と 1047〜2142 行、koyomi の `src/fetch.rs` と `src/sources.rs`、yuen の `src/fetch.rs`・`src/copies.rs`・`src/base64.rs` | 三つのリポジトリのテストにある、要素の名前と本文の例を全部。通信は小さな HTTP サーバーで（yuen の `tests/fetch.rs` の形）。本物の e-Gov と eCFR には、`RITSU_TEST_LEVEL=platforms` のときだけ問い合わせる |
 | `docpage`（HTML の枠と CSS、Markdown の頭） | koyomi の `src/doc/html.rs`、dandori と chobo と rulec の CSS | 明るい配色と暗い配色、外の URL を読まない |
 | `json`（値の型、読み書き、キーの順） | rulec の `src/json.rs` | 読んで書いて同じになる、整数が正確 |
 
@@ -232,8 +232,8 @@ C.4〜C.8 でしたこと（C の二つ目の部分）：
 
 | | 言語に残したもの | 出力が変わったところ | 取り直した golden | テスト |
 |---|---|---|---|---|
-| C.4 koyomi | 計算の段（`Example`）、祝日の表、写しのうち本則の条だけを引くこと、`text_diff`、ページの中身と koyomi だけの色、台帳とコマンドの表の中身 | `--help` と `--lang` の説明（`RITSU_LANG`）、HTML の共通の役割の色の値、E001 の JSON の `line` と `col` が null、curl の `--compressed` と e-Gov の取り直し、写しの本文の表の読み方、固定の行の書き換えの `\"` | `docs/images/doc-{top,months}.{en,ja}.png`、`docs/reference.md` とスキルの写し | 99（C.10 で 100） |
-| C.5 chobo | 操作とヒント（`Ops`）、`--help` の組み立て、台帳と `explain` の形、Markdown の頭、ページの中身 | `check --format json` の診断のキーと外側の `v`、`--lang` の説明、`doc` の `generator` と配色の変数の名前 | `tests/doc/*.html`（14）、`docs/formats.md` とスキルの写し、`skills/chobo/SKILL.md` | 63 |
+| C.4 koyomi | 計算の段（`Example`）、祝日の表、コピーのうち本則の条だけを引くこと、`text_diff`、ページの中身と koyomi だけの色、台帳とコマンドの表の中身 | `--help` と `--lang` の説明（`RITSU_LANG`）、HTML の共通の役割の色の値、E001 の JSON の `line` と `col` が null、curl の `--compressed` と e-Gov の取り直し、コピーの本文の表の読み方、固定の行の書き換えの `\"` | `docs/images/doc-{top,months}.{en,ja}.png`、`docs/reference.md` とスキルのコピー | 99（C.10 で 100） |
+| C.5 chobo | 操作とヒント（`Ops`）、`--help` の組み立て、台帳と `explain` の形、Markdown の頭、ページの中身 | `check --format json` の診断のキーと外側の `v`、`--lang` の説明、`doc` の `generator` と配色の変数の名前 | `tests/doc/*.html`（14）、`docs/formats.md` とスキルのコピー、`skills/chobo/SKILL.md` | 63 |
 | C.6 geas | コマンドの表（DESIGN 4.4 が外している）、台帳と `explain` の形、`src/json.rs`、SHA-1、歩くときに飛ばす名前 | E081 の JSON の `line` と `col` が null、診断の JSON の `\b` と `\f`、`RITSU_LANG`、SKIP の行、一時ディレクトリの場所 | `tests/golden/en/errors/E081-missing.json` | 236 |
 | C.7 yuen | `.req` の字句と構文、`Trail`、名指しの診断のコードと文（E011〜E013）、ReqIF と PROV の書き出し | 書き出しの識別子、`RITSU_LANG`、表示のパス、歩くときに飛ばす名前、curl と e-Gov の取り直し、JSON が読めないときの理由の文 | `tests/golden/export/{ecfr,payment,period}.{reqif,provn,prov.json}`（9） | 94（`#[test]` は 95 から 94。base64 の RFC 4648 の例のテストを ritsu-base に移した） |
 | C.8 sakai | `.ctx` の字句と構文、`Refs`、名指しの診断の文、地図の検査、`build`、`export cml`、`api` | `--format json` の `file` をルートからの相対にし、`root` を足した、`RITSU_LANG`、SKIP の行 | なし | 94（SHA-256 の一つと文の二つのテストは ritsu-base にある。C.9 のあと 90） |
@@ -256,19 +256,19 @@ sakai の `src/proto.rs`（型の名前の解決まで持つ）を元に、rulec
 C.9 でしたこと：
 
 - `crates/ritsu-proto`（std と `ritsu-base` だけ）を作った。sakai の `src/proto.rs` を元に、どの要素にもオプションを書いたまま持たせ（`Opt`：名前、値の文、protobuf のテキスト形式として読んだ値 `Value`）、次を足した。dandori の読み方：オプションを拡張の名前で引く木にすること（`value::tree`。`(a).b.c = v` は `{"a": {"b": {"c": v}}}`、同じフィールドを二度書けば並び）、import の先を何段でも読むこと（`load_from`。dandori の決まりで探し、`dandori/v1/options.proto` のように中身を渡されたファイルはその文を読む）。rulec の読み方：Protovalidate の規則（`validate`：フィールドの整数の範囲、`required`、`ignore`、並びの数、文字列の値と長さ、CEL を文字列のまま、読まなかった規則の名前。メッセージの CEL と `oneof` と `disabled`）、`buf.yaml` の `deps` と `buf.lock` の固定（`buf`）。宣言した `oneof` そのもの（名前と中のフィールドとオプション）、`syntax` を書いた行、読んだ順（`Protos::order`）も持つ。読めないときは、何が悪いか（`Problem`）を返し、文は読んだプログラムの名前を渡して作る（`ReadError::message("sakai")`。知らない `syntax` の文だけがプログラムの名前を言う）。
-- テスト（`tests/readers.rs`）：三つのリポジトリの `.proto` の全部（rulec 4、dandori 20、sakai 39）と、三つの読み手が自分のテストで使っていた例（ritsu-proto の `tests/fixtures/` に写した 22 のファイルと、rulec のテストの `buf.yaml` と `buf.lock` の五つ）を、三つの読み手の言葉に直して比べる。rulec の読み手とは rulec の型のまま等しいこと（`package`、`imports`、`enums`、`messages`、`buf_deps`、`buf_lock`）、dandori の読み手とは `load` が出すもの（全部のメッセージと列挙、型の解決、JSON の名前、`presence`、規則の木、サービスとメソッドのオプション、読めなかった import、型が無いときの誤り）が一行ずつ等しいことを確かめる。sakai の読み手とは、替える前に一時的に sakai を dev-dependency にして、ファイルごとの読み取りと、まとめて読んだときの import の行き先と型の解決が一字も違わないことを確かめ、それを `tests/golden/sakai.txt` に残した（いまはその golden と比べる）。rulec と dandori の分も golden に残す（D.10 で古い読み手を消したあとに比べるため）。
+- テスト（`tests/readers.rs`）：三つのリポジトリの `.proto` の全部（rulec 4、dandori 20、sakai 39）と、三つの読み手が自分のテストで使っていた例（ritsu-proto の `tests/fixtures/` にコピーした 22 のファイルと、rulec のテストの `buf.yaml` と `buf.lock` の五つ）を、三つの読み手の言葉に直して比べる。rulec の読み手とは rulec の型のまま等しいこと（`package`、`imports`、`enums`、`messages`、`buf_deps`、`buf_lock`）、dandori の読み手とは `load` が出すもの（全部のメッセージと列挙、型の解決、JSON の名前、`presence`、規則の木、サービスとメソッドのオプション、読めなかった import、型が無いときの誤り）が一行ずつ等しいことを確かめる。sakai の読み手とは、替える前に一時的に sakai を dev-dependency にして、ファイルごとの読み取りと、まとめて読んだときの import の行き先と型の解決が一字も違わないことを確かめ、それを `tests/golden/sakai.txt` に残した（いまはその golden と比べる）。rulec と dandori の分も golden に残す（D.10 で古い読み手を消したあとに比べるため）。
 - 食い違いは二つだけだった。どちらも新しい読み手の方が多く読む。rulec の `package` は行の頭にしか見つけないので、`syntax = "proto3"; package a.v1;` のように一行に書いたファイルでは何も返さない（テストは、rulec が何かを返したときだけ比べる）。三つのファイル（sakai の E106 の変異、dandori のテストの `.proto` でないファイル、proto2 の `group`）は、新しい読み手が読めないと言い、rulec の読み手は読めたところまでを返す（テストは、この三つが読めないことを確かめる）。
 - sakai を替えた：`src/proto.rs` は ritsu-proto の型と関数をそのまま公開するだけになり、名指しの作り方（`Naming`）と、何も設定していないことを言う列挙の値の決め方（`value_prefix`、`is_unset`）だけが sakai に残った。読み手の単体のテスト四つは ritsu-proto に移した。sakai の出力は、全部のコマンド（205 回）で替える前と一字も違わない。
-- 決めたこと：言語が読んだものから作るもの（rulec の列挙の値の別名と `upper_snake`、sakai の `value_prefix`、dandori が proto2 と edition を断ること、dandori の型の解決が読んだ全部のファイルから引くこと）は、言語に残した。ritsu-proto の型の解決は sakai の形（import したファイルと `import public` の先だけを見る）で、dandori の例では結果が同じだった。
+- 決めたこと：言語が読んだものから作るもの（rulec の列挙の値の別名と `upper_snake`、sakai の `value_prefix`、dandori が proto2 と edition を受け付けないこと、dandori の型の解決が読んだ全部のファイルから引くこと）は、言語に残した。ritsu-proto の型の解決は sakai の形（import したファイルと `import public` の先だけを見る）で、dandori の例では結果が同じだった。
 
 
 ### C.10 `ritsu-emit`
 
-生成先の言語ごとの予約語（rulec の `src/backend.rs` の `words`、koyomi の `src/reserved.rs`、dandori の `src/temporal_py.rs` と `src/temporal_go.rs`、chobo の `src/client/`）、識別子の作り方、リテラル、生成物の頭（DESIGN 9.2）。koyomi と chobo を替え、生成物が一バイトも変わらないことを、各クレートの突き合わせのテスト（koyomi の五つの出力先、chobo の七つの組み合わせ）と golden で確かめる。rulec と dandori の表は、ritsu-emit に写して突き合わせるテストだけを置き、二つのコードは C.11 で替える。
+生成先の言語ごとの予約語（rulec の `src/backend.rs` の `words`、koyomi の `src/reserved.rs`、dandori の `src/temporal_py.rs` と `src/temporal_go.rs`、chobo の `src/client/`）、識別子の作り方、リテラル、生成物の頭（DESIGN 9.2）。koyomi と chobo を替え、生成物が一バイトも変わらないことを、各クレートの突き合わせのテスト（koyomi の五つの出力先、chobo の七つの組み合わせ）と golden で確かめる。rulec と dandori の表は、ritsu-emit にコピーして突き合わせるテストだけを置き、二つのコードは C.11 で替える。
 
 C.10 でしたこと：
 
-- `crates/ritsu-emit`（std と `ritsu-base` だけ）を作った。`words`：標準が並べる語を、標準ごとに一つずつ（TypeScript は ECMAScript 2025 の予約語、strict mode の予約語、strict mode で名前にできない `arguments` と `eval` と大域の値の `undefined`・`NaN`・`Infinity`、Python 3.14.6 の `keyword.kwlist` と `softkwlist`、Go 1.25 のキーワードと事前宣言の識別子、Rust 1.94 のキーワード、PostgreSQL 18.0 の `kwlist.h` と PL/pgSQL の予約語）。生成器が名前を照らし合わせる語は、いくつかの表をまとめた `Words` で表し、各言語の `NAMES` が koyomi の表と同じ語になる。`copies`：rulec の 12 の出力先ごとの三つの表と、dandori の四つの表を写した。標準の表と同じものはそれを指し、違うところだけを自分の表に持つ。`ident`（`pascal`、`go_package`、`go_exported`、`is_ascii_ident`、`aside`、`unique`）、`lit`（JSON の文字列、Python の `'…'`、Go の `"…"`、SQL の `'…'` と `"…"`）、`header`（`Code generated … DO NOT EDIT.` の一行と、それを書くコメント）。
+- `crates/ritsu-emit`（std と `ritsu-base` だけ）を作った。`words`：標準が並べる語を、標準ごとに一つずつ（TypeScript は ECMAScript 2025 の予約語、strict mode の予約語、strict mode で名前にできない `arguments` と `eval` と大域の値の `undefined`・`NaN`・`Infinity`、Python 3.14.6 の `keyword.kwlist` と `softkwlist`、Go 1.25 のキーワードと事前宣言の識別子、Rust 1.94 のキーワード、PostgreSQL 18.0 の `kwlist.h` と PL/pgSQL の予約語）。生成器が名前を照らし合わせる語は、いくつかの表をまとめた `Words` で表し、各言語の `NAMES` が koyomi の表と同じ語になる。`copies`：rulec の 12 の出力先ごとの三つの表と、dandori の四つの表をコピーした。標準の表と同じものはそれを指し、違うところだけを自分の表に持つ。`ident`（`pascal`、`go_package`、`go_exported`、`is_ascii_ident`、`aside`、`unique`）、`lit`（JSON の文字列、Python の `'…'`、Go の `"…"`、SQL の `'…'` と `"…"`）、`header`（`Code generated … DO NOT EDIT.` の一行と、それを書くコメント）。
 - koyomi を替えた：`src/reserved.rs` は ritsu-emit の表を出力先の名前と組にするだけになり、`pascal` と `go_package`、五つの生成器の文字列のリテラル、生成物の頭の一行とコメントが ritsu-emit のものになった。生成物が使う名前（`GENERATED`、`MODULES`）は koyomi に残した。
 - chobo を替えた：Python と Go のキーワード、Go の外に見せる名前、ASCII の識別子の見分け、名前を `_2` で分けること、TypeScript・Python・Go・SQL のリテラル、Go のファイルの頭の一行が ritsu-emit のものになった。生成物が自分で使う名前（`self`、`_str` など）と、TypeScript と Python のファイルの頭の文（`Written by …`）は chobo に残した。
 - 確かめたこと：例の全部の `.cal` を五つの出力先に生成したファイル（80 個）と、三つの帳簿を七つの組み合わせに生成したファイル（72 個）が、替える前と一バイトも違わない。koyomi の五つの出力先の突き合わせ、chobo の生成したクライアントを本物の PostgreSQL と TigerBeetle で走らせるテスト、golden は SKIP なしで通る。koyomi に、ritsu-emit の JSON の文字列が serde_json の書くものと同じことを確かめるテストを一つ足した。rulec の表は rulec の `backend::ALL` と、dandori の表は dandori のソースの定数と（公開していないので文字で読む）、語の組として等しいことをテストで確かめる。
@@ -276,14 +276,14 @@ C.10 でしたこと：
 
 ### C.11 rulec と dandori（合うところだけ）
 
-- rulec：`src/sha256.rs`、`src/json.rs`（土台の `json` の元なので、置き場所が移るだけ）、`src/sources.rs` の共通の部分（20〜313 行と 1047〜2142 行。写しと表の突き合わせ、534〜1009 行は rulec に残す）、テストの SKIP の書き方（`注意:` → `SKIP: rulec: …`）。診断（`src/diag.rs`）、CLI の表（`src/main.rs`）、`tr!` は残す（DESIGN 4.1、4.2、4.4）。
+- rulec：`src/sha256.rs`、`src/json.rs`（土台の `json` の元なので、置き場所が移るだけ）、`src/sources.rs` の共通の部分（20〜313 行と 1047〜2142 行。コピーと表の突き合わせ、534〜1009 行は rulec に残す）、テストの SKIP の書き方（`注意:` → `SKIP: rulec: …`）。診断（`src/diag.rs`）、CLI の表（`src/main.rs`）、`tr!` は残す（DESIGN 4.1、4.2、4.4）。
 - dandori：診断の `(en, ja)` の組を `tr!` の順に（機械的に）、CLI を土台の表に移し `--version` とコマンドごとの `--help` を足す、テストの一時ディレクトリと Chrome と golden を `ritsu-testkit` に。rulec とのつなぎ（`src/rulec.rs`、`src/sources.rs`）は D まで触らない。
 - どちらも、コーパスとテストの全部、rulec の証明書（`rulec certificate` の出力）、golden が一字も変わらない。
 
 C.11 でしたこと（C の最後の部分）：
 
-- rulec：`src/sha256.rs` を消し、`rulec::sha256` は土台の `sha256` を指す。`src/json.rs` は土台の `json` の上の薄い層になった（456 → 204 行）。残したのは、読めないときの rulec の文（土台が返す種類から選ぶ。位置の数も前と同じ）、値の種類の名前、オブジェクトをキーの順に並べて読み書きすること、`--format json` を組み立てる `Obj` である。`src/sources.rs` は、引用から要素の名前を作ること、写しの場所と本文、固定の行の書き換え、curl と e-Gov と eCFR と GitHub への問い合わせ、base64 を土台のものにした（2,142 → 1,640 行）。写しと表の突き合わせと、`source fetch | pin | outdated` を rulec の文で言う部分は残した。予約語の表（`src/backend.rs` の `words`）は `ritsu-emit` の `copies` から読む（998 → 812 行）。テストの SKIP の行は、29 のファイルで `SKIP: rulec: <理由>` になった。外のツールが要るテストは `ready(Need::…, 見つかるか, 理由)` で先に段を見る。理由の文は前のまま（日本語）。診断、コマンドの表、`tr!` は残した。rulec の DESIGN §15.162 に書いた。
-- dandori：診断の文と注、そこに至る実行の一歩、文の切れ端の `(en, ja)` の組を、スクリプトで機械的に `tr!("日本語", "English")` に替えた（613 か所。片方が文字列でも `format!` でもない 9 か所は `Text::new(ja, en)`）。診断の型（`Diag`、`Step`）は、文を土台の `Text` で持つ。CLI は `src/cli.rs` の表（土台の `cli`）に移し、`--version` とコマンドごとの `--help` を足した。テストの一時ディレクトリ、Chrome、golden、SKIP、段は `ritsu-testkit` のものにした。予約語の表（Python、Go、TypeScript）は `copies` から読む。`src/rulec.rs` と `src/sources.rs` は触っていない。dandori の DESIGN 0.3 に書き、README、サイトのコマンドのページ（英語と日本語）、スキルの写し（`skills/sync.sh`）を直した。
+- rulec：`src/sha256.rs` を消し、`rulec::sha256` は土台の `sha256` を指す。`src/json.rs` は土台の `json` の上の薄い層になった（456 → 204 行）。残したのは、読めないときの rulec の文（土台が返す種類から選ぶ。位置の数も前と同じ）、値の種類の名前、オブジェクトをキーの順に並べて読み書きすること、`--format json` を組み立てる `Obj` である。`src/sources.rs` は、引用から要素の名前を作ること、コピーの場所と本文、固定の行の書き換え、curl と e-Gov と eCFR と GitHub への問い合わせ、base64 を土台のものにした（2,142 → 1,640 行）。コピーと表の突き合わせと、`source fetch | pin | outdated` を rulec の文で言う部分は残した。予約語の表（`src/backend.rs` の `words`）は `ritsu-emit` の `copies` から読む（998 → 812 行）。テストの SKIP の行は、29 のファイルで `SKIP: rulec: <理由>` になった。外のツールが要るテストは `ready(Need::…, 見つかるか, 理由)` で先に段を見る。理由の文は前のまま（日本語）。診断、コマンドの表、`tr!` は残した。rulec の DESIGN §15.162 に書いた。
+- dandori：診断の文と注、そこに至る実行の一歩、文の切れ端の `(en, ja)` の組を、スクリプトで機械的に `tr!("日本語", "English")` に替えた（613 か所。片方が文字列でも `format!` でもない 9 か所は `Text::new(ja, en)`）。診断の型（`Diag`、`Step`）は、文を土台の `Text` で持つ。CLI は `src/cli.rs` の表（土台の `cli`）に移し、`--version` とコマンドごとの `--help` を足した。テストの一時ディレクトリ、Chrome、golden、SKIP、段は `ritsu-testkit` のものにした。予約語の表（Python、Go、TypeScript）は `copies` から読む。`src/rulec.rs` と `src/sources.rs` は触っていない。dandori の DESIGN 0.3 に書き、README、サイトのコマンドのページ（英語と日本語）、スキルのコピー（`skills/sync.sh`）を直した。
 - 確かめたこと：rulec は、コーパスの全部の規則の `check`（英語・日本語・JSON）、`certificate`、`api`、`schema`、`graph`、`vectors`、`coverage`、`adapter`、`fmt --check`、`doc`（Markdown と HTML、英語と日本語）、`gen` の全部の出力先と、変異の全部の `check`、壊れた JSON Lines を渡した `fixtures lint` を、替える前と後のバイナリで出して比べ、1,227 回とも一字も違わなかった。dandori は、例とテストのフローの全部の `check`（英語・日本語・JSON）、例の `build`（七つのプラットフォーム）、`scenarios`、`doc`、`run` の 695 回を比べ、違ったのは CLI を表に移して決めて変えた 7 回（`--help` と引数の誤り）だけだった。`source outdated` は、本物の e-Gov と eCFR に問い合わせて、前と後のバイナリで比べた。テストと golden と証明書は一つも変わっていない（取り直した golden は無い）。
 - 漢数字と `第0条`（7.3）：土台の `sources` に替えて、rulec は条の番号を百と千の位まで読み、`第0条` を通さなくなった。これで変わったテストや出力は、コーパスにもテストにも証明書にも無かった。どの規則も踏まない変わったこととして、rulec の DESIGN §15.162 に並べた（ほかに、JSON として読まないもの三つ、文字列の中の `\b` と `\f`、`file://` の URL を一度だけ試すこと、e-Gov の base64 を標準の形で読むこと、問い合わせが失敗したときの文）。
 - 土台に足したものと消したもの（すでに替えた五つの言語のテストも回し直した）：`json` の読み手が止まった理由の種類（`Problem`。rulec が自分の文を選ぶため）。`ritsu-emit` の `copies::rulec` を出力先ごとの定数と `BACKENDS` にしたこと（rulec の `backend.rs` が並べるため）。`ritsu-testkit` の `ready` と `Need::Rulec`（rulec と dandori）。`docpage` の `stamp` と `markdown_head` は、rulec と dandori の doc が出力を変えずに使えなかったので消した（DESIGN 4.8）。
@@ -298,7 +298,7 @@ C.12 でしたこと：
 
 - 根の `.github/workflows/` に、ジョブ一つにファイル一つで `fast.yml`、`tools.yml`（三つの組の matrix）、`proofs.yml`、`kani.yml`、`platforms.yml` を書き、`ci/skips/` に三つの一覧を書いた。ジョブごとに決めたことと、クレートの中に残っている `.github/` の扱いは DESIGN 10.5 にある。
 - 五つとも YAML として読め、actionlint 1.7.12 が何も言わず、46 の `run` の中身が `bash -n` を通る（protoc を足したあとにもう一度確かめた）。
-- `fast`：作業ツリーと同じ中身を、まっさらに取り出した木に置き（gitignore したものは無い）、PATH には cargo と git と curl とシステムのコマンドだけを残して（ほかのツールは、呼ぶと記録を残して失敗するものに替えて）、ジョブのとおりに走らせた。写しを作るのに 2 秒、`cargo build --workspace --locked` に 12 秒、`cargo xtask deps` は通り、`cargo xtask test --level fast` は 1,489 件が通った（ignored 1。SKIP は段で外したもの 303 で、許していないものは 0。ツールの呼び出しは 0）。テストのビルドを含めて 3 分 30 秒、ビルド済みなら 2 分 15 秒だった。
+- `fast`：作業ツリーと同じ中身を、まっさらに取り出した木に置き（gitignore したものは無い）、PATH には cargo と git と curl とシステムのコマンドだけを残して（ほかのツールは、呼ぶと記録を残して失敗するものに替えて）、ジョブのとおりに走らせた。コピーを作るのに 2 秒、`cargo build --workspace --locked` に 12 秒、`cargo xtask deps` は通り、`cargo xtask test --level fast` は 1,489 件が通った（ignored 1。SKIP は段で外したもの 303 で、許していないものは 0。ツールの呼び出しは 0）。テストのビルドを含めて 3 分 30 秒、ビルド済みなら 2 分 15 秒だった。
 - 最初に `fast` を回したとき、段を聞かずにツールを呼ぶテストが geas に五か所、sakai に一か所あり、許していない SKIP が 20 出た（geas が Python・Node・Go・rustc・pixie の greeter、sakai が rulec・koyomi・chobo・dandori のバイナリ）。段を聞くようにし、`ritsu-testkit` に `Need::Suite`（sakai）と `Need::Pixie`（geas）を足した（DESIGN 10.9）。curl は、koyomi と yuen と土台の `sources` のテストが、自分の中に立てたサーバーに問い合わせるのに使っていた。これは fast の段で使ってよいものとして DESIGN 10.2 に書き足した。
 - `tools`：この機械で、三つの組の `cargo xtask test --level tools` を順に走らせた。rulec は 727 件が通り（ignored 1。SKIP は段で外した Kani と Buf Schema Registry の二つ）、399 秒。dandori は 81 件が通り（SKIP は段で外した platforms の段の十）、92 秒。残りの組は 681 件が通り（SKIP 0。この機械には pixie の greeter がある）、252 秒。rulec の組の後ろの三つも通った：`rulec test --require-all` は 36 の側が全部合い、`skipped` は無かった。証明書の再検査は 50 本、`fmt --check` と `check` は通った。
 - `proofs`：`lake build`、50 本の証明書を `rulec-recheck` で、`cargo test --release -p rulec --test lean`（12 件）が通った。
@@ -331,15 +331,15 @@ C.13 で確かめたこと（2026-10-03、この機械で）：
 
 ### D.1 `ritsu-units`
 
-DESIGN 5 章。rulec の `src/types.rs` の `money_unit`・`unit_info`・`unit_offset`・`CURRENCIES` と `src/num.rs` の有理数を移し、`Unit`（次元、単位、税込か税抜か、刻み）を足す。テストは、表のすべての綴りの係数、`JPY` と `円`、`USD` と `USDc` の換算、℉ の一次式、順序だけの次元、整数にならない換算を断ること。rulec をこれに替え、コーパスの golden と、すべての規則の `rulec certificate` と `rulec api` の出力が一字も変わらないことを確かめる。
+DESIGN 5 章。rulec の `src/types.rs` の `money_unit`・`unit_info`・`unit_offset`・`CURRENCIES` と `src/num.rs` の有理数を移し、`Unit`（次元、単位、税込か税抜か、刻み）を足す。テストは、表のすべての綴りの係数、`JPY` と `円`、`USD` と `USDc` の換算、℉ の一次式、順序だけの次元、整数にならない換算をエラーにすること。rulec をこれに替え、コーパスの golden と、すべての規則の `rulec certificate` と `rulec api` の出力が一字も変わらないことを確かめる。
 
 D.1 でしたこと（2026-10-04）：
 
-- `crates/ritsu-units`（`ritsu-base` だけに依存）を作った。rulec の `src/num.rs` の有理数 `Rat`（`Hash` を足した）と、`src/types.rs` の表（`CURRENCIES`、`money_unit`、`unit_info`、`unit_offset`）を中身を変えずに移し、単位の型 `Unit`（次元、書いたとおりの綴り、税込か税抜か、刻み）と `Dim`、`Tax`、`Problem` を足した。形は DESIGN 5.1 の「D.1 で作った形」に書いた。テストは `tests/units.rs` の 9 本（表のすべての綴りの次元と係数、`JPY` と `円`、`USD` と `USDc` の換算と、二つの通貨は換算しないこと、整数にならない換算を断ること、℉ の一次式、順序だけの次元、綴りを読んで書き戻すと同じになること、単位でない綴りの理由、有理数が正確で溢れを言うこと）。
+- `crates/ritsu-units`（`ritsu-base` だけに依存）を作った。rulec の `src/num.rs` の有理数 `Rat`（`Hash` を足した）と、`src/types.rs` の表（`CURRENCIES`、`money_unit`、`unit_info`、`unit_offset`）を中身を変えずに移し、単位の型 `Unit`（次元、書いたとおりの綴り、税込か税抜か、刻み）と `Dim`、`Tax`、`Problem` を足した。形は DESIGN 5.1 の「D.1 で作った形」に書いた。テストは `tests/units.rs` の 9 本（表のすべての綴りの次元と係数、`JPY` と `円`、`USD` と `USDc` の換算と、二つの通貨は換算しないこと、整数にならない換算をエラーにすること、℉ の一次式、順序だけの次元、綴りを読んで書き戻すと同じになること、単位でない綴りの理由、有理数が正確で溢れを言うこと）。
 - rulec を替えた。`num::Rat` は `ritsu_units::Rat` を指し、`unit_info` と `unit_offset` は表を引くだけになった。丸めの仕方（`RoundMode` と `round_to`）は rulec の意味なので rulec に残し、`round_to` は rulec が `Rat` に足すトレイト `RoundTo` のメソッドにした（使う六つのファイルが `use` する）。rulec の DESIGN §15.164 に書いた。
 - 確かめたこと：コーパスの 50 本、変異の 109 本、ほかの 16 本の規則について、`check`（英語、日本語、JSON）、`certificate`、`api`、`schema`、`graph` を、コーパスの 50 本についてはさらに `fmt --check`、`vectors`、`coverage`、`doc`（Markdown と HTML、二つの言語、顧客向け）、`gen`、`adapter` を、替える前と後のバイナリで出し、1,782 回とも一字も違わなかった（以下、この 1,782 回を「rulec の出力の突き合わせ」と呼ぶ）。rulec の `tests/units.rs` に二本足した（単位を挙げる文が表のすべての綴りを挙げること、コーパスのどの数の型も表で書けること。206 の数）。
 - 決めたこと（★）：rulec の `Ty` は、中に `Unit` を持たず、書いたとおりの綴りを持ち続ける。`Ty::unit(刻み)` で単位の型にする。DESIGN 5.2 の「D.1 で変えたこと」に理由を書いた。税の語を `incl_tax` と `excl_tax` のほかに書いた型（`money[円, foo]`）を rulec が黙って通すことは、変えなかった（7.6）。
-- D の二つ目の部分で、作者が決めたとおり、税の語を誤った型を rulec が E103 で断るようにした（rulec の §15.169。型を書く六つの場所のどれでも、お金の型の二つ目の語が `incl_tax` でも `excl_tax` でもなければ、その型に印を付けて断る）。新しいコードを作らずに E103 にしたのは、E103 が型の書き方の誤り（読めない刻み、率の入力の刻みが無いこと）も受け持つからである。台帳の E103 の文と `docs/codes.md`・`docs/codes.ja.md` を直した。`tests/units.rs` に一本足した。rulec の出力（1,725 回）と golden は変わらない。
+- D の二つ目の部分で、作者が決めたとおり、税の語を誤った型を rulec が E103 でエラーにするようにした（rulec の §15.169。型を書く六つの場所のどれでも、お金の型の二つ目の語が `incl_tax` でも `excl_tax` でもなければ、その型に印を付けてエラーにする）。新しいコードを作らずに E103 にしたのは、E103 が型の書き方の誤り（読めない刻み、率の入力の刻みが無いこと）も受け持つからである。台帳の E103 の文と `docs/codes.md`・`docs/codes.ja.md` を直した。`tests/units.rs` に一本足した。rulec の出力（1,725 回）と golden は変わらない。
 
 ### D.2 `ritsu-ports`
 
@@ -364,9 +364,9 @@ D.2 でしたこと（2026-10-04）：
 
 D.3 でしたこと（2026-10-04、D の二つ目の部分）：
 
-- 突き合わせ（手順 1）：rulec のコーパスの 50 本と dandori の 14 本（例の 11 本と `tests/fixtures/rules` の 3 本）の規則で、`Rules::facts` から作った `RuleInfo` と、前の `src/rulec.rs` が `rulec schema`・`certificate`・`api` の JSON（rulec のライブラリで書いたもの）から組み立てた `RuleInfo` を、dandori が読む 1,939 の項目（名前とバージョンと SHA-256、入力と出力の名前と別名と型、列挙、ステートマシンのすべての項目、前提、TypeScript・Python・Go の呼び方、`connect` で呼ぶサービスの形）で比べた。検査を通らない規則は無かった。違ったのは 7 か所で、どれも JSON の側の読み違えだった。規則がたどる並び（`elements`）を入力の一つに数えて文字列と読んでいたこと（5 本。dandori はどちらでも E005 で断る）と、無いことがある列挙の入力（`T?`）を文字列と読んでいたこと（2 本）である。率の刻み（11 列）は説明の文から読んだものと型の刻みが同じで、ステートマシン（5 本）は、どれも状態の軸を持っていた。比べたテストは、JSON の読み手を消すときに一緒に消した（報告に、その写しと出力を添えた）。
+- 突き合わせ（手順 1）：rulec のコーパスの 50 本と dandori の 14 本（例の 11 本と `tests/fixtures/rules` の 3 本）の規則で、`Rules::facts` から作った `RuleInfo` と、前の `src/rulec.rs` が `rulec schema`・`certificate`・`api` の JSON（rulec のライブラリで書いたもの）から組み立てた `RuleInfo` を、dandori が読む 1,939 の項目（名前とバージョンと SHA-256、入力と出力の名前と別名と型、列挙、ステートマシンのすべての項目、前提、TypeScript・Python・Go の呼び方、`connect` で呼ぶサービスの形）で比べた。検査を通らない規則は無かった。違ったのは 7 か所で、どれも JSON の側の読み違えだった。規則がたどる並び（`elements`）を入力の一つに数えて文字列と読んでいたこと（5 本。dandori はどちらでも E005 でエラーにする）と、無いことがある列挙の入力（`T?`）を文字列と読んでいたこと（2 本）である。率の刻み（11 列）は説明の文から読んだものと型の刻みが同じで、ステートマシン（5 本）は、どれも状態の軸を持っていた。比べたテストは、JSON の読み手を消すときに一緒に消した（報告に、そのコピーと出力を添えた）。
 - 状態の軸（7.6 の申し送り）：dandori のステートマシンも軸を `Option` で持ち、None（表が状態を読まない）なら、どの状態からも同じ行が当てはまると読む。前の dandori は null を 0 と読み、最初の軸を状態の軸と取り違えて、どの呼び出しも当てはまらないとしていた。単体テストを一本足した。
-- 無いことがある入力と出力（`T?`）：口は型を `Opt` で渡す。dandori は規則に `none` を渡さず、生成するコードも規則のコードとのあいだで null をやりとりしない（`Window | null` や Go の `*Window` を型の名前として読み込んで壊れる）ので、そういう規則を `use rule` が E005 で断るようにした（★。dandori の DESIGN 1.13、7 章に残したこと）。例とテストの規則には、そういう規則は無い。
+- 無いことがある入力と出力（`T?`）：口は型を `Opt` で渡す。dandori は規則に `none` を渡さず、生成するコードも規則のコードとのあいだで null をやりとりしない（`Window | null` や Go の `*Window` を型の名前として読み込んで壊れる）ので、そういう規則を `use rule` が E005 でエラーにするようにした（★。dandori の DESIGN 1.13、7 章に残したこと）。例とテストの規則には、そういう規則は無い。
 - JSON の読み手と子プロセス（手順 2）：dandori の `src/rulec.rs` は、口の事実を `RuleInfo` にするだけになった（678 行から 554 行。`connect_shape` も型から読む。`connect.enums` を言わない rulec のための読み方は消した）。`src/sources.rs` は、ファイルと規則の口を返す trait（`Sources::rules`）になり、子プロセスで rulec を呼ぶところを消した。ディスクから読む `Disk` は渡された口を使い、規則を読まない口 `NoRules` は `ritsu dandori …` で走らせるよう言う。生成器（`asl.rs`、`temporal.rs`、`temporal_py.rs`、`temporal_go.rs`）は、生成されたコードの呼び方を `rulec api` の JSON ではなく型（`ritsu_ports::Call`）から読む。dandori は `ritsu-ports` と `ritsu-units` に依存し、rulec は `[dev-dependencies]` にだけ持つ。
 - CLI（手順 3）：コマンドの本体を `dandori::cli::run(引数, 口, 標準出力, 標準エラー)` に移し、`src/main.rs` は `NoRules` を渡して呼ぶだけにした。テストは rulec の口（`rulec::ports::Engine`）を渡して呼ぶか、ライブラリを `dandori::sources::with_rules` の中で呼ぶ。テストが要る `rulec gen` の出力は、rulec の `gen` の本体をライブラリに移した `rulec::codegen::generate` で作る（rulec の §15.170。出力は変わらない）。`DANDORI_RULEC`、ritsu-testkit の `Need::Rulec`、CI（`tools.yml` と `platforms.yml`）で rulec 0.22.0 を取ってくる段を消した。規則を読むだけのテスト（`examples_pass_check` など）は `fast` の段でも走る。`Need::Rulec` だけで段を見ていたテストは、使うツールの `need` で段を見る。`tests/fixtures/unnamed_enums`（0.21.2 の出力を記録したもの）と、それを読むテストを消した。dandori のテストに `tests/cli.rs`（三本）を足した。規則を使わないフローでクレートのバイナリと口を渡したコマンドが同じものを出し、同じものを書くこと、規則を使うフローでバイナリが E005 で `ritsu dandori` を案内すること、`cli::run` が出力を渡された先に書くことを見る。
 - golden（手順 4）：`tests/doc` の golden 34 本とサイトの例のページ 10 枚（44 ファイル、60 行、78 か所）を取り直した。どれも `rulec 0.22.0` が `rulec 0.22.1` になっただけで、取り直す前のものの版の文字列を置き換えると一字も違わない。
@@ -374,15 +374,15 @@ D.3 でしたこと（2026-10-04、D の二つ目の部分）：
 - ブラウザで試すページ：記録（`presets.json`）を口の答え（規則の事実と、`rulec doc` のページ）にし、記録から答える口 `Recorded` で読む。事実は dandori の形の JSON（`src/record.rs`）で持つ。`presets.json` は 1,442,820 バイトから 1,141,648 バイトになった。`website/tools/make_wasm.sh` をワークスペースの `target/` を見るように直し、`dandori.wasm` を作り直した（モジュールが 432 の問いにライブラリと同じに答えることを、テストで確かめた）。
 - D.5 の残り：dandori が規則のページを描かせるとき、口の `Rules::doc` にページの言語を渡す（rulec がそのスレッドの言語で描く）。
 - 確かめたこと：例とテストのフローの全部の `check`（英語・日本語・JSON）、例と `tests/flows` の `build`（七つのプラットフォーム）・`scenarios`・`doc`（Markdown と HTML、二つの言語）・`run` の 969 回を、替える前（HEAD の dandori に HEAD の rulec 0.22.1 を `DANDORI_RULEC` で渡したもの）と `ritsu dandori` で比べ、一字も違わなかった。rulec の出力の 1,725 回も、`gen` を移す前と一字も違わない。`cargo xtask deps` は 15 のクレートで通る。
-- 決めたこと：★ 入口の最小の形を D で作った（DESIGN 8.6）。★ `T?` を持つ規則を E005 で断る。★ 突き合わせのテストは JSON の読み手と一緒に消した（JSON の読み手を残す理由が無いため。写しは報告に添えた）。状態の軸の None を、表が状態を読まないステートマシンとして読む。
+- 決めたこと：★ 入口の最小の形を D で作った（DESIGN 8.6）。★ `T?` を持つ規則を E005 でエラーにする。★ 突き合わせのテストは JSON の読み手と一緒に消した（JSON の読み手を残す理由が無いため。コピーは報告に添えた）。状態の軸の None を、表が状態を読まないステートマシンとして読む。
 
 D の二つ目の部分で、あわせてしたこと（作者が D で直すと決めたもの。7.5 の申し送り）：dandori の名前のぶつかり。
 
-- 規則の別名（rulec の生成したコードの関数、モジュール、Go のパッケージ）と、受け取る列挙の別名が、dandori が規則のまわりに書くコードの名前とぶつかる規則を、`check` が E006 で断る（dandori の DESIGN 1.15）。どの名前を断るかは、生成するコードを読んで、四つのファイル（`rules.ts`、`rules.py`、Lambda の関数、`rules.go`）ごとに、そのファイルが宣言するか外から読む名前として決め、生成器の表（`AROUND_RULES`）に置いた。7.5 で見つかった五つ（`activity`、`rules`、`rule_<規則>`、`handler`・`event`・`context`）のほか、`args`、`out`、TypeScript の `Boolean`・`String`・`BigInt`・`Number`、Python の `Any`・`bool`・`str`・`int`・`dict`、Go の `context`・`ctx`・`args`・`int64`・`any`・`string`・`error`・`nil`・`true` と列挙を受け取る規則の `ok` である。7.5 の「Go ではぶつからない」は、dandori の名前（`dd` が付く）については正しかったが、規則のパッケージの名前は、`rules.go` が読み込む `context` と、関数の引数と、組み込みの名前に当たりうる。別名が同じ二つの規則（`rulec gen` の書くファイルが重なる）と、タスクと規則のアクティビティ（`rule_<規則>`）が同じ名前になるものも断る。コードは新しく作らず、名前のぶつかりの E006 に入れた（★）。
-- 読んでいて見つけたもの：二つの規則のあいだで名前が重なると、生成物が壊れていた。`money[JPY, incl_tax]` を受け取る二つの規則を呼ぶフローでは `rules.ts` が同じ型の名前を二度読み込んでコンパイルが通らず、同じ名前の列挙を受け取る二つの規則では `rules.py` が後のクラスで前の規則を呼んでいた。断るとふつうのフローを断ることになるので、生成するコードの側で、重なる名前だけを別の名前で読み込むようにした（★。単位の型は一度だけ読み込む）。重なりの無いフローの生成物は変わらない。
-- 断る範囲の外：rulec の生成したコードと出力先の言語そのもの（予約語、組み込みの名前、標準ライブラリ）のぶつかりは、rulec の W121（警告）が言うので、dandori は断らない（dandori の DESIGN 1.15）。
+- 規則の別名（rulec の生成したコードの関数、モジュール、Go のパッケージ）と、受け取る列挙の別名が、dandori が規則のまわりに書くコードの名前とぶつかる規則を、`check` が E006 でエラーにする（dandori の DESIGN 1.15）。どの名前をエラーにするかは、生成するコードを読んで、四つのファイル（`rules.ts`、`rules.py`、Lambda の関数、`rules.go`）ごとに、そのファイルが宣言するか外から読む名前として決め、生成器の表（`AROUND_RULES`）に置いた。7.5 で見つかった五つ（`activity`、`rules`、`rule_<規則>`、`handler`・`event`・`context`）のほか、`args`、`out`、TypeScript の `Boolean`・`String`・`BigInt`・`Number`、Python の `Any`・`bool`・`str`・`int`・`dict`、Go の `context`・`ctx`・`args`・`int64`・`any`・`string`・`error`・`nil`・`true` と列挙を受け取る規則の `ok` である。7.5 の「Go ではぶつからない」は、dandori の名前（`dd` が付く）については正しかったが、規則のパッケージの名前は、`rules.go` が読み込む `context` と、関数の引数と、組み込みの名前に当たりうる。別名が同じ二つの規則（`rulec gen` の書くファイルが重なる）と、タスクと規則のアクティビティ（`rule_<規則>`）が同じ名前になるものもエラーにする。コードは新しく作らず、名前のぶつかりの E006 に入れた（★）。
+- 読んでいて見つけたもの：二つの規則のあいだで名前が重なると、生成物が壊れていた。`money[JPY, incl_tax]` を受け取る二つの規則を呼ぶフローでは `rules.ts` が同じ型の名前を二度読み込んでコンパイルが通らず、同じ名前の列挙を受け取る二つの規則では `rules.py` が後のクラスで前の規則を呼んでいた。エラーにすると、ふつうのフローまでエラーにすることになるので、生成するコードの側で、重なる名前だけを別の名前で読み込むようにした（★。単位の型は一度だけ読み込む）。重なりの無いフローの生成物は変わらない。
+- エラーにする範囲の外：rulec の生成したコードと出力先の言語そのもの（予約語、組み込みの名前、標準ライブラリ）のぶつかりは、rulec の W121（警告）が言うので、dandori はエラーにしない（dandori の DESIGN 1.15）。
 - `dandori explain` と台帳：E006 の文を `explain` で読めるように、dandori に診断の台帳（`src/codes.rs`、30 のコードの全部）と `explain` を足した（★。台帳が無かったので、一つのコードだけを載せる形にはしなかった）。どのコードにも最小の再現があり、`tests/codes.rs` が、どの再現も自分のコードを出すこと（E040 と E050 は `build` で）を確かめる。
-- テスト：`tests/names.rs`（六本）が、四つの表のどの名前にも E006 が出ること、列挙の別名、Go の `ok`、`rule_<規則>`、別名の同じ二つの規則、タスクと規則のアクティビティ、Connect で呼ぶ規則は断らないこと、表の名前がどれもそのファイルに書かれることを確かめる。断らない名前で全部の出力先の生成物が通ることは、`tests/flows/names.flow`（規則二つを `tests/flows/rules/` に足した）を、ほかのテストのフローと同じに全部のプラットフォームで走らせて確かめる。rulec の例を規則のまわりのコードに答えさせる二本（`rule_glue_answers_the_rulec_vectors`、`python_rules_answer_the_rulec_vectors`）は、例のフローだけでなく `tests/flows` のフローの規則も見るようにした。
+- テスト：`tests/names.rs`（六本）が、四つの表のどの名前にも E006 が出ること、列挙の別名、Go の `ok`、`rule_<規則>`、別名の同じ二つの規則、タスクと規則のアクティビティ、Connect で呼ぶ規則はエラーにしないこと、表の名前がどれもそのファイルに書かれることを確かめる。エラーにしない名前で全部の出力先の生成物が通ることは、`tests/flows/names.flow`（規則二つを `tests/flows/rules/` に足した）を、ほかのテストのフローと同じに全部のプラットフォームで走らせて確かめる。rulec の例を規則のまわりのコードに答えさせる二本（`rule_glue_answers_the_rulec_vectors`、`python_rules_answer_the_rulec_vectors`）は、例のフローだけでなく `tests/flows` のフローの規則も見るようにした。
 - 見つけた rulec のこと：order_state.rule の TypeScript（rulec の生成したもの）は `tsc --strict`（TypeScript 7）を通らない（列挙の値の絞り込み）。どのフローも order_state を関数として呼んでいなかったので、これまで表に出なかった。`names.flow` では別の規則にした（7.7）。D の最後の部分で rulec の生成器を直し（rulec の §15.171）、`names.flow` は order_state を関数として呼ぶ形にした（D.11）。
 
 ### D.4 dandori の単位
@@ -393,7 +393,7 @@ D.4 でしたこと（2026-10-04、D の二つ目の部分）：
 
 - dandori の `Ty::Num` は `ritsu_units::Unit` を持つ。二つの数の型が同じかは `Unit::same` で決める（`Ty` の等しさを手で書いた。`contract.rs` の突き合わせも同じ）。型の綴りは `Unit::parse` で読み、`Display` で書いたとおりに出すので、診断と生成物の型の名前は変わらない。`src/syntax.rs` の `UNIT_KINDS` は消した（次元の語は ritsu-units が知っている）。表に無い単位（`mass[foo]`）、税区分の誤り（`money[円, foo]`）、次元の誤り（`length[kg]`）は E002 で、ritsu-units が言う理由を注にする。前は、種類の語だけを確かめていた。
 - `src/model.rs` の `rate_unit` と `rate_per`（刻みを文字列で作って読む）は、単位の型の刻みを読む `rate_per(&Unit)` 一つにした。規則の型も、口が渡す単位の型のまま持つ（D.3 では綴りの文字列にしていた）。
-- 範囲の端に単位を付けて書ける（`range >=1kg <=40kg`、`<=100万円`、率の `<=50%`）。字句の段で、`>=` と `<=` のあとの、単位の付いた数を一つの語として読み（`万` と `億` も rulec と同じに掛ける）、lower が型の単位で数えた整数にする（ritsu-units の `Unit::convert`。率は百分率を刻みで割る）。整数にならない端、型の次元に無い単位、`int` に付けた単位は E003。前は、単位を付けた端を E001 で断っていた。温度の単位（`℃`、`℉`）を、型の `[` のすぐあとと範囲の端の単位としてだけ読むようにした（前は `temperature[℃]` が E001 だった。名前の一部にはならず、ほかのところではこれまでどおり E001）。
+- 範囲の端に単位を付けて書ける（`range >=1kg <=40kg`、`<=100万円`、率の `<=50%`）。字句の段で、`>=` と `<=` のあとの、単位の付いた数を一つの語として読み（`万` と `億` も rulec と同じに掛ける）、lower が型の単位で数えた整数にする（ritsu-units の `Unit::convert`。率は百分率を刻みで割る）。整数にならない端、型の次元に無い単位、`int` に付けた単位は E003。前は、単位を付けた端を E001 でエラーにしていた。温度の単位（`℃`、`℉`）を、型の `[` のすぐあとと範囲の端の単位としてだけ読むようにした（前は `temperature[℃]` が E001 だった。名前の一部にはならず、ほかのところではこれまでどおり E001）。
 - テスト：dandori の `tests/units.rs` に四本足した。DESIGN 1.4 の流れ（規則の `money[JPY, incl_tax]` をタスクの `money[円, incl_tax]` に渡す）が検査を通ること、`mass[kg]` を `mass[g]` に渡すと E003（税込を税抜に渡すのも E003）、単位を付けた端が型の単位で数えられること（`>=1kg` は 1000、`<=50%` は 500 刻み、`>=100銭` は 1、`>=41℉` は 5）、表に無い単位が理由つきの E002 になること。`tests/fixtures/range_syntax.flow` を、単位を付けた端を試すように書き直し、golden を取り直した（前は E001 の一行、いまは E003 の三つ）。
 - 確かめたこと：例とテストのフローの出力の 969 回は、書き直した `range_syntax.flow` の `check` の三つのほかは、D.3 のあとと一字も違わない。どのプラットフォームの生成物も変わらない。
 
@@ -433,7 +433,7 @@ yuen の PLAN の C.1〜C.9 を、子プロセスと JSON ではなく口で作�
 D.7 でしたこと（2026-10-04、D の最後の部分）：
 
 - yuen の PLAN の C.1〜C.9 を、口で作る計画に書き直してから作った（書き直す前の計画の要点は、各項の「前の計画」に残した）。yuen は読む言語を `yuen::suite::Suite`（言語ごとの `Items` と `Sources`、それに `Rules`、`Dates`、`Claims`）として渡され、コマンドを関数（`yuen::run::run`）にした。`ritsu yuen`（DESIGN 8.6）がすべての言語をつなぎ、yuen のクレートのバイナリは何もつながず、ほかの言語のものを名指すプロジェクトには `ritsu yuen` に同じコマンドを続けた形を言って exit 2 で終わる。
-- 口を二つ足した（DESIGN 3.2）。`Sources`（rulec と koyomi が答える。ファイルが写して固定している出典。検査を通らないファイルには検査の診断を返す）と、`Claims::affected`（geas が答える。geas の `affected` と同じ関数）。
+- 口を二つ足した（DESIGN 3.2）。`Sources`（rulec と koyomi が答える。ファイルが保存して固定している出典。検査を通らないファイルには検査の診断を返す）と、`Claims::affected`（geas が答える。geas の `affected` と同じ関数）。
 - 端は、言語が `Items` で渡す定義の文になった（DESIGN 6.4、yuen の DESIGN 3.2）。定義の文が空なら端にせず E203。端のハッシュは取り直した（ファイルの端と chobo の端は A の段階の値のまま。koyomi の日付と条件、rulec の表と節、geas の主張、proto の要素、dandori のタスク、sakai の語の値は、yuen の PLAN の C.13 と DESIGN 19 章）。DESIGN 4.3 の例は、印が五本から三本になった（日付の端が、ファイル全体からその日付の定義の文になった）。
 - 借りた出典と E107 は `Sources` で読む。`source outdated` は借りた出典も問い（取り直すのは借りた先の言語だと言う）、条が変われば、その条を固定している成果物も言う。`trace`（リンクごとの `pins`）、`api`（成果物の `pins`）、PROV（`yuen:pins`）も、成果物のファイルが固定している条を出す。
 - `affected` を作った（yuen の DESIGN 8 章を実物にした）。統一形式の差分の読み手は、geas の `src/diff.rs` の読む部分を ritsu-base の `udiff` に移して、geas と yuen で一つにした（DESIGN 4.14。geas の振る舞いは変わらない）。`yuen api` を実物にした（11 章）。
@@ -441,7 +441,7 @@ D.7 でしたこと（2026-10-04、D の最後の部分）：
 - テストの材料を七つ足した（`tests/fixtures/` の rulec、koyomi、chobo、geas、proto、dandori、sakai）。確かめた記録は `ritsu yuen review` で書いた。geas の記録は `geas map` で一度だけ取ってテストの材料に置き、テストは python3 を走らせない。yuen のテストは六つの言語のクレートを dev-dependency に持ち、同じプロセスの中でつなぐ（DESIGN 3.3）。新しいテストは `tests/suite.rs`（19 本）と、`crates/ritsu/tests/yuen.rs`（3 本）。
 - 決めたこと（★）：
   - `Sources` を `Rules` と `Dates` の事実に入れず、別の口にした（DESIGN 3.2 の段落）。
-  - yuen のクレートのバイナリが断るときの終了コードは 2 で、言う文は `ritsu yuen` に同じコマンドを続けた形にした（ツールが見つからないときと同じく、走らせる場所の問題として）。
+  - yuen のクレートのバイナリがほかの言語を読めずに止まるときの終了コードは 2 で、言う文は `ritsu yuen` に同じコマンドを続けた形にした（ツールが見つからないときと同じく、走らせる場所の問題として）。
   - `affected` で、どの主張も走らせない行でも、そのファイルをリンクが名指していれば要件に届くとした。届かない変更（exit 1）は、どのリンクも名指さないファイルの行と、範囲の中でどの要件にも辿れないファイルだけにした（yuen の DESIGN 8 章）。
   - ReqIF には、成果物のファイルが固定している条を書かない（PROV だけ。yuen の DESIGN 12 章）。PROV では、固定をファイルの entity から引く（リンクがファイルを名指していなければ足す）。
   - `trace --format json` の、リンクごとの `pins` は、規則とカレンダーでなくても空の並びで出す（キーの形を一つにするため。前の golden も取り直した）。
@@ -462,11 +462,11 @@ D.8 でしたこと（2026-10-04、D の最後の部分）：
 - sakai の PLAN の C.1〜C.5 を、口で作る計画に書き直してから作った（子プロセス、ツールの探し方、版の確かめ、時間の上限は作らない）。sakai は読む言語を `sakai::suite::Suite`（rulec の `Rules`、rulec・koyomi・dandori の `References`、chobo の `Books`）として渡され、コマンドを関数（`sakai::run::run`）にした。`ritsu sakai`（DESIGN 8.6）がすべての言語をつなぎ、sakai のクレートのバイナリは何もつながない。
 - 境界を越える参照に、rulec の `import proto`・`shape`・`apply`、koyomi の `use calendar`、dandori の `use rule`・`use proto`・`connect`・`flow` を足した。dandori の `implements` は、自分の公表された言語の公開ホストサービスであることを確かめる。例の `check` の要約は「9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)」になった（sakai の PLAN の C.15 の表を直した）。
 - 台帳：E104 は「地図が含む成果物の言語がつながっていない」、E105 は「成果物が、その言語の検査を通らないか、読めない」に意味を替え、N101 を退かせた（台帳に残す）。DESIGN 7.10 の四つの検査を E202（同梱、`apply`）、E207、E208、E209 として足した。ほかの言語の成果物を含む再現は、`sakai explain` が `ritsu sakai check .` で走らせると言う（ritsu-base の台帳で、`ritsu` で始まるコマンドをそのまま書くようにした。DESIGN 4.3）。
-- テスト：sakai のテストは rulec、koyomi、chobo、dandori を dev-dependency に持ち、同じプロセスでつなぐ。一式のバイナリを走らせるところ（`SAKAI_RITSU` と、例の写しを確かめる `what_was_copied_passes_the_suite`）を口に替え、ritsu-testkit の `Need::Suite` と CI（`tools.yml`）の `SAKAI_*` を消した。例を土台にした変異を九つ足した（sakai の PLAN の 5.4）。
+- テスト：sakai のテストは rulec、koyomi、chobo、dandori を dev-dependency に持ち、同じプロセスでつなぐ。一式のバイナリを走らせるところ（`SAKAI_RITSU` と、例のコピーを確かめる `what_was_copied_passes_the_suite`）を口に替え、ritsu-testkit の `Need::Suite` と CI（`tools.yml`）の `SAKAI_*` を消した。例を土台にした変異を九つ足した（sakai の PLAN の 5.4）。
 - 決めたこと（★）：
-  - E104 は言語ごとに一度、その言語の最初の成果物を持つ `owns` の行で言う診断にした（exit 1）。yuen のクレートのバイナリは exit 2 で断るが、sakai は地図の検査の診断として言う（sakai の診断の台帳にあったコードの意味を替える形で、検査の段と一緒に出せるため）。
+  - E104 は言語ごとに一度、その言語の最初の成果物を持つ `owns` の行で言う診断にした（exit 1）。yuen のクレートのバイナリは exit 2 で止まるが、sakai は地図の検査の診断として言う（sakai の診断の台帳にあったコードの意味を替える形で、検査の段と一緒に出せるため）。
   - 子の `.flow` を境界の向こうから走らせてよいのは、パートナーシップ、共有カーネル、子が相手の公開ホストサービスを `implements` で実装しているときだけ（E209。sakai の DESIGN 4.7）。
-  - 規則の `apply` も境界を越える参照にした（規則そのものを使うので、共有カーネルの中でなければ E202）。`use openapi`・`use smithy`、JSON Schema、出典の写しは、それを読む成果物の一部として数えない。
+  - 規則の `apply` も境界を越える参照にした（規則そのものを使うので、共有カーネルの中でなければ E202）。`use openapi`・`use smithy`、JSON Schema、出典のコピーは、それを読む成果物の一部として数えない。
   - koyomi と dandori は、構文を読めるファイルに参照を答える。rulec は、検査を通る規則にだけ事実を答え、sakai は事実を答えた規則にだけ参照を問う。
   - 規則の `means` の先に無い要素は E007（sakai の PLAN は E408 と書いていた。E408 は公表された言語に無い要素のコード）。
   - 片側だけの共有カーネルで、境界を越えて読むカレンダーは E201 になる（sakai の PLAN は E202 と書いていた。関係の向きが逆なので E201 が先に決まる）。
@@ -482,7 +482,7 @@ D.9 でしたこと（2026-10-04、D の最後の部分）：
 - chobo の単位の行は `unit <名前> [scale <桁>] [incl_tax | excl_tax]` になった。税の語は最後に一つだけ書く（`scale` より前に書けば E001）。chobo の `model::unit_type` が単位を ritsu の単位の型にする（DESIGN 5.4 の三つの決まり。通貨の名前で `scale 0` はその通貨、円と JPY のほかの通貨で `scale 2` は `<コード>c`、足し引きのできる次元の単位の綴りで `scale 0` はその単位、ほかは `Dim::Count(名前)`）。お金でない単位に税の語を書けば、新しいコード E014。chobo は ritsu-units に依存するようになった（言語のクレートが土台に依存するのは 3.1 のとおり）。
 - 口の `BookUnit` に、ritsu の単位の型 `unit` を足し、`BookFacts::unit(名前)` で引けるようにした。`chobo api` は税の語を書いた単位にだけ `tax` を出す。`chobo doc` は勘定の単位を `円 incl_tax` のように書く。税の語は帳簿の中の意味も生成するコードも変えない（TigerBeetle の ledger の番号は単位の名前と `scale` から作り、税の語は入らない）。
 - 「区別の無い chobo の単位は、区別の無い額だけを受け取る」は、ritsu-units の `Unit::same` が税の区別まで比べることで成り立つ（`unit 円` の型は `money[円]` で、`money[円, incl_tax]` とも `money[円, excl_tax]` とも同じでない）。受け取るところで確かめる検査は E の X4（DESIGN 7.6）で、D では単位の型を渡すところまでにした。
-- 文書：chobo の DESIGN（1.2 に税込と税抜と ritsu の単位の型の表、1.6 のキーワード、3.1 の E014、5 章の api の `tax`、8.1 に D.9 の段落）、README.md（「Money with tax or without」の節、いまの状態、コードの数 29）、README.ja.md（「税込と税抜」の節、いまの状態、コードの数）、`docs/reference.md`（単位の節とキーワードの表）、`docs/formats.md`、`docs/codes.md` と `docs/codes.ja.md`（`explain` の出力そのもの）、スキル（`SKILL.md` の単位の行と、`sync.sh` で写す三つ）。
+- 文書：chobo の DESIGN（1.2 に税込と税抜と ritsu の単位の型の表、1.6 のキーワード、3.1 の E014、5 章の api の `tax`、8.1 に D.9 の段落）、README.md（「Money with tax or without」の節、いまの状態、コードの数 29）、README.ja.md（「税込と税抜」の節、いまの状態、コードの数）、`docs/reference.md`（単位の節とキーワードの表）、`docs/formats.md`、`docs/codes.md` と `docs/codes.ja.md`（`explain` の出力そのもの）、スキル（`SKILL.md` の単位の行と、`sync.sh` でコピーする三つ）。
 - テスト：chobo の `tests/units.rs`（四本。単位の型、税の区別が同じかどうか、E014 と税の語の書き方の誤り、口の事実と api の `tax`）、`tests/fixtures/税区分.book`（E014 の golden、英語と日本語）、`tests/ids.rs`（税の語で ledger の番号が変わらないこと）。
 - 確かめたこと：例とテストの帳簿の全部のコマンドの出力（277 回）と、例を七つの組み合わせに生成したファイル（72 個）を、替える前と後のバイナリで比べた。違ったのは、E014 が増えた `--help` の三つ（`check --help` の英語と日本語、知らないフラグに添える `--help`）と `explain --all` の四つ、新しいテストの帳簿 `税区分.book` の四つ（替える前は E001）だけで、生成したファイルは 72 個とも一バイトも変わらない。yuen の端になる chobo の定義の文（DESIGN 6.4）も、税の語を書かない帳簿では変わらない（`返金` は 1,206 バイトで `84e9ce254075c697` のまま）。
 
@@ -492,7 +492,7 @@ D.9 でしたこと（2026-10-04、D の最後の部分）：
 
 D.10 でしたこと（2026-10-04）：
 
-- rulec と dandori の `src/proto.rs` を `ritsu-proto` で読む形にした（rulec 1,358 行から 569 行、dandori 1,145 行から 551 行）。それぞれに残したものは DESIGN 4.13 の「D.10 で rulec と dandori を替えた形」に書いた。dandori は import をたどる部分を残し（ディスクからも、ブラウザで試すページが持つファイルからも探すため）、型の名前は見えるファイルだけから引き、proto2 と editions を断り、読めなかった import があれば引けない名前を書いたまま持つ。
+- rulec と dandori の `src/proto.rs` を `ritsu-proto` で読む形にした（rulec 1,358 行から 569 行、dandori 1,145 行から 551 行）。それぞれに残したものは DESIGN 4.13 の「D.10 で rulec と dandori を替えた形」に書いた。dandori は import をたどる部分を残し（ディスクからも、ブラウザで試すページが持つファイルからも探すため）、型の名前は見えるファイルだけから引き、proto2 と editions を受け付けず、読めなかった import があれば引けない名前を書いたまま持つ。
 - 決めたこと（★）：rulec は、`.proto` として読めない契約を途中まで読まずに、E013 で場所を言う。rulec の DESIGN §15.166 に理由を書いた。前の読み手は、最後の `}` が欠けた契約を通し、値の行の `=` が抜けた契約に E032 を出していた。
 - `ritsu-proto` の文：何が要るかの語を二つの言語の文にし、日本語の文に英語の語が混ざらないようにした（「a name が要る」が「名前が要る」）。dandori の読めないファイルの文の形も変わった（dandori の DESIGN 0.3）。
 - `ritsu-proto` の `tests/readers.rs` から、rulec と dandori の古い読み手と生のまま比べる部分を消し、rulec と dandori への dev-dependency を消した（DESIGN 3.3）。消す前に、替えたあとの二つの読み方とも生のまま比べ、golden の全部と同じことを確かめた。golden は `tests/golden/sakai.txt` の一行（上の文の直し）だけが変わった。
@@ -510,7 +510,7 @@ D.10 でしたこと（2026-10-04）：
 D.11 でしたこと（2026-10-04、D の最後の部分）：
 
 1. 根から `cargo test --workspace --no-fail-fast -- --nocapture`（dandori の重い十二を `--skip` で外したもの）が、10 分 54 秒で 1,576 件通った（ignored 1、rulec の一つ）。SKIP は 0 で、dandori の Jev も、作者の環境の TypeSafe の鍵で TypeSafe に送って回した。外した十二は一つずつ `cargo test -p dandori -- --exact <名前>` で回し、全部が一度で通った（durable 16 秒、pydantic-graph 4 秒、記録した履歴の再生 16 秒、LocalStack 69 秒、Temporal の TypeScript 74 秒・Python 63 秒・Go 72 秒・言語をまたぐ 106 秒・Worker Versioning 17 秒・子のフロー 13 秒、Argo 126 秒、Ollama 25 秒。回し直しは無し）。合わせて 1,588 件で、クレートごとには rulec 744（ignored 1）、geas 231、yuen 118、koyomi 104、dandori 102（重い十二を含む）、sakai 95、chobo 70、ritsu-base 66、ritsu-testkit 15、ritsu-proto 14、ritsu-units 9、ritsu 7、xtask 6、ritsu-emit 5、ritsu-ports 2。コンパイラの警告は rulec のテスト関数の名前の七つだけ（前と同じ）。一度目に回したとき、`ritsu-proto` の `tests/readers.rs` の三つが落ちた。D.8 で足した sakai の変異（`E105_取り込みが合わない規則`）の `.proto` が、三つの読み手で読む `.proto` の一覧に加わったからで、golden（`tests/golden/` の `rulec.txt`、`dandori.txt`、`sakai.txt`）に、そのファイルの行を足した（ほかの行は変わらない）。
-2. ritsu のツールどうしが子プロセスで呼び合うところは無い。`crates/*/src` の `Command::new` の相手は、git、go、rustc、python3、psql、curl、Chrome、PostgreSQL、TigerBeetle、kill と ps などの外のもの、rulec が生成したコード、利用者が渡すアダプタと抽出器、geas が外から叩くプログラムである。ritsu の言語のバイナリを走らせるのは、rulec の MCP サーバーが、MCP のツールを呼ばれるたびに自分自身（`current_exe`）を走らせるところだけで、言語どうしではない（rulec の §15.163）。テストでは、各クレートが自分のバイナリ（`CARGO_BIN_EXE_<名前>`）を、`crates/ritsu/tests/` が `ritsu` を走らせる（テストのランナー）。ほかの言語のバイナリを走らせるテストは、D.8 で sakai の最後のもの（例の写しの確かめ）を口に替えて、無くなった。
+2. ritsu のツールどうしが子プロセスで呼び合うところは無い。`crates/*/src` の `Command::new` の相手は、git、go、rustc、python3、psql、curl、Chrome、PostgreSQL、TigerBeetle、kill と ps などの外のもの、rulec が生成したコード、利用者が渡すアダプタと抽出器、geas が外から叩くプログラムである。ritsu の言語のバイナリを走らせるのは、rulec の MCP サーバーが、MCP のツールを呼ばれるたびに自分自身（`current_exe`）を走らせるところだけで、言語どうしではない（rulec の §15.163）。テストでは、各クレートが自分のバイナリ（`CARGO_BIN_EXE_<名前>`）を、`crates/ritsu/tests/` が `ritsu` を走らせる（テストのランナー）。ほかの言語のバイナリを走らせるテストは、D.8 で sakai の最後のもの（例のコピーの確かめ）を口に替えて、無くなった。
 3. D.3 の突き合わせは、JSON の読み手を消す前に、rulec のコーパスの 50 本と dandori の 14 本の規則で、dandori が読む 1,939 の項目を比べて通した（違った 7 か所はどれも JSON の側の読み違え。D の二つ目の部分。DESIGN 3.2）。
 4. DESIGN 1.4 の二つの例は直っている。`hold.flow` は通り（dandori の `tests/units.rs` の `an_amount_in_jpy_goes_where_yen_is_taken`）、dandori は率の刻みを、説明の文からではなく口の事実の型から読む（D.3、D.4）。
 5. yuen の C.1〜C.9 は、書き直した計画の完了の条件（yuen の PLAN の C.13）を満たした。sakai の C.1〜C.5 は、書き直した計画の完了の条件（sakai の PLAN の C.15 の表の、例の `check`、一式の言語、変異、台帳、文書の行）を満たした。
@@ -522,7 +522,7 @@ D.11 でしたこと（2026-10-04、D の最後の部分）：
 
 ### E.1 `ritsu-project`
 
-DESIGN 6 章。プロジェクトを歩いて種類を分け、一度ずつ読み、索引を作り、ファイルをまたぐ参照を解決し、出す側の実装を作って受け取る側に渡す。テストのプロジェクトには、sakai の `examples/shop/`（英語の版。日本語の版は `examples/shop.ja/`。rulec の規則、koyomi のカレンダー、chobo の帳簿、dandori のフロー、`.proto`、コードを持つ）を使い、`crates/ritsu/tests/projects/shop/` に写す（日本語の `通販/` も残す）。
+DESIGN 6 章。プロジェクトを歩いて種類を分け、一度ずつ読み、索引を作り、ファイルをまたぐ参照を解決し、出す側の実装を作って受け取る側に渡す。テストのプロジェクトには、sakai の `examples/shop/`（英語の版。日本語の版は `examples/shop.ja/`。rulec の規則、koyomi のカレンダー、chobo の帳簿、dandori のフロー、`.proto`、コードを持つ）を使い、`crates/ritsu/tests/projects/shop/` にコピーする（日本語の `通販/` も残す）。
 
 **したこと**（E の最初の部分）：
 
@@ -530,7 +530,7 @@ DESIGN 6 章。プロジェクトを歩いて種類を分け、一度ずつ読�
 - `crates/ritsu-project` を作った（DESIGN 6.1）。`Joined` が言語を一度だけ作って索引でつなぎ、dandori・yuen・sakai に口を渡す。`Project::load` がプロジェクトを歩いて言語を分け、`Project::references` が参照を索引で解く。
 - `crates/ritsu/src/main.rs` の `yuen_suite` と `sakai_suite` を消し、`ritsu dandori`・`ritsu yuen`・`ritsu sakai` は `Joined` から口を受け取る。三つが別々に rulec の `Engine` を作ることは無くなった（7.8）。
 - 名指しを索引で引く形にした（DESIGN 7.10 の X10）。yuen は `src/ends.rs` と `src/coverage.rs`、sakai は `src/suite.rs` と `src/elements.rs`。口のまとまり（`yuen::suite::Suite`、`sakai::suite::Suite`）は、言語ごとの `Items`・`References` の表に代えて索引を持つ。言語ごとのコードと文は変えていない。
-- sakai の例を `crates/ritsu/tests/projects/通販/` に写した（92 ファイル。祝日の表は Shift_JIS で改行が CRLF のまま）。sakai の例は、英語を先にする担当がのちに `examples/shop.ja/` に名前を替え、英語の版 `examples/shop/` と、その写しの `crates/ritsu/tests/projects/shop/` を足した。
+- sakai の例を `crates/ritsu/tests/projects/通販/` にコピーした（92 ファイル。祝日の表は Shift_JIS で改行が CRLF のまま）。sakai の例は、英語を先にする担当がのちに `examples/shop.ja/` に名前を替え、英語の版 `examples/shop/` と、そのコピーの `crates/ritsu/tests/projects/shop/` を足した。
 
 **決めたこと**：
 
@@ -553,7 +553,7 @@ DESIGN 8.1、8.3、8.4。テキストと JSON の形を決めて golden にし�
 - 終了コードを決めた（DESIGN 8.4）。確かめられなかった単位があれば 2、エラーか通らない単位があれば 1。
 - `ritsu <言語>` を七つの全部に作り、`ritsu` を言語の名前で呼べばその言語のコマンドとして動くようにした（DESIGN 2.3、8.2）。そのために rulec、koyomi、chobo、geas のコマンドの本体を `src/main.rs` からライブラリの関数に移した（`rulec::cli::run`、`koyomi::run::run`、`chobo::run::run`、`geas::cli::run`）。`ritsu --help` は ritsu-base の表で描く。
 - rulec の `Engine` が `check` の報告を覚え、`ritsu check` の中で dandori や sakai が同じ規則の事実を尋ねても、規則を検査し直さないようにした（DESIGN 6.1、rulec の §15.173）。
-- テスト：`crates/ritsu/tests/check.rs`（テストのプロジェクトと、受注が注文の状態に値を足した写しの、英語と日本語のテキストと JSON の golden。各言語のコマンドとファイルごとに突き合わせること。止める場合）、`tests/entry.rs`（`--help`、七つの `ritsu <言語>`、リンクの名前）、rulec の `tests/ports.rs`（`checked` の出力が `rulec check` と同じで、規則を一回ずつしか検査しないこと）。
+- テスト：`crates/ritsu/tests/check.rs`（テストのプロジェクトと、受注が注文の状態に値を足したコピーの、英語と日本語のテキストと JSON の golden。各言語のコマンドとファイルごとに突き合わせること。止める場合）、`tests/entry.rs`（`--help`、七つの `ritsu <言語>`、リンクの名前）、rulec の `tests/ports.rs`（`checked` の出力が `rulec check` と同じで、規則を一回ずつしか検査しないこと）。
 
 **決めたこと**：
 
@@ -566,7 +566,7 @@ DESIGN 8.1、8.3、8.4。テキストと JSON の形を決めて golden にし�
 
 **確かめたこと**：触ったクレート（ritsu-ports、ritsu-project、ritsu、rulec、koyomi、chobo、geas、dandori、yuen、sakai）のテストを、ツールを全部つないだ環境（PostgreSQL つき）で一度回した。1,472 件が通り、落ちた 3 件（rulec のフラグのテストが `src/main.rs` を読んでいたこと、テストの二つの書き誤り）を直して、その 3 件を回し直して通った。SKIP 0、ignored 1（rulec の、前からあるもの）。dandori の重いテストは、生成器と runner と規則の読み方に触れていないので回していない。
 
-コマンドの出力を、E の前のバイナリと突き合わせた（作業場所の `cap.py`。geas の分を足した）。rulec はコーパスの 1,675 回、koyomi は 289 回、chobo は 277 回、geas は 339 回（`--help`、`explain`、`tests/specs` の 109 の主張のファイルの `check` を写しの上で）、dandori は `ritsu dandori` で 702 回、yuen は 1,026 回と sakai は 238 回をクレートのバイナリと `ritsu yuen`・`ritsu sakai` の両方で走らせ、どれも一字も違わなかった。新しい `ritsu rulec`・`ritsu koyomi`・`ritsu chobo`・`ritsu geas` の出力も、E の前のそれぞれのバイナリと一字も違わなかった。
+コマンドの出力を、E の前のバイナリと突き合わせた（作業場所の `cap.py`。geas の分を足した）。rulec はコーパスの 1,675 回、koyomi は 289 回、chobo は 277 回、geas は 339 回（`--help`、`explain`、`tests/specs` の 109 の主張のファイルの `check` をコピーの上で）、dandori は `ritsu dandori` で 702 回、yuen は 1,026 回と sakai は 238 回をクレートのバイナリと `ritsu yuen`・`ritsu sakai` の両方で走らせ、どれも一字も違わなかった。新しい `ritsu rulec`・`ritsu koyomi`・`ritsu chobo`・`ritsu geas` の出力も、E の前のそれぞれのバイナリと一字も違わなかった。
 
 ### E.3 ritsu の台帳と `ritsu explain`
 
@@ -594,7 +594,7 @@ DESIGN 7.3〜7.6、7.8 のうち、dandori の新しい書き方が要らない�
 
 **したこと**（E.4。言語をまたぐ検査の担当）：
 
-- rulec に `range from koyomi "<ファイル>" date <日付の名前>` を足した（X3 の (b)。rulec の §15.174）。構文、日付の入力にだけ書けること（E065）、口 `Dates` から集合を読むこと（`src/days.rs`）、領域のふるい（日付の軸の座標に集合の日が無ければ起きない）、当てはまらない行（E102）、例（E019）、ベクタ、網羅（境界の対の義務を集合の日に限る）、生成コードの入口（九つの言語。`rulec test` で十二の言語の全部が通る）、証明書の `days`・覆いの葉 `days_axis`・集合の日が分ける対 `days_apart`、`tools/recheck.py` と Lean の再検査（点と対の両方）、`doc` のページの注記、前提の `days`（`api`）、`References` の koyomi の名指し、`checked_over`。koyomi がつながっていなければ E129（終了コード 2）、集合を読めなければ E130。rulec の DESIGN、`docs/reference.md` とスキルの写し、サイトの checks のページ（英語と日本語）、台帳（`docs/codes.md`、`codes.ja.md`）に載せた。`ritsu-project` の `Joined` と `ritsu rulec` が koyomi をつなぐ。
+- rulec に `range from koyomi "<ファイル>" date <日付の名前>` を足した（X3 の (b)。rulec の §15.174）。構文、日付の入力にだけ書けること（E065）、口 `Dates` から集合を読むこと（`src/days.rs`）、領域のふるい（日付の軸の座標に集合の日が無ければ起きない）、当てはまらない行（E102）、例（E019）、ベクタ、網羅（境界の対の義務を集合の日に限る）、生成コードの入口（九つの言語。`rulec test` で十二の言語の全部が通る）、証明書の `days`・覆いの葉 `days_axis`・集合の日が分ける対 `days_apart`、`tools/recheck.py` と Lean の再検査（点と対の両方）、`doc` のページの注記、前提の `days`（`api`）、`References` の koyomi の名指し、`checked_over`。koyomi がつながっていなければ E129（終了コード 2）、集合を読めなければ E130。rulec の DESIGN、`docs/reference.md` とスキルのコピー、サイトの checks のページ（英語と日本語）、台帳（`docs/codes.md`、`codes.ja.md`）に載せた。`ritsu-project` の `Joined` と `ritsu rulec` が koyomi をつなぐ。
 - 口の問いを実装した：`preconditions_hold` の並びの合計と長さ（並びの長さの上限を問いに足した）、`checked_over`、`Books::refusals`。`Rules::output_values`、`Rules::date_range`、dandori の新しい口 `Flows::rule_calls` を足した（DESIGN 3.2）。
 - ritsu-cross に X2 を作った（E201、W201。`src/preconditions.rs`）。X3 の (a)、X4、X6 の判定を `src/borders.rs` に作り、台帳に E202〜W205 を `Repro::Later` で載せた（E.5 で再現を足した）。`ritsu check` の境目の数に、X2 の前提と、X3 の (b) の入力を数える。`crates/ritsu-cross/docs/codes.md` と `codes.ja.md` を取り直した。
 - テスト：rulec の `tests/days.rs`（7 件、golden 20、`tests/days/golden/`）、`tests/ports.rs` の並びの上限、`tests/codes.rs`（koyomi をつなぐ）。`crates/ritsu/tests/cross.rs`（golden 12、`tests/golden/cross/`）、`crates/ritsu/tests/codes.rs`（E201 と W201 の再現）。`crates/ritsu-cross/tests/borders.rs`（X3 の (a)、X4、X6 の三つの結果）。
@@ -604,7 +604,7 @@ DESIGN 7.3〜7.6、7.8 のうち、dandori の新しい書き方が要らない�
 - ★ X1 は言語の検査のまま（DESIGN 7.3 の E で決めたこと）。
 - ★ `range from koyomi` の書き方（`from` のあとに名指し）。`range` のすぐあとの `from` は射影の始まりとして読まない。
 - ★ koyomi がつながっていない rulec（クレートのバイナリ、ブラウザ）は E129 で止め、終了コード 2（dandori の E018、yuen の E206 と同じ扱い）。
-- 集合の外の日は、生成コードの入口で断る（範囲の両端だけでは、表が確かめていない日が入口を通る）。
+- 集合の外の日は、生成コードの入口で受け付けない（範囲の両端だけでは、表が確かめていない日が入口を通る）。
 - 前提に `days` の種類を足した（`api` の出力が変わるのは、新しい書き方を使う規則だけ）。
 - X2 の例は、dandori の範囲が値ごとに独立に取れるとしたときの角（dandori の E014 と同じ読み方）。同じ値を両方に渡すときだけは、値が連動することを使って決める。
 - X3 の (a)、X4、X6 の台帳のコードは、判定と文を先に置き、再現を `Later` にした（呼び出しの場所は E.5 で作った）。
@@ -640,9 +640,9 @@ DESIGN 7.7、7.8。`use dates`、`use book`、タスクの呼び方、`case … 
 - ★ X5 が成り立つ（期限は切れない）ときは何も言わない（DESIGN 7.7）。
 - ★ X6 はカレンダーのデータの範囲と比べない（DESIGN 7.8）。
 - ★ dandori に日付の範囲を書く書き方を足さない。ワークフローの入力や `now` から来る日は W205 になる（DESIGN 7.8）。
-- ★ X4 の断る理由は、帳簿の境界の理由だけを比べる（DESIGN 7.6）。比べないと、`key_conflict` と `already_refused` の処理をどの `do` と `hold` にも求めることになる。
-- X5 は取消（`void`）も数える。期限切れは取消も断るからである。
-- X4 の断る理由は `do` と `hold` だけを数える。`post` と `void` は状態で断られ、dandori が案件で確かめる。
+- ★ X4 の拒否の理由は、帳簿の境界の理由だけを比べる（DESIGN 7.6）。比べないと、`key_conflict` と `already_refused` の処理をどの `do` と `hold` にも求めることになる。
+- X5 は取消（`void`）も数える。期限が切れると取消も拒否されるからである。
+- X4 の拒否の理由は `do` と `hold` だけを数える。`post` と `void` は状態で拒否され、dandori が案件で確かめる。
 - 規則と日付の呼び出しには上限が無いものとして数える（`.flow` に時間の上限を書けない）。コールバックとイベントのタスクが `timeout` の無いときに使う一日も、プラットフォームの生成の決まりなので数えない。
 - 長さの計算（分岐とループと `wait until`）は dandori に置き、ritsu-cross は有効期限と比べるだけにした。分岐をたどるには dandori の文を知っている必要があり、koyomi の日数は日付の口で読める。ritsu-cross の判定が一つの比べになり、Lean のモデルが短くなる。
 - E202、E205 の例には、koyomi がその日を返す最初の入力を書く（DESIGN 7.1 の「koyomi の入力の日付」）。そのために `Dates::input_for` を足した。
@@ -675,7 +675,7 @@ DESIGN 7.9。dandori の参照インタプリタに、rulec の評価、koyomi �
 
 - `ritsu dandori` と `ritsu check` に、koyomi と chobo の口をつないだ（`crates/ritsu/src/main.rs`、`crates/ritsu-project/src/check.rs`）。日付か帳簿を使うフローが E018 で止まらなくなった。担当の版は dandori に `ports::Engine::checked_with_ports` を足していたが、言語をまたぐ検査の担当が同じ役目の `checked_with(root, files, &ritsu_ports::Ports, lang)` を足していたので、取り込むときにそれ一つにした（DESIGN 6.1）。`ritsu dandori` は、決められない前提の担当の `run_with_undecided` にまとめた（DESIGN 8.1）。
 - `ritsu run <file.flow> --scenario <file.json> [--target <target>] [--format json]` を作った（`crates/ritsu/src/run.rs`。`ritsu` のライブラリの `pub mod run`）。dandori の参照インタプリタに、結果をシナリオのほかから受け取る口（`interp::Answers`）を足し、rulec・koyomi・chobo に結果を計算させる `dandori::computed` を書いた（DESIGN 7.9）。帳簿の口の `Ledger` に `accounts` と `holds` を足した（DESIGN 3.2、chobo の DESIGN 8 章）。シナリオを読むところは `ritsu_base::fs` を通す（DESIGN 4.15）。
-- テストのプロジェクト `crates/ritsu/tests/projects/invoice/` を作った。英語の版（`invoice.flow`、規則 `rules/payment_method.rule`、日付 `dates/payment_terms.cal` とカレンダー `calendars/weekdays.cal`、帳簿 `books/stock.book`、シナリオ五つ）と、その横の日本語の版（`invoice.ja.flow`、`支払方法.rule`、`支払条件.cal`、`平日.cal`、`在庫.book`、シナリオ `*.ja.json`）で、日本語の版は英語の版の訳である（同じ日に同じに流れる）。日付とカレンダーは dandori の `examples/invoice` から写し、帳簿は有効期限を 30 日にし、規則は新しく書いた。dandori の検査の直し（F.6 の E020）で、二つのフローの `on failure` を dandori の `examples/invoice` と同じ形に直した（`put_back`・`棚に戻す` に `already_posted` を足して受け、取れない腕を消した。どのシナリオも `on failure` に入らないので golden は変わらない）。
+- テストのプロジェクト `crates/ritsu/tests/projects/invoice/` を作った。英語の版（`invoice.flow`、規則 `rules/payment_method.rule`、日付 `dates/payment_terms.cal` とカレンダー `calendars/weekdays.cal`、帳簿 `books/stock.book`、シナリオ五つ）と、その横の日本語の版（`invoice.ja.flow`、`支払方法.rule`、`支払条件.cal`、`平日.cal`、`在庫.book`、シナリオ `*.ja.json`）で、日本語の版は英語の版の訳である（同じ日に同じに流れる）。日付とカレンダーは dandori の `examples/invoice` からコピーし、帳簿は有効期限を 30 日にし、規則は新しく書いた。dandori の検査の直し（F.6 の E020）で、二つのフローの `on failure` を dandori の `examples/invoice` と同じ形に直した（`put_back`・`棚に戻す` に `already_posted` を足して受け、取れない腕を消した。どのシナリオも `on failure` に入らないので golden は変わらない）。
 - テスト：`crates/ritsu/tests/run.rs`（6 件。golden は英語と日本語のテキストと JSON の 20 個）、`crates/ritsu/tests/dandori.rs`（`ritsu dandori` と `ritsu check` が日付と帳簿を読むこと、2 件）、dandori の `computed` の単体テスト（日と時刻の読み書き）。`ritsu check` で dandori の `examples/invoice` を確かめるテストの期待は、取り込むときに、言語をまたぐ検査の W205 が二つと W206 が六つの 8 件の警告に合わせた（DESIGN 8.3）。
 
 **決めたこと**：
@@ -703,8 +703,8 @@ DESIGN 9.3。TypeScript、Python、Go の一つのパッケージ。テストは
 - 生成物の頭を、四つの言語でそろえた（DESIGN 9.2。rulec の §15.175）。ritsu-emit の `header` に `VERSION`、`generated(tool)`、`Source`、`Origin`、`file_name` を置き、rulec・koyomi・chobo・dandori がそれで書く。生成パッケージのモジュールの書き方は rulec の §15.176 に書いた。
 - `--check` は書かずに、無いファイル、古いか手で直したファイル、前の `gen` が書いて今は書かないファイルを挙げて 1 で終わる。書くときは、前に書いて今は書かないファイルを消す。
 - パッケージの Python が `mypy --strict` を通るように、dandori の Temporal の Python（と同じ部品を使う pydantic-graph と Step Functions の Lambda の Python）と、chobo の Python のクライアントの型の書き方を直した（振る舞いは変えていない。dandori の DESIGN 0.3、chobo の DESIGN 8.1）。chobo の `target::build` は、帳簿のファイルの名前とハッシュ（`Origin`）も受け取る。
-- テストのプロジェクト `crates/ritsu/tests/projects/stockroom/`（英語）を足した。rulec の規則 `delivery`（GBP の額で便を決める。この例のために書いたもの）、koyomi の日付のファイルとカレンダー、chobo の帳簿（三つは dandori の `examples/invoice` の写し）、三つを使う dandori のフロー `orders/order.flow`。取り込むときに、このフローを dandori の検査の直し（F.6 の E020）に合わせた（`put_back` が `already_posted` を宣言し、`on failure` の `held` の腕で受ける。取れない腕 `voided`・`expired` を消した）。
-- テスト `crates/ritsu/tests/gen.rs`（6 件）：三つのパッケージを帳簿の二通りで `tsc --strict`・`mypy --strict`・`go vet` と gofmt にかけること（通販は TypeScript だけ）、フローの import がパッケージの `rules/`・`dates/`・`books/` を名指すこと、フローの規則と日付のアクティビティがパッケージのモジュールを通って答えること（Python と Go）、`--check` が古いものを英語と日本語で挙げること、どのファイルの頭も DESIGN 9.2 の形であること、パッケージにできないものを断ること。
+- テストのプロジェクト `crates/ritsu/tests/projects/stockroom/`（英語）を足した。rulec の規則 `delivery`（GBP の額で便を決める。この例のために書いたもの）、koyomi の日付のファイルとカレンダー、chobo の帳簿（三つは dandori の `examples/invoice` のコピー）、三つを使う dandori のフロー `orders/order.flow`。取り込むときに、このフローを dandori の検査の直し（F.6 の E020）に合わせた（`put_back` が `already_posted` を宣言し、`on failure` の `held` の腕で受ける。取れない腕 `voided`・`expired` を消した）。
+- テスト `crates/ritsu/tests/gen.rs`（6 件）：三つのパッケージを帳簿の二通りで `tsc --strict`・`mypy --strict`・`go vet` と gofmt にかけること（通販は TypeScript だけ）、フローの import がパッケージの `rules/`・`dates/`・`books/` を名指すこと、フローの規則と日付のアクティビティがパッケージのモジュールを通って答えること（Python と Go）、`--check` が古いものを英語と日本語で挙げること、どのファイルの頭も DESIGN 9.2 の形であること、パッケージにできないものをエラーにすること。
 
 **決めたこと**（どれも DESIGN 9.2〜9.5 に理由を書いた）：
 
@@ -713,7 +713,7 @@ DESIGN 9.3。TypeScript、Python、Go の一つのパッケージ。テストは
 - ★ 帳簿のクライアントは `--books postgres|tigerbeetle` で選び、既定は PostgreSQL（SQL も書く）。
 - ★ パッケージの生成物のコメントは `--lang` の言語で書く。`--check` は書いたときと同じ言語で走らせる。
 - ★ 頭のバージョンは ritsu のバージョン（F.7 でそろえるまでは 0.1.0 で、rulec の生成物の頭も 0.22.1 から 0.1.0 になる）。★ 頭のハッシュは 16 桁（rulec は 12 桁から延びた）。日本語の頭の種類の語は、言語のファイルに書く語にした（rulec は前は `規則`）。
-- パッケージの同じファイルを二つのファイルが書くときは、名前を替えずに exit 2 で断る。ワークフローが読む規則・日付のファイル・帳簿がプロジェクトのファイルでなければ exit 1 で断る。
+- パッケージの同じファイルを二つのファイルが書くときは、名前を替えずに exit 2 で止まる。ワークフローが読む規則・日付のファイル・帳簿がプロジェクトのファイルでなければ exit 1 で止まる。
 - 予約語の表は一つにしない。インデックスのファイルと Go のディレクトリが import するモジュールの名前だけを、ritsu-emit の標準の表で確かめる。
 - ★ dandori の生成物に `Books` という名前が増える（パッケージの中だけ）。dandori と chobo の Python を `mypy --strict` に通すため、それぞれの単独の出力も変えた（型の書き方だけ）。
 
@@ -728,7 +728,7 @@ DESIGN 3.4、7.13。sakai が Rust のクレートの依存を確かめられる
 - sakai が Rust のクレートの依存を確かめるようにした（sakai の DESIGN 7.7）。地図の `code rust "<パス>"`（ワークスペースの `Cargo.toml` のあるディレクトリ）、公表された言語の `crate "<ディレクトリ>"`（見出しはクレートの名前の `-` を `_` にしたもの。1.4）、成果物の `.rs` とクレートの `Cargo.toml`。依存は `cargo metadata --format-version 1 --no-deps --offline` に尋ね、パスで書いた `[dependencies]` と `[build-dependencies]` を、依存を書いたマニフェストの行からの参照として、ほかの言語と同じ境界の検査（E201〜E206）にかける。Cargo に尋ねられなければ E107（新しいコード）。sakai の `src/cargo.rs`（依存の行を探すところを含む）、`refs.rs` の `Kind::Crate` と `crate_crossings`、`patterns.rs` のクレートの E302 と E301。
 - sakai のテストの土台の地図に `tests/maps/rust`（英語の名前の、四つのクレートのワークスペース）を足し、変異を四つ（`E107_no_cargo_manifest`、`E201_a_crate_with_no_relationship`、`E202_a_crate_inside_another_context`、`E302_a_crate_named_otherwise`）と、その golden を英語と日本語で足した。台帳の E107 の再現は、Rust のコードを持つ一つのコンテキストの地図（英語）。
 - `ritsu.ctx` を根に、12 のコンテキストのファイルを `contexts/` に置いた（DESIGN 3.4）。`ritsu check ritsu.ctx` は `ritsu.ctx: ok — 12 contexts, 27 relationships; 356 artifacts, each in one context; 50 crossings checked (rust 50)` と言い、0.03 秒ほどで終わる。
-- `crates/ritsu/tests/map.rs`：リポジトリの地図が通ること。ワークスペースのマニフェストと地図を一時ディレクトリに写し、koyomi のクレートが rulec のクレートに依存する変異を入れると、sakai が `crates/koyomi/Cargo.toml` の足した行を E201 で名指すこと（英語と日本語）、同じ依存を `[dev-dependencies]` に書けば通ること、土台（`ritsu-units`）が言語（`chobo`）に依存しても名指すこと。
+- `crates/ritsu/tests/map.rs`：リポジトリの地図が通ること。ワークスペースのマニフェストと地図を一時ディレクトリにコピーし、koyomi のクレートが rulec のクレートに依存する変異を入れると、sakai が `crates/koyomi/Cargo.toml` の足した行を E201 で名指すこと（英語と日本語）、同じ依存を `[dev-dependencies]` に書けば通ること、土台（`ritsu-units`）が言語（`chobo`）に依存しても名指すこと。
 - CI の `fast` のジョブに `cargo run --locked -q -p ritsu -- check ritsu.ctx` を足した（`cargo xtask deps` の次）。
 - `ritsu check` の要約で、地図が言語のものでないファイル（`Cargo.toml`）のせいで通らないとき、地図のファイルを「通らない」と数えるようにした（E.2 の形では、エラーの数は出るのに `all pass` と言っていた。終了コードは前から 1）。
 
@@ -767,11 +767,11 @@ DESIGN 3.4、7.13。sakai が Rust のクレートの依存を確かめられる
 
 済んだ。yuen の PLAN の D.1〜D.7 を、ritsu の中で、土台と口を使う形に直して作った（2026-10-04。yuen の PLAN の 4 章が、書き直した D とその結果）。
 
-- doc（`yuen doc`、`src/doc/`）：Markdown と一枚の HTML。HTML の枠は ritsu-base の `docpage`、条文は `trace` と同じ ritsu-base の `quote_lines` で写しから引く。グラフは `yuen api` の JSON から組む。1〜4 の段のエラーがあればページを作らない（DESIGN 4.8）。
+- doc（`yuen doc`、`src/doc/`）：Markdown と一枚の HTML。HTML の枠は ritsu-base の `docpage`、条文は `trace` と同じ ritsu-base の `quote_lines` でコピーから引く。グラフは `yuen api` の JSON から組む。1〜4 の段のエラーがあればページを作らない（DESIGN 4.8）。
 - 例（`crates/yuen/examples/`）：英語を先にした。`osha`（eCFR の 29 CFR 1910.157、rulec の表）、`greeter`（`greeter.req` と `greeter.ja.req`、geas の主張と記録、`affected` の差分）、`payment_terms`（英語と日本語、koyomi の日付と条件、祝日の表を借りる）、`refunds`（英語と日本語、chobo の勘定と振替）、e-Gov の法令にしか無い `civil_code_periods`、`civil_code_periods_reread`、`stamp_tax`（日本語だけ、`<英語の名前>.ja.req`）。名指すもの（rulec の表と出力、koyomi の日付と条件、geas の主張、chobo の勘定と振替）は口から読む。
-- ★わざと止まる例 `civil_code_periods_reread` は E303 が一つ（A の段階の見込みは三つ）。D.7 で koyomi の日付の端がその日付の定義の文になり、書き換えた日付へのリンクだけが止まるため（yuen の DESIGN 15 章、根の DESIGN 6.4）。★写したファイルは koyomi のいまの名前（`civil_code_period_end.ja.cal`）のまま。★greeter・payment_terms・refunds の出どころは `decided`（この例のために決めたもの）。
+- ★わざと止まる例 `civil_code_periods_reread` は E303 が一つ（A の段階の見込みは三つ）。D.7 で koyomi の日付の端がその日付の定義の文になり、書き換えた日付へのリンクだけが止まるため（yuen の DESIGN 15 章、根の DESIGN 6.4）。★コピーしたファイルは koyomi のいまの名前（`civil_code_period_end.ja.cal`）のまま。★greeter・payment_terms・refunds の出どころは `decided`（この例のために決めたもの）。
 - `docs/`（`reference.md`、`codes.md`、`codes.ja.md`）、README.md と README.ja.md（日本語は一から書いた）、`skills/yuen`（`SKILL.md` と `skills/sync.sh`）、`THIRD_PARTY_NOTICES.md`。入れ方は ritsu の `cargo install --git https://github.com/i2y/ritsu --locked ritsu`、コマンドは `ritsu yuen …`。
-- テスト：`tests/doc.rs`（例の十の `.req` の四十の golden、外を読まない HTML、引いた条文が写しの行であること、Chrome の画像四枚）、`tests/examples.rs`、`tests/docs.rs`、`tests/skill.rs`。`cargo test -p yuen -p ritsu --no-fail-fast -- --nocapture` が通る（yuen 225 件、ritsu 57 件と ignored 1 件、SKIP 0）。
+- テスト：`tests/doc.rs`（例の十の `.req` の四十の golden、外を読まない HTML、引いた条文がコピーの行であること、Chrome の画像四枚）、`tests/examples.rs`、`tests/docs.rs`、`tests/skill.rs`。`cargo test -p yuen -p ritsu --no-fail-fast -- --nocapture` が通る（yuen 225 件、ritsu 57 件と ignored 1 件、SKIP 0）。
 - 替える前と後の出力を、テストの材料と変異の全部（151 のプロジェクトに `check` 四通り、`api`、`export` 二つ）、ヘルプ、`explain --all`、`affected` の 1,086 回で比べ、1,081 回が一字も違わなかった。違ったのは、`doc` を足したヘルプ（`yuen --help`、引数の無い `yuen`、日本語の `--help`、`yuen help doc`、`yuen doc --help`）の 5 回だけである。ほかに、`from` の無い要件を `affected` が書くときの空の `from ;` を直した（例 `greeter` で出る。替える前の材料には無い。yuen の DESIGN 8 章）。
 
 ### F.2 sakai の段階 D
@@ -782,7 +782,7 @@ DESIGN 3.4、7.13。sakai が Rust のクレートの依存を確かめられる
 
 ### F.3 ritsu の文書とスキル
 
-- 根の README.md（英語）と README.ja.md（日本語。英語の写しではなく一から書く）：何をするか、七つの言語とそれぞれの README への案内、`ritsu check` の出力（本物）、言語をまたぐ検査が言うこと（本物の診断）、入れ方、コマンド、どう確かめているか、ライセンス。README の出力と診断は、テストが実際に走らせて照らし合わせる（koyomi と chobo の `tests/docs.rs` の形）。
+- 根の README.md（英語）と README.ja.md（日本語。英語の訳ではなく一から書く）：何をするか、七つの言語とそれぞれの README への案内、`ritsu check` の出力（本物）、言語をまたぐ検査が言うこと（本物の診断）、入れ方、コマンド、どう確かめているか、ライセンス。README の出力と診断は、テストが実際に走らせて照らし合わせる（koyomi と chobo の `tests/docs.rs` の形）。
 - DESIGN.md：A のスケッチと見込みを、実物と実際の数に差し替える。
 - `skills/ritsu/`：プロジェクトを `ritsu check` で回す流れ、言語をまたぐ診断の直し方、どの言語のスキルを読むか。各言語のスキルは残す。
 - koyomi と chobo の例とテストの材料は、英語を先にした（各言語の DESIGN 10.1、根の DESIGN 10.10）。ritsu の README とスキルで koyomi と chobo の例を見せるときは、英語の例（koyomi は England and Wales の `close_20th_pay_10th.cal` など、chobo は `examples/inventory/inventory.book` など）を先に見せ、日本語の版を並べる。
@@ -797,7 +797,7 @@ DESIGN 3.4、7.13。sakai が Rust のクレートの依存を確かめられる
 - `skills/ritsu/SKILL.md` を書き、テスト（`crates/ritsu/tests/skill.rs`、6 件）を足した。プロジェクトを `ritsu check` で回す流れ、出力の読み方、言語をまたぐ診断 13 個（E101、E201〜E206、W201〜W206）の読み方と直し方、`ritsu run` と `ritsu gen`、どの言語のスキルを読むか、人に残すこと。ページを読む人は「コードが実現すべきものを理解し、確かめる人」と書く。
 - rulec、dandori、koyomi、chobo、geas の README の入れ方を、ritsu から入れる形（`cargo install --git https://github.com/i2y/ritsu --locked ritsu`、その言語だけなら `--locked <言語>`）に直した。言語ごとのリポジトリの URL は入れ方から消えた。★koyomi、chobo、geas、dandori のスキルの `compatibility` も同じにした（dandori のものは、規則に rulec のバイナリが要ると書いていたのも、いまの dandori に合わせて直した）。★rulec のスキルの `license: MIT` は、rulec の `Cargo.toml` と README の `MIT OR Apache-2.0` と食い違っていたので直した（元は `skills/header.md`。`skills/sync.sh` で SKILL.md を作り直した）。
 - 実際に確かめた：ローカルのクローンから `cargo install --git file://… --locked rulec` と `--locked ritsu` を走らせると、入る実行ファイルは `rulec` と `ritsu` のそれぞれ一つだけだった（`ritsu` だけを入れた PATH に `rulec` は無く、`ln -s "$(command -v ritsu)" …/rulec` を作ると `rulec --version` が `rulec 0.22.1`、`koyomi check` が README と同じ行を出した）。
-- dandori の `--help` の、規則を使うワークフローは `ritsu dandori` で走らせる、という文（★とそのそばの exit code の文二つ）に、日付のファイルと帳簿（`use dates`、`use book`）を足した。サイトの英語と日本語のページ、スキルの写しも同じにした。
+- dandori の `--help` の、規則を使うワークフローは `ritsu dandori` で走らせる、という文（★とそのそばの exit code の文二つ）に、日付のファイルと帳簿（`use dates`、`use book`）を足した。サイトの英語と日本語のページ、スキルのコピーも同じにした。
 
 **したこと**（日本語の出力の読み直しと言い方。2026-10-04〜05。作者がブラウザで試すページで、日本語の出力の不自然さと、出力に設計の文書の節の番号が出ることを指摘した。DESIGN の 4.1、4.3、4.8）：
 
@@ -814,13 +814,13 @@ DESIGN 3.4、7.13。sakai が Rust のクレートの依存を確かめられる
 
 「**したこと**」に足す：
 
-- 八つの Agent Skills を配る仕組みを作った（sk-a の担当、2026-10-05。DESIGN 13.2）。Claude Code のプラグインとマーケットプレイス（根の `.claude-plugin/plugin.json` と `marketplace.json`）、`ritsu skills install` と `ritsu skills list`（`crates/ritsu/src/skills.rs`。`ritsu --help` とコマンドの表にも足した）、リリースの `ritsu-skills-v<版>.zip`（`packaging/skills.sh`、`release.yml`）、根の `skills/README.md` と日本語の版の `skills/README.ja.md`（八つの一覧と四つの入れ方）、根の README の「For AI agents」「AI エージェント向け」とコマンドの一覧、各言語の `crates/<言語>/skills/README.md` の入れ方の節（根の `skills/README.md` を指す短いものにした。権限の書き方と、geas のバイナリが自分のスキルを入れることは残した）。★rulec と dandori のサイトの入れ方のページ（英語と日本語）が、スキルを `crates/<言語>/skills/<言語>` から写す古いパスのままだったので、`ritsu skills install` と根の `skills/` に直した（rulec のページの「ほかに五つのファイル」も、いまの六つに直した）。テストは `crates/ritsu/tests/skill.rs` に 9 件、`tests/release.rs` に zip の行。
+- 八つの Agent Skills を配る仕組みを作った（sk-a の担当、2026-10-05。DESIGN 13.2）。Claude Code のプラグインとマーケットプレイス（根の `.claude-plugin/plugin.json` と `marketplace.json`）、`ritsu skills install` と `ritsu skills list`（`crates/ritsu/src/skills.rs`。`ritsu --help` とコマンドの表にも足した）、リリースの `ritsu-skills-v<版>.zip`（`packaging/skills.sh`、`release.yml`）、根の `skills/README.md` と日本語の版の `skills/README.ja.md`（八つの一覧と四つの入れ方）、根の README の「For AI agents」「AI エージェント向け」とコマンドの一覧、各言語の `crates/<言語>/skills/README.md` の入れ方の節（根の `skills/README.md` を指す短いものにした。権限の書き方と、geas のバイナリが自分のスキルを入れることは残した）。★rulec と dandori のサイトの入れ方のページ（英語と日本語）が、スキルを `crates/<言語>/skills/<言語>` からコピーする古いパスのままだったので、`ritsu skills install` と根の `skills/` に直した（rulec のページの「ほかに五つのファイル」も、いまの六つに直した）。テストは `crates/ritsu/tests/skill.rs` に 9 件、`tests/release.rs` に zip の行。
 
 「済んだもの」に足す：Agent Skills の配り方（プラグイン、`ritsu skills install`、リリースの zip、案内とテスト）。
 
 「残り」に足す：リポジトリを public にしたあと、`/plugin marketplace add i2y/ritsu` と `/plugin install ritsu@ritsu` を一度走らせ、八つのスキルが `ritsu:<名前>` で読まれることを確かめる。リリースの zip は、最初のタグで `release.yml` が走ったときに確かめる（CI は止めてあるので、手元で `packaging/skills.sh` を走らせて zip ができ、中身が `skills/` と同じことだけを確かめた）。
 
-- 八つのスキルの中身を、エージェントが使う流れで読み直した（2026-10-05、sk-b）。入れ方は八つとも ritsu だけにした：`compatibility` は「`ritsu` を PATH に（`cargo install --git https://github.com/i2y/ritsu --locked ritsu`）、言語は `ritsu <言語> <command>`、言語の名前のリンクでも同じ」。本文で走らせるコマンド（インラインのコードと、`console` の塊の `$` の行）は `ritsu <言語> <コマンド>` の形にした（出力の塊は、コマンドが出すものなので替えない）。rulec は、本文が AGENTS.md と共有で 499 行の上限もあるので、頭（`header.md`）で一度だけ呼び方を言う。各スキルの流れに、`explain` で一つのコードを引くこと、人が読むページ、プロジェクトなら `ritsu check`（koyomi は E202・E205、chobo は E203・E204・E206、dandori は前提・日・額・断り・保留）を足し、ritsu のスキルの流れに「人に確かめてもらう」段（7）を足した。いまの実物から足したもの：rulec の `import std/<国>/<種類>` と `std/都道府県`、`range from koyomi`、dandori の、決められなかった前提を生成したワークフローが実行時に確かめること（`Dandori.BrokenPrecondition`）、`ritsu gen`、chobo の額 0、yuen の `export prov` の名前空間（`https://i2y.github.io/ritsu/ns/yuen#`）、ritsu のブラウザで試すページ、`ritsu skills install`（sk-a の形）。rulec の AGENTS.md から設計の文書の節の番号（§15.95）を外し、CI の例を `uses: i2y/ritsu@v0.23.0` にした。
+- 八つのスキルの中身を、エージェントが使う流れで読み直した（2026-10-05、sk-b）。入れ方は八つとも ritsu だけにした：`compatibility` は「`ritsu` を PATH に（`cargo install --git https://github.com/i2y/ritsu --locked ritsu`）、言語は `ritsu <言語> <command>`、言語の名前のリンクでも同じ」。本文で走らせるコマンド（インラインのコードと、`console` の塊の `$` の行）は `ritsu <言語> <コマンド>` の形にした（出力の塊は、コマンドが出すものなので替えない）。rulec は、本文が AGENTS.md と共有で 499 行の上限もあるので、頭（`header.md`）で一度だけ呼び方を言う。各スキルの流れに、`explain` で一つのコードを引くこと、人が読むページ、プロジェクトなら `ritsu check`（koyomi は E202・E205、chobo は E203・E204・E206、dandori は前提・日・額・拒否・保留）を足し、ritsu のスキルの流れに「人に確かめてもらう」段（7）を足した。いまの実物から足したもの：rulec の `import std/<国>/<種類>` と `std/都道府県`、`range from koyomi`、dandori の、決められなかった前提を生成したワークフローが実行時に確かめること（`Dandori.BrokenPrecondition`）、`ritsu gen`、chobo の額 0、yuen の `export prov` の名前空間（`https://i2y.github.io/ritsu/ns/yuen#`）、ritsu のブラウザで試すページ、`ritsu skills install`（sk-a の形）。rulec の AGENTS.md から設計の文書の節の番号（§15.95）を外し、CI の例を `uses: i2y/ritsu@v0.23.0` にした。
 - 切り替え（PLAN 7.10 のサイトの切り替え）のときに直すものに、次を足す：rulec のスキルの footer と AGENTS.md の 7 章のサイトの URL（`https://i2y.github.io/rulec/`）、dandori のスキルの最後の行（`https://i2y.github.io/dandori/`）。ritsu のスキルのブラウザで試すページのリンク（`https://i2y.github.io/ritsu/playground/`）は、切り替えまで 404（10/5 07:2x に確かめた）で、切り替えれば生きる。
 
 ### F.4 LSP
@@ -857,12 +857,12 @@ DESIGN 11 章。済んだ。
 
 - バージョンの番号を 0.23.0 にそろえる（DESIGN 13.1）。`version.workspace = true`、生成物と golden を一度に取り直す。手順と試した結果は DESIGN 13.1 に書いた。そろえるのは F の最後（ほかの担当が golden を触らなくなってから）。
 - 作った：`.github/workflows/release.yml`（四つの対象、`ritsu` とリンク七つとライセンス二つのアーカイブ、`.deb` と `.rpm`、`SHA256SUMS`、Homebrew の formula の検査と tap への push）、`.github/workflows/packages.yml`（毎回の確かめ）、`packaging/`（`archive.sh`、`smoke.sh`、`nfpm.yaml`、`linux.sh`、`homebrew.sh`）、根の `action.yml`。リンクの名前で呼ばれたときの入口は E.2 で作ったので、`rulec mcp` が自分を呼ぶときの `arg0` と、リンクのテスト（`crates/ritsu/tests/links.rs`、7 件）を足した。リリースのテストは `crates/ritsu/tests/release.rs`（7 件と ignore 1）。手元で確かめたことは、F.8 の報告のとおり。
-- 決めたこと：アーカイブは平らで、リンクは相対（`tar -xzf … -C ~/.local/bin` が入れ方のすべて）、ライセンスの写しを入れる。`.deb` と `.rpm` は `rulec` を置き換える。`release.yml` は、タグと八つの名前の `--version` がそろっていなければ止まる。`packages.yml` は main への push と pull request（文書だけの変更を除く）で走る。tap へは `Formula/ritsu.rb` を足すのと `rulec.rb` を名前の変更に替えるのを同じコミットでする（DESIGN 13.2。★切り替えの時期は作者に聞く）。formula と `.deb`・`.rpm` の `homepage` は `https://github.com/i2y/ritsu`。
+- 決めたこと：アーカイブは平らで、リンクは相対（`tar -xzf … -C ~/.local/bin` が入れ方のすべて）、ライセンスのコピーを入れる。`.deb` と `.rpm` は `rulec` を置き換える。`release.yml` は、タグと八つの名前の `--version` がそろっていなければ止まる。`packages.yml` は main への push と pull request（文書だけの変更を除く）で走る。tap へは `Formula/ritsu.rb` を足すのと `rulec.rb` を名前の変更に替えるのを同じコミットでする（DESIGN 13.2。★切り替えの時期は作者に聞く）。formula と `.deb`・`.rpm` の `homepage` は `https://github.com/i2y/ritsu`。
 - 配る場所を ritsu に移す準備（DESIGN 13.2。F の最後）：rulec と dandori のサイトの中身（英語と日本語のページ、ブラウザで試すページ）を ritsu のサイトに移し、そのビルドと文書のテスト（いまの rulec の `tests/website.rs`、dandori の `tests/docs.rs` にあたるもの）を ritsu で回す。作者の指示（2026-10-04 19:30）で、rulec と dandori のサイトを `website/` の下に移した（切り替えはしていない）。rulec の Homebrew の formula を ritsu の formula に替える下書き（`packaging/homebrew.sh`）と、`i2y/tap/rulec` を入れている人の移り方は、DESIGN 13.2 に書いた。
-  - 済んだ（site の担当）：ritsu のサイトの骨組み（根の `website/` の `zensical.toml`・`zensical.ja.toml`、`docs/index.md` と `docs-ja/index.md`、`build.sh`・`sync.sh`・`serve.sh`、`README.md`）、`.github/workflows/docs.yml`（`workflow_dispatch` だけ）、根のサイトのテスト `crates/ritsu/tests/website.rs`（9 件。yuen の名前空間のページの二つを足した）。dandori のサイトを `website/dandori/` に移した（`git mv`。設定はそのままで、`site_url` を `/ritsu/dandori/`、`repo_url` を ritsu にした）。dandori のテストと道具が読む場所と、CI の三つの段が写しを作る `sync.sh` の場所を直した。取り込むときに、ritsu のブラウザで試すページが言語の `doc` のページを呼ぶ言い方を、根の index にそろえて「the page for people」「人が読むページ」に直した。
+  - 済んだ（site の担当）：ritsu のサイトの骨組み（根の `website/` の `zensical.toml`・`zensical.ja.toml`、`docs/index.md` と `docs-ja/index.md`、`build.sh`・`sync.sh`・`serve.sh`、`README.md`）、`.github/workflows/docs.yml`（`workflow_dispatch` だけ）、根のサイトのテスト `crates/ritsu/tests/website.rs`（9 件。yuen の名前空間のページの二つを足した）。dandori のサイトを `website/dandori/` に移した（`git mv`。設定はそのままで、`site_url` を `/ritsu/dandori/`、`repo_url` を ritsu にした）。dandori のテストと道具が読む場所と、CI の三つの段がコピーを作る `sync.sh` の場所を直した。取り込むときに、ritsu のブラウザで試すページが言語の `doc` のページを呼ぶ言い方を、根の index にそろえて「the page for people」「人が読むページ」に直した。
   - 済んだ（rulec のサイトの担当）：rulec のサイトを `website/rulec/` に移した（`git mv`。設定はそのままで、`site_url` を `/ritsu/rulec/`、`repo_url` を ritsu にした。`serve.sh` は消した）。根の `build.sh` は `sites=(rulec dandori)`、根の index（英日）の表は rulec のサイトを指す。rulec のテストと道具（`tests/website.rs`・`docs.rs`・`skill.rs`・`m0.rs`・`verify.rs`・`vdiff.rs`・`doc.rs`・`wasm.rs`、`skills/sync.sh`、`website/rulec/sync.sh`・`tools/make_examples.py`・`make_stack.py`・`make_assurance.py`・`shots.sh`・`social.sh`・`make_wasm.sh`）が読む場所を直した。ritsu の `tests/website.rs` は、`build.sh` が rulec と dandori のサイトを組むことと、組んだ木に `rulec/index.html`・`rulec/ja/index.html` と rulec のブラウザで試すページがあることを確かめる。CI の三つの段の `sync.sh` の場所と、`docs.yml` の木の確かめ（rulec の七つ）を直した。`ritsu.ctx` の `except` から `crates/rulec/website` を消し、★`crates/rulec/.github/workflows/docs.yml` を消した。ページの中の `github.com/i2y/rulec/…` を ritsu の `crates/rulec/…` にし、★入れ方のページ（英日）を rulec の README の入れ方に合わせた。英語のページの日本語の残り三つ（画面写真、突き合わせの実演、`flow.svg` の質問）を `parcel_rate` と英語に替えた（DESIGN 10.10。rulec の §15.181）。前のブラウザで試すページは二つとも残した（★残すか替えるかは作者に聞く。DESIGN 15 章）。ritsu のページに替えると決まり（作者の決め）、ritsu のページが前の二つのページの例とリンクの形を全部持つようにした（F.5）。前のページは、切り替えるときに転送のページにする（DESIGN 13.2、15 章）。
-  - 済んだ（yuen の名前空間の担当。2026-10-04）：yuen の PROV の名前空間の IRI を、リポジトリの URL `https://github.com/i2y/yuen/ns#` から ritsu のサイトの URL `https://i2y.github.io/ritsu/ns/yuen#` に替えた（作者の決め。yuen はまだ配っていなかったので、替えて困る文書は無い）。書き出し（PROV-N と PROV-JSON）、18 プロジェクトの golden 36 枚、yuen の DESIGN 13 章、`docs/reference.md` とスキルの写し、`ritsu.wasm` を直した。IRI を開くと語の説明が読めるページ `website/docs/ns/yuen.md`（日本語は `website/docs-ja/ns/yuen.md`。公開先は `/ritsu/ns/yuen/` と `/ritsu/ja/ns/yuen/`。nav には出さない）を足した。語は 28（型 7、関係の種類 4、属性 17）で、一覧は yuen の `src/export/prov.rs` の `TERMS`（名前、種類、書かれる先）。yuen の `tests/export.rs`（4 件から 5 件になった）が一覧と全プロジェクトの書き出しの語を突き合わせ、ritsu の `tests/website.rs`（7 件から 9 件になった）が一覧とページ（英語と日本語）を突き合わせる（DESIGN 13.2）。
-  - 取り込むときにしたこと：移す前の `crates/rulec/website` と `crates/dandori/website` の gitignore の写しを消した。英語の `doc` の約物を直した（DESIGN 10.10）ので、dandori の図の英語の golden、サイトの図のページ、ブラウザで試すページの presets を取り直し、wasm を三つ（rulec・dandori・ritsu。rulec の wasm は `website/rulec/docs/playground/`）作り直した。
+  - 済んだ（yuen の名前空間の担当。2026-10-04）：yuen の PROV の名前空間の IRI を、リポジトリの URL `https://github.com/i2y/yuen/ns#` から ritsu のサイトの URL `https://i2y.github.io/ritsu/ns/yuen#` に替えた（作者の決め。yuen はまだ配っていなかったので、替えて困る文書は無い）。書き出し（PROV-N と PROV-JSON）、18 プロジェクトの golden 36 枚、yuen の DESIGN 13 章、`docs/reference.md` とスキルのコピー、`ritsu.wasm` を直した。IRI を開くと語の説明が読めるページ `website/docs/ns/yuen.md`（日本語は `website/docs-ja/ns/yuen.md`。公開先は `/ritsu/ns/yuen/` と `/ritsu/ja/ns/yuen/`。nav には出さない）を足した。語は 28（型 7、関係の種類 4、属性 17）で、一覧は yuen の `src/export/prov.rs` の `TERMS`（名前、種類、書かれる先）。yuen の `tests/export.rs`（4 件から 5 件になった）が一覧と全プロジェクトの書き出しの語を突き合わせ、ritsu の `tests/website.rs`（7 件から 9 件になった）が一覧とページ（英語と日本語）を突き合わせる（DESIGN 13.2）。
+  - 取り込むときにしたこと：移す前の `crates/rulec/website` と `crates/dandori/website` の gitignore のコピーを消した。英語の `doc` の約物を直した（DESIGN 10.10）ので、dandori の図の英語の golden、サイトの図のページ、ブラウザで試すページの presets を取り直し、wasm を三つ（rulec・dandori・ritsu。rulec の wasm は `website/rulec/docs/playground/`）作り直した。
   - まだ：サイトの切り替え（7.10）。
 - 言語の七つのクレートの `Cargo.toml` の `repository` を、`repository.workspace = true` にそろえた（作者の指示。rulec の `homepage` は、公開している `https://i2y.github.io/rulec/` を指すので、サイトを切り替えるまで残した。DESIGN 13.2）。
 - リリース、タグ、push、公開、サイトと formula の切り替えは、作者の指示があるまでしない。
@@ -896,7 +896,7 @@ DESIGN 11 章。済んだ。
 - 警告：cargo の「profiles for the non root package will be ignored」が五つ（C.0 で消える）。rulec のテスト関数の名前が snake case でないという警告が七つ（元のリポジトリと同じ）。
 - 入れ直したツール（B.5）は、gitignore した場所に約 2.4 GB ある。yuen の venv は `crates/yuen/tools/.venv` にあり、改名で一緒に移った。
 - この機械でのテストの回し方（ツールの場所は指示書）：
-  - rulec：`website/sync.sh` で写すページを作り、`proofs/` で `lake build` を済ませ、Connect・mypy・NumPy・ruff・uvicorn の入った venv（dandori の `tools/connect/requirements.txt` から作る）を PATH の先頭に、OpenJDK と PostgreSQL の bin を PATH に置き、使い捨ての PostgreSQL を `PGHOST`・`PGPORT`・`PGDATABASE` で渡す。
+  - rulec：`website/sync.sh` でコピーするページを作り、`proofs/` で `lake build` を済ませ、Connect・mypy・NumPy・ruff・uvicorn の入った venv（dandori の `tools/connect/requirements.txt` から作る）を PATH の先頭に、OpenJDK と PostgreSQL の bin を PATH に置き、使い捨ての PostgreSQL を `PGHOST`・`PGPORT`・`PGDATABASE` で渡す。
   - dandori：`DANDORI_RULEC` に rulec 0.22.0、PATH に argo CLI v4.1.4、`TYPESAFE_API_KEY` は空。重いもの（Temporal、Argo、LocalStack、durable、pydantic-graph）は `cargo test --test examples <名前> -- --exact` で一つずつ、残りは `--skip localstack --skip temporal --skip pydantic_graph --skip durable --skip argo --skip ollama` で回す。
   - koyomi：`KOYOMI_PG_BIN` と、短いパスの `KOYOMI_PG_SOCKET_DIR`。chobo：`CHOBO_PG_BIN`、`CHOBO_PG_SOCKET_DIR`、`TMPDIR`。geas：`GEAS_PIXIE_GREETER`。yuen：環境変数は要らない（venv とスキーマを既定の場所に入れた）。sakai：`SAKAI_JAVA`・`SAKAI_JAVAC` と、`SAKAI_RULEC`・`SAKAI_KOYOMI`・`SAKAI_CHOBO`・`SAKAI_DANDORI` にワークスペースの `target/debug` のバイナリ（先に `cargo build --workspace`）。Go のビルドキャッシュ（`GOCACHE`）は作業場所に置く。
 - テストが OS の一時ディレクトリに残すもの（`dandori-steps-*`、`dandori-protos-*`、`rulec-*-<pid>`、swiftc の `TemporaryDirectory.*`）は、C.2 の一時ディレクトリに替えるときに片づける。
@@ -911,7 +911,7 @@ DESIGN 11 章。済んだ。
   - `cli::lang_flag` の説明は `RITSU_LANG` に触れていない。言語を `Lang::pick` に替えるときに説明も直し、`--help` の golden を取り直す。
   - `sources` へ替えると、rulec は漢数字を百と千まで読むようになり、`第0条` を通さなくなる。koyomi の `text_diff` は全体で件数を切り、土台の `text_diff` は片側ずつ切って「あと n 行」を足す（koyomi は `diff_lines` から自分の形を作れる）。koyomi と yuen の curl には `--compressed` が付く。
   - yuen の書き出しの識別子は、実装では SHA-256 を二度かけている（`src/export/mod.rs` の `sha256::hex(&sha256::digest(&b))`。土台の `hex` も同じく、渡されたバイト列のダイジェストを書く）。yuen の DESIGN.md 12 章は一度と書いている。C.7 で yuen を土台の `sha256` に替えるときに、値を保つなら二度かけたままにし、直すなら識別子が全部変わる。どちらにするかは作者に聞く。
-  - `naming.tsv` の yuen と sakai の写しは C.7 と C.8 で消す（PLAN 0.3）。`ritsu-base` のテストは、写しが無くなれば比べないで通る作りにしてある。
+  - `naming.tsv` の yuen と sakai のコピーは C.7 と C.8 で消す（PLAN 0.3）。`ritsu-base` のテストは、コピーが無くなれば比べないで通る作りにしてある。
   - yuen の `Project::shown` は C.0 で直した。C.7 で土台の `paths::Shown` に替える（同じ考え。ただし yuen はシンボリックリンクをたどったパスを持っている）。
 - この機械で根から回すとき：`cargo test --workspace --no-fail-fast -- --nocapture --skip localstack --skip temporal --skip pydantic_graph --skip durable --skip argo --skip ollama`。dandori の重い段は、7.2 のとおり一つずつ回す。環境は 7.2 のものに、`RITSU_PG_BIN`・`RITSU_PG_SOCKET_DIR`・`RITSU_TIGERBEETLE`（`ritsu-testkit` のテスト）を足す。PostgreSQL のソケットのディレクトリは短いパス（`/tmp` の下）にする（作業場所のパスでは 103 バイトを超える）。dandori の `DANDORI_RULEC` には rulec 0.22.0（GitHub のリリースのバイナリを、チェックサムを確かめて作業場所に置く）。geas の `GEAS_PIXIE_GREETER` は、pixie を作者がビルドした場所にある greeter を読む（pixie の木ではビルドしない）。
 - `--skip argo` は `cargo` を含む名前にも当たる。根から回すテストに、その語を含む名前を付けない。
@@ -922,13 +922,13 @@ DESIGN 11 章。済んだ。
 
 - 済んだもの：C.4〜C.10。koyomi・chobo・geas・yuen・sakai は土台（`ritsu-base`、`ritsu-testkit`）を使い、sakai は `ritsu-proto` で、koyomi と chobo は `ritsu-emit` で書く。残りは C.11〜C.13。
 - C.11 の手がかり：
-  - rulec と dandori の予約語の表は `ritsu-emit` の `copies` に写してあり、`crates/ritsu-emit/tests/copies.rs` が二つのいまの表と等しいことを確かめる。替えるときは `copies` から読むようにし、写しのテストを消す。rulec は語を大文字と小文字を区別せずに照らすので、`words::rust::KEYWORDS`（`Self` を含む）をそのまま使っても結果は変わらない。rulec の `GO_GLOBAL` には `complex64` と `complex128` が無く、dandori の Python の組み込みの名前は rulec のものと一部が違う。そろえるなら生成物と診断が変わるので、それぞれの DESIGN.md に理由を書く。
+  - rulec と dandori の予約語の表は `ritsu-emit` の `copies` にコピーしてあり、`crates/ritsu-emit/tests/copies.rs` が二つのいまの表と等しいことを確かめる。替えるときは `copies` から読むようにし、コピーのテストを消す。rulec は語を大文字と小文字を区別せずに照らすので、`words::rust::KEYWORDS`（`Self` を含む）をそのまま使っても結果は変わらない。rulec の `GO_GLOBAL` には `complex64` と `complex128` が無く、dandori の Python の組み込みの名前は rulec のものと一部が違う。そろえるなら生成物と診断が変わるので、それぞれの DESIGN.md に理由を書く。
   - `ritsu-emit` の `ident` と `lit` は koyomi と chobo の形である。rulec の `go_package` は小文字にもする（koyomi の別名はもともと小文字）。dandori の Go の外に見せる名前（`exported`）は、区切りで分けて頭を大文字にする形で、chobo の `go_exported` とは違う。
   - rulec の `src/sha256.rs` と `src/json.rs` は、まだ rulec の中にある（`grep -rn 0x428a2f98 crates/*/src` は ritsu-base と rulec に当たる）。
 - D.10 の手がかり：
   - `ritsu-proto` のテストは、rulec と dandori を dev-dependency にして古い読み手と比べている。二つが `ritsu-proto` で読むようになれば依存が輪になるので、そのとき比べるところを消し、`tests/golden/rulec.txt` と `dandori.txt` と比べる形だけを残す。
   - 新しい読み手が rulec の読み手と違うのは、一行に書いた `package` を読むことと、壊れたファイルを途中まで読まずに誤りを言うことの二つ（C.9）。後者を rulec がどう扱うか（いまは読めたところまでで契約を突き合わせる）は D.10 で決める。
-  - dandori が `ritsu-proto` で読むときは、proto2 と edition を断ること、読めなかった import があるときに型の名前を書いたまま残すこと、型の解決を見えるファイルだけにすることを、dandori の側で書く（`tests/readers.rs` の `as_dandori` がその形で、三つのリポジトリの全部の `.proto` で古い読み手と同じ結果になる）。
+  - dandori が `ritsu-proto` で読むときは、proto2 と edition を受け付けないこと、読めなかった import があるときに型の名前を書いたまま残すこと、型の解決を見えるファイルだけにすることを、dandori の側で書く（`tests/readers.rs` の `as_dandori` がその形で、三つのリポジトリの全部の `.proto` で古い読み手と同じ結果になる）。
 - この機械でテストを回すとき（7.3 のものに足す）：sakai のテストは、先に `cargo build --workspace` をして、`SAKAI_RULEC`・`SAKAI_KOYOMI`・`SAKAI_CHOBO`・`SAKAI_DANDORI` にワークスペースの `target/debug` のバイナリを渡す。`ritsu-proto` と `ritsu-emit` のテストは rulec（と dandori）をビルドするので、初めは時間がかかる。
 - yuen の名前の漢字は、まだどの文書にも書いていない（作者に聞いているところ）。各クレートの `repository` と yuen の PROV の名前空間の URL は F で決める。（どちらも F.7 で決めた。`repository` は `repository.workspace = true`、PROV の名前空間は `https://i2y.github.io/ritsu/ns/yuen#`）
 
@@ -984,7 +984,7 @@ DESIGN 11 章。済んだ。
 
 ### 7.7 D の二つ目の部分から、D の残りへ（D の二つ目の部分の終わりに書いた）
 
-- 済んだもの：D.3、D.4、D.6、D.5 の残り（dandori が `Rules::doc` に言語を渡す）と、作者が D で直すと決めた三つ（rulec が `RITSU_LANG` を読む（D.5 に書いた）、rulec が税の語の誤りを E103 で断る（D.1 に書いた）、dandori の名前のぶつかりを E006 で断る（D.3 に書いた））。入口の最小の形として `crates/ritsu` に `ritsu dandori` を作った（DESIGN 8.6）。dandori のクレートは rulec に `[dependencies]` で依存せず、規則は渡された口で読む。
+- 済んだもの：D.3、D.4、D.6、D.5 の残り（dandori が `Rules::doc` に言語を渡す）と、作者が D で直すと決めた三つ（rulec が `RITSU_LANG` を読む（D.5 に書いた）、rulec が税の語の誤りを E103 でエラーにする（D.1 に書いた）、dandori の名前のぶつかりを E006 でエラーにする（D.3 に書いた））。入口の最小の形として `crates/ritsu` に `ritsu dandori` を作った（DESIGN 8.6）。dandori のクレートは rulec に `[dependencies]` で依存せず、規則は渡された口で読む。
 - D.7 の手がかり：
   - dandori の中のものは `dandori::ports::Engine` の `Items` が渡す（種類は `task`・`case`・`record`／`field`・`enum`／`value`・`input`・`output`）。構文まで読むだけなので、規則を読めないフローでも答える。定義の文は dandori の DESIGN 0.3 の形（コメントと空白の幅と字下げの幅に左右されない）で、yuen の端のハッシュはこれから取る。
   - yuen は、dandori の名指しを、ファイルで書いても種類つきで書いても「まだ読めない」と言う（`Unread::NotYet`）。D.7 で、ファイルなら `dandori check` の結果、種類つきなら `Items` の定義の文を端にする。
@@ -996,7 +996,7 @@ DESIGN 11 章。済んだ。
 - E の手がかり：
   - `ritsu` の入口は `ritsu dandori` と `--help`、`--version` だけ。ほかの言語の名前には、まだ無いと言って 2 で終わる。E で残りを作るときは、`crates/ritsu/tests/dandori.rs` の確かめ（`ritsu dandori` が規則を同じプロセスで読んで検査し、規則のページを入れて図にすること、無いものは無いと言うこと）を全部の言語に広げる。
   - 生成するコードの予約語の表を一つにするとき（7.5）は、dandori の生成器の `AROUND_RULES`（四つのファイルで、規則の名前と並べて読み込む dandori の名前）も入れるか、dandori の側の名前を替える。替えると、どの出力先の生成物も変わる。
-  - rulec の W121（別名が出力先の言語の予約語や標準ライブラリとぶつかる）を、dandori は断らない。`ritsu check` で規則の警告をフローの側にも見せるかを決める。
+  - rulec の W121（別名が出力先の言語の予約語や標準ライブラリとぶつかる）を、dandori はエラーにしない。`ritsu check` で規則の警告をフローの側にも見せるかを決める。
   - ブラウザで試すページは、記録から答える口（dandori の `src/record.rs` と `sources::Recorded`）で規則を読む。F.5 で rulec と一つの wasm にすれば要らなくなる。
 - 見つけたこと（直していない）：rulec が order_state.rule のために生成する TypeScript は、`tsc --strict`（TypeScript 7）を通らない（`Event` を、絞り込んだ値の型に渡しているところが三つ）。dandori のフローで order_state を関数として呼ぶものが無かったので、表に出ていなかった。rulec の生成器の問題である。（D の最後の部分で直した。rulec の §15.171、PLAN の D.11）
 - 片づけ：`env-full.sh` が `DANDORI_RULEC` を書いているが、dandori はもう読まない（害は無い）。テストのあとの OS の一時ディレクトリは、この部分の報告に前と後の数を書いた。
@@ -1008,7 +1008,7 @@ DESIGN 11 章。済んだ。
 - E の手がかり：
   - 入口：`ritsu` が持つのは `ritsu dandori`、`ritsu yuen`、`ritsu sakai` と `--help`、`--version` だけで、ほかの四つの言語の名前には、まだ無いと言って 2 で終わる。三つの口のつなぎ方は `crates/ritsu/src/main.rs` の `yuen_suite` と `sakai_suite`（dandori は `rulec::ports::Engine` を一つ渡す）にある。E.1 の `ritsu-project` が出す側の実装を作って渡すようになれば、ここは消える。そのとき、同じ規則を yuen と sakai と dandori が別々に読むこと（三つがそれぞれ `rulec::ports::Engine::new()` を持ち、覚えた事実を分け合わない）も無くなる。
   - 名指し（7.10 の X10）：`Items` と `References` は七つの言語の全部が答えるようになった（sakai は `References` を受け取る側でもある）。yuen は名指しを `src/ends.rs` で、sakai は `src/elements.rs` と `src/suite.rs` で、それぞれ自分で引いている。索引に引き方を替えるのは、この二か所である。
-  - 断り方：yuen のクレートのバイナリは、ほかの言語のものを名指すプロジェクトに exit 2 で断り（`ritsu yuen` に同じコマンドを続けた形を言う）、sakai のクレートのバイナリは、規則、カレンダー、ワークフローを含む地図に E104 を出す（exit 1）。どちらも言語のクレートのバイナリのためのもので、リリースのリンクの名前（DESIGN 2.3）がすべての口をつないで動くようになれば出なくなる。台帳の E104 は残す。
+  - ほかの言語を読めないときの扱い：yuen のクレートのバイナリは、ほかの言語のものを名指すプロジェクトでは exit 2 で止まり（`ritsu yuen` に同じコマンドを続けた形を言う）、sakai のクレートのバイナリは、規則、カレンダー、ワークフローを含む地図に E104 を出す（exit 1）。どちらも言語のクレートのバイナリのためのもので、リリースのリンクの名前（DESIGN 2.3）がすべての口をつないで動くようになれば出なくなる。台帳の E104 は残す。
   - 確かめていないこと：sakai の api の `not_checked` は、いつも空の並びのまま残した（sakai の DESIGN 9 章）。`ritsu check` が「確かめていないこと」を一つの形で言うなら、それに合わせて決め直す。
   - X4：chobo の単位は ritsu の単位の型になり、口の `BookUnit` が持つ（D.9）。受け取るところ（dandori の `use book`、規則の出力から振替の額へ）で単位と税の区別を確かめる検査は E の X4 である。
   - sakai の doc（sakai の PLAN の D.1）は、chobo の勘定と振替を `Books` で読むところ（`suite::book_names`）まで作った。
@@ -1019,12 +1019,12 @@ DESIGN 11 章。済んだ。
 
 ### 7.9 E の最初の部分から、E の残りへ（E の最初の部分の終わりに書いた）
 
-- 済んだもの：E.1（`ritsu-project`、索引、名指しを索引で引くこと）、E.2（`ritsu check` と、七つの言語の `ritsu <言語>`）、E.3（ritsu の台帳と `ritsu explain`）、E.8（ritsu 自身の地図）。ほかに、受け取る側のクレートのバイナリの断り方を一つにし（dandori の E018、yuen の E206、sakai の E104。どれもコードのある診断で、`ritsu <言語> …` で走らせるように言い、exit 2。DESIGN 2.3）、sakai の api の `not_checked` を消した（sakai の DESIGN 9 章）。7.8 の手がかりのうち、入口、名指し、断り方、確かめていないことの四つは済んだ。
+- 済んだもの：E.1（`ritsu-project`、索引、名指しを索引で引くこと）、E.2（`ritsu check` と、七つの言語の `ritsu <言語>`）、E.3（ritsu の台帳と `ritsu explain`）、E.8（ritsu 自身の地図）。ほかに、受け取る側のクレートのバイナリがほかの言語を読めないときの扱いを一つにし（dandori の E018、yuen の E206、sakai の E104。どれもコードのある診断で、`ritsu <言語> …` で走らせるように言い、exit 2。DESIGN 2.3）、sakai の api の `not_checked` を消した（sakai の DESIGN 9 章）。7.8 の手がかりのうち、入口、名指し、ほかの言語を読めないときの扱い、確かめていないことの四つは済んだ。
 - E の残りの手がかり：
   - 言語をまたぐ検査（E.4）の置き場所：`ritsu_cross::check` が、ritsu 自身の診断（`Finding`。`tool` は `ritsu`）と、境目の検査の数（`Borders`。確かめた数と決められない数）を返し、`ritsu check` が言語の診断のあとに出す。要約の行の「borders between the languages」と、JSON の `borders` がその結果である（DESIGN 8.3）。台帳は `crates/ritsu-cross/src/codes.rs` で、E2xx の帯を境目の検査に空けてある（DESIGN 7.1）。再現は英語の名前の小さなプロジェクトにし、`crates/ritsu/tests/codes.rs` が全部を英語と日本語で走らせる。ページ（`crates/ritsu-cross/docs/codes.md` と `codes.ja.md`）は、テストが台帳と突き合わせる。
   - 読み込み：`ritsu_project::Project::load` がプロジェクトを一度歩いて種類を分け、`Joined` が出す側の実装を一度作って受け取る側に渡す（rulec の `Engine` は、読んだ規則の検査の結果を覚えていて、同じ規則を二度読まない）。ファイルをまたぐ参照は `Project::references`、名指しは `ritsu_ports::Index`（各言語の `Items` と `References` を、ファイルごとに一度だけ尋ねる）で引く。E.4〜E.7 はこれを使う。
   - 言語の検査の結果：`ritsu check` は、各言語の `checked`（rulec、koyomi、chobo、geas、dandori の `ports::Engine::checked`、yuen と sakai の `run::checked`）を呼ぶ。言語の `check` の出力を変えると、`crates/ritsu/tests/check.rs` の突き合わせ（ファイルごとに、言語の `check` の出力と比べる）が落ちる。
-  - テストのプロジェクト：`crates/ritsu/tests/projects/通販/` は sakai の例を写したもので、日本語の名前のままである。（E の終わりに、英語を先にする担当が英語の `shop/` を足した。`ritsu check` の golden は `通販.*` と `shop.*` を持つ。7.10）
+  - テストのプロジェクト：`crates/ritsu/tests/projects/通販/` は sakai の例をコピーしたもので、日本語の名前のままである。（E の終わりに、英語を先にする担当が英語の `shop/` を足した。`ritsu check` の golden は `通販.*` と `shop.*` を持つ。7.10）
   - ritsu の地図：クレートを足すとき（F の `ritsu-wasm` など）は、`contexts/` のどれかの `owns` に足し、関係を書く（足さなければ `ritsu check ritsu.ctx` が E101 で落ちる）。言語のクレートの下に、わざと通らないファイルを置く新しいディレクトリを作るなら、`ritsu.ctx` の `except` に足す。
 - 見つけたこと（直していない）：
   - rulec のテスト関数の名前のうち七つが、Rust の `non_snake_case` の警告を出す（7.8 から変わらない）。
@@ -1046,18 +1046,18 @@ DESIGN 11 章。済んだ。
   - `ritsu gen` の試しのプロジェクト `stockroom` のフローを、dandori の検査の直し（F.6 の E020）に合わせた（E.7）。
 - F の残り：
   - F.1、F.2（yuen と sakai の段階 D）は済んだ。F.3 は、根の README とその確かめ、`skills/ritsu`、各言語の README の入れ方、dandori の `--help` が済み、DESIGN の 1.2 と 10.1 の数も測り直した（F.3）。F.7 のバージョンは 0.23.0 にそろえた（F.7）。
-  - F.7 のバージョンを 0.23.0 にそろえることは済んだ（F.7。指示する側がした）。手順は DESIGN 13.1 で、リリースの準備の担当が書いたスクリプト（ルートの `[workspace.package]` に `version` を書き、十五のクレートを `version.workspace = true` にする。指示する側が持っていて、中身はここに写さない）を使った。
+  - F.7 のバージョンを 0.23.0 にそろえることは済んだ（F.7。指示する側がした）。手順は DESIGN 13.1 で、リリースの準備の担当が書いたスクリプト（ルートの `[workspace.package]` に `version` を書き、十五のクレートを `version.workspace = true` にする。指示する側が持っていて、中身はここには載せない）を使った。
   - F.7 のサイトの切り替え（サイトの移動は済んだ。`docs.yml` に push のきっかけを足すこと、元のリポジトリのサイトを止めること、README・スキル・ページの `i2y.github.io/rulec`・`i2y.github.io/dandori` へのリンクと rulec の `Cargo.toml` の `homepage` を ritsu のサイトに直すこと）、formula の切り替え、タグ、公開。クレートの中の古いリリースのファイル（`crates/rulec/.github/workflows/release.yml`、`ci.yml` の `packages` のジョブ、`crates/rulec/packaging/`、`crates/rulec/action.yml`）は、リリースを移すときに消す（`ci.yml` は `./website/sync.sh` をまだ呼んでいるが、ritsu では走らない）。rulec の `[package.metadata.binstall]` の `pkg-url` は ritsu のアーカイブと合わない（crates.io に出さないので困らない）。Intel の macOS のビルド、CI での実行（リモートが無い）、`brew audit --online` は、手元では確かめていない。
 - 残したこと：
   - E.9 の 1（済んだ。DESIGN 10.1）：全部を取り込んだ木で、根から全体を一度回し、dandori の platforms の段を一度通す。dandori の検査の担当が例のホテルの予約・請求・注文の Temporal 版と `tests/flows/dates_and_books.flow` を直して生成物が変わり、`ritsu gen` の担当が生成物の頭を変えたので、dandori の重い十二（少なくとも Ollama のほかの十一）を回す必要がある。記録した履歴のうち、ホテルの予約（run-52）と注文（run-45 の三つ）は、直したところ（`on failure` と `on cancel`）を通らない実行なので、再生は変わらない見込みである。`ritsu gen` の担当は、生成物の変わった五つを回して通した。決められない前提の担当は、自分の木で重い十二を一件ずつ回して通した。
   - X3 の (a)、X4、X6 が決められないと言うものを、X2 と同じく口で dandori に渡して生成コードで確かめること（`TK::Check` の `PreTest` に種類を足し、`prechecks::insert` で置き、七つの生成器と参照インタプリタとシナリオに一つずつ足す）。確かめる文をブロックをまたいで前へ寄せること（`match` のどの分岐も規則を呼ぶとき）。Lean の `DandoriCore` は確かめる文を知らない（入れるなら、置き場所の決め方が規則を呼ぶ実行を変えないことが定理になる）。
   - dandori の日付の範囲（書き方と、七つのプラットフォームの確かめ）。それまで、ワークフローの入力と `now` から来る日は W205 になる。X5 の長さで、プラットフォームがタスクに付ける既定のタイムアウト（コールバックの一日など）は数えていない。
   - `ritsu run` を、一つの生成パッケージとの突き合わせの基準にすること。`ritsu run --target temporal --format json` の `trace` が計算した結果で流したときの呼び出しの並びで、パッケージを流すランナーを作るなら、帳簿の操作を本物の帳簿（chobo のクライアント）に送り、規則と日付をパッケージの中のコードで計算させ、`trace` と比べればよい。
-  - dandori の Temporal の Python は、ネストした関数やラムダの中で読む `let` の変数（`T | None` で宣言する）、サービスを実装するフローのクライアントの型、子のワークフローを名前で呼ぶところで、まだ `mypy --strict` に断られる（通販の受注のフローで 6 か所。dandori の DESIGN 7 章）。通販の Go は、二つのフローの名前が日本語で、どちらも Go のパッケージ `workflow` になり、パッケージにできない（テストが断ることを確かめる）。
+  - dandori の Temporal の Python は、ネストした関数やラムダの中で読む `let` の変数（`T | None` で宣言する）、サービスを実装するフローのクライアントの型、子のワークフローを名前で呼ぶところで、まだ `mypy --strict` でエラーになる（通販の受注のフローで 6 か所。dandori の DESIGN 7 章）。通販の Go は、二つのフローの名前が日本語で、どちらも Go のパッケージ `workflow` になり、パッケージにできない（`ritsu gen` がエラーで止まることを、テストが確かめる）。
   - `ritsu gen` の `package.rs` の `checked` の dandori の部分は、自分で日付と帳簿の口をつないで確かめている。`Project::check` が三つの口を渡すようになったので、それに替えられる。
-  - dandori のクレートの `--help` の終わりの文（「規則を使うワークフローは `ritsu dandori` で走らせます」）と、それを写したサイトの `reference/commands.md`、スキルの `commands.md` と `SKILL.md` は、日付と帳簿のことを言っていない（直すなら `skills/sync.sh` で写しを作り直し、`crates/ritsu/tests/dandori.rs` の `the_words_after_dandori_are_dandori_s` の文も合わせる）。`ritsu-project/src/joined.rs` の `rules()` の注は、規則の口のことしか言っていない。
+  - dandori のクレートの `--help` の終わりの文（「規則を使うワークフローは `ritsu dandori` で走らせます」）と、それをコピーしたサイトの `reference/commands.md`、スキルの `commands.md` と `SKILL.md` は、日付と帳簿のことを言っていない（直すなら `skills/sync.sh` でコピーを作り直し、`crates/ritsu/tests/dandori.rs` の `the_words_after_dandori_are_dandori_s` の文も合わせる）。`ritsu-project/src/joined.rs` の `rules()` の注は、規則の口のことしか言っていない。
   - ritsu-cross の W201 の注の日本語で、名前の後ろに空白が入らない（「`求める額`に範囲がありません」。dandori の W104 は `spaced` で入れている）。
-  - Lean の次に足すもの：X6 を koyomi のモデルにつなぐ定理（`inputRange` の範囲で `daysGiven` が成り立てば `KoyomiModel.DatesFile.expect` が「range」のエラーを返さない）、X5 の秒数を dandori のモデルから数えること、rulec の並びの上限の答え、証明書の日の集合を証明にすること（`rulec-recheck` が `.cal` を読むことになる）。`RitsuCross/Borders.lean` と `Relation.lean` は `borders.rs` と `preconditions.rs` の写しなので、判定を変えたら `crates/ritsu-model/tests/cross.rs` を回し、違えば Lean の側を Rust に合わせる。E201 の注の文を変えたら、`cross.rs` の `example_of` の読み方（`, and at `、`(for one, `、` and can be `）を直す。
+  - Lean の次に足すもの：X6 を koyomi のモデルにつなぐ定理（`inputRange` の範囲で `daysGiven` が成り立てば `KoyomiModel.DatesFile.expect` が「range」のエラーを返さない）、X5 の秒数を dandori のモデルから数えること、rulec の並びの上限の答え、証明書の日の集合を証明にすること（`rulec-recheck` が `.cal` を読むことになる）。`RitsuCross/Borders.lean` と `Relation.lean` は `borders.rs` と `preconditions.rs` を Lean で書き直したものなので、判定を変えたら `crates/ritsu-model/tests/cross.rs` を回し、違えば Lean の側を Rust に合わせる。E201 の注の文を変えたら、`cross.rs` の `example_of` の読み方（`, and at `、`(for one, `、` and can be `）を直す。
   - 英語を先にすることの残り：koyomi の台帳の E111 と W102 の再現は、e-Gov の法令の引用を書くので日本語のまま（足すなら、koyomi が eCFR の節を固定できるようにしてから）。共有の名指しの表 `naming.tsv`（42 行）の 17 行に日本語の名前がある（英語の対を足すなら、ritsu-base、yuen の `names.rs`、sakai の三つのテストの数（`ok == 24 && errors == 18` など）を一緒に直す）。yuen の DESIGN 15 章の `examples/` の 7 つの例は、F.1 で作るときに英語を先にした名前（`<英語の名前>` と `<英語の名前>.ja`）で作る。sakai の `--help` の例のうち日本語の地図 `tests/maps/基本/基本.ctx` を指すものと、yuen の `--help` の例の `tests/fixtures/period` は、日本語の材料を指したまま（直すと `--help` の出力が変わる）。rulec の文書のうち、日本語の規則に走らせた実物のままのもの：`website/rulec/docs/generate.md` の `rulec schema --keys alias` の例（名前と別名が違う規則でしか見せられない）と、`std/都道府県` の値を入力や例に使う所（双子 `member_shipping_fee`、`yupack_base_fee`、`shipping_fee_proviso`）、e-Gov の条文を例にした所（ほかの英語のページの日本語の例は、作者の指示で英語の実物に替えた。DESIGN 10.10）。`std/都道府県` に英語のつづりで書ける別名を足せば、前者は英語の例にできる（言語の変更。作者に聞くことの 4）。rulec の `explain` の台帳の再現例を二つ持たせることと、E043 と E103 の英語の文は、済んだ（DESIGN 10.10、rulec の §15.179）。rulec の英語の出力から、診断の文の日本語の例（30 か所のうち 16 か所。残りは理由のあるもの）、`fmt_big` の `万`・`億`・`兆`（英語は `_` で区切った桁）、`doc` の範囲の `〜`、`--help` の例と引数の名前、E119 の例を外した（DESIGN 10.10、rulec の §15.180）。英語の `doc` の約物（全角のかっこと `「」`）も、取り込むときに直した。残るのは、`tests/golden_en.rs` の `KEPT`（`届け先`）と、JSON の `fix.text` の金額（`witness` と同じデータで、言語で変わらないと `tests/json_v2.rs` が決めているので、英語の出力でも `万` で書く。`range >=-100万円 <=1000万円`）と、`rulec import` が `JPY` の列にも `money[円, incl_tax]` と書くこと（作者が、表の綴りのまま通貨を書くと決め、取り込むときに直した。表に `JPY` と書けば `money[JPY, incl_tax]`）。koyomi の例の名前替えで古くなった sakai の例の一行目のコメントは、英語を先にする担当が直した。
   - 例の名前が変わるとき：`packaging/smoke.sh` と `crates/ritsu/tests/links.rs` が名指す例（`koyomi/examples/net30.cal`、`chobo/examples/inventory/inventory.book`、`yuen/tests/fixtures/rulec`、`rulec/tests/corpus/ec261.rule`、`dandori/examples/hotel/temporal/hotel.flow`）を動かすと、この二つが落ちる。rulec のコーパスに双子を足すときは、`twins.tsv` に一行足し、`tests/threeway.rs` の `CORPUS`、`tests/coverage.rs` の `CORPUS` と `PINNED`、`tests/doc.rs` の `CORPUS` に足す（`doc.rs` の一覧には守りが無い）。
   - `ritsu check` の出力を変えたら、`website/tools/make_wasm.sh` で ritsu.wasm を作り直す（`the_module_answers_as_the_library_does` が落ちる）。ページのプロジェクトについて新しい検査が何かを言うなら、`the_page_starts_in_chrome` が確かめる状態の行の数（英語は `3 errors, 0 warnings`、日本語は `エラー 3 件、警告 0 件`）と、ページの「試してみること」の文を直す。rulec の `make_wasm.sh`（いまは `website/rulec/tools/make_wasm.sh`）は、F.7 でワークスペースの `target/` と `CARGO_TARGET_DIR` で動くように直した。
@@ -1066,21 +1066,21 @@ DESIGN 11 章。済んだ。
   - ritsu の `--help` の `--lang` の説明が、`RITSU_LANG` を二度言う（「else the RITSU_LANG environment variable, then RITSU_LANG」）。ritsu-base の `lang_flag(var)` が、`crates/ritsu/src/cli.rs` で `"RITSU_LANG"` を渡されるため（F.3 の担当が見つけた。取り込みのときに、`RITSU_LANG` を渡されたときは一度だけ言うように直した）。
   - 各クレートの `Cargo.toml` の `repository`：済んだ。作者の指示で、言語の七つのクレートを `repository.workspace = true`（`https://github.com/i2y/ritsu`）にした。rulec の `homepage` は、公開している `https://i2y.github.io/rulec/` を指すので、サイトを切り替えるまで残した（DESIGN 13.2）。
   - yuen の担当の提案：`ritsu.ctx` の `except` に `"crates/yuen/examples"` を足すか。いまのままでも `ritsu check ritsu.ctx` は通る（`code rust "."` だけを数えるので、例の `.req` などは数えない）が、ほかの言語の `examples` と並びをそろえるなら足す。
-  - F.3 の担当が残したこと：根の README の「リポジトリ」の節の、七つの言語の README へのリンク（yuen と sakai の README が入ったので足せる。足せば `readme.rs` が先の有無を見る）。根の README とスキルの `ritsu gen` のコマンド名の確かめ（`ritsu gen` が入ったので、`ritsu --help` の一覧と突き合わせられる）。yuen と sakai の README の入れ方とスキルの `compatibility` を、`readme.rs` の「入れ方」の確かめの対象に足すこと。rulec と dandori のサイトとスキルの写しのリポジトリへのリンクは、F.7 で ritsu のリポジトリの `crates/<言語>/…` に直した（`tests/website.rs` が先の有無と、一つの言語のリポジトリを名指さないことを確かめる。rulec のリリースの URL だけは、ritsu の最初のリリースが引き継ぐまで残す）。`Cargo.toml` の `repository` も F.7 でそろえた。サイトへのリンク（`i2y.github.io/rulec`、`i2y.github.io/dandori`）は、切り替えるまで公開しているほうを指す。
+  - F.3 の担当が残したこと：根の README の「リポジトリ」の節の、七つの言語の README へのリンク（yuen と sakai の README が入ったので足せる。足せば `readme.rs` が先の有無を見る）。根の README とスキルの `ritsu gen` のコマンド名の確かめ（`ritsu gen` が入ったので、`ritsu --help` の一覧と突き合わせられる）。yuen と sakai の README の入れ方とスキルの `compatibility` を、`readme.rs` の「入れ方」の確かめの対象に足すこと。rulec と dandori のサイトとスキルのコピーのリポジトリへのリンクは、F.7 で ritsu のリポジトリの `crates/<言語>/…` に直した（`tests/website.rs` が先の有無と、一つの言語のリポジトリを名指さないことを確かめる。rulec のリリースの URL だけは、ritsu の最初のリリースが引き継ぐまで残す）。`Cargo.toml` の `repository` も F.7 でそろえた。サイトへのリンク（`i2y.github.io/rulec`、`i2y.github.io/dandori`）は、切り替えるまで公開しているほうを指す。
   - sakai の Mermaid のテストのための `crates/sakai/tools/mermaid/node_modules` は git に入れないので、本のリポジトリで `npm ci --prefix crates/sakai/tools/mermaid` を一度走らせる（F.2）。
 - 作者に聞くこと（★）：
   1. リリースの前のこと（リリースの準備の担当）：リポジトリ `i2y/ritsu` を作って public にし、GitHub Actions を有効にすること（`Cargo.toml` の `repository` と formula の URL が指す）。シークレット `HOMEBREW_TAP_KEY`（`i2y/homebrew-tap` に書き込める deploy key）を `i2y/ritsu` に置くこと。最初のタグの前に `packages.yml` を手で走らせること。`i2y/tap/rulec` を ritsu に移す時期（最初のリリースと同じときか、そのあとか。DESIGN 13.2）。
   2. X4 の額の下の端：作者が、chobo に合わせて額 0 を通すと決めた（0〜2⁶³ − 1。2026-10-04 19:30）。X4 の担当が、判定、額を範囲に限った chobo の探索、台帳の E203（文と再現。再現は 0 から −20 に）、Lean の `RitsuCross`（`amountFits_fails_chobo` を足し、判定が chobo と過不足なく同じになった）、突き合わせ、ブラウザで試すページの wasm を直した。取り込むときに、その担当が見つけた chobo の `passing_call` の五つ目からの額の引数も、探索を限った範囲の下の端を使うように直した（DESIGN 7.6）。★額 0 を ritsu が何も言わずに通すことでよいか（0 の振替を業務として避けたいかは、帳簿の書き手が決めることとした）。
   3. dandori の例の直し方の文言（ホテルの予約の `CleanupFailed`、注文の `ShippedAlready`、請求の `already_posted`。dandori の検査の担当が決めた）でよいか。DandoriCore の前提二つ（案件を始める呼び出しの失敗、拒否のエラー）は、指示する側が決めて入れた（DESIGN 11.2 の 4）。
   4. rulec のコーパスを英語を先にした担当の四つ：双子の名前（元の別名に言葉を足した形。`_en` を付ける形もある）でよいか。`std/都道府県` に、規則の中で英語のつづりで書ける別名を足すか（足さなければ、三本の双子に都道府県の値が日本語で残る）。日本語の規則のまま残した文書と画面写真（上の「英語を先にすることの残り」）でよいか（続けるなら、`formats.md` と `generated-code.md` は日本語の名前の例を残したうえで英語の名前の例を先に足す形がよい）。E043 と E103 の英語の文を直すか（コマンドの出力が変わる）。（`std/都道府県` の英語の別名は、rulec の英語の文書を直した担当も同じことを聞く。足せば、英語のページから都道府県の値の大部分（examples.md の 47 の名前など）を消せる。）（決まった：作者が各国の一段目の区分を入れると決め、入れた。`std/jp/prefectures` は都道府県を英語の綴りで持ち、どちらの取り込みでも `東京都` と `Tokyo` の両方を書ける。三本の双子は `std/jp/prefectures` と英語の綴りにした。rulec の DESIGN §15.182、根の DESIGN 5.6。）
-  5. 担当が★を付けた決めごと（それぞれ DESIGN の節に★で書いた）：X1 を言語の検査のまま残す（7.3）。`range from koyomi` の書き方と、koyomi がつながっていない rulec を E129・exit 2 で止める（7.5）。X5 が成り立つとき何も言わない、X6 をカレンダーのデータの範囲と比べない、dandori に日付の範囲の書き方を足さない、X4 の断る理由は境界の理由だけを比べる（7.6〜7.8）。決められない前提を確かめる場所と `Dandori.BrokenPrecondition`（7.4）。`ritsu run` の `--target`、走らせる前の帳簿の書き方、時間の数え方（7.9、8.1）。`ritsu gen` の `go.mod` を書かないこと、既定の名前 `generated`、`--books` の既定、`--lang` のコメント、頭のバージョンと 16 桁のハッシュ、`mypy --strict` のための単独の出力の変更（9.2〜9.4）。ブラウザで試すページを wasm32-unknown-unknown と土台の入口で作ったこと（4.15）。Lean の検査が `for … in parallel` を受け付けないこと（11.2）。
-  6. yuen の段階 D の担当の三つ：わざと止まる例の E303 が一つ（A の段階の見込みは三つ）でよいか。写したファイルを koyomi のいまの名前（`civil_code_period_end.ja.cal`）にしたこと。greeter・payment_terms・refunds の出どころを `decided`（この例のために決めたもの）にしたこと（F.1）。
+  5. 担当が★を付けた決めごと（それぞれ DESIGN の節に★で書いた）：X1 を言語の検査のまま残す（7.3）。`range from koyomi` の書き方と、koyomi がつながっていない rulec を E129・exit 2 で止める（7.5）。X5 が成り立つとき何も言わない、X6 をカレンダーのデータの範囲と比べない、dandori に日付の範囲の書き方を足さない、X4 の拒否の理由は境界の理由だけを比べる（7.6〜7.8）。決められない前提を確かめる場所と `Dandori.BrokenPrecondition`（7.4）。`ritsu run` の `--target`、走らせる前の帳簿の書き方、時間の数え方（7.9、8.1）。`ritsu gen` の `go.mod` を書かないこと、既定の名前 `generated`、`--books` の既定、`--lang` のコメント、頭のバージョンと 16 桁のハッシュ、`mypy --strict` のための単独の出力の変更（9.2〜9.4）。ブラウザで試すページを wasm32-unknown-unknown と土台の入口で作ったこと（4.15）。Lean の検査が `for … in parallel` を受け付けないこと（11.2）。
+  6. yuen の段階 D の担当の三つ：わざと止まる例の E303 が一つ（A の段階の見込みは三つ）でよいか。コピーしたファイルを koyomi のいまの名前（`civil_code_period_end.ja.cal`）にしたこと。greeter・payment_terms・refunds の出どころを `decided`（この例のために決めたもの）にしたこと（F.1）。
   7. sakai の段階 D の担当の四つ：doc のために `Suite` に `Dates` を足し、共有の ritsu-project を一行直したこと（DESIGN 4.8）。`Cargo.toml` の `repository` を ritsu にしたこと。CI の `tools.yml` を直したこと（外すなら `ci/skips/tools.txt` に `sakai every_mermaid_chart_draws` を足す）。日本語の例の README を `examples/shop.ja/README.ja.md` にしたこと（GitHub はディレクトリを開いたとき `README.ja.md` を自動では見せない。`README.md` にする案もある）。
-  8. F.3 の担当の五つ：rulec の配り方（Homebrew、`.deb` と `.rpm`、アーカイブ、`uses: i2y/rulec@v0.22.1`）を残して入れ方の節で断ったこと（DESIGN 13.2）。指示の外で直した四つ（四つのスキルの `compatibility`、rulec のスキルの `license`、根の README の「AI エージェント向け」の節、dandori の `--help` の exit code の文二つと README の一文）。README の `console` の塊を走らせる場所の三通り、スキルが言語のスキルを Markdown のリンクでなくパスで案内すること、コードの塊を一つのファイルの行と順に突き合わせること（DESIGN 10.12）。ritsu の `--help` の `--lang` の文の誤りを、どの担当で直すか。
+  8. F.3 の担当の五つ：rulec の配り方（Homebrew、`.deb` と `.rpm`、アーカイブ、`uses: i2y/rulec@v0.22.1`）を残して入れ方の節に書き添えたこと（DESIGN 13.2）。指示の外で直した四つ（四つのスキルの `compatibility`、rulec のスキルの `license`、根の README の「AI エージェント向け」の節、dandori の `--help` の exit code の文二つと README の一文）。README の `console` の塊を走らせる場所の三通り、スキルが言語のスキルを Markdown のリンクでなくパスで案内すること、コードの塊を一つのファイルの行と順に突き合わせること（DESIGN 10.12）。ritsu の `--help` の `--lang` の文の誤りを、どの担当で直すか。
   9. rulec の台帳の再現を英語でも持たせた担当の★：E103 の英語の文の例を、`1JPY` の固定ではなく列の単位から作る形にしたこと（取り込むときもこの形のまま）。E011 と e-Gov の四つ（E037・E038・E039・W119）の再現を日本語のまま残したこと（条の名前を英語の別名で書けるようにするのは言語の変更）。英語の説明 28 項は、取り込むときに入れた。
   10. サイトの担当の★：dandori の前のブラウザで試すページを、ritsu のサイトに残すか、ritsu のページに替えるか（DESIGN 15 章。いまは残してある）。根のサイトにロゴと favicon を付けるか。切り替えるまで、README・スキル・ページから公開しているサイト（`i2y.github.io/rulec`・`i2y.github.io/dandori`）を指したままにしたこと。（決まった：前のページは、ritsu のページに例を全部持たせたうえで、切り替えのときに ritsu のページへ転送する。ロゴは案を作る（案はあるが、まだ入れていない）。サイトの切り替えは、ritsu を public にしたらすぐにする。）
   11. rulec の英語の文書を直した担当の★：英語の画面写真、`compare.md` と `scenarios.md` の突き合わせの実演、`flow.svg` の三つは、rulec のサイトの担当が `parcel_rate` と英語に替えた（済んだ）。W114 の防壁の材料を `tests/pages/` に置いたこと（`tests/mutants/` に足すと、確かめ方のページと図の本数が変わる）。
-  12. rulec のサイトを移した担当の★：ritsu の `tests/website.rs` に `github.com/i2y/<言語>/releases` の例外を足したこと（入れ方のページに rulec のリリースの URL を残すことと、言語のリポジトリを名指さない確かめがぶつかるため。ritsu の最初のリリースのあとで外す）。入れ方のページの冒頭に「ritsu の最初のリリースが引き継ぐ」の段落を置いたこと。`crates/rulec/.github/workflows/docs.yml` を消したこと（`ci.yml` と `release.yml` は残した）。`compare.md` を、北海道の行だけでなく続けて使っている例の全部（沖縄県・江戸・滋賀県を含む）を `parcel_rate` にしたこと。`scenarios.md` の 2-1・2-2 の話の規則名 `rules/shipping_fee.rule` をそのままにし、2-3 から先を実物の `parcel_rate.rule` にして、そう断る一文を足したこと。英語の写真のドックを運賃表の `base_rate` にしたこと。
+  12. rulec のサイトを移した担当の★：ritsu の `tests/website.rs` に `github.com/i2y/<言語>/releases` の例外を足したこと（入れ方のページに rulec のリリースの URL を残すことと、言語のリポジトリを名指さない確かめがぶつかるため。ritsu の最初のリリースのあとで外す）。入れ方のページの冒頭に「ritsu の最初のリリースが引き継ぐ」の段落を置いたこと。`crates/rulec/.github/workflows/docs.yml` を消したこと（`ci.yml` と `release.yml` は残した）。`compare.md` を、北海道の行だけでなく続けて使っている例の全部（沖縄県・江戸・滋賀県を含む）を `parcel_rate` にしたこと。`scenarios.md` の 2-1・2-2 の話の規則名 `rules/shipping_fee.rule` をそのままにし、2-3 から先を実物の `parcel_rate.rule` にして、そのことを書いた一文を足したこと。英語の写真のドックを運賃表の `base_rate` にしたこと。
   13. rulec の英語の出力を直した担当の★：英語の桁は `_` で、5 桁以上のすべての整数を区切ること（`,` にも、1 万の倍数だけにも、それぞれ一行で替えられる）。JSON の `fix.text` は英語でも `万` のままにしたこと。`doc` の範囲の `〜` を英語では `to` にしたこと。英語の `--help` の `doc` の例から `--lang ja` を外したこと。`rulec import` が `JPY` の列にも `円` と書くこと（直していない）。顧客向けのページの金額の書き方（英語では `10_000_000JPY` になる。`,` や単位の位置は別に決めるのがよい）。英語の `doc` の約物は、取り込むときに直した。（決まった：英語の大きい金額は `_` で区切ってよい。`rulec import` は表の綴りのまま通貨を書く（取り込むときに直した）。）
   14. 各国の区分の担当の★：列挙の名前を `<国>_<種類の単数>`（`us_state`、`jp_prefecture`）にしたこと。値の書き方（CLDR の英語の名前からダイアクリティカルマークと略語の点を落とし、空白・ハイフン・アポストロフィを `_` に。大文字小文字は英語のまま）。`std/jp/prefectures` の値を英語、`std/都道府県` を日本語にしたこと（DESIGN 5.6）。
   15. yuen の名前空間の担当の★：名前空間のページを nav に出さないこと（出すなら二つの設定に一行ずつ）。ページに「語の意味は変えない」といった互換の約束を書くかどうか。yuen の公開 API に `Kind`・`Term`・`TERMS` が増えたこと（DESIGN 13.2）。
@@ -1092,12 +1092,12 @@ DESIGN 11 章。済んだ。
   21. `ritsu check` の道の出し方：プロジェクトの根より下のディレクトリで走らせると（例：リポジトリの中の `website/playground/shop` で `ritsu check .`）、yuen はプロジェクトの根からの道（`website/playground/shop/billing/rules/…`）を、ほかの言語はいまの場所からの道（`billing/rules/…`）を出し、一つの出力の中で食い違う。ブラウザで試すページでは根がプロジェクトそのものなので出ない。勧めは、どの言語もいまの場所からの道にそろえること（ritsu-base の `Shown` の使い方を yuen の `shown_any` にも当てる）。
 - 作者の指示（2026-10-04 19:30）で入れたこと：X4 は chobo に合わせて額 0 を通す（DESIGN 7.6、11.2）、rulec と dandori のサイトを ritsu のサイトへ移す準備（切り替えはしない。F.7、DESIGN 13.2）、英語のページで rulec の文書が日本語を使っているところを英語に（DESIGN 10.10。rulec の §15.178 と §15.179）、各クレートの `repository` をそろえる（DESIGN 13.2）。rulec の DESIGN に足した節は、§15.178（英語の文書）、§15.179（台帳の英語の再現）、§15.180（英語の出力から日本語の例と万・億・兆を外す）、§15.181（サイトを `website/rulec/` に移し、英語のページの残り三つ）である。
 - rulec のサイトの移動は済んだ（F.7。サイトの担当が申し送った手順のとおりに入れた）。
-- サイトを切り替えるとき（作者が決めたら）：`docs.yml` に `push: branches: [main]`（パスは `website/**`、`crates/rulec/AGENTS.md`、`crates/rulec/docs/**`、`.github/workflows/docs.yml`）を足し、`crates/ritsu/tests/website.rs` の `the_workflow_that_publishes_the_site_runs_only_by_hand` をそれに合わせて直す。リポジトリの Settings の Pages を「GitHub Actions」にする。README・スキル・ページの `https://i2y.github.io/rulec/…` と `https://i2y.github.io/dandori/…` へのリンクを ritsu のサイト（`https://i2y.github.io/ritsu/rulec/…`、`https://i2y.github.io/ritsu/dandori/…`）に直す。rulec では、README の入れ方の `[how]` のリンク、`tools/make_examples.py` の日本語の例のページへのリンク（直したら `python3 website/rulec/tools/make_examples.py` と `sh crates/rulec/skills/sync.sh` を走らせる）、`Cargo.toml` の `homepage`。dandori では `skills/sync.sh` の `site=`（スキルの写しが変わるので `skills/sync.sh` を走らせる）。元のリポジトリのサイトを止める（または ritsu のサイトへ案内するページに替える）。
+- サイトを切り替えるとき（作者が決めたら）：`docs.yml` に `push: branches: [main]`（パスは `website/**`、`crates/rulec/AGENTS.md`、`crates/rulec/docs/**`、`.github/workflows/docs.yml`）を足し、`crates/ritsu/tests/website.rs` の `the_workflow_that_publishes_the_site_runs_only_by_hand` をそれに合わせて直す。リポジトリの Settings の Pages を「GitHub Actions」にする。README・スキル・ページの `https://i2y.github.io/rulec/…` と `https://i2y.github.io/dandori/…` へのリンクを ritsu のサイト（`https://i2y.github.io/ritsu/rulec/…`、`https://i2y.github.io/ritsu/dandori/…`）に直す。rulec では、README の入れ方の `[how]` のリンク、`tools/make_examples.py` の日本語の例のページへのリンク（直したら `python3 website/rulec/tools/make_examples.py` と `sh crates/rulec/skills/sync.sh` を走らせる）、`Cargo.toml` の `homepage`。dandori では `skills/sync.sh` の `site=`（スキルのコピーが変わるので `skills/sync.sh` を走らせる）。元のリポジトリのサイトを止める（または ritsu のサイトへ案内するページに替える）。
 - ritsu の最初のリリースが出たら：rulec の入れ方のページ（英日）と README の、Homebrew・`.deb`・`.rpm`・アーカイブ・`uses: i2y/rulec@v0.22.1` を ritsu のもの（`i2y/tap/ritsu`、`ritsu_<版>-1_<arch>.deb`、`uses: i2y/ritsu@v0.23.0`）に替え、ritsu の `tests/website.rs` の、言語のリリースへのリンクを許す例外（`/releases`）を外す。
 - 作者が 10/4 の夜に決めたこと（作者に聞くことの答え）：(1) 各国の一段目の区分を入れる（12 か国。上の「済んだもの」、DESIGN 5.6）。(2) `rulec import` は表の綴りのまま通貨を書く（取り込むときに直した）。(3) 英語の大きい金額は `_` で区切ってよい。(4) 前のブラウザで試すページは、ritsu のページに例を全部持たせたうえで、切り替えのときに ritsu のページへ替える（転送。F.5、DESIGN 8.7、13.2、15 章）。ロゴは案を作る（案はあるが、まだ入れていない）。(5) yuen の名前空間を `https://i2y.github.io/ritsu/ns/yuen#` にする（F.7）。(6) サイトの切り替えは、ritsu を public にしたらすぐにする。(7) 言語の側の「承認する人」も README の言い方にそろえる（`--audience approver` の値は残す。DESIGN 4.8）。あわせて、全部の言語の日本語の出力を読み直し、出力から節の番号を外した（F.3）。rulec の DESIGN の節は、§15.182（各国の区分）と §15.183（ページの言い方と節の番号）である。
-- 作者が 10/5 の朝に決めたこと：ロゴの案は取り下げる（サイトにロゴは置かない）。八つの Agent Skills を、Claude Code のプラグインとマーケットプレイス、`ritsu skills install`、フォルダーを写す入れ方、リリースの zip で配る（F.3）。担当が決めて作者に聞く項：プラグインの source をリポジトリの根にしたので、入れるとリポジトリ全体がプラグインの置き場所に写る（public にする前に、スキルだけを持つ軽い形にするかを決める）。`ritsu skills install` の既定の書き先（いまいるディレクトリの `.claude/skills/`）と、断ったときの exit code 1。スキルの中のブラウザで試すページへのリンク（`https://i2y.github.io/ritsu/playground/`。切り替えまでは 404）と、CI の例の `uses: i2y/ritsu@v0.23.0`（ritsu の最初のリリースまでは動かない）。
+- 作者が 10/5 の朝に決めたこと：ロゴの案は取り下げる（サイトにロゴは置かない）。八つの Agent Skills を、Claude Code のプラグインとマーケットプレイス、`ritsu skills install`、フォルダーをコピーする入れ方、リリースの zip で配る（F.3）。担当が決めて作者に聞く項：プラグインの source をリポジトリの根にしたので、入れるとリポジトリ全体がプラグインの置き場所にコピーされる（public にする前に、スキルだけを持つ軽い形にするかを決める）。`ritsu skills install` の既定の書き先（いまいるディレクトリの `.claude/skills/`）と、上書きせずに止まったときの exit code 1。スキルの中のブラウザで試すページへのリンク（`https://i2y.github.io/ritsu/playground/`。切り替えまでは 404）と、CI の例の `uses: i2y/ritsu@v0.23.0`（ritsu の最初のリリースまでは動かない）。
 - 区分を取り直すとき：生成の台本は持ち込んでいない。表は `crates/rulec/src/prelude.rs` にあり、CLDR から離れたところ（米国の準州の名前、台湾の `CYI` と `CYQ`、区分の種類の語を外した五つ、韓国の新しい正式の名）は rulec の DESIGN §15.182 に書いた。表を変えたら `tests/regions.rs` の数と、`website/rulec/tools/make_wasm.sh` と `website/tools/make_wasm.sh` の二つの wasm を作り直す。綴りは規則の中でだけ効く（生成コード、`verify`、`replay`、`fixtures lint` は値の綴りだけを受け取る）。記録の入力に現地の綴りが来る現場が出たら、`fixtures lint` で案内するかを決める。
-- Unicode CLDR のライセンスの写し（`crates/rulec/THIRD_PARTY_NOTICES`）を、リリースのアーカイブ（`packaging/archive.sh` の `licenses`）と `.deb`・`.rpm`（`packaging/nfpm.yaml`、`crates/rulec/packaging/nfpm.yaml`）に入れる（DESIGN 13.2。まだ。`crates/ritsu/tests/release.rs` も合わせる）。
+- Unicode CLDR のライセンスのコピー（`crates/rulec/THIRD_PARTY_NOTICES`）を、リリースのアーカイブ（`packaging/archive.sh` の `licenses`）と `.deb`・`.rpm`（`packaging/nfpm.yaml`、`crates/rulec/packaging/nfpm.yaml`）に入れる（DESIGN 13.2。まだ。`crates/ritsu/tests/release.rs` も合わせる）。
 - yuen の PROV の名前空間の IRI（`https://i2y.github.io/ritsu/ns/yuen#`）は、ritsu のサイトを公開したあとにしか開けない（2026-10-04 に `curl -I https://i2y.github.io/ritsu/ns/yuen` は 404 を返した）。yuen と、PROV を書き出す ritsu を配るより前に、`docs.yml` でサイトを公開する。配る前に `git grep -n -I 'i2y/yuen/ns'` が空で、`strings website/docs/playground/ritsu.wasm | grep -c i2y/yuen/ns` が 0 であることを確かめる。
-- 日本語の読み直しの残り：ritsu-base の台帳が書く二つの文（`explain` の再現の「…そこで `…` を走らせます」と、`docs/codes*.md` の頭の「手で直しません」）は、決まりでは「走らせてください」「手で直さないでください」になるが、koyomi・chobo・yuen・sakai・ritsu-cross の `docs/codes.ja.md` にも出るので、全部を取り込んだあとに一度で直す（ritsu-base の二行と、それらの `docs/codes.ja.md`、`crates/ritsu-base/tests/golden/compat/` を取り直す）。ritsu-base の `--help` の見出し「exit code:」「この画面を出す」、診断の見出し「確かめたら」、koyomi の `gen --lang ja` の生成物のコメントの空白、yuen の `src/check.rs` の E105 と同じ形の文、`crates/ritsu-base/tests/golden/compat/` の koyomi と yuen の古い文の写し、根の README.ja.md のクレートの一覧の「口」、根のサイトの `website/docs-ja/ns/yuen.md` の地の文の「端」（六か所。言い換えの案は yuen の読み直しの担当が出した）、dandori の `--lang ja` でも英語のまま出る文（読めないファイル、`scenarios --out` の行など）。 rulec の読み直しの残り：ritsu-base の共通の行（`--help` の見出し「exit code:」と、`出しうる診断（…）` の行。rulec の `cli.rs` が持つ同じ行は「出しうる診断（`rulec explain <CODE>` で一つずつ説明を読めます）:」にした）。rulec の `diag.rs` の見出しの書き方と、生成物のコメントの「入口で断る」は、rulec の文書とサイトの全体で使う言い方なので残した。rulec のサイトの地の文（出力の貼り付けではないもの）に、`website/rulec/docs-ja/tour.md` の「それを見ていない表が完全性検査で割れるのが狙いです」と `docs-ja/index.md` の「丸め方で円がいくら動くか」が残る。実験の記録（`crates/rulec/experiments/` の下）と、rulec の DESIGN.md の測った記録の引用は、そのときの出力の記録なので取り直していない。rulec の DESIGN の §11 の合意済みの五つの文面は、決めたときの記録として残した。図の URL の `?v=` は、ほかの担当が図を描き直したら `cargo test -p rulec --test website 図のurlは中身のハッシュを持っている` が言う値にそろえる。
+- 日本語の読み直しの残り：ritsu-base の台帳が書く二つの文（`explain` の再現の「…そこで `…` を走らせます」と、`docs/codes*.md` の頭の「手で直しません」）は、決まりでは「走らせてください」「手で直さないでください」になるが、koyomi・chobo・yuen・sakai・ritsu-cross の `docs/codes.ja.md` にも出るので、全部を取り込んだあとに一度で直す（ritsu-base の二行と、それらの `docs/codes.ja.md`、`crates/ritsu-base/tests/golden/compat/` を取り直す）。ritsu-base の `--help` の見出し「exit code:」「この画面を出す」、診断の見出し「確かめたら」、koyomi の `gen --lang ja` の生成物のコメントの空白、yuen の `src/check.rs` の E105 と同じ形の文、`crates/ritsu-base/tests/golden/compat/` の koyomi と yuen の古い文のコピー、根の README.ja.md のクレートの一覧の「口」、根のサイトの `website/docs-ja/ns/yuen.md` の地の文の「端」（六か所。言い換えの案は yuen の読み直しの担当が出した）、dandori の `--lang ja` でも英語のまま出る文（読めないファイル、`scenarios --out` の行など）。 rulec の読み直しの残り：ritsu-base の共通の行（`--help` の見出し「exit code:」と、`出しうる診断（…）` の行。rulec の `cli.rs` が持つ同じ行は「出しうる診断（`rulec explain <CODE>` で一つずつ説明を読めます）:」にした）。rulec の `diag.rs` の見出しの書き方と、生成物のコメントの「入口で断る」は、rulec の文書とサイトの全体で使う言い方なので残した。rulec のサイトの地の文（出力の貼り付けではないもの）に、`website/rulec/docs-ja/tour.md` の「それを見ていない表が完全性検査で割れるのが狙いです」と `docs-ja/index.md` の「丸め方で円がいくら動くか」が残る。実験の記録（`crates/rulec/experiments/` の下）と、rulec の DESIGN.md の測った記録の引用は、そのときの出力の記録なので取り直していない。rulec の DESIGN の §11 の合意済みの五つの文面は、決めたときの記録として残した。図の URL の `?v=` は、ほかの担当が図を描き直したら `cargo test -p rulec --test website 図のurlは中身のハッシュを持っている` が言う値にそろえる。
 - テストの回し方：7.9 と同じ。Lean の層は、根の `proofs/` で `lake build` してから `cargo test --release -p ritsu-model`（`proofs/` を作っていないと SKIP する）。rulec の `tests/lean.rs`・`days.rs`・`machine.rs` は根の `proofs/` の `rulec-recheck` を使う。dandori の重い十二は、ほかと同時でなく一つずつ回す。

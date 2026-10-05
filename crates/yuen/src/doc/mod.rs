@@ -183,7 +183,7 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
     }
     out.push(Block::P(vec![t(say(
         tr!(
-            "このページは、下の .req のファイルと、出典の写しと、ほかの言語から読んだ成果物の定義をもとに、yuen {version} が作った。",
+            "このページは、下の .req のファイルと、出典のコピーと、ほかの言語から読んだ成果物の定義をもとに、yuen {version} が作った。",
             "yuen {version} made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts."
         ),
         lang,
@@ -295,7 +295,7 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
                 if let Some(rev) = src["revision"].as_str() {
                     p.push(t(say(tr!("、版 ", ", version "), lang)));
                     p.push(c(rev.to_string()));
-                    p.push(t(say(tr!("（写しの隣の revision.txt）", " (revision.txt beside the copies)"), lang)));
+                    p.push(t(say(tr!("（コピーの隣の revision.txt）", " (revision.txt beside the copies)"), lang)));
                 }
                 p.push(t(say(tr!("。", "."), lang)));
             }
@@ -318,7 +318,7 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
         if !src["borrowed"].is_null() {
             p.push(t(say(tr!("借りた先：", " Borrowed from "), lang)));
             p.push(c(s(&src["borrowed"]["text"])));
-            p.push(t(say(tr!("（写しと固定はそのファイルのもので、その言語の検査が確かめる）。", " (the copies and the pins are that file's, and its language's check holds them)."), lang)));
+            p.push(t(say(tr!("（コピーと固定はそのファイルのもので、その言語の検査が確かめる）。", " (the copies and the pins are that file's, and its language's check holds them)."), lang)));
         }
         out.push(Block::P(p));
         let file = s(&src["file"]);
@@ -423,7 +423,7 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
                 let Some(bytes) = bytes else { continue };
                 quoted.insert(key);
                 let dbw = if db.word() == "ecfr" { "eCFR" } else { "e-Gov" };
-                let head = say(tr!("{source} {frag}（{dbw} {id}、{asof} 時点の写し）", "{source} {frag} ({dbw} {id}, the copy as of {asof})"), lang);
+                let head = say(tr!("{source} {frag}（{dbw} {id}、{asof} 時点のコピー）", "{source} {frag} ({dbw} {id}, the copy as of {asof})"), lang);
                 // quoted as `yuen trace` quotes it (ritsu-base's `quote_lines`): an e-Gov article as
                 // the law prints it, a table or an eCFR section a line for each line of its text
                 let file = a.abs.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();

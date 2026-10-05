@@ -4,4 +4,4 @@
   = `else reject` は、範囲の中で一度も当たらないことを確かめる書き方です。当たるなら、`else end_of_month` か `else start_of_next_month` で扱いを書くか、範囲を狭めてください。
   そうなる例（最初の入力）:
       received     2026-01-29（木）
-      month_later                    1 か月後の同じ日（無ければ断る）: 2026-02-29 は無い日で、`else reject` なので断る
+      month_later                    1 か月後の同じ日（無ければエラーにする）: 2026-02-29 は無い日で、`else reject` なのでエラーにする

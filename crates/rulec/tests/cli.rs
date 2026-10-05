@@ -605,7 +605,7 @@ fn 検査を通らない規則に_どのコマンドが何を返すか() {
             .args([cmd, f])
             .output()
             .expect("rulec を起動できない");
-        assert_eq!(o.status.code(), Some(0), "{cmd}: 形を訊いただけなのに断られた");
+        assert_eq!(o.status.code(), Some(0), "{cmd}: 形を訊いただけなのにエラーになった");
     }
     // The refusal says what is wrong, on stderr, so a caller reading JSON on stdout is not
     // handed prose in the middle of it.
@@ -616,5 +616,5 @@ fn 検査を通らない規則に_どのコマンドが何を返すか() {
         .unwrap();
     let err = String::from_utf8_lossy(&o.stderr);
     assert!(err.contains("E101"), "何が悪いか言っていない: {err}");
-    assert!(String::from_utf8_lossy(&o.stdout).trim().is_empty(), "断ったのに標準出力に何か書いた");
+    assert!(String::from_utf8_lossy(&o.stdout).trim().is_empty(), "エラーにしたのに標準出力に何か書いた");
 }

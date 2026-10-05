@@ -137,7 +137,7 @@ fn bounds(book: &Book, k: usize, out: &mut Titled) {
                         0 => (last_is(&b, &Outcome::Done), tr!("境界: {gj} {r} をちょうど {lv} まで減らす（`at least {lv}` ちょうど）", "bound: {ae} takes {r} to exactly {lv}, its `at least {lv}`")),
                         _ => (
                             refused_at(&b, &l.refusal, i, false),
-                            tr!("境界: {wj} {r} を {left} まで減らすので断られる（`at least {lv}` を割る）", "bound: {ae} would take {r} to {left}, below `at least {lv}`"),
+                            tr!("境界: {wj} {r} を {left} まで減らすので拒否される（`at least {lv}` を割る）", "bound: {ae} would take {r} to {left}, below `at least {lv}`"),
                         ),
                     };
                     if ok {
@@ -185,7 +185,7 @@ fn bounds(book: &Book, k: usize, out: &mut Titled) {
                         0 => (last_is(&b, &Outcome::Done), tr!("境界: {gj} {r} をちょうど {uv} まで増やす（`at most {uv}` ちょうど）", "bound: {ae} fills {r} to exactly {uv}, its `at most {uv}`")),
                         _ => (
                             refused_at(&b, &u.refusal, i, true),
-                            tr!("境界: {wj} {r} を {to} まで増やすので断られる（`at most {uv}` を超える）", "bound: {ae} would fill {r} to {to}, past `at most {uv}`"),
+                            tr!("境界: {wj} {r} を {to} まで増やすので拒否される（`at most {uv}` を超える）", "bound: {ae} would fill {r} to {to}, past `at most {uv}`"),
                         ),
                     };
                     if ok {
@@ -241,13 +241,13 @@ fn keys(book: &Book, k: usize, out: &mut Titled) {
                     out,
                     &b,
                     tr!(
-                        "キー: {tn}.{op} が {reason} で断られたあと、同じ引数ですぐにもう一度呼び、{xr} が足りるようになってからもう一度呼ぶ",
+                        "キー: {tn}.{op} が {reason} で拒否されたあと、同じ引数ですぐにもう一度呼び、{xr} が足りるようになってからもう一度呼ぶ",
                         "key: {tn}.{op} refused with {reason}, then again, and again once {xr} has enough"
                     ),
                 );
             } else {
                 let tn = &t.name;
-                push(out, &b, tr!("キー: {tn}.{op} が {reason} で断られたあと、同じ引数でもう一度呼ぶ", "key: {tn}.{op} refused with {reason}, then again"));
+                push(out, &b, tr!("キー: {tn}.{op} が {reason} で拒否されたあと、同じ引数でもう一度呼ぶ", "key: {tn}.{op} refused with {reason}, then again"));
             }
             break 'found;
         }
@@ -379,7 +379,7 @@ fn moves(book: &Book, k: usize, out: &mut Titled) {
             }
             let x = book.ref_text(t, if upper { &m.to } else { &m.from });
             let (tn, op, n) = (&t.name, op_name(t), i + 1);
-            push(out, &b, tr!("移動: {tn}.{op} が {n} つ目の移動（{x}）で断られ、どの移動も行われない", "moves: {tn}.{op} refused at move {n} ({x}), and no move is made"));
+            push(out, &b, tr!("移動: {tn}.{op} が {n} つ目の移動（{x}）で拒否され、どの移動も行われない", "moves: {tn}.{op} refused at move {n} ({x}), and no move is made"));
             break;
         }
     }

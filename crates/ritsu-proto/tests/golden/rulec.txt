@@ -924,7 +924,7 @@ message Record
 package Some("kernel") imports []
 message Days
   count int64
-== ../sakai/tests/mutants/E308_写しの中身が違う/proto/contracts/kernel/units.proto
+== ../sakai/tests/mutants/E308_コピーの中身が違う/proto/contracts/kernel/units.proto
 package Some("kernel") imports []
 message Days
   count int64

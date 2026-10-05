@@ -221,10 +221,10 @@ fn 検査を通して生成コードが食い違っていた形は止まる() {
 }
 
 #[test]
-fn 深すぎるjsonは断る() {
+fn 深すぎるjsonはエラーにする() {
     let deep = |n: usize| format!("{}{}", "[".repeat(n), "]".repeat(n));
     assert!(rulec::json::parse(&deep(rulec::json::MAX_DEPTH)).is_ok(), "上限ちょうどは読める");
-    let e = rulec::json::parse(&deep(rulec::json::MAX_DEPTH + 1)).expect_err("上限を超えたら断る");
+    let e = rulec::json::parse(&deep(rulec::json::MAX_DEPTH + 1)).expect_err("上限を超えたらエラーにする");
     assert!(e.contains(&rulec::json::MAX_DEPTH.to_string()), "上限を言わない: {e}");
     // Some twenty thousand levels ran the reader out of stack and aborted the process.
     assert!(rulec::json::parse(&deep(100_000)).is_err());

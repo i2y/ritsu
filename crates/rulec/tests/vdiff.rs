@@ -308,8 +308,8 @@ fn 受け付ける入力が変わったことは_答えの差とは別に出る(
     let j = json(&out);
     let kinds: Vec<&str> = arr(&j, "domain").iter().filter_map(|d| d.get("what").and_then(|x| x.as_str())).collect();
     assert!(kinds.contains(&"input_range"), "範囲が広がったことが出ていない: {out}");
-    // 広がったぶんは旧版が断る入力なので、軸は両方が受け付ける範囲に絞る。絞らずに
-    // 比べると、旧版に入口で断られる入力について「同じ答えだ」と言ってしまう。
+    // 広がったぶんは旧版が受け付けない入力なので、軸は両方が受け付ける範囲に絞る。絞らずに
+    // 比べると、旧版が入口で受け付けない入力について「同じ答えだ」と言ってしまう。
     assert!(arr(&j, "changes").is_empty(), "受け付ける範囲の違いを答えの差に混ぜている: {out}");
     let (_, text) = rulec(&["diff", &as_, &bs]);
     assert!(
@@ -438,12 +438,12 @@ fn 文書に載せた実演は_いまの出力と一致する() {
 /// The flags that only mean something against records are refused here rather than
 /// ignored, and the ones that mean something in both modes work in both.
 #[test]
-fn 意味の無い旗は断り_意味のある旗は効く() {
+fn 意味の無い旗はエラーにし_意味のある旗は効く() {
     let p = root().join("tests/corpus/送料.rule");
     let s = p.to_string_lossy().to_string();
     for bad in [vec!["diff", &s, &s, "--fill", "重量=1"], vec!["diff", &s, &s, "--manifest", "m.json"]] {
         let (code, _) = rulec(&bad);
-        assert_eq!(code, 2, "{bad:?} が断られていない");
+        assert_eq!(code, 2, "{bad:?} がエラーになっていない");
     }
     // --budget belongs to the other side of the same coin.
     let (code, _) = rulec(&["diff", &s, &s, "--fixtures", "/dev/null", "--budget", "10"]);

@@ -1,4 +1,4 @@
 エラー[E102]: tests/mutants/E102_固定が無い.cal:4:8: 出典「休業日」が固定されていません（`sha256:` がありません）
      4 | source 休業日 = file "../fixtures/data/holidays.csv"
-  = 写しのバイト列の SHA-256 の先頭 16 桁を書いて、固定してください。いまの写しなら sha256:56ebcd2f1e91e0a1 です（`koyomi source pin` でも書けます）。
+  = コピーのバイト列の SHA-256 の先頭 16 桁を書いて、固定してください。いまのコピーなら sha256:56ebcd2f1e91e0a1 です（`koyomi source pin` でも書けます）。
   = 直した行: source 休業日 = file "../fixtures/data/holidays.csv" sha256:56ebcd2f1e91e0a1

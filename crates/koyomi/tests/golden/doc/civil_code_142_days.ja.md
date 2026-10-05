@@ -3,7 +3,7 @@
 Only the days Article 142 of the Civil Code names are closed: Sundays, and the days off under the Act on National Holidays. This example does not decide what the other days off of the article are. The English version of 民法142条の休日.cal
 
 - ファイル: `civil_code_142_days.cal`（calendar civil_code_142_days v1、sha256:dd534a7343411409）
-- 表: national_holidays = `data/syukujitsu.csv`（sha256:cec37a743c96995c、https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv の写し、covers 1955-01-01..2027-12-31）
+- 表: national_holidays = `data/syukujitsu.csv`（sha256:cec37a743c96995c、https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv のコピー、covers 1955-01-01..2027-12-31）
 - koyomi: 0.23.0
 
 上のファイルを koyomi 0.23.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
@@ -17,7 +17,7 @@ Only the days Article 142 of the Civil Code names are closed: Sundays, and the d
 
 ## 出典とデータの範囲
 
-- national_holidays: 1,067 行。https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv の写しを、sha256:cec37a743c96995c で固定しています。休みを全部載せているのは 1955-01-01〜2027-12-31 です。
+- national_holidays: 1,067 行。https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv のコピーを、sha256:cec37a743c96995c で固定しています。休みを全部載せているのは 1955-01-01〜2027-12-31 です。
 
 このカレンダーが休みかどうかを知っているのは 1955-01-01〜2027-12-31 です。その外の日が営業日かを問う計算は、検査でも生成したコードでも止まります。
 

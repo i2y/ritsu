@@ -17,7 +17,7 @@
     28 |   book 倉庫.引当.do
 エラー[E007]: tests/fixtures/books.flow:32:3: 帳簿の操作は、帳簿に書いたキーで一度だけ行われます。`key` は外してください
     32 |   key 便
-エラー[E007]: tests/fixtures/books.flow:33:10: 帳簿の操作のエラーは、帳簿が断る理由の名前そのものです。`= …` は外してください
+エラー[E007]: tests/fixtures/books.flow:33:10: 帳簿の操作のエラーは、帳簿が拒否する理由の名前そのものです。`= …` は外してください
     33 |   errors 足りない = 409
 エラー[E016]: tests/fixtures/books.flow:35:1: 帳簿は `数` を `int` で受け取りますが、タスクの引数は `string` です
     35 | task 引き当てる(注文: string, sku: string, 数: string) -> 注文
@@ -33,11 +33,11 @@
     48 | task 入荷を返す(便: string, sku: string, 数: int) -> 倉庫.引当
 エラー[E008]: tests/fixtures/books.flow:53:3: `引当.post` が仮押さえに対してするのは `sends post` です
     53 |   sends void
-エラー[E007]: tests/fixtures/books.flow:58:14: 帳簿は、仮押さえの状態ごとに理由を付けて断ります。`refused as` は外し、理由を `errors` に書いてください
-    58 |   refused as 断られた
+エラー[E007]: tests/fixtures/books.flow:58:14: 帳簿は、仮押さえの状態ごとに理由を付けて拒否します。`refused as` は外し、理由を `errors` に書いてください
+    58 |   refused as 拒否された
 エラー[E008]: tests/fixtures/books.flow:62:3: `引当.hold` が仮押さえに対してするのは `starts 倉庫.引当` です
     62 |   sends post
 エラー[E008]: tests/fixtures/books.flow:75:12: 仮押さえにワークフローの外で起きることは、有効期限のある振替の `expire` だけです
     75 |   external post
-エラー[E008]: tests/fixtures/books.flow:76:16: 仮押さえを断るのは帳簿で、理由は状態ごとに決まっています。`refused when` は外してください
+エラー[E008]: tests/fixtures/books.flow:76:16: 仮押さえを拒否するのは帳簿で、理由は状態ごとに決まっています。`refused when` は外してください
     76 |   refused when refused = true

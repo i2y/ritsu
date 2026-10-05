@@ -35,6 +35,6 @@ pub const TARGET_FILES: &[&str] = &[
     "tests/fixtures/helpers_月を引く.cal",
     "tests/fixtures/helpers_月の日と締め.cal",
     "tests/fixtures/helpers_営業日.cal",
-    "tests/fixtures/helpers_断る.cal",
+    "tests/fixtures/helpers_エラーにする.cal",
     "tests/fixtures/helpers_日付が一つも無い.cal",
 ];

@@ -1,6 +1,6 @@
-// 写した元: dandori の examples/fulfillment/specs/fulfillment.ja.proto。package を shop.ordering.v1 にし、在庫の契約の import を
+// コピー元: dandori の examples/fulfillment/specs/fulfillment.ja.proto。package を shop.ordering.v1 にし、在庫の契約の import を
 // この例の置き場所に、Order を FulfillmentOrder に直した（受注の order.proto の Order とぶつかるため）。
-// import する dandori/v1/options.proto は、dandori の proto/dandori/v1/ から写した（変えていない）。
+// import する dandori/v1/options.proto は、dandori の proto/dandori/v1/ からコピーした（変えていない）。
 // 引当と発送の日本語の版が実装するサービス。fulfillment.proto と同じ形で、ワークフロー、失敗、タスクの
 // 名前を日本語の版のとおりにし、protobuf の JSON での名前（`json_name`）を日本語にしてある。それが
 // 版の入力・出力・フィールドの名前になる。日本語の版はどれも、`workflow` の行でこのサービスを実装すると

@@ -175,7 +175,7 @@ fn 行を足すか_default_を付ければ通る() {
 }
 
 #[test]
-fn 読めないファイルと_無い列挙と_形の違う行を断る() {
+fn 読めないファイルと_無い列挙と_形の違う行をエラーにする() {
     let plain = rule("一般(basic) | ゴールド(gold) default", "| - | 400円 |\n");
     let (_tmp, missing) = pair("missing", PROTO, &plain.replace("order.proto", "nope.proto"));
     let (code, out) = run(&["check", &missing]);

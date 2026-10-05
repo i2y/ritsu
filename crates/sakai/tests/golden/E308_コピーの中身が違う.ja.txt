@@ -1,0 +1,7 @@
+エラー[E308]: ctx/契約.ctx:23:1: 「見積」と「契約」の共有カーネルのコピーの中身が違います
+    23 | shared kernel with 見積
+  = 「見積」の proto "proto/quotes/kernel/units.proto" と同じ中身のコピーが、「契約」の側にありません（「契約」の側は proto "proto/contracts/kernel/units.proto"）。
+  = コピーを両側に置くときは、中身を同じに保ってください。
+  関わるもの:
+      見積  ctx/見積.ctx:21  shared kernel with 契約
+      契約  ctx/契約.ctx:23  shared kernel with 見積

@@ -96,7 +96,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
                     m.line,
                     m.col,
                     tr!(
-                        "この移動の元と先は、どちらも {r} です。元と先がいつも同じ勘定なので、`{}` はどう呼んでも same_account で断られます",
+                        "この移動の元と先は、どちらも {r} です。元と先がいつも同じ勘定なので、`{}` はどう呼んでも same_account で拒否されます",
                         "this move goes from {r} to {r}: the same account whatever it is called with, so every call of `{}` is refused with same_account",
                         t.name
                     ),
@@ -157,7 +157,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
                     m.line,
                     m.col,
                     tr!(
-                        "`{n}` へ入れる移動がどこにも無いので、`{tn}` は 0 より多く動かせば、いつも {reason} で断られます",
+                        "`{n}` へ入れる移動がどこにも無いので、`{tn}` は 0 より多く動かせば、いつも {reason} で拒否されます",
                         "nothing in the book puts into `{n}`, so `{tn}` is refused with {reason} whenever it moves more than 0"
                     ),
                 )
@@ -189,7 +189,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
                                 (
                                     "W104",
                                     tr!(
-                                        "仮押さえでは、{pn} つ目の移動が {rt} へ入れる額は入ってくる仮押さえになり、{tn} つ目の移動が {rt} から取るときに数えられません。{rt} にはじめから足りるだけの残高が無ければ、{reason} で断られます",
+                                        "仮押さえでは、{pn} つ目の移動が {rt} へ入れる額は入ってくる仮押さえになり、{tn} つ目の移動が {rt} から取るときに数えられません。{rt} にはじめから足りるだけの残高が無ければ、{reason} で拒否されます",
                                         "in a hold, what move {pn} puts into {rt} is held coming in, and does not count when move {tn} takes from {rt}: unless {rt} has enough already, the hold is refused with {reason}"
                                     ),
                                     tr!(
@@ -201,7 +201,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
                                 (
                                     "W103",
                                     tr!(
-                                        "{tn} つ目の移動が {rt} から取るのは、{pn} つ目の移動が {rt} へ入れるより前です。そのとき {rt} が足りないと、二つの移動を合わせれば足りる場合でも {reason} で断られます",
+                                        "{tn} つ目の移動が {rt} から取るのは、{pn} つ目の移動が {rt} へ入れるより前です。そのとき {rt} が足りないと、二つの移動を合わせれば足りる場合でも {reason} で拒否されます",
                                         "move {tn} takes from {rt} before move {pn} puts into it: when {rt} is short at that point, the call is refused with {reason}, even when the two moves together would leave enough"
                                     ),
                                     tr!("{rt} へ入れる移動を先に書いてください", "write the move that puts into {rt} first"),
@@ -220,7 +220,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
                                 (
                                     "W104",
                                     tr!(
-                                        "仮押さえでは、{tn} つ目の移動が {rt} から取る額は出ていく仮押さえになり、{pn} つ目の移動が {rt} へ入れるときに空きとして数えられません。{rt} にはじめから空きが無ければ、{reason} で断られます",
+                                        "仮押さえでは、{tn} つ目の移動が {rt} から取る額は出ていく仮押さえになり、{pn} つ目の移動が {rt} へ入れるときに空きとして数えられません。{rt} にはじめから空きが無ければ、{reason} で拒否されます",
                                         "in a hold, what move {tn} takes from {rt} is held going out, and makes no room when move {pn} puts into {rt}: unless {rt} has room already, the hold is refused with {reason}"
                                     ),
                                     tr!(
@@ -232,7 +232,7 @@ pub fn findings(book: &Book) -> Vec<Diag> {
                                 (
                                     "W103",
                                     tr!(
-                                        "{pn} つ目の移動が {rt} へ入れるのは、{tn} つ目の移動が {rt} から取るより前です。そのとき {rt} に空きが無いと、二つの移動を合わせれば上限に収まる場合でも {reason} で断られます",
+                                        "{pn} つ目の移動が {rt} へ入れるのは、{tn} つ目の移動が {rt} から取るより前です。そのとき {rt} に空きが無いと、二つの移動を合わせれば上限に収まる場合でも {reason} で拒否されます",
                                         "move {pn} puts into {rt} before move {tn} takes from it: when {rt} has no room at that point, the call is refused with {reason}, even when the two moves together would stay within its bound"
                                     ),
                                     tr!("{rt} から取る移動を先に書いてください", "write the move that takes from {rt} first"),
@@ -455,7 +455,7 @@ pub fn render_report(book: &Book, rep: &Report, lang: Lang) -> String {
     for (o, head) in rep.ops.iter().zip(&heads) {
         let names: Vec<String> = o.refusals.iter().map(|r| refusal_text(r, lang)).collect();
         let list = if names.is_empty() { tr!("なし", "none").get(lang).to_string() } else { names.join(if lang == Lang::Ja { "、" } else { ", " }) };
-        let label = tr!("断られうる理由", "may be refused").get(lang).to_string();
+        let label = tr!("拒否されうる理由", "may be refused").get(lang).to_string();
         out.push_str(&format!("  {}  {label}: {list}\n", scenario::pad(head, w)));
     }
     for kn in &rep.keys {
@@ -471,7 +471,7 @@ pub fn render_report(book: &Book, rep: &Report, lang: Lang) -> String {
         if !kn.outside.is_empty() {
             let others: Vec<String> = kn.outside.iter().map(|(i, _)| t.params[*i].name.clone()).collect();
             let (oj, oe) = (or_list(&others, Lang::Ja), or_list(&others, Lang::En));
-            line.ja.push_str(&format!("。キーが同じで {oj}が違う二度目の呼び出しは、key_conflict で断られます"));
+            line.ja.push_str(&format!("。キーが同じで {oj}が違う二度目の呼び出しは、key_conflict で拒否されます"));
             line.en.push_str(&format!("; a second call that differs only in {oe} is refused with key_conflict"));
         }
         if kn.again.is_some() {

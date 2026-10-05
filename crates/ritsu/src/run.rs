@@ -257,8 +257,8 @@ fn answer_text(who: Who, answer: &Value, lang: Lang) -> String {
     }
     let kind = answer["error"].as_str().unwrap_or("failure");
     match (who, answer.get("cause").and_then(|c| c.as_str())) {
-        (Who::Chobo, Some(reason)) if kind == reason => tr!("{reason} で断られる", "refused: {reason}").get(lang).to_string(),
-        (Who::Chobo, Some(reason)) => tr!("{reason} で断られる（{kind}）", "refused: {reason} ({kind})").get(lang).to_string(),
+        (Who::Chobo, Some(reason)) if kind == reason => tr!("{reason} で拒否される", "refused: {reason}").get(lang).to_string(),
+        (Who::Chobo, Some(reason)) => tr!("{reason} で拒否される（{kind}）", "refused: {reason} ({kind})").get(lang).to_string(),
         (_, Some(cause)) => tr!("エラー {kind}: {cause}", "error {kind}: {cause}").get(lang).to_string(),
         (_, None) => tr!("エラー {kind}", "error {kind}").get(lang).to_string(),
     }

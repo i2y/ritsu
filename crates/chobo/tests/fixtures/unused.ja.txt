@@ -5,7 +5,7 @@
 警告[W105]: unused.book:13:56: 引数 `staff` はキーにも移動にも使われていません
     13 | transfer receive(slip: string, sku: string, qty: item, staff: string)
 unused.book: ok、警告 3 件
-  receive.do  断られうる理由: key_conflict
-  ship.do     断られうる理由: out_of_stock（stock(sku) at least 0）、key_conflict、already_refused
-  キー: receive は、slip ごとに一度だけ動きます。キーが同じで sku、qty、staff のどれかが違う二度目の呼び出しは、key_conflict で断られます。
-  キー: ship は、order ごとに一度だけ動きます。キーが同じで sku、qty のどれかが違う二度目の呼び出しは、key_conflict で断られます。
+  receive.do  拒否されうる理由: key_conflict
+  ship.do     拒否されうる理由: out_of_stock（stock(sku) at least 0）、key_conflict、already_refused
+  キー: receive は、slip ごとに一度だけ動きます。キーが同じで sku、qty、staff のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: ship は、order ごとに一度だけ動きます。キーが同じで sku、qty のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。

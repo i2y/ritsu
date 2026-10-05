@@ -1,4 +1,4 @@
-# 写した元: koyomi の examples/payment_20th_close_next_10th.ja.cal。use calendar のパスだけを、この例の置き場所に直した
+# コピー元: koyomi の examples/payment_20th_close_next_10th.ja.cal。use calendar のパスだけを、この例の置き場所に直した
 dates 支払条件(payment_terms) v1
 description "20 日締め翌月 10 日払い。支払日が休みなら前の営業日。条件「受領から60日以内」は、この例の条件として文字どおりに書いたもので、法令の読み方を示すものではない"
 use calendar "../calendars/東京の営業日.cal"

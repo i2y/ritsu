@@ -544,7 +544,7 @@ fn 数の集合の箱は証明付きの検査器でも組み直される() {
 /// A certificate of a shape other than the one the proofs are about is refused, not read
 /// (§15.156). `tests/cert.rs` holds `tools/recheck.py` to the same.
 #[test]
-fn 知らない形式の版の証明書は証明付きの検査器でも断る() {
+fn 知らない形式の版の証明書は証明付きの検査器でも受け付けない() {
     let Some(bin) = checker() else {
         return;
     };

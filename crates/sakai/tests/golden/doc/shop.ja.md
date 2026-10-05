@@ -213,7 +213,7 @@ Collects what buyers think and shows it. It has nothing to do with billing
 |---|---|
 | `PACKING_STATUS_WAITING` | `wait` |
 | `PACKING_STATUS_PACKED` | `ship` |
-| `PACKING_STATUS_SHORT` | 断る：A box with an item missing is not shipped. It goes back to ordering |
+| `PACKING_STATUS_SHORT` | 拒否：A box with an item missing is not shipped. It goes back to ordering |
 
 ### Billing ← Ordering：OrderStatus
 

@@ -179,7 +179,7 @@ impl Computed {
                     Ok(BookOutcome::DoneBefore) => "done_before",
                     Ok(BookOutcome::Refused(r)) => {
                         return Err(ritsu_base::tr!(
-                            "帳簿 `{name}` は、走らせる前の {n} 番目の操作を `{r}` で断ります",
+                            "帳簿 `{name}` は、走らせる前の {n} 番目の操作を `{r}` で拒否します",
                             "the book `{name}` refuses operation {n}, before the run, with `{r}`"
                         ))
                     }

@@ -17,6 +17,6 @@ upstream 料金 customer
 
 partnership with 通知
 
-# 日数の単位の写しを、契約もそれぞれ持つ。
+# 日数の単位のコピーを、契約もそれぞれ持つ。
 shared kernel with 契約
   proto "../proto/quotes/kernel/units.proto"

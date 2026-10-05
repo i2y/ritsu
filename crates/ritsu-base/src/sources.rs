@@ -397,7 +397,7 @@ pub fn readable(db: LawDb, file: &str, bytes: &[u8]) -> Result<(), Text> {
         None => Err(tr!("XML ではありません", "it is not XML")),
         Some(got) if got != want => {
             let db = db.title();
-            Err(tr!("{db} の写しなら最初の要素は <{want}> ですが、<{got}> です", "a copy from {db} starts with <{want}>, and this one starts with <{got}>"))
+            Err(tr!("{db} から取ったコピーなら最初の要素は <{want}> ですが、<{got}> です", "a copy from {db} starts with <{want}>, and this one starts with <{got}>"))
         }
         Some(_) if xml_text(xml).is_empty() => Err(tr!("本文がありません", "it has no text")),
         Some(_) => Ok(()),

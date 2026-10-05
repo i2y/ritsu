@@ -646,7 +646,7 @@ fn mappings(c: &Checked, b: &mut Vec<Block>, lang: Lang) {
                             ValueTo::Value(x, _) => vec![code(&v.from), code(x)],
                             ValueTo::Refuse(why, _) => {
                                 let why = why.as_ref().map(|s| s.value.clone()).unwrap_or_default();
-                                vec![code(&v.from), if lang == Lang::Ja { format!("断る：{why}") } else { format!("refused: {why}") }]
+                                vec![code(&v.from), if lang == Lang::Ja { format!("拒否：{why}") } else { format!("refused: {why}") }]
                             }
                         })
                         .collect()

@@ -149,7 +149,7 @@ ul.legend svg { flex: none; }
 <template id="t-start"><h2 class="dh"><code>請求 v1</code></h2><p>注文の品を支払期日まで押さえ、支払われたら出荷し、支払われなければ戻す</p><dl class="facts"><dt>入力</dt><dd><code>受注: 注文</code></dd><dt>出力</dt><dd><code>結果: 終わり方</code>・<code>期日: date?</code></dd><dt>ファイル</dt><dd><code>examples/invoice/invoice.ja.flow</code></dd></dl></template>
 <template id="t-s1"><h2 class="dh"><code>押さえ ← 引き当てる(…)</code> <span class="dl">56 行目</span></h2><pre class="src"><span class="ln">  56</span>  押さえ &lt;- 引き当てる(注文: 受注.id, sku: 受注.sku, 数: 受注.数)
 <span class="ln">  57</span>    on 在庫切れ =&gt; succeed 結果 = 在庫切れ, 期日 = none
-</pre><h3>ここに来たときの案件</h3><ul class="facts"><li><code>押さえ</code>: 始まっていない</li></ul><dl class="facts"><dt>呼ぶもの</dt><dd><code>book 在庫.引当.hold</code>・<code>starts 在庫.引当</code></dd><dt>失敗したとき</dt><dd><code>在庫切れ</code> → 57 行目<br><code>timeout</code>・<code>failure</code> → <code>on failure</code></dd><dt>呼び出しのあとの案件</dt><dd><code>押さえ</code>: <code>held</code></dd></dl><h3>タスクの宣言</h3><pre class="src"><span class="ln">  29</span>  # 帳簿が注文のために品を押さえる。押さえるのは chobo のクライアントで、断られると、帳簿が付けた
+</pre><h3>ここに来たときの案件</h3><ul class="facts"><li><code>押さえ</code>: 始まっていない</li></ul><dl class="facts"><dt>呼ぶもの</dt><dd><code>book 在庫.引当.hold</code>・<code>starts 在庫.引当</code></dd><dt>失敗したとき</dt><dd><code>在庫切れ</code> → 57 行目<br><code>timeout</code>・<code>failure</code> → <code>on failure</code></dd><dt>呼び出しのあとの案件</dt><dd><code>押さえ</code>: <code>held</code></dd></dl><h3>タスクの宣言</h3><pre class="src"><span class="ln">  29</span>  # 帳簿が注文のために品を押さえる。押さえるのは chobo のクライアントで、拒否されると、帳簿が付けた
 <span class="ln">  30</span>  # 理由で返ってくる。
 <span class="ln">  31</span>  task 引き当てる(注文: string, sku: string, 数: int) -&gt; 在庫.引当
 <span class="ln">  32</span>    book 在庫.引当.hold

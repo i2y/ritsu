@@ -1,6 +1,6 @@
 $ geas map examples/greeter/greeter.ja.geas --lang ja
 ok 1 - 名前で挨拶する
-ok 2 - 空の名前は断る
+ok 2 - 空の名前は受け付けない
 ok 3 - 足した数が積み上がる
 ok 4 - 知らないパスには 404 を返す
 主張 4 件 · 成り立った 4 件 · 成り立たなかった 0 件 · ジャーナル: examples/greeter/.geas/greeter.ja.journal.jsonl
@@ -10,7 +10,7 @@ $ git diff | geas affected examples/greeter/greeter.ja.geas - --lang ja
 この変更が関わる主張:
   1 - 名前で挨拶する
       examples/greeter/server.py: 21
-  2 - 空の名前は断る
+  2 - 空の名前は受け付けない
       examples/greeter/server.py: 21
   4 - 知らないパスには 404 を返す
       examples/greeter/server.py: 29

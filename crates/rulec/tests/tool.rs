@@ -231,7 +231,7 @@ fn http_contract(dir: &Path, cwd: &str, cmd: &str, args: &[&str]) {
     // client is told to start again.
     let ping = r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#;
     let (code, _, _) = call("POST", &format!("Mcp-Session-Id: {session}\r\n"), ping);
-    assert_eq!(code, 200, "{cwd}: 渡したセッションを断った");
+    assert_eq!(code, 200, "{cwd}: 渡したセッションを受け付けなかった");
     let (code, _, _) = call("POST", "Mcp-Session-Id: 0123456789abcdef\r\n", ping);
     assert_eq!(code, 404, "{cwd}: 知らないセッションを通した");
 
@@ -245,7 +245,7 @@ fn http_contract(dir: &Path, cwd: &str, cmd: &str, args: &[&str]) {
     let (code, _, _) = call("POST", "Origin: https://evil.example\r\n", ping);
     assert_eq!(code, 403, "{cwd}: 外の Origin を通した");
     let (code, _, _) = call("POST", "Origin: http://localhost:5173\r\n", ping);
-    assert_eq!(code, 200, "{cwd}: 手元の Origin を断った");
+    assert_eq!(code, 200, "{cwd}: 手元の Origin を受け付けなかった");
 
     // A batch is not part of this protocol version, and is refused rather than half-read.
     let (code, _, _) = call("POST", "", "[{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}]");

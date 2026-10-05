@@ -1,8 +1,8 @@
-警告[W102]: refused.book:11:3: `stock` へ入れる移動がどこにも無いので、`ship` は 0 より多く動かせば、いつも out_of_stock で断られます
+警告[W102]: refused.book:11:3: `stock` へ入れる移動がどこにも無いので、`ship` は 0 より多く動かせば、いつも out_of_stock で拒否されます
     11 |   move qty from stock(sku) to customer
   そうなる例:
-       1  ship.do(order: order-1, sku: sku-2, qty: 1)  out_of_stock で断られる（1 つ目の移動が stock(sku-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
+       1  ship.do(order: order-1, sku: sku-2, qty: 1)  out_of_stock で拒否される（1 つ目の移動が stock(sku-2) から 1 を取ろうとしたときの残高は、確定 0、出ていく仮押さえ 0）
   ヒント: `stock` へ入れる振替を書いてください
 refused.book: ok、警告 1 件
-  ship.do  断られうる理由: out_of_stock（stock(sku) at least 0）、already_refused
+  ship.do  拒否されうる理由: out_of_stock（stock(sku) at least 0）、already_refused
   キー: ship は、order と sku の組ごとに一度だけ動きます。

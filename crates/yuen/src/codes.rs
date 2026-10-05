@@ -235,9 +235,9 @@ pub fn ledger() -> Ledger {
         // ── Sources ──
         e(
             "E101",
-            tr!("出典の写しがありません", "The copy of a source is not there"),
-            tr!("固定した条の写し（`sources/law/<ID>@<日付>/<要素>.xml`）か、`file` の出典のファイルが無いとき。check は通信しません。", "The copy of a pinned article (`sources/law/<id>@<date>/<element>.xml`), or the file of a `file` source, is not there. check never reads the network."),
-            tr!("`yuen source fetch` で写しを取ってくるか、パスを直してください。", "Bring the copy with `yuen source fetch`, or correct the path."),
+            tr!("出典のコピーがありません", "The copy of a source is not there"),
+            tr!("固定した条のコピー（`sources/law/<ID>@<日付>/<要素>.xml`）か、`file` の出典のファイルが無いとき。check は通信しません。", "The copy of a pinned article (`sources/law/<id>@<date>/<element>.xml`), or the file of a `file` source, is not there. check never reads the network."),
+            tr!("`yuen source fetch` でコピーを取ってくるか、パスを直してください。", "Bring the copy with `yuen source fetch`, or correct the path."),
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条 sha256:fc8c35a0769d3b35\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E102", "E103"],
         )
@@ -246,7 +246,7 @@ pub fn ledger() -> Ledger {
             "E102",
             tr!("出典が固定されていません", "A source is not pinned"),
             tr!("引いている条に固定の行が無いとき、固定の行や `file` の出典に `sha256:` が無いとき。", "An article cited has no pin line, or a pin line or a `file` source has no `sha256:`."),
-            tr!("写しの SHA-256 の先頭 16 桁を書いてください（直した行が注に出ます。`yuen source pin` でも書けます）。", "Write the first 16 digits of the SHA-256 of the copy (the fixed line is shown; `yuen source pin` writes it too)."),
+            tr!("コピーの SHA-256 の先頭 16 桁を書いてください（直した行が注に出ます。`yuen source pin` でも書けます）。", "Write the first 16 digits of the SHA-256 of the copy (the fixed line is shown; `yuen source pin` writes it too)."),
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E101", "E103"],
         )
@@ -254,8 +254,8 @@ pub fn ledger() -> Ledger {
         .en("requirements example v1\nrole legal\n\nsource cfr = law ecfr \"37 CFR 1\" asof 2026-01-01\n  \"§1.7\"\n\nrequirement r1\n  text \"x\"\n  owner legal\n  from @cfr \"§1.7\"\n  not satisfied \"left out in this example\"\n  not verified \"left out in this example\"\n", &[COPY_1_7]),
         e(
             "E103",
-            tr!("写しが固定と違います", "A copy does not match its pin"),
-            tr!("写しのハッシュが、固定の行の `sha256:` と違うとき。固定したあとで写しが変わっています。", "The hash of the copy differs from the `sha256:` of its pin: the copy changed after it was pinned."),
+            tr!("コピーが固定と違います", "A copy does not match its pin"),
+            tr!("コピーのハッシュが、固定の行の `sha256:` と違うとき。固定したあとでコピーが変わっています。", "The hash of the copy differs from the `sha256:` of its pin: the copy changed after it was pinned."),
             tr!("何が変わったかを読んでから（`yuen source outdated`）、固定を書き換えてください。", "Read what changed (`yuen source outdated`), then pin it again."),
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条 sha256:0000000000000000\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E102", "E302"],
@@ -264,9 +264,9 @@ pub fn ledger() -> Ledger {
         .en("requirements example v1\nrole legal\n\nsource cfr = law ecfr \"37 CFR 1\" asof 2026-01-01\n  \"§1.7\" sha256:0000000000000000\n\nrequirement r1\n  text \"x\"\n  owner legal\n  from @cfr \"§1.7\"\n  not satisfied \"left out in this example\"\n  not verified \"left out in this example\"\n", &[COPY_1_7]),
         e(
             "E104",
-            tr!("写しが読めません", "A copy cannot be read"),
-            tr!("法令の写しが UTF-8 の XML でないか、e-Gov や eCFR が配る形（条なら `<Article>`、eCFR の section なら `<DIV8>` で始まる）でないとき。", "The copy of a law is not UTF-8 XML, or not what e-Gov or the eCFR serves (an article starts with `<Article>`, an eCFR section with `<DIV8>`)."),
-            tr!("写しは手で直さず、`yuen source fetch` で取り直してください。", "Fetch it again with `yuen source fetch` rather than editing it."),
+            tr!("コピーが読めません", "A copy cannot be read"),
+            tr!("法令のコピーが UTF-8 の XML でないか、e-Gov や eCFR が配る形（条なら `<Article>`、eCFR の section なら `<DIV8>` で始まる）でないとき。", "The copy of a law is not UTF-8 XML, or not what e-Gov or the eCFR serves (an article starts with `<Article>`, an eCFR section with `<DIV8>`)."),
+            tr!("コピーは手で直さず、`yuen source fetch` で取り直してください。", "Fetch it again with `yuen source fetch` rather than editing it."),
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条 sha256:6210aedce8fd1601\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E101"],
         )
@@ -288,7 +288,7 @@ pub fn ledger() -> Ledger {
             "E106",
             tr!("借りた出典が使えません", "A borrowed source cannot be used"),
             tr!(
-                "借りた出典を、名指したファイルが宣言していないか、引いた条を固定していないとき。ファイルが無いとき、写しが読めないか固定と違うときにも出ます。",
+                "借りた出典を、名指したファイルが宣言していないか、引いた条を固定していないとき。ファイルが無いとき、コピーが読めないか固定と違うときにも出ます。",
                 "The file named declares no such source, or does not pin the article cited; also when the file is not there, or a copy cannot be read or does not match its pin."
             ),
             tr!("そのファイルが宣言して固定している出典と条を書いてください。ほかの条を引くなら、そのファイルに固定の行を足してください。", "Write a source and an article the file declares and pins; to cite another article, add its pin to that file."),
@@ -301,10 +301,10 @@ pub fn ledger() -> Ledger {
             "E107",
             tr!("要件と成果物が、同じ条の違う本文を読んでいます", "A requirement and what meets it read different texts of one article"),
             tr!(
-                "要件が引く条を、それを満たす規則かカレンダーのファイルも固定していて、どの写しも要件の写しと本文が違うとき。どちらかが古い写しです。",
+                "要件が引く条を、それを満たす規則かカレンダーのファイルも固定していて、どのコピーも要件のコピーと本文が違うとき。どちらかが古いコピーです。",
                 "A rule or a calendar that meets a requirement pins an article the requirement cites, and none of its copies has the text of the requirement's copy: one of them is old."
             ),
-            tr!("本文の差分を読み、古いほうの写しを取り直して固定し直してください。", "Read the diff of the texts, then fetch and pin the older copy again."),
+            tr!("本文の差分を読み、古いほうのコピーを取り直して固定し直してください。", "Read the diff of the texts, then fetch and pin the older copy again."),
             include_str!("../tests/mutants/E107_同じ条の違う本文/例.req"),
             &["E103"],
         )

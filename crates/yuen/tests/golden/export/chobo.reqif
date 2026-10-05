@@ -521,7 +521,7 @@
             <ATTRIBUTE-VALUE-STRING THE-VALUE="1">
               <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_4d29b822c24952edd439e093b5d3165a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
             </ATTRIBUTE-VALUE-STRING>
-            <ATTRIBUTE-VALUE-STRING THE-VALUE="chobo の例「refunds.ja.book」の勘定と振替が、返金の方針のどこから来たかを書いたテストの材料。出典は方針の文書を写して固定し、成果物は勘定と振替を一つずつ名指す">
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="chobo の例「refunds.ja.book」の勘定と振替が、返金の方針のどこから来たかを書いたテストの材料。出典は方針の文書を保存して固定し、成果物は勘定と振替を一つずつ名指す">
               <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a839768f26076ff8651b726d23c1ccaa</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
             </ATTRIBUTE-VALUE-STRING>
           </VALUES>

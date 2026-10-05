@@ -18,7 +18,7 @@ inputs
 outputs
   利用料(fee) : money[USDc, excl_tax]  round half_up(1USDc)
 
-# 単価は百万トークンあたり。ページの表をそのまま写している。
+# 単価は百万トークンあたり。ページの表をそのまま転記している。
 table 単価表(unit_price)
 policy unique
 | モデル     | 種類                | -> 単価(price) : money[USDc, excl_tax] |

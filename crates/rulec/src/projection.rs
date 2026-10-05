@@ -1256,7 +1256,7 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
                         Some(k) => format!("[(buf.validate.field).{k} = {{gte: {a}, lte: {b}}}]"),
                         None => format!("\"minimum\": {a}, \"maximum\": {b}"),
                     };
-                    let mut d = Diag::error("E122", tr!("契約は `{full}` に {v} を通しますが、規則はそれを断ります", "The contract lets `{full}` be {v}, which the rule refuses"))
+                    let mut d = Diag::error("E122", tr!("契約は `{full}` に {v} を通しますが、規則はそれを受け付けません", "The contract lets `{full}` be {v}, which the rule refuses"))
                         .at(at.clone())
                         .win(name, WVal::Int(v))
                         .mark(
@@ -1415,11 +1415,11 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
                 });
                 let title = if filtered {
                     tr!(
-                        "契約は `{full}` のうち `where` に当てはまる要素が {v} 件でも通しますが、規則はそれを断ります",
+                        "契約は `{full}` のうち `where` に当てはまる要素が {v} 件でも通しますが、規則はそれを受け付けません",
                         "The contract lets `{full}` hold {v} elements the `where` picks out, which the rule refuses"
                     )
                 } else {
-                    tr!("契約は `{full}` が {v} 件でも通しますが、規則はそれを断ります", "The contract lets `{full}` hold {v}, which the rule refuses")
+                    tr!("契約は `{full}` が {v} 件でも通しますが、規則はそれを受け付けません", "The contract lets `{full}` hold {v}, which the rule refuses")
                 };
                 let mut d = Diag::error("E122", title)
                     .at(at.clone())
@@ -1475,7 +1475,7 @@ fn defaulted(at: &str, pr: &Projection, steps: &[String], si: usize, full: &str,
     Diag::error(
         "E122",
         tr!(
-            "契約では `{step}` を省略でき、そのとき `{full}` は {zero} として届きますが、規則はそれを断ります",
+            "契約では `{step}` を省略でき、そのとき `{full}` は {zero} として届きますが、規則はそれを受け付けません",
             "The contract lets `{step}` be left out, and `{full}` then arrives as {zero}, which the rule refuses"
         ),
     )
@@ -1517,7 +1517,7 @@ fn empty_date(at: &str, pr: &Projection, fd: &crate::proto::Field, full: &str, n
     let mut d = Diag::error("E122", tr!("契約は `{full}` に \"\" を通しますが、\"\" は日付ではありません", "The contract lets `{full}` be \"\", which is not a date"))
         .at(at.to_string())
         .win(name, WVal::Str(String::new()))
-        .mark(pr.span.clone(), tr!("`{}` は \"\" を断りません", "nothing on `{}` rules \"\" out", fd.name))
+        .mark(pr.span.clone(), tr!("`{}` は \"\" を通します", "nothing on `{}` rules \"\" out", fd.name))
         .fix(FixKind::NarrowContract, fix.clone())
         .note(if fd.optional {
             tr!(
@@ -1542,7 +1542,7 @@ fn empty_date(at: &str, pr: &Projection, fd: &crate::proto::Field, full: &str, n
         )
     } else {
         tr!(
-            "ヒント: `{full}` に {fix} と書いてください。Protovalidate が \"\" を断るようになります。",
+            "ヒント: `{full}` に {fix} と書いてください。Protovalidate が \"\" を通さなくなります。",
             "hint: write {fix} on `{full}`, and Protovalidate refuses \"\"."
         )
     })
@@ -1554,7 +1554,7 @@ fn null_passes(at: &str, pr: &Projection, con: &Contract, n: &Json, full: &str, 
     let ty = con.schema_type(n).0.unwrap_or_default();
     let by_keyword = con.applying(n).iter().any(|x| matches!(get(x, "nullable"), Some(Json::Bool(true))));
     let fix = if by_keyword { "\"nullable\": false".to_string() } else { format!("\"type\": \"{ty}\"") };
-    Diag::error("E122", tr!("契約は `{full}` に null を通しますが、規則はそれを断ります", "The contract lets `{full}` be null, which the rule refuses"))
+    Diag::error("E122", tr!("契約は `{full}` に null を通しますが、規則はそれを受け付けません", "The contract lets `{full}` be null, which the rule refuses"))
         .at(at.to_string())
         .mark(
             pr.span.clone(),
@@ -1581,7 +1581,7 @@ impl Contract {
 
 fn refused_note() -> String {
     tr!(
-        "契約の検証を通っても、この値では生成コードが入口で断ります。API ならリクエストが誤りとして返り、Kafka の消費側なら処理が止まるか DLQ に回ります。",
+        "契約の検証を通っても、この値は生成コードが入口で受け付けません。API ならリクエストが誤りとして返り、Kafka の消費側なら処理が止まるか DLQ に回ります。",
         "A value that passes the contract's validation is still refused at the door of the generated code: an API answers the request with an error, and a Kafka consumer stops or sends the message to the DLQ."
     )
 }
@@ -2409,7 +2409,7 @@ fn broken_constraints(f: &RuleFile, c: &Checked, con: &Contract, ac: &Across, ru
             }
             None => {
                 d = d.note(tr!(
-                    "契約がこの組み合わせを断ることを示せませんでした（例は作れませんでした）。",
+                    "契約がこの組み合わせを通さないことを示せませんでした（例は作れませんでした）。",
                     "It could not be shown that the contract refuses such a combination, and no example could be built either."
                 ));
             }

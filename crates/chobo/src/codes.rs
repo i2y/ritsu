@@ -479,7 +479,7 @@ pub fn ledger() -> Vec<Entry> {
             "E012",
             tr!("移動の元と先がいつも同じ勘定です", "A move from an account to the same account"),
             tr!(
-                "一つの移動の `from` と `to` に、同じ勘定と同じ引数を書いたときに出ます。どう呼んでも same_account で断られます。",
+                "一つの移動の `from` と `to` に、同じ勘定と同じ引数を書いたときに出ます。どう呼んでも same_account で拒否されます。",
                 "One move names the same account with the same arguments in `from` and in `to`. Every call is refused with same_account."
             ),
             tr!(
@@ -555,9 +555,9 @@ pub fn ledger() -> Vec<Entry> {
         ),
         e(
             "E023",
-            tr!("境界に断る理由の名前がありません", "A bound with no reason to refuse with"),
+            tr!("境界に拒否の理由の名前がありません", "A bound with no reason to refuse with"),
             tr!(
-                "境界に `refused as <理由>` が無いとき、または理由の名前が chobo の決めている名前（key_conflict、already_refused、same_account、no_such_hold、already_posted、already_voided、expired、over_hold）と同じときに出ます。理由の名前は、断ったときに呼ぶ側が受け取るもので、dandori のタスクのエラーの名前にもなります。",
+                "境界に `refused as <理由>` が無いとき、または理由の名前が chobo の決めている名前（key_conflict、already_refused、same_account、no_such_hold、already_posted、already_voided、expired、over_hold）と同じときに出ます。理由の名前は、その境界で拒否されたときに呼ぶ側が受け取るもので、dandori のタスクのエラーの名前にもなります。",
                 "A bound has no `refused as <reason>`, or its reason is one of the names chobo gives itself (key_conflict, already_refused, same_account, no_such_hold, already_posted, already_voided, expired, over_hold). The reason is what a caller gets back when the bound refuses, and it is the name of the error of a dandori task."
             ),
             tr!(
@@ -571,7 +571,7 @@ pub fn ledger() -> Vec<Entry> {
             "E030",
             tr!("振替にキーがありません", "A transfer with no key"),
             tr!(
-                "振替に `key` の行が無いとき、またはキーに書いた名前が振替の引数に無いときに出ます。どの振替にも冪等のキーが要ります。同じキーで同じ中身の二度目の呼び出しは何もせず、中身が違えば断られます。",
+                "振替に `key` の行が無いとき、またはキーに書いた名前が振替の引数に無いときに出ます。どの振替にも冪等のキーが要ります。同じキーで同じ中身の二度目の呼び出しは何もせず、中身が違えば拒否されます。",
                 "A transfer has no `key` line, or the key names something that is not one of its parameters. Every transfer needs an idempotency key: a second call with the same key and the same content does nothing, and one with other content is refused."
             ),
             tr!(
@@ -589,7 +589,7 @@ pub fn ledger() -> Vec<Entry> {
                 "The key lists a parameter whose type is a unit. A retry with another amount would then go through as a second transfer, and move twice."
             ),
             tr!(
-                "キーから額を外してください。額だけが違う二度目の呼び出しは、key_conflict で断られるようになります。",
+                "キーから額を外してください。額だけが違う二度目の呼び出しは、key_conflict で拒否されるようになります。",
                 "Take the amount out of the key; a second call that differs only in the amount is then refused with key_conflict."
             ),
             X_E031,
@@ -646,7 +646,7 @@ pub fn ledger() -> Vec<Entry> {
                 "E051",
                 tr!("前のリビジョンからある振替の定義が変わりました", "A transfer kind changed since the revision compared with"),
                 tr!(
-                    "`--diff-base` で比べたリビジョンにある振替の、引数、キー、仮押さえの終わり方、移動が変わったときに出ます。呼んでいる途中の操作をリトライすると key_conflict で断られ、押さえ中の仮押さえを確定できなくなります。",
+                    "`--diff-base` で比べたリビジョンにある振替の、引数、キー、仮押さえの終わり方、移動が変わったときに出ます。呼んでいる途中の操作をリトライすると key_conflict で拒否され、押さえ中の仮押さえを確定できなくなります。",
                     "A transfer kind of the revision given to `--diff-base` has new parameters, a new key, a new way for its holds to end, or new moves. A retry in flight would be refused with key_conflict, and a hold still held could not be posted."
                 ),
                 tr!(
@@ -704,9 +704,9 @@ pub fn ledger() -> Vec<Entry> {
         ),
         e(
             "W102",
-            tr!("いつも断られる振替", "A transfer that is always refused"),
+            tr!("いつも拒否される振替", "A transfer that is always refused"),
             tr!(
-                "振替が取る元の勘定に、入れる移動がどこにも無く、その勘定の下限が 0 以上のときに出ます。0 より多く動かせば、いつも断られます。",
+                "振替が取る元の勘定に、入れる移動がどこにも無く、その勘定の下限が 0 以上のときに出ます。0 より多く動かせば、いつも拒否されます。",
                 "What a transfer takes from has a lower bound of 0 or more, and nothing anywhere puts into it: whenever the transfer moves more than 0, it is refused."
             ),
             tr!("その勘定へ入れる振替（入荷、入金）を書いてください。", "Write a transfer that puts into that account (a delivery, a top-up)."),
@@ -715,9 +715,9 @@ pub fn ledger() -> Vec<Entry> {
         ),
         e(
             "W103",
-            tr!("移動の順序のせいで断られる振替", "A transfer refused for the order of its moves"),
+            tr!("移動の順序のせいで拒否される振替", "A transfer refused for the order of its moves"),
             tr!(
-                "すぐに確定する振替で、前の移動が勘定から取り、後の移動が同じ勘定へ入れるとき（下限）、または前の移動が入れ、後の移動が取るとき（上限）に出ます。chobo は移動を書いた順に一つずつ確かめるので、合わせれば収まる場合でも、前の移動で断られます。",
+                "すぐに確定する振替で、前の移動が勘定から取り、後の移動が同じ勘定へ入れるとき（下限）、または前の移動が入れ、後の移動が取るとき（上限）に出ます。chobo は移動を書いた順に一つずつ確かめるので、合わせれば収まる場合でも、前の移動で拒否されます。",
                 "In a transfer that posts at once, an earlier move takes from an account that a later move puts into (a lower bound), or puts into one that a later move takes from (an upper bound). Moves are checked one at a time in the order they are written, so the earlier move is refused even when the two together would fit."
             ),
             tr!(
@@ -756,7 +756,7 @@ pub fn ledger() -> Vec<Entry> {
             "W106",
             tr!("効かない境界", "A bound that never matters"),
             tr!(
-                "上限のある勘定へ入れる移動がどこにも無いとき（下限のある勘定から取る移動が無いときも）に出ます。その境界で断られる振替がありません。",
+                "上限のある勘定へ入れる移動がどこにも無いとき（下限のある勘定から取る移動が無いときも）に出ます。その境界で拒否される振替がありません。",
                 "Nothing puts into an account with an upper bound (or takes out of one with a lower bound), so the bound never refuses anything."
             ),
             tr!("境界を消すか、その境界で確かめるはずだった振替を書いてください。", "Remove the bound, or write the transfer it was meant to check."),

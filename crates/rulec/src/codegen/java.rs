@@ -528,7 +528,7 @@ impl<'a> Gen<'a> {
                  return x;\n                }}\n            }}\n            \
                  throw new RuleInputError({msg} + v);\n        }}\n    }}\n\n",
                 vd = tr!("記録と、受け渡しする値に使う綴り。", "The spelling this member has on the wire and in a record."),
-                fd = tr!("受け渡しする値の綴りから引く。無ければ入口で断る。", "The member with this spelling on the wire; refused at the door when there is none."),
+                fd = tr!("受け渡しする値の綴りから引く。無ければ入口でエラーにする。", "The member with this spelling on the wire; refused at the door when there is none."),
                 msg = java_str(&tr!(
                     "{jp} が列挙 {ascii} の値ではありません: ",
                     "{jp} is not a value of enum {ascii}: "
@@ -560,8 +560,8 @@ impl<'a> Gen<'a> {
              super(value == null ? what : what + \": \" + value);\n            \
              this.what = what;\n            this.value = value;\n        }}\n    }}\n\n",
             tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller."),
-            tr!("何を断ったかを説明するメッセージ。", "The sentence that says what was refused."),
-            tr!("断られた値。理由が値についてでなければ null。", "The value refused, or null when the refusal is not about one.")
+            tr!("何を受け付けなかったかを説明するメッセージ。", "The sentence that says what was refused."),
+            tr!("受け付けなかった値。理由が値についてでなければ null。", "The value refused, or null when the refusal is not about one.")
         ));
         o.push_str(&format!(
             "    /** {} */\n    public static final class RuleContradictionError extends RuntimeException {{\n        \
