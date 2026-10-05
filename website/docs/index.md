@@ -51,11 +51,14 @@ people.
   that no sequence of transfers, holds and expiries can take an account past a bound, and generates
   clients for PostgreSQL and TigerBeetle.
 - **geas** runs each claim about a program against it — a command line, an HTTP service, a page in
-  a browser — and, given a diff, tells which claims it touches.
+  a browser — and, given a diff, tells which claims it touches. Given an OpenSpec spec, it lists the
+  scenarios that no claim of the same name checks.
 - **yuen** says where each requirement came from, who owns it, and what satisfies and verifies it,
-  with every link pinned by hashes at both ends.
+  with every link pinned by hashes at both ends. It pins the requirements of an OpenSpec spec the
+  same way.
 - **sakai** maps which context owns which files and who may depend on whom, and checks every
-  reference that crosses contexts, in the files of every language here and in the code.
+  reference that crosses contexts, in the files of every language here, in the OpenAPI and AsyncAPI
+  documents services keep as their contracts, and in the code.
 
 ## Where the languages meet
 

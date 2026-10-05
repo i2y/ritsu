@@ -166,7 +166,7 @@ transfer refund(request: string, order: string, amount: USD)
 
 ### geas：エージェントが書いたコードについての主張
 
-コードはエージェントが書き、主張は人が読みます。geas は主張を一つずつ、動いているプログラム（コマンドライン、HTTP のサービス、ブラウザのページ）に当てて確かめ、差分を渡せば、それがどの主張にかかわるかを答えます。
+コードはエージェントが書き、主張は人が読みます。geas は主張を一つずつ、動いているプログラム（コマンドライン、HTTP のサービス、ブラウザのページ）に当てて確かめ、差分を渡せば、それがどの主張にかかわるかを答えます。OpenSpec の仕様を渡せば、`geas scenarios` が、同じ名前の主張で確かめていないシナリオを挙げます。
 
 ```geas
 # The human-auditable half. The implementation (calc.py) is agent-written;
@@ -202,7 +202,7 @@ claim "rejects an unknown operator" {
 
 ### yuen：要件の出どころ
 
-要件ごとに、どこから来たか（法令の条、文書、決定）、誰が受け持つか、何が満たし何が確かめるかを書きます。どのリンクも両端のハッシュで固定されていて、出典、要件、満たすもののどれかが変われば、その先のリンクは、人が見直すまで止まります。yuen は米国の eCFR と日本の e-Gov から法令を読み、ReqIF と W3C PROV に書き出せます。
+要件ごとに、どこから来たか（法令の条、文書、決定）、誰が受け持つか、何が満たし何が確かめるかを書きます。どのリンクも両端のハッシュで固定されていて、出典、要件、満たすもののどれかが変われば、その先のリンクは、人が見直すまで止まります。yuen は米国の eCFR と日本の e-Gov から法令を読み、ReqIF と W3C PROV に書き出せます。[OpenSpec](https://github.com/Fission-AI/OpenSpec) の仕様の要件も同じように固定し、変更が要件を書き換えると止まります。
 
 ```req
 requirements osha v1
@@ -226,7 +226,7 @@ requirement extinguisher_distance
 
 ### sakai：境界づけられたコンテキストの地図
 
-地図には、どのコンテキストがどのファイルを持ち、どの言語を公開し、誰が誰に何を通して依存してよいかを書きます。sakai は、コンテキストのあいだをまたぐすべての参照を、ここにあるすべての言語のファイルと、コードについて確かめます。コードの import は import-linter、dependency-cruiser、ArchUnit、go-arch-lint に渡し、Rust のクレートは Cargo に尋ねます。ritsu は自分のクレートをこの形で地図にしています。次はそのコンテキストの一つです。
+地図には、どのコンテキストがどのファイルを持ち、どの言語を公開し、誰が誰に何を通して依存してよいかを書きます。sakai は、コンテキストのあいだをまたぐすべての参照を、ここにあるすべての言語のファイルと、サービスが契約として持つ OpenAPI と AsyncAPI の文書と、コードについて確かめます。コードの import は import-linter、dependency-cruiser、ArchUnit、go-arch-lint に渡し、Rust のクレートは Cargo に尋ねます。ritsu は自分のクレートをこの形で地図にしています。次はそのコンテキストの一つです。
 
 ```ctx
 context Workflows(dandori) v1

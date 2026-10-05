@@ -14,7 +14,7 @@ ritsu（バイナリ。CLI。ritsu-wasm はブラウザで動かすもの。LSP 
  └── ritsu-project  プロジェクトの読み込み、名前の解決、口のつなぎ（6 章）
       ├── rulec  dandori  koyomi  chobo  geas  yuen  sakai     言語のクレート（互いに依存しない）
       └── 土台の層
-           ├── ritsu-base    診断、二つの言語の文、診断の台帳、CLI の表、ハッシュ、名指しとパス、出典、doc の枠、JSON
+           ├── ritsu-base    診断、二つの言語の文、診断の台帳、CLI の表、ハッシュ、名指しとパス、出典、doc の枠、JSON、YAML
            ├── ritsu-units   単位の型（5 章）
            ├── ritsu-ports   口：言語のあいだで渡すものの型と、問いの形（3.2）
            ├── ritsu-proto   .proto の読み手
@@ -54,7 +54,7 @@ dandori を作ったときの前提の一つ、「rulec の CLI の出力だけ�
 | 一つにする | 別々に保つ |
 |---|---|
 | リポジトリ（Cargo のワークスペース）と、バージョンとリリース | 言語の名前、字句、構文、キーワード、拡張子 |
-| 土台：診断と `--lang ja`、二つの言語の文、診断の台帳と `explain`、CLI の表、ハッシュ、出典の固定と改正の検知、名指しとパス、doc のページの枠、JSON | 各言語の検査と参照インタプリタ |
+| 土台：診断と `--lang ja`、二つの言語の文、診断の台帳と `explain`、CLI の表、ハッシュ、出典の固定と改正の検知、名指しとパス、doc のページの枠、JSON、YAML（JSON と行き来できる YAML 1.2） | 各言語の検査と参照インタプリタ |
 | 単位の型 | ページを読んで理解し確かめる人に見せるページの中身 |
 | `.proto` の読み手、生成先の言語ごとの書き出しの共通部分 | 生成するコードの形（rulec の表の一行が一つの分岐になる形など） |
 | プロジェクトの読み込みと名前の解決 | 各言語の README、DESIGN.md、PLAN.md、スキル、例 |
@@ -404,6 +404,55 @@ E と F で足した dev-dependency は三つある。ritsu-cross は、判定�
 - **一つのクレートにまとめる形**：依存の決まりがモジュールの規約になり、コンパイラが守らない。
 - **プロセスの境目を残し、JSON を型の付いた形式に直す形**：一つの処理系にする理由（型の付いたまま渡す）が無くなる。7 章の問い（「この集合で完全か」）は、渡すたびに子プロセスと JSON の往復になり、二つのツールのバージョンが違えば答えも食い違う。
 
+### 3.6 依存の脆弱性、ライセンス、出どころ（2026-10-06）
+
+ritsu が依存するものの既知の脆弱性、ライセンス、出どころを、CI の `audit` のジョブ（`.github/workflows/audit.yml`）で確かめる。確かめるのは次の二つで、どちらもネットワークが要るので、テストではなく CI で走らせる。
+
+- **Rust のクレート**：cargo-deny 0.20.2 が、`deny.toml` のとおりに `Cargo.lock` を確かめる。アドバイザリ（RustSec のデータベース。脆弱性、保守されなくなったクレート、健全でない（unsound）クレート、crates.io から取り下げられたバージョン）、ライセンス（MIT と Apache-2.0 だけ。memchr は「Unlicense OR MIT」で、MIT で足りる）、同じクレートの二つ目のバージョン、出どころ（crates.io だけ。ほかのレジストリと git は使わない）の四つである。`Cargo.lock` に載る外のクレート 14 個のうち、ビルドされるのは 8 個（serde_json、serde_core、indexmap、hashbrown、equivalent、itoa、memchr、zmij）で、残りの 6 個（serde、serde_derive、syn、quote、proc-macro2、unicode-ident）は、serde_json と serde_core が `cfg(any())`（どの対象でも成り立たない条件）の依存としてバージョンをそろえるために載るだけである。cargo-deny は cargo と同じくこの 6 個を外し、osv-scanner は `Cargo.lock` のとおりに 14 個とも調べる。
+- **リポジトリのすべてのロックファイル**：osv-scanner 2.6.0（osv-scalibr 0.5.2）が、根から下のロックファイルを OSV のデータベースで調べる。2026-10-06 の時点で 32 のファイルで、`Cargo.lock`、`crates/*/tools` の `package-lock.json` が 12（778 パッケージ）、`requirements.txt` が 9（142 パッケージ）、`go.mod` が 10（ツールの二つと、テストの材料と例の八つ）である。この中に、`ritsu gen` が書くバージョンを固定しているもの（dandori の Temporal のランナーと chobo のランナー）がある（9.3）。
+
+ジョブは、push（ブランチ）と pull request のたび、毎日（UTC 16:00）、手で始めたとき、それと `release.yml` がビルドの前に呼ぶ（13.2）。アドバイザリは、リポジトリが変わらなくても出るからである。二つのツールは、リリースのバイナリを決めたバージョンで取り、チェックサムで確かめて使う（`tools.yml` が wasm-tools と protoc を入れる形と同じ）。GitHub のもの（`actions/checkout`）のほかに action は使わない。
+
+**配るバイナリが、含むクレートを言う（2026-10-06）。** リリースの `ritsu` は、cargo-auditable 0.7.7 でビルドする（`cargo auditable build`）。含むクレートの一覧（名前、バージョン、出どころ）が、圧縮した JSON としてバイナリの中のセクション（`.dep-v0`）に入る。使う人が、入れた ritsu を自分のスキャナーで調べられるようにするためである（コンテナのイメージに `.deb` で入れた場合など）。確かめたこと：serde_json だけに依存する小さなクレートを `strip = true` のリリースでビルドすると、cargo-auditable を使ったものは、`cargo audit bin` が「Found 'cargo auditable' data（9 dependencies）」と読み、osv-scanner 2.6.0 は `--experimental-plugins rust/cargoauditable` で 9 パッケージを読んで調べた（既定のプラグインでは読まない）。使わないものは、`cargo audit bin` がパニックの文から 3 個を拾うだけで（「not built with 'cargo auditable', the report will be incomplete」）、osv-scanner は 0 個だった。増えたのは 32 バイトだった。macOS では `otool -l` に、Linux では `readelf -S` に `.dep-v0` が出るので、`release.yml` はアーカイブを作る前にそれを確かめる。Trivy、Grype、Syft も読むと、それぞれの文書が言う（この機械では試していない）。
+
+通すもの：通すアドバイザリは、`deny.toml` の `ignore`（理由を書いた表の形）と `osv-scanner.toml` の `IgnoredVulns`（理由と期日 `ignoreUntil`）に書く。osv-scanner の期日を過ぎると、ジョブはまた落ち、誰かが理由を読み直す。
+
+osv-scanner は `--no-resolve` で走らせる。`requirements.txt` が入れたい名前だけを書いていると、osv-scanner は deps.dev で依存を解決するが、その結果は誰も入れないバージョンになった（`tools/wire` では、idna 3.9.0 と setuptools 9.1.0 について、八つのアドバイザリを挙げた）。そこで、テストが入れる `requirements.txt` は、どれも依存の依存までバージョンを書いたものにして、osv-scanner は書いてあるとおりに読む。
+
+テストでの確かめ（`crates/ritsu/tests/audit.rs`、fast の段）：ネットワークを使わずに、監査の答えが正しくなるための前提を確かめる。`crates/*/tools` の `package.json` の横に `package-lock.json` があり、`go.mod` の横に `go.sum` があり、`requirements.txt` のどの行も一つのバージョン（`name==version`）であること。`ritsu gen` がパッケージに書くバージョンと、生成したコードのコメントが名指すバージョンが、ツールのロックファイルのバージョンと同じであること（9.3）。通すアドバイザリのどれにも理由があり、osv-scanner のものは期日が一年より先でないこと。`audit.yml` が全体を毎日調べ、`release.yml` がビルドの前にそれを呼ぶこと。`release.yml` が四つのプラットフォームとも cargo-auditable でビルドし、それを動かす機械の cargo-auditable をチェックサムつきで取り、セクションを確かめること。
+
+#### 2026-10-06 に見つかったものと、したこと
+
+| どこ | 何 | したこと |
+|---|---|---|
+| `crates/chobo/tools/runner/go`（pgx v5.11.0 が求める） | golang.org/x/text v0.29.0、GO-2026-5970（正規化が不正な UTF-8 で止まらなくなる。v0.39.0 で直った） | v0.41.0 に上げた（それが求める golang.org/x/sync も v0.22.0 に）。dandori の `tools/temporal-go` と同じバージョン。govulncheck v1.7.0 で、pgx の SCRAM の認証（`pgconn.scramAuth` → `precis` → `norm`）から関数の単位で届くことを確かめ、上げたあとは消えた |
+| `crates/dandori/tools/mermaid`（mermaid 12.0.0 の chevrotain が指す） | lodash-es 4.17.23、GHSA-f23m-r3pf-42rh（中）と GHSA-r5fr-rjxr-66jc（高） | mermaid の 12 系を 12.1.0 にした（chobo と sakai の `tools/mermaid` と同じ。ロックファイルの中身も同じになった）。lodash-es は 4.18.1 |
+| `crates/dandori/tools`（`tools/asl-run.mjs`） | jsonata 2.0.6 の五つ（細工した式によるコードの実行が三つ、プロトタイプ汚染、`$toMillis` の入力によるリソースの枯渇） | 上げない。AWS の Step Functions は JSONata を 2.0.6 の仕様で評価し（AWS の開発者ガイド「Transforming data with JSONata in Step Functions」）、ランナーはそれをまねる。2.0.x の続きは出ていない。ランナーが評価するのは、dandori が書いた式と、テストのシナリオの入力だけである。`osv-scanner.toml` に理由を書き、期日は 2027-04-05 |
+| `crates/dandori/tools/wire`、`crates/koyomi/tools` の `requirements.txt` | 入れたい名前だけ（boto3 と moto、mypy）で、依存はバージョンを書いていない。上の deps.dev の解決で、入れていないバージョンのアドバイザリが出た | `requirements.in` を置き、`uv pip compile --generate-hashes` で依存まで固定した（61 と 6 のパッケージ）。既知の脆弱性は無い |
+| `Cargo.lock` | なし（cargo-deny、cargo-audit 0.22.2 の 1,290 件、OSV のどれでも） | なし |
+
+ほかの四つの dandori の `requirements.txt`（agents、connect、pydantic-graph、temporal-python）は、`uv pip compile` にかけて、もう依存まで書いてあることを確かめた（足りないものは無かった）。
+
+#### 調べていないもの
+
+- `fetch.sh` と `install.sh` で取ってくるバイナリ（TigerBeetle、sakai の Java のツールと Context Mapper、wasm-tools、protoc）。チェックサムで確かめているが、OSV では調べていない。
+- Lean の依存（`proofs/lake-manifest.json`）。OSV に Lean のエコシステムが無い。
+- ワークフローが使う action（タグで指している）。`release.yml` は GitHub のもの（checkout、upload-artifact、download-artifact）しか使わず、ほかの action を使うのは、読むだけの権限で、secret を持たないジョブだけである。
+- 手元と CI のツールチェーンそのもの。この機械の Go 1.25.5 の標準ライブラリには、1.25.6〜1.25.10 で直ったアドバイザリが 30 ほどある（govulncheck の結果）。CI は `setup-go` の `1.25` で最新のパッチを入れる。
+- yuen の `tools/requirements.txt`（prov と reqif の二つの名前だけ）。依存まではまだ固定していないので、osv-scanner は二つだけを調べる。
+
+#### 捨てたもの
+
+- **CI で cargo-audit も走らせる**：cargo-deny がアドバイザリに加えてライセンスと出どころも見る。osv-scanner も OSV（RustSec を取り込んでいる）で `Cargo.lock` をもう一度調べる。cargo-audit は、バイナリを調べる `cargo audit bin` のほか、足すものが無い。
+- **osv-scanner の依存の解決（deps.dev）に任せる**：ネットワークの向こうの答えでバージョンが決まり、誰も入れないバージョンになった（上）。ロックファイルを置くほうが、CI が入れるものと同じになる。
+- **cargo-deny の `wildcards = "deny"`**：七つの言語のクレートは、Cargo から見れば公開できるクレートで、土台のクレートをパスで指す。cargo-deny はそれをワイルドカードと数える。外のクレートの指定は serde_json の `"1"` だけで、`cargo xtask deps` がそれ一つに保つ。
+- **jsonata を 2.2.x に上げる**：上の表。
+- **google の `osv-scanner-action` の再利用できるワークフロー（SARIF を code scanning に上げる）**：`security-events: write` が要り、GitHub の Security のタブに出す。リポジトリの設定にかかわるので、作者が決める（PLAN 7.11）。
+- **Dependabot と Renovate**：二十を超えるロックファイルに、それぞれ pull request が来る。リポジトリの設定にかかわり、入れるかどうかと範囲は作者が決める（PLAN 7.11）。
+
+参照した文書とバージョン（2026-10-06）：cargo-deny 0.20.2（2026-07-09、<https://embarkstudios.github.io/cargo-deny/checks/cfg.html> と各検査の `cfg.html`）、cargo-audit 0.22.2（2026-06-05）、osv-scanner 2.6.0（2026-09-14、<https://google.github.io/osv-scanner/supported-languages-and-lockfiles/>、<https://google.github.io/osv-scanner/configuration/>）、govulncheck v1.7.0（v1.8.0 は Go 1.26 が要る）、CycloneDX 1.7.2（2026-09-17）、cargo-cyclonedx 0.5.9、cargo-auditable 0.7.7（2026-10-02）、Trivy 0.75.0、Syft 1.54.0、Grype 0.120.0、<https://docs.aws.amazon.com/step-functions/latest/dg/data-transform.html>（JSONata 2.0.6）、<https://pkg.go.dev/vuln/GO-2026-5970>。
+
+
 ## 4. 土台
 
 `ritsu-base` に置くものと、その元。どれも言語の意味を持たない。
@@ -565,6 +614,25 @@ C.9 で `ritsu-proto` を作り、sakai をこれに替えた（rulec と dandor
 
 捨てたもの：wasm32-wasip1 で、ページが WASI のファイルの呼び出しを JavaScript で肩代わりする形。言語には一行も触らずに `std::fs` が動くが、PLAN の F.5 が wasm32-unknown-unknown と「バッファの頭に長さを書く」決まりを決めていて、肩代わりする JavaScript が、std がどの WASI の呼び出しをするかに追いつき続けるもう一つの実装になる。
 
+### 4.16 OpenSpec の読み手（`ritsu_base::openspec`、2026-10-05 の夜に足した）
+
+OpenSpec（Fission-AI の `@fission-ai/openspec`。2026-09-30 の 1.14.0 で確かめた）の仕様と変更の提案を読む読み手を、土台に一つ置く。yuen が仕様の要件を出典として要件ごとに固定し（yuen の DESIGN 20 章）、geas が仕様のシナリオを同じ名前の主張と突き合わせる（geas の DESIGN §17）ので、二つの言語が同じ読み方で読む必要がある。
+
+読むのは、仕様（`openspec/specs/<capability>/spec.md`）の `## Requirements` の下の要件（`### Requirement: <名前>`）のブロックとシナリオ（`#### ` の見出しで本文のあるもの）、変更の提案の差分（`openspec/changes/<id>/specs/<capability>/spec.md`）の ADDED・MODIFIED・REMOVED・RENAMED の四つの節、`openspec/` の置き方（仕様のパスから capability と変更の提案の場所を引き、`changes/archive/` を除いた提案を並べる）である。決まりは OpenSpec 自身の読み手（ソースの `src/core/parsers/`）と同じにした：コードブロックの中の行は見出しにしない、CR LF を LF として読み BOM を落とす、要件の名前は `Requirement:` のあとの文字列から見出しの末尾の `#` の並びを除いて前後の空白を落とし、書いたとおりに比べる、要件のブロックは見出しから次の要件か `## ` の行の手前までで末尾の空白を落とす（archive が MODIFIED で置き換える範囲）、archive は RENAMED・REMOVED・MODIFIED・ADDED の順に当てる。
+
+確かめ方：OpenSpec 1.14.0 の読み手（`extractRequirementsSection`、`MarkdownParser`、`parseDeltaSpec`）を npm で入れて node で呼び、同じファイルから作ったブロックとシナリオの名前と差分を `crates/ritsu-base/tests/fixtures/openspec/expected.json` に置いた（作り方は隣の `expected.mjs`）。`tests/openspec.rs` は、土台の読み手がそれと一字も違わないことを確かめる。テストは Node も OpenSpec も要らない。材料には、コードブロックの中の見出し、見出しの末尾の `#`、CR LF と BOM、`Scenario:` の無い四段の見出し、本文の無いシナリオ、要件でない三段の見出し、`*` と `+` の箇条書きの RENAMED と REMOVED、対の無い `FROM:` を入れた。
+
+捨てたもの：`openspec` の CLI（`openspec show --json`）を子プロセスで呼ぶこと。`yuen check` と `geas scenarios` が Node と OpenSpec を要るようになり、yuen の `check` は何も走らせないという前提（yuen の P4）から外れる。`show --json` の要件の `text` はシナリオを含まないので、要件の端にもそのままは使えない。
+
+### 4.17 YAML の読み手（`ritsu_base::yaml`、sakai が OpenAPI と AsyncAPI の文書を読むときに足した）
+
+YAML と JSON を、値ごとに行と列を持つ値（`yaml::Node`）に読む。読むのは、RFC 9512（YAML のメディアタイプ）の 3.4 節の言う、JSON と行き来できる YAML 1.2 で、OpenAPI 3.2 と AsyncAPI 3.1 が文書に勧めるものである。ブロックとフローのマップとシーケンス、四つの書き方のスカラー（プレーン、一重引用符、二重引用符、`|` と `>`）、コメント、`---` と `...`、`%YAML 1.2`、アンカーとエイリアス（エイリアスはコピーとして読む）、JSON の型に当たるタグ（`!!str` など）と `!` を読む。値の型は YAML 1.2 のコアスキーマで、マップのキーは書いたままの文字列（フェイルセーフのスキーマ）にする。二つ目の文書、`%YAML 1.1` と `%TAG`、ほかのタグ、`?` のキー、スカラーでないキー、同じキーの二度書き、自分の中を指すエイリアス、`.inf` と `.nan`、字下げのタブは、読まずに、どの行の何が読めないかを二つの言語で返す。`.json` は JSON の決まりで読む（同じキーの二度書きは止める）。JSON Pointer（RFC 6901）で値を引ける。
+
+確かめ方は、YAML の公式のテストスイート（yaml-test-suite の data-2022-01-17、MIT。`crates/ritsu-base/tests/fixtures/yaml-test-suite.json` に一つのファイルにして持ち、ライセンスの文は隣の `yaml-test-suite.LICENSE`）の全部のケースにかけることである。2026-10-06 の回で、402 ケースのうち 204 をスイートの JSON と同じ値に読み、104 を読まずに止め、YAML でない 94 をどれも止めた。違う値を返したケースは無い。手では、Stripe と GitHub の OpenAPI の YAML（6.6 MB と 9.9 MB）を、js-yaml 4.3.2 のコアスキーマと同じ値に読むことも確かめた（リリースのビルドで 59 ms と 93 ms）。
+
+土台に置いたのは、どの言語の意味も持たず（4.11）、rulec の `import jsonschema` と dandori の `use openapi` も同じ文書を読むからである（二つとも、いまは JSON だけを読む）。土台は std だけで書く決まり（P9）なので、YAML のクレート（yaml-rust2 0.13.0、saphyr 0.1.0、serde-saphyr 1.3.0。serde_yaml は 2024 年に保守を終え、serde_yml は非推奨）は使わなかった。くわしくは sakai の DESIGN 15.3。
+
+
 ## 5. 単位の型
 
 ### 5.1 rulec の書き方を土台にする
@@ -685,6 +753,9 @@ rulec の組み込みの名前空間は、十三か国の一段目の区分で�
 9. **JSON の中のファイルの場所**：診断の `file` なども、名指しと同じくルートからの相対にし、JSON の外側に `root`（走らせたディレクトリから見たルート）を添える。取り込んだときは、yuen がルートからの相対、sakai が走らせたディレクトリからの相対で食い違っていた。土台で一つにするときにそろえる（4.2）とし、C.8 で sakai をルートからの相対にした。
 
 この決まりを、処理系のどこでも使う一つの書き方にする。yuen と sakai の `.req` と `.ctx` の中、診断の文と JSON、LSP の「定義へ移る」、`ritsu check` の JSON の中のもの、のどれも同じ形で書き、読み直すと同じものを指す。ツールの語は九つのまま。`ritsu` はツールの語にしない（ritsu は言語ではない）。
+
+OpenAPI と AsyncAPI の文書の要素（スキーマ、チャネル、メッセージ、操作）には、まだ名指しの形が無い。sakai は `.ctx` の中では短い書き方で、api と診断ではファイルと JSON Pointer（`payments/api.yaml#/components/schemas/Charge`）で書く（sakai の DESIGN 15.10）。ツールの語 `openapi` と `asyncapi` を足すと、yuen の診断の文（書けるツールの語の並び）と `naming.tsv` が変わるので、yuen と一緒に決める。
+
 
 ### 6.3 種類の語を足す
 
@@ -1278,6 +1349,9 @@ E.2 で、入口を 8.1 の形にした（`ritsu check`、七つの全部の `ri
 - 二行目は `--lang ja` で `もと: <ファイル>（<種類の語> <名前> v<版>、sha256:<16 桁>）` になる（rulec と koyomi。chobo と dandori の生成物は英語だけ）。種類の語は、言語のファイルに書く語（`rule`・`dates`・`calendar`・`book`・`workflow`）である（rulec の日本語は前は `規則`）。三行目から下（rulec の `Applies:`・`Cites:`、koyomi の `Calendar:`・`Cites:`）は言語ごとのまま。
 - 元のファイルを持たないもの（chobo の Go の `runtime.go`、rulec の丸めのテスト、パッケージのインデックスのファイルと依存を書くファイル）は一行目だけ。パッケージそのものの部分の一行目の言語は `ritsu`。
 
+- **頭とコメントに書く文字列は、その中に収める（2026-10-06）。** 頭の `Source:` の行は、ファイルのパスをそのまま書いていた。Unix ではファイルの名前に改行を入れられ、名前の続きが生成したコードの行になった（`ritsu gen` で、`rules/` に `pickup` と改行と `print('ran') #.rule` の名前の規則を置くと、Python のモジュールの頭の次の行がその文になった）。dandori のワークフローの説明（`\n` を書ける）も、rulec の出典の URL とパス（U+2028 や `\r` を書ける）も、同じことが起きた。いまは、ritsu-emit の `header::one_line` が、行を終える五つの文字（`\n`、`\r`、U+0085、U+2028、U+2029）をエスケープにして一行に収め、`Source::line` と `Comment::line` がそれを通る。どこかの出力先がこの五つで行を終える（Python は `\r`、TypeScript と JavaScript は U+2028 と U+2029、YAML 1.1 は三つとも）。説明のように何行にもなってよい文は、`Comment::lines` が一行ずつコメントにする（dandori の DESIGN 4.7）。ページに埋め込むスクリプトは、ritsu-base の `docpage::script_text` が `</script` を `<\/script` にする（rulec の DESIGN §15.187。chobo と dandori は前から JSON の `</` を `<\/` にしていた）。確かめ方は、ritsu-emit の `tests/emit.rs`、dandori の `tests/comments.rs`、rulec の `tests/heads.rs`、ritsu の `tests/gen.rs` の `a_files_name_stays_in_the_head`。ふつうの入力の出力は変わらない。0.23.0 のリリースと、例とテストの材料を全部の生成器にかけた出力を比べ（dandori は 52 のフローを七つのプラットフォームで 2,149 ファイル、rulec はコーパスの 87 の規則を英語と日本語で 10,140 ファイル、koyomi は 21 の日付のファイルで 150 ファイル、chobo は 8 つの帳簿を七つの出力先で 72 ファイル、`ritsu gen` は三つのプロジェクトを帳簿の二つの置き場所で 410 ファイル）、違ったのは、9.3 の doc.go の二つだけだった。
+
+
 ### 9.3 一つの生成パッケージ（E）
 
 `ritsu gen` は、プロジェクトの規則、期日、帳簿のクライアント、ワークフローを、言語ごとに一つのパッケージにする。対象は、四つの言語が共に生成している TypeScript、Python、Go。E.7 で作った形は次のとおりである（A の段階の形は、Go と Python のディレクトリと、依存を書くファイルを持たなかった）。
@@ -1296,6 +1370,19 @@ generated/typescript/          generated/python/              generated/go/
 
 - ワークフローは、規則と期日と帳簿を、同じパッケージの `rules/`・`dates/`・`books/` から読む。import はパッケージのモジュールを名指し、帳簿のトランスポートが受け取るクライアントは、パッケージの `books/` のクライアントの型である（TypeScript の `Books`、Python の `TypedDict` の `Books`、Go の `Books` と `Map()`）。渡すクライアントが帳簿と違えば、その言語の型の検査が言う。dandori のモデルに `package`（`InPackage`）があるときだけ、Temporal の三つの SDK のビルドが読み込む先を替える。`package` が無い `dandori build` の生成物は前と同じである（dandori の DESIGN 4.2）。
 - 依存は、入れたものが要るものだけを書く。TypeScript の `package.json` は、生成物が読み込むパッケージ（フローがあれば `@temporalio/*` 1.24.0、TigerBeetle の帳簿なら `tigerbeetle-node` 0.17.9）。Python の `pyproject.toml` は `temporalio==1.33.0` と `tigerbeetle==0.17.9`。PostgreSQL の帳簿のクライアントは、呼ぶ側が渡す接続を使うので依存を持たない（Go の pgx だけは import する）。バージョンは、ここで生成物を確かめているもの（dandori と chobo のランナー）。★Go のパッケージは `go.mod` を書かず、利用者のモジュールのディレクトリとして置く（`--module` が import のパス）。`go mod tidy` が書き換える `go.mod` を生成すると、`--check` が古いと言うからである。生成物が import するモジュールとバージョンは `doc.go` に書く。
+- **書くバージョンは、ツールのロックファイルのバージョンと同じにし、その既知の脆弱性を監査で見る（2026-10-06）。** パッケージが書くバージョン（`package.json` の `@temporalio/*` 1.24.0 と `tigerbeetle-node` 0.17.9、`pyproject.toml` の `temporalio==1.33.0` と `tigerbeetle==0.17.9`、`doc.go` の Go のモジュール）と、生成したコードがコメントで名指すバージョン（chobo のクライアントの「through tigerbeetle-node 0.17.9」、dandori の Go の「written against go.temporal.io/sdk v1.49.0」など）は、dandori の `tools/temporal`・`tools/temporal-python`・`tools/temporal-go` と、chobo の `tools/runner` と `tools/runner/go` のロックファイルのバージョンと同じである。`crates/ritsu/tests/audit.rs` が、stockroom のパッケージを帳簿の二つの置き場所で生成して、それを確かめる。だから、監査（3.6）がツールのロックファイルを調べることは、パッケージが求めるバージョンと、ここでそれを確かめたときの依存の依存を調べることになる。リリースの前にも調べる（13.2）。
+- **Go の依存の依存は、`doc.go` に上げるよう書く（2026-10-06）。** Go のモジュールは、求められたうちで最小のバージョンを選ぶ（minimal version selection）。npm や PyPI と違い、利用者が `go mod tidy` をしても、依存の依存は新しくならない。pgx v5.11.0（いま一番新しい）は golang.org/x/text v0.29.0 を求め、そのバージョンには GO-2026-5970 があり、pgx の SCRAM の認証から届く。PostgreSQL の帳簿の Go のクライアントは pgx を import するので、そのままだと利用者のモジュールは v0.29.0 でビルドされる（ほかの依存が上げなければ）。`ritsu gen` は、pgx を import するパッケージの `doc.go` に、次の行を足す（表は `src/package.rs` の `GO_RAISED`。pgx が直ったバージョンを求めるようになったら外す）。
+
+  ```go
+  //
+  // Of the modules those require, these are tested at a later version than the one asked for, which
+  // has a known vulnerability; raise them in the go.mod (`go get <module>@<version>`):
+  //
+  //	golang.org/x/text v0.41.0 (GO-2026-5970, through github.com/jackc/pgx/v5)
+  ```
+
+- **パッケージに SBOM は書かない（2026-10-06）。** 確かめたこと：osv-scanner 2.6.0 は、生成したパッケージの `package.json`（ロックファイルが無い）、`pyproject.toml`、`doc.go` のどれも読まない（三つとも「No package sources found」）。同じ依存を並べた CycloneDX 1.6 の `bom.cdx.json` を手で書いて置くと読み、x/text v0.29.0 の GO-2026-5970 などを見つけた。それでも書かない理由は三つある。一つ目に、ritsu が書ける SBOM は、パッケージが直接求めるものだけか、ここで確かめたときの依存の依存で、利用者の npm や uv が解決するものではない。利用者のロックファイル（`npm install` の `package-lock.json`、`uv lock`、`go mod tidy` の `go.mod` と `go.sum`）が、スキャナーが読むべきものである。二つ目に、直接の依存は、GitHub の依存関係グラフ（Dependabot）が `package.json` と `pyproject.toml` からそのまま読む。三つ目に、ritsu の書くバージョンが利用者の依存の依存を決めるのは Go だけで、それは上の `doc.go` の行が言う。作るなら、`ritsu gen --sbom` が、直接の依存と、生成したファイル（頭のハッシュ）を部品にした CycloneDX 1.7 を書く形がよい（15 章）。
+- ★**パッケージは、確かめたバージョンを「ちょうど」で書く**（`"1.24.0"`、`temporalio==1.33.0`）。`@temporalio/*` そのものに脆弱性が出たとき、直ったバージョンを使うには、生成した `package.json` か `pyproject.toml` を書き換える（`ritsu gen --check` は手で直したと言う）か、ritsu の次のリリースを待つことになる。下限を確かめたバージョンにした範囲（`^1.24.0`、`>=1.33.0,<2`）にすれば、利用者のロックファイルだけで上げられるが、確かめていないバージョンが入る。どちらにするかは作者が決める（PLAN 7.11）。
 - ★帳簿は `--books` で PostgreSQL（既定）か TigerBeetle を選ぶ。PostgreSQL なら、クライアントが呼ぶ SQL（スキーマと関数）も `books/<帳簿>.sql` に書く。クライアントだけでは動かないからである。
 - ★パッケージの名前（`--name`、既定は `generated`）は、npm のパッケージの名前、Python のパッケージのディレクトリ、Go の import のパスの既定になる。ディレクトリの名前から決めると、CI で別の名前のディレクトリに取り出したときに `--check` が古いと言うからである。
 - 何も書かずにエラーで止まるもの：検査を通らないファイル（その言語の診断を `ritsu check` と同じ形で出し、exit 1）、パッケージの同じファイルを書く二つのファイル（同じ別名の二つの規則、日本語の名前の二つのフローの Go の `workflow`。どちらの名前を替えるかは書いた人が決めることなので、exit 2）、インデックスのファイルや Go のディレクトリが import できない名前（Python と Go が予約している語。exit 2）、プロジェクトに無いファイルを読むワークフロー（exit 1）。
@@ -1380,6 +1467,7 @@ ritsu のリモートを作るまで（作者が決める）、CI は走らな�
 | `platforms` | 毎晩、手で始めたとき、`crates/dandori/` を変えた pull request | kind の上の Argo、LocalStack、Temporal の dev server を立てて、dandori の `platforms` の段を回す。外のサーバー（e-Gov、eCFR、Buf Schema Registry）に問い合わせるテストもここで回す（下）。ほかのジョブと並べない |
 | `release` | タグ（F） | 13.2 |
 | `docs` | 手で始めたとき（サイトを切り替えるまで） | ritsu のサイト（根のページと rulec と dandori のサイト）を `website/build.sh` で組み、出力の木に要るファイルがあることを確かめてから GitHub Pages に出す（13.2。F.7 で足した） |
+| `audit` | push（ブランチ）と pull request のたび、毎日、手で始めたとき、`release` から | cargo-deny で `Cargo.lock` のアドバイザリ、ライセンス、二つ目のバージョン、出どころを、osv-scanner でリポジトリのすべてのロックファイルの既知の脆弱性を確かめる（3.6） |
 
 C.12 で、`release` のほかの五つを根の `.github/workflows/` に書いた（ジョブ一つにファイル一つ。`fast.yml`、`tools.yml`、`proofs.yml`、`kani.yml`、`platforms.yml`）。F.7 で `release.yml`（タグで走る。13.2）と `packages.yml`（main への push と pull request で、文書だけの変更を除く）を足した。`packages.yml` は、rulec の `ci.yml` の `packages` のジョブのうち、静的な `ritsu` の musl のビルド、アーカイブ、`.deb` と `.rpm` を Debian と Fedora に入れて消すこと、を引き継ぐ。`cargo package` の半分は、crates.io に出さないので引き継がない。許す SKIP の一覧は `ci/skips/fast.txt`、`tools.txt`、`platforms.txt` にある。リモートが無いので、どれもまだ走らせていない。手元で確かめたのは、YAML として読めること、actionlint（v1.7.12）が何も言わないこと、`run` の中身が `bash -n` を通ること、ジョブが呼ぶコマンドがこの機械で通ることである（PLAN の C.12）。書いたときに決めたことは次のとおり。
 
@@ -1396,6 +1484,11 @@ C.12 で、`release` のほかの五つを根の `.github/workflows/` に書い�
 - rulec の `experiments/library/.github/workflows/` の三つは、規則のライブラリを外のリポジトリに出したときに走らせる見本で、ritsu の CI ではない（ritsu の中では走らない）。
 
 2026-10-05 の昼に、リポジトリを public にして初めて GitHub で回した。`fast`、`proofs`、`packages`、`docs` は通り、`tools` は三つの組がどれも落ちた。rulec の組では、rulec の `witとモジュールはcomponentになりwasmtimeが呼べる` が wasm-tools を見つけられず、その SKIP が一覧に無かった。rulec の `ci.yml` も wasm-tools を入れていなかったので、このテストは CI で一度も走っていなかった。rulec の組には、wasm-tools 1.245.1（このテストを書いた機械の版）のリリースのアーカイブを、書いたときに取ったチェックサムで確かめて入れる。数 MB なのでキャッシュはしない（`cargo install` は数分かかり、版ごとのキャッシュも要る）。dandori の組は、dandori の `tests/examples.rs` の `books_run_on_postgres_and_tigerbeetle`（例が呼ぶ帳簿を chobo のクライアントで PostgreSQL と TigerBeetle に流す）と、ritsu の `tests/gen.rs` の `the_packages_pass_the_type_checkers`（パッケージを tsc と mypy で確かめる）の、六つの SKIP で落ちた。dandori の組には、chobo の `tools/runner`（npm と `.venv`）、TigerBeetle（`fetch.sh` と `RITSU_TIGERBEETLE`）、koyomi の `.venv`（mypy）を入れる段を足し、PostgreSQL 18 のプログラムを入れる段を dandori の組でも走らせる（`if: matrix.group != 'rulec'`）。入れ方は、ほかの五つの言語の組と同じにした。ほかの五つの言語の組では、sakai、geas、chobo の四つのテストが落ちた（10.6）。 直したあとは、同じ日の夜に、六つのワークフローが全部通った。
+
+2026-10-06 に `audit.yml` を足し、`release.yml` に `audit` のジョブと cargo-auditable の段を足した。手元で確かめたのは、ジョブが走らせる二つのコマンド（cargo-deny 0.20.2 と osv-scanner 2.6.0。macOS の arm64 のリリースのバイナリ）がこの機械で通ること、`crates/ritsu/tests/audit.rs` が通ること、actionlint 1.7.12 が全部のワークフローに何も言わないことである。GitHub ではまだ走らせていない（Linux のバイナリのチェックサムは、リリースの `SHA256SUMS` と `.sha256` から取った）。
+
+`crates/ritsu-base/tests/yaml.rs` は、リポジトリの中のケースだけを読むので fast の段で走る。sakai の webshop の例の CML を Context Mapper の検査器に通すテスト（`crates/sakai/tests/contracts.rs`）は、ほかの CML のテストと同じく tools の段である。
+
 
 ### 10.6 揺れるテスト
 
@@ -1646,6 +1739,10 @@ git -C ~/ritsu remote remove rulec
 
 リリースと push は、作者の指示があるときだけ行う。
 
+- リリースは、ビルドの前に `audit.yml` を呼び（`release.yml` の `audit` のジョブ。`build` は `needs: audit`）、通すと書いていない既知の脆弱性があれば何も作らない（2026-10-06）。ritsu のバイナリが含むクレートと、`ritsu gen` がパッケージに書くバージョン（9.3）の両方を、その日のアドバイザリで確かめるためである。
+- バイナリは cargo-auditable 0.7.7 でビルドし、含むクレートの一覧をバイナリに入れる（3.6）。cargo-auditable は、ビルドする機械（ubuntu の x64 と arm64、macOS の x64 と arm64）のリリースのアーカイブを、決めた SHA-256 で確かめて使う。ビルドのあと、`readelf -S`（Linux）か `otool -l`（macOS）で `.dep-v0` のセクションがあることを確かめてから、アーカイブを作る。リリースに SBOM のファイル（CycloneDX）を別に付けることはしない。スキャナーはバイナリから読み、要る人は cargo-auditable の `auditable2cdx` でバイナリから作れるからである。
+
+
 ## 14. 捨てた形
 
 - **一つの言語にまとめる**：検査は、それぞれの狭さの上に立っている（rulec の自分の列への単項テスト、koyomi の一つの日付と有限の範囲、chobo の勘定の上限と下限、dandori の比較も計算もしない式、yuen のつながりとハッシュと期間、sakai の確かめられる部分）。混ぜれば崩れ、節で分ければファイルが一つになるだけである。
@@ -1659,6 +1756,10 @@ git -C ~/ritsu remote remove rulec
 - **土台を serde_json に依存させる**：4.9。
 - **yuen と sakai が、ほかの言語のファイルを自分で読み解く**：二つの読み手が同じ言語の構文を持つことになる（sakai の DESIGN 4.7 の C と同じ理由）。口を通して読む。
 - **言語ごとの診断のコードを一つの番号に振り直す**：rulec の診断のコードは、rulec の docs/compatibility.md が 1.0 から保つと書いているものである。番号は言語ごとのまま残し、`ritsu check` の中でだけツールの語を添える（8.3）。
+
+- **生成したパッケージに SBOM を書く**：9.3。
+- **CI で cargo-audit も走らせる、osv-scanner の依存の解決に任せる**：3.6。
+
 
 ## 15. まだやらないこと
 
@@ -1676,3 +1777,24 @@ git -C ~/ritsu remote remove rulec
 - **`ritsu run` で、子のフロー（`flow "…"` のタスク）を、子の `.flow` を同じように流して結果を出すこと**：いまは、ほかのタスクと同じくシナリオの結果を使う。
 - **`ritsu run` の時間で、並列のイテレーションの待ちを重ねて数えること**：参照インタプリタはイテレーションを一つずつ回すので、いまはイテレーションの中の待ちが足し合わさる。
 - **`ritsu run` の入力を、rulec の `vectors` から選ぶこと**（7.9 が書いた使い方）：いまはシナリオを人が書く。
+- **`ritsu gen --sbom`**：直接の依存と、生成したファイル（頭のハッシュ）を部品にした CycloneDX 1.7（9.3）。
+- **言語としての、セキュリティの検査**（下の「言語としての検査の提案」）。いまは、生成器が書き出す文字列を、それを書いたコメントや文字列の外に出さないことだけを確かめている（9.2）。
+
+**言語としての、セキュリティの検査（2026-10-06 に調べた）。** 七つの言語の成果物の中の、セキュリティにかかわる誤りを、言語の検査として足すかを調べた。作ったのは芯の一つで、残りは提案である。
+
+**作ったもの（芯）：検査を通ったファイルの文字列が、生成したコードのコメントや文字列の外に出ないこと。** ritsu の言語は、人が読んで確かめるのはソースのファイル（`.rule`、`.flow` など）で、生成したコードは「DO NOT EDIT」として読まない、という前提に立つ。その前提のもとでは、ソースの文字列が生成したコードの中でコードになることは、検査をすり抜ける道になる。四つが見つかり、直した（9.2、dandori の DESIGN 4.7、rulec の §15.187）。
+
+1. dandori のワークフローの `description` に `\n` を書くと、生成した TypeScript、Python、Go のコメントの外に、続きがコードの行として出た。TypeScript では、モジュールを読み込んだときに動く文になる。Argo の YAML では、`---` と別の文書（Pod）を書けて、`kubectl apply -f` がそれも作る。`dandori check` は通していた。
+2. ファイルの名前に改行があると、すべての生成器の頭の `Source:` の行の続きが、コードの行になった。
+3. rulec の出典の URL とパス（`source … = file "…" url "…"`、`applies`）に U+2028 や `\r` を書くと、TypeScript や Python の頭のコメントの外に出た。
+4. rulec が `rulec gen` で書くページ（`<別名>_page.html`）は、生成した JavaScript を頭ごと `<script>` に埋め込む。出典の URL の `</script>` で要素が閉じ、続きが HTML として読まれて、ページを開いた人のブラウザでスクリプトが動いた。
+
+Python と Go は、ファイルの先頭の `from __future__` や `package` より前に文が来るので、多くは構文の誤りで止まる。TypeScript と YAML と HTML では、そのまま動いた。
+
+**提案（作っていない）**：
+
+- **秘密の値をソースに直に書くこと。** `.flow` の文字列（URL、ヘッダ、エージェントの設定）や `.rule` の文字列に、鍵の形の値（`AKIA…`、`sk-…`、`ghp_…`、`xoxb-…`、PEM の秘密鍵）があれば警告にする。言語の検査にする意味は、プラットフォームの側にある。Temporal はワークフローの入力とアクティビティの引数を履歴に平文で残し（ペイロードのコーデックを入れないかぎり）、Step Functions は実行の履歴に、Argo はパラメーター（UI と Pod の仕様）に残す。dandori に「秘密」の印（型か注釈）を足し、印の付いた値が、ワークフローの入力と出力、履歴に残るタスクの引数にならないこと（アクティビティの中で、参照から取りに行くこと）を確かめる形がよい。
+- **外へ出すデータの境界。** 個人の情報などの印をフィールドに付け、それが `http`・`agent`・`aws` のタスクで外のサービスへ出るところを、sakai のコンテキストが許す相手に限る。言語をまたぐ検査（7 章の X の番号）になる。
+- **平文の通信。** `agent` や `http` のタスクの `http://` の URL（localhost を除く）を警告にする。
+- **生成器のほかの出力。** dandori のコメントに入る、ほかの文（`for … in …` の式の表示、規則の前提の文、`.proto` のファイルの名前）、yuen の書き出し（ReqIF、PROV の XML）、sakai と geas のページ。同じ種類の誤りが無いかを、同じ形のテスト（行を終える五つの文字と、`</script>`、`---`、`]]>` を入れた材料）で確かめる。yuen、sakai、geas の出力は、まだ見ていない。
+- **`dandori doc` の Markdown。** 説明の文を、HTML のタグごとそのまま書く（`<img src=x onerror=…>` を書いた説明は、そのまま `notice.md` に出た）。GitHub は描くときにタグの危ないところを消すが、生の HTML を許すサイトの生成器に載せると動く。HTML の版（`--format html`）は、本文も、埋め込む JSON（`</` を `<\/` に）も、前からエスケープしている。Markdown でも `<`、`>`、`&` をエスケープするかを決める（rulec の Markdown の版と合わせて）。

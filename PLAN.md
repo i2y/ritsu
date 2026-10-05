@@ -1113,3 +1113,47 @@ DESIGN 11 章。済んだ。
 - yuen の PROV の名前空間の IRI（`https://i2y.github.io/ritsu/ns/yuen#`）は、ritsu のサイトを公開したあとにしか開けない（2026-10-04 に `curl -I https://i2y.github.io/ritsu/ns/yuen` は 404 を返した）。yuen と、PROV を書き出す ritsu を配るより前に、`docs.yml` でサイトを公開する。配る前に `git grep -n -I 'i2y/yuen/ns'` が空で、`strings website/docs/playground/ritsu.wasm | grep -c i2y/yuen/ns` が 0 であることを確かめる。
 - 日本語の読み直しの残り：ritsu-base の台帳が書く二つの文（`explain` の再現の「…そこで `…` を走らせます」と、`docs/codes*.md` の頭の「手で直しません」）は、決まりでは「走らせてください」「手で直さないでください」になるが、koyomi・chobo・yuen・sakai・ritsu-cross の `docs/codes.ja.md` にも出るので、全部を取り込んだあとに一度で直す（ritsu-base の二行と、それらの `docs/codes.ja.md`、`crates/ritsu-base/tests/golden/compat/` を取り直す）。ritsu-base の `--help` の見出し「exit code:」「この画面を出す」、診断の見出し「確かめたら」、koyomi の `gen --lang ja` の生成物のコメントの空白、yuen の `src/check.rs` の E105 と同じ形の文、`crates/ritsu-base/tests/golden/compat/` の koyomi と yuen の古い文のコピー、根の README.ja.md のクレートの一覧の「口」、根のサイトの `website/docs-ja/ns/yuen.md` の地の文の「端」（六か所。言い換えの案は yuen の読み直しの担当が出した）、dandori の `--lang ja` でも英語のまま出る文（読めないファイル、`scenarios --out` の行など）。 rulec の読み直しの残り：ritsu-base の共通の行（`--help` の見出し「exit code:」と、`出しうる診断（…）` の行。rulec の `cli.rs` が持つ同じ行は「出しうる診断（`rulec explain <CODE>` で一つずつ説明を読めます）:」にした）。rulec の `diag.rs` の見出しの書き方は残した（生成物のコメントの「入口で断る」は、2026-10-05 に「入口でエラーにする」「受け付けない」に替えた。DESIGN 4.1）。rulec のサイトの地の文（出力の貼り付けではないもの）に、`website/rulec/docs-ja/tour.md` の「それを見ていない表が完全性検査で割れるのが狙いです」と `docs-ja/index.md` の「丸め方で円がいくら動くか」が残る。実験の記録（`crates/rulec/experiments/` の下）と、rulec の DESIGN.md の測った記録の引用は、そのときの出力の記録なので取り直していない。rulec の DESIGN の §11 の合意済みの五つの文面は、決めたときの記録として残した。図の URL の `?v=` は、ほかの担当が図を描き直したら `cargo test -p rulec --test website 図のurlは中身のハッシュを持っている` が言う値にそろえる。
 - テストの回し方：7.9 と同じ。Lean の層は、根の `proofs/` で `lake build` してから `cargo test --release -p ritsu-model`（`proofs/` を作っていないと SKIP する）。rulec の `tests/lean.rs`・`days.rs`・`machine.rs` は根の `proofs/` の `rulec-recheck` を使う。dandori の重い十二は、ほかと同時でなく一つずつ回す。
+
+### 7.11 夜の三つ（2026-10-05 の夜〜10-06 の朝。作者が取り込むかを決める）
+
+三つ（OpenSpec との連携、脆弱性の検査、sakai の OpenAPI と AsyncAPI への対応）を、三人の担当が並べて作った。取り込みはローカルのブランチ `night/2026-10-06` にして、main には入れていない。
+
+**OpenSpec との連携**（openspec の担当）
+
+OpenSpec の仕様（要件とシナリオ）と変更の提案を、yuen と geas が読む。変えたのは、ritsu-base の読み手、yuen、geas、ritsu のスキルの四つ。
+
+- **yuen**：OpenSpec の仕様を、法令と同じく、要件ごとに固定して読む出典の種類 `openspec` を足した（yuen の DESIGN 20 章）。仕様の要件が変われば（MODIFIED を含む変更を archive すれば）、`check` が固定で止まって差分を見せ（E103）、固定し直すと、その要件を引くリンクと、その先の規則・フロー・コード・主張へのリンクに印が付く（E302）。まだ archive していない提案は `source outdated`（通信しない）と `affected`（提案のフォルダーを足す差分）が読み、どの要件と持ち主とリンクに届くかを言う。新しいコードは E108（仕様に無い要件）、W102（どの出典も固定していない仕様の要件）、W402（OpenSpec の要件を引き geas の主張で確かめている要件で、シナリオに同じ名前の主張が無い）。
+- **geas**：`geas scenarios <spec.geas>... --openspec <path>...` を足した（geas の DESIGN §17）。シナリオごとに同じ名前の主張を探し、主張の無いシナリオを言う（exit 1）。`--draft` は、主張の無いシナリオの主張の下書き（本体はコメントだけで、E005 で止まる）を出す。新しいコードは E090。
+- **スキル**：ritsu のスキルに「OpenSpec と各言語の使い分け」の節（8 章）、yuen と geas のスキルに OpenSpec の扱いを足した。
+- **ritsu-base**：OpenSpec の読み手（DESIGN 4.16）。
+- 例：yuen の `openspec_greeter`（まだ archive していない提案のあるもの）と `openspec_greeter_archived`（`openspec archive` のあと。わざと止まる）、geas の `examples/greeter/openspec/`。どれも英語が先で、日本語の版を `ja/` の下に置いた。
+- 残したこと：OpenSpec のストア（ベータ）とほかのリポジトリの仕様、シナリオの単位の固定、Spec Kit と Kiro の仕様、`ritsu check` で OpenSpec のシナリオの網羅を言うこと（言語をまたぐ検査に足すかは、作者が決める）。
+
+**sakai の OpenAPI と AsyncAPI**（sakai-api の担当）
+
+- sakai の DESIGN 15 章。入れたもの（`ritsu_base::yaml`、sakai の `src/contracts.rs`、E108・W104・E210、例の webshop）。残したもの：
+  1. 名指しの決まり（DESIGN 6.2）に、ツールの語 `openapi` と `asyncapi` と、種類の語（`schema`（下に `value`）、`channel`、`message`、`operation`）を足す。yuen の DESIGN 2.2 の表、yuen の診断の文（ツールの語の並び）、ritsu-base の `naming.tsv`、sakai の `.ctx` の長い書き方と api の書き方（いまは `{"pointer": …}`）を一緒に変える。
+  2. dandori の口（`References`）で、`http` のタスクが呼ぶ操作（文書と操作）を言う。sakai はそれを E210 で確かめる（いまは `use openapi` を文書の単位で数えるだけ）。
+  3. rulec の口で、`import jsonschema` が取り込む JSON Pointer を言う。sakai はそれを対応の先として読む（`import proto` と同じく、規則が対応になる）。
+  4. rulec の `import jsonschema` と dandori の `use openapi` が、`ritsu_base::yaml` で YAML の文書も読む。rulec の `src/jsonschema.rs` が YAML を読まない理由（その文書が使う部分だけを読む読み手は黙って読み違える）は、読む部分を決めてその外を止める読み手で解けている。
+  5. sakai の `build`：文書の `$ref` から、生成したコードどうしの import を許す（sakai の DESIGN 7.1 の表の最後の行。いまは proto の import だけから作る）。
+  6. 根の README（英日）の sakai の段落に、OpenAPI と AsyncAPI の文書を足した。文は作者が確かめる。
+
+**脆弱性の検査**（vuln の担当）：ritsu 自身の依存の監査（DESIGN 3.6）と、生成器がソースの文字列をコメントやスクリプトの外に出さない直し（9.2）を作った。ritsu を使う人のための脆弱性の検査として何を作るか（使う人のプロジェクトの依存を調べるのか、ritsu の地図と契約から見える脆弱性を言うのか）は、まだ決めていない（DESIGN 15 章の提案）。ritsu 自身の依存の監査は、その問いとは別に残した。
+
+残したこと：
+
+- `audit.yml` を GitHub で走らせること（push してから）。走らせて確かめるのは、Linux のバイナリが取れること、`cargo-deny --locked check` と osv-scanner がランナーで通ること、`release.yml` から呼べること。
+- yuen の `tools/requirements.txt` を、依存まで固定したロックファイルにすること（いまは prov と reqif の二つの名前だけ）。
+- dandori の、ほかのコメントに入る文と、Argo の注釈の U+0085・U+2028・U+2029（dandori の DESIGN 7 章）。
+- 秘密の値、外へ出すデータの境界、平文の通信の検査（上の提案）。
+
+作者に聞くこと：
+
+- ★パッケージの依存を「ちょうど」で書くか、下限つきの範囲で書くか（9.3）。
+- ★Dependabot（または Renovate）を入れるか。入れるなら、どのエコシステム（cargo、npm、pip、gomod、github-actions）と、どのディレクトリか。テストのツールのロックファイルは二十を超える。
+- ★osv-scanner の結果を SARIF で code scanning に上げるか（GitHub の Security のタブに出る。`security-events: write`）。
+- ★`SECURITY.md`（脆弱性の知らせ方）を置くか。GitHub の private vulnerability reporting を使うなら、リポジトリの設定を有効にする必要がある。
+- ★rulec のクレートは Unicode CLDR のデータ（Unicode-3.0）を含むが、`Cargo.toml` の `license` は「MIT OR Apache-2.0」のままで、リリースのアーカイブと `.deb`・`.rpm` にも `THIRD_PARTY_NOTICES` が入っていない（13.2 と、もとからの 7.10 の項目）。unicode-ident のように「(MIT OR Apache-2.0) AND Unicode-3.0」と書くか、配るものに通知を入れるかを決める。
+- この機械の Go（1.25.5）は、標準ライブラリに直ったアドバイザリが 30 ほどある。手が空いたときに 1.25 の最新のパッチに上げるとよい。
+

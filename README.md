@@ -192,7 +192,8 @@ transfer refund(request: string, order: string, amount: USD)
 
 The code is the agent's; the claims are what a person reads. geas runs each claim against the
 program — a command line, an HTTP service, a page in a browser — and, given a diff, tells which
-claims it touches.
+claims it touches. Given an OpenSpec spec, `geas scenarios` lists the scenarios that no claim of the
+same name checks.
 
 ```geas
 # The human-auditable half. The implementation (calc.py) is agent-written;
@@ -232,7 +233,8 @@ Each requirement says where it came from (an article of a law, a document, a dec
 it, and what satisfies and verifies it. Every link is pinned by hashes at both ends: when the
 source, the requirement or the thing that satisfies it changes, the links after it stop until
 someone looks again. yuen reads laws from the US eCFR and Japan's e-Gov, and exports ReqIF and
-W3C PROV.
+W3C PROV. It pins the requirements of an [OpenSpec](https://github.com/Fission-AI/OpenSpec) spec
+the same way, and stops when a change rewrites one.
 
 ```req
 requirements osha v1
@@ -258,9 +260,9 @@ requirement extinguisher_distance
 
 A map says which context owns which files, which language each publishes, and who may depend on
 whom, through what. sakai checks every reference that crosses contexts, in the files of every
-language here and in the code — handing imports to import-linter, dependency-cruiser, ArchUnit
-and go-arch-lint, and reading Rust's crates from Cargo. ritsu maps its own crates this way; this
-is one of its contexts:
+language here, in the OpenAPI and AsyncAPI documents services keep as their contracts, and in the
+code — handing imports to import-linter, dependency-cruiser, ArchUnit and go-arch-lint, and reading
+Rust's crates from Cargo. ritsu maps its own crates this way; this is one of its contexts:
 
 ```ctx
 context Workflows(dandori) v1
