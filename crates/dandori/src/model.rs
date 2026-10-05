@@ -942,6 +942,15 @@ impl Model {
         format!("{mark} {}\n{mark} {}\n", ritsu_emit::header::generated("dandori"), source.line().get(ritsu_base::text::Lang::En))
     }
 
+    /// `<name> v<version>: <description>`, a comment of as many lines as the description has. The
+    /// description is a string of the `.flow`, which may hold `\n` (and the breaks TypeScript and
+    /// YAML end a line at); written after one comment mark, the rest of it was a line of the
+    /// generated code, and in the YAML for Argo a document of its own (DESIGN 4.7).
+    pub fn titled(&self, c: ritsu_emit::header::Comment) -> String {
+        let described = if self.description.is_empty() { String::new() } else { format!(": {}", self.description) };
+        c.lines(&format!("{} v{}{described}", self.name, self.version))
+    }
+
     /// Whether a statement of the workflow reads `now`.
     pub fn uses_now(&self) -> bool {
         self.all_stmts().iter().any(|s| s.kind.reads_now())

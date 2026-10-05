@@ -2336,7 +2336,8 @@ impl<'a> Gen<'a> {
     fn workflow(&mut self, header: &str, rules: bool) -> String {
         let m = self.m;
         self.out.push_str(header);
-        self.out.push_str(&format!("// {} v{}{}\n\n", m.name, m.version, if m.description.is_empty() { String::new() } else { format!(": {}", m.description) }));
+        self.out.push_str(&m.titled(ritsu_emit::header::Comment::Slashes));
+        self.out.push('\n');
         // a workflow that implements a service ends with an object, its response, outputs or none
         let ret = if m.outputs.is_empty() && m.service.is_none() { "null".to_string() } else { "T.WorkflowOutput".to_string() };
         if self.flavor == Flavor::Durable {

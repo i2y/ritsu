@@ -2376,18 +2376,22 @@ pub fn render_html_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown
     };
     o.push_str(&body.replace("<!--TRY-->", &try_panel()).replace("<!--GRAPH-->\n", "").replace("<!--MACHINE-->", &machine));
     o.push_str("</main>\n<script type=\"module\">\n");
-    o.push_str(js);
-    o.push_str(&format!("\nconst RULE = {};\n", rule_json(f, c)));
+    // What goes in the element: the module, whose head names the files and the addresses the rule
+    // cites, and the rule as JSON. A `</script` in any of it would end the element there, and the
+    // rest would be read as HTML, so it is written `<\/script` (ritsu's DESIGN 9.2).
+    let mut script = String::from(js);
+    script.push_str(&format!("\nconst RULE = {};\n", rule_json(f, c)));
     let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
-    o.push_str(&format!("const FN = {{ run: {alias}_traced, record: {alias}_record }};\n"));
-    o.push_str(PAGE_JS);
+    script.push_str(&format!("const FN = {{ run: {alias}_traced, record: {alias}_record }};\n"));
+    script.push_str(PAGE_JS);
     // The board (§15.118). It is built out of the document above, so a reader with no
     // script still has the document — this only rearranges it.
-    o.push_str(&format!("\nconst GRAPH = {};\n", crate::graph::data_json(f, c, src)));
-    o.push_str(crate::graph::APP_JS);
+    script.push_str(&format!("\nconst GRAPH = {};\n", crate::graph::data_json(f, c, src)));
+    script.push_str(crate::graph::APP_JS);
     // Last, because both ask the board about something only the board knows: where the
     // answer goes, and whether the name in the address is a card of its own.
-    o.push_str("\nif (lastRun && window.rulecBoardFill) rulecBoardFill(lastRun.trace, lastRun.outs);\nlandOnHash();\n");
+    script.push_str("\nif (lastRun && window.rulecBoardFill) rulecBoardFill(lastRun.trace, lastRun.outs);\nlandOnHash();\n");
+    o.push_str(&ritsu_base::docpage::script_text(&script));
     o.push_str("</script>\n</body>\n</html>\n");
     o
 }

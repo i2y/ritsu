@@ -52,12 +52,39 @@ pub struct Source<'a> {
 
 impl Source<'_> {
     /// `Source: dates/payment_terms.cal (dates payment_terms v1, sha256:20eacc1719046107)`, in the
-    /// language the generated code is written in.
+    /// language the generated code is written in. The path is put on one line ([`one_line`]): a
+    /// file's name may hold a line break, and the line is a comment.
     pub fn line(&self) -> Text {
         let Source { path, kind, name, version, sha256 } = *self;
+        let path = one_line(path);
         let sha = &sha256[..16.min(sha256.len())];
         tr!("もと: {path}（{kind} {name} v{version}、sha256:{sha}）", "Source: {path} ({kind} {name} v{version}, sha256:{sha})")
     }
+}
+
+/// The characters some target ends a line at: `\n` and `\r` (Python ends one at a `\r` alone), and
+/// NEL, LINE SEPARATOR and PARAGRAPH SEPARATOR (U+0085, U+2028, U+2029), the last two of which end
+/// a line of JavaScript and TypeScript, and all three one of YAML 1.1.
+pub const LINE_BREAKS: [char; 5] = ['\n', '\r', '\u{85}', '\u{2028}', '\u{2029}'];
+
+/// `text` on one line, each of [`LINE_BREAKS`] written as its escape (`\n`, `\r`, `\u{2028}`, …).
+/// Text a source file holds (a file's name, a path or a URL it cites) goes into a comment of one
+/// line; a break in it would end the comment, and what follows would be a line of the generated
+/// code that no check of the source has seen (DESIGN 9.2).
+pub fn one_line(text: &str) -> std::borrow::Cow<'_, str> {
+    if !text.contains(LINE_BREAKS) {
+        return std::borrow::Cow::Borrowed(text);
+    }
+    let mut s = String::with_capacity(text.len() + 8);
+    for c in text.chars() {
+        match c {
+            '\n' => s.push_str("\\n"),
+            '\r' => s.push_str("\\r"),
+            c if LINE_BREAKS.contains(&c) => s.push_str(&format!("\\u{{{:x}}}", c as u32)),
+            c => s.push(c),
+        }
+    }
+    std::borrow::Cow::Owned(s)
 }
 
 /// The name of a file at `path` (a path as the person gave it), which a language's own command
@@ -103,13 +130,47 @@ pub enum Comment {
 }
 
 impl Comment {
-    /// The line as a comment, with its newline.
-    pub fn line(self, text: &str) -> String {
-        let mark = match self {
+    /// What begins each line of the comment.
+    pub fn mark(self) -> &'static str {
+        match self {
             Comment::Slashes => "//",
             Comment::Hash => "#",
             Comment::Dashes => "--",
-        };
-        format!("{mark} {text}\n")
+        }
+    }
+
+    /// The line as a comment, with its newline; a break in it is written as its escape
+    /// ([`one_line`]), so the comment stays one line.
+    pub fn line(self, text: &str) -> String {
+        format!("{} {}\n", self.mark(), one_line(text))
+    }
+
+    /// The text as a comment of as many lines as it has, each with its newline: a description a
+    /// source file gives in several lines (`\n` in a string of dandori's) stays a comment on each
+    /// of them. A line ends at each of [`LINE_BREAKS`], and at `\r\n` once.
+    pub fn lines(self, text: &str) -> String {
+        let mut out = String::new();
+        let mut rest = text;
+        loop {
+            let (line, next) = match rest.find(LINE_BREAKS) {
+                Some(at) => {
+                    let c = rest[at..].chars().next().unwrap_or('\n');
+                    let skip = if rest[at..].starts_with("\r\n") { 2 } else { c.len_utf8() };
+                    (&rest[..at], Some(&rest[at + skip..]))
+                }
+                None => (rest, None),
+            };
+            out.push_str(self.mark());
+            if !line.is_empty() {
+                out.push(' ');
+                out.push_str(line);
+            }
+            out.push('\n');
+            match next {
+                Some(n) => rest = n,
+                None => break,
+            }
+        }
+        out
     }
 }

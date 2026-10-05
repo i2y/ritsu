@@ -546,7 +546,7 @@ impl<'a> Gen<'a> {
                 "{comment} 準用: {} = {} (sha256:{})\n",
                 "{comment} Applies: {} = {} (sha256:{})\n",
                 a.name.text,
-                a.path,
+                ritsu_emit::header::one_line(&a.path),
                 a.hash.as_deref().unwrap_or("")
             ));
         }
@@ -579,6 +579,8 @@ impl<'a> Gen<'a> {
                     )
                 }
             };
+            // what a source file names (a path, a URL) stays on the comment's line (ritsu's DESIGN 9.2)
+            let what = ritsu_emit::header::one_line(&what);
             h.push_str(&tr!("{comment} 出典: {} = {what}\n", "{comment} Cites: {} = {what}\n", s.name.text));
         }
         h

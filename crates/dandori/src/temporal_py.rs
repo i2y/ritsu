@@ -1807,7 +1807,8 @@ impl<'a> Gen<'a> {
     fn workflow(&mut self, header: &str, _rules: bool) -> String {
         let m = self.m;
         self.out.push_str(header);
-        self.out.push_str(&format!("# {} v{}{}\n\n", m.name, m.version, if m.description.is_empty() { String::new() } else { format!(": {}", m.description) }));
+        self.out.push_str(&m.titled(ritsu_emit::header::Comment::Hash));
+        self.out.push('\n');
         self.out.push_str("from __future__ import annotations\n\nimport asyncio\nfrom datetime import timedelta\nfrom typing import Any, Callable\n\n");
         self.out.push_str("from temporalio import workflow\nfrom temporalio.common import RetryPolicy\n\n");
         self.out.push_str("from . import runtime as dd\nfrom . import types as T\n\n");

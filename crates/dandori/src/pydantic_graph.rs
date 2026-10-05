@@ -500,7 +500,8 @@ impl<'a> Gen<'a> {
         };
 
         let mut out = header.to_string();
-        out.push_str(&format!("# {} v{}{}\n#\n", m.name, m.version, if m.description.is_empty() { String::new() } else { format!(": {}", m.description) }));
+        out.push_str(&m.titled(ritsu_emit::header::Comment::Hash));
+        out.push_str("#\n");
         out.push_str("# Run it with the input as a dict:\n#   await graph.run(inputs={…}, state=State(), deps=Deps(tasks=make_tasks(your_tasks), run_id=\"…\"))\n");
         out.push_str("# It returns the outputs (None when the flow ends without `succeed`), or raises runtime.Failure.\n");
         out.push_str("# The run lives in this process: a wait sleeps by Deps.clock, a callback's answer comes to\n# Deps.callbacks. graph.render() draws the flow.\n\n");

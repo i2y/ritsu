@@ -1221,7 +1221,8 @@ impl<'a> Gen<'a> {
         });
         let mut out = String::new();
         out.push_str(&m.head("#"));
-        out.push_str(&format!("# {} v{}{}\n#\n", m.name, m.version, if m.description.is_empty() { String::new() } else { format!(": {}", m.description) }));
+        out.push_str(&m.titled(ritsu_emit::header::Comment::Hash));
+        out.push_str("#\n");
         out.push_str("# Submit with the input as JSON: argo submit --from workflowtemplate/<name> -p input='{…}'.\n");
         out.push_str("# The outputs end up in the global parameter dd_output; a failure's error and cause in dd_error.\n#\n");
         out.push_str("# The variables, as global parameters (JSON):\n");

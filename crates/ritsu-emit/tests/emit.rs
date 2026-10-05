@@ -52,3 +52,27 @@ fn the_generated_line() {
     assert_eq!(header::Comment::Hash.line("x"), "# x\n");
     assert_eq!(header::Comment::Dashes.line("x"), "-- x\n");
 }
+
+/// Text a source file holds never ends the comment it is written in (DESIGN 9.2). A file's name
+/// with a line break in it, put in the head as it is, made the rest of the name a line of the
+/// generated Python; a description of a flow with `\n` in it, a line of the TypeScript, the Go and
+/// the Python, and a document of its own in the YAML for Argo.
+#[test]
+fn what_a_source_says_stays_in_its_comment() {
+    let breaks = "a\nb\rc\u{85}d\u{2028}e\u{2029}f";
+    assert_eq!(header::one_line(breaks), "a\\nb\\rc\\u{85}d\\u{2028}e\\u{2029}f");
+    assert_eq!(header::one_line("rules/送料.rule"), "rules/送料.rule");
+    let s = header::Source { path: "rules/pickup\nprint('ran') #.rule", kind: "rule", name: "pickup", version: "1", sha256: "0123456789abcdef" };
+    assert_eq!(s.line().get(ritsu_base::text::Lang::En), "Source: rules/pickup\\nprint('ran') #.rule (rule pickup v1, sha256:0123456789abcdef)");
+    assert_eq!(header::Comment::Hash.line("one\ntwo"), "# one\\ntwo\n");
+    // a description of several lines: a comment on each, `\r\n` one break, an empty line a bare mark
+    assert_eq!(header::Comment::Slashes.lines("order v1: An order.\nIt ships."), "// order v1: An order.\n// It ships.\n");
+    assert_eq!(header::Comment::Hash.lines("a\r\nb\rc\u{85}d\u{2028}e\u{2029}f\n\ng"), "# a\n# b\n# c\n# d\n# e\n# f\n#\n# g\n");
+    assert_eq!(header::Comment::Dashes.lines("one line"), "-- one line\n");
+    for c in [header::Comment::Slashes, header::Comment::Hash, header::Comment::Dashes] {
+        for line in c.lines(breaks).lines().chain(c.line(breaks).lines()) {
+            assert!(line.starts_with(c.mark()), "{line:?} is not a comment");
+            assert!(!line.contains(header::LINE_BREAKS), "{line:?} holds a line break");
+        }
+    }
+}

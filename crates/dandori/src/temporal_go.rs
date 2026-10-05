@@ -2844,7 +2844,13 @@ fn doc_file(m: &Model, nd: &Needs, pkg: &str, header: &str, called: &BTreeSet<us
         modules.push(ANTHROPIC_SDK.to_string());
     }
     let mut d = header.to_string();
-    d.push_str(&format!("// Package {pkg} is the workflow {} v{} of {} for Temporal's Go SDK{}.\n", m.name, m.version, m.source_file, if m.description.is_empty() { String::new() } else { format!(": {}", m.description) }));
+    d.push_str(&ritsu_emit::header::Comment::Slashes.lines(&format!(
+        "Package {pkg} is the workflow {} v{} of {} for Temporal's Go SDK{}.",
+        m.name,
+        m.version,
+        ritsu_emit::header::one_line(&m.source_file),
+        if m.description.is_empty() { String::new() } else { format!(": {}", m.description) }
+    )));
     d.push_str("//\n// Workflow is the workflow (workflow.go), and NewWorker its worker, with the tasks you write\n// (OwnTasks); Start, Answer, Send and Status are its client (client.go).\n//\n");
     d.push_str(&format!("// It is written against {}; add them to your module with go get.\n", modules.join(", ")));
     if !called.is_empty() {
@@ -3079,7 +3085,8 @@ impl<'a> Gen<'a> {
         self.out.push_str("}\n");
         std::mem::swap(&mut self.out, &mut body);
         let mut w = header.to_string();
-        w.push_str(&format!("// {} v{}{}\n\npackage {pkg}\n\n", m.name, m.version, if m.description.is_empty() { String::new() } else { format!(": {}", m.description) }));
+        w.push_str(&m.titled(ritsu_emit::header::Comment::Slashes));
+        w.push_str(&format!("\npackage {pkg}\n\n"));
         if self.time {
             w.push_str("import (\n\t\"time\"\n\n\t\"go.temporal.io/sdk/workflow\"\n)\n");
         } else {

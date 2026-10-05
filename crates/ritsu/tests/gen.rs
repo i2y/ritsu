@@ -474,6 +474,32 @@ fn every_file_says_what_wrote_it_and_what_it_is_made_from() {
     golden(here().join("tests/golden/gen/stockroom.txt"), &shape.replace(version, "<version>"));
 }
 
+/// The head names the file a part is made from as its path, which may hold a line break: Unix lets
+/// a file's name have one. The head writes it as `\n` (ritsu-emit's `one_line`), so the rest of the
+/// name stays in the comment. Written as it was, the rest of this name was a line of the package's
+/// Python, a statement before everything else in the module (DESIGN 9.2).
+#[test]
+fn a_files_name_stays_in_the_head() {
+    let t = TempDir::new("gen-name");
+    let project = t.path().join("project");
+    ritsu_testkit::tmp::copy_dir(&here().join(STOCKROOM), &project);
+    let rule = read(&project.join("rules/delivery.rule")).replace("rule delivery v1", "rule pickup v1");
+    std::fs::write(project.join("rules/pickup\nprint('ran') #.rule"), rule).unwrap();
+    let out = t.path().join("out");
+    let (code, _, err) = generate(&project, &out, &[]);
+    assert_eq!(code, 0, "{err}");
+    let mut seen = 0;
+    for target in ["typescript", "python", "go"] {
+        for f in files(&out.join(target)) {
+            for line in read(&out.join(target).join(&f)).lines().filter(|l| l.contains("print('ran')")) {
+                assert!(line.starts_with("// Source: rules/pickup\\nprint('ran') #.rule (") || line.starts_with("# Source: rules/pickup\\nprint('ran') #.rule ("), "{target}/{f}: {line}");
+                seen += 1;
+            }
+        }
+    }
+    assert_eq!(seen, 3, "the head of the rule's module in each language");
+}
+
 // ── what it refuses ──────────────────────────────────────────────────────────────────────────────
 
 /// Two files of the project that would write one file of a package (the Go of two flows with

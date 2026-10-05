@@ -104,6 +104,34 @@ pub fn esc(s: &str) -> String {
     o
 }
 
+/// A text as the content of a `<script>` element. A browser ends the element at the first
+/// `</script` in it, whatever the script makes of it (a comment, a string), and reads what follows
+/// as HTML; so `</script` is written `<\/script`, in any case, and `<!--`, after which the parser
+/// reads the rest otherwise, `<\!--`. In a comment, a string or a regular expression of JavaScript,
+/// both mean what they meant. A path or an address a source file names reaches a generated page's
+/// script this way, in the head of the module it embeds (DESIGN 9.2).
+pub fn script_text(s: &str) -> String {
+    let mut o = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(at) = rest.find('<') {
+        o.push_str(&rest[..at]);
+        let after = &rest[at + 1..];
+        let closes = after.len() >= 7 && after.as_bytes()[0] == b'/' && after.is_char_boundary(7) && after[1..7].eq_ignore_ascii_case("script");
+        if closes {
+            o.push_str("<\\/");
+            rest = &after[1..];
+        } else if after.starts_with("!--") {
+            o.push_str("<\\!");
+            rest = &after[1..];
+        } else {
+            o.push('<');
+            rest = after;
+        }
+    }
+    o.push_str(rest);
+    o
+}
+
 /// The top of a page, up to and including `<body>`: the doctype, the language, the viewport,
 /// the generator (`koyomi 0.1.0`), the title, and the stylesheet.
 pub fn html_head(lang: Lang, generator: &str, title: &str, css: &str) -> String {
