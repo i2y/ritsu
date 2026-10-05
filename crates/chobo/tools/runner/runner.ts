@@ -12,6 +12,11 @@
 // `pass` waits until the expiry of every hold the scenario has made is past, then, on
 // PostgreSQL, calls the book's expire(); on TigerBeetle, it reads the accounts again until what
 // they hold is what the holds that never expire still hold (10 seconds at most).
+//
+// The reference lets no time pass but at a `pass`, and the holds expire after a few seconds of
+// real time: a scenario with a step or a read that long after a hold it made since its last
+// `pass` is `late`. The reference does not say what that run answers, and the test runs the
+// scenario again when it disagrees.
 
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -116,6 +121,13 @@ async function runScenario(mod: Json, book: Input["books"][number], sc: Scenario
   const factory = input.backend === "postgres" ? mod.postgres : mod.tigerbeetle;
   const sent: Json[] = [];
   const doneHolds: number[] = [];
+  // when the first hold since the last `pass` was asked for, and whether a step or a read came
+  // after its expiry
+  let heldSince: number | null = null;
+  let late = false;
+  const outlived = () => {
+    if (heldSince !== null && Date.now() - heldSince >= book.expiry * 1000) late = true;
+  };
   // on TigerBeetle: what each hold of the scenario still holds, by the hold's kind and key
   const pending = new Map<string, Pending[]>();
   const debited = new Set<string>();
@@ -130,6 +142,7 @@ async function runScenario(mod: Json, book: Input["books"][number], sc: Scenario
   async function call(c: { rec: Recorder; book: Json }, op: Json, step: number, callerNo: number | null): Promise<Json> {
     const requests: Json[] = [];
     c.rec.current = requests;
+    const asked = Date.now();
     let r: Json;
     try {
       const calls = c.book[op.kind];
@@ -145,6 +158,7 @@ async function runScenario(mod: Json, book: Input["books"][number], sc: Scenario
     sent.push({ ...at, op: op.op, kind: op.kind, requests });
     if (r.result === "done" && op.op === "hold") {
       doneHolds.push(Date.now());
+      heldSince ??= asked;
       const chain = requests.filter((q) => q.create_transfers).at(-1)?.create_transfers ?? [];
       const ps: Pending[] = chain
         .filter((x: Json) => x.flags.includes("pending") && x.user_data_32 !== 2)
@@ -159,6 +173,12 @@ async function runScenario(mod: Json, book: Input["books"][number], sc: Scenario
   }
 
   async function pass(): Promise<void> {
+    outlived();
+    await expireAll();
+    heldSince = null;
+  }
+
+  async function expireAll(): Promise<void> {
     const until = Math.max(0, ...doneHolds) + book.expiry * 1000 + 300;
     await sleep(Math.max(0, until - Date.now()));
     if (input.backend === "postgres") {
@@ -216,7 +236,8 @@ async function runScenario(mod: Json, book: Input["books"][number], sc: Scenario
     const state = await main.book[h.kind].status(h.args);
     if (state !== null) holds.push({ kind: h.kind, key: h.key, state });
   }
-  return { tenant: sc.tenant, result: { steps, accounts, holds }, sent, error: null };
+  outlived();
+  return { tenant: sc.tenant, result: { steps, accounts, holds }, sent, late, error: null };
 }
 
 async function main(): Promise<void> {

@@ -301,15 +301,21 @@ pub fn build_go(cases: &[Case], work: &Path) -> Result<GoRunner, String> {
 /// What a runner is given for one book: its client, and each scenario with its tenant, the
 /// accounts to read at the end, and the holds to ask about.
 pub fn book_input(c: &Case, client: &str, combo: &str) -> Value {
+    book_input_of(c, client, combo, None)
+}
+
+/// The same, for the scenarios `only` names (every one when None), in that order.
+pub fn book_input_of(c: &Case, client: &str, combo: &str, only: Option<&[usize]>) -> Value {
     let mut keys = serde_json::Map::new();
     for t in &c.book.transfers {
         keys.insert(t.name.clone(), json!(t.key.iter().map(|i| t.params[*i].name.clone()).collect::<Vec<_>>()));
     }
-    let scenarios: Vec<Value> = c
-        .scenarios
+    let all: Vec<usize> = (0..c.scenarios.len()).collect();
+    let scenarios: Vec<Value> = only
+        .unwrap_or(&all)
         .iter()
-        .enumerate()
-        .map(|(i, s)| {
+        .map(|&i| {
+            let s = &c.scenarios[i];
             let accounts: Vec<Value> = scenario::named_accounts(&c.book, s)
                 .iter()
                 .map(|id| {
@@ -352,7 +358,7 @@ pub fn tenant(combo: &str, c: &Case, i: usize) -> String {
 
 /// Run a runner on its input; what it printed, or why it failed.
 pub fn run_runner(mut cmd: Command, input: &Value, work: &Path, combo: &str) -> Result<Value, String> {
-    let file = work.join(format!("{combo}.json"));
+    let file = work.join(format!("{}.json", combo.replace('/', "-")));
     std::fs::write(&file, serde_json::to_string(input).unwrap()).unwrap();
     let out = cmd.arg(&file).output().map_err(|e| e.to_string())?;
     if !out.status.success() {
@@ -454,6 +460,11 @@ fn sql_scenario(pg: &Postgres, c: &Case, combo: &str, i: usize) -> Result<Value,
     let schema = chobo::postgres::ident(&book.name);
     let mut main = Psql::open(pg);
     let mut held: Vec<Instant> = Vec::new();
+    // when the first hold since the last `pass` was asked for, and whether a step or a read came
+    // after its expiry (tools/runner/runner.ts says why)
+    let mut held_since: Option<Instant> = None;
+    let mut late = false;
+    let outlived = |since: Option<Instant>| since.is_some_and(|t| t.elapsed() >= Duration::from_secs(EXPIRY));
     let call = |p: &mut Psql, call: &chobo::interp::Call| -> Result<(Value, bool), String> {
         let (sql, params) = chobo::postgres::call(book, &tenant, call);
         // which parameters are amounts: the tenant's is not; then the call's, as postgres::call lays them out
@@ -480,22 +491,27 @@ fn sql_scenario(pg: &Postgres, c: &Case, combo: &str, i: usize) -> Result<Value,
     for st in &s.steps {
         match st {
             Step::Call(cl) => {
+                let asked = Instant::now();
                 let (v, h) = call(&mut main, cl)?;
                 if h {
                     held.push(Instant::now());
+                    held_since.get_or_insert(asked);
                 }
                 steps.push(v);
             }
             Step::Pass(..) => {
+                late |= outlived(held_since);
                 let until = held.iter().max().copied().unwrap_or_else(Instant::now) + Duration::from_secs(EXPIRY) + Duration::from_millis(300);
                 std::thread::sleep(until.saturating_duration_since(Instant::now()));
                 // one expire() at a time, as one job would call it: an expire() skips the holds
                 // another is giving back, and returns before that one commits
                 let _one = EXPIRING.lock().unwrap();
                 main.one(&format!("select {schema}.expire()"))?;
+                held_since = None;
                 steps.push(json!({"op": "pass"}));
             }
             Step::Together(cs) => {
+                let asked = Instant::now();
                 let outs: Vec<Result<Vec<(Value, bool)>, String>> = std::thread::scope(|sc| {
                     let handles: Vec<_> = cs
                         .iter()
@@ -515,6 +531,7 @@ fn sql_scenario(pg: &Postgres, c: &Case, combo: &str, i: usize) -> Result<Value,
                     for (_, h) in &o {
                         if *h {
                             held.push(Instant::now());
+                            held_since.get_or_insert(asked);
                         }
                     }
                     callers.push(o.into_iter().map(|(v, _)| v).collect::<Vec<_>>());
@@ -563,13 +580,20 @@ fn sql_scenario(pg: &Postgres, c: &Case, combo: &str, i: usize) -> Result<Value,
             holds.push(json!({"kind": t.name, "key": key, "state": state}));
         }
     }
-    Ok(json!({"tenant": tenant, "result": {"steps": steps, "accounts": accounts, "holds": holds}, "sent": [], "error": null}))
+    late |= outlived(held_since);
+    Ok(json!({"tenant": tenant, "result": {"steps": steps, "accounts": accounts, "holds": holds}, "sent": [], "late": late, "error": null}))
 }
 
 /// The scenarios of every book on the SQL itself, through psql: what the functions answer, with
 /// no client in between.
 pub fn run_sql(pg: &Postgres, cases: &[Case], combo: &str) -> Value {
-    let jobs: Vec<(usize, usize)> = cases.iter().enumerate().flat_map(|(ci, c)| (0..c.scenarios.len()).map(move |i| (ci, i))).collect();
+    run_sql_of(pg, cases, combo, None)
+}
+
+/// The same, for the scenarios `only` names of each book (every one when None), in that order.
+pub fn run_sql_of(pg: &Postgres, cases: &[Case], combo: &str, only: Option<&[Vec<usize>]>) -> Value {
+    let which = |ci: usize| -> Vec<usize> { only.map(|o| o[ci].clone()).unwrap_or_else(|| (0..cases[ci].scenarios.len()).collect()) };
+    let jobs: Vec<(usize, usize)> = (0..cases.len()).flat_map(|ci| which(ci).into_iter().map(move |i| (ci, i))).collect();
     let results: Mutex<BTreeMap<(usize, usize), Value>> = Mutex::new(BTreeMap::new());
     let next = Mutex::new(0usize);
     std::thread::scope(|sc| {
@@ -594,7 +618,7 @@ pub fn run_sql(pg: &Postgres, cases: &[Case], combo: &str) -> Value {
     let books: Vec<Value> = cases
         .iter()
         .enumerate()
-        .map(|(ci, c)| json!({"name": c.stem, "scenarios": (0..c.scenarios.len()).map(|i| results[&(ci, i)].clone()).collect::<Vec<_>>()}))
+        .map(|(ci, c)| json!({"name": c.stem, "scenarios": which(ci).into_iter().map(|i| results[&(ci, i)].clone()).collect::<Vec<_>>()}))
         .collect();
     json!({"books": books})
 }

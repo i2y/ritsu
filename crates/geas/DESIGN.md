@@ -1052,6 +1052,20 @@ As built:
   start, E032. A message names an auto port as "the port geas gave it",
   and gives the command with `{port}` in it, since the number changes
   from run to run and the output must not.
+- geas could also keep such a port open itself. A program being started
+  holds a copy of every descriptor geas has open until it execs; when
+  another worker had the socket `port auto` reads its number from open at
+  that moment, the copy kept the port listening after geas closed it,
+  with nothing to accept on it. The claim given the port found its
+  service ready on a connection to the copy, and its request was cut off
+  when the copy went: E033, "closed the connection without answering",
+  with nothing on the service's stderr. It showed on GitHub's runner, on
+  `snap -j4` of tally-go. On Linux it came back with tally-node in 4 runs
+  of 14, the listening socket on the port held by no process when the
+  claim connected. Picking a port and starting a program now take one
+  lock (`proc::starting`), so no program starts while that socket is
+  open, and the same runs came back clean 10 times of 10. A start takes
+  a moment, and claims still run side by side.
 - `port auto` on a target whose command and `env` values never say
   `{port}` is E004: the service would have no way to learn its port.
 - A masked value, of a header or of a JSON path in a body that is JSON, is

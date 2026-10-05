@@ -91,7 +91,7 @@ fn apiのwasmの項は生成物を指している() {
 
 #[test]
 fn モジュールは参照評価器と一致しtestがそう言う() {
-    if !ready(Need::Rustc, toolchain, "node か rustc か wasm32-unknown-unknown が無いので飛ばした") {
+    if !ready(Need::Rustc, toolchain, "node, rustc or its wasm32-unknown-unknown target is missing; the Wasm module is not held to the reference evaluator") {
         return;
     }
     let (_tmp, dir) = generate("test");
@@ -103,7 +103,7 @@ fn モジュールは参照評価器と一致しtestがそう言う() {
 
 #[test]
 fn 契約の外の入力はerrorの行で返る() {
-    if !ready(Need::Rustc, toolchain, "node か rustc か wasm32-unknown-unknown が無いので飛ばした") {
+    if !ready(Need::Rustc, toolchain, "node, rustc or its wasm32-unknown-unknown target is missing; the Wasm module is not given inputs outside the contract") {
         return;
     }
     let (_tmp, dir) = generate("error");
@@ -148,7 +148,7 @@ console.log(call('{"届け先":"北海道","重量":"2.5kg","注文金額":12000
 
 #[test]
 fn witとモジュールはcomponentになりwasmtimeが呼べる() {
-    if !ready(Need::Rustc, || toolchain() && have("wasm-tools"), "toolchain か wasm-tools が無いので飛ばした") {
+    if !ready(Need::Rustc, || toolchain() && have("wasm-tools"), "node, rustc or its wasm32-unknown-unknown target, or wasm-tools, is missing; the Wasm target's component is not made") {
         return;
     }
     let (_tmp, dir) = generate("component");
@@ -164,7 +164,7 @@ fn witとモジュールはcomponentになりwasmtimeが呼べる() {
     sh(&["wasm-tools", "validate", "component.wasm"]);
     let wit = sh(&["wasm-tools", "component", "wit", "component.wasm"]);
     assert!(wit.contains("export call: func(input: string) -> string;"), "{wit}");
-    if !have("wasmtime") {
+    if !ready(Need::Rustc, || have("wasmtime"), "wasmtime is missing; the Wasm target's component is made but not called") {
         return;
     }
     // One vector through the component, held to the expected record.

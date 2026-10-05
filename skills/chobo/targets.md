@@ -82,7 +82,7 @@ select * from inventory.balance_stock('', 'A-1');
 - **Your transaction.** A function runs in the caller's transaction, so an order and the hold of
   its stock can commit together. The clients neither commit nor roll back. Under REPEATABLE READ
   or SERIALIZABLE, a call can fail to serialize; the clients retry it with the same arguments, up
-  to ten times (the key keeps it from moving twice).
+  to thirty times, about a second and a half of waits in all (the key keeps it from moving twice).
 - **Expiry.** PostgreSQL has no clock that acts on its own. A hold past its expiry answers
   `expired` to a post or a void at once, but what it holds still counts until `expire()` lets it
   go: call `select inventory.expire()` from pg_cron or a job of your own, one at a time. It lets

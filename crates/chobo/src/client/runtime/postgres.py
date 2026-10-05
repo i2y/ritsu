@@ -31,8 +31,9 @@ class Balance:
 
 
 _AMOUNT_LIMIT = 2**63 - 1
-# How many times a call is made when PostgreSQL answers a serialization failure or a deadlock.
-_ATTEMPTS = 10
+# How many times a call is made when PostgreSQL answers a serialization failure or a deadlock: about
+# 1.5 seconds of waits between them (DESIGN 4.1).
+_ATTEMPTS = 30
 
 
 def _backoff(attempt: int) -> None:

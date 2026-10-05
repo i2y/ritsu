@@ -2,9 +2,9 @@
 
     .venv/bin/python runner.py <input.json>
 
-The input and the output are those of runner.ts (see there). Every scenario runs in a thread of
-its own; the callers of a `together` run in threads of their own too, each through a connection
-(or a TigerBeetle client) of its own.
+The input and the output are those of runner.ts (see there, `late` too). Every scenario runs in a
+thread of its own; the callers of a `together` run in threads of their own too, each through a
+connection (or a TigerBeetle client) of its own.
 """
 
 from __future__ import annotations
@@ -171,6 +171,13 @@ def run_scenario(mod: Any, book: dict, sc: dict) -> dict:
     sent: list = []
     sent_lock = threading.Lock()
     done_holds: list = []
+    # when the first hold since the last `pass` was asked for, and whether a step or a read came
+    # after its expiry (runner.ts says why)
+    held = {"since": None, "late": False}
+
+    def outlived() -> None:
+        if held["since"] is not None and time.monotonic() - held["since"] >= book["expiry"]:
+            held["late"] = True
     # on TigerBeetle: what each hold of the scenario still holds, by the hold's kind and key
     pending: dict = {}
     debited: set = set()
@@ -188,6 +195,7 @@ def run_scenario(mod: Any, book: dict, sc: dict) -> dict:
         rec, b = c
         requests: list = []
         rec.current = requests
+        asked = time.monotonic()
         try:
             calls = getattr(b, op["kind"])
             if op["op"] == "do":
@@ -207,6 +215,8 @@ def run_scenario(mod: Any, book: dict, sc: dict) -> dict:
             sent.append({**at, "op": op["op"], "kind": op["kind"], "requests": requests})
             if r.result == "done" and op["op"] == "hold":
                 done_holds.append(time.monotonic())
+                if held["since"] is None:
+                    held["since"] = asked
                 chains = [q["create_transfers"] for q in requests if "create_transfers" in q]
                 ps = [(x["debit_account_id"], int(x["amount"]), x["timeout"]) for x in (chains[-1] if chains else []) if "pending" in x["flags"] and x["user_data_32"] != 2]
                 debited.update(p[0] for p in ps)
@@ -219,6 +229,11 @@ def run_scenario(mod: Any, book: dict, sc: dict) -> dict:
         return out
 
     def pass_() -> None:
+        outlived()
+        expire_all()
+        held["since"] = None
+
+    def expire_all() -> None:
         until = max(done_holds, default=0) + book["expiry"] + 0.3
         time.sleep(max(0.0, until - time.monotonic()))
         if INPUT["backend"] == "postgres":
@@ -277,7 +292,8 @@ def run_scenario(mod: Any, book: dict, sc: dict) -> dict:
         state = getattr(main[1], h["kind"]).status(**h["args"])
         if state is not None:
             holds.append({"kind": h["kind"], "key": h["key"], "state": state})
-    return {"tenant": sc["tenant"], "result": {"steps": steps, "accounts": accounts, "holds": holds}, "sent": sent, "error": None}
+    outlived()
+    return {"tenant": sc["tenant"], "result": {"steps": steps, "accounts": accounts, "holds": holds}, "sent": sent, "late": held["late"], "error": None}
 
 
 def load(path: str) -> Any:

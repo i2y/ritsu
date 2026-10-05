@@ -244,6 +244,28 @@ fn stop(child: &mut Child, group: &Group, term: bool) -> bool {
 /// The ports geas has handed to `port auto` instances and not taken back.
 static HANDED: Mutex<BTreeSet<u16>> = Mutex::new(BTreeSet::new());
 
+/// Held while geas starts a program, and while `AutoPort::take` has the socket it reads a free
+/// port from open (DESIGN §10). A program being started holds a copy of every descriptor geas
+/// has open until it execs. A program started on one worker while another worker had that
+/// socket open kept the port listening after geas closed it: the claim given the port found its
+/// service ready on a connection to the copy, which nothing accepts, and its request was cut off
+/// when the copy went (E033). With the two kept apart, no program starts with such a copy.
+static STARTING: Mutex<()> = Mutex::new(());
+
+pub fn starting() -> std::sync::MutexGuard<'static, ()> {
+    STARTING.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// `cmd.output()`, the program started under `starting`. The command sets its stdin, stdout and
+/// stderr itself: `Command::output` pipes stdout and stderr when it does not, `spawn` does not.
+pub fn output(cmd: &mut Command) -> std::io::Result<std::process::Output> {
+    let child = {
+        let _starting = starting();
+        cmd.spawn()?
+    };
+    child.wait_with_output()
+}
+
 /// A free port on 127.0.0.1 for one instance of a `port auto` service, held until
 /// dropped (DESIGN §10): geas binds port 0, reads the number, closes it, and skips
 /// numbers it has handed to an instance still running.
@@ -252,7 +274,10 @@ pub struct AutoPort(pub u16);
 impl AutoPort {
     pub fn take() -> std::io::Result<AutoPort> {
         for _ in 0..100 {
-            let port = TcpListener::bind("127.0.0.1:0")?.local_addr()?.port();
+            let port = {
+                let _starting = starting();
+                TcpListener::bind("127.0.0.1:0")?.local_addr()?.port()
+            };
             if HANDED.lock().unwrap_or_else(|e| e.into_inner()).insert(port) {
                 return Ok(AutoPort(port));
             }
@@ -473,7 +498,11 @@ fn spawn_with(target: &str, words: &[String], shown: &[String], launch: &Launch,
     for (k, v) in &launch.env.vars {
         cmd.env(k, v);
     }
-    let child = cmd.spawn().map_err(|e| Failure {
+    let spawned = {
+        let _starting = starting();
+        cmd.spawn()
+    };
+    let child = spawned.map_err(|e| Failure {
         code: "E030",
         msg: tr!("`{prog}` を起動できません: {e}", "cannot start `{prog}`: {e}"),
         notes: vec![command_note(shown)],

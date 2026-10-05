@@ -16,8 +16,8 @@ export type HoldState = "held" | "posted" | "voided" | "expired";
 export type Balance = { posted: bigint; held_in: bigint; held_out: bigint };
 
 const AMOUNT_LIMIT = (1n << 63n) - 1n;
-/** How many times a call is made when PostgreSQL answers a serialization failure or a deadlock. */
-const ATTEMPTS = 10;
+/** How many times a call is made when PostgreSQL answers a serialization failure or a deadlock: about 1.5 seconds of waits between them (DESIGN 4.1). */
+const ATTEMPTS = 30;
 
 /** A wait before the next try: up to 1, 2, 4 … 128 ms, at random, so that the calls that failed together do not meet again. */
 function backoff(attempt: number): Promise<void> {

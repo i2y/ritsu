@@ -46,8 +46,9 @@ type Balance struct {
 	HeldOut int64
 }
 
-// attempts is how many times a call is made when PostgreSQL answers a serialization failure or a deadlock.
-const attempts = 10
+// attempts is how many times a call is made when PostgreSQL answers a serialization failure or a
+// deadlock: about 1.5 seconds of waits between them (DESIGN 4.1).
+const attempts = 30
 
 // backoff waits before the next try: up to 1, 2, 4 … 128 ms, at random, so that the calls that
 // failed together do not meet again.

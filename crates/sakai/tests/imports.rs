@@ -180,7 +180,7 @@ fn import_linter_keeps_the_map() {
     };
     let run = |dir: &Path| {
         let r = common::run(
-            Command::new(&tool).args(["--no-logo", "--no-cache", "--config", ".importlinter"]).current_dir(dir.join("py")).env("COLUMNS", "300").env("PYTHONDONTWRITEBYTECODE", "1"),
+            common::uncoloured(Command::new(&tool).args(["--no-logo", "--no-cache", "--config", ".importlinter"]).current_dir(dir.join("py")).env("COLUMNS", "300").env("PYTHONDONTWRITEBYTECODE", "1")),
             Duration::from_secs(120),
         );
         let out = format!("{}{}", r.stdout, r.stderr);
@@ -202,11 +202,11 @@ fn dependency_cruiser_keeps_the_map() {
     };
     // dependency-cruiser 16 reads TypeScript under 6 only; with another, it cruises no .ts file and
     // passes (DESIGN 7.3). That is a failure, not a skip.
-    let info = common::run(Command::new(&tool).arg("--info"), Duration::from_secs(60));
+    let info = common::run(common::uncoloured(Command::new(&tool).arg("--info")), Duration::from_secs(60));
     let ts = info.stdout.lines().map(str::trim).find(|l| l.contains(" typescript ")).unwrap_or("").to_string();
     assert!(ts.starts_with('✔'), "dependency-cruiser does not read the TypeScript it finds, and would pass every .ts file in silence: {ts}");
     let run = |dir: &Path| {
-        let r = common::run(Command::new(&tool).args(["--config", ".dependency-cruiser.cjs", "--output-type", "json", "."]).current_dir(dir.join("ts")), Duration::from_secs(120));
+        let r = common::run(common::uncoloured(Command::new(&tool).args(["--config", ".dependency-cruiser.cjs", "--output-type", "json", "."]).current_dir(dir.join("ts"))), Duration::from_secs(120));
         let v: serde_json::Value = serde_json::from_str(&r.stdout).unwrap_or(serde_json::Value::Null);
         let read = v["summary"]["totalCruised"].as_u64().unwrap_or(0) as usize;
         let lines = v["summary"]["violations"]

@@ -256,15 +256,16 @@ impl Reader {
         let p = procs[0];
         let out = first.join("go.txt");
         let list: Vec<String> = dirs.iter().map(|d| d.to_string_lossy().into_owned()).collect();
-        let run = Command::new("go")
-            .args(["tool", "covdata", "textfmt"])
-            .arg(format!("-i={}", list.join(",")))
-            .arg(format!("-o={}", out.to_string_lossy()))
-            .env_remove("GOCOVERDIR")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .output();
+        let run = crate::proc::output(
+            Command::new("go")
+                .args(["tool", "covdata", "textfmt"])
+                .arg(format!("-i={}", list.join(",")))
+                .arg(format!("-o={}", out.to_string_lossy()))
+                .env_remove("GOCOVERDIR")
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped()),
+        );
         let failed = |msg: Text, notes: Vec<Text>| Problem { code: "E065", msg, notes, target: p.target.clone(), line: p.line };
         match run {
             Err(e) if e.kind() == io::ErrorKind::NotFound => problems.push(failed(
@@ -374,15 +375,16 @@ impl Reader {
             target: p.target.clone(),
             line: p.line,
         };
-        let merge_run = Command::new(&profdata_tool)
-            .args(["merge", "-sparse"])
-            .args(&profiles)
-            .arg("-o")
-            .arg(&merged)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .output();
+        let merge_run = crate::proc::output(
+            Command::new(&profdata_tool)
+                .args(["merge", "-sparse"])
+                .args(&profiles)
+                .arg("-o")
+                .arg(&merged)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped()),
+        );
         match merge_run {
             Ok(o) if o.status.success() => {}
             Ok(o) => return problems.push(failed("llvm-profdata merge", &o.stderr)),
@@ -396,7 +398,7 @@ impl Reader {
             }
             export.arg(o);
         }
-        match export.stdin(Stdio::null()).stderr(Stdio::piped()).stdout(Stdio::piped()).output() {
+        match crate::proc::output(export.stdin(Stdio::null()).stderr(Stdio::piped()).stdout(Stdio::piped())) {
             Ok(o) if o.status.success() => match rust::read_lcov(&String::from_utf8_lossy(&o.stdout), &self.root) {
                 Ok(r) => merge(report, r),
                 Err(why) => problems.push(Problem {
@@ -469,7 +471,7 @@ fn look_for_llvm() -> Llvm {
 /// `<rustc --print sysroot>/lib/rustlib/<host>/bin`, the host from `rustc -vV`.
 fn sysroot_bin() -> Option<PathBuf> {
     let out = |args: &[&str]| -> Option<String> {
-        let o = Command::new("rustc").args(args).stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
+        let o = crate::proc::output(Command::new("rustc").args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null())).ok()?;
         o.status.success().then(|| String::from_utf8_lossy(&o.stdout).into_owned())
     };
     let sysroot = out(&["--print", "sysroot"])?;

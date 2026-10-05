@@ -186,6 +186,16 @@ pub fn linters() -> bool {
     ritsu_testkit::need(ritsu_testkit::Need::Linters)
 }
 
+/// A tool whose words a test reads, told to print them without colours. Some colour by what the
+/// environment says, not by whether they print to a terminal: dependency-cruiser's picocolors
+/// colours when CI is set (GitHub's runners set it) or FORCE_COLOR is, and import-linter's rich
+/// when FORCE_COLOR is, even into a pipe; a line then starts with an escape, not with `✔` or
+/// `Analyzed`. NO_COLOR turns picocolors off; rich keeps its bold under NO_COLOR while
+/// FORCE_COLOR is set, so that is taken away, and rich asks whether it prints to a terminal.
+pub fn uncoloured(cmd: &mut Command) -> &mut Command {
+    cmd.env("NO_COLOR", "1").env_remove("FORCE_COLOR")
+}
+
 pub fn lint_imports() -> Option<String> {
     program("LINT_IMPORTS", "tools/.venv/bin/lint-imports", "lint-imports", &["--help"])
 }

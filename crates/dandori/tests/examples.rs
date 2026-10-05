@@ -2056,7 +2056,8 @@ fn books_run_on_postgres_and_tigerbeetle() {
                 json!({ "host": pg.socket.to_str().unwrap(), "port": pg.port, "database": "postgres", "user": pg.user })
             }
             ("tigerbeetle", _, Ok(tb)) => json!({ "cluster": "0", "addresses": [tb.address] }),
-            (_, Err(why), _) | (_, _, Err(why)) => {
+            // each backend's own reason: TigerBeetle's is not PostgreSQL's
+            ("postgres", Err(why), _) | ("tigerbeetle", _, Err(why)) => {
                 skip(&format!("{why}; the books are not run on {backend}"));
                 continue;
             }

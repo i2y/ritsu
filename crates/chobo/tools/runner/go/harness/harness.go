@@ -244,6 +244,15 @@ func (r *runner) scenario(ctx context.Context, e Entry, expiry float64, keys map
 	var mu sync.Mutex
 	sent := []any{}
 	var doneHolds []time.Time
+	// when the first hold since the last pass was asked for, and whether a step or a read came
+	// after its expiry (runner.ts says why)
+	var heldSince time.Time
+	late := false
+	outlived := func() {
+		if !heldSince.IsZero() && time.Since(heldSince) >= time.Duration(expiry*float64(time.Second)) {
+			late = true
+		}
+	}
 	pending := map[string][]pendingTransfer{}
 	debited := map[string]bool{}
 	holdKey := func(kind string, args map[string]any) string {
@@ -264,6 +273,7 @@ func (r *runner) scenario(ctx context.Context, e Entry, expiry float64, keys map
 		c.rec.mu.Lock()
 		c.rec.current = &requests
 		c.rec.mu.Unlock()
+		asked := time.Now()
 		kind, opName := op["kind"].(string), op["op"].(string)
 		args := toMap(op["args"])
 		var amounts map[string]any
@@ -285,6 +295,9 @@ func (r *runner) scenario(ctx context.Context, e Entry, expiry float64, keys map
 		sent = append(sent, at)
 		if outcome == "done" && opName == "hold" {
 			doneHolds = append(doneHolds, time.Now())
+			if heldSince.IsZero() {
+				heldSince = asked
+			}
 			var chain []any
 			for _, q := range requests {
 				if xs, ok := q.(map[string]any)["create_transfers"]; ok {
@@ -319,7 +332,14 @@ func (r *runner) scenario(ctx context.Context, e Entry, expiry float64, keys map
 		}
 		return res, nil
 	}
+	var expireAll func() error
 	pass := func() error {
+		outlived()
+		err := expireAll()
+		heldSince = time.Time{}
+		return err
+	}
+	expireAll = func() error {
 		var until time.Time
 		for _, t := range doneHolds {
 			if t.After(until) {
@@ -446,7 +466,8 @@ func (r *runner) scenario(ctx context.Context, e Entry, expiry float64, keys map
 			holds = append(holds, map[string]any{"kind": h.Kind, "key": h.Key, "state": state})
 		}
 	}
-	return map[string]any{"tenant": sc.Tenant, "result": map[string]any{"steps": steps, "accounts": accounts, "holds": holds}, "sent": sent, "error": nil}, nil
+	outlived()
+	return map[string]any{"tenant": sc.Tenant, "result": map[string]any{"steps": steps, "accounts": accounts, "holds": holds}, "sent": sent, "late": late, "error": nil}, nil
 }
 
 // Main runs the scenarios the input (os.Args[1]) names through the packages of entries.

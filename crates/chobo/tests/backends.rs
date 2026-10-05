@@ -6,7 +6,10 @@
 //!
 //! One throwaway PostgreSQL cluster and one TigerBeetle replica serve the whole test. The
 //! clients are built from a copy of each book with every expiry at 3 seconds, and `pass` is
-//! waited for, for real.
+//! waited for, for real. The reference lets no time pass but at a `pass`, so a scenario whose step
+//! or read came after the expiry of a hold it made since its last `pass` (`late`, which the runner
+//! measures) is not held to it on that run: when it disagrees, it runs again, on tenants of its
+//! own, with only the others that were late beside it, and late and wrong twice, it fails.
 
 mod common;
 use common::runners::*;
@@ -16,22 +19,34 @@ use serde_json::Value;
 use std::process::Command;
 use std::time::Instant;
 
-/// Compare the runner's answers for every book with the reference, and what it sent with the
-/// show; one `compared:` line a book, and every disagreement in `failures`.
-fn check(cases: &[Case], combo: &str, backend: &str, out: &Value, sent: bool, failures: &mut Vec<String>) {
+/// Each book's scenarios a run has, by their place in the book's: every one, or those named.
+type Only<'a> = Option<&'a [Vec<usize>]>;
+
+/// Compare the runner's answers for the scenarios `only` names (every one when None) with the
+/// reference, and what it sent with the show; one `compared:` line a book, and every disagreement
+/// in `failures`. A late scenario that disagrees goes in `again` instead, when there is one.
+fn check(cases: &[Case], combo: &str, backend: &str, out: &Value, sent: bool, only: Only, mut again: Option<&mut Vec<Vec<usize>>>, failures: &mut Vec<String>) {
     let books = out["books"].as_array().cloned().unwrap_or_default();
-    for (c, b) in cases.iter().zip(&books) {
+    for (k, (c, b)) in cases.iter().zip(&books).enumerate() {
+        let all: Vec<usize> = (0..c.scenarios.len()).collect();
+        let which: &[usize] = only.map(|o| o[k].as_slice()).unwrap_or(&all);
         let scenarios = b["scenarios"].as_array().cloned().unwrap_or_default();
         let mut n = 0;
-        for (i, got) in scenarios.iter().enumerate() {
+        for (&i, got) in which.iter().zip(&scenarios) {
             let name = &c.scenarios[i].name;
             if let Some(e) = got["error"].as_str() {
                 failures.push(format!("{} {combo} ({name}): {e}", c.stem));
                 continue;
             }
             if !agrees(&c.reference[i], &got["result"]) {
+                let late = got["late"].as_bool().unwrap_or(false);
+                if late && let Some(a) = again.as_deref_mut() {
+                    a[k].push(i);
+                    continue;
+                }
+                let when = if late { ", late again: a step or a read came after the expiry of a hold it made" } else { "" };
                 failures.push(format!(
-                    "{} {combo} ({name}): the result is not the reference's\n  got       {}\n  reference {}",
+                    "{} {combo} ({name}): the result is not the reference's{when}\n  got       {}\n  reference {}",
                     c.stem, got["result"], c.reference[i]
                 ));
                 continue;
@@ -44,15 +59,39 @@ fn check(cases: &[Case], combo: &str, backend: &str, out: &Value, sent: bool, fa
             }
             n += 1;
         }
-        if scenarios.len() != c.scenarios.len() {
-            failures.push(format!("{} {combo}: {} scenarios came back of {}", c.stem, scenarios.len(), c.scenarios.len()));
+        if scenarios.len() != which.len() {
+            failures.push(format!("{} {combo}: {} scenarios came back of {}", c.stem, scenarios.len(), which.len()));
         }
-        eprintln!("compared: {} {combo} {n} scenarios", c.stem);
+        if only.is_none() {
+            eprintln!("compared: {} {combo} {n} scenarios", c.stem);
+        } else if !which.is_empty() {
+            eprintln!("compared again: {} {combo} {n} scenario(s)", c.stem);
+        }
     }
 }
 
-fn input(backend: &str, conn: Value, combo: &str, cases: &[Case], clients: &[String]) -> Value {
-    let books: Vec<Value> = cases.iter().zip(clients).map(|(c, client)| book_input(c, client, combo)).collect();
+/// Run a combo and hold it to the reference; then, again, the scenarios that were late and
+/// disagreed. `run` runs the scenarios `only` names on the tenants of the combo it is given.
+fn run_and_check(cases: &[Case], combo: &str, backend: &str, sent: bool, failures: &mut Vec<String>, run: &dyn Fn(Only, &str) -> Result<Value, String>) {
+    let out = match run(None, combo) {
+        Ok(out) => out,
+        Err(e) => return failures.push(e),
+    };
+    let mut again: Vec<Vec<usize>> = vec![Vec::new(); cases.len()];
+    check(cases, combo, backend, &out, sent, None, Some(&mut again), failures);
+    let late: Vec<String> = cases.iter().zip(&again).flat_map(|(c, a)| a.iter().map(move |&i| format!("{} ({})", c.stem, c.scenarios[i].name))).collect();
+    if late.is_empty() {
+        return;
+    }
+    eprintln!("run again: {combo}: {} scenario(s) disagreed after a hold made since their last pass had expired: {}", late.len(), late.join(", "));
+    match run(Some(&again), &format!("{combo}/again")) {
+        Ok(out) => check(cases, combo, backend, &out, sent, Some(&again), None, failures),
+        Err(e) => failures.push(e),
+    }
+}
+
+fn input(backend: &str, conn: Value, combo: &str, cases: &[Case], clients: &[String], only: Only) -> Value {
+    let books: Vec<Value> = cases.iter().zip(clients).enumerate().map(|(k, (c, client))| book_input_of(c, client, combo, only.map(|o| o[k].as_slice()))).collect();
     let mut v = serde_json::json!({"backend": backend, "books": books});
     v[backend] = conn;
     v
@@ -66,21 +105,20 @@ fn postgres(pg: &Postgres, cases: &[Case], work: &std::path::Path, go: Option<&G
         assert!(out.status.success(), "{}: the SQL does not load:\n{}", c.stem, String::from_utf8_lossy(&out.stderr));
     }
     let started = Instant::now();
-    let out = run_sql(pg, cases, "postgres");
-    check(cases, "postgres", "postgres", &out, false, failures);
+    run_and_check(cases, "postgres", "postgres", false, failures, &|only, combo| Ok(run_sql_of(pg, cases, combo, only)));
     eprintln!("ran postgres in {:.1} s", started.elapsed().as_secs_f64());
 
     match node() {
         Ok(()) => {
             let dir = ts_dir(work).join("postgres");
             let clients: Vec<String> = build_all(cases, chobo::target::Target::PostgresTypeScript, &dir).iter().map(|p| p.display().to_string()).collect();
-            let mut cmd = Command::new("node");
-            cmd.arg("--no-warnings").arg(runner_dir().join("runner.ts"));
+            let run = |only: Only, combo: &str| {
+                let mut cmd = Command::new("node");
+                cmd.arg("--no-warnings").arg(runner_dir().join("runner.ts"));
+                run_runner(cmd, &input("postgres", pg.connection(), combo, cases, &clients, only), work, combo)
+            };
             let started = Instant::now();
-            match run_runner(cmd, &input("postgres", pg.connection(), "postgres-typescript", cases, &clients), work, "postgres-typescript") {
-                Ok(out) => check(cases, "postgres-typescript", "postgres", &out, true, failures),
-                Err(e) => failures.push(e),
-            }
+            run_and_check(cases, "postgres-typescript", "postgres", true, failures, &run);
             eprintln!("ran postgres-typescript in {:.1} s", started.elapsed().as_secs_f64());
         }
         Err(why) => skip(&format!("{why}; postgres-typescript is not run")),
@@ -89,13 +127,13 @@ fn postgres(pg: &Postgres, cases: &[Case], work: &std::path::Path, go: Option<&G
         Ok(py) => {
             let dir = work.join("py/postgres");
             let clients: Vec<String> = build_all(cases, chobo::target::Target::PostgresPython, &dir).iter().map(|p| p.display().to_string()).collect();
-            let mut cmd = Command::new(py);
-            cmd.arg(runner_dir().join("runner.py"));
+            let run = |only: Only, combo: &str| {
+                let mut cmd = Command::new(&py);
+                cmd.arg(runner_dir().join("runner.py"));
+                run_runner(cmd, &input("postgres", pg.connection(), combo, cases, &clients, only), work, combo)
+            };
             let started = Instant::now();
-            match run_runner(cmd, &input("postgres", pg.connection(), "postgres-python", cases, &clients), work, "postgres-python") {
-                Ok(out) => check(cases, "postgres-python", "postgres", &out, true, failures),
-                Err(e) => failures.push(e),
-            }
+            run_and_check(cases, "postgres-python", "postgres", true, failures, &run);
             eprintln!("ran postgres-python in {:.1} s", started.elapsed().as_secs_f64());
         }
         Err(why) => skip(&format!("{why}; postgres-python is not run")),
@@ -103,11 +141,9 @@ fn postgres(pg: &Postgres, cases: &[Case], work: &std::path::Path, go: Option<&G
     match go {
         Some(g) => {
             let clients: Vec<String> = cases.iter().map(|c| g.keys[&(c.stem.clone(), "postgres")].clone()).collect();
+            let run = |only: Only, combo: &str| run_runner(Command::new(&g.bin), &input("postgres", pg.connection(), combo, cases, &clients, only), work, combo);
             let started = Instant::now();
-            match run_runner(Command::new(&g.bin), &input("postgres", pg.connection(), "postgres-go", cases, &clients), work, "postgres-go") {
-                Ok(out) => check(cases, "postgres-go", "postgres", &out, true, failures),
-                Err(e) => failures.push(e),
-            }
+            run_and_check(cases, "postgres-go", "postgres", true, failures, &run);
             eprintln!("ran postgres-go in {:.1} s", started.elapsed().as_secs_f64());
         }
         None => skip("the Go runner is not built; postgres-go is not run"),
@@ -129,13 +165,13 @@ fn tigerbeetle(tb: &TigerBeetle, cases: &[Case], work: &std::path::Path, go: Opt
         Ok(()) => {
             let dir = ts_dir(work).join("tigerbeetle");
             let clients: Vec<String> = build_all(cases, chobo::target::Target::TigerBeetleTypeScript, &dir).iter().map(|p| p.display().to_string()).collect();
-            let mut cmd = Command::new("node");
-            cmd.arg("--no-warnings").arg(runner_dir().join("runner.ts"));
+            let run = |only: Only, combo: &str| {
+                let mut cmd = Command::new("node");
+                cmd.arg("--no-warnings").arg(runner_dir().join("runner.ts"));
+                run_runner(cmd, &input("tigerbeetle", tb.connection(), combo, cases, &clients, only), work, combo)
+            };
             let started = Instant::now();
-            match run_runner(cmd, &input("tigerbeetle", tb.connection(), "tigerbeetle-typescript", cases, &clients), work, "tigerbeetle-typescript") {
-                Ok(out) => check(cases, "tigerbeetle-typescript", "tigerbeetle", &out, true, failures),
-                Err(e) => failures.push(e),
-            }
+            run_and_check(cases, "tigerbeetle-typescript", "tigerbeetle", true, failures, &run);
             eprintln!("ran tigerbeetle-typescript in {:.1} s", started.elapsed().as_secs_f64());
         }
         Err(why) => skip(&format!("{why}; tigerbeetle-typescript is not run")),
@@ -144,13 +180,13 @@ fn tigerbeetle(tb: &TigerBeetle, cases: &[Case], work: &std::path::Path, go: Opt
         Ok(py) => {
             let dir = work.join("py/tigerbeetle");
             let clients: Vec<String> = build_all(cases, chobo::target::Target::TigerBeetlePython, &dir).iter().map(|p| p.display().to_string()).collect();
-            let mut cmd = Command::new(py);
-            cmd.arg(runner_dir().join("runner.py"));
+            let run = |only: Only, combo: &str| {
+                let mut cmd = Command::new(&py);
+                cmd.arg(runner_dir().join("runner.py"));
+                run_runner(cmd, &input("tigerbeetle", tb.connection(), combo, cases, &clients, only), work, combo)
+            };
             let started = Instant::now();
-            match run_runner(cmd, &input("tigerbeetle", tb.connection(), "tigerbeetle-python", cases, &clients), work, "tigerbeetle-python") {
-                Ok(out) => check(cases, "tigerbeetle-python", "tigerbeetle", &out, true, failures),
-                Err(e) => failures.push(e),
-            }
+            run_and_check(cases, "tigerbeetle-python", "tigerbeetle", true, failures, &run);
             eprintln!("ran tigerbeetle-python in {:.1} s", started.elapsed().as_secs_f64());
         }
         Err(why) => skip(&format!("{why}; tigerbeetle-python is not run")),
@@ -158,11 +194,9 @@ fn tigerbeetle(tb: &TigerBeetle, cases: &[Case], work: &std::path::Path, go: Opt
     match go {
         Some(g) => {
             let clients: Vec<String> = cases.iter().map(|c| g.keys[&(c.stem.clone(), "tigerbeetle")].clone()).collect();
+            let run = |only: Only, combo: &str| run_runner(Command::new(&g.bin), &input("tigerbeetle", tb.connection(), combo, cases, &clients, only), work, combo);
             let started = Instant::now();
-            match run_runner(Command::new(&g.bin), &input("tigerbeetle", tb.connection(), "tigerbeetle-go", cases, &clients), work, "tigerbeetle-go") {
-                Ok(out) => check(cases, "tigerbeetle-go", "tigerbeetle", &out, true, failures),
-                Err(e) => failures.push(e),
-            }
+            run_and_check(cases, "tigerbeetle-go", "tigerbeetle", true, failures, &run);
             eprintln!("ran tigerbeetle-go in {:.1} s", started.elapsed().as_secs_f64());
         }
         None => skip("the Go runner is not built; tigerbeetle-go is not run"),

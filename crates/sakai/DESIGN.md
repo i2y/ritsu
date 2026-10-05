@@ -1348,6 +1348,8 @@ depguard の利点は、golangci-lint に入っていて、多くのチームが
 
 ツールごとに、例の五つと入れ子の地図の二つのコピーを並べて走らせる。四つのツールで合わせて 28 のコピーになり、この機械で 6 秒ほどかかる。
 
+テストが出力の文字を読む import-linter と dependency-cruiser は、色を切って走らせる（`NO_COLOR=1` を渡し、`FORCE_COLOR` を消す。`tests/common` の `uncoloured`）。どちらも、端末に出しているかどうかではなく、環境変数を見て色を付けることがあるからである。dependency-cruiser が使う picocolors（1.1.1）は、`CI` か `FORCE_COLOR` があれば、パイプに出すときも色を付ける。GitHub Actions は `CI=true` を置くので、ritsu の CI を初めて回したとき、`depcruise --info` の行が `\x1b[32m✔\x1b[39m typescript …` で始まり、`✔` で始まるかを見る確かめが外れた。import-linter が使う rich（15.0.0）は、`FORCE_COLOR` があれば色と太字を付け、進み具合の表示も端末に向けて描く。`NO_COLOR` があっても太字は残り、`Analyzed N files` の行が `\x1b[1m` で始まって、読んだ数が 0 になる。ArchUnit を走らせる JUnit には `--disable-ansi-colors` を渡している。go-arch-lint と buf については、テストは JSON か exit code だけを読む。
+
 `tests/build.rs` は、例の地図のまとまりと、それぞれを import してよいまとまり（7.1 の表）、例に置いた四つの設定がいまの地図から書くものと一字も違わないこと（`SAKAI_BLESS=1` で書き直す。この章に貼った設定は、そのファイルから抜き出した）、地図を変えると `--check` が E502 を言うこと、E501 の場合を確かめる。
 
 ツールの置き場所は sakai の `tools/` の下で、git に入れない（版を書いたファイルと取ってくるスクリプトだけを入れる。入れ方は `tools/README.md`）。環境変数でほかの場所のものも使える。ツールが無ければ、そのテストは `SKIP: sakai: <理由>` の一行を出して通す（PLAN の 0 章）。
