@@ -356,7 +356,7 @@ going overseas?"* — and answers with an amount or a rounding direction, never 
 they read and check is a document rendered from the rule, with a page to try a case on.
 
 The agent's procedure is [For agents](agents.md). The
-[agent skill](https://github.com/i2y/ritsu/tree/main/crates/rulec/skills) ships in the repository
+[agent skill](https://github.com/i2y/ritsu/tree/main/skills/rulec) ships in the repository
 ([how](install.md#the-agent-skill)), `rulec mcp` offers the same commands as tools where there
 is no shell ([how](install.md#the-mcp-server)), and findings come back as JSON whose codes and
 shape **stay put while the wording improves**.

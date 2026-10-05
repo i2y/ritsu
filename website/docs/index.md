@@ -169,3 +169,23 @@ language, which runs as that language.
 
 The design of the whole is in [DESIGN.md](https://github.com/i2y/ritsu/blob/main/DESIGN.md), in
 Japanese. ritsu is MIT OR Apache-2.0.
+
+## For AI agents
+
+ritsu and its languages are made to be used by AI agents, and the repository holds eight
+[Agent Skills](https://agentskills.io) for them: [one for ritsu](https://github.com/i2y/ritsu/tree/main/skills/ritsu),
+for a project of more than one language, and one for each of the seven languages
+([skills/README.md](https://github.com/i2y/ritsu/blob/main/skills/README.md) lists them). There are
+four ways to install them:
+
+- **Claude Code**: this site publishes a plugin marketplace whose plugin `ritsu` holds the eight.
+  Run `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`, then `/plugin install ritsu@ritsu`;
+  Claude Code fetches the folder `skills/` alone, not the whole repository.
+- **Any agent, from the binary**: `ritsu skills install` writes them into the project's
+  `.claude/skills/`; with `--user`, into `~/.claude/skills/`; with `--dir <dir>`, where another
+  agent reads skills. Names after it (`ritsu skills install rulec dandori`) write only those, and
+  `ritsu skills list` lists them.
+- **By hand**: copy the folders you need from `skills/` into `~/.claude/skills/`, or into a
+  project's `.claude/skills/`.
+- **From a release**: `ritsu-skills-v<version>.zip` holds the eight folders; unzip it where your
+  agent reads skills.

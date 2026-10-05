@@ -270,13 +270,40 @@ fn the_marketplace_on_the_site_hands_out_the_folder_of_skills_alone() {
         assert!(!root().join("skills").join(part).exists(), "skills/{part} would be a part of the plugin `ritsu` too");
     }
 
-    // The pages that say how to install it add the marketplace at the URL the site publishes it at.
+    // The pages that say how to install it add the marketplace at the URL the site publishes it at:
+    // the READMEs and the top pages of the site say so, and no page of the repository adds it any
+    // other way (the notes of DESIGN.md and PLAN.md record what it was).
     let add = format!("/plugin marketplace add {}marketplace.json", site_url());
-    for readme in ["README.md", "README.ja.md", "skills/README.md", "skills/README.ja.md"] {
-        let text = fs::read_to_string(root().join(readme)).unwrap();
-        assert!(text.contains(&add), "{readme} does not say `{add}`");
-        assert!(!text.contains("/plugin marketplace add i2y/ritsu"), "{readme} adds the repository as the marketplace");
+    for page in ["README.md", "README.ja.md", "skills/README.md", "skills/README.ja.md", "website/docs/index.md", "website/docs-ja/index.md"] {
+        let text = fs::read_to_string(root().join(page)).unwrap();
+        assert!(text.contains(&add), "{page} does not say `{add}`");
     }
+    // Every Markdown page under the root, leaving out what tools put there.
+    fn markdown(base: &Path, dir: &Path, out: &mut Vec<String>) {
+        for e in fs::read_dir(dir).unwrap().flatten() {
+            let p = e.path();
+            let name = e.file_name().to_string_lossy().to_string();
+            if p.is_dir() {
+                if !["target", "node_modules", ".venv", "build", ".cache", ".lake", ".git"].contains(&name.as_str()) {
+                    markdown(base, &p, out);
+                }
+            } else if name.ends_with(".md") {
+                out.push(p.strip_prefix(base).unwrap().display().to_string());
+            }
+        }
+    }
+    let mut pages = Vec::new();
+    markdown(&root(), &root(), &mut pages);
+    let mut wrong = Vec::new();
+    for page in pages.iter().filter(|p| !p.ends_with("DESIGN.md") && !p.ends_with("PLAN.md")) {
+        let Ok(text) = fs::read_to_string(root().join(page)) else { continue };
+        for (i, _) in text.match_indices("/plugin marketplace add ") {
+            if !text[i..].starts_with(&add) {
+                wrong.push(format!("{page}: `{}`", text[i..].lines().next().unwrap_or_default()));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "these add the marketplace some other way than `{add}`:\n{}", wrong.join("\n"));
 }
 
 #[test]

@@ -106,7 +106,7 @@ rulec を実際に使うのはたいていエージェントです。`skills/rul
 $ ritsu skills install rulec
 ```
 
-`.claude/skills/rulec/` の下に `SKILL.md` と六つのファイルが置かれます。フォルダの名前でスキルが見つかるので、中身をばらして置かないでください。一つのプロジェクトではなく全部で使うなら、`--user` を付けて `~/.claude/skills/` に置きます。`--dir <dir>` を付けると、ほかのエージェントがスキルを読む場所に置きます。Claude Code なら、プラグイン `ritsu` に八つのスキルが入っています（`/plugin marketplace add i2y/ritsu` のあと `/plugin install ritsu@ritsu`）。リポジトリのクローンから `skills/rulec` をコピーしても同じで、リリースごとの `ritsu-skills-v<版>.zip` にも八つが入っています。
+`.claude/skills/rulec/` の下に `SKILL.md` と六つのファイルが置かれます。フォルダの名前でスキルが見つかるので、中身をばらして置かないでください。一つのプロジェクトではなく全部で使うなら、`--user` を付けて `~/.claude/skills/` に置きます。`--dir <dir>` を付けると、ほかのエージェントがスキルを読む場所に置きます。Claude Code なら、プラグイン `ritsu` に八つのスキルが入っています（`/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json` のあと `/plugin install ritsu@ritsu`）。リポジトリのクローンから `skills/rulec` をコピーしても同じで、リリースごとの `ritsu-skills-v<版>.zip` にも八つが入っています。
 
 要るのは `rulec` が PATH にあることだけです（上のどの入れ方でも構いません）。
 

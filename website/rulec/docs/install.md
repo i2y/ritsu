@@ -150,7 +150,7 @@ That gives `.claude/skills/rulec/SKILL.md` with six files beside it.
 The folder is what makes the skill findable, so keep it whole. To have
 it in every project rather than one, add `--user`, which puts it in
 `~/.claude/skills/` instead; `--dir <dir>` puts it where another agent reads skills.
-In Claude Code, the plugin `ritsu` holds all eight skills: `/plugin marketplace add i2y/ritsu`,
+In Claude Code, the plugin `ritsu` holds all eight skills: `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`,
 then `/plugin install ritsu@ritsu`. From a clone of the repository, copying `skills/rulec` does
 the same, and every release has the eight in `ritsu-skills-v<version>.zip`.
 

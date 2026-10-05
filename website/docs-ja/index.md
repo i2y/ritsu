@@ -132,3 +132,12 @@ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 `ritsu check <ディレクトリ>` は、各言語の検査と、言語をまたぐ検査を走らせます。各言語のコマンドは `ritsu <言語> …` で呼びます（例：`ritsu rulec doc fee.rule`）。リリースは 0.23.0 から（rulec の番号の続き）で、macOS と Linux のアーカイブ、`.deb` と `.rpm`、Homebrew の formula を出す予定です。アーカイブには、`ritsu` と、言語の名前を付けたそれへのリンクが入っていて、リンクはその言語として動きます。
 
 全体の設計は [DESIGN.md](https://github.com/i2y/ritsu/blob/main/DESIGN.md) にあります。ライセンスは MIT と Apache-2.0 のどちらかを選べます。
+
+## AI エージェント向け
+
+ritsu とその言語は、AI エージェントに使ってもらうためのものです。リポジトリに、八つの [Agent Skills](https://agentskills.io) を置いています。[ritsu のスキル](https://github.com/i2y/ritsu/tree/main/skills/ritsu)は二つ以上の言語を使うプロジェクトのためのもので、残りの七つは言語ごとのスキルです（一覧は [skills/README.ja.md](https://github.com/i2y/ritsu/blob/main/skills/README.ja.md) にあります）。入れ方は四つあります。
+
+- **Claude Code**：このサイトがプラグインのマーケットプレイスを公開していて、プラグイン `ritsu` に八つが入っています。`/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json` を実行してから、`/plugin install ritsu@ritsu` を実行します。Claude Code が取ってくるのは `skills/` のフォルダーだけで、リポジトリ全体はダウンロードしません。
+- **どのエージェントでも、バイナリから**：`ritsu skills install` が、プロジェクトの `.claude/skills/` に書きます。`--user` を付けると `~/.claude/skills/` に、`--dir <dir>` を付けると、ほかのエージェントがスキルを読む場所に書きます。名前を挙げると（`ritsu skills install rulec dandori`）そのスキルだけを書き、`ritsu skills list` で一覧を出します。
+- **手で**：`skills/` から必要なフォルダーを、`~/.claude/skills/` か、プロジェクトの `.claude/skills/` にコピーします。
+- **リリースから**：`ritsu-skills-v<版>.zip` に八つのフォルダーが入っています。エージェントがスキルを読む場所に展開します。
