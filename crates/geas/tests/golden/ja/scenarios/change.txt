@@ -1,0 +1,11 @@
+examples/greeter/ja/openspec/changes/trim-names/specs/greeting/spec.md（変更の提案の差分）
+  MODIFIED 名前で挨拶する
+    名前で挨拶する: examples/greeter/greeter.ja.geas の主張 1（13 行目）
+    空の名前は受け付けない: examples/greeter/greeter.ja.geas の主張 2（19 行目）
+    空白だけの名前は受け付けない: 主張がありません
+  ADDED ヘルスチェック
+    ヘルスチェックに答える: 主張がありません
+どのシナリオとも名前が合わない主張:
+  足した数が積み上がる: examples/greeter/greeter.ja.geas の主張 3（24 行目）
+  知らないパスには 404 を返す: examples/greeter/greeter.ja.geas の主張 4（33 行目）
+シナリオ 4 個 · 主張のあるもの 2 個 · 主張の無いもの 2 個

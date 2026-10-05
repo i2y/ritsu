@@ -1,0 +1,12 @@
+requirements 挨拶 v1
+role 窓口 "サービスが何を返すかを決める"
+
+source 挨拶 = openspec "openspec/changes/trim-names/specs/greeting/spec.md"
+  名前で挨拶する sha256:7b148317fa6902cd
+
+requirement 名前で挨拶する(greeting_by_name)
+  text "挨拶には、頼んだ人の名前を入れる"
+  owner 窓口
+  from @挨拶 名前で挨拶する
+  not satisfied "この材料では置かない"
+  not verified "この材料では置かない"

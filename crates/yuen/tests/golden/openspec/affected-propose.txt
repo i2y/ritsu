@@ -1,0 +1,13 @@
+diff: examples/openspec_greeter/diffs/propose.diff
+OpenSpec changes the diff touches, not yet archived:
+  trim-names (examples/openspec_greeter/openspec/changes/trim-names/specs/greeting/spec.md, for examples/openspec_greeter/openspec/specs/greeting/spec.md):
+    MODIFIED "Greeting by name": cited by greeting_by_name
+    ADDED "Health check": no requirement reads it yet
+the claims the change touches (geas "greeter.geas"; records: examples/openspec_greeter/.geas/greeter.map.jsonl (either side)):
+  none
+changes no requirement reaches: none
+other files the diff touches: examples/openspec_greeter/openspec/changes/trim-names/proposal.md, examples/openspec_greeter/openspec/changes/trim-names/tasks.md
+requirements touched:
+  greeting_by_name (examples/openspec_greeter/greeter.req:12): owner api; from greeting "Greeting by name"
+1 requirement touched; ask api
+exit 0

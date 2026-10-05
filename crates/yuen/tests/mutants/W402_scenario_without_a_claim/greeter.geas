@@ -1,0 +1,37 @@
+# Claims for a small HTTP service. Each claim gets a fresh server
+# instance, on a port of its own, so the stateful scenario below is
+# self-contained.
+
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+# Declared volatility: these fields are noise by nature, not behavior.
+mask header "date"
+mask header "server"
+
+claim "greets by name" {
+  when api.get("/greet?name=Alice")
+  then status is 200
+  and  body json ".message" is "Hello, Alice"
+}
+
+claim "rejects an empty name" {
+  when api.get("/greet?name=")
+  then status is 400
+}
+
+claim "totals accumulate across requests" {
+  when api.post("/reset")
+  then status is 200
+  when api.post("/add", body: "5")
+  when api.post("/add", body: "7")
+  when api.get("/total")
+  then body is "12"
+}
+
+claim "unknown paths are 404" {
+  when api.get("/nope")
+  then status is 404
+}

@@ -1,0 +1,12 @@
+requirements greeter v1
+role api "Decides what the service answers"
+
+source greeting = openspec "openspec/specs/greeting/spec.md"
+  "Running Total" sha256:f94d564d4cf48f1f
+
+requirement running_total
+  text "A total is kept across requests"
+  owner api
+  from @greeting "Running Total"
+  not satisfied "left out in this material"
+  not verified "left out in this material"

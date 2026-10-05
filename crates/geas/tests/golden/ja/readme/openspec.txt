@@ -1,0 +1,45 @@
+$ geas scenarios examples/greeter/greeter.ja.geas --openspec examples/greeter/ja/openspec/specs --lang ja
+examples/greeter/ja/openspec/specs/greeting/spec.md
+  名前で挨拶する
+    名前で挨拶する: examples/greeter/greeter.ja.geas の主張 1（13 行目）
+    空の名前は受け付けない: examples/greeter/greeter.ja.geas の主張 2（19 行目）
+  足した数の合計
+    足した数が積み上がる: examples/greeter/greeter.ja.geas の主張 3（24 行目）
+  知らないパス
+    知らないパスには 404 を返す: examples/greeter/greeter.ja.geas の主張 4（33 行目）
+どのシナリオとも名前が合わない主張: なし
+シナリオ 4 個 · 主張のあるもの 4 個 · 主張の無いもの 0 個
+$ geas scenarios examples/greeter/greeter.ja.geas --openspec examples/greeter/ja/openspec/changes/trim-names --lang ja
+examples/greeter/ja/openspec/changes/trim-names/specs/greeting/spec.md（変更の提案の差分）
+  MODIFIED 名前で挨拶する
+    名前で挨拶する: examples/greeter/greeter.ja.geas の主張 1（13 行目）
+    空の名前は受け付けない: examples/greeter/greeter.ja.geas の主張 2（19 行目）
+    空白だけの名前は受け付けない: 主張がありません
+  ADDED ヘルスチェック
+    ヘルスチェックに答える: 主張がありません
+どのシナリオとも名前が合わない主張:
+  足した数が積み上がる: examples/greeter/greeter.ja.geas の主張 3（24 行目）
+  知らないパスには 404 を返す: examples/greeter/greeter.ja.geas の主張 4（33 行目）
+シナリオ 4 個 · 主張のあるもの 2 個 · 主張の無いもの 2 個
+$ echo $?
+1
+$ geas scenarios examples/greeter/greeter.ja.geas --openspec examples/greeter/ja/openspec/changes/trim-names --draft --lang ja
+# examples/greeter/ja/openspec/changes/trim-names/specs/greeting/spec.md
+# Requirement: 名前で挨拶する
+#   Scenario: 空白だけの名前は受け付けない
+#   - **WHEN** クライアントが `/greet?name=%20%20` を求める
+#   - **THEN** ステータスは 400
+claim "空白だけの名前は受け付けない" {
+  # when <ターゲット>.<呼び出し>(…)
+  # then <チェックするもの> <比べ方>
+}
+
+# examples/greeter/ja/openspec/changes/trim-names/specs/greeting/spec.md
+# Requirement: ヘルスチェック
+#   Scenario: ヘルスチェックに答える
+#   - **WHEN** クライアントが `/health` を求める
+#   - **THEN** ステータスは 200
+claim "ヘルスチェックに答える" {
+  # when <ターゲット>.<呼び出し>(…)
+  # then <チェックするもの> <比べ方>
+}

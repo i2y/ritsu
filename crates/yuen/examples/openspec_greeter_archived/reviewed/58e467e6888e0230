@@ -1,0 +1,6 @@
+### Requirement: Unknown paths
+The service MUST answer any path it does not know with status 404.
+
+#### Scenario: unknown paths are 404
+- **WHEN** a client asks for `/nope`
+- **THEN** the status is 404

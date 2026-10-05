@@ -11,6 +11,8 @@ usage:
   geas drift <spec.geas>...           run them again and report what changed since the baseline
   geas map <spec.geas>...             run them with coverage on and record the lines each claim runs
   geas affected <spec.geas> <diff|->  the claims a diff touches, and the changed code no claim runs
+  geas scenarios <spec.geas>... --openspec <path>...
+                                      the scenarios of OpenSpec specs, each with the claims of its name
   geas explain <code>... | --all      what a code means and how to fix it
   geas skill [--install <dir>]        the guide for coding agents, or the guide written as a skill folder
 
@@ -21,6 +23,8 @@ options:
   --root <dir>      map, affected: the directory the record's paths are relative to
   --out <file>      map: where to write the record
   --map <file>      affected: a record to read; give two for both sides of the diff
+  --openspec <path> scenarios: a spec, a change's delta spec, or a directory of them
+  --draft           scenarios: a claim to fill in for each scenario no claim answers
   --install <dir>   skill: write the skill's files to <dir>/geas
   --force           skill: write over a <dir>/geas that is already there
   --help, -h        this text
@@ -38,6 +42,7 @@ exit: 0 all held, or nothing to report · 1 something failed or changed · 2 the
 | `geas drift <spec>…` | runs the claims again and compares every observation with the baseline | 0 nothing changed, 1 something changed, 2 no baseline, an unreadable one, or a claim that could not run |
 | `geas map <spec>…` | runs the claims with each runtime's coverage on, and writes the record of the lines each claim ran | as `check`; 2 for E065 or E066, and then no record is written |
 | `geas affected <spec> <diff>` | reads a unified diff (`-` for stdin) and the record, runs nothing, and says which claims the change touches and which changed code no claim runs | 0 nothing to read again, 1 changed code no claim runs, a deleted file whose claims are unknown, or a changed spec or baseline, 2 no record, a stale one, or a diff that cannot be read |
+| `geas scenarios <spec>… --openspec <path>…` | reads OpenSpec specs and change delta specs, runs nothing, and says for each scenario which claims of the same name answer it; with `--draft`, a claim to fill in for each scenario no claim answers | 0 every scenario has a claim (or, with `--draft`, the drafts), 1 a scenario has none, 2 a file that is not there or not an OpenSpec spec (E081, E090) |
 | `geas explain <code>…`, `geas explain --all` | when a code appears, what usually fixes it, and the smallest spec that gives it | 0, or 2 for a code geas does not have |
 | `geas skill` | prints the guide for coding agents (`SKILL.md`) | 0 |
 | `geas skill --install <dir>` | writes the skill folder as `<dir>/geas/`; with `--force`, over one that is there | 0; 2 when the folder is there and `--force` is not given (E081) |
@@ -55,6 +60,8 @@ not take is E080, never ignored.
 | `--out <file>` | `map` | where to write the record, instead of `.geas/<stem>.map.jsonl` |
 | `--map <file>` | `affected` | a record to read instead of the spec's; give it twice for a record of each side of the diff |
 | `--install <dir>`, `--force` | `skill` | where to write the skill folder, and whether to write over one |
+| `--openspec <path>` | `scenarios` | an OpenSpec spec (`openspec/specs/<capability>/spec.md`), a change's delta spec (its ADDED and MODIFIED requirements), or a directory: every `spec.md` under it, leaving out `archive/`. Give it as often as needed |
+| `--draft` | `scenarios` | instead of the report, a claim for each scenario no claim answers, its body only comments (geas refuses it, E005, until the steps are written) |
 
 ## Environment variables
 
@@ -148,5 +155,10 @@ In text, a screen is one node a line, two spaces a level: `button "Greet" disabl
   "why"}],"deleted":[{"file","known"}],"outside","spec_changed","baseline_changed","ok"}`. A line's
   `side` is `after` (numbered in the code after the change) or `before` (a removed line); `how` is
   `ran` or `near`; `startup` names the target every claim of which runs the line.
+- `scenarios`: `{"geas":1,"specs":[{"path","delta","requirements":[{"name","op","line","scenarios":
+  [{"name","line","claims":[{"spec","number","name","line"}],"near":[…]}]}]}],
+  "claims_no_scenario_names":[…],"scenarios","answered","unanswered","exit"}`. `delta` is true for a
+  change's delta spec, and `op` is then `ADDED` or `MODIFIED` (null for a spec); `claims` are the
+  claims of the scenario's name, `near` those whose names differ only in case or spaces.
 - `explain`: one object a line, `{"geas":1,"code","severity","summary","when","fix","repro":{"args",
   "files":[{"name","text"}],"exit","needs","env"}}`.

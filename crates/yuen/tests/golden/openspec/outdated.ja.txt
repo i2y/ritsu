@@ -1,0 +1,21 @@
+挨拶: まだ archive していない変更 trim-names が、名前で挨拶する を変えます（examples/openspec_greeter/ja/openspec/changes/trim-names/specs/greeting/spec.md:3）
+  要件の変わるところ:
+      @@ -1,4 +1,4 @@
+        ### Requirement: 名前で挨拶する
+      - サービスは `GET /greet?name=<名前>` に、ステータス 200 と、`message` が `Hello, <名前>` の JSON で答える（SHALL）。空の名前には、ステータス 400 で答える（SHALL）。
+      + サービスは `GET /greet?name=<名前>` に、ステータス 200 と、`message` が、名前の前後の空白を除いた `Hello, <名前>` の JSON で答える（SHALL）。空白を除くと空になる名前には、ステータス 400 で答える（SHALL）。
+
+        #### Scenario: 名前で挨拶する
+      @@ -9,3 +9,7 @@
+        #### Scenario: 空の名前は受け付けない
+        - **WHEN** クライアントが `/greet?name=` を求める
+      + - **THEN** ステータスは 400
+      +
+      + #### Scenario: 空白だけの名前は受け付けない
+      + - **WHEN** クライアントが `/greet?name=%20%20` を求める
+        - **THEN** ステータスは 400
+  引いている要件: 名前で挨拶する（持ち主 窓口、examples/openspec_greeter/greeter.ja.req:12）
+  確かめ直すもの: リンク 4 本
+  読んでから、archive したあとで yuen source pin で固定すると、yuen check がこれらに印を付けます
+挨拶: まだ archive していない変更 trim-names が、要件 ヘルスチェック を足します（examples/openspec_greeter/ja/openspec/changes/trim-names/specs/greeting/spec.md:21）。プロジェクトのどの要件もまだ読んでいません
+exit 1

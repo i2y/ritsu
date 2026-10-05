@@ -128,6 +128,13 @@ impl ritsu_ports::Items for Engine {
                     (s.span.line, pin.as_ref().map(|h| format!("from file {path} sha256:{h}\n")).unwrap_or_default())
                 }
                 SourceKind::Borrowed { .. } => (s.span.line, p.names.sources[0].get(si).and_then(|n| n.as_ref()).map(|n| format!("{}\n", n.text())).unwrap_or_default()),
+                SourceKind::OpenSpec { pins, .. } => {
+                    let path = p.names.sources[0].get(si).and_then(|n| n.as_ref()).map(|n| n.path.clone()).unwrap_or_default();
+                    (
+                        pins.iter().map(|x| x.span.line).fold(s.span.line, usize::max),
+                        pins.iter().filter_map(|x| x.pin.as_ref().map(|h| format!("from openspec {path} {} sha256:{h}\n", x.fragment))).collect::<String>(),
+                    )
+                }
             };
             out.push(Item { naming: naming("source", &s.name), lines: (s.span.line, end), text });
         }

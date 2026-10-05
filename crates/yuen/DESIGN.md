@@ -6,6 +6,8 @@
 
 この文書は段階 A（設計）で書き、段階 B（言語の芯）で、B が作ったコマンド（`check`、`review`、`trace`、`api`、`explain`）の出力を実物に差し替えた（4.3、5.1、6.3、9 章。どれもテストが走らせて照らし合わせる）。段階 C のうち書き出しと出典のコマンドを作ったところで、12〜14 章を実物にした（13 章の PROV-N はテストが走らせて照らし合わせ、12 章の ReqIF はテストの golden から引き、14 章の `outdated` は本物の e-Gov に一度問い合わせた出力を貼った）。段階 C の残り（一式の読み込み）は、yuen が ritsu（七つの言語を一つにまとめる処理系）に取り込まれたので、子プロセスと JSON ではなく ritsu の口（ritsu の DESIGN 3.2）で作った（ritsu の PLAN の D.7）。そこで 3 章を書き直し、8 章の affected と 11 章の api を実物にした（8 章の出力はテストが走らせて照らし合わせる）。A の段階でほかのツール（rulec 0.22.1、koyomi 0.1.0、chobo 0.1.0、geas 0.0.1）の出力、xmllint と Python の `prov`・`reqif` の振る舞いを、2026-10-03 にこの機械で実際に走らせて確かめたことは、19 章にそのまま残した。要件の端のハッシュの値（1.1、4.1）は、この文書の定義どおりに組んだ使い捨ての試作（Python）で計算したもので、段階 B の yuen は同じ値を出した（PLAN B.15）。成果物の端は、ritsu の D.7 で、それぞれの言語が口で渡す定義の文になり、ハッシュを取り直した（3.2、19 章）。
 
+2026-10-05 の夜に、OpenSpec の仕様を、要件ごとに固定して読む出典の種類を足した（20 章。出力は実物を貼った）。
+
 ## 0. 全体像
 
 ```
@@ -96,6 +98,8 @@ yuen が確かめるのは、つながりとハッシュと期間だけである
 **OpenFastTrace**（4.10.0、2026-09-20）。仕様の項目の ID を `型~名前~版`（`dsn~cli.tracing.default-format~1`）で書き、Markdown の項目に `Needs: impl, utest`、`Covers: req~…~1` を書く。コードにはコメントのタグ `// [impl->dsn~validate-authentication-request~1]` を書く。項目の意味が変わったら、人が版の数を上げる。上げると、古い版を指すリンクが全部無効になる。ハッシュは使わない。項目 A が項目 B を覆っていて、B に欠陥があれば、A も「not ok (transitive)」になる。
 
 **ReqIF**（OMG、1.2、2016 年 7 月）。企業の要件管理ツールのあいだで要件をやりとりする XML の形式で、`SPEC-OBJECT`（要件）、`SPEC-RELATION`（つながり）、`SPECIFICATION`（文書の木）からなる。ツールのあいだの約束（属性の名前など）は、ReqIF Implementor Forum の実装ガイド（v1.10、2024-01-26）が補っている（12 章）。
+
+**OpenSpec**（Fission-AI の `@fission-ai/openspec` 1.14.0、2026-09-30。2026-10-05 に確かめた）。仕様から始める開発の道具で、要件とシナリオを Markdown の仕様に書き、変更の提案（`openspec/changes/<id>/` の差分）を `openspec archive` で当てる。要件から先の成果物へのリンクも、確かめた記録も持たない。yuen は、その仕様の要件を出典として読む（20 章）。
 
 **W3C PROV**（PROV-DM と PROV-N は 2013-04-30 の勧告、PROV-JSON は 2013-04-24 のメンバー提出）。来歴を entity（もの）、activity（行い）、agent（行う人）と、そのあいだの関係（wasDerivedFrom、wasGeneratedBy、used、wasAssociatedWith など）で書く。
 
@@ -246,7 +250,7 @@ role 経理
 
 ### 1.4 出典
 
-**決定**：出典の書き方は三つある。
+**決定**：出典の書き方は三つある（20 章で、OpenSpec の仕様を読む四つめの `openspec` を足した）。
 
 ```
 source 民法 = law "129AC0000000089" asof 2026-10-01
@@ -949,14 +953,16 @@ exit code は 0（エラーなし。警告はあってよい）、1（エラー�
 | E011 | 知らないツールの語（`dir` も） |
 | E012 | ツールに無い種類の語、組の並びの誤り（子の種類が親のすぐあとにない、子が二つ、入れ子の無いツールで組が二つ、file の種類、種類のあとに名前が無い）、その位置に書けない名指し（`source` をリンクや範囲に書いた、`yuen` の名指しをリンクや範囲に書いた、借りた出典が rulec と koyomi の `source` でない） |
 | E013 | パスの誤り（引用符が無い、空、絶対パス、ルートの外） |
-| E101 | 出典のコピーが無い |
-| E102 | 出典が固定されていない（引いている条に固定の行が無い、`file` に `sha256:` が無い） |
-| E103 | コピーが固定と違う |
-| E104 | コピーが読めない（XML でない、e-Gov か eCFR の形でない） |
-| E105 | 引用が使えない（書き方が読めない、宣言の無い出典、`file` の出典に条を書いた） |
+| E101 | 出典のコピーが無い（OpenSpec の仕様が無いときも） |
+| E102 | 出典が固定されていない（引いている条や OpenSpec の要件に固定の行が無い、`file` に `sha256:` が無い） |
+| E103 | コピーが固定と違う（OpenSpec の要件のブロックが固定と違うときも） |
+| E104 | コピーが読めない（XML でない、e-Gov か eCFR の形でない。OpenSpec の仕様として読めない） |
+| E105 | 引用が使えない（書き方が読めない、宣言の無い出典、`file` の出典に条を書いた、OpenSpec の仕様を要件なしで引いた） |
 | E106 | 借りた出典が使えない（名指したファイルがその出典を宣言していない、その条を固定していない、ファイルが無い、コピーが読めないか固定と違う） |
 | E107 | 要件と、それを満たす規則かカレンダーが、同じ条の違う本文を読んでいる |
+| E108 | OpenSpec の仕様に、固定か引用が名指す要件が無い（20 章） |
 | W101 | 固定した条が、どの要件からも引かれていない |
+| W102 | OpenSpec の仕様の要件を、プロジェクトのどの出典も固定していない（20 章） |
 | E201 | 成果物のファイルが無い（範囲のパスが無い、リンクにディレクトリを書いたときも） |
 | E202 | 成果物の名前が、そのファイルに無い（別名で書いた、名前が変わった。候補を添える） |
 | E203 | 名指したものの言語が、そのファイルについて答えられない（その言語の検査を通らない、読めない、定義の文を渡さない。その言語の診断を注に添える） |
@@ -980,12 +986,13 @@ exit code は 0（エラーなし。警告はあってよい）、1（エラー�
 | E408 | 版の期間の書き方が足りない（期間の無い版、終わりを開けた版が最後でない、版の番号が期間の順でない） |
 | E409 | 置き換える要件の期間が、置き換えられる要件の終わりの翌日から始まらない |
 | W401 | 見送りと、同じ側のリンクの両方がある |
+| W402 | OpenSpec の要件のシナリオに、同じ名前の主張が、要件を確かめる主張の中に無い（20 章） |
 
 番台は、構文と名前（E0xx）、出典（E1xx）、成果物（E2xx）、リンクとハッシュ（E3xx）、構造とカバレッジ（E4xx）で分けた。増やすときは番台の末尾に足し、番台をまたがない。
 
 退いたコードは、台帳に残して `yuen explain` で引けるようにし、退いた理由と版を書く。番号はほかのものに使い回さない（ritsu の DESIGN 7.10、rulec の docs/compatibility.md と同じ決まり）。ritsu の D.7 で、子プロセスと JSON のために決めていた E204 と、記録で主張の名前を確かめていた W201 を退かせ、E203 は、言語がファイルについて答えられないこと（その言語の検査を通らない、読めない、定義の文を渡さない）を、その言語の診断を名指して言う意味に替えた。E106、E107、E202、E203、E205 の再現は、ほかの言語のファイルを隣に置く `.req` で、テストはすべての言語をつないで走らせる（`ritsu yuen` と同じ）。
 
-台帳は、コードごとに再現を二つ持つ（E206 の一つは英語で、両方の言語で同じものを見せる。退いたコードは持たない）。`yuen explain` は、`--lang en` では英語の再現（名前も英語で、法令は eCFR）を、`--lang ja` では日本語の再現を見せる。日本語の出力は変えていない。英語の出力に出る再現が日本語から英語になったのは、決めて変えたことである（英語を先にする）。テストは、どちらの再現も同じに走らせ、そのコードが出ることを確かめる（`tests/codes.rs`。42 と 41 の 83 回）。
+台帳は、コードごとに再現を二つ持つ（E206 の一つは英語で、両方の言語で同じものを見せる。退いたコードは持たない）。`yuen explain` は、`--lang en` では英語の再現（名前も英語で、法令は eCFR）を、`--lang ja` では日本語の再現を見せる。日本語の出力は変えていない。英語の出力に出る再現が日本語から英語になったのは、決めて変えたことである（英語を先にする）。テストは、どちらの再現も同じに走らせ、そのコードが出ることを確かめる（`tests/codes.rs`。42 と 41 の 83 回。20 章で E108 と W102 を足して、44 と 43 の 87 回）。
 
 ### 6.3 診断の例
 
@@ -1150,7 +1157,7 @@ requirements touched:
 
 規則を変える差分では、規則のファイルの中のものを名指す要件を全部挙げる。どの表が変わり、どのリンクが確かめ直しになるかは、差分を当てたあとの `check` が、表ごとの端（3.2）で正確に言う。
 
-`--format json` は、同じ答えを一つの JSON にする。キーは `diff`、`root`、`requirement_files`、`copies`、`specs`、`files`、`unreached`、`others`、`requirements`、`owners`、`exit` の順で、パスはルートからの相対である（`tests/golden/affected/greeter.json`）。
+`--format json` は、同じ答えを一つの JSON にする。キーは `diff`、`root`、`requirement_files`、`copies`、`openspec_changes`（20 章で足した。OpenSpec の変更の提案）、`specs`、`files`、`unreached`、`others`、`requirements`、`owners`、`exit` の順で、パスはルートからの相対である（`tests/golden/affected/greeter.json`）。
 
 exit code は、答えられて、要件の届かない変更が無ければ 0、要件の届かない変更があれば 1、差分が読めない、`--map` の spec をどのリンクも名指していない、geas が記録を受け付けなかった、のどれかなら 2 にする。geas の `affected` の exit code（届かないコードがあれば 1）と同じ向きである。
 
@@ -1563,7 +1570,7 @@ ritsu の D.7 で、一式の読み込みを口で作った（3 章）。その�
 
 言語：
 
-- `file` の出典の中の箇所（条、段落、表）を引くこと（1.4）。
+- `file` の出典の中の箇所（条、段落、表）を引くこと（1.4）。形の決まった文書のうち、OpenSpec の仕様は 20 章で要件ごとに読めるようにした。
 - 利用者が型の付いたフィールドを足すこと（1.5）。
 - 書き方をそろえる `yuen fmt`。
 
@@ -1686,3 +1693,222 @@ broken.reqif validates
   | `… term キャンセル` | `dbfd211b7e4cef4b` |
 
   koyomi の条件の端は、A の段階の試作では `koyomi api` の `claims[]` の一つから `name` を除いた JSON で（`142条の満了日は満了日以後` が `825aa6c6f7ccf314`、ほかの三つが `447d80ca751bd681`、`2a8e130e4c527692`、`0b951fef68a36592`）、koyomi が渡す定義の文（条件の行）に替わって、上の値になった。日付の端は、A の段階ではファイル全体（`c9b94eecde23e6b5`）だった。chobo の端は、A の段階と同じ形の JSON を chobo の口が渡すので、同じ値になった。
+
+## 20. OpenSpec の仕様を出典にする
+
+2026-10-05 の夜に足した。OpenSpec（Fission-AI の `@fission-ai/openspec`。この章は 2026-09-30 に出た 1.14.0 の文書とソースを読み、手元に入れて走らせて確かめた）は、仕様から始める開発の道具で、仕様（`openspec/specs/<capability>/spec.md`）と変更の提案（`openspec/changes/<id>/`）を Markdown で持つ。仕様は `## Requirements` の下に `### Requirement: <名前>` の要件を並べ、要件ごとに `#### Scenario: <名前>` のシナリオを GIVEN／WHEN／THEN の箇条書きで書く。変更の提案は `proposal.md`、`tasks.md` と仕様の差分（`specs/<capability>/spec.md` の `## ADDED|MODIFIED|REMOVED|RENAMED Requirements`）を持ち、`openspec archive` が差分を仕様に当てて、提案を `changes/archive/` へ移す。
+
+### 20.1 何をつなぐと価値があるか
+
+OpenSpec は、人とエージェントが「何をするか」に合意するところまでを受け持つ。合意したあとの三つは、OpenSpec の外にある。
+
+- 実装が仕様に従ったか。OpenSpec の `/opsx:verify` はエージェントに読ませて確かめるもので、同じ入力で同じ答えになるとは限らない。
+- 仕様の要件が変わったとき（MODIFIED を含む変更を archive したとき）、見直すべき規則・フロー・コード・主張はどれか。OpenSpec は、要件から先の成果物を知らない。
+- 要件が何から来て、誰がいつ決め、誰が承認すべきか。`proposal.md` に理由の文章はあるが、ハッシュで固定した確かめの記録は無い。
+
+yuen はこの二つめと三つめに当たる。要件を出典の条から読み、満たすものと確かめるものにつなぎ、どこかが変われば止める。一つめは geas が受け持つ（シナリオと主張。geas の DESIGN §17）。
+
+**決定**：OpenSpec の仕様を、法令と同じく、条（ここでは要件）ごとに固定して読む出典の種類にする。仕様が変われば、その要件を引く `from` のリンクと、その先の `satisfied by`・`verified by` のリンクに印が付き、確かめたときのブロックとの差分を見せる。まだ archive していない変更の提案が、固定した要件をどう変えるかは、`yuen source outdated` と `yuen affected` が答える。
+
+### 20.2 書き方
+
+```
+source greeting = openspec "openspec/specs/greeting/spec.md"
+  "Greeting by name" sha256:…
+  "Running total" sha256:…
+
+requirement greets_by_name
+  text "A greeting names whoever asked for it"
+  owner api
+  from @greeting "Greeting by name"
+```
+
+- `source <名前> = openspec "<spec.md のパス>"`。パスは `file` の出典と同じく `.req` のディレクトリからの相対で、絶対パスとルートの外は E013。
+- 下の行に、引く要件ごとの固定を書く（法令の条の固定と同じ形）。名前は OpenSpec の archive が MODIFIED・REMOVED・RENAMED の見出しと突き合わせる名前で、`Requirement:` のあとの文字列から、見出しの末尾の `#` の並びを除いて前後の空白を落としたもの。大文字と小文字を区別し、書いたとおりに比べる。空白を含むので、ふつうは `"…"` で囲む。
+- 引用は `from @greeting "Greeting by name"`。仕様を丸ごと引くこと（`from @greeting`）はできない（E105）。
+
+`openspec` は出典の行の語で、名前には使える（`law`、`file` と同じ）。
+
+### 20.3 要件の端
+
+**決定**：OpenSpec の要件の端の中身は、その要件のブロックである。見出しの行から、次の要件の見出しか `## ` の行の手前までで、末尾の空白（改行を含む）を落とし、行を LF でつないだもの。CR LF は LF として読み、先頭の BOM は落とす。コードブロック（``` か ~~~）の中の行は、見出しとして読まない。ハッシュは、ほかの端と同じく、その UTF-8 のバイト列の SHA-256 の先頭 16 桁である。要件の端（4.1）の行は `from openspec <ルートからのパス> <要件の名前> sha256:<ハッシュ>` になる。
+
+この決まりは OpenSpec 自身の読み方（ソースの `src/core/parsers/requirement-blocks.ts` の `extractRequirementsSection`）と同じで、archive が MODIFIED の差分で置き換えるのはちょうどこのブロックである。だから、要件を変える変更を archive すれば、その要件の端は必ず変わり、ほかの要件を変える変更や、`## Purpose` の書き直しでは変わらない。読み手は ritsu の土台（`ritsu_base::openspec`。geas もシナリオを読むのに使う）に置き、OpenSpec 1.14.0 の読み手が同じファイルから作るブロックとシナリオの名前（`expected.json`。npm で入れた OpenSpec を node で呼んで作った）と、一字も違わないことをテストが確かめる。
+
+**理由**：
+
+- 端をファイル全体にすると、仕様のどこを直しても、その仕様を引くすべての要件に印が付く（法令を丸ごと固定しない理由と同じ。17 章）。
+- シナリオを端に含めたのは、OpenSpec ではシナリオが要件の受け入れの条件だからである。30 分を 15 分に変えるのがシナリオの行だけでも、満たすものと確かめるものは見直すべきである。MODIFIED がブロックを丸ごと置き換えることとも合う。
+- 空白を詰めるなどの、yuen だけの正規化はしない。人が読んだのは、OpenSpec が archive で書き、`openspec show` が見せるブロックそのものである。
+
+**捨てたもの**：
+
+- 要件の本文（`openspec show --json` の `text`）だけを端にすること。シナリオの変更を見落とす。
+- `openspec` の CLI を子プロセスで呼び、`show --json` を読むこと。`check` が Node と OpenSpec を要るようになり、通信しない・何も走らせないという `check` の前提（P4）から外れる。OpenSpec の Markdown は形が決まっていて、読み方はソースに書いてある。その読み方どおりの読み手を土台に書き、OpenSpec の読み手の結果と照らし合わせるほうが確かである。
+- `file` の出典で仕様を丸ごと固定すること。これはいまでも書けるが、要件ごとの差分も、変更の提案の読み方も無い。
+
+### 20.4 検査
+
+`check` の 3 の段（出典）で、次を確かめる。
+
+| 状態 | 診断 |
+|---|---|
+| 仕様のファイルが無い | E101 |
+| 仕様として読めない（UTF-8 でない、`## Requirements` の節が無い、同じ名前の要件が二つある） | E104。変更の差分のファイルを渡したなら、そう言う |
+| 固定した名前の要件が仕様に無い | E108（新しいコード）。大文字と小文字や空白だけが違う名前があれば、それを候補に挙げる |
+| 引いている要件に固定が無い、固定の行に `sha256:` が無い | E102 |
+| 要件のブロックが固定と違う | E103。確かめたときのブロックが `reviewed/` にあれば、差分を見せる |
+| 固定した要件を、どの要件も引いていない | W101 |
+| 仕様の要件のうち、固定していないものがある | W102（新しいコード） |
+| 引いた要件のシナリオに、同じ名前の主張が、要件を確かめる geas の主張の中に無い（7 の段） | W402（新しいコード） |
+
+W102 は、OpenSpec の仕様に書いた要件を、プロジェクトの要件が一つも読んでいないことを言う。一部だけを読むと決めたなら、外す要件も yuen の要件として引き、`not satisfied` と `not verified` に理由を書いて承認を得る。外したことが記録に残り、理由を読むのは持ち主になる（1.7 の見送りと同じ考え）。仕様全体を範囲（1.8）のように宣言する書き方は作らなかった。範囲は満たす側の成果物の集まりで、出典の側に同じ語を使うと、意味が二つになる。
+
+7 の段（カバレッジ）では、OpenSpec の要件を引き、geas の主張で確かめている要件について、その OpenSpec の要件のシナリオのうち、同じ名前の主張が、要件を確かめる主張（`verified by geas … claim …`。spec を丸ごと名指したなら、その spec のすべての主張）の中に無いものを、W402（新しいコード）で言う。シナリオと主張は名前で突き合わせる（geas の DESIGN §17 と同じ決まり）。geas で確かめていない要件には言わない。規則の検査や koyomi の条件で確かめる要件では、シナリオと主張を突き合わせる意味が無いからである。変更を archive してシナリオが足されると、固定し直して確かめ直したあとも、この警告が新しいシナリオの主張を求める。
+
+**E103 と、そのあとの E302**：仕様が変わった直後の `check` は、まず E103（固定と違う）で止まり、差分を見せる。`yuen source pin` で固定を書き換えると、その要件を引く `from` のリンクに E302、その先のリンクにも E302 が付き、一本ずつ人が確かめるまで止まる。法令の改正を取り込むときの順（コピーを取る、固定する、リンクを確かめる）と同じで、固定の行は「プロジェクトがこの版の要件を読む」という宣言として、プルリクエストの差分に残る。
+
+**捨てたもの**：固定を置かず、`from` の記録のハッシュだけで仕様の変化を見ること。手順が一つ減るが、出典の書き方が一つだけ違う形になり、`source pin`・`source outdated`・`api` の `pins` がこの種類だけ別の扱いになる。法令と同じ形にそろえた。
+
+### 20.5 変更の提案：`source outdated` と `affected`
+
+**決定**：`yuen source outdated` は、`openspec` の出典について、まだ archive していない変更の提案を読む（通信しない）。仕様のパスが `<dir>/openspec/specs/<capability>/spec.md` の形なら、`<dir>/openspec/changes/` の下の、`archive` を除いた各変更の `specs/<capability>/spec.md` を読み、固定した要件に何をするかを言う。
+
+- MODIFIED：要件のブロックが置き換わる。それを引く要件と持ち主、確かめ直しになるリンクと見送りの数（14 章と同じ数え方）、そのリンクが名指す成果物。
+- REMOVED：要件が無くなる。引く要件が出どころを失う。
+- RENAMED：名前が変わる。固定と引用の名前を直すことになり、ブロックの見出しの行も変わる。
+- ADDED：プロジェクトがまだ読んでいない要件が増える（archive すれば W102）。
+
+固定した要件を変える提案があれば exit 1、ADDED だけなら 0 にする。法令の改正が施行される前に言うのと同じく、archive の前に言う。
+
+`yuen affected --diff` は、差分が触るファイルに OpenSpec のものがあれば、二つを足して答える。
+
+1. 出典の仕様のファイル（8 章の 2 の、出典のコピーとして）：ディスクのファイルが差分のどちらの側かを確かめ、もう一方の側を差分から組み立てて、両側の仕様を読む。ブロックが違う要件と、片側にしか無い要件が、差分が触る要件である。そのうち固定している要件を引く要件を挙げる。どちらの側とも合わなければ、その仕様から引いている要件の全部を挙げる。
+2. 変更の提案の差分のファイル（`openspec/changes/<id>/specs/<capability>/spec.md`）：上の `source outdated` と同じ読み方で、その変更が固定した要件に何をするかと、触る要件を挙げる。提案を出すプルリクエストの差分に、archive の前に答えられる。
+
+**捨てたもの**：
+
+- 変更の提案を名前で渡すフラグ（`yuen affected --change trim-names`）。`source outdated` が全部の提案を見て、`affected` は差分に入った提案を見るので、二つで足りる。
+- archive した提案（`changes/archive/`）を読むこと。当てたあとの仕様は `specs/` にあり、端のハッシュで変化が分かる。
+
+### 20.6 ほかのコマンド
+
+- `source fetch`：取るものは無い。仕様はプロジェクトのファイルで、そこに書くものだからである。その旨を一行で言う。
+- `source pin`：固定の行の 16 桁を、いまのブロックのハッシュに書き換える。引いているのに固定の行が無い要件には、行を足す。
+- `trace`、`doc`：要件のブロックを、法令の条と同じ場所に引用する。`doc` の出典の節は、仕様の要件ごとに、固定と引く要件を表にする。
+- `api`：出典に `"kind": "openspec"`、`path`、`pins` を出す。
+- `export`：ReqIF と PROV は、OpenSpec の要件を、パスと要件の名前で区別する出典として書く。属性は `file` の出典と同じ `yuen.file`（PROV は `yuen:file`）に仕様のパスを、名前（ReqIF の `ReqIF.Name`、PROV の `prov:label`）に `<出典> "<要件>"` を、本文（`ReqIF.Text`）にブロックの行を書く。新しい属性は足さなかった。ReqIF は属性の定義を文書の頭にまとめて書くので、一つ足すと、OpenSpec を読まないプロジェクトの書き出しまで変わるからである。
+- ritsu の口：yuen の出典の定義の文は、固定ごとの `from openspec …` の行。`References` は、仕様のファイルを出典として名指したものとして渡す。
+
+### 20.7 範囲と、まだやらないこと
+
+範囲に入れたもの：`openspec` の出典（書き方、検査、端と印、`review`、`source` の三つのコマンド、`affected`、`trace`、`doc`、`api`、`export`、口）、E108、W102、W402、例（`openspec_greeter` と、変更を archive したあとに止まる `openspec_greeter_archived`）、テストの材料と変異（英語と日本語）、README（英日）、`docs/reference.md`、台帳、スキル。
+
+まだやらないこと：
+
+- 仕様のストア（OpenSpec の stores。ベータ）や、`config.yaml` の `references` が指すほかのリポジトリの仕様を読むこと。いまは同じルートの中のファイルだけを読む。
+- シナリオの単位で固定すること。シナリオは要件のブロックに含まれ、シナリオと主張の対応は geas が受け持つ（geas の DESIGN §17）。
+- 要件の文（`text`）を OpenSpec の要件から取って省けるようにすること。要件の端は yuen の要件の文から作る（4.1）ので、出典の文を流用すると、リンク元が変わったのか要件が変わったのか（E302 と E303 の区別）がぼやける。
+- Spec Kit や Kiro の仕様を同じように読むこと。形が決まっていて、読み方が公開されていれば、同じ形で足せる。
+
+### 20.8 実際の出力
+
+例 `openspec_greeter` は、geas の例 greeter の仕様を OpenSpec で書き（要件三つ、シナリオ四つ。シナリオには geas の主張と同じ名前を付けた）、変更の提案 `trim-names`（名前の前後の空白を除く MODIFIED と、ヘルスチェックの ADDED）を持つ。仕様と提案は、手元に入れた OpenSpec 1.14.0 の `openspec validate --all --json` を通した。`openspec_greeter_archived` は、そのコピーで `openspec archive trim-names --yes` を走らせたあとのもので、仕様の書き換えと提案の移動は OpenSpec が行った。`.req` と `reviewed/` は二つの例で同じバイト列である（`tests/openspec.rs` が確かめる）。
+
+archive の前に、`source outdated` が言うこと（通信しない）：
+
+```
+$ yuen source outdated examples/openspec_greeter/greeter.req --root examples/openspec_greeter
+greeting: the change trim-names, not yet archived, modifies "Greeting by name" (examples/openspec_greeter/openspec/changes/trim-names/specs/greeting/spec.md:3)
+  what changes in the requirement:
+      @@ -1,4 +1,4 @@
+        ### Requirement: Greeting by name
+      - The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>`, and SHALL refuse an empty name with status 400.
+      + The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>` with the spaces around the name removed, and SHALL refuse a name that is empty once they are removed with status 400.
+
+        #### Scenario: greets by name
+      @@ -9,3 +9,7 @@
+        #### Scenario: rejects an empty name
+        - **WHEN** a client asks for `/greet?name=`
+      + - **THEN** the status is 400
+      +
+      + #### Scenario: rejects a name of spaces
+      + - **WHEN** a client asks for `/greet?name=%20%20`
+        - **THEN** the status is 400
+  cited by: greeting_by_name (owned by api, examples/openspec_greeter/greeter.req:12)
+  to look at again: 4 links
+  read it; once it is archived, yuen source pin pins the new requirement, and yuen check then marks these
+greeting: the change trim-names, not yet archived, adds the requirement "Health check" (examples/openspec_greeter/openspec/changes/trim-names/specs/greeting/spec.md:21), which no requirement of the project reads yet
+```
+
+archive のあと、固定し直す前の `check`：
+
+```
+$ yuen check examples/openspec_greeter_archived/greeter.req --root examples/openspec_greeter_archived
+warning[W102]: examples/openspec_greeter_archived/greeter.req:7:8: A requirement of the spec examples/openspec_greeter_archived/openspec/specs/greeting/spec.md is pinned by no source of the project: "Health check"
+     7 | source greeting = openspec "openspec/specs/greeting/spec.md"
+  = Pin each one and read it with a requirement. To leave one out, read it with a requirement all the same and write `not satisfied` and `not verified` with the reasons: leaving it out is then on record, with its approval.
+error[E103]: examples/openspec_greeter_archived/greeter.req:8:3: greeting "Greeting by name" does not match its pin (pinned sha256:1c3d865f4a521275, the requirement is sha256:228485bfce459383)
+     8 |   "Greeting by name" sha256:1c3d865f4a521275
+  = The requirement changed in the spec after it was pinned (an archived change, or an edit). Read what changed, then pin it again (`yuen source pin`).
+  what changed in the requirement since it was pinned (the spec examples/openspec_greeter_archived/openspec/specs/greeting/spec.md):
+      @@ -1,4 +1,4 @@
+        ### Requirement: Greeting by name
+      - The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>`, and SHALL refuse an empty name with status 400.
+      + The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>` with the spaces around the name removed, and SHALL refuse a name that is empty once they are removed with status 400.
+
+        #### Scenario: greets by name
+      @@ -9,3 +9,7 @@
+        #### Scenario: rejects an empty name
+        - **WHEN** a client asks for `/greet?name=`
+      + - **THEN** the status is 400
+      +
+      + #### Scenario: rejects a name of spaces
+      + - **WHEN** a client asks for `/greet?name=%20%20`
+        - **THEN** the status is 400
+  = The line, fixed: "Greeting by name" sha256:228485bfce459383
+warning[W402]: examples/openspec_greeter_archived/greeter.req:15:3: The scenario "rejects a name of spaces" of greeting "Greeting by name" has no claim of its name among the claims that check greeting_by_name
+    15 |   from @greeting "Greeting by name"
+  = geas holds a scenario to the claim of its name (`geas scenarios`). Write a claim of that name with the person who reads the claims, and link it with `verified by`; if a claim of another name runs the scenario, ask which of the two names is to change.
+examples/openspec_greeter_archived/greeter.req: 1 error, 2 warnings
+```
+
+`yuen source pin` で固定し直すと、`from` のリンクに E302 が付き（同じ差分を見せる）、その先の三本（`satisfied by file "server.py"` と二つの主張）にも E302 が付く。ほかの二つの要件のリンクには付かない。人が見て `review` を書けば、残るのは W102（ヘルスチェック）と W402（提案が足したシナリオ「rejects a name of spaces」に、同じ名前の主張がまだ無い）になる（`tests/openspec.rs` の `pinned_again_the_links_below_the_requirement_are_marked`）。
+
+提案のフォルダーを足すプルリクエストの差分（`diffs/propose.diff`）と、archive が仕様に当てた差分（`diffs/archive.diff`）への `affected`：
+
+```
+$ yuen affected examples/openspec_greeter/greeter.req --root examples/openspec_greeter --diff examples/openspec_greeter/diffs/propose.diff
+diff: examples/openspec_greeter/diffs/propose.diff
+OpenSpec changes the diff touches, not yet archived:
+  trim-names (examples/openspec_greeter/openspec/changes/trim-names/specs/greeting/spec.md, for examples/openspec_greeter/openspec/specs/greeting/spec.md):
+    MODIFIED "Greeting by name": cited by greeting_by_name
+    ADDED "Health check": no requirement reads it yet
+the claims the change touches (geas "greeter.geas"; records: examples/openspec_greeter/.geas/greeter.map.jsonl (either side)):
+  none
+changes no requirement reaches: none
+other files the diff touches: examples/openspec_greeter/openspec/changes/trim-names/proposal.md, examples/openspec_greeter/openspec/changes/trim-names/tasks.md
+requirements touched:
+  greeting_by_name (examples/openspec_greeter/greeter.req:12): owner api; from greeting "Greeting by name"
+1 requirement touched; ask api
+$ yuen affected examples/openspec_greeter/greeter.req --root examples/openspec_greeter --diff examples/openspec_greeter/diffs/archive.diff
+diff: examples/openspec_greeter/diffs/archive.diff
+copies of sources the diff touches:
+  examples/openspec_greeter/openspec/specs/greeting/spec.md (greeting "Greeting by name", "Health check"): cited by greeting_by_name
+the claims the change touches (geas "greeter.geas"; records: examples/openspec_greeter/.geas/greeter.map.jsonl (either side)):
+  none
+changes no requirement reaches: none
+requirements touched:
+  greeting_by_name (examples/openspec_greeter/greeter.req:12): owner api; from greeting "Greeting by name"
+1 requirement touched; ask api
+```
+
+二つめでは、差分の両側の仕様を組み立てて比べるので、変わったのは「Greeting by name」と、足された「Health check」だけと分かる。最初は差分の行の番号で要件のブロックを当てていたが、要件の境目に足した行（シナリオを一つ足した行）が次の要件のブロックに数えられ、仕様の三つの要件の全部を挙げてしまった。それで両側を比べる形にした。
+
+### 20.9 確かめたこと（2026-10-05、macOS arm64）
+
+- **版と出どころ**：npm の `@fission-ai/openspec` の最新は 1.14.0（2026-09-30 公開。<https://registry.npmjs.org/@fission-ai/openspec> の `dist-tags.latest`）。`npm install --prefix` で作業場所に入れて走らせ、ソースは <https://github.com/Fission-AI/OpenSpec> のタグ `v1.14.0` を読んだ。読んだ文書は `docs/concepts.md`、`docs/cli.md`、`docs/writing-specs.md`、`docs/agent-contract.md`。読み方の決まりは `src/core/parsers/` の `requirement-blocks.ts`（`extractRequirementsSection`、`parseDeltaSpec`、`normalizeRequirementName`）、`requirement-text.ts`、`code-fence.ts`、`markdown-parser.ts`、`spec-structure.ts`、archive の順は `src/core/specs-apply.ts`（RENAMED、REMOVED、MODIFIED、ADDED）から取った。
+- **CLI の JSON**：`openspec show <spec> --type spec --json` の要件は `name`、`text`、`scenarios`（`name` と `rawText`）。`text` は本文だけで、シナリオを含まない（20.3 で端に使わなかった理由）。`list --json`、`validate --all --json`、`archive <id> --yes --json` の形も、`docs/agent-contract.md` のとおりだった。
+- **archive が書く仕様**：英語と日本語の例の提案で `openspec archive` を走らせ、MODIFIED の要件のブロックが提案のブロックと一字も違わないこと、ほかの要件のブロックが一字も変わらないこと、ADDED の要件が最後に足されることを確かめた（`tests/openspec.rs` の `the_archived_example_is_the_other_after_the_archive`）。
+- **読み手の照らし合わせ**：ritsu-base の読み手が作るブロックとシナリオの名前と差分の四つの節を、OpenSpec 1.14.0 の読み手を node で呼んで作った `expected.json`（コードブロックの中の見出し、見出しの末尾の `#`、CR LF と BOM、`Scenario:` の無い四段の見出し、本文の無いシナリオ、要件でない三段の見出し、`*` と `+` の箇条書きの RENAMED と REMOVED、対の無い `FROM:` を含む）と比べ、一字も違わないことを確かめた（ritsu-base の `tests/openspec.rs`）。
+- **日本語の仕様**：要件とシナリオの名前を日本語にした仕様も `openspec validate` を通る。ただし本文に `SHALL` か `MUST` の語が要るので、例では「（SHALL）」と書いた。

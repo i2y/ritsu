@@ -479,6 +479,18 @@ const TALLY_RS: &str = "fn main() {
 }
 ";
 
+/// A claims file that parses, and a file that is no OpenSpec spec (E090).
+const X_E090: &str = "target calc {
+  run \"python3 calc.py\"
+}
+
+claim \"adds two integers\" {
+  when calc.run(\"2\", \"+\", \"3\")
+  then stdout is \"5\"
+}
+";
+const NOTES_MD: &str = "# Notes\n\nNothing here is a spec.\n";
+
 fn spec(args: &'static [&'static str], files: &'static [(&'static str, &'static str)], exit: i32) -> Repro {
     Repro { args, files, exit, needs: &[], env: &[] }
 }
@@ -1025,14 +1037,27 @@ pub fn table() -> Vec<Entry> {
             code: "E081",
             summary: tr!("読めないか、書けないファイル", "a file that cannot be read or written"),
             when: tr!(
-                "geas が主張のファイルを読めなかったか、その隣の `.geas/` にジャーナルやベースラインを書けなかったときです。`geas skill --install <dir>` がスキルのフォルダーを書けなかったときと、`--force` を付けずに、すでにある `<dir>/geas` に書こうとしたときにも出ます。メッセージに OS が返した理由が出ます。",
-                "geas could not read a spec, or could not write the journal or the baseline in the `.geas/` directory beside it, or `geas skill --install <dir>` could not write the skill folder, or found `<dir>/geas` already there and was not given `--force`. The message carries the system's reason.",
+                "geas が主張のファイルを読めなかったか、その隣の `.geas/` にジャーナルやベースラインを書けなかったときです。`geas scenarios` の `--openspec` に渡したものが無いときや読めないとき、`geas skill --install <dir>` がスキルのフォルダーを書けなかったときと、`--force` を付けずに、すでにある `<dir>/geas` に書こうとしたときにも出ます。メッセージに OS が返した理由が出ます。",
+                "geas could not read a spec, or could not write the journal or the baseline in the `.geas/` directory beside it; or what `geas scenarios` was given with `--openspec` is not there or cannot be read; or `geas skill --install <dir>` could not write the skill folder, or found `<dir>/geas` already there and was not given `--force`. The message carries the system's reason.",
             ),
             fix: tr!(
                 "パスと、主張のファイルのディレクトリに書き込めるかを確かめてください。`geas skill --install` では、`--force` を付けると、そこにあるフォルダーにスキルを上書きします。",
                 "Check the path, and that the spec's directory can be written to. For `geas skill --install`, add `--force` to write the skill over the folder that is there.",
             ),
             repro: spec(&["check", "missing.geas"], &[], 2),
+        },
+        Entry {
+            code: "E090",
+            summary: tr!("OpenSpec の仕様として読めないファイル", "a file that does not read as an OpenSpec spec"),
+            when: tr!(
+                "`geas scenarios` の `--openspec` に渡したファイルが、仕様（`## Requirements` の節）でも変更の提案の差分（`## ADDED Requirements` などの節）でもないとき、同じ名前の要件を二つ持つとき、UTF-8 でないときです。渡したディレクトリの下に `spec.md` が一つも無いときにも出ます。",
+                "In `geas scenarios`, a file given to `--openspec` is neither a spec (a `## Requirements` section) nor a change's delta spec (a section such as `## ADDED Requirements`), holds two requirements of one name, or is not UTF-8; or a directory given holds no `spec.md`.",
+            ),
+            fix: tr!(
+                "仕様（`openspec/specs/<capability>/spec.md`）、変更の提案の差分（`openspec/changes/<id>/specs/<capability>/spec.md`）、それらを持つディレクトリを渡してください。形の誤りは `openspec validate` が言います。",
+                "Give a spec (`openspec/specs/<capability>/spec.md`), a change's delta spec (`openspec/changes/<id>/specs/<capability>/spec.md`), or a directory that holds them; `openspec validate` says what is wrong with a form.",
+            ),
+            repro: spec(&["scenarios", "e090.geas", "--openspec", "notes.md"], &[("e090.geas", X_E090), ("notes.md", NOTES_MD)], 2),
         },
         Entry {
             code: "W060",

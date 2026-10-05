@@ -8,6 +8,7 @@ use crate::diag::{Diag, DiagExt};
 use ritsu_base::text::Text;
 use crate::names::Name;
 use crate::project::Project;
+use ritsu_base::openspec;
 use ritsu_base::sha256;
 use std::path::PathBuf;
 
@@ -24,6 +25,17 @@ pub struct Article {
     pub span: Span,
 }
 
+/// One requirement of an OpenSpec spec a `.req` pins (DESIGN 20).
+#[derive(Clone, Debug)]
+pub struct SpecPin {
+    /// The requirement's name, as OpenSpec's archive matches it.
+    pub name: String,
+    pub pin: Option<String>,
+    /// Its block, when the spec reads, holds the requirement, and the block matches the pin.
+    pub block: Option<String>,
+    pub span: Span,
+}
+
 #[derive(Clone, Debug)]
 pub enum Resolved {
     /// A law, copied an article at a time. `borrowed` is the source of a rule or a calendar it is
@@ -31,6 +43,9 @@ pub enum Resolved {
     /// language's check holds them.
     Law { db: LawDb, id: String, asof: String, dir: PathBuf, revision: Option<String>, articles: Vec<Article>, borrowed: Option<Name> },
     File { name: Name, abs: PathBuf, url: Option<String>, pin: Option<String>, bytes: Option<Vec<u8>>, borrowed: Option<Name> },
+    /// An OpenSpec spec, read a requirement at a time (DESIGN 20): the file, the requirements
+    /// pinned, and the spec as read, when it reads.
+    OpenSpec { name: Name, abs: PathBuf, pins: Vec<SpecPin>, spec: Option<openspec::Spec> },
     /// A borrowed source whose language is not handed to yuen: `ritsu yuen` reads it (exit 2).
     NoPort { name: Name },
     /// The naming of a borrowed source or the path of a file source did not resolve (stage 2),
@@ -57,11 +72,13 @@ pub struct Sources {
 /// and the copy it is.
 #[derive(Clone, Debug)]
 pub struct Cited {
-    /// `from law egov 129AC0000000089 第140条 sha256:…` or `from file docs/x.md sha256:…`.
+    /// `from law egov 129AC0000000089 第140条 sha256:…`, `from file docs/x.md sha256:…` or
+    /// `from openspec openspec/specs/x/spec.md <requirement> sha256:…`.
     pub line: String,
     pub hash: String,
     pub bytes: Vec<u8>,
-    /// The source and the article as a person reads them: `民法 第140条`, `約款`.
+    /// The source and the article as a person reads them: `民法 第140条`, `約款`,
+    /// `greeting "Greeting by name"`.
     pub label: String,
     /// For a law: the database and the copy's file, to quote it.
     pub law: Option<(LawDb, String)>,
@@ -103,6 +120,24 @@ impl Sources {
                 let bytes = bytes.clone()?;
                 let hash = sha256::short(&bytes);
                 Some(vec![Cited { line: format!("from file {} sha256:{hash}", name.path), hash, bytes, label: source.to_string(), law: None }])
+            }
+            Resolved::OpenSpec { name, pins, .. } => {
+                if fragments.is_empty() {
+                    return None;
+                }
+                let mut out = Vec::new();
+                for (fr, _) in fragments {
+                    let bytes = pins.iter().find(|x| &x.name == fr)?.block.clone()?.into_bytes();
+                    let hash = sha256::short(&bytes);
+                    out.push(Cited {
+                        line: format!("from openspec {} {fr} sha256:{hash}", name.path),
+                        hash,
+                        bytes,
+                        label: format!("{source} {}", crate::names::word_or_quote(fr)),
+                        law: None,
+                    });
+                }
+                Some(out)
             }
             Resolved::NoPort { .. } | Resolved::Broken => None,
         }
@@ -300,6 +335,10 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                     Some(n) => borrow(p, fi, s, n, &mut diags),
                     None => Resolved::Broken,
                 },
+                SourceKind::OpenSpec { pins, .. } => match &p.names.sources[fi][si] {
+                    Some(n) => spec_source(p, fi, s, n, pins, &mut diags),
+                    None => Resolved::Broken,
+                },
             };
             out.push((s.name.clone(), r));
         }
@@ -354,6 +393,50 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                             }
                         }
                     }
+                    SourceKind::OpenSpec { pins, .. } => {
+                        if fragments.is_empty() {
+                            diags.push(p.err(fi, "E105", *source_span, tr!(
+                                "OpenSpec の仕様は要件の単位で読むので、`@{source} \"<要件の名前>\"` のように、どの要件を引いたかを書いてください",
+                                "An OpenSpec spec is read a requirement at a time, so say which one: `@{source} \"<requirement>\"`"
+                            )));
+                            continue;
+                        }
+                        let spec = match sources.get(fi, source) {
+                            Some(Resolved::OpenSpec { spec: Some(spec), .. }) => Some(spec),
+                            _ => None,
+                        };
+                        for (fr, sp) in fragments {
+                            cited.push((source.clone(), fr.clone()));
+                            if pins.iter().any(|pl| &pl.fragment == fr) {
+                                continue;
+                            }
+                            let shown = crate::names::word_or_quote(fr);
+                            let indent = pins.first().map(|pl| " ".repeat(pl.span.col - 1)).unwrap_or_else(|| "  ".into());
+                            match spec.map(|s| s.get(fr)) {
+                                Some(None) => {
+                                    let spec_shown = match sources.get(fi, source) {
+                                        Some(Resolved::OpenSpec { name, .. }) => p.shown(&name.path),
+                                        _ => String::new(),
+                                    };
+                                    diags.push(no_such_requirement(p, fi, *sp, &spec_shown, fr, spec.unwrap()));
+                                }
+                                found => {
+                                    let fix = match found.flatten() {
+                                        Some(r) => format!("{indent}{shown} sha256:{}", sha256::short(r.block.as_bytes())),
+                                        None => format!("{indent}{shown} sha256:<yuen source pin>"),
+                                    };
+                                    diags.push(
+                                        p.err(fi, "E102", *sp, tr!("{source} {shown} を引いていますが、固定されていません", "{source} {shown} is cited but not pinned"))
+                                            .note(tr!(
+                                                "引く要件には、出典の下に固定の行を書いてください。どの版の要件を読んで書いたかを、固定で残すためです。",
+                                                "Every requirement cited has a pin line under its source: it records which version of the requirement was read."
+                                            ))
+                                            .fix_trimmed(fix),
+                                    );
+                                }
+                            }
+                        }
+                    }
                     SourceKind::File { .. } => {
                         if let Some((fr, sp)) = fragments.first() {
                             diags.push(p.err(fi, "E105", *sp, tr!("出典「{source}」はファイルを丸ごと固定しているので、`{fr}` のように箇所を引けません", "The source {source} pins a whole file, so no part of it such as `{fr}` can be cited")).note(tr!(
@@ -394,10 +477,10 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
             }
         }
         for s in &f.ast.sources {
-            let SourceKind::Law { pins, .. } = &s.kind else { continue };
+            let (SourceKind::Law { pins, .. } | SourceKind::OpenSpec { pins, .. }) = &s.kind else { continue };
             for pl in pins {
                 if !cited.iter().any(|(n, fr)| n == &s.name && fr == &pl.fragment) {
-                    let fr = &pl.fragment;
+                    let fr = &if matches!(s.kind, SourceKind::OpenSpec { .. }) { crate::names::word_or_quote(&pl.fragment) } else { pl.fragment.clone() };
                     let name = &s.name;
                     diags.push(p.warn(fi, "W101", pl.span, tr!("{name} {fr} は固定されていますが、どの要件からも引かれていません", "{name} {fr} is pinned but no requirement cites it")).note(tr!(
                         "引用を消したあとの残りなら、固定の行を消してください。",
@@ -407,8 +490,155 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
             }
         }
     }
+    diags.extend(unpinned(p, &sources));
     diags.sort_by(|a, b| (a.file.as_str(), a.line, a.col).cmp(&(b.file.as_str(), b.line, b.col)));
     (sources, diags)
+}
+
+/// E108: a spec without a requirement of a name, with the near name or the names it has.
+fn no_such_requirement(p: &Project, fi: usize, at: Span, shown: &str, name: &str, spec: &openspec::Spec) -> Diag {
+    let n = crate::names::word_or_quote(name);
+    let mut d = p.err(fi, "E108", at, tr!("仕様 {shown} に要件 {n} がありません", "The spec {shown} has no requirement {n}"));
+    let near = spec.near(name);
+    d = if let Some(m) = near.first() {
+        let m = crate::names::word_or_quote(m);
+        d.note(tr!(
+            "近い名前の要件 {m} があります。OpenSpec は名前を、大文字と小文字や空白も含めて、書いたとおりに比べます。",
+            "The spec has a requirement of a near name, {m}; OpenSpec compares names as written, case and spaces included."
+        ))
+    } else if spec.requirements.is_empty() {
+        d.note(tr!("この仕様には要件がありません。", "The spec has no requirement."))
+    } else {
+        let names: Vec<String> = spec.requirements.iter().map(|r| crate::names::word_or_quote(&r.name)).collect();
+        d.note(tr!("仕様にある要件: {}", "The requirements of the spec: {}", names.join("、"); names.join(", ")))
+    };
+    d.note(tr!(
+        "変更を archive して名前が変わった（RENAMED）か、無くなった（REMOVED）のなら、その要件を読む要件を見直してから、固定と引用を直してください。",
+        "If an archived change renamed the requirement (RENAMED) or removed it (REMOVED), look again at the requirements that read it, then correct the pin and the citations."
+    ))
+}
+
+/// An OpenSpec spec a `.req` names (DESIGN 20.4): the spec against the pins of its requirements.
+fn spec_source(p: &Project, fi: usize, s: &SourceDecl, name: &Name, pins: &[PinLine], diags: &mut Vec<Diag>) -> Resolved {
+    let f = &p.files[fi];
+    let line_of = |n: usize| f.src.lines().nth(n.saturating_sub(1)).unwrap_or("").to_string();
+    let abs = p.root.join(&name.path);
+    let shown = p.shown(&name.path);
+    let sname = &s.name;
+    let unread = |pins: &[PinLine]| pins.iter().map(|pl| SpecPin { name: pl.fragment.clone(), pin: pl.pin.clone(), block: None, span: pl.span }).collect();
+    let bytes = match ritsu_base::fs::read(&abs) {
+        Ok(b) => b,
+        Err(_) => {
+            diags.push(p.err(fi, "E101", s.span, tr!("出典「{sname}」の仕様 {shown} がありません", "The spec of the source {sname} is not there: {shown}")).note(tr!(
+                "OpenSpec の仕様は取ってくるコピーではなく、プロジェクトのファイルです。パスを直してください。変更を archive して capability が無くなったのなら、それを読む要件を見直してください。",
+                "An OpenSpec spec is a file of the project, not a copy to fetch: correct the path. If an archived change retired the capability, look again at the requirements that read it."
+            )));
+            return Resolved::OpenSpec { name: name.clone(), abs, pins: unread(pins), spec: None };
+        }
+    };
+    let spec = match openspec::read_spec(&bytes) {
+        Ok(spec) => spec,
+        Err(e) => {
+            let why = match e {
+                openspec::SpecError::NotUtf8 => tr!("UTF-8 ではありません", "it is not UTF-8"),
+                openspec::SpecError::NoRequirements { delta: true } => tr!(
+                    "`## Requirements` の節がありません。これは変更の提案の差分（`## ADDED Requirements` など）です",
+                    "it has no `## Requirements` section: it is a change's delta spec (`## ADDED Requirements` and the like)"
+                ),
+                openspec::SpecError::NoRequirements { delta: false } => tr!("`## Requirements` の節がありません", "it has no `## Requirements` section"),
+                openspec::SpecError::Twice { name, first, line } => tr!("要件「{name}」が {first} 行目と {line} 行目の二か所にあります", "the requirement {name} is written twice, on lines {first} and {line}"),
+            };
+            diags.push(p.err(fi, "E104", s.span, tr!("出典「{sname}」の仕様 {shown} が読めません: {}", "The spec {shown} of the source {sname} cannot be read: {}", why.ja; why.en)).note(tr!(
+                "出典に書くのは `openspec/specs/<capability>/spec.md` です。仕様の形の誤りは `openspec validate --specs` が言います。",
+                "A source names `openspec/specs/<capability>/spec.md`; `openspec validate --specs` says what is wrong with the form of a spec."
+            )));
+            return Resolved::OpenSpec { name: name.clone(), abs, pins: unread(pins), spec: None };
+        }
+    };
+    let mut out = Vec::new();
+    for pl in pins {
+        let rname = &pl.fragment;
+        let n = crate::names::word_or_quote(rname);
+        let mut sp = SpecPin { name: rname.clone(), pin: pl.pin.clone(), block: None, span: pl.span };
+        match spec.get(rname) {
+            None => diags.push(no_such_requirement(p, fi, pl.span, &shown, rname, &spec)),
+            Some(req) => {
+                let actual = sha256::short(req.block.as_bytes());
+                match &pl.pin {
+                    None => diags.push(
+                        p.err(fi, "E102", pl.span, tr!("{sname} {n} が固定されていません（`sha256:` がありません）", "{sname} {n} is not pinned (it has no `sha256:`)"))
+                            .note(tr!("いまの要件なら sha256:{actual} です（`yuen source pin` でも書けます）。", "For the requirement as it is, that is sha256:{actual} (`yuen source pin` writes it too)."))
+                            .fix_trimmed(ritsu_base::sources::fixed_pin_line(&line_of(pl.span.line), &actual)),
+                    ),
+                    Some(pin) if *pin != actual => {
+                        let mut d = p
+                            .err(fi, "E103", pl.span, tr!(
+                                "{sname} {n} が固定と違います（固定は sha256:{pin}、いまの要件は sha256:{actual}）",
+                                "{sname} {n} does not match its pin (pinned sha256:{pin}, the requirement is sha256:{actual})"
+                            ))
+                            .note(tr!(
+                                "固定したあとで、仕様の要件が変わりました（変更の archive か、仕様の書き直し）。何が変わったかを読んでから、固定を書き換えてください（`yuen source pin`）。",
+                                "The requirement changed in the spec after it was pinned (an archived change, or an edit). Read what changed, then pin it again (`yuen source pin`)."
+                            ));
+                        if let Some(old) = crate::marks::reviewed_content(p, fi, pin) {
+                            let (dl, more) = crate::diff::unified(&String::from_utf8_lossy(&old), &req.block);
+                            d = d.diff(tr!("固定したときの要件からの差分（仕様は {shown}）", "what changed in the requirement since it was pinned (the spec {shown})"), dl);
+                            if more > 0 {
+                                d = d.note(tr!("差分はほかに {more} 行あります。", "{more} more lines of the diff are not shown."));
+                            }
+                        }
+                        diags.push(d.fix_trimmed(ritsu_base::sources::fixed_pin_line(&line_of(pl.span.line), &actual)));
+                    }
+                    Some(_) => sp.block = Some(req.block.clone()),
+                }
+            }
+        }
+        out.push(sp);
+    }
+    Resolved::OpenSpec { name: name.clone(), abs, pins: out, spec: Some(spec) }
+}
+
+/// W102 (DESIGN 20.4): the requirements of a spec no source of the project pins, said once for a
+/// spec, at the first source that names it.
+fn unpinned(p: &Project, sources: &Sources) -> Vec<Diag> {
+    let mut seen: Vec<&str> = Vec::new();
+    let mut out = Vec::new();
+    for (fi, f) in p.files.iter().enumerate() {
+        for (s, (_, r)) in f.ast.sources.iter().zip(&sources.files[fi]) {
+            let Resolved::OpenSpec { name, spec: Some(spec), .. } = r else { continue };
+            if seen.contains(&name.path.as_str()) {
+                continue;
+            }
+            seen.push(&name.path);
+            let pinned = |rn: &str| {
+                p.files.iter().enumerate().any(|(fj, g)| {
+                    g.ast.sources.iter().zip(&sources.files[fj]).any(|(t, (_, x))| {
+                        matches!(x, Resolved::OpenSpec { name: m, .. } if m.path == name.path) && matches!(&t.kind, SourceKind::OpenSpec { pins, .. } if pins.iter().any(|pl| pl.fragment == rn))
+                    })
+                })
+            };
+            let left: Vec<String> = spec.requirements.iter().filter(|q| !pinned(&q.name)).map(|q| crate::names::word_or_quote(&q.name)).collect();
+            if left.is_empty() {
+                continue;
+            }
+            let shown = p.shown(&name.path);
+            let k = left.len();
+            let (ja, en) = (left.join("、"), left.join(", "));
+            let msg = if k == 1 {
+                tr!("仕様 {shown} の要件のうち 1 件を、プロジェクトのどの出典も固定していません: {ja}", "A requirement of the spec {shown} is pinned by no source of the project: {en}")
+            } else {
+                tr!("仕様 {shown} の要件のうち {k} 件を、プロジェクトのどの出典も固定していません: {ja}", "{k} requirements of the spec {shown} are pinned by no source of the project: {en}")
+            };
+            out.push(
+                p.warn(fi, "W102", s.span, msg)
+                .note(tr!(
+                    "要件ごとに、固定の行と、それを引く要件を書いてください。読まないと決めた要件も、引く要件を書いて `not satisfied` と `not verified` に理由を書けば、外したことが承認とともに残ります。",
+                    "Pin each one and read it with a requirement. To leave one out, read it with a requirement all the same and write `not satisfied` and `not verified` with the reasons: leaving it out is then on record, with its approval."
+                )),
+            );
+        }
+    }
+    out
 }
 
 /// An article a rule or a calendar pins (DESIGN 3.3): the source's name in that file, the law,

@@ -40,11 +40,13 @@ pub fn digits(kind: &str, parts: &[&str]) -> String {
     sha256::hex(&b)[..32].to_string()
 }
 
-/// What tells two sources apart: an article of a law as of a date, or a file.
+/// What tells two sources apart: an article of a law as of a date, a file, or a requirement of an
+/// OpenSpec spec (DESIGN 20.6).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SourceKey {
     Law { db: LawDb, id: String, asof: String, fragment: String },
     File { path: String },
+    OpenSpec { path: String, fragment: String },
 }
 
 impl SourceKey {
@@ -52,6 +54,7 @@ impl SourceKey {
         match self {
             SourceKey::Law { db, id, asof, fragment } => digits("source", &["law", db.word(), id, asof, fragment]),
             SourceKey::File { path } => digits("source", &["file", path]),
+            SourceKey::OpenSpec { path, fragment } => digits("source", &["openspec", path, fragment]),
         }
     }
 }
@@ -231,6 +234,16 @@ pub fn graph<'a>(p: &'a Project, m: &'a Model) -> Graph<'a> {
                         sources.push(SourceNode { key, label: name.clone(), revision: None, pin: pin.clone(), lines: vec![], url: url.clone() });
                     }
                 }
+                Resolved::OpenSpec { name: n, pins, .. } => {
+                    for x in pins {
+                        let key = SourceKey::OpenSpec { path: n.path.clone(), fragment: x.name.clone() };
+                        if find(&sources, &key).is_some() {
+                            continue;
+                        }
+                        let lines = x.block.as_deref().map(|b| b.lines().map(str::to_string).collect()).unwrap_or_default();
+                        sources.push(SourceNode { key, label: format!("{name} {}", crate::names::word_or_quote(&x.name)), revision: None, pin: x.pin.clone(), lines, url: None });
+                    }
+                }
                 Resolved::NoPort { .. } | Resolved::Broken => {}
             }
         }
@@ -255,6 +268,14 @@ pub fn graph<'a>(p: &'a Project, m: &'a Model) -> Graph<'a> {
                     Some(Resolved::File { name: n, .. }) => {
                         if let Some(t) = find(&sources, &SourceKey::File { path: n.path.clone() }) {
                             rels.push(Rel { kind: RelKind::From, req: r, target: Target::Source(t), state, k: 0 });
+                        }
+                    }
+                    Some(Resolved::OpenSpec { name: n, .. }) => {
+                        for (k, (fr, _)) in fragments.iter().enumerate() {
+                            let key = SourceKey::OpenSpec { path: n.path.clone(), fragment: fr.clone() };
+                            if let Some(t) = find(&sources, &key) {
+                                rels.push(Rel { kind: RelKind::From, req: r, target: Target::Source(t), state, k });
+                            }
                         }
                     }
                     _ => {}

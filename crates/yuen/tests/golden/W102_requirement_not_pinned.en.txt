@@ -1,0 +1,4 @@
+warning[W102]: tests/mutants/W102_requirement_not_pinned/greeter.req:7:8: A requirement of the spec tests/mutants/W102_requirement_not_pinned/openspec/specs/greeting/spec.md is pinned by no source of the project: "Unknown paths"
+     7 | source greeting = openspec "openspec/specs/greeting/spec.md"
+  = Pin each one and read it with a requirement. To leave one out, read it with a requirement all the same and write `not satisfied` and `not verified` with the reasons: leaving it out is then on record, with its approval.
+tests/mutants/W102_requirement_not_pinned: ok — 2 requirements, whose 7 links are as they were looked at; every requirement is met and checked, or waived (1 warning)

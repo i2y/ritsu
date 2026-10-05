@@ -1,0 +1,10 @@
+diff: examples/openspec_greeter/diffs/archive.diff
+copies of sources the diff touches:
+  examples/openspec_greeter/openspec/specs/greeting/spec.md (greeting "Greeting by name", "Health check"): cited by greeting_by_name
+the claims the change touches (geas "greeter.geas"; records: examples/openspec_greeter/.geas/greeter.map.jsonl (either side)):
+  none
+changes no requirement reaches: none
+requirements touched:
+  greeting_by_name (examples/openspec_greeter/greeter.req:12): owner api; from greeting "Greeting by name"
+1 requirement touched; ask api
+exit 0

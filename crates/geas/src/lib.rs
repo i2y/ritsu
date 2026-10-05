@@ -33,6 +33,8 @@ pub mod screen;
 pub mod report;
 pub mod run;
 pub mod sched;
+/// `geas scenarios`: OpenSpec's scenarios held to the claims of the same names (DESIGN §17).
+pub mod scenarios;
 pub mod skill;
 pub mod tree;
 pub mod words;

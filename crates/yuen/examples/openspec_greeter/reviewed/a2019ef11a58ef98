@@ -1,0 +1,2 @@
+text A total is kept across requests: POST /reset sets it to 0, POST /add adds to it, GET /total answers it
+from openspec openspec/specs/greeting/spec.md Running total sha256:f94d564d4cf48f1f

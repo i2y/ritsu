@@ -13,7 +13,9 @@ looks again.
 yuen is one of the seven languages of [ritsu](https://github.com/i2y/ritsu), and reads what the other languages
 hold through them, in the same process: the tables of a rulec rule, the dates and claims of a
 koyomi calendar, the accounts and transfers of a chobo book, the claims of a geas spec, the tasks of
-a dandori workflow, the terms of a sakai map, and the services and messages of a `.proto`.
+a dandori workflow, the terms of a sakai map, and the services and messages of a `.proto`. It reads
+the requirements of an [OpenSpec](https://github.com/Fission-AI/OpenSpec) spec as sources, a
+requirement at a time.
 
 ```req
 requirements osha v1
@@ -95,6 +97,107 @@ requirements touched:
 4 requirements touched; ask api
 ```
 
+## Requirements from an OpenSpec spec
+
+OpenSpec keeps what a system does as specs in Markdown: requirements (`### Requirement:`), each with
+the scenarios that show it, and changes proposed as folders that `openspec archive` applies to the
+specs. yuen reads such a spec as it reads a law, a requirement at a time. Each requirement is pinned
+by the hash of its block, from its header to its last scenario: the text OpenSpec's archive puts in
+place of the old one when a change modifies the requirement, and leaves alone when the change
+touches another. The example `openspec_greeter` reads the spec of geas's greeter:
+
+```req
+source greeting = openspec "openspec/specs/greeting/spec.md"
+  "Greeting by name" sha256:1c3d865f4a521275
+  "Running total" sha256:f94d564d4cf48f1f
+  "Unknown paths" sha256:58e467e6888e0230
+
+requirement greeting_by_name
+  text "A greeting answers 200 with Hello and the name asked for, and an empty name answers 400"
+  owner api
+  from @greeting "Greeting by name"
+  satisfied by file "server.py"
+  verified by geas "greeter.geas" claim "greets by name"
+  verified by geas "greeter.geas" claim "rejects an empty name"
+```
+
+```console
+$ ritsu yuen check examples/openspec_greeter/greeter.req --root examples/openspec_greeter
+examples/openspec_greeter/greeter.req: ok — 3 requirements, whose 10 links are as they were looked at; every requirement is met and checked, or waived
+```
+
+A change is proposed in `openspec/changes/trim-names/`: names are to be trimmed, and a health check
+added. Before it is archived, `source outdated` reads the changes under `openspec/changes/` (for an
+OpenSpec spec it reads no network) and says what each does to the requirements pinned, whom it
+reaches, and how many links it will mark:
+
+```console
+$ ritsu yuen source outdated examples/openspec_greeter/greeter.req --root examples/openspec_greeter
+greeting: the change trim-names, not yet archived, modifies "Greeting by name" (examples/openspec_greeter/openspec/changes/trim-names/specs/greeting/spec.md:3)
+  what changes in the requirement:
+      @@ -1,4 +1,4 @@
+        ### Requirement: Greeting by name
+      - The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>`, and SHALL refuse an empty name with status 400.
+      + The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>` with the spaces around the name removed, and SHALL refuse a name that is empty once they are removed with status 400.
+
+        #### Scenario: greets by name
+      @@ -9,3 +9,7 @@
+        #### Scenario: rejects an empty name
+        - **WHEN** a client asks for `/greet?name=`
+      + - **THEN** the status is 400
+      +
+      + #### Scenario: rejects a name of spaces
+      + - **WHEN** a client asks for `/greet?name=%20%20`
+        - **THEN** the status is 400
+  cited by: greeting_by_name (owned by api, examples/openspec_greeter/greeter.req:12)
+  to look at again: 4 links
+  read it; once it is archived, yuen source pin pins the new requirement, and yuen check then marks these
+greeting: the change trim-names, not yet archived, adds the requirement "Health check" (examples/openspec_greeter/openspec/changes/trim-names/specs/greeting/spec.md:21), which no requirement of the project reads yet
+```
+
+`yuen affected` says the same of a pull request that adds the change's folder, from its diff
+([diffs/propose.diff](examples/openspec_greeter/diffs/propose.diff)). Once the change is archived,
+the block of `Greeting by name` is the one the change wrote, and the check stops on its pin, with the
+diff from the block that was looked at. `openspec_greeter_archived` is the example after
+`openspec archive trim-names`, with the same `.req` and the same records:
+
+```console
+$ ritsu yuen check examples/openspec_greeter_archived/greeter.req --root examples/openspec_greeter_archived
+warning[W102]: examples/openspec_greeter_archived/greeter.req:7:8: A requirement of the spec examples/openspec_greeter_archived/openspec/specs/greeting/spec.md is pinned by no source of the project: "Health check"
+     7 | source greeting = openspec "openspec/specs/greeting/spec.md"
+  = Pin each one and read it with a requirement. To leave one out, read it with a requirement all the same and write `not satisfied` and `not verified` with the reasons: leaving it out is then on record, with its approval.
+error[E103]: examples/openspec_greeter_archived/greeter.req:8:3: greeting "Greeting by name" does not match its pin (pinned sha256:1c3d865f4a521275, the requirement is sha256:228485bfce459383)
+     8 |   "Greeting by name" sha256:1c3d865f4a521275
+  = The requirement changed in the spec after it was pinned (an archived change, or an edit). Read what changed, then pin it again (`yuen source pin`).
+  what changed in the requirement since it was pinned (the spec examples/openspec_greeter_archived/openspec/specs/greeting/spec.md):
+      @@ -1,4 +1,4 @@
+        ### Requirement: Greeting by name
+      - The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>`, and SHALL refuse an empty name with status 400.
+      + The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>` with the spaces around the name removed, and SHALL refuse a name that is empty once they are removed with status 400.
+
+        #### Scenario: greets by name
+      @@ -9,3 +9,7 @@
+        #### Scenario: rejects an empty name
+        - **WHEN** a client asks for `/greet?name=`
+      + - **THEN** the status is 400
+      +
+      + #### Scenario: rejects a name of spaces
+      + - **WHEN** a client asks for `/greet?name=%20%20`
+        - **THEN** the status is 400
+  = The line, fixed: "Greeting by name" sha256:228485bfce459383
+warning[W402]: examples/openspec_greeter_archived/greeter.req:15:3: The scenario "rejects a name of spaces" of greeting "Greeting by name" has no claim of its name among the claims that check greeting_by_name
+    15 |   from @greeting "Greeting by name"
+  = geas holds a scenario to the claim of its name (`geas scenarios`). Write a claim of that name with the person who reads the claims, and link it with `verified by`; if a claim of another name runs the scenario, ask which of the two names is to change.
+examples/openspec_greeter_archived/greeter.req: 1 error, 2 warnings
+```
+
+After `yuen source pin`, the link from the requirement of the spec and the three links below
+`greeting_by_name` are marked until someone looks at them again; the other two requirements of the
+spec mark nothing. W402 stays after they have looked: the change added the scenario `rejects a name
+of spaces`, and no claim of that name checks `greeting_by_name` yet. A scenario is held to the
+claim of its name, as geas holds it: `geas scenarios` says the same from the claims file, and
+drafts the claim to write ([geas's README](../geas/README.md)).
+
 ## What it checks, and what it does not
 
 yuen checks the links, the hashes and the periods: that every name resolves, that every copy of a
@@ -160,7 +263,7 @@ $ ritsu yuen explain E303
 
 Every command takes `--lang ja|en` and `--root <dir>`; `ritsu yuen <command> --help` gives each
 one's flags and exit codes. The whole language and every command are in
-[docs/reference.md](docs/reference.md), and the 44 diagnostic codes (two of them retired) in
+[docs/reference.md](docs/reference.md), and the 47 diagnostic codes (two of them retired) in
 [docs/codes.md](docs/codes.md) ([Japanese](docs/codes.ja.md)).
 
 ## Examples
@@ -175,16 +278,18 @@ first, and a Japanese version, where there is one, sits beside it as `<name>.ja.
 | [payment_terms](examples/payment_terms) | a payment day decided for the example, and business days borrowed from the holidays a koyomi calendar pins |
 | [refunds](examples/refunds) | "a refund does not exceed the sale", met by an account and two transfers of a chobo book |
 | [civil_code_periods](examples/civil_code_periods) | Japan's Civil Code, articles 140 to 143, borrowed from a koyomi calendar, and who decided how article 142 reads (Japanese) |
-| [civil_code_periods_reread](examples/civil_code_periods_reread) | the same, after the calendar was rewritten: the one example that stops (Japanese) |
+| [civil_code_periods_reread](examples/civil_code_periods_reread) | the same, after the calendar was rewritten: it stops on purpose (Japanese) |
 | [stamp_tax](examples/stamp_tax) | one requirement in two versions, in force one after the other, met by a rulec rule (Japanese) |
+| [openspec_greeter](examples/openspec_greeter) | the requirements of an OpenSpec spec pinned a requirement at a time, met by `server.py` and checked by geas's claims; a change not yet archived, for `source outdated` and `affected` |
+| [openspec_greeter_archived](examples/openspec_greeter_archived) | the same, after `openspec archive`: it stops on the requirement the change modified |
 
 The examples that read a law are written as examples; they do not say how any law is to be read.
 
 ## How it is checked
 
-`cargo test -p yuen` (225 tests) checks every example and test fixture with every language
+`cargo test -p yuen` (234 tests) checks every example and test fixture with every language
 joined, as `ritsu yuen` does, and runs every command on them. On macOS on Apple silicon, one run of
-them together with ritsu's own tests took 57 seconds once built, and no test was skipped. The golden files hold the output of each
+them took 44 seconds once built, and no test was skipped. The golden files hold the output of each
 command in English and in Japanese, the pages of `doc` in both forms, and the exports. The outside
 tools: xmllint and ReqIF's schemas (`tools/reqif/fetch.sh`) validate the ReqIF, Python's `prov`
 and `reqif` read the exports back, `curl` and a server in the test stand in for e-Gov and the eCFR,

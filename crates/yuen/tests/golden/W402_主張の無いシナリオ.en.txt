@@ -1,0 +1,4 @@
+warning[W402]: tests/mutants/W402_主張の無いシナリオ/greeter.ja.req:15:3: The scenario 空の名前は受け付けない of 挨拶 名前で挨拶する has no claim of its name among the claims that check 名前で挨拶する
+    15 |   from @挨拶 名前で挨拶する
+  = geas holds a scenario to the claim of its name (`geas scenarios`). Write a claim of that name with the person who reads the claims, and link it with `verified by`; if a claim of another name runs the scenario, ask which of the two names is to change.
+tests/mutants/W402_主張の無いシナリオ: ok — 3 requirements, whose 9 links are as they were looked at; every requirement is met and checked, or waived (1 warning)

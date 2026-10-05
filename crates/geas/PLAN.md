@@ -910,6 +910,34 @@ their apps are. Links to pages in English say so.)
 
 ---
 
+## Stage E: OpenSpec's scenarios (2026-10-05, built)
+
+DESIGN §17. Built in one night, after ritsu's release v0.23.0, as a
+proposal the owner reads before it is taken in.
+
+- `ritsu_base::openspec` (ritsu-base, shared with yuen): a spec's
+  requirements, blocks and scenarios, a delta spec's four sections, the
+  layout of `openspec/`, held to what OpenSpec 1.14.0's own readers make of
+  the same files (ritsu-base's `tests/openspec.rs` and `expected.json`).
+- `src/scenarios.rs`: `geas scenarios <spec.geas>... --openspec <path>...`
+  with `--json` and `--draft`; `src/cli.rs` (the command, `--openspec`
+  given any number of times, `--draft` not with `--json`); E090 in
+  `src/codes.rs`, E081's text for a path given to `--openspec`.
+- The greeter's spec in OpenSpec, English and Japanese, under
+  `examples/greeter/openspec/` and `examples/greeter/ja/openspec/`, with
+  the change `trim-names`; `tests/openspec/near.geas`.
+- Tests: `tests/scenarios.rs` (the report in both languages, JSON, the
+  draft refused by `check` with E005, a near name, E090, E081, E080) and
+  the README's story in `tests/readme.rs`; the help and `explain --all`
+  goldens.
+- Pages: README.md and README.ja.md (a section, the help, 35 codes),
+  `examples/greeter/README.md`, the skill's SKILL.md (who writes what for
+  scenarios, E090) and commands.md; `skills/sync.sh` writes codes.md.
+
+Done when: `cargo test -p geas` passes with every tool at hand, the pages
+hold to the goldens (`tests/docs.rs`), and nothing here starts a program
+(`geas scenarios` runs nothing).
+
 ## Appendix A. Formats and texts
 
 ### The help text (a starting point; the test pins whatever is built)

@@ -1,0 +1,14 @@
+足した数の合計（examples/openspec_greeter/greeter.ja.req:24）持ち主 窓口
+  「合計はリクエストをまたいで覚えておく。POST /reset で 0 にし、POST /add で足し、GET /total で返す」
+  出どころ: 挨拶 足した数の合計（OpenSpec の仕様 examples/openspec_greeter/ja/openspec/specs/greeting/spec.md）
+    > ### Requirement: 足した数の合計
+    > サービスは、リクエストをまたいで合計を覚えておく（SHALL）。`POST /reset` で 0 にし、`POST /add` で本文の数を足し、`GET /total` で合計を返す。
+    > 
+    > #### Scenario: 足した数が積み上がる
+    > - **GIVEN** 合計を 0 にした
+    > - **WHEN** クライアントが 5 と 7 を足す
+    > - **THEN** `GET /total` は 12 を返す
+    2026-10-05 に 窓口 が確かめた。そのあと変わっていない
+  満たすもの: file "server.py" — 2026-10-05 に 開発 が確かめた。そのあと変わっていない
+  確かめるもの: geas "greeter.ja.geas" claim 足した数が積み上がる — 2026-10-05 に 開発 が確かめた。そのあと変わっていない
+exit 0

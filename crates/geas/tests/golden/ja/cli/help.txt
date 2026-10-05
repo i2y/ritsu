@@ -7,6 +7,8 @@ geas: エージェントが書いたコードに、人が読んで確かめた�
   geas drift <spec.geas>...           もう一度実行し、ベースラインから変わったところを示す
   geas map <spec.geas>...             カバレッジを取りながら実行し、主張ごとに通った行を記録する
   geas affected <spec.geas> <diff|->  差分が関わる主張と、変わったコードのうちどの主張も通らないところを示す
+  geas scenarios <spec.geas>... --openspec <path>...
+                                      OpenSpec の仕様のシナリオごとに、同じ名前の主張を示す
   geas explain <code>... | --all      コードの意味と直し方
   geas skill [--install <dir>]        コーディングエージェント向けの手引きを出すか、スキルのフォルダーとして書く
 
@@ -17,6 +19,8 @@ geas: エージェントが書いたコードに、人が読んで確かめた�
   --root <dir>      map、affected: 記録のパスの基準にするディレクトリ
   --out <file>      map: 記録を書く先
   --map <file>      affected: 読む記録。変更前と変更後のコードの記録を二つ渡せる
+  --openspec <path> scenarios: 仕様、変更の提案の差分、それらを持つディレクトリ
+  --draft           scenarios: 主張の無いシナリオごとに、書き足す主張の下書きを出す
   --install <dir>   skill: スキルのファイルを <dir>/geas に書く
   --force           skill: すでにある <dir>/geas に上書きする
   --help, -h        この説明を出す

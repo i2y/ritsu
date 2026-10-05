@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="yuen 0.23.0">
+<title>挨拶 — 要件の出どころ</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 1.6rem; line-height: 1.3; margin: 0 0 12px; overflow-wrap: anywhere; }
+h2 { font-size: 1.25rem; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1.05rem; margin: 28px 0 8px; overflow-wrap: anywhere; }
+p, li { overflow-wrap: anywhere; }
+code { font: 0.88em/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); border-radius: 4px; padding: 1px 4px; overflow-wrap: anywhere; }
+pre { font: 0.82rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--bad); border-radius: 6px; padding: 10px 12px; overflow-x: auto; white-space: pre; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--line); min-width: 7em; }
+th { background: var(--soft); color: var(--dim); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td strong { color: var(--warn); }
+td.nw { white-space: nowrap; }
+blockquote.law { margin: 8px 0 16px; padding: 8px 14px; border-left: 3px solid var(--accent); background: var(--panel); border-radius: 0 6px 6px 0; }
+blockquote.law p { margin: 4px 0; }
+blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; }
+.lead { color: var(--dim); }
+@media print { body { background: #fff; color: #000; } .scroll { overflow: visible; } pre { white-space: pre-wrap; } }
+</style>
+</head>
+<body>
+<main>
+<h1>挨拶 — 要件の出どころ</h1>
+<p class="lead">このページは、下の .req のファイルと、出典のコピーと、ほかの言語から読んだ成果物の定義をもとに、yuen 0.23.0 が作った。</p>
+<ul>
+<li><code>greeter.ja.req</code>（挨拶 v1、<code>sha256:23706b2d5df397b0</code>）</li>
+</ul>
+<p>検査の結果：<code>examples/openspec_greeter/greeter.ja.req: ok — 要件 3 件のリンク 10 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（無ければ見送り）があります。</code></p>
+<h2 id="traceability">トレーサビリティ</h2>
+<div class="scroll"><table>
+<thead><tr><th>要件</th><th>期間</th><th>出どころ</th><th>持ち主</th><th>満たすもの</th><th>確かめるもの</th><th>状態</th></tr></thead>
+<tbody>
+<tr><td><code>名前で挨拶する (greeting_by_name)</code></td><td>—</td><td><code>@挨拶 名前で挨拶する</code></td><td>窓口</td><td><code>file &quot;server.py&quot;</code></td><td><code>geas &quot;greeter.ja.geas&quot; claim 名前で挨拶する</code>、<code>geas &quot;greeter.ja.geas&quot; claim 空の名前は受け付けない</code></td><td>確かめたまま</td></tr>
+<tr><td><code>足した数の合計 (running_total)</code></td><td>—</td><td><code>@挨拶 足した数の合計</code></td><td>窓口</td><td><code>file &quot;server.py&quot;</code></td><td><code>geas &quot;greeter.ja.geas&quot; claim 足した数が積み上がる</code></td><td>確かめたまま</td></tr>
+<tr><td><code>知らないパス (unknown_paths)</code></td><td>—</td><td><code>@挨拶 知らないパス</code></td><td>窓口</td><td><code>file &quot;server.py&quot;</code></td><td><code>geas &quot;greeter.ja.geas&quot; claim &quot;知らないパスには 404 を返す&quot;</code></td><td>確かめたまま</td></tr>
+</tbody>
+</table></div>
+<h2 id="sources">出典</h2>
+<h3 id="source-挨拶">挨拶</h3>
+<p>OpenSpec の仕様 <code>ja/openspec/specs/greeting/spec.md</code>。要件ごとに、そのブロック（見出しからシナリオまで）を固定する。</p>
+<div class="scroll"><table>
+<thead><tr><th>要件</th><th>固定</th><th>引く要件</th></tr></thead>
+<tbody>
+<tr><td>名前で挨拶する</td><td><code>sha256:584f410eda34b49e</code></td><td><code>名前で挨拶する (greeting_by_name)</code></td></tr>
+<tr><td>足した数の合計</td><td><code>sha256:16b2a7d63d90dcf5</code></td><td><code>足した数の合計 (running_total)</code></td></tr>
+<tr><td>知らないパス</td><td><code>sha256:d0b84e0286e74b3a</code></td><td><code>知らないパス (unknown_paths)</code></td></tr>
+</tbody>
+</table></div>
+<h2 id="why">要件ごとの「なぜ」</h2>
+<h3 id="why-greeting_by_name">名前で挨拶する (greeting_by_name)</h3>
+<p><strong>挨拶は 200 と、Hello と頼まれた名前を返す。空の名前には 400 を返す</strong></p>
+<ul>
+<li>期間：—</li>
+<li>持ち主：窓口</li>
+<li>ファイル：<code>examples/openspec_greeter/greeter.ja.req:12</code></li>
+<li>要件のハッシュ：<code>sha256:0fe7e5be49136195</code></li>
+</ul>
+<p>出どころ <code>@挨拶 名前で挨拶する</code> — 窓口 が 2026-10-05 に確かめた（<code>sha256:584f410eda34b49e</code> → <code>sha256:0fe7e5be49136195</code>）。状態：確かめたまま</p>
+<blockquote class="law">
+<p class="cite">挨拶 名前で挨拶する（OpenSpec の仕様 examples/openspec_greeter/ja/openspec/specs/greeting/spec.md）</p>
+<p>### Requirement: 名前で挨拶する</p>
+<p>サービスは `GET /greet?name=&lt;名前&gt;` に、ステータス 200 と、`message` が `Hello, &lt;名前&gt;` の JSON で答える（SHALL）。空の名前には、ステータス 400 で答える（SHALL）。</p>
+<p>#### Scenario: 名前で挨拶する</p>
+<p>- **WHEN** クライアントが `/greet?name=Alice` を求める</p>
+<p>- **THEN** ステータスは 200</p>
+<p>- **AND** `message` は `Hello, Alice`</p>
+<p>#### Scenario: 空の名前は受け付けない</p>
+<p>- **WHEN** クライアントが `/greet?name=` を求める</p>
+<p>- **THEN** ステータスは 400</p>
+</blockquote>
+<p>満たすもの <code>file &quot;server.py&quot;</code> — 開発 が 2026-10-05 に確かめた（<code>sha256:0fe7e5be49136195</code> → <code>sha256:331e02e26d128e8c</code>）。状態：確かめたまま</p>
+<p>確かめるもの <code>geas &quot;greeter.ja.geas&quot; claim 名前で挨拶する</code> — 開発 が 2026-10-05 に確かめた（<code>sha256:0fe7e5be49136195</code> → <code>sha256:23771933ab7071aa</code>）。状態：確かめたまま</p>
+<p>確かめるもの <code>geas &quot;greeter.ja.geas&quot; claim 空の名前は受け付けない</code> — 開発 が 2026-10-05 に確かめた（<code>sha256:0fe7e5be49136195</code> → <code>sha256:cfde1ffad5721517</code>）。状態：確かめたまま</p>
+<h3 id="why-running_total">足した数の合計 (running_total)</h3>
+<p><strong>合計はリクエストをまたいで覚えておく。POST /reset で 0 にし、POST /add で足し、GET /total で返す</strong></p>
+<ul>
+<li>期間：—</li>
+<li>持ち主：窓口</li>
+<li>ファイル：<code>examples/openspec_greeter/greeter.ja.req:24</code></li>
+<li>要件のハッシュ：<code>sha256:2c9bc244d3620e0c</code></li>
+</ul>
+<p>出どころ <code>@挨拶 足した数の合計</code> — 窓口 が 2026-10-05 に確かめた（<code>sha256:16b2a7d63d90dcf5</code> → <code>sha256:2c9bc244d3620e0c</code>）。状態：確かめたまま</p>
+<blockquote class="law">
+<p class="cite">挨拶 足した数の合計（OpenSpec の仕様 examples/openspec_greeter/ja/openspec/specs/greeting/spec.md）</p>
+<p>### Requirement: 足した数の合計</p>
+<p>サービスは、リクエストをまたいで合計を覚えておく（SHALL）。`POST /reset` で 0 にし、`POST /add` で本文の数を足し、`GET /total` で合計を返す。</p>
+<p>#### Scenario: 足した数が積み上がる</p>
+<p>- **GIVEN** 合計を 0 にした</p>
+<p>- **WHEN** クライアントが 5 と 7 を足す</p>
+<p>- **THEN** `GET /total` は 12 を返す</p>
+</blockquote>
+<p>満たすもの <code>file &quot;server.py&quot;</code> — 開発 が 2026-10-05 に確かめた（<code>sha256:2c9bc244d3620e0c</code> → <code>sha256:331e02e26d128e8c</code>）。状態：確かめたまま</p>
+<p>確かめるもの <code>geas &quot;greeter.ja.geas&quot; claim 足した数が積み上がる</code> — 開発 が 2026-10-05 に確かめた（<code>sha256:2c9bc244d3620e0c</code> → <code>sha256:851003f8a61e8af4</code>）。状態：確かめたまま</p>
+<h3 id="why-unknown_paths">知らないパス (unknown_paths)</h3>
+<p><strong>知らないパスには 404 を返す</strong></p>
+<ul>
+<li>期間：—</li>
+<li>持ち主：窓口</li>
+<li>ファイル：<code>examples/openspec_greeter/greeter.ja.req:34</code></li>
+<li>要件のハッシュ：<code>sha256:eb33424df22e79c6</code></li>
+</ul>
+<p>出どころ <code>@挨拶 知らないパス</code> — 窓口 が 2026-10-05 に確かめた（<code>sha256:d0b84e0286e74b3a</code> → <code>sha256:eb33424df22e79c6</code>）。状態：確かめたまま</p>
+<blockquote class="law">
+<p class="cite">挨拶 知らないパス（OpenSpec の仕様 examples/openspec_greeter/ja/openspec/specs/greeting/spec.md）</p>
+<p>### Requirement: 知らないパス</p>
+<p>サービスは、知らないパスにステータス 404 で答える（MUST）。</p>
+<p>#### Scenario: 知らないパスには 404 を返す</p>
+<p>- **WHEN** クライアントが `/nope` を求める</p>
+<p>- **THEN** ステータスは 404</p>
+</blockquote>
+<p>満たすもの <code>file &quot;server.py&quot;</code> — 開発 が 2026-10-05 に確かめた（<code>sha256:eb33424df22e79c6</code> → <code>sha256:331e02e26d128e8c</code>）。状態：確かめたまま</p>
+<p>確かめるもの <code>geas &quot;greeter.ja.geas&quot; claim &quot;知らないパスには 404 を返す&quot;</code> — 開発 が 2026-10-05 に確かめた（<code>sha256:eb33424df22e79c6</code> → <code>sha256:8788b539c21c495d</code>）。状態：確かめたまま</p>
+<h2 id="scope">範囲</h2>
+<p>範囲の宣言は無い。</p>
+<h2 id="records">確かめた記録</h2>
+<div class="scroll"><table>
+<thead><tr><th>日付</th><th>誰が</th><th>何を</th><th>ハッシュ</th></tr></thead>
+<tbody>
+<tr><td class="nw">2026-10-05</td><td>窓口</td><td><code>@挨拶 名前で挨拶する</code> → <code>名前で挨拶する (greeting_by_name)</code></td><td><code>sha256:584f410eda34b49e -&gt; sha256:0fe7e5be49136195</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>開発</td><td><code>名前で挨拶する (greeting_by_name)</code> → <code>file &quot;server.py&quot;</code></td><td><code>sha256:0fe7e5be49136195 -&gt; sha256:331e02e26d128e8c</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>開発</td><td><code>名前で挨拶する (greeting_by_name)</code> → <code>geas &quot;greeter.ja.geas&quot; claim 名前で挨拶する</code></td><td><code>sha256:0fe7e5be49136195 -&gt; sha256:23771933ab7071aa</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>開発</td><td><code>名前で挨拶する (greeting_by_name)</code> → <code>geas &quot;greeter.ja.geas&quot; claim 空の名前は受け付けない</code></td><td><code>sha256:0fe7e5be49136195 -&gt; sha256:cfde1ffad5721517</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>窓口</td><td><code>@挨拶 足した数の合計</code> → <code>足した数の合計 (running_total)</code></td><td><code>sha256:16b2a7d63d90dcf5 -&gt; sha256:2c9bc244d3620e0c</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>開発</td><td><code>足した数の合計 (running_total)</code> → <code>file &quot;server.py&quot;</code></td><td><code>sha256:2c9bc244d3620e0c -&gt; sha256:331e02e26d128e8c</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>開発</td><td><code>足した数の合計 (running_total)</code> → <code>geas &quot;greeter.ja.geas&quot; claim 足した数が積み上がる</code></td><td><code>sha256:2c9bc244d3620e0c -&gt; sha256:851003f8a61e8af4</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>窓口</td><td><code>@挨拶 知らないパス</code> → <code>知らないパス (unknown_paths)</code></td><td><code>sha256:d0b84e0286e74b3a -&gt; sha256:eb33424df22e79c6</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>開発</td><td><code>知らないパス (unknown_paths)</code> → <code>file &quot;server.py&quot;</code></td><td><code>sha256:eb33424df22e79c6 -&gt; sha256:331e02e26d128e8c</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>開発</td><td><code>知らないパス (unknown_paths)</code> → <code>geas &quot;greeter.ja.geas&quot; claim &quot;知らないパスには 404 を返す&quot;</code></td><td><code>sha256:eb33424df22e79c6 -&gt; sha256:8788b539c21c495d</code></td></tr>
+</tbody>
+</table></div>
+</main>
+</body>
+</html>

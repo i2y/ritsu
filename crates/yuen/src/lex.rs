@@ -204,7 +204,7 @@ fn naming_begins(toks: &[Token], indent: usize, cs: &[char], next: usize) -> boo
         3 => {
             indent == 0 && w(0, crate::kw::SOURCE) && matches!(toks[1].tok, Tok::Word(_)) && toks[2].tok == Tok::Eq && {
                 let a = word_ahead(cs, next);
-                a != crate::kw::LAW && a != crate::kw::FILE
+                a != crate::kw::LAW && a != crate::kw::FILE && a != crate::kw::OPENSPEC
             }
         }
         _ => false,

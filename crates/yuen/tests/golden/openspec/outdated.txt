@@ -1,0 +1,21 @@
+greeting: the change trim-names, not yet archived, modifies "Greeting by name" (examples/openspec_greeter/openspec/changes/trim-names/specs/greeting/spec.md:3)
+  what changes in the requirement:
+      @@ -1,4 +1,4 @@
+        ### Requirement: Greeting by name
+      - The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>`, and SHALL refuse an empty name with status 400.
+      + The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>` with the spaces around the name removed, and SHALL refuse a name that is empty once they are removed with status 400.
+
+        #### Scenario: greets by name
+      @@ -9,3 +9,7 @@
+        #### Scenario: rejects an empty name
+        - **WHEN** a client asks for `/greet?name=`
+      + - **THEN** the status is 400
+      +
+      + #### Scenario: rejects a name of spaces
+      + - **WHEN** a client asks for `/greet?name=%20%20`
+        - **THEN** the status is 400
+  cited by: greeting_by_name (owned by api, examples/openspec_greeter/greeter.req:12)
+  to look at again: 4 links
+  read it; once it is archived, yuen source pin pins the new requirement, and yuen check then marks these
+greeting: the change trim-names, not yet archived, adds the requirement "Health check" (examples/openspec_greeter/openspec/changes/trim-names/specs/greeting/spec.md:21), which no requirement of the project reads yet
+exit 1

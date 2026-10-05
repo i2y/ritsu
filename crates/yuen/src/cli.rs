@@ -232,8 +232,8 @@ pub fn commands() -> Vec<Cmd> {
                 (
                     "fetch|pin|outdated",
                     tr!(
-                        "fetch は e-Gov か eCFR か url から取ってきて保存する。pin はコピーの SHA-256 の先頭 16 桁を書く（ほかは一字も変えない）。outdated は asof より後の版と url を問う",
-                        "fetch takes the copies from e-Gov, the eCFR or the url; pin writes the first 16 digits of each copy's SHA-256 (and changes nothing else); outdated asks about the revisions after asof, and about each url"
+                        "fetch は e-Gov か eCFR か url から取ってきて保存する。pin はコピーの SHA-256 の先頭 16 桁を書く（ほかは一字も変えない）。outdated は asof より後の版と url を問う。OpenSpec の仕様なら、fetch は取るものが無く、pin は要件のブロックのハッシュを書き、outdated は openspec/changes/ のまだ archive していない変更の提案を読む（通信しない）",
+                        "fetch takes the copies from e-Gov, the eCFR or the url; pin writes the first 16 digits of each copy's SHA-256 (and changes nothing else); outdated asks about the revisions after asof, and about each url. For an OpenSpec spec, fetch has nothing to take, pin writes the hash of each requirement's block, and outdated reads the changes not yet archived under openspec/changes/ (no network)"
                     ),
                 ),
                 ("<path>...", tr!("{}", "{}", PATHS.0; PATHS.1)),
@@ -241,7 +241,7 @@ pub fn commands() -> Vec<Cmd> {
             flags: vec![],
             exits: vec![
                 (0, tr!("済んだ（outdated なら、どの元も変わっていない）", "done (for outdated: no original moved on)")),
-                (1, tr!("outdated で、元が変わっていた。構文か名前にエラーがある", "for outdated, an original moved on; or the words or names have errors")),
+                (1, tr!("outdated で、元が変わっていた（OpenSpec なら、固定した要件を変える提案がある）。構文か名前にエラーがある", "for outdated, an original moved on (for OpenSpec, a change would change a requirement pinned); or the words or names have errors")),
                 (
                     2,
                     tr!(

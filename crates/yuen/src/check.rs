@@ -320,6 +320,7 @@ pub fn check_with(args: &[String], root: Option<&str>, suite: crate::suite::Suit
     diags.extend(marks::mark_diags(&p, &Ctx { sources: &srcs, req_ends: &req_ends }, &states));
     // 7. Coverage and scope.
     diags.extend(coverage::coverage(&p));
+    diags.extend(coverage::scenarios(&p, &srcs));
     let links: Vec<&Name> = p.names.links.iter().flatten().flatten().collect();
     let ran = coverage::ran_by_claims(&p);
     for s in &mut scopes {

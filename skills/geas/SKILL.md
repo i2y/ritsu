@@ -1,6 +1,6 @@
 ---
 name: geas
-description: Hold code to claims a person has read, with geas. A `.geas` file holds claims about what a program does as anyone could observe it from outside (what a command prints and exits with, what an HTTP service answers, what a screen shows), and geas runs every claim against the real program, whatever language it is written in. Use when writing or changing code that a `.geas` claims file holds; when running the gate on a change (`ritsu geas check`, `drift`, `map` and `affected`); when a claim fails or a geas diagnostic (E001-E081, W060-W061) has to be fixed; or when behavior no claim covers has to be proposed to the person as new claims.
+description: Hold code to claims a person has read, with geas. A `.geas` file holds claims about what a program does as anyone could observe it from outside (what a command prints and exits with, what an HTTP service answers, what a screen shows), and geas runs every claim against the real program, whatever language it is written in. Use when writing or changing code that a `.geas` claims file holds; when running the gate on a change (`ritsu geas check`, `drift`, `map` and `affected`); when a claim fails or a geas diagnostic (E001-E090, W060-W061) has to be fixed; when the scenarios of an OpenSpec spec or change have to be held to claims (`ritsu geas scenarios`); or when behavior no claim covers has to be proposed to the person as new claims.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run geas as `ritsu geas <command>`, or as `geas <command>` through a link to ritsu named for it. The project's own programs need whatever they need to run. `ritsu geas map` records Python 3.12 and later, Node, Go built with `-cover`, and Rust built with `-C instrument-coverage` (with rustup's llvm-tools). A page in a browser needs Chrome or Chromium; a pixie target needs a built pixie app.
 license: MIT OR Apache-2.0
 ---
@@ -44,6 +44,13 @@ holds the code to the claims. That split is the whole point, so keep to it.
   person decides.
 - **The files under `.geas/` are geas's.** The journal, the baseline and the record are written
   by geas; never edit them by hand.
+- **OpenSpec's scenarios are the person's too.** In a project that keeps its behavior in OpenSpec,
+  each scenario (`#### Scenario:` under a requirement) is a case the person agreed on, and the claim
+  that runs it carries the scenario's name exactly. `ritsu geas scenarios <spec.geas> --openspec
+  openspec/specs` says which scenarios no claim answers; `--openspec openspec/changes/<id>` does
+  the same for a change before it is archived. For each one, propose a claim (`--draft` writes the
+  frame, with the scenario quoted above it; the steps are yours to propose and the person's to
+  accept). Never rename a claim or a scenario to make the two meet: say which is wrong, and ask.
 
 Run every command here as `ritsu geas <command>` (through a link to ritsu named geas,
 `geas <command>` is the same). Everything is reachable from the command line: `ritsu geas --help`
@@ -227,6 +234,7 @@ A diagnostic has a code, a place, notes (`= …`) and the run that gets there.
 | E060 to E064 | no record, a record of another spec, a stale record, added lines with only a record of the code before, a diff that fits neither side | `ritsu geas map` on the code the diff ends at |
 | E065, E066 | a coverage tool missing or failing; a service that stopped without writing its record | [map.md](map.md) |
 | E080, E081 | arguments the command does not take; a file that cannot be read or written | `geas --help` |
+| E090 | a file given to `scenarios` that is neither an OpenSpec spec nor a change's delta spec | give `openspec/specs/…` or `openspec/changes/<id>`; `openspec validate` says what is wrong |
 | W060, W061 | a target that gave `map` no record; a Rust profile from a program geas did not start | build it with coverage; start the binary itself |
 
 `ritsu geas explain <code>` prints when a code appears, what usually fixes it, and the smallest spec that

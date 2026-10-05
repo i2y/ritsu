@@ -362,8 +362,10 @@ fn ends_label(ends: &[&EndInfo]) -> Text {
     if let Some(src) = &source
         && ends.iter().all(|e| matches!(&e.thing, Thing::Source { source, fragment, .. } if source == src && !fragment.is_empty()))
     {
-        let frs: Vec<&str> = ends.iter().filter_map(|e| match &e.thing {
-            Thing::Source { fragment, .. } => Some(fragment.as_str()),
+        // a requirement of an OpenSpec spec is named in quotes when it is not a word
+        let frs: Vec<String> = ends.iter().filter_map(|e| match &e.thing {
+            Thing::Source { fragment, .. } if e.law.is_none() => Some(crate::names::word_or_quote(fragment)),
+            Thing::Source { fragment, .. } => Some(fragment.clone()),
             _ => None,
         }).collect();
         return Text::new(format!("{src} {}", frs.join("、")), format!("{src} {}", frs.join(", ")));
@@ -536,9 +538,17 @@ fn mark_diag(p: &Project, ctx: &Ctx, by_req: &BTreeMap<usize, Vec<&LinkState>>, 
                             },
                             _ => None,
                         };
-                        let head = match copy {
-                            Some(c) => tr!("条文の変わったところ（コピーは {c}）", "what changed in the text (the copy {c})"),
-                            None => tr!("変わったところ", "what changed"),
+                        let spec = match &p.decl(st.req).from[i].what {
+                            FromWhat::Cite { source, .. } => match ctx.sources.get(fi, source) {
+                                Some(crate::sources::Resolved::OpenSpec { name, .. }) => Some(p.shown(&name.path)),
+                                _ => None,
+                            },
+                            _ => None,
+                        };
+                        let head = match (copy, spec) {
+                            (Some(c), _) => tr!("条文の変わったところ（コピーは {c}）", "what changed in the text (the copy {c})"),
+                            (None, Some(s)) => tr!("要件の変わったところ（仕様は {s}）", "what changed in the requirement (the spec {s})"),
+                            (None, None) => tr!("変わったところ", "what changed"),
                         };
                         d = d.diff(head, lines);
                         if more_total > 0 {

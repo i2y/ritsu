@@ -1,0 +1,27 @@
+warning[W102]: examples/openspec_greeter_archived/greeter.req:7:8: A requirement of the spec examples/openspec_greeter_archived/openspec/specs/greeting/spec.md is pinned by no source of the project: "Health check"
+     7 | source greeting = openspec "openspec/specs/greeting/spec.md"
+  = Pin each one and read it with a requirement. To leave one out, read it with a requirement all the same and write `not satisfied` and `not verified` with the reasons: leaving it out is then on record, with its approval.
+error[E103]: examples/openspec_greeter_archived/greeter.req:8:3: greeting "Greeting by name" does not match its pin (pinned sha256:1c3d865f4a521275, the requirement is sha256:228485bfce459383)
+     8 |   "Greeting by name" sha256:1c3d865f4a521275
+  = The requirement changed in the spec after it was pinned (an archived change, or an edit). Read what changed, then pin it again (`yuen source pin`).
+  what changed in the requirement since it was pinned (the spec examples/openspec_greeter_archived/openspec/specs/greeting/spec.md):
+      @@ -1,4 +1,4 @@
+        ### Requirement: Greeting by name
+      - The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>`, and SHALL refuse an empty name with status 400.
+      + The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>` with the spaces around the name removed, and SHALL refuse a name that is empty once they are removed with status 400.
+
+        #### Scenario: greets by name
+      @@ -9,3 +9,7 @@
+        #### Scenario: rejects an empty name
+        - **WHEN** a client asks for `/greet?name=`
+      + - **THEN** the status is 400
+      +
+      + #### Scenario: rejects a name of spaces
+      + - **WHEN** a client asks for `/greet?name=%20%20`
+        - **THEN** the status is 400
+  = The line, fixed: "Greeting by name" sha256:228485bfce459383
+warning[W402]: examples/openspec_greeter_archived/greeter.req:15:3: The scenario "rejects a name of spaces" of greeting "Greeting by name" has no claim of its name among the claims that check greeting_by_name
+    15 |   from @greeting "Greeting by name"
+  = geas holds a scenario to the claim of its name (`geas scenarios`). Write a claim of that name with the person who reads the claims, and link it with `verified by`; if a claim of another name runs the scenario, ask which of the two names is to change.
+examples/openspec_greeter_archived/greeter.req: 1 error, 2 warnings
+exit 1

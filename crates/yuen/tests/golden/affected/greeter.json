@@ -3,6 +3,7 @@
   "root": "tests/fixtures/geas",
   "requirement_files": [],
   "copies": [],
+  "openspec_changes": [],
   "specs": [
     {
       "spec": {

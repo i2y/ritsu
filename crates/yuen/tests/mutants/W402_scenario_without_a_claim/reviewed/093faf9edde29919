@@ -1,0 +1,2 @@
+text A greeting answers 200 with Hello and the name asked for, and an empty name answers 400
+from openspec openspec/specs/greeting/spec.md Greeting by name sha256:1c3d865f4a521275

@@ -165,6 +165,8 @@ fn records(g: &Graph) -> Vec<Rec> {
                     attrs.push(("yuen:url", Val::Str(u.clone())));
                 }
             }
+            // a requirement of an OpenSpec spec: the spec's file, and the requirement in its label
+            SourceKey::OpenSpec { path, .. } => attrs.push(("yuen:file", Val::Str(path.clone()))),
         }
         if let Some(pin) = &s.pin {
             attrs.push(("yuen:sha256", Val::Str(pin.clone())));

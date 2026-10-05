@@ -213,3 +213,34 @@ such a rule.
   (<https://i2y.github.io/ritsu/playground/>): a person can open a project there and see what
   `ritsu check` says, the generated code and the pages for people, with nothing installed and
   nothing sent anywhere.
+
+## 8. A project that keeps its behavior in OpenSpec too
+
+OpenSpec (`openspec/specs/`, with changes proposed under `openspec/changes/` and applied by
+`openspec archive`) is where people and agents agree, in prose, on what a system should do. The
+languages hold the rest, each its own part; keep each thing where it belongs.
+
+| Where | What it holds | Who decides |
+|---|---|---|
+| OpenSpec | the behavior in prose: requirements (SHALL, MUST) and their scenarios; the changes proposed, reviewed and archived | the people who agree on the behavior; the agent drafts |
+| geas (`.geas`) | each scenario as a claim run against the real program, named as the scenario is | the person reads the claims; the agent writes the code and proposes claims |
+| rulec, koyomi, chobo, dandori | what a requirement needs exactly: a tariff or an eligibility rule, a closing or payment day, the bounds of an account, a workflow | the people who own each |
+| yuen (`.req`) | where each requirement comes from (a requirement of an OpenSpec spec, an article of a law, a decision), who owns it, what meets it and what checks it, each link recorded with the hashes of its ends | the owner of each requirement |
+
+With a change in OpenSpec:
+
+1. **Before it is archived.** `ritsu geas scenarios <spec.geas> --openspec openspec/changes/<id>`
+   lists the scenarios the change asks for that no claim runs; propose a claim for each
+   (`--draft` gives the frame). `ritsu yuen source outdated <path>` says which requirements of the
+   project, which owners and how many links the change will reach.
+2. **The work.** Write the code, and each rule, date, account or workflow the change needs in its
+   own language; `ritsu check` holds them together.
+3. **After `openspec archive`.** `ritsu yuen check` stops on each requirement the change rewrote
+   (E103, with the diff). Show it to the owner; `ritsu yuen source pin` then pins the new blocks,
+   and the links below them are marked until the people who own them look (`ritsu yuen review`,
+   only when they ask). A requirement the change added that nothing reads is W102: ask whether to
+   read it, or to leave it out with waivers whose reasons the owner gives.
+
+Do not copy a requirement's prose into a rule or a claim to make the two look alike. A rule holds
+the exact table the prose describes, and a claim holds a case anyone could observe; yuen keeps the
+link between them and the prose, and says when either moves.

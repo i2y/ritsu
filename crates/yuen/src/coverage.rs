@@ -1,6 +1,7 @@
 //! The seventh stage (DESIGN 5.2, 5.3, PLAN B.8): every version of every requirement has what
-//! meets it and what checks it, or a waiver for each (E401, E402, W401); and every artifact in
-//! a scope traces back to a requirement (E404).
+//! meets it and what checks it, or a waiver for each (E401, E402, W401); every scenario of an
+//! OpenSpec requirement it reads has a claim of its name among the claims that check it (W402,
+//! DESIGN 20.4); and every artifact in a scope traces back to a requirement (E404).
 
 use crate::ast::Side;
 use crate::diag::Diag;
@@ -166,6 +167,71 @@ pub fn coverage(p: &Project) -> Vec<Diag> {
                         "A waiver says no link is to be there; now that there is one, delete the waiver."
                     )));
                 }
+            }
+        }
+    }
+    diags
+}
+
+/// W402 (DESIGN 20.4): a requirement that reads a requirement of an OpenSpec spec, and is checked
+/// by claims of geas, where a scenario of the spec's requirement has no claim of its name among
+/// those claims. geas holds a scenario to the claim of its name (`geas scenarios`); this says the
+/// same of the claims linked to the requirement, without running anything.
+pub fn scenarios(p: &Project, s: &crate::sources::Sources) -> Vec<Diag> {
+    use crate::ast::FromWhat;
+    use crate::sources::Resolved;
+    let mut diags = Vec::new();
+    for r in 0..p.reqs.len() {
+        let fi = p.reqs[r].file;
+        let d = p.decl(r);
+        // the names of the claims that check it: a claim named, or every claim of a spec named whole
+        let mut claims: Vec<String> = Vec::new();
+        let mut by_geas = false;
+        for (li, l) in d.links.iter().enumerate() {
+            let Some(n) = p.names.links[r].get(li).and_then(|n| n.as_ref()) else { continue };
+            if l.side != Side::Verified || n.tool != Tool::Geas {
+                continue;
+            }
+            by_geas = true;
+            match n.items.first() {
+                Some((_, c)) => claims.push(c.clone()),
+                None => {
+                    if let Some(Ok(items)) = p.suite.index.items(Tool::Geas, &p.root, &n.path) {
+                        claims.extend(items.iter().filter_map(|i| i.naming.items.first().map(|(_, c)| c.clone())));
+                    }
+                }
+            }
+        }
+        if !by_geas {
+            continue;
+        }
+        let me = p.req_label(r);
+        for f in &d.from {
+            let FromWhat::Cite { source, fragments, .. } = &f.what else { continue };
+            let Some(Resolved::OpenSpec { spec: Some(spec), .. }) = s.get(fi, source) else { continue };
+            for (fr, _) in fragments {
+                let Some(req) = spec.get(fr) else { continue };
+                let missing: Vec<String> = req.scenarios.iter().filter(|sc| !claims.contains(&sc.name)).map(|sc| crate::names::word_or_quote(&sc.name)).collect();
+                if missing.is_empty() {
+                    continue;
+                }
+                let n = crate::names::word_or_quote(fr);
+                let (ja, en) = (missing.join("、"), missing.join(", "));
+                let msg = if missing.len() == 1 {
+                    tr!(
+                        "{source} {n} のシナリオ {ja} と同じ名前の主張が、{me} を確かめる主張の中にありません",
+                        "The scenario {en} of {source} {n} has no claim of its name among the claims that check {me}"
+                    )
+                } else {
+                    tr!(
+                        "{source} {n} のシナリオ {ja} と同じ名前の主張が、{me} を確かめる主張の中にありません",
+                        "The scenarios {en} of {source} {n} have no claim of their names among the claims that check {me}"
+                    )
+                };
+                diags.push(p.warn(fi, "W402", f.span, msg).note(tr!(
+                    "geas はシナリオを同じ名前の主張と突き合わせます（`geas scenarios`）。その名前の主張を、主張を読む人と一緒に書き、`verified by` でつないでください。別の名前の主張がそのシナリオを確かめているなら、どちらの名前を直すかを聞いてください。",
+                    "geas holds a scenario to the claim of its name (`geas scenarios`). Write a claim of that name with the person who reads the claims, and link it with `verified by`; if a claim of another name runs the scenario, ask which of the two names is to change."
+                )));
             }
         }
     }

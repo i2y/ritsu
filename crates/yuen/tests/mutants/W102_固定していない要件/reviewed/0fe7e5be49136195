@@ -1,0 +1,2 @@
+text 挨拶は 200 と、Hello と頼まれた名前を返す。空の名前には 400 を返す
+from openspec ja/openspec/specs/greeting/spec.md 名前で挨拶する sha256:584f410eda34b49e

@@ -376,8 +376,8 @@ impl Parser<'_> {
                     ))
                     .notes
                     .push(tr!(
-                        "字下げは、要件の中の行と、法令の出典の下の固定の行と、リンクの下の確かめた記録の行を表します。",
-                        "Indentation marks the lines of a requirement, the pins under a law source, and the record under a link."
+                        "字下げは、要件の中の行と、法令と OpenSpec の仕様の出典の下の固定の行と、リンクの下の確かめた記録の行を表します。",
+                        "Indentation marks the lines of a requirement, the pins under a law or an OpenSpec source, and the record under a link."
                     ));
                     continue;
                 }
@@ -488,7 +488,7 @@ impl Parser<'_> {
         Ok(())
     }
 
-    /// `source …`; true for a law, whose pins follow.
+    /// `source …`; true for a law or an OpenSpec spec, whose pins follow.
     fn source(&mut self, f: &mut ReqFile, line: &Line) -> Result<bool, Bad> {
         let mut c = Cur::new(line);
         c.bump();
@@ -518,6 +518,13 @@ impl Parser<'_> {
             f.sources.push(SourceDecl { name, span, kind: SourceKind::Law { db, id, asof, pins: vec![] } });
             return Ok(true);
         }
+        if c.word(kw::OPENSPEC) {
+            let path_span = c.span(line.no);
+            let path = c.string(&tr!("仕様のパス", "the path of the spec"))?;
+            c.done()?;
+            f.sources.push(SourceDecl { name, span, kind: SourceKind::OpenSpec { path, path_span, pins: vec![] } });
+            return Ok(true);
+        }
         if c.word(kw::FILE) {
             let path_span = c.span(line.no);
             let path = c.string(&tr!("コピーのパス", "the path of the copy"))?;
@@ -537,8 +544,8 @@ impl Parser<'_> {
         // `=` and nothing after it: the lexer did not start a naming.
         let fd = c.found();
         Err(bad("E002", c.col(), tr!(
-            "`=` のあとには `law`、`file`、借りる出典の名指し（`koyomi \"x.cal\" source 民法`）のどれかを書いてください（{}）",
-            "`law`, `file`, or the naming of a source to borrow (`koyomi \"x.cal\" source 民法`) follows `=` ({})",
+            "`=` のあとには `law`、`file`、`openspec`、借りる出典の名指し（`koyomi \"x.cal\" source 民法`）のどれかを書いてください（{}）",
+            "`law`, `file`, `openspec`, or the naming of a source to borrow (`koyomi \"x.cal\" source 民法`) follows `=` ({})",
             fd.ja;
             fd.en
         )))
@@ -552,6 +559,9 @@ impl Parser<'_> {
             Some(Tok::Str(w)) => w.clone(),
             _ => {
                 let f = c.found();
+                if matches!(s.kind, SourceKind::OpenSpec { .. }) {
+                    return Err(bad("E002", c.col(), tr!("固定の行は `\"<要件の名前>\" sha256:<16 桁>` の形です（{}）", "A pin line is `\"<requirement>\" sha256:<16 digits>` ({})", f.ja; f.en)));
+                }
                 return Err(bad("E002", c.col(), tr!("固定の行は `<条> sha256:<16 桁>` の形です（{}）", "A pin line is `<article> sha256:<16 digits>` ({})", f.ja; f.en)));
             }
         };
@@ -565,7 +575,7 @@ impl Parser<'_> {
             _ => None,
         };
         c.done()?;
-        if let SourceKind::Law { pins, .. } = &mut s.kind {
+        if let SourceKind::Law { pins, .. } | SourceKind::OpenSpec { pins, .. } = &mut s.kind {
             pins.push(PinLine { fragment, span, pin });
         }
         Ok(())

@@ -2,7 +2,7 @@
 //! geas` (ritsu's DESIGN 8.2); and `geas check` of the specs of a project, as `ritsu check`
 //! prints it ([`checked`]).
 
-use crate::{affected, codes, diag, drift, map, model, parse, proc, report, run, sched, skill};
+use crate::{affected, codes, diag, drift, map, model, parse, proc, report, run, scenarios, sched, skill};
 
 use diag::{Diag, Show};
 use ritsu_base::text::{Lang, Text};
@@ -20,6 +20,8 @@ usage:
   geas drift <spec.geas>...           run them again and report what changed since the baseline
   geas map <spec.geas>...             run them with coverage on and record the lines each claim runs
   geas affected <spec.geas> <diff|->  the claims a diff touches, and the changed code no claim runs
+  geas scenarios <spec.geas>... --openspec <path>...
+                                      the scenarios of OpenSpec specs, each with the claims of its name
   geas explain <code>... | --all      what a code means and how to fix it
   geas skill [--install <dir>]        the guide for coding agents, or the guide written as a skill folder
 
@@ -30,6 +32,8 @@ options:
   --root <dir>      map, affected: the directory the record's paths are relative to
   --out <file>      map: where to write the record
   --map <file>      affected: a record to read; give two for both sides of the diff
+  --openspec <path> scenarios: a spec, a change's delta spec, or a directory of them
+  --draft           scenarios: a claim to fill in for each scenario no claim answers
   --install <dir>   skill: write the skill's files to <dir>/geas
   --force           skill: write over a <dir>/geas that is already there
   --help, -h        this text
@@ -48,6 +52,8 @@ geas: エージェントが書いたコードに、人が読んで確かめた�
   geas drift <spec.geas>...           もう一度実行し、ベースラインから変わったところを示す
   geas map <spec.geas>...             カバレッジを取りながら実行し、主張ごとに通った行を記録する
   geas affected <spec.geas> <diff|->  差分が関わる主張と、変わったコードのうちどの主張も通らないところを示す
+  geas scenarios <spec.geas>... --openspec <path>...
+                                      OpenSpec の仕様のシナリオごとに、同じ名前の主張を示す
   geas explain <code>... | --all      コードの意味と直し方
   geas skill [--install <dir>]        コーディングエージェント向けの手引きを出すか、スキルのフォルダーとして書く
 
@@ -58,6 +64,8 @@ geas: エージェントが書いたコードに、人が読んで確かめた�
   --root <dir>      map、affected: 記録のパスの基準にするディレクトリ
   --out <file>      map: 記録を書く先
   --map <file>      affected: 読む記録。変更前と変更後のコードの記録を二つ渡せる
+  --openspec <path> scenarios: 仕様、変更の提案の差分、それらを持つディレクトリ
+  --draft           scenarios: 主張の無いシナリオごとに、書き足す主張の下書きを出す
   --install <dir>   skill: スキルのファイルを <dir>/geas に書く
   --force           skill: すでにある <dir>/geas に上書きする
   --help, -h        この説明を出す
@@ -75,10 +83,11 @@ enum Cmd {
     Affected,
     Explain,
     Skill,
+    Scenarios,
 }
 
 /// The options that take a value, and how many times each may be given.
-const VALUE_FLAGS: &[(&str, usize)] = &[("--lang", 1), ("--jobs", 1), ("--root", 1), ("--out", 1), ("--map", 2), ("--install", 1)];
+const VALUE_FLAGS: &[(&str, usize)] = &[("--lang", 1), ("--jobs", 1), ("--root", 1), ("--out", 1), ("--map", 2), ("--install", 1), ("--openspec", usize::MAX)];
 
 impl Cmd {
     fn parse(s: &str) -> Option<Cmd> {
@@ -90,6 +99,7 @@ impl Cmd {
             "affected" => Some(Cmd::Affected),
             "explain" => Some(Cmd::Explain),
             "skill" => Some(Cmd::Skill),
+            "scenarios" => Some(Cmd::Scenarios),
             _ => None,
         }
     }
@@ -103,6 +113,7 @@ impl Cmd {
             Cmd::Affected => "affected",
             Cmd::Explain => "explain",
             Cmd::Skill => "skill",
+            Cmd::Scenarios => "scenarios",
         }
     }
 
@@ -113,6 +124,7 @@ impl Cmd {
             Cmd::Skill => &["--install", "--force", "--lang"],
             Cmd::Map => &["--json", "--lang", "--jobs", "--root", "--out"],
             Cmd::Affected => &["--json", "--lang", "--root", "--map"],
+            Cmd::Scenarios => &["--json", "--lang", "--openspec", "--draft"],
             _ => &["--json", "--lang", "--jobs"],
         }
     }
@@ -133,6 +145,9 @@ struct Args {
     /// written over.
     install: Option<String>,
     force: bool,
+    /// `scenarios`: the OpenSpec specs, delta specs and directories, and whether to draft claims.
+    openspec: Vec<String>,
+    draft: bool,
 }
 
 enum Parsed {
@@ -147,8 +162,8 @@ fn e080(en: impl Into<String>, ja: impl Into<String>) -> Diag {
 
 fn commands_note() -> Text {
     tr!(
-        "コマンドは check、snap、drift、map、affected、explain、skill です。詳しくは `geas --help` を見てください",
-        "the commands: check, snap, drift, map, affected, explain, skill; `geas --help` says more",
+        "コマンドは check、snap、drift、map、affected、scenarios、explain、skill です。詳しくは `geas --help` を見てください",
+        "the commands: check, snap, drift, map, affected, scenarios, explain, skill; `geas --help` says more",
     )
 }
 
@@ -331,6 +346,18 @@ fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
                 .note(tr!("使い方: geas {c} <spec.geas>...", "usage: geas {c} <spec.geas>...")),
             );
         }
+        Cmd::Scenarios if value("--openspec").is_none() => {
+            return fail(
+                e080(
+                    "`geas scenarios` needs `--openspec <path>`: the specs whose scenarios to hold to the claims",
+                    "`geas scenarios` には `--openspec <path>` が要ります。シナリオを主張と照らし合わせる仕様です",
+                )
+                .note(tr!("使い方: geas scenarios <spec.geas>... --openspec <path>... [--draft]", "usage: geas scenarios <spec.geas>... --openspec <path>... [--draft]")),
+            );
+        }
+        Cmd::Scenarios if flags.contains(&"--draft") && flags.contains(&"--json") => {
+            return fail(e080("`--draft` writes claims, and `--json` a report: give one of them", "`--draft` は主張を書き、`--json` は報告を出します。どちらか一つを渡してください"));
+        }
         Cmd::Map if files.len() > 1 && value("--out").is_some() => {
             return fail(e080(
                 format!("`--out` names one record, and `geas map` was given {} specs", files.len()),
@@ -351,6 +378,8 @@ fn parse_args(raw: &[String]) -> Result<Parsed, (Diag, Lang)> {
         jobs: sched::jobs(jobs),
         install: value("--install"),
         force: flags.contains(&"--force"),
+        openspec: values.iter().filter(|(f, _)| *f == "--openspec").map(|(_, v)| v.clone()).collect(),
+        draft: flags.contains(&"--draft"),
     }))
 }
 
@@ -575,7 +604,7 @@ fn run_file(file: &str, a: &Args) -> i32 {
                 0
             };
         }
-        Cmd::Map | Cmd::Affected | Cmd::Explain | Cmd::Skill => unreachable!("handled apart"),
+        Cmd::Map | Cmd::Affected | Cmd::Explain | Cmd::Skill | Cmd::Scenarios => unreachable!("handled apart"),
     }
     for (f, d) in &problems {
         eprint!("{}", d.shown(f, "", lang));
@@ -731,6 +760,7 @@ pub fn run(raw: &[String]) -> i32 {
         Ok(Parsed::Run(a)) => match a.cmd {
             Cmd::Explain => explain(&a),
             Cmd::Skill => skill_command(&a),
+            Cmd::Scenarios => scenarios::command(&a.files, &scenarios::Opts { openspec: &a.openspec, draft: a.draft, json: a.json, lang: a.lang }),
             Cmd::Affected => affected::command(
                 &a.files[0],
                 &a.files[1],

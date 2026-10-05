@@ -1,0 +1,13 @@
+差分: examples/openspec_greeter/diffs/propose.ja.diff
+差分が触る OpenSpec の変更の提案（まだ archive していないもの）:
+  trim-names（examples/openspec_greeter/ja/openspec/changes/trim-names/specs/greeting/spec.md、仕様は examples/openspec_greeter/ja/openspec/specs/greeting/spec.md）:
+    MODIFIED 名前で挨拶する: 引く要件 名前で挨拶する
+    ADDED ヘルスチェック: まだどの要件も読んでいません
+差分が触る主張（geas "greeter.ja.geas"、記録: examples/openspec_greeter/.geas/greeter.ja.map.jsonl はどちらの側にも合うもの）:
+  なし
+どの要件にも届かない変更: なし
+要件に関わらないファイル: examples/openspec_greeter/ja/openspec/changes/trim-names/proposal.md、examples/openspec_greeter/ja/openspec/changes/trim-names/tasks.md
+触る要件:
+  名前で挨拶する（examples/openspec_greeter/greeter.ja.req:12）持ち主 窓口、出どころ 挨拶 名前で挨拶する
+触る要件は 1 件です。窓口 に見てもらってください
+exit 0

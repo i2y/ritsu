@@ -1,2 +1,2 @@
 エラー[E080]: `chekc` というコマンドはありません
-  = コマンドは check、snap、drift、map、affected、explain、skill です。詳しくは `geas --help` を見てください
+  = コマンドは check、snap、drift、map、affected、scenarios、explain、skill です。詳しくは `geas --help` を見てください

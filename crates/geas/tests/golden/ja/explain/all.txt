@@ -796,13 +796,37 @@
 エラー[E081]: 読めないか、書けないファイル
 
 いつ出るか
-  geas が主張のファイルを読めなかったか、その隣の `.geas/` にジャーナルやベースラインを書けなかったときです。`geas skill --install <dir>` がスキルのフォルダーを書けなかったときと、`--force` を付けずに、すでにある `<dir>/geas` に書こうとしたときにも出ます。メッセージに OS が返した理由が出ます。
+  geas が主張のファイルを読めなかったか、その隣の `.geas/` にジャーナルやベースラインを書けなかったときです。`geas scenarios` の `--openspec` に渡したものが無いときや読めないとき、`geas skill --install <dir>` がスキルのフォルダーを書けなかったときと、`--force` を付けずに、すでにある `<dir>/geas` に書こうとしたときにも出ます。メッセージに OS が返した理由が出ます。
 
 直し方
   パスと、主張のファイルのディレクトリに書き込めるかを確かめてください。`geas skill --install` では、`--force` を付けると、そこにあるフォルダーにスキルを上書きします。
 
 再現
   $ geas check missing.geas
+
+エラー[E090]: OpenSpec の仕様として読めないファイル
+
+いつ出るか
+  `geas scenarios` の `--openspec` に渡したファイルが、仕様（`## Requirements` の節）でも変更の提案の差分（`## ADDED Requirements` などの節）でもないとき、同じ名前の要件を二つ持つとき、UTF-8 でないときです。渡したディレクトリの下に `spec.md` が一つも無いときにも出ます。
+
+直し方
+  仕様（`openspec/specs/<capability>/spec.md`）、変更の提案の差分（`openspec/changes/<id>/specs/<capability>/spec.md`）、それらを持つディレクトリを渡してください。形の誤りは `openspec validate` が言います。
+
+再現
+  $ geas scenarios e090.geas --openspec notes.md
+  e090.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds two integers" {
+      when calc.run("2", "+", "3")
+      then stdout is "5"
+    }
+  notes.md:
+    # Notes
+
+    Nothing here is a spec.
 
 警告[W060]: `map` で記録が何も取れなかったターゲット
 

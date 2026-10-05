@@ -1,0 +1,11 @@
+### Requirement: Greeting by name
+The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>`, and SHALL refuse an empty name with status 400.
+
+#### Scenario: greets by name
+- **WHEN** a client asks for `/greet?name=Alice`
+- **THEN** the status is 200
+- **AND** `message` is `Hello, Alice`
+
+#### Scenario: rejects an empty name
+- **WHEN** a client asks for `/greet?name=`
+- **THEN** the status is 400

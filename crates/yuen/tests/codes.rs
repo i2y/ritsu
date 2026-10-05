@@ -24,7 +24,7 @@ fn every_example_gives_its_code() {
         got
     });
     // 42 examples in Japanese, and 41 in English (E206's is English in both)
-    assert_eq!(n, 83, "every code but the two retired ones is reproduced, in each language it has an example in");
+    assert_eq!(n, 89, "every code but the two retired ones is reproduced, in each language it has an example in");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
@@ -68,5 +68,5 @@ fn the_ledger_has_each_code_of_design_once_and_in_order() {
     let design = std::fs::read_to_string("DESIGN.md").unwrap();
     let table: Vec<String> = design.lines().filter_map(|l| l.strip_prefix("| ")).filter_map(|l| l.split(' ').next()).filter(|c| c.len() == 4 && (c.starts_with('E') || c.starts_with('W')) && c[1..].chars().all(|d| d.is_ascii_digit())).map(|s| s.to_string()).collect();
     assert_eq!(codes, table, "the ledger is DESIGN 6.2's table");
-    assert_eq!(codes.len(), 44);
+    assert_eq!(codes.len(), 47);
 }

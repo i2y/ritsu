@@ -23,6 +23,8 @@ pub const ASOF: &str = "asof";
 pub const SHA256: &str = "sha256";
 pub const EGOV: &str = "egov";
 pub const ECFR: &str = "ecfr";
+/// An OpenSpec spec, read a requirement at a time (DESIGN 20).
+pub const OPENSPEC: &str = "openspec";
 
 // The lines of a requirement.
 pub const TEXT: &str = "text";
@@ -44,7 +46,7 @@ pub const APPROVED: &str = "approved";
 /// The words, by where they are written, as DESIGN 1.2 lists them.
 pub const TABLE: &[(&str, &[&str])] = &[
     ("line", &[REQUIREMENTS, DESCRIPTION, ROLE, SOURCE, SCOPE, REQUIREMENT]),
-    ("source", &[LAW, FILE, URL, ASOF, "sha256:", EGOV, ECFR, SOURCE]),
+    ("source", &[LAW, FILE, URL, ASOF, "sha256:", EGOV, ECFR, OPENSPEC, SOURCE]),
     (
         "requirement",
         &[TEXT, "in force", OWNER, REPLACES, FROM, DECIDED, BY, "satisfied by", "verified by", "not satisfied", "not verified"],

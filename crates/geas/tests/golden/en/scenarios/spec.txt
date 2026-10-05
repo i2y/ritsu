@@ -1,0 +1,10 @@
+examples/greeter/openspec/specs/greeting/spec.md
+  Greeting by name
+    greets by name: claim 1 of examples/greeter/greeter.geas (line 14)
+    rejects an empty name: claim 2 of examples/greeter/greeter.geas (line 20)
+  Running total
+    totals accumulate across requests: claim 3 of examples/greeter/greeter.geas (line 25)
+  Unknown paths
+    unknown paths are 404: claim 4 of examples/greeter/greeter.geas (line 34)
+claims no scenario names: none
+4 scenarios · 4 with a claim · 0 with none

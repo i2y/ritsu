@@ -1,14 +1,18 @@
 //! `yuen doc` (DESIGN 10, PLAN D.1): the page of every example, in Markdown and in HTML, in
 //! English and in Japanese, against golden files (`YUEN_BLESS=1` or `RITSU_BLESS=1` writes
-//! them); the HTML reads nothing from outside; every line quoted from a law is a line of its
-//! pinned copy; the page is not made while the sources or the artifacts have errors; and, with
-//! Chrome, the pictures the READMEs show.
+//! them); the HTML reads nothing from outside; every line quoted from a law or an OpenSpec spec is
+//! a line of its pinned copy or of the spec; the page is not made while the sources or the
+//! artifacts have errors (`openspec_greeter_archived` is such an example); and, with Chrome, the
+//! pictures the READMEs show.
 
 mod common;
 
 use ritsu_testkit::{Need, TempDir, chrome, need};
 use std::path::Path;
 use std::time::Duration;
+
+/// The example whose pin stops the check at its third stage, so `doc` makes no page of it.
+const NO_PAGE: &str = "openspec_greeter_archived";
 
 fn page(dir: &str, req: &str, lang: &str, html: bool) -> common::Ran {
     let path = format!("{dir}/{req}");
@@ -25,8 +29,17 @@ fn the_page_of_every_example() {
     let mut n = 0;
     for (ex, reqs, _) in common::EXAMPLES {
         let dir = format!("examples/{ex}");
+        if *ex == NO_PAGE {
+            for req in *reqs {
+                let r = page(&dir, req, "en", false);
+                if r.code != 1 || !r.stderr.contains("[E103]") || !r.stdout.is_empty() {
+                    failures.push(format!("{dir}/{req}: a page was made, or not for E103: exit {}\n{}", r.code, r.stderr));
+                }
+            }
+            continue;
+        }
         for req in *reqs {
-            let stem = req.trim_end_matches(".req");
+            let stem = if *ex == "openspec_greeter" { format!("openspec_{}", req.trim_end_matches(".req")) } else { req.trim_end_matches(".req").to_string() };
             for lang in ["en", "ja"] {
                 for html in [false, true] {
                     let r = page(&dir, req, lang, html);
@@ -41,7 +54,7 @@ fn the_page_of_every_example() {
             }
         }
     }
-    assert_eq!(n, 40, "pages");
+    assert_eq!(n, 48, "pages");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
@@ -51,6 +64,9 @@ fn the_page_of_every_example() {
 fn the_html_reads_nothing_from_outside() {
     for (ex, reqs, _) in common::EXAMPLES {
         let dir = format!("examples/{ex}");
+        if *ex == NO_PAGE {
+            continue;
+        }
         for req in *reqs {
             let r = page(&dir, req, "en", true);
             let html = r.stdout;
@@ -85,6 +101,18 @@ fn every_quoted_line_is_a_line_of_the_pinned_copy() {
                     }
                 }
             }
+        }
+        // the blocks an OpenSpec spec holds, a line each (the page leaves the blank lines out)
+        for spec in [Path::new(&dir).join("openspec/specs"), Path::new(&dir).join("ja/openspec/specs")] {
+            let Ok(rd) = std::fs::read_dir(&spec) else { continue };
+            for cap in rd {
+                if let Ok(text) = std::fs::read_to_string(cap.unwrap().path().join("spec.md")) {
+                    lines.extend(text.lines().map(str::to_string));
+                }
+            }
+        }
+        if *ex == NO_PAGE {
+            continue;
         }
         for req in *reqs {
             for lang in ["en", "ja"] {

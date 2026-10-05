@@ -20,6 +20,21 @@ const COPY_142: (&str, &[u8]) = (
     include_bytes!("../tests/fixtures/period/sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml"),
 );
 const NOT_XML: (&str, &[u8]) = ("sources/law/129AC0000000089@2026-10-01/MainProvision-Article_142.xml", b"not xml\n");
+/// An OpenSpec spec of two requirements (DESIGN 20), in English and in Japanese.
+const SPEC_EN: (&str, &[u8]) = (
+    "openspec/specs/greeting/spec.md",
+    b"# Greeting\n\n## Purpose\nGreets people.\n\n## Requirements\n\n### Requirement: Greeting by name\nThe service SHALL greet by name.\n\n#### Scenario: greets by name\n- **WHEN** a client asks for `/greet?name=Alice`\n- **THEN** the status is 200\n\n### Requirement: Unknown paths\nThe service MUST answer 404 to a path it does not know.\n\n#### Scenario: unknown paths are 404\n- **WHEN** a client asks for `/nope`\n- **THEN** the status is 404\n",
+);
+const SPEC_JA: (&str, &[u8]) = (
+    "openspec/specs/greeting/spec.md",
+    "# あいさつ\n\n## Purpose\n人にあいさつする。\n\n## Requirements\n\n### Requirement: 名前であいさつする\nサービスは名前であいさつしなければならない（SHALL）。\n\n#### Scenario: 名前であいさつする\n- **WHEN** `/greet?name=Alice` を求める\n- **THEN** ステータスは 200\n\n### Requirement: 知らないパス\nサービスは知らないパスに 404 を返さなければならない（MUST）。\n\n#### Scenario: 知らないパスは 404\n- **WHEN** `/nope` を求める\n- **THEN** ステータスは 404\n".as_bytes(),
+);
+/// A claims file of one claim, for W402.
+const GEAS_EN: (&str, &[u8]) = ("greeter.geas", b"target api {\n  serve \"python3 server.py {port}\"\n  port auto\n}\n\nclaim \"greets by name\" {\n  when api.get(\"/greet?name=Alice\")\n  then status is 200\n}\n");
+const GEAS_JA: (&str, &[u8]) = (
+    "greeter.geas",
+    "target api {\n  serve \"python3 server.py {port}\"\n  port auto\n}\n\nclaim \"名前であいさつする\" {\n  when api.get(\"/greet?name=Alice\")\n  then status is 200\n}\n".as_bytes(),
+);
 const A_TXT: (&str, &[u8]) = ("a.txt", b"a\n");
 const B_TXT: (&str, &[u8]) = ("b.txt", b"b\n");
 /// What `r1` said when the link was looked at: `text the old x`.
@@ -236,8 +251,8 @@ pub fn ledger() -> Ledger {
         e(
             "E101",
             tr!("出典のコピーがありません", "The copy of a source is not there"),
-            tr!("固定した条のコピー（`sources/law/<ID>@<日付>/<要素>.xml`）か、`file` の出典のファイルが無いとき。check は通信しません。", "The copy of a pinned article (`sources/law/<id>@<date>/<element>.xml`), or the file of a `file` source, is not there. check never reads the network."),
-            tr!("`yuen source fetch` でコピーを取ってくるか、パスを直してください。", "Bring the copy with `yuen source fetch`, or correct the path."),
+            tr!("固定した条のコピー（`sources/law/<ID>@<日付>/<要素>.xml`）か、`file` の出典のファイルか、`openspec` の出典の仕様が無いとき。check は通信しません。", "The copy of a pinned article (`sources/law/<id>@<date>/<element>.xml`), the file of a `file` source, or the spec of an `openspec` source, is not there. check never reads the network."),
+            tr!("`yuen source fetch` でコピーを取ってくるか、パスを直してください。OpenSpec の仕様はプロジェクトのファイルなので、パスを直します。", "Bring the copy with `yuen source fetch`, or correct the path; an OpenSpec spec is a file of the project, so correct its path."),
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条 sha256:fc8c35a0769d3b35\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E102", "E103"],
         )
@@ -245,8 +260,8 @@ pub fn ledger() -> Ledger {
         e(
             "E102",
             tr!("出典が固定されていません", "A source is not pinned"),
-            tr!("引いている条に固定の行が無いとき、固定の行や `file` の出典に `sha256:` が無いとき。", "An article cited has no pin line, or a pin line or a `file` source has no `sha256:`."),
-            tr!("コピーの SHA-256 の先頭 16 桁を書いてください（直した行が注に出ます。`yuen source pin` でも書けます）。", "Write the first 16 digits of the SHA-256 of the copy (the fixed line is shown; `yuen source pin` writes it too)."),
+            tr!("引いている条か OpenSpec の要件に固定の行が無いとき、固定の行や `file` の出典に `sha256:` が無いとき。", "An article or an OpenSpec requirement cited has no pin line, or a pin line or a `file` source has no `sha256:`."),
+            tr!("コピー（OpenSpec の要件なら、そのブロック）の SHA-256 の先頭 16 桁を書いてください（直した行が注に出ます。`yuen source pin` でも書けます）。", "Write the first 16 digits of the SHA-256 of the copy, or of an OpenSpec requirement's block (the fixed line is shown; `yuen source pin` writes it too)."),
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E101", "E103"],
         )
@@ -255,7 +270,10 @@ pub fn ledger() -> Ledger {
         e(
             "E103",
             tr!("コピーが固定と違います", "A copy does not match its pin"),
-            tr!("コピーのハッシュが、固定の行の `sha256:` と違うとき。固定したあとでコピーが変わっています。", "The hash of the copy differs from the `sha256:` of its pin: the copy changed after it was pinned."),
+            tr!(
+                "コピーのハッシュが、固定の行の `sha256:` と違うとき。固定したあとでコピーが変わっています。OpenSpec の要件なら、変更の archive か書き直しで、要件のブロックが変わっています（確かめたときのブロックが reviewed/ にあれば、差分を見せます）。",
+                "The hash of the copy differs from the `sha256:` of its pin: the copy changed after it was pinned. For an OpenSpec requirement, its block changed (an archived change, or an edit); the diff is shown when the block looked at is in reviewed/."
+            ),
             tr!("何が変わったかを読んでから（`yuen source outdated`）、固定を書き換えてください。", "Read what changed (`yuen source outdated`), then pin it again."),
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条 sha256:0000000000000000\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E102", "E302"],
@@ -265,8 +283,11 @@ pub fn ledger() -> Ledger {
         e(
             "E104",
             tr!("コピーが読めません", "A copy cannot be read"),
-            tr!("法令のコピーが UTF-8 の XML でないか、e-Gov や eCFR が配る形（条なら `<Article>`、eCFR の section なら `<DIV8>` で始まる）でないとき。", "The copy of a law is not UTF-8 XML, or not what e-Gov or the eCFR serves (an article starts with `<Article>`, an eCFR section with `<DIV8>`)."),
-            tr!("コピーは手で直さず、`yuen source fetch` で取り直してください。", "Fetch it again with `yuen source fetch` rather than editing it."),
+            tr!(
+                "法令のコピーが UTF-8 の XML でないか、e-Gov や eCFR が配る形（条なら `<Article>`、eCFR の section なら `<DIV8>` で始まる）でないとき。OpenSpec の仕様が、UTF-8 でないか、`## Requirements` の節を持たないか（変更の提案の差分を名指したときを含む）、同じ名前の要件を二つ持つときにも出ます。",
+                "The copy of a law is not UTF-8 XML, or not what e-Gov or the eCFR serves (an article starts with `<Article>`, an eCFR section with `<DIV8>`); also an OpenSpec spec that is not UTF-8, has no `## Requirements` section (a change's delta spec among them), or holds two requirements of one name."
+            ),
+            tr!("コピーは手で直さず、`yuen source fetch` で取り直してください。OpenSpec の仕様は `openspec/specs/<capability>/spec.md` を名指し、形の誤りを `openspec validate --specs` で直してください。", "Fetch it again with `yuen source fetch` rather than editing it. For OpenSpec, name `openspec/specs/<capability>/spec.md`, and fix its form with `openspec validate --specs`."),
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条 sha256:6210aedce8fd1601\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E101"],
         )
@@ -276,8 +297,8 @@ pub fn ledger() -> Ledger {
             "E105",
             tr!("引用が使えません", "A citation cannot be used"),
             tr!(
-                "引用の条が読めない形のとき、同じファイルで宣言されていない出典を引いたとき、法令を条なしで引いたとき、`file` の出典に条を書いたとき。",
-                "The article of a citation is not in a form read, the source is not declared in the same file, a law is cited without an article, or a `file` source is cited with one."
+                "引用の条が読めない形のとき、同じファイルで宣言されていない出典を引いたとき、法令を条なしで、OpenSpec の仕様を要件なしで引いたとき、`file` の出典に条を書いたとき。",
+                "The article of a citation is not in a form read, the source is not declared in the same file, a law is cited without an article or an OpenSpec spec without a requirement, or a `file` source is cited with one."
             ),
             tr!("出典を同じファイルで宣言し、法令は `@民法 第142条` のように条で、`file` の出典は `@約款` と丸ごと引いてください。", "Declare the source in the same file; cite a law by article or section (`@cfr \"§1.7\"`) and a `file` source whole (`@terms`)."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @商法 第1条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
@@ -311,6 +332,19 @@ pub fn ledger() -> Ledger {
         .beside(&[CHANGED_142, E107_CAL, E107_CAL_142])
         .en(include_str!("../tests/mutants/E107_same_article_different_text/fire_extinguishers.req"), &[E107_RULE_EN, E107_RULE_COPY_EN, E107_COPY_EN]),
         e(
+            "E108",
+            tr!("OpenSpec の仕様に、その名前の要件がありません", "An OpenSpec spec has no requirement of that name"),
+            tr!(
+                "`openspec` の出典の固定の行か引用が名指す要件が、仕様に無いとき。OpenSpec は名前を書いたとおりに比べるので、大文字と小文字や空白だけが違うときにも出ます（そのときは近い名前を注に挙げます）。変更を archive して名前が変わった（RENAMED）か、無くなった（REMOVED）ときにも出ます。",
+                "A pin line or a citation of an `openspec` source names a requirement the spec does not have. OpenSpec compares names as written, so a name that differs only in case or spaces gives it too (the near name is noted); so does a requirement an archived change renamed (RENAMED) or removed (REMOVED)."
+            ),
+            tr!("仕様の `### Requirement:` のあとの名前を、そのまま書いてください。archive で変わったのなら、その要件を読む要件を見直してから、固定と引用を直してください。", "Write the name after the spec's `### Requirement:` as it is. If an archive changed it, look again at the requirements that read it, then correct the pin and the citations."),
+            "requirements 例 v1\nrole 開発\n\nsource あいさつ = openspec \"openspec/specs/greeting/spec.md\"\n  \"名前で あいさつする\" sha256:0000000000000000\n\nrequirement r1\n  text \"x\"\n  owner 開発\n  from @あいさつ \"名前で あいさつする\"\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
+            &["E101", "E104", "W102"],
+        )
+        .beside(&[SPEC_JA])
+        .en("requirements example v1\nrole api\n\nsource greeting = openspec \"openspec/specs/greeting/spec.md\"\n  \"Greeting by Name\" sha256:0000000000000000\n\nrequirement r1\n  text \"x\"\n  owner api\n  from @greeting \"Greeting by Name\"\n  not satisfied \"left out in this example\"\n  not verified \"left out in this example\"\n", &[SPEC_EN]),
+        e(
             "W101",
             tr!("固定した条が、どの要件からも引かれていません", "A pinned article is cited by no requirement"),
             tr!("出典の下に固定の行があるのに、同じファイルのどの要件の `from` もその条を引いていないとき。", "A pin line under a source, and no `from` of a requirement of the same file cites the article."),
@@ -320,6 +354,22 @@ pub fn ledger() -> Ledger {
         )
         .beside(&[COPY_142])
         .en("requirements example v1\nrole legal\n\nsource cfr = law ecfr \"37 CFR 1\" asof 2026-01-01\n  \"§1.7\" sha256:01de176ebe4740d7\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  not satisfied \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n", &[COPY_1_7]),
+        e(
+            "W102",
+            tr!("OpenSpec の仕様の要件を、どの出典も固定していません", "A requirement of an OpenSpec spec is pinned by no source"),
+            tr!(
+                "プロジェクトが `openspec` の出典として読む仕様に、プロジェクトのどの出典も固定していない要件があるとき。仕様に書いた要件を、プロジェクトのどの要件も読んでいません。一つの仕様について、それを名指す最初の出典に一度だけ出します。",
+                "A spec the project reads as an `openspec` source holds a requirement no source of the project pins: no requirement of the project reads it. Said once for a spec, at the first source that names it."
+            ),
+            tr!(
+                "固定の行を足し、それを引く要件を書いてください。読まないと決めた要件も、引く要件を書いて `not satisfied` と `not verified` に理由を書けば、外したことが承認とともに残ります。",
+                "Pin it and read it with a requirement. To leave one out, read it with a requirement all the same and write `not satisfied` and `not verified` with the reasons: leaving it out is then on record, with its approval."
+            ),
+            "requirements 例 v1\nrole 開発\n\nsource あいさつ = openspec \"openspec/specs/greeting/spec.md\"\n\nrequirement r1\n  text \"x\"\n  owner 開発\n  decided 2026-10-05 by 開発 \"例\"\n  not satisfied \"例なので置かない\"\n    approved 2026-10-05 by 開発 sha256:fbdfb71af500ce5f\n  not verified \"例なので置かない\"\n    approved 2026-10-05 by 開発 sha256:fbdfb71af500ce5f\n",
+            &["W101", "E108"],
+        )
+        .beside(&[SPEC_JA])
+        .en("requirements example v1\nrole api\n\nsource greeting = openspec \"openspec/specs/greeting/spec.md\"\n\nrequirement r1\n  text \"x\"\n  owner api\n  decided 2026-10-05 by api \"example\"\n  not satisfied \"left out in this example\"\n    approved 2026-10-05 by api sha256:fbdfb71af500ce5f\n  not verified \"left out in this example\"\n    approved 2026-10-05 by api sha256:fbdfb71af500ce5f\n", &[SPEC_EN]),
         // ── Artifacts ──
         e(
             "E201",
@@ -561,6 +611,22 @@ pub fn ledger() -> Ledger {
         )
         .beside(&[A_TXT])
         .en("requirements example v1\nrole legal\n\nrequirement r1\n  text \"x\"\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n  satisfied by file \"a.txt\"\n    reviewed 2026-10-03 by legal sha256:fbdfb71af500ce5f -> sha256:87428fc522803d31\n  not satisfied \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n  not verified \"left out in this example\"\n    approved 2026-10-03 by legal sha256:fbdfb71af500ce5f\n", &[A_TXT]),
+        e(
+            "W402",
+            tr!("OpenSpec のシナリオに、同じ名前の主張がありません", "A scenario of an OpenSpec requirement has no claim of its name"),
+            tr!(
+                "OpenSpec の仕様の要件を引き、geas の主張で確かめている要件で、その仕様の要件のシナリオのうち、同じ名前の主張が、要件を確かめる主張（`verified by geas …`。spec を丸ごと名指したなら、その spec のすべての主張）の中に無いとき。変更の archive でシナリオが足されたあとによく出ます。",
+                "A requirement reads a requirement of an OpenSpec spec and is checked by claims of geas, and a scenario of the spec's requirement has no claim of its name among the claims that check it (`verified by geas …`; every claim of a spec named whole). It often comes after an archived change added a scenario."
+            ),
+            tr!(
+                "その名前の主張を、主張を読む人と一緒に書き、`verified by` でつないでください（`geas scenarios --draft` が下書きを出します）。別の名前の主張がそのシナリオを確かめているなら、どちらの名前を直すかを聞いてください。",
+                "Write a claim of that name with the person who reads the claims, and link it with `verified by` (`geas scenarios --draft` gives a frame); if a claim of another name runs the scenario, ask which of the two names is to change."
+            ),
+            "requirements 例 v1\nrole 開発\n\nsource あいさつ = openspec \"openspec/specs/greeting/spec.md\"\n  知らないパス sha256:0f97c4b193dbba2b\n\nrequirement r1\n  text \"x\"\n  owner 開発\n  from @あいさつ 知らないパス\n  not satisfied \"例なので置かない\"\n  verified by geas \"greeter.geas\" claim 名前であいさつする\n",
+            &["W102", "E402"],
+        )
+        .beside(&[SPEC_JA, GEAS_JA])
+        .en("requirements example v1\nrole api\n\nsource greeting = openspec \"openspec/specs/greeting/spec.md\"\n  \"Unknown paths\" sha256:f140ceede48af8ff\n\nrequirement r1\n  text \"x\"\n  owner api\n  from @greeting \"Unknown paths\"\n  not satisfied \"left out in this example\"\n  verified by geas \"greeter.geas\" claim \"greets by name\"\n", &[SPEC_EN, GEAS_EN]),
     ];
     // every code that is printed has its example; the words are for one that has none yet
     let later = tr!("（再現はまだありません。）", "(No example yet.)");

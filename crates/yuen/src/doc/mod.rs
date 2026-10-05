@@ -138,7 +138,7 @@ fn from_words(f: &Value) -> String {
     }
     let srcs = f["sources"].as_array().cloned().unwrap_or_default();
     let name = srcs.first().map(|x| s(&x["source"])).unwrap_or_default();
-    let frags: Vec<String> = srcs.iter().filter_map(|x| x["fragment"].as_str().map(str::to_string)).collect();
+    let frags: Vec<String> = srcs.iter().filter_map(|x| x["fragment"].as_str().map(crate::names::word_or_quote)).collect();
     if frags.is_empty() { format!("@{name}") } else { format!("@{name} {}", frags.join(", ")) }
 }
 
@@ -313,6 +313,11 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
                 }
                 p.push(t(say(tr!("。", "."), lang)));
             }
+            Some("openspec") => {
+                p.push(t(say(tr!("OpenSpec の仕様 ", "The OpenSpec spec "), lang)));
+                p.push(c(s(&src["path"])));
+                p.push(t(say(tr!("。要件ごとに、そのブロック（見出しからシナリオまで）を固定する。", ", each requirement pinned by its block (from its header to its scenarios)."), lang)));
+            }
             _ => {}
         }
         if !src["borrowed"].is_null() {
@@ -360,6 +365,14 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
                     }
                 }
                 rows.push(vec![vec![c(frag.clone())], vec![c(short(&s(&pin["sha256"])))], citing(Some(&frag)), pinned]);
+            }
+            out.push(Block::Table(heads, rows));
+        } else if src["kind"].as_str() == Some("openspec") {
+            let heads = [tr!("要件", "Requirement"), tr!("固定", "Pin"), tr!("引く要件", "Cited by")].into_iter().map(|x| say(x, lang)).collect();
+            let mut rows = Vec::new();
+            for pin in src["pins"].as_array().cloned().unwrap_or_default() {
+                let frag = s(&pin["fragment"]);
+                rows.push(vec![vec![t(frag.clone())], vec![c(short(&s(&pin["sha256"])))], citing(Some(&frag))]);
             }
             out.push(Block::Table(heads, rows));
         } else {
@@ -411,6 +424,23 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
             out.push(Block::P(line));
             push_diags(&mut out, ch, &rel, decl.from.get(i).map(|x| (x.span.line, x.record.as_ref().map(|r| r.line))), lang);
             let Some(FromWhat::Cite { source, fragments, .. }) = decl.from.get(i).map(|x| &x.what) else { continue };
+            // a requirement of an OpenSpec spec, quoted as the spec writes its block
+            if let Some((_, Resolved::OpenSpec { name, pins, .. })) = m.sources.files[fi].iter().find(|(n, _)| n == source) {
+                for (frag, _) in fragments {
+                    let Some(block) = pins.iter().find(|x| &x.name == frag).and_then(|x| x.block.clone()) else { continue };
+                    let key = (fi, source.clone(), frag.clone());
+                    let n = crate::names::word_or_quote(frag);
+                    if quoted.contains(&key) {
+                        out.push(Block::P(vec![t(say(tr!("（{source} {n} の要件は、上に載せた）", "(The requirement {source} {n} is quoted above.)"), lang))]));
+                        continue;
+                    }
+                    quoted.insert(key);
+                    let path = p.shown(&name.path);
+                    let head = say(tr!("{source} {n}（OpenSpec の仕様 {path}）", "{source} {n} (the OpenSpec spec {path})"), lang);
+                    out.push(Block::Quote(Quote { head, lines: block.lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect() }));
+                }
+                continue;
+            }
             let Some((_, Resolved::Law { db, id, asof, articles, .. })) = m.sources.files[fi].iter().find(|(n, _)| n == source) else { continue };
             for (frag, _) in fragments {
                 let Some(a) = articles.iter().find(|a| &a.fragment == frag) else { continue };

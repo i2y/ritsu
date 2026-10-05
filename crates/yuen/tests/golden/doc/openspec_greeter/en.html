@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="yuen 0.23.0">
+<title>openspec_greeter — where the requirements come from</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 1.6rem; line-height: 1.3; margin: 0 0 12px; overflow-wrap: anywhere; }
+h2 { font-size: 1.25rem; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1.05rem; margin: 28px 0 8px; overflow-wrap: anywhere; }
+p, li { overflow-wrap: anywhere; }
+code { font: 0.88em/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); border-radius: 4px; padding: 1px 4px; overflow-wrap: anywhere; }
+pre { font: 0.82rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--bad); border-radius: 6px; padding: 10px 12px; overflow-x: auto; white-space: pre; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--line); min-width: 7em; }
+th { background: var(--soft); color: var(--dim); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td strong { color: var(--warn); }
+td.nw { white-space: nowrap; }
+blockquote.law { margin: 8px 0 16px; padding: 8px 14px; border-left: 3px solid var(--accent); background: var(--panel); border-radius: 0 6px 6px 0; }
+blockquote.law p { margin: 4px 0; }
+blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; }
+.lead { color: var(--dim); }
+@media print { body { background: #fff; color: #000; } .scroll { overflow: visible; } pre { white-space: pre-wrap; } }
+</style>
+</head>
+<body>
+<main>
+<h1>openspec_greeter — where the requirements come from</h1>
+<p class="lead">yuen 0.23.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.</p>
+<ul>
+<li><code>greeter.req</code> (openspec_greeter v1, <code>sha256:54e1d167deb692f2</code>)</li>
+</ul>
+<p>The check: <code>examples/openspec_greeter/greeter.req: ok — 3 requirements, whose 10 links are as they were looked at; every requirement is met and checked, or waived</code></p>
+<h2 id="traceability">Traceability</h2>
+<div class="scroll"><table>
+<thead><tr><th>Requirement</th><th>In force</th><th>Comes from</th><th>Owner</th><th>Met by</th><th>Checked by</th><th>State</th></tr></thead>
+<tbody>
+<tr><td><code>greeting_by_name</code></td><td>—</td><td><code>@greeting &quot;Greeting by name&quot;</code></td><td>api</td><td><code>file &quot;server.py&quot;</code></td><td><code>geas &quot;greeter.geas&quot; claim &quot;greets by name&quot;</code>; <code>geas &quot;greeter.geas&quot; claim &quot;rejects an empty name&quot;</code></td><td>as looked at</td></tr>
+<tr><td><code>running_total</code></td><td>—</td><td><code>@greeting &quot;Running total&quot;</code></td><td>api</td><td><code>file &quot;server.py&quot;</code></td><td><code>geas &quot;greeter.geas&quot; claim &quot;totals accumulate across requests&quot;</code></td><td>as looked at</td></tr>
+<tr><td><code>unknown_paths</code></td><td>—</td><td><code>@greeting &quot;Unknown paths&quot;</code></td><td>api</td><td><code>file &quot;server.py&quot;</code></td><td><code>geas &quot;greeter.geas&quot; claim &quot;unknown paths are 404&quot;</code></td><td>as looked at</td></tr>
+</tbody>
+</table></div>
+<h2 id="sources">Sources</h2>
+<h3 id="source-greeting">greeting</h3>
+<p>The OpenSpec spec <code>openspec/specs/greeting/spec.md</code>, each requirement pinned by its block (from its header to its scenarios).</p>
+<div class="scroll"><table>
+<thead><tr><th>Requirement</th><th>Pin</th><th>Cited by</th></tr></thead>
+<tbody>
+<tr><td>Greeting by name</td><td><code>sha256:1c3d865f4a521275</code></td><td><code>greeting_by_name</code></td></tr>
+<tr><td>Running total</td><td><code>sha256:f94d564d4cf48f1f</code></td><td><code>running_total</code></td></tr>
+<tr><td>Unknown paths</td><td><code>sha256:58e467e6888e0230</code></td><td><code>unknown_paths</code></td></tr>
+</tbody>
+</table></div>
+<h2 id="why">Why each requirement is so</h2>
+<h3 id="why-greeting_by_name">greeting_by_name</h3>
+<p><strong>A greeting answers 200 with Hello and the name asked for, and an empty name answers 400</strong></p>
+<ul>
+<li>In force: —</li>
+<li>Owner: api</li>
+<li>File: <code>examples/openspec_greeter/greeter.req:12</code></li>
+<li>The requirement&#39;s end: <code>sha256:093faf9edde29919</code></li>
+</ul>
+<p>Comes from <code>@greeting &quot;Greeting by name&quot;</code> — looked at by api on 2026-10-05 (<code>sha256:1c3d865f4a521275</code> → <code>sha256:093faf9edde29919</code>). State: as looked at</p>
+<blockquote class="law">
+<p class="cite">greeting &quot;Greeting by name&quot; (the OpenSpec spec examples/openspec_greeter/openspec/specs/greeting/spec.md)</p>
+<p>### Requirement: Greeting by name</p>
+<p>The service SHALL answer `GET /greet?name=&lt;name&gt;` with status 200 and a JSON body whose `message` is `Hello, &lt;name&gt;`, and SHALL refuse an empty name with status 400.</p>
+<p>#### Scenario: greets by name</p>
+<p>- **WHEN** a client asks for `/greet?name=Alice`</p>
+<p>- **THEN** the status is 200</p>
+<p>- **AND** `message` is `Hello, Alice`</p>
+<p>#### Scenario: rejects an empty name</p>
+<p>- **WHEN** a client asks for `/greet?name=`</p>
+<p>- **THEN** the status is 400</p>
+</blockquote>
+<p>Met by <code>file &quot;server.py&quot;</code> — looked at by development on 2026-10-05 (<code>sha256:093faf9edde29919</code> → <code>sha256:331e02e26d128e8c</code>). State: as looked at</p>
+<p>Checked by <code>geas &quot;greeter.geas&quot; claim &quot;greets by name&quot;</code> — looked at by development on 2026-10-05 (<code>sha256:093faf9edde29919</code> → <code>sha256:2b4e11c2cc191431</code>). State: as looked at</p>
+<p>Checked by <code>geas &quot;greeter.geas&quot; claim &quot;rejects an empty name&quot;</code> — looked at by development on 2026-10-05 (<code>sha256:093faf9edde29919</code> → <code>sha256:3f7c8d1b2bbcc309</code>). State: as looked at</p>
+<h3 id="why-running_total">running_total</h3>
+<p><strong>A total is kept across requests: POST /reset sets it to 0, POST /add adds to it, GET /total answers it</strong></p>
+<ul>
+<li>In force: —</li>
+<li>Owner: api</li>
+<li>File: <code>examples/openspec_greeter/greeter.req:24</code></li>
+<li>The requirement&#39;s end: <code>sha256:a2019ef11a58ef98</code></li>
+</ul>
+<p>Comes from <code>@greeting &quot;Running total&quot;</code> — looked at by api on 2026-10-05 (<code>sha256:f94d564d4cf48f1f</code> → <code>sha256:a2019ef11a58ef98</code>). State: as looked at</p>
+<blockquote class="law">
+<p class="cite">greeting &quot;Running total&quot; (the OpenSpec spec examples/openspec_greeter/openspec/specs/greeting/spec.md)</p>
+<p>### Requirement: Running total</p>
+<p>The service SHALL keep a total across requests: `POST /reset` sets it to 0, `POST /add` adds the number in the body, and `GET /total` answers it.</p>
+<p>#### Scenario: totals accumulate across requests</p>
+<p>- **GIVEN** the total was reset</p>
+<p>- **WHEN** a client adds 5 and then 7</p>
+<p>- **THEN** `GET /total` answers 12</p>
+</blockquote>
+<p>Met by <code>file &quot;server.py&quot;</code> — looked at by development on 2026-10-05 (<code>sha256:a2019ef11a58ef98</code> → <code>sha256:331e02e26d128e8c</code>). State: as looked at</p>
+<p>Checked by <code>geas &quot;greeter.geas&quot; claim &quot;totals accumulate across requests&quot;</code> — looked at by development on 2026-10-05 (<code>sha256:a2019ef11a58ef98</code> → <code>sha256:d653be1c06f5c8b1</code>). State: as looked at</p>
+<h3 id="why-unknown_paths">unknown_paths</h3>
+<p><strong>Any path the service does not know answers 404</strong></p>
+<ul>
+<li>In force: —</li>
+<li>Owner: api</li>
+<li>File: <code>examples/openspec_greeter/greeter.req:34</code></li>
+<li>The requirement&#39;s end: <code>sha256:fa91c8ff4af0068e</code></li>
+</ul>
+<p>Comes from <code>@greeting &quot;Unknown paths&quot;</code> — looked at by api on 2026-10-05 (<code>sha256:58e467e6888e0230</code> → <code>sha256:fa91c8ff4af0068e</code>). State: as looked at</p>
+<blockquote class="law">
+<p class="cite">greeting &quot;Unknown paths&quot; (the OpenSpec spec examples/openspec_greeter/openspec/specs/greeting/spec.md)</p>
+<p>### Requirement: Unknown paths</p>
+<p>The service MUST answer any path it does not know with status 404.</p>
+<p>#### Scenario: unknown paths are 404</p>
+<p>- **WHEN** a client asks for `/nope`</p>
+<p>- **THEN** the status is 404</p>
+</blockquote>
+<p>Met by <code>file &quot;server.py&quot;</code> — looked at by development on 2026-10-05 (<code>sha256:fa91c8ff4af0068e</code> → <code>sha256:331e02e26d128e8c</code>). State: as looked at</p>
+<p>Checked by <code>geas &quot;greeter.geas&quot; claim &quot;unknown paths are 404&quot;</code> — looked at by development on 2026-10-05 (<code>sha256:fa91c8ff4af0068e</code> → <code>sha256:1950201e8644bc57</code>). State: as looked at</p>
+<h2 id="scope">Scope</h2>
+<p>No scope is declared.</p>
+<h2 id="records">Records</h2>
+<div class="scroll"><table>
+<thead><tr><th>Date</th><th>By</th><th>What</th><th>Hashes</th></tr></thead>
+<tbody>
+<tr><td class="nw">2026-10-05</td><td>api</td><td><code>@greeting &quot;Greeting by name&quot;</code> → <code>greeting_by_name</code></td><td><code>sha256:1c3d865f4a521275 -&gt; sha256:093faf9edde29919</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>development</td><td><code>greeting_by_name</code> → <code>file &quot;server.py&quot;</code></td><td><code>sha256:093faf9edde29919 -&gt; sha256:331e02e26d128e8c</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>development</td><td><code>greeting_by_name</code> → <code>geas &quot;greeter.geas&quot; claim &quot;greets by name&quot;</code></td><td><code>sha256:093faf9edde29919 -&gt; sha256:2b4e11c2cc191431</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>development</td><td><code>greeting_by_name</code> → <code>geas &quot;greeter.geas&quot; claim &quot;rejects an empty name&quot;</code></td><td><code>sha256:093faf9edde29919 -&gt; sha256:3f7c8d1b2bbcc309</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>api</td><td><code>@greeting &quot;Running total&quot;</code> → <code>running_total</code></td><td><code>sha256:f94d564d4cf48f1f -&gt; sha256:a2019ef11a58ef98</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>development</td><td><code>running_total</code> → <code>file &quot;server.py&quot;</code></td><td><code>sha256:a2019ef11a58ef98 -&gt; sha256:331e02e26d128e8c</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>development</td><td><code>running_total</code> → <code>geas &quot;greeter.geas&quot; claim &quot;totals accumulate across requests&quot;</code></td><td><code>sha256:a2019ef11a58ef98 -&gt; sha256:d653be1c06f5c8b1</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>api</td><td><code>@greeting &quot;Unknown paths&quot;</code> → <code>unknown_paths</code></td><td><code>sha256:58e467e6888e0230 -&gt; sha256:fa91c8ff4af0068e</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>development</td><td><code>unknown_paths</code> → <code>file &quot;server.py&quot;</code></td><td><code>sha256:fa91c8ff4af0068e -&gt; sha256:331e02e26d128e8c</code></td></tr>
+<tr><td class="nw">2026-10-05</td><td>development</td><td><code>unknown_paths</code> → <code>geas &quot;greeter.geas&quot; claim &quot;unknown paths are 404&quot;</code></td><td><code>sha256:fa91c8ff4af0068e -&gt; sha256:1950201e8644bc57</code></td></tr>
+</tbody>
+</table></div>
+</main>
+</body>
+</html>

@@ -1,0 +1,12 @@
+requirements 挨拶 v1
+role 窓口 "サービスが何を返すかを決める"
+
+source 挨拶 = openspec "openspec/specs/greeting/spec.md"
+  合計 sha256:16b2a7d63d90dcf5
+
+requirement 合計(running_total)
+  text "合計はリクエストをまたいで覚えておく"
+  owner 窓口
+  from @挨拶 合計
+  not satisfied "この材料では置かない"
+  not verified "この材料では置かない"

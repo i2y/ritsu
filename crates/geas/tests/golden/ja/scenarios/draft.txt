@@ -1,0 +1,19 @@
+# examples/greeter/ja/openspec/changes/trim-names/specs/greeting/spec.md
+# Requirement: 名前で挨拶する
+#   Scenario: 空白だけの名前は受け付けない
+#   - **WHEN** クライアントが `/greet?name=%20%20` を求める
+#   - **THEN** ステータスは 400
+claim "空白だけの名前は受け付けない" {
+  # when <ターゲット>.<呼び出し>(…)
+  # then <チェックするもの> <比べ方>
+}
+
+# examples/greeter/ja/openspec/changes/trim-names/specs/greeting/spec.md
+# Requirement: ヘルスチェック
+#   Scenario: ヘルスチェックに答える
+#   - **WHEN** クライアントが `/health` を求める
+#   - **THEN** ステータスは 200
+claim "ヘルスチェックに答える" {
+  # when <ターゲット>.<呼び出し>(…)
+  # then <チェックするもの> <比べ方>
+}

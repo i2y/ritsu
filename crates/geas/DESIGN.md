@@ -33,6 +33,10 @@ rewritten around v1, README.ja.md, and the tests that hold the pages to the
 tool. §14 ends with what building it decided, §15 gathers what is still
 out, and §16 says what was measured. v1 is now what §6–§14 describe.
 
+2026-10-05: §17 is added: the scenarios of an OpenSpec spec held to the
+claims of the same names (`geas scenarios`), and the claims drafted for
+the scenarios no claim answers.
+
 ## 0. Thesis
 
 Agent-written code has a verification gap: specs (Spec Kit, Kiro) drive
@@ -1635,3 +1639,209 @@ Measured while building stage D (2026-10-03, the same machine):
   `tests/languages.rs` keeps for two records.
 - Twelve deliberate breakages of the pages each failed the test that
   should catch them (PLAN.md, D6).
+
+## 17. OpenSpec's scenarios: `geas scenarios`
+
+Added 2026-10-05. OpenSpec (Fission-AI's `@fission-ai/openspec`; this
+section read the documents and the source of 1.14.0, published
+2026-09-30, and ran it here) keeps a project's behavior as specs in
+Markdown: `openspec/specs/<capability>/spec.md` holds requirements
+(`### Requirement: <name>`, a sentence with SHALL or MUST), and each
+requirement holds scenarios (`#### Scenario: <name>`, a list of GIVEN,
+WHEN and THEN). A change is proposed as a folder under
+`openspec/changes/<id>/`, with its deltas to the specs (`## ADDED`,
+`## MODIFIED`, `## REMOVED`, `## RENAMED Requirements`), and
+`openspec archive` applies them.
+
+A scenario is an acceptance case in prose: a person and an agent agree on
+it before the code is written. It is the generation half of §0, and a
+claim is the acceptance half: the same case, run against the program.
+What OpenSpec does not say is whether each scenario is run by anything.
+Its `/opsx:verify` has an agent read the code against the specs, which
+need not give the same answer twice.
+
+**Decided**: `geas scenarios <spec.geas>... --openspec <path>...` reads
+the scenarios of the specs given and the claims of the claims files
+given, and says, for each scenario, which claims answer it, and which
+scenarios no claim answers. A claim answers a scenario when its name is
+the scenario's name. `--draft` writes, for the scenarios no claim
+answers, a claim to fill in. geas runs nothing for it.
+
+### 17.1 A claim answers a scenario by its name
+
+The claim's name and the scenario's name are compared as written, case
+and spaces included: `claim "rejects an empty name"` answers
+`#### Scenario: rejects an empty name`. The scenario's name is
+OpenSpec's own: the header's text without a closing run of `#` and
+without a leading `Scenario:`, trimmed (OpenSpec's
+`scenarioNameFromHeaderText`).
+
+Why the name:
+
+- The claims file stays as it is. A claim already reads aloud as the
+  case it holds ("rejects an empty name"), and OpenSpec's guide asks for
+  scenario titles of the same kind ("Name the case in the title.
+  'Scenario: Rejects an expired token'"). Nothing new is learned, and the
+  language does not grow a reference into another tool's tree.
+- Nothing goes quiet. A scenario renamed in the spec, or a claim renamed
+  in the claims file, shows as a scenario no claim answers and a claim no
+  scenario names, and the exit status is 1 until they meet again. A name
+  that differs only in case or in its spaces is pointed out as the near
+  one (the fold OpenSpec uses for its own near misses).
+- One claim may answer scenarios of two requirements that share a name,
+  and the report shows it under each; several claims files may answer one
+  spec.
+
+Discarded:
+
+- A line in a claim naming its scenario (`covers "openspec/specs/…" "…"`).
+  It ties the claims file to a path in another tool's tree, says again
+  what the name already says, and adds a form to a language kept small
+  enough to read aloud (§0).
+- Steps guessed from the scenario's prose (`WHEN a client asks for
+  /greet?name=Alice` → `when api.get("/greet?name=Alice")`). What a
+  sentence means is for the person who reads it; a guessed step that
+  looks right and runs the wrong thing is worse than none, and §0 keeps
+  the agent from writing the claims.
+- Running OpenSpec's CLI (`openspec show --json`). It would need Node and
+  OpenSpec wherever geas runs. The format is fixed and its reader is
+  published; ritsu's base layer reads it as OpenSpec does
+  (`ritsu_base::openspec`, which yuen also reads), and its tests hold it
+  to what OpenSpec 1.14.0's own reader makes of the same files.
+
+### 17.2 What it reads
+
+- A spec (`openspec/specs/<capability>/spec.md`): every scenario of every
+  requirement.
+- A delta spec (`openspec/changes/<id>/specs/<capability>/spec.md`): the
+  scenarios of its ADDED and MODIFIED requirements, the ones the change
+  asks for. A REMOVED or RENAMED entry has no scenarios to run.
+- A directory: every `spec.md` under it, in path order, except under a
+  directory named `archive` (OpenSpec's archived changes). So
+  `--openspec openspec/specs` is the whole behavior, and
+  `--openspec openspec/changes/trim-names` is one change.
+
+A scenario is a `#### ` header of a requirement with something under it
+(OpenSpec drops one with an empty body, and so does geas), and a line in
+a fenced code block is never a header. A file that reads as neither a
+spec nor a delta spec (no `## Requirements` and no delta section, two
+requirements of one name, or not UTF-8) is E090; one that cannot be read
+is E081.
+
+### 17.3 What it says
+
+The scenarios come in the order of the files, the requirements and the
+scenarios, each with the claims that answer it (their numbers in their
+files, and where they are), or `no claim`, with a near name when there
+is one. The claims no scenario names follow, as information; the last
+line counts. The exit status is 0 when every scenario has a claim, 1
+when some scenario has none, and 2 when a file or an argument is wrong.
+`--json` gives the same as one object.
+
+The claims no scenario names never change the exit status: a claims file
+may hold claims for what no spec says (the greeter's `/health` before
+anyone wrote a scenario for it), and when only a change is read, the
+claims of the rest of the behavior are not its business.
+
+### 17.4 `--draft`
+
+For each scenario no claim answers, `--draft` prints a claim to fill in:
+comments that quote the spec, the requirement and the scenario's lines,
+then `claim "<the scenario's name>" { … }` whose body is only comments.
+geas refuses such a claim (E005: the claim has no steps, and a claim
+starts with a `when`), so a draft pasted and left as it is fails `geas
+check` instead of passing.
+A person writes the steps, or reads the ones an agent proposes; the
+draft only saves copying the names and keeps the scenario beside the
+claim.
+
+### 17.5 Scope, and what is still out
+
+In: the command, its text and JSON, `--draft`, E090, the skill's pages
+(SKILL.md and commands.md), the tests (the greeter's spec in OpenSpec,
+in English and in Japanese, under `examples/greeter/openspec/` and
+`examples/greeter/ja/openspec/`, with a change that asks for two
+scenarios no claim answers; a claims file with a near name), README.md
+and README.ja.md, whose story `tests/readme.rs` runs.
+
+Out:
+
+- Spec Kit's acceptance scenarios and Kiro's EARS criteria. Their forms
+  are looser (numbered sentences in a user story); when a form is fixed
+  and published, it can be read the same way.
+- Holding the claim's steps to the scenario's sentences. That is what a
+  person reads (§0).
+- Following OpenSpec's stores (other repositories a project's
+  `config.yaml` references). Only the paths given are read.
+
+### 17.6 As built (2026-10-05)
+
+Read on 2026-10-05: OpenSpec 1.14.0 from npm
+(<https://registry.npmjs.org/@fission-ai/openspec>, `dist-tags.latest`, published 2026-09-30),
+installed with `npm install --prefix` in a scratch directory and run; its source at the tag
+`v1.14.0` of <https://github.com/Fission-AI/OpenSpec> (`docs/concepts.md`, `docs/cli.md`,
+`docs/writing-specs.md`, `docs/agent-contract.md`, `src/core/parsers/`).
+
+The reader is ritsu-base's `openspec` module, which yuen reads too; its
+tests hold it to `expected.json`, what OpenSpec 1.14.0's own readers
+(`extractRequirementsSection`, `MarkdownParser`, `parseDeltaSpec`, run
+with node over the npm package) make of the same files: fenced headers,
+closing `#` runs, CR LF and a byte order mark, a level-4 header without
+`Scenario:`, a scenario with no body, `*` and `+` bullets in RENAMED and
+REMOVED, a `FROM:` with no `TO:`. The greeter's spec and its change pass
+OpenSpec's `openspec validate --all`; the Japanese spec needs `SHALL` or
+`MUST` in its sentences, as OpenSpec's validator asks for those words.
+
+The story the READMEs tell, as `tests/readme.rs` records it:
+
+```
+$ geas scenarios examples/greeter/greeter.geas --openspec examples/greeter/openspec/specs
+examples/greeter/openspec/specs/greeting/spec.md
+  Greeting by name
+    greets by name: claim 1 of examples/greeter/greeter.geas (line 14)
+    rejects an empty name: claim 2 of examples/greeter/greeter.geas (line 20)
+  Running total
+    totals accumulate across requests: claim 3 of examples/greeter/greeter.geas (line 25)
+  Unknown paths
+    unknown paths are 404: claim 4 of examples/greeter/greeter.geas (line 34)
+claims no scenario names: none
+4 scenarios · 4 with a claim · 0 with none
+$ geas scenarios examples/greeter/greeter.geas --openspec examples/greeter/openspec/changes/trim-names
+examples/greeter/openspec/changes/trim-names/specs/greeting/spec.md (a change's delta spec)
+  MODIFIED Greeting by name
+    greets by name: claim 1 of examples/greeter/greeter.geas (line 14)
+    rejects an empty name: claim 2 of examples/greeter/greeter.geas (line 20)
+    rejects a name of spaces: no claim
+  ADDED Health check
+    answers the health check: no claim
+claims no scenario names:
+  "totals accumulate across requests": claim 3 of examples/greeter/greeter.geas (line 25)
+  "unknown paths are 404": claim 4 of examples/greeter/greeter.geas (line 34)
+4 scenarios · 2 with a claim · 2 with none
+$ echo $?
+1
+$ geas scenarios examples/greeter/greeter.geas --openspec examples/greeter/openspec/changes/trim-names --draft
+# examples/greeter/openspec/changes/trim-names/specs/greeting/spec.md
+# Requirement: Greeting by name
+#   Scenario: rejects a name of spaces
+#   - **WHEN** a client asks for `/greet?name=%20%20`
+#   - **THEN** the status is 400
+claim "rejects a name of spaces" {
+  # when <target>.<call>(…)
+  # then <subject> <matcher>
+}
+
+# examples/greeter/openspec/changes/trim-names/specs/greeting/spec.md
+# Requirement: Health check
+#   Scenario: answers the health check
+#   - **WHEN** a client asks for `/health`
+#   - **THEN** the status is 200
+claim "answers the health check" {
+  # when <target>.<call>(…)
+  # then <subject> <matcher>
+}
+```
+
+A claim pasted from the draft as it is gives E005 (the claim has no
+steps, and a claim starts with a `when`), and `geas check` exits 2
+(`tests/scenarios.rs`).

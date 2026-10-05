@@ -1,0 +1,11 @@
+greeting "Running total" (the OpenSpec spec examples/openspec_greeter/openspec/specs/greeting/spec.md)
+  > ### Requirement: Running total
+  > The service SHALL keep a total across requests: `POST /reset` sets it to 0, `POST /add` adds the number in the body, and `GET /total` answers it.
+  > 
+  > #### Scenario: totals accumulate across requests
+  > - **GIVEN** the total was reset
+  > - **WHEN** a client adds 5 and then 7
+  > - **THEN** `GET /total` answers 12
+cited by:
+  running_total (examples/openspec_greeter/greeter.req:24), owned by api — looked at by api on 2026-10-05; as it was looked at
+exit 0

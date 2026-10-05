@@ -1,0 +1,40 @@
+requirements openspec_greeter v1
+description "What geas's example greeter answers, read from the OpenSpec spec of the service: each requirement of the spec is pinned and read by one requirement here, met by server.py and checked by geas's claims, which are named as the scenarios are. The spec was written for this example"
+
+role api "Decides what the service answers"
+role development "Writes the server"
+
+source greeting = openspec "openspec/specs/greeting/spec.md"
+  "Greeting by name" sha256:1c3d865f4a521275
+  "Running total" sha256:f94d564d4cf48f1f
+  "Unknown paths" sha256:58e467e6888e0230
+
+requirement greeting_by_name
+  text "A greeting answers 200 with Hello and the name asked for, and an empty name answers 400"
+  owner api
+  from @greeting "Greeting by name"
+    reviewed 2026-10-05 by api sha256:1c3d865f4a521275 -> sha256:093faf9edde29919
+  satisfied by file "server.py"
+    reviewed 2026-10-05 by development sha256:093faf9edde29919 -> sha256:331e02e26d128e8c
+  verified by geas "greeter.geas" claim "greets by name"
+    reviewed 2026-10-05 by development sha256:093faf9edde29919 -> sha256:2b4e11c2cc191431
+
+requirement running_total
+  text "A total is kept across requests: POST /reset sets it to 0, POST /add adds to it, GET /total answers it"
+  owner api
+  from @greeting "Running total"
+    reviewed 2026-10-05 by api sha256:f94d564d4cf48f1f -> sha256:a2019ef11a58ef98
+  satisfied by file "server.py"
+    reviewed 2026-10-05 by development sha256:a2019ef11a58ef98 -> sha256:331e02e26d128e8c
+  verified by geas "greeter.geas" claim "totals accumulate across requests"
+    reviewed 2026-10-05 by development sha256:a2019ef11a58ef98 -> sha256:d653be1c06f5c8b1
+
+requirement unknown_paths
+  text "Any path the service does not know answers 404"
+  owner api
+  from @greeting "Unknown paths"
+    reviewed 2026-10-05 by api sha256:58e467e6888e0230 -> sha256:fa91c8ff4af0068e
+  satisfied by file "server.py"
+    reviewed 2026-10-05 by development sha256:fa91c8ff4af0068e -> sha256:331e02e26d128e8c
+  verified by geas "greeter.geas" claim "unknown paths are 404"
+    reviewed 2026-10-05 by development sha256:fa91c8ff4af0068e -> sha256:1950201e8644bc57

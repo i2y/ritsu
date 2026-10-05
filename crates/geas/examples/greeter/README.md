@@ -28,3 +28,14 @@ $ git checkout examples/greeter/server.py
 The top-level [README](../../README.md) shows each of these runs, the claim that catches a service
 without the check for an empty name, and `geas map` and `geas affected` on an agent's change to
 `server.py` ([tests/changes/greeter](../../tests/changes/greeter)).
+
+[openspec/](openspec) is the greeter's spec in OpenSpec (`openspec/specs/greeting/spec.md`), its
+scenarios named as the claims are, and a change not yet archived, `trim-names`, which asks for two
+scenarios no claim answers yet; [ja/openspec/](ja/openspec) is the same in Japanese, its scenarios
+named as the claims of `greeter.ja.geas` are. Both were checked with OpenSpec 1.14.0's
+`openspec validate`.
+
+```console
+$ geas scenarios examples/greeter/greeter.geas --openspec examples/greeter/openspec/specs
+$ geas scenarios examples/greeter/greeter.geas --openspec examples/greeter/openspec/changes/trim-names --draft
+```

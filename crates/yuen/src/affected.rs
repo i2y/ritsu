@@ -3,8 +3,9 @@
 //! copy of a source (the requirements that cite the article, and the rules and calendars that
 //! pin it), a file the links name (the requirements that name something in it), code (geas
 //! answers which claims the change touches, through ritsu's port of claims, from the records of
-//! the lines each claim ran, and yuen follows the claims to the requirements that name them), and
-//! the rest. Each requirement touched is said once, with its owner, where it comes from and the
+//! the lines each claim ran, and yuen follows the claims to the requirements that name them), a
+//! delta spec of an OpenSpec change not yet archived (what it does to the requirements of a spec
+//! the project pins, DESIGN 20.5), and the rest. Each requirement touched is said once, with its owner, where it comes from and the
 //! last decision on it. Nothing is run and nothing is written.
 
 use crate::ast::{FromWhat, Side};
@@ -37,9 +38,18 @@ struct ReqFile {
 /// A copy of a source the diff changes.
 struct Copy {
     path: String,
-    label: String,
+    label: Text,
     cited: Vec<usize>,
     pinned: Vec<Name>,
+}
+
+/// A delta spec of an OpenSpec change not yet archived, for a spec the project reads (DESIGN
+/// 20.5): what it does to each requirement, and the requirements that cite it.
+struct Proposed {
+    change: String,
+    delta: String,
+    spec: String,
+    items: Vec<(ritsu_base::openspec::Op, String, Option<String>, Vec<usize>)>,
 }
 
 /// A claim of a spec the change touches.
@@ -79,6 +89,7 @@ struct Answer {
     diff_shown: String,
     req_files: Vec<ReqFile>,
     copies: Vec<Copy>,
+    proposed: Vec<Proposed>,
     specs: Vec<Spec>,
     named: Vec<Named>,
     unreached: Vec<Unreached>,
@@ -94,6 +105,11 @@ impl Answer {
         }
         for c in &self.copies {
             out.extend(c.cited.iter().copied());
+        }
+        for x in &self.proposed {
+            for (_, _, _, cited) in &x.items {
+                out.extend(cited.iter().copied());
+            }
         }
         for s in &self.specs {
             for c in &s.claims {
@@ -219,6 +235,33 @@ fn changed_lines(f: &FileDiff, disk: &Content) -> Option<BTreeSet<usize>> {
     Some(out)
 }
 
+/// The requirements of a spec a diff changes (DESIGN 20.5): both sides of the change are made from
+/// the file on disk, whichever side it is, and a requirement whose block differs between them, or
+/// that is on one side only, is changed. None when the file on disk is neither side.
+fn spec_touched(disk: &Path, f: &FileDiff) -> Option<Vec<String>> {
+    use ritsu_base::openspec::{Spec, read_spec};
+    let bytes = ritsu_base::fs::read(disk).ok()?;
+    let here = Content::of(&bytes);
+    let after = if udiff::fits(&here, f, true) {
+        true
+    } else if udiff::fits(&here, f, false) {
+        false
+    } else {
+        return None;
+    };
+    let there = udiff::other_side(&here, f, after).bytes();
+    let read = |b: &[u8]| read_spec(b).unwrap_or(Spec { requirements: vec![] });
+    let (before, now) = if after { (read(&there), read(&bytes)) } else { (read(&bytes), read(&there)) };
+    let mut out: Vec<String> = Vec::new();
+    for r in before.requirements.iter().chain(&now.requirements) {
+        let same = matches!((before.get(&r.name), now.get(&r.name)), (Some(a), Some(b)) if a.block == b.block);
+        if !same && !out.contains(&r.name) {
+            out.push(r.name.clone());
+        }
+    }
+    Some(out)
+}
+
 /// The lines each requirement of a file takes: from its line to its last indented line.
 fn blocks(p: &Project, fi: usize) -> Vec<(usize, usize, usize)> {
     let lines: Vec<&str> = p.files[fi].src.lines().collect();
@@ -265,6 +308,8 @@ fn push(v: &mut Vec<Reach>, x: Reach) {
 struct Of {
     label: String,
     article: Option<(String, String, String)>,
+    /// An OpenSpec spec: read a requirement at a time (DESIGN 20.5).
+    spec: bool,
 }
 
 fn answer(c: &Checked, files: &[FileDiff], bytes: &[u8], diff_shown: &str, maps: &[(PathBuf, String)]) -> Result<Answer, Text> {
@@ -319,11 +364,14 @@ fn answer(c: &Checked, files: &[FileDiff], bytes: &[u8], diff_shown: &str, maps:
             match res {
                 Resolved::Law { db, id, articles, .. } => {
                     for a in articles {
-                        copy_of.entry(a.rel.clone()).or_insert(Of { label: format!("{sname} {}", a.fragment), article: Some((db.word().to_string(), id.clone(), a.fragment.clone())) });
+                        copy_of.entry(a.rel.clone()).or_insert(Of { label: format!("{sname} {}", a.fragment), article: Some((db.word().to_string(), id.clone(), a.fragment.clone())), spec: false });
                     }
                 }
                 Resolved::File { name, .. } => {
-                    copy_of.entry(name.path.clone()).or_insert(Of { label: sname.clone(), article: None });
+                    copy_of.entry(name.path.clone()).or_insert(Of { label: sname.clone(), article: None, spec: false });
+                }
+                Resolved::OpenSpec { name, .. } => {
+                    copy_of.entry(name.path.clone()).or_insert(Of { label: sname.clone(), article: None, spec: true });
                 }
                 _ => {}
             }
@@ -339,7 +387,7 @@ fn answer(c: &Checked, files: &[FileDiff], bytes: &[u8], diff_shown: &str, maps:
     }
     for (_, pins) in &pinning {
         for x in pins {
-            copy_of.entry(x.rel.clone()).or_insert(Of { label: format!("{} {}", x.source, x.fragment), article: Some((x.db.word().to_string(), x.id.clone(), x.fragment.clone())) });
+            copy_of.entry(x.rel.clone()).or_insert(Of { label: format!("{} {}", x.source, x.fragment), article: Some((x.db.word().to_string(), x.id.clone(), x.fragment.clone())), spec: false });
         }
     }
     let mut copies = Vec::new();
@@ -347,6 +395,9 @@ fn answer(c: &Checked, files: &[FileDiff], bytes: &[u8], diff_shown: &str, maps:
         for path in paths_of(f) {
             let Some(of) = copy_of.get(&path) else { continue };
             consumed.insert(path.clone());
+            // A spec: the requirements whose blocks the diff's lines fall in, whichever side of the
+            // change the file on disk is; every requirement when it is neither (DESIGN 20.5).
+            let in_blocks: Option<Vec<String>> = if of.spec { spec_touched(&p.root.join(&path), f) } else { None };
             let mut cited = Vec::new();
             for r in 0..p.reqs.len() {
                 let fi = p.reqs[r].file;
@@ -355,6 +406,7 @@ fn answer(c: &Checked, files: &[FileDiff], bytes: &[u8], diff_shown: &str, maps:
                     let hit = match (m.sources.get(fi, source), &of.article) {
                         (Some(Resolved::Law { db, id, .. }), Some((d, i, fr))) => db.word() == d && id == i && fragments.iter().any(|(x, _)| x == fr),
                         (Some(Resolved::File { name, .. }), None) => name.path == path,
+                        (Some(Resolved::OpenSpec { name, .. }), None) => name.path == path && fragments.iter().any(|(x, _)| in_blocks.as_ref().is_none_or(|t| t.contains(x))),
                         _ => false,
                     };
                     if hit && !cited.contains(&r) {
@@ -366,7 +418,50 @@ fn answer(c: &Checked, files: &[FileDiff], bytes: &[u8], diff_shown: &str, maps:
                 Some((d, i, fr)) => pinning.iter().filter(|(_, pins)| pins.iter().any(|x| x.db.word() == d && x.id == *i && x.fragment == *fr)).map(|(n, _)| n.clone()).collect(),
                 None => vec![],
             };
-            copies.push(Copy { path, label: of.label.clone(), cited, pinned });
+            let label = match &in_blocks {
+                Some(t) if !t.is_empty() => {
+                    let names: Vec<String> = t.iter().map(|n| crate::names::word_or_quote(n)).collect();
+                    Text::new(format!("{} {}", of.label, names.join("、")), format!("{} {}", of.label, names.join(", ")))
+                }
+                _ => Text::same(of.label.clone()),
+            };
+            copies.push(Copy { path, label, cited, pinned });
+        }
+    }
+
+    // 2b. the delta specs of OpenSpec changes not yet archived, for a spec the project reads
+    let mut proposed = Vec::new();
+    for f in files {
+        for path in paths_of(f) {
+            let Some((spec, change, touches)) = crate::openspec::of_delta(&p.root, &path) else { continue };
+            let reading: Vec<(usize, &str)> = m
+                .sources
+                .files
+                .iter()
+                .enumerate()
+                .flat_map(|(fi, srcs)| srcs.iter().filter(|(_, r)| matches!(r, Resolved::OpenSpec { name, .. } if name.path == spec)).map(move |(n, _)| (fi, n.as_str())))
+                .collect();
+            if reading.is_empty() {
+                continue;
+            }
+            consumed.insert(path.clone());
+            let items = touches
+                .iter()
+                .map(|t| {
+                    let mut cited = Vec::new();
+                    for r in 0..p.reqs.len() {
+                        let fi = p.reqs[r].file;
+                        let hit = p.decl(r).from.iter().any(|fl| {
+                            matches!(&fl.what, FromWhat::Cite { source, fragments, .. } if reading.contains(&(fi, source.as_str())) && fragments.iter().any(|(x, _)| *x == t.name))
+                        });
+                        if hit && !cited.contains(&r) {
+                            cited.push(r);
+                        }
+                    }
+                    (t.op, t.name.clone(), t.to.clone(), cited)
+                })
+                .collect();
+            proposed.push(Proposed { change, delta: path.clone(), spec, items });
         }
     }
 
@@ -492,7 +587,7 @@ fn answer(c: &Checked, files: &[FileDiff], bytes: &[u8], diff_shown: &str, maps:
             others.push(path);
         }
     }
-    Ok(Answer { diff_shown: diff_shown.to_string(), req_files, copies, specs, named, unreached, others })
+    Ok(Answer { diff_shown: diff_shown.to_string(), req_files, copies, proposed, specs, named, unreached, others })
 }
 
 // ── For a person ──────────────────────────────────────────────────────────
@@ -606,12 +701,35 @@ fn render(p: &Project, a: &Answer, lang: Lang) -> String {
             let label = &c.label;
             let cited: Vec<Reach> = c.cited.iter().map(|r| (*r, None)).collect();
             let who = reach_text(p, &cited);
-            let mut t = tr!("  {shown}（{label}）: {}", "  {shown} ({label}): {}", who.ja; who.en);
+            let mut t = tr!("  {shown}（{}）: {}", "  {shown} ({}): {}", label.ja, who.ja; label.en, who.en);
             if !c.pinned.is_empty() {
                 let ns: Vec<String> = c.pinned.iter().map(|n| n.text()).collect();
                 t = t.then(&tr!("、固定している成果物 {}", "; pinned by {}", ns.join("、"); ns.join(", ")));
             }
             lines.push(t);
+        }
+    }
+    if !a.proposed.is_empty() {
+        lines.push(tr!("差分が触る OpenSpec の変更の提案（まだ archive していないもの）:", "OpenSpec changes the diff touches, not yet archived:"));
+        for x in &a.proposed {
+            let (c, delta, spec) = (&x.change, p.shown(&x.delta), p.shown(&x.spec));
+            lines.push(tr!("  {c}（{delta}、仕様は {spec}）:", "  {c} ({delta}, for {spec}):"));
+            for (op, name, to, cited) in &x.items {
+                let (w, n) = (op.word(), crate::names::word_or_quote(name));
+                let what = match to {
+                    Some(t) => format!("{w} {n} -> {}", crate::names::word_or_quote(t)),
+                    None => format!("{w} {n}"),
+                };
+                let who = if cited.is_empty() {
+                    match op {
+                        ritsu_base::openspec::Op::Added => tr!("まだどの要件も読んでいません", "no requirement reads it yet"),
+                        _ => tr!("どの要件も引いていません", "cited by no requirement"),
+                    }
+                } else {
+                    reach_text(p, &cited.iter().map(|r| (*r, None)).collect::<Vec<_>>())
+                };
+                lines.push(tr!("    {what}: {}", "    {what}: {}", who.ja; who.en));
+            }
         }
     }
     for s in &a.specs {
@@ -757,7 +875,8 @@ fn from_labels(p: &Project, r: usize) -> Vec<String> {
                 if fragments.is_empty() {
                     out.push(source.clone());
                 } else {
-                    let frs: Vec<&str> = fragments.iter().map(|(x, _)| x.as_str()).collect();
+                    // a name that is not a word (a requirement of an OpenSpec spec) in quotes
+                    let frs: Vec<String> = fragments.iter().map(|(x, _)| crate::names::word_or_quote(x)).collect();
                     out.push(format!("{source} {}", frs.join(", ")));
                 }
             }
@@ -815,9 +934,20 @@ fn to_json(p: &Project, a: &Answer) -> Value {
         })).collect::<Vec<_>>(),
         "copies": a.copies.iter().map(|c| json!({
             "path": c.path,
-            "source": c.label,
+            "source": c.label.en,
             "cited_by": reach_json(p, &c.cited.iter().map(|r| (*r, None)).collect::<Vec<_>>()),
             "pinned_by": c.pinned.iter().map(|n| crate::diag::value(&n.to_json())).collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
+        "openspec_changes": a.proposed.iter().map(|x| json!({
+            "change": x.change,
+            "delta": x.delta,
+            "spec": x.spec,
+            "requirements": x.items.iter().map(|(op, name, to, cited)| json!({
+                "op": op.word(),
+                "name": name,
+                "to": to,
+                "cited_by": reach_json(p, &cited.iter().map(|r| (*r, None)).collect::<Vec<_>>()),
+            })).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
         "specs": a.specs.iter().map(|s| json!({
             "spec": crate::diag::value(&s.spec.to_json()),

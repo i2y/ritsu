@@ -1,0 +1,8 @@
+warning[W102]: tests/mutants/E108_no_such_requirement/greeter.req:4:8: 3 requirements of the spec tests/mutants/E108_no_such_requirement/openspec/specs/greeting/spec.md are pinned by no source of the project: "Greeting by name", "Running total", "Unknown paths"
+     4 | source greeting = openspec "openspec/specs/greeting/spec.md"
+  = Pin each one and read it with a requirement. To leave one out, read it with a requirement all the same and write `not satisfied` and `not verified` with the reasons: leaving it out is then on record, with its approval.
+error[E108]: tests/mutants/E108_no_such_requirement/greeter.req:5:3: The spec tests/mutants/E108_no_such_requirement/openspec/specs/greeting/spec.md has no requirement "Running Total"
+     5 |   "Running Total" sha256:f94d564d4cf48f1f
+  = The spec has a requirement of a near name, "Running total"; OpenSpec compares names as written, case and spaces included.
+  = If an archived change renamed the requirement (RENAMED) or removed it (REMOVED), look again at the requirements that read it, then correct the pin and the citations.
+tests/mutants/E108_no_such_requirement: 1 error, 1 warning

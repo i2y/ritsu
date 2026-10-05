@@ -1,0 +1,53 @@
+diff --git a/ja/openspec/changes/trim-names/proposal.md b/ja/openspec/changes/trim-names/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/ja/openspec/changes/trim-names/proposal.md
+@@ -0,0 +1,9 @@
++## Why
++前後に空白を付けて打った名前には、空白ごと挨拶している。空白だけの名前にも、名前として挨拶している。
++
++## What Changes
++- 名前の前後の空白を除いてから挨拶する。除くと空になる名前は受け付けない。
++- `/health` にヘルスチェックを足す。
++
++## Impact
++- かかわる仕様: greeting
+diff --git a/ja/openspec/changes/trim-names/specs/greeting/spec.md b/ja/openspec/changes/trim-names/specs/greeting/spec.md
+new file mode 100644
+--- /dev/null
++++ b/ja/openspec/changes/trim-names/specs/greeting/spec.md
+@@ -0,0 +1,26 @@
++## MODIFIED Requirements
++
++### Requirement: 名前で挨拶する
++サービスは `GET /greet?name=<名前>` に、ステータス 200 と、`message` が、名前の前後の空白を除いた `Hello, <名前>` の JSON で答える（SHALL）。空白を除くと空になる名前には、ステータス 400 で答える（SHALL）。
++
++#### Scenario: 名前で挨拶する
++- **WHEN** クライアントが `/greet?name=Alice` を求める
++- **THEN** ステータスは 200
++- **AND** `message` は `Hello, Alice`
++
++#### Scenario: 空の名前は受け付けない
++- **WHEN** クライアントが `/greet?name=` を求める
++- **THEN** ステータスは 400
++
++#### Scenario: 空白だけの名前は受け付けない
++- **WHEN** クライアントが `/greet?name=%20%20` を求める
++- **THEN** ステータスは 400
++
++## ADDED Requirements
++
++### Requirement: ヘルスチェック
++サービスは `GET /health` にステータス 200 で答える（SHALL）。
++
++#### Scenario: ヘルスチェックに答える
++- **WHEN** クライアントが `/health` を求める
++- **THEN** ステータスは 200
+diff --git a/ja/openspec/changes/trim-names/tasks.md b/ja/openspec/changes/trim-names/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/ja/openspec/changes/trim-names/tasks.md
+@@ -0,0 +1,3 @@
++## 1. 実装
++- [ ] 1.1 名前の前後の空白を除いてから確かめる
++- [ ] 1.2 `/health` に 200 で答える

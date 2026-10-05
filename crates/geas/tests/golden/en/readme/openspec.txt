@@ -1,0 +1,45 @@
+$ geas scenarios examples/greeter/greeter.geas --openspec examples/greeter/openspec/specs
+examples/greeter/openspec/specs/greeting/spec.md
+  Greeting by name
+    greets by name: claim 1 of examples/greeter/greeter.geas (line 14)
+    rejects an empty name: claim 2 of examples/greeter/greeter.geas (line 20)
+  Running total
+    totals accumulate across requests: claim 3 of examples/greeter/greeter.geas (line 25)
+  Unknown paths
+    unknown paths are 404: claim 4 of examples/greeter/greeter.geas (line 34)
+claims no scenario names: none
+4 scenarios · 4 with a claim · 0 with none
+$ geas scenarios examples/greeter/greeter.geas --openspec examples/greeter/openspec/changes/trim-names
+examples/greeter/openspec/changes/trim-names/specs/greeting/spec.md (a change's delta spec)
+  MODIFIED Greeting by name
+    greets by name: claim 1 of examples/greeter/greeter.geas (line 14)
+    rejects an empty name: claim 2 of examples/greeter/greeter.geas (line 20)
+    rejects a name of spaces: no claim
+  ADDED Health check
+    answers the health check: no claim
+claims no scenario names:
+  "totals accumulate across requests": claim 3 of examples/greeter/greeter.geas (line 25)
+  "unknown paths are 404": claim 4 of examples/greeter/greeter.geas (line 34)
+4 scenarios · 2 with a claim · 2 with none
+$ echo $?
+1
+$ geas scenarios examples/greeter/greeter.geas --openspec examples/greeter/openspec/changes/trim-names --draft
+# examples/greeter/openspec/changes/trim-names/specs/greeting/spec.md
+# Requirement: Greeting by name
+#   Scenario: rejects a name of spaces
+#   - **WHEN** a client asks for `/greet?name=%20%20`
+#   - **THEN** the status is 400
+claim "rejects a name of spaces" {
+  # when <target>.<call>(…)
+  # then <subject> <matcher>
+}
+
+# examples/greeter/openspec/changes/trim-names/specs/greeting/spec.md
+# Requirement: Health check
+#   Scenario: answers the health check
+#   - **WHEN** a client asks for `/health`
+#   - **THEN** the status is 200
+claim "answers the health check" {
+  # when <target>.<call>(…)
+  # then <subject> <matcher>
+}

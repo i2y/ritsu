@@ -485,3 +485,13 @@ DESIGN 15 章の七つ。英語の例を先に、日本語の版を `<名前>.ja
 - 例の記録は `review --date 2026-10-04` で書いた。例のファイル（コピーした `.rule`・`.cal`・`.book`・`.geas`・`server.py`）を元の言語で直したら、コピーし直して、人が確かめてから `review` を走らせ直す（記録を書くのは人が確かめたときだけ。例でも同じ）。
 - `doc` のページの画像（`docs/images/`）は `YUEN_BLESS=1 cargo test -p yuen --test doc` で撮り直す。golden も同じ。
 - 文書のテスト（`tests/docs.rs`）は、`$ ritsu yuen …` を、クレートのディレクトリで、すべての言語をつないで走らせる。README に出力を足すときは、走らせた出力をそのまま貼る。
+
+### 5.6 OpenSpec の仕様を出典にする（2026-10-05 の夜に作った）
+
+DESIGN 20 章。ritsu の v0.23.0 のあとに、作者が取り込むかを決める案として、一晩で作った。
+
+- 読み手は ritsu-base の `openspec`（geas と分け合う）。yuen の側は、`src/ast.rs` の `SourceKind::OpenSpec`、`src/kw.rs` の `openspec`、`src/lex.rs`（`openspec "…"` を名指しとして切り出さない）、`src/parse.rs`、`src/project.rs`（パスの解決と E013）、`src/sources.rs`（`spec_source` の E101・E102・E103・E104・E108、引用の E102・E105・E108、プロジェクト全体で一度の W102、`Cited` の `from openspec …` の行）、`src/marks.rs`（差分の見出しと、名前の引用符）、`src/fetch.rs`（`fetch` の一行、`pin`、`spec_outdated`）、`src/openspec.rs`（変更の提案が固定した要件に何をするか）、`src/affected.rs`（仕様の両側を比べる `spec_touched`、提案の差分の `Proposed` と JSON の `openspec_changes`）、`src/trace.rs`、`src/doc/mod.rs`、`src/api.rs`、`src/export/`（`SourceKey::OpenSpec`。属性は `yuen.file` を使い回す）、`src/ports.rs`、`src/codes.rs`（E108、W102、W402 と、E101〜E105 の文）、`src/coverage.rs`（W402。シナリオと、要件を確かめる geas の主張の名前を突き合わせる）。
+- 例は `examples/openspec_greeter` と `examples/openspec_greeter_archived`（英語と、`ja/` の下の日本語）。仕様と提案は OpenSpec 1.14.0 の `openspec validate` を通し、archive したあとの木は OpenSpec が書いたものである。固定は `yuen source pin`、記録は `yuen review --date 2026-10-05` が書いた。geas の記録（`.geas/`）は、同じ主張と同じサーバーの `examples/greeter/.geas/` のコピー。
+- テストは `tests/openspec.rs`（英語と日本語、golden は `tests/golden/openspec/`）、変異は E104・E108・W102・W402 の英語と日本語の対（`tests/english_mutants.rs` の `PAIRS` は 70 組）、`tests/examples.rs` は二つめのわざと止まる例を知っている（`tests/doc.rs` は、それがページを作らないことを確かめる）。台帳のテストは 89 回の再現と 47 個のコード。
+- 文書は README.md と README.ja.md の節、例ごとの README、`docs/reference.md`、`docs/codes.md` と `docs/codes.ja.md`（`explain --all --format markdown` の出力）、スキルの SKILL.md（`skills/sync.sh` が reference と codes をコピーする）。
+- 残したこと（DESIGN 20.7）：OpenSpec のストアとほかのリポジトリの仕様、シナリオの単位の固定、要件の文を仕様から取ること、Spec Kit と Kiro。

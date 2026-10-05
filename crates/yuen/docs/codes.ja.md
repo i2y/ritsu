@@ -269,9 +269,9 @@ requirement r1
 
 ## E101 — 出典のコピーがありません
 
-**いつ出るか**: 固定した条のコピー（`sources/law/<ID>@<日付>/<要素>.xml`）か、`file` の出典のファイルが無いとき。check は通信しません。
+**いつ出るか**: 固定した条のコピー（`sources/law/<ID>@<日付>/<要素>.xml`）か、`file` の出典のファイルか、`openspec` の出典の仕様が無いとき。check は通信しません。
 
-**直し方**: `yuen source fetch` でコピーを取ってくるか、パスを直してください。
+**直し方**: `yuen source fetch` でコピーを取ってくるか、パスを直してください。OpenSpec の仕様はプロジェクトのファイルなので、パスを直します。
 
 **再現**:
 
@@ -296,9 +296,9 @@ requirement r1
 
 ## E102 — 出典が固定されていません
 
-**いつ出るか**: 引いている条に固定の行が無いとき、固定の行や `file` の出典に `sha256:` が無いとき。
+**いつ出るか**: 引いている条か OpenSpec の要件に固定の行が無いとき、固定の行や `file` の出典に `sha256:` が無いとき。
 
-**直し方**: コピーの SHA-256 の先頭 16 桁を書いてください（直した行が注に出ます。`yuen source pin` でも書けます）。
+**直し方**: コピー（OpenSpec の要件なら、そのブロック）の SHA-256 の先頭 16 桁を書いてください（直した行が注に出ます。`yuen source pin` でも書けます）。
 
 **再現**:
 
@@ -323,7 +323,7 @@ requirement r1
 
 ## E103 — コピーが固定と違います
 
-**いつ出るか**: コピーのハッシュが、固定の行の `sha256:` と違うとき。固定したあとでコピーが変わっています。
+**いつ出るか**: コピーのハッシュが、固定の行の `sha256:` と違うとき。固定したあとでコピーが変わっています。OpenSpec の要件なら、変更の archive か書き直しで、要件のブロックが変わっています（確かめたときのブロックが reviewed/ にあれば、差分を見せます）。
 
 **直し方**: 何が変わったかを読んでから（`yuen source outdated`）、固定を書き換えてください。
 
@@ -350,9 +350,9 @@ requirement r1
 
 ## E104 — コピーが読めません
 
-**いつ出るか**: 法令のコピーが UTF-8 の XML でないか、e-Gov や eCFR が配る形（条なら `<Article>`、eCFR の section なら `<DIV8>` で始まる）でないとき。
+**いつ出るか**: 法令のコピーが UTF-8 の XML でないか、e-Gov や eCFR が配る形（条なら `<Article>`、eCFR の section なら `<DIV8>` で始まる）でないとき。OpenSpec の仕様が、UTF-8 でないか、`## Requirements` の節を持たないか（変更の提案の差分を名指したときを含む）、同じ名前の要件を二つ持つときにも出ます。
 
-**直し方**: コピーは手で直さず、`yuen source fetch` で取り直してください。
+**直し方**: コピーは手で直さず、`yuen source fetch` で取り直してください。OpenSpec の仕様は `openspec/specs/<capability>/spec.md` を名指し、形の誤りを `openspec validate --specs` で直してください。
 
 **再現**:
 
@@ -383,7 +383,7 @@ not xml
 
 ## E105 — 引用が使えません
 
-**いつ出るか**: 引用の条が読めない形のとき、同じファイルで宣言されていない出典を引いたとき、法令を条なしで引いたとき、`file` の出典に条を書いたとき。
+**いつ出るか**: 引用の条が読めない形のとき、同じファイルで宣言されていない出典を引いたとき、法令を条なしで、OpenSpec の仕様を要件なしで引いたとき、`file` の出典に条を書いたとき。
 
 **直し方**: 出典を同じファイルで宣言し、法令は `@民法 第142条` のように条で、`file` の出典は `@約款` と丸ごと引いてください。
 
@@ -486,6 +486,33 @@ date 満了日(last_day) = 起点  @民法 第142条
 
 関連: [E103](#e103)
 
+<a id="e108"></a>
+
+## E108 — OpenSpec の仕様に、その名前の要件がありません
+
+**いつ出るか**: `openspec` の出典の固定の行か引用が名指す要件が、仕様に無いとき。OpenSpec は名前を書いたとおりに比べるので、大文字と小文字や空白だけが違うときにも出ます（そのときは近い名前を注に挙げます）。変更を archive して名前が変わった（RENAMED）か、無くなった（REMOVED）ときにも出ます。
+
+**直し方**: 仕様の `### Requirement:` のあとの名前を、そのまま書いてください。archive で変わったのなら、その要件を読む要件を見直してから、固定と引用を直してください。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 開発
+
+source あいさつ = openspec "openspec/specs/greeting/spec.md"
+  "名前で あいさつする" sha256:0000000000000000
+
+requirement r1
+  text "x"
+  owner 開発
+  from @あいさつ "名前で あいさつする"
+  not satisfied "例なので置かない"
+  not verified "例なので置かない"
+```
+
+関連: [E101](#e101), [E104](#e104), [W102](#w102)
+
 <a id="w101"></a>
 
 ## W101 — 固定した条が、どの要件からも引かれていません
@@ -514,6 +541,34 @@ requirement r1
 ```
 
 関連: [E102](#e102)
+
+<a id="w102"></a>
+
+## W102 — OpenSpec の仕様の要件を、どの出典も固定していません
+
+**いつ出るか**: プロジェクトが `openspec` の出典として読む仕様に、プロジェクトのどの出典も固定していない要件があるとき。仕様に書いた要件を、プロジェクトのどの要件も読んでいません。一つの仕様について、それを名指す最初の出典に一度だけ出します。
+
+**直し方**: 固定の行を足し、それを引く要件を書いてください。読まないと決めた要件も、引く要件を書いて `not satisfied` と `not verified` に理由を書けば、外したことが承認とともに残ります。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 開発
+
+source あいさつ = openspec "openspec/specs/greeting/spec.md"
+
+requirement r1
+  text "x"
+  owner 開発
+  decided 2026-10-05 by 開発 "例"
+  not satisfied "例なので置かない"
+    approved 2026-10-05 by 開発 sha256:fbdfb71af500ce5f
+  not verified "例なので置かない"
+    approved 2026-10-05 by 開発 sha256:fbdfb71af500ce5f
+```
+
+関連: [W101](#w101), [E108](#e108)
 
 <a id="e201"></a>
 
@@ -1232,3 +1287,44 @@ a
 ```
 
 関連: [E401](#e401)
+
+<a id="w402"></a>
+
+## W402 — OpenSpec のシナリオに、同じ名前の主張がありません
+
+**いつ出るか**: OpenSpec の仕様の要件を引き、geas の主張で確かめている要件で、その仕様の要件のシナリオのうち、同じ名前の主張が、要件を確かめる主張（`verified by geas …`。spec を丸ごと名指したなら、その spec のすべての主張）の中に無いとき。変更の archive でシナリオが足されたあとによく出ます。
+
+**直し方**: その名前の主張を、主張を読む人と一緒に書き、`verified by` でつないでください（`geas scenarios --draft` が下書きを出します）。別の名前の主張がそのシナリオを確かめているなら、どちらの名前を直すかを聞いてください。
+
+**再現**:
+
+```req
+requirements 例 v1
+role 開発
+
+source あいさつ = openspec "openspec/specs/greeting/spec.md"
+  知らないパス sha256:0f97c4b193dbba2b
+
+requirement r1
+  text "x"
+  owner 開発
+  from @あいさつ 知らないパス
+  not satisfied "例なので置かない"
+  verified by geas "greeter.geas" claim 名前であいさつする
+```
+
+`greeter.geas`:
+
+```
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "名前であいさつする" {
+  when api.get("/greet?name=Alice")
+  then status is 200
+}
+```
+
+関連: [W102](#w102), [E402](#e402)

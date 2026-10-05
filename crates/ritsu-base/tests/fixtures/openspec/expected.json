@@ -1,0 +1,114 @@
+{
+  "openspec": "1.14.0",
+  "specs": {
+    "greeting": {
+      "blocks": [
+        {
+          "name": "Greeting by name",
+          "block": "### Requirement: Greeting by name\nThe service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>`, and SHALL refuse an empty name with status 400.\n\n#### Scenario: greets by name\n- **WHEN** a client asks for `/greet?name=Alice`\n- **THEN** the status is 200\n- **AND** `message` is `Hello, Alice`\n\n#### Scenario: rejects an empty name\n- **WHEN** a client asks for `/greet?name=`\n- **THEN** the status is 400"
+        },
+        {
+          "name": "Running total",
+          "block": "### Requirement: Running total\nThe service SHALL keep a total across requests: `POST /reset` sets it to 0, `POST /add` adds the number in the body, and `GET /total` answers it.\n\n#### Scenario: totals accumulate across requests\n- **GIVEN** the total was reset\n- **WHEN** a client adds 5 and then 7\n- **THEN** `GET /total` answers 12"
+        },
+        {
+          "name": "Unknown paths",
+          "block": "### Requirement: Unknown paths\nThe service MUST answer any path it does not know with status 404.\n\n#### Scenario: unknown paths are 404\n- **WHEN** a client asks for `/nope`\n- **THEN** the status is 404"
+        }
+      ],
+      "shown": [
+        {
+          "name": "Greeting by name",
+          "scenarios": [
+            "greets by name",
+            "rejects an empty name"
+          ]
+        },
+        {
+          "name": "Running total",
+          "scenarios": [
+            "totals accumulate across requests"
+          ]
+        },
+        {
+          "name": "Unknown paths",
+          "scenarios": [
+            "unknown paths are 404"
+          ]
+        }
+      ]
+    },
+    "edges": {
+      "blocks": [
+        {
+          "name": "Fenced headers",
+          "block": "### Requirement: Fenced headers ###\nThe reader SHALL pass over a header inside a fenced block.\n\n```markdown\n### Requirement: Not a requirement\n#### Scenario: Not a scenario\n```\n\n#### Scenario: a fence of tildes ####\n- **WHEN** a block is fenced with `~~~~`\n- **THEN** a `~~~` line inside it does not close it\n\n~~~~\n~~~\n## Not a section\n~~~~\n\n#### Scenario:   \n\n#### Edge case without the word\n- **WHEN** a level-4 header does not say `Scenario:`\n- **THEN** it is a scenario all the same\n##### A deeper header\nstays in the scenario's body"
+        },
+        {
+          "name": "C#",
+          "block": "### Requirement: C#\nA name MUST keep a `#` that closes no heading.\n\n#### Scenario: keeps the hash\n- **THEN** the name is `C#`\n\n### Notes for readers\nA level-3 header that is not a requirement stays in the block before it."
+        }
+      ],
+      "shown": [
+        {
+          "name": "Fenced headers",
+          "scenarios": [
+            "a fence of tildes",
+            "Edge case without the word"
+          ]
+        },
+        {
+          "name": "C#",
+          "scenarios": [
+            "keeps the hash"
+          ]
+        },
+        {
+          "name": "Notes for readers",
+          "scenarios": []
+        }
+      ]
+    }
+  },
+  "deltas": {
+    "trim-names": {
+      "renamed": [],
+      "removed": [],
+      "modified": [
+        {
+          "name": "Greeting by name",
+          "block": "### Requirement: Greeting by name\nThe service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>` with the spaces around the name removed, and SHALL refuse a name that is empty once they are removed with status 400.\n\n#### Scenario: greets by name\n- **WHEN** a client asks for `/greet?name=Alice`\n- **THEN** the status is 200\n- **AND** `message` is `Hello, Alice`\n\n#### Scenario: rejects an empty name\n- **WHEN** a client asks for `/greet?name=`\n- **THEN** the status is 400\n\n#### Scenario: rejects a name of spaces\n- **WHEN** a client asks for `/greet?name=%20%20`\n- **THEN** the status is 400"
+        }
+      ],
+      "added": [
+        {
+          "name": "Health check",
+          "block": "### Requirement: Health check\nThe service SHALL answer `GET /health` with status 200.\n\n#### Scenario: answers the health check\n- **WHEN** a client asks for `/health`\n- **THEN** the status is 200"
+        }
+      ]
+    },
+    "rework": {
+      "renamed": [
+        {
+          "from": "Unknown paths",
+          "to": "Paths it does not know"
+        }
+      ],
+      "removed": [
+        "Running total"
+      ],
+      "modified": [
+        {
+          "name": "Paths it does not know",
+          "block": "### Requirement: Paths it does not know\nThe service MUST answer any path it does not know with status 404 and a body `not found`.\n\n#### Scenario: unknown paths are 404\n- **WHEN** a client asks for `/nope`\n- **THEN** the status is 404\n- **AND** the body is `not found`\n\n```markdown\n## ADDED Requirements\n### Requirement: Inside a fence\n```"
+        }
+      ],
+      "added": [
+        {
+          "name": "Version",
+          "block": "### Requirement: Version\nThe service SHALL answer `GET /version` with its version.\n\n#### Scenario: answers its version\n- **WHEN** a client asks for `/version`\n- **THEN** the status is 200"
+        }
+      ]
+    }
+  }
+}

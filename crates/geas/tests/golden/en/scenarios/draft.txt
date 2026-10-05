@@ -1,0 +1,19 @@
+# examples/greeter/openspec/changes/trim-names/specs/greeting/spec.md
+# Requirement: Greeting by name
+#   Scenario: rejects a name of spaces
+#   - **WHEN** a client asks for `/greet?name=%20%20`
+#   - **THEN** the status is 400
+claim "rejects a name of spaces" {
+  # when <target>.<call>(…)
+  # then <subject> <matcher>
+}
+
+# examples/greeter/openspec/changes/trim-names/specs/greeting/spec.md
+# Requirement: Health check
+#   Scenario: answers the health check
+#   - **WHEN** a client asks for `/health`
+#   - **THEN** the status is 200
+claim "answers the health check" {
+  # when <target>.<call>(…)
+  # then <subject> <matcher>
+}

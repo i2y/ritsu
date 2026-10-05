@@ -27,6 +27,8 @@ pub mod kw;
 pub mod lex;
 pub mod marks;
 pub mod names;
+/// OpenSpec's changes, as they bear on the requirements a project pins (DESIGN 20).
+pub mod openspec;
 pub mod parse;
 /// ritsu's ports, as yuen answers them (ritsu's DESIGN 3.2).
 pub mod ports;

@@ -1,0 +1,4 @@
+警告[W402]: tests/mutants/W402_scenario_without_a_claim/greeter.req:15:3: greeting "Greeting by name" のシナリオ "rejects an empty name" と同じ名前の主張が、greeting_by_name を確かめる主張の中にありません
+    15 |   from @greeting "Greeting by name"
+  = geas はシナリオを同じ名前の主張と突き合わせます（`geas scenarios`）。その名前の主張を、主張を読む人と一緒に書き、`verified by` でつないでください。別の名前の主張がそのシナリオを確かめているなら、どちらの名前を直すかを聞いてください。
+tests/mutants/W402_scenario_without_a_claim: ok — 要件 3 件のリンク 9 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（無ければ見送り）があります。警告は 1 件です。

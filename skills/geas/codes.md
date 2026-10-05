@@ -803,13 +803,37 @@ Repro
 error[E081]: a file that cannot be read or written
 
 When it appears
-  geas could not read a spec, or could not write the journal or the baseline in the `.geas/` directory beside it, or `geas skill --install <dir>` could not write the skill folder, or found `<dir>/geas` already there and was not given `--force`. The message carries the system's reason.
+  geas could not read a spec, or could not write the journal or the baseline in the `.geas/` directory beside it; or what `geas scenarios` was given with `--openspec` is not there or cannot be read; or `geas skill --install <dir>` could not write the skill folder, or found `<dir>/geas` already there and was not given `--force`. The message carries the system's reason.
 
 What usually fixes it
   Check the path, and that the spec's directory can be written to. For `geas skill --install`, add `--force` to write the skill over the folder that is there.
 
 Repro
   $ geas check missing.geas
+
+error[E090]: a file that does not read as an OpenSpec spec
+
+When it appears
+  In `geas scenarios`, a file given to `--openspec` is neither a spec (a `## Requirements` section) nor a change's delta spec (a section such as `## ADDED Requirements`), holds two requirements of one name, or is not UTF-8; or a directory given holds no `spec.md`.
+
+What usually fixes it
+  Give a spec (`openspec/specs/<capability>/spec.md`), a change's delta spec (`openspec/changes/<id>/specs/<capability>/spec.md`), or a directory that holds them; `openspec validate` says what is wrong with a form.
+
+Repro
+  $ geas scenarios e090.geas --openspec notes.md
+  e090.geas:
+    target calc {
+      run "python3 calc.py"
+    }
+
+    claim "adds two integers" {
+      when calc.run("2", "+", "3")
+      then stdout is "5"
+    }
+  notes.md:
+    # Notes
+
+    Nothing here is a spec.
 
 warning[W060]: a target that gave no record at all in `map`
 

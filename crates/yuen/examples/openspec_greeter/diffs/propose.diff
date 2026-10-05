@@ -1,0 +1,53 @@
+diff --git a/openspec/changes/trim-names/proposal.md b/openspec/changes/trim-names/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/openspec/changes/trim-names/proposal.md
+@@ -0,0 +1,9 @@
++## Why
++Names typed with spaces around them are greeted with the spaces, and a name of spaces only is greeted as if it were a name.
++
++## What Changes
++- Trim the name before greeting; a name that is empty after trimming is refused.
++- Add a health check at `/health`.
++
++## Impact
++- Affected specs: greeting
+diff --git a/openspec/changes/trim-names/specs/greeting/spec.md b/openspec/changes/trim-names/specs/greeting/spec.md
+new file mode 100644
+--- /dev/null
++++ b/openspec/changes/trim-names/specs/greeting/spec.md
+@@ -0,0 +1,26 @@
++## MODIFIED Requirements
++
++### Requirement: Greeting by name
++The service SHALL answer `GET /greet?name=<name>` with status 200 and a JSON body whose `message` is `Hello, <name>` with the spaces around the name removed, and SHALL refuse a name that is empty once they are removed with status 400.
++
++#### Scenario: greets by name
++- **WHEN** a client asks for `/greet?name=Alice`
++- **THEN** the status is 200
++- **AND** `message` is `Hello, Alice`
++
++#### Scenario: rejects an empty name
++- **WHEN** a client asks for `/greet?name=`
++- **THEN** the status is 400
++
++#### Scenario: rejects a name of spaces
++- **WHEN** a client asks for `/greet?name=%20%20`
++- **THEN** the status is 400
++
++## ADDED Requirements
++
++### Requirement: Health check
++The service SHALL answer `GET /health` with status 200.
++
++#### Scenario: answers the health check
++- **WHEN** a client asks for `/health`
++- **THEN** the status is 200
+diff --git a/openspec/changes/trim-names/tasks.md b/openspec/changes/trim-names/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/openspec/changes/trim-names/tasks.md
+@@ -0,0 +1,3 @@
++## 1. Implementation
++- [ ] 1.1 Strip the name before checking it
++- [ ] 1.2 Answer `/health` with 200

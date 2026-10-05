@@ -58,7 +58,7 @@ written in any language.
 | Where | Words |
 |---|---|
 | line | `requirements` `description` `role` `source` `scope` `requirement` |
-| source | `law` `file` `url` `asof` `sha256:` `egov` `ecfr` `source` |
+| source | `law` `file` `url` `asof` `sha256:` `egov` `ecfr` `openspec` `source` |
 | requirement | `text` `in force` `owner` `replaces` `from` `decided` `by` `satisfied by` `verified by` `not satisfied` `not verified` |
 | record | `reviewed` `approved` `by` `->` |
 | symbol | `@` `..` `,` `->` `=` `#` |
@@ -88,7 +88,7 @@ team; its description may be left out.
 
 ## Sources
 
-A source is written one of three ways.
+A source is written one of four ways.
 
 ```req
 source osha = law ecfr "29 CFR 1910" asof 2026-01-01
@@ -96,6 +96,8 @@ source osha = law ecfr "29 CFR 1910" asof 2026-01-01
 source 法 = law "342AC0000000023" asof 2026-04-01
   別表第一 sha256:0ba69792e960021e
 source 民法 = koyomi "civil_code_period_end.ja.cal" source 民法
+source greeting = openspec "openspec/specs/greeting/spec.md"
+  "Greeting by name" sha256:1c3d865f4a521275
 ```
 
 - **`law`** reads a law an article (a section) at a time, as rulec and koyomi do. Without a
@@ -111,16 +113,32 @@ source 民法 = koyomi "civil_code_period_end.ja.cal" source 民法
 - **A borrowed source**, `<tool> "<path>" source <name>`, is a source a rule (`rulec`) or a
   calendar (`koyomi`) declares and pins. Its copies and pins are that file's, held by its
   language's check, and are not written twice.
+- **`openspec`** reads an [OpenSpec](https://github.com/Fission-AI/OpenSpec) spec
+  (`openspec/specs/<capability>/spec.md`) a requirement at a time:
+  `source <name> = openspec "<path>"`, the path from the `.req`, and a pin line below it for each
+  requirement cited. A requirement is named as OpenSpec's archive matches it: the text after
+  `### Requirement:`, without a closing run of `#`, trimmed, compared as written. The spec is a file
+  of the project, so there is no copy to fetch; the pin is the hash of the requirement's block (see
+  [Ends](#ends-hashes-and-records)). The spec is read as OpenSpec 1.14 reads it: a line inside a
+  fenced code block is never a header, CR LF is read as LF.
 
 A requirement cites a source with `from @<source> <article>[, <article>…]`; a name that is not a
-word is quoted (`@osha "§1910.157"`), and a `file` source is cited whole (`@holidays`).
+word is quoted (`@osha "§1910.157"`, `@greeting "Greeting by name"`), and a `file` source is cited
+whole (`@holidays`). An OpenSpec spec is cited a requirement at a time.
 
 The check never reads the network. A copy missing is E101 (`yuen source fetch`), an article cited
 without a pin E102 (`yuen source pin`), a copy that differs from its pin E103, a copy that does
 not read as one E104, a citation that cannot be read or names no declared source E105, a borrowed
 source its file does not declare or pin E106, a pin no requirement cites W101. When a requirement
 copies an article a rule or a calendar that meets it also pins, the two copies must say the same
-(E107).
+(E107). For an OpenSpec spec: a spec missing is E101, one that does not read as a spec (not
+UTF-8, no `## Requirements` section, as a change's delta spec has none, or two requirements of one
+name) E104, a requirement the spec does not have E108 (a near name, differing in case or spaces, is
+noted), a block that differs from its pin E103 (with the diff from the block looked at, when
+`reviewed/` keeps it), and a requirement of the spec no source of the project pins W102. When a
+requirement reads a requirement of an OpenSpec spec and is checked by claims of geas, a scenario of
+the spec's requirement with no claim of its name among those claims is W402 (a scenario is held to
+the claim of its name, as `geas scenarios` holds it).
 
 ## Requirements
 
@@ -241,12 +259,14 @@ SHA-256.
 |---|---|
 | an article of a law | the copy, as the database served it (the same hash the pins have) |
 | a `file` source | the file |
+| a requirement of an OpenSpec spec | its block: its `### Requirement:` line and every line after it to the next requirement or `## ` header, the white space at its end removed, CR LF read as LF (the text OpenSpec's archive replaces) |
 | a file named by any tool | the file |
 | one thing in a file | the definition the language hands over for it: a rule's lines as `rulec fmt` writes them, a date's or claim's lines in koyomi, chobo's JSON of the unit, account or transfer, a claim's block in geas, a declaration's lines in dandori, a context's or term's lines in sakai, the fixed text of a `.proto` item |
 | a requirement | the lines below |
 
 A requirement's end is its sentence, then a `from` line for each article cited (`from law <db>
-<ID> <article> sha256:<copy>`), file cited (`from file <path from the root> sha256:<file>`) and
+<ID> <article> sha256:<copy>`), file cited (`from file <path from the root> sha256:<file>`),
+requirement of an OpenSpec spec cited (`from openspec <path from the root> <name> sha256:<block>`) and
 requirement read from (`from requirement <name> v<n> sha256:<its end>`), and its period (`in force
 <period>`), the lines after the first in byte order, each ending in LF. The owner, the decisions,
 the links, the waivers, the name and the version are not in it: renaming a requirement does not ask
@@ -330,7 +350,10 @@ Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be re
   requirements a unified diff touches, with their owners, where they come from and the last
   decision on them. Code is followed through geas's records (before and after the change) to the
   claims, and on to the requirements those claims check; exit 1 when a change reaches no
-  requirement.
+  requirement. An OpenSpec spec the project reads is a copy of a source read a requirement at a
+  time (the requirements whose blocks differ between the two sides of the diff), and a change's
+  delta spec (`openspec/changes/<id>/specs/<capability>/spec.md`) says what the change does to the
+  requirements pinned, before it is archived.
 - `doc <path>... [--format markdown|html] [--out <dir>]`: the page of the project for whoever has
   to understand and check what the code is meant to do: the files and the check, a traceability
   table, the sources and the articles each requirement cites (quoted from the copies), why each
@@ -347,7 +370,10 @@ Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be re
 - `source fetch|pin|outdated <path>...`: fetch the copies of the sources a project copies itself,
   pin their hashes in the `.req`, or ask whether the originals moved on. Only `fetch` and
   `outdated` read the network (e-Gov's API v2, the eCFR's versioner API, and a `file` source's
-  `url`, through `curl`).
+  `url`, through `curl`). For an OpenSpec spec, `fetch` has nothing to fetch, `pin` writes the
+  hashes of the requirements' blocks, and `outdated` reads the changes not yet archived under
+  `openspec/changes/` (no network): what each modifies, removes, renames or adds, whom it reaches
+  and how many links it will mark (exit 1 when one would change a requirement pinned).
 - `explain <CODE>`, `explain --all [--format markdown]`: a code, when it comes, how to fix it,
   and the smallest reproduction.
 
@@ -374,8 +400,8 @@ $ ritsu yuen check examples/refunds/refunds.req --root examples/refunds --format
 
 `api` prints the whole graph, its keys in this order: `yuen` (the version), `root`, `files`
 (`path`, `name`, `version`, `sha256`), `roles`, `sources` (a `law` with `db`, `id`, `asof`,
-`revision` and its `pins`; a `file` with `path`, `url`, `sha256`; `borrowed`, the naming it is
-borrowed from, or null), `requirements` (`name`, `alias`, `version`, `file`, `line`, `text`,
+`revision` and its `pins`; a `file` with `path`, `url`, `sha256`; an `openspec` with `path` and
+its `pins`; `borrowed`, the naming it is borrowed from, or null), `requirements` (`name`, `alias`, `version`, `file`, `line`, `text`,
 `in_force`, `owner`, `replaces`, `sha256`, `from`, `decided`, `links`, `waivers`), `artifacts`
 (the naming's keys, then `sha256`, `end` (`file` or `item`) and the articles its file pins),
 `scopes` (`file`, `line`, `text`, `artifacts`, `untraced`) and `check` (`ok`, `summary`,

@@ -1,0 +1,3 @@
+claim "unknown paths are 404" {
+when api.get("/nope")
+then status is 404

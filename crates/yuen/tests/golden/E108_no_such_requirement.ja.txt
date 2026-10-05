@@ -1,0 +1,8 @@
+警告[W102]: tests/mutants/E108_no_such_requirement/greeter.req:4:8: 仕様 tests/mutants/E108_no_such_requirement/openspec/specs/greeting/spec.md の要件のうち 3 件を、プロジェクトのどの出典も固定していません: "Greeting by name"、"Running total"、"Unknown paths"
+     4 | source greeting = openspec "openspec/specs/greeting/spec.md"
+  = 要件ごとに、固定の行と、それを引く要件を書いてください。読まないと決めた要件も、引く要件を書いて `not satisfied` と `not verified` に理由を書けば、外したことが承認とともに残ります。
+エラー[E108]: tests/mutants/E108_no_such_requirement/greeter.req:5:3: 仕様 tests/mutants/E108_no_such_requirement/openspec/specs/greeting/spec.md に要件 "Running Total" がありません
+     5 |   "Running Total" sha256:f94d564d4cf48f1f
+  = 近い名前の要件 "Running total" があります。OpenSpec は名前を、大文字と小文字や空白も含めて、書いたとおりに比べます。
+  = 変更を archive して名前が変わった（RENAMED）か、無くなった（REMOVED）のなら、その要件を読む要件を見直してから、固定と引用を直してください。
+tests/mutants/E108_no_such_requirement: エラー 1 件、警告 1 件

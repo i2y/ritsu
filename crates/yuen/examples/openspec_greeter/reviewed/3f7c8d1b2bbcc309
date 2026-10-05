@@ -1,0 +1,3 @@
+claim "rejects an empty name" {
+when api.get("/greet?name=")
+then status is 400

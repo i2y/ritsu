@@ -1,0 +1,11 @@
+examples/greeter/openspec/changes/trim-names/specs/greeting/spec.md (a change's delta spec)
+  MODIFIED Greeting by name
+    greets by name: claim 1 of examples/greeter/greeter.geas (line 14)
+    rejects an empty name: claim 2 of examples/greeter/greeter.geas (line 20)
+    rejects a name of spaces: no claim
+  ADDED Health check
+    answers the health check: no claim
+claims no scenario names:
+  "totals accumulate across requests": claim 3 of examples/greeter/greeter.geas (line 25)
+  "unknown paths are 404": claim 4 of examples/greeter/greeter.geas (line 34)
+4 scenarios · 2 with a claim · 2 with none

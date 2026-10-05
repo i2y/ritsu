@@ -1,0 +1,27 @@
+警告[W102]: examples/openspec_greeter_archived/greeter.ja.req:7:8: 仕様 examples/openspec_greeter_archived/ja/openspec/specs/greeting/spec.md の要件のうち 1 件を、プロジェクトのどの出典も固定していません: ヘルスチェック
+     7 | source 挨拶 = openspec "ja/openspec/specs/greeting/spec.md"
+  = 要件ごとに、固定の行と、それを引く要件を書いてください。読まないと決めた要件も、引く要件を書いて `not satisfied` と `not verified` に理由を書けば、外したことが承認とともに残ります。
+エラー[E103]: examples/openspec_greeter_archived/greeter.ja.req:8:3: 挨拶 名前で挨拶する が固定と違います（固定は sha256:584f410eda34b49e、いまの要件は sha256:7b148317fa6902cd）
+     8 |   名前で挨拶する sha256:584f410eda34b49e
+  = 固定したあとで、仕様の要件が変わりました（変更の archive か、仕様の書き直し）。何が変わったかを読んでから、固定を書き換えてください（`yuen source pin`）。
+  固定したときの要件からの差分（仕様は examples/openspec_greeter_archived/ja/openspec/specs/greeting/spec.md）:
+      @@ -1,4 +1,4 @@
+        ### Requirement: 名前で挨拶する
+      - サービスは `GET /greet?name=<名前>` に、ステータス 200 と、`message` が `Hello, <名前>` の JSON で答える（SHALL）。空の名前には、ステータス 400 で答える（SHALL）。
+      + サービスは `GET /greet?name=<名前>` に、ステータス 200 と、`message` が、名前の前後の空白を除いた `Hello, <名前>` の JSON で答える（SHALL）。空白を除くと空になる名前には、ステータス 400 で答える（SHALL）。
+
+        #### Scenario: 名前で挨拶する
+      @@ -9,3 +9,7 @@
+        #### Scenario: 空の名前は受け付けない
+        - **WHEN** クライアントが `/greet?name=` を求める
+      + - **THEN** ステータスは 400
+      +
+      + #### Scenario: 空白だけの名前は受け付けない
+      + - **WHEN** クライアントが `/greet?name=%20%20` を求める
+        - **THEN** ステータスは 400
+  = 直した行: 名前で挨拶する sha256:7b148317fa6902cd
+警告[W402]: examples/openspec_greeter_archived/greeter.ja.req:15:3: 挨拶 名前で挨拶する のシナリオ 空白だけの名前は受け付けない と同じ名前の主張が、名前で挨拶する を確かめる主張の中にありません
+    15 |   from @挨拶 名前で挨拶する
+  = geas はシナリオを同じ名前の主張と突き合わせます（`geas scenarios`）。その名前の主張を、主張を読む人と一緒に書き、`verified by` でつないでください。別の名前の主張がそのシナリオを確かめているなら、どちらの名前を直すかを聞いてください。
+examples/openspec_greeter_archived/greeter.ja.req: エラー 1 件、警告 2 件
+exit 1

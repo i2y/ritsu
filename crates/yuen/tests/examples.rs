@@ -1,13 +1,16 @@
 //! The examples (DESIGN 15, PLAN D.2), checked with every language joined, as `ritsu yuen`
 //! checks them. Every example passes but `civil_code_periods_reread`, which stops on purpose on
-//! the one link whose date was read another way after it was looked at; no example has a link
-//! left to look at; and the records of geas in `greeter` are what `geas map` writes.
+//! the one link whose date was read another way after it was looked at, and
+//! `openspec_greeter_archived`, which stops on the requirement of the OpenSpec spec a change
+//! modified when it was archived; no example has a link left to look at; and the records of geas
+//! in `greeter` are what `geas map` writes.
 
 mod common;
 
 use std::path::Path;
 
 const REREAD: &str = "civil_code_periods_reread";
+const ARCHIVED: &str = "openspec_greeter_archived";
 
 #[test]
 fn every_example_passes_but_the_one_that_stops_on_purpose() {
@@ -25,6 +28,17 @@ fn every_example_passes_but_the_one_that_stops_on_purpose() {
                 // the diff is the line that was read another way
                 for want in ["- if closed + 1 day", "+ roll following", "date 満了日_142条"] {
                     if !r.stdout.contains(want) {
+                        failures.push(format!("{path}: no {want:?} in\n{}", r.stdout));
+                    }
+                }
+            } else if *ex == ARCHIVED {
+                // the pin of the requirement the change modified, the requirement it added, and the
+                // scenario it added, which no claim answers yet
+                if r.code != 1 || codes != ["W102", "E103", "W402"] {
+                    failures.push(format!("{path}: exit {}, codes {codes:?} (W102, E103 and W402 expected)\n{}", r.code, r.stdout));
+                }
+                for want in ["#### Scenario: rejects a name of spaces", "#### Scenario: 空白だけの名前は受け付けない"] {
+                    if !r.stdout.contains(want) && path.contains(if want.is_ascii() { "greeter.req" } else { "greeter.ja.req" }) {
                         failures.push(format!("{path}: no {want:?} in\n{}", r.stdout));
                     }
                 }
@@ -67,7 +81,7 @@ fn the_reread_example_differs_by_one_line_of_the_calendar() {
 fn no_example_has_anything_left_to_look_at() {
     let mut failures = Vec::new();
     for (ex, reqs, role) in common::EXAMPLES {
-        if *ex == REREAD {
+        if *ex == REREAD || *ex == ARCHIVED {
             continue;
         }
         let t = common::TempDir::new("examples-review");

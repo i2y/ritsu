@@ -1,0 +1,2 @@
+text 合計はリクエストをまたいで覚えておく。POST /reset で 0 にし、POST /add で足し、GET /total で返す
+from openspec ja/openspec/specs/greeting/spec.md 足した数の合計 sha256:16b2a7d63d90dcf5

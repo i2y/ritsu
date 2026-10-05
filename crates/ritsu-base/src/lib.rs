@@ -20,6 +20,8 @@
 //!   is one side of one.
 //! - [`fs`]: where a project's files are read and written: the disk, or files held in memory (the
 //!   project a page in the browser hands over).
+//! - [`openspec`]: OpenSpec's specs and changes, read as OpenSpec reads them: a spec's requirements
+//!   with their blocks and scenarios, and what a change adds, modifies, removes and renames.
 //!
 //! Nothing here depends on anything but std (DESIGN 3.1, P9).
 
@@ -30,6 +32,7 @@ pub mod fs;
 pub mod json;
 pub mod ledger;
 pub mod naming;
+pub mod openspec;
 pub mod paths;
 pub mod sha256;
 pub mod sources;

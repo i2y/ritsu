@@ -1,0 +1,11 @@
+examples/greeter/openspec/specs/greeting/spec.md
+  Greeting by name
+    greets by name: claim 1 of tests/openspec/near.geas (line 14)
+    rejects an empty name: no claim; a claim of a near name: "Rejects an Empty Name", claim 2 of tests/openspec/near.geas (line 20)
+  Running total
+    totals accumulate across requests: claim 3 of tests/openspec/near.geas (line 25)
+  Unknown paths
+    unknown paths are 404: claim 4 of tests/openspec/near.geas (line 34)
+claims no scenario names:
+  "Rejects an Empty Name": claim 2 of tests/openspec/near.geas (line 20)
+4 scenarios · 3 with a claim · 1 with none

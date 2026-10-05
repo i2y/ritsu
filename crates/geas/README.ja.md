@@ -2,7 +2,7 @@
 
 **エージェントが書いたコードに、人が読んで確かめた主張を守らせる。**
 
-geas は、エージェントが書いたコードを受け入れてよいかを確かめるための、小さな言語です。エージェントにコードを書かせる側には仕様書（Spec Kit や Kiro）がありますが、仕様書は文章で、そのままでは確かめられません。コードを書いたエージェントが自分で書いたテストは、自分の答案を自分で採点するのと変わりません。
+geas は、エージェントが書いたコードを受け入れてよいかを確かめるための、小さな言語です。エージェントにコードを書かせる側には仕様書（Spec Kit、Kiro、OpenSpec）がありますが、仕様書は文章で、そのままでは確かめられません。コードを書いたエージェントが自分で書いたテストは、自分の答案を自分で採点するのと変わりません。
 
 geas の主張のファイルには、コマンドが何を出力するか、サービスが何を返すか、画面に何が出るかといった、プログラムを外から見て分かることを書きます。一行は、声に出して読めるくらいの短さです。geas は、どの主張も実際のプログラムに対して走らせ、人にはテキストで、エージェントには JSON で報告します。プログラムが何の言語で書かれていてもかまいません。
 
@@ -174,6 +174,60 @@ $ echo $?
 
 報告の各部分がどう決まるか、プルリクエストで二つをどう走らせるかは [skills/geas/map.md](../../skills/geas/map.md)（英語）にあります。
 
+## OpenSpec のシナリオ
+
+[OpenSpec](https://github.com/Fission-AI/OpenSpec) は、システムが何をするかを Markdown の仕様に書く道具です。要件ごとにシナリオがあり、GIVEN、WHEN、THEN を文章で書きます。コードを書く前に、人とエージェントが合意したケースです。主張は、同じケースを実際のプログラムに対して走らせるものです。`geas scenarios` は、シナリオごとに同じ名前の主張を探し、主張の無いシナリオを挙げます。何も走らせません。[examples/greeter/ja/openspec](examples/greeter/ja/openspec) は、greeter の仕様を日本語で書いたもので、シナリオには主張と同じ名前を付けてあります。まだ archive していない変更の提案 `trim-names` は、名前の前後の空白を除き、ヘルスチェックを足すものです。
+
+```console
+$ geas scenarios examples/greeter/greeter.ja.geas --openspec examples/greeter/ja/openspec/specs --lang ja
+examples/greeter/ja/openspec/specs/greeting/spec.md
+  名前で挨拶する
+    名前で挨拶する: examples/greeter/greeter.ja.geas の主張 1（13 行目）
+    空の名前は受け付けない: examples/greeter/greeter.ja.geas の主張 2（19 行目）
+  足した数の合計
+    足した数が積み上がる: examples/greeter/greeter.ja.geas の主張 3（24 行目）
+  知らないパス
+    知らないパスには 404 を返す: examples/greeter/greeter.ja.geas の主張 4（33 行目）
+どのシナリオとも名前が合わない主張: なし
+シナリオ 4 個 · 主張のあるもの 4 個 · 主張の無いもの 0 個
+$ geas scenarios examples/greeter/greeter.ja.geas --openspec examples/greeter/ja/openspec/changes/trim-names --lang ja
+examples/greeter/ja/openspec/changes/trim-names/specs/greeting/spec.md（変更の提案の差分）
+  MODIFIED 名前で挨拶する
+    名前で挨拶する: examples/greeter/greeter.ja.geas の主張 1（13 行目）
+    空の名前は受け付けない: examples/greeter/greeter.ja.geas の主張 2（19 行目）
+    空白だけの名前は受け付けない: 主張がありません
+  ADDED ヘルスチェック
+    ヘルスチェックに答える: 主張がありません
+どのシナリオとも名前が合わない主張:
+  足した数が積み上がる: examples/greeter/greeter.ja.geas の主張 3（24 行目）
+  知らないパスには 404 を返す: examples/greeter/greeter.ja.geas の主張 4（33 行目）
+シナリオ 4 個 · 主張のあるもの 2 個 · 主張の無いもの 2 個
+$ echo $?
+1
+$ geas scenarios examples/greeter/greeter.ja.geas --openspec examples/greeter/ja/openspec/changes/trim-names --draft --lang ja
+# examples/greeter/ja/openspec/changes/trim-names/specs/greeting/spec.md
+# Requirement: 名前で挨拶する
+#   Scenario: 空白だけの名前は受け付けない
+#   - **WHEN** クライアントが `/greet?name=%20%20` を求める
+#   - **THEN** ステータスは 400
+claim "空白だけの名前は受け付けない" {
+  # when <ターゲット>.<呼び出し>(…)
+  # then <チェックするもの> <比べ方>
+}
+
+# examples/greeter/ja/openspec/changes/trim-names/specs/greeting/spec.md
+# Requirement: ヘルスチェック
+#   Scenario: ヘルスチェックに答える
+#   - **WHEN** クライアントが `/health` を求める
+#   - **THEN** ステータスは 200
+claim "ヘルスチェックに答える" {
+  # when <ターゲット>.<呼び出し>(…)
+  # then <チェックするもの> <比べ方>
+}
+```
+
+提案は、まだ主張の無いシナリオを二つ求めています。`--draft` は、そのシナリオごとに、書き足す主張の下書きを出します。上にシナリオを引用し、本体はコメントだけです。geas は手順の無い主張を受け付けない（E005）ので、下書きをそのまま貼ると、人が手順を書くか、エージェントが提案した手順を人が読むまで、`geas check` は通りません。主張の名前は、大文字と小文字や空白も含めて、書いたとおりに比べます。近い名前の主張があれば、そう言います。`--openspec` には、仕様、変更の提案の差分（ADDED と MODIFIED の要件）、それらを持つディレクトリを渡せます。`archive/` の下は読みません。
+
 ## 画面
 
 GUI の主張が見るのは、スクリーンリーダーに伝わる画面、つまりロール、名前、値、状態を持つノードの木です。[examples/web-greeter](examples/web-greeter) は、ページとその裏のサービスで、ヘッドレスの Chrome で開きます。
@@ -277,7 +331,7 @@ ok 4 - the note is a field of its own
   = その環境変数の名前を、同じ行に書いてください（`clock "2026-08-29T09:00:00+09:00" env "NOW"`）
 ```
 
-どの診断にも、コードと場所と、そうなる例が付きます。最後まで走れなかった主張なら、上の E035 のように、そこまでの実行が例になります。`geas explain <code>` は、そのコードがいつ出るか、ふつうはどう直すか、そのコードが出る最小の主張のファイルを出します。診断のコードは全部で 34 種類あり、`geas explain --all --lang ja` で全部を日本語で読めます。
+どの診断にも、コードと場所と、そうなる例が付きます。最後まで走れなかった主張なら、上の E035 のように、そこまでの実行が例になります。`geas explain <code>` は、そのコードがいつ出るか、ふつうはどう直すか、そのコードが出る最小の主張のファイルを出します。診断のコードは全部で 35 種類あり、`geas explain --all --lang ja` で全部を日本語で読めます。
 
 `--jobs 4` を付けると、主張を四つまで並列に走らせます。`port auto` のサービスはそれぞれ別のポートで動きます。報告もジャーナルもベースラインも主張の順に書くので、一つずつ走らせたときとバイト単位で同じです。あるターゲットを使う主張どうしが、geas から見えない状態（ファイルやデータベース）を共有しているなら、`serial` を書いて並列に走らないようにします。言語の全体は [skills/geas/language.md](../../skills/geas/language.md)（英語）にあります。
 
@@ -321,6 +375,8 @@ geas: エージェントが書いたコードに、人が読んで確かめた�
   geas drift <spec.geas>...           もう一度実行し、ベースラインから変わったところを示す
   geas map <spec.geas>...             カバレッジを取りながら実行し、主張ごとに通った行を記録する
   geas affected <spec.geas> <diff|->  差分が関わる主張と、変わったコードのうちどの主張も通らないところを示す
+  geas scenarios <spec.geas>... --openspec <path>...
+                                      OpenSpec の仕様のシナリオごとに、同じ名前の主張を示す
   geas explain <code>... | --all      コードの意味と直し方
   geas skill [--install <dir>]        コーディングエージェント向けの手引きを出すか、スキルのフォルダーとして書く
 
@@ -331,6 +387,8 @@ geas: エージェントが書いたコードに、人が読んで確かめた�
   --root <dir>      map、affected: 記録のパスの基準にするディレクトリ
   --out <file>      map: 記録を書く先
   --map <file>      affected: 読む記録。変更前と変更後のコードの記録を二つ渡せる
+  --openspec <path> scenarios: 仕様、変更の提案の差分、それらを持つディレクトリ
+  --draft           scenarios: 主張の無いシナリオごとに、書き足す主張の下書きを出す
   --install <dir>   skill: スキルのファイルを <dir>/geas に書く
   --force           skill: すでにある <dir>/geas に上書きする
   --help, -h        この説明を出す
@@ -353,7 +411,7 @@ geas: エージェントが書いたコードに、人が読んで確かめた�
 | 例 | 見せるもの |
 |---|---|
 | [calc](examples/calc) | Python のコマンドラインのプログラム。`stdout`、`stderr`、`exit` |
-| [greeter](examples/greeter) | 上の HTTP サービス、ドリフトを見るためのリファクタリング、日本語で名前を付けた主張 |
+| [greeter](examples/greeter) | 上の HTTP サービス、ドリフトを見るためのリファクタリング、日本語で名前を付けた主張、`geas scenarios` のための OpenSpec の仕様 |
 | [tally-node](examples/tally-node) | TypeScript のサービス。ビルドなしで `geas map` が記録を取る |
 | [tally-go](examples/tally-go) | 同じサービスの Go 版。`-cover` を付けてビルドする |
 | [tally-rust](examples/tally-rust) | Rust のコマンドライン。`-C instrument-coverage` を付けてビルドする |
@@ -368,7 +426,7 @@ geas: エージェントが書いたコードに、人が読んで確かめた�
 
 このページとスキルに載せた出力は、そのテストが golden のファイルとして残したものを、そのまま貼っています。`tests/docs.rs` が、ページとそれを突き合わせます。ここに載せた主張のファイルは geas が読めること、出力は geas が実際に出したものであること、名前を挙げたコマンド、オプション、コード、リンクはどれも実在することを確かめています。
 
-macOS（Apple シリコン）で、ツールを全部そろえて `cargo test` を一度走らせたときは、テスト 236 件（単体テスト 119 件、バイナリを走らせるテスト 117 件）が 79 秒で通り、飛ばしたテストはありませんでした。リリースビルドのバイナリは 2.3 MB です。
+macOS（Apple シリコン）で、ツールを全部そろえて `cargo test` を一度走らせたときは、テスト 238 件（単体テスト 111 件、バイナリを走らせるテスト 127 件）が 77 秒で通り、飛ばしたテストはありませんでした。リリースビルドのバイナリは 2.3 MB です。
 
 ツールが無いテスト（python3、node、go、llvm-tools の入った rustc、Chrome、git、`GEAS_PIXIE_GREETER` で指定するビルド済みの pixie の greeter）は、`SKIP:` の行を出して通ります。走らなかったものは次で分かります。
 

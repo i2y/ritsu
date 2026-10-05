@@ -1,0 +1,7 @@
+### Requirement: 足した数の合計
+サービスは、リクエストをまたいで合計を覚えておく（SHALL）。`POST /reset` で 0 にし、`POST /add` で本文の数を足し、`GET /total` で合計を返す。
+
+#### Scenario: 足した数が積み上がる
+- **GIVEN** 合計を 0 にした
+- **WHEN** クライアントが 5 と 7 を足す
+- **THEN** `GET /total` は 12 を返す

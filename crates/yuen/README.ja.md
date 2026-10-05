@@ -4,7 +4,7 @@
 
 yuen は、要件と、その出どころを書く小さな言語です。`.req` のファイルに、何が求められているか、それが法令のどの条か、誰のどの決定から来たか、持ち主は誰か、何が満たすのか（規則の表、カレンダーの日付、帳簿の勘定、コードのファイル）、何が確かめるのか（主張、規則そのものの検査）を書きます。そのつながりの一本ずつに、人が確かめたことを、両端のハッシュと一緒に記録します。条文が改正されたり、規則が書き換えられたり、コードの一行が変わったりすると、ハッシュが合わなくなり、検査はそのつながりで止まります。確かめたときとの差分を見せ、誰かが確かめ直すまで止まったままです。
 
-yuen は [ritsu](https://github.com/i2y/ritsu) の七つの言語の一つです。ほかの言語が持つもの（rulec の規則の表、koyomi のカレンダーの日付と条件、chobo の帳簿の勘定と振替、geas の spec の主張、dandori のワークフローのタスク、sakai の地図の語、`.proto` のサービスとメッセージ）は、同じプロセスの中で、それぞれの言語に読んでもらいます。
+yuen は [ritsu](https://github.com/i2y/ritsu) の七つの言語の一つです。ほかの言語が持つもの（rulec の規則の表、koyomi のカレンダーの日付と条件、chobo の帳簿の勘定と振替、geas の spec の主張、dandori のワークフローのタスク、sakai の地図の語、`.proto` のサービスとメッセージ）は、同じプロセスの中で、それぞれの言語に読んでもらいます。[OpenSpec](https://github.com/Fission-AI/OpenSpec) の仕様の要件は、出典として、要件ごとに読みます。
 
 ## 例：民法の期間
 
@@ -62,6 +62,91 @@ examples/civil_code_periods_reread/civil_code_periods_reread.ja.req: エラー 1
 
 人が差分を読み、カレンダーの書き換えが決めた読み方と合っていると確かめたら、その人の役割で `yuen review` を走らせて、記録を書き直します。合っていなければ、カレンダーを直すか、要件と決めたことを書き直します。
 
+## OpenSpec の仕様から読む
+
+OpenSpec は、システムが何をするかを Markdown の仕様に書く道具です。仕様には要件（`### Requirement:`）が並び、要件ごとに、それを具体的に示すシナリオが付きます。仕様を変えるときは、変更の提案をフォルダーに書き、`openspec archive` で仕様に当てます。
+
+yuen は、この仕様を、法令を条ごとに読むのと同じく、要件ごとに出典として読みます。要件は、見出しから最後のシナリオまでのブロックのハッシュで固定します。このブロックは、変更がその要件を変えるときに OpenSpec の archive がまるごと置き換える範囲で、ほかの要件を変える変更では一字も変わりません。例 `openspec_greeter` の日本語の版は、geas の例 greeter の仕様を、日本語で書いた OpenSpec の仕様から読みます。
+
+```req
+source 挨拶 = openspec "ja/openspec/specs/greeting/spec.md"
+  名前で挨拶する sha256:584f410eda34b49e
+
+requirement 名前で挨拶する(greeting_by_name)
+  text "挨拶は 200 と、Hello と頼まれた名前を返す。空の名前には 400 を返す"
+  owner 窓口
+  from @挨拶 名前で挨拶する
+  verified by geas "greeter.ja.geas" claim 名前で挨拶する
+  verified by geas "greeter.ja.geas" claim 空の名前は受け付けない
+```
+
+```console
+$ ritsu yuen check examples/openspec_greeter/greeter.ja.req --root examples/openspec_greeter --lang ja
+examples/openspec_greeter/greeter.ja.req: ok — 要件 3 件のリンク 10 本が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（無ければ見送り）があります。
+```
+
+`ja/openspec/changes/trim-names/` には、名前の前後の空白を除き、ヘルスチェックを足す変更の提案があります。archive する前でも、`source outdated` が `openspec/changes/` の下の提案を読み（OpenSpec の仕様については通信しません）、固定している要件が提案でどう変わるか、それを誰が引いているか、確かめ直すリンクが何本になるかを言います。
+
+```console
+$ ritsu yuen source outdated examples/openspec_greeter/greeter.ja.req --root examples/openspec_greeter --lang ja
+挨拶: まだ archive していない変更 trim-names が、名前で挨拶する を変えます（examples/openspec_greeter/ja/openspec/changes/trim-names/specs/greeting/spec.md:3）
+  要件の変わるところ:
+      @@ -1,4 +1,4 @@
+        ### Requirement: 名前で挨拶する
+      - サービスは `GET /greet?name=<名前>` に、ステータス 200 と、`message` が `Hello, <名前>` の JSON で答える（SHALL）。空の名前には、ステータス 400 で答える（SHALL）。
+      + サービスは `GET /greet?name=<名前>` に、ステータス 200 と、`message` が、名前の前後の空白を除いた `Hello, <名前>` の JSON で答える（SHALL）。空白を除くと空になる名前には、ステータス 400 で答える（SHALL）。
+
+        #### Scenario: 名前で挨拶する
+      @@ -9,3 +9,7 @@
+        #### Scenario: 空の名前は受け付けない
+        - **WHEN** クライアントが `/greet?name=` を求める
+      + - **THEN** ステータスは 400
+      +
+      + #### Scenario: 空白だけの名前は受け付けない
+      + - **WHEN** クライアントが `/greet?name=%20%20` を求める
+        - **THEN** ステータスは 400
+  引いている要件: 名前で挨拶する（持ち主 窓口、examples/openspec_greeter/greeter.ja.req:12）
+  確かめ直すもの: リンク 4 本
+  読んでから、archive したあとで yuen source pin で固定すると、yuen check がこれらに印を付けます
+挨拶: まだ archive していない変更 trim-names が、要件 ヘルスチェック を足します（examples/openspec_greeter/ja/openspec/changes/trim-names/specs/greeting/spec.md:21）。プロジェクトのどの要件もまだ読んでいません
+```
+
+提案のフォルダーを足すプルリクエストの差分には、`yuen affected` が同じことを答えます（[diffs/propose.ja.diff](examples/openspec_greeter/diffs/propose.ja.diff)）。
+
+提案を archive すると、要件「名前で挨拶する」のブロックは提案が書いたものに置き換わり、検査はその固定で止まって、確かめたときのブロックとの差分を見せます。例 `openspec_greeter_archived` は、`openspec archive trim-names` のあとの同じプロジェクトで、`.req` と確かめた記録は上の例と同じバイト列です。
+
+```console
+$ ritsu yuen check examples/openspec_greeter_archived/greeter.ja.req --root examples/openspec_greeter_archived --lang ja
+警告[W102]: examples/openspec_greeter_archived/greeter.ja.req:7:8: 仕様 examples/openspec_greeter_archived/ja/openspec/specs/greeting/spec.md の要件のうち 1 件を、プロジェクトのどの出典も固定していません: ヘルスチェック
+     7 | source 挨拶 = openspec "ja/openspec/specs/greeting/spec.md"
+  = 要件ごとに、固定の行と、それを引く要件を書いてください。読まないと決めた要件も、引く要件を書いて `not satisfied` と `not verified` に理由を書けば、外したことが承認とともに残ります。
+エラー[E103]: examples/openspec_greeter_archived/greeter.ja.req:8:3: 挨拶 名前で挨拶する が固定と違います（固定は sha256:584f410eda34b49e、いまの要件は sha256:7b148317fa6902cd）
+     8 |   名前で挨拶する sha256:584f410eda34b49e
+  = 固定したあとで、仕様の要件が変わりました（変更の archive か、仕様の書き直し）。何が変わったかを読んでから、固定を書き換えてください（`yuen source pin`）。
+  固定したときの要件からの差分（仕様は examples/openspec_greeter_archived/ja/openspec/specs/greeting/spec.md）:
+      @@ -1,4 +1,4 @@
+        ### Requirement: 名前で挨拶する
+      - サービスは `GET /greet?name=<名前>` に、ステータス 200 と、`message` が `Hello, <名前>` の JSON で答える（SHALL）。空の名前には、ステータス 400 で答える（SHALL）。
+      + サービスは `GET /greet?name=<名前>` に、ステータス 200 と、`message` が、名前の前後の空白を除いた `Hello, <名前>` の JSON で答える（SHALL）。空白を除くと空になる名前には、ステータス 400 で答える（SHALL）。
+
+        #### Scenario: 名前で挨拶する
+      @@ -9,3 +9,7 @@
+        #### Scenario: 空の名前は受け付けない
+        - **WHEN** クライアントが `/greet?name=` を求める
+      + - **THEN** ステータスは 400
+      +
+      + #### Scenario: 空白だけの名前は受け付けない
+      + - **WHEN** クライアントが `/greet?name=%20%20` を求める
+        - **THEN** ステータスは 400
+  = 直した行: 名前で挨拶する sha256:7b148317fa6902cd
+警告[W402]: examples/openspec_greeter_archived/greeter.ja.req:15:3: 挨拶 名前で挨拶する のシナリオ 空白だけの名前は受け付けない と同じ名前の主張が、名前で挨拶する を確かめる主張の中にありません
+    15 |   from @挨拶 名前で挨拶する
+  = geas はシナリオを同じ名前の主張と突き合わせます（`geas scenarios`）。その名前の主張を、主張を読む人と一緒に書き、`verified by` でつないでください。別の名前の主張がそのシナリオを確かめているなら、どちらの名前を直すかを聞いてください。
+examples/openspec_greeter_archived/greeter.ja.req: エラー 1 件、警告 2 件
+```
+
+`yuen source pin` で固定し直すと、仕様の要件から来るつながりと、要件「名前で挨拶する」から先の三本のつながりが、誰かが確かめ直すまで止まります。仕様のほかの二つの要件のつながりは止まりません。確かめ直したあとも W402 は残ります。提案がシナリオ「空白だけの名前は受け付けない」を足したのに、その名前の主張が、要件「名前で挨拶する」を確かめる主張の中にまだ無いからです。シナリオは、geas と同じく、同じ名前の主張と突き合わせます。主張のファイルの側からは `geas scenarios` が同じことを言い、書き足す主張の下書きを出します（[geas の README](../geas/README.ja.md)）。
+
 ## 確かめること、確かめないこと
 
 yuen が確かめるのは、つながりとハッシュと期間です。名前がどれも何かを指していること、法令のコピーが固定と同じこと、確かめた記録が今のハッシュと合うこと、どの要件にも満たすものと確かめるもの（か、人が承認した見送りと、その理由）があること、宣言した範囲の成果物がどれも要件に辿れること、要件の版の期間が隙間も重なりもなく並ぶこと、要件が自分自身から読み出されていないこと。通信するのは `source fetch` と `source outdated` だけで、主張もテストも走らせません。
@@ -108,7 +193,7 @@ $ ritsu yuen source fetch examples/stamp_tax/stamp_tax.ja.req
 $ ritsu yuen explain E303 --lang ja
 ```
 
-どのコマンドにも `--lang ja|en` と `--root <dir>` を付けられます。フラグと終了コードは `ritsu yuen <コマンド> --help` で見られます。言語とコマンドの全部は [docs/reference.md](docs/reference.md)（英語）、診断のコードは 44 個（うち二つは退いたもの）で、[docs/codes.ja.md](docs/codes.ja.md) にあります。
+どのコマンドにも `--lang ja|en` と `--root <dir>` を付けられます。フラグと終了コードは `ritsu yuen <コマンド> --help` で見られます。言語とコマンドの全部は [docs/reference.md](docs/reference.md)（英語）、診断のコードは 47 個（うち二つは退いたもの）で、[docs/codes.ja.md](docs/codes.ja.md) にあります。
 
 ## 例
 
@@ -121,14 +206,16 @@ $ ritsu yuen explain E303 --lang ja
 | [payment_terms](examples/payment_terms) | 例として決めた支払日と、koyomi のカレンダーが固定する祝日の表から借りた営業日（英語と日本語） |
 | [refunds](examples/refunds) | 「返金は売上を超えない」を、chobo の帳簿の勘定一つと振替二つが満たす（英語と日本語） |
 | [civil_code_periods](examples/civil_code_periods) | 民法 140〜143 条をカレンダーから借り、142 条の読み方を誰が決めたかを書く |
-| [civil_code_periods_reread](examples/civil_code_periods_reread) | 同じものの、カレンダーを書き換えたあと。止まる例はこれだけ |
+| [civil_code_periods_reread](examples/civil_code_periods_reread) | 同じものの、カレンダーを書き換えたあと。わざと止まる例（ほかに `openspec_greeter_archived`） |
 | [stamp_tax](examples/stamp_tax) | 一つの要件を、期間の続く二つの版で書き、rulec の規則が満たす |
+| [openspec_greeter](examples/openspec_greeter) | OpenSpec の仕様の要件を要件ごとに固定して読み、`server.py` が満たし、geas の主張が確かめる。まだ archive していない変更の提案への `source outdated` と `affected`（英語と日本語） |
+| [openspec_greeter_archived](examples/openspec_greeter_archived) | 同じものの、提案を archive したあと。提案が変えた要件で止まる（英語と日本語） |
 
 法令を引く例は、例として書いたもので、法令の読み方を示すものではありません。
 
 ## どう確かめているか
 
-`cargo test -p yuen`（テストは 225 件）は、例とテストの材料のどれも、`ritsu yuen` と同じくすべての言語をつないで検査し、コマンドを走らせます。macOS（Apple silicon）で ritsu のテストと一緒に一度回すと、ビルドのあとは 57 秒で、飛ばしたテストはありませんでした。golden のファイルには、コマンドごとの英語と日本語の出力、`doc` の二つの形のページ、書き出しが入っています。外のツールは、ReqIF を検証する xmllint と ReqIF のスキーマ（`tools/reqif/fetch.sh`）、書き出しを読み戻す Python の `prov` と `reqif`、e-Gov と eCFR の代わりになる `curl` とテストの中のサーバー、geas が greeter のサーバーを走らせる Python、上の画像を描く Chrome です。ツールが無いテストは `SKIP: yuen: …` の一行を出して通ります。`YUEN_NET=1` で、本物の e-Gov と eCFR に問い合わせます。
+`cargo test -p yuen`（テストは 234 件）は、例とテストの材料のどれも、`ritsu yuen` と同じくすべての言語をつないで検査し、コマンドを走らせます。macOS（Apple silicon）で一度回すと、ビルドのあとは 44 秒で、飛ばしたテストはありませんでした。golden のファイルには、コマンドごとの英語と日本語の出力、`doc` の二つの形のページ、書き出しが入っています。外のツールは、ReqIF を検証する xmllint と ReqIF のスキーマ（`tools/reqif/fetch.sh`）、書き出しを読み戻す Python の `prov` と `reqif`、e-Gov と eCFR の代わりになる `curl` とテストの中のサーバー、geas が greeter のサーバーを走らせる Python、上の画像を描く Chrome です。ツールが無いテストは `SKIP: yuen: …` の一行を出して通ります。`YUEN_NET=1` で、本物の e-Gov と eCFR に問い合わせます。
 
 このページと英語の README、`docs/`、スキルに載せた `.req` の行は、どれも `examples/` か `tests/` のファイルの行で、出力つきで載せたコマンドは、テストが実際に走らせて照らし合わせます（`tests/docs.rs`）。
 

@@ -243,3 +243,27 @@ fn the_commands_in_english() {
 fn the_commands_in_japanese() {
     commands_story("ja", " --lang ja");
 }
+
+/// The story of OpenSpec's scenarios: every scenario of the greeter's spec has its claim; the change
+/// `trim-names` asks for two no claim answers yet; and the claims drafted for them.
+fn openspec_story(lang: &str, spec: &str, tree: &str, flag: &str) {
+    let mut t = Session::new(&format!("readme-openspec-{lang}"));
+    copy_example("greeter", &t.s);
+    let spec = format!("examples/greeter/{spec}");
+    let tree = format!("examples/greeter/{tree}");
+    assert_eq!(t.geas(&format!("geas scenarios {spec} --openspec {tree}/specs{flag}")), 0);
+    assert_eq!(t.geas(&format!("geas scenarios {spec} --openspec {tree}/changes/trim-names{flag}")), 1);
+    t.status(1);
+    assert_eq!(t.geas(&format!("geas scenarios {spec} --openspec {tree}/changes/trim-names --draft{flag}")), 0);
+    t.keep(&format!("{lang}/readme/openspec.txt"));
+}
+
+#[test]
+fn the_openspec_scenarios_in_english() {
+    openspec_story("en", "greeter.geas", "openspec", "");
+}
+
+#[test]
+fn the_openspec_scenarios_in_japanese() {
+    openspec_story("ja", "greeter.ja.geas", "ja/openspec", " --lang ja");
+}

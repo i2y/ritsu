@@ -409,6 +409,8 @@ pub fn write(g: &Graph, time: Option<&str>, version: &str) -> Result<String, Ref
                     vals.push(("yuen.url", V::S(u.clone())));
                 }
             }
+            // a requirement of an OpenSpec spec: the spec's file, and the requirement in its label
+            SourceKey::OpenSpec { path, .. } => vals.push(("yuen.file", V::S(path.clone()))),
         }
         if let Some(pin) = &s.pin {
             vals.push(("yuen.sha256", V::S(pin.clone())));

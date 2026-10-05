@@ -155,7 +155,7 @@ fn explain_prints_every_code() {
     assert!(r.stdout.matches(" — ").count() >= 44);
     let md = run(&["explain", "--all", "--format", "markdown", "--lang", "ja"]);
     assert!(md.stdout.starts_with("# 診断のコード\n"));
-    assert_eq!(md.stdout.matches("<a id=\"").count(), 44);
+    assert_eq!(md.stdout.matches("<a id=\"").count(), 47);
     let one = run(&["explain", "E302"]);
     assert!(one.stdout.starts_with("E302 (error) — The upper end changed after the link was looked at\n"), "{}", one.stdout);
     // The example is the one in the language asked for: English output shows the English example

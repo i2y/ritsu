@@ -48,6 +48,10 @@ pub fn api(c: &Checked, label: &str, lang: Lang) -> Option<Value> {
                     "file": f.rel, "name": name, "kind": "file", "path": n.path, "url": url, "sha256": pin,
                     "borrowed": borrowed.as_ref().map(|b| crate::diag::value(&b.to_json())),
                 }),
+                Resolved::OpenSpec { name: n, pins, .. } => json!({
+                    "file": f.rel, "name": name, "kind": "openspec", "path": n.path, "borrowed": null,
+                    "pins": pins.iter().map(|x| json!({"fragment": x.name, "sha256": x.pin})).collect::<Vec<_>>(),
+                }),
                 Resolved::NoPort { name: n } => json!({"file": f.rel, "name": name, "kind": null, "borrowed": crate::diag::value(&n.to_json())}),
                 Resolved::Broken => json!({"file": f.rel, "name": name, "kind": null, "borrowed": null}),
             });

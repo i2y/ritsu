@@ -225,4 +225,6 @@ pub const EXAMPLES: &[(&str, &[&str], &str)] = &[
     ("civil_code_periods", &["civil_code_periods.ja.req"], "開発"),
     ("civil_code_periods_reread", &["civil_code_periods_reread.ja.req"], "開発"),
     ("stamp_tax", &["stamp_tax.ja.req"], "開発"),
+    ("openspec_greeter", &["greeter.req", "greeter.ja.req"], "development"),
+    ("openspec_greeter_archived", &["greeter.req", "greeter.ja.req"], "development"),
 ];

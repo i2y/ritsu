@@ -2,8 +2,8 @@
 
 **Hold agent-written code to claims a person has read.**
 
-geas is a small language for the acceptance half of coding with agents. Specs (Spec Kit, Kiro)
-drive the generation half and are prose; tests written by the agent that wrote the code are
+geas is a small language for the acceptance half of coding with agents. Specs (Spec Kit, Kiro,
+OpenSpec) drive the generation half and are prose; tests written by the agent that wrote the code are
 circular. A claims file says, in lines short enough to read aloud, what a program does as anyone
 could observe it from outside: what a command prints, what a service answers, what a screen shows.
 geas runs every claim against the real program, whatever language it is written in, and reports
@@ -205,6 +205,71 @@ verdict, only where a reviewer looks.
 [skills/geas/map.md](../../skills/geas/map.md) says how each part of the report is decided, and how to
 run both halves on a pull request.
 
+## OpenSpec's scenarios
+
+[OpenSpec](https://github.com/Fission-AI/OpenSpec) keeps what a system does as specs in Markdown:
+each requirement comes with scenarios, a GIVEN, a WHEN and a THEN in prose, the cases a person and
+an agent agreed on before the code was written. A claim is the same case, run against the program.
+`geas scenarios` holds each scenario to the claim of its name and says which scenarios no claim
+answers; it runs nothing. [examples/greeter/openspec](examples/greeter/openspec) is the greeter's
+spec, whose scenarios are named as its claims are, and a change not yet archived, `trim-names`,
+which trims the name and adds a health check:
+
+```console
+$ geas scenarios examples/greeter/greeter.geas --openspec examples/greeter/openspec/specs
+examples/greeter/openspec/specs/greeting/spec.md
+  Greeting by name
+    greets by name: claim 1 of examples/greeter/greeter.geas (line 14)
+    rejects an empty name: claim 2 of examples/greeter/greeter.geas (line 20)
+  Running total
+    totals accumulate across requests: claim 3 of examples/greeter/greeter.geas (line 25)
+  Unknown paths
+    unknown paths are 404: claim 4 of examples/greeter/greeter.geas (line 34)
+claims no scenario names: none
+4 scenarios · 4 with a claim · 0 with none
+$ geas scenarios examples/greeter/greeter.geas --openspec examples/greeter/openspec/changes/trim-names
+examples/greeter/openspec/changes/trim-names/specs/greeting/spec.md (a change's delta spec)
+  MODIFIED Greeting by name
+    greets by name: claim 1 of examples/greeter/greeter.geas (line 14)
+    rejects an empty name: claim 2 of examples/greeter/greeter.geas (line 20)
+    rejects a name of spaces: no claim
+  ADDED Health check
+    answers the health check: no claim
+claims no scenario names:
+  "totals accumulate across requests": claim 3 of examples/greeter/greeter.geas (line 25)
+  "unknown paths are 404": claim 4 of examples/greeter/greeter.geas (line 34)
+4 scenarios · 2 with a claim · 2 with none
+$ echo $?
+1
+$ geas scenarios examples/greeter/greeter.geas --openspec examples/greeter/openspec/changes/trim-names --draft
+# examples/greeter/openspec/changes/trim-names/specs/greeting/spec.md
+# Requirement: Greeting by name
+#   Scenario: rejects a name of spaces
+#   - **WHEN** a client asks for `/greet?name=%20%20`
+#   - **THEN** the status is 400
+claim "rejects a name of spaces" {
+  # when <target>.<call>(…)
+  # then <subject> <matcher>
+}
+
+# examples/greeter/openspec/changes/trim-names/specs/greeting/spec.md
+# Requirement: Health check
+#   Scenario: answers the health check
+#   - **WHEN** a client asks for `/health`
+#   - **THEN** the status is 200
+claim "answers the health check" {
+  # when <target>.<call>(…)
+  # then <subject> <matcher>
+}
+```
+
+The change asks for two scenarios no claim answers yet. `--draft` writes a claim to fill in for
+each, with the scenario quoted above it. Its body is only comments, and geas refuses a claim with no
+steps (E005), so a draft pasted as it is fails `geas check` until a person writes the steps, or
+reads the ones an agent proposes. A claim is matched by its name as written, case and spaces
+included; a claim of a near name is pointed out. `--openspec` takes a spec, a change's delta spec
+(its ADDED and MODIFIED requirements), or a directory of them, leaving out `archive/`.
+
 ## Screens
 
 A GUI claim observes the screen as a screen reader is told it: nodes with a role, a name, a value
@@ -334,7 +399,7 @@ error[E011]: E011-clock-without-env.geas:2:1: `clock` cannot be kept for `calc` 
 
 Every diagnostic has a code, the place, and what leads to it: a claim that could not run carries the
 run that gets there, as E035 above. `geas explain <code>` says when a code appears, what usually
-fixes it, and the smallest claims file that gives it; there are 34 codes, and `--lang ja` prints
+fixes it, and the smallest claims file that gives it; there are 35 codes, and `--lang ja` prints
 them all in Japanese. `--jobs 4` runs up to four claims at once, each service on a port of its own
 (`port auto`); the report, the journal and the baseline come out in claim order, the same bytes as
 with one, and `serial` keeps a target's claims apart when they share state geas cannot see.
@@ -388,6 +453,8 @@ usage:
   geas drift <spec.geas>...           run them again and report what changed since the baseline
   geas map <spec.geas>...             run them with coverage on and record the lines each claim runs
   geas affected <spec.geas> <diff|->  the claims a diff touches, and the changed code no claim runs
+  geas scenarios <spec.geas>... --openspec <path>...
+                                      the scenarios of OpenSpec specs, each with the claims of its name
   geas explain <code>... | --all      what a code means and how to fix it
   geas skill [--install <dir>]        the guide for coding agents, or the guide written as a skill folder
 
@@ -398,6 +465,8 @@ options:
   --root <dir>      map, affected: the directory the record's paths are relative to
   --out <file>      map: where to write the record
   --map <file>      affected: a record to read; give two for both sides of the diff
+  --openspec <path> scenarios: a spec, a change's delta spec, or a directory of them
+  --draft           scenarios: a claim to fill in for each scenario no claim answers
   --install <dir>   skill: write the skill's files to <dir>/geas
   --force           skill: write over a <dir>/geas that is already there
   --help, -h        this text
@@ -421,7 +490,7 @@ and JSON geas writes.
 | Example | What it shows |
 |---|---|
 | [calc](examples/calc) | a command-line program in Python: `stdout`, `stderr`, `exit` |
-| [greeter](examples/greeter) | the HTTP service above, its refactor for drift, and the same claims named in Japanese |
+| [greeter](examples/greeter) | the HTTP service above, its refactor for drift, the same claims named in Japanese, and its OpenSpec spec for `geas scenarios` |
 | [tally-node](examples/tally-node) | a service in TypeScript, recorded by `geas map` with nothing to build |
 | [tally-go](examples/tally-go) | the same service in Go, built with `-cover` |
 | [tally-rust](examples/tally-rust) | a command line in Rust, built with `-C instrument-coverage` |
@@ -443,8 +512,8 @@ those tests keep, this page's stories as whole transcripts, and `tests/docs.rs` 
 them: every claims file here parses, every output is what geas printed, and every command, option,
 code and link exists.
 
-On one run on macOS on Apple silicon, with every tool at hand, `cargo test` ran 236 tests (119
-unit tests and 117 that run the binary) in 79 seconds, none skipped; the release binary is 2.3 MB.
+On one run on macOS on Apple silicon, with every tool at hand, `cargo test` ran 238 tests (111
+unit tests and 127 that run the binary) in 77 seconds, none skipped; the release binary is 2.3 MB.
 A test whose tool is missing (python3, node, go, rustc with the llvm-tools component, Chrome, git,
 or a built pixie greeter named by `GEAS_PIXIE_GREETER`) prints `SKIP:` and passes, and this lists
 what was not run:

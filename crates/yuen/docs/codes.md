@@ -269,9 +269,9 @@ See also: [E011](#e011), [E012](#e012)
 
 ## E101 — The copy of a source is not there
 
-**When**: The copy of a pinned article (`sources/law/<id>@<date>/<element>.xml`), or the file of a `file` source, is not there. check never reads the network.
+**When**: The copy of a pinned article (`sources/law/<id>@<date>/<element>.xml`), the file of a `file` source, or the spec of an `openspec` source, is not there. check never reads the network.
 
-**Fix**: Bring the copy with `yuen source fetch`, or correct the path.
+**Fix**: Bring the copy with `yuen source fetch`, or correct the path; an OpenSpec spec is a file of the project, so correct its path.
 
 **Example**:
 
@@ -296,9 +296,9 @@ See also: [E102](#e102), [E103](#e103)
 
 ## E102 — A source is not pinned
 
-**When**: An article cited has no pin line, or a pin line or a `file` source has no `sha256:`.
+**When**: An article or an OpenSpec requirement cited has no pin line, or a pin line or a `file` source has no `sha256:`.
 
-**Fix**: Write the first 16 digits of the SHA-256 of the copy (the fixed line is shown; `yuen source pin` writes it too).
+**Fix**: Write the first 16 digits of the SHA-256 of the copy, or of an OpenSpec requirement's block (the fixed line is shown; `yuen source pin` writes it too).
 
 **Example**:
 
@@ -323,7 +323,7 @@ See also: [E101](#e101), [E103](#e103)
 
 ## E103 — A copy does not match its pin
 
-**When**: The hash of the copy differs from the `sha256:` of its pin: the copy changed after it was pinned.
+**When**: The hash of the copy differs from the `sha256:` of its pin: the copy changed after it was pinned. For an OpenSpec requirement, its block changed (an archived change, or an edit); the diff is shown when the block looked at is in reviewed/.
 
 **Fix**: Read what changed (`yuen source outdated`), then pin it again.
 
@@ -350,9 +350,9 @@ See also: [E102](#e102), [E302](#e302)
 
 ## E104 — A copy cannot be read
 
-**When**: The copy of a law is not UTF-8 XML, or not what e-Gov or the eCFR serves (an article starts with `<Article>`, an eCFR section with `<DIV8>`).
+**When**: The copy of a law is not UTF-8 XML, or not what e-Gov or the eCFR serves (an article starts with `<Article>`, an eCFR section with `<DIV8>`); also an OpenSpec spec that is not UTF-8, has no `## Requirements` section (a change's delta spec among them), or holds two requirements of one name.
 
-**Fix**: Fetch it again with `yuen source fetch` rather than editing it.
+**Fix**: Fetch it again with `yuen source fetch` rather than editing it. For OpenSpec, name `openspec/specs/<capability>/spec.md`, and fix its form with `openspec validate --specs`.
 
 **Example**:
 
@@ -383,7 +383,7 @@ See also: [E101](#e101)
 
 ## E105 — A citation cannot be used
 
-**When**: The article of a citation is not in a form read, the source is not declared in the same file, a law is cited without an article, or a `file` source is cited with one.
+**When**: The article of a citation is not in a form read, the source is not declared in the same file, a law is cited without an article or an OpenSpec spec without a requirement, or a `file` source is cited with one.
 
 **Fix**: Declare the source in the same file; cite a law by article or section (`@cfr "§1.7"`) and a `file` source whole (`@terms`).
 
@@ -475,6 +475,33 @@ requirement travel_distance
 
 See also: [E103](#e103)
 
+<a id="e108"></a>
+
+## E108 — An OpenSpec spec has no requirement of that name
+
+**When**: A pin line or a citation of an `openspec` source names a requirement the spec does not have. OpenSpec compares names as written, so a name that differs only in case or spaces gives it too (the near name is noted); so does a requirement an archived change renamed (RENAMED) or removed (REMOVED).
+
+**Fix**: Write the name after the spec's `### Requirement:` as it is. If an archive changed it, look again at the requirements that read it, then correct the pin and the citations.
+
+**Example**:
+
+```req
+requirements example v1
+role api
+
+source greeting = openspec "openspec/specs/greeting/spec.md"
+  "Greeting by Name" sha256:0000000000000000
+
+requirement r1
+  text "x"
+  owner api
+  from @greeting "Greeting by Name"
+  not satisfied "left out in this example"
+  not verified "left out in this example"
+```
+
+See also: [E101](#e101), [E104](#e104), [W102](#w102)
+
 <a id="w101"></a>
 
 ## W101 — A pinned article is cited by no requirement
@@ -503,6 +530,34 @@ requirement r1
 ```
 
 See also: [E102](#e102)
+
+<a id="w102"></a>
+
+## W102 — A requirement of an OpenSpec spec is pinned by no source
+
+**When**: A spec the project reads as an `openspec` source holds a requirement no source of the project pins: no requirement of the project reads it. Said once for a spec, at the first source that names it.
+
+**Fix**: Pin it and read it with a requirement. To leave one out, read it with a requirement all the same and write `not satisfied` and `not verified` with the reasons: leaving it out is then on record, with its approval.
+
+**Example**:
+
+```req
+requirements example v1
+role api
+
+source greeting = openspec "openspec/specs/greeting/spec.md"
+
+requirement r1
+  text "x"
+  owner api
+  decided 2026-10-05 by api "example"
+  not satisfied "left out in this example"
+    approved 2026-10-05 by api sha256:fbdfb71af500ce5f
+  not verified "left out in this example"
+    approved 2026-10-05 by api sha256:fbdfb71af500ce5f
+```
+
+See also: [W101](#w101), [E108](#e108)
 
 <a id="e201"></a>
 
@@ -1221,3 +1276,44 @@ a
 ```
 
 See also: [E401](#e401)
+
+<a id="w402"></a>
+
+## W402 — A scenario of an OpenSpec requirement has no claim of its name
+
+**When**: A requirement reads a requirement of an OpenSpec spec and is checked by claims of geas, and a scenario of the spec's requirement has no claim of its name among the claims that check it (`verified by geas …`; every claim of a spec named whole). It often comes after an archived change added a scenario.
+
+**Fix**: Write a claim of that name with the person who reads the claims, and link it with `verified by` (`geas scenarios --draft` gives a frame); if a claim of another name runs the scenario, ask which of the two names is to change.
+
+**Example**:
+
+```req
+requirements example v1
+role api
+
+source greeting = openspec "openspec/specs/greeting/spec.md"
+  "Unknown paths" sha256:f140ceede48af8ff
+
+requirement r1
+  text "x"
+  owner api
+  from @greeting "Unknown paths"
+  not satisfied "left out in this example"
+  verified by geas "greeter.geas" claim "greets by name"
+```
+
+`greeter.geas`:
+
+```
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "greets by name" {
+  when api.get("/greet?name=Alice")
+  then status is 200
+}
+```
+
+See also: [W102](#w102), [E402](#e402)

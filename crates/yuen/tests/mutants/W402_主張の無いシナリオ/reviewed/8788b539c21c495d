@@ -1,0 +1,3 @@
+claim "知らないパスには 404 を返す" {
+when api.get("/nope")
+then status is 404

@@ -52,6 +52,8 @@ pub enum SourceKind {
     File { path: String, path_span: Span, url: Option<String>, pin: Option<String> },
     /// `<tool> "<path>" source <name>`: a source a rule or a calendar pins (DESIGN 1.4).
     Borrowed { naming: Written },
+    /// `openspec "<path>"`, an OpenSpec spec, and a pin line under it per requirement (DESIGN 20).
+    OpenSpec { path: String, path_span: Span, pins: Vec<PinLine> },
 }
 
 #[derive(Clone, Debug)]

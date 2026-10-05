@@ -569,6 +569,20 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
                         Ok(()) => Some(n),
                     },
                 },
+                SourceKind::OpenSpec { path, path_span, .. } => {
+                    if path.is_empty() || ritsu_base::paths::is_absolute(path) {
+                        diags.push(p.err(fi, "E013", *path_span, tr!("仕様のパス `{path}` は、.req からの相対パスで書いてください", "Write the path `{path}` of the spec from the directory of the .req")));
+                        None
+                    } else {
+                        match ritsu_base::paths::join(&dir, path).ok() {
+                            None => {
+                                diags.push(p.err(fi, "E013", *path_span, tr!("`{path}` はルートの外に出ます", "`{path}` goes outside the root")));
+                                None
+                            }
+                            Some(full) => Some(Name { tool: Tool::File, path: full, items: vec![] }),
+                        }
+                    }
+                }
                 SourceKind::File { path, path_span, .. } => {
                     if path.is_empty() || ritsu_base::paths::is_absolute(path) {
                         diags.push(p.err(fi, "E013", *path_span, tr!("出典のコピーのパス `{path}` は、.req からの相対パスで書いてください", "Write the path `{path}` of the copy from the directory of the .req")));

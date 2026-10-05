@@ -7,6 +7,8 @@ usage:
   geas drift <spec.geas>...           run them again and report what changed since the baseline
   geas map <spec.geas>...             run them with coverage on and record the lines each claim runs
   geas affected <spec.geas> <diff|->  the claims a diff touches, and the changed code no claim runs
+  geas scenarios <spec.geas>... --openspec <path>...
+                                      the scenarios of OpenSpec specs, each with the claims of its name
   geas explain <code>... | --all      what a code means and how to fix it
   geas skill [--install <dir>]        the guide for coding agents, or the guide written as a skill folder
 
@@ -17,6 +19,8 @@ options:
   --root <dir>      map, affected: the directory the record's paths are relative to
   --out <file>      map: where to write the record
   --map <file>      affected: a record to read; give two for both sides of the diff
+  --openspec <path> scenarios: a spec, a change's delta spec, or a directory of them
+  --draft           scenarios: a claim to fill in for each scenario no claim answers
   --install <dir>   skill: write the skill's files to <dir>/geas
   --force           skill: write over a <dir>/geas that is already there
   --help, -h        this text

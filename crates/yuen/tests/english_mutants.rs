@@ -12,7 +12,7 @@ mod common;
 use ritsu_base::text::Lang;
 
 /// (the mutant of a Japanese name or Japanese files, its English twin).
-const PAIRS: [(&str, &str); 66] = [
+const PAIRS: [(&str, &str); 70] = [
     ("E001_閉じていない文字列", "E001_unclosed_string"),
     ("E002_名前に予約語", "E002_reserved_word_as_a_name"),
     ("E002_知らない行", "E002_unknown_line"),
@@ -46,10 +46,12 @@ const PAIRS: [(&str, &str); 66] = [
     ("E103_固定と違う", "E103_pin_differs"),
     ("E104_XMLでない", "E104_not_xml"),
     ("E104_条でない要素", "E104_not_an_article"),
+    ("E104_差分の仕様を名指す", "E104_delta_spec_named"),
     ("E105_宣言されていない出典", "E105_undeclared_source"),
     ("E105_条の形でない", "E105_not_an_article_form"),
     ("E106_宣言されていない出典を借りる", "E106_borrows_an_undeclared_source"),
     ("E107_同じ条の違う本文", "E107_same_article_different_text"),
+    ("E108_仕様に無い要件", "E108_no_such_requirement"),
     ("E201_ディレクトリ", "E201_directory"),
     ("E201_成果物のファイルが無い", "E201_artifact_file_missing"),
     ("E202_名前が変わった", "E202_renamed"),
@@ -77,8 +79,10 @@ const PAIRS: [(&str, &str); 66] = [
     ("E408_開いた終わりが最後でない", "E408_open_end_not_last"),
     ("E409_置き換えの始まりが一日遅い", "E409_replacement_starts_a_day_late"),
     ("W101_引かれていない固定", "W101_pin_not_cited"),
+    ("W102_固定していない要件", "W102_requirement_not_pinned"),
     ("W301_中身が無い", "W301_no_content"),
     ("W401_見送りとリンク", "W401_waiver_and_link"),
+    ("W402_主張の無いシナリオ", "W402_scenario_without_a_claim"),
 ];
 
 fn mutants() -> Vec<String> {
@@ -147,7 +151,7 @@ fn every_japanese_mutant_has_an_english_one() {
             failures.push(format!("{n} is Japanese and has no English twin"));
         }
     }
-    assert_eq!(PAIRS.iter().filter(|(ja, _)| !ja.is_ascii()).count(), 65, "the 65 mutants of Japanese names are all kept");
+    assert_eq!(PAIRS.iter().filter(|(ja, _)| !ja.is_ascii()).count(), 69, "the 69 mutants of Japanese names are all kept");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

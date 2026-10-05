@@ -162,6 +162,14 @@ pub fn fetch(p: &Project) -> Result<Outcome, Text> {
                         "{name}: borrowed from a {tool} file, so yuen does not fetch it; {tool} source fetch does"
                     ));
                 }
+                SourceKind::OpenSpec { .. } => {
+                    let Some(n) = &p.names.sources[fi][si] else { continue };
+                    let path = p.shown(&n.path);
+                    lines.push(tr!(
+                        "{name}: {path} は OpenSpec の仕様で、プロジェクトの中で書くファイルなので、取ってくるものはありません",
+                        "{name}: {path} is an OpenSpec spec, a file written in the project, so there is nothing to fetch"
+                    ));
+                }
                 SourceKind::File { url, pin, .. } => {
                     let Some(n) = &p.names.sources[fi][si] else { continue };
                     let path = p.shown(&n.path);
@@ -284,6 +292,62 @@ pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
                     let (body, end) = split(&lines[k]);
                     lines[k] = sources::pinned(&body, &h) + &end;
                     report.push(tr!("{name}: sha256:{h} で固定しました", "{name}: pinned at sha256:{h}"));
+                }
+                SourceKind::OpenSpec { pins, .. } => {
+                    let Some(n) = &p.names.sources[fi][si] else { continue };
+                    let path = p.shown(&n.path);
+                    let spec = match std::fs::read(p.root.join(&n.path)).map(|b| ritsu_base::openspec::read_spec(&b)) {
+                        Ok(Ok(spec)) => spec,
+                        Ok(Err(_)) => {
+                            report.push(tr!("{name}: 仕様 {path} が読めないので固定できません（理由は yuen check が示します）", "{name}: the spec {path} cannot be read, so nothing is pinned (yuen check says why)"));
+                            continue;
+                        }
+                        Err(_) => {
+                            report.push(tr!("{name}: 仕様 {path} が無いので固定できません", "{name}: there is no spec {path} to pin"));
+                            continue;
+                        }
+                    };
+                    let said = report.len();
+                    let hash_of = |rn: &str| spec.get(rn).map(|r| sha256::short(r.block.as_bytes()));
+                    for pl in pins {
+                        let fr = crate::names::word_or_quote(&pl.fragment);
+                        let Some(h) = hash_of(&pl.fragment) else {
+                            report.push(tr!("{name}: 仕様に要件 {fr} が無いので固定できません（yuen check の E108 を見てください）", "{name}: the spec has no requirement {fr} to pin (see E108 in yuen check)"));
+                            continue;
+                        };
+                        if pl.pin.as_deref() != Some(h.as_str()) {
+                            let k = pl.span.line - 1;
+                            let (body, end) = split(&lines[k]);
+                            lines[k] = sources::pinned(&body, &h) + &end;
+                            report.push(tr!("{name}: {fr} を sha256:{h} で固定しました", "{name}: pinned {fr} at sha256:{h}"));
+                        }
+                    }
+                    let (anchor, indent) = match pins.last() {
+                        Some(pl) => {
+                            let l = &lines[pl.span.line - 1];
+                            (pl.span.line - 1, l[..l.len() - l.trim_start().len()].to_string())
+                        }
+                        None => (s.span.line - 1, "  ".to_string()),
+                    };
+                    for rn in fragments(&f.ast, name, pins).into_iter().skip(pins.len()) {
+                        let fr = crate::names::word_or_quote(&rn);
+                        let Some(h) = hash_of(&rn) else {
+                            report.push(tr!("{name}: 仕様に要件 {fr} が無いので固定できません（yuen check の E108 を見てください）", "{name}: the spec has no requirement {fr} to pin (see E108 in yuen check)"));
+                            continue;
+                        };
+                        let (_, end) = split(&lines[anchor]);
+                        let end = if end.is_empty() { "\n".to_string() } else { end };
+                        inserts.entry(anchor).or_default().push(format!("{indent}{fr} sha256:{h}{end}"));
+                        report.push(tr!("{name}: 引いている {fr} の固定の行を足しました（sha256:{h}）", "{name}: added a pin line for the cited {fr} (sha256:{h})"));
+                    }
+                    if report.len() == said {
+                        let k = pins.len();
+                        report.push(if k == 1 {
+                            tr!("{name}: 固定済みです", "{name}: already pinned")
+                        } else {
+                            tr!("{name}: {k} 件の要件とも固定済みです", "{name}: all {k} requirements already pinned")
+                        });
+                    }
                 }
                 SourceKind::Law { db, id, asof, pins } => {
                     let cdir = req_dir.join(copies::copy_dir(id, &asof.to_string()));
@@ -585,6 +649,74 @@ fn file_outdated(p: &Project, fi: usize, name: &str, url: Option<&str>, pin: Opt
     Ok(true)
 }
 
+/// An OpenSpec spec against the changes not yet archived (DESIGN 20.5): what each does to the
+/// requirements pinned, whom it reaches and how many links it will mark. True when a change
+/// modifies, removes or renames a requirement pinned; a requirement added is said, and is not a
+/// move of what the project reads.
+fn spec_outdated(p: &Project, fi: usize, name: &str, pins: &[PinLine], spec: &str, lines: &mut Vec<Text>) -> bool {
+    use ritsu_base::openspec::Op;
+    let path = p.shown(spec);
+    let Some(touches) = crate::openspec::pending(&p.root, spec) else {
+        lines.push(tr!(
+            "{name}: {path} は `openspec/specs/<capability>/spec.md` の形の場所に無いので、変更の提案を探せません",
+            "{name}: {path} is not at `openspec/specs/<capability>/spec.md`, so its changes cannot be looked for"
+        ));
+        return false;
+    };
+    let pinned = |rn: &str| pins.iter().any(|pl| pl.fragment == rn);
+    let mut moved = false;
+    let mut said = false;
+    for t in &touches {
+        let at = format!("{}:{}", p.shown(&t.delta), t.line);
+        let (c, fr) = (&t.change, crate::names::word_or_quote(&t.name));
+        match t.op {
+            Op::Added => {
+                said = true;
+                lines.push(tr!(
+                    "{name}: まだ archive していない変更 {c} が、要件 {fr} を足します（{at}）。プロジェクトのどの要件もまだ読んでいません",
+                    "{name}: the change {c}, not yet archived, adds the requirement {fr} ({at}), which no requirement of the project reads yet"
+                ));
+            }
+            _ if !pinned(&t.name) => {}
+            op => {
+                said = true;
+                moved = true;
+                lines.push(match op {
+                    Op::Modified => tr!("{name}: まだ archive していない変更 {c} が、{fr} を変えます（{at}）", "{name}: the change {c}, not yet archived, modifies {fr} ({at})"),
+                    Op::Removed => tr!("{name}: まだ archive していない変更 {c} が、{fr} を消します（{at}）", "{name}: the change {c}, not yet archived, removes {fr} ({at})"),
+                    _ => {
+                        let to = crate::names::word_or_quote(t.to.as_deref().unwrap_or(""));
+                        tr!("{name}: まだ archive していない変更 {c} が、{fr} の名前を {to} に変えます（{at}）", "{name}: the change {c}, not yet archived, renames {fr} to {to} ({at})")
+                    }
+                });
+                if let (Some(old), Some(new)) = (&t.old_block, &t.new_block) {
+                    lines.push(tr!("  要件の変わるところ:", "  what changes in the requirement:"));
+                    diff_lines(old, new, lines);
+                }
+                reach_lines(p, &reach(p, fi, name, Some(&t.name)), lines);
+                lines.push(match op {
+                    Op::Removed => tr!(
+                        "  archive すると、引いている要件は出どころを失い、yuen check が E108 で止まります",
+                        "  once it is archived, the requirements citing it lose where they come from, and yuen check stops with E108"
+                    ),
+                    Op::Renamed => tr!(
+                        "  archive したら、固定と引用の名前を直してから yuen source pin で固定すると、yuen check がこれらに印を付けます",
+                        "  once it is archived, correct the name in the pin and the citations, then yuen source pin pins it; yuen check then marks these"
+                    ),
+                    _ => tr!(
+                        "  読んでから、archive したあとで yuen source pin で固定すると、yuen check がこれらに印を付けます",
+                        "  read it; once it is archived, yuen source pin pins the new requirement, and yuen check then marks these"
+                    ),
+                });
+            }
+        }
+    }
+    if !said {
+        lines.push(tr!("{name}: {path} の、固定している要件を変える変更の提案はありません", "{name}: no change not yet archived touches the requirements of {path} pinned"));
+    }
+    moved
+}
+
 /// `yuen source outdated`. A borrowed source is asked about as its own are, from the pins and
 /// the copies of the rule or the calendar it is borrowed from (`Sources`); it is fetched and
 /// pinned again there.
@@ -621,6 +753,10 @@ pub fn outdated(p: &Project) -> Result<Outcome, Text> {
                 SourceKind::File { url, pin, .. } => {
                     let Some(n) = &p.names.sources[fi][si] else { continue };
                     changed |= file_outdated(p, fi, name, url.as_deref(), pin.as_deref(), &n.path, Whose::Own, &mut lines)?;
+                }
+                SourceKind::OpenSpec { pins, .. } => {
+                    let Some(n) = &p.names.sources[fi][si] else { continue };
+                    changed |= spec_outdated(p, fi, name, pins, &n.path, &mut lines);
                 }
                 SourceKind::Law { db, id, asof, pins } => {
                     let asof = asof.to_string();

@@ -1,6 +1,6 @@
 ---
 name: yuen
-description: Write and check yuen files (`.req`), which say where each requirement comes from — an article of a law (e-Gov or the eCFR), a file, or a person's decision — who owns it, what meets it (a rulec rule, a koyomi date, a chobo account or transfer, a dandori workflow, a `.proto`, a file of code) and what checks it (a geas or koyomi claim, a tool's own check), with each link recorded under the hashes of its two ends when a person looked. Use when a requirement and its provenance have to be written or changed as a `.req`; when `yuen check` stops on a yuen diagnostic (E001-E409, W101-W401), above all a mark (E301-E304) that shows what changed; when a diff has to be traced to the requirements and owners it touches; or when the page of a project has to be made for the people who check what the code is meant to do.
+description: Write and check yuen files (`.req`), which say where each requirement comes from — an article of a law (e-Gov or the eCFR), a requirement of an OpenSpec spec, a file, or a person's decision — who owns it, what meets it (a rulec rule, a koyomi date, a chobo account or transfer, a dandori workflow, a `.proto`, a file of code) and what checks it (a geas or koyomi claim, a tool's own check), with each link recorded under the hashes of its two ends when a person looked. Use when a requirement and its provenance have to be written or changed as a `.req`; when `yuen check` stops on a yuen diagnostic (E001-E409, W101-W402), above all a mark (E301-E304) that shows what changed; when a diff, or an OpenSpec change not yet archived, has to be traced to the requirements and owners it touches; or when the page of a project has to be made for the people who check what the code is meant to do.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run yuen as `ritsu yuen <command>`, or as `yuen <command>` through a link to ritsu named for it. `ritsu yuen source fetch` and `source outdated` also need `curl`.
 license: MIT OR Apache-2.0
 ---
@@ -16,6 +16,13 @@ changed.
 
 It does not apply to what the rule, the date or the code says: that is rulec, koyomi, chobo,
 dandori or the code itself. yuen never reads what a requirement means.
+
+A project that keeps its behavior in **OpenSpec** (`openspec/specs/<capability>/spec.md`, changes
+under `openspec/changes/`) reads each OpenSpec requirement as a source: `source greeting = openspec
+"openspec/specs/greeting/spec.md"`, a pin line per requirement, and `from @greeting "Greeting by
+name"` in the requirement that reads it. OpenSpec is where people agree on what to change; yuen is
+where the links from those requirements to the rules, workflows, code and claims are recorded and
+held. Which scenario a claim answers is geas's (`geas scenarios`), not yuen's.
 
 # Working with yuen
 
@@ -117,6 +124,16 @@ every code is in [codes.md](codes.md).
   again through `review`, or the waiver goes.
 - **E101–E107** (copies and pins): `ritsu yuen source fetch` then `ritsu yuen source pin` for a
   source the `.req` copies itself; a borrowed source is fixed in its rule or calendar.
+- **An OpenSpec spec** (E103 on a pin, E108, W102): E103 after `openspec archive` means a change
+  rewrote that requirement's block; the diagnostic shows the diff. Show it to the owner; `ritsu
+  yuen source pin` then pins the new block, and the links below are marked (E302) until people look.
+  E108 is a name the spec does not have (a rename or a removal archived, or a case or space typo,
+  which it names). W102 is a requirement of the spec nothing reads: ask whether to read it (a pin
+  and a requirement) or to leave it out with waivers whose reasons the owner gives. W402 is a
+  scenario with no claim of its name among the claims that check the requirement: propose the claim
+  (`ritsu geas scenarios … --draft` gives the frame) and let the person accept it. Before a change
+  is archived, `ritsu yuen source outdated` says what it would do and whom it reaches; do not pin
+  ahead of the archive.
 - **E201–E203, E205** (a naming that does not resolve, or a file its language does not pass): fix
   the path or the name (E202 suggests one), or fix the file in its own language first.
 - **E206**: the yuen that ran holds no other language; run the same command as `ritsu yuen`.

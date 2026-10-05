@@ -1,0 +1,11 @@
+### Requirement: 名前で挨拶する
+サービスは `GET /greet?name=<名前>` に、ステータス 200 と、`message` が `Hello, <名前>` の JSON で答える（SHALL）。空の名前には、ステータス 400 で答える（SHALL）。
+
+#### Scenario: 名前で挨拶する
+- **WHEN** クライアントが `/greet?name=Alice` を求める
+- **THEN** ステータスは 200
+- **AND** `message` は `Hello, Alice`
+
+#### Scenario: 空の名前は受け付けない
+- **WHEN** クライアントが `/greet?name=` を求める
+- **THEN** ステータスは 400

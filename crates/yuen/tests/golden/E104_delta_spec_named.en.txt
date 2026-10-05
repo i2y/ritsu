@@ -1,0 +1,4 @@
+error[E104]: tests/mutants/E104_delta_spec_named/greeter.req:4:8: The spec tests/mutants/E104_delta_spec_named/openspec/changes/trim-names/specs/greeting/spec.md of the source greeting cannot be read: it has no `## Requirements` section: it is a change's delta spec (`## ADDED Requirements` and the like)
+     4 | source greeting = openspec "openspec/changes/trim-names/specs/greeting/spec.md"
+  = A source names `openspec/specs/<capability>/spec.md`; `openspec validate --specs` says what is wrong with the form of a spec.
+tests/mutants/E104_delta_spec_named: 1 error

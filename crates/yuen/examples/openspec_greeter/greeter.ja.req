@@ -1,0 +1,42 @@
+requirements 挨拶 v1
+description "geas の例 greeter が何を返すかを、サービスの OpenSpec の仕様から読んだ例（greeter.req の日本語版）。仕様の要件ごとに、ここで要件を一つ書いて固定して読み、server.py が満たし、シナリオと同じ名前の geas の主張が確かめる。仕様はこの例のために書いたもの"
+
+role 窓口 "サービスが何を返すかを決める"
+role 開発 "サーバーを書く"
+
+source 挨拶 = openspec "ja/openspec/specs/greeting/spec.md"
+  名前で挨拶する sha256:584f410eda34b49e
+  足した数の合計 sha256:16b2a7d63d90dcf5
+  知らないパス sha256:d0b84e0286e74b3a
+
+requirement 名前で挨拶する(greeting_by_name)
+  text "挨拶は 200 と、Hello と頼まれた名前を返す。空の名前には 400 を返す"
+  owner 窓口
+  from @挨拶 名前で挨拶する
+    reviewed 2026-10-05 by 窓口 sha256:584f410eda34b49e -> sha256:0fe7e5be49136195
+  satisfied by file "server.py"
+    reviewed 2026-10-05 by 開発 sha256:0fe7e5be49136195 -> sha256:331e02e26d128e8c
+  verified by geas "greeter.ja.geas" claim 名前で挨拶する
+    reviewed 2026-10-05 by 開発 sha256:0fe7e5be49136195 -> sha256:23771933ab7071aa
+  verified by geas "greeter.ja.geas" claim 空の名前は受け付けない
+    reviewed 2026-10-05 by 開発 sha256:0fe7e5be49136195 -> sha256:cfde1ffad5721517
+
+requirement 足した数の合計(running_total)
+  text "合計はリクエストをまたいで覚えておく。POST /reset で 0 にし、POST /add で足し、GET /total で返す"
+  owner 窓口
+  from @挨拶 足した数の合計
+    reviewed 2026-10-05 by 窓口 sha256:16b2a7d63d90dcf5 -> sha256:2c9bc244d3620e0c
+  satisfied by file "server.py"
+    reviewed 2026-10-05 by 開発 sha256:2c9bc244d3620e0c -> sha256:331e02e26d128e8c
+  verified by geas "greeter.ja.geas" claim 足した数が積み上がる
+    reviewed 2026-10-05 by 開発 sha256:2c9bc244d3620e0c -> sha256:851003f8a61e8af4
+
+requirement 知らないパス(unknown_paths)
+  text "知らないパスには 404 を返す"
+  owner 窓口
+  from @挨拶 知らないパス
+    reviewed 2026-10-05 by 窓口 sha256:d0b84e0286e74b3a -> sha256:eb33424df22e79c6
+  satisfied by file "server.py"
+    reviewed 2026-10-05 by 開発 sha256:eb33424df22e79c6 -> sha256:331e02e26d128e8c
+  verified by geas "greeter.ja.geas" claim "知らないパスには 404 を返す"
+    reviewed 2026-10-05 by 開発 sha256:eb33424df22e79c6 -> sha256:8788b539c21c495d
