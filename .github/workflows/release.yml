@@ -5,7 +5,8 @@ name: release
 # licenses, checks that the tag is the version every one of the eight names says, and publishes the
 # archives with their SHA-256 sums as a GitHub Release (DESIGN 13.2). `action.yml` at the root of
 # the repository installs one of them onto a runner, and the install page says which lines to run
-# by hand.
+# by hand. Before anything is built, audit.yml looks up every dependency's known vulnerabilities
+# (DESIGN 3.6).
 #
 # The same binaries reach the package managers. The Linux ones go out as a .deb and an .rpm as well,
 # beside the archives and in the same SHA256SUMS. Once the release is up, the Homebrew formula is
@@ -34,15 +35,39 @@ permissions:
   contents: write
 
 jobs:
+  # Nothing is built while a dependency has a known vulnerability that deny.toml or
+  # osv-scanner.toml does not let pass with its reason: the crates the binary is made of, and the
+  # versions `ritsu gen` writes into the packages it makes, locked by the tools the tests run
+  # (audit.yml, DESIGN 3.6, 13.2).
+  audit:
+    uses: ./.github/workflows/audit.yml
+    permissions:
+      contents: read
+
   build:
+    needs: audit
     strategy:
       fail-fast: false
       matrix:
+        # `host` is where cargo runs, for the cargo-auditable that runs there, with the SHA-256 its
+        # release gives that archive
         include:
-          - { target: x86_64-unknown-linux-musl,  runner: ubuntu-latest }
-          - { target: aarch64-unknown-linux-musl, runner: ubuntu-24.04-arm }
-          - { target: x86_64-apple-darwin,        runner: macos-15-intel }
-          - { target: aarch64-apple-darwin,       runner: macos-latest }
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+            host: x86_64-unknown-linux-gnu
+            auditable_sha256: 4c8d3b08c3c34e9f2333367224dbbfb4aab68067698b43de59fe19aded3416dd
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+            host: aarch64-unknown-linux-gnu
+            auditable_sha256: bcb2d46002a8dd8e94d0d669cb39d38c9651db2ae5d1f3f1f1bab516ee1e212c
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+            host: x86_64-apple-darwin
+            auditable_sha256: 4b87f06ea13d32466bbc68b1f5715ac11753a052d9935245380bddce8a3f0e50
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            host: aarch64-apple-darwin
+            auditable_sha256: a66ad6392861ca1abfe0b02b522622d91edf63e5d7b60f4d3088b5c23d240c72
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
@@ -62,8 +87,29 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update -q && sudo apt-get install -y -q musl-tools
 
+      # The binary carries the list of the crates it is made of, written by cargo-auditable into a
+      # section of its own (`.dep-v0`), so that a scanner of what is installed reads which
+      # serde_json the ritsu it finds has: `cargo audit bin`, osv-scanner (its rust/cargoauditable
+      # plugin), Trivy, Grype and Syft (DESIGN 3.6, 13.2). The release's archive, held to its
+      # SHA-256, as tools.yml installs wasm-tools.
+      - name: cargo-auditable 0.7.7
+        run: |
+          set -eu
+          d="$RUNNER_TEMP/cargo-auditable"
+          mkdir -p "$d"
+          curl -fsSL -o "$d/a.tar.xz" "https://github.com/rust-secure-code/cargo-auditable/releases/download/v0.7.7/cargo-auditable-${{ matrix.host }}.tar.xz"
+          echo "${{ matrix.auditable_sha256 }}  $d/a.tar.xz" | shasum -a 256 -c -
+          tar -xJf "$d/a.tar.xz" -C "$d" --strip-components=1
+          echo "$d" >> "$GITHUB_PATH"
+
       - name: Build
-        run: cargo build --release --locked --target ${{ matrix.target }} -p ritsu
+        run: cargo auditable build --release --locked --target ${{ matrix.target }} -p ritsu
+
+      - name: The binary carries its crates
+        run: |
+          set -eu
+          b=target/${{ matrix.target }}/release/ritsu
+          if [ "$RUNNER_OS" = Linux ]; then readelf -S "$b" | grep -q '\.dep-v0'; else otool -l "$b" | grep -q 'sectname \.dep-v0'; fi
 
       - name: Archive
         run: sh packaging/archive.sh "$GITHUB_REF_NAME" ${{ matrix.target }} target/${{ matrix.target }}/release/ritsu dist

@@ -1,0 +1,44 @@
+# What cargo-deny holds the crates of Cargo.lock to (DESIGN 3.6): no known vulnerability, unsound or
+# unmaintained crate, or yanked version (the RustSec advisory database); only the licenses the
+# workspace is under and those its dependencies need; nothing from a registry other than crates.io
+# or from git. The audit workflow (.github/workflows/audit.yml) runs `cargo deny --locked check`
+# on every push, every day and before every release, with cargo-deny 0.20.2.
+#
+# DESIGN 3.1 keeps the crates from outside to serde_json and what it needs; `cargo xtask deps`
+# holds the workspace to that, and this file holds those crates to the database and the licenses.
+# Of the 14 in Cargo.lock, 8 are built. The other 6 (serde, serde_derive, syn, quote, proc-macro2,
+# unicode-ident) are there only because serde_json and serde_core name them under `cfg(any())`, a
+# condition no target meets, to keep their versions in step; cargo-deny leaves them out, as cargo
+# does, and osv-scanner, which reads Cargo.lock as it stands, looks them up too.
+#
+# An advisory ignored below says why, and goes once the reason does.
+
+[advisories]
+# A vulnerability always fails the check (cargo-deny no longer lets one be a warning). So does a
+# crate its maintainers have left, or one unsound to use, anywhere in the tree, and a version
+# yanked from crates.io.
+unmaintained = "all"
+unsound = "all"
+yanked = "deny"
+ignore = []
+
+[licenses]
+# The workspace is MIT OR Apache-2.0, and so are the crates it builds from outside, but memchr,
+# which is "Unlicense OR MIT" (MIT is enough).
+allow = ["MIT", "Apache-2.0"]
+# An allowed license that nothing uses any more is an error, so the list stays the one the tree needs.
+unused-allowed-license = "deny"
+
+[bans]
+# The tree is small enough that a second version of any crate is worth reading before it lands.
+# Wildcards are not checked: the seven languages are crates Cargo would let be published, and
+# they name the base crates by path, which cargo-deny counts as a wildcard. The one crate from
+# outside that the crates name, serde_json, is named as "1" everywhere, and `cargo xtask deps`
+# keeps it the only one.
+multiple-versions = "deny"
+
+[sources]
+# crates.io and nothing else: no other registry, no git.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

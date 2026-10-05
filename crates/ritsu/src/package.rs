@@ -124,6 +124,14 @@ const GO_MODULES: &[(&str, &str)] = &[
     ("github.com/anthropics/anthropic-sdk-go", "v1.78.0"),
     ("google.golang.org/protobuf", "v1.36.11"),
 ];
+/// Modules the ones above ask for at a version with a known vulnerability, the version the tests
+/// run instead (the go.mod of chobo's tools/runner/go and of dandori's tools/temporal-go), and the
+/// advisory. `go mod tidy` gives a module the version a requirement asks for, not the newest (Go's
+/// minimal version selection), so a package that imports the module on the left would otherwise
+/// be built with the vulnerable one; doc.go says to raise it (DESIGN 9.3). pgx v5.11.0 asks for
+/// golang.org/x/text v0.29.0, whose normalization its SCRAM authentication reaches (GO-2026-5970,
+/// fixed in v0.39.0). An entry goes once the module on the left asks for a fixed version.
+const GO_RAISED: &[(&str, &str, &str, &str)] = &[("github.com/jackc/pgx/v5", "golang.org/x/text", "v0.41.0", "GO-2026-5970")];
 
 /// A package: each file by its path under the package's directory, with the file of the project it
 /// is made from (None for what the package itself is made of: the index and the manifest).
@@ -477,6 +485,13 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
                 for m in &imported {
                     let v = GO_MODULES.iter().find(|(x, _)| x == m).map(|(_, v)| *v).unwrap_or("");
                     doc.push_str(&format!("//\t{m} {v}\n"));
+                }
+                let raised: Vec<_> = GO_RAISED.iter().filter(|(by, ..)| imported.contains(by)).collect();
+                if !raised.is_empty() {
+                    doc.push_str("//\n// Of the modules those require, these are tested at a later version than the one asked for, which\n// has a known vulnerability; raise them in the go.mod (`go get <module>@<version>`):\n//\n");
+                    for (by, m, v, advisory) in raised {
+                        doc.push_str(&format!("//\t{m} {v} ({advisory}, through {by})\n"));
+                    }
                 }
             }
             doc.push_str(&format!("package {package}\n"));

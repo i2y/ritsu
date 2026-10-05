@@ -1,0 +1,38 @@
+# What osv-scanner lets pass (DESIGN 3.6). The audit workflow (.github/workflows/audit.yml) runs
+# osv-scanner 2.6.0 over every lockfile of the repository (Cargo.lock, and the package-lock.json,
+# requirements.txt and go.mod of the tools the tests run under crates/*/tools) and fails on any
+# known vulnerability that is not below. Every entry says why it is let pass and until when: on
+# that day the scan fails again, and someone reads the reason again.
+
+# JSONata 2.0.6, in crates/dandori/tools (tools/asl-run.mjs and tools/connect/read.mjs). AWS Step
+# Functions evaluates JSONata as the 2.0.6 specification says (its developer guide, "Transforming
+# data with JSONata in Step Functions"), and the runner plays Step Functions, so it stays at 2.0.6:
+# a newer JSONata reads some expressions otherwise ($string of a number in 2.1.1, the ?: and ??
+# operators in 2.1.0), and the comparison with the reference interpreter would stop being one with
+# Step Functions. There is no later 2.0.x. The five advisories are about evaluating an expression
+# or an input made to attack JSONata; the expressions here are the ones dandori wrote into the ASL
+# under test, and the inputs are the tests' scenarios. Move to the version Step Functions moves to.
+[[IgnoredVulns]]
+id = "GHSA-2943-5xfg-gq5f"
+ignoreUntil = 2027-04-05
+reason = "JSONata 2.0.6 in crates/dandori/tools plays Step Functions, which evaluates JSONata 2.0.6; it evaluates only the expressions dandori wrote, on the tests' inputs (osv-scanner.toml)"
+
+[[IgnoredVulns]]
+id = "GHSA-663r-x48j-fg8p"
+ignoreUntil = 2027-04-05
+reason = "JSONata 2.0.6 in crates/dandori/tools plays Step Functions, which evaluates JSONata 2.0.6; it evaluates only the expressions dandori wrote, on the tests' inputs (osv-scanner.toml)"
+
+[[IgnoredVulns]]
+id = "GHSA-66mm-25pp-rfff"
+ignoreUntil = 2027-04-05
+reason = "JSONata 2.0.6 in crates/dandori/tools plays Step Functions, which evaluates JSONata 2.0.6; it evaluates only the expressions dandori wrote, on the tests' inputs (osv-scanner.toml)"
+
+[[IgnoredVulns]]
+id = "GHSA-86vw-mfpg-wwv9"
+ignoreUntil = 2027-04-05
+reason = "JSONata 2.0.6 in crates/dandori/tools plays Step Functions, which evaluates JSONata 2.0.6; it evaluates only the expressions dandori wrote, on the tests' inputs (osv-scanner.toml)"
+
+[[IgnoredVulns]]
+id = "GHSA-8gq3-vp5j-2grp"
+ignoreUntil = 2027-04-05
+reason = "JSONata 2.0.6 in crates/dandori/tools plays Step Functions, which evaluates JSONata 2.0.6; it evaluates only the expressions dandori wrote, on the tests' inputs (osv-scanner.toml)"
