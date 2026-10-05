@@ -14,7 +14,7 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 out=${1:-$here/../../../skills/dandori}
 docs=$here/../../../website/dandori/docs
-site=https://i2y.github.io/dandori
+site=https://i2y.github.io/ritsu/dandori
 mkdir -p "$out"
 
 # One page: the site's wrappers around the diagnostics dropped, the links rewritten, and the

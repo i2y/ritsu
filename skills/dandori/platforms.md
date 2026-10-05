@@ -142,4 +142,4 @@ $ dandori run <file.flow> --scenario <file.json> [--target reference|asl|tempora
 `scenarios` writes inputs and scripted answers that together take every arm, every handler, every way
 a case can move, and lists that are empty, short, and longer than their loop takes. `run` plays one
 through the reference interpreter and prints the calls as the target would make them.
-[How it is checked](https://i2y.github.io/dandori/assurance/) says how the builds are held to it.
+[How it is checked](https://i2y.github.io/ritsu/dandori/assurance/) says how the builds are held to it.

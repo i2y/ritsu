@@ -3,8 +3,8 @@
 dandori's documentation, in English and Japanese, built with [Zensical](https://zensical.org) (the
 successor of Material for MkDocs; built with 0.0.67, unpinned). It is one of the sites inside
 ritsu's (`website/`, [its README](../README.md)), which builds it into `website/build/dandori` and
-publishes it at <https://i2y.github.io/ritsu/dandori/>. Until ritsu's site is published, the pages
-people read are the ones dandori's own repository publishes, at <https://i2y.github.io/dandori/>.
+publishes it at <https://i2y.github.io/ritsu/dandori/>. It took over from the site dandori's own
+repository published, at <https://i2y.github.io/dandori/>.
 
 ## Layout
 

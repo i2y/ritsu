@@ -333,7 +333,7 @@ may be none (`T?`): the code dandori writes passes a rule no null, and reads non
 
 The order example for AWS calls its urgency rule this way
 ([order.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/order/aws/order.flow)), and the tests
-send the services `rulec gen` writes what dandori sends them ([How it is checked](https://i2y.github.io/dandori/assurance/)).
+send the services `rulec gen` writes what dandori sends them ([How it is checked](https://i2y.github.io/ritsu/dandori/assurance/)).
 
 ## Child flows
 

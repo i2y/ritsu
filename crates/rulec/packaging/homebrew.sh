@@ -31,7 +31,7 @@ cat <<EOF
 # Written by packaging/homebrew.sh in i2y/rulec for $tag; the next release replaces it.
 class Rulec < Formula
   desc "Little language for business rules that proves each rule before it compiles"
-  homepage "https://i2y.github.io/rulec/"
+  homepage "https://i2y.github.io/ritsu/rulec/"
   license any_of: ["MIT", "Apache-2.0"]
 
   on_macos do

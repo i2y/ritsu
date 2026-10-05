@@ -17,7 +17,8 @@
 //!   configurations;
 //! - the configurations name the URL each site is published at, under /ritsu/, and ritsu's
 //!   repository;
-//! - .github/workflows/docs.yml runs only by hand;
+//! - .github/workflows/docs.yml runs on a push to main that changes what the site is built from,
+//!   and by hand;
 //! - the pages of a language's namespace (website/docs/ns/yuen.md and website/docs-ja/ns/yuen.md,
 //!   which the IRIs of yuen's PROV words open: `https://i2y.github.io/ritsu/ns/yuen#Requirement`)
 //!   say every word yuen writes and no other, each once, under the heading of its kind, with the
@@ -303,12 +304,13 @@ fn the_configurations_name_where_each_site_is_published() {
 }
 
 #[test]
-fn the_workflow_that_publishes_the_site_runs_only_by_hand() {
+fn the_workflow_that_publishes_the_site_runs_on_a_push_to_main_and_by_hand() {
     let text = read(&root().join(".github/workflows/docs.yml"));
     let mut lines = text.lines().skip_while(|l| *l != "on:");
     assert_eq!(lines.next(), Some("on:"), "docs.yml has no `on:`");
     let triggers: Vec<&str> = lines.take_while(|l| l.is_empty() || l.starts_with(' ')).map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')).collect();
-    assert_eq!(triggers, ["workflow_dispatch:"], "docs.yml runs only by hand until the sites are switched over");
+    let want = ["push:", "branches: [main]", "paths:", "- \"website/**\"", "- \"crates/rulec/AGENTS.md\"", "- \"crates/rulec/docs/**\"", "- \".github/workflows/docs.yml\"", "workflow_dispatch:"];
+    assert_eq!(triggers, want, "docs.yml runs on a push to main that changes what the site is built from (website/, the documents rulec's sync.sh copies in, and itself), and by hand");
     assert!(text.contains("./build.sh") && text.contains("path: website/build"), "docs.yml builds with website/build.sh and publishes website/build");
 }
 

@@ -469,4 +469,4 @@ overrule them will see them.
 | `proofs/` (Lean 4) | what a table means, the checks a certificate has to pass, and the theorems that a `true` from each one settles the matching claim. `lake build` checks them; the program it builds re-checks certificates |
 | `DESIGN.md` (Japanese) | why each decision was made and what was rejected |
 | `README.md` | the worked example, the excerpts of generated code, and how to run the suite |
-| <https://i2y.github.io/rulec/> | the same references as pages, plus the tour and the worked rules written for a person — English, and Japanese under `/ja/` |
+| <https://i2y.github.io/ritsu/rulec/> | the same references as pages, plus the tour and the worked rules written for a person — English, and Japanese under `/ja/` |

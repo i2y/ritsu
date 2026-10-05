@@ -496,4 +496,4 @@ overrule them will see them.
 | [backends.md](backends.md) | targeting a language rulec does not generate, without losing the comparison |
 | `ritsu rulec explain <CODE>` | one diagnostic: when it appears, how to fix it, a runnable reproduction. `--all` for every one, `--format json` for data |
 | <https://github.com/i2y/ritsu/tree/main/crates/rulec> | the source and the design document, in the ritsu repository |
-| <https://i2y.github.io/rulec/> | the documentation site: the tour and the worked rules written for a person — English, and Japanese under `/ja/` |
+| <https://i2y.github.io/ritsu/rulec/> | the documentation site: the tour and the worked rules written for a person — English, and Japanese under `/ja/` |

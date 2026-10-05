@@ -74,8 +74,8 @@ tests hold its site (rulec's and dandori's READMEs say how).
 ## Publishing
 
 `.github/workflows/docs.yml` builds the whole site with `build.sh` and deploys `build/` to GitHub
-Pages. For now it runs only by hand, from the Actions tab (`workflow_dispatch`): the sites people
-read are still the ones rulec's and dandori's own repositories publish, at
-<https://i2y.github.io/rulec/> and <https://i2y.github.io/dandori/>, and the push that publishes
-ritsu's is added when the sites are switched over. Pages takes its source from "GitHub Actions" in
-the repository's settings.
+Pages, on a push to main that changes what the site is built from (`website/`, the documents
+rulec's `sync.sh` copies in, and the workflow itself), and by hand from the Actions tab. Pages
+takes its source from "GitHub Actions" in the repository's settings. ritsu's site took over from
+the sites rulec's and dandori's own repositories published, at <https://i2y.github.io/rulec/> and
+<https://i2y.github.io/dandori/>.

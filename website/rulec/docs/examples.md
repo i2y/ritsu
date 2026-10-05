@@ -19,7 +19,7 @@ English twin: the same rule with English names, `JPY` for the yen, and the amoun
 in digits. What stays in Japanese in them belongs to the documents: the headings that a
 `source` line points at in a statute or a workbook. The prefectures are spelled in English,
 from `std/jp/prefectures`.
-[The Japanese page](https://i2y.github.io/rulec/ja/examples/) shows the originals, with their
+[The Japanese page](https://i2y.github.io/ritsu/rulec/ja/examples/) shows the originals, with their
 names in Japanese, and the repository's tests hold each pair to the same findings, the same
 answers and the same claims.
 

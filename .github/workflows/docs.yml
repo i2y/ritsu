@@ -10,13 +10,19 @@ name: docs
 #   website/dandori/docs/      -> https://i2y.github.io/ritsu/dandori/
 #   website/dandori/docs-ja/   -> https://i2y.github.io/ritsu/dandori/ja/
 #
-# It runs only by hand, from the Actions tab, for now: the sites people read are still the ones
-# rulec's and dandori's own repositories publish, and a push to main starts publishing ritsu's only
-# when the sites are switched over (then add `push: branches: [main]` with the paths `website/**`
-# and this file). Pages must be enabled with "GitHub Actions" as the source in the repository's
-# settings. crates/ritsu/tests/website.rs holds this file to running only by hand.
+# It runs on a push to main that changes what the site is built from (website/, the documents
+# rulec's sync.sh copies in, and this file), and by hand from the Actions tab. Pages takes its
+# source from "GitHub Actions" in the repository's settings. crates/ritsu/tests/website.rs holds
+# this file to those triggers.
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "crates/rulec/AGENTS.md"
+      - "crates/rulec/docs/**"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 permissions:

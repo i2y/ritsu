@@ -73,7 +73,7 @@ in it.
 - **Changing a rule.** The rules are the examples' own, and a flow here can use only those; *rules*
   shows them, but they cannot be changed here. The same goes for the dates file and the book of
   invoice, which *rules* does not show. To write a rule, use
-  [rulec's playground](https://i2y.github.io/rulec/playground/).
+  [rulec's playground](https://i2y.github.io/ritsu/rulec/playground/).
 - **Calls.** Nothing is called: not an API, an agent or Jev. *build* shows the code that would call
   them.
 - **Other files.** Only the flow in the box can be edited. A child flow and the API descriptions

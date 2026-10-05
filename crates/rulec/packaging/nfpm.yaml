@@ -9,7 +9,7 @@ release: "1"
 section: devel
 priority: optional
 maintainer: Yasushi Itoh <6240399+i2y@users.noreply.github.com>
-homepage: https://i2y.github.io/rulec/
+homepage: https://i2y.github.io/ritsu/rulec/
 license: MIT OR Apache-2.0
 description: |-
   A little language for business rules.

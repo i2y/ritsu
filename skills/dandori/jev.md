@@ -145,4 +145,4 @@ a choice without its confidence, does not fit the type, and ends the run as any 
   ask Jev for the judgement.
 - The tests answer Jev's calls with a stand-in, in the shape of TypeSafe's API reference, and check
   the default `Transport`'s requests on this machine. With `TYPESAFE_API_KEY` set, they also send each
-  Jev task once to TypeSafe for real ([How it is checked](https://i2y.github.io/dandori/assurance/)).
+  Jev task once to TypeSafe for real ([How it is checked](https://i2y.github.io/ritsu/dandori/assurance/)).

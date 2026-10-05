@@ -5,8 +5,8 @@ Source for the user-facing rulec site, built with
 the squidfunk team; latest release, unpinned). It is one of the sites inside
 ritsu's (`website/`, [its README](../README.md)), which builds it into
 `website/build/rulec` and publishes it at <https://i2y.github.io/ritsu/rulec/>.
-Until ritsu's site is published, the pages people read are the ones rulec's own
-repository publishes, at <https://i2y.github.io/rulec/>.
+It took over from the site rulec's own repository published, at
+<https://i2y.github.io/rulec/>.
 
 The tests, the corpus and the documents this site copies in are rulec's, in
 `crates/rulec` of ritsu's workspace; the paths below that name `tests/`, `src/`,

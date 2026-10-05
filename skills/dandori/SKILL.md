@@ -442,4 +442,4 @@ written for Temporal, for AWS and for pydantic-graph, and one that runs as it is
 | [examples.md](examples.md) | the six examples and how their versions differ |
 | [design.md](design.md) | the six principles the language keeps |
 
-They are copies of the pages of <https://i2y.github.io/dandori/>, which has them in Japanese too.
+They are copies of the pages of <https://i2y.github.io/ritsu/dandori/>, which has them in Japanese too.

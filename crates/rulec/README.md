@@ -59,10 +59,10 @@ What one table produces is a column of the next, and `examples` is an executable
 The keywords are English, and the names and cell values are the business's own words. The
 first-level divisions of thirteen countries are built in (`import std/us/states`, `std/de/states`,
 `std/jp/prefectures` and ten more), written by name, in the local spelling or by ISO code. The
-[examples page](https://i2y.github.io/rulec/examples/) writes them in English throughout,
+[examples page](https://i2y.github.io/ritsu/rulec/examples/) writes them in English throughout,
 including the rules transcribed from Japanese terms and statutes; the originals, with their names
 in Japanese, are beside them in the repository and on the
-[Japanese page](https://i2y.github.io/rulec/ja/examples/).
+[Japanese page](https://i2y.github.io/ritsu/rulec/ja/examples/).
 
 Transcribe a tariff, leave one of its bands out, and the gap comes back with the input that
 falls through it:
@@ -117,13 +117,13 @@ The function you call is `fee_demo`; beside it, `fee_demo_traced` returns **the 
 matched** — one per table, as the table's name and its row number — which is what a log line or
 an answer to "why this fee" needs.
 
-> **Documentation site — [i2y.github.io/rulec](https://i2y.github.io/rulec/)**
+> **Documentation site — [i2y.github.io/ritsu/rulec](https://i2y.github.io/ritsu/rulec/)**
 > All of this at length, in English and Japanese: the whole language, what is proved and how,
 > generating and calling it, comparing against what runs today, worked examples, and the
 > agent's own procedure.
-> 日本語のドキュメントは **[i2y.github.io/rulec/ja/](https://i2y.github.io/rulec/ja/)** にあります。
+> 日本語のドキュメントは **[i2y.github.io/ritsu/rulec/ja/](https://i2y.github.io/ritsu/rulec/ja/)** にあります。
 >
-> **Try it first — [i2y.github.io/rulec/playground/](https://i2y.github.io/rulec/playground/)**
+> **Try it first — [i2y.github.io/ritsu/rulec/playground/](https://i2y.github.io/ritsu/rulec/playground/)**
 > The checker itself, compiled to wasm and running in the page: paste a table and the gap
 > comes back with the input that falls through it. Nothing is sent anywhere, and nothing is
 > installed.
@@ -173,7 +173,7 @@ What is **not** proved matters just as much.
    certificate has to pass imply the claims.
 
 **What each layer reaches, and where it stops, is laid out in
-[How it is checked](https://i2y.github.io/rulec/assurance/).**
+[How it is checked](https://i2y.github.io/ritsu/rulec/assurance/).**
 
 ## Install
 
@@ -183,11 +183,11 @@ One binary, no runtime. On macOS or Linux, with Homebrew:
 $ brew install i2y/tap/rulec
 ```
 
-Every release carries a `.deb` and an `.rpm` as well ([how](https://i2y.github.io/rulec/install/)).
+Every release carries a `.deb` and an `.rpm` as well ([how](https://i2y.github.io/ritsu/rulec/install/)).
 
 <!-- crates.io is on hold (DESIGN §15.158). Once the crate is published, this replaces the line above:
 `cargo install rulec` builds it, `cargo binstall rulec` takes the release binary, and every
-release carries a `.deb` and an `.rpm` as well ([how](https://i2y.github.io/rulec/install/)).
+release carries a `.deb` and an `.rpm` as well ([how](https://i2y.github.io/ritsu/rulec/install/)).
 -->
 
 By hand: every release publishes a binary for macOS (arm64, x64) and Linux (x64, arm64), with
@@ -260,7 +260,7 @@ once, in `src/codes.rs`, and [`docs/codes.md`](docs/codes.md) is literally the
 Those logs are read by machines and developers, so they stay in the default English. What goes
 to a person — `rulec diff` on a pull request, `rulec doc` for the people who read it — is built
 in the same job with `RULEC_LANG` set to their language. The job that puts the diff on the pull
-request is on the [install page](https://i2y.github.io/rulec/install/#in-ci).
+request is on the [install page](https://i2y.github.io/ritsu/rulec/install/#in-ci).
 
 ## What is in this repository
 
@@ -304,9 +304,9 @@ $ cargo test          # python3, node, rustc, ruby, php, go, swiftc, a JDK and p
 
 | | |
 |---|---|
-| **[The documentation site](https://i2y.github.io/rulec/)** | all of this at length, in English and [日本語](https://i2y.github.io/rulec/ja/) |
-| [Where to start, by what you have](https://i2y.github.io/rulec/#where-to-start-by-what-you-have) | a spreadsheet, an implementation that runs today, or past records — the first move for each |
-| [Does your rule fit](https://i2y.github.io/rulec/fit/) | five questions, and what else is out there |
+| **[The documentation site](https://i2y.github.io/ritsu/rulec/)** | all of this at length, in English and [日本語](https://i2y.github.io/ritsu/rulec/ja/) |
+| [Where to start, by what you have](https://i2y.github.io/ritsu/rulec/#where-to-start-by-what-you-have) | a spreadsheet, an implementation that runs today, or past records — the first move for each |
+| [Does your rule fit](https://i2y.github.io/ritsu/rulec/fit/) | five questions, and what else is out there |
 | [`AGENTS.md`](AGENTS.md) | the procedure for an agent: write → check → fix → generate → integrate → show the impact → ask a person |
 | [`docs/reference.md`](docs/reference.md) | the complete grammar |
 | [`docs/codes.md`](docs/codes.md) / [`docs/codes.ja.md`](docs/codes.ja.md) | every diagnostic code, as `rulec explain --all` prints it |
@@ -329,7 +329,7 @@ priorities. Not borrowed: DMN's XML interchange format, its runtime engine and i
 Proving a table free of gaps and overlaps is older than DMN — SCR and PVS did it in the 1990s
 — and today most rules engines, Catala's proof plugin and LF-ET check it too; the neighbours
 are laid out, with where each one stops, on
-[the site](https://i2y.github.io/rulec/fit/#what-else-is-out-there). What this tool adds is
+[the site](https://i2y.github.io/ritsu/rulec/fit/#what-else-is-out-there). What this tool adds is
 narrower. The checks hand over evidence that another program re-checks, with the checks
 proved in Lean to imply the claims, and an API's contract is held to the rule's inputs, so a
 change that is compatible on the wire and breaks the decision fails in CI. Units and rounding

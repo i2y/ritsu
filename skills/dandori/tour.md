@@ -230,6 +230,6 @@ ships as a new version or through Worker Deployment Versioning.
 
 ## See it drawn
 
-`dandori doc` draws the workflow this page has read: [the hotel booking, drawn](https://i2y.github.io/dandori/doc/hotel.html),
+`dandori doc` draws the workflow this page has read: [the hotel booking, drawn](https://i2y.github.io/ritsu/dandori/doc/hotel.html),
 where each scenario lights up the way its run goes. [Draw a workflow](diagrams.md) says what is on
 the picture.

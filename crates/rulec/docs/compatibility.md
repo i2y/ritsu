@@ -54,7 +54,7 @@ as well: "the crate `rulec`", after `i2y/tap/rulec` in Homebrew. -->
   installs one exact release (`uses: i2y/rulec@v1.0.0`), and there is no moving tag such as
   `@v1`: the generated files would go stale under it without a change of yours.
 - **A pass that should have been a failure.** When a 1.x finds that an earlier version let
-  through something this page or [what it proves](https://i2y.github.io/rulec/checks/) says
+  through something this page or [what it proves](https://i2y.github.io/ritsu/rulec/checks/) says
   it catches — a gap or an overlap it missed, a line it read into nothing — the fix makes that
   rule fail. A false green is not kept for the sake of compatibility. Each such change is
   named in the release notes, with the kind of rule it can affect.

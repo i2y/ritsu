@@ -22,11 +22,11 @@ retries, and drives things like a Stripe PaymentIntent from state to state.
   calls a date as it calls a rule, holds, posts and voids stock as tasks, and follows a hold as a
   case whose expiry the checker counts.
 
-**Documentation: <https://i2y.github.io/dandori/>**, in English and Japanese. The pages are also
+**Documentation: <https://i2y.github.io/ritsu/dandori/>**, in English and Japanese. The pages are also
 readable here, in [website/dandori/docs](../../website/dandori/docs) and
 [website/dandori/docs-ja](../../website/dandori/docs-ja).
 
-**Try it in the browser: <https://i2y.github.io/dandori/playground/>**. The checker, the builds
+**Try it in the browser: <https://i2y.github.io/ritsu/dandori/playground/>**. The checker, the builds
 and `dandori doc`, compiled to wasm32 and run in the page, on the examples or on a flow you edit,
 with the rules each calls; nothing is sent anywhere.
 
@@ -56,7 +56,7 @@ The transitions come from `payment_intent.rule`, a transcription of Stripe's doc
 rulec state machine. The workflow says which events happen on their own
 (`external authenticate, settle, expire`), and the checker follows them too: waiting until
 check-out, the authorization can expire, and then the capture is refused. Every diagnostic comes
-with a run that gets there; [Diagnostics](https://i2y.github.io/dandori/reference/codes/) lists
+with a run that gets there; [Diagnostics](https://i2y.github.io/ritsu/dandori/reference/codes/) lists
 all 31 codes.
 
 ## A workflow
@@ -90,7 +90,7 @@ type as it is (`warehouse.ReserveResponse`), and the task is held to the same de
 workflow's own entry can be a service of a `.proto`, from which clients in other languages are made
 (`workflow fulfillment v1 implements shop.FulfillmentService`); the checker holds the workflow to
 it. Every loop has a bound, so a run's history has one too.
-[Write a workflow](https://i2y.github.io/dandori/tour/) reads the whole example.
+[Write a workflow](https://i2y.github.io/ritsu/dandori/tour/) reads the whole example.
 
 ## Install
 
@@ -141,7 +141,7 @@ prints the messages in Japanese (else `DANDORI_LANG`, then `RITSU_LANG`). `build
 and a workflow whose one run can outgrow the platform (E040). `doc` draws the workflow for the
 person who reviews it: Mermaid charts that GitHub draws in a pull request, with tables of every
 call and every way the workflow can end, or one HTML page on which each scenario lights up the way
-its run goes ([the hotel booking, drawn](https://i2y.github.io/dandori/doc/hotel.html)). The rules
+its run goes ([the hotel booking, drawn](https://i2y.github.io/ritsu/dandori/doc/hotel.html)). The rules
 it calls come with it, each as the page for people that `rulec doc` renders.
 
 | Target | What `build` writes |
@@ -154,8 +154,8 @@ it calls come with it, each as the page for people that `rulec doc` renders.
 | `argo` | a WorkflowTemplate, and the caller image that makes its calls |
 | `pydantic-graph` | a graph that runs in your own Python process |
 
-[Build for a platform](https://i2y.github.io/dandori/platforms/) has what each of them writes, and
-[What a task calls](https://i2y.github.io/dandori/tasks/) what a task becomes on each.
+[Build for a platform](https://i2y.github.io/ritsu/dandori/platforms/) has what each of them writes, and
+[What a task calls](https://i2y.github.io/ritsu/dandori/tasks/) what a task becomes on each.
 
 ## Examples
 
@@ -167,10 +167,10 @@ warehouse's `.proto`; an inquiry sorted by Jev and read and answered by agents; 
 scored by Jev and, when a rule says so, approved by a person. The sixth, an invoice, is written once
 for every platform: it holds an order's goods in a book of chobo's until the payment is due by a date
 of koyomi's, then ships them once paid or puts them back
-([Dates and books](https://i2y.github.io/dandori/dates-and-books/)). Every example has a Japanese
+([Dates and books](https://i2y.github.io/ritsu/dandori/dates-and-books/)). Every example has a Japanese
 twin beside it (`hotel.ja.flow`), with Japanese names everywhere but where an API description fixes
 them.
-[Examples](https://i2y.github.io/dandori/examples/) says how the versions differ.
+[Examples](https://i2y.github.io/ritsu/dandori/examples/) says how the versions differ.
 
 ## How it is checked
 
@@ -183,7 +183,7 @@ make the same calls, with the same arguments and idempotency keys, and end the s
 on the site that runs dandori in the browser must answer every example as the command does. The
 operations of books that the runs make also go through the code dandori writes to chobo's clients,
 on PostgreSQL and TigerBeetle, and must answer what chobo's reference interpreter answers.
-[How it is checked](https://i2y.github.io/dandori/assurance/) tells the rest, and how to run the
+[How it is checked](https://i2y.github.io/ritsu/dandori/assurance/) tells the rest, and how to run the
 tests.
 
 Most of the flows and fixtures under `tests/` have Japanese names, on purpose: they see that
@@ -200,7 +200,7 @@ HTTP and AWS endpoints from Argo, agents run against OpenAI and Anthropic themse
 that cross into koyomi and chobo: a hold's expiry against the waits before it is posted, and the days
 a workflow passes against a dates file's range. The
 design, the decisions and what is left are in [DESIGN.md](DESIGN.md), in Japanese; its principles
-are on [Design](https://i2y.github.io/dandori/design/).
+are on [Design](https://i2y.github.io/ritsu/dandori/design/).
 
 ## License
 
