@@ -21,14 +21,14 @@
 
 ### Claude Code：プラグイン
 
-このリポジトリは Claude Code のプラグインのマーケットプレイス `ritsu` で、同じ名前のプラグイン `ritsu` を一つ持ち、そこに八つのスキルが入っています。
+ritsu のサイトが、Claude Code のプラグインのマーケットプレイス `ritsu` を公開しています。マーケットプレイスには同じ名前のプラグイン `ritsu` が一つあり、そこに八つのスキルが入っています。
 
 ```text
-/plugin marketplace add i2y/ritsu
+/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json
 /plugin install ritsu@ritsu
 ```
 
-Claude Code は、プラグインのスキルにプラグインの名前を付けて呼びます（`ritsu:ritsu`、`ritsu:rulec`、`ritsu:dandori` など）。プラグインのバージョンは ritsu のバージョンと同じなので、ritsu の新しいリリースが、プラグインの新しいバージョンになります。
+マーケットプレイスはこの一つのファイルで、プラグインはこのリポジトリの `skills/` のフォルダーです。Claude Code はこのフォルダーだけを取ってくる（1 MB ほど）ので、リポジトリ全体はダウンロードしません。Claude Code は、プラグインのスキルにプラグインの名前を付けて呼びます（`ritsu:ritsu`、`ritsu:rulec`、`ritsu:dandori` など）。プラグインのバージョンは ritsu のバージョンと同じなので、ritsu の新しいリリースが、プラグインの新しいバージョンになります。
 
 ### どのエージェントでも：`ritsu skills install`
 
@@ -81,4 +81,4 @@ $ unzip ritsu-skills-v0.23.0.zip -d ~/.claude/skills -x 'LICENSE-*'
 
 ## どう保っているか
 
-`ritsu/SKILL.md` は手で書いています。言語のスキルは、その言語と一緒に保っています。`crates/<言語>/skills/sync.sh` が、言語の文書を写したページを書き、どのページがそれに当たるかは `crates/<言語>/skills/README.md` にあります。言語ごとのテストが、スキルとツールの食い違いを確かめます。`crates/ritsu/tests/skill.rs` は八つをまとめて確かめます。各フォルダーの `SKILL.md` がフォルダーの名前とリポジトリのライセンスを書いていること、バイナリが八つのフォルダーの全ファイルを持ち、`ritsu skills install` がそれをそのまま書くこと、リリースの zip が同じファイルを持つこと、プラグインの manifest がワークスペースのバージョンを書いていること、です。
+`ritsu/SKILL.md` は手で書いています。言語のスキルは、その言語と一緒に保っています。`crates/<言語>/skills/sync.sh` が、言語の文書を写したページを書き、どのページがそれに当たるかは `crates/<言語>/skills/README.md` にあります。言語ごとのテストが、スキルとツールの食い違いを確かめます。`crates/ritsu/tests/skill.rs` は八つをまとめて確かめます。各フォルダーの `SKILL.md` がフォルダーの名前とリポジトリのライセンスを書いていること、バイナリが八つのフォルダーの全ファイルを持ち、`ritsu skills install` がそれをそのまま書くこと、リリースの zip が同じファイルを持つこと、サイトのマーケットプレイスがワークスペースのバージョンを書き、`skills/` だけを配ること、です。

@@ -27,15 +27,17 @@ There are four ways, and each installs the same files.
 
 ### Claude Code: the plugin
 
-The repository is a Claude Code plugin marketplace, `ritsu`, with one plugin, also `ritsu`, which
-holds the eight skills:
+ritsu's site publishes a Claude Code plugin marketplace, `ritsu`, with one plugin, also `ritsu`,
+which holds the eight skills:
 
 ```text
-/plugin marketplace add i2y/ritsu
+/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json
 /plugin install ritsu@ritsu
 ```
 
-Claude Code names a plugin's skills after the plugin: `ritsu:ritsu`, `ritsu:rulec`,
+The marketplace is that one file, and the plugin is the folder `skills/` of this repository, which
+Claude Code checks out alone (about 1 MB) rather than the whole repository. Claude Code names a
+plugin's skills after the plugin: `ritsu:ritsu`, `ritsu:rulec`,
 `ritsu:dandori`, and so on. The plugin takes the version of ritsu, so a new release of ritsu is a
 new version of the plugin.
 
@@ -105,4 +107,5 @@ looked at a link, so it should always ask, and `ritsu skills install` writes fil
 skill to what the tool does. `crates/ritsu/tests/skill.rs` holds the eight together: each folder's
 `SKILL.md` names the folder and the repository's license, the binary carries every file of the
 eight folders and `ritsu skills install` writes them as they are, the release zip holds the same
-files, and the plugin's manifests say the version of the workspace.
+files, and the marketplace on the site says the version of the workspace and hands out `skills/`
+alone.

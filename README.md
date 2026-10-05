@@ -391,8 +391,10 @@ across the languages and fix it, and which language's skill to read for the rest
 of the seven languages, in `skills/<language>/`. [skills/README.md](skills/README.md) lists them.
 There are four ways to install them:
 
-- **Claude Code**: the repository is a plugin marketplace whose plugin `ritsu` holds the eight.
-  Run `/plugin marketplace add i2y/ritsu`, then `/plugin install ritsu@ritsu`.
+- **Claude Code**: ritsu's site publishes a plugin marketplace whose plugin `ritsu` holds the
+  eight. Run `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`, then
+  `/plugin install ritsu@ritsu`; Claude Code fetches the folder `skills/` alone, not the whole
+  repository.
 - **Any agent, from the binary**: `ritsu skills install` writes them into the project's
   `.claude/skills/`; with `--user`, into `~/.claude/skills/`; with `--dir <dir>`, where another
   agent reads skills. Names after it (`ritsu skills install rulec dandori`) write only those, and

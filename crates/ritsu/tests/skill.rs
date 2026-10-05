@@ -11,15 +11,16 @@
 //! - the output it shows (the blocks marked `text`) is lines of one of ritsu's golden files;
 //! - the commands it names are commands.
 //!
-//! It holds the eight skills of `skills/` together too, and the three ways they are handed out
+//! It holds the eight skills of `skills/` together too, and the ways they are handed out
 //! (PLAN F.3):
 //!
 //! - `skills/` holds a folder for ritsu and one for each language, and no other, each with a
 //!   `SKILL.md` whose frontmatter names the folder, says in at most 1,024 characters when to use it,
 //!   and names the repository's license;
-//! - the plugin of Claude Code (`.claude-plugin/plugin.json`) and its marketplace
-//!   (`.claude-plugin/marketplace.json`) say what they must, in the version of the workspace, and the
-//!   plugin is the eight skills and nothing else Claude Code would load from its root;
+//! - the marketplace of Claude Code is one file the site publishes (website/docs/marketplace.json),
+//!   not the repository; it says what it must, in the version of the workspace, and its plugin is
+//!   the folder skills/, fetched alone, with the eight skills and nothing else Claude Code would
+//!   load; the pages that say how to install it add it at the URL the site publishes it at;
 //! - the binary carries every file of the eight folders, `ritsu skills install` writes them as they
 //!   are, refuses a file changed by hand unless `--force` is given, and writes only the skills
 //!   named; `ritsu skills list` names the eight;
@@ -223,35 +224,59 @@ fn skills_holds_the_eight_each_with_its_frontmatter() {
     }
 }
 
-#[test]
-fn the_plugin_and_its_marketplace_say_what_they_are() {
-    let plugin = json(".claude-plugin/plugin.json");
-    assert_eq!(plugin["name"], "ritsu");
-    assert_eq!(plugin["version"].as_str(), Some(workspace("version").as_str()), "the plugin takes the version of the workspace");
-    assert!(plugin["description"].as_str().is_some_and(|d| !d.is_empty()), "the plugin says what it is");
-    assert_eq!(plugin["author"]["name"], "i2y");
-    assert!(plugin["author"].get("email").is_none(), "the manifest names no address");
-    assert_eq!(plugin["license"].as_str(), Some(workspace("license").as_str()));
-    assert_eq!(plugin["repository"].as_str(), Some(workspace("repository").as_str()));
-    // The skills are found where Claude Code looks by default, skills/ at the plugin's root.
-    for key in ["skills", "commands", "agents", "hooks", "mcpServers", "lspServers", "outputStyles"] {
-        assert!(plugin.get(key).is_none(), "plugin.json sets `{key}`: the plugin is the folders of skills/ alone");
-    }
-    // The root is the plugin's, so nothing else there may be a part Claude Code loads.
-    for part in ["commands", "agents", "hooks", "bin", "output-styles", "workflows", "themes", "monitors", ".mcp.json", ".lsp.json", "settings.json", "SKILL.md", "CLAUDE.md"] {
-        assert!(!root().join(part).exists(), "{part} at the root would be a part of the plugin `ritsu` too");
-    }
+/// The URL ritsu's site is published at (`site_url` in website/zensical.toml), ending in `/`.
+fn site_url() -> String {
+    let toml = fs::read_to_string(root().join("website/zensical.toml")).unwrap();
+    toml.lines().find_map(|l| l.strip_prefix("site_url = \"")).and_then(|l| l.strip_suffix('"')).expect("website/zensical.toml names its site_url").to_string()
+}
 
-    let market = json(".claude-plugin/marketplace.json");
+#[test]
+fn the_marketplace_on_the_site_hands_out_the_folder_of_skills_alone() {
+    // Were the repository the marketplace, adding it would clone all of ritsu, and installing would
+    // copy all of it again, to read the eight folders of skills/. The marketplace is one file the
+    // site publishes instead, and the plugin it lists is skills/, which Claude Code fetches alone.
+    assert!(!root().join(".claude-plugin").exists(), ".claude-plugin/ makes the repository a marketplace, the adding of which clones all of it; the marketplace is website/docs/marketplace.json");
+    let market = json("website/docs/marketplace.json");
     assert_eq!(market["name"], "ritsu");
     assert_eq!(market["owner"]["name"], "i2y");
     assert!(market["owner"].get("email").is_none(), "the marketplace names no address");
     assert!(market["description"].as_str().is_some_and(|d| !d.is_empty()), "the marketplace says what it is");
     let plugins = market["plugins"].as_array().expect("the marketplace lists its plugins");
     assert_eq!(plugins.len(), 1, "one plugin, ritsu");
-    assert_eq!(plugins[0]["name"], "ritsu", "the entry is named as the manifest is, so `/plugin install ritsu@ritsu` finds it");
-    assert_eq!(plugins[0]["source"], "./", "the plugin is the root of the repository");
-    assert!(plugins[0].get("version").is_none(), "the version is plugin.json's alone");
+    let plugin = &plugins[0];
+    assert_eq!(plugin["name"], "ritsu", "`/plugin install ritsu@ritsu` names it");
+    assert_eq!(plugin["version"].as_str(), Some(workspace("version").as_str()), "the plugin takes the version of the workspace");
+    assert!(plugin["description"].as_str().is_some_and(|d| !d.is_empty()), "the plugin says what it is");
+    assert_eq!(plugin["author"]["name"], "i2y");
+    assert!(plugin["author"].get("email").is_none(), "the plugin names no address");
+    assert_eq!(plugin["license"].as_str(), Some(workspace("license").as_str()));
+    let repository = workspace("repository");
+    assert_eq!(plugin["repository"].as_str(), Some(repository.as_str()));
+    assert_eq!(plugin["homepage"].as_str(), Some(site_url().as_str()), "the plugin's homepage is ritsu's site");
+    // Claude Code checks out skills/ alone, with a sparse checkout, over HTTPS (a GitHub `owner/repo`
+    // would have it try SSH first, which fails where there is no key).
+    let source = &plugin["source"];
+    assert_eq!(source["source"], "git-subdir");
+    assert_eq!(source["url"].as_str(), Some(format!("{repository}.git").as_str()));
+    assert_eq!(source["path"], "skills");
+    assert!(source.get("ref").is_none() && source.get("sha").is_none(), "the plugin follows the default branch, and its version decides when an install takes a new copy");
+    // skills/ holds no plugin.json, so the entry is the manifest: the skills are the folders at the
+    // root of skills/, and the plugin is nothing else.
+    assert_eq!(plugin["skills"], serde_json::json!(["./"]), "the skills are the folders at the root of skills/");
+    for key in ["commands", "agents", "hooks", "mcpServers", "lspServers", "outputStyles", "workflows"] {
+        assert!(plugin.get(key).is_none(), "the entry sets `{key}`: the plugin is the folders of skills/ alone");
+    }
+    for part in [".claude-plugin", "commands", "agents", "hooks", "bin", "skills", "output-styles", "workflows", "themes", "monitors", ".mcp.json", ".lsp.json", "settings.json", "SKILL.md", "CLAUDE.md"] {
+        assert!(!root().join("skills").join(part).exists(), "skills/{part} would be a part of the plugin `ritsu` too");
+    }
+
+    // The pages that say how to install it add the marketplace at the URL the site publishes it at.
+    let add = format!("/plugin marketplace add {}marketplace.json", site_url());
+    for readme in ["README.md", "README.ja.md", "skills/README.md", "skills/README.ja.md"] {
+        let text = fs::read_to_string(root().join(readme)).unwrap();
+        assert!(text.contains(&add), "{readme} does not say `{add}`");
+        assert!(!text.contains("/plugin marketplace add i2y/ritsu"), "{readme} adds the repository as the marketplace");
+    }
 }
 
 #[test]

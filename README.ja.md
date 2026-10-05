@@ -340,7 +340,7 @@ rulec の証明書は、Lean 4 で検査し直します。chobo、koyomi、dando
 
 ritsu とその言語は、AI エージェントに使ってもらうためのものです。[skills/](skills) に、八つの [Agent Skills](https://agentskills.io) を置いています。[skills/ritsu](skills/ritsu) は二つ以上の言語を使うプロジェクトのためのスキルで、`ritsu check` から、ワークフローの実行とパッケージの生成までの手順、言語をまたぐ診断の読み方と直し方、残りは言語ごとのどのスキルを読むか、が入っています。残りの七つは言語ごとのスキルで、`skills/<言語>/` にあります。一覧は [skills/README.ja.md](skills/README.ja.md) にあります。入れ方は四つあります。
 
-- **Claude Code**：このリポジトリはプラグインのマーケットプレイスで、プラグイン `ritsu` に八つが入っています。`/plugin marketplace add i2y/ritsu` を実行してから、`/plugin install ritsu@ritsu` を実行します。
+- **Claude Code**：ritsu のサイトがプラグインのマーケットプレイスを公開していて、プラグイン `ritsu` に八つが入っています。`/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json` を実行してから、`/plugin install ritsu@ritsu` を実行します。Claude Code が取ってくるのは `skills/` のフォルダーだけで、リポジトリ全体はダウンロードしません。
 - **どのエージェントでも、バイナリから**：`ritsu skills install` が、プロジェクトの `.claude/skills/` に書きます。`--user` を付けると `~/.claude/skills/` に、`--dir <dir>` を付けると、ほかのエージェントがスキルを読む場所に書きます。名前を挙げると（`ritsu skills install rulec dandori`）そのスキルだけを書き、`ritsu skills list` で一覧を出します。
 - **手で**：`skills/` から必要なフォルダーを、`~/.claude/skills/` か、プロジェクトの `.claude/skills/` にコピーします。
 - **リリースから**：`ritsu-skills-v<版>.zip` に八つのフォルダーが入っています。エージェントがスキルを読む場所に展開します。

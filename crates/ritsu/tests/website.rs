@@ -25,8 +25,8 @@
 //!   command prints;
 //! - and, when Zensical is in website/.venv, build.sh builds the tree that is published, in a copy
 //!   of website/: the index pages of ritsu's site and of each language's, in both languages, the
-//!   playgrounds, and a file of the tree for every link of ritsu's built pages that stays in the
-//!   site. Without Zensical the test says SKIP.
+//!   playgrounds, the marketplace of Claude Code as it is written, and a file of the tree for every
+//!   link of ritsu's built pages that stays in the site. Without Zensical the test says SKIP.
 //!
 //! (tests/common/mod.rs holds what this file shares with tests/readme.rs.)
 
@@ -533,8 +533,12 @@ fn build_sh_builds_the_tree_that_is_published() {
             want.extend([format!("{s}/playground/index.html"), format!("{s}/ja/playground/index.html")]);
         }
     }
+    // The marketplace of Claude Code that the README adds by its URL (tests/skill.rs holds what it
+    // says), published as it is written.
+    want.push("marketplace.json".to_string());
     let missing: Vec<&String> = want.iter().filter(|w| !built.join(w).is_file()).collect();
     assert!(missing.is_empty(), "build.sh built no {missing:?}");
+    assert!(fs::read(built.join("marketplace.json")).unwrap() == fs::read(website().join("docs/marketplace.json")).unwrap(), "the site publishes another marketplace.json than website/docs/marketplace.json");
 
     // The page of yuen's namespace is built with an element for every word, the id of which is the
     // word as it follows the `#` of its IRI: `…/ns/yuen#Requirement`, which the server sends on to
