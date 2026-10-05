@@ -58,9 +58,4 @@ done
 cp docs/stylesheets/extra.css docs-ja/stylesheets/extra.css
 cp docs/images/*.svg docs/images/*.png docs-ja/images/
 
-# The playground (§15.48) is three files — the module, the script and the stylesheet —
-# loaded by a page in each language. The Japanese tree gets a copy for the same reason the
-# images do, and `rulec.wasm` is committed once, on the English side.
-mkdir -p docs-ja/playground
-cp docs/playground/playground.js docs/playground/playground.css docs/playground/rulec.wasm docs-ja/playground/
-echo "synced: agents, reference, formats, generated-code, backends, codes, compatibility, playground (en + ja)"
+echo "synced: agents, reference, formats, generated-code, backends, codes, compatibility (en + ja)"

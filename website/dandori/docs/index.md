@@ -33,7 +33,7 @@ against one reference interpreter, on every scenario the tests generate.
 </p>
 
 <div class="dd-hero__cta" markdown>
-[Try it in the browser](playground.md){ .md-button .md-button--primary }
+[Try it in the browser](../playground/#flow=tests/fixtures/hotel_naive.flow){ .md-button .md-button--primary }
 [Install](install.md){ .md-button }
 [Write a workflow](tour.md){ .md-button }
 [Examples](examples.md){ .md-button }

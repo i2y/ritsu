@@ -7,8 +7,8 @@
 //! and the names of types are resolved by protobuf's rule over the files a file can see: itself,
 //! what it imports, and what those pass on with `import public` (`ritsu_proto::Protos`). What is
 //! dandori's own is what it makes of that: it reads proto3 only, it finds a file through its
-//! sources (the disk, or the playground's bundle), and with an import that was not read it keeps
-//! a name it cannot resolve as written.
+//! sources (the disk, through ritsu_base::fs, which ritsu's playground holds in memory), and with an
+//! import that was not read it keeps a name it cannot resolve as written.
 //!
 //! Google's well-known types, `buf/validate/validate.proto` and dandori's
 //! `dandori/v1/options.proto` are known without their files; any other import is read from the

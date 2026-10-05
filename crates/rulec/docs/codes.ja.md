@@ -3246,7 +3246,7 @@ machine k(k) over m
 
 `error` — **この rulec は koyomi のファイルを読めません**
 
-**いつ出るか。** 範囲を koyomi の日付からとる規則（`range from koyomi`）を、koyomi をつないでいない rulec で確かめたとき。rulec のクレートのバイナリと、ブラウザで試すページがそうです。範囲全体で確かめ直すことはせず、確かめられなかったとして終了コード 2 で終わります。
+**いつ出るか。** 範囲を koyomi の日付からとる規則（`range from koyomi`）を、koyomi をつないでいない rulec で確かめたとき。rulec のクレートのバイナリがそうです。範囲全体で確かめ直すことはせず、確かめられなかったとして終了コード 2 で終わります。
 
 **直し方。** `ritsu rulec check <ファイル>` か `ritsu check <ディレクトリ>` で走らせてください。どちらも、koyomi から日の集合を受け取ります。
 

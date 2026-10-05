@@ -1,8 +1,9 @@
 //! The page's side of the boundary, for `wasm32-unknown-unknown` with no bindgen and no JavaScript
-//! toolchain: six exported functions and the convention rulec's and dandori's pages keep. **Every
-//! buffer that crosses the boundary begins with its own length, as a little-endian `u32`.** The
-//! page allocates a buffer, writes its request into it, calls, reads the answer out of the module's
-//! memory and frees both. Everything else is in crate::playground, which the tests run natively.
+//! toolchain: six exported functions and the convention rulec's and dandori's playgrounds kept.
+//! **Every buffer that crosses the boundary begins with its own length, as a little-endian `u32`.**
+//! The page allocates a buffer, writes its request into it, calls, reads the answer out of the
+//! module's memory and frees both. Everything else is in crate::playground, which the tests run
+//! natively.
 //!
 //! The module keeps nothing between calls: every request carries the whole project, which is a few
 //! files the reader is editing.

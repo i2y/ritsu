@@ -66,8 +66,8 @@ as well: "the crate `rulec`", after `i2y/tap/rulec` in Homebrew. -->
 
 ## What is not covered
 
-- **The Rust library** (`src/lib.rs`). Its modules are public so that the tests, the
-  playground and `rulec mcp` can reach them, not as an interface; they change with the tool.
-  Use the command line, `rulec mcp`, or the generated code.
-- **The playground and the site.**
+- **The Rust library** (`src/lib.rs`). Its modules are public so that the tests, ritsu (its
+  commands and its playground) and `rulec mcp` can reach them, not as an interface; they change
+  with the tool. Use the command line, `rulec mcp`, or the generated code.
+- **ritsu's playground and the site.**
 - **Everything under `experiments/`.**

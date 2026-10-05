@@ -1,4 +1,5 @@
-//! What the commands print and build, for the binary and the playground to say the same.
+//! What the commands print and build, for the binary and ritsu (its commands and its playground) to
+//! say the same.
 
 use crate::diag::{Diag, Lang};
 use crate::model::Model;

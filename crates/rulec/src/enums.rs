@@ -17,8 +17,8 @@ use crate::types::Checked;
 ///
 /// The path is resolved against the directory of the `.rule`, which is the only place a
 /// relative path in it can sensibly mean. Reading happens here and nowhere deeper: the
-/// checker itself stays a function from text to diagnostics (the playground runs it as wasm,
-/// where there is no file to read, and says so rather than pretending the enum agrees).
+/// checker itself stays a function from text to diagnostics (where the file cannot be read,
+/// E013 says so rather than pretending the enum agrees).
 pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
     let mut out = Vec::new();
     for im in &f.enum_imports {

@@ -2,7 +2,7 @@
 
 dandori は [ritsu](https://github.com/i2y/ritsu) の言語の一つで、ritsu のリポジトリからビルドします。規則を使う（`use rule` がある）ワークフローは `ritsu dandori` で走らせます。規則は rulec が、日付のファイルと帳簿（`use dates`、`use book`）は koyomi と chobo が、同じプロセスの中で読みます。規則を使わないワークフローなら、`dandori` のコマンドだけでも動き、生成したコードに rulec のものは入りません。
 
-インストールする前に試すなら、[ブラウザで試す](playground.md)を開いてください。dandori がページの中で動きます。
+インストールする前に試すなら、ritsu のサイトの[ブラウザで試す](../../ja/playground/#flow=tests/fixtures/hotel_naive.flow)を開いてください。dandori が、フローが読む規則や日付のファイル、帳簿と一緒に、ページの中で動きます。
 
 ## ritsu
 

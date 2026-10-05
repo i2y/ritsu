@@ -1,39 +1,12 @@
 # ブラウザで試す
 
-このページで動いているのは検査器そのものです。wasm32 に載せているだけで、`report` も診断もジェネレーターも、コマンドと同じものが走ります。**どこにも送っていません。** 打ち込んだ表はブラウザの中だけにあるので、web のフォームに貼ってはいけない料金表でも、ここには貼れます。
+<p>このページは、ritsu のサイトの<a id="moved" href="../../ja/playground/#project=rulec/gap.ja">ブラウザで試すページ</a>に移りました。</p>
 
-<div class="pg" data-lang="ja">
-  <div class="pg-bar">
-    <button data-preset="gap" type="button">一行足りない表</button>
-    <button data-preset="full" type="button">そろった表</button>
-    <button data-preset="multi" type="button">表をつなぐ</button>
-    <button data-preset="big" type="button">大きい規則</button>
-    <button data-preset="walk" type="button">並びを歩く</button>
-    <select class="pg-picker" hidden></select>
-    <span class="pg-status"></span>
-  </div>
-  <textarea class="pg-src" spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>
-  <div class="pg-tabs">
-    <button data-view="check" class="on" type="button">検査</button>
-    <button data-view="gen" type="button">生成コード</button>
-    <button data-view="doc" type="button">人が読む資料</button>
-  </div>
-  <div class="pg-out"></div>
-</div>
-
-<script src="playground/playground.js" defer></script>
-
-## 試してみること
-
-**最初に出ているのは、最後の行が欠けた表**です。[ホーム](index.md)の一枚目の絵に描いてある、あの表です。`check` は「不完全です」とは言いません。**どの入力がすり抜けるか**を名指しして、その穴を塞ぐ行の形まで出します。
-
-1. **指摘を読む。** `当てはまらない例: あて先 = 遠隔地, 重量 = 2001g`。これを見つけるのに、データも、いま動いている実装も要りません。
-2. **穴を塞ぐ。** 「そろった表」を押すと、欠けていた行 `| 遠隔地 | >2kg <=5kg | 1500円 |` が戻って、指摘が消えます。ヒントが出す行は**形**で、額は一行目からコピーしたもの、重量はちょうど 2001g です。検査が名指しした一点だけを塞ぎます。額を勝手に決めないし、帯がどこまで続くかも推測しないからです。
-3. **「生成コード」を開く。** `rulec gen` がこの表に対して書くもの全部です。Python・TypeScript・JavaScript・Rust・Ruby・PHP・Go・Swift・Java・SQL・Wasm・NumPy と、それぞれのランナー、規則を MCP ツールにするサーバ、そして表の境界から作ったテストベクタ。
-4. **「人が読む資料」を開く。** `rulec doc --format html` が、表を読んで確かめる人のために用意するページです。ウィンドウいっぱいを使うページなので、この中ではなく**別のタブで**開きます。あらかじめ用意した答えを見せているのではありません。**生成した JavaScript がその場で動いている**ので、打ち込んだケースは同じコードが決めています。
-5. **わざと壊す。** `<=2kg` を `<=6kg` に変えると、両方の行に当てはまる入力つきで重なりが返ります。出力から `round up(10円)` を消すと、丸めの診断が何を訊いてくるか読めます。
-6. **他のサンプルを開く。** 一枚の表で終わらない規則が三つあります。**「表をつなぐ」**は、表が決めた値を次の表が読む形（`define` と `result` も入ります）。**「大きい規則」**は、同じ入力から出た二本の筋が下でまた合流する形で、人が読むページを開くと、その形がそのまま並びます。**「並びを歩く」**は、件数が呼び出しのたびに変わる明細を `elements` で受けて `sum` で畳む形——入力欄が「行を足す」になります。どれも[コーパスの規則そのもの](examples.md)で、毎コミット全言語で走っているものです。
-
-## ここに無いもの
-
-`verify`（いま動いている実装との突き合わせ）、`replay` と `diff`（過去の記録との突き合わせ）は、プロセスとファイルが要るのでこのページには置いていません。そちらは[コマンド](install.md)の仕事です。文法は[ルール(.rule)を書く](tour.md)に、指摘の一つ一つの意味は[何を証明するか](checks.md)にあります。
+<script>
+  // Send the reader on to where this page went, ritsu's playground: a link that opened something
+  // here goes on with what it opened, and any other opens what this page opened on, the table with
+  // a row missing (the link above).
+  const to = new URL(document.getElementById("moved").href);
+  if (location.hash.includes("=")) to.hash = location.hash;
+  location.replace(to.href);
+</script>

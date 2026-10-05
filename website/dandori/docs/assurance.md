@@ -205,23 +205,21 @@ rules.
 
 ## The playground
 
-[Try it in the browser](playground.md) runs dandori compiled to wasm32, and reads what the examples
-read from `presets.json`: their files, what rulec printed for their rules, `rulec doc` among it, and
-what koyomi and chobo said of their dates files and books. Both are committed, and both are held to
-the repository.
+[Try it in the browser](../playground/#flow=tests/fixtures/hotel_naive.flow) is ritsu's playground:
+ritsu compiled to wasm32, which opens every flow of the examples in a project of its own, with the
+files it reads (its rules, the descriptions of the APIs it calls, its child flow, its dates file and
+its book). It took over from the playground this site had, and a link that page gave (`#flow=…`)
+opens the same flow there. ritsu's tests hold it (`crates/ritsu/tests/playground.rs`):
 
-- `presets.json` must be what checking the examples reads now, and what rulec, koyomi and chobo
-  print for their rules, dates files and books now.
-- For every flow the page opens, the command, reading the disk and running rulec, must print and
-  write what the page answers from `presets.json`: `check`, `build` for all seven targets, and `doc` in
-  both formats.
-- The rules tab has no command to be held to: what it answers from `presets.json` must be what it
-  answers reading the disk and running rulec, and every rule must have its page.
-- The module must answer every request as the library does: the flows as they are, and edits that
-  reach what they do not (a flow that does not parse, a rule and a child flow the page does not have,
-  a flow that runs itself).
-- In Chrome, the page in each language must start, show what `check` prints for the draft, follow a
-  link to a flow, a tab and a platform, and show each rule's text with a link to its page.
+- Every flow of the examples must be a project of the page, made from the examples' files as they
+  are now.
+- For every project, what the page answers must be what the `ritsu` binary prints and writes in a
+  directory holding the same files: `check` of the whole project, and each file's generator (every
+  target of a flow) and page. So must it after edits that reach what the examples do not (a rule and
+  a child flow the project does not have, a flow that runs itself).
+- The module must answer as the library does.
+- In Chrome, the page in each language must open the links this site's playground gave, on the flow,
+  the tab and the platform they name, and this site's page must send them on.
 
 ## What is left out
 
@@ -263,9 +261,9 @@ $ cargo test
 
 The rules are read through rulec's own answer to ritsu's port of rules, in the tests' process, and the
 code `rulec gen` writes for them is made by rulec's library, so the tests need no rulec binary. The
-golden files of `dandori doc`, the pages of the site's examples and the playground's `presets.json` hold
-what rulec draws for the rules, `rulec doc` among it, and its version is in that: they are recorded
-anew when the version changes.
+golden files of `dandori doc` and the pages of the site's examples hold what rulec draws for the
+rules, `rulec doc` among it, and its version is in that: they are recorded anew when the version
+changes.
 
 A test that cannot find Node, the tools, buf, protoc, the cluster, the `argo` command, the image of
 LocalStack or Chrome prints a `SKIP:` line and passes, so read the output with `-- --nocapture`.
@@ -274,7 +272,9 @@ The test of the books uses PostgreSQL, TigerBeetle and chobo's `tools/runner` (i
 `cargo test` takes six to seven minutes; `tools/argo/setup.sh` sets Argo's controller up for it, to
 look at a workflow again a second after a change rather than ten, on the node image of kind 0.33.0.
 `DANDORI_FLOW=<part of a path>` runs only the flows whose path
-has it, and `DANDORI_BLESS=1` rewrites the golden files and the site's pages of the examples, and records the kept histories and the playground's `presets.json` anew.
-After a change to what `check`, `build` or `doc` answers, `website/dandori/tools/make_wasm.sh`, at the
-root of the repository, builds the
-playground's module again (it needs the `wasm32-unknown-unknown` target of rustup).
+has it, and `DANDORI_BLESS=1` rewrites the golden files and the site's pages of the examples, and records the kept histories anew.
+After a change to what `check`, `build` or `doc` answers, `website/tools/make_wasm.sh`, at the root of
+the repository, builds the module of ritsu's playground again (it needs the `wasm32-unknown-unknown`
+target of rustup); after a change to an example,
+`RITSU_BLESS=1 cargo test -p ritsu --test playground the_projects_are_what_the_page_opens` writes its
+projects anew.

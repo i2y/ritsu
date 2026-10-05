@@ -1,7 +1,7 @@
 //! What dandori reads of a rule: the facts rulec knows of it, handed over as types through ritsu's
 //! port of rules (`ritsu_ports::Rules`, ritsu's DESIGN 3.2). dandori does not hold rulec; whoever
-//! runs it hands it the port (crate::sources): `ritsu dandori` hands it rulec itself, the
-//! playground the facts it recorded, and the dandori binary of this crate one that reads no rule.
+//! runs it hands it the port (crate::sources): `ritsu dandori` and ritsu's playground hand it rulec
+//! itself, and the dandori binary of this crate one that reads no rule.
 //!
 //! - the inputs and the outputs: their names, ASCII aliases, types with their units (a rate with
 //!   the step its integer counts), and their ranges as the integers that go on the wire

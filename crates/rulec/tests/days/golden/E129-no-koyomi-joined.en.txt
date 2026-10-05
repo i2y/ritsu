@@ -4,5 +4,5 @@ error[E129]: This rulec reads no koyomi file
 7 |   pay_day : date  range from koyomi "payment_terms.cal" date payment
   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the range of pay_day is the days koyomi "payment_terms.cal" date payment comes to
   |
- The binary of rulec's own crate (and the page in the browser) has no koyomi joined. Run `ritsu rulec check …` or `ritsu check …`, which hand the set of days over through koyomi's port.
+ The binary of rulec's own crate has no koyomi joined. Run `ritsu rulec check …` or `ritsu check …`, which hand the set of days over through koyomi's port.
 

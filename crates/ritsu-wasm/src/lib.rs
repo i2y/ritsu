@@ -7,7 +7,7 @@
 //!   command reads them as it would read them from a directory: what it answers is what the
 //!   command answers there, word for word.
 //! - `wasm` (wasm32 only): the page's side of the boundary, with the convention rulec's and
-//!   dandori's pages keep — every buffer that crosses it begins with its own length, as a
+//!   dandori's playgrounds kept — every buffer that crosses it begins with its own length, as a
 //!   little-endian `u32`.
 
 pub mod playground;

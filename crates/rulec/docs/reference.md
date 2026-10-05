@@ -677,9 +677,8 @@ over the payment days it is complete. The four jobs a range does all follow the 
    and the Lean one in `proofs/`) rule a box out when it holds none of the days.
 
 The set is read through ritsu's port of dates, so the rule has to be checked with koyomi joined:
-`ritsu rulec check` or `ritsu check`. The binary of rulec's own crate, and the page in the
-browser, have no koyomi; there the file is not checked over every day instead, and the run says
-so (E129, exit 2). A set that cannot be had — the file is not there, does not pass koyomi's
+`ritsu rulec check` or `ritsu check`. The binary of rulec's own crate has no koyomi; there the
+file is not checked over every day instead, and the run says so (E129, exit 2). A set that cannot be had — the file is not there, does not pass koyomi's
 check, has no such date, or comes to no day — is E130, with what koyomi says. Only a `date`
 input takes `range from koyomi` (E065); an output, a `derive` or a field of an element cannot
 borrow its range from another file. The days are listed as a precondition in `rulec api`

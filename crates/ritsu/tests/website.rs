@@ -19,6 +19,10 @@
 //!   repository;
 //! - .github/workflows/docs.yml runs on a push to main that changes what the site is built from,
 //!   and by hand;
+//! - the pages the playgrounds of rulec's and dandori's sites had (`playground.md` in each language)
+//!   send a reader on to ritsu's playground in the same language, on a project it opens, and the nav
+//!   and the home page of each site link to the same place (tests/playground.rs follows them in
+//!   Chrome);
 //! - the pages of a language's namespace (website/docs/ns/yuen.md and website/docs-ja/ns/yuen.md,
 //!   which the IRIs of yuen's PROV words open: `https://i2y.github.io/ritsu/ns/yuen#Requirement`)
 //!   say every word yuen writes and no other, each once, under the heading of its kind, with the
@@ -26,8 +30,10 @@
 //!   command prints;
 //! - and, when Zensical is in website/.venv, build.sh builds the tree that is published, in a copy
 //!   of website/: the index pages of ritsu's site and of each language's, in both languages, the
-//!   playgrounds, the marketplace of Claude Code as it is written, and a file of the tree for every
-//!   link of ritsu's built pages that stays in the site. Without Zensical the test says SKIP.
+//!   playground, the pages the languages' playgrounds had, each with nothing beside it and its link
+//!   and the nav of its site leading to the playground in the tree, the marketplace of Claude Code as
+//!   it is written, and a file of the tree for every link of ritsu's built pages that stays in the
+//!   site. Without Zensical the test says SKIP.
 //!
 //! (tests/common/mod.rs holds what this file shares with tests/readme.rs.)
 
@@ -314,6 +320,92 @@ fn the_workflow_that_publishes_the_site_runs_on_a_push_to_main_and_by_hand() {
     assert!(text.contains("./build.sh") && text.contains("path: website/build"), "docs.yml builds with website/build.sh and publishes website/build");
 }
 
+/// The page a language's site had for its playground, in a language (`docs/playground.md` or
+/// `docs-ja/playground.md` of website/<site>), and where its site publishes it.
+fn page_before(site: &str, ja: bool) -> (PathBuf, String) {
+    let file = website().join(site).join(if ja { "docs-ja" } else { "docs" }).join("playground.md");
+    let url = if ja { format!("/{site}/ja/playground/") } else { format!("/{site}/playground/") };
+    (file, url)
+}
+
+/// The value of an attribute of the first element that has `id="…"`, as a page writes it.
+fn attribute_of(html: &str, id: &str, attr: &str) -> Option<String> {
+    let at = html.find(&format!("id=\"{id}\""))?;
+    let start = html[..at].rfind('<')?;
+    let tag = &html[start..start + html[start..].find('>')?];
+    let from = tag.find(&format!(" {attr}=\""))? + attr.len() + 3;
+    Some(tag[from..from + tag[from..].find('"')?].replace("&amp;", "&"))
+}
+
+/// What a link of the playground opens it on (`#project=rulec/gap`, `#flow=tests/…`): a project the
+/// page lists in its language, by projects.json.
+fn opens_a_project(fragment: &str, ja: bool) -> bool {
+    let v: serde_json::Value = serde_json::from_str(&read(&website().join("docs/playground/projects.json"))).expect("projects.json");
+    let lang = if ja { "ja" } else { "en" };
+    let listed = |p: &&serde_json::Value| p["lang"].as_str().is_none_or(|l| l == lang);
+    let projects: Vec<&serde_json::Value> = v["projects"].as_array().unwrap().iter().filter(listed).collect();
+    if let Some(name) = fragment.strip_prefix("project=") {
+        projects.iter().any(|p| p["name"] == name)
+    } else if let Some(flow) = fragment.strip_prefix("flow=") {
+        projects.iter().any(|p| p["group"] == "dandori" && p["open"] == flow)
+    } else {
+        false
+    }
+}
+
+/// The playgrounds rulec's and dandori's sites had are ritsu's now (DESIGN 13.2). The page each had
+/// is kept, in each language, only to send a reader on: its link `#moved` leads to ritsu's playground
+/// in the page's language, on a project it opens (what the page that was there opened on); its script
+/// follows the link, and takes a link the reader followed that opened something (`=`) along. The page
+/// is no more in the site's nav: the nav, and the home page, lead to the same place as the link.
+///
+/// A link of a page is read from the page's file, as Zensical reads it (and Zensical writes it, in the
+/// page it publishes a directory deeper, with one more `../`), and the nav's from the site's root: for
+/// all three, from the site's root, which is where the page's file is. Every site is under /ritsu/, and
+/// a link is followed from there, so one that climbs out of ritsu's site leads nowhere here.
+#[test]
+fn the_pages_the_playgrounds_had_send_a_reader_on() {
+    let mut seen = 0;
+    for site in sites() {
+        if !page_before(&site, false).0.is_file() {
+            continue;
+        }
+        for ja in [false, true] {
+            let (file, url) = page_before(&site, ja);
+            let name = file.strip_prefix(root()).unwrap().display().to_string();
+            let text = read(&file);
+            let site_root = if ja { format!("/ritsu/{site}/ja/") } else { format!("/ritsu/{site}/") };
+            let link = attribute_of(&text, "moved", "href").unwrap_or_else(|| panic!("{name} has no link `#moved`"));
+            let (path, fragment) = link.split_once('#').unwrap_or_else(|| panic!("{name}: the link {link} names nothing to open"));
+            let lands = normal(&format!("{site_root}{path}"));
+            let playground = if ja { "/ritsu/ja/playground/" } else { "/ritsu/playground/" };
+            assert_eq!(lands, playground, "{name}: the link {link} leads, from the site's root {site_root} (where the page {url} is read from), elsewhere than to the playground");
+            let source = source_of(lands.strip_prefix("/ritsu").unwrap(), &sites()).unwrap_or_else(|| panic!("{name}: {lands} is no page of the site"));
+            assert_eq!(source, website().join(if ja { "docs-ja/playground.md" } else { "docs/playground.md" }), "{name}: the link leads to another page");
+            assert!(opens_a_project(fragment, ja), "{name}: the playground lists no project #{fragment} opens");
+            for part in ["document.getElementById(\"moved\").href", "location.hash.includes(\"=\")", "location.replace("] {
+                assert!(text.contains(part), "{name}: the script does not hold `{part}`");
+            }
+            // the nav of the site, whose links are read from the site's root, and its home page,
+            // whose links are read from the page's file
+            let config = read(&website().join(&site).join(if ja { "zensical.ja.toml" } else { "zensical.toml" }));
+            assert!(!config.contains("\"playground.md\""), "{site}'s nav still names playground.md");
+            let nav: Vec<String> = config
+                .lines()
+                .filter_map(|l| l.trim().strip_prefix('{')?.split_once("\" = \"").map(|(_, t)| t.trim_end_matches(['}', ',', ' ']).trim_end_matches('"').to_string()))
+                .filter(|t| t.contains('#'))
+                .collect();
+            let want = format!("{playground}#{fragment}");
+            assert!(nav.iter().any(|t| { let (p, f) = t.split_once('#').unwrap(); format!("{}#{f}", normal(&format!("{site_root}{p}"))) == want }), "{site}'s nav leads to no {want}");
+            let index = read(&website().join(&site).join(if ja { "docs-ja/index.md" } else { "docs/index.md" }));
+            assert!(link_targets(&index).iter().any(|(_, t)| t.split_once('#').is_some_and(|(p, f)| format!("{}#{f}", normal(&format!("{site_root}{p}"))) == want)), "{site}'s home page leads to no {want}");
+            seen += 1;
+        }
+    }
+    // rulec's and dandori's, in two languages each
+    assert!(seen >= 4, "{seen} pages that send a reader on: were they changed?");
+}
+
 /// The pages of yuen's namespace, in English and in Japanese: what the IRI of a word of yuen's
 /// PROV opens (`https://i2y.github.io/ritsu/ns/yuen#Requirement`, which the server sends on to
 /// `…/ns/yuen/#Requirement`).
@@ -529,11 +621,31 @@ fn build_sh_builds_the_tree_that_is_published() {
     let built = copy.join("build");
 
     let mut want: Vec<String> = ["index.html", "ja/index.html", "playground/index.html", "playground/ritsu.wasm", "ja/playground/index.html", "ja/playground/projects.json", "ns/yuen/index.html", "ja/ns/yuen/index.html"].map(String::from).to_vec();
+    let mut before = Vec::new();
     for s in sites() {
         want.extend([format!("{s}/index.html"), format!("{s}/ja/index.html")]);
-        if website().join(&s).join("docs/playground.md").is_file() {
+        if page_before(&s, false).0.is_file() {
             want.extend([format!("{s}/playground/index.html"), format!("{s}/ja/playground/index.html")]);
+            before.extend([(s.clone(), false), (s.clone(), true)]);
         }
+    }
+    // The page a language's playground had is all there is of it, its link leads to the playground
+    // of the tree, and so does the nav of the site's home page: the page itself is no more in it.
+    for (s, ja) in &before {
+        let (_, url) = page_before(s, *ja);
+        let dir = built.join(url.trim_start_matches('/'));
+        let beside: Vec<String> = fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n != "index.html").collect();
+        assert!(beside.is_empty(), "{url} has {beside:?} beside the page that sends a reader on");
+        let html = read(&dir.join("index.html"));
+        let link = attribute_of(&html, "moved", "href").unwrap_or_else(|| panic!("{url}: built with no link `#moved`"));
+        // followed from where the site publishes the page, under /ritsu/: a link that climbs out of
+        // ritsu's site does not come back to it
+        let to = normal(&format!("/ritsu{url}{}", link.split('#').next().unwrap()));
+        let playground = if *ja { "/ritsu/ja/playground/" } else { "/ritsu/playground/" };
+        assert!(to == playground && built.join(to.trim_start_matches("/ritsu/")).join("index.html").is_file(), "{url}: the link {link} leads to {to}, not to the playground of the tree at {playground}");
+        let home = if *ja { format!("/{s}/ja/") } else { format!("/{s}/") };
+        let nav = read(&built.join(home.trim_start_matches('/')).join("index.html"));
+        assert!(targets_in(&nav).iter().any(|t| !t.contains("://") && normal(&format!("/ritsu{home}{}", t.split('#').next().unwrap())) == playground), "{home}: the built page leads nowhere to {playground}");
     }
     // The marketplace of Claude Code that the README adds by its URL (tests/skill.rs holds what it
     // says), published as it is written.

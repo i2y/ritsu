@@ -13,16 +13,14 @@ website/dandori/
 ├── zensical.toml       # the English site: docs/ -> build/
 ├── zensical.ja.toml    # the Japanese site: docs-ja/ -> build/ja/
 ├── build.sh            # both languages, in the one order that works
-├── sync.sh             # copies the pictures, the stylesheet and the playground into docs-ja/
+├── sync.sh             # copies the pictures and the stylesheet into docs-ja/
 ├── docs/               # the English pages, the pictures and the stylesheet
-│   ├── doc/            # the examples as `dandori doc --format html` draws them
-│   └── playground/     # the playground: dandori.wasm, presets.json, playground.js and .css
+│   └── doc/            # the examples as `dandori doc --format html` draws them
 ├── docs-ja/            # the Japanese pages
 │   └── doc/            # the Japanese versions of the examples, drawn with `--lang ja`
 └── tools/
     ├── flowlexer.py    # colours the ```flow blocks
-    ├── make_overview.py  # draws the overview on the home page
-    └── make_wasm.sh    # builds docs/playground/dandori.wasm
+    └── make_overview.py  # draws the overview on the home page
 ```
 
 The Japanese pages are written for a Japanese reader, not translated sentence by sentence, so the
@@ -45,11 +43,6 @@ nothing but the repository) checks that:
 - every ```` ```mermaid ```` block is word for word in a golden file of `tests/doc`, which
   `tests/doc.rs` holds to what `dandori doc` writes. Take a chart from a golden file.
 - `tools/flowlexer.py`'s `KEYWORDS` are `src/syntax.rs`'s, word for word.
-
-`tests/playground.rs` holds the playground to the tool: `presets.json` to what checking the examples
-reads now (with rulec's library), what the page answers from it to what the command prints and writes, the
-committed `dandori.wasm` to the library, through node, and the page to what it should show, in
-Chrome.
 
 `tests/doc.rs` (which needs Chrome for two of its tests) holds `docs/doc` and
 `docs-ja/doc` to what `dandori doc --format html` writes for the examples now; after a change to
@@ -92,28 +85,20 @@ $ ../.venv/bin/python tools/make_overview.py      # in website/dandori
 
 ## The playground
 
-`playground.md` in each language runs dandori in the page: `docs/playground/dandori.wasm` is the
-library compiled to wasm32 (`src/wasm.rs`), and `docs/playground/presets.json` holds what the
-examples read, their files and what rulec answered for their rules (`rulec doc` among it, and the
-rules' own text for the rules tab), since a page can neither read files nor run rulec. `sync.sh`
-copies the four files into `docs-ja/playground`.
+The playground this site had is ritsu's now (`website/docs/playground.md`, published at
+`/ritsu/playground/`): it opens every flow of the examples with the files the flow reads, and a reader
+can change the rules there too. The nav and the home page link to it. `playground.md` in each language
+is kept only to send a link to it on: a link it gave (`#flow=examples/hotel/temporal/hotel.flow&view=build`)
+opens the same flow there, and any other opens the first draft it opened on. ritsu's
+`crates/ritsu/tests/playground.rs` holds the page, the examples in it and the sending on, and ritsu's
+site's README says how to build the page's module and write its projects anew.
 
-Both are committed, so building the site needs no Rust and no rulec, and both go stale:
-
-```console
-$ website/dandori/tools/make_wasm.sh                          # after a change to what check, build or doc answers
-$ DANDORI_BLESS=1 cargo test -p dandori --test playground     # after a change to an example or a rule
-```
-
-`make_wasm.sh` adds the `wasm32-unknown-unknown` target to rustup when it is missing. The module is
-2.2 MB (729 KB gzipped), and `presets.json` 1.1 MB (261 KB gzipped). What `rulec doc` renders names
-the version of rulec, so a new rulec means recording `presets.json` anew, and `docs/doc` and
-`docs-ja/doc` too (`DANDORI_BLESS=1 cargo test -p dandori --test doc`).
+What `rulec doc` renders names the version of rulec, so a new rulec means drawing `docs/doc` and
+`docs-ja/doc` anew (`DANDORI_BLESS=1 cargo test -p dandori --test doc`).
 
 ## Publishing
 
 ritsu's `.github/workflows/docs.yml` builds the whole site with `website/build.sh` and deploys
-`website/build/` to GitHub Pages, where this site is `/ritsu/dandori/`. For now it runs only by hand,
-from the Actions tab (`workflow_dispatch`): what is published is still dandori's own repository's
-site, and the push that publishes ritsu's is added when the site is switched over. Pages takes its
-source from "GitHub Actions" in the repository's settings.
+`website/build/` to GitHub Pages, where this site is `/ritsu/dandori/`. It runs on a push to main
+that changes what the site is built from, and by hand from the Actions tab (`workflow_dispatch`).
+Pages takes its source from "GitHub Actions" in the repository's settings.

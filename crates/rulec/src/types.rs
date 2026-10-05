@@ -3711,8 +3711,8 @@ fn koyomi_days(c: &mut Checked, i: &VarDecl, ty: &Ty, from: &crate::ast::DaysFro
                 .at(at(from.span.line))
                 .mark(from.span.clone(), tr!("{name} の範囲は {naming} がとる日です", "the range of {name} is the days {naming} comes to"))
                 .note(tr!(
-                    "rulec 単独のバイナリ（とブラウザで試すページ）には、koyomi が入っていません。`ritsu rulec check …` か `ritsu check …` で走らせると、ritsu を通して koyomi から日の集合を受け取って確かめます。",
-                    "The binary of rulec's own crate (and the page in the browser) has no koyomi joined. Run `ritsu rulec check …` or `ritsu check …`, which hand the set of days over through koyomi's port."
+                    "rulec 単独のバイナリには、koyomi が入っていません。`ritsu rulec check …` か `ritsu check …` で走らせると、ritsu を通して koyomi から日の集合を受け取って確かめます。",
+                    "The binary of rulec's own crate has no koyomi joined. Run `ritsu rulec check …` or `ritsu check …`, which hand the set of days over through koyomi's port."
                 )),
         ),
         crate::days::Read::Refused(said) => {

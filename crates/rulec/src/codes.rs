@@ -2918,8 +2918,8 @@ pub fn ledger() -> Vec<Entry> {
             "E129",
             tr!("この rulec は koyomi のファイルを読めません", "This rulec reads no koyomi file"),
             tr!(
-                "範囲を koyomi の日付からとる規則（`range from koyomi`）を、koyomi をつないでいない rulec で確かめたとき。rulec のクレートのバイナリと、ブラウザで試すページがそうです。範囲全体で確かめ直すことはせず、確かめられなかったとして終了コード 2 で終わります。",
-                "A rule that takes a range from a koyomi date (`range from koyomi`) is checked by a rulec with no koyomi joined: the binary of rulec's own crate, or the page in the browser. The check does not fall back to every day of the range; the file counts as not checked, and the run exits 2."
+                "範囲を koyomi の日付からとる規則（`range from koyomi`）を、koyomi をつないでいない rulec で確かめたとき。rulec のクレートのバイナリがそうです。範囲全体で確かめ直すことはせず、確かめられなかったとして終了コード 2 で終わります。",
+                "A rule that takes a range from a koyomi date (`range from koyomi`) is checked by a rulec with no koyomi joined: the binary of rulec's own crate. The check does not fall back to every day of the range; the file counts as not checked, and the run exits 2."
             ),
             tr!(
                 "`ritsu rulec check <ファイル>` か `ritsu check <ディレクトリ>` で走らせてください。どちらも、koyomi から日の集合を受け取ります。",

@@ -19,7 +19,8 @@ extra_css = ["stylesheets/extra.css"]
 
 nav = [
   { Home = "index.md" },
-  { "Try it in the browser" = "playground.md" },
+  # ritsu's playground, from this site's root (/ritsu/dandori/), on the flow this site's page opened on
+  { "Try it in the browser" = "../playground/#flow=tests/fixtures/hotel_naive.flow" },
   { Install = "install.md" },
   { "Write a workflow" = "tour.md" },
   { "What a task calls" = "tasks.md" },

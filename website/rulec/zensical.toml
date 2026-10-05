@@ -19,7 +19,8 @@ extra_css = ["stylesheets/extra.css"]
 
 nav = [
   { Home = "index.md" },
-  { "Try it in the browser" = "playground.md" },
+  # ritsu's playground, from this site's root (/ritsu/rulec/), on the table this site's page opened on
+  { "Try it in the browser" = "../playground/#project=rulec/gap" },
   { Install = "install.md" },
   { "How to use it, by role" = "scenarios.md" },
   { "Write a rule (.rule)" = "tour.md" },

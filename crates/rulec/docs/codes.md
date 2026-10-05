@@ -3246,7 +3246,7 @@ Related codes: [E109](#e109), [W127](#w127)
 
 `error` — **This rulec reads no koyomi file**
 
-**When.** A rule that takes a range from a koyomi date (`range from koyomi`) is checked by a rulec with no koyomi joined: the binary of rulec's own crate, or the page in the browser. The check does not fall back to every day of the range; the file counts as not checked, and the run exits 2.
+**When.** A rule that takes a range from a koyomi date (`range from koyomi`) is checked by a rulec with no koyomi joined: the binary of rulec's own crate. The check does not fall back to every day of the range; the file counts as not checked, and the run exits 2.
 
 **Fix.** Run `ritsu rulec check <file>` or `ritsu check <dir>`; both hand the set of days over through koyomi's port.
 

@@ -2609,6 +2609,27 @@ count 一致数(hits) over 候補 where 照合結果 = 一致  range >=0 <=50
 
 **捨てたもの**：生成コードの入口の「断る」を「拒否する」にすること。拒否は、一式の中では chobo が操作を受け付けないこと（理由の名前が付く）に使う語なので、混ぜない。
 
+### 15.185 前のブラウザで試すページを、ritsu のページへの転送に替える（2026-10-05）
+
+**きっかけ**：ritsu のリポジトリを公開し、サイトを `https://i2y.github.io/ritsu/` に切り替えた。ritsu のブラウザで試すページは、このサイトのページが開いた五つの規則を英語と日本語で開き、規則を一つだけ試すための空のプロジェクトも持つ（ritsu の DESIGN 8.7）。前のページは、ritsu のページに例を全部持たせたうえで、切り替えのときに ritsu のページへの転送に替えると決めていた（ritsu の DESIGN 13.2）。
+
+**決定**：
+
+- **`website/rulec/docs/playground.md` と `docs-ja/playground.md` は、ritsu のページへ送るだけのページにした。** 英語のページは `/ritsu/playground/` へ、日本語のページは `/ritsu/ja/playground/` へ送る。前のページは URL を読まず、共有の形も持たなかったので、来たリンクにかかわらず、前のページが開いていた一行足りない表（`#project=rulec/gap`、日本語は `#project=rulec/gap.ja`）を開く。ただし `=` を含むリンク（ritsu のページが読む形）で来たときは、それをそのまま渡す。ページは、移ったことを言う一文と ritsu のページへのリンク（`id="moved"`）と、そのリンクの先へ `location.replace` で移るスクリプトだけを持つ。スクリプトが動かなくても、リンクから行ける。リンクはサイトの中の相対のパスで、Markdown のリンクと同じくページのファイルから読む形（`../playground/#…`）で書く。Zensical は Markdown の中の HTML の `href` も同じように読み、一つ深いディレクトリに出したページでは `../../playground/#…` に書き直す。
+- **ナビの「ブラウザで試す」とトップページのボタンは、ritsu のページを直接指す**（転送のページを通さない）。ナビのリンクは Zensical がサイトのルートからたどってページごとに書き直し、ページの中のリンクはページのファイルからたどる。転送のページはナビから外した。
+- **前のページだけが使っていたものを消した。** `src/wasm.rs`（ページとの境目の六つの関数。ritsu の wasm も、使わない `rulec_*` の関数を出していた）、`website/rulec/docs/playground/` の `playground.js`・`playground.css`・`rulec.wasm`、`website/rulec/tools/make_wasm.sh`、`sync.sh` が日本語の木へコピーしていたところと、その gitignore の行。`src/` のモジュールは 52 になった（README の数も直した）。
+- **確かめていたことは、ritsu のテストに移した。** `tests/wasm.rs` と、`tests/website.rs` の二つ（ページの表が絵の表と同じこと、サンプルがコーパスの規則と同じこと）を消した。ritsu の `tests/playground.rs` が、前のページのファイルではなく、もとのファイル（`website/rulec/tools/overview.rule`・`overview-ja.rule` とコーパス）に対して、ritsu のページの五つの規則を英日で確かめる。`tests/wasm.rs` がわざと選んでいた規則（消去で答えが決まる `クーポン併用` とその英語の双子、決まらない `m_w114`、℃ より後ろに出る指摘。`^` の位置が ℃ の幅の数え方で変わる）は、ritsu のページの答えをバイナリと、ritsu の wasm をライブラリと突き合わせる編集に入れた。`tests/website.rs` は、書き下ろしのページから `playground.md` を外し、サイトの外（ritsu のサイト）へ出るリンクは、公開先の URL でたどって ritsu のページがあることを確かめる。転送のページは、ritsu の `tests/website.rs`（リンクとスクリプトとナビ、組んだ木）と `tests/playground.rs`（Chrome で、送られた先が同じ中身を開くこと）が確かめる。
+- **E129 の注と台帳から「ブラウザで試すページ」を外した。** koyomi をつないでいない rulec は、いまは rulec のクレートのバイナリだけで、ritsu のページは `ritsu check` と同じく koyomi をつなぐ（§15.174）。`docs/codes.md`・`codes.ja.md`、`docs/reference.md` とスキルのコピー、E129 の golden を直した。
+- ライブラリのモジュールを公開する理由（`lib.rs` と `docs/compatibility.md`）の「プレイグラウンド」は、「ritsu（コマンドとブラウザで試すページ）」にした。
+
+**捨てたもの**：
+
+- **前のページを残すこと。** 例も、規則を書いて試すことも ritsu のページにそろったので、残すと、二つのページと二つの wasm を同じに保つ手間だけが残る。
+- **`src/wasm.rs` をフィーチャーの陰に置くこと。** 使うものが無い。要るようになれば、履歴から戻せる。
+- **ナビとボタンを転送のページに向けること。** 読む人が毎回、移ったことを告げるページを通ることになる。
+
+**確かめたこと**：`cargo test -p ritsu -p rulec -p dandori`（dandori のプラットフォームのテストを除く）の全体で 959 件が通った（rulec 774、ritsu 96、dandori 89。落ちたもの 0、ignored 2、12 分 55 秒）。SKIP の 15 行は、どれも rulec の Lean の確かめ直しで、`proofs/` を組まずに回したためだった。`proofs/` で `lake build` してから `tests/lean.rs`・`days.rs`・`machine.rs` を回し直し、42 件が SKIP なしで通った。`rulec explain --all` から `docs/codes.md` と `codes.ja.md` を作り直すと、変わるのは E129 の一行ずつだった。ritsu の `website/build.sh` で組んだサイトを `/ritsu/` の下で配り、英語と日本語の転送のページを headless の Chrome で開いて、ハッシュ無しのリンクが一行足りない表を、ritsu のページの共有のリンク（`#project=rulec/full&view=gen`）がそのままの中身を開くことを見た。
+
 ## 16. この設計で最も危うい点
 
 第一に、**rulec が消したかった二重実装が、一段上で小さく再発する**。

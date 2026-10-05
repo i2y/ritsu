@@ -47,12 +47,12 @@ jobs:
 
       # build.sh builds ritsu's pages in both languages, then each language's site with its own
       # build.sh, and copies it to build/<language>. Nothing but Zensical is needed: the pictures,
-      # the pages `dandori doc` writes for the examples and the playgrounds' modules and bundles are
+      # the pages `dandori doc` writes for the examples and the playground's module and projects are
       # committed, rulec's sync.sh copies rulec's documents in from crates/rulec, and rulec's
       # tools/rulelexer.py and dandori's tools/flowlexer.py are plain Python. The tests of each
-      # language (rulec's tests/website.rs, tests/docs.rs and tests/wasm.rs, dandori's
-      # tests/docs.rs, tests/doc.rs and tests/playground.rs) and ritsu's tests/website.rs hold the
-      # pages to the tools; the other workflows run them.
+      # language (rulec's tests/website.rs and tests/docs.rs, dandori's tests/docs.rs and
+      # tests/doc.rs) and ritsu's tests/website.rs and tests/playground.rs hold the pages to the
+      # tools; the other workflows run them.
       - name: Build the site
         run: |
           cd website
@@ -60,6 +60,8 @@ jobs:
           uv pip install --python .venv/bin/python zensical
           ./build.sh
 
+      # The playgrounds rulec's and dandori's sites had are ritsu's now: their pages are kept only to
+      # send a link on to it.
       - name: Check the tree is complete
         run: |
           test -f website/build/index.html
@@ -72,8 +74,7 @@ jobs:
           test -f website/build/rulec/codes/index.html
           test -f website/build/rulec/ja/codes/index.html
           test -f website/build/rulec/playground/index.html
-          test -f website/build/rulec/playground/rulec.wasm
-          test -f website/build/rulec/ja/playground/rulec.wasm
+          test -f website/build/rulec/ja/playground/index.html
           test -f website/build/dandori/index.html
           test -f website/build/dandori/ja/index.html
           test -f website/build/dandori/reference/codes/index.html
@@ -81,8 +82,7 @@ jobs:
           test -f website/build/dandori/doc/hotel.html
           test -f website/build/dandori/ja/doc/hotel.html
           test -f website/build/dandori/playground/index.html
-          test -f website/build/dandori/playground/dandori.wasm
-          test -f website/build/dandori/ja/playground/presets.json
+          test -f website/build/dandori/ja/playground/index.html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

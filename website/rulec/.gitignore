@@ -19,7 +19,6 @@ docs-ja/codes.md
 docs-ja/compatibility.md
 docs-ja/stylesheets/
 docs-ja/images/
-docs-ja/playground/
 
 # Left behind by the diagram scripts importing tools/diagram.py.
 tools/__pycache__/

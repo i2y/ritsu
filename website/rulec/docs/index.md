@@ -36,7 +36,7 @@ person can decide comes back as a question.
 </p>
 
 <div class="rc-hero__cta" markdown>
-[Try it in the browser](playground.md){ .md-button .md-button--primary }
+[Try it in the browser](../playground/#project=rulec/gap){ .md-button .md-button--primary }
 [Install](install.md){ .md-button }
 [Write a rule (.rule)](tour.md){ .md-button }
 [For agents](agents.md){ .md-button }

@@ -2,9 +2,10 @@
 //! [`backend::ALL`] names.
 //! The design is in DESIGN.md.
 //!
-//! The modules are public so that the tests, the playground and `rulec mcp` can reach them,
-//! not as an interface: they change with the tool, and docs/compatibility.md leaves them out
-//! of what 1.x keeps. Use the command line, `rulec mcp`, or the generated code.
+//! The modules are public so that the tests, ritsu (its commands and its playground) and
+//! `rulec mcp` can reach them, not as an interface: they change with the tool, and
+//! docs/compatibility.md leaves them out of what 1.x keeps. Use the command line, `rulec mcp`,
+//! or the generated code.
 
 /// A user-facing sentence in both languages: `tr!("日本語", "English")`.
 ///
@@ -80,9 +81,6 @@ pub mod vdiff;
 pub mod vectors;
 pub mod verify;
 pub mod xlsx;
-/// The library as a web page. Only built for the target the site loads (§15.48).
-#[cfg(target_arch = "wasm32")]
-pub mod wasm;
 
 use diag::{Diag, Severity};
 
@@ -184,9 +182,9 @@ pub fn has_error(ds: &[Diag]) -> bool {
 /// Every finding of one file, in the frame §11 fixes, with a blank line between them.
 ///
 /// `main` walks the list itself (it also counts, and `--format json` and `--terse` are
-/// other renderings of the same list), and prints this for the default one; the wasm
-/// playground (§15.48) returns it. Two implementations would be two sets of answers to
-/// keep true.
+/// other renderings of the same list), and prints this for the default one; `ports::Engine`
+/// returns it for `ritsu check`, which ritsu's playground runs too. Two implementations would
+/// be two sets of answers to keep true.
 pub fn findings_text(diags: &[Diag], lines: &[String]) -> String {
     let mut out = String::new();
     for d in diags {

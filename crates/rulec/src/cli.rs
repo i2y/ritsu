@@ -1368,8 +1368,9 @@ fn check(
         if json {
             continue;
         }
-        // The default rendering and everything after the findings are shared with the
-        // playground (§15.48), so the page and the terminal cannot answer differently.
+        // The default rendering and everything after the findings are shared with
+        // `ports::Engine`, which `ritsu check` (and ritsu's playground) prints, so the two cannot
+        // answer differently.
         if !terse {
             print!("{}", crate::findings_text(&diags, &lines));
         }

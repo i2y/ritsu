@@ -354,7 +354,7 @@ impl<'a> Gen<'a> {
     }
 
     /// `path` is where the rule was read from, as the command line named it, or "" when it was
-    /// read from no file (the playground). It is an argument and not a setting because the
+    /// read from no file. It is an argument and not a setting because the
     /// files a rule cites — a `.proto` it imports an enum from, a contract it reads inputs
     /// out of — are found from the rule's directory, and a generator left to look from the
     /// working directory wrote different code depending on where it was run.

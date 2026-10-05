@@ -2,8 +2,9 @@
 //!
 //! rulec's site is ritsu's `website/rulec/`, at the root of the workspace (the tests name
 //! its paths from there, `website/rulec/…`, and every other path from this crate).
-//! `website/rulec/docs/` and `website/rulec/docs-ja/` hold ten authored pages each; the rest
-//! are copied in from this crate by `website/rulec/sync.sh` and are not committed,
+//! `website/rulec/docs/` and `website/rulec/docs-ja/` hold ten authored pages each, and the page
+//! the playground had, which sends a reader on to ritsu's playground (ritsu's tests hold it); the
+//! rest are copied in from this crate by `website/rulec/sync.sh` and are not committed,
 //! so they are checked where they live (`tests/docs.rs`, `tests/codes.rs`,
 //! `tests/formats.rs`, `tests/api.rs`). What is checked here is the site's own
 //! seams: that both languages carry the same pages, that every page the nav
@@ -38,7 +39,6 @@ const SYNCED: &[&str] =
 /// The pages written for the site itself, in both languages.
 const AUTHORED: &[&str] = &[
     "index.md",
-    "playground.md",
     "install.md",
     "scenarios.md",
     "tour.md",
@@ -180,10 +180,44 @@ fn サイトが名指しするコマンドは実在する() {
     }
 }
 
+/// The page of ritsu's site a path of the published site leads to, if it is one of ritsu's pages
+/// (`/ritsu/playground/` is `website/docs/playground.md`, `/ritsu/ja/playground/` is
+/// `website/docs-ja/playground.md`): where a link of this site that leaves it goes.
+fn ritsus_page(url: &str) -> Option<PathBuf> {
+    let rest = url.strip_prefix("/ritsu/")?.trim_end_matches('/');
+    let (docs, page) = match rest.strip_prefix("ja/") {
+        Some(p) => ("website/docs-ja", p),
+        None if rest == "ja" => ("website/docs-ja", ""),
+        None => ("website/docs", rest),
+    };
+    let file = if page.is_empty() { locate(docs).join("index.md") } else { locate(docs).join(format!("{page}.md")) };
+    file.is_file().then_some(file)
+}
+
+/// A path with `.` and `..` worked out: `/ritsu/rulec/../playground/` is `/ritsu/playground/`.
+fn normal(path: &str) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    for p in path.split('/') {
+        match p {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            p => parts.push(p),
+        }
+    }
+    format!("/{}/", parts.join("/"))
+}
+
+/// A link is read from the page's file, as Zensical reads it: a page of this site, or, past this
+/// site's root (`/ritsu/rulec/`, and `/ritsu/rulec/ja/` for the Japanese pages), a page of ritsu's
+/// site, which publishes this one below its own (the playground, which is ritsu's).
 #[test]
 fn サイトの相対リンクは実在する() {
+    let mut out_of_the_site = 0;
     for (name, body) in authored_pages() {
         let dir = name.rsplit_once('/').unwrap().0.to_string();
+        let root = if dir.ends_with("docs-ja") { "/ritsu/rulec/ja/" } else { "/ritsu/rulec/" };
         let mut rest = body.as_str();
         while let Some(k) = rest.find("](") {
             rest = &rest[k + 2..];
@@ -197,9 +231,17 @@ fn サイトの相対リンクは実在する() {
             if path.is_empty() || SYNCED.contains(&path) {
                 continue; // copied in by sync.sh
             }
-            assert!(locate(&dir).join(path).exists(), "{name}: リンク先が無い: {target}");
+            let url = normal(&format!("{root}{path}"));
+            if url.starts_with(root) {
+                assert!(locate(&dir).join(path).exists(), "{name}: リンク先が無い: {target}");
+            } else {
+                assert!(ritsus_page(&url).is_some(), "{name}: リンク先が ritsu のサイトに無い: {target}（{url}）");
+                out_of_the_site += 1;
+            }
         }
     }
+    // The playground, from the home page in each language.
+    assert!(out_of_the_site >= 2, "ritsu のサイトへのリンクが {out_of_the_site} 本しかない");
 }
 
 /// The examples page shows ten corpus rules in full. They are the rules the rest of the
@@ -652,72 +694,6 @@ fn 確かめ方のページの件数は実物と合っている() {
         for w in want {
             assert!(page.contains(&w), "website/rulec/{lang}/assurance.md に「{w}」がありません");
         }
-    }
-}
-
-/// The playground opens on the table the front page's first picture is about
-/// (`website/rulec/tools/overview.rule`), so the two must be the same table. A page showing a
-/// different one would be a second source for the same example — the failure `examples.md`
-/// is held to, one page over.
-#[test]
-fn playgroundの表は絵の表と同じ() {
-    let js = read("website/rulec/docs/playground/playground.js");
-    for (key, rule) in
-        [("en", "website/rulec/tools/overview.rule"), ("ja", "website/rulec/tools/overview-ja.rule")]
-    {
-        let open = format!("  {key}: `");
-        let start = js.find(&open).unwrap_or_else(|| panic!("playground.js に {key} の表が無い"))
-            + open.len();
-        let got = &js[start..start + js[start..].find("`,").expect("表が閉じていない")];
-        // The file opens with a comment block about the diagram; the page shows the table.
-        let want: String = read(rule)
-            .lines()
-            .skip_while(|l| l.starts_with('#') || l.is_empty())
-            .collect::<Vec<_>>()
-            .join("\n")
-            + "\n";
-        assert_eq!(got, want, "playground.js の {key} の表が {rule} と違う");
-    }
-}
-
-/// **Every sample the playground offers is a rule the repository already checks.** The page
-/// carries them as text — it is three files and fetches nothing — so the copy can drift from
-/// the corpus, and a sample that drifted would be a rule nothing runs: the one place on the
-/// site where a reader types into the checker, showing a table no test has seen.
-///
-/// The button that offers a sample lives in the markdown, so it is checked here too: a key
-/// the script does not carry would put a button on the page that empties the box.
-#[test]
-fn playgroundのサンプルはコーパスの規則と一字一句同じ() {
-    const SAMPLES: [(&str, &str); 6] = [
-        ("en:multi", "tests/corpus/parcel_rate.rule"),
-        ("ja:multi", "tests/corpus/送料.rule"),
-        ("en:big", "tests/corpus/Claude利用料.rule"),
-        ("ja:big", "tests/corpus/クーポン割引.rule"),
-        ("en:walk", "tests/corpus/shipment_surcharge.rule"),
-        ("ja:walk", "tests/corpus/買物かごの送料.rule"),
-    ];
-    let js = read("website/rulec/docs/playground/playground.js");
-    for (key, rule) in SAMPLES {
-        let open = format!("  \"{key}\": `");
-        let start = js
-            .find(&open)
-            .unwrap_or_else(|| panic!("playground.js に {key} が無い。website/rulec/tools/samples.py で作り直してください"))
-            + open.len();
-        let got = &js[start..start + js[start..].find("`,").expect("規則が閉じていない")];
-        assert_eq!(got, read(rule), "playground.js の {key} が {rule} と違う。website/rulec/tools/samples.py で作り直してください");
-    }
-    // Both pages offer the same set, and offer nothing the script cannot serve.
-    for page in ["website/rulec/docs/playground.md", "website/rulec/docs-ja/playground.md"] {
-        let md = read(page);
-        let keys: Vec<&str> = md
-            .match_indices("data-preset=\"")
-            .map(|(i, m)| {
-                let rest = &md[i + m.len()..];
-                &rest[..rest.find('"').expect("data-preset が閉じていない")]
-            })
-            .collect();
-        assert_eq!(keys, ["gap", "full", "multi", "big", "walk"], "{page} の並びが違う");
     }
 }
 

@@ -29,6 +29,9 @@ own repository, and its own `build.sh` builds it into `<language>/build`. `build
 ritsu's pages, then runs each language's `build.sh` (the list `sites` in it) and copies what it
 built to `build/<language>`, published at `/ritsu/<language>/` and `/ritsu/<language>/ja/`. The two
 sites are rulec's (`rulec/`, from rulec's repository) and dandori's (`dandori/`, from dandori's).
+Each had a playground of its own; ritsu's took them over, with every example they opened and the
+links they gave, and their `playground.md` is kept only to send a link to it on (the nav of each
+site links to ritsu's page itself).
 
 The Japanese pages are written for a Japanese reader, not translated sentence by sentence, so the
 two languages say the same things but not always in the same order. A change to one goes to the
@@ -43,6 +46,20 @@ is the page that address opens. A word's IRI has no `/` before the `#`, so
 browser keeps the `#Requirement`. An id is matched with its case, and Zensical's own ids are lower
 case, so every word has a heading written `### inForce { #inForce }`. The page is not in `nav`: a
 person gets to it from an IRI, or from yuen's reference.
+
+## The playground
+
+`docs/playground.md` (and `docs-ja/playground.md`) runs ritsu in the page. Its module and the projects
+it opens are committed, so building the site needs no Rust toolchain, and both go stale. At the root
+of the repository:
+
+```console
+$ website/tools/make_wasm.sh    # after a change to what a language's check, gen or doc answers
+$ RITSU_BLESS=1 cargo test -p ritsu --test playground the_projects_are_what_the_page_opens
+                                # after a change to website/playground/, rulec's corpus or dandori's examples
+```
+
+`crates/ritsu/tests/playground.rs` fails until they are made anew.
 
 ## Build and preview
 
@@ -65,11 +82,14 @@ a heading or a language's site that `build.sh` builds; every link into this repo
 that is there; the code on the index is the lines of the files of the languages, and `ritsu check`
 prints what it shows; the pages of yuen's namespace have every word yuen's exporter writes (its
 list `TERMS`, which yuen's own tests hold to what it writes) and no other, and their example is
-what the command prints; the two configurations name ritsu's URLs; and `.github/workflows/docs.yml`
-runs only by hand. When Zensical is in `.venv`, it runs `build.sh` into a copy of `website/` and
-looks at the tree it builds, down to an element for every word whose id is the word.
-`crates/ritsu/tests/playground.rs` holds the playground, as its page says, and each language's own
-tests hold its site (rulec's and dandori's READMEs say how).
+what the command prints; the two configurations name ritsu's URLs; `.github/workflows/docs.yml`
+runs on a push to main that changes what the site is built from, and by hand; and the page each of
+the two sites had for its playground sends a reader on to the playground, where the site's nav and
+home page lead too. When Zensical is in `.venv`, it runs `build.sh` into a copy of `website/` and
+looks at the tree it builds, down to an element for every word whose id is the word, and to where
+the link of each page that sends a reader on leads. `crates/ritsu/tests/playground.rs` holds the
+playground, as its page says, and follows in Chrome the links those pages gave, sent on to it; each
+language's own tests hold its site (rulec's and dandori's READMEs say how).
 
 ## Publishing
 

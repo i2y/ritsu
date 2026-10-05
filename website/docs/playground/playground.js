@@ -5,14 +5,16 @@
 // a directory holding the same files: `ritsu check .` over the whole project, and a language's
 // generator and page on the file that is open. The projects the page opens come from
 // projects.json, written by crates/ritsu/tests/playground.rs from the files they are made of: the
-// shop (website/playground/), the examples of rulec's page (one rule each) and those of dandori's
-// page (each flow with the files it reads). Each page lists the projects of its language.
+// shop (website/playground/), the examples of the playground rulec's site had (one rule each) and
+// those of dandori's (each flow with the files it reads). Each page lists the projects of its
+// language.
 //
 // A link opens the page on a project as the reader made it: the project, the file, the view, the
-// target, and what the reader changed, packed (see `pack`). The page reads the links dandori's page
-// gave too (#flow=…), so that a link to that page opens here once it is sent on.
+// target, and what the reader changed, packed (see `pack`). The page reads the links dandori's
+// playground gave too (#flow=…): its page sends them on here, as rulec's sends its readers on to
+// rulec's first example.
 //
-// One convention crosses the boundary, the one rulec's and dandori's pages keep: every buffer
+// One convention crosses the boundary, the one rulec's and dandori's playgrounds kept: every buffer
 // begins with its own length as a little-endian u32. `put` writes one, `take` reads one and frees
 // it.
 

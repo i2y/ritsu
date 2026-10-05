@@ -22,7 +22,7 @@ website/rulec/
 ├── build.sh          # both languages, in the one order that works
 ├── docs/             # English pages
 ├── docs-ja/          # Japanese pages
-└── tools/            # the diagrams, the screenshots, the examples page, rulec.wasm
+└── tools/            # the diagrams, the screenshots, the examples page
 ```
 
 ## One source of truth
@@ -81,8 +81,8 @@ language switch), where GitHub Pages will serve them, so `website/serve.sh`
 serves the site under `/ritsu/`.
 
 Published by ritsu's `.github/workflows/docs.yml`, which builds the whole site
-with `website/build.sh`; for now it runs only by hand (ritsu's README for the
-site says why).
+with `website/build.sh`, on a push to main that changes what the site is built
+from, and by hand (ritsu's README for the site says more).
 
 ## The front-page diagrams
 
@@ -129,30 +129,15 @@ $ python3 tools/make_overview.py --verify ../../target/release/rulec
 
 ## The playground
 
-`docs/playground.md` (and its Japanese twin) is the checker itself, compiled to
-wasm32 and running in the page: `check`, everything `gen` writes, and the
-page for people, with nothing sent anywhere. Three files sit beside it in
-`docs/playground/`, and `sync.sh` copies them into `docs-ja/playground/` the way
-it copies the images:
-
-| file | what it is |
-|---|---|
-| `playground.js` | the page's side of the boundary — allocate, write, call, read the length out of the header. It finds the other two from its own URL |
-| `playground.css` | borrows the theme's variables, so the palette and the dark-mode switch need no second set of colours |
-| `rulec.wasm` | **a build product, committed**, so that building the site needs no Rust toolchain — the same bargain as the SVGs and Python |
-
-Re-build it after anything that changes what `check`, `gen` or `doc` answer:
-
-```console
-$ website/rulec/tools/make_wasm.sh
-```
-
-`tests/wasm.rs` drives the committed file through node and holds its answers to
-the binary's, byte for byte, in both languages — and holds `rulec_version` to the
-crate's version. The version is what makes a release with a stale `rulec.wasm` fail.
-Between releases the answers are only compared on the rules the test drives, and a
-change those rules do not reach passes with the old file still in place (DESIGN
-§15.131) — so re-build after the change, not at the release.
+The playground this site had (§15.48 of rulec's DESIGN) is ritsu's now
+(`website/docs/playground.md`, published at `/ritsu/playground/`): it opens the five rules this site's
+page offered, in both languages, beside the examples of the other languages, and a rule of the
+reader's own in an empty project. The nav and the home page link to it. `playground.md` in each
+language is kept only to send a reader on to it, on the table with a row missing that the page
+opened on (a link that names a project of ritsu's page goes on as it is).
+ritsu's `crates/ritsu/tests/playground.rs` holds the page to the tool, the examples in it to the
+corpus and to `tools/overview.rule`, and the sending on; ritsu's site's README says how to build the
+page's module and write its projects anew.
 
 ## The social preview
 

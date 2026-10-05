@@ -26,7 +26,7 @@ hide:
 </p>
 
 <div class="rc-hero__cta" markdown>
-[ブラウザで試す](playground.md){ .md-button .md-button--primary }
+[ブラウザで試す](../../ja/playground/#project=rulec/gap.ja){ .md-button .md-button--primary }
 [インストール](install.md){ .md-button }
 [ルール(.rule)を書く](tour.md){ .md-button }
 [エージェント向け](agents.md){ .md-button }

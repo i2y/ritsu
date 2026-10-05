@@ -26,7 +26,7 @@ hide:
 </p>
 
 <div class="dd-hero__cta" markdown>
-[ブラウザで試す](playground.md){ .md-button .md-button--primary }
+[ブラウザで試す](../../ja/playground/#flow=tests/fixtures/hotel_naive.flow){ .md-button .md-button--primary }
 [インストール](install.md){ .md-button }
 [ワークフローを書く](tour.md){ .md-button }
 [例で見る](examples.md){ .md-button }

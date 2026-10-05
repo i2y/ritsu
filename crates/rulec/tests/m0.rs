@@ -638,7 +638,8 @@ impl<'a, I: Iterator<Item = &'a str>> FirstCell for I {
 /// committed — fourteen test files read them — but nothing ran the script, so **a corpus rule
 /// that moved on left a mutant that was quietly no longer that rule with one seeded error**
 /// (§15.92). `m0` would keep passing: it checks the codes of the files on disk, whatever they
-/// have become. The same shape as the committed `rulec.wasm`, which does have such a test.
+/// have become. The same shape as the module of the playground, which does have such a test (ritsu's
+/// `tests/playground.rs` holds the committed `ritsu.wasm` to the library).
 ///
 /// A few mutants are written by hand rather than seeded — the two that need a document beside
 /// them (E116, W120) and the copies under `sources/`. They are named here so that "not

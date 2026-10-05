@@ -6,8 +6,8 @@ with rulec in the same process, and its dates files and books (`use dates`, `use
 and chobo; a workflow without them also runs with the `dandori` command alone, and its output has
 nothing of rulec's.
 
-To try it before installing anything, open [Try it in the browser](playground.md): dandori runs in the
-page.
+To try it before installing anything, open [Try it in the browser](../playground/#flow=tests/fixtures/hotel_naive.flow)
+on ritsu's site: dandori runs in the page, with the rules, the dates files and the books a flow reads.
 
 ## ritsu
 

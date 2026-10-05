@@ -123,10 +123,10 @@ an answer to "why this fee" needs.
 > agent's own procedure.
 > 日本語のドキュメントは **[i2y.github.io/ritsu/rulec/ja/](https://i2y.github.io/ritsu/rulec/ja/)** にあります。
 >
-> **Try it first — [i2y.github.io/ritsu/rulec/playground/](https://i2y.github.io/ritsu/rulec/playground/)**
-> The checker itself, compiled to wasm and running in the page: paste a table and the gap
-> comes back with the input that falls through it. Nothing is sent anywhere, and nothing is
-> installed.
+> **Try it first — [i2y.github.io/ritsu/playground/](https://i2y.github.io/ritsu/playground/#project=rulec/gap)**
+> ritsu, with this checker in it, compiled to wasm and running in the page: it opens on a table
+> with a row missing, and the gap comes back with the input that falls through it. Paste a table
+> of your own into an empty project. Nothing is sent anywhere, and nothing is installed.
 
 ## Who writes it
 
@@ -277,7 +277,7 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
 ../../proofs/     the Lean 4 development, RulecCert in ritsu's one Lean package: what a table
                   means, the checks a certificate has to pass, the theorems that each check
                   settles its claim, and the re-checker
-src/              53 modules, and 6 more under codegen/
+src/              52 modules, and 6 more under codegen/
 tests/corpus/     87 rules, and the copies of the documents they cite
 tests/mutants/    109 files, each with one mistake planted in it
 tests/golden/     the diagnostic prose snapshot by snapshot: 55 in Japanese, 44 in English

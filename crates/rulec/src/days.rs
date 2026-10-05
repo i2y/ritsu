@@ -73,7 +73,7 @@ pub enum Read {
     /// The days, in order, as day numbers (days since 1970-01-01, rulec's ordinal of a date),
     /// with the SHA-256 of the koyomi file they were computed from.
     Days { sha256: String, days: Vec<i64> },
-    /// No koyomi is joined: the binary of rulec's own crate, or the page in the browser.
+    /// No koyomi is joined: the binary of rulec's own crate.
     NotJoined,
     /// koyomi cannot answer for the file (it is not there, does not pass koyomi's check, or has
     /// no such date): what koyomi says.

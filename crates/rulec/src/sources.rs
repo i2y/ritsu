@@ -8,7 +8,7 @@
 //! asking e-Gov for later revisions are the `rulec source` commands, below.
 //!
 //! Reading happens here and nowhere deeper, the layering `enums.rs` set: the checker stays a
-//! function from text to diagnostics, and the playground says a copy cannot be read.
+//! function from text to diagnostics, and where a copy cannot be read, E039 says so.
 
 use crate::ast::{Cite, Item, LawDb, RuleFile, SourceDecl, SourceKind};
 use crate::diag::{Diag, Span};

@@ -26,9 +26,10 @@ retries, and drives things like a Stripe PaymentIntent from state to state.
 readable here, in [website/dandori/docs](../../website/dandori/docs) and
 [website/dandori/docs-ja](../../website/dandori/docs-ja).
 
-**Try it in the browser: <https://i2y.github.io/ritsu/dandori/playground/>**. The checker, the builds
-and `dandori doc`, compiled to wasm32 and run in the page, on the examples or on a flow you edit,
-with the rules each calls; nothing is sent anywhere.
+**Try it in the browser: [i2y.github.io/ritsu/playground](https://i2y.github.io/ritsu/playground/#flow=tests/fixtures/hotel_naive.flow)**.
+ritsu, with dandori in it, compiled to wasm32 and run in the page: the checker, the builds and
+`dandori doc` on every example or on a flow you edit, with the rules, dates files and books each
+reads, which you can edit too; nothing is sent anywhere.
 
 The name comes from 段取り (dandori), arranging the steps of a job beforehand.
 
@@ -179,9 +180,9 @@ example and run each of them nine ways: in the reference interpreter, the ASL un
 and on LocalStack's Step Functions, the Temporal workflow in TypeScript, in Python and in Go on the
 Temporal CLI's dev server, the durable function in the SDK's local test runner, the
 WorkflowTemplate on Argo Workflows in a kind cluster, and the graph with pydantic-graph. Each must
-make the same calls, with the same arguments and idempotency keys, and end the same way. The page
-on the site that runs dandori in the browser must answer every example as the command does. The
-operations of books that the runs make also go through the code dandori writes to chobo's clients,
+make the same calls, with the same arguments and idempotency keys, and end the same way. ritsu's
+playground, which runs dandori in the browser, must answer every example as the command does
+(ritsu's tests hold it to that). The operations of books that the runs make also go through the code dandori writes to chobo's clients,
 on PostgreSQL and TigerBeetle, and must answer what chobo's reference interpreter answers.
 [How it is checked](https://i2y.github.io/ritsu/dandori/assurance/) tells the rest, and how to run the
 tests.
