@@ -385,6 +385,7 @@ cargo install --git https://github.com/i2y/ritsu --locked rulec
 - `proofs/`：Lean のモデル
 - `website/`：サイト（ritsu のページ、ブラウザで試すページ、`website/rulec` に置いた rulec のサイト、`website/dandori` に置いた dandori のサイト）
 - `DESIGN.md`、`PLAN.md`：全体の設計（日本語）
+- `SECURITY.md`：脆弱性の知らせ方
 
 ## ライセンス
 

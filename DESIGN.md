@@ -415,6 +415,8 @@ ritsu が依存するものの既知の脆弱性、ライセンス、出どこ�
 
 **配るバイナリが、含むクレートを言う（2026-10-06）。** リリースの `ritsu` は、cargo-auditable 0.7.7 でビルドする（`cargo auditable build`）。含むクレートの一覧（名前、バージョン、出どころ）が、圧縮した JSON としてバイナリの中のセクション（`.dep-v0`）に入る。使う人が、入れた ritsu を自分のスキャナーで調べられるようにするためである（コンテナのイメージに `.deb` で入れた場合など）。確かめたこと：serde_json だけに依存する小さなクレートを `strip = true` のリリースでビルドすると、cargo-auditable を使ったものは、`cargo audit bin` が「Found 'cargo auditable' data（9 dependencies）」と読み、osv-scanner 2.6.0 は `--experimental-plugins rust/cargoauditable` で 9 パッケージを読んで調べた（既定のプラグインでは読まない）。使わないものは、`cargo audit bin` がパニックの文から 3 個を拾うだけで（「not built with 'cargo auditable', the report will be incomplete」）、osv-scanner は 0 個だった。増えたのは 32 バイトだった。macOS では `otool -l` に、Linux では `readelf -S` に `.dep-v0` が出るので、`release.yml` はアーカイブを作る前にそれを確かめる。Trivy、Grype、Syft も読むと、それぞれの文書が言う（この機械では試していない）。
 
+**脆弱性の知らせ方（2026-10-06）。** 根の `SECURITY.md` に、脆弱性は GitHub の非公開の報告（private vulnerability reporting）で知らせること、直すのは最新のリリースだけであること、リポジトリが自分の依存をどう確かめているかを、英語と日本語で書いた。報告のボタンは、リポジトリの設定で private vulnerability reporting を有効にすると出る。
+
 通すもの：通すアドバイザリは、`deny.toml` の `ignore`（理由を書いた表の形）と `osv-scanner.toml` の `IgnoredVulns`（理由と期日 `ignoreUntil`）に書く。osv-scanner の期日を過ぎると、ジョブはまた落ち、誰かが理由を読み直す。
 
 osv-scanner は `--no-resolve` で走らせる。`requirements.txt` が入れたい名前だけを書いていると、osv-scanner は deps.dev で依存を解決するが、その結果は誰も入れないバージョンになった（`tools/wire` では、idna 3.9.0 と setuptools 9.1.0 について、八つのアドバイザリを挙げた）。そこで、テストが入れる `requirements.txt` は、どれも依存の依存までバージョンを書いたものにして、osv-scanner は書いてあるとおりに読む。
@@ -447,8 +449,8 @@ osv-scanner は `--no-resolve` で走らせる。`requirements.txt` が入れた
 - **osv-scanner の依存の解決（deps.dev）に任せる**：ネットワークの向こうの答えでバージョンが決まり、誰も入れないバージョンになった（上）。ロックファイルを置くほうが、CI が入れるものと同じになる。
 - **cargo-deny の `wildcards = "deny"`**：七つの言語のクレートは、Cargo から見れば公開できるクレートで、土台のクレートをパスで指す。cargo-deny はそれをワイルドカードと数える。外のクレートの指定は serde_json の `"1"` だけで、`cargo xtask deps` がそれ一つに保つ。
 - **jsonata を 2.2.x に上げる**：上の表。
-- **google の `osv-scanner-action` の再利用できるワークフロー（SARIF を code scanning に上げる）**：`security-events: write` が要り、GitHub の Security のタブに出す。リポジトリの設定にかかわるので、作者が決める（PLAN 7.11）。
-- **Dependabot と Renovate**：二十を超えるロックファイルに、それぞれ pull request が来る。リポジトリの設定にかかわり、入れるかどうかと範囲は作者が決める（PLAN 7.11）。
+- **google の `osv-scanner-action` の再利用できるワークフロー（SARIF を code scanning に上げる）**：入れない（2026-10-06 に決めた）。`security-events: write` の権限が要り、結果は GitHub の Security のタブに出る。読む人は一人なので、`audit` のジョブが落ちることで知らせは足りる。
+- **Dependabot と Renovate**：入れない（2026-10-06 に決めた）。`audit` のジョブが毎日すべてのロックファイルを調べ、新しいアドバイザリが出れば落ちるので、知らせはそれで足りる。テストのツールには、わざと固定しているバージョン（Step Functions に合わせた jsonata 2.0.6 など）があり、二十を超えるロックファイルに更新の pull request が来ても、多くは閉じることになる。
 
 参照した文書とバージョン（2026-10-06）：cargo-deny 0.20.2（2026-07-09、<https://embarkstudios.github.io/cargo-deny/checks/cfg.html> と各検査の `cfg.html`）、cargo-audit 0.22.2（2026-06-05）、osv-scanner 2.6.0（2026-09-14、<https://google.github.io/osv-scanner/supported-languages-and-lockfiles/>、<https://google.github.io/osv-scanner/configuration/>）、govulncheck v1.7.0（v1.8.0 は Go 1.26 が要る）、CycloneDX 1.7.2（2026-09-17）、cargo-cyclonedx 0.5.9、cargo-auditable 0.7.7（2026-10-02）、Trivy 0.75.0、Syft 1.54.0、Grype 0.120.0、<https://docs.aws.amazon.com/step-functions/latest/dg/data-transform.html>（JSONata 2.0.6）、<https://pkg.go.dev/vuln/GO-2026-5970>。
 
@@ -1382,7 +1384,7 @@ generated/typescript/          generated/python/              generated/go/
   ```
 
 - **パッケージに SBOM は書かない（2026-10-06）。** 確かめたこと：osv-scanner 2.6.0 は、生成したパッケージの `package.json`（ロックファイルが無い）、`pyproject.toml`、`doc.go` のどれも読まない（三つとも「No package sources found」）。同じ依存を並べた CycloneDX 1.6 の `bom.cdx.json` を手で書いて置くと読み、x/text v0.29.0 の GO-2026-5970 などを見つけた。それでも書かない理由は三つある。一つ目に、ritsu が書ける SBOM は、パッケージが直接求めるものだけか、ここで確かめたときの依存の依存で、利用者の npm や uv が解決するものではない。利用者のロックファイル（`npm install` の `package-lock.json`、`uv lock`、`go mod tidy` の `go.mod` と `go.sum`）が、スキャナーが読むべきものである。二つ目に、直接の依存は、GitHub の依存関係グラフ（Dependabot）が `package.json` と `pyproject.toml` からそのまま読む。三つ目に、ritsu の書くバージョンが利用者の依存の依存を決めるのは Go だけで、それは上の `doc.go` の行が言う。作るなら、`ritsu gen --sbom` が、直接の依存と、生成したファイル（頭のハッシュ）を部品にした CycloneDX 1.7 を書く形がよい（15 章）。
-- ★**パッケージは、確かめたバージョンを「ちょうど」で書く**（`"1.24.0"`、`temporalio==1.33.0`）。`@temporalio/*` そのものに脆弱性が出たとき、直ったバージョンを使うには、生成した `package.json` か `pyproject.toml` を書き換える（`ritsu gen --check` は手で直したと言う）か、ritsu の次のリリースを待つことになる。下限を確かめたバージョンにした範囲（`^1.24.0`、`>=1.33.0,<2`）にすれば、利用者のロックファイルだけで上げられるが、確かめていないバージョンが入る。どちらにするかは作者が決める（PLAN 7.11）。
+- **パッケージは、確かめたバージョンを「ちょうど」で書く**（`"1.24.0"`、`temporalio==1.33.0`。2026-10-06 に決めた）。確かめていないバージョンを入れないためである。`@temporalio/*` そのものに脆弱性が出たときは、生成した `package.json` か `pyproject.toml` を書き換える（`ritsu gen --check` は手で直したと言う）か、ritsu の次のリリースを待つ。監査（3.6）はツールのロックファイルでそのバージョンを毎日調べるので、アドバイザリが出れば ritsu の側で気づき、直ったバージョンを確かめてからリリースする。下限つきの範囲（`^1.24.0`、`>=1.33.0,<2`）は捨てた。利用者のロックファイルだけで上げられる代わりに、確かめていないバージョンが入るからである。
 - ★帳簿は `--books` で PostgreSQL（既定）か TigerBeetle を選ぶ。PostgreSQL なら、クライアントが呼ぶ SQL（スキーマと関数）も `books/<帳簿>.sql` に書く。クライアントだけでは動かないからである。
 - ★パッケージの名前（`--name`、既定は `generated`）は、npm のパッケージの名前、Python のパッケージのディレクトリ、Go の import のパスの既定になる。ディレクトリの名前から決めると、CI で別の名前のディレクトリに取り出したときに `--check` が古いと言うからである。
 - 何も書かずにエラーで止まるもの：検査を通らないファイル（その言語の診断を `ritsu check` と同じ形で出し、exit 1）、パッケージの同じファイルを書く二つのファイル（同じ別名の二つの規則、日本語の名前の二つのフローの Go の `workflow`。どちらの名前を替えるかは書いた人が決めることなので、exit 2）、インデックスのファイルや Go のディレクトリが import できない名前（Python と Go が予約している語。exit 2）、プロジェクトに無いファイルを読むワークフロー（exit 1）。

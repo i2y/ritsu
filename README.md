@@ -452,6 +452,7 @@ With Homebrew it is `brew install i2y/tap/ritsu`, and in GitHub Actions `uses: i
 - `proofs/` — the Lean models
 - `website/` — the site: ritsu's pages and the playground, with rulec's site in `website/rulec` and dandori's in `website/dandori`
 - `DESIGN.md`, `PLAN.md` — the design of the whole (in Japanese)
+- `SECURITY.md` — how to report a vulnerability
 
 ## License
 

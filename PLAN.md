@@ -1137,9 +1137,9 @@ OpenSpec の仕様（要件とシナリオ）と変更の提案を、yuen と ge
   3. rulec の口で、`import jsonschema` が取り込む JSON Pointer を言う。sakai はそれを対応の先として読む（`import proto` と同じく、規則が対応になる）。
   4. rulec の `import jsonschema` と dandori の `use openapi` が、`ritsu_base::yaml` で YAML の文書も読む。rulec の `src/jsonschema.rs` が YAML を読まない理由（その文書が使う部分だけを読む読み手は黙って読み違える）は、読む部分を決めてその外を止める読み手で解けている。
   5. sakai の `build`：文書の `$ref` から、生成したコードどうしの import を許す（sakai の DESIGN 7.1 の表の最後の行。いまは proto の import だけから作る）。
-  6. 根の README（英日）の sakai の段落に、OpenAPI と AsyncAPI の文書を足した。文は作者が確かめる。
+  6. 根の README（英日）の sakai の段落に、OpenAPI と AsyncAPI の文書を足した（2026-10-06 に作者が確かめた）。
 
-**脆弱性の検査**（vuln の担当）：ritsu 自身の依存の監査（DESIGN 3.6）と、生成器がソースの文字列をコメントやスクリプトの外に出さない直し（9.2）を作った。ritsu を使う人のための脆弱性の検査として何を作るか（使う人のプロジェクトの依存を調べるのか、ritsu の地図と契約から見える脆弱性を言うのか）は、まだ決めていない（DESIGN 15 章の提案）。ritsu 自身の依存の監査は、その問いとは別に残した。
+**脆弱性の検査**（vuln の担当）：ritsu 自身の依存の監査（DESIGN 3.6）と、生成器がソースの文字列をコメントやスクリプトの外に出さない直し（9.2）を作った。ritsu を使う人のための脆弱性の検査は、2026-10-06 に、ritsu の地図と契約から見える脆弱性を言う言語の検査にすると決めた（使う人のプロジェクトの依存を調べるものではない）。DESIGN 15 章の提案のうち、秘密の値、平文の通信、認証の無い操作、外へ出すデータの境界の四つである。ritsu 自身の依存の監査は、その検査とは別のものとして残した。
 
 残したこと：
 
@@ -1148,12 +1148,17 @@ OpenSpec の仕様（要件とシナリオ）と変更の提案を、yuen と ge
 - dandori の、ほかのコメントに入る文と、Argo の注釈の U+0085・U+2028・U+2029（dandori の DESIGN 7 章）。
 - 秘密の値、外へ出すデータの境界、平文の通信の検査（上の提案）。
 
-作者に聞くこと：
+作者が決めたこと（2026-10-06 の朝）：
 
-- ★パッケージの依存を「ちょうど」で書くか、下限つきの範囲で書くか（9.3）。
-- ★Dependabot（または Renovate）を入れるか。入れるなら、どのエコシステム（cargo、npm、pip、gomod、github-actions）と、どのディレクトリか。テストのツールのロックファイルは二十を超える。
-- ★osv-scanner の結果を SARIF で code scanning に上げるか（GitHub の Security のタブに出る。`security-events: write`）。
-- ★`SECURITY.md`（脆弱性の知らせ方）を置くか。GitHub の private vulnerability reporting を使うなら、リポジトリの設定を有効にする必要がある。
-- ★rulec のクレートは Unicode CLDR のデータ（Unicode-3.0）を含むが、`Cargo.toml` の `license` は「MIT OR Apache-2.0」のままで、リリースのアーカイブと `.deb`・`.rpm` にも `THIRD_PARTY_NOTICES` が入っていない（13.2 と、もとからの 7.10 の項目）。unicode-ident のように「(MIT OR Apache-2.0) AND Unicode-3.0」と書くか、配るものに通知を入れるかを決める。
-- この機械の Go（1.25.5）は、標準ライブラリに直ったアドバイザリが 30 ほどある。手が空いたときに 1.25 の最新のパッチに上げるとよい。
+- パッケージの依存は「ちょうど」で書く（9.3）。
+- Dependabot と Renovate は入れない。osv-scanner の結果を SARIF で code scanning に上げることもしない（3.6）。
+- `SECURITY.md` を置く（3.6）。GitHub の private vulnerability reporting は、push のときにリポジトリの設定で有効にする。
+- rulec が含む Unicode CLDR のデータは、`license` に書き、配るものに通知を入れる。koyomi が含む WHATWG の表と、バイナリが含む外のクレートも同じに扱う（13.2）。
+- OpenSpec の決め方（仕様の要件を固定していなければ W102 の警告、シナリオと主張は書いたとおりの名前で突き合わせる）と、sakai の決め方（契約の文書かどうかを中身で決める）は、このままにする。
+- この機械の Go（1.25.5）を上げるのは、作者の Homebrew にかかわるので作者がする（`brew upgrade go` は 1.27.1 になる）。
+
+作者に聞いていること：
+
+- OpenAPI と AsyncAPI の文書の要素を、ツール名 `openapi`・`asyncapi` で指せるようにするか（上の sakai の残したものの 1）。
+- 文書と診断の「名指し」を、普通の語（参照、指す）に置き換えるか。
 
