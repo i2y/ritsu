@@ -244,11 +244,9 @@ fn the_workflows_run_the_scripts_and_the_action_unpacks_what_they_write() {
     assert!(linux.contains("deb=\"ritsu_$version-1_$arch.deb\"") && linux.contains("rpm=\"ritsu-$version-1.$rpmarch.rpm\""));
 }
 
-/// Every crate takes the version of the workspace (DESIGN 13.1), and so every name says it. The
-/// versions are made one at the end of stage F, all together, because the headers of what is
-/// generated and the golden files hold them; this is what checks that it was done.
+/// Every crate takes the version of the workspace (DESIGN 13.1), and so every name says it, as
+/// the release checks the tag against each of them.
 #[test]
-#[ignore = "the versions are made one at the end of stage F (PLAN F.7); run with --ignored then"]
 fn one_version_for_the_workspace_and_every_crate() {
     let top = read("Cargo.toml");
     assert!(top.contains("[workspace.package]") && top.lines().any(|l| l.starts_with("version = \"")), "the workspace has a version");
