@@ -1133,7 +1133,7 @@ OpenSpec の仕様（要件とシナリオ）と変更の提案を、yuen と ge
 **sakai の OpenAPI と AsyncAPI**（sakai-api の担当）
 
 - sakai の DESIGN 15 章。入れたもの（`ritsu_base::yaml`、sakai の `src/contracts.rs`、E108・W104・E210、例の webshop）。残したもの：
-  1. 名指しの決まり（DESIGN 6.2）に、ツールの語 `openapi` と `asyncapi` と、種類の語（`schema`（下に `value`）、`channel`、`message`、`operation`）を足す。yuen の DESIGN 2.2 の表、yuen の診断の文（ツールの語の並び）、ritsu-base の `naming.tsv`、sakai の `.ctx` の長い書き方と api の書き方（いまは `{"pointer": …}`）を一緒に変える。
+  1. （2026-10-06 に済んだ。7.12 の「参照の書き方のツール名」。）名指しの決まり（DESIGN 6.2）に、ツールの語 `openapi` と `asyncapi` と、種類の語（`schema`（下に `value`）、`channel`、`message`、`operation`）を足す。yuen の DESIGN 2.2 の表、yuen の診断の文（ツールの語の並び）、ritsu-base の `naming.tsv`、sakai の `.ctx` の長い書き方と api の書き方（いまは `{"pointer": …}`）を一緒に変える。
   2. dandori の口（`References`）で、`http` のタスクが呼ぶ操作（文書と操作）を言う。sakai はそれを E210 で確かめる（いまは `use openapi` を文書の単位で数えるだけ）。
   3. rulec の口で、`import jsonschema` が取り込む JSON Pointer を言う。sakai はそれを対応の先として読む（`import proto` と同じく、規則が対応になる）。
   4. rulec の `import jsonschema` と dandori の `use openapi` が、`ritsu_base::yaml` で YAML の文書も読む。rulec の `src/jsonschema.rs` が YAML を読まない理由（その文書が使う部分だけを読む読み手は黙って読み違える）は、読む部分を決めてその外を止める読み手で解けている。
@@ -1159,7 +1159,7 @@ OpenSpec の仕様（要件とシナリオ）と変更の提案を、yuen と ge
 - 依存を上げたら（`cargo update` など）、`THIRD_PARTY_NOTICES` の版と節を直す。`release.rs` が、どの名前・バージョン・行が違うかを言って落ちる。
 - OpenSpec の決め方（仕様の要件を固定していなければ W102 の警告、シナリオと主張は書いたとおりの名前で突き合わせる）と、sakai の決め方（契約の文書かどうかを中身で決める）は、このままにする。
 
-- OpenAPI と AsyncAPI の文書の要素を、ツール名 `openapi`・`asyncapi` で指せるようにする（上の sakai の残したものの 1）。
+- OpenAPI と AsyncAPI の文書の要素を、ツール名 `openapi`・`asyncapi` で指せるようにする（上の sakai の残したものの 1）。同じ日に作った（7.12）。
 - 文書と診断の「名指し」を、普通の語（参照、参照の書き方、指す、ツール名）に置き換える。
 
 ### 7.12 認可とセキュリティの検査（2026-10-06）
@@ -1228,9 +1228,9 @@ ritsu.ctx: ok — 13 contexts, 30 relationships; 473 artifacts, each in one cont
 
 残したこと：
 
-- 段階 B〜D（Cedar の生成と公式の CLI との突き合わせ、TypeScript・Python・Go のリクエストを組み立てるコード、`sekisho doc`、X15 と X16、八つ目の言語としての取り込み）。
+- 段階 C と D（TypeScript・Python・Go のリクエストを組み立てるコード、`sekisho doc`、X15 と X16、八つ目の言語としての取り込み）。段階 B は、下の「sekisho の段階 B」で済んだ。
 - W201 の再現。いまは範囲に端の無い値を規則に渡せない（E103）ので、W201 は出ない。安全網として残し、台帳の再現は「まだ無い」のままにした（sekisho の DESIGN 3.2）。
-- rulec の E102 を、導出の届く区間とふるいで強める（2026-10-06 に決めた。作っている）。強めると `rulec check` の答えと golden が変わり、`crates/rulec/tests/over/reach.rule` の行が E102 になる。コーパスの検査を通る 87 の規則では、区間に限らずに届きうる行を求めても、E102 が通す行で落ちるものは 0 本だった（変異と golden の材料は数えていない）。
+- （済み）rulec の E102 を、導出の取りうる値で強める。2026-10-06 に、E102 の三つ目の形として入れた（rulec の DESIGN 15.189。下の「rulec の E102 の三つ目の形」）。`crates/rulec/tests/over/reach.rule` の行は E102 になった。コーパスの検査を通る 87 の規則では、`rulec check` の出力（英語、日本語、JSON）が一字も変わらなかった。木にあるほかの `.rule` で変わったのは、`reach.rule` と変異 `m_e019.rule`（足した `constraint` で導出が 0 円以下にしかならず、行に当たる入力が無い）の二つだった。
 - 本物の Verified Permissions で確かめるか（決めていない。sekisho の DESIGN 15 章）。
 - dandori と sakai の OpenAPI の読み手を `ritsu_base::openapi` に替えること（出力が変わらないことの突き合わせと一緒に）。
 - 参照の書き方のツール名 `sekisho`（`Tool::ALL`、`naming.tsv`、yuen と sakai の文）。`Tool::Sekisho` はいま `Tool::ALL` の外にあり、拡張子と種類だけを持つ。
@@ -1245,3 +1245,54 @@ ritsu.ctx: ok — 13 contexts, 30 relationships; 473 artifacts, each in one cont
 - 表は、規則の値を `.rule` に書いた名前で出す（`.gate` と並べて読むため）。Cedar に渡す文字列（別名）は、ページのポリシーのところに出る（sekisho の DESIGN 7 章）。
 - 名前の検査は、規則の値を、`.rule` に書いた名前、生成したコードの名前、`.rule` の別名のどれでも引く（sekisho の DESIGN 3.2）。
 - 二人の担当が同じ名前で作った E201 の変異（rulec の検査を通らない規則を読むもの。日本語の版の名前が重なった）は両方残し、返金の例を元にしたほうを `E201_通らない規則を読む返金` にした（sekisho の DESIGN 4.3）。
+
+**sekisho の段階 B**（sekisho-b1、sekisho-b2 の担当）
+
+Cedar の生成と、公式の CLI との突き合わせを、二人の担当が並べて作った（sekisho の DESIGN 5 章、6.1、6.2、11 章、16.1 の 27〜46）。
+
+- **sekisho-b1（生成）**：`sekisho gen --target cedar` が、`.gate` ごとに Cedar のスキーマとポリシーとその JSON の形の四つのファイルを書く（`<out>/cedar/<別名>.*`）。`sekisho vectors` は全部の組み合わせを `cedar run-tests` のテストにし（例は 1,078 通りから 2,134 件）、`sekisho api` は宣言を JSON で出す。例の生成物は、設計の担当が手で書いた見本と、頭の二行のほかは同じになった。突き合わせで見つかった段階 A の数え方の食い違い二つ（関係の項の綴り、規則の値の生成したコードの名前）を直した。
+- **sekisho-b2（突き合わせ）**：生成した Cedar を公式の CLI 4.13.0 にかけるテスト（`crates/sekisho/tests/cedar.rs`）、ritsu-testkit の `Need::Cedar` と `cedar::cli()`、`tools.yml` の CLI を入れる段を作った。検査を通る材料の全部（131 のうち 27）で、`validate`（strict、Cedar と JSON の形）、`format --check`、`translate-*` の一致、`run-tests`（全部のテスト、Cedar と JSON の形）、ポリシーを一つずつ流す確かめ、要る属性を抜いたテストが通る。生成したテキストを一か所ずつ変えた変異は 465 で、全部がどれかの確かめで落ちる（sekisho の DESIGN 6.1、6.2）。`run-tests` が決めたポリシーを含まれるかでしか比べないことを、CLI のソースで確かめ、ポリシーを一つずつ流す確かめで補った。
+- **守る操作の参照**（取り込み）：action が守る操作を、診断の文（E202〜E205）、`sekisho api` の `guards`、生成するスキーマの `@guards` で、参照の書き方で言うようにした（sekisho の DESIGN 2.6）。参照は契約の検査が操作を見つけたときに `ritsu_base::naming::Name` で組み（`openapi "…" operation <operationId>`、`asyncapi "…" operation <キー>`、`proto "…" service S method M`、`chobo "…" transfer T operation O`）、パスは `.gate` の `use` に書いたパスではなくルートからにした。ルートは yuen と sakai と同じに決め、`check`・`gen`・`vectors`・`api` が `--root` を取り、`ritsu check` はプロジェクトのルートを渡す。守る契約がルートの外にあれば E201。`api` の `guards` は sakai の `api` と同じ参照の JSON で、段階 D の口 `Gates` の `GateAction::guards` も同じ値（`Action::references`）を入れる。E202 は yuen の E202 と同じく、文書のパスと書いた組で無いものを言う（`There is no operation refundOrders in examples/refunds/api/orders.json`）。例の `@guards` は、例のディレクトリをルートにすると前と同じ `openapi "api/orders.json" operation refundOrder` である。
+- **CI**：`tools.yml` の「それ以外」の組で、同じ CLI で ritsu-base の Cedar の材料を `expected.sh` で作り直し、一字も変わらないことを確かめる段を足した（DESIGN 4.18、10.5）。足す前に手元で同じ CLI で走らせ、材料の 586 のファイルが一字も変わらないことを確かめた。
+
+取り込み：二人のパッチと、参照の書き方のツール名（下）のパッチを一つの木に当て、関わるテストを回した（クレートの 781 件、dandori の `ports` 6 件、ritsu の 45 件が通り、SKIP は 0）。そのあと守る操作の参照を入れ、sekisho の全部（77 件。公式の CLI を使う 2 件を含む）と、ritsu の `sekisho`・`check`・`cross`・`yuen`・`sakai`（24 件）が、SKIP なしで通った。
+
+```
+$ ritsu check crates/sekisho/examples/refunds
+ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; borders between the languages: 0 checked, 0 undecided
+$ ritsu check ritsu.ctx
+ritsu.ctx: ok — 13 contexts, 30 relationships; 486 artifacts, each in one context; 66 crossings checked (rust 66)
+```
+
+ritsu 自身の地図の成果物は、段階 A の 473 から、参照の書き方のツール名で 481（例の文書が六つと、`ritsu-base/src/document.rs`、`yuen/src/documents.rs`）、段階 B の新しい五つの `.rs`（sekisho の `api.rs`・`cedar.rs`・`gen.rs`・`vectors.rs`、ritsu-testkit の `cedar.rs`）で 486 になった。
+
+残したこと：
+
+- 計算した値とワークフローの `@doc` の参照（`rulec "…" output …`、`dandori "…"`）は、まだ `use` と `workflow` の行に書いたパスで書く。`.gate` が読むファイルの参照を口 `References` で出す段階 D で、ルートからのパスにする（ルートの外の規則や日付のファイルをどうするかも、そのときに決める。sekisho の DESIGN 5.1）。
+- `tools.yml` の Cedar の二つの段を GitHub で走らせること（push してから）。
+
+決めたこと：
+
+- `.cedarschema` は、CLI の `translate-schema --direction json-to-cedar` の形（名前の順、`\'`）のままにする。土台の書き手が CLI と一字も違わないことを確かめているためである（sekisho の DESIGN 16.1 の 27）。
+- `vectors` は、区間の両端の二件にする（例は 1,078 通りの 2,134 件。33）。
+- 生成物の文（頭の二行目と `@doc`）は `--lang` の言語で書き、koyomi とそろえる（35）。`--target` は省けない（36）。計算した値の `@doc` の最後の文は、どのコマンドが書くかを言わない形にする（46）。
+- 決めたポリシーを一つずつ流す確かめと、要る属性を一つ抜いたテストの確かめを持つ（41、42）。CLI を使うテストは二つで、CLI が無いときの SKIP の行はテストごとに一つ、合わせて二つ（44）。変異のテストは材料を絞らない（43）。
+- 守る操作は参照の書き方で言い、パスはルートからにする。ルートは yuen と sakai と同じに決め、守る契約がルートの外にあれば E201 にする（39、40）。
+- Verified Permissions の `CreatePolicy` の `definition.static.statement` に置くのは、`.cedar` のポリシーを一つずつ書いたテキスト（`ritsu_base::cedar::write_policy`）で、`.policies.json` は三つの実装（cedar-wasm、cedarpy、cedar-go）に渡すものにする。API の文書（CreatePolicy、StaticPolicyDefinition、GetPolicy）で確かめた（sekisho の DESIGN 5.8）。
+- CI で、ritsu-base の Cedar の材料を同じ CLI で作り直して確かめる（DESIGN 4.18）。
+- rulec のサイトの相対リンクのテスト（`crates/rulec/tests/website.rs` の `サイトの相対リンクは実在する`）は、日本語のページの画像を、`sync.sh` のコピー元である英語のページの `images/` で確かめる。`sync.sh` を走らせていない木でも通るようにするためである（前は、`website/rulec/docs-ja/index.md` が指す `images/overview-ja.svg` が無いと落ちた）。
+
+**参照の書き方のツール名**（tool-names の担当）
+
+参照の書き方（DESIGN 6.2、6.5）に、ツール名 `openapi`・`asyncapi`・`cedar` と、chobo の振替の下の `operation` を足した。土台の `naming` と新しい `document`（DESIGN 4.21）、`naming.tsv` の 24 行。chobo の口の `Items` は振替の操作も渡す。yuen は三つのツール名の要素をリンクの端にし、要素ごとのハッシュで固定する（yuen の DESIGN 3.6。英語の材料 `refund_contracts` と日本語の `contracts`、変異の対 `E303_element_changed`・`E303_要素が変わった`）。sakai は文書と要素を、api、診断、doc のページで参照の書き方で書き、`.ctx` の長い書き方を読む（sakai の DESIGN 15.10）。dandori の `use openapi` の参照も `openapi "…"` になった。
+
+- 残したこと：ツール名 `sekisho`（段階 D、口 `Items` と一緒に）。Cedar の要素の引き方を土台に移すこと（sekisho が手で書いた Cedar に答える段階 D で）。yuen の `affected` が、文書と Cedar のファイルを要素の単位で答えること（いまはファイルの単位）。sekisho の `guards` の診断の文を参照の書き方にすることは、上の「守る操作の参照」で済んだ。
+- 決めたこと：`pointer` の種類、asyncapi の `schema` の下の `value`、`message` を二つの場所に置くこと、Cedar の名前に名前空間を付けないこと（DESIGN 6.5）。yuen の端に文書の値（`description` も値として入る。`.proto` のコメントは値ではない）と `$ref` の先を入れること、E205 を広げたこと（yuen の DESIGN 3.6）。sakai の api の形を変えたこと（`pointer`・`pointers`・`contract` のキーを無くした。sakai の DESIGN 15.10）。まだリリースしていない形なので、前の形は残さない。sakai の `.ctx` の予約語に `cedar`・`property`・`pointer`・`policy`・`action`・`entity` の六つを足したこと。dandori の `use openapi` の参照を `openapi "…"` にしたこと（`use smithy` は `file` のまま）。
+
+**rulec の E102 の三つ目の形**（rulec-e102 の担当）
+
+導出の列に、その導出が入力の範囲から実際に取りうる値の外だけを求める行を、E102（どの入力にも当てはまらない行）の三つ目の形にした（rulec の DESIGN 15.189）。
+
+次のリリースノートに書くこと：derive の範囲を入力から計算して、届かない行を E102 にした。derive の範囲を広めに書き、その先に行を書いていた規則は、新しく E102 で落ちる。`policy first` の表で、上の行が derive の取りうる値をすべて覆ったあとに置いた受け皿の行（`-` の行）と、`constraint` で derive の取りうる値が狭まり、その外を求める行も同じく落ちる。対象は、入力の足し算・引き算・定数倍でできた derive の列で、`define` の列と、分数の定数を掛ける derive の列は、これまでどおり見ない。
+
+- 残したこと：分数の定数を掛ける導出（`amount * 10%`）を軸に持つ表で、軸が金額の刻みで切られ、値の刻み（0.1 ポンドなど）のあいだの値を数えないため、E101 が穴を見逃す（生成したコードは、その値で完全性の assert に止まる）。三つ目の形は、この軸を持つ表を読まない。

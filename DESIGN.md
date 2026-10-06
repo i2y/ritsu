@@ -387,7 +387,7 @@ ritsu-ports には、秒を最も大きな単位で書く `seconds_text`（`17 d
 
 **2026-10-06 に足したもの**（八つ目の言語 sekisho の段階 A。PLAN の 7.12）。sekisho は、規則と日付の答えを Cedar のリクエストの context に入れ、許すか拒むかを全部の組み合わせで数える（sekisho の DESIGN 3 章、4 章）。そのための問いと型を足した。
 
-- `Rules::outputs_over`（rulec が答える）：列挙か真偽の出力の名前と、入力ごとの区間（受け渡す整数で、日付は日の番号。両端を含み、None の端は宣言した範囲のまま）を受け取り、出力がとる値の一つ一つに、そこに届く入力を添えて返す（値を宣言した順。区間の中に入力が無ければ空）。rulec は、入力を区間に限って規則を読み直し、出力を決める表の行のうち、ある入力が届きうる行を、完全性の証明のふるいと導出の届く区間で求め、その行が書く値に届く入力を規則のベクタから探して評価器で確かめる。二つがそろえば正確で、そろわなければ値と行を言って決められないと答える。rulec のコーパスとテストの規則の 323 の問いのうち 322 が、区間の中の全部の入力を流した答えと同じに正確に答えられた（rulec の DESIGN 15.188）。`rulec check` の答えは変わらない（E102 は強めていない）。既定の実装は決められないと答えるので、いま口を実装しているもの（dandori の `NoRules` など）は直していない。
+- `Rules::outputs_over`（rulec が答える）：列挙か真偽の出力の名前と、入力ごとの区間（受け渡す整数で、日付は日の番号。両端を含み、None の端は宣言した範囲のまま）を受け取り、出力がとる値の一つ一つに、そこに届く入力を添えて返す（値を宣言した順。区間の中に入力が無ければ空）。rulec は、入力を区間に限って規則を読み直し、出力を決める表の行のうち、ある入力が届きうる行を、完全性の証明のふるいと導出の届く区間で求め、その行が書く値に届く入力を規則のベクタから探して評価器で確かめる。二つがそろえば正確で、そろわなければ値と行を言って決められないと答える。rulec のコーパスとテストの規則の 323 の問いのうち 322 が、区間の中の全部の入力を流した答えと同じに正確に答えられた（rulec の DESIGN 15.188）。導出の取りうる値の外だけを求める行は、`rulec check` も E102（三つ目の形）として止める（rulec の DESIGN 15.189）。`rulec check` は、`define` の取りうる値と、`constraint` だけで死ぬ行は読まないので、区間に限った問いでは落ちる行が、`check` では通ることがある。既定の実装は決められないと答えるので、いま口を実装しているもの（dandori の `NoRules` など）は直していない。
 - `EnumValue::public`：口の事実の列挙の値に、公開名（`.rule` が括弧の中に書いた別名、無ければ名前。`上限まで(within_limit)` なら `within_limit`）を足した。sekisho が Cedar に入れる文字列で、`outputs_over` も列挙の値をこれで返す（添える入力は `eval` が受け取る形で、列挙の値は名前）。前からの `alias`（生成したコードのメンバーの名前、`WithinLimit`）と `name` は変えていないので、dandori と yuen の答えは変わらない。
 - `Dates::calendar` と `Dates::doc`（koyomi が答える）：`calendar` は、カレンダーのファイルの名前と別名、データの範囲、UTC オフセット、データの範囲の中で休みの日の全部（`CalendarFacts`）を返す。`doc` は `koyomi doc` と同じページを返し、頭の「ファイル」の行だけを呼ぶ側の書き方にする（`Rules::doc` と同じ使い方）。どちらも `check` を通るファイルにだけ答え、既定の実装は答えない（`Err`）。
 - 口 `Gates` の型（`GateFacts`・`GateAction`・`GateWorkflow`・`GatePolicy`・`Asker`・`Allowance`）と、口のまとまり `GatePorts`（`crates/ritsu-ports/src/gates.rs`）。`Gates` に答える `Engine` は段階 D で作る。`GatePorts` は、sekisho のクレートに依存せずに `ritsu-project` が作れるよう、ritsu-ports に置いた（dandori の `Ports` と同じ形）。契約（OpenAPI と AsyncAPI の文書、`.proto`）は口を通さず、土台の読み手（4.20、ritsu-proto）で読む。
@@ -720,6 +720,10 @@ YAML と JSON を、値ごとに行と列を持つ値（`yaml::Node`）に読む
 確かめ方：`crates/ritsu-base/tests/openapi.rs`。材料の六つの文書（`tests/fixtures/openapi/`。OpenAPI が四つで、そのうち一つは日本語の版。AsyncAPI が二つ）は、Redocly CLI 2.58.1 と AsyncAPI のパーサー 3.6.3 が誤りを言わないもので、操作の始まる位置は Redocly が言う行と列と同じ、AsyncAPI の操作のフィールド・必須か・content type・チャネルのアドレスはパーサーが読むものと同じである（どちらも手で走らせて確かめた。テストは Node を要らない）。dandori と sakai の読み手をこれに替えるのは、出力が変わらないことを確かめる仕事と一緒に、あとでする。
 
 
+### 4.21 文書の要素と参照（`ritsu_base::document`、2026-10-06）
+
+OpenAPI と AsyncAPI の文書の、参照の書き方（6.5）と JSON Pointer の行き来を一つにする。`find` は参照から、要素を読む場所（ファイルと JSON Pointer。プロパティは `allOf` の中まで、値は `enum` の場所）を返し、`reference` は場所から参照を返し、`gather` は一つの種類の要素を全部並べる。`$ref` は、sakai の読み方（ファイルとポインタ、途中の `$ref` もたどる、例とデータと `x-` の下は読まない、名前を並べるマップのキーは名前、64 段まで）でたどる。sakai の `src/contracts.rs` にあったその部分を移し、sakai はこれを呼ぶ。文書は `Documents`（ファイルから一番上の値を返すトレイト）で渡すので、sakai は検査で読んだ文書を、yuen は参照の文書とその `$ref` が読むファイルを渡す。どの言語の意味も持たない（4.11）。テストは、このモジュールの単体のテストと、yuen と sakai のテスト（往き来が同じ要素になること、`allOf` の中のプロパティ、`operationId` の無い操作、文書の一部のファイル）。
+
 ## 5. 単位の型
 
 ### 5.1 rulec の書き方を土台にする
@@ -805,7 +809,7 @@ rulec の組み込みの名前空間は、十三か国の一段目の区分で�
 
 `ritsu check <パス>...` は、渡したファイルとディレクトリを一つのプロジェクトとして読む。ルートは 6.2 の 3 のとおり（4.7）。ディレクトリは、4.7 の飛ばす名前を除いて下まで歩く。
 
-ファイルの種類は拡張子で決める：`.rule`（rulec）、`.flow`（dandori。`.ja.flow` も）、`.cal`（koyomi）、`.book`（chobo）、`.geas`（geas）、`.req`（yuen）、`.ctx`（sakai）、`.proto`、`.gate`（sekisho。2026-10-06 から）。ほかのファイルは、誰かが名指したとき（yuen と sakai の `file "…"`、dandori の `use openapi|smithy` のパス）にだけ読む。
+ファイルの種類は拡張子で決める：`.rule`（rulec）、`.flow`（dandori。`.ja.flow` も）、`.cal`（koyomi）、`.book`（chobo）、`.geas`（geas）、`.req`（yuen）、`.ctx`（sakai）、`.proto`、`.gate`（sekisho。2026-10-06 から）。ほかのファイルは、誰かが指したとき（yuen と sakai の `file "…"`・`openapi "…"`・`asyncapi "…"`、yuen の `cedar "…"`（6.5）、dandori の `use openapi|smithy`、sekisho の `use openapi|proto|asyncapi` のパス）にだけ読む。
 
 読み方の順：
 
@@ -829,19 +833,19 @@ rulec の組み込みの名前空間は、十三か国の一段目の区分で�
 
 `ritsu-base` の名指しは、yuen と sakai の DESIGN.md の 2 章で決め、二つのリポジトリの `tests/fixtures/naming.tsv`（36 行の試しの表）で確かめているものを、そのまま処理系全体の決まりにする。決まりは次のとおり。
 
-1. **形**：`<ツール> "<パス>" [<種類> <名前>]...`。組はツールの構造どおりに入れ子にできる。入れ子にできるのは、proto の `service S [method M]`、`message M [field f]`、`enum E [value V]`（入れ子のメッセージは名前を `.` でつなぐ：`message Order.Line`）と、rulec の `enum E [value V]` だけで、ほかのツールの組は一つまで。子の種類は、親の種類のすぐあとにしか書けない。
-2. **ツールの語**：`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`file`、`yuen`、`sakai`。`dir` はツールの語にしない（sakai の `.ctx` の構文の語にとどめる）。
+1. **形**：`<ツール> "<パス>" [<種類> <名前>]...`。組はツールの構造どおりに入れ子にできる。入れ子にできるのは、proto の `service S [method M]`、`message M [field f]`、`enum E [value V]`（入れ子のメッセージは名前を `.` でつなぐ：`message Order.Line`）、rulec の `enum E [value V]`、dandori の `record R [field f]` と `enum E [value V]`（6.3）、chobo の `transfer T [operation O]`、openapi と asyncapi の `schema S [property P]` と `schema S [value V]`、asyncapi の `channel C [message M]`（6.5）だけで、ほかのツールの組は一つまで。子の種類は、親の種類のすぐあとにしか書けない。
+2. **ツール名**：`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`。`openapi`・`asyncapi`・`cedar` は 2026-10-06 に足した（6.5）。`dir` はツール名にしない（sakai の `.ctx` の構文の語にとどめる）。`sekisho` は、`.gate` の言語として土台の `Tool` にあるが、まだツール名にしていない（sekisho の段階 D で、口 `Items` と一緒に足す）。
 3. **パス**：`.req` や `.ctx` の中では、書いたファイルのディレクトリからの相対。区切りは `/` で、`.` と `..` は字の上で畳む。絶対パスと空のパスはエラー。`"."` はルートを指す。末尾の `/` は取り除く。JSON では、ルート（`--root`、無ければ最初に渡したパスの上でいちばん近い `.git` のあるディレクトリ、それも無ければ渡したディレクトリ）からの相対で、ルートの外に出るパスはエラー。
-4. **種類の語**：rulec は `input`・`output`・`enum`（下に `value`）・`table`・`clause`・`define`・`derive`・`machine`・`source`、koyomi は `input`・`date`・`claim`・`source`、chobo は `unit`・`account`・`transfer`、geas は `claim`、proto は `service`（下に `method`）・`message`（下に `field`）・`enum`（下に `value`）、yuen は `requirement`・`source`、sakai は `context`・`term`、dandori は `task`・`case`・`record`（下に `field`）・`enum`（下に `value`）・`input`・`output`（6.3。D の二つ目の部分で足した）。`file` には無い。どの言語も、自分が使わない種類も名指しとして受け付ける。
-5. **名前**：ツールの名前（JSON の `name`）。別名は使わない。語（空白、`"`、`#` を含まない一続きの文字。頭が数字でもよい）か `"…"` で書く。`"…"` の中のエスケープは `\"` と `\\` だけで、ほかはエラー。正規化せず、大文字と小文字を区別する。proto の名前は、そのファイルの package から見た名前。文字列の外の全角の空白、`"…"` で書いた種類やツールの語、名前の無い種類はエラー。
-6. **同じ・含む**：同じは、ツールの語と、ルートからのパスと、組の並びが同じとき。ファイルは中のものを全部含み、親の組（proto の `service`・`message`・`enum`、rulec の `enum`）は子を全部含む。
+4. **種類**：rulec は `input`・`output`・`enum`（下に `value`）・`table`・`clause`・`define`・`derive`・`machine`・`source`、koyomi は `input`・`date`・`claim`・`source`、chobo は `unit`・`account`・`transfer`（下に `operation`。振替の操作の `do`、`hold`、`post`、`void`）、geas は `claim`、proto は `service`（下に `method`）・`message`（下に `field`）・`enum`（下に `value`）、yuen は `requirement`・`source`、sakai は `context`・`term`、dandori は `task`・`case`・`record`（下に `field`）・`enum`（下に `value`）・`input`・`output`（6.3）、openapi は `schema`（下に `property`・`value`）・`operation`・`pointer`、asyncapi は `channel`（下に `message`）・`message`・`operation`・`schema`（下に `property`・`value`）・`pointer`、cedar は `policy`・`action`・`entity`（6.5）。`file` には無い。どの言語も、自分が使わない種類も参照として受け付ける。
+5. **名前**：ツールの名前（JSON の `name`）。別名は使わない。語（空白、`"`、`#` を含まない一続きの文字。頭が数字でもよい）か `"…"` で書く。`"…"` の中のエスケープは `\"` と `\\` だけで、ほかはエラー。正規化せず、大文字と小文字を区別する。proto の名前は、そのファイルの package から見た名前。文書と Cedar の名前は 6.5。文字列の外の全角の空白、`"…"` で書いた種類やツール名、名前の無い種類はエラー。
+6. **同じ・含む**：同じは、ツール名と、ルートからのパスと、組の並びが同じとき。ファイルは中のものを全部含み、親の組（proto の `service`・`message`・`enum`、rulec と dandori の `enum`、dandori の `record`、chobo の `transfer`、openapi と asyncapi の `schema`、asyncapi の `channel`）は子を全部含む。
 7. **JSON の形**：`{"text": …, "tool": …, "path": …, "items": [[種類, 名前], …]}`（キーはこの順）。`text` は、パスをルートからの相対に直し、名前を語で書けるなら引用符なしで書いた形。空白を入れない詰めた書き方で、ASCII でない文字はそのまま出す。
 8. **文の中の書き方**：診断などの文に書くファイルの場所（`<パス>:<行>:<列>`、コピーのパス）は、走らせたディレクトリから、渡されたとおりに書く。文の中の名指しは、JSON と同じくルートからの相対で書く（読み直すと同じ名指しになり、`.req` や `.ctx` にそのまま貼れる）。
 9. **JSON の中のファイルの場所**：診断の `file` なども、名指しと同じくルートからの相対にし、JSON の外側に `root`（走らせたディレクトリから見たルート）を添える。取り込んだときは、yuen がルートからの相対、sakai が走らせたディレクトリからの相対で食い違っていた。土台で一つにするときにそろえる（4.2）とし、C.8 で sakai をルートからの相対にした。
 
-この決まりを、処理系のどこでも使う一つの書き方にする。yuen と sakai の `.req` と `.ctx` の中、診断の文と JSON、LSP の「定義へ移る」、`ritsu check` の JSON の中のもの、のどれも同じ形で書き、読み直すと同じものを指す。ツールの語は九つのまま。`ritsu` はツールの語にしない（ritsu は言語ではない）。
+この決まりを、処理系のどこでも使う一つの書き方にする。yuen と sakai の `.req` と `.ctx` の中、診断の文と JSON、LSP の「定義へ移る」、`ritsu check` の JSON の中のもの、のどれも同じ形で書き、読み直すと同じものを指す。ツール名は十二。`ritsu` はツール名にしない（ritsu は言語ではない）。
 
-OpenAPI と AsyncAPI の文書の要素（スキーマ、チャネル、メッセージ、操作）には、まだ名指しの形が無い。sakai は `.ctx` の中では短い書き方で、api と診断ではファイルと JSON Pointer（`payments/api.yaml#/components/schemas/Charge`）で書く（sakai の DESIGN 15.10）。ツールの語 `openapi` と `asyncapi` を足すと、yuen の診断の文（書けるツールの語の並び）と `naming.tsv` が変わるので、yuen と一緒に決める。
+OpenAPI と AsyncAPI の文書の要素は、2026-10-06 からツール名 `openapi`・`asyncapi` で指す（6.5）。sakai は `.ctx` の中で短い書き方（`schema Charge`）も使えるが、api と診断では参照の書き方で書く（sakai の DESIGN 15.10）。
 
 
 ### 6.3 種類の語を足す
@@ -854,6 +858,8 @@ OpenAPI と AsyncAPI の文書の要素（スキーマ、チャネル、メッ�
 
 D の二つ目の部分で、これを足した（PLAN の D.6）。表は、dandori の行を JSON にし、入れ子の行（`record 予約 field 泊数`、`enum Outcome value awaiting_review`）と、入れ子の誤りの行（親のすぐあとでない `value`、`task` の下の組、`record` の下の `field` でない組）と、種類の無い `file` に種類を書いた行（`dandori has no kinds yet` の行が受け持っていた誤りの種類）を足して、42 行（名指し 24、誤り 18）になった。
 
+2026-10-06 に、ツール名 `openapi`・`asyncapi`・`cedar` の行（参照 15 行、誤り 6 行）と、chobo の振替の操作の行（参照 2 行、誤り 1 行）を足し、表は 66 行（参照 41、誤り 25）になった（6.5）。英語の名前の行が先で、日本語の名前の行が 3 行ある。chobo に入れ子ができたので、`chobo "在庫.book" account 在庫 value X` の行の理由は、入れ子が無いことから、`account` の下に組を書けないことに替わった。
+
 ### 6.4 索引：中のものと参照
 
 各言語は、`Items` と `References` の口（3.2）で、自分の中のものと参照を出す。`ritsu-project` は、それをプロジェクト全体の索引にする。
@@ -864,10 +870,12 @@ D の二つ目の部分で、これを足した（PLAN の D.6）。表は、dan
 |---|---|---|
 | rulec | `table`、`clause`、`define`、`derive`、`input`、`output`、`enum`、`machine`、`source` | そのものの行を `rulec fmt` が書く形にしたもの（表なら見出しから最後の行まで） |
 | koyomi | `date`、`claim`、`input`、`source` | `date … =` の塊の行（操作の行を含む）、条件の行 |
-| chobo | `unit`、`account`、`transfer` | yuen の DESIGN 3.2 の形（`chobo api` の一つから名前とコードを除いたもの）を土台の JSON で |
+| chobo | `unit`、`account`、`transfer`（下に `operation`） | yuen の DESIGN 3.2 の形（`chobo api` の一つから名前とコードを除いたもの）を土台の JSON で。操作は、振替の文に操作の名前と拒否されうる理由の名前を足したもの |
 | dandori | 6.3 の種類 | タスクや案件やレコードの宣言の塊の行（列挙、フィールド、入力、出力はその行、列挙の値はその名前） |
 | geas | `claim` | 主張の塊の行 |
 | proto | `service`、`method`、`message`、`field`、`enum`、`value` | yuen の DESIGN 3.4 の決まった形の文 |
+
+openapi、asyncapi、cedar の要素は、どの言語の `Items` にも入らない。yuen が自分で読み、端の中身は yuen の DESIGN 3.6 で決める（proto の要素を yuen が 3.4 で決めるのと同じ）。
 
 yuen の端は、いまはファイル全体のもの（rulec、koyomi の日付、geas、dandori）がある（yuen の DESIGN 3.2）。定義の文が出れば、表や日付の関数やタスクの一つ一つが端になる（7.10）。端の中身が変わるので、yuen のテストと例の確かめた記録（`.req` のハッシュ）は D の段階で取り直す。D.7 で取り直し、F.1 の例もこの端で記録を書いた。koyomi の日付の端がその日付の定義の文になったので、カレンダーの一行を書き換えた例（yuen の `civil_code_periods_reread`）は、書き換えた日付へのリンク一本だけが E303 で止まる（ファイル全体を端にしていた A の段階の見込みでは、同じ `.cal` を指す三本が止まるはずだった）。
 
@@ -890,6 +898,29 @@ yuen の端は、いまはファイル全体のもの（rulec、koyomi の日付
 yuen を入れていないのは、yuen の `Engine` が、借りた出典の端を作るためにほかの言語の口（この索引を含む）を持つので、索引が yuen を持つと輪になるからである。yuen の要件を名指す言語は、いまは無い（LSP が要るようになったら、ritsu-project で輪にならない持ち方を決める）。
 
 yuen と sakai は、名指しを自分で言語ごとに引くのをやめ、この索引で引く（7.10）。yuen は `ends.rs`（リンクの端）と `coverage.rs`（範囲が集めるもの）、sakai は `suite.rs`（参照を読む）と `elements.rs`（語の `means` が名指す規則の入力、出力、列挙、値）である。どちらも出力は変わらない（PLAN の E.1 の突き合わせ）。
+
+### 6.5 OpenAPI と AsyncAPI の文書の要素、Cedar（2026-10-06）
+
+OpenAPI と AsyncAPI の文書と、手で書いた Cedar のポリシーとスキーマは、proto と同じく標準の形式で、どの言語のソースでもない。その中の一つのものを指せるように、ツール名を三つ足した。yuen の要件を一つの操作や一つのポリシーに結び付けられ、端もその要素の分だけになるので、同じ文書のほかの要素を直しても、その要件のリンクは止まらない（yuen の DESIGN 3.6）。sakai は、文書の要素を、ファイルと JSON Pointer ではなく参照の書き方で書く（sakai の DESIGN 15.10）。
+
+| ツール名 | ファイル | 種類と名前 |
+|---|---|---|
+| `openapi` | OpenAPI の文書（`.yaml`、`.yml`、`.json`）と、文書が `$ref` で読むその一部 | `schema`（`components/schemas` のキー。下に `property`（定義の `properties` のキー。無ければ `allOf` のスキーマを順に探す）と `value`（`enum` の値。数と真偽は JSON の書き方、`null`））、`operation`（`operationId`。無い操作だけ方法とパスで `"POST /orders/{orderId}/refunds"`）、`pointer`（JSON Pointer） |
+| `asyncapi` | AsyncAPI の文書と、その一部 | `channel`（`channels` のキー。下に `message`（そのチャネルの `messages` のキー））、`message`（`components/messages` のキー）、`operation`（`operations` のキー）、`schema`（openapi と同じ）、`pointer` |
+| `cedar` | `.cedar`、`.cedarschema`、`.cedarschema.json` | `policy`（`@id`。無ければ Cedar の CLI と同じく、ファイルの中の順の `policy0`、`policy1`）、`action` と `entity`（宣言した名前。名前空間を付けない） |
+
+- **`pointer`**：種類の無い場所（レスポンス、引数、サーバー、`$ref` で読まれる文書の一部のファイルの中）を、ファイルの頭からの JSON Pointer で指す。名前は `/` で始まる（`openapi "common/money.yaml" pointer /Money`）。sakai は、`$ref` の行き着く先とサーバーを、これで書く。
+- **`message` は二つの場所にある**：AsyncAPI 3 では、メッセージを `components/messages` に置いて `$ref` で読むことも、チャネルの `messages` に直に書くこともできる。前者は `message M`、後者は `channel C message M` と書く。
+- **一つの書き方**：`operationId` のある操作を方法とパスで書いた参照は、その操作を指さない（名前の書き方を一つにする。5）。Cedar の action と entity も、名前空間を付けた書き方は受け付けない。一つのスキーマのファイルで二つの名前空間が同じ名前を宣言していれば、その名前は一つに決まらず、yuen は E202 を出す。
+- **どこを指すか**：文書の中のどこがどの参照になるかと、その逆、`$ref` のたどり方は、土台の `ritsu_base::document`（4.21）が一つ持つ。yuen と sakai が同じ関数で引くので、同じ要素を同じ参照で書く。Cedar の要素は、いまは yuen だけが引く（`crates/yuen/src/documents.rs`）。sekisho が手で書いた Cedar を口で答える段階 D で、土台に移す。
+- **言語の検査は持たない**：`ritsu check` は、`.yaml` や `.cedar` を言語のファイルとして読まない（6.1 の `ORDER` に無い）。誰かが指したときに、指した言語が読む。
+- **sekisho が守る操作**：sekisho は、action が守る操作を、診断の文、`sekisho api`、生成するスキーマの `@guards` で、`openapi "…" operation <operationId>`、`asyncapi "…" operation <キー>`、`proto "…" service S method M`、`chobo "…" transfer T operation O` の参照で書く。パスは `.gate` の `use` に書いたパスではなく、ルートからのパスで、ルートは yuen と sakai と同じに決める（sekisho の DESIGN 2.6）。
+
+捨てた案：
+
+- 文書の要素に、ツール名を足さずに `file "…"` と JSON Pointer の組で書くこと（sakai の前の形）。yuen と sekisho が同じ要素を書くときに、言語ごとに書き方が分かれる。
+- 種類に `response`、`parameter`、`server` などを足すこと。文書の一部のファイル（`common/money.yaml#/Money`）のように、決まった場所に無いものが残る。`pointer` 一つで、どの場所も書ける。
+- Cedar の action を、Cedar の書き方（`Shop::Action::"refund_order"`）で書くこと。参照の中では引用符が二重になり、一つのファイルには、ふつう名前空間が一つしかない。
 
 ## 7. 言語をまたぐ検査
 
@@ -1224,6 +1255,7 @@ ritsu --help | --version
 - `ritsu check` は、パスを渡さなければ今いるディレクトリを読む。各言語の `check` を全部のファイルに走らせ、言語をまたぐ検査をし、最後に一行の要約（言語ごとのファイルの数、確かめた境目の数、決められなかった数）を出す。
 - `ritsu explain` は、ritsu の台帳（言語をまたぐ検査のコード）を引く。各言語のコードは `ritsu <言語> explain <コード>` で引く。言語ごとにコードの番号が重なる（rulec の E101 と koyomi の E101 は別のもの）からである。
 - `ritsu <言語> …` は、その言語のコマンドと同じものを、すべての口をつないで走らせる。
+- `ritsu sekisho …`（八つ目の言語。sekisho の DESIGN 11 章）は、段階 A で `check` と `explain` を、段階 B で `gen --target cedar`、`vectors`、`api` を作った（2026-10-06）。上の `ritsu <言語>` の並びと `ritsu --help` の言語の一覧、`sekisho` という名前のリンクには、まだ入れていない（段階 D）。
 
 **E.2 で作った形**（PLAN の E.2）。`ritsu check` は、プロジェクトを読み（6.1 の `Project::load`）、言語ごとの `check` を 6.1 の順に走らせる。rulec、koyomi、chobo、geas、dandori には、プロジェクトのファイルを一つずつ、使う人が書くとおりのパス（走らせたディレクトリから）で渡す。dandori には rulec・koyomi・chobo の口をつなぐ（E の二つ目の部分から。前は rulec の規則の口だけだった。6.1）。yuen と sakai は自分でファイルを探して一つのプロジェクトや地図として確かめる言語なので、渡されたパスのうち自分のファイルを含むものと、プロジェクトのルートを `--root` で渡す。`.proto` には自分の言語の `check` が無い（言語をまたぐ検査が読む。7 章）。
 
@@ -1519,6 +1551,7 @@ C.10 で `ritsu-emit` を作り、koyomi と chobo をこれに替えた。生�
 | geas | 236 件、SKIP 0、77 秒（2026-10-03 の記録） | pixie で作った greeter、Chrome、LLVM のツール、Go、Node、Python |
 | yuen | 94 件、SKIP 0（2026-10-03 の記録） | Python の venv（prov と reqif）、ReqIF のスキーマ、xmllint |
 | sakai | 97 件、SKIP 0、約 20 秒（2026-10-03 の記録） | import-linter、dependency-cruiser、Java と ArchUnit、Context Mapper、go-arch-lint、buf、rulec・koyomi・chobo・dandori のバイナリ |
+| sekisho | 77 件、SKIP 0、約 57 秒（2026-10-06 の記録。生成した Cedar を公式の CLI にかける `tests/cedar.rs` の 2 件が約 30 秒） | 公式の Cedar の CLI 4.13.0（`RITSU_CEDAR`）。rulec・koyomi・chobo・dandori は、同じプロセスで口からつなぐ |
 
 rulec の Kani の記録（`crates/rulec/experiments/kani/report.txt`）は、コーパスが英語の双子で 87 本になったあと（10.10）、207 本のハーネスが通り、手元で 766 秒かかる（`.github/workflows/kani.yml` の 60 分の上限の内）。
 
@@ -1535,7 +1568,7 @@ rulec の Kani の記録（`crates/rulec/experiments/kani/report.txt`）は、�
 | 段 | 走らせるもの | 目安 |
 |---|---|---|
 | `fast` | cargo のほかに何も要らないテスト。字句、構文、検査、診断の golden、変異、`explain` の再現、`naming.tsv`、api の JSON、外のツールを走らせない文書のテスト。git は使ってよい。curl も、テストが自分の中に立てたサーバー（e-Gov と eCFR の代わり）に問い合わせるためなら使ってよい（土台の `sources` が curl で問い合わせるため） | ワークスペース全体で数分（2026-10-03、この機械で 2 分 15 秒） |
-| `tools` | 手元に入れるツールが要るテスト。生成したコードの型の検査と突き合わせ（Node、Python、Go、rustc、Ruby、PHP、Swift、Java、protoc と buf）、PostgreSQL、TigerBeetle、Chrome、Mermaid、xmllint、Lean、sakai の四つのリンター | 数十分 |
+| `tools` | 手元に入れるツールが要るテスト。生成したコードの型の検査と突き合わせ（Node、Python、Go、rustc、Ruby、PHP、Swift、Java、protoc と buf）、PostgreSQL、TigerBeetle、Chrome、Mermaid、xmllint、Lean、sakai の四つのリンター、Cedar の CLI（sekisho が生成した Cedar をかける） | 数十分 |
 | `platforms` | サービスやクラスタを立てるか、外と通信するテスト。dandori の Temporal の dev server、kind の上の Argo、LocalStack、Ollama、TypeSafe、e-Gov と eCFR に本当に問い合わせるもの、Kani | 長い。揺れがある |
 
 テストは、要るものを `ritsu-testkit` で言う（`need(Tool::Postgres)` など）。`RITSU_TEST_LEVEL` が `fast`、`tools`、`platforms` のどれかなら、その段までのテストだけを走らせ、それより上の段のテストは SKIP の行を出して通す。`RITSU_TEST_LEVEL` が無ければ、いまと同じく、見つかったツールで走れるものを全部走らせる（B と C の振る舞いを変えないため）。
@@ -1560,7 +1593,7 @@ ritsu のリモートを作るまで（作者が決める）、CI は走らな�
 | ジョブ | いつ | すること |
 |---|---|---|
 | `fast` | push と pull request のたび | `cargo build --workspace --locked`、`RITSU_TEST_LEVEL=fast cargo test --workspace --locked`、依存の決まりの確かめ（3.4。`cargo xtask deps` と、ritsu 自身の地図の `ritsu check ritsu.ctx`） |
-| `tools` | main への push、コードを変えた pull request、毎晩 | ツールを入れ（rulec の `ci.yml` の一覧に、koyomi、chobo、geas、yuen、sakai、dandori のものを足す。PostgreSQL は、rulec にはサービスで、ほかには使い捨てのクラスタで）、クレートの組ごとに並べて `RITSU_TEST_LEVEL=tools` で回す。許す SKIP は、CI で用意できない pixie の greeter の四つだけ（下） |
+| `tools` | main への push、コードを変えた pull request、毎晩 | ツールを入れ（rulec の `ci.yml` の一覧に、koyomi、chobo、geas、yuen、sakai、sekisho、dandori のものを足す。PostgreSQL は、rulec にはサービスで、ほかには使い捨てのクラスタで）、クレートの組ごとに並べて `RITSU_TEST_LEVEL=tools` で回す。許す SKIP は、CI で用意できない pixie の greeter の四つだけ（下） |
 | `proofs` | `proofs/` か、証明書とモデルにかかわるコードを変えたとき | `lake build`、コーパスの証明書の再検査、Lean のモデルとの突き合わせ（11 章） |
 | `kani` | 毎晩と、rulec の生成器を変えたとき | rulec の CI の Kani の段（生成した Rust のハーネス） |
 | `platforms` | 毎晩、手で始めたとき、`crates/dandori/` を変えた pull request | kind の上の Argo、LocalStack、Temporal の dev server を立てて、dandori の `platforms` の段を回す。外のサーバー（e-Gov、eCFR、Buf Schema Registry）に問い合わせるテストもここで回す（下）。ほかのジョブと並べない |
@@ -1571,7 +1604,7 @@ ritsu のリモートを作るまで（作者が決める）、CI は走らな�
 C.12 で、`release` のほかの五つを根の `.github/workflows/` に書いた（ジョブ一つにファイル一つ。`fast.yml`、`tools.yml`、`proofs.yml`、`kani.yml`、`platforms.yml`）。F.7 で `release.yml`（タグで走る。13.2）と `packages.yml`（main への push と pull request で、文書だけの変更を除く）を足した。`packages.yml` は、rulec の `ci.yml` の `packages` のジョブのうち、静的な `ritsu` の musl のビルド、アーカイブ、`.deb` と `.rpm` を Debian と Fedora に入れて消すこと、を引き継ぐ。`cargo package` の半分は、crates.io に出さないので引き継がない。許す SKIP の一覧は `ci/skips/fast.txt`、`tools.txt`、`platforms.txt` にある。リモートが無いので、どれもまだ走らせていない。手元で確かめたのは、YAML として読めること、actionlint（v1.7.12）が何も言わないこと、`run` の中身が `bash -n` を通ること、ジョブが呼ぶコマンドがこの機械で通ることである（PLAN の C.12）。書いたときに決めたことは次のとおり。
 
 - `fast`：新しく取り出した木で走らせることを考え、`website/rulec/sync.sh` と `website/dandori/sync.sh` で（F.7 で rulec と dandori のサイトを根の `website/` の下に移した。`tools.yml` と `platforms.yml` の同じ段も直した）、サイトが共有するページのコピー（gitignore してある）を先に作る。テストは `cargo xtask test --level fast` で回し、`ci/skips/fast.txt` は空である。 F.5 で、ritsu-wasm を wasm32-unknown-unknown でコンパイルする一段を足した（`cargo check --locked -p ritsu-wasm --target wasm32-unknown-unknown`）。言語のクレートが Unix にしかないもの（プロセスグループ、シグナル）を、ほかの対象でどうするかを書かずに使うと、ここで落ちる。ページのテストのうち、ライブラリとバイナリを突き合わせる二つは fast の段で、node と Chrome を使う二つは tools の段（dandori の組。`-p ritsu` を回している）で走る。
-- `tools`：クレートを三つの組（rulec、dandori、それ以外の五つの言語と `ritsu-base`・`ritsu-testkit`・`ritsu-proto`・`ritsu-emit`・xtask）に分け、matrix で並べて走らせる。組ごとに要るものだけを入れる。PostgreSQL は、rulec の組がサービスのサーバーを libpq の環境変数で使い、ほかの組は PGDG の PostgreSQL 18 のプログラムで使い捨てのクラスタを立てる（`RITSU_PG_BIN`）。dandori の組は、rulec 0.22.0 のリリースのバイナリをチェックサムで確かめて `DANDORI_RULEC` に渡し（D.3 まで）、protoc 35.1 のリリースの zip を、書いたときに取ったチェックサムで確かめて入れる。rulec の `ci.yml` が `cargo test` のあとに走らせていたもの（`rulec test --require-all` で飛ばした側が無いこと、証明書の再検査、`fmt --check` と `check`）は、rulec の組の最後に残した。`--proofs` の付いた回は `kani` に移した。`ci/skips/tools.txt` は、PLAN の C.12 が空としていたのと違い、geas の pixie の四つを許す。pixie は ritsu の外でビルドするもので、pixie のテストは CI では回さず、greeter のある手元の機械で回すと決めた。 dandori の組は、ritsu の `tests/website.rs` がサイトを組むために、Zensical を `website/.venv` に入れる（F.7）。
+- `tools`：クレートを三つの組（rulec、dandori、それ以外の六つの言語と `ritsu-base`・`ritsu-testkit`・`ritsu-proto`・`ritsu-emit`・xtask）に分け、matrix で並べて走らせる。組ごとに要るものだけを入れる。PostgreSQL は、rulec の組がサービスのサーバーを libpq の環境変数で使い、ほかの組は PGDG の PostgreSQL 18 のプログラムで使い捨てのクラスタを立てる（`RITSU_PG_BIN`）。dandori の組は、rulec 0.22.0 のリリースのバイナリをチェックサムで確かめて `DANDORI_RULEC` に渡し（D.3 まで）、protoc 35.1 のリリースの zip を、書いたときに取ったチェックサムで確かめて入れる。rulec の `ci.yml` が `cargo test` のあとに走らせていたもの（`rulec test --require-all` で飛ばした側が無いこと、証明書の再検査、`fmt --check` と `check`）は、rulec の組の最後に残した。`--proofs` の付いた回は `kani` に移した。`ci/skips/tools.txt` は、PLAN の C.12 が空としていたのと違い、geas の pixie の四つを許す。pixie は ritsu の外でビルドするもので、pixie のテストは CI では回さず、greeter のある手元の機械で回すと決めた。 dandori の組は、ritsu の `tests/website.rs` がサイトを組むために、Zensical を `website/.venv` に入れる（F.7）。2026-10-06 に、それ以外の組に sekisho を足し、Cedar の CLI 4.13.0 の Linux の x86-64 のリリースのアーカイブを、書いたときに取ったチェックサム（リリースの `.sha256` と `sha256.sum` と同じ）で確かめて入れ、`RITSU_CEDAR` に渡す段を足した（sekisho の `tests/cedar.rs`）。数 MB なのでキャッシュはしない。同じ組で、同じバイナリで ritsu-base の Cedar の材料を `expected.sh` で作り直し、材料が一字も変わらないことと、リポジトリに無いファイルができないことを確かめる段も足した（4.18）。手元で確かめたのは、actionlint 1.7.12 が `tools.yml` に何も言わないこと、二つの段の `run` が `bash -n` を通ること、CLI を入れる段を `sha256sum` だけ `shasum -a 256` に替えて流すと、ダウンロード、チェックサム、展開、`RITSU_CEDAR` の行まで通ること、材料を確かめる段の `run` を手元の CLI 4.13.0 で流すと通ることである。GitHub ではまだ走らせていない。許す SKIP は足していない。
 - `proofs`：根の `proofs/` で `lake build` を一度だけ走らせ（五つのライブラリと、`rulec-recheck` と `ritsu-model`）、コーパスの全部の証明書を `rulec-recheck` にかけ、rulec の `tests/lean.rs` と `cargo test --release -p ritsu-model` を `tools` の段で回す。どちらも SKIP の行が一つでもあれば落ちる（突き合わせが走らなかったことになる）。走るのは、`proofs/`、`crates/ritsu-model/`、rulec の src・コーパス・`tests/days/`・`tests/lean.rs`・`tools/recheck.py`、土台の src、口（`ritsu-ports`）と `ritsu-cross` の src、chobo・koyomi・dandori の src と突き合わせが読む例とテストの材料、`Cargo.lock` のどれかが変わったときである。`tools` の rulec の組は、rulec のテストが使う `RulecCert` と `rulec-recheck` だけを作る。`fast` のジョブでは、`ritsu-model` の文字で穴を探すテストだけが走り、ほかは段の SKIP になる。C.12 では rulec の `ci.yml` の `proofs` のジョブをコピーしていたが、F.6 で rulec の証明を根に移したので、この形にした。
 - `kani`：rulec の `ci.yml` の Kani の段（コーパスの全部の規則を Rust にして Kani で証明する）と、`rulec test --proofs` の回（`フラグを付ければ証明が走る` を platforms の段で）。毎晩と、rulec の生成器、`ritsu-emit` の src、コーパスが変わったとき。
 - `platforms`：kind の上の Argo（kind 0.33 は Go の `go install` で、argo CLI v4.1.4 はチェックサムで確かめて入れ、`crates/dandori/tools/argo/setup.sh` でクラスタを作る）、LocalStack 4.14.0 のイメージ、Temporal の dev server（TypeScript の SDK の `@temporalio/testing` が取ってくる）を用意し、dandori の platforms の段のテストを一つずつ回す（10.6 のとおり、落ちたら一度だけ回し直し、そのことを出力に書く）。最後に kind の上にワークフローが残っていないことを確かめる。そのあと、外のサーバーに問い合わせるテスト（土台、koyomi、yuen の本物の e-Gov と eCFR、rulec の Buf Schema Registry）を platforms の段で回す。10.5 の表に無かったこの四つは、ほかにどのジョブも回さないので、ここに置いた。TypeSafe には CI から送らない。呼ぶたびにお金がかかり、CI では呼ぶ回数を見込めないので、鍵をリポジトリの secret にも置かない。ワークフローは `TYPESAFE_API_KEY` を空にして走らせるので、secret があっても読まず、Jev のテストは SKIP になる。それと Ollama の無い runner での SKIP を、`ci/skips/platforms.txt` で許す。
@@ -1611,7 +1644,7 @@ CI を初めて回したときに落ちた四つは、どれも GitHub の環境
 
 ### 10.9 段階 C で作った形（`ritsu-testkit` と `xtask`）
 
-- `ritsu-testkit` には、10.8 のものに、テストの中に立てる小さな HTTP サーバー（yuen の形。e-Gov と eCFR の代わり）を足した。一時ディレクトリの名前は `ritsu-test-<クレート>-<pid>-<n>-<用途>` で、最初の一つを作るときに、終わったテストのプロセスの分を消す。そのプロセスが書き残したサーバー（PostgreSQL、TigerBeetle）は、まだ同じプログラムであるときだけ止める（プロセスの番号は、そのあいだに別のプログラムのものになっていることがある）。golden の取り直しは `RITSU_BLESS` と `<クレート>_BLESS` のどちらでもよく、空と `0` は取り直さない。
+- `ritsu-testkit` には、10.8 のものに、テストの中に立てる小さな HTTP サーバー（yuen の形。e-Gov と eCFR の代わり）を足した。一時ディレクトリの名前は `ritsu-test-<クレート>-<pid>-<n>-<用途>` で、最初の一つを作るときに、終わったテストのプロセスの分を消す。そのプロセスが書き残したサーバー（PostgreSQL、TigerBeetle）は、まだ同じプログラムであるときだけ止める（プロセスの番号は、そのあいだに別のプログラムのものになっていることがある）。golden の取り直しは `RITSU_BLESS` と `<クレート>_BLESS` のどちらでもよく、空と `0` は取り直さない。2026-10-06 に、`Need::Cedar`（sekisho のテストが、生成した Cedar をかける公式の CLI。tools の段）と、それを探す `ritsu_testkit::cedar` を足した。`RITSU_CEDAR` か `<クレート>_CEDAR`、無ければ PATH の `cedar` を探し、`--version` が `cedar-policy-cli 4.13.0` でなければ、SKIP の行でその版を言う（出力を一字ずつ比べるテストなので、ほかの版は使わない）。
 - SKIP の記録は、一行に四つの値をタブで区切って書く。クレート、テスト、理由の種類、理由である。理由の種類は `level`（`RITSU_TEST_LEVEL` が上の段のテストを外した）と `missing`（要るものがこの機械に無い）の二つで、`cargo xtask test` が `ci/skips/<段>.txt` と突き合わせるのは `missing` だけにした。段で外したテストは、その段の意味どおりに外れたもので、一覧に書き並べても何も確かめないからである。
 - 本物の外部のサービスに問い合わせるテストが段で外れたときは、SKIP ではなく `not asked:` の行を出す（yuen の形）。SKIP の数は、この機械に無いものの数として読めるように保つ。
 - `cargo xtask test --changed <リビジョン>` は、変わったファイルのクレートと、それに依存する（どの種類の依存でも）クレートを回す。クレートの外のファイル（根の `Cargo.toml` など）が変われば全部を回す。文書だけの変更を見分けて文書のテストだけを回すことは、まだしない（そのクレートのテストを全部回す）。

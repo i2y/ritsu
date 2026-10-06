@@ -4,7 +4,7 @@
 
 名前は関所（せきしょ）から取った。
 
-この文書は設計の段階（2026-10-06）に書き、言語の芯を作った段階（A）で、作ったものに合わせて直した。設計の段階では、ritsu 0.23.0 を読み、2026-10 の時点の Cedar とまわりの道具を調べて決めた。決めたことのうち、Cedar で本当にそうなるかが分かれ目になるものは、手で書いた例を公式の Cedar の CLI 4.13.0、cedar-wasm 4.13.0、cedarpy 4.12.1、cedar-go v1.8.0 にかけて確かめた（6 章）。例の規則・日付・ワークフローは、ritsu 0.23.0 の `rulec check`・`koyomi check`・`dandori check` と `ritsu check` を通してある。例の Cedar とリクエストを組み立てるコードは、sekisho が生成する形を手で書いた見本である。`.gate` の検査の結果として載せた数は、設計の段階には、検査が数える形を Python で書いた使い捨ての試作の出力（1,090 通りなど）だった。A で全部の組み合わせの検査を作り、4 章、7 章、10 章の数と文を実物の出力に差し替えた（6.2 の表は、試作を四つの実装に流した記録なので残した）。A では、字句と構文、名前と型、診断の台帳、`check` と `explain` のコマンド、`ritsu sekisho` と `ritsu check` の入口、口のまとまり `GatePorts` と口 `Gates` の型、rulec の `outputs_over`、koyomi の `calendar` と `doc`、OpenAPI と AsyncAPI の操作の読み手、全部の組み合わせの検査と参照の評価、行を合わせた表を作った。2.8、2.10、3 章、4 章、7〜10 章をそれに合わせて直し、16 章を決めたことの形に書き直した。段階 B では、Cedar のスキーマとポリシーの生成（`gen --target cedar`）、全部の組み合わせを `cedar run-tests` のテストにする `vectors`、外のツールのための JSON の `api` を作り、5 章、6.1、11 章を作ったものに合わせて直し、16.1 に段階 B で決めたことを足した。
+この文書は設計の段階（2026-10-06）に書き、言語の芯を作った段階（A）で、作ったものに合わせて直した。設計の段階では、ritsu 0.23.0 を読み、2026-10 の時点の Cedar とまわりの道具を調べて決めた。決めたことのうち、Cedar で本当にそうなるかが分かれ目になるものは、手で書いた例を公式の Cedar の CLI 4.13.0、cedar-wasm 4.13.0、cedarpy 4.12.1、cedar-go v1.8.0 にかけて確かめた（6 章）。例の規則・日付・ワークフローは、ritsu 0.23.0 の `rulec check`・`koyomi check`・`dandori check` と `ritsu check` を通してある。例の Cedar とリクエストを組み立てるコードは、sekisho が生成する形を手で書いた見本である。`.gate` の検査の結果として載せた数は、設計の段階には、検査が数える形を Python で書いた使い捨ての試作の出力（1,090 通りなど）だった。A で全部の組み合わせの検査を作り、4 章、7 章、10 章の数と文を実物の出力に差し替えた（6.2 の表は、試作を四つの実装に流した記録なので残した）。A では、字句と構文、名前と型、診断の台帳、`check` と `explain` のコマンド、`ritsu sekisho` と `ritsu check` の入口、口のまとまり `GatePorts` と口 `Gates` の型、rulec の `outputs_over`、koyomi の `calendar` と `doc`、OpenAPI と AsyncAPI の操作の読み手、全部の組み合わせの検査と参照の評価、行を合わせた表を作った。2.8、2.10、3 章、4 章、7〜10 章をそれに合わせて直し、16 章を決めたことの形に書き直した。段階 B では、Cedar のスキーマとポリシーの生成（`gen --target cedar`）、全部の組み合わせを `cedar run-tests` のテストにする `vectors`、外のツールのための JSON の `api`、生成した Cedar を公式の CLI にかけるテスト（`tests/cedar.rs`）を作り、5 章、6.1、6.2、11 章を作ったものに合わせて直し、16.1 に段階 B で決めたことを足した。取り込みのときに、守る操作を、参照の書き方とルートからのパスで言うようにした（2.6）。
 
 ## 0. 全体像
 
@@ -765,7 +765,7 @@ permit 係は上限まで返金できる(clerks_refund_within_their_limit)
 sekisho は Verified Permissions に何も送らない（ritsu の検査と生成はネットワークを使わない）。置くためのファイルを書くだけである。
 
 - スキーマ：`.cedarschema.json` を `PutSchema` に渡す。ポリシーより先に置く（Verified Permissions は `CreatePolicy` のときに、ストアのスキーマでポリシーを検証する）。context の値を足すときも、スキーマを先に変える。
-- ポリシー：`.policies.json` の一つずつを `CreatePolicy` の `definition.static.statement` にし、`name` に `@id` を渡す。名前はポリシーの ID の代わりに使える（API に渡すときは頭に `name/` を付ける）。
+- ポリシー：`.cedar` のポリシーを一つずつ Cedar のテキストに書いたもの（`ritsu_base::cedar::write_policy`）を、`CreatePolicy` の `definition.static.statement` にし、`name` に `@id` を渡す。`statement` は Cedar のポリシーの言語で書いた中身で（API の文書の `StaticPolicyDefinition`）、JSON の形ではない。`.policies.json` は、三つの実装（cedar-wasm、cedarpy、cedar-go）に `@id` ごとに渡すためのものである（5.2）。`name` はポリシーストアの中で一意な名前で、ポリシーを指す API では ID の代わりに使え、そのときは頭に `name/` を付ける（`name/refunds/clerks_refund_within_their_limit`）。`@id` は `name` の形（`[a-zA-Z0-9-/_]*`、150 字まで）に収まる（5.2）。どれも 2026-10-06 に、API の文書の CreatePolicy（Request Syntax と `definition`・`name` の説明。<https://docs.aws.amazon.com/verifiedpermissions/latest/apireference/API_CreatePolicy.html>）、StaticPolicyDefinition（<https://docs.aws.amazon.com/verifiedpermissions/latest/apireference/API_StaticPolicyDefinition.html>）、GetPolicy（`policyId` に名前を渡すときの `name/`。<https://docs.aws.amazon.com/verifiedpermissions/latest/apireference/API_GetPolicy.html>）で確かめた。本物のアカウントでは確かめていない（15 章）。
 - `IsAuthorized` の `determiningPolicies` は、ストアが付けた `policyId` を返す。生成する `--authorizer avp` のコードは、それをそのまま返し、ページと文書に、名前で引けることを書く。
 - 上限（2026-10 の Verified Permissions のクォータ）：一つのポリシーは 10,000 バイトまで、スキーマは 100,000 バイトまで、一つのスキーマの名前空間は 100 まで、principal・action・resource のそれぞれの推移的な親は 100 まで、一つの認可のリクエストは 1 MB まで。`sekisho gen --authorizer avp` は、ポリシーとスキーマの大きさと、役割の親の深さがこれを超えれば W401 で言う。
 - 置く手順（AWS の CLI、CloudFormation の `AWS::VerifiedPermissions::Policy` など）は生成しない。置くのは使う人で、sekisho が書くのは置くためのファイルだけである。
@@ -780,13 +780,16 @@ sekisho は Verified Permissions に何も送らない（ritsu の検査と生�
   - ID は、型の別名を小文字にして番号を付ける（`user1`、`order1`、`customer2`）。同じエンティティを指す項（2.5 の分け方の一つの組）は同じ ID で、principal を指すなら principal の ID である。ワークフローの principal は、ワークフローの別名を ID にする。
   - 組み合わせが数えない値（ほかの action のポリシーだけが読む属性など）は、その値がとりうる最初の値にする（真偽は false、列挙は最初の値、数は下限）。省けるものは書かない。
   - 例の英語の版では、1,078 通りから 2,134 件になる（`view_order` 18、`refund_order` 1,056 × 2、`export_refunds` 4）。日本語の版は、名前空間と ID の頭のほかは一字も同じである（`tests/cli.rs`）。
-- テストは、生成した Cedar に、`cedar validate`（strict）、`cedar format --check`、`cedar run-tests` をかけ、JSON の形を `cedar translate-schema` と `translate-policy` の出力と比べる。
-- CLI は、公式のリリースのバイナリ（`cedar-policy-cli` 4.13.0。macOS と Linux の四つ）を、チェックサムで確かめて置く。CI は ritsu の `tools.yml` が wasm-tools と protoc を入れるのと同じ形で入れる。テストは環境変数 `RITSU_CEDAR` で受け取り、無ければ `SKIP: sekisho: …` を言う（ritsu の DESIGN 10.3）。Cedar の読み手と書き手（`ritsu_base::cedar`）のテストの材料も同じバイナリで作るので、CI の入れ方は一つにする。
+- テスト（`tests/cedar.rs`）は、例とテストの材料の `.gate` のうち、検査を通るものの全部を、言語を全部つないで生成し（`gen --target cedar` を `--lang en` と `--lang ja` で）、公式の CLI に次をかける。`cedar validate`（strict。警告も誤りとする）を、Cedar の形と JSON の形の両方に。`cedar format --check`。JSON の形が `cedar translate-policy` と `translate-schema` の出力と一字も違わないこと。`cedar run-tests` を、`sekisho vectors` が書く全部のテストに、Cedar の形と JSON の形の両方で。あわせて、検査を通るファイルにだけ `gen` が書くこと、vectors の組み合わせの数と許す数が検査の数えたものと同じであること、一つの組み合わせの二件の答えが同じであることも確かめる。
+- `cedar run-tests` は、テストに書いた決めたポリシーが、実際に決めたポリシーの中にあるかだけを見る（4.13.0 の `cedar-policy-cli/src/command/run_test.rs`）。多いものは見ない。そこでテストは、ポリシーを一つずつ permit にして単独で流し、そのポリシーが当てはまるかを答えが言うテストで、当てはまるところが答えと同じであることを確かめる。forbid は、拒んだ答えの決めたポリシーにあるところでだけ当てはまる。permit は、許した答えの決めたポリシーにあるところで当てはまり、それ以外の許した答えと、forbid の無い拒んだ答えでは当てはまらない。forbid が拒んだテストでは、permit が当てはまるかを答えは言わないので、流さない。これと `run-tests` で、決めたポリシーが一致する。
+- スキーマが要るとする属性（エンティティの型と action の context）ごとに、その属性を持つ最初のテストから属性を一つ抜いたテストを作り、`cedar run-tests` がどれもスキーマに合わないと言うことを確かめる（Cedar の形と JSON の形の両方で）。Verified Permissions は、渡されたスキーマでリクエストを確かめる。要る属性を省けるものとして書いたスキーマは、値の無いリクエストを受け付け、値が無いものとして答える。この誤りは、読むところが全部 `has` で守られていると、`validate` にも答えにも出ない。
+- 生成の誤りを見つけられることも、同じファイルで確かめる。生成したポリシーとスキーマを ritsu-base の Cedar で読み、一か所ずつ変えて書き直した変異の全部が、上の確かめ（`validate`、`run-tests`、ポリシーを一つずつ流すこと、要る属性を抜いたテスト）のどれかで落ちること（6.2）。構文木を変えて書き直すので、どの変異も CLI が読め、`cedar format` の形である。答えに出ない変異（役割が一つで `includes` が無いときの、役割の型の親）は作らない。
+- CLI は、公式のリリースのバイナリ（`cedar-policy-cli` 4.13.0）を、チェックサムで確かめて置く。テストは ritsu-testkit の `cedar::cli()`（`Need::Cedar`、tools の段）で、環境変数 `RITSU_CEDAR`（か `SEKISHO_CEDAR`）、無ければ PATH の `cedar` を探し、`cedar --version` が `cedar-policy-cli 4.13.0` のときだけ使う。出力を一字ずつ比べるので、ほかの版では違う形で出すことがあるからである。無いか版が違えば `SKIP: sekisho: …` を言う（ritsu の DESIGN 10.3）。CLI を使うテストは二つ（全部のファイルを CLI にかけるものと、変異のもの）で、それぞれが SKIP の行を一つ出す。CI は ritsu の `tools.yml` の「それ以外」の組で、Linux の x86-64 のアーカイブ（`cedar-policy-cli-x86_64-unknown-linux-gnu.tar.xz`、SHA-256 `23d358ef38edad8ade629a09f6a7359ecbd1761c9ff82e9fd0a5c5bce36b8c79`。リリースの `.sha256` と `sha256.sum` と同じ）を、wasm-tools と protoc と同じ形で入れ、`RITSU_CEDAR` に渡す。Cedar の読み手と書き手（`ritsu_base::cedar`）の材料も、同じ組が同じバイナリの `expected.sh` で作り直し、一字も変わらないことを確かめる（ritsu の DESIGN 4.18）。CI の入れ方は一つである。
 - ほかの言語のランナーと突き合わせのテストと同じ形にする：生成物（Cedar）を、本物の評価器（公式の CLI）に、参照の評価が作った全部の場合をかけ、一字も違わないこと。dandori が Temporal の dev server で、chobo が PostgreSQL と TigerBeetle で確かめるのと同じ位置にある。
 
 ### 6.2 試したこと（2026-10-06）
 
-例 `refunds.gate` を、sekisho が生成する形で手で Cedar に書き、検査が数える形で書いた試作（Python）で 1,090 通りの組み合わせと答えを作って、四つの実装にかけた。段階 A の検査は 1,078 通りを数える（4.1。試作は `export_refunds` で、ポリシーが読まない役割も数えていた）。段階 B の `sekisho vectors` が書くのはこの 1,078 通りなので、突き合わせを流したら、この表をその数で取り直す。
+例 `refunds.gate` を、sekisho が生成する形で手で Cedar に書き、検査が数える形で書いた試作（Python）で 1,090 通りの組み合わせと答えを作って、四つの実装にかけた。段階 A の検査は 1,078 通りを数える（4.1。試作は `export_refunds` で、ポリシーが読まない役割も数えていた）。下の表は、そのときの記録である。段階 B で、生成した Cedar と `sekisho vectors` で取り直したものは、表のあとに書く。
 
 | 実装 | 結果 | 時間 |
 |---|---|---|
@@ -798,6 +801,21 @@ sekisho は Verified Permissions に何も送らない（ritsu の検査と生�
 | cedar-go v1.8.0（Go 1.25.5） | 1,090 通りとも一致（JSON の形を `json.Unmarshal`） | 2.6 秒（`go run` のビルドを含む） |
 
 テストが誤りを見つけることも試した。ワークフローの permit の `context.amount <= 50` を `< 50` に変えると、`run-tests` は 4 通りで落ちた（区間の端の 50 を使っているため）。`context has refund_band &&` を消すと、`cedar validate` が `unable to guarantee safety of access to optional attribute refund_band` で落ちた。最初に書いたスキーマは `entity Role;` で、manager の親を clerk にしたエンティティを CLI が受け付けなかった（`Shop::Role::"manager"` is not allowed to have an ancestor of type `Shop::Role`）。5.1 の `entity Role in [Role]` はこれで決めた。
+
+段階 B で、生成した Cedar と `sekisho vectors` で取り直した（例の英語の版。CLI 4.13.0、2026-10-06）：
+
+| 確かめ | 結果 | 時間 |
+|---|---|---|
+| `cedar validate`（strict、`--deny-warnings`）、Cedar の形と JSON の形 | `policy set validation passed`、`no errors or warnings` | 0.02 秒、0.01 秒 |
+| `cedar format --check` | 生成したテキストが整形の結果と同じ | 0.01 秒 |
+| `cedar translate-policy`、`translate-schema` | `.policies.json`、`.cedarschema.json` と一字も違わない | — |
+| `cedar run-tests`、Cedar の形と JSON の形 | `results: 2134 passed, 0 failed`（1,078 通りの 2,134 件。許すのは 97 通り） | 0.34〜0.35 秒 |
+| ポリシーを一つずつ permit にして流す | 10 のポリシーとも、答えと同じところで当てはまる | — |
+| 要る属性を一つ抜いたテスト | 6 件とも、スキーマに合わないと言う | — |
+
+検査を通る材料の全部（131 のうち 27）で、同じ確かめが通る。`tests/gen/conditions.gate` は 1,444 通りの 2,888 件である。
+
+生成したテキストを一か所ずつ変えた変異は、名前のほかが同じ Cedar と vectors になるファイルをまとめて、9 のファイルで 465 あり、どれもどれかの確かめで落ちた。例の 124 は、`validate` で 47、`run-tests` で 76 が落ち、残る 1 は `run-tests` を通って、ポリシーを一つずつ流す確かめだけで落ちた。`managers_refund_late_on_business_days` から `unless { context.in_period }` を除いたもので、期間内の営業日には `managers_refund_in_period` も許すので、答えは変わらず、決めたポリシーが一つ増えるだけである。同じ形のものが、ほかの材料に三つあった。`tests/gen/conditions.gate` の 106 のうち一つ（`Doc` の `dept` を省けるものにした変異）は、`validate` も `run-tests` も通り、要る属性を抜いたテストだけで落ちた。`dept` を読む permit は、resource が `Doc` と `Folder` の二つの型をとるので `resource has dept &&` で守っていて、vectors の `Doc` はいつも `dept` を持つからである。
 
 ### 6.3 生成したコードのテスト（段階 C）
 
@@ -1384,13 +1402,19 @@ Zanzibar の形（OpenFGA、SpiceDB、Permify、Topaz のディレクトリ）�
 38. **規則の列挙の値を生成したコードの名前（`WithinLimit`）で書いた条件も、数え方と生成で同じ値を引く（3.2）。** 段階 A の数え方は、名前の検査が受け付けるこの綴りを、規則の名前と公開名の中に探して見つけられず、その条件をどの組み合わせでも成り立たないものとして数えていた（例を `WithinLimit` と書くと E303 になった）。口が返す値ごとの生成したコードの名前も持ち、それでも引く。例をそう書き換えたものは、例と同じ数になり、同じポリシーを生成する（`tests/gen.rs`）。
 39. **守る操作は、診断の文、`api`、`@guards`、口のどれでも、同じ参照で書く（2.6）。** 参照は `ritsu_base::naming::Name` で組み、文字列を組まない。`operationId` のある操作は、`guards` の行の書き方によらず `operationId` で書き、proto のサービスはファイルの package から見た名前で書く。同じ操作が、書き方によって二つの参照にならないためである。E202 は、yuen の E202 と同じく、文書のパスと書いた組で無いものを言う。
 40. **参照のパスはルートからにし、ルートは yuen と sakai と同じに決める（2.6）。** `check`・`gen`・`vectors`・`api` が `--root` を取る。守る契約がルートの外にあれば、E201 にする。参照に書けないパスを、別の形で書いて通さないためである。
+41. **決めたポリシーの一致は、`cedar run-tests` に加えて、ポリシーを一つずつ permit にして流して確かめる（6.1）。** `run-tests` は決めたポリシーが含まれるかだけを見るので、それだけでは、ほかの permit と重なる permit の条件を一つ落とした生成の誤りを見逃す（材料の変異で四つあった。6.2）。
+42. **スキーマが要る属性を一つ抜いたテストを、CLI がスキーマに合わないと言うことを確かめる（6.1）。** 要る属性を省けるものとして書くスキーマの誤りは、読むところが `has` で守られていると、検証にも答えにも出ない。Verified Permissions がスキーマでリクエストを確かめるときに効く。
+43. **生成した Cedar の変異は、ritsu-base の Cedar で読んだ構文木を一か所ずつ変えて作り、全部がどれかの確かめで落ちることを求める（6.1、6.2）。** 文字を変えると、CLI が読めない変異が多くなり、読めないことで落ちても何も確かめていない。答えに出ない変異は作らず、名前のほかが同じファイルは一度だけ変える。変異の材料は絞らない。手元の 14 コアで約 30 秒（CPU の時間は 2 分ほど）、CI の 4 コアの runner では 1〜2 分の見込みで、tools の段で走る。
+44. **テストに使う CLI は 4.13.0 だけで、ほかの版は SKIP にする（6.1）。** 出力を一字ずつ比べるからである。CI では、版を上げてテストを直していなければ、その SKIP が許す一覧に無いので落ちる。CLI を使うテストは二つで、CLI が無いときは、それぞれが SKIP の行を一つ出す（合わせて二つ）。SKIP の記録はテストごとなので、二つのテストがそれぞれ自分の理由を言う。英語と日本語の版の双子は `tests/gen.rs` が確かめるので、CLI のテストには重ねて持たない。
+45. **CI では、tools の「それ以外」の組で CLI を入れる（6.1）。** ritsu-base の Cedar の材料と同じ組で、入れ方を一つにする。同じ組が、その材料を `expected.sh` で作り直して確かめる（ritsu の DESIGN 4.18）。
+46. **計算した値の `@doc` の最後の文は、どのコマンドが書くかを言わない（5.1）。** 「Computed by the generated code, never taken from the caller」（「生成したコードが計算し、呼ぶ側からは受け取らない」）。同じ Cedar を `sekisho gen` も `ritsu gen` も書くからである。
 
 ### 16.2 危ないところ
 
 - **計算した値を作る者を信じること（3.6）。** 守りはコードの形による。生成したコードを使わずに、自分で Cedar のリクエストを組み立てる人には効かない。README とページで、生成したコードを通すことを強く書く。
 - **Verified Permissions の版のずれ。** ストアに置いたポリシーと、生成したコードの版が合わないと、計算した値の名前が食い違う。置く手順を生成しない（5.8）ので、合わせるのは使う人である。
 - **数え方の予算。** 役割が多い（`roles` が 15 を超える）と、役割の組だけで 3 万を超え、ほかの値と掛け合わせると予算（10⁸）に届きうる。超えれば E307 で止まる。`roles` を型ごとに分けることと、役割ごとの確かめ（`can`）が手当てになる。
-- **rulec と koyomi に新しい問いを足すこと（8.3）。** `outputs_over` は rulec の解析を区間に限って走らせるもので、rulec の中に手を入れる仕事になる。正確でない答えを「決められない」と言えるかが、sekisho の検査の正しさを決める。段階 A で作り、rulec のコーパスとテストの規則の 323 の問いを、区間の中の全部の入力を流した答えと突き合わせた（3.2）。rulec の E102 は変えていないので、E102 を通る行が、区間に限った問いでは落ちることがある（rulec の DESIGN 15.188）。
+- **rulec と koyomi に新しい問いを足すこと（8.3）。** `outputs_over` は rulec の解析を区間に限って走らせるもので、rulec の中に手を入れる仕事になる。正確でない答えを「決められない」と言えるかが、sekisho の検査の正しさを決める。段階 A で作り、rulec のコーパスとテストの規則の 323 の問いを、区間の中の全部の入力を流した答えと突き合わせた（3.2）。rulec の E102 は、導出の取りうる値の外だけを求める行も止めるようになった（rulec の DESIGN 15.189）が、`define` の取りうる値と、`constraint` だけで死ぬ行は読まないので、E102 を通る行が、区間に限った問いでは落ちることがある（rulec の DESIGN 15.188）。
 - **Cedar の実装の差。** 四つの実装で、決めたポリシーの名前の付け方が違った（6.2）。版が上がるたびに、生成したコードのテストで突き合わせる。cedarpy は AWS の公式ではない。
 - **日本語の名前と Cedar。** Cedar に出るものは全部 ASCII の別名で、Cedar の側では、日本語は注釈（`@name` と `@doc`）にしか残らない。
 - **判断と操作のあいだにデータが変わること。** `Store` から読んだ属性で許したあと、操作を行うまでに属性が変わりうる（注文の状態が返金済になる）。どの認可の仕組みにもあることで、sekisho が閉じられるものではない。生成するコードの文書に、操作と同じトランザクションの中で読むか、操作の側でもう一度確かめる（返金済の注文には返金しない、など）ことを書く。
