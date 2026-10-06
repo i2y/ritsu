@@ -334,8 +334,12 @@ fn notices() -> (String, Vec<Notice>) {
     (intro, sections)
 }
 
+/// Cargo, without colors: CI asks for them (`CARGO_TERM_COLOR=always`), and `cargo tree` then writes
+/// its marks (`(*)`) in escapes the tests would read as part of a license.
 fn cargo() -> Command {
-    Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
+    let mut c = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()));
+    c.env("CARGO_TERM_COLOR", "never");
+    c
 }
 
 /// The crates from outside the workspace that `package` is built from, as `cargo tree` gives them
