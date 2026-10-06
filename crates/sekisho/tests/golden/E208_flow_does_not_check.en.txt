@@ -1,0 +1,5 @@
+error[E208]: tests/mutants/E208_flow_does_not_check.gate:39:1: `fixtures/broken.flow` does not pass dandori's check, or cannot be read
+    39 | workflow returns from "fixtures/broken.flow"
+  = [E002] tests/mutants/fixtures/broken.flow:11: there is no task or rule `refund_order`
+  = [E002] tests/mutants/fixtures/broken.flow:12: there is no variable or value `r`
+  = Fix the workflow until dandori's check passes.

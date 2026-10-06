@@ -1,0 +1,6 @@
+gate 職員(staff_ja) v1
+description "店の職員。ほかの gate を読む変異のためのもの"
+namespace ShopJa
+
+role 研修中(trainee)
+  description "仕事を覚えている"

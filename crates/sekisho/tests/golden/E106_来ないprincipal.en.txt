@@ -1,0 +1,3 @@
+error[E106]: tests/mutants/E106_来ないprincipal.gate:62:3: No principal this permit's `principal` line picks comes to the action `返金する`
+    62 |   principal is 顧客
+  = The principal types that come to `返金する` are `職員`; a role picks a type that can hold it (its `roles`).

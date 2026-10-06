@@ -1,0 +1,4 @@
+error[E206]: tests/mutants/E206_outside_the_rule.gate:66:1: `principal.refund_limit` can be outside the range of the input `limit` of the rule `refund_limit` (0GBP..10,000GBP)
+    66 |     refund_band  = refund_limit(amount: amount, limit: principal.refund_limit).band
+  = For example: `principal.refund_limit` at 20,000GBP.
+  = Narrow the range of what is given to the input's.

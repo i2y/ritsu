@@ -1,0 +1,32 @@
+gate undecided v1
+description "Whether the clerks' permit allows anything rests on the band, which the test's rulec cannot be asked about"
+namespace Shop
+
+use rule refund_limit from "../../../examples/refunds/rules/refund_limit.rule"
+
+role clerk
+  description "Refunds small amounts"
+
+principal User
+  description "A member of the shop's staff"
+  roles clerk
+  attributes
+    refund_limit : money[GBP, incl_tax]  range >=0GBP <=10_000GBP
+
+resource Order
+  description "An order of the shop"
+
+action refund_order
+  description "Refund an order"
+  principal User
+  resource Order
+  input
+    amount : money[GBP, incl_tax]  range >=1GBP <=10_000GBP
+  context
+    refund_band = refund_limit(amount: amount, limit: principal.refund_limit).band
+
+permit clerks_refund_within_their_limit
+  description "A clerk refunds up to the clerk's own limit"
+  principal in clerk
+  action refund_order
+  when refund_band is within_limit

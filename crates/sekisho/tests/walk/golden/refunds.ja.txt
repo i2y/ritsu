@@ -1,0 +1,18 @@
+combinations: 注文を見る 18, 返金する 1056, 返金を書き出す 4; 1078 in all
+permit 職員は注文を見られる: allows 7 combinations, 7 of them alone
+permit 顧客は自分の注文を見られる: allows 1 combinations, 1 of them alone
+permit 係は上限まで返金できる: allows 36 combinations, 12 of them alone
+permit 責任者は期間内なら返金できる: allows 48 combinations, 24 of them alone
+permit 責任者は期間後も営業日なら返金できる: allows 24 combinations, 24 of them alone
+permit 返品のワークフローは返品済の注文を返金できる: allows 4 combinations, 4 of them alone
+permit 監査は返金の記録を書き出せる: allows 1 combinations, 1 of them alone
+forbid 二度は返金しない: holds on 264 combinations, and turns 112 that a permit allows into a deny
+forbid 監査は返金しない: holds on 512 combinations, and turns 224 that a permit allows into a deny
+forbid 停止中の職員は何もできない: holds on 522 combinations, and turns 232 that a permit allows into a deny
+expect deny 係は上限を超えて返金しない: holds on all 128
+expect deny 返金済の注文は返金しない: holds on all 264
+expect allow 責任者は期間内に返金できる: holds on all 48
+separate 返金する, 返金を書き出す: holds
+role 係: can ["注文を見る", "返金する"]
+role 責任者: can ["注文を見る", "返金する"]
+role 監査: can ["注文を見る", "返金を書き出す"]

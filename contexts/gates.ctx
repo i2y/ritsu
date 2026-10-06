@@ -1,0 +1,12 @@
+context Gates(sekisho) v1
+description "Who may do what, with the rules and the dates as conditions, checked on every combination it declares and made into Cedar (sekisho)"
+
+owns
+  dir "../crates/sekisho"
+
+published language sekisho
+  crate "../crates/sekisho"
+
+# A language stands on the base, and reads another language only through the ports.
+upstream Base conformist
+  through ritsu_base, ritsu_units, ritsu_proto, ritsu_emit, ritsu_ports

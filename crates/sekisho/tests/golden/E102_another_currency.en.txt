@@ -1,0 +1,2 @@
+error[E102]: tests/mutants/E102_another_currency.gate:58:18: The constant `50USD` is not a value of money[GBP, incl_tax], the unit of `amount`
+    58 |   when amount <= 50USD

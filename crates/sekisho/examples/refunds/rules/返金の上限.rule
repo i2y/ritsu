@@ -1,0 +1,26 @@
+rule 返金の上限(refund_limit_ja) v1
+description "返金が、返金を頼んだ人の上限の内にあるか。店の決まりの一例として sekisho の例のために書いたもので、どの文書の転記でもない。refund_limit.rule の日本語の版"
+
+enum 返金の区分(refund_band) = 上限まで(within_limit) | 上限超え(over_limit)
+
+inputs
+  金額(amount) : money[GBP, incl_tax]  range >=1GBP <=10_000GBP
+  上限(limit)  : money[GBP, incl_tax]  range >=0GBP <=10_000GBP
+
+outputs
+  区分(band) : 返金の区分
+
+derive 超過(excess) : money[GBP, incl_tax] = 金額 - 上限  range >=-9_999GBP <=10_000GBP
+
+table 決める
+policy unique
+| 超過   | -> 区分 : 返金の区分 |
+| <=0GBP | 上限まで             |
+| >0GBP  | 上限超え             |
+
+examples
+| 金額   | 上限   | -> 区分  |
+| 50GBP  | 100GBP | 上限まで |
+| 100GBP | 100GBP | 上限まで |
+| 101GBP | 100GBP | 上限超え |
+| 1GBP   | 0GBP   | 上限超え |

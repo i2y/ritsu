@@ -1,0 +1,3 @@
+error[E101]: tests/mutants/E101_unknown_output_of_a_rule.gate:66:80: The rule `refund_limit` has no output `bands`
+    66 |     refund_band  = refund_limit(amount: amount, limit: principal.refund_limit).bands
+  = The outputs there are `band`.

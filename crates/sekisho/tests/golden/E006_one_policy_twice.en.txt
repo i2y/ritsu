@@ -1,0 +1,3 @@
+error[E006]: tests/mutants/E006_one_policy_twice.gate:60:8: The policy `managers_refund` is declared on line 54 too
+    60 | permit managers_refund
+  = Names and aliases are each declared once among the things of one kind.

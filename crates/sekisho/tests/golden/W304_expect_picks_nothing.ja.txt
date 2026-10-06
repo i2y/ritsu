@@ -1,0 +1,5 @@
+警告[W304]: tests/mutants/W304_expect_picks_nothing.gate:156:1: 期待 `returned_and_refunded_orders_are_not_refunded` は、どの組み合わせも選びません。成り立ちますが、何も確かめていません
+   156 | expect deny returned_and_refunded_orders_are_not_refunded
+  = `refund_order` の 1,056 通りのうち、`when resource.status is returned` は 264 通り、`when resource.status is refunded` は 264 通りで満たされますが、全部が同時に満たされることはありません。
+  = 同時に満たせない行を直すか、期待を消してください。
+tests/mutants/W304_expect_picks_nothing.gate: ok — action 3、ポリシー 10（permit 7、forbid 3）、期待 4、職務の分離 1

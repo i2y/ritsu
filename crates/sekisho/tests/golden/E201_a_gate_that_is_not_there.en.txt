@@ -1,0 +1,2 @@
+error[E201]: tests/mutants/E201_a_gate_that_is_not_there.gate:5:1: Cannot read `tests/mutants/people.gate`: No such file or directory (os error 2)
+     5 | use gate "people.gate"

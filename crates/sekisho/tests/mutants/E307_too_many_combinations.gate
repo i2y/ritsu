@@ -1,0 +1,36 @@
+gate too_many v1
+description "Fourteen attributes of four values each: the walk of read_order comes to more than 10^8 combinations"
+
+enum level = a | b | c | d
+
+principal User
+  description "A member of the staff"
+  attributes
+    x1 : level
+    x2 : level
+    x3 : level
+    x4 : level
+    x5 : level
+    x6 : level
+    x7 : level
+    x8 : level
+    x9 : level
+    x10 : level
+    x11 : level
+    x12 : level
+    x13 : level
+    x14 : level
+
+resource Order
+  description "An order"
+
+action read_order
+  description "Look at an order"
+  principal User
+  resource Order
+
+permit level_a_reads
+  description "Whoever is at level a in all fourteen reads"
+  action read_order
+  when principal.x1 is a and principal.x2 is a and principal.x3 is a and principal.x4 is a and principal.x5 is a and principal.x6 is a and principal.x7 is a
+  when principal.x8 is a and principal.x9 is a and principal.x10 is a and principal.x11 is a and principal.x12 is a and principal.x13 is a and principal.x14 is a

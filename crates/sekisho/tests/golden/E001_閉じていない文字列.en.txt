@@ -1,0 +1,2 @@
+error[E001]: tests/mutants/E001_閉じていない文字列.gate:8:15: The string is not closed (a `"` is missing)
+     8 |   description "お客さまに応対する

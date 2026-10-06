@@ -1,0 +1,2 @@
+エラー[E102]: tests/mutants/E102_another_currency.gate:58:18: 定数 `50USD` は、`amount` の単位 money[GBP, incl_tax] の値ではありません
+    58 |   when amount <= 50USD

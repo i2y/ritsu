@@ -1,0 +1,4 @@
+rule broken v1
+description "Not a rule rulec can read: `input` is not a word of rulec's. For the mutants that read a rule that does not pass"
+
+input

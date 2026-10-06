@@ -1,0 +1,3 @@
+error[E211]: tests/mutants/E211_one_role_in_two_gates.gate:6:1: `tests/mutants/read/staff_again.gate` and `tests/mutants/read/staff.gate` both declare the role `trainee`
+     6 | use gate "read/staff_again.gate"
+  = What is read with `use gate` stands in one Cedar namespace: declare a thing of one name in one file, and have the other files read that one with `use gate`.

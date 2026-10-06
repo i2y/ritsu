@@ -1,0 +1,3 @@
+error[E003]: tests/mutants/E003_principalより先のresource.gate:39:3: `principal` is out of place
+    39 |   principal 職員
+  = Under `action`, the lines go: `description`, `guards`, `principal`, `resource`, `nobody`, `input` and `context`.

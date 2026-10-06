@@ -14,8 +14,8 @@ use crate::paths::{self, PathError};
 use crate::text::Text;
 use crate::tr;
 
-/// The nine tools a naming can start with (DESIGN 6.2, item 2). `ritsu` is not one: it is not
-/// a language.
+/// The nine tools a naming can start with (DESIGN 6.2, item 2), and sekisho. `ritsu` is not one:
+/// it is not a language.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tool {
     Rulec,
@@ -27,6 +27,11 @@ pub enum Tool {
     File,
     Yuen,
     Sakai,
+    /// The language of `.gate` files, which `ritsu check` checks (sekisho's DESIGN 11). It is not
+    /// yet a tool a naming starts with, and so not in [`Tool::ALL`]: a naming does not read
+    /// `sekisho`, and the lists of the tools a diagnostic gives do not have it, until the namings
+    /// of a gate's things come (sekisho's DESIGN 8.4).
+    Sekisho,
 }
 
 /// A tool's kinds, each with the kinds that can come right after it.
@@ -46,6 +51,7 @@ impl Tool {
             Tool::File => "file",
             Tool::Yuen => "yuen",
             Tool::Sakai => "sakai",
+            Tool::Sekisho => "sekisho",
         }
     }
 
@@ -65,6 +71,7 @@ impl Tool {
             Tool::File => None,
             Tool::Yuen => Some("req"),
             Tool::Sakai => Some("ctx"),
+            Tool::Sekisho => Some("gate"),
         }
     }
 
@@ -91,6 +98,18 @@ impl Tool {
             Tool::File => &[],
             Tool::Yuen => &[("requirement", &[]), ("source", &[])],
             Tool::Sakai => &[("context", &[]), ("term", &[])],
+            // sekisho's DESIGN 8.2, for when a naming reads it
+            Tool::Sekisho => &[
+                ("principal", &["attribute"]),
+                ("resource", &["attribute"]),
+                ("role", &[]),
+                ("workflow", &[]),
+                ("enum", &["value"]),
+                ("action", &["input", "context"]),
+                ("policy", &[]),
+                ("expect", &[]),
+                ("separate", &[]),
+            ],
         }
     }
 

@@ -1,0 +1,4 @@
+error[E201]: tests/mutants/E201_検査を通らない規則.gate:5:22: `tests/mutants/read/通らない規則.rule` does not pass rulec's check
+     5 | use rule 通らない規則 from "read/通らない規則.rule"
+  = E005: `input` cannot appear at this position (tests/mutants/read/通らない規則.rule:4)
+  = Correct that file until rulec's check passes it.

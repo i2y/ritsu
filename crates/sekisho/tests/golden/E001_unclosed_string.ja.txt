@@ -1,0 +1,2 @@
+エラー[E001]: tests/mutants/E001_unclosed_string.gate:8:15: 文字列が閉じていません（`"` が足りません）
+     8 |   description "Answers customers

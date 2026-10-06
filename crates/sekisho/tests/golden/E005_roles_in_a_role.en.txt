@@ -1,0 +1,3 @@
+error[E005]: tests/mutants/E005_roles_in_a_role.gate:13:3: A `roles` line cannot be written under `role`
+    13 |   roles clerk
+  = Under `role`, the lines go: `description`, `includes` and `can`.

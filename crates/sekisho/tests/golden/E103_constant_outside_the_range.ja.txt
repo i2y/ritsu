@@ -1,0 +1,3 @@
+エラー[E103]: tests/mutants/E103_constant_outside_the_range.gate:58:18: 定数 `20_000GBP` は、`amount` の範囲（1GBP〜10000GBP）の外です
+    58 |   when amount <= 20_000GBP
+  = 範囲の外の定数と比べると、どの値でも答えが同じになります。比べる定数か、`amount` の範囲を直してください。

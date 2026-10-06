@@ -1,0 +1,3 @@
+error[E101]: tests/mutants/E101_知らない規則の出力.gate:66:63: The rule `返金の上限` has no output `区分け`
+    66 |     返金の区分(refund_band)  = 返金の上限(金額: 金額, 上限: principal.返金できる額).区分け
+  = The outputs there are `区分`.

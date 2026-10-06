@@ -1,0 +1,4 @@
+error[E201]: tests/mutants/E201_検査を通らないgateを読む.gate:5:1: `tests/mutants/read/別の職員を読む職員.gate` does not pass sekisho's check
+     5 | use gate "read/別の職員を読む職員.gate"
+  = E210: The namespace of `tests/mutants/read/別の職員.gate`, `StaffJa`, is not this file's, `ShopJa` (tests/mutants/read/別の職員を読む職員.gate:5:1)
+  = `sekisho check tests/mutants/read/別の職員を読む職員.gate` says everything that is wrong with it.

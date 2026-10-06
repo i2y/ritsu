@@ -1,0 +1,2 @@
+error[E001]: tests/mutants/E001_cedarの等号.gate:68:20: `==` is not part of the language; write `is` for the same
+    68 |   when resource.状態 == 返金済

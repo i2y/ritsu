@@ -1,0 +1,5 @@
+警告[W301]: tests/mutants/W301_permit_adds_nothing.gate:107:1: permit `managers_refund_any` が許す組み合わせは、どれも `managers_refund_in_period` も許します
+   107 | permit managers_refund_any
+  = `managers_refund_any` は 24 通りを許し、そのどれも `managers_refund_in_period` が許すので、`managers_refund_any` を消しても答えは変わりません。
+  = `managers_refund_any` を消すか、`managers_refund_any` のほうが意図どおりなら `managers_refund_in_period` を狭めてください。
+tests/mutants/W301_permit_adds_nothing.gate: ok — action 3、ポリシー 11（permit 8、forbid 3）、期待 3、職務の分離 1

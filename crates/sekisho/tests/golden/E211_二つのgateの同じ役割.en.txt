@@ -1,0 +1,4 @@
+error[E211]: tests/mutants/E211_二つのgateの同じ役割.gate:6:1: `tests/mutants/read/もう一度の職員.gate` and `tests/mutants/read/職員.gate` both declare the role `見習い`
+     6 | use gate "read/もう一度の職員.gate"
+  = `tests/mutants/read/職員.gate` declares it as `研修中`, of the same name or alias.
+  = What is read with `use gate` stands in one Cedar namespace: declare a thing of one name in one file, and have the other files read that one with `use gate`.

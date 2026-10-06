@@ -1,0 +1,2 @@
+error[E104]: tests/mutants/E104_型の違う二つの属性.gate:68:32: `resource.状態` (the enum `注文の状態`) and `resource.注文した人` (the type `顧客`) are of different types, and do not compare
+    68 |   when resource.状態 is resource.注文した人

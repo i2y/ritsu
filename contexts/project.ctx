@@ -30,3 +30,6 @@ upstream Requirements conformist
 
 upstream ContextMaps conformist
   through sakai
+
+upstream Gates conformist
+  through sekisho

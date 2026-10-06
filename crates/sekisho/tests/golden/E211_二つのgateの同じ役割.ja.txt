@@ -1,0 +1,4 @@
+エラー[E211]: tests/mutants/E211_二つのgateの同じ役割.gate:6:1: `tests/mutants/read/もう一度の職員.gate` と `tests/mutants/read/職員.gate` が、どちらも役割 `見習い` を宣言しています
+     6 | use gate "read/もう一度の職員.gate"
+  = `tests/mutants/read/職員.gate` では `研修中` という名前で、名前か別名が同じです。
+  = `use gate` で読んだものは一つの Cedar の名前空間に並ぶので、同じ名前のものは一つのファイルにだけ宣言し、ほかのファイルはそのファイルを `use gate` で読んでください。

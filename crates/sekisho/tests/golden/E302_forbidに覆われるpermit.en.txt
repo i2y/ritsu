@@ -1,0 +1,25 @@
+warning[W302]: tests/mutants/E302_forbidに覆われるpermit.gate:18:1: The role `係` alone is never allowed `返金する`, which its `can` line lists
+    18 |   can 注文を見る, 返金する
+  = Remove `返金する` from `can`, or write the permit that allows it.
+warning[W302]: tests/mutants/E302_forbidに覆われるpermit.gate:23:1: The role `責任者` alone is never allowed `返金する`, which its `can` line lists
+    23 |   can 注文を見る, 返金する
+  = Remove `返金する` from `can`, or write the permit that allows it.
+error[E302]: tests/mutants/E302_forbidに覆われるpermit.gate:87:1: The permit `係は上限まで返金できる` allows nothing: a forbid denies every combination it would allow
+    87 | permit 係は上限まで返金できる(clerks_refund_within_their_limit)
+  = It would allow 192 combinations; `係は返金しない` denies 192 of them, `監査は返金しない` 96, `停止中の職員は何もできない` 96, `二度は返金しない` 48.
+  = For example: 職員 holding 係 (停止中: no), 注文 (状態: 支払済), 金額: 1GBP to 50GBP, 返金の区分: 上限まで, 期間内: yes, 営業日: no; denied by `係は返金しない`.
+  = Narrow the forbid, or remove the permit if no one is meant to be allowed this.
+error[E302]: tests/mutants/E302_forbidに覆われるpermit.gate:94:1: The permit `責任者は期間内なら返金できる` allows nothing: a forbid denies every combination it would allow
+    94 | permit 責任者は期間内なら返金できる(managers_refund_in_period)
+  = It would allow 256 combinations; `係は返金しない` denies 256 of them, `監査は返金しない` 128, `停止中の職員は何もできない` 128, `二度は返金しない` 64.
+  = For example: 職員 holding 責任者 (停止中: no), 注文 (状態: 支払済), 金額: 1GBP to 50GBP, 返金の区分: 上限まで, 期間内: yes, 営業日: no; denied by `係は返金しない`.
+  = Narrow the forbid, or remove the permit if no one is meant to be allowed this.
+error[E302]: tests/mutants/E302_forbidに覆われるpermit.gate:100:1: The permit `責任者は期間後も営業日なら返金できる` allows nothing: a forbid denies every combination it would allow
+   100 | permit 責任者は期間後も営業日なら返金できる(managers_refund_late_on_business_days)
+  = It would allow 128 combinations; `係は返金しない` denies 128 of them, `監査は返金しない` 64, `停止中の職員は何もできない` 64, `二度は返金しない` 32.
+  = For example: 職員 holding 責任者 (停止中: no), 注文 (状態: 支払済), 金額: 1GBP to 50GBP, 返金の区分: 上限まで, 期間内: no, 営業日: yes; denied by `係は返金しない`.
+  = Narrow the forbid, or remove the permit if no one is meant to be allowed this.
+error[E304]: tests/mutants/E302_forbidに覆われるpermit.gate:152:1: The expectation `責任者は期間内に返金できる` does not hold: 48 of the 48 combinations it picks are denied
+   152 | expect allow 責任者は期間内に返金できる
+  = For example: 職員 holding 責任者 (停止中: no), 注文 (状態: 支払済), 金額: 1GBP to 50GBP, 返金の区分: 上限まで, 期間内: yes, 営業日: no; denied by `係は返金しない`.
+  = Fix the policies, or the expectation if it says more than is meant.

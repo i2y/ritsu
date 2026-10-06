@@ -1,0 +1,7 @@
+警告[W302]: tests/mutants/E303_never_true.gate:18:1: 役割 `clerk` だけを持つ principal は、`can` の行にある `refund_order` を、どの組み合わせでも許されません
+    18 |   can view_order, refund_order
+  = `can` から `refund_order` を消すか、許す permit を書いてください。
+エラー[E303]: tests/mutants/E303_never_true.gate:87:1: permit `clerks_refund_within_their_limit` は、どの組み合わせにも当てはまりません
+    87 | permit clerks_refund_within_their_limit
+  = `principal` の行が当てはまる 768 通りのうち、`when refund_band is within_limit` は 384 通り、`when in_period` は 384 通り、`unless in_period` は 384 通りで満たされますが、全部が同時に満たされることはありません。
+  = 満たせない行か、permit そのものを消してください。

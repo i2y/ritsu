@@ -1,0 +1,20 @@
+dates refund_terms v1
+description "A refund can be asked for until 30 days after the order was paid, moved to the next business day in England and Wales when that day is closed. A sketch of a shop's own terms, written for sekisho's example"
+use calendar "../calendars/england_and_wales.cal"
+
+inputs
+  paid_on : date  range >=2026-01-01 <=2028-11-25
+
+date last_day = paid_on
+  + 30 days             # until 30 days after the order was paid
+  roll following        # on the next business day when that day is closed
+
+claims
+  on_a_business_day       : last_day is open
+  at_least_30_days        : last_day >= paid_on + 30 days
+  later_payment_later_day : last_day is monotonic
+
+examples
+| paid_on    | -> last_day |
+| 2026-10-06 | 2026-11-05  |
+| 2026-11-26 | 2026-12-29  |

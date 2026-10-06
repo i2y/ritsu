@@ -1,0 +1,3 @@
+error[E101]: tests/mutants/E101_unknown_role.gate:45:16: There is no role `clerck`
+    45 |   principal in clerck
+  = The roles there are `clerk` and `manager`.

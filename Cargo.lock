@@ -119,6 +119,7 @@ dependencies = [
  "ritsu-wasm",
  "rulec",
  "sakai",
+ "sekisho",
  "serde_json",
  "yuen",
 ]
@@ -190,6 +191,7 @@ dependencies = [
  "ritsu-testkit",
  "rulec",
  "sakai",
+ "sekisho",
  "yuen",
 ]
 
@@ -255,6 +257,22 @@ dependencies = [
  "ritsu-testkit",
  "rulec",
  "serde_json",
+]
+
+[[package]]
+name = "sekisho"
+version = "0.23.0"
+dependencies = [
+ "chobo",
+ "dandori",
+ "koyomi",
+ "ritsu-base",
+ "ritsu-emit",
+ "ritsu-ports",
+ "ritsu-proto",
+ "ritsu-testkit",
+ "ritsu-units",
+ "rulec",
 ]
 
 [[package]]

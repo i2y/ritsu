@@ -1,0 +1,7 @@
+warning[W302]: tests/mutants/E303_never_true.gate:18:1: The role `clerk` alone is never allowed `refund_order`, which its `can` line lists
+    18 |   can view_order, refund_order
+  = Remove `refund_order` from `can`, or write the permit that allows it.
+error[E303]: tests/mutants/E303_never_true.gate:87:1: The permit `clerks_refund_within_their_limit` applies to no combination
+    87 | permit clerks_refund_within_their_limit
+  = Of the 768 combinations its `principal` line takes, the lines are met: `when refund_band is within_limit` on 384, `when in_period` on 384, `unless in_period` on 384; but never all at once.
+  = Remove the line that cannot be met, or the permit itself.

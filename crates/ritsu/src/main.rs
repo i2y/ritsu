@@ -73,7 +73,9 @@ fn language(name: &str, args: &[String]) -> ExitCode {
         "dandori" => ritsu::languages::dandori(args, &mut out, &mut err),
         "yuen" => yuen::run::run(args, Joined::new().yuen(), &mut out, &mut err),
         "sakai" => sakai::run::run(args, Joined::new().sakai(), &mut out, &mut err),
-        _ => unreachable!("only the seven languages come here"),
+        // a gate reads its rules, dates files, calendars, books and flows in the same process
+        "sekisho" => sekisho::run::run(args, Joined::new().sekisho().into(), &mut out, &mut err),
+        _ => unreachable!("only the languages come here"),
     };
     let _ = out.flush();
     ExitCode::from(code)
@@ -121,7 +123,7 @@ fn run() -> ExitCode {
                 print!("{}", table.help_all(lang));
                 ExitCode::SUCCESS
             }
-            Some(l) if cli::LANGUAGES.contains(&l.as_str()) => language(l, &["--help".to_string()]),
+            Some(l) if cli::is_language(l) => language(l, &["--help".to_string()]),
             Some(c) => match table.command(c) {
                 Some(cmd) => {
                     print!("{}", table.help_cmd(cmd, lang));
@@ -149,7 +151,7 @@ fn run() -> ExitCode {
             rest.extend(args[at + 1..].iter().cloned());
             ExitCode::from(run::command(&rest, lang))
         }
-        l if cli::LANGUAGES.contains(&l) => language(l, &args[at + 1..]),
+        l if cli::is_language(l) => language(l, &args[at + 1..]),
         other => refuse(tr!("`{other}` というコマンドはありません。`ritsu --help` を読んでください", "there is no command `{other}`; run `ritsu --help`"), lang),
     }
 }

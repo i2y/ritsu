@@ -1,0 +1,4 @@
+error[E206]: tests/mutants/E206_規則の範囲の外.gate:66:1: `principal.返金できる額` can be outside the range of the input `上限` of the rule `返金の上限` (0GBP..10,000GBP)
+    66 |     返金の区分(refund_band)  = 返金の上限(金額: 金額, 上限: principal.返金できる額).区分
+  = For example: `principal.返金できる額` at 20,000GBP.
+  = Narrow the range of what is given to the input's.

@@ -1,0 +1,6 @@
+gate staff_elsewhere v1
+description "The staff, in a namespace of its own"
+namespace Staff
+
+role trainee
+  description "Learns the work"

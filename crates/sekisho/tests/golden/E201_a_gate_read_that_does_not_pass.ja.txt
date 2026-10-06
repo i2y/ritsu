@@ -1,0 +1,4 @@
+エラー[E201]: tests/mutants/E201_a_gate_read_that_does_not_pass.gate:5:1: `tests/mutants/read/staff_through.gate` は sekisho の検査を通りません
+     5 | use gate "read/staff_through.gate"
+  = E210: `tests/mutants/read/staff_elsewhere.gate` の名前空間 `Staff` は、このファイルの名前空間 `Shop` と違います（tests/mutants/read/staff_through.gate:5:1）
+  = `sekisho check tests/mutants/read/staff_through.gate` で、そのファイルの誤りを全部読めます。

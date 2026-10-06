@@ -1,0 +1,5 @@
+gate 別の職員を読む職員(staff_through_ja) v1
+description "別の名前空間のファイルを読む職員"
+namespace ShopJa
+
+use gate "別の職員.gate"

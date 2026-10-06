@@ -1,0 +1,2 @@
+error[E002]: tests/mutants/E002_a_string_for_a_name.gate:7:6: The role goes here, by name (found `"clerk"`)
+     7 | role "clerk"

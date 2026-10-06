@@ -1,0 +1,74 @@
+gate shop v1
+description "Who may look at an order of the shop, and refund it"
+namespace Shop
+
+enum order_status = paid | shipped | refunded
+
+role clerk
+  description "Answers customers"
+  can view_order, refund_order
+
+role manager
+  description "Refunds what a clerk cannot"
+  includes clerk
+  can view_order, refund_order
+
+principal User
+  description "A member of the staff"
+  roles clerk, manager
+  attributes
+    suspended : bool
+
+principal Customer
+  description "A customer of the shop"
+
+resource Order
+  description "An order of the shop"
+  attributes
+    status   : order_status
+    customer : Customer
+
+action view_order
+  description "Look at an order"
+  principal User, Customer
+  resource Order
+
+action refund_order
+  description "Refund an order"
+  principal User
+  resource Order
+  input
+    amount : money[GBP, incl_tax]  range >=1GBP <=10_000GBP
+
+permit staff_view_orders
+  description "The staff look at any order"
+  principal in clerk
+  action view_order
+
+permit customers_view_their_orders
+  description "A customer looks at their own orders"
+  principal is Customer
+  action view_order
+  when resource.customer is principal
+
+permit clerks_refund_small_amounts
+  description "A clerk refunds up to 50 pounds"
+  principal in clerk
+  action refund_order
+  when amount <= 20_000GBP
+
+permit managers_refund
+  description "A manager refunds any amount"
+  principal in manager
+  action refund_order
+
+forbid no_second_refund
+  description "An order already refunded is not refunded again"
+  action refund_order
+  when resource.status is refunded
+
+forbid suspended_staff_do_nothing
+  description "A suspended member of the staff does nothing"
+  principal is User
+  action any
+  when principal.suspended

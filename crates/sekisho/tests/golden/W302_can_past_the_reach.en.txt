@@ -1,0 +1,4 @@
+warning[W302]: tests/mutants/W302_can_past_the_reach.gate:18:1: The role `clerk` alone is never allowed `export_refunds`, which its `can` line lists
+    18 |   can view_order, refund_order, export_refunds
+  = Remove `export_refunds` from `can`, or write the permit that allows it.
+tests/mutants/W302_can_past_the_reach.gate: ok — 3 actions, 10 policies (7 permits, 3 forbids), 3 expectations, 1 separation

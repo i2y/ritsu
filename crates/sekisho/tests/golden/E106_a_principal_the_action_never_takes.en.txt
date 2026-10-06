@@ -1,0 +1,3 @@
+error[E106]: tests/mutants/E106_a_principal_the_action_never_takes.gate:62:3: No principal this permit's `principal` line picks comes to the action `refund_order`
+    62 |   principal is Customer
+  = The principal types that come to `refund_order` are `User`; a role picks a type that can hold it (its `roles`).

@@ -1,0 +1,3 @@
+error[E007]: tests/mutants/E007_別名が無い.gate:20:5: The attribute name `停止中` needs an ASCII alias
+    20 |     停止中 : bool
+  = A name in Cedar is ASCII only: give it an alias in parentheses, like `停止中(<alias>)`. The alias of an attribute is `[a-z][a-z0-9_]*` (a lower-case letter, then lower-case letters, digits and `_`).

@@ -1,0 +1,6 @@
+gate 別の職員(staff_elsewhere_ja) v1
+description "別の名前空間にある職員"
+namespace StaffJa
+
+role 研修中(trainee)
+  description "仕事を覚えている"

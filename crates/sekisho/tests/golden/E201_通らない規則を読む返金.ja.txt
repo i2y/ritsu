@@ -1,0 +1,4 @@
+エラー[E201]: tests/mutants/E201_通らない規則を読む返金.gate:5:21: `tests/mutants/fixtures/broken.rule` は rulec の検査を通りません
+     5 | use rule 返金の上限 from "fixtures/broken.rule"
+  = E101: 完全性の欠落: どの行にも当てはまらない入力があります（tests/mutants/fixtures/broken.rule:15）
+  = そのファイルを、rulec の検査が通るように直してください。

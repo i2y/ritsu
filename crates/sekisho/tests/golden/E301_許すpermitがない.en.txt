@@ -1,0 +1,8 @@
+warning[W302]: tests/mutants/E301_許すpermitがない.gate:27:1: The role `監査` alone is never allowed `返金を書き出す`, which its `can` line lists
+    27 |   can 注文を見る, 返金を書き出す
+  = Remove `返金を書き出す` from `can`, or write the permit that allows it.
+error[E301]: tests/mutants/E301_許すpermitがない.gate:70:1: No permit allows `返金を書き出す` in any combination: no one can do it
+    70 | action 返金を書き出す(export_refunds)
+  = No permit is written for it.
+  = It comes to 2 combinations.
+  = Write a permit for it; if no one is meant to do it, write `nobody "<why>"` under the action.

@@ -1,0 +1,4 @@
+エラー[E201]: tests/mutants/E201_検査を通らない規則.gate:5:22: `tests/mutants/read/通らない規則.rule` は rulec の検査を通りません
+     5 | use rule 通らない規則 from "read/通らない規則.rule"
+  = E005: `input` はこの位置に書けません（tests/mutants/read/通らない規則.rule:4）
+  = そのファイルを、rulec の検査が通るように直してください。

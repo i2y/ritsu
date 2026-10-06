@@ -1,0 +1,25 @@
+sekisho check — 検査する。構文、名前と型、宣言した範囲のすべての組み合わせ
+
+使い方:
+  sekisho check <file.gate>... [--format json] [--budget <n>]
+
+引数:
+  <file.gate>...  検査する .gate のファイル
+
+フラグ:
+  --format json  ファイルごとに一つの JSON
+  --budget <n>   一つの action で数える組み合わせの上限（既定 100000000）
+  --lang ja|en   文面の言語。無ければ環境変数 SEKISHO_LANG、次に RITSU_LANG、どちらも無ければ en（既定 en）
+  --help         この画面を出す
+
+exit code:
+  0  エラーなし（警告はありうる）
+  1  エラーが一つ以上
+  2  引数の誤り、読めないファイル、規則・日付・カレンダー・帳簿・フローを読むファイルを、それらを読めないこの sekisho で走らせた（E209。ritsu sekisho で走らせる）
+
+例:
+  $ sekisho check shop.gate
+  $ ritsu sekisho check examples/refunds/refunds.gate --format json --lang ja
+
+出しうる診断（`sekisho explain <CODE>` が引きます）:
+  E001 E002 E003 E004 E005 E006 E007 E008 E101 E102 E103 E104 E105 E106 E107 E108 E201 E202 E203 E204 E205 E206 E207 E208 E209 E210 E211 E301 E302 E303 E304 E305 E306 E307 W201 W301 W302 W303 W304 W401

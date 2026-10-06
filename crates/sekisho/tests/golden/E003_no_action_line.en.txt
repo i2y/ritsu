@@ -1,0 +1,3 @@
+error[E003]: tests/mutants/E003_no_action_line.gate:60:1: This `permit` has no `action` line
+    60 | permit managers_refund
+  = Write the actions it applies to, like `  action refund_order` or `  action any`.

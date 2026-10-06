@@ -1,0 +1,4 @@
+エラー[E304]: tests/mutants/E304_expect_fails.gate:147:1: 期待 `managers_refund_in_period` が成り立ちません。選んだ 192 通りのうち 144 通りが拒まれます
+   147 | expect allow managers_refund_in_period
+  = 例：manager を持つ User（suspended：はい）、Order（status：paid）、amount：1GBP〜50GBP、refund_band：within_limit、in_period：はい、business_day：いいえ。`suspended_staff_do_nothing` が拒みます。
+  = ポリシーを直すか、期待が言いすぎているなら期待を直してください。

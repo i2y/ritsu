@@ -1,0 +1,3 @@
+エラー[E207]: tests/mutants/E207_calendar_short_of_today.gate:68:1: カレンダー `../../examples/refunds/calendars/england_and_wales.cal` のデータは 2019-01-01〜2028-12-31 の日しか知らず、today の 2026-10-01〜2029-01-31 を覆いません
+    68 |     business_day = today is open in uk
+  = today の範囲をデータの範囲の中に狭めるか、新しいデータが出てからカレンダーのコピーを取り直してください。

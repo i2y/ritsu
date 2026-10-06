@@ -1,0 +1,21 @@
+sekisho explain — explain a diagnostic code: when it is printed, how to fix it, and the smallest file that prints it
+
+Usage:
+  sekisho explain <code> | --all [--format markdown|json] [--lang ja|en]
+
+Arguments:
+  <code>  a code such as `E101`
+
+Flags:
+  --all                   every code
+  --format markdown|json  Markdown (as docs/codes.md is) or JSON
+  --lang ja|en            the language of the text; else the SEKISHO_LANG environment variable, then RITSU_LANG, else en (default en)
+  --help                  print this page
+
+Exit codes:
+  0  explained
+  2  an unknown code, or bad arguments
+
+Examples:
+  $ sekisho explain E101
+  $ sekisho explain --all --format markdown --lang ja

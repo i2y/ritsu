@@ -1,0 +1,3 @@
+error[E008]: tests/mutants/E008_生成先の予約語.gate:5:74: `delete` is a reserved word of TypeScript, and cannot be a name in the generated code
+     5 | enum 注文の状態(order_status) = 支払済(paid) | 発送済(shipped) | 返金済(refunded) | 削除(delete)
+  = Choose another name or alias.

@@ -1,0 +1,3 @@
+error[E204]: tests/mutants/E204_from_not_a_parameter.gate:62:1: `order_id` is not a parameter of the path or the query of `refundOrder`
+    62 |   resource Order from order_id
+  = Its parameters are orderId.

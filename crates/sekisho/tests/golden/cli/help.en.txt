@@ -1,0 +1,11 @@
+sekisho <version>
+
+A small language for who may do what: roles, attributes and relations, with rulec's rules and koyomi's dates as conditions, checked on every combination it declares and compiled to Cedar
+
+Usage:
+  sekisho check <file.gate>...  check the words, the names and the types, and every combination the file declares
+  sekisho explain <code>        explain a diagnostic code: when it is printed, how to fix it, and the smallest file that prints it
+
+For one command in detail: `sekisho <cmd> --help` (`sekisho help <cmd>` is the same page).
+Every command takes `--lang ja|en` and `--help`.
+Exit codes: 0 no errors / 1 errors found / 2 bad arguments or an unreadable file, or a file that reads another language run with this sekisho, which reads none (E209)

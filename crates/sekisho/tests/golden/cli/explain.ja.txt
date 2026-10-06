@@ -1,0 +1,21 @@
+sekisho explain — 診断のコードを説明する。いつ出るか、直し方、それを出す一番小さな例
+
+使い方:
+  sekisho explain <code> | --all [--format markdown|json] [--lang ja|en]
+
+引数:
+  <code>  `E101` のようなコード
+
+フラグ:
+  --all                   全部のコード
+  --format markdown|json  Markdown（docs/codes.md の形）か JSON
+  --lang ja|en            文面の言語。無ければ環境変数 SEKISHO_LANG、次に RITSU_LANG、どちらも無ければ en（既定 en）
+  --help                  この画面を出す
+
+exit code:
+  0  説明した
+  2  知らないコード、引数の誤り
+
+例:
+  $ sekisho explain E101
+  $ sekisho explain --all --format markdown --lang ja

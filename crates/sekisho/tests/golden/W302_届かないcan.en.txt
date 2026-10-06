@@ -1,0 +1,4 @@
+warning[W302]: tests/mutants/W302_届かないcan.gate:18:1: The role `係` alone is never allowed `返金を書き出す`, which its `can` line lists
+    18 |   can 注文を見る, 返金する, 返金を書き出す
+  = Remove `返金を書き出す` from `can`, or write the permit that allows it.
+tests/mutants/W302_届かないcan.gate: ok — 3 actions, 10 policies (7 permits, 3 forbids), 3 expectations, 1 separation

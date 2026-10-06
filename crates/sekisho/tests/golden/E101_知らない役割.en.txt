@@ -1,0 +1,3 @@
+error[E101]: tests/mutants/E101_知らない役割.gate:45:16: There is no role `系`
+    45 |   principal in 系
+  = The roles there are `係` and `責任者`.

@@ -1,0 +1,20 @@
+dates 返金の期限(refund_terms_ja) v1
+description "注文の支払いから 30 日後まで返金を頼める。その日がイングランドとウェールズで休みなら、次の営業日まで。店の決まりの一例として sekisho の例のために書いたもの。refund_terms.cal の日本語の版"
+use calendar "../calendars/england_and_wales.cal"
+
+inputs
+  支払日(paid_on) : date  range >=2026-01-01 <=2028-11-25
+
+date 最終日(last_day) = 支払日
+  + 30 days             # 支払いから 30 日後まで
+  roll following        # その日が休みなら、次の営業日まで
+
+claims
+  営業日に終わる       : 最終日 is open
+  30日より短くならない : 最終日 >= 支払日 + 30 days
+  遅い支払は遅い最終日 : 最終日 is monotonic
+
+examples
+| 支払日     | -> 最終日   |
+| 2026-10-06 | 2026-11-05  |
+| 2026-11-26 | 2026-12-29  |

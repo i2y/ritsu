@@ -1,0 +1,5 @@
+warning[W304]: tests/mutants/W304_何も選ばない期待.gate:156:1: The expectation `返品済で返金済の注文は返金しない` picks no combination: it holds, and checks nothing
+   156 | expect deny 返品済で返金済の注文は返金しない
+  = Of the 1,056 combinations of `返金する`, the lines are met: `when resource.状態 is 返品済` on 264, `when resource.状態 is 返金済` on 264; but never all at once.
+  = Correct the lines that cannot be met together, or remove the expectation.
+tests/mutants/W304_何も選ばない期待.gate: ok — 3 actions, 10 policies (7 permits, 3 forbids), 4 expectations, 1 separation

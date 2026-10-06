@@ -1,0 +1,3 @@
+error[E104]: tests/mutants/E104_two_steps.gate:52:25: A relation goes one step in v1, and nothing goes on from `resource.customer`
+    52 |   when resource.customer.suspended is principal
+  = A relation goes one step (`resource.customer is principal`, `resource.tenant is principal.tenant`, `principal in resource.team`); where two steps are needed, make the answer a true-or-false output of a rule that computes it.

@@ -14,6 +14,16 @@ pub fn global_flags() -> Vec<Flag> {
 /// of the others.
 pub const LANGUAGES: [&str; 7] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai"];
 
+/// The languages `ritsu <language>` runs that `ritsu --help` does not list yet: sekisho, the eighth,
+/// until it takes its place among the others (in `--help`, the links, the release, the README and
+/// the skills).
+pub const NOT_LISTED_YET: [&str; 1] = ["sekisho"];
+
+/// Whether `ritsu <name> …` is a language's own command.
+pub fn is_language(name: &str) -> bool {
+    LANGUAGES.contains(&name) || NOT_LISTED_YET.contains(&name)
+}
+
 fn language(name: &'static str) -> Cmd {
     let purpose = match name {
         "rulec" => tr!("rulec のコマンド（業務の規則）", "rulec's commands (business rules)"),

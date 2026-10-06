@@ -1,0 +1,2 @@
+エラー[E102]: tests/mutants/E102_a_rule_input_of_another_currency.gate:66:56: 定数 `50USD` は、`limit` の単位 money[GBP, incl_tax] の値ではありません
+    66 |     refund_band  = refund_limit(amount: amount, limit: 50USD).band

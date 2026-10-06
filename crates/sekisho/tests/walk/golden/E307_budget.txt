@@ -1,0 +1,10 @@
+error[E307]: examples/refunds/refunds.gate:58:1: The dates of the action `refund_order` come to 765,048 pairs of today and the values they are given, more than the budget of 1,000: the action is not checked, and nothing is generated
+    58 | action refund_order
+  = What makes them: the days of today (762), resource.paid_on (1,004).
+  = Narrow the range of today or of what the dates are given, or raise the budget with `--budget`.
+
+エラー[E307]: examples/refunds/refunds.gate:58:1: action `refund_order` の日付を確かめるには、today と日付に渡す値の組を 765,048 通り数えることになり、予算の 1,000 通りを超えます。この action は確かめず、何も生成しません
+    58 | action refund_order
+  = 数を増やしているもの：today の日（762 通り）、resource.paid_on（1,004 通り）。
+  = today の範囲か、日付に渡す値の範囲を狭めるか、`--budget` で予算を上げてください。
+

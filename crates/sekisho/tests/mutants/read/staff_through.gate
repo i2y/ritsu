@@ -1,0 +1,5 @@
+gate staff_through v1
+description "The staff, read through a file in another namespace"
+namespace Shop
+
+use gate "staff_elsewhere.gate"

@@ -1,0 +1,4 @@
+エラー[E206]: tests/mutants/E206_outside_the_rule.gate:66:1: `principal.refund_limit` は規則 `refund_limit` の入力 `limit` の範囲（0GBP〜10,000GBP）の外になりえます
+    66 |     refund_band  = refund_limit(amount: amount, limit: principal.refund_limit).band
+  = 例：`principal.refund_limit` が 20,000GBP のとき。
+  = 渡す値の範囲を、入力の範囲の中に狭めてください。

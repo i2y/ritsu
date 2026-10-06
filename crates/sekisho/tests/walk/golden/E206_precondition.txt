@@ -1,0 +1,8 @@
+error[E206]: example.gate:16:1: The values given to the rule `ordered` can break its precondition `low <= high`
+    16 |     span = ordered(low: principal.low, high: principal.high).span
+  = For example: low = 100, high = 0.
+  = Narrow the ranges of what is given to ones that keep the precondition.
+エラー[E206]: example.gate:16:1: 規則 `ordered` に渡す値が、前提 `low <= high` を破りえます
+    16 |     span = ordered(low: principal.low, high: principal.high).span
+  = 例：low = 100、high = 0。
+  = 渡す属性か input の範囲を、前提を守る範囲に狭めてください。

@@ -1,0 +1,74 @@
+gate 店(shop) v1
+description "店の注文を見ること、返金することを、だれがしてよいか"
+namespace ShopJa
+
+enum 注文の状態(order_status) = 支払済(paid) | 発送済(shipped) | 返金済(refunded)
+
+role 係(clerk)
+  description "お客さまに応対する"
+  can 注文を見る, 返金する
+
+role 責任者(manager)
+  description "係ができない返金をする"
+  includes 係
+  can 注文を見る, 返金する
+
+principal 職員(User)
+  description "店の職員"
+  roles 係, 責任者
+  attributes
+    停止中(suspended) : bool
+
+principal 顧客(Customer)
+  description "店のお客さま"
+
+resource 注文(Order)
+  description "店の注文"
+  attributes
+    状態(status)         : 注文の状態
+    注文した人(customer) : 顧客
+
+action 注文を見る(view_order)
+  description "注文を見る"
+  principal 職員, 顧客
+  resource 注文
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  principal 職員
+  resource 注文
+  input
+    金額(amount) : money[GBP, incl_tax]  range >=1GBP <=10_000GBP
+
+permit 職員は注文を見られる(staff_view_orders)
+  description "職員はどの注文も見られる"
+  principal in 係
+  action 注文を見る
+
+permit 顧客は自分の注文を見られる(customers_view_their_orders)
+  description "お客さまは自分の注文を見られる"
+  principal is 顧客
+  action 注文を見る
+  when resource.注文した人 is principal
+
+permit 係は少額なら返金できる(clerks_refund_small_amounts)
+  description "係は 50 ポンドまで返金できる"
+  principal in 係
+  action 返金する
+  when 金額 <= 49.5GBP
+
+permit 責任者は返金できる(managers_refund)
+  description "責任者はどの額でも返金できる"
+  principal in 責任者
+  action 返金する
+
+forbid 二度は返金しない(no_second_refund)
+  description "返金済の注文は、もう返金しない"
+  action 返金する
+  when resource.状態 is 返金済
+
+forbid 停止中の職員は何もできない(suspended_staff_do_nothing)
+  description "停止中の職員は何もできない"
+  principal is 職員
+  action any
+  when principal.停止中

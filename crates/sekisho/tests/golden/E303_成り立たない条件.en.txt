@@ -1,0 +1,7 @@
+warning[W302]: tests/mutants/E303_成り立たない条件.gate:18:1: The role `係` alone is never allowed `返金する`, which its `can` line lists
+    18 |   can 注文を見る, 返金する
+  = Remove `返金する` from `can`, or write the permit that allows it.
+error[E303]: tests/mutants/E303_成り立たない条件.gate:87:1: The permit `係は上限まで返金できる` applies to no combination
+    87 | permit 係は上限まで返金できる(clerks_refund_within_their_limit)
+  = Of the 768 combinations its `principal` line takes, the lines are met: `when 返金の区分 is 上限まで` on 384, `when 期間内` on 384, `unless 期間内` on 384; but never all at once.
+  = Remove the line that cannot be met, or the permit itself.

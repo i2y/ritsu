@@ -1,0 +1,2 @@
+error[E002]: tests/mutants/E002_名前の位置の文字列.gate:7:6: The role goes here, by name (found `"係"`)
+     7 | role "係"

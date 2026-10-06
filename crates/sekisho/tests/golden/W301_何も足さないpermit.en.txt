@@ -1,0 +1,5 @@
+warning[W301]: tests/mutants/W301_何も足さないpermit.gate:107:1: Every combination the permit `責任者は上限を超えても返金できる` allows, `責任者は期間内なら返金できる` allows too
+   107 | permit 責任者は上限を超えても返金できる(managers_refund_any)
+  = It allows 24 combinations, and `責任者は期間内なら返金できる` allows each of them: removing `責任者は上限を超えても返金できる` changes no answer.
+  = Remove `責任者は上限を超えても返金できる`, or narrow `責任者は期間内なら返金できる` if `責任者は上限を超えても返金できる` says what is meant.
+tests/mutants/W301_何も足さないpermit.gate: ok — 3 actions, 11 policies (8 permits, 3 forbids), 3 expectations, 1 separation

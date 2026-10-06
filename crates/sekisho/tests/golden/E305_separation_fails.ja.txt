@@ -1,0 +1,6 @@
+エラー[E305]: tests/mutants/E305_separation_fails.gate:151:1: 職務の分離 `refunding_and_auditing` が成り立ちません。同じ principal が `refund_order` と `export_refunds` の両方を許されます
+   151 | separate refunding_and_auditing
+  = その principal：clerk と auditor を持つ User（suspended：いいえ）。
+  = `refund_order` の例：clerk と auditor を持つ User（suspended：いいえ）、Order（status：paid）、amount：1GBP〜50GBP、refund_band：within_limit、in_period：はい、business_day：いいえ。`clerks_refund_within_their_limit` が許します。
+  = `export_refunds` の例：auditor を持つ User（suspended：いいえ）、RefundRecord。`auditors_export_refunds` が許します。
+  = 片方を許される principal がもう片方をできないよう forbid を足すか、permit を狭めてください。

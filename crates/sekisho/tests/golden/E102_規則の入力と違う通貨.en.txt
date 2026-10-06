@@ -1,0 +1,2 @@
+error[E102]: tests/mutants/E102_規則の入力と違う通貨.gate:66:45: The constant `50USD` is not a value of money[GBP, incl_tax], the unit of `上限`
+    66 |     返金の区分(refund_band)  = 返金の上限(金額: 金額, 上限: 50USD).区分

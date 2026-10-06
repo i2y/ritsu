@@ -1,0 +1,3 @@
+error[E007]: tests/mutants/E007_name_not_of_the_form.gate:20:5: The attribute name `Suspended` is not of the form a name in Cedar takes
+    20 |     Suspended : bool
+  = The name of an attribute is of the form `[a-z][a-z0-9_]*` (a lower-case letter, then lower-case letters, digits and `_`): `suspended`, say.

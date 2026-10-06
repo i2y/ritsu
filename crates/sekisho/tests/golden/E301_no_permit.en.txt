@@ -1,0 +1,8 @@
+warning[W302]: tests/mutants/E301_no_permit.gate:27:1: The role `auditor` alone is never allowed `export_refunds`, which its `can` line lists
+    27 |   can view_order, export_refunds
+  = Remove `export_refunds` from `can`, or write the permit that allows it.
+error[E301]: tests/mutants/E301_no_permit.gate:70:1: No permit allows `export_refunds` in any combination: no one can do it
+    70 | action export_refunds
+  = No permit is written for it.
+  = It comes to 2 combinations.
+  = Write a permit for it; if no one is meant to do it, write `nobody "<why>"` under the action.

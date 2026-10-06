@@ -1,0 +1,158 @@
+gate refunds v1
+description "refunds.gate with the clerk's can leaving out refund_order, which a clerk is allowed"
+namespace Shop
+
+use rule refund_limit from "../../examples/refunds/rules/refund_limit.rule"
+use dates refund_terms from "../../examples/refunds/dates/refund_terms.cal"
+use calendar uk from "../../examples/refunds/calendars/england_and_wales.cal"
+use openapi orders from "../../examples/refunds/api/orders.json"
+
+# The day of the request, taken from the clock of the server that asks the gate; the day changes at
+# midnight UTC. The check walks every day of this range, and the generated code refuses any other.
+today range >=2026-10-01 <=2028-10-31 offset +00:00
+
+enum order_status = paid | shipped | returned | refunded
+
+role clerk
+  description "Answers customers, and refunds small amounts"
+  can view_order
+
+role manager
+  description "Refunds what a clerk cannot, and after the refund period on a business day"
+  includes clerk
+  can view_order, refund_order
+
+role auditor
+  description "Checks the refunds after the fact"
+  can view_order, export_refunds
+
+principal User
+  description "A member of the shop's staff, signed in"
+  roles clerk, manager, auditor
+  attributes
+    refund_limit : money[GBP, incl_tax]  range >=0GBP <=10_000GBP
+    suspended    : bool
+
+principal Customer
+  description "A customer of the shop, signed in"
+
+workflow returns from "../../examples/refunds/flows/returns.flow"
+  description "Refunds a returned order once the item is back at the warehouse"
+
+resource Order
+  description "An order of the shop"
+  attributes
+    status   : order_status
+    paid_on  : date  range >=2026-01-01 <=2028-09-30
+    customer : Customer
+
+resource RefundRecord
+  description "The record of every refund, exported as one document"
+
+action view_order
+  description "Look at an order"
+  guards orders getOrder
+  principal User, Customer
+  resource Order from orderId
+
+action refund_order
+  description "Refund an order, in part or in whole"
+  guards orders refundOrder
+  principal User, Workflow
+  resource Order from orderId
+  input
+    amount : money[GBP, incl_tax]  range >=1GBP <=10_000GBP
+  context
+    refund_band  = refund_limit(amount: amount, limit: principal.refund_limit).band
+    in_period    = today <= refund_terms.last_day(paid_on: resource.paid_on)
+    business_day = today is open in uk
+
+action export_refunds
+  description "Export the record of refunds"
+  guards orders exportRefunds
+  principal User
+  resource RefundRecord
+
+permit staff_view_orders
+  description "The staff look at any order"
+  principal in clerk, auditor
+  action view_order
+
+permit customers_view_their_orders
+  description "A customer looks at their own orders"
+  principal is Customer
+  action view_order
+  when resource.customer is principal
+
+permit clerks_refund_within_their_limit
+  description "A clerk refunds up to the clerk's own limit, while the refund period lasts"
+  principal in clerk
+  action refund_order
+  when refund_band is within_limit
+  when in_period
+
+permit managers_refund_in_period
+  description "A manager refunds any amount while the refund period lasts"
+  principal in manager
+  action refund_order
+  when in_period
+
+permit managers_refund_late_on_business_days
+  description "After the refund period, a manager may still refund, on a business day in England and Wales"
+  principal in manager
+  action refund_order
+  unless in_period
+  when business_day
+
+permit returns_refunds_returned_orders
+  description "The returns workflow refunds a returned order, up to 50 pounds"
+  principal is workflow returns
+  action refund_order
+  when resource.status is returned
+  when amount <= 50GBP
+
+permit auditors_export_refunds
+  description "An auditor exports the record of refunds"
+  principal in auditor
+  action export_refunds
+
+forbid no_second_refund
+  description "An order already refunded is not refunded again"
+  action refund_order
+  when resource.status is refunded
+
+forbid auditors_do_not_refund
+  description "Whoever audits the refunds does not refund"
+  principal in auditor
+  action refund_order
+
+forbid suspended_staff_do_nothing
+  description "A suspended member of the staff does nothing"
+  principal is User
+  action any
+  when principal.suspended
+
+expect deny clerks_never_refund_over_their_limit
+  description "A clerk who is not a manager never refunds more than the clerk's own limit"
+  principal in clerk
+  action refund_order
+  unless principal in manager
+  when refund_band is over_limit
+
+expect deny nothing_refunded_twice
+  description "No one refunds an order that is already refunded"
+  action refund_order
+  when resource.status is refunded
+
+expect allow managers_refund_in_period
+  description "A manager who is not suspended and does not audit refunds an order not yet refunded, while the period lasts"
+  principal in manager
+  action refund_order
+  unless principal in auditor
+  unless principal.suspended
+  unless resource.status is refunded
+  when in_period
+
+separate refunding_and_auditing
+  description "The people who refund are not the people who audit the refunds"
+  actions refund_order, export_refunds

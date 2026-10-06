@@ -35,7 +35,7 @@ pub struct Report<'a> {
 
 /// The languages whose `check` takes one file at a time: whatever their check of a file comes
 /// to is that file's.
-const ONE_FILE: [Tool; 5] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Dandori];
+const ONE_FILE: [Tool; 6] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Dandori, Tool::Sekisho];
 
 impl Report<'_> {
     fn findings(&self) -> impl Iterator<Item = (&str, &Finding)> {

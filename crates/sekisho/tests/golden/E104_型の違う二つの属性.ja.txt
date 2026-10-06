@@ -1,0 +1,2 @@
+エラー[E104]: tests/mutants/E104_型の違う二つの属性.gate:68:32: `resource.状態`（列挙 `注文の状態`）と `resource.注文した人`（型 `顧客`）は型が違うので、比べられません
+    68 |   when resource.状態 is resource.注文した人

@@ -1,0 +1,4 @@
+error[E201]: tests/mutants/E201_rule_does_not_check.gate:5:28: `tests/mutants/fixtures/broken.rule` does not pass rulec's check
+     5 | use rule refund_limit from "fixtures/broken.rule"
+  = E101: Completeness gap: some input matches no row (tests/mutants/fixtures/broken.rule:15)
+  = Correct that file until rulec's check passes it.

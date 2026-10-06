@@ -1,0 +1,3 @@
+error[E104]: tests/mutants/E104_二段の関係.gate:52:22: A relation goes one step in v1, and nothing goes on from `resource.注文した人`
+    52 |   when resource.注文した人.停止中 is principal
+  = A relation goes one step (`resource.customer is principal`, `resource.tenant is principal.tenant`, `principal in resource.team`); where two steps are needed, make the answer a true-or-false output of a rule that computes it.

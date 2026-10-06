@@ -1,0 +1,4 @@
+警告[W303]: tests/mutants/W303_a_value_no_input_reaches.gate:31:1: permit `halves_read` が当てはまる組み合わせがあるかどうかを決められません
+    31 | permit halves_read
+  = 規則が、問われた範囲で出力がとりうる値を正確に言えず、その値になる具体的な入力も見つかりませんでした。
+tests/mutants/W303_a_value_no_input_reaches.gate: ok — action 1、ポリシー 2（permit 2、forbid 0）、期待 0、職務の分離 0

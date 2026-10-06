@@ -1,0 +1,3 @@
+error[E207]: tests/mutants/E207_カレンダーが覆わないtoday.gate:68:1: The calendar `../../examples/refunds/calendars/england_and_wales.cal` knows the days 2019-01-01..2028-12-31 only, which do not cover today's 2026-10-01..2029-01-31
+    68 |     営業日(business_day)     = today is open in 英国
+  = Narrow today's range to the data's, or take the calendar's copy again when newer data is out.

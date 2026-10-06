@@ -1,0 +1,6 @@
+エラー[E107]: tests/mutants/E107_todayの行が無い.gate:64:5: `today` を使うのに、`today` の行がありません
+    64 |     期間内(in_period)        = today <= 返金の期限.最終日(支払日: resource.支払日)
+  = `today range >=2026-10-01 <=2028-10-31 offset +00:00` のように、リクエストの日の範囲と、日を変えるオフセットを書いてください。
+エラー[E107]: tests/mutants/E107_todayの行が無い.gate:65:5: `today` を使うのに、`today` の行がありません
+    65 |     営業日(business_day)     = today is open in 英国
+  = `today range >=2026-10-01 <=2028-10-31 offset +00:00` のように、リクエストの日の範囲と、日を変えるオフセットを書いてください。

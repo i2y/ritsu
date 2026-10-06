@@ -1,0 +1,3 @@
+error[E006]: tests/mutants/E006_同じ別名のポリシー.gate:60:18: The alias `managers_refund` of the policy `責任者は返金できる` is the alias of the policy `係は少額なら返金できる` on line 54 too
+    60 | permit 責任者は返金できる(managers_refund)
+  = Names and aliases are each declared once among the things of one kind.

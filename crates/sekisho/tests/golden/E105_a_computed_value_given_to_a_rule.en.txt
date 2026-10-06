@@ -1,0 +1,3 @@
+error[E105]: tests/mutants/E105_a_computed_value_given_to_a_rule.gate:66:41: The computed value `in_period` cannot be given to a rule or a date
+    66 |     refund_band  = refund_limit(amount: in_period, limit: principal.refund_limit).band
+  = A rule or a date is given an attribute of the principal or the resource, an input of the action, a constant, or `today` (v1, so that computed values need no order).

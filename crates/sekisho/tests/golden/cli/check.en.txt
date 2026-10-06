@@ -1,0 +1,25 @@
+sekisho check — check the words, the names and the types, and every combination the file declares
+
+Usage:
+  sekisho check <file.gate>... [--format json] [--budget <n>]
+
+Arguments:
+  <file.gate>...  the .gate files to check
+
+Flags:
+  --format json  one JSON object a file
+  --budget <n>   the most combinations the check walks for one action (default 100000000)
+  --lang ja|en   the language of the text; else the SEKISHO_LANG environment variable, then RITSU_LANG, else en (default en)
+  --help         print this page
+
+Exit codes:
+  0  no errors (there may be warnings)
+  1  at least one error
+  2  bad arguments, a file that cannot be read, or a file that reads a rule, a dates file, a calendar, a book or a flow, run with this sekisho, which reads none of them (E209: run it as ritsu sekisho)
+
+Examples:
+  $ sekisho check shop.gate
+  $ ritsu sekisho check examples/refunds/refunds.gate --format json --lang ja
+
+Diagnostics it can print (`sekisho explain <CODE>` looks one up):
+  E001 E002 E003 E004 E005 E006 E007 E008 E101 E102 E103 E104 E105 E106 E107 E108 E201 E202 E203 E204 E205 E206 E207 E208 E209 E210 E211 E301 E302 E303 E304 E305 E306 E307 W201 W301 W302 W303 W304 W401

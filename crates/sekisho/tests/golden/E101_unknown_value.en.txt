@@ -1,0 +1,3 @@
+error[E101]: tests/mutants/E101_unknown_value.gate:68:27: The enum `order_status` has no value `refundd`
+    68 |   when resource.status is refundd
+  = The values there are `paid`, `shipped` and `refunded`.

@@ -1,0 +1,3 @@
+error[E103]: tests/mutants/E103_範囲の外の定数.gate:58:14: The constant `20_000GBP` is outside the range of `金額` (1GBP to 10000GBP)
+    58 |   when 金額 <= 20_000GBP
+  = Against a constant outside the range, every value gives the same answer; correct the constant, or the range of `金額`.

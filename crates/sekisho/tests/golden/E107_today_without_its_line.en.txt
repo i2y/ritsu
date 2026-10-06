@@ -1,0 +1,6 @@
+error[E107]: tests/mutants/E107_today_without_its_line.gate:64:5: `today` is used, and there is no `today` line
+    64 |     in_period    = today <= refund_terms.last_day(paid_on: resource.paid_on)
+  = Write the range of the request's day and the offset the day changes at, like `today range >=2026-10-01 <=2028-10-31 offset +00:00`.
+error[E107]: tests/mutants/E107_today_without_its_line.gate:65:5: `today` is used, and there is no `today` line
+    65 |     business_day = today is open in uk
+  = Write the range of the request's day and the offset the day changes at, like `today range >=2026-10-01 <=2028-10-31 offset +00:00`.

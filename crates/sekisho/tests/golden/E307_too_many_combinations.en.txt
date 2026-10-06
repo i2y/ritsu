@@ -1,0 +1,4 @@
+error[E307]: tests/mutants/E307_too_many_combinations.gate:27:1: The action `read_order` comes to 268,435,456 combinations, more than the budget of 100,000,000: it is not checked, and nothing is generated
+    27 | action read_order
+  = What makes them: principal.x1 (4), principal.x2 (4), principal.x3 (4), principal.x4 (4), principal.x5 (4), principal.x6 (4), principal.x7 (4), principal.x8 (4), principal.x9 (4), principal.x10 (4), principal.x11 (4), principal.x12 (4), principal.x13 (4), principal.x14 (4).
+  = Have the conditions read fewer values (fewer attributes, fewer constants to compare with), split the type, or raise the budget with `--budget`.

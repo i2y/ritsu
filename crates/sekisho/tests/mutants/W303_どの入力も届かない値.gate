@@ -1,0 +1,35 @@
+gate 半分(halves_ja) v1
+description "halves_read が何かを許すかは、rulec が除けず、どの整数も届かない値で決まる"
+
+use rule 半分 from "fixtures/halves.rule"
+
+role 係(clerk)
+  description "お客さまに応対する"
+
+principal 職員(User)
+  description "店の職員"
+  roles 係
+  attributes
+    一つ目(first)  : number  range >=0 <=3
+    二つ目(second) : number  range >=0 <=3
+
+resource 注文(Order)
+  description "店の注文"
+
+action 注文を読む(read_order)
+  description "注文を見る"
+  principal 職員
+  resource 注文
+  context
+    種類(kind) = 半分(first: principal.一つ目, second: principal.二つ目).answer
+
+permit 係は読める(clerks_read)
+  description "係は読める"
+  principal in 係
+  action 注文を読む
+
+permit 半分なら読める(halves_read)
+  description "どちらも一と半分なら読める"
+  principal in 係
+  action 注文を読む
+  when 種類 is odd_half

@@ -1,0 +1,2 @@
+エラー[E004]: tests/mutants/E004_misaligned.gate:13:4: 字下げが上の行とそろっていません（ブロックの行は 2 文字、この行は 3 文字）。もう一段の字下げを取るのは `attributes`、`input`、`context` だけです
+    13 |    includes clerk

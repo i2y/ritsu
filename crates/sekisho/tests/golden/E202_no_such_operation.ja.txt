@@ -1,0 +1,3 @@
+エラー[E202]: tests/mutants/E202_no_such_operation.gate:60:1: `refundOrders` は `../../examples/refunds/api/orders.json` の操作にありません
+    60 |   guards orders refundOrders
+  = 操作は getOrder、refundOrder、exportRefunds です。

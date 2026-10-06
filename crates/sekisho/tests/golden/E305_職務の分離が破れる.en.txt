@@ -1,0 +1,6 @@
+error[E305]: tests/mutants/E305_職務の分離が破れる.gate:151:1: The separation `返金と監査を分ける` does not hold: the same principal is allowed both `返金する` and `返金を書き出す`
+   151 | separate 返金と監査を分ける
+  = The principal: 職員 holding 係 and 監査 (停止中: no).
+  = Example of `返金する`: 職員 holding 係 and 監査 (停止中: no), 注文 (状態: 支払済), 金額: 1GBP to 50GBP, 返金の区分: 上限まで, 期間内: yes, 営業日: no; allowed by `係は上限まで返金できる`.
+  = Example of `返金を書き出す`: 職員 holding 監査 (停止中: no), 返金の記録; allowed by `監査は返金の記録を書き出せる`.
+  = Add a forbid that keeps whoever is allowed one from the other, or narrow a permit.

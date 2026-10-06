@@ -1,0 +1,5 @@
+warning[W301]: tests/mutants/W301_permit_adds_nothing.gate:107:1: Every combination the permit `managers_refund_any` allows, `managers_refund_in_period` allows too
+   107 | permit managers_refund_any
+  = It allows 24 combinations, and `managers_refund_in_period` allows each of them: removing `managers_refund_any` changes no answer.
+  = Remove `managers_refund_any`, or narrow `managers_refund_in_period` if `managers_refund_any` says what is meant.
+tests/mutants/W301_permit_adds_nothing.gate: ok — 3 actions, 11 policies (8 permits, 3 forbids), 3 expectations, 1 separation

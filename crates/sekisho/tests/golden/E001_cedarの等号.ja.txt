@@ -1,0 +1,2 @@
+エラー[E001]: tests/mutants/E001_cedarの等号.gate:68:20: `==` は sekisho の字句にありません。等しいことは `is` で書いてください
+    68 |   when resource.状態 == 返金済

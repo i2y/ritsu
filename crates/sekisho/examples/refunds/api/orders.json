@@ -1,0 +1,69 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Orders of the shop", "version": "1.0.0" },
+  "servers": [ { "url": "https://orders.example.com" } ],
+  "paths": {
+    "/orders/{orderId}": {
+      "get": {
+        "operationId": "getOrder",
+        "parameters": [ { "name": "orderId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "security": [ { "staff": [] }, { "customer": [] } ],
+        "responses": {
+          "200": { "description": "The order", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Order" } } } },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [ { "name": "orderId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "security": [ { "staff": [] }, { "workflow": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "required": [ "amount" ],
+            "properties": { "amount": { "type": "integer", "minimum": 1, "maximum": 10000, "description": "In whole pounds, tax included" } }
+          } } }
+        },
+        "responses": {
+          "201": { "description": "The refund", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Refund" } } } },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    },
+    "/refunds/export": {
+      "post": {
+        "operationId": "exportRefunds",
+        "security": [ { "staff": [] } ],
+        "responses": {
+          "200": { "description": "Every refund, as one document", "content": { "text/csv": { "schema": { "type": "string" } } } },
+          "403": { "description": "Not allowed" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "staff": { "type": "openIdConnect", "openIdConnectUrl": "https://id.example.com/.well-known/openid-configuration" },
+      "customer": { "type": "openIdConnect", "openIdConnectUrl": "https://id.example.com/.well-known/openid-configuration" },
+      "workflow": { "type": "mutualTLS" }
+    },
+    "schemas": {
+      "Order": {
+        "type": "object",
+        "required": [ "id", "status" ],
+        "properties": {
+          "id": { "type": "string" },
+          "status": { "type": "string", "enum": [ "paid", "shipped", "returned", "refunded" ] }
+        }
+      },
+      "Refund": {
+        "type": "object",
+        "required": [ "id" ],
+        "properties": { "id": { "type": "string" } }
+      }
+    }
+  }
+}

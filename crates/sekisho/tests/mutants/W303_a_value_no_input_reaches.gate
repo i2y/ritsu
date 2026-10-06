@@ -1,0 +1,35 @@
+gate halves v1
+description "Whether halves_read allows anything rests on a value rulec cannot rule out and no whole number reaches"
+
+use rule halves from "fixtures/halves.rule"
+
+role clerk
+  description "Answers customers"
+
+principal User
+  description "A member of the staff"
+  roles clerk
+  attributes
+    first  : number  range >=0 <=3
+    second : number  range >=0 <=3
+
+resource Order
+  description "An order"
+
+action read_order
+  description "Look at an order"
+  principal User
+  resource Order
+  context
+    kind = halves(first: principal.first, second: principal.second).answer
+
+permit clerks_read
+  description "A clerk reads"
+  principal in clerk
+  action read_order
+
+permit halves_read
+  description "Whoever is at one and a half twice reads"
+  principal in clerk
+  action read_order
+  when kind is odd_half

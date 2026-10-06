@@ -1,0 +1,3 @@
+エラー[E002]: tests/mutants/E002_keyword_as_a_value.gate:5:28: `any` は sekisho のキーワードなので、名前にも別名にもできません
+     5 | enum order_status = paid | any | refunded
+  = 条件と計算と型を書く語は、名前にできません（and、or、not、in、is、principal、resource、workflow、true、false、any、today、bool、date、number、rate）。条件が二通りに読めてしまうからです。別の名前にしてください。

@@ -1,0 +1,3 @@
+error[E101]: tests/mutants/E101_知らない列挙の値.gate:68:23: The enum `注文の状態` has no value `返金ずみ`
+    68 |   when resource.状態 is 返金ずみ
+  = The values there are `支払済`, `発送済` and `返金済`.

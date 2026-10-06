@@ -1,0 +1,4 @@
+rule 通らない規則(broken_ja) v1
+description "rulec が読めない規則。`input` は rulec の語ではない。検査を通らない規則を読む変異のためのもの"
+
+input

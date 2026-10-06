@@ -1,0 +1,26 @@
+[package]
+name = "sekisho"
+version.workspace = true
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "A small language for who may do what: roles, attributes and relations, with business rules and dates as conditions, checked on every combination it declares and compiled to Cedar"
+repository.workspace = true
+
+# ritsu's base layer, and nothing from outside (ritsu's DESIGN 3.1, 4.9): JSON is ritsu-base's, as
+# rulec's and geas's are. The languages sekisho reads (rulec, koyomi, chobo, dandori) are handed to
+# it through ritsu's ports; the library holds none of them.
+[dependencies]
+ritsu-base = { path = "../ritsu-base" }
+ritsu-emit = { path = "../ritsu-emit" }
+ritsu-ports = { path = "../ritsu-ports" }
+ritsu-proto = { path = "../ritsu-proto" }
+ritsu-units = { path = "../ritsu-units" }
+
+# The languages sekisho reads, each through its own engine of ritsu's ports: the tests join them as
+# `ritsu sekisho` does (ritsu's DESIGN 3.3). sekisho's own code holds none of them.
+[dev-dependencies]
+ritsu-testkit = { path = "../ritsu-testkit" }
+chobo = { path = "../chobo" }
+dandori = { path = "../dandori" }
+koyomi = { path = "../koyomi" }
+rulec = { path = "../rulec" }

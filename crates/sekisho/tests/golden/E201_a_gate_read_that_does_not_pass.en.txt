@@ -1,0 +1,4 @@
+error[E201]: tests/mutants/E201_a_gate_read_that_does_not_pass.gate:5:1: `tests/mutants/read/staff_through.gate` does not pass sekisho's check
+     5 | use gate "read/staff_through.gate"
+  = E210: The namespace of `tests/mutants/read/staff_elsewhere.gate`, `Staff`, is not this file's, `Shop` (tests/mutants/read/staff_through.gate:5:1)
+  = `sekisho check tests/mutants/read/staff_through.gate` says everything that is wrong with it.

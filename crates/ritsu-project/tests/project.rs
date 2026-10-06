@@ -18,7 +18,7 @@ fn load(root: &Path) -> Project {
 }
 
 /// Every file under the paths, each with its language, in the order the languages are checked:
-/// the ones that give facts first, then dandori, then yuen and sakai.
+/// the ones that give facts first, then dandori, then sekisho, then yuen and sakai.
 #[test]
 fn the_files_of_a_project_and_their_languages() {
     let p = load(&shop());
@@ -33,6 +33,12 @@ fn the_files_of_a_project_and_their_languages() {
     assert_eq!(p.root_shown(), p.shown.path("."));
     assert_eq!(p.given_for(Tool::Sakai), [shop().to_string_lossy().to_string()]);
     assert!(p.given_for(Tool::Yuen).is_empty());
+    // a project with gates (sekisho's example): the gates come after the flow they read
+    let g = load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../sekisho/examples/refunds"));
+    let counts: Vec<(&str, usize)> = g.counts().into_iter().map(|(t, n)| (t.word(), n)).collect();
+    assert_eq!(counts, [("rulec", 2), ("koyomi", 3), ("dandori", 1), ("sekisho", 2)]);
+    let rels: Vec<&str> = g.files.iter().map(|f| f.rel.as_str()).collect();
+    assert_eq!(rels[rels.len() - 3..], ["flows/returns.flow", "refunds.gate", "refunds.ja.gate"]);
 }
 
 /// What the person has to correct before anything is read: a path that is not there, one

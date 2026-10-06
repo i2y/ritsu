@@ -1,0 +1,12 @@
+workflow returns v1
+description "returns.flow calling a task it does not declare"
+
+inputs
+  order_id : string
+
+outputs
+  refund : string
+
+flow
+  let r = refund_order(orderId: order_id)
+  succeed refund = r.id

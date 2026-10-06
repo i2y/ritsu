@@ -1,0 +1,4 @@
+error[E201]: tests/mutants/E201_通らない規則を読む返金.gate:5:21: `tests/mutants/fixtures/broken.rule` does not pass rulec's check
+     5 | use rule 返金の上限 from "fixtures/broken.rule"
+  = E101: Completeness gap: some input matches no row (tests/mutants/fixtures/broken.rule:15)
+  = Correct that file until rulec's check passes it.

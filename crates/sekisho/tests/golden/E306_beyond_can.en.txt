@@ -1,0 +1,4 @@
+error[E306]: tests/mutants/E306_beyond_can.gate:18:1: The role `clerk` is allowed `refund_order`, which its `can` line does not list
+    18 |   can view_order
+  = For example: User holding clerk (suspended: no), Order (status: paid), amount: 1GBP to 50GBP, refund_band: within_limit, in_period: yes, business_day: no; allowed by `clerks_refund_within_their_limit`.
+  = Add `refund_order` to `can`, or narrow the permit that allows it.

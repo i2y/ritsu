@@ -1,0 +1,3 @@
+error[E008]: tests/mutants/E008_reserved_in_typescript.gate:5:49: `delete` is a reserved word of TypeScript, and cannot be a name in the generated code
+     5 | enum order_status = paid | shipped | refunded | delete
+  = Choose another name or alias.

@@ -1,0 +1,158 @@
+gate 返金(refunds_ja) v1
+description "店の注文を見ること、返金すること、返金の記録を書き出すことを、だれがしてよいか。店の決まりの一例として書いた sekisho の例で、refunds.gate の日本語の版"
+namespace ShopJa
+
+use rule 返金の上限 from "../../examples/refunds/rules/返金の上限.rule"
+use dates 返金の期限 from "../../examples/refunds/dates/返金の期限.cal"
+use calendar 英国 from "../../examples/refunds/calendars/england_and_wales.cal"
+use openapi 注文 from "../../examples/refunds/api/orders.json"
+
+# リクエストの日。ゲートに問い合わせるサーバーの時計から取り、UTC の 0 時に変わる。
+# 検査はこの範囲のすべての日を数え、生成したコードはほかの日を受け付けない。
+today range >=2026-10-01 <=2028-10-31 offset +00:00
+
+enum 注文の状態(order_status) = 支払済(paid) | 発送済(shipped) | 返品済(returned) | 返金済(refunded)
+
+role 係(clerk)
+  description "お客さまに応対し、少額の返金をする"
+  can 注文を見る, 返金する
+
+role 責任者(manager)
+  description "係ができない返金をし、返金の期間が過ぎても営業日なら返金する"
+  includes 係
+  can 注文を見る, 返金する
+
+role 監査(auditor)
+  description "あとから返金を確かめる"
+  can 注文を見る, 返金を書き出す
+
+principal 職員(User)
+  description "サインインした店の職員"
+  roles 係, 責任者, 監査
+  attributes
+    返金できる額(refund_limit) : money[GBP, incl_tax]  range >=0GBP <=10_000GBP
+    停止中(suspended)          : bool
+
+principal 顧客(Customer)
+  description "サインインした店のお客さま"
+
+workflow 返品(returns) from "../../examples/refunds/flows/returns.flow"
+  description "返品された品物が倉庫に戻ったら、その注文を返金する"
+
+resource 注文(Order)
+  description "店の注文"
+  attributes
+    状態(status)           : 注文の状態
+    支払日(paid_on)        : date  range >=2026-01-01 <=2028-09-30
+    注文した人(customer)   : 顧客
+
+resource 返金の記録(RefundRecord)
+  description "すべての返金の記録。一つの文書として書き出す"
+
+action 注文を見る(view_order)
+  description "注文を見る"
+  guards 注文 getOrder
+  principal 職員, 顧客
+  resource 注文 from orderId
+
+action 返金する(refund_order)
+  description "注文の全部か一部を返金する"
+  guards 注文 refundOrder
+  principal 職員, Workflow
+  resource 注文 from orderId
+  input
+    金額(amount) : money[GBP, incl_tax]  range >=1GBP <=10_000GBP
+  context
+    返金の区分(refund_band)  = 返金の上限(金額: 期間内, 上限: principal.返金できる額).区分
+    期間内(in_period)        = today <= 返金の期限.最終日(支払日: resource.支払日)
+    営業日(business_day)     = today is open in 英国
+
+action 返金を書き出す(export_refunds)
+  description "返金の記録を書き出す"
+  guards 注文 exportRefunds
+  principal 職員
+  resource 返金の記録
+
+permit 職員は注文を見られる(staff_view_orders)
+  description "職員はどの注文も見られる"
+  principal in 係, 監査
+  action 注文を見る
+
+permit 顧客は自分の注文を見られる(customers_view_their_orders)
+  description "お客さまは自分の注文を見られる"
+  principal is 顧客
+  action 注文を見る
+  when resource.注文した人 is principal
+
+permit 係は上限まで返金できる(clerks_refund_within_their_limit)
+  description "係は、返金の期間のあいだ、自分の上限まで返金できる"
+  principal in 係
+  action 返金する
+  when 返金の区分 is 上限まで
+  when 期間内
+
+permit 責任者は期間内なら返金できる(managers_refund_in_period)
+  description "責任者は、返金の期間のあいだ、どの額でも返金できる"
+  principal in 責任者
+  action 返金する
+  when 期間内
+
+permit 責任者は期間後も営業日なら返金できる(managers_refund_late_on_business_days)
+  description "返金の期間が過ぎても、イングランドとウェールズの営業日なら、責任者は返金できる"
+  principal in 責任者
+  action 返金する
+  unless 期間内
+  when 営業日
+
+permit 返品のワークフローは返品済の注文を返金できる(returns_refunds_returned_orders)
+  description "返品のワークフローは、返品済の注文を 50 ポンドまで返金できる"
+  principal is workflow 返品
+  action 返金する
+  when resource.状態 is 返品済
+  when 金額 <= 50GBP
+
+permit 監査は返金の記録を書き出せる(auditors_export_refunds)
+  description "監査は返金の記録を書き出せる"
+  principal in 監査
+  action 返金を書き出す
+
+forbid 二度は返金しない(no_second_refund)
+  description "返金済の注文は、もう返金しない"
+  action 返金する
+  when resource.状態 is 返金済
+
+forbid 監査は返金しない(auditors_do_not_refund)
+  description "返金を確かめる人は、返金をしない"
+  principal in 監査
+  action 返金する
+
+forbid 停止中の職員は何もできない(suspended_staff_do_nothing)
+  description "停止中の職員は何もできない"
+  principal is 職員
+  action any
+  when principal.停止中
+
+expect deny 係は上限を超えて返金しない
+  description "責任者でない係は、自分の上限を超えて返金することがない"
+  principal in 係
+  action 返金する
+  unless principal in 責任者
+  when 返金の区分 is 上限超え
+
+expect deny 返金済の注文は返金しない
+  description "返金済の注文を返金する人はいない"
+  action 返金する
+  when resource.状態 is 返金済
+
+expect allow 責任者は期間内に返金できる
+  description "停止中でなく、監査でもない責任者は、返金の期間のあいだ、返金済でない注文を返金できる"
+  principal in 責任者
+  action 返金する
+  unless principal in 監査
+  unless principal.停止中
+  unless resource.状態 is 返金済
+  when 期間内
+
+separate 返金と監査を分ける
+  description "返金をする人は、返金を確かめる人ではない"
+  actions 返金する, 返金を書き出す

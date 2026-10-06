@@ -1,0 +1,3 @@
+error[E105]: tests/mutants/E105_規則でないもの.gate:66:27: `注文` is a `use openapi`, not a rule
+    66 |     返金の区分(refund_band)  = 注文(金額: 金額, 上限: principal.返金できる額).区分
+  = A computed value is a rule's output (`use rule`), a date function (`use dates`), or a business day of a calendar (`use calendar`).

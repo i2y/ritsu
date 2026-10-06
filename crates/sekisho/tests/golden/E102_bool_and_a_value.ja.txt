@@ -1,0 +1,3 @@
+エラー[E102]: tests/mutants/E102_bool_and_a_value.gate:74:31: `principal.suspended` は真偽（bool）なので、`yes` とは比べられません
+    74 |   when principal.suspended is yes
+  = 真偽は `when principal.suspended` か `unless principal.suspended` と書きます。

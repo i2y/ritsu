@@ -1,0 +1,3 @@
+error[E103]: tests/mutants/E103_no_range.gate:41:14: `amount` has no range
+    41 |     amount : money[GBP, incl_tax]
+  = The check counts values within their range, so a number and a date take one (`range >=1GBP <=10_000GBP`, `range >=2026-01-01 <=2028-09-30`); the generated code refuses a value outside it before asking Cedar.

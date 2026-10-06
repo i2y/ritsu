@@ -1,0 +1,4 @@
+error[E201]: tests/mutants/E201_a_rule_that_does_not_pass.gate:5:22: `tests/mutants/read/broken.rule` does not pass rulec's check
+     5 | use rule broken from "read/broken.rule"
+  = E005: `input` cannot appear at this position (tests/mutants/read/broken.rule:4)
+  = Correct that file until rulec's check passes it.

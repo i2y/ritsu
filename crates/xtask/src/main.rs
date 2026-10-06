@@ -113,8 +113,8 @@ enum Layer {
 }
 
 const BASE: &[&str] = &["ritsu-base", "ritsu-units", "ritsu-ports", "ritsu-proto", "ritsu-emit"];
-const LANGUAGES: &[&str] = &["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai"];
-/// The languages that read and write JSON with serde_json; rulec and geas depend on nothing.
+const LANGUAGES: &[&str] = &["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho"];
+/// The languages that read and write JSON with serde_json; rulec, geas and sekisho depend on nothing.
 const WITH_SERDE: &[&str] = &["dandori", "koyomi", "chobo", "yuen", "sakai"];
 
 fn layer(name: &str) -> Option<Layer> {

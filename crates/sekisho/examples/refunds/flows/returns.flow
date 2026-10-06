@@ -1,0 +1,24 @@
+workflow returns v1
+description "When a returned item is back at the warehouse, refund the order. Written for sekisho's example: the workflow calls the shop's API as itself, and the gate refunds.gate decides whether it may"
+
+use openapi orders from "../api/orders.json"
+
+record Refund
+  id : string
+
+inputs
+  order_id : string
+  amount   : money[GBP, incl_tax]  range >=1 <=50
+
+outputs
+  refund : string
+
+task refund_order(orderId: string, amount: money[GBP, incl_tax] range >=1 <=10000) -> Refund
+  http POST orders "/orders/{orderId}/refunds"
+  errors denied = 403
+  key
+
+flow
+  let r = refund_order(orderId: order_id, amount: amount)
+    on denied => fail Denied "The gate did not let the workflow refund this order"
+  succeed refund = r.id

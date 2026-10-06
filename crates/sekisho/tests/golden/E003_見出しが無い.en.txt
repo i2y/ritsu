@@ -1,0 +1,3 @@
+error[E003]: tests/mutants/E003_見出しが無い.gate:1:1: A file starts with a `gate` line
+     1 | description "店の注文を見ること、返金することを、だれがしてよいか"
+  = Start it like `gate refunds v1`: `gate`, the file's name, and its version. A Japanese name takes an ASCII alias: `gate 返金(refunds) v1`.

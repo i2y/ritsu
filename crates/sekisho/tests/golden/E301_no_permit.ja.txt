@@ -1,0 +1,8 @@
+警告[W302]: tests/mutants/E301_no_permit.gate:27:1: 役割 `auditor` だけを持つ principal は、`can` の行にある `export_refunds` を、どの組み合わせでも許されません
+    27 |   can view_order, export_refunds
+  = `can` から `export_refunds` を消すか、許す permit を書いてください。
+エラー[E301]: tests/mutants/E301_no_permit.gate:70:1: `export_refunds` を許す permit が、どの組み合わせにもありません。だれもこの action をできません
+    70 | action export_refunds
+  = この action の permit がありません。
+  = 2 通りの組み合わせを数えました。
+  = permit を書いてください。だれにもさせないつもりなら、action の下に `nobody "<理由>"` を書いてください。

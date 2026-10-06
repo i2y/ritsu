@@ -1,0 +1,2 @@
+エラー[E002]: tests/mutants/E002_a_string_for_a_name.gate:7:6: ここには役割の名前を書いてください（書かれているのは `"clerk"` です）
+     7 | role "clerk"

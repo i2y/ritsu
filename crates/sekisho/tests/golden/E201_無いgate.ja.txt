@@ -1,0 +1,2 @@
+エラー[E201]: tests/mutants/E201_無いgate.gate:5:1: `tests/mutants/職員.gate` を読めません: No such file or directory (os error 2)
+     5 | use gate "職員.gate"

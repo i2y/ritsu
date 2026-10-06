@@ -1,0 +1,3 @@
+error[E103]: tests/mutants/E103_整数にならない定数.gate:58:14: The constant `49.5GBP`, counted in money[GBP, incl_tax], is not a whole number
+    58 |   when 金額 <= 49.5GBP
+  = A value goes to Cedar as a whole number in the unit of its type, so a constant has to come to one too.

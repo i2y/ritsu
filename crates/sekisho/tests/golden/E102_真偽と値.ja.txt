@@ -1,0 +1,3 @@
+エラー[E102]: tests/mutants/E102_真偽と値.gate:74:25: `principal.停止中` は真偽（bool）なので、`はい` とは比べられません
+    74 |   when principal.停止中 is はい
+  = 真偽は `when principal.停止中` か `unless principal.停止中` と書きます。

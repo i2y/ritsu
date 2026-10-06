@@ -1,0 +1,36 @@
+gate 多すぎる(too_many) v1
+description "四つの値の属性が十四あり、注文を読む の組み合わせが 10^8 通りを超える"
+
+enum 段階(level) = 一(a) | 二(b) | 三(c) | 四(d)
+
+principal 職員(User)
+  description "店の職員"
+  attributes
+    x1 : 段階
+    x2 : 段階
+    x3 : 段階
+    x4 : 段階
+    x5 : 段階
+    x6 : 段階
+    x7 : 段階
+    x8 : 段階
+    x9 : 段階
+    x10 : 段階
+    x11 : 段階
+    x12 : 段階
+    x13 : 段階
+    x14 : 段階
+
+resource 注文(Order)
+  description "店の注文"
+
+action 注文を読む(read_order)
+  description "注文を見る"
+  principal 職員
+  resource 注文
+
+permit 全部が一なら読める(level_a_reads)
+  description "十四のどれも段階が一なら、注文を読める"
+  action 注文を読む
+  when principal.x1 is 一 and principal.x2 is 一 and principal.x3 is 一 and principal.x4 is 一 and principal.x5 is 一 and principal.x6 is 一 and principal.x7 is 一
+  when principal.x8 is 一 and principal.x9 is 一 and principal.x10 is 一 and principal.x11 is 一 and principal.x12 is 一 and principal.x13 is 一 and principal.x14 is 一

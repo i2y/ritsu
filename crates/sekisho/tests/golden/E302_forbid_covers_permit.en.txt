@@ -1,0 +1,25 @@
+warning[W302]: tests/mutants/E302_forbid_covers_permit.gate:18:1: The role `clerk` alone is never allowed `refund_order`, which its `can` line lists
+    18 |   can view_order, refund_order
+  = Remove `refund_order` from `can`, or write the permit that allows it.
+warning[W302]: tests/mutants/E302_forbid_covers_permit.gate:23:1: The role `manager` alone is never allowed `refund_order`, which its `can` line lists
+    23 |   can view_order, refund_order
+  = Remove `refund_order` from `can`, or write the permit that allows it.
+error[E302]: tests/mutants/E302_forbid_covers_permit.gate:87:1: The permit `clerks_refund_within_their_limit` allows nothing: a forbid denies every combination it would allow
+    87 | permit clerks_refund_within_their_limit
+  = It would allow 192 combinations; `clerks_do_not_refund` denies 192 of them, `auditors_do_not_refund` 96, `suspended_staff_do_nothing` 96, `no_second_refund` 48.
+  = For example: User holding clerk (suspended: no), Order (status: paid), amount: 1GBP to 50GBP, refund_band: within_limit, in_period: yes, business_day: no; denied by `clerks_do_not_refund`.
+  = Narrow the forbid, or remove the permit if no one is meant to be allowed this.
+error[E302]: tests/mutants/E302_forbid_covers_permit.gate:94:1: The permit `managers_refund_in_period` allows nothing: a forbid denies every combination it would allow
+    94 | permit managers_refund_in_period
+  = It would allow 256 combinations; `clerks_do_not_refund` denies 256 of them, `auditors_do_not_refund` 128, `suspended_staff_do_nothing` 128, `no_second_refund` 64.
+  = For example: User holding manager (suspended: no), Order (status: paid), amount: 1GBP to 50GBP, refund_band: within_limit, in_period: yes, business_day: no; denied by `clerks_do_not_refund`.
+  = Narrow the forbid, or remove the permit if no one is meant to be allowed this.
+error[E302]: tests/mutants/E302_forbid_covers_permit.gate:100:1: The permit `managers_refund_late_on_business_days` allows nothing: a forbid denies every combination it would allow
+   100 | permit managers_refund_late_on_business_days
+  = It would allow 128 combinations; `clerks_do_not_refund` denies 128 of them, `auditors_do_not_refund` 64, `suspended_staff_do_nothing` 64, `no_second_refund` 32.
+  = For example: User holding manager (suspended: no), Order (status: paid), amount: 1GBP to 50GBP, refund_band: within_limit, in_period: no, business_day: yes; denied by `clerks_do_not_refund`.
+  = Narrow the forbid, or remove the permit if no one is meant to be allowed this.
+error[E304]: tests/mutants/E302_forbid_covers_permit.gate:152:1: The expectation `managers_refund_in_period` does not hold: 48 of the 48 combinations it picks are denied
+   152 | expect allow managers_refund_in_period
+  = For example: User holding manager (suspended: no), Order (status: paid), amount: 1GBP to 50GBP, refund_band: within_limit, in_period: yes, business_day: no; denied by `clerks_do_not_refund`.
+  = Fix the policies, or the expectation if it says more than is meant.

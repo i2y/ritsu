@@ -1,0 +1,25 @@
+警告[W302]: tests/mutants/E302_forbid_covers_permit.gate:18:1: 役割 `clerk` だけを持つ principal は、`can` の行にある `refund_order` を、どの組み合わせでも許されません
+    18 |   can view_order, refund_order
+  = `can` から `refund_order` を消すか、許す permit を書いてください。
+警告[W302]: tests/mutants/E302_forbid_covers_permit.gate:23:1: 役割 `manager` だけを持つ principal は、`can` の行にある `refund_order` を、どの組み合わせでも許されません
+    23 |   can view_order, refund_order
+  = `can` から `refund_order` を消すか、許す permit を書いてください。
+エラー[E302]: tests/mutants/E302_forbid_covers_permit.gate:87:1: permit `clerks_refund_within_their_limit` は何も許しません。許すはずの組み合わせを、どれも forbid が拒みます
+    87 | permit clerks_refund_within_their_limit
+  = 許すはずの組み合わせは 192 通りで、`clerks_do_not_refund` が 192 通り、`auditors_do_not_refund` が 96 通り、`suspended_staff_do_nothing` が 96 通り、`no_second_refund` が 48 通りを拒みます。
+  = 例：clerk を持つ User（suspended：いいえ）、Order（status：paid）、amount：1GBP〜50GBP、refund_band：within_limit、in_period：はい、business_day：いいえ。`clerks_do_not_refund` が拒みます。
+  = forbid を狭めるか、だれにも許さないつもりなら permit を消してください。
+エラー[E302]: tests/mutants/E302_forbid_covers_permit.gate:94:1: permit `managers_refund_in_period` は何も許しません。許すはずの組み合わせを、どれも forbid が拒みます
+    94 | permit managers_refund_in_period
+  = 許すはずの組み合わせは 256 通りで、`clerks_do_not_refund` が 256 通り、`auditors_do_not_refund` が 128 通り、`suspended_staff_do_nothing` が 128 通り、`no_second_refund` が 64 通りを拒みます。
+  = 例：manager を持つ User（suspended：いいえ）、Order（status：paid）、amount：1GBP〜50GBP、refund_band：within_limit、in_period：はい、business_day：いいえ。`clerks_do_not_refund` が拒みます。
+  = forbid を狭めるか、だれにも許さないつもりなら permit を消してください。
+エラー[E302]: tests/mutants/E302_forbid_covers_permit.gate:100:1: permit `managers_refund_late_on_business_days` は何も許しません。許すはずの組み合わせを、どれも forbid が拒みます
+   100 | permit managers_refund_late_on_business_days
+  = 許すはずの組み合わせは 128 通りで、`clerks_do_not_refund` が 128 通り、`auditors_do_not_refund` が 64 通り、`suspended_staff_do_nothing` が 64 通り、`no_second_refund` が 32 通りを拒みます。
+  = 例：manager を持つ User（suspended：いいえ）、Order（status：paid）、amount：1GBP〜50GBP、refund_band：within_limit、in_period：いいえ、business_day：はい。`clerks_do_not_refund` が拒みます。
+  = forbid を狭めるか、だれにも許さないつもりなら permit を消してください。
+エラー[E304]: tests/mutants/E302_forbid_covers_permit.gate:152:1: 期待 `managers_refund_in_period` が成り立ちません。選んだ 48 通りのうち 48 通りが拒まれます
+   152 | expect allow managers_refund_in_period
+  = 例：manager を持つ User（suspended：いいえ）、Order（status：paid）、amount：1GBP〜50GBP、refund_band：within_limit、in_period：はい、business_day：いいえ。`clerks_do_not_refund` が拒みます。
+  = ポリシーを直すか、期待が言いすぎているなら期待を直してください。

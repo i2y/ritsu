@@ -1,0 +1,3 @@
+error[E108]: tests/mutants/E108_輪になる役割.gate:9:12: The roles' `includes` go round in a circle: 係 → 責任者 → 係
+     9 |   includes 責任者
+  = `includes` says whoever holds this role holds that one too; in a circle, which role includes which is not decided, and the parents of Cedar's roles would go round too. Remove an `includes` of the circle.

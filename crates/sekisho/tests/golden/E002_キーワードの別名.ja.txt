@@ -1,0 +1,3 @@
+エラー[E002]: tests/mutants/E002_キーワードの別名.gate:5:44: `any` は sekisho のキーワードなので、名前にも別名にもできません
+     5 | enum 注文の状態(order_status) = 支払済(paid) | 発送済(any) | 返金済(refunded)
+  = 条件と計算と型を書く語は、名前にできません（and、or、not、in、is、principal、resource、workflow、true、false、any、today、bool、date、number、rate）。条件が二通りに読めてしまうからです。別の名前にしてください。

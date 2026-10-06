@@ -1,0 +1,4 @@
+error[E107]: tests/mutants/E107_タイムゾーンの名前.gate:6:46: The offset is a time zone's name, `Europe/London`; sekisho takes only a fixed UTC offset
+     6 | today range >=2026-10-01 <=2028-10-31 offset Europe/London
+  = In a time zone with daylight saving time, the offset changes with the season, and knowing which zones have it takes the tz database; so no name is taken (as in koyomi).
+  = Pick the one offset the day changes at, and write it as a number, like `offset +00:00`; where summer time moves the local midnight, say so in a comment for the reader.

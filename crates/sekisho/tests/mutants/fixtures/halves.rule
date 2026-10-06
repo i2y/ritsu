@@ -1,0 +1,20 @@
+rule halves v1
+description "A row that asks for a sum of 3 and a difference of 0: real numbers reach it, whole numbers do not, so rulec cannot say over ranges whether the row is reached"
+
+enum kind = odd_half | other
+
+inputs
+  first  : number  range >=0 <=3
+  second : number  range >=0 <=3
+
+outputs
+  answer : kind
+
+derive total : number = first + second  range >=0 <=6
+derive gap   : number = first - second  range >=-3 <=3
+
+table t
+policy first
+| total | gap | -> answer : kind |
+| 3     | 0   | odd_half         |
+| -     | -   | other            |

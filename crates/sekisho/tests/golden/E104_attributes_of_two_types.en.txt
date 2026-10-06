@@ -1,0 +1,2 @@
+error[E104]: tests/mutants/E104_attributes_of_two_types.gate:68:36: `resource.status` (the enum `order_status`) and `resource.customer` (the type `Customer`) are of different types, and do not compare
+    68 |   when resource.status is resource.customer

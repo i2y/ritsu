@@ -1,0 +1,6 @@
+gate staff v1
+description "The staff of the shop, for the mutants that read another gate"
+namespace Shop
+
+role trainee
+  description "Learns the work"

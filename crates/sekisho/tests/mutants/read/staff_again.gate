@@ -1,0 +1,6 @@
+gate staff_again v1
+description "The staff once more, declaring a role staff.gate declares"
+namespace Shop
+
+role trainee
+  description "Learns the work, declared a second time"

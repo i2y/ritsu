@@ -1,0 +1,6 @@
+error[E305]: tests/mutants/E305_separation_fails.gate:151:1: The separation `refunding_and_auditing` does not hold: the same principal is allowed both `refund_order` and `export_refunds`
+   151 | separate refunding_and_auditing
+  = The principal: User holding clerk and auditor (suspended: no).
+  = Example of `refund_order`: User holding clerk and auditor (suspended: no), Order (status: paid), amount: 1GBP to 50GBP, refund_band: within_limit, in_period: yes, business_day: no; allowed by `clerks_refund_within_their_limit`.
+  = Example of `export_refunds`: User holding auditor (suspended: no), RefundRecord; allowed by `auditors_export_refunds`.
+  = Add a forbid that keeps whoever is allowed one from the other, or narrow a permit.

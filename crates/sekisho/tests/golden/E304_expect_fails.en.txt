@@ -1,0 +1,4 @@
+error[E304]: tests/mutants/E304_expect_fails.gate:147:1: The expectation `managers_refund_in_period` does not hold: 144 of the 192 combinations it picks are denied
+   147 | expect allow managers_refund_in_period
+  = For example: User holding manager (suspended: yes), Order (status: paid), amount: 1GBP to 50GBP, refund_band: within_limit, in_period: yes, business_day: no; denied by `suspended_staff_do_nothing`.
+  = Fix the policies, or the expectation if it says more than is meant.

@@ -1,0 +1,3 @@
+error[E004]: tests/mutants/E004_tab.gate:8:1: The indentation has a tab; indent with spaces
+     8 | 	description "Answers customers"
+  = How wide a tab is depends on the editor, so whether the lines line up cannot be told.

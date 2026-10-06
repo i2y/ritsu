@@ -1,0 +1,3 @@
+error[E008]: tests/mutants/E008_sekishoの型.gate:25:13: The type name `Role` is one Cedar or sekisho uses already
+    25 | resource 注文(Role)
+  = `Role` and `Workflow` are the types sekisho declares for the roles and the workflows.

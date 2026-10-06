@@ -1,0 +1,4 @@
+error[E304]: tests/mutants/E304_成り立たない期待.gate:147:1: The expectation `責任者は期間内に返金できる` does not hold: 144 of the 192 combinations it picks are denied
+   147 | expect allow 責任者は期間内に返金できる
+  = For example: 職員 holding 責任者 (停止中: yes), 注文 (状態: 支払済), 金額: 1GBP to 50GBP, 返金の区分: 上限まで, 期間内: yes, 営業日: no; denied by `停止中の職員は何もできない`.
+  = Fix the policies, or the expectation if it says more than is meant.

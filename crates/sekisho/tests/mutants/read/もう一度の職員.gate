@@ -1,0 +1,6 @@
+gate もう一度の職員(staff_again_ja) v1
+description "職員.gate と同じ役割を、もう一度宣言する"
+namespace ShopJa
+
+role 見習い(trainee)
+  description "仕事を覚えている。二度目の宣言"

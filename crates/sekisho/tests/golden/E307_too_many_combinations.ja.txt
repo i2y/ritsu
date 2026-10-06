@@ -1,0 +1,4 @@
+エラー[E307]: tests/mutants/E307_too_many_combinations.gate:27:1: action `read_order` の組み合わせは 268,435,456 通りで、予算の 100,000,000 通りを超えます。この action は確かめず、何も生成しません
+    27 | action read_order
+  = 数を増やしているもの：principal.x1（4 通り）、principal.x2（4 通り）、principal.x3（4 通り）、principal.x4（4 通り）、principal.x5（4 通り）、principal.x6（4 通り）、principal.x7（4 通り）、principal.x8（4 通り）、principal.x9（4 通り）、principal.x10（4 通り）、principal.x11（4 通り）、principal.x12（4 通り）、principal.x13（4 通り）、principal.x14（4 通り）。
+  = 条件が読む値を減らすか（読む属性、比べる定数）、型を分けるか、`--budget` で予算を上げてください。

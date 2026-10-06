@@ -1,0 +1,14 @@
+warning[W303]: tests/walk/undecided/W303_undecided.gate:19:1: Cannot decide whether anyone is allowed `refund_order`
+    19 | action refund_order
+  = A rule could not say what its output comes to over the values in question, and no concrete input was found that gives it.
+warning[W303]: tests/walk/undecided/W303_undecided.gate:28:1: Cannot decide whether the permit `clerks_refund_within_their_limit` applies to any combination
+    28 | permit clerks_refund_within_their_limit
+  = A rule could not say what its output comes to over the values in question, and no concrete input was found that gives it.
+
+警告[W303]: tests/walk/undecided/W303_undecided.gate:19:1: `refund_order` を許される principal がいるかどうかを決められません
+    19 | action refund_order
+  = 規則が、問われた範囲で出力がとりうる値を正確に言えず、その値になる具体的な入力も見つかりませんでした。
+警告[W303]: tests/walk/undecided/W303_undecided.gate:28:1: permit `clerks_refund_within_their_limit` が当てはまる組み合わせがあるかどうかを決められません
+    28 | permit clerks_refund_within_their_limit
+  = 規則が、問われた範囲で出力がとりうる値を正確に言えず、その値になる具体的な入力も見つかりませんでした。
+

@@ -1,0 +1,4 @@
+error[E306]: tests/mutants/E306_canにないaction.gate:18:1: The role `係` is allowed `返金する`, which its `can` line does not list
+    18 |   can 注文を見る
+  = For example: 職員 holding 係 (停止中: no), 注文 (状態: 支払済), 金額: 1GBP to 50GBP, 返金の区分: 上限まで, 期間内: yes, 営業日: no; allowed by `係は上限まで返金できる`.
+  = Add `返金する` to `can`, or narrow the permit that allows it.

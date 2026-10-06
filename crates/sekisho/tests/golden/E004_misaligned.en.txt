@@ -1,0 +1,2 @@
+error[E004]: tests/mutants/E004_misaligned.gate:13:4: The indentation does not line up (2 spaces for the lines of the block, 3 here); only `attributes`, `input` and `context` take lines indented further
+    13 |    includes clerk

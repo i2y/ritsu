@@ -1,0 +1,46 @@
+gate tenants v1
+description "Documents of tenants: the owner reads, and so does a member of the document's team or of its department, within the tenant"
+
+enum department = sales | support
+
+principal User
+  description "A member of a tenant"
+  attributes
+    tenant     : Tenant
+    department : department
+
+resource Tenant
+  description "A tenant of the service"
+
+resource Team
+  description "A team of a tenant"
+
+resource Doc
+  description "A document"
+  attributes
+    tenant     : Tenant
+    team       : Team
+    owner      : User
+    department : department
+
+action read_doc
+  description "Read a document"
+  principal User
+  resource Doc
+
+permit owners_read
+  description "The owner reads the document"
+  action read_doc
+  when resource.owner is principal
+
+permit team_reads_within_the_tenant
+  description "A member of the document's team reads it, within the tenant"
+  action read_doc
+  when principal in resource.team
+  when resource.tenant is principal.tenant
+
+permit department_reads_within_the_tenant
+  description "Whoever is of the document's department reads it, within the tenant"
+  action read_doc
+  when principal.department is resource.department
+  when resource.tenant is principal.tenant

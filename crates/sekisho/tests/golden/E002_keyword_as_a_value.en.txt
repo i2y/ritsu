@@ -1,0 +1,3 @@
+error[E002]: tests/mutants/E002_keyword_as_a_value.gate:5:28: `any` is a keyword of sekisho, and can be neither a name nor an alias
+     5 | enum order_status = paid | any | refunded
+  = The words conditions, computed values and types are written with cannot be names (and, or, not, in, is, principal, resource, workflow, true, false, any, today, bool, date, number, rate): a condition could be read two ways. Choose another name.

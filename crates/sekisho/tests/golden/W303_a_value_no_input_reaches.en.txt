@@ -1,0 +1,4 @@
+warning[W303]: tests/mutants/W303_a_value_no_input_reaches.gate:31:1: Cannot decide whether the permit `halves_read` applies to any combination
+    31 | permit halves_read
+  = A rule could not say what its output comes to over the values in question, and no concrete input was found that gives it.
+tests/mutants/W303_a_value_no_input_reaches.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 0 expectations, 0 separations

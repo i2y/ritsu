@@ -1,0 +1,3 @@
+error[E102]: tests/mutants/E102_真偽と値.gate:74:25: `principal.停止中` is true or false (bool), which does not compare with `はい`
+    74 |   when principal.停止中 is はい
+  = True or false is written `when principal.停止中` or `unless principal.停止中`.

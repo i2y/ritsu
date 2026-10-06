@@ -1,0 +1,18 @@
+combinations: view_order 18, refund_order 1056, export_refunds 4; 1078 in all
+permit staff_view_orders: allows 7 combinations, 7 of them alone
+permit customers_view_their_orders: allows 1 combinations, 1 of them alone
+permit clerks_refund_within_their_limit: allows 36 combinations, 12 of them alone
+permit managers_refund_in_period: allows 48 combinations, 24 of them alone
+permit managers_refund_late_on_business_days: allows 24 combinations, 24 of them alone
+permit returns_refunds_returned_orders: allows 4 combinations, 4 of them alone
+permit auditors_export_refunds: allows 1 combinations, 1 of them alone
+forbid no_second_refund: holds on 264 combinations, and turns 112 that a permit allows into a deny
+forbid auditors_do_not_refund: holds on 512 combinations, and turns 224 that a permit allows into a deny
+forbid suspended_staff_do_nothing: holds on 522 combinations, and turns 232 that a permit allows into a deny
+expect deny clerks_never_refund_over_their_limit: holds on all 128
+expect deny nothing_refunded_twice: holds on all 264
+expect allow managers_refund_in_period: holds on all 48
+separate refund_order, export_refunds: holds
+role clerk: can ["refund_order", "view_order"]
+role manager: can ["refund_order", "view_order"]
+role auditor: can ["export_refunds", "view_order"]
