@@ -86,6 +86,21 @@ fn java_str(s: &str) -> String {
     format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
+/// Text a rule holds, made safe in a Java comment (ritsu's DESIGN 9.2): on one line, since a `\r`
+/// the lexer leaves in a string would end a `//` comment, and with its backslashes doubled, since
+/// javac reads a `\uXXXX` in a comment before it reads the comment (JLS 3.3), and a `\u000a` in a
+/// name would end the comment and make the rest Java.
+fn jc(s: &str) -> String {
+    ritsu_emit::header::for_unicode_comment(&ritsu_emit::header::one_line(s))
+}
+
+/// `"<name>"` and what follows it in a record (`:`, `:[`), as a Java string literal: the name
+/// written as JSON first, so a `\` in it reads back as itself, then as Java, so its backslashes
+/// are doubled and javac reads no `\uXXXX` in it.
+fn json_key(name: &str, after: &str) -> String {
+    java_str(&format!("{}{after}", crate::json::quote(name)))
+}
+
 /// Append `L` to every integer literal, and only to those.
 ///
 /// A literal wider than int is a compile error in Java without the suffix, and a tariff in
@@ -395,7 +410,7 @@ impl<'a> Gen<'a> {
     fn java_doc_ty(&self, ty: &Ty) -> String {
         match ty {
             Ty::Enum(_) | Ty::Bool | Ty::Str | Ty::Opt(_) => self.java_ty(ty),
-            _ => format!("long  // {ty}"),
+            _ => format!("long  // {}", jc(&ty.to_string())),
         }
     }
 
@@ -491,11 +506,14 @@ impl<'a> Gen<'a> {
     /// The module: one class, one file, no package and no build file.
     pub fn java(&self) -> String {
         let cls = self.java_class();
-        let mut o = self.header("//");
+        // Java reads a `\uXXXX` in a comment before it reads the comment (JLS 3.3), so a `\u000a`
+        // in a cited path or URL would end the head's comment; the backslashes are doubled to make
+        // any such escape inert (ritsu's DESIGN 9.2).
+        let mut o = ritsu_emit::header::for_unicode_comment(&self.header("//"));
         o.push_str("\nimport java.util.ArrayList;\nimport java.util.List;\n\n");
         o.push_str(&format!(
             "/** {} */\npublic final class {cls} {{\n    private {cls}() {{\n    }}\n\n",
-            tr!("規則 {} v{}", "Rule {} v{}", self.f.name.text, self.f.version)
+            jc(&tr!("規則 {} v{}", "Rule {} v{}", self.f.name.text, self.f.version))
         ));
 
         // Enums. Each constant carries the source name, which is also the wire value
@@ -508,7 +526,7 @@ impl<'a> Gen<'a> {
             emitted.push(ascii.clone());
             let Some(vals) = self.c.enums.get(jp) else { continue };
             let ty = java_class(ascii);
-            o.push_str(&format!("    /** {jp} */\n    public enum {ty} {{\n"));
+            o.push_str(&format!("    /** {} */\n    public enum {ty} {{\n", jc(jp)));
             let cs: Vec<String> = vals
                 .iter()
                 .map(|v| {
@@ -594,7 +612,7 @@ impl<'a> Gen<'a> {
             };
             o.push_str(&format!(
                 "    /** {} */\n    private static final List<{ety}> {} = List.of({});\n\n",
-                g.name.text,
+                jc(&g.name.text),
                 self.java_group(&g.name.text),
                 ms.join(", ")
             ));
@@ -690,7 +708,7 @@ impl<'a> Gen<'a> {
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
             let val = self.java_value(&name.text, &self.ty_of(&fold.verdict));
-            body.push_str(&format!("        if ({v} == {val}) {{  // {}\n", name.text));
+            body.push_str(&format!("        if ({v} == {val}) {{  // {}\n", jc(&name.text)));
             match arm {
                 Arm::Next => body.push_str("            // next\n"),
                 Arm::Stop(None) => body.push_str("            break;\n"),
@@ -782,7 +800,7 @@ impl<'a> Gen<'a> {
         for d in self.counts() {
             let v = local(&d.column.text);
             if d.kind == crate::ast::AggKind::Sum {
-                body.push_str(&format!("        {} += {v};  // {}\n", java_name(&self.ident(&d.name.text)), d.name.text));
+                body.push_str(&format!("        {} += {v};  // {}\n", java_name(&self.ident(&d.name.text)), jc(&d.name.text)));
                 continue;
             }
             let test = match self.count_member(d) {
@@ -792,7 +810,7 @@ impl<'a> Gen<'a> {
             };
             body.push_str(&format!(
                 "        if ({test}) {{  // {}\n            {} += 1;\n        }}\n",
-                d.name.text,
+                jc(&d.name.text),
                 java_name(&self.ident(&d.name.text))
             ));
         }
@@ -847,7 +865,7 @@ impl<'a> Gen<'a> {
                 .collect();
             o.push_str(&format!(
                 "    /** {} */\n    public record Element({}) {{\n    }}\n\n",
-                tr!("{} の一件", "one of {}", el.name.text),
+                jc(&tr!("{} の一件", "one of {}", el.name.text)),
                 fs.join(", ")
             ));
         }
@@ -910,7 +928,7 @@ impl<'a> Gen<'a> {
             args.join(", ")
         ));
 
-        o.push_str(&format!("    /** {} */\n", traced_doc(&self.f.name.text, &self.f.version)));
+        o.push_str(&format!("    /** {} */\n", jc(&traced_doc(&self.f.name.text, &self.f.version))));
         o.push_str(&format!("    public static Traced {traced}({}) {{\n", params.join(", ")));
 
         // Entry guards (§8.5). The declared types already refuse a value of the wrong kind,
@@ -966,7 +984,7 @@ impl<'a> Gen<'a> {
                         o.push_str(&format!(
                             "        long {raw} = {};  // {}\n",
                             java_expr(unparen(&res.text)),
-                            tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
+                            jc(&tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty))
                         ));
                         format!("{}({raw}, {grid_i}L) / {}L", java_round_fn(m), res.scale / os)
                     } else {
@@ -990,7 +1008,7 @@ impl<'a> Gen<'a> {
     }
 
     fn java_table(&self, t: &Table, local: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let mut o = format!("        // {}\n", self.table_head(t));
+        let mut o = format!("        // {}\n", jc(&self.table_head(t)));
         // Java wants the variable to exist before the branches assign it. The last arm
         // throws, so the compiler can see that every path assigns it exactly once.
         for oc in &t.outputs {
@@ -1013,7 +1031,7 @@ impl<'a> Gen<'a> {
             let cond = if conds.is_empty() { "true".into() } else { conds.join(" && ") };
             let kw = if ri == 0 { "if" } else { "} else if" };
             let cells: Vec<String> = row.cells.iter().map(cell_src).chain(row.outs.iter().map(out_src)).collect();
-            o.push_str(&format!("        {kw} ({cond}) {{  // {}\n", self.row_head(t, ri, &cells.join(" | "))));
+            o.push_str(&format!("        {kw} ({cond}) {{  // {}\n", jc(&self.row_head(t, ri, &cells.join(" | ")))));
             for (oi, oc) in t.outputs.iter().enumerate() {
                 let v = match row.outs.get(oi) {
                     Some(OutCell::Lit(Lit::Num(n))) => {
@@ -1141,7 +1159,7 @@ impl<'a> Gen<'a> {
         let (v_ins, v_obs, v_rows, v_head) =
             (java_name(&self.temp("ins")), java_name(&self.temp("obs")), java_name(&self.temp("rows")), java_name(&self.temp("head")));
         let field = |(jp, e, w): &(String, String, Wire)| {
-            format!("            \"\\\"{jp}\\\":\" + {}", Self::java_wire(e, w))
+            format!("            {} + {}", json_key(jp, ":"), Self::java_wire(e, w))
         };
         // The sequence goes in first (§15.56).
         let mut parts: Vec<String> = Vec::new();
@@ -1154,8 +1172,8 @@ impl<'a> Gen<'a> {
                 .map(|fd| {
                     let ty = self.ty_of(&fd.name.text);
                     format!(
-                        "\"\\\"{}\\\":\" + {}",
-                        fd.name.text,
+                        "{} + {}",
+                        json_key(&fd.name.text, ":"),
                         Self::java_wire(&format!("{e}.{}()", java_name(&pub_name(&fd.name))), &wire_of(&ty))
                     )
                 })
@@ -1167,8 +1185,8 @@ impl<'a> Gen<'a> {
                 inner.join(" + \",\" + ")
             ));
             parts.push(format!(
-                "            \"\\\"{}\\\":[\" + String.join(\",\", {v_els}) + \"]\"",
-                el.name.text
+                "            {} + String.join(\",\", {v_els}) + \"]\"",
+                json_key(&el.name.text, ":[")
             ));
         }
         parts.extend(ins.iter().map(field));

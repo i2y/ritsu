@@ -60,11 +60,13 @@ fn the_generated_line() {
 #[test]
 fn what_a_source_says_stays_in_its_comment() {
     let breaks = "a\nb\rc\u{85}d\u{2028}e\u{2029}f";
-    assert_eq!(header::one_line(breaks), "a\\nb\\rc\\u{85}d\\u{2028}e\\u{2029}f");
+    // each break is written `U+XXXX`: no `\` and no `\u`, so it reads the same in every target and
+    // is safe where a `\uXXXX` in a comment is read (Java, Scala 2)
+    assert_eq!(header::one_line(breaks), "aU+000AbU+000DcU+0085dU+2028eU+2029f");
     assert_eq!(header::one_line("rules/送料.rule"), "rules/送料.rule");
     let s = header::Source { path: "rules/pickup\nprint('ran') #.rule", kind: "rule", name: "pickup", version: "1", sha256: "0123456789abcdef" };
-    assert_eq!(s.line().get(ritsu_base::text::Lang::En), "Source: rules/pickup\\nprint('ran') #.rule (rule pickup v1, sha256:0123456789abcdef)");
-    assert_eq!(header::Comment::Hash.line("one\ntwo"), "# one\\ntwo\n");
+    assert_eq!(s.line().get(ritsu_base::text::Lang::En), "Source: rules/pickupU+000Aprint('ran') #.rule (rule pickup v1, sha256:0123456789abcdef)");
+    assert_eq!(header::Comment::Hash.line("one\ntwo"), "# oneU+000Atwo\n");
     // a description of several lines: a comment on each, `\r\n` one break, an empty line a bare mark
     assert_eq!(header::Comment::Slashes.lines("order v1: An order.\nIt ships."), "// order v1: An order.\n// It ships.\n");
     assert_eq!(header::Comment::Hash.lines("a\r\nb\rc\u{85}d\u{2028}e\u{2029}f\n\ng"), "# a\n# b\n# c\n# d\n# e\n# f\n#\n# g\n");
@@ -75,4 +77,29 @@ fn what_a_source_says_stays_in_its_comment() {
             assert!(!line.contains(header::LINE_BREAKS), "{line:?} holds a line break");
         }
     }
+}
+
+/// A comment of a target that reads `\uXXXX` before the comment (Java, Scala 2): a line break is
+/// `U+XXXX`, which holds no `\` and no `\u`, and the backslashes the text itself holds are doubled,
+/// so no `u` follows an even run of `\` and no escape (`\u000a` → a break; `\u{…}` → a stop) begins.
+#[test]
+fn a_comment_safe_where_unicode_escapes_are_read() {
+    // the six characters `\`, `u`, `0`, `0`, `0`, `a`: a line break to Java, inert once doubled
+    let cited = "https://example.com/x\\u000a\u{2028}y";
+    let line = header::for_unicode_comment(&header::one_line(cited));
+    assert_eq!(line, "https://example.com/x\\\\u000aU+2028y");
+    assert!(!line.contains('\u{2028}'), "no raw line break is left");
+    // a `\` that is followed by `u` begins an escape only when an even number of `\` stands before
+    // it (Java 3.3); every such `\` here has an odd count before it, so none begins one
+    let cs: Vec<char> = line.chars().collect();
+    for i in 0..cs.len() {
+        if cs[i] == '\\' && cs.get(i + 1) == Some(&'u') {
+            let before = cs[..i].iter().rev().take_while(|x| **x == '\\').count();
+            assert!(before % 2 == 1, "the `\\` before the `u` at {i} has {before} backslashes before it (even), and would begin an escape");
+        }
+    }
+    // doubling leaves the `u` after each run of `\` preceded by an odd count
+    assert_eq!(header::for_unicode_comment("a\\ub\\\\uc"), "a\\\\ub\\\\\\\\uc");
+    // text with no backslash is unchanged
+    assert_eq!(header::for_unicode_comment("rules/送料.rule"), "rules/送料.rule");
 }

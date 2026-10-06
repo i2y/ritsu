@@ -67,24 +67,41 @@ impl Source<'_> {
 /// a line of JavaScript and TypeScript, and all three one of YAML 1.1.
 pub const LINE_BREAKS: [char; 5] = ['\n', '\r', '\u{85}', '\u{2028}', '\u{2029}'];
 
-/// `text` on one line, each of [`LINE_BREAKS`] written as its escape (`\n`, `\r`, `\u{2028}`, …).
-/// Text a source file holds (a file's name, a path or a URL it cites) goes into a comment of one
-/// line; a break in it would end the comment, and what follows would be a line of the generated
-/// code that no check of the source has seen (DESIGN 9.2).
+/// `text` on one line, each of [`LINE_BREAKS`] written `U+XXXX` (`U+000A`, `U+2028`, …). Text a
+/// source file holds (a file's name, a path or a URL it cites) goes into a comment of one line; a
+/// break in it would end the comment, and what follows would be a line of the generated code that
+/// no check of the source has seen (DESIGN 9.2).
+///
+/// The form holds no `\` and no `\u`, so it is the same in every target and safe where a `\uXXXX`
+/// in a comment is read before the comment is (Java, Scala 2): the earlier `\u{XXXX}` was a
+/// malformed escape there and stopped the compiler. A literal `\uXXXX` already in `text` is left
+/// as it is here; a target that reads it in a comment takes the line through [`for_unicode_comment`].
 pub fn one_line(text: &str) -> std::borrow::Cow<'_, str> {
     if !text.contains(LINE_BREAKS) {
         return std::borrow::Cow::Borrowed(text);
     }
     let mut s = String::with_capacity(text.len() + 8);
     for c in text.chars() {
-        match c {
-            '\n' => s.push_str("\\n"),
-            '\r' => s.push_str("\\r"),
-            c if LINE_BREAKS.contains(&c) => s.push_str(&format!("\\u{{{:x}}}", c as u32)),
-            c => s.push(c),
+        if LINE_BREAKS.contains(&c) {
+            s.push_str(&format!("U+{:04X}", c as u32));
+        } else {
+            s.push(c);
         }
     }
     std::borrow::Cow::Owned(s)
+}
+
+/// `text` made safe in a comment of a target that reads a Unicode escape (`\uXXXX`) before it
+/// recognises the comment — Java (JLS 3.3) and Scala 2 — by doubling every `\`. Such a target
+/// translates `\uXXXX` anywhere in the source, a comment included, so a `\u000a` in a cited path
+/// or URL would become a line break that ends the comment, and the code after it would be text no
+/// check has seen. A `\` begins an escape only when an even number of `\` stands before it, so
+/// doubling leaves the `u` after every run of `\` preceded by an odd count, and no escape begins.
+/// [`one_line`] has already put the line breaks as `U+XXXX`, which holds no `\`, so this touches
+/// only the backslashes the source text itself holds. Every other target the generators of ritsu
+/// write leaves a comment's bytes alone and needs none of this.
+pub fn for_unicode_comment(text: &str) -> String {
+    text.replace('\\', "\\\\")
 }
 
 /// The name of a file at `path` (a path as the person gave it), which a language's own command

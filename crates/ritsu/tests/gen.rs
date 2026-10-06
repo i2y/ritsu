@@ -475,7 +475,7 @@ fn every_file_says_what_wrote_it_and_what_it_is_made_from() {
 }
 
 /// The head names the file a part is made from as its path, which may hold a line break: Unix lets
-/// a file's name have one. The head writes it as `\n` (ritsu-emit's `one_line`), so the rest of the
+/// a file's name have one. The head writes it as `U+000A` (ritsu-emit's `one_line`), so the rest of the
 /// name stays in the comment. Written as it was, the rest of this name was a line of the package's
 /// Python, a statement before everything else in the module (DESIGN 9.2).
 #[test]
@@ -492,7 +492,7 @@ fn a_files_name_stays_in_the_head() {
     for target in ["typescript", "python", "go"] {
         for f in files(&out.join(target)) {
             for line in read(&out.join(target).join(&f)).lines().filter(|l| l.contains("print('ran')")) {
-                assert!(line.starts_with("// Source: rules/pickup\\nprint('ran') #.rule (") || line.starts_with("# Source: rules/pickup\\nprint('ran') #.rule ("), "{target}/{f}: {line}");
+                assert!(line.starts_with("// Source: rules/pickupU+000Aprint('ran') #.rule (") || line.starts_with("# Source: rules/pickupU+000Aprint('ran') #.rule ("), "{target}/{f}: {line}");
                 seen += 1;
             }
         }
