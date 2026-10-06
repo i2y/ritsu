@@ -1140,14 +1140,14 @@ OpenSpec の仕様（要件とシナリオ）と変更の提案を、yuen と ge
   5. sakai の `build`：文書の `$ref` から、生成したコードどうしの import を許す（sakai の DESIGN 7.1 の表の最後の行。いまは proto の import だけから作る）。
   6. 根の README（英日）の sakai の段落に、OpenAPI と AsyncAPI の文書を足した（2026-10-06 に作者が確かめた）。
 
-**脆弱性の検査**（vuln の担当）：ritsu 自身の依存の監査（DESIGN 3.6）と、生成器がソースの文字列をコメントやスクリプトの外に出さない直し（9.2）を作った。ritsu を使う人のための脆弱性の検査は、2026-10-06 に、ritsu の地図と契約から見える脆弱性を言う言語の検査にすると決めた（使う人のプロジェクトの依存を調べるものではない）。DESIGN 15 章の提案のうち、秘密の値、平文の通信、認証の無い操作、外へ出すデータの境界の四つである。ritsu 自身の依存の監査は、その検査とは別のものとして残した。
+**脆弱性の検査**（vuln の担当）：ritsu 自身の依存の監査（DESIGN 3.6）と、生成器がソースの文字列をコメントやスクリプトの外に出さない直し（9.2）を作った。ritsu を使う人のための脆弱性の検査は、2026-10-06 に、ritsu の地図と契約から見える脆弱性を言う言語の検査にすると決めた（使う人のプロジェクトの依存を調べるものではない）。秘密の値、平文の通信、認証の無い操作、外へ出すデータの境界の四つで、同じ日の昼に作った（7.12、DESIGN 16 章）。ritsu 自身の依存の監査は、その検査とは別のものとして残した。
 
 残したこと：
 
 - `audit.yml` を GitHub で走らせること（push してから）。走らせて確かめるのは、Linux のバイナリが取れること、`cargo-deny --locked check` と osv-scanner がランナーで通ること、`release.yml` から呼べること。
 - yuen の `tools/requirements.txt` を、依存まで固定したロックファイルにすること（いまは prov と reqif の二つの名前だけ）。
 - dandori の、ほかのコメントに入る文と、Argo の注釈の U+0085・U+2028・U+2029（dandori の DESIGN 7 章）。
-- 秘密の値、外へ出すデータの境界、平文の通信の検査（上の提案）。
+- 秘密の値、外へ出すデータの境界、平文の通信の検査：作った（7.12、DESIGN 16 章）。
 
 作者が決めたこと（2026-10-06 の朝）：
 
@@ -1167,7 +1167,7 @@ OpenSpec の仕様（要件とシナリオ）と変更の提案を、yuen と ge
 
 ### 7.12 認可とセキュリティの検査（2026-10-06 の昼）
 
-作者は 2026-10-06 の朝に、認可を二つの形で ritsu に入れると決めた。標準の Cedar のポリシーとスキーマを ritsu が読むことと、Cedar を生成する八つ目の言語 sekisho（`.gate`。rulec の規則と koyomi の日付を許可の条件に使う）である。あわせて、ritsu を使う人のための言語のセキュリティの検査（DESIGN 15 章の提案の四つ）を作る。この節に、担当ごとの記録を足していく。
+作者は 2026-10-06 の朝に、認可を二つの形で ritsu に入れると決めた。標準の Cedar のポリシーとスキーマを ritsu が読むことと、Cedar を生成する八つ目の言語 sekisho（`.gate`。rulec の規則と koyomi の日付を許可の条件に使う）である。あわせて、ritsu を使う人のための言語のセキュリティの検査（DESIGN 16 章）を作る。この節に、担当ごとの記録を足していく。
 
 **Cedar の読み手と書き手**（cedar-reader の担当）
 
@@ -1176,4 +1176,38 @@ OpenSpec の仕様（要件とシナリオ）と変更の提案を、yuen と ge
 - 残したこと：JSON の形のポリシーとテンプレートのリンクを読むこと、エンティティとリクエストの JSON、スキーマの名前の解決（DESIGN 4.18 の「まだやっていないこと」）。言語をまたぐ確かめ（公開する操作と action、ワークフローの最小権限、yuen の要件とポリシー）は、この部品の上に別の項目として作る。
 - Cedar の版を上げるときは、新しい CLI で `expected.sh` を走らせて答えを取り直し、テストが落ちたところを直す。
 
+**言語のセキュリティの検査**（sec-base、sec-dandori、sec-langs の担当）
 
+ritsu を使う人のプロジェクトのファイルから見える、セキュリティの誤りを言う検査を、三人の担当が並べて作った（DESIGN 16 章）。検査は五つで、コードは、どの台帳でも同じ検査を指す 9xx の帯に置いた。鍵の形の値（W901。七つの言語と ritsu）、暗号化しない通信（W902。dandori と sakai）、認証の指定の無い公開の操作（W903。sakai）、プラットフォームの履歴に残る秘密の値（W904。dandori）、秘密の値を外へ送ること（dandori の E906、ritsu の E905・W905。言語をまたぐ検査の X14）である。どれもネットワークを使わない。
+
+- **sec-base**：土台の `ritsu_base::secrets`（鍵の形の検出と、見せる行の鍵を伏せる `mask`）・`urls`・`marks`（DESIGN 4.19）、ritsu-proto の `extend` と `Protos::redaction`、口の型（`Flows::sends` の型と空を返す既定の実装、新しい口 `Maps`）と `Joined::maps`。sakai の W901・W902・W903 と、`Maps` の答え（`tests/maps.rs`）。webshop の例の三つの OpenAPI の文書に、ベアラートークンの方式とルートの `security` を足した。sakai の書き出し（CML、`build` の設定の頭、`doc` の Markdown）に入る `.ctx` の文字列と地図のパスを、コメントや行の中に収めた。ritsu-emit の `one_line` が行を終える文字を `U+XXXX` で書き、rulec の Java の頭を `for_unicode_comment` に通すようにした（DESIGN 9.2）。sakai の DESIGN 16 章、README、スキル、`docs/codes.md`。
+- **sec-dandori**：`secret`・`plaintext`・`discloses`・`history encrypted` の構文（予約語の表には足さない）、印の読み取り（`.flow` の `secret`、`.proto` の `debug_redact`、OpenAPI の三つ）と、変数ごとのたどり方、W901・W902・W904・E906、E007 と Argo の E050。`history encrypted` のフローでは、Temporal の TypeScript・Python・Go の生成コードが、ペイロードのコーデックを型で要るようにし、失敗の文とスタックトレースも符号化する（宣言の無いフローの生成物は一バイトも変えない）。Temporal の dev server で、コーデックの無いクライアントで読んだ履歴に、入力の値も失敗の文も平文で残らないことを、三つの SDK で確かめた。`Flows::sends` の答え。例 `examples/payout`（英語と日本語。どのプラットフォームでも、シナリオを参照インタプリタと突き合わせた）と、問い合わせの例の Temporal 版の `plaintext`。dandori の DESIGN 1.18、README、サイトの「Secrets」のページと診断の表、スキル。
+- **sec-langs**：rulec・koyomi・chobo・geas・yuen の W901 と、各言語の DESIGN・README・スキル・`docs/codes.md`。ritsu-cross の契約の文書の W901（`src/secrets.rs`）と X14（E905・W905。`src/egress.rs`）、台帳の再現、`skills/ritsu` のコードの表。chobo・geas・rulec が診断に引く行の鍵を伏せること。geas の `check --json` がいつも `diagnostics` を出すこと。yuen の書き出しと geas の下書きのテスト（直すところは無かった）と、`dandori doc` と `rulec doc` の Markdown の `<` のエスケープ（DESIGN 16 章の頭）。
+
+突き合わせ：替える前と後のバイナリを、例とテストの材料の全部にかけ、変わったのが、新しい材料と例と、意図して直したもの（webshop の W903 が消えたこと、問い合わせの例に `plaintext` を書き足したこと、W902 が出る dandori の三つの材料）だけであることを確かめた（DESIGN 16.10）。dandori の重いテストは、例 `payout` のシナリオを七つのプラットフォームと LocalStack で参照インタプリタと突き合わせるものと、暗号化した履歴を Temporal で確かめるものを一つずつ回し、どれも SKIP なしで通った。
+
+残したこと：
+
+- DESIGN 16.12 の項目。
+- ritsu のサイトの頭のページ（`website/docs/index.md` と `website/docs-ja/index.md`）に、根の README の「Security checks」（「セキュリティの検査」）の節を足すこと。サイトの頭のページは README の節を並べた形だが、この節はまだ無い。
+- rulec の名前に `\` があると、ASCII の別名の無い名前は生成物の識別子にそのまま入り、どの出力先でも生成物が通らない（止まるほうに倒れるので、外へ出る穴ではない）。`\` を名前に書けなくする（字句の決まりと診断）か、ASCII の別名を求めるかを決める。TypeScript の、列挙に無い値のエラーの文（テンプレートリテラル）も同じ決めで直す。
+- HTML を開きうる `<` のエスケープ（`md_prose`）が、dandori・rulec・sakai の三つにある。ritsu-base の `docpage` に一つにまとめる。
+- dandori の生成物で前からあった問題：サービスを実装するフローの Python が `mypy --strict` を通らない（`start` に TypedDict を渡すところ）。Go のサービスのクライアントが、`RPC` を付けた名前がすでにあるかを確かめない（`go vet` が redeclared と言う）。同じサービスにメソッドとメッセージで同じ名前があると、protoc は止めるが ritsu-proto は通す。どれも、直すと暗号化の無いフローの生成物が変わる。
+
+決めたこと：
+
+- `Maps` は、sakai の検査の段 1・2（構文、名前、パスと、属し方）だけで答える。段 3 から後は、どのファイルがどのコンテキストに属するかを変えない（DESIGN 16.9）。
+- webshop の例で `security: []` を付けたのは、受注の `createOrder`（アカウントの無い客の注文）。注文の状態を ID だけでだれでも読める形は、例として勧めにくい（DESIGN 16.11）。
+- 土台の `Diag::source` が見せる行の鍵は、`secrets::mask` で伏せる。chobo・geas・rulec・dandori も、自分の診断の型で同じにした（DESIGN 16.3）。
+- W901 は、鍵のある行を引用しない。どの診断でも原文の行を引く dandori は、伏せた行を引く（DESIGN 16.3）。
+- 生成物の頭は、行を終える五つの文字を `U+XXXX` で書く。rulec の Java は、頭と本文のコメントのバックスラッシュを二つにし（`for_unicode_comment`）、記録の JSON のキーを JSON の文字列から作る（DESIGN 9.2）。
+- Markdown のエスケープは、HTML を開きうる `<` だけにした。`<=60cm`、`R&D` のような文を、元の文のまま読めるようにするためである（DESIGN 16 章の頭）。
+- geas の `check --json` は、`diagnostics` をいつも出す（鍵の無い仕様では `[]`）。`snap` は鍵を調べないので出さない。
+- geas の `.geas/` の journal とベースラインには、鍵が残る（実行したことの記録なので伏せない）。
+- `connect` のタスクの引数と結果にも、`.proto` の印が効く（DESIGN 16.6）。
+- `Flows::sends` は、dandori の検査を通るフローにだけ答える（DESIGN 16.9）。
+- `history encrypted` で生成コードが増やす名前（Go の `EncryptedClient`、`Dial`、`CodecDataConverter`、`CodecFailureConverter` など）が、サービスのメソッドやメッセージ、Go の型の名前と重なるときは、E006 で止めず、生成する側で名前を変える（TypeScript は `Rpc`、Python は `_rpc`、Go は `RPC` か `_` を付ける）。生成する名前のほうが避けるという、dandori のもとからの決まり（dandori の DESIGN 1.14、1.15）に合わせた。`.proto` の名前は利用者が変えられないことが多く、E006 にすると、そのサービスでは暗号化を宣言できなくなる。
+- ブラウザで試すページの例に `payout` を足し、`projects.json` と `ritsu.wasm` を作り直した。
+- sakai の参照の口は、公表された言語の `openapi "…"`・`asyncapi "…"` の文書も返す。ritsu-cross の W901 が、地図だけが読む文書の鍵も言う（DESIGN 16.3）。
+- `.github/secret_scanning.yml` を置き、`paths-ignore` で、偽の鍵を書いた材料と、生成する codes のページを外す（DESIGN 16.10）。
+- 契約の文書の W901 は、`ritsu check` だけに出す（DESIGN 16.1）。E905 と E906 はエラーにする（DESIGN 16.2）。

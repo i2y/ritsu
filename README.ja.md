@@ -321,6 +321,34 @@ ritsu check: ファイル 2 個（rulec 1、dandori 1）。検査を通らない
 - rulec、dandori、chobo で一つの型になったお金と単位
 - yuen は表、日付、主張、タスクを一つずつハッシュで固定し、sakai はすべての言語の参照を行番号つきで確かめる
 
+## セキュリティの検査
+
+各言語の検査は、セキュリティの誤りも探します。ファイルに直に書いた鍵、暗号化しない通信、認証の指定が無い操作、契約が秘密と印を付けた値をワークフローが履歴に残したり外へ送ったりすることです。どれもネットワークを使わず、何も実行しません。依存の脆弱性をデータベースで調べるものではなく、プロジェクトのファイルに書いてあることを読みます。
+
+| コード | 見つけるもの | 出るところ |
+|---|---|---|
+| W901 | プロバイダーが形を決めている鍵（AWS、GitHub、Slack、Stripe、OpenAI、Anthropic、Google、PEM の秘密鍵）を、ファイルに書いていること。診断は種類と接頭辞と長さだけを出し、鍵そのものは出しません | 各言語の `check`（自分のファイル）。プロジェクトの `.proto` と、`.flow`・`.rule`・地図の公表された言語が参照する文書は `ritsu check` |
+| W902 | このマシンの外への、暗号化しない通信 | `dandori check`（タスクが呼ぶ URL）、`sakai check`（地図の OpenAPI と AsyncAPI の文書のサーバー） |
+| W903 | 公表された言語の操作やチャネルの文書に、`security` が無いこと | `sakai check` |
+| W904 | プラットフォームが実行の履歴に残す秘密の値（入力、出力、引数、結果） | `dandori check` |
+| E906 | プロジェクトの外（モデルのプロバイダー、Jev、URL だけで書いた相手、AWS のサービス）へ送る秘密の値 | `dandori check` |
+| E905、W905 | 地図の外のファイルや、印を付けたコンテキストと地図の上で関係の無いコンテキストへ送る秘密の値。地図が sakai の検査を通らず、送り先が地図のどこかを決められないこと | `ritsu check` |
+
+値が秘密になるのは、契約が印を付けたとき（`.proto` の `debug_redact`、OpenAPI のスキーマの `x-data-classification`・`x-sensitive-data`・`format: password`）と、`.flow` が型のあとに `secret` と書いたときです。dandori は、その値が入るすべての変数を追います。次の例は、dandori のテストにある、例 `crates/dandori/examples/payout` を変えたものです。売り手への知らせを下書きするモデルに、口座の名義を読ませています。
+
+```console
+$ cd crates/dandori/tests/fixtures/security
+$ dandori check E906_payout_holder.flow --lang ja
+…
+エラー[E906]: E906_payout_holder.flow:41:1: タスク `draft_notice` が、秘密の値 `account.holder` をプロジェクトの外の OpenAI に送ります
+    41 |   let notice = draft_notice(amount: amount, payout_id: paid.payoutId, holder: account.holder)
+  = 印は ../../../examples/payout/specs/payout.proto:35 の `debug_redact = true` です。
+  = 参照か、相手に要るものだけを送ってください。そこへ送ることを意図しているなら、タスクの下に `discloses holder "<理由>"` と書いてください。
+…
+```
+
+意図は、それが関わるもののすぐそばに書きます。書いてあれば、検査はそれに従います。テスト用の鍵には同じ行のコメントに `ritsu: test secret`、平文の通信には `.flow` の URL を書いたところに `plaintext "<理由>"`（文書ならサーバーに `x-ritsu-plaintext`）、だれでも呼べる操作には `security: []`、自分の持つ鍵で履歴を暗号化しているワークフローには `history encrypted`（dandori が生成する Temporal のコードは、ペイロードのコーデックを要るようになります）、送ると決めたタスクには `discloses <引数> "<理由>"` と書きます。
+
 ## 人のためのページ
 
 コードが実現すべきものを理解し、確かめたい人（業務の担当者、経理や法務、運用する人、コードをレビューする開発者）のためのページも、同じファイルから英語か日本語で作れます。書かれたことを読み、自分の知っていることと照らし合わせられます。チームで規則を承認する決まりがあるなら、その承認にもこのページが使えます。

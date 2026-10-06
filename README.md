@@ -363,6 +363,47 @@ them:
 - yuen pins each table, date, claim and task one by one, and sakai checks every reference in
   every language, with its line.
 
+## Security checks
+
+The languages also read their files for what leaves a secret or a service exposed: a key written
+into a file, a connection that is not encrypted, an operation with no authentication, a value a
+contract marks secret that a workflow keeps in its history or sends away. None of it uses the
+network or runs anything, and none of it looks dependencies up in a vulnerability database: it
+reads what the project says.
+
+| Code | What it finds | Where it shows |
+|---|---|---|
+| W901 | a key in the shape its provider gives it (AWS, GitHub, Slack, Stripe, OpenAI, Anthropic, Google, a PEM private key) written in a file, shown by its kind, prefix and length, never the key | each language's `check`, in its own files; `ritsu check`, in the project's `.proto` files and the documents a `.flow`, a `.rule` or a map's published language points at |
+| W902 | a connection that is not encrypted, to a host that is not this machine | `dandori check`, for the URLs a task calls; `sakai check`, for the servers of a map's OpenAPI and AsyncAPI documents |
+| W903 | an operation or a channel of a published language whose document has no `security` | `sakai check` |
+| W904 | a secret the platform keeps in the history of a run: an input, an output, an argument, an answer | `dandori check` |
+| E906 | a secret sent outside the project: to a model's provider, Jev, a host named by its URL alone, an AWS service | `dandori check` |
+| E905, W905 | a secret sent to a file outside the map, or to a context the map does not relate to the one that marked it; or, with a map that does not pass sakai's check, where it goes cannot be decided | `ritsu check` |
+
+A value is secret where a contract marks it (`debug_redact` in a `.proto`; `x-data-classification`,
+`x-sensitive-data` or `format: password` in an OpenAPI schema) or where a `.flow` writes `secret`
+after its type, and dandori follows it through every variable it goes into. Here a variant of the
+example `crates/dandori/examples/payout`, from dandori's tests, has the model that drafts the
+seller's notice read the name the bank account is held in:
+
+```console
+$ cd crates/dandori/tests/fixtures/security
+$ dandori check E906_payout_holder.flow
+…
+error[E906]: E906_payout_holder.flow:41:1: the task `draft_notice` sends the secret `account.holder` to OpenAI, outside the project
+    41 |   let notice = draft_notice(amount: amount, payout_id: paid.payoutId, holder: account.holder)
+  = The mark is `debug_redact = true` at ../../../examples/payout/specs/payout.proto:35.
+  = Send a reference or only what the other side needs. If sending it there is intended, write `discloses holder "<why>"` under the task.
+…
+```
+
+What is meant is written beside what it is about, and the check takes it at its word:
+`ritsu: test secret` in a comment on the line of a key for tests, `plaintext "<why>"` where a
+`.flow` writes the URL, `x-ritsu-plaintext` in a server of a document, `security: []` on an
+operation open to anyone, `history encrypted` under a workflow whose history is encrypted with a
+key you hold (the Temporal code dandori generates for it then requires a payload codec), and
+`discloses <parameter> "<why>"` under a task that is meant to send what it is given.
+
 ## Pages for people
 
 The same files give pages, in English or Japanese, for the people who need to understand what the

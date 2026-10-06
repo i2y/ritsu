@@ -14,7 +14,7 @@ ritsu（バイナリ。CLI。ritsu-wasm はブラウザで動かすもの。LSP 
  └── ritsu-project  プロジェクトの読み込み、名前の解決、口のつなぎ（6 章）
       ├── rulec  dandori  koyomi  chobo  geas  yuen  sakai     言語のクレート（互いに依存しない）
       └── 土台の層
-           ├── ritsu-base    診断、二つの言語の文、診断の台帳、CLI の表、ハッシュ、名指しとパス、出典、doc の枠、JSON、YAML、Cedar
+           ├── ritsu-base    診断、二つの言語の文、診断の台帳、CLI の表、ハッシュ、名指しとパス、出典、doc の枠、JSON、YAML、Cedar、鍵の形、URL、秘密の印
            ├── ritsu-units   単位の型（5 章）
            ├── ritsu-ports   口：言語のあいだで渡すものの型と、問いの形（3.2）
            ├── ritsu-proto   .proto の読み手
@@ -54,7 +54,7 @@ dandori を作ったときの前提の一つ、「rulec の CLI の出力だけ�
 | 一つにする | 別々に保つ |
 |---|---|
 | リポジトリ（Cargo のワークスペース）と、バージョンとリリース | 言語の名前、字句、構文、キーワード、拡張子 |
-| 土台：診断と `--lang ja`、二つの言語の文、診断の台帳と `explain`、CLI の表、ハッシュ、出典の固定と改正の検知、名指しとパス、doc のページの枠、JSON、YAML（JSON と行き来できる YAML 1.2）、Cedar のポリシーとスキーマ | 各言語の検査と参照インタプリタ |
+| 土台：診断と `--lang ja`、二つの言語の文、診断の台帳と `explain`、CLI の表、ハッシュ、出典の固定と改正の検知、名指しとパス、doc のページの枠、JSON、YAML（JSON と行き来できる YAML 1.2）、Cedar のポリシーとスキーマ、セキュリティの検査が使う決まり（鍵の形、URL、秘密の印。4.19） | 各言語の検査と参照インタプリタ |
 | 単位の型 | ページを読んで理解し確かめる人に見せるページの中身 |
 | `.proto` の読み手、生成先の言語ごとの書き出しの共通部分 | 生成するコードの形（rulec の表の一行が一つの分岐になる形など） |
 | プロジェクトの読み込みと名前の解決 | 各言語の README、DESIGN.md、PLAN.md、スキル、例 |
@@ -288,7 +288,8 @@ E の最初の部分で、三つの言語がほかの言語を読めないとき
 | `References` | 七つ全部 | sakai、yuen | 参照（行、先の名指し、参照の仕方）。6.4 |
 | `Sources` | rulec、koyomi | yuen | ファイルが宣言して保存している出典（法令の ID と時点と条ごとの固定、文書のパスと url と固定）。検査を通るファイルにだけ答える。D.7 で足した（下の段落） |
 | 索引（`Index`） | （口ではなく、`Items` と `References` の答えを持つもの） | yuen、sakai、ritsu-cross | 各言語の `Items` と `References` の答えをファイルごとに一度だけ尋ねて持ち、名指しで引く。E.1 で足した（6.4） |
-| `Flows` | dandori | ritsu-cross | 検査を通るフローが、規則・koyomi の日付・chobo の振替を呼ぶところと、渡す値がどこから来うるか、期限のある仮押さえを確定か取消をするまでの長さ。E.4 と E.5 で足した（下の段落） |
+| `Flows` | dandori | ritsu-cross | 検査を通るフローが、規則・koyomi の日付・chobo の振替を呼ぶところと、渡す値がどこから来うるか、期限のある仮押さえを確定か取消をするまでの長さ。E.4 と E.5 で足した（下の段落）。秘密の値をプロジェクトの中の成果物へ送る呼び出し（`sends`。2026-10-06 に足した。16.8）：呼び出しの行、タスクか規則、送る先のファイル（OpenAPI の文書、`.proto`、Connect の規則、子の `.flow`、帳簿、日付のファイル。dandori が届くパス）、引数ごとの秘密の値（フローの書き方、印のファイルと行と印）、`discloses` の引数と理由 |
+| `Maps` | sakai | ritsu-cross | 地図のコンテキストと関係、ファイルがどのコンテキストに属するか。sakai の検査の段 1 と段 2（構文、名前、パスと、属し方）だけで答える。2026-10-06 に足した（16.8、16.9） |
 | `Undecided` | ritsu-cross（`ritsu_cross::UndecidedCalls`） | dandori | フローの規則の呼び出しごとに、X2 が決められなかった前提（呼び出しの行、規則のファイル、前提）。dandori の生成したコードが、ワークフローを走らせたときに確かめる（7.4 の 3）。E.5 で足した |
 
 どの問いの答えも、P5 の三つのどれかになる。値を尋ねる問い（koyomi の日付がとりうる値の集合など）は、その値か、決められない理由かの二つになる。
@@ -318,8 +319,9 @@ pub trait Sources { fn sources(..) -> Vec<Source>; }   // Source { name, line, k
 pub trait Items { fn items(&self, root: &Path, file: &str) -> Result<Vec<Item>, Vec<Said>>; }       // Item { naming, lines, text }
 pub trait References { fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>>; } // Reference { line, target, how }
 pub struct Ports { rules: Rc<dyn Rules>, dates: Rc<dyn Dates>, books: Rc<dyn Books> }   // フローを読む三つの口。ritsu-project の Joined::ports が作る
-pub trait Flows { fn rule_calls(.., rules) -> Vec<RuleCall>; fn crossings(.., ports: &Ports) -> Crossings; }   // dandori が答える。E.4 と E.5
+pub trait Flows { fn rule_calls(.., rules) -> Vec<RuleCall>; fn crossings(.., ports: &Ports) -> Crossings; fn sends(.., ports: &Ports) -> Vec<Send>; }   // dandori が答える。E.4 と E.5、sends は 16.8
 pub trait Undecided { fn preconditions(&self, file: &Path) -> Vec<UndecidedPrecondition>; }   // ritsu-cross が答え、dandori が受け取る。E.5
+pub trait Maps { fn map(&self, root: &Path, map: &str) -> Result<Option<MapFacts>, Vec<Said>>; fn context_of(&self, root: &Path, map: &str, file: &str) -> Result<Option<String>, Vec<Said>>; }   // sakai が答え、ritsu-cross が受け取る。16.8
 ```
 
 `RuleFacts` は、dandori の `src/rulec.rs` がいま三つの JSON から組み立てている `RuleInfo`（入力と出力の `Column`、列挙、`Machine`、前提、`walks`）を、単位の型（5 章）の付いた形にしたものである。D の段階では、例のすべての規則について、型の付いた呼び出しで得た事実と、いまの JSON から読んだ事実が同じになることを一度確かめてから、JSON の読み手を消す。D の二つ目の部分でそうした。rulec のコーパスの 50 本と dandori の 14 本の規則で、dandori が読む 1,939 の項目を突き合わせ、違った 7 か所は、どれも JSON の側の読み違えだった（規則がたどる並びを入力に数えて文字列と読んだこと 5 本、無いことがある入力を文字列と読んだこと 2 本）。ステートマシンの状態の軸（口では `Option`）は、dandori も `Option` で持ち、None は「表が状態を読まないので、どの状態からも同じ行が当てはまる」と読む（前の dandori は null を最初の軸と読み違えていた）。くわしくは PLAN の D.3。
@@ -375,6 +377,8 @@ pub trait Undecided { fn preconditions(&self, file: &Path) -> Vec<UndecidedPreco
 ritsu-ports には、秒を最も大きな単位で書く `seconds_text`（`17 days 9 hours`、`17 日 9 時間`）と、日の番号を `YYYY-MM-DD` で書く `day_text` も置いた（dandori と ritsu-cross の文が使う。`ritsu_cross::borders::day_text` はこれを指す）。
 
 **E の二つ目の部分で足したもの**（PLAN の E.6）。`ritsu run` が帳簿の終わりを見せるために、`Ledger` に問いを二つ足した。`accounts` は `do` と `hold` が名指した勘定の全部（拒否された操作が名指した勘定も入る）とその残高、`holds` は仮押さえの全部といまの状態で、どちらも `chobo run` がシナリオの終わりに出すものと同じものを同じ順に返す（chobo の DESIGN 8 章）。
+
+**2026-10-06 に足したもの**（16 章のセキュリティの検査）。`Flows::sends` は、秘密の値をプロジェクトの中のファイルへ渡す呼び出しを返し、新しい口 `Maps` は、sakai の地図のコンテキストと関係と、ファイルがどのコンテキストに属するかを返す。ritsu-cross の X14 が二つを合わせ、秘密の値の送り先が地図の上で送ってよいところかを確かめる。どちらも、検査を通らないもの（フローか地図）には、その検査の診断を `Said` で返す。型と決まりは 16.9 に書いた。
 
 中のものの定義の文は、6.4 の表のとおりにした。rulec は `rulec fmt` が書く形の行、koyomi は `date … =` の塊の行と条件の行（コメントと前後の空白を除く）、chobo は yuen の DESIGN 3.2 の形の JSON（yuen の試作が計算したハッシュと同じになる）、geas は主張の塊の行、dandori はタスク・案件・レコードの宣言の塊の行（コメントと前後の空白を除き、文字列の外の続いた空白を一つにし、字下げは深さごとに空白二つに直す。dandori の DESIGN 0.3）である。表に無かった yuen は要件の端の中身（yuen の DESIGN 4.1）と出典の固定の行、sakai はコンテキストのファイルの行と語の塊の行にした。
 
@@ -681,6 +685,16 @@ YAML と JSON を、値ごとに行と列を持つ値（`yaml::Node`）に読む
 
 参照したものとバージョン（2026-10-06）：Cedar 4.13.0 のソース（文法の `cedar-policy-core/src/parser/grammar.lalrpop` と `cst_to_ast.rs`、JSON の形の `est/`、スキーマの `validator/cedar_schema/` と `validator/json_schema.rs`、フォーマッターの `cedar-policy-formatter/src/pprint/`、CLI の `cedar-policy-cli/src/command/`）、pretty 0.12.5（crates.io）、cedar-policy-cli 4.13.0 のリリースのバイナリ（<https://github.com/cedar-policy/cedar/releases/tag/cedar-policy-cli-v4.13.0>）、<https://docs.cedarpolicy.com/policies/syntax-grammar.html>、<https://docs.cedarpolicy.com/policies/json-format.html>、<https://docs.cedarpolicy.com/schema/json-schema.html>。
 
+### 4.19 鍵の形、URL、秘密の印（`ritsu_base::secrets`・`urls`・`marks`、2026-10-06）
+
+セキュリティの検査（16 章）が言語をまたいで同じ決まりを使うために、三つを土台に置いた。どれも、どの言語の意味も持たない（4.11）。
+
+- `secrets`：16.3 の表の九つの種類を、ファイルの全文（文字列もコメントも）から探し、行と列と、伏せた形（接頭辞と `…`、秘密鍵はその頭の行）と長さと、行に `ritsu: test secret` があるかを返す（`scan`）。正規表現のクレートは使わず、gitleaks の既定の規則の正規表現の意味を、接頭辞、文字の種類、長さ、前後の区切りで書いた（P9）。gitleaks の規則が前後を決めていない種類（GitHub のトークン、Slack のトークンと Incoming Webhook の URL）も、前後が英数字に続くものは鍵としない。`mask` は、テキストの中の鍵（テスト用の値も）を伏せた形に替える。診断が見せる行は、どの言語でもこれを通る。土台の `Diag::source` を使う koyomi、yuen、sakai、ritsu は土台の中で、自分の診断の型で行を見せる rulec、dandori、chobo、geas はそれぞれの中で通す。だから、どの診断も鍵を行ごと出さない（16.3）。
+- `urls`：URL のスキームとホスト（`scheme_and_host`）、ループバックか（`is_loopback`：`localhost`、`.localhost` で終わる名前、127.0.0.0/8、`::1`、`::ffff:127.0.0.1` のような IPv4 のループバックを表す IPv6 のアドレス）、暗号化しない通信か（`plaintext`：`http://` と `ws://` で、ループバックの外）、AsyncAPI の `protocol` の、暗号化して通信するプロトコルの名前（`encrypted_form`）。
+- `marks`：OpenAPI・AsyncAPI・JSON Schema のスキーマのプロパティが秘密の印を持つかを決める（`schema_mark`）。`x-data-classification` は `sensitivity` が `confidential` か `restricted` のとき（書かなければ `confidential`）、`x-sensitive-data` はあれば、`format: password` もあれば印にする。dandori（serde_json）と sakai（土台の YAML）が、自分の JSON から三つのキーワードを読んで渡す。
+
+`ritsu-proto` は `extend` を読むようにした（前は読み飛ばしていた）。トップレベルとメッセージの中の `extend` のフィールドを `ProtoFile::extensions` に入れ、メッセージの中で宣言したものはメッセージからの名前（`Holder.tag`）にする。フィールドとして読めない文は、前と同じく読み飛ばす。`Protos::redaction` は、フィールドが `debug_redact` の印を持つかを、直に書いたもの（`[debug_redact = true]`）と、`debug_redact` を付けた列挙の値をカスタムのオプションで付けたもの（`[(acme.v1.sensitivity) = PERSONAL]`）の両方で答える。オプションは、フィールドのファイルが見るファイル（自分、import するもの、それが `import public` するもの）の `extend google.protobuf.FieldOptions` から、protobuf の名前の決まり（フィールドのメッセージから外へ）で探し、列挙の型は `extend` を書いたところから探す。三つの読み手の golden（`tests/golden/` の三つ）は変わらない。
+
 
 ## 5. 単位の型
 
@@ -865,7 +879,7 @@ yuen と sakai は、名指しを自分で言語ごとに引くのをやめ、�
 
 検査の診断は、ritsu の台帳（`crates/ritsu-cross/src/codes.rs`）のコードで出す。言語ごとの台帳とは番号を分け、`ritsu explain <コード>` で引く。どの言語の診断かは、テキストでは見出しの括弧に（`error[ritsu E201]`）、JSON では `tool` に書く（8.3）。
 
-**E.3 で作った形**（PLAN の E.3）。台帳は ritsu-base の `ledger` で書き、番号を帯で分ける。E1xx はプロジェクトのファイルを ritsu が読むところ、E2xx は言語の境目の検査（7.2 の X1〜X7。E の二つ目の部分から）である。E の最初の部分で載せたのは、次の一つである。
+**E.3 で作った形**（PLAN の E.3）。台帳は ritsu-base の `ledger` で書き、番号を帯で分ける。E1xx はプロジェクトのファイルを ritsu が読むところ、E2xx は言語の境目の検査（7.2 の X1〜X7。E の二つ目の部分から）、9xx はセキュリティの検査（16 章。2026-10-06 から）である。E の最初の部分で載せたのは、次の一つである。
 
 | コード | いつ出るか |
 |---|---|
@@ -888,7 +902,15 @@ E.4 と E.5 で、言語の境目の検査のコードを載せた（E2xx がエ
 | E206 | 仮押さえを作ってから確定か取消をするまでの長さの下限が、有効期限以上である。帳簿はどの実行でもその呼び出しを `expired` で拒否する（X5）。注に、下限と、それを作る文を書く |
 | W206 | 仮押さえを作ってから確定か取消をするまでの長さが、有効期限の前にも後にもなりうる、または長さの上限が分からない（X5） |
 
-どのコードにも、英語の小さなプロジェクトの再現がある（E.4 で判定より先に載せた `Repro::Later` は、E.5 で無くなった）。X2 は返金の確認（`refund_check.rule`・`refund.flow`）、X3 の (a) は支払日を規則に渡す請求（`payment_terms.cal`・`batch.rule`・`billing.flow`）、X4 は催しに座席を割り当てるホール（`seats.rule`・`hall.book`・`booking.flow`）、X6 は支払日の一週間前の催促（`payment_terms.cal`・`reminders.cal`・`reminding.flow`）、X5 は支払日まで商品を押さえる請求（`weekdays.cal`・`payment_terms.cal`・`stock.book`・`invoice.flow`）。`crates/ritsu/tests/codes.rs` が全部を英語と日本語で走らせ、自分のコードが出ることを確かめる。
+2026-10-06 に、セキュリティの検査のコードを載せた（16 章）。番号は、どの言語の台帳でも同じ検査を指す 9xx の帯に置いた（16.2）。
+
+| コード | いつ出るか |
+|---|---|
+| W901 | 鍵の形の値が、プロジェクトの `.proto` か、言語が参照する契約の文書（`.json`・`.yaml`・`.yml`）に書いてある（16.3）。言語のファイルの鍵は、その言語の W901 |
+| E905 | フローが秘密の値を、地図の外か、印を付けたコンテキストと関係の無いコンテキストへ送る（X14、16.8） |
+| W905 | フローが秘密の値を送る先が地図のどこかを、決められない（X14、16.8） |
+
+どのコードにも、英語の小さなプロジェクトの再現がある（E.4 で判定より先に載せた `Repro::Later` は、E.5 で無くなった。X14 の二つも、判定より先に `Repro::Later` で載せ、`Flows::sends` と `Maps` が入ってから再現に替えた）。X2 は返金の確認（`refund_check.rule`・`refund.flow`）、X3 の (a) は支払日を規則に渡す請求（`payment_terms.cal`・`batch.rule`・`billing.flow`）、X4 は催しに座席を割り当てるホール（`seats.rule`・`hall.book`・`booking.flow`）、X6 は支払日の一週間前の催促（`payment_terms.cal`・`reminders.cal`・`reminding.flow`）、X5 は支払日まで商品を押さえる請求（`weekdays.cal`・`payment_terms.cal`・`stock.book`・`invoice.flow`）。W901 はコメントに偽の鍵を書いた `maps.proto`、E905 は Payments・Ordering・Notices の地図と、`debug_redact` の付いたカードの番号を Notices の API へ渡すフロー（`shop.ctx`・`contexts/*.ctx`・`card.proto`・`notices.json`・`checkout.flow`）、W905 は同じプロジェクトの地図が無いファイルを `use context` する形。`crates/ritsu/tests/codes.rs` が全部を英語と日本語で走らせ、自分のコードが出ることを確かめる。
 
 ritsu の台帳に X10（名指しの解決）のコードは無い。名指しを書いた言語が、自分のコードで言うからである（7.10）。どのコードも、再現（小さなプロジェクトのファイル）を持ち、`crates/ritsu/tests/codes.rs` がそれを一時ディレクトリに置いて `ritsu check .` を英語と日本語で走らせ、見出しが `[ritsu <コード>]` の診断が出ることを確かめる。`ritsu explain` は、ritsu-base の台帳の書き方で、テキスト、Markdown、JSON を出す。言語のコードを渡されたら、`ritsu <言語> explain` で引くように言って 2 で終わる。`crates/ritsu-cross/docs/codes.md` と `codes.ja.md` は `ritsu explain --all --format markdown` の出力そのもので、`crates/ritsu-cross/tests/codes.rs` がそれを確かめる。
 
@@ -909,6 +931,7 @@ ritsu の台帳に X10（名指しの解決）のコードは無い。名指し�
 | X11 | 同じ条のコピー | 同じ法令の同じ条を、規則、カレンダー、要件が同じ本文で保存している | 土台の出典 | rulec、koyomi、yuen | yuen の E107 | C〜D（土台の出典は C、yuen が借りた出典とコピーを比べるのは D.7） |
 | X12 | 一つの `.proto` の読み方 | 同じ `.proto` を、どの言語も同じに読む | `ritsu-proto` | rulec、dandori、sakai、yuen | 読めないファイルは ritsu の E101 と、読む言語のコード | C〜D（C.9、D.10） |
 | X13 | 処理系自身の依存 | ritsu のクレートの依存が 3.1 のとおり | sakai の地図、Cargo の依存 | ritsu のリポジトリ | sakai の E201 など（`ritsu check ritsu.ctx`）と `cargo xtask deps` | E.8 |
+| X14 | 秘密の値の行き先 | 契約が秘密と印を付けた値を、フローが、印のコンテキストと関係の無いコンテキストや地図の外へ送らない | dandori の送る値と印（`Flows::sends`）、sakai の地図（`Maps`） | dandori の、プロジェクトの中の成果物を呼ぶタスク | ritsu の E905、W905 | 2026-10-06（16.8） |
 
 ### 7.3 境目の単位（X1）
 
@@ -1232,7 +1255,7 @@ error[sakai E105]: billing/rules/billing_need.rule:5:1: The file billing/rules/b
 ritsu check: 21 files (rulec 4, koyomi 3, chobo 1, proto 5, dandori 2, sakai 6): 1 fail (2 errors); borders between the languages: 0 checked, 0 undecided
 ```
 
-要約は、言語ごとのファイルの数、結果、言語の境目の検査の数を言う。結果は、どれも通れば `all pass`（日本語は「どれも検査を通りました」）、通らないファイルがあればその数、確かめられなかったファイルがあればその数で、エラーと警告の数を括弧に添える。ファイルが通らないとは、そのファイルを場所とするエラーがあるか、ファイルを一つずつ確かめる言語（rulec、koyomi、chobo、geas、dandori）がそのファイルを通さなかった（geas の成り立たない主張など、コードの無いものも含む）ことである。境目の数は、言語をまたぐ検査（7 章）が確かめた境目と、そのうち決められなかったものである。E.4 で、X2（前提を呼び出しの場所で）と X3 の (b)（rulec の `range from koyomi`）が数に入り、E.5 で、`ritsu check` が dandori に日付の口と帳簿の口も渡すようになって（6.1。前は規則の口だけで、`use dates` と `use book` のあるフローは `ritsu check` でも E018 になっていた）、X3 の (a)、X4、X5、X6 が入った。テストのプロジェクト（`shop` と `通販`）は、フローが呼ぶ規則に前提も koyomi の範囲も無く、日付も帳簿も使わないので、どちらも 0 のままである（golden は変わらない）。dandori の例の `invoice` を `ritsu check` にかけると、W205 が二つ（`now` から来る日）と W206 が六つ（仮押さえを作るタスクに `timeout` が無い）出て、要約は `ritsu check: 8 files (koyomi 4, chobo 2, dandori 2): all pass (8 warnings); borders between the languages: 8 checked, 8 undecided` になる。これが正しい振る舞いで、`ritsu run` の担当のテスト（`crates/ritsu/tests/dandori.rs`）の期待は、取り込むときにこの 8 件に合わせた。日本語の要約は「ritsu check: ファイル 21 個（rulec 4、…）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 0 か所、決められない 0 か所」の形になる。
+要約は、言語ごとのファイルの数、結果、言語の境目の検査の数を言う。結果は、どれも通れば `all pass`（日本語は「どれも検査を通りました」）、通らないファイルがあればその数、確かめられなかったファイルがあればその数で、エラーと警告の数を括弧に添える。ファイルが通らないとは、そのファイルを場所とするエラーがあるか、ファイルを一つずつ確かめる言語（rulec、koyomi、chobo、geas、dandori）がそのファイルを通さなかった（geas の成り立たない主張など、コードの無いものも含む）ことである。境目の数は、言語をまたぐ検査（7 章）が確かめた境目と、そのうち決められなかったものである。E.4 で、X2（前提を呼び出しの場所で）と X3 の (b)（rulec の `range from koyomi`）が数に入り、E.5 で、`ritsu check` が dandori に日付の口と帳簿の口も渡すようになって（6.1。前は規則の口だけで、`use dates` と `use book` のあるフローは `ritsu check` でも E018 になっていた）、X3 の (a)、X4、X5、X6 が入った。テストのプロジェクト（`shop` と `通販`）は、フローが呼ぶ規則に前提も koyomi の範囲も無く、日付も帳簿も使わないので、どちらも 0 のままである（golden は変わらない）。2026-10-06 に、X14（16.8）も数に入った。フローが地図のコンテキストに属し、秘密の値をプロジェクトの中のファイルへ送る呼び出しごとに、境目を一つ数える（地図の無いプロジェクトでは数えない）。テストのプロジェクト四つ（`shop`、`通販`、`invoice`、`stockroom`）には秘密の値を送るフローが無いので、数は変わらない（替える前と後で確かめた）。dandori の例の `invoice` を `ritsu check` にかけると、W205 が二つ（`now` から来る日）と W206 が六つ（仮押さえを作るタスクに `timeout` が無い）出て、要約は `ritsu check: 8 files (koyomi 4, chobo 2, dandori 2): all pass (8 warnings); borders between the languages: 8 checked, 8 undecided` になる。これが正しい振る舞いで、`ritsu run` の担当のテスト（`crates/ritsu/tests/dandori.rs`）の期待は、取り込むときにこの 8 件に合わせた。日本語の要約は「ritsu check: ファイル 21 個（rulec 4、…）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 0 か所、決められない 0 か所」の形になる。
 
 JSON は一つのオブジェクトで、キーは `ritsu`（バージョン）、`root`（走らせたディレクトリから見たルート）、`ok`（exit 0 になるか）、`files`（ファイルごとの `tool`、ルートからの `file`、`ok`）、`diagnostics`、`borders`（境目の検査の `held`・`failed`・`undecided`）の順である。各言語の診断は、その言語の `check --format json` が書く形のまま入れ、その先頭に `tool` を置き、`file` をルートからの相対にする（言語の形に `file` が無ければ `tool` のすぐあとに足す）。rulec の診断は rulec の形（`v` が 2 の形）のままで、`title` や `column` は rulec の名前である。上の例では次のようになる（`crates/ritsu/tests/golden/check/shop-returned.json`。`…` は省いたところ）。境目の検査が数えたときの `borders` の三つの数は、`crates/ritsu/tests/cross.rs` がプロジェクトごとに確かめる（テキストは `tests/golden/cross/` の golden）。
 
@@ -1400,7 +1423,8 @@ E.2 で、入口を 8.1 の形にした（`ritsu check`、七つの全部の `ri
 - 二行目は `--lang ja` で `もと: <ファイル>（<種類の語> <名前> v<版>、sha256:<16 桁>）` になる（rulec と koyomi。chobo と dandori の生成物は英語だけ）。種類の語は、言語のファイルに書く語（`rule`・`dates`・`calendar`・`book`・`workflow`）である（rulec の日本語は前は `規則`）。三行目から下（rulec の `Applies:`・`Cites:`、koyomi の `Calendar:`・`Cites:`）は言語ごとのまま。
 - 元のファイルを持たないもの（chobo の Go の `runtime.go`、rulec の丸めのテスト、パッケージのインデックスのファイルと依存を書くファイル）は一行目だけ。パッケージそのものの部分の一行目の言語は `ritsu`。
 
-- **頭とコメントに書く文字列は、その中に収める（2026-10-06）。** 頭の `Source:` の行は、ファイルのパスをそのまま書いていた。Unix ではファイルの名前に改行を入れられ、名前の続きが生成したコードの行になった（`ritsu gen` で、`rules/` に `pickup` と改行と `print('ran') #.rule` の名前の規則を置くと、Python のモジュールの頭の次の行がその文になった）。dandori のワークフローの説明（`\n` を書ける）も、rulec の出典の URL とパス（U+2028 や `\r` を書ける）も、同じことが起きた。いまは、ritsu-emit の `header::one_line` が、行を終える五つの文字（`\n`、`\r`、U+0085、U+2028、U+2029）をエスケープにして一行に収め、`Source::line` と `Comment::line` がそれを通る。どこかの出力先がこの五つで行を終える（Python は `\r`、TypeScript と JavaScript は U+2028 と U+2029、YAML 1.1 は三つとも）。説明のように何行にもなってよい文は、`Comment::lines` が一行ずつコメントにする（dandori の DESIGN 4.7）。ページに埋め込むスクリプトは、ritsu-base の `docpage::script_text` が `</script` を `<\/script` にする（rulec の DESIGN §15.187。chobo と dandori は前から JSON の `</` を `<\/` にしていた）。確かめ方は、ritsu-emit の `tests/emit.rs`、dandori の `tests/comments.rs`、rulec の `tests/heads.rs`、ritsu の `tests/gen.rs` の `a_files_name_stays_in_the_head`。ふつうの入力の出力は変わらない。0.23.0 のリリースと、例とテストの材料を全部の生成器にかけた出力を比べ（dandori は 52 のフローを七つのプラットフォームで 2,149 ファイル、rulec はコーパスの 87 の規則を英語と日本語で 10,140 ファイル、koyomi は 21 の日付のファイルで 150 ファイル、chobo は 8 つの帳簿を七つの出力先で 72 ファイル、`ritsu gen` は三つのプロジェクトを帳簿の二つの置き場所で 410 ファイル）、違ったのは、9.3 の doc.go の二つだけだった。
+- **頭とコメントに書く文字列は、その中に収める（2026-10-06）。** 頭の `Source:` の行は、ファイルのパスをそのまま書いていた。Unix ではファイルの名前に改行を入れられ、名前の続きが生成したコードの行になった（`ritsu gen` で、`rules/` に `pickup` と改行と `print('ran') #.rule` の名前の規則を置くと、Python のモジュールの頭の次の行がその文になった）。dandori のワークフローの説明（`\n` を書ける）も、rulec の出典の URL とパス（U+2028 や `\r` を書ける）も、同じことが起きた。いまは、ritsu-emit の `header::one_line` が、行を終える五つの文字（`\n`、`\r`、U+0085、U+2028、U+2029）を `U+XXXX`（`U+000A`、`U+2028` など）にして一行に収め、`Source::line` と `Comment::line` がそれを通る。`U+XXXX` にしたのは、Java と Scala 2 がコメントの中でも `\uXXXX` を、ほかのどの処理より先に読むからである（JLS 3.3）。前の `\u{2028}` は javac を「不正な Unicode エスケープ」で止め、文字列がもともと持つ六文字の `\u000a` はコメントの中で改行になって外へ出た。`U+XXXX` は `\` も `\u` も含まないのでどの言語でも安全で、文字列がもともと持つ `\` は、Java を書く生成器（いまは rulec）が、頭を `header::for_unicode_comment` に通して二つにし、無害にする（`u` の前の `\` が偶数個のときだけエスケープが始まる決まりによる）。rulec の Java は、頭だけでなく、本文のコメント（表の名前、行のラベル、列挙の値、`starts_with` の文字列が入る、分岐の上と行の `//` と `/** … */`）も同じ関数に通し、記録の JSON のキーは、名前を JSON の文字列にしてから Java のリテラルにする。文字列リテラルは、前から `\` を `\\` にしていたので、`\u0022` でリテラルが閉じることは無かった。rulec の Java 以外の出力先と、koyomi・chobo・dandori の出力先は、コメントの中で `\uXXXX` を読まないので、二つにしない（Python、Ruby、PHP、JavaScript と TypeScript、Go、Swift で、コメントに六文字の `\u000a` と `\u{2028}` を入れて確かめた。Rust と SQL も、仕様上コメントで `\u` を読まない）。どこかの出力先がこの五つで行を終える（Python は `\r`、TypeScript と JavaScript は U+2028 と U+2029、YAML 1.1 は三つとも）。説明のように何行にもなってよい文は、`Comment::lines` が一行ずつコメントにする（dandori の DESIGN 4.7）。ページに埋め込むスクリプトは、ritsu-base の `docpage::script_text` が `</script` を `<\/script` にする（rulec の DESIGN §15.187。chobo と dandori は前から JSON の `</` を `<\/` にしていた）。確かめ方は、ritsu-emit の `tests/emit.rs`、dandori の `tests/comments.rs`、rulec の `tests/heads.rs`（`a_cited_address_does_not_break_the_java_head` と `rule_strings_stay_what_they_are_in_the_java` は、生成した Java を javac にかけ、後者は走らせて値を比べる）、ritsu の `tests/gen.rs` の `a_files_name_stays_in_the_head`。ふつうの入力の出力は変わらない。0.23.0 のリリースと、例とテストの材料を全部の生成器にかけた出力を比べ（dandori は 52 のフローを七つのプラットフォームで 2,149 ファイル、rulec はコーパスの 87 の規則を英語と日本語で 10,140 ファイル、koyomi は 21 の日付のファイルで 150 ファイル、chobo は 8 つの帳簿を七つの出力先で 72 ファイル、`ritsu gen` は三つのプロジェクトを帳簿の二つの置き場所で 410 ファイル）、違ったのは、9.3 の doc.go の二つだけだった。
+- **sakai の書き出し（2026-10-06）。** 同じ形で確かめた。CML の持ち主のコメントと、`build` の設定の頭の地図のパスを一行に収め（ArchUnit の Java では、`\u000a` を javac が改行として読むので、バックスラッシュも二つにする）、`doc` の Markdown の `\r` を空白にした。HTML と `api` は、もとからエスケープしていた（sakai の DESIGN 16.7）。yuen と geas の書き出し、`dandori doc` と `rulec doc` の Markdown は、16 章の頭に書いた。
 
 
 ### 9.3 一つの生成パッケージ（E）
@@ -1810,6 +1834,8 @@ git -C ~/ritsu remote remove rulec
 
 - **生成したパッケージに SBOM を書く**：9.3。
 - **CI で cargo-audit も走らせる、osv-scanner の依存の解決に任せる**：3.6。
+- **エントロピー（文字のばらつき）で、決まった形の無い鍵を探す**：ハッシュや ID や出典の固定に当たる。W901 は、プロバイダーが形を決めている鍵だけを探す（16.3）。
+- **地図の外の相手（モデルのプロバイダー、Jev）へ秘密の値を送ることも、言語をまたぐ検査で言う**：地図が要らない判定まで `ritsu check` だけのものになる。dandori の E906 にした（16.8）。
 
 
 ## 15. まだやらないこと
@@ -1829,11 +1855,22 @@ git -C ~/ritsu remote remove rulec
 - **`ritsu run` の時間で、並列のイテレーションの待ちを重ねて数えること**：参照インタプリタはイテレーションを一つずつ回すので、いまはイテレーションの中の待ちが足し合わさる。
 - **`ritsu run` の入力を、rulec の `vectors` から選ぶこと**（7.9 が書いた使い方）：いまはシナリオを人が書く。
 - **`ritsu gen --sbom`**：直接の依存と、生成したファイル（頭のハッシュ）を部品にした CycloneDX 1.7（9.3）。
-- **言語としての、セキュリティの検査**（下の「言語としての検査の提案」）。いまは、生成器が書き出す文字列を、それを書いたコメントや文字列の外に出さないことだけを確かめている（9.2）。
+- **言語としての、セキュリティの検査**は 16 章（2026-10-06 に作った）。その中でまだやらないことは 16.12 にある。
 
-**言語としての、セキュリティの検査（2026-10-06 に調べた）。** 七つの言語の成果物の中の、セキュリティにかかわる誤りを、言語の検査として足すかを調べた。作ったのは芯の一つで、残りは提案である。
 
-**作ったもの（芯）：検査を通ったファイルの文字列が、生成したコードのコメントや文字列の外に出ないこと。** ritsu の言語は、人が読んで確かめるのはソースのファイル（`.rule`、`.flow` など）で、生成したコードは「DO NOT EDIT」として読まない、という前提に立つ。その前提のもとでは、ソースの文字列が生成したコードの中でコードになることは、検査をすり抜ける道になる。四つが見つかり、直した（9.2、dandori の DESIGN 4.7、rulec の §15.187）。
+## 16. 言語としての、セキュリティの検査（2026-10-06）
+
+ritsu を使う人のプロジェクトの成果物から見える、セキュリティの誤りを言う。成果物とは、七つの言語のファイルと、プロジェクトが読む契約の文書（`.proto`、OpenAPI、AsyncAPI、JSON Schema、Smithy）である。ritsu 自身の依存の監査（3.6）とは別のもので、使う人のプロジェクトの依存の脆弱性（OSV などのデータベース）は調べない。どの検査もネットワークを使わず、実行時のことは見ない。
+
+確かめるのは次の五つである。
+
+1. 鍵の形の値を、ファイルに直に書いていること（W901）。
+2. このマシンの外（ループバックでない相手）へ、暗号化しない通信をすること（W902）。
+3. コンテキストが公開する OpenAPI の操作と AsyncAPI のチャネルに、認証の指定が無いこと（W903）。
+4. 契約が秘密と印を付けた値が、ワークフローの入力・出力・タスクの引数や結果として、プラットフォームの履歴に残ること（W904）。
+5. 秘密の値を、外のサービス（モデルのプロバイダー、Jev、URL だけで書いた相手、AWS のサービス）へ送ること（dandori の E906）、地図の外や、地図の上で印を付けたコンテキストと関係の無いコンテキストへ送ること（ritsu の E905・W905。言語をまたぐ検査の X14）。
+
+**前からあるもの（2026-10-06 の朝に作った）。** 検査を通ったファイルの文字列が、生成したコードのコメントや文字列の外に出ないこと（9.2）。ritsu の言語は、人が読んで確かめるのはソースのファイル（`.rule`、`.flow` など）で、生成したコードは「DO NOT EDIT」として読まない、という前提に立つ。その前提のもとでは、ソースの文字列が生成したコードの中でコードになることは、検査の抜け穴になる。次の四つが見つかり、直した（9.2、dandori の DESIGN 4.7、rulec の §15.187）。
 
 1. dandori のワークフローの `description` に `\n` を書くと、生成した TypeScript、Python、Go のコメントの外に、続きがコードの行として出た。TypeScript では、モジュールを読み込んだときに動く文になる。Argo の YAML では、`---` と別の文書（Pod）を書けて、`kubectl apply -f` がそれも作る。`dandori check` は通していた。
 2. ファイルの名前に改行があると、すべての生成器の頭の `Source:` の行の続きが、コードの行になった。
@@ -1842,10 +1879,682 @@ git -C ~/ritsu remote remove rulec
 
 Python と Go は、ファイルの先頭の `from __future__` や `package` より前に文が来るので、多くは構文の誤りで止まる。TypeScript と YAML と HTML では、そのまま動いた。
 
-**提案（作っていない）**：
+同じ日の昼に、残りの書き出しも同じ形のテスト（行を終える五つの文字と、`</script>`、`---`、`]]>` を入れた材料）で確かめた。
 
-- **秘密の値をソースに直に書くこと。** `.flow` の文字列（URL、ヘッダ、エージェントの設定）や `.rule` の文字列に、鍵の形の値（`AKIA…`、`sk-…`、`ghp_…`、`xoxb-…`、PEM の秘密鍵）があれば警告にする。言語の検査にする意味は、プラットフォームの側にある。Temporal はワークフローの入力とアクティビティの引数を履歴に平文で残し（ペイロードのコーデックを入れないかぎり）、Step Functions は実行の履歴に、Argo はパラメーター（UI と Pod の仕様）に残す。dandori に「秘密」の印（型か注釈）を足し、印の付いた値が、ワークフローの入力と出力、履歴に残るタスクの引数にならないこと（アクティビティの中で、参照から取りに行くこと）を確かめる形がよい。
-- **外へ出すデータの境界。** 個人の情報などの印をフィールドに付け、それが `http`・`agent`・`aws` のタスクで外のサービスへ出るところを、sakai のコンテキストが許す相手に限る。言語をまたぐ検査（7 章の X の番号）になる。
-- **平文の通信。** `agent` や `http` のタスクの `http://` の URL（localhost を除く）を警告にする。
-- **生成器のほかの出力。** dandori のコメントに入る、ほかの文（`for … in …` の式の表示、規則の前提の文、`.proto` のファイルの名前）、yuen の書き出し（ReqIF、PROV の XML）、sakai と geas のページ。同じ種類の誤りが無いかを、同じ形のテスト（行を終える五つの文字と、`</script>`、`---`、`]]>` を入れた材料）で確かめる。yuen、sakai、geas の出力は、まだ見ていない。
-- **`dandori doc` の Markdown。** 説明の文を、HTML のタグごとそのまま書く（`<img src=x onerror=…>` を書いた説明は、そのまま `notice.md` に出た）。GitHub は描くときにタグの危ないところを消すが、生の HTML を許すサイトの生成器に載せると動く。HTML の版（`--format html`）は、本文も、埋め込む JSON（`</` を `<\/` に）も、前からエスケープしている。Markdown でも `<`、`>`、`&` をエスケープするかを決める（rulec の Markdown の版と合わせて）。
+- sakai：CML の持ち主のコメントと、`build` の設定の頭の地図のパスを一行に収め、`doc` の Markdown の `\r` を空白にした（9.2、sakai の DESIGN 16.7）。HTML のページと `api` は、もとからエスケープしていた。
+- yuen の書き出し（ReqIF、PROV-N、PROV-JSON）と geas の下書き（`geas scenarios --draft`）：直すところは無く、確かめるテストだけを足した（`crates/yuen/tests/export_text.rs`、`crates/geas/tests/draft_text.rs`）。ReqIF は `&`・`<`・`>`・`\r` を文字参照にし、PROV-N は文字列の `"`・`\`・`\n`・`\r`・`\t` をエスケープしている。geas の下書きは、要件とシナリオの文を `#` のコメントに入れる。geas の字句は `\n` でしかコメントを終えないので、ほかの四つの文字はコメントの中にとどまる。
+- rulec の Java の生成物：Java はコメントの中でも Unicode のエスケープを読むので、頭の行を終える文字の書き方を替え、頭と本文のコメントの `\` を二つにし、記録の JSON のキーを JSON の文字列から作るようにした（9.2）。
+- `dandori doc`・`rulec doc`・`sakai doc` の Markdown：HTML として読まれうる `<`、つまり `<` のあとが英字・`/`・`!`・`?` のもの（タグ、閉じタグ、コメント、宣言、処理命令、自動リンクの始まり）だけを、コードスパンの外で `&lt;` にする。CommonMark と Python-Markdown（Zensical のもの）が生の HTML として読むのは、この形で始まるものだけである。`>` と `&` はそのまま書くので、`<=60cm`、`a > b`、`R&D` のような普通の文は、Markdown の元の文のまま読める（`&amp;` や `&gt;` が混ざらない）。コードスパンの中は、Markdown が文字参照を解かないので、手を付けない。dandori はワークフローの説明と `fail` の理由（終わり方の表のセル）を、rulec は規則の説明（人が読むページと、顧客向けのページ）と、準用する規則の説明を、これに通す。HTML の版は、どちらも前から全部をエスケープしている。いまの例とテストの材料には、説明に `<` を書いたものが無いので、生成物は一バイトも変わらない（`crates/dandori/tests/doc_text.rs`）。
+
+```
+description "Tells the customer, a > b and R&D. <img src=x onerror=alert(1)> <!-- c --> and `<b>` stay as they read"
+```
+
+は、`dandori doc` の Markdown の説明の段落で次のようになる。
+
+```
+Tells the customer, a > b and R&D. &lt;img src=x onerror=alert(1)> &lt;!-- c --> and `<b>` stay as they read
+```
+
+### 16.1 置き場所と、単体で使う人に届くか
+
+| 検査 | 置き場所 | `dandori check`・`sakai check` などを単体で使う人に |
+|---|---|---|
+| W901（鍵） | 検出は ritsu-base の `secrets`。言語のファイルは各言語の `check` が自分のファイルを調べる。契約の文書は ritsu-cross が調べる | 言語のファイルは届く。契約の文書は `ritsu check` だけ |
+| W902（平文） | dandori の `check`（タスクが実際に呼ぶ URL）と sakai の `check`（地図の文書のサーバー）。判定は ritsu-base の `urls` | 届く |
+| W903（認証） | sakai の `check` | 届く |
+| W904（履歴） | dandori の `check` | 届く |
+| E906（外のサービスへ） | dandori の `check` | 届く |
+| E905・W905（地図） | ritsu-cross（X14） | `ritsu check` だけ |
+
+**理由**：ファイル一つ、言語一つで決まることは、その言語の検査に置く。単体で使う人にも届き、`ritsu check` では言語の出力をそのまま並べる（8.3）ので、同じことが二度出ない。言語をまたいで初めて決まるのは、送る値の印が付いたコンテキストと、宛先のコンテキストの関係だけである。地図は sakai が、送ることは dandori が知っているので、ここだけを ritsu-cross に置く。
+
+契約の文書の鍵を ritsu-cross に置いたのは、文書がどの言語のソースでもないからである。同じ `.proto` を rulec と dandori と sakai が読むので、読む言語ごとに調べると、`ritsu check` で同じ鍵が三度出る。ritsu-cross は、プロジェクトの `.proto` を E101 で読むのと同じく、ファイルごとに一度だけ調べる。だから、単体の `dandori check` は `use proto` や `use openapi` の文書の鍵を言わない。単体で使う人にも届けるには、文書を読む言語が出し、`ritsu check` で重なるものを一つにする仕組みが要るが、`ritsu check` は言語の出力を読み直さない（8.3）。契約の文書の W901 は、`ritsu check` だけに出すと決めた。
+
+### 16.2 コード
+
+| コード | 重さ | 台帳 | いつ出るか |
+|---|---|---|---|
+| W901 | 警告 | 七つの言語、ritsu | 鍵の形の値が、ファイル（契約の文書を含む）に書いてある |
+| W902 | 警告 | dandori、sakai | このマシンの外へ、暗号化しない通信をする（dandori はタスクが呼ぶ URL、sakai は文書のサーバー） |
+| W903 | 警告 | sakai | 公表された言語の OpenAPI の操作、または AsyncAPI のチャネルが使うサーバーに、認証の指定が無い |
+| W904 | 警告 | dandori | 秘密の値が、ワークフローの入力・出力、呼び出しの引数や結果、`fail` の理由として、プラットフォームの履歴に残る |
+| E905 | エラー | ritsu | フローが、秘密の値を、地図の外のファイルか、印を付けたコンテキストと関係の無いコンテキストの成果物へ送る（X14） |
+| W905 | 警告 | ritsu | フローが秘密の値を送る先が地図のどこかを、決められない（X14） |
+| E906 | エラー | dandori | 秘密の値を、プロジェクトの外の相手（モデルのプロバイダー、Jev、URL だけで書いた相手、AWS のサービス）へ送る |
+
+**9xx の帯にしたこと。** どの台帳でも空いている帯で、セキュリティの検査をまとめて置く。一つの番号は一つの検査を指し、言語が違っても同じことを言う（`warning[rulec W901]` も `warning[dandori W901]` も鍵のこと）。使う人は、言語ごとの台帳を引かずに、番号で何の検査かが分かる。ritsu の X14 を、ほかの X と同じ E2xx にしなかったのも同じ理由である（E905 は、dandori の E906 と組で読む）。そのため、ritsu の台帳の帯の決まり（E1xx はファイル、E2xx は境目。7.1）に、9xx はセキュリティの検査、を足した。
+
+**警告とエラー。** W901〜W904 は、形から推すものである。鍵の形をしていてもテスト用の値のことがあり、平文でもサービスメッシュが守っていることがあり、認証を文書に書かずにゲートウェイで課すことがあり、履歴をカスタマー管理の鍵で暗号化していることがある。だから警告にして、意図を書けば消えるようにする（16.3〜16.7）。E905 と E906 は、書いたもの同士の食い違いである。契約を書いた人が「この値は秘密」と書き、フローを書いた人が意図を書かずにそれを外へ送っている。dandori の E014 が、範囲を書いた場所に範囲を外れうる値を渡すとエラーにするのと同じ考えで、エラーにする。
+
+エラーにすると、使う人が契約に印を足した日から、その値を送るフローは `dandori check` か `ritsu check` を通らなくなる。警告にすれば印を足すことは気軽になるが、送っていることに気づかないままになりうる。印は「この値を外へ出さない」という宣言なので、宣言を足したら、それを破る呼び出しを止めるほうを選んだ。取り込んだときに印を持つのは、新しい例 `payout`（どの検査も何も言わない形。16.11）と検査の材料だけで、前からある例とテストのプロジェクトは止まらない。
+
+### 16.3 鍵の形の値（W901）
+
+**検出の決まり**（ritsu-base の `secrets`。4.19）。gitleaks の既定の規則と、GitHub の secret scanning が検出する種類から、プロバイダーが接頭辞や形を決めていて、誤って当たることの少ないものを選んだ。正規表現のクレートは使わない（土台は std だけ。P9）ので、接頭辞、文字の種類、長さ、前後の区切りを手で書く。
+
+| 種類（英 / 日） | 形 | 元にした規則 |
+|---|---|---|
+| an AWS access key ID / AWS のアクセスキー ID | `AKIA`・`ASIA`・`ABIA`・`ACCA`（または `A3T` と英大文字か数字の 1 字）のあとに、`A`〜`Z` と `2`〜`7` が 16 字。前後は英数字でない | gitleaks `aws-access-token` |
+| a GitHub token / GitHub のトークン | `ghp_`・`gho_`・`ghu_`・`ghs_`・`ghr_` のあとに英数字 36 字。`github_pat_` のあとに英数字と `_` が 82 字 | gitleaks `github-pat` ほか |
+| a Slack token / Slack のトークン | `xoxb-`・`xoxp-`・`xoxe-`・`xapp-` で始まり、gitleaks の各規則の数字と英数字の並び | gitleaks `slack-bot-token` ほか |
+| a Slack incoming webhook URL / Slack の Incoming Webhook の URL | `hooks.slack.com/services/`（`workflows`・`triggers`）のあとに英数字と `+`・`/` が 43〜56 字 | gitleaks `slack-webhook-url` |
+| a Stripe secret key / Stripe のシークレットキー | `sk_` か `rk_` のあとに `test_`・`live_`・`prod_`、英数字 10〜99 字。後ろは引用符、空白、`;`、行の終わり | gitleaks `stripe-access-token` |
+| an OpenAI API key / OpenAI の API キー | `sk-proj-`・`sk-svcacct-`・`sk-admin-` か `sk-` で始まり、途中に `T3BlbkFJ` を持つ形 | gitleaks `openai-api-key` |
+| an Anthropic API key / Anthropic の API キー | `sk-ant-api03-` か `sk-ant-admin01-` のあとに英数字と `_`・`-` が 93 字、最後が `AA` | gitleaks `anthropic-api-key`、`anthropic-admin-api-key` |
+| a Google API key / Google の API キー | `AIza` のあとに英数字と `_`・`-` が 35 字 | gitleaks `gcp-api-key` |
+| a private key / 秘密鍵 | `-----BEGIN` と、`PRIVATE KEY-----`（`PRIVATE KEY BLOCK-----`）までの行のあとに、base64 の文字が 64 字以上（行をまたいでよい。文字列の中の `\n` は飛ばす） | gitleaks `private-key`、GitHub の非プロバイダーのパターン |
+
+- **調べるのはファイルの全文である。** 文字列の中だけでなく、コメントも調べる。コメントに残した鍵も、リポジトリを読める人に渡るからである。構文の誤りがあっても調べる（鍵は、ファイルが読めるかどうかに関係なくリポジトリにある）。
+- **前後の区切り。** gitleaks の規則にある区切り（AWS の `\b`、Stripe・OpenAI・Anthropic・Google の「後ろは引用符、空白、`;`、`\n`」）はそのまま書いた。規則に区切りが無い種類（GitHub、Slack、Webhook の URL）も、前後が英数字に続くものは鍵としない。そのため、Google の API キーが URL の `&` の前にあるとき（`?key=AIza…&q=…`）は、gitleaks と同じく見つけない。秘密鍵は、頭の行のあとの base64 を、行の終わり（文字列の中の `\n` も）と次の行の字下げと行の頭の `#`・`//` を飛ばして数え、行の中の空白で切る。頭の行のあとに文章が続いても秘密鍵とはしない。
+- **例の値は言わない。** AWS のアクセスキー ID が `EXAMPLE` で終わるもの（AWS の文書の例 `AKIAIOSFODNN7EXAMPLE`。gitleaks の規則の allowlist と同じ）と、接頭辞のあとが一つの文字の繰り返しのもの（`ghp_` と `x` が 36 字。`-` と `_` は数えない）は、例の値として言わない。gitleaks の各規則にあるエントロピーの下限は入れなかった（下の「捨てたもの」）。
+- **値は伏せて出す。** 診断には、種類と、接頭辞と `…` と、長さだけを出す（`AIza…`、39 文字。秘密鍵は `-----BEGIN RSA PRIVATE KEY-----` の行だけ）。鍵そのものを出すと、CI のログに鍵が残る。
+- **鍵のある行は引用しない。** 診断は、ふつうは原文の行を添える（rulec は行の枠、ほかは `<行> | <原文>`）。W901 はその行に鍵があるので、行を添えない。場所は見出しの `<ファイル>:<行>:<列>` と JSON の `line`・`col` が言う（rulec は `-->` の行と、JSON の `line`・`column`・`where`。`spans` は空）。chobo の JSON の `excerpt` も空にした。dandori だけは、どの診断でも原文の行を引いて見せる形なので、W901 でも行を引き、行の鍵を伏せた形に置き換えて見せる。
+- **ほかの診断の行も伏せる。** ほかの診断が鍵のある行を見せるときも、ritsu-base の `secrets::mask` が、行の鍵を（テスト用の値も）接頭辞と `…` に替える。土台の診断（`Diag::source`）を使う koyomi、yuen、sakai、ritsu はこれで伏せ、自分の診断の型で行を見せる rulec、dandori、chobo、geas も、行を見せるところで同じ関数を通す。rulec は `^` も伏せたあとの行で数え、chobo は JSON の `excerpt` も伏せる。geas は、診断の文と注、ここまでの実行の行、成り立たなかったチェックの文とプログラムの出力、`--json` の主張の `error` も伏せる。geas の `.geas/` の journal とベースラインは、実行したことの記録なので、伏せない。呼び出しの引数に鍵を書いた仕様や、鍵を出力するプログラムでは、そこに鍵が残る（geas の DESIGN の W901 の段落）。
+- **出すのは見つけた場所ごとに一つ**（行と列）。同じ値が二か所にあれば二つ出す。
+- **契約の文書**（ritsu-cross。`ritsu check` だけ。16.1）。プロジェクトの `.proto` と、言語の参照の口（`References`）が指す文書のうち拡張子が `.json`・`.yaml`・`.yml` のもの（dandori の `use openapi`・`use smithy`、rulec の `import jsonschema` と `shape … jsonschema`、sakai の地図の公表された言語の `openapi "…"`・`asyncapi "…"`）を、ファイルごとに一度だけ調べる。
+
+**意図の書き方。** テスト用の値は、同じ行のコメントに `ritsu: test secret` と書く（`.flow`・`.rule` などは `# ritsu: test secret`、`.proto` は `// ritsu: test secret`、YAML は `# ritsu: test secret`）。秘密鍵は `-----BEGIN` の行に書く。ritsu-base は、行の中にこの言葉があるかだけを見て、コメントの書き方は見ない。JSON の文書にはコメントが無いので、この書き方は使えない。JSON の文書の値は、例の値（`EXAMPLE` で終わる、一つの文字の繰り返し）に替える。
+
+```
+task find(q: string) -> Place
+  http GET "https://maps.example.com/v1/find?key=AIzaSy…"   # ritsu: test secret
+```
+
+**診断の文。** どの言語も同じ三つの注を持つ。dandori の材料 `tests/fixtures/security/W901_key_in_a_string.flow`（`http` の URL に偽の鍵）で、dandori は次のとおり言う（dandori の文は小文字で始まる。ほかの言語は `A Google API key is written here` と大文字で始め、行を引かない）。
+
+```
+warning[W901]: tests/fixtures/security/W901_key_in_a_string.flow:5:50: a Google API key is written here (AIza…, 39 characters)
+     5 |   http GET "https://maps.example.com/v1/find?key=AIza…"
+  = A key in a file reaches everyone who can read the repository, its history and its builds. Keep it where the code runs (an environment variable, the platform's connection or secret store) and read it from there.
+  = If this key is real, revoke it with Google first: taking it out of the file leaves it in the history of the repository.
+  = If it is a value for tests, write `ritsu: test secret` in a comment on the same line.
+```
+
+```
+警告[W901]: tests/fixtures/security/W901_key_in_a_string.flow:5:50: Google の API キーがここに書かれています（AIza…、39 文字）
+     5 |   http GET "https://maps.example.com/v1/find?key=AIza…"
+  = ファイルに書いた鍵は、リポジトリとその履歴とビルドを読めるすべての人に渡ります。鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください。
+  = 本物の鍵なら、まず Google で無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。
+  = テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。
+```
+
+秘密鍵（プロバイダーの無い種類）の二つ目の注は「本物の鍵なら、まず新しい鍵に替えて、古い鍵を使えないようにしてください。ファイルから消しても、リポジトリの履歴には残ります。」（"If this key is real, replace it with a new one first, and see that the old one is no longer accepted: taking it out of the file leaves it in the history of the repository."）である。
+
+契約の文書の W901 は、ritsu の台帳の再現（コメントに偽の鍵を書いた `maps.proto`）で、`ritsu check .` が次のとおり言う。三つ目の注が、文書のコメントの書き方（`.proto` は `//`、YAML は `#`）を言い、JSON の文書なら「JSON にはコメントが書けないので、例の値に替えてください」になる。
+
+```
+warning[ritsu W901]: maps.proto:5:56: A Google API key is written here (AIza…, 39 characters)
+  = A key in a file reaches everyone who can read the repository, its history and its builds. Keep it where the code runs (an environment variable, the platform's connection or secret store) and read it from there.
+  = If this key is real, revoke it with Google first: taking it out of the file leaves it in the history of the repository.
+  = If it is a value for tests, write `// ritsu: test secret` on the same line.
+ritsu check: 1 file (proto 1): all pass (1 warning); borders between the languages: 0 checked, 0 undecided
+```
+
+```
+警告[ritsu W901]: maps.proto:5:37: Google の API キーがここに書かれています（AIza…、39 文字）
+  = ファイルに書いた鍵は、リポジトリとその履歴とビルドを読めるすべての人に渡ります。鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください。
+  = 本物の鍵なら、まず Google で無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。
+  = テスト用の値なら、同じ行に `// ritsu: test secret` と書いてください。
+ritsu check: ファイル 1 個（proto 1）。どれも検査を通りました（警告 1 件）。言語の境目: 確かめた 0 か所、決められない 0 か所
+```
+
+`explain` の再現は、どの言語でも、その言語のいちばん小さいファイルに、偽の Google の API キー（16.10）を書いたものである。
+
+**捨てたもの**：
+
+- **エントロピー（文字のばらつき）で、決まった形の無い鍵を探すこと。** gitleaks の generic な規則はこれをするが、ハッシュ、ID、base64 の値に当たる。ritsu の言語のファイルには、ハッシュの固定（`sha256:…`）や出典の固定が多い。決まった形のものに絞る。
+- **gitleaks の設定（`.gitleaks.toml`、`.gitleaksignore`）や `gitleaks:allow` を読むこと。** ほかのツールの設定の形に合わせ続けることになる。ritsu の書き方は一つにする。
+- **鍵が本物かをプロバイダーに問い合わせること。** ネットワークを使わない決まり（この章の頭）。
+- **警告ではなくエラーにすること。** テスト用の値と本物を形では分けられない。
+
+### 16.4 暗号化しない通信（W902）
+
+**dandori が見る URL**：タスクとその呼び出し方が実際に送る先の URL である。
+
+- `http` のタスクの URL。`use openapi` の操作を呼ぶなら、`use` の下の `url`、無ければ文書の最初のサーバー（dandori が実際に呼ぶもの。dandori の DESIGN 1.10）。
+- エージェントの `url`（Open Responses のエンドポイント）。
+- `use rule … connect "<URL>"`（規則の Connect のサービス）。
+- `connect` のタスクが呼ぶ、`use proto` の下の `url`。
+
+`lambda`、`aws`、Jev、`url` の無いエージェントは、プラットフォームや SDK が HTTPS で送るので見ない。`use` の URL の W902 は、それを呼ぶタスクがあるときだけ、`url` の行（無ければ `use` の行）に、`use` ごとに一つ出す。タスクごとに出すと、一つの直し方に、同じ警告がタスクの数だけ並ぶからである。
+
+**sakai が見るサーバー**：地図の成果物の OpenAPI と AsyncAPI の文書の、ルートの `servers`（OpenAPI はパスの項と操作の `servers`、OpenAPI 3.2 の `additionalOperations` も）である。公表された言語に入れたかは問わない。
+
+- OpenAPI：`url` が `http://` か `ws://` で始まり、ホストがループバックでないもの。`url` が相対（OpenAPI 3.2 の Server Object は「相対でもよく、そのときは文書を置いた場所からの相対」と書く）なら、スキームが分からないので見ない。サーバー変数（`{scheme}://…`）は、まず全部を `default` の値にし、次に変数ごとに `enum` の値を一つずつ入れて（ほかは `default` のまま）見る。全部の組み合わせは見ない。注は、どの変数のどの値でそうなったかを言う。ほかのファイルへの `$ref` で書いたパスの項のサーバーは、まだ見ない（16.12）。
+- AsyncAPI：`protocol` が次の表の左の列のもので、`host` がループバックでないもの。AsyncAPI 3.0 と 3.1 の Server Object は `protocol` の値を並べていない。2.6.0 は「Supported protocol include, but are not limited to: `amqp`, `amqps`, `http`, `https`, `ibmmq`, `jms`, `kafka`, `kafka-secure`, `anypointmq`, `mqtt`, `secure-mqtt`, `solace`, `stomp`, `stomps`, `ws`, `wss`, `mercure`, `googlepubsub`, `pulsar`」と書き、暗号化して通信する名前を持つのは、次の表の六つである。
+
+| 暗号化しない | 暗号化して通信するプロトコル（注に出す） |
+|---|---|
+| `http` | `https` |
+| `ws` | `wss` |
+| `amqp` | `amqps` |
+| `mqtt`（`mqtt5` も） | `secure-mqtt` |
+| `stomp` | `stomps` |
+| `kafka` | `kafka-secure` |
+
+表に無い `protocol`（`nats`、`jms`、`ibmmq`、`solace`、`pulsar`、`googlepubsub`、`sns`、`sqs`、`redis` など）は見ない。暗号化するかが `protocol` の名前に出ないからである。
+
+**ループバック**（ritsu-base の `urls::is_loopback`）：`localhost`、`.localhost` で終わる名前（RFC 6761 がループバックに決めている）、`127.0.0.0/8` の IPv4、`::1`（`[::1]`）、IPv4 のループバックを表す IPv6 のアドレス（`::ffff:127.0.0.1`）。プライベートなネットワーク（`10.0.0.0/8`、`.internal` など）は入れない。このマシンの外へ出る通信だからである。
+
+**意図の書き方**：
+
+- dandori：URL を書いたところに `plaintext "<理由>"` と書く。`http` のタスクとエージェントの `url` はタスクの下、規則のサービスは `use rule … connect` の下、`use openapi`・`use proto` から呼ぶ操作は `use` の下である。理由は要る。`use` から呼ぶタスクの下の `plaintext` は E007 で、その `use` の下に書くよう注で言う。URL を持たないところ（`connect` の無い `use rule`、`use smithy`、`url` の無い `use proto`、サーバーの無い OpenAPI の文書）の `plaintext` と、空の理由も E007 である。
+
+  ```
+  task read_inquiry(text: string) -> Reading
+    agent "Read the text of a customer's inquiry, …"
+    model "gpt-oss:20b"
+    url "http://ollama.internal:11434/v1"
+    plaintext "The model server is reached only inside the cluster network, which the service mesh encrypts"
+  ```
+
+- OpenAPI と AsyncAPI の文書：Server Object に `x-ritsu-plaintext: "<理由>"` と書く。どちらの仕様も Server Object に `x-` で始まる拡張を書けるので、ほかのツールはこれを読み飛ばす。意図が、文書と一緒に動く。空の文字列や文字列でない値は意図として読まず、W902 の注で理由を書くよう求める。
+
+**Step Functions の E050 との関係。** Step Functions の HTTP Task は HTTPS の送り先しか呼べないので、dandori は `http://` の送り先を、`dandori build --target asl` で E050 にしている（dandori の DESIGN 1.7）。W902 はどのプラットフォームにも出す `check` の警告で、E050 はそのまま残る。`plaintext` を書いても、Step Functions には出せない。
+
+**診断の文。** dandori（材料 `tests/fixtures/security/W902_agent_url.flow`）：
+
+```
+warning[W902]: tests/fixtures/security/W902_agent_url.flow:7:3: the agent `read` sends its requests to ollama.internal over plain HTTP
+     7 |   url "http://ollama.internal:11434/v1"
+  = Whoever is on the network between can read and change the requests, the answers, and any key in the headers.
+  = Use https://. If the connection is protected another way (a service mesh, a private link), say so under the task with `plaintext "<why>"`.
+```
+
+```
+警告[W902]: tests/fixtures/security/W902_agent_url.flow:7:3: エージェント `read` は、ollama.internal に暗号化しない HTTP でリクエストを送ります
+     7 |   url "http://ollama.internal:11434/v1"
+  = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
+  = https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、タスクの下に `plaintext "<理由>"` と書いてください。
+```
+
+sakai（webshop の決済の AsyncAPI の文書に、TLS の無い Kafka のブローカーを足した変異 `W902_kafka_broker` と、日本語の版 `W902_Kafka_のブローカー`）：
+
+```
+warning[W902]: payments/events/payments.yaml:43:15: The server production of payments/events/payments.yaml does not encrypt the connection (kafka)
+    43 |     protocol: kafka
+  = Whoever is on the network between can read and change the messages, and any key sent with them.
+  = The encrypted form of the protocol is kafka-secure.
+  = If the connection is protected another way (a service mesh, a private link), write `x-ritsu-plaintext: "<why>"` in the server.
+  involved:
+      Payments  payments/events/payments.yaml:41  #/servers/production
+```
+
+```
+警告[W902]: payments/events/payments.yaml:43:15: payments/events/payments.yaml のサーバー production は、通信を暗号化しません（kafka）
+    43 |     protocol: kafka
+  = 途中のネットワークにいる人は、メッセージと、一緒に送る鍵を読んだり書き換えたりできます。
+  = 暗号化して通信するプロトコルは kafka-secure です。
+  = ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、サーバーに `x-ritsu-plaintext: "<理由>"` と書いてください。
+  関わるもの:
+      決済  payments/events/payments.yaml:41  #/servers/production
+```
+
+**捨てたもの**：
+
+- **プライベートなネットワークのアドレスも通すこと。** 「社内だから平文でよい」をツールが決めることになる。通すなら、書いた人が理由を書く。
+- **意図を `.ctx` に書くこと。** URL を書いたファイル（`.flow` と文書）に意図を置くほうが、差分を読む人が一緒に読める。
+- **dandori が `use openapi` の文書のサーバーを見ないこと（文書は sakai に任せる）。** 地図を書かずに dandori だけを使う人には、呼ぶ URL が平文でも何も出なくなる。dandori は呼ぶ URL を、sakai は文書を見る。`ritsu check` で一つの文書のサーバーについて二つ出ることがあるが、指す場所が違い（`.flow` の `use` の行と、文書のサーバーの行）、直す場所もそれぞれにある。
+
+### 16.5 認証を書いていない公開の操作（W903）
+
+**OpenAPI**（sakai。公表された言語の OpenAPI の文書の、`paths` の操作）。操作の実際の `security` は、操作に `security` があればそれ、無ければ文書のルートの `security` である（OpenAPI 3.2 の Operation Object：「This definition overrides any declared top-level `security`. To remove a top-level security declaration, an empty array can be used.」）。
+
+| 実際の `security` | 判定 |
+|---|---|
+| どこにも書いていない | W903 |
+| 一つ以上の要件があり、空の要件 `{}` を含まない | 通る |
+| 空の要件 `{}` を含む（OpenAPI 3.2：「To make security optional, an empty security requirement (`{}`) can be included in the array.」） | 通る（認証を任意にすると書いた） |
+| 操作に書いた空の配列 `security: []` | 通る（だれでも呼べると書いた） |
+| ルートに書いた空の配列 `security: []` で、操作に何も無い | 通る（文書全体を、だれでも呼べると書いた） |
+
+`webhooks` の操作は見ない。webhook の `security` は、API がクライアントの側を呼ぶときのことで、コンテキストが公開する操作ではないからである。公表された言語に入れていない文書（コンテキストの中だけで使う API）も見ない。
+
+**AsyncAPI**（sakai。公表された言語の AsyncAPI の文書の、チャネル）。AsyncAPI 3.1 の `security` は、サーバー（接続）と操作（Operation Object：「In cases where Server Security also applies, it MUST also be satisfied.」）に書く。操作の `security` はサーバーのものに足すもので、置き換えない。空の配列の意味は仕様に書いていない。
+
+- チャネルが使うサーバー（Channel Object の `servers`。無ければ文書のすべてのサーバー）のうち、`security` を書いていないサーバーがあり、そのチャネルを使う操作のどれも `security` を書いていなければ、W903。
+- サーバーか操作に、空の配列 `security: []` を書いたものは、意図として通す。仕様は空の配列を禁じておらず、「認証の方法を一つも並べない」と書いたことになるので、OpenAPI と同じ読み方にそろえた。
+- 文書に `servers` が一つも無ければ見ない（接続のことを何も言っていない）。
+- ほかの文書のチャネルへの `$ref`（受け取る側の文書が書くもの）は、そのチャネルを持つ文書の側で見る。両方で見ると、同じチャネルについて二度出る。
+
+診断の見出しは、操作を `operationId` で、チャネルを名前で言い、関わるもの（`involved`）の行に、場所と `#<JSON Pointer>`（と、操作ならメソッドとパス）を書く。参照の書き方に `openapi`・`asyncapi` のツール名が入れば、その形にも書ける。検査そのものは、どちらにも頼らない。
+
+**診断の文。** webshop の決済の OpenAPI の文書から、ルートの `security` を消した変異 `W903_operation_without_security`（日本語の版 `W903_認証の無い操作`）の最初の出力：
+
+```
+warning[W903]: payments/api/payments.yaml:9:7: The operation createCharge of the published language payments.v1 says no authentication
+     9 |       operationId: createCharge
+  = Neither the operation nor the document has `security`, so a reader of the contract cannot tell how a client proves who it is.
+  = Add `security` to the operation, or to the whole document. If the operation is open to anyone on purpose, write `security: []` on it.
+  involved:
+      Payments  payments/api/payments.yaml:9  #/paths/~1charges/post (POST /charges)
+```
+
+```
+警告[W903]: payments/api/payments.yaml:9:7: 公表された言語 payments.v1 の操作 createCharge に、認証の指定がありません
+     9 |       operationId: createCharge
+  = 操作にも文書にも `security` が無いので、契約を読む人には、クライアントがどう認証すればよいかが分かりません。
+  = 操作か文書全体に `security` を書いてください。だれでも呼べるようにわざとしている操作なら、その操作に `security: []` と書いてください。
+  関わるもの:
+      決済  payments/api/payments.yaml:9  #/paths/~1charges/post（POST /charges）
+```
+
+AsyncAPI のチャネル（変異 `W903_channel_on_a_server_without_security`）：
+
+```
+warning[W903]: payments/events/payments.yaml:9:3: The channel paymentSucceeded of the published language payments.v1 says no authentication on the server production
+     9 |   paymentSucceeded:
+  = Neither the server nor an operation on the channel has `security`, so a reader of the contract cannot tell how a client proves who it is.
+  = Add `security` to the server, or to the operations on the channel. If it is open to anyone on purpose, write `security: []` on the server or on an operation.
+  involved:
+      Payments  payments/events/payments.yaml:9   #/channels/paymentSucceeded (a channel of payments/events/payments.yaml)
+      Payments  payments/events/payments.yaml:38  #/servers/production (a server without `security`)
+```
+
+**捨てたもの**：
+
+- **`open host service` に並べた操作だけを見ること。** 公開ホストサービスは「ほかのコンテキストのだれでも呼べる」という地図の上の約束で、インターネットに公開するかとは別である。公表された言語の文書は、どれも境界の外から読む契約なので、全部の操作を見る。
+- **認証の方式の強さ（`apiKey` を query に置く、`http` の `basic`）を言うこと。** 書いた方式が弱いかは、運用の決めで、ここでは書いたかどうかだけを見る。
+
+**認可とのつながり。** W903 は、OpenAPI と AsyncAPI の文書の `security`（だれが呼んでいるかを確かめること）を見る検査のままにする。その先の、どの操作にも許可の決まり（ritsu が読む Cedar のポリシーとスキーマ（4.18）、または八つ目の言語 sekisho の `.gate` が生成する Cedar）があるかは、sekisho の側の言語をまたぐ検査が言う。
+
+### 16.6 秘密の印
+
+**proto**：`google.protobuf.FieldOptions` の `debug_redact`（フィールド番号 16）。印の付け方は二つで、protobuf の 2024-12-04 の告知が書くとおりである（「Mark a field with the field option `debug_redact = true`, directly」と、カスタムのオプションの列挙の値に `debug_redact = true` を付け、その値でフィールドに印を付ける形）。どちらも読む（ritsu-proto の `Protos::redaction`。4.19）。
+
+```proto
+message BankAccount {
+  string id = 1;
+  string number = 2 [debug_redact = true];
+  string holder = 3 [(acme.v1.sensitivity) = PERSONAL];   // PERSONAL = 1 [debug_redact = true];
+}
+```
+
+C++ の protobuf は v30 から、この印のフィールドをデバッグの出力（`DebugString` など）で伏せる。JSON やバイナリにしたときの中身は変わらない。ritsu は、この印を「この値を履歴やほかのサービスへ平文で出さない」という契約の宣言として読む。dandori では、`.proto` の印は、メッセージから作ったレコードのフィールドのほか、`connect` のタスクの引数と結果（リクエストとレスポンスのフィールドと突き合わせるところ）にも効く。手で書いた引数（`account_number: string`）が、印の付いたフィールドに送られる形を取りこぼさないためである。
+
+**OpenAPI・AsyncAPI・JSON Schema**：スキーマのプロパティが、次のどれかを持てば印とする（ritsu-base の `marks`。4.19）。
+
+| 書き方 | 出典 | 印にするもの |
+|---|---|---|
+| `x-data-classification` | OpenAPI の拡張の登録簿（Schema Object に書く。`category` と `masking` が要り、`sensitivity` は `public`・`internal`・`confidential`・`restricted`、書かなければ `confidential`） | `sensitivity` が `confidential` か `restricted`（書かないときを含む） |
+| `x-sensitive-data` | OpenAPI の拡張の登録簿（Schema Object に書く。表示で値を伏せる） | 書いてあれば |
+| `format: password` | OpenAPI のフォーマットの登録簿（「a string that hints to obscure the value」） | 書いてあれば |
+
+`writeOnly: true` だけでは印にしない。JSON Schema 2020-12 の 9.4 は「'writeOnly' would be used to mark a password input field」と例に挙げるが、意味は「取り出すときには無い」で、作るときにだけ送るフィールド（初めの残高など）にも使う。パスワードのフィールドは、たいてい `format: password` も持つ。`x-data-classification` の `internal` は、組織の中で扱ってよい値なので、印にしない（履歴に残ってよい）。外へ送ることだけを止めたい値として区別することは、16.12 に残した。dandori は、OpenAPI の操作と突き合わせるタスクの引数と結果で、これを読む。
+
+**dandori の `secret`**：dandori の値を置くところ（レコードのフィールド、入力、出力、タスクの引数と結果）の型のあとに、`range` と同じ位置で `secret` と書ける（`range` と両方なら `range` のあと）。契約の無い値（ワークフローに渡すトークン、手で書いたレコード）に印を付けるためである。
+
+```
+inputs
+  seller_id  : string
+  api_token  : string secret
+
+task score(text: string secret) -> Score
+```
+
+`secret`・`plaintext`・`discloses`・`history encrypted` は、dandori の予約語の表（`src/syntax.rs` の `KEYWORDS`）に足さず、`agent`・`model`・`jev` と同じく、書ける位置でだけ読む。いまの `.flow` で名前に使える語は減らない。
+
+**dandori が秘密の値をたどる決まり**：値の範囲を求めるときと同じく、流れに沿わず、変数に値を入れるすべての場所を合わせる（dandori の DESIGN 1.3）。
+
+- 印の付いたところ（`secret` を書いた入力・フィールド・引数・結果、印の付いたフィールドを持つ `.proto` のメッセージから作ったレコード、`connect` のタスクと OpenAPI の操作と突き合わせたタスクの引数と結果のうち、フィールドやプロパティが印を持つもの）から読んだ値は秘密である。印の付いたフィールドを中に持つレコードは、そのフィールドのパスごとに秘密を持つ（`account.number`）。
+- `{…}` のレコード、`[…]` のリスト、`for` の変数、`some x` の `x` は、中に入れた値の秘密をそのまま持つ。値を埋め込んだ文字列は、埋め込んだ値のどれかが秘密なら、全体が秘密になる。`json` の値は、秘密の値から作ったなら、全体が秘密になる。
+- 規則の出力は秘密にしない。規則の出力は、入力から決めた判断（列挙、bool、額）であり、秘密を運ぶものではないからである。印を付けていないタスクの結果も、秘密にしない。
+- 変数は、値を入れるどこかで秘密が入れば秘密である（範囲と同じく、実際には通らないパスのせいで言うことがある。そのときは変数を分ける）。
+- 診断は、秘密の値を、フローがそれを最初に読んだ書き方で言い（`account.number`。変数を通しても、`let note = "… {account.number}"` を渡しても同じ）、印がどこに書いてあるかを注に出す。一つの値に印が二つあれば（入力の `secret` と、引数の `format: password`）、診断は一つにして、注に印を二つ並べる。同じ場所で同じ値を何度も言わない。
+- 印のファイルは、`.flow` のある場所から見たパスで言う（`../../../examples/payout/specs/payout.proto:34`）。`.flow` に書いた `secret` はファイル名と行で、OpenAPI の文書は JSON Pointer で言う（`secrets/crm.json#/components/schemas/Customer/properties/email`）。
+
+### 16.7 履歴に残る秘密の値（W904）
+
+プラットフォームは、ワークフローの入力と出力と、呼び出しの引数と結果を、実行の履歴に残す。
+
+| プラットフォーム | 残るもの | 鍵を持つ人だけが読めるようにする手段 |
+|---|---|---|
+| Temporal | ワークフローの入力と結果、アクティビティ（タスク、規則、日付、帳簿）の入力と結果、子ワークフロー、Update の値。失敗の文とスタックトレースは、既定ではペイロードの外に平文で残る | ペイロードのコーデックで暗号化し、失敗のコンバーターの `encodeCommonAttributes` で失敗の文もそれに通す |
+| Step Functions | 実行の入力と出力、各ステートの入力と出力 | ステートマシンにカスタマー管理の KMS キーを設定する（実行の履歴を暗号化し、`GetExecutionHistory` と `DescribeExecution` には `kms:Decrypt` が要る） |
+| Lambda durable functions | ステップの結果（実行の履歴として読める） | durable の実行のデータを、カスタマー管理の KMS キーで暗号化する（2026-07-22 の告知から。関数の `DurableConfig.KMSKeyArn`） |
+| Argo Workflows | テンプレートの入力と出力のパラメーター（Workflow のオブジェクトの中。UI と `argo get` で読める） | 無い（Argo の文書は、秘密を Kubernetes の Secret から環境変数かボリュームで渡すよう勧める） |
+| pydantic-graph | 残さない（2.x はどこにも状態を残さない。dandori の DESIGN 4.5） | 要らない |
+
+**W904 を出すところ**（dandori の `check`。どのプラットフォームにも出すものなので `build` ではなく `check` に置く）。列は 1（E014 と同じ）。
+
+- 秘密の値を持つワークフローの入力と出力（宣言の行）。`succeed` が出力に書いた秘密の値は、その行。
+- 秘密の値を持つタスクの結果（タスクの宣言の行。フローが呼ぶタスクだけ。結果は、ワークフローがそれを読まなくても履歴に残る）。
+- 秘密の値を渡すタスク・規則・日付・帳簿・子のフローの呼び出し（呼び出しの行）。
+- 秘密の値を埋め込む `fail` の理由（その行）。
+
+**意図の書き方**：`workflow` の行の下に `history encrypted` と書く。「この実行の履歴は、秘密を読んでよい人だけが持つ鍵で暗号化してある」という宣言である。プラットフォームごとに次のようになる。
+
+| プラットフォーム | `history encrypted` で dandori がすること |
+|---|---|
+| Temporal（TypeScript） | `worker.ts` の `WorkerConfig.codec` を要るフィールドにし、ワーカーの `dataConverter` に、そのコーデックと `failure.ts` の `DefaultFailureConverter({ encodeCommonAttributes: true })` を入れる。`client.ts` の関数は、`encryptedClient(connection, codec)` だけが返す `EncryptedClient`（`Client` に、モジュールの外から作れない `unique symbol` の印を足した型）を受け取る。`replay` もコーデックを受け取る |
+| Temporal（Python） | `client.py` の `connect(target, codec)` だけが返す `EncryptedClient`（`NewType`）を、関数と `worker.py` の `make_worker` が受け取る。データコンバーターの失敗のコンバーターは `DefaultFailureConverterWithEncodedAttributes`。`replay` もコーデックを受け取る |
+| Temporal（Go） | `client.go` の `Dial(options, codec)` だけが、パッケージの外では作れない `EncryptedClient` を返し、関数と `NewWorker` が受け取る。失敗のコンバーターは `temporal.NewDefaultFailureConverter(… EncodeCommonAttributes: true)`。`Replay` もコーデックを受け取る |
+| Step Functions | 何も変えない。ステートマシンの `EncryptionConfiguration`（`Type: CUSTOMER_MANAGED_KMS_KEY` と `KmsKeyId`）に設定する鍵で、`GetExecutionHistory` と `DescribeExecution` には `kms:Decrypt` が要る |
+| Lambda durable functions | 何も変えない。関数の `DurableConfig.KMSKeyArn` に設定する鍵で、`GetDurableExecution` と `GetDurableExecutionHistory`（`IncludeExecutionData=true`）には `kms:Decrypt` が要る。実行は始まったときの鍵を最後まで使う |
+| Argo Workflows | E050（`history encrypted` の行）。パラメーターを鍵で暗号化する手段が無いので、宣言を守れない（P6） |
+| pydantic-graph | 何もしない。履歴を残さない |
+
+`history encrypted` で生成するクライアントが増やす名前（Go の `EncryptedClient`・`Dial`・`CodecDataConverter`・`CodecFailureConverter` など）は、クライアントがもとから持つ名前と同じに扱う。サービスのメソッドとメッセージの名前は `Rpc`（Python は `_rpc`、Go は `RPC`）を付け、Go のレコードと列挙の型は `_` を付けて、生成する側が避ける（dandori の DESIGN 1.14、1.18）。E006 では止めない。`.proto` の名前は利用者が変えられないことが多く、止めると、そのサービスでは暗号化を宣言できなくなるからである。
+
+コーデックを型で要るものにしたので、渡し忘れは、利用者のコードの型の検査（`tsc --strict`、`mypy --strict`、`go vet`）が言う。Step Functions と durable functions の鍵は、dandori が書く ASL と関数のコードの外にあり、dandori はそれを確かめられない。宣言の無いフローの生成物は一バイトも変えない。Go の `NewWorker` は、包む前の SDK のクライアントを `worker.New` に渡す（SDK 1.49.0 の `worker.New` は、`client.Dial` が作ったクライアントそのものを求め、包んだ値では「Client must be created with client.Dial() or client.NewLazyClient()」で止まった。実際に走らせて見つけた）。
+
+**診断の文**（材料 `tests/fixtures/security/W904_payout_number.flow`。例の `payout` を、口座の番号を運ぶ形に一か所変えたもの）：
+
+```
+warning[W904]: tests/fixtures/security/W904_payout_number.flow:39:1: the secret `account.number` is kept in the history of the workflow, as the argument `reference` of `pay`
+    39 |   let paid = pay(account_id: account_id, amount: amount, reference: "Sales payout to {account.number}")
+  = The mark is `debug_redact = true` at ../../../examples/payout/specs/payout.proto:34.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Pass a reference instead (an ID, the name of a secret) and fetch the value inside the task. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.
+```
+
+```
+警告[W904]: tests/fixtures/security/W904_payout_number.flow:39:1: 秘密の値 `account.number` が、`pay` の引数 `reference` として、ワークフローの履歴に残ります
+    39 |   let paid = pay(account_id: account_id, amount: amount, reference: "Sales payout to {account.number}")
+  = 印は ../../../examples/payout/specs/payout.proto:34 の `debug_redact = true` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+```
+
+同じ材料は、口座を返すタスクの宣言の行（15 行）にも、結果の形の W904 を出す（「`get_account` の結果が持つ秘密の値 `number` が、ワークフローの履歴に残ります」。注の三つ目は、タスクには値の代わりに参照を返させるよう言う）。
+
+**捨てたもの**：
+
+- **`dandori build` でプラットフォームごとに出すこと（E040 と同じ置き場所）。** `ritsu check` に出なくなる。履歴に残ることは五つのうち四つのプラットフォームで同じなので、`check` に置いた。pydantic-graph だけに出すフローでも W904 は出る（文は、四つのプラットフォームが残すと言う）。
+- **Temporal だけの宣言にすること（`payload codec`）。** Step Functions と Lambda durable functions も、カスタマー管理の鍵で同じことができる（読むのに `kms:Decrypt` が要る）。宣言は「鍵を持つ人だけが読める」という事実にし、手段はプラットフォームごとにした。
+- **`history encrypted` のとき、Step Functions と durable functions でも E050 にすること。** できるプラットフォームで締め出すことになる（P6 は、できないプラットフォームでだけ E050 にする）。
+
+### 16.8 秘密の値を外へ送ること（dandori の E906、ritsu の E905・W905）
+
+**宛先の決め方**（dandori が、タスクと呼び出し方から決める）：
+
+| 呼び出し | 宛先 | 判定する検査 |
+|---|---|---|
+| `agent`（`url` が無い、またはループバックでない `url`） | モデルのプロバイダー（OpenAI、Anthropic）か、`url` のサーバー | dandori の E906 |
+| `jev` | TypeSafe | dandori の E906 |
+| `http`（`use openapi` の文書を使わず、URL だけで書いたもの。ホストがループバックのものは除く） | URL のホスト | dandori の E906 |
+| `aws` | その AWS のサービス | dandori の E906 |
+| `http` で `use openapi` の操作を呼ぶもの | その文書のファイル | ritsu の E905 |
+| `connect`（`use proto`） | その `.proto` のファイル | ritsu の E905 |
+| `use rule … connect` の規則の呼び出し | その規則のファイル | ritsu の E905 |
+| `flow "<パス>"` | 子の `.flow` | ritsu の E905 |
+| 帳簿の操作、日付の呼び出し | その `.book`、`.cal` | ritsu の E905 |
+| `lambda`、`image`、利用者が書く実装、dandori で書いていない子ワークフロー、同梱の規則、ループバックの `url` のエージェントと `http` | フローと同じところ（利用者のコードと、このマシン） | 見ない |
+
+**dandori の E906**：秘密の値を、プロジェクトの外の相手へ送る。地図が要らないので dandori の検査に置き、`dandori check` を単体で使う人にも届く。モデルのプロバイダーに個人の情報を読ませる、というよくある漏れ方がここに入る。診断は宛先を、OpenAI、Anthropic、`url` のホスト、`TypeSafe (Jev)`、`AWS (<サービス>)`、`http` の URL のホストと言う。
+
+**ritsu の E905**（X14）：秘密の値を、プロジェクトの中の成果物へ送るとき、地図の上で送ってよいかを確かめる。
+
+- フローのファイルがどの地図のコンテキストにも属さないときは、見ない（地図が何も言っていない）。属するときは、その地図で次のように決める。
+- 地図が二つ以上あるときは、sakai が地図と答える `.ctx` をパスの順に見て、フローを持つ（`context_of` が `Some` を返す）最初の地図で決める。
+- 印のコンテキスト：印を書いたファイル（`.proto`、文書）が属するコンテキスト。印を `.flow` の `secret` で書いたとき、印を書いたファイルがどのコンテキストにも属さないときは、フローのコンテキスト。
+- 宛先のコンテキスト：宛先のファイルが属するコンテキスト。
+- 宛先がどのコンテキストにも属さないとき（地図の外）：E905。
+- 宛先のコンテキストが印のコンテキストと同じか、地図にその二つの関係（`separate ways` のほかのどれでも。上流と下流、共有カーネル、パートナーシップ）があるとき：通る。
+- 関係が無いとき：E905。宛先のコンテキストが印のコンテキストと `separate ways` を書いているときは、注にそう添える。
+- 地図が、sakai の検査のうちコンテキストと関係と属し方を決める段（構文、名前、パスと、属し方。sakai の DESIGN 16.4）を通らないとき：W905（決められない理由を言う。P5）。どの地図もフローを持たず、通らない地図があるときは、そのフローの、秘密を送る呼び出しの全部が W905 になる。
+
+**意図の書き方**：タスクの下に `discloses <引数>, … "<理由>"` と書く。そのタスクがその引数の秘密を宛先へ送ることを、書いた人が決めたという宣言である。E906 と E905 の両方を通す。履歴（W904）は通さない（送ることと、履歴に残ることは別のことである）。`discloses` の引数がタスクに無いとき、理由が空のときは E007。
+
+```
+task read_inquiry(text: string) -> Reading
+  agent "Read the text of a customer's inquiry, …"
+  model "gpt-5.4-mini"
+  discloses text "The model reads the inquiry to sort it; the provider keeps no data under our agreement"
+```
+
+**数え方**：X14 は、宛先がプロジェクトの中で、秘密の値を渡す呼び出しごとに、境目一つと数える（`ritsu check` の要約の `borders`。8.3）。秘密の値が二つあれば、どれか一つが E905 なら failed、そうでなく W905 があれば undecided、どれも通れば held。`discloses` で通したものは held に数える。地図の無いプロジェクトでは数えない。
+
+**診断の文。** dandori の E906（材料 `tests/fixtures/security/E906_payout_holder.flow`。例の `payout` の、エージェントが下書きする知らせに口座の名義を渡す形）：
+
+```
+error[E906]: tests/fixtures/security/E906_payout_holder.flow:41:1: the task `draft_notice` sends the secret `account.holder` to OpenAI, outside the project
+    41 |   let notice = draft_notice(amount: amount, payout_id: paid.payoutId, holder: account.holder)
+  = The mark is `debug_redact = true` at ../../../examples/payout/specs/payout.proto:35.
+  = Send a reference or only what the other side needs. If sending it there is intended, write `discloses holder "<why>"` under the task.
+```
+
+```
+エラー[E906]: tests/fixtures/security/E906_payout_holder.flow:41:1: タスク `draft_notice` が、秘密の値 `account.holder` をプロジェクトの外の OpenAI に送ります
+    41 |   let notice = draft_notice(amount: amount, payout_id: paid.payoutId, holder: account.holder)
+  = 印は ../../../examples/payout/specs/payout.proto:35 の `debug_redact = true` です。
+  = 参照か、相手に要るものだけを送ってください。そこへ送ることを意図しているなら、タスクの下に `discloses holder "<理由>"` と書いてください。
+```
+
+ritsu の E905 は、台帳の再現で `ritsu check .` が次のとおり言う。地図は Payments・Ordering・Notices の三つのコンテキストで、Ordering は二つと `partnership` を結び、Payments は `card.proto` を、Notices は `notices.json` を公表した言語に置く（文書には `security` を書いたので、sakai の W903 は出ない）。`card.proto` は `card.number` に `debug_redact` を付け、Ordering のフローが `card` を Notices の API へ渡す。フローは `history encrypted` を書いたので、dandori の W904 も出ない。英語の版を英語で：
+
+```
+ordering/checkout.flow: ok
+shop.ctx: ok — 3 contexts, 2 relationships; 3 artifacts, each in one context; 2 crossings checked (dandori 2)
+error[ritsu E905]: ordering/checkout.flow:17: The task `tell` sends the secret `card.number`, marked by Payments, to Notices, which has no relationship with Payments
+    17 |   tell(order: order, card: card)
+  = The mark is `debug_redact = true` at payments/v1/card.proto:7.
+  = The map shop.ctx relates Notices with Ordering only.
+  = Send a reference instead, add the relationship to the map, or, if sending it there is intended, write `discloses card "<why>"` under the task.
+ritsu check: 6 files (proto 1, dandori 1, sakai 4): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided
+```
+
+日本語の版を日本語で：
+
+```
+受注/注文.flow: 検査を通りました
+店.ctx: ok — コンテキスト 3、関係 2。成果物 3 件は、どれも一つのコンテキストに属する。境界を越える参照 2 件を確かめた（dandori 2）
+エラー[ritsu E905]: 受注/注文.flow:17: タスク `知らせる` が、「決済」が印を付けた秘密の値 `カード.number` を、「決済」と関係の無い「通知」に送ります
+    17 |   知らせる(order: 注文, card: カード)
+  = 印は 決済/v1/card.proto:7 の `debug_redact = true` です。
+  = 地図 店.ctx は、「通知」を「受注」とだけ関係づけています。
+  = 値の代わりに参照を送るか、地図に関係を足すか、そこへ送ることを意図しているなら、タスクの下に `discloses card "<理由>"` と書いてください。
+ritsu check: ファイル 6 個（proto 1、dandori 1、sakai 4）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 1 か所、決められない 0 か所
+```
+
+地図の外へ送るとき（`crates/ritsu-cross/tests/egress_map.rs`。地図とコンテキストは sakai の口が答え、フローが何を送るかだけをテストが与える）：
+
+```
+error[E905]: ordering/checkout.flow:32: The task `report` sends the secret `card.number`, marked by Payments, to "tools/report.yaml", which no context of the map shop.ctx holds
+    32 |   report(card: card)
+  = The mark is `debug_redact = true` at payments/v1/card.proto:7.
+  = Send a reference instead, give the file to a context of the map (`owns`), or, if sending it there is intended, write `discloses card "<why>"` under the task.
+```
+
+```
+エラー[E905]: ordering/checkout.flow:32: タスク `report` が、「決済」が印を付けた秘密の値 `card.number` を、地図 shop.ctx のどのコンテキストにも属さない "tools/report.yaml" に送ります
+    32 |   report(card: card)
+  = 印は payments/v1/card.proto:7 の `debug_redact = true` です。
+  = 値の代わりに参照を送るか、そのファイルを地図のコンテキストに入れるか（`owns`）、そこへ送ることを意図しているなら、タスクの下に `discloses card "<理由>"` と書いてください。
+```
+
+`separate ways` のときは、二つ目の注が「The map shop.ctx relates Notices with no other context (with Payments, it writes `separate ways`: the two have nothing to do with each other).」になる。呼び出しは、送り先のファイルが `.rule` なら「規則 `x` の呼び出し」、`.cal` なら「`x` の呼び出し」、ほかは「タスク `x`」と言う（`Send::task` は、規則の呼び出しでは規則の名前だからである）。
+
+W905 は、同じ再現の地図が、無いファイルを `use context` する形で、`ritsu check .` が次のとおり言う。
+
+```
+ordering/checkout.flow: ok
+error[sakai E009]: shop.ctx:7:13: The path "contexts/billing.ctx" is not there
+     7 | use context "contexts/billing.ctx"
+  = A path counts from the directory of this .ctx; as written, it points at contexts/billing.ctx.
+warning[ritsu W905]: ordering/checkout.flow:17: Where in the map shop.ctx the task `tell` sends the secret `card.number` cannot be decided
+    17 |   tell(order: order, card: card)
+  = The map does not pass sakai's check, so which context a file belongs to is not known (sakai's E009: The path "contexts/billing.ctx" is not there).
+  = Correct the map so that `sakai check` passes.
+ritsu check: 6 files (proto 1, dandori 1, sakai 4): 1 fail (1 error, 1 warning); borders between the languages: 1 checked, 1 undecided
+```
+
+```
+受注/注文.flow: 検査を通りました
+エラー[sakai E009]: 店.ctx:7:13: パス "contexts/請求.ctx" がありません
+     7 | use context "contexts/請求.ctx"
+  = パスは、この .ctx のあるディレクトリからの相対パスです。書いてあるパスは contexts/請求.ctx を指します。
+警告[ritsu W905]: 受注/注文.flow:17: タスク `知らせる` が秘密の値 `カード.number` を送る先が、地図 店.ctx のどこかを決められません
+    17 |   知らせる(order: 注文, card: カード)
+  = 地図が sakai の検査を通らないので、ファイルがどのコンテキストに属するかが分かりません（sakai の E009: パス "contexts/請求.ctx" がありません）。
+  = `sakai check` が通るよう地図を直してください。
+ritsu check: ファイル 6 個（proto 1、dandori 1、sakai 4）。検査を通らないもの 1 個（エラー 1 件、警告 1 件）。言語の境目: 確かめた 1 か所、決められない 1 か所
+```
+
+**捨てたもの**：
+
+- **地図の外の相手（プロバイダー、Jev）も ritsu-cross で言うこと。** 地図が要らない判定まで `ritsu check` だけのものになり、`dandori check` を単体で使う人に届かない。
+- **送ってよい関係を、印の付いた要素を公表された言語に持つ関係（`through`）に限ること。** より細かく言えるが、印はたいてい公表された言語の文書に付くので、ほとんど同じ答えになり、判定が sakai の公表された言語の決まりをもう一度書くことになる（ritsu の P4）。
+- **`discloses` を `.ctx` に書くこと。** 送ると決めるのは呼び出しを書く人で、その差分と一緒に読めるところに置く。
+- **利用者が書く実装（`lambda` など）を地図の外と数えること。** 値はフローの持ち主のコードにとどまる。数えれば、ほとんどのタスクが E905 になる。
+
+### 16.9 口と型
+
+口（3.2）に、次を足した。`Flows::sends` は dandori が、`Maps` は sakai が答える。
+
+```rust
+// ritsu-ports/src/flows.rs
+/// Where a call of a flow sends what it gives, inside the project (X14, DESIGN 16.8). dandori
+/// says the parties outside the project itself (its E906), so they are not here.
+pub enum Destination {
+    /// A file of the project that holds the other side: an OpenAPI document a task calls an
+    /// operation of, a `.proto` a `connect` task calls, a rule called at its Connect service, a
+    /// child `.flow`, a book, a dates file. As dandori reaches it.
+    File(PathBuf),
+}
+
+/// A value marked secret, as the flow gives it, and where the mark is written.
+pub struct Secret {
+    /// The value as the flow writes it, down to the field that is secret: `account.number`.
+    pub shown: String,
+    /// The file that marks it (a `.proto`, an OpenAPI or AsyncAPI document, or the `.flow`
+    /// itself, for `secret`), as dandori reaches it; the line of the mark; and the mark as the
+    /// file writes it (`debug_redact = true`, `x-data-classification`, `secret`).
+    pub marked_in: PathBuf,
+    pub line: usize,
+    pub mark: String,
+}
+
+/// One call of a flow that gives a secret value to something in the project (X14).
+pub struct Send {
+    /// The line of the call, from 1, and the task (or the rule) called.
+    pub line: usize,
+    pub task: String,
+    pub to: Destination,
+    /// Each secret the call gives, with the parameter that carries it.
+    pub secrets: Vec<(String, Secret)>,
+    /// The parameters the task says it discloses (`discloses`), with the reason written.
+    pub disclosed: Vec<(String, String)>,
+}
+
+pub trait Flows {
+    // …（rule_calls と crossings は前のまま）
+    /// Every call of the flow at `file` that gives a secret value to a file of the project, read
+    /// with the other languages through `ports`, when the flow passes dandori's check; else what
+    /// the check says. None by default, until dandori answers it.
+    fn sends(&self, file: &Path, ports: &Ports) -> Result<Vec<Send>, Vec<Said>> { … }
+}
+```
+
+```rust
+// ritsu-ports/src/maps.rs。sakai が答える（sakai の src/ports.rs）
+pub struct MapFacts { pub file: String, pub contexts: Vec<String>, pub relationships: Vec<MapRelationship> }
+/// One relationship between two contexts, as the `.ctx` of `from` writes it. `words`: `upstream`,
+/// `downstream`, `shared kernel with`, `partnership with`, `separate ways from`.
+pub struct MapRelationship { pub from: String, pub to: String, pub words: String, pub separate: bool, pub file: String, pub line: usize }
+
+pub trait Maps {
+    /// The map at `map` (a `.ctx` from the root), when it is a map and passes the stages of sakai's
+    /// check that decide its contexts, their relationships and who owns what (its words, names and
+    /// paths, and its owners); None when the file is a context file, not a map; else what those
+    /// stages say. The stages after them (the references, the patterns, the mappings) do not change
+    /// which context a file is in, and are the map's own check's to say.
+    fn map(&self, root: &Path, map: &str) -> Result<Option<MapFacts>, Vec<Said>>;
+    /// The context of the map at `map` that the file at `file` (from the root) belongs to, as
+    /// sakai's check decides it (the context of the deepest entry of `owns` that holds it; a
+    /// `layer`, a shared kernel and a published language must agree with it); None when the map
+    /// does not cover the file, or covers it and gives it to no context.
+    fn context_of(&self, root: &Path, map: &str, file: &str) -> Result<Option<String>, Vec<Said>>;
+}
+```
+
+- `Flows::sends` は、dandori の検査を通るフローにだけ答え、通らないフローには検査のエラーを `Said` で返す。E906 はエラーなので、プロジェクトの外へ秘密を送るフローは、`sends` も通らない（`Err` の中に E906 がある）。`Destination::File` と `Secret::marked_in` のパスは、`RuleCall::rule` と同じく dandori が届くパス（フローのファイルのディレクトリに、`.flow` が書いたパスをつないだもの）である。`disclosed` は、そのタスクに書いた `discloses` の全部（秘密の値を渡していない引数のものも入る）。
+- `Maps` は、sakai の検査の段 1 と段 2（構文、名前、パスと、属し方）だけで答える（sakai の DESIGN 16.4）。段 3 から後は、どのファイルがどのコンテキストに属するかを変えない。段 3 はほかの言語の口を要るので、全部を走らせると、`Joined::maps` が sakai の検査の全部を持つことになり、X14 の問い一つごとに地図の検査を全部走らせることにもなる。
+- `ritsu-project` の `Joined` に `maps()`（sakai の `Engine`）を足した。ritsu-cross の X14（`src/egress.rs`）は、プロジェクトの `.ctx` のうち `map` が `Some` を返すものを地図とし、フローのファイルを `context_of` で地図に当て、`Flows::sends` の宛先と印のファイルも同じく当てる。関係があるかは `MapFacts::relationships` に、`separate` でない二つの向きのどちらかがあるかで決める（関係を言うのは sakai の決まりのままで、ritsu-cross はそれを並べ直さない）。判定は、`Send` の並びと `MapFacts` と `context_of` の答えを受け取る純粋な関数にした。
+- 型の名前 `Send` は、`use ritsu_ports::Send` をしたモジュールでは std の `Send` を隠す。いまワークスペースに `ritsu_ports::*` の glob の use は無い。使うところは `ritsu_ports::Send` と書くか、読み替える（`use ritsu_ports::Send as SecretSend`）。
+
+土台に足したもの（std だけ。4.19）：
+
+```rust
+// ritsu-base/src/secrets.rs
+pub struct Kind { pub id: &'static str, pub name: Text, pub provider: &'static str }  // "aws-access-key-id", tr!("AWS のアクセスキー ID", "an AWS access key ID"), "AWS"
+pub struct Found { pub line: usize, pub col: usize, pub kind: &'static Kind, pub shown: String, pub len: usize, pub test: bool }  // shown: "AKIA…"
+pub const TEST_MARK: &str = "ritsu: test secret";
+pub fn kinds() -> &'static [Kind];
+pub fn scan(text: &str) -> Vec<Found>;  // in the order found; a language reports the ones whose `test` is false
+pub fn mask(text: &str) -> String;      // every key in the text put as `shown` gives it: what a diagnostic shows of a line goes through this
+
+// ritsu-base/src/urls.rs
+pub fn is_loopback(host: &str) -> bool;
+pub fn scheme_and_host(url: &str) -> Option<(String, String)>;   // None for a relative URL
+pub fn plaintext(url: &str) -> Option<(String, String)>;         // `http`, `ws` to a host that is not the loopback
+pub fn encrypted_form(protocol: &str) -> Option<&'static str>;   // 16.4's table
+
+// ritsu-base/src/marks.rs
+pub struct SchemaMark { pub keyword: &'static str, pub detail: String }  // ("x-data-classification", "PII, confidential")
+pub fn schema_mark(format: Option<&str>, sensitive_data: bool, classification: Option<(&str, Option<&str>)>) -> Option<SchemaMark>;
+
+// ritsu-proto：model.rs と load.rs
+pub struct Extension { pub extendee: String, pub name: String, pub ty: Type, pub number: i64, pub line: usize }  // ProtoFile::extensions
+pub enum Redaction { Direct { line: usize }, ByOption { option: String, value: String, file: String, line: usize } }
+impl Protos { pub fn redaction(&self, file: &str, field: &Field) -> Option<Redaction>; }
+```
+
+### 16.10 テスト
+
+- **ritsu-base**：`tests/secrets.rs` が、表の種類ごとに当たる値と当たらない値（短い、文字の種類が違う、前後が英数字に続く、`EXAMPLE` で終わる、一つの文字の繰り返し、`ritsu: test secret` の行）と `mask` を確かめる。`tests/urls.rs` はループバックと平文の判定、`tests/marks.rs` は印の三つの書き方と `sensitivity` の読み方、`tests/diag.rs` は見せる行の鍵を伏せることを確かめる。
+- **ritsu-proto**：`tests/redaction.rs` と `tests/redaction/` の五つの `.proto`（読み手の golden の外に置いた）。`debug_redact` を直に書いたフィールド、カスタムのオプションの値で付けたフィールド（オプションと列挙を別のファイルに置き、import をたどる）、`debug_redact = false`、`extend` をメッセージの中に書いたもの。`extend` を読んでも、三つの読み手の golden（`tests/golden/` の三つ）は変わらない。
+- **各言語の W901**：英語の材料（`W901_key_in_a_string`、`W901_key_in_a_comment`、`W901_test_secret`）と日本語の版（`W901_文字列の鍵`、`W901_コメントの鍵`、`W901_テスト用の鍵`。同じ鍵の値）を置き、英語と日本語の出力を golden にする。台帳の再現（英語と日本語）を `check_every` などが走らせる。rulec、chobo、geas は、鍵のある行をほかの診断に引用させて、出力に鍵が無いことも確かめる（`tests/secrets.rs`）。
+- **dandori**：`tests/fixtures/secrets.flow`（英語）と `secrets.ja.flow`（日本語）が、印の三つの出どころ（`.proto` の直とカスタムのオプション、OpenAPI の三つ、`.flow` の `secret`）、レコード、リスト、文字列への埋め込み、`for`、`some`、`json`、規則の結果（秘密にならない）、`writeOnly` だけのプロパティと `internal`（印にならない）、`discloses` を一つのフローで見せ、`check` の英語と日本語のテキストと JSON、`Flows::sends` の答え（`secrets.sends.json`、`secrets.ja.sends.json`）を golden にする。`tests/fixtures/security` に、W901・W902・W904・E906・E007・E001 の変異と Argo の E050 を、英語と日本語の対で置いた（例の `payout` を一か所ずつ変えた変異も）。例と `tests/flows` の全部のフローは `sends` に空を返す。`tests/secrets.rs` が、`history encrypted` の生成物が、コーデックを渡すプログラムでは `tsc --strict`・`mypy --strict`・`go vet`（と `gofmt -l`）を通り、渡さないプログラムでは型の誤りになることと、`tests/encrypted/pay.flow` を Temporal の dev server で TypeScript・Python・Go から、ペイロードを base64 にするコーデックで走らせ、コーデックの無いクライアントで読んだ履歴に、入力の値も失敗の文も平文で残らないことを確かめる。
+- **sakai**：台帳の W901・W902・W903 の英語と日本語の再現。webshop を一か所ずつ変えた変異 8 組（W901 のコメントの鍵と文字列の鍵、W902 の平文のサーバー、サーバー変数、Kafka と MQTT のブローカー、W903 の認証の無い操作と、認証の無いサーバーのチャネル）。`tests/security.rs` は、何も出ないこと（相対の `url`、`https`、ループバック、`x-ritsu-plaintext`、名前で暗号化が分からないプロトコル、文書と操作とサーバーの `security: []`、空の要件 `{}`、`webhooks`、公表された言語でない文書、`security` を持つ AsyncAPI の操作、`ritsu: test secret`、AWS の文書の例の鍵）を、英語と日本語の例の両方で確かめる。`tests/maps.rs` は、shop と webshop（と日本語の版）の地図の答えと、例の全部のファイルの `context_of` を golden にする。
+- **ritsu-cross**：契約の文書の W901（`tests/secrets.rs`。`.proto` のコメント、YAML の文書の値、JSON の文書の値、YAML の `# ritsu: test secret`、`EXAMPLE` で終わる AWS の ID（何も出ない））。X14 の判定の単体テスト（`tests/egress.rs`。地図の外、関係の無いコンテキスト、同じコンテキスト、関係がある、`separate ways` だけがある、`discloses`、印が `.flow` の `secret`、印のファイルがどのコンテキストにも属さない、地図が検査を通らない）と、sakai の本物の口で答えさせる `tests/egress_map.rs`（英語と日本語の名前のプロジェクトを、英語と日本語で。golden は `tests/golden/egress/`）。`crates/ritsu/tests/codes.rs` が、ritsu の新しい三つのコードの再現を英語と日本語で走らせる。
+- **突き合わせ**：替える前と後のバイナリを、同じ入力のコピーにかけた。
+  - rulec・koyomi・chobo・yuen・geas の例とテストの材料の全部、rulec のコーパス、ritsu のテストのプロジェクト（`shop`、`通販`、`invoice`、`stockroom`）を、`night/2026-10-06` の先のバイナリと比べた。英語と日本語と JSON で 2,139 回走らせ、違ったのは新しい W901 の材料の 90 回だけだった。
+  - dandori は、例と `tests/flows` と `tests/fixtures` の 102 本の `.flow` に、`check`（英語、日本語、JSON）、七つのプラットフォームの `build`、`scenarios`、`doc` をかけた。変わったのは、`plaintext` を書き足した問い合わせの例の二つの版（`.flow` が変わったので、生成物の頭のハッシュと `doc` の抜粋も）と、W902 が出る三つの材料（どのコマンドも、先に W902 を出す）の五本だけで、ほかの 97 本は一字も変わらなかった。
+  - sakai の例と `tests/maps` の地図と変異の全部、`ritsu check ritsu.ctx` は、共通の型を足したあとと最後とで比べた。違ったのは、新しい変異の出力と、webshop（直す前に出た W903 の五つが、直したあとに消えた）と、`ritsu.ctx` の成果物の数（sakai の `src/security.rs` の分の 421 → 422）だけだった。
+
+**偽の鍵。** 材料の鍵は、どの言語でも一つの偽の値にした。`AIzaSyD-ritsu-fake-key-for-tests-` のあとに `0` を 6 字並べた 39 字で、読めば偽と分かる（この文書には、鍵の形の値を一続きでは書かない）。Google の API キーは、GitHub の push protection の既定の対象でない（GitHub の文書の表）。ソースの `.rs` には一続きで書かず、台帳の再現は `concat!` で、テストは部品をつないで作る（`["AKIA", "Q7TF", …].concat()`）。一続きで持つのは、W901 の材料（七つの言語）と、生成する診断の一覧（`crates/*/docs/codes.md`・`codes.ja.md`、スキルの `codes.md`、geas の `explain --all` の golden）の 59 本だけである。リポジトリの中の鍵の形の値をこの一つに限ると、GitHub の secret scanning の知らせが来ても、どれが何かがすぐ分かる。知らせが出ないよう、`.github/secret_scanning.yml` を置き、`paths-ignore` で、偽の鍵を書いた材料と、生成する codes のページを外す。
+
+### 16.11 例
+
+- **dandori の `examples/payout`**（英語の版 `payout.flow` と、日本語の版 `payout.ja.flow`、契約 `specs/payout.proto`。日本語の版は、JSON の名前を日本語にした `payout.ja.proto` を呼ぶ）。売り手への支払いを、銀行の API（`connect`）で送り、エージェントが下書きした知らせを送る。契約は口座の番号と名義に `debug_redact` を付け、フローは口座の ID だけを運ぶ。どの検査も何も言わない形で、参照を渡して値を渡さないことを見せる。テストの変異が、番号を運ぶ形（W904）、エージェントに名義を読ませる形（E906）、`discloses` で通す形を作る。どのプラットフォームでも走る例として、ほかの例と同じくシナリオを全部のプラットフォームで突き合わせる。
+- **dandori の `examples/inquiry`**：Temporal 版の Open Responses のエンドポイント（この例では Ollama）が `http://ollama.internal:11434/v1` で、W902 が英語と日本語の版で一つずつ出た。`plaintext "<理由>"` を書き足して、意図の書き方の例にした（README とサイトのこの例のページの抜粋も直した）。
+- **sakai の `examples/webshop`**：三つの OpenAPI の文書（`payments/api/payments.yaml`、`shipping/api/shipping.yaml`、`ordering/api/ordering.json`）は `security` を持たず、公表された言語の操作の五つに W903 が出た。文書の終わりに、ベアラートークンの方式（`components.securitySchemes`）とルートの `security` を足した。受注の `createOrder` は、アカウントの無い客も注文できるように、わざとだれでも呼べるようにして、操作に `security: []` を書いた（JSON の `operationId` と同じ行に書き、前からある行の番号を変えない）。注文の状態を ID だけでだれでも読めるようにする形は、例として勧めにくいので選ばなかった。日本語の版（`webshop.ja`）も同じに直した。足したあとの三つの文書は、Redocly CLI 2.58.1（`redocly lint --extends minimal`）が正しいと言う（警告は servers と summary が無いことだけ）。
+- **dandori のテストの材料** `agent_targets.flow`、`agents.flow`、`rule_connect_targets.flow`：E050 を確かめる材料で、`http://` の送り先に W902 が出る。golden を取り直した（材料は直していない。E050 を確かめる形を変えないため）。
+
+### 16.12 まだやらないこと
+
+- `x-data-classification` の `internal` を、外へ送る検査（E905、E906）だけの印にすること。
+- AsyncAPI の文書の印を使うこと（いまは dandori が AsyncAPI を読まないので、印を読むのは OpenAPI だけになる）。
+- rulec の `shape … proto|jsonschema` の入力の印を、規則の口で渡すこと。
+- 入力をそのまま出力に運ぶ規則（`carry` や、入力を書く行）。規則の出力を秘密にしないので、そうした規則に秘密を渡すと、出力は秘密のまま、印が消える。規則の口に「この出力は、この入力をそのまま出しうる」を足せば言える。
+- 子の `.flow` の出力の印（子の `outputs` の `secret`）を、親のタスクの結果に引き継ぐこと。いまは、親のタスクの結果に `secret` を書けば秘密になる。
+- `dandori doc` の表と図に、`secret`・`plaintext`・`discloses`・`history encrypted` を見せること。
+- 出典の URL（rulec、koyomi、yuen の `source … url`）が平文であること。`source fetch` が取ってきた本文を、そのまま固定することになる。
+- 契約の文書の W901 を、単体の `sakai check` と `dandori check` にも出すこと。いまは `ritsu check` だけにした（16.1）。
+- 契約の文書が `$ref` で読む、ほかの文書の鍵。ritsu-cross が調べるのは、言語が直に参照する文書だけである。
+- OpenAPI の、ほかのファイルへの `$ref` で書いたパスの項のサーバー（W902）。
+- `ritsu check` の警告を CI で失敗にするフラグ。
+- 公開する操作のどれにも、許可の決まり（Cedar のポリシー、sekisho の `.gate`）があるかを確かめること。W903 は `security` を見るところまでで、その先は sekisho の側の言語をまたぐ検査になる。
+- 生成器のほかの出力のうち、dandori のコメントに入るほかの文（`for … in …` の式の表示、規則の前提の文、`.proto` のファイルの名前）と、Argo の注釈の U+0085・U+2028・U+2029（dandori の DESIGN 7 章）。同じ形のテスト（行を終える五つの文字と、`</script>`、`---`、`]]>` を入れた材料）で確かめる。
+
+### 16.13 調べたもの（2026-10-06）
+
+| 何 | URL | 版・日付 | 読んだこと |
+|---|---|---|---|
+| protobuf の `debug_redact` | <https://protobuf.dev/news/2024-12-04/> | 2024-12-04 の告知 | 二つの印の付け方。C++ のデバッグの出力が v30 から伏せる |
+| 同（descriptor.proto） | <https://raw.githubusercontent.com/protocolbuffers/protobuf/main/src/google/protobuf/descriptor.proto> | 2026-10-06 の main | `FieldOptions` の `debug_redact = 16`（「Indicate that the field value should not be printed out when using debug formats, e.g. when the field contains sensitive credentials.」）と、`EnumValueOptions` の `debug_redact = 3`（「fields annotated with this enum value should not be printed out」） |
+| OpenAPI 3.2.0 | <https://spec.openapis.org/oas/v3.2.0.html> | 3.2.0（2025-09-19） | ルートと操作の `security`、空の配列、空の要件 `{}`、Server Object の `url` は相対でもよい |
+| OpenAPI のフォーマットの登録簿 | <https://spec.openapis.org/registry/format/password.html> | 2026-10-06 に読んだ | `password`：「a string that hints to obscure the value」 |
+| OpenAPI の拡張の登録簿 | <https://spec.openapis.org/registry/extension/x-data-classification>、<https://spec.openapis.org/registry/extension/x-sensitive-data> | 2026-10-06 に読んだ（提案は OAI/OpenAPI-Specification の discussion #4330） | 書く場所（Schema Object）、値の形、`category` と `sensitivity` の値 |
+| AsyncAPI 3.1.0 | <https://www.asyncapi.com/docs/reference/specification/v3.1.0> | 3.1.0（2026-01-31） | Server Object の `host`・`protocol`・`security`、Operation Object の `security`、Security Scheme Object の `type`、サーバーのバインディングの名前の一覧 |
+| AsyncAPI 3.0.0 と 2.6.0 | <https://raw.githubusercontent.com/asyncapi/spec/v3.0.0/spec/asyncapi.md>、<https://raw.githubusercontent.com/asyncapi/spec/v2.6.0/spec/asyncapi.md> | 3.0.0、2.6.0 | 3.0.0 は `protocol` の値を並べない。2.6.0 は暗号化する名前を含む一覧を持つ |
+| JSON Schema 2020-12 | <https://json-schema.org/draft/2020-12/json-schema-validation> | 2020-12、9.4 | `writeOnly` の意味と、パスワードの例 |
+| gitleaks の既定の規則 | <https://raw.githubusercontent.com/gitleaks/gitleaks/master/config/gitleaks.toml> | 2026-10-06 の master（3,209 行）。最新のリリースは v8.30.1（2026-03-21） | 16.3 の表の各規則、AWS の `.+EXAMPLE$` の allowlist |
+| GitHub の secret scanning | <https://docs.github.com/en/code-security/secret-scanning/introduction/supported-secret-scanning-patterns> | 2026-10-06 に読んだ | プロバイダーのパターンと push protection の既定（Google の API キーは既定でない）、秘密鍵の非プロバイダーのパターン |
+| Temporal のペイロードのコーデック | <https://docs.temporal.io/payload-codec>、<https://docs.temporal.io/failure-converter> | 2026-10-06 に読んだ。生成物が使う SDK は TypeScript 1.24.0・Python 1.33.0・Go v1.49.0 | コーデックで暗号化する。失敗の文とスタックトレースは既定では平文で、`encodeCommonAttributes` で通す |
+| Step Functions の保存時の暗号化 | <https://docs.aws.amazon.com/step-functions/latest/dg/encryption-at-rest.html> | 2026-10-06 に読んだ | カスタマー管理の鍵は実行の履歴を暗号化し、`GetExecutionHistory` と `DescribeExecution` に `kms:Decrypt` が要る |
+| Lambda durable functions のカスタマー管理の鍵 | <https://aws.amazon.com/about-aws/whats-new/2026/07/durablefunctions-cmk/>、<https://docs.aws.amazon.com/lambda/latest/dg/durable-encryption.html> | 2026-07-22 の告知。設定のページは 2026-10-06 に本文で読んだ | 関数の `DurableConfig.KMSKeyArn`、`GetDurableExecution` と `GetDurableExecutionHistory`（`IncludeExecutionData=true`）に `kms:Decrypt` が要る、実行は始まったときの鍵を使う |
+| Argo Workflows の秘密 | <https://argo-workflows.readthedocs.io/en/latest/walk-through/secrets/> | latest（2026-10-06 に読んだ） | 秘密は Kubernetes の Secret を環境変数かボリュームで渡す |
+| RFC 6761 | <https://www.rfc-editor.org/rfc/rfc6761.txt> | 2013 | 6.3 節：「The domain "localhost." and any names falling within ".localhost." are special」、名前の問い合わせはループバックのアドレスになると考えてよい |
