@@ -127,6 +127,13 @@ fn held() -> Option<Rc<dyn Files>> {
     FILES.with(|c| c.borrow().clone())
 }
 
+/// What this module reads and writes on this thread when it is not the disk: the files of the
+/// innermost [`with`], or None for the disk. A [`Files`] that watches what is read (koyomi's ports
+/// keep a check until a file it read reads differently) hands every call on to it.
+pub fn current() -> Option<Rc<dyn Files>> {
+    held()
+}
+
 /// `std::fs::read`.
 pub fn read(p: impl AsRef<Path>) -> io::Result<Vec<u8>> {
     match held() {

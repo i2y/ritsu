@@ -1,0 +1,25 @@
+rule reach v1
+description "A table over a derived value whose last row lies past what the derive reaches: the check lets the row through, and a question over ranges of the inputs leaves it out"
+
+enum band = small | big | huge
+
+inputs
+  amount : money[GBP]  range >=1GBP <=100GBP
+  limit  : money[GBP]  range >=0GBP <=100GBP
+
+outputs
+  out : band
+
+derive excess : money[GBP] = amount - limit  range >=-1000GBP <=1000GBP
+
+table t
+policy unique
+| excess          | -> out : band |
+| <=0GBP          | small         |
+| >0GBP <=500GBP  | big           |
+| >500GBP         | huge          |
+
+examples
+| amount | limit | -> out |
+| 1GBP   | 100GBP | small |
+| 100GBP | 0GBP   | big   |

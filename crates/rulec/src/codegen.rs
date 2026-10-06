@@ -109,6 +109,13 @@ fn pub_name(n: &Name) -> String {
     n.ascii.clone().unwrap_or_else(|| n.text.clone())
 }
 
+/// The public name of the value `v` of the enum `en`, as the rule writes it: its alias in
+/// parentheses, else its name; a value of an enum the rule takes from the prelude is its name as
+/// written. What ritsu's port hands over beside the generated member (`EnumValue::public`).
+pub fn public_value(f: &RuleFile, en: &str, v: &str) -> String {
+    f.enums.iter().find(|e| e.name.text == en).and_then(|e| e.values.iter().find(|x| x.text == v)).map(pub_name).unwrap_or_else(|| v.to_string())
+}
+
 /// Which side of a counting walk an item is emitted on (§15.58).
 ///
 /// A rule that counts has items before the walk's summary and after it, so the body is
@@ -6445,7 +6452,11 @@ impl Gen<'_> {
                 alias: self.enum_names.get(jp).cloned().unwrap_or_else(|| pascal(jp)),
                 values: self.c.enums[jp]
                     .iter()
-                    .map(|v| ritsu_ports::EnumValue { name: v.clone(), alias: self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.clone()).unwrap_or_else(|| v.clone()) })
+                    .map(|v| ritsu_ports::EnumValue {
+                        name: v.clone(),
+                        alias: self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.clone()).unwrap_or_else(|| v.clone()),
+                        public: public_value(self.f, jp, v),
+                    })
                     .collect(),
             })
             .collect()

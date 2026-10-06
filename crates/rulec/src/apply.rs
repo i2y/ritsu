@@ -193,9 +193,10 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             continue;
         }
         // The callee has to pass the whole check — completeness and the rest, not the type
-        // check alone — before its definitions are trusted here.
-        let verdict = crate::report(&src, &cp).diags;
-        let (cf, cc) = match crate::prepare(&src, &cp) {
+        // check alone — before its definitions are trusted here. It is checked as it is: the
+        // ranges `outputs_over` holds this rule's inputs to are not the callee's.
+        let (verdict, prepared) = crate::over::without(|| (crate::report(&src, &cp).diags, crate::prepare(&src, &cp)));
+        let (cf, cc) = match prepared {
             Ok(v) if !verdict.iter().any(|d| d.severity == Severity::Error) => v,
             _ => {
                 let mut codes: Vec<&str> = verdict.iter().filter(|d| d.severity == Severity::Error).map(|d| d.code).collect();

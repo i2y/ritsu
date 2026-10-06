@@ -1,0 +1,61 @@
+asyncapi: 3.0.0
+info:
+  title: Order events
+  version: 1.0.0
+defaultContentType: application/json
+channels:
+  orderPlaced:
+    address: orders/{orderId}/placed
+    parameters:
+      orderId:
+        description: The order placed
+    messages:
+      placed:
+        $ref: '#/components/messages/OrderPlaced'
+  refunds:
+    address: null
+    messages:
+      requested:
+        contentType: application/cloudevents+json
+        payload:
+          schemaFormat: application/vnd.aai.asyncapi+json;version=3.0.0
+          schema:
+            type: object
+            required: [amount]
+            properties:
+              amount:
+                type: integer
+                minimum: 1
+                maximum: 10000
+operations:
+  publishOrderPlaced:
+    action: send
+    channel:
+      $ref: '#/channels/orderPlaced'
+    security:
+      - $ref: '#/components/securitySchemes/broker'
+  onRefundRequested:
+    action: receive
+    channel:
+      $ref: '#/channels/refunds'
+    messages:
+      - $ref: '#/channels/refunds/messages/requested'
+    security: []
+components:
+  securitySchemes:
+    broker:
+      type: scramSha256
+  messages:
+    OrderPlaced:
+      payload:
+        type: object
+        required: [orderId, total]
+        properties:
+          orderId:
+            type: string
+          total:
+            type: integer
+            minimum: 0
+          region:
+            type: string
+            enum: [uk, eu]

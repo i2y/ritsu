@@ -702,6 +702,16 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             }
             c.day_sets.insert(i.name.text.clone(), held);
         }
+        if let Some(given) = crate::over::held(&i.name.text) {
+            // `outputs_over` (ritsu's port): the input takes only the values given, inside what
+            // the rule declares for it; a date of koyomi's keeps the days among them.
+            let declared = c.ranges.get(&i.name.text).copied().unwrap_or((None, None));
+            let (lo, hi) = crate::over::meet(declared, given);
+            c.ranges.insert(i.name.text.clone(), (lo, hi));
+            if let Some(d) = c.day_sets.get_mut(&i.name.text) {
+                d.days.retain(|x| held_one(*x, lo, hi));
+            }
+        }
         if let Some(n) = unreadable_step(&i.ty, &ty) {
             c.diags.push(
                 Diag::error("E103", tr!("刻み `{}` は {ty} の値ではありません", "The step `{}` is not a value of {ty}", n.raw))

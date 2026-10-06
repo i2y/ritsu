@@ -993,6 +993,10 @@ impl TableRegion {
                         lo = dlo.or(lo);
                         hi = dhi.or(hi);
                     }
+                    // `outputs_over` (ritsu's port): the input takes only the days given.
+                    if let Some(h) = crate::over::held(name) {
+                        (lo, hi) = crate::over::narrow(&mut b, (lo, hi), h);
+                    }
                     // A date's step is one day. Dates are serial day numbers, so adjacent days
                     // differ by 1.
                     Axis::Num {
@@ -1024,6 +1028,10 @@ impl TableRegion {
                         b.dedup_by(|x, y| x.cmp_to(*y) == std::cmp::Ordering::Equal);
                         lo = clo.or(lo);
                         hi = chi.or(hi);
+                    }
+                    // `outputs_over` (ritsu's port): the input takes only the values given.
+                    if let Some(h) = crate::over::held(name) {
+                        (lo, hi) = crate::over::narrow(&mut b, (lo, hi), h);
                     }
                     let unit = match &ty {
                         Ty::Money { cur, .. } => cur.clone(),
@@ -2402,6 +2410,98 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
     }
     TableCheck { diags: out, w114, quiet, shadow, nodes, overlaps, edge_pairs, dead: dead_rows }
 }
+
+/// Which rows of a definition set some input may reach (`outputs_over`, ritsu's port), on the
+/// merged table: a row is live when some point of its region that no row taking precedence over
+/// it covers is left standing by the sieve — koyomi's days, the `constraint`s, a derived value's
+/// reach, the tables above, and the rule's linear model. E102 asks less of a row (an empty
+/// region, the tables above, the rows that take precedence), so a row it lets through can still
+/// be dead here: one that takes only values of a derived column the derive never reaches.
+///
+/// A dead row is never reached. A live row may still be out of reach where the sieve cannot
+/// tell (two derived values over the same inputs), so a caller that needs an exact answer finds
+/// an input for each live row's value. None when the region cannot be analyzed or the walk runs
+/// past `budget`.
+pub fn live_rows(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, budget: i64) -> Option<Vec<bool>> {
+    let t = &set.table;
+    let reg = TableRegion::build(t, c, f)?;
+    if reg.unanalyzable.is_some() {
+        return None;
+    }
+    let ups = upstreams(t, c, f);
+    let mut left = budget;
+    let mut out = Vec::with_capacity(t.rows.len());
+    for i in 0..t.rows.len() {
+        if reg.empty(i) || upstream_dead(&t.rows[i], &ups, c, t) || reg.misses_the_days(i).is_some() {
+            out.push(false);
+            continue;
+        }
+        let winners: Vec<usize> = set.beats[i].iter().copied().filter(|&e| reg.intersects(e, i)).collect();
+        let live = reg.live_rec(&winners, i, &mut Vec::new(), &ups, c, &mut left).is_some();
+        if left < 0 {
+            return None;
+        }
+        out.push(live);
+    }
+    Some(out)
+}
+
+impl TableRegion {
+    /// A point of row `target`'s region that `rows` do not cover and the sieve leaves standing,
+    /// as [`live_rows`] asks for it.
+    fn live_rec(&self, rows: &[usize], target: usize, path: &mut Vec<usize>, ups: &[Upstream], chk: &Checked, budget: &mut i64) -> Option<Vec<usize>> {
+        *budget -= 1;
+        if *budget < 0 {
+            return None;
+        }
+        if path.len() == self.axes.len() {
+            if !rows.is_empty() || self.feasible(path) == Feasible::No || self.beyond_reach(path, chk) || self.upstream_dead_at(path, ups, chk) || self.refutes_path(path) {
+                return None;
+            }
+            return Some(path.clone());
+        }
+        let ai = path.len();
+        if rows.iter().any(|&r| self.masks[r][ai..].iter().all(|m| m.iter().all(|x| *x))) {
+            return None;
+        }
+        for c in 0..self.axes[ai].len() {
+            if !self.masks[target][ai][c] {
+                continue;
+            }
+            let sub: Vec<usize> = rows.iter().copied().filter(|&r| self.masks[r][ai][c]).collect();
+            path.push(c);
+            let got = if self.feasible(path) == Feasible::No { None } else { self.live_rec(&sub, target, path, ups, chk, budget) };
+            path.pop();
+            if got.is_some() {
+                return got;
+            }
+        }
+        None
+    }
+
+    /// Whether a numeric axis of the path takes a coordinate wholly outside the values its column
+    /// can come to (`Checked::ranges`: an input's range, a derive's or a define's reach by the
+    /// arithmetic of intervals, the values an upstream table writes). An open coordinate leaves its
+    /// ends out, so `> 0` against a reach that ends at 0 is outside it; the sieve reads the ends in,
+    /// and looks at the derives only.
+    fn beyond_reach(&self, path: &[usize], chk: &Checked) -> bool {
+        use std::cmp::Ordering::*;
+        for (ai, &ci) in path.iter().enumerate() {
+            let Axis::Num { coords, .. } = &self.axes[ai] else { continue };
+            let Some(&(rl, rh)) = chk.ranges.get(&self.col_names[ai]) else { continue };
+            let outside = match coords.get(ci) {
+                Some(Coord::Point(v)) => rl.is_some_and(|l| v.cmp_to(l) == Less) || rh.is_some_and(|h| v.cmp_to(h) == Greater),
+                Some(Coord::Open(a, b)) => matches!((b, rl), (Some(b), Some(l)) if b.cmp_to(l) != Greater) || matches!((a, rh), (Some(a), Some(h)) if a.cmp_to(h) != Less),
+                None => false,
+            };
+            if outside {
+                return true;
+            }
+        }
+        false
+    }
+}
+
 impl TableRegion {
     /// Find a coordinate in the region of row `target` that `rows` do not cover.
     fn hole_within(&self, rows: &[usize], target: usize, budget: &mut i64) -> Option<Vec<usize>> {

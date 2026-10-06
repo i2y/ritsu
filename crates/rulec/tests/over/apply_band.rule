@@ -1,0 +1,12 @@
+rule apply_band v1
+description "Applies size_band.rule with its input under the same name: a question over a range of the amount holds this rule's input, and the rule applied is checked as it is"
+
+inputs
+  amount : money[GBP]  range >=1GBP <=100GBP
+
+outputs
+  answer : bool
+
+apply size_band = "size_band.rule" sha256:4fbc01deaa3a7f91
+  amount = amount
+  large -> answer

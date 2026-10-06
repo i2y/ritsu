@@ -1,0 +1,26 @@
+rule refund_limit v1
+description "Whether a refund is within the limit of the person who asks for it. A sketch of a shop's own terms, written for sekisho's example; it is not a transcription of any document"
+
+enum refund_band = within_limit | over_limit
+
+inputs
+  amount : money[GBP, incl_tax]  range >=1GBP <=10_000GBP
+  limit  : money[GBP, incl_tax]  range >=0GBP <=10_000GBP
+
+outputs
+  band : refund_band
+
+derive excess : money[GBP, incl_tax] = amount - limit  range >=-9_999GBP <=10_000GBP
+
+table decide
+policy unique
+| excess | -> band : refund_band |
+| <=0GBP | within_limit          |
+| >0GBP  | over_limit            |
+
+examples
+| amount | limit  | -> band       |
+| 50GBP  | 100GBP | within_limit  |
+| 100GBP | 100GBP | within_limit  |
+| 101GBP | 100GBP | over_limit    |
+| 1GBP   | 0GBP   | over_limit    |

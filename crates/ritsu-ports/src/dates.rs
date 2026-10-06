@@ -65,6 +65,18 @@ pub struct DateCalendar {
     pub offset: Option<i32>,
 }
 
+/// What koyomi knows of one calendar file that passes its check (`Dates::calendar`): its name and
+/// alias, the days its data covers (both ends in), the UTC offset its times are in (minutes east
+/// of UTC) when it says one, and every day it closes within the data.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CalendarFacts {
+    pub name: String,
+    pub alias: String,
+    pub data: (Day, Day),
+    pub offset: Option<i32>,
+    pub closed: DaySet,
+}
+
 /// The fewest and the most days from the date input to a date over the whole range of the
 /// inputs (`Dates::span`), each with the date input's day that first comes to it, when the answer
 /// says one.
@@ -121,12 +133,31 @@ pub trait Dates {
     /// itself), in the order written.
     fn eval(&self, file: &Path, inputs: &[(String, i64)]) -> Result<Vec<(String, DateValue)>, Vec<Said>>;
 
+    /// What koyomi knows of a calendar file (sekisho's DESIGN 3.3: `today is open in <calendar>`),
+    /// when it passes check; else what check says. The default reads no calendar.
+    fn calendar(&self, file: &Path) -> Result<CalendarFacts, Vec<Said>> {
+        Err(unanswered(file, ritsu_base::tr!("この口はカレンダーを読みません", "this port reads no calendar")))
+    }
+
+    /// The page for people, as `koyomi doc` draws it — Markdown, or with `html` the one HTML file —
+    /// in `lang`, naming the file `shown`, for a dates file or a calendar, as `Rules::doc` gives
+    /// rulec's. The default draws no page.
+    fn doc(&self, file: &Path, shown: &str, html: bool, lang: ritsu_base::text::Lang) -> Result<String, Vec<Said>> {
+        let _ = (shown, html, lang);
+        Err(unanswered(file, ritsu_base::tr!("この口はページを作りません", "this port draws no page")))
+    }
+
     /// Whether koyomi is joined at all: false for the port the binary of a receiving language's own
     /// crate holds, which reads no dates file (DESIGN 2.3), so that the language can say so once,
     /// as with rules (`Rules::joined`).
     fn joined(&self) -> bool {
         true
     }
+}
+
+/// What a port that does not answer a question says of the file it was asked about.
+fn unanswered(file: &Path, message: ritsu_base::text::Text) -> Vec<Said> {
+    vec![Said { code: String::new(), file: file.display().to_string(), line: None, message }]
 }
 
 /// A day number as a date, `YYYY-MM-DD` (days since 1970-01-01, as rulec and koyomi count them).

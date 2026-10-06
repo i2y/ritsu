@@ -7,9 +7,11 @@
 //!
 //! - [`Rules`]: a rule's inputs and outputs with their units and ranges, its enums, its state
 //!   machine, its preconditions, its Connect service, how its generated code is called, the page
-//!   `rulec doc` draws, and the questions a workflow asks of it.
+//!   `rulec doc` draws, the questions a workflow asks of it, and the values an output comes to
+//!   when the inputs are held to ranges (what a gate counts).
 //! - [`Dates`]: a dates file's functions, inputs, calendar and claims, the values a function
-//!   takes over its whole range, and the days from an input to a value.
+//!   takes over its whole range, the days from an input to a value, a calendar's closed days, and
+//!   the page `koyomi doc` draws.
 //! - [`Books`]: a book's units, accounts and transfers, the life of a hold, and a [`Ledger`] to
 //!   run operations on.
 //! - [`Claims`]: a geas spec's claims, the record `geas map` keeps of the lines they ran, and
@@ -30,6 +32,9 @@
 //!   file belongs to — as the checks across the borders read them (X14).
 //! - [`Checked`]: what a language's own `check` prints for a unit it checks, a diagnostic at a
 //!   time, the text and the JSON, as `ritsu check` prints it again (DESIGN 8.3).
+//! - [`Gates`]: a `.gate`'s actions with the operations they guard, its workflows, policies and
+//!   expectations, and how far someone is allowed an action, for the checks across the borders;
+//!   and [`GatePorts`], the ports sekisho reads a `.gate` with.
 //!
 //! Every check across a border answers with an [`Answer`]: shown to hold, an example where it
 //! does not, or why it cannot be decided (P5). A question that asks for a value answers with a
@@ -40,6 +45,7 @@ mod check;
 mod claims;
 mod dates;
 mod flows;
+mod gates;
 mod index;
 mod maps;
 mod rules;
@@ -50,6 +56,8 @@ pub use check::{Checked, Finding, Part, Verdict};
 pub use claims::{Affected, Claim, Claims, MapRecord, RecordClaim, RecordFile, RecordRan, Touched, TouchedLines, Untouched};
 pub use sources::{Source, SourceKind, Sources};
 pub use dates::{day_text, DateCalendar, DateFacts, DateFunction, DateInput, DateKind, DateValue, Dates, Day, DaySet, DaySpan};
+pub use dates::CalendarFacts;
+pub use gates::{Allowance, Asker, GateAction, GateFacts, GatePolicy, GatePorts, GateWorkflow, Gates};
 pub use index::{Index, Item, Items, Lookup, Reference, References};
 pub use flows::{
     seconds_text, Amount, CallArg, Crossings, DateCall, Destination, Flows, HoldSpan, Origin, Ports, RuleCall, Secret, Send, TransferCall,

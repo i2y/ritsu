@@ -1,0 +1,14 @@
+rule size_band v1
+description "Whether an amount is large, applied by apply_band.rule under the same name of its input"
+
+inputs
+  amount : money[GBP]  range >=1GBP <=100GBP
+
+outputs
+  large : bool
+
+table decide
+policy unique
+| amount  | -> large : bool |
+| <=50GBP | false           |
+| >50GBP  | true            |

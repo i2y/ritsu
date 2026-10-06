@@ -1,0 +1,25 @@
+asyncapi: 3.1.0
+info:
+  title: Stock
+  version: 0.1.0
+channels:
+  received:
+    address: stock/{warehouse}/received
+    parameters:
+      warehouse:
+        enum: [north, south]
+    messages:
+      received:
+        payload:
+          type: object
+          properties:
+            sku:
+              type: string
+            qty:
+              type: integer
+              minimum: 1
+operations:
+  receiveStock:
+    action: receive
+    channel:
+      $ref: '#/channels/received'

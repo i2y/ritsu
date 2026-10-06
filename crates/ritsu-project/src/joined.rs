@@ -103,4 +103,14 @@ impl Joined {
         s.dates = Some(self.koyomi.clone());
         s
     }
+
+    /// Every language sekisho reads (sekisho's DESIGN 8.1): a rule a computed value calls, what
+    /// its outputs come to over the intervals a policy cuts, and its page (`Rules`); a dates file's
+    /// dates, a calendar's closed days, and their pages (`Dates`); a book whose transfers an action
+    /// guards (`Books`); and dandori for the workflows a gate names — whether a `.flow` passes its
+    /// check (`Flows`, read with the rules, dates files and books here) and what it holds (`Items`).
+    /// The contracts an action guards need no port (`ritsu_base::openapi`, ritsu-proto).
+    pub fn sekisho(&self) -> ritsu_ports::GatePorts {
+        ritsu_ports::GatePorts { rules: self.rulec.clone(), dates: self.koyomi.clone(), books: self.chobo.clone(), flows: self.dandori.clone(), items: self.dandori.clone() }
+    }
 }

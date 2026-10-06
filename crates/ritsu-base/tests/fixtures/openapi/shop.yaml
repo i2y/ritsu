@@ -1,0 +1,123 @@
+openapi: 3.0.3
+info:
+  title: Shop
+  version: 2.1.0
+servers:
+  - url: https://shop.example.com
+security:
+  - staff: []
+paths:
+  /orders:
+    get:
+      operationId: listOrders
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [paid, shipped, returned, refunded]
+      responses:
+        '200':
+          description: The orders
+        default:
+          description: An error
+    post:
+      operationId: placeOrder
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/NewOrder'
+      responses:
+        '201':
+          description: The order
+        4XX:
+          description: Refused
+  /orders/{orderId}:
+    parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: X-Request-Id
+        in: header
+        schema:
+          type: string
+    get:
+      parameters:
+        - name: X-Request-Id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: session
+          in: cookie
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The order
+    patch:
+      operationId: noteOrder
+      security:
+        - staff: []
+          audit: [write]
+        - {}
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  nullable: true
+      responses:
+        '204':
+          description: Noted
+components:
+  securitySchemes:
+    staff:
+      type: http
+      scheme: bearer
+    audit:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://id.example.com/token
+          scopes:
+            write: Write notes
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+  requestBodies:
+    NewOrder:
+      required: true
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Customer'
+              - type: object
+                required: [total]
+                properties:
+                  total:
+                    type: integer
+                    minimum: 0
+                    exclusiveMinimum: true
+                    maximum: 1000000
+                  express:
+                    type: boolean
+  schemas:
+    Customer:
+      type: object
+      required: [customerId]
+      properties:
+        customerId:
+          type: string

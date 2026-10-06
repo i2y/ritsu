@@ -60,6 +60,9 @@ pub mod lex;
 pub mod machine;
 pub mod num;
 pub mod ooxml;
+/// What an output comes to with some inputs held to part of their range (ritsu's port
+/// `Rules::outputs_over`).
+pub mod over;
 pub mod parse;
 /// ritsu's ports, as rulec answers them (ritsu's DESIGN 3.2).
 pub mod ports;

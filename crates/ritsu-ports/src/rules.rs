@@ -73,10 +73,17 @@ pub struct RuleEnum {
     pub values: Vec<EnumValue>,
 }
 
+/// A value of a rule's enum.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnumValue {
+    /// As the rule names it (`上限まで`).
     pub name: String,
+    /// The member in the generated code (`WithinLimit`).
     pub alias: String,
+    /// The value's public name as the rule writes it: its alias in parentheses
+    /// (`上限まで(within_limit)` is `within_limit`), else its name. What a gate writes into Cedar,
+    /// and what `Rules::outputs_over` answers an enum's value with.
+    pub public: String,
 }
 
 /// The state machine a rule is one step of (rulec's §15.148): the table that decides the next
@@ -235,7 +242,8 @@ pub enum Value {
     Str(String),
     /// `YYYY-MM-DD`.
     Date(String),
-    /// An enum's value, by the rule's name of it.
+    /// An enum's value, by the rule's name of it (by its public name in what
+    /// `Rules::outputs_over` answers, `EnumValue::public`).
     Enum(String),
     /// The list a rule walks: each element, its fields by name.
     List(Vec<Vec<(String, Value)>>),
@@ -276,6 +284,23 @@ pub trait Rules {
     /// fewest and most, and, where every row that decides it writes a number, each of those
     /// numbers with an input that reaches it.
     fn output_values(&self, rule: &Path, output: &str) -> Result<crate::Found<OutputValues>, Vec<Said>>;
+
+    /// Each value the output `output` (an enum or a bool) can come to when the inputs named in
+    /// `ranges` are held to them (by name, as the integers on the wire, both ends in; None at an
+    /// open end, where the rule's own range holds) and every other input takes its whole range,
+    /// each with an input that reaches it (sekisho's DESIGN 3.2: the computed values a policy
+    /// reads, counted over the intervals its conditions cut). An enum's value is its public name
+    /// (`EnumValue::public`, what a gate writes into Cedar); the input is as `eval` takes it.
+    /// Exact, or undecided with the reason: a value the rule's own analysis cannot rule out and
+    /// no input is found to reach. An empty list when no input is inside the ranges. The default
+    /// decides nothing, for a port that does not analyse rules.
+    fn outputs_over(&self, rule: &Path, output: &str, ranges: &[(String, Option<i128>, Option<i128>)]) -> Result<crate::Found<Vec<(Value, Values)>>, Vec<Said>> {
+        let _ = (rule, output, ranges);
+        Ok(crate::Found::Undecided(ritsu_base::tr!(
+            "この口は、入力を範囲に限ったときに出力がとる値を答えません",
+            "this port does not say what an output comes to over ranges of the inputs"
+        )))
+    }
 
     /// Whether the rule's tables are complete, without overlap and without a row nothing
     /// reaches, when the date input `input` takes only the days in `days` (DESIGN 7.5 (b), X3).

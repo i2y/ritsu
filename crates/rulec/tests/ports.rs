@@ -432,3 +432,416 @@ fn a_rule_checked_for_ritsu_check_is_checked_once() {
     }
     assert_eq!(e.checks(), rules.len(), "each rule is checked once, for check and for its facts");
 }
+
+/// The values a question over ranges answers, in its order.
+fn values_of(found: &ritsu_ports::Found<Vec<(Value, ritsu_ports::Values)>>) -> Vec<Value> {
+    match found {
+        ritsu_ports::Found::Value(vs) => vs.iter().map(|(v, _)| v.clone()).collect(),
+        ritsu_ports::Found::Undecided(why) => panic!("undecided: {}", why.en),
+    }
+}
+
+/// Each value comes with an input that is inside the ranges and comes to it.
+fn witnesses_hold(e: &Engine, path: &str, output: &str, held: &[(String, Option<i128>, Option<i128>)], found: &ritsu_ports::Found<Vec<(Value, ritsu_ports::Values)>>) {
+    let ritsu_ports::Found::Value(vs) = found else { return };
+    for (v, input) in vs {
+        for (name, lo, hi) in held {
+            let at = match input.iter().find(|(n, _)| n == name).map(|(_, x)| x) {
+                Some(Value::Int(n)) => *n,
+                Some(Value::Date(d)) => {
+                    let p: Vec<i32> = d.split('-').map(|x| x.parse().unwrap()).collect();
+                    let r = rulec::types::date_ord(p[0], p[1] as u32, p[2] as u32);
+                    r.num / r.den
+                }
+                _ => continue,
+            };
+            assert!(lo.is_none_or(|l| at >= l) && hi.is_none_or(|h| at <= h), "{path} {output}: {name} = {at} is outside {lo:?}..{hi:?}");
+        }
+        let outs = e.eval(Path::new(path), input).unwrap_or_else(|x| panic!("{path} {output}: {x:?}"));
+        let got = outs.iter().find(|(n, _)| n == output).map(|(_, x)| public(e, path, output, x));
+        assert_eq!(got.as_ref(), Some(v), "{path} {output}: {input:?}");
+    }
+}
+
+/// A value `eval` answers (an enum's value by the rule's name of it), as the question over ranges
+/// answers it: an enum's value by its public name, from the facts the port hands over.
+fn public(e: &Engine, path: &str, output: &str, v: &Value) -> Value {
+    let Value::Enum(name) = v else { return v.clone() };
+    let facts = e.facts(Path::new(path)).unwrap();
+    let ty = facts.outputs.iter().find(|c| c.name == output).map(|c| c.ty.clone());
+    let en = match ty {
+        Some(ritsu_ports::ColumnType::Enum(en)) => en,
+        Some(ritsu_ports::ColumnType::Opt(t)) => match *t {
+            ritsu_ports::ColumnType::Enum(en) => en,
+            _ => return v.clone(),
+        },
+        _ => return v.clone(),
+    };
+    let value = facts.enums.iter().find(|x| x.name == en).and_then(|x| x.values.iter().find(|y| y.name == *name)).unwrap_or_else(|| panic!("{path}: {name} is no value of {en}"));
+    Value::Enum(value.public.clone())
+}
+
+/// sekisho's example: a refund within the limit or over it, by a table over the derived value
+/// `excess = amount - limit`. Held to the intervals a policy cuts `amount` into, and to limits
+/// that leave only one of the rows, the values are the ones some input reaches — a row whose
+/// values of `excess` the derive does not reach is left out, which `rulec check` (E102) does not
+/// look at — in the English rule and its Japanese twin alike.
+#[test]
+fn an_output_over_ranges_leaves_out_the_rows_past_a_derives_reach() {
+    use ritsu_ports::Found;
+    let e = Engine::new();
+    for (path, out, amount, limit, within, over) in [
+        ("tests/over/refund_limit.rule", "band", "amount", "limit", "within_limit", "over_limit"),
+        // the Japanese twin answers by the aliases it writes: `上限まで(within_limit)`
+        ("tests/over/返金の上限.rule", "区分", "金額", "上限", "within_limit", "over_limit"),
+    ] {
+        let ask = |ranges: &[(&str, Option<i128>, Option<i128>)]| {
+            let held: Vec<(String, Option<i128>, Option<i128>)> = ranges.iter().map(|(n, l, h)| (n.to_string(), *l, *h)).collect();
+            let found = e.outputs_over(Path::new(path), out, &held).unwrap_or_else(|x| panic!("{path}: {x:?}"));
+            witnesses_hold(&e, path, out, &held, &found);
+            found
+        };
+        let (w, o) = (Value::Enum(within.into()), Value::Enum(over.into()));
+        // the two intervals sekisho's example cuts `amount` into, at 50 pounds
+        assert_eq!(values_of(&ask(&[(amount, Some(1), Some(50))])), [w.clone(), o.clone()], "{path}");
+        // each value comes with an input written in the order the rule declares its inputs
+        if let ritsu_ports::Found::Value(vs) = ask(&[(amount, Some(1), Some(50))]) {
+            assert!(vs.iter().all(|(_, input)| input.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>() == [amount, limit]), "{path}: {vs:?}");
+        }
+        assert_eq!(values_of(&ask(&[(amount, Some(51), Some(10_000))])), [w.clone(), o.clone()], "{path}");
+        // a limit above every amount: `excess` stays at -50 or below
+        assert_eq!(values_of(&ask(&[(amount, Some(1), Some(50)), (limit, Some(100), None)])), [w.clone()], "{path}");
+        // no limit at all: `excess` is the amount
+        assert_eq!(values_of(&ask(&[(limit, Some(0), Some(0))])), [o.clone()], "{path}");
+        // `excess` is exactly 0, and `>0GBP` on a derive of whole pounds is `>=1GBP`
+        assert_eq!(values_of(&ask(&[(amount, Some(5), Some(5)), (limit, Some(5), Some(5))])), [w.clone()], "{path}");
+        // ranges that hold no input
+        assert_eq!(ask(&[(amount, Some(20_000), None)]), Found::Value(vec![]), "{path}");
+        assert_eq!(ask(&[(amount, Some(40), Some(30))]), Found::Value(vec![]), "{path}");
+    }
+    // a row past the reach of its derive passes check, and no input comes to its value
+    let path = "tests/over/reach.rule";
+    let src = std::fs::read_to_string(path).unwrap();
+    assert!(!rulec::has_error(&rulec::report(&src, path).diags));
+    let found = e.outputs_over(Path::new(path), "out", &[]).unwrap();
+    witnesses_hold(&e, path, "out", &[], &found);
+    assert_eq!(values_of(&found), [Value::Enum("small".into()), Value::Enum("big".into())]);
+    let found = e.outputs_over(Path::new(path), "out", &[("limit".into(), Some(0), Some(0)), ("amount".into(), Some(1), Some(1))]).unwrap();
+    assert_eq!(values_of(&found), [Value::Enum("big".into())]);
+}
+
+/// What the question does not answer, it says why: a name that is no output or no input, an
+/// output that is a number, an input that is not one, a rule that walks a list.
+#[test]
+fn an_output_over_ranges_says_why_it_cannot_answer() {
+    use ritsu_ports::Found;
+    let e = Engine::new();
+    let undecided = |path: &str, out: &str, held: &[(String, Option<i128>, Option<i128>)]| match e.outputs_over(Path::new(path), out, held).unwrap_or_else(|x| panic!("{path}: {x:?}")) {
+        Found::Undecided(t) => {
+            assert!(!t.ja.is_empty() && t.ja != t.en, "{t:?}");
+            t.en
+        }
+        Found::Value(v) => panic!("{path} {out}: decided {v:?}"),
+    };
+    let p = "tests/over/refund_limit.rule";
+    assert!(undecided(p, "excess", &[]).contains("not an output"));
+    assert!(undecided(p, "band", &[("price".into(), Some(1), Some(2))]).contains("not an input"));
+    // a numeric output, and a rule that walks a list, from the corpus
+    let mut numeric = false;
+    let mut walks = false;
+    for path in corpus() {
+        let src = std::fs::read_to_string(&path).unwrap();
+        if rulec::has_error(&rulec::report(&src, &path).diags) {
+            continue;
+        }
+        let (f, c) = rulec::prepare(&src, &path).unwrap();
+        let first = f.outputs[0].name.text.clone();
+        if !numeric && f.elements.is_none() && c.ty_of(&first).is_some_and(|t| t.is_numeric()) {
+            assert!(undecided(&path, &first, &[]).contains("neither an enum nor a bool"), "{path}");
+            numeric = true;
+        }
+        if !walks
+            && let Some(el) = &f.elements
+            && let Some(o) = f.outputs.iter().find(|o| matches!(c.ty_of(&o.name.text), Some(rulec::types::Ty::Enum(_) | rulec::types::Ty::Bool)))
+        {
+            assert!(undecided(&path, &o.name.text, &[]).contains(&format!("walks the list `{}`", el.name.text)), "{path}");
+            walks = true;
+        }
+        if !walks || !numeric {
+            continue;
+        }
+        // an enum input cannot be held to a range
+        if let Some(i) = f.inputs.iter().find(|i| matches!(c.ty_of(&i.name.text), Some(rulec::types::Ty::Enum(_)))) {
+            let out = f.outputs.iter().find(|o| matches!(c.ty_of(&o.name.text), Some(rulec::types::Ty::Enum(_) | rulec::types::Ty::Bool)));
+            if let Some(o) = out {
+                assert!(undecided(&path, &o.name.text, &[(i.name.text.clone(), Some(0), Some(1))]).contains("neither a number nor a date"), "{path}");
+                return;
+            }
+        }
+    }
+    panic!("the corpus has no rule with a numeric output, a list, and an enum input beside an enum output");
+}
+
+/// Over the corpus, every numeric and date input held to a small interval around a vector's
+/// value, what the port answers for each enum and bool output is what the reference evaluator
+/// comes to on every input inside the intervals (every value of each enum and bool input, the
+/// constraints kept): the same values, each with an input inside the ranges that comes to it.
+/// What the port leaves undecided is counted, and printed with its reason.
+#[test]
+fn an_output_over_ranges_is_what_every_input_inside_them_comes_to() {
+    use rulec::eval::Val;
+    use rulec::types::Ty;
+    use std::collections::{BTreeMap, HashMap};
+    const CAP: usize = 2_000;
+    let e = Engine::new();
+    let (mut cases, mut exact, mut undecided, mut unwalked, mut too_big, mut narrower) = (0, 0, 0, 0, 0, 0);
+    let mut why: Vec<String> = Vec::new();
+    // the corpus, and the rules of these tests and of `apply`'s
+    let mut rules = corpus();
+    for dir in ["tests/over", "tests/apply_fixtures"] {
+        let mut more: Vec<String> = std::fs::read_dir(dir).unwrap().flatten().map(|e| format!("{dir}/{}", e.file_name().to_string_lossy())).filter(|p| p.ends_with(".rule")).collect();
+        more.sort();
+        rules.extend(more);
+    }
+    for path in rules {
+        let src = std::fs::read_to_string(&path).unwrap();
+        if rulec::has_error(&rulec::report(&src, &path).diags) {
+            continue;
+        }
+        let (f, c) = rulec::prepare(&src, &path).unwrap();
+        let base = |t: Option<Ty>| match t {
+            Some(Ty::Opt(t)) => *t,
+            Some(t) => t,
+            None => Ty::Unknown,
+        };
+        let outputs: Vec<String> = f.outputs.iter().map(|o| o.name.text.clone()).filter(|o| matches!(base(c.ty_of(o)), Ty::Enum(_) | Ty::Bool)).collect();
+        if outputs.is_empty() || f.elements.is_some() {
+            continue;
+        }
+        // the inputs held to intervals (numbers and dates, on the wire), and the ones walked whole
+        let mut held_names: Vec<(String, bool, bool)> = Vec::new();
+        let mut whole: Vec<(String, Vec<Val>)> = Vec::new();
+        let mut walkable = true;
+        for i in &f.inputs {
+            let n = i.name.text.clone();
+            let ty = c.ty_of(&n);
+            let opt = matches!(ty, Some(Ty::Opt(_)));
+            let mut vals: Vec<Val> = if opt { vec![Val::Enum(rulec::kw::NONE.into())] } else { vec![] };
+            match base(ty) {
+                Ty::Enum(en) => vals.extend(c.enums.get(&en).cloned().unwrap_or_default().into_iter().map(Val::Enum)),
+                Ty::Bool => vals.extend([Val::Bool(true), Val::Bool(false)]),
+                // a number or a date that may be absent: its interval, and `none` beside it
+                Ty::Date => held_names.push((n.clone(), true, opt)),
+                t if t.is_numeric() => held_names.push((n.clone(), false, opt)),
+                _ => walkable = false,
+            }
+            if matches!(base(c.ty_of(&n)), Ty::Enum(_) | Ty::Bool) {
+                whole.push((n, vals));
+            }
+        }
+        let vectors = rulec::vectors::generate(&f, &c);
+        if !walkable || vectors.is_empty() {
+            unwalked += 1;
+            continue;
+        }
+        let wire_of = |n: &str, date: bool, v: &Val| -> Option<i128> {
+            match v {
+                Val::Num(x) if !date => Some(rulec::types::wire_int(*x, c.wire_scale(n))),
+                Val::Date(y, m, d) => {
+                    let r = rulec::types::date_ord(*y, *m, *d);
+                    Some(r.num / r.den)
+                }
+                _ => None,
+            }
+        };
+        let declared = |n: &str, date: bool| -> (Option<i128>, Option<i128>) {
+            let (lo, hi) = c.ranges.get(n).copied().unwrap_or((None, None));
+            let w = |r: rulec::num::Rat| if date { r.num / r.den } else { rulec::types::wire_int(r, c.wire_scale(n)) };
+            (lo.map(w), hi.map(w))
+        };
+        let absent = |n: &str| held_names.iter().any(|(m, _, opt)| m == n && *opt);
+        let size_of = |held: &[(String, bool, i128, i128)]| held.iter().map(|(n, _, l, h)| (h - l + 1).max(0) as usize + usize::from(absent(n))).chain(whole.iter().map(|(_, vs)| vs.len())).fold(1usize, |a, b| a.saturating_mul(b));
+        // around four of the vectors: every input held as wide as keeps the walk small, and each
+        // input in turn swept 40 steps each way with the others at the vector's values
+        let n = vectors.len();
+        let mut picks = vec![0, n / 3, 2 * n / 3, n - 1];
+        picks.dedup();
+        let mut boxes: Vec<Vec<(String, bool, i128, i128)>> = Vec::new();
+        for pick in picks {
+            let v = &vectors[pick];
+            let around = |wide: Option<usize>, width: i128| -> Vec<(String, bool, i128, i128)> {
+                held_names
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(j, (n, date, _))| {
+                        // a value that is absent is centred on the low end the input declares
+                        let at = v.input.get(n).and_then(|x| wire_of(n, *date, x)).or(declared(n, *date).0)?;
+                        let w = match wide {
+                            None => width,
+                            Some(k) if k == j => 40,
+                            Some(_) => 0,
+                        };
+                        let (dlo, dhi) = declared(n, *date);
+                        Some((n.clone(), *date, dlo.map_or(at - w, |l| l.max(at - w)), dhi.map_or(at + w, |h| h.min(at + w))))
+                    })
+                    .collect()
+            };
+            let mut these: Vec<Vec<(String, bool, i128, i128)>> = Vec::new();
+            match [3i128, 2, 1, 0].into_iter().map(|w| around(None, w)).find(|b| size_of(b) <= CAP) {
+                Some(b) => these.push(b),
+                None => too_big += 1,
+            }
+            these.extend((0..held_names.len()).map(|k| around(Some(k), 0)).filter(|b| size_of(b) <= CAP));
+            for b in these {
+                if !boxes.contains(&b) {
+                    boxes.push(b);
+                }
+            }
+        }
+        for held in boxes {
+            // every input in the box, through the reference evaluator
+            let mut truth: HashMap<String, Vec<Value>> = outputs.iter().map(|o| (o.clone(), Vec::new())).collect();
+            let mut axes: Vec<(String, Vec<Val>)> = whole.clone();
+            for (n, date, lo, hi) in &held {
+                let mut vals: Vec<Val> = if absent(n) { vec![Val::Enum(rulec::kw::NONE.into())] } else { vec![] };
+                vals.extend((*lo..=*hi).map(|w| {
+                        if *date {
+                            let (y, m, d) = rulec::types::ord_to_date(rulec::num::Rat::int(w));
+                            Val::Date(y, m, d)
+                        } else {
+                            Val::Num(rulec::types::from_wire(w, c.wire_scale(n)))
+                        }
+                    }));
+                axes.push((n.clone(), vals));
+            }
+            let mut at = vec![0usize; axes.len()];
+            'walk: loop {
+                let input: BTreeMap<String, Val> = axes.iter().zip(&at).map(|((n, vs), i)| (n.clone(), vs[*i].clone())).collect();
+                if rulec::vectors::allowed(&f, &input) && rulec::vectors::days_ok(&c, &input) {
+                    let (outs, _, _) = rulec::eval::run_all(&f, &c, input.into_iter().collect());
+                    for (n, x) in outs {
+                        if let (Some(seen), Some(x)) = (truth.get_mut(&n), x) {
+                            let v = match (wire(&c, &n, &x), base(c.ty_of(&n))) {
+                                (Value::Enum(name), Ty::Enum(en)) => Value::Enum(rulec::codegen::public_value(&f, &en, &name)),
+                                (v, _) => v,
+                            };
+                            if !seen.contains(&v) {
+                                seen.push(v);
+                            }
+                        }
+                    }
+                }
+                for k in 0..at.len() {
+                    at[k] += 1;
+                    if at[k] < axes[k].1.len() {
+                        continue 'walk;
+                    }
+                    at[k] = 0;
+                }
+                break;
+            }
+            let ranges: Vec<(String, Option<i128>, Option<i128>)> = held.iter().map(|(n, _, l, h)| (n.clone(), Some(*l), Some(*h))).collect();
+            for out in &outputs {
+                cases += 1;
+                let found = e.outputs_over(Path::new(&path), out, &ranges).unwrap_or_else(|x| panic!("{path}: {x:?}"));
+                match &found {
+                    ritsu_ports::Found::Value(vs) => {
+                        exact += 1;
+                        let every = match base(c.ty_of(out)) {
+                            Ty::Enum(en) => c.enums.get(&en).map_or(0, |v| v.len()),
+                            _ => 2,
+                        } + usize::from(matches!(c.ty_of(out), Some(Ty::Opt(_))));
+                        if vs.len() < every {
+                            narrower += 1;
+                        }
+                        let mut got: Vec<String> = vs.iter().map(|(v, _)| format!("{v:?}")).collect();
+                        let mut want: Vec<String> = truth[out].iter().map(|v| format!("{v:?}")).collect();
+                        got.sort();
+                        want.sort();
+                        assert_eq!(got, want, "{path} {out} over {ranges:?}");
+                        witnesses_hold(&e, &path, out, &ranges, &found);
+                    }
+                    ritsu_ports::Found::Undecided(t) => {
+                        undecided += 1;
+                        why.push(format!("{path} {out} over {ranges:?}: {}", t.en));
+                    }
+                }
+            }
+        }
+    }
+    println!("outputs_over: {cases} questions over the corpus and the rules of these tests, {exact} answered exactly ({narrower} of them with fewer values than the output has), {undecided} undecided; {unwalked} rules not walked (a string input), {too_big} boxes too big to walk");
+    for w in &why {
+        println!("  undecided: {w}");
+    }
+    assert!(exact * 3 >= cases * 2, "{exact} of {cases} answered exactly");
+}
+
+/// A row whose two derived columns over the same inputs ask for what only numbers between whole
+/// numbers give (a sum of 3 and a difference of 0): the analysis cannot rule the row out, and no
+/// input reaches it, so its value is left undecided, with the row named, rather than counted as
+/// reached or as never reached.
+#[test]
+fn an_output_over_ranges_names_the_row_it_cannot_decide() {
+    use ritsu_ports::Found;
+    let e = Engine::new();
+    let path = "tests/over/parity.rule";
+    let src = std::fs::read_to_string(path).unwrap();
+    assert!(!rulec::has_error(&rulec::report(&src, path).diags));
+    match e.outputs_over(Path::new(path), "answer", &[]).unwrap() {
+        Found::Undecided(t) => {
+            assert!(t.en.contains("comes to odd_half") && t.en.contains("row 1 of t"), "{}", t.en);
+            assert!(t.ja.contains("odd_half") && t.ja.contains("t の行 1"), "{}", t.ja);
+        }
+        other => panic!("{other:?}"),
+    }
+    // held where the sum cannot be 3, the row is ruled out and the answer is exact
+    let held = [("first".to_string(), Some(0), Some(1)), ("second".to_string(), Some(0), Some(1))];
+    let found = e.outputs_over(Path::new(path), "answer", &held).unwrap();
+    witnesses_hold(&e, path, "answer", &held, &found);
+    assert_eq!(values_of(&found), [Value::Enum("other".into())]);
+}
+
+/// A rule that applies another holds its own inputs to the ranges, not the other rule's: the rule
+/// applied is checked as it is (here its input has the same name), and its rows come into this
+/// rule's table, where the ranges hold.
+#[test]
+fn an_output_over_ranges_holds_the_rule_not_the_one_it_applies() {
+    let e = Engine::new();
+    let path = "tests/over/apply_band.rule";
+    for (lo, hi, want) in [(1, 50, vec![Value::Bool(false)]), (51, 100, vec![Value::Bool(true)]), (50, 51, vec![Value::Bool(true), Value::Bool(false)])] {
+        let held = [("amount".to_string(), Some(lo), Some(hi))];
+        let found = e.outputs_over(Path::new(path), "answer", &held).unwrap();
+        witnesses_hold(&e, path, "answer", &held, &found);
+        assert_eq!(values_of(&found), want, "{lo}..{hi}");
+    }
+}
+
+/// Each value of a rule's enum is handed over with its public name — the alias the rule writes in
+/// parentheses, else its name; what a gate writes into Cedar — beside the member the generated code
+/// builds from it. Over the corpus, a public name that is not the name is written in the rule as
+/// `<name>(<public name>)`.
+#[test]
+fn a_value_of_an_enum_has_the_public_name_the_rule_writes() {
+    let e = Engine::new();
+    for (path, name, values) in [
+        ("tests/over/refund_limit.rule", "refund_band", [("within_limit", "within_limit"), ("over_limit", "over_limit")]),
+        ("tests/over/返金の上限.rule", "返金の区分", [("上限まで", "within_limit"), ("上限超え", "over_limit")]),
+    ] {
+        let f = e.facts(Path::new(path)).unwrap();
+        let en = f.enums.iter().find(|x| x.name == name).unwrap_or_else(|| panic!("{path}: no enum {name}"));
+        let got: Vec<(&str, &str, &str)> = en.values.iter().map(|v| (v.name.as_str(), v.public.as_str(), v.alias.as_str())).collect();
+        assert_eq!(got, [(values[0].0, values[0].1, "WithinLimit"), (values[1].0, values[1].1, "OverLimit")], "{path}");
+    }
+    let mut aliased = 0;
+    for path in corpus() {
+        let Ok(f) = e.facts(Path::new(&path)) else { continue };
+        let src = std::fs::read_to_string(&path).unwrap();
+        for v in f.enums.iter().flat_map(|en| &en.values) {
+            if v.public != v.name {
+                assert!(src.contains(&format!("{}({})", v.name, v.public)), "{path}: {} is not written {}({})", v.name, v.name, v.public);
+                aliased += 1;
+            }
+        }
+    }
+    assert!(aliased > 20, "{aliased} values are written with an alias");
+}

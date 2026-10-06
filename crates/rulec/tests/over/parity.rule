@@ -1,0 +1,20 @@
+rule parity v1
+description "A row that asks of two derived values over the same inputs what no whole numbers give (a sum of 3 and a difference of 0): on the real numbers it is reached, on whole numbers it is not, so a question over ranges of the inputs is left undecided"
+
+enum kind = odd_half | other
+
+inputs
+  first  : number  range >=0 <=3
+  second : number  range >=0 <=3
+
+outputs
+  answer : kind
+
+derive total : number = first + second  range >=0 <=6
+derive gap   : number = first - second  range >=-3 <=3
+
+table t
+policy first
+| total | gap | -> answer : kind |
+| 3     | 0   | odd_half         |
+| -     | -   | other            |

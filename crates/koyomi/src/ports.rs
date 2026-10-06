@@ -12,28 +12,166 @@ use crate::interp;
 use crate::resolve::Model;
 use ritsu_base::naming::{Name as Naming, Tool};
 use ritsu_base::text::Text;
-use ritsu_ports::{DateCalendar, DateFacts, DateFunction, DateInput, DateKind, DateValue, DaySet, DaySpan, Found, Item, Reference, Said};
-use std::path::Path;
+use ritsu_base::fs::{Files, Kind, Meta};
+use ritsu_ports::{CalendarFacts, DateCalendar, DateFacts, DateFunction, DateInput, DateKind, DateValue, DaySet, DaySpan, Found, Item, Reference, Said};
+use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
+use std::ffi::OsString;
+use std::io;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
-/// koyomi, as the ports reach it.
+/// koyomi, as the ports reach it. A file the ports ask about is checked once, and its check is
+/// kept for the next question on the thread, while every file that check read still reads the
+/// same: the file itself, the calendars it uses, their tables of holidays and the copies of the
+/// laws they cite (a program asks one dates file many times: sekisho, a date a day). The engine
+/// holds no value of its own, so that every program that names it as `koyomi::ports::Engine`
+/// keeps doing so; the kept checks belong to the thread, as the port of dates a rule reads its
+/// days through does (rulec's `days::with`) and the files a page in the browser hands over
+/// (`ritsu_base::fs::with`).
 #[derive(Default)]
 pub struct Engine;
 
-/// The dates file, checked as `koyomi check` checks it; else what check says.
-fn model(file: &Path) -> Result<Model, Vec<Said>> {
+/// What a check read: each file as koyomi named it to `ritsu_base::fs`, with its bytes, or None
+/// where nothing could be read.
+type Reads = Vec<(PathBuf, Option<Vec<u8>>)>;
+
+thread_local! {
+    /// The checks made for the ports on this thread, by the file as the caller named it (which
+    /// the check's diagnostics name it by): what check came to, and every file it read.
+    static KEPT: RefCell<BTreeMap<String, (Rc<check::Outcome>, Rc<Reads>)>> = const { RefCell::new(BTreeMap::new()) };
+    /// How many times a file has been checked whole for the ports on this thread.
+    static CHECKS: Cell<usize> = const { Cell::new(0) };
+}
+
+/// How many checks a thread keeps; one more starts the keeping over.
+const KEEP: usize = 256;
+
+/// What a check reads through `ritsu_base::fs`: every call handed on to what the thread read
+/// before (the disk, or the files of an outer `ritsu_base::fs::with`), and every read noted with
+/// what it got. koyomi's check reads files and does nothing else with them.
+struct Recorder {
+    outer: Option<Rc<dyn Files>>,
+    reads: RefCell<Reads>,
+}
+
+fn kind_of(t: &std::fs::FileType) -> Kind {
+    if t.is_file() {
+        Kind::File
+    } else if t.is_dir() {
+        Kind::Dir
+    } else {
+        Kind::Other
+    }
+}
+
+impl Files for Recorder {
+    fn read(&self, p: &Path) -> io::Result<Vec<u8>> {
+        let got = match &self.outer {
+            Some(o) => o.read(p),
+            None => std::fs::read(p),
+        };
+        self.reads.borrow_mut().push((p.to_path_buf(), got.as_ref().ok().cloned()));
+        got
+    }
+
+    fn metadata(&self, p: &Path) -> io::Result<Meta> {
+        match &self.outer {
+            Some(o) => o.metadata(p),
+            None => std::fs::metadata(p).map(|m| Meta { kind: kind_of(&m.file_type()), len: m.len() }),
+        }
+    }
+
+    fn read_dir(&self, p: &Path) -> io::Result<Vec<(OsString, Kind)>> {
+        match &self.outer {
+            Some(o) => o.read_dir(p),
+            None => std::fs::read_dir(p)?
+                .map(|e| {
+                    let e = e?;
+                    Ok((e.file_name(), kind_of(&e.file_type()?)))
+                })
+                .collect(),
+        }
+    }
+
+    fn write(&self, p: &Path, bytes: &[u8]) -> io::Result<()> {
+        match &self.outer {
+            Some(o) => o.write(p, bytes),
+            None => std::fs::write(p, bytes),
+        }
+    }
+
+    fn create_dir_all(&self, p: &Path) -> io::Result<()> {
+        match &self.outer {
+            Some(o) => o.create_dir_all(p),
+            None => std::fs::create_dir_all(p),
+        }
+    }
+
+    fn current_dir(&self) -> io::Result<PathBuf> {
+        match &self.outer {
+            Some(o) => o.current_dir(),
+            None => std::env::current_dir(),
+        }
+    }
+
+    fn canonicalize(&self, p: &Path) -> io::Result<PathBuf> {
+        match &self.outer {
+            Some(o) => o.canonicalize(p),
+            None => std::fs::canonicalize(p),
+        }
+    }
+}
+
+/// `koyomi check` of the file, as the ports ask it (a loader of its own for the calendars it
+/// uses): the check kept from the last time on this thread, while every file it read reads the
+/// same now; else the file checked again, and kept.
+fn checked_file(file: &Path) -> Result<Rc<check::Outcome>, Vec<Said>> {
     let path = file.to_string_lossy().to_string();
-    let out = check::check_file(&path, &Options::default(), &mut Loader::default()).map_err(|e| vec![Said::unreadable(&path, &e)])?;
+    let kept = KEPT.with(|k| k.borrow().get(&path).cloned());
+    if let Some((out, reads)) = kept
+        && reads.iter().all(|(p, was)| ritsu_base::fs::read(p).ok().as_ref() == was.as_ref())
+    {
+        return Ok(out);
+    }
+    let rec = Rc::new(Recorder { outer: ritsu_base::fs::current(), reads: RefCell::new(Vec::new()) });
+    let got = ritsu_base::fs::with(rec.clone(), || check::check_file(&path, &Options::default(), &mut Loader::default()));
+    CHECKS.with(|c| c.set(c.get() + 1));
+    let out = Rc::new(got.map_err(|e| vec![Said::unreadable(&path, &e)])?);
+    let reads = Rc::new(rec.reads.take());
+    KEPT.with(|k| {
+        let mut k = k.borrow_mut();
+        if k.len() >= KEEP {
+            k.clear();
+        }
+        k.insert(path, (out.clone(), reads));
+    });
+    Ok(out)
+}
+
+/// The dates file, checked as `koyomi check` checks it; else what check says.
+fn model(file: &Path) -> Result<Rc<check::Outcome>, Vec<Said>> {
+    let path = file.to_string_lossy().to_string();
+    let out = checked_file(file)?;
     if out.has_errors() {
         return Err(out.diags.iter().filter(|d| d.is_error()).map(Said::of).collect());
     }
-    match out.checked {
-        Some(Checked::Dates(m, _)) => Ok(*m),
+    match &out.checked {
+        Some(Checked::Dates(..)) => Ok(out),
         _ => Err(vec![Said {
             code: String::new(),
             file: path.clone(),
             line: None,
             message: ritsu_base::tr!("`{path}` は日付のファイルではなく、カレンダーです", "`{path}` is a calendar, not a dates file"),
         }]),
+    }
+}
+
+/// The model of the dates file [`model`] answers with.
+fn dates(o: &check::Outcome) -> &Model {
+    match &o.checked {
+        Some(Checked::Dates(m, _)) => m,
+        _ => unreachable!("`model` answers only with a dates file"),
     }
 }
 
@@ -81,6 +219,12 @@ fn over_budget(m: &Model) -> Option<Text> {
 }
 
 impl Engine {
+    /// How many times a file has been checked whole for the ports on this thread (a question about
+    /// a file whose check is kept checks nothing): what a test of the keeping counts.
+    pub fn checks(&self) -> usize {
+        CHECKS.with(|c| c.get())
+    }
+
     /// `koyomi check` of each file, as `ritsu check` prints it (ritsu's DESIGN 8.3): every finding,
     /// as the command prints it and as its `--format json` prints it, then the line that says what
     /// was checked. One loader is shared by the files, as the command shares it. `files` are as
@@ -111,7 +255,8 @@ impl Engine {
 
 impl ritsu_ports::Dates for Engine {
     fn facts(&self, file: &Path) -> Result<DateFacts, Vec<Said>> {
-        let m = model(file)?;
+        let o = model(file)?;
+        let m = dates(&o);
         Ok(DateFacts {
             name: m.file.name.text.clone(),
             alias: m.file.name.ascii().unwrap_or_default().to_string(),
@@ -137,7 +282,8 @@ impl ritsu_ports::Dates for Engine {
     }
 
     fn values(&self, file: &Path, date: &str) -> Result<Found<DaySet>, Vec<Said>> {
-        let m = model(file)?;
+        let o = model(file)?;
+        let m = dates(&o);
         let k = date_index(&m, date, file)?;
         if let Some(t) = over_budget(&m) {
             return Ok(Found::Undecided(t));
@@ -153,7 +299,8 @@ impl ritsu_ports::Dates for Engine {
     }
 
     fn days(&self, file: &Path, date: &str) -> Result<Found<(i64, i64)>, Vec<Said>> {
-        let m = model(file)?;
+        let o = model(file)?;
+        let m = dates(&o);
         let k = date_index(&m, date, file)?;
         if let Some(t) = over_budget(&m) {
             return Ok(Found::Undecided(t));
@@ -172,7 +319,8 @@ impl ritsu_ports::Dates for Engine {
     }
 
     fn span(&self, file: &Path, date: &str) -> Result<Found<DaySpan>, Vec<Said>> {
-        let m = model(file)?;
+        let o = model(file)?;
+        let m = dates(&o);
         let k = date_index(&m, date, file)?;
         if let Some(t) = over_budget(&m) {
             return Ok(Found::Undecided(t));
@@ -203,7 +351,8 @@ impl ritsu_ports::Dates for Engine {
     }
 
     fn input_for(&self, file: &Path, date: &str, day: ritsu_ports::Day) -> Result<Option<Vec<(String, i64)>>, Vec<Said>> {
-        let m = model(file)?;
+        let o = model(file)?;
+        let m = dates(&o);
         let k = date_index(&m, date, file)?;
         if over_budget(&m).is_some() {
             return Ok(None);
@@ -218,7 +367,8 @@ impl ritsu_ports::Dates for Engine {
     }
 
     fn eval(&self, file: &Path, inputs: &[(String, i64)]) -> Result<Vec<(String, DateValue)>, Vec<Said>> {
-        let m = model(file)?;
+        let o = model(file)?;
+        let m = dates(&o);
         let path = file.to_string_lossy().to_string();
         let mut vals = Vec::new();
         for i in &m.inputs {
@@ -254,6 +404,35 @@ impl ritsu_ports::Dates for Engine {
             })
             .collect())
     }
+
+    /// The calendar, checked as `koyomi check` checks it, with every day of its data it closes
+    /// (what `koyomi vectors` writes as `"open": false`).
+    fn calendar(&self, file: &Path) -> Result<CalendarFacts, Vec<Said>> {
+        let path = file.to_string_lossy().to_string();
+        let out = checked_file(file)?;
+        if out.has_errors() {
+            return Err(out.diags.iter().filter(|d| d.is_error()).map(Said::of).collect());
+        }
+        let Some(Checked::Calendar(c)) = &out.checked else {
+            return Err(vec![Said { code: String::new(), file: path.clone(), line: None, message: ritsu_base::tr!("`{path}` は日付のファイルで、カレンダーではありません", "`{path}` is a dates file, not a calendar") }]);
+        };
+        let closed: DaySet = (c.data.0.0..=c.data.1.0).filter(|z| c.is_open(Day(*z)) == Ok(false)).map(|z| z as i64).collect();
+        Ok(CalendarFacts { name: c.info.name.clone(), alias: c.info.alias.clone().unwrap_or_default(), data: (c.data.0.0 as i64, c.data.1.0 as i64), offset: c.offset, closed })
+    }
+
+    /// The page `koyomi doc` draws (with the months it decides itself), its first line naming the
+    /// file `shown` where the command names it by its file name.
+    fn doc(&self, file: &Path, shown: &str, html: bool, lang: ritsu_base::text::Lang) -> Result<String, Vec<Said>> {
+        use crate::doc::{Block, Format, Inline};
+        let out = checked_file(file)?;
+        let mut page = crate::doc::page(&out, lang, &crate::doc::Options::default()).map_err(|ds| ds.iter().map(Said::of).collect::<Vec<_>>())?;
+        if let Some(Block::Stamp(rows)) = page.blocks.iter_mut().find(|b| matches!(b, Block::Stamp(_)))
+            && let Some(first) = rows.first_mut().and_then(|(_, cell)| cell.first_mut())
+        {
+            *first = Inline::C(shown.to_string());
+        }
+        Ok(crate::doc::render(&page, if html { Format::Html } else { Format::Markdown }))
+    }
 }
 
 impl ritsu_ports::Sources for Engine {
@@ -262,7 +441,7 @@ impl ritsu_ports::Sources for Engine {
     /// copy to its pin. A dates file and a calendar answer alike.
     fn sources(&self, file: &Path) -> Result<Vec<ritsu_ports::Source>, Vec<Said>> {
         let path = file.to_string_lossy().to_string();
-        let out = check::check_file(&path, &Options::default(), &mut Loader::default()).map_err(|e| vec![Said::unreadable(&path, &e)])?;
+        let out = checked_file(file)?;
         if out.has_errors() || out.checked.is_none() {
             return Err(out.diags.iter().filter(|d| d.is_error()).map(Said::of).collect());
         }

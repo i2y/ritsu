@@ -121,3 +121,31 @@ fn a_thing_that_is_not_there_is_missing() {
         other => panic!("{other:?}"),
     }
 }
+
+/// What sekisho reads a gate with is the languages joined here, made once: what a rule's output
+/// comes to over the intervals a policy cuts, the days a calendar closes, whether a workflow
+/// passes dandori's check, and what it holds — through the same engines the other readers hold.
+#[test]
+fn sekisho_reads_through_the_languages_joined_once() {
+    use ritsu_ports::{Found, Value};
+    let j = Joined::new();
+    let g = j.sekisho();
+    assert!(g.rules.joined() && g.dates.joined() && g.books.joined());
+    assert!(std::ptr::addr_eq(Rc::as_ptr(&g.rules), Rc::as_ptr(&j.rulec)) && std::ptr::addr_eq(Rc::as_ptr(&g.flows), Rc::as_ptr(&j.dandori)));
+    let shop = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ritsu/tests/projects/shop");
+    // a member is always urgent; from 30,000 yen, everyone is
+    let rule = shop.join("delivery/rules/urgency.rule");
+    let values = |held: &[(String, Option<i128>, Option<i128>)]| match g.rules.outputs_over(&rule, "urgent", held).unwrap() {
+        Found::Value(vs) => vs.into_iter().map(|(v, _)| v).collect::<Vec<_>>(),
+        Found::Undecided(t) => panic!("{}", t.en),
+    };
+    assert_eq!(values(&[]), [Value::Bool(true), Value::Bool(false)]);
+    assert_eq!(values(&[("amount".into(), Some(30_000), None)]), [Value::Bool(true)]);
+    // the calendar a dates file of the project reads
+    let cal = g.dates.calendar(&shop.join("calendars/tokyo_business_days.cal")).unwrap();
+    assert!(cal.closed.len() > 100 && cal.data.0 < cal.data.1, "{} closed days", cal.closed.len());
+    // a workflow of the project passes dandori's check, read with the languages joined here
+    let flow = "delivery/arrange_delivery.flow";
+    assert!(g.flows.crossings(&shop.join(flow), &g.ports()).is_ok());
+    assert!(g.items.items(&shop, flow).unwrap().iter().any(|i| i.kind() == "task"));
+}

@@ -30,6 +30,9 @@
 //!   the languages: the keys of a known shape written into a file, what a URL says of how it is
 //!   reached (the loopback, plain HTTP, the encrypted form of a protocol), and the marks that make
 //!   a schema's property secret.
+//! - [`openapi`]: the operations of an OpenAPI or AsyncAPI document: each with its id, method and
+//!   path, parameters, the fields of its body with their types and ranges, who may call it, and
+//!   the status codes it answers with.
 //!
 //! Nothing here depends on anything but std (DESIGN 3.1, P9).
 
@@ -42,6 +45,7 @@ pub mod json;
 pub mod ledger;
 pub mod marks;
 pub mod naming;
+pub mod openapi;
 pub mod openspec;
 pub mod paths;
 pub mod secrets;

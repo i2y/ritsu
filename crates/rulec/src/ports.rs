@@ -302,7 +302,7 @@ fn to_val(c: &Checked, name: &str, ty: &Ty, v: &Value) -> Result<crate::eval::Va
 }
 
 /// An output of the evaluator, on the wire: `none` of a value that may be absent is the absence.
-fn from_val(c: &Checked, name: &str, v: &crate::eval::Val) -> Value {
+pub(crate) fn from_val(c: &Checked, name: &str, v: &crate::eval::Val) -> Value {
     use crate::eval::Val;
     match v {
         Val::Enum(s) if s == crate::kw::NONE && matches!(c.ty_of(name), Some(Ty::Opt(_))) => Value::None,
@@ -484,6 +484,15 @@ impl ritsu_ports::Rules for Engine {
             }
         }
         Ok(ritsu_ports::Found::Value(ritsu_ports::OutputValues { min, max, values, examples }))
+    }
+
+    /// The rule read again with each input held to its range, the rows some input may reach
+    /// found through the sieve of the completeness proof, and an input for each of their values
+    /// found in the vectors over the ranges (`crate::over`). Exact when the two meet.
+    fn outputs_over(&self, rule: &Path, output: &str, ranges: &[(String, Option<i128>, Option<i128>)]) -> Result<ritsu_ports::Found<Vec<(Value, Values)>>, Vec<Said>> {
+        let (path, src, got) = self.rule(rule)?;
+        let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
+        Ok(self.joined(|| crate::over::outputs_over(f, c, &src, &path, output, ranges)))
     }
 
     fn date_range(&self, rule: &Path, input: &str) -> Result<(Option<i64>, Option<i64>), Vec<Said>> {

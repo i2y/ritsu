@@ -1,0 +1,43 @@
+openapi: 3.1.0
+info:
+  title: 店の注文
+  version: 1.0.0
+servers:
+  - url: https://orders.example.com
+security:
+  - staff: []
+paths:
+  /注文/{注文番号}/返金:
+    post:
+      operationId: 返金する
+      parameters:
+        - name: 注文番号
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [金額]
+              properties:
+                金額:
+                  type: integer
+                  minimum: 1
+                  maximum: 10000
+                理由:
+                  type: string
+                  enum: [破損, 遅延]
+      responses:
+        '201':
+          description: 返金
+        '403':
+          description: 許されない
+components:
+  securitySchemes:
+    staff:
+      type: http
+      scheme: bearer
