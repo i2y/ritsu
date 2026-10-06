@@ -462,6 +462,14 @@ osv-scanner は `--no-resolve` で走らせる。`requirements.txt` が入れた
 
 ほかの四つの dandori の `requirements.txt`（agents、connect、pydantic-graph、temporal-python）は、`uv pip compile` にかけて、もう依存まで書いてあることを確かめた（足りないものは無かった）。
 
+#### 2026-10-07 に見つかったものと、したこと
+
+毎日の `audit` のジョブ（2026-10-07 の朝の実行）が、前の日に出たアドバイザリで落ちた。
+
+| どこ | 何 | したこと |
+|---|---|---|
+| `crates/dandori/tools/agents`（`@openai/agents` が任意の依存として `^2.0.0` で求める） | `@modelcontextprotocol/client` 2.1.0、GHSA-6qxp-vccf-f47h（高。MCP の TypeScript SDK の OAuth のクライアントが、MCP サーバーが選んだ認可サーバーに資格情報を送りうる。2.2.0 で直った） | 依存の範囲の中で、`@modelcontextprotocol/client` と `@modelcontextprotocol/core` を 2.3.1 に上げた（`npm update --package-lock-only`）。2.3 系から、二つのライセンスは MIT から Apache-2.0 になった。テストの道具で、`ritsu` にも生成するコードにも入らない。dandori の `agents_sdk_is_asked_what_step_functions_asks` が、上げた版で通る |
+
 #### 調べていないもの
 
 - `fetch.sh` と `install.sh` で取ってくるバイナリ（TigerBeetle、sakai の Java のツールと Context Mapper、wasm-tools、protoc）。チェックサムで確かめているが、OSV では調べていない。
