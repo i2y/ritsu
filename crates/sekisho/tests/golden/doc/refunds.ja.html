@@ -71,10 +71,10 @@ body.sheet-open { overflow: hidden; }
 <div class="scroll"><table>
 <thead><tr><th>ファイル</th><th>SHA-256（先頭 16 桁）</th></tr></thead>
 <tbody>
-<tr><td><code>cedar/refunds_ja.cedar</code></td><td><code>8ced7ba8b70cd521</code></td></tr>
-<tr><td><code>cedar/refunds_ja.cedarschema</code></td><td><code>5b732f084fd1ad46</code></td></tr>
-<tr><td><code>cedar/refunds_ja.cedarschema.json</code></td><td><code>a5303048128a2757</code></td></tr>
-<tr><td><code>cedar/refunds_ja.policies.json</code></td><td><code>b67c8c77038f6989</code></td></tr>
+<tr><td><code>cedar/refunds_ja.cedar</code></td><td><code>&lt;sha256&gt;</code></td></tr>
+<tr><td><code>cedar/refunds_ja.cedarschema</code></td><td><code>&lt;sha256&gt;</code></td></tr>
+<tr><td><code>cedar/refunds_ja.cedarschema.json</code></td><td><code>&lt;sha256&gt;</code></td></tr>
+<tr><td><code>cedar/refunds_ja.policies.json</code></td><td><code>&lt;sha256&gt;</code></td></tr>
 </tbody>
 </table></div>
 <p class="note"><code>sekisho check</code> は、3 つの action の組み合わせ 1,078 通りをすべて数え、どれも Cedar と同じ決まりで、許すか拒むかを決めました。3 つの期待は、どれも成り立ちます。職務の分離も成り立ちます。<code>can</code> を書いた 3 つの役割は、どれも、<code>can</code> に並べた action だけを許されます。</p>
@@ -498,6 +498,14 @@ when { principal.suspended };</code></pre></figure>
 <thead><tr><th>action</th><th>許されるか</th></tr></thead>
 <tbody>
 <tr><td><code>返金する</code>（<code>refund_order</code>）</td><td>組み合わせによる（32 通りのうち 4 通りを許す）</td></tr>
+</tbody>
+</table></div>
+<h4 id="workflow-returns-calls">フローが呼ぶ操作</h4>
+<p>フローのタスクが呼ぶ操作と、それを守る action、そのワークフローがその action を許されるかです。<code>ritsu check</code> は、これを言語をまたいで確かめます。</p>
+<div class="scroll"><table>
+<thead><tr><th>行</th><th>タスク</th><th>操作</th><th>守る action</th><th>許されるか</th><th>拒まれたときのエラー</th></tr></thead>
+<tbody>
+<tr><td>22</td><td><code>refund_order</code></td><td><code>openapi &quot;api/orders.json&quot; operation refundOrder</code></td><td><code>返金する</code>（<code>refund_order</code>）</td><td>組み合わせによる</td><td><code>denied</code></td></tr>
 </tbody>
 </table></div>
 <h2 id="operations">守る操作</h2>

@@ -1,0 +1,44 @@
+// A schema written by hand for a test: a library's documents, read, printed and archived.
+namespace Library {
+  entity Role in [Role];
+
+  @doc("A member of the library")
+  entity User in [Role] = {
+    @doc("How many pages the member may print at a time")
+    limit: Long,
+    suspended: Bool
+  };
+
+  @doc("A document of the library")
+  entity Doc = {
+    title: String,
+    pages: Long,
+    owner: User
+  };
+
+  @doc("Read a document")
+  @guards("openapi \"api/docs.json\" operation readDoc")
+  action "read" appliesTo {
+    principal: [User],
+    resource: [Doc],
+    context: {}
+  };
+
+  @doc("Print copies of a document")
+  @guards("openapi \"api/docs.json\" operation printDoc")
+  action "print" appliesTo {
+    principal: [User],
+    resource: [Doc],
+    context: {
+      copies: Long
+    }
+  };
+
+  @doc("Archive a document")
+  @guards("openapi \"api/docs.json\" operation archiveDoc")
+  action "archive" appliesTo {
+    principal: [User],
+    resource: [Doc],
+    context: {}
+  };
+}

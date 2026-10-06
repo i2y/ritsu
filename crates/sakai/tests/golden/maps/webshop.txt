@@ -22,3 +22,9 @@ files
   shipping/acl/payments.yaml -> Shipping
   shipping/api/shipping.yaml -> Shipping
   webshop.ctx -> -
+published operations
+  Ordering openapi "ordering/api/ordering.json" operation createOrder [open to anyone]  (contexts/ordering.ctx:11)
+  Ordering openapi "ordering/api/ordering.json" operation getOrder  (contexts/ordering.ctx:11)
+  Payments openapi "payments/api/payments.yaml" operation createCharge  (contexts/payments.ctx:11)
+  Payments openapi "payments/api/payments.yaml" operation getCharge  (contexts/payments.ctx:11)
+  Shipping openapi "shipping/api/shipping.yaml" operation getShipment  (contexts/shipping.ctx:10)

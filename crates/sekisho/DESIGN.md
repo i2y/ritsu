@@ -110,6 +110,16 @@ ritsu は、Cedar のポリシーとスキーマを、proto や OpenAPI と同�
 - Cedar をそのまま読む確かめを ritsu-cross に置き、sekisho は別に持つ。同じ問いに二つの答え方ができ、食い違ったときにどちらが正しいかを決める者がいない。
 - 手で書いた Cedar を sekisho のモデルに読み直して、`.gate` に書き戻す（逆の生成）。Cedar のほうが表せるものが多く（算術、`like`、拡張の関数）、書き戻せないものが残る。読む確かめに要るのは操作との結び付けと有限の部分の評価で、`.gate` への変換ではない。
 
+**段階 D で作った形（2026-10-06）**：`src/cedar_in.rs`。
+
+- 組は、ポリシーの `<名前>.cedar` と、その横のスキーマ `<名前>.cedarschema`（無ければ `<名前>.cedarschema.json`）である。口は、組のどちらのファイルを渡されても、同じ組に答える。スキーマが無ければ答えない（「There is no schema (refunds.cedarschema or refunds.cedarschema.json) beside refunds.cedar」）。ポリシーの無いスキーマは、ポリシーが一つも無い組として答える（どの action も、だれにも許さない）。
+- 読むのは、スキーマの action と、その `@guards`（一行に一つの参照で、ルートからのパス。参照として読めない行があれば、その行を言って答えない）、`appliesTo` の型、ポリシーの `@id`（無ければ ritsu-base の読み手が付ける `policy0`、`policy1`）と permit か forbid かである。名前空間は、action を宣言した最初のもの。組の SHA-256 は、ポリシーとスキーマのテキストを続けたものから取る。
+- 許すかを数えるのは、`.gate` と同じく、action のポリシーが読む値の全部の組み合わせである。有限の部分は、スコープ（`==`、`in`、`is`）、principal が入る役割とグループ（`principal in Role::"clerk"`）、principal・resource・context の属性（スキーマで宣言した一段だけ）を文字列・真偽・整数の定数と比べる条件、`has`、principal であるエンティティの属性（`resource.owner == principal`）とそうした属性どうしの一致、エンティティの属性への `principal in`、`&&`・`||`・`!`・`if … then … else` である。それより外のもの（算術、`like`、集合とそのメソッド、拡張の関数、属性の属性、テンプレートの穴）に届く問いは、決められないと答え、どのポリシーの何かを言う（「the like at line 19, column 8 is outside the finite part sekisho counts, in the policy drafts_are_not_printed」「ポリシー drafts_are_not_printed の、19 行 8 列の like は、sekisho が数える有限の部分の外です」）。同じ組のほかの action の問いには答える。組み合わせが 10⁶ を超えても、決められないと答える。
+- 役割は、principal が入るエンティティである。だれがどこに入るかは、Cedar ではエンティティのデータが持ち、ポリシーとスキーマには無い。そこで、尋ねる側が並べた役割をそのまま数え、役割の中の役割はたどらない（`.gate` の `includes` は `.gate` に書いてあるが、手で書いた Cedar では、尋ねる側が principal の入る役割を全部並べる）。
+- `ritsu check` が読む組は、地図の `owns` に `cedar "…"` と書いたものと、要件が `cedar "…"` で指すものだけである。ルートの下の `.cedar` を探しはしない。地図にも要件にも無い Cedar は、どのコンテキストのものでも、どの要件のものでもなく、確かめる相手が無いからである（sakai の DESIGN 17 章）。
+- ワークフローは読まない。`Workflow` のエンティティと `.flow` の結び付きは Cedar には書けないので、X16 は `.gate` だけを見る（15 章）。
+- 材料は `tests/cedar_in/` で、二組ある。一つは、例の `refunds.gate` から生成した Cedar を、手で保つ人が置くように置いたもの（頭の二行を除き、コメントを足した）。もう一つは、有限の部分の外の式（`like` と算術）を持つ図書館のもの（`outside.*`）。どちらも英語と日本語の版があり、公式の CLI 4.13.0 の `cedar validate` が誤りも警告も言わない。`tests/cedar_in.rs` は、生成した Cedar のコピーが `.gate` と同じ action・守る操作・型・ポリシーを持つこと、七通りの尋ねる側と三つの action のどれでも `.gate` と同じ答えを返すこと、外の式を読む action の問いだけが決められず、理由が英語と日本語で言えること、読めない組が理由を言うことを確かめる。
+
 ## 2. モデル
 
 ### 2.1 ファイルの形
@@ -231,7 +241,7 @@ action refund_order
 
 **パスとルート。** 参照のパスは、`use` の行に書いたパスではなく、ルートからのパスである（ritsu の DESIGN 6.2 の 3）。ルートは yuen と sakai と同じく、`--root` があればそれ、無ければ最初に渡したパスの上で `.git` を持つ一番近いディレクトリ、それも無ければ、渡したファイルのあるディレクトリである。sekisho のクレートのバイナリと `ritsu sekisho` では、`check`・`gen`・`vectors`・`api` が `--root <dir>` を取り（ディレクトリでなければ exit 2）、無ければ最初に渡したファイルから探す。`ritsu check` は、プロジェクトのルート（ritsu の DESIGN 6.1）を渡す（`check::checked`）。ライブラリから呼ぶときは `check::Options::root` に渡し、`None` なら、確かめるファイルから同じ決まりで探す。`use` のパスを書いたまま参照にすると、`.gate` の置き場所によって、同じ文書の同じ操作が違う参照になり、yuen と sakai が書く参照と突き合わせられない。
 
-`use openapi`・`use proto`・`use asyncapi`・`use book` のファイルがルートの外にあれば、その操作を参照で書けないので、`use` の行で E201 にする（`--root` で、そのファイルを含むディレクトリをルートにすれば通る）。参照にならないパスを、黙って別の形で書かないためである。例は、例のディレクトリをルートにして（`--root examples/refunds`）走らせる（yuen と sakai の例と同じ）。`tests/mutants/` の変異と `tests/gen/` の材料は例の文書を読むので、テストはクレートのディレクトリをルートにする（`tests/common/mod.rs` の `root_of`）。
+`use` のファイルがルートの外にあれば `use` の行で E201、ワークフローの `.flow` がルートの外にあれば `workflow` の行で E208 にする（`--root` で、そのファイルを含むディレクトリをルートにすれば通る）。守る操作だけでなく、生成する Cedar の `@doc` に書く規則・日付・カレンダー・フロー（5.1）と、口 `References` が出す参照（8.2）も、ルートからのパスで書くからである。参照にならないパスを、黙って別の形で書かないためである。ルートの外のファイルは読まない（その言語にも尋ねない）。契約と帳簿の E201 は契約の検査（`src/contracts.rs`）が、規則・日付・カレンダー・`use gate` の E201 と `.flow` の E208 は、ほかの言語との境の検査（`src/borders.rs`）が言う。規則・日付・カレンダー・`use gate`・`.flow` をルートの外で E にしたのは段階 D（2026-10-06）で、それまでは契約と帳簿だけだった。例は、例のディレクトリをルートにして（`--root examples/refunds`）走らせる（yuen と sakai の例と同じ）。`tests/mutants/` の変異と `tests/gen/` の材料は例の文書を読むので、テストはクレートのディレクトリをルートにする（`tests/common/mod.rs` の `root_of`）。
 
 **捨てた案**：`guards` に参照の書き方をそのまま書く（`guards openapi "api/orders.json" operation refundOrder`）。action ごとにファイルのパスを繰り返すことになり、文書を動かしたときに全部の行を直すことになる。`use openapi orders from "…"` で一度だけパスを書き、`guards orders refundOrder` と書く形は、dandori の `use openapi` と `http POST stripe "/v1/…"` と同じである。参照の書き方は、yuen と sakai のように、ものを指すこと自体が仕事の言語の書き方として残し、sekisho では診断の文と JSON に使う。
 
@@ -554,6 +564,16 @@ ritsu-cross に置き、口だけを通す（ritsu の DESIGN 7 章）。番号�
   - W908：ワークフローが許される action のうち、フローがどこでも呼ばない操作のもの（要るより多く許している）。
 - 例：ワークフロー `returns` は `refund_order` を 32 通りのうち 4 通りで許され、28 通りで拒まれる。タスク `refund_order` は `errors denied = 403` を宣言しているので W909 は出ない。許されて呼ばないものは無い（試作の出力）。
 
+**段階 D で作った形（2026-10-06）**：ritsu-cross の `src/gates.rs`。コードは ritsu の台帳（ritsu-cross の `src/codes.rs`）にあり、再現は英語と日本語の版のプロジェクトである。`crates/ritsu/tests/cross.rs` が、通るもの（手で書いた Cedar の組が操作を守るもので、組を地図が指すものと要件が指すものを含む）と五つのコードのそれぞれを、出力の golden と境界の数で確かめる。
+
+- 読むゲートは、プロジェクトの `.gate` の全部と、地図の `owns` と要件が指す Cedar の組（1.3）である。口 `Gates::facts` が答えないゲート（検査を通らない `.gate`、読めない組）は、その言語の検査が理由を言うので、X15 と X16 は黙って外す。
+- X15 は、プロジェクトに `.gate` か Cedar の組が一つでもあるときだけ見る。sekisho で認可を書いていないプロジェクトでは、地図の全部のコンテキストが W907 になり、何も教えない警告で埋まるからである。見るのは、sakai の段 1 と段 2（構文と属し方）を通る地図の `published_operations`（8.3）である。守る action は、どのゲートのものも数える（ほかのコンテキストの操作を守るゲートは、sakai が E211 で言う）。答えないゲートが属するコンテキストは見ない。
+- X16 が見るのは、ワークフローを `workflow … from` で書いたゲートの action が守る操作の呼び出しだけである。ほかのゲートは、そのワークフローを principal として知らないので、そのゲートが守る操作の呼び出しは言わない。
+- W909 は、組み合わせによって拒まれるとき（注に、許される例と拒まれる例）と、許すかを決められないとき（注に理由）の両方に出す。どちらも、タスクが拒まれたときのエラー（状態 403。Connect の `permission_denied` は dandori が 403 に読む）を宣言していないときだけである。決められないことを黙って通さず、ワークフローが拒まれたときの手当てを求める。
+- 呼ぶ操作は、dandori の `Flows::operation_calls`（8.3）が、守る操作と同じ参照で言う（`use openapi` の `http` は `operationId` で、無ければ方法とパス。`use proto` の `connect` はサービスとメソッド）。だから、`guards` の参照と一字ずつ突き合わせられる。
+- 境界の数え方（ritsu の DESIGN 7 章の `borders`）：X15 は公開する操作ごとに一つで、守られている操作とだれでも呼べる操作が通り、E907 が落ち、W907 の操作は決められない。X16 は呼び出しごとに一つで、E908 が落ち、W909 は決められず、ほかは通る。W908 は呼び出しではないので数えない。
+- 例（`examples/refunds`）は、二つの版のゲートがそれぞれワークフロー `returns` を書き、フローの返金の呼び出しは、どちらのゲートでも組み合わせによって許され、タスクが `errors denied = 403` を宣言しているので通る。`ritsu check examples/refunds` の最後の行は「borders between the languages: 2 checked, 0 undecided」になる。
+
 ### 4.7 Cedar の解析との関係
 
 Cedar Analysis（2025-06 に公開）の四つの検出は、sekisho の検査と重なる。「Forbid Overrides」は E302、「Impossible Conditions」は E303、「Shadowed Permits」は W301、「Complete Denials」は E301 にあたる。違うのは、SymCC が context の値を自由な値として扱うのに対し、sekisho は計算した値がとりうる値（rulec と koyomi の答え）だけを数えることである。koyomi の日付で、ある述語の組が起こりえなければ、SymCC はそれを起こりうるものとして答え、sekisho は数えない。
@@ -630,7 +650,7 @@ sekisho が自分で書く文（頭の二行目と、計算した値・`input`�
 
 一つの action が二つ以上の操作を守るときは、一つの `@guards` に、参照を一行に一つ並べる（Cedar の注釈は、一つの宣言に同じキーを二つ持てない）。一行一行は `Name::text` が書いたもので、`api` の `guards` と口 `Gates`（8.3）の `GateAction::guards` と同じ値である。口が手で書いた Cedar の `@guards` を読むときも、同じ参照の書き方で読む。
 
-計算した値とワークフローの `@doc` の参照（`rulec "rules/refund_limit.rule" output band`、`dandori "flows/returns.flow"`）は、まだ `use` と `workflow` の行に書いたパスで書く。ルートからのパスにするのは、`.gate` が読むファイルの参照を口 `References` で出す段階 D に合わせる（そのとき、ルートの外の規則や日付のファイルをどう扱うかも決める）。例は `.gate` がルートにあるので、どちらで書いても同じである。
+計算した値とワークフローの `@doc` の参照（`rulec "rules/refund_limit.rule" output band`、`koyomi "dates/refund_terms.cal" date last_day`、`koyomi "calendars/england_and_wales.cal"`、`dandori "flows/returns.flow"`）も、`@guards` と同じくルートからのパスで書き、`Name::text` が書く（段階 D、2026-10-06）。口 `References` が出す参照（8.2）と同じ値である。読むファイルがルートの外なら、E201 か E208 で生成しない（2.6）。例は `.gate` がルートにあるので、`use` の行に書いたパスと同じになる。`tests/gen.rs` の `what_a_gate_reads_is_named_from_the_root` は、例の二つの版を一つ下のディレクトリ（`gates/`）に置いてパスを `../rules/…` と書き直し、上のディレクトリをルートにして生成したスキーマが、頭の二行のほかは例のものと一字も違わない（`@doc` に `../` が出ない）ことと、`gates/` をルートにすると四つの `use` の行が E201、`workflow` の行が E208 になることを確かめる。
 
 ### 5.2 ポリシー
 
@@ -948,11 +968,15 @@ sekisho は Verified Permissions に何も送らない（ritsu の検査と生�
    | `Customer` | sometimes | - | - |
 
    停止中の User はどの action も拒まれるので、役割を持つ User は、許される action でも「組み合わせによる」になる。期待も職務の分離も無いファイルでは、この節は「役割」だけになる。
-6. **ワークフロー**：`workflow` ごとに、`description`、`.flow` の参照、`Workflow` を取る action ごとの答えと数（例では `sometimes (4 of 32 combinations allowed)`）。フローが呼ぶ操作（dandori の口 `Flows::operation_calls` の答え）を受け取ったときは、呼び出しごとに、行、タスク、操作の参照、それを守る action、そのワークフローがその action を許されるか、タスクが宣言した、拒まれたときのエラーを表にする。`ritsu check` が X16 で確かめることを、ページの上で読めるようにするためである。ページの関数は、この答えを引数（`doc::FlowCalls`）で受け取る。dandori を持たない sekisho のクレートのバイナリでは、この表を出さない。
+6. **ワークフロー**：`workflow` ごとに、`description`、`.flow` の参照、`Workflow` を取る action ごとの答えと数（例では `sometimes (4 of 32 combinations allowed)`）。フローが呼ぶ操作（dandori の口 `Flows::operation_calls` の答え）を受け取ったときは、呼び出しごとに、行、タスク、操作の参照、それを守る action、そのワークフローがその action を許されるか、タスクが宣言した、拒まれたときのエラーを表にする。`ritsu check` が X16 で確かめることを、ページの上で読めるようにするためである。ページの関数は、この答えを引数（`doc::FlowCalls`）で受け取り、`ritsu sekisho doc` はフローごとに dandori の口に尋ねる（`doc::calls_of`。ルートと、ルートからのフローのパスと、規則と日付と帳簿の口を渡す）。守る action は、呼ぶ操作の参照と同じ参照を守る action である。dandori を持たない sekisho のクレートのバイナリでは、この表を出さない。例のワークフロー `returns` では次のようになる（英語の版の英語のページ）。
+
+   | Line | Task | Operation | Guarded by | Allowed | Error on a denial |
+   |---|---|---|---|---|---|
+   | 22 | `refund_order` | `openapi "api/orders.json" operation refundOrder` | `refund_order` | sometimes | `denied` |
 7. **守る操作**：action ごとに、守る操作の参照と呼び出し方（OpenAPI の操作の方法とパス、AsyncAPI の `send`・`receive` とチャネルのアドレス、proto の `/<package>.<Service>/<Method>`、帳簿の振替と操作）。契約の操作を一つも守らない action は、最後に並べる。
 8. **検査の警告**：ファイルが検査を通っていても、`sekisho check` が警告を言うなら（W301〜W304）、その文をそのまま載せる。
 
-**テスト**（`tests/doc.rs`）：例の二つの版を、それぞれ英語と日本語の Markdown と自分の言語の HTML で、テストの材料の代表（条件の形を並べた `tests/gen/conditions.gate` とその日本語の版、`use gate` の forbid を読む `papers.gate`、二つの操作を守る `guards.gate`、W303 と W304 の変異の英語と日本語の版）を Markdown で、golden（`tests/golden/doc/`）と突き合わせる。golden では、埋め込んだページを、それを指す一行に置き換え、埋め込んだページそのものは、rulec と koyomi の口が今描くものと一字も違わないことを別のテストで確かめる。rulec と koyomi のページの文が変わっても、sekisho の golden を取り直さずに済むようにするためである。ほかに、HTML とそれが埋め込むページが外のファイルを読まないこと、`.gate` の説明に書いた `</script>` などがページの中で文字のままであること、ポリシーごとの Cedar が `.cedar` のファイルの中のものと同じであること、フローが呼ぶ操作の表、検査を通らないファイル（exit 1）と E209（exit 2）、Chrome で描けて、埋め込んだページがボタンと `#page=<n>` の両方で開くこと（ritsu-testkit の Chrome を探す関数。見つからなければ SKIP）を確かめる。`ritsu sekisho doc` は、ritsu のクレートの `tests/sekisho.rs` が確かめる。
+**テスト**（`tests/doc.rs`）：例の二つの版を、それぞれ英語と日本語の Markdown と自分の言語の HTML で、テストの材料の代表（条件の形を並べた `tests/gen/conditions.gate` とその日本語の版、`use gate` の forbid を読む `papers.gate`、二つの操作を守る `guards.gate`、W303 と W304 の変異の英語と日本語の版）を Markdown で、golden（`tests/golden/doc/`）と突き合わせる。golden では、埋め込んだページを、それを指す一行に置き換え、埋め込んだページそのものは、rulec と koyomi の口が今描くものと一字も違わないことを別のテストで確かめる。頭の、生成する Cedar のハッシュも同じく、golden では `<sha256>` と書き、`cedar::files` が今書くファイルのハッシュと同じであることを別のテストで確かめる。rulec と koyomi のページの文や、Cedar の生成器が書く `@doc` が変わっても、sekisho のページの golden を取り直さずに済むようにするためである。ほかに、HTML とそれが埋め込むページが外のファイルを読まないこと、`.gate` の説明に書いた `</script>` などがページの中で文字のままであること、ポリシーごとの Cedar が `.cedar` のファイルの中のものと同じであること、フローが呼ぶ操作の表、検査を通らないファイル（exit 1）と E209（exit 2）、Chrome で描けて、埋め込んだページがボタンと `#page=<n>` の両方で開くこと（ritsu-testkit の Chrome を探す関数。見つからなければ SKIP）を確かめる。`ritsu sekisho doc` は、ritsu のクレートの `tests/sekisho.rs` が確かめる。
 
 ## 8. ほかの言語とのつながり（口）
 
@@ -972,9 +996,9 @@ sekisho は受け取る側の言語である（dandori、yuen、sakai と同じ�
 
 ### 8.2 出すもの
 
-- **`Gates`**（新しい口。8.3）：action と守る操作、ワークフロー、ポリシーと期待の一覧、ある principal がある action をどれだけ許されるか。答えるのは sekisho の `Engine` で、`.gate` と、`.cedar` と `.cedarschema` の組（1.3）の両方に答える。
+- **`Gates`**（新しい口。8.3）：action と守る操作、ワークフロー、ポリシーと期待の一覧、ある principal がある action をどれだけ許されるか。答えるのは sekisho の `Engine`（`src/ports.rs`）で、`.gate` と、`.cedar` と `.cedarschema` の組（1.3）の両方に答える。
 - **`Items`**：種類 `principal`（下に `attribute`）、`resource`（下に `attribute`）、`role`、`workflow`、`enum`（下に `value`）、`action`（下に `input`、`context`）、`policy`、`expect`、`separate`。定義の文は、宣言の塊の行（コメントと前後の空白を除き、続いた空白を一つにし、字下げを深さごとに空白二つに直したもの。dandori と同じ。ritsu の DESIGN 3.2）。
-- **`References`**：`use rule|dates|calendar|openapi|proto|asyncapi|book|gate` の先、`workflow … from` の先、`guards` の先（操作）。sakai が境界を越える参照として確かめ、yuen が `trace` でたどる。
+- **`References`**：`use rule|dates|calendar|openapi|proto|asyncapi|book|gate` の先、`workflow … from` の先、`guards` の先（操作）。sakai が境界を越える参照として確かめ、yuen が `trace` でたどる。どれもルートからのパスの参照で、ルートの外のファイルは参照にしない（その `.gate` は E201 か E208 になる。2.6）。`guards` の先は検査が見つけた操作（`Action::references`）なので、名前の検査を通らないファイルと、見つからない操作（E202）は出さない。行は、`use` と `workflow` と `guards` の行。手で書いた Cedar の組には、スキーマの `@guards` の参照を、action の行で出す（ポリシーのファイルは何も参照しない）。
 
 ### 8.3 ritsu-ports に足す型
 
@@ -1112,6 +1136,28 @@ impl GatePorts {
 - `Dates::calendar` と `Dates::doc` には既定の実装がある（答えない。`Err` で「この口はカレンダーを読みません」「この口はページを作りません」）。`Rules::outputs_over` の既定は決められない。いま口を実装しているもの（dandori の `NoRules`・`NoDates`）は直していない。
 - `Flows::operation_calls` と `Maps::published_operations` は、まだ足していない（段階 D の X15 と X16 で足す）。
 
+段階 D で作った形（2026-10-06）：
+
+```rust
+pub trait Gates {
+    fn facts(&self, root: &Path, file: &str) -> Result<GateFacts, Vec<Said>>;
+    fn allowed(&self, root: &Path, file: &str, action: &str, asker: &Asker) -> Result<Found<Allowance>, Vec<Said>>;
+    fn joined(&self) -> bool { true }
+}
+pub struct GateWorkflow { pub name: String, pub alias: String, pub flow: ritsu_base::naming::Name, pub line: usize }
+
+// Flows（dandori が答える）
+fn operation_calls(&self, root: &Path, file: &str, ports: &Ports) -> Result<(String, Vec<OperationCall>), Vec<Said>> { Ok((String::new(), Vec::new())) }
+// Maps（sakai が答える）
+fn published_operations(&self, root: &Path, map: &str) -> Result<Vec<PublishedOperation>, Vec<Said>> { Ok(Vec::new()) }
+```
+
+- 問いは、ファイルをルートとルートからのパスで受け取る（`Items` と `References` と同じ）。答えの参照がルートからのパスなので、問う側も同じ形で渡す。上の計画の `&Path` の一つの引数からは、そこを変えた。
+- `GateWorkflow` には、別名（Cedar の `Workflow::"…"` の ID。`Gates::allowed` の `Asker::Workflow` はこれで尋ねる）を足し、`.flow` はルートからの参照（`dandori "flows/returns.flow"`）にした。
+- `Flows::operation_calls`（dandori の `src/ports.rs`）：dandori の検査を通るフローだけに答える（規則と日付と帳簿は `ports` で読む）。タスクの呼び出しのうち、`use openapi` の `http` と `use proto` の `connect` のタスクのものを、行の順に返す。操作は、`ritsu_base::openapi` で文書を読んで `operationId` を引き（無ければ方法とパス）、proto はサービスの最後の名前とメソッドで書く。拒まれたときのエラーは、タスクが宣言したエラーのうち状態が 403 のもの（Connect の `permission_denied` も dandori は 403 に読む）。テストは dandori の `tests/ports.rs` の `a_flow_says_which_operations_it_calls`（例の `hotel` と `fulfillment`、一時ディレクトリのフロー、検査を通らないフロー）。
+- `Maps::published_operations`（sakai の `src/ports.rs`）：sakai の段 1 と段 2 を通る地図に答える。コンテキストの `open host service` に並べた名前ごとに、proto のサービスならメソッドの全部、OpenAPI の文書の操作（webhook でないもの）ならその操作を返す。`open_to_anyone` は、操作の `security: []`。AsyncAPI のチャネルと、規則の Connect のサービスは返さない（X15 が求めないもので、`guards` で守るものでもない。4.6）。`file` と `line` は、その名前を並べた context のファイルと行。テストは sakai の `tests/maps.rs` で、四つの例の golden の「published operations」の節。
+- sekisho の `Engine` が `Gates`、`Items`、`References` に答え、同じファイルの検査の結果を、一つの実行の中で（ルートとファイルごとに）一度だけ持つ。`ritsu check` も `.gate` の検査をこの `Engine` で走らせるので、口に答えるときに検査をやり直さない。`Items` と `References` の `use` と `workflow` の行は構文だけから読み、`guards` の先だけが検査の結果を使う。
+
 ### 8.4 yuen：ツール名 `sekisho` と種類
 
 参照の書き方（ritsu の DESIGN 6.2）に、ツール名 `sekisho` と、8.2 の種類を足す。例：
@@ -1127,6 +1173,8 @@ requirement refunds_within_limit
 
 2026-10-06 に、ツール名 `cedar` と `openapi`・`asyncapi` を参照の書き方に足した（yuen の DESIGN 3.6）。`cedar` の `policy` の名前は `@id`（無ければ Cedar の CLI と同じく、ファイルの中の順の `policy0`、`policy1`）、`action` と `entity` は宣言した名前で、名前空間は付けない。yuen の端は、ポリシーを `cedar format` の形で書いたものと、宣言をスキーマの人が読む形で書いたもの（action は `context` の共通の型も含む）である。`naming.tsv` は 63 行になった。ツール名 `sekisho` は、まだ `Tool::ALL` に入れていない。段階 D で、口 `Items` と一緒に足す。
 
+段階 D（2026-10-06）で、`sekisho` を `Tool::ALL` の十三番目に入れた。種類は 8.2 の表のとおりで、子の種類 `attribute` は `principal` と `resource` のどちらの下にも書ける（ritsu-base の `ErrorKind::ChildFirst` が親の全部を持ち、誤りの文は「`attribute` は `principal` か `resource` のすぐあとにしか書けません」と言う）。`naming.tsv` に sekisho の JSON の行を六つ、誤りの行を三つ足して、75 行（JSON 47 行、誤り 28 行）になった。`Items` の定義の文は、宣言の塊の行で、ritsu-base の `definition::block`（dandori から土台に移した）が作る。yuen の `verified by` には、sekisho の `expect` と `separate`（落ちることのあるもの）と、`.gate` のファイル全体（sekisho の検査）を書ける。ポリシーなどほかの種類は、`satisfied by` に書く（`verified by` なら E403）。端は yuen の `tests/gates.rs` が、英語の材料 `tests/fixtures/refund_gates/` と日本語の版 `返金のゲート/` で確かめる（ポリシーと期待の端、同じ `.gate` のほかのポリシーを直しても止まらないこと）。
+
 `guards` の操作は、`openapi "api/orders.json" operation refundOrder`、`asyncapi "…" operation <キー>`、`proto "…" service S method M`、帳簿の振替の操作なら `chobo "books/stock.book" transfer receive operation do` の参照で書く（2.6、3.4。`ritsu_base::naming::Tool::Openapi` と `Tool::Asyncapi`、chobo の `transfer` の下の `operation`）。パスはルートからである（2.6）。E202 は、yuen の E202 と同じく、文書のパス（走らせたディレクトリから）と、書いた組で、無いものを言う（`There is no operation refundOrders in examples/refunds/api/orders.json`、`examples/refunds/api/orders.json に operation refundOrders はありません`）。E203〜E205 は、見つけた操作の参照で言う（10 章）。`api` の `guards` は sakai の `api` と同じ参照の JSON（`{"text", "tool", "path", "items"}`）と行で、口 `Gates` の `GateAction::guards` は同じ `Name` と行である（段階 D で口に答えるときに、`Action::references` を入れる）。
 
 ### 8.5 sakai
@@ -1134,6 +1182,13 @@ requirement refunds_within_limit
 - `.gate` は、ほかの成果物と同じく、ちょうど一つのコンテキストに属する（`owns` に `sekisho "…"`）。
 - `.gate` の参照（8.2）は、境界を越える参照として関係で確かめる。規則とカレンダーを読むのは、ほかの言語の成果物を読むのと同じ決まり（共有カーネル、公表された言語）。
 - `guards` は、操作を守る参照である。操作の契約の文書と同じコンテキストの `.gate` だけが、その操作を守れる（段階 D で sakai と確かめる）。操作を持つサービスが、自分の認可を書くのが自然だからである。
+
+段階 D で作った形（2026-10-06。sakai の DESIGN 17 章）：
+
+- `.gate` は一式の成果物で、`dir` か `sekisho "…"` でコンテキストに属する。手で書いた Cedar のファイル（`.cedar`、`.cedarschema`、`.cedarschema.json`）は、`owns` の `cedar "…"` の項で書いたものだけが成果物になる（`dir` の下にあるだけのものは、どのコンテキストのものでもない）。
+- 操作を守る参照（`.gate` の `guards` と、Cedar のスキーマの `@guards`）が、ほかのコンテキストの契約の操作を指せば、関係によらず sakai の E211 である。
+- `use rule`・`use dates`・`use calendar`・`use gate` は、境界を越えれば、二つの共有カーネルに並べたものだけを読める（関係が無ければ E201、あれば E202）。ゲートから生成したコードが規則と日付から生成したコードを呼び、`use gate` はほかのゲートの宣言を読むので、使うのは相手の内側だからである。
+- `use openapi`・`use proto`・`use asyncapi`・`use book` と `workflow … from` は、境界を越える参照に数えない。契約は `guards` が守る操作のために読み（その操作は E211 で確かめる）、ワークフローは呼ぶ側の名前で、ワークフロー自身の呼び出しはそのフローの参照として確かめるからである。
 
 ### 8.6 `ritsu_base::cedar` との分担、OpenAPI の操作の読み手
 
@@ -1263,7 +1318,7 @@ ritsu の土台の診断（`ritsu_base::diag`）と台帳（`ledger`）で書く
 | E106 | `principal` のスコープが action の principal の型に無い（`principal is Customer` を Customer の来ない action に） |
 | E107 | `today` を使うのに `today` の行が無い、オフセットにタイムゾーンの名前を書いた |
 | E108 | 役割の `includes` が輪になる（`clerk → manager → clerk` のように、輪の役割を順に示す。輪一つにつき一度） |
-| E201 | `use` のファイルが、その言語の検査を通らないか、読めない（その言語の言うことを注に）。`use rule` と `use dates` は名前の検査が口で事実を読むときに、`use calendar` と `use book` は検査がカレンダーと帳簿を読むときに、`use gate` は sekisho が読むときに出す。`use gate` が輪になっているときも。`use openapi`・`use proto`・`use asyncapi`・`use book` のファイルがルートの外にあるときも（守る操作を参照で書けない。2.6） |
+| E201 | `use` のファイルが、その言語の検査を通らないか、読めない（その言語の言うことを注に）。`use rule` と `use dates` は名前の検査が口で事実を読むときに、`use calendar` と `use book` は検査がカレンダーと帳簿を読むときに、`use gate` は sekisho が読むときに出す。`use gate` が輪になっているときも。`use` のファイルがルートの外にあるときも（gate が読むファイルは、守る操作も `@doc` も口も、ルートからのパスで参照する。2.6） |
 | E202 | `guards` の操作が契約の文書に無い（文書のパスと、書いた組で言う。2.6） |
 | E203 | `input` が操作の受け取るものに無いか、型か範囲が操作と合わない（dandori の E016 と同じ読み方） |
 | E204 | `from` の引数が操作のパスかクエリの引数に無い |
@@ -1271,7 +1326,7 @@ ritsu の土台の診断（`ritsu_base::diag`）と台帳（`ledger`）で書く
 | E206 | 規則か日付の入力に渡す値の範囲が、その入力の範囲を外れうる、または規則の前提を破りうる（例つき） |
 | W201 | 規則の前提を守るかを決められない（生成したコードが走らせたときに確かめる） |
 | E207 | カレンダーのデータの範囲が、`today` の範囲か、日付の関数が返しうる日を覆わない |
-| E208 | `workflow` の `.flow` が dandori の検査を通らないか、読めない |
+| E208 | `workflow` の `.flow` が dandori の検査を通らないか、読めないか、ルートの外にある（2.6） |
 | E209 | sekisho のクレートのバイナリはほかの言語を持たない（`ritsu sekisho …` で走らせるよう言い、exit 2。dandori の E018 と同じ形）。`use rule`・`use dates`・`use calendar`・`use book`・`workflow … from` の最初の一行で一度だけ出し、ほかの診断は出さない。契約（`use openapi`・`use proto`・`use asyncapi`）と `use gate` は、sekisho のクレートが土台の読み手で読むので出さない |
 | E210 | `use gate` で読んだファイルの名前空間が、読む側と違う |
 | E211 | `use gate` で読んだ二つのファイルが、同じ名前か別名の型・列挙・役割・ワークフローを宣言している（あとから読んだファイルの `use gate` の行に出る） |
@@ -1287,8 +1342,31 @@ ritsu の土台の診断（`ritsu_base::diag`）と台帳（`ledger`）で書く
 | W303 | 決められない（多めに数えた組み合わせから出た例を、具体的な入力で起こせなかった。読んだ Cedar に有限でない式がある） |
 | W304 | 期待が、どの組み合わせも選ばない（成り立つが、何も確かめていない。`principal` の行が当てはまる数と、それぞれの行が満たされる数を注に） |
 | W401 | 生成したポリシーかスキーマが Verified Permissions の上限を超える（`--authorizer avp`） |
+| W901 | 鍵の形の値（ritsu の DESIGN 16.3 の九つの種類）を、文字列かコメントに書いた。同じ行に `ritsu: test secret` と書いた値は言わない |
+| W910 | ポリシーが読む `input` が、守る操作の契約が秘密と印を付けた引数かフィールドである（その値は、Cedar に尋ねるリクエストと判断の記録に残る） |
 
-ritsu の台帳には、X15 と X16 の E907・W907・E908・W908・W909（4.6）を足す。
+ritsu の台帳には、X15 と X16 の E907・W907・E908・W908・W909 を足した（4.6 の段階 D で作った形）。
+
+**W901 と W910（段階 D、2026-10-06）**：セキュリティの検査の帯（ritsu の DESIGN 16 章）のうち、sekisho のファイルの中だけで決まる二つを、sekisho の台帳に置く（`src/security.rs` と `src/contracts.rs`）。
+
+- W901 は、ほかの言語と同じく `ritsu_base::secrets` でファイルのテキストを調べる。鍵の行は出さない（出すと、走らせるたびのログに鍵が残る）。名前の検査より先に調べるので、読めないファイルでも言う。変異は英語と日本語の三つずつ（文字列の鍵、コメントの鍵、テストの値の印）で、どれも ritsu の DESIGN 16.10 の偽の鍵を使う。
+- W910 は、ポリシーが条件で読む `input` だけに言う。ポリシーが読まない `input` は、生成した Cedar の `context` に入らず（5.1）、Cedar に届かないからである。印の読み手は、セキュリティの検査と同じもの（OpenAPI と AsyncAPI は ritsu-base の `marks::schema_mark` で、`x-data-classification`（`sensitivity` が `confidential` か `restricted`）、`x-sensitive-data`、`format: password`。ritsu-base の `openapi` の `Schema::mark` に持ち、`allOf` の中の印も読む。proto は ritsu-proto の `Protos::redaction` で、`debug_redact` と、それを付けるカスタムオプション）である。一つの `input` に一つだけ、最初に印を見つけた操作で言う。変異は `W910_secret_input.gate` と日本語の版で、契約は `tests/mutants/loans.json`。英語の版の英語の出力（`tests/golden/`）：
+
+```text
+warning[W910]: tests/mutants/W910_secret_input.gate:22:1: The input `credit_score` is a field of the body of openapi "tests/mutants/loans.json" operation openLoan, which its contract marks secret (`x-data-classification`: PII, restricted)
+    22 |     credit_score : number  range >=0 <=999
+  = An input a policy reads goes into the request Cedar is asked, and stays in the record of the decision (the answer the generated code gives, Verified Permissions' logs): a secret there reaches everyone who can read them.
+  = Give the policies what they need of it as a value a rule or a date computes (`context`), or take it out of the policies' conditions.
+```
+
+日本語の版の日本語の出力：
+
+```text
+警告[W910]: tests/mutants/W910_秘密のinput.gate:22:1: input `信用スコア` は openapi "tests/mutants/loans.json" operation openLoan の本文のフィールドで、契約が秘密と印を付けています（`x-data-classification`: PII, restricted）
+    22 |     信用スコア(credit_score) : number  range >=0 <=999
+  = ポリシーが読む input の値は、Cedar に尋ねるリクエストに入り、判断の記録（生成したコードが返す答え、Verified Permissions のログ）に残ります。秘密の値は、その記録を読めるすべての人に渡ります。
+  = ポリシーが値そのものを読まずに済むよう、規則か日付で計算した値（`context`）にして渡すか、ポリシーの条件から外してください。
+```
 
 E006 で名前を比べるのは、同じ種類のもののあいだである。型（principal と resource）と列挙は、フィールドの型の位置でどちらも書けるので、一つの名前の集まりにする。ほかは、役割、一つの列挙の値、一つの型の属性、ワークフロー、action、一つの action の入力と計算した値（Cedar の `context` で並ぶので一つ）、ポリシー（permit と forbid。`@id` が重ならないように）、期待、職務の分離、`use` の名前、のそれぞれである。名前と別名のどちらが重なっても E006 で、`use gate` で読んだファイルの型・列挙・役割・ワークフローとも比べる。種類が違えば同じ名前でよい（例の日本語の版では、`use openapi 注文` と `resource 注文(Order)` が並ぶ。期待 `managers_refund_in_period` は、同じ名前の permit と並ぶ）。
 
@@ -1376,7 +1454,7 @@ sekisho explain <code> | --all [--format markdown|json]
 - `ritsu sekisho` の入口と、`ritsu check` が `.gate` を sekisho に渡すこと（`ritsu --help` の言語の一覧には、まだ出さない）。
 - 読む順（`ritsu-project` の `ORDER`）の sekisho の位置（dandori のあと、yuen の前）。
 - 地図の `Gates` のコンテキストと、`ritsu-project` と `ritsu` からの関係。
-- `ritsu_base::naming::Tool::Sekisho`（拡張子と種類だけで、`Tool::ALL` には入れていない。参照の書き方のツール名には、まだならない）。
+- `ritsu_base::naming::Tool::Sekisho`（拡張子と種類だけで、`Tool::ALL` には入れていない。参照の書き方のツール名には、まだならない）。段階 D で `Tool::ALL` に入れ、yuen と sakai の診断の文と golden を直した（8.4）。
 
 拡張子を並べる `ritsu-project` の二つの文には、まだ `.gate` が無い。いまの `ritsu.wasm` が同じ文を返すので、ブラウザで試すページを作り直すときに足す。
 
@@ -1447,6 +1525,9 @@ Zanzibar の形（OpenFGA、SpiceDB、Permify、Topaz のディレクトリ）�
 - **SymCC を使うテスト**：cvc5 があるときだけ走らせ、E302 と E303 を SymCC の答えと比べる。
 - **Lean のモデル**：区間に分けて数えることが、全部のリクエストを覆うことの証明（ritsu の P7）。Cedar の意味は Cedar の Lean の形式化に任せ、sekisho の数え方だけをモデルにする。
 - **LSP**：ritsu の LSP と同じく作らない（ritsu の DESIGN 15 章）。
+- **手で書いた Cedar のワークフロー（X16）**：Cedar には `Workflow` のエンティティと `.flow` を結ぶ書き方が無いので、X16 は `.gate` だけを見る（1.3）。`@guards` と同じく、スキーマの注釈で `.flow` を書く形が候補。
+- **手で書いた Cedar の役割の中の役割**：だれがどこに入るかはエンティティのデータが持つので、口は尋ねる側が並べた役割だけを数える（1.3）。役割の親子を書いたエンティティの JSON を読む形が候補。
+- **Cedar の JSON の形のポリシー**：ritsu-base が読まないので、口も読まない（ritsu の DESIGN 4.18）。
 
 ## 16. 決めたことと、危ないところ
 
@@ -1460,12 +1541,12 @@ Zanzibar の形（OpenFGA、SpiceDB、Permify、Topaz のディレクトリ）�
 4. **関係は一段だけ（2.5）。** テナントの分離（`resource.tenant is principal.tenant`）とメンバーであることは入れ、二段以上と Zanzibar の形は入れない。
 5. **言語をまたぐ検査は X15 と X16、コードは E907〜W909（4.6）。** セキュリティの検査（X14、9xx の帯）の続き。
 6. **X15 の範囲（4.6）。** 公開ホストサービスの操作だけを求め、AsyncAPI のチャネルは求めない。`security: []` の操作は求めない。
-7. **`guards` は、操作と同じコンテキストの `.gate` に限る（8.5）。** 段階 D で sakai と確かめる。
+7. **`guards` は、操作と同じコンテキストの `.gate` に限る（8.5）。** 段階 D で sakai の E211 にした。
 8. **手で書いた Cedar を指すツール名 `cedar` を足す（8.4）。**
 9. **Verified Permissions に置く手順は生成しない（5.8）。** 置くためのファイルだけを書く。
 10. **既定の評価の場所は `--authorizer cedar`（5.5）。** その言語の Cedar の実装を同じプロセスの中で呼び、Verified Permissions は `--authorizer avp` で選ぶ。
 11. **ワークフローの principal の作り方は、v1 では書かない（2.2）。** ワークフローの資格から `Workflow::"<名前>"` を作るのは API の側の認証で、sekisho は書かない。dandori の生成するアクティビティが、どの資格で呼ぶかを決める項目も、v1 では足さない。
-12. **契約が秘密と印を付けたフィールドを `input` に書けば、警告にする。** 段階 D で、セキュリティの検査の印の読み手を使って足す。
+12. **契約が秘密と印を付けたフィールドを `input` に書けば、警告にする。** 段階 D で、セキュリティの検査の印の読み手を使って W910 にした（10 章）。
 13. **名前は sekisho のまま。** npm には同じ名前のパッケージ `sekisho`（React のアプリの認証とアクセス制御。0.7.0、2026-07-01）があり、crates.io と PyPI では空いていた（2026-10-06）。看板は「Eight small languages」（「八つの小さな言語」）にする（12 章。段階 D3 で直す）。
 14. **Cedar に渡す規則の列挙の値は、`.rule` に書いた別名にする（3.1）。** 例の `within_limit` で、英語と日本語の版で同じになる。生成するコードのメンバーの名前（`WithinLimit`）は使わない。rulec の口が、列挙の値ごとにこの別名も返す。
 
@@ -1530,10 +1611,26 @@ Zanzibar の形（OpenFGA、SpiceDB、Permify、Topaz のディレクトリ）�
 62. **ページは検査を通るファイルにだけ出す（7 章）。** `api` と `vectors` と同じにした。表は全部の組み合わせを歩いた結果から作るので、歩けないファイルには表が無い。
 63. **ページのパスは、参照と同じくルートから書く。** `doc` も `--root` を取る。守る操作と計算した値の参照（2.6）と、頭のパスが、同じルートから読めるようにするためである。
 64. **頭のハッシュは、ページの言語で `gen --target cedar` が書く四つのファイルのものにする。** sekisho が書く `@doc` と生成物の頭は `--lang` で変わる（16.1 の 35）ので、どの言語で生成したファイルのハッシュかを、ページに書く。
-65. **埋め込んだ rulec と koyomi のページは、golden では一行に置き換え、口が今描くものと別に突き合わせる。** rulec と koyomi のページの文が変わるたびに、sekisho の golden を取り直さずに済むようにするためである。HTML では、ページを JSON で持ち、`<` を `\u003c` と書く。
+65. **埋め込んだ rulec と koyomi のページと、頭の Cedar のハッシュは、golden では置き換え、今の出力と別に突き合わせる。** rulec と koyomi のページの文や、生成する Cedar の `@doc` が変わるたびに、sekisho のページの golden を取り直さずに済むようにするためである。HTML では、ページを JSON で持ち、`<` を `\u003c` と書く。
 66. **表の「〜以外」は、英字の値のあとだけ空白を入れる（`paid 以外`、`返金済以外`）。** 土台の `ja_spacing` で書く。段階 A の表の golden（`tests/walk/golden/refund_order.table.ja.md`）を取り直した。英語は変わらない。
-67. **ワークフローがフローで呼ぶ操作の表（X16 の中身）は、dandori の答え（`Flows::operation_calls`）を受け取ったときだけ出す。** ページの関数は答えを `doc::FlowCalls` で受け取る。ritsu-cross の X16 と同じ口の答えを読み、守る action は参照が同じものを探す（文字列を組まない）。
+67. **ワークフローがフローで呼ぶ操作の表（X16 の中身）は、dandori の答え（`Flows::operation_calls`）を受け取ったときだけ出す。** ページの関数は答えを `doc::FlowCalls` で受け取り、`ritsu sekisho doc` は dandori の口に尋ねる。ritsu-cross の X16 と同じ口の答えを読み、守る action は参照が同じものを探す（文字列を組まない）。
 68. **役割と action の表の行は、役割を一つだけ持つ principal と、役割を持たない型の principal にする。** 役割の届く範囲（4.4）と同じ問いを、いつも許すか、組み合わせによるか、許さないかの三つで見せる。二つ以上の役割を持つ人の組み合わせは、職務の分離（E305）と action ごとの表が見せる。
+
+段階 D の、言語をまたぐ検査とほかの言語のつなぎで決めたもの（2026-10-06）：
+
+69. **口の問いは、ファイルをルートとルートからのパスで受け取る（8.3）。** `Gates::facts`・`Gates::allowed`・`Flows::operation_calls`・`Maps::published_operations` のどれも。答えの参照がルートからのパスだからである。`GateWorkflow` には別名を足し、`.flow` は参照にした。
+70. **計算した値とワークフローの `@doc` の参照も、ルートからのパスで書く（5.1）。** `@guards` と口 `References` と同じ値にするためである。
+71. **ルートの外の規則・日付・カレンダー・`use gate` のファイルは E201、`.flow` は E208 にする（2.6）。** 契約と同じく、参照にならないパスを、黙って別の形で書かないためである。ルートの外のファイルは読まない。
+72. **X15 は、プロジェクトに `.gate` か Cedar の組が一つでもあるときだけ見る（4.6）。** sekisho を使わないプロジェクトの地図の全部のコンテキストに W907 を出さないためである。答えないゲートが属するコンテキストも見ない。
+73. **X15 は、どのゲートの `guards` も数える（4.6）。** ほかのコンテキストの操作を守ることは、sakai の E211 が言う。二つで同じことを言わない。
+74. **X16 は、ワークフローを書いたゲートの action が守る操作の呼び出しだけを見る（4.6）。** ほかのゲートは、そのワークフローを principal として知らない。
+75. **W909 は、拒まれうるときと、許すかを決められないときの両方に出す（4.6）。** どちらもタスクが拒まれたときのエラーを宣言していないときだけで、決められないことを黙って通さない。
+76. **W908 は境界に数えない（4.6）。** 呼び出しではなく、許しすぎを言う警告だからである。
+77. **W910 は、ポリシーが読む `input` にだけ言う（10 章）。** ポリシーが読まない `input` は、生成した Cedar の `context` に入らない。
+78. **手で書いた Cedar の役割は、尋ねる側が並べたものをそのまま数え、役割の中の役割はたどらない（1.3）。** だれがどこに入るかは、Cedar ではエンティティのデータが持つからである。
+79. **`ritsu check` が読む Cedar は、地図の `owns` と要件が指す組だけにする（1.3）。** ルートの下の `.cedar` を探さない。sakai も、`cedar "…"` の項で書いたファイルだけを成果物にする（sakai の DESIGN 17 章）。
+80. **`published_operations` は、AsyncAPI のチャネルと規則の Connect のサービスを返さない（8.3）。** X15 が求めず、`guards` で守るものでもないからである。
+81. **定義の文の作り方（宣言の塊の行）は、dandori から ritsu-base の `definition` に移し、sekisho と dandori で一つにする（8.2）。**
 
 ### 16.2 危ないところ
 
@@ -1544,4 +1641,4 @@ Zanzibar の形（OpenFGA、SpiceDB、Permify、Topaz のディレクトリ）�
 - **Cedar の実装の差。** 四つの実装で、決めたポリシーの名前の付け方が違った（6.2）。版が上がるたびに、生成したコードのテストで突き合わせる。cedarpy は AWS の公式ではない。
 - **日本語の名前と Cedar。** Cedar に出るものは全部 ASCII の別名で、Cedar の側では、日本語は注釈（`@name` と `@doc`）にしか残らない。
 - **判断と操作のあいだにデータが変わること。** `Store` から読んだ属性で許したあと、操作を行うまでに属性が変わりうる（注文の状態が返金済になる）。どの認可の仕組みにもあることで、sekisho が閉じられるものではない。生成するコードの文書に、操作と同じトランザクションの中で読むか、操作の側でもう一度確かめる（返金済の注文には返金しない、など）ことを書く。
-- **秘密の値を context に入れること。** `input` が、契約で秘密と印を付けたフィールド（proto の `debug_redact`、OpenAPI の `x-data-classification` など）なら、その値は Cedar のリクエストと、Verified Permissions の判断の記録に残る。そういう `input` は、段階 D で、セキュリティの検査の印の読み手を使って警告にする（16.1 の 12）。
+- **秘密の値を context に入れること。** `input` が、契約で秘密と印を付けたフィールド（proto の `debug_redact`、OpenAPI の `x-data-classification` など）なら、その値は Cedar のリクエストと、Verified Permissions の判断の記録に残る。そういう `input` は、ポリシーが読むなら W910 になる（16.1 の 12、10 章）。ポリシーが読まない `input` は Cedar に届かないので言わない。

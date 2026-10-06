@@ -1,0 +1,11 @@
+requirements 返金 v1
+description "テストの材料。店の返金を、ゲートのポリシーが満たし、ゲートの期待が確かめる"
+
+role 決済 "返金の進め方を決める"
+
+requirement 係は返金できる(clerks_refund)
+  text "停止中でない係は、注文を返金できる"
+  owner 決済
+  decided 2026-10-06 by 決済 "返金を求める客に応対するのは係である"
+  satisfied by sekisho "返金.gate" policy 係は返金できる
+  verified by sekisho "返金.gate" expect 停止中でない係は返金できる

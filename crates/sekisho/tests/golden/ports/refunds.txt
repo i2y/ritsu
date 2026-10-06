@@ -1,0 +1,205 @@
+items
+  14-14 sekisho "refunds.gate" enum order_status
+      enum order_status = paid | shipped | returned | refunded
+  14-14 sekisho "refunds.gate" enum order_status value paid
+      paid
+  14-14 sekisho "refunds.gate" enum order_status value shipped
+      shipped
+  14-14 sekisho "refunds.gate" enum order_status value returned
+      returned
+  14-14 sekisho "refunds.gate" enum order_status value refunded
+      refunded
+  16-18 sekisho "refunds.gate" role clerk
+      role clerk
+        description "Answers customers, and refunds small amounts"
+        can view_order, refund_order
+  20-23 sekisho "refunds.gate" role manager
+      role manager
+        description "Refunds what a clerk cannot, and after the refund period on a business day"
+        includes clerk
+        can view_order, refund_order
+  25-27 sekisho "refunds.gate" role auditor
+      role auditor
+        description "Checks the refunds after the fact"
+        can view_order, export_refunds
+  29-34 sekisho "refunds.gate" principal User
+      principal User
+        description "A member of the shop's staff, signed in"
+        roles clerk, manager, auditor
+        attributes
+          refund_limit : money[GBP, incl_tax] range >=0GBP <=10_000GBP
+          suspended : bool
+  33-33 sekisho "refunds.gate" principal User attribute refund_limit
+      refund_limit : money[GBP, incl_tax] range >=0GBP <=10_000GBP
+  34-34 sekisho "refunds.gate" principal User attribute suspended
+      suspended : bool
+  36-37 sekisho "refunds.gate" principal Customer
+      principal Customer
+        description "A customer of the shop, signed in"
+  39-40 sekisho "refunds.gate" workflow returns
+      workflow returns from "flows/returns.flow"
+        description "Refunds a returned order once the item is back at the warehouse"
+  42-47 sekisho "refunds.gate" resource Order
+      resource Order
+        description "An order of the shop"
+        attributes
+          status : order_status
+          paid_on : date range >=2026-01-01 <=2028-09-30
+          customer : Customer
+  45-45 sekisho "refunds.gate" resource Order attribute status
+      status : order_status
+  46-46 sekisho "refunds.gate" resource Order attribute paid_on
+      paid_on : date range >=2026-01-01 <=2028-09-30
+  47-47 sekisho "refunds.gate" resource Order attribute customer
+      customer : Customer
+  49-50 sekisho "refunds.gate" resource RefundRecord
+      resource RefundRecord
+        description "The record of every refund, exported as one document"
+  52-56 sekisho "refunds.gate" action view_order
+      action view_order
+        description "Look at an order"
+        guards orders getOrder
+        principal User, Customer
+        resource Order from orderId
+  58-68 sekisho "refunds.gate" action refund_order
+      action refund_order
+        description "Refund an order, in part or in whole"
+        guards orders refundOrder
+        principal User, Workflow
+        resource Order from orderId
+        input
+          amount : money[GBP, incl_tax] range >=1GBP <=10_000GBP
+        context
+          refund_band = refund_limit(amount: amount, limit: principal.refund_limit).band
+          in_period = today <= refund_terms.last_day(paid_on: resource.paid_on)
+          business_day = today is open in uk
+  64-64 sekisho "refunds.gate" action refund_order input amount
+      amount : money[GBP, incl_tax] range >=1GBP <=10_000GBP
+  66-66 sekisho "refunds.gate" action refund_order context refund_band
+      refund_band = refund_limit(amount: amount, limit: principal.refund_limit).band
+  67-67 sekisho "refunds.gate" action refund_order context in_period
+      in_period = today <= refund_terms.last_day(paid_on: resource.paid_on)
+  68-68 sekisho "refunds.gate" action refund_order context business_day
+      business_day = today is open in uk
+  70-74 sekisho "refunds.gate" action export_refunds
+      action export_refunds
+        description "Export the record of refunds"
+        guards orders exportRefunds
+        principal User
+        resource RefundRecord
+  76-79 sekisho "refunds.gate" policy staff_view_orders
+      permit staff_view_orders
+        description "The staff look at any order"
+        principal in clerk, auditor
+        action view_order
+  81-85 sekisho "refunds.gate" policy customers_view_their_orders
+      permit customers_view_their_orders
+        description "A customer looks at their own orders"
+        principal is Customer
+        action view_order
+        when resource.customer is principal
+  87-92 sekisho "refunds.gate" policy clerks_refund_within_their_limit
+      permit clerks_refund_within_their_limit
+        description "A clerk refunds up to the clerk's own limit, while the refund period lasts"
+        principal in clerk
+        action refund_order
+        when refund_band is within_limit
+        when in_period
+  94-98 sekisho "refunds.gate" policy managers_refund_in_period
+      permit managers_refund_in_period
+        description "A manager refunds any amount while the refund period lasts"
+        principal in manager
+        action refund_order
+        when in_period
+  100-105 sekisho "refunds.gate" policy managers_refund_late_on_business_days
+      permit managers_refund_late_on_business_days
+        description "After the refund period, a manager may still refund, on a business day in England and Wales"
+        principal in manager
+        action refund_order
+        unless in_period
+        when business_day
+  107-112 sekisho "refunds.gate" policy returns_refunds_returned_orders
+      permit returns_refunds_returned_orders
+        description "The returns workflow refunds a returned order, up to 50 pounds"
+        principal is workflow returns
+        action refund_order
+        when resource.status is returned
+        when amount <= 50GBP
+  114-117 sekisho "refunds.gate" policy auditors_export_refunds
+      permit auditors_export_refunds
+        description "An auditor exports the record of refunds"
+        principal in auditor
+        action export_refunds
+  119-122 sekisho "refunds.gate" policy no_second_refund
+      forbid no_second_refund
+        description "An order already refunded is not refunded again"
+        action refund_order
+        when resource.status is refunded
+  124-127 sekisho "refunds.gate" policy auditors_do_not_refund
+      forbid auditors_do_not_refund
+        description "Whoever audits the refunds does not refund"
+        principal in auditor
+        action refund_order
+  129-133 sekisho "refunds.gate" policy suspended_staff_do_nothing
+      forbid suspended_staff_do_nothing
+        description "A suspended member of the staff does nothing"
+        principal is User
+        action any
+        when principal.suspended
+  135-140 sekisho "refunds.gate" expect clerks_never_refund_over_their_limit
+      expect deny clerks_never_refund_over_their_limit
+        description "A clerk who is not a manager never refunds more than the clerk's own limit"
+        principal in clerk
+        action refund_order
+        unless principal in manager
+        when refund_band is over_limit
+  142-145 sekisho "refunds.gate" expect nothing_refunded_twice
+      expect deny nothing_refunded_twice
+        description "No one refunds an order that is already refunded"
+        action refund_order
+        when resource.status is refunded
+  147-154 sekisho "refunds.gate" expect managers_refund_in_period
+      expect allow managers_refund_in_period
+        description "A manager who is not suspended and does not audit refunds an order not yet refunded, while the period lasts"
+        principal in manager
+        action refund_order
+        unless principal in auditor
+        unless principal.suspended
+        unless resource.status is refunded
+        when in_period
+  156-158 sekisho "refunds.gate" separate refunding_and_auditing
+      separate refunding_and_auditing
+        description "The people who refund are not the people who audit the refunds"
+        actions refund_order, export_refunds
+references
+  5 rulec "rules/refund_limit.rule" [use rule]
+  6 koyomi "dates/refund_terms.cal" [use dates]
+  7 koyomi "calendars/england_and_wales.cal" [use calendar]
+  8 openapi "api/orders.json" [use openapi]
+  39 dandori "flows/returns.flow" [workflow]
+  54 openapi "api/orders.json" operation getOrder [guards]
+  60 openapi "api/orders.json" operation refundOrder [guards]
+  72 openapi "api/orders.json" operation exportRefunds [guards]
+facts
+  refunds (refunds) v1 Shop sha256:678573b010ccf8c4
+  action view_order (view_order) line 52: principals ["User", "Customer"], resources ["Order"], nobody None
+    guards openapi "api/orders.json" operation getOrder (line 54)
+  action refund_order (refund_order) line 58: principals ["User", "Workflow"], resources ["Order"], nobody None
+    guards openapi "api/orders.json" operation refundOrder (line 60)
+  action export_refunds (export_refunds) line 70: principals ["User"], resources ["RefundRecord"], nobody None
+    guards openapi "api/orders.json" operation exportRefunds (line 72)
+  workflow returns (returns) line 39: dandori "flows/returns.flow"
+  permit staff_view_orders @id refunds/staff_view_orders line 76
+  permit customers_view_their_orders @id refunds/customers_view_their_orders line 81
+  permit clerks_refund_within_their_limit @id refunds/clerks_refund_within_their_limit line 87
+  permit managers_refund_in_period @id refunds/managers_refund_in_period line 94
+  permit managers_refund_late_on_business_days @id refunds/managers_refund_late_on_business_days line 100
+  permit returns_refunds_returned_orders @id refunds/returns_refunds_returned_orders line 107
+  permit auditors_export_refunds @id refunds/auditors_export_refunds line 114
+  forbid no_second_refund @id refunds/no_second_refund line 119
+  forbid auditors_do_not_refund @id refunds/auditors_do_not_refund line 124
+  forbid suspended_staff_do_nothing @id refunds/suspended_staff_do_nothing line 129
+  expect clerks_never_refund_over_their_limit line 135
+  expect nothing_refunded_twice line 142
+  expect managers_refund_in_period line 147
+  separate refunding_and_auditing line 156

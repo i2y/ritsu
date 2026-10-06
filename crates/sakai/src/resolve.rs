@@ -82,6 +82,12 @@ impl R<'_> {
             self.at("E011", file, src, it.path.pos, tr!("{w} の行に書けるのは、.yaml、.yml、.json のファイルです（\"{v}\"）", "A {w} line names a .yaml, .yml or .json file (\"{v}\")"));
             return None;
         }
+        // Cedar's files written by hand (sekisho's DESIGN 1.3): a policy set and its schema
+        if it.tool == Some(Tool::Cedar) && !Tool::Cedar.extensions().iter().any(|x| p.ends_with(x)) {
+            let v = &it.path.value;
+            self.at("E011", file, src, it.path.pos, tr!("cedar の行に書けるのは、.cedar、.cedarschema、.cedarschema.json のファイルです（\"{v}\"）", "A cedar line names a .cedar, .cedarschema or .cedarschema.json file (\"{v}\")"));
+            return None;
+        }
         if let Some(t) = it.tool
             && let Some(ext) = t.extension()
             && !p.ends_with(&format!(".{ext}"))

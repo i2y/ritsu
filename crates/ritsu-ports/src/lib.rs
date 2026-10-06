@@ -27,9 +27,12 @@
 //!   and [`Undecided`], the preconditions those checks could not decide, which the code dandori
 //!   writes checks when the workflow runs.
 //!   [`Flows::sends`] adds the calls that give a value the contracts mark secret to another
-//!   file of the project ([`Send`]), for the check of where secrets go (X14).
-//! - [`Maps`]: sakai's maps — their contexts and relationships ([`MapFacts`]) and the context a
-//!   file belongs to — as the checks across the borders read them (X14).
+//!   file of the project ([`Send`]), for the check of where secrets go (X14), and
+//!   [`Flows::operation_calls`] the calls of an operation of a contract ([`OperationCall`]), for
+//!   the check of what a workflow is allowed (X16).
+//! - [`Maps`]: sakai's maps — their contexts and relationships ([`MapFacts`]), the context a file
+//!   belongs to, and the operations each context opens ([`PublishedOperation`]) — as the checks
+//!   across the borders read them (X14, X15).
 //! - [`Checked`]: what a language's own `check` prints for a unit it checks, a diagnostic at a
 //!   time, the text and the JSON, as `ritsu check` prints it again (DESIGN 8.3).
 //! - [`Gates`]: a `.gate`'s actions with the operations they guard, its workflows, policies and
@@ -60,10 +63,10 @@ pub use dates::CalendarFacts;
 pub use gates::{Allowance, Asker, GateAction, GateFacts, GatePolicy, GatePorts, GateWorkflow, Gates};
 pub use index::{Index, Item, Items, Lookup, Reference, References};
 pub use flows::{
-    seconds_text, Amount, CallArg, Crossings, DateCall, Destination, Flows, HoldSpan, Origin, Ports, RuleCall, Secret, Send, TransferCall,
-    Undecided, UndecidedPrecondition,
+    seconds_text, Amount, CallArg, Crossings, DateCall, Destination, Flows, HoldSpan, OperationCall, Origin, Ports, RuleCall, Secret, Send,
+    TransferCall, Undecided, UndecidedPrecondition,
 };
-pub use maps::{MapFacts, MapRelationship, Maps};
+pub use maps::{MapFacts, MapRelationship, Maps, PublishedOperation};
 pub use rules::{Axis, Call, CallEnum, Column, ColumnType, Connect, EnumValue, Machine, MachineRow, OutputValues, Param, Precondition, RuleEnum, RuleError, RuleFacts, Rules, Value, Values, WireEnum, WireField};
 
 use ritsu_base::text::Text;

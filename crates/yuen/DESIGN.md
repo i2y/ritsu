@@ -348,7 +348,8 @@ requirement 支払日(payment_day) v2
 |---|---|
 | `geas "<spec>" claim "<名前>"` | geas が走らせる主張 |
 | `koyomi "<file>" claim <名前>` | koyomi が範囲のすべての日で確かめる条件 |
-| `rulec "<file>"`、`koyomi "<file>"`、`chobo "<file>"`、`dandori "<file>"`、`geas "<spec>"` | そのツールの `check` がそのファイルに対して確かめること（rulec なら完全性、重なり、例） |
+| `sekisho "<file>" expect <名前>`、`sekisho "<file>" separate <名前>` | sekisho が全部の組み合わせで確かめる期待と職務の分離（2026-10-06。3.7） |
+| `rulec "<file>"`、`koyomi "<file>"`、`chobo "<file>"`、`dandori "<file>"`、`geas "<spec>"`、`sekisho "<file>"` | そのツールの `check` がそのファイルに対して確かめること（rulec なら完全性、重なり、例） |
 | `file "<path>"` | テストのファイル。何が走らせるかを yuen は知らない |
 
 `rulec "x.rule" output 送料` や `chobo "在庫.book" transfer 引当` は、満たす側には書けるが、確かめる側には書けない。出力や振替は、それ自身では何も確かめないからである。
@@ -460,7 +461,7 @@ sakai "contexts/受注.ctx" term キャンセル
 
 ### 2.3 ツールと種類
 
-ツール名は、`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai` の十二である。ほかの語は E011 にする。`openapi`、`asyncapi`、`cedar` は 2026-10-06 に足した（3.6）。
+ツール名は、`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho` の十三である。ほかの語は E011 にする。`openapi`、`asyncapi`、`cedar` は 2026-10-06 に足した（3.6）。`sekisho` も同じ日に足した（3.7）。
 
 種類の語は、それぞれのツールが JSON で出す名前の種類から取り、yuen と sakai が使う種類を合わせたものにした。どちらの言語も、自分では使わない種類も名指しとして読み、JSON に出す。
 
@@ -478,6 +479,7 @@ sakai "contexts/受注.ctx" term キャンセル
 | `file` | 何でも | （無い） | — |
 | `yuen` | `.req` | `requirement`、`source` | yuen 自身（ほかの言語へは `yuen api`（11 章）と yuen の口） |
 | `sakai` | `.ctx` | `context`、`term` | sakai の口（`Items`） |
+| `sekisho` | `.gate` | `principal`（下に `attribute`）、`resource`（下に `attribute`）、`role`、`workflow`、`enum`（下に `value`）、`action`（下に `input`、`context`）、`policy`、`expect`、`separate` | sekisho の口（`Items`。構文だけから読む。3.7） |
 
 - 取り込む前は、名前をツールの JSON（`rulec graph` の `nodes`、`rulec api` の `python.enums`、`koyomi api`、`chobo api`、geas の記録の一行め、`sakai api`）から読むと決めていた。ritsu の D.7 から、どの言語も口の `Items`（ritsu の DESIGN 6.4）で中のものを渡し、yuen はそれを読む。その言語の名前で読むので、JSON の二つの出口（`graph` と `api`）が同じ名前を出すかを確かめる必要は無くなった。
 - ディレクトリを指すツールの語（`dir`）は置かない。yuen でディレクトリを書けるのは `scope` だけで、その書き方は 1.8 で決める。JSON では、ディレクトリをパスの文字列で出す（11 章の `scopes`）。
@@ -508,7 +510,7 @@ sakai "contexts/受注.ctx" term キャンセル
 
 キーは `text`、`tool`、`path`、`items` の順に並べる。`path` はルートからの相対、`items` は種類と名前の組の並び（組が無ければ `[]`）、`text` は 2.4 の形で文字にしたものである。一つの名指しだけを出すときは、serde_json の詰めた書き方（空白を入れず、ASCII でない文字はエスケープしない）にする。`api` のように整形した JSON の中に置くときも、キーと値は同じで、違うのは空白だけである。
 
-ritsu-base の `tests/fixtures/naming.tsv` は、この決まりを試す表である。一行が一つの名指しで、タブの左が名指し（書いたファイルはルートにあるとする）、右が、その名指しだけを出したときの JSON か、`ERROR: <理由>` である。`tests/names.rs` は、表のどの行についても、JSON の行では一字も違わない JSON を出すこと、エラーの行ではエラーにすることを確かめる。エラーの理由は、知らないツールとツールの語を `"…"` で書いたものなら E011、種類と組（種類を `"…"` で書いた、種類のあとに名前が無い、を含む）なら E012、パス（空のパスを含む）なら E013、字句（文字列の外の全角の空白、`\"` と `\\` のほかのエスケープ）なら E001 に当たることも確かめる。表は 2026-10-03 に 36 行（JSON 21 行、エラー 15 行）になり、ritsu の D.6 で dandori の種類の行を足して 42 行（JSON 24 行、エラー 18 行）になった。2026-10-06 に、ツール名 `openapi`、`asyncapi`、`cedar` の行（JSON 15 行、エラー 6 行）と、chobo の振替の操作の行（JSON 2 行、エラー 1 行）を足し、66 行（JSON 41 行、エラー 25 行）になった。chobo に入れ子ができたので、`account 在庫 value X` の行の理由は「`account` の下に組を書けない」に替わった。
+ritsu-base の `tests/fixtures/naming.tsv` は、この決まりを試す表である。一行が一つの名指しで、タブの左が名指し（書いたファイルはルートにあるとする）、右が、その名指しだけを出したときの JSON か、`ERROR: <理由>` である。`tests/names.rs` は、表のどの行についても、JSON の行では一字も違わない JSON を出すこと、エラーの行ではエラーにすることを確かめる。エラーの理由は、知らないツールとツールの語を `"…"` で書いたものなら E011、種類と組（種類を `"…"` で書いた、種類のあとに名前が無い、を含む）なら E012、パス（空のパスを含む）なら E013、字句（文字列の外の全角の空白、`\"` と `\\` のほかのエスケープ）なら E001 に当たることも確かめる。表は 2026-10-03 に 36 行（JSON 21 行、エラー 15 行）になり、ritsu の D.6 で dandori の種類の行を足して 42 行（JSON 24 行、エラー 18 行）になった。2026-10-06 に、ツール名 `openapi`、`asyncapi`、`cedar` の行（JSON 15 行、エラー 6 行）と、chobo の振替の操作の行（JSON 2 行、エラー 1 行）を足し、66 行（JSON 41 行、エラー 25 行）になった。chobo に入れ子ができたので、`account 在庫 value X` の行の理由は「`account` の下に組を書けない」に替わった。同じ日に、ツール名 `sekisho` の行（JSON 6 行、エラー 3 行。`attribute` を親のすぐあとでなく書いたもの、`policy` の下の組、`action` の下の `input` と `context` でない組）を足し、75 行（JSON 47 行、エラー 28 行）になった。
 
 ### 2.7 dandori と geas に足りなかったもの
 
@@ -545,6 +547,7 @@ ritsu-base の `tests/fixtures/naming.tsv` は、この決まりを試す表で�
 | geas | `Items`（索引で）、`Claims` | spec の主張。`geas map` の記録（範囲の 4、5.3）と、差分が主張に何をもたらすか（`affected`、8 章） |
 | dandori | `Items`（索引で） | 中のもの（構文だけから。規則は要らない） |
 | sakai | `Items`（索引で） | コンテキストと語 |
+| sekisho | `Items`（索引で） | `.gate` の中のもの（構文だけから。規則も契約も要らない。3.7） |
 | proto | 口は使わない | ritsu の `.proto` の読み手（ritsu-proto）で yuen が読む（3.4） |
 | openapi、asyncapi | 口は使わない | ritsu の YAML と JSON の読み手（`ritsu_base::yaml`）で yuen が読み、要素は `ritsu_base::document` で引く（3.6） |
 | cedar | 口は使わない | ritsu の Cedar の読み手（`ritsu_base::cedar`）で yuen が読む（3.6） |
@@ -578,6 +581,7 @@ ritsu-base の `tests/fixtures/naming.tsv` は、この決まりを試す表で�
 | geas | `claim` | 主張の塊の行 |
 | dandori | `task`、`case`、`record`、`enum`、`input`、`output` と下の `field`、`value` | タスクや案件やレコードの宣言の塊の行（コメントと前後の空白を除き、文字列の外の続いた空白を一つにし、字下げは深さごとに空白二つに直す。dandori の DESIGN 0.3） |
 | sakai | `context`、`term` | コンテキストのファイルの行、語の塊の行（コメントと前後の空白を除く） |
+| sekisho | `principal`、`resource`、`role`、`workflow`、`enum`、`action`、`policy`、`expect`、`separate` と下の `attribute`、`value`、`input`、`context` | 宣言の塊の行（コメントと前後の空白を除き、文字列の外の続いた空白を一つにし、字下げは深さごとに空白二つに直す。dandori と同じ。sekisho の DESIGN 8.2） |
 | proto | `service`、`method`、`message`、`field`、`enum`、`value` | 3.4 の決まった形の文 |
 | openapi、asyncapi | `schema`、`property`、`value`、`operation`、`channel`、`message`、`pointer` | 3.6 の文（要素の値と、その `$ref` がたどる値） |
 | cedar | `policy`、`action`、`entity` | 3.6 の文（ポリシー、宣言） |
@@ -767,9 +771,28 @@ tests/mutants/E303_element_changed: 2 errors
 
 **まだやらないこと**：
 
-- sekisho の `.gate` の中のもの（ツール名 `sekisho`）。sekisho の段階 D で、sekisho の口 `Items` から読む。
 - Cedar の JSON の形のポリシーと、テンプレートのリンク。ritsu-base が読まない（ritsu の DESIGN 4.18）。
 - `affected` は、文書と Cedar のファイルを、ほかの成果物のファイルと同じく、ファイルの単位で答える（差分が触る要素までは絞らない）。
+
+### 3.7 sekisho の `.gate`（2026-10-06）
+
+**決定**：sekisho の `.gate` の中のもの（ポリシー、期待、職務の分離、action、役割、型とその属性、列挙と値、ワークフロー）を、リンクの端にする。ツール名は `sekisho` で、種類は 2.3 の表のとおりである（sekisho の DESIGN 8.4）。読むのは sekisho の口 `Items` で、ほかの言語と同じく索引で引く。
+
+```req
+requirement clerks_refund
+  text "A clerk who is not suspended refunds an order"
+  owner payments
+  satisfied by sekisho "refunds.gate" policy clerks_refund
+  verified by sekisho "refunds.gate" expect clerks_who_are_not_suspended_refund
+```
+
+- 端の中身は、そのものの宣言の塊の行である（3.2）。同じ `.gate` のほかのポリシーを直しても、そのリンクは止まらない。そのポリシー（説明や条件）を直せば、その端が変わる。
+- `verified by` には、期待（`expect`）と職務の分離（`separate`）と、`.gate` のファイル全体（sekisho の検査）を書ける（1.6）。期待と職務の分離は、sekisho が全部の組み合わせで確かめ、成り立たなければ検査が落ちる（sekisho の E304、E305）。ポリシーや action は、それ自身では何も確かめないので、`satisfied by` に書く（`verified by` なら E403）。
+- `Items` は構文だけから読む。規則や契約が読めない `.gate` の中のものも引ける。名前の検査を通らない `.gate` かどうかは、sekisho の検査が言う。
+- yuen のクレートのバイナリは sekisho を持たないので、`.gate` を指すプロジェクトは E206 で止まる（3.1。`Suite::READ` に sekisho を足した）。
+- 生成した Cedar は指さない（`.gate` の中のものと一対一の生成物だから。sekisho の DESIGN 1.3）。手で書いた Cedar は、ツール名 `cedar` で指す（3.6）。
+
+**確かめ方**：`tests/gates.rs`。英語の材料 `tests/fixtures/refund_gates/`（`refunds.gate` と `refunds.req`）と、同じものを日本語の名前で書いた `tests/fixtures/返金のゲート/`。二つの材料のどちらでも、ポリシーと期待の端が宣言の塊の行であること、ほかのポリシー（forbid）の説明、permit の行の中の空白、行末のコメントを直しても二つの端が変わらず、permit の説明を直せばその端が変わること。E011 と E403 の文と golden は、ツール名 `sekisho` と、確かめる側に書ける sekisho の種類を足して取り直した。
 
 ## 4. ハッシュと印
 

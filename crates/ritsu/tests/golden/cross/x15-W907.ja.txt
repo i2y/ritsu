@@ -1,0 +1,7 @@
+payments/charges.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0
+shop.ctx: ok — コンテキスト 2、関係 0。成果物 3 件は、どれも一つのコンテキストに属する。境界を越える参照は無い
+警告[ritsu W907]: contexts/orders.ctx:10: 「Orders」はほかのコンテキストに操作を 2 個公開していますが、どれも守る action がありません
+    10 |   open host service getOrder, refundOrder
+  = 公開している操作: openapi "orders/api/orders.json" operation getOrder、openapi "orders/api/orders.json" operation refundOrder（地図 shop.ctx）。
+  = 「Orders」は、まだ sekisho で認可を書いていません。認証した相手に何をさせてよいかが、ritsu の確かめられる形で書かれていません。「Orders」の .gate を書き、公開する操作をそれぞれ action で守ってください。
+ritsu check: ファイル 4 個（sekisho 1、sakai 3）。どれも検査を通りました（警告 1 件）。言語の境目: 確かめた 3 か所、決められない 2 か所

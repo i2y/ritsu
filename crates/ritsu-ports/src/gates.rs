@@ -10,7 +10,7 @@
 use crate::{Books, Dates, Flows, Found, Items, Ports, Rules, Said};
 use ritsu_base::naming::Name;
 use ritsu_base::text::Text;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
 
 /// What sekisho knows of one `.gate` that passes its check, or of a Cedar policy set with its
@@ -55,10 +55,11 @@ pub struct GateAction {
 /// One workflow a gate names as a principal.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GateWorkflow {
-    /// The name the gate gives it (the Cedar id of `Workflow`), and the `.flow`, as the caller
-    /// reaches it.
+    /// The name the gate gives it (`返品`, `returns`), and its alias, the Cedar id of `Workflow`.
     pub name: String,
-    pub flow: PathBuf,
+    pub alias: String,
+    /// The `.flow`, as a reference from the root (`dandori "flows/returns.flow"`).
+    pub flow: Name,
     pub line: usize,
 }
 
@@ -91,15 +92,19 @@ pub enum Allowance {
     Never,
 }
 
-/// What sekisho answers for a gate. `file` is the `.gate` (or the `.cedar` beside its
-/// `.cedarschema`), as the caller reaches it.
+/// What sekisho answers for a gate. `file` is the `.gate`, or a policy set of Cedar with its schema
+/// beside it (the `.cedar`, or its `.cedarschema` or `.cedarschema.json`), from `root`, the root
+/// the references are written from (ritsu's DESIGN 6.2, item 3), as the port of what files hold is
+/// asked (`Items`).
 pub trait Gates {
     /// What sekisho knows of the file, when it passes check; else what check says.
-    fn facts(&self, file: &Path) -> Result<GateFacts, Vec<Said>>;
+    fn facts(&self, root: &Path, file: &str) -> Result<GateFacts, Vec<Said>>;
 
-    /// Whether `asker` is allowed `action`, over every combination the check walks; undecided with
-    /// the reason when the walk is over budget or a language cannot say what a value can come to.
-    fn allowed(&self, file: &Path, action: &str, asker: &Asker) -> Result<Found<Allowance>, Vec<Said>>;
+    /// Whether `asker` is allowed `action` (by its name or its alias), over every combination the
+    /// check walks; undecided with the reason when the walk is over budget, a language cannot say
+    /// what a value can come to, or a policy of Cedar written by hand reads what sekisho does not
+    /// count; what check says when the file does not pass it.
+    fn allowed(&self, root: &Path, file: &str, action: &str, asker: &Asker) -> Result<Found<Allowance>, Vec<Said>>;
 
     /// Whether sekisho is joined at all: false for a port that reads no gate, so that the language
     /// that asks can say so once, as with rules (`Rules::joined`).

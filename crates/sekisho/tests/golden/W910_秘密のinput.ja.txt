@@ -1,0 +1,5 @@
+警告[W910]: tests/mutants/W910_秘密のinput.gate:22:1: input `信用スコア` は openapi "tests/mutants/loans.json" operation openLoan の本文のフィールドで、契約が秘密と印を付けています（`x-data-classification`: PII, restricted）
+    22 |     信用スコア(credit_score) : number  range >=0 <=999
+  = ポリシーが読む input の値は、Cedar に尋ねるリクエストに入り、判断の記録（生成したコードが返す答え、Verified Permissions のログ）に残ります。秘密の値は、その記録を読めるすべての人に渡ります。
+  = ポリシーが値そのものを読まずに済むよう、規則か日付で計算した値（`context`）にして渡すか、ポリシーの条件から外してください。
+tests/mutants/W910_秘密のinput.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0

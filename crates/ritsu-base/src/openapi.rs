@@ -184,6 +184,10 @@ pub struct Schema {
     /// `enum` (or a `const`): each value as it goes on the wire, a string as itself and a number
     /// or a boolean as JSON writes it; `null` is left out (it sets `nullable`).
     pub values: Option<Vec<String>>,
+    /// The mark that makes the value secret, when the schema has one (DESIGN 16.6, [`crate::marks`]):
+    /// `x-data-classification` at `confidential` or `restricted`, `x-sensitive-data`, or `format:
+    /// password`.
+    pub mark: Option<crate::marks::SchemaMark>,
     /// Where the schema is written, after following the `$ref`s to it.
     pub line: usize,
     pub col: usize,
@@ -477,6 +481,10 @@ impl Reader<'_> {
             s.nullable = true;
         }
         s.format = l.str("format");
+        // the marks of a secret, read as every language reads them (`marks`)
+        let sensitive = n.get("x-sensitive-data").is_some_and(|v| v.value != Value::Bool(false));
+        let classification = n.get("x-data-classification").map(|c| (c.get("category").and_then(Node::as_str).unwrap_or(""), c.get("sensitivity").and_then(Node::as_str)));
+        s.mark = crate::marks::schema_mark(s.format.as_deref(), sensitive, classification);
         let number = |k: &str| -> Option<Number> {
             match &n.get(k)?.value {
                 Value::Int(i) => Some(Number::Int(*i)),
@@ -525,6 +533,7 @@ impl Reader<'_> {
                 s.minimum = s.minimum.or(m.minimum);
                 s.maximum = s.maximum.or(m.maximum);
                 s.values = s.values.or(m.values);
+                s.mark = s.mark.or(m.mark);
             }
         }
         s

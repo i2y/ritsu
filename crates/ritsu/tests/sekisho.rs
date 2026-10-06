@@ -62,7 +62,8 @@ fn ritsu_check_hands_the_gates_to_sekisho() {
     // after the flow, as the languages are checked: what gives facts first
     let flow = out.find("examples/refunds/flows/returns.flow: ok").expect("the flow is checked");
     assert!(flow < out.find("refunds.gate: ok").unwrap(), "{out}");
-    assert!(out.ends_with("ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; borders between the languages: 0 checked, 0 undecided\n"), "{out}");
+    // the workflow's call of the refund is a border of each gate (X16): the task handles a denial
+    assert!(out.ends_with("ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; borders between the languages: 2 checked, 0 undecided\n"), "{out}");
     let (code, out, _) = ritsu_in(&sekisho_dir(), &["check", "examples/refunds", "--format", "json"]);
     assert_eq!(code, 0);
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
@@ -83,7 +84,8 @@ fn a_mistake_in_a_gate_fails_ritsu_check() {
     assert_eq!(code, 1, "{out}{err}");
     assert!(out.contains("error[sekisho E101]: refunds.gate:"), "{out}");
     assert!(out.contains("There is no role `clerck`"), "{out}");
-    assert!(out.ends_with("ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): 1 fail (1 error); borders between the languages: 0 checked, 0 undecided\n"), "{out}");
+    // the gate that does not pass answers nothing of what its workflow calls; the other one does
+    assert!(out.ends_with("ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided\n"), "{out}");
     let (_, out, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--format", "json"]);
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     let d = v["diagnostics"].as_array().unwrap().iter().find(|d| d["tool"] == "sekisho").expect("sekisho's diagnostic");

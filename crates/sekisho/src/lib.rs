@@ -14,6 +14,9 @@
 //!   declares, as JSON; [`raw`]: the data of every combination for the code that builds the
 //!   requests, with the answer of the reference evaluation (DESIGN 6.3).
 //! - [`cli`] and [`run`]: the `sekisho` command, which the binary runs and so does `ritsu sekisho`.
+//! - [`ports`]: what sekisho answers through ritsu's ports — what a gate holds and names outside
+//!   itself, and the port `Gates` the checks across the borders read; [`cedar_in`] answers the same
+//!   for Cedar's policies and schemas written by hand.
 
 #[macro_use]
 extern crate ritsu_base;
@@ -22,6 +25,7 @@ pub mod api;
 pub mod ast;
 pub mod borders;
 pub mod cedar;
+pub mod cedar_in;
 pub mod cells;
 pub mod check;
 pub mod checks;
@@ -39,11 +43,13 @@ pub mod lex;
 pub mod model;
 pub mod names;
 pub mod parse;
+pub mod ports;
 /// The data the generated code is given for each combination, and the answer for it (DESIGN 6.3).
 pub mod raw;
 pub mod repros;
 /// The `sekisho` command, as a function: the binary runs it, and so does `ritsu sekisho`.
 pub mod run;
+pub mod security;
 pub mod suite;
 pub mod table;
 pub mod types;

@@ -1,0 +1,25 @@
+gate 代金(charges) v1
+description "注文の代金をカードで受け取ってよい人。決済が持つ操作を、受注の側で書いた"
+
+use openapi 決済 from "../payments/api/payments.yaml"
+
+role 会計係(cashier)
+  description "注文の支払いを受け付ける"
+
+principal 職員(Staff)
+  description "サインインした店の職員"
+  roles 会計係
+
+resource 支払(Charge)
+  description "カードの支払"
+
+action 代金を受け取る(create_charge)
+  description "注文の代金をカードで受け取る"
+  guards 決済 createCharge
+  principal 職員
+  resource 支払
+
+permit 会計係は受け取れる(cashiers_charge)
+  description "会計係はカードで代金を受け取れる"
+  principal in 会計係
+  action 代金を受け取る

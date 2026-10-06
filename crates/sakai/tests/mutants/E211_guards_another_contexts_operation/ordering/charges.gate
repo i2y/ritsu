@@ -1,0 +1,25 @@
+gate charges v1
+description "Who may charge a card for an order: written in Ordering, for an operation Payments holds"
+
+use openapi payments from "../payments/api/payments.yaml"
+
+role cashier
+  description "Takes the payment for an order"
+
+principal Staff
+  description "A member of the shop's staff, signed in"
+  roles cashier
+
+resource Charge
+  description "A charge of a card"
+
+action create_charge
+  description "Charge a card for an order"
+  guards payments createCharge
+  principal Staff
+  resource Charge
+
+permit cashiers_charge
+  description "A cashier charges a card"
+  principal in cashier
+  action create_charge

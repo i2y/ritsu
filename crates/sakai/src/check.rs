@@ -149,7 +149,9 @@ pub fn summary(m: &Model, arts: &[Artifact], crossings: &[Crossing]) -> Text {
             by.push(format!("{} {n}", k.word()));
         }
     }
-    for t in [Tool::Rulec, Tool::Koyomi, Tool::Dandori] {
+    // a gate's crossings that pass are its `use` lines through a shared kernel (DESIGN 17); one of
+    // Cedar's is a `guards`, which never passes (E211)
+    for t in [Tool::Rulec, Tool::Koyomi, Tool::Dandori, Tool::Sekisho] {
         if count(t) > 0 {
             by.push(format!("{} {}", t.word(), count(t)));
         }

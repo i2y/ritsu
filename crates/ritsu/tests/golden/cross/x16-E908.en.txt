@@ -1,0 +1,7 @@
+returns.flow: ok
+refunds.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations
+error[ritsu E908]: returns.flow:14: The task `refund_order` calls openapi "orders.json" operation refundOrder, and the action `refund_order` of refunds.gate that guards it allows the workflow `returns` in no combination
+    14 |   refund_order(orderId: order)
+  = Every run that comes to the call is denied there.
+  = Write a permit in refunds.gate that allows the workflow (`principal is workflow returns`), or take the call out.
+ritsu check: 2 files (dandori 1, sekisho 1): 1 fail (1 error); borders between the languages: 1 checked, 0 undecided

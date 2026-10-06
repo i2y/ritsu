@@ -1,0 +1,106 @@
+// テストのために手で書いたポリシー。sekisho が examples/refunds/refunds.ja.gate から生成するものの
+// コピーで、Cedar を手で保つ人が置く形にした。
+@id("refunds_ja/staff_view_orders")
+@name("職員は注文を見られる")
+@doc("職員はどの注文も見られる")
+permit (
+  principal,
+  action == ShopJa::Action::"view_order",
+  resource is ShopJa::Order
+)
+when
+{ principal in ShopJa::Role::"clerk" || principal in ShopJa::Role::"auditor" };
+
+@id("refunds_ja/customers_view_their_orders")
+@name("顧客は自分の注文を見られる")
+@doc("お客さまは自分の注文を見られる")
+permit (
+  principal is ShopJa::Customer,
+  action == ShopJa::Action::"view_order",
+  resource is ShopJa::Order
+)
+when { resource.customer == principal };
+
+@id("refunds_ja/clerks_refund_within_their_limit")
+@name("係は上限まで返金できる")
+@doc("係は、返金の期間のあいだ、自分の上限まで返金できる")
+permit (
+  principal in ShopJa::Role::"clerk",
+  action == ShopJa::Action::"refund_order",
+  resource is ShopJa::Order
+)
+when { context has refund_band && context.refund_band == "within_limit" }
+when { context.in_period };
+
+@id("refunds_ja/managers_refund_in_period")
+@name("責任者は期間内なら返金できる")
+@doc("責任者は、返金の期間のあいだ、どの額でも返金できる")
+permit (
+  principal in ShopJa::Role::"manager",
+  action == ShopJa::Action::"refund_order",
+  resource is ShopJa::Order
+)
+when { context.in_period };
+
+@id("refunds_ja/managers_refund_late_on_business_days")
+@name("責任者は期間後も営業日なら返金できる")
+@doc("返金の期間が過ぎても、イングランドとウェールズの営業日なら、責任者は返金できる")
+permit (
+  principal in ShopJa::Role::"manager",
+  action == ShopJa::Action::"refund_order",
+  resource is ShopJa::Order
+)
+unless { context.in_period }
+when { context.business_day };
+
+@id("refunds_ja/returns_refunds_returned_orders")
+@name("返品のワークフローは返品済の注文を返金できる")
+@doc("返品のワークフローは、返品済の注文を 50 ポンドまで返金できる")
+permit (
+  principal == ShopJa::Workflow::"returns",
+  action == ShopJa::Action::"refund_order",
+  resource is ShopJa::Order
+)
+when { resource.status == "returned" }
+when { context.amount <= 50 };
+
+@id("refunds_ja/auditors_export_refunds")
+@name("監査は返金の記録を書き出せる")
+@doc("監査は返金の記録を書き出せる")
+permit (
+  principal in ShopJa::Role::"auditor",
+  action == ShopJa::Action::"export_refunds",
+  resource is ShopJa::RefundRecord
+);
+
+@id("refunds_ja/no_second_refund")
+@name("二度は返金しない")
+@doc("返金済の注文は、もう返金しない")
+forbid (
+  principal,
+  action == ShopJa::Action::"refund_order",
+  resource is ShopJa::Order
+)
+when { resource.status == "refunded" };
+
+@id("refunds_ja/auditors_do_not_refund")
+@name("監査は返金しない")
+@doc("返金を確かめる人は、返金をしない")
+forbid (
+  principal in ShopJa::Role::"auditor",
+  action == ShopJa::Action::"refund_order",
+  resource is ShopJa::Order
+);
+
+@id("refunds_ja/suspended_staff_do_nothing")
+@name("停止中の職員は何もできない")
+@doc("停止中の職員は何もできない")
+forbid (
+  principal is ShopJa::User,
+  action in
+    [ShopJa::Action::"view_order",
+     ShopJa::Action::"refund_order",
+     ShopJa::Action::"export_refunds"],
+  resource
+)
+when { principal.suspended };

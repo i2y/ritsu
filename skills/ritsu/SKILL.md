@@ -112,6 +112,11 @@ comes with an example that breaks it; a warning says what could not be decided.
 | W901 | a key is written in a contract: a `.proto` of the project, or an OpenAPI, AsyncAPI or JSON Schema document a language reads (the kind, its prefix and its length; never the key) | take it out and read it from where the code runs; if it is real, tell the person: it has to be revoked with its provider; a value for tests carries `ritsu: test secret` in a comment on its line (`//` in a `.proto`, `#` in YAML) |
 | E905 | a workflow sends a value a contract marks secret to a file outside the map, or to a context the map does not relate to the one that marked it | send a reference instead; or ask whether the map is to relate the two, or whether the task is to say `discloses <parameter> "<why>"` |
 | W905 | where in the map such a value goes cannot be decided: the map does not pass sakai's check | correct the map so that `sakai check` passes |
+| E907 | a context opens an operation (`open host service`) that no action of a gate guards, while its other operations are guarded | write an action that guards it in a `.gate` of that context; if anyone may call it on purpose, write `security: []` on the operation |
+| W907 | a context opens operations and no action guards any of them: it has written no authorization with sekisho yet | write a `.gate` of the context, and guard each operation it opens with an action |
+| E908 | a workflow calls an operation whose action allows the workflow in no combination: every run that comes to the call is denied | write a permit that allows the workflow (`principal is workflow <name>`), or take the call out |
+| W908 | a workflow is allowed an action whose operations its flow never calls | take the action out of the permits that allow the workflow |
+| W909 | a call of a workflow can be denied, or whether it is allowed cannot be decided, and the task declares no error for a denial | declare `errors denied = 403` (or `permission_denied` for Connect) on the task, and handle it under the call |
 
 A few things to know before you act on one:
 

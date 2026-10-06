@@ -1,0 +1,37 @@
+gate refunds v1
+description "A test material: who may refund an order of a shop"
+
+role clerk
+  description "Answers customers, and refunds"
+  can refund_order
+
+principal User
+  description "A member of the shop's staff"
+  roles clerk
+  attributes
+    suspended : bool
+
+resource Order
+  description "An order of the shop"
+
+action refund_order
+  description "Refund an order"
+  principal User
+  resource Order
+
+permit clerks_refund
+  description "A clerk refunds an order"
+  principal in clerk
+  action refund_order
+
+forbid suspended_staff_do_nothing
+  description "A suspended member of the staff does nothing"
+  principal is User
+  action any
+  when principal.suspended
+
+expect allow clerks_who_are_not_suspended_refund
+  description "A clerk who is not suspended refunds"
+  principal in clerk
+  action refund_order
+  unless principal.suspended

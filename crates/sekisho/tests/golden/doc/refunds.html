@@ -71,10 +71,10 @@ body.sheet-open { overflow: hidden; }
 <div class="scroll"><table>
 <thead><tr><th>File</th><th>SHA-256 (first 16 digits)</th></tr></thead>
 <tbody>
-<tr><td><code>cedar/refunds.cedar</code></td><td><code>952a822487ce2b19</code></td></tr>
-<tr><td><code>cedar/refunds.cedarschema</code></td><td><code>9088881fef86f054</code></td></tr>
-<tr><td><code>cedar/refunds.cedarschema.json</code></td><td><code>1618cf868c7fce1f</code></td></tr>
-<tr><td><code>cedar/refunds.policies.json</code></td><td><code>ee2b1291ba49c1a0</code></td></tr>
+<tr><td><code>cedar/refunds.cedar</code></td><td><code>&lt;sha256&gt;</code></td></tr>
+<tr><td><code>cedar/refunds.cedarschema</code></td><td><code>&lt;sha256&gt;</code></td></tr>
+<tr><td><code>cedar/refunds.cedarschema.json</code></td><td><code>&lt;sha256&gt;</code></td></tr>
+<tr><td><code>cedar/refunds.policies.json</code></td><td><code>&lt;sha256&gt;</code></td></tr>
 </tbody>
 </table></div>
 <p class="note"><code>sekisho check</code> walked all 1,078 combinations of the 3 actions, and decided each as Cedar does. Each of the 3 expectations holds. The separation holds too. Each of the 3 roles that write <code>can</code> is allowed the actions its <code>can</code> lists, and no other.</p>
@@ -487,6 +487,14 @@ when { principal.suspended };</code></pre></figure>
 <thead><tr><th>action</th><th>Allowed</th></tr></thead>
 <tbody>
 <tr><td><code>refund_order</code></td><td>sometimes (4 of 32 combinations allowed)</td></tr>
+</tbody>
+</table></div>
+<h4 id="workflow-returns-calls">What the flow calls</h4>
+<p>Each operation a task of the flow calls, the action that guards it, and whether the workflow is allowed that action: what <code>ritsu check</code> holds across the languages.</p>
+<div class="scroll"><table>
+<thead><tr><th>Line</th><th>Task</th><th>Operation</th><th>Guarded by</th><th>Allowed</th><th>Error on a denial</th></tr></thead>
+<tbody>
+<tr><td>22</td><td><code>refund_order</code></td><td><code>openapi &quot;api/orders.json&quot; operation refundOrder</code></td><td><code>refund_order</code></td><td>sometimes</td><td><code>denied</code></td></tr>
 </tbody>
 </table></div>
 <h2 id="operations">Operations guarded</h2>

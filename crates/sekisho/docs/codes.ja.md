@@ -370,7 +370,7 @@ role 責任者(manager)
 
 ## E201 — `use` のファイルが検査を通らないか、読めないか、ルートの外にあります
 
-**いつ出るか**: `use rule` の規則が rulec の、`use dates` の日付のファイルが koyomi の検査を通らないか、読めないとき（その言語の言うことが注に出ます）。`use gate` のファイルが sekisho の検査を通らないとき、読めないとき、`use gate` が輪になっているときも出ます。`use openapi`・`use proto`・`use asyncapi`・`use book` のファイルがルートの外にあるときも出ます（action が守る操作は、ルートからのパスで参照するため）。
+**いつ出るか**: `use rule` の規則が rulec の、`use dates` の日付のファイルが koyomi の検査を通らないか、読めないとき（その言語の言うことが注に出ます）。`use gate` のファイルが sekisho の検査を通らないとき、読めないとき、`use gate` が輪になっているときも出ます。`use` のファイルがルートの外にあるときも出ます。gate が読むファイルは、ルートからのパスで参照するためです（action が守る操作、生成する Cedar の `@doc` に書く規則と日付とカレンダー、ほかの言語からの参照）。
 
 **直し方**: そのファイルを、その言語の検査が通るように直してください。ルートの外にあるファイルなら、そのファイルを含むディレクトリを `--root` でルートにしてください。
 
@@ -705,11 +705,11 @@ closed holidays
 
 <a id="e208"></a>
 
-## E208 — ワークフローの `.flow` が dandori の検査を通りません
+## E208 — ワークフローの `.flow` が dandori の検査を通らないか、読めないか、ルートの外にあります
 
-**いつ出るか**: `workflow <名前> from "<.flow>"` のフローが、dandori の検査を通らないか、読めないとき。
+**いつ出るか**: `workflow <名前> from "<.flow>"` のフローが、dandori の検査を通らないか、読めないとき。フローがルートの外にあるときも出ます（生成する Cedar の `@doc` も、ほかの言語も、フローをルートからのパスで参照するため）。
 
-**直し方**: フローを dandori の検査が通るように直してください。注に、dandori の言うことがあります。
+**直し方**: フローを dandori の検査が通るように直してください。注に、dandori の言うことがあります。ルートの外にあるフローなら、そのフローを含むディレクトリを `--root` でルートにしてください。
 
 **再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu sekisho check example.gate` を走らせます。
 
@@ -1585,3 +1585,55 @@ action 読む(read)
 permit だれでも読む(everyone_reads)
   action 読む
 ```
+
+<a id="w901"></a>
+
+## W901 — 鍵の形の値が書かれています
+
+**いつ出るか**: `.gate` のどこか（文字列でもコメントでも）に、プロバイダーが形を決めている鍵の形の値（AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、Slack の Incoming Webhook の URL、PEM の秘密鍵）があるとき。診断には鍵の種類と、接頭辞と、長さだけを出し、鍵そのものも、その行も出しません。
+
+**直し方**: 鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください。本物の鍵なら、まずプロバイダーで無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。
+
+**再現**:
+
+```gate
+gate 地図(maps) v1
+# 検証用のサイトの地図の API キー: AIzaSyD-ritsu-fake-key-for-tests-000000
+```
+
+<a id="w910"></a>
+
+## W910 — 契約が秘密と印を付けた値を、ポリシーが読みます
+
+**いつ出るか**: ポリシーが読む `input` が、守る操作の契約で秘密と印を付けた引数かフィールド（OpenAPI のスキーマの `x-data-classification`・`x-sensitive-data`・`format: password`、`.proto` の `debug_redact`）のとき。ポリシーが読む input の値は、Cedar に尋ねるリクエストに入り、判断の記録（生成したコードが返す答え、Verified Permissions のログ）に残ります。計算した値の入力にだけ使う input は、Cedar に渡らないので言いません。
+
+**直し方**: ポリシーが値そのものを読まずに済むよう、規則か日付で計算した値（`context`）にして渡すか、ポリシーの条件から外してください。
+
+**再現**:
+
+```gate
+gate 融資(loans) v1
+
+use openapi 融資 from "loans.json"
+
+role 担当者(officer)
+
+principal 職員(User)
+  roles 担当者
+
+resource 融資(Loan)
+
+action 融資を始める(open_loan)
+  guards 融資 openLoan
+  principal 職員
+  resource 融資
+  input
+    信用スコア(credit_score) : number  range >=0 <=999
+
+permit 担当者はスコアがよければ融資できる(officers_open_loans_for_good_scores)
+  principal in 担当者
+  action 融資を始める
+  when 信用スコア >= 600
+```
+
+関連: [W901](#w901)

@@ -6,7 +6,7 @@
 //! with a `.proto`) with the entry's own files laid over them. `sakai check` on that directory
 //! gives the code (`sakai build …` for the codes of the settings). E107's is a map of Rust code
 //! of its own ([`RUST`]), which the base has none of. The codes that read another
-//! language (E105, E207, E208, E209, E405) come out of `ritsu sakai check`, with every language
+//! language (E105, E207, E208, E209, E211, E405) come out of `ritsu sakai check`, with every language
 //! joined; E104 comes out of the binary of sakai's own crate, which joins none. N101 is retired:
 //! its entry stays, and its number is given to nothing else.
 
@@ -116,6 +116,17 @@ const B_PUBLISHES_AN_API_EN: (&str, &str) = (
 /// 乙's HTTP API: one operation, and no `security` anywhere.
 const B_API_WITHOUT_SECURITY: (&str, &str) = ("b/api.yaml", "openapi: 3.1.0\ninfo:\n  title: B\n  version: 1.0.0\npaths:\n  /things/{id}:\n    get:\n      operationId: getThing\n      responses:\n        '200':\n          description: The thing\n");
 
+/// A gate of 甲 whose action guards a method of 乙's `BService` (E211).
+const A_GATE_GUARDS_B: (&str, &str) = (
+    "a/関所.gate",
+    "gate 甲の関所(a_gate) v1\n\nuse proto 乙 from \"../b/v1/b.proto\"\n\nrole 係(clerk)\n\nprincipal 職員(User)\n  roles 係\n\nresource もの(Thing)\n\naction 見る(get)\n  guards 乙 \"BService/Get\"\n  principal 職員\n  resource もの\n\npermit 係は見る(clerks_get)\n  principal in 係\n  action 見る\n",
+);
+/// The same, with its names in English.
+const A_GATE_GUARDS_B_EN: (&str, &str) = (
+    "a/gate.gate",
+    "gate a_gate v1\n\nuse proto b from \"../b/v1/b.proto\"\n\nrole clerk\n\nprincipal User\n  roles clerk\n\nresource Thing\n\naction get\n  guards b \"BService/Get\"\n  principal User\n  resource Thing\n\npermit clerks_get\n  principal in clerk\n  action get\n",
+);
+
 /// The files of a reproduction: [`BASE`] in its order, each replaced by the entry's file of the
 /// same path, then the entry's other files.
 fn laid(files: &'static [(&'static str, &'static str)]) -> Vec<(&'static str, &'static str)> {
@@ -153,7 +164,7 @@ impl English for Entry {
 /// which is what the binary of sakai's own crate says of one); one with no files is a code sakai
 /// does not print yet, and has no reproduction.
 fn e(code: &'static str, title: Text, when: Text, fix: Text, files: &'static [(&'static str, &'static str)], related: &'static [&'static str]) -> Entry {
-    let other = files.iter().any(|(p, _)| [".rule", ".cal", ".flow"].iter().any(|x| p.ends_with(x)));
+    let other = files.iter().any(|(p, _)| [".rule", ".cal", ".flow", ".gate"].iter().any(|x| p.ends_with(x)));
     let command = if other && code != "E104" { vec!["ritsu", "sakai", "check", "."] } else { vec!["check", "."] };
     let repro = if files.is_empty() { Repro::Later } else { Repro::Dir { files: laid(files), command } };
     Entry::new(code, title, when, fix, repro, related)
@@ -703,6 +714,21 @@ pub fn ledger() -> Ledger {
             B_EVENTS,
             A_RECEIVES_DONE,
         ]),
+        e(
+            "E211",
+            tr!("ほかのコンテキストの操作を守る action です", "An action guards an operation of another context"),
+            tr!(
+                "`.gate` の action が `guards` で守る操作（か、`cedar \"…\"` と書いた Cedar のスキーマが `@guards` に書いた操作）の契約（OpenAPI と AsyncAPI の文書、`.proto`、帳簿）が、その `.gate` と違うコンテキストに属するとき。二つのあいだに関係があっても出ます。",
+                "An operation an action of a `.gate` guards (or one the `@guards` of a schema of Cedar written as `cedar \"…\"` names) is of a contract (an OpenAPI or AsyncAPI document, a `.proto`, a book) that belongs to another context than the `.gate`; whatever the two are to each other."
+            ),
+            tr!(
+                "action を、操作の契約を持つコンテキストの `.gate` に移すか、`guards` の行を消してください。認可の決まりは、操作を持つサービスが自分で書きます。",
+                "Move the action to a `.gate` of the context that holds the operation's contract, or delete the `guards` line: the service that holds an operation writes who may call it."
+            ),
+            &[A_GATE_GUARDS_B],
+            &["E202"],
+        )
+        .en(&[A_GATE_GUARDS_B_EN]),
         // ── The patterns ──
         e(
             "E301",

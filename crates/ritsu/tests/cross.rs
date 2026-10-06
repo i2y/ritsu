@@ -26,6 +26,17 @@
 //! - X5 (a hold against its expiry): `invoice` — goods held three days, with timeouts (held), until
 //!   the payment day at 09:00 when the hold lasts 14 days (E206), or 60 days (W206).
 //!
+//! - X15 (the operations a context opens, against the actions that guard them; sekisho's DESIGN
+//!   4.6): `orders` — a map whose one context opens two operations of its OpenAPI document: both
+//!   guarded (held), one guarded and the other open to anyone (`security: []`, held), one guarded and
+//!   the other not (E907); and none guarded while Payments, beside it, guards its own (W907: Orders
+//!   has written no authorization yet). A pair of Cedar written by hand guards one of them too,
+//!   named by the map (`cedar "…"` under `owns`) or by a requirement (held).
+//! - X16 (what a workflow calls, against what the gate that names it allows it): `returns` — the
+//!   workflow refunds a returned order: allowed when the order has come back, and the task declares
+//!   the error of a denial (held); allowed in no combination (E908); allowed in some, the task
+//!   declaring nothing (W909); allowed to look at an order too, which it never does (W908).
+//!
 //! The day a flow's date call is given from its own input says nothing of what day it is (W205):
 //! the projects of X3 (a) and X5 show it alongside what they are about.
 
@@ -65,7 +76,9 @@ fn repro(code: &str) -> Vec<(&'static str, &'static str)> {
 fn lay_out(files: &[(&str, String)], tag: &str) -> TempDir {
     let t = TempDir::new(tag);
     for (name, body) in files {
-        std::fs::write(t.path().join(name), body).unwrap();
+        let p = t.path().join(name);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, body).unwrap();
     }
     t
 }
@@ -201,5 +214,60 @@ fn x5_a_hold_against_its_expiry() {
     run("x5-held", &held, 0, (1, 0, 0), &mut failures);
     run("x5-E206", &changed("E206", &[]), 1, (0, 1, 1), &mut failures);
     run("x5-W206", &changed("W206", &[]), 0, (0, 0, 2), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn x15_the_operations_a_context_opens() {
+    let mut failures = Vec::new();
+    // held: an action guards each operation
+    let both = changed("E907", &[("orders/refunds.gate", "  guards orders refundOrder\n", "  guards orders refundOrder\n  guards orders getOrder\n")]);
+    run("x15-held", &both, 0, (2, 0, 0), &mut failures);
+    // held: the one not guarded is open to anyone, as its document says
+    let open = changed("E907", &[("orders/api/orders.json", "\"operationId\": \"getOrder\",\n", "\"operationId\": \"getOrder\",\n        \"security\": [],\n")]);
+    run("x15-open", &open, 0, (2, 0, 0), &mut failures);
+    run("x15-E907", &changed("E907", &[]), 1, (1, 1, 0), &mut failures);
+    // none of Orders' operations is guarded, and Payments guards its one
+    run("x15-W907", &changed("W907", &[]), 0, (1, 0, 2), &mut failures);
+    // held: the look at an order guarded by a pair of Cedar written by hand, which Orders names
+    // under `owns`; its schema's `@guards` names the operation as a gate's `guards` does
+    let mut named = changed("E907", &[("contexts/orders.ctx", "  dir \"../orders\"\n", "  dir \"../orders\"\n  cedar \"../orders/policies/orders.cedar\", \"../orders/policies/orders.cedarschema\"\n")]);
+    named.extend(cedar_pair());
+    run("x15-cedar", &named, 0, (2, 0, 0), &mut failures);
+    // the same pair, named by a requirement instead of the map: read all the same (the link has no
+    // record of a look yet, which yuen says; that is beside X15)
+    let mut required = changed("E907", &[]);
+    required.extend(cedar_pair());
+    required.push(("orders.req", ORDERS_REQ.to_string()));
+    run("x15-cedar-requirement", &required, 1, (2, 0, 0), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// A pair of Cedar written by hand for X15's project: who may look at an order.
+fn cedar_pair() -> Vec<(&'static str, String)> {
+    vec![
+        (
+            "orders/policies/orders.cedarschema",
+            "namespace Orders {\n  entity User;\n  entity Order;\n\n  @guards(\"openapi \\\"orders/api/orders.json\\\" operation getOrder\")\n  action \"view_order\" appliesTo {\n    principal: [User],\n    resource: [Order],\n    context: {}\n  };\n}\n".to_string(),
+        ),
+        ("orders/policies/orders.cedar", "@id(\"staff_look\")\npermit (principal, action == Orders::Action::\"view_order\", resource);\n".to_string()),
+    ]
+}
+
+/// A requirement the policy of [`cedar_pair`] meets.
+const ORDERS_REQ: &str = "requirements orders v1\ndescription \"Who may look at an order\"\n\nrole orders \"Keeps the orders\"\n\nrequirement staff_look\n  text \"A member of the staff looks at an order\"\n  owner orders\n  decided 2026-10-06 by orders \"The staff answer the customers\"\n  satisfied by cedar \"orders/policies/orders.cedar\" policy staff_look\n  not verified \"Looked at by hand\"\n";
+
+#[test]
+fn x16_what_a_workflow_calls() {
+    let mut failures = Vec::new();
+    // held: allowed when the order has come back, and the task handles a denial
+    let handled = changed(
+        "W909",
+        &[("returns.flow", "  key\n", "  errors denied = 403\n  key\n"), ("returns.flow", "  refund_order(orderId: order)\n", "  refund_order(orderId: order)\n    on denied => fail Denied \"the gate did not let the workflow refund\"\n")],
+    );
+    run("x16-held", &handled, 0, (1, 0, 0), &mut failures);
+    run("x16-E908", &changed("E908", &[]), 1, (0, 1, 0), &mut failures);
+    run("x16-W909", &changed("W909", &[]), 0, (0, 0, 1), &mut failures);
+    run("x16-W908", &changed("W908", &[]), 0, (1, 0, 0), &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

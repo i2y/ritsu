@@ -13,10 +13,10 @@
 
 | ファイル | SHA-256（先頭 16 桁） |
 |---|---|
-| `cedar/refunds_ja.cedar` | `8ced7ba8b70cd521` |
-| `cedar/refunds_ja.cedarschema` | `5b732f084fd1ad46` |
-| `cedar/refunds_ja.cedarschema.json` | `a5303048128a2757` |
-| `cedar/refunds_ja.policies.json` | `b67c8c77038f6989` |
+| `cedar/refunds_ja.cedar` | `<sha256>` |
+| `cedar/refunds_ja.cedarschema` | `<sha256>` |
+| `cedar/refunds_ja.cedarschema.json` | `<sha256>` |
+| `cedar/refunds_ja.policies.json` | `<sha256>` |
 
 > [!NOTE]
 > `sekisho check` は、3 つの action の組み合わせ 1,078 通りをすべて数え、どれも Cedar と同じ決まりで、許すか拒むかを決めました。3 つの期待は、どれも成り立ちます。職務の分離も成り立ちます。`can` を書いた 3 つの役割は、どれも、`can` に並べた action だけを許されます。
@@ -542,6 +542,14 @@ action が計算して、Cedar の context に入れる値です。生成した�
 | action | 許されるか |
 |---|---|
 | `返金する`（`refund_order`） | 組み合わせによる（32 通りのうち 4 通りを許す） |
+
+#### フローが呼ぶ操作
+
+フローのタスクが呼ぶ操作と、それを守る action、そのワークフローがその action を許されるかです。`ritsu check` は、これを言語をまたいで確かめます。
+
+| 行 | タスク | 操作 | 守る action | 許されるか | 拒まれたときのエラー |
+|---|---|---|---|---|---|
+| 22 | `refund_order` | `openapi "api/orders.json" operation refundOrder` | `返金する`（`refund_order`） | 組み合わせによる | `denied` |
 
 ## 守る操作
 

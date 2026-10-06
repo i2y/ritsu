@@ -14,9 +14,9 @@ use crate::paths::{self, PathError};
 use crate::text::Text;
 use crate::tr;
 
-/// The twelve tools a naming can start with (DESIGN 6.2, item 2), and sekisho. `ritsu` is not one:
-/// it is not a language. Four are standard formats every language reads the same way: `.proto`
-/// files, OpenAPI and AsyncAPI documents, and Cedar's policies and schemas.
+/// The thirteen tools a naming can start with (DESIGN 6.2, item 2). `ritsu` is not one: it is not a
+/// language. Four are standard formats every language reads the same way: `.proto` files, OpenAPI
+/// and AsyncAPI documents, and Cedar's policies and schemas.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tool {
     Rulec,
@@ -35,10 +35,9 @@ pub enum Tool {
     File,
     Yuen,
     Sakai,
-    /// The language of `.gate` files, which `ritsu check` checks (sekisho's DESIGN 11). It is not
-    /// yet a tool a naming starts with, and so not in [`Tool::ALL`]: a naming does not read
-    /// `sekisho`, and the lists of the tools a diagnostic gives do not have it, until the namings
-    /// of a gate's things come (sekisho's DESIGN 8.4).
+    /// The language of `.gate` files (sekisho's DESIGN 8.4): a gate's principals and resources
+    /// with their attributes, its roles, workflows and enums, its actions with their inputs and
+    /// computed values, its policies, expectations and separations.
     Sekisho,
 }
 
@@ -46,7 +45,7 @@ pub enum Tool {
 pub type Kinds = &'static [(&'static str, &'static [&'static str])];
 
 impl Tool {
-    pub const ALL: [Tool; 12] = [Tool::Rulec, Tool::Dandori, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Proto, Tool::Openapi, Tool::Asyncapi, Tool::Cedar, Tool::File, Tool::Yuen, Tool::Sakai];
+    pub const ALL: [Tool; 13] = [Tool::Rulec, Tool::Dandori, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Proto, Tool::Openapi, Tool::Asyncapi, Tool::Cedar, Tool::File, Tool::Yuen, Tool::Sakai, Tool::Sekisho];
 
     pub fn word(self) -> &'static str {
         match self {
@@ -142,7 +141,8 @@ impl Tool {
             Tool::File => &[],
             Tool::Yuen => &[("requirement", &[]), ("source", &[])],
             Tool::Sakai => &[("context", &[]), ("term", &[])],
-            // sekisho's DESIGN 8.2, for when a naming reads it
+            // sekisho's DESIGN 8.2: an attribute under a principal's or a resource's type, a value
+            // under an enum, an input and a computed value under an action
             Tool::Sekisho => &[
                 ("principal", &["attribute"]),
                 ("resource", &["attribute"]),
@@ -167,9 +167,15 @@ impl Tool {
         self.kinds().iter().find(|(k, _)| *k == kind).map(|(_, c)| *c)
     }
 
-    /// The kind a child kind comes right after (`value` → `enum`).
+    /// The kind a child kind comes right after (`value` → `enum`): the first, when more than one
+    /// takes it (sekisho's `attribute`, under `principal` and `resource`).
     pub fn parent(self, child: &str) -> Option<&'static str> {
-        self.kinds().iter().find(|(_, cs)| cs.contains(&child)).map(|(k, _)| *k)
+        self.parents(child).first().copied()
+    }
+
+    /// Every kind a child kind can come right after, in the order of the kinds.
+    pub fn parents(self, child: &str) -> Vec<&'static str> {
+        self.kinds().iter().filter(|(_, cs)| cs.contains(&child)).map(|(k, _)| *k).collect()
     }
 
     /// Whether a naming of the tool can have a pair under a pair (proto, rulec, dandori, chobo,
@@ -314,8 +320,9 @@ pub enum ErrorKind {
     QuotedKind(String),
     /// A kind for a tool that has none (file).
     NoKinds(Tool),
-    /// A child kind (`value`) that does not come right after its parent (`enum`).
-    ChildFirst { kind: String, parent: &'static str },
+    /// A child kind (`value`) that does not come right after a parent of it (`enum`): every kind it
+    /// can come right after (sekisho's `attribute`, `principal` and `resource`).
+    ChildFirst { kind: String, parents: Vec<&'static str> },
     UnknownKind { tool: Tool, kind: String },
     /// A second pair for a tool whose names do not nest.
     NoNesting(Tool),
@@ -372,7 +379,10 @@ impl Error {
                 let t = t.word();
                 tr!("{t} に種類はありません。{t} は、ファイルそのものを名指してください", "{t} has no kinds; name the file")
             }
-            ErrorKind::ChildFirst { kind, parent } => tr!("`{kind}` は `{parent}` のすぐあとにしか書けません", "`{kind}` comes only right after `{parent}`"),
+            ErrorKind::ChildFirst { kind, parents } => {
+                let quoted: Vec<String> = parents.iter().map(|p| format!("`{p}`")).collect();
+                tr!("`{kind}` は {} のすぐあとにしか書けません", "`{kind}` comes only right after {}", quoted.join(" か "); quoted.join(" or "))
+            }
             ErrorKind::UnknownKind { tool, kind } => {
                 let ks = tool.top_kinds();
                 let t = tool.word();
@@ -521,8 +531,9 @@ fn check_kind(tool: Tool, items: &[(String, String)], k: &Word) -> Result<(), Er
             if tool.children(kt).is_some() {
                 return Ok(());
             }
-            if let Some(p) = tool.parent(kt) {
-                return Err(err(ErrorKind::ChildFirst { kind: kt.to_string(), parent: p }, k.at));
+            let parents = tool.parents(kt);
+            if !parents.is_empty() {
+                return Err(err(ErrorKind::ChildFirst { kind: kt.to_string(), parents }, k.at));
             }
             Err(err(ErrorKind::UnknownKind { tool, kind: kt.to_string() }, k.at))
         }
@@ -535,8 +546,9 @@ fn check_kind(tool: Tool, items: &[(String, String)], k: &Word) -> Result<(), Er
             if !tool.nests() {
                 return Err(err(ErrorKind::NoNesting(tool), k.at));
             }
-            if let Some(p) = tool.parent(kt) {
-                return Err(err(ErrorKind::ChildFirst { kind: kt.to_string(), parent: p }, k.at));
+            let parents = tool.parents(kt);
+            if !parents.is_empty() {
+                return Err(err(ErrorKind::ChildFirst { kind: kt.to_string(), parents }, k.at));
             }
             if children.is_empty() {
                 return Err(err(ErrorKind::NothingUnder(parent.to_string()), k.at));

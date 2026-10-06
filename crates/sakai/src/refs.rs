@@ -64,6 +64,14 @@ pub enum Kind {
     /// A rule's `import jsonschema`, or its `shape` of a JSON Schema, from an OpenAPI or AsyncAPI
     /// document.
     RuleJsonSchema { how: String },
+    /// A gate's `use rule`, `use dates`, `use calendar` or `use gate` (sekisho's DESIGN 8.5): the
+    /// code a gate is made into calls the code made of the rule and of the dates, and a gate reads
+    /// another's declarations, so each is the thing itself.
+    GateUse { how: String },
+    /// An operation an action of a gate guards (`guards`), or that the `@guards` of a schema of
+    /// Cedar written by hand names: only a gate of the context that holds the operation's contract
+    /// may guard it (E211).
+    GateGuards,
 }
 
 impl Kind {
@@ -83,6 +91,8 @@ impl Kind {
             Kind::Contract { via, .. } => via.clone(),
             Kind::FlowOpenApi => "use openapi".into(),
             Kind::RuleJsonSchema { how } => how.clone(),
+            Kind::GateUse { how } => how.clone(),
+            Kind::GateGuards => "guards".into(),
         }
     }
 
@@ -254,6 +264,11 @@ pub fn suite_crossings(m: &Model, ps: &Protos, arts: &[Artifact], read: &Read) -
                 (Tool::Dandori, "use openapi") if is_contract(&r.target.path) => Kind::FlowOpenApi,
                 (Tool::Rulec, "import jsonschema") if is_contract(&r.target.path) => Kind::RuleJsonSchema { how: "import jsonschema".into() },
                 (Tool::Rulec, "shape") if r.target.tool == Tool::File && is_contract(&r.target.path) => Kind::RuleJsonSchema { how: "shape".into() },
+                // a gate's rules, dates, calendars and other gates; its contracts (`use openapi` and
+                // the rest) are read for the operations its actions guard, which `guards` names; and a
+                // workflow it names is who calls, which the workflow's own calls are held for
+                (Tool::Sekisho, h @ ("use rule" | "use dates" | "use calendar" | "use gate")) => Kind::GateUse { how: h.to_string() },
+                (Tool::Sekisho | Tool::Cedar, "guards") => Kind::GateGuards,
                 _ => continue,
             };
             let to = r.target.path.clone();
@@ -290,6 +305,7 @@ pub fn suite_crossings(m: &Model, ps: &Protos, arts: &[Artifact], read: &Read) -
             let reach = ps.reach(&uses);
             let import = match &kind {
                 Kind::FlowConnect => format!("connect {}", r.target.items.iter().map(|(_, v)| v.as_str()).collect::<Vec<_>>().join("/")),
+                Kind::GateGuards => format!("guards {}", r.target.text()),
                 k => format!("{} {}", k.via(), crate::naming::quote(&ritsu_base::paths::relative(&ritsu_base::paths::parent(from), &to))),
             };
             out.push(Crossing { from: from.clone(), from_tool: *tool, from_ctx: x, to, to_ctx: y, target: r.target.clone(), kind, line: r.line, col: 1, import, uses, reach, allowed: None, pointer: None, elements: vec![], from_contract: None });
@@ -555,9 +571,11 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
         }
         let pkg = match &c.kind {
             Kind::FlowRule { connect: true, .. } => m.contexts[y].published.iter().find(|pl| pl.rulec.as_ref().is_some_and(|(f, _)| *f == q)).map(|pl| pl.package.clone()),
-            Kind::FlowRule { connect: false, .. } | Kind::RuleApply | Kind::CalendarUse => None,
+            Kind::FlowRule { connect: false, .. } | Kind::RuleApply | Kind::CalendarUse | Kind::GateUse { .. } => None,
             Kind::FlowChild if !child_published => None,
             Kind::Crate { .. } => published_crate(m, y, &q),
+            // the operation a gate guards, of a document or a `.proto`
+            Kind::GateGuards if matches!(c.target.tool, Tool::Openapi | Tool::Asyncapi) => contract_package(m, cs, arts, y, &q),
             k if k.to_contract() => contract_package(m, cs, arts, y, &q),
             _ => published_package(m, y, &lands),
         };
@@ -583,6 +601,19 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
             _ => Ref::name(Some(&yn), c.to_name(), to_what),
         };
         let diag = |code: &'static str, msg: Text| diag::at(code, &p, c.line, c.col, msg).source(&src).refer(from_ref.clone()).refer(to_ref.clone());
+        // An operation is guarded by the context that holds its contract, whatever the two are to
+        // each other (sekisho's DESIGN 8.5)
+        if c.kind == Kind::GateGuards {
+            let op = c.target.text();
+            diags.push(diag("E211", tr!("「{xn}」の {sp} が、「{yn}」の操作 {op} を守っています", "The file {sp} of {xn} guards {op}, an operation of {yn}")).note(tr!(
+                "操作を守る action を書けるのは、その操作の契約を持つコンテキストの .gate（か、そのコンテキストの Cedar）だけです。認可の決まりは、操作を持つサービスが自分で書きます。",
+                "Only a .gate (or the Cedar) of the context that holds an operation's contract writes an action that guards it: the service that holds an operation writes who may call it."
+            )).note(tr!(
+                "この action を「{yn}」の .gate に移すか、`guards` の行を消してください。",
+                "Move the action to a .gate of {yn}, or delete the `guards` line."
+            )));
+            continue;
+        }
         let separate = m.writes(x, y, |k| matches!(k, RelK::Separate)) || m.writes(y, x, |k| matches!(k, RelK::Separate));
         if separate {
             let obj = format!("{sq} of {yn}");
@@ -659,6 +690,18 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
                 Kind::Crate { .. } => tr!(
                     "{sq} のクレートは「{yn}」の公表された言語に入っていません。境界の向こうのクレートに依存できるのは、「{yn}」がそのクレートを公表された言語（`published language` の下の `crate \"…\"`）に入れたときと、二つの共有カーネルに並べたときだけです。",
                     "The crate at {sq} is in no published language of {yn}; a crate across the boundary is depended on only once {yn} puts it in a published language (`crate \"…\"` under a `published language`), or from the two's shared kernel."
+                ),
+                Kind::GateUse { how } if how == "use rule" => tr!(
+                    "ゲートから生成したコードは、規則から生成したコードを呼んで答えを計算するので、使うのは規則そのもの（「{yn}」の内側）です。境界の向こうの規則は、二つの共有カーネルに並べてください。",
+                    "The code a gate is made into calls the code made of the rule to compute its answer: the rule itself, inside {yn}. A rule across the boundary is read from the two's shared kernel."
+                ),
+                Kind::GateUse { how } if how == "use gate" => tr!(
+                    "`use gate` は、ほかの .gate の型と役割と forbid を読みます。使うのは .gate そのもの（「{yn}」の内側）で、.gate は公表された言語にできません。境界の向こうの .gate は、二つの共有カーネルに並べてください。",
+                    "A `use gate` reads another .gate's types, roles and forbids: the .gate itself, inside {yn}, and a .gate cannot be a published language. A .gate across the boundary is read from the two's shared kernel."
+                ),
+                Kind::GateUse { .. } => tr!(
+                    "ゲートから生成したコードは、日付とカレンダーから生成したコードを呼びます。日付のファイルとカレンダーは公表された言語にできないので、境界の向こうのものは、二つの共有カーネルに並べたときだけ読めます。",
+                    "The code a gate is made into calls the code made of the dates and the calendar; a dates file and a calendar cannot be a published language, and one across the boundary is read only from the two's shared kernel."
                 ),
                 Kind::RuleApply => tr!(
                     "`apply` は、呼び先の規則をこの規則の中に展開します。使うのは規則そのもの（「{yn}」の内側）です。境界の向こうの規則は、二つの共有カーネルに並べて展開するか、「{yn}」が公表された言語（`published language rulec.…`）に入れた規則を、ワークフローから `use rule … connect` で呼んでください。",

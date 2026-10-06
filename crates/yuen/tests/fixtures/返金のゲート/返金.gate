@@ -1,0 +1,37 @@
+gate 返金(refunds) v1
+description "テストの材料。店の注文を返金してよい人"
+
+role 係(clerk)
+  description "客に応対し、返金する"
+  can 返金する
+
+principal 職員(User)
+  description "店の職員"
+  roles 係
+  attributes
+    停止中(suspended) : bool
+
+resource 注文(Order)
+  description "店の注文"
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  principal 職員
+  resource 注文
+
+permit 係は返金できる(clerks_refund)
+  description "係は注文を返金できる"
+  principal in 係
+  action 返金する
+
+forbid 停止中の職員は何もできない(suspended_staff_do_nothing)
+  description "停止中の職員は何もできない"
+  principal is 職員
+  action any
+  when principal.停止中
+
+expect allow 停止中でない係は返金できる
+  description "停止中でない係は返金できる"
+  principal in 係
+  action 返金する
+  unless principal.停止中

@@ -1,0 +1,7 @@
+error[E211]: ordering/charges.gate:18:1: The file ordering/charges.gate of Ordering guards openapi "payments/api/payments.yaml" operation createCharge, an operation of Payments
+    18 |   guards payments createCharge
+  = Only a .gate (or the Cedar) of the context that holds an operation's contract writes an action that guards it: the service that holds an operation writes who may call it.
+  = Move the action to a .gate of Payments, or delete the `guards` line.
+  involved:
+      Ordering  ordering/charges.gate:18                                     guards openapi "payments/api/payments.yaml" operation createCharge
+      Payments  openapi "payments/api/payments.yaml" operation createCharge  a part of the published language payments.v1

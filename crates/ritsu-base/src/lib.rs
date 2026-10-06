@@ -36,11 +36,15 @@
 //! - [`document`]: the elements of an OpenAPI or AsyncAPI document as references (`openapi
 //!   "api.yaml" operation refundOrder`): where a reference lands, the reference of what a JSON
 //!   Pointer names, and the `$ref`s followed on the way.
+//! - [`definition`]: the definition of a thing written as a block of lines (a task of dandori's, a
+//!   policy of sekisho's), the text yuen takes the hash of: its lines without their comments and
+//!   alignment, each under the one above by its depth.
 //!
 //! Nothing here depends on anything but std (DESIGN 3.1, P9).
 
 pub mod cedar;
 pub mod cli;
+pub mod definition;
 pub mod diag;
 pub mod docpage;
 pub mod document;

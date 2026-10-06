@@ -21,12 +21,15 @@
 //! Two are of security (DESIGN 16): a key written in a contract of the project, a `.proto` or a
 //! document a language reads, looked at once whatever reads it ([`secrets`], W901); and where a
 //! flow sends a value a contract marks secret, against sakai's map ([`egress`], X14, E905 and
-//! W905).
+//! W905). Two are of authorization, sekisho's (its DESIGN 4.6; [`gates`]): every operation a
+//! context of a map opens has an action of a gate to guard it (X15, E907 and W907), and what a
+//! workflow calls is what the gate that names it allows it (X16, E908, W908 and W909).
 
 pub mod borders;
 pub mod codes;
 mod dates;
 pub mod egress;
+pub mod gates;
 mod holds;
 mod preconditions;
 mod protos;
@@ -79,6 +82,7 @@ pub fn check(project: &Project, joined: &Joined, lang: Lang) -> Crossed {
     findings.extend(holds::check(project, &flows, joined, lang, &mut borders));
     findings.extend(secrets::keys(project, joined, lang));
     findings.extend(egress::check(project, joined, lang, &mut borders));
+    findings.extend(gates::check(project, joined, lang, &mut borders));
     Crossed { findings, borders }
 }
 

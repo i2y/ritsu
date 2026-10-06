@@ -158,6 +158,12 @@ it calls come with it, each as the page for people that `rulec doc` renders.
 [Build for a platform](https://i2y.github.io/ritsu/dandori/platforms/) has what each of them writes, and
 [What a task calls](https://i2y.github.io/ritsu/dandori/tasks/) what a task becomes on each.
 
+When a sekisho gate names the workflow (`workflow returns from "flows/returns.flow"`), `ritsu check`
+holds each operation the workflow calls, by an `http` task of a `use openapi` or a `connect` task, to
+what the gate allows the workflow: a call the gate allows in no combination is an error (E908), and
+one it allows only in some needs the task to declare the error of a denial, `errors denied = 403` or
+`errors denied = permission_denied` (W909).
+
 ### Secrets and keys
 
 `dandori check` also looks for what a workflow does with secrets, and so does `ritsu check`, which

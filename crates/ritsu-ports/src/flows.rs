@@ -7,9 +7,12 @@
 //! that amount can meet (X4), how long a hold is held against its expiry (X5), the day given to a
 //! koyomi date against its range (X6) — which ritsu-cross asks the other language about with
 //! these facts. dandori also says which calls give a value the contracts mark secret to another
-//! file of the project ([`Flows::sends`]), which ritsu-cross holds to the map (X14).
+//! file of the project ([`Flows::sends`]), which ritsu-cross holds to the map (X14), and which
+//! calls are of an operation of a contract ([`Flows::operation_calls`]), which ritsu-cross holds to
+//! what sekisho's gates allow the workflow (X16).
 
 use crate::{Books, Dates, Rules, Said};
+use ritsu_base::naming::Name;
 use ritsu_base::text::Text;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -206,6 +209,35 @@ pub trait Flows {
         let _ = (file, ports);
         Ok(Vec::new())
     }
+
+    /// The workflow's name, and every call the flow at `file` (from `root`) makes of an operation of
+    /// a contract, read with the other languages through `ports`, when the flow passes dandori's
+    /// check; else what the check says. An operation whose contract is outside the root has no
+    /// reference, and its calls are not here. None by default, until dandori answers it.
+    fn operation_calls(&self, root: &Path, file: &str, ports: &Ports) -> Result<(String, Vec<OperationCall>), Vec<Said>> {
+        let _ = (root, file, ports);
+        Ok((String::new(), Vec::new()))
+    }
+}
+
+/// One call a flow makes of an operation of a contract (sekisho's X16): a task bound to an operation
+/// of an OpenAPI document (`http` on a `use openapi`) or to a method of a service of a `.proto`
+/// (`connect` on a `use proto`), at a line where the flow calls it. sekisho's gates guard the same
+/// operations by the same references, so the checks across the borders hold what a workflow calls
+/// to what the gate that names it allows it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OperationCall {
+    /// The line of the call, from 1, and the task called.
+    pub line: usize,
+    pub task: String,
+    /// The operation, as a reference from the root (ritsu's DESIGN 6.2): `openapi "api/orders.json"
+    /// operation refundOrder` (its `operationId`, else its method and path), `proto
+    /// "shop/v1/orders.proto" service Orders method Refund` (the service from the file's package).
+    pub operation: Name,
+    /// The error the task declares for a denial, when it declares one: the one that comes back with
+    /// the HTTP status 403 (`errors denied = 403`), or for a method called by Connect with the code
+    /// `permission_denied` (`errors denied = permission_denied`), whose status is 403 too.
+    pub denied: Option<String>,
 }
 
 /// A length of time as a message says it, in its largest units: `17 days 9 hours`, `17 日 9 時間`.

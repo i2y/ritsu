@@ -369,7 +369,7 @@ See also: [E101](#e101)
 
 ## E201 — A file a `use` reads does not pass its language's check, cannot be read, or is outside the root
 
-**When**: A rule of a `use rule` does not pass rulec's check, or a dates file of a `use dates` koyomi's, or it cannot be read (the note says what the language says); or a file of a `use gate` does not pass sekisho's check, cannot be read, or the `use gate` lines go round in a circle; or the file of a `use openapi`, `use proto`, `use asyncapi` or `use book` is outside the root (an operation an action guards is named by a reference whose path is from the root).
+**When**: A rule of a `use rule` does not pass rulec's check, or a dates file of a `use dates` koyomi's, or it cannot be read (the note says what the language says); or a file of a `use gate` does not pass sekisho's check, cannot be read, or the `use gate` lines go round in a circle; or the file of a `use` is outside the root. A file a gate reads is named by a reference whose path is from the root: the operations its actions guard, the rules, dates and calendars the `@doc` of the generated Cedar names, and what the other languages name of it.
 
 **Fix**: Correct that file until its language's check passes it. For a file outside the root, give `--root` a directory that holds it.
 
@@ -704,11 +704,11 @@ See also: [E107](#e107)
 
 <a id="e208"></a>
 
-## E208 — A workflow's `.flow` does not pass dandori's check
+## E208 — A workflow's `.flow` does not pass dandori's check, cannot be read, or is outside the root
 
-**When**: The flow of `workflow <name> from "<.flow>"` does not pass dandori's check, or cannot be read.
+**When**: The flow of `workflow <name> from "<.flow>"` does not pass dandori's check, or cannot be read; or the flow is outside the root (the `@doc` of the generated Cedar and the other languages name it by a reference whose path is from the root).
 
-**Fix**: Fix the flow until dandori's check passes; the notes say what dandori says.
+**Fix**: Fix the flow until dandori's check passes; the notes say what dandori says. For a flow outside the root, give `--root` a directory that holds it.
 
 **Example**: put the files below in one directory, and run `ritsu sekisho check example.gate` there.
 
@@ -1584,3 +1584,55 @@ action read
 permit everyone_reads
   action read
 ```
+
+<a id="w901"></a>
+
+## W901 — A value in the shape of a key is written
+
+**When**: Somewhere in a `.gate`, in a string or a comment, there is a value in a shape its provider fixes for a key: an AWS access key ID, a key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a Slack incoming webhook URL, a PEM private key. The diagnostic gives the kind of key, its prefix and its length, and never the key nor its line.
+
+**Fix**: Keep the key where the code runs (an environment variable, the platform's connection or secret store) and read it from there. If it is real, revoke it with its provider first: taking it out of the file leaves it in the history of the repository. If it is a value for tests, write `ritsu: test secret` in a comment on the same line.
+
+**Example**:
+
+```gate
+gate maps v1
+# the maps API key of the staging site: AIzaSyD-ritsu-fake-key-for-tests-000000
+```
+
+<a id="w910"></a>
+
+## W910 — A policy reads a value the contract marks secret
+
+**When**: An `input` a policy reads is a parameter or a field the contract of the operation marks secret (`x-data-classification`, `x-sensitive-data` or `format: password` on an OpenAPI schema, `debug_redact` in a `.proto`). An input a policy reads goes into the request Cedar is asked, and stays in the record of the decision (the answer the generated code gives, Verified Permissions' logs). An input only a computed value reads does not go to Cedar, and is not told.
+
+**Fix**: Give the policies what they need of it as a value a rule or a date computes (`context`), or take it out of the policies' conditions.
+
+**Example**:
+
+```gate
+gate loans v1
+
+use openapi loans from "loans.json"
+
+role officer
+
+principal User
+  roles officer
+
+resource Loan
+
+action open_loan
+  guards loans openLoan
+  principal User
+  resource Loan
+  input
+    credit_score : number  range >=0 <=999
+
+permit officers_open_loans_for_good_scores
+  principal in officer
+  action open_loan
+  when credit_score >= 600
+```
+
+See also: [W901](#w901)

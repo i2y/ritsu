@@ -1,0 +1,7 @@
+returns.flow: 検査を通りました
+refunds.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0
+エラー[ritsu E908]: returns.flow:14: タスク `refund_order` は openapi "orders.json" operation refundOrder を呼びますが、それを守る refunds.gate の action `refund_order` は、ワークフロー `returns` をどの組み合わせでも許しません
+    14 |   refund_order(orderId: order)
+  = この呼び出しまで進んだ実行は、いつもそこで拒まれます。
+  = refunds.gate に、ワークフローを許す permit を書くか（`principal is workflow returns`）、呼び出しを消してください。
+ritsu check: ファイル 2 個（dandori 1、sekisho 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 1 か所、決められない 0 か所

@@ -27,7 +27,10 @@ fn code_of(reason: &str) -> Option<&'static str> {
         | "unknown kind for openapi"
         | "only message under channel"
         | "one child at most (value)"
-        | "cedar has no nested kinds" => Some("E012"),
+        | "cedar has no nested kinds"
+        | "attribute only right after principal or resource"
+        | "nothing under policy"
+        | "only input or context under action" => Some("E012"),
         "a full-width space outside a string" => Some("E001"),
         r#"only \" and \\ are escapes"# => Some("E001"),
         _ => None,
@@ -73,7 +76,7 @@ fn every_line_of_the_shared_table() {
             }
         }
     }
-    assert!(ok == 41 && errors == 25, "{ok} lines of JSON and {errors} of errors");
+    assert!(ok == 47 && errors == 28, "{ok} lines of JSON and {errors} of errors");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

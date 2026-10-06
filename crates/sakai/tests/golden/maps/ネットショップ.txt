@@ -22,3 +22,9 @@ files
   shipping/acl/payments.yaml -> 配送
   shipping/api/shipping.yaml -> 配送
   ネットショップ.ctx -> -
+published operations
+  受注 openapi "ordering/api/ordering.json" operation createOrder [open to anyone]  (contexts/受注.ctx:11)
+  受注 openapi "ordering/api/ordering.json" operation getOrder  (contexts/受注.ctx:11)
+  決済 openapi "payments/api/payments.yaml" operation createCharge  (contexts/決済.ctx:11)
+  決済 openapi "payments/api/payments.yaml" operation getCharge  (contexts/決済.ctx:11)
+  配送 openapi "shipping/api/shipping.yaml" operation getShipment  (contexts/配送.ctx:10)

@@ -1350,3 +1350,543 @@ flow
 ```
 
 See also: [E905](#e905)
+
+<a id="e907"></a>
+
+## E907 — No action guards an operation a context opens
+
+**When**: An operation a context of the map opens with `open host service` (a method of a service of a `.proto`, an operation of an OpenAPI document) is guarded by no action of a `.gate` (`guards`), nor by the `@guards` of a schema of Cedar written as `cedar "…"`, and its document does not say that anyone may call it (`security: []`); when an action guards another operation of the same context. When none of them is guarded, it is W907. A channel of an AsyncAPI document and a rule's Connect service are not asked for: `guards` cannot name them.
+
+**Fix**: Write an action that guards the operation in a `.gate` of the context. If anyone may call an OpenAPI operation on purpose, write `security: []` on it in its document.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`shop.ctx`:
+
+```ctx
+map Shop(shop) v1
+description "A shop that takes orders"
+
+use context "contexts/orders.ctx"
+
+covers "orders"
+```
+
+`contexts/orders.ctx`:
+
+```ctx
+context Orders(orders) v1
+description "Takes the customers' orders, and refunds them"
+owner "Orders team"
+
+owns
+  dir "../orders"
+
+published language orders.v1
+  openapi "../orders/api/orders.json"
+  open host service getOrder, refundOrder
+```
+
+`orders/api/orders.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {"title": "Orders", "version": "1.0.0"},
+  "servers": [{"url": "https://orders.example.com"}],
+  "security": [{"bearer": []}],
+  "paths": {
+    "/orders/{orderId}": {
+      "get": {
+        "operationId": "getOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"description": "The order"}}
+      }
+    },
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"201": {"description": "Refunded"}, "403": {"description": "Not allowed"}}
+      }
+    }
+  },
+  "components": {"securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}}
+}
+```
+
+`orders/refunds.gate`:
+
+```
+gate refunds v1
+description "Who may refund an order"
+
+use openapi orders from "api/orders.json"
+
+role clerk
+  description "Answers the customers, and refunds"
+
+principal User
+  description "A member of the staff"
+  roles clerk
+
+resource Order
+  description "An order"
+
+action refund_order
+  description "Refund an order"
+  guards orders refundOrder
+  principal User
+  resource Order from orderId
+
+permit clerks_refund
+  description "A clerk refunds an order"
+  principal in clerk
+  action refund_order
+```
+
+See also: [W907](#w907)
+
+<a id="w907"></a>
+
+## W907 — A context guards none of the operations it opens
+
+**When**: No action guards any operation a context of the map opens (as E907 counts them); once a context. The context has written no authorization with sekisho yet. A project with no `.gate`, and no Cedar its maps or requirements name, is not asked.
+
+**Fix**: Write a `.gate` of the context, and guard each operation it opens with an action.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`shop.ctx`:
+
+```ctx
+map Shop(shop) v1
+description "A shop that takes orders and charges cards"
+
+use context "contexts/orders.ctx"
+use context "contexts/payments.ctx"
+
+covers "orders", "payments"
+```
+
+`contexts/orders.ctx`:
+
+```ctx
+context Orders(orders) v1
+description "Takes the customers' orders, and refunds them"
+owner "Orders team"
+
+owns
+  dir "../orders"
+
+published language orders.v1
+  openapi "../orders/api/orders.json"
+  open host service getOrder, refundOrder
+```
+
+`contexts/payments.ctx`:
+
+```ctx
+context Payments(payments) v1
+description "Charges the customers' cards"
+owner "Payments team"
+
+owns
+  dir "../payments"
+
+published language payments.v1
+  openapi "../payments/api/payments.json"
+  open host service createCharge
+```
+
+`orders/api/orders.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {"title": "Orders", "version": "1.0.0"},
+  "servers": [{"url": "https://orders.example.com"}],
+  "security": [{"bearer": []}],
+  "paths": {
+    "/orders/{orderId}": {
+      "get": {
+        "operationId": "getOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"description": "The order"}}
+      }
+    },
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"201": {"description": "Refunded"}, "403": {"description": "Not allowed"}}
+      }
+    }
+  },
+  "components": {"securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}}
+}
+```
+
+`payments/api/payments.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {"title": "Payments", "version": "1.0.0"},
+  "servers": [{"url": "https://payments.example.com"}],
+  "security": [{"bearer": []}],
+  "paths": {
+    "/charges": {
+      "post": {
+        "operationId": "createCharge",
+        "responses": {"201": {"description": "The charge"}}
+      }
+    }
+  },
+  "components": {"securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}}
+}
+```
+
+`payments/charges.gate`:
+
+```
+gate charges v1
+description "Who may charge a card"
+
+use openapi payments from "api/payments.json"
+
+role cashier
+  description "Takes the payment for an order"
+
+principal User
+  description "A member of the staff"
+  roles cashier
+
+resource Charge
+  description "A charge of a card"
+
+action create_charge
+  description "Charge a card"
+  guards payments createCharge
+  principal User
+  resource Charge
+
+permit cashiers_charge
+  description "A cashier charges a card"
+  principal in cashier
+  action create_charge
+```
+
+See also: [E907](#e907)
+
+<a id="e908"></a>
+
+## E908 — A gate allows a workflow an operation it calls in no combination
+
+**When**: A workflow a `.gate` writes with `workflow … from` calls an operation an action of the gate guards (`http` on a `use openapi`, `connect` on a `use proto`), and the action allows the workflow in no combination: every run that comes to the call is denied there.
+
+**Fix**: Write a permit in the gate that allows the workflow (`principal is workflow <name>`), or take the call out.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`orders.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {"title": "Orders", "version": "1.0.0"},
+  "servers": [{"url": "https://orders.example.com"}],
+  "security": [{"bearer": []}],
+  "paths": {
+    "/orders/{orderId}": {
+      "get": {
+        "operationId": "getOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"description": "The order"}}
+      }
+    },
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"201": {"description": "Refunded"}, "403": {"description": "Not allowed"}}
+      }
+    }
+  },
+  "components": {"securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}}
+}
+```
+
+`returns.flow`:
+
+```flow
+workflow returns v1
+description "Refunds an order once the item is back"
+
+use openapi orders from "orders.json"
+
+inputs
+  order : string
+
+task refund_order(orderId: string)
+  http POST orders "/orders/{orderId}/refunds"
+  key
+
+flow
+  refund_order(orderId: order)
+```
+
+`refunds.gate`:
+
+```
+gate refunds v1
+description "Who may look at an order and refund it"
+
+use openapi orders from "orders.json"
+
+enum order_status = paid | returned
+
+role clerk
+  description "Answers the customers, and refunds"
+
+principal User
+  description "A member of the staff"
+  roles clerk
+
+workflow returns from "returns.flow"
+  description "Refunds an order once the item is back"
+
+resource Order
+  description "An order"
+  attributes
+    status : order_status
+
+action refund_order
+  description "Refund an order"
+  guards orders refundOrder
+  principal User, Workflow
+  resource Order from orderId
+
+permit clerks_refund
+  description "A clerk refunds an order"
+  principal in clerk
+  action refund_order
+```
+
+See also: [W909](#w909), [W908](#w908)
+
+<a id="w908"></a>
+
+## W908 — A workflow is allowed an action whose operations it never calls
+
+**When**: A workflow a `.gate` writes with `workflow … from` is allowed an action of the gate (in some combinations, or in all), and its flow calls none of the operations the action guards: the workflow is allowed more than it needs.
+
+**Fix**: Take the action out of the permits that allow the workflow.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`orders.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {"title": "Orders", "version": "1.0.0"},
+  "servers": [{"url": "https://orders.example.com"}],
+  "security": [{"bearer": []}],
+  "paths": {
+    "/orders/{orderId}": {
+      "get": {
+        "operationId": "getOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"description": "The order"}}
+      }
+    },
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"201": {"description": "Refunded"}, "403": {"description": "Not allowed"}}
+      }
+    }
+  },
+  "components": {"securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}}
+}
+```
+
+`returns.flow`:
+
+```flow
+workflow returns v1
+description "Refunds an order once the item is back"
+
+use openapi orders from "orders.json"
+
+inputs
+  order : string
+
+task refund_order(orderId: string)
+  http POST orders "/orders/{orderId}/refunds"
+  errors denied = 403
+  key
+
+flow
+  refund_order(orderId: order)
+    on denied => fail Denied "the gate did not let the workflow refund"
+```
+
+`refunds.gate`:
+
+```
+gate refunds v1
+description "Who may look at an order and refund it"
+
+use openapi orders from "orders.json"
+
+enum order_status = paid | returned
+
+role clerk
+  description "Answers the customers, and refunds"
+
+principal User
+  description "A member of the staff"
+  roles clerk
+
+workflow returns from "returns.flow"
+  description "Refunds an order once the item is back"
+
+resource Order
+  description "An order"
+  attributes
+    status : order_status
+
+action view_order
+  description "Look at an order"
+  guards orders getOrder
+  principal User, Workflow
+  resource Order from orderId
+
+action refund_order
+  description "Refund an order"
+  guards orders refundOrder
+  principal User, Workflow
+  resource Order from orderId
+
+permit clerks_refund
+  description "A clerk refunds an order"
+  principal in clerk
+  action refund_order
+
+permit clerks_look
+  description "A clerk looks at an order"
+  principal in clerk
+  action view_order
+
+permit returns_look_and_refund
+  description "The returns workflow looks at any order, and refunds it"
+  principal is workflow returns
+  action view_order, refund_order
+```
+
+See also: [E908](#e908)
+
+<a id="w909"></a>
+
+## W909 — A call that can be denied declares no error for it
+
+**When**: The action that guards an operation a workflow calls denies the workflow in some combinations (or whether it does cannot be decided), and the task that calls it declares no error for a denial (403 for HTTP, `permission_denied` for Connect): a run that is denied stops with a failure the workflow does not declare.
+
+**Fix**: Declare the error on the task, `errors denied = 403` (`errors denied = permission_denied` for Connect), and say under the call what happens when it is denied (`on denied => …`).
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`orders.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {"title": "Orders", "version": "1.0.0"},
+  "servers": [{"url": "https://orders.example.com"}],
+  "security": [{"bearer": []}],
+  "paths": {
+    "/orders/{orderId}": {
+      "get": {
+        "operationId": "getOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"description": "The order"}}
+      }
+    },
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"201": {"description": "Refunded"}, "403": {"description": "Not allowed"}}
+      }
+    }
+  },
+  "components": {"securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}}
+}
+```
+
+`returns.flow`:
+
+```flow
+workflow returns v1
+description "Refunds an order once the item is back"
+
+use openapi orders from "orders.json"
+
+inputs
+  order : string
+
+task refund_order(orderId: string)
+  http POST orders "/orders/{orderId}/refunds"
+  key
+
+flow
+  refund_order(orderId: order)
+```
+
+`refunds.gate`:
+
+```
+gate refunds v1
+description "Who may look at an order and refund it"
+
+use openapi orders from "orders.json"
+
+enum order_status = paid | returned
+
+role clerk
+  description "Answers the customers, and refunds"
+
+principal User
+  description "A member of the staff"
+  roles clerk
+
+workflow returns from "returns.flow"
+  description "Refunds an order once the item is back"
+
+resource Order
+  description "An order"
+  attributes
+    status : order_status
+
+action refund_order
+  description "Refund an order"
+  guards orders refundOrder
+  principal User, Workflow
+  resource Order from orderId
+
+permit clerks_refund
+  description "A clerk refunds an order"
+  principal in clerk
+  action refund_order
+
+permit returns_refunds_returned_orders
+  description "The returns workflow refunds an order that has come back"
+  principal is workflow returns
+  action refund_order
+  when resource.status is returned
+```
+
+See also: [E908](#e908)

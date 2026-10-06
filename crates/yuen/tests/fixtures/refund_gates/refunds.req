@@ -1,0 +1,11 @@
+requirements refunds v1
+description "A test material: a shop's refunds, met by a policy of its gate and checked by an expectation of it"
+
+role payments "Decides how refunds go"
+
+requirement clerks_refund
+  text "A clerk who is not suspended refunds an order"
+  owner payments
+  decided 2026-10-06 by payments "Clerks answer the customers who ask for their money back"
+  satisfied by sekisho "refunds.gate" policy clerks_refund
+  verified by sekisho "refunds.gate" expect clerks_who_are_not_suspended_refund

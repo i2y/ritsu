@@ -165,9 +165,15 @@ pub fn entries() -> Vec<Entry> {
         ),
         Entry::new(
             "E208",
-            tr!("ワークフローの `.flow` が dandori の検査を通りません", "A workflow's `.flow` does not pass dandori's check"),
-            tr!("`workflow <名前> from \"<.flow>\"` のフローが、dandori の検査を通らないか、読めないとき。", "The flow of `workflow <name> from \"<.flow>\"` does not pass dandori's check, or cannot be read."),
-            tr!("フローを dandori の検査が通るように直してください。注に、dandori の言うことがあります。", "Fix the flow until dandori's check passes; the notes say what dandori says."),
+            tr!("ワークフローの `.flow` が dandori の検査を通らないか、読めないか、ルートの外にあります", "A workflow's `.flow` does not pass dandori's check, cannot be read, or is outside the root"),
+            tr!(
+                "`workflow <名前> from \"<.flow>\"` のフローが、dandori の検査を通らないか、読めないとき。フローがルートの外にあるときも出ます（生成する Cedar の `@doc` も、ほかの言語も、フローをルートからのパスで参照するため）。",
+                "The flow of `workflow <name> from \"<.flow>\"` does not pass dandori's check, or cannot be read; or the flow is outside the root (the `@doc` of the generated Cedar and the other languages name it by a reference whose path is from the root)."
+            ),
+            tr!(
+                "フローを dandori の検査が通るように直してください。注に、dandori の言うことがあります。ルートの外にあるフローなら、そのフローを含むディレクトリを `--root` でルートにしてください。",
+                "Fix the flow until dandori's check passes; the notes say what dandori says. For a flow outside the root, give `--root` a directory that holds it."
+            ),
             joined(vec![
                 (
                     "example.gate",

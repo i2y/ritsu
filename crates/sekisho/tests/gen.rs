@@ -163,3 +163,44 @@ fn a_value_of_a_rule_by_the_name_of_the_generated_code() {
     };
     assert_eq!(body(&o), body(&example));
 }
+
+/// What a gate reads is named from the root (DESIGN 2.6), in the `@doc` of the generated Cedar as
+/// in `@guards`: the example with its gates moved down into `gates/`, which then read `../rules/…`,
+/// names `rules/…` from the root above, as the example does. With `gates/` as the root, every
+/// file the gate reads is outside it: E201 at each `use` line, E208 at the workflow.
+#[test]
+fn what_a_gate_reads_is_named_from_the_root() {
+    let t = ritsu_testkit::TempDir::new("sekisho-root");
+    ritsu_testkit::tmp::copy_dir(std::path::Path::new("examples/refunds"), t.path());
+    for gate in ["refunds.gate", "refunds.ja.gate"] {
+        let src = std::fs::read_to_string(t.path().join(gate)).unwrap();
+        let moved = t.write(&format!("gates/{gate}"), src.replace(" from \"", " from \"../"));
+        let path = moved.to_string_lossy().to_string();
+        let check = |root: &std::path::Path| sekisho::check::check_file(&path, &common::joined(), &sekisho::check::Options { root: Some(root.to_path_buf()), ..Default::default() }).unwrap();
+        // the directory above as the root: the same references as the example's
+        let o = check(t.path());
+        assert!(!o.has_errors(), "{}", common::shown(&o, Lang::En));
+        let schema = |o: &sekisho::check::Outcome, lang: Lang| -> String {
+            let files = sekisho::r#gen::files(o, "cedar", gate, lang).unwrap();
+            files.into_iter().find(|(rel, _)| rel.ends_with(".cedarschema")).unwrap().1.lines().skip(2).collect::<Vec<_>>().join("\n")
+        };
+        let example = common::check(&format!("examples/refunds/{gate}"));
+        for lang in [Lang::En, Lang::Ja] {
+            assert_eq!(schema(&o, lang), schema(&example, lang), "{gate}");
+        }
+        let doc = schema(&o, Lang::En);
+        for named in ["dandori \\\"flows/returns.flow\\\"", "koyomi \\\"calendars/england_and_wales.cal\\\"", "rulec \\\"rules/", "koyomi \\\"dates/", "@guards(\"openapi \\\"api/orders.json\\\" operation refundOrder\")"] {
+            assert!(doc.contains(named), "{gate}: {named}\n{doc}");
+        }
+        assert!(!doc.contains("../"), "{doc}");
+        // `gates/` as the root: what the gate reads is outside it
+        let o = check(&t.path().join("gates"));
+        let said: Vec<(&str, Option<usize>)> = o.diags.iter().map(|d| (d.code, d.line)).collect();
+        assert_eq!(said, [("E201", Some(5)), ("E201", Some(6)), ("E201", Some(7)), ("E201", Some(8)), ("E208", Some(39))], "{gate}: {}", common::shown(&o, Lang::En));
+        let shown = [Lang::En, Lang::Ja].map(|l| common::shown(&o, l).replace(&format!("{}/", t.path().display()), "")).concat();
+        assert!(shown.contains(": `../flows/returns.flow` is outside the root\n"), "{shown}");
+        assert!(shown.contains(": `../flows/returns.flow` はルートの外にあります\n"), "{shown}");
+        assert!(shown.contains("in the `@doc` of the generated Cedar and by the other languages. The root is the nearest directory above"), "{shown}");
+        assert!(shown.contains("生成する Cedar の `@doc` でも、ほかの言語からも、ルートからのパスで参照します。ルートは、"), "{shown}");
+    }
+}

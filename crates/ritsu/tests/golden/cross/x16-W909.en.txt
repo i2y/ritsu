@@ -1,0 +1,8 @@
+returns.flow: ok
+refunds.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 0 expectations, 0 separations
+warning[ritsu W909]: returns.flow:14: The call of the task `refund_order` can be denied by the action `refund_order` of refunds.gate, and the task declares no error for it
+    14 |   refund_order(orderId: order)
+  = Allowed, for example: workflow returns, Order (status: returned). Denied, for example: workflow returns, Order (status: paid).
+  = A run that is denied stops with a failure the workflow does not declare.
+  = Declare the error on the task, `errors denied = 403`, and say under the call what happens when it is denied (`on denied => …`).
+ritsu check: 2 files (dandori 1, sekisho 1): all pass (1 warning); borders between the languages: 1 checked, 1 undecided

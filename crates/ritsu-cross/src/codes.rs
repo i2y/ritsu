@@ -7,9 +7,10 @@
 //!
 //! The numbers go in bands: E1xx for the files of a project as ritsu reads them, E2xx for the
 //! checks of the borders between the languages (DESIGN 7.2), E9xx and W9xx for the checks of
-//! security (DESIGN 16). The reproductions are small English projects; the ones of security have
-//! their Japanese versions besides ([`Entry::english`]), which `explain` shows in Japanese. A code that is retired keeps its entry, and its number is given to nothing else
-//! (DESIGN 7.10).
+//! security (DESIGN 16) and of authorization (sekisho's DESIGN 4.6, which go on from them). The
+//! reproductions are small English projects; the ones of security and of authorization have their
+//! Japanese versions besides ([`Entry::english`]), which `explain` shows in Japanese. A code that
+//! is retired keeps its entry, and its number is given to nothing else (DESIGN 7.10).
 
 use ritsu_base::ledger::{Entry, Ledger, Repro};
 use ritsu_base::tr;
@@ -148,6 +149,90 @@ fn x14_ja(map: &'static str) -> Vec<(&'static str, &'static str)> {
         ("通知/api/notices.json", X14_NOTICES_API_JA),
         ("受注/注文.flow", X14_CHECKOUT_JA),
     ]
+}
+
+/// The map of X15's reproductions (E907, W907): one context, Orders, which opens two operations of its OpenAPI document to the others.
+const X15_MAP: &str = "map Shop(shop) v1\ndescription \"A shop that takes orders\"\n\nuse context \"contexts/orders.ctx\"\n\ncovers \"orders\"\n";
+const X15_ORDERS: &str = "context Orders(orders) v1\ndescription \"Takes the customers' orders, and refunds them\"\nowner \"Orders team\"\n\nowns\n  dir \"../orders\"\n\npublished language orders.v1\n  openapi \"../orders/api/orders.json\"\n  open host service getOrder, refundOrder\n";
+/// The OpenAPI document of X15's and X16's reproductions: an order looked at and refunded, each said to need a bearer token.
+const ORDERS_API: &str = "{\n  \"openapi\": \"3.1.0\",\n  \"info\": {\"title\": \"Orders\", \"version\": \"1.0.0\"},\n  \"servers\": [{\"url\": \"https://orders.example.com\"}],\n  \"security\": [{\"bearer\": []}],\n  \"paths\": {\n    \"/orders/{orderId}\": {\n      \"get\": {\n        \"operationId\": \"getOrder\",\n        \"parameters\": [{\"name\": \"orderId\", \"in\": \"path\", \"required\": true, \"schema\": {\"type\": \"string\"}}],\n        \"responses\": {\"200\": {\"description\": \"The order\"}}\n      }\n    },\n    \"/orders/{orderId}/refunds\": {\n      \"post\": {\n        \"operationId\": \"refundOrder\",\n        \"parameters\": [{\"name\": \"orderId\", \"in\": \"path\", \"required\": true, \"schema\": {\"type\": \"string\"}}],\n        \"responses\": {\"201\": {\"description\": \"Refunded\"}, \"403\": {\"description\": \"Not allowed\"}}\n      }\n    }\n  },\n  \"components\": {\"securitySchemes\": {\"bearer\": {\"type\": \"http\", \"scheme\": \"bearer\"}}}\n}\n";
+/// The gate of E907: it guards the refund, and not the look at an order.
+const X15_GATE: &str = "gate refunds v1\ndescription \"Who may refund an order\"\n\nuse openapi orders from \"api/orders.json\"\n\nrole clerk\n  description \"Answers the customers, and refunds\"\n\nprincipal User\n  description \"A member of the staff\"\n  roles clerk\n\nresource Order\n  description \"An order\"\n\naction refund_order\n  description \"Refund an order\"\n  guards orders refundOrder\n  principal User\n  resource Order from orderId\n\npermit clerks_refund\n  description \"A clerk refunds an order\"\n  principal in clerk\n  action refund_order\n";
+/// The same project, in Japanese names.
+const X15_MAP_JA: &str = "map 店(shop) v1\ndescription \"注文を受ける店\"\n\nuse context \"contexts/受注.ctx\"\n\ncovers \"受注\"\n";
+const X15_ORDERS_JA: &str = "context 受注(orders) v1\ndescription \"客の注文を受け、返金する\"\nowner \"受注の担当\"\n\nowns\n  dir \"../受注\"\n\npublished language orders.v1\n  openapi \"../受注/api/orders.json\"\n  open host service getOrder, refundOrder\n";
+const ORDERS_API_JA: &str = "{\n  \"openapi\": \"3.1.0\",\n  \"info\": {\"title\": \"注文\", \"version\": \"1.0.0\"},\n  \"servers\": [{\"url\": \"https://orders.example.com\"}],\n  \"security\": [{\"bearer\": []}],\n  \"paths\": {\n    \"/orders/{orderId}\": {\n      \"get\": {\n        \"operationId\": \"getOrder\",\n        \"parameters\": [{\"name\": \"orderId\", \"in\": \"path\", \"required\": true, \"schema\": {\"type\": \"string\"}}],\n        \"responses\": {\"200\": {\"description\": \"注文\"}}\n      }\n    },\n    \"/orders/{orderId}/refunds\": {\n      \"post\": {\n        \"operationId\": \"refundOrder\",\n        \"parameters\": [{\"name\": \"orderId\", \"in\": \"path\", \"required\": true, \"schema\": {\"type\": \"string\"}}],\n        \"responses\": {\"201\": {\"description\": \"返金した\"}, \"403\": {\"description\": \"許されていない\"}}\n      }\n    }\n  },\n  \"components\": {\"securitySchemes\": {\"bearer\": {\"type\": \"http\", \"scheme\": \"bearer\"}}}\n}\n";
+const X15_GATE_JA: &str = "gate 返金(refunds) v1\ndescription \"注文を返金してよい人\"\n\nuse openapi 注文 from \"api/orders.json\"\n\nrole 係(clerk)\n  description \"客に応対し、返金する\"\n\nprincipal 職員(User)\n  description \"店の職員\"\n  roles 係\n\nresource 注文(Order)\n  description \"注文\"\n\naction 返金する(refund_order)\n  description \"注文を返金する\"\n  guards 注文 refundOrder\n  principal 職員\n  resource 注文 from orderId\n\npermit 係は返金できる(clerks_refund)\n  description \"係は注文を返金できる\"\n  principal in 係\n  action 返金する\n";
+/// The workflow of X16's reproductions (E908, W909): it refunds an order once the item is back.
+const X16_FLOW: &str = "workflow returns v1\ndescription \"Refunds an order once the item is back\"\n\nuse openapi orders from \"orders.json\"\n\ninputs\n  order : string\n\ntask refund_order(orderId: string)\n  http POST orders \"/orders/{orderId}/refunds\"\n  key\n\nflow\n  refund_order(orderId: order)\n";
+/// The gate of E908: it names the workflow, and no permit allows it the refund.
+const X16_GATE_NEVER: &str = "gate refunds v1\ndescription \"Who may look at an order and refund it\"\n\nuse openapi orders from \"orders.json\"\n\nenum order_status = paid | returned\n\nrole clerk\n  description \"Answers the customers, and refunds\"\n\nprincipal User\n  description \"A member of the staff\"\n  roles clerk\n\nworkflow returns from \"returns.flow\"\n  description \"Refunds an order once the item is back\"\n\nresource Order\n  description \"An order\"\n  attributes\n    status : order_status\n\naction refund_order\n  description \"Refund an order\"\n  guards orders refundOrder\n  principal User, Workflow\n  resource Order from orderId\n\npermit clerks_refund\n  description \"A clerk refunds an order\"\n  principal in clerk\n  action refund_order\n";
+/// The gate of W909: the workflow refunds only an order that has come back.
+const X16_GATE_SOMETIMES: &str = "gate refunds v1\ndescription \"Who may look at an order and refund it\"\n\nuse openapi orders from \"orders.json\"\n\nenum order_status = paid | returned\n\nrole clerk\n  description \"Answers the customers, and refunds\"\n\nprincipal User\n  description \"A member of the staff\"\n  roles clerk\n\nworkflow returns from \"returns.flow\"\n  description \"Refunds an order once the item is back\"\n\nresource Order\n  description \"An order\"\n  attributes\n    status : order_status\n\naction refund_order\n  description \"Refund an order\"\n  guards orders refundOrder\n  principal User, Workflow\n  resource Order from orderId\n\npermit clerks_refund\n  description \"A clerk refunds an order\"\n  principal in clerk\n  action refund_order\n\npermit returns_refunds_returned_orders\n  description \"The returns workflow refunds an order that has come back\"\n  principal is workflow returns\n  action refund_order\n  when resource.status is returned\n";
+/// The workflow of W908: the task declares the error of a denial, and handles it.
+const X16_FLOW_DENIED: &str = "workflow returns v1\ndescription \"Refunds an order once the item is back\"\n\nuse openapi orders from \"orders.json\"\n\ninputs\n  order : string\n\ntask refund_order(orderId: string)\n  http POST orders \"/orders/{orderId}/refunds\"\n  errors denied = 403\n  key\n\nflow\n  refund_order(orderId: order)\n    on denied => fail Denied \"the gate did not let the workflow refund\"\n";
+/// The gate of W908: the workflow is allowed to look at an order too, which it never does.
+const X16_GATE_MORE: &str = "gate refunds v1\ndescription \"Who may look at an order and refund it\"\n\nuse openapi orders from \"orders.json\"\n\nenum order_status = paid | returned\n\nrole clerk\n  description \"Answers the customers, and refunds\"\n\nprincipal User\n  description \"A member of the staff\"\n  roles clerk\n\nworkflow returns from \"returns.flow\"\n  description \"Refunds an order once the item is back\"\n\nresource Order\n  description \"An order\"\n  attributes\n    status : order_status\n\naction view_order\n  description \"Look at an order\"\n  guards orders getOrder\n  principal User, Workflow\n  resource Order from orderId\n\naction refund_order\n  description \"Refund an order\"\n  guards orders refundOrder\n  principal User, Workflow\n  resource Order from orderId\n\npermit clerks_refund\n  description \"A clerk refunds an order\"\n  principal in clerk\n  action refund_order\n\npermit clerks_look\n  description \"A clerk looks at an order\"\n  principal in clerk\n  action view_order\n\npermit returns_look_and_refund\n  description \"The returns workflow looks at any order, and refunds it\"\n  principal is workflow returns\n  action view_order, refund_order\n";
+/// The same, in Japanese names.
+const X16_FLOW_JA: &str = "workflow 返品 v1\ndescription \"品物が戻ったら、注文を返金する\"\n\nuse openapi 注文 from \"orders.json\"\n\ninputs\n  注文番号 : string\n\ntask 返金する(orderId: string)\n  http POST 注文 \"/orders/{orderId}/refunds\"\n  key\n\nflow\n  返金する(orderId: 注文番号)\n";
+const X16_GATE_NEVER_JA: &str = "gate 返金(refunds) v1\ndescription \"注文を見て、返金してよい人\"\n\nuse openapi 注文 from \"orders.json\"\n\nenum 注文の状態(order_status) = 支払済(paid) | 返品済(returned)\n\nrole 係(clerk)\n  description \"客に応対し、返金する\"\n\nprincipal 職員(User)\n  description \"店の職員\"\n  roles 係\n\nworkflow 返品(returns) from \"返品.flow\"\n  description \"品物が戻ったら、注文を返金する\"\n\nresource 注文(Order)\n  description \"注文\"\n  attributes\n    状態(status) : 注文の状態\n\naction 返金する(refund_order)\n  description \"注文を返金する\"\n  guards 注文 refundOrder\n  principal 職員, Workflow\n  resource 注文 from orderId\n\npermit 係は返金できる(clerks_refund)\n  description \"係は注文を返金できる\"\n  principal in 係\n  action 返金する\n";
+const X16_GATE_SOMETIMES_JA: &str = "gate 返金(refunds) v1\ndescription \"注文を見て、返金してよい人\"\n\nuse openapi 注文 from \"orders.json\"\n\nenum 注文の状態(order_status) = 支払済(paid) | 返品済(returned)\n\nrole 係(clerk)\n  description \"客に応対し、返金する\"\n\nprincipal 職員(User)\n  description \"店の職員\"\n  roles 係\n\nworkflow 返品(returns) from \"返品.flow\"\n  description \"品物が戻ったら、注文を返金する\"\n\nresource 注文(Order)\n  description \"注文\"\n  attributes\n    状態(status) : 注文の状態\n\naction 返金する(refund_order)\n  description \"注文を返金する\"\n  guards 注文 refundOrder\n  principal 職員, Workflow\n  resource 注文 from orderId\n\npermit 係は返金できる(clerks_refund)\n  description \"係は注文を返金できる\"\n  principal in 係\n  action 返金する\n\npermit 返品は戻った注文を返金できる(returns_refunds_returned_orders)\n  description \"返品のワークフローは、戻ってきた注文を返金できる\"\n  principal is workflow 返品\n  action 返金する\n  when resource.状態 is 返品済\n";
+const X16_FLOW_DENIED_JA: &str = "workflow 返品 v1\ndescription \"品物が戻ったら、注文を返金する\"\n\nuse openapi 注文 from \"orders.json\"\n\ninputs\n  注文番号 : string\n\ntask 返金する(orderId: string)\n  http POST 注文 \"/orders/{orderId}/refunds\"\n  errors denied = 403\n  key\n\nflow\n  返金する(orderId: 注文番号)\n    on denied => fail Denied \"ゲートが返金を許さなかった\"\n";
+const X16_GATE_MORE_JA: &str = "gate 返金(refunds) v1\ndescription \"注文を見て、返金してよい人\"\n\nuse openapi 注文 from \"orders.json\"\n\nenum 注文の状態(order_status) = 支払済(paid) | 返品済(returned)\n\nrole 係(clerk)\n  description \"客に応対し、返金する\"\n\nprincipal 職員(User)\n  description \"店の職員\"\n  roles 係\n\nworkflow 返品(returns) from \"返品.flow\"\n  description \"品物が戻ったら、注文を返金する\"\n\nresource 注文(Order)\n  description \"注文\"\n  attributes\n    状態(status) : 注文の状態\n\naction 注文を見る(view_order)\n  description \"注文を見る\"\n  guards 注文 getOrder\n  principal 職員, Workflow\n  resource 注文 from orderId\n\naction 返金する(refund_order)\n  description \"注文を返金する\"\n  guards 注文 refundOrder\n  principal 職員, Workflow\n  resource 注文 from orderId\n\npermit 係は返金できる(clerks_refund)\n  description \"係は注文を返金できる\"\n  principal in 係\n  action 返金する\n\npermit 係は注文を見られる(clerks_look)\n  description \"係は注文を見られる\"\n  principal in 係\n  action 注文を見る\n\npermit 返品は注文を見て返金できる(returns_look_and_refund)\n  description \"返品のワークフローは、どの注文も見て、返金できる\"\n  principal is workflow 返品\n  action 注文を見る, 返金する\n";
+
+/// The map of W907: Orders, and Payments, whose gate guards the operation it opens.
+const X15_MAP_TWO: &str = "map Shop(shop) v1\ndescription \"A shop that takes orders and charges cards\"\n\nuse context \"contexts/orders.ctx\"\nuse context \"contexts/payments.ctx\"\n\ncovers \"orders\", \"payments\"\n";
+const X15_PAYMENTS: &str = "context Payments(payments) v1\ndescription \"Charges the customers' cards\"\nowner \"Payments team\"\n\nowns\n  dir \"../payments\"\n\npublished language payments.v1\n  openapi \"../payments/api/payments.json\"\n  open host service createCharge\n";
+const PAYMENTS_API: &str = "{\n  \"openapi\": \"3.1.0\",\n  \"info\": {\"title\": \"Payments\", \"version\": \"1.0.0\"},\n  \"servers\": [{\"url\": \"https://payments.example.com\"}],\n  \"security\": [{\"bearer\": []}],\n  \"paths\": {\n    \"/charges\": {\n      \"post\": {\n        \"operationId\": \"createCharge\",\n        \"responses\": {\"201\": {\"description\": \"The charge\"}}\n      }\n    }\n  },\n  \"components\": {\"securitySchemes\": {\"bearer\": {\"type\": \"http\", \"scheme\": \"bearer\"}}}\n}\n";
+const X15_CHARGES: &str = "gate charges v1\ndescription \"Who may charge a card\"\n\nuse openapi payments from \"api/payments.json\"\n\nrole cashier\n  description \"Takes the payment for an order\"\n\nprincipal User\n  description \"A member of the staff\"\n  roles cashier\n\nresource Charge\n  description \"A charge of a card\"\n\naction create_charge\n  description \"Charge a card\"\n  guards payments createCharge\n  principal User\n  resource Charge\n\npermit cashiers_charge\n  description \"A cashier charges a card\"\n  principal in cashier\n  action create_charge\n";
+/// The same, in Japanese names.
+const X15_MAP_TWO_JA: &str = "map 店(shop) v1\ndescription \"注文を受け、カードで代金を受け取る店\"\n\nuse context \"contexts/受注.ctx\"\nuse context \"contexts/決済.ctx\"\n\ncovers \"受注\", \"決済\"\n";
+const X15_PAYMENTS_JA: &str = "context 決済(payments) v1\ndescription \"客のカードで代金を受け取る\"\nowner \"決済の担当\"\n\nowns\n  dir \"../決済\"\n\npublished language payments.v1\n  openapi \"../決済/api/payments.json\"\n  open host service createCharge\n";
+const PAYMENTS_API_JA: &str = "{\n  \"openapi\": \"3.1.0\",\n  \"info\": {\"title\": \"決済\", \"version\": \"1.0.0\"},\n  \"servers\": [{\"url\": \"https://payments.example.com\"}],\n  \"security\": [{\"bearer\": []}],\n  \"paths\": {\n    \"/charges\": {\n      \"post\": {\n        \"operationId\": \"createCharge\",\n        \"responses\": {\"201\": {\"description\": \"支払\"}}\n      }\n    }\n  },\n  \"components\": {\"securitySchemes\": {\"bearer\": {\"type\": \"http\", \"scheme\": \"bearer\"}}}\n}\n";
+const X15_CHARGES_JA: &str = "gate 代金(charges) v1\ndescription \"カードで代金を受け取ってよい人\"\n\nuse openapi 決済 from \"api/payments.json\"\n\nrole 会計係(cashier)\n  description \"注文の支払いを受け付ける\"\n\nprincipal 職員(User)\n  description \"店の職員\"\n  roles 会計係\n\nresource 支払(Charge)\n  description \"カードの支払\"\n\naction 代金を受け取る(create_charge)\n  description \"カードで代金を受け取る\"\n  guards 決済 createCharge\n  principal 職員\n  resource 支払\n\npermit 会計係は受け取れる(cashiers_charge)\n  description \"会計係はカードで代金を受け取れる\"\n  principal in 会計係\n  action 代金を受け取る\n";
+
+/// The files of E907's project: the map, its context, its document, and the gate.
+fn x15() -> Vec<(&'static str, &'static str)> {
+    vec![("shop.ctx", X15_MAP), ("contexts/orders.ctx", X15_ORDERS), ("orders/api/orders.json", ORDERS_API), ("orders/refunds.gate", X15_GATE)]
+}
+
+/// The same, in Japanese names.
+fn x15_ja() -> Vec<(&'static str, &'static str)> {
+    vec![("店.ctx", X15_MAP_JA), ("contexts/受注.ctx", X15_ORDERS_JA), ("受注/api/orders.json", ORDERS_API_JA), ("受注/返金.gate", X15_GATE_JA)]
+}
+
+/// The files of W907's project: Orders with no gate, and Payments with its gate.
+fn x15_two() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("shop.ctx", X15_MAP_TWO),
+        ("contexts/orders.ctx", X15_ORDERS),
+        ("contexts/payments.ctx", X15_PAYMENTS),
+        ("orders/api/orders.json", ORDERS_API),
+        ("payments/api/payments.json", PAYMENTS_API),
+        ("payments/charges.gate", X15_CHARGES),
+    ]
+}
+
+/// The same, in Japanese names.
+fn x15_two_ja() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("店.ctx", X15_MAP_TWO_JA),
+        ("contexts/受注.ctx", X15_ORDERS_JA),
+        ("contexts/決済.ctx", X15_PAYMENTS_JA),
+        ("受注/api/orders.json", ORDERS_API_JA),
+        ("決済/api/payments.json", PAYMENTS_API_JA),
+        ("決済/代金.gate", X15_CHARGES_JA),
+    ]
+}
+
+/// The files of X16's project: the document, the flow and the gate.
+fn x16(flow: &'static str, gate: &'static str) -> Vec<(&'static str, &'static str)> {
+    vec![("orders.json", ORDERS_API), ("returns.flow", flow), ("refunds.gate", gate)]
+}
+
+/// The same, in Japanese names.
+fn x16_ja(flow: &'static str, gate: &'static str) -> Vec<(&'static str, &'static str)> {
+    vec![("orders.json", ORDERS_API_JA), ("返品.flow", flow), ("返金.gate", gate)]
 }
 
 pub fn ledger() -> Ledger {
@@ -379,6 +464,76 @@ pub fn ledger() -> Ledger {
             &["E905"],
         )
         .english(Repro::Dir { files: x14(X14_MAP_BROKEN), command: CHECK.to_vec() }),
+        // ── Authorization (sekisho's DESIGN 4.6) ──
+        Entry::new(
+            "E907",
+            tr!("コンテキストが公開する操作を、どの action も守っていません", "No action guards an operation a context opens"),
+            tr!(
+                "地図のコンテキストが `open host service` で公開する操作（`.proto` のサービスのメソッドと、OpenAPI の文書の操作）を、どの `.gate` の action も `guards` で守らず（`cedar \"…\"` と書いた Cedar のスキーマの `@guards` でも守らず）、文書がだれでも呼べると書いてもいない（`security: []`）とき。そのコンテキストのほかの操作を守る action があるときに出ます。どれも守られていなければ W907 です。AsyncAPI のチャネルと規則の Connect のサービスは、`guards` で書けるものでないので、求めません。",
+                "An operation a context of the map opens with `open host service` (a method of a service of a `.proto`, an operation of an OpenAPI document) is guarded by no action of a `.gate` (`guards`), nor by the `@guards` of a schema of Cedar written as `cedar \"…\"`, and its document does not say that anyone may call it (`security: []`); when an action guards another operation of the same context. When none of them is guarded, it is W907. A channel of an AsyncAPI document and a rule's Connect service are not asked for: `guards` cannot name them."
+            ),
+            tr!(
+                "その操作を守る action を、そのコンテキストの `.gate` に書いてください。だれでも呼べるようにわざとしている OpenAPI の操作なら、文書でその操作に `security: []` と書いてください。",
+                "Write an action that guards the operation in a `.gate` of the context. If anyone may call an OpenAPI operation on purpose, write `security: []` on it in its document."
+            ),
+            Repro::Dir { files: x15_ja(), command: CHECK.to_vec() },
+            &["W907"],
+        )
+        .english(Repro::Dir { files: x15(), command: CHECK.to_vec() }),
+        Entry::new(
+            "W907",
+            tr!("コンテキストが、公開する操作のどれも action で守っていません", "A context guards none of the operations it opens"),
+            tr!(
+                "地図のコンテキストが公開する操作（E907 と同じもの）を、どの action も守っていないとき。コンテキストごとに一つ出ます。そのコンテキストは、まだ sekisho で認可を書いていません。プロジェクトに `.gate` も、地図か要件が指す Cedar も無ければ、X15 は何も言いません。",
+                "No action guards any operation a context of the map opens (as E907 counts them); once a context. The context has written no authorization with sekisho yet. A project with no `.gate`, and no Cedar its maps or requirements name, is not asked."
+            ),
+            tr!("そのコンテキストの `.gate` を書き、公開する操作をそれぞれ action で守ってください。", "Write a `.gate` of the context, and guard each operation it opens with an action."),
+            Repro::Dir { files: x15_two_ja(), command: CHECK.to_vec() },
+            &["E907"],
+        )
+        .english(Repro::Dir { files: x15_two(), command: CHECK.to_vec() }),
+        Entry::new(
+            "E908",
+            tr!("ワークフローが呼ぶ操作を、ゲートがそのワークフローにどの組み合わせでも許しません", "A gate allows a workflow an operation it calls in no combination"),
+            tr!(
+                "`.gate` が `workflow … from` で書いたワークフローが、そのゲートの action が守る操作を呼び（`use openapi` の `http`、`use proto` の `connect`）、その action がワークフローをどの組み合わせでも許さないとき。その呼び出しまで進んだ実行は、いつもそこで拒まれます。",
+                "A workflow a `.gate` writes with `workflow … from` calls an operation an action of the gate guards (`http` on a `use openapi`, `connect` on a `use proto`), and the action allows the workflow in no combination: every run that comes to the call is denied there."
+            ),
+            tr!(
+                "ゲートに、ワークフローを許す permit を書くか（`principal is workflow <名前>`）、呼び出しを消してください。",
+                "Write a permit in the gate that allows the workflow (`principal is workflow <name>`), or take the call out."
+            ),
+            Repro::Dir { files: x16_ja(X16_FLOW_JA, X16_GATE_NEVER_JA), command: CHECK.to_vec() },
+            &["W909", "W908"],
+        )
+        .english(Repro::Dir { files: x16(X16_FLOW, X16_GATE_NEVER), command: CHECK.to_vec() }),
+        Entry::new(
+            "W908",
+            tr!("ワークフローが、呼ばない操作の action を許されています", "A workflow is allowed an action whose operations it never calls"),
+            tr!(
+                "`.gate` の action のうち、`workflow … from` で書いたワークフローが許されるもの（組み合わせによって許されるものも）が守る操作を、そのワークフローのフローがどこでも呼ばないとき。ワークフローは要るより多く許されています。",
+                "A workflow a `.gate` writes with `workflow … from` is allowed an action of the gate (in some combinations, or in all), and its flow calls none of the operations the action guards: the workflow is allowed more than it needs."
+            ),
+            tr!("ワークフローを許す permit から、その action を外してください。", "Take the action out of the permits that allow the workflow."),
+            Repro::Dir { files: x16_ja(X16_FLOW_DENIED_JA, X16_GATE_MORE_JA), command: CHECK.to_vec() },
+            &["E908"],
+        )
+        .english(Repro::Dir { files: x16(X16_FLOW_DENIED, X16_GATE_MORE), command: CHECK.to_vec() }),
+        Entry::new(
+            "W909",
+            tr!("拒まれることのある呼び出しが、拒まれたときのエラーを宣言していません", "A call that can be denied declares no error for it"),
+            tr!(
+                "ワークフローが呼ぶ操作を守る action が、ワークフローを組み合わせによっては拒む（拒むかを決められないときも）のに、呼ぶタスクが、拒まれたときのエラー（HTTP の 403、Connect の `permission_denied`）を宣言していないとき。拒まれると、ワークフローは宣言していない失敗で止まります。",
+                "The action that guards an operation a workflow calls denies the workflow in some combinations (or whether it does cannot be decided), and the task that calls it declares no error for a denial (403 for HTTP, `permission_denied` for Connect): a run that is denied stops with a failure the workflow does not declare."
+            ),
+            tr!(
+                "タスクに `errors denied = 403`（Connect なら `errors denied = permission_denied`）と書き、拒まれたときにどうするかを呼び出しの下に書いてください（`on denied => …`）。",
+                "Declare the error on the task, `errors denied = 403` (`errors denied = permission_denied` for Connect), and say under the call what happens when it is denied (`on denied => …`)."
+            ),
+            Repro::Dir { files: x16_ja(X16_FLOW_JA, X16_GATE_SOMETIMES_JA), command: CHECK.to_vec() },
+            &["E908"],
+        )
+        .english(Repro::Dir { files: x16(X16_FLOW, X16_GATE_SOMETIMES), command: CHECK.to_vec() }),
     ];
     Ledger {
         tool: "ritsu",

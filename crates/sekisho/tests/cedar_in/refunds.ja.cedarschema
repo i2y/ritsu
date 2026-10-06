@@ -1,0 +1,74 @@
+// refunds.ja.cedar のスキーマ。同じように、生成したもののコピーを置いた。action ごとの @guards が、守る操作を指す。
+@doc("店の注文を見ること、返金すること、返金の記録を書き出すことを、だれがしてよいか。店の決まりの一例として書いた sekisho の例で、refunds.gate の日本語の版")
+namespace ShopJa {
+  @doc("サインインした店のお客さま")
+  @name("顧客")
+  entity Customer;
+
+  @doc("店の注文")
+  @name("注文")
+  entity Order = {
+    @name("注文した人")
+    customer: Customer,
+    @doc("paid（支払済）、shipped（発送済）、returned（返品済）、refunded（返金済）のどれか")
+    @name("状態")
+    status: String
+  };
+
+  @doc("すべての返金の記録。一つの文書として書き出す")
+  @name("返金の記録")
+  entity RefundRecord;
+
+  @doc("役割：clerk（係。お客さまに応対し、少額の返金をする）、manager（責任者。係ができない返金をし、返金の期間が過ぎても営業日なら返金する。clerk を含む）、auditor（監査。あとから返金を確かめる）")
+  entity Role in [Role];
+
+  @doc("サインインした店の職員")
+  @name("職員")
+  entity User in [Role] = {
+    @name("停止中")
+    suspended: Bool
+  };
+
+  @doc("自分の資格で呼ぶワークフロー：returns（返品。返品された品物が倉庫に戻ったら、その注文を返金する。dandori \"flows/returns.flow\"）")
+  entity Workflow;
+
+  @doc("返金の記録を書き出す")
+  @guards("openapi \"api/orders.json\" operation exportRefunds")
+  @name("返金を書き出す")
+  action "export_refunds" appliesTo {
+    principal: [User],
+    resource: [RefundRecord],
+    context: {}
+  };
+
+  @doc("注文の全部か一部を返金する")
+  @guards("openapi \"api/orders.json\" operation refundOrder")
+  @name("返金する")
+  action "refund_order" appliesTo {
+    principal: [User, Workflow],
+    resource: [Order],
+    context: {
+      @doc("操作の引数。money[GBP, incl_tax]、1〜10000")
+      @name("金額")
+      amount: Long,
+      @doc("today is open in koyomi \"calendars/england_and_wales.cal\"。日は +00:00 で変わる。生成したコードが計算し、呼ぶ側からは受け取らない")
+      @name("営業日")
+      business_day: Bool,
+      @doc("today <= koyomi \"dates/返金の期限.cal\" date 最終日。resource.支払日 から計算する。日は +00:00 で変わる。生成したコードが計算し、呼ぶ側からは受け取らない")
+      @name("期間内")
+      in_period: Bool,
+      @doc("rulec \"rules/返金の上限.rule\" output 区分。金額、principal.返金できる額 から計算する。値は within_limit か over_limit。principal の型が User のときだけ計算する。生成したコードが計算し、呼ぶ側からは受け取らない")
+      @name("返金の区分")
+      refund_band?: String
+    }
+  };
+
+  @doc("注文を見る")
+  @guards("openapi \"api/orders.json\" operation getOrder")
+  @name("注文を見る")
+  action "view_order" appliesTo {
+    principal: [User, Customer],
+    resource: [Order],
+    context: {}
+  };
+}

@@ -24,8 +24,8 @@ use std::rc::Rc;
 #[derive(Default, Clone)]
 pub struct Suite {
     pub rules: Option<Rc<dyn Rules>>,
-    /// What the files of rulec, koyomi and dandori name outside themselves, and what a rule holds,
-    /// by the naming of ritsu's DESIGN 6.2.
+    /// What the files of rulec, koyomi, dandori and sekisho (and Cedar's written by hand) name
+    /// outside themselves, and what a rule holds, by the naming of ritsu's DESIGN 6.2.
     pub index: Rc<Index>,
     pub books: Option<Rc<dyn Books>>,
     /// What koyomi knows of a dates file: its dates and the days its calendar's data covers, for
@@ -40,14 +40,16 @@ struct Asked {
 }
 
 impl Suite {
-    /// The languages whose artifacts sakai reads the references of, by their tool words.
-    pub const READ: [Tool; 3] = [Tool::Rulec, Tool::Koyomi, Tool::Dandori];
+    /// The languages whose artifacts sakai reads the references of, by their tool words: sekisho
+    /// answers for its gates and for the Cedar written by hand (the operations a schema's `@guards`
+    /// names).
+    pub const READ: [Tool; 5] = [Tool::Rulec, Tool::Koyomi, Tool::Dandori, Tool::Sekisho, Tool::Cedar];
 
     /// Whether sakai is handed what it needs to read the artifacts of `tool`.
     pub fn reads(&self, tool: Tool) -> bool {
         match tool {
             Tool::Rulec => self.rules.is_some() && self.index.reads_references(Tool::Rulec),
-            Tool::Koyomi | Tool::Dandori => self.index.reads_references(tool),
+            Tool::Koyomi | Tool::Dandori | Tool::Sekisho | Tool::Cedar => self.index.reads_references(tool),
             Tool::Chobo => self.books.is_some(),
             _ => true,
         }

@@ -101,3 +101,11 @@ files
   ts/shop/ordering/v1/order_pb.ts -> 受注
   ts/warehouse/v1/stock_pb.ts -> 在庫
   通販.ctx -> -
+published operations
+  受注 proto "proto/shop/ordering/v1/order.proto" service OrderService method GetOrder  (contexts/受注.ctx:13)
+  受注 proto "proto/shop/ordering/v1/fulfillment.proto" service FulfillmentService method Fulfill  (contexts/受注.ctx:13)
+  受注 proto "proto/shop/ordering/v1/fulfillment.proto" service FulfillmentService method AnswerPacking  (contexts/受注.ctx:13)
+  在庫 proto "proto/warehouse/v1/stock.proto" service StockService method Reserve  (contexts/在庫.ctx:14)
+  在庫 proto "proto/warehouse/v1/stock.proto" service StockService method Release  (contexts/在庫.ctx:14)
+  在庫 proto "proto/warehouse/v1/stock.proto" service PackingService method GetPacking  (contexts/在庫.ctx:14)
+  配送 proto "proto/shop/delivery/v1/shipment.proto" service DeliveryService method CreateShipment  (contexts/配送.ctx:13)

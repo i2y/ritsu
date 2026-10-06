@@ -13,10 +13,10 @@ The Cedar `sekisho gen --target cedar --lang en` writes from it:
 
 | File | SHA-256 (first 16 digits) |
 |---|---|
-| `cedar/guards.cedar` | `e99bd2eab97524dc` |
-| `cedar/guards.cedarschema` | `e17f781bcc4b44dd` |
-| `cedar/guards.cedarschema.json` | `6ffc1e3739870a71` |
-| `cedar/guards.policies.json` | `97b8dccceafe233d` |
+| `cedar/guards.cedar` | `<sha256>` |
+| `cedar/guards.cedarschema` | `<sha256>` |
+| `cedar/guards.cedarschema.json` | `<sha256>` |
+| `cedar/guards.policies.json` | `<sha256>` |
 
 > [!NOTE]
 > `sekisho check` walked all 1 combination of the action, and decided each as Cedar does.

@@ -1,6 +1,7 @@
 //! The port of maps (ritsu's DESIGN 16.8, 16.9), as sakai answers it: a map's contexts and
 //! relationships, and the context each file of the project belongs to, decided as the check
-//! decides who owns what. The answers for the examples `shop` and `webshop` (and their Japanese
+//! decides who owns what, and the operations each context opens to the others (`open host service`),
+//! as sekisho's gates name them. The answers for the examples `shop` and `webshop` (and their Japanese
 //! twins) are golden files in `tests/golden/maps/`; `SAKAI_BLESS=1 cargo test` writes them again.
 //! A context file is no map, and a map whose names or owners do not pass says why.
 
@@ -25,6 +26,11 @@ fn answers(example: &str, map: &str) -> String {
     for f in files {
         let c = Engine.context_of(&root, map, &f).unwrap();
         out.push_str(&format!("  {f} -> {}\n", c.as_deref().unwrap_or("-")));
+    }
+    // what each context opens to the others, as a gate's `guards` names it (sekisho's X15)
+    out.push_str("published operations\n");
+    for o in Engine.published_operations(&root, map).unwrap() {
+        out.push_str(&format!("  {} {}{}  ({}:{})\n", o.context, o.operation.text(), if o.open_to_anyone { " [open to anyone]" } else { "" }, o.file, o.line));
     }
     out
 }

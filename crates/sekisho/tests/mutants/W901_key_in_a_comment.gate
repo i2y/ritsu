@@ -1,0 +1,23 @@
+gate maps v1
+description "Who may look at a place on the map"
+
+# the maps API key of the staging site: AIzaSyD-ritsu-fake-key-for-tests-000000
+role clerk
+  description "Answers customers"
+
+principal User
+  description "A member of the staff"
+  roles clerk
+
+resource Place
+  description "A place on the map"
+
+action view_place
+  description "Look at a place"
+  principal User
+  resource Place
+
+permit clerks_view
+  description "A clerk looks at any place"
+  principal in clerk
+  action view_place

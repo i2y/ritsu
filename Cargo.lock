@@ -256,6 +256,7 @@ dependencies = [
  "ritsu-proto",
  "ritsu-testkit",
  "rulec",
+ "sekisho",
  "serde_json",
 ]
 
@@ -356,6 +357,7 @@ dependencies = [
  "ritsu-testkit",
  "rulec",
  "sakai",
+ "sekisho",
  "serde_json",
 ]
 

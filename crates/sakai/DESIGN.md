@@ -347,7 +347,8 @@ owns
 
 成果物とみなすファイルは、次のものだけである。
 
-- 一式の成果物：`.rule`、`.flow`、`.cal`、`.book`、`.geas`
+- 一式の成果物：`.rule`、`.flow`、`.cal`、`.book`、`.geas`、`.gate`
+- 手で書いた Cedar のファイル（`.cedar`、`.cedarschema`、`.cedarschema.json`）のうち、`owns`・`layer`・`shared kernel with` の `cedar "…"` の項で書いたもの（17 章）
 - `.proto`
 - OpenAPI と AsyncAPI の文書：範囲の `.yaml`、`.yml`、`.json` のうち、いちばん上のマップに `openapi`、`asyncapi`、`swagger` のキーを持つもの（中身で見分ける）と、それらが `$ref` でたどるファイル（文書の一部）。15.2
 - 地図の `code` で宣言した言語のコードで、その言語の置き場所の下にあるもの：Python は `.py`、TypeScript は `.ts`・`.tsx`・`.mts`・`.cts`・`.js`・`.jsx`・`.mjs`・`.cjs`、Java は `.java`、Go は `.go`、Rust は `.rs` と、クレートのマニフェスト（`[package]` のある `Cargo.toml`。ワークスペースのためだけのマニフェストは、どのクレートのものでもないので成果物にしない。7.7）
@@ -581,7 +582,7 @@ sakai が列挙の値（対応の網羅）とフィールド（語の `means`）
 
 ### 2.2 ツールの語と種類の語
 
-ツール名は `rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai` の十二である。`openapi`、`asyncapi`、`cedar` は 2026-10-06 に足した（15.10）。
+ツール名は `rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho` の十三である。`openapi`、`asyncapi`、`cedar` は 2026-10-06 に足した（15.10）。`sekisho` も同じ日に足した（17 章）。
 
 種類の語は、それぞれのツールが JSON で出す名前の種類から取り、二つの言語で使う種類を合わせた。表の右の列は、種類の語を取った元である。ritsu に取り込んでからは、どの言語の名前も、その言語の口（`Items`）が渡す（ritsu の DESIGN 6.4）。
 
@@ -595,7 +596,8 @@ sakai が列挙の値（対応の網羅）とフィールド（語の `means`）
 | `proto` | `.proto` | `service`（下に `method`）、`message`（下に `field`）、`enum`（下に `value`） | proto のファイルの中の名前 |
 | `openapi` | OpenAPI の文書と、文書が `$ref` で読むその一部 | `schema`（下に `property`、`value`）、`operation`、`pointer` | 文書の中の名前（15.10） |
 | `asyncapi` | AsyncAPI の文書と、その一部 | `channel`（下に `message`）、`message`、`operation`、`schema`（下に `property`、`value`）、`pointer` | 文書の中の名前（15.10） |
-| `cedar` | `.cedar`、`.cedarschema`、`.cedarschema.json` | `policy`、`action`、`entity` | sakai は読まない（yuen が読む。`owns` には書けない） |
+| `cedar` | `.cedar`、`.cedarschema`、`.cedarschema.json` | `policy`、`action`、`entity` | 中の名前は sakai は読まない（yuen が読む）。`owns`・`layer`・`shared kernel with` の `cedar "…"` で書いたファイルは成果物で、スキーマの `@guards` を sekisho の口で読む（17 章） |
+| `sekisho` | `.gate` | `principal`（下に `attribute`）、`resource`（下に `attribute`）、`role`、`workflow`、`enum`（下に `value`）、`action`（下に `input`、`context`）、`policy`、`expect`、`separate` | 中の名前は sakai は読まない（yuen が sekisho の口 `Items` で読む）。`.gate` が指すものは sekisho の口 `References` で読む（17 章） |
 | `file` | 何でも | なし | |
 | `yuen` | `.req` | `requirement`、`source` | `yuen api` |
 | `sakai` | `.ctx` | `context`、`term` | sakai の地図とコンテキストのファイル |
@@ -732,18 +734,20 @@ examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, e
 | koyomi の dates とカレンダー | koyomi の `References` の `use calendar`（行と、カレンダー） | koyomi のカレンダー |
 | dandori のワークフロー | dandori の `References` の `use rule`（呼び方の語を添えて）、`use proto`、`connect`（proto のサービスとメソッド）、`flow`（子の `.flow`）、`implements`（proto のサービス）。4.7 | 規則、proto のファイルとサービスとメソッド、ワークフロー |
 | chobo の帳簿、geas の主張 | 参照を持たない（chobo の帳簿はほかの成果物を読まない。geas の主張はプログラムを外から叩く） | |
+| sekisho のゲート（`.gate`） | sekisho の `References` の `use rule`・`use dates`・`use calendar`・`use gate`（行と、先のファイル）、`guards`（行と、守る操作の参照）。17 章 | 規則、日付のファイルとカレンダー、ほかの `.gate`、契約の操作 |
+| 手で書いた Cedar のスキーマ | sekisho の `References` の `guards`（action の `@guards` の参照と、action の行）。17 章 | 契約の操作 |
 | Rust のクレート（`[package]` のある `Cargo.toml`） | Cargo が言う、パスで書いたほかのクレートへの依存（`[dependencies]` と `[build-dependencies]`。行は依存を書いたマニフェストの行）。7.7 | クレート（その `Cargo.toml`） |
 | OpenAPI と AsyncAPI の文書 | ファイルをまたぐ `$ref`（行と列）。AsyncAPI のチャネルを指すものは、その上の操作の `send` か `receive`。15.5 | 文書の要素（ファイルと JSON Pointer） |
 | ほかの言語のコード | sakai は読まない。7 章の設定で各ツールが確かめる | |
 
-ほかの言語が口で言う参照のうち、ここに無いもの（rulec の `import jsonschema` と JSON Schema の `shape`、rulec と koyomi の `source` のコピー、dandori の `use openapi` と `use smithy`）は、境界を越える参照に数えない。JSON Schema、出典のコピー、祝日の表、Smithy の記述は、それを読む成果物の一部として扱い、属し方を問わない（1.3）からである。範囲の外にあっても何も言わない。ただし、dandori の `use openapi` と、rulec の `import jsonschema` と JSON Schema の `shape` は、先が OpenAPI か AsyncAPI の文書（成果物）なら、その文書への参照として数える（15.5）。
+ほかの言語が口で言う参照のうち、ここに無いもの（rulec の `import jsonschema` と JSON Schema の `shape`、rulec と koyomi の `source` のコピー、dandori の `use openapi` と `use smithy`、sekisho の `use openapi`・`use proto`・`use asyncapi`・`use book` と `workflow`）は、境界を越える参照に数えない。JSON Schema、出典のコピー、祝日の表、Smithy の記述は、それを読む成果物の一部として扱い、属し方を問わない（1.3）からである。範囲の外にあっても何も言わない。ただし、dandori の `use openapi` と、rulec の `import jsonschema` と JSON Schema の `shape` は、先が OpenAPI か AsyncAPI の文書（成果物）なら、その文書への参照として数える（15.5）。
 
 参照のもとと先が別のコンテキストに属するとき、境界を越える参照になる。そのとき、次のどれかでなければ診断を出す。
 
 1. 先が、二つのあいだの共有カーネルに並べた成果物（の中）にある。
 2. 先が、相手の公表された言語の要素で、関係がそれを許す（1.5 の表）。
 
-先が公表された言語の要素かは、参照の種類で決まる。proto のファイルを指す参照（`import`、規則の `import proto` と `shape`、ワークフローの `use proto` と `connect`）は、そのファイルを並べた `published language` の塊の package のものである。規則を Connect のサービスとして呼ぶ参照（`use rule … connect`）は、その規則を並べた `published language rulec.…` の塊のものである。子の `.flow` は、それが相手の公開ホストサービスを `implements` で実装しているときに、そのサービスの proto のものになる（4.7）。Rust のクレートの依存は、その先のクレートを並べた `published language` の塊（`crate "…"`）のものである。規則そのものを使う参照（`use rule` の同梱、Lambda、ローカルと、規則の `apply`）とカレンダー（`use calendar`）は、どの公表された言語のものでもない。
+先が公表された言語の要素かは、参照の種類で決まる。proto のファイルを指す参照（`import`、規則の `import proto` と `shape`、ワークフローの `use proto` と `connect`）は、そのファイルを並べた `published language` の塊の package のものである。規則を Connect のサービスとして呼ぶ参照（`use rule … connect`）は、その規則を並べた `published language rulec.…` の塊のものである。子の `.flow` は、それが相手の公開ホストサービスを `implements` で実装しているときに、そのサービスの proto のものになる（4.7）。Rust のクレートの依存は、その先のクレートを並べた `published language` の塊（`crate "…"`）のものである。規則そのものを使う参照（`use rule` の同梱、Lambda、ローカルと、規則の `apply`）とカレンダー（`use calendar`）は、どの公表された言語のものでもない。ゲートの `use rule`・`use dates`・`use calendar`・`use gate` も同じである（17 章）。
 
 診断は、関係が無ければ E201、相手の内側（公表された言語でない proto、規則そのもの、カレンダー）を参照していれば E202、関係はあるが `through` に無い package なら E203、腐敗防止層の `layer` の外からの参照なら E204、腐敗防止層の公表された言語に上流の型が出ていれば E205、別々の道の相手なら E206、相手の公開ホストサービスでないサービスを呼んでいれば E207、境界の向こうのワークフローを子として走らせていれば E209（4.7）。ワークフローの `implements` は境界を越える参照ではなく、実装するサービスが自分の公表された言語の公開ホストサービスであることを確かめる（E208。4.7）。
 
@@ -759,6 +763,8 @@ examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, e
 8. 先の package が `through` に無ければ E203。
 9. 腐敗防止層で、参照のもとが下流の公表された言語のファイル（proto か、公表された言語に並べた規則）なら E205（上流の公表された言語を参照すること自体を、上流の型を出すこととみなす）。`layer` があり、もとが層の外なら E204。
 10. ほかは通す。
+
+ゲートの `guards` と、手で書いた Cedar のスキーマの `@guards`（操作を守る参照）は、この順の前に、関係によらず E211 にする（17 章）。
 
 関係が成り立つのは、下流が書いた `upstream` は、それだけで成り立ち（P4。顧客が片側だけでも、E303 を出したうえで参照は通す）、パートナーシップと共有カーネルは、両側が書いたときだけである。片側だけのパートナーシップや共有カーネルは参照を許さず、E309 や E307 と一緒に、許されなくなった参照を言う。
 
@@ -799,6 +805,7 @@ sakai が一式の成果物から読むものは、どれも ritsu の口（rits
 | rulec | `References`（索引で） | `import proto`、`shape`、`apply`（3.3） | 境界を越える参照 |
 | koyomi | `References`（索引で） | `use calendar`（3.3） | 境界を越える参照 |
 | dandori | `References`（索引で） | `use rule`、`use proto`、`connect`、`flow`、`implements`（4.7） | 境界を越える参照、E207〜E209 |
+| sekisho | `References`（索引で） | `.gate` の `use rule`・`use dates`・`use calendar`・`use gate` と `guards`、手で書いた Cedar のスキーマの `@guards`（17 章） | 境界を越える参照、E211 |
 | koyomi | `Dates`（`facts`） | 日付の名前と、使うカレンダーの名前とデータの範囲 | doc のコンテキストのページ（4.4） |
 | chobo | `Books`（`facts`） | 勘定と振替の名前 | doc のコンテキストのページ（4.5） |
 | geas | 読まない | | 属し方だけ（4.6） |
@@ -817,7 +824,7 @@ rulec には、検査を通る規則にだけ答える事実（`Rules`）を先�
   = そのファイルを、rulec の検査を通るように直してください。検査を通らないファイルや読めないファイルからは参照を読み取れないので、sakai はその参照を確かめられません。
 ```
 
-ほかの言語が渡されていないとき（sakai のクレートのバイナリ）は、地図が rulec、koyomi、dandori の成果物を含めば、言語ごとに一つの E104 を、その言語の最初の成果物を持つ `owns` の行に出す。注に、同じコマンドを `ritsu sakai` で走らせる形を書き、exit 2 で終わる（走らせ方の問題で、地図の誤りではないため。ritsu の段階 E の前は、ほかの誤りと同じく exit 1 だった。12.3）。
+ほかの言語が渡されていないとき（sakai のクレートのバイナリ）は、地図が rulec、koyomi、dandori、sekisho の成果物（sekisho は `.gate` と、`cedar "…"` と書いた Cedar のファイル。17 章）を含めば、言語ごとに一つの E104 を、その言語の最初の成果物を持つ `owns` の行に出す。注に、同じコマンドを `ritsu sakai` で走らせる形を書き、exit 2 で終わる（走らせ方の問題で、地図の誤りではないため。ritsu の段階 E の前は、ほかの誤りと同じく exit 1 だった。12.3）。
 
 ```
 $ sakai check examples/shop/shop.ctx
@@ -967,6 +974,7 @@ error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
 | E208 | ワークフローが `implements` で実装するサービスが、自分の公表された言語の公開ホストサービスでない |
 | E209 | ワークフローが、境界の向こうのワークフローを子として走らせている（パートナーでなく、共有カーネルになく、子が相手の公開ホストサービスを実装していない） |
 | E210 | 文書が、境界の向こうの、相手の公開ホストサービスでないチャネルか HTTP の操作を使っている（15.5） |
+| E211 | `.gate` の action（か、`cedar "…"` と書いた Cedar のスキーマの `@guards`）が、ほかのコンテキストに属する契約の操作を守っている（17 章） |
 | E301 | 公開ホストサービスのサービスが、公表された言語に無い（Rust のクレートの公表された言語に `open host service` を書いたときも） |
 | E302 | 公表された言語の proto や規則やクレートや生成したコードの置き場所が、そのコンテキストのものでない、package やクレートの名前が見出しと違う、`crate` の先がワークスペースのクレートでない、地図に `code rust` が無いのにクレートを公表している |
 | E303 | 顧客／供給者が片側だけ |
@@ -2107,10 +2115,11 @@ sakai は ritsu の口 `Maps`（`src/ports.rs`）に答える。ritsu-cross が�
 
 - `map`：地図のコンテキスト（`use context` の順）と、関係のすべて（それを書いた context のファイルと行、書き出しの語、`separate ways from` かどうか）。context のファイルには None を返す。
 - `context_of`：ファイルが属するコンテキスト。検査と同じ決まり（含む `owns` の項のうち、いちばん深いもの）で決め、範囲の外のファイルと、どの `owns` にも入らないファイルには None を返す。
+- `published_operations`（2026-10-06。sekisho の DESIGN 8.3）：コンテキストが `open host service` に並べた名前ごとに、proto のサービスならメソッドの全部、OpenAPI の文書の操作（webhook でないもの）ならその操作を、参照（`proto "…" service S method M`、`openapi "…" operation <operationId>`）で返す。`open_to_anyone` は操作の `security: []`。名前を並べた context のファイルと行も返す。AsyncAPI のチャネルと、規則の Connect のサービスは返さない。ritsu-cross の X15（公開する操作に、守る action があるか）が使う。
 
 **決定**：答えるのに使うのは、検査の段 1（構文、名前、パス）と段 2（属し方）だけである。この二つの段に誤りがあれば、その診断を返す（ritsu-cross は W905 で、決められない理由として言う）。段 3 から後（参照、パターン、対応）は、どのファイルがどのコンテキストに属するかを変えないので、そこに誤りがあっても答える。段 3 は、ほかの言語の口（rulec、koyomi、chobo、dandori）を要るので、ritsu の口を一つ答えるたびに地図の検査を全部走らせることにもなる。
 
-`tests/maps.rs` が、`examples/shop`・`examples/shop.ja`・`examples/webshop`・`examples/webshop.ja` の地図の答えと、例の全部のファイルの `context_of` を、`tests/golden/maps/` の golden と突き合わせる。
+`tests/maps.rs` が、`examples/shop`・`examples/shop.ja`・`examples/webshop`・`examples/webshop.ja` の地図の答えと、例の全部のファイルの `context_of` と、公開する操作（golden の「published operations」の節）を、`tests/golden/maps/` の golden と突き合わせる。
 
 ### 16.5 例
 
@@ -2141,4 +2150,78 @@ ritsu の DESIGN 9.2 と同じ形で、sakai が書き出すもの（`export cml
 - 契約の文書の鍵を、単体の `sakai check` で言うこと（いまは `ritsu check` だけ。ritsu の DESIGN 16.12）。
 - AsyncAPI の操作の `traits` に書いた `security` を読むこと。
 - ほかのファイルへの `$ref` で書いたパスの項のサーバーを見ること（いまは、文書に直に書いたパスの項と操作のサーバーだけを見る）。
-- 認可（16.3）。
+- 認可そのもの（16.3）。どの操作をだれに許すかは sekisho のゲートが書き、公開する操作に守る action があるかは ritsu-cross の X15 が見る。sakai が見るのは、ゲートと Cedar がどのコンテキストのもので、どの操作を守るかまでである（17 章）。
+
+## 17. sekisho のゲートと、手で書いた Cedar（2026-10-06）
+
+sekisho（認可の言語、`.gate`）のゲートと、人が手で書いた Cedar のポリシーとスキーマを、地図の成果物として扱う。sekisho の DESIGN 8.5 の決まりを、sakai の側で確かめる。
+
+### 17.1 属し方
+
+**決定**：`.gate` は一式の成果物で、ほかの成果物と同じく、ちょうど一つのコンテキストに属する（`dir` の下に置くか、`sekisho "…"` の項で書く）。手で書いた Cedar のファイル（`.cedar`、`.cedarschema`、`.cedarschema.json`）は、`owns`・`layer`・`shared kernel with` の `cedar "…"` の項で書いたものだけを成果物にする。
+
+```ctx
+owns
+  dir "../payments"
+  cedar "../payments/policies/charges.cedar", "../payments/policies/charges.cedarschema"
+```
+
+**理由**：`.cedar` は、名前でも中身でも、テストの材料や生成したファイル（`sekisho gen` が書くもの）と見分けられない。生成した Cedar は `.gate` の生成物で、成果物は `.gate` のほうである。手で保つ Cedar だけを、書いた人が項で言う。`dir` の下にあるだけの Cedar のファイルは、どのコンテキストのものでもなく、何も言わない（E101 にもしない）。
+
+- `cedar "…"` の項に書けるのは、`.cedar`、`.cedarschema`、`.cedarschema.json` のファイルだけで、ほかは E011（「A cedar line names a .cedar, .cedarschema or .cedarschema.json file ("…")」）。項のファイルが無ければ、ほかの項と同じく E009。
+- W101 の注の成果物の種類に、`.gate` と、`cedar "…"` と書いた Cedar のファイルを足した。
+- ritsu-cross の X15 と X16 が読む Cedar の組も、地図の `cedar "…"` の項と、要件が指すものだけである（sekisho の DESIGN 1.3）。
+
+### 17.2 境界を越える参照
+
+sekisho の `References`（索引で。4.1）が言う参照のうち、次のものを境界を越える参照に数える。
+
+| 参照 | 先 | 境界を越えたとき |
+|---|---|---|
+| `.gate` の `use rule`・`use dates`・`use calendar` | 規則、日付のファイル、カレンダー | 二つの共有カーネルに並べたものだけを読める。関係が無ければ E201、あれば E202 |
+| `.gate` の `use gate` | ほかの `.gate` | 同じ |
+| `.gate` の `guards`、手で書いた Cedar のスキーマの `@guards` | 契約の操作（`openapi "…" operation …`、`proto "…" service S method M` など） | 関係によらず E211 |
+
+- `use rule` などが共有カーネルを求めるのは、ゲートから生成したコードが、規則と日付から生成したコードを呼んで値を計算し、`use gate` がほかのゲートの型と役割と forbid を読むからである。使うのは相手の内側で、規則そのもの、日付のファイル、カレンダー、`.gate` は公表された言語にできない。E202 の注は、それぞれの読み方を言う。
+- `guards` を関係によらず E211 にするのは、守ることが、使うことではないからである。関係は、相手の公表された言語を使うことを許すが、相手の操作をだれが呼べるかを書くのは、操作を持つコンテキストの仕事である（sekisho の DESIGN 8.5）。共有カーネルやパートナーシップがあっても同じである。
+- `use openapi`・`use proto`・`use asyncapi`・`use book` と `workflow … from` は数えない。契約は `guards` の操作のために読み（その操作を E211 で確かめる）、ワークフローは呼ぶ側の名前で、ワークフローの呼び出しは、フロー自身の参照として dandori の側で確かめるからである。
+
+変異 `E211_guards_another_contexts_operation`（`examples/webshop` の受注に、決済の操作を守るゲートを置いたもの）の英語の出力（`tests/golden/`）：
+
+```
+error[E211]: ordering/charges.gate:18:1: The file ordering/charges.gate of Ordering guards openapi "payments/api/payments.yaml" operation createCharge, an operation of Payments
+    18 |   guards payments createCharge
+  = Only a .gate (or the Cedar) of the context that holds an operation's contract writes an action that guards it: the service that holds an operation writes who may call it.
+  = Move the action to a .gate of Payments, or delete the `guards` line.
+  involved:
+      Ordering  ordering/charges.gate:18                                     guards openapi "payments/api/payments.yaml" operation createCharge
+      Payments  openapi "payments/api/payments.yaml" operation createCharge  a part of the published language payments.v1
+```
+
+日本語の版の変異 `E211_ほかのコンテキストの操作を守る`（`examples/webshop.ja`）の日本語の出力：
+
+```
+エラー[E211]: ordering/代金.gate:18:1: 「受注」の ordering/代金.gate が、「決済」の操作 openapi "payments/api/payments.yaml" operation createCharge を守っています
+    18 |   guards 決済 createCharge
+  = 操作を守る action を書けるのは、その操作の契約を持つコンテキストの .gate（か、そのコンテキストの Cedar）だけです。認可の決まりは、操作を持つサービスが自分で書きます。
+  = この action を「決済」の .gate に移すか、`guards` の行を消してください。
+  関わるもの:
+      受注  ordering/代金.gate:18                                        guards openapi "payments/api/payments.yaml" operation createCharge
+      決済  openapi "payments/api/payments.yaml" operation createCharge  公表された言語 payments.v1 のもの
+```
+
+### 17.3 変えたこと
+
+- キーワード：ツール名 `sekisho` と、sekisho の種類の語のうち新しいもの（`principal`、`resource`、`attribute`、`role`、`workflow`、`expect`、`separate`）が加わり、地図、コンテキスト、語、下流の値の名前にできなくなった（E002。2.2 の決まりのとおり、ツール名と種類の語はキーワードである）。例とテストに、これらを名前にしたものは無かった。
+- `owns`・`layer`・`shared kernel with` に `cedar "…"` を書けるようになった（前は E002）。
+- W101 の注の成果物の種類と、`owns` に書けるものを言う E002 の注に、`.gate`（`sekisho`）と Cedar を足した。
+- sakai のクレートのバイナリは、地図に `.gate` か `cedar "…"` の Cedar があれば E104 で止まる（4.1）。
+- 要約の越える参照の数に、`sekisho N` が加わる（共有カーネルを通るゲートの `use` の行。ゲートの無い地図では変わらない。Cedar の越える参照は `@guards` だけで、いつも E211 なので、要約には出ない）。
+
+### 17.4 テスト
+
+- 台帳：E211 の英語と日本語の再現（`sakai explain E211`）。
+- 変異：上の二つ。
+- `tests/gates.rs`：`examples/webshop` に、決済のゲートと Cedar の組を置くと何も出ないこと、受注に置いた Cedar のスキーマが決済の `getCharge` を守ると E211 になること、項で書いていない Cedar のファイルは成果物にならず何も出ないこと、`cedar "…"` の項に Cedar でないファイルを書くと E011 になること。`examples/webshop` と `examples/webshop.ja` の両方で、決済のゲートの `use rule` が、共有カーネル（`common/`）の規則なら通って要約に `sekisho 1` と数え、受注の内側の規則なら E202（注に、ゲートが使うのは規則そのものであること）、関係の無い配送のゲートからなら E201 になること。
+- `tests/maps.rs`：公開する操作（16.4）。
+- sekisho の `References` は、`ritsu sakai` と `ritsu check` では ritsu-project の索引が、sakai のテストでは `tests/common` の索引が持つ。sakai のクレートのバイナリは sekisho を持たないので、地図に `.gate` か `cedar "…"` の Cedar があれば、ほかの言語と同じく、ツール名ごとに一つの E104 で止まる（4.1。読む言語の並びは `Suite::READ` の rulec、koyomi、dandori、sekisho、cedar）。

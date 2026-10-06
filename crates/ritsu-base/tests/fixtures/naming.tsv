@@ -36,6 +36,12 @@ cedar "policies/refunds.cedar" policy clerks_refund_within_their_limit	{"text":"
 cedar "policies/shop.cedarschema" action refund_order	{"text":"cedar \"policies/shop.cedarschema\" action refund_order","tool":"cedar","path":"policies/shop.cedarschema","items":[["action","refund_order"]]}
 cedar "policies/shop.cedarschema" entity User	{"text":"cedar \"policies/shop.cedarschema\" entity User","tool":"cedar","path":"policies/shop.cedarschema","items":[["entity","User"]]}
 cedar "policies/返金.cedar" policy "係は自分の上限まで返金できる"	{"text":"cedar \"policies/返金.cedar\" policy 係は自分の上限まで返金できる","tool":"cedar","path":"policies/返金.cedar","items":[["policy","係は自分の上限まで返金できる"]]}
+sekisho "refunds.gate"	{"text":"sekisho \"refunds.gate\"","tool":"sekisho","path":"refunds.gate","items":[]}
+sekisho "refunds.gate" policy clerks_refund_within_their_limit	{"text":"sekisho \"refunds.gate\" policy clerks_refund_within_their_limit","tool":"sekisho","path":"refunds.gate","items":[["policy","clerks_refund_within_their_limit"]]}
+sekisho "refunds.gate" expect clerks_never_refund_over_their_limit	{"text":"sekisho \"refunds.gate\" expect clerks_never_refund_over_their_limit","tool":"sekisho","path":"refunds.gate","items":[["expect","clerks_never_refund_over_their_limit"]]}
+sekisho "refunds.gate" principal User attribute refund_limit	{"text":"sekisho \"refunds.gate\" principal User attribute refund_limit","tool":"sekisho","path":"refunds.gate","items":[["principal","User"],["attribute","refund_limit"]]}
+sekisho "refunds.gate" action refund_order context refund_band	{"text":"sekisho \"refunds.gate\" action refund_order context refund_band","tool":"sekisho","path":"refunds.gate","items":[["action","refund_order"],["context","refund_band"]]}
+sekisho "gates/返金.gate" policy 係は上限まで返金できる	{"text":"sekisho \"gates/返金.gate\" policy 係は上限まで返金できる","tool":"sekisho","path":"gates/返金.gate","items":[["policy","係は上限まで返金できる"]]}
 dandori "hotel.flow" value awaiting_review	ERROR: value only right after enum
 dandori "order.flow" task reserve case payment	ERROR: nothing under task
 dandori "order.flow" record Delivery task reserve	ERROR: only field under record
@@ -55,6 +61,9 @@ openapi "api/orders.yaml" enum OrderStatus	ERROR: unknown kind for openapi
 asyncapi "events/orders.yaml" channel orderPlaced operation sendOrderPlaced	ERROR: only message under channel
 asyncapi "events/orders.yaml" schema S property p value v	ERROR: one child at most (value)
 cedar "policies/refunds.cedar" policy p action a	ERROR: cedar has no nested kinds
+sekisho "refunds.gate" attribute suspended	ERROR: attribute only right after principal or resource
+sekisho "refunds.gate" policy p action a	ERROR: nothing under policy
+sekisho "refunds.gate" action refund_order role clerk	ERROR: only input or context under action
 koyomi "支払条件.cal" claim "受領から　60日"	{"text":"koyomi \"支払条件.cal\" claim \"受領から　60日\"","tool":"koyomi","path":"支払条件.cal","items":[["claim","受領から　60日"]]}
 file "."	{"text":"file \".\"","tool":"file","path":".","items":[]}
 file "src/"	{"text":"file \"src\"","tool":"file","path":"src","items":[]}

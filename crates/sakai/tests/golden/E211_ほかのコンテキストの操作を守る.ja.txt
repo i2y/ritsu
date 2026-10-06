@@ -1,0 +1,7 @@
+エラー[E211]: ordering/代金.gate:18:1: 「受注」の ordering/代金.gate が、「決済」の操作 openapi "payments/api/payments.yaml" operation createCharge を守っています
+    18 |   guards 決済 createCharge
+  = 操作を守る action を書けるのは、その操作の契約を持つコンテキストの .gate（か、そのコンテキストの Cedar）だけです。認可の決まりは、操作を持つサービスが自分で書きます。
+  = この action を「決済」の .gate に移すか、`guards` の行を消してください。
+  関わるもの:
+      受注  ordering/代金.gate:18                                        guards openapi "payments/api/payments.yaml" operation createCharge
+      決済  openapi "payments/api/payments.yaml" operation createCharge  公表された言語 payments.v1 のもの

@@ -46,24 +46,14 @@ pub enum Format {
     Html,
 }
 
-/// One call of an operation in a workflow's flow, as dandori answers it (a task's `http` on a
-/// `use openapi`, its `connect` on a `use proto`).
-#[derive(Clone, Debug, PartialEq)]
-pub struct Call {
-    /// The line of the call in the `.flow`, from 1.
-    pub line: usize,
-    /// The task that calls it.
-    pub task: String,
-    /// The operation, as a reference from the root (`openapi "api/orders.json" operation
-    /// refundOrder`).
-    pub operation: Name,
-    /// The error the task declares for a denial (a 403, Connect's `permission_denied`), by name.
-    pub denied: Option<String>,
-}
+/// One call of an operation in a workflow's flow, as dandori answers it through the port of flows
+/// (`Flows::operation_calls`): the line, the task, the operation as a reference from the root, and
+/// the error the task declares for a denial.
+pub use ritsu_ports::OperationCall as Call;
 
-/// What the flow of one workflow of the gate calls, for the part of the page on workflows. Who
-/// draws the page with dandori joined hands it over (`ritsu sekisho doc`); without it, the page
-/// says what each workflow is allowed and no more.
+/// What the flow of one workflow of the gate calls, for the part of the page on workflows
+/// ([`calls_of`], where dandori is joined: `ritsu sekisho doc`); without it, the page says what
+/// each workflow is allowed and no more.
 #[derive(Clone, Debug)]
 pub struct FlowCalls {
     /// The workflow, by its index in the gate's.
@@ -148,12 +138,27 @@ pub fn page(o: &Outcome, suite: &Suite, lang: Lang, format: Format, calls: Optio
     Some(b.done())
 }
 
-/// What the flows of the gate's workflows call, as dandori answers it, for the part of the page on
-/// workflows. None where dandori is not joined (the binary of sekisho's own crate), and while the
-/// port of flows does not answer what a flow calls.
+/// What the flows of the gate's workflows call, as dandori answers it through the port of flows
+/// (`Flows::operation_calls`, read with the rules, the dates files and the books the suite joins),
+/// for the part of the page on workflows. None where dandori is not joined (the binary of sekisho's
+/// own crate). A flow outside the root, whose operations no reference names, is said to be.
 pub fn calls_of(o: &Outcome, suite: &Suite) -> Option<Vec<FlowCalls>> {
-    let _ = (o, suite.flows.as_ref()?);
-    None
+    let flows = suite.flows.as_ref()?;
+    let ports = ritsu_ports::Ports { rules: suite.rules.clone()?, dates: suite.dates.clone()?, books: suite.books.clone()? };
+    let g = &o.walked.as_ref()?.gate;
+    let calls = g
+        .workflows
+        .iter()
+        .enumerate()
+        .map(|(wi, w)| {
+            let calls = match g.from_root(&w.file) {
+                Some(rel) => flows.operation_calls(&g.root, &rel, &ports).map(|(_, cs)| cs),
+                None => Err(vec![Said { code: String::new(), file: w.flow.clone(), line: None, message: tr!("`{}` はルートの外にあります", "`{}` is outside the root", w.flow) }]),
+            };
+            FlowCalls { workflow: wi, calls }
+        })
+        .collect();
+    Some(calls)
 }
 
 /// The page written out in its form.

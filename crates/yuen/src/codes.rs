@@ -227,10 +227,10 @@ pub fn ledger() -> Ledger {
             "E011",
             tr!("名指しの最初の語が、ツールの語ではありません", "A tool that does not exist"),
             tr!(
-                "名指しの最初の語が、rulec、dandori、koyomi、chobo、geas、proto、openapi、asyncapi、cedar、file、yuen、sakai のどれでもないとき（`dir` も、名指しの語ではありません）。",
-                "The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen and sakai (`dir` is not a word of a naming either)."
+                "名指しの最初の語が、rulec、dandori、koyomi、chobo、geas、proto、openapi、asyncapi、cedar、file、yuen、sakai、sekisho のどれでもないとき（`dir` も、名指しの語ではありません）。",
+                "The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen, sakai and sekisho (`dir` is not a word of a naming either)."
             ),
-            tr!("この十二のツール名のどれかを書いてください。ほかのファイルは `file \"…\"` で指してください。", "Write one of the twelve; name any other file with `file \"…\"`."),
+            tr!("この十三のツール名のどれかを書いてください。ほかのファイルは `file \"…\"` で指してください。", "Write one of the thirteen; name any other file with `file \"…\"`."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by excel \"a.xlsx\"\n",
             &["E012", "E013"],
         )
@@ -552,7 +552,7 @@ pub fn ledger() -> Ledger {
         e(
             "E403",
             tr!("確かめる側に、何も確かめないものが書かれています", "Something that checks nothing is on the side that verifies"),
-            tr!("`verified by` に、geas と koyomi の主張、検査するツールのファイル全体、テストのファイルのほかを書いたとき（rulec の出力、chobo の振替、proto など）。", "`verified by` names something other than a geas or koyomi claim, the whole file of a tool that checks it, or a test file (a rulec output, a chobo transfer, a proto)."),
+            tr!("`verified by` に、geas と koyomi の主張、sekisho の期待と職務の分離、検査するツールのファイル全体、テストのファイルのほかを書いたとき（rulec の出力、chobo の振替、proto など）。", "`verified by` names something other than a geas or koyomi claim, a sekisho expectation or separation, the whole file of a tool that checks it, or a test file (a rulec output, a chobo transfer, a proto)."),
             tr!("満たすものなら `satisfied by` に書いてください。確かめる側には、落ちることのあるものを書いてください。", "If it meets the requirement, write it after `satisfied by`; the side that verifies takes what can fail."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  verified by koyomi \"支払条件.cal\" date 支払日\n",
             &["E012"],

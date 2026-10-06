@@ -203,3 +203,53 @@ fn a_flow_says_what_it_crosses_into() {
     // the hold's amount comes from the workflow's input, whose range dandori knows
     assert_eq!(c.transfers[0].amounts[0].from, vec![Origin::Range(Some(1), Some(100))]);
 }
+
+/// The calls of operations of contracts a flow makes, for sekisho's check of what a workflow is
+/// allowed (`Flows::operation_calls`, sekisho's X16): each task call bound to an OpenAPI operation
+/// (`http` on a `use openapi`) or a Connect method (`connect` on a `use proto`), named by the
+/// reference a gate's `guards` names it by, from the root, with the error the task declares for a
+/// denial.
+#[test]
+fn a_flow_says_which_operations_it_calls() {
+    use ritsu_ports::{Flows, Ports};
+    use std::rc::Rc;
+    let ports = Ports { rules: Rc::new(rulec::ports::Engine::new()), dates: Rc::new(koyomi::ports::Engine), books: Rc::new(chobo::ports::Engine) };
+    let show = |root: &Path, file: &str| -> (String, Vec<String>) {
+        let (name, calls) = Engine.operation_calls(root, file, &ports).unwrap_or_else(|e| panic!("{file}: {e:?}"));
+        (name, calls.iter().map(|c| format!("{} {} {} [{}]", c.line, c.task, c.operation.text(), c.denied.as_deref().unwrap_or("-"))).collect())
+    };
+    // Stripe's operations by their operationId; a call in a handler is a call too
+    let (name, calls) = show(&root(), "examples/hotel/temporal/hotel.flow");
+    assert_eq!(name, "hotel_stay");
+    assert!(calls.iter().all(|c| c.contains(" openapi \"examples/hotel/specs/stripe.json\" operation ")), "{calls:?}");
+    assert!(calls.iter().any(|c| c.ends_with("create_intent openapi \"examples/hotel/specs/stripe.json\" operation PostPaymentIntents [-]")), "{calls:?}");
+    assert!(calls.iter().any(|c| c.ends_with("get_intent openapi \"examples/hotel/specs/stripe.json\" operation GetPaymentIntentsIntent [-]")), "{calls:?}");
+    // a Connect method by its service and method; a child flow and a callback are no operation
+    let (_, calls) = show(&root(), "examples/fulfillment/temporal/fulfillment.flow");
+    assert!(!calls.is_empty() && calls.iter().all(|c| c.contains(" proto \"examples/fulfillment/specs/warehouse.proto\" service StockService method ")), "{calls:?}");
+    // the error of a denial: 403 for an HTTP operation, `permission_denied` for a Connect method;
+    // an operation with no operationId by its method and path
+    let t = ritsu_testkit::TempDir::new("operation-calls");
+    let write = |name: &str, body: &str| {
+        let p = t.path().join(name);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, body).unwrap();
+    };
+    write("api/orders.json", "{\"openapi\": \"3.1.0\", \"info\": {\"title\": \"Orders\", \"version\": \"1\"}, \"servers\": [{\"url\": \"https://orders.example.com\"}], \"paths\": {\"/orders/{orderId}/refunds\": {\"post\": {\"operationId\": \"refundOrder\", \"parameters\": [{\"name\": \"orderId\", \"in\": \"path\", \"required\": true, \"schema\": {\"type\": \"string\"}}], \"responses\": {\"201\": {\"description\": \"refunded\"}, \"403\": {\"description\": \"denied\"}}}}, \"/orders/{orderId}\": {\"get\": {\"parameters\": [{\"name\": \"orderId\", \"in\": \"path\", \"required\": true, \"schema\": {\"type\": \"string\"}}], \"responses\": {\"200\": {\"description\": \"the order\"}}}}}}\n");
+    write("proto/stock.proto", "syntax = \"proto3\";\n\npackage shop.v1;\n\nservice Stock {\n  rpc Reserve(ReserveRequest) returns (ReserveResponse);\n}\n\nmessage ReserveRequest {\n  string sku = 1;\n}\n\nmessage ReserveResponse {\n  string id = 1;\n}\n");
+    let flow = "workflow refunds v1\ndescription \"Looks at an order, refunds it and holds its stock\"\n\nuse openapi orders from \"api/orders.json\"\nuse proto stock from \"proto/stock.proto\"\n  url \"https://stock.example.com\"\n\ninputs\n  order : string\n\ntask look(orderId: string)\n  http GET orders \"/orders/{orderId}\"\n  idempotent\n\ntask refund(orderId: string)\n  http POST orders \"/orders/{orderId}/refunds\"\n  errors denied = 403\n  key\n\ntask reserve(sku: string) -> stock.ReserveResponse\n  connect stock \"shop.v1.Stock/Reserve\"\n  errors denied = permission_denied\n  key\n\nflow\n  look(orderId: order)\n  refund(orderId: order)\n    on denied => fail Denied \"the refund is not allowed\"\n  let held = reserve(sku: order)\n    on denied => fail Denied \"the stock is not ours to hold\"\n";
+    write("refunds.flow", flow);
+    let (name, calls) = show(t.path(), "refunds.flow");
+    assert_eq!(name, "refunds");
+    assert_eq!(
+        calls,
+        [
+            "26 look openapi \"api/orders.json\" operation \"GET /orders/{orderId}\" [-]",
+            "27 refund openapi \"api/orders.json\" operation refundOrder [denied]",
+            "29 reserve proto \"proto/stock.proto\" service Stock method Reserve [denied]",
+        ]
+    );
+    // a flow that does not pass dandori's check says why
+    write("broken.flow", &flow.replace("look(orderId: order)\n", "look(orderId: nothing)\n"));
+    assert!(Engine.operation_calls(t.path(), "broken.flow", &ports).unwrap_err().iter().any(|s| s.code.starts_with('E')));
+}

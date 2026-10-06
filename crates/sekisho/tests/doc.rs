@@ -38,10 +38,13 @@ const PAGES: [(&str, Lang, Format, &str); 14] = [
     ("tests/mutants/W304_何も選ばない期待.gate", Lang::Ja, Format::Markdown, "W304_何も選ばない期待.ja.md"),
 ];
 
-/// The page of a file, with every language joined as `ritsu sekisho` joins them.
+/// The page of a file, with every language joined as `ritsu sekisho` joins them: what its
+/// workflows' flows call, too, as dandori answers it.
 fn page_of(path: &str, lang: Lang, format: Format) -> Page {
     let o = common::check(path);
-    doc::page(&o, &common::joined(), lang, format, None).unwrap_or_else(|| panic!("{path} has no page:\n{}", common::shown(&o, Lang::En)))
+    let suite = common::joined();
+    let calls = doc::calls_of(&o, &suite);
+    doc::page(&o, &suite, lang, format, calls.as_deref()).unwrap_or_else(|| panic!("{path} has no page:\n{}", common::shown(&o, Lang::En)))
 }
 
 /// What `sekisho doc` prints for a file, as `ritsu sekisho doc` runs it: the exit code and the text.
@@ -67,13 +70,41 @@ fn drawn(e: &Embedded, path: &str, lang: Lang, format: Format) -> String {
     p.unwrap_or_else(|s| panic!("{}: {s:?}", e.file))
 }
 
-/// The page as its golden file holds it: sekisho's version as `<version>`, and each page of
-/// another language as one line that names it.
+/// The table of the head that gives each file `gen --target cedar` writes with its digest.
+fn cedar_table(p: &mut Page) -> Option<&mut Vec<Vec<String>>> {
+    p.blocks.iter_mut().find_map(|b| match b {
+        doc::Block::Table { head, rows, .. } if head.get(1).is_some_and(|h| h.starts_with("SHA-256")) => Some(rows),
+        _ => None,
+    })
+}
+
+/// The page as its golden file holds it: sekisho's version as `<version>`, each page of another
+/// language as one line that names it, and the digests of the generated Cedar as `<sha256>` —
+/// what the generator of Cedar writes is held to the page by its own test
+/// (`the_head_gives_the_digests_of_the_cedar_gen_writes`).
 fn as_golden(mut p: Page, format: Format) -> String {
     for e in &mut p.embedded {
         e.page = Ok(format!("[the page {} doc draws of {}]", e.tool, e.file));
     }
+    if let Some(rows) = cedar_table(&mut p) {
+        for r in rows {
+            r[1] = "`<sha256>`".into();
+        }
+    }
     doc::write(&p, format).replace(env!("CARGO_PKG_VERSION"), "<version>")
+}
+
+/// The head gives each of the four files `gen --target cedar` writes from the file, in the page's
+/// language, with the first sixteen hex digits of its SHA-256, as the generator writes them now.
+#[test]
+fn the_head_gives_the_digests_of_the_cedar_gen_writes() {
+    for (path, lang, format, stem) in PAGES {
+        let o = common::check(path);
+        let files = sekisho::cedar::files(o.scope.as_ref().unwrap(), o.walked.as_ref().unwrap(), &ritsu_emit::header::file_name(path), lang).unwrap();
+        let want: Vec<Vec<String>> = files.paths(&o.walked.as_ref().unwrap().gate.named.alias).iter().map(|(f, text)| vec![format!("`{f}`"), format!("`{}`", ritsu_base::sha256::short(text.as_bytes()))]).collect();
+        let mut p = page_of(path, lang, format);
+        assert_eq!(cedar_table(&mut p).cloned(), Some(want), "{stem}");
+    }
 }
 
 #[test]
@@ -246,6 +277,26 @@ fn the_calls_of_a_flow_stand_under_its_workflow() {
     let said = ritsu_ports::Said { code: "E001".into(), file: "flows/returns.flow".into(), line: Some(3), message: ritsu_base::text::Text::same("broken") };
     let md = doc::write(&doc::page(&o, &common::joined(), Lang::En, Format::Markdown, Some(&[FlowCalls { workflow: 0, calls: Err(vec![said]) }])).unwrap(), Format::Markdown);
     assert!(md.contains("dandori could not read the flow.") && md.contains("flows/returns.flow: broken"), "{md}");
+}
+
+/// With dandori joined, the page asks it what each workflow's flow calls (the port of flows, as
+/// ritsu-cross reads it for X16): the example's workflow `returns` calls `refundOrder` at line 22
+/// of its flow, which `refund_order` guards and allows the workflow in some combinations, and the
+/// task declares `denied` for a 403. Without dandori there is no answer, and no table.
+#[test]
+fn dandori_says_what_the_flow_calls() {
+    let o = common::check("examples/refunds/refunds.gate");
+    let calls = doc::calls_of(&o, &common::joined()).expect("dandori is joined");
+    assert_eq!(calls.len(), 1);
+    let got = calls[0].calls.as_ref().unwrap_or_else(|s| panic!("{s:?}"));
+    assert_eq!(
+        got,
+        &vec![Call { line: 22, task: "refund_order".into(), operation: Name::file(Tool::Openapi, "api/orders.json").with("operation", "refundOrder"), denied: Some("denied".into()) }]
+    );
+    assert!(doc::calls_of(&o, &Suite::default()).is_none());
+    let (code, out, _) = run(&["doc", "examples/refunds/refunds.gate", "--root", "examples/refunds"], common::joined());
+    assert_eq!(code, 0);
+    assert!(out.contains("| 22 | `refund_order` | `openapi \"api/orders.json\" operation refundOrder` | `refund_order` | sometimes | `denied` |"), "{out}");
 }
 
 /// A file that does not pass has no page: what check says, and exit 1. One that reads a rule, a

@@ -1,0 +1,205 @@
+items
+  14-14 sekisho "refunds.ja.gate" enum 注文の状態
+      enum 注文の状態(order_status) = 支払済(paid) | 発送済(shipped) | 返品済(returned) | 返金済(refunded)
+  14-14 sekisho "refunds.ja.gate" enum 注文の状態 value 支払済
+      支払済
+  14-14 sekisho "refunds.ja.gate" enum 注文の状態 value 発送済
+      発送済
+  14-14 sekisho "refunds.ja.gate" enum 注文の状態 value 返品済
+      返品済
+  14-14 sekisho "refunds.ja.gate" enum 注文の状態 value 返金済
+      返金済
+  16-18 sekisho "refunds.ja.gate" role 係
+      role 係(clerk)
+        description "お客さまに応対し、少額の返金をする"
+        can 注文を見る, 返金する
+  20-23 sekisho "refunds.ja.gate" role 責任者
+      role 責任者(manager)
+        description "係ができない返金をし、返金の期間が過ぎても営業日なら返金する"
+        includes 係
+        can 注文を見る, 返金する
+  25-27 sekisho "refunds.ja.gate" role 監査
+      role 監査(auditor)
+        description "あとから返金を確かめる"
+        can 注文を見る, 返金を書き出す
+  29-34 sekisho "refunds.ja.gate" principal 職員
+      principal 職員(User)
+        description "サインインした店の職員"
+        roles 係, 責任者, 監査
+        attributes
+          返金できる額(refund_limit) : money[GBP, incl_tax] range >=0GBP <=10_000GBP
+          停止中(suspended) : bool
+  33-33 sekisho "refunds.ja.gate" principal 職員 attribute 返金できる額
+      返金できる額(refund_limit) : money[GBP, incl_tax] range >=0GBP <=10_000GBP
+  34-34 sekisho "refunds.ja.gate" principal 職員 attribute 停止中
+      停止中(suspended) : bool
+  36-37 sekisho "refunds.ja.gate" principal 顧客
+      principal 顧客(Customer)
+        description "サインインした店のお客さま"
+  39-40 sekisho "refunds.ja.gate" workflow 返品
+      workflow 返品(returns) from "flows/returns.flow"
+        description "返品された品物が倉庫に戻ったら、その注文を返金する"
+  42-47 sekisho "refunds.ja.gate" resource 注文
+      resource 注文(Order)
+        description "店の注文"
+        attributes
+          状態(status) : 注文の状態
+          支払日(paid_on) : date range >=2026-01-01 <=2028-09-30
+          注文した人(customer) : 顧客
+  45-45 sekisho "refunds.ja.gate" resource 注文 attribute 状態
+      状態(status) : 注文の状態
+  46-46 sekisho "refunds.ja.gate" resource 注文 attribute 支払日
+      支払日(paid_on) : date range >=2026-01-01 <=2028-09-30
+  47-47 sekisho "refunds.ja.gate" resource 注文 attribute 注文した人
+      注文した人(customer) : 顧客
+  49-50 sekisho "refunds.ja.gate" resource 返金の記録
+      resource 返金の記録(RefundRecord)
+        description "すべての返金の記録。一つの文書として書き出す"
+  52-56 sekisho "refunds.ja.gate" action 注文を見る
+      action 注文を見る(view_order)
+        description "注文を見る"
+        guards 注文 getOrder
+        principal 職員, 顧客
+        resource 注文 from orderId
+  58-68 sekisho "refunds.ja.gate" action 返金する
+      action 返金する(refund_order)
+        description "注文の全部か一部を返金する"
+        guards 注文 refundOrder
+        principal 職員, Workflow
+        resource 注文 from orderId
+        input
+          金額(amount) : money[GBP, incl_tax] range >=1GBP <=10_000GBP
+        context
+          返金の区分(refund_band) = 返金の上限(金額: 金額, 上限: principal.返金できる額).区分
+          期間内(in_period) = today <= 返金の期限.最終日(支払日: resource.支払日)
+          営業日(business_day) = today is open in 英国
+  64-64 sekisho "refunds.ja.gate" action 返金する input 金額
+      金額(amount) : money[GBP, incl_tax] range >=1GBP <=10_000GBP
+  66-66 sekisho "refunds.ja.gate" action 返金する context 返金の区分
+      返金の区分(refund_band) = 返金の上限(金額: 金額, 上限: principal.返金できる額).区分
+  67-67 sekisho "refunds.ja.gate" action 返金する context 期間内
+      期間内(in_period) = today <= 返金の期限.最終日(支払日: resource.支払日)
+  68-68 sekisho "refunds.ja.gate" action 返金する context 営業日
+      営業日(business_day) = today is open in 英国
+  70-74 sekisho "refunds.ja.gate" action 返金を書き出す
+      action 返金を書き出す(export_refunds)
+        description "返金の記録を書き出す"
+        guards 注文 exportRefunds
+        principal 職員
+        resource 返金の記録
+  76-79 sekisho "refunds.ja.gate" policy 職員は注文を見られる
+      permit 職員は注文を見られる(staff_view_orders)
+        description "職員はどの注文も見られる"
+        principal in 係, 監査
+        action 注文を見る
+  81-85 sekisho "refunds.ja.gate" policy 顧客は自分の注文を見られる
+      permit 顧客は自分の注文を見られる(customers_view_their_orders)
+        description "お客さまは自分の注文を見られる"
+        principal is 顧客
+        action 注文を見る
+        when resource.注文した人 is principal
+  87-92 sekisho "refunds.ja.gate" policy 係は上限まで返金できる
+      permit 係は上限まで返金できる(clerks_refund_within_their_limit)
+        description "係は、返金の期間のあいだ、自分の上限まで返金できる"
+        principal in 係
+        action 返金する
+        when 返金の区分 is 上限まで
+        when 期間内
+  94-98 sekisho "refunds.ja.gate" policy 責任者は期間内なら返金できる
+      permit 責任者は期間内なら返金できる(managers_refund_in_period)
+        description "責任者は、返金の期間のあいだ、どの額でも返金できる"
+        principal in 責任者
+        action 返金する
+        when 期間内
+  100-105 sekisho "refunds.ja.gate" policy 責任者は期間後も営業日なら返金できる
+      permit 責任者は期間後も営業日なら返金できる(managers_refund_late_on_business_days)
+        description "返金の期間が過ぎても、イングランドとウェールズの営業日なら、責任者は返金できる"
+        principal in 責任者
+        action 返金する
+        unless 期間内
+        when 営業日
+  107-112 sekisho "refunds.ja.gate" policy 返品のワークフローは返品済の注文を返金できる
+      permit 返品のワークフローは返品済の注文を返金できる(returns_refunds_returned_orders)
+        description "返品のワークフローは、返品済の注文を 50 ポンドまで返金できる"
+        principal is workflow 返品
+        action 返金する
+        when resource.状態 is 返品済
+        when 金額 <= 50GBP
+  114-117 sekisho "refunds.ja.gate" policy 監査は返金の記録を書き出せる
+      permit 監査は返金の記録を書き出せる(auditors_export_refunds)
+        description "監査は返金の記録を書き出せる"
+        principal in 監査
+        action 返金を書き出す
+  119-122 sekisho "refunds.ja.gate" policy 二度は返金しない
+      forbid 二度は返金しない(no_second_refund)
+        description "返金済の注文は、もう返金しない"
+        action 返金する
+        when resource.状態 is 返金済
+  124-127 sekisho "refunds.ja.gate" policy 監査は返金しない
+      forbid 監査は返金しない(auditors_do_not_refund)
+        description "返金を確かめる人は、返金をしない"
+        principal in 監査
+        action 返金する
+  129-133 sekisho "refunds.ja.gate" policy 停止中の職員は何もできない
+      forbid 停止中の職員は何もできない(suspended_staff_do_nothing)
+        description "停止中の職員は何もできない"
+        principal is 職員
+        action any
+        when principal.停止中
+  135-140 sekisho "refunds.ja.gate" expect 係は上限を超えて返金しない
+      expect deny 係は上限を超えて返金しない
+        description "責任者でない係は、自分の上限を超えて返金することがない"
+        principal in 係
+        action 返金する
+        unless principal in 責任者
+        when 返金の区分 is 上限超え
+  142-145 sekisho "refunds.ja.gate" expect 返金済の注文は返金しない
+      expect deny 返金済の注文は返金しない
+        description "返金済の注文を返金する人はいない"
+        action 返金する
+        when resource.状態 is 返金済
+  147-154 sekisho "refunds.ja.gate" expect 責任者は期間内に返金できる
+      expect allow 責任者は期間内に返金できる
+        description "停止中でなく、監査でもない責任者は、返金の期間のあいだ、返金済でない注文を返金できる"
+        principal in 責任者
+        action 返金する
+        unless principal in 監査
+        unless principal.停止中
+        unless resource.状態 is 返金済
+        when 期間内
+  156-158 sekisho "refunds.ja.gate" separate 返金と監査を分ける
+      separate 返金と監査を分ける
+        description "返金をする人は、返金を確かめる人ではない"
+        actions 返金する, 返金を書き出す
+references
+  5 rulec "rules/返金の上限.rule" [use rule]
+  6 koyomi "dates/返金の期限.cal" [use dates]
+  7 koyomi "calendars/england_and_wales.cal" [use calendar]
+  8 openapi "api/orders.json" [use openapi]
+  39 dandori "flows/returns.flow" [workflow]
+  54 openapi "api/orders.json" operation getOrder [guards]
+  60 openapi "api/orders.json" operation refundOrder [guards]
+  72 openapi "api/orders.json" operation exportRefunds [guards]
+facts
+  返金 (refunds_ja) v1 ShopJa sha256:371be7754cdffe7e
+  action 注文を見る (view_order) line 52: principals ["User", "Customer"], resources ["Order"], nobody None
+    guards openapi "api/orders.json" operation getOrder (line 54)
+  action 返金する (refund_order) line 58: principals ["User", "Workflow"], resources ["Order"], nobody None
+    guards openapi "api/orders.json" operation refundOrder (line 60)
+  action 返金を書き出す (export_refunds) line 70: principals ["User"], resources ["RefundRecord"], nobody None
+    guards openapi "api/orders.json" operation exportRefunds (line 72)
+  workflow 返品 (returns) line 39: dandori "flows/returns.flow"
+  permit 職員は注文を見られる @id refunds_ja/staff_view_orders line 76
+  permit 顧客は自分の注文を見られる @id refunds_ja/customers_view_their_orders line 81
+  permit 係は上限まで返金できる @id refunds_ja/clerks_refund_within_their_limit line 87
+  permit 責任者は期間内なら返金できる @id refunds_ja/managers_refund_in_period line 94
+  permit 責任者は期間後も営業日なら返金できる @id refunds_ja/managers_refund_late_on_business_days line 100
+  permit 返品のワークフローは返品済の注文を返金できる @id refunds_ja/returns_refunds_returned_orders line 107
+  permit 監査は返金の記録を書き出せる @id refunds_ja/auditors_export_refunds line 114
+  forbid 二度は返金しない @id refunds_ja/no_second_refund line 119
+  forbid 監査は返金しない @id refunds_ja/auditors_do_not_refund line 124
+  forbid 停止中の職員は何もできない @id refunds_ja/suspended_staff_do_nothing line 129
+  expect 係は上限を超えて返金しない line 135
+  expect 返金済の注文は返金しない line 142
+  expect 責任者は期間内に返金できる line 147
+  separate 返金と監査を分ける line 156

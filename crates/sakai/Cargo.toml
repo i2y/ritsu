@@ -21,3 +21,4 @@ chobo = { path = "../chobo" }
 dandori = { path = "../dandori" }
 koyomi = { path = "../koyomi" }
 rulec = { path = "../rulec" }
+sekisho = { path = "../sekisho" }

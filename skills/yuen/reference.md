@@ -190,7 +190,8 @@ checking side takes only what a tool checks and can fail (E403 otherwise):
 |---|---|
 | `geas "<spec>" claim "<name>"` | a claim geas runs |
 | `koyomi "<file>" claim <name>` | a claim koyomi holds on every day of its range |
-| `rulec "<file>"`, `koyomi "<file>"`, `chobo "<file>"`, `dandori "<file>"`, `geas "<spec>"` | that tool's check of the file (for rulec: completeness, overlaps, examples) |
+| `sekisho "<file>" expect <name>`, `sekisho "<file>" separate <name>` | an expectation or a separation of duties sekisho holds over every combination |
+| `rulec "<file>"`, `koyomi "<file>"`, `chobo "<file>"`, `dandori "<file>"`, `geas "<spec>"`, `sekisho "<file>"` | that tool's check of the file (for rulec: completeness, overlaps, examples) |
 | `file "<path>"` | a test file; yuen does not know what runs it |
 
 `not satisfied "<why>"` and `not verified "<why>"` waive a side, with the reason (it cannot be left
@@ -220,8 +221,9 @@ With no pair a naming is the file itself; with one pair, one thing in the file. 
 what nests: `proto` `service S [method M]`, `message M [field f]`, `enum E [value V]`, `rulec` and
 `dandori` `enum E [value V]`, `dandori` `record R [field f]`, `chobo` `transfer T [operation O]`
 (`do`, or `hold`, `post` and `void`), `openapi` and `asyncapi` `schema S
-[property p]` and `schema S [value v]`, and `asyncapi` `channel C [message M]`; a child kind comes
-only right after its parent's pair (E012).
+[property p]` and `schema S [value v]`, `asyncapi` `channel C [message M]`, and `sekisho`
+`principal P [attribute a]`, `resource R [attribute a]`, `enum E [value V]` and `action A [input i]`
+or `action A [context c]`; a child kind comes only right after its parent's pair (E012).
 
 | Tool | Files | Kinds |
 |---|---|---|
@@ -237,6 +239,7 @@ only right after its parent's pair (E012).
 | `file` | anything | none |
 | `yuen` | `.req` | `requirement` `source` |
 | `sakai` | `.ctx` | `context` `term` |
+| `sekisho` | `.gate` | `principal` (`attribute` below) `resource` (`attribute` below) `role` `workflow` `enum` (`value` below) `action` (`input` and `context` below) `policy` `expect` `separate` |
 
 - **Paths** are written in quotes, from the directory of the file the naming is written in, with
   `/` between parts; `.` and `..` fold away. An empty path, an absolute one and one that folds out
@@ -275,7 +278,7 @@ SHA-256.
 | a `file` source | the file |
 | a requirement of an OpenSpec spec | its block: its `### Requirement:` line and every line after it to the next requirement or `## ` header, the white space at its end removed, CR LF read as LF (the text OpenSpec's archive replaces) |
 | a file named by any tool | the file |
-| one thing in a file | the definition the language hands over for it: a rule's lines as `rulec fmt` writes them, a date's or claim's lines in koyomi, chobo's JSON of the unit, account or transfer (an operation's is its transfer's, with the operation and the names of the reasons it can be refused with), a claim's block in geas, a declaration's lines in dandori, a context's or term's lines in sakai, the fixed text of a `.proto` item |
+| one thing in a file | the definition the language hands over for it: a rule's lines as `rulec fmt` writes them, a date's or claim's lines in koyomi, chobo's JSON of the unit, account or transfer (an operation's is its transfer's, with the operation and the names of the reasons it can be refused with), a claim's block in geas, a declaration's lines in dandori, a context's or term's lines in sakai, a declaration's lines in sekisho, the fixed text of a `.proto` item |
 | an element of an OpenAPI or AsyncAPI document | its place (`#<JSON Pointer>`) on a line and its value as JSON (the keys in byte order, two spaces of indent), then the same for every value its `$ref`s reach, in the order of their files and pointers; an operation takes in its path's `parameters` and `servers`, a property says ` (required)` when its schema requires it, and a value of an `enum` is its place and itself |
 | a Cedar policy, action or entity type | the policy as `cedar format` lays it out, without its comments; the declaration in the Cedar schema format, in its namespace, with the common types it uses |
 | a requirement | the lines below |

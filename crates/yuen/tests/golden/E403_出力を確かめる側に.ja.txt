@@ -1,5 +1,5 @@
 エラー[E403]: tests/mutants/E403_出力を確かめる側に/支払.req:12:15: rulec "支払.rule" output 支払日 は何も確かめないので、`verified by` に書けません
     12 |   verified by rulec "支払.rule" output 支払日
-  = 確かめる側に書けるのは、geas と koyomi の主張（`claim`）、検査するツールのファイル全体（`rulec "x.rule"` なら rulec の検査）、テストのファイル（`file "…"`）のような、落ちることのあるものです。
+  = 確かめる側に書けるのは、geas と koyomi の主張（`claim`）、sekisho の期待と職務の分離（`expect`、`separate`）、検査するツールのファイル全体（`rulec "x.rule"` なら rulec の検査）、テストのファイル（`file "…"`）のような、落ちることのあるものです。
   = 満たす成果物なら `satisfied by` に書いてください。
 tests/mutants/E403_出力を確かめる側に: エラー 1 件

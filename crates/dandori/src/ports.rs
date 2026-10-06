@@ -25,52 +25,10 @@ fn parsed(root: &Path, file: &str) -> Result<(String, Program), Vec<Said>> {
     }
 }
 
-/// A line as a definition counts it: without its comment and the spaces around it, and each run
-/// of spaces outside a string as one, so that lining up the colons of a record changes nothing.
-fn plain(line: &str) -> String {
-    let mut out = String::new();
-    let (mut quoted, mut space) = (false, false);
-    let mut chars = line.trim().chars();
-    while let Some(c) = chars.next() {
-        if quoted {
-            out.push(c);
-            match c {
-                '\\' => out.extend(chars.next()),
-                '"' => quoted = false,
-                _ => {}
-            }
-            continue;
-        }
-        match c {
-            '#' => break,
-            ' ' => space = true,
-            _ => {
-                if std::mem::take(&mut space) {
-                    out.push(' ');
-                }
-                quoted = c == '"';
-                out.push(c);
-            }
-        }
-    }
-    out
-}
-
-/// The definition of what is written on the lines `from` to `to`: each line made [`plain`], and
-/// put under the line above it by its depth, two spaces a level, however deep it was indented.
+/// The definition of what is written on the lines `from` to `to` (ritsu-base's: each line without
+/// its comment and alignment, under the one above by its depth).
 fn definition(lines: &[&str], from: usize, to: usize) -> String {
-    let rows: Vec<(usize, String)> = (from..=to)
-        .filter_map(|n| {
-            let raw = lines.get(n.checked_sub(1)?)?;
-            let p = plain(raw);
-            (!p.is_empty()).then(|| (raw.len() - raw.trim_start_matches(' ').len(), p))
-        })
-        .collect();
-    let mut widths: Vec<usize> = rows.iter().map(|(w, _)| *w).collect();
-    widths.sort_unstable();
-    widths.dedup();
-    let depth = |w: usize| widths.iter().position(|x| *x == w).unwrap_or(0);
-    rows.iter().map(|(w, p)| format!("{}{p}", "  ".repeat(depth(*w)))).collect::<Vec<_>>().join("\n")
+    ritsu_base::definition::block(lines, from, to)
 }
 
 impl Engine {
@@ -186,6 +144,62 @@ impl ritsu_ports::Flows for Engine {
                     .collect()
             })
         })
+    }
+
+    /// Every call of a flow that passes `dandori check` of a task bound to an operation of a contract
+    /// (sekisho's X16): `http` on a `use openapi`, named by the operation's `operationId` (else its
+    /// method and path, as ritsu-base's reader of documents names it), and `connect` on a `use
+    /// proto`, named by the service and the method (the service from the file's package); each with
+    /// the error the task declares for a denial, the one that comes back with 403 (for Connect, the
+    /// code `permission_denied`). The references are from `root`, as the task's `.proto` and
+    /// documents are; a contract outside the root has none, and its calls are left out.
+    fn operation_calls(&self, root: &Path, file: &str, ports: &ritsu_ports::Ports) -> Result<(String, Vec<ritsu_ports::OperationCall>), Vec<Said>> {
+        let disk = ritsu_base::paths::on_disk(root, file);
+        let m = crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || Engine::model_with(&disk))?;
+        // the bindings as written: which `use` a task's operation is of, and how the task names it
+        let (_, prog) = parsed(root, file)?;
+        let dir = ritsu_base::paths::parent(file);
+        let from_root = |api: &str, kind: ApiKind| -> Option<String> {
+            let u = prog.apis.iter().find(|a| a.name.0 == api && a.kind == kind)?;
+            ritsu_base::paths::join(&dir, &u.path).ok()
+        };
+        // each document read once: what ritsu-base's reader names its operations by
+        let mut docs: std::collections::BTreeMap<String, Option<ritsu_base::openapi::Document>> = std::collections::BTreeMap::new();
+        let mut named = |rel: &str, method: &str, path: &str| -> String {
+            let doc = docs.entry(rel.to_string()).or_insert_with(|| {
+                let on_disk = ritsu_base::paths::on_disk(root, rel);
+                let text = ritsu_base::fs::read_to_string(&on_disk).ok()?;
+                let load = |p: &str| ritsu_base::fs::read_to_string(Path::new(p)).ok();
+                ritsu_base::openapi::read_with(&on_disk.to_string_lossy(), &text, &load).ok()
+            });
+            let written = format!("{} {path}", method.to_ascii_uppercase());
+            doc.as_ref().and_then(|d| d.operation(&written)).map(|o| o.name()).unwrap_or(written)
+        };
+        let mut out = Vec::new();
+        for s in m.all_stmts() {
+            let crate::model::TK::Call { callee: crate::model::Callee::Task(t), .. } = &s.kind else { continue };
+            let task = &m.tasks[*t];
+            let Some(decl) = prog.tasks.iter().find(|d| d.name.0 == task.name) else { continue };
+            let operation = match decl.binding.as_ref().map(|(b, _)| b) {
+                Some(Binding::Http { method, url, api: Some(a), .. }) => {
+                    let Some(rel) = from_root(&a.0, ApiKind::OpenApi) else { continue };
+                    let op = named(&rel, method, url);
+                    Naming::file(Tool::Openapi, rel).with("operation", op)
+                }
+                Some(Binding::Connect { api, method }) => {
+                    let Some(rel) = from_root(&api.0, ApiKind::Proto) else { continue };
+                    let Some((service, m)) = method.split_once('/') else { continue };
+                    // a service is not nested, so its name from the package is its last part
+                    let service = service.rsplit('.').next().unwrap_or(service);
+                    Naming::file(Tool::Proto, rel).with("service", service).with("method", m)
+                }
+                _ => continue,
+            };
+            let denied = task.errors.iter().find(|e| e.status == Some(403)).map(|e| e.name.clone());
+            out.push(ritsu_ports::OperationCall { line: s.line, task: task.name.clone(), operation, denied });
+        }
+        out.sort_by_key(|c| c.line);
+        Ok((m.name.clone(), out))
     }
 }
 
@@ -311,26 +325,5 @@ impl ritsu_ports::References for Engine {
         }
         out.sort_by_key(|r| r.line);
         Ok(out)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_line_is_plain_without_its_comment_and_its_alignment() {
-        assert_eq!(plain("  sku      : string   # the stock unit"), "sku : string");
-        assert_eq!(plain("agent \"a  # b\"  # c"), "agent \"a  # b\"");
-        assert_eq!(plain("jev \"say \\\"hi\\\"  #1\""), "jev \"say \\\"hi\\\"  #1\"");
-        assert_eq!(plain("   # only a comment"), "");
-    }
-
-    #[test]
-    fn a_block_keeps_its_depth_however_it_was_indented() {
-        let two = ["task t() -> k", "  jev \"q\"", "    a \"x\"", "  timeout 10 seconds"];
-        let four = ["task t() -> k", "    jev \"q\"   # asked", "", "        a \"x\"", "    timeout 10 seconds"];
-        assert_eq!(definition(&two, 1, 4), "task t() -> k\n  jev \"q\"\n    a \"x\"\n  timeout 10 seconds");
-        assert_eq!(definition(&four, 1, 5), definition(&two, 1, 4));
     }
 }

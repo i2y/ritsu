@@ -30,11 +30,17 @@ pub fn suite() -> sakai::suite::Suite {
     use ritsu_base::naming::Tool;
     use std::rc::Rc;
     let rules = Rc::new(rulec::ports::Engine::new());
+    // sekisho reads a gate with the rules, the dates, the books and the flows it names
+    let gates = Rc::new(sekisho::ports::Engine::new(
+        ritsu_ports::GatePorts { rules: rules.clone(), dates: Rc::new(koyomi::ports::Engine), books: Rc::new(chobo::ports::Engine), flows: Rc::new(dandori::ports::Engine), items: Rc::new(dandori::ports::Engine) }.into(),
+    ));
     let index = ritsu_ports::Index::new()
         .with_items(Tool::Rulec, rules.clone())
         .with_references(Tool::Rulec, rules.clone())
         .with_references(Tool::Koyomi, Rc::new(koyomi::ports::Engine))
-        .with_references(Tool::Dandori, Rc::new(dandori::ports::Engine));
+        .with_references(Tool::Dandori, Rc::new(dandori::ports::Engine))
+        .with_references(Tool::Sekisho, gates.clone())
+        .with_references(Tool::Cedar, gates);
     let mut s = sakai::suite::Suite::default();
     s.index = Rc::new(index);
     s.rules = Some(rules);

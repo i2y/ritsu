@@ -280,4 +280,47 @@ impl ritsu_ports::Maps for Engine {
         }
         Ok(crate::owners::context_of(&m, file).map(|c| m.contexts[c].name.clone()))
     }
+
+    /// What each context opens to the others, from the names its `open host service` lines list
+    /// (sekisho's X15): a service of a `.proto` of the same published language is each of its
+    /// methods; an operation of an OpenAPI document of it, by its `operationId` (or its method and
+    /// path), is that operation, open to anyone when its document says so (`security: []`, or a
+    /// requirement that asks for nothing). A channel of an AsyncAPI document, a rule's Connect
+    /// service, and a name the published language does not have (sakai's E301) are left out.
+    fn published_operations(&self, root: &Path, map: &str) -> Result<Vec<ritsu_ports::PublishedOperation>, Vec<Said>> {
+        let Some(m) = map_model(root, map)? else { return Ok(Vec::new()) };
+        let text = |f: &str| ritsu_base::fs::read_to_string(ritsu_base::paths::on_disk(root, f)).ok();
+        let mut protos: std::collections::BTreeMap<String, Option<ritsu_proto::ProtoFile>> = std::collections::BTreeMap::new();
+        let mut docs: std::collections::BTreeMap<String, Option<ritsu_base::openapi::Document>> = std::collections::BTreeMap::new();
+        let mut out = Vec::new();
+        for c in &m.contexts {
+            for p in &c.published {
+                for (listed, pos) in &p.services {
+                    let at = |operation: Naming, open_to_anyone: bool| ritsu_ports::PublishedOperation { context: c.name.clone(), operation, open_to_anyone, file: c.file.clone(), line: pos.line };
+                    for (f, _) in &p.protos {
+                        let pf = protos.entry(f.clone()).or_insert_with(|| ritsu_proto::read(f, &text(f)?).ok());
+                        if let Some(s) = pf.as_ref().and_then(|pf| pf.service(listed)) {
+                            for x in &s.methods {
+                                out.push(at(Naming::file(Tool::Proto, f.clone()).with("service", s.name.clone()).with("method", x.name.clone()), false));
+                            }
+                        }
+                    }
+                    for (kind, f, _) in &p.contracts {
+                        if *kind != crate::contracts::Kind::OpenApi {
+                            continue;
+                        }
+                        let doc = docs.entry(f.clone()).or_insert_with(|| {
+                            let disk = ritsu_base::paths::on_disk(root, f);
+                            let load = |q: &str| ritsu_base::fs::read_to_string(Path::new(q)).ok();
+                            ritsu_base::openapi::read_with(&disk.to_string_lossy(), &text(f)?, &load).ok()
+                        });
+                        if let Some(op) = doc.as_ref().and_then(|d| d.operation(listed)).filter(|op| !op.webhook) {
+                            out.push(at(Naming::file(Tool::Openapi, f.clone()).with("operation", op.name()), op.open_to_anyone()));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(out)
+    }
 }

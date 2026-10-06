@@ -10,13 +10,13 @@ use std::path::Path;
 fn reason(why: &str) -> ErrorKind {
     match why {
         "file has no kinds" => ErrorKind::NoKinds(Tool::File),
-        "value only right after enum" => ErrorKind::ChildFirst { kind: "value".into(), parent: "enum" },
+        "value only right after enum" => ErrorKind::ChildFirst { kind: "value".into(), parents: vec!["enum"] },
         "nothing under task" => ErrorKind::NothingUnder("task".into()),
         "only field under record" => ErrorKind::WrongChild { kind: "task".into(), parent: "record".into(), allowed: &["field"] },
-        "method only right after service" => ErrorKind::ChildFirst { kind: "method".into(), parent: "service" },
+        "method only right after service" => ErrorKind::ChildFirst { kind: "method".into(), parents: vec!["service"] },
         "one child at most" => ErrorKind::TooManyPairs("method".into()),
         "nothing under account" => ErrorKind::NothingUnder("account".into()),
-        "operation only right after transfer" => ErrorKind::ChildFirst { kind: "operation".into(), parent: "transfer" },
+        "operation only right after transfer" => ErrorKind::ChildFirst { kind: "operation".into(), parents: vec!["transfer"] },
         "unknown kind for koyomi" => ErrorKind::UnknownKind { tool: Tool::Koyomi, kind: "alias".into() },
         "unknown tool" => ErrorKind::UnknownTool("excel".into()),
         "absolute path" => ErrorKind::AbsolutePath("/etc/hosts".into()),
@@ -27,12 +27,15 @@ fn reason(why: &str) -> ErrorKind {
         "a tool written as a string" => ErrorKind::QuotedTool("koyomi".into()),
         "a kind without a name" => ErrorKind::MissingName("output".into()),
         "an empty path" => ErrorKind::EmptyPath,
-        "property only right after schema" => ErrorKind::ChildFirst { kind: "property".into(), parent: "schema" },
+        "property only right after schema" => ErrorKind::ChildFirst { kind: "property".into(), parents: vec!["schema"] },
         "nothing under operation" => ErrorKind::NothingUnder("operation".into()),
         "unknown kind for openapi" => ErrorKind::UnknownKind { tool: Tool::Openapi, kind: "enum".into() },
         "only message under channel" => ErrorKind::WrongChild { kind: "operation".into(), parent: "channel".into(), allowed: &["message"] },
         "one child at most (value)" => ErrorKind::TooManyPairs("value".into()),
         "cedar has no nested kinds" => ErrorKind::NoNesting(Tool::Cedar),
+        "attribute only right after principal or resource" => ErrorKind::ChildFirst { kind: "attribute".into(), parents: vec!["principal", "resource"] },
+        "nothing under policy" => ErrorKind::NothingUnder("policy".into()),
+        "only input or context under action" => ErrorKind::WrongChild { kind: "role".into(), parent: "action".into(), allowed: &["input", "context"] },
         other => panic!("the reason `{other}` is new to this test; say which error it is"),
     }
 }
@@ -71,7 +74,7 @@ fn every_line_of_the_table_gives_its_json_or_is_refused_for_its_reason() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    assert_eq!((ok, refused), (41, 25), "the table has 41 namings and 25 refusals");
+    assert_eq!((ok, refused), (47, 28), "the table has 47 namings and 28 refusals");
 }
 
 #[test]
@@ -98,14 +101,14 @@ fn where_an_error_is_and_what_it_says() {
     assert_eq!(e.text().en, "`alias` is not a kind of koyomi; the kinds of koyomi are input, date, claim and source");
     assert_eq!(e.text().ja, "koyomi に `alias` という種類はありません。koyomi の種類は input、date、claim、source です");
     let e = naming::parse_one("excel \"a.xlsx\"").unwrap_err();
-    assert!(e.text().en.starts_with("`excel` is not a tool; a naming starts with one of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen, sakai"), "{}", e.text().en);
+    assert!(e.text().en.starts_with("`excel` is not a tool; a naming starts with one of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen, sakai, sekisho"), "{}", e.text().en);
     assert_eq!(naming::parse_one("").unwrap_err().kind, ErrorKind::Missing);
     assert_eq!(naming::parse_one("rulec").unwrap_err().kind, ErrorKind::MissingPath);
     assert_eq!(naming::parse_one("rulec x.rule").unwrap_err().kind, ErrorKind::UnquotedPath("x.rule".into()));
     assert_eq!(naming::parse_one("rulec \"x.rule\" table t input i").unwrap_err().kind, ErrorKind::NothingUnder("table".into()));
     assert_eq!(
         naming::parse_one("proto \"x.proto\" service S field f").unwrap_err().kind,
-        ErrorKind::ChildFirst { kind: "field".into(), parent: "message" }
+        ErrorKind::ChildFirst { kind: "field".into(), parents: vec!["message"] }
     );
     assert_eq!(
         naming::parse_one("proto \"x.proto\" service S enum E").unwrap_err().kind,
@@ -179,6 +182,19 @@ fn the_standard_formats_and_their_kinds() {
     }
     assert_eq!(Tool::Cedar.extensions(), &[".cedar", ".cedarschema", ".cedarschema.json"]);
     assert_eq!(Tool::Openapi.extensions(), Tool::Asyncapi.extensions());
-    assert_eq!(Tool::from_word("sekisho"), None, "sekisho is not a tool of a naming yet");
-    assert!(!Tool::ALL.contains(&Tool::Sekisho));
+    // sekisho's things (its DESIGN 8.2): an attribute under a principal's or a resource's type, an
+    // input and a computed value under an action
+    assert_eq!(Tool::from_word("sekisho"), Some(Tool::Sekisho));
+    assert_eq!(Tool::Sekisho.extensions(), &[".gate"]);
+    let a = naming::parse_one("sekisho \"refunds.gate\" resource Order attribute status").unwrap();
+    assert!(naming::parse_one("sekisho \"refunds.gate\" resource Order").unwrap().contains(&a));
+    assert_eq!(
+        naming::parse_one("sekisho \"refunds.gate\" attribute status").unwrap_err().kind,
+        ErrorKind::ChildFirst { kind: "attribute".into(), parents: vec!["principal", "resource"] }
+    );
+    assert_eq!(
+        naming::parse_one("sekisho \"refunds.gate\" attribute status").unwrap_err().text().en,
+        "`attribute` comes only right after `principal` or `resource`"
+    );
+    assert_eq!(naming::parse_one("sekisho \"refunds.gate\" attribute status").unwrap_err().text().ja, "`attribute` は `principal` か `resource` のすぐあとにしか書けません");
 }

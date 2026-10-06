@@ -13,10 +13,10 @@ The Cedar `sekisho gen --target cedar --lang en` writes from it:
 
 | File | SHA-256 (first 16 digits) |
 |---|---|
-| `cedar/refunds.cedar` | `952a822487ce2b19` |
-| `cedar/refunds.cedarschema` | `9088881fef86f054` |
-| `cedar/refunds.cedarschema.json` | `1618cf868c7fce1f` |
-| `cedar/refunds.policies.json` | `ee2b1291ba49c1a0` |
+| `cedar/refunds.cedar` | `<sha256>` |
+| `cedar/refunds.cedarschema` | `<sha256>` |
+| `cedar/refunds.cedarschema.json` | `<sha256>` |
+| `cedar/refunds.policies.json` | `<sha256>` |
 
 > [!NOTE]
 > `sekisho check` walked all 1,078 combinations of the 3 actions, and decided each as Cedar does. Each of the 3 expectations holds. The separation holds too. Each of the 3 roles that write `can` is allowed the actions its `can` lists, and no other.
@@ -531,6 +531,14 @@ Refunds a returned order once the item is back at the warehouse
 | action | Allowed |
 |---|---|
 | `refund_order` | sometimes (4 of 32 combinations allowed) |
+
+#### What the flow calls
+
+Each operation a task of the flow calls, the action that guards it, and whether the workflow is allowed that action: what `ritsu check` holds across the languages.
+
+| Line | Task | Operation | Guarded by | Allowed | Error on a denial |
+|---|---|---|---|---|---|
+| 22 | `refund_order` | `openapi "api/orders.json" operation refundOrder` | `refund_order` | sometimes | `denied` |
 
 ## Operations guarded
 

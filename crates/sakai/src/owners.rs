@@ -111,7 +111,36 @@ pub fn scope(m: &Model) -> Vec<InScope> {
             out.push((p, k.tool(), Some((k, true))));
         }
     }
+    // Cedar written by hand is an artifact where an entry names it (`cedar "…"`): a `.cedar` is
+    // told from a test's fixture or a generated file by nothing in its name or its text
+    for p in named_cedar(m) {
+        if in_scope(m, &p) && ritsu_base::fs::is_file(paths::on_disk(&m.root, &p)) && !out.iter().any(|(q, _, _)| *q == p) {
+            out.push((p, Tool::Cedar, None));
+        }
+    }
     out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
+/// The files of Cedar's the entries of `owns`, `layer` and `shared kernel with` name (`cedar "…"`),
+/// from the root (sekisho's DESIGN 1.3, 8.5).
+pub fn named_cedar(m: &Model) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for c in &m.contexts {
+        let mut entries: Vec<&Own> = c.owns.iter().collect();
+        for r in &c.rels {
+            match &r.kind {
+                crate::model::RelK::Kernel(items) => entries.extend(items.iter()),
+                crate::model::RelK::Upstream { layer, .. } => entries.extend(layer.iter()),
+                _ => {}
+            }
+        }
+        for o in entries {
+            if o.tool == Some(Tool::Cedar) && !out.contains(&o.path) {
+                out.push(o.path.clone());
+            }
+        }
+    }
     out
 }
 
@@ -179,8 +208,8 @@ pub fn own(m: &Model) -> (Vec<Artifact>, Vec<Diag>) {
                     diag::at("W101", &c.file, o.pos.line, o.pos.col, tr!("{t} は成果物を一つも含みません", "The entry {t} holds no artifact"))
                         .source(&c.src)
                         .note(tr!(
-                            "パスの書き誤りかもしれません。成果物は、.rule、.flow、.cal、.book、.geas、.proto のファイル、OpenAPI と AsyncAPI の文書、地図の `code` に書いた言語の、その置き場所の下のコードです。",
-                            "The path may be mistyped. The artifacts are the .rule, .flow, .cal, .book, .geas and .proto files, the OpenAPI and AsyncAPI documents, and the code of the languages the map's `code` lines name, under the places they give."
+                            "パスの書き誤りかもしれません。成果物は、.rule、.flow、.cal、.book、.geas、.gate、.proto のファイル、OpenAPI と AsyncAPI の文書、`cedar \"…\"` と書いた Cedar のファイル、地図の `code` に書いた言語の、その置き場所の下のコードです。",
+                            "The path may be mistyped. The artifacts are the .rule, .flow, .cal, .book, .geas, .gate and .proto files, the OpenAPI and AsyncAPI documents, the files of Cedar written as `cedar \"…\"`, and the code of the languages the map's `code` lines name, under the places they give."
                         )),
                 );
             }

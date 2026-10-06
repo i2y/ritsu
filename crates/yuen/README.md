@@ -13,7 +13,8 @@ looks again.
 yuen is one of the seven languages of [ritsu](https://github.com/i2y/ritsu), and reads what the other languages
 hold through them, in the same process: the tables of a rulec rule, the dates and claims of a
 koyomi calendar, the accounts and transfers of a chobo book, the claims of a geas spec, the tasks of
-a dandori workflow, the terms of a sakai map, and the services and messages of a `.proto`. It reads
+a dandori workflow, the terms of a sakai map, the policies and expectations of a sekisho gate, and
+the services and messages of a `.proto`. It reads
 the operations and schemas of OpenAPI and AsyncAPI documents and the policies and actions of
 [Cedar](https://www.cedarpolicy.com/) itself, an element at a time, and the requirements of an
 [OpenSpec](https://github.com/Fission-AI/OpenSpec) spec as sources, a requirement at a time.
@@ -249,6 +250,12 @@ error[E303]: tests/mutants/E303_element_changed/refunds.req:21:3: openapi "api/o
   = Once a person has looked: yuen review tests/mutants/E303_element_changed --root tests/mutants/E303_element_changed --at tests/mutants/E303_element_changed/refunds.req:21 --by <role>
 tests/mutants/E303_element_changed: 2 errors
 ```
+
+A sekisho gate is named the same way, through sekisho: a policy meets a requirement
+(`satisfied by sekisho "refunds.gate" policy clerks_refund`), and an expectation or a separation of
+duties, which sekisho holds over every combination, checks it
+(`verified by sekisho "refunds.gate" expect clerks_who_are_not_suspended_refund`). The end is the
+declaration's lines, so a change to another policy of the gate stops neither link.
 
 ## What it checks, and what it does not
 

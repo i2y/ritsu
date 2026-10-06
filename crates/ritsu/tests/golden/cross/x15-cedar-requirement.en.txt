@@ -1,0 +1,12 @@
+orders/refunds.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations
+error[yuen E301]: orders.req:10:3: No one has looked at the link from staff_look to cedar "orders/policies/orders.cedar" policy staff_look yet
+    10 |   satisfied by cedar "orders/policies/orders.cedar" policy staff_look
+  = Once a person has read both ends and the link holds, `yuen review` writes who looked, when, and the hashes of both ends under the link.
+  = Once a person has looked: yuen review . --root . --at orders.req:10 --by <role>
+error[yuen E304]: orders.req:11:3: This waiver has not been approved yet
+    11 |   not verified "Looked at by hand"
+  = A waiver is a decision too: once the owner has read the reason and approves it, `yuen review` writes who approved it, when, and the requirement's hash under it.
+  = Once a person has looked: yuen review . --root . --at orders.req:11 --by <role>
+orders.req: 2 errors
+shop.ctx: ok — 1 context, 0 relationships; 2 artifacts, each in one context; no crossing to check
+ritsu check: 4 files (sekisho 1, yuen 1, sakai 2): 1 fail (2 errors); borders between the languages: 2 checked, 0 undecided

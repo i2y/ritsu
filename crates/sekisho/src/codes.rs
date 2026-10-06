@@ -59,6 +59,15 @@ const STAFF_JA: (&str, &[u8]) = ("職員.gate", "gate 職員(staff) v1\nnamespac
 const CLERKS_JA: (&str, &[u8]) = ("店員.gate", "gate 店員(clerks) v1\nnamespace Shop\n\nrole 係(clerk)\n".as_bytes());
 const STAFF_ELSEWHERE: (&str, &[u8]) = ("職員.gate", "gate 職員(staff) v1\nnamespace Staff\n\nrole 係(clerk)\n".as_bytes());
 
+/// A document of loans whose credit score is marked secret, and the gates of W910 that read it.
+const LOANS: (&str, &[u8]) = (
+    "loans.json",
+    br#"{"openapi": "3.1.0", "info": {"title": "Loans", "version": "1"}, "paths": {"/loans": {"post": {"operationId": "openLoan", "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "required": ["credit_score"], "properties": {"credit_score": {"type": "integer", "minimum": 0, "maximum": 999, "x-data-classification": {"category": "PII", "sensitivity": "restricted"}}}}}}}, "responses": {"201": {"description": "Opened"}}}}}}
+"#,
+);
+const W910_EN: &str = "gate loans v1\n\nuse openapi loans from \"loans.json\"\n\nrole officer\n\nprincipal User\n  roles officer\n\nresource Loan\n\naction open_loan\n  guards loans openLoan\n  principal User\n  resource Loan\n  input\n    credit_score : number  range >=0 <=999\n\npermit officers_open_loans_for_good_scores\n  principal in officer\n  action open_loan\n  when credit_score >= 600\n";
+const W910_JA: &str = "gate 融資(loans) v1\n\nuse openapi 融資 from \"loans.json\"\n\nrole 担当者(officer)\n\nprincipal 職員(User)\n  roles 担当者\n\nresource 融資(Loan)\n\naction 融資を始める(open_loan)\n  guards 融資 openLoan\n  principal 職員\n  resource 融資\n  input\n    信用スコア(credit_score) : number  range >=0 <=999\n\npermit 担当者はスコアがよければ融資できる(officers_open_loans_for_good_scores)\n  principal in 担当者\n  action 融資を始める\n  when 信用スコア >= 600\n";
+
 /// An OpenAPI document with no operations, for an example that names one.
 const SHOP: (&str, &[u8]) = ("shop.json", b"{\"openapi\": \"3.1.0\", \"info\": {\"title\": \"shop\", \"version\": \"1\"}, \"paths\": {}}\n");
 
@@ -301,8 +310,8 @@ pub fn ledger() -> Ledger {
             "E201",
             tr!("`use` のファイルが検査を通らないか、読めないか、ルートの外にあります", "A file a `use` reads does not pass its language's check, cannot be read, or is outside the root"),
             tr!(
-                "`use rule` の規則が rulec の、`use dates` の日付のファイルが koyomi の検査を通らないか、読めないとき（その言語の言うことが注に出ます）。`use gate` のファイルが sekisho の検査を通らないとき、読めないとき、`use gate` が輪になっているときも出ます。`use openapi`・`use proto`・`use asyncapi`・`use book` のファイルがルートの外にあるときも出ます（action が守る操作は、ルートからのパスで参照するため）。",
-                "A rule of a `use rule` does not pass rulec's check, or a dates file of a `use dates` koyomi's, or it cannot be read (the note says what the language says); or a file of a `use gate` does not pass sekisho's check, cannot be read, or the `use gate` lines go round in a circle; or the file of a `use openapi`, `use proto`, `use asyncapi` or `use book` is outside the root (an operation an action guards is named by a reference whose path is from the root)."
+                "`use rule` の規則が rulec の、`use dates` の日付のファイルが koyomi の検査を通らないか、読めないとき（その言語の言うことが注に出ます）。`use gate` のファイルが sekisho の検査を通らないとき、読めないとき、`use gate` が輪になっているときも出ます。`use` のファイルがルートの外にあるときも出ます。gate が読むファイルは、ルートからのパスで参照するためです（action が守る操作、生成する Cedar の `@doc` に書く規則と日付とカレンダー、ほかの言語からの参照）。",
+                "A rule of a `use rule` does not pass rulec's check, or a dates file of a `use dates` koyomi's, or it cannot be read (the note says what the language says); or a file of a `use gate` does not pass sekisho's check, cannot be read, or the `use gate` lines go round in a circle; or the file of a `use` is outside the root. A file a gate reads is named by a reference whose path is from the root: the operations its actions guard, the rules, dates and calendars the `@doc` of the generated Cedar names, and what the other languages name of it."
             ),
             tr!(
                 "そのファイルを、その言語の検査が通るように直してください。ルートの外にあるファイルなら、そのファイルを含むディレクトリを `--root` でルートにしてください。",
@@ -528,6 +537,39 @@ pub fn ledger() -> Ledger {
             x.repro_ja = Some(deep_roles(true));
             x
         },
+        // ── Security (ritsu's DESIGN 16) ──
+        e(
+            "W901",
+            tr!("鍵の形の値が書かれています", "A value in the shape of a key is written"),
+            tr!(
+                "`.gate` のどこか（文字列でもコメントでも）に、プロバイダーが形を決めている鍵の形の値（AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、Slack の Incoming Webhook の URL、PEM の秘密鍵）があるとき。診断には鍵の種類と、接頭辞と、長さだけを出し、鍵そのものも、その行も出しません。",
+                "Somewhere in a `.gate`, in a string or a comment, there is a value in a shape its provider fixes for a key: an AWS access key ID, a key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a Slack incoming webhook URL, a PEM private key. The diagnostic gives the kind of key, its prefix and its length, and never the key nor its line."
+            ),
+            tr!(
+                "鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください。本物の鍵なら、まずプロバイダーで無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。",
+                "Keep the key where the code runs (an environment variable, the platform's connection or secret store) and read it from there. If it is real, revoke it with its provider first: taking it out of the file leaves it in the history of the repository. If it is a value for tests, write `ritsu: test secret` in a comment on the same line."
+            ),
+            concat!("gate maps v1\n# the maps API key of the staging site: AIzaSyD-ritsu-fake-", "key-for-tests-000000\n"),
+            concat!("gate 地図(maps) v1\n# 検証用のサイトの地図の API キー: AIzaSyD-ritsu-fake-", "key-for-tests-000000\n"),
+            &[],
+        ),
+        with_ja(
+            Entry::new(
+                "W910",
+                tr!("契約が秘密と印を付けた値を、ポリシーが読みます", "A policy reads a value the contract marks secret"),
+                tr!(
+                    "ポリシーが読む `input` が、守る操作の契約で秘密と印を付けた引数かフィールド（OpenAPI のスキーマの `x-data-classification`・`x-sensitive-data`・`format: password`、`.proto` の `debug_redact`）のとき。ポリシーが読む input の値は、Cedar に尋ねるリクエストに入り、判断の記録（生成したコードが返す答え、Verified Permissions のログ）に残ります。計算した値の入力にだけ使う input は、Cedar に渡らないので言いません。",
+                    "An `input` a policy reads is a parameter or a field the contract of the operation marks secret (`x-data-classification`, `x-sensitive-data` or `format: password` on an OpenAPI schema, `debug_redact` in a `.proto`). An input a policy reads goes into the request Cedar is asked, and stays in the record of the decision (the answer the generated code gives, Verified Permissions' logs). An input only a computed value reads does not go to Cedar, and is not told."
+                ),
+                tr!(
+                    "ポリシーが値そのものを読まずに済むよう、規則か日付で計算した値（`context`）にして渡すか、ポリシーの条件から外してください。",
+                    "Give the policies what they need of it as a value a rule or a date computes (`context`), or take it out of the policies' conditions."
+                ),
+                Repro::File { body: W910_EN, beside: &[LOANS] },
+                &["W901"],
+            ),
+            Repro::File { body: W910_JA, beside: &[LOANS] },
+        ),
     ];
     // the codes of the borders, the contracts and the checks of every combination, with their
     // examples, in place of the entries written for later; a code not written here comes after the

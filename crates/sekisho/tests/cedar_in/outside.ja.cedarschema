@@ -1,0 +1,44 @@
+// テストのために手で書いたスキーマ。図書館の文書を読む、印刷する、保管に回す。
+namespace Library {
+  entity Role in [Role];
+
+  @doc("図書館の利用者")
+  entity User in [Role] = {
+    @doc("一度に印刷してよいページ数")
+    limit: Long,
+    suspended: Bool
+  };
+
+  @doc("図書館の文書")
+  entity Doc = {
+    title: String,
+    pages: Long,
+    owner: User
+  };
+
+  @doc("文書を読む")
+  @guards("openapi \"api/docs.json\" operation readDoc")
+  action "read" appliesTo {
+    principal: [User],
+    resource: [Doc],
+    context: {}
+  };
+
+  @doc("文書を部数を決めて印刷する")
+  @guards("openapi \"api/docs.json\" operation printDoc")
+  action "print" appliesTo {
+    principal: [User],
+    resource: [Doc],
+    context: {
+      copies: Long
+    }
+  };
+
+  @doc("文書を保管に回す")
+  @guards("openapi \"api/docs.json\" operation archiveDoc")
+  action "archive" appliesTo {
+    principal: [User],
+    resource: [Doc],
+    context: {}
+  };
+}

@@ -1,0 +1,7 @@
+payments/charges.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations
+shop.ctx: ok — 2 contexts, 0 relationships; 3 artifacts, each in one context; no crossing to check
+warning[ritsu W907]: contexts/orders.ctx:10: Orders opens 2 operations to the other contexts, and no action guards any of them
+    10 |   open host service getOrder, refundOrder
+  = The operations it opens: openapi "orders/api/orders.json" operation getOrder and openapi "orders/api/orders.json" operation refundOrder (the map shop.ctx).
+  = Orders has written no authorization with sekisho yet: what someone who has signed in may do is written nowhere ritsu can check. Write a .gate of Orders, and guard each operation it opens with an action.
+ritsu check: 4 files (sekisho 1, sakai 3): all pass (1 warning); borders between the languages: 3 checked, 2 undecided

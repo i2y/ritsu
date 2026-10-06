@@ -25,14 +25,16 @@ use std::collections::BTreeMap;
 /// A contract a `use` line reads.
 enum Contract {
     Doc(Document),
-    Proto(ritsu_proto::ProtoFile),
+    /// The `.proto`, and it with the files it imports (for the marks of a secret its fields carry by
+    /// a custom option, ritsu's DESIGN 16.6).
+    Proto(ritsu_proto::ProtoFile, ritsu_proto::Protos),
     Book(ritsu_ports::BookFacts),
 }
 
 /// One operation a `guards` line finds.
 enum Found<'a> {
     Op(&'a openapi::Operation),
-    Method { file: &'a ritsu_proto::ProtoFile, method: &'a ritsu_proto::Method },
+    Method { file: &'a ritsu_proto::ProtoFile, method: &'a ritsu_proto::Method, rel: &'a str, protos: &'a ritsu_proto::Protos },
     Transfer,
 }
 
@@ -46,12 +48,18 @@ fn pairs(items: &[(&str, &str)]) -> String {
     items.iter().map(|(k, n)| format!("{k} {}", word_or_quote(n))).collect::<Vec<_>>().join(" ")
 }
 
+/// How the root is found, for a file outside it: `named` says what is named from the root.
+pub(crate) fn outside_note(named: Text) -> Text {
+    tr!(
+        "{}ルートは、最初に渡したパスの上で .git を持つ一番近いディレクトリです（無ければ、渡したファイルのあるディレクトリ。--root で替えられます）。",
+        "{} The root is the nearest directory above the first path given that has a .git (else the directory of the file given); --root changes it.",
+        named.ja; named.en
+    )
+}
+
 /// How the root is found, for a contract outside it.
 fn root_note() -> Text {
-    tr!(
-        "action が守る操作は、ルートからのパスで参照します。ルートは、最初に渡したパスの上で .git を持つ一番近いディレクトリです（無ければ、渡したファイルのあるディレクトリ。--root で替えられます）。",
-        "An operation an action guards is named by a reference whose path is from the root. The root is the nearest directory above the first path given that has a .git (else the directory of the file given); --root changes it."
-    )
+    outside_note(tr!("action が守る操作は、ルートからのパスで参照します。", "An operation an action guards is named by a reference whose path is from the root."))
 }
 
 /// The checks of the contracts an action guards. `books` is chobo, when it is joined. What they
@@ -104,7 +112,16 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> (Vec<Diag>, Ve
                 };
                 match ritsu_proto::read(&path, &text) {
                     Ok(pf) => {
-                        contracts.insert(ui, (Contract::Proto(pf), rel));
+                        // with what it imports, from its own directory and from the root
+                        let roots = [ritsu_base::paths::parent(&rel), ".".to_string()];
+                        let ps = ritsu_proto::load_from(&g.root, &rel, &roots, &[]).map(|(ps, _)| ps).unwrap_or_else(|_| {
+                            let mut ps = ritsu_proto::Protos::default();
+                            let mut one = pf.clone();
+                            one.path = rel.clone();
+                            ps.add(one);
+                            ps
+                        });
+                        contracts.insert(ui, (Contract::Proto(pf, ps), rel));
                     }
                     Err(e) => diags.push(unreadable(tr!("{}:{}: {}", "{}:{}: {}", e.line, e.col, e.message("sekisho").ja; e.line, e.col, e.message("sekisho").en))),
                 }
@@ -147,13 +164,13 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> (Vec<Diag>, Ve
                         }
                     }
                 }
-                Contract::Proto(pf) => {
+                Contract::Proto(pf, ps) => {
                     let (svc, m) = gd.operation.rsplit_once('/').unwrap_or(("", gd.operation.as_str()));
                     let svc_short = svc.rsplit('.').next().unwrap_or(svc);
                     let hit = pf.services.iter().find(|s| s.name == svc_short || pf.full(&s.name) == svc).and_then(|s| s.methods.iter().find(|x| x.name == m).map(|x| (s, x)));
                     match hit {
                         // a service by its name in the file's package
-                        Some((s, x)) => (Name::file(Tool::Proto, rel.clone()).with("service", s.name.clone()).with("method", x.name.clone()), Found::Method { file: pf, method: x }),
+                        Some((s, x)) => (Name::file(Tool::Proto, rel.clone()).with("service", s.name.clone()).with("method", x.name.clone()), Found::Method { file: pf, method: x, rel, protos: ps }),
                         None => {
                             let names: Vec<Text> = pf.services.iter().flat_map(|s| s.methods.iter().map(move |x| Text::same(format!("{}/{}", s.name, x.name)))).take(12).collect();
                             let l = Text::list(&names);
@@ -199,7 +216,7 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> (Vec<Diag>, Ve
                         let listed: Vec<Text> = op.params.iter().filter(|p| matches!(p.place, Place::Path | Place::Query | Place::Channel)).map(|p| Text::same(p.name.clone())).collect();
                         (ok, listed)
                     }
-                    Found::Method { file, method } => {
+                    Found::Method { file, method, .. } => {
                         let msg = message_of(file, &method.input);
                         let ok = msg.is_some_and(|m| m.fields.iter().any(|x| x.name == *arg || x.json() == *arg));
                         (ok, msg.map(|m| m.fields.iter().map(|x| Text::same(x.name.clone())).collect()).unwrap_or_default())
@@ -216,12 +233,18 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> (Vec<Diag>, Ve
                 }
             }
         }
-        // each input: a parameter or a field of the body of every operation, of its type and range
+        // each input: a parameter or a field of the body of every operation, of its type and range;
+        // and one a policy reads, which goes into the request Cedar is asked, not a secret (W910)
         for inp in &a.inputs {
             for (reference, f) in &found {
                 if let Some(d) = input_fits(g, inp, reference, f) {
                     diags.push(d);
                 }
+            }
+            if read_by_a_policy(g, ai, inp)
+                && let Some(d) = found.iter().find_map(|(reference, f)| secret_input(g, inp, reference, f))
+            {
+                diags.push(d);
             }
         }
     }
@@ -267,6 +290,61 @@ fn decimal(s: &str) -> Option<ritsu_units::Rat> {
     ritsu_units::Rat::checked_new(if neg { -n } else { n }, 10i128.checked_pow(f.len() as u32)?)
 }
 
+/// Whether a policy on the action reads the input (by its name or its alias): what a policy reads
+/// goes into Cedar's `context` (DESIGN 5.1); an input only a computed value reads stays in the code
+/// that computes it.
+fn read_by_a_policy(g: &Gate, action: usize, inp: &Field) -> bool {
+    fn reads(e: &Expr, inp: &Field) -> bool {
+        match e {
+            Expr::Not(x) => reads(x, inp),
+            Expr::And(xs) | Expr::Or(xs) => xs.iter().any(|x| reads(x, inp)),
+            Expr::Atom(Atom::True(p) | Atom::Is(p, _) | Atom::Cmp(p, _, _)) => matches!(p, Path::Value(n) if inp.named.is(n)),
+            Expr::Atom(Atom::Eq(p, q)) => [p, q].iter().any(|p| matches!(p, Path::Value(n) if inp.named.is(n))),
+            Expr::Atom(_) => false,
+        }
+    }
+    g.policies_on(action).into_iter().any(|p| g.policies[p].conds.iter().any(|c| reads(&c.expr, inp)))
+}
+
+/// W910: an input a policy reads is what the contract of the operation marks secret: its value goes
+/// into the request Cedar is asked, and stays in the record of the decision.
+fn secret_input(g: &Gate, inp: &Field, reference: &Name, f: &Found) -> Option<Diag> {
+    let name = &inp.named.name;
+    let (what, mark): (Text, String) = match f {
+        Found::Transfer => return None,
+        Found::Op(op) => {
+            let (what, schema) = match (op.param(name).or_else(|| op.param(&inp.named.alias)), op.field(name).or_else(|| op.field(&inp.named.alias))) {
+                (Some(p), _) => (tr!("引数", "a parameter"), &p.schema),
+                (None, Some(x)) => (tr!("本文のフィールド", "a field of the body"), &x.schema),
+                (None, None) => return None,
+            };
+            let m = schema.mark.as_ref()?;
+            (what, if m.detail.is_empty() { format!("`{}`", m.keyword) } else { format!("`{}`: {}", m.keyword, m.detail) })
+        }
+        Found::Method { file, method, rel, protos } => {
+            let msg = message_of(file, &method.input)?;
+            let fld = msg.fields.iter().find(|x| x.name == *name || x.json() == *name || x.name == inp.named.alias)?;
+            let mark = match protos.redaction(rel, fld)? {
+                ritsu_proto::Redaction::Direct { line } => format!("`debug_redact = true`, {rel}:{line}"),
+                ritsu_proto::Redaction::ByOption { option, value, file, line } => format!("`{option} = {value}`, {file}:{line}"),
+            };
+            (tr!("リクエストのフィールド", "a field of the request"), mark)
+        }
+    };
+    let r = reference.text();
+    Some(
+        at("W910", g, inp.named.line, tr!("input `{name}` は {r} の{}で、契約が秘密と印を付けています（{mark}）", "The input `{name}` is {} of {r}, which its contract marks secret ({mark})", what.ja; what.en))
+            .note(tr!(
+                "ポリシーが読む input の値は、Cedar に尋ねるリクエストに入り、判断の記録（生成したコードが返す答え、Verified Permissions のログ）に残ります。秘密の値は、その記録を読めるすべての人に渡ります。",
+                "An input a policy reads goes into the request Cedar is asked, and stays in the record of the decision (the answer the generated code gives, Verified Permissions' logs): a secret there reaches everyone who can read them."
+            ))
+            .note(tr!(
+                "ポリシーが値そのものを読まずに済むよう、規則か日付で計算した値（`context`）にして渡すか、ポリシーの条件から外してください。",
+                "Give the policies what they need of it as a value a rule or a date computes (`context`), or take it out of the policies' conditions."
+            )),
+    )
+}
+
 /// What is wrong with an input against one operation (E203), if anything. `reference` is the
 /// operation's.
 fn input_fits(g: &Gate, inp: &Field, reference: &Name, f: &Found) -> Option<Diag> {
@@ -292,7 +370,7 @@ fn input_fits(g: &Gate, inp: &Field, reference: &Name, f: &Found) -> Option<Diag
             }
             schema_fits(g, inp, schema).map(e203)
         }
-        Found::Method { file, method } => {
+        Found::Method { file, method, .. } => {
             let msg = message_of(file, &method.input)?;
             let Some(fld) = msg.fields.iter().find(|x| x.name == *name || x.json() == *name || x.name == inp.named.alias) else {
                 return Some(at("E203", g, line, tr!("input `{name}` は {r} のリクエストのフィールドにありません", "The input `{name}` is not a field of the request of {r}")));

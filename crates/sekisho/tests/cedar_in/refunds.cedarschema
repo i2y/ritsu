@@ -1,0 +1,60 @@
+// The schema of refunds.cedar, copied the same way: each action's @guards names the operation it guards.
+@doc("Who may look at an order of the shop, refund it, and export the record of refunds. A sketch of a shop\'s own terms, written as sekisho\'s example")
+namespace Shop {
+  @doc("A customer of the shop, signed in")
+  entity Customer;
+
+  @doc("An order of the shop")
+  entity Order = {
+    customer: Customer,
+    @doc("One of paid, shipped, returned, refunded")
+    status: String
+  };
+
+  @doc("The record of every refund, exported as one document")
+  entity RefundRecord;
+
+  @doc("The roles: clerk (Answers customers, and refunds small amounts), manager (Refunds what a clerk cannot, and after the refund period on a business day; includes clerk), auditor (Checks the refunds after the fact)")
+  entity Role in [Role];
+
+  @doc("A member of the shop\'s staff, signed in")
+  entity User in [Role] = {
+    suspended: Bool
+  };
+
+  @doc("The workflows, calling as themselves: returns (Refunds a returned order once the item is back at the warehouse; dandori \"flows/returns.flow\")")
+  entity Workflow;
+
+  @doc("Export the record of refunds")
+  @guards("openapi \"api/orders.json\" operation exportRefunds")
+  action "export_refunds" appliesTo {
+    principal: [User],
+    resource: [RefundRecord],
+    context: {}
+  };
+
+  @doc("Refund an order, in part or in whole")
+  @guards("openapi \"api/orders.json\" operation refundOrder")
+  action "refund_order" appliesTo {
+    principal: [User, Workflow],
+    resource: [Order],
+    context: {
+      @doc("An argument of the operation: money[GBP, incl_tax], 1 to 10000")
+      amount: Long,
+      @doc("today is open in koyomi \"calendars/england_and_wales.cal\", the day changing at +00:00. Computed by the generated code, never taken from the caller")
+      business_day: Bool,
+      @doc("today <= koyomi \"dates/refund_terms.cal\" date last_day, from resource.paid_on, the day changing at +00:00. Computed by the generated code, never taken from the caller")
+      in_period: Bool,
+      @doc("rulec \"rules/refund_limit.rule\" output band, from amount and principal.refund_limit: within_limit or over_limit. Only for a principal of type User. Computed by the generated code, never taken from the caller")
+      refund_band?: String
+    }
+  };
+
+  @doc("Look at an order")
+  @guards("openapi \"api/orders.json\" operation getOrder")
+  action "view_order" appliesTo {
+    principal: [User, Customer],
+    resource: [Order],
+    context: {}
+  };
+}

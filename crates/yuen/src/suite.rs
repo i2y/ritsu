@@ -1,6 +1,6 @@
-//! The languages yuen reads through ritsu's ports (ritsu's DESIGN 3.2, yuen's DESIGN 3.1): what
-//! a file of rulec, koyomi, chobo, geas, dandori or sakai holds and the definition of each thing
-//! in it, looked up in the project's index (`Index`, which keeps every language's `Items`), the
+//! The languages yuen reads through ritsu's ports (ritsu's DESIGN 3.2, yuen's DESIGN 3.1): what a
+//! file of rulec, koyomi, chobo, geas, dandori, sekisho or sakai holds and the definition of each
+//! thing in it, looked up in the project's index (`Index`, which keeps every language's `Items`), the
 //! sources a rule or a calendar pins (`Sources`), the claims of a geas spec, the record of what
 //! they ran and what a diff comes to for them (`Claims`), and the aliases of a rule's and a dates
 //! file's names (`Rules`, `Dates`), for when a link is written with one.
@@ -39,7 +39,7 @@ struct Asked {
 
 impl Suite {
     /// The languages whose things yuen reads through the index, by their tool words.
-    pub const READ: [Tool; 6] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Dandori, Tool::Sakai];
+    pub const READ: [Tool; 7] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Dandori, Tool::Sekisho, Tool::Sakai];
 
     /// Whether yuen is handed what it needs to read the files of `tool`.
     pub fn reads(&self, tool: Tool) -> bool {

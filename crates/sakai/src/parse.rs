@@ -449,11 +449,11 @@ impl<'a> P<'a> {
                     } else {
                         contract = None;
                         match Tool::from_word(&w) {
-                            Some(Tool::Yuen | Tool::Sakai | Tool::Cedar) => {
+                            Some(Tool::Yuen | Tool::Sakai) => {
                                 self.push("E002", l, col, tr!("ここに `{w}` のファイルは書けません", "A `{w}` file does not go here"));
                                 self.note(tr!(
-                                    "書けるのは成果物（rulec、dandori、koyomi、chobo、geas、proto、file、openapi、asyncapi）とディレクトリ（dir）です。",
-                                    "Artifacts (rulec, dandori, koyomi, chobo, geas, proto, file, openapi, asyncapi) and directories (dir) go here."
+                                    "書けるのは成果物（rulec、dandori、koyomi、chobo、geas、sekisho、proto、file、openapi、asyncapi、cedar）とディレクトリ（dir）です。",
+                                    "Artifacts (rulec, dandori, koyomi, chobo, geas, sekisho, proto, file, openapi, asyncapi, cedar) and directories (dir) go here."
                                 ));
                                 return None;
                             }

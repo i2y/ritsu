@@ -13,10 +13,10 @@ The Cedar `sekisho gen --target cedar --lang en` writes from it:
 
 | File | SHA-256 (first 16 digits) |
 |---|---|
-| `cedar/refunds_ja.cedar` | `ee16298b6c25d33b` |
-| `cedar/refunds_ja.cedarschema` | `67ea0e01c272d24c` |
-| `cedar/refunds_ja.cedarschema.json` | `af77b0ebcb1e883e` |
-| `cedar/refunds_ja.policies.json` | `b67c8c77038f6989` |
+| `cedar/refunds_ja.cedar` | `<sha256>` |
+| `cedar/refunds_ja.cedarschema` | `<sha256>` |
+| `cedar/refunds_ja.cedarschema.json` | `<sha256>` |
+| `cedar/refunds_ja.policies.json` | `<sha256>` |
 
 > [!NOTE]
 > `sekisho check` walked all 1,078 combinations of the 3 actions, and decided each as Cedar does. Each of the 3 expectations holds. The separation holds too. Each of the 3 roles that write `can` is allowed the actions its `can` lists, and no other.
@@ -542,6 +542,14 @@ A workflow calls the operations as itself: in Cedar, the principal `Workflow::"<
 | action | Allowed |
 |---|---|
 | `返金する` (`refund_order`) | sometimes (4 of 32 combinations allowed) |
+
+#### What the flow calls
+
+Each operation a task of the flow calls, the action that guards it, and whether the workflow is allowed that action: what `ritsu check` holds across the languages.
+
+| Line | Task | Operation | Guarded by | Allowed | Error on a denial |
+|---|---|---|---|---|---|
+| 22 | `refund_order` | `openapi "api/orders.json" operation refundOrder` | `返金する` (`refund_order`) | sometimes | `denied` |
 
 ## Operations guarded
 

@@ -1,0 +1,28 @@
+gate 融資(loans) v1
+description "融資を始めてよい人"
+
+use openapi 融資 from "loans.json"
+
+role 担当者(officer)
+  description "融資を始める"
+
+principal 職員(User)
+  description "職員"
+  roles 担当者
+
+resource 融資(Loan)
+  description "融資"
+
+action 融資を始める(open_loan)
+  description "融資を始める"
+  guards 融資 openLoan
+  principal 職員
+  resource 融資
+  input
+    信用スコア(credit_score) : number  range >=0 <=999
+
+permit 担当者はスコアがよければ融資できる(officers_open_loans_for_good_scores)
+  description "担当者は、信用スコアが 600 以上なら融資を始められる"
+  principal in 担当者
+  action 融資を始める
+  when 信用スコア >= 600

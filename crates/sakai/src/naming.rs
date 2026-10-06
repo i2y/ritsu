@@ -88,7 +88,10 @@ fn said(kind: &ErrorKind, rest: &[base::Word]) -> Text {
         ErrorKind::OutsideRoot(p) => paths::error_text(paths::PathError::Outside, p),
         ErrorKind::QuotedKind(_) => tr!("ここには種類の語を書いてください", "a kind goes here"),
         ErrorKind::NoKinds(_) => tr!("`file` には種類を書けません", "`file` has no kinds"),
-        ErrorKind::ChildFirst { kind, parent } => tr!("`{kind}` は `{parent}` のすぐあとにだけ書けます", "`{kind}` comes only right after `{parent}`"),
+        ErrorKind::ChildFirst { kind, parents } => {
+            let quoted: Vec<String> = parents.iter().map(|p| format!("`{p}`")).collect();
+            tr!("`{kind}` は {} のすぐあとにだけ書けます", "`{kind}` comes only right after {}", quoted.join(" か "); quoted.join(" or "))
+        }
         ErrorKind::UnknownKind { tool, kind } => {
             let (t, list) = (tool.word(), tool.top_kinds().join(", "));
             tr!("{t} に種類 `{kind}` はありません。書けるのは {list} です", "the tool {t} has no kind `{kind}`; its kinds are {list}")

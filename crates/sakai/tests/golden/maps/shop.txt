@@ -101,3 +101,11 @@ files
   ts/shop/ordering/v1/fulfillment_pb.ts -> Ordering
   ts/shop/ordering/v1/order_pb.ts -> Ordering
   ts/warehouse/v1/stock_pb.ts -> Inventory
+published operations
+  Ordering proto "proto/shop/ordering/v1/order.proto" service OrderService method GetOrder  (contexts/ordering.ctx:13)
+  Ordering proto "proto/shop/ordering/v1/fulfillment.proto" service FulfillmentService method Fulfill  (contexts/ordering.ctx:13)
+  Ordering proto "proto/shop/ordering/v1/fulfillment.proto" service FulfillmentService method AnswerPacking  (contexts/ordering.ctx:13)
+  Inventory proto "proto/warehouse/v1/stock.proto" service StockService method Reserve  (contexts/inventory.ctx:14)
+  Inventory proto "proto/warehouse/v1/stock.proto" service StockService method Release  (contexts/inventory.ctx:14)
+  Inventory proto "proto/warehouse/v1/stock.proto" service PackingService method GetPacking  (contexts/inventory.ctx:14)
+  Delivery proto "proto/shop/delivery/v1/shipment.proto" service DeliveryService method CreateShipment  (contexts/delivery.ctx:13)

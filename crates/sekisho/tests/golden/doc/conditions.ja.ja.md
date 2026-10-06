@@ -13,10 +13,10 @@ Cedar の生成器が書く条件の形を、全部並べたもの。無いこ�
 
 | ファイル | SHA-256（先頭 16 桁） |
 |---|---|
-| `cedar/conditions_ja.cedar` | `d62af8e15af25f42` |
-| `cedar/conditions_ja.cedarschema` | `24d6f24d92751606` |
-| `cedar/conditions_ja.cedarschema.json` | `b7a813b796b53b8b` |
-| `cedar/conditions_ja.policies.json` | `4d3e48c34713dcee` |
+| `cedar/conditions_ja.cedar` | `<sha256>` |
+| `cedar/conditions_ja.cedarschema` | `<sha256>` |
+| `cedar/conditions_ja.cedarschema.json` | `<sha256>` |
+| `cedar/conditions_ja.policies.json` | `<sha256>` |
 
 > [!NOTE]
 > `sekisho check` は、2 つの action の組み合わせ 1,444 通りをすべて数え、どれも Cedar と同じ決まりで、許すか拒むかを決めました。

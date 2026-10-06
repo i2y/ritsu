@@ -80,7 +80,10 @@ impl Outcome {
 pub fn check_text(path: &str, src: &str, suite: &Suite, opts: &Options) -> Outcome {
     let parsed = crate::parse::parse(path, src);
     let mut diags = parsed.diags;
+    // a key in the file is in the repository whether the file reads or not (W901)
+    diags.extend(crate::security::keys(path, src));
     let Some(file) = parsed.file else {
+        diag::sort(&mut diags);
         return Outcome { path: path.to_string(), diags, scope: None, walked: None, ok: None };
     };
     let named = names::check(file, suite);
@@ -151,33 +154,38 @@ pub fn to_json(o: &Outcome, lang: Lang) -> Json {
 /// passes. `files` are as the person gave them, from where the program runs; `root` is the
 /// project's, which the references are written from too. A file that cannot be read, or that reads
 /// a language `suite` does not join (E209), is one the command does not check (its exit 2).
+/// `ritsu check` checks through the engine of the ports ([`crate::ports::Engine::checked`]), which
+/// keeps each check for the questions asked of the gate after it.
 pub fn checked(root: &Path, files: &[String], suite: &Suite, lang: Lang) -> Vec<ritsu_ports::Checked> {
-    use ritsu_ports::{Checked, Finding, Part, Verdict};
     let opts = Options { root: Some(root.to_path_buf()), ..Options::default() };
-    files
-        .iter()
-        .map(|f| match check_file(f, suite, &opts) {
-            Ok(o) => {
-                let mut parts: Vec<Part> = o.diags.iter().map(|d| Part::Finding(Finding::of(d, ritsu_base::paths::from_root(root, Path::new(&d.file)), lang))).collect();
-                if let Some(ok) = &o.ok {
-                    parts.push(Part::Text(format!("{}: ok — {}\n", o.path, ok.get(lang))));
-                }
-                let verdict = if o.unjoined() {
-                    Verdict::Unchecked
-                } else if o.has_errors() {
-                    Verdict::Fails
-                } else {
-                    Verdict::Passes
-                };
-                Checked { label: f.clone(), parts, verdict }
+    files.iter().map(|f| unit(root, f, check_file(f, suite, &opts).as_ref().map_err(|e| e.clone()), lang)).collect()
+}
+
+/// What `ritsu check` prints of one file (`f`, as the person gave it) that `check` came to, or
+/// could not read.
+pub fn unit(root: &Path, f: &str, checked: Result<&Outcome, String>, lang: Lang) -> ritsu_ports::Checked {
+    use ritsu_ports::{Checked, Finding, Part, Verdict};
+    match checked {
+        Ok(o) => {
+            let mut parts: Vec<Part> = o.diags.iter().map(|d| Part::Finding(Finding::of(d, ritsu_base::paths::from_root(root, Path::new(&d.file)), lang))).collect();
+            if let Some(ok) = &o.ok {
+                parts.push(Part::Text(format!("{}: ok — {}\n", o.path, ok.get(lang))));
             }
-            Err(e) => {
-                let msg = tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}");
-                let head = if lang == Lang::Ja { "エラー" } else { "error" };
-                Checked::unchecked(f, format!("{head}: {}\n", msg.get(lang)))
-            }
-        })
-        .collect()
+            let verdict = if o.unjoined() {
+                Verdict::Unchecked
+            } else if o.has_errors() {
+                Verdict::Fails
+            } else {
+                Verdict::Passes
+            };
+            Checked { label: f.to_string(), parts, verdict }
+        }
+        Err(e) => {
+            let msg = tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}");
+            let head = if lang == Lang::Ja { "エラー" } else { "error" };
+            Checked::unchecked(f, format!("{head}: {}\n", msg.get(lang)))
+        }
+    }
 }
 
 /// Shorthand for a test or a tool: the file at `path` with no other language joined.

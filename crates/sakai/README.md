@@ -126,7 +126,8 @@ Each is a warning, and goes away when the file says the thing is meant:
 
 The diagnostic of a key gives its kind, prefix and length, never the key, and a line another diagnostic shows has its keys masked.
 The keys of the documents and the `.proto` files are said once, by `ritsu check`, since other languages read them too.
-Which operation is allowed to whom is not looked at here.
+Which operation is allowed to whom is written in sekisho's gates (`.gate`), not here.
+sakai holds each gate, and each file of Cedar written by hand that a context names (`cedar "…"` under `owns`), to the map like any artifact: an operation is guarded only by a gate, or the Cedar, of the context that holds its contract (E211).
 With the `security` of Payments' API taken away:
 
 ```text
@@ -209,7 +210,7 @@ The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file 
 `cargo test -p sakai` runs the language on its fixtures and on the example, and runs the real tools.
 On one run of `cargo test -p sakai -- --nocapture` on macOS on Apple silicon, with every tool there and no test skipped: 191 tests, 26 seconds once built.
 
-- 168 mutants, each a fixture or an example with one change, are held to the diagnostics they give, in English and in Japanese (82 of them with Japanese names, each with an English twin, and 4 for Rust).
+- 170 mutants, each a fixture or an example with one change, are held to the diagnostics they give, in English and in Japanese (83 of them with Japanese names, each with an English twin, and 4 for Rust).
 - The four import linters run on 56 copies (14 for each tool): the example and a map whose generated code sits inside a context, each as it is and with imports added that the map forbids, with English and Japanese names. Every tool passes the copies as they are and catches each added import.
 - Context Mapper 6.12.0's validator, with every check, finds nothing in the CML of the examples.
 - ritsu's reader of YAML is held to the YAML test suite (its release data-2022-01-17, 402 cases): it reads 204 as the suite's JSON, does not read 104 that go beyond what goes to JSON and back, does not read any of the 94 that are no YAML, and reads none of them as another value.

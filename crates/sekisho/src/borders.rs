@@ -2,7 +2,10 @@
 //! koyomi and dandori, checked through their ports.
 //!
 //! - E201: a calendar or a book the file reads does not pass koyomi's or chobo's check, or cannot
-//!   be read (the rules and the dates files are `names.rs`'s, which asks their facts first).
+//!   be read (the rules and the dates files are `names.rs`'s, which asks their facts first); or a
+//!   rule, a dates file, a calendar or a gate it reads is outside the root (DESIGN 2.6: what a gate
+//!   reads is named from the root; the contracts and the books are `contracts.rs`'s). A file
+//!   outside the root is not read.
 //! - E101, E102, E105 of what only the other language knows (a rule's output or input, a date of
 //!   a dates file and its inputs): `names.rs` says them, and a file whose names hold has none. They
 //!   are said here too, for a reading of the facts that would differ from the names', rather than
@@ -10,7 +13,8 @@
 //! - E206: a value given to a rule or a date can be outside the input's range, or can break a
 //!   precondition of the rule (rulec answers, with an example); W201 when rulec cannot decide.
 //! - E207: a calendar `today is open in` reads does not cover every day of `today`.
-//! - E208: a workflow's `.flow` does not pass dandori's check, or cannot be read.
+//! - E208: a workflow's `.flow` does not pass dandori's check, cannot be read, or is outside the
+//!   root.
 //!
 //! What the languages answer is gathered as [`Known`], what the walk reads of each computed value.
 
@@ -35,6 +39,16 @@ pub struct Langs<'a> {
 
 fn at(code: &'static str, g: &Gate, line: usize, message: Text) -> Diag {
     Diag::at(code, &g.file, line, 1, message).source(&g.src)
+}
+
+/// A file the gate reads outside the root (E201 for a `use`, E208 for a workflow's `.flow`): the
+/// generated Cedar's `@doc` and the other languages name it by its path from the root, and from
+/// outside there is none.
+fn outside_the_root(code: &'static str, g: &Gate, line: usize, written: &str) -> Diag {
+    at(code, g, line, tr!("`{written}` はルートの外にあります", "`{written}` is outside the root")).note(crate::contracts::outside_note(tr!(
+        "gate が読むファイルは、生成する Cedar の `@doc` でも、ほかの言語からも、ルートからのパスで参照します。",
+        "A file a gate reads is named by a reference whose path is from the root, in the `@doc` of the generated Cedar and by the other languages."
+    )))
 }
 
 /// What a language said of a file, one note a finding.
@@ -147,6 +161,13 @@ pub fn check(g: &Gate, langs: &Langs) -> (Vec<Diag>, Known) {
     let mut dates: BTreeMap<usize, Option<ritsu_ports::DateFacts>> = BTreeMap::new();
     let mut cals: BTreeMap<usize, Option<ritsu_ports::CalendarFacts>> = BTreeMap::new();
     for (ui, u) in g.uses.iter().enumerate() {
+        // a file outside the root is not read: E201 here, or of a contract or a book in `contracts.rs`
+        if g.from_root(&u.file).is_none() {
+            if matches!(u.kind, UseKind::Rule | UseKind::Dates | UseKind::Calendar | UseKind::Gate) {
+                diags.push(outside_the_root("E201", g, u.line, &u.path));
+            }
+            continue;
+        }
         let unreadable = |said: Vec<Said>, lang: &str| {
             let d = at("E201", g, u.line, tr!("`{}` は {lang} の検査を通らないか、読めません", "`{}` does not pass {lang}'s check, or cannot be read", u.path));
             said_notes(d, &said).note(tr!("そのファイルを {lang} の検査が通るように直してください。", "Fix the file until {lang}'s check passes."))
@@ -243,9 +264,14 @@ pub fn check(g: &Gate, langs: &Langs) -> (Vec<Diag>, Known) {
         }
     }
 
-    // the workflows: each `.flow` passes dandori's check
+    // the workflows: each `.flow` under the root, and passing dandori's check
+    for w in &g.workflows {
+        if g.from_root(&w.file).is_none() {
+            diags.push(outside_the_root("E208", g, w.named.line, &w.flow));
+        }
+    }
     if let Some((flows, ports)) = &langs.flows {
-        for w in &g.workflows {
+        for w in g.workflows.iter().filter(|w| g.from_root(&w.file).is_some()) {
             if let Err(said) = flows.crossings(&w.file, ports) {
                 let d = at("E208", g, w.named.line, tr!("`{}` は dandori の検査を通らないか、読めません", "`{}` does not pass dandori's check, or cannot be read", w.flow));
                 diags.push(said_notes(d, &said).note(tr!("ワークフローを dandori の検査が通るように直してください。", "Fix the workflow until dandori's check passes.")));

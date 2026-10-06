@@ -21,6 +21,7 @@ use crate::model::*;
 use crate::names::Scope;
 use crate::walk::{Domain, Kn, Slot, Val};
 use ritsu_base::cedar::{self as c, BinOp, CondKind, ExprKind, Var};
+use ritsu_base::naming::{Name as Reference, Tool};
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
 
@@ -404,12 +405,20 @@ fn offset_text(m: i32) -> String {
     format!("{sign}{:02}:{:02}", m.abs() / 60, m.abs() % 60)
 }
 
+/// A file the gate reads, by the reference its path from the root makes (DESIGN 2.6): the rule,
+/// the dates or the calendar of a computed value, the `.flow` of a workflow, as the `@doc` of the
+/// schema and the page of `doc` write it. The file of a gate that passes its check is under the
+/// root (E201, E208); the path as written stands in otherwise.
+pub fn reference(g: &Gate, tool: Tool, file: &std::path::Path, written: &str) -> Reference {
+    Reference::file(tool, g.from_root(file).unwrap_or_else(|| written.to_string()))
+}
+
 /// The doc of a computed value (DESIGN 3.7): what computes it from what, the values it can be,
 /// the types it is computed for, and that the generated code computes it.
 fn computed_doc(g: &Gate, scope: &Scope, ai: usize, ci: usize, cs: &ComputedShape) -> Text {
     let a = &g.actions[ai];
     let cv = &a.computed[ci];
-    let use_path = |u: usize| g.uses.get(u).map(|u| ritsu_base::naming::quote(&u.path)).unwrap_or_default();
+    let used = |u: usize, tool: Tool| g.uses.get(u).map(|x| reference(g, tool, &x.file, &x.path)).unwrap_or_else(|| Reference::file(tool, ""));
     let from = |args: &[(String, Source)]| -> Vec<String> {
         let mut v: Vec<String> = Vec::new();
         for (_, s) in args {
@@ -425,17 +434,17 @@ fn computed_doc(g: &Gate, scope: &Scope, ai: usize, ci: usize, cs: &ComputedShap
         How::Rule { rule, args, output } => {
             let s = from(args);
             let t = today(&s);
-            (format!("rulec {} output {}", use_path(*rule), ritsu_base::naming::word_or_quote(output)), s, t)
+            (used(*rule, Tool::Rulec).with("output", output.as_str()).text(), s, t)
         }
         How::Date { op, of: DateOf::Call { dates, function, args } } => {
             let s = from(args);
-            (format!("today {} koyomi {} date {}", op.symbol(), use_path(*dates), ritsu_base::naming::word_or_quote(function)), s, true)
+            (format!("today {} {}", op.symbol(), used(*dates, Tool::Koyomi).with("date", function.as_str()).text()), s, true)
         }
         How::Date { op, of: DateOf::Attr(o, n) } => {
             let s = source_text(g, a, &Source::Attr(*o, n.clone()));
             (format!("today {} {s}", op.symbol()), Vec::new(), true)
         }
-        How::Open { calendar } => (format!("today is open in koyomi {}", use_path(*calendar)), Vec::new(), true),
+        How::Open { calendar } => (format!("today is open in {}", used(*calendar, Tool::Koyomi).text()), Vec::new(), true),
     };
     let mut en: Vec<String> = Vec::new();
     let mut ja: Vec<String> = Vec::new();
@@ -580,7 +589,7 @@ fn workflows_doc(g: &Gate, docs: &Docs) -> Text {
     let mut ja: Vec<String> = Vec::new();
     for w in &g.workflows {
         let d = docs.workflow(&w.named.alias).and_then(|x| Docs::of(&x.description));
-        let flow = format!("dandori {}", ritsu_base::naming::quote(&w.flow));
+        let flow = reference(g, Tool::Dandori, &w.file, &w.flow).text();
         let mut pe: Vec<String> = Vec::new();
         if w.named.name != w.named.alias {
             pe.push(w.named.name.clone());

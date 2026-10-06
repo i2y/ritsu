@@ -15,9 +15,13 @@ pub struct Joined {
     pub chobo: Rc<chobo::ports::Engine>,
     pub geas: Rc<geas::ports::Engine>,
     pub dandori: Rc<dandori::ports::Engine>,
+    /// sekisho, with the languages a gate reads joined: it keeps each gate it checks for the
+    /// questions the checks across the borders ask of it after the check (`Gates`).
+    pub sekisho: Rc<sekisho::ports::Engine>,
     pub sakai: Rc<sakai::ports::Engine>,
-    /// What the files of rulec, koyomi, chobo, geas, dandori and sakai hold, and what the files of
-    /// rulec, koyomi, dandori and sakai name outside themselves. yuen's own things are named by no
+    /// What the files of rulec, koyomi, chobo, geas, dandori, sekisho and sakai hold, and what the
+    /// files of rulec, koyomi, dandori, sekisho and sakai name outside themselves (and the files of
+    /// Cedar written by hand, the operations their schemas guard). yuen's own things are named by no
     /// language yet: yuen's engine reads what it borrows through the other languages' ports, so it
     /// would have to hold this index itself, and the index is left without it until a reader of
     /// requirements needs it (the LSP, DESIGN 15).
@@ -39,6 +43,9 @@ impl Joined {
         let chobo = Rc::new(chobo::ports::Engine);
         let geas = Rc::new(geas::ports::Engine);
         let dandori = Rc::new(dandori::ports::Engine);
+        let sekisho = Rc::new(sekisho::ports::Engine::new(
+            ritsu_ports::GatePorts { rules: rulec.clone(), dates: koyomi.clone(), books: chobo.clone(), flows: dandori.clone(), items: dandori.clone() }.into(),
+        ));
         let sakai = Rc::new(sakai::ports::Engine);
         let index = Index::new()
             .with_items(Tool::Rulec, rulec.clone())
@@ -49,9 +56,12 @@ impl Joined {
             .with_items(Tool::Geas, geas.clone())
             .with_items(Tool::Dandori, dandori.clone())
             .with_references(Tool::Dandori, dandori.clone())
+            .with_items(Tool::Sekisho, sekisho.clone())
+            .with_references(Tool::Sekisho, sekisho.clone())
+            .with_references(Tool::Cedar, sekisho.clone())
             .with_items(Tool::Sakai, sakai.clone())
             .with_references(Tool::Sakai, sakai.clone());
-        Joined { rulec, koyomi, chobo, geas, dandori, sakai, index: Rc::new(index) }
+        Joined { rulec, koyomi, chobo, geas, dandori, sekisho, sakai, index: Rc::new(index) }
     }
 
     /// The port of dates, as rulec reads the days of `range from koyomi` with it (DESIGN 7.5
@@ -69,6 +79,19 @@ impl Joined {
     /// relationships, and the context a file belongs to (X14, DESIGN 16.8).
     pub fn maps(&self) -> Rc<dyn ritsu_ports::Maps> {
         self.sakai.clone()
+    }
+
+    /// What the project's requirements name, as ritsu-cross reads it (the Cedar written by hand a
+    /// requirement points at, for X15): yuen's `References`, with every language yuen reads.
+    pub fn requirements(&self) -> Rc<dyn ritsu_ports::References> {
+        Rc::new(yuen::ports::Engine::with(self.yuen()))
+    }
+
+    /// The port of gates, as ritsu-cross reads sekisho's gates and the Cedar written by hand with
+    /// it: the operations an action guards, the workflows a gate names, and how far one is allowed
+    /// an action (X15, X16; sekisho's DESIGN 4.6).
+    pub fn gates(&self) -> Rc<dyn ritsu_ports::Gates> {
+        self.sekisho.clone()
     }
 
     /// The ports of rules, dates and books, as dandori reads a flow's rules, dates files and books

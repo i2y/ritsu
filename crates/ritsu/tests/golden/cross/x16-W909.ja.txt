@@ -1,0 +1,8 @@
+returns.flow: 検査を通りました
+refunds.gate: ok — action 1、ポリシー 2（permit 2、forbid 0）、期待 0、職務の分離 0
+警告[ritsu W909]: returns.flow:14: タスク `refund_order` の呼び出しは、refunds.gate の action `refund_order` に拒まれることがありますが、タスクは拒まれたときのエラーを宣言していません
+    14 |   refund_order(orderId: order)
+  = たとえば、ワークフロー returns、Order（status：returned）のときは許され、ワークフロー returns、Order（status：paid）のときは拒まれます。
+  = 拒まれると、ワークフローは宣言していない失敗で止まります。
+  = タスクに `errors denied = 403` と書き、拒まれたときにどうするかを呼び出しの下に書いてください（`on denied => …`）。
+ritsu check: ファイル 2 個（dandori 1、sekisho 1）。どれも検査を通りました（警告 1 件）。言語の境目: 確かめた 1 か所、決められない 1 か所

@@ -2581,6 +2581,98 @@ operations:
 
 See also: [E207](#e207), [E301](#e301)
 
+<a id="e211"></a>
+
+## E211 — An action guards an operation of another context
+
+**When**: An operation an action of a `.gate` guards (or one the `@guards` of a schema of Cedar written as `cedar "…"` names) is of a contract (an OpenAPI or AsyncAPI document, a `.proto`, a book) that belongs to another context than the `.gate`; whatever the two are to each other.
+
+**Fix**: Move the action to a `.gate` of the context that holds the operation's contract, or delete the `guards` line: the service that holds an operation writes who may call it.
+
+**Reproduction**: put the files below in one directory, and run `ritsu sakai check .` there.
+
+`map.ctx`:
+
+```ctx
+map Map(m) v1
+use context "alpha.ctx"
+use context "beta.ctx"
+covers "."
+```
+
+`alpha.ctx`:
+
+```ctx
+context Alpha(a) v1
+owns
+  dir "a"
+```
+
+`beta.ctx`:
+
+```ctx
+context Beta(b) v1
+owns
+  dir "b"
+
+published language b.v1
+  proto "b/v1/b.proto"
+  open host service BService
+
+terms
+  kind "The kind of thing Beta deals with"
+    means enum Kind
+```
+
+`a/a.proto`:
+
+```proto
+syntax = "proto3";
+package a;
+message A {}
+```
+
+`b/v1/b.proto`:
+
+```proto
+syntax = "proto3";
+package b.v1;
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_ONE = 1;
+  KIND_TWO = 2;
+}
+message B { Kind kind = 1; }
+message Plain { string id = 1; }
+service BService { rpc Get(B) returns (B); }
+```
+
+`a/gate.gate`:
+
+```
+gate a_gate v1
+
+use proto b from "../b/v1/b.proto"
+
+role clerk
+
+principal User
+  roles clerk
+
+resource Thing
+
+action get
+  guards b "BService/Get"
+  principal User
+  resource Thing
+
+permit clerks_get
+  principal in clerk
+  action get
+```
+
+See also: [E202](#e202)
+
 <a id="e301"></a>
 
 ## E301 — An open host service is not in the published language

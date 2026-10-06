@@ -52,8 +52,9 @@ fn every_example_gives_its_code() {
 fn the_ledger_has_each_code_once() {
     let l = sekisho::codes::ledger();
     assert!(ledger::duplicates(&l).is_empty(), "{:?}", ledger::duplicates(&l));
-    // DESIGN 10: E001–E008, E101–E108, E201–E211 with W201, E301–E307, W301–W304, W401
-    assert_eq!(l.entries.len(), 40);
+    // DESIGN 10: E001–E008, E101–E108, E201–E211 with W201, E301–E307, W301–W304, W401, and the
+    // checks of security W901 and W910
+    assert_eq!(l.entries.len(), 42);
 }
 
 #[test]

@@ -1,0 +1,6 @@
+returns.flow: ok
+refunds.gate: ok — 2 actions, 3 policies (3 permits, 0 forbids), 0 expectations, 0 separations
+warning[ritsu W908]: refunds.gate:15: The workflow `returns` is allowed the action `view_order`, and dandori "returns.flow" calls none of its operations (openapi "orders.json" operation getOrder)
+    15 | workflow returns from "returns.flow"
+  = The workflow is allowed more than it needs: take the action out of the permits that allow it.
+ritsu check: 2 files (dandori 1, sekisho 1): all pass (1 warning); borders between the languages: 1 checked, 0 undecided

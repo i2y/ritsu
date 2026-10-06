@@ -23,3 +23,4 @@ geas = { path = "../geas" }
 koyomi = { path = "../koyomi" }
 rulec = { path = "../rulec" }
 sakai = { path = "../sakai" }
+sekisho = { path = "../sekisho" }

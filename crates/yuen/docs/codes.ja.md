@@ -200,9 +200,9 @@ requirement r1
 
 ## E011 — 名指しの最初の語が、ツールの語ではありません
 
-**いつ出るか**: 名指しの最初の語が、rulec、dandori、koyomi、chobo、geas、proto、openapi、asyncapi、cedar、file、yuen、sakai のどれでもないとき（`dir` も、名指しの語ではありません）。
+**いつ出るか**: 名指しの最初の語が、rulec、dandori、koyomi、chobo、geas、proto、openapi、asyncapi、cedar、file、yuen、sakai、sekisho のどれでもないとき（`dir` も、名指しの語ではありません）。
 
-**直し方**: この十二のツール名のどれかを書いてください。ほかのファイルは `file "…"` で指してください。
+**直し方**: この十三のツール名のどれかを書いてください。ほかのファイルは `file "…"` で指してください。
 
 **再現**:
 
@@ -1022,7 +1022,7 @@ requirement r1
 
 ## E403 — 確かめる側に、何も確かめないものが書かれています
 
-**いつ出るか**: `verified by` に、geas と koyomi の主張、検査するツールのファイル全体、テストのファイルのほかを書いたとき（rulec の出力、chobo の振替、proto など）。
+**いつ出るか**: `verified by` に、geas と koyomi の主張、sekisho の期待と職務の分離、検査するツールのファイル全体、テストのファイルのほかを書いたとき（rulec の出力、chobo の振替、proto など）。
 
 **直し方**: 満たすものなら `satisfied by` に書いてください。確かめる側には、落ちることのあるものを書いてください。
 

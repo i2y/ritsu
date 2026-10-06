@@ -1,0 +1,6 @@
+returns.flow: 検査を通りました
+refunds.gate: ok — action 2、ポリシー 3（permit 3、forbid 0）、期待 0、職務の分離 0
+警告[ritsu W908]: refunds.gate:15: ワークフロー `returns` は action `view_order` を許されていますが、dandori "returns.flow" はその操作（openapi "orders.json" operation getOrder）をどこでも呼びません
+    15 | workflow returns from "returns.flow"
+  = ワークフローは要るより多く許されています。ワークフローを許す permit から、この action を外してください。
+ritsu check: ファイル 2 個（dandori 1、sekisho 1）。どれも検査を通りました（警告 1 件）。言語の境目: 確かめた 1 か所、決められない 0 か所

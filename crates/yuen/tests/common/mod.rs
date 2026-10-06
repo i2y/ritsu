@@ -28,6 +28,7 @@ pub fn suite_where(instead: Option<(ritsu_base::naming::Tool, Rc<dyn ritsu_ports
         .with_items(Tool::Chobo, Rc::new(chobo::ports::Engine))
         .with_items(Tool::Geas, claims.clone())
         .with_items(Tool::Dandori, Rc::new(dandori::ports::Engine))
+        .with_items(Tool::Sekisho, Rc::new(sekisho::ports::Engine::default()))
         .with_items(Tool::Sakai, Rc::new(sakai::ports::Engine));
     if let Some((tool, port)) = instead {
         index = index.with_items(tool, port);

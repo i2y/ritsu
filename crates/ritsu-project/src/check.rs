@@ -35,7 +35,7 @@ impl Project {
                 Tool::Chobo => joined.chobo.checked(&self.root, &files, lang),
                 Tool::Geas => joined.geas.checked(&self.root, &files, lang),
                 Tool::Dandori => joined.dandori.checked_with(&self.root, &files, &joined.ports(), lang),
-                Tool::Sekisho => sekisho::check::checked(&self.root, &files, &joined.sekisho().into(), lang),
+                Tool::Sekisho => joined.sekisho.checked(&self.root, &files, lang),
                 Tool::Yuen => yuen::ports::Engine::with(joined.yuen()).checked(&self.given_for(Tool::Yuen), Some(&root_arg), lang),
                 Tool::Sakai => sakai::run::checked(&self.given_for(Tool::Sakai), Some(&root_arg), &joined.sakai(), lang),
                 // the standard formats are read by the languages that name them

@@ -1,0 +1,12 @@
+orders/refunds.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0
+エラー[yuen E301]: orders.req:10:3: staff_look から cedar "orders/policies/orders.cedar" policy staff_look へのリンクを、まだ誰も確かめていません
+    10 |   satisfied by cedar "orders/policies/orders.cedar" policy staff_look
+  = 両端を読んで、つながりが正しいことを確かめたら、`yuen review` を走らせてください。リンクの下に、確かめた人と日付と両端のハッシュが書かれます。
+  = 確かめたら: yuen review . --root . --at orders.req:10 --by <役割>
+エラー[yuen E304]: orders.req:11:3: この見送りは、まだ承認されていません
+    11 |   not verified "Looked at by hand"
+  = 見送りも、人が決めることです。持ち主が理由を読んで承認したら、`yuen review` を走らせてください。見送りの下に、承認した人と日付と要件のハッシュが書かれます。
+  = 確かめたら: yuen review . --root . --at orders.req:11 --by <役割>
+orders.req: エラー 2 件
+shop.ctx: ok — コンテキスト 1、関係 0。成果物 2 件は、どれも一つのコンテキストに属する。境界を越える参照は無い
+ritsu check: ファイル 4 個（sekisho 1、yuen 1、sakai 2）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 2 か所、決められない 0 か所

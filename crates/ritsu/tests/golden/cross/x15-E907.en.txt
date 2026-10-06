@@ -1,0 +1,7 @@
+orders/refunds.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations
+shop.ctx: ok — 1 context, 0 relationships; 2 artifacts, each in one context; no crossing to check
+error[ritsu E907]: contexts/orders.ctx:10: Orders opens openapi "orders/api/orders.json" operation getOrder to the other contexts, and no action guards it
+    10 |   open host service getOrder, refundOrder
+  = Orders guards its other operations with the actions of its gates (openapi "orders/api/orders.json" operation refundOrder); this one says nothing of who may call it (the map shop.ctx).
+  = Write an action that guards it in a .gate of Orders (`guards <api> <operation>`). If anyone may call it on purpose, write `security: []` on the operation in its document.
+ritsu check: 3 files (sekisho 1, sakai 2): 1 fail (1 error); borders between the languages: 2 checked, 0 undecided

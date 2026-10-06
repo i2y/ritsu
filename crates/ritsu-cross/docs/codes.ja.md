@@ -1350,3 +1350,543 @@ flow
 ```
 
 関連: [E905](#e905)
+
+<a id="e907"></a>
+
+## E907 — コンテキストが公開する操作を、どの action も守っていません
+
+**いつ出るか**: 地図のコンテキストが `open host service` で公開する操作（`.proto` のサービスのメソッドと、OpenAPI の文書の操作）を、どの `.gate` の action も `guards` で守らず（`cedar "…"` と書いた Cedar のスキーマの `@guards` でも守らず）、文書がだれでも呼べると書いてもいない（`security: []`）とき。そのコンテキストのほかの操作を守る action があるときに出ます。どれも守られていなければ W907 です。AsyncAPI のチャネルと規則の Connect のサービスは、`guards` で書けるものでないので、求めません。
+
+**直し方**: その操作を守る action を、そのコンテキストの `.gate` に書いてください。だれでも呼べるようにわざとしている OpenAPI の操作なら、文書でその操作に `security: []` と書いてください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`店.ctx`:
+
+```ctx
+map 店(shop) v1
+description "注文を受ける店"
+
+use context "contexts/受注.ctx"
+
+covers "受注"
+```
+
+`contexts/受注.ctx`:
+
+```ctx
+context 受注(orders) v1
+description "客の注文を受け、返金する"
+owner "受注の担当"
+
+owns
+  dir "../受注"
+
+published language orders.v1
+  openapi "../受注/api/orders.json"
+  open host service getOrder, refundOrder
+```
+
+`受注/api/orders.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {"title": "注文", "version": "1.0.0"},
+  "servers": [{"url": "https://orders.example.com"}],
+  "security": [{"bearer": []}],
+  "paths": {
+    "/orders/{orderId}": {
+      "get": {
+        "operationId": "getOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"description": "注文"}}
+      }
+    },
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"201": {"description": "返金した"}, "403": {"description": "許されていない"}}
+      }
+    }
+  },
+  "components": {"securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}}
+}
+```
+
+`受注/返金.gate`:
+
+```
+gate 返金(refunds) v1
+description "注文を返金してよい人"
+
+use openapi 注文 from "api/orders.json"
+
+role 係(clerk)
+  description "客に応対し、返金する"
+
+principal 職員(User)
+  description "店の職員"
+  roles 係
+
+resource 注文(Order)
+  description "注文"
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  guards 注文 refundOrder
+  principal 職員
+  resource 注文 from orderId
+
+permit 係は返金できる(clerks_refund)
+  description "係は注文を返金できる"
+  principal in 係
+  action 返金する
+```
+
+関連: [W907](#w907)
+
+<a id="w907"></a>
+
+## W907 — コンテキストが、公開する操作のどれも action で守っていません
+
+**いつ出るか**: 地図のコンテキストが公開する操作（E907 と同じもの）を、どの action も守っていないとき。コンテキストごとに一つ出ます。そのコンテキストは、まだ sekisho で認可を書いていません。プロジェクトに `.gate` も、地図か要件が指す Cedar も無ければ、X15 は何も言いません。
+
+**直し方**: そのコンテキストの `.gate` を書き、公開する操作をそれぞれ action で守ってください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`店.ctx`:
+
+```ctx
+map 店(shop) v1
+description "注文を受け、カードで代金を受け取る店"
+
+use context "contexts/受注.ctx"
+use context "contexts/決済.ctx"
+
+covers "受注", "決済"
+```
+
+`contexts/受注.ctx`:
+
+```ctx
+context 受注(orders) v1
+description "客の注文を受け、返金する"
+owner "受注の担当"
+
+owns
+  dir "../受注"
+
+published language orders.v1
+  openapi "../受注/api/orders.json"
+  open host service getOrder, refundOrder
+```
+
+`contexts/決済.ctx`:
+
+```ctx
+context 決済(payments) v1
+description "客のカードで代金を受け取る"
+owner "決済の担当"
+
+owns
+  dir "../決済"
+
+published language payments.v1
+  openapi "../決済/api/payments.json"
+  open host service createCharge
+```
+
+`受注/api/orders.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {"title": "注文", "version": "1.0.0"},
+  "servers": [{"url": "https://orders.example.com"}],
+  "security": [{"bearer": []}],
+  "paths": {
+    "/orders/{orderId}": {
+      "get": {
+        "operationId": "getOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"description": "注文"}}
+      }
+    },
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"201": {"description": "返金した"}, "403": {"description": "許されていない"}}
+      }
+    }
+  },
+  "components": {"securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}}
+}
+```
+
+`決済/api/payments.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {"title": "決済", "version": "1.0.0"},
+  "servers": [{"url": "https://payments.example.com"}],
+  "security": [{"bearer": []}],
+  "paths": {
+    "/charges": {
+      "post": {
+        "operationId": "createCharge",
+        "responses": {"201": {"description": "支払"}}
+      }
+    }
+  },
+  "components": {"securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}}
+}
+```
+
+`決済/代金.gate`:
+
+```
+gate 代金(charges) v1
+description "カードで代金を受け取ってよい人"
+
+use openapi 決済 from "api/payments.json"
+
+role 会計係(cashier)
+  description "注文の支払いを受け付ける"
+
+principal 職員(User)
+  description "店の職員"
+  roles 会計係
+
+resource 支払(Charge)
+  description "カードの支払"
+
+action 代金を受け取る(create_charge)
+  description "カードで代金を受け取る"
+  guards 決済 createCharge
+  principal 職員
+  resource 支払
+
+permit 会計係は受け取れる(cashiers_charge)
+  description "会計係はカードで代金を受け取れる"
+  principal in 会計係
+  action 代金を受け取る
+```
+
+関連: [E907](#e907)
+
+<a id="e908"></a>
+
+## E908 — ワークフローが呼ぶ操作を、ゲートがそのワークフローにどの組み合わせでも許しません
+
+**いつ出るか**: `.gate` が `workflow … from` で書いたワークフローが、そのゲートの action が守る操作を呼び（`use openapi` の `http`、`use proto` の `connect`）、その action がワークフローをどの組み合わせでも許さないとき。その呼び出しまで進んだ実行は、いつもそこで拒まれます。
+
+**直し方**: ゲートに、ワークフローを許す permit を書くか（`principal is workflow <名前>`）、呼び出しを消してください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`orders.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {"title": "注文", "version": "1.0.0"},
+  "servers": [{"url": "https://orders.example.com"}],
+  "security": [{"bearer": []}],
+  "paths": {
+    "/orders/{orderId}": {
+      "get": {
+        "operationId": "getOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"description": "注文"}}
+      }
+    },
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"201": {"description": "返金した"}, "403": {"description": "許されていない"}}
+      }
+    }
+  },
+  "components": {"securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}}
+}
+```
+
+`返品.flow`:
+
+```flow
+workflow 返品 v1
+description "品物が戻ったら、注文を返金する"
+
+use openapi 注文 from "orders.json"
+
+inputs
+  注文番号 : string
+
+task 返金する(orderId: string)
+  http POST 注文 "/orders/{orderId}/refunds"
+  key
+
+flow
+  返金する(orderId: 注文番号)
+```
+
+`返金.gate`:
+
+```
+gate 返金(refunds) v1
+description "注文を見て、返金してよい人"
+
+use openapi 注文 from "orders.json"
+
+enum 注文の状態(order_status) = 支払済(paid) | 返品済(returned)
+
+role 係(clerk)
+  description "客に応対し、返金する"
+
+principal 職員(User)
+  description "店の職員"
+  roles 係
+
+workflow 返品(returns) from "返品.flow"
+  description "品物が戻ったら、注文を返金する"
+
+resource 注文(Order)
+  description "注文"
+  attributes
+    状態(status) : 注文の状態
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  guards 注文 refundOrder
+  principal 職員, Workflow
+  resource 注文 from orderId
+
+permit 係は返金できる(clerks_refund)
+  description "係は注文を返金できる"
+  principal in 係
+  action 返金する
+```
+
+関連: [W909](#w909), [W908](#w908)
+
+<a id="w908"></a>
+
+## W908 — ワークフローが、呼ばない操作の action を許されています
+
+**いつ出るか**: `.gate` の action のうち、`workflow … from` で書いたワークフローが許されるもの（組み合わせによって許されるものも）が守る操作を、そのワークフローのフローがどこでも呼ばないとき。ワークフローは要るより多く許されています。
+
+**直し方**: ワークフローを許す permit から、その action を外してください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`orders.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {"title": "注文", "version": "1.0.0"},
+  "servers": [{"url": "https://orders.example.com"}],
+  "security": [{"bearer": []}],
+  "paths": {
+    "/orders/{orderId}": {
+      "get": {
+        "operationId": "getOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"description": "注文"}}
+      }
+    },
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"201": {"description": "返金した"}, "403": {"description": "許されていない"}}
+      }
+    }
+  },
+  "components": {"securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}}
+}
+```
+
+`返品.flow`:
+
+```flow
+workflow 返品 v1
+description "品物が戻ったら、注文を返金する"
+
+use openapi 注文 from "orders.json"
+
+inputs
+  注文番号 : string
+
+task 返金する(orderId: string)
+  http POST 注文 "/orders/{orderId}/refunds"
+  errors denied = 403
+  key
+
+flow
+  返金する(orderId: 注文番号)
+    on denied => fail Denied "ゲートが返金を許さなかった"
+```
+
+`返金.gate`:
+
+```
+gate 返金(refunds) v1
+description "注文を見て、返金してよい人"
+
+use openapi 注文 from "orders.json"
+
+enum 注文の状態(order_status) = 支払済(paid) | 返品済(returned)
+
+role 係(clerk)
+  description "客に応対し、返金する"
+
+principal 職員(User)
+  description "店の職員"
+  roles 係
+
+workflow 返品(returns) from "返品.flow"
+  description "品物が戻ったら、注文を返金する"
+
+resource 注文(Order)
+  description "注文"
+  attributes
+    状態(status) : 注文の状態
+
+action 注文を見る(view_order)
+  description "注文を見る"
+  guards 注文 getOrder
+  principal 職員, Workflow
+  resource 注文 from orderId
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  guards 注文 refundOrder
+  principal 職員, Workflow
+  resource 注文 from orderId
+
+permit 係は返金できる(clerks_refund)
+  description "係は注文を返金できる"
+  principal in 係
+  action 返金する
+
+permit 係は注文を見られる(clerks_look)
+  description "係は注文を見られる"
+  principal in 係
+  action 注文を見る
+
+permit 返品は注文を見て返金できる(returns_look_and_refund)
+  description "返品のワークフローは、どの注文も見て、返金できる"
+  principal is workflow 返品
+  action 注文を見る, 返金する
+```
+
+関連: [E908](#e908)
+
+<a id="w909"></a>
+
+## W909 — 拒まれることのある呼び出しが、拒まれたときのエラーを宣言していません
+
+**いつ出るか**: ワークフローが呼ぶ操作を守る action が、ワークフローを組み合わせによっては拒む（拒むかを決められないときも）のに、呼ぶタスクが、拒まれたときのエラー（HTTP の 403、Connect の `permission_denied`）を宣言していないとき。拒まれると、ワークフローは宣言していない失敗で止まります。
+
+**直し方**: タスクに `errors denied = 403`（Connect なら `errors denied = permission_denied`）と書き、拒まれたときにどうするかを呼び出しの下に書いてください（`on denied => …`）。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`orders.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {"title": "注文", "version": "1.0.0"},
+  "servers": [{"url": "https://orders.example.com"}],
+  "security": [{"bearer": []}],
+  "paths": {
+    "/orders/{orderId}": {
+      "get": {
+        "operationId": "getOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"description": "注文"}}
+      }
+    },
+    "/orders/{orderId}/refunds": {
+      "post": {
+        "operationId": "refundOrder",
+        "parameters": [{"name": "orderId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"201": {"description": "返金した"}, "403": {"description": "許されていない"}}
+      }
+    }
+  },
+  "components": {"securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}}}
+}
+```
+
+`返品.flow`:
+
+```flow
+workflow 返品 v1
+description "品物が戻ったら、注文を返金する"
+
+use openapi 注文 from "orders.json"
+
+inputs
+  注文番号 : string
+
+task 返金する(orderId: string)
+  http POST 注文 "/orders/{orderId}/refunds"
+  key
+
+flow
+  返金する(orderId: 注文番号)
+```
+
+`返金.gate`:
+
+```
+gate 返金(refunds) v1
+description "注文を見て、返金してよい人"
+
+use openapi 注文 from "orders.json"
+
+enum 注文の状態(order_status) = 支払済(paid) | 返品済(returned)
+
+role 係(clerk)
+  description "客に応対し、返金する"
+
+principal 職員(User)
+  description "店の職員"
+  roles 係
+
+workflow 返品(returns) from "返品.flow"
+  description "品物が戻ったら、注文を返金する"
+
+resource 注文(Order)
+  description "注文"
+  attributes
+    状態(status) : 注文の状態
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  guards 注文 refundOrder
+  principal 職員, Workflow
+  resource 注文 from orderId
+
+permit 係は返金できる(clerks_refund)
+  description "係は注文を返金できる"
+  principal in 係
+  action 返金する
+
+permit 返品は戻った注文を返金できる(returns_refunds_returned_orders)
+  description "返品のワークフローは、戻ってきた注文を返金できる"
+  principal is workflow 返品
+  action 返金する
+  when resource.状態 is 返品済
+```
+
+関連: [E908](#e908)

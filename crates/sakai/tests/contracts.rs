@@ -292,11 +292,12 @@ fn the_elements_of_a_document_in_their_long_form() {
     let d = changed(&[("contexts/shipping.ctx", "  enum ChargeStatus -> enum ShipmentGate\n", "  enum ChargeStatus -> openapi \"../shipping/api/shipping.yaml\" schema ShipmentGate\n")]);
     let (codes, text) = codes_of(&d);
     assert!(codes.is_empty(), "{text}");
-    // a Cedar file is no artifact sakai reads
+    // a file of Cedar is an artifact where an entry of `owns` names it (DESIGN 17), and one that is
+    // not there is said as any other path that is not
     let d = changed(&[("contexts/payments.ctx", "  dir \"../payments\"\n", "  dir \"../payments\"\n  cedar \"../payments/policies.cedar\"\n")]);
     let (codes, text) = codes_of(&d);
-    assert_eq!(codes, ["E002"], "{text}");
-    assert!(text.contains("A `cedar` file does not go here"), "{text}");
+    assert_eq!(codes, ["E009"], "{text}");
+    assert!(text.contains("The path \"../payments/policies.cedar\" is not there"), "{text}");
 }
 
 /// A rule's `import jsonschema` of an enum of another context's OpenAPI document is a crossing

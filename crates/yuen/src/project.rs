@@ -686,14 +686,16 @@ pub fn placed(n: &Name, place: Place) -> Result<(), Refused> {
     if place == Place::Link(Side::Verified) {
         let ok = matches!(
             (n.tool, kind),
-            (Tool::Geas | Tool::Koyomi, Some("claim")) | (Tool::Rulec | Tool::Koyomi | Tool::Chobo | Tool::Dandori | Tool::Geas | Tool::Sakai | Tool::File, None)
+            (Tool::Geas | Tool::Koyomi, Some("claim"))
+                | (Tool::Sekisho, Some("expect" | "separate"))
+                | (Tool::Rulec | Tool::Koyomi | Tool::Chobo | Tool::Dandori | Tool::Geas | Tool::Sekisho | Tool::Sakai | Tool::File, None)
         );
         if !ok {
             let t = n.text();
             return Err(("E403", tr!("{t} は何も確かめないので、`verified by` に書けません", "{t} checks nothing, so it cannot be written after `verified by`"), vec![
                 tr!(
-                    "確かめる側に書けるのは、geas と koyomi の主張（`claim`）、検査するツールのファイル全体（`rulec \"x.rule\"` なら rulec の検査）、テストのファイル（`file \"…\"`）のような、落ちることのあるものです。",
-                    "The side that verifies takes what can fail: a geas or koyomi claim (`claim`), the whole file of a tool that checks it (`rulec \"x.rule\"` stands for rulec's check), or a test file (`file \"…\"`)."
+                    "確かめる側に書けるのは、geas と koyomi の主張（`claim`）、sekisho の期待と職務の分離（`expect`、`separate`）、検査するツールのファイル全体（`rulec \"x.rule\"` なら rulec の検査）、テストのファイル（`file \"…\"`）のような、落ちることのあるものです。",
+                    "The side that verifies takes what can fail: a geas or koyomi claim (`claim`), a sekisho expectation or separation (`expect`, `separate`), the whole file of a tool that checks it (`rulec \"x.rule\"` stands for rulec's check), or a test file (`file \"…\"`)."
                 ),
                 tr!("満たす成果物なら `satisfied by` に書いてください。", "If it is what meets the requirement, it goes after `satisfied by`."),
             ]));

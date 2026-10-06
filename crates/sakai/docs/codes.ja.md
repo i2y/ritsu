@@ -2581,6 +2581,98 @@ operations:
 
 関連: [E207](#e207), [E301](#e301)
 
+<a id="e211"></a>
+
+## E211 — ほかのコンテキストの操作を守る action です
+
+**いつ出るか**: `.gate` の action が `guards` で守る操作（か、`cedar "…"` と書いた Cedar のスキーマが `@guards` に書いた操作）の契約（OpenAPI と AsyncAPI の文書、`.proto`、帳簿）が、その `.gate` と違うコンテキストに属するとき。二つのあいだに関係があっても出ます。
+
+**直し方**: action を、操作の契約を持つコンテキストの `.gate` に移すか、`guards` の行を消してください。認可の決まりは、操作を持つサービスが自分で書きます。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu sakai check .` を走らせます。
+
+`地図.ctx`:
+
+```ctx
+map 地図(m) v1
+use context "甲.ctx"
+use context "乙.ctx"
+covers "."
+```
+
+`甲.ctx`:
+
+```ctx
+context 甲(a) v1
+owns
+  dir "a"
+```
+
+`乙.ctx`:
+
+```ctx
+context 乙(b) v1
+owns
+  dir "b"
+
+published language b.v1
+  proto "b/v1/b.proto"
+  open host service BService
+
+terms
+  種類 "乙が扱うものの種類"
+    means enum Kind
+```
+
+`a/a.proto`:
+
+```proto
+syntax = "proto3";
+package a;
+message A {}
+```
+
+`b/v1/b.proto`:
+
+```proto
+syntax = "proto3";
+package b.v1;
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_ONE = 1;
+  KIND_TWO = 2;
+}
+message B { Kind kind = 1; }
+message Plain { string id = 1; }
+service BService { rpc Get(B) returns (B); }
+```
+
+`a/関所.gate`:
+
+```
+gate 甲の関所(a_gate) v1
+
+use proto 乙 from "../b/v1/b.proto"
+
+role 係(clerk)
+
+principal 職員(User)
+  roles 係
+
+resource もの(Thing)
+
+action 見る(get)
+  guards 乙 "BService/Get"
+  principal 職員
+  resource もの
+
+permit 係は見る(clerks_get)
+  principal in 係
+  action 見る
+```
+
+関連: [E202](#e202)
+
 <a id="e301"></a>
 
 ## E301 — 公開ホストサービスが、公表された言語に無いサービスです

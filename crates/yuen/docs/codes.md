@@ -200,9 +200,9 @@ requirement r1
 
 ## E011 — A tool that does not exist
 
-**When**: The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen and sakai (`dir` is not a word of a naming either).
+**When**: The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen, sakai and sekisho (`dir` is not a word of a naming either).
 
-**Fix**: Write one of the twelve; name any other file with `file "…"`.
+**Fix**: Write one of the thirteen; name any other file with `file "…"`.
 
 **Example**:
 
@@ -1011,7 +1011,7 @@ See also: [E401](#e401)
 
 ## E403 — Something that checks nothing is on the side that verifies
 
-**When**: `verified by` names something other than a geas or koyomi claim, the whole file of a tool that checks it, or a test file (a rulec output, a chobo transfer, a proto).
+**When**: `verified by` names something other than a geas or koyomi claim, a sekisho expectation or separation, the whole file of a tool that checks it, or a test file (a rulec output, a chobo transfer, a proto).
 
 **Fix**: If it meets the requirement, write it after `satisfied by`; the side that verifies takes what can fail.
 
