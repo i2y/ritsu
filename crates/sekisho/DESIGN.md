@@ -4,7 +4,7 @@
 
 名前は関所（せきしょ）から取った。
 
-この文書は設計の段階（2026-10-06）に書き、言語の芯を作った段階（A）で、作ったものに合わせて直した。設計の段階では、ritsu 0.23.0 を読み、2026-10 の時点の Cedar とまわりの道具を調べて決めた。決めたことのうち、Cedar で本当にそうなるかが分かれ目になるものは、手で書いた例を公式の Cedar の CLI 4.13.0、cedar-wasm 4.13.0、cedarpy 4.12.1、cedar-go v1.8.0 にかけて確かめた（6 章）。例の規則・日付・ワークフローは、ritsu 0.23.0 の `rulec check`・`koyomi check`・`dandori check` と `ritsu check` を通してある。例の Cedar とリクエストを組み立てるコードは、sekisho が生成する形を手で書いた見本である。`.gate` の検査の結果として載せた数は、設計の段階には、検査が数える形を Python で書いた使い捨ての試作の出力（1,090 通りなど）だった。A で全部の組み合わせの検査を作り、4 章、7 章、10 章の数と文を実物の出力に差し替えた（6.2 の表は、試作を四つの実装に流した記録なので残した）。A では、字句と構文、名前と型、診断の台帳、`check` と `explain` のコマンド、`ritsu sekisho` と `ritsu check` の入口、口のまとまり `GatePorts` と口 `Gates` の型、rulec の `outputs_over`、koyomi の `calendar` と `doc`、OpenAPI と AsyncAPI の操作の読み手、全部の組み合わせの検査と参照の評価、行を合わせた表を作った。2.8、2.10、3 章、4 章、7〜10 章をそれに合わせて直し、16 章を決めたことの形に書き直した。段階 B では、Cedar のスキーマとポリシーの生成（`gen --target cedar`）、全部の組み合わせを `cedar run-tests` のテストにする `vectors`、外のツールのための JSON の `api`、生成した Cedar を公式の CLI にかけるテスト（`tests/cedar.rs`）を作り、5 章、6.1、6.2、11 章を作ったものに合わせて直し、16.1 に段階 B で決めたことを足した。段階 D では、人が読むページ（`doc`）を作り、7 章と 11 章を作ったものに合わせて直し、16.1 に決めたことを足した。取り込みのときに、守る操作を、参照の書き方とルートからのパスで言うようにした（2.6）。
+この文書は設計の段階（2026-10-06）に書き、言語の芯を作った段階（A）で、作ったものに合わせて直した。設計の段階では、ritsu 0.23.0 を読み、2026-10 の時点の Cedar とまわりの道具を調べて決めた。決めたことのうち、Cedar で本当にそうなるかが分かれ目になるものは、手で書いた例を公式の Cedar の CLI 4.13.0、cedar-wasm 4.13.0、cedarpy 4.12.1、cedar-go v1.8.0 にかけて確かめた（6 章）。例の規則・日付・ワークフローは、ritsu 0.23.0 の `rulec check`・`koyomi check`・`dandori check` と `ritsu check` を通してある。例の Cedar とリクエストを組み立てるコードは、sekisho が生成する形を手で書いた見本である。`.gate` の検査の結果として載せた数は、設計の段階には、検査が数える形を Python で書いた使い捨ての試作の出力（1,090 通りなど）だった。A で全部の組み合わせの検査を作り、4 章、7 章、10 章の数と文を実物の出力に差し替えた（6.2 の表は、試作を四つの実装に流した記録なので残した）。A では、字句と構文、名前と型、診断の台帳、`check` と `explain` のコマンド、`ritsu sekisho` と `ritsu check` の入口、口のまとまり `GatePorts` と口 `Gates` の型、rulec の `outputs_over`、koyomi の `calendar` と `doc`、OpenAPI と AsyncAPI の操作の読み手、全部の組み合わせの検査と参照の評価、行を合わせた表を作った。2.8、2.10、3 章、4 章、7〜10 章をそれに合わせて直し、16 章を決めたことの形に書き直した。段階 B では、Cedar のスキーマとポリシーの生成（`gen --target cedar`）、全部の組み合わせを `cedar run-tests` のテストにする `vectors`、外のツールのための JSON の `api`、生成した Cedar を公式の CLI にかけるテスト（`tests/cedar.rs`）を作り、5 章、6.1、6.2、11 章を作ったものに合わせて直し、16.1 に段階 B で決めたことを足した。取り込みのときに、守る操作を、参照の書き方とルートからのパスで言うようにした（2.6）。段階 C では、action ごとにリクエストを組み立てて尋ねるコードの生成（`gen --target typescript|python|go` と `--authorizer`、`--module`）、組み合わせごとの生の値と、それを参照の評価にかけた答え（`src/raw.rs`）、生成したコードを本物の Cedar の実装（cedar-wasm、cedarpy、cedar-go）にかけてその答えと突き合わせるテスト、Verified Permissions の上限の警告（W401）、`ritsu gen` のパッケージへの取り込みを作り、2.9、3.8、5 章、6.3、11 章を直し、16.1 に段階 C で決めたことを足した。段階 D では、人が読むページ（`doc`）を作り、7 章と 11 章を作ったものに合わせて直し、16.1 に決めたことを足した。
 
 ## 0. 全体像
 
@@ -220,14 +220,14 @@ action refund_order
 
 **操作と結び付けない action**も書ける（`guards` の無い action）。そのときは、ページと `api` に「どの操作も守っていない」と出る。バッチの処理のように、契約の無い入口を守るためである。
 
-**守る操作の参照。** 診断の文（E202〜E205）、`api` の JSON、生成するスキーマの `@guards`、口 `Gates` の `GateAction::guards` では、守る操作を参照の書き方（ritsu の DESIGN 6.2）で書く。
+**守る操作の参照。** 診断の文（E202〜E205）、`api` の JSON、生成するスキーマの `@guards`、リクエストを組み立てるコードのコメント（5.3）、口 `Gates` の `GateAction::guards` では、守る操作を参照の書き方（ritsu の DESIGN 6.2）で書く。
 
 - OpenAPI：`openapi "api/orders.json" operation refundOrder`。名前は `operationId` で、無い操作だけ方法とパス（`operation "POST /orders/{orderId}/refunds"`）。`operationId` のある操作は、`guards` の行が方法とパスで書いていても `operationId` で書く（参照の名前の書き方を一つにする。ritsu の DESIGN 6.5）。
 - AsyncAPI：`asyncapi "<パス>" operation <操作のキー>`。
 - proto：`proto "<パス>" service <サービス> method <メソッド>`。サービスは、そのファイルの package から見た名前（`guards` の行が `shop.v1.Orders/Refund` と書いても `service Orders`）。
 - 帳簿：`chobo "<パス>" transfer <振替> operation <操作>`（`guards stock receive.do` なら `transfer receive operation do`）。
 
-参照は、契約の検査（`src/contracts.rs`）が操作を見つけたときに `ritsu_base::naming::Name` で組み、モデル（`Guard::reference`）に置く。`@guards`、`api`、口は、どれも `Action::references` の同じ値を書き、文字列を組まない。
+参照は、契約の検査（`src/contracts.rs`）が操作を見つけたときに `ritsu_base::naming::Name` で組み、モデル（`Guard::reference`）に置く。`@guards`、`api`、生成するコード、口は、どれも `Action::references` の同じ値を書き、文字列を組まない。
 
 **パスとルート。** 参照のパスは、`use` の行に書いたパスではなく、ルートからのパスである（ritsu の DESIGN 6.2 の 3）。ルートは yuen と sakai と同じく、`--root` があればそれ、無ければ最初に渡したパスの上で `.git` を持つ一番近いディレクトリ、それも無ければ、渡したファイルのあるディレクトリである。sekisho のクレートのバイナリと `ritsu sekisho` では、`check`・`gen`・`vectors`・`api` が `--root <dir>` を取り（ディレクトリでなければ exit 2）、無ければ最初に渡したファイルから探す。`ritsu check` は、プロジェクトのルート（ritsu の DESIGN 6.1）を渡す（`check::checked`）。ライブラリから呼ぶときは `check::Options::root` に渡し、`None` なら、確かめるファイルから同じ決まりで探す。`use` のパスを書いたまま参照にすると、`.gate` の置き場所によって、同じ文書の同じ操作が違う参照になり、yuen と sakai が書く参照と突き合わせられない。
 
@@ -278,7 +278,7 @@ separate refunding_and_auditing
 today range >=2026-10-01 <=2028-10-31 offset +00:00
 ```
 
-`today` はリクエストの日で、生成したコードがサーバーの時計から取る。範囲（検査はこの範囲のすべての日を数え、生成したコードはほかの日を受け付けない）と、日を変えるオフセットを書く。koyomi と同じく、夏時間のあるタイムゾーンの名前は書けない（koyomi の DESIGN 1.9）。イングランドとウェールズのように夏時間のある地域では、日を UTC の 0 時で変えるなどと決めて `.gate` に書き、読む人に見せる（例では、夏のあいだ、現地の 0 時から 1 時までは前の日として扱われる）。`today` を使う計算した値があれば、`today` の行は要る（E107）。
+`today` はリクエストの日で、生成したコードがサーバーの時計から取る。範囲（検査はこの範囲のすべての日を数える）と、日を変えるオフセットを書く。生成したコードは、`today` を読む計算した値を持つ action では、範囲の外の日を受け付けない（3.8）。`today` を読まない action は、どの日でも、ほかの決まりのとおりに答える。Cedar に渡すものが日に依らず、検査が数えた答えがそのまま当てはまるからである。koyomi と同じく、夏時間のあるタイムゾーンの名前は書けない（koyomi の DESIGN 1.9）。イングランドとウェールズのように夏時間のある地域では、日を UTC の 0 時で変えるなどと決めて `.gate` に書き、読む人に見せる（例では、夏のあいだ、現地の 0 時から 1 時までは前の日として扱われる）。`today` を使う計算した値があれば、`today` の行は要る（E107）。
 
 ### 2.10 ほかの `.gate` を読む
 
@@ -425,12 +425,15 @@ sekisho が生成する形（実物。並びと書き方は `cedar translate-sch
 
 ### 3.8 計算できなければ拒む
 
-生成したコードは、次のときに Cedar に尋ねずに拒み、理由を返す。
+生成したコードは、次のときに Cedar に尋ねずに拒み、理由を種類とともに返す（種類は括弧の中の六つ。確かめる順は 5.3）。
 
-- `Store` が principal か resource を返さない。属性が宣言した範囲や列挙の外。
-- `input` が宣言した範囲の外。
-- `today` が宣言した範囲の外（例の試しでは 2029-01-02 で `today 2029-01-02 is outside 2026-10-01..2028-10-31` を返して拒んだ）。
-- 規則や日付の生成物がエラーを返した（範囲を確かめていれば起きないはずのことへの備え）。
+- principal の型がその action のとるものでない。宣言していないワークフロー。`Store` が principal を返さない。属性が宣言した範囲や列挙の外。型の持たない役割（`principal`）。
+- resource の ID が無い（TypeScript と Python。Go の入力の ID は文字列の型で、いつもある）。resource の型がその action のとるものでない。`Store` が resource を返さない。属性が宣言した範囲や列挙の外（`resource`）。
+- `input` が無いか、宣言した範囲や列挙の外（`input`）。
+- `today` を読む計算した値を持つ action で、`today` が宣言した範囲の外（`today`）。例の `refund_order` に 2029-01-02 を渡すと、生成したコードは `today 2029-01-02 is outside 2026-10-01..2028-10-31, the range "refunds.gate" was checked over` を返して拒む。`today` を読まない action は、範囲の外の日でも、ほかの決まりのとおりに答える（2.9）。
+- 規則や日付の生成物がエラーを返した（`rule`・`date`。範囲を確かめていれば起きないはずのことへの備え）。
+
+尋ねたあとも、Cedar がエラーを言ったとき、尋ねる先に届かないとき（`--authorizer avp`）は拒み、七つ目の種類 `cedar` を返す（5.3）。
 
 Cedar に尋ねる前に拒むのは、Cedar が、評価の途中でエラーになったポリシーを当てはまらなかったものとして扱うからである。forbid の条件がエラーになれば、その forbid は効かず、ほかの permit が許すことがある。生成するポリシーは Cedar の検証（strict）を通り、検証は、スキーマに合うリクエストではエラーが起きないことを保証する（13.1。整数のオーバーフローは別で、sekisho は算術を生成しない）。だから、エラーの元は、スキーマに合わない値を入れることだけで、それを Cedar の前で止める。突き合わせのテストは、どのリクエストでもエラーが 0 であることも確かめる（`num_errors: 0`）。
 
@@ -559,7 +562,9 @@ sekisho は SMT のソルバーに頼らない。ritsu の検査は、ネット�
 
 ## 5. 生成するもの
 
-`sekisho gen <file.gate>... --target cedar|typescript|python|go [--authorizer cedar|avp] [--out <dir>] [--check]` が書く。`ritsu gen` は、プロジェクトの `.gate` から、同じものをパッケージの中に書く（5.6）。段階 B で `--target cedar` を作った。`typescript`・`python`・`go` と `--authorizer` は段階 C で足す。`--target` は省けない。三つの言語のコードは、サービスの言語を一つ選んで書くもので、全部をいつも書くものではないからである。
+`sekisho gen <file.gate>... --target cedar|typescript|python|go [--authorizer cedar|avp] [--module <path>] [--out <dir>] [--check] [--root <dir>]` が書く。`ritsu gen` は、プロジェクトの `.gate` から、同じものをパッケージの中に書く（5.6）。段階 B で `--target cedar` を、段階 C で `typescript`・`python`・`go` と `--authorizer`・`--module` を作った。`--target` は省けない。三つの言語のコードは、サービスの言語を一つ選んで書くもので、全部をいつも書くものではないからである。
+
+`.gate` ごとに、`--target typescript` は `<out>/typescript/authz/<別名>.ts` を、`python` は `<out>/python/authz/<別名>.py` を、`go` は `<out>/go/authz/<パッケージ>/<パッケージ>.go` を書く。中身は `ritsu gen` がパッケージに入れるもの（5.6）と同じで、隣の `rules/` と `dates/` にある規則と日付の生成物を読む。rulec と koyomi の生成物の場所をコマンドごとに変えず、どちらから書いても同じコードにするためである。Go の import のパスは `--module` で決める（既定は `generated`。`ritsu gen` の既定と同じ）。
 
 `--target cedar` は、`.gate` ごとに `<out>/cedar/` の下に四つのファイルを、ファイルの別名で書く（`--out` の既定は `generated`。`ritsu gen` の `generated/cedar/` と同じ形）。検査を通らないファイルからは何も書かない（その診断を出し、exit 1）。ほかの言語を読むファイルを sekisho のクレートのバイナリで走らせれば、`check` と同じく E209 で exit 2 になる。`--check` は何も書かず、ディスクのファイルが、いま書くものと一字も違わないかを見る（違うファイルと無いファイルを一行ずつ言い、exit 1。koyomi の `gen --check` と同じ）。
 
@@ -671,45 +676,100 @@ when { !(resource.level == "high") || principal.clearance >= 3 };
 
 ### 5.3 リクエストを組み立てるコード
 
-action ごとに、TypeScript・Python・Go で二つの関数を生成する。
+action ごとに、TypeScript・Python・Go で二つの関数を生成する。TypeScript なら `refundOrderRequest` と `authorizeRefundOrder`（Python は `refund_order_request` と `authorize_refund_order`、Go は `RefundOrderRequest` と `AuthorizeRefundOrder`）である。
 
-- `<action>Request(store, principal, input, now)`：`Store` から principal と resource を読み、`input` と範囲を確かめ、rulec と koyomi の生成物を呼んで計算した値を求め、Cedar のリクエストとエンティティの JSON を返す。計算できなければ、種類の付いたエラー（`principal`・`resource`・`input`・`today`・`rule`・`date`）を投げる（3.8）。
-- `authorize<Action>(store, principal, input, now)`：上で組み立てて、Cedar に尋ね、答え（許すか、決めたポリシーの `@id`、拒んだ理由）を返す。エラーは拒む答えにする。答えには、Cedar に渡した context も入れる。判断の記録（監査のログ）に、計算した値と決めたポリシーを一緒に残せるようにするためである。
+- `<action>Request(store, principal, input, now)`：`Store` から resource と principal を読み、`input` と範囲を確かめ、rulec と koyomi の生成物を呼んで計算した値を求め、Cedar のリクエストとエンティティを返す。計算できなければ、種類の付いたエラー（`principal`・`resource`・`input`・`today`・`rule`・`date`）を投げる（3.8）。
+- `authorize<Action>(store, principal, input, now)`：上で組み立てて Cedar に尋ね、答え（許すか、決めたポリシーの `@id` を並べ替えたもの、Cedar に渡した context、拒んだ理由）を返す。上のエラーは拒む答えにする。Cedar がエラーを言ったとき（`--authorizer avp` では尋ねられなかったときも）も拒む答えにし、種類は七つ目の `cedar` である。評価の途中でエラーになったポリシーを Cedar は当てはまらなかったものとして扱い、forbid が効かずに許すことがあるからである。`Store` の失敗（データベースに届かない、など）は、そのまま投げる。判断ではなく、呼ぶ側が扱う失敗だからである。`--authorizer avp` では、尋ねる先 `avp` を最初の引数で受け取る（Go は `ctx` のあと。5.5）。
+
+`principal` は型と ID（ワークフローは名前）、`input` は宣言した `input` と、resource の ID を持つ。resource の ID のフィールドは、`from` を書けばその引数（`orderId`）、書かなければ `resource` である。resource の型を二つ以上とる action では、`resource_type` が型を言う。`now` は時刻で、日は `today` のオフセットで決める。
+
+確かめる順は決めてある。最初に外れたものの種類で拒み、Cedar には尋ねない。
+
+1. `principal`：principal の型が、その action のとるものでない。宣言していないワークフロー。
+2. `today`：その action の計算した値が `today` を読むとき、`now` の日が `today` の範囲の外。`today` を読まない action では確かめない（2.9）。
+3. `input`：宣言した入力が無い（`?` のものを除く）、型か範囲か列挙の外。
+4. `resource`：resource の ID が無い（TypeScript と Python）。resource の型が、その action のとるものでない。読むときは、`Store` が返さない。属性が無い（`?` のものを除く）か、範囲か列挙の外。
+5. `principal`：4 と同じく principal。役割がその型の `roles` に無い、メンバーであるグループの型が違う。
+6. `rule`・`date`：規則の生成物が入力を受け付けない、日付が止まる、カレンダーの知らない日。
+
+`Store` がエンティティについて返すものは、型ごとに一つに決まり、どの action でも同じである。役割（型が役割を持つとき）、メンバーであるグループ（ポリシーがその型の principal に聞くとき）、属性（スキーマがその型に与えるものと、その型をとるどれかの action の計算した値が読むもの）である。このどれかがある型は、その型をとるどの action でも読み、全部を確かめる。どれも無い型（例の `Customer`、`RefundRecord`）は ID だけでエンティティを作り、ワークフローは名前で作る。action ごとに読むものを変える形も試したが、同じデータが action によって拒まれたり通ったりし、型ごとの `Store` の形とも合わないので捨てた。
+
+例の `refund_order` の TypeScript（`ritsu sekisho gen examples/refunds/refunds.gate --target typescript` の実物から）：
 
 ```ts
-// Code generated by sekisho 0.24.0. DO NOT EDIT.   （設計の段階に手で書いた見本から）
-export interface RefundOrderInput {
-  orderId: string;
-  /** money[GBP, incl_tax], 1 to 10000 */
-  amount: GBPInclTax;
+export interface User {
+  /** The roles it holds directly (clerk, manager, auditor) */
+  roles: Role[];
+  /** money[GBP, incl_tax], 0 to 10000 */
+  refund_limit: bigint;
+  suspended: boolean;
 }
-
+…
 export async function refundOrderRequest(store: Store, principal: Principal, input: RefundOrderInput, now: Date = new Date()): Promise<Request> {
+  if (principal.type !== "User" && principal.type !== "Workflow") _fail("principal", `refund_order is asked by User, Workflow, not by a ${(principal as Uid).type}`);
+  if (principal.type === "Workflow" && !_WORKFLOWS.includes(principal.id)) _fail("principal", `the gate declares no workflow ${principal.id}`);
+  const day = _today(now);
+  const in0 = _num(input.amount, 1n, 10000n, "input", "amount");
+  const resourceId = _id(input.orderId, "resource", "orderId");
   …
-  if (user !== undefined) {
-    // rulec "rules/refund_limit.rule" output band, from amount and principal.refund_limit
-    const band: RefundBand = refund_limit(input.amount, user.refund_limit);
-    context.refund_band = band;
+  const r_Order: Order | undefined = _read_Order(await store.order(resourceId), "resource", resourceId);
+  const p_User: User | undefined = principal.type === "User" ? _read_User(await store.user(principal.id), "principal", principal.id) : undefined;
+  const context: Record<string, Value> = {};
+  context["amount"] = Number(in0);
+  // refund_band = rulec "rules/refund_limit.rule" output band, from amount: amount, limit:
+  // principal.refund_limit
+  if (p_User !== undefined) {
+    context["refund_band"] = _public({ [rule_refund_limit.RefundBand.WITHINLIMIT]: "within_limit", [rule_refund_limit.RefundBand.OVERLIMIT]: "over_limit" }, _rule(() => rule_refund_limit.refund_limit(in0 as rule_refund_limit.GBPInclTax, p_User.refund_limit as rule_refund_limit.GBPInclTax)));
   }
-  // today <= koyomi "dates/refund_terms.cal" date last_day, from resource.paid_on
-  context.in_period = day <= refund_terms_last_day(order.paid_on);
-  // today is open in koyomi "calendars/england_and_wales.cal"
-  context.business_day = uk_is_open(day);
+  // in_period = today <= koyomi "dates/refund_terms.cal" date last_day, from paid_on:
+  // resource.paid_on
+  if (r_Order !== undefined) {
+    context["in_period"] = day <= _dated(() => dates_refund_terms.last_day(r_Order.paid_on));
+  }
+  // business_day = today is open in koyomi "calendars/england_and_wales.cal"
+  context["business_day"] = _dated(() => dates_england_and_wales.is_open(day));
   …
 ```
 
-規則と日付の生成物の呼び方は、口から取る。rulec の関数の名前と型は `RuleFacts::typescript`・`python`・`go`（ritsu の DESIGN 3.2）、koyomi の関数の名前は dandori と同じく ritsu-emit の決め方で求める（ritsu の DESIGN 3.2 の E.5）。
+規則と日付の生成物の呼び方は、口から取る。rulec の関数の名前と引数の型は `RuleFacts::typescript`・`python`・`go`（ritsu の DESIGN 3.2）、koyomi の関数の名前と引数の順は `DateFacts` の日付の別名と入力、カレンダーの関数は `is_open` で、モジュールはカレンダーの別名（`Dates::calendar`）である。どちらのモジュールも名前空間ごと別名で読み（TypeScript は `import * as rule_refund_limit`、`dates_refund_terms`、Python は `from ..rules import refund_limit as _rules_refund_limit`、Go は `rulesrefundlimit "<module>/rules/refundlimit"`）、ゲートの型や列挙の名前とぶつからないようにする。生成するコードが自分で使う名前（`Principal`、`Store`、`Request`、`Answer` など）とゲートの型や列挙の名前がぶつかれば、どの言語でも、ゲートの名前はそのまま使い、生成するコードの名前に `_2` を付ける（`Store_2`）。ゲートの名前が、生成するコードが呼ぶ組み込みの名前や読み込む名前（TypeScript の `Date`、Python の `Protocol` など）と同じなら、ゲートの名前のほうに `_2` を付ける。
 
-例の見本は三つの言語とも、ritsu 0.23.0 の `rulec gen` と `koyomi gen` が書いた三つのモジュール（規則、日付、カレンダー）を呼び、生の値から組み立てた 11 のリクエストに、三つとも同じ、期待どおりの答えを返した（TypeScript は cedar-wasm 4.13.0、Python は cedarpy 4.12.1、Go は cedar-go v1.8.0。6.3）。Go では、koyomi の日付のパッケージがそれぞれ自分の `Date` の型を持つので、生成するコードは、日付のファイルとカレンダーのあいだで年月日を詰め替える。
+- 規則の列挙の出力は、生成物の値をそのまま Cedar に渡さない。rulec の生成物の値は `.rule` に書いた名前で、日本語の版では `上限まで` になるからである。生成物のメンバーから公開名（`EnumValue::public`。`within_limit`）を引く表を書き、それで引いて渡す（16.1 の 14）。設計の段階の見本は値をそのまま渡していて、英語の版でしか合わなかった。ゲートの列挙の値を規則の列挙の入力に渡すときも、値ごとの表で規則のメンバーを引く。
+- 数は、宣言した単位で数えた整数として受け取る（TypeScript は `bigint`、Python は `int`、Go は `int64`）。規則に渡すときに、規則の単位の型（`GBPInclTax`）にする。二つの規則が同じ単位の型をそれぞれ持てば、Python の `NewType` も Go の名前付きの型も別の型になり、どちらかの型で受け取ると、もう一方に渡せないからである。
+- 日付は、Python は `datetime.date`、Go はパッケージの `Date{Year, Month, Day}` で受け取る。TypeScript では `YYYY-MM-DD` の文字列で受け取り、koyomi の生成物にはそのまま渡し、rulec の生成物の日付の入力には 1970-01-01 からの日数を渡す（rulec の生成物がそう受け取る）。`today` の比べ方（`<=` など）は文字列の比べ方で、同じ長さの `YYYY-MM-DD` なので日の順と同じになる。
+- Go では、koyomi の日付のパッケージがそれぞれ自分の `Date` の型を持つので、生成するコードは、日付のファイルとカレンダーのあいだで年月日を詰め替える。
+
+三つの言語の形（例の `refund_order`）：
+
+| | TypeScript | Python | Go |
+|---|---|---|---|
+| 組み立てる | `refundOrderRequest(store, principal, input, now = new Date()): Promise<Request>`。拒むときは `SekishoError` を投げる | `refund_order_request(store, principal, input, now=None) -> Request`。拒むときは `SekishoError` を投げる | `RefundOrderRequest(store Store, p Principal, in RefundOrderInput, now time.Time) (Request, error)`。拒むときは `*Error` を返す |
+| 尋ねる | `authorizeRefundOrder(store, principal, input, now = new Date()): Promise<Answer>` | `authorize_refund_order(store, principal, input, now=None) -> Answer` | `AuthorizeRefundOrder(store, p, in, now) Answer` |
+| `--authorizer avp` | `authorizeRefundOrder(avp, store, principal, input, now)`。`avp` は `VerifiedPermissions { client, policyStoreId }` | `authorize_refund_order(avp, store, principal, input, now=None)`。`avp` は `VerifiedPermissions(client, policy_store_id)` | `AuthorizeRefundOrder(ctx, avp, store, p, in, now)`。`avp` は `VerifiedPermissions{Client, PolicyStoreID}` |
+| `Store` | `interface`。型ごとに `user(id): Promise<User \| undefined \| null>` | `Protocol`。型ごとに `user(id) -> User \| None` | `interface`。型ごとに `User(id string) (*User, error)` |
+| レコード | `interface`。役割は `roles`、グループは `member_of`（型と ID） | `@dataclass(frozen=True)`。役割は `roles`、グループは `member_of_<型>`（ID） | 構造体。`Roles`、`MemberOf<型>` |
+| 無いことがある値 | `?` のプロパティ（`null` も受け付ける） | `X \| None` | ポインタ |
+| `now` | `Date`（省けばいま） | タイムゾーンのある `datetime`（省けばいまの UTC。`today` を読む action では、タイムゾーンの無いものは日を決められないので、`today` で拒む） | `time.Time` |
+
+レコードは ID を持たない。ID は尋ねたもので、`Store` が別の ID のものを返す食い違いを作らないためである。Python の規則の呼び方（`ritsu sekisho gen examples/refunds/refunds.gate --target python` の実物から）：
+
+```python
+    # refund_band  = refund_limit(amount: amount, limit: principal.refund_limit).band
+    if p_user is not None:
+        try:
+            v_refund_band = _rules_refund_limit.refund_limit(_rules_refund_limit.GBPInclTax(in_amount), _rules_refund_limit.GBPInclTax(p_user.refund_limit))
+            context['refund_band'] = {_rules_refund_limit.RefundBand.WITHINLIMIT: 'within_limit', _rules_refund_limit.RefundBand.OVERLIMIT: 'over_limit'}[v_refund_band]
+        except Exception as x:
+            raise SekishoError("rule", f'rulec "rules/refund_limit.rule": {x}') from x
+```
 
 ### 5.4 リクエストとエンティティの JSON
 
 Cedar のエンティティの JSON の形（`{"uid": {"type", "id"}, "attrs", "parents"}`）で書く。
 
 - 役割のエンティティ：`.gate` の役割と `includes` から作った定数。
-- principal：型ごとに、ポリシーが読む属性と、`Store` が返した役割を親にしたもの。ワークフローは属性を持たない。
-- resource：ポリシーが読む属性。エンティティの型の属性は `{"__entity": {…}}` で書き、指す先のエンティティも入れる（例の `customer`）。
-- context：ポリシーが読む `input`（宣言した単位で数えた整数）と、計算した値。
+- principal：スキーマがその型に与える属性と、`Store` が返した役割とグループを親にしたもの。ワークフローは属性を持たない。
+- resource：スキーマがその型に与える属性。エンティティの型の属性は `{"__entity": {…}}` で書き、指す先の型がスキーマで属性を持たないときは、指す先のエンティティも入れる（例の `customer`）。属性を持つ型のものは書かない。Cedar はそのエンティティの属性を読まないからである（`vectors` と同じ。6.1）。同じ ID のエンティティは一つだけ入れる（顧客が注文の持ち主で、principal でもあるとき）。
+- context：ポリシーが読む `input`（宣言した単位で数えた整数）と、計算した値の全部（計算しない型のときと、値の無いときは入れない）。
 
 数は JSON の数として書く。TypeScript の `number` で正確に表せるのは 2⁵³ までなので、宣言する範囲は ±(2⁵³ − 1) に収める（E103）。
 
@@ -719,27 +779,32 @@ Cedar のエンティティの JSON の形（`{"uid": {"type", "id"}, "attrs", "
 |---|---|---|---|
 | 公式の CLI `cedar-policy-cli` | 4.13.0（2026-09-15。Cedar の言語の版は 4.5） | テストだけで使う（`validate`・`format --check`・`run-tests`・`translate-*`） | `@id` を名前にする |
 | Rust `cedar-policy` | 4.13.0（crates.io、2026-09-15） | 生成しない（Rust は生成先に無い。9.3 の三つの言語） | — |
-| npm `@cedar-policy/cedar-wasm` | 4.13.0（2026-09-15） | `isAuthorized({principal, action, resource, context, entities, policies: {staticPolicies: {<@id>: <ポリシー>}}, schema, validateRequest: true})`。Node は `@cedar-policy/cedar-wasm/nodejs` | 一つのテキストを渡すと `policy0`… になる |
-| Go `github.com/cedar-policy/cedar-go` | v1.8.0（2026-06-01） | `json.Unmarshal` で JSON の形のポリシーを `cedar.PolicySet` に読み、`cedar.Authorize(ps, entities, req)` | 検証器は実験（`x/exp/schema`）で、テンプレートと部分評価が無い（sekisho は使わない）。`NewPolicySetFromBytes` は `policy0`… |
-| Python `cedarpy`（k9securityio。AWS の公式ではない） | 4.12.1（2026-09-24。Cedar 4.12.0） | `cedarpy.PolicySet.from_json_str(…)` を一度作り、`is_authorized(request, policies, entities, schema=…)` | 文字列で渡すと `policy0`… |
-| Amazon Verified Permissions | Cedar 4 に上げた（`is`、タグ、`datetime` と `duration` の値が使える。Verified Permissions の Cedar 4 の FAQ） | `IsAuthorized`（`entities` と `context` は `cedarJson` で渡せる） | 決めたポリシーは生成された `policyId` で返る（5.8） |
+| npm `@cedar-policy/cedar-wasm` | 4.13.0（2026-09-15） | `isAuthorized({principal, action, resource, context, entities, policies: POLICIES, schema: SCHEMA, validateRequest: true})`。Node は `@cedar-policy/cedar-wasm/nodejs`。`POLICIES` は `.policies.json`（`@id` ごと）、`SCHEMA` は `.cedarschema.json` を、モジュールの中の JSON の文字列から一度だけ読んだもの | 一つのテキストを渡すと `policy0`… になる |
+| Go `github.com/cedar-policy/cedar-go` | v1.8.0（2026-06-01） | `json.Unmarshal` で JSON の形のポリシーを `cedar.PolicySet` に読み、`cedar.Authorize(ps, entities, req)`。スキーマは渡さない | 検証器は実験（`x/exp/schema`）で、テンプレートと部分評価が無い（sekisho は使わない）。だから生成するコードはスキーマを持たず、範囲と列挙は尋ねる前に自分で確かめる。`NewPolicySetFromBytes` は `policy0`… |
+| Python `cedarpy`（k9securityio。AWS の公式ではない） | 4.12.1（2026-09-24。Cedar 4.12.0） | `cedarpy.PolicySet.from_json_str(…)` と `cedarpy.Schema.from_json_str(…)` をモジュールを読み込むときに一度作り、`is_authorized(request, policies, entities, schema=…)`。スキーマを渡すので、cedarpy がリクエストとエンティティをスキーマで確かめる | 文字列で渡すと `policy0`… |
+| Amazon Verified Permissions | Cedar 4 に上げた（`is`、タグ、`datetime` と `duration` の値が使える。Verified Permissions の Cedar 4 の FAQ） | `IsAuthorized`（`entities` と `context` は `cedarJson` で渡す） | 決めたポリシーは生成された `policyId` で返る（5.8） |
 
-`--authorizer cedar`（既定）は、その言語の Cedar の実装をプロセスの中で呼ぶ。`--authorizer avp` は、AWS の SDK（`@aws-sdk/client-verifiedpermissions`、boto3、`aws-sdk-go-v2/service/verifiedpermissions`）で `IsAuthorized` を呼ぶ。どちらも、組み立てる関数（`<action>Request`）は同じである。
+`--authorizer cedar`（既定）は、その言語の Cedar の実装をプロセスの中で呼ぶ。`--authorizer avp` は、AWS の SDK（`@aws-sdk/client-verifiedpermissions` 3.1146.0、boto3 1.43.103、`github.com/aws/aws-sdk-go-v2` v1.47.1 と `service/verifiedpermissions` v1.41.1）で `IsAuthorized` を呼び、context とエンティティを `cedarJson` で渡す。boto3 は dandori の `tools/wire` と同じ版で、Python の型の検査には `boto3-stubs[verifiedpermissions]` 1.43.103 を使う。どちらも、組み立てる関数（`<action>Request`）は同じである。`avp` の `authorize<Action>` は、尋ねる先 `avp` を最初の引数で受け取る（Go は `ctx` のあと）。型はどの言語も `VerifiedPermissions` で、Verified Permissions のクライアントとポリシーストアの ID を持つ（TypeScript は `{ client, policyStoreId }`、Python は `(client, policy_store_id)`、Go は `{Client, PolicyStoreID}`。Go の `Client` は `IsAuthorized` を持つもので、AWS の SDK の `*verifiedpermissions.Client` がそうである）。モジュールに AWS の資格や地域を書き込まないためである。`avp` のモジュールはポリシーとスキーマを持たない。持つのはポリシーストアである（5.8）。
 
 ### 5.6 `ritsu gen` のパッケージへの入り方
 
-ritsu の DESIGN 9.3 のパッケージに、次を足す。
+ritsu の DESIGN 9.3 のパッケージに、次を足した。
 
 ```
 generated/cedar/<別名>.cedar, <別名>.cedarschema, <別名>.cedarschema.json, <別名>.policies.json   言語に依らない（一度だけ書く）
-generated/typescript/authz/<別名>.ts
+generated/typescript/authz/<別名>.ts, authz/index.ts
 generated/python/<name>/authz/<別名>.py
 generated/go/authz/<パッケージ>/<パッケージ>.go
 ```
 
-- 認可のモジュールは、同じパッケージの `rules/` と `dates/` の生成物を読む（ワークフローと同じ）。インデックスのファイル（`index.ts`、`__init__.py`）に `authz` を足す。
-- 依存は、`.gate` があるときだけ書く。TypeScript は `@cedar-policy/cedar-wasm` を `"4.13.0"`、Python は `cedarpy==4.12.1`、Go は `doc.go` に `github.com/cedar-policy/cedar-go v1.8.0`。`--authorizer avp` なら AWS の SDK。書くバージョンは、sekisho の `tools/` のランナーのロックファイルのバージョンと同じにし、ritsu の監査（ritsu の DESIGN 3.6）がそのロックファイルを調べる。`crates/ritsu/tests/audit.rs` の確かめに sekisho のランナーを足す。
+- `ritsu gen` は、プロジェクトの `.gate` を `ritsu check` と同じく全部の言語をつないで確かめ、通らなければ何も書かない（ほかの言語のファイルと同じ）。`.gate` が読む規則と日付とカレンダーは、プロジェクトのファイルでなければならない（ワークフローと同じ。パッケージの `rules/` と `dates/` から読むため）。
+- Cedar の四つのファイルは、`--target` に依らず `<out>/cedar/` に一度だけ書く。頭は、プロジェクトの根からのパスで元の `.gate` を言う（ritsu の DESIGN 9.2）。`--check` も同じく見る。
+- 認可のモジュールは、同じパッケージの `rules/` と `dates/` の生成物を読む（ワークフローと同じ）。インデックスのファイル（`index.ts` と `authz/index.ts`、`__init__.py`）に `authz` を足す。パッケージの説明の文は、`.gate` があるときだけ「ゲートに尋ねるコード」を言う。
+- 依存は、`.gate` があるときだけ書く。TypeScript は `@cedar-policy/cedar-wasm` を `"4.13.0"`（`--authorizer avp` なら `@aws-sdk/client-verifiedpermissions` を `"3.1146.0"`）、Python は `cedarpy==4.12.1`（avp なら `boto3==1.43.103`）、Go は `doc.go` に `github.com/cedar-policy/cedar-go v1.8.0`（avp なら `github.com/aws/aws-sdk-go-v2 v1.47.1` と `github.com/aws/aws-sdk-go-v2/service/verifiedpermissions v1.41.1`）。`ritsu gen` も `--authorizer cedar|avp` を取る。
+- 書くバージョンは、sekisho の `tools/` のランナーのロックファイルのバージョンと同じにし、ritsu の監査（ritsu の DESIGN 3.6）がそのロックファイルを調べる。`crates/ritsu/tests/audit.rs` は、sekisho の例をプロジェクトにして二つの authorizer でパッケージを生成し、書いたバージョンがランナーのロックファイル（`tools/runner-ts/package-lock.json`、`tools/runner-py/requirements.txt`、`tools/runner-go/go.mod`）と同じことを確かめる。TypeScript の版は、生成器の定数（`sekisho::r#gen::typescript::CEDAR_WASM`、`AWS_SDK`）を `ritsu gen` も読む。
 - ポリシーとスキーマは、生成するモジュールの中に定数として書き込む（koyomi が祝日の表を書き込むのと同じ）。リクエストを組み立てるコードと、評価するポリシーの版が食い違わないようにするためである。Verified Permissions を使うときは、ストアに置いたポリシーと生成したコードの版を合わせるのは、置く側の仕事になる（5.8）。
+- `ritsu gen --authorizer avp` も、`sekisho gen` と同じく W401 を言う（5.8）。
+- 確かめ方：`crates/ritsu/tests/gen.rs` が、sekisho の例をプロジェクトにして三つの言語のパッケージを書き、ファイルの形、インデックス、依存、型の検査（TypeScript は dandori のランナーの `tsc --strict` と sekisho のランナーの cedar-wasm の型、Python は `mypy --strict` と cedarpy、Go は sekisho の Go のランナーの `go.mod` で作ったモジュールの `go vet` と gofmt）、`--check` が何も言わないことと `.gate` を変えたときに言うこと、`--authorizer avp` の依存を確かめる。中身の突き合わせは sekisho のテスト（6.3）がする。
 
 ### 5.7 日本語の名前と ASCII
 
@@ -767,7 +832,13 @@ sekisho は Verified Permissions に何も送らない（ritsu の検査と生�
 - スキーマ：`.cedarschema.json` を `PutSchema` に渡す。ポリシーより先に置く（Verified Permissions は `CreatePolicy` のときに、ストアのスキーマでポリシーを検証する）。context の値を足すときも、スキーマを先に変える。
 - ポリシー：`.cedar` のポリシーを一つずつ Cedar のテキストに書いたもの（`ritsu_base::cedar::write_policy`）を、`CreatePolicy` の `definition.static.statement` にし、`name` に `@id` を渡す。`statement` は Cedar のポリシーの言語で書いた中身で（API の文書の `StaticPolicyDefinition`）、JSON の形ではない。`.policies.json` は、三つの実装（cedar-wasm、cedarpy、cedar-go）に `@id` ごとに渡すためのものである（5.2）。`name` はポリシーストアの中で一意な名前で、ポリシーを指す API では ID の代わりに使え、そのときは頭に `name/` を付ける（`name/refunds/clerks_refund_within_their_limit`）。`@id` は `name` の形（`[a-zA-Z0-9-/_]*`、150 字まで）に収まる（5.2）。どれも 2026-10-06 に、API の文書の CreatePolicy（Request Syntax と `definition`・`name` の説明。<https://docs.aws.amazon.com/verifiedpermissions/latest/apireference/API_CreatePolicy.html>）、StaticPolicyDefinition（<https://docs.aws.amazon.com/verifiedpermissions/latest/apireference/API_StaticPolicyDefinition.html>）、GetPolicy（`policyId` に名前を渡すときの `name/`。<https://docs.aws.amazon.com/verifiedpermissions/latest/apireference/API_GetPolicy.html>）で確かめた。本物のアカウントでは確かめていない（15 章）。
 - `IsAuthorized` の `determiningPolicies` は、ストアが付けた `policyId` を返す。生成する `--authorizer avp` のコードは、それをそのまま返し、ページと文書に、名前で引けることを書く。
-- 上限（2026-10 の Verified Permissions のクォータ）：一つのポリシーは 10,000 バイトまで、スキーマは 100,000 バイトまで、一つのスキーマの名前空間は 100 まで、principal・action・resource のそれぞれの推移的な親は 100 まで、一つの認可のリクエストは 1 MB まで。`sekisho gen --authorizer avp` は、ポリシーとスキーマの大きさと、役割の親の深さがこれを超えれば W401 で言う。
+- 上限（2026-10 の Verified Permissions のクォータ）：一つのポリシーは 10,000 バイトまで、スキーマは 100,000 バイトまで、一つのスキーマの名前空間は 100 まで、principal・action・resource のそれぞれの推移的な親は 100 まで、一つの認可のリクエストは 1 MB まで。`sekisho gen --authorizer avp`（`--target` に依らない）と `ritsu gen --authorizer avp` は、次のどれかが超えれば W401 で言い、生成は続ける。ポリシーは、一つずつを `cedar format` の形で書いたテキストの大きさ（ストアに置くもの）。スキーマは JSON の形（`PutSchema` が受け取るもの）の大きさ。親は、型が持てる役割の全部と、それらが含む役割の数（役割を全部持つ principal の推移的な親）。グループのメンバーであることはデータで決まり、数えられないので数えない。名前空間は一つのゲートで一つなので、リクエストの大きさはデータで決まるので、見ない。例（`sekisho explain W401` の再現。役割が一つずつ前の役割を含み、101 個並ぶ）：
+
+  ```text
+  warning[W401]: example.gate:206:1: A User can hold 101 roles with the roles they include, past the 100 transitive parents Verified Permissions lets an entity have
+     206 | principal User
+    = Make the roles nest less deep, or spread the type's roles over types of their own.
+  ```
 - 置く手順（AWS の CLI、CloudFormation の `AWS::VerifiedPermissions::Policy` など）は生成しない。置くのは使う人で、sekisho が書くのは置くためのファイルだけである。
 
 ## 6. 本物の Cedar との突き合わせのテスト
@@ -819,11 +890,18 @@ sekisho は Verified Permissions に何も送らない（ritsu の検査と生�
 
 ### 6.3 生成したコードのテスト（段階 C）
 
-- 生の値の作り方：組み合わせごとに、区間の両端の値、規則の入力は rulec の vectors（境目から作った入力）、日付は koyomi が数えた日のうち述語の真偽が変わる日の前後を使い、`Store` の中身、`input`、時刻を作る。
-- TypeScript（Node と cedar-wasm、`tsc --strict`）、Python（cedarpy、`mypy --strict`）、Go（cedar-go、`go vet` と gofmt）で、生成したコードに生の値を渡して答えを得て、同じ生の値から sekisho の参照の評価（rulec と koyomi の参照の評価器を口で呼ぶ）で求めた答えと比べる。決めたポリシーまで一致すること。
-- 試し：例の三つの言語の見本（`generated/typescript`・`python`・`go`）に、11 の場合（上限の内と外、期間の最後の日と次の日、期間のあとの金曜と土曜、監査を兼ねる係、停止中の manager、ワークフローの 50 と 51 ポンド、返金済の注文、範囲の外の日）を生の値から渡し、三つとも同じ、期待どおりの答えを返した。規則と日付は、ritsu 0.23.0 の `rulec gen` と `koyomi gen` が書いた本物の生成物を呼んだ。TypeScript は `tsc --strict`（5.9.3）、Python は `mypy --strict`（2.4.0）、Go は `go vet` と gofmt を通した。
+組み合わせごとに、生成したコードに渡す生の値（`Store` の中身、`input`、時刻）を作り、同じ生の値から sekisho の参照の評価で求めた答えと、生成したコードの答えを比べる（`src/raw.rs`、`tests/raw.rs`、`tests/typescript.rs`、`tests/python.rs`、`tests/go.rs`）。
+
+- 生の値の作り方：検査が歩いた組み合わせの全部から作る。ポリシーが比べる数は、区間の両端で一つずつ（`vectors` と同じく、区間に二つ以上の値がある組み合わせは二件。名前も `vectors` と同じ `refund_order 3 (amount 1)`）。規則だけが読む値（係の上限）は、rulec がその区間で出力の値ごとに言う入力（`Rules::outputs_over`。rulec の vectors の、境目から作った入力）を先に、範囲の両端と真ん中と端の一つ内側をそのあとに試し、出力が組み合わせの値になる最初のものを使う。日付だけが読む値（注文の支払日）は範囲の両端と真ん中と端の一つ内側、`today` は範囲のすべての日から選び、日付の述語の真偽が組み合わせのとおりになる組のうち、`today` が述語の変わる日（期間の最後の日とその次の日）にいちばん近いものを使う。時刻は、その日の `today` のオフセットでの最初の秒か最後の秒を交互に使う。エンティティの ID は `vectors` と同じ形（`user1`、`order1`、`customer2`）で、同じエンティティを指す項は同じ ID である。
+- 拒むはずの生の値も足す。action ごとに一つずつ壊したもの：`today` の範囲の前の日と次の日（`today` を読む action）、入力の範囲の下と上と列挙に無い値、`Store` に無い resource と principal、属性の範囲の外と列挙に無い値、型の持たない役割、action のとらない型の principal、宣言していないワークフロー（二つ以上の型をとる action では、とらない型の resource）。`today` を読まない action には、範囲の次の日を渡し、拒まずにほかの決まりのとおりに答えることを確かめる（2.9）。
+- 参照の答えは、組み合わせの答えをそのまま使わず、生の値から求め直す（`raw::Model::evaluate`）。rulec と koyomi の参照の評価器を口で呼んで計算した値を求め、組み合わせの場所に当てはめて、検査と同じ形にしたポリシーで決める（`eval`）。拒む順と種類も 5.3 のとおりに言う。生成するコードが従う決まりは、この関数が一か所に書く。テストは、組み合わせから作った生の値の答えが、その組み合わせの答えとどれも同じであることも確かめる。
+- 生成したコードは、言語ごとのハーネスが生の値（JSON）を読み、ケースごとに `Store` を作って `authorize<Action>` を呼び、答えを一件一行の JSON で出す。比べるのは、許すか、決めたポリシーの集合（並べ替えて比べる）、拒んだ種類、Cedar に渡した context（尋ねたとき）である。
+- 例の英語の版は、1,078 通りから区間の両端で 2,134 件、拒むはずの 28 件、範囲の外の日に答える 2 件（`view_order` と `export_refunds`）の 2,164 件になる。検査を通る 27 のファイル（action の無い 7 つには件が無い）では 27,531 件である。生の値が見つからない組み合わせは、W303 の材料の 2 通り（整数では届かない値）だけである。
+- TypeScript（`tests/typescript.rs`）：action のある 20 の `.gate` で、英語と日本語（`--lang ja`）と `--authorizer avp` のモジュールの全部が `tsc --strict`（5.9.3）を通り、Node 23.11.0 と cedar-wasm 4.13.0 で、27,531 件の全部が参照の評価と一致した（テストは 55 秒ほど）。名前がぶつかるゲート（型 `Store`・`Request`・`Date` と列挙 `value`）もテストの中で書き、ゲートの型と列挙が名前を保ち、生成するコードの名前が `Store_2` などになること、`tsc --strict` を通ること、16 件が参照の評価と一致することを確かめる。テストが誤りを見つけることも試した。生成するコードの日付の比べ方 `<=` を `<` にすると、例の英語の版の 2,164 件のうち 528 件が食い違った（期間の最後の日を使っているため）。
+- Python と Go（`tests/python.rs`、`tests/go.rs`）：同じ 27,531 件で、cedarpy 4.12.1 と cedar-go v1.8.0 の答えが参照の評価と一致した（どちらも 50 秒ほど）。型の検査は、27 の `.gate` を `--authorizer cedar`、`--authorizer avp`、`--lang ja` の三通りで生成した 81 のパッケージで、Python は `mypy --strict`（2.4.0）、Go は gofmt と `go vet`（Go 1.25.5）を通した。Go のハーネスは、反射で生の値をレコードと入力の構造体に入れ、ゲートごとに `Store` のメソッドを書く。
+- 規則と日付の生成物は、テストの中で rulec と koyomi の生成の関数（`rulec::codegen::package_module`、koyomi の言語ごとの `module`）で作り、`ritsu gen` のパッケージと同じ形に並べる。ランナーは `tools/runner-ts/`（`package-lock.json`）、`tools/runner-py/`（依存までハッシュつきで固定した `requirements.txt`。`install.sh` が uv で `.venv` を作る）、`tools/runner-go/`（`go.mod` と `go.sum`。`install.sh` が `go mod download`）で、Go のテストはモジュールのキャッシュだけでビルドする（`GOPROXY=off`）。CI は `tools.yml` の「the others」の組で三つを入れる。
 - `--authorizer avp` のコードは、型の検査だけをする（ネットワークを使わない。本物の Verified Permissions で走らせて確かめることは、まだしていない。15 章）。
-- 英語の版と日本語の版の双子：`refunds.gate` と `refunds.ja.gate` から生成した Cedar が、名前空間、ID の頭、`@name` と `@doc` のほかは同じであること、`vectors` の答えが同じであること。
+- 英語の版と日本語の版の双子：`refunds.gate` と `refunds.ja.gate` から生成した Cedar が、名前空間、ID の頭、`@name` と `@doc` のほかは同じであること、`vectors` の答えが同じであること。生の値も、ゲートの名前とポリシーの ID の頭のほかは同じである（`tests/raw.rs`）。
 
 ### 6.4 捨てた案
 
@@ -1267,21 +1345,22 @@ W304 は警告なので、終了コードは変わらず、`ok —` の行も出
 ## 11. コマンド
 
 ```
-sekisho check <file.gate>... [--format json] [--budget <n>] [--lang en|ja]
-sekisho gen <file.gate>... --target cedar|typescript|python|go [--authorizer cedar|avp] [--out <dir>] [--check]
+sekisho check <file.gate>... [--format json] [--budget <n>] [--root <dir>] [--lang en|ja]
+sekisho gen <file.gate>... --target cedar|typescript|python|go [--authorizer cedar|avp] [--module <path>] [--out <dir>] [--check] [--root <dir>] [--lang en|ja]
 sekisho doc <file.gate> [--format markdown|html] [--root <dir>] [--lang en|ja]
-sekisho vectors <file.gate> [--action <action>]          全部の組み合わせを cedar run-tests の形で
-sekisho api <file.gate>                                   外のツールのための JSON（action、守る操作、役割、ポリシーの @id、期待）
+sekisho vectors <file.gate> [--action <action>] [--root <dir>]          全部の組み合わせを cedar run-tests の形で
+sekisho api <file.gate> [--root <dir>]                                   外のツールのための JSON（action、守る操作、役割、ポリシーの @id、期待）
 sekisho explain <code> | --all [--format markdown|json]
 ```
 
-- 段階 B までにできたもの：`check`、`explain`、`gen --target cedar`（5 章）、`vectors`（6.1）、`api`。`gen` の `typescript`・`python`・`go` と `--authorizer` は段階 C で足す。`doc`（7 章）は段階 D で足した。コマンドの表（`src/cli.rs`）には、できたものだけを載せる（ritsu の DESIGN 4.4。載せたフラグは必ず効く）。
+- 段階 D までにできたもの：`check`、`explain`、`gen --target cedar`（段階 B。5 章）と `typescript`・`python`・`go`・`--authorizer`・`--module`（段階 C。5.3〜5.6）、`vectors`（6.1）、`api`、`doc`（段階 D。7 章）。コマンドの表（`src/cli.rs`）には、できたものだけを載せる（ritsu の DESIGN 4.4。載せたフラグは必ず効く）。
+- `gen --authorizer avp` は、Verified Permissions の上限を超えるものがあれば W401 を言い（5.8）、生成は続ける。警告なので終了コードは変わらない。
 - `vectors`、`api`、`doc` は、検査を通るファイルを一つ取る。通らなければ、その診断を出して exit 1。`vectors --action` は action の名前か別名で、無ければ exit 2。
 - `api` の JSON は、koyomi と chobo の `api` と同じく、ツールと版とファイルのことから始まる：`sekisho`（版）、`name`、`alias`、`version`、`source_sha256`、`description`、`namespace`、`uses`（`use` の行）、`today`、`cedar`（`gen --target cedar` が書く四つのファイル）、`roles`（Cedar のエンティティ、`includes`、`can`）、`types`（エンティティタイプ、持てる役割、親になれる型、属性と Cedar に出るか）、`workflows`、`actions`（エンティティ、守る操作、principal と resource の型、`from`、`nobody`、`input`、context の値と、計算の式、Cedar に渡る値、省けるか）、`policies`（`@id`、効く action、書いたファイル）、`expects`、`separations`。どれも行の番号を持つ。守る操作（`actions` の `guards`）は、一つずつ `{"reference": …, "line": …}` で、`reference` は sakai の `api` と同じ参照の JSON（`{"text", "tool", "path", "items"}`。ritsu の DESIGN 6.2 の 7）、パスはルートから（2.6）である。`uses` の `path` と `policies` の `file` は、`.gate` のディレクトリから書く（手元のパスを書かない）。
 - 終了コードは 0（問題なし、警告だけ）、1（エラー）、2（使い方の誤り、読めないファイル、ほかの言語を持たないバイナリ）。
 - `ritsu sekisho <command>` は、rulec、koyomi、dandori、契約の読み手をつないで走らせる。`sekisho` という名前のリンクも同じ（ritsu の DESIGN 2.3）。
 - `ritsu check` は `.gate` を読む順（8.1）で確かめ、X15 と X16 を言語をまたぐ検査に足す。要約の `borders` に、X15 は操作ごと、X16 はワークフローの呼び出しごとに一つと数える。
-- `ritsu gen` は 5.6 のとおり。
+- `ritsu gen` は 5.6 のとおり。`--authorizer cedar|avp` を取る。
 
 ## 12. 八つ目の言語として足すとき
 
@@ -1428,15 +1507,33 @@ Zanzibar の形（OpenFGA、SpiceDB、Permify、Topaz のディレクトリ）�
 45. **CI では、tools の「それ以外」の組で CLI を入れる（6.1）。** ritsu-base の Cedar の材料と同じ組で、入れ方を一つにする。同じ組が、その材料を `expected.sh` で作り直して確かめる（ritsu の DESIGN 4.18）。
 46. **計算した値の `@doc` の最後の文は、どのコマンドが書くかを言わない（5.1）。** 「Computed by the generated code, never taken from the caller」（「生成したコードが計算し、呼ぶ側からは受け取らない」）。同じ Cedar を `sekisho gen` も `ritsu gen` も書くからである。
 
+段階 C で決めたもの：
+
+47. **生成したコードの答えは、組み合わせの答えをそのまま使わず、生の値から参照の評価で求め直した答えと比べる（6.3）。** 生成したコードが従う決まり（読むもの、確かめる順、拒む種類、context）は `raw::Model::evaluate` が一か所に書き、三つの言語の生成器はそれに合わせる。組み合わせの答えとも同じであることを確かめるので、生の値の作り方の誤りも見つかる。
+48. **`Store` が返すものは型ごとに一つで、どの action でも同じにする（5.3）。** その型のエンティティを読む action では、全部を確かめる。action ごとに読むものを変えると、同じデータが action によって拒まれたり通ったりする。
+49. **確かめる順を決める（5.3）。** principal の型、`today`（`today` を読む action だけ。57）、入力、resource、principal、計算した値の順に確かめ、最初に外れたものの種類で拒む。どの言語でも同じ答えになるようにするためである。resource の ID が無いときは、resource の型が違うときと同じく `resource` で拒む。
+50. **resource の ID は `input` の中に置く（5.3）。** `from` を書けばその引数、書かなければ `resource`。型が二つ以上なら `resource_type`。関数の形は、どの action も `(store, principal, input, now)` のままで、生の値の形とも同じになる。
+51. **規則の列挙の出力は、生成物のメンバーから公開名を引く表で Cedar に渡す（5.3）。** rulec の生成物の値（TypeScript の列挙の値、Python の `.value`、Go の `String()`）は `.rule` に書いた名前で、日本語の版では Cedar の文字列と違う。
+52. **拒む種類は、3.8 の六つに `cedar` を足した七つにする（3.8、5.3）。** `cedar` は、Cedar がエラーを言ったときと、尋ねる先に届かないとき（Verified Permissions）で、どれも拒む答えになる。リクエストを組み立てられないことと、尋ねて失敗したことは、直す場所が違うからである。`Store` の失敗は、そのまま投げる。
+53. **`sekisho gen --target typescript|python|go` は、`ritsu gen` のパッケージと同じ形（`authz/` の隣に `rules/` と `dates/`）で書く（5 章）。** コマンドによってコードを変えないためである。Go の import のパスは `--module` で決め、既定は `ritsu gen` と同じ `generated` にする。
+54. **`--authorizer avp` のコードは、尋ねる先 `avp` を最初の引数で受け取り（Go は `ctx` のあと）、ポリシーとスキーマを持たない（5.5）。** 尋ねる先の型は、どの言語も `VerifiedPermissions` という名前にする。
+55. **W401 は、`gen --authorizer avp` が `--target` に依らず言い、`ritsu gen --authorizer avp` も言う（5.8）。** ポリシーは一つずつ `cedar format` の形で、スキーマは JSON の形で量り、親は型が持てる役割とそれらが含む役割を数える。グループはデータで決まるので数えない。再現は `check` ではなく `gen` のコマンドなので、台帳の例はコマンドの形にし、変異は置かない。
+56. **`ritsu gen` は、ゲートの Cedar を `<out>/cedar/` に一度だけ書き、`--authorizer` を取る（5.6）。** 書くバージョンは sekisho の三つのランナーのロックファイルと同じで、監査のテストが確かめる。
+57. **範囲の外の日に拒むのは、`today` を読む計算した値を持つ action だけにする（2.9、3.8）。** `today` を読まない action は、Cedar に渡すものが日に依らず、検査が数えた答えがそのまま当てはまる。ゲートの `today` の範囲が尽きても、日付を読まない action まで止めないためである。生の値のテストは、そうした action に範囲の外の日を渡し、ほかの決まりのとおりに答えることを確かめる（6.3）。
+58. **数は宣言した単位の整数（`bigint`、`int`、`int64`）で受け取り、規則を呼ぶときに規則の単位の型に包む（5.3）。** 二つの規則が同じ単位の型をそれぞれ持つと、Python の `NewType` も Go の名前付きの型も別の型になるからである。
+59. **Python の生成物はスキーマを持ち、Go の生成物は持たない（5.5）。** cedarpy はスキーマでリクエストとエンティティを確かめ、cedar-go には安定した検証器が無い。範囲と列挙は、どの言語でも尋ねる前に生成したコードが確かめる。
+60. **boto3 は dandori の `tools/wire` と同じ 1.43.103 にする（5.5）。** リポジトリのランナーが入れる boto3 を一つの版にする。
+61. **生成するコードのコメントに書く守る操作は、`@guards` と同じ参照の書き方にする（2.6、5.3）。** パスはルートからで、`ritsu gen` もプロジェクトのルートを `sekisho` に渡す。同じ操作を、ファイルによって別の書き方で言わないためである。
+
 段階 D の人が読むページ（D1）で決めたもの：
 
-47. **ページは検査を通るファイルにだけ出す（7 章）。** `api` と `vectors` と同じにした。表は全部の組み合わせを歩いた結果から作るので、歩けないファイルには表が無い。
-48. **ページのパスは、参照と同じくルートから書く。** `doc` も `--root` を取る。守る操作と計算した値の参照（2.6）と、頭のパスが、同じルートから読めるようにするためである。
-49. **頭のハッシュは、ページの言語で `gen --target cedar` が書く四つのファイルのものにする。** sekisho が書く `@doc` と生成物の頭は `--lang` で変わる（16.1 の 35）ので、どの言語で生成したファイルのハッシュかを、ページに書く。
-50. **埋め込んだ rulec と koyomi のページは、golden では一行に置き換え、口が今描くものと別に突き合わせる。** rulec と koyomi のページの文が変わるたびに、sekisho の golden を取り直さずに済むようにするためである。HTML では、ページを JSON で持ち、`<` を `\u003c` と書く。
-51. **表の「〜以外」は、英字の値のあとだけ空白を入れる（`paid 以外`、`返金済以外`）。** 土台の `ja_spacing` で書く。段階 A の表の golden（`tests/walk/golden/refund_order.table.ja.md`）を取り直した。英語は変わらない。
-52. **ワークフローがフローで呼ぶ操作の表（X16 の中身）は、dandori の答え（`Flows::operation_calls`）を受け取ったときだけ出す。** ページの関数は答えを `doc::FlowCalls` で受け取る。ritsu-cross の X16 と同じ口の答えを読み、守る action は参照が同じものを探す（文字列を組まない）。
-53. **役割と action の表の行は、役割を一つだけ持つ principal と、役割を持たない型の principal にする。** 役割の届く範囲（4.4）と同じ問いを、いつも許すか、組み合わせによるか、許さないかの三つで見せる。二つ以上の役割を持つ人の組み合わせは、職務の分離（E305）と action ごとの表が見せる。
+62. **ページは検査を通るファイルにだけ出す（7 章）。** `api` と `vectors` と同じにした。表は全部の組み合わせを歩いた結果から作るので、歩けないファイルには表が無い。
+63. **ページのパスは、参照と同じくルートから書く。** `doc` も `--root` を取る。守る操作と計算した値の参照（2.6）と、頭のパスが、同じルートから読めるようにするためである。
+64. **頭のハッシュは、ページの言語で `gen --target cedar` が書く四つのファイルのものにする。** sekisho が書く `@doc` と生成物の頭は `--lang` で変わる（16.1 の 35）ので、どの言語で生成したファイルのハッシュかを、ページに書く。
+65. **埋め込んだ rulec と koyomi のページは、golden では一行に置き換え、口が今描くものと別に突き合わせる。** rulec と koyomi のページの文が変わるたびに、sekisho の golden を取り直さずに済むようにするためである。HTML では、ページを JSON で持ち、`<` を `\u003c` と書く。
+66. **表の「〜以外」は、英字の値のあとだけ空白を入れる（`paid 以外`、`返金済以外`）。** 土台の `ja_spacing` で書く。段階 A の表の golden（`tests/walk/golden/refund_order.table.ja.md`）を取り直した。英語は変わらない。
+67. **ワークフローがフローで呼ぶ操作の表（X16 の中身）は、dandori の答え（`Flows::operation_calls`）を受け取ったときだけ出す。** ページの関数は答えを `doc::FlowCalls` で受け取る。ritsu-cross の X16 と同じ口の答えを読み、守る action は参照が同じものを探す（文字列を組まない）。
+68. **役割と action の表の行は、役割を一つだけ持つ principal と、役割を持たない型の principal にする。** 役割の届く範囲（4.4）と同じ問いを、いつも許すか、組み合わせによるか、許さないかの三つで見せる。二つ以上の役割を持つ人の組み合わせは、職務の分離（E305）と action ごとの表が見せる。
 
 ### 16.2 危ないところ
 

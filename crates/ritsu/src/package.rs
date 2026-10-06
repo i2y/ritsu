@@ -1,5 +1,6 @@
-//! `ritsu gen` (DESIGN 9.3): the rules, the dates, the clients of the books and the workflows of a
-//! project, as one package for each of TypeScript, Python and Go.
+//! `ritsu gen` (DESIGN 9.3): the rules, the dates, the clients of the books, the workflows and the
+//! code that asks the gates of a project, as one package for each of TypeScript, Python and Go,
+//! with the gates' Cedar beside them, written once.
 //!
 //! ```text
 //! generated/typescript/          generated/python/              generated/go/
@@ -9,11 +10,14 @@
 //!   dates/<alias>.ts               <name>/dates/<alias>.py        dates/<package>/<package>.go
 //!   books/<book>.ts                <name>/books/<book>.py         books/<package>/book.go
 //!   flows/<flow>/…                 <name>/flows/<flow>/…          flows/<package>/…
+//!   authz/<gate>.ts
+//! generated/cedar/<gate>.cedar, .cedarschema, .cedarschema.json, .policies.json
 //! ```
 //!
 //! Each language writes its part with its own generator (DESIGN 9.1): rulec the rule's module,
 //! koyomi the dates file's, chobo the client of the book (and, on PostgreSQL, the SQL it calls),
-//! dandori the workflow for Temporal. A workflow reads the rules, the dates and the books from the
+//! dandori the workflow for Temporal, sekisho the gate's Cedar and the code that builds its
+//! requests and asks them (sekisho's DESIGN 5.6), which reads the package's rules/ and dates/. A workflow reads the rules, the dates and the books from the
 //! package's rules/, dates/ and books/ (dandori's `InPackage`), not from code put beside it: the
 //! imports name the package's modules, and the books the transport takes are typed with the
 //! package's clients, so that the type checker of the target holds the two languages to each
@@ -97,6 +101,8 @@ pub struct Options {
     /// The Go import path of the package's directory: a rule's package is `<module>/rules/<package>`.
     pub module: String,
     pub books: Books,
+    /// Where the code of the gates asks: Cedar in the process, or Verified Permissions.
+    pub authorizer: sekisho::r#gen::Authorizer,
     pub lang: Lang,
 }
 
@@ -106,6 +112,14 @@ pub struct Options {
 const TEMPORAL_TYPESCRIPT: &str = "1.24.0";
 const TEMPORAL_PYTHON: &str = "1.33.0";
 const TIGERBEETLE: &str = "0.17.9";
+/// The Cedar the TypeScript of a gate asks, or the AWS SDK's client of Verified Permissions, at the
+/// versions sekisho's tools/runner-ts locks (sekisho's generator says them).
+const CEDAR_WASM: &str = sekisho::r#gen::typescript::CEDAR_WASM;
+const AWS_SDK_VERIFIEDPERMISSIONS: &str = sekisho::r#gen::typescript::AWS_SDK;
+/// And the Python of a gate: Cedar's Python binding, or boto3 for Verified Permissions (sekisho's
+/// tools/runner-py).
+const CEDARPY: &str = "4.12.1";
+const BOTO3: &str = "1.43.103";
 /// And the Go modules the Go of a package imports, with the versions tested here (dandori's
 /// tools/temporal-go/go.mod, chobo's tools/runner/go/go.mod), which doc.go names: a package of Go
 /// is a directory of the module it is put in, so its requirements are that module's go.mod's.
@@ -123,6 +137,8 @@ const GO_MODULES: &[(&str, &str)] = &[
     ("github.com/openai/openai-go/v3", "v3.68.0"),
     ("github.com/anthropics/anthropic-sdk-go", "v1.78.0"),
     ("google.golang.org/protobuf", "v1.36.11"),
+    ("github.com/cedar-policy/cedar-go", "v1.8.0"),
+    ("github.com/aws/aws-sdk-go-v2/service/verifiedpermissions", "v1.41.1"),
 ];
 /// Modules the ones above ask for at a version with a known vulnerability, the version the tests
 /// run instead (the go.mod of chobo's tools/runner/go and of dandori's tools/temporal-go), and the
@@ -156,7 +172,7 @@ fn checked(project: &Project, joined: &Joined, lang: Lang) -> Result<(), Refusal
     let mut said = String::new();
     let mut worst = 0u8;
     let mut failing: Vec<String> = Vec::new();
-    for tool in [Tool::Rulec, Tool::Koyomi, Tool::Chobo] {
+    for tool in [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Sekisho] {
         let files: Vec<String> = project.of(tool).iter().map(|f| f.shown.clone()).collect();
         if files.is_empty() {
             continue;
@@ -164,6 +180,7 @@ fn checked(project: &Project, joined: &Joined, lang: Lang) -> Result<(), Refusal
         let units = match tool {
             Tool::Rulec => joined.rulec.checked(&project.root, &files, lang),
             Tool::Koyomi => joined.koyomi.checked(&project.root, &files, lang),
+            Tool::Sekisho => sekisho::check::checked(&project.root, &files, &joined.sekisho().into(), lang),
             _ => joined.chobo.checked(&project.root, &files, lang),
         };
         for u in units.into_iter().filter(|u| u.verdict != Verdict::Passes) {
@@ -333,6 +350,24 @@ pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) 
             files.push((format!("{base}flows/{rel}"), body, Some(f.rel.clone())));
         }
     }
+    // sekisho: each gate's code of the requests, which reads the package's rules/ and dates/
+    let gates: sekisho::suite::Suite = joined.sekisho().into();
+    for f in project.of(Tool::Sekisho) {
+        let outcome = gate(project, &gates, f, lang)?;
+        let to = sekisho::r#gen::Target { name: target.key(), authorizer: o.authorizer, go_module: o.module.clone() };
+        let made = sekisho::r#gen::generate(&outcome, &to, &f.rel, lang, &gates).map_err(|e| {
+            let shown = &f.shown;
+            refusal(2, tr!("`{shown}` から生成できません（{e}）。sekisho の不具合です", "cannot generate from `{shown}` ({e}): a bug in sekisho"), lang)
+        })?;
+        for (rel, body) in made {
+            // `typescript/authz/refunds.ts` as the package holds it: `authz/refunds.ts`
+            let rel = rel.split_once('/').map(|(_, r)| r.to_string()).unwrap_or(rel);
+            let module = module_of(rel.strip_prefix("authz/").unwrap_or(&rel));
+            named.push(("authz", module.clone(), f.rel.clone()));
+            kinds.entry("authz").or_default().push(module);
+            files.push((format!("{base}{rel}"), body, Some(f.rel.clone())));
+        }
+    }
     for list in kinds.values_mut() {
         list.dedup();
     }
@@ -359,6 +394,60 @@ pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) 
     Ok(Package { files })
 }
 
+/// A gate of the project, checked with every language joined: Err when it does not pass, or when
+/// it reads a rule, a dates file or a calendar the project does not hold (the code of its requests
+/// reads them from the package).
+fn gate(project: &Project, suite: &sekisho::suite::Suite, f: &File, lang: Lang) -> Result<sekisho::check::Outcome, Refusal> {
+    let shown = &f.shown;
+    // the project's root, which the references of `@guards` are written from (as `ritsu check` gives it)
+    let opts = sekisho::check::Options { root: Some(project.root.clone()), ..sekisho::check::Options::default() };
+    let o = sekisho::check::check_file(shown, suite, &opts).map_err(|e| refusal(2, tr!("`{shown}` を読めません: {e}", "cannot read `{shown}`: {e}"), lang))?;
+    let Some(checked) = o.walked.as_ref().filter(|_| !o.has_errors()) else {
+        return Err(refusal(1, tr!("`{shown}` は検査を通らないので、生成しません", "`{shown}` does not pass check, so nothing is generated from it"), lang));
+    };
+    for u in checked.gate.uses.iter().filter(|u| matches!(u.kind, sekisho::model::UseKind::Rule | sekisho::model::UseKind::Dates | sekisho::model::UseKind::Calendar)) {
+        let rel = ritsu_base::paths::from_root(&project.root, &u.file);
+        if rel.as_ref().and_then(|r| project.holds(r)).is_none() {
+            let other = rel.unwrap_or_else(|| u.file.display().to_string());
+            return Err(refusal(
+                1,
+                tr!(
+                    "`{shown}` が読む {other} が、プロジェクトのファイルにありません。パッケージはプロジェクトのファイルから作るので、そのファイルも ritsu gen に渡してください",
+                    "`{shown}` reads {other}, which is not one of the project's files; a package is made of the project's files, so give ritsu gen that file too"
+                ),
+                lang,
+            ));
+        }
+    }
+    Ok(o)
+}
+
+/// The Cedar of the project's gates, written once beside the packages (`<out>/cedar/`; sekisho's
+/// DESIGN 5.6): each file by its path under that directory; and, for Verified Permissions, what of
+/// it is over a quota (W401), as `sekisho gen --authorizer avp` says it.
+pub fn cedar(project: &Project, joined: &Joined, authorizer: sekisho::r#gen::Authorizer, lang: Lang) -> Result<(Package, String), Refusal> {
+    let gates: sekisho::suite::Suite = joined.sekisho().into();
+    let mut files = Vec::new();
+    let mut said = String::new();
+    for f in project.of(Tool::Sekisho) {
+        let outcome = gate(project, &gates, f, lang)?;
+        if authorizer == sekisho::r#gen::Authorizer::Avp {
+            for d in sekisho::r#gen::quotas(&outcome, lang) {
+                said.push_str(&d.render(lang));
+            }
+        }
+        let to = sekisho::r#gen::Target { name: "cedar", authorizer, go_module: String::new() };
+        let made = sekisho::r#gen::generate(&outcome, &to, &f.rel, lang, &gates).map_err(|e| {
+            let shown = &f.shown;
+            refusal(2, tr!("`{shown}` から生成できません（{e}）。sekisho の不具合です", "cannot generate from `{shown}` ({e}): a bug in sekisho"), lang)
+        })?;
+        for (rel, body) in made {
+            files.push((rel.strip_prefix("cedar/").unwrap_or(&rel).to_string(), body, Some(f.rel.clone())));
+        }
+    }
+    Ok((Package { files }, said))
+}
+
 /// The file of the project, read.
 fn read(project: &Project, f: &File, lang: Lang) -> Result<String, Refusal> {
     let p = ritsu_base::paths::on_disk(&project.root, &f.rel);
@@ -381,7 +470,11 @@ fn module_of(rel: &str) -> String {
 /// package files of Python.
 fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, files: &[(String, String, Option<String>)]) -> Vec<(String, String, Option<String>)> {
     let head = |c: Comment| c.line(&ritsu_emit::header::generated("ritsu"));
-    let what = "The rules, the dates, the clients of the books and the workflows of a project, as one package (ritsu gen).";
+    let what = if kinds.contains_key("authz") {
+        "The rules, the dates, the clients of the books, the workflows and the code that asks the gates of a project, as one package (ritsu gen)."
+    } else {
+        "The rules, the dates, the clients of the books and the workflows of a project, as one package (ritsu gen)."
+    };
     let generated = ritsu_emit::header::generated("ritsu");
     let mut out = Vec::new();
     match target {
@@ -415,6 +508,10 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
                         deps.insert(name.to_string(), TEMPORAL_TYPESCRIPT);
                     } else if name == "tigerbeetle-node" {
                         deps.insert(name.to_string(), TIGERBEETLE);
+                    } else if name == "@cedar-policy/cedar-wasm" || name.starts_with("@cedar-policy/cedar-wasm/") {
+                        deps.insert("@cedar-policy/cedar-wasm".to_string(), CEDAR_WASM);
+                    } else if name == "@aws-sdk/client-verifiedpermissions" {
+                        deps.insert(name.to_string(), AWS_SDK_VERIFIEDPERMISSIONS);
                     }
                 }
             }
@@ -443,7 +540,15 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
             }
             let flows = files.iter().any(|(p, _, _)| p.contains("/flows/"));
             let tigerbeetle = o.books == Books::TigerBeetle && kinds.contains_key("books");
+            // what the code of the gates asks with: Cedar's binding, or boto3's client of Verified
+            // Permissions, which the caller makes and hands in
+            let gates = files.iter().any(|(p, _, _)| p.starts_with(&format!("{n}/authz/")) && p.ends_with(".py"));
             let mut deps = Vec::new();
+            match (gates, o.authorizer) {
+                (true, sekisho::r#gen::Authorizer::Cedar) => deps.push(format!("cedarpy=={CEDARPY}")),
+                (true, sekisho::r#gen::Authorizer::Avp) => deps.push(format!("boto3=={BOTO3}")),
+                _ => {}
+            }
             if flows {
                 deps.push(format!("temporalio=={TEMPORAL_PYTHON}"));
             }
@@ -479,7 +584,11 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
                 }
             }
             let package = go_package_name(&o.module);
-            let mut doc = format!("{}\n// Package {package} is the rules, the dates, the clients of the books and the workflows of a project, as\n// one package (ritsu gen): rules/, dates/, books/ and flows/ under the import path {}.\n", head(Comment::Slashes), o.module);
+            let mut doc = if kinds.contains_key("authz") {
+                format!("{}\n// Package {package} is the rules, the dates, the clients of the books, the workflows and the code that\n// asks the gates of a project, as one package (ritsu gen): rules/, dates/, books/, flows/ and authz/ under\n// the import path {}.\n", head(Comment::Slashes), o.module)
+            } else {
+                format!("{}\n// Package {package} is the rules, the dates, the clients of the books and the workflows of a project, as\n// one package (ritsu gen): rules/, dates/, books/ and flows/ under the import path {}.\n", head(Comment::Slashes), o.module)
+            };
             if !imported.is_empty() {
                 doc.push_str("//\n// It imports these modules, which the go.mod of the module it is in requires (`go mod tidy`); these are\n// the versions it is tested with:\n//\n");
                 for m in &imported {
@@ -557,7 +666,7 @@ fn leftovers(dir: &Path, planned: &BTreeSet<PathBuf>) -> Vec<PathBuf> {
 /// Whether a file begins with the head of a file ritsu's generators write (DESIGN 9.2).
 fn generated_here(p: &Path) -> bool {
     let Ok(text) = std::fs::read_to_string(p) else { return false };
-    text.lines().take(3).any(|l| ["rulec", "koyomi", "chobo", "dandori", "ritsu"].iter().any(|t| l.contains(&format!("Code generated by {t} ")) && l.ends_with("DO NOT EDIT.")))
+    text.lines().take(3).any(|l| ["rulec", "koyomi", "chobo", "dandori", "sekisho", "ritsu"].iter().any(|t| l.contains(&format!("Code generated by {t} ")) && l.ends_with("DO NOT EDIT.")))
 }
 
 /// Write the package into `dir`, or under `check` say what differs from it.
@@ -597,7 +706,8 @@ fn emit(dir: &Path, p: &Package, check: bool, st: &mut Emitted, lang: Lang) -> R
 }
 
 /// `ritsu gen [<path>...] [--target typescript|python|go] [--out <dir>] [--check] [--books
-/// postgres|tigerbeetle] [--name <name>] [--module <path>] [--root <dir>]`: the exit code.
+/// postgres|tigerbeetle] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]`:
+/// the exit code.
 pub fn command(args: &[String], lang: Lang) -> u8 {
     let table = cli::table();
     let cmd = table.command("gen").expect("gen is in the table");
@@ -631,6 +741,7 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
         return say(refusal(2, tr!("`--module {module}` は Go の import のパスになりません", "`--module {module}` is not a Go import path"), lang));
     }
     let books = if a.get("--books") == Some("tigerbeetle") { Books::TigerBeetle } else { Books::Postgres };
+    let authorizer = a.get("--authorizer").and_then(sekisho::r#gen::Authorizer::parse).unwrap_or(sekisho::r#gen::Authorizer::Cedar);
     let targets: Vec<Target> = match a.get("--target") {
         Some(t) => Target::parse(t).into_iter().collect(),
         None => Target::ALL.to_vec(),
@@ -639,13 +750,13 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
         Ok(p) => p,
         Err(e) => return say(refusal(2, e, lang)),
     };
-    if [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Dandori].iter().all(|t| project.of(*t).is_empty()) {
+    if [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Dandori, Tool::Sekisho].iter().all(|t| project.of(*t).is_empty()) {
         let given = project.given.join(" ");
         return say(refusal(
             2,
             tr!(
-                "{given} には、パッケージにするファイル（.rule、.cal、.book、.flow）がありません",
-                "there is no file to make a package of (.rule, .cal, .book, .flow) in {given}"
+                "{given} には、パッケージにするファイル（.rule、.cal、.book、.flow、.gate）がありません",
+                "there is no file to make a package of (.rule, .cal, .book, .flow, .gate) in {given}"
             ),
             lang,
         ));
@@ -654,7 +765,7 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
     if let Err(r) = checked(&project, &joined, lang) {
         return say(r);
     }
-    let o = Options { name, module, books, lang };
+    let o = Options { name, module, books, authorizer, lang };
     let out = PathBuf::from(a.get("--out").unwrap_or("generated"));
     let check = a.has("--check");
     let mut st = Emitted::default();
@@ -680,6 +791,17 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
             }
         }
         if let Err(r) = emit(&out.join(t.key()), &p, check, &mut st, lang) {
+            return say(r);
+        }
+    }
+    // the gates' Cedar, once beside the packages, whatever the targets
+    if !project.of(Tool::Sekisho).is_empty() || out.join("cedar").exists() {
+        let (p, warnings) = match cedar(&project, &joined, authorizer, lang) {
+            Ok(p) => p,
+            Err(r) => return say(r),
+        };
+        print!("{warnings}");
+        if let Err(r) = emit(&out.join("cedar"), &p, check, &mut st, lang) {
             return say(r);
         }
     }

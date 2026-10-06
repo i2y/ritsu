@@ -90,9 +90,10 @@ fn a_mistake_in_a_gate_fails_ritsu_check() {
     assert_eq!((d["code"].as_str(), d["file"].as_str()), (Some("E101"), Some("refunds.gate")));
 }
 
-/// The commands of sekisho's stage B through `ritsu sekisho`, with every language joined: `gen
-/// --target cedar` writes the four files of the example's Cedar, `vectors` prints its combinations
-/// as the tests of `cedar run-tests`, and `api` its declarations as JSON.
+/// The commands of sekisho's stages B and C through `ritsu sekisho`, with every language joined:
+/// `gen --target cedar` writes the four files of the example's Cedar, `gen --target typescript` the
+/// code of its requests, `vectors` prints its combinations as the tests of `cedar run-tests`, and
+/// `api` its declarations as JSON.
 #[test]
 fn ritsu_sekisho_generates_the_cedar() {
     let t = TempDir::new("sekisho-gen");
@@ -104,6 +105,11 @@ fn ritsu_sekisho_generates_the_cedar() {
     }
     let (code, said, _) = ritsu_in(&sekisho_dir(), &["sekisho", "gen", "examples/refunds/refunds.gate", "--target", "cedar", "--out", &out, "--check"]);
     assert_eq!((code, said.as_str()), (0, ""));
+    // the code of the requests, in TypeScript, asking Verified Permissions
+    let (code, said, err) = ritsu_in(&sekisho_dir(), &["sekisho", "gen", "examples/refunds/refunds.ja.gate", "--target", "typescript", "--authorizer", "avp", "--out", &out, "--lang", "ja"]);
+    assert_eq!((code, said.clone()), (0, format!("生成しました: {out}/typescript/authz/refunds_ja.ts\n")), "{err}");
+    let ts = std::fs::read_to_string(t.path().join("typescript/authz/refunds_ja.ts")).unwrap();
+    assert!(ts.contains("\n// もと: refunds.ja.gate（gate 返金 v1、sha256:") && ts.contains("import * as rule_refund_limit_ja from \"../rules/refund_limit_ja\";"), "{ts}");
     let (code, said, _) = ritsu_in(&sekisho_dir(), &["sekisho", "vectors", "examples/refunds/refunds.gate", "--action", "export_refunds"]);
     assert_eq!(code, 0);
     let v: serde_json::Value = serde_json::from_str(&said).unwrap();

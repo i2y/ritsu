@@ -4,8 +4,9 @@
 //! flag given twice stop the run with exit 2. The table is sekisho's; how it is drawn and read is
 //! ritsu-base's ([`ritsu_base::cli`]).
 //!
-//! `check` and `explain` came with stage A, `gen` (Cedar), `vectors` and `api` with stage B, and
-//! `doc` with stage D (DESIGN 11).
+//! `check` and `explain` came with stage A, `gen` (Cedar), `vectors` and `api` with stage B,
+//! `gen --target typescript|python|go` with `--authorizer` and `--module` with stage C, and `doc`
+//! with stage D (DESIGN 11).
 
 use crate::check::{self, Options};
 use crate::suite::Suite;
@@ -63,24 +64,43 @@ pub fn table() -> Table {
                 codes: every_code(),
             },
             Cmd {
-                usage: Some("sekisho gen <file.gate>... --target cedar [--out <dir>] [--check] [--root <dir>] [--lang ja|en]"),
+                usage: Some("sekisho gen <file.gate>... --target cedar|typescript|python|go [--authorizer cedar|avp] [--module <path>] [--out <dir>] [--check] [--root <dir>] [--lang ja|en]"),
                 name: "gen",
                 args: "<file.gate>...",
                 purpose: tr!(
-                    "Cedar のスキーマとポリシーを生成する。検査を通らないファイルからは生成しない",
-                    "generate the Cedar schema and policies; nothing is generated from a file that does not pass check"
+                    "Cedar のスキーマとポリシーか、リクエストを組み立てて Cedar に尋ねるコードを生成する。検査を通らないファイルからは生成しない",
+                    "generate the Cedar schema and policies, or the code that builds the requests and asks Cedar; nothing is generated from a file that does not pass check"
                 ),
                 params: vec![("<file.gate>...", tr!(".gate のファイル", "the .gate files"))],
                 flags: vec![
                     flag(
                         "--target",
-                        Some("cedar"),
+                        Some("cedar|typescript|python|go"),
                         tr!(
-                            "生成するもの。cedar は <out>/cedar/ に、別名ごとに四つのファイル（.cedar、.cedarschema、.cedarschema.json、.policies.json）を書く。sekisho が書く文（頭と、計算した値の @doc）は --lang の言語になる",
-                            "what to generate: cedar writes four files a gate into <out>/cedar/, named by its alias (.cedar, .cedarschema, .cedarschema.json, .policies.json); what sekisho writes in them (the head, the @doc of a computed value) is in the language of --lang"
+                            "生成するもの。cedar は <out>/cedar/ に、別名ごとに四つのファイル（.cedar、.cedarschema、.cedarschema.json、.policies.json）を書く。typescript は <out>/typescript/authz/<別名>.ts、python は <out>/python/authz/<別名>.py、go は <out>/go/authz/<パッケージ>/<パッケージ>.go に、action ごとにリクエストを組み立てて Cedar に尋ねるコードを書く。規則と日付の生成物は、ritsu gen のパッケージと同じく、隣の rules/ と dates/ から読む。sekisho が書く文（頭、@doc、コメント、拒んだ理由）は --lang の言語になる",
+                            "what to generate: cedar writes four files a gate into <out>/cedar/, named by its alias (.cedar, .cedarschema, .cedarschema.json, .policies.json); typescript writes <out>/typescript/authz/<alias>.ts, python <out>/python/authz/<alias>.py and go <out>/go/authz/<package>/<package>.go, the code that builds each action's request and asks Cedar, which reads the rules' and the dates' code from rules/ and dates/ beside it, as in a package of ritsu gen; what sekisho writes (the heads, the @doc, the comments, why a request is refused) is in the language of --lang"
                         ),
                     )
                     .choices(&crate::r#gen::TARGETS),
+                    flag(
+                        "--authorizer",
+                        Some("cedar|avp"),
+                        tr!(
+                            "生成するコードが尋ねる先。cedar は、その言語の Cedar（@cedar-policy/cedar-wasm、cedarpy、cedar-go）にプロセスの中で尋ねる。avp は、Amazon Verified Permissions に AWS の SDK で尋ね（ポリシーとスキーマは --target cedar のものをストアに置く）、上限を超えるものがあれば W401 を言う",
+                            "where the generated code asks: cedar asks the language's own Cedar (@cedar-policy/cedar-wasm, cedarpy, cedar-go) in the process; avp asks Amazon Verified Permissions through the AWS SDK (the policies and the schema of --target cedar go into its store), and says W401 of what is over its quotas"
+                        ),
+                    )
+                    .choices(&crate::r#gen::Authorizer::WORDS)
+                    .default("cedar"),
+                    flag(
+                        "--module",
+                        Some("<path>"),
+                        tr!(
+                            "go のコードが規則と日付のパッケージを import するモジュールのパス（<path>/rules/<パッケージ>、<path>/dates/<パッケージ>。ritsu gen の --module と同じ）",
+                            "the Go module path the code of go imports the rules' and the dates' packages by (<path>/rules/<package>, <path>/dates/<package>; ritsu gen's --module)"
+                        ),
+                    )
+                    .default("generated"),
                     flag("--out", Some("<dir>"), tr!("生成物を書くディレクトリ", "the directory the generated files go to")).default("generated"),
                     flag("--check", None, tr!("書き出さずに、ディスクの生成物が、いま生成するものと一字一句同じかを見る。違えば 1（CI 用）", "write nothing; exit 1 if a file on disk differs from what gen would write (for CI)")),
                     root_flag(),
@@ -90,7 +110,14 @@ pub fn table() -> Table {
                     (1, tr!("検査を通らないファイルがある、または --check で違う・無いファイルがある", "a file does not pass check, or --check found a file that differs or is missing")),
                     (2, tr!("引数の誤り、読めないファイル、書けないファイル、ほかの言語を読むファイルを、それを読めないこの sekisho で走らせた（E209）", "bad arguments, a file that cannot be read or written, or a file that reads another language run with this sekisho, which reads none (E209)")),
                 ],
-                examples: vec!["ritsu sekisho gen examples/refunds/refunds.gate --target cedar", "ritsu sekisho gen examples/refunds/refunds.gate --target cedar --check", "sekisho gen shop.gate --target cedar --out generated --lang ja"],
+                examples: vec![
+                    "ritsu sekisho gen examples/refunds/refunds.gate --target cedar",
+                    "ritsu sekisho gen examples/refunds/refunds.gate --target cedar --check",
+                    "sekisho gen shop.gate --target cedar --out generated --lang ja",
+                    "ritsu sekisho gen examples/refunds/refunds.gate --target typescript --authorizer avp",
+                    "ritsu sekisho gen examples/refunds/refunds.gate --target python",
+                    "ritsu sekisho gen examples/refunds/refunds.gate --target go --authorizer avp --module example.com/shop",
+                ],
                 codes: vec![],
             },
             Cmd {

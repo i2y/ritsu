@@ -246,14 +246,18 @@ jobs:
 
       # dandori's tests/examples.rs runs the books its examples call on chobo's clients, through
       # chobo's runners, on a throwaway PostgreSQL cluster (the step below) and a TigerBeetle
-      # replica; ritsu's tests/gen.rs type-checks the packages with chobo's tigerbeetle packages
-      # and koyomi's mypy, which dandori's tests/secrets.rs also takes (DANDORI_MYPY) to hold the
-      # Python of a flow with `history encrypted` to `mypy --strict`. They are installed as the
-      # others' steps install them.
-      - name: "dandori: chobo's runners and TigerBeetle, for the books; koyomi's mypy, for ritsu's packages and dandori's encrypted history"
+      # replica; ritsu's tests/gen.rs type-checks the packages with chobo's tigerbeetle packages,
+      # koyomi's mypy and the Cedar of sekisho's runners (cedar-wasm, cedarpy, cedar-go), and
+      # dandori's tests/secrets.rs takes the same mypy (DANDORI_MYPY) to hold the Python of a flow
+      # with `history encrypted` to `mypy --strict`. They are installed as the others' steps
+      # install them.
+      - name: "dandori: chobo's runners and TigerBeetle, for the books; koyomi's mypy and sekisho's runners, for ritsu's packages and dandori's encrypted history"
         if: matrix.group == 'dandori'
         run: |
           set -eu
+          npm ci --prefix crates/sekisho/tools/runner-ts
+          sh crates/sekisho/tools/runner-py/install.sh
+          sh crates/sekisho/tools/runner-go/install.sh
           npm ci --prefix crates/chobo/tools/runner
           uv venv --python 3.13 crates/chobo/tools/runner/.venv
           uv pip install --python crates/chobo/tools/runner/.venv/bin/python --require-hashes -r crates/chobo/tools/runner/requirements.txt
@@ -350,6 +354,25 @@ jobs:
             exit 1
           fi
 
+      # sekisho's tests/typescript.rs type-checks the TypeScript `sekisho gen --target typescript`
+      # writes with tsc 5.9.3 (and the code of --authorizer avp with the AWS SDK's client of Verified
+      # Permissions), and runs it against @cedar-policy/cedar-wasm 4.13.0 in Node; the versions are
+      # those tools/runner-ts locks, which ritsu gen writes into a package's package.json.
+      - name: "sekisho: the runner of the TypeScript it generates (cedar-wasm, tsc)"
+        if: matrix.group == 'the others'
+        run: npm ci --prefix crates/sekisho/tools/runner-ts
+
+      # sekisho's tests/python.rs and tests/go.rs hold the Python and the Go it generates to their
+      # own tools (mypy --strict; gofmt and go vet) and run them on every case of the raw values,
+      # through cedarpy and cedar-go (sekisho's DESIGN 6.3). The versions are locked in the runners'
+      # requirements.txt and go.sum, and are the ones ritsu gen writes into a package.
+      - name: "sekisho: the runners of the generated Python and Go"
+        if: matrix.group == 'the others'
+        run: |
+          set -eu
+          sh crates/sekisho/tools/runner-py/install.sh
+          sh crates/sekisho/tools/runner-go/install.sh
+
       # --- Say what is here before the suite runs, so a version that moved is readable in the
       # log rather than only in a failure.
       - name: The toolchains this run has
@@ -373,6 +396,7 @@ jobs:
           if [ "${{ matrix.group }}" = "the others" ]; then
             "$RITSU_PG_BIN/postgres" --version && "$RITSU_TIGERBEETLE" version && xmllint --version
             "$RITSU_CEDAR" --version
+            crates/sekisho/tools/runner-ts/node_modules/.bin/tsc --version
           fi
           google-chrome --version
 

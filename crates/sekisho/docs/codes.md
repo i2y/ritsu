@@ -1358,8 +1358,229 @@ See also: [E304](#e304), [E303](#e303)
 
 ## W401 — Over a quota of Verified Permissions
 
-**When**: A generated policy or schema is over a quota of Verified Permissions (10,000 bytes a policy, 100,000 bytes a schema, 100 ancestors, …) (`--authorizer avp`).
+**When**: Under `sekisho gen --authorizer avp`, a generated policy or the schema is over a quota of Verified Permissions (10,000 bytes a policy, 100,000 bytes the schema as JSON, 100 transitive parents of an entity). The roles counted are every role a type can hold, with the roles they include.
 
-**Fix**: Split the policy, or make the roles nest less deep.
+**Fix**: Split the policy, spread the types and the actions over several gates, or make the roles nest less deep.
 
-**Example**: No example yet: the check that prints it comes in a later stage.
+**Example**: put the files below in one directory, and run `ritsu sekisho gen example.gate --target cedar --authorizer avp` there.
+
+`example.gate`:
+
+```
+gate deep v1
+namespace Shop
+
+role r0
+role r1
+  includes r0
+role r2
+  includes r1
+role r3
+  includes r2
+role r4
+  includes r3
+role r5
+  includes r4
+role r6
+  includes r5
+role r7
+  includes r6
+role r8
+  includes r7
+role r9
+  includes r8
+role r10
+  includes r9
+role r11
+  includes r10
+role r12
+  includes r11
+role r13
+  includes r12
+role r14
+  includes r13
+role r15
+  includes r14
+role r16
+  includes r15
+role r17
+  includes r16
+role r18
+  includes r17
+role r19
+  includes r18
+role r20
+  includes r19
+role r21
+  includes r20
+role r22
+  includes r21
+role r23
+  includes r22
+role r24
+  includes r23
+role r25
+  includes r24
+role r26
+  includes r25
+role r27
+  includes r26
+role r28
+  includes r27
+role r29
+  includes r28
+role r30
+  includes r29
+role r31
+  includes r30
+role r32
+  includes r31
+role r33
+  includes r32
+role r34
+  includes r33
+role r35
+  includes r34
+role r36
+  includes r35
+role r37
+  includes r36
+role r38
+  includes r37
+role r39
+  includes r38
+role r40
+  includes r39
+role r41
+  includes r40
+role r42
+  includes r41
+role r43
+  includes r42
+role r44
+  includes r43
+role r45
+  includes r44
+role r46
+  includes r45
+role r47
+  includes r46
+role r48
+  includes r47
+role r49
+  includes r48
+role r50
+  includes r49
+role r51
+  includes r50
+role r52
+  includes r51
+role r53
+  includes r52
+role r54
+  includes r53
+role r55
+  includes r54
+role r56
+  includes r55
+role r57
+  includes r56
+role r58
+  includes r57
+role r59
+  includes r58
+role r60
+  includes r59
+role r61
+  includes r60
+role r62
+  includes r61
+role r63
+  includes r62
+role r64
+  includes r63
+role r65
+  includes r64
+role r66
+  includes r65
+role r67
+  includes r66
+role r68
+  includes r67
+role r69
+  includes r68
+role r70
+  includes r69
+role r71
+  includes r70
+role r72
+  includes r71
+role r73
+  includes r72
+role r74
+  includes r73
+role r75
+  includes r74
+role r76
+  includes r75
+role r77
+  includes r76
+role r78
+  includes r77
+role r79
+  includes r78
+role r80
+  includes r79
+role r81
+  includes r80
+role r82
+  includes r81
+role r83
+  includes r82
+role r84
+  includes r83
+role r85
+  includes r84
+role r86
+  includes r85
+role r87
+  includes r86
+role r88
+  includes r87
+role r89
+  includes r88
+role r90
+  includes r89
+role r91
+  includes r90
+role r92
+  includes r91
+role r93
+  includes r92
+role r94
+  includes r93
+role r95
+  includes r94
+role r96
+  includes r95
+role r97
+  includes r96
+role r98
+  includes r97
+role r99
+  includes r98
+role r100
+  includes r99
+
+principal User
+  roles r100
+
+resource Doc
+
+action read
+  principal User
+  resource Doc
+
+permit everyone_reads
+  action read
+```

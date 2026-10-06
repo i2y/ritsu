@@ -13,6 +13,8 @@
 //! calendar of koyomi's, a book of chobo's, and a flow of dandori's that uses all three. The
 //! Japanese one, `tests/projects/通販`, is generated too, where it can be: its two flows have
 //! Japanese names, so the Go of both would be the package `workflow`, which ritsu gen refuses.
+//! sekisho's example (`crates/sekisho/examples/refunds`) is the project with gates: their Cedar
+//! goes once into `<out>/cedar/`, and the code of their requests into each package's `authz/`.
 
 use ritsu_testkit::{Need, TempDir, golden, ready};
 use std::path::{Path, PathBuf};
@@ -29,6 +31,9 @@ fn workspace() -> PathBuf {
 
 const STOCKROOM: &str = "tests/projects/stockroom";
 const SHOP: &str = "tests/projects/通販";
+/// sekisho's example, a project with two gates (English and Japanese) beside the rules, the dates,
+/// the calendar and the flow they read.
+const REFUNDS: &str = "../sekisho/examples/refunds";
 /// The module the Go is vetted in, and the import path of the package's directory in it.
 const MODULE: &str = "gocheck/generated";
 
@@ -131,13 +136,19 @@ fn mypy() -> Option<(PathBuf, PathBuf, PathBuf)> {
     python.exists().then_some((mypy, python, tigerbeetle))
 }
 
-/// `mypy --strict` on the Python package at `dir` (the directory of pyproject.toml). tigerbeetle is
-/// read from chobo's runner, and followed without its own errors said, as an installed package is.
-fn type_check_python(dir: &Path, mypy: &Path, python: &Path, tigerbeetle: &Path) {
+/// `mypy --strict` on the Python package at `dir` (the directory of pyproject.toml). The installed
+/// packages `extra` names (tigerbeetle from chobo's runner, cedarpy from sekisho's) are read beside
+/// it, and followed without their own errors said, as an installed package is.
+fn type_check_python(dir: &Path, mypy: &Path, python: &Path, extra_packages: &[PathBuf]) {
     let extra = dir.join("extra");
     std::fs::create_dir_all(&extra).unwrap();
-    std::os::unix::fs::symlink(tigerbeetle, extra.join("tigerbeetle")).unwrap();
-    std::fs::write(dir.join("mypy.ini"), "[mypy]\n\n[mypy-tigerbeetle.*]\nfollow_imports = silent\n").unwrap();
+    let mut ini = String::from("[mypy]\n");
+    for p in extra_packages {
+        let name = p.file_name().unwrap().to_string_lossy().to_string();
+        std::os::unix::fs::symlink(p, extra.join(&name)).unwrap();
+        ini.push_str(&format!("\n[mypy-{name}.*]\nfollow_imports = silent\n"));
+    }
+    std::fs::write(dir.join("mypy.ini"), ini).unwrap();
     let out = Command::new(mypy)
         .args(["--strict", "--config-file", "mypy.ini", "--no-incremental", "--cache-dir"])
         .arg(dir.join(".mypy_cache"))
@@ -149,6 +160,12 @@ fn type_check_python(dir: &Path, mypy: &Path, python: &Path, tigerbeetle: &Path)
         .output()
         .unwrap();
     assert!(out.status.success(), "{}: mypy --strict finds fault with the package:\n{}{}", dir.display(), String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+}
+
+/// cedarpy, from sekisho's runner of Python (tools/runner-py), which the Python of a gate imports.
+fn cedarpy() -> Option<PathBuf> {
+    let lib = workspace().join("crates/sekisho/tools/runner-py/.venv/lib");
+    std::fs::read_dir(&lib).ok()?.flatten().map(|e| e.path().join("site-packages/cedarpy")).find(|p| p.join("py.typed").exists())
 }
 
 /// The go.mod and go.sum of a module that requires what the Go of a package imports: those of
@@ -248,7 +265,7 @@ fn the_packages_pass_the_type_checkers() {
         match mypy() {
             Some((mypy, python, tigerbeetle)) => {
                 for out in &made {
-                    type_check_python(&out.join("python"), &mypy, &python, &tigerbeetle);
+                    type_check_python(&out.join("python"), &mypy, &python, std::slice::from_ref(&tigerbeetle));
                 }
                 println!("mypy --strict passes the Python of two packages");
             }
@@ -266,6 +283,137 @@ fn the_packages_pass_the_type_checkers() {
             }
             None => ritsu_testkit::skip("the go.mod of crates/dandori/tools/temporal-go or crates/chobo/tools/runner/go is missing; the Go of the packages is not vetted"),
         }
+    }
+}
+
+// ── the gates ────────────────────────────────────────────────────────────────────────────────────
+
+/// The TypeScript sekisho's code imports, from sekisho's runner (tools/runner-ts): Cedar's own
+/// WebAssembly build.
+fn cedar_wasm() -> Option<PathBuf> {
+    Some(workspace().join("crates/sekisho/tools/runner-ts/node_modules/@cedar-policy")).filter(|p| p.join("cedar-wasm/nodejs/cedar_wasm.d.ts").exists())
+}
+
+/// The gates of a project (sekisho's DESIGN 5.6): their Cedar once beside the packages, in
+/// `<out>/cedar/`, whatever the targets; in each package, the code of their requests in `authz/`,
+/// which reads the package's rules/ and dates/, in the indexes, with the Cedar it asks among the
+/// dependencies at the versions sekisho's runners lock (the AWS SDK's client of Verified Permissions,
+/// or boto3, with `--authorizer avp`). tsc --strict, mypy --strict and go vet pass the packages;
+/// `--check` finds nothing stale after a write, and says when a gate changed.
+#[test]
+fn the_gates_of_a_project_go_into_the_package() {
+    let t = TempDir::new("gen-gates");
+    let project = t.path().join("refunds");
+    ritsu_testkit::tmp::copy_dir(&here().join(REFUNDS), &project);
+    let out = t.path().join("out");
+    let (code, _, err) = generate(&project, &out, &[]);
+    assert_eq!(code, 0, "{err}");
+    let mut listed: Vec<String> = files(&out).into_iter().filter(|f| f.starts_with("cedar/") || f.contains("/authz/")).collect();
+    listed.sort();
+    assert_eq!(
+        listed,
+        [
+            "cedar/refunds.cedar",
+            "cedar/refunds.cedarschema",
+            "cedar/refunds.cedarschema.json",
+            "cedar/refunds.policies.json",
+            "cedar/refunds_ja.cedar",
+            "cedar/refunds_ja.cedarschema",
+            "cedar/refunds_ja.cedarschema.json",
+            "cedar/refunds_ja.policies.json",
+            "go/authz/refunds/refunds.go",
+            "go/authz/refundsja/refundsja.go",
+            "python/generated/authz/__init__.py",
+            "python/generated/authz/refunds.py",
+            "python/generated/authz/refunds_ja.py",
+            "typescript/authz/index.ts",
+            "typescript/authz/refunds.ts",
+            "typescript/authz/refunds_ja.ts",
+        ]
+    );
+    let authz = out.join("typescript/authz/refunds.ts");
+    assert_has(&authz, "// Source: refunds.gate (gate refunds v1, sha256:");
+    assert_has(&authz, "import * as rule_refund_limit from \"../rules/refund_limit\";\nimport * as dates_refund_terms from \"../dates/refund_terms\";\nimport * as dates_england_and_wales from \"../dates/england_and_wales\";\n");
+    assert_has(&out.join("typescript/index.ts"), "export * as authz from \"./authz/index\";\n");
+    assert_has(&out.join("typescript/authz/index.ts"), "export * as refunds from \"./refunds\";\nexport * as refunds_ja from \"./refunds_ja\";\n");
+    assert_has(&out.join("typescript/package.json"), "    \"@cedar-policy/cedar-wasm\": \"4.13.0\",\n");
+    assert_has(&out.join("python/generated/__init__.py"), "from . import authz as authz\n");
+    assert_has(&out.join("python/generated/authz/__init__.py"), "from . import refunds as refunds\nfrom . import refunds_ja as refunds_ja\n");
+    assert_has(&out.join("python/pyproject.toml"), "  \"cedarpy==4.12.1\",\n");
+    assert_has(&out.join("python/generated/authz/refunds.py"), "# Source: refunds.gate (gate refunds v1, sha256:");
+    assert_has(&out.join("go/doc.go"), "//\tgithub.com/cedar-policy/cedar-go v1.8.0\n");
+    assert_has(&out.join("go/authz/refunds/refunds.go"), &format!("\"{MODULE}/rules/refundlimit\""));
+    // the Cedar is sekisho gen's, but the head names the file from the project's root
+    let cedar = read(&out.join("cedar/refunds.cedar"));
+    assert!(cedar.starts_with("// Code generated by sekisho ") && cedar.contains("\n// Source: refunds.gate (gate refunds v1, sha256:"), "{cedar}");
+    type_check_the_gates(&t, &out);
+    let (code, stdout, _) = generate(&project, &out, &["--check"]);
+    assert_eq!((code, stdout.as_str()), (0, ""), "a package just written is not stale");
+    // a gate changed: its Cedar and its code in each language, and nothing else
+    let gate = project.join("refunds.gate");
+    std::fs::write(&gate, read(&gate).replace("A sketch of a shop's own terms", "A sketch of the shop's own terms")).unwrap();
+    let (code, stdout, _) = generate(&project, &out, &["--check"]);
+    assert_eq!(code, 1);
+    let o = out.display().to_string();
+    assert_eq!(
+        stdout,
+        format!(
+            "generated file is stale or hand-edited: {o}/typescript/authz/refunds.ts\ngenerated file is stale or hand-edited: {o}/python/generated/authz/refunds.py\ngenerated file is stale or hand-edited: {o}/go/authz/refunds/refunds.go\ngenerated file is stale or hand-edited: {o}/cedar/refunds.cedar\ngenerated file is stale or hand-edited: {o}/cedar/refunds.cedarschema\ngenerated file is stale or hand-edited: {o}/cedar/refunds.cedarschema.json\n"
+        )
+    );
+    // asking Verified Permissions: the AWS SDK's client and boto3, and no Cedar in the packages
+    let avp = t.path().join("avp");
+    let (code, _, err) = generate(&project, &avp, &["--authorizer", "avp"]);
+    assert_eq!(code, 0, "{err}");
+    let pkg = read(&avp.join("typescript/package.json"));
+    assert!(pkg.contains("    \"@aws-sdk/client-verifiedpermissions\": \"3.1146.0\",\n") && !pkg.contains("cedar-wasm"), "{pkg}");
+    let toml = read(&avp.join("python/pyproject.toml"));
+    assert!(toml.contains("  \"boto3==1.43.103\",\n") && !toml.contains("cedarpy"), "{toml}");
+    let doc = read(&avp.join("go/doc.go"));
+    assert!(doc.contains("//\tgithub.com/aws/aws-sdk-go-v2/service/verifiedpermissions v1.41.1\n") && !doc.contains("cedar-go"), "{doc}");
+    assert_has(&avp.join("typescript/authz/refunds.ts"), "export async function authorizeRefundOrder(avp: VerifiedPermissions, store: Store, principal: Principal, input: RefundOrderInput");
+}
+
+/// tsc --strict, mypy --strict and go vet on the packages of the gates at `out`, each with the
+/// Cedar of its language from sekisho's runners.
+fn type_check_the_gates(t: &TempDir, out: &Path) {
+    if ritsu_testkit::need(Need::Node) {
+        match (tsc(), cedar_wasm()) {
+            (Some((tsc, mut modules)), Some(cedar)) => {
+                modules.push(cedar);
+                type_check_typescript(&out.join("typescript"), &tsc, &modules);
+                println!("tsc --strict passes the TypeScript package of the gates");
+            }
+            _ => ritsu_testkit::skip("TypeScript (crates/dandori/tools/temporal), tigerbeetle-node (crates/chobo/tools/runner) or cedar-wasm (crates/sekisho/tools/runner-ts) is not installed; the TypeScript of the gates is not type-checked"),
+        }
+    }
+    if ritsu_testkit::need(Need::Python) {
+        match (mypy(), cedarpy()) {
+            (Some((mypy, python, tigerbeetle)), Some(cedarpy)) => {
+                type_check_python(&out.join("python"), &mypy, &python, &[tigerbeetle, cedarpy]);
+                println!("mypy --strict passes the Python package of the gates");
+            }
+            _ => ritsu_testkit::skip("mypy, Temporal's Python SDK (crates/dandori/tools/temporal-python), tigerbeetle (crates/chobo/tools/runner) or cedarpy (crates/sekisho/tools/runner-py) is not installed; the Python of the gates is not type-checked"),
+        }
+    }
+    if ready(Need::Go, have_go, "go is not installed; the Go of the gates is not vetted") {
+        // the gates, the rules and the dates they read, in a module that requires what sekisho's
+        // runner of Go locks (cedar-go, the AWS SDK's client); the flows are vetted with Temporal's
+        // SDK by the_packages_pass_the_type_checkers
+        let runner = workspace().join("crates/sekisho/tools/runner-go");
+        if !runner.join("go.mod").exists() {
+            ritsu_testkit::skip("the go.mod of crates/sekisho/tools/runner-go is missing; the Go of the gates is not vetted");
+            return;
+        }
+        let gomod = read(&runner.join("go.mod")).replacen("module sekisho-runner", "module gocheck", 1);
+        let gates = t.path().join("go-gates");
+        go_module_in(&gates, &out.join("go"), &(gomod, read(&runner.join("go.sum"))));
+        std::fs::remove_dir_all(gates.join("generated/flows")).unwrap();
+        let o = go_in(&gates).args(["vet", "./..."]).output().unwrap();
+        assert!(o.status.success(), "go vet finds fault with the Go of the gates:\n{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+        let fmt = Command::new("gofmt").arg("-l").arg("generated").current_dir(&gates).output().unwrap();
+        assert!(fmt.status.success() && fmt.stdout.is_empty(), "gofmt would write these otherwise:\n{}", String::from_utf8_lossy(&fmt.stdout));
+        println!("go vet and gofmt pass the Go of the gates, with the rules and the dates they read");
     }
 }
 

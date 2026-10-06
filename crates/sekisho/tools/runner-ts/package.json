@@ -1,0 +1,13 @@
+{
+  "name": "sekisho-runner-ts",
+  "private": true,
+  "description": "Runs the TypeScript sekisho gen writes against Cedar's own WebAssembly build, and type-checks it, the code of --authorizer avp against the AWS SDK's client of Verified Permissions (tests/typescript.rs). Install with: npm ci --prefix tools/runner-ts",
+  "dependencies": {
+    "@aws-sdk/client-verifiedpermissions": "3.1146.0",
+    "@cedar-policy/cedar-wasm": "4.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.4",
+    "typescript": "5.9.3"
+  }
+}

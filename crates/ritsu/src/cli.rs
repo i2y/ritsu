@@ -133,14 +133,14 @@ pub fn commands() -> Vec<Cmd> {
         name: "gen",
         args: "[<path>...]",
         purpose: tr!(
-            "プロジェクトの規則、期日、帳簿のクライアント、ワークフローを、TypeScript、Python、Go のそれぞれ一つのパッケージにする。ワークフローは同じパッケージの規則と期日と帳簿を読む",
-            "write the rules, the dates, the clients of the books and the workflows of a project as one package for each of TypeScript, Python and Go, whose workflows read the package's own rules, dates and books"
+            "プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、ゲートに尋ねるコードを、TypeScript、Python、Go のそれぞれ一つのパッケージにする。ワークフローとゲートのコードは同じパッケージの規則と期日と帳簿を読む。ゲートの Cedar は <out>/cedar/ に一度だけ書く",
+            "write the rules, the dates, the clients of the books, the workflows and the code that asks the gates of a project as one package for each of TypeScript, Python and Go, whose workflows and gates read the package's own rules, dates and books; the gates' Cedar goes once into <out>/cedar/"
         ),
         params: vec![(
             "<path>...",
             tr!(
-                "ファイルかディレクトリ。無ければ今いるディレクトリ。下の .rule、.cal、.book、.flow がパッケージに入る",
-                "files or directories; else the directory you are in. The .rule, .cal, .book and .flow files under them go into the package"
+                "ファイルかディレクトリ。無ければ今いるディレクトリ。下の .rule、.cal、.book、.flow、.gate がパッケージに入る",
+                "files or directories; else the directory you are in. The .rule, .cal, .book, .flow and .gate files under them go into the package"
             ),
         )],
         flags: vec![
@@ -148,6 +148,16 @@ pub fn commands() -> Vec<Cmd> {
             flag("--out", Some("<dir>"), tr!("パッケージを書く先。言語ごとに <dir>/<language> に書く", "where the packages go: each in <dir>/<language>")).default("generated"),
             flag("--check", None, tr!("書かずに、パッケージが古ければ 1 で落ちる（CI 用）", "write nothing, and exit 1 if a package is stale (for CI)")),
             flag("--books", Some("<database>"), tr!("帳簿のクライアントがつなぐ先", "what the clients of the books call")).choices(&["postgres", "tigerbeetle"]).default("postgres"),
+            flag(
+                "--authorizer",
+                Some("cedar|avp"),
+                tr!(
+                    "ゲートのコードが尋ねる先。cedar はその言語の Cedar をプロセスの中で呼び、avp は Amazon Verified Permissions に AWS の SDK で尋ねる",
+                    "where the code of the gates asks: cedar calls the language's own Cedar in the process, avp asks Amazon Verified Permissions through the AWS SDK"
+                ),
+            )
+            .choices(&sekisho::r#gen::Authorizer::WORDS)
+            .default("cedar"),
             flag("--name", Some("<name>"), tr!("パッケージの名前（npm のパッケージ、Python のパッケージのディレクトリ、Go の import のパスの既定）", "the package's name: the npm package's, the Python package's directory, and the Go import path unless --module says one")).default("generated"),
             flag("--module", Some("<path>"), tr!("Go のパッケージのディレクトリの import のパス", "the Go import path of the package's directory")),
             root_flag(),

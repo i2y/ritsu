@@ -4,7 +4,7 @@ A small language for who may do what: roles, attributes and relations, with rule
 
 Usage:
   sekisho check <file.gate>...  check the words, the names and the types, and every combination the file declares
-  sekisho gen <file.gate>...    generate the Cedar schema and policies; nothing is generated from a file that does not pass check
+  sekisho gen <file.gate>...    generate the Cedar schema and policies, or the code that builds the requests and asks Cedar; nothing is generated from a file that does not pass check
   sekisho vectors <file.gate>   print every combination as a test of cedar run-tests: the request, the entities, and the decision and the deciding policies by sekisho's reference evaluation
   sekisho api <file.gate>       print JSON for other tools: the namespace and the files gen writes, the roles, types and workflows with their entities in Cedar, the actions with the operations they guard and their context, the policies with their @id, the expectations and the separations
   sekisho doc <file.gate>       print the page for people: each action's table, the policies beside the Cedar they compile to, the computed values with the pages of their rules and dates, the expectations and the roles, the workflows, and the operations guarded

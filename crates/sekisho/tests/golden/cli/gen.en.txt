@@ -1,18 +1,20 @@
-sekisho gen — generate the Cedar schema and policies; nothing is generated from a file that does not pass check
+sekisho gen — generate the Cedar schema and policies, or the code that builds the requests and asks Cedar; nothing is generated from a file that does not pass check
 
 Usage:
-  sekisho gen <file.gate>... --target cedar [--out <dir>] [--check] [--root <dir>] [--lang ja|en]
+  sekisho gen <file.gate>... --target cedar|typescript|python|go [--authorizer cedar|avp] [--module <path>] [--out <dir>] [--check] [--root <dir>] [--lang ja|en]
 
 Arguments:
   <file.gate>...  the .gate files
 
 Flags:
-  --target cedar  what to generate: cedar writes four files a gate into <out>/cedar/, named by its alias (.cedar, .cedarschema, .cedarschema.json, .policies.json); what sekisho writes in them (the head, the @doc of a computed value) is in the language of --lang
-  --out <dir>     the directory the generated files go to (default generated)
-  --check         write nothing; exit 1 if a file on disk differs from what gen would write (for CI)
-  --root <dir>    the root the paths of references count from; else the nearest directory above the first path given that holds .git (else the directory of that file)
-  --lang ja|en    the language of the text; else the SEKISHO_LANG environment variable, then RITSU_LANG, else en (default en)
-  --help          print this page
+  --target cedar|typescript|python|go  what to generate: cedar writes four files a gate into <out>/cedar/, named by its alias (.cedar, .cedarschema, .cedarschema.json, .policies.json); typescript writes <out>/typescript/authz/<alias>.ts, python <out>/python/authz/<alias>.py and go <out>/go/authz/<package>/<package>.go, the code that builds each action's request and asks Cedar, which reads the rules' and the dates' code from rules/ and dates/ beside it, as in a package of ritsu gen; what sekisho writes (the heads, the @doc, the comments, why a request is refused) is in the language of --lang
+  --authorizer cedar|avp               where the generated code asks: cedar asks the language's own Cedar (@cedar-policy/cedar-wasm, cedarpy, cedar-go) in the process; avp asks Amazon Verified Permissions through the AWS SDK (the policies and the schema of --target cedar go into its store), and says W401 of what is over its quotas (default cedar)
+  --module <path>                      the Go module path the code of go imports the rules' and the dates' packages by (<path>/rules/<package>, <path>/dates/<package>; ritsu gen's --module) (default generated)
+  --out <dir>                          the directory the generated files go to (default generated)
+  --check                              write nothing; exit 1 if a file on disk differs from what gen would write (for CI)
+  --root <dir>                         the root the paths of references count from; else the nearest directory above the first path given that holds .git (else the directory of that file)
+  --lang ja|en                         the language of the text; else the SEKISHO_LANG environment variable, then RITSU_LANG, else en (default en)
+  --help                               print this page
 
 Exit codes:
   0  generated, or --check found every file the same
@@ -23,3 +25,6 @@ Examples:
   $ ritsu sekisho gen examples/refunds/refunds.gate --target cedar
   $ ritsu sekisho gen examples/refunds/refunds.gate --target cedar --check
   $ sekisho gen shop.gate --target cedar --out generated --lang ja
+  $ ritsu sekisho gen examples/refunds/refunds.gate --target typescript --authorizer avp
+  $ ritsu sekisho gen examples/refunds/refunds.gate --target python
+  $ ritsu sekisho gen examples/refunds/refunds.gate --target go --authorizer avp --module example.com/shop

@@ -6,8 +6,8 @@
 //! ([`ritsu_base::ledger`]).
 //!
 //! The codes of the checks of every combination and of the contracts (E202–E208, W201, E301–E307,
-//! W301–W303, W401) are in the ledger with no example yet ([`Repro::Later`]) until those checks
-//! print them.
+//! W301–W303) are in the ledger with no example yet ([`Repro::Later`]) until those checks print
+//! them. W401 is `gen`'s (`--authorizer avp`): its example is the command, not a file `check` reads.
 
 use ritsu_base::ledger::{Entry, Ledger, Repro};
 use ritsu_base::text::Text;
@@ -17,6 +17,27 @@ fn e(code: &'static str, title: Text, when: Text, fix: Text, en: &'static str, j
     let mut x = Entry::new(code, title, when, fix, Repro::File { body: en, beside: &[] }, related);
     x.repro_ja = Some(Repro::File { body: ja, beside: &[] });
     x
+}
+
+/// The example of W401: a type whose one role includes, step by step, a hundred more (101 parents
+/// of an entity), generated for Verified Permissions. Built here and kept for the run (a ledger is
+/// made a few times a run).
+fn deep_roles(ja: bool) -> Repro {
+    let (gate, role, user, doc, read, everyone) = if ja { ("深い(deep)", "役", "職員(User)", "文書(Doc)", "読む(read)", "だれでも読む(everyone_reads)") } else { ("deep", "r", "User", "Doc", "read", "everyone_reads") };
+    let mut body = format!("gate {gate} v1\nnamespace Shop\n\n");
+    for i in 0..=100 {
+        if ja {
+            body.push_str(&format!("role {role}{i}(r{i})\n"));
+        } else {
+            body.push_str(&format!("role {role}{i}\n"));
+        }
+        if i > 0 {
+            body.push_str(&format!("  includes {role}{}\n", i - 1));
+        }
+    }
+    body.push_str(&format!("\nprincipal {user}\n  roles {role}100\n\nresource {doc}\n\naction {read}\n  principal {}\n  resource {}\n\npermit {everyone}\n  action {}\n", if ja { "職員" } else { "User" }, if ja { "文書" } else { "Doc" }, if ja { "読む" } else { "read" }));
+    let body: &'static str = Box::leak(body.into_boxed_str());
+    Repro::Dir { files: vec![("example.gate", body)], command: vec!["ritsu", "sekisho", "gen", "example.gate", "--target", "cedar", "--authorizer", "avp"] }
 }
 
 /// An entry whose example is written in a later stage.
@@ -492,16 +513,21 @@ pub fn ledger() -> Ledger {
             &[],
         ),
         // ── Generation ──
-        later(
-            "W401",
-            tr!("Verified Permissions の上限を超えます", "Over a quota of Verified Permissions"),
-            tr!(
-                "生成したポリシーかスキーマが、Verified Permissions の上限（ポリシー 10,000 バイト、スキーマ 100,000 バイト、親の深さ 100 など）を超えるとき（`--authorizer avp`）。",
-                "A generated policy or schema is over a quota of Verified Permissions (10,000 bytes a policy, 100,000 bytes a schema, 100 ancestors, …) (`--authorizer avp`)."
-            ),
-            tr!("ポリシーを分けるか、役割の入れ子を浅くしてください。", "Split the policy, or make the roles nest less deep."),
-            &[],
-        ),
+        {
+            let mut x = Entry::new(
+                "W401",
+                tr!("Verified Permissions の上限を超えます", "Over a quota of Verified Permissions"),
+                tr!(
+                    "`sekisho gen --authorizer avp` で、生成したポリシーかスキーマが Verified Permissions の上限（一つのポリシーは 10,000 バイト、スキーマは JSON で 100,000 バイト、エンティティの推移的な親は 100 個）を超えるとき。役割は、型が持てる役割の全部と、それらが含む役割を数えます。",
+                    "Under `sekisho gen --authorizer avp`, a generated policy or the schema is over a quota of Verified Permissions (10,000 bytes a policy, 100,000 bytes the schema as JSON, 100 transitive parents of an entity). The roles counted are every role a type can hold, with the roles they include."
+                ),
+                tr!("ポリシーを分けるか、型と action をいくつかのゲートに分けるか、役割の入れ子を浅くしてください。", "Split the policy, spread the types and the actions over several gates, or make the roles nest less deep."),
+                deep_roles(false),
+                &[],
+            );
+            x.repro_ja = Some(deep_roles(true));
+            x
+        },
     ];
     // the codes of the borders, the contracts and the checks of every combination, with their
     // examples, in place of the entries written for later; a code not written here comes after the

@@ -1,18 +1,20 @@
-sekisho gen — Cedar のスキーマとポリシーを生成する。検査を通らないファイルからは生成しない
+sekisho gen — Cedar のスキーマとポリシーか、リクエストを組み立てて Cedar に尋ねるコードを生成する。検査を通らないファイルからは生成しない
 
 使い方:
-  sekisho gen <file.gate>... --target cedar [--out <dir>] [--check] [--root <dir>] [--lang ja|en]
+  sekisho gen <file.gate>... --target cedar|typescript|python|go [--authorizer cedar|avp] [--module <path>] [--out <dir>] [--check] [--root <dir>] [--lang ja|en]
 
 引数:
   <file.gate>...  .gate のファイル
 
 フラグ:
-  --target cedar  生成するもの。cedar は <out>/cedar/ に、別名ごとに四つのファイル（.cedar、.cedarschema、.cedarschema.json、.policies.json）を書く。sekisho が書く文（頭と、計算した値の @doc）は --lang の言語になる
-  --out <dir>     生成物を書くディレクトリ（既定 generated）
-  --check         書き出さずに、ディスクの生成物が、いま生成するものと一字一句同じかを見る。違えば 1（CI 用）
-  --root <dir>    参照のパスを数えるルート。無ければ、最初に渡したパスの上で .git を持つ一番近いディレクトリ（それも無ければ、そのファイルのあるディレクトリ）
-  --lang ja|en    文面の言語。無ければ環境変数 SEKISHO_LANG、次に RITSU_LANG、どちらも無ければ en（既定 en）
-  --help          この画面を出す
+  --target cedar|typescript|python|go  生成するもの。cedar は <out>/cedar/ に、別名ごとに四つのファイル（.cedar、.cedarschema、.cedarschema.json、.policies.json）を書く。typescript は <out>/typescript/authz/<別名>.ts、python は <out>/python/authz/<別名>.py、go は <out>/go/authz/<パッケージ>/<パッケージ>.go に、action ごとにリクエストを組み立てて Cedar に尋ねるコードを書く。規則と日付の生成物は、ritsu gen のパッケージと同じく、隣の rules/ と dates/ から読む。sekisho が書く文（頭、@doc、コメント、拒んだ理由）は --lang の言語になる
+  --authorizer cedar|avp               生成するコードが尋ねる先。cedar は、その言語の Cedar（@cedar-policy/cedar-wasm、cedarpy、cedar-go）にプロセスの中で尋ねる。avp は、Amazon Verified Permissions に AWS の SDK で尋ね（ポリシーとスキーマは --target cedar のものをストアに置く）、上限を超えるものがあれば W401 を言う（既定 cedar）
+  --module <path>                      go のコードが規則と日付のパッケージを import するモジュールのパス（<path>/rules/<パッケージ>、<path>/dates/<パッケージ>。ritsu gen の --module と同じ）（既定 generated）
+  --out <dir>                          生成物を書くディレクトリ（既定 generated）
+  --check                              書き出さずに、ディスクの生成物が、いま生成するものと一字一句同じかを見る。違えば 1（CI 用）
+  --root <dir>                         参照のパスを数えるルート。無ければ、最初に渡したパスの上で .git を持つ一番近いディレクトリ（それも無ければ、そのファイルのあるディレクトリ）
+  --lang ja|en                         文面の言語。無ければ環境変数 SEKISHO_LANG、次に RITSU_LANG、どちらも無ければ en（既定 en）
+  --help                               この画面を出す
 
 exit code:
   0  生成した、または --check で全部が同じだった
@@ -23,3 +25,6 @@ exit code:
   $ ritsu sekisho gen examples/refunds/refunds.gate --target cedar
   $ ritsu sekisho gen examples/refunds/refunds.gate --target cedar --check
   $ sekisho gen shop.gate --target cedar --out generated --lang ja
+  $ ritsu sekisho gen examples/refunds/refunds.gate --target typescript --authorizer avp
+  $ ritsu sekisho gen examples/refunds/refunds.gate --target python
+  $ ritsu sekisho gen examples/refunds/refunds.gate --target go --authorizer avp --module example.com/shop

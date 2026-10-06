@@ -1359,8 +1359,229 @@ expect deny 支払済で返金済の注文は返金しない
 
 ## W401 — Verified Permissions の上限を超えます
 
-**いつ出るか**: 生成したポリシーかスキーマが、Verified Permissions の上限（ポリシー 10,000 バイト、スキーマ 100,000 バイト、親の深さ 100 など）を超えるとき（`--authorizer avp`）。
+**いつ出るか**: `sekisho gen --authorizer avp` で、生成したポリシーかスキーマが Verified Permissions の上限（一つのポリシーは 10,000 バイト、スキーマは JSON で 100,000 バイト、エンティティの推移的な親は 100 個）を超えるとき。役割は、型が持てる役割の全部と、それらが含む役割を数えます。
 
-**直し方**: ポリシーを分けるか、役割の入れ子を浅くしてください。
+**直し方**: ポリシーを分けるか、型と action をいくつかのゲートに分けるか、役割の入れ子を浅くしてください。
 
-**再現**: まだ再現がありません。これを出す検査は、この先の段階で入ります。
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu sekisho gen example.gate --target cedar --authorizer avp` を走らせます。
+
+`example.gate`:
+
+```
+gate 深い(deep) v1
+namespace Shop
+
+role 役0(r0)
+role 役1(r1)
+  includes 役0
+role 役2(r2)
+  includes 役1
+role 役3(r3)
+  includes 役2
+role 役4(r4)
+  includes 役3
+role 役5(r5)
+  includes 役4
+role 役6(r6)
+  includes 役5
+role 役7(r7)
+  includes 役6
+role 役8(r8)
+  includes 役7
+role 役9(r9)
+  includes 役8
+role 役10(r10)
+  includes 役9
+role 役11(r11)
+  includes 役10
+role 役12(r12)
+  includes 役11
+role 役13(r13)
+  includes 役12
+role 役14(r14)
+  includes 役13
+role 役15(r15)
+  includes 役14
+role 役16(r16)
+  includes 役15
+role 役17(r17)
+  includes 役16
+role 役18(r18)
+  includes 役17
+role 役19(r19)
+  includes 役18
+role 役20(r20)
+  includes 役19
+role 役21(r21)
+  includes 役20
+role 役22(r22)
+  includes 役21
+role 役23(r23)
+  includes 役22
+role 役24(r24)
+  includes 役23
+role 役25(r25)
+  includes 役24
+role 役26(r26)
+  includes 役25
+role 役27(r27)
+  includes 役26
+role 役28(r28)
+  includes 役27
+role 役29(r29)
+  includes 役28
+role 役30(r30)
+  includes 役29
+role 役31(r31)
+  includes 役30
+role 役32(r32)
+  includes 役31
+role 役33(r33)
+  includes 役32
+role 役34(r34)
+  includes 役33
+role 役35(r35)
+  includes 役34
+role 役36(r36)
+  includes 役35
+role 役37(r37)
+  includes 役36
+role 役38(r38)
+  includes 役37
+role 役39(r39)
+  includes 役38
+role 役40(r40)
+  includes 役39
+role 役41(r41)
+  includes 役40
+role 役42(r42)
+  includes 役41
+role 役43(r43)
+  includes 役42
+role 役44(r44)
+  includes 役43
+role 役45(r45)
+  includes 役44
+role 役46(r46)
+  includes 役45
+role 役47(r47)
+  includes 役46
+role 役48(r48)
+  includes 役47
+role 役49(r49)
+  includes 役48
+role 役50(r50)
+  includes 役49
+role 役51(r51)
+  includes 役50
+role 役52(r52)
+  includes 役51
+role 役53(r53)
+  includes 役52
+role 役54(r54)
+  includes 役53
+role 役55(r55)
+  includes 役54
+role 役56(r56)
+  includes 役55
+role 役57(r57)
+  includes 役56
+role 役58(r58)
+  includes 役57
+role 役59(r59)
+  includes 役58
+role 役60(r60)
+  includes 役59
+role 役61(r61)
+  includes 役60
+role 役62(r62)
+  includes 役61
+role 役63(r63)
+  includes 役62
+role 役64(r64)
+  includes 役63
+role 役65(r65)
+  includes 役64
+role 役66(r66)
+  includes 役65
+role 役67(r67)
+  includes 役66
+role 役68(r68)
+  includes 役67
+role 役69(r69)
+  includes 役68
+role 役70(r70)
+  includes 役69
+role 役71(r71)
+  includes 役70
+role 役72(r72)
+  includes 役71
+role 役73(r73)
+  includes 役72
+role 役74(r74)
+  includes 役73
+role 役75(r75)
+  includes 役74
+role 役76(r76)
+  includes 役75
+role 役77(r77)
+  includes 役76
+role 役78(r78)
+  includes 役77
+role 役79(r79)
+  includes 役78
+role 役80(r80)
+  includes 役79
+role 役81(r81)
+  includes 役80
+role 役82(r82)
+  includes 役81
+role 役83(r83)
+  includes 役82
+role 役84(r84)
+  includes 役83
+role 役85(r85)
+  includes 役84
+role 役86(r86)
+  includes 役85
+role 役87(r87)
+  includes 役86
+role 役88(r88)
+  includes 役87
+role 役89(r89)
+  includes 役88
+role 役90(r90)
+  includes 役89
+role 役91(r91)
+  includes 役90
+role 役92(r92)
+  includes 役91
+role 役93(r93)
+  includes 役92
+role 役94(r94)
+  includes 役93
+role 役95(r95)
+  includes 役94
+role 役96(r96)
+  includes 役95
+role 役97(r97)
+  includes 役96
+role 役98(r98)
+  includes 役97
+role 役99(r99)
+  includes 役98
+role 役100(r100)
+  includes 役99
+
+principal 職員(User)
+  roles 役100
+
+resource 文書(Doc)
+
+action 読む(read)
+  principal 職員
+  resource 文書
+
+permit だれでも読む(everyone_reads)
+  action 読む
+```

@@ -6,7 +6,8 @@
 //! - Every manifest the tests install from has its lockfile, and every requirements.txt pins each
 //!   package it installs to one version, so the scan (`--no-resolve`) reads the versions CI installs.
 //! - The versions `ritsu gen` writes into a package, and those the generated code names, are the
-//!   ones the tools lock: a scan of the tools is a scan of what a package asks for (DESIGN 9.3).
+//!   ones the tools lock: a scan of the tools is a scan of what a package asks for (DESIGN 9.3),
+//!   the Cedar a gate's code asks among them (sekisho's runners).
 //! - Every advisory let pass says why, and osv-scanner's until when.
 //! - The workflow scans the whole repository, every day, and release.yml runs it before it builds.
 //! - The binary a release hands out carries the list of its crates (cargo-auditable), for the
@@ -105,8 +106,9 @@ fn every_manifest_the_tests_install_from_is_locked() {
         }
     }
     let reqs = tools("requirements.txt");
-    // nine of them today: chobo's runner, five of dandori's, koyomi's, sakai's and yuen's
-    assert!(reqs.len() >= 9, "the requirements of the tools: {reqs:?}");
+    // ten of them today: chobo's runner, five of dandori's, koyomi's, sakai's, sekisho's runner of
+    // Python and yuen's
+    assert!(reqs.len() >= 10, "the requirements of the tools: {reqs:?}");
     for p in reqs {
         for r in requirements(&read(&p)) {
             if pinned(&r).is_none() {
@@ -119,45 +121,60 @@ fn every_manifest_the_tests_install_from_is_locked() {
 }
 
 /// The versions the tools lock, of the packages `ritsu gen` writes into a package: npm's (dandori's
-/// Temporal runner, chobo's runner), PyPI's (dandori's Temporal runner for Python, chobo's) and Go's
-/// (dandori's tools/temporal-go, chobo's tools/runner/go).
+/// Temporal runner, chobo's runner, sekisho's runner of TypeScript), PyPI's (dandori's Temporal
+/// runner for Python, chobo's, sekisho's runner of Python) and Go's (dandori's tools/temporal-go,
+/// chobo's tools/runner/go, sekisho's runner of Go).
 struct Locked {
     npm: BTreeMap<String, String>,
     pypi: BTreeMap<String, String>,
     go: BTreeMap<String, String>,
 }
 
-/// Temporal's packages from dandori's runners, the rest (TigerBeetle's) from chobo's.
-fn of_temporal(name: &str) -> bool {
-    name.starts_with("@temporalio/") || name == "temporalio"
+/// Which runner locks a package a package asks for: Temporal's dandori's, Cedar's and the AWS SDK's
+/// client of Verified Permissions sekisho's, the rest (TigerBeetle's) chobo's.
+#[derive(Clone, Copy, PartialEq)]
+enum Of {
+    Dandori,
+    Chobo,
+    Sekisho,
+}
+
+fn of(name: &str) -> Of {
+    if name.starts_with("@temporalio/") || name == "temporalio" {
+        Of::Dandori
+    } else if name.starts_with("@cedar-policy/") || name == "cedarpy" || name == "@aws-sdk/client-verifiedpermissions" || name == "boto3" || name == "boto3-stubs" {
+        Of::Sekisho
+    } else {
+        Of::Chobo
+    }
 }
 
 fn locked() -> Locked {
     let tools = root().join("crates");
     let mut npm = BTreeMap::new();
-    for (lock, temporal) in [("dandori/tools/temporal/package-lock.json", true), ("chobo/tools/runner/package-lock.json", false)] {
+    for (lock, by) in [("dandori/tools/temporal/package-lock.json", Of::Dandori), ("chobo/tools/runner/package-lock.json", Of::Chobo), ("sekisho/tools/runner-ts/package-lock.json", Of::Sekisho)] {
         let v: serde_json::Value = serde_json::from_str(&read(&tools.join(lock))).unwrap();
         for (k, p) in v["packages"].as_object().unwrap() {
-            let Some(name) = k.strip_prefix("node_modules/").filter(|n| !n.contains("/node_modules/") && of_temporal(n) == temporal) else { continue };
+            let Some(name) = k.strip_prefix("node_modules/").filter(|n| !n.contains("/node_modules/") && of(n) == by) else { continue };
             if let Some(version) = p["version"].as_str() {
                 npm.insert(name.to_string(), version.to_string());
             }
         }
     }
     let mut pypi = BTreeMap::new();
-    for (req, temporal) in [("dandori/tools/temporal-python/requirements.txt", true), ("chobo/tools/runner/requirements.txt", false)] {
+    for (req, by) in [("dandori/tools/temporal-python/requirements.txt", Of::Dandori), ("chobo/tools/runner/requirements.txt", Of::Chobo), ("sekisho/tools/runner-py/requirements.txt", Of::Sekisho)] {
         for r in requirements(&read(&tools.join(req))) {
             let (name, version) = pinned(&r).unwrap();
-            if of_temporal(&name) == temporal {
+            if of(&name) == by {
                 pypi.insert(name, version);
             }
         }
     }
     let mut go = BTreeMap::new();
-    for gomod in ["dandori/tools/temporal-go/go.mod", "chobo/tools/runner/go/go.mod"] {
+    for gomod in ["dandori/tools/temporal-go/go.mod", "chobo/tools/runner/go/go.mod", "sekisho/tools/runner-go/go.mod"] {
         for (m, v) in go_requires(&read(&tools.join(gomod))) {
             if let Some(other) = go.insert(m.clone(), v.clone()) {
-                assert_eq!(other, v, "{m}: the two go.mod require it at two versions");
+                assert_eq!(other, v, "{m}: two go.mod of the runners require it at two versions");
             }
         }
     }
@@ -165,13 +182,13 @@ fn locked() -> Locked {
 }
 
 /// The package of the stockroom project in each language, with its books on PostgreSQL and on
-/// TigerBeetle.
+/// TigerBeetle; and of sekisho's example, whose gates ask Cedar in the process or Verified
+/// Permissions.
 fn packages(t: &TempDir) -> Vec<PathBuf> {
-    let project = root().join("crates/ritsu/tests/projects/stockroom");
     let mut outs = Vec::new();
-    for books in ["postgres", "tigerbeetle"] {
-        let out = t.path().join(books);
-        let o = Command::new(env!("CARGO_BIN_EXE_ritsu")).current_dir(&project).args(["gen", "--root", ".", "--out", out.to_str().unwrap(), "--books", books]).output().unwrap();
+    for (project, flag, value) in [("crates/ritsu/tests/projects/stockroom", "--books", "postgres"), ("crates/ritsu/tests/projects/stockroom", "--books", "tigerbeetle"), ("crates/sekisho/examples/refunds", "--authorizer", "cedar"), ("crates/sekisho/examples/refunds", "--authorizer", "avp")] {
+        let out = t.path().join(format!("{}-{value}", project.rsplit('/').next().unwrap()));
+        let o = Command::new(env!("CARGO_BIN_EXE_ritsu")).current_dir(root().join(project)).args(["gen", "--root", ".", "--out", out.to_str().unwrap(), flag, value]).output().unwrap();
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
         outs.push(out);
     }
@@ -241,6 +258,9 @@ fn the_packages_ask_for_the_versions_the_tools_lock() {
         }
     }
     assert!(checked >= 16, "{checked} versions checked");
+    // the Cedar of the gates and the AWS SDK's client, each in the package of its authorizer
+    let ts = |out: &str| read(&t.path().join(out).join("typescript/package.json"));
+    assert!(ts("refunds-cedar").contains("\"@cedar-policy/cedar-wasm\"") && ts("refunds-avp").contains("\"@aws-sdk/client-verifiedpermissions\""));
 }
 
 /// Every file under `dir`, by its path from it, with its text.

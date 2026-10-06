@@ -1,0 +1,8 @@
+/target
+# what `sekisho gen` writes when no --out is given
+/generated
+# what the runners of the generated code install: `npm ci --prefix tools/runner-ts`, and the venv
+# tools/runner-py/install.sh makes from requirements.txt
+/tools/runner-ts/node_modules/
+/tools/runner-py/.venv/
+__pycache__/

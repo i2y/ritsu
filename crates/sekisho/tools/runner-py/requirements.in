@@ -1,0 +1,16 @@
+# What tests/python.rs runs the Python sekisho generates with: cedarpy, the Cedar the generated
+# module asks in its own process (`--authorizer cedar`); boto3, which the code of
+# `--authorizer avp` calls Verified Permissions with, and its stubs, so that mypy reads that code
+# too; and mypy, which holds the generated module to `--strict`. The tests never call AWS.
+# requirements.txt is the lock, made from this with
+#   uv pip compile requirements.in --python-version 3.13 --generate-hashes -o requirements.txt
+# and installed with
+#   uv venv --python 3.13 tools/runner-py/.venv
+#   uv pip sync --python tools/runner-py/.venv/bin/python --require-hashes tools/runner-py/requirements.txt
+#
+# The versions are the ones `ritsu gen` writes into a package's pyproject.toml (cedarpy, boto3);
+# boto3 is the one dandori's tools/wire holds.
+cedarpy==4.12.1
+boto3==1.43.103
+boto3-stubs[verifiedpermissions]==1.43.103
+mypy==2.4.0

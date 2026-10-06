@@ -11,7 +11,8 @@
 //! - [`check`]: a file from its text to its diagnostics ([`diag`], the codes of [`codes`]).
 //! - [`cedar`] and [`r#gen`]: the Cedar a file that passes compiles to, and the command that writes it;
 //!   [`vectors`]: every combination, as the tests of `cedar run-tests`; [`api`]: what the file
-//!   declares, as JSON.
+//!   declares, as JSON; [`raw`]: the data of every combination for the code that builds the
+//!   requests, with the answer of the reference evaluation (DESIGN 6.3).
 //! - [`cli`] and [`run`]: the `sekisho` command, which the binary runs and so does `ritsu sekisho`.
 
 #[macro_use]
@@ -38,6 +39,8 @@ pub mod lex;
 pub mod model;
 pub mod names;
 pub mod parse;
+/// The data the generated code is given for each combination, and the answer for it (DESIGN 6.3).
+pub mod raw;
 pub mod repros;
 /// The `sekisho` command, as a function: the binary runs it, and so does `ritsu sekisho`.
 pub mod run;
