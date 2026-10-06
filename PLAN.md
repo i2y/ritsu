@@ -1351,6 +1351,16 @@ ritsu 自身の地図の成果物は、段階 C の 491 から、段階 D の新
 - sakai のキーワードに、ツール名 `sekisho` と sekisho の種類の語を足した（ツール名と種類の語はキーワードにする、という sakai の決まりのとおり）。地図、コンテキスト、語の名前にできなくなる語が七つ増えた（`sekisho`、`principal`、`resource`、`attribute`、`role`、`workflow`、`expect`。`separate` は前から `separate ways from` の語）。例とテストに当たるものは無かった。
 - 手で書いた Cedar の役割は、尋ねる側が並べたものだけを数え、役割の中の役割はたどらない（78）。だれがどの役割に入るかは、Cedar ではエンティティのデータが持つからである。
 
+**sekisho の段階 D3：八つ目の言語としての取り込み**（sekisho-d3 の担当）
+
+- 看板を「Eight small languages, one toolchain.」「八つの小さな言語を、一つの処理系で。」にし、言語の数を言う文を八つに、スキルの数を九つにした（根の README、サイトの頭のページ、`ritsu --help`、Homebrew の formula、`.deb`・`.rpm` の説明、`action.yml`、リリースのワークフロー、`ritsu.ctx`、`marketplace.json`、`SECURITY.md`、`THIRD_PARTY_NOTICES`、`deny.toml`、言語の README の入れ方の段落、rulec と dandori のサイトの入れ方のページ）。取り込んだときの記録として書いた文は、記録のまま残した。
+- `ritsu --help` の言語の一覧と `sekisho` という名前のリンク（`crates/ritsu/src/cli.rs` の `LANGUAGES`）。アーカイブ、formula、`.deb`・`.rpm`、smoke、リリースのワークフロー、action に `sekisho` を足した。拡張子を並べる文に `.gate` を足した。
+- sekisho の言語の文書 `docs/reference.md` と README（英語と日本語）、スキル `skills/sekisho`（ritsu のバイナリが九つのスキルを持つ）。`skills/ritsu/SKILL.md` に sekisho と `ritsu gen` のゲートの段落を足した。sekisho の `tests/docs.rs` と `tests/skill.rs`、ritsu の `tests/sekisho.rs` が、ページに載せたものを確かめる。
+- ブラウザで試すページ：`ritsu_gen` に `sekisho gen --target cedar`、`ritsu_doc` に `sekisho doc`。sekisho の例の二つの版をプロジェクトにした。sekisho のファイルの読み書きを ritsu-base の `fs` に替えた。`projects.json` と `ritsu.wasm`（12.4 MB）を作り直した。
+- 地図は「13 contexts, 30 relationships; 500 artifacts, each in one context; 67 crossings checked (rust 67)」。
+
+残したこと：ページが最初に開く小さな通販にはゲートを足していない（足すと X15 が地図の全部のコンテキストを見るようになり、通販の出力とページの手順が変わる。ゲートの設計も要る）。通販のグループの名前とページの文は、「全部の言語」から「いくつもの言語」「言語が出会う」に直した。
+
 **参照の書き方のツール名**（tool-names の担当）
 
 参照の書き方（DESIGN 6.2、6.5）に、ツール名 `openapi`・`asyncapi`・`cedar` と、chobo の振替の下の `operation` を足した。土台の `naming` と新しい `document`（DESIGN 4.21）、`naming.tsv` の 24 行。chobo の口の `Items` は振替の操作も渡す。yuen は三つのツール名の要素をリンクの端にし、要素ごとのハッシュで固定する（yuen の DESIGN 3.6。英語の材料 `refund_contracts` と日本語の `contracts`、変異の対 `E303_element_changed`・`E303_要素が変わった`）。sakai は文書と要素を、api、診断、doc のページで参照の書き方で書き、`.ctx` の長い書き方を読む（sakai の DESIGN 15.10）。dandori の `use openapi` の参照も `openapi "…"` になった。
