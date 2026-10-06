@@ -484,8 +484,8 @@ fn public(e: &Engine, path: &str, output: &str, v: &Value) -> Value {
 /// sekisho's example: a refund within the limit or over it, by a table over the derived value
 /// `excess = amount - limit`. Held to the intervals a policy cuts `amount` into, and to limits
 /// that leave only one of the rows, the values are the ones some input reaches — a row whose
-/// values of `excess` the derive does not reach is left out, which `rulec check` (E102) does not
-/// look at — in the English rule and its Japanese twin alike.
+/// values of `excess` the derive does not reach over the held ranges is left out — in the English
+/// rule and its Japanese twin alike. Over the whole ranges, such a row is E102 (DESIGN §15.189).
 #[test]
 fn an_output_over_ranges_leaves_out_the_rows_past_a_derives_reach() {
     use ritsu_ports::Found;
@@ -519,8 +519,16 @@ fn an_output_over_ranges_leaves_out_the_rows_past_a_derives_reach() {
         assert_eq!(ask(&[(amount, Some(20_000), None)]), Found::Value(vec![]), "{path}");
         assert_eq!(ask(&[(amount, Some(40), Some(30))]), Found::Value(vec![]), "{path}");
     }
-    // a row past the reach of its derive passes check, and no input comes to its value
+    // a row past the reach of its derive no longer passes check: E102's third form reads the same
+    // reach (DESIGN §15.189), and the port answers nothing for a rule that does not pass
     let path = "tests/over/reach.rule";
+    let src = std::fs::read_to_string(path).unwrap();
+    let dead: Vec<String> = rulec::report(&src, path).diags.iter().filter(|d| d.code == "E102").map(|d| d.where_.clone()).collect();
+    assert_eq!(dead, [format!("{path}:20 table t")]);
+    assert!(e.outputs_over(Path::new(path), "out", &[]).is_err());
+    // a row past the reach of a `define`, which E102 does not read, passes check, and no input
+    // comes to its value
+    let path = "tests/over/define_reach.rule";
     let src = std::fs::read_to_string(path).unwrap();
     assert!(!rulec::has_error(&rulec::report(&src, path).diags));
     let found = e.outputs_over(Path::new(path), "out", &[]).unwrap();

@@ -20,7 +20,7 @@ empty.
 |---|---|
 | **Completeness** | if some input matches no row, it stops — **with that input** |
 | **Overlap** | under `policy unique`, an overlap is an error. Under `policy first`, structural shadowing (the staircase) is told apart from the pairs whose outputs differ and therefore deserve a decision |
-| **Dead rows** | a row nothing reaches. The message tells apart "earlier rows already cover it" from "the upstream table never emits the value it names" |
+| **Dead rows** | a row nothing reaches. The message tells apart "earlier rows already cover it", "the upstream table never emits the value it names" and "the derive never comes to the values the row asks for", the last with the interval the derive does come to |
 | **Units** | adding yen to grams stops. So does tax-inclusive plus tax-exclusive |
 | **Rounding** | a numeric output must declare one. Without it, the message shows the money: "down(1JPY) gives 0JPY, half_up(1JPY) gives 0JPY and up(10JPY) gives 10JPY, so the rounding mode moves the result by up to 10JPY" |
 | **Overflow** | that every intermediate fits in int64, proved from the declared ranges and steps |
@@ -30,6 +30,15 @@ A `constraint` narrows what completeness quantifies over: no row is demanded for
 combination declared not to happen, and the generated code refuses one at the door
 instead. In a rule that walks a sequence, the same completeness check asks whether
 **every verdict the table can produce has an arm** in the fold (E024).
+
+A `derive` is checked against the values it can actually come to, not against the `range`
+written on it. With `amount` from 1GBP to 100GBP and `limit` from 0GBP to 100GBP,
+`excess = amount - limit` comes to −99GBP up to 100GBP however wide its `range` is written. A
+row that asks `excess` only for more than 100GBP is reached by no input, and it is E102: the
+message marks `>=-99GBP <=100GBP` on the `derive` line, and widening the `range` does not make
+the row reachable. Completeness reads the same interval, so no row is demanded beyond it
+either, and deleting such a row never opens a gap. The interval takes the `constraint` lines
+in: under `constraint paid <= billed`, `billed - paid` never goes below zero.
 
 In a rule that binds an enum to a `.proto` with `import proto`,
 completeness reaches **across the contract**. Every `rulec check` reads

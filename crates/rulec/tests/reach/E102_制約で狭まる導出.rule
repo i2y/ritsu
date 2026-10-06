@@ -1,0 +1,22 @@
+rule 請求の残り(balance_due) v1
+description "請求が済んだかどうか。入金は請求額を超えないので残額は 0 を下回らず、最初の行はそこを求めている"
+
+enum 状態(state) = 済み(settled) | 未払い(owing)
+
+inputs
+  請求額(billed) : money[円]  range >=0円 <=100円
+  入金額(paid)   : money[円]  range >=0円 <=100円
+
+constraint 入金額 <= 請求額
+
+outputs
+  支払状況(status) : 状態
+
+derive 残額(due) : money[円] = 請求額 - 入金額  range >=-1000円 <=1000円
+
+table 状況表(status_of)
+policy unique
+| 残額 | -> 支払状況 : 状態 |
+| <0円 | 済み               |
+| 0円  | 済み               |
+| >0円 | 未払い             |

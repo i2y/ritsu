@@ -1386,8 +1386,9 @@ def check_table(t):
                     raise Bad(f"{name}: the point for row {row} is taken by row {earlier} first")
         reached.add(row)
     unused = set(t.get("unused", []))
-    # Rows the sieve rules out entirely. E102 does not sieve, so `check` passes them; the
-    # certificate names them and this program repeats the name rather than proving it.
+    # Rows the sieve rules out entirely. E102 reads the sieve only where a derive's reach takes
+    # part (DESIGN §15.189), so `check` passes the rest; the certificate names them and this
+    # program repeats the name rather than proving it.
     ruled_out = set(t.get("unreachable", []))
     for row in sorted(ruled_out):
         if row in reached or row not in rows:

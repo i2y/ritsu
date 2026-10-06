@@ -714,7 +714,9 @@ derive net : money[JPY, incl_tax] = subtotal - discount  range >=0JPY <=1_000_00
 ```
 
 The right-hand side may use inputs, `+`, `-`, and multiplication by a constant. `range` is
-required and behaves exactly as it does for an input.
+required. What the derive can actually come to is its expression computed over the inputs'
+ranges and the `constraint` lines: the `range` has to contain it (E112), and a row that asks the
+derive only for values outside it is E102, however wide the `range` is written.
 
 ## 6. define
 

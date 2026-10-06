@@ -1,0 +1,21 @@
+rule order_band v1
+description "Sorts an order by what is left to pay after the discount. The last row was written as a catch-all for amounts the inputs never make"
+
+enum band = refund | small | large | oversized
+
+inputs
+  subtotal : money[GBP]  range >=0GBP <=500GBP
+  discount : money[GBP]  range >=0GBP <=50GBP
+
+outputs
+  size : band
+
+derive net : money[GBP] = subtotal - discount  range >=-1000GBP <=1000GBP
+
+table size_of
+policy first
+| net      | -> size : band |
+| <0GBP    | refund         |
+| <=100GBP | small          |
+| <=500GBP | large          |
+| -        | oversized      |

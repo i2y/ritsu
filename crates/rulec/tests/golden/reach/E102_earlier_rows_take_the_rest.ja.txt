@@ -1,0 +1,12 @@
+エラー[E102]: 行4 はどの入力にも当てはまりません
+  --> tests/reach/E102_earlier_rows_take_the_rest.rule:21 表 size_of
+   |
+21 | | -        | oversized      |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 行4: ここに到達する入力はありません
+13 | derive net : money[GBP] = subtotal - discount  range >=-1000GBP <=1000GBP
+   |                           ^^^^^^^^^^^^^^^^^^^ 実際に取りうる値は >=-50GBP <=500GBP です
+   |
+ `net` が取りうる値は、入力の範囲から計算すると >=-50GBP <=500GBP です。`policy first` なので、その中でこの行の条件に当てはまる値は、上にある行がすべて先に取ります。
+ ヒント: 条件を `net` の取りうる値の中に書き直すか、この行を削除してください。導出の `range` を広げても、取りうる値は変わりません。
+
+note tests/reach/E102_earlier_rows_take_the_rest.rule: 隠れ 6 対（階段 6、同じ答え 0、要確認 0）

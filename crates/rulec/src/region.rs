@@ -1213,8 +1213,14 @@ impl TableRegion {
     /// ends of the coordinates the box allows on each numeric axis. `None` when the model is
     /// empty or leaves the box possible.
     pub(crate) fn refute_box(&self, bx: &[Vec<usize>]) -> Option<crate::fourier::Refutation> {
+        self.refute_in(&self.model, bx)
+    }
+
+    /// The same, over `model` rather than the table's own: the third form of E102 reads the
+    /// relaxation [`Reach`] keeps (§15.189).
+    fn refute_in(&self, model: &[crate::fourier::Ground], bx: &[Vec<usize>]) -> Option<crate::fourier::Refutation> {
         use crate::fourier::{Lin, Origin, Refutation};
-        for g in &self.model {
+        for g in model {
             let mut sys = g.sys.clone();
             for (ai, name) in self.col_names.iter().enumerate() {
                 if !g.vars.contains(name) {
@@ -2221,6 +2227,12 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
     }
 
     // --- Unreachable rows
+    // The third form (§15.189) reads the reach of the derived columns, and only where every
+    // numeric axis, here and in the tables above, has a coordinate for each value its column
+    // takes. Its walk has a budget of its own for the whole table; past it, a row passes as it
+    // did before.
+    let reach = (reg.steps_exact(c) && ups.iter().all(|u| u.reg.steps_exact(c))).then(|| reg.reach_of(f, c)).filter(|r| r.axes.iter().any(|x| *x));
+    let mut reach_left = budget;
     for i in 0..t.rows.len() {
         let up_dead = upstream_dead(&t.rows[i], &ups, c, t);
         let winners = &set.beats[i];
@@ -2251,7 +2263,20 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
         } else {
             false
         };
-        if dead {
+        // What the first two forms let through, the reach of a derived column may still leave
+        // out: every point of the row is taken by the rows that take precedence, or reached by
+        // no input (§15.189).
+        let beyond = match &reach {
+            Some(rs) if !dead => {
+                let meet: Vec<usize> = winners.iter().copied().filter(|&e| reg.intersects(e, i)).collect();
+                let before = reach_left;
+                let why = reg.out_of_reach(&meet, i, &ups, c, rs, &mut reach_left);
+                nodes += (before - reach_left).max(0);
+                why.filter(|w| w.by_a_derive())
+            }
+            _ => None,
+        };
+        if dead || beyond.is_some() {
             let tn = set.row_table(i).to_string();
             let by_position = set.policy_of(i) == Policy::TopDown && winners.iter().all(|&e| set.same_member(e, i));
             let winner_tables: Vec<String> = {
@@ -2272,14 +2297,19 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
             if set.applied[set.member_of[i]].is_some() {
                 continue;
             }
+            let d = Diag::error("E102", tr!("{} はどの入力にも当てはまりません", "Unreachable row: {} never matches", rn(i)))
+                .at(at(t.rows[i].span.line, set.member_of[i]))
+                .table(tn.clone())
+                .row(t.rows[i].index)
+                .rowref(tn.clone(), t.rows[i].index)
+                .fix_kind(crate::diag::FixKind::RemoveRow)
+                .mark(t.rows[i].span.clone(), tr!("{}: ここに到達する入力はありません", "{}: no input reaches here", rn(i)));
+            if let (Some(w), Some(rs)) = (&beyond, &reach) {
+                out.push(third_form(d, w, &reg, rs, c, f, by_position, &winner_tables));
+                continue;
+            }
             out.push(
-                Diag::error("E102", tr!("{} はどの入力にも当てはまりません", "Unreachable row: {} never matches", rn(i)))
-                    .at(at(t.rows[i].span.line, set.member_of[i]))
-                    .table(tn.clone())
-                    .row(t.rows[i].index)
-                    .rowref(tn.clone(), t.rows[i].index)
-                    .fix_kind(crate::diag::FixKind::RemoveRow)
-                    .mark(t.rows[i].span.clone(), tr!("{}: ここに到達する入力はありません", "{}: no input reaches here", rn(i)))
+                d
                     .note(if let Some(col) = &no_day {
                         let from = c.day_sets.get(col).and_then(|d| d.from.as_ref()).map(|fr| format!("koyomi \"{}\" date {}", fr.file, fr.date)).unwrap_or_default();
                         tr!("{col} は {from} がとる日だけで、この行の日付はそのどれでもありません。", "{col} takes only the days {from} comes to, and this row's dates are none of them.")
@@ -2411,12 +2441,177 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
     TableCheck { diags: out, w114, quiet, shadow, nodes, overlaps, edge_pairs, dead: dead_rows }
 }
 
+/// The third form of E102 (§15.189): the derived columns whose reach left the row out, each with
+/// the values it can come to — marked on its `derive` line and said in the note, over the ranges
+/// of the inputs and the `constraint` lines that narrow it — and what took the rest of the row,
+/// the rows that take precedence first.
+#[allow(clippy::too_many_arguments)]
+fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, rs: &Reach, c: &Checked, f: &RuleFile, by_position: bool, winner_tables: &[String]) -> Diag {
+    let ja = crate::i18n::ja();
+    // The derives that took part, in the order the rule declares them, and the `constraint`
+    // lines that narrow what they come to.
+    let mut names: Vec<(&DerivedDecl, Ival)> = Vec::new();
+    let mut ks: BTreeSet<usize> = BTreeSet::new();
+    for it in &f.items {
+        let Item::Derived(dv) = it else { continue };
+        let n = &dv.name.text;
+        if !(w.reach.iter().any(|&ai| reg.col_names[ai] == *n) || w.derives.contains(n)) {
+            continue;
+        }
+        let Some((iv, by)) = reg.reach_interval(n, rs, c) else { continue };
+        ks.extend(by);
+        names.push((dv, iv));
+    }
+    // A derive the form reads always has an interval; were none to be had, the row is still
+    // reached by no input, and is said so plainly.
+    if names.is_empty() {
+        return d
+            .note(tr!("この行の条件を同時に満たす入力がありません。", "No input satisfies all of this row's conditions at once."))
+            .note(tr!("ヒント: 新しい仕様なら上へ移してください。不要なら削除してください。", "hint: if this is a new specification, move it up; if it is not needed, delete it."));
+    }
+    // The other `constraint` lines that left a point out.
+    let others: BTreeSet<usize> = w.constraints.iter().chain(&w.model_constraints).copied().filter(|k| !ks.contains(k)).collect();
+    let ends = |(lo, hi): Ival, ty: &Ty| -> String {
+        let mut s: Vec<String> = Vec::new();
+        if let Some(l) = lo {
+            s.push(format!(">={}", crate::types::fmt_val(l, ty)));
+        }
+        if let Some(h) = hi {
+            s.push(format!("<={}", crate::types::fmt_val(h, ty)));
+        }
+        s.join(" ")
+    };
+    let ty_of = |dv: &DerivedDecl| c.ty_of(&dv.name.text).unwrap_or(Ty::Unknown);
+    // A list of names, values or lines: `a`, `a` と `b`, `a`、`b`、`c` — and in English `a`,
+    // `a` and `b`, `a`, `b` and `c`.
+    let list = |xs: &[String]| -> String {
+        match xs {
+            [] => String::new(),
+            [a] => a.clone(),
+            [a, b] => tr!("{a} と {b}", "{a} and {b}"),
+            _ if ja => xs.join("、"),
+            _ => format!("{} and {}", xs[..xs.len() - 1].join(", "), xs[xs.len() - 1]),
+        }
+    };
+    // Where the reach comes from: the inputs' ranges, and the `constraint` lines that narrow it.
+    let line_of = |k: &usize| -> Option<String> {
+        let con = f.constraints.get(*k)?;
+        let op = match con.op {
+            CmpOp::Le => "<=",
+            CmpOp::Lt => "<",
+            CmpOp::Ge => ">=",
+            CmpOp::Gt => ">",
+        };
+        Some(format!("`{} {} {op} {}`", crate::kw::CONSTRAINT, con.left, con.right))
+    };
+    let lines: Vec<String> = ks.iter().filter_map(line_of).collect();
+    let other_lines: Vec<String> = others.iter().filter_map(line_of).collect();
+    let quoted: Vec<String> = names.iter().map(|(dv, _)| format!("`{}`", dv.name.text)).collect();
+    let one = names.len() == 1;
+    // What the derives come to.
+    let reach = if ja {
+        let ivs: Vec<String> = names.iter().map(|(dv, iv)| ends(*iv, &ty_of(dv))).collect();
+        let basis = if lines.is_empty() { "入力の範囲から".to_string() } else { format!("入力の範囲と、{} から", list(&lines)) };
+        if one {
+            format!("{} が取りうる値は、{basis}計算すると {} です。", quoted[0], ivs[0])
+        } else {
+            format!("{} が取りうる値は、{basis}計算すると、それぞれ {} です。", list(&quoted), list(&ivs))
+        }
+    } else {
+        let mut basis = vec!["the ranges of the inputs".to_string()];
+        basis.extend(lines.iter().cloned());
+        let basis = list(&basis);
+        let mut parts: Vec<String> = Vec::new();
+        for (k, (dv, iv)) in names.iter().enumerate() {
+            parts.push(if k == 0 { format!("`{}` can only come to {}", dv.name.text, ends(*iv, &ty_of(dv))) } else { format!("`{}` to {}", dv.name.text, ends(*iv, &ty_of(dv))) });
+        }
+        format!("Over {basis}, {}.", if parts.len() > 1 { format!("{}, and {}", parts[..parts.len() - 1].join(", "), parts[parts.len() - 1]) } else { parts.join("") })
+    };
+    // What becomes of the row's values among them.
+    let rest = if w.covered {
+        let who_ja = if by_position {
+            "上にある行".to_string()
+        } else if !winner_tables.is_empty() {
+            format!("優先する {} の行", winner_tables.join("、"))
+        } else {
+            "優先する行".to_string()
+        };
+        let who_en = if by_position {
+            "the earlier rows".to_string()
+        } else if !winner_tables.is_empty() {
+            format!("the rows of {}, which take precedence,", winner_tables.join(", "))
+        } else {
+            "the rows that take precedence".to_string()
+        };
+        let lead = if by_position { tr!("`{} {}` なので、", "Because of `{} {}`, ", crate::kw::POLICY, crate::kw::FIRST) } else { String::new() };
+        let who_en = if by_position { who_en } else { capital(&who_en) };
+        if one {
+            tr!(
+                "{lead}その中でこの行の条件に当てはまる値は、{who_ja}がすべて先に取ります。",
+                "{lead}{who_en} take first every one of those values that meets this row's conditions."
+            )
+        } else {
+            tr!(
+                "{lead}その中でこの行の条件をすべて満たす値の組は、{who_ja}がすべて先に取ります。",
+                "{lead}{who_en} take first every combination of those values that meets all of this row's conditions."
+            )
+        }
+    } else if one {
+        tr!("この行の条件に当てはまる値は、その中にありません。", "None of those values meets this row's conditions.")
+    } else {
+        tr!("この行の条件をすべて満たす値の組は、その中にありません。", "No combination of those values meets all of this row's conditions.")
+    };
+    let mut d = d;
+    // Each derive's line, with what it can come to. A derive a rule applied is written in the
+    // other file, so its line is not marked here.
+    for (dv, iv) in &names {
+        if dv.name.text.contains(':') {
+            continue;
+        }
+        let iv = ends(*iv, &ty_of(dv));
+        d = d.mark(dv.expr.span().clone(), tr!("実際に取りうる値は {iv} です", "the reachable interval is {iv}"));
+    }
+    d = d.note(format!("{reach}{}{rest}", if ja { "" } else { " " }));
+    // What else left a point out: a `constraint` that does not bear on the derives, the tables
+    // above, koyomi's days.
+    if !other_lines.is_empty() {
+        let ls = list(&other_lines);
+        let s = if other_lines.len() == 1 { "s" } else { "" };
+        d = d.note(tr!("{ls} が許さない入力の組み合わせも来ません。", "The combinations of inputs that {ls} rule{s} out never come either."));
+    }
+    if w.upstream {
+        d = d.note(tr!("上流の表が同時には出さない値の組み合わせも来ません。", "The combinations of values the tables above never produce together never come either."));
+    }
+    for &ai in &w.days {
+        let col = &reg.col_names[ai];
+        let from = c.day_sets.get(col).and_then(|x| x.from.as_ref()).map(|fr| format!("koyomi \"{}\" date {}", fr.file, fr.date)).unwrap_or_default();
+        d = d.note(tr!("{col} は {from} がとる日だけです。", "{col} takes only the days {from} comes to."));
+    }
+    let who = list(&quoted);
+    d.note(tr!(
+        "ヒント: 条件を {who} の取りうる値の中に書き直すか、この行を削除してください。導出の `range` を広げても、取りうる値は変わりません。",
+        "hint: rewrite the condition within the values {who} can come to, or delete this row. Widening a derive's `range` does not change the values it can come to."
+    ))
+}
+
+/// The first letter in upper case, for a phrase that starts a sentence.
+fn capital(s: &str) -> String {
+    let mut cs = s.chars();
+    match cs.next() {
+        Some(f) => f.to_uppercase().collect::<String>() + cs.as_str(),
+        None => String::new(),
+    }
+}
+
 /// Which rows of a definition set some input may reach (`outputs_over`, ritsu's port), on the
 /// merged table: a row is live when some point of its region that no row taking precedence over
 /// it covers is left standing by the sieve — koyomi's days, the `constraint`s, a derived value's
-/// reach, the tables above, and the rule's linear model. E102 asks less of a row (an empty
-/// region, the tables above, the rows that take precedence), so a row it lets through can still
-/// be dead here: one that takes only values of a derived column the derive never reaches.
+/// reach, the tables above, and the rule's linear model — and the reach of every numeric column,
+/// a `define`'s and a table output's included, with the open ends of a coordinate left out. E102
+/// reads the same sieve only where a derive that is a linear form of the inputs takes part, on
+/// axes cut finely enough for its values (§15.189), so a row it lets through can still be dead
+/// here: one that takes only values of a `define` the define never reaches, or one only a
+/// `constraint` rules out.
 ///
 /// A dead row is never reached. A live row may still be out of reach where the sieve cannot
 /// tell (two derived values over the same inputs), so a caller that needs an exact answer finds
@@ -2499,6 +2694,264 @@ impl TableRegion {
             }
         }
         false
+    }
+}
+
+/// The names whose values the third form of E102 reads a reach from (§15.189): the inputs (the
+/// generated code refuses a value outside the range at its door), what a walk counts or sums
+/// (refused the same way), and every `derive` that is a linear form of such names — sums,
+/// differences and constant multiples, which interval arithmetic bounds exactly. A `define`,
+/// a table's output, and a derive that reads one of them or multiplies two names are left out:
+/// their reach is computed too, but the third form does not stop a rule on it.
+fn reach_names(f: &RuleFile, c: &Checked) -> BTreeSet<String> {
+    let mut ok: BTreeSet<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
+    for it in &f.items {
+        match it {
+            Item::Agg(d) => {
+                ok.insert(d.name.text.clone());
+            }
+            Item::Derived(d) => {
+                let Some(ty) = c.ty_of(&d.name.text) else { continue };
+                if crate::fourier::linear(&d.expr, &ty, c).is_some_and(|l| l.terms.keys().all(|n| ok.contains(n))) {
+                    ok.insert(d.name.text.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+    ok
+}
+
+/// What the third form of E102 may read a row's reach from (§15.189).
+pub(crate) struct Reach {
+    /// Axis → whether it is a derived column whose reach the third form reads (`reach_names`).
+    axes: Vec<bool>,
+    /// The table's linear model with the facts about every other name left out. It is a
+    /// relaxation of the model E101 reads, so a box it rules out, the whole model rules out too.
+    model: Vec<crate::fourier::Ground>,
+}
+
+/// Why a row the first two forms of E102 let through is reached by no input all the same
+/// (§15.189), as the walk over its points wrote it down: each point it left out, it left out for
+/// the first of these that holds.
+#[derive(Default)]
+pub(crate) struct OutOfReach {
+    /// Some points are taken by the rows that take precedence.
+    covered: bool,
+    /// The axes of derived columns whose reach leaves a point out.
+    reach: BTreeSet<usize>,
+    /// The `constraint` lines (by index) that leave a point out, read one at a time.
+    constraints: BTreeSet<usize>,
+    /// The axes of koyomi's days that leave a point out.
+    days: BTreeSet<usize>,
+    /// The tables above leave a point out.
+    upstream: bool,
+    /// The derives whose equations, and the `constraint` lines, a refutation of the linear
+    /// model used.
+    derives: BTreeSet<String>,
+    model_constraints: BTreeSet<usize>,
+}
+
+impl OutOfReach {
+    /// Whether a derived value took part, which is what the third form is about. A row left out
+    /// only by `constraint` lines, the tables above or koyomi's days is not reported by it.
+    fn by_a_derive(&self) -> bool {
+        !self.reach.is_empty() || !self.derives.is_empty()
+    }
+}
+
+impl TableRegion {
+    /// Whether every numeric axis has a coordinate for each value its column can take. A derive
+    /// with a fractional factor (`amount × 10%`) takes values between the whole units its axis
+    /// is cut at, and the open coordinate between two boundaries one unit apart is left out of
+    /// such an axis, so a row there would look reached by fewer values than it is.
+    fn steps_exact(&self, c: &Checked) -> bool {
+        self.axes.iter().zip(&self.col_names).all(|(a, n)| match a {
+            Axis::Num { date: false, step, .. } => {
+                let scale = c.scales.get(n).copied().unwrap_or(1).max(1);
+                step.cmp_to(Rat::new(1, scale)) != std::cmp::Ordering::Greater
+            }
+            _ => true,
+        })
+    }
+
+    /// What the third form of E102 may read here (§15.189).
+    fn reach_of(&self, f: &RuleFile, c: &Checked) -> Reach {
+        use crate::fourier::{Ground, Origin};
+        let names = reach_names(f, c);
+        let axes = (0..self.axes.len()).map(|ai| self.derived[ai].is_some() && names.contains(&self.col_names[ai])).collect();
+        let keep = |o: &Origin| match o {
+            Origin::Derive { name, .. } | Origin::Range { name, .. } => names.contains(name),
+            Origin::Constraint(_) => true,
+            _ => false,
+        };
+        let model = self
+            .model
+            .iter()
+            .map(|g| Ground { vars: g.vars.clone(), want: g.want.clone(), sys: g.sys.iter().filter(|q| keep(&q.origin)).cloned().collect() })
+            .collect();
+        Reach { axes, model }
+    }
+
+    /// Whether row `target` is reached by no input although the first two forms of E102 let it
+    /// through (§15.189): every point of its region is taken by `rows` (the rows that take
+    /// precedence over it and meet it) or left out by the sieve, read only from what
+    /// [`Reach`] holds — koyomi's days, the `constraint` lines, the reach of the derived columns,
+    /// the tables above, and the linear model where the whole model agrees. Each test is one
+    /// E101 makes as well, so a box this leaves out is a box E101 never asks a row for: deleting
+    /// the row leaves no gap behind.
+    ///
+    /// `None` when some point is left standing, or when the walk runs past `budget`: the row
+    /// is then reached, as far as this can tell, and passes as it did before.
+    fn out_of_reach(&self, rows: &[usize], target: usize, ups: &[Upstream], chk: &Checked, rs: &Reach, budget: &mut i64) -> Option<OutOfReach> {
+        let mut why = OutOfReach::default();
+        let mut path = Vec::new();
+        let live = self.out_rec(rows, target, &mut path, ups, chk, rs, budget, &mut why);
+        (live.is_none() && *budget >= 0).then_some(why)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn out_rec(
+        &self,
+        rows: &[usize],
+        target: usize,
+        path: &mut Vec<usize>,
+        ups: &[Upstream],
+        chk: &Checked,
+        rs: &Reach,
+        budget: &mut i64,
+        why: &mut OutOfReach,
+    ) -> Option<Vec<usize>> {
+        *budget -= 1;
+        if *budget < 0 {
+            return None;
+        }
+        if path.len() == self.axes.len() {
+            if !rows.is_empty() {
+                why.covered = true;
+                return None;
+            }
+            if self.left_out(path, ups, chk, rs, true, why) {
+                return None;
+            }
+            return Some(path.clone());
+        }
+        let ai = path.len();
+        if rows.iter().any(|&r| self.masks[r][ai..].iter().all(|m| m.iter().all(|x| *x))) {
+            why.covered = true;
+            return None;
+        }
+        for c in 0..self.axes[ai].len() {
+            if !self.masks[target][ai][c] {
+                continue;
+            }
+            let sub: Vec<usize> = rows.iter().copied().filter(|&r| self.masks[r][ai][c]).collect();
+            path.push(c);
+            let got = if self.left_out(path, ups, chk, rs, false, why) { None } else { self.out_rec(&sub, target, path, ups, chk, rs, budget, why) };
+            path.pop();
+            if got.is_some() {
+                return got;
+            }
+        }
+        None
+    }
+
+    /// Whether the sieve of the third form leaves out every point below `path`, written into
+    /// `why`. On a prefix only the tests that read the axes one at a time are asked; at a whole
+    /// point (`leaf`), the tables above and the linear model too. The reach of a derived column
+    /// is asked first, since it is what the form is about, and read as `feasible` reads it.
+    fn left_out(&self, path: &[usize], ups: &[Upstream], chk: &Checked, rs: &Reach, leaf: bool, why: &mut OutOfReach) -> bool {
+        use std::cmp::Ordering::{Greater, Less};
+        for (ai, &ci) in path.iter().enumerate() {
+            if !rs.axes[ai] {
+                continue;
+            }
+            let (Some(((rl, rh), _)), Some((cl, ch))) = (&self.derived[ai], self.coord_span(ai, ci)) else { continue };
+            let apart = matches!((ch, rl), (Some(a), Some(b)) if a.cmp_to(*b) == Less) || matches!((cl, rh), (Some(a), Some(b)) if a.cmp_to(*b) == Greater);
+            if apart {
+                why.reach.insert(ai);
+                return true;
+            }
+        }
+        if let Some(ai) = self.days_rule_out(path) {
+            why.days.insert(ai);
+            return true;
+        }
+        for (k, con) in self.constraints.iter().enumerate() {
+            if self.constraint_impossible(con, path) {
+                why.constraints.insert(k);
+                return true;
+            }
+        }
+        if !leaf {
+            return false;
+        }
+        if self.upstream_dead_at(path, ups, chk) {
+            why.upstream = true;
+            return true;
+        }
+        if let Some(r) = self.refute_in(&rs.model, &self.path_box(path))
+            && self.refutes_path(path)
+        {
+            for (q, _) in r.used() {
+                match &q.origin {
+                    // A derive's equation, or the interval it reaches, which is its range here
+                    crate::fourier::Origin::Derive { name, .. } => {
+                        why.derives.insert(name.clone());
+                    }
+                    crate::fourier::Origin::Range { name, .. } if self.exprs.contains_key(name) => {
+                        why.derives.insert(name.clone());
+                    }
+                    crate::fourier::Origin::Constraint(k) => {
+                        why.model_constraints.insert(*k);
+                    }
+                    _ => {}
+                }
+            }
+            return true;
+        }
+        false
+    }
+
+    /// The interval a derived column comes to (§15.189), for the message: the bounds the linear
+    /// model of [`Reach`] puts on it once every other name is eliminated, pulled in to the grid
+    /// its values sit on, or the interval its expression reaches when the model says nothing.
+    /// With the `constraint` lines (by index) that narrow it: those of its system, when the
+    /// bounds without them are wider.
+    #[allow(clippy::type_complexity)]
+    fn reach_interval(&self, name: &str, rs: &Reach, c: &Checked) -> Option<(Ival, Vec<usize>)> {
+        use crate::fourier::Origin;
+        let plain = c.ranges.get(name).copied()?;
+        let Some(g) = rs.model.iter().find(|g| g.vars.iter().any(|v| v == name)) else { return Some((plain, Vec::new())) };
+        let grid = Rat::new(1, c.scales.get(name).copied().unwrap_or(1).max(1));
+        let inward = |b: Option<(Option<(Rat, bool)>, Option<(Rat, bool)>)>| -> Option<Ival> {
+            let (lo, hi) = b?;
+            let up = |x: Rat, strict: bool| {
+                let k = x.div(grid);
+                let ce = Rat::int(-((-k.num).div_euclid(k.den)));
+                let ce = if strict && ce.cmp_to(k) == std::cmp::Ordering::Equal { ce.add(Rat::int(1)) } else { ce };
+                ce.mul(grid)
+            };
+            let down = |x: Rat, strict: bool| {
+                let k = x.div(grid);
+                let fl = Rat::int(k.num.div_euclid(k.den));
+                let fl = if strict && fl.cmp_to(k) == std::cmp::Ordering::Equal { fl.sub(Rat::int(1)) } else { fl };
+                fl.mul(grid)
+            };
+            Some((lo.map(|(x, s)| up(x, s)), hi.map(|(x, s)| down(x, s))))
+        };
+        let with = crate::fourier::bounds(g.sys.clone(), name).and_then(inward);
+        let without = crate::fourier::bounds(g.sys.iter().filter(|q| !matches!(q.origin, Origin::Constraint(_))).cloned().collect(), name).and_then(inward);
+        let Some(iv) = with else { return Some((plain, Vec::new())) };
+        let moved = |a: Option<Rat>, b: Option<Rat>| match (a, b) {
+            (Some(a), Some(b)) => a.cmp_to(b) != std::cmp::Ordering::Equal,
+            (a, b) => a.is_some() != b.is_some(),
+        };
+        let by: Vec<usize> = match without {
+            Some(w) if !moved(w.0, iv.0) && !moved(w.1, iv.1) => Vec::new(),
+            _ => g.sys.iter().filter_map(|q| if let Origin::Constraint(k) = q.origin { Some(k) } else { None }).collect::<BTreeSet<usize>>().into_iter().collect(),
+        };
+        Some((iv, by))
     }
 }
 
@@ -3231,8 +3684,9 @@ pub struct CertTable {
     /// than passing over them.
     pub unused: Vec<usize>,
     /// Rows the sieve rules out entirely: every point of the row's box is one no input
-    /// reaches. E102 does not look at the sieve, so `check` passes them; the certificate
-    /// names them rather than leaving a row with no point and no reason.
+    /// reaches. E102 reads the sieve only where a derive's reach takes part (§15.189), so
+    /// `check` passes the rest — a row only a `constraint` rules out, for one — and the
+    /// certificate names them rather than leaving a row with no point and no reason.
     pub unreachable: Vec<usize>,
     /// The completeness cover: the walk of §6.3, written down. `None` when it ran past the
     /// budget — a certificate says what it does not have.
@@ -3480,9 +3934,10 @@ impl TableRegion {
                     reach.push((ri + 1, p, input, nums, extra));
                 }
                 None if applied.get(ri).copied().unwrap_or(false) => unused.push(ri + 1),
-                // The sieve rules out every point of the row. E102 does not sieve, so
-                // `check` is silent about it; dropping the row here made the certificate
-                // look as though it had simply forgotten one (§15.99).
+                // The sieve rules out every point of the row. E102 reads the sieve only where a
+                // derive's reach takes part (§15.189), so `check` is silent about the rest;
+                // dropping the row here made the certificate look as though it had simply
+                // forgotten one (§15.99).
                 None => unreachable.push(ri + 1),
             }
         }

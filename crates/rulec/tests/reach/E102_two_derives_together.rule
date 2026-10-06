@@ -1,0 +1,21 @@
+rule seat_split v1
+description "Two derived values over the same two inputs. The first row asks for a pair of them that no party makes"
+
+enum verdict = ok | review
+
+inputs
+  adults   : number  range >=0 <=10
+  children : number  range >=0 <=10
+
+outputs
+  decision : verdict
+
+derive party : number = adults + children  range >=0 <=20
+derive gap   : number = adults - children  range >=-10 <=10
+
+table decision_of
+policy unique
+| party | gap  | -> decision : verdict |
+| >=18  | <=-5 | review                |
+| >=18  | >-5  | ok                    |
+| <18   | -    | ok                    |

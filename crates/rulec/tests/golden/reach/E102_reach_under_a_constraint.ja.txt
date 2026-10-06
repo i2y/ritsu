@@ -1,0 +1,11 @@
+エラー[E102]: 行1 はどの入力にも当てはまりません
+  --> tests/reach/E102_reach_under_a_constraint.rule:20 表 status_of
+   |
+20 | | <0GBP | settled           |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 行1: ここに到達する入力はありません
+15 | derive due : money[GBP] = billed - paid  range >=-1000GBP <=1000GBP
+   |                           ^^^^^^^^^^^^^ 実際に取りうる値は >=0GBP <=100GBP です
+   |
+ `due` が取りうる値は、入力の範囲と、`constraint paid <= billed` から計算すると >=0GBP <=100GBP です。この行の条件に当てはまる値は、その中にありません。
+ ヒント: 条件を `due` の取りうる値の中に書き直すか、この行を削除してください。導出の `range` を広げても、取りうる値は変わりません。
+

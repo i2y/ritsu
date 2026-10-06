@@ -1,0 +1,11 @@
+error[E102]: Unreachable row: row 3 never matches
+  --> tests/reach/E102_導出の届かない行.rule:20 table 判定表
+   |
+20 | | >500円       | 大きく超え     |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3: no input reaches here
+13 | derive 超過額(excess) : money[円] = 金額 - 上限  range >=-1000円 <=1000円
+   |                                     ^^^^^^^^^^^ the reachable interval is >=-99円 <=100円
+   |
+ Over the ranges of the inputs, `超過額` can only come to >=-99円 <=100円. None of those values meets this row's conditions.
+ hint: rewrite the condition within the values `超過額` can come to, or delete this row. Widening a derive's `range` does not change the values it can come to.
+

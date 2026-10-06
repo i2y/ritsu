@@ -1,5 +1,5 @@
 rule reach v1
-description "A table over a derived value whose last row lies past what the derive reaches: the check lets the row through, and a question over ranges of the inputs leaves it out"
+description "A table over a derived value whose last row lies past what the derive reaches: the check calls the row unreachable (E102), from the same reach a question over ranges of the inputs reads"
 
 enum band = small | big | huge
 

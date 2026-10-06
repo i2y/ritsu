@@ -1,0 +1,20 @@
+rule 返金の区分(refund_band) v1
+description "返金を、上限を超えた額で分ける。超過額の範囲を広めに書き、最後の行は入力からは届かない額を求めている"
+
+enum 区分(band) = 上限まで(within) | 超え(over) | 大きく超え(far_over)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100円
+  上限(limit)  : money[円]  range >=0円 <=100円
+
+outputs
+  判定(verdict) : 区分
+
+derive 超過額(excess) : money[円] = 金額 - 上限  range >=-1000円 <=1000円
+
+table 判定表(verdict_of)
+policy unique
+| 超過額       | -> 判定 : 区分 |
+| <=0円        | 上限まで       |
+| >0円 <=500円 | 超え           |
+| >500円       | 大きく超え     |

@@ -90,19 +90,52 @@ fn printed(e: &rulec::codes::Entry, r: rulec::codes::Repro) -> Vec<(&'static str
 fn 台帳の例は本当にそのコードを出す() {
     for e in rulec::codes::ledger() {
         for lang in [Lang::En, Lang::Ja] {
-            let r = e.repro(lang);
-            let got = printed(&e, r);
-            assert!(
-                got.iter().any(|(c, _)| *c == e.code),
-                "{} の{}の例が {} を出さない（出たのは {:?}）:\n{}",
-                e.code,
-                if lang == Lang::En { "英語" } else { "日本語" },
-                e.code,
-                got,
-                r.example
-            );
+            // the reproduction, and the one of each other form the entry shows (E102, §15.189)
+            let all: Vec<rulec::codes::Repro> = std::iter::once(e.repro(lang)).chain(e.also.iter().map(|a| a.repro(lang))).collect();
+            for r in all {
+                let got = printed(&e, r);
+                assert!(
+                    got.iter().any(|(c, _)| *c == e.code),
+                    "{} の{}の例が {} を出さない（出たのは {:?}）:\n{}",
+                    e.code,
+                    if lang == Lang::En { "英語" } else { "日本語" },
+                    e.code,
+                    got,
+                    r.example
+                );
+            }
         }
     }
+}
+
+/// The other form an entry reproduces is that form, not the first one again: E102's is a row past
+/// what a derive reaches, and its note says what the derive comes to, in both languages
+/// (§15.189). Its English twin says the same things in the same places as the Japanese one.
+#[test]
+fn 台帳の別の形の再現はその形を出す() {
+    let e = rulec::codes::find("E102").unwrap();
+    assert_eq!(e.also.len(), 1);
+    let a = &e.also[0];
+    for (lang, said) in [(Lang::En, "can only come to >=-99JPY <=100JPY"), (Lang::Ja, "が取りうる値は、入力の範囲から計算すると >=-99円 <=100円 です。")] {
+        let r = a.repro(lang);
+        let notes = rulec::i18n::with(lang, || rulec::check_source(r.example, "explain.rule").iter().filter(|d| d.code == "E102").flat_map(|d| d.notes.clone()).collect::<Vec<_>>().join("\n"));
+        assert!(notes.contains(said), "{lang:?}:\n{notes}");
+    }
+    assert_eq!(printed(&e, a.repro(Lang::En)), printed(&e, a.repro(Lang::Ja)));
+    // the entries that show another form: E102 alone
+    let with: Vec<&str> = rulec::codes::ledger().iter().filter(|e| !e.also.is_empty()).map(|e| e.code).collect();
+    assert_eq!(with, ["E102"]);
+    // `explain` shows it under a heading of its own, in the language asked for, and the JSON under
+    // `also`, a key no other entry has
+    let (_, en) = run(&["explain", "E102", "--lang", "en"]);
+    assert!(en.contains("Smallest reproduction of the third form") && en.contains("amount(a) : money[JPY, incl_tax]"), "{en}");
+    let (_, ja) = run(&["explain", "E102", "--lang", "ja"]);
+    assert!(ja.contains("三つ目の形") && ja.contains("額(a)   : money[円, incl_tax]"), "{ja}");
+    let (_, j) = run(&["explain", "E102", "--format", "json", "--lang", "en"]);
+    let j = rulec::json::parse(&j).unwrap();
+    assert!(j.get("also").and_then(|a| a.as_arr()).is_some_and(|a| a.len() == 1), "{j:?}");
+    let (_, j) = run(&["explain", "E101", "--format", "json", "--lang", "en"]);
+    assert!(rulec::json::parse(&j).unwrap().get("also").is_none());
 }
 
 /// An English twin is the same rule with other names, so it has to say the same things in the
@@ -143,6 +176,10 @@ fn 英語の再現に日本語が残るのは決めた項目だけ() {
         let has = japanese(r.example) || r.files.iter().any(|(n, t)| japanese(n) || japanese(t));
         let kept = KEPT.iter().any(|(c, _)| *c == e.code);
         assert_eq!(has, kept, "{}: 英語の再現に日本語が{}", e.code, if has { "残っている（残すなら KEPT に理由を書く）" } else { "無い（KEPT から外す）" });
+        // the reproduction of another form has no reason to keep any
+        for a in &e.also {
+            assert!(!japanese(a.repro(Lang::En).example), "{}: 別の形の英語の再現に日本語が残っている", e.code);
+        }
     }
 }
 

@@ -1,0 +1,11 @@
+error[E102]: Unreachable row: row 1 never matches
+  --> tests/reach/E102_制約で狭まる導出.rule:20 table 状況表
+   |
+20 | | <0円 | 済み               |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1: no input reaches here
+15 | derive 残額(due) : money[円] = 請求額 - 入金額  range >=-1000円 <=1000円
+   |                                ^^^^^^^^^^^^^^^ the reachable interval is >=0円 <=100円
+   |
+ Over the ranges of the inputs and `constraint 入金額 <= 請求額`, `残額` can only come to >=0円 <=100円. None of those values meets this row's conditions.
+ hint: rewrite the condition within the values `残額` can come to, or delete this row. Widening a derive's `range` does not change the values it can come to.
+

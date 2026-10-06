@@ -192,7 +192,9 @@ fn 変異は決めたコードだけを出す() {
         ("m_e013.rule", &[("E013", 1)], "無い取込先を指した"),
         ("m_e017.rule", &[("E017", 1)], "`constraint` が関係の形をしていない"),
         ("m_e018.rule", &[("E018", 1)], "`constraint` の片側が表の出力"),
-        ("m_e019.rule", &[("E019", 3)], "例が制約の外にある"),
+        // The seeded `constraint 商品合計 <= 値引` also keeps 支払額 at 0円 or below, so the row
+        // of 送料表 that asks for >=3000円 is reached by no input: E102's third form (§15.189).
+        ("m_e019.rule", &[("E019", 3), ("E102", 1)], "例が制約の外にある"),
         ("m_e020.rule", &[("E020", 1)], "`elements` に名前が無い"),
         // Two edits, because either alone is a different error. §11 calls E110 the internal
         // breakwater — what is confirmed is that it fires rather than a table being skipped.

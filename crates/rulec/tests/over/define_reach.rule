@@ -1,0 +1,25 @@
+rule define_reach v1
+description "A table over a define whose last row lies past what the define reaches: the check lets the row through, since E102 does not read the reach of a define, and a question over ranges of the inputs leaves it out"
+
+enum band = small | big | huge
+
+inputs
+  amount : money[GBP]  range >=1GBP <=100GBP
+  limit  : money[GBP]  range >=0GBP <=100GBP
+
+outputs
+  out : band
+
+define excess : money[GBP] = amount - limit
+
+table t
+policy unique
+| excess         | -> out : band |
+| <=0GBP         | small         |
+| >0GBP <=500GBP | big           |
+| >500GBP        | huge          |
+
+examples
+| amount | limit  | -> out |
+| 1GBP   | 100GBP | small  |
+| 100GBP | 0GBP   | big    |

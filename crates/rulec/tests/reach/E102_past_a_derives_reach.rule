@@ -1,0 +1,20 @@
+rule refund_band v1
+description "Sorts a refund by how far it goes over the limit. The range of excess was written wide, and the last row asks for more than the inputs can make"
+
+enum band = within | over | far_over
+
+inputs
+  amount : money[GBP]  range >=1GBP <=100GBP
+  limit  : money[GBP]  range >=0GBP <=100GBP
+
+outputs
+  verdict : band
+
+derive excess : money[GBP] = amount - limit  range >=-1000GBP <=1000GBP
+
+table verdict_of
+policy unique
+| excess         | -> verdict : band |
+| <=0GBP         | within            |
+| >0GBP <=500GBP | over              |
+| >500GBP        | far_over          |

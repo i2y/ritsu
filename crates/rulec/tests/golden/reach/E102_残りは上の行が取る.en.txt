@@ -1,0 +1,12 @@
+error[E102]: Unreachable row: row 4 never matches
+  --> tests/reach/E102_残りは上の行が取る.rule:21 table 区分表
+   |
+21 | | -       | 特大             |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 4: no input reaches here
+13 | derive 支払額(net) : money[円] = 小計 - 値引  range >=-1000円 <=1000円
+   |                                  ^^^^^^^^^^^ the reachable interval is >=-50円 <=500円
+   |
+ Over the ranges of the inputs, `支払額` can only come to >=-50円 <=500円. Because of `policy first`, the earlier rows take first every one of those values that meets this row's conditions.
+ hint: rewrite the condition within the values `支払額` can come to, or delete this row. Widening a derive's `range` does not change the values it can come to.
+
+note tests/reach/E102_残りは上の行が取る.rule: 6 shadow pairs (6 structural, 0 equivalent, 0 needs review)

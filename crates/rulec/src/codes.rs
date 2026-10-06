@@ -50,7 +50,28 @@ pub struct Entry {
     /// The same reproduction written with English names, when `example` has Japanese ones:
     /// what `explain` shows in English. The budget is the same for both.
     pub english: Option<Repro>,
+    /// A form of the code the first reproduction does not show, with a reproduction of its
+    /// own. Only E102 has one: its third form, a row past what a derive reaches (§15.189).
+    pub also: Vec<Also>,
     pub related: &'static [&'static str],
+}
+
+/// Another form of a code, reproduced: a heading saying which form it is, and the smallest rule
+/// that shows it — with an English twin when the rule has Japanese names, as [`Entry::english`].
+pub struct Also {
+    pub what: String,
+    pub example: &'static str,
+    pub english: Option<&'static str>,
+}
+
+impl Also {
+    /// The reproduction `explain` shows in `lang`.
+    pub fn repro(&self, lang: Lang) -> Repro {
+        match (lang, self.english) {
+            (Lang::En, Some(en)) => Repro { example: en, files: &[] },
+            _ => Repro { example: self.example, files: &[] },
+        }
+    }
 }
 
 fn e(
@@ -62,7 +83,7 @@ fn e(
     example: &'static str,
     related: &'static [&'static str],
 ) -> Entry {
-    Entry { code, severity, title, when, fix, example, budget: None, files: &[], english: None, related }
+    Entry { code, severity, title, when, fix, example, budget: None, files: &[], english: None, also: Vec::new(), related }
 }
 
 fn err(
@@ -100,6 +121,12 @@ impl Entry {
     /// names or contents too.
     fn english_with_files(mut self, example: &'static str, files: &'static [(&'static str, &'static str)]) -> Entry {
         self.english = Some(Repro { example, files });
+        self
+    }
+
+    /// Another form of the code, reproduced (see the field).
+    fn also(mut self, what: String, example: &'static str, english: &'static str) -> Entry {
+        self.also.push(Also { what, example, english: Some(english) });
         self
     }
 
@@ -1035,6 +1062,44 @@ const X_E102: &str = "rule t(t) v1\n\ninputs\n  w(w) : mass[g]  range >=0g <=10k
                       outputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy first\n| w       | -> r(r) : bool |\n\
                       | -       | true           |\n| <=1000g | false          |\n";
+// E102's third form (§15.189): `超過` comes to -99円 up to 100円 over the inputs' ranges, so the
+// last row, wider in the derive's own `range`, is reached by no input.
+const X_E102_REACH: &str = r##"rule t(t) v1
+
+inputs
+  額(a)   : money[円, incl_tax]  range >=1円 <=100円
+  上限(l) : money[円, incl_tax]  range >=0円 <=100円
+
+outputs
+  r(r) : bool
+
+derive 超過(x) : money[円, incl_tax] = 額 - 上限  range >=-1000円 <=1000円
+
+table j(j)
+policy unique
+| 超過         | -> r(r) : bool |
+| <=0円        | false          |
+| >0円 <=100円 | true           |
+| >100円       | true           |
+"##;
+const X_E102_REACH_EN: &str = r##"rule t(t) v1
+
+inputs
+  amount(a) : money[JPY, incl_tax]  range >=1JPY <=100JPY
+  limit(l)  : money[JPY, incl_tax]  range >=0JPY <=100JPY
+
+outputs
+  r(r) : bool
+
+derive excess(x) : money[JPY, incl_tax] = amount - limit  range >=-1000JPY <=1000JPY
+
+table j(j)
+policy unique
+| excess         | -> r(r) : bool |
+| <=0JPY         | false          |
+| >0JPY <=100JPY | true           |
+| >100JPY        | true           |
+"##;
 const X_E103: &str = "rule t(t) v1\n\ninputs\n  w(w) : mass[g]  range >=0g <=10kg\n  \
                       p(p) : money[円, incl_tax]  range >=0円 <=1万円\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
@@ -2488,15 +2553,20 @@ pub fn ledger() -> Vec<Entry> {
             "E102",
             tr!("どの入力にも当てはまらない行があります", "Unreachable row: the row never matches"),
             tr!(
-                "先行する行にすべて覆われているか、上流の表が決して出さない値を名指ししているとき。形は二つあり、診断の文が原因を書き分けます。",
-                "Every input the row would take is already taken by an earlier row, or the row names a value that the upstream table never produces. The two forms are told apart in the wording."
+                "どの入力もその行に当てはまらないとき。形は三つあり、診断の文が原因を書き分けます。一つ目は、先行する行（`overrides` で優先する行も含む）にすべて覆われている行です。二つ目は、上流の表が決して出さない値を指している行です。三つ目は、導出の列に、その導出が実際に取りうる値の外だけを求めている行です（取りうる値の中の部分を、先行する行が先に取っている場合も含みます）。取りうる値は、導出の式を入力の範囲と `constraint` で計算したもので、導出に書いた `range` ではありません。三つ目の形は、入力の足し算、引き算、定数倍だけでできた導出を見ます。",
+                "No input matches the row. There are three forms, told apart in the wording. In the first, every input the row would take is already taken by an earlier row, or by a row that takes precedence through `overrides`. In the second, the row names a value that the upstream table never produces. In the third, the row asks a derived column only for values outside what the derive can actually reach, the part inside (if any) being taken first by earlier rows. What a derive can reach is its expression computed over the inputs' ranges and the `constraint` lines, not the `range` written on it. The third form reads derives that add, subtract and multiply the inputs by constants."
             ),
             tr!(
-                "その行が新しい仕様なら、覆っている行より上へ移してください。不要なら削除してください。上流が出さない値を指しているなら、上流の表にその値を出す行を足すか、この行を消してください。",
-                "If the row is the newer intent, move it above the row that covers it. If it is dead, delete it. If it names a value the upstream never emits, either add a row upstream that emits it, or delete this row."
+                "その行が新しい仕様なら、覆っている行より上へ移してください。不要なら削除してください。上流が出さない値を指しているなら、上流の表にその値を出す行を足すか、この行を消してください。導出が取りえない値を求めているなら、条件を導出の取りうる値の中に書き直すか、この行を削除してください。導出の `range` を広げても、取りうる値は変わりません。",
+                "If the row is the newer intent, move it above the row that covers it. If it is dead, delete it. If it names a value the upstream never emits, either add a row upstream that emits it, or delete this row. If it asks a derive for values it never reaches, rewrite the condition within the values the derive can come to, or delete the row; widening the derive's `range` does not change those values."
             ),
             X_E102,
-            &["E101", "W105", "W110"],
+            &["E101", "W105", "W110", "E112"],
+        )
+        .also(
+            tr!("三つ目の形（導出の取りうる値の外にある行）の最小の再現", "Smallest reproduction of the third form (a row outside what a derive can reach)"),
+            X_E102_REACH,
+            X_E102_REACH_EN,
         ),
         err(
             "E103",
@@ -3222,6 +3292,10 @@ pub fn render_text(e: &Entry) -> String {
         o.push_str(&tr!("\n隣に置くファイル `{name}`\n", "\nThe file `{name}` beside it\n"));
         o.push_str(&indent(text));
     }
+    for a in &e.also {
+        o.push_str(&format!("\n{}\n", a.what));
+        o.push_str(&indent(a.repro(crate::i18n::current()).example));
+    }
     if !e.related.is_empty() {
         o.push_str(&tr!("\n関係するコード: {}\n", "\nRelated codes: {}\n", e.related.join(" ")));
     }
@@ -3250,6 +3324,11 @@ pub fn render_markdown(e: &Entry) -> String {
         o.push_str(&tr!("\n隣に置く `{name}`:\n\n", "\nWith `{name}` beside it:\n\n"));
         o.push_str("```proto\n");
         o.push_str(text);
+        o.push_str("```\n");
+    }
+    for a in &e.also {
+        o.push_str(&format!("\n**{}**:\n\n```rule\n", a.what));
+        o.push_str(a.repro(crate::i18n::current()).example);
         o.push_str("```\n");
     }
     if !e.related.is_empty() {
@@ -3284,6 +3363,15 @@ pub fn render_json(e: &Entry) -> String {
                     .collect::<Vec<_>>()
                     .join(",")
             ),
+        )
+        // Another form with its reproduction, where the entry has one (E102, §15.189).
+        .opt_raw(
+            "also",
+            (!e.also.is_empty()).then(|| {
+                let lang = crate::i18n::current();
+                let each: Vec<String> = e.also.iter().map(|a| json::Obj::new().str("what", &a.what).str("example", a.repro(lang).example).finish()).collect();
+                format!("[{}]", each.join(","))
+            }),
         )
         .raw("related", json::strs(e.related))
         .str("lang", crate::i18n::current().code())

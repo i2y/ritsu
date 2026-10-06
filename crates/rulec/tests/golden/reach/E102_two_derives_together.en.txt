@@ -1,0 +1,13 @@
+error[E102]: Unreachable row: row 1 never matches
+  --> tests/reach/E102_two_derives_together.rule:19 table decision_of
+   |
+19 | | >=18  | <=-5 | review                |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1: no input reaches here
+13 | derive party : number = adults + children  range >=0 <=20
+   |                         ^^^^^^^^^^^^^^^^^ the reachable interval is >=0 <=20
+14 | derive gap   : number = adults - children  range >=-10 <=10
+   |                         ^^^^^^^^^^^^^^^^^ the reachable interval is >=-10 <=10
+   |
+ Over the ranges of the inputs, `party` can only come to >=0 <=20, and `gap` to >=-10 <=10. No combination of those values meets all of this row's conditions.
+ hint: rewrite the condition within the values `party` and `gap` can come to, or delete this row. Widening a derive's `range` does not change the values it can come to.
+

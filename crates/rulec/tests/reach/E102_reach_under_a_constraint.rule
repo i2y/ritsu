@@ -1,0 +1,22 @@
+rule balance_due v1
+description "Whether an invoice is settled. A payment never passes the amount billed, so what is due never goes below zero, and the first row asks for that"
+
+enum state = settled | owing
+
+inputs
+  billed : money[GBP]  range >=0GBP <=100GBP
+  paid   : money[GBP]  range >=0GBP <=100GBP
+
+constraint paid <= billed
+
+outputs
+  status : state
+
+derive due : money[GBP] = billed - paid  range >=-1000GBP <=1000GBP
+
+table status_of
+policy unique
+| due   | -> status : state |
+| <0GBP | settled           |
+| 0GBP  | settled           |
+| >0GBP | owing             |

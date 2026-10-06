@@ -2199,9 +2199,9 @@ Related codes: [E102](#e102), [E105](#e105), [W111](#w111)
 
 `error` — **Unreachable row: the row never matches**
 
-**When.** Every input the row would take is already taken by an earlier row, or the row names a value that the upstream table never produces. The two forms are told apart in the wording.
+**When.** No input matches the row. There are three forms, told apart in the wording. In the first, every input the row would take is already taken by an earlier row, or by a row that takes precedence through `overrides`. In the second, the row names a value that the upstream table never produces. In the third, the row asks a derived column only for values outside what the derive can actually reach, the part inside (if any) being taken first by earlier rows. What a derive can reach is its expression computed over the inputs' ranges and the `constraint` lines, not the `range` written on it. The third form reads derives that add, subtract and multiply the inputs by constants.
 
-**Fix.** If the row is the newer intent, move it above the row that covers it. If it is dead, delete it. If it names a value the upstream never emits, either add a row upstream that emits it, or delete this row.
+**Fix.** If the row is the newer intent, move it above the row that covers it. If it is dead, delete it. If it names a value the upstream never emits, either add a row upstream that emits it, or delete this row. If it asks a derive for values it never reaches, rewrite the condition within the values the derive can come to, or delete the row; widening the derive's `range` does not change those values.
 
 **Smallest reproduction**:
 
@@ -2221,7 +2221,29 @@ policy first
 | <=1000g | false          |
 ```
 
-Related codes: [E101](#e101), [W105](#w105), [W110](#w110)
+**Smallest reproduction of the third form (a row outside what a derive can reach)**:
+
+```rule
+rule t(t) v1
+
+inputs
+  amount(a) : money[JPY, incl_tax]  range >=1JPY <=100JPY
+  limit(l)  : money[JPY, incl_tax]  range >=0JPY <=100JPY
+
+outputs
+  r(r) : bool
+
+derive excess(x) : money[JPY, incl_tax] = amount - limit  range >=-1000JPY <=1000JPY
+
+table j(j)
+policy unique
+| excess         | -> r(r) : bool |
+| <=0JPY         | false          |
+| >0JPY <=100JPY | true           |
+| >100JPY        | true           |
+```
+
+Related codes: [E101](#e101), [W105](#w105), [W110](#w110), [E112](#e112)
 
 ## E103
 

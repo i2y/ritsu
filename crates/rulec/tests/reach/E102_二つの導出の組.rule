@@ -1,0 +1,21 @@
+rule 座席の組(seat_split) v1
+description "同じ二つの入力から計算する二つの導出。最初の行は、どの組も作らない二つの値の組み合わせを求めている"
+
+enum 判定(verdict) = 可(ok) | 確認(review)
+
+inputs
+  大人(adults)     : number  range >=0 <=10
+  子ども(children) : number  range >=0 <=10
+
+outputs
+  結果(decision) : 判定
+
+derive 人数(party) : number = 大人 + 子ども  range >=0 <=20
+derive 差(gap)     : number = 大人 - 子ども  range >=-10 <=10
+
+table 結果表(decision_of)
+policy unique
+| 人数 | 差   | -> 結果 : 判定 |
+| >=18 | <=-5 | 確認           |
+| >=18 | >-5  | 可             |
+| <18  | -    | 可             |

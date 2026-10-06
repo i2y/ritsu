@@ -1,0 +1,11 @@
+error[E102]: Unreachable row: row 3 never matches
+  --> tests/reach/E102_past_a_derives_reach.rule:20 table verdict_of
+   |
+20 | | >500GBP        | far_over          |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3: no input reaches here
+13 | derive excess : money[GBP] = amount - limit  range >=-1000GBP <=1000GBP
+   |                              ^^^^^^^^^^^^^^ the reachable interval is >=-99GBP <=100GBP
+   |
+ Over the ranges of the inputs, `excess` can only come to >=-99GBP <=100GBP. None of those values meets this row's conditions.
+ hint: rewrite the condition within the values `excess` can come to, or delete this row. Widening a derive's `range` does not change the values it can come to.
+

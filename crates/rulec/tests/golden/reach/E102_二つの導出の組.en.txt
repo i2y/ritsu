@@ -1,0 +1,13 @@
+error[E102]: Unreachable row: row 1 never matches
+  --> tests/reach/E102_二つの導出の組.rule:19 table 結果表
+   |
+19 | | >=18 | <=-5 | 確認           |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1: no input reaches here
+13 | derive 人数(party) : number = 大人 + 子ども  range >=0 <=20
+   |                               ^^^^^^^^^^^^^ the reachable interval is >=0 <=20
+14 | derive 差(gap)     : number = 大人 - 子ども  range >=-10 <=10
+   |                               ^^^^^^^^^^^^^ the reachable interval is >=-10 <=10
+   |
+ Over the ranges of the inputs, `人数` can only come to >=0 <=20, and `差` to >=-10 <=10. No combination of those values meets all of this row's conditions.
+ hint: rewrite the condition within the values `人数` and `差` can come to, or delete this row. Widening a derive's `range` does not change the values it can come to.
+

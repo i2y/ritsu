@@ -1,0 +1,21 @@
+rule 注文の区分(order_band) v1
+description "注文を、値引のあとに払う額で分ける。最後の行は、入力からは届かない額のための受け皿として書いた"
+
+enum 区分(band) = 返金(refund) | 小口(small) | 大口(large) | 特大(oversized)
+
+inputs
+  小計(subtotal) : money[円]  range >=0円 <=500円
+  値引(discount) : money[円]  range >=0円 <=50円
+
+outputs
+  大きさ(size) : 区分
+
+derive 支払額(net) : money[円] = 小計 - 値引  range >=-1000円 <=1000円
+
+table 区分表(size_of)
+policy first
+| 支払額  | -> 大きさ : 区分 |
+| <0円    | 返金             |
+| <=100円 | 小口             |
+| <=500円 | 大口             |
+| -       | 特大             |
