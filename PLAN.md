@@ -1358,6 +1358,7 @@ ritsu 自身の地図の成果物は、段階 C の 491 から、段階 D の新
 - sekisho の言語の文書 `docs/reference.md` と README（英語と日本語）、スキル `skills/sekisho`（ritsu のバイナリが九つのスキルを持つ）。`skills/ritsu/SKILL.md` に sekisho と `ritsu gen` のゲートの段落を足した。sekisho の `tests/docs.rs` と `tests/skill.rs`、ritsu の `tests/sekisho.rs` が、ページに載せたものを確かめる。
 - ブラウザで試すページ：`ritsu_gen` に `sekisho gen --target cedar`、`ritsu_doc` に `sekisho doc`。sekisho の例の二つの版をプロジェクトにした。sekisho のファイルの読み書きを ritsu-base の `fs` に替えた。`projects.json` と `ritsu.wasm`（12.4 MB）を作り直した。
 - 地図は「13 contexts, 30 relationships; 500 artifacts, each in one context; 67 crossings checked (rust 67)」。
+- 2026-10-07 に、看板を「システムが守るべき決まりを小さな言語で書き、どんな入力にも答えが一つに決まるか、決まりどうしが食い違っていないかを確かめる。確かめた決まりから、コード、人が読むページ、テストに使う入力と答えの組やシナリオを生成できる。」（英語は "Write the rules a system must follow in small languages, and check that every input gets exactly one answer and that no two rules disagree. From the checked rules, ritsu generates code, pages for people to read, and the inputs, answers and scenarios to test with."）に替えた。言語の数を外し、ritsu を知らない人にも何をするものかが分かる文にした（DESIGN 0.1）。
 
 残したこと：ページが最初に開く小さな通販にはゲートを足していない（足すと X15 が地図の全部のコンテキストを見るようになり、通販の出力とページの手順が変わる。ゲートの設計も要る）。通販のグループの名前とページの文は、「全部の言語」から「いくつもの言語」「言語が出会う」に直した。
 

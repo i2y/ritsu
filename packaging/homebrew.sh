@@ -30,7 +30,7 @@ linux_intel=$(sum x86_64-unknown-linux-musl)
 cat <<EOT
 # Written by packaging/homebrew.sh in i2y/ritsu for $tag; the next release replaces it.
 class Ritsu < Formula
-  desc "Eight small languages, one toolchain: what one checks, the next can build on"
+  desc "Small languages for a system's rules, checked so every input gets one answer"
   homepage "https://github.com/i2y/ritsu"
   # ritsu's own code with the data it holds (crates/ritsu/Cargo.toml); brew's audit asks for a
   # nested license on lines of its own

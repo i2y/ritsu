@@ -2,7 +2,7 @@
 # may depend on which. `ritsu check ritsu.ctx` holds the dependencies every crate's Cargo.toml
 # writes to it, as Cargo says them; CI's fast job runs it.
 map Ritsu(ritsu) v1
-description "Eight small languages, one toolchain: its crates, and what each may depend on"
+description "The crates of ritsu, and what each may depend on"
 
 use context "contexts/base.ctx"
 use context "contexts/rules.ctx"

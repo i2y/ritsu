@@ -31,11 +31,11 @@ fn ritsu_says_what_it_has() {
     assert_eq!((code, out), (0, format!("ritsu {}\n", env!("CARGO_PKG_VERSION"))));
     let (code, out, err) = ritsu(&["--help"]);
     assert!(code == 0 && err.is_empty(), "{out}");
-    for line in ["ritsu check [<path>...]", "ritsu rulec <command> ...", "ritsu dandori <command> ...", "ritsu sakai <command> ...", "ritsu sekisho <command> ...", "Eight small languages, one toolchain."] {
+    for line in ["ritsu check [<path>...]", "ritsu rulec <command> ...", "ritsu dandori <command> ...", "ritsu sakai <command> ...", "ritsu sekisho <command> ...", "Write the rules a system must follow in small languages"] {
         assert!(out.contains(line), "{line}: {out}");
     }
     let (code, out, _) = ritsu(&["--lang", "ja", "--help"]);
-    assert!(code == 0 && out.contains("八つの小さな言語を、一つの処理系で。") && out.contains("ritsu check [<path>...]"), "{out}");
+    assert!(code == 0 && out.contains("システムが守るべき決まりを小さな言語で書き") && out.contains("ritsu check [<path>...]"), "{out}");
     let (code, out, err) = ritsu(&[]);
     assert!(code == 2 && out.is_empty() && err.contains("Usage:"), "{err}");
     assert_eq!(ritsu(&["nope"]), (2, String::new(), "error: there is no command `nope`; run `ritsu --help`\n".into()));

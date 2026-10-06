@@ -32,8 +32,10 @@ ritsu は、境目を JSON から型の付いた呼び出しに替える。あ�
 
 看板の言い方は、次のとおりにする。README（F）の頭と、リリースの説明に使う。
 
-- **Eight small languages, one toolchain. What one checks, the next can build on.**
-- **八つの小さな言語を、一つの処理系で。ある言語が確かめたことを、隣の言語が前提にできる。**
+- **Write the rules a system must follow in small languages, and check that every input gets exactly one answer and that no two rules disagree. From the checked rules, ritsu generates code, pages for people to read, and the inputs, answers and scenarios to test with.**
+- **システムが守るべき決まりを小さな言語で書き、どんな入力にも答えが一つに決まるか、決まりどうしが食い違っていないかを確かめる。確かめた決まりから、コード、人が読むページ、テストに使う入力と答えの組やシナリオを生成できる。**
+
+2026-10-07 に、看板から言語の数と「一つの処理系」の言い方を外し、ritsu を知らない人にも何をするものかが分かる文にした。芯は、書いた決まりを確かめることで、何を確かめるか（どんな入力にも答えが一つに決まるか、決まりどうしが食い違っていないか）と、確かめた決まりから生成するもの（コード、人が読むページ、テストに使う入力と答えの組やシナリオ）を言う。言語が増えても、看板は変えずに済む。
 
 ### 0.2 前提
 

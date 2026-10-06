@@ -231,8 +231,8 @@ pub fn table() -> Table {
         tool: "ritsu",
         version: env!("CARGO_PKG_VERSION"),
         summary: tr!(
-            "八つの小さな言語を、一つの処理系で。ある言語が確かめたことを、隣の言語が前提にできる。",
-            "Eight small languages, one toolchain. What one checks, the next can build on."
+            "システムが守るべき決まりを小さな言語で書き、どんな入力にも答えが一つに決まるか、決まりどうしが食い違っていないかを確かめる。確かめた決まりから、コード、人が読むページ、テストに使う入力と答えの組やシナリオを生成できる。",
+            "Write the rules a system must follow in small languages, and check that every input gets exactly one answer and that no two rules disagree. From the checked rules, ritsu generates code, pages for people to read, and the inputs, answers and scenarios to test with."
         ),
         globals: global_flags(),
         commands: commands(),

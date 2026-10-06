@@ -21,9 +21,12 @@ maintainer: Yasushi Itoh <6240399+i2y@users.noreply.github.com>
 homepage: https://github.com/i2y/ritsu
 license: (MIT OR Apache-2.0) AND Unicode-3.0 AND BSD-3-Clause
 description: |-
-  Eight small languages, one toolchain: rulec, dandori, koyomi, chobo, geas, yuen, sakai and sekisho.
-  What one checks, the next can build on. One static binary, no runtime and no dependencies;
-  each language's command is a link to it.
+  Small languages for the rules a system must follow, checked so that every input gets exactly
+  one answer and no two rules disagree:
+  rulec, dandori, koyomi, chobo, geas, yuen, sakai and sekisho.
+  From the checked rules, ritsu generates code, pages for people to read, and the inputs,
+  answers and scenarios to test with. One static binary, no runtime and no dependencies; each
+  language's command is a link to it.
 
 replaces:
   - rulec

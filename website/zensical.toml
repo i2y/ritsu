@@ -1,7 +1,7 @@
 [project]
 site_name = "ritsu"
 site_url = "https://i2y.github.io/ritsu/"
-site_description = "Eight small languages, one toolchain. What one checks, the next can build on."
+site_description = "Write the rules a system must follow in small languages, and check that every input gets exactly one answer and that no two rules disagree. From the checked rules, ritsu generates code, pages for people to read, and the inputs, answers and scenarios to test with."
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh"
 
