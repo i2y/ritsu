@@ -1,6 +1,6 @@
 # ritsu の Agent Skills
 
-このフォルダーには、八つの [Agent Skills](https://agentskills.io) があります。ritsu のスキルが一つと、七つの言語のスキルが一つずつです。Agent Skills を読むエージェント（Claude Code など）は、作業がスキルの説明に合うと、そのスキルの `SKILL.md` を読み、フォルダーのほかのページは要るときにだけ読みます。どのスキルも、プロジェクトで ritsu と言語を*使う*ためのもので、このリポジトリで作業するためのものではありません。
+このフォルダーには、九つの [Agent Skills](https://agentskills.io) があります。ritsu のスキルが一つと、八つの言語のスキルが一つずつです。Agent Skills を読むエージェント（Claude Code など）は、作業がスキルの説明に合うと、そのスキルの `SKILL.md` を読み、フォルダーのほかのページは要るときにだけ読みます。どのスキルも、プロジェクトで ritsu と言語を*使う*ためのもので、このリポジトリで作業するためのものではありません。
 
 | スキル | 使う場面 |
 |---|---|
@@ -12,6 +12,7 @@
 | [geas](geas/SKILL.md) | 人が読んだ主張に、エージェントが書いたコードを従わせる（`.geas`） |
 | [yuen](yuen/SKILL.md) | 要件の来歴と、それを満たすもの、確かめるもの（`.req`） |
 | [sakai](sakai/SKILL.md) | 境界づけられたコンテキストの地図。地図が指す規則、ワークフロー、コードと突き合わせる（`.ctx`） |
+| [sekisho](sekisho/SKILL.md) | だれが何をしてよいか（`.gate`）。すべての組み合わせで確かめ、Cedar と、Cedar に尋ねるコードを生成する |
 
 どのスキルも ritsu を動かすので、PATH に `ritsu` が要ります。入れ方は [README](../README.ja.md#入れ方) にあります。言語の名前で呼ぶと（`rulec` という名前のリンクなど）ritsu はその言語として動き、`ritsu <言語> …` でも同じです。
 
@@ -21,7 +22,7 @@
 
 ### Claude Code：プラグイン
 
-ritsu のサイトが、Claude Code のプラグインのマーケットプレイス `ritsu` を公開しています。マーケットプレイスには同じ名前のプラグイン `ritsu` が一つあり、そこに八つのスキルが入っています。
+ritsu のサイトが、Claude Code のプラグインのマーケットプレイス `ritsu` を公開しています。マーケットプレイスには同じ名前のプラグイン `ritsu` が一つあり、そこに九つのスキルが入っています。
 
 ```text
 /plugin marketplace add https://i2y.github.io/ritsu/marketplace.json
@@ -44,6 +45,7 @@ chobo    在庫、お金、ポイント、予約の枠の帳簿（.book）
 geas     人が読んだ主張に、コードを従わせる（.geas）
 yuen     要件の来歴（.req）
 sakai    境界づけられたコンテキストの地図（.ctx）
+sekisho  だれが何をしてよいかを書き、Cedar を生成する（.gate）
 $ ritsu skills install
 $ ritsu skills install --user
 $ ritsu skills install rulec dandori
@@ -63,7 +65,7 @@ $ cp -r skills/rulec skills/dandori <your-project>/.claude/skills/     # 一つ�
 
 ### リリースから
 
-リリースごとに `ritsu-skills-v<版>.zip` があり、`SHA256SUMS` にも載っています。中身は八つのフォルダーと二つのライセンスなので、エージェントがスキルを読む場所に展開すれば入ります。
+リリースごとに `ritsu-skills-v<版>.zip` があり、`SHA256SUMS` にも載っています。中身は九つのフォルダーと二つのライセンスなので、エージェントがスキルを読む場所に展開すれば入ります。
 
 ```console
 $ unzip ritsu-skills-v0.23.0.zip -d ~/.claude/skills -x 'LICENSE-*'
@@ -74,11 +76,11 @@ $ unzip ritsu-skills-v0.23.0.zip -d ~/.claude/skills -x 'LICENSE-*'
 スキルが ritsu と言語のコマンドを毎回確かめずに走らせられるように、プロジェクトの設定（Claude Code なら `.claude/settings.json`）でコマンドを許します。
 
 ```json
-{ "permissions": { "allow": ["Bash(ritsu check:*)", "Bash(ritsu explain:*)", "Bash(rulec:*)", "Bash(dandori:*)", "Bash(koyomi:*)", "Bash(chobo:*)", "Bash(geas:*)"] } }
+{ "permissions": { "allow": ["Bash(ritsu check:*)", "Bash(ritsu explain:*)", "Bash(rulec:*)", "Bash(dandori:*)", "Bash(koyomi:*)", "Bash(chobo:*)", "Bash(geas:*)", "Bash(ritsu sekisho:*)"] } }
 ```
 
 毎回人に聞くべきものは入れません。`ritsu yuen review` は人が見たことを記録するので、いつも聞くようにします。`ritsu skills install` はファイルを書きます。
 
 ## どう保っているか
 
-`ritsu/SKILL.md` は手で書いています。言語のスキルは、その言語と一緒に保っています。`crates/<言語>/skills/sync.sh` が、言語の文書からコピーしたページを書き、どのページがそれに当たるかは `crates/<言語>/skills/README.md` にあります。言語ごとのテストが、スキルとツールの食い違いを確かめます。`crates/ritsu/tests/skill.rs` は八つをまとめて確かめます。各フォルダーの `SKILL.md` がフォルダーの名前とリポジトリのライセンスを書いていること、バイナリが八つのフォルダーの全ファイルを持ち、`ritsu skills install` がそれをそのまま書くこと、リリースの zip が同じファイルを持つこと、サイトのマーケットプレイスがワークスペースのバージョンを書き、`skills/` だけを配ること、です。
+`ritsu/SKILL.md` は手で書いています。言語のスキルは、その言語と一緒に保っています。`crates/<言語>/skills/sync.sh` が、言語の文書からコピーしたページを書き、どのページがそれに当たるかは `crates/<言語>/skills/README.md` にあります。言語ごとのテストが、スキルとツールの食い違いを確かめます。`crates/ritsu/tests/skill.rs` は九つをまとめて確かめます。各フォルダーの `SKILL.md` がフォルダーの名前とリポジトリのライセンスを書いていること、バイナリが九つのフォルダーの全ファイルを持ち、`ritsu skills install` がそれをそのまま書くこと、リリースの zip が同じファイルを持つこと、サイトのマーケットプレイスがワークスペースのバージョンを書き、`skills/` だけを配ること、です。

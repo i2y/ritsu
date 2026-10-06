@@ -76,9 +76,9 @@ $ ritsu skills install dandori --user                         # every project on
 $ ritsu skills install dandori --dir path/to/skills           # where another agent reads skills
 ```
 
-In Claude Code, the plugin `ritsu` holds all eight: `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`, then
+In Claude Code, the plugin `ritsu` holds all nine: `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`, then
 `/plugin install ritsu@ritsu`. From a clone of the repository, copying `skills/dandori` into
-`~/.claude/skills/` or a project's `.claude/skills/` does the same, and every release has the eight
+`~/.claude/skills/` or a project's `.claude/skills/` does the same, and every release has the nine
 in `ritsu-skills-v<version>.zip`.
 
 The skill runs `ritsu dandori` from the PATH for a workflow that uses rules, and `dandori` alone for one without.

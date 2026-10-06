@@ -16,14 +16,14 @@ fn here() -> PathBuf {
 fn ritsu_in(dir: &Path, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args);
-    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG"] {
+    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG"] {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run ritsu");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
 }
 
-const TOOLS: [&str; 8] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "ritsu"];
+const TOOLS: [&str; 9] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "ritsu"];
 
 /// The text without the tools' words in the headlines: `[rulec E032]` is `[E032]` again.
 fn without_tools(s: &str) -> String {

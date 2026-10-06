@@ -1,6 +1,6 @@
-//! `ritsu skills` (PLAN F.3): the eight Agent Skills, carried in the binary, so that an agent that
+//! `ritsu skills` (PLAN F.3): the nine Agent Skills, carried in the binary, so that an agent that
 //! has only `ritsu` gets the guides this repository has. The files are `skills/<name>/` at the root,
-//! taken in as they are (`include_str!`), one skill for ritsu and one for each of the seven
+//! taken in as they are (`include_str!`), one skill for ritsu and one for each of the eight
 //! languages, as geas's `geas skill --install` takes in its own.
 //!
 //! `ritsu skills list` names them; `ritsu skills install` writes them as `<dir>/<name>/`, where
@@ -22,7 +22,7 @@ pub struct Skill {
     pub files: &'static [(&'static str, &'static str)],
 }
 
-/// The eight skills, ritsu's first and then the languages in the order `ritsu --help` lists them.
+/// The nine skills, ritsu's first and then the languages in the order `ritsu --help` lists them.
 pub const SKILLS: &[Skill] = &[
     Skill {
         name: "ritsu",
@@ -110,6 +110,14 @@ pub const SKILLS: &[Skill] = &[
             ("targets.md", include_str!("../../../skills/sakai/targets.md")),
         ],
     },
+    Skill {
+        name: "sekisho",
+        files: &[
+            ("SKILL.md", include_str!("../../../skills/sekisho/SKILL.md")),
+            ("codes.md", include_str!("../../../skills/sekisho/codes.md")),
+            ("reference.md", include_str!("../../../skills/sekisho/reference.md")),
+        ],
+    },
 ];
 
 /// What `ritsu skills list` says of a skill, in a line.
@@ -125,7 +133,8 @@ pub fn purpose(name: &str) -> Text {
         "chobo" => tr!("在庫、お金、ポイント、予約の枠の帳簿（.book）", "books of stock, money, points and booking slots (.book)"),
         "geas" => tr!("人が読んだ主張に、コードを従わせる（.geas）", "claims a person has read, held over the code (.geas)"),
         "yuen" => tr!("要件の来歴（.req）", "where requirements come from (.req)"),
-        _ => tr!("境界づけられたコンテキストの地図（.ctx）", "maps of bounded contexts (.ctx)"),
+        "sakai" => tr!("境界づけられたコンテキストの地図（.ctx）", "maps of bounded contexts (.ctx)"),
+        _ => tr!("だれが何をしてよいかを書き、Cedar を生成する（.gate）", "who may do what, compiled to Cedar (.gate)"),
     }
 }
 

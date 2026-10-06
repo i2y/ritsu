@@ -25,7 +25,7 @@ $ rulec --version
 rulec 0.23.0
 ```
 
-That puts `ritsu` on the path with the seven links beside it, so `rulec` is a
+That puts `ritsu` on the path with the eight links beside it, so `rulec` is a
 command just as before. The old name, `i2y/tap/rulec`, leads to the same
 formula, but Homebrew 7 takes it only once that formula is trusted: by itself,
 `brew install i2y/tap/rulec` stops with
@@ -34,7 +34,7 @@ formula, but Homebrew 7 takes it only once that formula is trusted: by itself,
 
 The formula installs the release archive for your platform, held to its line
 in `SHA256SUMS`. Each release rewrites it, and only after brew has installed it
-and run its test on macOS and on Linux, which calls all eight names;
+and run its test on macOS and on Linux, which calls all nine names;
 `brew upgrade ritsu` takes the next one.
 
 ## Debian, Ubuntu, Fedora, RHEL
@@ -58,7 +58,7 @@ ritsu-0.23.0-1.x86_64.rpm: OK
 $ sudo dnf install "./ritsu-$v-1.$a.rpm"
 ```
 
-The package installs `/usr/bin/ritsu` with the seven links beside it
+The package installs `/usr/bin/ritsu` with the eight links beside it
 (`/usr/bin/rulec -> ritsu`, and so on), and replaces the package `rulec` of
 rulec's own releases.
 
@@ -92,7 +92,7 @@ rulec 0.23.0
 ```
 
 The archive holds `ritsu`, a link to it for each language (`rulec`, `dandori`,
-`koyomi`, `chobo`, `geas`, `yuen`, `sakai`) and the two licenses, side by side;
+`koyomi`, `chobo`, `geas`, `yuen`, `sakai`, `sekisho`) and the two licenses, side by side;
 the releases after 0.23.0 add THIRD_PARTY_NOTICES, the notices and licenses of
 what the binary holds from others. The links are relative, so unpacking it into a
 directory on the path is the whole install;
@@ -195,9 +195,9 @@ That gives `.claude/skills/rulec/SKILL.md` with six files beside it.
 The folder is what makes the skill findable, so keep it whole. To have
 it in every project rather than one, add `--user`, which puts it in
 `~/.claude/skills/` instead; `--dir <dir>` puts it where another agent reads skills.
-In Claude Code, the plugin `ritsu` holds all eight skills: `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`,
+In Claude Code, the plugin `ritsu` holds all nine skills: `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`,
 then `/plugin install ritsu@ritsu`. From a clone of the repository, copying `skills/rulec` does
-the same, and every release has the eight in `ritsu-skills-v<version>.zip`.
+the same, and every release has the nine in `ritsu-skills-v<version>.zip`.
 
 The only thing it needs is `rulec` on the path, whichever way above put it there.
 

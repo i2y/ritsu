@@ -1,4 +1,4 @@
-//! The seven languages, each made once (DESIGN 3.2, 6.4): the engine every language answers the
+//! The eight languages, each made once (DESIGN 3.2, 6.4): the engine every language answers the
 //! ports with, the index of what the files hold and name, and the ports each language that reads
 //! others is handed. `ritsu dandori`, `ritsu yuen`, `ritsu sakai` and `ritsu check` take them from
 //! here, so the three readers share one rulec (which keeps each rule it has checked) and one index

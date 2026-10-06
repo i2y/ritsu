@@ -1,12 +1,12 @@
 name: ritsu
-description: Put one release of ritsu on the PATH, with the command of each of its seven languages, verified against the checksums published with it.
+description: Put one release of ritsu on the PATH, with the command of each of its eight languages, verified against the checksums published with it.
 author: Yasushi Itoh
 
 # `uses: i2y/ritsu@v0.23.0` installs release v0.23.0: the ref the action is referenced with is the
 # release, so the action and the binary cannot drift apart. Nothing else is done here — the gate
 # is a few `run:` lines anyone can read. The release holds `ritsu` and a link to it for each of
-# the seven languages, so `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `yuen` and `sakai` are on
-# the PATH as well (DESIGN 2.3, 13.2).
+# the eight languages, so `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `yuen`, `sakai` and
+# `sekisho` are on the PATH as well (DESIGN 2.3, 13.2).
 
 inputs:
   version:

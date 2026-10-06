@@ -10,7 +10,7 @@
 # its image, pinned by digest as CI pins its other tools. Each package has to hold the two licenses
 # and THIRD_PARTY_NOTICES in /usr/share/doc/ritsu, as its own list of files says (the slim Debian
 # image leaves /usr/share/doc out when it installs), and is installed with no network, run under
-# all seven names (packaging/smoke.sh), and removed, and what it put in /usr/bin has to go with it.
+# all eight names (packaging/smoke.sh), and removed, and what it put in /usr/bin has to go with it.
 set -eu
 
 version=$1
@@ -44,8 +44,8 @@ pack deb "$deb"
 pack rpm "$rpm"
 
 # Each package is installed where it belongs, with no network, so a dependency it should not have
-# fails here. It has to put a working ritsu on the path under all seven names, which read the
-# examples as release.yml asks of the archive, and has to take all eight away again when removed.
+# fails here. It has to put a working ritsu on the path under all eight names, which read the
+# examples as release.yml asks of the archive, and has to take all nine away again when removed.
 docker run --rm --network none --platform "linux/$arch" -v "$out:/out:ro" -v "$root/crates:/crates:ro" -v "$root/packaging:/packaging:ro" \
   -e DEBIAN_FRONTEND=noninteractive debian:stable-slim sh -euc '
     for f in LICENSE-MIT LICENSE-APACHE THIRD_PARTY_NOTICES; do
@@ -55,7 +55,7 @@ docker run --rm --network none --platform "linux/$arch" -v "$out:/out:ro" -v "$r
     ritsu --version
     sh /packaging/smoke.sh - /crates
     apt-get remove -y -qq ritsu > /dev/null
-    for n in ritsu rulec dandori koyomi chobo geas yuen sakai; do
+    for n in ritsu rulec dandori koyomi chobo geas yuen sakai sekisho; do
       test ! -e "/usr/bin/$n" && test ! -L "/usr/bin/$n"
     done' sh "$deb"
 docker run --rm --network none --platform "linux/$arch" -v "$out:/out:ro" -v "$root/crates:/crates:ro" -v "$root/packaging:/packaging:ro" \
@@ -67,7 +67,7 @@ docker run --rm --network none --platform "linux/$arch" -v "$out:/out:ro" -v "$r
     ritsu --version
     sh /packaging/smoke.sh - /crates
     dnf remove -y -q ritsu > /dev/null
-    for n in ritsu rulec dandori koyomi chobo geas yuen sakai; do
+    for n in ritsu rulec dandori koyomi chobo geas yuen sakai sekisho; do
       test ! -e "/usr/bin/$n" && test ! -L "/usr/bin/$n"
     done' sh "$rpm"
 

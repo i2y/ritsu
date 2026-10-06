@@ -6,7 +6,7 @@ ask a person. It is not about working on chobo itself.
 
 ## Install
 
-The eight skills of ritsu, this one among them, install together or one by one, in any of the four
+The nine skills of ritsu, this one among them, install together or one by one, in any of the four
 ways [skills/README.md](../../../skills/README.md) at the root of the repository gives: the Claude
 Code plugin `ritsu`, `ritsu skills install chobo`, a copy of `skills/chobo/`, or the zip of a
 release. It needs `chobo` on PATH, or `ritsu`, which runs it as `ritsu chobo`. To let the skill run

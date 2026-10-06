@@ -1,23 +1,23 @@
 # ritsu
 
-**Seven small languages, one toolchain. What one checks, the next can build on.**
+**Eight small languages, one toolchain. What one checks, the next can build on.**
 
 Coding agents now write code faster, and more of it, than anyone can read line by line. That
 makes one question sharper: what is the code there to carry out, whoever — or whatever — writes
 it? The contracts between services and inside them. The business rules. The calendars and the
-deadlines. The ledgers and the bounds on them. The skeleton of a workflow. Where each
-requirement came from, and what still satisfies it.
+deadlines. The ledgers and the bounds on them. The skeleton of a workflow. Who may do what.
+Where each requirement came from, and what still satisfies it.
 
 ritsu gives each of those a small language of its own, in a file people can read. Each language
 checks what it says as far as it can be checked — over every input, every day, every path, not a
 sample — generates code where code is needed, and draws pages for whoever needs to understand
-it. Because the seven share one toolchain, a proof does not stop at a language's edge: a
+it. Because the eight share one toolchain, a proof does not stop at a language's edge: a
 workflow knows the preconditions of the rules it calls, a rule knows the days a calendar can
 come to, a ledger knows the amounts a rule can return.
 
 Agents write the glue. ritsu holds what it all has to carry out.
 
-## The seven languages
+## The eight languages
 
 | | File | What it is for | What it generates |
 |---|---|---|---|
@@ -28,6 +28,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 | [geas](#geas--claims-about-the-code-an-agent-wrote) | `.geas` | claims about the code an agent wrote | — |
 | [yuen](#yuen--where-requirements-come-from) | `.req` | where requirements come from, and what satisfies them | ReqIF, W3C PROV |
 | [sakai](#sakai--the-map-of-bounded-contexts) | `.ctx` | the map of bounded contexts | settings for import linters; Context Mapper |
+| [sekisho](#sekisho--who-may-do-what) | `.gate` | who may do what: roles, attributes, relations, with rules and dates as conditions | Cedar, and the TypeScript, Python and Go that ask it |
 
 Each language stands on its own: you can use rulec without writing a `.flow`. A file never mixes
 two languages, because a tariff, a calendar, a ledger and a workflow are read by different
@@ -279,6 +280,50 @@ upstream Base conformist
   through ritsu_base, ritsu_units, ritsu_proto, ritsu_emit, ritsu_ports
 ```
 
+### sekisho — who may do what
+
+A gate says which principal may do which action on which resource, with roles, attributes and
+relations, and with the answers of a rule and of dates as conditions. `sekisho check` asks rulec
+which answers the rule can give and koyomi which dates can come together, walks every combination
+that can happen, and decides each as Cedar does: an action no one can do, a permit a forbid covers,
+an expectation that does not hold, two duties one person is allowed, all stop the check. Only a
+gate that passes compiles, into Cedar's schema and policies, and into TypeScript, Python and Go that
+compute the conditions from the service's own data and ask Cedar, so a caller cannot hand them in.
+
+```gate
+action refund_order
+  description "Refund an order, in part or in whole"
+  guards orders refundOrder
+  principal User, Workflow
+  resource Order from orderId
+  input
+    amount : money[GBP, incl_tax]  range >=1GBP <=10_000GBP
+  context
+    refund_band  = refund_limit(amount: amount, limit: principal.refund_limit).band
+    in_period    = today <= refund_terms.last_day(paid_on: resource.paid_on)
+    business_day = today is open in uk
+…
+permit clerks_refund_within_their_limit
+  description "A clerk refunds up to the clerk's own limit, while the refund period lasts"
+  principal in clerk
+  action refund_order
+  when refund_band is within_limit
+  when in_period
+…
+expect deny clerks_never_refund_over_their_limit
+  description "A clerk who is not a manager never refunds more than the clerk's own limit"
+  principal in clerk
+  action refund_order
+  unless principal in manager
+  when refund_band is over_limit
+```
+
+```console
+$ cd crates/sekisho/examples/refunds
+$ sekisho check refunds.gate
+refunds.gate: ok — 3 actions, 10 policies (7 permits, 3 forbids), 3 expectations, 1 separation
+```
+
 ## Where the languages meet
 
 The languages share one toolchain so that what one has checked, another can take as given.
@@ -360,6 +405,8 @@ them:
 - a rule's output as the amount of a chobo transfer, and the refusals that transfer can come to;
 - a chobo hold's expiry, against the wait a workflow counts in business days;
 - money and units, one type across rulec, dandori and chobo;
+- every operation a context of sakai's map opens, held to the action of a gate that guards it, and
+  every operation a workflow calls, to what its gate allows the workflow;
 - yuen pins each table, date, claim and task one by one, and sakai checks every reference in
   every language, with its line.
 
@@ -379,6 +426,9 @@ reads what the project says.
 | W904 | a secret the platform keeps in the history of a run: an input, an output, an argument, an answer | `dandori check` |
 | E906 | a secret sent outside the project: to a model's provider, Jev, a host named by its URL alone, an AWS service | `dandori check` |
 | E905, W905 | a secret sent to a file outside the map, or to a context the map does not relate to the one that marked it; or, with a map that does not pass sakai's check, where it goes cannot be decided | `ritsu check` |
+| W910 | an input of a gate's action that a policy reads and that the contract of the operation it guards marks secret: the value goes into the request Cedar is asked, and stays in the record of the decision | `sekisho check` |
+| E907, W907 | an operation a context opens (`open host service`) that no action of a gate guards; a context none of whose operations is guarded yet | `ritsu check`, in a project with a gate |
+| E908, W908, W909 | a call of a workflow its gate allows in no combination; an action the workflow is allowed and never calls; a call that can be denied, or whether it is allowed cannot be decided, with no error declared for a denial | `ritsu check` |
 
 A value is secret where a contract marks it (`debug_redact` in a `.proto`; `x-data-classification`,
 `x-sensitive-data` or `format: password` in an OpenAPI schema) or where a `.flow` writes `secret`
@@ -415,6 +465,7 @@ team that signs off on its rules can sign off on these pages too.
 - `dandori doc` — a workflow drawn with every scenario it runs;
 - `koyomi doc` — a calendar, month by month;
 - `chobo doc` — a ledger, its bounds and its transfers;
+- `sekisho doc` — who may do what, action by action, beside the Cedar it compiles to;
 - `yuen trace` — a requirement back to its source and on to what satisfies it;
 - `explain <code>` — every diagnostic, with a reproduction you can run.
 
@@ -427,15 +478,15 @@ axiom of its own.
 
 ## For AI agents
 
-ritsu and its languages are made to be used by AI agents, and [skills/](skills) holds eight
+ritsu and its languages are made to be used by AI agents, and [skills/](skills) holds nine
 [Agent Skills](https://agentskills.io) for them: [skills/ritsu](skills/ritsu) for a project of more
 than one language (the loop from `ritsu check` to a run and a package, how to read each diagnostic
 across the languages and fix it, and which language's skill to read for the rest), and one for each
-of the seven languages, in `skills/<language>/`. [skills/README.md](skills/README.md) lists them.
+of the eight languages, in `skills/<language>/`. [skills/README.md](skills/README.md) lists them.
 There are four ways to install them:
 
 - **Claude Code**: ritsu's site publishes a plugin marketplace whose plugin `ritsu` holds the
-  eight. Run `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`, then
+  nine. Run `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`, then
   `/plugin install ritsu@ritsu`; Claude Code fetches the folder `skills/` alone, not the whole
   repository.
 - **Any agent, from the binary**: `ritsu skills install` writes them into the project's
@@ -444,7 +495,7 @@ There are four ways to install them:
   `ritsu skills list` lists them.
 - **By hand**: copy the folders you need from `skills/` into `~/.claude/skills/`, or into a
   project's `.claude/skills/`.
-- **From a release**: `ritsu-skills-v<version>.zip` holds the eight folders; unzip it where your
+- **From a release**: `ritsu-skills-v<version>.zip` holds the nine folders; unzip it where your
   agent reads skills.
 
 ## Commands
@@ -458,8 +509,8 @@ ritsu skills install      the Agent Skills, written where an agent reads them
 ritsu <language> …        a language's own commands, as in ritsu rulec doc fee.rule
 ```
 
-A release archive holds `ritsu` and seven links to it — `rulec`, `dandori`, `koyomi`, `chobo`,
-`geas`, `yuen`, `sakai` — and each runs as its language. `cargo install` installs the `ritsu`
+A release archive holds `ritsu` and eight links to it — `rulec`, `dandori`, `koyomi`, `chobo`,
+`geas`, `yuen`, `sakai`, `sekisho` — and each runs as its language. `cargo install` installs the `ritsu`
 binary alone: call a language as `ritsu <language> …`, or make the link yourself, named for the
 language (`ln -s "$(command -v ritsu)" ~/.cargo/bin/rulec`). Add `--lang ja` for Japanese.
 
@@ -487,7 +538,7 @@ With Homebrew it is `brew install i2y/tap/ritsu`, and in GitHub Actions `uses: i
   [rulec](crates/rulec/README.md), [dandori](crates/dandori/README.md),
   [koyomi](crates/koyomi/README.md), [chobo](crates/chobo/README.md),
   [geas](crates/geas/README.md), [yuen](crates/yuen/README.md),
-  [sakai](crates/sakai/README.md)
+  [sakai](crates/sakai/README.md), [sekisho](crates/sekisho/README.md)
 - `crates/ritsu-*` — the shared base, units, ports, project reading, the checks across
   languages, the `.proto` reader, the emitters, the browser build
 - `proofs/` — the Lean models

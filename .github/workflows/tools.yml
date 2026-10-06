@@ -267,7 +267,7 @@ jobs:
           uv pip install --python crates/koyomi/tools/.venv/bin/python -r crates/koyomi/tools/requirements.txt
           echo "DANDORI_MYPY=$GITHUB_WORKSPACE/crates/koyomi/tools/.venv/bin/mypy" >> "$GITHUB_ENV"
 
-      # --- koyomi, chobo, geas, yuen, sakai, and the test kit's own tests.
+      # --- koyomi, chobo, geas, yuen, sakai, sekisho, and the test kit's own tests.
       - name: "PostgreSQL 18's programs, for the throwaway clusters the tests start (dandori's too)"
         if: matrix.group != 'rulec'
         run: |

@@ -135,7 +135,7 @@ koyomi は、[rulec](https://github.com/i2y/ritsu/tree/main/crates/rulec)（業�
 
 ## インストール
 
-koyomi は [ritsu](https://github.com/i2y/ritsu) の言語の一つで、ritsu のリポジトリから、最近の stable の Rust でビルドします。七つの言語を全部入れ、複数の言語のファイルがあるプロジェクトを `ritsu check` で確かめるなら、次のとおりです。
+koyomi は [ritsu](https://github.com/i2y/ritsu) の言語の一つで、ritsu のリポジトリから、最近の stable の Rust でビルドします。八つの言語を全部入れ、複数の言語のファイルがあるプロジェクトを `ritsu check` で確かめるなら、次のとおりです。
 
 ```console
 $ cargo install --git https://github.com/i2y/ritsu --locked ritsu

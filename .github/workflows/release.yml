@@ -1,8 +1,8 @@
 name: release
 
 # A tag `v*` builds `ritsu` once per platform (static on Linux; on macOS linked only to the system
-# library), puts it in an archive with a link to it for each of the seven languages, the two
-# licenses and THIRD_PARTY_NOTICES, checks that the tag is the version every one of the eight names
+# library), puts it in an archive with a link to it for each of the eight languages, the two
+# licenses and THIRD_PARTY_NOTICES, checks that the tag is the version every one of the nine names
 # says, and publishes the archives with their SHA-256 sums as a GitHub Release (DESIGN 13.2).
 # `action.yml` at the root of the repository installs one of them onto a runner, and the install
 # page says which lines to run by hand. Before anything is built, audit.yml looks up every
@@ -22,11 +22,11 @@ name: release
 #   ritsu-skills-v0.23.0.zip
 #   SHA256SUMS
 #
-# An archive holds `ritsu` and, beside it, `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `yuen` and
-# `sakai`, links to it, LICENSE-MIT and LICENSE-APACHE, and THIRD_PARTY_NOTICES, the notices and
+# An archive holds `ritsu` and, beside it, `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `yuen`,
+# `sakai` and `sekisho`, links to it, LICENSE-MIT and LICENSE-APACHE, and THIRD_PARTY_NOTICES, the notices and
 # licenses of what the binary holds from others (packaging/archive.sh). The .deb and the .rpm put
 # the same three files in /usr/share/doc/ritsu, and the formula in the keg. The zip holds the
-# eight Agent Skills of skills/, a folder each, and the two licenses (packaging/skills.sh): the same
+# nine Agent Skills of skills/, a folder each, and the two licenses (packaging/skills.sh): the same
 # files `ritsu skills install` writes, for an agent that is given folders rather than the binary.
 
 on:
@@ -117,21 +117,21 @@ jobs:
         run: sh packaging/archive.sh "$GITHUB_REF_NAME" ${{ matrix.target }} target/${{ matrix.target }}/release/ritsu dist
 
       # Not the test suite — that needs a dozen tools — but the archive has to unpack, every name
-      # in it has to say the version of the tag, and each of the seven languages has to read what
-      # it is given (packaging/smoke.sh), the three that read others with the others joined.
+      # in it has to say the version of the tag, and each of the eight languages has to read what
+      # it is given (packaging/smoke.sh), the four that read others with the others joined.
       - name: The archive unpacks, every name says the version, every language reads its example
         run: |
           set -eu
           d=$(mktemp -d)
           tar -xzf "dist/ritsu-$GITHUB_REF_NAME-${{ matrix.target }}.tar.gz" -C "$d"
           ls -l "$d"
-          for n in ritsu rulec dandori koyomi chobo geas yuen sakai; do
+          for n in ritsu rulec dandori koyomi chobo geas yuen sakai sekisho; do
             test "$("$d/$n" --version)" = "$n ${GITHUB_REF_NAME#v}" || { echo "::error::$n --version says '$("$d/$n" --version)'"; exit 1; }
           done
           sh packaging/smoke.sh "$d" crates
 
       # The same binary as a .deb and an .rpm, each installed on Debian and on Fedora, run under
-      # all seven names and removed again before it is kept.
+      # all eight names and removed again before it is kept.
       - name: The Linux packages
         if: runner.os == 'Linux'
         run: sh packaging/linux.sh "${GITHUB_REF_NAME#v}" ${{ matrix.target }} target/${{ matrix.target }}/release/ritsu dist
@@ -159,7 +159,7 @@ jobs:
           set -eu
           sh packaging/skills.sh "$GITHUB_REF_NAME" dist
           unzip -l "dist/ritsu-skills-$GITHUB_REF_NAME.zip"
-          for skill in ritsu rulec dandori koyomi chobo geas yuen sakai; do
+          for skill in ritsu rulec dandori koyomi chobo geas yuen sakai sekisho; do
             unzip -l "dist/ritsu-skills-$GITHUB_REF_NAME.zip" "$skill/SKILL.md" >/dev/null || { echo "::error::the zip has no $skill/SKILL.md"; exit 1; }
           done
 
@@ -172,7 +172,7 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "ritsu $GITHUB_REF_NAME" \
-            --notes "One static binary per platform, with a link to it for each of the seven languages (rulec, dandori, koyomi, chobo, geas, yuen, sakai); on Linux also as a .deb and an .rpm. The Agent Skills of ritsu and the seven languages are in ritsu-skills-$GITHUB_REF_NAME.zip, a folder each, to unzip where an agent reads skills. Verify a download against SHA256SUMS before running it; the install page says how." \
+            --notes "One static binary per platform, with a link to it for each of the eight languages (rulec, dandori, koyomi, chobo, geas, yuen, sakai, sekisho); on Linux also as a .deb and an .rpm. The Agent Skills of ritsu and the eight languages are in ritsu-skills-$GITHUB_REF_NAME.zip, a folder each, to unzip where an agent reads skills. Verify a download against SHA256SUMS before running it; the install page says how." \
             dist/ritsu-*.tar.gz dist/ritsu_*.deb dist/ritsu-*.rpm dist/ritsu-skills-*.zip dist/SHA256SUMS
 
   # The formula is written once, from the SHA256SUMS that was just published, so it points at
@@ -228,7 +228,7 @@ jobs:
           brew audit --strict --online --formula i2y/tap/ritsu
           brew install --formula i2y/tap/ritsu
           brew test i2y/tap/ritsu
-          for n in ritsu rulec dandori koyomi chobo geas yuen sakai; do
+          for n in ritsu rulec dandori koyomi chobo geas yuen sakai sekisho; do
             test "$("$n" --version)" = "$n ${GITHUB_REF_NAME#v}"
           done
 

@@ -1,7 +1,7 @@
 ---
 name: ritsu
-description: Work on a project that holds files of more than one of ritsu's seven small languages, which are rules (`.rule`, rulec), workflows (`.flow`, dandori), dates (`.cal`, koyomi), ledgers (`.book`, chobo), claims about code (`.geas`, geas), requirements and their sources (`.req`, yuen) and maps of bounded contexts (`.ctx`, sakai). `ritsu check` checks each file with its own language and then across them, which shows that a workflow's call keeps a rule's preconditions, that the days a date comes to fit a rule's range, that a rule's output is an amount a ledger takes, and that a hold has not always expired by the time it is posted. Use when a project has files of two or more of these languages, when `ritsu check` prints a diagnostic of ritsu's own (E101, E201-E206, W201-W206, W901, E905, W905), when a workflow has to be run with its rules, dates and books computed, or when one package of TypeScript, Python or Go has to be generated for the whole project. To write one language's files, read that language's skill.
-compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`), which runs each language as `ritsu <language> …`; a link to ritsu named for a language (`rulec`, `dandori`, …), as a release archive holds, runs the same. `ritsu skills install` writes the eight skills into a project's `.claude/skills/`.
+description: Work on a project with files of more than one of ritsu's eight small languages, rules (`.rule`, rulec), workflows (`.flow`, dandori), dates (`.cal`, koyomi), ledgers (`.book`, chobo), claims about code (`.geas`, geas), requirements (`.req`, yuen), maps of bounded contexts (`.ctx`, sakai) and who may do what (`.gate`, sekisho). `ritsu check` checks each file with its own language and then across them, which shows that a workflow's call keeps a rule's preconditions, that the days a date comes to fit a rule's range, that a rule's output is an amount a ledger takes, and that a hold has not always expired by the time it is posted. Use when a project has files of two or more of these languages, when `ritsu check` prints a diagnostic of ritsu's own (E101, E201-E206, W201-W206, W901, E905-W909), when a workflow has to be run with its rules, dates and books computed, or when one package of TypeScript, Python or Go has to be generated for the whole project. To write one language's files, read that language's skill.
+compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`), which runs each language as `ritsu <language> …`; a link to ritsu named for a language (`rulec`, `dandori`, …), as a release archive holds, runs the same. `ritsu skills install` writes the nine skills into a project's `.claude/skills/`.
 license: MIT OR Apache-2.0
 ---
 
@@ -9,19 +9,21 @@ license: MIT OR Apache-2.0
 
 The job is a **project of more than one language**: a workflow that calls rules, a rule over the
 days of a calendar, a ledger whose amounts come from a rule, requirements that point at all of
-them, a map of which part may depend on which. Each language checks its own files over every
+them, a map of which part may depend on which, a gate that says who may call each operation. Each language checks its own files over every
 input, every day and every path it can reach. ritsu adds the checks **between** them, which no
 language can make alone, because what one has shown (a rule's preconditions, the days a date comes
 to, the bounds of an account) is what the next is held to.
 
 It also applies when the project holds the files of one language only and a diagnostic names
 `ritsu`, or when a command of one language has to read another (`ritsu dandori`, `ritsu yuen`,
-`ritsu sakai`, §6). It does not replace the language skills: to write a rule, a workflow, a date,
-a ledger, a claim, a requirement or a map, read the skill of that language (§5).
+`ritsu sakai`, `ritsu sekisho`, §6). It does not replace the language skills: to write a rule, a
+workflow, a date, a ledger, a claim, a requirement, a map or a gate, read the skill of that language
+(§5).
 
 A file never mixes two languages. A tariff, a calendar, a ledger and a workflow are read by
 different people, so each is a file of its own, and the files meet by name: a workflow's `use rule`,
-`use dates` and `use book`, a rule's `range from koyomi`, a requirement that names what satisfies it.
+`use dates` and `use book`, a rule's `range from koyomi`, a requirement that names what satisfies it,
+a gate's `use rule` and `guards`.
 
 Everything is reachable from the command line: `ritsu --help` lists the commands,
 `ritsu <command> --help` says what each takes, and `ritsu explain <CODE>` explains a diagnostic.
@@ -38,7 +40,7 @@ and bounds are, which warnings to leave, and what a fix would change in the mean
 ## 1. The loop
 
 1. **Check the project.** `ritsu check` in the project's directory reads every `.rule`, `.flow`,
-   `.cal`, `.book`, `.geas`, `.req`, `.ctx` and `.proto` under it, or the paths you give
+   `.cal`, `.book`, `.geas`, `.req`, `.ctx`, `.gate` and `.proto` under it, or the paths you give
    (`ritsu check rules/ flows/order.flow`). A `.geas` file is checked by running its claims, which
    starts the program they are about.
 2. **Read the last line first.** It says how many files each language had, how many failed, and how
@@ -53,7 +55,7 @@ and bounds are, which warnings to leave, and what a fix would change in the mean
 6. **Then run and generate**: `ritsu run` plays a workflow with its rules, dates and books worked
    out (§4); `ritsu gen [<path>...]` writes one package for the whole project (§4); the pages
    for people that the languages write (`rulec doc`, `dandori doc`, `koyomi doc`, `chobo doc`,
-   `yuen doc`, `sakai doc`, each run as `ritsu <language> doc`) are for whoever has to understand
+   `yuen doc`, `sakai doc`, `sekisho doc`, each run as `ritsu <language> doc`) are for whoever has to understand
    what the code is to carry out and check it against what they know.
 7. **Have a person confirm it.** Hand those pages to the people who own what they say (§7). What
    they find wrong you fix in the file of its language, and the loop starts again.
@@ -170,16 +172,19 @@ cancelled), 1 the flow has errors or the run could not go on (the scenario ran o
 
 **`ritsu gen [<path>...] [--target <language>] [--out <dir>]`** writes one package for each of
 TypeScript, Python and Go (`<out>/<language>/`, `generated` by default): the rules, the dates, the
-clients of the books and the workflows of the project, where a workflow reads its rules, dates and
-books from the package itself. Run it after `ritsu check` passes. `--check` writes nothing and exits
-1 if a package is stale, for CI; `--books postgres|tigerbeetle` says what the clients of the books
-call; `--name` and `--module` name the package. Each language's own `gen` or `build` still writes
-that language's code alone (`rulec gen`, `koyomi gen`, `chobo build`, `dandori build`).
+clients of the books, the workflows and the code that asks the gates of the project, where a
+workflow reads its rules, dates and books, and a gate's code its rules and dates, from the package
+itself; the gates' Cedar goes once into `<out>/cedar/`. Run it after `ritsu check` passes. `--check`
+writes nothing and exits 1 if a package is stale, for CI; `--books postgres|tigerbeetle` says what
+the clients of the books call; `--authorizer cedar|avp` says whether a gate's code asks the
+language's own Cedar in the process or Amazon Verified Permissions; `--name` and `--module` name
+the package. Each language's own `gen` or `build` still writes that language's code alone (`rulec
+gen`, `koyomi gen`, `chobo build`, `dandori build`, `sekisho gen`).
 
 ## 5. Which skill to read
 
 Each language has a skill of its own, with the language on one page, what to ask a person, and the
-fix for each of the language's own diagnostics. `ritsu skills install` writes all eight into the
+fix for each of the language's own diagnostics. `ritsu skills install` writes all nine into the
 project's `.claude/skills/` (`--user` for `~/.claude/skills/`, `--dir <dir>` for another agent's
 folder; name the ones you want, `ritsu skills install rulec dandori`). They are also in ritsu's
 repository at the paths below, to copy beside this one.
@@ -193,15 +198,16 @@ repository at the paths below, to copy beside this one.
 | geas | `.geas` | `skills/geas/` | write claims about code an agent wrote |
 | yuen | `.req` | `skills/yuen/` | write requirements and what they come from |
 | sakai | `.ctx` | `skills/sakai/` | write a map of bounded contexts |
+| sekisho | `.gate` | `skills/sekisho/` | write who may do what, fix sekisho's diagnostics, generate Cedar and the code that asks it |
 
 ## 6. A language that reads another
 
 `ritsu <language> …` is that language's own command, with the languages it reads joined in the same
-process. `dandori`, `yuen` and `sakai` read others, so a command of theirs on a file that uses
-another language's files is run as `ritsu dandori …`, `ritsu yuen …` or `ritsu sakai …`. A link to
-ritsu named for the language does the same. Built alone from its own crate, each reads no other
-language and says so: dandori's E018, yuen's E206 and sakai's E104 name the command to run
-instead. `rulec` reads koyomi's days (`range from koyomi`), so `ritsu rulec check` is what checks
+process. `dandori`, `yuen`, `sakai` and `sekisho` read others, so a command of theirs on a file
+that uses another language's files is run as `ritsu dandori …`, `ritsu yuen …`, `ritsu sakai …` or
+`ritsu sekisho …`. A link to ritsu named for the language does the same. Built alone from its own
+crate, each reads no other language and says so: dandori's E018, yuen's E206, sakai's E104 and
+sekisho's E209 name the command to run instead. `rulec` reads koyomi's days (`range from koyomi`), so `ritsu rulec check` is what checks
 such a rule.
 
 ## 7. What stays with people

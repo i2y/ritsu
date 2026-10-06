@@ -55,7 +55,7 @@ $ ritsu skills install dandori --user                         # このマシン�
 $ ritsu skills install dandori --dir path/to/skills           # ほかのエージェントがスキルを読む場所に入れる
 ```
 
-Claude Code なら、プラグイン `ritsu` に八つが入っています。`/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json` を実行してから、`/plugin install ritsu@ritsu` を実行します。リポジトリのクローンから `skills/dandori` を `~/.claude/skills/` かプロジェクトの `.claude/skills/` にコピーしても同じで、リリースごとの `ritsu-skills-v<版>.zip` にも八つが入っています。
+Claude Code なら、プラグイン `ritsu` に九つが入っています。`/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json` を実行してから、`/plugin install ritsu@ritsu` を実行します。リポジトリのクローンから `skills/dandori` を `~/.claude/skills/` かプロジェクトの `.claude/skills/` にコピーしても同じで、リリースごとの `ritsu-skills-v<版>.zip` にも九つが入っています。
 
 スキルは、規則を使うワークフローでは PATH にある `ritsu dandori` を、規則を使わないワークフローでは `dandori` を動かします。
 

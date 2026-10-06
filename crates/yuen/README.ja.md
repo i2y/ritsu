@@ -4,7 +4,7 @@
 
 yuen は、要件と、その出どころを書く小さな言語です。`.req` のファイルに、何が求められているか、それが法令のどの条か、誰のどの決定から来たか、持ち主は誰か、何が満たすのか（規則の表、カレンダーの日付、帳簿の勘定、コードのファイル）、何が確かめるのか（主張、規則そのものの検査）を書きます。そのつながりの一本ずつに、人が確かめたことを、両端のハッシュと一緒に記録します。条文が改正されたり、規則が書き換えられたり、コードの一行が変わったりすると、ハッシュが合わなくなり、検査はそのつながりで止まります。確かめたときとの差分を見せ、誰かが確かめ直すまで止まったままです。
 
-yuen は [ritsu](https://github.com/i2y/ritsu) の七つの言語の一つです。ほかの言語が持つもの（rulec の規則の表、koyomi のカレンダーの日付と条件、chobo の帳簿の勘定と振替、geas の spec の主張、dandori のワークフローのタスク、sakai の地図の語、sekisho のゲートのポリシーと期待、`.proto` のサービスとメッセージ）は、同じプロセスの中で、それぞれの言語に読んでもらいます。OpenAPI と AsyncAPI の文書の操作とスキーマ、[Cedar](https://www.cedarpolicy.com/) のポリシーとアクションは、yuen が要素ごとに読みます。[OpenSpec](https://github.com/Fission-AI/OpenSpec) の仕様の要件は、出典として、要件ごとに読みます。
+yuen は [ritsu](https://github.com/i2y/ritsu) の八つの言語の一つです。ほかの言語が持つもの（rulec の規則の表、koyomi のカレンダーの日付と条件、chobo の帳簿の勘定と振替、geas の spec の主張、dandori のワークフローのタスク、sakai の地図の語、sekisho のゲートのポリシーと期待、`.proto` のサービスとメッセージ）は、同じプロセスの中で、それぞれの言語に読んでもらいます。OpenAPI と AsyncAPI の文書の操作とスキーマ、[Cedar](https://www.cedarpolicy.com/) のポリシーとアクションは、yuen が要素ごとに読みます。[OpenSpec](https://github.com/Fission-AI/OpenSpec) の仕様の要件は、出典として、要件ごとに読みます。
 
 ## 例：民法の期間
 

@@ -1,8 +1,8 @@
 name: packages
 
 # What a release hands out, built and tried on every push (DESIGN 13.2), so that a release is not
-# the first time it runs: the musl binary of ritsu, the archive with its seven links (unpacked, and
-# run under all eight names), and the .deb and the .rpm (each installed on Debian and on Fedora,
+# the first time it runs: the musl binary of ritsu, the archive with its eight links (unpacked, and
+# run under all nine names), and the .deb and the .rpm (each installed on Debian and on Fedora,
 # run, and removed). release.yml does the same on the four platforms, on a tag.
 
 on:

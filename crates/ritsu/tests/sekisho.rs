@@ -1,8 +1,11 @@
 //! `ritsu sekisho` and the `.gate` files of `ritsu check` (sekisho's DESIGN 11): sekisho's command,
 //! with the languages a gate reads joined through the ports (the rules, the dates files and the
 //! calendars, the books, the flows), which the binary of sekisho's own crate cannot (it says E209;
-//! sekisho's `tests/cli.rs`); and `ritsu check` on a project that holds gates, which hands them to
-//! sekisho after dandori.
+//! sekisho's `tests/cli.rs`); `ritsu check` on a project that holds gates, which hands them to
+//! sekisho after dandori; and the `$ ritsu …` sekisho's READMEs show, which sekisho's own tests
+//! cannot run (its `tests/docs.rs` runs the `$ sekisho …`).
+
+mod common;
 
 use ritsu_testkit::TempDir;
 use std::path::{Path, PathBuf};
@@ -142,4 +145,37 @@ fn ritsu_sekisho_draws_the_page_of_the_example() {
     let (code, out, _) = ritsu_in(&sekisho_dir(), &["sekisho", "doc", "tests/mutants/E101_unknown_role.gate"]);
     assert_eq!(code, 1, "{out}");
     assert!(out.starts_with("error[E101]: "), "{out}");
+}
+
+/// Every `$ ritsu …` in a `console` block of sekisho's READMEs prints what the page shows under it,
+/// run in sekisho's crate as the page puts it (a `$ cd` before it in the block moves it), with
+/// `ritsu` and its links on the PATH.
+#[test]
+fn the_readmes_of_sekisho_show_what_ritsu_prints() {
+    let links = common::links();
+    let mut wrong = Vec::new();
+    let mut ran = 0;
+    for name in ["crates/sekisho/README.md", "crates/sekisho/README.ja.md"] {
+        let p = common::page(name);
+        for block in p.blocks.iter().filter(|b| b.info == "console") {
+            let mut cwd = sekisho_dir();
+            for (cmd, out) in common::runs(block) {
+                if let Some(dir) = cmd.strip_prefix("cd ") {
+                    cwd = sekisho_dir().join(dir.trim());
+                    continue;
+                }
+                if !cmd.starts_with("ritsu ") || out.is_empty() {
+                    continue;
+                }
+                let got = common::sh(links.path(), &cwd, &cmd);
+                if !common::same(&common::lines_of(&out.join("\n")), &common::lines_of(&got)) {
+                    wrong.push(format!("{name}:{}: $ {cmd}\n--- the page shows\n{}\n--- it prints\n{got}", block.at, out.join("\n")));
+                }
+                ran += 1;
+            }
+        }
+    }
+    // `ritsu check` on the example, on each of the two pages
+    assert!(ran >= 2, "{ran} commands run: were the fences changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }

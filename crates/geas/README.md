@@ -422,7 +422,7 @@ The same folder is [skills/geas](../../skills/geas); [skills/README.md](skills/R
 ## Install
 
 geas is one of the languages of [ritsu](https://github.com/i2y/ritsu), and is built from its
-repository with a recent stable Rust. To have all seven, and `ritsu check` for a project that
+repository with a recent stable Rust. To have all eight, and `ritsu check` for a project that
 holds the files of more than one (it runs the claims of a `.geas` file as `geas check` does):
 
 ```console

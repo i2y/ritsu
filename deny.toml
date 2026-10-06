@@ -34,7 +34,7 @@ unused-allowed-license = "deny"
 
 [bans]
 # The tree is small enough that a second version of any crate is worth reading before it lands.
-# Wildcards are not checked: the seven languages are crates Cargo would let be published, and
+# Wildcards are not checked: the eight languages are crates Cargo would let be published, and
 # they name the base crates by path, which cargo-deny counts as a wildcard. The one crate from
 # outside that the crates name, serde_json, is named as "1" everywhere, and `cargo xtask deps`
 # keeps it the only one.

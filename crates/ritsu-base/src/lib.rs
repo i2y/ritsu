@@ -1,4 +1,4 @@
-//! The ground the seven languages of ritsu stand on (DESIGN 4): what each of them wrote for
+//! The ground the eight languages of ritsu stand on (DESIGN 4): what each of them wrote for
 //! itself before, written once. None of it knows what a rule, a date, an account, a workflow,
 //! a claim, a requirement or a context is; each module is a tool a language uses.
 //!

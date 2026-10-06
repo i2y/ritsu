@@ -1,5 +1,5 @@
 //! The commands of `ritsu` and their flags, in one table (DESIGN 8.1; ritsu-base's `cli`, as every
-//! language draws its `--help` and reads its command line). The seven languages are in the table
+//! language draws its `--help` and reads its command line). The eight languages are in the table
 //! for `ritsu --help` only: what follows `ritsu <language>` is the language's own command line.
 
 use ritsu_base::cli::{Cmd, Flag, Reading, Table, flag, help_flag, lang_flag};
@@ -12,16 +12,11 @@ pub fn global_flags() -> Vec<Flag> {
 
 /// The languages, in the order `ritsu --help` lists them, each with what `ritsu <language>` reads
 /// of the others.
-pub const LANGUAGES: [&str; 7] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai"];
-
-/// The languages `ritsu <language>` runs that `ritsu --help` does not list yet: sekisho, the eighth,
-/// until it takes its place among the others (in `--help`, the links, the release, the README and
-/// the skills).
-pub const NOT_LISTED_YET: [&str; 1] = ["sekisho"];
+pub const LANGUAGES: [&str; 8] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho"];
 
 /// Whether `ritsu <name> …` is a language's own command.
 pub fn is_language(name: &str) -> bool {
-    LANGUAGES.contains(&name) || NOT_LISTED_YET.contains(&name)
+    LANGUAGES.contains(&name)
 }
 
 fn language(name: &'static str) -> Cmd {
@@ -38,9 +33,13 @@ fn language(name: &'static str) -> Cmd {
             "yuen のコマンド（要件の来歴）。要件が指すほかの言語のもの、借りた出典、主張の記録を、同じプロセスの中で読む",
             "yuen's commands (where requirements come from), reading in the same process what requirements name of the other languages, the sources they borrow and the records of claims"
         ),
-        _ => tr!(
+        "sakai" => tr!(
             "sakai のコマンド（境界づけられたコンテキスト）。地図が持つ規則、カレンダー、ワークフローの参照と、規則の列挙を、同じプロセスの中で読む",
             "sakai's commands (bounded contexts), reading in the same process what the rules, calendars and workflows of a map refer to, and the enums of its rules"
+        ),
+        _ => tr!(
+            "sekisho のコマンド（だれが何をしてよいか）。ゲートが条件に使う規則、日付のファイル、カレンダーと、ワークフローのフローを、同じプロセスの中で読む",
+            "sekisho's commands (who may do what), reading in the same process the rules, dates files and calendars a gate takes as conditions, and the flows of its workflows"
         ),
     };
     Cmd {
@@ -114,8 +113,8 @@ pub fn commands() -> Vec<Cmd> {
         params: vec![(
             "<path>...",
             tr!(
-                "ファイルかディレクトリ。無ければ今いるディレクトリ。ディレクトリは、下の .rule、.flow、.cal、.book、.geas、.req、.ctx、.proto を全部",
-                "files or directories; else the directory you are in. A directory stands for every .rule, .flow, .cal, .book, .geas, .req, .ctx and .proto under it"
+                "ファイルかディレクトリ。無ければ今いるディレクトリ。ディレクトリは、下の .rule、.flow、.cal、.book、.geas、.req、.ctx、.gate、.proto を全部",
+                "files or directories; else the directory you are in. A directory stands for every .rule, .flow, .cal, .book, .geas, .req, .ctx, .gate and .proto under it"
             ),
         )],
         flags: vec![flag("--format", Some("json"), tr!("一つの JSON で出す", "print one JSON object")).choices(&["json"]), root_flag()],
@@ -195,7 +194,7 @@ pub fn commands() -> Vec<Cmd> {
     cmds
 }
 
-/// `ritsu skills` (PLAN F.3): the eight Agent Skills the binary carries, listed or written where an
+/// `ritsu skills` (PLAN F.3): the nine Agent Skills the binary carries, listed or written where an
 /// agent reads them.
 fn skills() -> Cmd {
     Cmd {
@@ -203,13 +202,13 @@ fn skills() -> Cmd {
         name: "skills",
         args: "list | install [<name>...]",
         purpose: tr!(
-            "ritsu と七つの言語の Agent Skills（AI エージェント向けの手引き）を一覧する、またはエージェントが読む場所に書く",
-            "list the Agent Skills of ritsu and the seven languages (the guides for AI agents), or write them where an agent reads them"
+            "ritsu と八つの言語の Agent Skills（AI エージェント向けの手引き）を一覧する、またはエージェントが読む場所に書く",
+            "list the Agent Skills of ritsu and the eight languages (the guides for AI agents), or write them where an agent reads them"
         ),
         params: vec![
-            ("list", tr!("八つのスキルの名前と、何に使うか", "the names of the eight skills, and what each is for")),
+            ("list", tr!("九つのスキルの名前と、何に使うか", "the names of the nine skills, and what each is for")),
             ("install", tr!("スキルを <dir>/<name>/ に書く", "write the skills as <dir>/<name>/")),
-            ("<name>...", tr!("書くスキル。無ければ八つとも", "the skills to write; else all eight")),
+            ("<name>...", tr!("書くスキル。無ければ九つとも", "the skills to write; else all nine")),
         ],
         flags: vec![
             flag("--dir", Some("<dir>"), tr!("スキルを書くディレクトリ（ほかのエージェントが読む場所）", "the directory to write the skills into (where another agent reads them)")).default(".claude/skills"),
@@ -232,8 +231,8 @@ pub fn table() -> Table {
         tool: "ritsu",
         version: env!("CARGO_PKG_VERSION"),
         summary: tr!(
-            "七つの小さな言語を、一つの処理系で。ある言語が確かめたことを、隣の言語が前提にできる。",
-            "Seven small languages, one toolchain. What one checks, the next can build on."
+            "八つの小さな言語を、一つの処理系で。ある言語が確かめたことを、隣の言語が前提にできる。",
+            "Eight small languages, one toolchain. What one checks, the next can build on."
         ),
         globals: global_flags(),
         commands: commands(),

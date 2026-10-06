@@ -4,7 +4,7 @@
 
 ## Install
 
-The eight skills of ritsu, this one among them, install together or one by one, in any of the four
+The nine skills of ritsu, this one among them, install together or one by one, in any of the four
 ways [skills/README.md](../../../skills/README.md) at the root of the repository gives: the Claude
 Code plugin `ritsu`, `ritsu skills install sakai`, a copy of `skills/sakai/`, or the zip of a
 release. It needs ritsu on PATH (sakai comes with it). To let the skill run sakai without a prompt

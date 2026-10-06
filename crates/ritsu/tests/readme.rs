@@ -7,12 +7,12 @@
 //!   before it in the block, or, when the code blocks above it in the same section are the files
 //!   of a reproduction in ritsu's ledger, in those files. The commands are found the way a reader
 //!   with a release unpacked on the PATH finds them: `ritsu`, and a link to it for each language.
-//! - Every line of `.rule`, `.flow`, `.cal`, `.book`, `.geas`, `.req` and `.ctx` on the pages is a
+//! - Every line of `.rule`, `.flow`, `.cal`, `.book`, `.geas`, `.req`, `.ctx` and `.gate` on the pages is a
 //!   line of a file of that language in the repository, or of a reproduction in the ledger; the
 //!   lines of one block come from one file, in its order, and `…` cuts a line short.
 //! - A command the prose names as `rulec doc` or `ritsu check` is one.
 //! - Every relative link leads to a file, and every `#anchor` to a heading of the page it is on.
-//! - The table lists the seven languages as `ritsu` has them, the page names the seven links, the
+//! - The table lists the eight languages as `ritsu` has them, the page names the eight links, the
 //!   `cargo install` lines name this repository and a package of it that has a binary, and no
 //!   page names the repository of one language by itself.
 //! - What a link made by hand does, as the Commands section says it does.
@@ -42,7 +42,7 @@ fn the_commands_on_the_pages_print_what_they_show() {
 #[test]
 fn the_code_on_the_pages_is_from_the_files() {
     let (seen, wrong) = code_from_files(&pages());
-    // The seven languages and the refund rule and flow, on two pages.
+    // The eight languages and the refund rule and flow, on two pages.
     assert!(seen >= 2 * (CODE.len() + 2), "{seen} blocks of code on the pages: were the fences changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
@@ -75,21 +75,21 @@ fn the_links_on_the_pages_lead_somewhere() {
             }
         }
     }
-    // The seven rows of the table, on two pages.
+    // The eight rows of the table, on two pages.
     assert!(seen >= 2 * LANGUAGES.len(), "{seen} links on the pages: were they changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
 #[test]
-fn the_table_and_the_links_are_the_seven_languages_as_ritsu_has_them() {
+fn the_table_and_the_links_are_the_eight_languages_as_ritsu_has_them() {
     for p in pages() {
         // `| [rulec](#…) | `.rule` | …`: the first cell of each row under the header.
         let names: Vec<&str> = p.text.lines().filter_map(|l| l.strip_prefix("| [")).filter_map(|l| l.split_once("](")).map(|(name, _)| name).collect();
         assert_eq!(names, LANGUAGES, "{}: the table names the languages in the order `ritsu --help` lists them", p.name);
-        // The Commands section names the seven links, in that order, as a list.
+        // The Commands section names the eight links, in that order, as a list.
         let comma = if p.name.ends_with(".ja.md") { "、" } else { ", " };
         let listed = LANGUAGES.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(comma);
-        assert!(p.text.replace('\n', " ").contains(&listed), "{}: the seven links are not named as {listed}", p.name);
+        assert!(p.text.replace('\n', " ").contains(&listed), "{}: the eight links are not named as {listed}", p.name);
     }
 }
 

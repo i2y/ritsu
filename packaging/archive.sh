@@ -1,6 +1,6 @@
 #!/bin/sh
 # Writes the archive of one release for one platform: `ritsu`, a link to it named for each of the
-# seven languages, the two licenses, and THIRD_PARTY_NOTICES, the notices and licenses of what the
+# eight languages, the two licenses, and THIRD_PARTY_NOTICES, the notices and licenses of what the
 # binary holds from others (DESIGN 2.3, 13.2). release.yml runs it on each of the four platforms,
 # and crates/ritsu/tests/release.rs on the binary of the test.
 #
@@ -18,8 +18,8 @@ target=$2
 bin=$3
 out=$4
 
-# The names of the links: the seven languages (crates/ritsu/src/cli.rs says the same).
-languages="rulec dandori koyomi chobo geas yuen sakai"
+# The names of the links: the eight languages (crates/ritsu/src/cli.rs says the same).
+languages="rulec dandori koyomi chobo geas yuen sakai sekisho"
 # The licenses and the notices sit at the root of the repository, one up from this script.
 root=$(cd "$(dirname "$0")/.." && pwd)
 licenses="LICENSE-MIT LICENSE-APACHE THIRD_PARTY_NOTICES"

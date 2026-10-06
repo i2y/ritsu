@@ -1,7 +1,7 @@
 # sakai
 
 A small language for the part of a context map that can be checked: which bounded context owns each artifact, which references the relationships let cross a boundary, and how an anticorruption layer maps the values and words that cross.
-sakai is one of the seven languages of [ritsu](../../README.md), and reads the artifacts of the others (rules, workflows, calendars, books, `.proto` files) through ritsu, and the contracts services keep in OpenAPI and AsyncAPI documents.
+sakai is one of the eight languages of [ritsu](../../README.md), and reads the artifacts of the others (rules, workflows, calendars, books, `.proto` files) through ritsu, and the contracts services keep in OpenAPI and AsyncAPI documents.
 
 A context map usually lives in a drawing, and the drawing stops matching the code the week after it is drawn.
 sakai writes the map next to the artifacts, one file per context, owned by that context's team, and holds every artifact to it:
@@ -203,7 +203,7 @@ The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file 
 - [examples/shop](examples/shop/README.md): a small shop in five contexts and seven relationships, with every pattern, over real workflows, rules, calendars, a book and `.proto` files, and code in Python, TypeScript, Java and Go.
 - [examples/shop.ja](examples/shop.ja/README.ja.md): the same shop with Japanese names.
 - [examples/webshop](examples/webshop/README.md): four services of a web shop that talk over HTTP and events, by their OpenAPI and AsyncAPI documents, with an anticorruption layer that maps an enum of a document; [examples/webshop.ja](examples/webshop.ja/README.ja.md) is the same with Japanese names.
-- [ritsu.ctx](../../ritsu.ctx) and [contexts/](../../contexts) at the root of ritsu: ritsu's own crates, in twelve contexts, their dependencies held to the map by `ritsu check ritsu.ctx` in CI.
+- [ritsu.ctx](../../ritsu.ctx) and [contexts/](../../contexts) at the root of ritsu: ritsu's own crates, in thirteen contexts, their dependencies held to the map by `ritsu check ritsu.ctx` in CI.
 
 ## How it is checked
 

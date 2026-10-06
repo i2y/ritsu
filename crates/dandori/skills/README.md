@@ -6,7 +6,7 @@ is not about working on dandori itself.
 
 ## Install
 
-The eight skills of ritsu, this one among them, install together or one by one, in any of the four
+The nine skills of ritsu, this one among them, install together or one by one, in any of the four
 ways [skills/README.md](../../../skills/README.md) at the root of the repository gives: the Claude
 Code plugin `ritsu`, `ritsu skills install dandori`, a copy of `skills/dandori/`, or the zip of a
 release. It needs `dandori` on PATH, or `ritsu`, which runs it as `ritsu dandori` with the rules, dates

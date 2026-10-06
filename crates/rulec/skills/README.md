@@ -6,7 +6,7 @@ changed. It is not about working on rulec itself.
 
 ## Install
 
-The eight skills of ritsu, this one among them, install together or one by one, in any of the four
+The nine skills of ritsu, this one among them, install together or one by one, in any of the four
 ways [skills/README.md](../../../skills/README.md) at the root of the repository gives: the Claude
 Code plugin `ritsu`, `ritsu skills install rulec`, a copy of `skills/rulec/`, or the zip of a
 release. It needs `rulec` on PATH, or `ritsu`, which runs it as `ritsu rulec`. Nothing else: the skill

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Writes the archive of the Agent Skills of one release: every folder of skills/ at the root of the
-# repository (ritsu's and one for each of the seven languages), each as it is, and the two licenses
+# repository (ritsu's and one for each of the eight languages), each as it is, and the two licenses
 # (DESIGN 13.2). release.yml runs it once for a release, and crates/ritsu/tests/skill.rs runs it on
 # the repository.
 #

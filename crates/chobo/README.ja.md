@@ -118,7 +118,7 @@ $ chobo build examples/refunds/refunds.ja.book --target postgres --out db
 
 ## インストール
 
-chobo は [ritsu](https://github.com/i2y/ritsu) の言語の一つで、ritsu のリポジトリから、最近の stable の Rust でビルドします。七つの言語を全部入れ、複数の言語のファイルがあるプロジェクトを `ritsu check` で確かめるなら、次のとおりです。
+chobo は [ritsu](https://github.com/i2y/ritsu) の言語の一つで、ritsu のリポジトリから、最近の stable の Rust でビルドします。八つの言語を全部入れ、複数の言語のファイルがあるプロジェクトを `ritsu check` で確かめるなら、次のとおりです。
 
 ```console
 $ cargo install --git https://github.com/i2y/ritsu --locked ritsu

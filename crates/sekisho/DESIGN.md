@@ -4,7 +4,7 @@
 
 名前は関所（せきしょ）から取った。
 
-この文書は設計の段階（2026-10-06）に書き、言語の芯を作った段階（A）で、作ったものに合わせて直した。設計の段階では、ritsu 0.23.0 を読み、2026-10 の時点の Cedar とまわりの道具を調べて決めた。決めたことのうち、Cedar で本当にそうなるかが分かれ目になるものは、手で書いた例を公式の Cedar の CLI 4.13.0、cedar-wasm 4.13.0、cedarpy 4.12.1、cedar-go v1.8.0 にかけて確かめた（6 章）。例の規則・日付・ワークフローは、ritsu 0.23.0 の `rulec check`・`koyomi check`・`dandori check` と `ritsu check` を通してある。例の Cedar とリクエストを組み立てるコードは、sekisho が生成する形を手で書いた見本である。`.gate` の検査の結果として載せた数は、設計の段階には、検査が数える形を Python で書いた使い捨ての試作の出力（1,090 通りなど）だった。A で全部の組み合わせの検査を作り、4 章、7 章、10 章の数と文を実物の出力に差し替えた（6.2 の表は、試作を四つの実装に流した記録なので残した）。A では、字句と構文、名前と型、診断の台帳、`check` と `explain` のコマンド、`ritsu sekisho` と `ritsu check` の入口、口のまとまり `GatePorts` と口 `Gates` の型、rulec の `outputs_over`、koyomi の `calendar` と `doc`、OpenAPI と AsyncAPI の操作の読み手、全部の組み合わせの検査と参照の評価、行を合わせた表を作った。2.8、2.10、3 章、4 章、7〜10 章をそれに合わせて直し、16 章を決めたことの形に書き直した。段階 B では、Cedar のスキーマとポリシーの生成（`gen --target cedar`）、全部の組み合わせを `cedar run-tests` のテストにする `vectors`、外のツールのための JSON の `api`、生成した Cedar を公式の CLI にかけるテスト（`tests/cedar.rs`）を作り、5 章、6.1、6.2、11 章を作ったものに合わせて直し、16.1 に段階 B で決めたことを足した。取り込みのときに、守る操作を、参照の書き方とルートからのパスで言うようにした（2.6）。段階 C では、action ごとにリクエストを組み立てて尋ねるコードの生成（`gen --target typescript|python|go` と `--authorizer`、`--module`）、組み合わせごとの生の値と、それを参照の評価にかけた答え（`src/raw.rs`）、生成したコードを本物の Cedar の実装（cedar-wasm、cedarpy、cedar-go）にかけてその答えと突き合わせるテスト、Verified Permissions の上限の警告（W401）、`ritsu gen` のパッケージへの取り込みを作り、2.9、3.8、5 章、6.3、11 章を直し、16.1 に段階 C で決めたことを足した。段階 D では、人が読むページ（`doc`）を作り、7 章と 11 章を作ったものに合わせて直し、16.1 に決めたことを足した。
+この文書は設計の段階（2026-10-06）に書き、言語の芯を作った段階（A）で、作ったものに合わせて直した。設計の段階では、ritsu 0.23.0 を読み、2026-10 の時点の Cedar とまわりの道具を調べて決めた。決めたことのうち、Cedar で本当にそうなるかが分かれ目になるものは、手で書いた例を公式の Cedar の CLI 4.13.0、cedar-wasm 4.13.0、cedarpy 4.12.1、cedar-go v1.8.0 にかけて確かめた（6 章）。例の規則・日付・ワークフローは、ritsu 0.23.0 の `rulec check`・`koyomi check`・`dandori check` と `ritsu check` を通してある。例の Cedar とリクエストを組み立てるコードは、sekisho が生成する形を手で書いた見本である。`.gate` の検査の結果として載せた数は、設計の段階には、検査が数える形を Python で書いた使い捨ての試作の出力（1,090 通りなど）だった。A で全部の組み合わせの検査を作り、4 章、7 章、10 章の数と文を実物の出力に差し替えた（6.2 の表は、試作を四つの実装に流した記録なので残した）。A では、字句と構文、名前と型、診断の台帳、`check` と `explain` のコマンド、`ritsu sekisho` と `ritsu check` の入口、口のまとまり `GatePorts` と口 `Gates` の型、rulec の `outputs_over`、koyomi の `calendar` と `doc`、OpenAPI と AsyncAPI の操作の読み手、全部の組み合わせの検査と参照の評価、行を合わせた表を作った。2.8、2.10、3 章、4 章、7〜10 章をそれに合わせて直し、16 章を決めたことの形に書き直した。段階 B では、Cedar のスキーマとポリシーの生成（`gen --target cedar`）、全部の組み合わせを `cedar run-tests` のテストにする `vectors`、外のツールのための JSON の `api`、生成した Cedar を公式の CLI にかけるテスト（`tests/cedar.rs`）を作り、5 章、6.1、6.2、11 章を作ったものに合わせて直し、16.1 に段階 B で決めたことを足した。取り込みのときに、守る操作を、参照の書き方とルートからのパスで言うようにした（2.6）。段階 C では、action ごとにリクエストを組み立てて尋ねるコードの生成（`gen --target typescript|python|go` と `--authorizer`、`--module`）、組み合わせごとの生の値と、それを参照の評価にかけた答え（`src/raw.rs`）、生成したコードを本物の Cedar の実装（cedar-wasm、cedarpy、cedar-go）にかけてその答えと突き合わせるテスト、Verified Permissions の上限の警告（W401）、`ritsu gen` のパッケージへの取り込みを作り、2.9、3.8、5 章、6.3、11 章を直し、16.1 に段階 C で決めたことを足した。段階 D では、人が読むページ（`doc`）を作り、7 章と 11 章を作ったものに合わせて直し、16.1 に決めたことを足した。段階 D の最後（D3）で、八つ目の言語として ritsu の看板、README、CLI、リリース、スキル、サイト、地図、ブラウザで試すページに入れ、言語の文書（`docs/reference.md`）、README、スキル（`skills/sekisho`）を書き、12 章を直し、16.1 に決めたことを足した。
 
 ## 0. 全体像
 
@@ -1451,12 +1451,20 @@ sekisho explain <code> | --all [--format markdown|json]
 
 段階 A で先に入れたもの：
 
-- `ritsu sekisho` の入口と、`ritsu check` が `.gate` を sekisho に渡すこと（`ritsu --help` の言語の一覧には、まだ出さない）。
+- `ritsu sekisho` の入口と、`ritsu check` が `.gate` を sekisho に渡すこと（`ritsu --help` の言語の一覧には、段階 D3 で出した）。
 - 読む順（`ritsu-project` の `ORDER`）の sekisho の位置（dandori のあと、yuen の前）。
 - 地図の `Gates` のコンテキストと、`ritsu-project` と `ritsu` からの関係。
 - `ritsu_base::naming::Tool::Sekisho`（拡張子と種類だけで、`Tool::ALL` には入れていない。参照の書き方のツール名には、まだならない）。段階 D で `Tool::ALL` に入れ、yuen と sakai の診断の文と golden を直した（8.4）。
 
-拡張子を並べる `ritsu-project` の二つの文には、まだ `.gate` が無い。いまの `ritsu.wasm` が同じ文を返すので、ブラウザで試すページを作り直すときに足す。
+拡張子を並べる `ritsu-project` の二つの文と `ritsu check --help` の文には、段階 D3 で `.gate` を足し、`ritsu.wasm` を作り直した。
+
+段階 D3（2026-10-06）で入れたもの：
+
+- 看板を「Eight small languages」「八つの小さな言語」にし、言語の数を言う文を八つに、スキルの数を九つにした（根の README とサイトの頭のページ、`ritsu --help`、Homebrew の formula と `.deb`・`.rpm` の説明、`action.yml`、リリースのワークフロー、`ritsu.ctx` の説明、`marketplace.json`、言語の README の入れ方の段落）。取り込んだときの記録として書いた文（言語の DESIGN の「ritsu（七つの言語を一つにまとめる処理系）に取り込まれ」など）は、記録のまま残した。
+- `ritsu --help` の言語の一覧と、`sekisho` という名前のリンク（`crates/ritsu/src/cli.rs` の `LANGUAGES`。段階 A の `NOT_LISTED_YET` は除いた）。アーカイブ、Homebrew の formula、`.deb`・`.rpm`、`packaging/smoke.sh`（例の `refunds.gate` を `--root` つきで確かめる）、リリースのワークフローと action のリンクとスキルの並び。
+- 言語の文書 `docs/reference.md`（言語の全部、`check` が言うこと、`gen` が書くもの、コマンド、終了コード、JSON）と README（英語と日本語）。`tests/docs.rs` が、載せた `.gate` の行、Cedar の行、`$ sekisho …` の出力、診断、変異の数、キーワードの一覧、リンクを確かめ、ritsu の `tests/sekisho.rs` が README の `ritsu check` を確かめる。
+- スキル `skills/sekisho`：`SKILL.md` は手で書き、`reference.md` と `codes.md` は `skills/sync.sh` が `docs/` からコピーする（`tests/skill.rs`）。ritsu のバイナリが九つのスキルを持ち、`skills/ritsu/SKILL.md` に sekisho の行を足した。
+- ブラウザで試すページ：生成は `gen --target cedar`、ページは `doc`。例の二つの版を、ゲートと、ゲートが読むファイル（規則、日付のファイル、カレンダーとそのデータ、契約、フロー）のプロジェクトにした（グループ `sekisho`）。ページの中では、sekisho がファイルを ritsu-base の `fs` で読み書きする（`check_file`、`gen` の書き出し、`use gate` の読み込み）。
 
 ## 13. 先にあるもの（2026-10 の時点）
 
@@ -1547,7 +1555,7 @@ Zanzibar の形（OpenFGA、SpiceDB、Permify、Topaz のディレクトリ）�
 10. **既定の評価の場所は `--authorizer cedar`（5.5）。** その言語の Cedar の実装を同じプロセスの中で呼び、Verified Permissions は `--authorizer avp` で選ぶ。
 11. **ワークフローの principal の作り方は、v1 では書かない（2.2）。** ワークフローの資格から `Workflow::"<名前>"` を作るのは API の側の認証で、sekisho は書かない。dandori の生成するアクティビティが、どの資格で呼ぶかを決める項目も、v1 では足さない。
 12. **契約が秘密と印を付けたフィールドを `input` に書けば、警告にする。** 段階 D で、セキュリティの検査の印の読み手を使って W910 にした（10 章）。
-13. **名前は sekisho のまま。** npm には同じ名前のパッケージ `sekisho`（React のアプリの認証とアクセス制御。0.7.0、2026-07-01）があり、crates.io と PyPI では空いていた（2026-10-06）。看板は「Eight small languages」（「八つの小さな言語」）にする（12 章。段階 D3 で直す）。
+13. **名前は sekisho のまま。** npm には同じ名前のパッケージ `sekisho`（React のアプリの認証とアクセス制御。0.7.0、2026-07-01）があり、crates.io と PyPI では空いていた（2026-10-06）。看板は「Eight small languages」（「八つの小さな言語」）にした（12 章。段階 D3）。
 14. **Cedar に渡す規則の列挙の値は、`.rule` に書いた別名にする（3.1）。** 例の `within_limit` で、英語と日本語の版で同じになる。生成するコードのメンバーの名前（`WithinLimit`）は使わない。rulec の口が、列挙の値ごとにこの別名も返す。
 
 段階 A で決めたもの：
@@ -1631,6 +1639,13 @@ Zanzibar の形（OpenFGA、SpiceDB、Permify、Topaz のディレクトリ）�
 79. **`ritsu check` が読む Cedar は、地図の `owns` と要件が指す組だけにする（1.3）。** ルートの下の `.cedar` を探さない。sakai も、`cedar "…"` の項で書いたファイルだけを成果物にする（sakai の DESIGN 17 章）。
 80. **`published_operations` は、AsyncAPI のチャネルと規則の Connect のサービスを返さない（8.3）。** X15 が求めず、`guards` で守るものでもないからである。
 81. **定義の文の作り方（宣言の塊の行）は、dandori から ritsu-base の `definition` に移し、sekisho と dandori で一つにする（8.2）。**
+
+段階 D3（八つ目の言語としての取り込み）で決めたもの：
+
+82. **スキルのページは、言語の文書のコピーにする（12 章）。** `docs/reference.md` と `docs/codes.md` を `skills/sync.sh` がそのままコピーし、`SKILL.md` だけを手で書く。yuen と sakai と同じ形で、文書を直せばスキルも同じになり、`tests/skill.rs` が食い違いを見つける。生成したコードの呼び方は、koyomi の `generated-code.md` のような別のページにせず、`reference.md` の「What `gen` writes」の節に置いた。
+83. **ブラウザで試すページで生成するのは Cedar だけにする（12 章）。** TypeScript・Python・Go のコードは、パッケージの `rules/` と `dates/` にある規則と日付の生成物を読むので、ゲート一つから生成すると、読む先のコードが無いまま出ることになる。Cedar の四つのファイルは、それだけで読め、`cedar` の CLI にそのまま渡せる。
+84. **ファイルは ritsu-base の `fs` で読み書きする。** ブラウザで試すページは、ファイルをメモリに持って同じコマンドを走らせる（ritsu の DESIGN 4.15）。`check_file` と `gen` の書き出し、`use gate` の読み込みと同じファイルの見分けを `std::fs` から替えた。ディスクの上では答えは変わらない。
+85. **README の数は、テストが数え直すものだけを書く。** 変異の数と日本語の名前のものの数は `tests/docs.rs` が数え直す。テストの件数と時間は書かない（時間は同じ機械でほかのビルドやテストが走っているかで変わり、件数はテストを足すたびに古くなる）。
 
 ### 16.2 危ないところ
 

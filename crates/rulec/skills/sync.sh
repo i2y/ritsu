@@ -10,7 +10,7 @@
 #   $ skills/sync.sh
 set -eu
 cd "$(dirname "$0")"
-# The skill itself sits with the other seven at the root of the workspace.
+# The skill itself sits with the other eight at the root of the workspace.
 out=../../../skills/rulec
 
 # The body: everything in AGENTS.md above its own "where to look" table.

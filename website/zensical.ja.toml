@@ -1,7 +1,7 @@
 [project]
 site_name = "ritsu"
 site_url = "https://i2y.github.io/ritsu/ja/"
-site_description = "七つの小さな言語を、一つの処理系で。ある言語が確かめたことを、隣の言語が前提にできる。"
+site_description = "八つの小さな言語を、一つの処理系で。ある言語が確かめたことを、隣の言語が前提にできる。"
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh"
 

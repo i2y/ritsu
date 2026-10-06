@@ -1,6 +1,6 @@
 //! The links of a release (DESIGN 2.3, 8.2): one binary, `ritsu`, and a link to it named for each of
-//! the seven languages. `tests/entry.rs` calls two of the links; this file calls all seven, holds
-//! each against the same words after `ritsu`, reads what the three languages that read others get
+//! the eight languages. `tests/entry.rs` calls two of the links; this file calls all eight, holds
+//! each against the same words after `ritsu`, reads what the four languages that read others get
 //! from theirs, takes the name from the last part of `argv[0]`, closes a pipe on a command, and
 //! has `rulec mcp` call the binary the way a link does. The links are what a release makes:
 //! symbolic links in a temporary directory.
@@ -12,7 +12,7 @@ use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-const LANGUAGES: [&str; 7] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai"];
+const LANGUAGES: [&str; 8] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho"];
 
 fn ritsu() -> &'static str {
     env!("CARGO_BIN_EXE_ritsu")
@@ -22,7 +22,7 @@ fn crates() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
-/// A directory holding a link to `ritsu` for each of the seven names, and one for a name that is no
+/// A directory holding a link to `ritsu` for each of the eight names, and one for a name that is no
 /// language.
 fn links_in(t: &TempDir) -> PathBuf {
     for name in LANGUAGES.iter().copied().chain(["not-a-language"]) {
@@ -37,7 +37,7 @@ type Ran = (i32, String, String);
 /// Run `c` with no language asked of the environment.
 fn run(mut c: Command, args: &[&str]) -> Ran {
     c.args(args);
-    for var in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG"] {
+    for var in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG"] {
         c.env_remove(var);
     }
     let o = c.output().expect("could not run it");
@@ -73,9 +73,10 @@ fn sakai_map() -> String {
     maps.remove(0)
 }
 
-/// An example of each language, and the words that run its command on it. The last three read
+/// An example of each language, and the words that run its command on it. The last four read
 /// others, so the example reads another language: a flow that uses rules, a requirement that names
-/// a rule's source, a map that crosses into rules, calendars and flows.
+/// a rule's source, a map that crosses into rules, calendars and flows, a gate that takes a rule's
+/// answer, dates and a calendar as conditions and names a workflow's flow.
 fn examples() -> Vec<(&'static str, Vec<String>)> {
     let s = |v: &[&str]| v.iter().map(|w| w.to_string()).collect::<Vec<_>>();
     vec![
@@ -86,6 +87,7 @@ fn examples() -> Vec<(&'static str, Vec<String>)> {
         ("dandori", s(&["check", "examples/hotel/temporal/hotel.flow"])),
         ("yuen", s(&["check", "--root", "tests/fixtures/rulec", "tests/fixtures/rulec"])),
         ("sakai", vec!["check".to_string(), sakai_map()]),
+        ("sekisho", s(&["check", "examples/refunds/refunds.gate", "--root", "examples/refunds"])),
     ]
 }
 
@@ -124,10 +126,11 @@ fn a_link_and_the_same_words_after_ritsu_are_one_command() {
     }
 }
 
-/// What the three that read others get from their links: the ports are joined. A flow that uses
+/// What the four that read others get from their links: the ports are joined. A flow that uses
 /// rules passes check (the binary of dandori's crate stops at it), a requirement that names a
 /// rule's source is read (yuen's crate says to run it through ritsu), a map crosses into the
-/// rules, calendars and flows it names (sakai's crate stops at each).
+/// rules, calendars and flows it names (sakai's crate stops at each), and a gate reads its rules,
+/// dates, calendar and flow (sekisho's crate stops at the first `use rule` with E209).
 #[test]
 fn the_links_of_the_languages_that_read_others_join_the_ports() {
     let t = TempDir::new("links-ports");
@@ -139,6 +142,9 @@ fn the_links_of_the_languages_that_read_others_join_the_ports() {
     assert!(code == 0 && out.starts_with("tests/fixtures/rulec: ok — "), "{out}{err}");
     let (code, out, err) = linked(&links, "sakai", &["check", &sakai_map()]);
     assert!(code == 0 && out.contains(" crossings checked (") && out.contains("rulec ") && out.contains("koyomi ") && out.contains("dandori "), "{out}{err}");
+    let gate = "examples/refunds/refunds.gate";
+    let want = format!("{gate}: ok — 3 actions, 10 policies (7 permits, 3 forbids), 3 expectations, 1 separation\n");
+    assert_eq!(linked(&links, "sekisho", &["check", gate, "--root", "examples/refunds"]), (0, want, String::new()));
 }
 
 /// A name that is no language is `ritsu` itself: a file called `ritsu-0.23.0`, or a link a user

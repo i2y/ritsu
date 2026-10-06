@@ -1,7 +1,7 @@
 [project]
 site_name = "ritsu"
 site_url = "https://i2y.github.io/ritsu/"
-site_description = "Seven small languages, one toolchain. What one checks, the next can build on."
+site_description = "Eight small languages, one toolchain. What one checks, the next can build on."
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh"
 

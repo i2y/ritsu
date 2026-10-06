@@ -1,17 +1,17 @@
 # ritsu
 
-**Seven small languages, one toolchain. What one checks, the next can build on.**
+**Eight small languages, one toolchain. What one checks, the next can build on.**
 
 Coding agents now write code faster, and more of it, than anyone can read line by line. That
 makes one question sharper: what is the code there to carry out, whoever — or whatever — writes
 it? The contracts between services and inside them. The business rules. The calendars and the
-deadlines. The ledgers and the bounds on them. The skeleton of a workflow. Where each
-requirement came from, and what still satisfies it.
+deadlines. The ledgers and the bounds on them. The skeleton of a workflow. Who may do what.
+Where each requirement came from, and what still satisfies it.
 
 ritsu gives each of those a small language of its own, in a file people can read. Each language
 checks what it says as far as it can be checked — over every input, every day, every path, not a
 sample — generates code where code is needed, and draws pages for whoever needs to understand
-it. Because the seven share one toolchain, a proof does not stop at a language's edge: a
+it. Because the eight share one toolchain, a proof does not stop at a language's edge: a
 workflow knows the preconditions of the rules it calls, a rule knows the days a calendar can
 come to, a ledger knows the amounts a rule can return.
 
@@ -20,7 +20,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 [Try it in the browser](playground.md){ .md-button .md-button--primary }
 [GitHub](https://github.com/i2y/ritsu){ .md-button }
 
-## The seven languages
+## The eight languages
 
 | | File | What it is for | Read more |
 |---|---|---|---|
@@ -31,6 +31,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 | geas | `.geas` | claims about the code an agent wrote | [README](https://github.com/i2y/ritsu/blob/main/crates/geas/README.md) |
 | yuen | `.req` | where requirements come from, and what satisfies them | [README](https://github.com/i2y/ritsu/blob/main/crates/yuen/README.md) |
 | sakai | `.ctx` | the map of bounded contexts | [README](https://github.com/i2y/ritsu/blob/main/crates/sakai/README.md) |
+| sekisho | `.gate` | who may do what: roles, attributes, relations, with rules and dates as conditions | [README](https://github.com/i2y/ritsu/blob/main/crates/sekisho/README.md) |
 
 Each language stands on its own: you can use rulec without writing a `.flow`. A file never mixes
 two languages, because a tariff, a calendar, a ledger and a workflow are read by different
@@ -59,6 +60,11 @@ people.
 - **sakai** maps which context owns which files and who may depend on whom, and checks every
   reference that crosses contexts, in the files of every language here, in the OpenAPI and AsyncAPI
   documents services keep as their contracts, and in the code.
+- **sekisho** says which principal may do which action on which resource, with roles, attributes
+  and relations, and with the answers of a rule and of dates as conditions. `sekisho check` walks
+  every combination that can happen and decides each as Cedar does; only a gate that passes
+  compiles, into Cedar's schema and policies, and into TypeScript, Python and Go that compute the
+  conditions from the service's own data and ask Cedar.
 
 ## Where the languages meet
 
@@ -141,6 +147,8 @@ them:
 - a rule's output as the amount of a chobo transfer, and the refusals that transfer can come to;
 - a chobo hold's expiry, against the wait a workflow counts in business days;
 - money and units, one type across rulec, dandori and chobo;
+- every operation a context of sakai's map opens, held to the action of a gate that guards it, and
+  every operation a workflow calls, to what its gate allows the workflow;
 - yuen pins each table, date, claim and task one by one, and sakai checks every reference in
   every language, with its line.
 
@@ -154,6 +162,7 @@ reviewing the code — so they can read what was written and check it against wh
 - `dandori doc` — a workflow drawn with every scenario it runs;
 - `koyomi doc` — a calendar, month by month;
 - `chobo doc` — a ledger, its bounds and its transfers;
+- `sekisho doc` — who may do what, action by action, beside the Cedar it compiles to;
 - `yuen trace` — a requirement back to its source and on to what satisfies it.
 
 ## Install
@@ -176,13 +185,13 @@ Japanese. ritsu is MIT OR Apache-2.0.
 
 ## For AI agents
 
-ritsu and its languages are made to be used by AI agents, and the repository holds eight
+ritsu and its languages are made to be used by AI agents, and the repository holds nine
 [Agent Skills](https://agentskills.io) for them: [one for ritsu](https://github.com/i2y/ritsu/tree/main/skills/ritsu),
-for a project of more than one language, and one for each of the seven languages
+for a project of more than one language, and one for each of the eight languages
 ([skills/README.md](https://github.com/i2y/ritsu/blob/main/skills/README.md) lists them). There are
 four ways to install them:
 
-- **Claude Code**: this site publishes a plugin marketplace whose plugin `ritsu` holds the eight.
+- **Claude Code**: this site publishes a plugin marketplace whose plugin `ritsu` holds the nine.
   Run `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`, then `/plugin install ritsu@ritsu`;
   Claude Code fetches the folder `skills/` alone, not the whole repository.
 - **Any agent, from the binary**: `ritsu skills install` writes them into the project's
@@ -191,5 +200,5 @@ four ways to install them:
   `ritsu skills list` lists them.
 - **By hand**: copy the folders you need from `skills/` into `~/.claude/skills/`, or into a
   project's `.claude/skills/`.
-- **From a release**: `ritsu-skills-v<version>.zip` holds the eight folders; unzip it where your
+- **From a release**: `ritsu-skills-v<version>.zip` holds the nine folders; unzip it where your
   agent reads skills.

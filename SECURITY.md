@@ -6,7 +6,7 @@ Please report a vulnerability privately, through GitHub's private vulnerability 
 **Report a vulnerability** button on the [Security tab](https://github.com/i2y/ritsu/security) of
 this repository. Please do not open a public issue for it.
 
-Say what it affects — the `ritsu` binary or one of the seven languages, the code a language
+Say what it affects — the `ritsu` binary or one of the eight languages, the code a language
 generates, a page a language draws, the playground on the site, or the action — which release you
 use (its tag, such as `v0.23.0`), and, if you can, a file that shows it.
 
@@ -34,7 +34,7 @@ checked and why.
 
 知らせるときは、次の三つを書いてください。
 
-- 何にかかわるか：`ritsu` のバイナリか七つの言語のどれか、言語が生成するコード、言語が描くページ、サイトのブラウザで試すページ、action のどれか
+- 何にかかわるか：`ritsu` のバイナリか八つの言語のどれか、言語が生成するコード、言語が描くページ、サイトのブラウザで試すページ、action のどれか
 - 使っているリリース（`v0.23.0` のようなタグ）
 - できれば、それが起きるファイル
 

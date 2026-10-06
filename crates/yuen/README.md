@@ -10,7 +10,7 @@ ends. When an article is amended, a rule is rewritten or a line of code moves, t
 match and the check stops on that link, with the difference from what was looked at, until someone
 looks again.
 
-yuen is one of the seven languages of [ritsu](https://github.com/i2y/ritsu), and reads what the other languages
+yuen is one of the eight languages of [ritsu](https://github.com/i2y/ritsu), and reads what the other languages
 hold through them, in the same process: the tables of a rulec rule, the dates and claims of a
 koyomi calendar, the accounts and transfers of a chobo book, the claims of a geas spec, the tasks of
 a dandori workflow, the terms of a sakai map, the policies and expectations of a sekisho gate, and

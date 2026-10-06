@@ -1,8 +1,8 @@
 #!/bin/sh
-# Runs each of the seven names of ritsu once on an example of its language, and `ritsu check` on a
+# Runs each of the eight names of ritsu once on an example of its language, and `ritsu check` on a
 # project of them all, to show that a build, an archive or a package starts under every name and
-# does what the name says. The three languages that read others (dandori, yuen, sakai) are given
-# examples that read another language, so a binary whose ports were not joined fails here.
+# does what the name says. The four languages that read others (dandori, yuen, sakai, sekisho) are
+# given examples that read another language, so a binary whose ports were not joined fails here.
 # release.yml runs it on the unpacked archive, linux.sh on each package after it is installed, and
 # crates/ritsu/tests/release.rs on the binary of the test.
 #
@@ -37,12 +37,14 @@ step koyomi check "$crates/koyomi/examples/net30.cal"
 step chobo check "$crates/chobo/examples/inventory/inventory.book"
 step geas explain --all
 # the languages that read others: a flow that uses rules, a requirement that names a rule's source,
-# a map that crosses into rules, calendars and flows
+# a map that crosses into rules, calendars and flows, a gate that takes a rule's answer and dates as
+# conditions
 step dandori check "$crates/dandori/examples/hotel/temporal/hotel.flow"
 step yuen check --root "$crates/yuen/tests/fixtures/rulec" "$crates/yuen/tests/fixtures/rulec"
 # (the first map under sakai's examples: its name follows the language the example is written in)
 map=$(ls "$crates"/sakai/examples/*/*.ctx | head -n 1)
 step sakai check "$map"
+step sekisho check --root "$crates/sekisho/examples/refunds" "$crates/sekisho/examples/refunds/refunds.gate"
 # ritsu itself: a project with a file of each language, each checked with its language's check and
 # then across them (the first project under ritsu's tests, whatever language it is written in)
 project=$(ls -d "$crates"/ritsu/tests/projects/*/ | head -n 1)

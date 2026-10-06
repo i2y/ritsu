@@ -2,7 +2,7 @@
 
 コンテキストマップのうち、成果物と突き合わせて確かめられる部分だけを書く小さな言語です。
 どの成果物がどの境界づけられたコンテキストに属するか、関係が境界を越える参照をどこまで許すか、腐敗防止層が越えてくる値と語をどう読み替えるか、を書きます。
-sakai は [ritsu](../../README.ja.md) の七つの言語の一つで、ほかの言語の成果物（規則、ワークフロー、カレンダー、帳簿、`.proto`）を ritsu を通して読みます。サービスが OpenAPI と AsyncAPI の文書に書いた契約も読みます。
+sakai は [ritsu](../../README.ja.md) の八つの言語の一つで、ほかの言語の成果物（規則、ワークフロー、カレンダー、帳簿、`.proto`）を ritsu を通して読みます。サービスが OpenAPI と AsyncAPI の文書に書いた契約も読みます。
 
 コンテキストマップはたいてい図で描かれ、描いた翌週にはコードと合わなくなります。
 sakai では、地図を成果物の隣に、コンテキストごとに一つのファイルとして置きます。ファイルはそのコンテキストのチームが持ちます。そのうえで、どの成果物もこの地図と突き合わせます。
@@ -206,7 +206,7 @@ $ sakai explain E401 --lang ja
 - [examples/shop.ja](examples/shop.ja/README.ja.md)：五つのコンテキストと七つの関係からなる小さな通販です。六つのパターンが全部出てきます。本物のワークフロー、規則、カレンダー、帳簿、`.proto` があり、コードは Python、TypeScript、Java、Go の四つです。
 - [examples/shop](examples/shop/README.md)：同じ通販を英語の名前で書いたものです。
 - [examples/webshop.ja](examples/webshop.ja/README.ja.md)：HTTP とイベントでやりとりするネットショップの四つのサービスを、OpenAPI と AsyncAPI の文書でつないだ地図です。腐敗防止層が、文書の列挙を値ごとに読み替えます。[examples/webshop](examples/webshop/README.md) は、同じものを英語の名前で書いたものです。
-- ritsu の根の [ritsu.ctx](../../ritsu.ctx) と [contexts/](../../contexts)：ritsu 自身のクレートを十二のコンテキストに分けた地図です。CI が `ritsu check ritsu.ctx` で、クレートの依存をこの地図と突き合わせています。
+- ritsu の根の [ritsu.ctx](../../ritsu.ctx) と [contexts/](../../contexts)：ritsu 自身のクレートを十三のコンテキストに分けた地図です。CI が `ritsu check ritsu.ctx` で、クレートの依存をこの地図と突き合わせています。
 
 ## どう確かめているか
 

@@ -87,8 +87,8 @@ impl Project {
                     Some(t) => rels.push((t, rel)),
                     None => {
                         return Err(tr!(
-                            "`{g}` は ritsu のどの言語のファイルでもありません（.rule、.flow、.cal、.book、.geas、.req、.ctx、.proto のどれか）",
-                            "`{g}` is a file of none of ritsu's languages (.rule, .flow, .cal, .book, .geas, .req, .ctx or .proto)"
+                            "`{g}` は ritsu のどの言語のファイルでもありません（.rule、.flow、.cal、.book、.geas、.req、.ctx、.gate、.proto のどれか）",
+                            "`{g}` is a file of none of ritsu's languages (.rule, .flow, .cal, .book, .geas, .req, .ctx, .gate or .proto)"
                         ));
                     }
                 }
@@ -99,8 +99,8 @@ impl Project {
         if rels.is_empty() {
             let gs = given.join(" ");
             return Err(tr!(
-                "{gs} には、ritsu の言語のファイル（.rule、.flow、.cal、.book、.geas、.req、.ctx、.proto）がありません",
-                "there is no file of ritsu's languages (.rule, .flow, .cal, .book, .geas, .req, .ctx, .proto) in {gs}"
+                "{gs} には、ritsu の言語のファイル（.rule、.flow、.cal、.book、.geas、.req、.ctx、.gate、.proto）がありません",
+                "there is no file of ritsu's languages (.rule, .flow, .cal, .book, .geas, .req, .ctx, .gate, .proto) in {gs}"
             ));
         }
         let files = rels.into_iter().map(|(tool, rel)| File { tool, shown: shown.path(&rel), rel }).collect();

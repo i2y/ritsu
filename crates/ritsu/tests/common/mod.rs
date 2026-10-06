@@ -17,7 +17,7 @@ pub fn root() -> PathBuf {
 }
 
 /// The words after the opening fence of a block that hold the lines of one language.
-pub const CODE: [&str; 7] = ["rule", "flow", "cal", "book", "geas", "req", "ctx"];
+pub const CODE: [&str; 8] = ["rule", "flow", "cal", "book", "geas", "req", "ctx", "gate"];
 
 pub struct Block {
     pub info: String,
@@ -107,7 +107,7 @@ pub fn sh(links: &Path, dir: &Path, command: &str) -> String {
     let path = format!("{}:{}", links.display(), std::env::var("PATH").unwrap_or_default());
     let mut c = Command::new("sh");
     c.arg("-c").arg(format!("{command} 2>&1")).current_dir(dir).env("PATH", path);
-    for var in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG"] {
+    for var in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG"] {
         c.env_remove(var);
     }
     String::from_utf8_lossy(&c.output().expect("could not run sh").stdout).into_owned()

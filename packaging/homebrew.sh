@@ -2,7 +2,7 @@
 # Prints the Homebrew formula for one release, from the SHA256SUMS published with it (DESIGN
 # 13.2). The formula installs the release archives themselves, so what `brew install
 # i2y/tap/ritsu` puts on the path is the binary the release page offers, held to the same sums,
-# with the seven links beside it; the keg holds the two licenses and THIRD_PARTY_NOTICES.
+# with the eight links beside it; the keg holds the two licenses and THIRD_PARTY_NOTICES.
 # release.yml runs this once the release is up, has brew audit, install and test what it printed
 # on macOS and on Linux, and only then pushes it to the tap, i2y/homebrew-tap.
 #
@@ -30,7 +30,7 @@ linux_intel=$(sum x86_64-unknown-linux-musl)
 cat <<EOT
 # Written by packaging/homebrew.sh in i2y/ritsu for $tag; the next release replaces it.
 class Ritsu < Formula
-  desc "Seven small languages, one toolchain: what one checks, the next can build on"
+  desc "Eight small languages, one toolchain: what one checks, the next can build on"
   homepage "https://github.com/i2y/ritsu"
   # ritsu's own code with the data it holds (crates/ritsu/Cargo.toml); brew's audit asks for a
   # nested license on lines of its own
@@ -65,7 +65,7 @@ class Ritsu < Formula
   def install
     bin.install "ritsu"
     # one link to it for each language: called by that name, ritsu is that language's command
-    %w[rulec dandori koyomi chobo geas yuen sakai].each do |language|
+    %w[rulec dandori koyomi chobo geas yuen sakai sekisho].each do |language|
       bin.install_symlink "ritsu" => language
     end
     # brew puts LICENSE-MIT and LICENSE-APACHE in the keg by their names; the notices of what the
@@ -78,7 +78,7 @@ class Ritsu < Formula
       assert_path_exists prefix/file
     end
     assert_equal "ritsu #{version}", shell_output("#{bin}/ritsu --version").strip
-    %w[rulec dandori koyomi chobo geas yuen sakai].each do |language|
+    %w[rulec dandori koyomi chobo geas yuen sakai sekisho].each do |language|
       assert_equal "#{language} #{version}", shell_output("#{bin}/#{language} --version").strip
     end
 

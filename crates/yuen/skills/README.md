@@ -7,7 +7,7 @@ about working on yuen itself.
 
 ## Install
 
-The eight skills of ritsu, this one among them, install together or one by one, in any of the four
+The nine skills of ritsu, this one among them, install together or one by one, in any of the four
 ways [skills/README.md](../../../skills/README.md) at the root of the repository gives: the Claude
 Code plugin `ritsu`, `ritsu skills install yuen`, a copy of `skills/yuen/`, or the zip of a
 release. It needs `ritsu` on PATH (yuen comes with it: `cargo install --git https://github.com/i2y/ritsu

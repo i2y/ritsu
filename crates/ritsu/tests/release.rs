@@ -1,17 +1,17 @@
-//! What a release hands out (DESIGN 13.2): the archive with `ritsu`, its seven links, the two
+//! What a release hands out (DESIGN 13.2): the archive with `ritsu`, its eight links, the two
 //! licenses and THIRD_PARTY_NOTICES, the formula, the packages, the zip of the skills, the action,
 //! and the workflow that makes them; and THIRD_PARTY_NOTICES itself, held to `cargo tree` and to
 //! the texts it quotes. The scripts of `packaging/`
 //! are run on the binary of this crate; the files that say the same thing in five places — the
-//! seven names, the four platforms — are held to one another here, as the tests of the sites hold
+//! eight names, the four platforms — are held to one another here, as the tests of the sites hold
 //! the pages to the commands.
 
 use ritsu_testkit::{Need, TempDir, ready};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// The seven languages, as `cli.rs` of this crate lists them: the names of the links.
-const LANGUAGES: [&str; 7] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai"];
+/// The eight languages, as `cli.rs` of this crate lists them: the names of the links.
+const LANGUAGES: [&str; 8] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho"];
 
 /// The four platforms a release is built for.
 const TARGETS: [&str; 4] = ["x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl", "x86_64-apple-darwin", "aarch64-apple-darwin"];
@@ -53,7 +53,7 @@ fn unpacked(t: &TempDir) -> (Vec<String>, PathBuf) {
     (names, into)
 }
 
-/// The archive is flat: `ritsu`, beside it a link for each of the seven languages, each relative
+/// The archive is flat: `ritsu`, beside it a link for each of the eight languages, each relative
 /// (`rulec -> ritsu`), so that unpacking it into a directory on the PATH is the install, and the two
 /// licenses and THIRD_PARTY_NOTICES, the files of the repository.
 #[test]
@@ -83,7 +83,7 @@ fn the_archive_holds_ritsu_a_link_for_each_language_and_the_licenses() {
 }
 
 /// `packaging/smoke.sh`, which release.yml runs on the unpacked archive and linux.sh on each
-/// package, runs every one of the seven names on an example of its language, and `ritsu check` on a
+/// package, runs every one of the eight names on an example of its language, and `ritsu check` on a
 /// project of them all.
 #[test]
 fn the_smoke_run_reads_an_example_under_every_name() {
@@ -107,7 +107,7 @@ fn the_smoke_run_reads_an_example_under_every_name() {
 }
 
 /// The formula is written from the sums published with the release: one url and one sum for each
-/// of the four platforms, the install of the binary and the seven links, a test that holds every
+/// of the four platforms, the install of the binary and the eight links, a test that holds every
 /// name to the version.
 #[test]
 fn the_formula_is_written_from_the_sums() {
@@ -148,7 +148,7 @@ fn the_formula_is_ruby() {
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
 }
 
-/// The seven names are said in the script of the archive, the formula, the packages, the smoke
+/// The eight names are said in the script of the archive, the formula, the packages, the smoke
 /// run, the workflow and `cli.rs`; the four platforms in the workflow, the action, the formula
 /// and the packages. One test holds them to the list above, so a language added in one place and
 /// not another fails here.
@@ -158,7 +158,7 @@ fn the_names_and_the_platforms_are_the_same_in_every_file() {
     // cli.rs, which makes ritsu answer to the names
     let cli = read("crates/ritsu/src/cli.rs");
     let quoted: Vec<String> = LANGUAGES.iter().map(|l| format!("\"{l}\"")).collect();
-    assert!(cli.contains(&format!("pub const LANGUAGES: [&str; 7] = [{}];", quoted.join(", "))), "cli.rs");
+    assert!(cli.contains(&format!("pub const LANGUAGES: [&str; 8] = [{}];", quoted.join(", "))), "cli.rs");
     // the archive
     assert!(read("packaging/archive.sh").contains(&format!("languages=\"{names}\"")), "archive.sh");
     // the formula: the install and the test
@@ -169,11 +169,11 @@ fn the_names_and_the_platforms_are_the_same_in_every_file() {
     let dsts: Vec<&str> = nfpm.lines().filter_map(|l| l.trim().strip_prefix("dst: /usr/bin/")).collect();
     let mut want: Vec<&str> = LANGUAGES.to_vec();
     want.push("ritsu");
-    assert_eq!(dsts.len(), 8, "nfpm.yaml: {dsts:?}");
+    assert_eq!(dsts.len(), 9, "nfpm.yaml: {dsts:?}");
     for n in &want {
         assert!(dsts.contains(n), "nfpm.yaml has no /usr/bin/{n}");
     }
-    assert_eq!(nfpm.matches("type: symlink").count(), 7, "nfpm.yaml: seven links");
+    assert_eq!(nfpm.matches("type: symlink").count(), 8, "nfpm.yaml: eight links");
     // the smoke run: one step for each name, and `ritsu check`
     let smoke = read("packaging/smoke.sh");
     for l in LANGUAGES {
@@ -181,12 +181,12 @@ fn the_names_and_the_platforms_are_the_same_in_every_file() {
     }
     assert!(smoke.lines().any(|s| s.starts_with("step ritsu check ")), "smoke.sh has no step for ritsu check");
     // the workflow and the package run: every name is asked its version, and every package is
-    // removed with all eight files
+    // removed with all nine files
     let all = format!("ritsu {names}");
     assert_eq!(read(".github/workflows/release.yml").matches(&format!("for n in {all}; do")).count(), 2, "release.yml");
     assert_eq!(read("packaging/linux.sh").matches(&format!("for n in {all}; do")).count(), 2, "linux.sh");
     // DESIGN 2.3 lists them in this order too
-    assert!(read("DESIGN.md").contains(&format!("`{}`", LANGUAGES.join("`、`"))), "DESIGN 2.3 lists the seven names");
+    assert!(read("DESIGN.md").contains(&format!("`{}`", LANGUAGES.join("`、`"))), "DESIGN 2.3 lists the eight names");
     // the four platforms
     for (file, text) in [
         ("release.yml", read(".github/workflows/release.yml")),

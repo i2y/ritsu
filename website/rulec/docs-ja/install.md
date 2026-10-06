@@ -14,9 +14,9 @@ $ rulec --version
 rulec 0.23.0
 ```
 
-`ritsu` と七つのリンクが PATH に入るので、`rulec` はこれまでどおりコマンドとして使えます。古い名前の `i2y/tap/rulec` も同じ formula を指しますが、Homebrew 7 では、その formula を信頼してからでないと使えません。信頼する前に `brew install i2y/tap/rulec` を走らせると、`Refusing to load formula i2y/tap/ritsu from untrusted tap i2y/tap` と言って止まります。`brew trust --formula i2y/tap/ritsu` のあとなら、古い名前でも ritsu が入ります。
+`ritsu` と八つのリンクが PATH に入るので、`rulec` はこれまでどおりコマンドとして使えます。古い名前の `i2y/tap/rulec` も同じ formula を指しますが、Homebrew 7 では、その formula を信頼してからでないと使えません。信頼する前に `brew install i2y/tap/rulec` を走らせると、`Refusing to load formula i2y/tap/ritsu from untrusted tap i2y/tap` と言って止まります。`brew trust --formula i2y/tap/ritsu` のあとなら、古い名前でも ritsu が入ります。
 
-formula が入れるのは、その環境向けのリリースのアーカイブで、`SHA256SUMS` の行と突き合わせてから入れます。formula はリリースのたびに書き換わります。書き換えるのは、brew が macOS と Linux の両方で実際に入れて、formula のテスト（八つの名前を全部呼びます）が通ったあとです。次のリリースは `brew upgrade ritsu` で入ります。
+formula が入れるのは、その環境向けのリリースのアーカイブで、`SHA256SUMS` の行と突き合わせてから入れます。formula はリリースのたびに書き換わります。書き換えるのは、brew が macOS と Linux の両方で実際に入れて、formula のテスト（九つの名前を全部呼びます）が通ったあとです。次のリリースは `brew upgrade ritsu` で入ります。
 
 ## Debian・Ubuntu・Fedora・RHEL
 
@@ -38,7 +38,7 @@ ritsu-0.23.0-1.x86_64.rpm: OK
 $ sudo dnf install "./ritsu-$v-1.$a.rpm"
 ```
 
-パッケージが入れるのは、`/usr/bin/ritsu` と、その横の七つのリンク（`/usr/bin/rulec -> ritsu` など）です。rulec 自身のリリースの `rulec` のパッケージは、このパッケージに置き換わります。
+パッケージが入れるのは、`/usr/bin/ritsu` と、その横の八つのリンク（`/usr/bin/rulec -> ritsu` など）です。rulec 自身のリリースの `rulec` のパッケージは、このパッケージに置き換わります。
 
 パッケージに署名はしていません。アーカイブと同じく、`SHA256SUMS` の行との突き合わせが検証の全部です。パッケージのリポジトリは用意していないので、`apt upgrade` や `dnf upgrade` では新しいリリースは入りません。次のリリースも同じ手順で入れてください。
 
@@ -65,7 +65,7 @@ $ rulec --version
 rulec 0.23.0
 ```
 
-アーカイブには、`ritsu` と、言語ごとにそれを指すリンク（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`）と、二つのライセンスが、同じ階層に入っています。0.23.0 より後のリリースには、バイナリが含む他者のものの通知とライセンスの文（THIRD_PARTY_NOTICES）も入ります。リンクは相対なので、PATH にあるディレクトリに展開するだけで入ります。`--exclude 'LICENSE-*' --exclude THIRD_PARTY_NOTICES` を付けると、ライセンスと通知は展開しません。`t` は `aarch64-apple-darwin`・`x86_64-apple-darwin`・`x86_64-unknown-linux-musl`・`aarch64-unknown-linux-musl` のどれかです。Linux の二つは静的リンクなので、どのディストリビューションでも動きます。Linux では `sha256sum -c` を使います。走らせる前に `SHA256SUMS` と突き合わせる、この一行が検証の全部なので、ここは飛ばさないでください。
+アーカイブには、`ritsu` と、言語ごとにそれを指すリンク（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`、`sekisho`）と、二つのライセンスが、同じ階層に入っています。0.23.0 より後のリリースには、バイナリが含む他者のものの通知とライセンスの文（THIRD_PARTY_NOTICES）も入ります。リンクは相対なので、PATH にあるディレクトリに展開するだけで入ります。`--exclude 'LICENSE-*' --exclude THIRD_PARTY_NOTICES` を付けると、ライセンスと通知は展開しません。`t` は `aarch64-apple-darwin`・`x86_64-apple-darwin`・`x86_64-unknown-linux-musl`・`aarch64-unknown-linux-musl` のどれかです。Linux の二つは静的リンクなので、どのディストリビューションでも動きます。Linux では `sha256sum -c` を使います。走らせる前に `SHA256SUMS` と突き合わせる、この一行が検証の全部なので、ここは飛ばさないでください。
 
 ## rulec 自身のリリースから移る
 
@@ -127,7 +127,7 @@ rulec を実際に使うのはたいていエージェントです。`skills/rul
 $ ritsu skills install rulec
 ```
 
-`.claude/skills/rulec/` の下に `SKILL.md` と六つのファイルが置かれます。フォルダの名前でスキルが見つかるので、中身をばらして置かないでください。一つのプロジェクトではなく全部で使うなら、`--user` を付けて `~/.claude/skills/` に置きます。`--dir <dir>` を付けると、ほかのエージェントがスキルを読む場所に置きます。Claude Code なら、プラグイン `ritsu` に八つのスキルが入っています（`/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json` のあと `/plugin install ritsu@ritsu`）。リポジトリのクローンから `skills/rulec` をコピーしても同じで、リリースごとの `ritsu-skills-v<版>.zip` にも八つが入っています。
+`.claude/skills/rulec/` の下に `SKILL.md` と六つのファイルが置かれます。フォルダの名前でスキルが見つかるので、中身をばらして置かないでください。一つのプロジェクトではなく全部で使うなら、`--user` を付けて `~/.claude/skills/` に置きます。`--dir <dir>` を付けると、ほかのエージェントがスキルを読む場所に置きます。Claude Code なら、プラグイン `ritsu` に九つのスキルが入っています（`/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json` のあと `/plugin install ritsu@ritsu`）。リポジトリのクローンから `skills/rulec` をコピーしても同じで、リリースごとの `ritsu-skills-v<版>.zip` にも九つが入っています。
 
 要るのは `rulec` が PATH にあることだけです（上のどの入れ方でも構いません）。
 
