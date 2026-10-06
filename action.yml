@@ -2,7 +2,7 @@ name: ritsu
 description: Put one release of ritsu on the PATH, with the command of each of its eight languages, verified against the checksums published with it.
 author: Yasushi Itoh
 
-# `uses: i2y/ritsu@v0.23.0` installs release v0.23.0: the ref the action is referenced with is the
+# `uses: i2y/ritsu@v0.24.0` installs release v0.24.0: the ref the action is referenced with is the
 # release, so the action and the binary cannot drift apart. Nothing else is done here — the gate
 # is a few `run:` lines anyone can read. The release holds `ritsu` and a link to it for each of
 # the eight languages, so `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `yuen`, `sakai` and
@@ -10,7 +10,7 @@ author: Yasushi Itoh
 
 inputs:
   version:
-    description: The release to install, as its tag (v0.23.0). Empty means the ref this action was referenced with.
+    description: The release to install, as its tag (v0.24.0). Empty means the ref this action was referenced with.
     required: false
     default: ""
   sha256:

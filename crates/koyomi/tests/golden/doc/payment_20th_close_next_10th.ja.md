@@ -5,9 +5,9 @@ Closes on the 20th; pays on the 10th of the next month, or on the business day b
 - ファイル: `payment_20th_close_next_10th.cal`（dates payment_20th_close_next_10th v1、sha256:9973542043dbee17）
 - カレンダー: `calendars/tokyo_business_days.cal`（calendar tokyo_business_days v1、sha256:37af228cf6ba7b95）
 - 表: national_holidays = `calendars/data/syukujitsu.csv`（sha256:cec37a743c96995c、https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv のコピー、covers 1955-01-01..2027-12-31）
-- koyomi: 0.23.0
+- koyomi: 0.24.0
 
-上のファイルを koyomi 0.23.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
+上のファイルを koyomi 0.24.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
 
 > [!NOTE]
 > 3 つの条件が、received 2026-01-01〜2027-11-20 の 689 日のすべてで成り立ちます。例 2 行も合っています。

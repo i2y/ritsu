@@ -5,9 +5,9 @@ Takes the closing day, the month of payment and the day of payment as integers, 
 - File: `closing_and_payment_days_as_inputs.cal` (dates closing_and_payment_days_as_inputs v1, sha256:e4aef610c514fd26)
 - Calendar: `calendars/tokyo_business_days.cal` (calendar tokyo_business_days v1, sha256:37af228cf6ba7b95)
 - Table: national_holidays = `calendars/data/syukujitsu.csv` (sha256:cec37a743c96995c, a copy of https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv, covers 1955-01-01..2027-12-31)
-- koyomi: 0.23.0
+- koyomi: 0.24.0
 
-koyomi 0.23.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
+koyomi 0.24.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
 
 > [!NOTE]
 > 3 claims hold on all 871,596 combinations of received (2026-01-01..2027-10-01), closing_day (1..31), payment_month (1..2) and payment_day (10..31).

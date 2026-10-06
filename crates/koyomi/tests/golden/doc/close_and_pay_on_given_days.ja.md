@@ -5,9 +5,9 @@ Takes the closing day, the month of payment and the day of payment as integers, 
 - ファイル: `close_and_pay_on_given_days.cal`（dates close_and_pay_on_given_days v1、sha256:f5323722663873b0）
 - カレンダー: `calendars/england_and_wales.cal`（calendar england_and_wales v1、sha256:00a0d8a87344f4f4）
 - 表: bank_holidays = `calendars/data/bank-holidays.json`（sha256:538b3482c28b85ec、https://www.gov.uk/bank-holidays.json のコピー、covers listed years = 2019-01-01..2028-12-31）
-- koyomi: 0.23.0
+- koyomi: 0.24.0
 
-上のファイルを koyomi 0.23.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
+上のファイルを koyomi 0.24.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
 
 > [!NOTE]
 > 3 つの条件が、received 2027-01-01〜2028-10-01、closing_day 1〜31、payment_month 1〜2、payment_day 10〜31 の 872,960 通りのすべてで成り立ちます。

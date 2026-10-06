@@ -1,6 +1,6 @@
 # 返金 — where the requirements come from
 
-yuen 0.23.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
+yuen 0.24.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
 
 - `refunds.ja.req` (返金 v1, `sha256:4c3fc1d4ffaf75be`)
 

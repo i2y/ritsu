@@ -5,9 +5,9 @@
 - File: `payment_20th_close_next_10th.ja.cal` (dates 支払条件 v1, sha256:75482b2e796019d0)
 - Calendar: `calendars/東京の営業日.cal` (calendar 東京の営業日 v1, sha256:d7b6134e23a8cb9f)
 - Table: 祝日 = `calendars/data/syukujitsu.csv` (sha256:cec37a743c96995c, a copy of https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv, covers 1955-01-01..2027-12-31)
-- koyomi: 0.23.0
+- koyomi: 0.24.0
 
-koyomi 0.23.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
+koyomi 0.24.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
 
 > [!NOTE]
 > 3 claims hold on all 689 days of 受領日 (2026-01-01..2027-11-20); 2 examples match.

@@ -178,4 +178,4 @@ Maps `openapi "payments/api/payments.yaml" schema ChargeStatus` to `openapi "shi
 - What a term's definition says.
 - The imports of the code: the settings `sakai build` writes have import-linter, dependency-cruiser, ArchUnit and go-arch-lint check them in CI.
 
-Written by sakai 0.23.0 from `webshop.ctx`.
+Written by sakai 0.24.0 from `webshop.ctx`.

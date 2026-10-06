@@ -5,9 +5,9 @@ Breaks its claims on purpose. It writes moving an end on a closed day to the day
 - File: `period_of_months_two_readings.cal` (dates period_of_months_two_readings v1, sha256:4fd356c038abcbd2)
 - Calendar: `calendars/england_and_wales.cal` (calendar england_and_wales v1, sha256:00a0d8a87344f4f4)
 - Table: bank_holidays = `calendars/data/bank-holidays.json` (sha256:538b3482c28b85ec, a copy of https://www.gov.uk/bank-holidays.json, covers listed years = 2019-01-01..2028-12-31)
-- koyomi: 0.23.0
+- koyomi: 0.24.0
 
-koyomi 0.23.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
+koyomi 0.24.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
 
 > [!WARNING]
 > The claim the_two_readings_agree fails for 709 of the 4,380 combinations of origin and month_count.

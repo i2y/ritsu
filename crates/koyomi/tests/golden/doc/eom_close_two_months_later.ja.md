@@ -5,9 +5,9 @@ Closes at the end of the month; pays at the end of the month two months later, o
 - ファイル: `eom_close_two_months_later.cal`（dates eom_close_two_months_later v1、sha256:0e16bdf8d3db5f22）
 - カレンダー: `calendars/tokyo_business_days.cal`（calendar tokyo_business_days v1、sha256:37af228cf6ba7b95）
 - 表: national_holidays = `calendars/data/syukujitsu.csv`（sha256:cec37a743c96995c、https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv のコピー、covers 1955-01-01..2027-12-31）
-- koyomi: 0.23.0
+- koyomi: 0.24.0
 
-上のファイルを koyomi 0.23.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
+上のファイルを koyomi 0.24.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
 
 > [!WARNING]
 > 条件「within_60_days_of_receipt」が、received 669 日のうち 648 日で成り立ちません。

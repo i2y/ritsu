@@ -4,9 +4,9 @@ Saturdays, Sundays, Japan's national holidays and other days off, and 29 Decembe
 
 - ファイル: `tokyo_business_days.cal`（calendar tokyo_business_days v1、sha256:37af228cf6ba7b95）
 - 表: national_holidays = `data/syukujitsu.csv`（sha256:cec37a743c96995c、https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv のコピー、covers 1955-01-01..2027-12-31）
-- koyomi: 0.23.0
+- koyomi: 0.24.0
 
-上のファイルを koyomi 0.23.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
+上のファイルを koyomi 0.24.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
 
 時刻を出すときの UTC オフセットは +09:00 です。
 
