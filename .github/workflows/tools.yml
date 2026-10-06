@@ -334,6 +334,22 @@ jobs:
           tar -xJf "$d/cedar.tar.xz" -C "$d" --strip-components=1
           echo "RITSU_CEDAR=$d/cedar" >> "$GITHUB_ENV"
 
+      # ritsu-base's tests read its Cedar fixtures byte for byte, with no Cedar (DESIGN 4.18); here
+      # the CLI writes them again, and a fixture it writes otherwise, or one that is not in the
+      # repository, fails the job.
+      - name: "ritsu-base: the Cedar fixtures are what the CLI makes of them"
+        if: matrix.group == 'the others'
+        run: |
+          set -eu
+          CEDAR="$RITSU_CEDAR" sh crates/ritsu-base/tests/fixtures/cedar/expected.sh
+          git diff --exit-code -- crates/ritsu-base/tests/fixtures/cedar
+          left=$(git status --porcelain -- crates/ritsu-base/tests/fixtures/cedar)
+          if [ -n "$left" ]; then
+            echo "::error::the CLI wrote fixtures that are not in the repository"
+            echo "$left"
+            exit 1
+          fi
+
       # --- Say what is here before the suite runs, so a version that moved is readable in the
       # log rather than only in a failure.
       - name: The toolchains this run has
