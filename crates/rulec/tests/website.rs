@@ -233,7 +233,9 @@ fn サイトの相対リンクは実在する() {
             }
             let url = normal(&format!("{root}{path}"));
             if url.starts_with(root) {
-                assert!(locate(&dir).join(path).exists(), "{name}: リンク先が無い: {target}");
+                // The Japanese pages' images are the English pages' ones, which sync.sh copies in.
+                let from = if dir.ends_with("docs-ja") && path.starts_with("images/") { "website/rulec/docs".to_string() } else { dir.clone() };
+                assert!(locate(&from).join(path).exists(), "{name}: リンク先が無い: {target}");
             } else {
                 assert!(ritsus_page(&url).is_some(), "{name}: リンク先が ritsu のサイトに無い: {target}（{url}）");
                 out_of_the_site += 1;
