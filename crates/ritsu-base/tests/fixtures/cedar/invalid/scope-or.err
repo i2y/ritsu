@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: expected an entity uid or matching template slot, found a `||` expression
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal == User::"a" || User::"b", action, resource);
+    label at line 1, columns 21 to 42
+diagnostic help: the policy scope can only contain one constraint per variable. Consider moving the second operand of this `||` into a new policy
+
+

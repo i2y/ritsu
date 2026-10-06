@@ -1,0 +1,9 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: expected single entity uid or template slot, found set of entity uids
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal in [User::"a"], action, resource);
+    label at line 1, columns 21 to 31
+
+

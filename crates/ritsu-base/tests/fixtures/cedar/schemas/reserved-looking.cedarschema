@@ -1,0 +1,11 @@
+// Names that look reserved but are read: `__cedar` as an attribute, an action or an annotation's
+// name, and in references to types; keywords of the schema format as attribute names.
+@__cedar
+entity E in [__cedar::X] {
+  __cedar: Long,
+  entity: String,
+  namespace: Bool,
+  appliesTo: __cedar,
+  "if": Set<__cedar::String>
+} tags __cedar::String;
+action __cedar, "type" in __cedar::Action::"x" appliesTo { principal: __cedar::E, resource: E, context: __cedar::C };

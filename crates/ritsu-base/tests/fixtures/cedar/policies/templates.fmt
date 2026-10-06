@@ -1,0 +1,21 @@
+@id("share")
+permit (
+  principal == ?principal,
+  action in [Action::"view", Action::"comment"],
+  resource in ?resource
+);
+
+permit (
+  principal in ?principal,
+  action,
+  resource == ?resource
+)
+when { context.mfa };
+
+forbid (
+  principal is User in ?principal,
+  action,
+  resource is Doc in ?resource
+);
+
+permit (principal, action, resource);

@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: this policy is missing the `resource` variable in the scope
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action);
+    label at line 1, column 25
+diagnostic help: policy scopes must contain a `principal`, `action`, and `resource` element in that order
+
+

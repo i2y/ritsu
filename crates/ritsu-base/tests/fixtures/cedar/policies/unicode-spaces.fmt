@@ -1,0 +1,7 @@
+// White space as Unicode has it: NBSP, an ideographic space, LINE SEPARATOR, NEL, vertical tab and form feed; and a comment ended by a lone CR.
+permit (principal, action, resource)
+when
+{
+  true
+} // ends here
+when { false };

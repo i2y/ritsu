@@ -1,0 +1,44 @@
+{
+  "": {
+    "commonTypes": {
+      "Context": {
+        "type": "Record",
+        "attributes": {
+          "flag": { "type": "Boolean" },
+          "count": { "type": "Long", "required": false, "annotations": { "doc": "how many" } },
+          "who": { "type": "Entity", "name": "User" },
+          "from": { "type": "Extension", "name": "ipaddr" },
+          "ref": { "type": "Shared" },
+          "list": { "type": "Set", "element": { "type": "String" } },
+          "both": { "type": "EntityOrCommon", "name": "Shared" },
+          "it's here": { "type": "String" },
+          "if": { "type": "String" }
+        }
+      },
+      "Shared": { "type": "Record", "attributes": {} }
+    },
+    "entityTypes": {
+      "User": { "memberOfTypes": ["Group", "Org::Team"], "tags": { "type": "Set", "element": { "type": "Long" } } },
+      "Group": { "shape": { "type": "Record", "attributes": {} } },
+      "Open": { "shape": { "type": "Record", "attributes": {}, "additionalAttributes": true } },
+      "Color": { "enum": ["red", "it's \"blue\"", "グレー"], "annotations": { "z": "last", "a": null } }
+    },
+    "actions": {
+      "read": {
+        "appliesTo": { "principalTypes": ["User"], "resourceTypes": ["Group"], "context": { "type": "Context" } },
+        "memberOf": [{ "id": "all" }, { "id": "any", "type": "Org::Action" }],
+        "annotations": { "doc": "read it" }
+      },
+      "all": {},
+      "none": { "appliesTo": { "principalTypes": [], "resourceTypes": ["User"] } },
+      "empty parents": { "memberOf": [] },
+      "open": { "appliesTo": { "principalTypes": ["User"], "resourceTypes": ["User"], "context": { "type": "Record", "attributes": {}, "additionalAttributes": true } } }
+    }
+  },
+  "Org": {
+    "entityTypes": {},
+    "actions": {},
+    "annotations": { "doc": "Org", "empty": null }
+  },
+  "A::B::Org": { "entityTypes": { "X": {} }, "actions": {} }
+}

@@ -1,0 +1,9 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: duplicate key `a` in record literal
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { {a: 1, "a": 2} == {} };
+    label at line 1, columns 44 to 57
+
+

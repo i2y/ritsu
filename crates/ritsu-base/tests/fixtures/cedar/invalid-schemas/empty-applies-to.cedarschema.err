@@ -1,0 +1,8 @@
+error parsing schema: unexpected token `}`
+    Diagnostic severity: error
+Begin snippet starting at line 1, column 1
+
+snippet line 1: action a appliesTo { };
+    label at line 1, column 22: expected `context`, `principal`, or `resource`
+
+

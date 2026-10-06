@@ -1,0 +1,8 @@
+error parsing schema: `if` is a reserved identifier
+    Diagnostic severity: error
+Begin snippet starting at line 1, column 1
+
+snippet line 1: entity E { if: Long };
+    label at line 1, columns 12 to 13
+
+

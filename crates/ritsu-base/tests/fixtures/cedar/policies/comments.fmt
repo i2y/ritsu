@@ -1,0 +1,72 @@
+// The file's first comment.
+// A second line of it.
+// Before the annotation.
+@id("commented") // after the annotation
+@reason( // inside the parentheses
+"why" // after the value
+) // after the closing parenthesis
+// before the effect
+permit // after the effect
+( // after the opening parenthesis
+  // before principal
+  principal // after principal
+  == // after ==
+    User::"alice" // after the entity
+  , // after the comma
+  action // after action
+  in // after in
+    [ // after [
+    Action::"a", // after the first action
+     Action::"b" // after the second action
+    ] // after ]
+  ,
+  resource // after resource
+    is // after is
+    Photo // after the type
+) // after the scope
+// before when
+when // after when
+{ // after {
+  // before the expression
+  context.a // after context.a
+   && // after &&
+  ! // after !
+  context.b // after context.b
+   || // after ||
+  ( // after (
+  1 + // after +
+   2 // after 2
+  ) // after )
+   == 3 &&
+  context.list
+    .contains
+    ( // after the call's (
+      1 // after the argument
+    ) // after the call's )
+   &&
+  {
+    k: // after the colon
+     1
+  } // after the record
+  has
+  k &&
+  (if // after if
+     true
+   then
+     1
+   else
+     2) == 1 &&
+  context["x"] // after the index
+   == "y"
+} // after }
+// before the semicolon
+; // after the semicolon
+
+// Between policies.
+forbid (principal, action, resource) // trailing on the same line
+when
+{ // short
+  true
+};
+// The last comment, at the end of the file.
+// And one more.

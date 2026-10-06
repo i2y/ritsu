@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: found template slot ?principal in a `when` clause
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { ?principal == User::"a" };
+    label at line 1, columns 44 to 53
+diagnostic help: slots are currently unsupported in `when` clauses
+
+

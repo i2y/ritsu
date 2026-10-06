@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: invalid entity literal: User::{id: "a"}
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { principal == User::{id: "a"} };
+    label at line 1, columns 57 to 71
+diagnostic help: entity literals should have a form like `Namespace::User::"alice"`
+
+

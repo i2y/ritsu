@@ -24,9 +24,12 @@
 //!   project a page in the browser hands over).
 //! - [`openspec`]: OpenSpec's specs and changes, read as OpenSpec reads them: a spec's requirements
 //!   with their blocks and scenarios, and what a change adds, modifies, removes and renames.
+//! - [`cedar`]: Cedar's policies and schemas, read and written as Cedar 4.13.0 reads and writes
+//!   them: the policy syntax and both schema formats, the JSON policy format, `cedar format`.
 //!
 //! Nothing here depends on anything but std (DESIGN 3.1, P9).
 
+pub mod cedar;
 pub mod cli;
 pub mod diag;
 pub mod docpage;

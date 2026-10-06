@@ -1,0 +1,9 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: integer parse error: number too large to fit in target type
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { 99999999999999999999 == 0 };
+    label at line 1, columns 44 to 63
+
+

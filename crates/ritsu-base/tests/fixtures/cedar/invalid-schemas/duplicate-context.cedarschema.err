@@ -1,0 +1,10 @@
+error parsing schema: duplicate context declaration in action `a`
+    Diagnostic severity: error
+Begin snippet starting at line 1, column 1
+
+snippet line 1: action a appliesTo { principal: E, resource: E, context: {}, context: {} };
+    label at line 1, columns 49 to 60
+    label at line 1, columns 62 to 72
+diagnostic help: Try either deleting one of the declarations, or merging into a single declaration
+
+

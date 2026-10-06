@@ -1,0 +1,3 @@
+invalid entity or common type `A B`: unexpected token `B` at line 1 column 68
+    Diagnostic severity: error
+

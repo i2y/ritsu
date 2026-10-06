@@ -1,0 +1,9 @@
+error parsing schema: missing `resource` declaration for `a`
+    Diagnostic severity: error
+Begin snippet starting at line 1, column 1
+
+snippet line 1: action a appliesTo { principal: E };
+    label at line 1, column 8
+diagnostic help: Every action must define both `principal` and `resource` targets, and the `principal` and `resource` lists must not be `[]`.
+
+

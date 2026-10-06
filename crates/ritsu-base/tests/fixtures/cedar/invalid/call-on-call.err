@@ -1,0 +1,9 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: function calls must be of the form `<name>(arg1, arg2, ...)`
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { context.a.contains(1)(2) };
+    label at line 1, columns 44 to 67
+
+

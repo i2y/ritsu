@@ -1,0 +1,9 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: multiple relational operators (>, ==, in, etc.) must be used with parentheses to make ordering explicit
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { 1 < 2 < 3 };
+    label at line 1, columns 44 to 52
+
+

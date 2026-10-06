@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: invalid RHS of a `has` operation: (a)
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { context has (a) };
+    label at line 1, columns 56 to 58
+diagnostic help: valid RHS of a `has` operation is either a sequence of identifiers separated by `.` or a string literal
+
+

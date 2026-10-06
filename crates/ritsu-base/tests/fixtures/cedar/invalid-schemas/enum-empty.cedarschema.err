@@ -1,0 +1,8 @@
+error parsing schema: unexpected token `]`
+    Diagnostic severity: error
+Begin snippet starting at line 1, column 1
+
+snippet line 1: entity E enum [];
+    label at line 1, column 16: expected string literal
+
+

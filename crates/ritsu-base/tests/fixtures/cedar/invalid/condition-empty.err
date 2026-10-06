@@ -1,0 +1,9 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: `when` condition clause cannot be empty
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { };
+    label at line 1, columns 37 to 44
+
+

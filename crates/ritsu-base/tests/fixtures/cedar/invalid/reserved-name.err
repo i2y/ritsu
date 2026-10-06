@@ -1,0 +1,9 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: this identifier is reserved and cannot be used: in
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { principal is in };
+    label at line 1, columns 57 to 58
+
+

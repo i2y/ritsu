@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: `is` cannot appear in the action scope
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action is Action, resource);
+    label at line 1, columns 19 to 34
+diagnostic help: try moving `action is ..` into a `when` condition
+
+

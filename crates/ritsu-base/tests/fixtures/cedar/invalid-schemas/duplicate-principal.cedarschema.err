@@ -1,0 +1,10 @@
+error parsing schema: duplicate `principal` declaration in action `a`
+    Diagnostic severity: error
+Begin snippet starting at line 1, column 1
+
+snippet line 1: action a appliesTo { principal: E, principal: F, resource: E };
+    label at line 1, columns 22 to 33
+    label at line 1, columns 36 to 47
+diagnostic help: Actions may only have a single principal declaration, but a principal declaration may specify a list of entity types like `principal: [X, Y, Z]`
+
+

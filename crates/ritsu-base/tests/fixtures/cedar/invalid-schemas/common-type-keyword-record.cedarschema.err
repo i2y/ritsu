@@ -1,0 +1,9 @@
+error parsing schema: this uses a reserved schema keyword: `Record`
+    Diagnostic severity: error
+Begin snippet starting at line 1, column 1
+
+snippet line 1: type Record = { a: Long };
+    label at line 1, columns 6 to 11
+diagnostic help: Keywords such as `entity`, `extension`, `set` and `record` cannot be used as common type names
+
+

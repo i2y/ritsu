@@ -1,0 +1,76 @@
+@doc("Photo sharing")
+namespace PhotoApp {
+  type Address = {
+    city: String,
+    street: String,
+    zip?: String
+  };
+
+  entity Album in [Album];
+
+  entity Photo in [Album] = {
+    owner: User,
+    private: Bool
+  };
+
+  @doc("A person who uses the service")
+  entity User in [UserGroup] = {
+    @doc("Where they are")
+    address: Address,
+    age?: Long,
+    name: String,
+    profile: {
+      email: String,
+      verified?: Bool
+    },
+    tags: Set<String>
+  } tags String;
+
+  entity UserGroup;
+
+  entity Video in [Album] = {
+    owner: User,
+    private: Bool
+  };
+
+  entity Visibility enum ["public", "friends", "private"];
+
+  action "admin";
+
+  @doc("Look at a photo")
+  action "comment" in [Action::"viewing"] appliesTo {
+    principal: [User, UserGroup],
+    resource: [Photo, Video],
+    context: {
+      authenticated: Bool,
+      ip: ipaddr,
+      "request time": datetime
+    }
+  };
+
+  action "delete" in [Action::"edit", PhotoApp::Action::"admin"] appliesTo {
+    principal: [User],
+    resource: [Photo, Album],
+    context: {}
+  };
+
+  action "edit" appliesTo {
+    principal: [User],
+    resource: [Photo],
+    context: Address
+  };
+
+  @doc("Look at a photo")
+  action "view" in [Action::"viewing"] appliesTo {
+    principal: [User, UserGroup],
+    resource: [Photo, Video],
+    context: {
+      authenticated: Bool,
+      ip: ipaddr,
+      "request time": datetime
+    }
+  };
+
+  action "viewing";
+}
+

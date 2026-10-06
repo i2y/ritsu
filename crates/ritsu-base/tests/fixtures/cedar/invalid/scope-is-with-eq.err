@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: `is` cannot be used together with `==`
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal is User == User::"a", action, resource);
+    label at line 1, columns 8 to 37
+diagnostic help: try using `_ is _ in _`
+
+

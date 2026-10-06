@@ -1,0 +1,3 @@
+invalid namespace `A B`: unexpected token `B`
+    Diagnostic severity: error
+

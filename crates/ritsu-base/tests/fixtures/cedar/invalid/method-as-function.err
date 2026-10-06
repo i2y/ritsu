@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: `contains` is a method, not a function
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { contains([1], 1) };
+    label at line 1, columns 44 to 59
+diagnostic help: use a method-style call `e.contains(..)`
+
+

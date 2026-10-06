@@ -1,0 +1,9 @@
+error parsing schema: duplicate namespace id: `A`
+    Diagnostic severity: error
+Begin snippet starting at line 1, column 1
+
+snippet line 1: namespace A { } namespace A { }
+    label at line 1, column 11
+    label at line 1, column 27
+
+

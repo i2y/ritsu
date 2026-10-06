@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: invalid policy condition: if
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) if { true };
+    label at line 1, columns 37 to 38
+diagnostic help: condition must be either `when` or `unless`
+
+

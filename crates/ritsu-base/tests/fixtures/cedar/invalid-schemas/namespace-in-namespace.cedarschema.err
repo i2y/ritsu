@@ -1,0 +1,8 @@
+error parsing schema: unexpected token `namespace`
+    Diagnostic severity: error
+Begin snippet starting at line 1, column 1
+
+snippet line 1: namespace A { namespace B { } }
+    label at line 1, columns 15 to 23: expected `@`, `}`, `action`, `entity`, or `type`
+
+

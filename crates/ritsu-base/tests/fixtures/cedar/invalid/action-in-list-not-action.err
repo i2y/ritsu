@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: expected an entity uid with type `Action` but got `User::"b"`
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action in [Action::"a", User::"b"], resource);
+    label at line 1, columns 29 to 52
+diagnostic help: action entities must have type `Action`, optionally in a namespace
+
+

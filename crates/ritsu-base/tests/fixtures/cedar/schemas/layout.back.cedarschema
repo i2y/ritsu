@@ -1,0 +1,66 @@
+type Amount = {
+  currency: String,
+  value: decimal
+};
+
+entity AfterNamespaces;
+
+entity Global;
+
+action "global action" appliesTo {
+  principal: [Global],
+  resource: [Global],
+  context: {}
+};
+
+namespace Billing {
+  type Line = {
+    "item name": String,
+    prices: Set<Set<{
+      amount: Long
+    }>>,
+    quantity: Long
+  };
+
+  @a("")
+  @b("")
+  @c("value")
+  entity Invoice = {
+    lines: Set<Line>,
+    payer: Org::Team::Member,
+    total: __cedar::Long
+  };
+
+  action "pay" appliesTo {
+    principal: [Org::Team::Member],
+    resource: [Invoice],
+    context: {}
+  };
+}
+
+@note("an empty namespace")
+namespace Empty {
+}
+
+namespace Org::Team {
+  entity Group;
+
+  entity Member in [Org::Team::Group, Group] = {
+    limit: Amount,
+    since: datetime,
+    span: duration
+  };
+
+  action "it\'s \"quoted\"" appliesTo {
+    principal: [Member],
+    resource: [Group],
+    context: {}
+  };
+
+  action "plain" appliesTo {
+    principal: [Member],
+    resource: [Group],
+    context: {}
+  };
+}
+

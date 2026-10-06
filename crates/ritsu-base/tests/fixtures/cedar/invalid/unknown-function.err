@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: `foo` is not a valid function
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { foo(1) };
+    label at line 1, columns 44 to 49
+diagnostic help: did you mean `ip`?
+
+

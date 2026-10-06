@@ -1,0 +1,1 @@
+{"templates":{},"staticPolicies":{"policy0":{"effect":"permit","principal":{"op":"in","entity":{"type":"UserGroup","id":"abc"}},"action":{"op":"in","entities":[{"type":"Action","id":"viewPhoto"},{"type":"Action","id":"viewComments"}]},"resource":{"op":"in","entity":{"type":"Album","id":"one"}},"conditions":[]}},"templateLinks":[]}

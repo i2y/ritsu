@@ -1,0 +1,53 @@
+type Context = {
+  both: Shared,
+  @doc("how many")
+  count?: __cedar::Long,
+  flag: __cedar::Bool,
+  from: __cedar::ipaddr,
+  "if": __cedar::String,
+  "it\'s here": __cedar::String,
+  list: Set<__cedar::String>,
+  ref: Shared,
+  who: User
+};
+
+type Shared = {};
+
+@a
+@z("last")
+entity Color enum ["red", "it\'s \"blue\"", "グレー"];
+
+entity Group;
+
+entity Open = {};
+
+entity User in [Group, Org::Team] tags Set<__cedar::Long>;
+
+action "all";
+
+action "empty parents";
+
+action "none";
+
+action "open" appliesTo {
+  principal: [User],
+  resource: [User],
+  context: {  }
+};
+
+@doc("read it")
+action "read" in [Action::"all", Org::Action::"any"] appliesTo {
+  principal: [User],
+  resource: [Group],
+  context: Context
+};
+
+@doc("Org")
+@empty
+namespace Org {
+}
+
+namespace A::B::Org {
+  entity X;
+}
+

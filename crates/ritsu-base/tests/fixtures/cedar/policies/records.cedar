@@ -1,0 +1,7 @@
+permit (principal, action, resource)
+when {
+  {zeta: 1, alpha: {nested: [1, {deep: true}], "with space": "v"}, "quoted": [], principal: 2, Mid: {}} has alpha &&
+  context == {b: [1, [2, [3, []]]], a: {}, "": ""} &&
+  [User::"a", {k: User::"b"}, [Group::"g"]].contains(User::"a") &&
+  {if_: 1, then_: 2}.if_ == 1 && {"if": 1}["if"] == 1
+};

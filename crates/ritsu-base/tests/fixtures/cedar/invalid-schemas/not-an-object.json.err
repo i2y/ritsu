@@ -1,0 +1,4 @@
+invalid type: sequence, expected a map at line 1 column 0
+    Diagnostic severity: error
+diagnostic help: this API was expecting a schema in the JSON format; did you mean to use a different function, which expects the Cedar schema format?
+

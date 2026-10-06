@@ -1,0 +1,36 @@
+@doc("写真の共有")
+namespace PhotoApp {
+  entity Photo = {
+    "所有者": User,
+    "非公開": Bool
+  };
+
+  @doc("サービスを使う人")
+  entity User in [UserGroup] = {
+    "名前": String,
+    "年齢"?: Long
+  };
+
+  entity UserGroup;
+
+  entity Visibility enum ["公開", "友だち", "非公開"];
+
+  @doc("写真を見る")
+  action "コメントする" appliesTo {
+    principal: [User],
+    resource: [Photo],
+    context: {
+      "場所": String
+    }
+  };
+
+  @doc("写真を見る")
+  action "見る" appliesTo {
+    principal: [User],
+    resource: [Photo],
+    context: {
+      "場所": String
+    }
+  };
+}
+

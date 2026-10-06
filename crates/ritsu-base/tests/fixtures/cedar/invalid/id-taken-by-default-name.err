@@ -1,0 +1,4 @@
+failed to add template to policy set
+    Diagnostic severity: error
+    Caused by: duplicate template or policy id `policy1`
+

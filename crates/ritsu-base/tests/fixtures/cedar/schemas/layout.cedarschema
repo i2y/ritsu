@@ -1,0 +1,22 @@
+// Declarations outside any namespace, several namespaces, and names that need quoting.
+entity Global;
+type Amount = { value: decimal, currency: String };
+action "global action" appliesTo { principal: Global, resource: Global };
+
+namespace Org::Team {
+  entity Member in [Org::Team::Group, Group] { since: datetime, span: duration, limit: Amount };
+  entity Group;
+  action "it's \"quoted\"", plain appliesTo { principal: Member, resource: Group, context: {} };
+}
+
+namespace Billing {
+  type Line = { "item name": String, quantity: Long, prices: Set<Set<{ amount: Long }>> };
+  @a @b("") @c("value")
+  entity Invoice = { lines: Set<Line>, total: __cedar::Long, payer: Org::Team::Member };
+  action pay appliesTo { principal: Org::Team::Member, resource: Invoice } attributes {};
+}
+
+@note("an empty namespace")
+namespace Empty {}
+
+entity AfterNamespaces;

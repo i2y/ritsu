@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: integer literal `9223372036854775809` is too large
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { -9223372036854775809 == 0 };
+    label at line 1, columns 44 to 63
+diagnostic help: maximum allowed integer literal is `9223372036854775807`
+
+

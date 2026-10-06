@@ -1,0 +1,9 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: the input `\u{110000}` is not a valid escape
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { "\u{110000}" == "" };
+    label at line 1, columns 44 to 55
+
+

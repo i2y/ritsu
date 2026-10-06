@@ -1,0 +1,1 @@
+entity E; action a appliesTo { principal: [], resource: E };

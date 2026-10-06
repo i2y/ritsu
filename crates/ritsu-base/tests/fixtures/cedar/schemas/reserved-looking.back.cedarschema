@@ -1,0 +1,21 @@
+@__cedar("")
+entity E in [__cedar::X] = {
+  "__cedar": Long,
+  appliesTo: __cedar,
+  entity: String,
+  "if": Set<__cedar::String>,
+  namespace: Bool
+} tags __cedar::String;
+
+action "__cedar" in [__cedar::Action::"x"] appliesTo {
+  principal: [__cedar::E],
+  resource: [E],
+  context: __cedar::C
+};
+
+action "type" in [__cedar::Action::"x"] appliesTo {
+  principal: [__cedar::E],
+  resource: [E],
+  context: __cedar::C
+};
+

@@ -1,0 +1,3 @@
+unknown field `parents`, expected one of `attributes`, `appliesTo`, `memberOf`, `annotations` at line 1 column 52
+    Diagnostic severity: error
+

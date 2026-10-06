@@ -1,0 +1,29 @@
+// A photo-sharing service: the schema its policies are checked against.
+@doc("Photo sharing")
+namespace PhotoApp {
+  @doc("A person who uses the service")
+  entity User in [UserGroup] {
+    "name": String,
+    age?: Long,
+    @doc("Where they are")
+    address: Address,
+    tags: Set<String>,
+    profile: { email: String, verified?: Bool, },
+  } tags String;
+  entity UserGroup;
+  entity Photo, Video in Album = { owner: User, private: Bool };
+  entity Album in Album;
+  entity Visibility enum ["public", "friends", "private"];
+  type Address = { street: String, city: String, zip?: String };
+
+  @doc("Look at a photo")
+  action view, comment in viewing appliesTo {
+    principal: [User, UserGroup],
+    resource: [Photo, Video],
+    context: { ip: ipaddr, authenticated: Bool, "request time": datetime }
+  };
+  action viewing;
+  action edit appliesTo { principal: User, resource: Photo, context: Address };
+  action "delete" in [edit, PhotoApp::Action::"admin"] appliesTo { principal: User, resource: [Photo, Album], };
+  action admin;
+}

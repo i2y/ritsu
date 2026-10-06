@@ -1,0 +1,38 @@
+entity Account;
+
+entity Administrator;
+
+entity Album in [Account];
+
+entity Photo in [Account, Album];
+
+entity User in [UserGroup];
+
+entity UserGroup;
+
+entity Video in [Account, Album];
+
+action "delete" appliesTo {
+  principal: [User],
+  resource: [Photo, Video, Album],
+  context: {}
+};
+
+action "edit" appliesTo {
+  principal: [User],
+  resource: [Photo, Video, Album],
+  context: {}
+};
+
+action "listPhotos" appliesTo {
+  principal: [User],
+  resource: [Album, Photo, Video],
+  context: {}
+};
+
+action "view" appliesTo {
+  principal: [User],
+  resource: [Photo, Video, Album],
+  context: {}
+};
+

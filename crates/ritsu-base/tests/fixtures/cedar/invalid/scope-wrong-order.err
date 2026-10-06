@@ -1,0 +1,18 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: found the variable `action` where the variable `principal` must be used
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(action, principal, resource);
+    label at line 1, columns 8 to 13
+diagnostic help: policy scopes must contain a `principal`, `action`, and `resource` element in that order
+
+Error: found the variable `principal` where the variable `action` must be used
+    Diagnostic severity: error
+
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(action, principal, resource);
+    label at line 1, columns 16 to 24
+diagnostic help: policy scopes must contain a `principal`, `action`, and `resource` element in that order
+

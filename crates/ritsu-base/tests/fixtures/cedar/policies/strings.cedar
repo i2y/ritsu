@@ -1,0 +1,10 @@
+@id("escapes")
+@note("tab\there, newline\nthere, quote \" and backslash \\, \0 nul, \x41 and \u{1F600} and \u{0041}")
+permit (principal, action == Action::"read\u{2F}write", resource)
+when {
+  context.s == "a\"b" && context.t == "it's" && context.u == "\'" &&
+  context.v like "\*literal star then wildcard*" && context.w like "*" &&
+  context.x like "" && context.y == "" && context.z == "\u{10FFFF}\u{1_0}" &&
+  context.raw == "line one
+line two"
+};

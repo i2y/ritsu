@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: this policy has an extra element in the scope: context
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource, context);
+    label at line 1, columns 37 to 43
+diagnostic help: policy scopes must contain a `principal`, `action`, and `resource` element in that order
+
+

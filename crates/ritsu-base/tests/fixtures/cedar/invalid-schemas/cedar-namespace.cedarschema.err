@@ -1,0 +1,9 @@
+error parsing schema: use of the reserved `__cedar` namespace
+    Diagnostic severity: error
+Begin snippet starting at line 1, column 1
+
+snippet line 1: namespace __cedar { entity E; }
+    label at line 1, columns 11 to 17
+diagnostic help: Names containing `__cedar` (for example: `__cedar::A`, `A::__cedar`, or `A::__cedar::B`) are reserved
+
+

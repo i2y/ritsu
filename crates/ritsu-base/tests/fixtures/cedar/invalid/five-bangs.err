@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: too many occurrences of `!`
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { !!!!!true };
+    label at line 1, columns 44 to 52
+diagnostic help: cannot chain more the 4 applications of a unary operator
+
+

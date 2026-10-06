@@ -1,0 +1,3 @@
+invalid namespace `A::if`: this identifier is reserved and cannot be used: if
+    Diagnostic severity: error
+

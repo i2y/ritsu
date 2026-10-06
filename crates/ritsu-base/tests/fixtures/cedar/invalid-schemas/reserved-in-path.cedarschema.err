@@ -1,0 +1,8 @@
+error parsing schema: `then` is a reserved identifier
+    Diagnostic severity: error
+Begin snippet starting at line 1, column 1
+
+snippet line 1: entity E { a: then::T };
+    label at line 1, columns 15 to 18
+
+

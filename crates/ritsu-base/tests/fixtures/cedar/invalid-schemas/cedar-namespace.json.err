@@ -1,0 +1,3 @@
+invalid namespace `__cedar`: The name `__cedar` contains `__cedar`, which is reserved
+    Diagnostic severity: error
+

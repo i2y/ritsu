@@ -1,0 +1,3 @@
+invalid type: integer `1`, expected a string at line 1 column 63
+    Diagnostic severity: error
+

@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: expected an entity uid or matching template slot, found literal `"alice"`
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal == "alice", action, resource);
+    label at line 1, columns 21 to 27
+diagnostic help: try including the entity type if you intended this string to be an entity uid
+
+

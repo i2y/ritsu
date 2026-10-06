@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: type constraints using `:` are not supported
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal: User, action, resource);
+    label at line 1, columns 19 to 22
+diagnostic help: try using `is` instead
+
+

@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: invalid policy effect: allow
+Begin snippet starting at line 1, column 1
+
+snippet line 1: allow(principal, action, resource);
+    label at line 1, columns 1 to 5
+diagnostic help: effect must be either `permit` or `forbid`
+
+

@@ -14,7 +14,7 @@ ritsu（バイナリ。CLI。ritsu-wasm はブラウザで動かすもの。LSP 
  └── ritsu-project  プロジェクトの読み込み、名前の解決、口のつなぎ（6 章）
       ├── rulec  dandori  koyomi  chobo  geas  yuen  sakai     言語のクレート（互いに依存しない）
       └── 土台の層
-           ├── ritsu-base    診断、二つの言語の文、診断の台帳、CLI の表、ハッシュ、名指しとパス、出典、doc の枠、JSON、YAML
+           ├── ritsu-base    診断、二つの言語の文、診断の台帳、CLI の表、ハッシュ、名指しとパス、出典、doc の枠、JSON、YAML、Cedar
            ├── ritsu-units   単位の型（5 章）
            ├── ritsu-ports   口：言語のあいだで渡すものの型と、問いの形（3.2）
            ├── ritsu-proto   .proto の読み手
@@ -54,7 +54,7 @@ dandori を作ったときの前提の一つ、「rulec の CLI の出力だけ�
 | 一つにする | 別々に保つ |
 |---|---|
 | リポジトリ（Cargo のワークスペース）と、バージョンとリリース | 言語の名前、字句、構文、キーワード、拡張子 |
-| 土台：診断と `--lang ja`、二つの言語の文、診断の台帳と `explain`、CLI の表、ハッシュ、出典の固定と改正の検知、名指しとパス、doc のページの枠、JSON、YAML（JSON と行き来できる YAML 1.2） | 各言語の検査と参照インタプリタ |
+| 土台：診断と `--lang ja`、二つの言語の文、診断の台帳と `explain`、CLI の表、ハッシュ、出典の固定と改正の検知、名指しとパス、doc のページの枠、JSON、YAML（JSON と行き来できる YAML 1.2）、Cedar のポリシーとスキーマ | 各言語の検査と参照インタプリタ |
 | 単位の型 | ページを読んで理解し確かめる人に見せるページの中身 |
 | `.proto` の読み手、生成先の言語ごとの書き出しの共通部分 | 生成するコードの形（rulec の表の一行が一つの分岐になる形など） |
 | プロジェクトの読み込みと名前の解決 | 各言語の README、DESIGN.md、PLAN.md、スキル、例 |
@@ -634,6 +634,52 @@ YAML と JSON を、値ごとに行と列を持つ値（`yaml::Node`）に読む
 確かめ方は、YAML の公式のテストスイート（yaml-test-suite の data-2022-01-17、MIT。`crates/ritsu-base/tests/fixtures/yaml-test-suite.json` に一つのファイルにして持ち、ライセンスの文は隣の `yaml-test-suite.LICENSE`）の全部のケースにかけることである。2026-10-06 の回で、402 ケースのうち 204 をスイートの JSON と同じ値に読み、104 を読まずに止め、YAML でない 94 をどれも止めた。違う値を返したケースは無い。手では、Stripe と GitHub の OpenAPI の YAML（6.6 MB と 9.9 MB）を、js-yaml 4.3.2 のコアスキーマと同じ値に読むことも確かめた（リリースのビルドで 59 ms と 93 ms）。
 
 土台に置いたのは、どの言語の意味も持たず（4.11）、rulec の `import jsonschema` と dandori の `use openapi` も同じ文書を読むからである（二つとも、いまは JSON だけを読む）。土台は std だけで書く決まり（P9）なので、YAML のクレート（yaml-rust2 0.13.0、saphyr 0.1.0、serde-saphyr 1.3.0。serde_yaml は 2024 年に保守を終え、serde_yml は非推奨）は使わなかった。くわしくは sakai の DESIGN 15.3。
+
+
+### 4.18 Cedar の読み手と書き手（`ritsu_base::cedar`、2026-10-06 に足した）
+
+認可の標準の言語 Cedar（<https://github.com/cedar-policy/cedar>）のポリシーとスキーマを読み書きする部品を、土台に一つ置く。ritsu は Cedar を、proto や OpenAPI と同じく標準の形式として読み、その上に言語をまたぐ確かめ（公開する操作と action の突き合わせ、ワークフローの最小権限、yuen の要件とポリシーの結び付け）を載せる。八つ目の言語 sekisho（`.gate`）は、Cedar のポリシーとスキーマを書き出す。どちらも同じ読み方と書き方を使う必要があるので、土台に置いた。どの言語の意味も持たない（4.11）。
+
+読む版は Cedar 4.13.0（2026-09-15。`cedar-policy-cli` 4.13.0 で、`cedar language-version` が言う言語の版は 4.5）である。2026-10-06 に、crates.io と GitHub のリリース（<https://github.com/cedar-policy/cedar/releases>）で、これが最新であることを確かめた。
+
+読むもの：
+
+- ポリシー（`.cedar`）：`permit` と `forbid`、スコープ（`principal`・`resource` の `==`・`in`・`is`・`is … in`、`action` の `==`・`in`・`in [ … ]`）、`when` と `unless`、式の全部（演算子の優先順位、`has`（`a.b.c` の形も）、`like`、`is … in`、`in`、`if … then … else`、集合とレコード、メソッド（`contains` など六つと、拡張の 18）、拡張の関数（`decimal`、`ip`、`datetime`、`duration`、`unknown`））、注釈、コメント、テンプレート（`?principal`、`?resource`）。式ごとに行と列を持つ。ポリシーの id は CLI と同じく、`@id("…")` の値か、ファイルの中の順の `policy<n>` にする。
+- スキーマ：人が読む形（`.cedarschema`）と JSON の形の両方。名前空間、`entity`（`in`、属性、`tags`、`enum`）、`action`（`in`、`appliesTo` の `principal`・`resource`・`context`）、`type`（共通の型）、注釈。モデルは JSON の形のもの（Cedar の `json_schema::Fragment`）にした。`cedar translate-schema` は、二つの向きとも、これを通るからである。名前と属性は書いた位置を持つ。
+
+書くもの：
+
+- ポリシーの JSON の形（Cedar の EST）。`cedar translate-policy --direction cedar-to-json` と一字も違わない。
+- `cedar format`。Cedar のフォーマッター（`cedar-policy-formatter`）が具象構文木から文書を組む手順と、コメントをトークンから取る順番、文書を行に割り付けて出す pretty 0.12.5 の手順（グループを一行に収めるかは、その後ろの、次に改行できる位置までの長さで決まる。改行の後の字下げは、次の文書のものになる）を、そのまま書いた。幅と字下げの幅は引数で渡す。
+- 書き手（`write_policies`）：構文木を、文法が要る括弧だけを付けた Cedar のテキストにし、上の整形にかけて出す。だから出力は `cedar format` が直さない形で、読み直すと同じポリシー（同じ JSON）になる。sekisho はこれでポリシーを書き出す。
+- スキーマの JSON の形と人が読む形。`translate-schema` の二つの向きと一字も違わない。人が読む形で書けないもの（名前のある名前空間で、エンティティタイプと共通の型が同じ名前のもの、shape がレコードでないもの）は、CLI と同じく書かずにエラーにする。
+
+読めないときは、何行目の何列目の何が読めないかを、二つの言語で返す（`ritsu_base::yaml` と同じ形の `Error`）。公式の CLI が読めないものは読まない。Cedar が構文木を作るときにする確かめ（予約語、`__cedar`、スコープに書けるもの、action の型が `Action` であること、メソッドと関数の名前と引数の数、`i64` に収まる整数、エスケープ、同じキーと同じ注釈と同じ id、スロットはスコープにだけ、スキーマの同じ名前の宣言と名前空間、共通の型に使えない名前、`appliesTo` の `principal` と `resource`）は、全部した。
+
+確かめ方は、OpenSpec の読み手（4.16）と同じ形にした。公式の CLI 4.13.0 に材料を通した答え（JSON の形、`cedar format` の出力（幅 80・字下げ 2 と、幅 40・字下げ 4）、スキーマの二つの向きの変換）を `crates/ritsu-base/tests/fixtures/cedar/` に置き、作り方を隣の `expected.sh` に書いた。`tests/cedar.rs` は、土台の読み手と書き手が、それと一字も違わないことを確かめる。テストは Cedar もネットワークも要らない。材料は英語が先で、日本語の版（`ja.cedar`、`ja.cedarschema`）を横に置いた。
+
+- 自分で書いた材料：ポリシーが 16（演算子の優先順位、文字列のエスケープと Unicode、コメントのあらゆる位置、CR LF、空白とタブ、Unicode の空白とひとつだけの CR、空のファイル、コメントだけのファイル、注釈、テンプレート、拡張の関数とメソッド、入れ子のレコード、名前空間つきの名前、予約語に見えるが読める名前、80 列を超える行と全角の文字）、スキーマが 6（人が読む形 4、JSON の形 2）。
+- Cedar のリポジトリの材料（`upstream/`。Apache-2.0 で、ライセンスと NOTICE を隣に置いた）：フォーマッターのテストの入力 21 と、CLI の sample-data の sandbox_a〜c のポリシー 10 とスキーマ 3 組。
+- 書き手：各ポリシーのファイルから書いたもの（`written/`）を、`expected.sh` が CLI で確かめる（`cedar format --check` が通り、JSON が元と同じ）。コードで組んだ木（四つ続く `-` の後の負の数、五つ続く `!`、予約語の属性、空白を含む `has` の名前、`\*` を含むパターンなど）も、読み直すと同じ JSON になることを確かめる。
+- 読めない材料：ポリシーが 86、スキーマが 70（人が読む形 40、JSON の形 30）。`expected.sh` が、CLI がどれも読まないことを確かめ、CLI の文を `.err` に残す。土台も全部を読まない（文までは合わせていない）。
+
+2026-10-06 には、テストに入れていない突き合わせもした。Cedar のリポジトリの v4.13.0 にある `.cedar` の全部（88。CLI が読めない 1 を含む）、`.cedarschema` の全部（66）、パスに `schema` を含む JSON（15。CLI が読めない 1 を含む）で、JSON の形、整形、書き手、スキーマの二つの向きが CLI と一字も違わず、CLI が読めないものは土台も読まなかった。乱数で組んだポリシー 1,800（コメントをトークンの間に入れ、幅を 20〜129、字下げを 1〜5 に変えた。どれも CLI が読める）、それを一か所ずつ変えた変異 1,600（トークンを消す、二つにする、別のものに替える、足す。CLI が読めたのは 135 で、読めない 1,465 は土台も読まない）、乱数で組んだスキーマ 600（CLI が読めたのは 274）でも、違うものは無かった。
+
+速さ：約 50 万バイトのファイル（1,600 のポリシー）を、リリースのビルドで 57〜74 ms で読んで JSON の形にし、67〜75 ms で整形する（二回測った。同じファイルの `cedar format` は 6.1 秒と 13.8 秒。ほかの担当が同時にビルドしているので、時間は揺れる）。Cedar のフォーマッターは、コメントを探すたびにトークンの並びを頭からたどるが、ここでは並びが位置の順であることを使って二分探索にした（答えは同じ）。
+
+捨てたもの：
+
+- `cedar-policy` のクレート（4.13.0）に依存すること。土台が std だけで書く決まり（P9）から外れ、lalrpop-util、serde、miette などを引き込む。rulec と geas は依存の無いことを保っている（4.9）。
+- 公式の CLI を子プロセスで呼ぶこと。`ritsu check` と sekisho の生成が Cedar の CLI を要るようになる（OpenSpec で捨てたのと同じ理由。4.16）。
+- 書き手を、構文木をそのまま文字列にする形にすること（`translate-policy --direction json-to-cedar` が使う形）。Cedar のその書き方は、`>` を `!(… <= …)` に、`unless` を `when` の否定に、`is … in` を二つの式に替え、括弧を全部に付ける。人が書く形から離れるので、フォーマッターを通す形にした。
+
+まだやっていないこと：
+
+- JSON の形のポリシーを読むこと（書くだけ）と、テンプレートのリンク（`templateLinks`）。テキストの形には書けないので、読むのは JSON の形のときに足す。
+- エンティティとリクエストの JSON、スキーマの名前の解決（人が読む形の名前が、エンティティタイプか、共通の型か、`Long` などの組み込みの型かを決めること）。Cedar の `translate-schema` も、名前は書いたまま出す。
+- ASCII でない文字の幅は、東アジアの全角、ハングル、絵文字を 2、結合文字などを 0 とする表で数える（`cedar format` が使う unicode-width の表の全部ではない）。珍しい文字を含む文字列が行の幅の境にあると、改行の位置が `cedar format` と違うことがある。スキーマの人が読む形のエスケープ（Rust の `escape_debug`）も、表示しない文字の表は主なものだけである。
+
+参照したものとバージョン（2026-10-06）：Cedar 4.13.0 のソース（文法の `cedar-policy-core/src/parser/grammar.lalrpop` と `cst_to_ast.rs`、JSON の形の `est/`、スキーマの `validator/cedar_schema/` と `validator/json_schema.rs`、フォーマッターの `cedar-policy-formatter/src/pprint/`、CLI の `cedar-policy-cli/src/command/`）、pretty 0.12.5（crates.io）、cedar-policy-cli 4.13.0 のリリースのバイナリ（<https://github.com/cedar-policy/cedar/releases/tag/cedar-policy-cli-v4.13.0>）、<https://docs.cedarpolicy.com/policies/syntax-grammar.html>、<https://docs.cedarpolicy.com/policies/json-format.html>、<https://docs.cedarpolicy.com/schema/json-schema.html>。
 
 
 ## 5. 単位の型

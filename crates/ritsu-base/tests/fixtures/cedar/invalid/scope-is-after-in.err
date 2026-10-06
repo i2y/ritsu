@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: when `is` and `in` are used together, `is` must come first
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal in Group::"g" is User, action, resource);
+    label at line 1, columns 8 to 38
+diagnostic help: try `_ is _ in _`
+
+

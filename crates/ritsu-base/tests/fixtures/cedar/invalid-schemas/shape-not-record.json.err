@@ -1,0 +1,4 @@
+The following entities have shapes that cannot be converted to Cedar schema syntax: [E]
+    Diagnostic severity: error
+diagnostic help: Entity shapes may only be record types. In the Cedar schema syntax, they additionally may not reference common type definitions.
+

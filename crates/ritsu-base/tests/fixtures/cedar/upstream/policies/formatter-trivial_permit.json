@@ -1,0 +1,1 @@
+{"templates":{},"staticPolicies":{"policy0":{"effect":"permit","principal":{"op":"All"},"action":{"op":"All"},"resource":{"op":"All"},"conditions":[]}},"templateLinks":[]}

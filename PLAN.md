@@ -1165,3 +1165,15 @@ OpenSpec の仕様（要件とシナリオ）と変更の提案を、yuen と ge
 - OpenAPI と AsyncAPI の文書の要素を、ツール名 `openapi`・`asyncapi` で指せるようにするか（上の sakai の残したものの 1）。
 - 文書と診断の「名指し」を、普通の語（参照、指す）に置き換えるか。
 
+### 7.12 認可とセキュリティの検査（2026-10-06 の昼）
+
+作者は 2026-10-06 の朝に、認可を二つの形で ritsu に入れると決めた。標準の Cedar のポリシーとスキーマを ritsu が読むことと、Cedar を生成する八つ目の言語 sekisho（`.gate`。rulec の規則と koyomi の日付を許可の条件に使う）である。あわせて、ritsu を使う人のための言語のセキュリティの検査（DESIGN 15 章の提案の四つ）を作る。この節に、担当ごとの記録を足していく。
+
+**Cedar の読み手と書き手**（cedar-reader の担当）
+
+認可を ritsu に入れる二つの形（Cedar を読む確かめと、sekisho が書く Cedar）の土台として、`ritsu_base::cedar` を作った（DESIGN 4.18）。ポリシー（`.cedar`）とスキーマ（人が読む形と JSON の形）を読み、ポリシーの JSON の形、`cedar format`、書き手（`write_policies`）、スキーマの二つの形を書く。どれも公式の CLI 4.13.0 の出力と一字も違わないことを、`crates/ritsu-base/tests/cedar.rs` が材料（`tests/fixtures/cedar/`、作り方は `expected.sh`）で確かめる。
+
+- 残したこと：JSON の形のポリシーとテンプレートのリンクを読むこと、エンティティとリクエストの JSON、スキーマの名前の解決（DESIGN 4.18 の「まだやっていないこと」）。言語をまたぐ確かめ（公開する操作と action、ワークフローの最小権限、yuen の要件とポリシー）は、この部品の上に別の項目として作る。
+- Cedar の版を上げるときは、新しい CLI で `expected.sh` を走らせて答えを取り直し、テストが落ちたところを直す。
+
+

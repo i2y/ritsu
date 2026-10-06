@@ -1,0 +1,3 @@
+unknown field `types`, expected one of `commonTypes`, `entityTypes`, `actions`, `annotations` at line 1 column 47
+    Diagnostic severity: error
+

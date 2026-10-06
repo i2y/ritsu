@@ -1,0 +1,11 @@
+// 日本語の版：写真を共有するサービスのスキーマ（識別子は ASCII だけなので、日本語は文字列と注釈とコメントに書く）
+@doc("写真の共有")
+namespace PhotoApp {
+  @doc("サービスを使う人")
+  entity User in [UserGroup] { "名前": String, "年齢"?: Long };
+  entity UserGroup;
+  entity Photo { "所有者": User, "非公開": Bool };
+  entity Visibility enum ["公開", "友だち", "非公開"];
+  @doc("写真を見る")
+  action "見る", "コメントする" appliesTo { principal: User, resource: Photo, context: { "場所": String } };
+}

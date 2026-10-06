@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: right hand side of an `is` expression must be an entity type name, but got `"User"`
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { principal is "User" };
+    label at line 1, columns 57 to 62
+diagnostic help: try removing the quotes: `principal is User`
+
+

@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: '=' is not a valid operator in Cedar
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal = User::"a", action, resource);
+    label at line 1, columns 8 to 28
+diagnostic help: try using '==' instead
+
+

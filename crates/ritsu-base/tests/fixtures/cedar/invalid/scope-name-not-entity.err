@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: expected an entity uid or matching template slot, found name `User`
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal == User, action, resource);
+    label at line 1, columns 21 to 24
+diagnostic help: try using `is` to test for an entity type or including an identifier string if you intended this name to be an entity uid
+
+

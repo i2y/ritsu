@@ -1,0 +1,11 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: invalid token
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource); // ok
+snippet line 2: "
+    label at line 2, column 1
+diagnostic help: try checking that all strings are closed properly
+
+

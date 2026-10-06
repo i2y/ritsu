@@ -1,0 +1,9 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: invalid member access `User.name`, `User` has no fields or methods
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { User.name == "a" };
+    label at line 1, columns 44 to 52
+
+

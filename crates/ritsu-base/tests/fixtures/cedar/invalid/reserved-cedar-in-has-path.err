@@ -1,0 +1,9 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: The name `__cedar` contains `__cedar`, which is reserved
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { context has a.__cedar };
+    label at line 1, columns 58 to 64
+
+

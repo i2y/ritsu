@@ -1,0 +1,10 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: `decimal` is a function, not a method
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { "1.0".decimal() };
+    label at line 1, columns 44 to 58
+diagnostic help: use a function-style call `decimal(..)`
+
+

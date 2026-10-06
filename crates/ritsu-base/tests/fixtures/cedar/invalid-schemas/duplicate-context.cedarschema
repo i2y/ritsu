@@ -1,0 +1,1 @@
+action a appliesTo { principal: E, resource: E, context: {}, context: {} };

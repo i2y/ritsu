@@ -1,0 +1,9 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: `a::b` cannot be used as an attribute as it contains a namespace
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { {a::b: 1} == {} };
+    label at line 1, columns 45 to 48
+
+

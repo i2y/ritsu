@@ -1,0 +1,9 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: unexpected end of input
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource); xyz
+    label at line 1, column 41: expected `(`
+
+

@@ -1,0 +1,4 @@
+unsupported feature used in schema
+    Diagnostic severity: error
+    Caused by: action declared with attributes: [a]
+

@@ -1,0 +1,9 @@
+error parsing schema: this uses a reserved schema keyword: `Boolean`
+    Diagnostic severity: error
+Begin snippet starting at line 1, column 1
+
+snippet line 1: type Boolean = String;
+    label at line 1, columns 6 to 12
+diagnostic help: Keywords such as `entity`, `extension`, `set` and `record` cannot be used as common type names
+
+

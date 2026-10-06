@@ -1,0 +1,9 @@
+failed to parse policy set
+    Diagnostic severity: error
+    Caused by: right hand side of a `like` expression must be a pattern literal, but got `context.b`
+Begin snippet starting at line 1, column 1
+
+snippet line 1: permit(principal, action, resource) when { context.a like context.b };
+    label at line 1, columns 59 to 67
+
+
