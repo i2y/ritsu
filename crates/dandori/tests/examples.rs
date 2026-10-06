@@ -910,14 +910,23 @@ fn temporal_activities_run_in_the_other_language() {
         rounds.push([(Sdk::Go, Sdk::Ts), (Sdk::Ts, Sdk::Go)]);
     }
     for pairs in &rounds {
-        std::thread::scope(|scope| {
-            for f in &flows {
-                for (wf, acts) in pairs {
+        let runs: Vec<(&PathBuf, Sdk, Sdk)> = flows.iter().flat_map(|f| pairs.iter().map(move |(wf, acts)| (f, *wf, *acts))).collect();
+        for some in runs.chunks(at_once()) {
+            std::thread::scope(|scope| {
+                for (f, wf, acts) in some {
                     scope.spawn(move || temporal_one(f, *wf, Some(*acts)));
                 }
-            }
-        });
+            });
+        }
     }
+}
+
+/// How many flows `temporal_activities_run_in_the_other_language` runs at once: as many as the
+/// machine has cores, or `DANDORI_AT_ONCE`. Each of its runs starts a worker in each of two
+/// languages, and starting them all at once on the four cores of a GitHub runner left the first
+/// activities of some runs past their StartToClose timeouts (DESIGN 10.6).
+fn at_once() -> usize {
+    std::env::var("DANDORI_AT_ONCE").ok().and_then(|n| n.parse().ok()).filter(|n| *n > 0).unwrap_or_else(|| std::thread::available_parallelism().map_or(4, |n| n.get()))
 }
 
 /// One flow on Temporal, its workflow in `wf`; with `acts`, its activities in that other language,
