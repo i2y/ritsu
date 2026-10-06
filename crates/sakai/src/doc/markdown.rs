@@ -5,10 +5,52 @@
 
 use super::{Block, Line, Page, context_heading, slug};
 
-/// `[[alias|text]]` as a link to the context's heading.
+/// Text written as Markdown prose (ritsu's DESIGN 9.2): a `<` that could begin HTML (followed by
+/// a letter, `/`, `!` or `?`) is written `&lt;` outside the code spans, so a description that
+/// holds `</script>` or a tag stays text in a renderer that passes HTML through; the code spans,
+/// and a `<` before anything else (`<= 3`, `a < b`), are left as they are. The same rule as the
+/// Markdown of `dandori doc` and `rulec doc`.
+fn md_prose(s: &str) -> String {
+    let cs: Vec<char> = s.chars().collect();
+    let mut o = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < cs.len() {
+        if cs[i] == '`' {
+            // a code span runs to the next run of as many backquotes; without one, the backquotes
+            // are text
+            let n = cs[i..].iter().take_while(|c| **c == '`').count();
+            let mut j = i + n;
+            let mut end = None;
+            while j < cs.len() {
+                let m = cs[j..].iter().take_while(|c| **c == '`').count();
+                if m == n {
+                    end = Some(j + m);
+                    break;
+                }
+                j += m.max(1);
+            }
+            let stop = end.unwrap_or(i + n);
+            o.extend(&cs[i..stop]);
+            i = stop;
+            continue;
+        }
+        if cs[i] == '<' && cs.get(i + 1).is_some_and(|c| c.is_ascii_alphabetic() || matches!(c, '/' | '!' | '?')) {
+            o.push_str("&lt;");
+        } else {
+            o.push(cs[i]);
+        }
+        i += 1;
+    }
+    o
+}
+
+/// `[[alias|text]]` as a link to the context's heading. A carriage return, which a `.ctx` string
+/// can hold and Markdown takes for the end of a line, is a space: what a `.ctx` writes does not
+/// start a line of the page (ritsu's DESIGN 9.2). The text is prose ([`md_prose`]).
 fn inline(p: &Page, s: &str) -> String {
+    let s = md_prose(&s.replace('\r', " "));
     let mut out = String::new();
-    let mut rest = s;
+    let mut rest = s.as_str();
     while let Some(i) = rest.find("[[") {
         out.push_str(&rest[..i]);
         let after = &rest[i + 2..];

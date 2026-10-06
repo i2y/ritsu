@@ -198,3 +198,36 @@ fn chrome_shows_the_map_and_a_box_goes_to_its_context() {
     }
     ritsu_testkit::chrome::none_left(work.path()).unwrap();
 }
+
+/// What a `.ctx` brings into the page stays where the page puts it (ritsu's DESIGN 9.2): a
+/// description with `</script>` is text in the HTML and in the Markdown, where a `<` that could
+/// begin HTML is written `&lt;` outside the code spans (a `<` in a code span, or before a space or
+/// a number, is left as it is); and a carriage return, which ends a line of Markdown, starts no
+/// line of the Markdown page.
+#[test]
+fn text_from_the_ctx_stays_where_the_page_puts_it() {
+    let d = TempDir::new("doc-lines");
+    copy_dir(std::path::Path::new("tests/maps/basic"), d.path());
+    let p = d.path().join("ctx/billing.ctx");
+    let s = std::fs::read_to_string(&p)
+        .unwrap()
+        .replacen(
+            "\"Decides whether to bill an order, to wait, or not to bill\"",
+            "\"Decides </script><script>alert(1)</script>\r# Injected; `<b>` and a < 3 and <!-- x\"",
+            1,
+        )
+        .replacen("owner \"Accounting team\"", "owner \"Accounting\r| x | y |\"", 1);
+    std::fs::write(&p, s).unwrap();
+    let o = sakai::check::check_map_with(d.path(), "basic.ctx", &suite()).unwrap();
+    assert!(!o.has_errors(), "{}", sakai::check::render(&o, ritsu_base::text::Lang::En));
+    for lang in [ritsu_base::text::Lang::En, ritsu_base::text::Lang::Ja] {
+        let md = sakai::doc::write(&o, &suite(), lang, sakai::doc::Format::Markdown);
+        assert!(!md.contains('\r'), "{md:?}");
+        assert!(md.contains("&lt;/script>&lt;script>alert(1)&lt;/script> # Injected"), "{md:?}");
+        assert!(!md.contains("<script>") && !md.contains("</script>") && !md.contains("<!--"), "{md:?}");
+        // a code span, and a `<` before a space, stay as they are
+        assert!(md.contains("`<b>`") && md.contains("a < 3") && md.contains("&lt;!-- x"), "{md:?}");
+        let html = sakai::doc::write(&o, &suite(), lang, sakai::doc::Format::Html);
+        assert!(!html.contains("<script>alert") && html.contains("&lt;/script&gt;&lt;script&gt;alert(1)"), "{html}");
+    }
+}

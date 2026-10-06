@@ -1,7 +1,9 @@
 //! ritsu's ports, as sakai answers them (ritsu's DESIGN 3.2): [`Engine`] gives what a `.ctx` holds
 //! — a context and its terms — and the namings it writes of the artifacts outside it (`Items`,
-//! `References`). A short name of the context's own published language (`means message Order`)
-//! is named in full from the `.proto` that declares it, as sakai's check names it.
+//! `References`), and a map's contexts and relationships and the context a file belongs to
+//! (`Maps`, which ritsu-cross holds the secrets a flow sends to: ritsu's X14). A short name of the
+//! context's own published language (`means message Order`) is named in full from the `.proto`
+//! that declares it, as sakai's check names it.
 
 use crate::ast::{Element, File, Item as AstItem, RelKind, Str, Target};
 use ritsu_base::naming::{Name as Naming, Tool};
@@ -80,9 +82,10 @@ impl ritsu_ports::Items for Engine {
 
 impl ritsu_ports::References for Engine {
     /// The namings a `.ctx` writes. A context: what it owns, its published language (the
-    /// `.proto` files, the rule, the services, the generated code), the layers and kernels of its
-    /// relationships, the enums a layer maps to, and what each term means. A map: the contexts it
-    /// reads, what it covers and leaves out, its proto roots and its code.
+    /// `.proto` files, the rule, the OpenAPI and AsyncAPI documents, the services, the generated
+    /// code), the layers and kernels of its relationships, the enums a layer maps to, and what
+    /// each term means. A map: the contexts it reads, what it covers and leaves out, its proto
+    /// roots and its code.
     fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>> {
         let (_, f) = read(root, file)?;
         let dir = ritsu_base::paths::parent(file);
@@ -171,6 +174,11 @@ impl ritsu_ports::References for Engine {
                     if let Some(s) = &p.rulec {
                         path(s, Tool::Rulec, "published language", &mut out);
                     }
+                    // the OpenAPI and AsyncAPI documents (DESIGN 15.4): a file of the published
+                    // language, which `ritsu check` reads for the keys written in it (W901)
+                    for (_, s) in &p.contracts {
+                        path(s, Tool::File, "published language", &mut out);
+                    }
                     for (svc, pos) in &p.services {
                         if let Some(n) = short("service", svc) {
                             out.push(Reference { line: pos.line, target: n, how: "open host service".into() });
@@ -207,5 +215,69 @@ impl ritsu_ports::References for Engine {
         }
         out.sort_by_key(|r| r.line);
         Ok(out)
+    }
+}
+
+/// What the stages of sakai's check say is wrong, as the ports say it: the file from the root.
+fn said(ds: &[crate::diag::Diag]) -> Vec<Said> {
+    ds.iter().filter(|d| d.is_error()).map(|d| Said { file: d.rel.clone(), ..Said::of(d) }).collect()
+}
+
+/// A map read as far as the stages of sakai's check that decide what the port answers: its
+/// contexts and their relationships (the names, the sections and the paths, E001 to E012) and who
+/// owns what (E101 to E103). None for a context file; what those stages say, when one of them
+/// does not pass. The stages after them (the references, the patterns, the mappings) say nothing
+/// of which context a file is in, and are left to the map's own check.
+fn map_model(root: &Path, map: &str) -> Result<Option<crate::model::Model>, Vec<Said>> {
+    let disk = ritsu_base::paths::on_disk(root, map);
+    let src = ritsu_base::fs::read_to_string(&disk).map_err(|e| vec![Said::unreadable(map, &e.to_string())])?;
+    match crate::parse::kind_of(&src) {
+        Some(k) if k == crate::kw::MAP => {}
+        Some(_) => return Ok(None),
+        None => return Err(said(&crate::parse::parse(map, &src).1)),
+    }
+    let loaded = crate::resolve::load(root, map).map_err(|t| vec![Said { code: String::new(), file: map.to_string(), line: None, message: t }])?;
+    if loaded.diags.iter().any(|d| d.is_error()) {
+        return Err(said(&loaded.diags));
+    }
+    let Some(m) = loaded.model else { return Err(said(&loaded.diags)) };
+    let (_, owned) = crate::owners::own(&m);
+    // who owns what reads the documents' `$ref`s, and keeps them for a check that is not coming
+    crate::contracts::forget();
+    if owned.iter().any(|d| d.is_error()) {
+        return Err(said(&owned));
+    }
+    Ok(Some(m))
+}
+
+impl ritsu_ports::Maps for Engine {
+    /// The map's contexts, in the order of its `use context`, and every relationship as the
+    /// `.ctx` of the context it starts from writes it.
+    fn map(&self, root: &Path, map: &str) -> Result<Option<ritsu_ports::MapFacts>, Vec<Said>> {
+        let Some(m) = map_model(root, map)? else { return Ok(None) };
+        let mut relationships = Vec::new();
+        for c in &m.contexts {
+            for r in &c.rels {
+                relationships.push(ritsu_ports::MapRelationship {
+                    from: c.name.clone(),
+                    to: m.contexts[r.partner].name.clone(),
+                    words: r.kind.words().to_string(),
+                    separate: matches!(r.kind, crate::model::RelK::Separate),
+                    file: c.file.clone(),
+                    line: r.pos.line,
+                });
+            }
+        }
+        Ok(Some(ritsu_ports::MapFacts { file: map.to_string(), contexts: m.contexts.iter().map(|c| c.name.clone()).collect(), relationships }))
+    }
+
+    /// The context of the deepest entry of `owns` that holds `file`, as sakai's check gives every
+    /// artifact its context; None for a file outside the map's scope or in no context's `owns`.
+    fn context_of(&self, root: &Path, map: &str, file: &str) -> Result<Option<String>, Vec<Said>> {
+        let Some(m) = map_model(root, map)? else { return Ok(None) };
+        if !crate::owners::in_scope(&m, file) {
+            return Ok(None);
+        }
+        Ok(crate::owners::context_of(&m, file).map(|c| m.contexts[c].name.clone()))
     }
 }

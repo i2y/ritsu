@@ -1,0 +1,8 @@
+警告[W902]: payments/events/payments.yaml:43:15: payments/events/payments.yaml のサーバー production は、通信を暗号化しません（mqtt）
+    43 |     protocol: mqtt
+  = 途中のネットワークにいる人は、メッセージと、一緒に送る鍵を読んだり書き換えたりできます。
+  = 暗号化して通信するプロトコルは secure-mqtt です。
+  = ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、サーバーに `x-ritsu-plaintext: "<理由>"` と書いてください。
+  関わるもの:
+      決済  payments/events/payments.yaml:41  #/servers/production
+ネットショップ.ctx: ok — コンテキスト 4、関係 5。成果物 9 件は、どれも一つのコンテキストに属する。境界を越える参照 7 件を確かめた（openapi 1、asyncapi 5、dandori 1）

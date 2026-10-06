@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package bank.v1;
+
+import "acme/v1/sensitivity.proto";
+
+// `(acme.v1.level)` is declared in a file this one does not import: it marks nothing here.
+message Card {
+  string pan = 1 [(acme.v1.level) = SECRET];
+  string name = 2 [(.acme.v1.sensitivity) = PERSONAL];
+}

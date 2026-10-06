@@ -26,6 +26,9 @@ pub mod patterns;
 pub mod ports;
 pub mod refs;
 pub mod resolve;
+/// The checks of security: keys in a `.ctx`, servers that do not encrypt, operations and
+/// channels that say no authentication (DESIGN 16).
+pub mod security;
 /// The `sakai` command, as a function.
 pub mod run;
 /// The languages sakai reads through ritsu's ports.

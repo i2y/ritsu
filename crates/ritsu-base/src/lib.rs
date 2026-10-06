@@ -26,6 +26,10 @@
 //!   with their blocks and scenarios, and what a change adds, modifies, removes and renames.
 //! - [`cedar`]: Cedar's policies and schemas, read and written as Cedar 4.13.0 reads and writes
 //!   them: the policy syntax and both schema formats, the JSON policy format, `cedar format`.
+//! - [`secrets`], [`urls`] and [`marks`]: what the checks of security (DESIGN 16) share across
+//!   the languages: the keys of a known shape written into a file, what a URL says of how it is
+//!   reached (the loopback, plain HTTP, the encrypted form of a protocol), and the marks that make
+//!   a schema's property secret.
 //!
 //! Nothing here depends on anything but std (DESIGN 3.1, P9).
 
@@ -36,11 +40,14 @@ pub mod docpage;
 pub mod fs;
 pub mod json;
 pub mod ledger;
+pub mod marks;
 pub mod naming;
 pub mod openspec;
 pub mod paths;
+pub mod secrets;
 pub mod sha256;
 pub mod sources;
 pub mod text;
 pub mod udiff;
+pub mod urls;
 pub mod yaml;

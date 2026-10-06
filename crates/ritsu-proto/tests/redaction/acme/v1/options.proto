@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package acme.v1;
+
+import "google/protobuf/descriptor.proto";
+import "acme/v1/levels.proto";
+
+// The option and its enum are in two files: the enum is found from here.
+extend google.protobuf.FieldOptions {
+  Level level = 50002;
+}

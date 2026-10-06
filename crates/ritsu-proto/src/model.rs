@@ -21,6 +21,36 @@ pub struct ProtoFile {
     /// Every enum, nested ones too (`Order.Status`), in the order they start.
     pub enums: Vec<Enum>,
     pub services: Vec<Service>,
+    /// The fields of every `extend` (custom options among them), at the top of the file and
+    /// inside messages, in the order written.
+    pub extensions: Vec<Extension>,
+}
+
+/// A field of an `extend` (`extend google.protobuf.FieldOptions { Sensitivity sensitivity =
+/// 50001; }`): a custom option, when what it extends is one of `descriptor.proto`'s options.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Extension {
+    /// What it extends, as written: "google.protobuf.FieldOptions".
+    pub extendee: String,
+    /// From the package, as a message's name is: `sensitivity`, or `Holder.sensitivity` for one
+    /// declared in the message `Holder`.
+    pub name: String,
+    pub ty: Type,
+    pub number: i64,
+    pub line: usize,
+}
+
+/// How a field is marked to be redacted (DESIGN 16.6): protobuf's `debug_redact`, which C++'s
+/// protobuf (from v30) keeps out of the debug formats, and which ritsu reads as the contract
+/// saying the value is secret.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Redaction {
+    /// `[debug_redact = true]` on the field: the field's line.
+    Direct { line: usize },
+    /// A custom option of the field (`[(acme.v1.sensitivity) = PERSONAL]`) whose value is an enum
+    /// value marked `[debug_redact = true]`: the option as written, the value, and where the
+    /// value is (its file, from the root, and its line).
+    ByOption { option: String, value: String, file: String, line: usize },
 }
 
 #[derive(Clone, Debug, PartialEq)]

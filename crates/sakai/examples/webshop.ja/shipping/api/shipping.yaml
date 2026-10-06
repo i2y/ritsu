@@ -33,3 +33,9 @@ components:
     ShipmentGate:
       type: string
       enum: [hold, release]
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+security:
+  - bearer: []

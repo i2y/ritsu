@@ -4668,3 +4668,238 @@ X = 1
 ```
 
 See also: [E501](#e501)
+
+<a id="w901"></a>
+
+## W901 — A value of a key's shape is written in a `.ctx`
+
+**When**: A key whose provider fixes its shape (an AWS access key ID, a key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a PEM private key) is written in the map or a context file it reads, in a string or a comment. sakai gives the key's kind, prefix and length, never the key. The keys of the OpenAPI and AsyncAPI documents and the `.proto` files are said once, by `ritsu check`.
+
+**Fix**: Take the key out of the file, and read it where the code runs (an environment variable, a secret store). If it is real, revoke it with its provider first: the history of the repository keeps it. For a value for tests, write `ritsu: test secret` in a comment on the same line.
+
+**Reproduction**: put the files below in one directory, and run `sakai check .` there.
+
+`map.ctx`:
+
+```ctx
+map Map(m) v1
+use context "alpha.ctx"
+use context "beta.ctx"
+covers "."
+```
+
+`alpha.ctx`:
+
+```ctx
+context Alpha(a) v1
+# the maps API key of the staging site: AIzaSyD-ritsu-fake-key-for-tests-000000
+owns
+  dir "a"
+```
+
+`beta.ctx`:
+
+```ctx
+context Beta(b) v1
+owns
+  dir "b"
+
+published language b.v1
+  proto "b/v1/b.proto"
+  open host service BService
+
+terms
+  kind "The kind of thing Beta deals with"
+    means enum Kind
+```
+
+`a/a.proto`:
+
+```proto
+syntax = "proto3";
+package a;
+message A {}
+```
+
+`b/v1/b.proto`:
+
+```proto
+syntax = "proto3";
+package b.v1;
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_ONE = 1;
+  KIND_TWO = 2;
+}
+message B { Kind kind = 1; }
+message Plain { string id = 1; }
+service BService { rpc Get(B) returns (B); }
+```
+
+<a id="w902"></a>
+
+## W902 — A server of a document does not encrypt the connection
+
+**When**: A server of an OpenAPI or AsyncAPI document of the map talks to a host off this machine (not localhost, 127.0.0.0/8 or ::1) without encryption: in OpenAPI, a `url` of `http://` or `ws://` (of the document, a path item or an operation; a server variable is given its default and each value of its `enum`; a relative `url` is passed over); in AsyncAPI, a `protocol` of `http`, `ws`, `amqp`, `mqtt` (`mqtt5`), `stomp` or `kafka`.
+
+**Fix**: Use the encrypted form (https, wss, amqps, secure-mqtt, stomps, kafka-secure). If the connection is protected another way (a service mesh, a private link), write `x-ritsu-plaintext: "<why>"` in the server.
+
+**Reproduction**: put the files below in one directory, and run `sakai check .` there.
+
+`map.ctx`:
+
+```ctx
+map Map(m) v1
+use context "alpha.ctx"
+use context "beta.ctx"
+covers "."
+```
+
+`alpha.ctx`:
+
+```ctx
+context Alpha(a) v1
+owns
+  dir "a"
+```
+
+`beta.ctx`:
+
+```ctx
+context Beta(b) v1
+owns
+  dir "b"
+
+published language b.v1
+  proto "b/v1/b.proto"
+  open host service BService
+
+terms
+  kind "The kind of thing Beta deals with"
+    means enum Kind
+```
+
+`a/a.proto`:
+
+```proto
+syntax = "proto3";
+package a;
+message A {}
+```
+
+`b/v1/b.proto`:
+
+```proto
+syntax = "proto3";
+package b.v1;
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_ONE = 1;
+  KIND_TWO = 2;
+}
+message B { Kind kind = 1; }
+message Plain { string id = 1; }
+service BService { rpc Get(B) returns (B); }
+```
+
+`b/events.yaml`:
+
+```
+asyncapi: 3.0.0
+info:
+  title: B events
+  version: 1.0.0
+servers:
+  production:
+    host: broker.example.com:9092
+    protocol: kafka
+```
+
+See also: [W903](#w903)
+
+<a id="w903"></a>
+
+## W903 — An operation of a published language says no authentication
+
+**When**: An operation of a published language's OpenAPI document (not a webhook) has no `security`, and neither has the document; or, in an AsyncAPI document, a server a channel is on has no `security`, and no operation on the channel has it either (a document with no `servers` is not looked at). Which operation is allowed to whom is not looked at here.
+
+**Fix**: Write `security` on the operation or the document (in AsyncAPI, on the server or an operation). If it is open to anyone on purpose, write `security: []`.
+
+**Reproduction**: put the files below in one directory, and run `sakai check .` there.
+
+`map.ctx`:
+
+```ctx
+map Map(m) v1
+use context "alpha.ctx"
+use context "beta.ctx"
+covers "."
+```
+
+`alpha.ctx`:
+
+```ctx
+context Alpha(a) v1
+owns
+  dir "a"
+```
+
+`beta.ctx`:
+
+```ctx
+context Beta(b) v1
+owns
+  dir "b"
+
+published language b.v1
+  proto "b/v1/b.proto"
+  open host service BService
+
+published language b.api
+  openapi "b/api.yaml"
+
+terms
+  kind "The kind of thing Beta deals with"
+    means enum Kind
+```
+
+`a/a.proto`:
+
+```proto
+syntax = "proto3";
+package a;
+message A {}
+```
+
+`b/v1/b.proto`:
+
+```proto
+syntax = "proto3";
+package b.v1;
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_ONE = 1;
+  KIND_TWO = 2;
+}
+message B { Kind kind = 1; }
+message Plain { string id = 1; }
+service BService { rpc Get(B) returns (B); }
+```
+
+`b/api.yaml`:
+
+```
+openapi: 3.1.0
+info:
+  title: B
+  version: 1.0.0
+paths:
+  /things/{id}:
+    get:
+      operationId: getThing
+      responses:
+        '200':
+          description: The thing
+```
+
+See also: [W902](#w902)

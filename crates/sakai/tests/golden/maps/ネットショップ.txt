@@ -1,0 +1,24 @@
+map ネットショップ.ctx
+contexts 受注, 決済, 配送, 通知
+  受注 shared kernel with 決済  (contexts/受注.ctx:19)
+  決済 upstream 受注  (contexts/決済.ctx:19)
+  決済 shared kernel with 受注  (contexts/決済.ctx:22)
+  配送 upstream 決済  (contexts/配送.ctx:16)
+  通知 upstream 受注  (contexts/通知.ctx:11)
+  通知 separate ways from 決済 [separate]  (contexts/通知.ctx:14)
+files
+  README.ja.md -> -
+  common/money.yaml -> 受注
+  contexts/受注.ctx -> -
+  contexts/決済.ctx -> -
+  contexts/通知.ctx -> -
+  contexts/配送.ctx -> -
+  notifications/events/notifications.yaml -> 通知
+  notifications/notify.flow -> 通知
+  ordering/api/ordering.json -> 受注
+  ordering/events/ordering.yaml -> 受注
+  payments/api/payments.yaml -> 決済
+  payments/events/payments.yaml -> 決済
+  shipping/acl/payments.yaml -> 配送
+  shipping/api/shipping.yaml -> 配送
+  ネットショップ.ctx -> -

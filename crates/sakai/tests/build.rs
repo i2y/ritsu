@@ -297,3 +297,22 @@ fn what_cannot_be_written_in_english() {
         assert!(text.contains("error[E501]") && text.contains(says), "{text}");
     }
 }
+
+/// The map's path stays on the comment line the settings start with (ritsu's DESIGN 9.2), even
+/// when the map's file name holds a carriage return and, for Java, the text `\u000a`, which javac
+/// reads as a line break anywhere in the file, comments too.
+#[test]
+fn the_maps_path_stays_in_the_comment_of_the_settings() {
+    let d = common::TempDir::new("odd-map");
+    common::copy_dir(&example_en(), d.path());
+    let odd = "shop\\u000a\rodd.ctx";
+    std::fs::rename(d.path().join("shop.ctx"), d.path().join(odd)).unwrap();
+    for (t, written) in [(Target::ImportLinter, "../shop\\u000a\\rodd.ctx"), (Target::ArchUnit, "shop\\\\u000a\\\\rodd.ctx")] {
+        let b = build::run_with(d.path(), odd, t, &common::suite(), None, false, Lang::En).unwrap();
+        let (file, _) = b.done.unwrap_or_else(|| panic!("{}", b.outcome.diags.iter().map(|x| x.render(Lang::En)).collect::<String>()));
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(!text.contains('\r'), "{text:?}");
+        let head = text.lines().next().unwrap();
+        assert!(head.contains(written), "{head}");
+    }
+}

@@ -156,10 +156,11 @@ impl<X: Extra> Diag<X> {
         self
     }
 
-    /// The line's text, from the file's source.
+    /// The line's text, from the file's source, with any key on it masked
+    /// ([`crate::secrets::mask`]): a diagnostic's line must not carry a key into the logs.
     pub fn source(mut self, src: &str) -> Diag<X> {
         if let Some(l) = self.line {
-            self.src = src.lines().nth(l - 1).map(|s| s.trim_end().to_string());
+            self.src = src.lines().nth(l - 1).map(|s| crate::secrets::mask(s.trim_end()));
         }
         self
     }

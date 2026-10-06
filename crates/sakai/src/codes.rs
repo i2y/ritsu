@@ -96,6 +96,26 @@ const A_RECEIVES_DONE: (&str, &str) = (
     "asyncapi: 3.0.0\ninfo:\n  title: A, from B\n  version: 1.0.0\nchannels:\n  done:\n    $ref: '../b/events.yaml#/channels/done'\noperations:\n  receiveDone:\n    action: receive\n    channel:\n      $ref: '#/channels/done'\n",
 );
 
+/// 甲's context file with a key in a comment (W901): the one fake key the fixtures of ritsu hold
+/// (ritsu's DESIGN 16.10), written in two pieces here so that the source holds no key whole.
+const A_WITH_A_KEY: (&str, &str) = ("甲.ctx", concat!("context 甲(a) v1\n# 検証用の地図の API キー: AIzaSyD-ritsu-fake-", "key-for-tests-000000\nowns\n  dir \"a\"\n"));
+/// The same, with its names in English.
+const A_WITH_A_KEY_EN: (&str, &str) = ("alpha.ctx", concat!("context Alpha(a) v1\n# the maps API key of the staging site: AIzaSyD-ritsu-fake-", "key-for-tests-000000\nowns\n  dir \"a\"\n"));
+/// 乙's events, on a Kafka broker reached without TLS (W902).
+const B_EVENTS_ON_KAFKA: (&str, &str) = ("b/events.yaml", "asyncapi: 3.0.0\ninfo:\n  title: B events\n  version: 1.0.0\nservers:\n  production:\n    host: broker.example.com:9092\n    protocol: kafka\n");
+/// 乙 publishes an HTTP API whose operation says no authentication (W903).
+const B_PUBLISHES_AN_API: (&str, &str) = (
+    "乙.ctx",
+    "context 乙(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService\n\npublished language b.api\n  openapi \"b/api.yaml\"\n\nterms\n  種類 \"乙が扱うものの種類\"\n    means enum Kind\n",
+);
+/// The same, with its names in English.
+const B_PUBLISHES_AN_API_EN: (&str, &str) = (
+    "beta.ctx",
+    "context Beta(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService\n\npublished language b.api\n  openapi \"b/api.yaml\"\n\nterms\n  kind \"The kind of thing Beta deals with\"\n    means enum Kind\n",
+);
+/// 乙's HTTP API: one operation, and no `security` anywhere.
+const B_API_WITHOUT_SECURITY: (&str, &str) = ("b/api.yaml", "openapi: 3.1.0\ninfo:\n  title: B\n  version: 1.0.0\npaths:\n  /things/{id}:\n    get:\n      operationId: getThing\n      responses:\n        '200':\n          description: The thing\n");
+
 /// The files of a reproduction: [`BASE`] in its order, each replaced by the entry's file of the
 /// same path, then the entry's other files.
 fn laid(files: &'static [(&'static str, &'static str)]) -> Vec<(&'static str, &'static str)> {
@@ -1104,6 +1124,52 @@ pub fn ledger() -> Ledger {
                     ("py/.importlinter", "# written by hand\n"),
                 ],
         ),
+        // ── Security (ritsu's DESIGN 16) ──
+        e(
+            "W901",
+            tr!("鍵の形の値が `.ctx` に書いてあります", "A value of a key's shape is written in a `.ctx`"),
+            tr!(
+                "地図か、地図が読む context のファイルに、プロバイダーが形を決めている鍵（AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、PEM の秘密鍵）が、文字列でもコメントでも書いてあるとき。sakai は鍵の種類と接頭辞と長さだけを示し、鍵そのものは出しません。OpenAPI と AsyncAPI の文書と `.proto` の鍵は、`ritsu check` が一度だけ言います。",
+                "A key whose provider fixes its shape (an AWS access key ID, a key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a PEM private key) is written in the map or a context file it reads, in a string or a comment. sakai gives the key's kind, prefix and length, never the key. The keys of the OpenAPI and AsyncAPI documents and the `.proto` files are said once, by `ritsu check`."
+            ),
+            tr!(
+                "鍵をファイルから消し、コードが動くところ（環境変数、シークレットの置き場）から読んでください。本物の鍵なら、まずプロバイダーで無効にしてください（リポジトリの履歴に残ります）。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。",
+                "Take the key out of the file, and read it where the code runs (an environment variable, a secret store). If it is real, revoke it with its provider first: the history of the repository keeps it. For a value for tests, write `ritsu: test secret` in a comment on the same line."
+            ),
+            &[A_WITH_A_KEY],
+            &[],
+        )
+        .en(&[A_WITH_A_KEY_EN]),
+        e(
+            "W902",
+            tr!("文書のサーバーが、通信を暗号化しません", "A server of a document does not encrypt the connection"),
+            tr!(
+                "地図の OpenAPI か AsyncAPI の文書のサーバーが、ループバック（localhost、127.0.0.0/8、::1）の外へ、暗号化しない通信をするとき。OpenAPI では `url` が `http://` か `ws://` のサーバー（文書、パスの項、操作のもの。サーバー変数には既定の値と `enum` の値を一つずつ入れて見ます。相対の `url` は見ません）、AsyncAPI では `protocol` が `http`・`ws`・`amqp`・`mqtt`（`mqtt5`）・`stomp`・`kafka` のサーバーです。",
+                "A server of an OpenAPI or AsyncAPI document of the map talks to a host off this machine (not localhost, 127.0.0.0/8 or ::1) without encryption: in OpenAPI, a `url` of `http://` or `ws://` (of the document, a path item or an operation; a server variable is given its default and each value of its `enum`; a relative `url` is passed over); in AsyncAPI, a `protocol` of `http`, `ws`, `amqp`, `mqtt` (`mqtt5`), `stomp` or `kafka`."
+            ),
+            tr!(
+                "暗号化して通信するプロトコル（https、wss、amqps、secure-mqtt、stomps、kafka-secure）にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、サーバーに `x-ritsu-plaintext: \"<理由>\"` と書いてください。",
+                "Use the encrypted form (https, wss, amqps, secure-mqtt, stomps, kafka-secure). If the connection is protected another way (a service mesh, a private link), write `x-ritsu-plaintext: \"<why>\"` in the server."
+            ),
+            &[B_EVENTS_ON_KAFKA],
+            &["W903"],
+        )
+        .en(&[B_EVENTS_ON_KAFKA]),
+        e(
+            "W903",
+            tr!("公表された言語の操作に、認証の指定がありません", "An operation of a published language says no authentication"),
+            tr!(
+                "公表された言語の OpenAPI の文書の操作（`webhooks` のものを除く）に、操作にも文書にも `security` が無いとき。AsyncAPI の文書では、チャネルが使うサーバーに `security` が無く、そのチャネルの操作にも無いとき（文書に `servers` が無ければ見ません）。どの操作をだれに許すか（認可）は、ここでは見ません。",
+                "An operation of a published language's OpenAPI document (not a webhook) has no `security`, and neither has the document; or, in an AsyncAPI document, a server a channel is on has no `security`, and no operation on the channel has it either (a document with no `servers` is not looked at). Which operation is allowed to whom is not looked at here."
+            ),
+            tr!(
+                "操作か文書（AsyncAPI ではサーバーか操作）に `security` を書いてください。だれでも呼べるようにわざとしているなら、`security: []` と書いてください。",
+                "Write `security` on the operation or the document (in AsyncAPI, on the server or an operation). If it is open to anyone on purpose, write `security: []`."
+            ),
+            &[B_PUBLISHES_AN_API, B_API_WITHOUT_SECURITY],
+            &["W902"],
+        )
+        .en(&[B_PUBLISHES_AN_API_EN, B_API_WITHOUT_SECURITY]),
     ];
     Ledger {
         tool: "sakai",

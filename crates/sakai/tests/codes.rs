@@ -80,8 +80,8 @@ fn every_reproduction_gives_its_code() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    assert!(n >= 61, "{n} reproductions");
-    assert_eq!(japanese, 61, "every reproduction has its Japanese twin");
+    assert!(n >= 64, "{n} reproductions");
+    assert_eq!(japanese, 64, "every reproduction has its Japanese twin");
 }
 
 /// Every code is printed and reproduced, but the one retired (N101): its entry stays, with why it
@@ -133,6 +133,7 @@ fn every_japanese_mutant_has_an_english_one() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    // the 64 of before, and the 10 on the example of OpenAPI and AsyncAPI documents (DESIGN 15)
-    assert_eq!(japanese, 74, "the Japanese mutants are all kept");
+    // the 64 of before, the 10 on the example of OpenAPI and AsyncAPI documents (DESIGN 15), and
+    // the 8 of the checks of security on the same example (DESIGN 16)
+    assert_eq!(japanese, 82, "the Japanese mutants are all kept");
 }

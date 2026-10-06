@@ -1,0 +1,8 @@
+warning[W902]: payments/events/payments.yaml:43:15: The server production of payments/events/payments.yaml does not encrypt the connection (kafka)
+    43 |     protocol: kafka
+  = Whoever is on the network between can read and change the messages, and any key sent with them.
+  = The encrypted form of the protocol is kafka-secure.
+  = If the connection is protected another way (a service mesh, a private link), write `x-ritsu-plaintext: "<why>"` in the server.
+  involved:
+      Payments  payments/events/payments.yaml:41  #/servers/production
+webshop.ctx: ok — 4 contexts, 5 relationships; 9 artifacts, each in one context; 7 crossings checked (openapi 1, asyncapi 5, dandori 1)

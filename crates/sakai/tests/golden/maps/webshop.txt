@@ -1,0 +1,24 @@
+map webshop.ctx
+contexts Ordering, Payments, Shipping, Notifications
+  Ordering shared kernel with Payments  (contexts/ordering.ctx:19)
+  Payments upstream Ordering  (contexts/payments.ctx:19)
+  Payments shared kernel with Ordering  (contexts/payments.ctx:22)
+  Shipping upstream Payments  (contexts/shipping.ctx:16)
+  Notifications upstream Ordering  (contexts/notifications.ctx:11)
+  Notifications separate ways from Payments [separate]  (contexts/notifications.ctx:14)
+files
+  README.md -> -
+  common/money.yaml -> Ordering
+  contexts/notifications.ctx -> -
+  contexts/ordering.ctx -> -
+  contexts/payments.ctx -> -
+  contexts/shipping.ctx -> -
+  notifications/events/notifications.yaml -> Notifications
+  notifications/notify.flow -> Notifications
+  ordering/api/ordering.json -> Ordering
+  ordering/events/ordering.yaml -> Ordering
+  payments/api/payments.yaml -> Payments
+  payments/events/payments.yaml -> Payments
+  shipping/acl/payments.yaml -> Shipping
+  shipping/api/shipping.yaml -> Shipping
+  webshop.ctx -> -

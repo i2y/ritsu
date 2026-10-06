@@ -446,7 +446,7 @@
       },
       "context": "Ordering",
       "by": "contexts/ordering.ctx:6",
-      "sha256": "4bc08dffa7500c1b"
+      "sha256": "fe184b29ae53b702"
     },
     {
       "name": {
@@ -468,7 +468,7 @@
       },
       "context": "Payments",
       "by": "contexts/payments.ctx:6",
-      "sha256": "fd4d57c891c6e61f"
+      "sha256": "1003d3d4180bdda6"
     },
     {
       "name": {
@@ -501,7 +501,7 @@
       },
       "context": "Shipping",
       "by": "contexts/shipping.ctx:6",
-      "sha256": "bf58eeb84203d430"
+      "sha256": "f9a1e83f15317dc8"
     }
   ],
   "crossings": [

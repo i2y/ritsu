@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package bank.v1;
+
+import "acme/v1/sensitivity.proto";
+import "acme/v1/options.proto";
+
+// A bank account, as a payout contract carries it.
+message BankAccount {
+  string id = 1;
+  string number = 2 [debug_redact = true];
+  string holder = 3 [(acme.v1.sensitivity) = PERSONAL];
+  string branch = 4 [(acme.v1.sensitivity) = PUBLIC];
+  string iban = 5 [(acme.v1.level) = SECRET];
+  string nickname = 6 [debug_redact = false];
+  string note = 7 [(acme.v1.Holder.tag) = PERSONAL];
+  string swift = 8 [(acme.v1.level) = OPEN, deprecated = true];
+  string token = 9 [deprecated = true, debug_redact = true];
+}

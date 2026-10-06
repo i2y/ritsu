@@ -95,9 +95,29 @@ fn relationship(m: &Model, cs: &crate::contracts::Contracts, ci: usize, r: &Rel,
     }
 }
 
+/// Text a `.ctx` or a path brings into a comment, kept inside it (ritsu's DESIGN 9.2): each
+/// character that ends a line somewhere (`\n`, `\r`, NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR)
+/// written as its escape, as ritsu-emit's `one_line` writes it, and a `*/` broken so that it does
+/// not end a block comment. A string of a `.ctx` cannot hold a `\n`, but it can hold the other
+/// four, and a file's name any of them: an owner's `\r` would end the line comment, and what
+/// follows would be CML that no check has read.
+pub(crate) fn in_comment(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\u{85}' | '\u{2028}' | '\u{2029}' => out.push_str(&format!("\\u{{{:x}}}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.replace("*/", "*\\/")
+}
+
 /// The CML of a map that passed check. `from` is the map as the header names it.
 pub fn render(c: &Checked, from: &str, lang: Lang) -> String {
     let m = &c.model;
+    let from = in_comment(from);
     let mut s = match lang {
         Lang::En => format!("/* Written by `sakai export cml` from {from}. Edit the .ctx files and write it again. */\n"),
         Lang::Ja => format!("/* `sakai export cml --lang ja` が {from} から書いた。直すときは .ctx を直して書き直す。 */\n"),
@@ -131,7 +151,7 @@ pub fn render(c: &Checked, from: &str, lang: Lang) -> String {
             }
             None => tr!("「{n}」({a})", "{n} ({a})"),
         };
-        s.push_str(&format!("\n// {}\n", spaced(&said, lang)));
+        s.push_str(&format!("\n// {}\n", in_comment(&spaced(&said, lang))));
         let mut body: Vec<String> = Vec::new();
         if let Some(d) = &x.ast.description {
             body.push(format!("  domainVisionStatement = {}", string(&d.value)));

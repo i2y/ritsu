@@ -139,3 +139,14 @@ fn a_diagnostic_without_a_file_or_a_fix_key() {
     assert_eq!(d.render(Lang::En), "error[E081]: missing.geas: cannot read it\n");
     assert!(d.to_json(Lang::En).compact().ends_with(r#""notes":[],"fix":null}"#));
 }
+
+/// The line a diagnostic shows never carries a key (DESIGN 16.3): one on the line is masked.
+#[test]
+fn a_key_on_the_line_shown_is_masked() {
+    let key = ["AIzaSyD-ritsu-fake-", "key-for-tests-000000"].concat();
+    let src = format!("first\n  url: \"https://maps.example.com/find?key={key}\"\n");
+    let d: Diag = Diag::at("E001", "a.flow", 2, 3, tr!("ここが違います", "this is wrong")).source(&src);
+    let text = d.render(Lang::En);
+    assert!(text.contains("     2 |   url: \"https://maps.example.com/find?key=AIza…\""), "{text}");
+    assert!(!text.contains(&key), "{text}");
+}

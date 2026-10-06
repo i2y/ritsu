@@ -1,0 +1,8 @@
+警告[W902]: payments/api/payments.yaml:73:10: payments/api/payments.yaml のサーバー http://payments.internal/v1 は、通信を暗号化しません（http）
+    73 |   - url: http://payments.internal/v1
+  = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
+  = 暗号化して通信するプロトコルは https です。
+  = ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、サーバーに `x-ritsu-plaintext: "<理由>"` と書いてください。
+  関わるもの:
+      決済  payments/api/payments.yaml:73  #/servers/0
+ネットショップ.ctx: ok — コンテキスト 4、関係 5。成果物 9 件は、どれも一つのコンテキストに属する。境界を越える参照 7 件を確かめた（openapi 1、asyncapi 5、dandori 1）

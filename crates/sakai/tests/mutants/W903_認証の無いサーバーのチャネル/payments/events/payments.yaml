@@ -1,0 +1,40 @@
+asyncapi: 3.1.0
+info:
+  title: 決済のイベント
+  version: 1.0.0
+  description: 決済は、注文が入るとカードに課金し、課金がどうなったかを知らせる。
+channels:
+  orderPlaced:
+    $ref: '../../ordering/events/ordering.yaml#/channels/orderPlaced'
+  paymentSucceeded:
+    address: shop.payments.payment.succeeded
+    messages:
+      paymentSucceeded:
+        $ref: '#/components/messages/PaymentResult'
+  paymentFailed:
+    address: shop.payments.payment.failed
+    messages:
+      paymentFailed:
+        $ref: '#/components/messages/PaymentResult'
+operations:
+  receiveOrderPlaced:
+    action: receive
+    channel:
+      $ref: '#/channels/orderPlaced'
+  sendPaymentSucceeded:
+    action: send
+    channel:
+      $ref: '#/channels/paymentSucceeded'
+  sendPaymentFailed:
+    action: send
+    channel:
+      $ref: '#/channels/paymentFailed'
+components:
+  messages:
+    PaymentResult:
+      payload:
+        $ref: '../api/payments.yaml#/components/schemas/Charge'
+servers:
+  production:
+    host: broker.example.com:9093
+    protocol: kafka-secure

@@ -131,3 +131,26 @@ fn context_mapper_finds_nothing_wrong_in_the_english_one() {
         assert!(r.ok && r.stdout.trim().is_empty(), "{f}: {}{}", r.stdout, r.stderr);
     }
 }
+
+/// What a `.ctx` or a path brings into a comment of the CML stays in it (ritsu's DESIGN 9.2): an
+/// owner with a `\r`, NEL, LINE SEPARATOR and PARAGRAPH SEPARATOR in it, and a map's path with a
+/// line break and a `*/`, give no line of CML the `.ctx` did not write.
+#[test]
+fn text_from_the_ctx_stays_in_its_comment() {
+    let d = common::TempDir::new("cml-lines");
+    common::copy_dir(std::path::Path::new("tests/maps/basic"), d.path());
+    let p = d.path().join("ctx/billing.ctx");
+    let owner = "Accounting team\rBoundedContext Injected {}\u{2028}x\u{85}y\u{2029}z";
+    let s = std::fs::read_to_string(&p).unwrap().replacen("owner \"Accounting team\"", &format!("owner \"{owner}\""), 1);
+    std::fs::write(&p, s).unwrap();
+    let o = sakai::check::check_map_with(d.path(), "basic.ctx", &common::suite()).unwrap();
+    assert!(!o.has_errors(), "{}", sakai::check::render(&o, Lang::En));
+    for lang in [Lang::En, Lang::Ja] {
+        let cml = sakai::cml::render(o.checked.as_ref().unwrap(), "maps*/odd\nname.ctx", lang);
+        assert!(!cml.contains(['\r', '\u{85}', '\u{2028}', '\u{2029}']), "{cml:?}");
+        assert!(cml.contains("Accounting team\\rBoundedContext Injected {}\\u{2028}x\\u{85}y\\u{2029}z"), "{cml}");
+        assert!(!cml.lines().any(|l| l.starts_with("BoundedContext Injected") || l.starts_with("name.ctx")), "{cml}");
+        let head = cml.lines().next().unwrap();
+        assert!(head.starts_with("/* ") && head.ends_with(" */") && head.matches("*/").count() == 1 && head.contains("maps*\\/odd\\nname.ctx"), "{head}");
+    }
+}

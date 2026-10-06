@@ -1,6 +1,6 @@
 ---
 name: sakai
-description: Write, check and fix sakai files (`.ctx`), the checkable part of a context map — which bounded context owns each artifact, which relationships (conformist, anticorruption layer, customer and supplier, shared kernel, partnership, separate ways) let a reference cross a boundary, and how an anticorruption layer maps the enum values and terms that cross — held to real rules, workflows, calendars, books, `.proto` files, OpenAPI and AsyncAPI documents and code. Use when a context map has to be written or changed as `.ctx` files; when services that talk over HTTP or events have to be held to their OpenAPI and AsyncAPI contracts; when a sakai diagnostic (E001-E502, W101-W402) has to be fixed; when the settings of import-linter, dependency-cruiser, ArchUnit or go-arch-lint have to be written from the map; or when the map's page has to be shown to the people who check what the code is to do.
+description: Write, check and fix sakai files (`.ctx`), the checkable part of a context map — which bounded context owns each artifact, which relationships (conformist, anticorruption layer, customer and supplier, shared kernel, partnership, separate ways) let a reference cross a boundary, and how an anticorruption layer maps the enum values and terms that cross — held to real rules, workflows, calendars, books, `.proto` files, OpenAPI and AsyncAPI documents and code. Use when a context map has to be written or changed as `.ctx` files; when services that talk over HTTP or events have to be held to their OpenAPI and AsyncAPI contracts; when a sakai diagnostic (E001-E502, W101-W402, W901-W903) has to be fixed; when the settings of import-linter, dependency-cruiser, ArchUnit or go-arch-lint have to be written from the map; or when the map's page has to be shown to the people who check what the code is to do.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run sakai as `ritsu sakai <command>`, or as `sakai <command>` through a link to ritsu named for it. The import linters themselves run in the project's CI, not in sakai.
 license: MIT OR Apache-2.0
 ---
@@ -105,6 +105,7 @@ published language payments.v1
 - A document is found by its top (`openapi`, `asyncapi`), in JSON or YAML, and belongs to one context like any artifact. sakai reads OpenAPI 3.0 to 3.2 and AsyncAPI 3.0 and 3.1; convert AsyncAPI 2.x with `asyncapi convert`.
 - What crosses is what the documents write: a `$ref` to another context's document, and an operation that sends to or receives from another context's channel (the downstream writes `upstream`, as for any reference).
 - Name a document's element short, in the context's own published language or the upstream's: `schema Charge`, `enum ChargeStatus`, `channel orderPlaced`, `message OrderPlaced`, `operation createCharge`. An enum's values are its strings, as written.
+- A server that does not encrypt the connection to another machine is W902, and an operation of a published language (or an AsyncAPI channel on a server) with no `security` is W903. Do not silence them on your own: ask whether the connection is protected another way (then `x-ritsu-plaintext: "<why>"` in the server) or the operation is open on purpose (then `security: []`).
 
 ## 3. What to ask a person
 
@@ -132,6 +133,7 @@ The usual ones:
 | E401 | an upstream value with no mapping | add the line the note shows, with the value the team decides |
 | E406, E407 | one word in two meanings crosses | rename, `as`, or map it in an anticorruption layer (ask) |
 | E502 | the linter's settings are not what the map writes | run `ritsu sakai build` again with the same `--lang`, and commit |
+| W901 | a key of a known shape is written in a `.ctx` | take it out and read it where the code runs; tell the person to revoke it if it is real (the history keeps it) |
 
 Fix the first diagnostic first: an error of words or ownership stops what comes after it.
 

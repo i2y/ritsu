@@ -113,6 +113,31 @@ Of YAML it reads what goes to JSON and back (RFC 9512, section 3.4, as OpenAPI 3
 A call no contract writes (HTTP to a URL held in a string, a queue with no document) is still not checked, and the page of `doc` says so; nor does sakai check that the code calls what its contract says.
 [examples/webshop](examples/webshop/README.md) is a map of four services that talk this way.
 
+## Keys, plain connections and authentication
+
+sakai has three of ritsu's checks of security (the 9xx codes, which mean the same in every language of ritsu).
+Each is a warning, and goes away when the file says the thing is meant:
+
+| Code | What it finds | How a file says it is meant |
+|---|---|---|
+| W901 | a key of a known shape (AWS, GitHub, Slack, Stripe, OpenAI, Anthropic, Google, a PEM private key) written in the map or a context file | `ritsu: test secret` in a comment on the same line |
+| W902 | a server of a document of the map that does not encrypt the connection to a host off this machine: `http://` or `ws://` in OpenAPI, `http`, `ws`, `amqp`, `mqtt`, `stomp` or `kafka` in AsyncAPI | `x-ritsu-plaintext: "<why>"` in the server |
+| W903 | an operation of a published language's OpenAPI document with no `security` (nor the document), or an AsyncAPI channel on a server with no `security` and no operation that has it | `security: []` on the operation, the document or the server |
+
+The diagnostic of a key gives its kind, prefix and length, never the key, and a line another diagnostic shows has its keys masked.
+The keys of the documents and the `.proto` files are said once, by `ritsu check`, since other languages read them too.
+Which operation is allowed to whom is not looked at here.
+With the `security` of Payments' API taken away:
+
+```text
+warning[W903]: payments/api/payments.yaml:9:7: The operation createCharge of the published language payments.v1 says no authentication
+     9 |       operationId: createCharge
+  = Neither the operation nor the document has `security`, so a reader of the contract cannot tell how a client proves who it is.
+  = Add `security` to the operation, or to the whole document. If the operation is open to anyone on purpose, write `security: []` on it.
+  involved:
+      Payments  payments/api/payments.yaml:9  #/paths/~1charges/post (POST /charges)
+```
+
 ## The page of the map
 
 `sakai doc` writes a page for the people who have to understand what the code is to do and check it: those who run the business, those who run the systems, and the developers who read the code.
@@ -184,7 +209,7 @@ The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file 
 `cargo test -p sakai` runs the language on its fixtures and on the example, and runs the real tools.
 On one run of `cargo test -p sakai -- --nocapture` on macOS on Apple silicon, with every tool there and no test skipped: 191 tests, 26 seconds once built.
 
-- 152 mutants, each a fixture or an example with one change, are held to the diagnostics they give, in English and in Japanese (74 of them with Japanese names, each with an English twin, and 4 for Rust).
+- 168 mutants, each a fixture or an example with one change, are held to the diagnostics they give, in English and in Japanese (82 of them with Japanese names, each with an English twin, and 4 for Rust).
 - The four import linters run on 56 copies (14 for each tool): the example and a map whose generated code sits inside a context, each as it is and with imports added that the map forbids, with English and Japanese names. Every tool passes the copies as they are and catches each added import.
 - Context Mapper 6.12.0's validator, with every check, finds nothing in the CML of the examples.
 - ritsu's reader of YAML is held to the YAML test suite (its release data-2022-01-17, 402 cases): it reads 204 as the suite's JSON, does not read 104 that go beyond what goes to JSON and back, does not read any of the 94 that are no YAML, and reads none of them as another value.

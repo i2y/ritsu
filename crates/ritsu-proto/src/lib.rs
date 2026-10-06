@@ -6,14 +6,17 @@
 //!
 //! - [`read`]: one file — `syntax`, `package`, `import` (`public`, `weak`), messages (nested
 //!   ones by their dotted names), fields (`optional`, `repeated`, `map`, `oneof`, `json_name`),
-//!   enums and their values and numbers, services and their methods (streaming or not), and
-//!   every option as written ([`Opt`]).
+//!   enums and their values and numbers, services and their methods (streaming or not), the
+//!   fields of every `extend` ([`Extension`]: custom options), and every option as written
+//!   ([`Opt`]).
 //! - [`value`]: an option's value in protobuf's text format, and the tree the options of an
 //!   element make ([`value::tree`]).
 //! - [`validate`]: what `(buf.validate.field)`, `(buf.validate.message)` and
 //!   `(buf.validate.oneof)` ask. CEL is kept as text.
 //! - [`buf`]: `buf.yaml`'s `deps` and `buf.lock`'s pins.
-//! - [`load`] and [`load_from`]: many files, and the names across them ([`Protos::resolve`]).
+//! - [`load`] and [`load_from`]: many files, and the names across them ([`Protos::resolve`]),
+//!   and whether a field is marked to be redacted (`debug_redact`, written on it or through a
+//!   custom option: [`Protos::redaction`]).
 //!   Google's well-known types, `buf/validate/validate.proto` and dandori's
 //!   `dandori/v1/options.proto` are known without their files.
 //!
@@ -28,6 +31,6 @@ pub mod validate;
 pub mod value;
 
 pub use load::{DANDORI_OPTIONS, Issue, Protos, Resolved, Symbol, WELL_KNOWN, import_candidates, is_known, known_package, load, load_from};
-pub use model::{Enum, EnumValue, Field, Import, Label, Message, Method, Oneof, Opt, ProtoFile, Service, Type, json_name};
+pub use model::{Enum, EnumValue, Extension, Field, Import, Label, Message, Method, Oneof, Opt, ProtoFile, Redaction, Service, Type, json_name};
 pub use read::{Problem, ReadError, SCALARS, read};
 pub use value::Value;

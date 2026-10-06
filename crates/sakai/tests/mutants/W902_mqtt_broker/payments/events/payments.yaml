@@ -1,0 +1,45 @@
+asyncapi: 3.1.0
+info:
+  title: Payments events
+  version: 1.0.0
+  description: Payments charges a card when an order is placed, and tells how the charge went.
+channels:
+  orderPlaced:
+    $ref: '../../ordering/events/ordering.yaml#/channels/orderPlaced'
+  paymentSucceeded:
+    address: shop.payments.payment.succeeded
+    messages:
+      paymentSucceeded:
+        $ref: '#/components/messages/PaymentResult'
+  paymentFailed:
+    address: shop.payments.payment.failed
+    messages:
+      paymentFailed:
+        $ref: '#/components/messages/PaymentResult'
+operations:
+  receiveOrderPlaced:
+    action: receive
+    channel:
+      $ref: '#/channels/orderPlaced'
+  sendPaymentSucceeded:
+    action: send
+    channel:
+      $ref: '#/channels/paymentSucceeded'
+  sendPaymentFailed:
+    action: send
+    channel:
+      $ref: '#/channels/paymentFailed'
+components:
+  messages:
+    PaymentResult:
+      payload:
+        $ref: '../api/payments.yaml#/components/schemas/Charge'
+  securitySchemes:
+    sasl:
+      type: scramSha256
+servers:
+  production:
+    host: mqtt.internal:1883
+    protocol: mqtt
+    security:
+      - $ref: '#/components/securitySchemes/sasl'

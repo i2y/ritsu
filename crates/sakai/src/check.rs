@@ -1,11 +1,13 @@
 //! `sakai check` (DESIGN 3.1; PLAN B.11): the stages in their order, and the line that says what
 //! was checked when nothing is wrong.
 //!
-//! 1. the words, the sections, the names and the paths (E001 to E012);
+//! 1. the words, the sections, the names and the paths (E001 to E012), and the keys written in
+//!    the map and its context files (W901);
 //! 2. who owns what (E101 to E103, W101);
 //! 3. the `.proto` files (E106, W102, E103), what the other languages say of their artifacts
 //!    through ritsu's ports (E104, E105), the crates of the Rust code as Cargo says them (E107),
-//!    then the elements the map names (E007, E011);
+//!    the OpenAPI and AsyncAPI documents (E108, W104) with their servers and their authentication
+//!    (W902, W903), then the elements the map names (E007, E011);
 //! 4. the patterns (E301 to E313, W301);
 //! 5. the references that cross a boundary (E201 to E209);
 //! 6. the mappings and the glossaries (E401 to E410, W401, W402).
@@ -188,10 +190,13 @@ pub fn check_map_with(root: &Path, map: &str, suite: &crate::suite::Suite) -> Re
 fn check_map_once(root: &Path, map: &str, suite: &crate::suite::Suite) -> Result<Outcome, Text> {
     let loaded = resolve::load(root, map)?;
     let reads = loaded.reads;
+    // the keys written in the map and the context files it reads, whatever else is wrong with them
+    let mut d1 = loaded.diags;
+    d1.extend(crate::security::keys(root, &std::iter::once(map.to_string()).chain(reads.iter().cloned()).collect::<Vec<_>>()));
     let Some(m) = loaded.model else {
-        return Ok(Outcome { file: map.to_string(), diags: sorted(loaded.diags), summary: None, checked: None, reads });
+        return Ok(Outcome { file: map.to_string(), diags: sorted(d1), summary: None, checked: None, reads });
     };
-    let mut diags = sorted(loaded.diags);
+    let mut diags = sorted(d1);
     // 2. Who owns what.
     let (arts, d2) = owners::own(&m);
     let stop = has_errors(&d2);
@@ -207,7 +212,9 @@ fn check_map_once(root: &Path, map: &str, suite: &crate::suite::Suite) -> Result
     diags.extend(sorted(d3b));
     let (crates, d3c) = crate::cargo::read(&m);
     diags.extend(sorted(d3c));
-    let (cs, d3d) = crate::contracts::load(&m, &arts);
+    let (cs, mut d3d) = crate::contracts::load(&m, &arts);
+    d3d.extend(crate::security::plaintext(&m, &cs));
+    d3d.extend(crate::security::authentication(&m, &cs));
     diags.extend(sorted(d3d));
     let (el, d3) = elements::resolve(&m, &ps, &cs, &arts, &read);
     diags.extend(sorted(d3));

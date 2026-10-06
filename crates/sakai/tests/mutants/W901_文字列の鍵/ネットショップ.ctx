@@ -1,0 +1,9 @@
+map ネットショップ(webshop) v1
+description "HTTP とイベントでやりとりする、小さな店の四つのサービス。どれも契約の文書を持つ。検証用の地図の API キーは AIzaSyD-ritsu-fake-key-for-tests-000000"
+
+use context "contexts/受注.ctx"
+use context "contexts/決済.ctx"
+use context "contexts/配送.ctx"
+use context "contexts/通知.ctx"
+
+covers "."

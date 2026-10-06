@@ -92,7 +92,10 @@ pub struct Built {
 /// file to be written again with nothing in it changed.
 fn header(m: &Model, target: Target, file: &Path, lang: Lang) -> String {
     let dir = file.parent().unwrap_or(Path::new("."));
-    let map = paths::between(dir, &paths::on_disk(&m.root, &m.map.file));
+    // the map's path on one line of the comment (ritsu's DESIGN 9.2); in Java, a backslash is
+    // doubled too, since `\u000a` written in a comment is a line break to javac
+    let map = crate::cml::in_comment(&paths::between(dir, &paths::on_disk(&m.root, &m.map.file)));
+    let map = if matches!(target, Target::ArchUnit) { map.replace('\\', "\\\\") } else { map };
     let cmd = match lang {
         Lang::En => format!("sakai build --target {}", target.word()),
         Lang::Ja => format!("sakai build --target {} --lang ja", target.word()),

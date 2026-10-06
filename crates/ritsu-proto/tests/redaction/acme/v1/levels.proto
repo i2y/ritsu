@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package acme.v1;
+
+enum Level {
+  LEVEL_UNSPECIFIED = 0;
+  OPEN = 1;
+  SECRET = 2 [debug_redact = true];
+}

@@ -666,9 +666,9 @@ B の段階のあとで、二つの言語の細かい形をもう一度そろえ
 
 | 段 | 確かめること | コード |
 |---|---|---|
-| 1 | 字句、構文、節の順序、名前、別名、パスがあるか | E001〜E012 |
+| 1 | 字句、構文、節の順序、名前、別名、パスがあるか。地図と context のファイルに鍵が書いてないか（16 章） | E001〜E012、W901 |
 | 2 | 属し方：範囲の成果物がどれもちょうど一つのコンテキストに属するか | E101、E102、E103、W101、W103 |
-| 3 | 成果物を読む：proto と、rulec・koyomi・dandori が口で答えるもの（4.1）と、Rust のクレートとその依存（Cargo が言うもの。7.7）と、OpenAPI と AsyncAPI の文書とその `$ref`（15 章）。そのあとで、地図が名指す要素（`means`、対応の列挙）を、読んだ proto と文書と rulec の事実で引く | E104、E105、E106、E107、E108、W102、W104、E103（範囲の外の import や参照）、E007・E011（要素） |
+| 3 | 成果物を読む：proto と、rulec・koyomi・dandori が口で答えるもの（4.1）と、Rust のクレートとその依存（Cargo が言うもの。7.7）と、OpenAPI と AsyncAPI の文書とその `$ref`（15 章）、文書のサーバーと認証の指定（16 章）。そのあとで、地図が名指す要素（`means`、対応の列挙）を、読んだ proto と文書と rulec の事実で引く | E104、E105、E106、E107、E108、W102、W104、W902、W903、E103（範囲の外の import や参照）、E007・E011（要素） |
 | 4 | パターンどうしの整合 | E301〜E313、W301 |
 | 5 | 境界を越える参照 | E201〜E210 |
 | 6 | 対応の網羅と同じ語 | E401〜E410、W401、W402 |
@@ -988,8 +988,11 @@ error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
 | W402 | 値が無いことを表す 0 番の値に対応を書いている |
 | E501 | ツールの設定に書けない（言語のモジュールにならないディレクトリの名前、`code` の無い言語へのビルド、コードを持つコンテキストが無い） |
 | E502 | `build --check`：書いてある設定が、いまの地図から書くものと違う |
+| W901 | 鍵の形の値が、地図か context のファイルに書いてある（16 章） |
+| W902 | 地図の OpenAPI か AsyncAPI の文書のサーバーが、ループバックの外へ、暗号化しない通信をする（16 章） |
+| W903 | 公表された言語の OpenAPI の操作か AsyncAPI のチャネルに、認証の指定が無い（16 章） |
 
-番台は、構文と名前（E0xx）、属し方と成果物を読むこと（E1xx）、境界を越える参照（E2xx）、パターン（E3xx）、語と対応（E4xx）、出力（E5xx）で分けた。増やすときは番台の末尾に足し、番台をまたがない。
+番台は、構文と名前（E0xx）、属し方と成果物を読むこと（E1xx）、境界を越える参照（E2xx）、パターン（E3xx）、語と対応（E4xx）、出力（E5xx）、セキュリティの検査（W9xx）で分けた。9xx は ritsu のどの言語の台帳でもセキュリティの検査に空けてあり、同じ番号はどの言語でも同じことを言う（ritsu の DESIGN 16 章）。増やすときは番台の末尾に足し、番台をまたがない。
 
 ### 5.3 診断の例
 
@@ -1990,3 +1993,131 @@ examples/webshop.ja/ネットショップ.ctx: ok — コンテキスト 4、関
 - OpenAPI 2.0 と AsyncAPI 2.x を読むこと（15.2）。
 - OpenAPI の `links` の `operationRef`、discriminator の `mapping` の値（`$ref` と同じく文書を指す文字列）、`callbacks`、AsyncAPI の `reply` を参照に数えること。
 - 文書の `$ref` から、生成したコードどうしの import を許すこと（7.1 の表の最後の行は、いまは proto の import だけから作る）。
+
+## 16. 文書の通信と認証、`.ctx` の鍵（2026-10-06）
+
+ritsu の言語としてのセキュリティの検査（ritsu の DESIGN 16 章）のうち、三つを sakai が受け持つ。どれも警告で、書いた人が意図を書けば消える。ネットワークは使わず、実行時のことは見ない。
+
+| 検査 | コード | 何を見るか | 意図の書き方 |
+|---|---|---|---|
+| 鍵 | W901 | 地図と context のファイルに書いた、鍵の形の値 | 同じ行のコメントに `ritsu: test secret` |
+| 暗号化しない通信 | W902 | 地図の OpenAPI と AsyncAPI の文書のサーバーが、ループバックの外へ、暗号化しない通信をする | サーバーに `x-ritsu-plaintext: "<理由>"` |
+| 認証の指定 | W903 | 公表された言語の OpenAPI の操作と AsyncAPI のチャネルに、認証の指定が無い | 操作、文書、サーバーに `security: []` |
+
+契約の文書と `.proto` に書いた鍵は、sakai では言わない。同じ文書を rulec や dandori も読むので、`ritsu check` が ritsu-cross で一度だけ言う。ritsu-cross は、文書を言語の参照の口（`References`）から見つけるので、sakai は、公表された言語の `openapi "…"`・`asyncapi "…"` の文書も、参照（`file "…"`、`published language`）として返す。地図だけが読む文書の鍵も、これで `ritsu check` に届く。
+
+### 16.1 鍵（W901）
+
+**決定**：地図と、地図が `use context` で読む context のファイルの全文を、ritsu-base の `secrets` で調べる（文字列の中もコメントも）。鍵の種類と見分け方は、ritsu のどの言語も同じである（ritsu の DESIGN 16.3）。
+
+- **段 1 で出す。** 地図やコンテキストの構文が読めず、検査が段 1 で止まるときも出す。鍵は、ファイルが読めるかどうかに関係なく、リポジトリに入っているからである。
+- **行を見せない。** 診断は、鍵の種類と接頭辞と長さ（`AIza…、39 文字`）だけを言う。ほかの診断が鍵のある行を見せるときは、ritsu-base の `Diag::source` が行の鍵を接頭辞と `…` に替えて見せる（ritsu-base の診断を使う koyomi、chobo、geas、yuen、sakai に効く）。CI のログに鍵を残さないためである。
+- **一つの場所に一つ。** 同じ値が二か所にあれば二つ言う。
+
+日本語の名前の変異 `W901_コメントの鍵`（決済のファイルのコメントに、偽の Google の API キーを書いたもの）で、`ritsu sakai check . --lang ja` は次のとおり言う。
+
+```
+警告[W901]: contexts/決済.ctx:4:24: Google の API キーがここに書かれています（AIza…、39 文字）
+  = ファイルに書いた鍵は、リポジトリとその履歴とビルドを読めるすべての人に渡ります。鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください。
+  = 本物の鍵なら、まず Google で無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。
+  = テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。
+```
+
+### 16.2 暗号化しない通信（W902）
+
+**決定**：地図の成果物の OpenAPI と AsyncAPI の文書を、公表された言語に入れたかを問わず、すべて見る。
+
+- **OpenAPI**：文書、パスの項、操作の `servers` の `url` が `http://` か `ws://` で、ホストがループバックでないもの。相対の `url` は、スキームが分からないので見ない（OpenAPI 3.2 の Server Object は、相対の `url` を文書の置き場所からの相対と読む）。サーバー変数は、既定の値を入れて見て、それから `enum` の値を一つずつ入れて見る（ほかの変数は既定の値のまま）。
+- **AsyncAPI**：ルートの `servers` のサーバー（`$ref` はたどる）のうち、`protocol` が `http`・`ws`・`amqp`・`mqtt`（`mqtt5`）・`stomp`・`kafka` で、`host` のホスト（ポートを外したもの）がループバックでないもの。暗号化して通信するプロトコルの名前（`https`、`wss`、`amqps`、`secure-mqtt`、`stomps`、`kafka-secure`）は AsyncAPI 2.6.0 の `protocol` の一覧から取った。名前で暗号化が分からないプロトコル（`nats`、`jms`、`pulsar` など）は見ない。
+- **ループバック**は、`localhost`、`.localhost` で終わる名前、`127.0.0.0/8`、`::1` である（ritsu-base の `urls`）。プライベートなネットワーク（`10.0.0.0/8`、`.internal`）は入れない。同じ機械の外へ出る通信だからである。
+- **意図**：Server Object に `x-ritsu-plaintext: "<理由>"` と書けば言わない。どちらの仕様も Server Object に `x-` の拡張を書けるので、ほかの道具は読み飛ばす。空の文字列や文字列でない値は意図として読まず、W902 の注で理由を書くよう求める。
+- **場所**：OpenAPI は `url` の値、AsyncAPI は `protocol` の値を指す。関わるものに、サーバーの JSON Pointer（`#/servers/0`、`#/servers/production`）を出す。
+
+変異 `W902_平文のサーバー`（決済の OpenAPI の文書に `http://payments.internal/v1` のサーバーを足したもの）と `W902_Kafka_のブローカー`（決済の AsyncAPI の文書に、TLS の無い Kafka のブローカーを足したもの）では次のとおり。
+
+```
+警告[W902]: payments/api/payments.yaml:73:10: payments/api/payments.yaml のサーバー http://payments.internal/v1 は、通信を暗号化しません（http）
+    73 |   - url: http://payments.internal/v1
+  = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
+  = 暗号化して通信するプロトコルは https です。
+  = ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、サーバーに `x-ritsu-plaintext: "<理由>"` と書いてください。
+  関わるもの:
+      決済  payments/api/payments.yaml:73  #/servers/0
+```
+
+```
+警告[W902]: payments/events/payments.yaml:43:15: payments/events/payments.yaml のサーバー production は、通信を暗号化しません（kafka）
+    43 |     protocol: kafka
+  = 途中のネットワークにいる人は、メッセージと、一緒に送る鍵を読んだり書き換えたりできます。
+  = 暗号化して通信するプロトコルは kafka-secure です。
+  = ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、サーバーに `x-ritsu-plaintext: "<理由>"` と書いてください。
+  関わるもの:
+      決済  payments/events/payments.yaml:41  #/servers/production
+```
+
+dandori も、タスクが実際に呼ぶ URL（`use openapi` の `url`、無ければ文書の最初のサーバー）を W902 で見る。`ritsu check` で一つのサーバーについて二つ出ることがあるが、指す場所（`.flow` の `use` の行と、文書のサーバーの行）も直す場所も違う。
+
+### 16.3 認証の指定（W903）
+
+**決定**：公表された言語の文書だけを見る。公表された言語は境界の外から読む契約で、そこに認証の書き方が無ければ、契約を読む人には、クライアントがどう認証すればよいかが分からない。コンテキストの中だけで使う文書は見ない。
+
+- **OpenAPI**：`paths` の操作（OpenAPI 3.2 の `additionalOperations` も）ごとに、操作の `security`、無ければ文書のルートの `security` を見る。どちらにも無ければ W903。空の配列（`security: []`、だれでも呼べる）と空の要件 `{}`（認証は任意）は、書いた意図として通す（OpenAPI 3.2 の Operation Object の書き方）。`webhooks` の操作は見ない。API がクライアントの側を呼ぶときのことで、コンテキストが開く操作ではないからである。
+- **AsyncAPI**：チャネルごとに、チャネルの `servers`（無ければ文書のすべてのサーバー）のうち `security` の無いサーバーがあり、そのチャネルの操作のどれにも `security` が無ければ W903。AsyncAPI 3.1 では、操作の `security` はサーバーのものに足すもので、置き換えない。どちらかに書いてあれば、認証の書き方は契約にある。空の配列は、OpenAPI と同じく意図として読む（仕様は空の配列を禁じていない）。文書に `servers` が一つも無ければ見ない（接続のことを何も言っていない）。ほかの文書のチャネルへの `$ref`（受け取る側が書くもの）は、そのチャネルを持つ文書の側で見る。
+- **場所**：OpenAPI は操作（その最初のキー）、AsyncAPI はチャネルのキーを指す。関わるものに、要素の JSON Pointer と、`security` の無いサーバーを出す。参照の書き方に `openapi`・`asyncapi` のツール名が入るまでは、文書の要素を `<ファイル>#<JSON Pointer>` で書く。
+
+**認可は見ない。** W903 は、だれが呼んでいるかを確かめる書き方（`security`）が契約にあるかまでを見る。どの操作をだれに許すか（Cedar のポリシー、sekisho の `.gate`）は、sekisho の側の言語をまたぐ検査が言う。書いた方式の強さ（`apiKey` を query に置く、`http` の `basic`）も言わない。
+
+変異 `W903_認証の無い操作`（決済の OpenAPI の文書の、ルートの `security` を消したもの）では次のとおり。
+
+```
+警告[W903]: payments/api/payments.yaml:9:7: 公表された言語 payments.v1 の操作 createCharge に、認証の指定がありません
+     9 |       operationId: createCharge
+  = 操作にも文書にも `security` が無いので、契約を読む人には、クライアントがどう認証すればよいかが分かりません。
+  = 操作か文書全体に `security` を書いてください。だれでも呼べるようにわざとしている操作なら、その操作に `security: []` と書いてください。
+  関わるもの:
+      決済  payments/api/payments.yaml:9  #/paths/~1charges/post（POST /charges）
+```
+
+（getCharge にも同じ形の W903 が出る。）
+
+### 16.4 口 `Maps`
+
+sakai は ritsu の口 `Maps`（`src/ports.rs`）に答える。ritsu-cross が、フローが秘密の値を送る先が、地図の上で送ってよいところかを確かめるのに使う（ritsu の E905、W905）。
+
+- `map`：地図のコンテキスト（`use context` の順）と、関係のすべて（それを書いた context のファイルと行、書き出しの語、`separate ways from` かどうか）。context のファイルには None を返す。
+- `context_of`：ファイルが属するコンテキスト。検査と同じ決まり（含む `owns` の項のうち、いちばん深いもの）で決め、範囲の外のファイルと、どの `owns` にも入らないファイルには None を返す。
+
+**決定**：答えるのに使うのは、検査の段 1（構文、名前、パス）と段 2（属し方）だけである。この二つの段に誤りがあれば、その診断を返す（ritsu-cross は W905 で、決められない理由として言う）。段 3 から後（参照、パターン、対応）は、どのファイルがどのコンテキストに属するかを変えないので、そこに誤りがあっても答える。段 3 は、ほかの言語の口（rulec、koyomi、chobo、dandori）を要るので、ritsu の口を一つ答えるたびに地図の検査を全部走らせることにもなる。
+
+`tests/maps.rs` が、`examples/shop`・`examples/shop.ja`・`examples/webshop`・`examples/webshop.ja` の地図の答えと、例の全部のファイルの `context_of` を、`tests/golden/maps/` の golden と突き合わせる。
+
+### 16.5 例
+
+`examples/webshop` と `examples/webshop.ja` の三つの OpenAPI の文書は、どれも `security` を持たず、公表された言語の操作の五つに W903 が出た。文書の終わりに、ベアラートークンの方式（`components.securitySchemes`）と、ルートの `security` を足した。受注の `createOrder` は、アカウントの無い客も注文できるように、わざとだれでも呼べるようにしてあり、操作に `security: []` を書いた。足したのは文書の終わりの行と、`createOrder` の `operationId` の行の後ろだけなので、前からある行の番号は変わらず、15 章と README の出力と golden はそのままである。api の golden は、文書の SHA-256 だけが変わった。
+
+2026-10-06 に手で、足したあとの三つの文書を Redocly CLI 2.58.1（`redocly lint --extends minimal`）にかけ、正しいと言われた（警告は、servers と summary が無いことだけ）。
+
+### 16.6 テスト
+
+- 台帳：W901・W902・W903 の英語と日本語の再現（`sakai explain` が見せるもの）。W901 の再現の鍵は、ritsu のどの材料も使う一つの偽の Google の API キー（ritsu の DESIGN 16.10）で、`src/codes.rs` には二つに分けて書いた（ソースに鍵の形の値を一続きで置かない）。
+- 変異：webshop を一か所ずつ変えた 8 組（英語の名前と日本語の名前の対）。W901 の二つ（コメントの鍵、文字列の鍵）、W902 の四つ（平文のサーバー、サーバー変数、Kafka のブローカー、MQTT のブローカー）、W903 の二つ（認証の無い操作、認証の無いサーバーのチャネル）。
+- `tests/security.rs`：何も出ないことを、英語と日本語の例の両方で確かめる。相対の `url`、`https`、ループバック、`x-ritsu-plaintext`、名前で暗号化が分からないプロトコル、ループバックのブローカー、文書と操作とサーバーの `security: []`、空の要件 `{}`、`webhooks`、公表された言語でない文書、`security` を持つ AsyncAPI の操作、`ritsu: test secret`、AWS の文書の例の鍵。サーバー変数の `enum` の値で出る W902、理由の空の `x-ritsu-plaintext`、段 1 で止まる地図の W901（鍵がテキストにも JSON にも出ないこと）も確かめる。
+- `tests/maps.rs`：16.4 の golden と、context のファイル、属し方の誤り、読めない地図、範囲の外のファイル。
+
+### 16.7 書き出すものに入る、`.ctx` の文字列と地図のパス
+
+ritsu の DESIGN 9.2 と同じ形で、sakai が書き出すもの（`export cml`、`build` の設定、`doc` のページ、`api`）に、`.ctx` の文字列（説明、持ち主、語の定義）と地図のパスを入れて、コメントや行の外に出ないかを確かめた（2026-10-06）。`.ctx` の文字列は `\n` を持てない（字句の読み手が行で切る）が、`\r`、U+0085、U+2028、U+2029 は持てる。ファイルの名前は改行も持てる。
+
+- **CML**：コンテキストの持ち主を `//` のコメントの行に出していた。持ち主に `\r` を書くと、Context Mapper の読み手（行のコメントを `\r` でも終える）には、その続きが CML の文になった。いまは、コメントに入れる文字列の、行を終える五つの文字をエスケープ（`\r`、`\u{2028}` など。ritsu-emit の `one_line` と同じ書き方）にし、`*/` を `*\/` にする。頭の `/* … */` に入る地図のパスも同じにした。
+- **`build` の設定**：頭のコメントの行に、設定のファイルから見た地図のパスを書く。CML と同じくエスケープし、ArchUnit の Java ではバックスラッシュも二つにする。javac は、ファイルのどこでも（コメントの中でも）`\u000a` の六文字を改行として読むので、地図のファイルの名前に `\u000a` と書くと、コメントの続きが Java の文になる。設定のほかの文字列は、コンテキストの名前と別名と package（名前に使える文字だけ）から作るので、外に出ない。
+- **`doc` の Markdown**：`\r` は Markdown の行の終わりなので、説明や持ち主の `\r` で、表の行が崩れ、続きが見出しの行にもなった。いまは空白にする。HTML を始めうる `<`（あとに英字、`/`、`!`、`?` が続くもの）は、コードスパンの外で `&lt;` にする（`md_prose`）。`</script>` を書いた説明も、HTML をそのまま通す表示で要素にならない。コードスパンの中と、ほかの `<`（`a < 3`、`<= 3`）はそのまま書く。dandori と rulec の `doc` の Markdown と同じ決まりである。
+- **`doc` の HTML と `api`**：HTML は文字列をどれも ritsu-base の `docpage::esc` に通し、ページにスクリプトを持たない。`api` は serde_json が書く。どちらも直すところは無かった。
+
+確かめ方は、`tests/cml.rs` の `text_from_the_ctx_stays_in_its_comment`、`tests/build.rs` の `the_maps_path_stays_in_the_comment_of_the_settings`、`tests/doc.rs` の `text_from_the_ctx_stays_where_the_page_puts_it` である（Markdown は、`&lt;/script>` になること、コードスパンと `a < 3` がそのままであることも確かめる）。ふつうの入力の出力は変わらない（CML、設定、ページの golden はそのまま通る）。
+
+### 16.8 まだやらないこと
+
+- 契約の文書の鍵を、単体の `sakai check` で言うこと（いまは `ritsu check` だけ。ritsu の DESIGN 16.12）。
+- AsyncAPI の操作の `traits` に書いた `security` を読むこと。
+- ほかのファイルへの `$ref` で書いたパスの項のサーバーを見ること（いまは、文書に直に書いたパスの項と操作のサーバーだけを見る）。
+- 認可（16.3）。

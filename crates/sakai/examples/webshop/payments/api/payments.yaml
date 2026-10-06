@@ -63,3 +63,9 @@ components:
     ChargeStatus:
       type: string
       enum: [pending, succeeded, failed, refunded]
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+security:
+  - bearer: []

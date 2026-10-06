@@ -1,0 +1,24 @@
+context Payments(payments) v1
+description "Charges the customer's card for a placed order, and tells how the charge went"
+owner "Payments team"
+# the card processor's maps key, for the address check: AIzaSyD-ritsu-fake-key-for-tests-000000
+
+owns
+  dir "../payments"
+
+published language payments.v1
+  openapi "../payments/api/payments.yaml"
+  asyncapi "../payments/events/payments.yaml"
+  open host service createCharge, getCharge, paymentSucceeded, paymentFailed
+
+terms
+  charge "Taking the money for one order from the customer's card"
+    means schema Charge
+  charge_status "Where a charge is: waiting for the card's answer, taken, refused, or given back"
+    means enum ChargeStatus
+
+upstream Ordering conformist
+  through ordering.v1
+
+shared kernel with Ordering
+  dir "../common"

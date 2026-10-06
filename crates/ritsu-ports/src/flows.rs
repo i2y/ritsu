@@ -6,7 +6,8 @@
 //! to against a rule's range (X3 (a)), a rule's output as an amount chobo takes and the refusals
 //! that amount can meet (X4), how long a hold is held against its expiry (X5), the day given to a
 //! koyomi date against its range (X6) — which ritsu-cross asks the other language about with
-//! these facts.
+//! these facts. dandori also says which calls give a value the contracts mark secret to another
+//! file of the project ([`Flows::sends`]), which ritsu-cross holds to the map (X14).
 
 use crate::{Books, Dates, Rules, Said};
 use ritsu_base::text::Text;
@@ -151,6 +152,42 @@ pub struct Crossings {
     pub holds: Vec<HoldSpan>,
 }
 
+/// Where a call of a flow sends what it gives, inside the project (X14, DESIGN 16.8). dandori
+/// says the parties outside the project itself (its E906), so they are not here.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Destination {
+    /// A file of the project that holds the other side: an OpenAPI document a task calls an
+    /// operation of, a `.proto` a `connect` task calls, a rule called at its Connect service, a
+    /// child `.flow`, a book, a dates file. As dandori reaches it.
+    File(PathBuf),
+}
+
+/// A value marked secret, as the flow gives it, and where the mark is written.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Secret {
+    /// The value as the flow writes it, down to the field that is secret: `account.number`.
+    pub shown: String,
+    /// The file that marks it (a `.proto`, an OpenAPI or AsyncAPI document, or the `.flow`
+    /// itself, for `secret`), as dandori reaches it; the line of the mark; and the mark as the
+    /// file writes it (`debug_redact = true`, `x-data-classification`, `secret`).
+    pub marked_in: PathBuf,
+    pub line: usize,
+    pub mark: String,
+}
+
+/// One call of a flow that gives a secret value to something in the project (X14).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Send {
+    /// The line of the call, from 1, and the task (or the rule) called.
+    pub line: usize,
+    pub task: String,
+    pub to: Destination,
+    /// Each secret the call gives, with the parameter that carries it.
+    pub secrets: Vec<(String, Secret)>,
+    /// The parameters the task says it discloses (`discloses`), with the reason written.
+    pub disclosed: Vec<(String, String)>,
+}
+
 /// What dandori answers for a flow.
 pub trait Flows {
     /// The calls the flow at `file` makes to rules, read with the rules through `rules`, when the
@@ -161,6 +198,14 @@ pub trait Flows {
     /// span from a hold to a call its expiry can refuse, read with the other languages through
     /// `ports`, when the flow passes dandori's check; else what the check says.
     fn crossings(&self, file: &Path, ports: &Ports) -> Result<Crossings, Vec<Said>>;
+
+    /// Every call of the flow at `file` that gives a secret value to a file of the project, read
+    /// with the other languages through `ports`, when the flow passes dandori's check; else what
+    /// the check says. None by default, until dandori answers it.
+    fn sends(&self, file: &Path, ports: &Ports) -> Result<Vec<Send>, Vec<Said>> {
+        let _ = (file, ports);
+        Ok(Vec::new())
+    }
 }
 
 /// A length of time as a message says it, in its largest units: `17 days 9 hours`, `17 日 9 時間`.

@@ -8,7 +8,7 @@
   "paths": {
     "/orders": {
       "post": {
-        "operationId": "createOrder",
+        "operationId": "createOrder", "security": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -81,6 +81,10 @@
         "type": "string",
         "enum": ["placed", "paid", "shipped", "cancelled"]
       }
+    },
+    "securitySchemes": {
+      "bearer": { "type": "http", "scheme": "bearer" }
     }
-  }
+  },
+  "security": [{ "bearer": [] }]
 }

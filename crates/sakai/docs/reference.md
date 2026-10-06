@@ -126,6 +126,7 @@ published language payments.v1
 
 A published language may be OpenAPI and AsyncAPI documents (`openapi "…"`, `asyncapi "…"`, any number of each), which mix with no `.proto`, rule or crate (E004).
 sakai reads OpenAPI 3.0, 3.1 and 3.2, and AsyncAPI 3.0 and 3.1, in JSON or in YAML; of YAML, what goes to JSON and back (RFC 9512, section 3.4), and E108 stops at the rest, at OpenAPI 2.0 and at AsyncAPI 2.x.
+A server of a document that does not encrypt the connection to a host off the machine is W902, unless the server says why in `x-ritsu-plaintext: "<why>"`; an operation of a published language with no `security` (nor its document's), or an AsyncAPI channel on a server with none, is W903, unless it is open to anyone on purpose and says so with `security: []`.
 The heading is the name the context gives the language, as a document has no package; no two published languages share one (E006).
 Its open host services are the HTTP operations, by their `operationId` (or, with none, a method and a path in quotes, `"GET /orders"`), and the channels, by their keys under `channels`, that anyone may use (each must be in the block's documents, else E301).
 A part of a document that a listed document reaches by `$ref`, and that belongs to the same context, is in the published language too.
@@ -256,9 +257,9 @@ The elements of an OpenAPI or AsyncAPI document have no name of this form yet. I
 
 ## What `check` checks, in order
 
-1. The words, the sections, the names, the aliases and the paths (E001 to E012).
+1. The words, the sections, the names, the aliases and the paths (E001 to E012), and the keys written in the map and its context files (W901).
 2. Who owns what: every artifact covered belongs to exactly one context (E101 to E103, W101, W103).
-3. What the artifacts say: the `.proto` files, what rulec, koyomi and dandori answer of their files through ritsu's ports, the crates of the Rust code as Cargo says them, the OpenAPI and AsyncAPI documents and their `$ref`s; then the elements the map names (E104 to E108, W102, W104, E007, E011).
+3. What the artifacts say: the `.proto` files, what rulec, koyomi and dandori answer of their files through ritsu's ports, the crates of the Rust code as Cargo says them, the OpenAPI and AsyncAPI documents and their `$ref`s, with their servers and how they ask a client to prove who it is; then the elements the map names (E104 to E108, W102, W104, W902, W903, E007, E011).
 4. The patterns agree with each other (E301 to E313, W301).
 5. The references that cross a boundary (E201 to E210): a document's `$ref` to another context's, and an AsyncAPI operation on another context's channel, among them.
 6. The mappings and the glossaries (E401 to E410, W401, W402).

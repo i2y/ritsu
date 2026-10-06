@@ -65,6 +65,12 @@ impl Joined {
         self.rulec.clone()
     }
 
+    /// The port of maps, as ritsu-cross reads sakai's maps with it: their contexts and
+    /// relationships, and the context a file belongs to (X14, DESIGN 16.8).
+    pub fn maps(&self) -> Rc<dyn ritsu_ports::Maps> {
+        self.sakai.clone()
+    }
+
     /// The ports of rules, dates and books, as dandori reads a flow's rules, dates files and books
     /// with them (`ritsu check`, and the checks across the borders a flow crosses).
     pub fn ports(&self) -> ritsu_ports::Ports {

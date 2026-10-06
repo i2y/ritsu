@@ -47,7 +47,14 @@ error[E210]: shipping/acl/payments.yaml:11:5: The document shipping/acl/payments
       Payments  payments/events/payments.yaml:14  #/channels/paymentFailed, a part of the published language payments.v1
 ```
 
-The mutants of `tests/mutants` named `E108_…`, `W104_…`, `E202_a_document…`, `E204_a_document…`, `E205_the_upstream_charge…`, `E206_events…`, `E210_…`, `E301_a_channel…` and `E401_value_added_to_the_charge_status` are this example with one change each.
+The mutants of `tests/mutants` named `E108_…`, `W104_…`, `E202_a_document…`, `E204_a_document…`, `E205_the_upstream_charge…`, `E206_events…`, `E210_…`, `E301_a_channel…`, `E401_value_added_to_the_charge_status`, `W901_…`, `W902_…` and `W903_…` are this example with one change each.
+
+## Authentication
+
+Each of the three HTTP APIs asks for a bearer token: the end of each OpenAPI document declares the scheme (`components.securitySchemes`) and asks for it everywhere (`security`).
+Ordering's `createOrder` is open on purpose, so that a guest can place an order without an account, and says so with `security: []` on the operation.
+Without these, `sakai check` warns of each operation of a published language that says no authentication (W903).
+The AsyncAPI documents name no server, so they say nothing of how the services connect, and there is nothing for W902 and W903 to look at in them.
 
 ## The documents
 

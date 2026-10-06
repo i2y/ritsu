@@ -1,0 +1,103 @@
+map 通販.ctx
+contexts 受注, 在庫, 配送, 請求, レビュー
+  受注 upstream 在庫  (contexts/受注.ctx:23)
+  受注 partnership with 配送  (contexts/受注.ctx:26)
+  配送 upstream 在庫  (contexts/配送.ctx:29)
+  配送 downstream 請求  (contexts/配送.ctx:38)
+  配送 shared kernel with 請求  (contexts/配送.ctx:40)
+  配送 partnership with 受注  (contexts/配送.ctx:44)
+  請求 upstream 受注  (contexts/請求.ctx:20)
+  請求 upstream 配送  (contexts/請求.ctx:27)
+  請求 shared kernel with 配送  (contexts/請求.ctx:30)
+  レビュー separate ways from 請求 [separate]  (contexts/レビュー.ctx:8)
+files
+  README.ja.md -> -
+  billing/rules/出荷の送料.rule -> 請求
+  billing/rules/決済手数料.rule -> 請求
+  billing/rules/請求の要否.rule -> 請求
+  billing/支払条件.cal -> 請求
+  calendars/data/syukujitsu.csv -> 請求
+  calendars/東京の営業日.cal -> 請求
+  contexts/レビュー.ctx -> -
+  contexts/受注.ctx -> -
+  contexts/在庫.ctx -> -
+  contexts/請求.ctx -> -
+  contexts/配送.ctx -> -
+  delivery/rules/出荷の急ぎ.rule -> 配送
+  delivery/出荷日.cal -> 配送
+  delivery/配送の手配.flow -> 配送
+  go/billing/acl/ordering/status.go -> 請求
+  go/billing/invoice.go -> 請求
+  go/calendars/tokyo.go -> 請求
+  go/delivery/acl/inventory/packing.go -> 配送
+  go/delivery/ship.go -> 配送
+  go/go.mod -> -
+  go/inventory/ledger/ledger.go -> 在庫
+  go/inventory/service.go -> 在庫
+  go/ordering/fulfill.go -> 受注
+  go/reviews/stars.go -> レビュー
+  go/shop/delivery/v1/shipment.pb.go -> 配送
+  go/shop/ordering/v1/fulfillment.pb.go -> 受注
+  go/shop/ordering/v1/order.pb.go -> 受注
+  go/warehouse/v1/stock.pb.go -> 在庫
+  inventory/在庫の引当.book -> 在庫
+  java/src/main/java/billing/Invoice.java -> 請求
+  java/src/main/java/billing/acl/ordering/Status.java -> 請求
+  java/src/main/java/calendars/Tokyo.java -> 請求
+  java/src/main/java/delivery/Ship.java -> 配送
+  java/src/main/java/delivery/acl/inventory/Packing.java -> 配送
+  java/src/main/java/inventory/Ledger.java -> 在庫
+  java/src/main/java/inventory/StockService.java -> 在庫
+  java/src/main/java/ordering/Fulfill.java -> 受注
+  java/src/main/java/reviews/Stars.java -> レビュー
+  java/src/main/java/shop/delivery/v1/CreateShipmentRequest.java -> 配送
+  java/src/main/java/shop/ordering/v1/FulfillResponse.java -> 受注
+  java/src/main/java/shop/ordering/v1/Order.java -> 受注
+  java/src/main/java/shop/ordering/v1/OrderStatus.java -> 受注
+  java/src/main/java/warehouse/v1/PackingStatus.java -> 在庫
+  java/src/main/java/warehouse/v1/ReserveResponse.java -> 在庫
+  java/src/main/java/warehouse/v1/Stock.java -> 在庫
+  java/src/test/java/SakaiContextsTest.java -> -
+  ordering/受注.flow -> 受注
+  proto/dandori/v1/options.proto -> -
+  proto/shop/delivery/v1/shipment.proto -> 配送
+  proto/shop/ordering/v1/fulfillment.proto -> 受注
+  proto/shop/ordering/v1/order.proto -> 受注
+  proto/warehouse/v1/stock.proto -> 在庫
+  py/billing/__init__.py -> 請求
+  py/billing/acl/__init__.py -> 請求
+  py/billing/acl/ordering/__init__.py -> 請求
+  py/billing/acl/ordering/status.py -> 請求
+  py/billing/invoice.py -> 請求
+  py/calendars/__init__.py -> 請求
+  py/calendars/tokyo.py -> 請求
+  py/delivery/__init__.py -> 配送
+  py/delivery/acl/__init__.py -> 配送
+  py/delivery/acl/inventory/__init__.py -> 配送
+  py/delivery/acl/inventory/packing.py -> 配送
+  py/delivery/ship.py -> 配送
+  py/inventory/__init__.py -> 在庫
+  py/inventory/ledger.py -> 在庫
+  py/inventory/service.py -> 在庫
+  py/ordering/__init__.py -> 受注
+  py/ordering/fulfill.py -> 受注
+  py/reviews/__init__.py -> レビュー
+  py/reviews/stars.py -> レビュー
+  py/shop/delivery/v1/shipment_pb2.py -> 配送
+  py/shop/ordering/v1/fulfillment_pb2.py -> 受注
+  py/shop/ordering/v1/order_pb2.py -> 受注
+  py/warehouse/v1/stock_pb2.py -> 在庫
+  ts/billing/acl/ordering/status.ts -> 請求
+  ts/billing/invoice.ts -> 請求
+  ts/calendars/tokyo.ts -> 請求
+  ts/delivery/acl/inventory/packing.ts -> 配送
+  ts/delivery/ship.ts -> 配送
+  ts/inventory/ledger.ts -> 在庫
+  ts/inventory/service.ts -> 在庫
+  ts/ordering/fulfill.ts -> 受注
+  ts/reviews/stars.ts -> レビュー
+  ts/shop/delivery/v1/shipment_pb.ts -> 配送
+  ts/shop/ordering/v1/fulfillment_pb.ts -> 受注
+  ts/shop/ordering/v1/order_pb.ts -> 受注
+  ts/warehouse/v1/stock_pb.ts -> 在庫
+  通販.ctx -> -

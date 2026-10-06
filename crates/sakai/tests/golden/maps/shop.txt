@@ -1,0 +1,103 @@
+map shop.ctx
+contexts Ordering, Inventory, Delivery, Billing, Reviews
+  Ordering upstream Inventory  (contexts/ordering.ctx:23)
+  Ordering partnership with Delivery  (contexts/ordering.ctx:26)
+  Delivery upstream Inventory  (contexts/delivery.ctx:29)
+  Delivery downstream Billing  (contexts/delivery.ctx:38)
+  Delivery shared kernel with Billing  (contexts/delivery.ctx:40)
+  Delivery partnership with Ordering  (contexts/delivery.ctx:44)
+  Billing upstream Ordering  (contexts/billing.ctx:20)
+  Billing upstream Delivery  (contexts/billing.ctx:27)
+  Billing shared kernel with Delivery  (contexts/billing.ctx:30)
+  Reviews separate ways from Billing [separate]  (contexts/reviews.ctx:8)
+files
+  README.md -> -
+  billing/payment_terms.cal -> Billing
+  billing/rules/billing_need.rule -> Billing
+  billing/rules/payment_fee.rule -> Billing
+  billing/rules/shipment_fee.rule -> Billing
+  calendars/data/syukujitsu.csv -> Billing
+  calendars/tokyo_business_days.cal -> Billing
+  contexts/billing.ctx -> -
+  contexts/delivery.ctx -> -
+  contexts/inventory.ctx -> -
+  contexts/ordering.ctx -> -
+  contexts/reviews.ctx -> -
+  delivery/arrange_delivery.flow -> Delivery
+  delivery/rules/urgency.rule -> Delivery
+  delivery/ship_date.cal -> Delivery
+  go/billing/acl/ordering/status.go -> Billing
+  go/billing/invoice.go -> Billing
+  go/calendars/tokyo.go -> Billing
+  go/delivery/acl/inventory/packing.go -> Delivery
+  go/delivery/ship.go -> Delivery
+  go/go.mod -> -
+  go/inventory/ledger/ledger.go -> Inventory
+  go/inventory/service.go -> Inventory
+  go/ordering/fulfill.go -> Ordering
+  go/reviews/stars.go -> Reviews
+  go/shop/delivery/v1/shipment.pb.go -> Delivery
+  go/shop/ordering/v1/fulfillment.pb.go -> Ordering
+  go/shop/ordering/v1/order.pb.go -> Ordering
+  go/warehouse/v1/stock.pb.go -> Inventory
+  inventory/inventory.book -> Inventory
+  java/src/main/java/billing/Invoice.java -> Billing
+  java/src/main/java/billing/acl/ordering/Status.java -> Billing
+  java/src/main/java/calendars/Tokyo.java -> Billing
+  java/src/main/java/delivery/Ship.java -> Delivery
+  java/src/main/java/delivery/acl/inventory/Packing.java -> Delivery
+  java/src/main/java/inventory/Ledger.java -> Inventory
+  java/src/main/java/inventory/StockService.java -> Inventory
+  java/src/main/java/ordering/Fulfill.java -> Ordering
+  java/src/main/java/reviews/Stars.java -> Reviews
+  java/src/main/java/shop/delivery/v1/CreateShipmentRequest.java -> Delivery
+  java/src/main/java/shop/ordering/v1/FulfillResponse.java -> Ordering
+  java/src/main/java/shop/ordering/v1/Order.java -> Ordering
+  java/src/main/java/shop/ordering/v1/OrderStatus.java -> Ordering
+  java/src/main/java/warehouse/v1/PackingStatus.java -> Inventory
+  java/src/main/java/warehouse/v1/ReserveResponse.java -> Inventory
+  java/src/main/java/warehouse/v1/Stock.java -> Inventory
+  java/src/test/java/SakaiContextsTest.java -> -
+  ordering/fulfillment.flow -> Ordering
+  proto/dandori/v1/options.proto -> -
+  proto/shop/delivery/v1/shipment.proto -> Delivery
+  proto/shop/ordering/v1/fulfillment.proto -> Ordering
+  proto/shop/ordering/v1/order.proto -> Ordering
+  proto/warehouse/v1/stock.proto -> Inventory
+  py/billing/__init__.py -> Billing
+  py/billing/acl/__init__.py -> Billing
+  py/billing/acl/ordering/__init__.py -> Billing
+  py/billing/acl/ordering/status.py -> Billing
+  py/billing/invoice.py -> Billing
+  py/calendars/__init__.py -> Billing
+  py/calendars/tokyo.py -> Billing
+  py/delivery/__init__.py -> Delivery
+  py/delivery/acl/__init__.py -> Delivery
+  py/delivery/acl/inventory/__init__.py -> Delivery
+  py/delivery/acl/inventory/packing.py -> Delivery
+  py/delivery/ship.py -> Delivery
+  py/inventory/__init__.py -> Inventory
+  py/inventory/ledger.py -> Inventory
+  py/inventory/service.py -> Inventory
+  py/ordering/__init__.py -> Ordering
+  py/ordering/fulfill.py -> Ordering
+  py/reviews/__init__.py -> Reviews
+  py/reviews/stars.py -> Reviews
+  py/shop/delivery/v1/shipment_pb2.py -> Delivery
+  py/shop/ordering/v1/fulfillment_pb2.py -> Ordering
+  py/shop/ordering/v1/order_pb2.py -> Ordering
+  py/warehouse/v1/stock_pb2.py -> Inventory
+  shop.ctx -> -
+  ts/billing/acl/ordering/status.ts -> Billing
+  ts/billing/invoice.ts -> Billing
+  ts/calendars/tokyo.ts -> Billing
+  ts/delivery/acl/inventory/packing.ts -> Delivery
+  ts/delivery/ship.ts -> Delivery
+  ts/inventory/ledger.ts -> Inventory
+  ts/inventory/service.ts -> Inventory
+  ts/ordering/fulfill.ts -> Ordering
+  ts/reviews/stars.ts -> Reviews
+  ts/shop/delivery/v1/shipment_pb.ts -> Delivery
+  ts/shop/ordering/v1/fulfillment_pb.ts -> Ordering
+  ts/shop/ordering/v1/order_pb.ts -> Ordering
+  ts/warehouse/v1/stock_pb.ts -> Inventory

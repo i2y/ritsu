@@ -1,6 +1,6 @@
-//! Reading one `.proto`: the tokens, then the statements. `extend`, `reserved` and `extensions`
-//! are passed over; a proto2 `group` is refused, since its fields are a message of a kind the
-//! languages do not read.
+//! Reading one `.proto`: the tokens, then the statements. The fields of an `extend` are read as
+//! [`Extension`]s (custom options are declared so); `reserved` and `extensions` are passed over; a
+//! proto2 `group` is refused, since its fields are a message of a kind the languages do not read.
 
 use crate::model::*;
 use crate::validate::{self, MsgRules, OneofRule};
@@ -517,7 +517,10 @@ pub fn read(path: &str, src: &str) -> Result<ProtoFile, ReadError> {
                 p.i += 1;
                 service(&mut p, &mut f)?;
             }
-            T::Word(w) if w == "extend" => p.skip_statement()?,
+            T::Word(w) if w == "extend" => {
+                p.i += 1;
+                extend(&mut p, "", &mut f)?;
+            }
             T::Sym(';') => p.i += 1,
             _ => return p.expected(tr!("`message`・`enum`・`service`・`import`・`option` のどれか", "`message`, `enum`, `service`, `import` or `option`")),
         }
@@ -580,6 +583,10 @@ fn message(p: &mut P, outer: &str, f: &mut ProtoFile) -> Result<(), ReadError> {
                     }
                 }
             }
+            Some(T::Word(w)) if w == "extend" && oneof.is_none() => {
+                p.i += 1;
+                extend(p, &name, f)?;
+            }
             Some(T::Word(w)) if ["reserved", "extensions", "extend"].contains(&w.as_str()) => p.skip_statement()?,
             Some(T::Word(w)) => {
                 let fline = p.line();
@@ -638,6 +645,59 @@ fn message(p: &mut P, outer: &str, f: &mut ProtoFile) -> Result<(), ReadError> {
     m.oneofs = oneofs;
     m.rules = rules;
     Ok(())
+}
+
+/// `extend <Extendee> { <fields> }`, after `extend`, in `outer` (a message's name from the
+/// package, or "" at the top of the file): each field an [`Extension`]. A statement that does not
+/// read as a field is passed over, as the whole `extend` was before it was read.
+fn extend(p: &mut P, outer: &str, f: &mut ProtoFile) -> Result<(), ReadError> {
+    let extendee = p.word()?;
+    p.sym('{')?;
+    loop {
+        match p.peek().cloned() {
+            None => return p.expected(Text::same("`}`")),
+            Some(T::Sym('}')) => {
+                p.i += 1;
+                return Ok(());
+            }
+            Some(T::Sym(';')) => p.i += 1,
+            Some(T::Word(_)) => {
+                let at = p.i;
+                match extension(p, outer, &extendee) {
+                    Ok(x) => f.extensions.push(x),
+                    Err(_) => {
+                        p.i = at;
+                        p.skip_statement()?;
+                    }
+                }
+            }
+            Some(_) => p.skip_statement()?,
+        }
+    }
+}
+
+/// One field of an `extend`: `[label] <type> <name> = <number> [<options>];`.
+fn extension(p: &mut P, outer: &str, extendee: &str) -> Result<Extension, ReadError> {
+    let line = p.line();
+    let first = p.word()?;
+    let ty = if ["repeated", "optional", "required"].contains(&first.as_str()) { p.word()? } else { first };
+    if ty == "group" {
+        return p.fail(Problem::Group);
+    }
+    let ty = if SCALARS.contains(&ty.as_str()) { Type::Scalar(ty) } else { Type::Named(ty) };
+    let name = p.word()?;
+    p.sym('=')?;
+    let number = match p.peek().cloned() {
+        Some(T::Num(n)) => {
+            p.i += 1;
+            number(&n).ok_or(()).or_else(|_| p.expected(tr!("フィールドの番号", "the field's number")))?
+        }
+        _ => return p.expected(tr!("フィールドの番号", "the field's number")),
+    };
+    p.field_options()?;
+    p.sym(';')?;
+    let name = if outer.is_empty() { name } else { format!("{outer}.{name}") };
+    Ok(Extension { extendee: extendee.to_string(), name, ty, number, line })
 }
 
 fn enumeration(p: &mut P, outer: &str, f: &mut ProtoFile) -> Result<(), ReadError> {

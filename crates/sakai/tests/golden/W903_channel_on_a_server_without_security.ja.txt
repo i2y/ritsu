@@ -1,0 +1,15 @@
+警告[W903]: payments/events/payments.yaml:9:3: 公表された言語 payments.v1 のチャネル paymentSucceeded に、サーバー production での認証の指定がありません
+     9 |   paymentSucceeded:
+  = サーバーにも、このチャネルの操作にも `security` が無いので、契約を読む人には、クライアントがどう認証すればよいかが分かりません。
+  = サーバーか、このチャネルの操作に `security` を書いてください。だれでも使えるようにわざとしているなら、サーバーか操作に `security: []` と書いてください。
+  関わるもの:
+      Payments  payments/events/payments.yaml:9   #/channels/paymentSucceeded（payments/events/payments.yaml のチャネル）
+      Payments  payments/events/payments.yaml:38  #/servers/production（`security` の無いサーバー）
+警告[W903]: payments/events/payments.yaml:14:3: 公表された言語 payments.v1 のチャネル paymentFailed に、サーバー production での認証の指定がありません
+    14 |   paymentFailed:
+  = サーバーにも、このチャネルの操作にも `security` が無いので、契約を読む人には、クライアントがどう認証すればよいかが分かりません。
+  = サーバーか、このチャネルの操作に `security` を書いてください。だれでも使えるようにわざとしているなら、サーバーか操作に `security: []` と書いてください。
+  関わるもの:
+      Payments  payments/events/payments.yaml:14  #/channels/paymentFailed（payments/events/payments.yaml のチャネル）
+      Payments  payments/events/payments.yaml:38  #/servers/production（`security` の無いサーバー）
+webshop.ctx: ok — コンテキスト 4、関係 5。成果物 9 件は、どれも一つのコンテキストに属する。境界を越える参照 7 件を確かめた（openapi 1、asyncapi 5、dandori 1）

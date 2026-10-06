@@ -4668,3 +4668,238 @@ X = 1
 ```
 
 関連: [E501](#e501)
+
+<a id="w901"></a>
+
+## W901 — 鍵の形の値が `.ctx` に書いてあります
+
+**いつ出るか**: 地図か、地図が読む context のファイルに、プロバイダーが形を決めている鍵（AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、PEM の秘密鍵）が、文字列でもコメントでも書いてあるとき。sakai は鍵の種類と接頭辞と長さだけを示し、鍵そのものは出しません。OpenAPI と AsyncAPI の文書と `.proto` の鍵は、`ritsu check` が一度だけ言います。
+
+**直し方**: 鍵をファイルから消し、コードが動くところ（環境変数、シークレットの置き場）から読んでください。本物の鍵なら、まずプロバイダーで無効にしてください（リポジトリの履歴に残ります）。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `sakai check .` を走らせます。
+
+`地図.ctx`:
+
+```ctx
+map 地図(m) v1
+use context "甲.ctx"
+use context "乙.ctx"
+covers "."
+```
+
+`甲.ctx`:
+
+```ctx
+context 甲(a) v1
+# 検証用の地図の API キー: AIzaSyD-ritsu-fake-key-for-tests-000000
+owns
+  dir "a"
+```
+
+`乙.ctx`:
+
+```ctx
+context 乙(b) v1
+owns
+  dir "b"
+
+published language b.v1
+  proto "b/v1/b.proto"
+  open host service BService
+
+terms
+  種類 "乙が扱うものの種類"
+    means enum Kind
+```
+
+`a/a.proto`:
+
+```proto
+syntax = "proto3";
+package a;
+message A {}
+```
+
+`b/v1/b.proto`:
+
+```proto
+syntax = "proto3";
+package b.v1;
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_ONE = 1;
+  KIND_TWO = 2;
+}
+message B { Kind kind = 1; }
+message Plain { string id = 1; }
+service BService { rpc Get(B) returns (B); }
+```
+
+<a id="w902"></a>
+
+## W902 — 文書のサーバーが、通信を暗号化しません
+
+**いつ出るか**: 地図の OpenAPI か AsyncAPI の文書のサーバーが、ループバック（localhost、127.0.0.0/8、::1）の外へ、暗号化しない通信をするとき。OpenAPI では `url` が `http://` か `ws://` のサーバー（文書、パスの項、操作のもの。サーバー変数には既定の値と `enum` の値を一つずつ入れて見ます。相対の `url` は見ません）、AsyncAPI では `protocol` が `http`・`ws`・`amqp`・`mqtt`（`mqtt5`）・`stomp`・`kafka` のサーバーです。
+
+**直し方**: 暗号化して通信するプロトコル（https、wss、amqps、secure-mqtt、stomps、kafka-secure）にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、サーバーに `x-ritsu-plaintext: "<理由>"` と書いてください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `sakai check .` を走らせます。
+
+`地図.ctx`:
+
+```ctx
+map 地図(m) v1
+use context "甲.ctx"
+use context "乙.ctx"
+covers "."
+```
+
+`甲.ctx`:
+
+```ctx
+context 甲(a) v1
+owns
+  dir "a"
+```
+
+`乙.ctx`:
+
+```ctx
+context 乙(b) v1
+owns
+  dir "b"
+
+published language b.v1
+  proto "b/v1/b.proto"
+  open host service BService
+
+terms
+  種類 "乙が扱うものの種類"
+    means enum Kind
+```
+
+`a/a.proto`:
+
+```proto
+syntax = "proto3";
+package a;
+message A {}
+```
+
+`b/v1/b.proto`:
+
+```proto
+syntax = "proto3";
+package b.v1;
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_ONE = 1;
+  KIND_TWO = 2;
+}
+message B { Kind kind = 1; }
+message Plain { string id = 1; }
+service BService { rpc Get(B) returns (B); }
+```
+
+`b/events.yaml`:
+
+```
+asyncapi: 3.0.0
+info:
+  title: B events
+  version: 1.0.0
+servers:
+  production:
+    host: broker.example.com:9092
+    protocol: kafka
+```
+
+関連: [W903](#w903)
+
+<a id="w903"></a>
+
+## W903 — 公表された言語の操作に、認証の指定がありません
+
+**いつ出るか**: 公表された言語の OpenAPI の文書の操作（`webhooks` のものを除く）に、操作にも文書にも `security` が無いとき。AsyncAPI の文書では、チャネルが使うサーバーに `security` が無く、そのチャネルの操作にも無いとき（文書に `servers` が無ければ見ません）。どの操作をだれに許すか（認可）は、ここでは見ません。
+
+**直し方**: 操作か文書（AsyncAPI ではサーバーか操作）に `security` を書いてください。だれでも呼べるようにわざとしているなら、`security: []` と書いてください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `sakai check .` を走らせます。
+
+`地図.ctx`:
+
+```ctx
+map 地図(m) v1
+use context "甲.ctx"
+use context "乙.ctx"
+covers "."
+```
+
+`甲.ctx`:
+
+```ctx
+context 甲(a) v1
+owns
+  dir "a"
+```
+
+`乙.ctx`:
+
+```ctx
+context 乙(b) v1
+owns
+  dir "b"
+
+published language b.v1
+  proto "b/v1/b.proto"
+  open host service BService
+
+published language b.api
+  openapi "b/api.yaml"
+
+terms
+  種類 "乙が扱うものの種類"
+    means enum Kind
+```
+
+`a/a.proto`:
+
+```proto
+syntax = "proto3";
+package a;
+message A {}
+```
+
+`b/v1/b.proto`:
+
+```proto
+syntax = "proto3";
+package b.v1;
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_ONE = 1;
+  KIND_TWO = 2;
+}
+message B { Kind kind = 1; }
+message Plain { string id = 1; }
+service BService { rpc Get(B) returns (B); }
+```
+
+`b/api.yaml`:
+
+```
+openapi: 3.1.0
+info:
+  title: B
+  version: 1.0.0
+paths:
+  /things/{id}:
+    get:
+      operationId: getThing
+      responses:
+        '200':
+          description: The thing
+```
+
+関連: [W902](#w902)

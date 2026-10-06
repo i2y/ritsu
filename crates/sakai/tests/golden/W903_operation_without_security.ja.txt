@@ -1,0 +1,13 @@
+警告[W903]: payments/api/payments.yaml:9:7: 公表された言語 payments.v1 の操作 createCharge に、認証の指定がありません
+     9 |       operationId: createCharge
+  = 操作にも文書にも `security` が無いので、契約を読む人には、クライアントがどう認証すればよいかが分かりません。
+  = 操作か文書全体に `security` を書いてください。だれでも呼べるようにわざとしている操作なら、その操作に `security: []` と書いてください。
+  関わるもの:
+      Payments  payments/api/payments.yaml:9  #/paths/~1charges/post（POST /charges）
+警告[W903]: payments/api/payments.yaml:25:7: 公表された言語 payments.v1 の操作 getCharge に、認証の指定がありません
+    25 |       operationId: getCharge
+  = 操作にも文書にも `security` が無いので、契約を読む人には、クライアントがどう認証すればよいかが分かりません。
+  = 操作か文書全体に `security` を書いてください。だれでも呼べるようにわざとしている操作なら、その操作に `security: []` と書いてください。
+  関わるもの:
+      Payments  payments/api/payments.yaml:25  #/paths/~1charges~1{id}/get（GET /charges/{id}）
+webshop.ctx: ok — コンテキスト 4、関係 5。成果物 9 件は、どれも一つのコンテキストに属する。境界を越える参照 7 件を確かめた（openapi 1、asyncapi 5、dandori 1）

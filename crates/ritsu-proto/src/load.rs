@@ -205,6 +205,74 @@ impl Protos {
         out
     }
 
+    /// Whether `field` of a message in `file` is marked to be redacted (DESIGN 16.6): written
+    /// `[debug_redact = true]`, or given a custom option whose value is an enum value marked so.
+    /// A custom option is looked up as an extension of `google.protobuf.FieldOptions` among the
+    /// files `file` sees (itself, what it imports, what those import publicly), by protobuf's
+    /// rule for names from the scope of the field's message outward; its enum type the same way
+    /// from where the extension is declared. `debug_redact = false`, an option that is not found,
+    /// and one whose value is no enum value marked so, mark nothing.
+    pub fn redaction(&self, file: &str, field: &Field) -> Option<Redaction> {
+        if field.options.iter().any(|o| o.name.trim() == "debug_redact" && is_true(o)) {
+            return Some(Redaction::Direct { line: field.line });
+        }
+        let f = self.files.get(file)?;
+        let msg = f.messages.iter().find(|m| m.fields.iter().any(|x| x == field))?;
+        let scope = f.full(&msg.name);
+        for o in &field.options {
+            let written = o.name.trim();
+            let Some(ext) = written.strip_prefix('(').and_then(|x| x.strip_suffix(')')) else { continue };
+            let Some(crate::value::Value::Id(value)) = &o.value else { continue };
+            let Some((xfile, x)) = self.field_option(file, &scope, ext.trim()) else { continue };
+            let Type::Named(ty) = &x.ty else { continue };
+            let xf = &self.files[&xfile];
+            let xscope = match x.name.rsplit_once('.') {
+                Some((outer, _)) => xf.full(outer),
+                None => xf.package.clone(),
+            };
+            let Resolved::Found(sym) = self.resolve(&xfile, &xscope, ty) else { continue };
+            if !sym.is_enum {
+                continue;
+            }
+            let Some(e) = self.files.get(&sym.file).and_then(|ef| ef.enumeration(&sym.name)) else { continue };
+            if let Some(v) = e.values.iter().find(|v| &v.name == value)
+                && v.options.iter().any(|vo| vo.name.trim() == "debug_redact" && is_true(vo))
+            {
+                return Some(Redaction::ByOption { option: written.to_string(), value: value.clone(), file: sym.file.clone(), line: v.line });
+            }
+        }
+        None
+    }
+
+    /// The extension of `google.protobuf.FieldOptions` that `written` (an option's name inside
+    /// its parentheses) comes to from `scope` of `file`, and the file that declares it.
+    fn field_option(&self, file: &str, scope: &str, written: &str) -> Option<(String, Extension)> {
+        let vis = self.visible(file);
+        let found = |full: &str| {
+            vis.iter().find_map(|vf| {
+                let pf = self.files.get(vf)?;
+                pf.extensions
+                    .iter()
+                    .find(|x| x.extendee.trim_start_matches('.') == "google.protobuf.FieldOptions" && pf.full(&x.name) == full)
+                    .map(|x| (vf.clone(), x.clone()))
+            })
+        };
+        if let Some(abs) = written.strip_prefix('.') {
+            return found(abs);
+        }
+        let mut s = scope.to_string();
+        loop {
+            let full = if s.is_empty() { written.to_string() } else { format!("{s}.{written}") };
+            if let Some(x) = found(&full) {
+                return Some(x);
+            }
+            if s.is_empty() {
+                return None;
+            }
+            s = s.rsplit_once('.').map(|(a, _)| a.to_string()).unwrap_or_default();
+        }
+    }
+
     /// Every message and enum `start` reaches through the types of fields, `start` among them,
     /// in the order they are reached.
     pub fn reach(&self, start: &[Symbol]) -> Vec<Symbol> {
@@ -233,6 +301,11 @@ impl Protos {
         }
         out
     }
+}
+
+/// An option set to `true` (`debug_redact = true`).
+fn is_true(o: &Opt) -> bool {
+    matches!(&o.value, Some(crate::value::Value::Id(v)) if v == "true" || v == "True")
 }
 
 /// What reading a set of `.proto` files came across.
