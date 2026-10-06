@@ -1,3 +1,3 @@
-error[E202]: tests/mutants/E202_ない操作.gate:60:1: `refundOrders` is not an operation of `../../examples/refunds/api/orders.json`
+error[E202]: tests/mutants/E202_ない操作.gate:60:1: There is no operation refundOrders in examples/refunds/api/orders.json
     60 |   guards 注文 refundOrders
   = Its operations are getOrder, refundOrder and exportRefunds.

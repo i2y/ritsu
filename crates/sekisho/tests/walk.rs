@@ -31,7 +31,7 @@ fn check(path: &str, budget: u64) -> (Vec<Diag>, Checked) {
 }
 
 fn check_with(path: &str, suite: &Suite, budget: u64) -> (Vec<Diag>, Checked) {
-    let o = sekisho::check::check_file(path, suite, &Options { budget }).unwrap();
+    let o = sekisho::check::check_file(path, suite, &Options { budget, ..Options::default() }).unwrap();
     let said: String = o.diags.iter().map(|d| d.render(Lang::En)).collect();
     (o.diags, o.walked.unwrap_or_else(|| panic!("{path}: the names do not hold:\n{said}")))
 }
@@ -302,7 +302,7 @@ fn a_value_named_by_its_public_name_is_given_to_the_rule_by_the_rule_s_name() {
     let rules = Unsure(rulec::ports::Engine::default());
     let dates = koyomi::ports::Engine;
     let langs = sekisho::borders::Langs { rules: Some(&rules), dates: Some(&dates), books: None, flows: None };
-    let (diags, c) = checks::all(&f, &[], &langs, checks::BUDGET);
+    let (diags, c) = checks::all(&f, &[], &langs, checks::BUDGET, dir.path());
     // the discount is counted in case (inexact) for each grade, and a concrete input confirms it:
     // nothing is undecided
     assert!(diags.is_empty(), "{}", rendered(&diags));

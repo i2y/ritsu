@@ -1,7 +1,7 @@
 sekisho check — 検査する。構文、名前と型、宣言した範囲のすべての組み合わせ
 
 使い方:
-  sekisho check <file.gate>... [--format json] [--budget <n>]
+  sekisho check <file.gate>... [--format json] [--budget <n>] [--root <dir>]
 
 引数:
   <file.gate>...  検査する .gate のファイル
@@ -9,6 +9,7 @@ sekisho check — 検査する。構文、名前と型、宣言した範囲の�
 フラグ:
   --format json  ファイルごとに一つの JSON
   --budget <n>   一つの action で数える組み合わせの上限（既定 100000000）
+  --root <dir>   参照のパスを数えるルート。無ければ、最初に渡したパスの上で .git を持つ一番近いディレクトリ（それも無ければ、そのファイルのあるディレクトリ）
   --lang ja|en   文面の言語。無ければ環境変数 SEKISHO_LANG、次に RITSU_LANG、どちらも無ければ en（既定 en）
   --help         この画面を出す
 

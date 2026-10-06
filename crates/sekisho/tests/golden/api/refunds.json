@@ -214,7 +214,17 @@
       "entity": "Shop::Action::\"view_order\"",
       "guards": [
         {
-          "reference": "openapi \"api/orders.json\" operation getOrder",
+          "reference": {
+            "text": "openapi \"api/orders.json\" operation getOrder",
+            "tool": "openapi",
+            "path": "api/orders.json",
+            "items": [
+              [
+                "operation",
+                "getOrder"
+              ]
+            ]
+          },
           "line": 54
         }
       ],
@@ -237,7 +247,17 @@
       "entity": "Shop::Action::\"refund_order\"",
       "guards": [
         {
-          "reference": "openapi \"api/orders.json\" operation refundOrder",
+          "reference": {
+            "text": "openapi \"api/orders.json\" operation refundOrder",
+            "tool": "openapi",
+            "path": "api/orders.json",
+            "items": [
+              [
+                "operation",
+                "refundOrder"
+              ]
+            ]
+          },
           "line": 60
         }
       ],
@@ -304,7 +324,17 @@
       "entity": "Shop::Action::\"export_refunds\"",
       "guards": [
         {
-          "reference": "openapi \"api/orders.json\" operation exportRefunds",
+          "reference": {
+            "text": "openapi \"api/orders.json\" operation exportRefunds",
+            "tool": "openapi",
+            "path": "api/orders.json",
+            "items": [
+              [
+                "operation",
+                "exportRefunds"
+              ]
+            ]
+          },
           "line": 72
         }
       ],

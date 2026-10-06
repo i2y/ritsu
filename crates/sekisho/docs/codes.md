@@ -367,11 +367,11 @@ See also: [E101](#e101)
 
 <a id="e201"></a>
 
-## E201 — A file a `use` reads does not pass its language's check, or cannot be read
+## E201 — A file a `use` reads does not pass its language's check, cannot be read, or is outside the root
 
-**When**: A rule of a `use rule` does not pass rulec's check, or a dates file of a `use dates` koyomi's, or it cannot be read (the note says what the language says); or a file of a `use gate` does not pass sekisho's check, cannot be read, or the `use gate` lines go round in a circle.
+**When**: A rule of a `use rule` does not pass rulec's check, or a dates file of a `use dates` koyomi's, or it cannot be read (the note says what the language says); or a file of a `use gate` does not pass sekisho's check, cannot be read, or the `use gate` lines go round in a circle; or the file of a `use openapi`, `use proto`, `use asyncapi` or `use book` is outside the root (an operation an action guards is named by a reference whose path is from the root).
 
-**Fix**: Correct that file until its language's check passes it.
+**Fix**: Correct that file until its language's check passes it. For a file outside the root, give `--root` a directory that holds it.
 
 **Example**:
 

@@ -4,12 +4,21 @@
 //! within the range the operation takes, read as dandori reads a task's parameters against an
 //! operation (E203), and no operation is guarded by two actions (E205).
 //!
+//! Each operation found is named by its reference (ritsu's DESIGN 6.2), built as a
+//! [`ritsu_base::naming::Name`] with the contract's path from the root: `openapi "api/orders.json"
+//! operation refundOrder` (the `operationId`, else the method and the path), `asyncapi "…" operation
+//! <key>`, `proto "…" service S method M`, `chobo "…" transfer T operation O`. The diagnostics say
+//! it so, the model keeps it ([`Guard::reference`]), and `@guards`, `sekisho api` and the port
+//! `Gates` write it. A contract outside the root has no reference: E201.
+//!
 //! OpenAPI and AsyncAPI documents are read with ritsu-base's reader ([`ritsu_base::openapi`]),
 //! `.proto` files with ritsu-proto's, and a book's transfers through chobo's port.
 
 use crate::diag::Diag;
 use crate::model::*;
+use ritsu_base::naming::{Name, Tool, word_or_quote};
 use ritsu_base::openapi::{self, Bound, Document, Number, Place, Schema};
+use ritsu_base::paths::Shown;
 use ritsu_base::text::Text;
 use std::collections::BTreeMap;
 
@@ -31,11 +40,36 @@ fn at(code: &'static str, g: &Gate, line: usize, message: Text) -> Diag {
     Diag::at(code, &g.file, line, 1, message).source(&g.src)
 }
 
-/// The checks of the contracts an action guards. `books` is chobo, when it is joined.
-pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> Vec<Diag> {
+/// The pairs of a reference, without its tool and path: `operation refundOrder`, `service Orders
+/// method Refund`.
+fn pairs(items: &[(&str, &str)]) -> String {
+    items.iter().map(|(k, n)| format!("{k} {}", word_or_quote(n))).collect::<Vec<_>>().join(" ")
+}
+
+/// How the root is found, for a contract outside it.
+fn root_note() -> Text {
+    tr!(
+        "action が守る操作は、ルートからのパスで参照します。ルートは、最初に渡したパスの上で .git を持つ一番近いディレクトリです（無ければ、渡したファイルのあるディレクトリ。--root で替えられます）。",
+        "An operation an action guards is named by a reference whose path is from the root. The root is the nearest directory above the first path given that has a .git (else the directory of the file given); --root changes it."
+    )
+}
+
+/// The checks of the contracts an action guards. `books` is chobo, when it is joined. What they
+/// say, and each operation found, as the action and the guard (by index) and its reference.
+pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> (Vec<Diag>, Vec<(usize, usize, Name)>) {
     let mut diags = Vec::new();
-    let mut contracts: BTreeMap<usize, Contract> = BTreeMap::new();
+    let mut references = Vec::new();
+    // each contract read, with its path from the root
+    let mut contracts: BTreeMap<usize, (Contract, String)> = BTreeMap::new();
     for (ui, u) in g.uses.iter().enumerate() {
+        if !matches!(u.kind, UseKind::OpenApi | UseKind::AsyncApi | UseKind::Proto | UseKind::Book) {
+            continue;
+        }
+        // the operations it holds are named from the root, so it has to be under it
+        let Some(rel) = g.from_root(&u.file) else {
+            diags.push(at("E201", g, u.line, tr!("`{}` はルートの外にあります", "`{}` is outside the root", u.path)).note(root_note()));
+            continue;
+        };
         let path = u.file.to_string_lossy().to_string();
         let unreadable = |why: Text| at("E201", g, u.line, tr!("`{}` を読めません", "`{}` cannot be read", u.path)).note(why);
         match u.kind {
@@ -55,7 +89,7 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> Vec<Diag> {
                             diags.push(at("E201", g, u.line, tr!("`{}` は {} の文書です。`use {}` で読んでください", "`{}` is an {} document; read it with `use {}`", u.path, doc.kind.title(), doc.kind.word())));
                             continue;
                         }
-                        contracts.insert(ui, Contract::Doc(doc));
+                        contracts.insert(ui, (Contract::Doc(doc), rel));
                     }
                     Err(p) => diags.push(unreadable(tr!("{}:{}: {}", "{}:{}: {}", p.line, p.col, p.message.ja; p.line, p.col, p.message.en))),
                 }
@@ -70,7 +104,7 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> Vec<Diag> {
                 };
                 match ritsu_proto::read(&path, &text) {
                     Ok(pf) => {
-                        contracts.insert(ui, Contract::Proto(pf));
+                        contracts.insert(ui, (Contract::Proto(pf), rel));
                     }
                     Err(e) => diags.push(unreadable(tr!("{}:{}: {}", "{}:{}: {}", e.line, e.col, e.message("sekisho").ja; e.line, e.col, e.message("sekisho").en))),
                 }
@@ -79,40 +113,52 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> Vec<Diag> {
                 if let Some(b) = books.filter(|b| b.joined())
                     && let Ok(f) = b.facts(&u.file)
                 {
-                    contracts.insert(ui, Contract::Book(f));
+                    contracts.insert(ui, (Contract::Book(f), rel));
                 }
             }
             _ => {}
         }
     }
 
+    // what a contract does not have, as yuen's E202 says it: the pairs of the reference written,
+    // and the contract's path as the run writes it (the English starts as sekisho's E101 does)
+    let shown = Shown::new(&g.root, &g.file);
+    let has_no = |rel: &str, items: &[(&str, &str)]| {
+        let (f, p) = (shown.path(rel), pairs(items));
+        tr!("{f} に {p} はありません", "There is no {p} in {f}")
+    };
     // each guard: the operation it names, and who guards it
-    let mut guarded: BTreeMap<(usize, String), usize> = BTreeMap::new();
+    let mut guarded: BTreeMap<Name, usize> = BTreeMap::new();
     for (ai, a) in g.actions.iter().enumerate() {
-        let mut found: Vec<(usize, Found)> = Vec::new();
-        for gd in &a.guards {
-            let Some(c) = contracts.get(&gd.api) else { continue };
-            let u = &g.uses[gd.api];
-            let (key, f) = match c {
-                Contract::Doc(doc) => match doc.operation(&gd.operation) {
-                    Some(op) => (op.pointer.clone(), Found::Op(op)),
-                    None => {
-                        let names: Vec<Text> = doc.operations.iter().take(12).map(|o| Text::same(o.name())).collect();
-                        let l = Text::list(&names);
-                        diags.push(at("E202", g, gd.line, tr!("`{}` は `{}` の操作にありません", "`{}` is not an operation of `{}`", gd.operation, u.path)).note(tr!("操作は {} です。", "Its operations are {}.", l.ja; l.en)));
-                        continue;
+        let mut found: Vec<(Name, Found)> = Vec::new();
+        for (gi, gd) in a.guards.iter().enumerate() {
+            let Some((c, rel)) = contracts.get(&gd.api) else { continue };
+            let (reference, f) = match c {
+                Contract::Doc(doc) => {
+                    let tool = if doc.kind == openapi::Kind::OpenApi { Tool::Openapi } else { Tool::Asyncapi };
+                    match doc.operation(&gd.operation) {
+                        // an operation is named by its `operationId`, however the line writes it
+                        Some(op) => (Name::file(tool, rel.clone()).with("operation", op.name()), Found::Op(op)),
+                        None => {
+                            let names: Vec<Text> = doc.operations.iter().take(12).map(|o| Text::same(o.name())).collect();
+                            let l = Text::list(&names);
+                            diags.push(at("E202", g, gd.line, has_no(rel, &[("operation", &gd.operation)])).note(tr!("操作は {} です。", "Its operations are {}.", l.ja; l.en)));
+                            continue;
+                        }
                     }
-                },
+                }
                 Contract::Proto(pf) => {
                     let (svc, m) = gd.operation.rsplit_once('/').unwrap_or(("", gd.operation.as_str()));
                     let svc_short = svc.rsplit('.').next().unwrap_or(svc);
                     let hit = pf.services.iter().find(|s| s.name == svc_short || pf.full(&s.name) == svc).and_then(|s| s.methods.iter().find(|x| x.name == m).map(|x| (s, x)));
                     match hit {
-                        Some((s, x)) => (format!("{}/{}", pf.full(&s.name), x.name), Found::Method { file: pf, method: x }),
+                        // a service by its name in the file's package
+                        Some((s, x)) => (Name::file(Tool::Proto, rel.clone()).with("service", s.name.clone()).with("method", x.name.clone()), Found::Method { file: pf, method: x }),
                         None => {
                             let names: Vec<Text> = pf.services.iter().flat_map(|s| s.methods.iter().map(move |x| Text::same(format!("{}/{}", s.name, x.name)))).take(12).collect();
                             let l = Text::list(&names);
-                            diags.push(at("E202", g, gd.line, tr!("`{}` は `{}` のメソッドにありません", "`{}` is not a method of `{}`", gd.operation, u.path)).note(tr!("メソッドは {} です。", "Its methods are {}.", l.ja; l.en)));
+                            let items: Vec<(&str, &str)> = if svc.is_empty() { vec![("method", m)] } else { vec![("service", svc_short), ("method", m)] };
+                            diags.push(at("E202", g, gd.line, has_no(rel, &items)).note(tr!("メソッドは {} です。", "Its methods are {}.", l.ja; l.en)));
                             continue;
                         }
                     }
@@ -123,46 +169,46 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> Vec<Diag> {
                     if !ok {
                         let names: Vec<Text> = b.transfers.iter().flat_map(|x| x.refusals.iter().map(move |(o, _)| Text::same(format!("{}.{o}", x.name)))).take(12).collect();
                         let l = Text::list(&names);
-                        diags.push(at("E202", g, gd.line, tr!("`{}` は帳簿 `{}` の振替の操作にありません", "`{}` is not an operation of a transfer of the book `{}`", gd.operation, u.path)).note(tr!("振替の操作は {} です。", "Its transfers' operations are {}.", l.ja; l.en)));
+                        diags.push(at("E202", g, gd.line, has_no(rel, &[("transfer", t), ("operation", op)])).note(tr!("振替の操作は {} です。", "Its transfers' operations are {}.", l.ja; l.en)));
                         continue;
                     }
-                    (gd.operation.clone(), Found::Transfer)
+                    (Name::file(Tool::Chobo, rel.clone()).with("transfer", t).with("operation", op), Found::Transfer)
                 }
             };
-            let id = (gd.api, key);
-            match guarded.get(&id) {
+            match guarded.get(&reference) {
                 Some(&other) if other != ai => {
-                    let (x, y) = (&g.actions[other].named.name, &a.named.name);
-                    diags.push(at("E205", g, gd.line, tr!("操作 `{}` を、`{x}` と `{y}` の二つの action が守ります", "The operation `{}` is guarded by two actions, `{x}` and `{y}`", gd.operation)).note(tr!(
+                    let (x, y, r) = (&g.actions[other].named.name, &a.named.name, reference.text());
+                    diags.push(at("E205", g, gd.line, tr!("{r} を、`{x}` と `{y}` の二つの action が守ります", "Two actions, `{x}` and `{y}`, guard {r}")).note(tr!(
                         "どちらの判断で守るかが決まりません。一つの action にまとめてください。",
                         "Which of them decides is not settled: guard it with one action."
                     )));
                 }
                 _ => {
-                    guarded.insert(id, ai);
+                    guarded.insert(reference.clone(), ai);
                 }
             }
-            found.push((gd.line, f));
+            references.push((ai, gi, reference.clone()));
+            found.push((reference, f));
         }
         // `from`: a parameter of the path or the query of every operation
         if let Some((arg, line)) = &a.from {
-            for (_, f) in &found {
-                let (ok, name, listed) = match f {
+            for (reference, f) in &found {
+                let (ok, listed) = match f {
                     Found::Op(op) => {
                         let ok = op.param(arg).is_some_and(|p| matches!(p.place, Place::Path | Place::Query | Place::Channel));
                         let listed: Vec<Text> = op.params.iter().filter(|p| matches!(p.place, Place::Path | Place::Query | Place::Channel)).map(|p| Text::same(p.name.clone())).collect();
-                        (ok, op.name(), listed)
+                        (ok, listed)
                     }
                     Found::Method { file, method } => {
                         let msg = message_of(file, &method.input);
                         let ok = msg.is_some_and(|m| m.fields.iter().any(|x| x.name == *arg || x.json() == *arg));
-                        (ok, method.name.clone(), msg.map(|m| m.fields.iter().map(|x| Text::same(x.name.clone())).collect()).unwrap_or_default())
+                        (ok, msg.map(|m| m.fields.iter().map(|x| Text::same(x.name.clone())).collect()).unwrap_or_default())
                     }
-                    Found::Transfer => (true, String::new(), vec![]),
+                    Found::Transfer => (true, vec![]),
                 };
                 if !ok {
-                    let l = Text::list(&listed);
-                    let mut d = at("E204", g, *line, tr!("`{arg}` は `{name}` のパスかクエリの引数にありません", "`{arg}` is not a parameter of the path or the query of `{name}`"));
+                    let (l, r) = (Text::list(&listed), reference.text());
+                    let mut d = at("E204", g, *line, tr!("`{arg}` は {r} のパスかクエリの引数にありません", "`{arg}` is not a parameter of the path or the query of {r}"));
                     if !listed.is_empty() {
                         d = d.note(tr!("引数は {} です。", "Its parameters are {}.", l.ja; l.en));
                     }
@@ -172,14 +218,14 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> Vec<Diag> {
         }
         // each input: a parameter or a field of the body of every operation, of its type and range
         for inp in &a.inputs {
-            for (_, f) in &found {
-                if let Some(d) = input_fits(g, inp, f) {
+            for (reference, f) in &found {
+                if let Some(d) = input_fits(g, inp, reference, f) {
                     diags.push(d);
                 }
             }
         }
     }
-    diags
+    (diags, references)
 }
 
 fn message_of<'a>(f: &'a ritsu_proto::ProtoFile, written: &str) -> Option<&'a ritsu_proto::Message> {
@@ -221,34 +267,35 @@ fn decimal(s: &str) -> Option<ritsu_units::Rat> {
     ritsu_units::Rat::checked_new(if neg { -n } else { n }, 10i128.checked_pow(f.len() as u32)?)
 }
 
-/// What is wrong with an input against one operation (E203), if anything.
-fn input_fits(g: &Gate, inp: &Field, f: &Found) -> Option<Diag> {
+/// What is wrong with an input against one operation (E203), if anything. `reference` is the
+/// operation's.
+fn input_fits(g: &Gate, inp: &Field, reference: &Name, f: &Found) -> Option<Diag> {
     let name = &inp.named.name;
     let line = inp.named.line;
-    let e203 = |op: &str, why: Text| at("E203", g, line, tr!("input `{name}` は `{op}` が受け取るものと合いません。{}", "The input `{name}` does not fit what `{op}` takes: {}", why.ja; why.en));
+    let r = reference.text();
+    let e203 = |why: Text| at("E203", g, line, tr!("input `{name}` は {r} が受け取るものと合いません。{}", "The input `{name}` does not fit what {r} takes: {}", why.ja; why.en));
     match f {
         Found::Transfer => None,
         Found::Op(op) => {
-            let opn = op.name();
             let (schema, required): (&Schema, bool) = match (op.param(name).or_else(|| op.param(&inp.named.alias)), op.field(name).or_else(|| op.field(&inp.named.alias))) {
                 (Some(p), _) => (&p.schema, p.required || p.place == Place::Path),
                 (None, Some(x)) => (&x.schema, x.required && op.body.as_ref().is_some_and(|b| b.required)),
                 (None, None) => {
-                    return Some(at("E203", g, line, tr!("input `{name}` は `{opn}` の引数にも本文のフィールドにもありません", "The input `{name}` is neither a parameter nor a field of the body of `{opn}`")).note(tr!(
+                    return Some(at("E203", g, line, tr!("input `{name}` は {r} の引数にも本文のフィールドにもありません", "The input `{name}` is neither a parameter nor a field of the body of {r}")).note(tr!(
                         "input には、操作が受け取る引数かフィールドを、同じ名前で書いてください。",
                         "Write under `input` what the operation takes, by the same name."
                     )));
                 }
             };
             if !required && !inp.optional {
-                return Some(e203(&opn, tr!("操作はこれを求めないので、無いことがあります。型に `?` を付けてください", "the operation does not require it, so it can be absent: write `?` after its type")));
+                return Some(e203(tr!("操作はこれを求めないので、無いことがあります。型に `?` を付けてください", "the operation does not require it, so it can be absent: write `?` after its type")));
             }
-            schema_fits(g, inp, schema).map(|why| e203(&opn, why))
+            schema_fits(g, inp, schema).map(e203)
         }
         Found::Method { file, method } => {
             let msg = message_of(file, &method.input)?;
             let Some(fld) = msg.fields.iter().find(|x| x.name == *name || x.json() == *name || x.name == inp.named.alias) else {
-                return Some(at("E203", g, line, tr!("input `{name}` は `{}` のリクエストのフィールドにありません", "The input `{name}` is not a field of the request of `{}`", method.name; method.name)));
+                return Some(at("E203", g, line, tr!("input `{name}` は {r} のリクエストのフィールドにありません", "The input `{name}` is not a field of the request of {r}")));
             };
             let ints = ["int32", "int64", "uint32", "uint64", "sint32", "sint64", "fixed32", "fixed64", "sfixed32", "sfixed64"];
             let why = match (&inp.ty, &fld.ty) {
@@ -264,7 +311,7 @@ fn input_fits(g: &Gate, inp: &Field, f: &Found) -> Option<Diag> {
                 (FieldType::Date { .. }, _) => None,
                 (_, t) => Some(tr!("フィールドの型 `{}` と合いません", "the field's type `{}` is not the input's", proto_type(t); proto_type(t))),
             };
-            why.map(|w| e203(&method.name, w))
+            why.map(e203)
         }
     }
 }

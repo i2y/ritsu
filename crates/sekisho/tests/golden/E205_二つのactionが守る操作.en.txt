@@ -1,3 +1,3 @@
-error[E205]: tests/mutants/E205_二つのactionが守る操作.gate:60:1: The operation `refundOrder` is guarded by two actions, `注文を見る` and `返金する`
+error[E205]: tests/mutants/E205_二つのactionが守る操作.gate:60:1: Two actions, `注文を見る` and `返金する`, guard openapi "examples/refunds/api/orders.json" operation refundOrder
     60 |   guards 注文 refundOrder
   = Which of them decides is not settled: guard it with one action.

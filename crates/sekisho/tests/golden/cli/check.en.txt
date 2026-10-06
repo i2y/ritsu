@@ -1,7 +1,7 @@
 sekisho check — check the words, the names and the types, and every combination the file declares
 
 Usage:
-  sekisho check <file.gate>... [--format json] [--budget <n>]
+  sekisho check <file.gate>... [--format json] [--budget <n>] [--root <dir>]
 
 Arguments:
   <file.gate>...  the .gate files to check
@@ -9,6 +9,7 @@ Arguments:
 Flags:
   --format json  one JSON object a file
   --budget <n>   the most combinations the check walks for one action (default 100000000)
+  --root <dir>   the root the paths of references count from; else the nearest directory above the first path given that holds .git (else the directory of that file)
   --lang ja|en   the language of the text; else the SEKISHO_LANG environment variable, then RITSU_LANG, else en (default en)
   --help         print this page
 

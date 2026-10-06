@@ -212,13 +212,26 @@ action refund_order
     business_day = today is open in uk
 ```
 
-- `guards <API> <操作>`：action が守る契約の操作。`<API>` は `use openapi|proto|asyncapi <名前> from "…"` の名前、`<操作>` は OpenAPI の `operationId`（無ければ `"POST /orders/{orderId}/refunds"`）、proto の `"Service/Method"`（dandori の `connect` と同じ書き方）、AsyncAPI の操作のキー。chobo の振替の操作は `guards <帳簿> <振替>.<操作>` で書ける（3.4）。一つの action が二つ以上の操作を守ってよい（同じ操作を REST と gRPC で出すとき）。一つの操作を二つの action が守ればエラーにする（E205。どちらの判断で守るかが決まらない）。文の中と JSON では、参照の書き方（`openapi "api/orders.json" operation refundOrder`。ritsu の DESIGN 6.2 に足すと 2026-10-06 に決まった `openapi` のツール名）で書く。
+- `guards <API> <操作>`：action が守る契約の操作。`<API>` は `use openapi|proto|asyncapi <名前> from "…"` の名前、`<操作>` は OpenAPI の `operationId`（無ければ `"POST /orders/{orderId}/refunds"`）、proto の `"Service/Method"`（dandori の `connect` と同じ書き方）、AsyncAPI の操作のキー。chobo の振替の操作は `guards <帳簿> <振替>.<操作>` で書ける（3.4）。一つの action が二つ以上の操作を守ってよい（同じ操作を REST と gRPC で出すとき）。一つの操作を二つの action が守ればエラーにする（E205。どちらの判断で守るかが決まらない）。
 - `principal` と `resource` の行は、その action のリクエストに来うる型を並べる。Cedar のスキーマの `appliesTo` になる。
 - `resource Order from orderId`：resource の ID を、操作のどの引数（パスの引数かクエリ）から取るか。生成するコードは、その引数で resource をサービスのデータから読む。書かなければ、生成するコードは resource の ID を引数に取る。
 - `input`：操作の引数のうち、ポリシーか計算した値が読むもの。名前は操作の引数（OpenAPI ならパスとクエリの引数か本文のフィールド、proto ならリクエストのメッセージのフィールド）と同じで、型と範囲は操作が受け取るものと比べる（E203。dandori の E016 と同じ読み方。例のワークフローも同じ範囲を書いている）。
 - `context`：計算した値（3 章）。名前は Cedar の context の属性の名前になる。
 
 **操作と結び付けない action**も書ける（`guards` の無い action）。そのときは、ページと `api` に「どの操作も守っていない」と出る。バッチの処理のように、契約の無い入口を守るためである。
+
+**守る操作の参照。** 診断の文（E202〜E205）、`api` の JSON、生成するスキーマの `@guards`、口 `Gates` の `GateAction::guards` では、守る操作を参照の書き方（ritsu の DESIGN 6.2）で書く。
+
+- OpenAPI：`openapi "api/orders.json" operation refundOrder`。名前は `operationId` で、無い操作だけ方法とパス（`operation "POST /orders/{orderId}/refunds"`）。`operationId` のある操作は、`guards` の行が方法とパスで書いていても `operationId` で書く（参照の名前の書き方を一つにする。ritsu の DESIGN 6.5）。
+- AsyncAPI：`asyncapi "<パス>" operation <操作のキー>`。
+- proto：`proto "<パス>" service <サービス> method <メソッド>`。サービスは、そのファイルの package から見た名前（`guards` の行が `shop.v1.Orders/Refund` と書いても `service Orders`）。
+- 帳簿：`chobo "<パス>" transfer <振替> operation <操作>`（`guards stock receive.do` なら `transfer receive operation do`）。
+
+参照は、契約の検査（`src/contracts.rs`）が操作を見つけたときに `ritsu_base::naming::Name` で組み、モデル（`Guard::reference`）に置く。`@guards`、`api`、口は、どれも `Action::references` の同じ値を書き、文字列を組まない。
+
+**パスとルート。** 参照のパスは、`use` の行に書いたパスではなく、ルートからのパスである（ritsu の DESIGN 6.2 の 3）。ルートは yuen と sakai と同じく、`--root` があればそれ、無ければ最初に渡したパスの上で `.git` を持つ一番近いディレクトリ、それも無ければ、渡したファイルのあるディレクトリである。sekisho のクレートのバイナリと `ritsu sekisho` では、`check`・`gen`・`vectors`・`api` が `--root <dir>` を取り（ディレクトリでなければ exit 2）、無ければ最初に渡したファイルから探す。`ritsu check` は、プロジェクトのルート（ritsu の DESIGN 6.1）を渡す（`check::checked`）。ライブラリから呼ぶときは `check::Options::root` に渡し、`None` なら、確かめるファイルから同じ決まりで探す。`use` のパスを書いたまま参照にすると、`.gate` の置き場所によって、同じ文書の同じ操作が違う参照になり、yuen と sakai が書く参照と突き合わせられない。
+
+`use openapi`・`use proto`・`use asyncapi`・`use book` のファイルがルートの外にあれば、その操作を参照で書けないので、`use` の行で E201 にする（`--root` で、そのファイルを含むディレクトリをルートにすれば通る）。参照にならないパスを、黙って別の形で書かないためである。例は、例のディレクトリをルートにして（`--root examples/refunds`）走らせる（yuen と sakai の例と同じ）。`tests/mutants/` の変異と `tests/gen/` の材料は例の文書を読むので、テストはクレートのディレクトリをルートにする（`tests/common/mod.rs` の `root_of`）。
 
 **捨てた案**：`guards` に参照の書き方をそのまま書く（`guards openapi "api/orders.json" operation refundOrder`）。action ごとにファイルのパスを繰り返すことになり、文書を動かしたときに全部の行を直すことになる。`use openapi orders from "…"` で一度だけパスを書き、`guards orders refundOrder` と書く形は、dandori の `use openapi` と `http POST stripe "/v1/…"` と同じである。参照の書き方は、yuen と sakai のように、ものを指すこと自体が仕事の言語の書き方として残し、sekisho では診断の文と JSON に使う。
 
@@ -608,14 +621,11 @@ sekisho が自分で書く文（頭の二行目と、計算した値・`input`�
 
 日本語の版を `--lang ja` で書くと、`refund_band` の `@doc` は「rulec "rules/返金の上限.rule" output 区分。金額、principal.返金できる額 から計算する。値は within_limit か over_limit。principal の型が User のときだけ計算する。生成したコードが計算し、呼ぶ側からは受け取らない」になる。ほかの `@doc`：`input` は操作の引数であること（操作を守らない action では、リクエストの引数）と型と範囲、列挙の属性は値の並び（「One of paid, shipped, returned, refunded」。日本語の名前があれば `paid (支払済)`）、数の属性は型と範囲、役割の型は役割ごとの別名と日本語の名前と説明と `includes`、`Workflow` の型はワークフローごとの別名と説明と `.flow`（`dandori "flows/returns.flow"`）。
 
-`@guards` は、守る操作を参照の書き方で書く。パスは `use` の行に書いたまま（`.gate` のディレクトリから）である。
+`@guards` は、守る操作を参照の書き方で書く（2.6 の四つの形）。パスはルートからで、上の例は、例のディレクトリをルートにして（`--root examples/refunds`）生成したものである。`tests/gen/guards.gate` は、二つの操作の一つを方法とパスで書いていて、クレートのディレクトリをルートにすると `@guards("openapi \"examples/refunds/api/orders.json\" operation getOrder\nopenapi \"examples/refunds/api/orders.json\" operation refundOrder")` になる（`operationId` で書く）。
 
-- OpenAPI：`openapi "api/orders.json" operation refundOrder`（`operationId` の無い操作は `operation "POST /orders/{orderId}/refunds"`）
-- AsyncAPI：`asyncapi "<パス>" operation <操作のキー>`
-- proto：`proto "<パス>" service <サービス> method <メソッド>`（サービスは短い名前）
-- 帳簿の振替の操作（`guards stock receive.do`）：`chobo "<パス>" transfer receive operation do`。参照の書き方の chobo の種類には、振替の操作がまだ無い（`transfer` の下に `operation` を足すかは決めていない）。
+一つの action が二つ以上の操作を守るときは、一つの `@guards` に、参照を一行に一つ並べる（Cedar の注釈は、一つの宣言に同じキーを二つ持てない）。一行一行は `Name::text` が書いたもので、`api` の `guards` と口 `Gates`（8.3）の `GateAction::guards` と同じ値である。口が手で書いた Cedar の `@guards` を読むときも、同じ参照の書き方で読む。
 
-一つの action が二つ以上の操作を守るときは、一つの `@guards` に、参照を一行に一つ並べる（Cedar の注釈は、一つの宣言に同じキーを二つ持てない）。参照の文字列は `sekisho::cedar::guard_reference` が作り、口 `Gates`（8.3）が手で書いた Cedar の `@guards` を読むときも、同じ形で読む。
+計算した値とワークフローの `@doc` の参照（`rulec "rules/refund_limit.rule" output band`、`dandori "flows/returns.flow"`）は、まだ `use` と `workflow` の行に書いたパスで書く。ルートからのパスにするのは、`.gate` が読むファイルの参照を口 `References` で出す段階 D に合わせる（そのとき、ルートの外の規則や日付のファイルをどう扱うかも決める）。例は `.gate` がルートにあるので、どちらで書いても同じである。
 
 ### 5.2 ポリシー
 
@@ -1002,7 +1012,7 @@ requirement refunds_within_limit
 
 2026-10-06 に、ツール名 `cedar` と `openapi`・`asyncapi` を参照の書き方に足した（yuen の DESIGN 3.6）。`cedar` の `policy` の名前は `@id`（無ければ Cedar の CLI と同じく、ファイルの中の順の `policy0`、`policy1`）、`action` と `entity` は宣言した名前で、名前空間は付けない。yuen の端は、ポリシーを `cedar format` の形で書いたものと、宣言をスキーマの人が読む形で書いたもの（action は `context` の共通の型も含む）である。`naming.tsv` は 63 行になった。ツール名 `sekisho` は、まだ `Tool::ALL` に入れていない。段階 D で、口 `Items` と一緒に足す。
 
-`guards` の操作は、`openapi "api/orders.json" operation refundOrder`、`asyncapi "…" operation <キー>`、`proto "…" service S method M`、帳簿の振替の操作なら `chobo "books/stock.book" transfer receive operation do` の参照で書けるようになった（2.6、3.4。`ritsu_base::naming::Tool::Openapi` と `Tool::Asyncapi`、chobo の `transfer` の下の `operation`）。E202〜E205 の文（`src/contracts.rs`）は、まだ `use` の名前と `operationId` で言う。参照の書き方に替える文は、取り込みのときに決める。
+`guards` の操作は、`openapi "api/orders.json" operation refundOrder`、`asyncapi "…" operation <キー>`、`proto "…" service S method M`、帳簿の振替の操作なら `chobo "books/stock.book" transfer receive operation do` の参照で書く（2.6、3.4。`ritsu_base::naming::Tool::Openapi` と `Tool::Asyncapi`、chobo の `transfer` の下の `operation`）。パスはルートからである（2.6）。E202 は、yuen の E202 と同じく、文書のパス（走らせたディレクトリから）と、書いた組で、無いものを言う（`There is no operation refundOrders in examples/refunds/api/orders.json`、`examples/refunds/api/orders.json に operation refundOrders はありません`）。E203〜E205 は、見つけた操作の参照で言う（10 章）。`api` の `guards` は sakai の `api` と同じ参照の JSON（`{"text", "tool", "path", "items"}`）と行で、口 `Gates` の `GateAction::guards` は同じ `Name` と行である（段階 D で口に答えるときに、`Action::references` を入れる）。
 
 ### 8.5 sakai
 
@@ -1138,8 +1148,8 @@ ritsu の土台の診断（`ritsu_base::diag`）と台帳（`ledger`）で書く
 | E106 | `principal` のスコープが action の principal の型に無い（`principal is Customer` を Customer の来ない action に） |
 | E107 | `today` を使うのに `today` の行が無い、オフセットにタイムゾーンの名前を書いた |
 | E108 | 役割の `includes` が輪になる（`clerk → manager → clerk` のように、輪の役割を順に示す。輪一つにつき一度） |
-| E201 | `use` のファイルが、その言語の検査を通らないか、読めない（その言語の言うことを注に）。`use rule` と `use dates` は名前の検査が口で事実を読むときに、`use calendar` と `use book` は検査がカレンダーと帳簿を読むときに、`use gate` は sekisho が読むときに出す。`use gate` が輪になっているときも |
-| E202 | `guards` の操作が契約の文書に無い |
+| E201 | `use` のファイルが、その言語の検査を通らないか、読めない（その言語の言うことを注に）。`use rule` と `use dates` は名前の検査が口で事実を読むときに、`use calendar` と `use book` は検査がカレンダーと帳簿を読むときに、`use gate` は sekisho が読むときに出す。`use gate` が輪になっているときも。`use openapi`・`use proto`・`use asyncapi`・`use book` のファイルがルートの外にあるときも（守る操作を参照で書けない。2.6） |
+| E202 | `guards` の操作が契約の文書に無い（文書のパスと、書いた組で言う。2.6） |
 | E203 | `input` が操作の受け取るものに無いか、型か範囲が操作と合わない（dandori の E016 と同じ読み方） |
 | E204 | `from` の引数が操作のパスかクエリの引数に無い |
 | E205 | 二つの action が同じ操作を守る |
@@ -1166,6 +1176,20 @@ ritsu の土台の診断（`ritsu_base::diag`）と台帳（`ledger`）で書く
 ritsu の台帳には、X15 と X16 の E907・W907・E908・W908・W909（4.6）を足す。
 
 E006 で名前を比べるのは、同じ種類のもののあいだである。型（principal と resource）と列挙は、フィールドの型の位置でどちらも書けるので、一つの名前の集まりにする。ほかは、役割、一つの列挙の値、一つの型の属性、ワークフロー、action、一つの action の入力と計算した値（Cedar の `context` で並ぶので一つ）、ポリシー（permit と forbid。`@id` が重ならないように）、期待、職務の分離、`use` の名前、のそれぞれである。名前と別名のどちらが重なっても E006 で、`use gate` で読んだファイルの型・列挙・役割・ワークフローとも比べる。種類が違えば同じ名前でよい（例の日本語の版では、`use openapi 注文` と `resource 注文(Order)` が並ぶ。期待 `managers_refund_in_period` は、同じ名前の permit と並ぶ）。
+
+E203〜E205 は、操作を参照の書き方で言う（2.6）。E205 の変異の、英語の版の英語の出力と、日本語の版の日本語の出力（テストと同じく、クレートのディレクトリをルートにしたもの。`tests/golden/`）：
+
+```text
+error[E205]: tests/mutants/E205_one_operation_two_actions.gate:60:1: Two actions, `view_order` and `refund_order`, guard openapi "examples/refunds/api/orders.json" operation refundOrder
+    60 |   guards orders refundOrder
+  = Which of them decides is not settled: guard it with one action.
+```
+
+```text
+エラー[E205]: tests/mutants/E205_二つのactionが守る操作.gate:60:1: openapi "examples/refunds/api/orders.json" operation refundOrder を、`注文を見る` と `返金する` の二つの action が守ります
+    60 |   guards 注文 refundOrder
+  = どちらの判断で守るかが決まりません。一つの action にまとめてください。
+```
 
 次は、例に forbid `clerks_do_not_refund` を足した変異（4.3）の最初の E302 である。英語の版の英語の出力と、日本語の版の日本語の出力を並べる（`tests/golden/`）。
 
@@ -1216,7 +1240,7 @@ sekisho explain <code> | --all [--format markdown|json]
 
 - 段階 B までにできたもの：`check`、`explain`、`gen --target cedar`（5 章）、`vectors`（6.1）、`api`。`gen` の `typescript`・`python`・`go` と `--authorizer` は段階 C、`doc` は段階 D で足す。コマンドの表（`src/cli.rs`）には、できたものだけを載せる（ritsu の DESIGN 4.4。載せたフラグは必ず効く）。
 - `vectors` と `api` は、検査を通るファイルを一つ取る。通らなければ、その診断を出して exit 1。`vectors --action` は action の名前か別名で、無ければ exit 2。
-- `api` の JSON は、koyomi と chobo の `api` と同じく、ツールと版とファイルのことから始まる：`sekisho`（版）、`name`、`alias`、`version`、`source_sha256`、`description`、`namespace`、`uses`（`use` の行）、`today`、`cedar`（`gen --target cedar` が書く四つのファイル）、`roles`（Cedar のエンティティ、`includes`、`can`）、`types`（エンティティタイプ、持てる役割、親になれる型、属性と Cedar に出るか）、`workflows`、`actions`（エンティティ、守る操作の参照、principal と resource の型、`from`、`nobody`、`input`、context の値と、計算の式、Cedar に渡る値、省けるか）、`policies`（`@id`、効く action、書いたファイル）、`expects`、`separations`。どれも行の番号を持つ。ファイルのパスは `.gate` のディレクトリから書く（手元のパスを書かない）。
+- `api` の JSON は、koyomi と chobo の `api` と同じく、ツールと版とファイルのことから始まる：`sekisho`（版）、`name`、`alias`、`version`、`source_sha256`、`description`、`namespace`、`uses`（`use` の行）、`today`、`cedar`（`gen --target cedar` が書く四つのファイル）、`roles`（Cedar のエンティティ、`includes`、`can`）、`types`（エンティティタイプ、持てる役割、親になれる型、属性と Cedar に出るか）、`workflows`、`actions`（エンティティ、守る操作、principal と resource の型、`from`、`nobody`、`input`、context の値と、計算の式、Cedar に渡る値、省けるか）、`policies`（`@id`、効く action、書いたファイル）、`expects`、`separations`。どれも行の番号を持つ。守る操作（`actions` の `guards`）は、一つずつ `{"reference": …, "line": …}` で、`reference` は sakai の `api` と同じ参照の JSON（`{"text", "tool", "path", "items"}`。ritsu の DESIGN 6.2 の 7）、パスはルートから（2.6）である。`uses` の `path` と `policies` の `file` は、`.gate` のディレクトリから書く（手元のパスを書かない）。
 - 終了コードは 0（問題なし、警告だけ）、1（エラー）、2（使い方の誤り、読めないファイル、ほかの言語を持たないバイナリ）。
 - `ritsu sekisho <command>` は、rulec、koyomi、dandori、契約の読み手をつないで走らせる。`sekisho` という名前のリンクも同じ（ritsu の DESIGN 2.3）。
 - `ritsu check` は `.gate` を読む順（8.1）で確かめ、X15 と X16 を言語をまたぐ検査に足す。要約の `borders` に、X15 は操作ごと、X16 はワークフローの呼び出しごとに一つと数える。
@@ -1351,13 +1375,15 @@ Zanzibar の形（OpenFGA、SpiceDB、Permify、Topaz のディレクトリ）�
 29. **値が無いことがある読みは `has` で守る。守るのは、無いことがありうるときだけ（5.2）。** いつもある値を `has` で守っても検証は通るが、Cedar の側だけを読む人には、無いことがあるように見える（P6）。設計の担当の見本と、例の生成物は、頭の二行のほかは同じになった。
 30. **グループのメンバーを聞くポリシーがあれば、principal の型をそのグループの型に入れる（`entity User in [Role, Team]`。5.1）。** 入れないと、Cedar の検証が「どのリクエストでも当てはまらない」と警告し、メンバーであることをエンティティの親として渡せない。
 31. **計算した値は、ポリシーが読まないものも全部 context に入れ、省けるかは型と、計算に使う値と、検査の数えたものから決める（5.1）。** 生成したコードが計算した値の全部を判断の記録に残せるようにするためである（5.3）。
-32. **`@guards` は、一つの注釈に参照を一行に一つ並べる（5.1）。** 帳簿の振替の操作は `chobo "<パス>" transfer <振替> operation <操作>` と書く。参照の書き方の chobo の種類に操作がまだ無いので、足すかは決めていない。
+32. **`@guards` は、一つの注釈に参照を一行に一つ並べる（5.1）。** 帳簿の振替の操作は `chobo "<パス>" transfer <振替> operation <操作>` と書く（参照の書き方の chobo の `transfer` の下に `operation` を足した。ritsu の DESIGN 6.2）。
 33. **`vectors` は、区間に二つ以上の値がある組み合わせを、数を全部 low の端にしたものと high の端にしたものの二件にする（6.1）。** 数ごとに端を掛け合わせると、数が増えるたびに倍になる。二件でも、どの区間のどちらの端も、どれかのテストで踏む。
 34. **`vectors` のエンティティは、属性が指すもののうち、スキーマで属性を持たない型のものだけを書く（6.1）。** 属性を持つ型のものを書くには、その属性の値も決める要があり、Cedar はそれを読まない。
 35. **生成物の、sekisho が書く文は `--lang` で書く（5 章）。** koyomi の `gen` と同じにした。`--check` は書いたときと同じ言語で走らせる。
 36. **`--target` は省けない（5 章）。** koyomi の `gen` は省くと全部の出力先を書くが、sekisho のリクエストを組み立てるコードは、サービスの言語を一つ選んで書くものだからである。
 37. **関係の項は、条件が書いた綴りではなく、属性の宣言した名前でそろえる。** 段階 A の数え方は、同じ属性を一つの条件で名前、別の条件で別名と書くと、二つの項として数え、起こりえない組み合わせ（同じ属性が principal を指し、かつ指さない）を数えていた。Cedar では一つの属性なので、生成した Cedar と食い違う（`tests/gen/two_spellings.gate` で 10 通りを数え、`run-tests` が 2 件落ちた）。そろえたあとは 4 通りで、例と変異の数は変わらない。
 38. **規則の列挙の値を生成したコードの名前（`WithinLimit`）で書いた条件も、数え方と生成で同じ値を引く（3.2）。** 段階 A の数え方は、名前の検査が受け付けるこの綴りを、規則の名前と公開名の中に探して見つけられず、その条件をどの組み合わせでも成り立たないものとして数えていた（例を `WithinLimit` と書くと E303 になった）。口が返す値ごとの生成したコードの名前も持ち、それでも引く。例をそう書き換えたものは、例と同じ数になり、同じポリシーを生成する（`tests/gen.rs`）。
+39. **守る操作は、診断の文、`api`、`@guards`、口のどれでも、同じ参照で書く（2.6）。** 参照は `ritsu_base::naming::Name` で組み、文字列を組まない。`operationId` のある操作は、`guards` の行の書き方によらず `operationId` で書き、proto のサービスはファイルの package から見た名前で書く。同じ操作が、書き方によって二つの参照にならないためである。E202 は、yuen の E202 と同じく、文書のパスと書いた組で無いものを言う。
+40. **参照のパスはルートからにし、ルートは yuen と sakai と同じに決める（2.6）。** `check`・`gen`・`vectors`・`api` が `--root` を取る。守る契約がルートの外にあれば、E201 にする。参照に書けないパスを、別の形で書いて通さないためである。
 
 ### 16.2 危ないところ
 

@@ -9,15 +9,15 @@ mod common;
 use ritsu_base::text::Lang;
 use sekisho::check::{Options, check_file};
 
-/// A gate with what has to be beside it, checked as `ritsu sekisho check` checks it: the codes it
-/// gives, and what it prints.
+/// A gate with what has to be beside it, checked as `ritsu sekisho check` checks it, with the
+/// directory they are in as the root: the codes it gives, and what it prints.
 fn codes(files: &[(&str, &str)]) -> (Vec<&'static str>, String) {
     let dir = ritsu_testkit::TempDir::new("contracts");
     for (name, body) in files {
         std::fs::write(dir.path().join(name), body).unwrap();
     }
     let path = dir.path().join("example.gate");
-    let o = check_file(path.to_str().unwrap(), &common::joined(), &Options::default()).unwrap();
+    let o = check_file(path.to_str().unwrap(), &common::joined(), &Options { root: Some(dir.path().to_path_buf()), ..Options::default() }).unwrap();
     // in English, then in Japanese, the directory left out (it differs from run to run)
     let shown = format!("{}/", dir.path().display());
     let text: String = [Lang::En, Lang::Ja].iter().flat_map(|l| o.diags.iter().map(move |d| d.render(*l))).collect();
@@ -81,6 +81,60 @@ fn an_input_is_what_the_openapi_operation_takes() {
     // `from` an argument the operation does not have
     let (c, text) = codes(&[("example.gate", &refund_gate("    amount : money[GBP]  range >=1GBP <=10_000GBP\n").replace("from orderId", "from order")), ("orders.json", ORDERS)]);
     assert_eq!(c, vec!["E204"], "{text}");
+    // each is said of the operation's reference, its path from the root
+    assert!(text.contains("error[E204]: example.gate:14:1: `order` is not a parameter of the path or the query of openapi \"orders.json\" operation refundOrder\n"), "{text}");
+    assert!(text.contains("エラー[E204]: example.gate:14:1: `order` は openapi \"orders.json\" operation refundOrder のパスかクエリの引数にありません\n"), "{text}");
+}
+
+/// The operations an action guards are said by their references (ritsu's DESIGN 6.2), the path of
+/// the contract from the root: what is not in it by the pairs written (as yuen's E202 says it), the
+/// rest by the reference of the operation found — by its `operationId`, however the `guards` line
+/// writes it.
+#[test]
+fn the_operations_are_said_by_their_references() {
+    let (c, text) = codes(&[("example.gate", &refund_gate("    amount : money[GBP]  range >=1GBP <=10_000GBP\n").replace("guards orders refundOrder", "guards orders refundOrders")), ("orders.json", ORDERS)]);
+    assert_eq!(c, vec!["E202"], "{text}");
+    assert!(text.contains("error[E202]: example.gate:12:1: There is no operation refundOrders in orders.json\n"), "{text}");
+    assert!(text.contains("エラー[E202]: example.gate:12:1: orders.json に operation refundOrders はありません\n"), "{text}");
+    // an input it does not take, the operation written by its method and path
+    let by_path = refund_gate("    note : bool\n").replace("guards orders refundOrder", "guards orders \"POST /orders/{orderId}/refunds\"");
+    let (c, text) = codes(&[("example.gate", &by_path), ("orders.json", ORDERS)]);
+    assert_eq!(c, vec!["E203"], "{text}");
+    assert!(text.contains("The input `note` is neither a parameter nor a field of the body of openapi \"orders.json\" operation refundOrder\n"), "{text}");
+    assert!(text.contains("input `note` は openapi \"orders.json\" operation refundOrder の引数にも本文のフィールドにもありません\n"), "{text}");
+    // two actions that guard it, one by its operationId, the other by its method and path
+    let two = refund_gate("    amount : money[GBP]  range >=1GBP <=10_000GBP\n").replace(
+        "permit users_refund",
+        "action refund_again\n  guards orders \"POST /orders/{orderId}/refunds\"\n  principal User\n  resource Order\n\npermit users_refund_again\n  principal is User\n  action refund_again\n\npermit users_refund",
+    );
+    let (c, text) = codes(&[("example.gate", &two), ("orders.json", ORDERS)]);
+    assert_eq!(c, vec!["E205"], "{text}");
+    assert!(text.contains(": Two actions, `refund_order` and `refund_again`, guard openapi \"orders.json\" operation refundOrder\n"), "{text}");
+    assert!(text.contains(": openapi \"orders.json\" operation refundOrder を、`refund_order` と `refund_again` の二つの action が守ります\n"), "{text}");
+}
+
+/// A contract outside the root has no reference to name its operations by (E201): the root is
+/// `--root`, else the nearest directory above that holds `.git`, else the directory of the file.
+#[test]
+fn a_contract_outside_the_root() {
+    let dir = ritsu_testkit::TempDir::new("contracts");
+    std::fs::create_dir(dir.path().join("gates")).unwrap();
+    std::fs::write(dir.path().join("orders.json"), ORDERS).unwrap();
+    let gate = refund_gate("    amount : money[GBP]  range >=1GBP <=10_000GBP\n").replace("\"orders.json\"", "\"../orders.json\"");
+    let path = dir.path().join("gates/example.gate");
+    std::fs::write(&path, gate).unwrap();
+    let check = |root: &std::path::Path| check_file(path.to_str().unwrap(), &common::joined(), &Options { root: Some(root.to_path_buf()), ..Options::default() }).unwrap();
+    let o = check(&dir.path().join("gates"));
+    assert_eq!(o.diags.iter().map(|d| d.code).collect::<Vec<_>>(), vec!["E201"]);
+    assert_eq!(o.diags[0].line, Some(3));
+    let said: String = [Lang::En, Lang::Ja].iter().map(|l| o.diags[0].render(*l)).collect::<String>().replace(&format!("{}/", dir.path().display()), "");
+    assert!(said.starts_with("error[E201]: gates/example.gate:3:1: `../orders.json` is outside the root\n"), "{said}");
+    assert!(said.contains("--root changes it") && said.contains("エラー[E201]: gates/example.gate:3:1: `../orders.json` はルートの外にあります\n") && said.contains("--root で替えられます"), "{said}");
+    // the directory above as the root: the operation from there
+    let o = check(dir.path());
+    assert!(o.diags.is_empty(), "{:?}", o.diags.iter().map(|d| d.render(Lang::En)).collect::<Vec<_>>());
+    let refs = o.walked.as_ref().unwrap().gate.actions[0].references();
+    assert_eq!(refs.iter().map(|(n, at)| (n.text(), *at)).collect::<Vec<_>>(), vec![("openapi \"orders.json\" operation refundOrder".to_string(), 12)]);
 }
 
 const PROTO: &str = r#"syntax = "proto3";
@@ -116,7 +170,11 @@ fn a_proto_method_its_fields_and_their_ranges() {
     assert!(c.is_empty(), "{text}");
     let (c, text) = codes(&[("example.gate", &proto_gate("\"Orders/Refnd\"", "orderId", "    urgent : bool\n")), ("orders.proto", PROTO)]);
     assert_eq!(c, vec!["E202"], "{text}");
-    assert!(text.contains("Orders/Refund"), "{text}");
+    assert!(text.contains("There is no service Orders method Refnd in orders.proto\n") && text.contains("Its methods are Orders/Refund."), "{text}");
+    // a method is named by its service's name in the file's package, however the line writes it
+    let (c, text) = codes(&[("example.gate", &proto_gate("\"shop.v1.Orders/Refund\"", "orderId", "    flag : bool\n")), ("orders.proto", PROTO)]);
+    assert_eq!(c, vec!["E203"], "{text}");
+    assert!(text.contains("The input `flag` is not a field of the request of proto \"orders.proto\" service Orders method Refund\n"), "{text}");
     let (c, text) = codes(&[("example.gate", &proto_gate("\"Orders/Refund\"", "id", "    urgent : bool\n")), ("orders.proto", PROTO)]);
     assert_eq!(c, vec!["E204"], "{text}");
     // Protovalidate's range is what the method takes
@@ -163,24 +221,25 @@ fn an_asyncapi_operation_and_its_channel() {
     assert!(c.is_empty(), "{text}");
     let (c, text) = codes(&[("example.gate", &gate("refundAsked", "orderId")), ("events.yaml", EVENTS)]);
     assert_eq!(c, vec!["E202"], "{text}");
+    assert!(text.contains("There is no operation refundAsked in events.yaml\n"), "{text}");
     let (c, text) = codes(&[("example.gate", &gate("refundRequested", "order")), ("events.yaml", EVENTS)]);
     assert_eq!(c, vec!["E204"], "{text}");
+    assert!(text.contains("of asyncapi \"events.yaml\" operation refundRequested\n"), "{text}");
 }
 
 #[test]
 fn an_operation_of_a_transfer_of_a_book() {
-    let book = std::fs::canonicalize("../chobo/examples/inventory/inventory.book").unwrap();
+    let book = std::fs::read_to_string("../chobo/examples/inventory/inventory.book").unwrap();
     let gate = |guard: &str| {
         format!(
-            "gate stock v1\n\nuse book inventory from \"{}\"\n\nprincipal User\n\nresource Delivery\n\naction receive_delivery\n  guards inventory {guard}\n  principal User\n  resource Delivery\n\npermit users_receive\n  principal is User\n  action receive_delivery\n",
-            book.display()
+            "gate stock v1\n\nuse book inventory from \"inventory.book\"\n\nprincipal User\n\nresource Delivery\n\naction receive_delivery\n  guards inventory {guard}\n  principal User\n  resource Delivery\n\npermit users_receive\n  principal is User\n  action receive_delivery\n"
         )
     };
-    let (c, text) = codes(&[("example.gate", &gate("receive.do"))]);
+    let (c, text) = codes(&[("example.gate", &gate("receive.do")), ("inventory.book", &book)]);
     assert!(c.is_empty(), "{text}");
-    let (c, text) = codes(&[("example.gate", &gate("receive.hold"))]);
+    let (c, text) = codes(&[("example.gate", &gate("receive.hold")), ("inventory.book", &book)]);
     assert_eq!(c, vec!["E202"], "{text}");
-    assert!(text.contains("receive.do"), "{text}");
+    assert!(text.contains("There is no transfer receive operation hold in inventory.book\n") && text.contains("receive.do"), "{text}");
 }
 
 const ORDERED: &str = "rule ordered v1\ndescription \"Whether a span is wide; it asks that low is not above high\"\n\nenum width = narrow | wide\n\ninputs\n  low  : number  range >=0 <=100\n  high : number  range >=0 <=100\n\nconstraint low <= high\n\noutputs\n  span : width\n\nderive gap : number = high - low  range >=-100 <=100\n\ntable decide\npolicy unique\n| gap  | -> span : width |\n| <=10 | narrow          |\n| >10  | wide            |\n";

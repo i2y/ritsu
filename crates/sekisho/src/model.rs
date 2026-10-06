@@ -8,6 +8,7 @@
 //! [`build`] makes the model from the syntax tree; the checks never read the tree.
 
 use crate::ast::{Num, Op};
+use ritsu_base::naming::Name;
 use ritsu_units::Unit;
 use std::path::PathBuf;
 
@@ -39,6 +40,10 @@ pub struct Gate {
     /// The file, as the person gave it (what a diagnostic names), and its text.
     pub file: String,
     pub src: String,
+    /// The root a reference's path is written from (ritsu's DESIGN 6.2, item 3; DESIGN 2.6): what
+    /// `--root` says, else the nearest directory above the first path given that holds `.git`,
+    /// else the directory of the file given.
+    pub root: PathBuf,
     /// `gate 返金(refunds_ja) v1`
     pub named: Named,
     pub version: String,
@@ -195,6 +200,11 @@ pub struct Guard {
     /// `"Service/Method"`, an AsyncAPI operation's key, or `<transfer>.<operation>`.
     pub operation: String,
     pub line: usize,
+    /// The operation found, as a reference (ritsu's DESIGN 6.2): `openapi "api/orders.json"
+    /// operation refundOrder`, `proto "shop/v1/orders.proto" service Orders method Refund`,
+    /// `chobo "books/stock.book" transfer receive operation do`. The check of the contracts gives
+    /// it (`contracts.rs`); None until then, and for an operation it did not find.
+    pub reference: Option<Name>,
 }
 
 /// A value the action computes (`refund_band = refund_limit(...).band`).
@@ -392,6 +402,12 @@ impl Gate {
     pub fn workflow_type(&self) -> Option<usize> {
         self.types.iter().position(|t| t.kind == Kind::Workflow)
     }
+
+    /// A file the gate reads, as a path from the root (`api/orders.json`); None when it is outside
+    /// the root, where no reference can name it.
+    pub fn from_root(&self, file: &std::path::Path) -> Option<String> {
+        ritsu_base::paths::from_root(&self.root, file)
+    }
 }
 
 impl Type {
@@ -408,6 +424,13 @@ impl Action {
     pub fn computed_value(&self, name: &str) -> Option<(usize, &Computed)> {
         self.computed.iter().enumerate().find(|(_, c)| c.named.is(name))
     }
+
+    /// The operations the action guards, each as its reference with the line of its `guards`:
+    /// what the schema's `@guards`, `sekisho api` and the port `Gates` (`GateAction::guards`) hold.
+    /// Every guard of a file that passes its check has one.
+    pub fn references(&self) -> Vec<(Name, usize)> {
+        self.guards.iter().filter_map(|g| g.reference.clone().map(|n| (n, g.line))).collect()
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -416,9 +439,10 @@ impl Action {
 use crate::ast;
 
 /// The model of a file whose names, types and units pass `names.rs` (no error), with the files its
-/// `use gate` lines read, parsed, in the order written. A reference the scope does not find (which
-/// `names.rs` has said) is read as a condition that never holds.
-pub fn build(f: &ast::File, imports: &[&ast::File]) -> Gate {
+/// `use gate` lines read, parsed, in the order written, and the root its references are written
+/// from. A name the scope does not find (which `names.rs` has said) is read as a condition that
+/// never holds.
+pub fn build(f: &ast::File, imports: &[&ast::File], root: &std::path::Path) -> Gate {
     // the scope a name is found in: the file, then the files its `use gate` lines read
     let mut scope: Vec<&ast::File> = vec![f];
     scope.extend(imports.iter().copied());
@@ -554,7 +578,7 @@ pub fn build(f: &ast::File, imports: &[&ast::File]) -> Gate {
                 .collect();
             Action {
                 named: named(&a.name),
-                guards: a.guards.iter().map(|x| Guard { api: use_of(&x.api.word).unwrap_or(usize::MAX), operation: x.operation.0.clone(), line: x.span.line }).collect(),
+                guards: a.guards.iter().map(|x| Guard { api: use_of(&x.api.word).unwrap_or(usize::MAX), operation: x.operation.0.clone(), line: x.span.line, reference: None }).collect(),
                 principals: a.principals.0.iter().filter_map(|r| type_of(&r.word)).collect(),
                 resources: a.resources.0.iter().filter_map(|r| type_of(&r.word)).collect(),
                 from: a.resource_from.as_ref().map(|(s, sp)| (s.clone(), sp.line)),
@@ -641,6 +665,7 @@ pub fn build(f: &ast::File, imports: &[&ast::File]) -> Gate {
     Gate {
         file: f.path.clone(),
         src: f.src.clone(),
+        root: root.to_path_buf(),
         named: named(&f.name),
         version: f.version.clone(),
         namespace,

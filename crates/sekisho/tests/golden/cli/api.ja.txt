@@ -1,12 +1,13 @@
 sekisho api — ほかのツールのための JSON を出す。名前空間と生成するファイル、役割・型・ワークフローと Cedar でのエンティティ、action と守る操作と context、ポリシーの @id、期待と職務の分離
 
 使い方:
-  sekisho api <file.gate>
+  sekisho api <file.gate> [--root <dir>]
 
 引数:
   <file.gate>  検査を通る .gate のファイル
 
 フラグ:
+  --root <dir>  参照のパスを数えるルート。無ければ、最初に渡したパスの上で .git を持つ一番近いディレクトリ（それも無ければ、そのファイルのあるディレクトリ）
   --lang ja|en  文面の言語。無ければ環境変数 SEKISHO_LANG、次に RITSU_LANG、どちらも無ければ en（既定 en）
   --help        この画面を出す
 
@@ -16,4 +17,4 @@ exit code:
   2  引数の誤り、読めないファイル、ほかの言語を読むファイルを、それを読めないこの sekisho で走らせた（E209）
 
 例:
-  $ ritsu sekisho api examples/refunds/refunds.gate
+  $ ritsu sekisho api examples/refunds/refunds.gate --root examples/refunds

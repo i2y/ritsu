@@ -298,31 +298,6 @@ pub fn policy_id(g: &Gate, p: usize) -> String {
     }
 }
 
-/// The operation a `guards` line names, written as ritsu names a thing (ritsu's DESIGN 6.2), with
-/// the path of the contract as the `use` line writes it: `openapi "api/orders.json" operation
-/// refundOrder`, `proto "shop/v1/orders.proto" service Orders method Refund`, `asyncapi
-/// "events.yaml" operation refundRequested`, `chobo "books/stock.book" transfer receive operation
-/// do`. The schema's `@guards` holds one a line.
-pub fn guard_reference(g: &Gate, gd: &Guard) -> String {
-    use ritsu_base::naming::{quote, word_or_quote};
-    let Some(u) = g.uses.get(gd.api) else { return gd.operation.clone() };
-    let path = quote(&u.path);
-    match u.kind {
-        UseKind::OpenApi => format!("openapi {path} operation {}", word_or_quote(&gd.operation)),
-        UseKind::AsyncApi => format!("asyncapi {path} operation {}", word_or_quote(&gd.operation)),
-        UseKind::Proto => {
-            let (svc, m) = gd.operation.rsplit_once('/').unwrap_or(("", gd.operation.as_str()));
-            let short = svc.rsplit('.').next().unwrap_or(svc);
-            format!("proto {path} service {} method {}", word_or_quote(short), word_or_quote(m))
-        }
-        UseKind::Book => {
-            let (t, op) = gd.operation.split_once('.').unwrap_or((gd.operation.as_str(), ""));
-            if op.is_empty() { format!("chobo {path} transfer {}", word_or_quote(t)) } else { format!("chobo {path} transfer {} operation {}", word_or_quote(t), word_or_quote(op)) }
-        }
-        _ => format!("{} {path}", u.kind.word()),
-    }
-}
-
 // ---------------------------------------------------------------------------------------------
 // The schema
 
@@ -685,8 +660,9 @@ pub fn schema(g: &Gate, scope: &Scope, shape: &Shape, lang: Lang) -> c::Schema {
             }
             let context = if attrs.is_empty() { c::Type::empty_record() } else { c::Type::Record(c::RecordType { attrs, additional_attributes: false }) };
             let mut annotations = notes(&a.named, docs.action(&a.named.alias).and_then(|d| Docs::of(&d.description)));
-            if !a.guards.is_empty() {
-                let refs: Vec<String> = a.guards.iter().map(|gd| guard_reference(g, gd)).collect();
+            // the operations it guards, a reference a line (an annotation is one key a declaration)
+            let refs: Vec<String> = a.references().iter().map(|(n, _)| n.text()).collect();
+            if !refs.is_empty() {
                 annotations.push(note("guards", refs.join("\n")));
             }
             c::Action {

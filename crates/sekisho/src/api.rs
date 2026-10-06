@@ -3,8 +3,9 @@
 //! and its version, the file's name, alias, version, digest and description first). It holds what
 //! the Cedar is made of: the namespace and the four files `gen --target cedar` writes, each role,
 //! type and workflow with the entity it is in Cedar, each action with the operations it guards
-//! (as ritsu names them, ritsu's DESIGN 6.2) and its context, each policy with its `@id`, and the
-//! expectations and the separations, each with its line.
+//! (each as its reference, in the JSON of a reference that sakai's `api` writes too: ritsu's DESIGN
+//! 6.2) and its context, each policy with its `@id`, and the expectations and the separations, each
+//! with its line.
 
 use crate::cedar::{self, Shape};
 use crate::checks::Checked;
@@ -135,7 +136,7 @@ pub fn json(scope: &Scope, checked: &Checked) -> Json {
             ("alias", Json::str(a.named.alias.clone())),
             ("line", line(a.named.line)),
             ("entity", uid(cedar::action_uid(g, &shape, ai))),
-            ("guards", Json::arr(a.guards.iter().map(|gd| Json::obj([("reference", Json::str(cedar::guard_reference(g, gd))), ("line", line(gd.line))])))),
+            ("guards", Json::arr(a.references().into_iter().map(|(n, at)| Json::obj([("reference", n.to_json()), ("line", line(at))])))),
             ("principals", names(g, &a.principals, |g, x| &g.types[x].named)),
             ("resources", names(g, &a.resources, |g, x| &g.types[x].named)),
             ("from", a.from.as_ref().map(|(x, _)| Json::str(x.clone())).unwrap_or(Json::Null)),

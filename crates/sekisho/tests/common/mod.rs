@@ -5,6 +5,7 @@
 
 use sekisho::check::{Options, Outcome};
 use sekisho::suite::Suite;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -26,9 +27,25 @@ pub fn joined() -> Suite {
     Suite::from(ports())
 }
 
+/// The root the references of a file are written from (DESIGN 2.6), as the tests give it: an
+/// example is a project of its own, run with its directory as `--root` (as yuen's and sakai's
+/// examples are); a gate under `tests/` reads the example's documents, so its root is the crate's
+/// directory; any other file (a copy in a temporary directory) finds its root as the command does.
+pub fn root_of(path: &str) -> Option<PathBuf> {
+    if let Some((dir, _)) = path.strip_prefix("examples/").and_then(|p| p.split_once('/')) {
+        return Some(Path::new("examples").join(dir));
+    }
+    path.starts_with("tests/").then(|| PathBuf::from("."))
+}
+
+/// The options of a check of the file at `path`, its root as [`root_of`] gives it.
+pub fn options(path: &str) -> Options {
+    Options { root: root_of(path), ..Options::default() }
+}
+
 /// The file at `path`, checked with every language joined.
 pub fn check(path: &str) -> Outcome {
-    sekisho::check::check_file(path, &joined(), &Options::default()).unwrap()
+    sekisho::check::check_file(path, &joined(), &options(path)).unwrap()
 }
 
 /// What `sekisho check` prints for it.

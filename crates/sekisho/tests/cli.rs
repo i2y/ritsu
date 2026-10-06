@@ -231,13 +231,15 @@ fn vectors_of_relations() {
 }
 
 /// `api` (DESIGN 11): what the gate declares, as JSON — the files gen writes, each role, type and
-/// workflow with its entity in Cedar, each action with the operations it guards and its context,
-/// each policy with its `@id` and the file it is written in. The goldens are `tests/golden/api/`,
-/// with ritsu's version written `<version>`.
+/// workflow with its entity in Cedar, each action with the operations it guards (each as the JSON
+/// of its reference, its path from the root) and its context, each policy with its `@id` and the
+/// file it is written in. The goldens are `tests/golden/api/`, with ritsu's version written
+/// `<version>`; the example is run with its directory as the root.
 #[test]
 fn api_says_what_the_gate_declares() {
     for (path, golden) in [("examples/refunds/refunds.gate", "refunds.json"), ("examples/refunds/refunds.ja.gate", "refunds.ja.json"), ("tests/gen/papers.gate", "papers.json")] {
-        let (code, out, _) = run(&["api", path], common::joined());
+        let root = common::root_of(path).unwrap();
+        let (code, out, _) = run(&["api", path, "--root", root.to_str().unwrap()], common::joined());
         assert_eq!(code, 0, "{path}");
         let v = ritsu_base::json::parse(&out).unwrap();
         let keys: Vec<&str> = v.as_obj().unwrap().iter().map(|(k, _)| k.as_str()).collect();
@@ -251,4 +253,41 @@ fn api_says_what_the_gate_declares() {
     assert!(code == 2 && said.contains("ritsu sekisho api examples/refunds/refunds.gate"), "{said}");
     let (code, _, _) = run(&["api"], common::joined());
     assert_eq!(code, 2);
+}
+
+/// The root the references are written from (DESIGN 2.6): `--root`, else the nearest directory
+/// above the first path given that holds `.git`. An operation an action guards is named with its
+/// document's path from the root, by its `operationId` however the `guards` line writes it; a
+/// document outside the root has no reference (E201), and a root that is no directory stops the
+/// command (exit 2).
+#[test]
+fn the_root_the_references_are_written_from() {
+    let guards_of = |out: &str| -> Vec<String> {
+        let v = ritsu_base::json::parse(out).unwrap();
+        let a = &v.get("actions").and_then(|a| a.as_arr()).unwrap()[0];
+        a.get("guards").and_then(|g| g.as_arr()).unwrap().iter().map(|g| g.get("reference").and_then(|r| r.get("text")).and_then(|t| t.as_str()).unwrap().to_string()).collect()
+    };
+    // the crate's directory as the root: the example's document from there, and the operation
+    // written by its method and path named by its operationId
+    let (code, out, _) = run(&["api", "tests/gen/guards.gate", "--root", "."], common::joined());
+    assert_eq!(code, 0, "{out}");
+    assert_eq!(guards_of(&out), ["openapi \"examples/refunds/api/orders.json\" operation getOrder", "openapi \"examples/refunds/api/orders.json\" operation refundOrder"]);
+    // no --root: the nearest directory above that holds .git, the repository's
+    let (code, out, _) = run(&["api", "tests/gen/guards.gate"], common::joined());
+    assert_eq!(code, 0, "{out}");
+    let at = ritsu_base::paths::from_root(&ritsu_base::paths::find_root(std::path::Path::new(".")), std::path::Path::new("examples/refunds/api/orders.json")).unwrap();
+    assert_eq!(guards_of(&out)[0], format!("openapi \"{at}\" operation getOrder"));
+    // a root the document is outside of
+    let (code, out, err) = run(&["check", "tests/gen/guards.gate", "--root", "tests/gen"], common::joined());
+    assert_eq!(code, 1, "{out}{err}");
+    assert!(out.starts_with("error[E201]: tests/gen/guards.gate:5:1: `../../examples/refunds/api/orders.json` is outside the root\n"), "{out}");
+    let (code, out, err) = run(&["gen", "tests/gen/guards.gate", "--target", "cedar", "--root", "tests/gen", "--check"], common::joined());
+    assert_eq!(code, 1, "{out}{err}");
+    assert!(out.contains("error[E201]") && err.contains("does not pass check"), "{out}{err}");
+    // a root that is no directory
+    for args in [&["check", "tests/gen/guards.gate", "--root", "tests/no-such-dir"][..], &["api", "tests/gen/guards.gate", "--root", "tests/gen/guards.gate"], &["vectors", "tests/gen/guards.gate", "--root", "tests/no-such-dir"], &["gen", "tests/gen/guards.gate", "--target", "cedar", "--root", "tests/no-such-dir"]] {
+        let (code, out, err) = run(args, common::joined());
+        assert_eq!((code, out.as_str()), (2, ""), "{args:?}");
+        assert!(err.starts_with("error: `--root tests/") && err.ends_with("` is not a directory\n"), "{args:?}: {err}");
+    }
 }

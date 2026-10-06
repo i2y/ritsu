@@ -29,8 +29,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// What sekisho checks of a file whose names hold (`names.rs` gave its scope), with the languages
 /// the suite joins: the borders, the contracts, and every combination of every action, walking
-/// at most `budget` combinations an action (E307 past it).
-pub fn run(scope: &crate::names::Scope, suite: &crate::suite::Suite, budget: u64) -> (Vec<Diag>, Checked) {
+/// at most `budget` combinations an action (E307 past it). `root` is the root the references are
+/// written from (DESIGN 2.6).
+pub fn run(scope: &crate::names::Scope, suite: &crate::suite::Suite, budget: u64, root: &std::path::Path) -> (Vec<Diag>, Checked) {
     let imports: Vec<&crate::ast::File> = scope.files[1..].iter().collect();
     let ports = match (&suite.rules, &suite.dates, &suite.books) {
         (Some(r), Some(d), Some(b)) => Some(ritsu_ports::Ports { rules: r.clone(), dates: d.clone(), books: b.clone() }),
@@ -45,17 +46,22 @@ pub fn run(scope: &crate::names::Scope, suite: &crate::suite::Suite, budget: u64
             _ => None,
         },
     };
-    all(scope.file(), &imports, &langs, budget as u128)
+    all(scope.file(), &imports, &langs, budget as u128, root)
 }
 
 /// What sekisho checks of a file whose names, types and units pass (`names.rs` said no error), with
 /// the files its `use gate` lines read: the borders with the other languages, the contracts its
 /// actions guard, and every combination of every action. The diagnostics, in the order of the
-/// file, and what the checks found.
-pub fn all(f: &crate::ast::File, imports: &[&crate::ast::File], langs: &Langs, budget: u128) -> (Vec<Diag>, Checked) {
-    let gate = build(f, imports);
+/// file, and what the checks found; each operation the check of the contracts finds is kept in the
+/// model as its reference.
+pub fn all(f: &crate::ast::File, imports: &[&crate::ast::File], langs: &Langs, budget: u128, root: &std::path::Path) -> (Vec<Diag>, Checked) {
+    let mut gate = build(f, imports, root);
     let (mut diags, known) = crate::borders::check(&gate, langs);
-    diags.extend(crate::contracts::check(&gate, langs.books));
+    let (said, found) = crate::contracts::check(&gate, langs.books);
+    diags.extend(said);
+    for (ai, gi, reference) in found {
+        gate.actions[ai].guards[gi].reference = Some(reference);
+    }
     let (more, report) = check(&gate, &known, langs, budget);
     diags.extend(more);
     crate::diag::sort(&mut diags);

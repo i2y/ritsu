@@ -9,7 +9,7 @@ namespace Ops {
   entity User;
 
   @doc("Look at an order, or at what was refunded")
-  @guards("openapi \"../../examples/refunds/api/orders.json\" operation getOrder\nopenapi \"../../examples/refunds/api/orders.json\" operation \"POST /orders/{orderId}/refunds\"")
+  @guards("openapi \"examples/refunds/api/orders.json\" operation getOrder\nopenapi \"examples/refunds/api/orders.json\" operation refundOrder")
   action "look" appliesTo {
     principal: [User],
     resource: [Order],

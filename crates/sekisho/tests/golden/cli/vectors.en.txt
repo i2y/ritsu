@@ -1,13 +1,14 @@
 sekisho vectors — print every combination as a test of cedar run-tests: the request, the entities, and the decision and the deciding policies by sekisho's reference evaluation
 
 Usage:
-  sekisho vectors <file.gate> [--action <action>]
+  sekisho vectors <file.gate> [--action <action>] [--root <dir>]
 
 Arguments:
   <file.gate>  a .gate file that passes check
 
 Flags:
   --action <action>  the combinations of this action only (its name or its alias)
+  --root <dir>       the root the paths of references count from; else the nearest directory above the first path given that holds .git (else the directory of that file)
   --lang ja|en       the language of the text; else the SEKISHO_LANG environment variable, then RITSU_LANG, else en (default en)
   --help             print this page
 

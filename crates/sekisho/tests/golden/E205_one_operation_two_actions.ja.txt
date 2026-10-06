@@ -1,3 +1,3 @@
-エラー[E205]: tests/mutants/E205_one_operation_two_actions.gate:60:1: 操作 `refundOrder` を、`view_order` と `refund_order` の二つの action が守ります
+エラー[E205]: tests/mutants/E205_one_operation_two_actions.gate:60:1: openapi "examples/refunds/api/orders.json" operation refundOrder を、`view_order` と `refund_order` の二つの action が守ります
     60 |   guards orders refundOrder
   = どちらの判断で守るかが決まりません。一つの action にまとめてください。

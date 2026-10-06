@@ -1,5 +1,6 @@
 //! The mutants (PLAN A1): every `tests/mutants/<CODE>_<what>.gate` gives its code, checked as
-//! `ritsu sekisho check` checks it (an E209 mutant as the binary of sekisho's own crate does), and
+//! `ritsu sekisho check` checks it (an E209 mutant as the binary of sekisho's own crate does), with
+//! the crate's directory as the root its references are written from (`common::root_of`), and
 //! what `sekisho check` prints for it, in English and in Japanese, is its golden file in
 //! `tests/golden/`. An English mutant and a Japanese one are a pair by the code at their start.
 //! `SEKISHO_BLESS=1 cargo test -p sekisho --test mutants` writes the golden files again; read the diff.
@@ -7,7 +8,7 @@
 mod common;
 
 use ritsu_base::text::Lang;
-use sekisho::check::{Options, check_file};
+use sekisho::check::check_file;
 use sekisho::suite::Suite;
 
 fn mutants() -> Vec<String> {
@@ -24,7 +25,7 @@ fn every_mutant_gives_its_code_and_says_what_its_golden_files_say() {
         let path = format!("tests/mutants/{name}");
         let code = name.split('_').next().unwrap();
         let suite = if code == "E209" { Suite::default() } else { common::joined() };
-        let o = check_file(&path, &suite, &Options::default()).unwrap();
+        let o = check_file(&path, &suite, &common::options(&path)).unwrap();
         if !o.diags.iter().any(|d| d.code == code) {
             failures.push(format!("{path} does not give {code}: {:?}", o.diags.iter().map(|d| d.code).collect::<Vec<_>>()));
         }
@@ -62,7 +63,7 @@ fn every_golden_file_has_its_mutant() {
 #[test]
 fn the_json_of_a_diagnostic() {
     for path in ["tests/mutants/E101_unknown_role.gate", "tests/mutants/E101_知らない役割.gate"] {
-        let o = check_file(path, &common::joined(), &Options::default()).unwrap();
+        let o = check_file(path, &common::joined(), &common::options(path)).unwrap();
         for lang in [Lang::En, Lang::Ja] {
             let v = sekisho::check::to_json(&o, lang);
             assert_eq!(v.get("ok").and_then(|x| x.as_bool()), Some(false));

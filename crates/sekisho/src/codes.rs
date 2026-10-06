@@ -278,12 +278,15 @@ pub fn ledger() -> Ledger {
         // ── Other languages and contracts ──
         e(
             "E201",
-            tr!("`use` のファイルが検査を通らないか、読めません", "A file a `use` reads does not pass its language's check, or cannot be read"),
+            tr!("`use` のファイルが検査を通らないか、読めないか、ルートの外にあります", "A file a `use` reads does not pass its language's check, cannot be read, or is outside the root"),
             tr!(
-                "`use rule` の規則が rulec の、`use dates` の日付のファイルが koyomi の検査を通らないか、読めないとき（その言語の言うことが注に出ます）。`use gate` のファイルが sekisho の検査を通らないとき、読めないとき、`use gate` が輪になっているときも出ます。",
-                "A rule of a `use rule` does not pass rulec's check, or a dates file of a `use dates` koyomi's, or it cannot be read (the note says what the language says); or a file of a `use gate` does not pass sekisho's check, cannot be read, or the `use gate` lines go round in a circle."
+                "`use rule` の規則が rulec の、`use dates` の日付のファイルが koyomi の検査を通らないか、読めないとき（その言語の言うことが注に出ます）。`use gate` のファイルが sekisho の検査を通らないとき、読めないとき、`use gate` が輪になっているときも出ます。`use openapi`・`use proto`・`use asyncapi`・`use book` のファイルがルートの外にあるときも出ます（action が守る操作は、ルートからのパスで参照するため）。",
+                "A rule of a `use rule` does not pass rulec's check, or a dates file of a `use dates` koyomi's, or it cannot be read (the note says what the language says); or a file of a `use gate` does not pass sekisho's check, cannot be read, or the `use gate` lines go round in a circle; or the file of a `use openapi`, `use proto`, `use asyncapi` or `use book` is outside the root (an operation an action guards is named by a reference whose path is from the root)."
             ),
-            tr!("そのファイルを、その言語の検査が通るように直してください。", "Correct that file until its language's check passes it."),
+            tr!(
+                "そのファイルを、その言語の検査が通るように直してください。ルートの外にあるファイルなら、そのファイルを含むディレクトリを `--root` でルートにしてください。",
+                "Correct that file until its language's check passes it. For a file outside the root, give `--root` a directory that holds it."
+            ),
             "gate t v1\n\nuse gate \"people.gate\"\n",
             "gate t v1\n\nuse gate \"職員.gate\"\n",
             &["E209"],

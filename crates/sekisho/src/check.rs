@@ -8,6 +8,7 @@ use crate::names::{self, Scope};
 use crate::suite::Suite;
 use ritsu_base::json::Json;
 use ritsu_base::text::{Lang, Text, plural};
+use std::path::{Path, PathBuf};
 
 /// How many combinations an action's check walks before it stops with E307 (DESIGN 4.1): koyomi's.
 pub const DEFAULT_BUDGET: u64 = 100_000_000;
@@ -17,11 +18,24 @@ pub const DEFAULT_BUDGET: u64 = 100_000_000;
 pub struct Options {
     /// `--budget`: the most combinations of one action the check walks.
     pub budget: u64,
+    /// `--root`: the root the references are written from (DESIGN 2.6), the project's for `ritsu
+    /// check`. None finds it from the file checked, as yuen and sakai find theirs: the nearest
+    /// directory above it that holds `.git`, else the file's directory ([`root_of`]).
+    pub root: Option<PathBuf>,
 }
 
 impl Default for Options {
     fn default() -> Options {
-        Options { budget: DEFAULT_BUDGET }
+        Options { budget: DEFAULT_BUDGET, root: None }
+    }
+}
+
+/// The root of a run (ritsu's DESIGN 6.2, item 3): `--root`, else the nearest directory above the
+/// first path given that holds `.git`, else the directory of that file.
+pub fn root_of(root: Option<&Path>, first: &str) -> PathBuf {
+    match root {
+        Some(r) => ritsu_base::paths::absolute(r),
+        None => ritsu_base::paths::find_root(Path::new(first)),
     }
 }
 
@@ -73,9 +87,10 @@ pub fn check_text(path: &str, src: &str, suite: &Suite, opts: &Options) -> Outco
     diags.extend(named.diags);
     let scope = named.scope;
     // The checks of every combination (DESIGN 4: E3xx, and E202–E208 across the borders) read the
-    // scope here, with `opts.budget`.
+    // scope here, with `opts.budget`, and write the operations an action guards from the root.
+    let root = root_of(opts.root.as_deref(), path);
     let walked = scope.as_ref().map(|s| {
-        let (more, walked) = crate::checks::run(s, suite, opts.budget);
+        let (more, walked) = crate::checks::run(s, suite, opts.budget, &root);
         diags.extend(more);
         walked
     });
@@ -134,15 +149,16 @@ pub fn to_json(o: &Outcome, lang: Lang) -> Json {
 /// `sekisho check` of each file, as `ritsu check` prints it (ritsu's DESIGN 8.3): every finding, as
 /// the command prints it and as its `--format json` prints it, then the line that says the file
 /// passes. `files` are as the person gave them, from where the program runs; `root` is the
-/// project's. A file that cannot be read, or that reads a language `suite` does not join (E209), is
-/// one the command does not check (its exit 2).
-pub fn checked(root: &std::path::Path, files: &[String], suite: &Suite, lang: Lang) -> Vec<ritsu_ports::Checked> {
+/// project's, which the references are written from too. A file that cannot be read, or that reads
+/// a language `suite` does not join (E209), is one the command does not check (its exit 2).
+pub fn checked(root: &Path, files: &[String], suite: &Suite, lang: Lang) -> Vec<ritsu_ports::Checked> {
     use ritsu_ports::{Checked, Finding, Part, Verdict};
+    let opts = Options { root: Some(root.to_path_buf()), ..Options::default() };
     files
         .iter()
-        .map(|f| match check_file(f, suite, &Options::default()) {
+        .map(|f| match check_file(f, suite, &opts) {
             Ok(o) => {
-                let mut parts: Vec<Part> = o.diags.iter().map(|d| Part::Finding(Finding::of(d, ritsu_base::paths::from_root(root, std::path::Path::new(&d.file)), lang))).collect();
+                let mut parts: Vec<Part> = o.diags.iter().map(|d| Part::Finding(Finding::of(d, ritsu_base::paths::from_root(root, Path::new(&d.file)), lang))).collect();
                 if let Some(ok) = &o.ok {
                     parts.push(Part::Text(format!("{}: ok — {}\n", o.path, ok.get(lang))));
                 }

@@ -1,3 +1,3 @@
-error[E203]: tests/mutants/E203_操作が受け取らないinput.gate:65:1: The input `お客さまへの連絡` is neither a parameter nor a field of the body of `refundOrder`
+error[E203]: tests/mutants/E203_操作が受け取らないinput.gate:65:1: The input `お客さまへの連絡` is neither a parameter nor a field of the body of openapi "examples/refunds/api/orders.json" operation refundOrder
     65 |     お客さまへの連絡(note_to_customer) : bool
   = Write under `input` what the operation takes, by the same name.

@@ -47,12 +47,17 @@ pub fn run(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
     };
     let out_dir = PathBuf::from(a.get("--out").unwrap_or("generated"));
     let check_only = a.has("--check");
+    // the root the references of `@guards` are written from, found once for the run
+    let opts = match crate::cli::root(a, &a.pos[0], lang, err) {
+        Ok(root) => Options { root: Some(root), ..Options::default() },
+        Err(code) => return code,
+    };
     let mut worst = 0u8;
     // every file the run writes, and the .gate it comes from: two files of one alias would write
     // over each other
     let mut planned: Vec<(String, String, String)> = Vec::new();
     for f in &a.pos {
-        let o = match check::check_file(f, suite, &Options::default()) {
+        let o = match check::check_file(f, suite, &opts) {
             Ok(o) => o,
             Err(e) => return refuse(err, tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}"), lang),
         };
