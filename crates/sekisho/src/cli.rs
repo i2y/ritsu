@@ -4,8 +4,8 @@
 //! flag given twice stop the run with exit 2. The table is sekisho's; how it is drawn and read is
 //! ritsu-base's ([`ritsu_base::cli`]).
 //!
-//! `check` and `explain` came with stage A, and `gen` (Cedar), `vectors` and `api` with stage B;
-//! `doc` joins the table when it is written (DESIGN 11).
+//! `check` and `explain` came with stage A, `gen` (Cedar), `vectors` and `api` with stage B, and
+//! `doc` with stage D (DESIGN 11).
 
 use crate::check::{self, Options};
 use crate::suite::Suite;
@@ -134,6 +134,39 @@ pub fn table() -> Table {
                 codes: vec![],
             },
             Cmd {
+                usage: Some("sekisho doc <file.gate> [--format markdown|html] [--root <dir>] [--lang ja|en]"),
+                name: "doc",
+                args: "<file.gate>",
+                purpose: tr!(
+                    "人が読むページを出す。action ごとの表、ポリシーと生成する Cedar、計算した値とその規則と日付のページ、期待と役割、ワークフロー、守る操作",
+                    "print the page for people: each action's table, the policies beside the Cedar they compile to, the computed values with the pages of their rules and dates, the expectations and the roles, the workflows, and the operations guarded"
+                ),
+                params: vec![("<file.gate>", tr!("検査を通る .gate のファイル", "a .gate file that passes check"))],
+                flags: vec![
+                    flag(
+                        "--format",
+                        Some("markdown|html"),
+                        tr!(
+                            "ページの形。html は外のファイルを読まない一枚の HTML（明るい配色と暗い配色）。規則と日付のページは、Markdown では畳んだ節に入り、HTML ではボタンからページの上に開く",
+                            "the form of the page; html is one HTML file that loads nothing else (light and dark). The pages of the rules and the dates are folded sections in the Markdown, and open over the HTML page from a button"
+                        ),
+                    )
+                    .choices(&["markdown", "html"])
+                    .default("markdown"),
+                    root_flag(),
+                ],
+                exits: vec![
+                    (0, tr!("出した", "printed")),
+                    (1, tr!("ファイルが検査を通らない", "the file does not pass check")),
+                    (2, tr!("引数の誤り、読めないファイル、ほかの言語を読むファイルを、それを読めないこの sekisho で走らせた（E209）", "bad arguments, a file that cannot be read, or a file that reads another language run with this sekisho, which reads none (E209)")),
+                ],
+                examples: vec![
+                    "ritsu sekisho doc examples/refunds/refunds.gate --root examples/refunds > refunds.md",
+                    "ritsu sekisho doc examples/refunds/refunds.ja.gate --root examples/refunds --format html --lang ja > refunds.ja.html",
+                ],
+                codes: vec![],
+            },
+            Cmd {
                 usage: Some("sekisho explain <code> | --all [--format markdown|json] [--lang ja|en]"),
                 name: "explain",
                 args: "<code>",
@@ -231,6 +264,7 @@ pub fn run(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dyn Wr
         "gen" => crate::r#gen::run(&a, lang, suite, out, err),
         "vectors" => vectors_cmd(&a, lang, suite, out, err),
         "api" => api_cmd(&a, lang, suite, out, err),
+        "doc" => doc_cmd(&a, lang, suite, out, err),
         "explain" => explain_cmd(&a, lang, out, err),
         _ => unreachable!("every command in the table is dispatched"),
     }
@@ -343,6 +377,28 @@ fn api_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
     let (Some(scope), Some(checked)) = (o.scope.as_ref(), o.walked.as_ref()) else { return 1 };
     let _ = writeln!(out, "{}", crate::api::json(scope, checked).pretty());
     0
+}
+
+fn doc_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let [f] = a.pos.as_slice() else {
+        return refuse(err, tr!("`sekisho doc` には .gate のファイルを一つ渡してください", "`sekisho doc` takes one .gate file"), lang);
+    };
+    let o = match passing(a, f, tr!("`{f}` は検査を通らないので、ページを書きません", "`{f}` does not pass check, so it has no page"), suite, lang, out, err) {
+        Ok(o) => o,
+        Err(code) => return code,
+    };
+    let format = if a.get("--format") == Some("html") { crate::doc::Format::Html } else { crate::doc::Format::Markdown };
+    let calls = crate::doc::calls_of(&o, suite);
+    match crate::doc::page(&o, suite, lang, format, calls.as_deref()) {
+        Some(p) => {
+            let _ = write!(out, "{}", crate::doc::write(&p, format));
+            0
+        }
+        None => {
+            let _ = write!(out, "{}", check::render(&o, lang));
+            1
+        }
+    }
 }
 
 fn explain_cmd(a: &Args, lang: Lang, out: &mut dyn Write, err: &mut dyn Write) -> u8 {

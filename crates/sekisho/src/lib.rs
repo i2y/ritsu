@@ -28,6 +28,8 @@ pub mod cli;
 pub mod codes;
 pub mod contracts;
 pub mod diag;
+/// `sekisho doc`: the page for people, as Markdown and as one HTML file (DESIGN 7).
+pub mod doc;
 pub mod eval;
 /// `sekisho gen` (the file is `gen.rs`; `gen` is a keyword of Rust 2024).
 pub mod r#gen;

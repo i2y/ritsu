@@ -7,6 +7,7 @@ sekisho <version>
   sekisho gen <file.gate>...    Cedar のスキーマとポリシーを生成する。検査を通らないファイルからは生成しない
   sekisho vectors <file.gate>   全部の組み合わせを、cedar run-tests が読むテストにして出す（リクエスト、エンティティ、sekisho の参照の評価が言う答えと決めたポリシー）
   sekisho api <file.gate>       ほかのツールのための JSON を出す。名前空間と生成するファイル、役割・型・ワークフローと Cedar でのエンティティ、action と守る操作と context、ポリシーの @id、期待と職務の分離
+  sekisho doc <file.gate>       人が読むページを出す。action ごとの表、ポリシーと生成する Cedar、計算した値とその規則と日付のページ、期待と役割、ワークフロー、守る操作
   sekisho explain <code>        診断のコードを説明する。いつ出るか、直し方、それを出す一番小さな例
 
 一つのコマンドの詳しい説明は `sekisho <cmd> --help`（`sekisho help <cmd>` も同じ）。

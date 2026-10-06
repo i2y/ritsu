@@ -22,7 +22,7 @@ fn version_and_help() {
         let (code, out, _) = run(&["--help", "--lang", lang], Suite::default());
         assert_eq!(code, 0);
         ritsu_testkit::golden(format!("tests/golden/cli/help.{tag}.txt"), &out.replace(env!("CARGO_PKG_VERSION"), "<version>"));
-        for cmd in ["check", "gen", "vectors", "api", "explain"] {
+        for cmd in ["check", "gen", "vectors", "api", "doc", "explain"] {
             let (code, out, _) = run(&[cmd, "--help", "--lang", lang], Suite::default());
             assert_eq!(code, 0);
             ritsu_testkit::golden(format!("tests/golden/cli/{cmd}.{tag}.txt"), &out);

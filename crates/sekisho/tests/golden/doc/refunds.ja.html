@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="sekisho <version>">
+<title>返金 v1</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 8px 0 6px; }
+h2 { font-size: 21px; margin: 44px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+h3 { font-size: 17px; margin: 30px 0 8px; }
+h4 { font-size: 14px; margin: 20px 0 6px; color: var(--dim); }
+p, li { max-width: 88ch; }
+p.desc { color: var(--dim); margin: 0 0 12px; }
+a { color: var(--accent); }
+code { font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+nav.toc { margin: 16px 0 8px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+nav.toc ul { margin: 0; padding-left: 18px; }
+nav.toc li { max-width: none; }
+.note { margin: 12px 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--soft); border-radius: 0 6px 6px 0; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; }
+table { border-collapse: collapse; font-size: 13px; }
+th, td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; white-space: nowrap; }
+th { background: var(--soft); }
+td:last-child { white-space: normal; min-width: 18ch; }
+tr.allow td:first-child { box-shadow: inset 4px 0 0 var(--ok); }
+tr.deny td:first-child { box-shadow: inset 4px 0 0 var(--bad); }
+details { margin: 8px 0 16px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+details > summary { cursor: pointer; font-weight: 600; }
+details[open] > summary { margin-bottom: 6px; }
+.side { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 12px; margin: 8px 0 20px; }
+figure.code { margin: 0; min-width: 0; }
+figure.code figcaption { font-size: 12px; color: var(--dim); margin: 0 0 4px; }
+pre { margin: 0 0 12px; padding: 10px 12px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+figure.code pre { margin: 0; }
+pre code { background: none; padding: 0; font: inherit; }
+button.open { font: inherit; font-size: 14px; padding: 5px 12px; border: 1px solid var(--accent); border-radius: 6px; background: var(--bg); color: var(--accent); cursor: pointer; }
+button.open:hover, button.open:focus-visible { background: var(--soft); }
+.sheet { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; background: var(--bg); }
+.sheet[hidden] { display: none; }
+.sheet .bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel); font-size: 13px; }
+.sheet .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet button.close { font: inherit; font-size: 16px; line-height: 1; padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); cursor: pointer; }
+.sheet button.close:hover { border-color: var(--accent); }
+.sheet iframe { flex: 1; width: 100%; border: 0; }
+body.sheet-open { overflow: hidden; }
+:target { scroll-margin-top: 8px; }
+@media print { .sheet, button.open { display: none; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>返金 v1</h1>
+<p class="desc">店の注文を見ること、返金すること、返金の記録を書き出すことを、だれがしてよいか。店の決まりの一例として書いた sekisho の例で、refunds.gate の日本語の版</p>
+</header>
+<ul>
+<li>ファイル：<code>refunds.ja.gate</code>（gate 返金 v1、sha256:371be7754cdffe7e）</li>
+<li>Cedar の名前空間：<code>ShopJa</code></li>
+<li>sekisho：<version></li>
+</ul>
+<p>上のファイルと、それが読むファイルを sekisho <version> で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。</p>
+<p>このファイルから <code>sekisho gen --target cedar --lang ja</code> が書く Cedar：</p>
+<div class="scroll"><table>
+<thead><tr><th>ファイル</th><th>SHA-256（先頭 16 桁）</th></tr></thead>
+<tbody>
+<tr><td><code>cedar/refunds_ja.cedar</code></td><td><code>8ced7ba8b70cd521</code></td></tr>
+<tr><td><code>cedar/refunds_ja.cedarschema</code></td><td><code>5b732f084fd1ad46</code></td></tr>
+<tr><td><code>cedar/refunds_ja.cedarschema.json</code></td><td><code>a5303048128a2757</code></td></tr>
+<tr><td><code>cedar/refunds_ja.policies.json</code></td><td><code>b67c8c77038f6989</code></td></tr>
+</tbody>
+</table></div>
+<p class="note"><code>sekisho check</code> は、3 つの action の組み合わせ 1,078 通りをすべて数え、どれも Cedar と同じ決まりで、許すか拒むかを決めました。3 つの期待は、どれも成り立ちます。職務の分離も成り立ちます。<code>can</code> を書いた 3 つの役割は、どれも、<code>can</code> に並べた action だけを許されます。</p>
+<nav class="toc" aria-label="目次">
+<ul>
+<li><a href="#actions">だれが何をできるか</a>
+<ul>
+<li><a href="#action-view-order">action <code>注文を見る</code>（<code>view_order</code>）</a></li>
+<li><a href="#action-refund-order">action <code>返金する</code>（<code>refund_order</code>）</a></li>
+<li><a href="#action-export-refunds">action <code>返金を書き出す</code>（<code>export_refunds</code>）</a></li>
+</ul>
+</li>
+<li><a href="#policies">ポリシー</a></li>
+<li><a href="#computed">計算した値</a></li>
+<li><a href="#checks">期待、職務の分離、役割</a></li>
+<li><a href="#workflows">ワークフロー</a></li>
+<li><a href="#operations">守る操作</a></li>
+</ul>
+</nav>
+<h2 id="actions">だれが何をできるか</h2>
+<p>action ごとに、<code>sekisho check</code> が数えた組み合わせを、Cedar の答えと決めたポリシーが同じものどうしでまとめた表です。一つの列だけが違う行は一つにまとめ、その列にはまとめた値を書きます。その列がとるすべての値をまとめたときは「どれでも」、一つを除くすべてのときは「〜以外」と書きます。「-」は、その行には当てはまらない列です（ワークフローの役割など）。</p>
+<h3 id="action-view-order">action <code>注文を見る</code>（<code>view_order</code>）</h3>
+<p>注文を見る</p>
+<ul>
+<li>守る操作：<code>openapi &quot;api/orders.json&quot; operation getOrder</code></li>
+<li>principal の型：<code>職員</code>、<code>顧客</code>。resource の型：<code>注文</code>（ID は操作の引数 <code>orderId</code> から読む）</li>
+<li>組み合わせは 18 通りで、そのうち 8 通りを許します。</li>
+</ul>
+<h4 id="action-view-order-allowed">許す組み合わせ</h4>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th>係</th><th>責任者</th><th>監査</th><th>停止中</th><th>resource.注文した人 is principal</th><th>決めたポリシー</th></tr></thead>
+<tbody>
+<tr class="allow"><td>職員</td><td>はい</td><td>はい</td><td>はい</td><td>いいえ</td><td>-</td><td>職員は注文を見られる</td></tr>
+<tr class="allow"><td>職員</td><td>はい</td><td>どれでも</td><td>いいえ</td><td>いいえ</td><td>-</td><td>職員は注文を見られる</td></tr>
+<tr class="allow"><td>職員</td><td>どれでも</td><td>いいえ</td><td>はい</td><td>いいえ</td><td>-</td><td>職員は注文を見られる</td></tr>
+<tr class="allow"><td>顧客</td><td>-</td><td>-</td><td>-</td><td>-</td><td>はい</td><td>顧客は自分の注文を見られる</td></tr>
+</tbody>
+</table></div>
+<h4 id="action-view-order-denied">拒む組み合わせ</h4>
+<ul>
+<li><code>停止中の職員は何もできない</code>（<code>principal is 職員</code>、<code>when principal.停止中</code>）は 8 通りに当てはまり、どれも拒みます。そのうち 7 通りには permit も当てはまりますが、forbid が勝ちます。</li>
+<li>残る 2 通りは、どの permit も当てはまらないので拒みます。</li>
+</ul>
+<details>
+<summary>拒む行の表（4 行）</summary>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th>係</th><th>責任者</th><th>監査</th><th>停止中</th><th>resource.注文した人 is principal</th><th>決めたポリシー</th></tr></thead>
+<tbody>
+<tr class="deny"><td>職員</td><td>はい</td><td>はい</td><td>どれでも</td><td>はい</td><td>-</td><td>停止中の職員は何もできない</td></tr>
+<tr class="deny"><td>職員</td><td>どれでも</td><td>いいえ</td><td>どれでも</td><td>はい</td><td>-</td><td>停止中の職員は何もできない</td></tr>
+<tr class="deny"><td>職員</td><td>いいえ</td><td>いいえ</td><td>いいえ</td><td>いいえ</td><td>-</td><td>当てはまる permit なし</td></tr>
+<tr class="deny"><td>顧客</td><td>-</td><td>-</td><td>-</td><td>-</td><td>いいえ</td><td>当てはまる permit なし</td></tr>
+</tbody>
+</table></div>
+</details>
+<h3 id="action-refund-order">action <code>返金する</code>（<code>refund_order</code>）</h3>
+<p>注文の全部か一部を返金する</p>
+<ul>
+<li>守る操作：<code>openapi &quot;api/orders.json&quot; operation refundOrder</code></li>
+<li>principal の型：<code>職員</code>、<code>Workflow</code>。resource の型：<code>注文</code>（ID は操作の引数 <code>orderId</code> から読む）</li>
+<li>input <code>金額</code>（<code>amount</code>）：<code>money[GBP, incl_tax]</code>、1GBP〜10,000GBP</li>
+<li>計算した値：<code>返金の区分</code>、<code>期間内</code>、<code>営業日</code>（下の「計算した値」）</li>
+<li>組み合わせは 1,056 通りで、そのうち 88 通りを許します。</li>
+</ul>
+<h4 id="action-refund-order-allowed">許す組み合わせ</h4>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th>係</th><th>責任者</th><th>監査</th><th>ワークフロー</th><th>停止中</th><th>状態</th><th>金額</th><th>返金の区分</th><th>期間内</th><th>営業日</th><th>決めたポリシー</th></tr></thead>
+<tbody>
+<tr class="allow"><td>職員</td><td>はい</td><td>いいえ</td><td>いいえ</td><td>-</td><td>いいえ</td><td>返金済以外</td><td>どれでも</td><td>上限まで</td><td>はい</td><td>どれでも</td><td>係は上限まで返金できる</td></tr>
+<tr class="allow"><td>職員</td><td>はい</td><td>はい</td><td>いいえ</td><td>-</td><td>いいえ</td><td>返金済以外</td><td>どれでも</td><td>上限まで</td><td>はい</td><td>どれでも</td><td>係は上限まで返金できる、責任者は期間内なら返金できる</td></tr>
+<tr class="allow"><td>職員</td><td>はい</td><td>はい</td><td>いいえ</td><td>-</td><td>いいえ</td><td>返金済以外</td><td>どれでも</td><td>上限超え</td><td>はい</td><td>どれでも</td><td>責任者は期間内なら返金できる</td></tr>
+<tr class="allow"><td>職員</td><td>はい</td><td>はい</td><td>いいえ</td><td>-</td><td>いいえ</td><td>返金済以外</td><td>どれでも</td><td>どれでも</td><td>いいえ</td><td>はい</td><td>責任者は期間後も営業日なら返金できる</td></tr>
+<tr class="allow"><td>Workflow</td><td>-</td><td>-</td><td>-</td><td>返品</td><td>-</td><td>返品済</td><td>&lt;=50GBP</td><td>-</td><td>どれでも</td><td>どれでも</td><td>返品のワークフローは返品済の注文を返金できる</td></tr>
+</tbody>
+</table></div>
+<h4 id="action-refund-order-denied">拒む組み合わせ</h4>
+<ul>
+<li><code>二度は返金しない</code>（<code>when resource.状態 is 返金済</code>）は 264 通りに当てはまり、どれも拒みます。そのうち 112 通りには permit も当てはまりますが、forbid が勝ちます。</li>
+<li><code>監査は返金しない</code>（<code>principal in 監査</code>）は 512 通りに当てはまり、どれも拒みます。そのうち 224 通りには permit も当てはまりますが、forbid が勝ちます。</li>
+<li><code>停止中の職員は何もできない</code>（<code>principal is 職員</code>、<code>when principal.停止中</code>）は 512 通りに当てはまり、どれも拒みます。そのうち 224 通りには permit も当てはまりますが、forbid が勝ちます。</li>
+<li>残る 128 通りは、どの permit も当てはまらないので拒みます。</li>
+</ul>
+<details>
+<summary>拒む行の表（21 行）</summary>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th>係</th><th>責任者</th><th>監査</th><th>ワークフロー</th><th>停止中</th><th>状態</th><th>金額</th><th>返金の区分</th><th>期間内</th><th>営業日</th><th>決めたポリシー</th></tr></thead>
+<tbody>
+<tr class="deny"><td>職員</td><td>はい</td><td>はい</td><td>いいえ</td><td>-</td><td>いいえ</td><td>返金済</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>二度は返金しない</td></tr>
+<tr class="deny"><td>職員</td><td>どれでも</td><td>いいえ</td><td>いいえ</td><td>-</td><td>いいえ</td><td>返金済</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>二度は返金しない</td></tr>
+<tr class="deny"><td>Workflow</td><td>-</td><td>-</td><td>-</td><td>返品</td><td>-</td><td>返金済</td><td>どれでも</td><td>-</td><td>どれでも</td><td>どれでも</td><td>二度は返金しない</td></tr>
+<tr class="deny"><td>職員</td><td>はい</td><td>はい</td><td>はい</td><td>-</td><td>いいえ</td><td>返金済</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>二度は返金しない、監査は返金しない</td></tr>
+<tr class="deny"><td>職員</td><td>どれでも</td><td>いいえ</td><td>はい</td><td>-</td><td>いいえ</td><td>返金済</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>二度は返金しない、監査は返金しない</td></tr>
+<tr class="deny"><td>職員</td><td>はい</td><td>はい</td><td>はい</td><td>-</td><td>はい</td><td>返金済</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>二度は返金しない、監査は返金しない、停止中の職員は何もできない</td></tr>
+<tr class="deny"><td>職員</td><td>どれでも</td><td>いいえ</td><td>はい</td><td>-</td><td>はい</td><td>返金済</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>二度は返金しない、監査は返金しない、停止中の職員は何もできない</td></tr>
+<tr class="deny"><td>職員</td><td>はい</td><td>はい</td><td>いいえ</td><td>-</td><td>はい</td><td>返金済</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>二度は返金しない、停止中の職員は何もできない</td></tr>
+<tr class="deny"><td>職員</td><td>どれでも</td><td>いいえ</td><td>いいえ</td><td>-</td><td>はい</td><td>返金済</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>二度は返金しない、停止中の職員は何もできない</td></tr>
+<tr class="deny"><td>職員</td><td>はい</td><td>はい</td><td>はい</td><td>-</td><td>いいえ</td><td>返金済以外</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>監査は返金しない</td></tr>
+<tr class="deny"><td>職員</td><td>どれでも</td><td>いいえ</td><td>はい</td><td>-</td><td>いいえ</td><td>返金済以外</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>監査は返金しない</td></tr>
+<tr class="deny"><td>職員</td><td>はい</td><td>はい</td><td>はい</td><td>-</td><td>はい</td><td>返金済以外</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>監査は返金しない、停止中の職員は何もできない</td></tr>
+<tr class="deny"><td>職員</td><td>どれでも</td><td>いいえ</td><td>はい</td><td>-</td><td>はい</td><td>返金済以外</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>監査は返金しない、停止中の職員は何もできない</td></tr>
+<tr class="deny"><td>職員</td><td>はい</td><td>はい</td><td>いいえ</td><td>-</td><td>はい</td><td>返金済以外</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>停止中の職員は何もできない</td></tr>
+<tr class="deny"><td>職員</td><td>どれでも</td><td>いいえ</td><td>いいえ</td><td>-</td><td>はい</td><td>返金済以外</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>どれでも</td><td>停止中の職員は何もできない</td></tr>
+<tr class="deny"><td>職員</td><td>はい</td><td>はい</td><td>いいえ</td><td>-</td><td>いいえ</td><td>返金済以外</td><td>どれでも</td><td>どれでも</td><td>いいえ</td><td>いいえ</td><td>当てはまる permit なし</td></tr>
+<tr class="deny"><td>職員</td><td>どれでも</td><td>いいえ</td><td>いいえ</td><td>-</td><td>いいえ</td><td>返金済以外</td><td>どれでも</td><td>どれでも</td><td>いいえ</td><td>どれでも</td><td>当てはまる permit なし</td></tr>
+<tr class="deny"><td>職員</td><td>どれでも</td><td>いいえ</td><td>いいえ</td><td>-</td><td>いいえ</td><td>返金済以外</td><td>どれでも</td><td>上限超え</td><td>はい</td><td>どれでも</td><td>当てはまる permit なし</td></tr>
+<tr class="deny"><td>職員</td><td>いいえ</td><td>いいえ</td><td>いいえ</td><td>-</td><td>いいえ</td><td>返金済以外</td><td>どれでも</td><td>上限まで</td><td>はい</td><td>どれでも</td><td>当てはまる permit なし</td></tr>
+<tr class="deny"><td>Workflow</td><td>-</td><td>-</td><td>-</td><td>返品</td><td>-</td><td>支払済、発送済</td><td>&lt;=50GBP</td><td>-</td><td>どれでも</td><td>どれでも</td><td>当てはまる permit なし</td></tr>
+<tr class="deny"><td>Workflow</td><td>-</td><td>-</td><td>-</td><td>返品</td><td>-</td><td>返金済以外</td><td>&gt;50GBP</td><td>-</td><td>どれでも</td><td>どれでも</td><td>当てはまる permit なし</td></tr>
+</tbody>
+</table></div>
+</details>
+<h3 id="action-export-refunds">action <code>返金を書き出す</code>（<code>export_refunds</code>）</h3>
+<p>返金の記録を書き出す</p>
+<ul>
+<li>守る操作：<code>openapi &quot;api/orders.json&quot; operation exportRefunds</code></li>
+<li>principal の型：<code>職員</code>。resource の型：<code>返金の記録</code></li>
+<li>組み合わせは 4 通りで、そのうち 1 通りを許します。</li>
+</ul>
+<h4 id="action-export-refunds-allowed">許す組み合わせ</h4>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th>監査</th><th>停止中</th><th>決めたポリシー</th></tr></thead>
+<tbody>
+<tr class="allow"><td>職員</td><td>はい</td><td>いいえ</td><td>監査は返金の記録を書き出せる</td></tr>
+</tbody>
+</table></div>
+<h4 id="action-export-refunds-denied">拒む組み合わせ</h4>
+<ul>
+<li><code>停止中の職員は何もできない</code>（<code>principal is 職員</code>、<code>when principal.停止中</code>）は 2 通りに当てはまり、どれも拒みます。そのうち 1 通りには permit も当てはまりますが、forbid が勝ちます。</li>
+<li>残る 1 通りは、どの permit も当てはまらないので拒みます。</li>
+</ul>
+<details>
+<summary>拒む行の表（2 行）</summary>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th>監査</th><th>停止中</th><th>決めたポリシー</th></tr></thead>
+<tbody>
+<tr class="deny"><td>職員</td><td>どれでも</td><td>はい</td><td>停止中の職員は何もできない</td></tr>
+<tr class="deny"><td>職員</td><td>いいえ</td><td>いいえ</td><td>当てはまる permit なし</td></tr>
+</tbody>
+</table></div>
+</details>
+<h2 id="policies">ポリシー</h2>
+<p>ポリシーごとに、<code>.gate</code> に書いた行と、<code>sekisho gen --target cedar</code> が生成する Cedar を並べます。permit は、当てはまる組み合わせを許します。forbid は、当てはまる組み合わせを拒み、permit も当てはまるときは forbid が勝ちます。どのポリシーも当てはまらない組み合わせは、Cedar が拒みます。規則の答えを比べる条件は、<code>.gate</code> では <code>.rule</code> に書いた値の名前（<code>上限まで</code>）で、Cedar では Cedar に渡す文字列（<code>&quot;within_limit&quot;</code>）で書きます。</p>
+<h3 id="policy-refunds-ja-staff-view-orders">permit <code>職員は注文を見られる</code>（<code>staff_view_orders</code>）</h3>
+<p>職員はどの注文も見られる</p>
+<ul>
+<li><code>注文を見る</code> では 7 通りを許します。どれも、ほかの permit は許しません。</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.ja.gate</code></figcaption><pre><code class="language-gate">permit 職員は注文を見られる(staff_view_orders)
+  description &quot;職員はどの注文も見られる&quot;
+  principal in 係, 監査
+  action 注文を見る</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds_ja.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds_ja/staff_view_orders&quot;)
+@name(&quot;職員は注文を見られる&quot;)
+@doc(&quot;職員はどの注文も見られる&quot;)
+permit (
+  principal,
+  action == ShopJa::Action::&quot;view_order&quot;,
+  resource is ShopJa::Order
+)
+when
+{ principal in ShopJa::Role::&quot;clerk&quot; || principal in ShopJa::Role::&quot;auditor&quot; };</code></pre></figure>
+</div>
+<h3 id="policy-refunds-ja-customers-view-their-orders">permit <code>顧客は自分の注文を見られる</code>（<code>customers_view_their_orders</code>）</h3>
+<p>お客さまは自分の注文を見られる</p>
+<ul>
+<li><code>注文を見る</code> では 1 通りを許します。ほかの permit は、それを許しません。</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.ja.gate</code></figcaption><pre><code class="language-gate">permit 顧客は自分の注文を見られる(customers_view_their_orders)
+  description &quot;お客さまは自分の注文を見られる&quot;
+  principal is 顧客
+  action 注文を見る
+  when resource.注文した人 is principal</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds_ja.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds_ja/customers_view_their_orders&quot;)
+@name(&quot;顧客は自分の注文を見られる&quot;)
+@doc(&quot;お客さまは自分の注文を見られる&quot;)
+permit (
+  principal is ShopJa::Customer,
+  action == ShopJa::Action::&quot;view_order&quot;,
+  resource is ShopJa::Order
+)
+when { resource.customer == principal };</code></pre></figure>
+</div>
+<h3 id="policy-refunds-ja-clerks-refund-within-their-limit">permit <code>係は上限まで返金できる</code>（<code>clerks_refund_within_their_limit</code>）</h3>
+<p>係は、返金の期間のあいだ、自分の上限まで返金できる</p>
+<ul>
+<li><code>返金する</code> では 36 通りを許します。そのうち 12 通りは、ほかの permit が許しません。</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.ja.gate</code></figcaption><pre><code class="language-gate">permit 係は上限まで返金できる(clerks_refund_within_their_limit)
+  description &quot;係は、返金の期間のあいだ、自分の上限まで返金できる&quot;
+  principal in 係
+  action 返金する
+  when 返金の区分 is 上限まで
+  when 期間内</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds_ja.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds_ja/clerks_refund_within_their_limit&quot;)
+@name(&quot;係は上限まで返金できる&quot;)
+@doc(&quot;係は、返金の期間のあいだ、自分の上限まで返金できる&quot;)
+permit (
+  principal in ShopJa::Role::&quot;clerk&quot;,
+  action == ShopJa::Action::&quot;refund_order&quot;,
+  resource is ShopJa::Order
+)
+when { context has refund_band &amp;&amp; context.refund_band == &quot;within_limit&quot; }
+when { context.in_period };</code></pre></figure>
+</div>
+<h3 id="policy-refunds-ja-managers-refund-in-period">permit <code>責任者は期間内なら返金できる</code>（<code>managers_refund_in_period</code>）</h3>
+<p>責任者は、返金の期間のあいだ、どの額でも返金できる</p>
+<ul>
+<li><code>返金する</code> では 48 通りを許します。そのうち 24 通りは、ほかの permit が許しません。</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.ja.gate</code></figcaption><pre><code class="language-gate">permit 責任者は期間内なら返金できる(managers_refund_in_period)
+  description &quot;責任者は、返金の期間のあいだ、どの額でも返金できる&quot;
+  principal in 責任者
+  action 返金する
+  when 期間内</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds_ja.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds_ja/managers_refund_in_period&quot;)
+@name(&quot;責任者は期間内なら返金できる&quot;)
+@doc(&quot;責任者は、返金の期間のあいだ、どの額でも返金できる&quot;)
+permit (
+  principal in ShopJa::Role::&quot;manager&quot;,
+  action == ShopJa::Action::&quot;refund_order&quot;,
+  resource is ShopJa::Order
+)
+when { context.in_period };</code></pre></figure>
+</div>
+<h3 id="policy-refunds-ja-managers-refund-late-on-business-days">permit <code>責任者は期間後も営業日なら返金できる</code>（<code>managers_refund_late_on_business_days</code>）</h3>
+<p>返金の期間が過ぎても、イングランドとウェールズの営業日なら、責任者は返金できる</p>
+<ul>
+<li><code>返金する</code> では 24 通りを許します。どれも、ほかの permit は許しません。</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.ja.gate</code></figcaption><pre><code class="language-gate">permit 責任者は期間後も営業日なら返金できる(managers_refund_late_on_business_days)
+  description &quot;返金の期間が過ぎても、イングランドとウェールズの営業日なら、責任者は返金できる&quot;
+  principal in 責任者
+  action 返金する
+  unless 期間内
+  when 営業日</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds_ja.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds_ja/managers_refund_late_on_business_days&quot;)
+@name(&quot;責任者は期間後も営業日なら返金できる&quot;)
+@doc(&quot;返金の期間が過ぎても、イングランドとウェールズの営業日なら、責任者は返金できる&quot;)
+permit (
+  principal in ShopJa::Role::&quot;manager&quot;,
+  action == ShopJa::Action::&quot;refund_order&quot;,
+  resource is ShopJa::Order
+)
+unless { context.in_period }
+when { context.business_day };</code></pre></figure>
+</div>
+<h3 id="policy-refunds-ja-returns-refunds-returned-orders">permit <code>返品のワークフローは返品済の注文を返金できる</code>（<code>returns_refunds_returned_orders</code>）</h3>
+<p>返品のワークフローは、返品済の注文を 50 ポンドまで返金できる</p>
+<ul>
+<li><code>返金する</code> では 4 通りを許します。どれも、ほかの permit は許しません。</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.ja.gate</code></figcaption><pre><code class="language-gate">permit 返品のワークフローは返品済の注文を返金できる(returns_refunds_returned_orders)
+  description &quot;返品のワークフローは、返品済の注文を 50 ポンドまで返金できる&quot;
+  principal is workflow 返品
+  action 返金する
+  when resource.状態 is 返品済
+  when 金額 &lt;= 50GBP</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds_ja.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds_ja/returns_refunds_returned_orders&quot;)
+@name(&quot;返品のワークフローは返品済の注文を返金できる&quot;)
+@doc(&quot;返品のワークフローは、返品済の注文を 50 ポンドまで返金できる&quot;)
+permit (
+  principal == ShopJa::Workflow::&quot;returns&quot;,
+  action == ShopJa::Action::&quot;refund_order&quot;,
+  resource is ShopJa::Order
+)
+when { resource.status == &quot;returned&quot; }
+when { context.amount &lt;= 50 };</code></pre></figure>
+</div>
+<h3 id="policy-refunds-ja-auditors-export-refunds">permit <code>監査は返金の記録を書き出せる</code>（<code>auditors_export_refunds</code>）</h3>
+<p>監査は返金の記録を書き出せる</p>
+<ul>
+<li><code>返金を書き出す</code> では 1 通りを許します。ほかの permit は、それを許しません。</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.ja.gate</code></figcaption><pre><code class="language-gate">permit 監査は返金の記録を書き出せる(auditors_export_refunds)
+  description &quot;監査は返金の記録を書き出せる&quot;
+  principal in 監査
+  action 返金を書き出す</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds_ja.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds_ja/auditors_export_refunds&quot;)
+@name(&quot;監査は返金の記録を書き出せる&quot;)
+@doc(&quot;監査は返金の記録を書き出せる&quot;)
+permit (
+  principal in ShopJa::Role::&quot;auditor&quot;,
+  action == ShopJa::Action::&quot;export_refunds&quot;,
+  resource is ShopJa::RefundRecord
+);</code></pre></figure>
+</div>
+<h3 id="policy-refunds-ja-no-second-refund">forbid <code>二度は返金しない</code>（<code>no_second_refund</code>）</h3>
+<p>返金済の注文は、もう返金しない</p>
+<ul>
+<li><code>返金する</code> では 264 通りに当てはまり、どれも拒みます。そのうち 112 通りには permit も当てはまります。</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.ja.gate</code></figcaption><pre><code class="language-gate">forbid 二度は返金しない(no_second_refund)
+  description &quot;返金済の注文は、もう返金しない&quot;
+  action 返金する
+  when resource.状態 is 返金済</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds_ja.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds_ja/no_second_refund&quot;)
+@name(&quot;二度は返金しない&quot;)
+@doc(&quot;返金済の注文は、もう返金しない&quot;)
+forbid (
+  principal,
+  action == ShopJa::Action::&quot;refund_order&quot;,
+  resource is ShopJa::Order
+)
+when { resource.status == &quot;refunded&quot; };</code></pre></figure>
+</div>
+<h3 id="policy-refunds-ja-auditors-do-not-refund">forbid <code>監査は返金しない</code>（<code>auditors_do_not_refund</code>）</h3>
+<p>返金を確かめる人は、返金をしない</p>
+<ul>
+<li><code>返金する</code> では 512 通りに当てはまり、どれも拒みます。そのうち 224 通りには permit も当てはまります。</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.ja.gate</code></figcaption><pre><code class="language-gate">forbid 監査は返金しない(auditors_do_not_refund)
+  description &quot;返金を確かめる人は、返金をしない&quot;
+  principal in 監査
+  action 返金する</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds_ja.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds_ja/auditors_do_not_refund&quot;)
+@name(&quot;監査は返金しない&quot;)
+@doc(&quot;返金を確かめる人は、返金をしない&quot;)
+forbid (
+  principal in ShopJa::Role::&quot;auditor&quot;,
+  action == ShopJa::Action::&quot;refund_order&quot;,
+  resource is ShopJa::Order
+);</code></pre></figure>
+</div>
+<h3 id="policy-refunds-ja-suspended-staff-do-nothing">forbid <code>停止中の職員は何もできない</code>（<code>suspended_staff_do_nothing</code>）</h3>
+<p>停止中の職員は何もできない</p>
+<ul>
+<li><code>注文を見る</code> では 8 通りに当てはまり、どれも拒みます。そのうち 7 通りには permit も当てはまります。</li>
+<li><code>返金する</code> では 512 通りに当てはまり、どれも拒みます。そのうち 224 通りには permit も当てはまります。</li>
+<li><code>返金を書き出す</code> では 2 通りに当てはまり、どれも拒みます。そのうち 1 通りには permit も当てはまります。</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.ja.gate</code></figcaption><pre><code class="language-gate">forbid 停止中の職員は何もできない(suspended_staff_do_nothing)
+  description &quot;停止中の職員は何もできない&quot;
+  principal is 職員
+  action any
+  when principal.停止中</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds_ja.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds_ja/suspended_staff_do_nothing&quot;)
+@name(&quot;停止中の職員は何もできない&quot;)
+@doc(&quot;停止中の職員は何もできない&quot;)
+forbid (
+  principal is ShopJa::User,
+  action in
+    [ShopJa::Action::&quot;view_order&quot;,
+     ShopJa::Action::&quot;refund_order&quot;,
+     ShopJa::Action::&quot;export_refunds&quot;],
+  resource
+)
+when { principal.suspended };</code></pre></figure>
+</div>
+<h2 id="computed">計算した値</h2>
+<p>action が計算して、Cedar の context に入れる値です。生成したコードが、サービスのデータ、操作の引数、サーバーの時計から計算し、呼ぶ側からは受け取りません。規則と日付のページは、rulec と koyomi が描いた、人が読むページをそのまま載せています。</p>
+<h3 id="computed-refund-order-refund-band"><code>返金する</code> の <code>返金の区分</code>（<code>refund_band</code>）</h3>
+<ul>
+<li>書き方：<code>返金の区分 = 返金の上限(金額: 金額, 上限: principal.返金できる額).区分</code></li>
+<li><code>rulec &quot;rules/返金の上限.rule&quot; output 区分</code> が、<code>金額</code> と <code>principal.返金できる額</code> から計算します。</li>
+<li>値：<code>上限まで</code>、<code>上限超え</code>。Cedar に渡す文字列は <code>&quot;within_limit&quot;</code>、<code>&quot;over_limit&quot;</code> です。</li>
+<li>principal の型が <code>職員</code> のときだけ計算します。ほかの型のときは、context にこの値がありません。</li>
+</ul>
+<p><button class="open" type="button" data-page="0"><code>rules/返金の上限.rule</code> のページを開く（<code>rulec doc</code>）</button></p>
+<h3 id="computed-refund-order-in-period"><code>返金する</code> の <code>期間内</code>（<code>in_period</code>）</h3>
+<ul>
+<li>書き方：<code>期間内 = today &lt;= 返金の期限.最終日(支払日: resource.支払日)</code></li>
+<li><code>today &lt;= koyomi &quot;dates/返金の期限.cal&quot; date 最終日</code> として計算します。koyomi が <code>resource.支払日</code> から日付を求め、today がその日かそれより前なら「はい」です。</li>
+<li>today は、UTC からのオフセットが +00:00 の日付です（<code>today</code> の行）。</li>
+<li>値：はい、いいえ（Cedar では true と false）。</li>
+</ul>
+<p><button class="open" type="button" data-page="1"><code>dates/返金の期限.cal</code> のページを開く（<code>koyomi doc</code>）</button></p>
+<h3 id="computed-refund-order-business-day"><code>返金する</code> の <code>営業日</code>（<code>business_day</code>）</h3>
+<ul>
+<li>書き方：<code>営業日 = today is open in 英国</code></li>
+<li><code>today is open in koyomi &quot;calendars/england_and_wales.cal&quot;</code> として計算します。today がそのカレンダーの営業日なら「はい」です。</li>
+<li>today は、UTC からのオフセットが +00:00 の日付です（<code>today</code> の行）。</li>
+<li>値：はい、いいえ（Cedar では true と false）。</li>
+</ul>
+<p><code>期間内</code> と <code>営業日</code> は、どちらも today を読みます。koyomi が宣言した範囲のすべての日で計算すると、値の組 4 通りのどれも起こります。</p>
+<p><button class="open" type="button" data-page="2"><code>calendars/england_and_wales.cal</code> のページを開く（<code>koyomi doc</code>）</button></p>
+<h2 id="checks">期待、職務の分離、役割</h2>
+<h3 id="expectations">期待</h3>
+<ul>
+<li><code>係は上限を超えて返金しない</code>（<code>返金する</code> で拒むことを期待）：責任者でない係は、自分の上限を超えて返金することがない。この期待が選ぶ 128 通りのすべてで成り立ちます。</li>
+<li><code>返金済の注文は返金しない</code>（<code>返金する</code> で拒むことを期待）：返金済の注文を返金する人はいない。この期待が選ぶ 264 通りのすべてで成り立ちます。</li>
+<li><code>責任者は期間内に返金できる</code>（<code>返金する</code> で許すことを期待）：停止中でなく、監査でもない責任者は、返金の期間のあいだ、返金済でない注文を返金できる。この期待が選ぶ 48 通りのすべてで成り立ちます。</li>
+</ul>
+<h3 id="separations">職務の分離</h3>
+<ul>
+<li><code>返金と監査を分ける</code>（<code>返金する</code>、<code>返金を書き出す</code>）：返金をする人は、返金を確かめる人ではない。成り立ちます。二つ以上を許される principal はいません。</li>
+</ul>
+<h3 id="roles">役割</h3>
+<ul>
+<li><code>係</code>（<code>clerk</code>）：お客さまに応対し、少額の返金をする。<code>can</code> に <code>注文を見る</code>、<code>返金する</code> を並べています。</li>
+<li><code>責任者</code>（<code>manager</code>）：係ができない返金をし、返金の期間が過ぎても営業日なら返金する。<code>係</code> を含みます。<code>can</code> に <code>注文を見る</code>、<code>返金する</code> を並べています。</li>
+<li><code>監査</code>（<code>auditor</code>）：あとから返金を確かめる。<code>can</code> に <code>注文を見る</code>、<code>返金を書き出す</code> を並べています。</li>
+</ul>
+<p>役割を一つだけ持つ principal（その役割が含む役割も持つ）が、action を許されるかです。「いつも許す」はほかの値のどの組み合わせでも許すこと、「組み合わせによる」は許す組み合わせと拒む組み合わせの両方があること、「許さない」はどの組み合わせでも拒むことです。「-」は、action がその型の principal を取らないことを表します。役割に <code>can</code> を書くと、いつも許すか組み合わせによる action が <code>can</code> と同じであることを <code>sekisho check</code> が確かめます。</p>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th><code>注文を見る</code></th><th><code>返金する</code></th><th><code>返金を書き出す</code></th></tr></thead>
+<tbody>
+<tr><td><code>係</code> を持つ <code>職員</code></td><td>組み合わせによる</td><td>組み合わせによる</td><td>許さない</td></tr>
+<tr><td><code>責任者</code> を持つ <code>職員</code></td><td>組み合わせによる</td><td>組み合わせによる</td><td>許さない</td></tr>
+<tr><td><code>監査</code> を持つ <code>職員</code></td><td>組み合わせによる</td><td>許さない</td><td>組み合わせによる</td></tr>
+<tr><td><code>顧客</code></td><td>組み合わせによる</td><td>-</td><td>-</td></tr>
+</tbody>
+</table></div>
+<h2 id="workflows">ワークフロー</h2>
+<p>ワークフローは、自分の資格で操作を呼びます。Cedar では principal <code>Workflow::&quot;&lt;名前&gt;&quot;</code> です。ワークフローごとに、どの action をどれだけ許されるかを並べます。</p>
+<h3 id="workflow-returns">ワークフロー <code>返品</code>（<code>returns</code>）</h3>
+<p>返品された品物が倉庫に戻ったら、その注文を返金する</p>
+<ul>
+<li>フロー：<code>dandori &quot;flows/returns.flow&quot;</code></li>
+</ul>
+<div class="scroll"><table>
+<thead><tr><th>action</th><th>許されるか</th></tr></thead>
+<tbody>
+<tr><td><code>返金する</code>（<code>refund_order</code>）</td><td>組み合わせによる（32 通りのうち 4 通りを許す）</td></tr>
+</tbody>
+</table></div>
+<h2 id="operations">守る操作</h2>
+<p>action が守る契約の操作です。サービスは、操作を行う前に、その action について Cedar に尋ねます。参照のパスはルートからです。</p>
+<div class="scroll"><table>
+<thead><tr><th>action</th><th>操作</th><th>呼び出し方</th></tr></thead>
+<tbody>
+<tr><td><code>注文を見る</code>（<code>view_order</code>）</td><td><code>openapi &quot;api/orders.json&quot; operation getOrder</code></td><td><code>GET /orders/{orderId}</code></td></tr>
+<tr><td><code>返金する</code>（<code>refund_order</code>）</td><td><code>openapi &quot;api/orders.json&quot; operation refundOrder</code></td><td><code>POST /orders/{orderId}/refunds</code></td></tr>
+<tr><td><code>返金を書き出す</code>（<code>export_refunds</code>）</td><td><code>openapi &quot;api/orders.json&quot; operation exportRefunds</code></td><td><code>POST /refunds/export</code></td></tr>
+</tbody>
+</table></div>
+<p>どの action も、操作を守っています。</p>
+<div class="sheet" id="sk-sheet" role="dialog" aria-modal="true" aria-label="doc" hidden><div class="bar"><span class="what"></span><button class="close" type="button" title="閉じる" aria-label="閉じる">×</button></div><iframe sandbox="allow-scripts" title="doc"></iframe></div>
+<script type="application/json" id="sk-pages">[{"tool":"rulec","file":"rules/返金の上限.rule","page":"[the page rulec doc draws of rules/返金の上限.rule]","error":null},{"tool":"koyomi","file":"dates/返金の期限.cal","page":"[the page koyomi doc draws of dates/返金の期限.cal]","error":null},{"tool":"koyomi","file":"calendars/england_and_wales.cal","page":"[the page koyomi doc draws of calendars/england_and_wales.cal]","error":null}]</script>
+<script>
+(function () {
+  var pages = JSON.parse(document.getElementById('sk-pages').textContent);
+  var sheet = document.getElementById('sk-sheet');
+  var frame = sheet.querySelector('iframe');
+  var opener = null;
+  function code(t) { var c = document.createElement('code'); c.textContent = t; return c; }
+  function open(k) {
+    var p = pages[k];
+    if (!p) return;
+    if (sheet.hidden) opener = document.activeElement;
+    sheet.querySelector('.what').replaceChildren(code(p.file), ' · ' + p.tool + ' doc');
+    if (p.page !== null) {
+      frame.srcdoc = p.page;
+    } else {
+      var pre = document.createElement('pre');
+      pre.textContent = p.error;
+      pre.setAttribute('style', 'white-space:pre-wrap;font:13px ui-monospace,monospace;padding:16px');
+      frame.srcdoc = '<!doctype html><meta charset="utf-8">' + pre.outerHTML;
+    }
+    sheet.hidden = false;
+    document.body.classList.add('sheet-open');
+    sheet.querySelector('.close').focus();
+    try { history.replaceState(null, '', '#page=' + (k + 1)); } catch (e) {}
+  }
+  function close() {
+    if (sheet.hidden) return;
+    sheet.hidden = true;
+    frame.srcdoc = '';
+    document.body.classList.remove('sheet-open');
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    if (opener && opener.focus) opener.focus();
+  }
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('button[data-page]');
+    if (b) open(+b.dataset.page);
+  });
+  sheet.querySelector('.close').addEventListener('click', close);
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') close(); });
+  var m = /^#page=(\d+)$/.exec(location.hash);
+  if (m) open(+m[1] - 1);
+})();
+</script>
+</main>
+</body>
+</html>

@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="sekisho <version>">
+<title>refunds v1</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 8px 0 6px; }
+h2 { font-size: 21px; margin: 44px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+h3 { font-size: 17px; margin: 30px 0 8px; }
+h4 { font-size: 14px; margin: 20px 0 6px; color: var(--dim); }
+p, li { max-width: 88ch; }
+p.desc { color: var(--dim); margin: 0 0 12px; }
+a { color: var(--accent); }
+code { font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+nav.toc { margin: 16px 0 8px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+nav.toc ul { margin: 0; padding-left: 18px; }
+nav.toc li { max-width: none; }
+.note { margin: 12px 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--soft); border-radius: 0 6px 6px 0; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; }
+table { border-collapse: collapse; font-size: 13px; }
+th, td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; white-space: nowrap; }
+th { background: var(--soft); }
+td:last-child { white-space: normal; min-width: 18ch; }
+tr.allow td:first-child { box-shadow: inset 4px 0 0 var(--ok); }
+tr.deny td:first-child { box-shadow: inset 4px 0 0 var(--bad); }
+details { margin: 8px 0 16px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+details > summary { cursor: pointer; font-weight: 600; }
+details[open] > summary { margin-bottom: 6px; }
+.side { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 12px; margin: 8px 0 20px; }
+figure.code { margin: 0; min-width: 0; }
+figure.code figcaption { font-size: 12px; color: var(--dim); margin: 0 0 4px; }
+pre { margin: 0 0 12px; padding: 10px 12px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+figure.code pre { margin: 0; }
+pre code { background: none; padding: 0; font: inherit; }
+button.open { font: inherit; font-size: 14px; padding: 5px 12px; border: 1px solid var(--accent); border-radius: 6px; background: var(--bg); color: var(--accent); cursor: pointer; }
+button.open:hover, button.open:focus-visible { background: var(--soft); }
+.sheet { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; background: var(--bg); }
+.sheet[hidden] { display: none; }
+.sheet .bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel); font-size: 13px; }
+.sheet .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet button.close { font: inherit; font-size: 16px; line-height: 1; padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); cursor: pointer; }
+.sheet button.close:hover { border-color: var(--accent); }
+.sheet iframe { flex: 1; width: 100%; border: 0; }
+body.sheet-open { overflow: hidden; }
+:target { scroll-margin-top: 8px; }
+@media print { .sheet, button.open { display: none; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>refunds v1</h1>
+<p class="desc">Who may look at an order of the shop, refund it, and export the record of refunds. A sketch of a shop&#39;s own terms, written as sekisho&#39;s example</p>
+</header>
+<ul>
+<li>File: <code>refunds.gate</code> (gate refunds v1, sha256:678573b010ccf8c4)</li>
+<li>Cedar namespace: <code>Shop</code></li>
+<li>sekisho: <version></li>
+</ul>
+<p>sekisho <version> made this page by checking the file above and the files it reads. If the file&#39;s digest is no longer what it says here, the page is out of date.</p>
+<p>The Cedar <code>sekisho gen --target cedar --lang en</code> writes from it:</p>
+<div class="scroll"><table>
+<thead><tr><th>File</th><th>SHA-256 (first 16 digits)</th></tr></thead>
+<tbody>
+<tr><td><code>cedar/refunds.cedar</code></td><td><code>952a822487ce2b19</code></td></tr>
+<tr><td><code>cedar/refunds.cedarschema</code></td><td><code>9088881fef86f054</code></td></tr>
+<tr><td><code>cedar/refunds.cedarschema.json</code></td><td><code>1618cf868c7fce1f</code></td></tr>
+<tr><td><code>cedar/refunds.policies.json</code></td><td><code>ee2b1291ba49c1a0</code></td></tr>
+</tbody>
+</table></div>
+<p class="note"><code>sekisho check</code> walked all 1,078 combinations of the 3 actions, and decided each as Cedar does. Each of the 3 expectations holds. The separation holds too. Each of the 3 roles that write <code>can</code> is allowed the actions its <code>can</code> lists, and no other.</p>
+<nav class="toc" aria-label="Contents">
+<ul>
+<li><a href="#actions">Who may do what</a>
+<ul>
+<li><a href="#action-view-order">action <code>view_order</code></a></li>
+<li><a href="#action-refund-order">action <code>refund_order</code></a></li>
+<li><a href="#action-export-refunds">action <code>export_refunds</code></a></li>
+</ul>
+</li>
+<li><a href="#policies">Policies</a></li>
+<li><a href="#computed">Computed values</a></li>
+<li><a href="#checks">Expectations, separations and roles</a></li>
+<li><a href="#workflows">Workflows</a></li>
+<li><a href="#operations">Operations guarded</a></li>
+</ul>
+</nav>
+<h2 id="actions">Who may do what</h2>
+<p>For each action, the combinations <code>sekisho check</code> walked, put together where Cedar answers them alike and the same policies decide. Rows that differ in one column only are one row, the column holding their values: <code>any</code> is every value the column takes, <code>not …</code> every value but one. <code>-</code> is a column that does not apply to the row (the roles of a workflow, say).</p>
+<h3 id="action-view-order">action <code>view_order</code></h3>
+<p>Look at an order</p>
+<ul>
+<li>It guards <code>openapi &quot;api/orders.json&quot; operation getOrder</code>.</li>
+<li>Principals: <code>User</code>, <code>Customer</code>. Resources: <code>Order</code>, the id read from the operation&#39;s argument <code>orderId</code>.</li>
+<li>18 combinations, 8 of them allowed.</li>
+</ul>
+<h4 id="action-view-order-allowed">Allowed</h4>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th>clerk</th><th>manager</th><th>auditor</th><th>suspended</th><th>resource.customer is principal</th><th>Deciding policies</th></tr></thead>
+<tbody>
+<tr class="allow"><td>User</td><td>yes</td><td>yes</td><td>yes</td><td>no</td><td>-</td><td>staff_view_orders</td></tr>
+<tr class="allow"><td>User</td><td>yes</td><td>any</td><td>no</td><td>no</td><td>-</td><td>staff_view_orders</td></tr>
+<tr class="allow"><td>User</td><td>any</td><td>no</td><td>yes</td><td>no</td><td>-</td><td>staff_view_orders</td></tr>
+<tr class="allow"><td>Customer</td><td>-</td><td>-</td><td>-</td><td>-</td><td>yes</td><td>customers_view_their_orders</td></tr>
+</tbody>
+</table></div>
+<h4 id="action-view-order-denied">Denied</h4>
+<ul>
+<li><code>suspended_staff_do_nothing</code> (<code>principal is User</code>, <code>when principal.suspended</code>) applies to 8 combinations, and denies each; a permit applies to 7 of them too, and the forbid wins.</li>
+<li>No permit applies to the 2 other combinations that are denied.</li>
+</ul>
+<details>
+<summary>The 4 rows that deny</summary>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th>clerk</th><th>manager</th><th>auditor</th><th>suspended</th><th>resource.customer is principal</th><th>Deciding policies</th></tr></thead>
+<tbody>
+<tr class="deny"><td>User</td><td>yes</td><td>yes</td><td>any</td><td>yes</td><td>-</td><td>suspended_staff_do_nothing</td></tr>
+<tr class="deny"><td>User</td><td>any</td><td>no</td><td>any</td><td>yes</td><td>-</td><td>suspended_staff_do_nothing</td></tr>
+<tr class="deny"><td>User</td><td>no</td><td>no</td><td>no</td><td>no</td><td>-</td><td>no permit applies</td></tr>
+<tr class="deny"><td>Customer</td><td>-</td><td>-</td><td>-</td><td>-</td><td>no</td><td>no permit applies</td></tr>
+</tbody>
+</table></div>
+</details>
+<h3 id="action-refund-order">action <code>refund_order</code></h3>
+<p>Refund an order, in part or in whole</p>
+<ul>
+<li>It guards <code>openapi &quot;api/orders.json&quot; operation refundOrder</code>.</li>
+<li>Principals: <code>User</code>, <code>Workflow</code>. Resources: <code>Order</code>, the id read from the operation&#39;s argument <code>orderId</code>.</li>
+<li>Input <code>amount</code>: <code>money[GBP, incl_tax]</code>, 1GBP to 10,000GBP.</li>
+<li>Computed: <code>refund_band</code>, <code>in_period</code>, <code>business_day</code> (under Computed values below).</li>
+<li>1,056 combinations, 88 of them allowed.</li>
+</ul>
+<h4 id="action-refund-order-allowed">Allowed</h4>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th>clerk</th><th>manager</th><th>auditor</th><th>workflow</th><th>suspended</th><th>status</th><th>amount</th><th>refund_band</th><th>in_period</th><th>business_day</th><th>Deciding policies</th></tr></thead>
+<tbody>
+<tr class="allow"><td>User</td><td>yes</td><td>no</td><td>no</td><td>-</td><td>no</td><td>not refunded</td><td>any</td><td>within_limit</td><td>yes</td><td>any</td><td>clerks_refund_within_their_limit</td></tr>
+<tr class="allow"><td>User</td><td>yes</td><td>yes</td><td>no</td><td>-</td><td>no</td><td>not refunded</td><td>any</td><td>within_limit</td><td>yes</td><td>any</td><td>clerks_refund_within_their_limit, managers_refund_in_period</td></tr>
+<tr class="allow"><td>User</td><td>yes</td><td>yes</td><td>no</td><td>-</td><td>no</td><td>not refunded</td><td>any</td><td>over_limit</td><td>yes</td><td>any</td><td>managers_refund_in_period</td></tr>
+<tr class="allow"><td>User</td><td>yes</td><td>yes</td><td>no</td><td>-</td><td>no</td><td>not refunded</td><td>any</td><td>any</td><td>no</td><td>yes</td><td>managers_refund_late_on_business_days</td></tr>
+<tr class="allow"><td>Workflow</td><td>-</td><td>-</td><td>-</td><td>returns</td><td>-</td><td>returned</td><td>&lt;=50GBP</td><td>-</td><td>any</td><td>any</td><td>returns_refunds_returned_orders</td></tr>
+</tbody>
+</table></div>
+<h4 id="action-refund-order-denied">Denied</h4>
+<ul>
+<li><code>no_second_refund</code> (<code>when resource.status is refunded</code>) applies to 264 combinations, and denies each; a permit applies to 112 of them too, and the forbid wins.</li>
+<li><code>auditors_do_not_refund</code> (<code>principal in auditor</code>) applies to 512 combinations, and denies each; a permit applies to 224 of them too, and the forbid wins.</li>
+<li><code>suspended_staff_do_nothing</code> (<code>principal is User</code>, <code>when principal.suspended</code>) applies to 512 combinations, and denies each; a permit applies to 224 of them too, and the forbid wins.</li>
+<li>No permit applies to the 128 other combinations that are denied.</li>
+</ul>
+<details>
+<summary>The 21 rows that deny</summary>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th>clerk</th><th>manager</th><th>auditor</th><th>workflow</th><th>suspended</th><th>status</th><th>amount</th><th>refund_band</th><th>in_period</th><th>business_day</th><th>Deciding policies</th></tr></thead>
+<tbody>
+<tr class="deny"><td>User</td><td>yes</td><td>yes</td><td>no</td><td>-</td><td>no</td><td>refunded</td><td>any</td><td>any</td><td>any</td><td>any</td><td>no_second_refund</td></tr>
+<tr class="deny"><td>User</td><td>any</td><td>no</td><td>no</td><td>-</td><td>no</td><td>refunded</td><td>any</td><td>any</td><td>any</td><td>any</td><td>no_second_refund</td></tr>
+<tr class="deny"><td>Workflow</td><td>-</td><td>-</td><td>-</td><td>returns</td><td>-</td><td>refunded</td><td>any</td><td>-</td><td>any</td><td>any</td><td>no_second_refund</td></tr>
+<tr class="deny"><td>User</td><td>yes</td><td>yes</td><td>yes</td><td>-</td><td>no</td><td>refunded</td><td>any</td><td>any</td><td>any</td><td>any</td><td>no_second_refund, auditors_do_not_refund</td></tr>
+<tr class="deny"><td>User</td><td>any</td><td>no</td><td>yes</td><td>-</td><td>no</td><td>refunded</td><td>any</td><td>any</td><td>any</td><td>any</td><td>no_second_refund, auditors_do_not_refund</td></tr>
+<tr class="deny"><td>User</td><td>yes</td><td>yes</td><td>yes</td><td>-</td><td>yes</td><td>refunded</td><td>any</td><td>any</td><td>any</td><td>any</td><td>no_second_refund, auditors_do_not_refund, suspended_staff_do_nothing</td></tr>
+<tr class="deny"><td>User</td><td>any</td><td>no</td><td>yes</td><td>-</td><td>yes</td><td>refunded</td><td>any</td><td>any</td><td>any</td><td>any</td><td>no_second_refund, auditors_do_not_refund, suspended_staff_do_nothing</td></tr>
+<tr class="deny"><td>User</td><td>yes</td><td>yes</td><td>no</td><td>-</td><td>yes</td><td>refunded</td><td>any</td><td>any</td><td>any</td><td>any</td><td>no_second_refund, suspended_staff_do_nothing</td></tr>
+<tr class="deny"><td>User</td><td>any</td><td>no</td><td>no</td><td>-</td><td>yes</td><td>refunded</td><td>any</td><td>any</td><td>any</td><td>any</td><td>no_second_refund, suspended_staff_do_nothing</td></tr>
+<tr class="deny"><td>User</td><td>yes</td><td>yes</td><td>yes</td><td>-</td><td>no</td><td>not refunded</td><td>any</td><td>any</td><td>any</td><td>any</td><td>auditors_do_not_refund</td></tr>
+<tr class="deny"><td>User</td><td>any</td><td>no</td><td>yes</td><td>-</td><td>no</td><td>not refunded</td><td>any</td><td>any</td><td>any</td><td>any</td><td>auditors_do_not_refund</td></tr>
+<tr class="deny"><td>User</td><td>yes</td><td>yes</td><td>yes</td><td>-</td><td>yes</td><td>not refunded</td><td>any</td><td>any</td><td>any</td><td>any</td><td>auditors_do_not_refund, suspended_staff_do_nothing</td></tr>
+<tr class="deny"><td>User</td><td>any</td><td>no</td><td>yes</td><td>-</td><td>yes</td><td>not refunded</td><td>any</td><td>any</td><td>any</td><td>any</td><td>auditors_do_not_refund, suspended_staff_do_nothing</td></tr>
+<tr class="deny"><td>User</td><td>yes</td><td>yes</td><td>no</td><td>-</td><td>yes</td><td>not refunded</td><td>any</td><td>any</td><td>any</td><td>any</td><td>suspended_staff_do_nothing</td></tr>
+<tr class="deny"><td>User</td><td>any</td><td>no</td><td>no</td><td>-</td><td>yes</td><td>not refunded</td><td>any</td><td>any</td><td>any</td><td>any</td><td>suspended_staff_do_nothing</td></tr>
+<tr class="deny"><td>User</td><td>yes</td><td>yes</td><td>no</td><td>-</td><td>no</td><td>not refunded</td><td>any</td><td>any</td><td>no</td><td>no</td><td>no permit applies</td></tr>
+<tr class="deny"><td>User</td><td>any</td><td>no</td><td>no</td><td>-</td><td>no</td><td>not refunded</td><td>any</td><td>any</td><td>no</td><td>any</td><td>no permit applies</td></tr>
+<tr class="deny"><td>User</td><td>any</td><td>no</td><td>no</td><td>-</td><td>no</td><td>not refunded</td><td>any</td><td>over_limit</td><td>yes</td><td>any</td><td>no permit applies</td></tr>
+<tr class="deny"><td>User</td><td>no</td><td>no</td><td>no</td><td>-</td><td>no</td><td>not refunded</td><td>any</td><td>within_limit</td><td>yes</td><td>any</td><td>no permit applies</td></tr>
+<tr class="deny"><td>Workflow</td><td>-</td><td>-</td><td>-</td><td>returns</td><td>-</td><td>paid, shipped</td><td>&lt;=50GBP</td><td>-</td><td>any</td><td>any</td><td>no permit applies</td></tr>
+<tr class="deny"><td>Workflow</td><td>-</td><td>-</td><td>-</td><td>returns</td><td>-</td><td>not refunded</td><td>&gt;50GBP</td><td>-</td><td>any</td><td>any</td><td>no permit applies</td></tr>
+</tbody>
+</table></div>
+</details>
+<h3 id="action-export-refunds">action <code>export_refunds</code></h3>
+<p>Export the record of refunds</p>
+<ul>
+<li>It guards <code>openapi &quot;api/orders.json&quot; operation exportRefunds</code>.</li>
+<li>Principals: <code>User</code>. Resources: <code>RefundRecord</code>.</li>
+<li>4 combinations, 1 of them allowed.</li>
+</ul>
+<h4 id="action-export-refunds-allowed">Allowed</h4>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th>auditor</th><th>suspended</th><th>Deciding policies</th></tr></thead>
+<tbody>
+<tr class="allow"><td>User</td><td>yes</td><td>no</td><td>auditors_export_refunds</td></tr>
+</tbody>
+</table></div>
+<h4 id="action-export-refunds-denied">Denied</h4>
+<ul>
+<li><code>suspended_staff_do_nothing</code> (<code>principal is User</code>, <code>when principal.suspended</code>) applies to 2 combinations, and denies each; a permit applies to 1 of them too, and the forbid wins.</li>
+<li>No permit applies to the 1 other combination that is denied.</li>
+</ul>
+<details>
+<summary>The 2 rows that deny</summary>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th>auditor</th><th>suspended</th><th>Deciding policies</th></tr></thead>
+<tbody>
+<tr class="deny"><td>User</td><td>any</td><td>yes</td><td>suspended_staff_do_nothing</td></tr>
+<tr class="deny"><td>User</td><td>no</td><td>no</td><td>no permit applies</td></tr>
+</tbody>
+</table></div>
+</details>
+<h2 id="policies">Policies</h2>
+<p>Each policy as the <code>.gate</code> writes it, beside the Cedar <code>sekisho gen --target cedar</code> generates for it. A permit allows the combinations it applies to; a forbid denies those it applies to, and wins where a permit applies too. Cedar denies a combination no policy applies to. A condition on a rule&#39;s answer names the value as the <code>.rule</code> writes it (<code>within_limit</code>) in the <code>.gate</code>, and as the string Cedar is given (<code>&quot;within_limit&quot;</code>) in the Cedar.</p>
+<h3 id="policy-refunds-staff-view-orders">permit <code>staff_view_orders</code></h3>
+<p>The staff look at any order</p>
+<ul>
+<li>On <code>view_order</code>, it allows 7 combinations, and no other permit allows any of them.</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.gate</code></figcaption><pre><code class="language-gate">permit staff_view_orders
+  description &quot;The staff look at any order&quot;
+  principal in clerk, auditor
+  action view_order</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds/staff_view_orders&quot;)
+@doc(&quot;The staff look at any order&quot;)
+permit (
+  principal,
+  action == Shop::Action::&quot;view_order&quot;,
+  resource is Shop::Order
+)
+when { principal in Shop::Role::&quot;clerk&quot; || principal in Shop::Role::&quot;auditor&quot; };</code></pre></figure>
+</div>
+<h3 id="policy-refunds-customers-view-their-orders">permit <code>customers_view_their_orders</code></h3>
+<p>A customer looks at their own orders</p>
+<ul>
+<li>On <code>view_order</code>, it allows 1 combination, which no other permit allows.</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.gate</code></figcaption><pre><code class="language-gate">permit customers_view_their_orders
+  description &quot;A customer looks at their own orders&quot;
+  principal is Customer
+  action view_order
+  when resource.customer is principal</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds/customers_view_their_orders&quot;)
+@doc(&quot;A customer looks at their own orders&quot;)
+permit (
+  principal is Shop::Customer,
+  action == Shop::Action::&quot;view_order&quot;,
+  resource is Shop::Order
+)
+when { resource.customer == principal };</code></pre></figure>
+</div>
+<h3 id="policy-refunds-clerks-refund-within-their-limit">permit <code>clerks_refund_within_their_limit</code></h3>
+<p>A clerk refunds up to the clerk&#39;s own limit, while the refund period lasts</p>
+<ul>
+<li>On <code>refund_order</code>, it allows 36 combinations; no other permit allows 12 of them.</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.gate</code></figcaption><pre><code class="language-gate">permit clerks_refund_within_their_limit
+  description &quot;A clerk refunds up to the clerk&#39;s own limit, while the refund period lasts&quot;
+  principal in clerk
+  action refund_order
+  when refund_band is within_limit
+  when in_period</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds/clerks_refund_within_their_limit&quot;)
+@doc(&quot;A clerk refunds up to the clerk&#39;s own limit, while the refund period lasts&quot;)
+permit (
+  principal in Shop::Role::&quot;clerk&quot;,
+  action == Shop::Action::&quot;refund_order&quot;,
+  resource is Shop::Order
+)
+when { context has refund_band &amp;&amp; context.refund_band == &quot;within_limit&quot; }
+when { context.in_period };</code></pre></figure>
+</div>
+<h3 id="policy-refunds-managers-refund-in-period">permit <code>managers_refund_in_period</code></h3>
+<p>A manager refunds any amount while the refund period lasts</p>
+<ul>
+<li>On <code>refund_order</code>, it allows 48 combinations; no other permit allows 24 of them.</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.gate</code></figcaption><pre><code class="language-gate">permit managers_refund_in_period
+  description &quot;A manager refunds any amount while the refund period lasts&quot;
+  principal in manager
+  action refund_order
+  when in_period</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds/managers_refund_in_period&quot;)
+@doc(&quot;A manager refunds any amount while the refund period lasts&quot;)
+permit (
+  principal in Shop::Role::&quot;manager&quot;,
+  action == Shop::Action::&quot;refund_order&quot;,
+  resource is Shop::Order
+)
+when { context.in_period };</code></pre></figure>
+</div>
+<h3 id="policy-refunds-managers-refund-late-on-business-days">permit <code>managers_refund_late_on_business_days</code></h3>
+<p>After the refund period, a manager may still refund, on a business day in England and Wales</p>
+<ul>
+<li>On <code>refund_order</code>, it allows 24 combinations, and no other permit allows any of them.</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.gate</code></figcaption><pre><code class="language-gate">permit managers_refund_late_on_business_days
+  description &quot;After the refund period, a manager may still refund, on a business day in England and Wales&quot;
+  principal in manager
+  action refund_order
+  unless in_period
+  when business_day</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds/managers_refund_late_on_business_days&quot;)
+@doc(&quot;After the refund period, a manager may still refund, on a business day in England and Wales&quot;)
+permit (
+  principal in Shop::Role::&quot;manager&quot;,
+  action == Shop::Action::&quot;refund_order&quot;,
+  resource is Shop::Order
+)
+unless { context.in_period }
+when { context.business_day };</code></pre></figure>
+</div>
+<h3 id="policy-refunds-returns-refunds-returned-orders">permit <code>returns_refunds_returned_orders</code></h3>
+<p>The returns workflow refunds a returned order, up to 50 pounds</p>
+<ul>
+<li>On <code>refund_order</code>, it allows 4 combinations, and no other permit allows any of them.</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.gate</code></figcaption><pre><code class="language-gate">permit returns_refunds_returned_orders
+  description &quot;The returns workflow refunds a returned order, up to 50 pounds&quot;
+  principal is workflow returns
+  action refund_order
+  when resource.status is returned
+  when amount &lt;= 50GBP</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds/returns_refunds_returned_orders&quot;)
+@doc(&quot;The returns workflow refunds a returned order, up to 50 pounds&quot;)
+permit (
+  principal == Shop::Workflow::&quot;returns&quot;,
+  action == Shop::Action::&quot;refund_order&quot;,
+  resource is Shop::Order
+)
+when { resource.status == &quot;returned&quot; }
+when { context.amount &lt;= 50 };</code></pre></figure>
+</div>
+<h3 id="policy-refunds-auditors-export-refunds">permit <code>auditors_export_refunds</code></h3>
+<p>An auditor exports the record of refunds</p>
+<ul>
+<li>On <code>export_refunds</code>, it allows 1 combination, which no other permit allows.</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.gate</code></figcaption><pre><code class="language-gate">permit auditors_export_refunds
+  description &quot;An auditor exports the record of refunds&quot;
+  principal in auditor
+  action export_refunds</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds/auditors_export_refunds&quot;)
+@doc(&quot;An auditor exports the record of refunds&quot;)
+permit (
+  principal in Shop::Role::&quot;auditor&quot;,
+  action == Shop::Action::&quot;export_refunds&quot;,
+  resource is Shop::RefundRecord
+);</code></pre></figure>
+</div>
+<h3 id="policy-refunds-no-second-refund">forbid <code>no_second_refund</code></h3>
+<p>An order already refunded is not refunded again</p>
+<ul>
+<li>On <code>refund_order</code>, it applies to 264 combinations and denies them; a permit applies to 112 of them too.</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.gate</code></figcaption><pre><code class="language-gate">forbid no_second_refund
+  description &quot;An order already refunded is not refunded again&quot;
+  action refund_order
+  when resource.status is refunded</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds/no_second_refund&quot;)
+@doc(&quot;An order already refunded is not refunded again&quot;)
+forbid (
+  principal,
+  action == Shop::Action::&quot;refund_order&quot;,
+  resource is Shop::Order
+)
+when { resource.status == &quot;refunded&quot; };</code></pre></figure>
+</div>
+<h3 id="policy-refunds-auditors-do-not-refund">forbid <code>auditors_do_not_refund</code></h3>
+<p>Whoever audits the refunds does not refund</p>
+<ul>
+<li>On <code>refund_order</code>, it applies to 512 combinations and denies them; a permit applies to 224 of them too.</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.gate</code></figcaption><pre><code class="language-gate">forbid auditors_do_not_refund
+  description &quot;Whoever audits the refunds does not refund&quot;
+  principal in auditor
+  action refund_order</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds/auditors_do_not_refund&quot;)
+@doc(&quot;Whoever audits the refunds does not refund&quot;)
+forbid (
+  principal in Shop::Role::&quot;auditor&quot;,
+  action == Shop::Action::&quot;refund_order&quot;,
+  resource is Shop::Order
+);</code></pre></figure>
+</div>
+<h3 id="policy-refunds-suspended-staff-do-nothing">forbid <code>suspended_staff_do_nothing</code></h3>
+<p>A suspended member of the staff does nothing</p>
+<ul>
+<li>On <code>view_order</code>, it applies to 8 combinations and denies them; a permit applies to 7 of them too.</li>
+<li>On <code>refund_order</code>, it applies to 512 combinations and denies them; a permit applies to 224 of them too.</li>
+<li>On <code>export_refunds</code>, it applies to 2 combinations and denies them; a permit applies to 1 of them too.</li>
+</ul>
+<div class="side">
+<figure class="code"><figcaption><code>refunds.gate</code></figcaption><pre><code class="language-gate">forbid suspended_staff_do_nothing
+  description &quot;A suspended member of the staff does nothing&quot;
+  principal is User
+  action any
+  when principal.suspended</code></pre></figure>
+<figure class="code"><figcaption><code>cedar/refunds.cedar</code></figcaption><pre><code class="language-cedar">@id(&quot;refunds/suspended_staff_do_nothing&quot;)
+@doc(&quot;A suspended member of the staff does nothing&quot;)
+forbid (
+  principal is Shop::User,
+  action in
+    [Shop::Action::&quot;view_order&quot;,
+     Shop::Action::&quot;refund_order&quot;,
+     Shop::Action::&quot;export_refunds&quot;],
+  resource
+)
+when { principal.suspended };</code></pre></figure>
+</div>
+<h2 id="computed">Computed values</h2>
+<p>What an action computes and gives Cedar in its context. The generated code computes each one from the service&#39;s own data, the operation&#39;s arguments and the server&#39;s clock, and never takes it from the caller. The pages of the rules and the dates are the pages for people that rulec and koyomi draw, as they draw them.</p>
+<h3 id="computed-refund-order-refund-band"><code>refund_band</code> of <code>refund_order</code></h3>
+<ul>
+<li>Written: <code>refund_band = refund_limit(amount: amount, limit: principal.refund_limit).band</code></li>
+<li>Computed by <code>rulec &quot;rules/refund_limit.rule&quot; output band</code>, from <code>amount</code> and <code>principal.refund_limit</code>.</li>
+<li>Its values: <code>within_limit</code> and <code>over_limit</code>; Cedar is given the strings <code>&quot;within_limit&quot;</code> and <code>&quot;over_limit&quot;</code>.</li>
+<li>It is computed only for a principal of type <code>User</code>; for another type, the context does not have it.</li>
+</ul>
+<p><button class="open" type="button" data-page="0">Open the page of <code>rules/refund_limit.rule</code> (<code>rulec doc</code>)</button></p>
+<h3 id="computed-refund-order-in-period"><code>in_period</code> of <code>refund_order</code></h3>
+<ul>
+<li>Written: <code>in_period = today &lt;= refund_terms.last_day(paid_on: resource.paid_on)</code></li>
+<li>Computed as <code>today &lt;= koyomi &quot;dates/refund_terms.cal&quot; date last_day</code>: koyomi gives the date from <code>resource.paid_on</code>, and the value is yes when today is on or before it.</li>
+<li>Today is the date at the offset +00:00 from UTC (the line <code>today</code>).</li>
+<li>Its values: yes and no (true and false in Cedar).</li>
+</ul>
+<p><button class="open" type="button" data-page="1">Open the page of <code>dates/refund_terms.cal</code> (<code>koyomi doc</code>)</button></p>
+<h3 id="computed-refund-order-business-day"><code>business_day</code> of <code>refund_order</code></h3>
+<ul>
+<li>Written: <code>business_day = today is open in uk</code></li>
+<li>Computed as <code>today is open in koyomi &quot;calendars/england_and_wales.cal&quot;</code>: yes when today is a business day of the calendar.</li>
+<li>Today is the date at the offset +00:00 from UTC (the line <code>today</code>).</li>
+<li>Its values: yes and no (true and false in Cedar).</li>
+</ul>
+<p><code>in_period</code> and <code>business_day</code> both read today. Computed by koyomi on every day of the declared ranges, each of the 4 sets of their values can happen.</p>
+<p><button class="open" type="button" data-page="2">Open the page of <code>calendars/england_and_wales.cal</code> (<code>koyomi doc</code>)</button></p>
+<h2 id="checks">Expectations, separations and roles</h2>
+<h3 id="expectations">Expectations</h3>
+<ul>
+<li><code>clerks_never_refund_over_their_limit</code> (expects deny, on <code>refund_order</code>): A clerk who is not a manager never refunds more than the clerk&#39;s own limit. It holds on all 128 combinations it picks.</li>
+<li><code>nothing_refunded_twice</code> (expects deny, on <code>refund_order</code>): No one refunds an order that is already refunded. It holds on all 264 combinations it picks.</li>
+<li><code>managers_refund_in_period</code> (expects allow, on <code>refund_order</code>): A manager who is not suspended and does not audit refunds an order not yet refunded, while the period lasts. It holds on all 48 combinations it picks.</li>
+</ul>
+<h3 id="separations">Separations</h3>
+<ul>
+<li><code>refunding_and_auditing</code> (<code>refund_order</code>, <code>export_refunds</code>): The people who refund are not the people who audit the refunds. It holds: no principal is allowed two of them.</li>
+</ul>
+<h3 id="roles">Roles</h3>
+<ul>
+<li><code>clerk</code>: Answers customers, and refunds small amounts. Its <code>can</code> lists <code>view_order</code> and <code>refund_order</code>.</li>
+<li><code>manager</code>: Refunds what a clerk cannot, and after the refund period on a business day. It includes <code>clerk</code>. Its <code>can</code> lists <code>view_order</code> and <code>refund_order</code>.</li>
+<li><code>auditor</code>: Checks the refunds after the fact. Its <code>can</code> lists <code>view_order</code> and <code>export_refunds</code>.</li>
+</ul>
+<p>Whether a principal holding one role alone (and the roles it includes) is allowed each action: always, in every combination of the rest; sometimes, allowed in some combinations and denied in others; never, denied in every one. <code>-</code> is an action that does not take the principal&#39;s type. Where a role writes <code>can</code>, <code>sekisho check</code> holds the actions it is always or sometimes allowed to it.</p>
+<div class="scroll"><table>
+<thead><tr><th>principal</th><th><code>view_order</code></th><th><code>refund_order</code></th><th><code>export_refunds</code></th></tr></thead>
+<tbody>
+<tr><td><code>User</code> holding <code>clerk</code></td><td>sometimes</td><td>sometimes</td><td>never</td></tr>
+<tr><td><code>User</code> holding <code>manager</code></td><td>sometimes</td><td>sometimes</td><td>never</td></tr>
+<tr><td><code>User</code> holding <code>auditor</code></td><td>sometimes</td><td>never</td><td>sometimes</td></tr>
+<tr><td><code>Customer</code></td><td>sometimes</td><td>-</td><td>-</td></tr>
+</tbody>
+</table></div>
+<h2 id="workflows">Workflows</h2>
+<p>A workflow calls the operations as itself: in Cedar, the principal <code>Workflow::&quot;&lt;name&gt;&quot;</code>. For each workflow, the actions it is allowed, and how far.</p>
+<h3 id="workflow-returns">workflow <code>returns</code></h3>
+<p>Refunds a returned order once the item is back at the warehouse</p>
+<ul>
+<li>Its flow: <code>dandori &quot;flows/returns.flow&quot;</code>.</li>
+</ul>
+<div class="scroll"><table>
+<thead><tr><th>action</th><th>Allowed</th></tr></thead>
+<tbody>
+<tr><td><code>refund_order</code></td><td>sometimes (4 of 32 combinations allowed)</td></tr>
+</tbody>
+</table></div>
+<h2 id="operations">Operations guarded</h2>
+<p>The operations of the contracts each action guards: before it does an operation, the service asks Cedar about the action. The paths of the references are from the root.</p>
+<div class="scroll"><table>
+<thead><tr><th>action</th><th>Operation</th><th>How it is called</th></tr></thead>
+<tbody>
+<tr><td><code>view_order</code></td><td><code>openapi &quot;api/orders.json&quot; operation getOrder</code></td><td><code>GET /orders/{orderId}</code></td></tr>
+<tr><td><code>refund_order</code></td><td><code>openapi &quot;api/orders.json&quot; operation refundOrder</code></td><td><code>POST /orders/{orderId}/refunds</code></td></tr>
+<tr><td><code>export_refunds</code></td><td><code>openapi &quot;api/orders.json&quot; operation exportRefunds</code></td><td><code>POST /refunds/export</code></td></tr>
+</tbody>
+</table></div>
+<p>Every action guards an operation.</p>
+<div class="sheet" id="sk-sheet" role="dialog" aria-modal="true" aria-label="doc" hidden><div class="bar"><span class="what"></span><button class="close" type="button" title="Close" aria-label="Close">×</button></div><iframe sandbox="allow-scripts" title="doc"></iframe></div>
+<script type="application/json" id="sk-pages">[{"tool":"rulec","file":"rules/refund_limit.rule","page":"[the page rulec doc draws of rules/refund_limit.rule]","error":null},{"tool":"koyomi","file":"dates/refund_terms.cal","page":"[the page koyomi doc draws of dates/refund_terms.cal]","error":null},{"tool":"koyomi","file":"calendars/england_and_wales.cal","page":"[the page koyomi doc draws of calendars/england_and_wales.cal]","error":null}]</script>
+<script>
+(function () {
+  var pages = JSON.parse(document.getElementById('sk-pages').textContent);
+  var sheet = document.getElementById('sk-sheet');
+  var frame = sheet.querySelector('iframe');
+  var opener = null;
+  function code(t) { var c = document.createElement('code'); c.textContent = t; return c; }
+  function open(k) {
+    var p = pages[k];
+    if (!p) return;
+    if (sheet.hidden) opener = document.activeElement;
+    sheet.querySelector('.what').replaceChildren(code(p.file), ' · ' + p.tool + ' doc');
+    if (p.page !== null) {
+      frame.srcdoc = p.page;
+    } else {
+      var pre = document.createElement('pre');
+      pre.textContent = p.error;
+      pre.setAttribute('style', 'white-space:pre-wrap;font:13px ui-monospace,monospace;padding:16px');
+      frame.srcdoc = '<!doctype html><meta charset="utf-8">' + pre.outerHTML;
+    }
+    sheet.hidden = false;
+    document.body.classList.add('sheet-open');
+    sheet.querySelector('.close').focus();
+    try { history.replaceState(null, '', '#page=' + (k + 1)); } catch (e) {}
+  }
+  function close() {
+    if (sheet.hidden) return;
+    sheet.hidden = true;
+    frame.srcdoc = '';
+    document.body.classList.remove('sheet-open');
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    if (opener && opener.focus) opener.focus();
+  }
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('button[data-page]');
+    if (b) open(+b.dataset.page);
+  });
+  sheet.querySelector('.close').addEventListener('click', close);
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') close(); });
+  var m = /^#page=(\d+)$/.exec(location.hash);
+  if (m) open(+m[1] - 1);
+})();
+</script>
+</main>
+</body>
+</html>

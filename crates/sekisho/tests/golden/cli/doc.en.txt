@@ -1,0 +1,22 @@
+sekisho doc — print the page for people: each action's table, the policies beside the Cedar they compile to, the computed values with the pages of their rules and dates, the expectations and the roles, the workflows, and the operations guarded
+
+Usage:
+  sekisho doc <file.gate> [--format markdown|html] [--root <dir>] [--lang ja|en]
+
+Arguments:
+  <file.gate>  a .gate file that passes check
+
+Flags:
+  --format markdown|html  the form of the page; html is one HTML file that loads nothing else (light and dark). The pages of the rules and the dates are folded sections in the Markdown, and open over the HTML page from a button (default markdown)
+  --root <dir>            the root the paths of references count from; else the nearest directory above the first path given that holds .git (else the directory of that file)
+  --lang ja|en            the language of the text; else the SEKISHO_LANG environment variable, then RITSU_LANG, else en (default en)
+  --help                  print this page
+
+Exit codes:
+  0  printed
+  1  the file does not pass check
+  2  bad arguments, a file that cannot be read, or a file that reads another language run with this sekisho, which reads none (E209)
+
+Examples:
+  $ ritsu sekisho doc examples/refunds/refunds.gate --root examples/refunds > refunds.md
+  $ ritsu sekisho doc examples/refunds/refunds.ja.gate --root examples/refunds --format html --lang ja > refunds.ja.html

@@ -350,8 +350,10 @@ fn shown(set: &BTreeSet<Cell>, domain: &BTreeSet<Cell>) -> Text {
     }
     let rest: Vec<&Cell> = domain.iter().filter(|c| !set.contains(c)).collect();
     if rest.len() == 1 {
+        // `返金済以外`, and `paid 以外`: a space only after an ASCII word, as the suite's Japanese
+        // writes it
         let t = rest[0].text();
-        return ritsu_base::tr!("{} 以外", "not {}", t.ja; t.en);
+        return Text { ja: ritsu_base::text::ja_spacing(&format!("{}以外", t.ja)), en: format!("not {}", t.en) };
     }
     let parts: Vec<Text> = set.iter().map(Cell::text).collect();
     Text::join(&parts, "、", ", ")
