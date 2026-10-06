@@ -1159,7 +1159,7 @@ OpenSpec の仕様（要件とシナリオ）と変更の提案を、yuen と ge
 - OpenSpec の決め方（仕様の要件を固定していなければ W102 の警告、シナリオと主張は書いたとおりの名前で突き合わせる）と、sakai の決め方（契約の文書かどうかを中身で決める）は、このままにする。
 
 - OpenAPI と AsyncAPI の文書の要素を、ツール名 `openapi`・`asyncapi` で指せるようにする（上の sakai の残したものの 1）。同じ日に作った（7.12）。
-- 文書と診断の「名指し」を、普通の語（参照、参照の書き方、指す、ツール名）に置き換える。根の DESIGN と PLAN は 2026-10-06 に置き換えた。
+- 文書と診断で、参照の書き方とその先頭の語を言っていた不自然な語を、普通の語（参照、参照の書き方、指す、挙げる、ツール名）に置き換える。2026-10-06 に、根の DESIGN と PLAN、yuen・sakai・ritsu-base・chobo・geas・ritsu の文書と出力、テストの材料（yuen の変異二つの名前を含む。いまは `E012_yuenの参照` と `E104_差分の仕様を指す`。対の英語の名前は変えていない）を置き換え、rulec・koyomi・dandori の文書と出力、サイトの日本語のページも同じ日に置き換えた。参照の決まり（DESIGN 6.2）のことは「参照」「指す」「ツール名」、それ以外は文に合わせて「書く」「挙げる」「示す」「指摘する」「指定する」と言い、言語のキーワードのことは「キーワード」と言う。yuen と sakai の DESIGN の 2 章の題は「成果物の参照の書き方」になった。同じ入力では、英語の出力は一字も変わっていない（言語ごとに、替える前と後のバイナリを、例とテストの材料の全部と `explain`・`--help` に、英語と日本語でかけて突き合わせた。違ったのは、文を直した日本語のテストの材料と例に由来する文とハッシュ、名前を替えた変異のパスだけだった）。
 
 ### 7.12 認可とセキュリティの検査（2026-10-06）
 
@@ -1227,12 +1227,12 @@ ritsu.ctx: ok — 13 contexts, 30 relationships; 473 artifacts, each in one cont
 
 残したこと：
 
-- 段階 C と D（TypeScript・Python・Go のリクエストを組み立てるコード、`sekisho doc`、X15 と X16、八つ目の言語としての取り込み）。段階 B は、下の「sekisho の段階 B」で済んだ。
+- 段階 C と D（TypeScript・Python・Go のリクエストを組み立てるコード、`sekisho doc`、X15 と X16、八つ目の言語としての取り込み）。段階 B と C、段階 D のうち `sekisho doc` と X15・X16 は、下のそれぞれの記録で済んだ。八つ目の言語としての取り込みは段階 D3 でする。
 - W201 の再現。いまは範囲に端の無い値を規則に渡せない（E103）ので、W201 は出ない。安全網として残し、台帳の再現は「まだ無い」のままにした（sekisho の DESIGN 3.2）。
 - （済み）rulec の E102 を、導出の取りうる値で強める。2026-10-06 に、E102 の三つ目の形として入れた（rulec の DESIGN 15.189。下の「rulec の E102 の三つ目の形」）。`crates/rulec/tests/over/reach.rule` の行は E102 になった。コーパスの検査を通る 87 の規則では、`rulec check` の出力（英語、日本語、JSON）が一字も変わらなかった。木にあるほかの `.rule` で変わったのは、`reach.rule` と変異 `m_e019.rule`（足した `constraint` で導出が 0 円以下にしかならず、行に当たる入力が無い）の二つだった。
 - 本物の Verified Permissions で確かめるか（決めていない。sekisho の DESIGN 15 章）。
 - dandori と sakai の OpenAPI の読み手を `ritsu_base::openapi` に替えること（出力が変わらないことの突き合わせと一緒に）。
-- 参照の書き方のツール名 `sekisho`（`Tool::ALL`、`naming.tsv`、yuen と sakai の文）。`Tool::Sekisho` はいま `Tool::ALL` の外にあり、拡張子と種類だけを持つ。
+- （済み）参照の書き方のツール名 `sekisho`（`Tool::ALL`、`naming.tsv`、yuen と sakai の文）。段階 D で、口 `Items` と一緒に足した（下の「sekisho の段階 D」）。
 
 決めたこと：
 
@@ -1267,7 +1267,7 @@ ritsu 自身の地図の成果物は、段階 A の 473 から、参照の書き
 
 残したこと：
 
-- 計算した値とワークフローの `@doc` の参照（`rulec "…" output …`、`dandori "…"`）は、まだ `use` と `workflow` の行に書いたパスで書く。`.gate` が読むファイルの参照を口 `References` で出す段階 D で、ルートからのパスにする（ルートの外の規則や日付のファイルをどうするかも、そのときに決める。sekisho の DESIGN 5.1）。
+- （済み）計算した値とワークフローの `@doc` の参照（`rulec "…" output …`、`dandori "…"`）を、`use` と `workflow` の行に書いたパスではなく、ルートからのパスで書く。段階 D でそうし、ルートの外の規則・日付・カレンダー・`use gate` は E201、`.flow` は E208 にした（下の「sekisho の段階 D」、sekisho の DESIGN 5.1）。
 - `tools.yml` の Cedar の二つの段を GitHub で走らせること（push してから）。
 
 決めたこと：
@@ -1281,17 +1281,105 @@ ritsu 自身の地図の成果物は、段階 A の 473 から、参照の書き
 - CI で、ritsu-base の Cedar の材料を同じ CLI で作り直して確かめる（DESIGN 4.18）。
 - rulec のサイトの相対リンクのテスト（`crates/rulec/tests/website.rs` の `サイトの相対リンクは実在する`）は、日本語のページの画像を、`sync.sh` のコピー元である英語のページの `images/` で確かめる。`sync.sh` を走らせていない木でも通るようにするためである（前は、`website/rulec/docs-ja/index.md` が指す `images/overview-ja.svg` が無いと落ちた）。
 
+**sekisho の段階 C**（sekisho-c1、sekisho-c2 の担当）
+
+action ごとにリクエストを組み立てて Cedar に尋ねるコードの生成と、それを本物の Cedar の実装で確かめるテストを、二人の担当が並べて作った（sekisho の DESIGN 2.9、3.8、5 章、6.3、11 章、16.1 の 47〜61）。
+
+- **sekisho-c1（生の値、TypeScript、`ritsu gen`）**：検査が歩いた組み合わせの全部から、生成したコードに渡す生の値（`Store` の中身、`input`、時刻）を作り、同じ生の値を参照の評価にかけた答えを添える（`src/raw.rs`。例は 1,078 通りから 2,164 件）。生成したコードが従う決まり（読むもの、確かめる順、拒む七つの種類）は `raw::Model::evaluate` が一か所に書く。`sekisho gen --target typescript` は、cedar-wasm 4.13.0 か Verified Permissions に尋ねるモジュールを書く。`gen --authorizer avp` は、Verified Permissions の上限（ポリシー 10,000 バイト、スキーマ 100,000 バイト、推移的な親 100）を超えるものを W401 で言う。`ritsu gen` は、ゲートの Cedar を `<out>/cedar/` に一度だけ書き、言語ごとのパッケージに `authz/` を足し、`--authorizer cedar|avp` を取る（DESIGN 9.3）。
+- **sekisho-c2（Python と Go）**：`sekisho gen --target python|go`（Go の import のパスは `--module`）。cedarpy 4.12.1 と cedar-go v1.8.0（`--authorizer avp` なら boto3 1.43.103 と aws-sdk-go-v2 の Verified Permissions のクライアント v1.41.1）に尋ねるコードを書く。Python はスキーマを持ち、cedarpy がリクエストを確かめる。
+- **確かめ**：検査を通る `.gate` の生の値の全部で、三つの言語の生成したコードの答え（許すか、決めたポリシーの集合、拒んだ種類、Cedar に渡した context）が、参照の評価と一致する。段階 C を取り込んだときは 27 の `.gate` の 27,531 件で、段階 D を取り込んだいまの木では 35 の `.gate` の 27,579 件である。英語、日本語、avp のモジュールは `tsc --strict`、`mypy --strict`、gofmt と `go vet` を通る（avp は型の検査だけ）。生成するコードの日付の比べ方を一つずらすと、例の 2,164 件のうち 528 件が食い違って落ちる。ランナーは `crates/sekisho/tools/runner-ts`・`runner-py`・`runner-go`（ロックファイルと入れ方、`tools.yml` の段）で、`ritsu gen` が書くバージョンと同じであることを監査のテストが確かめる（DESIGN 3.6、10.5）。
+
+取り込み：C2 のパッチを C1 の木に当て、重なるところ（生成の入口、`gen` の使い方とフラグ、CLI の golden、`.gitignore`、`tools.yml`）を一つにした。C2 の生成器が `Store` から読むものを生の値の決まり（型ごとに一つ）にそろえ、守る操作のコメントを参照の書き方にし、拒む種類、avp の関数の形、`today` の範囲、名前がぶつかったときのよけ方を三つの言語でそろえた。統合の木に載せ替えたあと、sekisho の全部（87 件。公式の CLI を使う 2 件を含む）と、ritsu の `sekisho`・`gen`・`audit`・`check`（24 件）が SKIP なしで通った。ワークスペース全体の tools の段は 2,270 件が通り、落ちたものは無かった（SKIP のうち許す一覧に無い 28 行は、担当の worktree に Lean の `proofs/` のビルド、サイトの Zensical、psql が無いためのもの）。統合の木の `ritsu` と出力を比べ、変わったのは W401 の台帳と、ゲートのあるプロジェクトのパッケージだけだった。
+
+ritsu 自身の地図の成果物は、段階 C の新しい五つの `.rs`（sekisho の `raw.rs`、`gen/plan.rs`・`gen/typescript.rs`・`gen/python.rs`・`gen/go.rs`）で 491 になった（いまの数は、下の「sekisho の段階 D」）。
+
+残したこと：
+
+- `--authorizer avp` のコードを本物の Verified Permissions で走らせること（sekisho の DESIGN 15 章）。
+- `tools.yml` の sekisho のランナーの段を GitHub で走らせること（push してから）。
+- resource の ID が無い件の突き合わせ。生の値は resource の ID がいつもある形で作るので、TypeScript と Python がその件を `resource` で拒むことは、生の値のテストでは確かめていない。
+
+決めたこと：
+
+- 生成したコードの答えは、組み合わせの答えをそのまま使わず、生の値から参照の評価で求め直した答えと比べる（sekisho の DESIGN 16.1 の 47）。`Store` が返すものは型ごとに一つで、どの action でも同じにする（48）。確かめる順を決めた（49）。
+- 拒む種類は、3.8 の六つに `cedar` を足した七つにし、三つの言語で同じにする（52）。範囲の外の日に拒むのは、`today` を読む計算した値を持つ action だけにする（57）。
+- `--authorizer avp` の関数は、尋ねる先 `avp` を最初の引数で受け取り（Go は `ctx` のあと）、ポリシーとスキーマを持たない。尋ねる先の型の名前は、どの言語も `VerifiedPermissions` にする（54）。生成したコードを読み比べるとき、同じものが同じ名前で見つかるようにするためである。
+- W401 は `gen` の入口で、言語に依らず言う（55）。台帳の例は `check` ではなく `gen` のコマンドの形（101 の役割が一つずつ前の役割を含む `.gate`）にし、`explain W401` が出し、`tests/codes.rs` が走らせる。例は長い（`docs/codes.md` で 220 行ほど）が、台帳の例はどれも走らせて確かめた実物にしているので、短くしない。
+- ゲートの型や列挙の名前と、生成するコードが自分で使う名前（`Store`、`Request` など）がぶつかったときは、三つの言語とも、ゲートの名前はそのまま使い、生成するコードの名前に `_2` を付ける（`Store_2`）。ゲートの名前が、生成するコードが呼ぶ組み込みの名前や読み込む名前（`Date`、`Promise` など）と同じなら、ゲートの名前に `_2` を付ける（sekisho の DESIGN 5.3）。取り込む前は、TypeScript だけがゲートの型の名前に `_` を付けていた。
+- Go は、空の resource の ID を拒まない。Go の入力の ID は文字列の型で「無い」が無く、Cedar では空の文字列も ID になれるので、Go だけ拒むと Cedar より狭くなる。resource の ID が無いときに `resource` で拒むのは、TypeScript と Python である（sekisho の DESIGN 3.8）。
+- `ritsu gen` は、ゲートの Cedar を一度だけ書き、書くバージョンは sekisho のランナーのロックファイルと同じにする（56）。boto3 は、dandori の `tools/wire` と同じ 1.43.103 にする（60）。リポジトリのランナーが入れる boto3 を一つの版にするためである。
+- 生成するコードのコメントに書く守る操作は、`@guards` と同じ参照の書き方にし、`ritsu gen` もプロジェクトのルートを渡す（61）。
+
+**sekisho の段階 D**（sekisho-d1、sekisho-d2 の担当）
+
+人が読むページと、言語をまたぐ検査とほかの言語のつなぎを、二人の担当が並べて作った（sekisho の DESIGN 1.3、4.6、7 章、8 章、10 章、16.1 の 62〜81）。八つ目の言語としての取り込み（看板、README、CLI、リリース、スキル、サイト、地図、ブラウザで試すページ）は、段階 D3 でする。
+
+- **sekisho-d1（人が読むページ）**：`sekisho doc`（Markdown と HTML、英語と日本語）を作った。action ごとの表（許す組み合わせと拒む組み合わせ）、ポリシーと生成した Cedar、計算した値と、rulec と koyomi が描いた規則と日付のページ（Markdown は畳んだ節、HTML はページの上に開く枠）、期待と職務の分離と役割、ワークフロー（dandori の口で、フローが呼ぶ操作も）、守る操作、検査の警告を並べる。`ritsu sekisho doc` で走る。ページの枠は土台のもの（DESIGN 4.8）。テストは `crates/sekisho/tests/doc.rs`（例の二つの版とテストの材料の代表の 14 ページの golden、埋め込んだページと口の出力の突き合わせ、外の URL、Chrome）。
+- **sekisho-d2（言語をまたぐ検査とほかの言語のつなぎ）**：
+  - 口：dandori の `Flows::operation_calls`、sakai の `Maps::published_operations`、sekisho の `Engine`（`Gates`・`Items`・`References`。`.gate` と手で書いた Cedar の組）。口の問いは、ファイルをルートとルートからのパスで受け取る形にした（DESIGN 3.2）。
+  - ツール名 `sekisho`（`Tool::ALL`、`naming.tsv` の 75 行、yuen と sakai の文と golden、sakai のキーワード。DESIGN 6.2、6.3）。yuen の `verified by` が sekisho の `expect` と `separate` を受け付ける。sakai は `.gate` と `cedar "…"` の Cedar を成果物にし、ほかのコンテキストの操作を守る参照を E211 にし、境界を越えるゲートの `use rule` などを共有カーネルに限る（sakai の DESIGN 17 章）。定義の文の作り方を、dandori から土台に移した（DESIGN 4.22）。
+  - 手で書いた Cedar の組が口 `Gates` に答える（sekisho の DESIGN 1.3）。有限の部分の外の式は、決められないと答える。
+  - X15 と X16（ritsu の E907・W907・E908・W908・W909。DESIGN 7.14、sekisho の DESIGN 4.6）。例の `ritsu check` の境界は、0 から 2 になった。
+  - sekisho の W901 と W910（DESIGN 16.2）。生成する Cedar の `@doc` の参照をルートからのパスにし、ルートの外の規則・日付・カレンダー・`use gate` を E201、`.flow` を E208 にした（sekisho の DESIGN 2.6、5.1）。
+
+取り込み：D1 のページは、D2 の口（`Flows::operation_calls`）の上で dandori に尋ねるようにつないだ。D2 が `@doc` の参照をルートからにしたことで、`use` のパスがルートからのパスと違うテストの材料の生成した Cedar のハッシュが変わるので、ページの golden は頭の Cedar のハッシュを `<sha256>` と書き、今の出力のハッシュとは別のテストで突き合わせる（sekisho の DESIGN 16.1 の 65）。sekisho の DESIGN 16.1 の番号は、段階 C を 47〜61、D1 を 62〜68、D2 を 69〜81 に振り直した。D2 は、替える前と後の `ritsu` で同じ材料に 785 のコマンドを走らせ、違いが決めて変えたものだけ（sekisho の例の `ritsu check` の境界の数、四つの言語と ritsu の `explain --all` の新しいコードと直した文、`use` のパスがルートからと違う材料の、生成した Cedar の `@doc` の参照）であることを確かめた。段階 D を取り込んだいまの木では、sekisho のテストは 106 件が SKIP なしで通る（DESIGN 10.1）。
+
+```
+$ ritsu check crates/sekisho/examples/refunds
+ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; borders between the languages: 2 checked, 0 undecided
+$ ritsu check ritsu.ctx
+ritsu.ctx: ok — 13 contexts, 30 relationships; 500 artifacts, each in one context; 66 crossings checked (rust 66)
+```
+
+ritsu 自身の地図の成果物は、段階 C の 491 から、段階 D の新しい九つ（D1 の sekisho の `doc/mod.rs`・`doc/markdown.rs`・`doc/html.rs`、D2 の sekisho の `cedar_in.rs`・`ports.rs`・`security.rs`、ritsu-base の `definition.rs`、ritsu-cross の `src/gates.rs`・`tests/gates.rs`）で 500 になった。
+
+残したこと：
+
+- 手で書いた Cedar のワークフロー（X16 は `.gate` だけを見る）、手で書いた Cedar の役割の中の役割、Cedar の JSON の形のポリシー（sekisho の DESIGN 15 章）。
+- 手で書いた Cedar の答えを、公式の CLI の評価と突き合わせること。いまの `tests/cedar_in.rs` は `.gate` の答えと突き合わせ、材料は `cedar validate` が誤りも警告も言わないことだけを確かめている。
+
+決めたこと：
+
+- ページは、検査を通るファイルにだけ出す（sekisho の DESIGN 16.1 の 62）。表は全部の組み合わせを歩いた結果から作るので、歩けないファイルには表が無い。sekisho の誤りは診断の例が組み合わせを言うので、dandori の `doc` のように、誤りのあるファイルにもページを出して図の上で誤りを光らせる形は取らない。
+- ページの頭の Cedar のハッシュは、ページの言語で `gen --target cedar` が書く四つのファイルのものにする（64）。sekisho が書く `@doc` と生成物の頭は `--lang` で変わるので、どの言語で生成したファイルかもページに書く。
+- 表の「〜以外」は、英字の値のあとだけ空白を入れる（`paid 以外`、`返金済以外`。66）。段階 A の表の golden を一つ取り直した。英語は変わらない。
+- X15 は、プロジェクトに `.gate` か Cedar の組が一つでもあるときだけ見る（72。DESIGN 7.14）。W909 は、許すかを決められないときにも出す（75）。W910 は、ポリシーが読む `input` にだけ言う（77）。ポリシーが読まない `input` は、生成した Cedar の `context` に入らないからである。
+- ルートの外の規則・日付・カレンダー・`use gate` は E201、`.flow` は E208 にする（71）。警告にして、書いたパスのまま `@doc` に書くと、参照にならないパスを黙って書くことになるからである。
+- 口の問いの引数は、ルートとルートからのパスにする（69）。答えの参照がルートからのパスだからである。
+- sakai は、手で書いた Cedar のファイルを、`cedar "…"` の項で書いたときだけ成果物にする（79、sakai の DESIGN 17.1）。`dir` の下の `.cedar` を全部成果物にすると、テストの材料や生成したファイルまで、どれかのコンテキストに属することを求められるからである。
+- sakai は、`guards` を、関係によらず同じコンテキストの `.gate` だけに許す（E211。共有カーネルやパートナーシップがあっても。sekisho の DESIGN 16.1 の 7）。
+- sakai のキーワードに、ツール名 `sekisho` と sekisho の種類の語を足した（ツール名と種類の語はキーワードにする、という sakai の決まりのとおり）。地図、コンテキスト、語の名前にできなくなる語が七つ増えた（`sekisho`、`principal`、`resource`、`attribute`、`role`、`workflow`、`expect`。`separate` は前から `separate ways from` の語）。例とテストに当たるものは無かった。
+- 手で書いた Cedar の役割は、尋ねる側が並べたものだけを数え、役割の中の役割はたどらない（78）。だれがどの役割に入るかは、Cedar ではエンティティのデータが持つからである。
+
 **参照の書き方のツール名**（tool-names の担当）
 
 参照の書き方（DESIGN 6.2、6.5）に、ツール名 `openapi`・`asyncapi`・`cedar` と、chobo の振替の下の `operation` を足した。土台の `naming` と新しい `document`（DESIGN 4.21）、`naming.tsv` の 24 行。chobo の口の `Items` は振替の操作も渡す。yuen は三つのツール名の要素をリンクの端にし、要素ごとのハッシュで固定する（yuen の DESIGN 3.6。英語の材料 `refund_contracts` と日本語の `contracts`、変異の対 `E303_element_changed`・`E303_要素が変わった`）。sakai は文書と要素を、api、診断、doc のページで参照の書き方で書き、`.ctx` の長い書き方を読む（sakai の DESIGN 15.10）。dandori の `use openapi` の参照も `openapi "…"` になった。
 
-- 残したこと：ツール名 `sekisho`（段階 D、口 `Items` と一緒に）。Cedar の要素の引き方を土台に移すこと（sekisho が手で書いた Cedar に答える段階 D で）。yuen の `affected` が、文書と Cedar のファイルを要素の単位で答えること（いまはファイルの単位）。sekisho の `guards` の診断の文を参照の書き方にすることは、上の「守る操作の参照」で済んだ。
+- 残したこと：yuen の `affected` が、文書と Cedar のファイルを要素の単位で答えること（いまはファイルの単位）。ツール名 `sekisho` は、段階 D で口 `Items` と一緒に足した。Cedar の要素の引き方は、段階 D の sekisho の口が Cedar の要素の参照を引かないので、土台に移していない（DESIGN 6.5。二つ目の言語が引くようになったら移す）。sekisho の `guards` の診断の文を参照の書き方にすることは、上の「守る操作の参照」で済んだ。
 - 決めたこと：`pointer` の種類、asyncapi の `schema` の下の `value`、`message` を二つの場所に置くこと、Cedar の名前に名前空間を付けないこと（DESIGN 6.5）。yuen の端に文書の値（`description` も値として入る。`.proto` のコメントは値ではない）と `$ref` の先を入れること、E205 を広げたこと（yuen の DESIGN 3.6）。sakai の api の形を変えたこと（`pointer`・`pointers`・`contract` のキーを無くした。sakai の DESIGN 15.10）。まだリリースしていない形なので、前の形は残さない。sakai の `.ctx` の予約語に `cedar`・`property`・`pointer`・`policy`・`action`・`entity` の六つを足したこと。dandori の `use openapi` の参照を `openapi "…"` にしたこと（`use smithy` は `file` のまま）。
 
-**rulec の E102 の三つ目の形**（rulec-e102 の担当）
+**rulec の E102 の三つ目の形と、そのあとの直し**（rulec-e102 の担当）
 
-導出の列に、その導出が入力の範囲から実際に取りうる値の外だけを求める行を、E102（どの入力にも当てはまらない行）の三つ目の形にした（rulec の DESIGN 15.189）。
+導出の列に、その導出が入力の範囲から実際に取りうる値の外だけを求める行を、E102（どの入力にも当てはまらない行）の三つ目の形にした（rulec の DESIGN 15.189）。同じ日に、そこで見つけた不具合を二つ直した。計算した値の列を、値が実際にとる刻みで切ること（15.190）と、式の中の値にならない数を E103 にすること（15.191）である。
 
-次のリリースノートに書くこと：derive の範囲を入力から計算して、届かない行を E102 にした。derive の範囲を広めに書き、その先に行を書いていた規則は、新しく E102 で落ちる。`policy first` の表で、上の行が derive の取りうる値をすべて覆ったあとに置いた受け皿の行（`-` の行）と、`constraint` で derive の取りうる値が狭まり、その外を求める行も同じく落ちる。対象は、入力の足し算・引き算・定数倍でできた derive の列で、`define` の列と、分数の定数を掛ける derive の列は、これまでどおり見ない。
+次のリリースノートに書くこと：
 
-- 残したこと：分数の定数を掛ける導出（`amount * 10%`）を軸に持つ表で、軸が金額の刻みで切られ、値の刻み（0.1 ポンドなど）のあいだの値を数えないため、E101 が穴を見逃す（生成したコードは、その値で完全性の assert に止まる）。三つ目の形は、この軸を持つ表を読まない。
+derive の範囲を入力から計算して、届かない行を E102 にした。derive の範囲を広めに書き、その先に行を書いていた規則は、新しく E102 で落ちる。`policy first` の表で、上の行が derive の取りうる値をすべて覆ったあとに置いた受け皿の行（`-` の行）と、`constraint` で derive の取りうる値が狭まり、その外を求める行も同じく落ちる。対象は、入力の足し算・引き算・定数倍（`10%` のような分数の定数も含む）でできた derive の列で、`define` の列は、これまでどおり見ない。
+
+完全性の検査（E101）が、規則の計算する値（derive、define、表の出力）の列を、値が実際にとる刻みで見るようにした。分数の定数を掛ける derive（`amount * 10%` は 0.1 ポンド刻み）の列で、整数の単位の境目のあいだに値が残る表（`<=1GBP` と `>=2GBP`）は、これまで `rulec check` を通り、生成したコードはその入力で `unreachable` で止まっていた。そういう規則は新しく E101 で落ち、E101 は穴の値（JSON の `witness` では `"1.1"` のような文字列）と、それを作る入力（「この例を作る入力: amount = 11」）を示す。逆に、境目のあいだに書いた行（`>1GBP <2GBP`）を E102 と言っていた規則は通るようになる。あわせて、`min`・`max` の二つの引数の刻みが違う derive と、範囲の無い入力から計算した derive で、生成したコードが参照の評価器と違う答えを返していたのを直した。証明書には `scales` を足し（形式の版は 1 のまま）、二つの再検査は軸の刻みを確かめる。`scales` の無い古い証明書では、その刻みを述べただけとして数える。
+
+式の中の、値にならない数のリテラルを E103 にした。単位の無い小数（`amount * 0.4`。単位の無い数は整数の `number`）と、金額や量の端数（`0.5GBP`）である。これまでは `check` を通り、参照の評価器は答えを出さず、生成したコードは 0 を掛けていた。単位の無い小数には、それが表す率（`40%`）を `fix.text` で示す。整数に書ける小数（`2.0`）は、これまでどおり通る。互換のページの「落ちるべきだったのに通っていた規則」に当たる。
+
+残したこと：
+
+- `define` の列で、E101 が、その `define` が取りえない値に行を求めることがある（`define ratio : rate = total / 30` で `total` が 0〜30 のとき、`ratio = 310/3%` を例に行を求める）。不健全な緑にはならず、言いすぎるほうの誤りである。三つ目の形が `define` の取りうる値を読まない理由でもある（E102 だけが読むと、E102 が消せと言った行を E101 が足せと言う）。直すなら、E101 のふるいと二つの再検査（`recheck.py` と Lean）も、`define` の取りうる値を読むようにする。
+- 上の表の出力と導出の組み合わせでしか死なない行（`amount <= 50GBP` でしか `low` にならない列の下で、`low` と `excess > 50GBP` を同時に求める行）は、どのふるいも落とせず、E102 にならない。region が上の表の列と導出の入力を結んでいないためである。これも不健全な緑にはならない。
+- 線形でない導出（`min(amount, amount * 10%)` など）の穴では、E101 が、例を作る入力を添えないことがある。表の線形のモデルが、その導出と入力を結ばないためである。添えないだけで、例の値と E101 は正しい。直すなら、入力の少ない規則で総当たりに探す（`grid.rs` の `exhaust_*` と同じやり方。rulec の DESIGN 15.190）。
+
+決めたこと：
+
+- 分数の定数を掛ける導出の軸は、「決められない」として止めず、値がとる刻みで正確に切る（rulec の DESIGN 15.190）。止める形は、正しく敷き詰めた表（`<=1GBP` と `>1GBP`）まで落とすからである。三つ目の形も、この軸を持つ表を読むようにした。
+- 生成コードの刻みの不具合を二つ直した。`min` と `max` の値の刻みを、一つ目の引数の刻みではなく二つの引数の刻みの最小公倍数にし、範囲の無い入力から計算した値の刻みも記録する。どちらも `check` を通り、生成したコードが参照の評価器と違う答えを返していた。木の中の規則では、生成したコードは一字も変わらない。
+- 証明書に `scales`（名前ごとの値の刻み）を足し、二つの再検査が軸の刻みを確かめる。形式の版は 1 のままにした（キーを足すのは互換のページの範囲）。`scales` の無い古い証明書は、刻みを述べただけとして通す。古い証明書を落とすと、正しい証明書まで読めなくなるからである。
+- 金額と量の端数（`amount + 0.5GBP`）も、単位の無い小数と同じ E103 にする（rulec の DESIGN 15.191）。同じ抜け道で、生成したコードは同じように 0 を使っていた。`fix.text` は出さない（細かい単位の型で書くほかに、機械的に書き換える形が無い）。
+- 整数に書ける小数（`2.0`、`100.0g`）は、これまでどおり通す。値があり、参照の評価器と生成したコードが同じ値を使うからである。止めるのは値の無いリテラルだけで、書き方の好みまでは止めない。

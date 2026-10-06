@@ -284,14 +284,14 @@ E の最初の部分で、三つの言語がほかの言語を読めないとき
 | `Dates` | koyomi | dandori、rulec、sakai（doc のため。F.2）、ritsu-cross、sekisho | 関数、引数の型と範囲、カレンダーとデータの範囲、`at` の時刻と UTC オフセット、条件の名前と文、`koyomi doc` が描いたもの。問いは「入力の範囲で、関数がとりうる値の集合」と「入力から値までの日数の最小と最大」と「カレンダーのデータの範囲と、休みの日の全部」（`calendar`）。`calendar` と `doc` は 2026-10-06 に sekisho のために足した。評価 |
 | `Books` | chobo | dandori、sakai（doc のため。D.8）、ritsu-cross、sekisho（`GatePorts`） | 単位（ritsu の単位の型。D.9）、勘定と境界と拒否の理由、振替の種類（引数と単位、キー、仮押さえと有効期限、移動）、仮押さえのステートマシン。問いは「額がこの範囲のとき、どの操作が、どの理由で拒否されうるか」。評価（帳簿の状態を持つ） |
 | `Claims` | geas | yuen、ritsu-cross | 主張の一覧（名前、行、書いたとおりの手順）。map の記録の読み方。差分が主張に何をもたらすか（geas の `affected`。D.7 で足した） |
-| `Items` | 七つ全部 | yuen、sakai、sekisho（`GatePorts`） | 中のもの（種類、名前、行の範囲、定義の文）。6.4 |
-| `References` | 七つ全部 | sakai、yuen | 参照（行、指す先、参照の仕方）。6.4 |
+| `Items` | 八つ全部 | yuen、sakai、sekisho（`GatePorts`） | 中のもの（種類、名前、行の範囲、定義の文）。6.4 |
+| `References` | 八つ全部 | sakai、yuen | 参照（行、指す先、参照の仕方）。6.4 |
 | `Sources` | rulec、koyomi | yuen | ファイルが宣言して保存している出典（法令の ID と時点と条ごとの固定、文書のパスと url と固定）。検査を通るファイルにだけ答える。D.7 で足した（下の段落） |
 | 索引（`Index`） | （口ではなく、`Items` と `References` の答えを持つもの） | yuen、sakai、ritsu-cross | 各言語の `Items` と `References` の答えをファイルごとに一度だけ尋ねて持ち、参照で引く。E.1 で足した（6.4） |
-| `Flows` | dandori | ritsu-cross、sekisho（`crossings` で、`.flow` が dandori の検査を通るかを尋ねる。`GatePorts`） | 検査を通るフローが、規則・koyomi の日付・chobo の振替を呼ぶところと、渡す値がどこから来うるか、期限のある仮押さえを確定か取消をするまでの長さ。E.4 と E.5 で足した（下の段落）。秘密の値をプロジェクトの中の成果物へ送る呼び出し（`sends`。2026-10-06 に足した。16.8）：呼び出しの行、タスクか規則、送る先のファイル（OpenAPI の文書、`.proto`、Connect の規則、子の `.flow`、帳簿、日付のファイル。dandori が届くパス）、引数ごとの秘密の値（フローの書き方、印のファイルと行と印）、`discloses` の引数と理由 |
-| `Maps` | sakai | ritsu-cross | 地図のコンテキストと関係、ファイルがどのコンテキストに属するか。sakai の検査の段 1 と段 2（構文、名前、パスと、属し方）だけで答える。2026-10-06 に足した（16.8、16.9） |
+| `Flows` | dandori | ritsu-cross、sekisho（`crossings` で `.flow` が dandori の検査を通るかを尋ね、`doc` のページが `operation_calls` でフローが呼ぶ操作を尋ねる。`GatePorts`） | 検査を通るフローが、規則・koyomi の日付・chobo の振替を呼ぶところと、渡す値がどこから来うるか、期限のある仮押さえを確定か取消をするまでの長さ。E.4 と E.5 で足した（下の段落）。秘密の値をプロジェクトの中の成果物へ送る呼び出し（`sends`。2026-10-06 に足した。16.8）：呼び出しの行、タスクか規則、送る先のファイル（OpenAPI の文書、`.proto`、Connect の規則、子の `.flow`、帳簿、日付のファイル。dandori が届くパス）、引数ごとの秘密の値（フローの書き方、印のファイルと行と印）、`discloses` の引数と理由。呼ぶ操作（`operation_calls`。2026-10-06 に sekisho の X16 のために足した）：検査を通るフローの、`use openapi` の `http` と `use proto` の `connect` のタスクの呼び出しごとに、行、タスク、操作の参照（ルートから）、拒まれたときのエラー（状態 403 のもの。Connect の `permission_denied` も 403） |
+| `Maps` | sakai | ritsu-cross | 地図のコンテキストと関係、ファイルがどのコンテキストに属するか。sakai の検査の段 1 と段 2（構文、名前、パスと、属し方）だけで答える。2026-10-06 に足した（16.8、16.9）。コンテキストが公開する操作（`published_operations`。同じ日に sekisho の X15 のために足した）：`open host service` に並べた proto のサービスのメソッドの全部と OpenAPI の操作を、参照と、だれでも呼べるか（`security: []`）と、それを並べたコンテキストのファイルと行で |
 | `Undecided` | ritsu-cross（`ritsu_cross::UndecidedCalls`） | dandori | フローの規則の呼び出しごとに、X2 が決められなかった前提（呼び出しの行、規則のファイル、前提）。dandori の生成したコードが、ワークフローを走らせたときに確かめる（7.4 の 3）。E.5 で足した |
-| `Gates` | sekisho（段階 D で `Engine` が実装する） | ritsu-cross（X15、X16） | `.gate` の action と守る操作（参照の書き方）、ワークフロー、ポリシーの `@id`、期待と職務の分離の名前と行。問いは「この principal（ワークフローか、型と役割の組）は、この action を、全部の組み合わせでいつも・組み合わせによって・決して許されるか」。2026-10-06 に型を足した（下の段落） |
+| `Gates` | sekisho（`sekisho::ports::Engine`。`.gate` と、手で書いた Cedar の組の両方に答える） | ritsu-cross（X15、X16） | `.gate` か Cedar の組の action と守る操作（参照の書き方。Cedar はスキーマの `@guards`）、ワークフロー（別名と、`.flow` の参照）、ポリシーの `@id`、期待と職務の分離の名前と行。問いは「この principal（ワークフローか、型と役割の組）は、この action を、全部の組み合わせでいつも・組み合わせによって・決して許されるか」。どの問いも、ファイルをルートとルートからのパスで受け取る。2026-10-06 に型を足し（下の段落）、同じ日に段階 D で答えるようにした |
 | `GatePorts` | （口ではなく、sekisho が読む口のまとまり） | sekisho | `Rules`・`Dates`・`Books`・`Flows`・`Items` の五つの口。`ritsu-project` の `Joined::sekisho` が作る。`ports()` が、`Flows::crossings` に渡す三つの口の組（`Ports`）を返す。2026-10-06 に足した |
 
 どの問いの答えも、P5 の三つのどれかになる。値を尋ねる問い（koyomi の日付がとりうる値の集合など）は、その値か、決められない理由かの二つになる。
@@ -322,10 +322,13 @@ pub trait Sources { fn sources(..) -> Vec<Source>; }   // Source { name, line, k
 pub trait Items { fn items(&self, root: &Path, file: &str) -> Result<Vec<Item>, Vec<Said>>; }       // Item { naming, lines, text }
 pub trait References { fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>>; } // Reference { line, target, how }
 pub struct Ports { rules: Rc<dyn Rules>, dates: Rc<dyn Dates>, books: Rc<dyn Books> }   // フローを読む三つの口。ritsu-project の Joined::ports が作る
-pub trait Flows { fn rule_calls(.., rules) -> Vec<RuleCall>; fn crossings(.., ports: &Ports) -> Crossings; fn sends(.., ports: &Ports) -> Vec<Send>; }   // dandori が答える。E.4 と E.5、sends は 16.8
+pub trait Flows { fn rule_calls(.., rules) -> Vec<RuleCall>; fn crossings(.., ports: &Ports) -> Crossings; fn sends(.., ports: &Ports) -> Vec<Send>; fn operation_calls(&self, root: &Path, file: &str, ports: &Ports) -> Result<(String, Vec<OperationCall>), Vec<Said>>; }   // dandori が答える。E.4 と E.5、sends は 16.8、operation_calls は sekisho の X16 のために足した（2026-10-06。既定は空）
 pub trait Undecided { fn preconditions(&self, file: &Path) -> Vec<UndecidedPrecondition>; }   // ritsu-cross が答え、dandori が受け取る。E.5
-pub trait Maps { fn map(&self, root: &Path, map: &str) -> Result<Option<MapFacts>, Vec<Said>>; fn context_of(&self, root: &Path, map: &str, file: &str) -> Result<Option<String>, Vec<Said>>; }   // sakai が答え、ritsu-cross が受け取る。16.8
-pub trait Gates { fn facts(..) -> GateFacts; fn allowed(.., action, asker: &Asker) -> Found<Allowance>; fn joined(&self) -> bool; }   // sekisho が答え（段階 D）、ritsu-cross が受け取る。2026-10-06 に型を足した
+pub trait Maps { fn map(&self, root: &Path, map: &str) -> Result<Option<MapFacts>, Vec<Said>>; fn context_of(&self, root: &Path, map: &str, file: &str) -> Result<Option<String>, Vec<Said>>; fn published_operations(&self, root: &Path, map: &str) -> Result<Vec<PublishedOperation>, Vec<Said>>; }   // sakai が答え、ritsu-cross が受け取る。16.8。published_operations は sekisho の X15 のために足した（2026-10-06。既定は空）
+pub trait Gates { fn facts(&self, root: &Path, file: &str) -> Result<GateFacts, Vec<Said>>; fn allowed(&self, root: &Path, file: &str, action: &str, asker: &Asker) -> Result<Found<Allowance>, Vec<Said>>; fn joined(&self) -> bool; }   // sekisho が答え（段階 D）、ritsu-cross が受け取る
+pub struct GateWorkflow { name: String, alias: String, flow: Name, line: usize }   // flow は dandori "<ルートからのパス>"
+pub struct OperationCall { line: usize, task: String, operation: Name, denied: Option<String> }   // フローが呼ぶ操作（X16）
+pub struct PublishedOperation { context: String, operation: Name, open_to_anyone: bool, file: String, line: usize }   // コンテキストが公開する操作（X15）
 pub struct GatePorts { rules: Rc<dyn Rules>, dates: Rc<dyn Dates>, books: Rc<dyn Books>, flows: Rc<dyn Flows>, items: Rc<dyn Items> }   // sekisho が読む五つの口。ritsu-project の Joined::sekisho が作り、ports() が Flows::crossings に渡す Ports を返す
 ```
 
@@ -390,11 +393,13 @@ ritsu-ports には、秒を最も大きな単位で書く `seconds_text`（`17 d
 - `Rules::outputs_over`（rulec が答える）：列挙か真偽の出力の名前と、入力ごとの区間（受け渡す整数で、日付は日の番号。両端を含み、None の端は宣言した範囲のまま）を受け取り、出力がとる値の一つ一つに、そこに届く入力を添えて返す（値を宣言した順。区間の中に入力が無ければ空）。rulec は、入力を区間に限って規則を読み直し、出力を決める表の行のうち、ある入力が届きうる行を、完全性の証明のふるいと導出の届く区間で求め、その行が書く値に届く入力を規則のベクタから探して評価器で確かめる。二つがそろえば正確で、そろわなければ値と行を言って決められないと答える。rulec のコーパスとテストの規則の 323 の問いのうち 322 が、区間の中の全部の入力を流した答えと同じに正確に答えられた（rulec の DESIGN 15.188）。導出の取りうる値の外だけを求める行は、`rulec check` も E102（三つ目の形）として止める（rulec の DESIGN 15.189）。`rulec check` は、`define` の取りうる値と、`constraint` だけで死ぬ行は読まないので、区間に限った問いでは落ちる行が、`check` では通ることがある。既定の実装は決められないと答えるので、いま口を実装しているもの（dandori の `NoRules` など）は直していない。
 - `EnumValue::public`：口の事実の列挙の値に、公開名（`.rule` が括弧の中に書いた別名、無ければ名前。`上限まで(within_limit)` なら `within_limit`）を足した。sekisho が Cedar に入れる文字列で、`outputs_over` も列挙の値をこれで返す（添える入力は `eval` が受け取る形で、列挙の値は名前）。前からの `alias`（生成したコードのメンバーの名前、`WithinLimit`）と `name` は変えていないので、dandori と yuen の答えは変わらない。
 - `Dates::calendar` と `Dates::doc`（koyomi が答える）：`calendar` は、カレンダーのファイルの名前と別名、データの範囲、UTC オフセット、データの範囲の中で休みの日の全部（`CalendarFacts`）を返す。`doc` は `koyomi doc` と同じページを返し、頭の「ファイル」の行だけを呼ぶ側の書き方にする（`Rules::doc` と同じ使い方）。どちらも `check` を通るファイルにだけ答え、既定の実装は答えない（`Err`）。
-- 口 `Gates` の型（`GateFacts`・`GateAction`・`GateWorkflow`・`GatePolicy`・`Asker`・`Allowance`）と、口のまとまり `GatePorts`（`crates/ritsu-ports/src/gates.rs`）。`Gates` に答える `Engine` は段階 D で作る。`GatePorts` は、sekisho のクレートに依存せずに `ritsu-project` が作れるよう、ritsu-ports に置いた（dandori の `Ports` と同じ形）。契約（OpenAPI と AsyncAPI の文書、`.proto`）は口を通さず、土台の読み手（4.20、ritsu-proto）で読む。
+- 口 `Gates` の型（`GateFacts`・`GateAction`・`GateWorkflow`・`GatePolicy`・`Asker`・`Allowance`）と、口のまとまり `GatePorts`（`crates/ritsu-ports/src/gates.rs`）。`Gates` に答える `Engine` は、段階 D で作った（下の段落）。`GatePorts` は、sekisho のクレートに依存せずに `ritsu-project` が作れるよう、ritsu-ports に置いた（dandori の `Ports` と同じ形）。契約（OpenAPI と AsyncAPI の文書、`.proto`）は口を通さず、土台の読み手（4.20、ritsu-proto）で読む。
 
 同じ日に、koyomi の口（`koyomi::ports::Engine`）が、同じファイルを何度尋ねられても検査を一度で済ませるようにした。sekisho は日付の関数を、渡す値ごとに `Dates::eval` で呼ぶ（例の `.gate` では、注文の支払日がとる 1,004 日について一回ずつ）。前の口は、尋ねられるたびにファイルを検査し直していた。いまの口は、検査の結果を、呼ぶ側が書いたパスごとに、その検査が読んだファイルの全部（そのファイル、カレンダー、祝日の表、法令のコピー）とその中身と一緒に覚え、次に尋ねられたら読んだファイルを読み直して、どれも同じときだけ覚えた結果で答える。読んだファイルは、検査が `ritsu_base::fs` に頼んだ読みを記録して知る（結果の型から集めると、読みが増えたときに集め忘れる）。土台に、外側の `ritsu_base::fs::with` を返す `fs::current` を足した。覚えるのはスレッドごとで、256 件を超えたら覚え直す。`Engine` は値を持たない型のままにした（ritsu の三十を超える所が `koyomi::ports::Engine` と値で書いている）。`ritsu check` の `koyomi check`（`Engine::checked`）は、前のとおりファイルごとに検査する。速さは、例の `refunds.gate` の検査が 1.8 秒ほどから 0.46 秒ほどになった（test の構成。koyomi の DESIGN 11 章）。
 
-中のものの定義の文は、6.4 の表のとおりにした。rulec は `rulec fmt` が書く形の行、koyomi は `date … =` の塊の行と条件の行（コメントと前後の空白を除く）、chobo は yuen の DESIGN 3.2 の形の JSON（yuen の試作が計算したハッシュと同じになる）、geas は主張の塊の行、dandori はタスク・案件・レコードの宣言の塊の行（コメントと前後の空白を除き、文字列の外の続いた空白を一つにし、字下げは深さごとに空白二つに直す。dandori の DESIGN 0.3）である。表に無かった yuen は要件の端の中身（yuen の DESIGN 4.1）と出典の固定の行、sakai はコンテキストのファイルの行と語の塊の行にした。
+**2026-10-06 に足したもの**（sekisho の段階 D。PLAN の 7.12）。sekisho の `Engine`（`crates/sekisho/src/ports.rs`）が `Gates`・`Items`・`References` に答える。`.gate` のほかに、手で書いた Cedar の組（`.cedar` と、`.cedarschema` か `.cedarschema.json`）にも答える（sekisho の DESIGN 1.3）。一回の実行の中では、`.gate` を一度だけ検査し、その結果で全部の問いに答える（`ritsu check` は `Engine::checked` でゲートを検査し、言語をまたぐ検査と sakai と yuen は同じ `Engine` に尋ねる）。言語をまたぐ検査の X15 と X16（7.14）のために、dandori の `Flows::operation_calls`（フローが呼ぶ操作）と sakai の `Maps::published_operations`（コンテキストが公開する操作）を足した。どちらも既定の実装は空を返す。口の問いは、どれもファイルをルートとルートからのパスで受け取る形にした（`Gates::facts(root, file)` など）。答えに入る操作の参照がルートからのパスなので、問いもそれにそろえた。
+
+中のものの定義の文は、6.4 の表のとおりにした。rulec は `rulec fmt` が書く形の行、koyomi は `date … =` の塊の行と条件の行（コメントと前後の空白を除く）、chobo は yuen の DESIGN 3.2 の形の JSON（yuen の試作が計算したハッシュと同じになる）、geas は主張の塊の行、dandori はタスク・案件・レコードの宣言の塊の行（コメントと前後の空白を除き、文字列の外の続いた空白を一つにし、字下げは深さごとに空白二つに直す。dandori の DESIGN 0.3）である。表に無かった yuen は要件の端の中身（yuen の DESIGN 4.1）と出典の固定の行、sakai はコンテキストのファイルの行と語の塊の行にした。あとから足した sekisho は、dandori と同じ作り方の宣言の塊の行にした（作る関数は土台の `ritsu_base::definition` に移し、二つの言語が同じ関数を呼ぶ。4.22）。
 
 ### 3.3 テストと dev-dependency
 
@@ -428,7 +433,7 @@ E と F で足した dev-dependency は三つある。ritsu-cross は、判定�
 ritsu が依存するものの既知の脆弱性、ライセンス、出どころを、CI の `audit` のジョブ（`.github/workflows/audit.yml`）で確かめる。確かめるのは次の二つで、どちらもネットワークが要るので、テストではなく CI で走らせる。
 
 - **Rust のクレート**：cargo-deny 0.20.2 が、`deny.toml` のとおりに `Cargo.lock` を確かめる。アドバイザリ（RustSec のデータベース。脆弱性、保守されなくなったクレート、健全でない（unsound）クレート、crates.io から取り下げられたバージョン）、ライセンス（MIT、Apache-2.0、Unicode-3.0、BSD-3-Clause。memchr は「Unlicense OR MIT」で、MIT で足りる。Unicode-3.0 と BSD-3-Clause は 2026-10-06 に足した。rulec と koyomi が持つデータのためで、二つのクレートと `ritsu`・`ritsu-wasm` の `license` がそう言う。`unused-allowed-license = "deny"` なので、使わなくなれば検査が落ちる）、同じクレートの二つ目のバージョン、出どころ（crates.io だけ。ほかのレジストリと git は使わない）の四つである。`Cargo.lock` に載る外のクレート 14 個のうち、ビルドされるのは 8 個（serde_json、serde_core、indexmap、hashbrown、equivalent、itoa、memchr、zmij）で、残りの 6 個（serde、serde_derive、syn、quote、proc-macro2、unicode-ident）は、serde_json と serde_core が `cfg(any())`（どの対象でも成り立たない条件）の依存としてバージョンをそろえるために載るだけである。cargo-deny は cargo と同じくこの 6 個を外し、osv-scanner は `Cargo.lock` のとおりに 14 個とも調べる。
-- **リポジトリのすべてのロックファイル**：osv-scanner 2.6.0（osv-scalibr 0.5.2）が、根から下のロックファイルを OSV のデータベースで調べる。2026-10-06 の時点で 32 のファイルで、`Cargo.lock`、`crates/*/tools` の `package-lock.json` が 12（778 パッケージ）、`requirements.txt` が 9（142 パッケージ）、`go.mod` が 10（ツールの二つと、テストの材料と例の八つ）である。この中に、`ritsu gen` が書くバージョンを固定しているもの（dandori の Temporal のランナーと chobo のランナー）がある（9.3）。
+- **リポジトリのすべてのロックファイル**：osv-scanner 2.6.0（osv-scalibr 0.5.2）が、根から下のロックファイルを OSV のデータベースで調べる。2026-10-06 の時点で 35 のファイルで、`Cargo.lock`、`crates/*/tools` の `package-lock.json` が 13（806 パッケージ）、`requirements.txt` が 10（160 パッケージ）、`go.mod` が 11（ツールの三つと、テストの材料と例の八つ）である。この中に、`ritsu gen` が書くバージョンを固定しているもの（dandori の Temporal のランナー、chobo のランナー、sekisho のランナー）がある（9.3）。
 
 ジョブは、push（ブランチ）と pull request のたび、毎日（UTC 16:00）、手で始めたとき、それと `release.yml` がビルドの前に呼ぶ（13.2）。アドバイザリは、リポジトリが変わらなくても出るからである。二つのツールは、リリースのバイナリを決めたバージョンで取り、チェックサムで確かめて使う（`tools.yml` が wasm-tools と protoc を入れる形と同じ）。GitHub のもの（`actions/checkout`）のほかに action は使わない。
 
@@ -440,7 +445,7 @@ ritsu が依存するものの既知の脆弱性、ライセンス、出どこ�
 
 osv-scanner は `--no-resolve` で走らせる。`requirements.txt` が入れたい名前だけを書いていると、osv-scanner は deps.dev で依存を解決するが、その結果は誰も入れないバージョンになった（`tools/wire` では、idna 3.9.0 と setuptools 9.1.0 について、八つのアドバイザリを挙げた）。そこで、テストが入れる `requirements.txt` は、どれも依存の依存までバージョンを書いたものにして、osv-scanner は書いてあるとおりに読む。
 
-テストでの確かめ（`crates/ritsu/tests/audit.rs`、fast の段）：ネットワークを使わずに、監査の答えが正しくなるための前提を確かめる。`crates/*/tools` の `package.json` の横に `package-lock.json` があり、`go.mod` の横に `go.sum` があり、`requirements.txt` のどの行も一つのバージョン（`name==version`）であること。`ritsu gen` がパッケージに書くバージョンと、生成したコードのコメントに書いたバージョンが、ツールのロックファイルのバージョンと同じであること（9.3）。通すアドバイザリのどれにも理由があり、osv-scanner のものは期日が一年より先でないこと。`audit.yml` が全体を毎日調べ、`release.yml` がビルドの前にそれを呼ぶこと。`release.yml` が四つのプラットフォームとも cargo-auditable でビルドし、それを動かす機械の cargo-auditable をチェックサムつきで取り、セクションを確かめること。
+テストでの確かめ（`crates/ritsu/tests/audit.rs`、fast の段）：ネットワークを使わずに、監査の答えが正しくなるための前提を確かめる。`crates/*/tools` の `package.json` の横に `package-lock.json` があり、`go.mod` の横に `go.sum` があり、`requirements.txt` のどの行も一つのバージョン（`name==version`）であること。`ritsu gen` がパッケージに書くバージョンと、生成したコードのコメントに書いたバージョンが、ツールのロックファイルのバージョンと同じであること（stockroom のパッケージを帳簿の二つの置き場所で、sekisho の例のパッケージを二つの authorizer で生成して確かめる。9.3）。通すアドバイザリのどれにも理由があり、osv-scanner のものは期日が一年より先でないこと。`audit.yml` が全体を毎日調べ、`release.yml` がビルドの前にそれを呼ぶこと。`release.yml` が四つのプラットフォームとも cargo-auditable でビルドし、それを動かす機械の cargo-auditable をチェックサムつきで取り、セクションを確かめること。
 
 #### 2026-10-06 に見つかったものと、したこと
 
@@ -453,6 +458,7 @@ osv-scanner は `--no-resolve` で走らせる。`requirements.txt` が入れた
 | `Cargo.lock` | なし（cargo-deny、cargo-audit 0.22.2 の 1,290 件、OSV のどれでも） | なし |
 | `crates/dandori/tools/temporal`（2026-10-06、GitHub で `audit` を初めて走らせたとき） | source-map-js 1.2.1、GHSA-68fv-2mgg-jv7q（高。索引つきのソースマップの行の数を確かめず、イベントループを止められる。2026-09-18 に出た） | 依存の範囲（`^1.0.2`）の中で 1.2.2 に上げた（`npm update --package-lock-only`） |
 | `crates/*/tools/mermaid`（同じ回） | KaTeX 0.16.47、GHSA-238p-pmpm-9mq7（低。ほかのパッケージがすでに汚した `Object.prototype` があり、攻撃者が数式を書けるとき。2026-10-05 に出た） | 上げない。Mermaid 11.17.2 と 12.1.0 が `^0.16.47` を求め、直った 0.18.2 はその外にある。テストが描くのは言語が書いた図だけで、数式を含まない。`osv-scanner.toml` に理由を書き、期日は 2027-01-06 |
+| `crates/sekisho/tools/runner-ts`・`runner-py`・`runner-go`（sekisho の段階 C で足した） | なし（osv-scanner 2.6.0 の `--no-resolve` で 28、18、8 パッケージ） | なし |
 
 ほかの四つの dandori の `requirements.txt`（agents、connect、pydantic-graph、temporal-python）は、`uv pip compile` にかけて、もう依存まで書いてあることを確かめた（足りないものは無かった）。
 
@@ -558,7 +564,7 @@ rulec、koyomi、yuen の三つは、法令のコピーを同じ場所と同じ�
 
 ### 4.8 doc のページの枠
 
-ページを読んで理解し確かめる人のためのページ（rulec、dandori、koyomi、chobo、yuen、sakai の `doc`。yuen と sakai の `doc` は F で作った）の枠を一つにする。
+ページを読んで理解し確かめる人のためのページ（rulec、dandori、koyomi、chobo、yuen、sakai、sekisho の `doc`。yuen と sakai の `doc` は F で、sekisho の `doc` は 2026-10-06 に作った）の枠を一つにする。
 
 - HTML：`<!doctype html>`、`lang`、viewport、ツールとバージョンを書く `generator`、題、一つの CSS。CSS は色の変数を明るい配色と暗い配色で持ち、`prefers-color-scheme` と `data-theme` で切り替える。ページの頭に、元のファイルのパスと SHA-256 の先頭 16 桁とツールのバージョンを書く。外のファイルを読まない（スクリプトも CSS も中に書く）。狭い画面で横にはみ出さない。
 - Markdown：頭のコメント（`<!-- Generated by <ツール> <バージョン> from <パス> (sha256:…) -->`）。
@@ -572,6 +578,8 @@ F.1 で作った yuen の `doc` は、最初から土台の枠（`docpage::html_
 sakai の `doc`（F.2 で作った）も、初めから土台の枠（`html_head`、`Palette`、`HTML_TAIL`）で書いた。ページの中身（コンテキストマップの図、コンテキストごとの成果物と用語集、関係と越える参照、対応の表）は sakai に残す。元のファイルとハッシュを頭に書く行は、ほかの言語がまだ自分の書き方のままなので、足していない（ページの最後に、書いた sakai の版と地図のファイルの名前を書く）。そろえるときに、一緒に足す。カレンダーのデータの範囲を出すため、sakai の口のまとまりに koyomi の `Dates` を足し、ritsu-project の `Joined::sakai` がそれを渡す（★。カレンダーのファイルそのものには `Dates` が答えないので、それを `use calendar` で読む日付のファイルが聞いた範囲を出す）。
 
 ページとその読み手の言い方は、七つの言語でそろえた（2026-10-04 に決めた。言い方の担当）。ページは、英語では "the page for people"（短く言うなら "the doc page"）、日本語では「人が読むページ」と言う。読む人は、コードが実現すべきものを理解し、確かめるために読む人（事業を回す人、経理や法務、運用する人、コードを見る開発者）で、短く言うなら "readers"、「読む人」「確かめる人」と言う。前は「承認する人」「approver」「for whoever approves」と言っていたが、ページは承認する人のためだけのものではない。チームで規則を承認する決まりがあるなら、その承認にもページが使える、という順で書く（根の README の「Pages for people」「人のためのページ」）。直したのは、言語の README、DESIGN、docs、スキル、rulec と dandori のサイトのページと図、ritsu のブラウザで試すページの、規則のページを言う文、`--help`（`rulec doc` と `koyomi doc`）、診断の文（rulec の W1xx の直し方）、`doc` のページの文（dandori の規則の節）、生成したコードの文（rulec の MCP のツールの、隣のページの説明）、コードのコメントである。替えなかったのは次のものである。業務の中の承認（dandori の審査の例の承認、`approve`・`approved`・`approver` のフィールド、chobo の返金の承認待ち、proto の `ApproveRequest` など）。CLI の値 `rulec doc --audience approver`（利用者のスクリプトが使う名前。`--help` は「既定は approver で、人が読む資料になる」と説明する）。yuen の見送りの承認（`approved … by`、E304）と持ち主の役割。rulec の `source pin` でコピーの変更を受け入れること（「この内容で承認するなら」）と、E037・E043 の承認。★規則を決める人の役割としての承認（rulec の AGENTS.md と README の「someone approves the table」、rulec の DESIGN 0.1 の「承認する人がいて」）。日付の入った決定の記録（rulec の DESIGN 15 章など。§15.183 に、この変更の記録を足した）と、テストの関数の名前。
+
+sekisho の `doc`（2026-10-06 に、sekisho の段階 D で作った）も、初めから土台の枠（`html_head`、`Palette`、`HTML_TAIL`）で書いた。中身（action ごとの表、ポリシーと生成した Cedar、計算した値、期待と職務の分離と役割、ワークフロー、守る操作）と、表とシートの見た目の CSS は sekisho のものである。規則と日付のページは、dandori と同じく、rulec と koyomi の口が描いたものをそのまま埋め込む（Markdown は畳んだ節、HTML はボタンでページの上に開く枠）。頭には、元の `.gate` のパスとハッシュと sekisho の版を書き、Markdown は頭のコメントから始める。
 
 ### 4.9 JSON
 
@@ -719,10 +727,16 @@ YAML と JSON を、値ごとに行と列を持つ値（`yaml::Node`）に読む
 
 確かめ方：`crates/ritsu-base/tests/openapi.rs`。材料の六つの文書（`tests/fixtures/openapi/`。OpenAPI が四つで、そのうち一つは日本語の版。AsyncAPI が二つ）は、Redocly CLI 2.58.1 と AsyncAPI のパーサー 3.6.3 が誤りを言わないもので、操作の始まる位置は Redocly が言う行と列と同じ、AsyncAPI の操作のフィールド・必須か・content type・チャネルのアドレスはパーサーが読むものと同じである（どちらも手で走らせて確かめた。テストは Node を要らない）。dandori と sakai の読み手をこれに替えるのは、出力が変わらないことを確かめる仕事と一緒に、あとでする。
 
+同じ日に、sekisho の段階 D で、スキーマに秘密の印（`Schema` の `mark`。4.19 の `marks::schema_mark` で、`x-data-classification`・`x-sensitive-data`・`format: password` を読む。`allOf` の中の印も読む）を足した。sekisho の W910 は、ポリシーが読む `input` を、守る操作の引数と本文のフィールドで引き、その印を見る。dandori の口の `operation_calls` も、タスクの操作を `Document::operation` で引いて、sekisho の `guards` と同じ参照にする。
+
 
 ### 4.21 文書の要素と参照（`ritsu_base::document`、2026-10-06）
 
 OpenAPI と AsyncAPI の文書の、参照の書き方（6.5）と JSON Pointer の行き来を一つにする。`find` は参照から、要素を読む場所（ファイルと JSON Pointer。プロパティは `allOf` の中まで、値は `enum` の場所）を返し、`reference` は場所から参照を返し、`gather` は一つの種類の要素を全部並べる。`$ref` は、sakai の読み方（ファイルとポインタ、途中の `$ref` もたどる、例とデータと `x-` の下は読まない、名前を並べるマップのキーは名前、64 段まで）でたどる。sakai の `src/contracts.rs` にあったその部分を移し、sakai はこれを呼ぶ。文書は `Documents`（ファイルから一番上の値を返すトレイト）で渡すので、sakai は検査で読んだ文書を、yuen は参照の文書とその `$ref` が読むファイルを渡す。どの言語の意味も持たない（4.11）。テストは、このモジュールの単体のテストと、yuen と sakai のテスト（往き来が同じ要素になること、`allOf` の中のプロパティ、`operationId` の無い操作、文書の一部のファイル）。
+
+### 4.22 定義の文（`ritsu_base::definition`、2026-10-06）
+
+口 `Items` の定義の文（6.4）のうち、宣言の塊の行で作るもの（コメントと前後の空白を除き、文字列の外の続いた空白を一つにし、字下げを深さごとに空白二つに直す）を、dandori から土台に移した（`plain`、`block`、`block_end`）。sekisho の `Items` も同じ関数で作るので、二つの言語で、yuen が端のハッシュを取る元の作り方が一つになる。dandori の出力は変わらない。
 
 ## 5. 単位の型
 
@@ -809,7 +823,7 @@ rulec の組み込みの名前空間は、十三か国の一段目の区分で�
 
 `ritsu check <パス>...` は、渡したファイルとディレクトリを一つのプロジェクトとして読む。ルートは 6.2 の 3 のとおり（4.7）。ディレクトリは、4.7 の飛ばす名前を除いて下まで歩く。
 
-ファイルの種類は拡張子で決める：`.rule`（rulec）、`.flow`（dandori。`.ja.flow` も）、`.cal`（koyomi）、`.book`（chobo）、`.geas`（geas）、`.req`（yuen）、`.ctx`（sakai）、`.proto`、`.gate`（sekisho。2026-10-06 から）。ほかのファイルは、誰かが指したとき（yuen と sakai の `file "…"`・`openapi "…"`・`asyncapi "…"`、yuen の `cedar "…"`（6.5）、dandori の `use openapi|smithy`、sekisho の `use openapi|proto|asyncapi` のパス）にだけ読む。
+ファイルの種類は拡張子で決める：`.rule`（rulec）、`.flow`（dandori。`.ja.flow` も）、`.cal`（koyomi）、`.book`（chobo）、`.geas`（geas）、`.req`（yuen）、`.ctx`（sakai）、`.proto`、`.gate`（sekisho。2026-10-06 から）。ほかのファイルは、誰かが指したとき（yuen と sakai の `file "…"`・`openapi "…"`・`asyncapi "…"`・`cedar "…"`（6.5。sakai の `cedar "…"` は 2026-10-06 に足した）、dandori の `use openapi|smithy`、sekisho の `use openapi|proto|asyncapi` のパス）にだけ読む。地図と要件が `cedar "…"` で指す Cedar の組は、言語をまたぐ検査も口 `Gates` で読む（7.14）。
 
 読み方の順：
 
@@ -825,7 +839,7 @@ rulec の組み込みの名前空間は、十三か国の一段目の区分で�
 **E.1 で作った形**（`crates/ritsu-project`。PLAN の E.1）。
 
 - `Project::load(パス, --root)` が、渡したパス（無ければ `.`）の下のファイルを、土台の `paths::walk`（4.7 の名前を飛ばす）で歩き、拡張子で言語を決める。ルートは `--root`、無ければ最初のパスの上でいちばん近い `.git` のあるディレクトリ、それも無ければ最初のパスである（6.2 の 3）。並びは、上の 3 の順の言語（rulec、koyomi、chobo、geas、`.proto`、dandori、sekisho、yuen、sakai。`ORDER`。sekisho は 2026-10-06 に dandori のあとに足した）、言語の中ではパスの順である。止めるのは四つで、どれも使う人が直すもの（使い方の誤り。8.4 の exit 2）である。無いパス、ルートの外のパス、名前で渡した言語の無いファイル（`.py` など）、言語のファイルが一つも無いプロジェクト。最後のものを止めるのは、何も確かめずに通ったように見せないためである（rulec の `check` が、無いディレクトリを空のまま通さないのと同じ考え）。
-- 言語は `Joined` が一度だけ作る。rulec の `Engine`（確かめた規則を覚える）、koyomi・chobo・geas・dandori・sakai の `Engine`、その上の索引（6.4）である。`ritsu dandori` と `ritsu check` の dandori には規則と日付と帳簿の口を、`ritsu yuen` と `ritsu sakai` には索引を含む口のまとまりを、ここから渡す。dandori の口は、E の二つ目の部分から三つになった（前は規則の口だけで、日付か帳簿を使うフローは E018 で止まっていた）。`Joined::ports` が三つの口の組 `ritsu_ports::Ports` を作り、`ritsu check` は `dandori::ports::Engine::checked_with(root, files, &Ports, lang)` を呼ぶ。`ritsu run` の担当と言語をまたぐ検査の担当がそれぞれ足した入口（`checked_with_ports` と `checked_with`）は、取り込むときに `checked_with` 一つにした。`ritsu dandori` には、ritsu-cross の `Undecided` も渡す（7.4）。`ritsu sekisho` と `ritsu check` の sekisho には、`Joined::sekisho` が口のまとまり `GatePorts`（3.2）を渡す（2026-10-06）。D の入口では三つがそれぞれ rulec の `Engine` を作り、同じ規則を別々に読んでいた（PLAN の 7.8）。
+- 言語は `Joined` が一度だけ作る。rulec の `Engine`（確かめた規則を覚える）、koyomi・chobo・geas・dandori・sakai の `Engine`、sekisho の `Engine`（検査したゲートを覚える。2026-10-06 から）、その上の索引（6.4）である。`ritsu dandori` と `ritsu check` の dandori には規則と日付と帳簿の口を、`ritsu yuen` と `ritsu sakai` には索引を含む口のまとまりを、ここから渡す。dandori の口は、E の二つ目の部分から三つになった（前は規則の口だけで、日付か帳簿を使うフローは E018 で止まっていた）。`Joined::ports` が三つの口の組 `ritsu_ports::Ports` を作り、`ritsu check` は `dandori::ports::Engine::checked_with(root, files, &Ports, lang)` を呼ぶ。`ritsu run` の担当と言語をまたぐ検査の担当がそれぞれ足した入口（`checked_with_ports` と `checked_with`）は、取り込むときに `checked_with` 一つにした。`ritsu dandori` には、ritsu-cross の `Undecided` も渡す（7.4）。`ritsu sekisho` と `ritsu check` の sekisho には、`Joined::sekisho` が口のまとまり `GatePorts`（3.2）を渡す（2026-10-06）。D の入口では三つがそれぞれ rulec の `Engine` を作り、同じ規則を別々に読んでいた（PLAN の 7.8）。
 - 一度だけ読むことの中身は、口の問いを同じファイルに一度しか問わないことである（索引、rulec の `Engine` の覚え書き、yuen と sakai の口のまとまりの覚え書き、koyomi の口の覚え書き（2026-10-06。3.2））。`ritsu check`（E.2）は、rulec の `check` の報告も rulec の `Engine` から作る。`Engine` は報告をファイルと中身で覚え、dandori や sakai がその規則の事実を尋ねたら、報告から検査を通ったかを読んで、規則を検査し直さない（パスの書き方が違っても同じファイルとみなす。`rulec/tests/ports.rs` が、コーパスの 50 本で、`check` と事実の二つを尋ねても検査は一回ずつであることを確かめる）。各言語の `check` の文は、頼まれた言語で一度作る。
 - ファイルをまたぐ参照（上の 2）は `Project::references` が解く。各ファイルの言語が `References` で言う参照ごとに、行き着くファイル、そのファイルがプロジェクトのものか、行き着き方（`Landing`：ファイルが無い、索引が読むファイルならその言語の答え、`.proto` なら ritsu-proto で読んでその要素があるか、索引が読まないファイル）を返す。参照の誤りは、これまでどおり各言語が自分の `check` と自分のコードで言う（7.10）ので、これは言語をまたぐ検査（E.4）が読み、LSP を作るならそれも読む、プロジェクトの一枚の見取り図である。テストは、sakai の例をコピーした `crates/ritsu/tests/projects/通販` の参照の全部（`crates/ritsu-project/tests/golden/shop.references.txt`）を golden にする。
 
@@ -833,17 +847,17 @@ rulec の組み込みの名前空間は、十三か国の一段目の区分で�
 
 `ritsu-base` の参照の書き方は、yuen と sakai の DESIGN.md の 2 章で決め、二つのリポジトリの `tests/fixtures/naming.tsv`（36 行の試しの表）で確かめているものを、そのまま処理系全体の決まりにする。決まりは次のとおり。
 
-1. **形**：`<ツール> "<パス>" [<種類> <名前>]...`。組はツールの構造どおりに入れ子にできる。入れ子にできるのは、proto の `service S [method M]`、`message M [field f]`、`enum E [value V]`（入れ子のメッセージは名前を `.` でつなぐ：`message Order.Line`）、rulec の `enum E [value V]`、dandori の `record R [field f]` と `enum E [value V]`（6.3）、chobo の `transfer T [operation O]`、openapi と asyncapi の `schema S [property P]` と `schema S [value V]`、asyncapi の `channel C [message M]`（6.5）だけで、ほかのツールの組は一つまで。子の種類は、親の種類のすぐあとにしか書けない。
-2. **ツール名**：`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`。`openapi`・`asyncapi`・`cedar` は 2026-10-06 に足した（6.5）。`dir` はツール名にしない（sakai の `.ctx` の構文の語にとどめる）。`sekisho` は、`.gate` の言語として土台の `Tool` にあるが、まだツール名にしていない（sekisho の段階 D で、口 `Items` と一緒に足す）。
+1. **形**：`<ツール> "<パス>" [<種類> <名前>]...`。組はツールの構造どおりに入れ子にできる。入れ子にできるのは、proto の `service S [method M]`、`message M [field f]`、`enum E [value V]`（入れ子のメッセージは名前を `.` でつなぐ：`message Order.Line`）、rulec の `enum E [value V]`、dandori の `record R [field f]` と `enum E [value V]`（6.3）、chobo の `transfer T [operation O]`、openapi と asyncapi の `schema S [property P]` と `schema S [value V]`、asyncapi の `channel C [message M]`（6.5）、sekisho の `principal P [attribute a]` と `resource R [attribute a]`、`enum E [value V]`、`action A [input i]` と `action A [context c]` だけで、ほかのツールの組は一つまで。子の種類は、親の種類のすぐあとにしか書けない。sekisho の `attribute` は、二つの親（`principal` と `resource`）のどちらのすぐあとにも書ける（土台の `ErrorKind::ChildFirst` が親の全部を持ち、誤りの文は「`attribute` は `principal` か `resource` のすぐあとにしか書けません」になる）。
+2. **ツール名**：`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho`。`openapi`・`asyncapi`・`cedar` は 2026-10-06 に足した（6.5）。`sekisho` は同じ日に、sekisho の段階 D で、口 `Items` と一緒に足した。`dir` はツール名にしない（sakai の `.ctx` の構文の語にとどめる）。
 3. **パス**：`.req` や `.ctx` の中では、書いたファイルのディレクトリからの相対。区切りは `/` で、`.` と `..` は字の上で畳む。絶対パスと空のパスはエラー。`"."` はルートを指す。末尾の `/` は取り除く。JSON では、ルート（`--root`、無ければ最初に渡したパスの上でいちばん近い `.git` のあるディレクトリ、それも無ければ渡したディレクトリ）からの相対で、ルートの外に出るパスはエラー。
-4. **種類**：rulec は `input`・`output`・`enum`（下に `value`）・`table`・`clause`・`define`・`derive`・`machine`・`source`、koyomi は `input`・`date`・`claim`・`source`、chobo は `unit`・`account`・`transfer`（下に `operation`。振替の操作の `do`、`hold`、`post`、`void`）、geas は `claim`、proto は `service`（下に `method`）・`message`（下に `field`）・`enum`（下に `value`）、yuen は `requirement`・`source`、sakai は `context`・`term`、dandori は `task`・`case`・`record`（下に `field`）・`enum`（下に `value`）・`input`・`output`（6.3）、openapi は `schema`（下に `property`・`value`）・`operation`・`pointer`、asyncapi は `channel`（下に `message`）・`message`・`operation`・`schema`（下に `property`・`value`）・`pointer`、cedar は `policy`・`action`・`entity`（6.5）。`file` には無い。どの言語も、自分が使わない種類も参照として受け付ける。
+4. **種類**：rulec は `input`・`output`・`enum`（下に `value`）・`table`・`clause`・`define`・`derive`・`machine`・`source`、koyomi は `input`・`date`・`claim`・`source`、chobo は `unit`・`account`・`transfer`（下に `operation`。振替の操作の `do`、`hold`、`post`、`void`）、geas は `claim`、proto は `service`（下に `method`）・`message`（下に `field`）・`enum`（下に `value`）、yuen は `requirement`・`source`、sakai は `context`・`term`、dandori は `task`・`case`・`record`（下に `field`）・`enum`（下に `value`）・`input`・`output`（6.3）、openapi は `schema`（下に `property`・`value`）・`operation`・`pointer`、asyncapi は `channel`（下に `message`）・`message`・`operation`・`schema`（下に `property`・`value`）・`pointer`、cedar は `policy`・`action`・`entity`（6.5）、sekisho は `principal`（下に `attribute`）・`resource`（下に `attribute`）・`role`・`workflow`・`enum`（下に `value`）・`action`（下に `input`・`context`）・`policy`・`expect`・`separate`。`file` には無い。どの言語も、自分が使わない種類も参照として受け付ける。
 5. **名前**：ツールの名前（JSON の `name`）。別名は使わない。語（空白、`"`、`#` を含まない一続きの文字。頭が数字でもよい）か `"…"` で書く。`"…"` の中のエスケープは `\"` と `\\` だけで、ほかはエラー。正規化せず、大文字と小文字を区別する。proto の名前は、そのファイルの package から見た名前。文書と Cedar の名前は 6.5。文字列の外の全角の空白、`"…"` で書いた種類やツール名、名前の無い種類はエラー。
-6. **同じ・含む**：同じは、ツール名と、ルートからのパスと、組の並びが同じとき。ファイルは中のものを全部含み、親の組（proto の `service`・`message`・`enum`、rulec と dandori の `enum`、dandori の `record`、chobo の `transfer`、openapi と asyncapi の `schema`、asyncapi の `channel`）は子を全部含む。
+6. **同じ・含む**：同じは、ツール名と、ルートからのパスと、組の並びが同じとき。ファイルは中のものを全部含み、親の組（proto の `service`・`message`・`enum`、rulec と dandori の `enum`、dandori の `record`、chobo の `transfer`、openapi と asyncapi の `schema`、asyncapi の `channel`、sekisho の `principal`・`resource`・`enum`・`action`）は子を全部含む。
 7. **JSON の形**：`{"text": …, "tool": …, "path": …, "items": [[種類, 名前], …]}`（キーはこの順）。`text` は、パスをルートからの相対に直し、名前を語で書けるなら引用符なしで書いた形。空白を入れない詰めた書き方で、ASCII でない文字はそのまま出す。
 8. **文の中の書き方**：診断などの文に書くファイルの場所（`<パス>:<行>:<列>`、コピーのパス）は、走らせたディレクトリから、渡されたとおりに書く。文の中の参照は、JSON と同じくルートからの相対で書く（読み直すと同じ参照になり、`.req` や `.ctx` にそのまま貼れる）。
 9. **JSON の中のファイルの場所**：診断の `file` なども、参照と同じくルートからの相対にし、JSON の外側に `root`（走らせたディレクトリから見たルート）を添える。取り込んだときは、yuen がルートからの相対、sakai が走らせたディレクトリからの相対で食い違っていた。土台で一つにするときにそろえる（4.2）とし、C.8 で sakai をルートからの相対にした。
 
-この決まりを、処理系のどこでも使う一つの書き方にする。yuen と sakai の `.req` と `.ctx` の中、診断の文と JSON、LSP の「定義へ移る」、`ritsu check` の JSON の中のもの、のどれも同じ形で書き、読み直すと同じものを指す。ツール名は十二。`ritsu` はツール名にしない（ritsu は言語ではない）。
+この決まりを、処理系のどこでも使う一つの書き方にする。yuen と sakai の `.req` と `.ctx` の中、診断の文と JSON、LSP の「定義へ移る」、`ritsu check` の JSON の中のもの、のどれも同じ形で書き、読み直すと同じものを指す。ツール名は十三。`ritsu` はツール名にしない（ritsu は言語ではない）。
 
 OpenAPI と AsyncAPI の文書の要素は、2026-10-06 からツール名 `openapi`・`asyncapi` で指す（6.5）。sakai は `.ctx` の中で短い書き方（`schema Charge`）も使えるが、api と診断では参照の書き方で書く（sakai の DESIGN 15.10）。
 
@@ -860,6 +874,8 @@ D の二つ目の部分で、これを足した（PLAN の D.6）。表は、dan
 
 2026-10-06 に、ツール名 `openapi`・`asyncapi`・`cedar` の行（参照 15 行、誤り 6 行）と、chobo の振替の操作の行（参照 2 行、誤り 1 行）を足し、表は 66 行（参照 41、誤り 25）になった（6.5）。英語の名前の行が先で、日本語の名前の行が 3 行ある。chobo に入れ子ができたので、`chobo "在庫.book" account 在庫 value X` の行の理由は、入れ子が無いことから、`account` の下に組を書けないことに替わった。
 
+同じ日に、ツール名 `sekisho` の行（参照 6 行、誤り 3 行。親のすぐあとでない `attribute`、`policy` の下の組、`action` の下の `input` と `context` でない組）を足し、表は 75 行（参照 47、誤り 28）になった。
+
 ### 6.4 索引：中のものと参照
 
 各言語は、`Items` と `References` の口（3.2）で、自分の中のものと参照を出す。`ritsu-project` は、それをプロジェクト全体の索引にする。
@@ -874,12 +890,13 @@ D の二つ目の部分で、これを足した（PLAN の D.6）。表は、dan
 | dandori | 6.3 の種類 | タスクや案件やレコードの宣言の塊の行（列挙、フィールド、入力、出力はその行、列挙の値はその名前） |
 | geas | `claim` | 主張の塊の行 |
 | proto | `service`、`method`、`message`、`field`、`enum`、`value` | yuen の DESIGN 3.4 の決まった形の文 |
+| sekisho | `principal`、`resource`、`role`、`workflow`、`enum`、`action`、`policy`、`expect`、`separate` と下の `attribute`、`value`、`input`、`context` | 宣言の塊の行（dandori と同じ作り方。土台の `definition`、4.22） |
 
 openapi、asyncapi、cedar の要素は、どの言語の `Items` にも入らない。yuen が自分で読み、端の中身は yuen の DESIGN 3.6 で決める（proto の要素を yuen が 3.4 で決めるのと同じ）。
 
 yuen の端は、いまはファイル全体のもの（rulec、koyomi の日付、geas、dandori）がある（yuen の DESIGN 3.2）。定義の文が出れば、表や日付の関数やタスクの一つ一つが端になる（7.10）。端の中身が変わるので、yuen のテストと例の確かめた記録（`.req` のハッシュ）は D の段階で取り直す。D.7 で取り直し、F.1 の例もこの端で記録を書いた。koyomi の日付の端がその日付の定義の文になったので、カレンダーの一行を書き換えた例（yuen の `civil_code_periods_reread`）は、書き換えた日付へのリンク一本だけが E303 で止まる（ファイル全体を端にしていた A の段階の見込みでは、同じ `.cal` を指す三本が止まるはずだった）。
 
-**参照**（`References`）は、参照のある行、指す先、参照の仕方を持つ。dandori の `use rule … from`（同梱、Lambda、Connect の URL、`local`）、`use proto|openapi|smithy`、`connect`、`implements`、子の `flow "…"`、rulec の `import proto`、`shape`、`source … file`、`range from koyomi`（先は `koyomi "<ファイル>" date <名前>`。E.4 で足した）、koyomi の `use calendar` と `source`、yuen と sakai の参照を出す。sakai はこれで全部の言語の参照を行番号つきで確かめ（7.10）、yuen は `trace` と `affected` でたどる。
+**参照**（`References`）は、参照のある行、指す先、参照の仕方を持つ。dandori の `use rule … from`（同梱、Lambda、Connect の URL、`local`）、`use proto|openapi|smithy`、`connect`、`implements`、子の `flow "…"`、rulec の `import proto`、`shape`、`source … file`、`range from koyomi`（先は `koyomi "<ファイル>" date <名前>`。E.4 で足した）、koyomi の `use calendar` と `source`、yuen と sakai の参照、sekisho の `use rule|dates|calendar|openapi|proto|asyncapi|book|gate`、`workflow … from`、`guards`（検査が見つけた操作）、手で書いた Cedar のスキーマの `@guards` を出す。sakai はこれで全部の言語の参照を行番号つきで確かめ（7.10。ゲートの `use rule`・`use dates`・`use calendar`・`use gate` と `guards`、Cedar の `@guards` も、境界を越える参照として確かめる。sakai の DESIGN 17 章）、yuen は `trace` と `affected` でたどる。
 
 **E.1 で作った形**（PLAN の E.1）。索引は `ritsu-ports` の `Index` である。言語の口（`Items`、`References`）をツール名ごとに持ち、ファイルごとの答えを、ツールとルートとルートからのパスで一度だけ尋ねて覚える（参照のパスはルートからなので、ルートが違えば別の答えになる）。参照を渡せば `find` が引く。答えは四つのどれかで（`Lookup`）、その言語がつながっていない、その言語がファイルに答えない（言うこと `Said` を添える）、ある（ファイルそのものの参照なら、言語がファイルを読めたこと）、無い（同じ親の下の同じ種類のものを添える）である。何が誤りかは言わない。言うのは、参照を書いた言語である（yuen の E202、sakai の E007）。
 
@@ -893,6 +910,7 @@ yuen の端は、いまはファイル全体のもの（rulec、koyomi の日付
 | geas | 入れる | （答えない） |
 | dandori | 入れる | 入れる |
 | sakai | 入れる | 入れる |
+| sekisho | 入れる | 入れる（`.gate` の `use` と `workflow` と `guards`。手で書いた Cedar の組には、ツール名 `cedar` で、スキーマの `@guards`） |
 | yuen | 入れない | 入れない |
 
 yuen を入れていないのは、yuen の `Engine` が、借りた出典の端を作るためにほかの言語の口（この索引を含む）を持つので、索引が yuen を持つと輪になるからである。yuen の要件を指す言語は、いまは無い（LSP が要るようになったら、ritsu-project で輪にならない持ち方を決める）。
@@ -912,7 +930,7 @@ OpenAPI と AsyncAPI の文書と、手で書いた Cedar のポリシーとス�
 - **`pointer`**：種類の無い場所（レスポンス、引数、サーバー、`$ref` で読まれる文書の一部のファイルの中）を、ファイルの頭からの JSON Pointer で指す。名前は `/` で始まる（`openapi "common/money.yaml" pointer /Money`）。sakai は、`$ref` の行き着く先とサーバーを、これで書く。
 - **`message` は二つの場所にある**：AsyncAPI 3 では、メッセージを `components/messages` に置いて `$ref` で読むことも、チャネルの `messages` に直に書くこともできる。前者は `message M`、後者は `channel C message M` と書く。
 - **一つの書き方**：`operationId` のある操作を方法とパスで書いた参照は、その操作を指さない（名前の書き方を一つにする。5）。Cedar の action と entity も、名前空間を付けた書き方は受け付けない。一つのスキーマのファイルで二つの名前空間が同じ名前を宣言していれば、その名前は一つに決まらず、yuen は E202 を出す。
-- **どこを指すか**：文書の中のどこがどの参照になるかと、その逆、`$ref` のたどり方は、土台の `ritsu_base::document`（4.21）が一つ持つ。yuen と sakai が同じ関数で引くので、同じ要素を同じ参照で書く。Cedar の要素は、いまは yuen だけが引く（`crates/yuen/src/documents.rs`）。sekisho が手で書いた Cedar を口で答える段階 D で、土台に移す。
+- **どこを指すか**：文書の中のどこがどの参照になるかと、その逆、`$ref` のたどり方は、土台の `ritsu_base::document`（4.21）が一つ持つ。yuen と sakai が同じ関数で引くので、同じ要素を同じ参照で書く。Cedar の要素は、いまも yuen だけが引く（`crates/yuen/src/documents.rs`）。sekisho の口（段階 D）は、手で書いた Cedar の action・ポリシー・`@guards` を ritsu-base の読み手で読むが、Cedar の要素の参照（`cedar "…" policy …`）を引くことはしないので、土台には移していない。二つ目の言語が Cedar の要素の参照を引くようになったら移す。
 - **言語の検査は持たない**：`ritsu check` は、`.yaml` や `.cedar` を言語のファイルとして読まない（6.1 の `ORDER` に無い）。誰かが指したときに、指した言語が読む。
 - **sekisho が守る操作**：sekisho は、action が守る操作を、診断の文、`sekisho api`、生成するスキーマの `@guards` で、`openapi "…" operation <operationId>`、`asyncapi "…" operation <キー>`、`proto "…" service S method M`、`chobo "…" transfer T operation O` の参照で書く。パスは `.gate` の `use` に書いたパスではなく、ルートからのパスで、ルートは yuen と sakai と同じに決める（sekisho の DESIGN 2.6）。
 
@@ -965,6 +983,18 @@ E.4 と E.5 で、言語の境目の検査のコードを載せた（E2xx がエ
 | E905 | フローが秘密の値を、地図の外か、印を付けたコンテキストと関係の無いコンテキストへ送る（X14、16.8） |
 | W905 | フローが秘密の値を送る先が地図のどこかを、決められない（X14、16.8） |
 
+同じ日に、sekisho の段階 D で、認可の検査のコードを載せた（7.14）。番号は、セキュリティの検査の帯の続きにした。
+
+| コード | いつ出るか |
+|---|---|
+| E907 | コンテキストが公開する操作を、どのゲートの action も守らず、同じコンテキストのほかの操作は守られている（X15） |
+| W907 | コンテキストが公開する操作を、どれも守る action が無い。そのコンテキストは、まだ sekisho で認可を書いていない（X15。コンテキストごとに一つ） |
+| E908 | ワークフローが呼ぶ操作を守る action が、そのワークフローをどの組み合わせでも許さない（X16） |
+| W908 | ワークフローが許される action の操作を、フローがどこでも呼ばない（X16） |
+| W909 | ワークフローの呼び出しが、組み合わせによって拒まれうるか、許すかを決められず、タスクが拒まれたときのエラーを宣言していない（X16） |
+
+再現は、英語と日本語の名前の小さなプロジェクトである。E907 は Orders のコンテキストの地図と OpenAPI の文書とゲート（`shop.ctx`・`contexts/orders.ctx`・`orders/api/orders.json`・`orders/refunds.gate`）、W907 は、ゲートの無い Orders とゲートのある Payments の二つのコンテキストの地図、X16 の三つは文書とフローとゲート（`orders.json`・`returns.flow`・`refunds.gate`）。
+
 どのコードにも、英語の小さなプロジェクトの再現がある（E.4 で判定より先に載せた `Repro::Later` は、E.5 で無くなった。X14 の二つも、判定より先に `Repro::Later` で載せ、`Flows::sends` と `Maps` が入ってから再現に替えた）。X2 は返金の確認（`refund_check.rule`・`refund.flow`）、X3 の (a) は支払日を規則に渡す請求（`payment_terms.cal`・`batch.rule`・`billing.flow`）、X4 は催しに座席を割り当てるホール（`seats.rule`・`hall.book`・`booking.flow`）、X6 は支払日の一週間前の催促（`payment_terms.cal`・`reminders.cal`・`reminding.flow`）、X5 は支払日まで商品を押さえる請求（`weekdays.cal`・`payment_terms.cal`・`stock.book`・`invoice.flow`）。W901 はコメントに偽の鍵を書いた `maps.proto`、E905 は Payments・Ordering・Notices の地図と、`debug_redact` の付いたカードの番号を Notices の API へ渡すフロー（`shop.ctx`・`contexts/*.ctx`・`card.proto`・`notices.json`・`checkout.flow`）、W905 は同じプロジェクトの地図が無いファイルを `use context` する形。`crates/ritsu/tests/codes.rs` が全部を英語と日本語で走らせ、自分のコードが出ることを確かめる。
 
 ritsu の台帳に X10（参照の解決）のコードは無い。参照を書いた言語が、自分のコードで言うからである（7.10）。どのコードも、再現（小さなプロジェクトのファイル）を持ち、`crates/ritsu/tests/codes.rs` がそれを一時ディレクトリに置いて `ritsu check .` を英語と日本語で走らせ、見出しが `[ritsu <コード>]` の診断が出ることを確かめる。`ritsu explain` は、ritsu-base の台帳の書き方で、テキスト、Markdown、JSON を出す。言語のコードを渡されたら、`ritsu <言語> explain` で引くように言って 2 で終わる。`crates/ritsu-cross/docs/codes.md` と `codes.ja.md` は `ritsu explain --all --format markdown` の出力そのもので、`crates/ritsu-cross/tests/codes.rs` がそれを確かめる。
@@ -987,6 +1017,8 @@ ritsu の台帳に X10（参照の解決）のコードは無い。参照を書�
 | X12 | 一つの `.proto` の読み方 | 同じ `.proto` を、どの言語も同じに読む | `ritsu-proto` | rulec、dandori、sakai、yuen | 読めないファイルは ritsu の E101 と、読む言語のコード | C〜D（C.9、D.10） |
 | X13 | 処理系自身の依存 | ritsu のクレートの依存が 3.1 のとおり | sakai の地図、Cargo の依存 | ritsu のリポジトリ | sakai の E201 など（`ritsu check ritsu.ctx`）と `cargo xtask deps` | E.8 |
 | X14 | 秘密の値の行き先 | 契約が秘密と印を付けた値を、フローが、印のコンテキストと関係の無いコンテキストや地図の外へ送らない | dandori の送る値と印（`Flows::sends`）、sakai の地図（`Maps`） | dandori の、プロジェクトの中の成果物を呼ぶタスク | ritsu の E905、W905 | 2026-10-06（16.8） |
+| X15 | 公開する操作の認可 | コンテキストが公開する操作のどれにも、守る action がある（だれでも呼べる操作を除く） | sakai の `Maps::published_operations`、sekisho の `Gates::facts` | sakai の地図の `open host service` | ritsu の E907、W907 | 2026-10-06（sekisho の段階 D。7.14） |
+| X16 | ワークフローの最小権限 | ワークフローが呼ぶ操作を、ゲートがそのワークフローに許し、拒まれうるならタスクがそれを処理し、許されて呼ばない操作が無い | dandori の `Flows::operation_calls`、sekisho の `Gates::facts` と `Gates::allowed` | sekisho の `workflow … from` が書くフロー | ritsu の E908、W908、W909 | 2026-10-06（sekisho の段階 D。7.14） |
 
 ### 7.3 境目の単位（X1）
 
@@ -1237,7 +1269,25 @@ book stock (books/stock.book) at the end:
 
 ### 7.13 処理系自身の依存（X13）
 
-3.4 の地図 `ritsu.ctx` を ritsu のリポジトリの根に置き、`ritsu check ritsu.ctx` で確かめる（E.8 で作った）。`ritsu check .` にしないのは、リポジトリには、言語が自分を試すためにわざと通らないファイル（変異、エラーの例）があり、地図の `except` もそれを範囲から外しているからである。言語のクレートが別の言語のクレートを `[dependencies]` に足せば、sakai がその行を指摘して止める（`crates/ritsu/tests/map.rs` の変異。koyomi のクレートに rulec を足すと、`error[sakai E201]: crates/koyomi/Cargo.toml:10:1: The file crates/koyomi/Cargo.toml of Calendars depends on crates/rulec of Rules (dependencies), which Calendars has no relationship with`）。CI の `fast` のジョブで走らせる。E の最初の部分（2026-10-04）の地図は `356 artifacts`、`50 crossings` で通った。E の終わり（F の `ritsu-wasm` と `ritsu-model` が入ったあと）には、`ritsu.ctx: ok — 12 contexts, 27 relationships; 381 artifacts, each in one context; 58 crossings checked (rust 58)` で通る（増えた依存の八つは ritsu-wasm のもの。`ritsu-model` は `Testing` の `owns` に足した）。
+3.4 の地図 `ritsu.ctx` を ritsu のリポジトリの根に置き、`ritsu check ritsu.ctx` で確かめる（E.8 で作った）。`ritsu check .` にしないのは、リポジトリには、言語が自分を試すためにわざと通らないファイル（変異、エラーの例）があり、地図の `except` もそれを範囲から外しているからである。言語のクレートが別の言語のクレートを `[dependencies]` に足せば、sakai がその行を指摘して止める（`crates/ritsu/tests/map.rs` の変異。koyomi のクレートに rulec を足すと、`error[sakai E201]: crates/koyomi/Cargo.toml:10:1: The file crates/koyomi/Cargo.toml of Calendars depends on crates/rulec of Rules (dependencies), which Calendars has no relationship with`）。CI の `fast` のジョブで走らせる。E の最初の部分（2026-10-04）の地図は `356 artifacts`、`50 crossings` で通った。E の終わり（F の `ritsu-wasm` と `ritsu-model` が入ったあと）には、`ritsu.ctx: ok — 12 contexts, 27 relationships; 381 artifacts, each in one context; 58 crossings checked (rust 58)` で通った（増えた依存の八つは ritsu-wasm のもの。`ritsu-model` は `Testing` の `owns` に足した）。sekisho の段階 D を取り込んだあと（2026-10-06）は、`ritsu.ctx: ok — 13 contexts, 30 relationships; 500 artifacts, each in one context; 66 crossings checked (rust 66)` で通る（PLAN の 7.12）。
+
+### 7.14 認可（X15、X16。2026-10-06）
+
+sekisho の DESIGN 4.6 の検査を、`crates/ritsu-cross/src/gates.rs` に置いた。読むゲートは、プロジェクトの `.gate` の全部と、地図の `owns` と要件が `cedar "…"` で指す Cedar の組である（ルートの下の `.cedar` を探しはしない）。口が答えないゲートは、その言語の検査が理由を言うので、黙って外す。
+
+- **X15** は、プロジェクトに `.gate` か Cedar の組が一つでもあるときだけ見る。sekisho を使わないプロジェクトで、地図の操作を公開する全部のコンテキストに W907 を出しても、何も教えないからである。そのかわり、ゲートを一つでも書いたプロジェクトでは、ゲートの無いコンテキストが W907 になる。見るのは sakai の段 1 と段 2 を通る地図で、守る action はどのゲートのものも数える（ほかのコンテキストの操作を守ることは、sakai の E211 が言う）。答えないゲートが属するコンテキストは見ない。境界は公開する操作ごとに一つで、守られている操作とだれでも呼べる操作が通り、E907 が落ち、W907 の操作は決められない。
+- **X16** は、ワークフローを書いたゲートの action が守る操作の呼び出しだけを見る（ほかのゲートは、そのワークフローを principal として知らない）。境界は呼び出しごとに一つで、E908 が落ち、W909 は決められず、ほかは通る。W909 は、組み合わせによって拒まれうるときと、許すかを決められないときの両方に出す。決められないことを黙って通さないためである。W908 は呼び出しではなく、許しすぎを言う警告なので、境界に数えない。
+- 操作は、ゲートの `guards`、Cedar のスキーマの `@guards`、地図の `open host service`、フローのタスクのどれでも、同じ参照（6.2、ルートから）で言う。だから参照が等しいかだけで突き合わせる。
+
+sekisho の人が読むページ（`ritsu sekisho doc`）も、X16 と同じ口の答え（`Flows::operation_calls`）を読み、ワークフローごとに、フローが呼ぶ操作、それを守る action、そのワークフローが許されるか、タスクが宣言した拒まれたときのエラーを表にする（sekisho の DESIGN 7 章の 6）。
+
+例：`ritsu check crates/sekisho/examples/refunds` では、二つの版のゲートで、ワークフローが返金の操作を呼ぶ二つの呼び出しが境界として通る。最後の行は次のとおりで、境界の数は段階 D の前の 0 から 2 になった。
+
+```
+ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; borders between the languages: 2 checked, 0 undecided
+```
+
+確かめ方：`crates/ritsu-cross/tests/gates.rs`（判定の単体テスト）、`crates/ritsu/tests/cross.rs` の `x15_the_operations_a_context_opens` と `x16_what_a_workflow_calls`（台帳の再現のプロジェクトを英語と日本語で走らせ、出力の golden（`tests/golden/cross/x15-*`、`x16-*`）と境界の数を見る。X15 は、手で書いた Cedar の組が操作を守る形も、組を地図が `owns` で指すものと、要件が指すものの二つで確かめる）、`crates/ritsu/tests/codes.rs`（再現）、`crates/ritsu/tests/sekisho.rs`（例の境界の数）。
 
 ## 8. 一つの CLI
 
@@ -1255,7 +1305,7 @@ ritsu --help | --version
 - `ritsu check` は、パスを渡さなければ今いるディレクトリを読む。各言語の `check` を全部のファイルに走らせ、言語をまたぐ検査をし、最後に一行の要約（言語ごとのファイルの数、確かめた境目の数、決められなかった数）を出す。
 - `ritsu explain` は、ritsu の台帳（言語をまたぐ検査のコード）を引く。各言語のコードは `ritsu <言語> explain <コード>` で引く。言語ごとにコードの番号が重なる（rulec の E101 と koyomi の E101 は別のもの）からである。
 - `ritsu <言語> …` は、その言語のコマンドと同じものを、すべての口をつないで走らせる。
-- `ritsu sekisho …`（八つ目の言語。sekisho の DESIGN 11 章）は、段階 A で `check` と `explain` を、段階 B で `gen --target cedar`、`vectors`、`api` を作った（2026-10-06）。上の `ritsu <言語>` の並びと `ritsu --help` の言語の一覧、`sekisho` という名前のリンクには、まだ入れていない（段階 D）。
+- `ritsu sekisho …`（八つ目の言語。sekisho の DESIGN 11 章）は、段階 A で `check` と `explain` を、段階 B で `gen --target cedar`、`vectors`、`api` を、段階 C で `gen --target typescript|python|go` を、段階 D で `doc` を作った（2026-10-06）。上の `ritsu <言語>` の並びと `ritsu --help` の言語の一覧、`sekisho` という名前のリンクには、まだ入れていない（段階 D3）。
 
 **E.2 で作った形**（PLAN の E.2）。`ritsu check` は、プロジェクトを読み（6.1 の `Project::load`）、言語ごとの `check` を 6.1 の順に走らせる。rulec、koyomi、chobo、geas、dandori には、プロジェクトのファイルを一つずつ、使う人が書くとおりのパス（走らせたディレクトリから）で渡す。dandori には rulec・koyomi・chobo の口をつなぐ（E の二つ目の部分から。前は rulec の規則の口だけだった。6.1）。yuen と sakai は自分でファイルを探して一つのプロジェクトや地図として確かめる言語なので、渡されたパスのうち自分のファイルを含むものと、プロジェクトのルートを `--root` で渡す。`.proto` には自分の言語の `check` が無い（言語をまたぐ検査が読む。7 章）。
 
@@ -1485,7 +1535,7 @@ E.2 で、入口を 8.1 の形にした（`ritsu check`、七つの全部の `ri
 
 ### 9.3 一つの生成パッケージ（E）
 
-`ritsu gen` は、プロジェクトの規則、期日、帳簿のクライアント、ワークフローを、言語ごとに一つのパッケージにする。対象は、四つの言語が共に生成している TypeScript、Python、Go。E.7 で作った形は次のとおりである（A の段階の形は、Go と Python のディレクトリと、依存を書くファイルを持たなかった）。
+`ritsu gen` は、プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード（2026-10-06 から）を、言語ごとに一つのパッケージにする。対象は、五つの言語（rulec、koyomi、chobo、dandori、sekisho）が共に生成している TypeScript、Python、Go。E.7 で作り、sekisho の段階 C で `authz/` を足した形は次のとおりである（A の段階の形は、Go と Python のディレクトリと、依存を書くファイルを持たなかった）。
 
 ```
 generated/typescript/          generated/python/              generated/go/
@@ -1495,13 +1545,16 @@ generated/typescript/          generated/python/              generated/go/
   dates/<別名>.ts                <name>/dates/<別名>.py         dates/<パッケージ>/<パッケージ>.go
   books/<帳簿>.ts (.sql)         <name>/books/<帳簿>.py (.sql)  books/<パッケージ>/book.go, runtime.go
   flows/<名前>/…                 <name>/flows/<名前>/…          flows/<パッケージ>/…
+  authz/<別名>.ts                <name>/authz/<別名>.py         authz/<パッケージ>/<パッケージ>.go
 ```
 
-`ritsu gen [<path>...] [--target typescript|python|go] [--out <dir>] [--check] [--books postgres|tigerbeetle] [--name <name>] [--module <path>]` は、プロジェクト（`ritsu check` と同じ `ritsu_project::Project::load` で読む）の規則、日付のファイルとカレンダー、帳簿のクライアント、ワークフローを、言語ごとに一つのパッケージにして `<out>/<言語>/`（既定は `generated/<言語>/`）に書く。`--target` が無ければ三つとも。言語ごとの生成器が自分の部分を書き（rulec の `codegen::package_module`、koyomi の `codegen::unit_shown` と各出力先の `module`、chobo の `target::build`、dandori のビルドと `InPackage`）、ritsu はインデックスのファイルと依存を書くファイルだけを書く（`crates/ritsu/src/package.rs`。`gen` は Rust 2024 の予約語なので、モジュールの名前は `package`）。
+ゲート（sekisho の `.gate`）の Cedar の四つのファイルは、言語に依らず `generated/cedar/<別名>.*` に一度だけ書く（sekisho の DESIGN 5.6）。
+
+`ritsu gen [<path>...] [--target typescript|python|go] [--out <dir>] [--check] [--books postgres|tigerbeetle] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]` は、プロジェクト（`ritsu check` と同じ `ritsu_project::Project::load` で読む）の規則、日付のファイルとカレンダー、帳簿のクライアント、ワークフロー、ゲートに尋ねるコードを、言語ごとに一つのパッケージにして `<out>/<言語>/`（既定は `generated/<言語>/`）に書く。`--target` が無ければ三つとも。言語ごとの生成器が自分の部分を書き（rulec の `codegen::package_module`、koyomi の `codegen::unit_shown` と各出力先の `module`、chobo の `target::build`、dandori のビルドと `InPackage`、sekisho の `r#gen::generate`）、ritsu はインデックスのファイルと依存を書くファイルだけを書く（`crates/ritsu/src/package.rs`。`gen` は Rust 2024 の予約語なので、モジュールの名前は `package`）。ゲートの認可のモジュール（`authz/`）は、action ごとにリクエストを組み立てて Cedar に尋ねるコードで、同じパッケージの `rules/` と `dates/` を読む（ワークフローと同じ）。`--authorizer cedar`（既定）はその言語の Cedar の実装をプロセスの中で呼び、`avp` は Amazon Verified Permissions に尋ねる（sekisho の DESIGN 5.5）。`avp` では、Verified Permissions の上限を超えるものを W401 で言う。
 
 - ワークフローは、規則と期日と帳簿を、同じパッケージの `rules/`・`dates/`・`books/` から読む。import はパッケージのモジュールを指し、帳簿のトランスポートが受け取るクライアントは、パッケージの `books/` のクライアントの型である（TypeScript の `Books`、Python の `TypedDict` の `Books`、Go の `Books` と `Map()`）。渡すクライアントが帳簿と違えば、その言語の型の検査が言う。dandori のモデルに `package`（`InPackage`）があるときだけ、Temporal の三つの SDK のビルドが読み込む先を替える。`package` が無い `dandori build` の生成物は前と同じである（dandori の DESIGN 4.2）。
-- 依存は、入れたものが要るものだけを書く。TypeScript の `package.json` は、生成物が読み込むパッケージ（フローがあれば `@temporalio/*` 1.24.0、TigerBeetle の帳簿なら `tigerbeetle-node` 0.17.9）。Python の `pyproject.toml` は `temporalio==1.33.0` と `tigerbeetle==0.17.9`。PostgreSQL の帳簿のクライアントは、呼ぶ側が渡す接続を使うので依存を持たない（Go の pgx だけは import する）。バージョンは、ここで生成物を確かめているもの（dandori と chobo のランナー）。★Go のパッケージは `go.mod` を書かず、利用者のモジュールのディレクトリとして置く（`--module` が import のパス）。`go mod tidy` が書き換える `go.mod` を生成すると、`--check` が古いと言うからである。生成物が import するモジュールとバージョンは `doc.go` に書く。
-- **書くバージョンは、ツールのロックファイルのバージョンと同じにし、その既知の脆弱性を監査で見る（2026-10-06）。** パッケージが書くバージョン（`package.json` の `@temporalio/*` 1.24.0 と `tigerbeetle-node` 0.17.9、`pyproject.toml` の `temporalio==1.33.0` と `tigerbeetle==0.17.9`、`doc.go` の Go のモジュール）と、生成したコードがコメントに書くバージョン（chobo のクライアントの「through tigerbeetle-node 0.17.9」、dandori の Go の「written against go.temporal.io/sdk v1.49.0」など）は、dandori の `tools/temporal`・`tools/temporal-python`・`tools/temporal-go` と、chobo の `tools/runner` と `tools/runner/go` のロックファイルのバージョンと同じである。`crates/ritsu/tests/audit.rs` が、stockroom のパッケージを帳簿の二つの置き場所で生成して、それを確かめる。だから、監査（3.6）がツールのロックファイルを調べることは、パッケージが求めるバージョンと、ここでそれを確かめたときの依存の依存を調べることになる。リリースの前にも調べる（13.2）。
+- 依存は、入れたものが要るものだけを書く。TypeScript の `package.json` は、生成物が読み込むパッケージ（フローがあれば `@temporalio/*` 1.24.0、TigerBeetle の帳簿なら `tigerbeetle-node` 0.17.9）。Python の `pyproject.toml` は `temporalio==1.33.0` と `tigerbeetle==0.17.9`。`.gate` があれば、TypeScript は `@cedar-policy/cedar-wasm` 4.13.0（`--authorizer avp` なら `@aws-sdk/client-verifiedpermissions` 3.1146.0）、Python は `cedarpy==4.12.1`（avp なら `boto3==1.43.103`）、Go の `doc.go` は `github.com/cedar-policy/cedar-go v1.8.0`（avp なら `github.com/aws/aws-sdk-go-v2 v1.47.1` と `github.com/aws/aws-sdk-go-v2/service/verifiedpermissions v1.41.1`）。PostgreSQL の帳簿のクライアントは、呼ぶ側が渡す接続を使うので依存を持たない（Go の pgx だけは import する）。バージョンは、ここで生成物を確かめているもの（dandori、chobo、sekisho のランナー）。★Go のパッケージは `go.mod` を書かず、利用者のモジュールのディレクトリとして置く（`--module` が import のパス）。`go mod tidy` が書き換える `go.mod` を生成すると、`--check` が古いと言うからである。生成物が import するモジュールとバージョンは `doc.go` に書く。
+- **書くバージョンは、ツールのロックファイルのバージョンと同じにし、その既知の脆弱性を監査で見る（2026-10-06）。** パッケージが書くバージョン（`package.json` の `@temporalio/*` 1.24.0 と `tigerbeetle-node` 0.17.9、`pyproject.toml` の `temporalio==1.33.0` と `tigerbeetle==0.17.9`、`doc.go` の Go のモジュール）と、生成したコードがコメントに書くバージョン（chobo のクライアントの「through tigerbeetle-node 0.17.9」、dandori の Go の「written against go.temporal.io/sdk v1.49.0」など）は、dandori の `tools/temporal`・`tools/temporal-python`・`tools/temporal-go`、chobo の `tools/runner` と `tools/runner/go`、sekisho の `tools/runner-ts`・`tools/runner-py`・`tools/runner-go` のロックファイルのバージョンと同じである。`crates/ritsu/tests/audit.rs` が、stockroom のパッケージを帳簿の二つの置き場所で、sekisho の例のパッケージを二つの authorizer で生成して、それを確かめる。だから、監査（3.6）がツールのロックファイルを調べることは、パッケージが求めるバージョンと、ここでそれを確かめたときの依存の依存を調べることになる。リリースの前にも調べる（13.2）。
 - **Go の依存の依存は、`doc.go` に上げるよう書く（2026-10-06）。** Go のモジュールは、求められたうちで最小のバージョンを選ぶ（minimal version selection）。npm や PyPI と違い、利用者が `go mod tidy` をしても、依存の依存は新しくならない。pgx v5.11.0（いま一番新しい）は golang.org/x/text v0.29.0 を求め、そのバージョンには GO-2026-5970 があり、pgx の SCRAM の認証から届く。PostgreSQL の帳簿の Go のクライアントは pgx を import するので、そのままだと利用者のモジュールは v0.29.0 でビルドされる（ほかの依存が上げなければ）。`ritsu gen` は、pgx を import するパッケージの `doc.go` に、次の行を足す（表は `src/package.rs` の `GO_RAISED`。pgx が直ったバージョンを求めるようになったら外す）。
 
   ```go
@@ -1521,7 +1574,7 @@ generated/typescript/          generated/python/              generated/go/
 - `--check` は書かずに、無いファイル、古いか手で直したファイル、前の `gen` が書いて今は書かないファイル（頭が ritsu の生成器のもの）を挙げて 1 で終わる。書くときは、前に書いて今は書かないファイルを消す（rulec の `gen --check` と同じ考え）。
 - パッケージの Python が `mypy --strict` を通るように、dandori の Temporal の Python（と同じ部品を使う pydantic-graph と Step Functions の Lambda の Python）と、chobo の Python のクライアントの型の書き方を直した（★単独の出力も変わった。振る舞いは変えていない。dandori の DESIGN 0.3、chobo の DESIGN 8.1）。
 
-確かめ方：`crates/ritsu/tests/gen.rs`。テストのプロジェクト `crates/ritsu/tests/projects/stockroom`（英語。rulec の規則 `delivery`、koyomi の日付のファイルとカレンダー、chobo の帳簿、三つを使う dandori のフロー）のパッケージが、帳簿の二つの出力先で、`tsc --strict`、`mypy --strict`、`go vet` と gofmt を通ること（通販は TypeScript だけ。dandori の Python の残りは dandori の DESIGN 7 章）。フローの import がパッケージのモジュールを指し、規則と日付のアクティビティを走らせるとパッケージのモジュールを通って答えること（Python と Go）。`--check` が、無いもの・古いもの・残ったものを言うこと。どのファイルの頭も 9.2 の形で、元のファイルとそのハッシュを書くこと（パッケージの形の golden `crates/ritsu/tests/golden/gen/stockroom.txt`。バージョンは `<version>` に置き換えてある）。中身ごとの突き合わせは、いままでどおり各言語のテスト（rulec の 12 言語のベクタ、koyomi の五つの出力先、chobo の七つの組み合わせ、dandori のプラットフォーム）がする。
+確かめ方：`crates/ritsu/tests/gen.rs`。テストのプロジェクト `crates/ritsu/tests/projects/stockroom`（英語。rulec の規則 `delivery`、koyomi の日付のファイルとカレンダー、chobo の帳簿、三つを使う dandori のフロー）のパッケージが、帳簿の二つの出力先で、`tsc --strict`、`mypy --strict`、`go vet` と gofmt を通ること（通販は TypeScript だけ。dandori の Python の残りは dandori の DESIGN 7 章）。フローの import がパッケージのモジュールを指し、規則と日付のアクティビティを走らせるとパッケージのモジュールを通って答えること（Python と Go）。`--check` が、無いもの・古いもの・残ったものを言うこと。sekisho の例をプロジェクトにしたパッケージで、三つの言語のファイルの形、インデックス、依存が正しく、型の検査（`tsc --strict` と cedar-wasm の型、`mypy --strict` と cedarpy、sekisho の Go のランナーの `go.mod` で作ったモジュールの `go vet` と gofmt）と `--check` を通り、`--authorizer avp` なら avp の依存を書くこと（`the_gates_of_a_project_go_into_the_package`）。どのファイルの頭も 9.2 の形で、元のファイルとそのハッシュを書くこと（パッケージの形の golden `crates/ritsu/tests/golden/gen/stockroom.txt`。バージョンは `<version>` に置き換えてある）。中身ごとの突き合わせは、いままでどおり各言語のテスト（rulec の 12 言語のベクタ、koyomi の五つの出力先、chobo の七つの組み合わせ、dandori のプラットフォーム）がする。sekisho のテストは、三つの言語の生成したコードに、検査を通る 35 の `.gate` の生の値 27,579 件を cedar-wasm、cedarpy、cedar-go で答えさせ、参照の評価と比べる（sekisho の DESIGN 6.3）。
 
 ### 9.4 生成物のバージョン
 
@@ -1551,7 +1604,7 @@ C.10 で `ritsu-emit` を作り、koyomi と chobo をこれに替えた。生�
 | geas | 236 件、SKIP 0、77 秒（2026-10-03 の記録） | pixie で作った greeter、Chrome、LLVM のツール、Go、Node、Python |
 | yuen | 94 件、SKIP 0（2026-10-03 の記録） | Python の venv（prov と reqif）、ReqIF のスキーマ、xmllint |
 | sakai | 97 件、SKIP 0、約 20 秒（2026-10-03 の記録） | import-linter、dependency-cruiser、Java と ArchUnit、Context Mapper、go-arch-lint、buf、rulec・koyomi・chobo・dandori のバイナリ |
-| sekisho | 77 件、SKIP 0、約 57 秒（2026-10-06 の記録。生成した Cedar を公式の CLI にかける `tests/cedar.rs` の 2 件が約 30 秒） | 公式の Cedar の CLI 4.13.0（`RITSU_CEDAR`）。rulec・koyomi・chobo・dandori は、同じプロセスで口からつなぐ |
+| sekisho | 106 件、SKIP 0、約 4 分（2026-10-06 の記録。段階 D を取り込んだ木で、ビルドのあとのテストの時間はおよそ 242 秒。生成した TypeScript・Python・Go を三つの Cedar の実装で確かめる `tests/typescript.rs`・`python.rs`・`go.rs` が合わせて約 148 秒、生成した Cedar を公式の CLI にかける `tests/cedar.rs` の 2 件が約 30 秒、生の値の `tests/raw.rs` が約 27 秒。ほかの担当のテストと同じ時刻に回した） | 公式の Cedar の CLI 4.13.0（`RITSU_CEDAR`）、sekisho のランナー（Node と tsc と cedar-wasm、Python の venv の cedarpy と mypy、Go と cedar-go）、Chrome（`doc` の HTML）。rulec・koyomi・chobo・dandori は、同じプロセスで口からつなぐ |
 
 rulec の Kani の記録（`crates/rulec/experiments/kani/report.txt`）は、コーパスが英語の双子で 87 本になったあと（10.10）、207 本のハーネスが通り、手元で 766 秒かかる（`.github/workflows/kani.yml` の 60 分の上限の内）。
 
@@ -1604,7 +1657,7 @@ ritsu のリモートを作るまで、CI は走らない。ワークフロー�
 C.12 で、`release` のほかの五つを根の `.github/workflows/` に書いた（ジョブ一つにファイル一つ。`fast.yml`、`tools.yml`、`proofs.yml`、`kani.yml`、`platforms.yml`）。F.7 で `release.yml`（タグで走る。13.2）と `packages.yml`（main への push と pull request で、文書だけの変更を除く）を足した。`packages.yml` は、rulec の `ci.yml` の `packages` のジョブのうち、静的な `ritsu` の musl のビルド、アーカイブ、`.deb` と `.rpm` を Debian と Fedora に入れて消すこと、を引き継ぐ。`cargo package` の半分は、crates.io に出さないので引き継がない。許す SKIP の一覧は `ci/skips/fast.txt`、`tools.txt`、`platforms.txt` にある。リモートが無いので、どれもまだ走らせていない。手元で確かめたのは、YAML として読めること、actionlint（v1.7.12）が何も言わないこと、`run` の中身が `bash -n` を通ること、ジョブが呼ぶコマンドがこの機械で通ることである（PLAN の C.12）。書いたときに決めたことは次のとおり。
 
 - `fast`：新しく取り出した木で走らせることを考え、`website/rulec/sync.sh` と `website/dandori/sync.sh` で（F.7 で rulec と dandori のサイトを根の `website/` の下に移した。`tools.yml` と `platforms.yml` の同じ段も直した）、サイトが共有するページのコピー（gitignore してある）を先に作る。テストは `cargo xtask test --level fast` で回し、`ci/skips/fast.txt` は空である。 F.5 で、ritsu-wasm を wasm32-unknown-unknown でコンパイルする一段を足した（`cargo check --locked -p ritsu-wasm --target wasm32-unknown-unknown`）。言語のクレートが Unix にしかないもの（プロセスグループ、シグナル）を、ほかの対象でどうするかを書かずに使うと、ここで落ちる。ページのテストのうち、ライブラリとバイナリを突き合わせる二つは fast の段で、node と Chrome を使う二つは tools の段（dandori の組。`-p ritsu` を回している）で走る。
-- `tools`：クレートを三つの組（rulec、dandori、それ以外の六つの言語と `ritsu-base`・`ritsu-testkit`・`ritsu-proto`・`ritsu-emit`・xtask）に分け、matrix で並べて走らせる。組ごとに要るものだけを入れる。PostgreSQL は、rulec の組がサービスのサーバーを libpq の環境変数で使い、ほかの組は PGDG の PostgreSQL 18 のプログラムで使い捨てのクラスタを立てる（`RITSU_PG_BIN`）。dandori の組は、rulec 0.22.0 のリリースのバイナリをチェックサムで確かめて `DANDORI_RULEC` に渡し（D.3 まで）、protoc 35.1 のリリースの zip を、書いたときに取ったチェックサムで確かめて入れる。rulec の `ci.yml` が `cargo test` のあとに走らせていたもの（`rulec test --require-all` で飛ばした側が無いこと、証明書の再検査、`fmt --check` と `check`）は、rulec の組の最後に残した。`--proofs` の付いた回は `kani` に移した。`ci/skips/tools.txt` は、PLAN の C.12 が空としていたのと違い、geas の pixie の四つを許す。pixie は ritsu の外でビルドするもので、pixie のテストは CI では回さず、greeter のある手元の機械で回すと決めた。 dandori の組は、ritsu の `tests/website.rs` がサイトを組むために、Zensical を `website/.venv` に入れる（F.7）。2026-10-06 に、それ以外の組に sekisho を足し、Cedar の CLI 4.13.0 の Linux の x86-64 のリリースのアーカイブを、書いたときに取ったチェックサム（リリースの `.sha256` と `sha256.sum` と同じ）で確かめて入れ、`RITSU_CEDAR` に渡す段を足した（sekisho の `tests/cedar.rs`）。数 MB なのでキャッシュはしない。同じ組で、同じバイナリで ritsu-base の Cedar の材料を `expected.sh` で作り直し、材料が一字も変わらないことと、リポジトリに無いファイルができないことを確かめる段も足した（4.18）。手元で確かめたのは、actionlint 1.7.12 が `tools.yml` に何も言わないこと、二つの段の `run` が `bash -n` を通ること、CLI を入れる段を `sha256sum` だけ `shasum -a 256` に替えて流すと、ダウンロード、チェックサム、展開、`RITSU_CEDAR` の行まで通ること、材料を確かめる段の `run` を手元の CLI 4.13.0 で流すと通ることである。GitHub ではまだ走らせていない。許す SKIP は足していない。
+- `tools`：クレートを三つの組（rulec、dandori、それ以外の六つの言語と `ritsu-base`・`ritsu-testkit`・`ritsu-proto`・`ritsu-emit`・xtask）に分け、matrix で並べて走らせる。組ごとに要るものだけを入れる。PostgreSQL は、rulec の組がサービスのサーバーを libpq の環境変数で使い、ほかの組は PGDG の PostgreSQL 18 のプログラムで使い捨てのクラスタを立てる（`RITSU_PG_BIN`）。dandori の組は、rulec 0.22.0 のリリースのバイナリをチェックサムで確かめて `DANDORI_RULEC` に渡し（D.3 まで）、protoc 35.1 のリリースの zip を、書いたときに取ったチェックサムで確かめて入れる。rulec の `ci.yml` が `cargo test` のあとに走らせていたもの（`rulec test --require-all` で飛ばした側が無いこと、証明書の再検査、`fmt --check` と `check`）は、rulec の組の最後に残した。`--proofs` の付いた回は `kani` に移した。`ci/skips/tools.txt` は、PLAN の C.12 が空としていたのと違い、geas の pixie の四つを許す。pixie は ritsu の外でビルドするもので、pixie のテストは CI では回さず、greeter のある手元の機械で回すと決めた。 dandori の組は、ritsu の `tests/website.rs` がサイトを組むために、Zensical を `website/.venv` に入れる（F.7）。2026-10-06 に、それ以外の組に sekisho を足し、Cedar の CLI 4.13.0 の Linux の x86-64 のリリースのアーカイブを、書いたときに取ったチェックサム（リリースの `.sha256` と `sha256.sum` と同じ）で確かめて入れ、`RITSU_CEDAR` に渡す段を足した（sekisho の `tests/cedar.rs`）。数 MB なのでキャッシュはしない。同じ組で、同じバイナリで ritsu-base の Cedar の材料を `expected.sh` で作り直し、材料が一字も変わらないことと、リポジトリに無いファイルができないことを確かめる段も足した（4.18）。手元で確かめたのは、actionlint 1.7.12 が `tools.yml` に何も言わないこと、二つの段の `run` が `bash -n` を通ること、CLI を入れる段を `sha256sum` だけ `shasum -a 256` に替えて流すと、ダウンロード、チェックサム、展開、`RITSU_CEDAR` の行まで通ること、材料を確かめる段の `run` を手元の CLI 4.13.0 で流すと通ることである。GitHub ではまだ走らせていない。許す SKIP は足していない。同じ日に、sekisho の段階 C で、それ以外の組に sekisho のランナーの段を二つ足した（`npm ci --prefix crates/sekisho/tools/runner-ts` と、`crates/sekisho/tools/runner-py/install.sh`・`runner-go/install.sh`）。sekisho の `tests/typescript.rs`・`python.rs`・`go.rs` が、生成した TypeScript・Python・Go を型の検査にかけ、生の値の全部の件を cedar-wasm、cedarpy、cedar-go で答えさせる。dandori の組でも同じ三つを入れる（ritsu の `tests/gen.rs` がゲートのパッケージを型の検査にかけるため）。ツールの版を出す段は、runner-ts の tsc の版も出す。手元で確かめたのは、三つのコマンドがこの機械で通ることと、それで入れたもので両方のテストが通ることである。この二つの段には actionlint を走らせていない（段階 C のときは手元に無かった）。GitHub ではまだ走らせていない。許す SKIP は足していない。
 - `proofs`：根の `proofs/` で `lake build` を一度だけ走らせ（五つのライブラリと、`rulec-recheck` と `ritsu-model`）、コーパスの全部の証明書を `rulec-recheck` にかけ、rulec の `tests/lean.rs` と `cargo test --release -p ritsu-model` を `tools` の段で回す。どちらも SKIP の行が一つでもあれば落ちる（突き合わせが走らなかったことになる）。走るのは、`proofs/`、`crates/ritsu-model/`、rulec の src・コーパス・`tests/days/`・`tests/lean.rs`・`tools/recheck.py`、土台の src、口（`ritsu-ports`）と `ritsu-cross` の src、chobo・koyomi・dandori の src と突き合わせが読む例とテストの材料、`Cargo.lock` のどれかが変わったときである。`tools` の rulec の組は、rulec のテストが使う `RulecCert` と `rulec-recheck` だけを作る。`fast` のジョブでは、`ritsu-model` の文字で穴を探すテストだけが走り、ほかは段の SKIP になる。C.12 では rulec の `ci.yml` の `proofs` のジョブをコピーしていたが、F.6 で rulec の証明を根に移したので、この形にした。
 - `kani`：rulec の `ci.yml` の Kani の段（コーパスの全部の規則を Rust にして Kani で証明する）と、`rulec test --proofs` の回（`フラグを付ければ証明が走る` を platforms の段で）。毎晩と、rulec の生成器、`ritsu-emit` の src、コーパスが変わったとき。
 - `platforms`：kind の上の Argo（kind 0.33 は Go の `go install` で、argo CLI v4.1.4 はチェックサムで確かめて入れ、`crates/dandori/tools/argo/setup.sh` でクラスタを作る）、LocalStack 4.14.0 のイメージ、Temporal の dev server（TypeScript の SDK の `@temporalio/testing` が取ってくる）を用意し、dandori の platforms の段のテストを一つずつ回す（10.6 のとおり、落ちたら一度だけ回し直し、そのことを出力に書く）。最後に kind の上にワークフローが残っていないことを確かめる。そのあと、外のサーバーに問い合わせるテスト（土台、koyomi、yuen の本物の e-Gov と eCFR、rulec の Buf Schema Registry）を platforms の段で回す。10.5 の表に無かったこの四つは、ほかにどのジョブも回さないので、ここに置いた。TypeSafe には CI から送らない。呼ぶたびにお金がかかり、CI では呼ぶ回数を見込めないので、鍵をリポジトリの secret にも置かない。ワークフローは `TYPESAFE_API_KEY` を空にして走らせるので、secret があっても読まず、Jev のテストは SKIP になる。それと Ollama の無い runner での SKIP を、`ci/skips/platforms.txt` で許す。
@@ -1964,6 +2017,8 @@ Tells the customer, a > b and R&D. &lt;img src=x onerror=alert(1)> &lt;!-- c -->
 | W904（履歴） | dandori の `check` | 届く |
 | E906（外のサービスへ） | dandori の `check` | 届く |
 | E905・W905（地図） | ritsu-cross（X14） | `ritsu check` だけ |
+| W910（認可のリクエストの秘密。2026-10-06、sekisho の段階 D） | sekisho の `check`（ポリシーが読む `input` と、守る操作の契約の印） | 届く |
+| E907〜W909（認可。7.14） | ritsu-cross（X15、X16） | `ritsu check` だけ |
 
 **理由**：ファイル一つ、言語一つで決まることは、その言語の検査に置く。単体で使う人にも届き、`ritsu check` では言語の出力をそのまま並べる（8.3）ので、同じことが二度出ない。言語をまたいで初めて決まるのは、送る値の印が付いたコンテキストと、宛先のコンテキストの関係だけである。地図は sakai が、送ることは dandori が知っているので、ここだけを ritsu-cross に置く。
 
@@ -1973,13 +2028,21 @@ Tells the customer, a > b and R&D. &lt;img src=x onerror=alert(1)> &lt;!-- c -->
 
 | コード | 重さ | 台帳 | いつ出るか |
 |---|---|---|---|
-| W901 | 警告 | 七つの言語、ritsu | 鍵の形の値が、ファイル（契約の文書を含む）に書いてある |
+| W901 | 警告 | 八つの言語、ritsu | 鍵の形の値が、ファイル（契約の文書を含む）に書いてある |
 | W902 | 警告 | dandori、sakai | このマシンの外へ、暗号化しない通信をする（dandori はタスクが呼ぶ URL、sakai は文書のサーバー） |
 | W903 | 警告 | sakai | 公表された言語の OpenAPI の操作、または AsyncAPI のチャネルが使うサーバーに、認証の指定が無い |
 | W904 | 警告 | dandori | 秘密の値が、ワークフローの入力・出力、呼び出しの引数や結果、`fail` の理由として、プラットフォームの履歴に残る |
 | E905 | エラー | ritsu | フローが、秘密の値を、地図の外のファイルか、印を付けたコンテキストと関係の無いコンテキストの成果物へ送る（X14） |
 | W905 | 警告 | ritsu | フローが秘密の値を送る先が地図のどこかを、決められない（X14） |
 | E906 | エラー | dandori | 秘密の値を、プロジェクトの外の相手（モデルのプロバイダー、Jev、URL だけで書いた相手、AWS のサービス）へ送る |
+| E907 | エラー | ritsu | 公開する操作を守る action が無い（X15。同じコンテキストのほかの操作は守られている） |
+| W907 | 警告 | ritsu | コンテキストが公開する操作を、どれも守る action が無い（X15） |
+| E908 | エラー | ritsu | ワークフローが呼ぶ操作を、守る action がそのワークフローにどの組み合わせでも許さない（X16） |
+| W908 | 警告 | ritsu | ワークフローが許される action の操作を、フローが呼ばない（X16） |
+| W909 | 警告 | ritsu | ワークフローの呼び出しが、組み合わせによって拒まれうるか、許すかを決められず、タスクが拒まれたときのエラーを宣言していない（X16） |
+| W910 | 警告 | sekisho | ポリシーが読む `input` が、守る操作の契約が秘密と印を付けた引数かフィールドである（値が Cedar のリクエストと判断の記録に残る） |
+
+E907〜W909 と W910 は、2026-10-06 に sekisho の段階 D で足した。E907〜W909 は認可の言語をまたぐ検査（7.14）で、番号はセキュリティの検査の帯の続きにした（sekisho の DESIGN 16.1 の 5）。
 
 **9xx の帯にしたこと。** どの台帳でも空いている帯で、セキュリティの検査をまとめて置く。一つの番号は一つの検査を指し、言語が違っても同じことを言う（`warning[rulec W901]` も `warning[dandori W901]` も鍵のこと）。使う人は、言語ごとの台帳を引かずに、番号で何の検査かが分かる。ritsu の X14 を、ほかの X と同じ E2xx にしなかったのも同じ理由である（E905 は、dandori の E906 と組で読む）。そのため、ritsu の台帳の帯の決まり（E1xx はファイル、E2xx は境目。7.1）に、9xx はセキュリティの検査、を足した。
 
@@ -2572,7 +2635,7 @@ impl Protos { pub fn redaction(&self, file: &str, field: &Field) -> Option<Redac
   - dandori は、例と `tests/flows` と `tests/fixtures` の 102 本の `.flow` に、`check`（英語、日本語、JSON）、七つのプラットフォームの `build`、`scenarios`、`doc` をかけた。変わったのは、`plaintext` を書き足した問い合わせの例の二つの版（`.flow` が変わったので、生成物の頭のハッシュと `doc` の抜粋も）と、W902 が出る三つの材料（どのコマンドも、先に W902 を出す）の五本だけで、ほかの 97 本は一字も変わらなかった。
   - sakai の例と `tests/maps` の地図と変異の全部、`ritsu check ritsu.ctx` は、共通の型を足したあとと最後とで比べた。違ったのは、新しい変異の出力と、webshop（直す前に出た W903 の五つが、直したあとに消えた）と、`ritsu.ctx` の成果物の数（sakai の `src/security.rs` の分の 421 → 422）だけだった。
 
-**偽の鍵。** 材料の鍵は、どの言語でも一つの偽の値にした。`AIzaSyD-ritsu-fake-key-for-tests-` のあとに `0` を 6 字並べた 39 字で、読めば偽と分かる（この文書には、鍵の形の値を一続きでは書かない）。Google の API キーは、GitHub の push protection の既定の対象でない（GitHub の文書の表）。ソースの `.rs` には一続きで書かず、台帳の再現は `concat!` で、テストは部品をつないで作る（`["AKIA", "Q7TF", …].concat()`）。一続きで持つのは、W901 の材料（七つの言語）と、生成する診断の一覧（`crates/*/docs/codes.md`・`codes.ja.md`、スキルの `codes.md`、geas の `explain --all` の golden）の 59 本だけである。リポジトリの中の鍵の形の値をこの一つに限ると、GitHub の secret scanning の知らせが来ても、どれが何かがすぐ分かる。知らせが出ないよう、`.github/secret_scanning.yml` を置き、`paths-ignore` で、偽の鍵を書いた材料と、生成する codes のページを外す。
+**偽の鍵。** 材料の鍵は、どの言語でも一つの偽の値にした。`AIzaSyD-ritsu-fake-key-for-tests-` のあとに `0` を 6 字並べた 39 字で、読めば偽と分かる（この文書には、鍵の形の値を一続きでは書かない）。Google の API キーは、GitHub の push protection の既定の対象でない（GitHub の文書の表）。ソースの `.rs` には一続きで書かず、台帳の再現は `concat!` で、テストは部品をつないで作る（`["AKIA", "Q7TF", …].concat()`）。一続きで持つのは、W901 の材料（八つの言語）と、生成する診断の一覧（`crates/*/docs/codes.md`・`codes.ja.md`、スキルの `codes.md`、geas の `explain --all` の golden）の 67 本だけである（sekisho の段階 D で、sekisho の W901 の材料 6 本と `docs/codes.md`・`codes.ja.md` の 2 本を足した。ブラウザで試すページの `ritsu.wasm` は数えていない）。リポジトリの中の鍵の形の値をこの一つに限ると、GitHub の secret scanning の知らせが来ても、どれが何かがすぐ分かる。知らせが出ないよう、`.github/secret_scanning.yml` を置き、`paths-ignore` で、偽の鍵を書いた材料と、生成する codes のページを外す。`paths-ignore` のいまの形（`crates/*/tests/**/W901_*`、`crates/*/docs/codes.md`、`crates/*/docs/codes.ja.md`）で sekisho の 8 本も外れるので、sekisho のために直したところは無い。
 
 ### 16.11 例
 
@@ -2594,7 +2657,7 @@ impl Protos { pub fn redaction(&self, file: &str, field: &Field) -> Option<Redac
 - 契約の文書が `$ref` で読む、ほかの文書の鍵。ritsu-cross が調べるのは、言語が直に参照する文書だけである。
 - OpenAPI の、ほかのファイルへの `$ref` で書いたパスの項のサーバー（W902）。
 - `ritsu check` の警告を CI で失敗にするフラグ。
-- 公開する操作のどれにも、許可の決まり（Cedar のポリシー、sekisho の `.gate`）があるかを確かめること。W903 は `security` を見るところまでで、その先は sekisho の側の言語をまたぐ検査になる。
+- （済み）公開する操作のどれにも、許可の決まり（Cedar のポリシー、sekisho の `.gate`）があるかを確かめること。W903 は `security` を見るところまでで、その先は sekisho の側の言語をまたぐ検査になる。2026-10-06 に、sekisho の段階 D で X15（E907、W907）として作った（7.14）。
 - 生成器のほかの出力のうち、dandori のコメントに入るほかの文（`for … in …` の式の表示、規則の前提の文、`.proto` のファイルの名前）と、Argo の注釈の U+0085・U+2028・U+2029（dandori の DESIGN 7 章）。同じ形のテスト（行を終える五つの文字と、`</script>`、`---`、`]]>` を入れた材料）で確かめる。
 
 ### 16.13 調べたもの（2026-10-06）
