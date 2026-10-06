@@ -36,3 +36,14 @@ reason = "JSONata 2.0.6 in crates/dandori/tools plays Step Functions, which eval
 id = "GHSA-8gq3-vp5j-2grp"
 ignoreUntil = 2027-04-05
 reason = "JSONata 2.0.6 in crates/dandori/tools plays Step Functions, which evaluates JSONata 2.0.6; it evaluates only the expressions dandori wrote, on the tests' inputs (osv-scanner.toml)"
+
+# KaTeX 0.16.47, which Mermaid 11.17.2 and 12.1.0 ask for (^0.16.47), in the Mermaid that the tests
+# of chobo, dandori and sakai draw their diagrams with (crates/*/tools/mermaid). The advisory
+# (2026-10-05) needs two things at once: an Object.prototype another package has already polluted,
+# and mathematical expressions an attacker writes. The tests draw only the diagrams the languages
+# write, which hold no math, in a headless Chrome that loads nothing else. The fix, 0.18.2, is
+# outside the range Mermaid asks for. Move when Mermaid asks for a fixed KaTeX.
+[[IgnoredVulns]]
+id = "GHSA-238p-pmpm-9mq7"
+ignoreUntil = 2027-01-06
+reason = "KaTeX 0.16.47 in the Mermaid of crates/*/tools/mermaid draws only the diagrams the tests write, with no math; Mermaid asks for ^0.16.47 and the fix is 0.18.2 (osv-scanner.toml)"

@@ -437,6 +437,8 @@ osv-scanner は `--no-resolve` で走らせる。`requirements.txt` が入れた
 | `crates/dandori/tools`（`tools/asl-run.mjs`） | jsonata 2.0.6 の五つ（細工した式によるコードの実行が三つ、プロトタイプ汚染、`$toMillis` の入力によるリソースの枯渇） | 上げない。AWS の Step Functions は JSONata を 2.0.6 の仕様で評価し（AWS の開発者ガイド「Transforming data with JSONata in Step Functions」）、ランナーはそれをまねる。2.0.x の続きは出ていない。ランナーが評価するのは、dandori が書いた式と、テストのシナリオの入力だけである。`osv-scanner.toml` に理由を書き、期日は 2027-04-05 |
 | `crates/dandori/tools/wire`、`crates/koyomi/tools` の `requirements.txt` | 入れたい名前だけ（boto3 と moto、mypy）で、依存はバージョンを書いていない。上の deps.dev の解決で、入れていないバージョンのアドバイザリが出た | `requirements.in` を置き、`uv pip compile --generate-hashes` で依存まで固定した（61 と 6 のパッケージ）。既知の脆弱性は無い |
 | `Cargo.lock` | なし（cargo-deny、cargo-audit 0.22.2 の 1,290 件、OSV のどれでも） | なし |
+| `crates/dandori/tools/temporal`（2026-10-06 の昼、GitHub で `audit` を初めて走らせたとき） | source-map-js 1.2.1、GHSA-68fv-2mgg-jv7q（高。索引つきのソースマップの行の数を確かめず、イベントループを止められる。2026-09-18 に出た） | 依存の範囲（`^1.0.2`）の中で 1.2.2 に上げた（`npm update --package-lock-only`） |
+| `crates/*/tools/mermaid`（同じ回） | KaTeX 0.16.47、GHSA-238p-pmpm-9mq7（低。ほかのパッケージがすでに汚した `Object.prototype` があり、攻撃者が数式を書けるとき。2026-10-05 に出た） | 上げない。Mermaid 11.17.2 と 12.1.0 が `^0.16.47` を求め、直った 0.18.2 はその外にある。テストが描くのは言語が書いた図だけで、数式を含まない。`osv-scanner.toml` に理由を書き、期日は 2027-01-06 |
 
 ほかの四つの dandori の `requirements.txt`（agents、connect、pydantic-graph、temporal-python）は、`uv pip compile` にかけて、もう依存まで書いてあることを確かめた（足りないものは無かった）。
 
