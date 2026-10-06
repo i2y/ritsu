@@ -1115,9 +1115,9 @@ DESIGN 11 章。済んだ。
 - 日本語の読み直しの残り：ritsu-base の台帳が書く二つの文（`explain` の再現の「…そこで `…` を走らせます」と、`docs/codes*.md` の頭の「手で直しません」）は、決まりでは「走らせてください」「手で直さないでください」になるが、koyomi・chobo・yuen・sakai・ritsu-cross の `docs/codes.ja.md` にも出るので、全部を取り込んだあとに一度で直す（ritsu-base の二行と、それらの `docs/codes.ja.md`、`crates/ritsu-base/tests/golden/compat/` を取り直す）。ritsu-base の `--help` の見出し「exit code:」「この画面を出す」、診断の見出し「確かめたら」、koyomi の `gen --lang ja` の生成物のコメントの空白、yuen の `src/check.rs` の E105 と同じ形の文、`crates/ritsu-base/tests/golden/compat/` の koyomi と yuen の古い文のコピー、根の README.ja.md のクレートの一覧の「口」、根のサイトの `website/docs-ja/ns/yuen.md` の地の文の「端」（六か所。言い換えの案は yuen の読み直しの担当が出した）、dandori の `--lang ja` でも英語のまま出る文（読めないファイル、`scenarios --out` の行など）。 rulec の読み直しの残り：ritsu-base の共通の行（`--help` の見出し「exit code:」と、`出しうる診断（…）` の行。rulec の `cli.rs` が持つ同じ行は「出しうる診断（`rulec explain <CODE>` で一つずつ説明を読めます）:」にした）。rulec の `diag.rs` の見出しの書き方は残した（生成物のコメントの「入口で断る」は、2026-10-05 に「入口でエラーにする」「受け付けない」に替えた。DESIGN 4.1）。rulec のサイトの地の文（出力の貼り付けではないもの）に、`website/rulec/docs-ja/tour.md` の「それを見ていない表が完全性検査で割れるのが狙いです」と `docs-ja/index.md` の「丸め方で円がいくら動くか」が残る。実験の記録（`crates/rulec/experiments/` の下）と、rulec の DESIGN.md の測った記録の引用は、そのときの出力の記録なので取り直していない。rulec の DESIGN の §11 の合意済みの五つの文面は、決めたときの記録として残した。図の URL の `?v=` は、ほかの担当が図を描き直したら `cargo test -p rulec --test website 図のurlは中身のハッシュを持っている` が言う値にそろえる。
 - テストの回し方：7.9 と同じ。Lean の層は、根の `proofs/` で `lake build` してから `cargo test --release -p ritsu-model`（`proofs/` を作っていないと SKIP する）。rulec の `tests/lean.rs`・`days.rs`・`machine.rs` は根の `proofs/` の `rulec-recheck` を使う。dandori の重い十二は、ほかと同時でなく一つずつ回す。
 
-### 7.11 夜の三つ（2026-10-05 の夜〜10-06 の朝。作者が取り込むかを決める）
+### 7.11 OpenSpec、sakai の OpenAPI と AsyncAPI、依存の監査（2026-10-05〜06）
 
-三つ（OpenSpec との連携、脆弱性の検査、sakai の OpenAPI と AsyncAPI への対応）を、三人の担当が並べて作った。取り込みはローカルのブランチ `night/2026-10-06` にして、main には入れていない。
+三つ（OpenSpec との連携、依存の監査と生成器の直し、sakai の OpenAPI と AsyncAPI への対応）を、三人の担当が並べて作った。
 
 **OpenSpec との連携**（openspec の担当）
 
@@ -1128,7 +1128,7 @@ OpenSpec の仕様（要件とシナリオ）と変更の提案を、yuen と ge
 - **スキル**：ritsu のスキルに「OpenSpec と各言語の使い分け」の節（8 章）、yuen と geas のスキルに OpenSpec の扱いを足した。
 - **ritsu-base**：OpenSpec の読み手（DESIGN 4.16）。
 - 例：yuen の `openspec_greeter`（まだ archive していない提案のあるもの）と `openspec_greeter_archived`（`openspec archive` のあと。わざと止まる）、geas の `examples/greeter/openspec/`。どれも英語が先で、日本語の版を `ja/` の下に置いた。
-- 残したこと：OpenSpec のストア（ベータ）とほかのリポジトリの仕様、シナリオの単位の固定、Spec Kit と Kiro の仕様、`ritsu check` で OpenSpec のシナリオの網羅を言うこと（言語をまたぐ検査に足すかは、作者が決める）。
+- 残したこと：OpenSpec のストア（ベータ）とほかのリポジトリの仕様、シナリオの単位の固定、Spec Kit と Kiro の仕様、`ritsu check` で OpenSpec のシナリオの網羅を言うこと（言語をまたぐ検査に足すかは、まだ決めていない）。
 
 **sakai の OpenAPI と AsyncAPI**（sakai-api の担当）
 
@@ -1138,9 +1138,9 @@ OpenSpec の仕様（要件とシナリオ）と変更の提案を、yuen と ge
   3. rulec の口で、`import jsonschema` が取り込む JSON Pointer を言う。sakai はそれを対応の先として読む（`import proto` と同じく、規則が対応になる）。
   4. rulec の `import jsonschema` と dandori の `use openapi` が、`ritsu_base::yaml` で YAML の文書も読む。rulec の `src/jsonschema.rs` が YAML を読まない理由（その文書が使う部分だけを読む読み手は黙って読み違える）は、読む部分を決めてその外を止める読み手で解けている。
   5. sakai の `build`：文書の `$ref` から、生成したコードどうしの import を許す（sakai の DESIGN 7.1 の表の最後の行。いまは proto の import だけから作る）。
-  6. 根の README（英日）の sakai の段落に、OpenAPI と AsyncAPI の文書を足した（2026-10-06 に作者が確かめた）。
+  6. 根の README（英日）の sakai の段落に、OpenAPI と AsyncAPI の文書を足した（2026-10-06）。
 
-**脆弱性の検査**（vuln の担当）：ritsu 自身の依存の監査（DESIGN 3.6）と、生成器がソースの文字列をコメントやスクリプトの外に出さない直し（9.2）を作った。ritsu を使う人のための脆弱性の検査は、2026-10-06 に、ritsu の地図と契約から見える脆弱性を言う言語の検査にすると決めた（使う人のプロジェクトの依存を調べるものではない）。秘密の値、平文の通信、認証の無い操作、外へ出すデータの境界の四つで、同じ日の昼に作った（7.12、DESIGN 16 章）。ritsu 自身の依存の監査は、その検査とは別のものとして残した。
+**脆弱性の検査**（vuln の担当）：ritsu 自身の依存の監査（DESIGN 3.6）と、生成器がソースの文字列をコメントやスクリプトの外に出さない直し（9.2）を作った。ritsu を使う人のための脆弱性の検査は、2026-10-06 に、ritsu の地図と契約から見える脆弱性を言う言語の検査にすると決めた（使う人のプロジェクトの依存を調べるものではない）。秘密の値、平文の通信、認証の無い操作、外へ出すデータの境界の四つで、同じ日に作った（7.12、DESIGN 16 章）。ritsu 自身の依存の監査は、その検査とは別のものとして残した。
 
 残したこと：
 
@@ -1149,25 +1149,22 @@ OpenSpec の仕様（要件とシナリオ）と変更の提案を、yuen と ge
 - dandori の、ほかのコメントに入る文と、Argo の注釈の U+0085・U+2028・U+2029（dandori の DESIGN 7 章）。
 - 秘密の値、外へ出すデータの境界、平文の通信の検査：作った（7.12、DESIGN 16 章）。
 
-作者が決めたこと（2026-10-06 の朝）：
+決めたこと（2026-10-06）：
 
 - パッケージの依存は「ちょうど」で書く（9.3）。
 - Dependabot と Renovate は入れない。osv-scanner の結果を SARIF で code scanning に上げることもしない（3.6）。
 - `SECURITY.md` を置く（3.6）。GitHub の private vulnerability reporting は、push のときにリポジトリの設定で有効にする。
-- rulec が含む Unicode CLDR のデータは、`license` に書き、配るものに通知を入れる。koyomi が含む WHATWG の表と、バイナリが含む外のクレートと、`explain` の例のための法令のコピーも同じに扱う（2.3、13.2）。同じ日の朝に作った。式は `(MIT OR Apache-2.0) AND Unicode-3.0`（rulec）、`(MIT OR Apache-2.0) AND BSD-3-Clause`（koyomi）、三つを合わせたもの（ritsu、ritsu-wasm、`.deb`・`.rpm`、formula）。
+- rulec が含む Unicode CLDR のデータは、`license` に書き、配るものに通知を入れる。koyomi が含む WHATWG の表と、バイナリが含む外のクレートと、`explain` の例のための法令のコピーも同じに扱う（2.3、13.2）。同じ日に作った。式は `(MIT OR Apache-2.0) AND Unicode-3.0`（rulec）、`(MIT OR Apache-2.0) AND BSD-3-Clause`（koyomi）、三つを合わせたもの（ritsu、ritsu-wasm、`.deb`・`.rpm`、formula）。
 - 次のリリース（0.23.0 の次）で、アーカイブ、`.deb`・`.rpm`、formula に `THIRD_PARTY_NOTICES` が入ったことを実物で確かめる（`release.yml` の homebrew のジョブが `brew audit --strict --online`、install、test を通す）。rulec の入れ方のページと README の「0.23.0 より後のリリース」の言い方は、そのとき実物の出力を取り直すのに合わせて直す。
 - 依存を上げたら（`cargo update` など）、`THIRD_PARTY_NOTICES` の版と節を直す。`release.rs` が、どの名前・バージョン・行が違うかを言って落ちる。
 - OpenSpec の決め方（仕様の要件を固定していなければ W102 の警告、シナリオと主張は書いたとおりの名前で突き合わせる）と、sakai の決め方（契約の文書かどうかを中身で決める）は、このままにする。
-- この機械の Go（1.25.5）を上げるのは、作者の Homebrew にかかわるので作者がする（`brew upgrade go` は 1.27.1 になる）。
 
-作者に聞いていること：
+- OpenAPI と AsyncAPI の文書の要素を、ツール名 `openapi`・`asyncapi` で指せるようにする（上の sakai の残したものの 1）。
+- 文書と診断の「名指し」を、普通の語（参照、参照の書き方、指す、ツール名）に置き換える。
 
-- OpenAPI と AsyncAPI の文書の要素を、ツール名 `openapi`・`asyncapi` で指せるようにするか（上の sakai の残したものの 1）。
-- 文書と診断の「名指し」を、普通の語（参照、指す）に置き換えるか。
+### 7.12 認可とセキュリティの検査（2026-10-06）
 
-### 7.12 認可とセキュリティの検査（2026-10-06 の昼）
-
-作者は 2026-10-06 の朝に、認可を二つの形で ritsu に入れると決めた。標準の Cedar のポリシーとスキーマを ritsu が読むことと、Cedar を生成する八つ目の言語 sekisho（`.gate`。rulec の規則と koyomi の日付を許可の条件に使う）である。あわせて、ritsu を使う人のための言語のセキュリティの検査（DESIGN 16 章）を作る。この節に、担当ごとの記録を足していく。
+2026-10-06 に、認可を二つの形で ritsu に入れると決めた。標準の Cedar のポリシーとスキーマを ritsu が読むことと、Cedar を生成する八つ目の言語 sekisho（`.gate`。rulec の規則と koyomi の日付を許可の条件に使う）である。あわせて、ritsu を使う人のための言語のセキュリティの検査（DESIGN 16 章）を作る。この節に、担当ごとの記録を足していく。
 
 **Cedar の読み手と書き手**（cedar-reader の担当）
 

@@ -437,7 +437,7 @@ osv-scanner は `--no-resolve` で走らせる。`requirements.txt` が入れた
 | `crates/dandori/tools`（`tools/asl-run.mjs`） | jsonata 2.0.6 の五つ（細工した式によるコードの実行が三つ、プロトタイプ汚染、`$toMillis` の入力によるリソースの枯渇） | 上げない。AWS の Step Functions は JSONata を 2.0.6 の仕様で評価し（AWS の開発者ガイド「Transforming data with JSONata in Step Functions」）、ランナーはそれをまねる。2.0.x の続きは出ていない。ランナーが評価するのは、dandori が書いた式と、テストのシナリオの入力だけである。`osv-scanner.toml` に理由を書き、期日は 2027-04-05 |
 | `crates/dandori/tools/wire`、`crates/koyomi/tools` の `requirements.txt` | 入れたい名前だけ（boto3 と moto、mypy）で、依存はバージョンを書いていない。上の deps.dev の解決で、入れていないバージョンのアドバイザリが出た | `requirements.in` を置き、`uv pip compile --generate-hashes` で依存まで固定した（61 と 6 のパッケージ）。既知の脆弱性は無い |
 | `Cargo.lock` | なし（cargo-deny、cargo-audit 0.22.2 の 1,290 件、OSV のどれでも） | なし |
-| `crates/dandori/tools/temporal`（2026-10-06 の昼、GitHub で `audit` を初めて走らせたとき） | source-map-js 1.2.1、GHSA-68fv-2mgg-jv7q（高。索引つきのソースマップの行の数を確かめず、イベントループを止められる。2026-09-18 に出た） | 依存の範囲（`^1.0.2`）の中で 1.2.2 に上げた（`npm update --package-lock-only`） |
+| `crates/dandori/tools/temporal`（2026-10-06、GitHub で `audit` を初めて走らせたとき） | source-map-js 1.2.1、GHSA-68fv-2mgg-jv7q（高。索引つきのソースマップの行の数を確かめず、イベントループを止められる。2026-09-18 に出た） | 依存の範囲（`^1.0.2`）の中で 1.2.2 に上げた（`npm update --package-lock-only`） |
 | `crates/*/tools/mermaid`（同じ回） | KaTeX 0.16.47、GHSA-238p-pmpm-9mq7（低。ほかのパッケージがすでに汚した `Object.prototype` があり、攻撃者が数式を書けるとき。2026-10-05 に出た） | 上げない。Mermaid 11.17.2 と 12.1.0 が `^0.16.47` を求め、直った 0.18.2 はその外にある。テストが描くのは言語が書いた図だけで、数式を含まない。`osv-scanner.toml` に理由を書き、期日は 2027-01-06 |
 
 ほかの四つの dandori の `requirements.txt`（agents、connect、pydantic-graph、temporal-python）は、`uv pip compile` にかけて、もう依存まで書いてあることを確かめた（足りないものは無かった）。
@@ -623,7 +623,7 @@ C.9 で `ritsu-proto` を作り、sakai をこれに替えた（rulec と dandor
 
 捨てたもの：wasm32-wasip1 で、ページが WASI のファイルの呼び出しを JavaScript で肩代わりする形。言語には一行も触らずに `std::fs` が動くが、PLAN の F.5 が wasm32-unknown-unknown と「バッファの頭に長さを書く」決まりを決めていて、肩代わりする JavaScript が、std がどの WASI の呼び出しをするかに追いつき続けるもう一つの実装になる。
 
-### 4.16 OpenSpec の読み手（`ritsu_base::openspec`、2026-10-05 の夜に足した）
+### 4.16 OpenSpec の読み手（`ritsu_base::openspec`、2026-10-05 に足した）
 
 OpenSpec（Fission-AI の `@fission-ai/openspec`。2026-09-30 の 1.14.0 で確かめた）の仕様と変更の提案を読む読み手を、土台に一つ置く。yuen が仕様の要件を出典として要件ごとに固定し（yuen の DESIGN 20 章）、geas が仕様のシナリオを同じ名前の主張と突き合わせる（geas の DESIGN §17）ので、二つの言語が同じ読み方で読む必要がある。
 
@@ -1873,7 +1873,7 @@ ritsu を使う人のプロジェクトの成果物から見える、セキュ�
 4. 契約が秘密と印を付けた値が、ワークフローの入力・出力・タスクの引数や結果として、プラットフォームの履歴に残ること（W904）。
 5. 秘密の値を、外のサービス（モデルのプロバイダー、Jev、URL だけで書いた相手、AWS のサービス）へ送ること（dandori の E906）、地図の外や、地図の上で印を付けたコンテキストと関係の無いコンテキストへ送ること（ritsu の E905・W905。言語をまたぐ検査の X14）。
 
-**前からあるもの（2026-10-06 の朝に作った）。** 検査を通ったファイルの文字列が、生成したコードのコメントや文字列の外に出ないこと（9.2）。ritsu の言語は、人が読んで確かめるのはソースのファイル（`.rule`、`.flow` など）で、生成したコードは「DO NOT EDIT」として読まない、という前提に立つ。その前提のもとでは、ソースの文字列が生成したコードの中でコードになることは、検査の抜け穴になる。次の四つが見つかり、直した（9.2、dandori の DESIGN 4.7、rulec の §15.187）。
+**前からあるもの（2026-10-06 に作った）。** 検査を通ったファイルの文字列が、生成したコードのコメントや文字列の外に出ないこと（9.2）。ritsu の言語は、人が読んで確かめるのはソースのファイル（`.rule`、`.flow` など）で、生成したコードは「DO NOT EDIT」として読まない、という前提に立つ。その前提のもとでは、ソースの文字列が生成したコードの中でコードになることは、検査の抜け穴になる。次の四つが見つかり、直した（9.2、dandori の DESIGN 4.7、rulec の §15.187）。
 
 1. dandori のワークフローの `description` に `\n` を書くと、生成した TypeScript、Python、Go のコメントの外に、続きがコードの行として出た。TypeScript では、モジュールを読み込んだときに動く文になる。Argo の YAML では、`---` と別の文書（Pod）を書けて、`kubectl apply -f` がそれも作る。`dandori check` は通していた。
 2. ファイルの名前に改行があると、すべての生成器の頭の `Source:` の行の続きが、コードの行になった。
@@ -1882,7 +1882,7 @@ ritsu を使う人のプロジェクトの成果物から見える、セキュ�
 
 Python と Go は、ファイルの先頭の `from __future__` や `package` より前に文が来るので、多くは構文の誤りで止まる。TypeScript と YAML と HTML では、そのまま動いた。
 
-同じ日の昼に、残りの書き出しも同じ形のテスト（行を終える五つの文字と、`</script>`、`---`、`]]>` を入れた材料）で確かめた。
+同じ日に、残りの書き出しも同じ形のテスト（行を終える五つの文字と、`</script>`、`---`、`]]>` を入れた材料）で確かめた。
 
 - sakai：CML の持ち主のコメントと、`build` の設定の頭の地図のパスを一行に収め、`doc` の Markdown の `\r` を空白にした（9.2、sakai の DESIGN 16.7）。HTML のページと `api` は、もとからエスケープしていた。
 - yuen の書き出し（ReqIF、PROV-N、PROV-JSON）と geas の下書き（`geas scenarios --draft`）：直すところは無く、確かめるテストだけを足した（`crates/yuen/tests/export_text.rs`、`crates/geas/tests/draft_text.rs`）。ReqIF は `&`・`<`・`>`・`\r` を文字参照にし、PROV-N は文字列の `"`・`\`・`\n`・`\r`・`\t` をエスケープしている。geas の下書きは、要件とシナリオの文を `#` のコメントに入れる。geas の字句は `\n` でしかコメントを終えないので、ほかの四つの文字はコメントの中にとどまる。

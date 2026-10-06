@@ -488,7 +488,7 @@ DESIGN 15 章の七つ。英語の例を先に、日本語の版を `<名前>.ja
 
 ### 5.6 OpenSpec の仕様を出典にする（2026-10-05 の夜に作った）
 
-DESIGN 20 章。ritsu の v0.23.0 のあとに、作者が取り込むかを決める案として、一晩で作った。
+DESIGN 20 章。ritsu の v0.23.0 のあとに作った。
 
 - 読み手は ritsu-base の `openspec`（geas と分け合う）。yuen の側は、`src/ast.rs` の `SourceKind::OpenSpec`、`src/kw.rs` の `openspec`、`src/lex.rs`（`openspec "…"` を名指しとして切り出さない）、`src/parse.rs`、`src/project.rs`（パスの解決と E013）、`src/sources.rs`（`spec_source` の E101・E102・E103・E104・E108、引用の E102・E105・E108、プロジェクト全体で一度の W102、`Cited` の `from openspec …` の行）、`src/marks.rs`（差分の見出しと、名前の引用符）、`src/fetch.rs`（`fetch` の一行、`pin`、`spec_outdated`）、`src/openspec.rs`（変更の提案が固定した要件に何をするか）、`src/affected.rs`（仕様の両側を比べる `spec_touched`、提案の差分の `Proposed` と JSON の `openspec_changes`）、`src/trace.rs`、`src/doc/mod.rs`、`src/api.rs`、`src/export/`（`SourceKey::OpenSpec`。属性は `yuen.file` を使い回す）、`src/ports.rs`、`src/codes.rs`（E108、W102、W402 と、E101〜E105 の文）、`src/coverage.rs`（W402。シナリオと、要件を確かめる geas の主張の名前を突き合わせる）。
 - 例は `examples/openspec_greeter` と `examples/openspec_greeter_archived`（英語と、`ja/` の下の日本語）。仕様と提案は OpenSpec 1.14.0 の `openspec validate` を通し、archive したあとの木は OpenSpec が書いたものである。固定は `yuen source pin`、記録は `yuen review --date 2026-10-05` が書いた。geas の記録（`.geas/`）は、同じ主張と同じサーバーの `examples/greeter/.geas/` のコピー。
