@@ -217,17 +217,23 @@ the kind. `source` and `yuen` cannot be written in a scope (E012).
 ```
 
 With no pair a naming is the file itself; with one pair, one thing in the file. Two pairs are for
-what nests: `proto` `service S [method M]`, `message M [field f]`, `enum E [value V]`, and `rulec`
-`enum E [value V]`; a child kind comes only right after its parent's pair (E012).
+what nests: `proto` `service S [method M]`, `message M [field f]`, `enum E [value V]`, `rulec` and
+`dandori` `enum E [value V]`, `dandori` `record R [field f]`, `chobo` `transfer T [operation O]`
+(`do`, or `hold`, `post` and `void`), `openapi` and `asyncapi` `schema S
+[property p]` and `schema S [value v]`, and `asyncapi` `channel C [message M]`; a child kind comes
+only right after its parent's pair (E012).
 
 | Tool | Files | Kinds |
 |---|---|---|
 | `rulec` | `.rule` | `input` `output` `enum` (`value` below) `table` `clause` `define` `derive` `machine` `source` |
 | `koyomi` | `.cal` | `input` `date` `claim` `source` |
-| `chobo` | `.book` | `unit` `account` `transfer` |
+| `chobo` | `.book` | `unit` `account` `transfer` (`operation` below) |
 | `geas` | `.geas` | `claim` |
 | `dandori` | `.flow` | `task` `case` `record` (`field` below) `enum` (`value` below) `input` `output` |
 | `proto` | `.proto` | `service` (`method` below) `message` (`field` below) `enum` (`value` below) |
+| `openapi` | an OpenAPI document (`.yaml`, `.yml`, `.json`), or a part of one | `schema` (`property` and `value` below) `operation` `pointer` |
+| `asyncapi` | an AsyncAPI document, or a part of one | `channel` (`message` below) `message` `operation` `schema` (`property` and `value` below) `pointer` |
+| `cedar` | `.cedar`, `.cedarschema`, `.cedarschema.json` | `policy` `action` `entity` |
 | `file` | anything | none |
 | `yuen` | `.req` | `requirement` `source` |
 | `sakai` | `.ctx` | `context` `term` |
@@ -239,12 +245,20 @@ what nests: `proto` `service S [method M]`, `message M [field f]`, `enum E [valu
 - **Names** are each language's own (not their aliases: E202 points at the name). A name is a word
   (no space, `"` or `#`) or a string in `"…"`; names are compared as written, case and all. A
   `proto` name is the name from the file's package, nested names joined with `.`.
+- **In a document**, a `schema` is a key of `components/schemas`, a `property` one of its
+  properties (or of a schema of its `allOf`), a `value` one of its `enum` (a number as JSON writes
+  it); an OpenAPI `operation` is its `operationId`, or for one with none its method and path
+  (`operation "POST /orders/{orderId}/refunds"`); an AsyncAPI `channel`, `message` and `operation`
+  are keys of `channels`, of a channel's `messages` or `components/messages`, and of `operations`.
+  `pointer` names anything else by its JSON Pointer (`pointer /components/responses/NotFound`). A
+  Cedar `policy` is its `@id` (else `policy0`, `policy1`… in the order written, as the Cedar CLI
+  numbers them); an `action` and an `entity` are the names declared, without the namespace.
 - **The same, and inside**: two namings are the same when the tool, the path from the root and the
   pairs are the same. A file holds everything in it, and a parent pair its children.
 - A tool unknown is E011, a kind or a pair the tool does not have E012, a thing the file does not
   hold E202, a file its language does not pass (or cannot read) E203, a file that is not there
-  E201, and a language the running yuen does not hold E206 (the binary of yuen's own crate holds
-  none: run it as `ritsu yuen`).
+  E201, a `.proto`, a document or a Cedar file that does not read E205, and a language the running
+  yuen does not hold E206 (the binary of yuen's own crate holds none: run it as `ritsu yuen`).
 
 In JSON a naming is `{"text": …, "tool": …, "path": …, "items": [[kind, name], …]}`, in that order,
 the path from the root; `text` is the naming written back, the path from the root and a name in
@@ -261,7 +275,9 @@ SHA-256.
 | a `file` source | the file |
 | a requirement of an OpenSpec spec | its block: its `### Requirement:` line and every line after it to the next requirement or `## ` header, the white space at its end removed, CR LF read as LF (the text OpenSpec's archive replaces) |
 | a file named by any tool | the file |
-| one thing in a file | the definition the language hands over for it: a rule's lines as `rulec fmt` writes them, a date's or claim's lines in koyomi, chobo's JSON of the unit, account or transfer, a claim's block in geas, a declaration's lines in dandori, a context's or term's lines in sakai, the fixed text of a `.proto` item |
+| one thing in a file | the definition the language hands over for it: a rule's lines as `rulec fmt` writes them, a date's or claim's lines in koyomi, chobo's JSON of the unit, account or transfer (an operation's is its transfer's, with the operation and the names of the reasons it can be refused with), a claim's block in geas, a declaration's lines in dandori, a context's or term's lines in sakai, the fixed text of a `.proto` item |
+| an element of an OpenAPI or AsyncAPI document | its place (`#<JSON Pointer>`) on a line and its value as JSON (the keys in byte order, two spaces of indent), then the same for every value its `$ref`s reach, in the order of their files and pointers; an operation takes in its path's `parameters` and `servers`, a property says ` (required)` when its schema requires it, and a value of an `enum` is its place and itself |
+| a Cedar policy, action or entity type | the policy as `cedar format` lays it out, without its comments; the declaration in the Cedar schema format, in its namespace, with the common types it uses |
 | a requirement | the lines below |
 
 A requirement's end is its sentence, then a `from` line for each article cited (`from law <db>

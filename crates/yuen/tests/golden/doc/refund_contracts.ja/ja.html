@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="yuen 0.23.0">
+<title>返金の契約 — 要件の出どころ</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 1.6rem; line-height: 1.3; margin: 0 0 12px; overflow-wrap: anywhere; }
+h2 { font-size: 1.25rem; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1.05rem; margin: 28px 0 8px; overflow-wrap: anywhere; }
+p, li { overflow-wrap: anywhere; }
+code { font: 0.88em/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code); border-radius: 4px; padding: 1px 4px; overflow-wrap: anywhere; }
+pre { font: 0.82rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--bad); border-radius: 6px; padding: 10px 12px; overflow-x: auto; white-space: pre; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--line); min-width: 7em; }
+th { background: var(--soft); color: var(--dim); font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td strong { color: var(--warn); }
+td.nw { white-space: nowrap; }
+blockquote.law { margin: 8px 0 16px; padding: 8px 14px; border-left: 3px solid var(--accent); background: var(--panel); border-radius: 0 6px 6px 0; }
+blockquote.law p { margin: 4px 0; }
+blockquote.law .cite { color: var(--dim); font-size: 0.85rem; font-weight: 600; }
+.lead { color: var(--dim); }
+@media print { body { background: #fff; color: #000; } .scroll { overflow: visible; } pre { white-space: pre-wrap; } }
+</style>
+</head>
+<body>
+<main>
+<h1>返金の契約 — 要件の出どころ</h1>
+<p class="lead">このページは、下の .req のファイルと、出典のコピーと、ほかの言語から読んだ成果物の定義をもとに、yuen 0.23.0 が作った。</p>
+<ul>
+<li><code>refund_contracts.ja.req</code>（返金の契約 v1、<code>sha256:4738e5072c85cd5d</code>）</li>
+</ul>
+<p>検査の結果：<code>examples/refund_contracts/refund_contracts.ja.req: ok — 要件 4 件のリンク 5 本と見送り 4 件が、確かめたときのままです。どの要件にも、満たすものと確かめるもの（無ければ見送り）があります。</code></p>
+<h2 id="traceability">トレーサビリティ</h2>
+<div class="scroll"><table>
+<thead><tr><th>要件</th><th>期間</th><th>出どころ</th><th>持ち主</th><th>満たすもの</th><th>確かめるもの</th><th>状態</th></tr></thead>
+<tbody>
+<tr><td><code>注文を返金する (refund_an_order)</code></td><td>—</td><td>2026-10-06 に 決済 が決めた</td><td>決済</td><td><code>openapi &quot;api/注文.yaml&quot; operation 返金する</code>、<code>cedar &quot;policies/店.cedarschema&quot; action 返金</code></td><td>見送り</td><td>確かめたまま（見送り 1 件）</td></tr>
+<tr><td><code>返金は円で (refund_in_yen)</code></td><td>—</td><td>2026-10-06 に 決済 が決めた</td><td>決済</td><td><code>openapi &quot;api/注文.yaml&quot; schema 返金 property 金額</code></td><td>見送り</td><td>確かめたまま（見送り 1 件）</td></tr>
+<tr><td><code>係には上限がある (clerks_have_a_limit)</code></td><td>—</td><td>2026-10-06 に 決済 が決めた</td><td>決済</td><td><code>cedar &quot;policies/返金.cedar&quot; policy 係は自分の上限まで返金できる</code></td><td>見送り</td><td>確かめたまま（見送り 1 件）</td></tr>
+<tr><td><code>返金をほかに知らせる (others_hear_of_a_refund)</code></td><td>—</td><td>2026-10-06 に 決済 が決めた</td><td>決済</td><td><code>asyncapi &quot;events/注文.yaml&quot; operation 返金を知らせる</code></td><td>見送り</td><td>確かめたまま（見送り 1 件）</td></tr>
+</tbody>
+</table></div>
+<h2 id="sources">出典</h2>
+<p>出典の宣言は無い。どの要件も、決めたことか、ほかの要件から来ている。</p>
+<h2 id="why">要件ごとの「なぜ」</h2>
+<h3 id="why-refund_an_order">注文を返金する (refund_an_order)</h3>
+<p><strong>店の人が、注文の一部か全部を、API で返金する</strong></p>
+<ul>
+<li>期間：—</li>
+<li>持ち主：決済</li>
+<li>ファイル：<code>examples/refund_contracts/refund_contracts.ja.req:7</code></li>
+<li>要件のハッシュ：<code>sha256:718c7d1fa3f18e6a</code></li>
+</ul>
+<p>2026-10-06 に 決済 が決めた：店は自分の API で返金する</p>
+<p>満たすもの <code>openapi &quot;api/注文.yaml&quot; operation 返金する</code> — 開発 が 2026-10-06 に確かめた（<code>sha256:718c7d1fa3f18e6a</code> → <code>sha256:ce072e77d7b9291b</code>）。状態：確かめたまま</p>
+<p>満たすもの <code>cedar &quot;policies/店.cedarschema&quot; action 返金</code> — 開発 が 2026-10-06 に確かめた（<code>sha256:718c7d1fa3f18e6a</code> → <code>sha256:7af4e4d13df4b756</code>）。状態：確かめたまま</p>
+<p>確かめるものを置かない（見送り）：この例には API を呼ぶ主張が無い — 開発 が 2026-10-06 に承認した（<code>sha256:718c7d1fa3f18e6a</code>）。状態：確かめたまま</p>
+<h3 id="why-refund_in_yen">返金は円で (refund_in_yen)</h3>
+<p><strong>返金は 1 円以上 10 万円以下の、円の整数である</strong></p>
+<ul>
+<li>期間：—</li>
+<li>持ち主：決済</li>
+<li>ファイル：<code>examples/refund_contracts/refund_contracts.ja.req:18</code></li>
+<li>要件のハッシュ：<code>sha256:5fe0ddfe3e950118</code></li>
+</ul>
+<p>2026-10-06 に 決済 が決めた：10 万円を超える返金は銀行を通す</p>
+<p>満たすもの <code>openapi &quot;api/注文.yaml&quot; schema 返金 property 金額</code> — 開発 が 2026-10-06 に確かめた（<code>sha256:5fe0ddfe3e950118</code> → <code>sha256:e98e692466066f55</code>）。状態：確かめたまま</p>
+<p>確かめるものを置かない（見送り）：この例には API を呼ぶ主張が無い — 開発 が 2026-10-06 に承認した（<code>sha256:5fe0ddfe3e950118</code>）。状態：確かめたまま</p>
+<h3 id="why-clerks_have_a_limit">係には上限がある (clerks_have_a_limit)</h3>
+<p><strong>係は、自分の上限を超えて返金しない</strong></p>
+<ul>
+<li>期間：—</li>
+<li>持ち主：決済</li>
+<li>ファイル：<code>examples/refund_contracts/refund_contracts.ja.req:27</code></li>
+<li>要件のハッシュ：<code>sha256:c436ea13e448749c</code></li>
+</ul>
+<p>2026-10-06 に 決済 が決めた：係ごとに上限があり、店長が決める</p>
+<p>満たすもの <code>cedar &quot;policies/返金.cedar&quot; policy 係は自分の上限まで返金できる</code> — 開発 が 2026-10-06 に確かめた（<code>sha256:c436ea13e448749c</code> → <code>sha256:4d2087493a79024f</code>）。状態：確かめたまま</p>
+<p>確かめるものを置かない（見送り）：この例には Cedar に尋ねる主張が無い — 開発 が 2026-10-06 に承認した（<code>sha256:c436ea13e448749c</code>）。状態：確かめたまま</p>
+<h3 id="why-others_hear_of_a_refund">返金をほかに知らせる (others_hear_of_a_refund)</h3>
+<p><strong>ほかのサービスは、返金のたびに知らせを受ける</strong></p>
+<ul>
+<li>期間：—</li>
+<li>持ち主：決済</li>
+<li>ファイル：<code>examples/refund_contracts/refund_contracts.ja.req:36</code></li>
+<li>要件のハッシュ：<code>sha256:0f56f17aa132ee68</code></li>
+</ul>
+<p>2026-10-06 に 決済 が決めた：出荷と経理が返金に応じて動く</p>
+<p>満たすもの <code>asyncapi &quot;events/注文.yaml&quot; operation 返金を知らせる</code> — 開発 が 2026-10-06 に確かめた（<code>sha256:0f56f17aa132ee68</code> → <code>sha256:2ec3c65482725512</code>）。状態：確かめたまま</p>
+<p>確かめるものを置かない（見送り）：この例にはイベントを読む主張が無い — 開発 が 2026-10-06 に承認した（<code>sha256:0f56f17aa132ee68</code>）。状態：確かめたまま</p>
+<h2 id="scope">範囲</h2>
+<p>範囲の宣言は無い。</p>
+<h2 id="records">確かめた記録</h2>
+<div class="scroll"><table>
+<thead><tr><th>日付</th><th>誰が</th><th>何を</th><th>ハッシュ</th></tr></thead>
+<tbody>
+<tr><td class="nw">2026-10-06</td><td>開発</td><td><code>注文を返金する (refund_an_order)</code> → <code>openapi &quot;api/注文.yaml&quot; operation 返金する</code></td><td><code>sha256:718c7d1fa3f18e6a -&gt; sha256:ce072e77d7b9291b</code></td></tr>
+<tr><td class="nw">2026-10-06</td><td>開発</td><td><code>注文を返金する (refund_an_order)</code> → <code>cedar &quot;policies/店.cedarschema&quot; action 返金</code></td><td><code>sha256:718c7d1fa3f18e6a -&gt; sha256:7af4e4d13df4b756</code></td></tr>
+<tr><td class="nw">2026-10-06</td><td>開発</td><td><code>注文を返金する (refund_an_order)</code> の見送り（確かめるもの）を承認</td><td><code>sha256:718c7d1fa3f18e6a</code></td></tr>
+<tr><td class="nw">2026-10-06</td><td>開発</td><td><code>返金は円で (refund_in_yen)</code> → <code>openapi &quot;api/注文.yaml&quot; schema 返金 property 金額</code></td><td><code>sha256:5fe0ddfe3e950118 -&gt; sha256:e98e692466066f55</code></td></tr>
+<tr><td class="nw">2026-10-06</td><td>開発</td><td><code>返金は円で (refund_in_yen)</code> の見送り（確かめるもの）を承認</td><td><code>sha256:5fe0ddfe3e950118</code></td></tr>
+<tr><td class="nw">2026-10-06</td><td>開発</td><td><code>係には上限がある (clerks_have_a_limit)</code> → <code>cedar &quot;policies/返金.cedar&quot; policy 係は自分の上限まで返金できる</code></td><td><code>sha256:c436ea13e448749c -&gt; sha256:4d2087493a79024f</code></td></tr>
+<tr><td class="nw">2026-10-06</td><td>開発</td><td><code>係には上限がある (clerks_have_a_limit)</code> の見送り（確かめるもの）を承認</td><td><code>sha256:c436ea13e448749c</code></td></tr>
+<tr><td class="nw">2026-10-06</td><td>開発</td><td><code>返金をほかに知らせる (others_hear_of_a_refund)</code> → <code>asyncapi &quot;events/注文.yaml&quot; operation 返金を知らせる</code></td><td><code>sha256:0f56f17aa132ee68 -&gt; sha256:2ec3c65482725512</code></td></tr>
+<tr><td class="nw">2026-10-06</td><td>開発</td><td><code>返金をほかに知らせる (others_hear_of_a_refund)</code> の見送り（確かめるもの）を承認</td><td><code>sha256:0f56f17aa132ee68</code></td></tr>
+</tbody>
+</table></div>
+</main>
+</body>
+</html>

@@ -1,0 +1,66 @@
+#/paths/~1orders~1{orderId}~1refunds/post
+{
+  "operationId": "返金する",
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "$ref": "#/components/schemas/返金"
+        }
+      }
+    },
+    "required": true
+  },
+  "responses": {
+    "201": {
+      "description": "返金した"
+    },
+    "403": {
+      "description": "呼んだ人には、この額を返金する権限がない"
+    }
+  },
+  "summary": "注文の一部か全部を返金する"
+}
+#/components/parameters/注文番号
+{
+  "in": "path",
+  "name": "orderId",
+  "required": true,
+  "schema": {
+    "type": "string"
+  }
+}
+#/components/schemas/返金
+{
+  "properties": {
+    "理由": {
+      "$ref": "#/components/schemas/返金の理由"
+    },
+    "金額": {
+      "description": "円",
+      "maximum": 100000,
+      "minimum": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "金額",
+    "理由"
+  ],
+  "type": "object"
+}
+#/components/schemas/返金の理由
+{
+  "enum": [
+    "破損",
+    "遅延",
+    "不要"
+  ],
+  "type": "string"
+}
+#/paths/~1orders~1{orderId}~1refunds/parameters
+[
+  {
+    "$ref": "#/components/parameters/注文番号"
+  }
+]

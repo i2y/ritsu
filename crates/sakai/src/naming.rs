@@ -75,10 +75,11 @@ fn said(kind: &ErrorKind, rest: &[base::Word]) -> Text {
         ),
         ErrorKind::Hash => tr!("名前に `#` を書くときは、名前を `\"…\"` で囲んでください", "a name with `#` in it is written in `\"…\"`"),
         ErrorKind::Missing => tr!("名指しがありません", "there is no name"),
-        ErrorKind::UnknownTool(w) => tr!(
-            "`{w}` というツールの語はありません。書けるのは rulec、dandori、koyomi、chobo、geas、proto、file、yuen、sakai です",
-            "`{w}` is not a tool; the tools are rulec, dandori, koyomi, chobo, geas, proto, file, yuen and sakai"
-        ),
+        ErrorKind::UnknownTool(w) => {
+            let ws: Vec<&str> = Tool::ALL.iter().map(|t| t.word()).collect();
+            let (ja, en) = (ws.join("、"), format!("{} and {}", ws[..ws.len() - 1].join(", "), ws[ws.len() - 1]));
+            tr!("`{w}` というツール名はありません。書けるのは {ja} です", "`{w}` is not a tool; the tools are {en}")
+        }
         ErrorKind::QuotedTool(_) => tr!("名指しは、ツールの語で始めてください", "a name starts with its tool"),
         ErrorKind::MissingPath => tr!("ツールの語のあとに、パスを `\"…\"` で書いてください", "the tool is followed by the path, in `\"…\"`"),
         ErrorKind::UnquotedPath(_) => tr!("パスは `\"…\"` で囲んで書いてください", "the path is written in `\"…\"`"),

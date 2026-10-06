@@ -16,29 +16,17 @@ use ritsu_base::sha256;
 use serde_json::{Value, json};
 
 fn own(o: &Own) -> Value {
-    match (o.tool, o.contract) {
-        (None, _) => json!({"dir": o.path}),
-        (Some(t), None) => json!({"name": value(&Name::file(t, o.path.clone()).to_json())}),
-        // an OpenAPI or AsyncAPI document: a file, and its kind (DESIGN 15.7)
-        (Some(t), Some(k)) => json!({"name": value(&Name::file(t, o.path.clone()).to_json()), "contract": k.word()}),
+    match o.tool {
+        None => json!({"dir": o.path}),
+        // an OpenAPI or AsyncAPI document is `openapi "…"` or `asyncapi "…"` (DESIGN 15.7)
+        Some(t) => json!({"name": value(&Name::file(t, o.path.clone()).to_json())}),
     }
 }
 
-/// An element the map names: a name of DESIGN 2.6, or an element of an OpenAPI or AsyncAPI
-/// document as its file and JSON Pointer (`{"pointer": "payments/api.yaml#/components/schemas/Charge"}`,
-/// with the value of an enum beside it), since a document's elements have no name of DESIGN 2
-/// yet (DESIGN 15.7, 15.10).
+/// An element the map names, as its reference (DESIGN 2.6): an element of an OpenAPI or AsyncAPI
+/// document too (`openapi "payments/api.yaml" schema Charge`, DESIGN 15.7).
 fn element(n: &Name) -> Value {
-    match crate::elements::as_contract(n) {
-        Some((f, p)) => {
-            let mut v = json!({"pointer": crate::contracts::shown(f, p)});
-            if let Some((_, value)) = n.items.get(1) {
-                v["value"] = json!(value);
-            }
-            v
-        }
-        None => value(&n.to_json()),
-    }
+    value(&n.to_json())
 }
 
 fn at(file: &str, line: usize) -> String {
@@ -76,7 +64,7 @@ pub fn api(c: &Checked) -> Value {
                     if let Some((d, _)) = &p.krate {
                         from.push(value(&Name::file(Tool::File, crate::cargo::manifest_of(d)).to_json()));
                     }
-                    from.extend(p.contracts.iter().map(|(_, f, _)| value(&Name::file(Tool::File, f.clone()).to_json())));
+                    from.extend(p.contracts.iter().map(|(k, f, _)| value(&Name::file(k.tool(), f.clone()).to_json())));
                     let mut v = json!({
                         "package": p.package,
                         "from": from,
@@ -149,22 +137,20 @@ pub fn api(c: &Checked) -> Value {
                 }
                 None => Value::Null,
             };
-            let mut v = json!({
+            // what crosses: the messages and enums a `.proto`'s reference reaches, or every element
+            // a document's `$ref` reaches, each as its reference (DESIGN 3.3, 15.5)
+            let mut elements: Vec<Value> = cr.reach.iter().map(|s| value(&s.naming().to_json())).collect();
+            elements.extend(cr.elements.iter().map(|(f, p)| value(&c.contracts.naming(f, p).to_json())));
+            json!({
                 "from": value(&cr.from_name().to_json()),
                 "line": cr.line,
                 "to": value(&cr.to_name().to_json()),
                 "from_context": x.name,
                 "to_context": m.contexts[cr.to_ctx].name,
                 "via": cr.kind.via(),
-                "elements": cr.reach.iter().map(|s| value(&s.naming().to_json())).collect::<Vec<_>>(),
+                "elements": elements,
                 "allowed_by": allowed,
-            });
-            // a document's `$ref`: where it lands and what it reaches, as files and JSON Pointers
-            if let Some(p) = &cr.pointer {
-                v["pointer"] = json!(crate::contracts::shown(&cr.to, p));
-                v["pointers"] = json!(cr.elements.iter().map(|(f, p)| crate::contracts::shown(f, p)).collect::<Vec<_>>());
-            }
-            v
+            })
         }).collect::<Vec<_>>(),
     })
 }
@@ -200,7 +186,7 @@ fn relationships(c: &Checked) -> Vec<Value> {
                                 Target::Name(n, _) => (json!({"name": n}), false),
                                 Target::Element(e) => {
                                     let n = c.elements.get(At::To(ci, ri, ei));
-                                    let checked = n.is_some_and(|n| n.tool == Tool::Proto || crate::elements::as_contract(n).is_some());
+                                    let checked = n.is_some_and(|n| matches!(n.tool, Tool::Proto | Tool::Openapi | Tool::Asyncapi));
                                     let v = match (n, e) {
                                         (Some(n), _) => element(n),
                                         (None, Element::Long { .. } | Element::Short { .. }) => Value::Null,

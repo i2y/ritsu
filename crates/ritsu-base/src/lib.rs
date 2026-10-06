@@ -33,6 +33,9 @@
 //! - [`openapi`]: the operations of an OpenAPI or AsyncAPI document: each with its id, method and
 //!   path, parameters, the fields of its body with their types and ranges, who may call it, and
 //!   the status codes it answers with.
+//! - [`document`]: the elements of an OpenAPI or AsyncAPI document as references (`openapi
+//!   "api.yaml" operation refundOrder`): where a reference lands, the reference of what a JSON
+//!   Pointer names, and the `$ref`s followed on the way.
 //!
 //! Nothing here depends on anything but std (DESIGN 3.1, P9).
 
@@ -40,6 +43,7 @@ pub mod cedar;
 pub mod cli;
 pub mod diag;
 pub mod docpage;
+pub mod document;
 pub mod fs;
 pub mod json;
 pub mod ledger;

@@ -1,0 +1,66 @@
+#/paths/~1orders~1{orderId}~1refunds/post
+{
+  "operationId": "refundOrder",
+  "requestBody": {
+    "content": {
+      "application/json": {
+        "schema": {
+          "$ref": "#/components/schemas/Refund"
+        }
+      }
+    },
+    "required": true
+  },
+  "responses": {
+    "201": {
+      "description": "The refund is made"
+    },
+    "403": {
+      "description": "The caller may not refund this much"
+    }
+  },
+  "summary": "Refund an order, in part or in whole"
+}
+#/components/parameters/OrderId
+{
+  "in": "path",
+  "name": "orderId",
+  "required": true,
+  "schema": {
+    "type": "string"
+  }
+}
+#/components/schemas/Refund
+{
+  "properties": {
+    "amount": {
+      "description": "In pence",
+      "maximum": 10000,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "reason": {
+      "$ref": "#/components/schemas/RefundReason"
+    }
+  },
+  "required": [
+    "amount",
+    "reason"
+  ],
+  "type": "object"
+}
+#/components/schemas/RefundReason
+{
+  "enum": [
+    "damaged",
+    "late",
+    "unwanted"
+  ],
+  "type": "string"
+}
+#/paths/~1orders~1{orderId}~1refunds/parameters
+[
+  {
+    "$ref": "#/components/parameters/OrderId"
+  }
+]

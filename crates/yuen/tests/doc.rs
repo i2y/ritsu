@@ -54,7 +54,7 @@ fn the_page_of_every_example() {
             }
         }
     }
-    assert_eq!(n, 48, "pages");
+    assert_eq!(n, 56, "pages");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

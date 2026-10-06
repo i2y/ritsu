@@ -216,7 +216,7 @@ pub fn plaintext(m: &Model, cs: &Contracts) -> Vec<Diag> {
                                 (None, _) => tr!("サーバー変数を既定の値にすると、URL は {u} です。", "With the server variables at their defaults, the URL is {u}."),
                             });
                         }
-                        let dg = plaintext_notes(dg, encrypted, why).refer(Ref::line(ctx.as_deref(), file, server.line, Text::same(format!("#{at}/{i}"))));
+                        let dg = plaintext_notes(dg, encrypted, why).refer(Ref::name_at(ctx.as_deref(), cs.naming(file, &format!("{at}/{i}")), file, server.line, Text::default()));
                         out.push(dg);
                     }
                 }
@@ -243,7 +243,7 @@ pub fn plaintext(m: &Model, cs: &Contracts) -> Vec<Diag> {
                             "途中のネットワークにいる人は、メッセージと、一緒に送る鍵を読んだり書き換えたりできます。",
                             "Whoever is on the network between can read and change the messages, and any key sent with them."
                         ));
-                    out.push(plaintext_notes(dg, encrypted, why).refer(Ref::line(ctx.as_deref(), file, name.line, Text::same(format!("#{at}")))));
+                    out.push(plaintext_notes(dg, encrypted, why).refer(Ref::name_at(ctx.as_deref(), cs.naming(file, &at), file, name.line, Text::default())));
                 }
             }
         }
@@ -270,14 +270,13 @@ pub fn authentication(m: &Model, cs: &Contracts) -> Vec<Diag> {
             let pkg = &p.package;
             for (kind, file, _) in &p.contracts {
                 let Some(d) = cs.docs.get(file) else { continue };
-                let sf = shown(file);
                 match kind {
                     Kind::OpenApi => {
                         if has_security(&d.root) {
                             continue;
                         }
                         for op in cs.operations(file).into_iter().filter(|o| !o.webhook) {
-                            let Some((of, ptr, node)) = cs.locate(file, &op.pointer) else { continue };
+                            let Some((of, _, node)) = cs.locate(file, &op.pointer) else { continue };
                             if has_security(node) {
                                 continue;
                             }
@@ -294,7 +293,7 @@ pub fn authentication(m: &Model, cs: &Contracts) -> Vec<Diag> {
                                         "操作か文書全体に `security` を書いてください。だれでも呼べるようにわざとしている操作なら、その操作に `security: []` と書いてください。",
                                         "Add `security` to the operation, or to the whole document. If the operation is open to anyone on purpose, write `security: []` on it."
                                     ))
-                                    .refer(Ref::line(Some(c.name.as_str()), &of, node.line, tr!("#{ptr}（{method} {path}）", "#{ptr} ({method} {path})"))),
+                                    .refer(Ref::name_at(Some(c.name.as_str()), cs.naming(file, &op.pointer), &of, node.line, Text::same(format!("{method} {path}")))),
                             );
                         }
                     }
@@ -354,10 +353,10 @@ pub fn authentication(m: &Model, cs: &Contracts) -> Vec<Diag> {
                                 "サーバーか、このチャネルの操作に `security` を書いてください。だれでも使えるようにわざとしているなら、サーバーか操作に `security: []` と書いてください。",
                                 "Add `security` to the server, or to the operations on the channel. If it is open to anyone on purpose, write `security: []` on the server or on an operation."
                             ))
-                            .refer(Ref::line(Some(c.name.as_str()), file, ch.line, tr!("#{at}（{sf} のチャネル）", "#{at} (a channel of {sf})")));
+                            .refer(Ref::name_at(Some(c.name.as_str()), cs.naming(file, &at), file, ch.line, Text::default()));
                             for (k, _) in &open {
-                                let n = &k.name;
-                                dg = dg.refer(Ref::line(Some(c.name.as_str()), file, k.line, tr!("#/servers/{n}（`security` の無いサーバー）", "#/servers/{n} (a server without `security`)")));
+                                let at = format!("/servers/{}", contracts::escape(&k.name));
+                                dg = dg.refer(Ref::name_at(Some(c.name.as_str()), cs.naming(file, &at), file, k.line, tr!("`security` の無いサーバー", "a server without `security`")));
                             }
                             out.push(dg);
                         }

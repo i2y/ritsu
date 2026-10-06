@@ -257,11 +257,46 @@ fn what_else_the_documents_are_held_to() {
     let os = common::check_dir(d.path());
     assert!(!os.iter().any(|o| o.has_errors()), "{}", os.iter().map(|o| sakai::check::render(o, Lang::En)).collect::<String>());
     let c = os.iter().find_map(|o| o.checked.as_ref()).unwrap();
-    let means: Vec<String> = c.elements.found.values().map(sakai::elements::display).filter(|m| m.contains("refunded") || m.contains("charges")).collect();
-    assert_eq!(means, ["examples/webshop/payments/api/payments.yaml#/components/schemas/ChargeStatus value refunded", "examples/webshop/payments/api/payments.yaml#/paths/~1charges/post"].map(|s| s.trim_start_matches("examples/webshop/").to_string()), "{means:?}");
+    let means: Vec<String> = c.elements.found.values().map(sakai::elements::display).filter(|m| m.contains("refunded") || m.contains("createCharge")).collect();
+    assert_eq!(means, ["openapi \"payments/api/payments.yaml\" schema ChargeStatus value refunded", "openapi \"payments/api/payments.yaml\" operation createCharge"], "{means:?}");
     let d = changed(&[("contexts/payments.ctx", "    means schema Charge\n", "    means schema Refund\n")]);
     let (codes, text) = codes_of(&d);
     assert_eq!(codes, ["E007"], "{text}");
+}
+
+/// The long form of an element of a document (ritsu's DESIGN 6.2): the reference, from the
+/// context file's directory, read as the short form is; a name the document does not hold, or a
+/// document named with the other tool, is E007; a mapping's target can be a schema with an enum.
+#[test]
+fn the_elements_of_a_document_in_their_long_form() {
+    let d = changed(&[(
+        "contexts/payments.ctx",
+        "    means schema Charge\n",
+        "    means openapi \"../payments/api/payments.yaml\" schema Charge\n  charging \"Asking for the money\"\n    means openapi \"../payments/api/payments.yaml\" operation createCharge\n  paid \"The event of a charge that went through\"\n    means asyncapi \"../payments/events/payments.yaml\" channel paymentSucceeded\n",
+    )]);
+    let os = common::check_dir(d.path());
+    assert!(!os.iter().any(|o| o.has_errors()), "{}", os.iter().map(|o| sakai::check::render(o, Lang::En)).collect::<String>());
+    let c = os.iter().find_map(|o| o.checked.as_ref()).unwrap();
+    let means: Vec<String> = c.elements.found.values().map(sakai::elements::display).filter(|m| m.contains("payments/")).collect();
+    assert!(means.contains(&"openapi \"payments/api/payments.yaml\" schema Charge".to_string()) && means.contains(&"asyncapi \"payments/events/payments.yaml\" channel paymentSucceeded".to_string()), "{means:?}");
+    for (written, says) in [
+        ("    means openapi \"../payments/api/payments.yaml\" schema Refund\n", "There is no schema Refund in payments/api/payments.yaml"),
+        ("    means asyncapi \"../payments/api/payments.yaml\" schema Charge\n", "The file payments/api/payments.yaml is an OpenAPI document: write `openapi \"…\"`"),
+        ("    means openapi \"../payments/api/payments.yaml\" schema ChargeStatus value disputed\n", "There is no value disputed in payments/api/payments.yaml"),
+    ] {
+        let d = changed(&[("contexts/payments.ctx", "    means schema Charge\n", written)]);
+        let (codes, text) = codes_of(&d);
+        assert_eq!(codes, ["E007"], "{text}");
+        assert!(text.contains(says), "{text}");
+    }
+    let d = changed(&[("contexts/shipping.ctx", "  enum ChargeStatus -> enum ShipmentGate\n", "  enum ChargeStatus -> openapi \"../shipping/api/shipping.yaml\" schema ShipmentGate\n")]);
+    let (codes, text) = codes_of(&d);
+    assert!(codes.is_empty(), "{text}");
+    // a Cedar file is no artifact sakai reads
+    let d = changed(&[("contexts/payments.ctx", "  dir \"../payments\"\n", "  dir \"../payments\"\n  cedar \"../payments/policies.cedar\"\n")]);
+    let (codes, text) = codes_of(&d);
+    assert_eq!(codes, ["E002"], "{text}");
+    assert!(text.contains("A `cedar` file does not go here"), "{text}");
 }
 
 /// A rule's `import jsonschema` of an enum of another context's OpenAPI document is a crossing

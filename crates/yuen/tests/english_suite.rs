@@ -247,6 +247,39 @@ fn the_accounts_and_transfers_of_a_book_in_english() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// An operation of a transfer (`transfer refund operation post`, ritsu's DESIGN 6.2) is a thing of
+/// the book too: its end is its transfer's, with the operation and the names of the reasons it can
+/// be refused with. A link to it is read like any other: not looked at yet is E301, an operation
+/// the transfer does not have is E202 with the ones it has.
+#[test]
+fn the_operations_of_a_transfer_in_english() {
+    let book = "chobo \"refunds.book\"";
+    let items = common::suite().index.items(Tool::Chobo, Path::new("tests/fixtures/refunds_book"), "refunds.book").unwrap().unwrap();
+    let ops: Vec<String> = items.iter().filter(|i| i.kind() == "operation").map(|i| i.naming.text()).collect();
+    assert_eq!(ops, [format!("{book} transfer sale operation do"), format!("{book} transfer refund operation hold"), format!("{book} transfer refund operation post"), format!("{book} transfer refund operation void")]);
+    let text = |n: &str| items.iter().find(|i| i.naming.text() == n).unwrap().text.clone();
+    let (refund, post) = (text(&format!("{book} transfer refund")), text(&format!("{book} transfer refund operation post")));
+    // the transfer's definition, with the operation and its refusals beside it
+    let without = |t: &str, keys: &[&str]| -> Vec<(String, ritsu_base::json::Json)> {
+        let j = ritsu_base::json::parse(t).unwrap();
+        j.as_obj().unwrap().iter().filter(|(k, _)| !keys.contains(&k.as_str())).cloned().collect()
+    };
+    assert_eq!(without(&post, &["operation", "refusals"]), without(&refund, &[]));
+    let j = ritsu_base::json::parse(&post).unwrap();
+    assert_eq!(j.get("operation").and_then(|o| o.as_str()), Some("post"));
+    assert!(j.get("refusals").and_then(|r| r.as_arr()).is_some(), "{post}");
+    assert_ne!(refund, post);
+    let t = common::fixture("refunds_book");
+    let d = t.path().join("refunds_book");
+    common::edit(&d, "refund.req", "  satisfied by chobo \"refunds.book\" transfer refund\n", "  satisfied by chobo \"refunds.book\" transfer refund operation post\n");
+    let c = common::check(&d.to_string_lossy());
+    assert_eq!(codes(&c), ["E303"], "the link names the operation now, whose end is not the transfer's: {:?}", c.diags.iter().map(|x| x.message.en.clone()).collect::<Vec<_>>());
+    common::edit(&d, "refund.req", "transfer refund operation post\n", "transfer refund operation do\n");
+    let c = common::check(&d.to_string_lossy());
+    let d202: Vec<String> = c.diags.iter().filter(|x| x.code == "E202").map(|x| x.render(ritsu_base::text::Lang::En)).collect();
+    assert!(d202.len() == 1 && d202[0].contains("refunds.book has no operation do") && d202[0].contains("transfer refund operation hold"), "{d202:?}");
+}
+
 // ── C.6 proto ─────────────────────────────────────────────────────────────────
 
 fn proto_end(dir: &Path, file: &str, naming: &str) -> String {

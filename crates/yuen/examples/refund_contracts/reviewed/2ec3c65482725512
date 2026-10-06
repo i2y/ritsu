@@ -1,0 +1,39 @@
+#/operations/返金を知らせる
+{
+  "action": "send",
+  "channel": {
+    "$ref": "#/channels/返金済み"
+  }
+}
+#/channels/返金済み
+{
+  "address": "orders.refunded",
+  "messages": {
+    "返金済み": {
+      "$ref": "#/components/messages/返金済み"
+    }
+  }
+}
+#/components/messages/返金済み
+{
+  "payload": {
+    "$ref": "#/components/schemas/返金済みの中身"
+  }
+}
+#/components/schemas/返金済みの中身
+{
+  "properties": {
+    "注文番号": {
+      "type": "string"
+    },
+    "金額": {
+      "minimum": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "注文番号",
+    "金額"
+  ],
+  "type": "object"
+}

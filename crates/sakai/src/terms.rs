@@ -25,9 +25,9 @@ fn line_of(src: &str, l: usize) -> String {
 /// Whether the element a name points at crosses with a crossing (DESIGN 2.5: an enum that
 /// crosses takes its values along, a message its fields; DESIGN 15.6: an element of a document
 /// crosses when a `$ref` reaches it).
-fn crosses(ps: &Protos, n: &Name, cr: &Crossing) -> bool {
-    if let Some((f, p)) = crate::elements::as_contract(n) {
-        return cr.elements.iter().any(|(ef, ep)| ef == f && ep == p);
+fn crosses(ps: &Protos, cs: &crate::contracts::Contracts, n: &Name, cr: &Crossing) -> bool {
+    if let Some((f, p)) = crate::elements::as_contract(cs, n) {
+        return cr.elements.iter().any(|(ef, ep)| *ef == f && *ep == p);
     }
     let reach: &[Symbol] = &cr.reach;
     if n.tool != Tool::Proto {
@@ -54,7 +54,7 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[c
                 let ok = match n.tool {
                     Tool::Proto => c.published.iter().any(|p| p.protos.iter().any(|(f, _)| *f == n.path)),
                     Tool::Rulec => c.published.iter().any(|p| p.rulec.as_ref().is_some_and(|(f, _)| *f == n.path)),
-                    Tool::File if crate::elements::as_contract(n).is_some() => crate::elements::published_contracts(m, cs, arts, ci, None).contains(&n.path),
+                    Tool::Openapi | Tool::Asyncapi => crate::elements::published_contracts(m, cs, arts, ci, None).contains(&n.path),
                     _ => false,
                 };
                 if !ok {
@@ -120,7 +120,7 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[c
         for (ti, t) in yc.ast.terms.iter().enumerate() {
             for mi in 0..t.means.len() {
                 let Some(n) = el.get(At::Means(y, ti, mi)) else { continue };
-                if !crosses(ps, n, cr) {
+                if !crosses(ps, cs, n, cr) {
                     continue;
                 }
                 for (di, d) in xc.ast.terms.iter().enumerate() {
@@ -144,7 +144,7 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[c
                     let mut mapped = false;
                     if acl && let Some(r) = rel {
                         let RelK::Upstream { enums, terms, .. } = &r.kind else { unreachable!() };
-                        let is_enum = n.items.first().is_some_and(|(k, _)| k == "enum") || crate::elements::as_contract(n).is_some_and(|(f, p)| cs.enum_values(f, p).is_some());
+                        let is_enum = n.items.first().is_some_and(|(k, _)| k == "enum") || crate::elements::as_contract(cs, n).is_some_and(|(f, p)| cs.enum_values(&f, &p).is_some());
                         if is_enum {
                             for (ei, em) in enums.iter().enumerate() {
                                 let Some(from) = el.get(At::From(x, ri.unwrap(), ei)) else { continue };

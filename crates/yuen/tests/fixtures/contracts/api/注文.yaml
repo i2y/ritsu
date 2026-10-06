@@ -1,0 +1,71 @@
+openapi: 3.1.0
+info:
+  title: 注文
+  version: 1.0.0
+paths:
+  /orders/{orderId}:
+    parameters:
+      - $ref: '#/components/parameters/注文番号'
+    get:
+      operationId: 注文を読む
+      summary: 注文を読む
+      responses:
+        '200':
+          description: 注文
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/注文'
+  /orders/{orderId}/refunds:
+    parameters:
+      - $ref: '#/components/parameters/注文番号'
+    post:
+      operationId: 返金する
+      summary: 注文の一部か全部を返金する
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/返金'
+      responses:
+        '201':
+          description: 返金した
+        '403':
+          description: 呼んだ人には、この額を返金する権限がない
+components:
+  parameters:
+    注文番号:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    注文:
+      type: object
+      required: [番号, 状態, 合計]
+      properties:
+        番号:
+          type: string
+        状態:
+          $ref: '#/components/schemas/注文の状態'
+        合計:
+          $ref: '../common/金額.yaml#/金額'
+    注文の状態:
+      type: string
+      enum: [受注, 支払済み, 出荷済み, 返金済み]
+    返金:
+      type: object
+      required: [金額, 理由]
+      properties:
+        金額:
+          type: integer
+          minimum: 1
+          maximum: 100000
+          description: 円
+        理由:
+          $ref: '#/components/schemas/返金の理由'
+    返金の理由:
+      type: string
+      enum: [破損, 遅延, 不要]

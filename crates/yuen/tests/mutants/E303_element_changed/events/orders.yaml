@@ -1,0 +1,45 @@
+asyncapi: 3.0.0
+info:
+  title: Order events
+  version: 1.0.0
+channels:
+  orderRefunded:
+    address: orders.refunded
+    messages:
+      orderRefunded:
+        $ref: '#/components/messages/OrderRefunded'
+  orderShipped:
+    address: orders.shipped
+    messages:
+      orderShipped:
+        $ref: '#/components/messages/OrderShipped'
+operations:
+  sendOrderRefunded:
+    action: send
+    channel:
+      $ref: '#/channels/orderRefunded'
+  sendOrderShipped:
+    action: send
+    channel:
+      $ref: '#/channels/orderShipped'
+components:
+  messages:
+    OrderRefunded:
+      payload:
+        $ref: '#/components/schemas/OrderRefundedPayload'
+    OrderShipped:
+      payload:
+        type: object
+        properties:
+          orderId:
+            type: string
+  schemas:
+    OrderRefundedPayload:
+      type: object
+      required: [orderId, amount]
+      properties:
+        orderId:
+          type: string
+        amount:
+          type: integer
+          minimum: 1

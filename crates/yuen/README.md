@@ -14,8 +14,9 @@ yuen is one of the seven languages of [ritsu](https://github.com/i2y/ritsu), and
 hold through them, in the same process: the tables of a rulec rule, the dates and claims of a
 koyomi calendar, the accounts and transfers of a chobo book, the claims of a geas spec, the tasks of
 a dandori workflow, the terms of a sakai map, and the services and messages of a `.proto`. It reads
-the requirements of an [OpenSpec](https://github.com/Fission-AI/OpenSpec) spec as sources, a
-requirement at a time.
+the operations and schemas of OpenAPI and AsyncAPI documents and the policies and actions of
+[Cedar](https://www.cedarpolicy.com/) itself, an element at a time, and the requirements of an
+[OpenSpec](https://github.com/Fission-AI/OpenSpec) spec as sources, a requirement at a time.
 
 ```req
 requirements osha v1
@@ -198,6 +199,57 @@ of spaces`, and no claim of that name checks `greeting_by_name` yet. A scenario 
 claim of its name, as geas holds it: `geas scenarios` says the same from the claims file, and
 drafts the claim to write ([geas's README](../geas/README.md)).
 
+## Contracts and policies
+
+A link can name one element of an OpenAPI or AsyncAPI document, or one policy, action or entity
+type of [Cedar](https://www.cedarpolicy.com/)'s written by hand: `openapi`, `asyncapi` and `cedar`
+are tools of a naming, as `proto` is, and yuen reads their files itself
+([examples/refund_contracts](examples/refund_contracts)).
+
+```req
+requirement refund_in_pence
+  text "A refund is a whole number of pence, from one penny to one hundred pounds"
+  …
+  satisfied by openapi "api/orders.yaml" schema Refund property amount
+…
+requirement clerks_have_a_limit
+  …
+  satisfied by cedar "policies/refunds.cedar" policy clerks_refund_within_their_limit
+```
+
+The end of such a link is that element alone, with the values its `$ref`s reach; a policy and a
+declaration are what Cedar's formatter writes of them, without their comments. Raise the limit of
+`amount` from 10000 to 20000, and two links stop: the one to the property, and the one to the
+operation whose body is the schema `Refund`. A change to another operation of the same document
+stops none.
+
+```console
+$ ritsu yuen check tests/mutants/E303_element_changed --root tests/mutants/E303_element_changed
+error[E303]: tests/mutants/E303_element_changed/refunds.req:10:3: openapi "api/orders.yaml" operation refundOrder changed after payments looked at this link on 2026-10-06
+    10 |   satisfied by openapi "api/orders.yaml" operation refundOrder
+  what changed in openapi "api/orders.yaml" operation refundOrder:
+      @@ -36,5 +36,5 @@
+            "amount": {
+              "description": "In pence",
+      -       "maximum": 10000,
+      +       "maximum": 20000,
+              "minimum": 1,
+              "type": "integer"
+  = Once a person has looked: yuen review tests/mutants/E303_element_changed --root tests/mutants/E303_element_changed --at tests/mutants/E303_element_changed/refunds.req:10 --by <role>
+error[E303]: tests/mutants/E303_element_changed/refunds.req:21:3: openapi "api/orders.yaml" schema Refund property amount changed after payments looked at this link on 2026-10-06
+    21 |   satisfied by openapi "api/orders.yaml" schema Refund property amount
+  what changed in openapi "api/orders.yaml" schema Refund property amount:
+      @@ -2,5 +2,5 @@
+        {
+          "description": "In pence",
+      -   "maximum": 10000,
+      +   "maximum": 20000,
+          "minimum": 1,
+          "type": "integer"
+  = Once a person has looked: yuen review tests/mutants/E303_element_changed --root tests/mutants/E303_element_changed --at tests/mutants/E303_element_changed/refunds.req:21 --by <role>
+tests/mutants/E303_element_changed: 2 errors
+```
+
 ## What it checks, and what it does not
 
 yuen checks the links, the hashes and the periods: that every name resolves, that every copy of a
@@ -277,6 +329,7 @@ first, and a Japanese version, where there is one, sits beside it as `<name>.ja.
 | [greeter](examples/greeter) | decided requirements met by `server.py` and checked by geas's claims; `affected` on a change |
 | [payment_terms](examples/payment_terms) | a payment day decided for the example, and business days borrowed from the holidays a koyomi calendar pins |
 | [refunds](examples/refunds) | "a refund does not exceed the sale", met by an account and two transfers of a chobo book |
+| [refund_contracts](examples/refund_contracts) | a shop's refunds, met by an operation and a property of an OpenAPI document, an operation of an AsyncAPI document, and a policy and an action of Cedar's; each link's end is that one element |
 | [civil_code_periods](examples/civil_code_periods) | Japan's Civil Code, articles 140 to 143, borrowed from a koyomi calendar, and who decided how article 142 reads (Japanese) |
 | [civil_code_periods_reread](examples/civil_code_periods_reread) | the same, after the calendar was rewritten: it stops on purpose (Japanese) |
 | [stamp_tax](examples/stamp_tax) | one requirement in two versions, in force one after the other, met by a rulec rule (Japanese) |

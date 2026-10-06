@@ -4,7 +4,7 @@
 
 yuen は、要件と、その出どころを書く小さな言語です。`.req` のファイルに、何が求められているか、それが法令のどの条か、誰のどの決定から来たか、持ち主は誰か、何が満たすのか（規則の表、カレンダーの日付、帳簿の勘定、コードのファイル）、何が確かめるのか（主張、規則そのものの検査）を書きます。そのつながりの一本ずつに、人が確かめたことを、両端のハッシュと一緒に記録します。条文が改正されたり、規則が書き換えられたり、コードの一行が変わったりすると、ハッシュが合わなくなり、検査はそのつながりで止まります。確かめたときとの差分を見せ、誰かが確かめ直すまで止まったままです。
 
-yuen は [ritsu](https://github.com/i2y/ritsu) の七つの言語の一つです。ほかの言語が持つもの（rulec の規則の表、koyomi のカレンダーの日付と条件、chobo の帳簿の勘定と振替、geas の spec の主張、dandori のワークフローのタスク、sakai の地図の語、`.proto` のサービスとメッセージ）は、同じプロセスの中で、それぞれの言語に読んでもらいます。[OpenSpec](https://github.com/Fission-AI/OpenSpec) の仕様の要件は、出典として、要件ごとに読みます。
+yuen は [ritsu](https://github.com/i2y/ritsu) の七つの言語の一つです。ほかの言語が持つもの（rulec の規則の表、koyomi のカレンダーの日付と条件、chobo の帳簿の勘定と振替、geas の spec の主張、dandori のワークフローのタスク、sakai の地図の語、`.proto` のサービスとメッセージ）は、同じプロセスの中で、それぞれの言語に読んでもらいます。OpenAPI と AsyncAPI の文書の操作とスキーマ、[Cedar](https://www.cedarpolicy.com/) のポリシーとアクションは、yuen が要素ごとに読みます。[OpenSpec](https://github.com/Fission-AI/OpenSpec) の仕様の要件は、出典として、要件ごとに読みます。
 
 ## 例：民法の期間
 
@@ -147,6 +147,50 @@ examples/openspec_greeter_archived/greeter.ja.req: エラー 1 件、警告 2 �
 
 `yuen source pin` で固定し直すと、仕様の要件から来るつながりと、要件「名前で挨拶する」から先の三本のつながりが、誰かが確かめ直すまで止まります。仕様のほかの二つの要件のつながりは止まりません。確かめ直したあとも W402 は残ります。提案がシナリオ「空白だけの名前は受け付けない」を足したのに、その名前の主張が、要件「名前で挨拶する」を確かめる主張の中にまだ無いからです。シナリオは、geas と同じく、同じ名前の主張と突き合わせます。主張のファイルの側からは `geas scenarios` が同じことを言い、書き足す主張の下書きを出します（[geas の README](../geas/README.ja.md)）。
 
+## 契約とポリシー
+
+つながりの先には、OpenAPI と AsyncAPI の文書の要素を一つ、手で書いた [Cedar](https://www.cedarpolicy.com/) のポリシー、アクション、エンティティの型を一つ、書けます。`openapi`、`asyncapi`、`cedar` は、`proto` と同じく参照の書き方のツール名で、yuen がそのファイルを自分で読みます（[examples/refund_contracts](examples/refund_contracts)）。
+
+```req
+requirement 返金は円で(refund_in_yen)
+  text "返金は 1 円以上 10 万円以下の、円の整数である"
+  …
+  satisfied by openapi "api/注文.yaml" schema 返金 property 金額
+…
+requirement 係には上限がある(clerks_have_a_limit)
+  …
+  satisfied by cedar "policies/返金.cedar" policy 係は自分の上限まで返金できる
+```
+
+このつながりの先のハッシュは、その要素一つと、その `$ref` がたどる値から取ります。ポリシーと宣言は、Cedar のフォーマッターが書く形から、コメントを除いて取ります。`金額` の上限を 100000 から 200000 に変えると、止まるつながりは二本です。そのプロパティへのつながりと、本文がスキーマ `返金` の操作へのつながりです。同じ文書のほかの操作を変えても、どのつながりも止まりません。
+
+```console
+$ ritsu yuen check tests/mutants/E303_要素が変わった --root tests/mutants/E303_要素が変わった --lang ja
+エラー[E303]: tests/mutants/E303_要素が変わった/返金.req:10:3: openapi "api/注文.yaml" operation 返金する は、2026-10-06 に 決済 がこのリンクを確かめたあとで変わりました
+    10 |   satisfied by openapi "api/注文.yaml" operation 返金する
+  openapi "api/注文.yaml" operation 返金する の変わったところ:
+      @@ -39,5 +39,5 @@
+            "金額": {
+              "description": "円",
+      -       "maximum": 100000,
+      +       "maximum": 200000,
+              "minimum": 1,
+              "type": "integer"
+  = 確かめたら: yuen review tests/mutants/E303_要素が変わった --root tests/mutants/E303_要素が変わった --at tests/mutants/E303_要素が変わった/返金.req:10 --by <役割>
+エラー[E303]: tests/mutants/E303_要素が変わった/返金.req:21:3: openapi "api/注文.yaml" schema 返金 property 金額 は、2026-10-06 に 決済 がこのリンクを確かめたあとで変わりました
+    21 |   satisfied by openapi "api/注文.yaml" schema 返金 property 金額
+  openapi "api/注文.yaml" schema 返金 property 金額 の変わったところ:
+      @@ -2,5 +2,5 @@
+        {
+          "description": "円",
+      -   "maximum": 100000,
+      +   "maximum": 200000,
+          "minimum": 1,
+          "type": "integer"
+  = 確かめたら: yuen review tests/mutants/E303_要素が変わった --root tests/mutants/E303_要素が変わった --at tests/mutants/E303_要素が変わった/返金.req:21 --by <役割>
+tests/mutants/E303_要素が変わった: エラー 2 件
+```
+
 ## 確かめること、確かめないこと
 
 yuen が確かめるのは、つながりとハッシュと期間です。名前がどれも何かを指していること、法令のコピーが固定と同じこと、確かめた記録が今のハッシュと合うこと、どの要件にも満たすものと確かめるもの（か、人が承認した見送りと、その理由）があること、宣言した範囲の成果物がどれも要件に辿れること、要件の版の期間が隙間も重なりもなく並ぶこと、要件が自分自身から読み出されていないこと。通信するのは `source fetch` と `source outdated` だけで、主張もテストも走らせません。
@@ -205,6 +249,7 @@ $ ritsu yuen explain E303 --lang ja
 | [greeter](examples/greeter) | 決めた要件を `server.py` が満たし、geas の主張が確かめる。変更への `affected`（英語と日本語） |
 | [payment_terms](examples/payment_terms) | 例として決めた支払日と、koyomi のカレンダーが固定する祝日の表から借りた営業日（英語と日本語） |
 | [refunds](examples/refunds) | 「返金は売上を超えない」を、chobo の帳簿の勘定一つと振替二つが満たす（英語と日本語） |
+| [refund_contracts](examples/refund_contracts) | 店の返金を、OpenAPI の文書の操作とプロパティ、AsyncAPI の文書の操作、Cedar のポリシーとアクションが満たす。どのつながりの先も、その要素一つ（英語と日本語） |
 | [civil_code_periods](examples/civil_code_periods) | 民法 140〜143 条をカレンダーから借り、142 条の読み方を誰が決めたかを書く |
 | [civil_code_periods_reread](examples/civil_code_periods_reread) | 同じものの、カレンダーを書き換えたあと。わざと止まる例（ほかに `openspec_greeter_archived`） |
 | [stamp_tax](examples/stamp_tax) | 一つの要件を、期間の続く二つの版で書き、rulec の規則が満たす |

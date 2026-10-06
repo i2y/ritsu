@@ -3,13 +3,13 @@ warning[W903]: payments/events/payments.yaml:9:3: The channel paymentSucceeded o
   = Neither the server nor an operation on the channel has `security`, so a reader of the contract cannot tell how a client proves who it is.
   = Add `security` to the server, or to the operations on the channel. If it is open to anyone on purpose, write `security: []` on the server or on an operation.
   involved:
-      決済  payments/events/payments.yaml:9   #/channels/paymentSucceeded (a channel of payments/events/payments.yaml)
-      決済  payments/events/payments.yaml:38  #/servers/production (a server without `security`)
+      決済  asyncapi "payments/events/payments.yaml" channel paymentSucceeded
+      決済  asyncapi "payments/events/payments.yaml" pointer /servers/production  a server without `security`
 warning[W903]: payments/events/payments.yaml:14:3: The channel paymentFailed of the published language payments.v1 says no authentication on the server production
     14 |   paymentFailed:
   = Neither the server nor an operation on the channel has `security`, so a reader of the contract cannot tell how a client proves who it is.
   = Add `security` to the server, or to the operations on the channel. If it is open to anyone on purpose, write `security: []` on the server or on an operation.
   involved:
-      決済  payments/events/payments.yaml:14  #/channels/paymentFailed (a channel of payments/events/payments.yaml)
-      決済  payments/events/payments.yaml:38  #/servers/production (a server without `security`)
+      決済  asyncapi "payments/events/payments.yaml" channel paymentFailed
+      決済  asyncapi "payments/events/payments.yaml" pointer /servers/production  a server without `security`
 ネットショップ.ctx: ok — 4 contexts, 5 relationships; 9 artifacts, each in one context; 7 crossings checked (openapi 1, asyncapi 5, dandori 1)

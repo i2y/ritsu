@@ -1,0 +1,7 @@
+@id("clerks_refund_within_their_limit")
+permit (
+  principal in Shop::Role::"clerk",
+  action == Shop::Action::"refund_order",
+  resource
+)
+when { context.amount <= principal.refund_limit };

@@ -426,6 +426,11 @@ geas "greeter.geas" claim "rejects an empty name"
 proto "shop/v1/order.proto" service OrderService method Create
 proto "shop/v1/order.proto" message Order.Line field quantity
 proto "warehouse/v1/stock.proto" enum PackingStatus value PACKING_STATUS_SHORT
+openapi "api/orders.yaml" operation refundOrder
+openapi "api/orders.yaml" schema Refund property amount
+asyncapi "events/orders.yaml" channel orderRefunded message orderRefunded
+cedar "policies/refunds.cedar" policy clerks_refund_within_their_limit
+cedar "policies/shop.cedarschema" action refund_order
 file "src/app.py"
 yuen "民法の期間.req" requirement 満了日_142条
 sakai "contexts/受注.ctx" term キャンセル
@@ -437,10 +442,12 @@ sakai "contexts/受注.ctx" term キャンセル
 
 - proto：`service S [method M]`、`message M [field f]`、`enum E [value V]`。入れ子になったメッセージや列挙は、組を足さずに、名前を `.` でつないで書く（`message Order.Line`）。
 - rulec：`enum E [value V]`。
+- chobo：`transfer T [operation O]`（振替の操作。2026-10-06 から）。
+- openapi と asyncapi：`schema S [property P]`、`schema S [value V]`。asyncapi の `channel C [message M]`（3.6）。
 - 子の種類（`method`、`field`、`value`）は、親の種類（`service`、`message`、`enum`）のすぐあとにしか書けない。子のあとには、もう組を書けない。
 - ほかのツールでは、組は一つまでである。
 
-この決まりに合わない組は E012 になる（`rulec "x.rule" value 受注` は `value` が `enum` のすぐあとにない、`proto "x.proto" service S method M method N` は子が二つある、`chobo "在庫.book" account 在庫 value X` は chobo に入れ子の種類が無い）。
+この決まりに合わない組は E012 になる（`rulec "x.rule" value 受注` は `value` が `enum` のすぐあとにない、`proto "x.proto" service S method M method N` は子が二つある、`chobo "在庫.book" account 在庫 value X` は chobo の `account` の下に組を書けない）。
 
 ### 2.2 パス
 
@@ -453,7 +460,7 @@ sakai "contexts/受注.ctx" term キャンセル
 
 ### 2.3 ツールと種類
 
-ツールの語は、`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`file`、`yuen`、`sakai` の九つである。ほかの語は E011 にする。
+ツール名は、`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai` の十二である。ほかの語は E011 にする。`openapi`、`asyncapi`、`cedar` は 2026-10-06 に足した（3.6）。
 
 種類の語は、それぞれのツールが JSON で出す名前の種類から取り、yuen と sakai が使う種類を合わせたものにした。どちらの言語も、自分では使わない種類も名指しとして読み、JSON に出す。
 
@@ -461,10 +468,13 @@ sakai "contexts/受注.ctx" term キャンセル
 |---|---|---|---|
 | `rulec` | `.rule` | `input`、`output`、`enum`（下に `value`）、`table`、`clause`、`define`、`derive`、`machine`、`source` | rulec の口（`Items`）。`source` は `Sources` も |
 | `koyomi` | `.cal` | `input`、`date`、`claim`、`source` | koyomi の口（`Items`）。`source` は `Sources` も |
-| `chobo` | `.book` | `unit`、`account`、`transfer` | chobo の口（`Items`） |
+| `chobo` | `.book` | `unit`、`account`、`transfer`（下に `operation`） | chobo の口（`Items`） |
 | `geas` | `.geas` | `claim` | geas の口（`Items`。spec そのものから読み、`geas map` の記録は要らない） |
 | `dandori` | `.flow` | `task`、`case`、`record`（下に `field`）、`enum`（下に `value`）、`input`、`output`（ritsu の D.6 で足した。2.7） | dandori の口（`Items`。構文だけから読み、規則は要らない） |
 | `proto` | `.proto` | `service`（下に `method`）、`message`（下に `field`）、`enum`（下に `value`） | yuen が ritsu の `.proto` の読み手で読む（3.4） |
+| `openapi` | OpenAPI の文書（`.yaml`、`.yml`、`.json`）と、文書が `$ref` で読むその一部 | `schema`（下に `property`、`value`）、`operation`、`pointer` | yuen が ritsu の YAML と JSON の読み手で読む（3.6） |
+| `asyncapi` | AsyncAPI の文書と、その一部 | `channel`（下に `message`）、`message`、`operation`、`schema`（下に `property`、`value`）、`pointer` | 同じ（3.6） |
+| `cedar` | `.cedar`、`.cedarschema`、`.cedarschema.json` | `policy`、`action`、`entity` | yuen が ritsu の Cedar の読み手で読む（3.6） |
 | `file` | 何でも | （無い） | — |
 | `yuen` | `.req` | `requirement`、`source` | yuen 自身（ほかの言語へは `yuen api`（11 章）と yuen の口） |
 | `sakai` | `.ctx` | `context`、`term` | sakai の口（`Items`） |
@@ -487,7 +497,7 @@ sakai "contexts/受注.ctx" term キャンセル
 ### 2.5 同じかどうか、含むかどうか
 
 - **同じ**：ツールの語が同じで、ルートからの相対に直したパスが同じで、種類と名前の組の並びが同じとき。
-- **含む**：`<ツール> "<パス>"` は、そのファイルの中のものを全部含む。親の組（proto の `service`・`message`・`enum`、rulec の `enum`）は、その子を全部含む。範囲（1.8、5.3）と `affected`（8 章）は、この関係を使う。
+- **含む**：`<ツール> "<パス>"` は、そのファイルの中のものを全部含む。親の組（proto の `service`・`message`・`enum`、rulec の `enum`、openapi と asyncapi の `schema`、asyncapi の `channel`）は、その子を全部含む。範囲（1.8、5.3）と `affected`（8 章）は、この関係を使う。
 - ディレクトリは成果物ではない。ディレクトリを書けるのは `scope` だけである。
 
 ### 2.6 JSON での形
@@ -498,7 +508,7 @@ sakai "contexts/受注.ctx" term キャンセル
 
 キーは `text`、`tool`、`path`、`items` の順に並べる。`path` はルートからの相対、`items` は種類と名前の組の並び（組が無ければ `[]`）、`text` は 2.4 の形で文字にしたものである。一つの名指しだけを出すときは、serde_json の詰めた書き方（空白を入れず、ASCII でない文字はエスケープしない）にする。`api` のように整形した JSON の中に置くときも、キーと値は同じで、違うのは空白だけである。
 
-ritsu-base の `tests/fixtures/naming.tsv` は、この決まりを試す表である。一行が一つの名指しで、タブの左が名指し（書いたファイルはルートにあるとする）、右が、その名指しだけを出したときの JSON か、`ERROR: <理由>` である。`tests/names.rs` は、表のどの行についても、JSON の行では一字も違わない JSON を出すこと、エラーの行ではエラーにすることを確かめる。エラーの理由は、知らないツールとツールの語を `"…"` で書いたものなら E011、種類と組（種類を `"…"` で書いた、種類のあとに名前が無い、を含む）なら E012、パス（空のパスを含む）なら E013、字句（文字列の外の全角の空白、`\"` と `\\` のほかのエスケープ）なら E001 に当たることも確かめる。表は 2026-10-03 に 36 行（JSON 21 行、エラー 15 行）になり、ritsu の D.6 で dandori の種類の行を足して 42 行（JSON 24 行、エラー 18 行）になった。
+ritsu-base の `tests/fixtures/naming.tsv` は、この決まりを試す表である。一行が一つの名指しで、タブの左が名指し（書いたファイルはルートにあるとする）、右が、その名指しだけを出したときの JSON か、`ERROR: <理由>` である。`tests/names.rs` は、表のどの行についても、JSON の行では一字も違わない JSON を出すこと、エラーの行ではエラーにすることを確かめる。エラーの理由は、知らないツールとツールの語を `"…"` で書いたものなら E011、種類と組（種類を `"…"` で書いた、種類のあとに名前が無い、を含む）なら E012、パス（空のパスを含む）なら E013、字句（文字列の外の全角の空白、`\"` と `\\` のほかのエスケープ）なら E001 に当たることも確かめる。表は 2026-10-03 に 36 行（JSON 21 行、エラー 15 行）になり、ritsu の D.6 で dandori の種類の行を足して 42 行（JSON 24 行、エラー 18 行）になった。2026-10-06 に、ツール名 `openapi`、`asyncapi`、`cedar` の行（JSON 15 行、エラー 6 行）と、chobo の振替の操作の行（JSON 2 行、エラー 1 行）を足し、66 行（JSON 41 行、エラー 25 行）になった。chobo に入れ子ができたので、`account 在庫 value X` の行の理由は「`account` の下に組を書けない」に替わった。
 
 ### 2.7 dandori と geas に足りなかったもの
 
@@ -536,6 +546,8 @@ ritsu-base の `tests/fixtures/naming.tsv` は、この決まりを試す表で�
 | dandori | `Items`（索引で） | 中のもの（構文だけから。規則は要らない） |
 | sakai | `Items`（索引で） | コンテキストと語 |
 | proto | 口は使わない | ritsu の `.proto` の読み手（ritsu-proto）で yuen が読む（3.4） |
+| openapi、asyncapi | 口は使わない | ritsu の YAML と JSON の読み手（`ritsu_base::yaml`）で yuen が読み、要素は `ritsu_base::document` で引く（3.6） |
+| cedar | 口は使わない | ritsu の Cedar の読み手（`ritsu_base::cedar`）で yuen が読む（3.6） |
 | file | 口は使わない | バイト列 |
 
 - **言語がつながっていないとき**（E206）：yuen のクレートのバイナリが、ほかの言語のものを名指すプロジェクトを渡されると、名前の段（6.1 の 2）のあとで、要る言語ごとに一つ、最初に名指したところ（リンク、範囲、借りた出典）に E206 を出し、すべての言語をつないだ `ritsu yuen` で同じコマンドを走らせるよう注に書いて、exit 2 にする（引数の誤りや読めないファイルと同じく、検査の結果ではなく、走らせる場所の問題だからである）。`file` と `.proto` と法令のコピーだけのプロジェクトは、このバイナリでも全部読める。ritsu の段階 E の前は、コードの無い文を標準エラーに出していた。ritsu の受け取る側の三つの言語（dandori の E018、sakai の E104）と同じ形にそろえた（ritsu の DESIGN 2.3）。`source outdated` は、借りた出典の言語がつながっていなければ、同じ E206 を標準エラーに出して exit 2 にする。
@@ -562,16 +574,18 @@ ritsu-base の `tests/fixtures/naming.tsv` は、この決まりを試す表で�
 | どのツールも | ファイル | ファイルのバイト列 |
 | rulec | `table`、`clause`、`define`、`derive`、`input`、`output`、`enum`、`machine`、`source` | そのものの行を `rulec fmt` が書く形にしたもの（表なら見出しから最後の行まで） |
 | koyomi | `date`、`claim`、`input`、`source` | `date … =` の塊の行（操作の行を含む）、条件の行（コメントと前後の空白を除く） |
-| chobo | `unit`、`account`、`transfer` | 決まった形の JSON（下の段落） |
+| chobo | `unit`、`account`、`transfer` と下の `operation` | 決まった形の JSON（下の段落） |
 | geas | `claim` | 主張の塊の行 |
 | dandori | `task`、`case`、`record`、`enum`、`input`、`output` と下の `field`、`value` | タスクや案件やレコードの宣言の塊の行（コメントと前後の空白を除き、文字列の外の続いた空白を一つにし、字下げは深さごとに空白二つに直す。dandori の DESIGN 0.3） |
 | sakai | `context`、`term` | コンテキストのファイルの行、語の塊の行（コメントと前後の空白を除く） |
 | proto | `service`、`method`、`message`、`field`、`enum`、`value` | 3.4 の決まった形の文 |
+| openapi、asyncapi | `schema`、`property`、`value`、`operation`、`channel`、`message`、`pointer` | 3.6 の文（要素の値と、その `$ref` がたどる値） |
+| cedar | `policy`、`action`、`entity` | 3.6 の文（ポリシー、宣言） |
 | file | ファイル | バイト列 |
 | yuen | `requirement` | 4.1 の要件の端の中身 |
 | yuen | `source` | 出典の固定の並び（4.1 の `from` の行と同じ形で、条ごとに一行） |
 
-chobo の定義の文は、取り込む前に `chobo api` の JSON から作ると決めていた形のままである。`unit` は単位から `name` と `ledger` を除いたもの、`account` は勘定から `name` と `code` を除いたもの、`transfer` は振替から `name`・`code`・`definition`・`operations` を除き、その移動が触る勘定（`name` と `code` を除いたもの）を勘定の名前をキーにした `accounts` として足したもの。どれも、キーを UTF-8 のバイト列の順に並べ、二つの空白で字下げし、キーのあとを `": "`、改行を LF にして、最後に改行を一つ置いた JSON である（serde_json の `to_string_pretty` に、キーを並べた値を渡したものと同じ）。
+chobo の定義の文は、取り込む前に `chobo api` の JSON から作ると決めていた形のままである。`unit` は単位から `name` と `ledger` を除いたもの、`account` は勘定から `name` と `code` を除いたもの、`transfer` は振替から `name`・`code`・`definition`・`operations` を除き、その移動が触る勘定（`name` と `code` を除いたもの）を勘定の名前をキーにした `accounts` として足したもの。`operation`（振替の操作。2026-10-06 から）は、その振替の文に、操作の名前（`operation`）と、拒否されうる理由の名前の並び（`refusals`）を足したもの（chobo の DESIGN、口の `Items`）。どれも、キーを UTF-8 のバイト列の順に並べ、二つの空白で字下げし、キーのあとを `": "`、改行を LF にして、最後に改行を一つ置いた JSON である（serde_json の `to_string_pretty` に、キーを並べた値を渡したものと同じ）。
 
 テストの材料で取ったハッシュ（ritsu の D.7、`tests/suite.rs` が確かめる）：
 
@@ -644,6 +658,118 @@ yuen は、次のものが無くても動く（上の決定のとおり）。言
 | geas | 記録の一行めの spec のハッシュ | 記録が spec より古くても分からない（範囲の 4 と `affected` は、そのまま記録を読む） | 記録が spec より古いことが分かり、古い記録で範囲を辿らずに済む |
 
 取り込む前は、dandori にタスクや案件の一覧を出すコマンドが無いことも、ここに挙げていた（dandori に `api` を足す、ファイルの単位で名指す、yuen が `.flow` を読み解く、の三つから、二つめで作ると決めていた）。ritsu の D.6 で dandori の口（`Items`）ができ、D.7 で yuen がそれを読むようになって、タスクや案件を一つずつ名指して端にできるようになった（2.7）。
+
+### 3.6 OpenAPI と AsyncAPI の文書、Cedar のファイル（2026-10-06）
+
+**決定**：OpenAPI と AsyncAPI の文書の要素と、手で書いた Cedar のポリシーとスキーマの宣言を、リンクの端にする。ツール名は `openapi`、`asyncapi`、`cedar` で、種類は 2.3 の表のとおりである（参照の書き方そのものは ritsu の DESIGN 6.2）。`.proto`（3.4）と同じく標準の形式なので、どの言語の口も通さず、yuen が ritsu の読み手で読む。要件を一つの操作や一つのポリシーに結び付けられ、端もその要素の分だけになるので、同じ文書のほかの要素を直しても、そのリンクは止まらない。
+
+**どこを指すか**。文書の中のどこがどの参照になるかと、その逆は、ritsu-base の `document` が決める。sakai も同じ関数で引くので、二つの言語は同じ要素を同じ参照で書く。
+
+- `schema S`：`components/schemas/S`。`property P` は、その定義（`$ref` をたどった先）の `properties` の P で、無ければ `allOf` のスキーマを順に探す。`value V` は、その `enum` の値（文字列はそのまま、数と真偽は JSON の書き方、`null`）。
+- OpenAPI の `operation O`：`paths` と `webhooks` の操作のうち、`operationId` が O のもの。`operationId` の無い操作だけを、方法とパスで `"POST /orders/{orderId}/refunds"` と書く。`operationId` のある操作を方法とパスで書くと E202 で、候補に `operationId` の参照が出る（名前の書き方を一つにする。2.4）。
+- AsyncAPI の `channel C`（`channels` のキー）と、その下の `message M`（チャネルの `messages` のキー）、`message M`（`components/messages` のキー）、`operation O`（`operations` のキー）。
+- `pointer P`：ほかのもの（レスポンス、引数、サーバー、文書の一部のファイルのスキーマ）を、ファイルの頭からの JSON Pointer で指す。sakai が `$ref` の行き着く先や、サーバーを書くのにも使う。
+- Cedar の `policy`：`@id` の値。無ければ CLI と同じく、ファイルの中の順の `policy0`、`policy1`。`action` と `entity`：スキーマで宣言した名前で、名前空間は付けない。一つのスキーマのファイルで二つの名前空間が同じ名前を宣言していれば、一つに決まらないので E202 にする。
+- 読めない文書（YAML か JSON として読めない、もう一方の種類の文書）と、Cedar として読めないファイル（`.cedar`、`.cedarschema`、`.cedarschema.json` のどれでもないものも）は E205 である（6.2）。
+
+**端の中身**：
+
+- 文書の要素：要素の場所の行（`#<JSON Pointer>`。ほかのファイルなら `<ルートからのパス>#<JSON Pointer>`）と、値を JSON で書いたもの（マップのキーを UTF-8 のバイト列の順に並べ、字下げは空白二つ。chobo の端と同じ書き方。3.2）。そのあとに、要素の `$ref` がたどれる値の全部を、同じ形で、ファイルとポインタの順に足す。ほかのファイルへの `$ref` もたどり、例やデータの下の `$ref`、URL の `$ref`、何も指さない `$ref` はたどらない（sakai と同じ決まり。sakai の DESIGN 15.5）。OpenAPI の操作には、パスの項の `parameters` と `servers`（その操作にも効くもの）も足す。`property` の場所の行は、そのプロパティを持つスキーマ（か、それを `allOf` に持つスキーマ）が `required` に挙げていれば ` (required)` で終える。`value` の端は、`enum` の場所の行と、その値だけである。
+- Cedar のポリシー：コメントを除き、`cedar format` の形（幅 80、字下げ 2）で書いたポリシー（ritsu-base の `write_policy`）。
+- Cedar の `action` と `entity`：その宣言を、名前空間の中に、スキーマの人が読む形で書いたもの（ritsu-base の `write_schema`）。action の `context` と、entity の属性とタグが使う共通の型（`type`）も、その中に書く。人が読む形で書けないもの（レコードでない shape）は、JSON の形で書く。
+
+英語の材料 `tests/fixtures/refund_contracts` の、`schema Refund property amount` の端の中身は次の 7 行で、ハッシュは `55d566e37d48e6f7` である。
+
+```
+#/components/schemas/Refund/properties/amount (required)
+{
+  "description": "In pence",
+  "maximum": 10000,
+  "minimum": 1,
+  "type": "integer"
+}
+```
+
+`policy clerks_refund_within_their_limit` の端は次のとおりで、ハッシュは `0c7317f0e764cd08` である。ファイルの頭のコメントは入らない。
+
+```
+@id("clerks_refund_within_their_limit")
+permit (
+  principal in Shop::Role::"clerk",
+  action == Shop::Action::"refund_order",
+  resource
+)
+when { context.amount <= principal.refund_limit };
+```
+
+`action refund_order` の端は、`context` が使う共通の型 `RefundContext` を含む。ハッシュは `76a958d088eb5d8d` である。
+
+```
+namespace Shop {
+  type RefundContext = {
+    amount: Long
+  };
+
+  action "refund_order" appliesTo {
+    principal: [User],
+    resource: [Order],
+    context: RefundContext
+  };
+}
+```
+
+`Refund` の `amount` の上限を 10000 から 20000 に変えると（変異 `tests/mutants/E303_element_changed`。日本語の版は `E303_要素が変わった`）、印が付くのは、その要素を指すリンクと、その要素に `$ref` でたどり着く操作を指すリンクの二本である。同じ文書のほかの操作（`getOrder`）や、ほかの操作だけが読むスキーマを直しても、印は付かない（`tests/english_contracts.rs`）。
+
+```
+$ yuen check tests/mutants/E303_element_changed --root tests/mutants/E303_element_changed
+error[E303]: tests/mutants/E303_element_changed/refunds.req:10:3: openapi "api/orders.yaml" operation refundOrder changed after payments looked at this link on 2026-10-06
+    10 |   satisfied by openapi "api/orders.yaml" operation refundOrder
+  what changed in openapi "api/orders.yaml" operation refundOrder:
+      @@ -36,5 +36,5 @@
+            "amount": {
+              "description": "In pence",
+      -       "maximum": 10000,
+      +       "maximum": 20000,
+              "minimum": 1,
+              "type": "integer"
+  = Once a person has looked: yuen review tests/mutants/E303_element_changed --root tests/mutants/E303_element_changed --at tests/mutants/E303_element_changed/refunds.req:10 --by <role>
+error[E303]: tests/mutants/E303_element_changed/refunds.req:21:3: openapi "api/orders.yaml" schema Refund property amount changed after payments looked at this link on 2026-10-06
+    21 |   satisfied by openapi "api/orders.yaml" schema Refund property amount
+  what changed in openapi "api/orders.yaml" schema Refund property amount:
+      @@ -2,5 +2,5 @@
+        {
+          "description": "In pence",
+      -   "maximum": 10000,
+      +   "maximum": 20000,
+          "minimum": 1,
+          "type": "integer"
+  = Once a person has looked: yuen review tests/mutants/E303_element_changed --root tests/mutants/E303_element_changed --at tests/mutants/E303_element_changed/refunds.req:21 --by <role>
+tests/mutants/E303_element_changed: 2 errors
+```
+
+印は、ほかの成果物と同じく E303（リンク先が変わった）である。OpenSpec の要件の固定（20.3）が要件ごとのブロックで E103 を出すのと同じく、変わった要素の分だけが止まる。
+
+**理由**：
+
+- 要素ごとに端を取ると、変わった要素を指すリンクにだけ印が付く。文書を丸ごと `file` で指せば、文書のどこを直しても、その文書を指すリンクの全部に印が付く（3.2 で定義の文を端にしたのと同じ理由）。
+- `$ref` の先を足すのは、`.proto` のメソッドの端に、やりとりするメッセージを入れるのと同じ理由である（3.4）。操作が受け取るスキーマの上限が変われば、その操作を指すリンクは確かめ直すべきである。
+- 値を YAML のテキストではなく JSON で書くのは、コメント、引用符、キーの順、ブロックかフローかの書き方を変えただけでは止めないためである。`description` などの説明は、文書の値として契約を読む人に見せるものなので、書き直せば止まる（`.proto` のコメントは値ではないので落とした。3.4）。
+- Cedar のポリシーを `cedar format` の形で書くのは、コメントと改行の位置を変えただけでは止めないためである。ritsu-base の書き手は、同じポリシーを同じテキストに書く（ritsu の DESIGN 4.18）。
+- Cedar の `action` の端に、principal と resource のエンティティの宣言は入れない。エンティティの属性は、そのエンティティの端である。
+
+**捨てたもの**：
+
+- 要素の端を、YAML のその部分のテキストにすること。コメントや字下げを直しただけで止まり、ほかのファイルへの `$ref` の先が入らない。
+- 端を、ritsu-base の `openapi`（sekisho が操作を引く読み手）の型から作ること。型が持つのは、その読み手が読むもの（引数、本文の型と範囲、`security`、レスポンスの状態）だけで、ほかの変化（レスポンスの本文、説明、ヘッダー）を見落とす。人が確かめたのは文書の値である。
+- Cedar の `action` と `entity` を、名前空間を付けた名前（`Shop::User`、`Shop::Action::"refund_order"`）で書くこと。一つのファイルにはふつう名前空間が一つしかなく、action の名前は引用符を二重に書くことになる。二つの名前空間に同じ名前があるときは、E202 で言う。
+
+**確かめ方**：`tests/english_contracts.rs`（英語の材料 `refund_contracts`）と `tests/contracts.rs`（同じものを日本語の名前で書いた `contracts`）。要素の端の golden（`tests/golden/ends/` の 10 個）、要素を変えると止まり、同じ文書のほかの操作、ほかの操作だけが読むスキーマと文書の一部、コメント、キーの順では止まらないこと、Cedar のポリシーの条件を変えると止まり、コメント、改行、ほかのポリシーでは止まらないこと、action の `context` の型を変えると止まり、エンティティとほかの action では止まらないこと、E202（書き違えたとき、文書で名前が変わったとき、`operationId` のある操作を方法とパスで書いたとき、二つの名前空間）、E205、E403（文書もポリシーも何も確かめないので、`verified by` には書けない）、範囲（`scope openapi "." operation`、`scope cedar "policies" policy` など）の E404。例は `examples/refund_contracts`（英語の `refund_contracts.req` と日本語の版。15 章）で、README（英日）の「Contracts and policies」（「契約とポリシー」）の節が、上の変異にかけた出力を見せる。
+
+**まだやらないこと**：
+
+- sekisho の `.gate` の中のもの（ツール名 `sekisho`）。sekisho の段階 D で、sekisho の口 `Items` から読む。
+- Cedar の JSON の形のポリシーと、テンプレートのリンク。ritsu-base が読まない（ritsu の DESIGN 4.18）。
+- `affected` は、文書と Cedar のファイルを、ほかの成果物のファイルと同じく、ファイルの単位で答える（差分が触る要素までは絞らない）。
 
 ## 4. ハッシュと印
 
@@ -964,10 +1090,10 @@ exit code は 0（エラーなし。警告はあってよい）、1（エラー�
 | W101 | 固定した条が、どの要件からも引かれていない |
 | W102 | OpenSpec の仕様の要件を、プロジェクトのどの出典も固定していない（20 章） |
 | E201 | 成果物のファイルが無い（範囲のパスが無い、リンクにディレクトリを書いたときも） |
-| E202 | 成果物の名前が、そのファイルに無い（別名で書いた、名前が変わった。候補を添える） |
+| E202 | 成果物の名前が、そのファイルに無い（別名で書いた、名前が変わった。候補を添える）。Cedar のスキーマが同じ名前を二つの名前空間で宣言していて、一つに決まらない |
 | E203 | 名指したものの言語が、そのファイルについて答えられない（その言語の検査を通らない、読めない、定義の文を渡さない。その言語の診断を注に添える） |
 | E204 | 退いたコード（ritsu 0.23.0）。ツールの JSON が知らない形のときのためのものだった |
-| E205 | proto が読めない |
+| E205 | proto、OpenAPI と AsyncAPI の文書、Cedar のファイルが読めない（もう一方の種類の文書を指したときも。3.6） |
 | E206 | 名指したものの言語が、つながっていない（yuen のクレートのバイナリ。言語ごとに一つ、最初に名指したところで言い、exit 2。`ritsu yuen` で走らせる） |
 | W201 | 退いたコード（ritsu 0.23.0）。geas の記録が無いので主張があるかを確かめていない、と言うためのものだった |
 | E301 | まだ確かめていないリンク |
@@ -1492,6 +1618,7 @@ ritsu の決まりで、例は英語のものを先に置く。英語で作れ�
 | `greeter/` | geas の `examples/greeter/`（`greeter.geas`、`greeter.ja.geas`、`server.py`）と、`geas map <spec> --root .` が書いた記録 | 英語の `greeter.req` と日本語の版 `greeter.ja.req`。要件は主張ごとに一つで、出どころは `decided`。満たすのは `file "server.py"`、確かめるのは geas の主張。範囲の `server.py` に、geas の記録を通って辿る。`affected` の例の差分（`changes/change.diff`）と、変更のあとの記録（`changes/after.map.jsonl`） |
 | `payment_terms/` | koyomi の `payment_20th_close_next_10th.cal`（と `.ja.cal`）、`calendars/tokyo_business_days.cal`（と `東京の営業日.cal`）、`calendars/data/syukujitsu.csv` | 支払日の要件（例として決めた決まり）と、営業日の要件（出典はカレンダーが固定する内閣府の祝日の表を借りる）。確かめるのは koyomi の条件（`within_60_days_of_receipt`、`paid_on_a_business_day`）。範囲は `.cal` の日付 |
 | `refunds/` | chobo の `examples/refunds/refunds.book` と `refunds.ja.book` | 「返金は売上を超えない」の要件（例として決めた決まり）を、勘定一つと振替二つが満たし、帳簿の検査が確かめる。端の中身がそのもの一つの定義になる例。範囲は帳簿の振替 |
+| `refund_contracts/` | テストの材料 `tests/fixtures/refund_contracts` と `contracts` の文書とポリシー（どれもこの例のために書いたもの） | 店の返金の要件（例として決めた決まり）を、OpenAPI の文書の操作とプロパティ、AsyncAPI の文書の操作、Cedar のポリシーとアクションが満たす（3.6）。英語の `refund_contracts.req` と日本語の版 `refund_contracts.ja.req` が同じディレクトリにある。確かめる側は、どれも見送り |
 | `civil_code_periods/` | koyomi の `civil_code_period_end.ja.cal`、`calendars/民法142条の休日.cal`、`calendars/data/syukujitsu.csv`、`sources/law/129AC0000000089@2026-10-01/` | 1.1 の三つの要件（`civil_code_periods.ja.req`）。出典は koyomi から借りる。142 条の「その翌日」の読み方を、決めたこととして記録する（下） |
 | `civil_code_periods_reread/` | 同じもの。`.cal` だけ、`満了日_142条` を `roll following`（休みが明けるまで動かす読み方）に書き換えたもの | わざと止まる例。`.req`（`civil_code_periods_reread.ja.req`）と `reviewed/` は `civil_code_periods/` と同じバイト列で、`check` が E303 で日付の定義の差分を見せる |
 | `stamp_tax/` | rulec の `tests/corpus/印紙税の本則と軽減.rule` と、その出典のコピー（`sources/law/342AC0000000023@2026-04-01/`、`332AC0000000026@2026-04-01/`） | 契約書の印紙税額の要件を二つの版で書く（v1 は軽減の期間 `2014-04-01..2027-03-31` で、別表第一と措置法 91 条から。v2 は `2027-04-01..` で、別表第一から）。期間の始まりは規則の入力 `作成日` の範囲の始まり、軽減の終わりは規則の `define 軽減期間` にそろえた。満たすのは `output 印紙税額`、確かめるのは規則の検査。出典は yuen が自分で保存して固定する（コピーは規則のコピーと同じ本文で、E107 は出ない） |

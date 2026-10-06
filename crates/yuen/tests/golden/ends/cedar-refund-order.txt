@@ -1,0 +1,11 @@
+namespace Shop {
+  type RefundContext = {
+    amount: Long
+  };
+
+  action "refund_order" appliesTo {
+    principal: [User],
+    resource: [Order],
+    context: RefundContext
+  };
+}

@@ -227,10 +227,10 @@ pub fn ledger() -> Ledger {
             "E011",
             tr!("名指しの最初の語が、ツールの語ではありません", "A tool that does not exist"),
             tr!(
-                "名指しの最初の語が、rulec、dandori、koyomi、chobo、geas、proto、file、yuen、sakai のどれでもないとき（`dir` も、名指しの語ではありません）。",
-                "The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, file, yuen and sakai (`dir` is not a word of a naming either)."
+                "名指しの最初の語が、rulec、dandori、koyomi、chobo、geas、proto、openapi、asyncapi、cedar、file、yuen、sakai のどれでもないとき（`dir` も、名指しの語ではありません）。",
+                "The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen and sakai (`dir` is not a word of a naming either)."
             ),
-            tr!("九つのどれかを書いてください。ほかのファイルは `file \"…\"` で名指してください。", "Write one of the nine; name any other file with `file \"…\"`."),
+            tr!("この十二のツール名のどれかを書いてください。ほかのファイルは `file \"…\"` で指してください。", "Write one of the twelve; name any other file with `file \"…\"`."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by excel \"a.xlsx\"\n",
             &["E012", "E013"],
         )
@@ -393,8 +393,8 @@ pub fn ledger() -> Ledger {
             "E202",
             tr!("成果物の名前が、そのファイルにありません", "The name of an artifact is not in its file"),
             tr!(
-                "名指した名前が、そのファイルに無いとき（その言語が渡す名前にも、`.proto` の中にも無いとき）。別名で書いたときや、名前が変わったときにも出ます（注に候補が出ます）。",
-                "The name is not in the file (among the things its language gives, or in the `.proto`): written by its alias, or renamed (the candidates are given)."
+                "名指した名前が、そのファイルに無いとき（その言語が渡す名前にも、`.proto`、OpenAPI と AsyncAPI の文書、Cedar のファイルの中にも無いとき）。別名で書いたときや、名前が変わったときにも出ます（注に候補が出ます）。Cedar のスキーマが、同じ名前の action か entity を二つ以上の名前空間で宣言していて、一つに決まらないときにも出ます。",
+                "The name is not in the file (among the things its language gives, or in the `.proto`, the OpenAPI or AsyncAPI document, the Cedar file): written by its alias, or renamed (the candidates are given). Also a Cedar schema that declares an action or an entity of that name in more than one namespace, so the name is not one thing."
             ),
             tr!("別名ではなく、その言語の名前で書いてください。名前が変わったのなら、リンクも直してください。", "Write the name the language gives (not its alias); if it was renamed, correct the link."),
             include_str!("../tests/mutants/E202_無いメッセージ/例.req"),
@@ -429,9 +429,12 @@ pub fn ledger() -> Ledger {
         )),
         e(
             "E205",
-            tr!("proto が読めません", "A .proto cannot be read"),
-            tr!("`.proto` を、ritsu の `.proto` のパーサーが読めないとき（proto3 として読めないとき、import の先が読めないとき）。", "The `.proto` cannot be read by ritsu's reader of `.proto` files (not proto3, or an import that does not read)."),
-            tr!("`.proto` を直してください。", "Correct the `.proto`."),
+            tr!("proto、OpenAPI と AsyncAPI の文書、Cedar のファイルが読めません", "A .proto, an OpenAPI or AsyncAPI document, or a Cedar file cannot be read"),
+            tr!(
+                "yuen が自分で読む標準の形式のファイルを読めないとき。`.proto` を ritsu の `.proto` のパーサーが読めないとき（proto3 として読めないとき、import の先が読めないとき）、`openapi` と `asyncapi` で指した文書が YAML か JSON として読めないか、もう一方の種類の文書のとき、`cedar` で指したファイルが Cedar として読めないか、`.cedar`・`.cedarschema`・`.cedarschema.json` のどれでもないとき。",
+                "A file of a standard format yuen reads itself does not read: a `.proto` ritsu's reader of `.proto` files cannot read (not proto3, or an import that does not read); a document named by `openapi` or `asyncapi` that is not YAML or JSON, or is a document of the other kind; a file named by `cedar` that Cedar would not read, or that is no `.cedar`, `.cedarschema` or `.cedarschema.json`."
+            ),
+            tr!("ファイルを直してください。文書の種類が違うなら、その種類のツール名で指してください。", "Correct the file; a document of the other kind is named with its own tool."),
             include_str!("../tests/mutants/E205_読めないproto/例.req"),
             &["E201"],
         )

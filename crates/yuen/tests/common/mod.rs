@@ -222,6 +222,7 @@ pub const EXAMPLES: &[(&str, &[&str], &str)] = &[
     ("greeter", &["greeter.req", "greeter.ja.req"], "development"),
     ("payment_terms", &["payment_terms.req", "payment_terms.ja.req"], "development"),
     ("refunds", &["refunds.req", "refunds.ja.req"], "development"),
+    ("refund_contracts", &["refund_contracts.req", "refund_contracts.ja.req"], "development"),
     ("civil_code_periods", &["civil_code_periods.ja.req"], "開発"),
     ("civil_code_periods_reread", &["civil_code_periods_reread.ja.req"], "開発"),
     ("stamp_tax", &["stamp_tax.ja.req"], "開発"),

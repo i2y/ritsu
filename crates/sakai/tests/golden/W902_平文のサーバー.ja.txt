@@ -4,5 +4,5 @@
   = 暗号化して通信するプロトコルは https です。
   = ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、サーバーに `x-ritsu-plaintext: "<理由>"` と書いてください。
   関わるもの:
-      決済  payments/api/payments.yaml:73  #/servers/0
+      決済  openapi "payments/api/payments.yaml" pointer /servers/0
 ネットショップ.ctx: ok — コンテキスト 4、関係 5。成果物 9 件は、どれも一つのコンテキストに属する。境界を越える参照 7 件を確かめた（openapi 1、asyncapi 5、dandori 1）

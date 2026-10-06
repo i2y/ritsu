@@ -243,17 +243,18 @@ A context file names a file or a thing in it in one form, the same in yuen and i
 <tool> "<path>" [<kind> <name>]...
 ```
 
-The tools are `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `proto`, `file`, `yuen` and `sakai`.
-A kind can hold another only as its tool nests them: `service S method M`, `message M field f`, `enum E value V` for a `.proto`, `enum E value V` for a rule.
-The kinds are those of each tool: rulec's `input`, `output`, `enum`, `value`, `table`, `clause`, `define`, `derive`, `machine`, `source`; koyomi's `input`, `date`, `claim`, `source`; chobo's `unit`, `account`, `transfer`; geas's `claim`; dandori's `task`, `case`, `record`, `field`, `enum`, `value`, `input`, `output`; the `.proto`'s `service`, `method`, `message`, `field`, `enum`, `value`; yuen's `requirement`, `source`; sakai's `context`, `term`.
+The tools are `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `proto`, `openapi`, `asyncapi`, `cedar`, `file`, `yuen` and `sakai`.
+A kind can hold another only as its tool nests them: `service S method M`, `message M field f`, `enum E value V` for a `.proto`, `enum E value V` for a rule, `transfer T operation O` for a book, `schema S property P` and `schema S value V` for an OpenAPI or AsyncAPI document, `channel C message M` for an AsyncAPI one.
+The kinds are those of each tool: rulec's `input`, `output`, `enum`, `value`, `table`, `clause`, `define`, `derive`, `machine`, `source`; koyomi's `input`, `date`, `claim`, `source`; chobo's `unit`, `account`, `transfer`, `operation`; geas's `claim`; dandori's `task`, `case`, `record`, `field`, `enum`, `value`, `input`, `output`; the `.proto`'s `service`, `method`, `message`, `field`, `enum`, `value`; OpenAPI's `schema`, `property`, `value`, `operation`, `pointer`; AsyncAPI's `channel`, `message`, `operation`, `schema`, `property`, `value`, `pointer`; Cedar's `policy`, `action`, `entity`; yuen's `requirement`, `source`; sakai's `context`, `term`.
 A name is a word (no space, `"` or `#`) or a string in `"…"` with `\"` and `\\` as its only escapes.
 A path is from the directory of the file it is written in, `/` between its parts; an absolute path, or one that leaves the root, is E012.
 In JSON, a path is from the root: the nearest directory above the first path given that holds `.git`, or `--root`.
 
 The tool words and the kind words are keywords: no map, context, term or downstream value can be named with one (E002).
 
-The elements of an OpenAPI or AsyncAPI document have no name of this form yet. In a context file they are written short, in the context's own published language (`means`, the target of a mapping) or in the upstream's (the enum of a mapping): `schema <name>` and `enum <name>` (with `value <value>` under it) for `components/schemas`, `message <name>`, `channel <name>`, and `operation <name>` (an `operationId`, or a key of AsyncAPI's `operations`).
-`sakai api` and the diagnostics write them as their file and JSON Pointer, `payments/api/payments.yaml#/components/schemas/Charge`, the way a `$ref` points at them.
+The elements of an OpenAPI or AsyncAPI document are named in this form too: `openapi "payments/api/payments.yaml" schema Charge`, `openapi "…" operation createCharge` (an `operationId`, or for an operation with none its method and path, `"POST /charges"`), `asyncapi "…" channel paymentFailed`, and anything else by its JSON Pointer, `openapi "common/money.yaml" pointer /Money`. `sakai api` and the diagnostics write them so.
+In a context file they can also be written short, in the context's own published language (`means`, the target of a mapping) or in the upstream's (the enum of a mapping): `schema <name>` and `enum <name>` (with `value <value>` under it) for `components/schemas`, `message <name>`, `channel <name>`, and `operation <name>` (an `operationId`, or a key of AsyncAPI's `operations`).
+A `cedar` file is not an artifact sakai reads, and cannot be written under `owns` (E002).
 
 ## What `check` checks, in order
 
@@ -285,8 +286,8 @@ Every keyword has one English spelling and no synonym.
 | map file | `map`, `description`, `use context`, `covers`, `except`, `proto root`, `code`, `python`, `typescript`, `java`, `go`, `rust`, `test` |
 | context file | `context`, `description`, `owner`, `also`, `owns`, `dir`, `published language`, `crate`, `openapi`, `asyncapi`, `open host service`, `generated dir`, `terms`, `means`, `as` |
 | relationship | `upstream`, `downstream`, `conformist`, `anticorruption layer`, `customer`, `supplier`, `through`, `layer`, `enum`, `term`, `refuse`, `shared kernel with`, `partnership with`, `separate ways from` |
-| tool | `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `proto`, `file`, `yuen`, `sakai` |
-| kind | `input`, `output`, `enum`, `value`, `table`, `clause`, `define`, `derive`, `machine`, `source`, `date`, `claim`, `unit`, `account`, `transfer`, `service`, `method`, `message`, `field`, `requirement`, `context`, `term`, `task`, `case`, `record`, `schema`, `channel`, `operation` |
+| tool | `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `proto`, `openapi`, `asyncapi`, `cedar`, `file`, `yuen`, `sakai` |
+| kind | `input`, `output`, `enum`, `value`, `table`, `clause`, `define`, `derive`, `machine`, `source`, `date`, `claim`, `unit`, `account`, `transfer`, `service`, `method`, `message`, `field`, `requirement`, `context`, `term`, `task`, `case`, `record`, `schema`, `channel`, `operation`, `property`, `pointer`, `policy`, `action`, `entity` |
 
 ## Commands
 

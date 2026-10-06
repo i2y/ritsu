@@ -1,0 +1,7 @@
+@id("係は自分の上限まで返金できる")
+permit (
+  principal in Shop::Role::"clerk",
+  action == Shop::Action::"返金",
+  resource
+)
+when { context.amount <= principal.refund_limit };

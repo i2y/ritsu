@@ -1,0 +1,7 @@
+#/components/schemas/返金/properties/金額 (required)
+{
+  "description": "円",
+  "maximum": 100000,
+  "minimum": 1,
+  "type": "integer"
+}

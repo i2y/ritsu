@@ -89,15 +89,15 @@ h2:target { color: var(--accent); }
 <table>
 <thead><tr><th>Term</th><th>Definition</th><th>Means</th><th>Crosses into</th></tr></thead>
 <tbody>
-<tr><td><code>order</code></td><td>A customer&#39;s confirmed request to buy. A cancelled order stays</td><td><code>ordering/api/ordering.json#/components/schemas/Order</code></td><td><a href="#ctx-notifications">Notifications</a>, <a href="#ctx-payments">Payments</a></td></tr>
-<tr><td><code>order_placed</code></td><td>The event that an order has been placed</td><td><code>ordering/events/ordering.yaml#/channels/orderPlaced</code></td><td><a href="#ctx-notifications">Notifications</a>, <a href="#ctx-payments">Payments</a></td></tr>
+<tr><td><code>order</code></td><td>A customer&#39;s confirmed request to buy. A cancelled order stays</td><td><code>openapi &quot;ordering/api/ordering.json&quot; schema Order</code></td><td><a href="#ctx-notifications">Notifications</a>, <a href="#ctx-payments">Payments</a></td></tr>
+<tr><td><code>order_placed</code></td><td>The event that an order has been placed</td><td><code>asyncapi &quot;ordering/events/ordering.yaml&quot; channel orderPlaced</code></td><td><a href="#ctx-notifications">Notifications</a>, <a href="#ctx-payments">Payments</a></td></tr>
 </tbody>
 </table>
 <h3>Relationships</h3>
 <ul>
-<li>Shared kernel with <a href="#ctx-payments">Payments</a>: <code>dir &quot;common&quot;</code>. References that cross: <code>payments/api/payments.yaml:50</code> ($ref) → <code>common/money.yaml#/Money</code></li>
-<li>Downstream <a href="#ctx-payments">Payments</a>: open host service, published language <code>ordering.v1</code> → conformist. References that cross: <code>payments/events/payments.yaml:8</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderPlaced</code></li>
-<li>Downstream <a href="#ctx-notifications">Notifications</a>: open host service, published language <code>ordering.v1</code> → conformist. References that cross: <code>notifications/events/notifications.yaml:8</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderPlaced</code>; <code>notifications/events/notifications.yaml:10</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderCancelled</code>; <code>notifications/notify.flow:4</code> (use openapi) → <code>file &quot;ordering/api/ordering.json&quot;</code></li>
+<li>Shared kernel with <a href="#ctx-payments">Payments</a>: <code>dir &quot;common&quot;</code>. References that cross: <code>payments/api/payments.yaml:50</code> ($ref) → <code>openapi &quot;common/money.yaml&quot; pointer /Money</code></li>
+<li>Downstream <a href="#ctx-payments">Payments</a>: open host service, published language <code>ordering.v1</code> → conformist. References that cross: <code>payments/events/payments.yaml:8</code> (receive) → <code>asyncapi &quot;ordering/events/ordering.yaml&quot; channel orderPlaced</code></li>
+<li>Downstream <a href="#ctx-notifications">Notifications</a>: open host service, published language <code>ordering.v1</code> → conformist. References that cross: <code>notifications/events/notifications.yaml:8</code> (receive) → <code>asyncapi &quot;ordering/events/ordering.yaml&quot; channel orderPlaced</code>; <code>notifications/events/notifications.yaml:10</code> (receive) → <code>asyncapi &quot;ordering/events/ordering.yaml&quot; channel orderCancelled</code>; <code>notifications/notify.flow:4</code> (use openapi) → <code>openapi &quot;ordering/api/ordering.json&quot;</code></li>
 </ul>
 <h2 id="ctx-payments">Payments (payments)</h2>
 <p>Charges the customer&#39;s card for a placed order, and tells how the charge went</p>
@@ -121,15 +121,15 @@ h2:target { color: var(--accent); }
 <table>
 <thead><tr><th>Term</th><th>Definition</th><th>Means</th><th>Crosses into</th></tr></thead>
 <tbody>
-<tr><td><code>charge</code></td><td>Taking the money for one order from the customer&#39;s card</td><td><code>payments/api/payments.yaml#/components/schemas/Charge</code></td><td><a href="#ctx-shipping">Shipping</a></td></tr>
-<tr><td><code>charge_status</code></td><td>Where a charge is: waiting for the card&#39;s answer, taken, refused, or given back</td><td><code>payments/api/payments.yaml#/components/schemas/ChargeStatus</code></td><td><a href="#ctx-shipping">Shipping</a></td></tr>
+<tr><td><code>charge</code></td><td>Taking the money for one order from the customer&#39;s card</td><td><code>openapi &quot;payments/api/payments.yaml&quot; schema Charge</code></td><td><a href="#ctx-shipping">Shipping</a></td></tr>
+<tr><td><code>charge_status</code></td><td>Where a charge is: waiting for the card&#39;s answer, taken, refused, or given back</td><td><code>openapi &quot;payments/api/payments.yaml&quot; schema ChargeStatus</code></td><td><a href="#ctx-shipping">Shipping</a></td></tr>
 </tbody>
 </table>
 <h3>Relationships</h3>
 <ul>
-<li>Shared kernel with <a href="#ctx-ordering">Ordering</a>: <code>dir &quot;common&quot;</code>. References that cross: <code>payments/api/payments.yaml:50</code> ($ref) → <code>common/money.yaml#/Money</code></li>
-<li>Upstream <a href="#ctx-ordering">Ordering</a>: open host service, published language <code>ordering.v1</code> → conformist. References that cross: <code>payments/events/payments.yaml:8</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderPlaced</code></li>
-<li>Downstream <a href="#ctx-shipping">Shipping</a>: open host service, published language <code>payments.v1</code> → anticorruption layer. References that cross: <code>shipping/acl/payments.yaml:9</code> (receive) → <code>payments/events/payments.yaml#/channels/paymentSucceeded</code>; <code>shipping/acl/payments.yaml:11</code> (receive) → <code>payments/events/payments.yaml#/channels/paymentFailed</code></li>
+<li>Shared kernel with <a href="#ctx-ordering">Ordering</a>: <code>dir &quot;common&quot;</code>. References that cross: <code>payments/api/payments.yaml:50</code> ($ref) → <code>openapi &quot;common/money.yaml&quot; pointer /Money</code></li>
+<li>Upstream <a href="#ctx-ordering">Ordering</a>: open host service, published language <code>ordering.v1</code> → conformist. References that cross: <code>payments/events/payments.yaml:8</code> (receive) → <code>asyncapi &quot;ordering/events/ordering.yaml&quot; channel orderPlaced</code></li>
+<li>Downstream <a href="#ctx-shipping">Shipping</a>: open host service, published language <code>payments.v1</code> → anticorruption layer. References that cross: <code>shipping/acl/payments.yaml:9</code> (receive) → <code>asyncapi &quot;payments/events/payments.yaml&quot; channel paymentSucceeded</code>; <code>shipping/acl/payments.yaml:11</code> (receive) → <code>asyncapi &quot;payments/events/payments.yaml&quot; channel paymentFailed</code></li>
 <li>Separate ways from <a href="#ctx-notifications">Notifications</a> (no reference crosses, as checked)</li>
 </ul>
 <h2 id="ctx-shipping">Shipping (shipping)</h2>
@@ -154,12 +154,12 @@ h2:target { color: var(--accent); }
 <table>
 <thead><tr><th>Term</th><th>Definition</th><th>Means</th><th>Crosses into</th></tr></thead>
 <tbody>
-<tr><td><code>shipment_gate</code></td><td>Whether an order may leave the warehouse</td><td><code>shipping/api/shipping.yaml#/components/schemas/ShipmentGate</code></td><td>—</td></tr>
+<tr><td><code>shipment_gate</code></td><td>Whether an order may leave the warehouse</td><td><code>openapi &quot;shipping/api/shipping.yaml&quot; schema ShipmentGate</code></td><td>—</td></tr>
 </tbody>
 </table>
 <h3>Relationships</h3>
 <ul>
-<li>Upstream <a href="#ctx-payments">Payments</a>: open host service, published language <code>payments.v1</code> → anticorruption layer. References that cross: <code>shipping/acl/payments.yaml:9</code> (receive) → <code>payments/events/payments.yaml#/channels/paymentSucceeded</code>; <code>shipping/acl/payments.yaml:11</code> (receive) → <code>payments/events/payments.yaml#/channels/paymentFailed</code></li>
+<li>Upstream <a href="#ctx-payments">Payments</a>: open host service, published language <code>payments.v1</code> → anticorruption layer. References that cross: <code>shipping/acl/payments.yaml:9</code> (receive) → <code>asyncapi &quot;payments/events/payments.yaml&quot; channel paymentSucceeded</code>; <code>shipping/acl/payments.yaml:11</code> (receive) → <code>asyncapi &quot;payments/events/payments.yaml&quot; channel paymentFailed</code></li>
 </ul>
 <h2 id="ctx-notifications">Notifications (notifications)</h2>
 <p>Tells the customer by mail what happened to an order</p>
@@ -184,7 +184,7 @@ h2:target { color: var(--accent); }
 </table>
 <h3>Relationships</h3>
 <ul>
-<li>Upstream <a href="#ctx-ordering">Ordering</a>: open host service, published language <code>ordering.v1</code> → conformist. References that cross: <code>notifications/events/notifications.yaml:8</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderPlaced</code>; <code>notifications/events/notifications.yaml:10</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderCancelled</code>; <code>notifications/notify.flow:4</code> (use openapi) → <code>file &quot;ordering/api/ordering.json&quot;</code></li>
+<li>Upstream <a href="#ctx-ordering">Ordering</a>: open host service, published language <code>ordering.v1</code> → conformist. References that cross: <code>notifications/events/notifications.yaml:8</code> (receive) → <code>asyncapi &quot;ordering/events/ordering.yaml&quot; channel orderPlaced</code>; <code>notifications/events/notifications.yaml:10</code> (receive) → <code>asyncapi &quot;ordering/events/ordering.yaml&quot; channel orderCancelled</code>; <code>notifications/notify.flow:4</code> (use openapi) → <code>openapi &quot;ordering/api/ordering.json&quot;</code></li>
 <li>Separate ways from <a href="#ctx-payments">Payments</a> (no reference crosses, as checked)</li>
 </ul>
 <h2>Glossary index</h2>
@@ -201,7 +201,7 @@ h2:target { color: var(--accent); }
 </table>
 <h2>Mappings</h2>
 <h3>Shipping ← Payments: ChargeStatus</h3>
-<p>Maps <code>payments/api/payments.yaml#/components/schemas/ChargeStatus</code> to <code>shipping/api/shipping.yaml#/components/schemas/ShipmentGate</code>. The layer is <code>dir &quot;shipping/acl&quot;</code>. The mapping is written in <code>contexts/shipping.ctx</code>; the downstream values are checked to be in the target enum.</p>
+<p>Maps <code>openapi &quot;payments/api/payments.yaml&quot; schema ChargeStatus</code> to <code>openapi &quot;shipping/api/shipping.yaml&quot; schema ShipmentGate</code>. The layer is <code>dir &quot;shipping/acl&quot;</code>. The mapping is written in <code>contexts/shipping.ctx</code>; the downstream values are checked to be in the target enum.</p>
 <table>
 <thead><tr><th>Upstream value</th><th>Downstream value</th></tr></thead>
 <tbody>

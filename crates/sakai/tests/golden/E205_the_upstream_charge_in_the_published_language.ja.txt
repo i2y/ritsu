@@ -1,7 +1,7 @@
 エラー[E205]: shipping/api/shipping.yaml:34:11: 「Shipping」の公表された言語 shipping.v1 に、上流「Payments」の型が出ています
     34 |           $ref: '../../payments/api/payments.yaml#/components/schemas/Charge'
-  = shipping/api/shipping.yaml は payments/api/payments.yaml#/components/schemas/Charge を使っています。腐敗防止層の下流の公表された言語には、上流のモデルを出せません。層の中で自分の型に読み替えてください。
+  = shipping/api/shipping.yaml は openapi "payments/api/payments.yaml" schema Charge を使っています。腐敗防止層の下流の公表された言語には、上流のモデルを出せません。層の中で自分の型に読み替えてください。
   関わるもの:
-      Shipping  shipping/api/shipping.yaml:34  $ref: ../../payments/api/payments.yaml#/components/schemas/Charge
-      Payments  payments/api/payments.yaml:51  #/components/schemas/Charge（公表された言語 payments.v1 のもの）
-      Shipping  contexts/shipping.ctx:16       upstream Payments anticorruption layer
+      Shipping  shipping/api/shipping.yaml:34                       $ref: ../../payments/api/payments.yaml#/components/schemas/Charge
+      Payments  openapi "payments/api/payments.yaml" schema Charge  公表された言語 payments.v1 のもの
+      Shipping  contexts/shipping.ctx:16                            upstream Payments anticorruption layer

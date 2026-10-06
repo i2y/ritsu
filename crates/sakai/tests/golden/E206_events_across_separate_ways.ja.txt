@@ -1,6 +1,6 @@
-エラー[E206]: notifications/events/notifications.yaml:12:5: 「Notifications」の notifications/events/notifications.yaml が、別々の道の相手「Payments」の payments/events/payments.yaml#/channels/paymentSucceeded を参照しています（receive）
+エラー[E206]: notifications/events/notifications.yaml:12:5: 「Notifications」の notifications/events/notifications.yaml が、別々の道の相手「Payments」の asyncapi "payments/events/payments.yaml" channel paymentSucceeded を参照しています（receive）
     12 |     $ref: '../../payments/events/payments.yaml#/channels/paymentSucceeded'
   = 別々の道は、二つのあいだに何の参照も持たないという決定です。参照が要るなら、別々の道をやめて関係を書いてください。
   関わるもの:
-      Notifications  notifications/events/notifications.yaml:12  $ref: ../../payments/events/payments.yaml#/channels/paymentSucceeded
-      Payments       payments/events/payments.yaml:9             #/channels/paymentSucceeded（公表された言語 payments.v1 のもの）
+      Notifications  notifications/events/notifications.yaml:12                         $ref: ../../payments/events/payments.yaml#/channels/paymentSucceeded
+      Payments       asyncapi "payments/events/payments.yaml" channel paymentSucceeded  公表された言語 payments.v1 のもの

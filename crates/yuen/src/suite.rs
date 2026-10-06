@@ -29,10 +29,12 @@ pub struct Suite {
     asked: Rc<Asked>,
 }
 
-/// What a run has asked, by file.
+/// What a run has asked, by file; and the documents and Cedar files it has read (DESIGN 3.6), so
+/// that a large document many links name is read once.
 #[derive(Default)]
 struct Asked {
     sources: RefCell<BTreeMap<(String, PathBuf), Result<Vec<Source>, Vec<Said>>>>,
+    documents: RefCell<BTreeMap<(PathBuf, Tool, String), Rc<Result<crate::documents::Read, ritsu_base::text::Text>>>>,
 }
 
 impl Suite {
@@ -42,11 +44,24 @@ impl Suite {
     /// Whether yuen is handed what it needs to read the files of `tool`.
     pub fn reads(&self, tool: Tool) -> bool {
         match tool {
-            Tool::File | Tool::Proto => true,
+            // the standard formats, which yuen reads itself (DESIGN 3.4, 3.6)
+            Tool::File | Tool::Proto | Tool::Openapi | Tool::Asyncapi | Tool::Cedar => true,
             Tool::Rulec | Tool::Koyomi => self.index.reads_items(tool) && self.sources.contains_key(tool.word()),
             Tool::Geas => self.index.reads_items(tool) && self.claims.is_some(),
             t => self.index.reads_items(t),
         }
+    }
+
+    /// The file of a reference of `openapi`, `asyncapi` or `cedar` (`file`, from the root), read
+    /// once in a run (DESIGN 3.6).
+    pub fn document(&self, root: &Path, tool: Tool, file: &str) -> Rc<Result<crate::documents::Read, ritsu_base::text::Text>> {
+        let key = (root.to_path_buf(), tool, file.to_string());
+        if let Some(r) = self.asked.documents.borrow().get(&key) {
+            return r.clone();
+        }
+        let r = Rc::new(crate::documents::load(root, tool, file));
+        self.asked.documents.borrow_mut().insert(key, r.clone());
+        r
     }
 
     /// The sources a rule or a calendar pins (`abs`, absolute), asked once in a run. None when the

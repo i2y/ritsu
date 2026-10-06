@@ -42,18 +42,25 @@ impl Ref {
         Ref { context: context.map(String::from), name: Some(name), file: None, line: None, what, via: None }
     }
 
+    /// An element named by its reference, and the line of a file it is at: the text gives the
+    /// reference, and the JSON both.
+    pub fn name_at(context: Option<&str>, name: Name, file: &str, line: usize, what: Text) -> Ref {
+        Ref { context: context.map(String::from), name: Some(name), file: Some(file.to_string()), line: Some(line), what, via: None }
+    }
+
     pub fn via(mut self, v: &str) -> Ref {
         self.via = Some(v.to_string());
         self
     }
 
-    /// `ctx/請求.ctx:12`, `proto/x.proto:5`, or the name's text. The place in a file is written from
-    /// where sakai was run; a name keeps its path from the root, as names do everywhere (DESIGN 2.4).
+    /// The name's text, or `ctx/請求.ctx:12`, `proto/x.proto:5`. A name keeps its path from the
+    /// root, as names do everywhere (DESIGN 2.4); a place in a file is written from where sakai
+    /// was run.
     pub fn place(&self) -> String {
         match (&self.file, self.line, &self.name) {
-            (Some(f), Some(l), _) => format!("{}:{l}", shown(f)),
-            (Some(f), None, _) => shown(f),
-            (None, _, Some(n)) => n.text(),
+            (_, _, Some(n)) => n.text(),
+            (Some(f), Some(l), None) => format!("{}:{l}", shown(f)),
+            (Some(f), None, None) => shown(f),
             (None, _, None) => String::new(),
         }
     }

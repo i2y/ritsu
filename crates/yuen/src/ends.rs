@@ -127,14 +127,19 @@ pub enum Unread {
     NoSuchName { same_kind: Vec<(Name, End)> },
     /// A `.proto` that does not read (E205): the file, and why.
     Proto(String, ritsu_base::text::Text),
+    /// An OpenAPI or AsyncAPI document or a Cedar file that does not read as the tool's (E205):
+    /// the file, and why.
+    Doc(String, ritsu_base::text::Text),
+    /// A Cedar schema declares the name in more than one namespace (E202): the namespaces.
+    Twice(Vec<String>),
 }
 
 /// The end of an artifact (DESIGN 3.2): a file's bytes; a thing of a file of rulec, koyomi,
 /// chobo, geas, dandori or sakai, its definition as its language gives it (`Items`, found in the
-/// project's index); an element
-/// of a `.proto`, the text of DESIGN 3.4. A file of rulec or koyomi is held to its language's
-/// check first (`Sources`, which answers only for a file that passes it), and a file of the
-/// others to its language reading it (`Items`).
+/// project's index); an element of a `.proto`, the text of DESIGN 3.4; an element of an OpenAPI or
+/// AsyncAPI document, a Cedar policy, action or entity type, the text of DESIGN 3.6. A file of
+/// rulec or koyomi is held to its language's check first (`Sources`, which answers only for a file
+/// that passes it), and a file of the others to its language reading it (`Items`).
 pub fn artifact_end(p: &Project, n: &Name) -> Result<End, Unread> {
     let abs = if n.path == "." { p.root.clone() } else { p.root.join(&n.path) };
     if ritsu_base::fs::is_dir(&abs) {
@@ -159,6 +164,26 @@ pub fn artifact_end(p: &Project, n: &Name) -> Result<End, Unread> {
                     .collect();
                 Unread::NoSuchName { same_kind }
             })
+        }
+        Tool::Openapi | Tool::Asyncapi | Tool::Cedar => {
+            let loaded = p.suite.document(&p.root, n.tool, &n.path);
+            let read = loaded.as_ref().as_ref().map_err(|why| Unread::Doc(n.path.clone(), why.clone()))?;
+            if n.items.is_empty() {
+                return bytes();
+            }
+            match crate::documents::end_text(read, n) {
+                Ok(t) => Ok(End::of(t.into_bytes())),
+                Err(crate::documents::Miss::Twice(spaces)) => Err(Unread::Twice(spaces)),
+                Err(crate::documents::Miss::NotThere) => {
+                    let kind = n.kind().unwrap_or("");
+                    let parent = Name { tool: n.tool, path: n.path.clone(), items: n.items[..n.items.len() - 1].to_vec() };
+                    let same_kind = crate::documents::gather(read, &parent, kind)
+                        .into_iter()
+                        .filter_map(|m| crate::documents::end_text(read, &m).ok().map(|t| (m, End::of(t.into_bytes()))))
+                        .collect();
+                    Err(Unread::NoSuchName { same_kind })
+                }
+            }
         }
         t if crate::suite::Suite::READ.contains(&t) => {
             if !p.suite.reads(t) {

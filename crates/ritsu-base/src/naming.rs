@@ -14,8 +14,9 @@ use crate::paths::{self, PathError};
 use crate::text::Text;
 use crate::tr;
 
-/// The nine tools a naming can start with (DESIGN 6.2, item 2), and sekisho. `ritsu` is not one:
-/// it is not a language.
+/// The twelve tools a naming can start with (DESIGN 6.2, item 2), and sekisho. `ritsu` is not one:
+/// it is not a language. Four are standard formats every language reads the same way: `.proto`
+/// files, OpenAPI and AsyncAPI documents, and Cedar's policies and schemas.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tool {
     Rulec,
@@ -24,6 +25,13 @@ pub enum Tool {
     Chobo,
     Geas,
     Proto,
+    /// An OpenAPI document (YAML or JSON), or a part of one that a document reaches by `$ref`.
+    Openapi,
+    /// An AsyncAPI document, or a part of one.
+    Asyncapi,
+    /// Cedar's policies (`.cedar`) and schemas (`.cedarschema`, `.cedarschema.json`), written by
+    /// hand: a `.gate`'s own things are `sekisho`'s.
+    Cedar,
     File,
     Yuen,
     Sakai,
@@ -38,7 +46,7 @@ pub enum Tool {
 pub type Kinds = &'static [(&'static str, &'static [&'static str])];
 
 impl Tool {
-    pub const ALL: [Tool; 9] = [Tool::Rulec, Tool::Dandori, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Proto, Tool::File, Tool::Yuen, Tool::Sakai];
+    pub const ALL: [Tool; 12] = [Tool::Rulec, Tool::Dandori, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Proto, Tool::Openapi, Tool::Asyncapi, Tool::Cedar, Tool::File, Tool::Yuen, Tool::Sakai];
 
     pub fn word(self) -> &'static str {
         match self {
@@ -48,6 +56,9 @@ impl Tool {
             Tool::Chobo => "chobo",
             Tool::Geas => "geas",
             Tool::Proto => "proto",
+            Tool::Openapi => "openapi",
+            Tool::Asyncapi => "asyncapi",
+            Tool::Cedar => "cedar",
             Tool::File => "file",
             Tool::Yuen => "yuen",
             Tool::Sakai => "sakai",
@@ -59,7 +70,9 @@ impl Tool {
         Tool::ALL.into_iter().find(|t| t.word() == w)
     }
 
-    /// The extension of the tool's files; `file` names any file.
+    /// The extension of the tool's files, when one extension says a file is the tool's; `file`
+    /// names any file. An OpenAPI or AsyncAPI document is a `.yaml`, a `.yml` or a `.json` whose
+    /// top mapping says which it is, and Cedar has two kinds of file: see [`Tool::extensions`].
     pub fn extension(self) -> Option<&'static str> {
         match self {
             Tool::Rulec => Some("rule"),
@@ -68,10 +81,30 @@ impl Tool {
             Tool::Chobo => Some("book"),
             Tool::Geas => Some("geas"),
             Tool::Proto => Some("proto"),
+            Tool::Openapi | Tool::Asyncapi | Tool::Cedar => None,
             Tool::File => None,
             Tool::Yuen => Some("req"),
             Tool::Sakai => Some("ctx"),
             Tool::Sekisho => Some("gate"),
+        }
+    }
+
+    /// The endings of the names of the tool's files (`.cedarschema.json` is one): what a directory
+    /// holds of the tool. Empty for `file`, which takes any file.
+    pub fn extensions(self) -> &'static [&'static str] {
+        match self {
+            Tool::Openapi | Tool::Asyncapi => &[".yaml", ".yml", ".json"],
+            Tool::Cedar => &[".cedar", ".cedarschema", ".cedarschema.json"],
+            Tool::Rulec => &[".rule"],
+            Tool::Dandori => &[".flow"],
+            Tool::Koyomi => &[".cal"],
+            Tool::Chobo => &[".book"],
+            Tool::Geas => &[".geas"],
+            Tool::Proto => &[".proto"],
+            Tool::File => &[],
+            Tool::Yuen => &[".req"],
+            Tool::Sakai => &[".ctx"],
+            Tool::Sekisho => &[".gate"],
         }
     }
 
@@ -91,10 +124,21 @@ impl Tool {
                 ("source", &[]),
             ],
             Tool::Koyomi => &[("input", &[]), ("date", &[]), ("claim", &[]), ("source", &[])],
-            Tool::Chobo => &[("unit", &[]), ("account", &[]), ("transfer", &[])],
+            // an operation of a transfer: `do`, or `hold`, `post` and `void` for one that holds
+            Tool::Chobo => &[("unit", &[]), ("account", &[]), ("transfer", &["operation"])],
             Tool::Geas => &[("claim", &[])],
             Tool::Dandori => &[("task", &[]), ("case", &[]), ("record", &["field"]), ("enum", &["value"]), ("input", &[]), ("output", &[])],
             Tool::Proto => &[("service", &["method"]), ("message", &["field"]), ("enum", &["value"])],
+            // A schema under `components/schemas`, a property of one and a value of its `enum`; an
+            // operation by its `operationId`, or with none by its method and path
+            // (`"POST /orders/{orderId}/refunds"`); and anything else by its JSON Pointer.
+            Tool::Openapi => &[("schema", &["property", "value"]), ("operation", &[]), ("pointer", &[])],
+            // A channel (a key of `channels`) and a message of it, a message of
+            // `components/messages`, an operation (a key of `operations`), a schema as OpenAPI's.
+            Tool::Asyncapi => &[("channel", &["message"]), ("message", &[]), ("operation", &[]), ("schema", &["property", "value"]), ("pointer", &[])],
+            // A policy by its id (`@id`, else `policy<n>` as the CLI numbers them), and an action and
+            // an entity type of a schema, by the names they are declared with.
+            Tool::Cedar => &[("policy", &[]), ("action", &[]), ("entity", &[])],
             Tool::File => &[],
             Tool::Yuen => &[("requirement", &[]), ("source", &[])],
             Tool::Sakai => &[("context", &[]), ("term", &[])],
@@ -128,7 +172,8 @@ impl Tool {
         self.kinds().iter().find(|(_, cs)| cs.contains(&child)).map(|(k, _)| *k)
     }
 
-    /// Whether a naming of the tool can have a pair under a pair (proto, rulec, dandori).
+    /// Whether a naming of the tool can have a pair under a pair (proto, rulec, dandori, chobo,
+    /// openapi, asyncapi).
     pub fn nests(self) -> bool {
         self.kinds().iter().any(|(_, cs)| !cs.is_empty())
     }

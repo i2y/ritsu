@@ -43,8 +43,8 @@ examples/webshop.ja/ネットショップ.ctx: ok — コンテキスト 4、関
   = 公表された言語 payments.v1 の公開ホストサービスは createCharge、getCharge、paymentSucceeded です。
   = 境界の向こうのチャネルに送ったりそこから受けたりできるのは、相手が `open host service` に並べたチャネルだけです（HTTP の操作も同じです）。相手の公表された言語の `open host service` に足してもらうか、相手が開いたものを使ってください。
   関わるもの:
-      配送  shipping/acl/payments.yaml:11     $ref: ../../payments/events/payments.yaml#/channels/paymentFailed
-      決済  payments/events/payments.yaml:14  #/channels/paymentFailed（公表された言語 payments.v1 のもの）
+      配送  shipping/acl/payments.yaml:11                                   $ref: ../../payments/events/payments.yaml#/channels/paymentFailed
+      決済  asyncapi "payments/events/payments.yaml" channel paymentFailed  公表された言語 payments.v1 のもの
 ```
 
 `tests/mutants` のうち、名前が `E108_文書の字下げのタブ`、`E108_AsyncAPI_2_の文書`、`W104_URL_を指す_ref`、`E202_公表されていない文書`、`E204_層の外の文書`、`E205_公表された言語に上流の課金`、`E206_別々の道を越えるイベント`、`E210_開いていないチャネル`、`E301_文書に無いチャネル`、`E401_課金の状態に値が増えた` のものと、`W901_`、`W902_`、`W903_` で始まる日本語の名前のものが、この例を一か所ずつ変えたものです。

@@ -51,14 +51,14 @@ Takes the customer's orders, and tells the other services when an order is place
 
 | Term | Definition | Means | Crosses into |
 |---|---|---|---|
-| `order` | A customer's confirmed request to buy. A cancelled order stays | `ordering/api/ordering.json#/components/schemas/Order` | [Notifications](#notifications-notifications), [Payments](#payments-payments) |
-| `order_placed` | The event that an order has been placed | `ordering/events/ordering.yaml#/channels/orderPlaced` | [Notifications](#notifications-notifications), [Payments](#payments-payments) |
+| `order` | A customer's confirmed request to buy. A cancelled order stays | `openapi "ordering/api/ordering.json" schema Order` | [Notifications](#notifications-notifications), [Payments](#payments-payments) |
+| `order_placed` | The event that an order has been placed | `asyncapi "ordering/events/ordering.yaml" channel orderPlaced` | [Notifications](#notifications-notifications), [Payments](#payments-payments) |
 
 ### Relationships
 
-- Shared kernel with [Payments](#payments-payments): `dir "common"`. References that cross: `payments/api/payments.yaml:50` ($ref) → `common/money.yaml#/Money`
-- Downstream [Payments](#payments-payments): open host service, published language `ordering.v1` → conformist. References that cross: `payments/events/payments.yaml:8` (receive) → `ordering/events/ordering.yaml#/channels/orderPlaced`
-- Downstream [Notifications](#notifications-notifications): open host service, published language `ordering.v1` → conformist. References that cross: `notifications/events/notifications.yaml:8` (receive) → `ordering/events/ordering.yaml#/channels/orderPlaced`; `notifications/events/notifications.yaml:10` (receive) → `ordering/events/ordering.yaml#/channels/orderCancelled`; `notifications/notify.flow:4` (use openapi) → `file "ordering/api/ordering.json"`
+- Shared kernel with [Payments](#payments-payments): `dir "common"`. References that cross: `payments/api/payments.yaml:50` ($ref) → `openapi "common/money.yaml" pointer /Money`
+- Downstream [Payments](#payments-payments): open host service, published language `ordering.v1` → conformist. References that cross: `payments/events/payments.yaml:8` (receive) → `asyncapi "ordering/events/ordering.yaml" channel orderPlaced`
+- Downstream [Notifications](#notifications-notifications): open host service, published language `ordering.v1` → conformist. References that cross: `notifications/events/notifications.yaml:8` (receive) → `asyncapi "ordering/events/ordering.yaml" channel orderPlaced`; `notifications/events/notifications.yaml:10` (receive) → `asyncapi "ordering/events/ordering.yaml" channel orderCancelled`; `notifications/notify.flow:4` (use openapi) → `openapi "ordering/api/ordering.json"`
 
 ## Payments (payments)
 
@@ -82,14 +82,14 @@ Charges the customer's card for a placed order, and tells how the charge went
 
 | Term | Definition | Means | Crosses into |
 |---|---|---|---|
-| `charge` | Taking the money for one order from the customer's card | `payments/api/payments.yaml#/components/schemas/Charge` | [Shipping](#shipping-shipping) |
-| `charge_status` | Where a charge is: waiting for the card's answer, taken, refused, or given back | `payments/api/payments.yaml#/components/schemas/ChargeStatus` | [Shipping](#shipping-shipping) |
+| `charge` | Taking the money for one order from the customer's card | `openapi "payments/api/payments.yaml" schema Charge` | [Shipping](#shipping-shipping) |
+| `charge_status` | Where a charge is: waiting for the card's answer, taken, refused, or given back | `openapi "payments/api/payments.yaml" schema ChargeStatus` | [Shipping](#shipping-shipping) |
 
 ### Relationships
 
-- Shared kernel with [Ordering](#ordering-ordering): `dir "common"`. References that cross: `payments/api/payments.yaml:50` ($ref) → `common/money.yaml#/Money`
-- Upstream [Ordering](#ordering-ordering): open host service, published language `ordering.v1` → conformist. References that cross: `payments/events/payments.yaml:8` (receive) → `ordering/events/ordering.yaml#/channels/orderPlaced`
-- Downstream [Shipping](#shipping-shipping): open host service, published language `payments.v1` → anticorruption layer. References that cross: `shipping/acl/payments.yaml:9` (receive) → `payments/events/payments.yaml#/channels/paymentSucceeded`; `shipping/acl/payments.yaml:11` (receive) → `payments/events/payments.yaml#/channels/paymentFailed`
+- Shared kernel with [Ordering](#ordering-ordering): `dir "common"`. References that cross: `payments/api/payments.yaml:50` ($ref) → `openapi "common/money.yaml" pointer /Money`
+- Upstream [Ordering](#ordering-ordering): open host service, published language `ordering.v1` → conformist. References that cross: `payments/events/payments.yaml:8` (receive) → `asyncapi "ordering/events/ordering.yaml" channel orderPlaced`
+- Downstream [Shipping](#shipping-shipping): open host service, published language `payments.v1` → anticorruption layer. References that cross: `shipping/acl/payments.yaml:9` (receive) → `asyncapi "payments/events/payments.yaml" channel paymentSucceeded`; `shipping/acl/payments.yaml:11` (receive) → `asyncapi "payments/events/payments.yaml" channel paymentFailed`
 - Separate ways from [Notifications](#notifications-notifications) (no reference crosses, as checked)
 
 ## Shipping (shipping)
@@ -114,11 +114,11 @@ Ships an order once its charge has gone through
 
 | Term | Definition | Means | Crosses into |
 |---|---|---|---|
-| `shipment_gate` | Whether an order may leave the warehouse | `shipping/api/shipping.yaml#/components/schemas/ShipmentGate` | — |
+| `shipment_gate` | Whether an order may leave the warehouse | `openapi "shipping/api/shipping.yaml" schema ShipmentGate` | — |
 
 ### Relationships
 
-- Upstream [Payments](#payments-payments): open host service, published language `payments.v1` → anticorruption layer. References that cross: `shipping/acl/payments.yaml:9` (receive) → `payments/events/payments.yaml#/channels/paymentSucceeded`; `shipping/acl/payments.yaml:11` (receive) → `payments/events/payments.yaml#/channels/paymentFailed`
+- Upstream [Payments](#payments-payments): open host service, published language `payments.v1` → anticorruption layer. References that cross: `shipping/acl/payments.yaml:9` (receive) → `asyncapi "payments/events/payments.yaml" channel paymentSucceeded`; `shipping/acl/payments.yaml:11` (receive) → `asyncapi "payments/events/payments.yaml" channel paymentFailed`
 
 ## Notifications (notifications)
 
@@ -142,7 +142,7 @@ Tells the customer by mail what happened to an order
 
 ### Relationships
 
-- Upstream [Ordering](#ordering-ordering): open host service, published language `ordering.v1` → conformist. References that cross: `notifications/events/notifications.yaml:8` (receive) → `ordering/events/ordering.yaml#/channels/orderPlaced`; `notifications/events/notifications.yaml:10` (receive) → `ordering/events/ordering.yaml#/channels/orderCancelled`; `notifications/notify.flow:4` (use openapi) → `file "ordering/api/ordering.json"`
+- Upstream [Ordering](#ordering-ordering): open host service, published language `ordering.v1` → conformist. References that cross: `notifications/events/notifications.yaml:8` (receive) → `asyncapi "ordering/events/ordering.yaml" channel orderPlaced`; `notifications/events/notifications.yaml:10` (receive) → `asyncapi "ordering/events/ordering.yaml" channel orderCancelled`; `notifications/notify.flow:4` (use openapi) → `openapi "ordering/api/ordering.json"`
 - Separate ways from [Payments](#payments-payments) (no reference crosses, as checked)
 
 ## Glossary index
@@ -160,7 +160,7 @@ Tells the customer by mail what happened to an order
 
 ### Shipping ← Payments: ChargeStatus
 
-Maps `payments/api/payments.yaml#/components/schemas/ChargeStatus` to `shipping/api/shipping.yaml#/components/schemas/ShipmentGate`. The layer is `dir "shipping/acl"`. The mapping is written in `contexts/shipping.ctx`; the downstream values are checked to be in the target enum.
+Maps `openapi "payments/api/payments.yaml" schema ChargeStatus` to `openapi "shipping/api/shipping.yaml" schema ShipmentGate`. The layer is `dir "shipping/acl"`. The mapping is written in `contexts/shipping.ctx`; the downstream values are checked to be in the target enum.
 
 | Upstream value | Downstream value |
 |---|---|

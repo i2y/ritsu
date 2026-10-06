@@ -89,15 +89,15 @@ h2:target { color: var(--accent); }
 <table>
 <thead><tr><th>語</th><th>定義</th><th>指すもの</th><th>越えていく先</th></tr></thead>
 <tbody>
-<tr><td><code>注文</code></td><td>客が確定させた購入の申し込み。取り消されても消えない</td><td><code>ordering/api/ordering.json#/components/schemas/Order</code></td><td><a href="#ctx-notifications">通知</a>、<a href="#ctx-payments">決済</a></td></tr>
-<tr><td><code>注文の受付</code></td><td>注文が入ったという知らせ</td><td><code>ordering/events/ordering.yaml#/channels/orderPlaced</code></td><td><a href="#ctx-notifications">通知</a>、<a href="#ctx-payments">決済</a></td></tr>
+<tr><td><code>注文</code></td><td>客が確定させた購入の申し込み。取り消されても消えない</td><td><code>openapi &quot;ordering/api/ordering.json&quot; schema Order</code></td><td><a href="#ctx-notifications">通知</a>、<a href="#ctx-payments">決済</a></td></tr>
+<tr><td><code>注文の受付</code></td><td>注文が入ったという知らせ</td><td><code>asyncapi &quot;ordering/events/ordering.yaml&quot; channel orderPlaced</code></td><td><a href="#ctx-notifications">通知</a>、<a href="#ctx-payments">決済</a></td></tr>
 </tbody>
 </table>
 <h3>関係</h3>
 <ul>
-<li><a href="#ctx-payments">決済</a> と共有カーネル：<code>dir &quot;common&quot;</code>。越える参照：<code>payments/api/payments.yaml:50</code> ($ref) → <code>common/money.yaml#/Money</code></li>
-<li>下流 <a href="#ctx-payments">決済</a>：公開ホストサービス・公表された言語 <code>ordering.v1</code> → 順応者。越える参照：<code>payments/events/payments.yaml:8</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderPlaced</code></li>
-<li>下流 <a href="#ctx-notifications">通知</a>：公開ホストサービス・公表された言語 <code>ordering.v1</code> → 順応者。越える参照：<code>notifications/events/notifications.yaml:8</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderPlaced</code>; <code>notifications/events/notifications.yaml:10</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderCancelled</code>; <code>notifications/notify.flow:4</code> (use openapi) → <code>file &quot;ordering/api/ordering.json&quot;</code></li>
+<li><a href="#ctx-payments">決済</a> と共有カーネル：<code>dir &quot;common&quot;</code>。越える参照：<code>payments/api/payments.yaml:50</code> ($ref) → <code>openapi &quot;common/money.yaml&quot; pointer /Money</code></li>
+<li>下流 <a href="#ctx-payments">決済</a>：公開ホストサービス・公表された言語 <code>ordering.v1</code> → 順応者。越える参照：<code>payments/events/payments.yaml:8</code> (receive) → <code>asyncapi &quot;ordering/events/ordering.yaml&quot; channel orderPlaced</code></li>
+<li>下流 <a href="#ctx-notifications">通知</a>：公開ホストサービス・公表された言語 <code>ordering.v1</code> → 順応者。越える参照：<code>notifications/events/notifications.yaml:8</code> (receive) → <code>asyncapi &quot;ordering/events/ordering.yaml&quot; channel orderPlaced</code>; <code>notifications/events/notifications.yaml:10</code> (receive) → <code>asyncapi &quot;ordering/events/ordering.yaml&quot; channel orderCancelled</code>; <code>notifications/notify.flow:4</code> (use openapi) → <code>openapi &quot;ordering/api/ordering.json&quot;</code></li>
 </ul>
 <h2 id="ctx-payments">決済（payments）</h2>
 <p>入った注文の代金を客のカードに課金し、課金がどうなったかを知らせる</p>
@@ -121,15 +121,15 @@ h2:target { color: var(--accent); }
 <table>
 <thead><tr><th>語</th><th>定義</th><th>指すもの</th><th>越えていく先</th></tr></thead>
 <tbody>
-<tr><td><code>課金</code></td><td>注文一つ分の代金を、客のカードから受け取ること</td><td><code>payments/api/payments.yaml#/components/schemas/Charge</code></td><td><a href="#ctx-shipping">配送</a></td></tr>
-<tr><td><code>課金の状態</code></td><td>課金がどこまで進んだか。カードの返事待ち、受け取った、通らなかった、返した</td><td><code>payments/api/payments.yaml#/components/schemas/ChargeStatus</code></td><td><a href="#ctx-shipping">配送</a></td></tr>
+<tr><td><code>課金</code></td><td>注文一つ分の代金を、客のカードから受け取ること</td><td><code>openapi &quot;payments/api/payments.yaml&quot; schema Charge</code></td><td><a href="#ctx-shipping">配送</a></td></tr>
+<tr><td><code>課金の状態</code></td><td>課金がどこまで進んだか。カードの返事待ち、受け取った、通らなかった、返した</td><td><code>openapi &quot;payments/api/payments.yaml&quot; schema ChargeStatus</code></td><td><a href="#ctx-shipping">配送</a></td></tr>
 </tbody>
 </table>
 <h3>関係</h3>
 <ul>
-<li><a href="#ctx-ordering">受注</a> と共有カーネル：<code>dir &quot;common&quot;</code>。越える参照：<code>payments/api/payments.yaml:50</code> ($ref) → <code>common/money.yaml#/Money</code></li>
-<li>上流 <a href="#ctx-ordering">受注</a>：公開ホストサービス・公表された言語 <code>ordering.v1</code> → 順応者。越える参照：<code>payments/events/payments.yaml:8</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderPlaced</code></li>
-<li>下流 <a href="#ctx-shipping">配送</a>：公開ホストサービス・公表された言語 <code>payments.v1</code> → 腐敗防止層。越える参照：<code>shipping/acl/payments.yaml:9</code> (receive) → <code>payments/events/payments.yaml#/channels/paymentSucceeded</code>; <code>shipping/acl/payments.yaml:11</code> (receive) → <code>payments/events/payments.yaml#/channels/paymentFailed</code></li>
+<li><a href="#ctx-ordering">受注</a> と共有カーネル：<code>dir &quot;common&quot;</code>。越える参照：<code>payments/api/payments.yaml:50</code> ($ref) → <code>openapi &quot;common/money.yaml&quot; pointer /Money</code></li>
+<li>上流 <a href="#ctx-ordering">受注</a>：公開ホストサービス・公表された言語 <code>ordering.v1</code> → 順応者。越える参照：<code>payments/events/payments.yaml:8</code> (receive) → <code>asyncapi &quot;ordering/events/ordering.yaml&quot; channel orderPlaced</code></li>
+<li>下流 <a href="#ctx-shipping">配送</a>：公開ホストサービス・公表された言語 <code>payments.v1</code> → 腐敗防止層。越える参照：<code>shipping/acl/payments.yaml:9</code> (receive) → <code>asyncapi &quot;payments/events/payments.yaml&quot; channel paymentSucceeded</code>; <code>shipping/acl/payments.yaml:11</code> (receive) → <code>asyncapi &quot;payments/events/payments.yaml&quot; channel paymentFailed</code></li>
 <li><a href="#ctx-notifications">通知</a> と別々の道（越える参照が無いことを確かめた）</li>
 </ul>
 <h2 id="ctx-shipping">配送（shipping）</h2>
@@ -154,12 +154,12 @@ h2:target { color: var(--accent); }
 <table>
 <thead><tr><th>語</th><th>定義</th><th>指すもの</th><th>越えていく先</th></tr></thead>
 <tbody>
-<tr><td><code>出荷の可否</code></td><td>注文を倉庫から出してよいか</td><td><code>shipping/api/shipping.yaml#/components/schemas/ShipmentGate</code></td><td>—</td></tr>
+<tr><td><code>出荷の可否</code></td><td>注文を倉庫から出してよいか</td><td><code>openapi &quot;shipping/api/shipping.yaml&quot; schema ShipmentGate</code></td><td>—</td></tr>
 </tbody>
 </table>
 <h3>関係</h3>
 <ul>
-<li>上流 <a href="#ctx-payments">決済</a>：公開ホストサービス・公表された言語 <code>payments.v1</code> → 腐敗防止層。越える参照：<code>shipping/acl/payments.yaml:9</code> (receive) → <code>payments/events/payments.yaml#/channels/paymentSucceeded</code>; <code>shipping/acl/payments.yaml:11</code> (receive) → <code>payments/events/payments.yaml#/channels/paymentFailed</code></li>
+<li>上流 <a href="#ctx-payments">決済</a>：公開ホストサービス・公表された言語 <code>payments.v1</code> → 腐敗防止層。越える参照：<code>shipping/acl/payments.yaml:9</code> (receive) → <code>asyncapi &quot;payments/events/payments.yaml&quot; channel paymentSucceeded</code>; <code>shipping/acl/payments.yaml:11</code> (receive) → <code>asyncapi &quot;payments/events/payments.yaml&quot; channel paymentFailed</code></li>
 </ul>
 <h2 id="ctx-notifications">通知（notifications）</h2>
 <p>注文がどうなったかを、客にメールで知らせる</p>
@@ -184,7 +184,7 @@ h2:target { color: var(--accent); }
 </table>
 <h3>関係</h3>
 <ul>
-<li>上流 <a href="#ctx-ordering">受注</a>：公開ホストサービス・公表された言語 <code>ordering.v1</code> → 順応者。越える参照：<code>notifications/events/notifications.yaml:8</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderPlaced</code>; <code>notifications/events/notifications.yaml:10</code> (receive) → <code>ordering/events/ordering.yaml#/channels/orderCancelled</code>; <code>notifications/notify.flow:4</code> (use openapi) → <code>file &quot;ordering/api/ordering.json&quot;</code></li>
+<li>上流 <a href="#ctx-ordering">受注</a>：公開ホストサービス・公表された言語 <code>ordering.v1</code> → 順応者。越える参照：<code>notifications/events/notifications.yaml:8</code> (receive) → <code>asyncapi &quot;ordering/events/ordering.yaml&quot; channel orderPlaced</code>; <code>notifications/events/notifications.yaml:10</code> (receive) → <code>asyncapi &quot;ordering/events/ordering.yaml&quot; channel orderCancelled</code>; <code>notifications/notify.flow:4</code> (use openapi) → <code>openapi &quot;ordering/api/ordering.json&quot;</code></li>
 <li><a href="#ctx-payments">決済</a> と別々の道（越える参照が無いことを確かめた）</li>
 </ul>
 <h2>用語集の索引</h2>
@@ -201,7 +201,7 @@ h2:target { color: var(--accent); }
 </table>
 <h2>対応</h2>
 <h3>配送 ← 決済：ChargeStatus</h3>
-<p><code>payments/api/payments.yaml#/components/schemas/ChargeStatus</code> を <code>shipping/api/shipping.yaml#/components/schemas/ShipmentGate</code> に読み替える。 層は <code>dir &quot;shipping/acl&quot;</code>。 対応は <code>contexts/配送.ctx</code> に書いたもの。下流の値は、対応の先の列挙にあることを確かめた。</p>
+<p><code>openapi &quot;payments/api/payments.yaml&quot; schema ChargeStatus</code> を <code>openapi &quot;shipping/api/shipping.yaml&quot; schema ShipmentGate</code> に読み替える。 層は <code>dir &quot;shipping/acl&quot;</code>。 対応は <code>contexts/配送.ctx</code> に書いたもの。下流の値は、対応の先の列挙にあることを確かめた。</p>
 <table>
 <thead><tr><th>上流の値</th><th>下流の値</th></tr></thead>
 <tbody>

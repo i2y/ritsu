@@ -38,7 +38,8 @@ impl Project {
                 Tool::Sekisho => sekisho::check::checked(&self.root, &files, &joined.sekisho().into(), lang),
                 Tool::Yuen => yuen::ports::Engine::with(joined.yuen()).checked(&self.given_for(Tool::Yuen), Some(&root_arg), lang),
                 Tool::Sakai => sakai::run::checked(&self.given_for(Tool::Sakai), Some(&root_arg), &joined.sakai(), lang),
-                Tool::Proto | Tool::File => continue,
+                // the standard formats are read by the languages that name them
+                Tool::Proto | Tool::Openapi | Tool::Asyncapi | Tool::Cedar | Tool::File => continue,
             };
             out.extend(units.into_iter().map(|u| (tool, u)));
         }

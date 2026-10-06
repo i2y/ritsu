@@ -1,0 +1,71 @@
+openapi: 3.1.0
+info:
+  title: Orders
+  version: 1.0.0
+paths:
+  /orders/{orderId}:
+    parameters:
+      - $ref: '#/components/parameters/OrderId'
+    get:
+      operationId: getOrder
+      summary: Read an order
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+  /orders/{orderId}/refunds:
+    parameters:
+      - $ref: '#/components/parameters/OrderId'
+    post:
+      operationId: refundOrder
+      summary: Refund an order, in part or in whole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Refund'
+      responses:
+        '201':
+          description: The refund is made
+        '403':
+          description: The caller may not refund this much
+components:
+  parameters:
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    Order:
+      type: object
+      required: [id, status, total]
+      properties:
+        id:
+          type: string
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        total:
+          $ref: '../common/money.yaml#/Money'
+    OrderStatus:
+      type: string
+      enum: [placed, paid, shipped, refunded]
+    Refund:
+      type: object
+      required: [amount, reason]
+      properties:
+        amount:
+          type: integer
+          minimum: 1
+          maximum: 20000
+          description: In pence
+        reason:
+          $ref: '#/components/schemas/RefundReason'
+    RefundReason:
+      type: string
+      enum: [damaged, late, unwanted]

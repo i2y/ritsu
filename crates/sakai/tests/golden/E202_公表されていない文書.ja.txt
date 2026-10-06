@@ -1,6 +1,6 @@
-エラー[E202]: payments/events/payments.yaml:38:9: 「決済」の payments/events/payments.yaml が、「受注」の内側の ordering/internal/audit.yaml#/components/schemas/Audit を参照しています（$ref）
+エラー[E202]: payments/events/payments.yaml:38:9: 「決済」の payments/events/payments.yaml が、「受注」の内側の openapi "ordering/internal/audit.yaml" schema Audit を参照しています（$ref）
     38 |         $ref: '../../ordering/internal/audit.yaml#/components/schemas/Audit'
-  = ordering/internal/audit.yaml#/components/schemas/Audit は「受注」の公表された言語に入っていません。境界の向こうから参照できるのは、公表された言語と共有カーネルだけです。
+  = openapi "ordering/internal/audit.yaml" schema Audit は「受注」の公表された言語に入っていません。境界の向こうから参照できるのは、公表された言語と共有カーネルだけです。
   関わるもの:
-      決済  payments/events/payments.yaml:38  $ref: ../../ordering/internal/audit.yaml#/components/schemas/Audit
-      受注  ordering/internal/audit.yaml:7    #/components/schemas/Audit（「受注」の内側のもの）
+      決済  payments/events/payments.yaml:38                     $ref: ../../ordering/internal/audit.yaml#/components/schemas/Audit
+      受注  openapi "ordering/internal/audit.yaml" schema Audit  「受注」の内側のもの

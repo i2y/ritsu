@@ -1,0 +1,23 @@
+error[E303]: tests/mutants/E303_element_changed/refunds.req:10:3: openapi "api/orders.yaml" operation refundOrder changed after payments looked at this link on 2026-10-06
+    10 |   satisfied by openapi "api/orders.yaml" operation refundOrder
+  what changed in openapi "api/orders.yaml" operation refundOrder:
+      @@ -36,5 +36,5 @@
+            "amount": {
+              "description": "In pence",
+      -       "maximum": 10000,
+      +       "maximum": 20000,
+              "minimum": 1,
+              "type": "integer"
+  = Once a person has looked: yuen review tests/mutants/E303_element_changed --root tests/mutants/E303_element_changed --at tests/mutants/E303_element_changed/refunds.req:10 --by <role>
+error[E303]: tests/mutants/E303_element_changed/refunds.req:21:3: openapi "api/orders.yaml" schema Refund property amount changed after payments looked at this link on 2026-10-06
+    21 |   satisfied by openapi "api/orders.yaml" schema Refund property amount
+  what changed in openapi "api/orders.yaml" schema Refund property amount:
+      @@ -2,5 +2,5 @@
+        {
+          "description": "In pence",
+      -   "maximum": 10000,
+      +   "maximum": 20000,
+          "minimum": 1,
+          "type": "integer"
+  = Once a person has looked: yuen review tests/mutants/E303_element_changed --root tests/mutants/E303_element_changed --at tests/mutants/E303_element_changed/refunds.req:21 --by <role>
+tests/mutants/E303_element_changed: 2 errors

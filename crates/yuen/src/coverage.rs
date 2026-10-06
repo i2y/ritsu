@@ -52,16 +52,24 @@ fn files_under(root: &Path, rel: &str, ext: Option<&str>) -> Vec<String> {
 }
 
 /// What a scope gathers (DESIGN 1.8). Without a kind, the files: the file named, or every file
-/// of the tool under the directory (`file` takes any). With a kind, the things of that kind in
-/// those files, under the pairs written before it (`scope proto "x.proto" service S method`):
-/// read through the tool's language (`Items`, in the project's index), or for a `.proto` by yuen
-/// itself (DESIGN 3.4).
+/// of the tool under the directory (`file` takes any; an OpenAPI or AsyncAPI document is one whose
+/// top says so, DESIGN 3.6). With a kind, the things of that kind in those files, under the pairs
+/// written before it (`scope proto "x.proto" service S method`): read through the tool's language
+/// (`Items`, in the project's index), or for a `.proto`, a document and a Cedar file by yuen
+/// itself (DESIGN 3.4, 3.6).
 pub fn gather(p: &Project, n: &Name, kind: Option<&str>) -> Result<Vec<Name>, Unread> {
     let abs = if n.path == "." { p.root.clone() } else { p.root.join(&n.path) };
     if !ritsu_base::fs::exists(&abs) {
         return Err(Unread::Missing { dir: false });
     }
-    let files: Vec<String> = if ritsu_base::fs::is_dir(&abs) { files_under(&p.root, &n.path, n.tool.extension()) } else { vec![n.path.clone()] };
+    let files: Vec<String> = if !ritsu_base::fs::is_dir(&abs) {
+        vec![n.path.clone()]
+    } else if matches!(n.tool, Tool::Openapi | Tool::Asyncapi | Tool::Cedar) {
+        // a document by what its top says, a Cedar file by its name (DESIGN 3.6)
+        files_under(&p.root, &n.path, None).into_iter().filter(|f| crate::documents::is_the_tools(&p.root, n.tool, f)).collect()
+    } else {
+        files_under(&p.root, &n.path, n.tool.extension())
+    };
     let Some(kind) = kind else {
         return Ok(files.into_iter().map(|path| Name { tool: n.tool, path, items: vec![] }).collect());
     };
@@ -70,6 +78,14 @@ pub fn gather(p: &Project, n: &Name, kind: Option<&str>) -> Result<Vec<Name>, Un
         for f in &files {
             let ps = crate::proto::load(&p.root, f).map_err(|(file, why)| Unread::Proto(file, why))?;
             out.extend(crate::proto::gather(&ps, &Name { tool: n.tool, path: f.clone(), items: n.items.clone() }, kind));
+        }
+        return Ok(out);
+    }
+    if matches!(n.tool, Tool::Openapi | Tool::Asyncapi | Tool::Cedar) {
+        for f in &files {
+            let loaded = p.suite.document(&p.root, n.tool, f);
+            let read = loaded.as_ref().as_ref().map_err(|why| Unread::Doc(f.clone(), why.clone()))?;
+            out.extend(crate::documents::gather(read, &Name { tool: n.tool, path: f.clone(), items: n.items.clone() }, kind));
         }
         return Ok(out);
     }

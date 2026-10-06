@@ -391,13 +391,15 @@ pub fn contract_crossings(cs: &crate::contracts::Contracts, arts: &[Artifact]) -
             actions.sort();
         }
         let via = if actions.is_empty() { "$ref".to_string() } else { actions.join(", ") };
+        let from_contract = arts.iter().find(|a| a.path == r.from).and_then(|a| a.contract).map(|(k, _)| k);
         out.push(Crossing {
             from: r.from.clone(),
-            from_tool: Tool::File,
+            from_tool: from_contract.map(|k| k.tool()).unwrap_or(Tool::File),
             from_ctx: x,
             to: to.clone(),
             to_ctx: y,
-            target: Name::file(Tool::File, to.clone()),
+            // what the `$ref` lands on, as its reference (ritsu's DESIGN 6.2)
+            target: cs.naming(to, ptr),
             kind: Kind::Contract { via, channel, operations },
             line: r.line,
             col: r.col,
@@ -407,7 +409,7 @@ pub fn contract_crossings(cs: &crate::contracts::Contracts, arts: &[Artifact]) -
             allowed: None,
             pointer: Some(ptr.clone()),
             elements: cs.reach(to, ptr),
-            from_contract: arts.iter().find(|a| a.path == r.from).and_then(|a| a.contract).map(|(k, _)| k),
+            from_contract,
         });
     }
     out
@@ -522,9 +524,9 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
         let krate = matches!(c.kind, Kind::Crate { .. });
         // a crate is shown by its directory, as a dependency by its path writes it
         let (sp, sq) = (shown(&p), if krate { shown(&ritsu_base::paths::parent(&q)) } else { shown(&q) });
-        // a document's `$ref` names what it lands on: the file and the pointer
+        // a document's `$ref` is said by what it lands on, as its reference
         let sq = match &c.pointer {
-            Some(ptr) if !ptr.is_empty() => format!("{sq}#{ptr}"),
+            Some(_) => c.target.text(),
             _ => sq,
         };
         let from_ref = c.from_ref(&xn);
@@ -577,11 +579,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
             to_what
         };
         let to_ref = match (&c.kind, &c.pointer) {
-            (Kind::Contract { .. }, Some(ptr)) => {
-                let line = cs.key_line(&q, ptr).unwrap_or(1);
-                let shown_ptr = if ptr.is_empty() { "#".to_string() } else { format!("#{ptr}") };
-                Ref::line(Some(&yn), &q, line, tr!("{shown_ptr}（{}）", "{shown_ptr}, {}", to_what.ja; to_what.en))
-            }
+            (Kind::Contract { .. }, Some(ptr)) => Ref::name_at(Some(&yn), c.to_name(), &q, cs.key_line(&q, ptr).unwrap_or(1), to_what),
             _ => Ref::name(Some(&yn), c.to_name(), to_what),
         };
         let diag = |code: &'static str, msg: Text| diag::at(code, &p, c.line, c.col, msg).source(&src).refer(from_ref.clone()).refer(to_ref.clone());
@@ -665,6 +663,11 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
                 Kind::RuleApply => tr!(
                     "`apply` は、呼び先の規則をこの規則の中に展開します。使うのは規則そのもの（「{yn}」の内側）です。境界の向こうの規則は、二つの共有カーネルに並べて展開するか、「{yn}」が公表された言語（`published language rulec.…`）に入れた規則を、ワークフローから `use rule … connect` で呼んでください。",
                     "An `apply` expands the rule it names into this one: the rule itself, inside {yn}. A rule across the boundary is expanded from the two's shared kernel, or called from a workflow with `use rule … connect` once {yn} puts it in a published language (`published language rulec.…`)."
+                ),
+                // an element of a document is said by its reference, not as a file
+                _ if c.pointer.is_some() => tr!(
+                    "{sq} は「{yn}」の公表された言語に入っていません。境界の向こうから参照できるのは、公表された言語と共有カーネルだけです。",
+                    "The element {sq} is in no published language of {yn}; across a boundary only the published languages and a shared kernel can be referred to."
                 ),
                 _ => tr!(
                     "{sq} は「{yn}」の公表された言語に入っていません。境界の向こうから参照できるのは、公表された言語と共有カーネルだけです。",
@@ -750,8 +753,8 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
             let own_pl = published_package_any(m, x, &p).or_else(|| if c.from_contract.is_some() { contract_package(m, cs, arts, x, &p) } else { None });
             if let Some(own) = own_pl {
                 let mut used: Vec<String> = c.uses.iter().map(|s| s.full.clone()).collect();
-                if let Some(ptr) = &c.pointer {
-                    used.push(crate::contracts::shown(&q, ptr));
+                if c.pointer.is_some() {
+                    used.push(c.target.text());
                 }
                 let used = if used.is_empty() { k.clone() } else { used.join(", ") };
                 diags.push(diag("E205", tr!("「{xn}」の公表された言語 {own} に、上流「{yn}」の型が出ています", "The published language {own} of {xn} shows the upstream {yn}'s types")).note(tr!(

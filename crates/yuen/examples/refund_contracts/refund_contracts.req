@@ -1,0 +1,43 @@
+requirements refund_contracts v1
+description "A shop's refunds, met by elements of its OpenAPI and AsyncAPI documents and of its Cedar policies and schema, each named by itself. The rules are decided for this example"
+
+role payments "Decides how refunds go"
+role development "Writes the contracts and the policies"
+
+requirement refund_an_order
+  text "A member of the staff refunds an order, in part or in whole, through the API"
+  owner payments
+  decided 2026-10-06 by payments "The shop refunds through its own API"
+  satisfied by openapi "api/orders.yaml" operation refundOrder
+    reviewed 2026-10-06 by development sha256:34ed3dfa002d8b12 -> sha256:3ce78f035097e095
+  satisfied by cedar "policies/shop.cedarschema" action refund_order
+    reviewed 2026-10-06 by development sha256:34ed3dfa002d8b12 -> sha256:76a958d088eb5d8d
+  not verified "This example has no claim that calls the API"
+    approved 2026-10-06 by development sha256:34ed3dfa002d8b12
+
+requirement refund_in_pence
+  text "A refund is a whole number of pence, from one penny to one hundred pounds"
+  owner payments
+  decided 2026-10-06 by payments "A refund over one hundred pounds goes through the bank"
+  satisfied by openapi "api/orders.yaml" schema Refund property amount
+    reviewed 2026-10-06 by development sha256:4dbb88795db91fae -> sha256:55d566e37d48e6f7
+  not verified "This example has no claim that calls the API"
+    approved 2026-10-06 by development sha256:4dbb88795db91fae
+
+requirement clerks_have_a_limit
+  text "A clerk refunds no more than the clerk's own limit"
+  owner payments
+  decided 2026-10-06 by payments "Each clerk has a limit, set by a manager"
+  satisfied by cedar "policies/refunds.cedar" policy clerks_refund_within_their_limit
+    reviewed 2026-10-06 by development sha256:ac26306142b38a02 -> sha256:0c7317f0e764cd08
+  not verified "This example has no claim that asks Cedar"
+    approved 2026-10-06 by development sha256:ac26306142b38a02
+
+requirement others_hear_of_a_refund
+  text "The other services hear of each refund"
+  owner payments
+  decided 2026-10-06 by payments "Shipping and the accounts act on refunds"
+  satisfied by asyncapi "events/orders.yaml" operation sendOrderRefunded
+    reviewed 2026-10-06 by development sha256:c57be8713de0d6db -> sha256:80f62fd6c2d2bb47
+  not verified "This example has no claim that reads the events"
+    approved 2026-10-06 by development sha256:c57be8713de0d6db

@@ -1,0 +1,43 @@
+requirements 返金の契約 v1
+description "店の返金を、OpenAPI と AsyncAPI の文書の要素と、Cedar のポリシーとスキーマの要素で満たす。どれも要素ごとに指す。決まりは、この例のために決めたもの"
+
+role 決済 "返金のしかたを決める"
+role 開発 "契約とポリシーを書く"
+
+requirement 注文を返金する(refund_an_order)
+  text "店の人が、注文の一部か全部を、API で返金する"
+  owner 決済
+  decided 2026-10-06 by 決済 "店は自分の API で返金する"
+  satisfied by openapi "api/注文.yaml" operation 返金する
+    reviewed 2026-10-06 by 開発 sha256:718c7d1fa3f18e6a -> sha256:ce072e77d7b9291b
+  satisfied by cedar "policies/店.cedarschema" action 返金
+    reviewed 2026-10-06 by 開発 sha256:718c7d1fa3f18e6a -> sha256:7af4e4d13df4b756
+  not verified "この例には API を呼ぶ主張が無い"
+    approved 2026-10-06 by 開発 sha256:718c7d1fa3f18e6a
+
+requirement 返金は円で(refund_in_yen)
+  text "返金は 1 円以上 10 万円以下の、円の整数である"
+  owner 決済
+  decided 2026-10-06 by 決済 "10 万円を超える返金は銀行を通す"
+  satisfied by openapi "api/注文.yaml" schema 返金 property 金額
+    reviewed 2026-10-06 by 開発 sha256:5fe0ddfe3e950118 -> sha256:e98e692466066f55
+  not verified "この例には API を呼ぶ主張が無い"
+    approved 2026-10-06 by 開発 sha256:5fe0ddfe3e950118
+
+requirement 係には上限がある(clerks_have_a_limit)
+  text "係は、自分の上限を超えて返金しない"
+  owner 決済
+  decided 2026-10-06 by 決済 "係ごとに上限があり、店長が決める"
+  satisfied by cedar "policies/返金.cedar" policy 係は自分の上限まで返金できる
+    reviewed 2026-10-06 by 開発 sha256:c436ea13e448749c -> sha256:4d2087493a79024f
+  not verified "この例には Cedar に尋ねる主張が無い"
+    approved 2026-10-06 by 開発 sha256:c436ea13e448749c
+
+requirement 返金をほかに知らせる(others_hear_of_a_refund)
+  text "ほかのサービスは、返金のたびに知らせを受ける"
+  owner 決済
+  decided 2026-10-06 by 決済 "出荷と経理が返金に応じて動く"
+  satisfied by asyncapi "events/注文.yaml" operation 返金を知らせる
+    reviewed 2026-10-06 by 開発 sha256:0f56f17aa132ee68 -> sha256:2ec3c65482725512
+  not verified "この例にはイベントを読む主張が無い"
+    approved 2026-10-06 by 開発 sha256:0f56f17aa132ee68

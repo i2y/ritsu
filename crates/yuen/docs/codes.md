@@ -200,9 +200,9 @@ requirement r1
 
 ## E011 — A tool that does not exist
 
-**When**: The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, file, yuen and sakai (`dir` is not a word of a naming either).
+**When**: The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen and sakai (`dir` is not a word of a naming either).
 
-**Fix**: Write one of the nine; name any other file with `file "…"`.
+**Fix**: Write one of the twelve; name any other file with `file "…"`.
 
 **Example**:
 
@@ -588,7 +588,7 @@ See also: [E013](#e013)
 
 ## E202 — The name of an artifact is not in its file
 
-**When**: The name is not in the file (among the things its language gives, or in the `.proto`): written by its alias, or renamed (the candidates are given).
+**When**: The name is not in the file (among the things its language gives, or in the `.proto`, the OpenAPI or AsyncAPI document, the Cedar file): written by its alias, or renamed (the candidates are given). Also a Cedar schema that declares an action or an entity of that name in more than one namespace, so the name is not one thing.
 
 **Fix**: Write the name the language gives (not its alias); if it was renamed, correct the link.
 
@@ -677,11 +677,11 @@ See also: [E203](#e203)
 
 <a id="e205"></a>
 
-## E205 — A .proto cannot be read
+## E205 — A .proto, an OpenAPI or AsyncAPI document, or a Cedar file cannot be read
 
-**When**: The `.proto` cannot be read by ritsu's reader of `.proto` files (not proto3, or an import that does not read).
+**When**: A file of a standard format yuen reads itself does not read: a `.proto` ritsu's reader of `.proto` files cannot read (not proto3, or an import that does not read); a document named by `openapi` or `asyncapi` that is not YAML or JSON, or is a document of the other kind; a file named by `cedar` that Cedar would not read, or that is no `.cedar`, `.cedarschema` or `.cedarschema.json`.
 
-**Fix**: Correct the `.proto`.
+**Fix**: Correct the file; a document of the other kind is named with its own tool.
 
 **Example**:
 

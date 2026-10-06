@@ -1,0 +1,10 @@
+# 金額（通貨のいちばん小さい単位で）。文書が $ref で読む、文書の一部。
+金額:
+  type: object
+  required: [額, 通貨]
+  properties:
+    額:
+      type: integer
+    通貨:
+      type: string
+      enum: [JPY, USD, EUR]

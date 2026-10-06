@@ -30,9 +30,9 @@ pub struct EnumSrc {
 
 /// The enum a name points at.
 pub fn source(ps: &Protos, cs: &crate::contracts::Contracts, n: &Name) -> Option<EnumSrc> {
-    if let Some((f, p)) = crate::elements::as_contract(n) {
-        let ev = cs.enum_values(f, p)?;
-        return Some(EnumSrc { full: crate::contracts::shown(f, p), file: ev.file, line: ev.line, values: ev.values.iter().map(|v| (v.name.clone(), v.line, v.absent)).collect(), proto: None });
+    if let Some((f, p)) = crate::elements::as_contract(cs, n) {
+        let ev = cs.enum_values(&f, &p)?;
+        return Some(EnumSrc { full: n.text(), file: ev.file, line: ev.line, values: ev.values.iter().map(|v| (v.name.clone(), v.line, v.absent)).collect(), proto: None });
     }
     let (e, full, f) = enum_of(ps, n)?;
     Some(EnumSrc { full: full.clone(), file: f.path.clone(), line: e.line, values: e.values.iter().map(|v| (v.name.clone(), v.line, proto::is_unset(e, v))).collect(), proto: Some((f.path.clone(), full)) })
@@ -245,13 +245,13 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, el: &Elem
                     if !up_docs.contains(f) || cs.enum_values(f, p).is_none() {
                         continue;
                     }
-                    let full = crate::contracts::shown(f, p);
+                    let n = crate::elements::contract_name(cs, f, p);
+                    let full = n.text();
                     if mapped.contains(&full) || said.contains(&full) {
                         continue;
                     }
                     said.push(full.clone());
                     let short = short.replace("~1", "/").replace("~0", "~");
-                    let n = crate::elements::contract_name(f, p);
                     diags.push(
                         diag::at("E404", &c.file, r.pos.line, r.pos.col, tr!("「{xn}」は「{yn}」の列挙 {full} を参照していますが、腐敗防止層に対応がありません", "{xn} refers to {yn}'s enum {full}, and its anticorruption layer has no mapping for it"))
                             .source(&c.src)

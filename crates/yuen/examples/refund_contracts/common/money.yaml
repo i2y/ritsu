@@ -1,0 +1,10 @@
+# An amount of money in the currency's smallest unit: a part of the document, which it reaches by $ref.
+Money:
+  type: object
+  required: [amount, currency]
+  properties:
+    amount:
+      type: integer
+    currency:
+      type: string
+      enum: [GBP, USD, EUR]

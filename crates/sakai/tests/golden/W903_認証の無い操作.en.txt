@@ -3,11 +3,11 @@ warning[W903]: payments/api/payments.yaml:9:7: The operation createCharge of the
   = Neither the operation nor the document has `security`, so a reader of the contract cannot tell how a client proves who it is.
   = Add `security` to the operation, or to the whole document. If the operation is open to anyone on purpose, write `security: []` on it.
   involved:
-      決済  payments/api/payments.yaml:9  #/paths/~1charges/post (POST /charges)
+      決済  openapi "payments/api/payments.yaml" operation createCharge  POST /charges
 warning[W903]: payments/api/payments.yaml:25:7: The operation getCharge of the published language payments.v1 says no authentication
     25 |       operationId: getCharge
   = Neither the operation nor the document has `security`, so a reader of the contract cannot tell how a client proves who it is.
   = Add `security` to the operation, or to the whole document. If the operation is open to anyone on purpose, write `security: []` on it.
   involved:
-      決済  payments/api/payments.yaml:25  #/paths/~1charges~1{id}/get (GET /charges/{id})
+      決済  openapi "payments/api/payments.yaml" operation getCharge  GET /charges/{id}
 ネットショップ.ctx: ok — 4 contexts, 5 relationships; 9 artifacts, each in one context; 7 crossings checked (openapi 1, asyncapi 5, dandori 1)

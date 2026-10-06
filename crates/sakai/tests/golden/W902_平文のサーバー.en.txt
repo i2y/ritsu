@@ -4,5 +4,5 @@ warning[W902]: payments/api/payments.yaml:73:10: The server http://payments.inte
   = The encrypted form of the protocol is https.
   = If the connection is protected another way (a service mesh, a private link), write `x-ritsu-plaintext: "<why>"` in the server.
   involved:
-      決済  payments/api/payments.yaml:73  #/servers/0
+      決済  openapi "payments/api/payments.yaml" pointer /servers/0
 ネットショップ.ctx: ok — 4 contexts, 5 relationships; 9 artifacts, each in one context; 7 crossings checked (openapi 1, asyncapi 5, dandori 1)

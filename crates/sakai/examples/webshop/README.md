@@ -43,8 +43,8 @@ error[E210]: shipping/acl/payments.yaml:11:5: The document shipping/acl/payments
   = The open host services of the published language payments.v1 are createCharge, getCharge, paymentSucceeded.
   = Across a boundary, a document sends to and receives from only the channels the other side lists under `open host service` (and the same for HTTP operations): have it listed there, or use what the other side opens.
   involved:
-      Shipping  shipping/acl/payments.yaml:11     $ref: ../../payments/events/payments.yaml#/channels/paymentFailed
-      Payments  payments/events/payments.yaml:14  #/channels/paymentFailed, a part of the published language payments.v1
+      Shipping  shipping/acl/payments.yaml:11                                   $ref: ../../payments/events/payments.yaml#/channels/paymentFailed
+      Payments  asyncapi "payments/events/payments.yaml" channel paymentFailed  a part of the published language payments.v1
 ```
 
 The mutants of `tests/mutants` named `E108_…`, `W104_…`, `E202_a_document…`, `E204_a_document…`, `E205_the_upstream_charge…`, `E206_events…`, `E210_…`, `E301_a_channel…`, `E401_value_added_to_the_charge_status`, `W901_…`, `W902_…` and `W903_…` are this example with one change each.

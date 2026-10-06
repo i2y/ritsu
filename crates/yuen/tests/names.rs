@@ -17,10 +17,17 @@ fn code_of(reason: &str) -> Option<&'static str> {
         | "only field under record"
         | "method only right after service"
         | "one child at most"
-        | "chobo has no nested kinds"
+        | "nothing under account"
+        | "operation only right after transfer"
         | "unknown kind for koyomi"
         | "a kind written as a string"
-        | "a kind without a name" => Some("E012"),
+        | "a kind without a name"
+        | "property only right after schema"
+        | "nothing under operation"
+        | "unknown kind for openapi"
+        | "only message under channel"
+        | "one child at most (value)"
+        | "cedar has no nested kinds" => Some("E012"),
         "a full-width space outside a string" => Some("E001"),
         r#"only \" and \\ are escapes"# => Some("E001"),
         _ => None,
@@ -66,7 +73,7 @@ fn every_line_of_the_shared_table() {
             }
         }
     }
-    assert!(ok == 24 && errors == 18, "{ok} lines of JSON and {errors} of errors");
+    assert!(ok == 41 && errors == 25, "{ok} lines of JSON and {errors} of errors");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

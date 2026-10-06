@@ -107,8 +107,8 @@ examples/webshop.ja/ネットショップ.ctx: ok — コンテキスト 4、関
   = 公表された言語 payments.v1 の公開ホストサービスは createCharge、getCharge、paymentSucceeded です。
   = 境界の向こうのチャネルに送ったりそこから受けたりできるのは、相手が `open host service` に並べたチャネルだけです（HTTP の操作も同じです）。相手の公表された言語の `open host service` に足してもらうか、相手が開いたものを使ってください。
   関わるもの:
-      配送  shipping/acl/payments.yaml:11     $ref: ../../payments/events/payments.yaml#/channels/paymentFailed
-      決済  payments/events/payments.yaml:14  #/channels/paymentFailed（公表された言語 payments.v1 のもの）
+      配送  shipping/acl/payments.yaml:11                                   $ref: ../../payments/events/payments.yaml#/channels/paymentFailed
+      決済  asyncapi "payments/events/payments.yaml" channel paymentFailed  公表された言語 payments.v1 のもの
 ```
 
 読める文書は、OpenAPI の 3.0、3.1、3.2 と、AsyncAPI の 3.0、3.1 で、JSON でも YAML でもかまいません。
@@ -138,7 +138,7 @@ sakai は、ritsu のセキュリティの検査のうち三つを受け持ち�
   = 操作にも文書にも `security` が無いので、契約を読む人には、クライアントがどう認証すればよいかが分かりません。
   = 操作か文書全体に `security` を書いてください。だれでも呼べるようにわざとしている操作なら、その操作に `security: []` と書いてください。
   関わるもの:
-      決済  payments/api/payments.yaml:9  #/paths/~1charges/post（POST /charges）
+      決済  openapi "payments/api/payments.yaml" operation createCharge  POST /charges
 ```
 
 ## 地図のページ
@@ -223,7 +223,7 @@ macOS（Apple シリコン）で `cargo test -p sakai -- --nocapture` を一度�
 ## 状態
 
 言語、`check`、`build`、`export cml`、`doc`、`api`、`explain` はできています（[DESIGN.md](DESIGN.md)）。
-まだ作っていないもの：持ち主を CODEOWNERS と突き合わせること、規則の `import jsonschema` を対応の先にすること、対応から読み替えのコードを生成すること、契約に書いていない実行時の呼び出しを成果物として書くこと、OpenAPI と AsyncAPI の文書の要素を、ほかの言語と同じ名指しの形で書くこと（DESIGN の 14 章と 15.10）。
+まだ作っていないもの：持ち主を CODEOWNERS と突き合わせること、規則の `import jsonschema` を対応の先にすること、対応から読み替えのコードを生成すること、契約に書いていない実行時の呼び出しを成果物として書くこと（DESIGN の 14 章と 15.11）。
 
 ## ライセンス
 

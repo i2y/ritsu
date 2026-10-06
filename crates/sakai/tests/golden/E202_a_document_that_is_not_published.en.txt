@@ -1,6 +1,6 @@
-error[E202]: payments/events/payments.yaml:38:9: The file payments/events/payments.yaml of Payments refers to ordering/internal/audit.yaml#/components/schemas/Audit ($ref), which is inside Ordering
+error[E202]: payments/events/payments.yaml:38:9: The file payments/events/payments.yaml of Payments refers to openapi "ordering/internal/audit.yaml" schema Audit ($ref), which is inside Ordering
     38 |         $ref: '../../ordering/internal/audit.yaml#/components/schemas/Audit'
-  = The file ordering/internal/audit.yaml#/components/schemas/Audit is in no published language of Ordering; across a boundary only the published languages and a shared kernel can be referred to.
+  = The element openapi "ordering/internal/audit.yaml" schema Audit is in no published language of Ordering; across a boundary only the published languages and a shared kernel can be referred to.
   involved:
-      Payments  payments/events/payments.yaml:38  $ref: ../../ordering/internal/audit.yaml#/components/schemas/Audit
-      Ordering  ordering/internal/audit.yaml:7    #/components/schemas/Audit, a part of the inside of Ordering
+      Payments  payments/events/payments.yaml:38                     $ref: ../../ordering/internal/audit.yaml#/components/schemas/Audit
+      Ordering  openapi "ordering/internal/audit.yaml" schema Audit  a part of the inside of Ordering

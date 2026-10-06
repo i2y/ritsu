@@ -19,7 +19,8 @@ pub struct Artifact {
     /// The context, and the entry of its `owns` that decided it.
     pub owner: Option<(usize, usize)>,
     /// An OpenAPI or AsyncAPI document, and whether it is a part of one that another reaches by
-    /// `$ref` (DESIGN 15.2); its tool is `file`.
+    /// `$ref` (DESIGN 15.2); its tool is `openapi` or `asyncapi` (a part's, the document's that
+    /// reaches it).
     pub contract: Option<(crate::contracts::Kind, bool)>,
 }
 
@@ -102,12 +103,12 @@ pub fn scope(m: &Model) -> Vec<InScope> {
             && let Some(k) = crate::contracts::sniff(&text, p.ends_with(".json"))
         {
             docs.push((p.clone(), k));
-            out.push((p, Tool::File, Some((k, false))));
+            out.push((p, k.tool(), Some((k, false))));
         }
     }
     for (p, k) in crate::contracts::parts(m, &docs) {
         if !out.iter().any(|(q, _, _)| *q == p) {
-            out.push((p, Tool::File, Some((k, true))));
+            out.push((p, k.tool(), Some((k, true))));
         }
     }
     out.sort_by(|a, b| a.0.cmp(&b.0));

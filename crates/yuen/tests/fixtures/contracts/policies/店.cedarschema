@@ -1,0 +1,23 @@
+// 店の利用者、リソース、アクション。
+namespace Shop {
+  entity Role in [Role];
+  entity User in [Role] {
+    refund_limit: Long,
+    suspended: Bool
+  };
+  entity Order {
+    status: String
+  };
+  type RefundContext = {
+    amount: Long
+  };
+  action "返金" appliesTo {
+    principal: [User],
+    resource: [Order],
+    context: RefundContext
+  };
+  action "注文を見る" appliesTo {
+    principal: [User],
+    resource: [Order]
+  };
+}

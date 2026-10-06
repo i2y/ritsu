@@ -2,6 +2,6 @@
      7 |     $ref: '../../payments/events/payments.yaml#/channels/paymentSucceeded'
   = 「配送」は `layer` を書いているので、上流の公表された言語を参照できるのは層（dir "shipping/acl"）の中だけです。
   関わるもの:
-      配送  shipping/events/shipping.yaml:7  $ref: ../../payments/events/payments.yaml#/channels/paymentSucceeded
-      決済  payments/events/payments.yaml:9  #/channels/paymentSucceeded（公表された言語 payments.v1 のもの）
-      配送  contexts/配送.ctx:16             upstream 決済 anticorruption layer
+      配送  shipping/events/shipping.yaml:7                                    $ref: ../../payments/events/payments.yaml#/channels/paymentSucceeded
+      決済  asyncapi "payments/events/payments.yaml" channel paymentSucceeded  公表された言語 payments.v1 のもの
+      配送  contexts/配送.ctx:16                                               upstream 決済 anticorruption layer

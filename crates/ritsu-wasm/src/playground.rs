@@ -178,7 +178,7 @@ pub fn generate(r: &Request) -> Value {
                 ran(shown, |o, e| yuen::run::run(&args[1..], joined.yuen(), o, e))
             }
             // a gate's Cedar comes to the page with its generator (sekisho's DESIGN 12)
-            Tool::Geas | Tool::Proto | Tool::File | Tool::Sekisho => return None,
+            Tool::Geas | Tool::Proto | Tool::Openapi | Tool::Asyncapi | Tool::Cedar | Tool::File | Tool::Sekisho => return None,
         })
     });
     let Some(did) = did else {

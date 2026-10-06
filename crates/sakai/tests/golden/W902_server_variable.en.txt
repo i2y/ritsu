@@ -5,5 +5,5 @@ warning[W902]: payments/api/payments.yaml:73:10: The server {scheme}://payments.
   = The encrypted form of the protocol is https.
   = If the connection is protected another way (a service mesh, a private link), write `x-ritsu-plaintext: "<why>"` in the server.
   involved:
-      Payments  payments/api/payments.yaml:73  #/servers/0
+      Payments  openapi "payments/api/payments.yaml" pointer /servers/0
 webshop.ctx: ok — 4 contexts, 5 relationships; 9 artifacts, each in one context; 7 crossings checked (openapi 1, asyncapi 5, dandori 1)

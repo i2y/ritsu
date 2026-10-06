@@ -242,6 +242,22 @@ fn the_accounts_and_transfers_of_a_book() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// An operation of a transfer is a thing of the book: the twin of the English test of the same
+/// name, on `refunds.ja.book`, whose `返金` holds (`hold`, `post`, `void`) and whose `売上計上` is
+/// done at once (`do`).
+#[test]
+fn the_operations_of_a_transfer() {
+    let book = "chobo \"refunds.ja.book\"";
+    let items = common::suite().index.items(Tool::Chobo, Path::new("tests/fixtures/chobo"), "refunds.ja.book").unwrap().unwrap();
+    let ops: Vec<String> = items.iter().filter(|i| i.kind() == "operation").map(|i| i.naming.text()).collect();
+    assert_eq!(ops, [format!("{book} transfer 売上計上 operation do"), format!("{book} transfer 返金 operation hold"), format!("{book} transfer 返金 operation post"), format!("{book} transfer 返金 operation void")]);
+    let t = common::fixture("chobo");
+    let d = t.path().join("chobo");
+    common::edit(&d, "返金.req", "  satisfied by chobo \"refunds.ja.book\" transfer 返金\n", "  satisfied by chobo \"refunds.ja.book\" transfer 返金 operation void\n");
+    let c = common::check(&d.to_string_lossy());
+    assert_eq!(c.diags.iter().map(|x| x.code).collect::<Vec<_>>(), ["E303"], "{:?}", c.diags.iter().map(|x| x.message.ja.clone()).collect::<Vec<_>>());
+}
+
 // ── C.5 geas ──────────────────────────────────────────────────────────────────
 
 /// The claims of a spec are geas's (`Items`, `Claims`): each by its name, a name the spec does

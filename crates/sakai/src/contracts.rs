@@ -12,6 +12,8 @@ use crate::diag::{self, Diag};
 use crate::model::Model;
 use crate::owners::Artifact;
 use crate::paths;
+use crate::naming::Name;
+use ritsu_base::document::{self, Documents};
 use ritsu_base::text::Text;
 use ritsu_base::yaml::{self, Node, Value};
 use std::collections::{BTreeMap, BTreeSet};
@@ -45,6 +47,14 @@ impl Kind {
             "openapi" => Some(Kind::OpenApi),
             "asyncapi" => Some(Kind::AsyncApi),
             _ => None,
+        }
+    }
+
+    /// The tool its references start with (ritsu's DESIGN 6.2): `openapi "…"`, `asyncapi "…"`.
+    pub fn tool(self) -> crate::naming::Tool {
+        match self {
+            Kind::OpenApi => crate::naming::Tool::Openapi,
+            Kind::AsyncApi => crate::naming::Tool::Asyncapi,
         }
     }
 }
@@ -168,106 +178,21 @@ pub struct Contracts {
     pub unread: BTreeSet<String>,
 }
 
-/// The keys under which a `$ref` is data, not a reference: an example (`example`, and an Example
-/// Object's value) and an extension (`x-…`). A schema's `enum`, `const` and `default` hold data
-/// too, but `default` is also the default response of OpenAPI, so they are read: a `$ref` in data
-/// is a mapping with the key `$ref`, which their values hardly hold.
-fn is_data(key: &str) -> bool {
-    key == "example" || key.starts_with("x-")
-}
-
-/// The keys whose values are mappings of names (a property's, a response's, a channel's), not of
-/// the keywords of the specifications: their keys are never data.
-fn holds_names(key: &str) -> bool {
-    matches!(
-        key,
-        "properties" | "patternProperties" | "$defs" | "definitions" | "dependentSchemas" | "schemas" | "responses" | "parameters" | "examples" | "requestBodies" | "headers" | "securitySchemes" | "links" | "callbacks" | "pathItems" | "paths" | "webhooks" | "channels" | "operations" | "messages" | "messageTraits" | "operationTraits" | "replies" | "replyAddresses" | "servers" | "serverVariables" | "variables" | "correlationIds" | "externalDocs" | "tags" | "mapping"
-    )
-}
-
-/// Whether a mapping is a schema or a Reference Object itself, not a mapping of names: AsyncAPI's
-/// message `headers` is a schema, where OpenAPI's `headers` names the headers.
-fn schema_like(v: &Node) -> bool {
-    v.as_map().is_some_and(|es| es.iter().any(|(k, _)| matches!(k.name.as_str(), "$ref" | "type" | "properties" | "allOf" | "oneOf" | "anyOf" | "items" | "enum" | "format" | "$schema")))
-}
-
-/// Every `$ref` of a node, with the JSON Pointer of the mapping it is in.
+/// Every `$ref` of a node, with the JSON Pointer of the mapping it is in: ritsu-base's, which yuen
+/// follows too (`ritsu_base::document`).
 fn refs_in(node: &Node, at: &str, out: &mut Vec<(String, usize, usize, String)>) {
-    refs_under(node, at, false, out);
-}
-
-/// `names`: the keys of this mapping are names (under `properties`, `responses` and the like).
-fn refs_under(node: &Node, at: &str, names: bool, out: &mut Vec<(String, usize, usize, String)>) {
-    match &node.value {
-        Value::Map(es) => {
-            for (k, v) in es {
-                if !names
-                    && k.name == "$ref"
-                    && let Value::Str(s) = &v.value
-                {
-                    out.push((at.to_string(), k.line, k.col, s.clone()));
-                    continue;
-                }
-                if !names && is_data(&k.name) {
-                    continue;
-                }
-                // an example object's value is data
-                if !names && k.name == "value" && es.iter().any(|(k2, _)| matches!(k2.name.as_str(), "summary" | "externalValue" | "dataValue" | "serializedValue")) {
-                    continue;
-                }
-                let child_names = !names && holds_names(&k.name) && !(k.name == "headers" && schema_like(v));
-                refs_under(v, &format!("{at}/{}", escape(&k.name)), child_names, out);
-            }
-        }
-        Value::Seq(xs) => {
-            for (i, x) in xs.iter().enumerate() {
-                refs_under(x, &format!("{at}/{i}"), false, out);
-            }
-        }
-        _ => {}
-    }
+    document::refs_in(node, at, out);
 }
 
 /// A key as a token of a JSON Pointer.
 pub fn escape(key: &str) -> String {
-    key.replace('~', "~0").replace('/', "~1")
-}
-
-/// A `$ref`'s fragment as a JSON Pointer: `%XX` read as the byte it stands for.
-fn fragment(f: &str) -> String {
-    let bytes = f.as_bytes();
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%'
-            && i + 2 < bytes.len()
-            && let Ok(b) = u8::from_str_radix(&f[i + 1..i + 3], 16)
-        {
-            out.push(b);
-            i += 3;
-            continue;
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
-/// Whether a `$ref` is a URL (it starts with a scheme: `https:`, `urn:`).
-fn is_url(uri: &str) -> bool {
-    let mut cs = uri.chars();
-    cs.next().is_some_and(|c| c.is_ascii_alphabetic()) && uri.split_once(':').is_some_and(|(s, _)| s.len() > 1 && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '.' | '-')))
+    document::escape(key)
 }
 
 /// Where a `$ref` written in `from` lands: the file (from the root) and the JSON Pointer; Err with
 /// the URL when it is one; Err(None) when the path leaves the root.
 pub fn target(from: &str, written: &str) -> Result<(String, String), Option<String>> {
-    let (uri, frag) = written.split_once('#').unwrap_or((written, ""));
-    if is_url(uri) {
-        return Err(Some(uri.to_string()));
-    }
-    let file = if uri.is_empty() { from.to_string() } else { paths::join(&paths::parent(from), uri).map_err(|_| None)? };
-    Ok((file, fragment(frag)))
+    document::target(from, written)
 }
 
 thread_local! {
@@ -462,43 +387,18 @@ fn reader_note() -> Text {
     )
 }
 
-/// Following `$ref`s takes at most this many steps, so that two documents that point at each
-/// other cannot keep sakai going.
-const MAX_STEPS: usize = 64;
+impl Documents for Contracts {
+    fn root(&self, file: &str) -> Option<&Node> {
+        self.docs.get(file).map(|d| &d.root)
+    }
+}
 
 impl Contracts {
     /// The node a file and a JSON Pointer name, following the `$ref`s on the way (a channel that
     /// is a `$ref` to another file, then a message under it), and where it is: the file and the
     /// pointer it is at in the end.
     pub fn locate(&self, file: &str, pointer: &str) -> Option<(String, String, &Node)> {
-        self.locate_in(file, pointer, 0)
-    }
-
-    fn locate_in(&self, file: &str, pointer: &str, steps: usize) -> Option<(String, String, &Node)> {
-        if steps > MAX_STEPS {
-            return None;
-        }
-        let doc = self.docs.get(file)?;
-        let mut at: &Node = &doc.root;
-        let mut cur_file = file.to_string();
-        let mut cur_ptr = String::new();
-        for token in yaml::pointer_tokens(pointer)? {
-            // a `$ref` on the way: go on from where it lands
-            if let Some(Value::Str(w)) = at.get("$ref").map(|n| &n.value) {
-                let (f, p) = target(&cur_file, w).ok()?;
-                let (f2, p2, n2) = self.locate_in(&f, &p, steps + 1)?;
-                at = n2;
-                cur_file = f2;
-                cur_ptr = p2;
-            }
-            at = match &at.value {
-                Value::Map(es) => &es.iter().find(|(k, _)| k.name == token)?.1,
-                Value::Seq(xs) => xs.get(token.parse::<usize>().ok()?)?,
-                _ => return None,
-            };
-            cur_ptr = format!("{cur_ptr}/{}", escape(&token));
-        }
-        Some((cur_file, cur_ptr, at))
+        document::locate(self, file, pointer)
     }
 
     /// The line of the key a file and a pointer end on (the line of the document for the empty
@@ -518,39 +418,34 @@ impl Contracts {
 
     /// Where the `$ref`s of a node lead in the end: the definition it stands for.
     pub fn definition<'a>(&'a self, file: &str, pointer: &str, node: &'a Node) -> (String, String, &'a Node) {
-        let (mut f, mut p, mut n) = (file.to_string(), pointer.to_string(), node);
-        for _ in 0..MAX_STEPS {
-            let Some(Value::Str(w)) = n.get("$ref").map(|x| &x.value) else { break };
-            let Ok((tf, tp)) = target(&f, w) else { break };
-            let Some((f2, p2, n2)) = self.locate(&tf, &tp) else { break };
-            (f, p, n) = (f2, p2, n2);
-        }
-        (f, p, n)
+        document::definition(self, file, pointer, node)
     }
 
     /// Every element a file and a pointer reach: themselves, what their `$ref`s land on, and on
     /// from there (a channel's messages and their payloads), as (file, pointer).
     pub fn reach(&self, file: &str, pointer: &str) -> Vec<(String, String)> {
-        let mut out: Vec<(String, String)> = Vec::new();
-        let mut todo = vec![(file.to_string(), pointer.to_string())];
-        while let Some((f, p)) = todo.pop() {
-            if out.contains(&(f.clone(), p.clone())) || out.len() > 10_000 {
-                continue;
-            }
-            out.push((f.clone(), p.clone()));
-            let Some((lf, lp, node)) = self.locate(&f, &p) else { continue };
-            if (lf.clone(), lp.clone()) != (f.clone(), p.clone()) {
-                todo.push((lf.clone(), lp.clone()));
-            }
-            let mut rs = Vec::new();
-            refs_in(node, &lp, &mut rs);
-            for (_, _, _, w) in rs {
-                if let Ok(t) = target(&lf, &w) {
-                    todo.push(t);
-                }
-            }
+        document::reach(self, file, pointer)
+    }
+
+    /// The reference of what a file and a JSON Pointer name (ritsu's DESIGN 6.2): `openapi
+    /// "payments/api.yaml" schema Charge`, `asyncapi "…" channel orderPlaced`, and with no kind of
+    /// its own `pointer /servers/0`. The tool is the document's (a part of one, the tool of the
+    /// document that reaches it).
+    pub fn naming(&self, file: &str, pointer: &str) -> Name {
+        let tool = self.docs.get(file).map(|d| d.kind.tool()).unwrap_or(crate::naming::Tool::Openapi);
+        document::reference(self, tool, file, pointer)
+    }
+
+    /// The file and the JSON Pointer of the element a reference of `openapi` or `asyncapi` names
+    /// (of the schema, for a value of its `enum`); None for another tool, a whole file, or what
+    /// the documents do not hold.
+    pub fn place(&self, n: &Name) -> Option<(String, String)> {
+        if !matches!(n.tool, crate::naming::Tool::Openapi | crate::naming::Tool::Asyncapi) || n.items.is_empty() {
+            return None;
         }
-        out
+        let base = if n.kind() == Some("value") { Name { items: n.items[..n.items.len() - 1].to_vec(), ..n.clone() } } else { n.clone() };
+        let e = document::find(self, &base)?;
+        Some((e.file, e.pointer))
     }
 
     /// The elements of a kind named `name` in the documents `files` (DESIGN 15.4): `schema` and
@@ -624,34 +519,13 @@ impl Contracts {
         Some(EnumValues { file: df, pointer: dp, line: k.line, values })
     }
 
-    /// The operations of an OpenAPI document: under `paths` and `webhooks`, each method of a path
-    /// item (and the `additionalOperations` of OpenAPI 3.2), with its `operationId`.
+    /// The operations of an OpenAPI document: under `paths` and `webhooks`, each method of a
+    /// path item (and the `additionalOperations` of OpenAPI 3.2), with its `operationId`.
     pub fn operations(&self, file: &str) -> Vec<Operation> {
-        const METHODS: [&str; 9] = ["get", "put", "post", "delete", "options", "head", "patch", "trace", "query"];
-        let mut out = Vec::new();
-        let Some(d) = self.docs.get(file) else { return out };
-        if d.kind != Kind::OpenApi {
-            return out;
+        if self.docs.get(file).is_none_or(|d| d.kind != Kind::OpenApi) {
+            return Vec::new();
         }
-        for top in ["paths", "webhooks"] {
-            for (pk, item) in d.root.get(top).and_then(Node::as_map).unwrap_or_default() {
-                let base = format!("/{top}/{}", escape(&pk.name));
-                let (_, _, item) = self.definition(file, &base, item);
-                let mut add = |method: &str, node: &Node, ptr: String| {
-                    let id = node.get("operationId").and_then(Node::as_str).unwrap_or("").to_string();
-                    out.push(Operation { id, method: method.to_ascii_uppercase(), path: pk.name.clone(), pointer: ptr, line: node.line, webhook: top == "webhooks" });
-                };
-                for (mk, op) in item.as_map().unwrap_or_default() {
-                    if METHODS.contains(&mk.name.as_str()) {
-                        add(&mk.name, op, format!("{base}/{}", mk.name));
-                    }
-                }
-                for (mk, op) in item.get("additionalOperations").and_then(Node::as_map).unwrap_or_default() {
-                    add(&mk.name, op, format!("{base}/additionalOperations/{}", escape(&mk.name)));
-                }
-            }
-        }
-        out
+        document::operations(self, file).into_iter().map(|o| Operation { id: o.id, method: o.method, path: o.path, pointer: o.pointer, line: o.line, webhook: o.webhook }).collect()
     }
 
     /// The channels of an AsyncAPI document: the key, the address, and where the key is.
@@ -767,12 +641,6 @@ pub struct Action {
     pub channel: Option<String>,
     pub channel_ref: String,
     pub line: usize,
-}
-
-/// An element of a document as sakai names it in its own text: the file and the JSON Pointer,
-/// `payments/api.yaml#/components/schemas/Charge`, as a `$ref` would point at it.
-pub fn shown(file: &str, pointer: &str) -> String {
-    format!("{file}#{pointer}")
 }
 
 #[cfg(test)]

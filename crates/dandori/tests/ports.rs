@@ -98,8 +98,8 @@ fn a_flow_names_its_rules_apis_services_methods_and_children() {
     assert_eq!(ways("tests/flows/connect_rules.flow"), ["use rule … connect, local", "use rule … connect", "use rule … connect"]);
     assert_eq!(ways("tests/flows/local_rules.flow")[..2], ["use rule … lambda, local", "use rule … lambda"]);
     assert_eq!(ways("examples/inquiry/temporal/inquiry.flow"), ["use rule … local"]);
-    // an OpenAPI document is a file
-    assert!(show("examples/hotel/temporal/hotel.ja.flow").contains(&"6 file \"examples/hotel/specs/stripe.json\" [use openapi]".to_string()));
+    // an OpenAPI document is openapi's (ritsu's DESIGN 6.2), a Smithy model a file
+    assert!(show("examples/hotel/temporal/hotel.ja.flow").contains(&"6 openapi \"examples/hotel/specs/stripe.json\" [use openapi]".to_string()));
     // a dates file is koyomi's, and a book chobo's, with each transfer a task runs an operation of
     assert_eq!(
         show("examples/invoice/invoice.flow"),

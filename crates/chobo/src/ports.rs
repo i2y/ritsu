@@ -321,10 +321,13 @@ fn without(v: &serde_json::Value, keys: &[&str]) -> serde_json::Value {
 }
 
 impl ritsu_ports::Items for Engine {
-    /// Each unit, account and transfer of a book. The definition of each is what `chobo api` says
-    /// of it without its name and the numbers chobo makes from the name (yuen's DESIGN 3.2): a
-    /// unit's scale; an account's parameters, unit, bounds and description; a transfer's
-    /// parameters, key, hold and moves, with each account its moves touch.
+    /// Each unit, account and transfer of a book, and each operation of a transfer (`do`, or
+    /// `hold`, `post` and `void`; ritsu's DESIGN 6.2, `transfer T operation O`). The definition of
+    /// each is what `chobo api` says of it without its name and the numbers chobo makes from the
+    /// name (yuen's DESIGN 3.2): a unit's scale; an account's parameters, unit, bounds and
+    /// description; a transfer's parameters, key, hold and moves, with each account its moves
+    /// touch; an operation's, its transfer's, with the operation and the names of the reasons it
+    /// can be refused with (not chobo's examples of them, which its search finds).
     fn items(&self, root: &Path, file: &str) -> Result<Vec<Item>, Vec<Said>> {
         let disk = ritsu_base::paths::on_disk(root, file);
         let (src, book, c) = checked(&disk)?;
@@ -352,6 +355,14 @@ impl ritsu_ports::Items for Engine {
             v["accounts"] = serde_json::Value::Object(touched);
             let end = t.moves.iter().map(|m| m.line).fold(t.line.max(t.key_line), usize::max);
             out.push(Item { naming: naming("transfer", &t.name), lines: (t.line, end), text: definition(&v) });
+            let ops: &[Op] = if t.is_pending() { &[Op::Hold, Op::Post, Op::Void] } else { &[Op::Do] };
+            for op in ops {
+                let refusals: Vec<serde_json::Value> = j["operations"][op.name()]["refusals"].as_array().into_iter().flatten().map(|r| r["name"].clone()).collect();
+                let mut o = v.clone();
+                o["operation"] = serde_json::Value::String(op.name().to_string());
+                o["refusals"] = serde_json::Value::Array(refusals);
+                out.push(Item { naming: naming("transfer", &t.name).with("operation", op.name()), lines: (t.line, end), text: definition(&o) });
+            }
         }
         out.sort_by_key(|i| i.lines.0);
         Ok(out)

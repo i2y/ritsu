@@ -115,49 +115,31 @@ struct E<'a> {
     diags: Vec<Diag>,
 }
 
-/// An element of an OpenAPI or AsyncAPI document, as sakai holds it (DESIGN 15.4): the file, and
-/// the JSON Pointer as its one pair (`#`), with a value of an enum after it.
-pub fn contract_name(file: &str, pointer: &str) -> Name {
-    Name::file(Tool::File, file.to_string()).with("#", pointer.to_string())
+/// An element of an OpenAPI or AsyncAPI document, as sakai holds it (DESIGN 15.4): its reference
+/// (ritsu's DESIGN 6.2), `openapi "payments/api.yaml" schema Charge`, found from the file and the
+/// JSON Pointer it is at.
+pub fn contract_name(cs: &Contracts, file: &str, pointer: &str) -> Name {
+    cs.naming(file, pointer)
 }
 
-/// The file and the pointer of an element of a document, if the name is one.
-pub fn as_contract(n: &Name) -> Option<(&str, &str)> {
-    match (n.tool, n.items.first()) {
-        (Tool::File, Some((k, p))) if k == "#" => Some((&n.path, p)),
-        _ => None,
-    }
+/// The file and the pointer of an element of a document, if the name is one (of the schema, for a
+/// value of its `enum`).
+pub fn as_contract(cs: &Contracts, n: &Name) -> Option<(String, String)> {
+    cs.place(n)
 }
 
-/// An element as a person reads it: a name of DESIGN 2, or an element of a document as its file
-/// and its JSON Pointer (`payments/api.yaml#/components/schemas/Charge value refunded`).
+/// An element as a person reads it: its reference.
 pub fn display(n: &Name) -> String {
-    match as_contract(n) {
-        Some((f, p)) => {
-            let mut s = crate::contracts::shown(f, p);
-            for (k, v) in &n.items[1..] {
-                s.push_str(&format!(" {k} {}", ritsu_base::naming::word_or_quote(v)));
-            }
-            s
-        }
-        None => n.text(),
-    }
+    n.text()
 }
 
-/// What a diagnostic says is involved, for an element: its name, or for an element of a
-/// document the line its key is at.
+/// What a diagnostic says is involved, for an element: its reference, and for an element of a
+/// document the line its key is at too (for the JSON).
 pub fn refer(cs: &Contracts, context: Option<&str>, n: &Name, what: Text) -> crate::diag::Ref {
-    match as_contract(n) {
+    match as_contract(cs, n) {
         Some((f, p)) => {
-            let line = cs.key_line(f, p).unwrap_or(1);
-            // the file is the place the line names; what is there is its pointer
-            let mut shown = format!("#{p}");
-            for (k, v) in &n.items[1..] {
-                shown.push_str(&format!(" {k} {}", ritsu_base::naming::word_or_quote(v)));
-            }
-            let (wj, we) = (what.ja.clone(), what.en.clone());
-            let what = if wj.is_empty() { Text::same(shown.clone()) } else { tr!("{shown}（{wj}）", "{shown}, {we}") };
-            crate::diag::Ref::line(context, f, line, what)
+            let line = cs.key_line(&f, &p).unwrap_or(1);
+            crate::diag::Ref::name_at(context, n.clone(), &f, line, what)
         }
         None => crate::diag::Ref::name(context, n.clone(), what),
     }
@@ -184,6 +166,48 @@ fn rule_has(index: &Index, root: &std::path::Path, name: &Name) -> Result<(), Te
 }
 
 impl E<'_> {
+    /// An element of an OpenAPI or AsyncAPI document in its long form (`openapi "../payments/api.yaml"
+    /// schema Charge`): the document is one of the scope, and holds what the pairs name (DESIGN
+    /// 15.4); a document that could not be read is told as E108 already.
+    fn document_element(&mut self, c: usize, pos: Pos, name: Name) -> Option<Name> {
+        let t = name.text();
+        let Some(doc) = self.cs.docs.get(&name.path) else {
+            if self.cs.unread.contains(&name.path) {
+                return None;
+            }
+            if !self.arts.iter().any(|a| a.path == name.path) {
+                self.err(c, pos, "E103", tr!("{t} は、地図の範囲の外のファイルを指しています", "The name {t} points at a file outside the map's scope"));
+            } else {
+                let sf = paths::shown(&name.path);
+                self.err(c, pos, "E007", tr!("{sf} は OpenAPI と AsyncAPI のどちらの文書でもありません", "The file {sf} is neither an OpenAPI nor an AsyncAPI document"));
+            }
+            return None;
+        };
+        if doc.kind.tool() != name.tool && !doc.part {
+            let (sf, w) = (paths::shown(&name.path), doc.kind.word());
+            self.err(c, pos, "E007", tr!("{sf} は {} の文書です。`{w} \"…\"` で書いてください", "The file {sf} is an {} document: write `{w} \"…\"`", doc.kind.title(); doc.kind.title()));
+            return None;
+        }
+        if name.items.is_empty() {
+            return Some(name);
+        }
+        let there = match self.cs.place(&name) {
+            Some((f, p)) if name.kind() == Some("value") => {
+                let v = &name.items[name.items.len() - 1].1;
+                self.cs.enum_values(&f, &p).is_some_and(|e| e.values.iter().any(|x| x.name == *v))
+            }
+            Some(_) => true,
+            None => false,
+        };
+        if !there {
+            let (sf, (k, v)) = (paths::shown(&name.path), name.items.last().cloned().unwrap_or_default());
+            let v = ritsu_base::naming::word_or_quote(&v);
+            self.err(c, pos, "E007", tr!("{sf} に {k} {v} はありません", "There is no {k} {v} in {sf}"));
+            return None;
+        }
+        Some(name)
+    }
+
     fn err(&mut self, c: usize, p: Pos, code: &'static str, msg: Text) -> &mut Diag {
         let cx = &self.m.contexts[c];
         self.diags.push(diag::at(code, &cx.file, p.line, p.col, msg).source(&cx.src));
@@ -209,6 +233,9 @@ impl E<'_> {
                         return None;
                     }
                     return Some(name);
+                }
+                if matches!(written.tool, Tool::Openapi | Tool::Asyncapi) {
+                    return self.document_element(c, *pos, name);
                 }
                 if written.tool != Tool::Proto {
                     // The other tools' names are taken as written (DESIGN 2.2).
@@ -243,7 +270,7 @@ impl E<'_> {
                 let docs: Vec<(String, String)> = self.cs.find(contract_files, kind, name);
                 if found.is_empty() && docs.len() == 1 {
                     let (f, p) = &docs[0];
-                    let mut n = contract_name(f, p);
+                    let mut n = contract_name(self.cs, f, p);
                     if let Some((ck, cn)) = child {
                         if ck != "value" || kind != "enum" {
                             self.err(c, *pos, "E011", tr!("`{ck}` は `{kind}` の下に書けません", "`{ck}` cannot come under `{kind}`"));
@@ -262,7 +289,7 @@ impl E<'_> {
                 // one that two packages of `.proto` files have is told below, as before
                 if !docs.is_empty() && found.len() + docs.len() > 1 {
                     let mut cands: Vec<String> = found.iter().map(|(p, r)| self.ps.files[p].full(r)).collect();
-                    cands.extend(docs.iter().map(|(f, p)| crate::contracts::shown(f, p)));
+                    cands.extend(docs.iter().map(|(f, p)| contract_name(self.cs, f, p).text()));
                     let list = cands.join("、");
                     let list_en = cands.join(", ");
                     self.err(c, *pos, "E007", tr!("{kind} {name} は、公表された言語の二つ以上の要素に当たります（{list}）", "The name {kind} {name} is in more than one place of the published languages ({list_en})")).notes.push(tr!(
@@ -364,13 +391,16 @@ pub fn resolve(m: &Model, ps: &Protos, cs: &Contracts, arts: &[Artifact], read: 
                 if let Target::Element(te) = &em.target {
                     // The target is an enum: a proto enum or a rule's.
                     let ok_kind = match te {
-                        Element::Long { written, .. } => written.items.len() == 1 && written.items[0].0 == "enum" && matches!(written.tool, Tool::Proto | Tool::Rulec),
+                        Element::Long { written, .. } => {
+                            written.items.len() == 1
+                                && ((written.items[0].0 == "enum" && matches!(written.tool, Tool::Proto | Tool::Rulec)) || (written.items[0].0 == "schema" && matches!(written.tool, Tool::Openapi | Tool::Asyncapi)))
+                        }
                         Element::Short { kind, child, .. } => kind == "enum" && child.is_none(),
                     };
                     if !ok_kind {
-                        e.err(ci, te.pos(), "E011", tr!("対応の先にできるのは、proto の列挙か rulec の規則の列挙です", "A mapping's target is a proto enum or a rule's enum")).notes.push(tr!(
-                            "`proto \"<パス>\" enum <列挙>`、自分の公表された言語の `enum <列挙>`、`rulec \"<パス>\" enum <列挙>` のどれかか、名前だけを書いてください。",
-                            "Write `proto \"<path>\" enum <enum>`, `enum <enum>` of the context's own published language, `rulec \"<path>\" enum <enum>`, or a name only."
+                        e.err(ci, te.pos(), "E011", tr!("対応の先にできるのは、proto の列挙、rulec の規則の列挙、OpenAPI か AsyncAPI の文書の列挙のスキーマです", "A mapping's target is a proto enum, a rule's enum, or a schema with an enum of an OpenAPI or AsyncAPI document")).notes.push(tr!(
+                            "`proto \"<パス>\" enum <列挙>`、自分の公表された言語の `enum <列挙>`、`rulec \"<パス>\" enum <列挙>`、`openapi \"<パス>\" schema <スキーマ>` のどれかか、名前だけを書いてください。",
+                            "Write `proto \"<path>\" enum <enum>`, `enum <enum>` of the context's own published language, `rulec \"<path>\" enum <enum>`, `openapi \"<path>\" schema <schema>`, or a name only."
                         ));
                         continue;
                     }

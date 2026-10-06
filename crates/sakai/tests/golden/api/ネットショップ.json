@@ -35,14 +35,14 @@
           "package": "ordering.v1",
           "from": [
             {
-              "text": "file \"ordering/api/ordering.json\"",
-              "tool": "file",
+              "text": "openapi \"ordering/api/ordering.json\"",
+              "tool": "openapi",
               "path": "ordering/api/ordering.json",
               "items": []
             },
             {
-              "text": "file \"ordering/events/ordering.yaml\"",
-              "tool": "file",
+              "text": "asyncapi \"ordering/events/ordering.yaml\"",
+              "tool": "asyncapi",
               "path": "ordering/events/ordering.yaml",
               "items": []
             }
@@ -79,7 +79,15 @@
           "also": [],
           "means": [
             {
-              "pointer": "ordering/api/ordering.json#/components/schemas/Order"
+              "text": "openapi \"ordering/api/ordering.json\" schema Order",
+              "tool": "openapi",
+              "path": "ordering/api/ordering.json",
+              "items": [
+                [
+                  "schema",
+                  "Order"
+                ]
+              ]
             }
           ],
           "as": null
@@ -90,7 +98,15 @@
           "also": [],
           "means": [
             {
-              "pointer": "ordering/events/ordering.yaml#/channels/orderPlaced"
+              "text": "asyncapi \"ordering/events/ordering.yaml\" channel orderPlaced",
+              "tool": "asyncapi",
+              "path": "ordering/events/ordering.yaml",
+              "items": [
+                [
+                  "channel",
+                  "orderPlaced"
+                ]
+              ]
             }
           ],
           "as": null
@@ -116,14 +132,14 @@
           "package": "payments.v1",
           "from": [
             {
-              "text": "file \"payments/api/payments.yaml\"",
-              "tool": "file",
+              "text": "openapi \"payments/api/payments.yaml\"",
+              "tool": "openapi",
               "path": "payments/api/payments.yaml",
               "items": []
             },
             {
-              "text": "file \"payments/events/payments.yaml\"",
-              "tool": "file",
+              "text": "asyncapi \"payments/events/payments.yaml\"",
+              "tool": "asyncapi",
               "path": "payments/events/payments.yaml",
               "items": []
             }
@@ -160,7 +176,15 @@
           "also": [],
           "means": [
             {
-              "pointer": "payments/api/payments.yaml#/components/schemas/Charge"
+              "text": "openapi \"payments/api/payments.yaml\" schema Charge",
+              "tool": "openapi",
+              "path": "payments/api/payments.yaml",
+              "items": [
+                [
+                  "schema",
+                  "Charge"
+                ]
+              ]
             }
           ],
           "as": null
@@ -171,7 +195,15 @@
           "also": [],
           "means": [
             {
-              "pointer": "payments/api/payments.yaml#/components/schemas/ChargeStatus"
+              "text": "openapi \"payments/api/payments.yaml\" schema ChargeStatus",
+              "tool": "openapi",
+              "path": "payments/api/payments.yaml",
+              "items": [
+                [
+                  "schema",
+                  "ChargeStatus"
+                ]
+              ]
             }
           ],
           "as": null
@@ -197,8 +229,8 @@
           "package": "shipping.v1",
           "from": [
             {
-              "text": "file \"shipping/api/shipping.yaml\"",
-              "tool": "file",
+              "text": "openapi \"shipping/api/shipping.yaml\"",
+              "tool": "openapi",
               "path": "shipping/api/shipping.yaml",
               "items": []
             }
@@ -225,7 +257,15 @@
           "also": [],
           "means": [
             {
-              "pointer": "shipping/api/shipping.yaml#/components/schemas/ShipmentGate"
+              "text": "openapi \"shipping/api/shipping.yaml\" schema ShipmentGate",
+              "tool": "openapi",
+              "path": "shipping/api/shipping.yaml",
+              "items": [
+                [
+                  "schema",
+                  "ShipmentGate"
+                ]
+              ]
             }
           ],
           "as": null
@@ -338,10 +378,26 @@
       "enums": [
         {
           "from": {
-            "pointer": "payments/api/payments.yaml#/components/schemas/ChargeStatus"
+            "text": "openapi \"payments/api/payments.yaml\" schema ChargeStatus",
+            "tool": "openapi",
+            "path": "payments/api/payments.yaml",
+            "items": [
+              [
+                "schema",
+                "ChargeStatus"
+              ]
+            ]
           },
           "to": {
-            "pointer": "shipping/api/shipping.yaml#/components/schemas/ShipmentGate"
+            "text": "openapi \"shipping/api/shipping.yaml\" schema ShipmentGate",
+            "tool": "openapi",
+            "path": "shipping/api/shipping.yaml",
+            "items": [
+              [
+                "schema",
+                "ShipmentGate"
+              ]
+            ]
           },
           "checked": true,
           "values": [
@@ -406,8 +462,8 @@
   "artifacts": [
     {
       "name": {
-        "text": "file \"common/money.yaml\"",
-        "tool": "file",
+        "text": "openapi \"common/money.yaml\"",
+        "tool": "openapi",
         "path": "common/money.yaml",
         "items": []
       },
@@ -417,8 +473,8 @@
     },
     {
       "name": {
-        "text": "file \"notifications/events/notifications.yaml\"",
-        "tool": "file",
+        "text": "asyncapi \"notifications/events/notifications.yaml\"",
+        "tool": "asyncapi",
         "path": "notifications/events/notifications.yaml",
         "items": []
       },
@@ -439,8 +495,8 @@
     },
     {
       "name": {
-        "text": "file \"ordering/api/ordering.json\"",
-        "tool": "file",
+        "text": "openapi \"ordering/api/ordering.json\"",
+        "tool": "openapi",
         "path": "ordering/api/ordering.json",
         "items": []
       },
@@ -450,8 +506,8 @@
     },
     {
       "name": {
-        "text": "file \"ordering/events/ordering.yaml\"",
-        "tool": "file",
+        "text": "asyncapi \"ordering/events/ordering.yaml\"",
+        "tool": "asyncapi",
         "path": "ordering/events/ordering.yaml",
         "items": []
       },
@@ -461,8 +517,8 @@
     },
     {
       "name": {
-        "text": "file \"payments/api/payments.yaml\"",
-        "tool": "file",
+        "text": "openapi \"payments/api/payments.yaml\"",
+        "tool": "openapi",
         "path": "payments/api/payments.yaml",
         "items": []
       },
@@ -472,8 +528,8 @@
     },
     {
       "name": {
-        "text": "file \"payments/events/payments.yaml\"",
-        "tool": "file",
+        "text": "asyncapi \"payments/events/payments.yaml\"",
+        "tool": "asyncapi",
         "path": "payments/events/payments.yaml",
         "items": []
       },
@@ -483,8 +539,8 @@
     },
     {
       "name": {
-        "text": "file \"shipping/acl/payments.yaml\"",
-        "tool": "file",
+        "text": "asyncapi \"shipping/acl/payments.yaml\"",
+        "tool": "asyncapi",
         "path": "shipping/acl/payments.yaml",
         "items": []
       },
@@ -494,8 +550,8 @@
     },
     {
       "name": {
-        "text": "file \"shipping/api/shipping.yaml\"",
-        "tool": "file",
+        "text": "openapi \"shipping/api/shipping.yaml\"",
+        "tool": "openapi",
         "path": "shipping/api/shipping.yaml",
         "items": []
       },
@@ -507,199 +563,467 @@
   "crossings": [
     {
       "from": {
-        "text": "file \"notifications/events/notifications.yaml\"",
-        "tool": "file",
+        "text": "asyncapi \"notifications/events/notifications.yaml\"",
+        "tool": "asyncapi",
         "path": "notifications/events/notifications.yaml",
         "items": []
       },
       "line": 8,
       "to": {
-        "text": "file \"ordering/events/ordering.yaml\"",
-        "tool": "file",
+        "text": "asyncapi \"ordering/events/ordering.yaml\" channel orderPlaced",
+        "tool": "asyncapi",
         "path": "ordering/events/ordering.yaml",
-        "items": []
+        "items": [
+          [
+            "channel",
+            "orderPlaced"
+          ]
+        ]
       },
       "from_context": "通知",
       "to_context": "受注",
       "via": "receive",
-      "elements": [],
+      "elements": [
+        {
+          "text": "asyncapi \"ordering/events/ordering.yaml\" channel orderPlaced",
+          "tool": "asyncapi",
+          "path": "ordering/events/ordering.yaml",
+          "items": [
+            [
+              "channel",
+              "orderPlaced"
+            ]
+          ]
+        },
+        {
+          "text": "asyncapi \"ordering/events/ordering.yaml\" message OrderPlaced",
+          "tool": "asyncapi",
+          "path": "ordering/events/ordering.yaml",
+          "items": [
+            [
+              "message",
+              "OrderPlaced"
+            ]
+          ]
+        },
+        {
+          "text": "openapi \"ordering/api/ordering.json\" schema Order",
+          "tool": "openapi",
+          "path": "ordering/api/ordering.json",
+          "items": [
+            [
+              "schema",
+              "Order"
+            ]
+          ]
+        },
+        {
+          "text": "openapi \"common/money.yaml\" pointer /Money",
+          "tool": "openapi",
+          "path": "common/money.yaml",
+          "items": [
+            [
+              "pointer",
+              "/Money"
+            ]
+          ]
+        },
+        {
+          "text": "openapi \"ordering/api/ordering.json\" schema Line",
+          "tool": "openapi",
+          "path": "ordering/api/ordering.json",
+          "items": [
+            [
+              "schema",
+              "Line"
+            ]
+          ]
+        },
+        {
+          "text": "openapi \"ordering/api/ordering.json\" schema OrderStatus",
+          "tool": "openapi",
+          "path": "ordering/api/ordering.json",
+          "items": [
+            [
+              "schema",
+              "OrderStatus"
+            ]
+          ]
+        }
+      ],
       "allowed_by": {
         "relationship": "upstream_downstream",
         "roles": [
           "conformist"
         ],
         "declared": "contexts/通知.ctx:11"
-      },
-      "pointer": "ordering/events/ordering.yaml#/channels/orderPlaced",
-      "pointers": [
-        "ordering/events/ordering.yaml#/channels/orderPlaced",
-        "ordering/events/ordering.yaml#/components/messages/OrderPlaced",
-        "ordering/api/ordering.json#/components/schemas/Order",
-        "common/money.yaml#/Money",
-        "ordering/api/ordering.json#/components/schemas/Line",
-        "ordering/api/ordering.json#/components/schemas/OrderStatus"
-      ]
+      }
     },
     {
       "from": {
-        "text": "file \"notifications/events/notifications.yaml\"",
-        "tool": "file",
+        "text": "asyncapi \"notifications/events/notifications.yaml\"",
+        "tool": "asyncapi",
         "path": "notifications/events/notifications.yaml",
         "items": []
       },
       "line": 10,
       "to": {
-        "text": "file \"ordering/events/ordering.yaml\"",
-        "tool": "file",
+        "text": "asyncapi \"ordering/events/ordering.yaml\" channel orderCancelled",
+        "tool": "asyncapi",
         "path": "ordering/events/ordering.yaml",
-        "items": []
+        "items": [
+          [
+            "channel",
+            "orderCancelled"
+          ]
+        ]
       },
       "from_context": "通知",
       "to_context": "受注",
       "via": "receive",
-      "elements": [],
+      "elements": [
+        {
+          "text": "asyncapi \"ordering/events/ordering.yaml\" channel orderCancelled",
+          "tool": "asyncapi",
+          "path": "ordering/events/ordering.yaml",
+          "items": [
+            [
+              "channel",
+              "orderCancelled"
+            ]
+          ]
+        },
+        {
+          "text": "asyncapi \"ordering/events/ordering.yaml\" message OrderCancelled",
+          "tool": "asyncapi",
+          "path": "ordering/events/ordering.yaml",
+          "items": [
+            [
+              "message",
+              "OrderCancelled"
+            ]
+          ]
+        }
+      ],
       "allowed_by": {
         "relationship": "upstream_downstream",
         "roles": [
           "conformist"
         ],
         "declared": "contexts/通知.ctx:11"
-      },
-      "pointer": "ordering/events/ordering.yaml#/channels/orderCancelled",
-      "pointers": [
-        "ordering/events/ordering.yaml#/channels/orderCancelled",
-        "ordering/events/ordering.yaml#/components/messages/OrderCancelled"
-      ]
+      }
     },
     {
       "from": {
-        "text": "file \"payments/api/payments.yaml\"",
-        "tool": "file",
+        "text": "openapi \"payments/api/payments.yaml\"",
+        "tool": "openapi",
         "path": "payments/api/payments.yaml",
         "items": []
       },
       "line": 50,
       "to": {
-        "text": "file \"common/money.yaml\"",
-        "tool": "file",
+        "text": "openapi \"common/money.yaml\" pointer /Money",
+        "tool": "openapi",
         "path": "common/money.yaml",
-        "items": []
+        "items": [
+          [
+            "pointer",
+            "/Money"
+          ]
+        ]
       },
       "from_context": "決済",
       "to_context": "受注",
       "via": "$ref",
-      "elements": [],
+      "elements": [
+        {
+          "text": "openapi \"common/money.yaml\" pointer /Money",
+          "tool": "openapi",
+          "path": "common/money.yaml",
+          "items": [
+            [
+              "pointer",
+              "/Money"
+            ]
+          ]
+        }
+      ],
       "allowed_by": {
         "relationship": "shared_kernel",
         "declared": "contexts/決済.ctx:22"
-      },
-      "pointer": "common/money.yaml#/Money",
-      "pointers": [
-        "common/money.yaml#/Money"
-      ]
+      }
     },
     {
       "from": {
-        "text": "file \"payments/events/payments.yaml\"",
-        "tool": "file",
+        "text": "asyncapi \"payments/events/payments.yaml\"",
+        "tool": "asyncapi",
         "path": "payments/events/payments.yaml",
         "items": []
       },
       "line": 8,
       "to": {
-        "text": "file \"ordering/events/ordering.yaml\"",
-        "tool": "file",
+        "text": "asyncapi \"ordering/events/ordering.yaml\" channel orderPlaced",
+        "tool": "asyncapi",
         "path": "ordering/events/ordering.yaml",
-        "items": []
+        "items": [
+          [
+            "channel",
+            "orderPlaced"
+          ]
+        ]
       },
       "from_context": "決済",
       "to_context": "受注",
       "via": "receive",
-      "elements": [],
+      "elements": [
+        {
+          "text": "asyncapi \"ordering/events/ordering.yaml\" channel orderPlaced",
+          "tool": "asyncapi",
+          "path": "ordering/events/ordering.yaml",
+          "items": [
+            [
+              "channel",
+              "orderPlaced"
+            ]
+          ]
+        },
+        {
+          "text": "asyncapi \"ordering/events/ordering.yaml\" message OrderPlaced",
+          "tool": "asyncapi",
+          "path": "ordering/events/ordering.yaml",
+          "items": [
+            [
+              "message",
+              "OrderPlaced"
+            ]
+          ]
+        },
+        {
+          "text": "openapi \"ordering/api/ordering.json\" schema Order",
+          "tool": "openapi",
+          "path": "ordering/api/ordering.json",
+          "items": [
+            [
+              "schema",
+              "Order"
+            ]
+          ]
+        },
+        {
+          "text": "openapi \"common/money.yaml\" pointer /Money",
+          "tool": "openapi",
+          "path": "common/money.yaml",
+          "items": [
+            [
+              "pointer",
+              "/Money"
+            ]
+          ]
+        },
+        {
+          "text": "openapi \"ordering/api/ordering.json\" schema Line",
+          "tool": "openapi",
+          "path": "ordering/api/ordering.json",
+          "items": [
+            [
+              "schema",
+              "Line"
+            ]
+          ]
+        },
+        {
+          "text": "openapi \"ordering/api/ordering.json\" schema OrderStatus",
+          "tool": "openapi",
+          "path": "ordering/api/ordering.json",
+          "items": [
+            [
+              "schema",
+              "OrderStatus"
+            ]
+          ]
+        }
+      ],
       "allowed_by": {
         "relationship": "upstream_downstream",
         "roles": [
           "conformist"
         ],
         "declared": "contexts/決済.ctx:19"
-      },
-      "pointer": "ordering/events/ordering.yaml#/channels/orderPlaced",
-      "pointers": [
-        "ordering/events/ordering.yaml#/channels/orderPlaced",
-        "ordering/events/ordering.yaml#/components/messages/OrderPlaced",
-        "ordering/api/ordering.json#/components/schemas/Order",
-        "common/money.yaml#/Money",
-        "ordering/api/ordering.json#/components/schemas/Line",
-        "ordering/api/ordering.json#/components/schemas/OrderStatus"
-      ]
+      }
     },
     {
       "from": {
-        "text": "file \"shipping/acl/payments.yaml\"",
-        "tool": "file",
+        "text": "asyncapi \"shipping/acl/payments.yaml\"",
+        "tool": "asyncapi",
         "path": "shipping/acl/payments.yaml",
         "items": []
       },
       "line": 9,
       "to": {
-        "text": "file \"payments/events/payments.yaml\"",
-        "tool": "file",
+        "text": "asyncapi \"payments/events/payments.yaml\" channel paymentSucceeded",
+        "tool": "asyncapi",
         "path": "payments/events/payments.yaml",
-        "items": []
+        "items": [
+          [
+            "channel",
+            "paymentSucceeded"
+          ]
+        ]
       },
       "from_context": "配送",
       "to_context": "決済",
       "via": "receive",
-      "elements": [],
+      "elements": [
+        {
+          "text": "asyncapi \"payments/events/payments.yaml\" channel paymentSucceeded",
+          "tool": "asyncapi",
+          "path": "payments/events/payments.yaml",
+          "items": [
+            [
+              "channel",
+              "paymentSucceeded"
+            ]
+          ]
+        },
+        {
+          "text": "asyncapi \"payments/events/payments.yaml\" message PaymentResult",
+          "tool": "asyncapi",
+          "path": "payments/events/payments.yaml",
+          "items": [
+            [
+              "message",
+              "PaymentResult"
+            ]
+          ]
+        },
+        {
+          "text": "openapi \"payments/api/payments.yaml\" schema Charge",
+          "tool": "openapi",
+          "path": "payments/api/payments.yaml",
+          "items": [
+            [
+              "schema",
+              "Charge"
+            ]
+          ]
+        },
+        {
+          "text": "openapi \"common/money.yaml\" pointer /Money",
+          "tool": "openapi",
+          "path": "common/money.yaml",
+          "items": [
+            [
+              "pointer",
+              "/Money"
+            ]
+          ]
+        },
+        {
+          "text": "openapi \"payments/api/payments.yaml\" schema ChargeStatus",
+          "tool": "openapi",
+          "path": "payments/api/payments.yaml",
+          "items": [
+            [
+              "schema",
+              "ChargeStatus"
+            ]
+          ]
+        }
+      ],
       "allowed_by": {
         "relationship": "upstream_downstream",
         "roles": [
           "anticorruption_layer"
         ],
         "declared": "contexts/配送.ctx:16"
-      },
-      "pointer": "payments/events/payments.yaml#/channels/paymentSucceeded",
-      "pointers": [
-        "payments/events/payments.yaml#/channels/paymentSucceeded",
-        "payments/events/payments.yaml#/components/messages/PaymentResult",
-        "payments/api/payments.yaml#/components/schemas/Charge",
-        "common/money.yaml#/Money",
-        "payments/api/payments.yaml#/components/schemas/ChargeStatus"
-      ]
+      }
     },
     {
       "from": {
-        "text": "file \"shipping/acl/payments.yaml\"",
-        "tool": "file",
+        "text": "asyncapi \"shipping/acl/payments.yaml\"",
+        "tool": "asyncapi",
         "path": "shipping/acl/payments.yaml",
         "items": []
       },
       "line": 11,
       "to": {
-        "text": "file \"payments/events/payments.yaml\"",
-        "tool": "file",
+        "text": "asyncapi \"payments/events/payments.yaml\" channel paymentFailed",
+        "tool": "asyncapi",
         "path": "payments/events/payments.yaml",
-        "items": []
+        "items": [
+          [
+            "channel",
+            "paymentFailed"
+          ]
+        ]
       },
       "from_context": "配送",
       "to_context": "決済",
       "via": "receive",
-      "elements": [],
+      "elements": [
+        {
+          "text": "asyncapi \"payments/events/payments.yaml\" channel paymentFailed",
+          "tool": "asyncapi",
+          "path": "payments/events/payments.yaml",
+          "items": [
+            [
+              "channel",
+              "paymentFailed"
+            ]
+          ]
+        },
+        {
+          "text": "asyncapi \"payments/events/payments.yaml\" message PaymentResult",
+          "tool": "asyncapi",
+          "path": "payments/events/payments.yaml",
+          "items": [
+            [
+              "message",
+              "PaymentResult"
+            ]
+          ]
+        },
+        {
+          "text": "openapi \"payments/api/payments.yaml\" schema Charge",
+          "tool": "openapi",
+          "path": "payments/api/payments.yaml",
+          "items": [
+            [
+              "schema",
+              "Charge"
+            ]
+          ]
+        },
+        {
+          "text": "openapi \"common/money.yaml\" pointer /Money",
+          "tool": "openapi",
+          "path": "common/money.yaml",
+          "items": [
+            [
+              "pointer",
+              "/Money"
+            ]
+          ]
+        },
+        {
+          "text": "openapi \"payments/api/payments.yaml\" schema ChargeStatus",
+          "tool": "openapi",
+          "path": "payments/api/payments.yaml",
+          "items": [
+            [
+              "schema",
+              "ChargeStatus"
+            ]
+          ]
+        }
+      ],
       "allowed_by": {
         "relationship": "upstream_downstream",
         "roles": [
           "anticorruption_layer"
         ],
         "declared": "contexts/配送.ctx:16"
-      },
-      "pointer": "payments/events/payments.yaml#/channels/paymentFailed",
-      "pointers": [
-        "payments/events/payments.yaml#/channels/paymentFailed",
-        "payments/events/payments.yaml#/components/messages/PaymentResult",
-        "payments/api/payments.yaml#/components/schemas/Charge",
-        "common/money.yaml#/Money",
-        "payments/api/payments.yaml#/components/schemas/ChargeStatus"
-      ]
+      }
     },
     {
       "from": {
@@ -710,8 +1034,8 @@
       },
       "line": 4,
       "to": {
-        "text": "file \"ordering/api/ordering.json\"",
-        "tool": "file",
+        "text": "openapi \"ordering/api/ordering.json\"",
+        "tool": "openapi",
         "path": "ordering/api/ordering.json",
         "items": []
       },

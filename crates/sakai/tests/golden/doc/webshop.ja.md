@@ -51,14 +51,14 @@ Takes the customer's orders, and tells the other services when an order is place
 
 | 語 | 定義 | 指すもの | 越えていく先 |
 |---|---|---|---|
-| `order` | A customer's confirmed request to buy. A cancelled order stays | `ordering/api/ordering.json#/components/schemas/Order` | [Notifications](#notificationsnotifications)、[Payments](#paymentspayments) |
-| `order_placed` | The event that an order has been placed | `ordering/events/ordering.yaml#/channels/orderPlaced` | [Notifications](#notificationsnotifications)、[Payments](#paymentspayments) |
+| `order` | A customer's confirmed request to buy. A cancelled order stays | `openapi "ordering/api/ordering.json" schema Order` | [Notifications](#notificationsnotifications)、[Payments](#paymentspayments) |
+| `order_placed` | The event that an order has been placed | `asyncapi "ordering/events/ordering.yaml" channel orderPlaced` | [Notifications](#notificationsnotifications)、[Payments](#paymentspayments) |
 
 ### 関係
 
-- [Payments](#paymentspayments) と共有カーネル：`dir "common"`。越える参照：`payments/api/payments.yaml:50` ($ref) → `common/money.yaml#/Money`
-- 下流 [Payments](#paymentspayments)：公開ホストサービス・公表された言語 `ordering.v1` → 順応者。越える参照：`payments/events/payments.yaml:8` (receive) → `ordering/events/ordering.yaml#/channels/orderPlaced`
-- 下流 [Notifications](#notificationsnotifications)：公開ホストサービス・公表された言語 `ordering.v1` → 順応者。越える参照：`notifications/events/notifications.yaml:8` (receive) → `ordering/events/ordering.yaml#/channels/orderPlaced`; `notifications/events/notifications.yaml:10` (receive) → `ordering/events/ordering.yaml#/channels/orderCancelled`; `notifications/notify.flow:4` (use openapi) → `file "ordering/api/ordering.json"`
+- [Payments](#paymentspayments) と共有カーネル：`dir "common"`。越える参照：`payments/api/payments.yaml:50` ($ref) → `openapi "common/money.yaml" pointer /Money`
+- 下流 [Payments](#paymentspayments)：公開ホストサービス・公表された言語 `ordering.v1` → 順応者。越える参照：`payments/events/payments.yaml:8` (receive) → `asyncapi "ordering/events/ordering.yaml" channel orderPlaced`
+- 下流 [Notifications](#notificationsnotifications)：公開ホストサービス・公表された言語 `ordering.v1` → 順応者。越える参照：`notifications/events/notifications.yaml:8` (receive) → `asyncapi "ordering/events/ordering.yaml" channel orderPlaced`; `notifications/events/notifications.yaml:10` (receive) → `asyncapi "ordering/events/ordering.yaml" channel orderCancelled`; `notifications/notify.flow:4` (use openapi) → `openapi "ordering/api/ordering.json"`
 
 ## Payments（payments）
 
@@ -82,14 +82,14 @@ Charges the customer's card for a placed order, and tells how the charge went
 
 | 語 | 定義 | 指すもの | 越えていく先 |
 |---|---|---|---|
-| `charge` | Taking the money for one order from the customer's card | `payments/api/payments.yaml#/components/schemas/Charge` | [Shipping](#shippingshipping) |
-| `charge_status` | Where a charge is: waiting for the card's answer, taken, refused, or given back | `payments/api/payments.yaml#/components/schemas/ChargeStatus` | [Shipping](#shippingshipping) |
+| `charge` | Taking the money for one order from the customer's card | `openapi "payments/api/payments.yaml" schema Charge` | [Shipping](#shippingshipping) |
+| `charge_status` | Where a charge is: waiting for the card's answer, taken, refused, or given back | `openapi "payments/api/payments.yaml" schema ChargeStatus` | [Shipping](#shippingshipping) |
 
 ### 関係
 
-- [Ordering](#orderingordering) と共有カーネル：`dir "common"`。越える参照：`payments/api/payments.yaml:50` ($ref) → `common/money.yaml#/Money`
-- 上流 [Ordering](#orderingordering)：公開ホストサービス・公表された言語 `ordering.v1` → 順応者。越える参照：`payments/events/payments.yaml:8` (receive) → `ordering/events/ordering.yaml#/channels/orderPlaced`
-- 下流 [Shipping](#shippingshipping)：公開ホストサービス・公表された言語 `payments.v1` → 腐敗防止層。越える参照：`shipping/acl/payments.yaml:9` (receive) → `payments/events/payments.yaml#/channels/paymentSucceeded`; `shipping/acl/payments.yaml:11` (receive) → `payments/events/payments.yaml#/channels/paymentFailed`
+- [Ordering](#orderingordering) と共有カーネル：`dir "common"`。越える参照：`payments/api/payments.yaml:50` ($ref) → `openapi "common/money.yaml" pointer /Money`
+- 上流 [Ordering](#orderingordering)：公開ホストサービス・公表された言語 `ordering.v1` → 順応者。越える参照：`payments/events/payments.yaml:8` (receive) → `asyncapi "ordering/events/ordering.yaml" channel orderPlaced`
+- 下流 [Shipping](#shippingshipping)：公開ホストサービス・公表された言語 `payments.v1` → 腐敗防止層。越える参照：`shipping/acl/payments.yaml:9` (receive) → `asyncapi "payments/events/payments.yaml" channel paymentSucceeded`; `shipping/acl/payments.yaml:11` (receive) → `asyncapi "payments/events/payments.yaml" channel paymentFailed`
 - [Notifications](#notificationsnotifications) と別々の道（越える参照が無いことを確かめた）
 
 ## Shipping（shipping）
@@ -114,11 +114,11 @@ Ships an order once its charge has gone through
 
 | 語 | 定義 | 指すもの | 越えていく先 |
 |---|---|---|---|
-| `shipment_gate` | Whether an order may leave the warehouse | `shipping/api/shipping.yaml#/components/schemas/ShipmentGate` | — |
+| `shipment_gate` | Whether an order may leave the warehouse | `openapi "shipping/api/shipping.yaml" schema ShipmentGate` | — |
 
 ### 関係
 
-- 上流 [Payments](#paymentspayments)：公開ホストサービス・公表された言語 `payments.v1` → 腐敗防止層。越える参照：`shipping/acl/payments.yaml:9` (receive) → `payments/events/payments.yaml#/channels/paymentSucceeded`; `shipping/acl/payments.yaml:11` (receive) → `payments/events/payments.yaml#/channels/paymentFailed`
+- 上流 [Payments](#paymentspayments)：公開ホストサービス・公表された言語 `payments.v1` → 腐敗防止層。越える参照：`shipping/acl/payments.yaml:9` (receive) → `asyncapi "payments/events/payments.yaml" channel paymentSucceeded`; `shipping/acl/payments.yaml:11` (receive) → `asyncapi "payments/events/payments.yaml" channel paymentFailed`
 
 ## Notifications（notifications）
 
@@ -142,7 +142,7 @@ Tells the customer by mail what happened to an order
 
 ### 関係
 
-- 上流 [Ordering](#orderingordering)：公開ホストサービス・公表された言語 `ordering.v1` → 順応者。越える参照：`notifications/events/notifications.yaml:8` (receive) → `ordering/events/ordering.yaml#/channels/orderPlaced`; `notifications/events/notifications.yaml:10` (receive) → `ordering/events/ordering.yaml#/channels/orderCancelled`; `notifications/notify.flow:4` (use openapi) → `file "ordering/api/ordering.json"`
+- 上流 [Ordering](#orderingordering)：公開ホストサービス・公表された言語 `ordering.v1` → 順応者。越える参照：`notifications/events/notifications.yaml:8` (receive) → `asyncapi "ordering/events/ordering.yaml" channel orderPlaced`; `notifications/events/notifications.yaml:10` (receive) → `asyncapi "ordering/events/ordering.yaml" channel orderCancelled`; `notifications/notify.flow:4` (use openapi) → `openapi "ordering/api/ordering.json"`
 - [Payments](#paymentspayments) と別々の道（越える参照が無いことを確かめた）
 
 ## 用語集の索引
@@ -160,7 +160,7 @@ Tells the customer by mail what happened to an order
 
 ### Shipping ← Payments：ChargeStatus
 
-`payments/api/payments.yaml#/components/schemas/ChargeStatus` を `shipping/api/shipping.yaml#/components/schemas/ShipmentGate` に読み替える。 層は `dir "shipping/acl"`。 対応は `contexts/shipping.ctx` に書いたもの。下流の値は、対応の先の列挙にあることを確かめた。
+`openapi "payments/api/payments.yaml" schema ChargeStatus` を `openapi "shipping/api/shipping.yaml" schema ShipmentGate` に読み替える。 層は `dir "shipping/acl"`。 対応は `contexts/shipping.ctx` に書いたもの。下流の値は、対応の先の列挙にあることを確かめた。
 
 | 上流の値 | 下流の値 |
 |---|---|

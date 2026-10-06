@@ -1000,6 +1000,10 @@ requirement refunds_within_limit
 
 リンクの端は、そのポリシーと期待の定義の文で、ポリシーを書き換えれば、その端のリンクだけが止まる（yuen の DESIGN 3.2 と 4.1 の端と同じ）。手で書いた Cedar を指すツール名 `cedar`（種類 `policy`（`@id` で）、`action`、`entity`）も足す。`naming.tsv`（42 行）に、`sekisho` の行と入れ子の行、誤りの行を足す。
 
+2026-10-06 に、ツール名 `cedar` と `openapi`・`asyncapi` を参照の書き方に足した（yuen の DESIGN 3.6）。`cedar` の `policy` の名前は `@id`（無ければ Cedar の CLI と同じく、ファイルの中の順の `policy0`、`policy1`）、`action` と `entity` は宣言した名前で、名前空間は付けない。yuen の端は、ポリシーを `cedar format` の形で書いたものと、宣言をスキーマの人が読む形で書いたもの（action は `context` の共通の型も含む）である。`naming.tsv` は 63 行になった。ツール名 `sekisho` は、まだ `Tool::ALL` に入れていない。段階 D で、口 `Items` と一緒に足す。
+
+`guards` の操作は、`openapi "api/orders.json" operation refundOrder`、`asyncapi "…" operation <キー>`、`proto "…" service S method M`、帳簿の振替の操作なら `chobo "books/stock.book" transfer receive operation do` の参照で書けるようになった（2.6、3.4。`ritsu_base::naming::Tool::Openapi` と `Tool::Asyncapi`、chobo の `transfer` の下の `operation`）。E202〜E205 の文（`src/contracts.rs`）は、まだ `use` の名前と `operationId` で言う。参照の書き方に替える文は、取り込みのときに決める。
+
 ### 8.5 sakai
 
 - `.gate` は、ほかの成果物と同じく、ちょうど一つのコンテキストに属する（`owns` に `sekisho "…"`）。

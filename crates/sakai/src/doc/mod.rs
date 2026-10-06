@@ -106,16 +106,8 @@ fn rel(m: &Model, p: &str) -> String {
     format!("{}{p}", "../".repeat(ups))
 }
 
-/// A naming as the page shows it: the tool, the file from the map's directory, the pairs. An
-/// element of an OpenAPI or AsyncAPI document is its file and its JSON Pointer.
+/// A naming as the page shows it: the tool, the file from the map's directory, the pairs.
 fn naming(m: &Model, n: &Name) -> String {
-    if let Some((f, ptr)) = crate::elements::as_contract(n) {
-        let mut s = format!("{}#{ptr}", rel(m, f));
-        for (k, v) in &n.items[1..] {
-            s.push_str(&format!(" {k} {}", ritsu_base::naming::word_or_quote(v)));
-        }
-        return s;
-    }
     let mut s = format!("{} \"{}\"", n.tool.word(), rel(m, &n.path));
     for (k, v) in &n.items {
         s.push_str(&format!(" {k} {}", ritsu_base::naming::word_or_quote(v)));
@@ -353,7 +345,7 @@ fn artifacts(c: &Checked, suite: &Suite, ci: usize, lang: Lang) -> Block {
     let m = &c.model;
     let mine: Vec<&crate::owners::Artifact> = c.artifacts.iter().filter(|x| x.owner.map(|o| o.0) == Some(ci)).collect();
     let mut rows = Vec::new();
-    for x in mine.iter().filter(|x| x.tool != Tool::File) {
+    for x in mine.iter().filter(|x| x.tool != Tool::File && x.contract.is_none()) {
         rows.push(vec![code(x.tool.word()), code(&rel(m, &x.path)), holds(c, suite, x, lang)]);
     }
     for x in mine.iter().filter(|x| x.contract.is_some()) {
@@ -614,13 +606,8 @@ fn term_row(c: &Checked, rels: &[Value], crossings: &[Value], ci: usize, ti: usi
         if cr["to_context"].as_str() != Some(x.name.as_str()) {
             continue;
         }
+        // what crosses, a document's elements among them, as references
         let mut reached: Vec<Name> = cr["elements"].as_array().map(|a| a.iter().filter_map(name_of).collect()).unwrap_or_default();
-        // what a document's `$ref` reaches, as files and JSON Pointers
-        for p in cr["pointers"].as_array().into_iter().flatten().filter_map(|p| p.as_str()) {
-            if let Some((f, ptr)) = p.split_once('#') {
-                reached.push(crate::elements::contract_name(f, ptr));
-            }
-        }
         if let Some(to) = name_of(&cr["to"]) {
             reached.push(to);
         }
@@ -676,10 +663,8 @@ fn term_row(c: &Checked, rels: &[Value], crossings: &[Value], ci: usize, ti: usi
 fn values_across(c: &Checked, _rels: &[Value], e: &Name, v: &str) -> Vec<(String, String)> {
     let m = &c.model;
     let mut out = Vec::new();
-    let enum_of = match crate::elements::as_contract(e) {
-        Some((f, p)) => crate::elements::contract_name(f, p),
-        None => e.whole_file().with("enum", e.items[0].1.clone()),
-    };
+    // the enum the value is of: a document's schema, a `.proto`'s or a rule's enum
+    let enum_of = Name { items: e.items[..1].to_vec(), ..e.clone() };
     for (ci, x) in m.contexts.iter().enumerate() {
         for (ri, r) in x.rels.iter().enumerate() {
             let RelK::Upstream { enums, .. } = &r.kind else { continue };
@@ -795,10 +780,7 @@ fn relationship(m: &Model, r: &Value, crossings: &[Value], me: &str, lang: Lang)
         .filter(|cr| cr["from_context"].as_str() == Some(me) || cr["to_context"].as_str() == Some(me))
         .map(|cr| {
             let from = name_of(&cr["from"]).map(|n| rel(m, &n.path)).unwrap_or_default();
-            let to = match cr["pointer"].as_str().and_then(|p| p.split_once('#')) {
-                Some((f, ptr)) => format!("{}#{ptr}", rel(m, f)),
-                None => name_of(&cr["to"]).map(|n| naming(m, &n)).unwrap_or_default(),
-            };
+            let to = name_of(&cr["to"]).map(|n| naming(m, &n)).unwrap_or_default();
             format!("{} ({}) → {}", code(&format!("{from}:{}", cr["line"])), cr["via"].as_str().unwrap_or(""), code(&to))
         })
         .collect();
@@ -829,10 +811,9 @@ fn relationship(m: &Model, r: &Value, crossings: &[Value], me: &str, lang: Lang)
                         .as_array()
                         .into_iter()
                         .flatten()
-                        .map(|i| match (i.get("dir"), i.get("contract").and_then(|k| k.as_str())) {
-                            (Some(d), _) => code(&format!("dir \"{}\"", rel(m, d.as_str().unwrap_or("")))),
-                            (None, Some(k)) => name_of(&i["name"]).map(|n| code(&format!("{k} \"{}\"", rel(m, &n.path)))).unwrap_or_default(),
-                            (None, None) => name_of(&i["name"]).map(|n| code(&naming(m, &n))).unwrap_or_default(),
+                        .map(|i| match i.get("dir") {
+                            Some(d) => code(&format!("dir \"{}\"", rel(m, d.as_str().unwrap_or("")))),
+                            None => name_of(&i["name"]).map(|n| code(&naming(m, &n))).unwrap_or_default(),
                         })
                         .collect();
                     if lang == Lang::Ja { format!("{} と共有カーネル：{}", link(m, &other), join(lang, &items)) } else { format!("Shared kernel with {}: {}", link(m, &other), join(lang, &items)) }

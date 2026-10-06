@@ -104,8 +104,8 @@ error[E210]: shipping/acl/payments.yaml:11:5: The document shipping/acl/payments
   = The open host services of the published language payments.v1 are createCharge, getCharge, paymentSucceeded.
   = Across a boundary, a document sends to and receives from only the channels the other side lists under `open host service` (and the same for HTTP operations): have it listed there, or use what the other side opens.
   involved:
-      Shipping  shipping/acl/payments.yaml:11     $ref: ../../payments/events/payments.yaml#/channels/paymentFailed
-      Payments  payments/events/payments.yaml:14  #/channels/paymentFailed, a part of the published language payments.v1
+      Shipping  shipping/acl/payments.yaml:11                                   $ref: ../../payments/events/payments.yaml#/channels/paymentFailed
+      Payments  asyncapi "payments/events/payments.yaml" channel paymentFailed  a part of the published language payments.v1
 ```
 
 sakai reads OpenAPI 3.0, 3.1 and 3.2, and AsyncAPI 3.0 and 3.1, written in JSON or in YAML.
@@ -135,7 +135,7 @@ warning[W903]: payments/api/payments.yaml:9:7: The operation createCharge of the
   = Neither the operation nor the document has `security`, so a reader of the contract cannot tell how a client proves who it is.
   = Add `security` to the operation, or to the whole document. If the operation is open to anyone on purpose, write `security: []` on it.
   involved:
-      Payments  payments/api/payments.yaml:9  #/paths/~1charges/post (POST /charges)
+      Payments  openapi "payments/api/payments.yaml" operation createCharge  POST /charges
 ```
 
 ## The page of the map
@@ -220,7 +220,7 @@ On one run of `cargo test -p sakai -- --nocapture` on macOS on Apple silicon, wi
 ## Status
 
 The language, `check`, `build`, `export cml`, `doc`, `api` and `explain` are done, as in [DESIGN.md](DESIGN.md).
-Not yet: checking owners against CODEOWNERS, a rule's `import jsonschema` as the target of a mapping, generating the code of a mapping, run-time calls that no contract writes as artifacts, and names of the elements of OpenAPI and AsyncAPI documents in the form other languages name things by (DESIGN 14, 15.10).
+Not yet: checking owners against CODEOWNERS, a rule's `import jsonschema` as the target of a mapping, generating the code of a mapping, and run-time calls that no contract writes as artifacts (DESIGN 14, 15.11).
 
 ## License
 

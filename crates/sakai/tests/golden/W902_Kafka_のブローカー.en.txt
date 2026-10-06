@@ -4,5 +4,5 @@ warning[W902]: payments/events/payments.yaml:43:15: The server production of pay
   = The encrypted form of the protocol is kafka-secure.
   = If the connection is protected another way (a service mesh, a private link), write `x-ritsu-plaintext: "<why>"` in the server.
   involved:
-      決済  payments/events/payments.yaml:41  #/servers/production
+      決済  asyncapi "payments/events/payments.yaml" pointer /servers/production
 ネットショップ.ctx: ok — 4 contexts, 5 relationships; 9 artifacts, each in one context; 7 crossings checked (openapi 1, asyncapi 5, dandori 1)

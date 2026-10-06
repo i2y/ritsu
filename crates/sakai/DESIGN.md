@@ -559,6 +559,8 @@ geas "greeter.geas" claim "rejects an empty name"
 proto "shop/v1/order.proto" service OrderService method Create
 proto "warehouse/v1/stock.proto" enum PackingStatus value PACKING_STATUS_SHORT
 proto "shop/v1/order.proto" message Order.Line field quantity
+openapi "payments/api/payments.yaml" schema ChargeStatus value refunded
+asyncapi "payments/events/payments.yaml" channel paymentFailed
 file "src/app.py"
 yuen "民法の期間.req" requirement 満了日_142条
 sakai "contexts/受注.ctx" term キャンセル
@@ -570,6 +572,8 @@ sakai "contexts/受注.ctx" term キャンセル
 
 - proto：`service S [method M]`、`message M [field f]`、`enum E [value V]`。入れ子のメッセージは名前を `.` でつなぐ（`message Order.Line`）。
 - rulec：`enum E [value V]`。
+- chobo：`transfer T [operation O]`（振替の操作。2026-10-06 から）。
+- openapi と asyncapi：`schema S [property P]`、`schema S [value V]`。asyncapi の `channel C [message M]`（2026-10-06 から。15.10）。
 
 子の種類（`method`、`field`、`value`）は、親の種類のすぐあとにしか書けない。子の組は一つまでである。
 
@@ -577,7 +581,7 @@ sakai が列挙の値（対応の網羅）とフィールド（語の `means`）
 
 ### 2.2 ツールの語と種類の語
 
-ツールの語は `rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`file`、`yuen`、`sakai` の九つである。
+ツール名は `rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai` の十二である。`openapi`、`asyncapi`、`cedar` は 2026-10-06 に足した（15.10）。
 
 種類の語は、それぞれのツールが JSON で出す名前の種類から取り、二つの言語で使う種類を合わせた。表の右の列は、種類の語を取った元である。ritsu に取り込んでからは、どの言語の名前も、その言語の口（`Items`）が渡す（ritsu の DESIGN 6.4）。
 
@@ -585,10 +589,13 @@ sakai が列挙の値（対応の網羅）とフィールド（語の `means`）
 |---|---|---|---|
 | `rulec` | `.rule` | `input`、`output`、`enum`（下に `value`）、`table`、`clause`、`define`、`derive`、`machine`、`source` | `rulec api` の `python.params`、`python.outputs`、`python.enums` と `values`、`machine.name`、`sources`。`rulec graph` の `nodes`（`input`、`output`、`table`、`clause`、`define`、`derive`）。`rulec certificate` の `tables` |
 | `koyomi` | `.cal` | `input`、`date`、`claim`、`source` | `koyomi api` の `inputs`、`dates`、`claims`、`sources`（カレンダーのファイルでは `calendar.sources`） |
-| `chobo` | `.book` | `unit`、`account`、`transfer` | `chobo api` の `units`、`accounts`、`transfers` |
+| `chobo` | `.book` | `unit`、`account`、`transfer`（下に `operation`。2026-10-06 から） | `chobo api` の `units`、`accounts`、`transfers` と、振替の `operations` |
 | `geas` | `.geas` | `claim` | `geas map` の記録の一行め（`.geas/<stem>.map.jsonl` の主張の並び）。geas は主張を、走らせずに並べるコマンドを持たない（4.6） |
 | `dandori` | `.flow` | `task`、`case`、`record`（下に `field`）、`enum`（下に `value`）、`input`、`output` | ritsu の D.6 で足した（ritsu の DESIGN 6.3）。名前は dandori の口（`Items`）が渡す。sakai が dandori から読むのは、ワークフローが名指すもの（`References`。4.7）で、`.ctx` に書いた dandori の種類の語は形だけを確かめる |
 | `proto` | `.proto` | `service`（下に `method`）、`message`（下に `field`）、`enum`（下に `value`） | proto のファイルの中の名前 |
+| `openapi` | OpenAPI の文書と、文書が `$ref` で読むその一部 | `schema`（下に `property`、`value`）、`operation`、`pointer` | 文書の中の名前（15.10） |
+| `asyncapi` | AsyncAPI の文書と、その一部 | `channel`（下に `message`）、`message`、`operation`、`schema`（下に `property`、`value`）、`pointer` | 文書の中の名前（15.10） |
+| `cedar` | `.cedar`、`.cedarschema`、`.cedarschema.json` | `policy`、`action`、`entity` | sakai は読まない（yuen が読む。`owns` には書けない） |
 | `file` | 何でも | なし | |
 | `yuen` | `.req` | `requirement`、`source` | `yuen api` |
 | `sakai` | `.ctx` | `context`、`term` | sakai の地図とコンテキストのファイル |
@@ -1557,7 +1564,7 @@ BoundedContext ordering {
 - `relationships[]`：`kind` は `upstream_downstream`、`shared_kernel`、`partnership`、`separate_ways`。上流と下流の関係は、`roles` の `upstream`（`supplier`、`open_host_service`、`published_language`）と `downstream`（`conformist`、`anticorruption_layer`、`customer`）、`through`、`layer`、`enums`（上流の列挙の名指し、先、`checked`、値の対応）、`terms`、`declared`（宣言した `.ctx` の行）を持つ。対応の先が名前だけなら `"to": {"name": "出荷の可否"}` で、`checked` は false になる。共有カーネルは `sides` に両側の並びを持つ。
 - `artifacts[]`：範囲の成果物の全部。名指しと、属するコンテキストと、それを決めた `owns` の行と、ファイルの SHA-256（先頭 16 桁）。yuen が、成果物の定義が変わったかを知るのに使える。
 - `crossings[]`：境界を越える参照の全部。もとと先の名指し、行、二つのコンテキスト、参照の仕方（`via`。proto の import は `proto import`、Rust のクレートの依存は、依存を書いた表の名前の `dependencies` か `build-dependencies`、ほかは、もとの言語が口で言う語：`import proto`、`shape`、`apply`、`use calendar`、`use rule`、`use rule … connect` など、`use proto`、`connect`、`flow`）、越えていく要素（使う型と、そこからフィールドでたどれる型。3.3。proto の import と、規則の `import proto` と `shape` のほかは空）、許した関係（`allowed_by`）。
-- OpenAPI と AsyncAPI の文書（15.7）：`published` の `from` に文書を `file "…"` の名指しで並べ、文書のある塊にだけ `contracts`（ファイル、種類、仕様の版、題、文書の版）を足す。`owns` と `layer` と共有カーネルの文書の項は `{"name": …, "contract": "openapi"}`。文書の要素は名指しの形を持たない（15.10）ので、`means` と `enums` の `from` と `to` は `{"pointer": "<ルートからのパス>#<JSON Pointer>"}` で書く。文書の `$ref` の `crossings` にだけ、`pointer`（`$ref` が指す先）と `pointers`（そこからたどる要素の全部）を足す。どれも、文書の無い地図の api は変えない。
+- OpenAPI と AsyncAPI の文書（15.7）：`published` の `from` に文書を `openapi "…"`・`asyncapi "…"` の参照で並べ、文書のある塊にだけ `contracts`（ファイル、種類、仕様の版、題、文書の版）を足す。`owns` と `layer` と共有カーネルの文書の項も、その参照（`{"name": …}`）である。文書の要素も参照で書く（15.10）。`means` と `enums` の `from` と `to` は `openapi "…" schema Charge` のような参照になり、文書の `$ref` の `crossings` は、`$ref` の行き着く要素を `to` に、そこからたどる要素の全部を `elements` に入れる。どれも、文書の無い地図の api は変えない。
 - 確かめていない成果物を並べる `not_checked[]` は、ritsu の段階 E で消した。ritsu の口で一式を読むようになってから、いつも空の並びだったからである。ほかの言語の成果物を読めなければ、検査が E104 か E105 を出し、api は検査を通らない地図には出さないので、api を出すときには、確かめていない成果物は無い。言語をまたいで決められなかったこと（ritsu の口の答えの `Undecided`）は、sakai が尋ねる口（`Rules` の事実、索引の `References` と `Items`、`Books` の事実）には無く、言語の境目の検査（ritsu の DESIGN 7 章）の結果として `ritsu check` が言う（要約の境目の数と JSON の `borders`、`tool` が `ritsu` の診断）。実行のときにしか見えない呼び出し（3.7）は成果物ごとのものではなく、doc の「確かめていないこと」に書く（10 章）。いつも空のキーを残すと、読む人がそこに何かが入ると思って待つことになる。
 
 ## 10. doc
@@ -1871,7 +1878,7 @@ published language payments.v1
 - 腐敗防止層の対応と語の `means` は、短い書き方で文書の要素を指す。`enum <名前>`（`components/schemas` のうち `enum` を持つスキーマ）と、その下の `value <値>`、`schema <名前>`（`components/schemas` のスキーマ）、`message <名前>`（AsyncAPI の `components/messages`）、`channel <名前>`、`operation <名前>`（OpenAPI の `operationId` か、AsyncAPI の `operations` のキー）である。`openapi`、`asyncapi`、`schema`、`channel`、`operation` はキーワードになり、名前には使えない（E002）。
 - `owns`、`layer`、`shared kernel with` の項にも、`openapi "…"` と `asyncapi "…"` でファイルを書ける（`rulec "…"` と同じく、ファイルを名指す項）。
 
-名指しの形（2 章）には、`openapi` と `asyncapi` のツールの語を足していない（15.10）。
+長い書き方（参照の書き方。2 章）でも書ける。`means openapi "../payments/api/payments.yaml" schema Charge` のように、ツール名 `openapi` か `asyncapi`、文書のパス、種類と名前を書く。sakai は短い書き方と同じく、文書がその要素を持つかを確かめる（無ければ E007、範囲の外の文書は E103、もう一方の種類の文書を指せば E007）。対応の先には `openapi "…" schema <列挙のスキーマ>` も書ける（15.10）。
 
 ### 15.5 境界を越える参照
 
@@ -1900,11 +1907,11 @@ published language payments.v1
   = 公表された言語 payments.v1 の公開ホストサービスは createCharge、getCharge、paymentSucceeded です。
   = 境界の向こうのチャネルに送ったりそこから受けたりできるのは、相手が `open host service` に並べたチャネルだけです（HTTP の操作も同じです）。相手の公表された言語の `open host service` に足してもらうか、相手が開いたものを使ってください。
   関わるもの:
-      配送  shipping/acl/payments.yaml:11     $ref: ../../payments/events/payments.yaml#/channels/paymentFailed
-      決済  payments/events/payments.yaml:14  #/channels/paymentFailed（公表された言語 payments.v1 のもの）
+      配送  shipping/acl/payments.yaml:11                                   $ref: ../../payments/events/payments.yaml#/channels/paymentFailed
+      決済  asyncapi "payments/events/payments.yaml" channel paymentFailed  公表された言語 payments.v1 のもの
 ```
 
-関わるものの行は、文書の要素を、ファイルの行と JSON Pointer で書く（名指しの形を持たないため。15.10）。
+関わるものの行は、文書の要素を参照の書き方で書く（`asyncapi "payments/events/payments.yaml" channel paymentFailed`）。JSON の `references` には、参照と一緒に、要素のキーのあるファイルと行も出す（15.10）。
 
 **捨てたもの**：
 
@@ -1933,14 +1940,14 @@ upstream Payments anticorruption layer
 15.9 の例で、決済が課金の状態に `disputed` を足すと、配送の腐敗防止層は、新しい値をどう扱うかを決めるまで通らない。
 
 ```
-エラー[E401]: contexts/配送.ctx:19:3: 「配送」の腐敗防止層の対応に、「決済」の列挙 payments/api/payments.yaml#/components/schemas/ChargeStatus の値 disputed がありません
+エラー[E401]: contexts/配送.ctx:19:3: 「配送」の腐敗防止層の対応に、「決済」の列挙 openapi "payments/api/payments.yaml" schema ChargeStatus の値 disputed がありません
     19 |   enum ChargeStatus -> enum ShipmentGate
   = 値 disputed は payments/api/payments.yaml:65 にあります。
   = 上流の列挙の値ごとに、下流の値か refuse（拒否）を書いてください。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。
   = 直した行: disputed -> refuse "…"
   関わるもの:
-      配送  contexts/配送.ctx:16           upstream 決済 anticorruption layer
-      決済  payments/api/payments.yaml:63  #/components/schemas/ChargeStatus（値は 5 個あり、そのうち 1 個に対応がありません）
+      配送  contexts/配送.ctx:16                                      upstream 決済 anticorruption layer
+      決済  openapi "payments/api/payments.yaml" schema ChargeStatus  値は 5 個あり、そのうち 1 個に対応がありません
 ```
 
 値の注は、proto のとき（「PACKING_STATUS_DAMAGED は … の値です。」）と違い、値で文を始めない（英語の文の頭を大文字にすると、大文字と小文字を区別する値が別の値に見えるため）。
@@ -1949,7 +1956,7 @@ upstream Payments anticorruption layer
 
 - **doc**：成果物の表に、文書の題と版、操作（OpenAPI はメソッドとパスと `operationId`、AsyncAPI は `send` か `receive` とチャネル）、チャネル、列挙を出す。公表された言語の節に文書と公開ホストサービスを、関係の節に越える参照を出す。「確かめていないこと」の節は、契約に書いた呼び出しは確かめた、契約に書いていない呼び出しは確かめていない、と書き直した。
 - **CML**：関係の `implementationTechnology` に、通る公表された言語の文書と、その公開ホストサービスを書く（`"OpenAPI: payments.v1 (createCharge, getCharge); AsyncAPI: payments.v1 (paymentSucceeded, paymentFailed)"`）。上流の役割に `OHS` が付くのは、proto と同じく、`through` の公表された言語に公開ホストサービスがあるときである。
-- **api**：`published` の `from` に文書を `file "…"` の名指しで出し、`contracts` に文書の種類と版を添える。`crossings` の `via` は 15.5 の表の語で、文書の要素は、名指しの代わりに `<ルートからのパス>#<ポインタ>` の文字列で `pointers` に出す。
+- **api**：`published` の `from` に文書を `openapi "…"`・`asyncapi "…"` の参照で出し、`contracts` に文書の種類と版を添える。`crossings` の `via` は 15.5 の表の語で、`$ref` の行き着く要素を `to` に、そこからたどれる要素を `elements` に、参照の書き方で出す（`.proto` の参照と同じキーである。15.10）。
 
 ### 15.8 診断
 
@@ -1984,9 +1991,23 @@ examples/webshop.ja/ネットショップ.ctx: ok — コンテキスト 4、関
 
 変異は、この例を一か所ずつ変えた 10 組（英語の名前と日本語の名前の対）である。新しい三つのコード（E108 を二つ、W104、E210）と、文書で出る E202、E204、E205、E206、E301、E401 を一つずつ持つ。`tests/contracts.rs` は、例の要約、越える参照ごとの `via` と許した関係、チャネルがたどる要素、二つの地図が名前のほかは同じこと、api と CML の golden、Context Mapper の検査器を確かめる。doc のページの golden は `tests/doc.rs` が持つ。
 
-### 15.10 まだやらないこと
+### 15.10 参照の書き方（2026-10-06）
 
-- 名指しの形（2 章）に、`openapi` と `asyncapi` のツールの語を足すこと。yuen と同じ決まり（ritsu-base の `naming.tsv`）を変えることになり、yuen の診断の文（書けるツールの語の並び）も変わるので、yuen と一緒に決める。それまでは、`.ctx` では短い書き方で文書の要素を指し、api と診断では `file "…"` の名指しと JSON Pointer で書く。
+**決定**：参照の書き方（ritsu の DESIGN 6.2）にツール名 `openapi`・`asyncapi`（と、手で書いた Cedar の `cedar`）が入ったので、文書と文書の要素を、api、診断、doc のページで参照の書き方で書く。
+
+- 文書は、成果物として `openapi "payments/api/payments.yaml"`・`asyncapi "…"` になる（前は `file "…"`）。文書が `$ref` で読む文書の一部（`common/money.yaml`）は、読む文書のツール名で書く。dandori の `use openapi` の参照も `openapi "…"` になった。
+- 要素は、`schema`（下に `property`、`value`）、OpenAPI の `operation`（`operationId`。無ければ `"POST /charges"` の形）、AsyncAPI の `channel`（下に `message`）・`message`・`operation`、それ以外の場所は `pointer`（JSON Pointer）で書く（`openapi "common/money.yaml" pointer /Money`、`asyncapi "…" pointer /servers/production`）。どの JSON Pointer がどの参照になるかと、その逆は、ritsu-base の `document` が決め、yuen も同じ関数で引く。
+- api：文書の要素を `{"pointer": …}` で出していたところ（語の `means`、対応の `from` と `to`）は、ほかの参照と同じ JSON の形になる。`crossings` の `pointer` と `pointers` は無くなり、`to` と `elements` に入った。`owns` の文書の `contract` のキーも、ツール名が同じことを言うので無くなった。
+- 診断：E401 の文の列挙、E202・E204・E205・E206・E210 の参照の先、W902 のサーバーと W903 の操作とチャネルの関わるものの行を、参照の書き方で書く。関わるものの行の JSON には、要素のキーのあるファイルと行も残す。
+- `.ctx`：短い書き方はそのままで、長い書き方（15.4）も書ける。`cedar` は `owns` に書けない（sakai は Cedar のファイルを成果物として読まない。E002）。
+- キーワード：ツール名 `cedar` と、種類 `property`、`pointer`、`policy`、`action`、`entity` が加わり、地図、コンテキスト、語、下流の値の名前にできなくなった（E002。1.2 の決まりのとおり）。例とテストに、この六つを名前にしたものは無かった。
+
+**理由**：文書の要素だけがファイルと JSON Pointer で書かれていると、同じ要素を yuen のリンクや sekisho の `guards` が参照の書き方で書いたときに、api と診断の文を突き合わせられない。要素の名前（スキーマのキー、`operationId`、チャネルのキー）は、文書を読む人が使う名前で、JSON Pointer はその場所である。
+
+**捨てたもの**：関わるものの行に、参照と並べてファイルの行（`payments/api/payments.yaml:63`）も書くこと。proto の要素の行と同じく参照だけを書き、行は JSON に残した。診断の頭の行と注が、問題の行を指している。
+
+### 15.11 まだやらないこと
+
 - dandori の `http` のタスクが呼ぶ操作を、境界を越える参照に数えること。dandori が口で操作の単位に言うようになれば、E210 で確かめる。
 - rulec の `import jsonschema` の列挙を、対応の先として読むこと。rulec の口が、取り込んだポインタを言うようになれば、`import proto` と同じく rulec の対応を読む（1.7）。
 - rulec と dandori が、土台の YAML の読み手で YAML の文書も読むこと。
@@ -2031,7 +2052,7 @@ ritsu の言語としてのセキュリティの検査（ritsu の DESIGN 16 章
 - **AsyncAPI**：ルートの `servers` のサーバー（`$ref` はたどる）のうち、`protocol` が `http`・`ws`・`amqp`・`mqtt`（`mqtt5`）・`stomp`・`kafka` で、`host` のホスト（ポートを外したもの）がループバックでないもの。暗号化して通信するプロトコルの名前（`https`、`wss`、`amqps`、`secure-mqtt`、`stomps`、`kafka-secure`）は AsyncAPI 2.6.0 の `protocol` の一覧から取った。名前で暗号化が分からないプロトコル（`nats`、`jms`、`pulsar` など）は見ない。
 - **ループバック**は、`localhost`、`.localhost` で終わる名前、`127.0.0.0/8`、`::1` である（ritsu-base の `urls`）。プライベートなネットワーク（`10.0.0.0/8`、`.internal`）は入れない。同じ機械の外へ出る通信だからである。
 - **意図**：Server Object に `x-ritsu-plaintext: "<理由>"` と書けば言わない。どちらの仕様も Server Object に `x-` の拡張を書けるので、ほかの道具は読み飛ばす。空の文字列や文字列でない値は意図として読まず、W902 の注で理由を書くよう求める。
-- **場所**：OpenAPI は `url` の値、AsyncAPI は `protocol` の値を指す。関わるものに、サーバーの JSON Pointer（`#/servers/0`、`#/servers/production`）を出す。
+- **場所**：OpenAPI は `url` の値、AsyncAPI は `protocol` の値を指す。関わるものに、サーバーの参照（`openapi "…" pointer /servers/0`、`asyncapi "…" pointer /servers/production`）を出す。
 
 変異 `W902_平文のサーバー`（決済の OpenAPI の文書に `http://payments.internal/v1` のサーバーを足したもの）と `W902_Kafka_のブローカー`（決済の AsyncAPI の文書に、TLS の無い Kafka のブローカーを足したもの）では次のとおり。
 
@@ -2042,7 +2063,7 @@ ritsu の言語としてのセキュリティの検査（ritsu の DESIGN 16 章
   = 暗号化して通信するプロトコルは https です。
   = ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、サーバーに `x-ritsu-plaintext: "<理由>"` と書いてください。
   関わるもの:
-      決済  payments/api/payments.yaml:73  #/servers/0
+      決済  openapi "payments/api/payments.yaml" pointer /servers/0
 ```
 
 ```
@@ -2052,7 +2073,7 @@ ritsu の言語としてのセキュリティの検査（ritsu の DESIGN 16 章
   = 暗号化して通信するプロトコルは kafka-secure です。
   = ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、サーバーに `x-ritsu-plaintext: "<理由>"` と書いてください。
   関わるもの:
-      決済  payments/events/payments.yaml:41  #/servers/production
+      決済  asyncapi "payments/events/payments.yaml" pointer /servers/production
 ```
 
 dandori も、タスクが実際に呼ぶ URL（`use openapi` の `url`、無ければ文書の最初のサーバー）を W902 で見る。`ritsu check` で一つのサーバーについて二つ出ることがあるが、指す場所（`.flow` の `use` の行と、文書のサーバーの行）も直す場所も違う。
@@ -2063,7 +2084,7 @@ dandori も、タスクが実際に呼ぶ URL（`use openapi` の `url`、無け
 
 - **OpenAPI**：`paths` の操作（OpenAPI 3.2 の `additionalOperations` も）ごとに、操作の `security`、無ければ文書のルートの `security` を見る。どちらにも無ければ W903。空の配列（`security: []`、だれでも呼べる）と空の要件 `{}`（認証は任意）は、書いた意図として通す（OpenAPI 3.2 の Operation Object の書き方）。`webhooks` の操作は見ない。API がクライアントの側を呼ぶときのことで、コンテキストが開く操作ではないからである。
 - **AsyncAPI**：チャネルごとに、チャネルの `servers`（無ければ文書のすべてのサーバー）のうち `security` の無いサーバーがあり、そのチャネルの操作のどれにも `security` が無ければ W903。AsyncAPI 3.1 では、操作の `security` はサーバーのものに足すもので、置き換えない。どちらかに書いてあれば、認証の書き方は契約にある。空の配列は、OpenAPI と同じく意図として読む（仕様は空の配列を禁じていない）。文書に `servers` が一つも無ければ見ない（接続のことを何も言っていない）。ほかの文書のチャネルへの `$ref`（受け取る側が書くもの）は、そのチャネルを持つ文書の側で見る。
-- **場所**：OpenAPI は操作（その最初のキー）、AsyncAPI はチャネルのキーを指す。関わるものに、要素の JSON Pointer と、`security` の無いサーバーを出す。参照の書き方に `openapi`・`asyncapi` のツール名が入るまでは、文書の要素を `<ファイル>#<JSON Pointer>` で書く。
+- **場所**：OpenAPI は操作（その最初のキー）、AsyncAPI はチャネルのキーを指す。関わるものに、要素の参照（`openapi "…" operation createCharge`、`asyncapi "…" channel paymentFailed`）と、`security` の無いサーバー（`asyncapi "…" pointer /servers/production`）を出す。
 
 **認可は見ない。** W903 は、だれが呼んでいるかを確かめる書き方（`security`）が契約にあるかまでを見る。どの操作をだれに許すか（Cedar のポリシー、sekisho の `.gate`）は、sekisho の側の言語をまたぐ検査が言う。書いた方式の強さ（`apiKey` を query に置く、`http` の `basic`）も言わない。
 
@@ -2075,7 +2096,7 @@ dandori も、タスクが実際に呼ぶ URL（`use openapi` の `url`、無け
   = 操作にも文書にも `security` が無いので、契約を読む人には、クライアントがどう認証すればよいかが分かりません。
   = 操作か文書全体に `security` を書いてください。だれでも呼べるようにわざとしている操作なら、その操作に `security: []` と書いてください。
   関わるもの:
-      決済  payments/api/payments.yaml:9  #/paths/~1charges/post（POST /charges）
+      決済  openapi "payments/api/payments.yaml" operation createCharge  POST /charges
 ```
 
 （getCharge にも同じ形の W903 が出る。）

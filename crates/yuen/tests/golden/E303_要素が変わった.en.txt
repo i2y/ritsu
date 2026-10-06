@@ -1,0 +1,23 @@
+error[E303]: tests/mutants/E303_要素が変わった/返金.req:10:3: openapi "api/注文.yaml" operation 返金する changed after 決済 looked at this link on 2026-10-06
+    10 |   satisfied by openapi "api/注文.yaml" operation 返金する
+  what changed in openapi "api/注文.yaml" operation 返金する:
+      @@ -39,5 +39,5 @@
+            "金額": {
+              "description": "円",
+      -       "maximum": 100000,
+      +       "maximum": 200000,
+              "minimum": 1,
+              "type": "integer"
+  = Once a person has looked: yuen review tests/mutants/E303_要素が変わった --root tests/mutants/E303_要素が変わった --at tests/mutants/E303_要素が変わった/返金.req:10 --by <role>
+error[E303]: tests/mutants/E303_要素が変わった/返金.req:21:3: openapi "api/注文.yaml" schema 返金 property 金額 changed after 決済 looked at this link on 2026-10-06
+    21 |   satisfied by openapi "api/注文.yaml" schema 返金 property 金額
+  what changed in openapi "api/注文.yaml" schema 返金 property 金額:
+      @@ -2,5 +2,5 @@
+        {
+          "description": "円",
+      -   "maximum": 100000,
+      +   "maximum": 200000,
+          "minimum": 1,
+          "type": "integer"
+  = Once a person has looked: yuen review tests/mutants/E303_要素が変わった --root tests/mutants/E303_要素が変わった --at tests/mutants/E303_要素が変わった/返金.req:21 --by <role>
+tests/mutants/E303_要素が変わった: 2 errors

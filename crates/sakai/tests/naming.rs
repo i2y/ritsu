@@ -13,7 +13,8 @@ const REASONS: &[(&str, &str)] = &[
     ("only field under record", "`task` cannot come under `record`"),
     ("method only right after service", "`method` comes only right after `service`"),
     ("one child at most", "one child at most"),
-    ("chobo has no nested kinds", "the tool chobo has no nested kinds"),
+    ("nothing under account", "`value` cannot come under `account`"),
+    ("operation only right after transfer", "`operation` comes only right after `transfer`"),
     ("unknown kind for koyomi", "the tool koyomi has no kind `alias`"),
     ("unknown tool", "is not a tool"),
     ("absolute path", "the absolute path"),
@@ -24,6 +25,12 @@ const REASONS: &[(&str, &str)] = &[
     ("a tool written as a string", "a name starts with its tool"),
     ("a kind without a name", "has no name after it"),
     ("an empty path", "the path is empty"),
+    ("property only right after schema", "`property` comes only right after `schema`"),
+    ("nothing under operation", "`schema` cannot come under `operation`"),
+    ("unknown kind for openapi", "the tool openapi has no kind `enum`"),
+    ("only message under channel", "`operation` cannot come under `channel`"),
+    ("one child at most (value)", "one child at most"),
+    ("cedar has no nested kinds", "the tool cedar has no nested kinds"),
 ];
 
 #[test]
@@ -66,7 +73,7 @@ fn every_line_of_the_table_gives_its_json_or_is_refused() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    assert_eq!((ok, refused), (24, 18), "the table has 24 names and 18 refusals");
+    assert_eq!((ok, refused), (41, 25), "the table has 41 names and 25 refusals");
 }
 
 /// The table is ritsu-base's, and yuen is held to it too; this test only says what it holds, so

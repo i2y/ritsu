@@ -444,12 +444,12 @@ impl<'a> P<'a> {
                         tool = Some(None);
                         contract = None;
                     } else if let Some(k) = crate::contracts::Kind::from_word(&w) {
-                        tool = Some(Some(Tool::File));
+                        tool = Some(Some(k.tool()));
                         contract = Some(k);
                     } else {
                         contract = None;
                         match Tool::from_word(&w) {
-                            Some(Tool::Yuen | Tool::Sakai) => {
+                            Some(Tool::Yuen | Tool::Sakai | Tool::Cedar) => {
                                 self.push("E002", l, col, tr!("ここに `{w}` のファイルは書けません", "A `{w}` file does not go here"));
                                 self.note(tr!(
                                     "書けるのは成果物（rulec、dandori、koyomi、chobo、geas、proto、file、openapi、asyncapi）とディレクトリ（dir）です。",

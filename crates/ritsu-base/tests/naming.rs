@@ -15,7 +15,8 @@ fn reason(why: &str) -> ErrorKind {
         "only field under record" => ErrorKind::WrongChild { kind: "task".into(), parent: "record".into(), allowed: &["field"] },
         "method only right after service" => ErrorKind::ChildFirst { kind: "method".into(), parent: "service" },
         "one child at most" => ErrorKind::TooManyPairs("method".into()),
-        "chobo has no nested kinds" => ErrorKind::NoNesting(Tool::Chobo),
+        "nothing under account" => ErrorKind::NothingUnder("account".into()),
+        "operation only right after transfer" => ErrorKind::ChildFirst { kind: "operation".into(), parent: "transfer" },
         "unknown kind for koyomi" => ErrorKind::UnknownKind { tool: Tool::Koyomi, kind: "alias".into() },
         "unknown tool" => ErrorKind::UnknownTool("excel".into()),
         "absolute path" => ErrorKind::AbsolutePath("/etc/hosts".into()),
@@ -26,6 +27,12 @@ fn reason(why: &str) -> ErrorKind {
         "a tool written as a string" => ErrorKind::QuotedTool("koyomi".into()),
         "a kind without a name" => ErrorKind::MissingName("output".into()),
         "an empty path" => ErrorKind::EmptyPath,
+        "property only right after schema" => ErrorKind::ChildFirst { kind: "property".into(), parent: "schema" },
+        "nothing under operation" => ErrorKind::NothingUnder("operation".into()),
+        "unknown kind for openapi" => ErrorKind::UnknownKind { tool: Tool::Openapi, kind: "enum".into() },
+        "only message under channel" => ErrorKind::WrongChild { kind: "operation".into(), parent: "channel".into(), allowed: &["message"] },
+        "one child at most (value)" => ErrorKind::TooManyPairs("value".into()),
+        "cedar has no nested kinds" => ErrorKind::NoNesting(Tool::Cedar),
         other => panic!("the reason `{other}` is new to this test; say which error it is"),
     }
 }
@@ -64,7 +71,7 @@ fn every_line_of_the_table_gives_its_json_or_is_refused_for_its_reason() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    assert_eq!((ok, refused), (24, 18), "the table has 24 namings and 18 refusals");
+    assert_eq!((ok, refused), (41, 25), "the table has 41 namings and 25 refusals");
 }
 
 #[test]
@@ -91,7 +98,7 @@ fn where_an_error_is_and_what_it_says() {
     assert_eq!(e.text().en, "`alias` is not a kind of koyomi; the kinds of koyomi are input, date, claim and source");
     assert_eq!(e.text().ja, "koyomi に `alias` という種類はありません。koyomi の種類は input、date、claim、source です");
     let e = naming::parse_one("excel \"a.xlsx\"").unwrap_err();
-    assert!(e.text().en.starts_with("`excel` is not a tool; a naming starts with one of rulec, dandori, koyomi, chobo, geas, proto, file, yuen, sakai"), "{}", e.text().en);
+    assert!(e.text().en.starts_with("`excel` is not a tool; a naming starts with one of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen, sakai"), "{}", e.text().en);
     assert_eq!(naming::parse_one("").unwrap_err().kind, ErrorKind::Missing);
     assert_eq!(naming::parse_one("rulec").unwrap_err().kind, ErrorKind::MissingPath);
     assert_eq!(naming::parse_one("rulec x.rule").unwrap_err().kind, ErrorKind::UnquotedPath("x.rule".into()));
@@ -145,4 +152,33 @@ fn what_contains_what() {
     assert_eq!(Tool::from_word("yuen"), Some(Tool::Yuen));
     assert_eq!(Tool::Yuen.extension(), Some("req"));
     assert_eq!(Tool::from_word("yurai"), None, "the tool is yuen now");
+}
+
+/// OpenAPI, AsyncAPI and Cedar (DESIGN 6.2, item 4): a document's elements by the keys the
+/// specifications give them, a policy by its id, a schema's declarations by their names. sekisho
+/// is no tool of a naming yet.
+#[test]
+fn the_standard_formats_and_their_kinds() {
+    let e = naming::parse_one("openapi \"a.yaml\" enum Status").unwrap_err();
+    assert_eq!(e.text().en, "`enum` is not a kind of openapi; the kinds of openapi are schema, operation and pointer");
+    assert_eq!(e.text().ja, "openapi に `enum` という種類はありません。openapi の種類は schema、operation、pointer です");
+    // a message is a channel's or the components'
+    let m = naming::parse_one("asyncapi \"e.yaml\" message OrderPlaced").unwrap();
+    let cm = naming::parse_one("asyncapi \"e.yaml\" channel orderPlaced message OrderPlaced").unwrap();
+    assert_ne!(m, cm);
+    assert!(naming::parse_one("asyncapi \"e.yaml\" channel orderPlaced").unwrap().contains(&cm));
+    assert_eq!(
+        naming::parse_one("openapi \"a.yaml\" pointer /components/responses/NotFound").unwrap().text(),
+        "openapi \"a.yaml\" pointer /components/responses/NotFound",
+        "a JSON Pointer is a word"
+    );
+    assert_eq!(naming::parse_one("cedar \"s.cedarschema\" entity User").unwrap().kind(), Some("entity"));
+    for t in [Tool::Openapi, Tool::Asyncapi, Tool::Cedar] {
+        assert_eq!(t.extension(), None, "{} files are not told by one extension", t.word());
+        assert_eq!(Tool::from_word(t.word()), Some(t));
+    }
+    assert_eq!(Tool::Cedar.extensions(), &[".cedar", ".cedarschema", ".cedarschema.json"]);
+    assert_eq!(Tool::Openapi.extensions(), Tool::Asyncapi.extensions());
+    assert_eq!(Tool::from_word("sekisho"), None, "sekisho is not a tool of a naming yet");
+    assert!(!Tool::ALL.contains(&Tool::Sekisho));
 }

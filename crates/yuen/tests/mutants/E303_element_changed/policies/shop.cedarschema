@@ -1,0 +1,23 @@
+// The shop's principals, resources and actions.
+namespace Shop {
+  entity Role in [Role];
+  entity User in [Role] {
+    refund_limit: Long,
+    suspended: Bool
+  };
+  entity Order {
+    status: String
+  };
+  type RefundContext = {
+    amount: Long
+  };
+  action "refund_order" appliesTo {
+    principal: [User],
+    resource: [Order],
+    context: RefundContext
+  };
+  action "view_order" appliesTo {
+    principal: [User],
+    resource: [Order]
+  };
+}

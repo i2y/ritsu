@@ -280,7 +280,7 @@ impl ritsu_ports::References for Engine {
             let Some(p) = from_root(&a.path) else { continue };
             let (tool, how) = match a.kind {
                 ApiKind::Proto => (Tool::Proto, "use proto"),
-                ApiKind::OpenApi => (Tool::File, "use openapi"),
+                ApiKind::OpenApi => (Tool::Openapi, "use openapi"),
                 ApiKind::Smithy => (Tool::File, "use smithy"),
             };
             out.push(Reference { line: a.name.1.line, target: Naming::file(tool, p), how: how.into() });

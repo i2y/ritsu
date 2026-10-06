@@ -176,8 +176,8 @@ impl ritsu_ports::References for Engine {
                     }
                     // the OpenAPI and AsyncAPI documents (DESIGN 15.4): a file of the published
                     // language, which `ritsu check` reads for the keys written in it (W901)
-                    for (_, s) in &p.contracts {
-                        path(s, Tool::File, "published language", &mut out);
+                    for (k, s) in &p.contracts {
+                        path(s, k.tool(), "published language", &mut out);
                     }
                     for (svc, pos) in &p.services {
                         if let Some(n) = short("service", svc) {

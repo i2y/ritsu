@@ -1,0 +1,45 @@
+asyncapi: 3.0.0
+info:
+  title: 注文のイベント
+  version: 1.0.0
+channels:
+  返金済み:
+    address: orders.refunded
+    messages:
+      返金済み:
+        $ref: '#/components/messages/返金済み'
+  出荷済み:
+    address: orders.shipped
+    messages:
+      出荷済み:
+        $ref: '#/components/messages/出荷済み'
+operations:
+  返金を知らせる:
+    action: send
+    channel:
+      $ref: '#/channels/返金済み'
+  出荷を知らせる:
+    action: send
+    channel:
+      $ref: '#/channels/出荷済み'
+components:
+  messages:
+    返金済み:
+      payload:
+        $ref: '#/components/schemas/返金済みの中身'
+    出荷済み:
+      payload:
+        type: object
+        properties:
+          注文番号:
+            type: string
+  schemas:
+    返金済みの中身:
+      type: object
+      required: [注文番号, 金額]
+      properties:
+        注文番号:
+          type: string
+        金額:
+          type: integer
+          minimum: 1

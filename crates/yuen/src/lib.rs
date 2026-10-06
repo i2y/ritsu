@@ -17,6 +17,8 @@ pub mod coverage;
 pub mod date;
 pub mod diag;
 pub mod diff;
+/// OpenAPI and AsyncAPI documents and Cedar's files, read by yuen itself (DESIGN 3.6).
+pub mod documents;
 /// The page of a project, as Markdown or one HTML file (DESIGN 10).
 pub mod doc;
 pub mod ends;

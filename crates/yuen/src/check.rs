@@ -174,6 +174,34 @@ fn unread_diag(p: &Project, fi: usize, line: usize, col: usize, n: &Name, u: &Un
                 "yuen reads it with ritsu's reader of .proto files; make it a proto3 `.proto`."
             ))
         }
+        Unread::Doc(file, why) => {
+            let (f, t) = (p.shown(file), n.tool.word());
+            let what = match n.tool {
+                crate::names::Tool::Openapi => tr!("OpenAPI の文書", "an OpenAPI document"),
+                crate::names::Tool::Asyncapi => tr!("AsyncAPI の文書", "an AsyncAPI document"),
+                _ => tr!("Cedar のファイル", "a file of Cedar's"),
+            };
+            let how = if n.tool == crate::names::Tool::Cedar {
+                tr!(
+                    "yuen は cedar の参照を、ritsu の Cedar のパーサー（Cedar 4.13.0 と同じ読み方）で読みます。ファイルを直してください。",
+                    "yuen reads a reference of cedar with ritsu's reader of Cedar, which reads as Cedar 4.13.0 does: put the file right."
+                )
+            } else {
+                tr!(
+                    "yuen は {t} の参照を、ritsu の YAML と JSON のパーサーで読みます。ファイルを直すか、そのファイルのツール名で指してください。",
+                    "yuen reads a reference of {t} with ritsu's reader of YAML and JSON: put the file right, or name it with its own tool."
+                )
+            };
+            p.err(fi, "E205", span, tr!("{f} を {}として読めません: {}", "{f} does not read as {}: {}", what.ja, why.ja; what.en, why.en)).note(how)
+        }
+        Unread::Twice(spaces) => {
+            let (kind, name) = n.items.last().map(|(k, v)| (k.clone(), crate::names::word_or_quote(v))).unwrap_or_default();
+            let (shown, ja, en) = (p.shown(&n.path), spaces.join("、"), spaces.join(", "));
+            p.err(fi, "E202", span, tr!("{shown} は {kind} {name} を二つ以上の名前空間（{ja}）で宣言しているので、一つに決まりません", "{shown} declares {kind} {name} in more than one namespace ({en}), so it names no one thing")).note(tr!(
+                "yuen は action と entity を、名前空間を付けずに、宣言した名前で指します。名前空間ごとに、スキーマのファイルを分けてください。",
+                "yuen names an action or an entity by the name it is declared with, without its namespace: keep each namespace in a file of the schema of its own."
+            ))
+        }
         Unread::NoSuchName { same_kind } => no_such_name(p, fi, span, n, same_kind, recorded),
     })
 }
