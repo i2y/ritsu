@@ -6,7 +6,7 @@
 
 この文書は段階 A（設計）で書き、段階 B（言語の芯）で、B が作ったコマンド（`check`、`review`、`trace`、`api`、`explain`）の出力を実物に差し替えた（4.3、5.1、6.3、9 章。どれもテストが走らせて照らし合わせる）。段階 C のうち書き出しと出典のコマンドを作ったところで、12〜14 章を実物にした（13 章の PROV-N はテストが走らせて照らし合わせ、12 章の ReqIF はテストの golden から引き、14 章の `outdated` は本物の e-Gov に一度問い合わせた出力を貼った）。段階 C の残り（一式の読み込み）は、yuen が ritsu（七つの言語を一つにまとめる処理系）に取り込まれたので、子プロセスと JSON ではなく ritsu の口（ritsu の DESIGN 3.2）で作った（ritsu の PLAN の D.7）。そこで 3 章を書き直し、8 章の affected と 11 章の api を実物にした（8 章の出力はテストが走らせて照らし合わせる）。A の段階でほかのツール（rulec 0.22.1、koyomi 0.1.0、chobo 0.1.0、geas 0.0.1）の出力、xmllint と Python の `prov`・`reqif` の振る舞いを、2026-10-03 にこの機械で実際に走らせて確かめたことは、19 章にそのまま残した。要件の端のハッシュの値（1.1、4.1）は、この文書の定義どおりに組んだ使い捨ての試作（Python）で計算したもので、段階 B の yuen は同じ値を出した（PLAN B.15）。成果物の端は、ritsu の D.7 で、それぞれの言語が口で渡す定義の文になり、ハッシュを取り直した（3.2、19 章）。
 
-2026-10-05 の夜に、OpenSpec の仕様を、要件ごとに固定して読む出典の種類を足した（20 章。出力は実物を貼った）。
+2026-10-05 に、OpenSpec の仕様を、要件ごとに固定して読む出典の種類を足した（20 章。出力は実物を貼った）。
 
 ## 0. 全体像
 
@@ -36,7 +36,7 @@
 
 yuen が確かめるのは、つながりとハッシュと期間だけである。要件の文の意味は確かめない。要件が出典の条文から正しく読めているか、成果物が要件を本当に満たしているか、主張が要件を十分に確かめているかは、人が読んで決める。yuen がするのは、人が読んだときから何かが変わったら、それを見落とさせないことと、読むべきものを読む順に並べることである。
 
-看板の言い方は、次を候補にする（作者が決める）。rulec（Write rules. Prove them. Compile them.）と koyomi（Write due dates. Check every day. Compile them.）にそろえて、三つの句にした。
+看板の言い方は次のとおりで、rulec（Write rules. Prove them. Compile them.）と koyomi（Write due dates. Check every day. Compile them.）にそろえて、三つの句にした。README の頭にこの句を置いている。
 
 - **Write where each requirement comes from. Link what meets it. Stop when anything moves.**
 - **要件の出どころを書く。満たすものにつなぐ。どこかが変われば止める。**
@@ -219,7 +219,7 @@ requirement 満了日_142条(last_day_142)
 | 出典 | `law` `file` `url` `asof` `sha256:`、データベースの語 `egov` `ecfr`、借りた出典の `source` |
 | 要件の中 | `text` `in force` `owner` `replaces` `from` `decided` `by` `satisfied by` `verified by` `not satisfied` `not verified` |
 | 確かめた記録 | `reviewed` `approved` `by` `->` |
-| 成果物の名前 | ツール名（`rulec` `dandori` `koyomi` `chobo` `geas` `proto` `file` `yuen` `sakai`）と、ツールごとの種類の語（2.3） |
+| 成果物の名前 | ツール名（`rulec` `dandori` `koyomi` `chobo` `geas` `proto` `openapi` `asyncapi` `cedar` `file` `yuen` `sakai` `sekisho`）と、ツールごとの種類の語（どちらも 2.3） |
 | 記号 | `@`（出典の引用）、`..`（日付の区間。両端を含む）、`,`、`->`、`#`（行末までコメント） |
 
 名前に使えないのは、行頭の語と、要件の中の語（確かめた記録の `reviewed` と `approved` を含む）である（E002）。ツール名と種類の語は、成果物の名前を書く位置（`satisfied by` と `verified by` のあと、`scope` のあと、`source <名前> =` のあと）でだけキーワードとして読む。要件の名前を `output` にしても、ほかの位置の `output` とは読み違えない。chobo が時間の語を `expires after` のあとでだけ読むのと同じ考えである。
@@ -653,7 +653,7 @@ dandori の例 `fulfillment/specs/warehouse.proto`（サービス `StockService`
 
 ### 3.5 一式に足りないもの（提案）
 
-yuen は、次のものが無くても動く（上の決定のとおり）。言語が口で渡すようになれば、yuen の検査が細かくなる。どれも、その言語の作者が決めることである。
+yuen は、次のものが無くても動く（上の決定のとおり）。言語が口で渡すようになれば、yuen の検査が細かくなる。どれも、渡すかどうかはその言語の側で決める。
 
 | ツール | 足りないもの | いまの yuen | 渡すようになれば |
 |---|---|---|---|
@@ -1077,7 +1077,7 @@ error[E302]: <ファイル>:<行>:<列>: <一行の見出し>
 
 文面は英語が既定で、`--lang ja` か環境変数 `YUEN_LANG=ja`（無ければ `RITSU_LANG=ja`）で日本語にする。システムのロケールは見ない。日本語と英語は `tr!("…", "…")` で隣に書き、言語は描くときに渡す（koyomi と同じく、テストが同じプロセスの中で二つの言語の golden を描けるように）。日本語の文では、ASCII の名前と日本語のあいだに空白を入れる。
 
-日本語の文の書き方は、2026-10-05 に読み直してそろえた（作者の指摘から。ほかの言語の読み直しと同じ決まり）。読む人にしてほしいことは「〜してください」と書き、「〜を直します」「〜を書きます」のように、読む人がするのか yuen がするのか分からない言い方をしない。yuen や ritsu がすることを言うときは、「yuen は〜」「ritsu は〜」と、する側を書く。`explain` の直し方の文も同じで、「〜ときも。」で切れた文は「〜ときにも出ます。」と閉じる。この文書の語「端」（リンクの両端と、そのハッシュを取る中身）は、利用者に見える文には出さない。一つの端は「リンク元」「リンク先」と言い、両方なら「両端」と言う。端の中身のことは、そのハッシュとして「要件のハッシュ」「成果物のハッシュ」と言う（`doc` のページの「要件のハッシュ：」、E203 の注と台帳、`export` の `--help`）。ほかの言語から事実を得られないことは「<言語> から〜の情報を得られません」と言い（sakai と ritsu-cross と同じ）、ritsu の部品の名前（口、読み手）は出さずに「ritsu の .proto のパーサー」「yuen 単独のバイナリ」と言う。`trace` と `affected` の一覧の行は、行の頭に「。」で始まる切れ端を作らず、ラベルどうしは「、」でつなぐ（「引く要件 …、固定している成果物 …」「2026-10-03 に 法務 が確かめた。そのあと変わっていない」）。`doc` のページは、これまでどおり常体で書く。英語の文は一字も変えていない。
+日本語の文の書き方は、2026-10-05 に読み直してそろえた（ほかの言語の読み直しと同じ決まり）。読む人にしてほしいことは「〜してください」と書き、「〜を直します」「〜を書きます」のように、読む人がするのか yuen がするのか分からない言い方をしない。yuen や ritsu がすることを言うときは、「yuen は〜」「ritsu は〜」と、する側を書く。`explain` の直し方の文も同じで、「〜ときも。」で切れた文は「〜ときにも出ます。」と閉じる。この文書の語「端」（リンクの両端と、そのハッシュを取る中身）は、利用者に見える文には出さない。一つの端は「リンク元」「リンク先」と言い、両方なら「両端」と言う。端の中身のことは、そのハッシュとして「要件のハッシュ」「成果物のハッシュ」と言う（`doc` のページの「要件のハッシュ：」、E203 の注と台帳、`export` の `--help`）。ほかの言語から事実を得られないことは「<言語> から〜の情報を得られません」と言い（sakai と ritsu-cross と同じ）、ritsu の部品の名前（口、読み手）は出さずに「ritsu の .proto のパーサー」「yuen 単独のバイナリ」と言う。`trace` と `affected` の一覧の行は、行の頭に「。」で始まる切れ端を作らず、ラベルどうしは「、」でつなぐ（「引く要件 …、固定している成果物 …」「2026-10-03 に 法務 が確かめた。そのあと変わっていない」）。`doc` のページは、これまでどおり常体で書く。英語の文は一字も変えていない。
 
 `--format json` は、プロジェクトに一つの JSON を出す：`{"root", "ok", "summary", "diagnostics": [{"code", "severity", "file", "line", "col", "message", "notes", "diff", "chain", "candidates", "fix"}]}`。`diff` は差分の行（`{"op": "-" | "+" | " " | "@@", "text"}` の並び。`@@` は統一形式の塊の見出し `@@ -18,5 +18,5 @@`）、`chain` は循環や期間の並び（`{"text", "file", "line"}`）、`candidates` は名前の候補、`fix` は `.req` に貼れる書き換えたあとの行かコマンドの行（無ければ null）。キーは `--lang` に依らず英語。文字で出すときは、行を「直した行:」、コマンドを「確かめたら:」の注にする（英語は `The line, fixed:` と `Once a person has looked:`）。
 
@@ -1849,7 +1849,7 @@ broken.reqif validates
 
 ## 20. OpenSpec の仕様を出典にする
 
-2026-10-05 の夜に足した。OpenSpec（Fission-AI の `@fission-ai/openspec`。この章は 2026-09-30 に出た 1.14.0 の文書とソースを読み、手元に入れて走らせて確かめた）は、仕様から始める開発の道具で、仕様（`openspec/specs/<capability>/spec.md`）と変更の提案（`openspec/changes/<id>/`）を Markdown で持つ。仕様は `## Requirements` の下に `### Requirement: <名前>` の要件を並べ、要件ごとに `#### Scenario: <名前>` のシナリオを GIVEN／WHEN／THEN の箇条書きで書く。変更の提案は `proposal.md`、`tasks.md` と仕様の差分（`specs/<capability>/spec.md` の `## ADDED|MODIFIED|REMOVED|RENAMED Requirements`）を持ち、`openspec archive` が差分を仕様に当てて、提案を `changes/archive/` へ移す。
+2026-10-05 に足した。OpenSpec（Fission-AI の `@fission-ai/openspec`。この章は 2026-09-30 に出た 1.14.0 の文書とソースを読み、手元に入れて走らせて確かめた）は、仕様から始める開発の道具で、仕様（`openspec/specs/<capability>/spec.md`）と変更の提案（`openspec/changes/<id>/`）を Markdown で持つ。仕様は `## Requirements` の下に `### Requirement: <名前>` の要件を並べ、要件ごとに `#### Scenario: <名前>` のシナリオを GIVEN／WHEN／THEN の箇条書きで書く。変更の提案は `proposal.md`、`tasks.md` と仕様の差分（`specs/<capability>/spec.md` の `## ADDED|MODIFIED|REMOVED|RENAMED Requirements`）を持ち、`openspec archive` が差分を仕様に当てて、提案を `changes/archive/` へ移す。
 
 ### 20.1 何をつなぐと価値があるか
 

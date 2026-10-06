@@ -10,7 +10,7 @@ B、C、D の三つの段階は終わった（どれも 2026-10-03）。各段�
 
 ### 0.1 守ること
 
-- 作者の決まり（段階ごとの指示書が挙げるメモ：`japanese-style`、`private-hobby`、`no-quoting-prompts`、`write-from-real-runs`、`features-are-first-class`、`do-the-whole-job`、`shell-gotchas`、`name-the-feature`）を先に読み、従う。日本語（DESIGN.md、`--lang ja` の診断、README.ja.md、報告）は、英語の概念語を漢字に直訳しない。関数や規則が返すものは「答え」ではなく「結果」と書く。
+- 書き方の決まり（`japanese-style`、`private-hobby`、`no-quoting-prompts`、`write-from-real-runs`、`features-are-first-class`、`do-the-whole-job`、`shell-gotchas`、`name-the-feature`）を先に読み、従う。日本語（DESIGN.md、`--lang ja` の診断、README.ja.md、報告）は、英語の概念語を漢字に直訳しない。関数や規則が返すものは「答え」ではなく「結果」と書く。
 - git のコミットと push をしない。`~/koyomi` の外に書かない（`~/rulec` と `~/dandori` は読むだけ。そこでビルドも git もしない）。
 - Rust は edition 2024 で、手元の stable 1.94.1 で通すこと。依存は `serde_json = "1"` だけ（clap、chrono、encoding_rs、sha2 などは使わない）。
 - 診断は英語が既定で、`--lang ja` で日本語。golden は両方の言語で取る。
@@ -22,7 +22,7 @@ B、C、D の三つの段階は終わった（どれも 2026-10-03）。各段�
 
 ### 0.2 作者の機械で気をつけること（macOS arm64）
 
-ツールの場所は、テストが環境変数で受け取る。この機械での値は、段階ごとの指示書にある。
+ツールの場所は、テストが環境変数で受け取る。
 
 - macOS には `timeout` コマンドが無い。子プロセスの時間切れは、テストの Rust の側で `Child::try_wait` を回して決め、超えたら kill する。
 - go のコマンドには `-trimpath` を付ける（付けないとビルドキャッシュが一回 1 GB 近く増える）。
@@ -349,7 +349,7 @@ C.1〜C.10 を書いた順に作り、C.10 の条件を全部満たした（2026
 
 ### D.6 ライセンスと出典
 
-- ライセンスは作者が決めた（2026-10-03）。rulec と dandori と同じ MIT OR Apache-2.0 で、LICENSE-MIT と LICENSE-APACHE を置き、`Cargo.toml` の `license`、README の「ライセンス」の節、スキルの frontmatter にも書く。決まるまでは、どれも置かずにいた。
+- ライセンスは 2026-10-03 に決めた。rulec と dandori と同じ MIT OR Apache-2.0 で、LICENSE-MIT と LICENSE-APACHE を置き、`Cargo.toml` の `license`、README の「ライセンス」の節、スキルの frontmatter にも書く。決まるまでは、どれも置かずにいた。
 - `THIRD_PARTY_NOTICES.md`：内閣府の祝日の CSV（公共データ利用規約（第1.0版）、出典の書き方）、GOV.UK の bank holidays（Open Government Licence v3.0）、WHATWG の `index-jis0208.txt` から作った表（CC BY 4.0）、e-Gov から取った民法の条文のコピー（e-Gov の利用規約をこの段階で読み、書き方を決める。dandori の THIRD_PARTY_NOTICES.md の書き方にそろえる）。
 
 ### D.7 D の完了の条件
@@ -373,7 +373,7 @@ D.1〜D.7 を書いた順に作り、D.7 の条件を全部満たした（2026-1
 - D.1：スクリーンショットは、ヘッドレスの Chrome がフラグで暗い配色に替わらなかったので、ページをコピーし、その `<html>` に `data-theme` を書いて撮る。わざと破る二つの例（英語の版と日本語の版）の、ページの先頭（明るい配色）と月の表（暗い配色）の四枚を `docs/images/` に置いた。
 - D.2：例の行末のコメントを、支払の例は支払条件の言葉、民法の例は条文の言葉か読み方の名前にした。英語の版の日付の名前は、日本語の版の別名と同じにした（生成した関数の名前が同じになる）。生成したコードの説明は、名前が別名と同じときは別名を繰り返さないようにした（`Gives payment.`。`codegen::named`）。
 - D.3：README と `docs/` とスキルの `.cal` の塊は、`examples/` か `tests/` の `.cal` の行でなければならない（`…` で切ってよい）。コマンドの塊は、出力を載せたものだけを走らせて比べ、出力の無い一覧は、コマンドの名前があることだけを確かめる。比べた行の数は、テストが走らせる vectors の行の数を、行を作らずに数えて確かめる（`tests/docs.rs`）。DESIGN の ```` ```markdown ```` の塊も、`tests/design.rs` がページの golden の抜き出しかを確かめる。
-- D.5：スキルの frontmatter の `license` は、作者がライセンスを決めるまで書かなかった。決まったあと（2026-10-03）に MIT OR Apache-2.0 と書き、`tests/skill.rs` は、それが `Cargo.toml` と同じであることを確かめる。
+- D.5：スキルの frontmatter の `license` は、ライセンスが決まるまで書かなかった。決まったあと（2026-10-03）に MIT OR Apache-2.0 と書き、`tests/skill.rs` は、それが `Cargo.toml` と同じであることを確かめる。
 - D.6：WHATWG の索引は CC BY 4.0 だが、ソースコードに取り込んだ部分は BSD 3-Clause License になる、と Encoding Standard が書いているので、`src/sjis_table.rs` の頭（`tools/sjis/make_table.py` が書く）と THIRD_PARTY_NOTICES.md をそう書いた。頭の文を書き換えるため、索引を作業場所に一度取り、スクリプトで表を作り直して、表の中身が一字も変わらないことを確かめた（索引はリポジトリに置かない）。データのコピー（内閣府、GOV.UK、e-Gov）は取り直していない。
 
 D の終わりの実行：`cargo test -- --nocapture` は 99 のテスト（`tests/` の 16 のファイルと、ライブラリの中のテスト）が通り、SKIP は 0（`not asked:` が一行。`KOYOMI_NET=1` でないので本物の内閣府、GOV.UK、e-Gov には問い合わせない）。`compared` の行は 75（五つの出力先 × 15 のファイル）で、出力先ごとに 5,341,318 行、合わせて 26,706,590 行を突き合わせた。全体は 40 秒。Chrome のスクリーンショットも撮れた（`KOYOMI_CHROME`）。
@@ -386,7 +386,7 @@ D の終わりの実行：`cargo test -- --nocapture` は 99 のテスト（`tes
 - ページの文面を変えたら `KOYOMI_BLESS=1 cargo test --test doc` で golden を取り直し、差分を読む。スクリーンショットも同じコマンドで撮り直す（Chrome は `KOYOMI_CHROME`）。
 - `docs/` を変えたら `skills/sync.sh` を走らせる。`docs/codes.md` と `docs/codes.ja.md` は、診断の台帳を変えたら `koyomi explain --all --format markdown [--lang ja]` で書き直す。
 - README の「どう確かめているか」の時間とテストの件数は、一度走らせたときのもので、テストは確かめない（比べた行の数は確かめる）。テストを足したら取り直す。
-- ライセンスは MIT OR Apache-2.0（2026-10-03 に作者が決めた）。変えるときは、LICENSE のファイル、`Cargo.toml` の `license`、README の節、スキルの frontmatter（`tests/skill.rs` の確かめも）をそろえて直す。
+- ライセンスは MIT OR Apache-2.0（2026-10-03 に決めた）。変えるときは、LICENSE のファイル、`Cargo.toml` の `license`、README の節、スキルの frontmatter（`tests/skill.rs` の確かめも）をそろえて直す。
 
 ### 5.1 C から D へ（C の段階で書いた）
 
@@ -413,4 +413,4 @@ D の終わりの実行：`cargo test -- --nocapture` は 99 のテスト（`tes
 
 - DESIGN の数は、A の段階の試作で出した。B の参照インタプリタが違う数を出したら、まず DESIGN 2.2 の定義に照らす。試作は `close day`、`roll`、営業日の数え方、民法の書き方を DESIGN と同じに実装していたが、`+ 0 business days` は試作ではその日のままにしていた（例では使わないので数に影響しない）。
 - 祝日の表のコピー（`examples/calendars/data/`）と民法のコピー（`examples/sources/law/`）は A の段階で取ったものを使い、取り直さない（B.5）。
-- 作者が決めるべきだったかもしれないこと（A の報告で挙げたもの）：看板の言い方、ファイルの見出しの語（`calendar` と `dates`）、`+ 0 business days` を寄せること、日付の入力を一つに限ること、ライセンス（2026-10-03 に MIT OR Apache-2.0 に決まった）。作者の返事で変わったら、DESIGN と、この計画の該当の項を直してから進める。
+- 段階 A の時点で、まだ変わりうるとしたもの：看板の言い方、ファイルの見出しの語（`calendar` と `dates`）、`+ 0 business days` を寄せること、日付の入力を一つに限ること、ライセンス（2026-10-03 に MIT OR Apache-2.0 に決まった）。変わったら、DESIGN と、この計画の該当の項を直してから進める。

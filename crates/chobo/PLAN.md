@@ -68,7 +68,7 @@ tools/
 examples/<名前>/      四つの例：<名前>.book（英語）と <名前>.ja.book（日本語）、chobo doc のページ doc.md と doc.ja.md、返金の例は手で書いたシナリオ <名前>.more.json とその結果（D）
 docs/                 reference.md、formats.md、targets.md、codes.md、codes.ja.md（D）
 skills/               chobo/（SKILL.md と docs/ のページのコピー）、sync.sh（コピーを作る）、README.md（D）
-README.md、README.ja.md（D）。LICENSE-MIT と LICENSE-APACHE（2026-10-03 に作者が MIT OR Apache-2.0 に決めた）
+README.md、README.ja.md（D）。LICENSE-MIT と LICENSE-APACHE（2026-10-03 に MIT OR Apache-2.0 に決めた）
 ```
 
 ### 0.3 段階をまたぐ約束
@@ -208,7 +208,7 @@ DESIGN 8 章のとおり。`src/main.rs` の一枚の表に、コマンドごと
 
 ### B1 プロジェクト
 
-`Cargo.toml`（`name = "chobo"`、`version = "0.1.0"`、`edition = "2024"`、`serde_json = { version = "1", features = ["preserve_order"] }`、`[profile.release] strip = true`）。`src/lib.rs` が各モジュールを `pub` で出し、テストから使う。ライセンスは作者が決めるので、段階 D で `license` を外した（段階 B では `MIT OR Apache-2.0` と書いていた）。
+`Cargo.toml`（`name = "chobo"`、`version = "0.1.0"`、`edition = "2024"`、`serde_json = { version = "1", features = ["preserve_order"] }`、`[profile.release] strip = true`）。`src/lib.rs` が各モジュールを `pub` で出し、テストから使う。ライセンスはまだ決めていなかったので、段階 D で `license` を外した（段階 B では `MIT OR Apache-2.0` と書いていた）。
 
 ### B2 字句（syntax.rs）
 
@@ -514,7 +514,7 @@ Markdown。DESIGN 7 章の五つ（勘定の表、振替の種類の表、勘定
 
 ### D4 README.md と README.ja.md
 
-英語の README.md と、日本語で一から書き起こした README.ja.md（英語を訳したものにしない）。看板（DESIGN の冒頭の案。段階 A の報告で認められた）、芯（守る条件を勘定の境界に絞り、だから一度の書き込みで守れる）、帳簿の例、実際の診断と報告、コマンド、ターゲットの表、確かめ方（実際の件数）、インストール、例、まだやっていないこと。載せる出力は全部実際に走らせたもの。ライセンスの節は、作者がライセンスを決めた 2026-10-03 に足した（MIT OR Apache-2.0）。
+英語の README.md と、日本語で一から書き起こした README.ja.md（英語を訳したものにしない）。看板（DESIGN の冒頭の案。段階 A のあとで、この形に決めた）、芯（守る条件を勘定の境界に絞り、だから一度の書き込みで守れる）、帳簿の例、実際の診断と報告、コマンド、ターゲットの表、確かめ方（実際の件数）、インストール、例、まだやっていないこと。載せる出力は全部実際に走らせたもの。ライセンスの節は、ライセンスを決めた 2026-10-03 に足した（MIT OR Apache-2.0）。
 
 ### D5 docs/
 
@@ -532,7 +532,7 @@ dandori の `skills/dandori` を手本にする。`SKILL.md`（手で書く。�
 
 ### D8 そのほか
 
-`Cargo.toml` に `description` と `repository`。ライセンスは作者が決めるまで置かずにいた（計画では rulec と dandori と同じ二つを置くことにしていた）。2026-10-03 に作者が MIT OR Apache-2.0 に決めたので、`LICENSE-APACHE` と `LICENSE-MIT` を置き、`Cargo.toml` の `license`、README の節、スキルの frontmatter に書いた。`tests/skill.rs` は、frontmatter と `Cargo.toml` のライセンスが同じであることを確かめる。
+`Cargo.toml` に `description` と `repository`。ライセンスは決まるまで置かずにいた（計画では rulec と dandori と同じ二つを置くことにしていた）。2026-10-03 に MIT OR Apache-2.0 に決めたので、`LICENSE-APACHE` と `LICENSE-MIT` を置き、`Cargo.toml` の `license`、README の節、スキルの frontmatter に書いた。`tests/skill.rs` は、frontmatter と `Cargo.toml` のライセンスが同じであることを確かめる。
 
 ### 段階 D の終わりの条件
 
@@ -547,4 +547,4 @@ dandori の `skills/dandori` を手本にする。`SKILL.md`（手で書く。�
 - `chobo doc`：Markdown（Mermaid の `flowchart LR` と `stateDiagram-v2`、シナリオは折りたたむ）と、一つの HTML（chobo が描く SVG、シナリオを一ステップずつ進めるスクリプト）。例の横に `doc.md` と `doc.ja.md` を置いた。golden は、テストの帳簿の Markdown 12 本、警告のある帳簿の Markdown 2 本、HTML 14 本。ページに出る 1074 のステップの残高が参照インタプリタと同じで、38 の Mermaid の図が Mermaid 11 と 12 で描け、Chrome で開いた HTML がデータどおりの残高と矢印を出す（二つのページの 12 ステップ）。
 - 文書：README.md、README.ja.md、`docs/`（reference、formats、targets、codes、codes.ja）。`tests/docs.rs` が、文書に出力つきで書いた `chobo` のコマンド 16 本を走らせて出力を比べ、診断の抜粋、帳簿の行、相対リンク、コードとシナリオの数、キーワードの表を確かめる。`docs/targets.md` のクライアントの呼び方と出力は、使い捨ての PostgreSQL のクラスタと TigerBeetle のレプリカで、TypeScript・Python・Go から実際に呼んで取った。
 - スキル：`skills/chobo/SKILL.md`（手で書いた）と、`skills/sync.sh` が作る `docs/` の四つのページのコピー、`skills/README.md`。
-- 計画から変えたこと：ライセンスのファイルと README のライセンスの節を、作者が決めるまで置かなかった（2026-10-03 に MIT OR Apache-2.0 に決まり、置いた）。英語の診断の帳簿 `tests/fixtures/split.book` を足した（README.md に英語の名前の診断を載せるため）。手で書いたシナリオの結果を `<帳簿>.more.runs.json` に固定した。シナリオの名前に入る数を単位の桁にした（テストの帳簿の名前は変わらなかった）。
+- 計画から変えたこと：ライセンスのファイルと README のライセンスの節を、ライセンスが決まるまで置かなかった（2026-10-03 に MIT OR Apache-2.0 に決まり、置いた）。英語の診断の帳簿 `tests/fixtures/split.book` を足した（README.md に英語の名前の診断を載せるため）。手で書いたシナリオの結果を `<帳簿>.more.runs.json` に固定した。シナリオの名前に入る数を単位の桁にした（テストの帳簿の名前は変わらなかった）。

@@ -10,7 +10,7 @@ DESIGN.md を仕様として、yuen を三つの段階（B・C・D）で作る�
 
 ### 0.1 守ること
 
-- 作者の決まり（段階ごとの指示書が挙げるメモ：`japanese-style`、`private-hobby`、`no-quoting-prompts`、`write-from-real-runs`、`features-are-first-class`、`do-the-whole-job`、`shell-gotchas`、`name-the-feature`、`user-profile`）を先に読み、従う。日本語（DESIGN.md、`--lang ja` の診断、README.ja.md、報告）は、英語の概念語を漢字に直訳しない。「道具」ではなく「ツール」、「原本」ではなく「出典」か「元」、「断片」ではなく「条」か「引用箇所」と書く。物に「たち」を付けない。
+- 書き方の決まり（`japanese-style`、`private-hobby`、`no-quoting-prompts`、`write-from-real-runs`、`features-are-first-class`、`do-the-whole-job`、`shell-gotchas`、`name-the-feature`、`user-profile`）を先に読み、従う。日本語（DESIGN.md、`--lang ja` の診断、README.ja.md、報告）は、英語の概念語を漢字に直訳しない。「道具」ではなく「ツール」、「原本」ではなく「出典」か「元」と書き、条文から引いた部分は「条」か「引用箇所」と書く。物に「たち」を付けない。
 - git のコミットと push をしない。書くのは ritsu の木の中だけにする。元のリポジトリ（前の名前の `~/yurai` と、`~/rulec`・`~/dandori`・`~/koyomi`・`~/chobo`・`~/geas`・`~/sakai`）は読むだけで、そこでビルドも git もしない。
 - Rust は edition 2024 で、手元の stable 1.94.1 で通すこと。依存は `serde_json = { version = "1", features = ["preserve_order"] }` だけ。
 - 診断は英語が既定で、`--lang ja` で日本語。golden は両方の言語で取る。
@@ -231,7 +231,7 @@ docs/  skills/  README.md  README.ja.md  THIRD_PARTY_NOTICES.md   （D）
 
 一式の言語が持つものと proto を読み、借りた出典と食い違いの検査、名前の変わった成果物、`affected`、ReqIF と PROV の書き出し、`source fetch | pin | outdated` を作る。
 
-**C は二つに分けて進めた。** 作者が一式の言語を一つの処理系（ritsu）にまとめるかを考えていたので、一式の読み込み（C.1〜C.9）はそれが決まるまで止め、yuen の要件だけで作れる C.10〜C.12（ReqIF、PROV、出典のコマンド）を 2026-10-03 に先に作った。まとめると決まり、yuen は ritsu の `crates/yuen` になった。C.1〜C.9 は、子プロセスでツールの CLI を呼んで JSON を読む計画だったものを、ritsu の口（ritsu の DESIGN 3.2）で読むように書き直し（下の C.1〜C.9 がその計画）、ritsu の PLAN の D.7 で作った（2026-10-04）。書き直す前の計画の要点は、それぞれの項の最後に「前の計画」として残した。
+**C は二つに分けて進めた。** 一式の言語を一つの処理系（ritsu）にまとめるかを決めていなかったので、一式の読み込み（C.1〜C.9）はそれが決まるまで止め、yuen の要件だけで作れる C.10〜C.12（ReqIF、PROV、出典のコマンド）を 2026-10-03 に先に作った。まとめると決まり、yuen は ritsu の `crates/yuen` になった。C.1〜C.9 は、子プロセスでツールの CLI を呼んで JSON を読む計画だったものを、ritsu の口（ritsu の DESIGN 3.2）で読むように書き直し（下の C.1〜C.9 がその計画）、ritsu の PLAN の D.7 で作った（2026-10-04）。書き直す前の計画の要点は、それぞれの項の最後に「前の計画」として残した。
 
 ### C.1 口をつなぐ（`src/suite.rs`、`src/run.rs`、`src/ends.rs`）
 
@@ -454,8 +454,8 @@ DESIGN 15 章の七つ。英語の例を先に、日本語の版を `<名前>.ja
 - DESIGN の端のハッシュの値は、A の段階の試作で出した。B の yuen が違う値を出したら、まず DESIGN 4.1 と 3.2 の定義に照らす（とくに、要件の端の中身の行の並べ方と最後の改行、決まった形の JSON のキーの順と字下げ）。
 - 法令のコピーは、koyomi と rulec の例から持ってくる（B.4、C.2、C.3）。取り直さない。e-Gov と eCFR に取りに行くのは、C.12 の `YUEN_NET=1` のテストだけである。
 - A の段階で確かめた一式の振る舞い（DESIGN 19 章）：三つのツールの `source_sha256` はファイルのバイト列のハッシュ、行ごとの引用はどの JSON にも無い、検査を通らないファイルには api が出ない、geas の記録と `affected --json` の形。どれかが変わっていたら（ツールのバージョンが上がって）、DESIGN 3 章を直してから進む。
-- 作者が決めるべきだったかもしれないこと（A の報告で挙げたもの）：看板の言い方、要件の端にリンク元のハッシュを入れて先のリンクを一本ずつ確かめさせること（DESIGN 4.1）、確かめた記録に人と日付を書くこと（4.2）、`reviewed/` を git に入れること（4.4）、rulec・koyomi の日付・geas の端をファイル全体にしたこと（3.2）、dandori をファイルの単位でだけ指すこと（2.7、3.5）、一式に出してほしいもの（3.5）、PROV-N と PROV-JSON の両方を出すこと（13 章）。作者の返事で変わったら、DESIGN と、この計画の該当の項を直してから進める。
-- sakai と突き合わせる参照の書き方（DESIGN 2.8）が、作者か突き合わせた人の判断で変わったら、2 章と、B.3 と C.2〜C.6 の名前の読み方を直す。（B の段階で決着した。下の 5.2。）
+- 段階 A の時点で、まだ変わりうるとしたもの：看板の言い方、要件の端にリンク元のハッシュを入れて先のリンクを一本ずつ確かめさせること（DESIGN 4.1）、確かめた記録に人と日付を書くこと（4.2）、`reviewed/` を git に入れること（4.4）、rulec・koyomi の日付・geas の端をファイル全体にしたこと（3.2）、dandori をファイルの単位でだけ指すこと（2.7、3.5）、一式に出してほしいもの（3.5）、PROV-N と PROV-JSON の両方を出すこと（13 章）。変わったら、DESIGN と、この計画の該当の項を直してから進める。
+- sakai と突き合わせる参照の書き方（DESIGN 2.8）が、突き合わせで変わったら、2 章と、B.3 と C.2〜C.6 の名前の読み方を直す。（B の段階で決着した。下の 5.2。）
 
 ### 5.2 B から C へ（B の段階で書いた）
 
@@ -486,7 +486,7 @@ DESIGN 15 章の七つ。英語の例を先に、日本語の版を `<名前>.ja
 - `doc` のページの画像（`docs/images/`）は `YUEN_BLESS=1 cargo test -p yuen --test doc` で撮り直す。golden も同じ。
 - 文書のテスト（`tests/docs.rs`）は、`$ ritsu yuen …` を、クレートのディレクトリで、すべての言語をつないで走らせる。README に出力を足すときは、走らせた出力をそのまま貼る。
 
-### 5.6 OpenSpec の仕様を出典にする（2026-10-05 の夜に作った）
+### 5.6 OpenSpec の仕様を出典にする（2026-10-05 に作った）
 
 DESIGN 20 章。ritsu の v0.23.0 のあとに作った。
 

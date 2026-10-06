@@ -16,7 +16,7 @@ proto の読み込みは、一式の読み込みと一緒に C に置く分け�
 
 ### 0.1 守ること
 
-- 作者の決まり（段階ごとの指示書が挙げるメモ：`japanese-style`、`private-hobby`、`no-quoting-prompts`、`write-from-real-runs`、`features-are-first-class`、`do-the-whole-job`、`shell-gotchas`、`name-the-feature`、`user-profile`）を先に読み、従う。日本語（DESIGN.md、`--lang ja` の診断、doc の日本語のページ、README.ja.md、報告）は、英語の概念語を漢字に直訳しない。物に「たち」を付けない。カタカナ英語が普通の語はカタカナで書く。DESIGN.md の語にそろえる：境界づけられたコンテキスト、コンテキストマップ、公表された言語、公開ホストサービス、上流、下流、順応者、腐敗防止層、顧客、供給者、共有カーネル、パートナーシップ、別々の道、用語集、語、成果物、属する、持ち主、範囲、参照、境界を越える、対応、拒否、参照の書き方、ツール名、まとまり（import を決める単位）。
+- 書き方の決まり（`japanese-style`、`private-hobby`、`no-quoting-prompts`、`write-from-real-runs`、`features-are-first-class`、`do-the-whole-job`、`shell-gotchas`、`name-the-feature`、`user-profile`）を先に読み、従う。日本語（DESIGN.md、`--lang ja` の診断、doc の日本語のページ、README.ja.md、報告）は、英語の概念語を漢字に直訳しない。物に「たち」を付けない。カタカナ英語が普通の語はカタカナで書く。DESIGN.md の語にそろえる：境界づけられたコンテキスト、コンテキストマップ、公表された言語、公開ホストサービス、上流、下流、順応者、腐敗防止層、顧客、供給者、共有カーネル、パートナーシップ、別々の道、用語集、語、成果物、属する、持ち主、範囲、参照、境界を越える、対応、拒否、参照の書き方、ツール名、まとまり（import を決める単位）。
 - git のコミットと push をしない。`~/sakai` の外に書かない。rulec、dandori、koyomi、chobo、geas の木は読むだけで、そこでビルドも git もしない。
 - 一式のツールを入れるときは `cargo install --locked --path ~/<名前> --root <作業場所> --target-dir <作業場所>/target` とし、`--target-dir` を必ず付ける。cargo 1.94.1 の `cargo help install` のとおり、`--path` で入れるときは、`--target-dir` が無いとそのクレートの木の `target/` でビルドする（ほかの木に書くことになる）。
 - Rust は edition 2024 で、手元の stable 1.94.1 で通すこと。依存は `serde_json = { version = "1", features = ["preserve_order"] }` だけ。
@@ -34,7 +34,7 @@ proto の読み込みは、一式の読み込みと一緒に C に置く分け�
 - go のコマンドには `-trimpath` を付け、`GOCACHE`、`GOMODCACHE`、`GOPATH` を `tools/go/` の下（git に入れない）か一時ディレクトリに置く。`GOTOOLCHAIN=local`。go は 1.25.5。
 - Python の venv は `uv venv --python 3.13 <場所>`。Homebrew の 3.14 の venv には pip が入らない。
 - node は v23.11.0。dependency-cruiser の 17 と 18 は node 23 を対象にしていない（DESIGN 7.3）ので 16.10.4 を使う。TypeScript は 6 未満でないと dependency-cruiser 16.10.4 が `.ts` を読まない。7.0.2 を入れると、黙って 0 モジュールで通る。
-- Java は OpenJDK 27 が入っているが、PATH には無い（場所は段階ごとの指示書にある）。テストは `SAKAI_JAVA` と `SAKAI_JAVAC`（無ければ `JAVA_HOME/bin`、それも無ければ PATH）で受け取るので、この機械でテストを回すときはその二つを付ける。クラスは `--release 21` で組む（ArchUnit 1.5.1 で確かめた形）。
+- Java は OpenJDK 27 が入っているが、PATH には無い。テストは `SAKAI_JAVA` と `SAKAI_JAVAC`（無ければ `JAVA_HOME/bin`、それも無ければ PATH）で受け取るので、この機械でテストを回すときはその二つを付ける。クラスは `--release 21` で組む（ArchUnit 1.5.1 で確かめた形）。
 - Chrome は `SAKAI_CHROME`、無ければ macOS が Google Chrome を入れる場所（`/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`）、それも無ければ PATH の `google-chrome` か `chromium`（dandori、koyomi、chobo と同じ順。OS の既定の場所は手元の機械に固有のパスではないので、リポジトリに書いてよい）。
 - buf 1.54.0 と protoc 35.1 は PATH にある。
 - 一式の言語：ritsu の D.8 から、テストは rulec、koyomi、chobo、dandori を `[dev-dependencies]` に持ち、同じプロセスでつなぐ。入れるツールは無い（前は `SAKAI_RULEC`、`SAKAI_KOYOMI`、`SAKAI_CHOBO`、`SAKAI_DANDORI` でバイナリを渡していた）。
@@ -616,7 +616,7 @@ Python（`py/`）の import は次のとおり。TypeScript（`ts/`。相対パ�
 
 - 事実（`Rules::facts`）を、地図の規則ごとに一度だけ問う。答えた規則には参照（`References`）も問う。答えなければ E105。
 - 参照：`import proto`（先：proto の列挙。越える要素はその列挙）、`shape`（先：proto のメッセージ。越える要素は、そのメッセージとたどれる型の全部）、`apply`（先：規則。規則そのものを使う参照で、共有カーネルの中でなければ E202）。`import jsonschema`、JSON Schema の `shape`、`source` のコピーは、規則の一部として数えない（DESIGN 3.3）。
-- 公表された言語の rulec の塊：事実の Connect のパスの package と見出しの突き合わせ（E302）、パスのサービスと `open host service`（E301）。語の `means` の先の規則の要素（`input`、`output`、`enum`、`value`）が事実にあること。無ければ E007（★proto の要素と同じ。前のこの計画は E408 と書いていたが、E408 は公表された言語に無い要素のコードで、指した先に無いことは proto でも E007 なので、そろえた）。
+- 公表された言語の rulec の塊：事実の Connect のパスの package と見出しの突き合わせ（E302）、パスのサービスと `open host service`（E301）。語の `means` の先の規則の要素（`input`、`output`、`enum`、`value`）が事実にあること。無ければ E007（proto の要素と同じ。前のこの計画は E408 と書いていたが、E408 は公表された言語に無い要素のコードで、指した先に無いことは proto でも E007 なので、そろえた）。
 - 対応の先が rulec の列挙（DESIGN 1.7）：規則の Connect の列挙が、対応の左辺と同じ proto の同じ列挙を取り込んでいれば（取り込んだファイルが同じで、別名が列挙の完全な名前）、値の対応を事実から読む。値の行が書いてあれば突き合わせ、違えば E405。値の行が無ければ、規則の取り込みが対応になる。取り込んでいなければ値の行が要り、右辺が規則の列挙の値であること（E403）。
 - 同じ語：rulec から読んだ越えてくる要素も、B.9 の検査に入れる。規則の取り込みの対応も、E407 の対応の先にする。
 - テスト（`tests/examples.rs`、`tests/api.rs`、`tests/mapping.rs`、`tests/mutants/`）：
@@ -631,7 +631,7 @@ Python（`py/`）の import は次のとおり。TypeScript（`ts/`。相対パ�
 
 ### C.4 dandori（`References`）
 
-作者の決定を待っていた dandori の api は、ritsu で dandori が口（`References`）に答えるようになって決着した（DESIGN 4.7 の「これまでの形」）。N101 は退かせた（台帳に残し、番号を使い回さない）。
+決めずにいた dandori の api は、ritsu で dandori が口（`References`）に答えるようになって決着した（DESIGN 4.7 の「これまでの形」）。N101 は退かせた（台帳に残し、番号を使い回さない）。
 
 - 参照：`use rule`（呼び方の語つき）、`use proto`、`connect`、`flow`、`implements`（DESIGN 4.7 の表）。`use openapi` と `use smithy` は数えない。
 - 四つの検査：規則の同梱が境界を越える（E202。`connect` の無い `use rule`）、`connect` で呼ぶサービスが相手の公開ホストサービスでない（E207。`use rule … connect` の規則のサービスも）、`implements` するサービスが自分の公表された言語の公開ホストサービスでない（E208）、子の `.flow` が境界の向こうのもの（E209。パートナーシップ、共有カーネル、子が相手の公開ホストサービスを実装しているときは許す。DESIGN 4.7 の決定）。
@@ -784,7 +784,7 @@ public class Validate {
 ### D.3 docs/
 
 - `docs/reference.md`（言語の全部。英語）、`docs/targets.md`（四つのツールの設定と、それぞれが捕まえるものの違い、CML への書き出し方。英語）、`docs/codes.md` と `docs/codes.ja.md`（`sakai explain --all --format markdown` の出力そのもの）。
-- 事実（数、名前、決めたこと）は DESIGN から引いてよいが、言い回しは引かない（作者の決まり）。
+- 事実（数、名前、決めたこと）は DESIGN から引いてよいが、言い回しは引かない（書き方の決まり）。
 
 ### D.4 README.md と README.ja.md
 
@@ -801,7 +801,7 @@ public class Validate {
 
 ### D.6 ライセンス
 
-- MIT OR Apache-2.0（作者が一式に決めた）。`Cargo.toml` の `license`、README.md の「License」と README.ja.md の「ライセンス」の節、スキルの frontmatter の `license` に書く（koyomi と chobo と同じ形）。コピーした一式の例のファイルは、どれも作者の一式のもので、同じライセンスである。
+- MIT OR Apache-2.0（一式で同じものにした）。`Cargo.toml` の `license`、README.md の「License」と README.ja.md の「ライセンス」の節、スキルの frontmatter の `license` に書く（koyomi と chobo と同じ形）。コピーした一式の例のファイルは、どれも作者の一式のもので、同じライセンスである。
 
 ### D.7 D の完了の条件
 
@@ -821,8 +821,8 @@ public class Validate {
 
 - 外のツールの振る舞い（DESIGN 0.4、7 章、8 章）は、2026-10-03 にこの機械で確かめた。版を変えたら確かめ直す。とくに、dependency-cruiser と TypeScript の組み合わせ（黙って通る）、Context Mapper の CLI の `validate` が構文しか見ないこと、ArchUnit の `failOnEmptyShould`、import-linter が名前空間の一部をルートに受け付けること。
 - C.0 の下書きは、A の段階で一式のツールに通した。直し方の表のとおりにコピーして直せば、同じものになる。
-- dandori の api は、作者が決めるまで無いものとして作る（C.4）。
-- 作者が決めるべきだったかもしれないこと（A の報告で挙げたもの）：看板の言い方、二種類のファイルと下流が関係を書く形、`through` と役割を必ず書かせること、dandori に api を足すかどうか、参照の書き方のうち、`dir` と `sakai` をツール名にするかどうかと、JSON のパスの基点。作者の返事で変わったら、DESIGN と、この計画の該当の項を直してから進める。
+- dandori の api は、足すかが決まるまで無いものとして作る（C.4）。
+- 段階 A の時点で、まだ変わりうるとしたもの：看板の言い方、二種類のファイルと下流が関係を書く形、`through` と役割を必ず書かせること、dandori に api を足すかどうか、参照の書き方のうち、`dir` と `sakai` をツール名にするかどうかと、JSON のパスの基点。変わったら、DESIGN と、この計画の該当の項を直してから進める。
 
 ### 5.2 B から C へ（B の段階で書いた）
 
@@ -845,7 +845,7 @@ C で作るときに気をつけること：
 
 ### 5.3 C から D へ（C の段階で書いた）
 
-C の段階では、C.0 と C.6〜C.14 を作った。C.1〜C.5（一式のツールの読み込み）は、一式の言語を一つの処理系にまとめるかを作者が決めるまで止めてある（C.1 の頭）。
+C の段階では、C.0 と C.6〜C.14 を作った。C.1〜C.5（一式のツールの読み込み）は、一式の言語を一つの処理系にまとめるかが決まるまで止めた（C.1 の頭）。
 
 C で決めて、DESIGN と、この計画の該当の項を直したこと：
 

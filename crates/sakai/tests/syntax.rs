@@ -33,9 +33,9 @@ fn as_file(block: &str) -> String {
         return block.to_string();
     }
     if first.starts_with("owns") {
-        return format!("context 断片(fragment) v1\n{block}");
+        return format!("context 抜粋(fragment) v1\n{block}");
     }
-    format!("context 断片(fragment) v1\nowns\n  dir \".\"\n{block}")
+    format!("context 抜粋(fragment) v1\nowns\n  dir \".\"\n{block}")
 }
 
 #[test]

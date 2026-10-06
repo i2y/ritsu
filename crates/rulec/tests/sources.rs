@@ -141,7 +141,7 @@ table 表(t1)   @法 第1条
 }
 
 #[test]
-fn ページは引いた断片を引用する() {
+fn ページは引用箇所の本文を載せる() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (c, out) = rulec(&root(), &["doc", RULE, "--lang", "ja"]);
     assert_eq!(c, 0, "{out}");

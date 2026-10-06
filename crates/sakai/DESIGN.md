@@ -37,7 +37,7 @@ sakai は、コンテキストマップのうち、実物と突き合わせら�
 
 理由は、書いても確かめられないものを書かせると、それがまた実物からずれるからである。Bounded Context Canvas が並べる戦略上の分類、ドメインでの役割、ビジネス上の決定、仮定、指標は、どれもコンテキストを設計するうえで大事だが、`.ctx` には入れない（13 章）。用語集も、境界を越える語に絞る。コンテキストの中だけで使う語まで載せさせると、用語集が名前の一覧になり、境界の語が埋もれる。公表された言語のすべての名前に語を付けることも求めない。
 
-看板の言い方は、次を候補にする（★作者が決めること）。rulec と koyomi の看板と同じ三つの句にした。
+看板の言い方の候補は次のとおりで、rulec と koyomi の看板と同じ三つの句にした。いまの README は、これを使わず、言語が何を書くかを言う一文で始めている。
 
 - **Write the map. Check every crossing. Hand the imports to your linters.**
 - **地図を書く。境界を越えるところを全部確かめる。import は各言語のリンターに渡す。**
@@ -325,7 +325,7 @@ partnership with 受注
 | `terms` | 用語集 |
 | `refuse` | 拒否 |
 
-ほかのキーワードは、`description`、`owner`、`also`、`use`、`covers`、`except`、`proto root`、`code`、`python`、`typescript`、`java`、`go`、`rust`、`test`、`owns`、`dir`、`crate`、`generated`、`through`、`layer`、`means`、`as`、`enum`、`term`、`with`、`from`、成果物のツール名（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`file`）と要素の種類の語（2 章）。表は B の段階の `src/kw.rs` に一枚で置く。
+ほかのキーワードは、`description`、`owner`、`also`、`use`、`covers`、`except`、`proto root`、`code`、`python`、`typescript`、`java`、`go`、`rust`、`test`、`owns`、`dir`、`crate`、`generated`、`through`、`layer`、`means`、`as`、`enum`、`term`、`with`、`from`、成果物のツール名（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho`。2.2）と要素の種類の語（2 章）。表は B の段階の `src/kw.rs` に一枚で置く。
 
 **決定**：地図とコンテキストには ASCII の別名を必ず書く（`受注(ordering)`。無ければ E008）。形は `[A-Za-z_][A-Za-z0-9_]*`。
 
