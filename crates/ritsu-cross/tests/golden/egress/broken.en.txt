@@ -1,0 +1,20 @@
+warning[W905]: ordering/checkout.flow:30: Where in the map shop.ctx the task `charge` sends the secret `card.number` cannot be decided
+    30 |   charge(card: card)
+  = The map does not pass sakai's check, so which context a file belongs to is not known (sakai's E009: The path "contexts/missing.ctx" is not there).
+  = Correct the map so that `sakai check` passes.
+warning[W905]: ordering/checkout.flow:31: Where in the map shop.ctx the task `notify` sends the secret `card.number` cannot be decided
+    31 |   notify(card: card)
+  = The map does not pass sakai's check, so which context a file belongs to is not known (sakai's E009: The path "contexts/missing.ctx" is not there).
+  = Correct the map so that `sakai check` passes.
+warning[W905]: ordering/checkout.flow:32: Where in the map shop.ctx the task `report` sends the secret `card.number` cannot be decided
+    32 |   report(card: card)
+  = The map does not pass sakai's check, so which context a file belongs to is not known (sakai's E009: The path "contexts/missing.ctx" is not there).
+  = Correct the map so that `sakai check` passes.
+warning[W905]: ordering/checkout.flow:33: Where in the map shop.ctx the task `notify_again` sends the secret `card.number` cannot be decided
+    33 |   notify_again(card: card)
+  = The map does not pass sakai's check, so which context a file belongs to is not known (sakai's E009: The path "contexts/missing.ctx" is not there).
+  = Correct the map so that `sakai check` passes.
+warning[W905]: ordering/checkout.flow:34: Where in the map shop.ctx the task `place` sends the secret `token` cannot be decided
+    34 |   place(order: order)
+  = The map does not pass sakai's check, so which context a file belongs to is not known (sakai's E009: The path "contexts/missing.ctx" is not there).
+  = Correct the map so that `sakai check` passes.

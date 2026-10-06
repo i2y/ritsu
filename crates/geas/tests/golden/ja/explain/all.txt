@@ -877,3 +877,26 @@
         let sum: i64 = std::env::args().skip(1).map(|a| a.parse::<i64>().unwrap_or(0)).sum();
         println!("{sum}");
     }
+
+警告[W901]: ファイルに書かれた鍵
+
+いつ出るか
+  `geas check` で、仕様のどこか（文字列でもコメントでも）に鍵の形の値があったときです。調べる鍵は、AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、Slack の Incoming Webhook の URL、PEM の秘密鍵で、どれもプロバイダーが接頭辞や形を決めているものです。ritsu のどの言語も同じ決まりで調べます。診断には鍵の種類と、接頭辞と、長さだけを出し、鍵そのものも、その行も出しません。主張はいつもどおり走ります。
+
+直し方
+  鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、ターゲットのプログラムがそこから読むようにしてください。本物の鍵なら、まずプロバイダーで無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。
+
+再現
+  $ geas check w901.geas
+  w901.geas:
+    # echo stands in for the address lookup
+    # the Google Maps API key it reads against the real service: AIzaSyD-ritsu-fake-key-for-tests-000000
+
+    target lookup {
+      run "echo"
+    }
+
+    claim "passes the address on" {
+      when lookup.run("1600 Amphitheatre Parkway")
+      then stdout is "1600 Amphitheatre Parkway"
+    }

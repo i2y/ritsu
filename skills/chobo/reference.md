@@ -265,5 +265,5 @@ No name may be a word of the first three rows. The words of durations are keywor
 
 Every diagnostic has a code, the line it is about, and, when it only shows when the book is
 called, the operations that get there, which the checker ran in the reference interpreter before
-saying so. [codes.md](codes.md) has all 29 codes, as `chobo explain --all` prints them, and
+saying so. [codes.md](codes.md) has all 30 codes, as `chobo explain --all` prints them, and
 `chobo explain <code>` prints one.

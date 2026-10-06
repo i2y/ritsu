@@ -263,7 +263,7 @@ $ ritsu yuen explain E303
 
 Every command takes `--lang ja|en` and `--root <dir>`; `ritsu yuen <command> --help` gives each
 one's flags and exit codes. The whole language and every command are in
-[docs/reference.md](docs/reference.md), and the 47 diagnostic codes (two of them retired) in
+[docs/reference.md](docs/reference.md), and the 48 diagnostic codes (two of them retired) in
 [docs/codes.md](docs/codes.md) ([Japanese](docs/codes.ja.md)).
 
 ## Examples

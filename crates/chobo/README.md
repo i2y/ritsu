@@ -74,7 +74,7 @@ warning[W103]: split.book:13:3: move 1 takes from shop_balance(shop) before move
   hint: write the move that puts into shop_balance(shop) first
 ```
 
-[docs/codes.md](docs/codes.md) has all 29 codes, as `chobo explain --all` prints them.
+[docs/codes.md](docs/codes.md) has all 30 codes, as `chobo explain --all` prints them.
 
 ## Two refunds at the same time
 

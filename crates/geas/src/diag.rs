@@ -46,6 +46,8 @@ pub struct Step {
 #[derive(Clone, Debug, Default)]
 pub struct Run {
     pub path: Vec<Step>,
+    /// The line is not quoted: it holds a key (W901).
+    pub unquoted: bool,
 }
 
 impl Extra for Run {
@@ -53,9 +55,15 @@ impl Extra for Run {
         if !self.path.is_empty() {
             out.push_str(tr!("  ここまでの実行:\n", "  the run that gets there:\n").get(lang));
             for s in &self.path {
-                out.push_str(&format!("    {:>4}  {}\n", s.line, s.text.get(lang)));
+                out.push_str(&format!("    {:>4}  {}\n", s.line, ritsu_base::secrets::mask(s.text.get(lang))));
             }
         }
+    }
+
+    /// As written, with any key in it masked: a message or a note can quote the spec (the command
+    /// of a target, the words of a call), and a key there must not reach the logs.
+    fn say(&self, t: &Text, lang: Lang) -> String {
+        ritsu_base::secrets::mask(t.get(lang))
     }
 
     fn json(&self, lang: Lang) -> Vec<(String, Json)> {
@@ -108,7 +116,9 @@ impl Show for Diag {
         let mut d = self.clone();
         d.file = file.to_string();
         d.rel = file.to_string();
-        d.src = d.line.and_then(|l| src.lines().nth(l - 1)).map(|t| cut(&visible(t), EXCERPT));
+        // a key on the line is masked (ritsu-base's `secrets::mask`): a line must not carry a key
+        // into the logs, whatever the diagnostic
+        d.src = if d.extra.unquoted { None } else { d.line.and_then(|l| src.lines().nth(l - 1)).map(|t| cut(&visible(&ritsu_base::secrets::mask(t)), EXCERPT)) };
         d
     }
 
@@ -123,6 +133,50 @@ impl Show for Diag {
 
 pub fn has_errors(diags: &[Diag]) -> bool {
     ritsu_base::diag::has_errors(diags)
+}
+
+/// W901 (ritsu's DESIGN 16.3): a key written in a spec, as the headline and the notes say it.
+/// They give the kind of key, its fixed prefix and its length, never the key; and the line is not
+/// quoted, since it holds the key.
+pub fn key_written(f: &ritsu_base::secrets::Found) -> Diag {
+    let name = &f.kind.name;
+    let private = f.kind.provider.is_empty();
+    let msg = if private {
+        tr!("{}がここに書かれています（{}）", "{} is written here ({})", name.ja, f.shown; name.en, f.shown)
+    } else {
+        tr!("{}がここに書かれています（{}、{} 文字）", "{} is written here ({}, {} characters)", name.ja, f.shown, f.len; name.en, f.shown, f.len)
+    };
+    let provider = f.kind.provider;
+    let revoke = if private {
+        tr!(
+            "本物の鍵なら、まず新しい鍵に替え、この鍵を使うのをやめてください。ファイルから消しても、リポジトリの履歴には残ります",
+            "if this key is real, replace it with a new one first and stop using this one: taking it out of the file leaves it in the history of the repository"
+        )
+    } else {
+        tr!(
+            "本物の鍵なら、まず {provider} で無効にしてください。ファイルから消しても、リポジトリの履歴には残ります",
+            "if this key is real, revoke it with {provider} first: taking it out of the file leaves it in the history of the repository"
+        )
+    };
+    let test = if private {
+        tr!("テスト用の鍵なら、`-----BEGIN` の行のコメントに `ritsu: test secret` と書いてください", "if it is a key for tests, write `ritsu: test secret` in a comment on its `-----BEGIN` line")
+    } else {
+        tr!("テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください", "if it is a value for tests, write `ritsu: test secret` in a comment on the same line")
+    };
+    let mut d = Diag::warning("W901", "", f.line, f.col, msg)
+        .note(tr!(
+            "ファイルに書いた鍵は、リポジトリとその履歴とビルドを読めるすべての人に渡ります。鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください",
+            "a key in a file reaches everyone who can read the repository, its history and its builds; keep it where the code runs (an environment variable, the platform's connection or secret store) and read it from there"
+        ))
+        .note(revoke)
+        .note(test);
+    d.extra.unquoted = true;
+    d
+}
+
+/// W901 for every key of a spec's text, but those whose line says `ritsu: test secret`.
+pub fn keys(src: &str) -> Vec<Diag> {
+    ritsu_base::secrets::scan(src).iter().filter(|f| !f.test).map(key_written).collect()
 }
 
 /// Sorts diagnostics into line order; ones on the same place keep the order found.

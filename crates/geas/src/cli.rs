@@ -510,10 +510,12 @@ fn run_file(file: &str, a: &Args) -> i32 {
             return 2;
         }
     };
+    // `check` says the keys written in the spec (W901), whatever else it holds
+    let keys = if a.cmd == Cmd::Check { diag::keys(&src) } else { Vec::new() };
     let spec = match parse::parse(&src) {
         Ok(s) => s,
         Err(diags) => {
-            let ds: Vec<(String, Diag)> = diags.into_iter().map(|d| (file.to_string(), d)).collect();
+            let ds: Vec<(String, Diag)> = keys.into_iter().chain(diags).map(|d| (file.to_string(), d)).collect();
             fail(a, file, &ds, &src);
             return 2;
         }
@@ -552,8 +554,14 @@ fn run_file(file: &str, a: &Args) -> i32 {
     match a.cmd {
         Cmd::Check => {
             if a.json {
-                println!("{}", report::claims_json(file, &results, lang));
+                // the keys of the spec (W901), `[]` when it has none: the shape a reader reads does not
+                // change with the spec, as `map`'s diagnostics do not
+                let more = format!(",\"diagnostics\":[{}]", keys.iter().map(|d| d.json_in(file, lang)).collect::<Vec<_>>().join(","));
+                println!("{}", report::claims_json_with(file, &results, lang, report::failed(&results) == 0, &more));
             } else {
+                for d in &keys {
+                    print!("{}", d.shown(file, &src, lang));
+                }
                 print!("{}", report::claims(file, &src, &results, lang, false));
                 print!("{}", report::check_summary(&results, &shown(&p.journal), lang));
             }
@@ -814,10 +822,12 @@ pub fn checked(root: &Path, files: &[String], lang: Lang) -> Vec<ritsu_ports::Ch
                 continue;
             }
         };
+        // the keys written in the spec (W901), whatever else it holds
+        let keys: Vec<Part> = diag::keys(&src).iter().map(|d| Part::Finding(finding(file, d, d.shown(file, &src, lang)))).collect();
         let spec = match parse::parse(&src) {
             Ok(s) => s,
             Err(diags) => {
-                let parts = diags.iter().map(|d| Part::Finding(finding(file, d, d.shown(file, &src, lang)))).collect();
+                let parts = keys.into_iter().chain(diags.iter().map(|d| Part::Finding(finding(file, d, d.shown(file, &src, lang))))).collect();
                 out.push(Checked { label: file.clone(), parts, verdict: Verdict::Fails });
                 continue;
             }
@@ -825,17 +835,14 @@ pub fn checked(root: &Path, files: &[String], lang: Lang) -> Vec<ritsu_ports::Ch
         let p = paths(file);
         let geas_dir = ritsu_base::fs::canonicalize(&p.cwd).map(|d| d.join(".geas")).unwrap_or_else(|_| p.geas.clone());
         let (results, journal) = run::run_spec(&spec, &p.cwd, &geas_dir, &p.stem, sched::jobs(None));
-        let mut parts: Vec<Part> = results
-            .iter()
-            .enumerate()
-            .map(|(i, r)| {
-                let text = report::claim(file, &src, i + 1, r, lang, false);
-                match &r.status {
-                    ClaimStatus::Error(d) => Part::Finding(finding(file, d, text)),
-                    _ => Part::Text(text),
-                }
-            })
-            .collect();
+        let mut parts: Vec<Part> = keys;
+        parts.extend(results.iter().enumerate().map(|(i, r)| {
+            let text = report::claim(file, &src, i + 1, r, lang, false);
+            match &r.status {
+                ClaimStatus::Error(d) => Part::Finding(finding(file, d, text)),
+                _ => Part::Text(text),
+            }
+        }));
         parts.push(Part::Text(report::check_summary(&results, &shown(&p.journal), lang)));
         let mut verdict = if report::failed(&results) == 0 { Verdict::Passes } else { Verdict::Fails };
         if let Err((f, d)) = write_journal(&p, &journal) {

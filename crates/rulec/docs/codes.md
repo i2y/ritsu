@@ -118,6 +118,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [W121](#w121) | warning | An alias collides with a word in a target language |
 | [W115](#w115) | warning | No element can land on this verdict |
 | [W114](#w114) | warning | Unconfirmed overlap: an input may match both rows |
+| [W901](#w901) | warning | A key is written in the file |
 
 ## E001
 
@@ -3841,3 +3842,32 @@ policy unique
 ```
 
 Related codes: [E105](#e105), [W105](#w105), [E109](#e109)
+
+## W901
+
+`warning` — **A key is written in the file**
+
+**When.** Somewhere in the rule, in a string or a comment alike, there is a value in the shape of a key: an AWS access key ID, a key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a Slack incoming webhook URL, or a PEM private key, each a shape its provider fixes. Every language of ritsu looks for them the same way. The diagnostic gives the kind of key, its prefix and its length, and never the key nor its line.
+
+**Fix.** Keep the key where the code runs (an environment variable, the platform's connection or secret store) and read it from there. If it is real, revoke it with its provider first: taking it out of the file leaves it in the history of the repository. If it is a value for tests, write `ritsu: test secret` in a comment on the same line.
+
+**Smallest reproduction**:
+
+```rule
+rule seats v1
+# the Google Sheets API key the counts were read with: AIzaSyD-ritsu-fake-key-for-tests-000000
+
+enum kind = workshop | talk
+
+inputs
+  event_kind : kind
+
+outputs
+  needed : number  round down(1)
+
+table pick
+policy unique
+| event_kind | -> needed : number |
+| workshop   | 30                 |
+| talk       | 80                 |
+```

@@ -177,7 +177,7 @@ fn explain() {
     }
     let o = koyomi(&["explain", "--all", "--format", "markdown"]);
     assert!(out(&o).starts_with("# Diagnostic codes"));
-    assert_eq!(out(&o).matches("\n## ").count(), 39);
+    assert_eq!(out(&o).matches("\n## ").count(), 40);
     let o = koyomi(&["explain", "W202", "--format", "markdown"]);
     assert!(out(&o).starts_with("<a id=\"w202\"></a>"), "{}", out(&o));
 }

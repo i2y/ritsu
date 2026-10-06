@@ -1504,6 +1504,26 @@ machine k(k) over m
 
 /// Every code, in ledger order: syntax and names first (E001–E013), then the table checks
 /// (E101–E113), then the warnings. There are no vacant numbers left.
+/// The one fake key the reproductions of W901 hold (ritsu's DESIGN 16.10): a Google API key that
+/// reads as a fake. It is put together from two pieces, so that no file of the source holds a key
+/// in one run; the pages of codes that `explain` writes hold it whole.
+macro_rules! fake_key {
+    () => {
+        concat!("AIzaSyD-ritsu-fake-", "key-for-tests-000000")
+    };
+}
+
+const X_W901: &str = concat!(
+    "rule 席数(seats) v1\n# 数を読んだときの Google Sheets の API キー: ",
+    fake_key!(),
+    "\n\nenum 種類(kind) = 講習(workshop) | 講演(talk)\n\ninputs\n  催しの種類(event_kind) : 種類\n\noutputs\n  席(needed) : number  round down(1)\n\ntable 選ぶ(pick)\npolicy unique\n| 催しの種類 | -> 席 : number |\n| 講習       | 30             |\n| 講演       | 80             |\n"
+);
+const X_W901_EN: &str = concat!(
+    "rule seats v1\n# the Google Sheets API key the counts were read with: ",
+    fake_key!(),
+    "\n\nenum kind = workshop | talk\n\ninputs\n  event_kind : kind\n\noutputs\n  needed : number  round down(1)\n\ntable pick\npolicy unique\n| event_kind | -> needed : number |\n| workshop   | 30                 |\n| talk       | 80                 |\n"
+);
+
 pub fn ledger() -> Vec<Entry> {
     vec![
         err(
@@ -3150,6 +3170,21 @@ pub fn ledger() -> Vec<Entry> {
             &["E105", "W105", "E109"],
         )
         .english(X_W114_EN),
+        warn(
+            "W901",
+            tr!("鍵がファイルに書かれています", "A key is written in the file"),
+            tr!(
+                "規則のどこか（文字列でもコメントでも）に、鍵の形の値があるとき。調べる鍵は、AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、Slack の Incoming Webhook の URL、PEM の秘密鍵で、どれもプロバイダーが接頭辞や形を決めているものです。ritsu のどの言語も同じ決まりで調べます。診断には鍵の種類と、接頭辞と、長さだけを出し、鍵そのものも、その行も出しません。",
+                "Somewhere in the rule, in a string or a comment alike, there is a value in the shape of a key: an AWS access key ID, a key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a Slack incoming webhook URL, or a PEM private key, each a shape its provider fixes. Every language of ritsu looks for them the same way. The diagnostic gives the kind of key, its prefix and its length, and never the key nor its line."
+            ),
+            tr!(
+                "鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください。本物の鍵なら、まずプロバイダーで無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。",
+                "Keep the key where the code runs (an environment variable, the platform's connection or secret store) and read it from there. If it is real, revoke it with its provider first: taking it out of the file leaves it in the history of the repository. If it is a value for tests, write `ritsu: test secret` in a comment on the same line."
+            ),
+            X_W901,
+            &[],
+        )
+        .english(X_W901_EN),
     ]
 }
 

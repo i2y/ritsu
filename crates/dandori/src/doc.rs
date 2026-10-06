@@ -966,6 +966,46 @@ fn list_lines(lines: &[usize], lang: Lang) -> String {
 // ---------------------------------------------------------------------------
 // The Markdown page
 
+/// Prose the flow writes, put into the Markdown (its description, the reason of a `fail`): a `<`
+/// that would open HTML there — a tag, a comment, a declaration, an autolink, that is `<` followed
+/// by a letter, `/`, `!` or `?` — is written `&lt;`, outside the code spans, so that the text reads
+/// as text wherever the page is put, a site that lets raw HTML through included (ritsu's DESIGN
+/// 9.2). The rest is as written, as rulec's page writes a rule's description: `a > b` and `R&D`
+/// read the same, and so does a code span.
+fn md_prose(s: &str) -> String {
+    let cs: Vec<char> = s.chars().collect();
+    let mut o = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < cs.len() {
+        if cs[i] == '`' {
+            // a code span runs to the next run of as many backquotes; without one, the backquotes
+            // are text
+            let n = cs[i..].iter().take_while(|c| **c == '`').count();
+            let mut j = i + n;
+            let mut end = None;
+            while j < cs.len() {
+                let m = cs[j..].iter().take_while(|c| **c == '`').count();
+                if m == n {
+                    end = Some(j + m);
+                    break;
+                }
+                j += m.max(1);
+            }
+            let stop = end.unwrap_or(i + n);
+            o.extend(&cs[i..stop]);
+            i = stop;
+            continue;
+        }
+        if cs[i] == '<' && cs.get(i + 1).is_some_and(|c| c.is_ascii_alphabetic() || matches!(c, '/' | '!' | '?')) {
+            o.push_str("&lt;");
+        } else {
+            o.push(cs[i]);
+        }
+        i += 1;
+    }
+    o
+}
+
 pub fn markdown(i: &Input) -> String {
     let m = i.m;
     let lang = i.lang;
@@ -974,7 +1014,7 @@ pub fn markdown(i: &Input) -> String {
     let mut o = String::new();
     let _ = writeln!(o, "# {} v{}\n", m.name, m.version);
     if !m.description.is_empty() {
-        let _ = writeln!(o, "{}\n", m.description);
+        let _ = writeln!(o, "{}\n", md_prose(&m.description));
     }
     let io = |list: &[(String, Ty)]| list.iter().map(|(n, t)| format!("`{n}: {}`", m.ty_name(t))).collect::<Vec<_>>().join(", ");
     match lang {
@@ -1117,7 +1157,7 @@ pub fn markdown(i: &Input) -> String {
         }
         o.push('\n');
         for r in &ends {
-            let _ = write!(o, "| {} | {} |", r.line, r.end);
+            let _ = write!(o, "| {} | {} |", r.line, md_prose(&r.end));
             for c in &r.cases {
                 let _ = write!(o, " {c} |");
             }

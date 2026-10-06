@@ -1317,3 +1317,29 @@ claim "greets by name" {
 ```
 
 See also: [W102](#w102), [E402](#e402)
+
+<a id="w901"></a>
+
+## W901 — A key is written in the file
+
+**When**: Somewhere in a `.req`, in a string or a comment alike, there is a value in the shape of a key: an AWS access key ID, a key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a Slack incoming webhook URL, or a PEM private key, each a shape its provider fixes. Every language of ritsu looks for them the same way. The diagnostic gives the kind of key, its prefix and its length, and never the key nor its line.
+
+**Fix**: Keep the key where the code runs (an environment variable, the platform's connection or secret store) and read it from there. If it is real, revoke it with its provider first: taking it out of the file leaves it in the history of the repository. If it is a value for tests, write `ritsu: test secret` in a comment on the same line.
+
+**Example**:
+
+```req
+requirements payment v1
+# the Google Calendar API key the payment service reads holidays with: AIzaSyD-ritsu-fake-key-for-tests-000000
+
+role accounting
+
+requirement payment_day
+  text "Closes on the 20th, pays on the 10th of the next month"
+  owner accounting
+  decided 2026-10-03 by accounting "decided for the example"
+  not satisfied "left out in this example"
+    approved 2026-10-03 by accounting sha256:54009bc976fdc31c
+  not verified "left out in this example"
+    approved 2026-10-03 by accounting sha256:54009bc976fdc31c
+```

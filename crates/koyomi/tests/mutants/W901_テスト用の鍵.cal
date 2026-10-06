@@ -1,0 +1,7 @@
+calendar 平日(weekdays) v1
+description "月曜から金曜まで開く"
+offset +09:00
+
+# テストが Google カレンダーを読むときのキー: AIzaSyD-ritsu-fake-key-for-tests-000000   # ritsu: test secret
+# 事務所のキー（テスト用ではない）: AIzaSyD-ritsu-fake-key-for-tests-000000
+closed weekly sat, sun

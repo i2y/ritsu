@@ -1,6 +1,8 @@
 //! `koyomi check` (DESIGN 3): five stages, each run only when the one before it found no
 //! error.
 //!
+//! 0. The keys written in the file, in its strings and its comments alike (W901, ritsu's
+//!    DESIGN 16.3). They stop nothing.
 //! 1. Words and lines (E001–E006).
 //! 2. Names and types, with the calendar a file uses (E007–E015, E304).
 //! 3. The calendar and the sources (E101–E111, W101, W102).
@@ -126,7 +128,9 @@ pub fn check_bytes(path: &str, bytes: &[u8], opts: &Options, loader: &mut Loader
         return Outcome { path: path.into(), diags: vec![d], checked: None, ok: None };
     };
     let parsed = crate::parse::parse(path, src);
-    let mut diags = parsed.diags;
+    // The keys written in the file first (W901): they are said whatever else the file holds.
+    let mut diags = crate::diag::keys(path, src);
+    diags.extend(parsed.diags);
     let Some(f) = parsed.file else {
         return Outcome { path: path.into(), diags, checked: None, ok: None };
     };

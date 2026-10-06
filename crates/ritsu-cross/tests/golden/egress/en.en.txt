@@ -1,0 +1,9 @@
+error[E905]: ordering/checkout.flow:31: The task `notify` sends the secret `card.number`, marked by Payments, to Notices, which has no relationship with Payments
+    31 |   notify(card: card)
+  = The mark is `debug_redact = true` at payments/v1/card.proto:7.
+  = The map shop.ctx relates Notices with no other context (with Payments, it writes `separate ways`: the two have nothing to do with each other).
+  = Send a reference instead, add the relationship to the map, or, if sending it there is intended, write `discloses card "<why>"` under the task.
+error[E905]: ordering/checkout.flow:32: The task `report` sends the secret `card.number`, marked by Payments, to "tools/report.yaml", which no context of the map shop.ctx holds
+    32 |   report(card: card)
+  = The mark is `debug_redact = true` at payments/v1/card.proto:7.
+  = Send a reference instead, give the file to a context of the map (`owns`), or, if sending it there is intended, write `discloses card "<why>"` under the task.

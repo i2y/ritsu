@@ -1,0 +1,9 @@
+warning[W901]: W901_コメントの鍵.book:3:34: A Google API key is written here (AIza…, 39 characters)
+  = A key in a file reaches everyone who can read the repository, its history and its builds. Keep it where the code runs (an environment variable, the platform's connection or secret store) and read it from there.
+  = If this key is real, revoke it with Google first: taking it out of the file leaves it in the history of the repository.
+  = If it is a value for tests, write `ritsu: test secret` in a comment on the same line.
+W901_コメントの鍵.book: ok, 1 warning(s)
+  入金.do  may be refused: key_conflict
+  購入.do  may be refused: 残高不足 (残高(客) at least 0), key_conflict, already_refused
+  key: 入金 once per 支払い; a second call that differs only in 客 or 額 is refused with key_conflict
+  key: 購入 once per 注文; a second call that differs only in 客 or 額 is refused with key_conflict

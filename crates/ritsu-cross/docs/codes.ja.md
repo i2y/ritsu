@@ -970,3 +970,383 @@ flow
 ```
 
 関連: [E206](#e206)
+
+<a id="w901"></a>
+
+## W901 — 鍵が契約の文書に書かれています
+
+**いつ出るか**: プロジェクトの `.proto` か、言語が読む OpenAPI・AsyncAPI・JSON Schema の文書（dandori の `use openapi`・`use smithy`、rulec の `import jsonschema` と `shape … jsonschema`、sakai の地図の公表された言語の `openapi`・`asyncapi` が参照する `.json`・`.yaml`・`.yml`）のどこか（値でもコメントでも）に、鍵の形の値があるとき。調べる鍵は、AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、Slack の Incoming Webhook の URL、PEM の秘密鍵で、どれもプロバイダーが接頭辞や形を決めているものです。契約の文書は、同じものを複数の言語が読むので、言語ごとではなく ritsu がファイルごとに一度だけ調べます。言語のファイルに書いた鍵は、それぞれの言語の W901 です。診断には鍵の種類と、接頭辞と、長さだけを出し、鍵そのものも、その行も出しません。
+
+**直し方**: 鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください。本物の鍵なら、まずプロバイダーで無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください（`.proto` は `//`、YAML は `#` で始まるコメント）。JSON の文書にはコメントが書けないので、例の値（`EXAMPLE` で終わる AWS のアクセスキー ID や、接頭辞のあとが一つの文字の繰り返しの値）に替えてください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`maps.proto`:
+
+```proto
+syntax = "proto3";
+
+package maps.v1;
+
+// サービスを呼ぶときの Google Maps の API キー: AIzaSyD-ritsu-fake-key-for-tests-000000
+message Place {
+  string id = 1;
+}
+```
+
+<a id="e905"></a>
+
+## E905 — 秘密の値を、地図の外か、印を付けたコンテキストと関係の無いコンテキストへ送ります
+
+**いつ出るか**: ワークフローが、契約が秘密と印を付けた値（`.proto` の `debug_redact`、OpenAPI のスキーマの `x-data-classification`・`x-sensitive-data`・`format: password`、`.flow` の `secret`）を、プロジェクトの中のファイル（OpenAPI の文書、`.proto`、Connect で呼ぶ規則、子の `.flow`、帳簿、日付のファイル）へ送り、そのファイルが地図のどのコンテキストにも属さないか、印を付けたコンテキストと地図の上で関係の無いコンテキストに属するとき。`separate ways` は関係に数えません。印を付けたコンテキストは、印を書いたファイルが属するコンテキストです。`.flow` の `secret` の印と、どのコンテキストにも属さないファイルの印は、フローのコンテキストのものとします。どの地図のコンテキストにも属さないフローは見ません。プロジェクトの外の相手（モデルのプロバイダー、Jev、URL、AWS のサービス）へ送ることは、dandori の E906 が言います。
+
+**直し方**: 値の代わりに参照（ID やシークレットの名前）を送り、受け取る側で値を取ってきてください。受け取る側が値を持ってよいなら、地図に関係を足すか、送り先のファイルをコンテキストに入れてください（`owns`）。そこへ送ることを意図しているなら、タスクの下に `discloses <引数> "<理由>"` と書いてください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`店.ctx`:
+
+```ctx
+map 店(shop) v1
+description "決済がカードの代金を受け取り、受注が注文を受け、通知が客に知らせる"
+
+use context "contexts/決済.ctx"
+use context "contexts/受注.ctx"
+use context "contexts/通知.ctx"
+
+covers "決済", "受注", "通知"
+```
+
+`contexts/決済.ctx`:
+
+```ctx
+context 決済(payments) v1
+description "客のカードで代金を受け取る"
+owner "決済の担当"
+
+owns
+  dir "../決済"
+
+published language payments.v1
+  proto "../決済/v1/card.proto"
+
+partnership with 受注
+```
+
+`contexts/受注.ctx`:
+
+```ctx
+context 受注(ordering) v1
+description "注文を受け、客に知らせてもらう"
+owner "受注の担当"
+
+owns
+  dir "../受注"
+
+partnership with 決済
+partnership with 通知
+```
+
+`contexts/通知.ctx`:
+
+```ctx
+context 通知(notices) v1
+description "客に知らせる"
+owner "顧客対応の担当"
+
+owns
+  dir "../通知"
+
+published language notices.v1
+  openapi "../通知/api/notices.json"
+
+partnership with 受注
+```
+
+`決済/v1/card.proto`:
+
+```proto
+syntax = "proto3";
+
+package payments.v1;
+
+message Card {
+  string id = 1;
+  string number = 2 [debug_redact = true];
+}
+```
+
+`通知/api/notices.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "通知",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://notices.example.com"
+    }
+  ],
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "paths": {
+    "/notices": {
+      "post": {
+        "operationId": "tell",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "order",
+                  "card"
+                ],
+                "properties": {
+                  "order": {
+                    "type": "string"
+                  },
+                  "card": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "number": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "知らせた"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
+```
+
+`受注/注文.flow`:
+
+```flow
+workflow 注文 v1
+  history encrypted
+description "カードで払った注文を受け、客に知らせてもらう"
+
+use proto 決済 from "../決済/v1/card.proto"
+use openapi 通知 from "../通知/api/notices.json"
+
+inputs
+  注文 : string
+  カード : 決済.Card
+
+task 知らせる(order: string, card: 決済.Card)
+  http POST 通知 "/notices"
+  key
+
+flow
+  知らせる(order: 注文, card: カード)
+```
+
+関連: [W905](#w905)
+
+<a id="w905"></a>
+
+## W905 — 秘密の値の送り先が地図のどこかを、決められません
+
+**いつ出るか**: ワークフローが秘密の値をプロジェクトの中のファイルへ送るとき、地図が sakai の検査を通らず、フローや送り先のファイルがどのコンテキストに属するかを sakai が答えられないとき。
+
+**直し方**: `sakai check` が通るよう地図を直してください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`店.ctx`:
+
+```ctx
+map 店(shop) v1
+description "決済がカードの代金を受け取り、受注が注文を受け、通知が客に知らせる"
+
+use context "contexts/決済.ctx"
+use context "contexts/受注.ctx"
+use context "contexts/通知.ctx"
+use context "contexts/請求.ctx"
+
+covers "決済", "受注", "通知"
+```
+
+`contexts/決済.ctx`:
+
+```ctx
+context 決済(payments) v1
+description "客のカードで代金を受け取る"
+owner "決済の担当"
+
+owns
+  dir "../決済"
+
+published language payments.v1
+  proto "../決済/v1/card.proto"
+
+partnership with 受注
+```
+
+`contexts/受注.ctx`:
+
+```ctx
+context 受注(ordering) v1
+description "注文を受け、客に知らせてもらう"
+owner "受注の担当"
+
+owns
+  dir "../受注"
+
+partnership with 決済
+partnership with 通知
+```
+
+`contexts/通知.ctx`:
+
+```ctx
+context 通知(notices) v1
+description "客に知らせる"
+owner "顧客対応の担当"
+
+owns
+  dir "../通知"
+
+published language notices.v1
+  openapi "../通知/api/notices.json"
+
+partnership with 受注
+```
+
+`決済/v1/card.proto`:
+
+```proto
+syntax = "proto3";
+
+package payments.v1;
+
+message Card {
+  string id = 1;
+  string number = 2 [debug_redact = true];
+}
+```
+
+`通知/api/notices.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "通知",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://notices.example.com"
+    }
+  ],
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "paths": {
+    "/notices": {
+      "post": {
+        "operationId": "tell",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "order",
+                  "card"
+                ],
+                "properties": {
+                  "order": {
+                    "type": "string"
+                  },
+                  "card": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "number": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "知らせた"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
+```
+
+`受注/注文.flow`:
+
+```flow
+workflow 注文 v1
+  history encrypted
+description "カードで払った注文を受け、客に知らせてもらう"
+
+use proto 決済 from "../決済/v1/card.proto"
+use openapi 通知 from "../通知/api/notices.json"
+
+inputs
+  注文 : string
+  カード : 決済.Card
+
+task 知らせる(order: string, card: 決済.Card)
+  http POST 通知 "/notices"
+  key
+
+flow
+  知らせる(order: 注文, card: カード)
+```
+
+関連: [E905](#e905)

@@ -1,0 +1,5 @@
+calendar 平日(weekdays) v1
+description "月曜から金曜まで開く。祝日は Google カレンダーから、キー AIzaSyD-ritsu-fake-key-for-tests-000000 で読む予定"
+offset +09:00
+
+closed weekly sat, sun

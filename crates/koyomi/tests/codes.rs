@@ -36,5 +36,5 @@ fn the_ledger_has_each_code_once_and_in_order() {
     for c in &codes {
         assert!(seen.insert(*c), "{c} is in the ledger twice");
     }
-    assert_eq!(codes.len(), 39, "DESIGN 4.2 has 39 codes");
+    assert_eq!(codes.len(), 40, "DESIGN 4.2 has 40 codes");
 }

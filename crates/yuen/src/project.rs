@@ -126,7 +126,8 @@ pub fn expand(arg: &str) -> Vec<String> {
 }
 
 /// Read and parse every file the paths stand for. The diagnostics are the first stage's
-/// (E001–E006); the project comes back only when there are none. No other language is joined.
+/// (W901, a key written in a file, then E001–E006); the project comes back only when there is no
+/// error. No other language is joined.
 pub fn load(args: &[String], root_flag: Option<&str>) -> Result<(Option<Project>, Vec<Diag>), Refusal> {
     load_with(args, root_flag, crate::suite::Suite::default())
 }
@@ -174,6 +175,8 @@ pub fn load_with(args: &[String], root_flag: Option<&str>, suite: crate::suite::
             let Ok(src) = String::from_utf8(bytes) else {
                 return Err(Refusal(tr!("`{display}` は UTF-8 ではありません", "`{display}` is not UTF-8")));
             };
+            // the keys written in the file (W901), whatever else it holds
+            diags.extend(diag::keys(&display, &rel, &src));
             let parsed = parse::parse(&display, &rel, &src);
             diags.extend(parsed.diags);
             match parsed.file {

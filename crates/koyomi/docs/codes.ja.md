@@ -903,3 +903,20 @@ inputs
 date x = d
   + n days
 ```
+
+<a id="w901"></a>
+
+## W901 — 鍵がファイルに書かれています
+
+**いつ出るか**: ファイルのどこか（文字列でもコメントでも）に、鍵の形の値があるとき。調べる鍵は、AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、Slack の Incoming Webhook の URL、PEM の秘密鍵で、どれもプロバイダーが接頭辞や形を決めているものです。ritsu のどの言語も同じ決まりで調べます。診断には鍵の種類と、接頭辞と、長さだけを出し、鍵そのものも、その行も出しません。
+
+**直し方**: 鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください。本物の鍵なら、まずプロバイダーで無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。
+
+**再現**:
+
+```cal
+calendar 平日(weekdays) v1
+
+# 事務所の Google カレンダーの API キー: AIzaSyD-ritsu-fake-key-for-tests-000000
+closed weekly sat, sun
+```

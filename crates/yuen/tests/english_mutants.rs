@@ -12,7 +12,7 @@ mod common;
 use ritsu_base::text::Lang;
 
 /// (the mutant of a Japanese name or Japanese files, its English twin).
-const PAIRS: [(&str, &str); 70] = [
+const PAIRS: [(&str, &str); 73] = [
     ("E001_閉じていない文字列", "E001_unclosed_string"),
     ("E002_名前に予約語", "E002_reserved_word_as_a_name"),
     ("E002_知らない行", "E002_unknown_line"),
@@ -83,6 +83,9 @@ const PAIRS: [(&str, &str); 70] = [
     ("W301_中身が無い", "W301_no_content"),
     ("W401_見送りとリンク", "W401_waiver_and_link"),
     ("W402_主張の無いシナリオ", "W402_scenario_without_a_claim"),
+    ("W901_文字列の鍵", "W901_key_in_a_string"),
+    ("W901_コメントの鍵", "W901_key_in_a_comment"),
+    ("W901_テスト用の鍵", "W901_test_secret"),
 ];
 
 fn mutants() -> Vec<String> {
@@ -151,7 +154,7 @@ fn every_japanese_mutant_has_an_english_one() {
             failures.push(format!("{n} is Japanese and has no English twin"));
         }
     }
-    assert_eq!(PAIRS.iter().filter(|(ja, _)| !ja.is_ascii()).count(), 69, "the 69 mutants of Japanese names are all kept");
+    assert_eq!(PAIRS.iter().filter(|(ja, _)| !ja.is_ascii()).count(), 72, "the 72 mutants of Japanese names are all kept");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

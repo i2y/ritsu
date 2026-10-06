@@ -28,7 +28,9 @@ the same thing, and its generated code is called the same way and answers the sa
    findings, 2 bad arguments or a file that cannot be read. New commands and flags may be
    added.
 6. **Diagnostic codes.** A code keeps its meaning. A code that is retired stays in the ledger,
-   marked as retired, and its number is never given to anything else.
+   marked as retired, and its number is never given to anything else. New codes may be added;
+   a new warning leaves a rule that passed passing (W901, a key written in a rule, came this
+   way, and means the same in every language of ritsu).
 7. **Machine-readable formats.** Every `--format json` output, the vectors, the fixtures and
    the replay manifest, the `adapter/1` and `extract/1` protocols, the certificate, the MCP
    tools with their arguments and resources, the GitHub Action's inputs, and the names of the

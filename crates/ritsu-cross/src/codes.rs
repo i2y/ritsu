@@ -6,8 +6,9 @@
 //! ritsu's; how they are written out is ritsu-base's ([`ritsu_base::ledger`]).
 //!
 //! The numbers go in bands: E1xx for the files of a project as ritsu reads them, E2xx for the
-//! checks of the borders between the languages (DESIGN 7.2). The reproductions are small English
-//! projects. A code that is retired keeps its entry, and its number is given to nothing else
+//! checks of the borders between the languages (DESIGN 7.2), E9xx and W9xx for the checks of
+//! security (DESIGN 16). The reproductions are small English projects; the ones of security have
+//! their Japanese versions besides ([`Entry::english`]), which `explain` shows in Japanese. A code that is retired keeps its entry, and its number is given to nothing else
 //! (DESIGN 7.10).
 
 use ritsu_base::ledger::{Entry, Ledger, Repro};
@@ -85,6 +86,69 @@ const STOCK_BOOK_LONG: &str = "book stock v1\ndescription \"Stock per SKU. An or
 
 /// The flow of X5: the goods are held until the payment is due, then shipped.
 const INVOICE_FLOW: &str = "workflow invoice v1\ndescription \"Holds an order's goods until its payment is due, then ships them\"\n\nuse dates terms from \"payment_terms.cal\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:payment-terms\"\nuse book stock from \"stock.book\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:stock\"\n\ninputs\n  order : string\n  sku   : string\n  qty   : int  range >=1 <=100\n\ntask reserve(order: string, sku: string, qty: int) -> stock.reserve\n  book stock.reserve.hold\n  starts stock.reserve\n  errors out_of_stock\n\ntask ship(order: string, sku: string) -> stock.reserve\n  book stock.reserve.post\n  sends post\n  errors expired\n\ncase goods : stock.reserve follows stock.reserve\n\nflow\n  goods <- reserve(order: order, sku: sku, qty: qty)\n    on out_of_stock => fail OutOfStock \"nothing left on the shelf\"\n  let due = terms.payment(received: now)\n  wait until due.at\n  goods <- ship(order: order, sku: sku)\n    on expired => fail Expired \"the hold expired before the payment was due\"\n";
+
+/// The one fake key the reproductions of W901 hold (DESIGN 16.10): a Google API key that reads as
+/// a fake. It is put together from two pieces, so that no file of the source holds a key in one
+/// run; the pages of codes that `explain` writes hold it whole.
+macro_rules! fake_key {
+    () => {
+        concat!("AIzaSyD-ritsu-fake-", "key-for-tests-000000")
+    };
+}
+
+/// The `.proto` of W901: a key left in a comment.
+const MAPS_PROTO: &str = concat!("syntax = \"proto3\";\n\npackage maps.v1;\n\n// the Google Maps API key the service is called with: ", fake_key!(), "\nmessage Place {\n  string id = 1;\n}\n");
+const MAPS_PROTO_JA: &str = concat!("syntax = \"proto3\";\n\npackage maps.v1;\n\n// サービスを呼ぶときの Google Maps の API キー: ", fake_key!(), "\nmessage Place {\n  string id = 1;\n}\n");
+
+/// The project of X14's reproductions (E905, W905): a map of three contexts, Payments, Ordering and
+/// Notices (Ordering is a partner of the other two); Payments publishes the card, whose number is
+/// marked `debug_redact`; Notices publishes the API that tells the customer; and the flow of
+/// Ordering gives the card to that API. The history is encrypted, so that dandori says nothing of
+/// it (its W904).
+const X14_MAP: &str = "map Shop(shop) v1\ndescription \"Payments charges the card, ordering takes orders, and notices write to the customer\"\n\nuse context \"contexts/payments.ctx\"\nuse context \"contexts/ordering.ctx\"\nuse context \"contexts/notices.ctx\"\n\ncovers \"payments\", \"ordering\", \"notices\"\n";
+const X14_PAYMENTS: &str = "context Payments(payments) v1\ndescription \"Charges the customer's card\"\nowner \"Payments team\"\n\nowns\n  dir \"../payments\"\n\npublished language payments.v1\n  proto \"../payments/v1/card.proto\"\n\npartnership with Ordering\n";
+const X14_ORDERING: &str = "context Ordering(ordering) v1\ndescription \"Takes orders, and has the customer told of them\"\nowner \"Ordering team\"\n\nowns\n  dir \"../ordering\"\n\npartnership with Payments\npartnership with Notices\n";
+const X14_NOTICES: &str = "context Notices(notices) v1\ndescription \"Writes to the customer\"\nowner \"Customer care team\"\n\nowns\n  dir \"../notices\"\n\npublished language notices.v1\n  openapi \"../notices/api/notices.json\"\n\npartnership with Ordering\n";
+const X14_CARD: &str = "syntax = \"proto3\";\n\npackage payments.v1;\n\nmessage Card {\n  string id = 1;\n  string number = 2 [debug_redact = true];\n}\n";
+const X14_NOTICES_API: &str = "{\n  \"openapi\": \"3.1.0\",\n  \"info\": {\n    \"title\": \"Notices\",\n    \"version\": \"1.0.0\"\n  },\n  \"servers\": [\n    {\n      \"url\": \"https://notices.example.com\"\n    }\n  ],\n  \"security\": [\n    {\n      \"bearer\": []\n    }\n  ],\n  \"paths\": {\n    \"/notices\": {\n      \"post\": {\n        \"operationId\": \"tell\",\n        \"requestBody\": {\n          \"required\": true,\n          \"content\": {\n            \"application/json\": {\n              \"schema\": {\n                \"type\": \"object\",\n                \"required\": [\n                  \"order\",\n                  \"card\"\n                ],\n                \"properties\": {\n                  \"order\": {\n                    \"type\": \"string\"\n                  },\n                  \"card\": {\n                    \"type\": \"object\",\n                    \"properties\": {\n                      \"id\": {\n                        \"type\": \"string\"\n                      },\n                      \"number\": {\n                        \"type\": \"string\"\n                      }\n                    }\n                  }\n                }\n              }\n            }\n          }\n        },\n        \"responses\": {\n          \"204\": {\n            \"description\": \"told\"\n          }\n        }\n      }\n    }\n  },\n  \"components\": {\n    \"securitySchemes\": {\n      \"bearer\": {\n        \"type\": \"http\",\n        \"scheme\": \"bearer\"\n      }\n    }\n  }\n}\n";
+const X14_CHECKOUT: &str = "workflow checkout v1\n  history encrypted\ndescription \"Takes an order paid by card, and has the customer told\"\n\nuse proto pay from \"../payments/v1/card.proto\"\nuse openapi notices from \"../notices/api/notices.json\"\n\ninputs\n  order : string\n  card  : pay.Card\n\ntask tell(order: string, card: pay.Card)\n  http POST notices \"/notices\"\n  key\n\nflow\n  tell(order: order, card: card)\n";
+/// The same project in Japanese names.
+const X14_MAP_JA: &str = "map 店(shop) v1\ndescription \"決済がカードの代金を受け取り、受注が注文を受け、通知が客に知らせる\"\n\nuse context \"contexts/決済.ctx\"\nuse context \"contexts/受注.ctx\"\nuse context \"contexts/通知.ctx\"\n\ncovers \"決済\", \"受注\", \"通知\"\n";
+const X14_PAYMENTS_JA: &str = "context 決済(payments) v1\ndescription \"客のカードで代金を受け取る\"\nowner \"決済の担当\"\n\nowns\n  dir \"../決済\"\n\npublished language payments.v1\n  proto \"../決済/v1/card.proto\"\n\npartnership with 受注\n";
+const X14_ORDERING_JA: &str = "context 受注(ordering) v1\ndescription \"注文を受け、客に知らせてもらう\"\nowner \"受注の担当\"\n\nowns\n  dir \"../受注\"\n\npartnership with 決済\npartnership with 通知\n";
+const X14_NOTICES_JA: &str = "context 通知(notices) v1\ndescription \"客に知らせる\"\nowner \"顧客対応の担当\"\n\nowns\n  dir \"../通知\"\n\npublished language notices.v1\n  openapi \"../通知/api/notices.json\"\n\npartnership with 受注\n";
+const X14_CARD_JA: &str = "syntax = \"proto3\";\n\npackage payments.v1;\n\nmessage Card {\n  string id = 1;\n  string number = 2 [debug_redact = true];\n}\n";
+const X14_NOTICES_API_JA: &str = "{\n  \"openapi\": \"3.1.0\",\n  \"info\": {\n    \"title\": \"通知\",\n    \"version\": \"1.0.0\"\n  },\n  \"servers\": [\n    {\n      \"url\": \"https://notices.example.com\"\n    }\n  ],\n  \"security\": [\n    {\n      \"bearer\": []\n    }\n  ],\n  \"paths\": {\n    \"/notices\": {\n      \"post\": {\n        \"operationId\": \"tell\",\n        \"requestBody\": {\n          \"required\": true,\n          \"content\": {\n            \"application/json\": {\n              \"schema\": {\n                \"type\": \"object\",\n                \"required\": [\n                  \"order\",\n                  \"card\"\n                ],\n                \"properties\": {\n                  \"order\": {\n                    \"type\": \"string\"\n                  },\n                  \"card\": {\n                    \"type\": \"object\",\n                    \"properties\": {\n                      \"id\": {\n                        \"type\": \"string\"\n                      },\n                      \"number\": {\n                        \"type\": \"string\"\n                      }\n                    }\n                  }\n                }\n              }\n            }\n          }\n        },\n        \"responses\": {\n          \"204\": {\n            \"description\": \"知らせた\"\n          }\n        }\n      }\n    }\n  },\n  \"components\": {\n    \"securitySchemes\": {\n      \"bearer\": {\n        \"type\": \"http\",\n        \"scheme\": \"bearer\"\n      }\n    }\n  }\n}\n";
+const X14_CHECKOUT_JA: &str = "workflow 注文 v1\n  history encrypted\ndescription \"カードで払った注文を受け、客に知らせてもらう\"\n\nuse proto 決済 from \"../決済/v1/card.proto\"\nuse openapi 通知 from \"../通知/api/notices.json\"\n\ninputs\n  注文 : string\n  カード : 決済.Card\n\ntask 知らせる(order: string, card: 決済.Card)\n  http POST 通知 \"/notices\"\n  key\n\nflow\n  知らせる(order: 注文, card: カード)\n";
+/// The map of W905: it uses a context file that is not there, so it does not pass sakai's check.
+const X14_MAP_BROKEN: &str = "map Shop(shop) v1\ndescription \"Payments charges the card, ordering takes orders, and notices write to the customer\"\n\nuse context \"contexts/payments.ctx\"\nuse context \"contexts/ordering.ctx\"\nuse context \"contexts/notices.ctx\"\nuse context \"contexts/billing.ctx\"\n\ncovers \"payments\", \"ordering\", \"notices\"\n";
+const X14_MAP_BROKEN_JA: &str = "map 店(shop) v1\ndescription \"決済がカードの代金を受け取り、受注が注文を受け、通知が客に知らせる\"\n\nuse context \"contexts/決済.ctx\"\nuse context \"contexts/受注.ctx\"\nuse context \"contexts/通知.ctx\"\nuse context \"contexts/請求.ctx\"\n\ncovers \"決済\", \"受注\", \"通知\"\n";
+
+/// The files of X14's project, with the map given.
+fn x14(map: &'static str) -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("shop.ctx", map),
+        ("contexts/payments.ctx", X14_PAYMENTS),
+        ("contexts/ordering.ctx", X14_ORDERING),
+        ("contexts/notices.ctx", X14_NOTICES),
+        ("payments/v1/card.proto", X14_CARD),
+        ("notices/api/notices.json", X14_NOTICES_API),
+        ("ordering/checkout.flow", X14_CHECKOUT),
+    ]
+}
+
+/// The same, in Japanese names.
+fn x14_ja(map: &'static str) -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("店.ctx", map),
+        ("contexts/決済.ctx", X14_PAYMENTS_JA),
+        ("contexts/受注.ctx", X14_ORDERING_JA),
+        ("contexts/通知.ctx", X14_NOTICES_JA),
+        ("決済/v1/card.proto", X14_CARD_JA),
+        ("通知/api/notices.json", X14_NOTICES_API_JA),
+        ("受注/注文.flow", X14_CHECKOUT_JA),
+    ]
+}
 
 pub fn ledger() -> Ledger {
     let entries = vec![
@@ -272,6 +336,49 @@ pub fn ledger() -> Ledger {
             Repro::Dir { files: vec![("weekdays.cal", WEEKDAYS_CAL), ("payment_terms.cal", TERMS_AT_CAL), ("stock.book", STOCK_BOOK_LONG), ("invoice.flow", INVOICE_FLOW)], command: CHECK.to_vec() },
             &["E206"],
         ),
+        // ── Security (DESIGN 16) ──
+        Entry::new(
+            "W901",
+            tr!("鍵が契約の文書に書かれています", "A key is written in a contract"),
+            tr!(
+                "プロジェクトの `.proto` か、言語が読む OpenAPI・AsyncAPI・JSON Schema の文書（dandori の `use openapi`・`use smithy`、rulec の `import jsonschema` と `shape … jsonschema`、sakai の地図の公表された言語の `openapi`・`asyncapi` が参照する `.json`・`.yaml`・`.yml`）のどこか（値でもコメントでも）に、鍵の形の値があるとき。調べる鍵は、AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、Slack の Incoming Webhook の URL、PEM の秘密鍵で、どれもプロバイダーが接頭辞や形を決めているものです。契約の文書は、同じものを複数の言語が読むので、言語ごとではなく ritsu がファイルごとに一度だけ調べます。言語のファイルに書いた鍵は、それぞれの言語の W901 です。診断には鍵の種類と、接頭辞と、長さだけを出し、鍵そのものも、その行も出しません。",
+                "Somewhere in a `.proto` of the project, or in an OpenAPI, AsyncAPI or JSON Schema document a language reads (a `.json`, `.yaml` or `.yml` that dandori's `use openapi` and `use smithy`, rulec's `import jsonschema` and `shape … jsonschema`, or the `openapi` and `asyncapi` of a published language of sakai's map refer to), in a value or a comment alike, there is a value in the shape of a key: an AWS access key ID, a key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a Slack incoming webhook URL, or a PEM private key, each a shape its provider fixes. More than one language can read the same contract, so ritsu looks at each once, rather than each language that reads it; a key in a file of a language is that language's W901. The diagnostic gives the kind of key, its prefix and its length, and never the key nor its line."
+            ),
+            tr!(
+                "鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください。本物の鍵なら、まずプロバイダーで無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください（`.proto` は `//`、YAML は `#` で始まるコメント）。JSON の文書にはコメントが書けないので、例の値（`EXAMPLE` で終わる AWS のアクセスキー ID や、接頭辞のあとが一つの文字の繰り返しの値）に替えてください。",
+                "Keep the key where the code runs (an environment variable, the platform's connection or secret store) and read it from there. If it is real, revoke it with its provider first: taking it out of the file leaves it in the history of the repository. If it is a value for tests, write `ritsu: test secret` in a comment on the same line (`//` in a `.proto`, `#` in YAML). A JSON document has no comments: put an example value in its place (an AWS access key ID that ends in `EXAMPLE`, or one character over and over after the prefix)."
+            ),
+            Repro::Dir { files: vec![("maps.proto", MAPS_PROTO_JA)], command: CHECK.to_vec() },
+            &[],
+        )
+        .english(Repro::Dir { files: vec![("maps.proto", MAPS_PROTO)], command: CHECK.to_vec() }),
+        Entry::new(
+            "E905",
+            tr!("秘密の値を、地図の外か、印を付けたコンテキストと関係の無いコンテキストへ送ります", "A secret value goes outside the map, or to a context unrelated to the one that marked it"),
+            tr!(
+                "ワークフローが、契約が秘密と印を付けた値（`.proto` の `debug_redact`、OpenAPI のスキーマの `x-data-classification`・`x-sensitive-data`・`format: password`、`.flow` の `secret`）を、プロジェクトの中のファイル（OpenAPI の文書、`.proto`、Connect で呼ぶ規則、子の `.flow`、帳簿、日付のファイル）へ送り、そのファイルが地図のどのコンテキストにも属さないか、印を付けたコンテキストと地図の上で関係の無いコンテキストに属するとき。`separate ways` は関係に数えません。印を付けたコンテキストは、印を書いたファイルが属するコンテキストです。`.flow` の `secret` の印と、どのコンテキストにも属さないファイルの印は、フローのコンテキストのものとします。どの地図のコンテキストにも属さないフローは見ません。プロジェクトの外の相手（モデルのプロバイダー、Jev、URL、AWS のサービス）へ送ることは、dandori の E906 が言います。",
+                "A workflow gives a value a contract marks secret (`debug_redact` in a `.proto`; `x-data-classification`, `x-sensitive-data` or `format: password` in an OpenAPI schema; `secret` in the `.flow`) to a file of the project (an OpenAPI document, a `.proto`, a rule called at its Connect service, a child `.flow`, a book, a dates file), and that file belongs to no context of the map, or to a context the map does not relate to the one that marked the value; `separate ways` relates nothing. The context that marked a value is the one the file of the mark belongs to; a mark the `.flow` writes, and one in a file no context holds, are the flow's own context's. A flow that belongs to no context of any map is not looked at. Sending a secret outside the project (a model's provider, Jev, a URL, an AWS service) is dandori's E906."
+            ),
+            tr!(
+                "値の代わりに参照（ID やシークレットの名前）を送り、受け取る側で値を取ってきてください。受け取る側が値を持ってよいなら、地図に関係を足すか、送り先のファイルをコンテキストに入れてください（`owns`）。そこへ送ることを意図しているなら、タスクの下に `discloses <引数> \"<理由>\"` と書いてください。",
+                "Send a reference (an ID, the name of a secret) instead, and have the other side fetch the value. If the other side may hold it, add the relationship to the map, or give the file to a context (`owns`). If sending it there is intended, write `discloses <parameter> \"<why>\"` under the task."
+            ),
+            Repro::Dir { files: x14_ja(X14_MAP_JA), command: CHECK.to_vec() },
+            &["W905"],
+        )
+        .english(Repro::Dir { files: x14(X14_MAP), command: CHECK.to_vec() }),
+        Entry::new(
+            "W905",
+            tr!("秘密の値の送り先が地図のどこかを、決められません", "Where in the map a secret value goes cannot be decided"),
+            tr!(
+                "ワークフローが秘密の値をプロジェクトの中のファイルへ送るとき、地図が sakai の検査を通らず、フローや送り先のファイルがどのコンテキストに属するかを sakai が答えられないとき。",
+                "A workflow gives a secret value to a file of the project, and the map does not pass sakai's check, so sakai cannot say which context the flow or the file belongs to."
+            ),
+            tr!("`sakai check` が通るよう地図を直してください。", "Correct the map so that `sakai check` passes."),
+            Repro::Dir { files: x14_ja(X14_MAP_BROKEN_JA), command: CHECK.to_vec() },
+            &["E905"],
+        )
+        .english(Repro::Dir { files: x14(X14_MAP_BROKEN), command: CHECK.to_vec() }),
     ];
     Ledger {
         tool: "ritsu",

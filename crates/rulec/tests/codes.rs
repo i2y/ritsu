@@ -119,8 +119,8 @@ fn 英語の再現は日本語の再現と同じ診断を同じ行に出す() {
     // The twins are the reproductions that had Japanese names, strings or units: 61 of the 112
     // entries, less the six that stay as they are (below); and E013, whose Japanese
     // reproduction misspells `std/都道府県` and whose English one misspells `std/us/states`
-    // (DESIGN §15.182).
-    assert_eq!(twins, 56, "英語の再現を持つ項目の数が変わった: {twins}");
+    // (DESIGN §15.182); and W901, written with both from the start (ritsu's DESIGN 16.3).
+    assert_eq!(twins, 57, "英語の再現を持つ項目の数が変わった: {twins}");
 }
 
 /// Japanese is left in a reproduction shown in English only where being Japanese is the point of
@@ -160,7 +160,8 @@ fn 台帳は重複せず_関係するコードも台帳にある() {
     }
     // Every code that has a golden snapshot, and every code in the DESIGN ledger, is here;
     // `出しうるコードは全部台帳にある` covers the first. There are no vacant numbers left.
-    assert_eq!(all.len(), 112, "台帳の件数が変わった: {}", all.len());
+    // W901 (ritsu's DESIGN 16.3) made it 113.
+    assert_eq!(all.len(), 113, "台帳の件数が変わった: {}", all.len());
 }
 
 fn run(args: &[&str]) -> (i32, String) {

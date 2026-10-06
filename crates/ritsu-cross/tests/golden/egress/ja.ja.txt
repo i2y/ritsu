@@ -1,0 +1,9 @@
+エラー[E905]: ordering/checkout.flow:31: タスク `notify` が、「決済」が印を付けた秘密の値 `card.number` を、「決済」と関係の無い「通知」に送ります
+    31 |   notify(card: card)
+  = 印は payments/v1/card.proto:7 の `debug_redact = true` です。
+  = 地図 shop.ctx は、「通知」をどのコンテキストとも関係づけていません（「決済」とは `separate ways` で、関係が無いことを書いています）。
+  = 値の代わりに参照を送るか、地図に関係を足すか、そこへ送ることを意図しているなら、タスクの下に `discloses card "<理由>"` と書いてください。
+エラー[E905]: ordering/checkout.flow:32: タスク `report` が、「決済」が印を付けた秘密の値 `card.number` を、地図 shop.ctx のどのコンテキストにも属さない "tools/report.yaml" に送ります
+    32 |   report(card: card)
+  = 印は payments/v1/card.proto:7 の `debug_redact = true` です。
+  = 値の代わりに参照を送るか、そのファイルを地図のコンテキストに入れるか（`owns`）、そこへ送ることを意図しているなら、タスクの下に `discloses card "<理由>"` と書いてください。

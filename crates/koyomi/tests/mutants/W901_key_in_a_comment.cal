@@ -1,0 +1,6 @@
+calendar weekdays v1
+description "Open Monday to Friday"
+offset +00:00
+
+# the Google Calendar API key of the office: AIzaSyD-ritsu-fake-key-for-tests-000000
+closed weekly sat, sun

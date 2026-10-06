@@ -17,13 +17,20 @@
 //! the checks gather the facts from what dandori says a flow calls (`Flows::crossings`) and what
 //! rulec, koyomi and chobo say of it. X1, the units at a border, is the languages' own check
 //! (dandori's E003, rulec's E065), and X3 (b) is rulec's (`range from koyomi`, rulec's §15.174).
+//!
+//! Two are of security (DESIGN 16): a key written in a contract of the project, a `.proto` or a
+//! document a language reads, looked at once whatever reads it ([`secrets`], W901); and where a
+//! flow sends a value a contract marks secret, against sakai's map ([`egress`], X14, E905 and
+//! W905).
 
 pub mod borders;
 pub mod codes;
 mod dates;
+pub mod egress;
 mod holds;
 mod preconditions;
 mod protos;
+pub mod secrets;
 mod transfers;
 
 pub use preconditions::UndecidedCalls;
@@ -70,6 +77,8 @@ pub fn check(project: &Project, joined: &Joined, lang: Lang) -> Crossed {
     findings.extend(transfers::check(project, &flows, joined, lang, &mut borders));
     findings.extend(dates::days_to_dates(project, &flows, joined, lang, &mut borders));
     findings.extend(holds::check(project, &flows, joined, lang, &mut borders));
+    findings.extend(secrets::keys(project, joined, lang));
+    findings.extend(egress::check(project, joined, lang, &mut borders));
     Crossed { findings, borders }
 }
 

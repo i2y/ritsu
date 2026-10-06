@@ -1,0 +1,13 @@
+requirements payment v1
+description "A test material, decided for the example. The day is looked up with the Google Calendar API key AIzaSyD-ritsu-fake-key-for-tests-000000"
+
+role accounting "Decides the rules of payment"
+
+requirement payment_day
+  text "Closes on the 20th, pays on the 10th of the next month"
+  owner accounting
+  decided 2026-10-03 by accounting "decided for the example"
+  not satisfied "left out in this example"
+    approved 2026-10-03 by accounting sha256:54009bc976fdc31c
+  not verified "left out in this example"
+    approved 2026-10-03 by accounting sha256:54009bc976fdc31c

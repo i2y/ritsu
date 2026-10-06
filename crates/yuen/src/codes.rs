@@ -93,6 +93,15 @@ impl English for Entry {
     }
 }
 
+/// The one fake key the reproductions of W901 hold (ritsu's DESIGN 16.10): a Google API key that
+/// reads as a fake. It is put together from two pieces, so that no file of the source holds a key
+/// in one run; the pages of codes that `explain` writes hold it whole.
+macro_rules! fake_key {
+    () => {
+        concat!("AIzaSyD-ritsu-fake-", "key-for-tests-000000")
+    };
+}
+
 pub fn ledger() -> Ledger {
     let entries = vec![
         // ── Words and lines ──
@@ -627,6 +636,33 @@ pub fn ledger() -> Ledger {
         )
         .beside(&[SPEC_JA, GEAS_JA])
         .en("requirements example v1\nrole api\n\nsource greeting = openspec \"openspec/specs/greeting/spec.md\"\n  \"Unknown paths\" sha256:f140ceede48af8ff\n\nrequirement r1\n  text \"x\"\n  owner api\n  from @greeting \"Unknown paths\"\n  not satisfied \"left out in this example\"\n  verified by geas \"greeter.geas\" claim \"greets by name\"\n", &[SPEC_EN, GEAS_EN]),
+        // ── The file's text ──
+        e(
+            "W901",
+            tr!("鍵がファイルに書かれています", "A key is written in the file"),
+            tr!(
+                "`.req` のどこか（文字列でもコメントでも）に、鍵の形の値があるとき。調べる鍵は、AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、Slack の Incoming Webhook の URL、PEM の秘密鍵で、どれもプロバイダーが接頭辞や形を決めているものです。ritsu のどの言語も同じ決まりで調べます。診断には鍵の種類と、接頭辞と、長さだけを出し、鍵そのものも、その行も出しません。",
+                "Somewhere in a `.req`, in a string or a comment alike, there is a value in the shape of a key: an AWS access key ID, a key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a Slack incoming webhook URL, or a PEM private key, each a shape its provider fixes. Every language of ritsu looks for them the same way. The diagnostic gives the kind of key, its prefix and its length, and never the key nor its line."
+            ),
+            tr!(
+                "鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください。本物の鍵なら、まずプロバイダーで無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。",
+                "Keep the key where the code runs (an environment variable, the platform's connection or secret store) and read it from there. If it is real, revoke it with its provider first: taking it out of the file leaves it in the history of the repository. If it is a value for tests, write `ritsu: test secret` in a comment on the same line."
+            ),
+            concat!(
+                "requirements 支払 v1\n# 支払のサービスが祝日を読む Google カレンダーの API キー: ",
+                fake_key!(),
+                "\n\nrole 経理\n\nrequirement 支払日(payment_day)\n  text \"20 日締め翌月 10 日払い\"\n  owner 経理\n  decided 2026-10-03 by 経理 \"例として決めた\"\n  not satisfied \"この例では置かない\"\n    approved 2026-10-03 by 経理 sha256:cdd8998a17be5a4b\n  not verified \"この例では置かない\"\n    approved 2026-10-03 by 経理 sha256:cdd8998a17be5a4b\n"
+            ),
+            &[],
+        )
+        .en(
+            concat!(
+                "requirements payment v1\n# the Google Calendar API key the payment service reads holidays with: ",
+                fake_key!(),
+                "\n\nrole accounting\n\nrequirement payment_day\n  text \"Closes on the 20th, pays on the 10th of the next month\"\n  owner accounting\n  decided 2026-10-03 by accounting \"decided for the example\"\n  not satisfied \"left out in this example\"\n    approved 2026-10-03 by accounting sha256:54009bc976fdc31c\n  not verified \"left out in this example\"\n    approved 2026-10-03 by accounting sha256:54009bc976fdc31c\n"
+            ),
+            &[],
+        ),
     ];
     // every code that is printed has its example; the words are for one that has none yet
     let later = tr!("（再現はまだありません。）", "(No example yet.)");

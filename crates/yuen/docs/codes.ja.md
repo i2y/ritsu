@@ -1328,3 +1328,29 @@ claim "名前であいさつする" {
 ```
 
 関連: [W102](#w102), [E402](#e402)
+
+<a id="w901"></a>
+
+## W901 — 鍵がファイルに書かれています
+
+**いつ出るか**: `.req` のどこか（文字列でもコメントでも）に、鍵の形の値があるとき。調べる鍵は、AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、Slack の Incoming Webhook の URL、PEM の秘密鍵で、どれもプロバイダーが接頭辞や形を決めているものです。ritsu のどの言語も同じ決まりで調べます。診断には鍵の種類と、接頭辞と、長さだけを出し、鍵そのものも、その行も出しません。
+
+**直し方**: 鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください。本物の鍵なら、まずプロバイダーで無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。
+
+**再現**:
+
+```req
+requirements 支払 v1
+# 支払のサービスが祝日を読む Google カレンダーの API キー: AIzaSyD-ritsu-fake-key-for-tests-000000
+
+role 経理
+
+requirement 支払日(payment_day)
+  text "20 日締め翌月 10 日払い"
+  owner 経理
+  decided 2026-10-03 by 経理 "例として決めた"
+  not satisfied "この例では置かない"
+    approved 2026-10-03 by 経理 sha256:cdd8998a17be5a4b
+  not verified "この例では置かない"
+    approved 2026-10-03 by 経理 sha256:cdd8998a17be5a4b
+```

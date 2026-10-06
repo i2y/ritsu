@@ -1037,9 +1037,10 @@ that what each target ran is kept apart.)
   `"screen"`, the screen it saw. A check's `check` is its subject and its
   matcher's words (`status is between`), `expected` the matcher's value as
   the spec writes it (`200 and 299`, a pattern as `"\d+"`), empty for
-  `exists` and `does not exist`; the journal's `check` event is the same. `map` adds `"map":{"record",
-  "files","code","ran"}` and `"diagnostics"` for the warnings. Several specs
-  print one object a line.
+  `exists` and `does not exist`; the journal's `check` event is the same. `check` adds `"diagnostics"`, the
+  keys written in the spec (W901), `[]` when it has none; `map` adds
+  `"map":{"record","files","code","ran"}` and `"diagnostics"` for the
+  warnings. Several specs print one object a line.
 - A spec that does not parse: `{"geas":1,"ok":false,"file":…,
   "diagnostics":[…]}`.
 - `drift`: `{"geas":1,"file":…,"compared":…,"drifted":…,"unclaimed":…,

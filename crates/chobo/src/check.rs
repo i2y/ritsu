@@ -1,7 +1,7 @@
 //! The check: the errors of how the book is written (`model`), the findings that only show
 //! when it is called (E012, W101–W104, each with the operations that get there), what is
-//! never used or never matters (W105, W106), and the report of what each operation can be
-//! refused with (DESIGN 3).
+//! never used or never matters (W105, W106), a key written in the book (W901, ritsu's DESIGN
+//! 16.3), and the report of what each operation can be refused with (DESIGN 3).
 
 use crate::diag::{self, DiagExt, Diag, Show};
 use ritsu_base::text::Lang;
@@ -57,7 +57,10 @@ pub fn check_file(path: &Path) -> Result<(String, Checked), String> {
 
 pub fn check_source(src: &str) -> Checked {
     let (book, mut diags) = model::load(src);
+    // The keys written in the book (W901), whatever else it holds; in the order of the lines.
+    diags.extend(diag::keys(src));
     let Some(book) = book else {
+        model::sort(&mut diags);
         return Checked { book: None, diags, report: None };
     };
     diags.extend(findings(&book));

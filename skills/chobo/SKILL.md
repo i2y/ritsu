@@ -1,6 +1,6 @@
 ---
 name: chobo
-description: Write, check and build chobo books (`.book` files), a small language for the things counted and moved between accounts (stock, money, points, seats), whose only conditions are the lower and upper bounds of accounts, each kept in one write on PostgreSQL or TigerBeetle. Use when stock has to be reserved without selling more than there is, a wallet or points kept from going below 0, refunds kept within the sale, a payment split between parties all or none, or a hold that must be posted or voided; when a chobo diagnostic (E001-E061, W101-W107) has to be fixed; when a book has to be shown to the people who keep the accounts; or when a book has to be built for PostgreSQL or TigerBeetle and its client (TypeScript, Python or Go) called.
+description: Write, check and build chobo books (`.book` files), a small language for the things counted and moved between accounts (stock, money, points, seats), whose only conditions are the lower and upper bounds of accounts, each kept in one write on PostgreSQL or TigerBeetle. Use when stock has to be reserved without selling more than there is, a wallet or points kept from going below 0, refunds kept within the sale, a payment split between parties all or none, or a hold that must be posted or voided; when a chobo diagnostic (E001-E061, W101-W107, W901) has to be fixed; when a book has to be shown to the people who keep the accounts; or when a book has to be built for PostgreSQL or TigerBeetle and its client (TypeScript, Python or Go) called.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run chobo as `ritsu chobo <command>`, or as `chobo <command>` through a link to ritsu named for it. The code it builds needs PostgreSQL, or TigerBeetle with its official client 0.17.9, in the program that calls it.
 license: MIT OR Apache-2.0
 ---
@@ -192,6 +192,7 @@ warning[W103]: split.book:13:3: move 1 takes from shop_balance(shop) before move
 | W103 | a transfer refused because of the order of its moves | the move that puts in first (the one that takes out first, for an upper bound) |
 | W104 | a hold that counts on what another of its moves puts in | have it there beforehand, or a second transfer after the post |
 | W105, W106 | something never used, a bound that never matters | remove it, or write what uses it |
+| W901 | a key written in the file, in a string or a comment (the kind, its prefix and its length; never the key) | take it out and read it from where the code runs; revoke it first if it is real; `# ritsu: test secret` on the line of a value for tests |
 
 [codes.md](codes.md) has every code with the smallest book that shows it, as `ritsu chobo explain
 <code>` prints it.

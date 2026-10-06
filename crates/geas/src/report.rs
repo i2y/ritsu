@@ -3,6 +3,9 @@
 //! diagnostic, and the summary line. Or the same as JSON.
 
 use crate::diag::{self, Diag, Show, count};
+/// What a report shows of the spec and of the program's output, with any key in it masked
+/// (ritsu-base's `secrets::mask`): a key there must not reach the logs.
+use ritsu_base::secrets::mask;
 use ritsu_base::text::Lang;
 use crate::json;
 use crate::run::{ClaimResult, ClaimStatus};
@@ -29,16 +32,16 @@ pub fn claim(file: &str, src: &str, n: usize, r: &ClaimResult, lang: Lang, only_
                 let mut last_screen: Option<&Vec<String>> = None;
                 for c in r.checks.iter().filter(|c| !c.ok) {
                     out.push_str(&match lang {
-                        Lang::En => format!("    {file}:{}: {} — got {}\n", c.line, c.text(), c.actual.get(lang)),
+                        Lang::En => format!("    {file}:{}: {} — got {}\n", c.line, mask(&c.text()), mask(c.actual.get(lang))),
                         Lang::Ja => {
                             // a value is set off by a space; words of Japanese are not
-                            let a = c.actual.get(lang);
+                            let a = mask(c.actual.get(lang));
                             let gap = if a.starts_with(|ch: char| ch.is_ascii()) { " " } else { "" };
-                            format!("    {file}:{}: {} のはずが、実際は{gap}{a}\n", c.line, c.text())
+                            format!("    {file}:{}: {} のはずが、実際は{gap}{a}\n", c.line, mask(&c.text()))
                         }
                     });
                     if let Some(text) = src.lines().nth(c.line.saturating_sub(1)) {
-                        out.push_str(&format!("      {:>4} | {}\n", c.line, text));
+                        out.push_str(&format!("      {:>4} | {}\n", c.line, mask(text)));
                     }
                     if let Some(sc) = &c.screen
                         && last_screen == Some(&sc.lines)
@@ -65,7 +68,7 @@ pub fn claim(file: &str, src: &str, n: usize, r: &ClaimResult, lang: Lang, only_
                 if !r.run.is_empty() {
                     out.push_str(tr!("      ここまでの実行:\n", "      the run that gets there:\n").get(lang));
                     for s in &r.run {
-                        out.push_str(&format!("        {:>4}  {}\n", s.line, s.step().text.get(lang)));
+                        out.push_str(&format!("        {:>4}  {}\n", s.line, mask(s.step().text.get(lang))));
                     }
                 }
             }
@@ -144,13 +147,13 @@ pub fn claims_json_with(file: &str, results: &[ClaimResult], lang: Lang, ok: boo
             };
             let error = match &r.status {
                 ClaimStatus::Error(d) => {
-                    let notes: Vec<String> = d.notes.iter().map(|n| json::quote(n.get(lang))).collect();
+                    let notes: Vec<String> = d.notes.iter().map(|n| json::quote(&mask(n.get(lang)))).collect();
                     format!(
                         "{{\"code\":\"{}\",\"line\":{},\"col\":{},\"message\":{},\"notes\":[{}]}}",
                         d.code,
                         d.line.unwrap_or(0),
                         d.col.unwrap_or(0),
-                        json::quote(d.message.get(lang)),
+                        json::quote(&mask(d.message.get(lang))),
                         notes.join(",")
                     )
                 }
@@ -165,8 +168,8 @@ pub fn claims_json_with(file: &str, results: &[ClaimResult], lang: Lang, ok: boo
                         "{{\"line\":{},\"check\":{},\"expected\":{},\"actual\":{},\"ok\":{}{}}}",
                         c.line,
                         json::quote(&c.label),
-                        json::quote(&c.expected),
-                        json::quote(c.actual.get(lang)),
+                        json::quote(&mask(&c.expected)),
+                        json::quote(&mask(c.actual.get(lang))),
                         c.ok,
                         screen
                     )
@@ -182,8 +185,8 @@ pub fn claims_json_with(file: &str, results: &[ClaimResult], lang: Lang, ok: boo
                         format!(
                             "{{\"line\":{},\"call\":{},\"observed\":{}}}",
                             s.line,
-                            json::quote(&s.when),
-                            s.observed.as_deref().map(json::quote).unwrap_or_else(|| "null".into())
+                            json::quote(&mask(&s.when)),
+                            s.observed.as_deref().map(|o| json::quote(&mask(o))).unwrap_or_else(|| "null".into())
                         )
                     })
                     .collect();

@@ -903,3 +903,20 @@ inputs
 date x = d
   + n days
 ```
+
+<a id="w901"></a>
+
+## W901 — A key is written in the file
+
+**When**: Somewhere in the file, in a string or a comment alike, there is a value in the shape of a key: an AWS access key ID, a key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a Slack incoming webhook URL, or a PEM private key, each a shape its provider fixes. Every language of ritsu looks for them the same way. The diagnostic gives the kind of key, its prefix and its length, and never the key nor its line.
+
+**Fix**: Keep the key where the code runs (an environment variable, the platform's connection or secret store) and read it from there. If it is real, revoke it with its provider first: taking it out of the file leaves it in the history of the repository. If it is a value for tests, write `ritsu: test secret` in a comment on the same line.
+
+**Example**:
+
+```cal
+calendar weekdays v1
+
+# the Google Calendar API key of the office: AIzaSyD-ritsu-fake-key-for-tests-000000
+closed weekly sat, sun
+```

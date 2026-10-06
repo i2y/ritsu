@@ -884,4 +884,27 @@ Repro (needs rustc, llvm-tools)
         let sum: i64 = std::env::args().skip(1).map(|a| a.parse::<i64>().unwrap_or(0)).sum();
         println!("{sum}");
     }
+
+warning[W901]: a key written in the file
+
+When it appears
+  In `geas check`, somewhere in the spec, in a string or a comment alike, there is a value in the shape of a key: an AWS access key ID, a key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a Slack incoming webhook URL, or a PEM private key, each a shape its provider fixes. Every language of ritsu looks for them the same way. The diagnostic gives the kind of key, its prefix and its length, and never the key nor its line. The claims run as they always do.
+
+What usually fixes it
+  Keep the key where the code runs (an environment variable, the platform's connection or secret store), and have the target's program read it from there. If it is real, revoke it with its provider first: taking it out of the file leaves it in the history of the repository. If it is a value for tests, write `ritsu: test secret` in a comment on the same line.
+
+Repro
+  $ geas check w901.geas
+  w901.geas:
+    # echo stands in for the address lookup
+    # the Google Maps API key it reads against the real service: AIzaSyD-ritsu-fake-key-for-tests-000000
+
+    target lookup {
+      run "echo"
+    }
+
+    claim "passes the address on" {
+      when lookup.run("1600 Amphitheatre Parkway")
+      then stdout is "1600 Amphitheatre Parkway"
+    }
 ```

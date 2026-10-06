@@ -193,7 +193,7 @@ $ ritsu yuen source fetch examples/stamp_tax/stamp_tax.ja.req
 $ ritsu yuen explain E303 --lang ja
 ```
 
-どのコマンドにも `--lang ja|en` と `--root <dir>` を付けられます。フラグと終了コードは `ritsu yuen <コマンド> --help` で見られます。言語とコマンドの全部は [docs/reference.md](docs/reference.md)（英語）、診断のコードは 47 個（うち二つは退いたもの）で、[docs/codes.ja.md](docs/codes.ja.md) にあります。
+どのコマンドにも `--lang ja|en` と `--root <dir>` を付けられます。フラグと終了コードは `ritsu yuen <コマンド> --help` で見られます。言語とコマンドの全部は [docs/reference.md](docs/reference.md)（英語）、診断のコードは 48 個（うち二つは退いたもの）で、[docs/codes.ja.md](docs/codes.ja.md) にあります。
 
 ## 例
 

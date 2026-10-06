@@ -35,6 +35,7 @@ Every code chobo prints, when it appears, and how to fix it. For one of them: `c
 | [W105](#w105) | warning | Declared and never used |
 | [W106](#w106) | warning | A bound that never matters |
 | [W107](#w107) | warning | An account or transfer kind gone since the revision compared with |
+| [W901](#w901) | warning | A key is written in the file |
 
 ## E001
 
@@ -797,3 +798,29 @@ transfer send(order: string, sku: string, qty: pcs)
 ```
 
 Related codes: [E050](#e050), [E051](#e051)
+
+## W901
+
+`warning` — **A key is written in the file**
+
+**When.** Somewhere in the book, in a string or a comment alike, there is a value in the shape of a key: an AWS access key ID, a key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a Slack incoming webhook URL, or a PEM private key, each a shape its provider fixes. Every language of ritsu looks for them the same way. The diagnostic gives the kind of key, its prefix and its length, and never the key nor its line.
+
+**Fix.** Keep the key where the code runs (an environment variable, the platform's connection or secret store) and read it from there. If it is real, revoke it with its provider first: taking it out of the file leaves it in the history of the repository. If it is a value for tests, write `ritsu: test secret` in a comment on the same line.
+
+**Smallest reproduction**:
+
+```book
+book wallet v1
+# the Google Maps API key the shops look addresses up with: AIzaSyD-ritsu-fake-key-for-tests-000000
+unit jpy
+account balance(customer: string) : jpy
+  at least 0 refused as not_enough
+account cards : jpy outside
+account shops : jpy outside
+transfer top_up(payment: string, customer: string, amount: jpy)
+  key payment
+  move amount from cards to balance(customer)
+transfer buy(order: string, customer: string, amount: jpy)
+  key order
+  move amount from balance(customer) to shops
+```

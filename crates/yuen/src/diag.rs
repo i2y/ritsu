@@ -90,6 +90,48 @@ pub fn warning(code: &'static str, file: &str, rel: &str, line: usize, col: usiz
     Diag::warning(code, file, line, col, message).rel(rel)
 }
 
+/// W901 (ritsu's DESIGN 16.3): a key written in a `.req`, as the headline and the notes say it.
+/// They give the kind of key, its fixed prefix and its length, never the key; and no line is
+/// quoted, since the line holds the key.
+pub fn key_written(file: &str, rel: &str, f: &ritsu_base::secrets::Found) -> Diag {
+    let name = &f.kind.name;
+    let private = f.kind.provider.is_empty();
+    let msg = if private {
+        tr!("{}がここに書かれています（{}）", "{} is written here ({})", name.ja, f.shown; ritsu_base::text::capitalize(&name.en), f.shown)
+    } else {
+        tr!("{}がここに書かれています（{}、{} 文字）", "{} is written here ({}, {} characters)", name.ja, f.shown, f.len; ritsu_base::text::capitalize(&name.en), f.shown, f.len)
+    };
+    let provider = f.kind.provider;
+    let revoke = if private {
+        tr!(
+            "本物の鍵なら、まず新しい鍵に替え、この鍵を使うのをやめてください。ファイルから消しても、リポジトリの履歴には残ります。",
+            "If this key is real, replace it with a new one first and stop using this one: taking it out of the file leaves it in the history of the repository."
+        )
+    } else {
+        tr!(
+            "本物の鍵なら、まず {provider} で無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。",
+            "If this key is real, revoke it with {provider} first: taking it out of the file leaves it in the history of the repository."
+        )
+    };
+    let test = if private {
+        tr!("テスト用の鍵なら、`-----BEGIN` の行のコメントに `ritsu: test secret` と書いてください。", "If it is a key for tests, write `ritsu: test secret` in a comment on its `-----BEGIN` line.")
+    } else {
+        tr!("テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。", "If it is a value for tests, write `ritsu: test secret` in a comment on the same line.")
+    };
+    warning("W901", file, rel, f.line, f.col, msg)
+        .note(tr!(
+            "ファイルに書いた鍵は、リポジトリとその履歴とビルドを読めるすべての人に渡ります。鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください。",
+            "A key in a file reaches everyone who can read the repository, its history and its builds. Keep it where the code runs (an environment variable, the platform's connection or secret store) and read it from there."
+        ))
+        .note(revoke)
+        .note(test)
+}
+
+/// W901 for every key of a `.req`'s text, but those whose line says `ritsu: test secret`.
+pub fn keys(file: &str, rel: &str, src: &str) -> Vec<Diag> {
+    ritsu_base::secrets::scan(src).iter().filter(|f| !f.test).map(|f| key_written(file, rel, f)).collect()
+}
+
 /// What yuen adds to a diagnostic as it is built.
 pub trait DiagExt {
     /// The line to write in the `.req`. The text and the JSON both write it trimmed.

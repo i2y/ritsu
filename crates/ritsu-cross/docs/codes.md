@@ -970,3 +970,383 @@ flow
 ```
 
 See also: [E206](#e206)
+
+<a id="w901"></a>
+
+## W901 — A key is written in a contract
+
+**When**: Somewhere in a `.proto` of the project, or in an OpenAPI, AsyncAPI or JSON Schema document a language reads (a `.json`, `.yaml` or `.yml` that dandori's `use openapi` and `use smithy`, rulec's `import jsonschema` and `shape … jsonschema`, or the `openapi` and `asyncapi` of a published language of sakai's map refer to), in a value or a comment alike, there is a value in the shape of a key: an AWS access key ID, a key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a Slack incoming webhook URL, or a PEM private key, each a shape its provider fixes. More than one language can read the same contract, so ritsu looks at each once, rather than each language that reads it; a key in a file of a language is that language's W901. The diagnostic gives the kind of key, its prefix and its length, and never the key nor its line.
+
+**Fix**: Keep the key where the code runs (an environment variable, the platform's connection or secret store) and read it from there. If it is real, revoke it with its provider first: taking it out of the file leaves it in the history of the repository. If it is a value for tests, write `ritsu: test secret` in a comment on the same line (`//` in a `.proto`, `#` in YAML). A JSON document has no comments: put an example value in its place (an AWS access key ID that ends in `EXAMPLE`, or one character over and over after the prefix).
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`maps.proto`:
+
+```proto
+syntax = "proto3";
+
+package maps.v1;
+
+// the Google Maps API key the service is called with: AIzaSyD-ritsu-fake-key-for-tests-000000
+message Place {
+  string id = 1;
+}
+```
+
+<a id="e905"></a>
+
+## E905 — A secret value goes outside the map, or to a context unrelated to the one that marked it
+
+**When**: A workflow gives a value a contract marks secret (`debug_redact` in a `.proto`; `x-data-classification`, `x-sensitive-data` or `format: password` in an OpenAPI schema; `secret` in the `.flow`) to a file of the project (an OpenAPI document, a `.proto`, a rule called at its Connect service, a child `.flow`, a book, a dates file), and that file belongs to no context of the map, or to a context the map does not relate to the one that marked the value; `separate ways` relates nothing. The context that marked a value is the one the file of the mark belongs to; a mark the `.flow` writes, and one in a file no context holds, are the flow's own context's. A flow that belongs to no context of any map is not looked at. Sending a secret outside the project (a model's provider, Jev, a URL, an AWS service) is dandori's E906.
+
+**Fix**: Send a reference (an ID, the name of a secret) instead, and have the other side fetch the value. If the other side may hold it, add the relationship to the map, or give the file to a context (`owns`). If sending it there is intended, write `discloses <parameter> "<why>"` under the task.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`shop.ctx`:
+
+```ctx
+map Shop(shop) v1
+description "Payments charges the card, ordering takes orders, and notices write to the customer"
+
+use context "contexts/payments.ctx"
+use context "contexts/ordering.ctx"
+use context "contexts/notices.ctx"
+
+covers "payments", "ordering", "notices"
+```
+
+`contexts/payments.ctx`:
+
+```ctx
+context Payments(payments) v1
+description "Charges the customer's card"
+owner "Payments team"
+
+owns
+  dir "../payments"
+
+published language payments.v1
+  proto "../payments/v1/card.proto"
+
+partnership with Ordering
+```
+
+`contexts/ordering.ctx`:
+
+```ctx
+context Ordering(ordering) v1
+description "Takes orders, and has the customer told of them"
+owner "Ordering team"
+
+owns
+  dir "../ordering"
+
+partnership with Payments
+partnership with Notices
+```
+
+`contexts/notices.ctx`:
+
+```ctx
+context Notices(notices) v1
+description "Writes to the customer"
+owner "Customer care team"
+
+owns
+  dir "../notices"
+
+published language notices.v1
+  openapi "../notices/api/notices.json"
+
+partnership with Ordering
+```
+
+`payments/v1/card.proto`:
+
+```proto
+syntax = "proto3";
+
+package payments.v1;
+
+message Card {
+  string id = 1;
+  string number = 2 [debug_redact = true];
+}
+```
+
+`notices/api/notices.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Notices",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://notices.example.com"
+    }
+  ],
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "paths": {
+    "/notices": {
+      "post": {
+        "operationId": "tell",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "order",
+                  "card"
+                ],
+                "properties": {
+                  "order": {
+                    "type": "string"
+                  },
+                  "card": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "number": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "told"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
+```
+
+`ordering/checkout.flow`:
+
+```flow
+workflow checkout v1
+  history encrypted
+description "Takes an order paid by card, and has the customer told"
+
+use proto pay from "../payments/v1/card.proto"
+use openapi notices from "../notices/api/notices.json"
+
+inputs
+  order : string
+  card  : pay.Card
+
+task tell(order: string, card: pay.Card)
+  http POST notices "/notices"
+  key
+
+flow
+  tell(order: order, card: card)
+```
+
+See also: [W905](#w905)
+
+<a id="w905"></a>
+
+## W905 — Where in the map a secret value goes cannot be decided
+
+**When**: A workflow gives a secret value to a file of the project, and the map does not pass sakai's check, so sakai cannot say which context the flow or the file belongs to.
+
+**Fix**: Correct the map so that `sakai check` passes.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`shop.ctx`:
+
+```ctx
+map Shop(shop) v1
+description "Payments charges the card, ordering takes orders, and notices write to the customer"
+
+use context "contexts/payments.ctx"
+use context "contexts/ordering.ctx"
+use context "contexts/notices.ctx"
+use context "contexts/billing.ctx"
+
+covers "payments", "ordering", "notices"
+```
+
+`contexts/payments.ctx`:
+
+```ctx
+context Payments(payments) v1
+description "Charges the customer's card"
+owner "Payments team"
+
+owns
+  dir "../payments"
+
+published language payments.v1
+  proto "../payments/v1/card.proto"
+
+partnership with Ordering
+```
+
+`contexts/ordering.ctx`:
+
+```ctx
+context Ordering(ordering) v1
+description "Takes orders, and has the customer told of them"
+owner "Ordering team"
+
+owns
+  dir "../ordering"
+
+partnership with Payments
+partnership with Notices
+```
+
+`contexts/notices.ctx`:
+
+```ctx
+context Notices(notices) v1
+description "Writes to the customer"
+owner "Customer care team"
+
+owns
+  dir "../notices"
+
+published language notices.v1
+  openapi "../notices/api/notices.json"
+
+partnership with Ordering
+```
+
+`payments/v1/card.proto`:
+
+```proto
+syntax = "proto3";
+
+package payments.v1;
+
+message Card {
+  string id = 1;
+  string number = 2 [debug_redact = true];
+}
+```
+
+`notices/api/notices.json`:
+
+```
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Notices",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://notices.example.com"
+    }
+  ],
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "paths": {
+    "/notices": {
+      "post": {
+        "operationId": "tell",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "order",
+                  "card"
+                ],
+                "properties": {
+                  "order": {
+                    "type": "string"
+                  },
+                  "card": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "number": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "told"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
+```
+
+`ordering/checkout.flow`:
+
+```flow
+workflow checkout v1
+  history encrypted
+description "Takes an order paid by card, and has the customer told"
+
+use proto pay from "../payments/v1/card.proto"
+use openapi notices from "../notices/api/notices.json"
+
+inputs
+  order : string
+  card  : pay.Card
+
+task tell(order: string, card: pay.Card)
+  http POST notices "/notices"
+  key
+
+flow
+  tell(order: order, card: card)
+```
+
+See also: [E905](#e905)

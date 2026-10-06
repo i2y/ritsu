@@ -1,6 +1,6 @@
 ---
 name: geas
-description: Hold code to claims a person has read, with geas. A `.geas` file holds claims about what a program does as anyone could observe it from outside (what a command prints and exits with, what an HTTP service answers, what a screen shows), and geas runs every claim against the real program, whatever language it is written in. Use when writing or changing code that a `.geas` claims file holds; when running the gate on a change (`ritsu geas check`, `drift`, `map` and `affected`); when a claim fails or a geas diagnostic (E001-E090, W060-W061) has to be fixed; when the scenarios of an OpenSpec spec or change have to be held to claims (`ritsu geas scenarios`); or when behavior no claim covers has to be proposed to the person as new claims.
+description: Hold code to claims a person has read, with geas. A `.geas` file holds claims about what a program does as anyone could observe it from outside (what a command prints and exits with, what an HTTP service answers, what a screen shows), and geas runs every claim against the real program, whatever language it is written in. Use when writing or changing code that a `.geas` claims file holds; when running the gate on a change (`ritsu geas check`, `drift`, `map` and `affected`); when a claim fails or a geas diagnostic (E001-E090, W060-W061, W901) has to be fixed; when the scenarios of an OpenSpec spec or change have to be held to claims (`ritsu geas scenarios`); or when behavior no claim covers has to be proposed to the person as new claims.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run geas as `ritsu geas <command>`, or as `geas <command>` through a link to ritsu named for it. The project's own programs need whatever they need to run. `ritsu geas map` records Python 3.12 and later, Node, Go built with `-cover`, and Rust built with `-C instrument-coverage` (with rustup's llvm-tools). A page in a browser needs Chrome or Chromium; a pixie target needs a built pixie app.
 license: MIT OR Apache-2.0
 ---
@@ -195,7 +195,8 @@ A `not ok … (error)` is a claim whose `when` could not run: a program that wou
 a service that never opened its port (E032), a control the screen does not have (E035). It comes
 as a diagnostic with its code, and the notes say what geas saw. A failed `screen` check shows the
 screen it looked at, one node a line. With `--json`, the report is one object a spec:
-`{"geas":1,"ok":…,"file":…,"claims":[{"name","line","status","error","checks","run"}]}`.
+`{"geas":1,"ok":…,"file":…,"claims":[{"name","line","status","error","checks","run"}],"diagnostics":[…]}`,
+`diagnostics` holding the keys written in the spec (W901), `[]` when it has none.
 
 `ritsu geas drift` prints each change under the `when` it comes from: `+` appeared, `-` disappeared, `~`
 changed, then the tag. `[claimed — `geas check` is the authority]` means some check looks at that
@@ -236,6 +237,7 @@ A diagnostic has a code, a place, notes (`= …`) and the run that gets there.
 | E080, E081 | arguments the command does not take; a file that cannot be read or written | `geas --help` |
 | E090 | a file given to `scenarios` that is neither an OpenSpec spec nor a change's delta spec | give `openspec/specs/…` or `openspec/changes/<id>`; `openspec validate` says what is wrong |
 | W060, W061 | a target that gave `map` no record; a Rust profile from a program geas did not start | build it with coverage; start the binary itself |
+| W901 | a key written in the spec, in a string or a comment (`check`; the kind, its prefix and its length, never the key) | have the target's program read it from where it runs; revoke it first if it is real; `# ritsu: test secret` on the line of a value for tests |
 
 `ritsu geas explain <code>` prints when a code appears, what usually fixes it, and the smallest spec that
 gives it; [codes.md](codes.md) has every one. `--lang ja` (or `GEAS_LANG=ja`) gives the messages in

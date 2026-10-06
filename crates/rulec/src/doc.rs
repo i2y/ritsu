@@ -78,6 +78,45 @@ fn md_esc(s: &str) -> String {
     s.replace('|', "\\|")
 }
 
+/// Prose the rule writes, put into the Markdown as a paragraph (its description): a `<` that would
+/// open HTML there — a tag, a comment, a declaration, an autolink, that is `<` followed by a letter,
+/// `/`, `!` or `?` — is written `&lt;`, outside the code spans, so that the text reads as text
+/// wherever the page is put, a site that lets raw HTML through included (ritsu's DESIGN 9.2). The
+/// rest is as written: `<=60cm`, `a > b` and `R&D` read the same, and so does a code span.
+pub(crate) fn md_prose(s: &str) -> String {
+    let cs: Vec<char> = s.chars().collect();
+    let mut o = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < cs.len() {
+        if cs[i] == '`' {
+            // a code span runs to the next run of as many backquotes; without one, the backquotes
+            // are text
+            let n = cs[i..].iter().take_while(|c| **c == '`').count();
+            let mut j = i + n;
+            let mut end = None;
+            while j < cs.len() {
+                let m = cs[j..].iter().take_while(|c| **c == '`').count();
+                if m == n {
+                    end = Some(j + m);
+                    break;
+                }
+                j += m.max(1);
+            }
+            let stop = end.unwrap_or(i + n);
+            o.extend(&cs[i..stop]);
+            i = stop;
+            continue;
+        }
+        if cs[i] == '<' && cs.get(i + 1).is_some_and(|c| c.is_ascii_alphabetic() || matches!(c, '/' | '!' | '?')) {
+            o.push_str("&lt;");
+        } else {
+            o.push(cs[i]);
+        }
+        i += 1;
+    }
+    o
+}
+
 /// `3 値` / `3 values` — English needs the singular for one.
 fn n_values(n: usize) -> String {
     if crate::i18n::ja() {
@@ -251,7 +290,7 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
     ));
     o.push_str(&tr!("# 規則 {} v{}\n", "# Rule {} v{}\n", f.name.text, f.version));
     if let Some(d) = &f.description {
-        o.push_str(&format!("\n{d}\n"));
+        o.push_str(&format!("\n{}\n", md_prose(d)));
     }
 
     // --- Inputs
@@ -1362,7 +1401,7 @@ fn apply_section(f: &RuleFile, c: &Checked, a: &ApplyDecl, lines: &[&str], path:
                 cf.version
             ));
             if let Some(d) = &cf.description {
-                o.push_str(&format!("{}\n\n", md_esc(d)));
+                o.push_str(&format!("{}\n\n", md_prose(&md_esc(d))));
             }
         }
         None => o.push_str(&tr!("元の規則 `{}` は読めませんでした。\n\n", "The callee `{}` could not be read.\n\n", a.path)),
@@ -1787,7 +1826,7 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
     ));
     o.push_str(&format!("# {}\n", md_esc(&f.name.text)));
     if let Some(d) = &f.description {
-        o.push_str(&format!("\n{d}\n"));
+        o.push_str(&format!("\n{}\n", md_prose(d)));
     }
     o.push_str(&tr!("\n版 v{}\n", "\nVersion v{}\n", f.version));
 

@@ -112,6 +112,9 @@ const TWINS: &[(&str, &str)] = &[
     ("使われない", "unused"),
     ("名前の長さ", "name_length"),
     ("仮押さえの順序", "hold_order"),
+    ("W901_文字列の鍵", "W901_key_in_a_string"),
+    ("W901_コメントの鍵", "W901_key_in_a_comment"),
+    ("W901_テスト用の鍵", "W901_test_secret"),
 ];
 
 #[test]

@@ -56,7 +56,7 @@ examples/refunds/refunds.ja.book: ok
   ヒント: 店の売上(店) へ入れる移動を先に書いてください
 ```
 
-診断のコードは全部で 29 種類あり、[docs/codes.ja.md](docs/codes.ja.md) に `chobo explain --all` の出力をそのまま置いてあります。
+診断のコードは全部で 30 種類あり、[docs/codes.ja.md](docs/codes.ja.md) に `chobo explain --all` の出力をそのまま置いてあります。
 
 ## 二つの返金が同時に来る
 

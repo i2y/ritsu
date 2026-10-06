@@ -491,6 +491,21 @@ claim \"adds two integers\" {
 ";
 const NOTES_MD: &str = "# Notes\n\nNothing here is a spec.\n";
 
+/// The one fake key the repro of W901 holds (ritsu's DESIGN 16.10): a Google API key that reads
+/// as a fake. It is put together from two pieces, so that no file of the source holds a key in one
+/// run; what `explain` prints holds it whole.
+macro_rules! fake_key {
+    () => {
+        concat!("AIzaSyD-ritsu-fake-", "key-for-tests-000000")
+    };
+}
+
+const X_W901: &str = concat!(
+    "# echo stands in for the address lookup\n# the Google Maps API key it reads against the real service: ",
+    fake_key!(),
+    "\n\ntarget lookup {\n  run \"echo\"\n}\n\nclaim \"passes the address on\" {\n  when lookup.run(\"1600 Amphitheatre Parkway\")\n  then stdout is \"1600 Amphitheatre Parkway\"\n}\n"
+);
+
 fn spec(args: &'static [&'static str], files: &'static [(&'static str, &'static str)], exit: i32) -> Repro {
     Repro { args, files, exit, needs: &[], env: &[] }
 }
@@ -1093,6 +1108,19 @@ pub fn table() -> Vec<Entry> {
                 needs: &["rustc", "llvm-tools"],
                 env: &[],
             },
+        },
+        Entry {
+            code: "W901",
+            summary: tr!("ファイルに書かれた鍵", "a key written in the file"),
+            when: tr!(
+                "`geas check` で、仕様のどこか（文字列でもコメントでも）に鍵の形の値があったときです。調べる鍵は、AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、Slack の Incoming Webhook の URL、PEM の秘密鍵で、どれもプロバイダーが接頭辞や形を決めているものです。ritsu のどの言語も同じ決まりで調べます。診断には鍵の種類と、接頭辞と、長さだけを出し、鍵そのものも、その行も出しません。主張はいつもどおり走ります。",
+                "In `geas check`, somewhere in the spec, in a string or a comment alike, there is a value in the shape of a key: an AWS access key ID, a key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a Slack incoming webhook URL, or a PEM private key, each a shape its provider fixes. Every language of ritsu looks for them the same way. The diagnostic gives the kind of key, its prefix and its length, and never the key nor its line. The claims run as they always do.",
+            ),
+            fix: tr!(
+                "鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、ターゲットのプログラムがそこから読むようにしてください。本物の鍵なら、まずプロバイダーで無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。",
+                "Keep the key where the code runs (an environment variable, the platform's connection or secret store), and have the target's program read it from there. If it is real, revoke it with its provider first: taking it out of the file leaves it in the history of the repository. If it is a value for tests, write `ritsu: test secret` in a comment on the same line.",
+            ),
+            repro: spec(&["check", "w901.geas"], &[("w901.geas", X_W901)], 0),
         },
     ]
 }

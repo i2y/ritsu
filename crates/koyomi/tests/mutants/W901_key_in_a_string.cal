@@ -1,0 +1,5 @@
+calendar weekdays v1
+description "Open Monday to Friday. The holidays are to come from Google Calendar, read with the key AIzaSyD-ritsu-fake-key-for-tests-000000"
+offset +00:00
+
+closed weekly sat, sun

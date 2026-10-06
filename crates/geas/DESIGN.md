@@ -1274,6 +1274,30 @@ cut to one line.
 | E081 | a file that cannot be read or written |
 | W060 | a target that gave no record at all in `map`, unless W061, E065 or E066 says why |
 | W061 | a Rust profile from a program geas did not start itself |
+| W901 | a key written in the spec, in a string or a comment alike (`check`) |
+
+**W901 (2026-10-06).** A value in the shape of a key (an AWS access key ID, a
+key or token of GitHub, Slack, Stripe, OpenAI, Anthropic or Google, a Slack
+incoming webhook URL, a PEM private key) written in the spec, in a string or
+a comment alike. `geas check` looks for them in the whole text of the spec
+before it runs the claims, with ritsu-base's `secrets`, the rules every
+language of ritsu looks with (ritsu's DESIGN 16.3); the claims run as they
+always do, and a spec that does not parse is looked at too. The diagnostic
+gives the kind of key, its prefix and its length, never the key, and quotes
+no line, since the line holds the key. A value for tests is not reported when
+a comment on the same line says `ritsu: test secret`. `--json` always has
+`diagnostics` beside the claims, `[]` when the spec has no key, so that the
+shape a reader reads does not change with the spec (the JSON of `map` carries
+its warnings the same way). `snap`, `drift` and `map` do not look; they read
+the same spec `check` does. The 9xx numbers mean the same check in every
+language of ritsu (ritsu's DESIGN 16.2). Whatever else geas prints of the
+spec or of the program's output — the line a diagnostic quotes, a message or
+a note (the command of a target), a failed check and what it got, the run
+that gets there, in the text and in the JSON — has every key in it masked to
+its prefix and `…` (ritsu-base's `secrets::mask`). The journal and the
+baseline under `.geas/` keep what the run did as it was, the arguments of
+every call and what the program answered: a key a spec writes into a call,
+or one a program prints, stays there in full.
 
 ### 13.1 What ritsu's base layer took over
 

@@ -66,7 +66,7 @@ fn refused(path: &str, src: &str) -> Vec<Said> {
     ja.iter()
         .zip(&en)
         .filter(|(d, _)| d.severity == crate::diag::Severity::Error)
-        .map(|(j, e)| Said { code: j.code.to_string(), file: path.to_string(), line: j.marks.first().map(|m| m.span.line), message: Text::new(j.title.clone(), e.title.clone()) })
+        .map(|(j, e)| Said { code: j.code.to_string(), file: path.to_string(), line: j.line(), message: Text::new(j.title.clone(), e.title.clone()) })
         .collect()
 }
 
@@ -213,7 +213,7 @@ impl Engine {
                                 crate::diag::Severity::Warning => ritsu_base::diag::Severity::Warning,
                             },
                             file: file.clone(),
-                            line: d.marks.first().map(|m| m.span.line),
+                            line: d.line(),
                             text: i18n::with(rl, || crate::findings_text(std::slice::from_ref(d), &lines)),
                             json,
                         })
@@ -424,7 +424,7 @@ impl ritsu_ports::Rules for Engine {
         Ok(match first {
             None => Answer::Holds,
             Some((j, e)) => {
-                let line = |d: &crate::diag::Diag| d.marks.first().map(|m| format!(":{}", m.span.line)).unwrap_or_default();
+                let line = |d: &crate::diag::Diag| d.line().map(|l| format!(":{l}")).unwrap_or_default();
                 Answer::Fails(Text::new(format!("[{}] {path}{}: {}", j.code, line(j), j.title), format!("[{}] {path}{}: {}", e.code, line(e), e.title)))
             }
         })

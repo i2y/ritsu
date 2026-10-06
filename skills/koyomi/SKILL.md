@@ -1,6 +1,6 @@
 ---
 name: koyomi
-description: Write, check and compile koyomi files (`.cal`), the rules of due dates — closing days, payment days, business days and month arithmetic, such as closing on the 20th and paying on the 10th of the next month or on the business day before when that is a holiday — with calendars of closed days read from published tables of holidays, claims checked on every day of a declared range, and code generated for TypeScript, Python, Go, Rust and PostgreSQL. Use when payment terms, a deadline or a calendar of business days has to be written or changed as a `.cal`; when a koyomi diagnostic (E001-E305, W101-W202) has to be fixed; when such a rule has to be shown to the people who read it; or when its generated code has to be called.
+description: Write, check and compile koyomi files (`.cal`), the rules of due dates — closing days, payment days, business days and month arithmetic, such as closing on the 20th and paying on the 10th of the next month or on the business day before when that is a holiday — with calendars of closed days read from published tables of holidays, claims checked on every day of a declared range, and code generated for TypeScript, Python, Go, Rust and PostgreSQL. Use when payment terms, a deadline or a calendar of business days has to be written or changed as a `.cal`; when a koyomi diagnostic (E001-E305, W101-W202, W901) has to be fixed; when such a rule has to be shown to the people who read it; or when its generated code has to be called.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run koyomi as `ritsu koyomi <command>`, or as `koyomi <command>` through a link to ritsu named for it. `ritsu koyomi source fetch` and `source outdated` also need `curl`.
 license: MIT OR Apache-2.0
 ---
@@ -188,6 +188,7 @@ error[E201]: tests/mutants/E201_no_way_for_a_missing_day.cal:7:3: `+ 1 month` ca
 | E305 | more combinations than the budget | narrow a range, split the file, or `--budget` |
 | W101, W102 | an `open` day that is open anyway; a pinned article nothing cites | delete the line |
 | W202 | a longer way of writing a shorter line | the line the warning gives |
+| W901 | a key written in the file, in a string or a comment (the kind, its prefix and its length; never the key) | take it out and read it from where the code runs; revoke it first if it is real; `# ritsu: test secret` on the line of a value for tests |
 
 [codes.md](codes.md) has every code, with a reproduction of each.
 

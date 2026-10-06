@@ -1,0 +1,17 @@
+book 財布 v1
+description "客ごとの前払いの残高。店は住所を Google Maps の API キー AIzaSyD-ritsu-fake-key-for-tests-000000 で調べる"
+
+unit 円
+
+account 残高(客: string) : 円
+  at least 0 refused as 残高不足
+account カード : 円 outside
+account 店 : 円 outside
+
+transfer 入金(支払い: string, 客: string, 額: 円)
+  key 支払い
+  move 額 from カード to 残高(客)
+
+transfer 購入(注文: string, 客: string, 額: 円)
+  key 注文
+  move 額 from 残高(客) to 店

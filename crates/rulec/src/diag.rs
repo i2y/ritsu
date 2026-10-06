@@ -236,6 +236,10 @@ pub struct Diag {
     pub marks: Vec<Marked>,
     /// Free lines under the frame: witness, cause, hint (§11 principles 2 and 3).
     pub notes: Vec<String>,
+    /// Where a finding is when it quotes no line of the rule, as (line, column), both from 1, the
+    /// column in bytes as the JSON counts it: a key written in the file (W901), whose line holds
+    /// the key and is not printed.
+    pub place: Option<(usize, usize)>,
 }
 
 impl Diag {
@@ -253,7 +257,13 @@ impl Diag {
             where_: String::new(),
             marks: Vec::new(),
             notes: Vec::new(),
+            place: None,
         }
+    }
+
+    /// The line it is about, from 1: its first mark's, else its place's (W901).
+    pub fn line(&self) -> Option<usize> {
+        self.marks.first().map(|m| m.span.line).or(self.place.map(|(l, _)| l))
     }
 
     pub fn warning(code: &'static str, title: impl Into<String>) -> Self {
@@ -413,10 +423,13 @@ pub fn render(d: &Diag, src_lines: &[String]) -> String {
         let _ = writeln!(out, "{:>w$} |", "", w = gw);
         for m in &d.marks {
             let Some(text) = src_lines.get(m.span.line.saturating_sub(1)) else { continue };
-            let _ = writeln!(out, "{:>w$} | {}", m.span.line, text, w = gw);
-            let pad = width(&text[..m.span.col.min(text.len())]);
-            let carets = "^".repeat(width(&text[m.span.col.min(text.len())
-                ..(m.span.col + m.span.len).min(text.len())])
+            // a key on the line is masked (ritsu-base's `secrets::mask`), and the carets are counted
+            // on the line as it is shown: a frame must not carry a key into the logs
+            let masked = |s: &str| ritsu_base::secrets::mask(s);
+            let _ = writeln!(out, "{:>w$} | {}", m.span.line, masked(text), w = gw);
+            let pad = width(&masked(&text[..m.span.col.min(text.len())]));
+            let carets = "^".repeat(width(&masked(&text[m.span.col.min(text.len())
+                ..(m.span.col + m.span.len).min(text.len())]))
                 .max(1));
             let _ = writeln!(
                 out,
@@ -468,8 +481,8 @@ pub fn terse_footer() -> String {
 /// unit, and the rewritten form that removes it — so that acting on a diagnostic no longer
 /// means taking a sentence apart.
 pub fn render_json(d: &Diag, path: &str) -> String {
-    let line = d.marks.first().map(|m| m.span.line).unwrap_or(1);
-    let col = d.marks.first().map(|m| m.span.col + 1).unwrap_or(1);
+    let line = d.line().unwrap_or(1);
+    let col = d.marks.first().map(|m| m.span.col + 1).or(d.place.map(|(_, c)| c)).unwrap_or(1);
 
     let where_ = crate::json::Obj::new()
         .str("file", path)
@@ -557,4 +570,51 @@ pub fn render_json(d: &Diag, path: &str) -> String {
         .raw("fix", fix)
         .opt_str("key", d.key.as_deref())
         .finish()
+}
+
+/// W901 (ritsu's DESIGN 16.3): a key written in the rule, in a string or a comment alike, as the
+/// title and the notes say it. They give the kind of key, its fixed prefix and its length, never
+/// the key; and the line is not framed, since it holds the key (its place is the JSON's).
+pub fn key_written(f: &ritsu_base::secrets::Found, path: &str, line_text: &str) -> Diag {
+    let ja = crate::i18n::ja();
+    let name = if ja { f.kind.name.ja.clone() } else { ritsu_base::text::capitalize(&f.kind.name.en) };
+    let private = f.kind.provider.is_empty();
+    let shown = &f.shown;
+    let len = f.len;
+    let title = if private { tr!("{name}がここに書かれています（{shown}）", "{name} is written here ({shown})") } else { tr!("{name}がここに書かれています（{shown}、{len} 文字）", "{name} is written here ({shown}, {len} characters)") };
+    let provider = f.kind.provider;
+    let revoke = if private {
+        tr!(
+            "本物の鍵なら、まず新しい鍵に替え、この鍵を使うのをやめてください。ファイルから消しても、リポジトリの履歴には残ります。",
+            "If this key is real, replace it with a new one first and stop using this one: taking it out of the file leaves it in the history of the repository."
+        )
+    } else {
+        tr!(
+            "本物の鍵なら、まず {provider} で無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。",
+            "If this key is real, revoke it with {provider} first: taking it out of the file leaves it in the history of the repository."
+        )
+    };
+    let test = if private {
+        tr!("テスト用の鍵なら、`-----BEGIN` の行のコメントに `ritsu: test secret` と書いてください。", "If it is a key for tests, write `ritsu: test secret` in a comment on its `-----BEGIN` line.")
+    } else {
+        tr!("テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。", "If it is a value for tests, write `ritsu: test secret` in a comment on the same line.")
+    };
+    // the JSON's column counts bytes, as a mark's does
+    let byte = line_text.char_indices().nth(f.col.saturating_sub(1)).map(|(b, _)| b).unwrap_or(0);
+    let mut d = Diag::warning("W901", title)
+        .at(format!("{path}:{}", f.line))
+        .note(tr!(
+            "ファイルに書いた鍵は、リポジトリとその履歴とビルドを読めるすべての人に渡ります。鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください。",
+            "A key in a file reaches everyone who can read the repository, its history and its builds. Keep it where the code runs (an environment variable, the platform's connection or secret store) and read it from there."
+        ))
+        .note(revoke)
+        .note(test);
+    d.place = Some((f.line, byte + 1));
+    d
+}
+
+/// W901 for every key of the rule's text, but those whose line says `ritsu: test secret`.
+pub fn keys(src: &str, path: &str) -> Vec<Diag> {
+    let lines: Vec<&str> = src.lines().collect();
+    ritsu_base::secrets::scan(src).iter().filter(|f| !f.test).map(|f| key_written(f, path, lines.get(f.line - 1).copied().unwrap_or(""))).collect()
 }

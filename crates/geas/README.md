@@ -399,7 +399,7 @@ error[E011]: E011-clock-without-env.geas:2:1: `clock` cannot be kept for `calc` 
 
 Every diagnostic has a code, the place, and what leads to it: a claim that could not run carries the
 run that gets there, as E035 above. `geas explain <code>` says when a code appears, what usually
-fixes it, and the smallest claims file that gives it; there are 35 codes, and `--lang ja` prints
+fixes it, and the smallest claims file that gives it; there are 36 codes, and `--lang ja` prints
 them all in Japanese. `--jobs 4` runs up to four claims at once, each service on a port of its own
 (`port auto`); the report, the journal and the baseline come out in claim order, the same bytes as
 with one, and `serial` keeps a target's claims apart when they share state geas cannot see.

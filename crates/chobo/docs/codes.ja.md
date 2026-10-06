@@ -35,6 +35,7 @@ chobo が出すコードの全部について、いつ出るかと、どう直�
 | [W105](#w105) | 警告 | 使われない宣言 |
 | [W106](#w106) | 警告 | 効かない境界 |
 | [W107](#w107) | 警告 | 前のリビジョンにあった勘定や振替がありません |
+| [W901](#w901) | 警告 | 鍵がファイルに書かれています |
 
 ## E001
 
@@ -797,3 +798,29 @@ transfer send(order: string, sku: string, qty: pcs)
 ```
 
 関係するコード: [E050](#e050), [E051](#e051)
+
+## W901
+
+`警告` — **鍵がファイルに書かれています**
+
+**いつ出るか。** 帳簿のどこか（文字列でもコメントでも）に、鍵の形の値があるときに出ます。調べる鍵は、AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、Slack の Incoming Webhook の URL、PEM の秘密鍵で、どれもプロバイダーが接頭辞や形を決めているものです。ritsu のどの言語も同じ決まりで調べます。診断には鍵の種類と、接頭辞と、長さだけを出し、鍵そのものも、その行も出しません。
+
+**直し方。** 鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください。本物の鍵なら、まずプロバイダーで無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。
+
+**最小の再現**:
+
+```book
+book wallet v1
+# the Google Maps API key the shops look addresses up with: AIzaSyD-ritsu-fake-key-for-tests-000000
+unit jpy
+account balance(customer: string) : jpy
+  at least 0 refused as not_enough
+account cards : jpy outside
+account shops : jpy outside
+transfer top_up(payment: string, customer: string, amount: jpy)
+  key payment
+  move amount from cards to balance(customer)
+transfer buy(order: string, customer: string, amount: jpy)
+  key order
+  move amount from balance(customer) to shops
+```

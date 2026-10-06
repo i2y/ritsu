@@ -1,6 +1,6 @@
 ---
 name: yuen
-description: Write and check yuen files (`.req`), which say where each requirement comes from — an article of a law (e-Gov or the eCFR), a requirement of an OpenSpec spec, a file, or a person's decision — who owns it, what meets it (a rulec rule, a koyomi date, a chobo account or transfer, a dandori workflow, a `.proto`, a file of code) and what checks it (a geas or koyomi claim, a tool's own check), with each link recorded under the hashes of its two ends when a person looked. Use when a requirement and its provenance have to be written or changed as a `.req`; when `yuen check` stops on a yuen diagnostic (E001-E409, W101-W402), above all a mark (E301-E304) that shows what changed; when a diff, or an OpenSpec change not yet archived, has to be traced to the requirements and owners it touches; or when the page of a project has to be made for the people who check what the code is meant to do.
+description: Write and check yuen files (`.req`), which say where each requirement comes from — an article of a law (e-Gov or the eCFR), a requirement of an OpenSpec spec, a file, or a person's decision — who owns it, what meets it (a rulec rule, a koyomi date, a chobo account or transfer, a dandori workflow, a `.proto`, a file of code) and what checks it (a geas or koyomi claim, a tool's own check), with each link recorded under the hashes of its two ends when a person looked. Use when a requirement and its provenance have to be written or changed as a `.req`; when `yuen check` stops on a yuen diagnostic (E001-E409, W101-W402, W901), above all a mark (E301-E304) that shows what changed; when a diff, or an OpenSpec change not yet archived, has to be traced to the requirements and owners it touches; or when the page of a project has to be made for the people who check what the code is meant to do.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run yuen as `ritsu yuen <command>`, or as `yuen <command>` through a link to ritsu named for it. `ritsu yuen source fetch` and `source outdated` also need `curl`.
 license: MIT OR Apache-2.0
 ---
@@ -137,6 +137,10 @@ every code is in [codes.md](codes.md).
 - **E201–E203, E205** (a naming that does not resolve, or a file its language does not pass): fix
   the path or the name (E202 suggests one), or fix the file in its own language first.
 - **E206**: the yuen that ran holds no other language; run the same command as `ritsu yuen`.
+- **W901** (a key written in a `.req`, in a string or a comment): the message gives its kind, prefix
+  and length, never the key. Take it out and tell the owner: if it is real, it has to be revoked with
+  its provider, since it stays in the history. A value for tests carries `# ritsu: test secret` on
+  its line.
 - **E401/E402** (nothing meets or checks a requirement): add a link, or a waiver whose reason the
   owner gives. **E404** (an artifact of a scope traces to nothing): link it from the requirement it
   serves, or narrow the scope with the person.

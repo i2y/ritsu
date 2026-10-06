@@ -289,7 +289,7 @@ tests/golden/     the diagnostic prose snapshot by snapshot: 55 in Japanese, 44 
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs
 ```
 
-87 rules — 34 transcribed from a published source, 53 written to reach the rest of the language — are checked, generated and run on every commit, and all 112 diagnostics are implemented.
+87 rules — 34 transcribed from a published source, 53 written to reach the rest of the language — are checked, generated and run on every commit, and all 113 diagnostics are implemented.
 Those rules come from **public information**: Japan Post's tariff, Yamato's size classes, the coupon
 terms of Rakuten and Yahoo, Article 7 of EU Regulation 261/2004, the National Tax Agency's
 income-tax and stamp-duty tables, the Stamp Tax Act and the Special Taxation Measures Act as

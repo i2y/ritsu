@@ -144,7 +144,8 @@ In text, a screen is one node a line, two spaces a level: `button "Greet" disabl
   "checks":[{"line","check","expected","actual","ok"}],"run":[{"line","call","observed"}]}]}`.
   `status` is `ok`, `fail` or `error`; `error` is null or `{"code","line","col","message","notes"}`;
   `run`, the run that gets there, comes only with a claim that is not ok. A failed `screen` check
-  carries `screen`, the screen it saw. `map` adds `"map":{"record","files","code","ran"}` and
+  carries `screen`, the screen it saw. `check` adds `"diagnostics"`, the keys written in the spec
+  (W901), `[]` when it has none; `map` adds `"map":{"record","files","code","ran"}` and
   `"diagnostics"`. Several specs print one object a line.
 - A spec that does not parse: `{"geas":1,"ok":false,"file","diagnostics":[…]}`, each diagnostic
   `{"code","severity","file","line","col","message","notes","path"}`.

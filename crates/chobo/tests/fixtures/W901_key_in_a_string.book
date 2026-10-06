@@ -1,0 +1,17 @@
+book wallet v1
+description "A prepaid balance per customer. The shops look addresses up with the Google Maps API key AIzaSyD-ritsu-fake-key-for-tests-000000"
+
+unit jpy
+
+account balance(customer: string) : jpy
+  at least 0 refused as not_enough
+account cards : jpy outside
+account shops : jpy outside
+
+transfer top_up(payment: string, customer: string, amount: jpy)
+  key payment
+  move amount from cards to balance(customer)
+
+transfer buy(order: string, customer: string, amount: jpy)
+  key order
+  move amount from balance(customer) to shops

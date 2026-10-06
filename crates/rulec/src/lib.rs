@@ -103,7 +103,16 @@ pub fn report(src: &str, path: &str) -> Report {
     report_with(src, path, region::DEFAULT_BUDGET)
 }
 
+/// [`report`] with a budget. The keys written in the file come first (W901, ritsu's DESIGN
+/// 16.3): they are said whatever else the rule holds, and they stop nothing.
 pub fn report_with(src: &str, path: &str, budget: i64) -> Report {
+    let mut r = stages(src, path, budget);
+    r.diags.splice(0..0, diag::keys(src, path));
+    r
+}
+
+/// The three stages of the check.
+fn stages(src: &str, path: &str, budget: i64) -> Report {
     let parsed = parse::parse(src, path);
     let mut diags = parsed.diags.clone();
     let mut quiet = Vec::new();

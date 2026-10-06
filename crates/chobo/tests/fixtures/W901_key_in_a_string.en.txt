@@ -1,0 +1,9 @@
+warning[W901]: W901_key_in_a_string.book:2:103: A Google API key is written here (AIza…, 39 characters)
+  = A key in a file reaches everyone who can read the repository, its history and its builds. Keep it where the code runs (an environment variable, the platform's connection or secret store) and read it from there.
+  = If this key is real, revoke it with Google first: taking it out of the file leaves it in the history of the repository.
+  = If it is a value for tests, write `ritsu: test secret` in a comment on the same line.
+W901_key_in_a_string.book: ok, 1 warning(s)
+  top_up.do  may be refused: key_conflict
+  buy.do     may be refused: not_enough (balance(customer) at least 0), key_conflict, already_refused
+  key: top_up once per payment; a second call that differs only in customer or amount is refused with key_conflict
+  key: buy once per order; a second call that differs only in customer or amount is refused with key_conflict
