@@ -332,7 +332,7 @@ pub fn trace(c: &Checked, start: &Start) -> Result<Traced, Refusal> {
         Start::Artifact(text) => {
             let n: Name = names::parse_one(text).map_err(|e| {
                 let msg = e.msg;
-                Refusal(tr!("`--artifact {text}` を名指しとして読めません: {}", "`--artifact {text}` is not a naming: {}", msg.ja; msg.en))
+                Refusal(tr!("`--artifact {text}` を参照として読めません: {}", "`--artifact {text}` is not a naming: {}", msg.ja; msg.en))
             })?;
             let label = n.text();
             let mut found: Vec<usize> = Vec::new();
@@ -343,7 +343,7 @@ pub fn trace(c: &Checked, start: &Start) -> Result<Traced, Refusal> {
             }
             let in_scope = m.scopes.iter().any(|s| s.artifacts.contains(&n));
             if found.is_empty() && !in_scope {
-                return Err(Refusal(tr!("{label} を名指すリンクも範囲もありません", "No link or scope names {label}")));
+                return Err(Refusal(tr!("{label} を指すリンクも範囲もありません", "No link or scope names {label}")));
             }
             o.push(0, Text::same(label.clone()));
             // the articles its file pins: said under each requirement's link, with whether the

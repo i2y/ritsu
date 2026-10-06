@@ -14,5 +14,5 @@ requirement 承認まで押さえる(hold_until_approved)
     reviewed 2026-10-04 by 経理 sha256:4a847d6d9b3e4853 -> sha256:b13e498e17a4fd86
   satisfied by chobo "refunds.ja.book" transfer 返金
     reviewed 2026-10-04 by 開発 sha256:b13e498e17a4fd86 -> sha256:84e9ce254075c697
-  not verified "押さえた額が期限で戻ることは chobo のシナリオが確かめる。この材料は、それを名指す主張を持たない"
+  not verified "押さえた額が期限で戻ることは chobo のシナリオが確かめる。この材料は、それを指す主張を持たない"
     approved 2026-10-04 by 経理 sha256:b13e498e17a4fd86

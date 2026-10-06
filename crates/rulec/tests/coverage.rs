@@ -160,7 +160,7 @@ fn 行を勝たせる例を抜くと行カバーが欠ける() {
     let a = coverage::audit(&f, &c, rel, &kept, &[]);
     assert!(!a.ok(), "抜いたのに緑のまま");
     let rows: Vec<&str> = a.missing.iter().filter(|m| m.kind == ROW).map(|m| m.what.as_str()).collect();
-    assert_eq!(rows, vec![tag], "欠けた行を名指ししていない: {rows:?}");
+    assert_eq!(rows, vec![tag], "欠けた行を挙げていない: {rows:?}");
 }
 
 /// Removing the vectors that step on the outside of a boundary leaves both-sides boundary coverage
@@ -180,7 +180,7 @@ fn 境界の片側を抜くと境界の両側カバーが欠ける() {
     let a = coverage::audit(&f, &c, rel, &kept, &[]);
     let b: Vec<&str> = a.missing.iter().filter(|m| m.kind == BOUND).map(|m| m.what.as_str()).collect();
     assert!(!b.is_empty(), "境界の外側を抜いたのに緑のまま:\n{}", coverage::render(&a, &kept, &[]));
-    assert!(b.iter().any(|w| w.contains("境界 60")), "どの境界かを名指ししていない: {b:?}");
+    assert!(b.iter().any(|w| w.contains("境界 60")), "どの境界かを示していない: {b:?}");
 }
 
 /// A shadow pair demands a point "inside the intersection". A point that merely hits row j is not
@@ -409,7 +409,7 @@ fn audit_src(tag: &str, src: &str) -> (coverage::Audit, Vec<Vector>) {
 /// Only row coverage is asserted here, since the rest of the audit answers to a different part
 /// of the machinery.
 #[test]
-fn 全列を名指しする行でも勝たせられる() {
+fn 全列に条件を書いた行でも勝たせられる() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
     let (a, _) = audit_src(
         "win.rule",

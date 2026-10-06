@@ -142,8 +142,8 @@ fn dead_rows(src: &str) -> Vec<usize> {
 /// above really does produce, which is why this used to pass `check` and then sit in `coverage`
 /// as a hole the author could not close.
 #[test]
-fn 上流が出せない組み合わせの行は名指しされる() {
-    assert_eq!(dead_rows(&stacked("黒", "乙")), vec![1], "死んだ行が E102 で名指しされていない");
+fn 上流が出せない組み合わせの行は指摘される() {
+    assert_eq!(dead_rows(&stacked("黒", "乙")), vec![1], "死んだ行を E102 が指摘していない");
 }
 
 /// One value apart: `白` is exactly what `種 = 乙` produces, so the row is alive. **It must not
@@ -159,7 +159,7 @@ fn 上流が出せる組み合わせの行は生きたまま() {
 /// first. `黒` is row 2 of the table above, and row 1 covers it whenever `旗` is false, so
 /// asking for `黒` with `旗 = false` below is asking for something that never arrives.
 #[test]
-fn 先行行に取られる上流の値も名指しされる() {
+fn 先行行に取られる上流の値も指摘される() {
     let src = "\
 rule t(t) v1
 
@@ -186,7 +186,7 @@ policy first
 | 黒 | 甲 | false | true              |
 | -  | -  | -     | false             |
 ";
-    assert_eq!(dead_rows(src), vec![1], "先行行に取られる組み合わせが名指しされていない");
+    assert_eq!(dead_rows(src), vec![1], "先行行に取られる組み合わせが指摘されていない");
 }
 
 /// And the completeness side must agree with it.

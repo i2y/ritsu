@@ -422,7 +422,7 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                     // always: reading the tables above is an under-approximation, so a dead row
                     // it could not prove dead still lands in this bucket.
                     hint: tr!(
-                        "この行が勝つ入力を、ベクタが一つも作れていません。到達できない行は E102 が名指しするので、ここに出る行の多くは、ジェネレーターが届いていない行です。",
+                        "この行が勝つ入力を、ベクタが一つも作れていません。到達できない行は E102 が挙げるので、ここに出る行の多くは、ジェネレーターが届いていない行です。",
                         "No vector produces an input on which this row wins. A row nothing can reach is named by E102 instead, so this is usually the generator not getting there."
                     ),
                 });

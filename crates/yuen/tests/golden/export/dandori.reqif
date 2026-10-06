@@ -512,7 +512,7 @@
             <ATTRIBUTE-VALUE-STRING THE-VALUE="1">
               <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_4d29b822c24952edd439e093b5d3165a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
             </ATTRIBUTE-VALUE-STRING>
-            <ATTRIBUTE-VALUE-STRING THE-VALUE="dandori の例「arrange_delivery.ja.flow」のタスクとレコードを、配送の手順のどこから来たかで名指したテストの材料">
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="dandori の例「arrange_delivery.ja.flow」のタスクとレコードが、配送の手順のどこから来たかを書いたテストの材料">
               <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a839768f26076ff8651b726d23c1ccaa</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
             </ATTRIBUTE-VALUE-STRING>
           </VALUES>

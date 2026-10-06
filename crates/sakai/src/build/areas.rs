@@ -209,7 +209,7 @@ pub fn areas(c: &Checked, language: Language) -> Result<Areas, Vec<Diag>> {
             o.pos.line,
             o.pos.col,
             &cx.src,
-            tr!("{t} はコードのファイルを一つ名指していて、import の検査の設定に書けません", "The entry {t} names one file of code, and the settings of an import linter cannot hold it"),
+            tr!("{t} はコードのファイルを一つだけ指していて、import の検査の設定に書けません", "The entry {t} names one file of code, and the settings of an import linter cannot hold it"),
             tr!(
                 "import の検査の設定はディレクトリの単位なので（Go と Java では、パッケージがディレクトリです）、`dir \"…\"` で書いてください。",
                 "The settings of the import linters are written by directories (in Go and Java a package is one); write it with `dir \"…\"`."

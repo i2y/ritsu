@@ -106,7 +106,7 @@ fn 偽った証明書は落ちる() {
         // A pair that is neither proved apart nor listed as undecided.
         ("対を落とす", cert.replace(r#",{"a":22,"b":23,"axis":2}"#, "")),
         // A pair said to part on an axis where both rows take every coordinate.
-        ("交わる軸を名指す", cert.replace(r#"{"a":1,"b":2,"axis":0}"#, r#"{"a":1,"b":2,"axis":1}"#)),
+        ("交わる軸を挙げる", cert.replace(r#"{"a":1,"b":2,"axis":0}"#, r#"{"a":1,"b":2,"axis":1}"#)),
         // The last row's point dropped, so row 23 is left with none.
         ("行の証人を落とす", {
             let at = cert.find(r#",{"row":23,"at":[0,1,23]"#).expect("行 23 の点が無い");

@@ -653,7 +653,7 @@ pub fn table() -> Vec<Entry> {
                 "geas splits a `run` or `serve` string into words itself, never through a shell: blanks separate words, `'…'` keeps what is in it as it is, `\"…\"` keeps blanks and reads `\\\"` and `\\\\`, and outside quotes a backslash keeps the next character. The string opens a quote that nothing closes, ends in a backslash, or holds no word at all. Or a `run` target, which has no port, says `{{port}}`, which stands for the target's port, in its command or in an `env` value.",
             ),
             fix: tr!(
-                "クォートを閉じるか、残したい文字の前にバックスラッシュを置いてください。主張のファイルでは文字列の中のダブルクォートを `\\\"` と書くので、シングルクォートのほうが書きやすく、`run \"python3 'my calc.py'\"` のように書けます。シェルを使いたいときは、`run \"sh -c 'cd tools && ./gen'\"` のようにシェルを名指ししてください。`{{port}}` を使えるのは、`serve` と `port` のあるサービスのターゲットだけです。",
+                "クォートを閉じるか、残したい文字の前にバックスラッシュを置いてください。主張のファイルでは文字列の中のダブルクォートを `\\\"` と書くので、シングルクォートのほうが書きやすく、`run \"python3 'my calc.py'\"` のように書けます。シェルを使いたいときは、`run \"sh -c 'cd tools && ./gen'\"` のように、シェルをコマンドとして書いてください。`{{port}}` を使えるのは、`serve` と `port` のあるサービスのターゲットだけです。",
                 "Close the quote, or keep the character with a backslash. In a claims file a double quote inside a string is written `\\\"`, so single quotes are the easy form: `run \"python3 'my calc.py'\"`. A shell, when one is wanted, is named: `run \"sh -c 'cd tools && ./gen'\"`. `{{port}}` belongs to a service: a target with `serve` and `port`.",
             ),
             repro: spec(&["check", "e010.geas"], &[("e010.geas", X_E010)], 2),

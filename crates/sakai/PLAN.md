@@ -6,7 +6,7 @@ DESIGN.md が仕様で、この計画はそれを作る順序と、段階ごと�
 - **C**：一式の読み込み（rulec・koyomi・dandori・chobo。ritsu の D.8 で、ritsu の口で作った。C.1〜C.5）、コードの import の検査の設定の出力と、本物のツールでの突き合わせ、CML の出力
 - **D**：`doc`、例の仕上げ、README.md と README.ja.md、エージェント向けのスキル（`skills/sakai`）
 
-どの段階も、ここに書いた順に進め、各段階の最後にある完了の条件のテストが全部通ったら終わりにする。実装して DESIGN.md の決定が成り立たないと分かったら、黙って変えずに、DESIGN.md を理由と捨てた形ごと直し、報告で言う。0 章の約束（名指しの形、api の形、診断のコード、コマンドの表、環境変数、外のツールの版）を変えるときも同じで、変えたら、それを使う段階のテストも直す。
+どの段階も、ここに書いた順に進め、各段階の最後にある完了の条件のテストが全部通ったら終わりにする。実装して DESIGN.md の決定が成り立たないと分かったら、黙って変えずに、DESIGN.md を理由と捨てた形ごと直し、報告で言う。0 章の約束（参照の書き方、api の形、診断のコード、コマンドの表、環境変数、外のツールの版）を変えるときも同じで、変えたら、それを使う段階のテストも直す。
 
 proto の読み込みは、一式の読み込みと一緒に C に置く分け方もあるが、この計画では proto の読み手を B に置いた。B の検査のうち、公表された言語（package、サービス）と対応の網羅（上流の列挙の値）と同じ語（越えてくる要素）は、proto を読まないと決められないからである。C に残したのは、一式の言語の読み込み（ritsu の D.8 から、ritsu の口で読む）と、dandori の扱いである。
 
@@ -16,7 +16,7 @@ proto の読み込みは、一式の読み込みと一緒に C に置く分け�
 
 ### 0.1 守ること
 
-- 作者の決まり（段階ごとの指示書が挙げるメモ：`japanese-style`、`private-hobby`、`no-quoting-prompts`、`write-from-real-runs`、`features-are-first-class`、`do-the-whole-job`、`shell-gotchas`、`name-the-feature`、`user-profile`）を先に読み、従う。日本語（DESIGN.md、`--lang ja` の診断、doc の日本語のページ、README.ja.md、報告）は、英語の概念語を漢字に直訳しない。物に「たち」を付けない。カタカナ英語が普通の語はカタカナで書く。DESIGN.md の語にそろえる：境界づけられたコンテキスト、コンテキストマップ、公表された言語、公開ホストサービス、上流、下流、順応者、腐敗防止層、顧客、供給者、共有カーネル、パートナーシップ、別々の道、用語集、語、成果物、属する、持ち主、範囲、参照、境界を越える、対応、拒否、名指す、まとまり（import を決める単位）。
+- 作者の決まり（段階ごとの指示書が挙げるメモ：`japanese-style`、`private-hobby`、`no-quoting-prompts`、`write-from-real-runs`、`features-are-first-class`、`do-the-whole-job`、`shell-gotchas`、`name-the-feature`、`user-profile`）を先に読み、従う。日本語（DESIGN.md、`--lang ja` の診断、doc の日本語のページ、README.ja.md、報告）は、英語の概念語を漢字に直訳しない。物に「たち」を付けない。カタカナ英語が普通の語はカタカナで書く。DESIGN.md の語にそろえる：境界づけられたコンテキスト、コンテキストマップ、公表された言語、公開ホストサービス、上流、下流、順応者、腐敗防止層、顧客、供給者、共有カーネル、パートナーシップ、別々の道、用語集、語、成果物、属する、持ち主、範囲、参照、境界を越える、対応、拒否、参照の書き方、ツール名、まとまり（import を決める単位）。
 - git のコミットと push をしない。`~/sakai` の外に書かない。rulec、dandori、koyomi、chobo、geas の木は読むだけで、そこでビルドも git もしない。
 - 一式のツールを入れるときは `cargo install --locked --path ~/<名前> --root <作業場所> --target-dir <作業場所>/target` とし、`--target-dir` を必ず付ける。cargo 1.94.1 の `cargo help install` のとおり、`--path` で入れるときは、`--target-dir` が無いとそのクレートの木の `target/` でビルドする（ほかの木に書くことになる）。
 - Rust は edition 2024 で、手元の stable 1.94.1 で通すこと。依存は `serde_json = { version = "1", features = ["preserve_order"] }` だけ。
@@ -51,9 +51,9 @@ proto の読み込みは、一式の読み込みと一緒に C に置く分け�
 
 ### 0.4 段階をまたぐ約束
 
-#### 名指しの形（DESIGN 2 章）
+#### 参照の書き方（DESIGN 2 章）
 
-yuen との決着（DESIGN 2.8）のとおり。`src/naming.rs` の `Name { tool: Tool, path: String, items: Vec<(String, String)> }`。`Tool` は `Rulec`、`Dandori`、`Koyomi`、`Chobo`、`Geas`、`Proto`、`File`、`Yuen`、`Sakai` の九つで、`dir` はツールの語にしない（`.ctx` の構文の語）。種類の語は DESIGN 2.2 の表（二つの言語の和）で、子の種類（`method`、`field`、`value`）は proto と rulec の親のすぐあとに一つだけ書ける。文字にすること（`Name::text`）、文字から読むこと（`naming::read` と `naming::parse`。`.ctx` の `means` と対応の先も、行の文字をこの関数に渡して読む）、JSON にすること（`{"text", "tool", "path", "items"}`、`Name::to_json`）の三つを一か所に置き、api、診断、doc が同じ関数を使う。パスはルート（`.git` を持つ一番近いディレクトリ、`--root`）からの相対で、`.` と `..` と末尾の `/` は字の上で畳み、ルートの外、絶対パス、空のパスは E012。診断の文面では、ファイルの場所（位置、関わるものの行、文の中のファイルのパス）を走らせたディレクトリから書き、名指しはルートからの相対のまま書く（DESIGN 2.4。`paths::Shown` と `paths::shown`）。`tests/fixtures/naming.tsv` は yuen と同じ表（36 行）で、`tests/naming.rs` が全行と、誤りの行が表の理由のとおりにエラーになることを確かめる。表を直すときは yuen の表も同じに直す。
+yuen との決着（DESIGN 2.8）のとおり。`src/naming.rs` の `Name { tool: Tool, path: String, items: Vec<(String, String)> }`。`Tool` は `Rulec`、`Dandori`、`Koyomi`、`Chobo`、`Geas`、`Proto`、`File`、`Yuen`、`Sakai` の九つで、`dir` はツール名にしない（`.ctx` の構文の語）。種類の語は DESIGN 2.2 の表（二つの言語の和）で、子の種類（`method`、`field`、`value`）は proto と rulec の親のすぐあとに一つだけ書ける。文字にすること（`Name::text`）、文字から読むこと（`naming::read` と `naming::parse`。`.ctx` の `means` と対応の先も、行の文字をこの関数に渡して読む）、JSON にすること（`{"text", "tool", "path", "items"}`、`Name::to_json`）の三つを一か所に置き、api、診断、doc が同じ関数を使う。パスはルート（`.git` を持つ一番近いディレクトリ、`--root`）からの相対で、`.` と `..` と末尾の `/` は字の上で畳み、ルートの外、絶対パス、空のパスは E012。診断の文面では、ファイルの場所（位置、関わるものの行、文の中のファイルのパス）を走らせたディレクトリから書き、参照はルートからの相対のまま書く（DESIGN 2.4。`paths::Shown` と `paths::shown`）。`tests/fixtures/naming.tsv` は yuen と同じ表（36 行）で、`tests/naming.rs` が全行と、誤りの行が表の理由のとおりにエラーになることを確かめる。表を直すときは yuen の表も同じに直す。
 
 #### コマンドの表（DESIGN 6 章）
 
@@ -111,7 +111,7 @@ e62b96ac475dbcde8599ea905d088f65d90778f86e259b856a49fa5c4ea256ec  junit-platform
 
 #### api の形（DESIGN 9 章）
 
-キーはこの順に出す：`sakai`、`map`、`covers`、`except`、`contexts`、`relationships`、`artifacts`、`crossings`（ritsu の D.8 から、`crossings[].via` は参照の種類ごとの語。いつも空だった `not_checked` は ritsu の段階 E で消した。DESIGN 9 章）。名前は名指しの形の JSON。`relationships[].kind` は `upstream_downstream`、`shared_kernel`、`partnership`、`separate_ways`。役割の語は `conformist`、`anticorruption_layer`、`customer`、`supplier`、`open_host_service`、`published_language`。B で形を決め、`tests/golden/api/` に固定する。C と D は、キーを足すことはあっても、名前を変えない。
+キーはこの順に出す：`sakai`、`map`、`covers`、`except`、`contexts`、`relationships`、`artifacts`、`crossings`（ritsu の D.8 から、`crossings[].via` は参照の種類ごとの語。いつも空だった `not_checked` は ritsu の段階 E で消した。DESIGN 9 章）。名前は参照の JSON の形。`relationships[].kind` は `upstream_downstream`、`shared_kernel`、`partnership`、`separate_ways`。役割の語は `conformist`、`anticorruption_layer`、`customer`、`supplier`、`open_host_service`、`published_language`。B で形を決め、`tests/golden/api/` に固定する。C と D は、キーを足すことはあっても、名前を変えない。
 
 ## 1. ディレクトリ
 
@@ -125,9 +125,9 @@ src/
   i18n.rs         Lang と tr!（文の組を返す）（B）
   kw.rs           キーワードの表（DESIGN 1.2）（B）
   lex.rs  parse.rs  ast.rs                               （B）
-  naming.rs       名指しの形（0.4）（B）
+  naming.rs       参照の書き方（0.4）（B）
   resolve.rs      名前の解決：コンテキスト、別名、語、package、パス（B）
-  elements.rs     地図が名指す要素（`means`、対応の列挙と先）を、読んだ proto で引く。短い書き方も（B）
+  elements.rs     地図が指す要素（`means`、対応の列挙と先）を、読んだ proto で引く。短い書き方も（B）
   paths.rs        パスの正規化、範囲を歩く、既定で外す名前、知っている proto（B）
   owners.rs       属し方（いちばん深い項）（B）
   proto.rs        proto の読み手（B）
@@ -225,7 +225,7 @@ context のファイル:
 
 役割:   conformist | anticorruption layer | customer
 項:     (dir | rulec | dandori | koyomi | chobo | geas | proto | file) "<パス>"
-        項の並び（`<項> (, <項>)*`）では、ツールの語は次のツールの語までのパスに効く：`dir "a", "b", rulec "c.rule"`
+        項の並び（`<項> (, <項>)*`）では、`dir` かツール名は、次の `dir` かツール名までのパスに効く：`dir "a", "b", rulec "c.rule"`
 要素:   <ツール> "<パス>" (<種類> <名前>)+        長い形（DESIGN 2 章）
         | (message|enum|service) <名前> [(field|value|method) <名前>]   短い形（proto だけ）
 先:     <要素> | enum <名前> | <名前>
@@ -281,9 +281,9 @@ context のファイル:
 
 ### B.8 対応の網羅（`src/mapping.rs`）
 
-- DESIGN 1.7 の検査のうち、proto の列挙が先のものと、名前だけの先のもの：E401（無い値を全部、proto の順に名指す）、E402、E403（下流の proto の列挙に無い値）、E404（腐敗防止層で、下流の成果物が参照している上流の列挙に対応が無い。参照は B.7 のもの）、W402。対応を書けるのは腐敗防止層だけ（E304、E305 は B.6）。
+- DESIGN 1.7 の検査のうち、proto の列挙が先のものと、名前だけの先のもの：E401（無い値を全部、proto の順に挙げる）、E402、E403（下流の proto の列挙に無い値）、E404（腐敗防止層で、下流の成果物が参照している上流の列挙に対応が無い。参照は B.7 のもの）、W402。対応を書けるのは腐敗防止層だけ（E304、E305 は B.6）。
 - rulec の規則が先の対応（値の行が無くてよい形と、E405）は C.2。
-- テスト（`tests/mapping.rs`）：上流の proto に値を一つ足すと E401 がその値を名指す。0 番の「値が無い」を書くと W402。0 番が本当の値の列挙では、0 番も対応に要る。
+- テスト（`tests/mapping.rs`）：上流の proto に値を一つ足すと E401 がその値を挙げる。0 番の「値が無い」を書くと W402。0 番が本当の値の列挙では、0 番も対応に要る。
 
 ### B.9 同じ語（`src/terms.rs`）
 
@@ -306,7 +306,7 @@ context のファイル:
 - DESIGN 6 章：コマンドとフラグを一枚の表に置き、`sakai --help`、`sakai <cmd> --help`（`sakai help <cmd>` も同じ）、`sakai --version` を出す。exit code は 0・1・2。知らないフラグ、閉じた集合の外の値、値の無いフラグ、二度書いたフラグは exit 2。引数なしの `sakai` は使い方を標準エラーに出して exit 2。
 - `check`：DESIGN 3.1 の段の順。通ったときの要約の一行（DESIGN 3.1。数は実物）。`--format json`（DESIGN 5.1）。ディレクトリを渡すと、その下の map のファイルを全部（パスの順に）。
 - `api`：DESIGN 9 章と 0.4 の形。検査を通らない地図には出さない（exit 1）。
-- テスト：`tests/cli.rs`（exit code、全コマンドの `--help`、知らないフラグ、`SAKAI_LANG`）、`tests/api.rs`（B.12 の地図ごとの api の golden、`tests/golden/api/<名前>.json`）、`tests/design.rs`（DESIGN に貼った sakai の出力が、実物と同じ。`$ sakai` の塊を走らせ、診断の塊を golden と、9 章の api の抜粋を api の golden と、2.6 の JSON を名指しの読み手と突き合わせる。`.ctx` の塊が構文を通ることは `tests/syntax.rs` が確かめる）。B で、3.1 の要約、5.3 の三つの診断、9 章の api は、B の地図（`tests/maps/基本/`）の実物に差し替えた。例の地図のものは、例を作る C で足す。
+- テスト：`tests/cli.rs`（exit code、全コマンドの `--help`、知らないフラグ、`SAKAI_LANG`）、`tests/api.rs`（B.12 の地図ごとの api の golden、`tests/golden/api/<名前>.json`）、`tests/design.rs`（DESIGN に貼った sakai の出力が、実物と同じ。`$ sakai` の塊を走らせ、診断の塊を golden と、9 章の api の抜粋を api の golden と、2.6 の JSON を参照の読み手と突き合わせる。`.ctx` の塊が構文を通ることは `tests/syntax.rs` が確かめる）。B で、3.1 の要約、5.3 の三つの診断、9 章の api は、B の地図（`tests/maps/基本/`）の実物に差し替えた。例の地図のものは、例を作る C で足す。
 
 ### B.12 B の地図（fixtures）
 
@@ -335,7 +335,7 @@ context のファイル:
 | `パターン` | `check` が exit 0。api の golden と一致 |
 | 台帳 | 0.4 の B のコードの全部に、変異と英語と日本語の golden があり、`explain` の再現がそのコードを出す |
 | proto | buf と比べた五つの項（package、import、メッセージとフィールド、列挙と値、サービスとメソッド）が一致する |
-| E401 | `基本` の `order.proto` に `ORDER_STATUS_RETURNED = 5;` を足した変異で、E401 が請求の対応の `ORDER_STATUS_RETURNED` だけを名指す |
+| E401 | `基本` の `order.proto` に `ORDER_STATUS_RETURNED = 5;` を足した変異で、E401 が請求の対応の `ORDER_STATUS_RETURNED` だけを挙げる |
 | CLI | 知らないフラグ、二度書いたフラグ、値の無いフラグが exit 2。`--help` が全コマンドにある |
 
 報告には、決めた要約の一行の形と、`基本` の変異の診断をいくつか（英語と日本語）書く。
@@ -616,7 +616,7 @@ Python（`py/`）の import は次のとおり。TypeScript（`ts/`。相対パ�
 
 - 事実（`Rules::facts`）を、地図の規則ごとに一度だけ問う。答えた規則には参照（`References`）も問う。答えなければ E105。
 - 参照：`import proto`（先：proto の列挙。越える要素はその列挙）、`shape`（先：proto のメッセージ。越える要素は、そのメッセージとたどれる型の全部）、`apply`（先：規則。規則そのものを使う参照で、共有カーネルの中でなければ E202）。`import jsonschema`、JSON Schema の `shape`、`source` のコピーは、規則の一部として数えない（DESIGN 3.3）。
-- 公表された言語の rulec の塊：事実の Connect のパスの package と見出しの突き合わせ（E302）、パスのサービスと `open host service`（E301）。語の `means` の先の規則の要素（`input`、`output`、`enum`、`value`）が事実にあること。無ければ E007（★proto の要素と同じ。前のこの計画は E408 と書いていたが、E408 は公表された言語に無い要素のコードで、名指した先に無いことは proto でも E007 なので、そろえた）。
+- 公表された言語の rulec の塊：事実の Connect のパスの package と見出しの突き合わせ（E302）、パスのサービスと `open host service`（E301）。語の `means` の先の規則の要素（`input`、`output`、`enum`、`value`）が事実にあること。無ければ E007（★proto の要素と同じ。前のこの計画は E408 と書いていたが、E408 は公表された言語に無い要素のコードで、指した先に無いことは proto でも E007 なので、そろえた）。
 - 対応の先が rulec の列挙（DESIGN 1.7）：規則の Connect の列挙が、対応の左辺と同じ proto の同じ列挙を取り込んでいれば（取り込んだファイルが同じで、別名が列挙の完全な名前）、値の対応を事実から読む。値の行が書いてあれば突き合わせ、違えば E405。値の行が無ければ、規則の取り込みが対応になる。取り込んでいなければ値の行が要り、右辺が規則の列挙の値であること（E403）。
 - 同じ語：rulec から読んだ越えてくる要素も、B.9 の検査に入れる。規則の取り込みの対応も、E407 の対応の先にする。
 - テスト（`tests/examples.rs`、`tests/api.rs`、`tests/mapping.rs`、`tests/mutants/`）：
@@ -644,7 +644,7 @@ Python（`py/`）の import は次のとおり。TypeScript（`ts/`。相対パ�
 
 ### C.6 import のまとまりと向き（`src/build/areas.rs`）
 
-**作った（C の段階）**：計画のとおり。計画に無く決めたことが四つある（DESIGN 7.1 に書いた）。表の「X」は X の内側、生成したコード、層のまとまり。共有カーネルのまとまりは、両側のどのまとまりからも import されてよいが、自分からは自分の中しか import しない。同じ深さのディレクトリでは、生成したコード、層、共有カーネルが内側より先に来る。コードのファイルを一つだけ名指した `owns` や `layer` の項は E501。テストは例の四つの言語と `tests/maps/入れ子/` の表を確かめる。
+**作った（C の段階）**：計画のとおり。計画に無く決めたことが四つある（DESIGN 7.1 に書いた）。表の「X」は X の内側、生成したコード、層のまとまり。共有カーネルのまとまりは、両側のどのまとまりからも import されてよいが、自分からは自分の中しか import しない。同じ深さのディレクトリでは、生成したコード、層、共有カーネルが内側より先に来る。コードのファイルを一つだけ指す `owns` や `layer` の項は E501。テストは例の四つの言語と `tests/maps/入れ子/` の表を確かめる。
 
 - DESIGN 7.1 の四つの種類のまとまりを、言語ごとに作る。まとまりは、`code` の置き場所の下のディレクトリの集まりで、入れ子はいちばん深いまとまりに属する。コードのファイルを一つも含まないまとまりは作らない。
 - 許す向きの表（DESIGN 7.1）を作る。生成したコードどうしの向きは、proto の import のうち、地図が許すもの（B.7）から作る。
@@ -777,7 +777,7 @@ public class Validate {
 
 ### D.2 例の仕上げ
 
-- 英語の地図 `examples/通販/shop.ctx` と `contexts/ordering.ctx` ほか五つを書く。同じ成果物を、英語の名前（`Ordering(ordering)` など。別名は日本語の地図と同じ）と英語の語で書く。規則やカレンダーの名前は、成果物のもの（日本語）のまま名指す。
+- 英語の地図 `examples/通販/shop.ctx` と `contexts/ordering.ctx` ほか五つを書く。同じ成果物を、英語の名前（`Ordering(ordering)` など。別名は日本語の地図と同じ）と英語の語で書く。規則やカレンダーの名前は、成果物のもの（日本語）のまま書く。
 - 例の README（`examples/通販/README.md` と `README.ja.md`）：コンテキストと関係の表、コピー元、コードが手書きの代わりであること。
 - テスト（`tests/examples.rs`）：二つの地図がどちらも `check` を通り、境界を越える参照が、コンテキストの名前を読み替えれば同じ。CML は、コメントと文字列を除けば一字も違わない（別名が同じなので）。C.0 でコピーしたものが、それぞれのツールの検査を通る（ツールが無ければ SKIP）。
 
@@ -822,15 +822,15 @@ public class Validate {
 - 外のツールの振る舞い（DESIGN 0.4、7 章、8 章）は、2026-10-03 にこの機械で確かめた。版を変えたら確かめ直す。とくに、dependency-cruiser と TypeScript の組み合わせ（黙って通る）、Context Mapper の CLI の `validate` が構文しか見ないこと、ArchUnit の `failOnEmptyShould`、import-linter が名前空間の一部をルートに受け付けること。
 - C.0 の下書きは、A の段階で一式のツールに通した。直し方の表のとおりにコピーして直せば、同じものになる。
 - dandori の api は、作者が決めるまで無いものとして作る（C.4）。
-- 作者が決めるべきだったかもしれないこと（A の報告で挙げたもの）：看板の言い方、二種類のファイルと下流が関係を書く形、`through` と役割を必ず書かせること、dandori に api を足すかどうか、名指し方のうち `dir` と `sakai` の二つのツールの語と、JSON のパスの基点。作者の返事で変わったら、DESIGN と、この計画の該当の項を直してから進める。
+- 作者が決めるべきだったかもしれないこと（A の報告で挙げたもの）：看板の言い方、二種類のファイルと下流が関係を書く形、`through` と役割を必ず書かせること、dandori に api を足すかどうか、参照の書き方のうち、`dir` と `sakai` をツール名にするかどうかと、JSON のパスの基点。作者の返事で変わったら、DESIGN と、この計画の該当の項を直してから進める。
 
 ### 5.2 B から C へ（B の段階で書いた）
 
 B で決めて、DESIGN と、この計画の B の項を直したこと：
 
-- 名指しは yuen との決着どおり（DESIGN 2 章）。JSON と診断のパスはルートからの相対で、`check` と `api` は `--root` を取る。絶対パスとルートの外に出るパスは、新しいコード E012。（C の段階で、診断の文面のファイルの場所は走らせたディレクトリから書くことにした。5.3）
-- 段の止め方（DESIGN 3.1）：段 1 と段 2 のエラーは後の段を止め、段 3 から後はどの段も走らせる。地図が名指す要素（`means`、対応の列挙と先）は、段 3 で proto を読んだあとに引く（E007、E011、範囲の外の proto は E103）。要素を一つでも引けなかった地図では、W401 を出さない（何が越えるかが分からないので）。
-- proto の名前の表は、同じ完全な名前を二つのファイルが持てる（共有カーネルのコピー）。型は、名指したファイルから見えるほうに解決する。
+- 参照の書き方は yuen との決着どおり（DESIGN 2 章）。JSON と診断のパスはルートからの相対で、`check` と `api` は `--root` を取る。絶対パスとルートの外に出るパスは、新しいコード E012。（C の段階で、診断の文面のファイルの場所は走らせたディレクトリから書くことにした。5.3）
+- 段の止め方（DESIGN 3.1）：段 1 と段 2 のエラーは後の段を止め、段 3 から後はどの段も走らせる。地図が指す要素（`means`、対応の列挙と先）は、段 3 で proto を読んだあとに引く（E007、E011、範囲の外の proto は E103）。要素を一つでも引けなかった地図では、W401 を出さない（何が越えるかが分からないので）。
+- proto の名前の表は、同じ完全な名前を二つのファイルが持てる（共有カーネルのコピー）。型は、指したファイルから見えるほうに解決する。
 - `check` にディレクトリを渡すと、地図が読む `.ctx` は地図を通して言い、どの地図にも読まれない context のファイルに W103、map でも context でもない `.ctx` に読んだときの診断（E003 など）を出す。
 
 C で作るときに気をつけること：
@@ -849,8 +849,8 @@ C の段階では、C.0 と C.6〜C.14 を作った。C.1〜C.5（一式のツ�
 
 C で決めて、DESIGN と、この計画の該当の項を直したこと：
 
-- 名指しの細かい形（naming.md の追記 8）：文字列の外の全角の空白、空のパス（E012）。`tests/fixtures/naming.tsv` は 36 行で、`tests/naming.rs` は誤りの行が表の理由のとおりにエラーになることも確かめる。
-- 診断の文面のパス（naming.md の追記 9 と 10）：ファイルの場所は走らせたディレクトリから、渡したパスと同じ書き方で書き、名指しはルートからの相対のまま書く（DESIGN 2.4）。`main.rs` が `paths::show_from` で一度だけ決め、ライブラリとテストは決めないので、ルートで走らせたのと同じ形になる。変異の golden は変わらず（E009 の注の言い回しだけ直した）、`tests/cli.rs` がルートの上、下、絶対パスの三つを確かめる。
+- 参照の細かい形（naming.md の追記 8）：文字列の外の全角の空白、空のパス（E012）。`tests/fixtures/naming.tsv` は 36 行で、`tests/naming.rs` は誤りの行が表の理由のとおりにエラーになることも確かめる。
+- 診断の文面のパス（naming.md の追記 9 と 10）：ファイルの場所は走らせたディレクトリから、渡したパスと同じ書き方で書き、参照はルートからの相対のまま書く（DESIGN 2.4）。`main.rs` が `paths::show_from` で一度だけ決め、ライブラリとテストは決めないので、ルートで走らせたのと同じ形になる。変異の golden は変わらず（E009 の注の言い回しだけ直した）、`tests/cli.rs` がルートの上、下、絶対パスの三つを確かめる。
 - W401 は、sakai がまだ参照を読まない成果物（規則、dandori のワークフロー）を地図が含むあいだ出さない（DESIGN 1.6。`terms::unread_references`）。例の請求の「キャンセル」が、規則を通って越えるのに W401 になっていたため。C.2 を作ったら、規則をこの条件から外す。
 - import のまとまりの決まり（DESIGN 7.1）、import-linter の書き方（C.7）、dependency-cruiser の否定先読み（C.8）、go-arch-lint の自分への依存（C.10）、設定の頭にハッシュを書かないことと golden の置き場所（C.11）。
 - 台帳の項目は、再現を走らせるコマンドを持てる（`Entry::command`。既定は `check .`）。変異も、ファイル `command` があればそのコマンドで走らせる（`tests/mutants.rs`）。

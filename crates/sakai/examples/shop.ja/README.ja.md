@@ -9,7 +9,7 @@ $ sakai check examples/shop.ja/通販.ctx --lang ja
 examples/shop.ja/通販.ctx: ok — コンテキスト 5、関係 7。成果物 79 件は、どれも一つのコンテキストに属する。境界を越える参照 9 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 5）
 ```
 
-地図が規則、カレンダー、ワークフローを含むので、`ritsu sakai`（か、同じ名前のリンクの `sakai`）で確かめます。sakai は、それらのファイルが何を名指しているかを、同じプロセスの中で、それぞれの言語に尋ねます。
+地図が規則、カレンダー、ワークフローを含むので、`ritsu sakai`（か、同じ名前のリンクの `sakai`）で確かめます。sakai は、それらのファイルが何を参照しているかを、同じプロセスの中で、それぞれの言語に尋ねます。
 `sakai doc examples/shop.ja/通販.ctx --lang ja` で地図のページを書けます。[`tests/golden/doc/通販.ja.md`](../../tests/golden/doc/通販.ja.md) がそのページです。
 
 ## コンテキスト

@@ -88,7 +88,7 @@ fn unformatted(tag: &str) -> (TempDir, PathBuf) {
 }
 
 #[test]
-fn fmtは整形されていないファイルを名指しする() {
+fn fmtは整形されていないファイルを挙げる() {
     let (_tmp, broken) = unformatted("fmt");
     let (c, out) = run(&["fmt", "--check", broken.to_str().unwrap(), "--format", "json"]);
     assert_eq!(c, 1);
@@ -461,7 +461,7 @@ fn 飛ばした言語があると要求時に落ちる() {
 /// interface. The line is the record's line in the fixtures file, so a record with no tag
 /// of its own can still be found.
 #[test]
-fn diffは動いた記録を全部名指しする() {
+fn diffは動いた記録を全部挙げる() {
     let tmp = TempDir::new("formats-names");
     let dir = tmp.path().to_path_buf();
     let src = std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap();

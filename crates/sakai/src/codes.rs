@@ -332,9 +332,9 @@ pub fn ledger() -> Ledger {
         .en(&[("map.ctx", "map Map(m) v1\nuse context \"alpha.ctx\"\nuse context \"beta.ctx\"\nuse context \"alpha.ctx\"\ncovers \".\"\n")]),
         e(
             "E011",
-            tr!("成果物の名指しの形が違います", "The name of an artifact is not of the right form"),
+            tr!("成果物の参照の形が違います", "The name of an artifact is not of the right form"),
             tr!(
-                "ツールの語と拡張子が合わないとき、`dir` や公表された言語の `crate` の先がファイルのとき、ツールの語の先がディレクトリのとき、知らないツールの語や、そのツールに無い種類の語を書いたとき、子の種類（`value`、`field`、`method`）が親のすぐあとにないとき、`file` に種類を書いたとき。対応の先が列挙でないときにも出ます。",
+                "ツール名と拡張子が合わないとき、`dir` や公表された言語の `crate` の先がファイルのとき、ツール名で書いた先がディレクトリのとき、知らないツール名や、そのツールに無い種類の語を書いたとき、子の種類（`value`、`field`、`method`）が親のすぐあとにないとき、`file` に種類を書いたとき。対応の先が列挙でないときにも出ます。",
                 "The tool and the extension do not agree, a `dir` or a published language's `crate` is a file or a tool's file a directory, a tool or a kind is not one the tool has, a child kind (`value`, `field`, `method`) does not come right after its parent, or a `file` is given a kind; also a mapping's target that is not an enum."
             ),
             tr!("`<ツール> \"<パス>\" [<種類> <名前>]…` の形で書いてください。", "Write it in the form `<tool> \"<path>\" [<kind> <name>]...`."),
@@ -1114,7 +1114,7 @@ pub fn ledger() -> Ledger {
             "E501",
             tr!("ツールの設定に書けません", "The settings of a tool cannot be written"),
             tr!(
-                "`sakai build` で、地図にその言語の `code` の行が無いとき、その言語のコードを持つコンテキストが無いとき、ディレクトリの名前がその言語のモジュールの名前にならないとき（Python と Java）、コードのファイルを一つだけ名指した項があるとき、Python の置き場所の直下にモジュールがあるとき（import-linter は読めない）、Java にデフォルトパッケージのクラスがあるとき、ArchUnit に `test` の置き場所が無いとき、Go の置き場所に go.mod が無いとき。",
+                "`sakai build` で、地図にその言語の `code` の行が無いとき、その言語のコードを持つコンテキストが無いとき、ディレクトリの名前がその言語のモジュールの名前にならないとき（Python と Java）、コードのファイルを一つだけ指す項があるとき、Python の置き場所の直下にモジュールがあるとき（import-linter は読めない）、Java にデフォルトパッケージのクラスがあるとき、ArchUnit に `test` の置き場所が無いとき、Go の置き場所に go.mod が無いとき。",
                 "`sakai build` finds that the map has no `code` line for the language, no context has code in it, a directory's name is not a module's (Python and Java), an entry names one file of code, a Python module sits right in the place of the code (import-linter cannot read it), a Java class is in the default package, ArchUnit has no place for the tests, or the place of the Go code has no go.mod."
             ),
             tr!("注のとおりに、地図の `code` と `owns` か、コードの置き場所を直してください。", "Correct the map's `code` and `owns`, or where the code is, as the note says."),

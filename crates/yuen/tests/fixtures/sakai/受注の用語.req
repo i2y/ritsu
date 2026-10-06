@@ -1,5 +1,5 @@
 requirements 受注の用語 v1
-description "sakai の例のコンテキスト「受注.ctx」の語を、用語集のどこから来たかで名指したテストの材料"
+description "sakai の例のコンテキスト「受注.ctx」の語が、用語集のどこから来たかを書いたテストの材料"
 
 role 受注 "受注の用語を決める"
 

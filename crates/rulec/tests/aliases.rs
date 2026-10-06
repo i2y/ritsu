@@ -43,7 +43,7 @@ fn 規則の別名は標準ライブラリのモジュールの名前と比べ�
         let ns = notes(&rule(alias));
         let langs = named(&ns);
         for w in want {
-            assert!(langs.iter().any(|l| l == w), "{alias}: {w} が名指しされない: {ns:?}");
+            assert!(langs.iter().any(|l| l == w), "{alias}: {w} が挙がらない: {ns:?}");
         }
     }
     // An alias no standard library has is quiet.

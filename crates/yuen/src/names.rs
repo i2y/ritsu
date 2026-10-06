@@ -56,7 +56,7 @@ fn said(e: base::Error) -> NameError {
                 "E011",
                 col,
                 tr!(
-                    "`{t}` というツールはありません。名指しは {} のどれかで始めてください",
+                    "`{t}` というツールはありません。参照は {} のどれかで始めてください",
                     "`{t}` is not a tool; a naming starts with one of {}",
                     tool_list_ja();
                     tool_list()
@@ -64,24 +64,24 @@ fn said(e: base::Error) -> NameError {
             );
             if t == "dir" {
                 x = x.note(tr!(
-                    "ディレクトリを名指す語はありません。範囲なら `scope file \"src/\"` のように書いてください。",
+                    "ディレクトリを指すツール名はありません。範囲なら `scope file \"src/\"` のように書いてください。",
                     "A directory is not named with a tool word of its own; in a scope, write `scope file \"src/\"`."
                 ));
             }
             x
         }
-        ErrorKind::MissingPath => err("E013", col, tr!("パスがありません。名指しは `<ツール> \"<パス>\" …` の形です", "The path is missing; a naming is `<tool> \"<path>\" …`")),
+        ErrorKind::MissingPath => err("E013", col, tr!("パスがありません。参照は `<ツール> \"<パス>\" …` の形です", "The path is missing; a naming is `<tool> \"<path>\" …`")),
         ErrorKind::UnquotedPath(t) => err("E013", col, tr!("パス `{t}` を `\"…\"` で囲んでください", "Write the path `{t}` in quotes"))
-            .note(tr!("名指しのパスは、いつも `\"{t}\"` のように引用符で囲む決まりです。", "The path of a naming is always quoted, like `\"{t}\"`.")),
+            .note(tr!("参照のパスは、いつも `\"{t}\"` のように引用符で囲む決まりです。", "The path of a naming is always quoted, like `\"{t}\"`.")),
         ErrorKind::EmptyPath => err("E013", col, tr!("パスが空です", "The path is empty")),
-        ErrorKind::AbsolutePath(t) => err("E013", col, tr!("`{t}` は絶対パスです。名指しを書いたファイルのディレクトリからの相対パスで書いてください", "`{t}` is an absolute path; write it from the directory of the file the naming is in"))
+        ErrorKind::AbsolutePath(t) => err("E013", col, tr!("`{t}` は絶対パスです。参照を書いたファイルのディレクトリからの相対パスで書いてください", "`{t}` is an absolute path; write it from the directory of the file the naming is in"))
             .note(tr!("絶対パスは、ほかの人のマシンでは別の場所を指します。", "An absolute path points somewhere else on someone else's machine.")),
         ErrorKind::OutsideRoot(t) => err("E013", col, tr!("`{t}` はルートの外に出ます", "`{t}` goes outside the root")).note(tr!(
             "ルートは、渡したパスの上で `.git` を持つ一番近いディレクトリです（無ければ渡したディレクトリ、`--root` で替えられます）。",
             "The root is the nearest directory above the path given that has a `.git` (else the directory given; `--root` changes it)."
         )),
         ErrorKind::QuotedKind(_) => err("E012", col, tr!("種類は `\"…\"` で囲まずに書いてください", "A kind is a word, not a string in quotes")),
-        ErrorKind::NoKinds(_) => err("E012", col, tr!("file に種類はありません。file はファイルを丸ごと名指します", "file has no kinds; it names a whole file")),
+        ErrorKind::NoKinds(_) => err("E012", col, tr!("file に種類はありません。file はファイルを丸ごと指します", "file has no kinds; it names a whole file")),
         // The rest of what a kind can do wrong is said in ritsu-base's words, which were yuen's.
         kind @ (ErrorKind::ChildFirst { .. } | ErrorKind::UnknownKind { .. } | ErrorKind::NoNesting(_) | ErrorKind::NothingUnder(_) | ErrorKind::WrongChild { .. } | ErrorKind::TooManyPairs(_) | ErrorKind::MissingName(_)) => {
             err("E012", col, base::Error { kind, at: col }.text())
@@ -95,7 +95,7 @@ fn said(e: base::Error) -> NameError {
 /// written in at the root).
 pub fn parse_one(s: &str) -> Result<Name, NameError> {
     let tokens = crate::lex::naming_tokens(s).map_err(|(col, msg)| err("E001", col, msg))?;
-    let w = read(&tokens, s.chars().count() + 1).ok_or_else(|| err("E011", 1, tr!("名指しがありません", "There is no naming")))?;
+    let w = read(&tokens, s.chars().count() + 1).ok_or_else(|| err("E011", 1, tr!("参照がありません", "There is no naming")))?;
     resolve(&w, "", false).map(|(n, _)| n)
 }
 

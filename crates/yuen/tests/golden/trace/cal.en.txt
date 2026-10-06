@@ -26,4 +26,4 @@ file "民法の期間.cal"
     decided:
       2026-10-03 法務: 「その翌日」は文字どおり末日の翌日と読み、翌日も休みでもそれ以上は動かさない。この材料のために決めたもので、法令の読み方を示すものではない
     met by file "民法の期間.cal" — looked at by 開発 on 2026-10-03; as it was looked at
-    not verified: "koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を名指さない" — approved by 法務 on 2026-10-03; as it was approved
+    not verified: "koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を指さない" — approved by 法務 on 2026-10-03; as it was approved

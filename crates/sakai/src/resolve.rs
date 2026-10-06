@@ -60,7 +60,7 @@ impl R<'_> {
                 if dir == Some(true) && !m.is_dir() {
                     self.at("E011", file, src, s.pos, tr!("`dir` の先 \"{v}\" はファイルです", "The `dir` \"{v}\" is a file"))
                         .notes
-                        .push(tr!("ファイルは `rulec \"…\"` のように、そのツールの語で書いてください。", "A file is written with its tool, like `rulec \"…\"`."));
+                        .push(tr!("ファイルは `rulec \"…\"` のように、そのツール名で書いてください。", "A file is written with its tool, like `rulec \"…\"`."));
                     return None;
                 }
                 if dir == Some(false) && m.is_dir() {

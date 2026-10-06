@@ -142,7 +142,7 @@ fn authored_pages() -> Vec<(String, String)> {
 }
 
 #[test]
-fn サイトが名指しするコマンドは実在する() {
+fn サイトが挙げるコマンドは実在する() {
     let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
         .env("RULEC_LANG", "ja")
         .current_dir(root())

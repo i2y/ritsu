@@ -2468,10 +2468,10 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                         let from = c.day_sets.get(col).and_then(|d| d.from.as_ref()).map(|fr| format!("koyomi \"{}\" date {}", fr.file, fr.date)).unwrap_or_default();
                         tr!("{col} は {from} がとる日だけで、この行の日付はそのどれでもありません。", "{col} takes only the days {from} comes to, and this row's dates are none of them.")
                     } else if reg.unreachable_row[i] {
-                        tr!("この行が名指ししている値を、上流の表は決して出しません。", "The upstream table never produces the values this row names.")
+                        tr!("この行が書いている値を、上流の表は決して出しません。", "The upstream table never produces the values this row names.")
                     } else if up_dead {
                         tr!(
-                            "ほかの列がこの行の条件どおりのとき、上流の表はこの行が名指しする値を出しません。どちらか一方だけなら起こりますが、両方が同時には起こりません。",
+                            "ほかの列がこの行の条件どおりのとき、上流の表はこの行が書いている値を出しません。どちらか一方だけなら起こりますが、両方が同時には起こりません。",
                             "The upstream table does not produce the value this row names while the other columns are what this row says. Either half happens; the two together do not."
                         )
                     } else if by_position {

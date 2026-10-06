@@ -225,9 +225,9 @@ pub fn ledger() -> Ledger {
         .en("requirements example v1\nrole legal\n\nrequirement r1\n  owner legal\n  decided 2026-10-03 by legal \"example\"\n", &[]),
         e(
             "E011",
-            tr!("名指しの最初の語が、ツールの語ではありません", "A tool that does not exist"),
+            tr!("参照の最初の語が、ツール名ではありません", "A tool that does not exist"),
             tr!(
-                "名指しの最初の語が、rulec、dandori、koyomi、chobo、geas、proto、openapi、asyncapi、cedar、file、yuen、sakai、sekisho のどれでもないとき（`dir` も、名指しの語ではありません）。",
+                "参照の最初の語が、rulec、dandori、koyomi、chobo、geas、proto、openapi、asyncapi、cedar、file、yuen、sakai、sekisho のどれでもないとき（`dir` も、ツール名ではありません）。",
                 "The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen, sakai and sekisho (`dir` is not a word of a naming either)."
             ),
             tr!("この十三のツール名のどれかを書いてください。ほかのファイルは `file \"…\"` で指してください。", "Write one of the thirteen; name any other file with `file \"…\"`."),
@@ -239,10 +239,10 @@ pub fn ledger() -> Ledger {
             "E012",
             tr!("そこに書けない種類か組があります", "A kind or pair that cannot be written there"),
             tr!(
-                "ツールに無い種類を書いたとき、子の種類（`method`、`field`、`value`）が親のすぐあとにないとき、子の組や、入れ子の無いツールの組が二つあるとき、file に種類を書いたとき、種類のあとに名前が無いとき。`source` や `yuen` の名指しをリンクや範囲に書いたとき、借りた出典が rulec か koyomi の `source` でないときにも出ます。",
+                "ツールに無い種類を書いたとき、子の種類（`method`、`field`、`value`）が親のすぐあとにないとき、子の組や、入れ子の無いツールの組が二つあるとき、file に種類を書いたとき、種類のあとに名前が無いとき。`source` や `yuen` の参照をリンクや範囲に書いたとき、借りた出典が rulec か koyomi の `source` でないときにも出ます。",
                 "A kind the tool does not have, a child kind (`method`, `field`, `value`) not right after its parent, two child pairs, two pairs for a tool without nesting, a kind for file, or a kind without its name; also `source` or a `yuen` naming in a link or a scope, and a borrowed source that is not the `source` of a rulec or koyomi file."
             ),
-            tr!("診断の文に挙がる種類のどれかを書いてください。file はファイルを丸ごと名指します（`file \"src/app.py\"`）。", "Write one of the kinds the message gives; file names a whole file (`file \"src/app.py\"`)."),
+            tr!("診断の文に挙がる種類のどれかを書いてください。file はファイルを丸ごと指します（`file \"src/app.py\"`）。", "Write one of the kinds the message gives; file names a whole file (`file \"src/app.py\"`)."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by dandori \"order.flow\" table reserve\n",
             &["E011", "E013"],
         )
@@ -251,7 +251,7 @@ pub fn ledger() -> Ledger {
             "E013",
             tr!("パスの書き方が違います", "A path that cannot be read"),
             tr!("パスに引用符が無いとき、空のとき、絶対パスのとき、`..` を解いたあとでルートの外に出るとき。", "A path without quotes, empty, absolute, or outside the root once collapsed."),
-            tr!("名指しを書いたファイルのディレクトリからの相対パスを、`\"…\"` で囲んで書いてください。", "Write it in quotes, from the directory of the file the naming is in."),
+            tr!("参照を書いたファイルのディレクトリからの相対パスを、`\"…\"` で囲んで書いてください。", "Write it in quotes, from the directory of the file the naming is in."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"/etc/hosts\"\n",
             &["E011", "E012"],
         )
@@ -293,10 +293,10 @@ pub fn ledger() -> Ledger {
             "E104",
             tr!("コピーが読めません", "A copy cannot be read"),
             tr!(
-                "法令のコピーが UTF-8 の XML でないか、e-Gov や eCFR が配る形（条なら `<Article>`、eCFR の section なら `<DIV8>` で始まる）でないとき。OpenSpec の仕様が、UTF-8 でないか、`## Requirements` の節を持たないか（変更の提案の差分を名指したときを含む）、同じ名前の要件を二つ持つときにも出ます。",
+                "法令のコピーが UTF-8 の XML でないか、e-Gov や eCFR が配る形（条なら `<Article>`、eCFR の section なら `<DIV8>` で始まる）でないとき。OpenSpec の仕様が、UTF-8 でないか、`## Requirements` の節を持たないか（変更の提案の差分を指したときを含む）、同じ名前の要件を二つ持つときにも出ます。",
                 "The copy of a law is not UTF-8 XML, or not what e-Gov or the eCFR serves (an article starts with `<Article>`, an eCFR section with `<DIV8>`); also an OpenSpec spec that is not UTF-8, has no `## Requirements` section (a change's delta spec among them), or holds two requirements of one name."
             ),
-            tr!("コピーは手で直さず、`yuen source fetch` で取り直してください。OpenSpec の仕様は `openspec/specs/<capability>/spec.md` を名指し、形の誤りを `openspec validate --specs` で直してください。", "Fetch it again with `yuen source fetch` rather than editing it. For OpenSpec, name `openspec/specs/<capability>/spec.md`, and fix its form with `openspec validate --specs`."),
+            tr!("コピーは手で直さず、`yuen source fetch` で取り直してください。OpenSpec の出典には `openspec/specs/<capability>/spec.md` を書き、形の誤りは `openspec validate --specs` で直してください。", "Fetch it again with `yuen source fetch` rather than editing it. For OpenSpec, name `openspec/specs/<capability>/spec.md`, and fix its form with `openspec validate --specs`."),
             "requirements 例 v1\nrole 法務\n\nsource 民法 = law \"129AC0000000089\" asof 2026-10-01\n  第142条 sha256:6210aedce8fd1601\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  from @民法 第142条\n  not satisfied \"例なので置かない\"\n  not verified \"例なので置かない\"\n",
             &["E101"],
         )
@@ -318,7 +318,7 @@ pub fn ledger() -> Ledger {
             "E106",
             tr!("借りた出典が使えません", "A borrowed source cannot be used"),
             tr!(
-                "借りた出典を、名指したファイルが宣言していないか、引いた条を固定していないとき。ファイルが無いとき、コピーが読めないか固定と違うときにも出ます。",
+                "借りた先のファイルが、その出典を宣言していないか、引いた条を固定していないとき。ファイルが無いとき、コピーが読めないか固定と違うときにも出ます。",
                 "The file named declares no such source, or does not pin the article cited; also when the file is not there, or a copy cannot be read or does not match its pin."
             ),
             tr!("そのファイルが宣言して固定している出典と条を書いてください。ほかの条を引くなら、そのファイルに固定の行を足してください。", "Write a source and an article the file declares and pins; to cite another article, add its pin to that file."),
@@ -344,7 +344,7 @@ pub fn ledger() -> Ledger {
             "E108",
             tr!("OpenSpec の仕様に、その名前の要件がありません", "An OpenSpec spec has no requirement of that name"),
             tr!(
-                "`openspec` の出典の固定の行か引用が名指す要件が、仕様に無いとき。OpenSpec は名前を書いたとおりに比べるので、大文字と小文字や空白だけが違うときにも出ます（そのときは近い名前を注に挙げます）。変更を archive して名前が変わった（RENAMED）か、無くなった（REMOVED）ときにも出ます。",
+                "`openspec` の出典の固定の行か引用が指す要件が、仕様に無いとき。OpenSpec は名前を書いたとおりに比べるので、大文字と小文字や空白だけが違うときにも出ます（そのときは近い名前を注に挙げます）。変更を archive して名前が変わった（RENAMED）か、無くなった（REMOVED）ときにも出ます。",
                 "A pin line or a citation of an `openspec` source names a requirement the spec does not have. OpenSpec compares names as written, so a name that differs only in case or spaces gives it too (the near name is noted); so does a requirement an archived change renamed (RENAMED) or removed (REMOVED)."
             ),
             tr!("仕様の `### Requirement:` のあとの名前を、そのまま書いてください。archive で変わったのなら、その要件を読む要件を見直してから、固定と引用を直してください。", "Write the name after the spec's `### Requirement:` as it is. If an archive changed it, look again at the requirements that read it, then correct the pin and the citations."),
@@ -367,7 +367,7 @@ pub fn ledger() -> Ledger {
             "W102",
             tr!("OpenSpec の仕様の要件を、どの出典も固定していません", "A requirement of an OpenSpec spec is pinned by no source"),
             tr!(
-                "プロジェクトが `openspec` の出典として読む仕様に、プロジェクトのどの出典も固定していない要件があるとき。仕様に書いた要件を、プロジェクトのどの要件も読んでいません。一つの仕様について、それを名指す最初の出典に一度だけ出します。",
+                "プロジェクトが `openspec` の出典として読む仕様に、プロジェクトのどの出典も固定していない要件があるとき。仕様に書いた要件を、プロジェクトのどの要件も読んでいません。一つの仕様について、それを指す最初の出典に一度だけ出します。",
                 "A spec the project reads as an `openspec` source holds a requirement no source of the project pins: no requirement of the project reads it. Said once for a spec, at the first source that names it."
             ),
             tr!(
@@ -383,7 +383,7 @@ pub fn ledger() -> Ledger {
         e(
             "E201",
             tr!("成果物のファイルがありません", "The file of an artifact is not there"),
-            tr!("リンクが名指すファイルか、範囲のパスが無いとき。リンクにディレクトリを書いたときにも出ます。", "The file a link names, or the path of a scope, is not there; also a directory written in a link."),
+            tr!("リンクが指すファイルか、範囲のパスが無いとき。リンクにディレクトリを書いたときにも出ます。", "The file a link names, or the path of a scope, is not there; also a directory written in a link."),
             tr!("パスを直してください。ファイルの名前を変えたのなら、リンクも直してください。", "Correct the path; if the file was renamed, correct the link."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by file \"missing.txt\"\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E013"],
@@ -393,7 +393,7 @@ pub fn ledger() -> Ledger {
             "E202",
             tr!("成果物の名前が、そのファイルにありません", "The name of an artifact is not in its file"),
             tr!(
-                "名指した名前が、そのファイルに無いとき（その言語が渡す名前にも、`.proto`、OpenAPI と AsyncAPI の文書、Cedar のファイルの中にも無いとき）。別名で書いたときや、名前が変わったときにも出ます（注に候補が出ます）。Cedar のスキーマが、同じ名前の action か entity を二つ以上の名前空間で宣言していて、一つに決まらないときにも出ます。",
+                "参照に書いた名前が、そのファイルに無いとき（その言語が渡す名前にも、`.proto`、OpenAPI と AsyncAPI の文書、Cedar のファイルの中にも無いとき）。別名で書いたときや、名前が変わったときにも出ます（注に候補が出ます）。Cedar のスキーマが、同じ名前の action か entity を二つ以上の名前空間で宣言していて、一つに決まらないときにも出ます。",
                 "The name is not in the file (among the things its language gives, or in the `.proto`, the OpenAPI or AsyncAPI document, the Cedar file): written by its alias, or renamed (the candidates are given). Also a Cedar schema that declares an action or an entity of that name in more than one namespace, so the name is not one thing."
             ),
             tr!("別名ではなく、その言語の名前で書いてください。名前が変わったのなら、リンクも直してください。", "Write the name the language gives (not its alias); if it was renamed, correct the link."),
@@ -404,9 +404,9 @@ pub fn ledger() -> Ledger {
         .en(include_str!("../tests/mutants/E202_no_such_message/example.req"), &[E202_PROTO_EN]),
         e(
             "E203",
-            tr!("名指したものの言語から、そのファイルの情報を得られません", "The language of what is named cannot answer for its file"),
+            tr!("指したものの言語から、そのファイルの情報を得られません", "The language of what is named cannot answer for its file"),
             tr!(
-                "名指したファイルが、その言語の検査を通らないか、読めないとき。そのようなファイルからは成果物の定義を読み取れないので、yuen はハッシュを取れません。注には、その言語の診断が並びます。",
+                "指したファイルが、その言語の検査を通らないか、読めないとき。そのようなファイルからは成果物の定義を読み取れないので、yuen はハッシュを取れません。注には、その言語の診断が並びます。",
                 "The file named does not pass its language's check, or does not read; no end is made from a file that does not pass. The notes give what the language says."
             ),
             tr!("そのファイルを、その言語の検査を通るように直してください。", "Make the file pass its language's check."),
@@ -442,9 +442,9 @@ pub fn ledger() -> Ledger {
         .en(include_str!("../tests/mutants/E205_unreadable_proto/example.req"), &[E205_PROTO_EN]),
         e(
             "E206",
-            tr!("名指したものの言語がつながっていません", "The language of what a line names is not joined"),
+            tr!("指したものの言語がつながっていません", "The language of what a line names is not joined"),
             tr!(
-                "yuen 単独のバイナリ（`yuen`）に、ほかの言語のもの（規則、カレンダー、帳簿、主張、ワークフロー、コンテキスト）を名指すプロジェクトを渡したとき。このバイナリにはほかの言語が入っておらず、それを読めません。yuen は、言語ごとに一度、最初に名指したところでこのエラーを出し、そこで止まります。exit code は 2 です（プロジェクトの誤りではなく、走らせ方の問題なので）。",
+                "yuen 単独のバイナリ（`yuen`）に、ほかの言語のもの（規則、カレンダー、帳簿、主張、ワークフロー、コンテキスト）を指すプロジェクトを渡したとき。このバイナリにはほかの言語が入っておらず、それを読めません。yuen は、言語ごとに一度、最初に指したところでこのエラーを出し、そこで止まります。exit code は 2 です（プロジェクトの誤りではなく、走らせ方の問題なので）。",
                 "The binary of yuen's own crate (`yuen`), given a project that names a thing of another language (a rule, a calendar, a book, a claim, a workflow, a context), which it holds none of and cannot read. It is said once for each language, where the first thing of it is named, and the check stops there. The exit code is 2: it is how the command is run, not what the project says."
             ),
             tr!(
@@ -561,8 +561,8 @@ pub fn ledger() -> Ledger {
         e(
             "E404",
             tr!("範囲の成果物を、どの要件からも辿れません", "An artifact in scope traces to no requirement"),
-            tr!("`scope` が集めた成果物を、どのリンクも名指していないとき（それを含むものも、それに含まれるものも名指していないとき）。", "No link names an artifact a `scope` gathers, nor anything containing it or in it."),
-            tr!("`satisfied by` か `verified by` でそれを名指す要件を足すか、範囲を狭めてください。", "Add a requirement whose `satisfied by` or `verified by` names it, or narrow the scope."),
+            tr!("`scope` が集めた成果物を、どのリンクも指していないとき（それを含むものも、それに含まれるものも指していないとき）。", "No link names an artifact a `scope` gathers, nor anything containing it or in it."),
+            tr!("`satisfied by` か `verified by` でそれを指す要件を足すか、範囲を狭めてください。", "Add a requirement whose `satisfied by` or `verified by` names it, or narrow the scope."),
             "requirements 例 v1\nrole 法務\n\nscope file \"b.txt\"\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  not satisfied \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n  not verified \"例なので置かない\"\n    approved 2026-10-03 by 法務 sha256:fbdfb71af500ce5f\n",
             &["E401"],
         )
@@ -627,7 +627,7 @@ pub fn ledger() -> Ledger {
             "W402",
             tr!("OpenSpec のシナリオに、同じ名前の主張がありません", "A scenario of an OpenSpec requirement has no claim of its name"),
             tr!(
-                "OpenSpec の仕様の要件を引き、geas の主張で確かめている要件で、その仕様の要件のシナリオのうち、同じ名前の主張が、要件を確かめる主張（`verified by geas …`。spec を丸ごと名指したなら、その spec のすべての主張）の中に無いとき。変更の archive でシナリオが足されたあとによく出ます。",
+                "OpenSpec の仕様の要件を引き、geas の主張で確かめている要件で、その仕様の要件のシナリオのうち、同じ名前の主張が、要件を確かめる主張（`verified by geas …`。spec を丸ごと指したなら、その spec のすべての主張）の中に無いとき。変更の archive でシナリオが足されたあとによく出ます。",
                 "A requirement reads a requirement of an OpenSpec spec and is checked by claims of geas, and a scenario of the spec's requirement has no claim of its name among the claims that check it (`verified by geas …`; every claim of a spec named whole). It often comes after an archived change added a scenario."
             ),
             tr!(

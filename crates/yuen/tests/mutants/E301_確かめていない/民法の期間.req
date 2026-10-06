@@ -42,5 +42,5 @@ requirement 満了日_142条(last_day_142)
   decided 2026-10-03 by 法務 "「その翌日」は文字どおり末日の翌日と読み、翌日も休みでもそれ以上は動かさない。この材料のために決めたもので、法令の読み方を示すものではない"
   satisfied by file "民法の期間.cal"
     reviewed 2026-10-03 by 開発 sha256:d4f2d2a67322df17 -> sha256:c9b94eecde23e6b5
-  not verified "koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を名指さない"
+  not verified "koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を指さない"
     approved 2026-10-03 by 法務 sha256:d4f2d2a67322df17

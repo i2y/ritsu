@@ -552,7 +552,7 @@
             <ATTRIBUTE-VALUE-STRING THE-VALUE="1">
               <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_4d29b822c24952edd439e093b5d3165a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
             </ATTRIBUTE-VALUE-STRING>
-            <ATTRIBUTE-VALUE-STRING THE-VALUE="dandori の例 fulfillment の倉庫と出荷のサービスの約束を、.proto の要素で名指したテストの材料。出典は約束の文書を保存して固定する">
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="dandori の例 fulfillment の倉庫と出荷のサービスの約束を、.proto の要素を指して書いたテストの材料。出典は約束の文書を保存して固定する">
               <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a839768f26076ff8651b726d23c1ccaa</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
             </ATTRIBUTE-VALUE-STRING>
           </VALUES>

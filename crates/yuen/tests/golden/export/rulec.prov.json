@@ -352,14 +352,14 @@
       "yuen:down": "5bc61581e0c31022",
       "yuen:status": "ok"
     },
-    "y:waiver/c19c179329ae48c51625b1de824c132e": {
+    "y:waiver/2df73f550587431ceb32dbbba43680d9": {
       "prov:startTime": "2026-10-04T00:00:00",
       "prov:type": {
         "$": "yuen:Waiver",
         "type": "prov:QUALIFIED_NAME"
       },
       "yuen:side": "not verified",
-      "yuen:why": "表が契約金額のすべてを覆い、行が重ならないことは rulec の検査が確かめる。この材料は、それを名指す主張を持たない",
+      "yuen:why": "表が契約金額のすべてを覆い、行が重ならないことは rulec の検査が確かめる。この材料は、それを指す主張を持たない",
       "yuen:sha256": "56d4ef0ae01ebb19",
       "yuen:status": "ok"
     },
@@ -396,14 +396,14 @@
       "yuen:down": "b5b30cefd66e58d6",
       "yuen:status": "ok"
     },
-    "y:waiver/b3297453047192d8115d87699b457d2e": {
+    "y:waiver/d8805f7faa93dd8c4337ac609a63e05d": {
       "prov:startTime": "2026-10-04T00:00:00",
       "prov:type": {
         "$": "yuen:Waiver",
         "type": "prov:QUALIFIED_NAME"
       },
       "yuen:side": "not verified",
-      "yuen:why": "軽減の表が本則の表より先に当たることは rulec の検査が確かめる。この材料は、それを名指す主張を持たない",
+      "yuen:why": "軽減の表が本則の表より先に当たることは rulec の検査が確かめる。この材料は、それを指す主張を持たない",
       "yuen:sha256": "c3fbde1529c44e2e",
       "yuen:status": "ok"
     }
@@ -454,7 +454,7 @@
       "prov:entity": "y:artifact/964734816e18a5498e1f92f624a978e9"
     },
     "_:r25": {
-      "prov:activity": "y:waiver/c19c179329ae48c51625b1de824c132e",
+      "prov:activity": "y:waiver/2df73f550587431ceb32dbbba43680d9",
       "prov:entity": "y:requirement/base_tax/v1"
     },
     "_:r31": {
@@ -482,7 +482,7 @@
       "prov:entity": "y:artifact/267961841802502c318f51cc0189e0ae"
     },
     "_:r40": {
-      "prov:activity": "y:waiver/b3297453047192d8115d87699b457d2e",
+      "prov:activity": "y:waiver/d8805f7faa93dd8c4337ac609a63e05d",
       "prov:entity": "y:requirement/reduced_rate/v1"
     }
   },
@@ -512,7 +512,7 @@
       "prov:agent": "y:role/開発"
     },
     "_:r26": {
-      "prov:activity": "y:waiver/c19c179329ae48c51625b1de824c132e",
+      "prov:activity": "y:waiver/2df73f550587431ceb32dbbba43680d9",
       "prov:agent": "y:role/税務"
     },
     "_:r33": {
@@ -528,7 +528,7 @@
       "prov:agent": "y:role/開発"
     },
     "_:r41": {
-      "prov:activity": "y:waiver/b3297453047192d8115d87699b457d2e",
+      "prov:activity": "y:waiver/d8805f7faa93dd8c4337ac609a63e05d",
       "prov:agent": "y:role/税務"
     }
   }

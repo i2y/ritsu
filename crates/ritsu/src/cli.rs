@@ -35,7 +35,7 @@ fn language(name: &'static str) -> Cmd {
         "chobo" => tr!("chobo のコマンド（在庫、お金、ポイント、予約の枠の帳簿）", "chobo's commands (books of stock, money, points and booking slots)"),
         "geas" => tr!("geas のコマンド（人が読んだ主張に、コードを従わせる）", "geas's commands (claims a person has read, held over the code)"),
         "yuen" => tr!(
-            "yuen のコマンド（要件の来歴）。要件が名指すほかの言語のもの、借りた出典、主張の記録を、同じプロセスの中で読む",
+            "yuen のコマンド（要件の来歴）。要件が指すほかの言語のもの、借りた出典、主張の記録を、同じプロセスの中で読む",
             "yuen's commands (where requirements come from), reading in the same process what requirements name of the other languages, the sources they borrow and the records of claims"
         ),
         _ => tr!(

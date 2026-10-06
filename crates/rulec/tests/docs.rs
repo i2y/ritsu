@@ -65,7 +65,7 @@ fn subcommands() -> BTreeSet<String> {
 }
 
 #[test]
-fn 文書が名指しするコマンドは実在する() {
+fn 文書が挙げるコマンドは実在する() {
     let have = subcommands();
     // `help`, and the two flags that stand in for a command name, are not in the list.
     let extra = ["help", "--help", "--version", "-h", "-V"];

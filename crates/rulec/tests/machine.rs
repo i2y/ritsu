@@ -531,7 +531,7 @@ fn heldの入力を変える並びは反例にしない() {
 }
 
 #[test]
-fn heldの行は入力だけを名指す() {
+fn heldの行には入力だけを書ける() {
     for (line, what) in [("  held    次の状態\n", "出力"), ("  held    状態\n", "持ち越す状態"), ("  held    申込額, 申込額\n", "二度")] {
         let src = REVIEW.replace("  held    申込額\n", line);
         assert!(codes_of(&src).contains(&"E056".to_string()), "{what}: {:?}", codes_of(&src));

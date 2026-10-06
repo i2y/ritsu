@@ -259,7 +259,7 @@ fn 契約が別名で綴っているときは名前との違いを言う() {
 /// the contract does not have: an enum of the `.proto`, whose values travel as their names and
 /// which a path does not hand to the rule's enum, and `bytes`.
 #[test]
-fn 入力にならない型のフィールドはe120で名指す() {
+fn 入力にならない型のフィールドはe120で示す() {
     let body = proto("enum Zone {\n  ZONE_UNSPECIFIED = 0;\n  ZONE_HONSHU = 1;\n}\n\nmessage Order {\n  Zone zone = 1;\n  bytes blob = 2;\n}");
     let r = "rule t(t) v1\n\nshape 注文(order) = proto \"order.proto\" shop.v1.Order\n\nenum 地域(zone) = ZONE_HONSHU(honshu)\n\n\
              inputs\n  a(a) : 地域  from 注文.zone\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";

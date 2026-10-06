@@ -224,7 +224,7 @@ fn 文書の表を引いてコピーに固定する() {
 /// Every generated file names the documents the rule transcribes, in the same words in every
 /// language (§15.71).
 #[test]
-fn 生成物のヘッダは出典を名指す() {
+fn 生成物のヘッダは出典を挙げる() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
     let tmp = TempDir::new("cites");
     let d = tmp.path().to_path_buf();

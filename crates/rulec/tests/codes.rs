@@ -295,7 +295,7 @@ fn jsonは鍵が英語で読み戻せる() {
 /// The codes a command's `--help` names must be codes the ledger carries. Without this the
 /// CLI table and the ledger drift apart, which is the exact failure this step removes.
 #[test]
-fn helpが名指しするコードは台帳にある() {
+fn helpが挙げるコードは台帳にある() {
     let have = ledger_codes();
     let (_, help) = run(&["--help", "--lang", "en"]);
     let cmds: Vec<String> = help
@@ -312,11 +312,11 @@ fn helpが名指しするコードは台帳にある() {
             continue;
         };
         for code in tail.split_whitespace() {
-            assert!(have.contains(code), "`rulec {c} --help` が台帳に無い {code} を名指ししている");
+            assert!(have.contains(code), "`rulec {c} --help` が台帳に無い {code} を挙げている");
             named += 1;
         }
     }
-    assert!(named >= 30, "どの help もコードを名指ししていない");
+    assert!(named >= 30, "どの help もコードを挙げていない");
 }
 
 /// And the other way round: every code in the ledger is on `check`'s page, and on `gen`'s,

@@ -31,9 +31,9 @@ pub struct Written {
 /// ends where the name ends (a `.ctx` has taken its comment off).
 pub fn read(text: &str) -> Result<Written, (usize, Text)> {
     let ws = base::words(text).map_err(|e| (e.at, said(&e.kind, &[])))?;
-    let w = base::written(ws, text.chars().count()).ok_or((0, tr!("名指しがありません", "there is no name")))?;
+    let w = base::written(ws, text.chars().count()).ok_or((0, tr!("参照がありません", "there is no name")))?;
     if w.tool.quoted {
-        return Err((w.tool.at, tr!("名指しは、ツールの語で始めてください", "a name starts with its tool")));
+        return Err((w.tool.at, tr!("参照は、ツール名で始めてください", "a name starts with its tool")));
     }
     // The tool, and the path's quotes: what ritsu-base checks first, on the name without its pairs
     // and with a path that is the root itself, which nothing refuses (the path comes last).
@@ -74,14 +74,14 @@ fn said(kind: &ErrorKind, rest: &[base::Word]) -> Text {
             "the escape `\\{e}` is not taken in a string; only `\\\"` and `\\\\` are"
         ),
         ErrorKind::Hash => tr!("名前に `#` を書くときは、名前を `\"…\"` で囲んでください", "a name with `#` in it is written in `\"…\"`"),
-        ErrorKind::Missing => tr!("名指しがありません", "there is no name"),
+        ErrorKind::Missing => tr!("参照がありません", "there is no name"),
         ErrorKind::UnknownTool(w) => {
             let ws: Vec<&str> = Tool::ALL.iter().map(|t| t.word()).collect();
             let (ja, en) = (ws.join("、"), format!("{} and {}", ws[..ws.len() - 1].join(", "), ws[ws.len() - 1]));
             tr!("`{w}` というツール名はありません。書けるのは {ja} です", "`{w}` is not a tool; the tools are {en}")
         }
-        ErrorKind::QuotedTool(_) => tr!("名指しは、ツールの語で始めてください", "a name starts with its tool"),
-        ErrorKind::MissingPath => tr!("ツールの語のあとに、パスを `\"…\"` で書いてください", "the tool is followed by the path, in `\"…\"`"),
+        ErrorKind::QuotedTool(_) => tr!("参照は、ツール名で始めてください", "a name starts with its tool"),
+        ErrorKind::MissingPath => tr!("ツール名のあとに、パスを `\"…\"` で書いてください", "the tool is followed by the path, in `\"…\"`"),
         ErrorKind::UnquotedPath(_) => tr!("パスは `\"…\"` で囲んで書いてください", "the path is written in `\"…\"`"),
         ErrorKind::EmptyPath => paths::error_text(paths::PathError::Empty, ""),
         ErrorKind::AbsolutePath(p) => paths::error_text(paths::PathError::Absolute, p),

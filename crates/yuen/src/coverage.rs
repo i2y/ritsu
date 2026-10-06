@@ -281,7 +281,7 @@ pub fn scope_diags(p: &Project, scopes: &[ScopeResult], ran: &Ran) -> Vec<Diag> 
                     "{en} has no geas record; with one (`geas map`), the files its claims run trace to their requirements."
                 ));
             }
-            d = d.note(tr!("`satisfied by` か `verified by` でこれを名指す要件を足すか、範囲を狭めてください。", "Add a requirement whose `satisfied by` or `verified by` names it, or narrow the scope."));
+            d = d.note(tr!("`satisfied by` か `verified by` でこれを指す要件を足すか、範囲を狭めてください。", "Add a requirement whose `satisfied by` or `verified by` names it, or narrow the scope."));
             diags.push(d);
         }
     }

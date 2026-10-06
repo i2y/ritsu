@@ -217,7 +217,7 @@ fn no_such_name(p: &Project, fi: usize, span: crate::ast::Span, n: &Name, same_k
     let mut d = p.err(fi, "E202", span, tr!("{shown} に {kind} {written} はありません", "{shown} has no {kind} {written}"));
     if let Some(real) = alias_of(p, n) {
         let fixed = Name { items: [&n.items[..n.items.len() - 1], &[(kind.to_string(), real.clone())]].concat(), ..n.clone() };
-        return d.note(tr!("`{name}` は {real} の別名です。名指しには、別名ではなくツールの名前を書いてください。", "`{name}` is the alias of {real}; a naming writes the tool's name.")).candidates(vec![fixed.text()]);
+        return d.note(tr!("`{name}` は {real} の別名です。参照には、別名ではなく名前のほうを書いてください。", "`{name}` is the alias of {real}; a naming writes the tool's name.")).candidates(vec![fixed.text()]);
     }
     let named: Vec<&Name> = p.names.links.iter().flatten().flatten().collect();
     let by_hash: Vec<String> = same_kind.iter().filter(|(_, e)| Some(e.hash.as_str()) == recorded).map(|(m, _)| m.text()).collect();
@@ -225,7 +225,7 @@ fn no_such_name(p: &Project, fi: usize, span: crate::ast::Span, n: &Name, same_k
     if !by_hash.is_empty() {
         d = d.note(tr!("名前が変わったようです。確かめたときと同じ定義のものがあります。", "It looks renamed: these have the definition that was looked at.")).candidates(by_hash);
     } else if !unlinked.is_empty() {
-        d = d.note(tr!("候補は、同じ種類のもののうち、どのリンクも名指していないものです。", "The ones of the same kind no link names.")).candidates(unlinked.iter().take(5).map(|(m, _)| m.text()).collect());
+        d = d.note(tr!("候補は、同じ種類のもののうち、どのリンクも指していないものです。", "The ones of the same kind no link names.")).candidates(unlinked.iter().take(5).map(|(m, _)| m.text()).collect());
         // one candidate, and what was looked at kept: how the two differ (DESIGN 4.5)
         if let ([(m, e)], Some(h)) = (unlinked.as_slice(), recorded)
             && let Some(before) = crate::marks::reviewed_content(p, fi, h)
@@ -363,7 +363,7 @@ fn missing(p: &Project, fi: usize, line: usize, col: usize, n: &Name, dir: bool)
     let t = n.text();
     let span = crate::ast::Span { line, col };
     if dir {
-        p.err(fi, "E201", span, tr!("{t} はディレクトリです。リンクが名指すのはファイルです", "{t} is a directory; a link names a file")).note(tr!(
+        p.err(fi, "E201", span, tr!("{t} はディレクトリです。リンクが指すのはファイルです", "{t} is a directory; a link names a file")).note(tr!(
             "ディレクトリを書けるのは `scope` だけです（`scope file \"src/\"`）。",
             "Only a `scope` takes a directory (`scope file \"src/\"`)."
         ))

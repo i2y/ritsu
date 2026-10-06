@@ -113,7 +113,7 @@ docs/  skills/  README.md  README.ja.md  THIRD_PARTY_NOTICES.md   （D）
 ### B.2 字句と構文（`src/lex.rs`、`src/parse.rs`、`src/ast.rs`）
 
 - 字句：名前（Unicode の文字・数字・`_`）、別名 `(ascii)`、版 `v<n>`、文字列（`\"` と `\\`）、日付 `YYYY-MM-DD`、期間（`<日付>..<日付>`、`<日付>..`、`..<日付>`）、`sha256:<16 桁>`、`@`、`,`、`->`、`=`、`#` から行末までのコメント。どの字句も行と列を持つ（列は文字で数える）。
-- 構文：DESIGN 1.1 の節の順（見出し、`description`、`role`、`source`、`scope`、`requirement`）、`source` の三つの形と固定の行、`scope`、`requirement` のブロックの行の順（DESIGN 1.5 の表）、リンクと見送りと、その下の記録の行。成果物の名前（DESIGN 2.1、2.4）は、ツールの語、パスの文字列、種類と名前の組（語か文字列）で読む。字下げはスペース。
+- 構文：DESIGN 1.1 の節の順（見出し、`description`、`role`、`source`、`scope`、`requirement`）、`source` の三つの形と固定の行、`scope`、`requirement` のブロックの行の順（DESIGN 1.5 の表）、リンクと見送りと、その下の記録の行。成果物の名前（DESIGN 2.1、2.4）は、ツール名、パスの文字列、種類と名前の組（語か文字列）で読む。字下げはスペース。
 - E001〜E006 を出す。
 - テスト（`tests/syntax.rs`）：DESIGN に出てくる `.req` の塊が全部構文を通る（1.1 はそのまま。1.4〜1.8 の抜き出しは、見出しを足したファイルにして）。E001〜E006 の変異ファイルが、そのコードを出す。
 
@@ -122,7 +122,7 @@ docs/  skills/  README.md  README.ja.md  THIRD_PARTY_NOTICES.md   （D）
 - プロジェクト：`yuen <コマンド> <path>...` に渡したファイルとディレクトリ（下の `.req` を全部、パスの順に）を一つのプロジェクトとして読む。
 - ルート（DESIGN 2.2）：最初に渡したパスの上で `.git` を持つ一番近いディレクトリ、無ければ渡したディレクトリ（ファイルならそのディレクトリ）。`--root` で替える。git は走らせない。
 - 名前の表：要件と版と別名、役割、出典（ファイルごと）、ファイルの見出し。E007〜E010。別名の決まり（DESIGN 1.2）。版の決まり（DESIGN 1.5）。
-- 成果物の名前（DESIGN 2 章）：パスを `.req` のディレクトリから読み、`.` と `..` を字の上で畳み、ルートからの相対にする。絶対パスとルートの外は E013。ツールの語（E011）と、ツールごとの種類の語と組の並び（E012。2.3 の表を `src/names.rs` に一枚で持つ。dandori の種類、`source` を借りた出典の外に書いたもの、`method` を `service` の外に書いたものも E012）。名前の文字の形（DESIGN 2.4）と JSON の形（2.6）。同じかどうか、含むかどうか（2.5）。
+- 成果物の名前（DESIGN 2 章）：パスを `.req` のディレクトリから読み、`.` と `..` を字の上で畳み、ルートからの相対にする。絶対パスとルートの外は E013。ツール名（E011）と、ツールごとの種類の語と組の並び（E012。2.3 の表を `src/names.rs` に一枚で持つ。dandori の種類、`source` を借りた出典の外に書いたもの、`method` を `service` の外に書いたものも E012）。名前の文字の形（DESIGN 2.4）と JSON の形（2.6）。同じかどうか、含むかどうか（2.5）。
 - `verified by` に書ける種類（DESIGN 1.6 の表）。違えば E403。
 - テスト（`tests/project.rs`、`tests/names.rs`）：E007〜E013 と E403 の変異。名前の文字の形が、2.4 の決まりで往復する（語と文字列、`\"` を含む名前）。パスの畳み方（`../x/./y.rule`）。ルートの探し方（一時ディレクトリに `.git` のディレクトリを作って）。sakai と共有する `tests/fixtures/naming.tsv` の全行が、表のとおりの JSON かエラー（理由に当たるコード）になる（DESIGN 2.6）。
 
@@ -142,7 +142,7 @@ docs/  skills/  README.md  README.ja.md  THIRD_PARTY_NOTICES.md   （D）
 - `file "<path>"` の成果物：ファイルがあるか（E201）、端の中身はバイト列、ハッシュは SHA-256 の先頭 16 桁。
 - 出典の条の端：コピーのバイト列（ハッシュは固定と同じ値）。`file` の出典の端：ファイルのバイト列。
 - 要件の端：DESIGN 4.1 の形を一字一句。`text` の行、`from` の行（自分の `law` の出典は `from law <db> <ID> <条> sha256:<固定>`、`file` の出典は `from file <ルートからのパス> sha256:<固定>`、元になった要件は `from requirement <名前> v<n> sha256:<端>`）、`in force` の行。二行めから下を UTF-8 のバイト列の順に並べ、どの行も LF で終える。元になった要件の端を先に計算する（循環は B.6 で止める）。
-- ほかのツールの成果物は、名前の検査（B.3）までで止め、端を作らない（C で作る）。B の段階のテストは、ほかのツールの成果物を使わない。B の yuen は、名前の検査を通ったプロジェクトがほかのツールの成果物、範囲、借りた出典を名指していれば、「yuen はまだ koyomi の成果物を読めません」と言って exit 2 にする（`src/check.rs` の `not_yet`）。確かめないまま通すことはしない（DESIGN 2.3）。C はここをツールの読み方に差し替える。
+- ほかのツールの成果物は、名前の検査（B.3）までで止め、端を作らない（C で作る）。B の段階のテストは、ほかのツールの成果物を使わない。B の yuen は、名前の検査を通ったプロジェクトがほかのツールの成果物、範囲、借りた出典を指していれば、「yuen はまだ koyomi の成果物を読めません」と言って exit 2 にする（`src/check.rs` の `not_yet`）。確かめないまま通すことはしない（DESIGN 2.3）。C はここをツールの読み方に差し替える。
 - テスト（`tests/ends.rs`）：B.14 の `period` の要件の端が、A の段階の試作と同じ値になる。`起算日` `a9ebc73907faddc8`、`満了日` `465b83ed8c251406`、`満了日_142条` `d4f2d2a67322df17`。`file "民法の期間.cal"` の端が `c9b94eecde23e6b5`。`起算日` の端の中身が DESIGN 4.1 の 3 行と一字一句同じ。
 
 ### B.6 グラフ、循環、期間（`src/graph.rs`）
@@ -167,7 +167,7 @@ docs/  skills/  README.md  README.ja.md  THIRD_PARTY_NOTICES.md   （D）
 ### B.8 カバレッジと範囲（`src/coverage.rs`）
 
 - DESIGN 5.2：E401、E402、W401。版ごとに数える。
-- DESIGN 5.3：範囲の成果物を集める（`scope file "<path>"` のファイルとディレクトリ。除くディレクトリは DESIGN 1.8）。辿れるかの 1〜3（名指されている、含むものが名指されている、含まれるものが名指されている）。4（geas の記録を通る）は C。E404。
+- DESIGN 5.3：範囲の成果物を集める（`scope file "<path>"` のファイルとディレクトリ。除くディレクトリは DESIGN 1.8）。辿れるかの 1〜3（指されている、含むものが指されている、含まれるものが指されている）。4（geas の記録を通る）は C。E404。
 - テスト（`tests/coverage.rs`）：満たすもの・確かめるものが無い、見送りとリンクの両方がある、範囲のファイルを指すリンクが無い、ディレクトリの範囲で一つだけ辿れない、の変異。
 
 ### B.9 検査（`src/check.rs`）
@@ -223,7 +223,7 @@ docs/  skills/  README.md  README.ja.md  THIRD_PARTY_NOTICES.md   （D）
 | B.7 の変異 | 1 は E302 が二つと E304 が一つ、2 は E303・E302・E304 が一つずつ、3 は E303 が三つ（差分は一本め）、4 は E301 と E304、5 は 1 の印に W301 |
 | B.10 の review | 1〜3 の変異が `review --all` のあと通る。`.req` は記録の行のほかは一字も変わらない |
 | 診断 | DESIGN 6.2 のうち B のコードに変異と再現があり、英語と日本語の golden と一致する |
-| 名指し | `tests/fixtures/naming.tsv` の全行が表のとおり（B の段階では JSON 18 行、エラー 9 行。2026-10-03 に sakai との突き合わせで 36 行（JSON 21 行、エラー 15 行）になり、C の段階でコピーし直した） |
+| 参照 | `tests/fixtures/naming.tsv` の全行が表のとおり（B の段階では JSON 18 行、エラー 9 行。2026-10-03 に sakai との突き合わせで 36 行（JSON 21 行、エラー 15 行）になり、C の段階でコピーし直した） |
 
 報告には、`cargo test` のテストの数と時間を書く。DESIGN の形の案のうち、B で実物に差し替えたもの（5.1 の一行、4.3 の例の診断、6.3 の例、9 章の trace）を挙げる。
 
@@ -239,21 +239,21 @@ docs/  skills/  README.md  README.ja.md  THIRD_PARTY_NOTICES.md   （D）
 - コマンドを関数にする（`yuen::run::run(引数, Suite, 標準出力, 標準エラー)`）。クレートのバイナリはそれを呼ぶだけにする。
 - 一回の実行の中で、同じファイルを同じ口に二度尋ねない（`Suite` が答えを覚える）。
 - 言語がつながっていなければ、何を読めないかと、`ritsu yuen` に同じコマンドを続けた形を言って exit 2。言語が答えられなければ E203（その言語の診断を注に）。中のものの定義の文が空なら、空の文のハッシュを端にせず E203（ritsu の PLAN 7.6）。E204 は退かせる（JSON を読まない）。
-- 端（DESIGN 3.2）：ファイルを名指したらバイト列、中のものを名指したら、その言語が渡す定義の文。rulec と koyomi のファイルは、`Sources` がそのファイルの検査を通してから答えるので、検査を通らないものからは端を作らない。
-- テスト（`tests/suite.rs`、`tests/cli.rs`）：クレートのバイナリが、六つの言語のどれを名指すプロジェクトでも exit 2 で止まり、`ritsu yuen check …` を言い、同じプロジェクトをすべての言語をつないで走らせれば通ること。一つの規則のファイルに六本のリンクがあっても、口に一度だけ尋ねること（数える口を挟む）。定義の文の空のものが E203 になること（空の文を渡す口を挟む）。検査を通らないカレンダー（koyomi の例 `民法の期間_読み方の比較.cal`）を名指せば E203 で、koyomi の診断が注に出ること。
+- 端（DESIGN 3.2）：ファイルを指したらバイト列、中のものを指したら、その言語が渡す定義の文。rulec と koyomi のファイルは、`Sources` がそのファイルの検査を通してから答えるので、検査を通らないものからは端を作らない。
+- テスト（`tests/suite.rs`、`tests/cli.rs`）：クレートのバイナリが、六つの言語のどれを指すプロジェクトでも exit 2 で止まり、`ritsu yuen check …` を言い、同じプロジェクトをすべての言語をつないで走らせれば通ること。一つの規則のファイルに六本のリンクがあっても、口に一度だけ尋ねること（数える口を挟む）。定義の文の空のものが E203 になること（空の文を渡す口を挟む）。検査を通らないカレンダー（koyomi の例 `民法の期間_読み方の比較.cal`）を指せば E203 で、koyomi の診断が注に出ること。
 - 前の計画：ツールを `YUEN_RULEC` などか PATH から探し、そのファイルのディレクトリで呼び、exit 0 でなければ E203、JSON にキーが無ければ E204、偽のツールのシェルスクリプトで E204 を試す、だった。
 
 ### C.2 rulec
 
 - 中のもの（`input`、`output`、`enum` と `value`、`table`、`clause`、`define`、`derive`、`machine`、`source`）は rulec の `Items` で、別名は `Rules` の事実（入力、出力、列挙、値の別名）で、規則が固定している出典は `Sources` で読む。
 - テストの材料：`tests/fixtures/rulec/`。rulec のコーパスの `印紙税の本則と軽減.rule` と `osha_extinguisher.rule` を `rules/` に、その出典のコピーを `rules/sources/law/` にコピーする。要件の側には、同じ条を自分で保存して固定した `印紙税.req`（コピーは規則のコピーと同じバイト列）と、規則の出典を借りる `fire_extinguishers.req` を置く。
-- テスト：`output 印紙税額`、`input 契約金額`、`table 本則`、`table 軽減`、`clause 非課税`、`define 軽減期間` があると分かり、`output tax`（別名）は E202 で名前を候補に示し、`table 無い表` は E202。ファイルを名指したときの端が `dc176eebd83f26e3` と `a52e955b88af88d6`。表と節と `define` の端（取り直した値は C.13）。`yuen api` の成果物の `pins` が、`法 別表第一 0ba69792e960021e`、`措置法 第91条 85faf53f6f6e8196`、`osha "§1910.157" c2a9ce966c7e2269`。
+- テスト：`output 印紙税額`、`input 契約金額`、`table 本則`、`table 軽減`、`clause 非課税`、`define 軽減期間` があると分かり、`output tax`（別名）は E202 で名前を候補に示し、`table 無い表` は E202。ファイルを指したときの端が `dc176eebd83f26e3` と `a52e955b88af88d6`。表と節と `define` の端（取り直した値は C.13）。`yuen api` の成果物の `pins` が、`法 別表第一 0ba69792e960021e`、`措置法 第91条 85faf53f6f6e8196`、`osha "§1910.157" c2a9ce966c7e2269`。
 - 前の計画：`rulec api` と `rulec graph` の JSON から読み、端はファイル全体（`source_sha256`）にする、だった。
 
 ### C.3 koyomi
 
 - 中のもの（`input`、`date`、`claim`、`source`）は koyomi の `Items` で、別名は `Dates` の事実で、日付のファイルとカレンダーのファイルが固定している出典は `Sources` で読む。
-- テストの材料：`tests/fixtures/koyomi/`。koyomi の `examples/` から `民法の期間.cal`、`支払_20日締め翌月10日払い.cal`、`calendars/民法142条の休日.cal`、`calendars/東京の営業日.cal`、`calendars/data/syukujitsu.csv`、`sources/law/129AC0000000089@2026-10-01/` をコピーする。要件は、民法を借りる `民法の期間.req`（日付と条件を一つずつ名指し、範囲は `scope koyomi "民法の期間.cal" date`）と、カレンダーの祝日の表（`file` の出典）を借りる `支払条件.req`。
+- テストの材料：`tests/fixtures/koyomi/`。koyomi の `examples/` から `民法の期間.cal`、`支払_20日締め翌月10日払い.cal`、`calendars/民法142条の休日.cal`、`calendars/東京の営業日.cal`、`calendars/data/syukujitsu.csv`、`sources/law/129AC0000000089@2026-10-01/` をコピーする。要件は、民法を借りる `民法の期間.req`（日付と条件を一つずつ指し、範囲は `scope koyomi "民法の期間.cal" date`）と、カレンダーの祝日の表（`file` の出典）を借りる `支払条件.req`。
 - テスト：日付 `起算日`・`満了日`・`満了日_142条` と条件の端（取り直した値は C.13）。条件 `142条の満了日は満了日以後` の端の中身が、その条件の行であること。`calendars/東京の営業日.cal` の出典 `祝日` が、固定 `cec37a743c96995c` の `file` の出典として読めること。カレンダーの 142 条のコピーを一文字変えて固定し直すと、印が付くのは `満了日_142条` の三本だけであること（DESIGN 4.3）。
 - 前の計画：`koyomi api` の JSON から読み、日付の端はファイル全体、条件の端は `claims[]` の一つから `name` を除いた JSON にする、だった。
 
@@ -290,14 +290,14 @@ docs/  skills/  README.md  README.ja.md  THIRD_PARTY_NOTICES.md   （D）
 
 ### C.8 名前の変わった成果物（DESIGN 4.5）
 
-- E202 のとき、同じファイルの同じ種類のもので、今の端が記録のリンク先のハッシュと同じものを、候補として添える。端に名前が入る種類では、どのリンクも名指していない同じ種類のものを並べ、候補が一つで、確かめたときの中身が `reviewed/` にあれば、その差分を見せる。
-- テスト（`tests/suite.rs` と変異 `E202_名前が変わった`）：chobo の帳簿で `transfer 返金` の名前を `返金の申請` に変えると、候補に `返金の申請` が一つ出る。`account 返金済み` を `返した額` に変えると、候補に `売上` と `返した額` の二つが出る（DESIGN 3.2）。koyomi の日付 `起算日` の名前を変えると、どのリンクも名指していない日付が候補に出て、名前の行だけが変わった差分が出る。
+- E202 のとき、同じファイルの同じ種類のもので、今の端が記録のリンク先のハッシュと同じものを、候補として添える。端に名前が入る種類では、どのリンクも指していない同じ種類のものを並べ、候補が一つで、確かめたときの中身が `reviewed/` にあれば、その差分を見せる。
+- テスト（`tests/suite.rs` と変異 `E202_名前が変わった`）：chobo の帳簿で `transfer 返金` の名前を `返金の申請` に変えると、候補に `返金の申請` が一つ出る。`account 返金済み` を `返した額` に変えると、候補に `売上` と `返した額` の二つが出る（DESIGN 3.2）。koyomi の日付 `起算日` の名前を変えると、どのリンクも指していない日付が候補に出て、名前の行だけが変わった差分が出る。
 
 ### C.9 affected（`src/affected.rs`）
 
 - DESIGN 8 章。統一形式の差分（`git diff` と `diff -u`。`diff --git`、`---`/`+++`、`a/`・`b/`、引用符で書いたパス、改名、ファイルの追加と削除）を読み、ファイルごとに、`.req`（差分の行が入る要件のブロック）、出典のコピー、成果物のファイル、コード（geas の spec ごとに geas の `Claims` の `affected` に尋ねる。`--map <spec>=<記録>` はその spec の記録）、範囲のファイル、そのほか、に分ける。差分の読み手は、geas の `src/diff.rs` の読む部分を ritsu-base（`udiff`）に移して、geas と yuen で一つにする（geas の振る舞いは変えない）。
 - 答えの文面（英語と日本語）と `--format json`。exit code は 0・1・2（DESIGN 8 章）。コマンドの表に `affected` を足す（`--diff`、何度でも書ける `--map`、`--format json`）。
-- テスト（`tests/suite.rs`）：`tests/fixtures/geas` に A の段階と同じ差分を当て、変更の前と後の記録を渡すと、主張 `rejects an empty name` と、それを確かめる要件と持ち主が出る（exit 0。英語、日本語、JSON の golden）。前の記録だけを渡すと、geas の E063 を主張の節に言って exit 2。`.req` の要件の文を変える差分、借りた出典のコピーを変える差分（その条を引く要件と、固定している成果物が出る）、規則を変える差分（その規則を名指す要件が出る）、自分で保存した条のコピーを変える差分（同じ条を固定している規則も出る）の golden（`tests/golden/affected/`）。範囲の中でどの要件にも辿れないファイルを変える差分は exit 1。読めない差分と、どのリンクも名指していない spec の `--map` は exit 2。
+- テスト（`tests/suite.rs`）：`tests/fixtures/geas` に A の段階と同じ差分を当て、変更の前と後の記録を渡すと、主張 `rejects an empty name` と、それを確かめる要件と持ち主が出る（exit 0。英語、日本語、JSON の golden）。前の記録だけを渡すと、geas の E063 を主張の節に言って exit 2。`.req` の要件の文を変える差分、借りた出典のコピーを変える差分（その条を引く要件と、固定している成果物が出る）、規則を変える差分（その規則を指す要件が出る）、自分で保存した条のコピーを変える差分（同じ条を固定している規則も出る）の golden（`tests/golden/affected/`）。範囲の中でどの要件にも辿れないファイルを変える差分は exit 1。読めない差分と、どのリンクも指していない spec の `--map` は exit 2。
 - 前の計画：geas の `affected` を子プロセスで呼び（`geas affected <spec> <差分> --json`）、差分は yuen が自分で読む、だった。
 
 ### dandori と sakai
@@ -358,7 +358,7 @@ C.1〜C.9 の計画には無かったが、ritsu の D.6 で dandori が中の�
 ### C.13 C の完了の条件
 
 - `cargo test -- --nocapture` が全部通り、この機械で SKIP が 0（`tools/reqif/xsd` と `YUEN_PYTHON` の venv を用意して回す。ほかの言語は同じプロセスの中でつなぐので、SKIP にならない）。
-- C.2〜C.4 の端のハッシュが出る。ファイルを名指したときの端は、A の段階の値のまま（`印紙税の本則と軽減.rule` `dc176eebd83f26e3`、`osha_extinguisher.rule` `a52e955b88af88d6`）。chobo の端も A の段階の値のまま（`84e9ce254075c697`、`851ab806078168fe`、`9f9b0d74872f62a4`、`35a4ec5a2ee5eb06`）。koyomi の日付と条件、rulec の表と節は、言語が渡す定義の文が端になったので取り直した（下の表。A の段階の試作の値 `c9b94eecde23e6b5`、`825aa6c6f7ccf314`・`447d80ca751bd681`・`2a8e130e4c527692`・`0b951fef68a36592` は、ファイル全体と `koyomi api` の JSON から作る端の値で、もう出ない）。
+- C.2〜C.4 の端のハッシュが出る。ファイルを指したときの端は、A の段階の値のまま（`印紙税の本則と軽減.rule` `dc176eebd83f26e3`、`osha_extinguisher.rule` `a52e955b88af88d6`）。chobo の端も A の段階の値のまま（`84e9ce254075c697`、`851ab806078168fe`、`9f9b0d74872f62a4`、`35a4ec5a2ee5eb06`）。koyomi の日付と条件、rulec の表と節は、言語が渡す定義の文が端になったので取り直した（下の表。A の段階の試作の値 `c9b94eecde23e6b5`、`825aa6c6f7ccf314`・`447d80ca751bd681`・`2a8e130e4c527692`・`0b951fef68a36592` は、ファイル全体と `koyomi api` の JSON から作る端の値で、もう出ない）。
 - C.7 の、借りた出典で書いた `民法の期間.req` が、B と同じ要件の端を出す。
 - C.9 の `affected` が、greeter の差分で主張から要件と持ち主まで答える。
 - C.10 と C.11 の書き出しが、xmllint、`reqif validate`、`prov` のどれでも通る（十のプロジェクト）。
@@ -415,7 +415,7 @@ DESIGN 15 章の七つ。英語の例を先に、日本語の版を `<名前>.ja
 
 ### D.3 docs/
 
-- `docs/reference.md`（英語）：言語の全部、名指し方、端とハッシュと確かめた記録、検査、コマンド、exit code、JSON の形、環境変数。キーワードの表は `src/kw.rs` の `TABLE` と同じ並び。
+- `docs/reference.md`（英語）：言語の全部、参照の書き方、端とハッシュと確かめた記録、検査、コマンド、exit code、JSON の形、環境変数。キーワードの表は `src/kw.rs` の `TABLE` と同じ並び。
 - `docs/codes.md` と `docs/codes.ja.md`：`yuen explain --all --format markdown`（`--lang ja`）の出力そのもの。
 - テスト（`tests/docs.rs`）：codes の二つがいまの出力と同じ。キーワードの表が `kw.rs` と同じ。
 
@@ -454,14 +454,14 @@ DESIGN 15 章の七つ。英語の例を先に、日本語の版を `<名前>.ja
 - DESIGN の端のハッシュの値は、A の段階の試作で出した。B の yuen が違う値を出したら、まず DESIGN 4.1 と 3.2 の定義に照らす（とくに、要件の端の中身の行の並べ方と最後の改行、決まった形の JSON のキーの順と字下げ）。
 - 法令のコピーは、koyomi と rulec の例から持ってくる（B.4、C.2、C.3）。取り直さない。e-Gov と eCFR に取りに行くのは、C.12 の `YUEN_NET=1` のテストだけである。
 - A の段階で確かめた一式の振る舞い（DESIGN 19 章）：三つのツールの `source_sha256` はファイルのバイト列のハッシュ、行ごとの引用はどの JSON にも無い、検査を通らないファイルには api が出ない、geas の記録と `affected --json` の形。どれかが変わっていたら（ツールのバージョンが上がって）、DESIGN 3 章を直してから進む。
-- 作者が決めるべきだったかもしれないこと（A の報告で挙げたもの）：看板の言い方、要件の端にリンク元のハッシュを入れて先のリンクを一本ずつ確かめさせること（DESIGN 4.1）、確かめた記録に人と日付を書くこと（4.2）、`reviewed/` を git に入れること（4.4）、rulec・koyomi の日付・geas の端をファイル全体にしたこと（3.2）、dandori をファイルでだけ名指すこと（2.7、3.5）、一式に出してほしいもの（3.5）、PROV-N と PROV-JSON の両方を出すこと（13 章）。作者の返事で変わったら、DESIGN と、この計画の該当の項を直してから進める。
-- sakai と突き合わせる名指し方（DESIGN 2.8）が、作者か突き合わせた人の判断で変わったら、2 章と、B.3 と C.2〜C.6 の名前の読み方を直す。（B の段階で決着した。下の 5.2。）
+- 作者が決めるべきだったかもしれないこと（A の報告で挙げたもの）：看板の言い方、要件の端にリンク元のハッシュを入れて先のリンクを一本ずつ確かめさせること（DESIGN 4.1）、確かめた記録に人と日付を書くこと（4.2）、`reviewed/` を git に入れること（4.4）、rulec・koyomi の日付・geas の端をファイル全体にしたこと（3.2）、dandori をファイルの単位でだけ指すこと（2.7、3.5）、一式に出してほしいもの（3.5）、PROV-N と PROV-JSON の両方を出すこと（13 章）。作者の返事で変わったら、DESIGN と、この計画の該当の項を直してから進める。
+- sakai と突き合わせる参照の書き方（DESIGN 2.8）が、作者か突き合わせた人の判断で変わったら、2 章と、B.3 と C.2〜C.6 の名前の読み方を直す。（B の段階で決着した。下の 5.2。）
 
 ### 5.2 B から C へ（B の段階で書いた）
 
-- 名指し方は `tests/fixtures/naming.tsv`（sakai と同じ表）で決着した。C で種類を読むとき、DESIGN 2.3 の表の「名前を読むところ」に従う。rulec の `enum`・`value` は `rulec api` の `python.enums[]`、`machine` は `rulec api` の `machine.name` である（B の段階で `rulec api` を走らせて確かめた）。`input` と `output` を `graph` と `api` の両方から読み、一致することを確かめる。
+- 参照の書き方は `tests/fixtures/naming.tsv`（sakai と同じ表）で決着した。C で種類を読むとき、DESIGN 2.3 の表の「名前を読むところ」に従う。rulec の `enum`・`value` は `rulec api` の `python.enums[]`、`machine` は `rulec api` の `machine.name` である（B の段階で `rulec api` を走らせて確かめた）。`input` と `output` を `graph` と `api` の両方から読み、一致することを確かめる。
 - ツールを読むところは `src/check.rs` の `not_yet` と `src/ends.rs` の `artifact_end`（`Unread::NotYet`）と `src/coverage.rs` の `gather` に集めてある。C はそこを `src/tools/` の読み方に差し替える。借りた出典は `src/sources.rs` の `Resolved::Borrowed` で止めてある。
-- 印の並べ方と説明は `src/marks.rs`。まとまりの元は `cause_of`（要件の端が変わったのは、どの上の端のせいか）で決める。端がファイル全体の種類（rulec、koyomi の日付、geas、dandori、sakai）では、`Thing::Artifact` を、名指しではなくファイルの名指し（`Name::file()`）にすると、同じ `.cal` を指す三本が一つのまとまりになり、差分も一度だけになる（DESIGN 4.3 の例）。B の `file` は名指しがファイルそのものなので、いまは区別が要らない。
+- 印の並べ方と説明は `src/marks.rs`。まとまりの元は `cause_of`（要件の端が変わったのは、どの上の端のせいか）で決める。端がファイル全体の種類（rulec、koyomi の日付、geas、dandori、sakai）では、`Thing::Artifact` を、参照ではなく、そのファイルの参照（`Name::file()`）にすると、同じ `.cal` を指す三本が一つのまとまりになり、差分も一度だけになる（DESIGN 4.3 の例）。B の `file` は参照がファイルそのものなので、いまは区別が要らない。
 - 端の値：B の yuen は、要件の端（`a9ebc73907faddc8`、`465b83ed8c251406`、`d4f2d2a67322df17`）と `file "民法の期間.cal"`（`c9b94eecde23e6b5`）で試作と同じ値を出した。C.7 の借りた出典で同じ値が出ればよい。
 - テストの一時ディレクトリは `std::env::temp_dir()` の下に作り、終われば消す。この機械では `TMPDIR` を作業場所に向けて回した。
 
@@ -475,7 +475,7 @@ DESIGN 15 章の七つ。英語の例を先に、日本語の版を `<名前>.ja
 ### 5.4 C の後半（ritsu の D.7）から次へ
 
 - C は済んだ。残りは D（doc、例、README、スキル）で、ritsu の PLAN の F.1 で書き直してから作る。doc（DESIGN 10 章）は、ほかの言語のものの名前と端を `Suite` から読み、規則やカレンダーのページを埋め込まずに名前とファイルを書く（10 章の「捨てたもの」のとおり）。
-- ほかの言語を読むところは `src/suite.rs`（口と、一回の実行の中で覚えた答え）、`src/ends.rs` の `artifact_end`、`src/coverage.rs` の `gather` と `ran_by_claims`、`src/sources.rs` の `borrow` と `pinned_by` に集めてある。言語が新しい種類を口で渡すようになっても、yuen の側は名指しの表（ritsu-base）に種類が入れば読める。
+- ほかの言語を読むところは `src/suite.rs`（口と、一回の実行の中で覚えた答え）、`src/ends.rs` の `artifact_end`、`src/coverage.rs` の `gather` と `ran_by_claims`、`src/sources.rs` の `borrow` と `pinned_by` に集めてある。言語が新しい種類を口で渡すようになっても、yuen の側は参照の決まり（ritsu-base）に種類が入れば読める。
 - テストは、ほかの言語のクレートを dev-dependency に持ち、`tests/common/mod.rs` の `suite()` と `run()` で、`ritsu yuen` と同じにつないで同じプロセスの中で走らせる。環境変数を変えて走らせるテスト（テストの中の e-Gov など）で、ほかの言語も要るものは、`crates/ritsu/tests/yuen.rs` に置く（ritsu のバイナリを走らせる）。
 - `ritsu yuen` に同じコマンドを続けて言うために、`run` が引数を `check::COMMAND`（スレッドに一つ）に置く。ライブラリの関数を直接呼んだときは、`check` と渡したパスから組み立てる。
 
@@ -490,7 +490,7 @@ DESIGN 15 章の七つ。英語の例を先に、日本語の版を `<名前>.ja
 
 DESIGN 20 章。ritsu の v0.23.0 のあとに作った。
 
-- 読み手は ritsu-base の `openspec`（geas と分け合う）。yuen の側は、`src/ast.rs` の `SourceKind::OpenSpec`、`src/kw.rs` の `openspec`、`src/lex.rs`（`openspec "…"` を名指しとして切り出さない）、`src/parse.rs`、`src/project.rs`（パスの解決と E013）、`src/sources.rs`（`spec_source` の E101・E102・E103・E104・E108、引用の E102・E105・E108、プロジェクト全体で一度の W102、`Cited` の `from openspec …` の行）、`src/marks.rs`（差分の見出しと、名前の引用符）、`src/fetch.rs`（`fetch` の一行、`pin`、`spec_outdated`）、`src/openspec.rs`（変更の提案が固定した要件に何をするか）、`src/affected.rs`（仕様の両側を比べる `spec_touched`、提案の差分の `Proposed` と JSON の `openspec_changes`）、`src/trace.rs`、`src/doc/mod.rs`、`src/api.rs`、`src/export/`（`SourceKey::OpenSpec`。属性は `yuen.file` を使い回す）、`src/ports.rs`、`src/codes.rs`（E108、W102、W402 と、E101〜E105 の文）、`src/coverage.rs`（W402。シナリオと、要件を確かめる geas の主張の名前を突き合わせる）。
+- 読み手は ritsu-base の `openspec`（geas と分け合う）。yuen の側は、`src/ast.rs` の `SourceKind::OpenSpec`、`src/kw.rs` の `openspec`、`src/lex.rs`（`openspec "…"` を参照として切り出さない）、`src/parse.rs`、`src/project.rs`（パスの解決と E013）、`src/sources.rs`（`spec_source` の E101・E102・E103・E104・E108、引用の E102・E105・E108、プロジェクト全体で一度の W102、`Cited` の `from openspec …` の行）、`src/marks.rs`（差分の見出しと、名前の引用符）、`src/fetch.rs`（`fetch` の一行、`pin`、`spec_outdated`）、`src/openspec.rs`（変更の提案が固定した要件に何をするか）、`src/affected.rs`（仕様の両側を比べる `spec_touched`、提案の差分の `Proposed` と JSON の `openspec_changes`）、`src/trace.rs`、`src/doc/mod.rs`、`src/api.rs`、`src/export/`（`SourceKey::OpenSpec`。属性は `yuen.file` を使い回す）、`src/ports.rs`、`src/codes.rs`（E108、W102、W402 と、E101〜E105 の文）、`src/coverage.rs`（W402。シナリオと、要件を確かめる geas の主張の名前を突き合わせる）。
 - 例は `examples/openspec_greeter` と `examples/openspec_greeter_archived`（英語と、`ja/` の下の日本語）。仕様と提案は OpenSpec 1.14.0 の `openspec validate` を通し、archive したあとの木は OpenSpec が書いたものである。固定は `yuen source pin`、記録は `yuen review --date 2026-10-05` が書いた。geas の記録（`.geas/`）は、同じ主張と同じサーバーの `examples/greeter/.geas/` のコピー。
 - テストは `tests/openspec.rs`（英語と日本語、golden は `tests/golden/openspec/`）、変異は E104・E108・W102・W402 の英語と日本語の対（`tests/english_mutants.rs` の `PAIRS` は 70 組）、`tests/examples.rs` は二つめのわざと止まる例を知っている（`tests/doc.rs` は、それがページを作らないことを確かめる）。台帳のテストは 89 回の再現と 47 個のコード。
 - 文書は README.md と README.ja.md の節、例ごとの README、`docs/reference.md`、`docs/codes.md` と `docs/codes.ja.md`（`explain --all --format markdown` の出力）、スキルの SKILL.md（`skills/sync.sh` が reference と codes をコピーする）。

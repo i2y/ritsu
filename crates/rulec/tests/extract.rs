@@ -134,7 +134,7 @@ fn 途中で終わった抽出は保存しない() {
 /// The template is the shape of an extractor, and it says which documents of this rule need
 /// one at all — a question only the rule can answer.
 #[test]
-fn テンプレートは文書を名指しする() {
+fn テンプレートは文書を挙げる() {
     let (_tmp, d) = scratch("template");
     let (c, out) = rulec(&d, &["source", "fetch", "a.rule"]);
     assert_eq!(c, 0, "{out}");

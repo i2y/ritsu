@@ -190,7 +190,7 @@
             </ATTRIBUTE-VALUE-STRING>
             <ATTRIBUTE-VALUE-XHTML>
               <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_7ffe71e9e8ed2f78b159d299efe86c10</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
-              <THE-VALUE><xhtml:div><xhtml:p>not verified "残りが 0 より下にならないことは chobo の検査が確かめる。この材料は、それを名指す主張を持たない"</xhtml:p><xhtml:p>approved 2026-10-04 by 経理 sha256:7c5b2a8cb5f9eb15</xhtml:p></xhtml:div></THE-VALUE>
+              <THE-VALUE><xhtml:div><xhtml:p>not verified "残りが 0 より下にならないことは chobo の検査が確かめる。この材料は、それを指す主張を持たない"</xhtml:p><xhtml:p>approved 2026-10-04 by 経理 sha256:7c5b2a8cb5f9eb15</xhtml:p></xhtml:div></THE-VALUE>
             </ATTRIBUTE-VALUE-XHTML>
             <ATTRIBUTE-VALUE-STRING THE-VALUE="7c5b2a8cb5f9eb15">
               <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3053884aad8bf228da5264102c7adaac</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
@@ -222,7 +222,7 @@
             </ATTRIBUTE-VALUE-STRING>
             <ATTRIBUTE-VALUE-XHTML>
               <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_7ffe71e9e8ed2f78b159d299efe86c10</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
-              <THE-VALUE><xhtml:div><xhtml:p>not verified "押さえた額が期限で戻ることは chobo のシナリオが確かめる。この材料は、それを名指す主張を持たない"</xhtml:p><xhtml:p>approved 2026-10-04 by 経理 sha256:b13e498e17a4fd86</xhtml:p></xhtml:div></THE-VALUE>
+              <THE-VALUE><xhtml:div><xhtml:p>not verified "押さえた額が期限で戻ることは chobo のシナリオが確かめる。この材料は、それを指す主張を持たない"</xhtml:p><xhtml:p>approved 2026-10-04 by 経理 sha256:b13e498e17a4fd86</xhtml:p></xhtml:div></THE-VALUE>
             </ATTRIBUTE-VALUE-XHTML>
             <ATTRIBUTE-VALUE-STRING THE-VALUE="b13e498e17a4fd86">
               <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3053884aad8bf228da5264102c7adaac</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
@@ -521,7 +521,7 @@
             <ATTRIBUTE-VALUE-STRING THE-VALUE="1">
               <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_4d29b822c24952edd439e093b5d3165a</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
             </ATTRIBUTE-VALUE-STRING>
-            <ATTRIBUTE-VALUE-STRING THE-VALUE="chobo の例「refunds.ja.book」の勘定と振替が、返金の方針のどこから来たかを書いたテストの材料。出典は方針の文書を保存して固定し、成果物は勘定と振替を一つずつ名指す">
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="chobo の例「refunds.ja.book」の勘定と振替が、返金の方針のどこから来たかを書いたテストの材料。出典は方針の文書を保存して固定し、成果物は勘定と振替を一つずつ指す">
               <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_a839768f26076ff8651b726d23c1ccaa</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>
             </ATTRIBUTE-VALUE-STRING>
           </VALUES>

@@ -1,5 +1,5 @@
 requirements 配送 v1
-description "dandori の例「arrange_delivery.ja.flow」のタスクとレコードを、配送の手順のどこから来たかで名指したテストの材料"
+description "dandori の例「arrange_delivery.ja.flow」のタスクとレコードが、配送の手順のどこから来たかを書いたテストの材料"
 
 role 物流 "配送の手順を決める"
 role 開発 "ワークフローを書いて直す"

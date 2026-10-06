@@ -221,14 +221,14 @@
       "yuen:down": "851ab806078168fe",
       "yuen:status": "ok"
     },
-    "y:waiver/ae2a7b6a5872bffdfc8ad23cdebb32b2": {
+    "y:waiver/4fe38e567488af2c57f4e98a881374ab": {
       "prov:startTime": "2026-10-04T00:00:00",
       "prov:type": {
         "$": "yuen:Waiver",
         "type": "prov:QUALIFIED_NAME"
       },
       "yuen:side": "not verified",
-      "yuen:why": "残りが 0 より下にならないことは chobo の検査が確かめる。この材料は、それを名指す主張を持たない",
+      "yuen:why": "残りが 0 より下にならないことは chobo の検査が確かめる。この材料は、それを指す主張を持たない",
       "yuen:sha256": "7c5b2a8cb5f9eb15",
       "yuen:status": "ok"
     },
@@ -254,14 +254,14 @@
       "yuen:down": "84e9ce254075c697",
       "yuen:status": "ok"
     },
-    "y:waiver/20d1420571ec1b197c12bacfe66cd025": {
+    "y:waiver/0280cc8a1bd06f6939b5e7ccb97bf462": {
       "prov:startTime": "2026-10-04T00:00:00",
       "prov:type": {
         "$": "yuen:Waiver",
         "type": "prov:QUALIFIED_NAME"
       },
       "yuen:side": "not verified",
-      "yuen:why": "押さえた額が期限で戻ることは chobo のシナリオが確かめる。この材料は、それを名指す主張を持たない",
+      "yuen:why": "押さえた額が期限で戻ることは chobo のシナリオが確かめる。この材料は、それを指す主張を持たない",
       "yuen:sha256": "b13e498e17a4fd86",
       "yuen:status": "ok"
     },
@@ -325,7 +325,7 @@
       "prov:entity": "y:artifact/0f8653b8096963c387df55ddf486a364"
     },
     "_:r14": {
-      "prov:activity": "y:waiver/ae2a7b6a5872bffdfc8ad23cdebb32b2",
+      "prov:activity": "y:waiver/4fe38e567488af2c57f4e98a881374ab",
       "prov:entity": "y:requirement/within_sales/v1"
     },
     "_:r19": {
@@ -345,7 +345,7 @@
       "prov:entity": "y:artifact/c0acdabaa818d3f2900ab54dfb8f466e"
     },
     "_:r25": {
-      "prov:activity": "y:waiver/20d1420571ec1b197c12bacfe66cd025",
+      "prov:activity": "y:waiver/0280cc8a1bd06f6939b5e7ccb97bf462",
       "prov:entity": "y:requirement/hold_until_approved/v1"
     },
     "_:r30": {
@@ -383,7 +383,7 @@
       "prov:agent": "y:role/開発"
     },
     "_:r15": {
-      "prov:activity": "y:waiver/ae2a7b6a5872bffdfc8ad23cdebb32b2",
+      "prov:activity": "y:waiver/4fe38e567488af2c57f4e98a881374ab",
       "prov:agent": "y:role/経理"
     },
     "_:r21": {
@@ -395,7 +395,7 @@
       "prov:agent": "y:role/開発"
     },
     "_:r26": {
-      "prov:activity": "y:waiver/20d1420571ec1b197c12bacfe66cd025",
+      "prov:activity": "y:waiver/0280cc8a1bd06f6939b5e7ccb97bf462",
       "prov:agent": "y:role/経理"
     },
     "_:r32": {

@@ -1796,7 +1796,7 @@ pub fn ledger() -> Vec<Entry> {
             "E015",
             tr!("`result` が書けるのは最初の出力だけです", "`result` can only assemble the first output"),
             tr!(
-                "`result` が二つ目以降の出力を名指ししたとき。`result` は最初の出力を組み立てるための書き方で、評価器も生成コードもそこにしか当てません。名指しが効かないまま通っていたので、`number` が `money` の枠に入っても E103 が出ませんでした。",
+                "`result` が二つ目以降の出力を指したとき。`result` は最初の出力を組み立てるための書き方で、評価器も生成コードもそこにしか当てません。書いた名前が効かないまま通っていたので、`number` が `money` の枠に入っても E103 が出ませんでした。",
                 "A `result` names an output other than the first. `result` is sugar for the first output, and both the evaluator and the generated code apply it only there. The name used to be ignored, so a `number` could land in a `money` slot without an E103."
             ),
             tr!(
@@ -2042,7 +2042,7 @@ pub fn ledger() -> Vec<Entry> {
             "E032",
             tr!("取り込んだ列挙と宣言がずれています", "The declared enum and the imported one disagree"),
             tr!(
-                "`import proto` や `import jsonschema` が名指しした列挙の値と、この規則の `enum` の値（別名があれば別名）がそろっていないとき。片方にしか無い値は、どちらの側のものも名前で出ます。値が増えるのはたいてい proto の側で、それは**規則の外での変更が、互換な変更として通ってしまったもの**です。",
+                "`import proto` や `import jsonschema` が指す列挙の値と、この規則の `enum` の値（別名があれば別名）がそろっていないとき。片方にしか無い値は、どちらの側のものも名前で出ます。値が増えるのはたいてい proto の側で、それは**規則の外での変更が、互換な変更として通ってしまったもの**です。",
                 "The values of the enum named by `import proto` or `import jsonschema` and the values of the rule's `enum` (their ASCII aliases, where they have them) are not the same set. Values on either side alone are named, in both directions. It is usually the proto that gained one, and **it shipped as a compatible change made outside this rule**."
             ),
             tr!(
@@ -2084,11 +2084,11 @@ pub fn ledger() -> Vec<Entry> {
             "E035",
             tr!("`overrides` の指す先がありません", "The target of `overrides` does not exist"),
             tr!(
-                "`overrides` が名指した表が無いか、この表より後ろで宣言されているか、`表:行ラベル` の行にそのラベルが無いとき。行の書き方が読めないときも同じです。例外は本文の後に書くので、指す先はいつも上にあります。",
+                "`overrides` が指す表が無いか、この表より後ろで宣言されているか、`表:行ラベル` の行にそのラベルが無いとき。行の書き方が読めないときも同じです。例外は本文の後に書くので、指す先はいつも上にあります。",
                 "An `overrides` line names a table that does not exist, or one declared below this table, or a row label (`table:label`) the table has no row of. A line whose shape cannot be read is reported the same way. The exception is written after what it excepts, so a target is always above."
             ),
             tr!(
-                "上で宣言した表か、その行（行の先頭にラベルを書き、`表:ラベル` で指す）を名指してください。優先する側を後に書いてください。",
+                "上で宣言した表か、その行（行の先頭にラベルを書き、`表:ラベル` で指す）を指定してください。優先する側を後に書いてください。",
                 "Name a table declared above, or one of its rows (label the row at its head and write `table:label`). Write the side that takes precedence later."
             ),
             X_E035,
@@ -2174,7 +2174,7 @@ pub fn ledger() -> Vec<Entry> {
             "E041",
             tr!("準用の読み替えが元の規則と合いません", "The bindings of an apply do not match the callee"),
             tr!(
-                "元の規則の入力に読み替えの無いものがあるとき、元の規則に無い入力や出力を名指ししたとき、元の規則の出力に付けた名前がこの規則に既にあるとき、`apply` の下の行の形が読めないとき。読み替えは元の規則の入力を一つ残らず書くものなので、一つでも足りなければ、読み替えを書いていないのと同じです。",
+                "元の規則の入力に読み替えの無いものがあるとき、元の規則に無い入力や出力を書いたとき、元の規則の出力に付けた名前がこの規則に既にあるとき、`apply` の下の行の形が読めないとき。読み替えは元の規則の入力を一つ残らず書くものなので、一つでも足りなければ、読み替えを書いていないのと同じです。",
                 "A callee input is left unbound, a binding or an output line names something the callee does not have, the name given to a callee output is already declared in this rule, or the `apply` block is not shaped as one. Substitution is written by binding every input explicitly, so a missing binding is a substitution left unwritten."
             ),
             tr!(
@@ -2336,7 +2336,7 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E052",
-            tr!("ステートマシンが名指しした状態が噛み合いません", "A state the machine names does not fit"),
+            tr!("ステートマシンに書いた状態が噛み合いません", "A state the machine names does not fit"),
             tr!(
                 "`initial`・`final`・`never` の行に、持ち越す状態の列挙に無い値があるとき。または `never` の両側に同じ状態があるとき。その主張は、その状態に留まる最初の呼び出しで破れるので、意味のある主張になりません。",
                 "An `initial`, `final` or `never` line names a value the enum of the carried state does not have, or `never` names one state on both sides — which the first call that stays in it breaks, so it cannot be what anyone means."
@@ -3023,7 +3023,7 @@ pub fn ledger() -> Vec<Entry> {
             "E130",
             tr!("koyomi の日付がとる日を読めません", "The days of the koyomi date cannot be read"),
             tr!(
-                "`range from koyomi` が名指す日付の日を、koyomi が答えないとき。ファイルが無い、koyomi の検査を通らない、その名前の日付が無い、入力の組み合わせが koyomi の確かめる数を超える、途中で計算が止まる入力がある、とる日が一つも無い、のどれかです。注には koyomi のメッセージが出ます。範囲全体で確かめ直すことはしません。",
+                "`range from koyomi` が指す日付の日を、koyomi が答えないとき。ファイルが無い、koyomi の検査を通らない、その名前の日付が無い、入力の組み合わせが koyomi の確かめる数を超える、途中で計算が止まる入力がある、とる日が一つも無い、のどれかです。注には koyomi のメッセージが出ます。範囲全体で確かめ直すことはしません。",
                 "koyomi does not answer for the days of the date `range from koyomi` names: the file is not there, does not pass koyomi's check, or has no date of that name; the inputs come to more combinations than koyomi checks; the computation stops at some input; or the date comes to no day at all. What koyomi says is in the notes. The check does not fall back to every day of the range."
             ),
             tr!(
@@ -3124,7 +3124,7 @@ pub fn ledger() -> Vec<Entry> {
             "W116",
             tr!("どの例も使っていない `sequence` です", "No example uses this sequence"),
             tr!(
-                "`sequence` を書いたのに、どの例もその名前を書いていないとき。並びは例から名指しされて初めて走るので、走っていない並びです。",
+                "`sequence` を書いたのに、どの例もその名前を書いていないとき。並びは、例が使ったときにだけ走るので、走っていない並びです。",
                 "A `sequence` is written and no example names it. A sequence runs only when an example names it, so this one never runs."
             ),
             tr!(

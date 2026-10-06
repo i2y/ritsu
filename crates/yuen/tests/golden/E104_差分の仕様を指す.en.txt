@@ -1,0 +1,4 @@
+error[E104]: tests/mutants/E104_差分の仕様を指す/挨拶.req:4:8: The spec tests/mutants/E104_差分の仕様を指す/openspec/changes/trim-names/specs/greeting/spec.md of the source 挨拶 cannot be read: it has no `## Requirements` section: it is a change's delta spec (`## ADDED Requirements` and the like)
+     4 | source 挨拶 = openspec "openspec/changes/trim-names/specs/greeting/spec.md"
+  = A source names `openspec/specs/<capability>/spec.md`; `openspec validate --specs` says what is wrong with the form of a spec.
+tests/mutants/E104_差分の仕様を指す: 1 error

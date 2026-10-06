@@ -34,7 +34,7 @@ fn section<'a>(text: &'a str, from: &str, to: &str) -> &'a str {
 #[test]
 fn every_req_design_shows_parses() {
     let design = std::fs::read_to_string("DESIGN.md").unwrap();
-    let mut parts = blocks(section(&design, "## 1. 言語", "## 2. 成果物の名指し方"));
+    let mut parts = blocks(section(&design, "## 1. 言語", "## 2. 成果物の参照の書き方"));
     parts.extend(blocks(section(&design, "### 4.2 確かめた記録", "### 4.3 印の付け方")));
     let mut n = 0;
     let mut failures = Vec::new();

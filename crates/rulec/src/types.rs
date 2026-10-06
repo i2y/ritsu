@@ -1644,9 +1644,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 c.diags.push(
                     Diag::warning("W116", tr!("どの例も使っていない `sequence` です: {}", "No example uses this sequence: {}", sq.name.text))
                         .at(tr!("{path}:{} 並び {}", "{path}:{} sequence {}", sq.span.line, sq.name.text))
-                        .mark(sq.name.span.clone(), tr!("名指ししている例がありません", "no example names it"))
+                        .mark(sq.name.span.clone(), tr!("使っている例がありません", "no example names it"))
                         .note(tr!(
-                            "並びは例から名指しされて初めて走ります。例を足すか、この並びを消してください。",
+                            "並びは、例が使ったときにだけ走ります。例を足すか、この並びを消してください。",
                             "A sequence runs only when an example names it. Add the example, or drop the sequence."
                         )),
                 );
@@ -3175,7 +3175,7 @@ impl Checked {
                             .at(at_m(m.span.line))
                             .mark(ov.span.clone(), "")
                             .note(tr!(
-                                "`over` の表の行が、状態の行き先そのものです。{} を出力の列に持つ表を名指ししてください。",
+                                "`over` の表の行が、状態の行き先そのものです。`over` には、{} を出力の列に持つ表の名前を書いてください。",
                                 "The rows of the `over` table are the transitions. Name a table that has {} as an output column.",
                                 o.text
                             )),

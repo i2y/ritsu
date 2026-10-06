@@ -247,7 +247,7 @@ fn 読まれない列があっても生成物はコンパイルできる() {
 }
 
 #[test]
-fn 読まれない列はW111で名指しされる() {
+fn 読まれない列はW111で指摘される() {
     let tmp = TempDir::new("shapes-w111");
     let dir = tmp.path().to_path_buf();
     let src = dir.join("r.rule");

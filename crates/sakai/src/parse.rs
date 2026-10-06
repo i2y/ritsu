@@ -461,7 +461,7 @@ impl<'a> P<'a> {
                             None => {
                                 self.push("E002", l, col, tr!("ここに `{w}` は書けません", "`{w}` does not belong here"));
                                 self.note(tr!(
-                                    "`dir \"<パス>\"` か、`rulec \"<パス>\"` のようにツールの語とパスを書いてください。",
+                                    "`dir \"<パス>\"` か、`rulec \"<パス>\"` のようにツール名とパスを書いてください。",
                                     "Write `dir \"<path>\"`, or a tool and a path, like `rulec \"<path>\"`."
                                 ));
                                 return None;
@@ -473,7 +473,7 @@ impl<'a> P<'a> {
                 }
                 Some(Tok::Str(s)) => {
                     let Some(tl) = tool else {
-                        self.push("E002", l, t.unwrap().col, tr!("パスの前に、`dir` かツールの語を書いてください", "A path comes after `dir` or a tool"));
+                        self.push("E002", l, t.unwrap().col, tr!("パスの前に、`dir` かツール名を書いてください", "A path comes after `dir` or a tool"));
                         return None;
                     };
                     out.push(Item { tool: tl, path: Str { value: s.clone(), pos: Pos { line: l.no, col: t.unwrap().col } }, contract });
@@ -906,7 +906,7 @@ impl<'a> P<'a> {
             return Some(Element::Short { kind: w.to_string(), name, child, pos: pos(l, t) });
         }
         let shown = l.rest_from(t.col).trim().to_string();
-        self.push("E002", l, t.col, tr!("`{shown}` は要素の名指しではありません", "`{shown}` does not name an element"));
+        self.push("E002", l, t.col, tr!("`{shown}` は要素の参照ではありません", "`{shown}` does not name an element"));
         self.note(element_forms());
         None
     }
@@ -1201,7 +1201,7 @@ fn roles_note() -> Text {
 
 fn element_forms() -> Text {
     tr!(
-        "要素は `proto \"<パス>\" message Order` のように名指すか、自分の公表された言語の proto の要素なら `message Order`、`enum Stock value STOCK_SHORT` のように短く書いてください。",
+        "要素は `proto \"<パス>\" message Order` のように参照の書き方で書くか、自分の公表された言語の proto の要素なら `message Order`、`enum Stock value STOCK_SHORT` のように短く書いてください。",
         "Name the element like `proto \"<path>\" message Order`, or, for an element of the context's own published language, shortly: `message Order`, `enum Stock value STOCK_SHORT`."
     )
 }

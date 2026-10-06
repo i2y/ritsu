@@ -672,8 +672,8 @@ pub fn placed(n: &Name, place: Place) -> Result<(), Refused> {
         };
     }
     if n.tool == Tool::Yuen {
-        return Err(("E012", tr!("`yuen` の名指しは .req の中には書けません", "A `yuen` naming is not written in a .req"), vec![tr!(
-            "要件から要件を指すときは、`from <要件>` のように名前だけを書いてください。`yuen` の名指しは、ほかの言語が yuen の要件を指すためのものです。",
+        return Err(("E012", tr!("`yuen` の参照は .req の中には書けません", "A `yuen` naming is not written in a .req"), vec![tr!(
+            "要件から要件を指すときは、`from <要件>` のように名前だけを書いてください。`yuen` の参照は、ほかの言語が yuen の要件を指すためのものです。",
             "One requirement points at another with `from <requirement>`, by name; a `yuen` naming is how the other languages point at a requirement."
         )]));
     }

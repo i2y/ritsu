@@ -93,7 +93,7 @@ pub fn commands() -> Vec<Cmd> {
             params: vec![("<path>...", tr!("{}", "{}", PATHS.0; PATHS.1))],
             flags: vec![
                 flag("--requirement", Some("'<name>[ v<n>]'"), tr!("この要件から（名前か別名）", "from this requirement (its name or alias)")),
-                flag("--artifact", Some("'<naming>'"), tr!("この成果物から（`file \"src/app.py\"` のような名指し）", "from this artifact (a naming such as `file \"src/app.py\"`)")),
+                flag("--artifact", Some("'<naming>'"), tr!("この成果物から（`file \"src/app.py\"` のような参照）", "from this artifact (a naming such as `file \"src/app.py\"`)")),
                 flag("--source", Some("'@<source> <article>'"), tr!("この出典の条から", "from this article of a source")),
                 flag("--format", Some("json"), tr!("同じ中身を、たどった順の木の JSON で", "the same, as a JSON tree in the order it was followed")).choices(&["json"]),
             ],
@@ -132,7 +132,7 @@ pub fn commands() -> Vec<Cmd> {
                 (
                     1,
                     tr!(
-                        "要件の届かない変更がある（どの主張も走らせず、どのリンクも名指さないコード、範囲の中でどの要件にも辿れないファイル）。構文か名前にエラーがある",
+                        "要件の届かない変更がある（どの主張も走らせず、どのリンクも指さないコード、範囲の中でどの要件にも辿れないファイル）。構文か名前にエラーがある",
                         "some change no requirement reaches (code no claim runs and no link names, a file of a scope no requirement leads to); or the words or names have errors"
                     ),
                 ),

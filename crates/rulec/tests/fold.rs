@@ -191,7 +191,7 @@ fn takeは一意か先頭かを書かせる() {
 /// produce a file that cannot run (§15.56). SQL is the one that cannot: a single query has
 /// nowhere to carry a value from row to row and stop early.
 #[test]
-fn 十言語に生成し_SQLは名指しで生成しない() {
+fn 十言語に生成し_SQLだけは生成しない() {
     let (_tmp, d) = dir("gen");
     let p = write(&d, "r.rule", RULE);
     let out = d.join("out");
@@ -205,7 +205,7 @@ fn 十言語に生成し_SQLは名指しで生成しない() {
     for b in rulec::backend::ALL.iter().filter(|b| !b.folds) {
         assert!(!out.join(b.id).exists(), "{} は書けないはず", b.id);
     }
-    assert!(said.contains("SQL"), "書けない言語を名指ししていない: {said}");
+    assert!(said.contains("SQL"), "書けない言語を挙げていない: {said}");
 
     let p = write(&d, "ex.rule", &format!("{RULE}\nexamples\n| 行ゾーン | 閾値 | 行運賃 | -> 運賃 |\n| 近畿圏 | 500円 | 800円 | 800円 |\n"));
     let (code, out, _) = run(&["check", &p, "--format", "json"]);
@@ -401,12 +401,12 @@ fn 例は並びに名前を付けて書く() {
         }
     }
     assert!(near && none, "例の入力がベクタに入っていない");
-    assert!(out.contains("example row") || out.contains("例 "), "例から来たベクタが名指しされていない: {out}");
+    assert!(out.contains("example row") || out.contains("例 "), "例から来たベクタが示されていない: {out}");
 }
 
 /// Each way of getting it wrong is named, and none of them is left to the first run.
 #[test]
-fn 並びの書き方の間違いは名指しされる() {
+fn 並びの書き方の間違いは指摘される() {
     let (_tmp, d) = dir("exbad");
     let body = format!("{RULE}{EXAMPLES}");
     for (tag, src, want) in [

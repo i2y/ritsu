@@ -2,7 +2,7 @@
 差分が触る主張（geas "greeter/greeter.geas"、記録: tests/fixtures/geas/greeter/.geas/greeter.map.jsonl は変更前のもの、tests/fixtures/geas/changes/after.map.jsonl は変更後のもの）:
   claim "rejects an empty name": tests/fixtures/geas/greeter/server.py の変更後の 26 行目と変更前の 26 行目
     確かめる要件 rejects_an_empty_name
-要件が名指すファイルで、差分が触るもの:
+要件が指すファイルで、差分が触るもの:
   file "greeter/server.py": 満たす要件 greets_by_name、rejects_an_empty_name、totals_accumulate、unknown_paths_are_404
 どの要件にも届かない変更: なし
 触る要件:

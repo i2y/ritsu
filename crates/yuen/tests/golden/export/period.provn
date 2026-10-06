@@ -57,7 +57,7 @@ document
   used(y:review/3e229ee0de1af9e68563063da81cf2ef, y:requirement/last_day_142/v1, -)
   used(y:review/3e229ee0de1af9e68563063da81cf2ef, y:artifact/3380918af81d0f4010f87afd607551e1, -)
   wasAssociatedWith(y:review/3e229ee0de1af9e68563063da81cf2ef, y:role/開発, -)
-  activity(y:waiver/aa30010618557515e812f7dedd8a6933, 2026-10-03T00:00:00, -, [prov:type='yuen:Waiver', yuen:side="not verified", yuen:why="koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を名指さない", yuen:sha256="d4f2d2a67322df17", yuen:status="ok"])
-  used(y:waiver/aa30010618557515e812f7dedd8a6933, y:requirement/last_day_142/v1, -)
-  wasAssociatedWith(y:waiver/aa30010618557515e812f7dedd8a6933, y:role/法務, -)
+  activity(y:waiver/a08b18e6b68219e64e6513fe5e6c4a6b, 2026-10-03T00:00:00, -, [prov:type='yuen:Waiver', yuen:side="not verified", yuen:why="koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を指さない", yuen:sha256="d4f2d2a67322df17", yuen:status="ok"])
+  used(y:waiver/a08b18e6b68219e64e6513fe5e6c4a6b, y:requirement/last_day_142/v1, -)
+  wasAssociatedWith(y:waiver/a08b18e6b68219e64e6513fe5e6c4a6b, y:role/法務, -)
 endDocument

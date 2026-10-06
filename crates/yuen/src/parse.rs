@@ -544,7 +544,7 @@ impl Parser<'_> {
         // `=` and nothing after it: the lexer did not start a naming.
         let fd = c.found();
         Err(bad("E002", c.col(), tr!(
-            "`=` のあとには `law`、`file`、`openspec`、借りる出典の名指し（`koyomi \"x.cal\" source 民法`）のどれかを書いてください（{}）",
+            "`=` のあとには `law`、`file`、`openspec`、借りる出典の参照（`koyomi \"x.cal\" source 民法`）のどれかを書いてください（{}）",
             "`law`, `file`, `openspec`, or the naming of a source to borrow (`koyomi \"x.cal\" source 民法`) follows `=` ({})",
             fd.ja;
             fd.en
@@ -585,7 +585,7 @@ impl Parser<'_> {
         let span = Span { line: line.no, col: line.tokens[0].col };
         let n = line.naming.unwrap_or(line.tokens.len());
         let Some(w) = crate::names::read(&line.tokens[n..], line.end) else {
-            return Err(bad("E002", line.end, tr!("`scope` のあとに名指しを書いてください（`scope file \"src/\"` のように）", "A naming follows `scope` (like `scope file \"src/\"`)")));
+            return Err(bad("E002", line.end, tr!("`scope` のあとに参照を書いてください（`scope file \"src/\"` のように）", "A naming follows `scope` (like `scope file \"src/\"`)")));
         };
         f.scopes.push(ScopeDecl { naming: w, span });
         Ok(())
@@ -731,8 +731,8 @@ impl Parser<'_> {
                 let side = if what == "satisfied by" { Side::Satisfied } else { Side::Verified };
                 let n = line.naming.unwrap_or(line.tokens.len());
                 let Some(w) = crate::names::read(&line.tokens[n..], line.end) else {
-                    return Err(bad("E002", line.end, tr!("`{what}` のあとに成果物の名指しを書いてください", "The naming of an artifact follows `{what}`")).note(tr!(
-                        "名指しは `<ツール> \"<パス>\" [<種類> <名前>]` の形です（`file \"src/app.py\"`、`koyomi \"支払条件.cal\" date 支払日`）。",
+                    return Err(bad("E002", line.end, tr!("`{what}` のあとに成果物の参照を書いてください", "The naming of an artifact follows `{what}`")).note(tr!(
+                        "参照は `<ツール> \"<パス>\" [<種類> <名前>]` の形です（`file \"src/app.py\"`、`koyomi \"支払条件.cal\" date 支払日`）。",
                         "A naming is `<tool> \"<path>\" [<kind> <name>]` (`file \"src/app.py\"`, `koyomi \"terms.cal\" date pay_day`)."
                     )));
                 };

@@ -69,7 +69,7 @@ fn 証明のハーネスは生成され_apiの名前と一致する() {
     let rulec::json::Json::Arr(hs) = rust.get("harnesses").expect("api に harnesses が無い") else {
         panic!("{api}")
     };
-    assert!(!hs.is_empty(), "ハーネスが一つも名指しされていない: {api}");
+    assert!(!hs.is_empty(), "ハーネスが一つも挙がっていない: {api}");
     for h in hs {
         let name = h.as_str().unwrap();
         assert!(body.contains(&format!("fn {name}(")), "`api` が言う {name} がファイルに無い");

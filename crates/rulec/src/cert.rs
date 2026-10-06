@@ -642,7 +642,7 @@ fn machine_json(f: &RuleFile, c: &Checked, src: &str) -> String {
             if !finish_coupled_said {
                 finish_coupled_said = true;
                 uncertified.push(tr!(
-                    "終わりの状態へ行く呼び出しの並び（遷移を決める表が入力でない値を読んでいるか、制約が {} を名指ししていて、一つの値のまま通れるかを行から示せない）",
+                    "終わりの状態へ行く呼び出しの並び（遷移を決める表が入力でない値を読んでいるか、制約が {} を含んでいて、一つの値のまま通れるかを行から示せない）",
                     "the sequences of calls to a final state (the table that decides the transitions reads a value that is not an input, or a constraint names {}, so that one value carries a case through is not shown from the rows)",
                     coupled.join(", ")
                 ));

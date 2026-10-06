@@ -61,13 +61,13 @@ PROV-JSON では、型と関係の種類は修飾名（`{"$": "yuen:Requirement"
 
 `yuen:Source` · [`entity`](https://www.w3.org/TR/prov-dm/#concept-entity) の型
 
-要件の読み出し元です。ある時点の法令の一つの条か、一つのファイルで、`.req` の `source` が名指します。この出典を引く要件は、そこから導かれたものとして書きます（`prov:type='prov:PrimarySource'`）。`prov:label` は出典の名前と条です（`osha §1910.157`）。条には [`law`](#law) と [`asof`](#asof) があり、コピーが記録していれば [`revision`](#revision) もあります。ファイルには [`file`](#file) があり、`.req` に書いてあれば [`url`](#url) もあります。どちらにも、コピーを固定しているハッシュ[`sha256`](#sha256) があります。
+要件の読み出し元です。ある時点の法令の一つの条か、一つのファイルで、`.req` の `source` が指します。この出典を引く要件は、そこから導かれたものとして書きます（`prov:type='prov:PrimarySource'`）。`prov:label` は出典の名前と条です（`osha §1910.157`）。条には [`law`](#law) と [`asof`](#asof) があり、コピーが記録していれば [`revision`](#revision) もあります。ファイルには [`file`](#file) があり、`.req` に書いてあれば [`url`](#url) もあります。どちらにも、コピーを固定しているハッシュ[`sha256`](#sha256) があります。
 
 ### Artifact { #Artifact }
 
 `yuen:Artifact` · [`entity`](https://www.w3.org/TR/prov-dm/#concept-entity) の型
 
-要件を満たすもの、または確かめるもので、`satisfied by` や `verified by` が名指します。ファイル一つのこともあれば、ほかの言語のファイルの中の一つ（規則の表、カレンダーの日付、主張）のこともあります。`prov:label` は、`.req` に書いてある名指しのままです（`rulec "osha_extinguisher.rule" table distance`）。属性は [`sha256`](#sha256) と [`end`](#end) です。
+要件を満たすもの、または確かめるもので、`satisfied by` や `verified by` が指します。ファイル一つのこともあれば、ほかの言語のファイルの中の一つ（規則の表、カレンダーの日付、主張）のこともあります。`prov:label` は、`.req` に書いてある参照のままです（`rulec "osha_extinguisher.rule" table distance`）。属性は [`sha256`](#sha256) と [`end`](#end) です。
 
 ### Role { #Role }
 
@@ -99,7 +99,7 @@ PROV-JSON では、型と関係の種類は修飾名（`{"$": "yuen:Requirement"
 
 `yuen:owner` · [`wasAttributedTo`](https://www.w3.org/TR/prov-dm/#concept-attribution) の種類
 
-`wasAttributedTo(要件, 役割, [prov:type='yuen:owner'])` は、`owner` の行が書く、要件の持ち主の役割を表します。要件に変更が及んだとき、`yuen affected` が名指す役割です。
+`wasAttributedTo(要件, 役割, [prov:type='yuen:owner'])` は、`owner` の行が書く、要件の持ち主の役割を表します。要件に変更が及んだとき、`yuen affected` が挙げる役割です。
 
 ### satisfies { #satisfies }
 
@@ -117,7 +117,7 @@ PROV-JSON では、型と関係の種類は修飾名（`{"$": "yuen:Requirement"
 
 `yuen:pins` · [`wasInfluencedBy`](https://www.w3.org/TR/prov-dm/#concept-influence) の種類
 
-`wasInfluencedBy(ファイル, 条, [prov:type='yuen:pins'])` は、成果物のファイル（規則やカレンダー）がその条を固定していることを表します。ファイルは、プロジェクトが読むのと同じコピーのハッシュを持っています。言語はファイルの単位で固定するので、影響を受けるのはファイル全体です。どのリンクもそのファイルを丸ごとは名指していなければ、そのファイルを、[`end`](#end) が `file` の[成果物](#Artifact)として、このために書きます。
+`wasInfluencedBy(ファイル, 条, [prov:type='yuen:pins'])` は、成果物のファイル（規則やカレンダー）がその条を固定していることを表します。ファイルは、プロジェクトが読むのと同じコピーのハッシュを持っています。言語はファイルの単位で固定するので、影響を受けるのはファイル全体です。どのリンクもそのファイルを丸ごとは指していなければ、そのファイルを、[`end`](#end) が `file` の[成果物](#Artifact)として、このために書きます。
 
 ## 属性 { #attributes }
 
@@ -221,7 +221,7 @@ PROV-JSON では、型と関係の種類は修飾名（`{"$": "yuen:Requirement"
 
 `yuen:sha256` · [`Requirement`](#Requirement)、[`Source`](#Source)、[`Artifact`](#Artifact)、[`Waiver`](#Waiver) の属性
 
-そのものを表すハッシュで、SHA-256 の先頭 16 桁の 16 進数です。出典なら、条かファイルのコピーで、`.req` が固定している値です。成果物なら、リンクが名指すものを、その言語が読んだとおりに（表、日付、ファイルのバイト列）です。要件なら、文と、読み出し元と、期間です。見送りなら、承認したときの要件のハッシュです。
+そのものを表すハッシュで、SHA-256 の先頭 16 桁の 16 進数です。出典なら、条かファイルのコピーで、`.req` が固定している値です。成果物なら、リンクが指すものを、その言語が読んだとおりに（表、日付、ファイルのバイト列）です。要件なら、文と、読み出し元と、期間です。見送りなら、承認したときの要件のハッシュです。
 
 ## 語の出どころ
 

@@ -361,15 +361,15 @@ impl Error {
                 "The escape `\\{e}` is not taken in a string; only `\\\"` and `\\\\` are"
             ),
             ErrorKind::Hash => tr!("名前に `#` を書くときは、名前を `\"…\"` で囲んでください", "A name with `#` in it is written in `\"…\"`"),
-            ErrorKind::Missing => tr!("名指しがありません", "There is no naming"),
+            ErrorKind::Missing => tr!("参照がありません", "There is no naming"),
             ErrorKind::UnknownTool(t) => tr!(
-                "`{t}` というツールはありません。名指しは、{} のどれかで始めてください",
+                "`{t}` というツールはありません。参照は、{} のどれかで始めてください",
                 "`{t}` is not a tool; a naming starts with one of {}",
                 tool_list("、");
                 tool_list(", ")
             ),
-            ErrorKind::QuotedTool(t) => tr!("ツールの語 `{t}` は、`\"…\"` で囲まずに書いてください", "The tool `{t}` is a word, not a string in quotes"),
-            ErrorKind::MissingPath => tr!("パスがありません。名指しは `<ツール> \"<パス>\" …` の形です", "The path is missing; a naming is `<tool> \"<path>\" …`"),
+            ErrorKind::QuotedTool(t) => tr!("ツール名 `{t}` は、`\"…\"` で囲まずに書いてください", "The tool `{t}` is a word, not a string in quotes"),
+            ErrorKind::MissingPath => tr!("パスがありません。参照は `<ツール> \"<パス>\" …` の形です", "The path is missing; a naming is `<tool> \"<path>\" …`"),
             ErrorKind::UnquotedPath(p) => tr!("パス `{p}` を `\"…\"` で囲んでください", "Write the path `{p}` in quotes"),
             ErrorKind::EmptyPath => PathError::Empty.text(""),
             ErrorKind::AbsolutePath(p) => PathError::Absolute.text(p),
@@ -377,7 +377,7 @@ impl Error {
             ErrorKind::QuotedKind(k) => tr!("種類 `{k}` は、`\"…\"` で囲まずに語で書いてください", "The kind `{k}` is a word, not a string in quotes"),
             ErrorKind::NoKinds(t) => {
                 let t = t.word();
-                tr!("{t} に種類はありません。{t} は、ファイルそのものを名指してください", "{t} has no kinds; name the file")
+                tr!("{t} に種類はありません。{t} で指せるのは、ファイルそのものだけです", "{t} has no kinds; name the file")
             }
             ErrorKind::ChildFirst { kind, parents } => {
                 let quoted: Vec<String> = parents.iter().map(|p| format!("`{p}`")).collect();

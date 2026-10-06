@@ -13,7 +13,7 @@ error[E302]: tests/mutants/E302_条が変わった/民法の期間.req:44:3: 満
   = Look at what changed first, where its own diagnostic shows it.
   = Once a person has looked: yuen review tests/mutants/E302_条が変わった --root tests/mutants/E302_条が変わった --at tests/mutants/E302_条が変わった/民法の期間.req:44 --by <role>
 error[E304]: tests/mutants/E302_条が変わった/民法の期間.req:46:3: 満了日_142条 changed, so this waiver needs approving again (the same change as at tests/mutants/E302_条が変わった/民法の期間.req:44)
-    46 |   not verified "koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を名指さない"
+    46 |   not verified "koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を指さない"
   = 法務 approved this waiver on 2026-10-03.
   = Once a person has looked: yuen review tests/mutants/E302_条が変わった --root tests/mutants/E302_条が変わった --at tests/mutants/E302_条が変わった/民法の期間.req:46 --by <role>
 tests/mutants/E302_条が変わった: 3 errors

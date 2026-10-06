@@ -477,7 +477,7 @@ fn answer(c: &Checked, files: &[FileDiff], bytes: &[u8], diff_shown: &str, maps:
         let known = spec_paths.iter().any(|s| std::fs::canonicalize(p.root.join(s)).is_ok_and(|x| x == *abs));
         if !known {
             let shown = abs.strip_prefix(&p.root).map(|r| p.shown(&r.to_string_lossy())).unwrap_or_else(|_| abs.display().to_string());
-            return Err(tr!("`--map` の spec {shown} を、プロジェクトのどのリンクも名指していません", "No link of the project names the spec {shown} of `--map`"));
+            return Err(tr!("`--map` の spec {shown} を、プロジェクトのどのリンクも指していません", "No link of the project names the spec {shown} of `--map`"));
         }
     }
     let named_file = |path: &str| -> Vec<Reach> {
@@ -661,7 +661,7 @@ fn reach_text(p: &Project, reqs: &[Reach]) -> Text {
         parts.push(tr!("引く要件 {}", "cited by {}", cited.join("、"); cited.join(", ")));
     }
     if parts.is_empty() {
-        return tr!("どの要件も名指していない", "named by no requirement");
+        return tr!("どの要件も指していない", "named by no requirement");
     }
     let ja: Vec<String> = parts.iter().map(|t| t.ja.clone()).collect();
     let en: Vec<String> = parts.iter().map(|t| t.en.clone()).collect();
@@ -771,7 +771,7 @@ fn render(p: &Project, a: &Answer, lang: Lang) -> String {
             let mut t = tr!("  どの主張も走らせない行: {file} の{}の {} 行目（{}）", "  lines no claim runs: {file} {} ({}; {})", side.ja, u.lines, why.ja; u.lines, side.en, why.en);
             if !reqs.is_empty() {
                 let who = reach_text(p, reqs);
-                t = t.then(&tr!("。このファイルを名指す要件があります（{}）", "; the file is named: {}", who.ja; who.en));
+                t = t.then(&tr!("。このファイルを指す要件があります（{}）", "; the file is named: {}", who.ja; who.en));
             }
             lines.push(t);
         }
@@ -784,7 +784,7 @@ fn render(p: &Project, a: &Answer, lang: Lang) -> String {
         }
     }
     if !a.named.is_empty() {
-        lines.push(tr!("要件が名指すファイルで、差分が触るもの:", "files that requirements name, that the diff touches:"));
+        lines.push(tr!("要件が指すファイルで、差分が触るもの:", "files that requirements name, that the diff touches:"));
         for n in &a.named {
             let t = n.file.text();
             let who = reach_text(p, &n.reqs);

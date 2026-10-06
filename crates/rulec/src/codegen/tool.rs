@@ -167,7 +167,7 @@ impl<'a> Gen<'a> {
             .replace("@D_CALL@", &tr!("入力を一つの辞書で受け、規則を当てて、記録の一行を返す。", "Take the inputs as one dict, apply the rule, and return the record line."))
             .replace("@D_SERVE@", &tr!("stdin の JSON-RPC を一行ずつ読み、stdout に一行ずつ返す。", "Read JSON-RPC from stdin one line at a time and answer on stdout one line at a time."))
             .replace("@D_HANDLE@", &tr!("メッセージ一つを受けて、返すメッセージ一つを返す（通知には返さない）。二つの経路はここを通る。", "One message in, one message out (none for a notification). Both transports come through here."))
-            .replace("@D_ORIGIN@", &tr!("Origin を見る。既定で通すのはローカルからの呼び出しだけで、ブラウザが開いているページに\n    このサーバを呼ばせないための検査である。ほかを通すなら --origin で名指しする。", "Check the Origin. By default only a caller on this machine is allowed, so that a page\n    open in a browser cannot reach this server; name any other origin with --origin."))
+            .replace("@D_ORIGIN@", &tr!("Origin を見る。既定で通すのはローカルからの呼び出しだけで、ブラウザが開いているページに\n    このサーバを呼ばせないための検査である。ほかを通すなら --origin に書く。", "Check the Origin. By default only a caller on this machine is allowed, so that a page\n    open in a browser cannot reach this server; name any other origin with --origin."))
             .replace("@D_HTTP@", &tr!("MCP の Streamable HTTP で待ち受ける。POST 一つにレスポンス一つ。", "Listen for MCP's Streamable HTTP: one POST, one answer."))
             .replace("@D_QUIET@", &tr!("アクセスログは出さない。通信のことで、このツールが扱うことではない。", "No access log: that is the transport talking, not this tool."))
             .replace("@D_POST@", &tr!("メッセージを一つ読んで、レスポンスを JSON で返す。", "Read one message and answer it in JSON."))
@@ -305,7 +305,7 @@ impl<'a> Gen<'a> {
             ("@D_CALL@", tr!("入力を一つのオブジェクトで受け、規則を当てて、記録の一行を返す。", "Take the inputs as one object, apply the rule, and return the record line.")),
             ("@D_SERVE@", tr!("stdin の JSON-RPC を一行ずつ読み、stdout に一行ずつ返す。", "Read JSON-RPC from stdin one line at a time and answer on stdout one line at a time.")),
             ("@D_HANDLE@", tr!("メッセージ一つを受けて、返すメッセージ一つを返す（通知には返さない）。二つの経路はここを通る。", "One message in, one message out (none for a notification). Both transports come through here.")),
-            ("@D_ORIGIN@", tr!("Origin を見る。既定で通すのはローカルからの呼び出しだけで、ブラウザが開いているページに\n * このサーバを呼ばせないための検査である。ほかを通すなら --origin で名指しする。", "Check the Origin. By default only a caller on this machine is allowed, so that a page\n * open in a browser cannot reach this server; name any other origin with --origin.")),
+            ("@D_ORIGIN@", tr!("Origin を見る。既定で通すのはローカルからの呼び出しだけで、ブラウザが開いているページに\n * このサーバを呼ばせないための検査である。ほかを通すなら --origin に書く。", "Check the Origin. By default only a caller on this machine is allowed, so that a page\n * open in a browser cannot reach this server; name any other origin with --origin.")),
             ("@D_HTTP@", tr!("MCP の Streamable HTTP で待ち受ける。POST 一つにレスポンス一つ。", "Listen for MCP's Streamable HTTP: one POST, one answer.")),
             ("@D_GET@", tr!("こちらから送るものは無いので、ストリームも開かない。", "Nothing is ever sent unasked, so there is no stream to open.")),
             ("@D_SEQ@", tr!("並びは配列で渡す。", "The sequence is passed as an array.")),

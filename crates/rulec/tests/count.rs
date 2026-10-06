@@ -149,7 +149,7 @@ fn 範囲の無い数え上げはエラーにする() {
 /// Counting something there is one of per call could only ever answer 0 or 1, and an enum
 /// column with no value says nothing about which elements are wanted.
 #[test]
-fn 数えられない列は名指しされる() {
+fn 数えられない列は指摘される() {
     for (what, src) in [
         ("入力", RULE.replace("where 照合 = 一致", "where 会社名一致 = true").replace(
             "elements 候補(candidates)\n  会社名一致(name_match) : bool",
@@ -166,7 +166,7 @@ fn 数えられない列は名指しされる() {
 }
 
 #[test]
-fn 書き方の間違いは名指しされる() {
+fn 書き方の間違いは指摘される() {
     let (_tmp, d) = dir("shape");
     let p = write(&d, "r.rule", &RULE.replace("over 候補 where", "where"));
     let (code, said, _) = run(&["check", &p, "--format", "json"]);

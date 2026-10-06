@@ -153,7 +153,7 @@ fn skill_mdは十分に短い() {
 /// range of diagnostic codes. A code added outside that range is a code the skill will not
 /// be reached for.
 #[test]
-fn スキルのdescriptionが名指しする範囲に全コードが入る() {
+fn スキルのdescriptionが挙げる範囲に全コードが入る() {
     let s = read("../../skills/rulec/SKILL.md");
     let desc = s
         .lines()

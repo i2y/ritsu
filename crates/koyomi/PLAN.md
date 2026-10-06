@@ -186,7 +186,7 @@ docs/  skills/  README.md  README.ja.md  THIRD_PARTY_NOTICES.md、LICENSE-MIT、
 
 DESIGN 10 章の例を `examples/` に書く。D の段階で仕上げるが、B の完了の条件がこれを使う。
 
-- `examples/calendars/東京の営業日.cal`（DESIGN 1.1 のまま）、`民法142条の休日.cal`（`closed weekly sun` と `closed 祝日`。description に「142 条が名指しする日だけを休みにした。『その他の休日』に何が入るかは、この例では決めない」）、`england_and_wales.cal`（`closed weekly sat, sun`、`source` は `format govuk "england-and-wales"` と `covers listed years`、オフセットは書かない）。
+- `examples/calendars/東京の営業日.cal`（DESIGN 1.1 のまま）、`民法142条の休日.cal`（`closed weekly sun` と `closed 祝日`。description に「142 条が挙げる日だけを休みにした。『その他の休日』に何が入るかは、この例では決めない」）、`england_and_wales.cal`（`closed weekly sat, sun`、`source` は `format govuk "england-and-wales"` と `covers listed years`、オフセットは書かない）。
 - `examples/支払_20日締め翌月10日払い.cal`（DESIGN 1.1 のまま）、`支払_月末締め翌々月末払い.cal`（DESIGN 4.3 のまま）。
 - `examples/民法の期間.cal`：カレンダーは `民法142条の休日.cal`。`source 民法 = law "129AC0000000089" asof 2026-10-01` と、140・141・142・143 条の固定の行（値は B.5 のテストのとおり。コピーは A の段階で置いてある）。入力は `起点 : date range >=2026-01-01 <=2026-12-31` と `月数 : int range >=1 <=12`。日付は `起算日`（`@民法 第140条`）、`満了日`（DESIGN 1.7 の書き方。`@民法 第141条, 第143条`）、`満了日_142条`（`満了日` から `if closed + 1 day`。`@民法 第142条`）。`at end of day` は書かない（カレンダーにオフセットが無い）。条件は `満了日 is monotonic`、`満了日_142条 is monotonic`、`満了日 > 起点`、`満了日_142条 >= 満了日`。
 - `examples/民法の期間_読み方の比較.cal`：同じカレンダー、同じ出典、同じ入力。`満了日`、`満了日_翌日`（`if closed + 1 day`）、`満了日_翌営業日`（`roll following`）、`月数を足して寄せる`（`起点` から `+ 月数 months else end_of_month`）。条件は `二つの読み方 : 満了日_翌日 = 満了日_翌営業日` と `月末に寄せる書き方 : 満了日 = 月数を足して寄せる`。

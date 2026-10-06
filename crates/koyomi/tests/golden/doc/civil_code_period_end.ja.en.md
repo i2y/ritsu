@@ -3,7 +3,7 @@
 期間の満了日を、民法 140 条・141 条・143 条を文字どおりに書いて計算し、142 条の「その翌日」も文字どおりに書いた例。条文の読み方を一つに決めるものではない
 
 - File: `civil_code_period_end.ja.cal` (dates 民法の期間 v1, sha256:c9b94eecde23e6b5)
-- Calendar: `calendars/民法142条の休日.cal` (calendar 民法142条の休日 v1, sha256:b568c9a906b72b17)
+- Calendar: `calendars/民法142条の休日.cal` (calendar 民法142条の休日 v1, sha256:d150b087e76b2009)
 - Table: 祝日 = `calendars/data/syukujitsu.csv` (sha256:cec37a743c96995c, a copy of https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv, covers 1955-01-01..2027-12-31)
 - Law: 民法 = law 129AC0000000089 on e-Gov as of 2026-10-01 (revision 129AC0000000089_20260624_508AC0000000045): 第140条 sha256:e880059021fbb67d, 第141条 sha256:0575c131b9f08063, 第142条 sha256:fc8c35a0769d3b35, 第143条 sha256:6950bdfb988439b6
 - koyomi: 0.23.0
@@ -100,7 +100,7 @@ Inputs koyomi picked from the range: month ends, closed days and the days around
 
 The file reads the calendar 民法142条の休日 v1 (`calendars/民法142条の休日.cal`).
 
-Its description: 民法 142 条が名指しする日（日曜日と、国民の祝日に関する法律に規定する休日）だけを休みにした。「その他の休日」に何が入るかは、この例では決めない
+Its description: 民法 142 条が挙げる日（日曜日と、国民の祝日に関する法律に規定する休日）だけを休みにした。「その他の休日」に何が入るかは、この例では決めない
 
 ### Closed days
 

@@ -364,7 +364,7 @@ sequence 空(none)
 }
 
 #[test]
-fn 知らない単位はその場で名指しされる() {
+fn 知らない単位はその場で指摘される() {
     let ds = rulec::check_source(&money("USD", "100zzz"), "units.rule");
     let d = ds.iter().find(|d| d.code == "E103").expect("E103 が出る");
     let notes = d.notes.join(" ");

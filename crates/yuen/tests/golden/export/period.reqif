@@ -258,7 +258,7 @@
             </ATTRIBUTE-VALUE-XHTML>
             <ATTRIBUTE-VALUE-XHTML>
               <DEFINITION><ATTRIBUTE-DEFINITION-XHTML-REF>_7ffe71e9e8ed2f78b159d299efe86c10</ATTRIBUTE-DEFINITION-XHTML-REF></DEFINITION>
-              <THE-VALUE><xhtml:div><xhtml:p>not verified "koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を名指さない"</xhtml:p><xhtml:p>approved 2026-10-03 by 法務 sha256:d4f2d2a67322df17</xhtml:p></xhtml:div></THE-VALUE>
+              <THE-VALUE><xhtml:div><xhtml:p>not verified "koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を指さない"</xhtml:p><xhtml:p>approved 2026-10-03 by 法務 sha256:d4f2d2a67322df17</xhtml:p></xhtml:div></THE-VALUE>
             </ATTRIBUTE-VALUE-XHTML>
             <ATTRIBUTE-VALUE-STRING THE-VALUE="d4f2d2a67322df17">
               <DEFINITION><ATTRIBUTE-DEFINITION-STRING-REF>_3053884aad8bf228da5264102c7adaac</ATTRIBUTE-DEFINITION-STRING-REF></DEFINITION>

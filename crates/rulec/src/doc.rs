@@ -455,7 +455,7 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
         }
         if f.enums.iter().any(|e| e.default_marks.iter().any(|b| *b)) {
             o.push_str(&tr!("\n`{}` は「この値は専用の行を持たず、既定の行に落ちるのが意図です」という宣言です。付いていない値が\
-                        どの行にも名指しされていなければ、`rulec check` が書き忘れとして警告します（W111）。\n",
+                        どの行にも書かれていなければ、`rulec check` が書き忘れとして警告します（W111）。\n",
                 "\n`{}` declares \"this value has no row of its own and is meant to fall to the default row\". \
                         If a value without the mark is named in no row, `rulec check` asks whether it was \
                         forgotten (W111).\n", crate::kw::DEFAULT));

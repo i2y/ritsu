@@ -237,7 +237,7 @@ fn 刻みに載らない値は止まる() {
     let (c, out) = run(&["check", &p]);
     assert_eq!(c, 1, "刻みの間の値が通ってしまう:\n{out}");
     assert!(out.contains("E114"), "{out}");
-    assert!(out.contains("0.1%"), "直し方が刻みを名指ししていない:\n{out}");
+    assert!(out.contains("0.1%"), "直し方が刻みを示していない:\n{out}");
 }
 
 #[test]

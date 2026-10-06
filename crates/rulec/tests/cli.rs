@@ -389,7 +389,7 @@ fn 知らないフラグは黙殺せず2で止まる() {
     for c in subcommands() {
         let (code, _, err) = run(&[&c, "--no-such-flag"]);
         assert_eq!(code, 2, "`rulec {c} --no-such-flag` が 2 でない");
-        assert!(err.contains("--no-such-flag"), "打ち間違いを名指ししない: {err}");
+        assert!(err.contains("--no-such-flag"), "打ち間違えたフラグを示さない: {err}");
         assert!(err.contains(&format!("rulec {c} --help")), "どこを読めばよいか言わない: {err}");
     }
     // A misspelled value of a flag that has a closed set of values is caught too.

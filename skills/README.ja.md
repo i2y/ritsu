@@ -11,7 +11,7 @@
 | [chobo](chobo/SKILL.md) | 在庫、お金、ポイント、予約の枠の帳簿（`.book`）。PostgreSQL か TigerBeetle で守る |
 | [geas](geas/SKILL.md) | 人が読んだ主張に、エージェントが書いたコードを従わせる（`.geas`） |
 | [yuen](yuen/SKILL.md) | 要件の来歴と、それを満たすもの、確かめるもの（`.req`） |
-| [sakai](sakai/SKILL.md) | 境界づけられたコンテキストの地図。地図が名指す規則、ワークフロー、コードと突き合わせる（`.ctx`） |
+| [sakai](sakai/SKILL.md) | 境界づけられたコンテキストの地図。地図が指す規則、ワークフロー、コードと突き合わせる（`.ctx`） |
 
 どのスキルも ritsu を動かすので、PATH に `ritsu` が要ります。入れ方は [README](../README.ja.md#入れ方) にあります。言語の名前で呼ぶと（`rulec` という名前のリンクなど）ritsu はその言語として動き、`ritsu <言語> …` でも同じです。
 

@@ -1,5 +1,5 @@
 requirements 印紙税 v1
-description "rulec のコーパスの規則「印紙税の本則と軽減.rule」の表が、印紙税法と租税特別措置法のどこから来たかを書いたテストの材料。出典は自分で保存して固定し（コピーは規則のコピーと同じバイト列）、成果物は規則の表と節を一つずつ名指す。例として書いたもので、法令の読み方を示すものではない"
+description "rulec のコーパスの規則「印紙税の本則と軽減.rule」の表が、印紙税法と租税特別措置法のどこから来たかを書いたテストの材料。出典は自分で保存して固定し（コピーは規則のコピーと同じバイト列）、成果物は規則の表と節を一つずつ指す。例として書いたもので、法令の読み方を示すものではない"
 
 role 税務 "条文の読み方を決める"
 role 開発 "規則を書いて直す"
@@ -21,7 +21,7 @@ requirement 本則の税額(base_tax)
     reviewed 2026-10-04 by 開発 sha256:56d4ef0ae01ebb19 -> sha256:21432c19a67fe72e
   satisfied by rulec "rules/印紙税の本則と軽減.rule" clause 非課税
     reviewed 2026-10-04 by 開発 sha256:56d4ef0ae01ebb19 -> sha256:5bc61581e0c31022
-  not verified "表が契約金額のすべてを覆い、行が重ならないことは rulec の検査が確かめる。この材料は、それを名指す主張を持たない"
+  not verified "表が契約金額のすべてを覆い、行が重ならないことは rulec の検査が確かめる。この材料は、それを指す主張を持たない"
     approved 2026-10-04 by 税務 sha256:56d4ef0ae01ebb19
 
 requirement 軽減税率(reduced_rate)
@@ -34,5 +34,5 @@ requirement 軽減税率(reduced_rate)
     reviewed 2026-10-04 by 開発 sha256:c3fbde1529c44e2e -> sha256:4ba4c2dec2c8262b
   satisfied by rulec "rules/印紙税の本則と軽減.rule" define 軽減期間
     reviewed 2026-10-04 by 開発 sha256:c3fbde1529c44e2e -> sha256:b5b30cefd66e58d6
-  not verified "軽減の表が本則の表より先に当たることは rulec の検査が確かめる。この材料は、それを名指す主張を持たない"
+  not verified "軽減の表が本則の表より先に当たることは rulec の検査が確かめる。この材料は、それを指す主張を持たない"
     approved 2026-10-04 by 税務 sha256:c3fbde1529c44e2e

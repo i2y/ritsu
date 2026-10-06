@@ -13,7 +13,7 @@
   = 変わったものを、その診断で先に確かめてください。
   = 確かめたら: yuen review period --root period --at period/民法の期間.req:44 --by <役割>
 エラー[E304]: period/民法の期間.req:46:3: 満了日_142条 が変わったので、この見送りを承認し直す必要があります（period/民法の期間.req:44 と同じ変更）
-    46 |   not verified "koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を名指さない"
+    46 |   not verified "koyomi の条件「142条の満了日は満了日以後」が確かめているが、この材料は .cal をファイルとして読むので、その条件を指さない"
   = 2026-10-03 に 法務 が承認した見送りです。
   = 確かめたら: yuen review period --root period --at period/民法の期間.req:46 --by <役割>
 period: エラー 3 件

@@ -365,7 +365,7 @@ fn 検査を通らない規則は診断を返す() {
 /// What a rule file holds: each thing by its naming, its lines, and its definition as `rulec fmt`
 /// writes it, so realigning a table changes no definition.
 #[test]
-fn 規則のファイルが持つものと名指すもの() {
+fn 規則のファイルが持つものと参照するもの() {
     let e = Engine::new();
     let items = e.items(&root(), "tests/corpus/送料.rule").unwrap();
     let names: Vec<String> = items.iter().map(|i| i.naming.text()).collect();

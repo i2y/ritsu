@@ -186,7 +186,7 @@ fn commands() -> Vec<Cmd> {
             ),
             params: vec![rule_files()],
             flags: vec![
-                flag("--check", None, tr!("書き換えず、整形されていないファイルを名指しする（CI 用）", "name the unformatted files instead of rewriting them (for CI)")),
+                flag("--check", None, tr!("書き換えず、整形されていないファイルを挙げる（CI 用）", "name the unformatted files instead of rewriting them (for CI)")),
                 flag("--format", Some("json"), tr!("機械向けの JSON（docs/formats.md）", "machine-facing JSON (docs/formats.md)")).choices(&["json"]),
             ],
             exits: vec![
