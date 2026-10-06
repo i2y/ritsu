@@ -2,16 +2,16 @@ name: tools
 
 # The tests that need the tools a machine installs (DESIGN 10.2, 10.5): the generated code
 # type-checked and run in every language it is written for, PostgreSQL, TigerBeetle, Chrome,
-# Mermaid, xmllint, Lean, sakai's four linters. Every tool is installed, and a SKIP for
-# something missing fails the job unless ci/skips/tools.txt allows it: a skipped language
-# narrows what the run proved, in a line that is easy to read past (rulec's ci.yml, where this
-# began). A test of the platforms level says so in a SKIP line of the level and passes; those
-# run in platforms.yml and kani.yml.
+# Mermaid, xmllint, Lean, sakai's four linters, the Cedar CLI. Every tool is installed, and a
+# SKIP for something missing fails the job unless ci/skips/tools.txt allows it: a skipped
+# language narrows what the run proved, in a line that is easy to read past (rulec's ci.yml,
+# where this began). A test of the platforms level says so in a SKIP line of the level and
+# passes; those run in platforms.yml and kani.yml.
 #
 # The crates run in three groups side by side, each on a runner of its own with what it needs:
 # rulec (the twelve languages it writes, a PostgreSQL server, Lean), dandori (the SDKs and
 # runners under its tools/; its tests read the rules through rulec's library, PLAN D.3, and run
-# the books its examples call on chobo's clients) with ritsu, and the other five languages with
+# the books its examples call on chobo's clients) with ritsu, and the other six languages with
 # the base layer, the test kit and xtask.
 
 on:
@@ -51,7 +51,7 @@ jobs:
           - group: dandori
             crates: -p dandori -p ritsu
           - group: the others
-            crates: -p koyomi -p chobo -p geas -p yuen -p sakai -p ritsu-base -p ritsu-units -p ritsu-ports -p ritsu-testkit -p ritsu-proto -p ritsu-emit -p xtask
+            crates: -p koyomi -p chobo -p geas -p yuen -p sakai -p sekisho -p ritsu-base -p ritsu-units -p ritsu-ports -p ritsu-testkit -p ritsu-proto -p ritsu-emit -p xtask
 
     # `rulec test` runs the generated SQL against a real PostgreSQL, because the query and the
     # function beside it are two doors on one rule and only a server can open the second. The
@@ -317,6 +317,23 @@ jobs:
           sh crates/sakai/tools/cml/fetch.sh
           sh crates/sakai/tools/go/install.sh
 
+      # sekisho's tests/cedar.rs holds the Cedar it generates to the official CLI: validate,
+      # format --check, run-tests on every combination, and the JSON of translate-policy and
+      # translate-schema (sekisho's DESIGN 6.1). ritsu-base's Cedar fixtures are written with the
+      # same binary (tests/fixtures/cedar/expected.sh). The release's archive, held to the checksum
+      # it had when this was written (its .sha256 and sha256.sum); a download of a few megabytes,
+      # so it is not cached.
+      - name: "sekisho: the Cedar CLI 4.13.0"
+        if: matrix.group == 'the others'
+        run: |
+          set -eu
+          d="$RUNNER_TEMP/cedar"
+          mkdir -p "$d"
+          curl -fsSL -o "$d/cedar.tar.xz" https://github.com/cedar-policy/cedar/releases/download/cedar-policy-cli-v4.13.0/cedar-policy-cli-x86_64-unknown-linux-gnu.tar.xz
+          echo "23d358ef38edad8ade629a09f6a7359ecbd1761c9ff82e9fd0a5c5bce36b8c79  $d/cedar.tar.xz" | sha256sum -c -
+          tar -xJf "$d/cedar.tar.xz" -C "$d" --strip-components=1
+          echo "RITSU_CEDAR=$d/cedar" >> "$GITHUB_ENV"
+
       # --- Say what is here before the suite runs, so a version that moved is readable in the
       # log rather than only in a failure.
       - name: The toolchains this run has
@@ -339,6 +356,7 @@ jobs:
           fi
           if [ "${{ matrix.group }}" = "the others" ]; then
             "$RITSU_PG_BIN/postgres" --version && "$RITSU_TIGERBEETLE" version && xmllint --version
+            "$RITSU_CEDAR" --version
           fi
           google-chrome --version
 

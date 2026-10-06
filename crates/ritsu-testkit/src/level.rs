@@ -3,7 +3,7 @@
 //! | level | what runs |
 //! |---|---|
 //! | `fast` | nothing but cargo (git may be used, and curl, to ask a server the test itself started) |
-//! | `tools` | the tools installed on the machine: compilers and checkers of generated code, PostgreSQL, TigerBeetle, Chrome, Mermaid, xmllint, Lean, the linters, pixie's greeter, the binaries of the other languages a test runs (rulec, koyomi, chobo and dandori for sakai's) |
+//! | `tools` | the tools installed on the machine: compilers and checkers of generated code, PostgreSQL, TigerBeetle, Chrome, Mermaid, xmllint, Lean, the linters, pixie's greeter, the Cedar CLI, the binaries of the other languages a test runs (rulec, koyomi, chobo and dandori for sakai's) |
 //! | `platforms` | services and clusters a test starts, and the network: Temporal, Argo on kind, LocalStack, Ollama, TypeSafe, e-Gov and the eCFR, Kani |
 //!
 //! `RITSU_TEST_LEVEL` names the highest level to run; a test that needs a higher one prints a
@@ -75,6 +75,9 @@ pub enum Need {
     Linters,
     /// A greeter built with pixie (`GEAS_PIXIE_GREETER`), which geas's tests drive.
     Pixie,
+    /// The official Cedar CLI (`RITSU_CEDAR`), which sekisho's tests hold the Cedar it generates
+    /// to ([`crate::cedar`]).
+    Cedar,
     Temporal,
     Argo,
     LocalStack,
@@ -113,6 +116,7 @@ impl Need {
             Need::Lean => "lean",
             Need::Linters => "linters",
             Need::Pixie => "pixie's greeter",
+            Need::Cedar => "cedar",
             Need::Temporal => "temporal",
             Need::Argo => "argo",
             Need::LocalStack => "localstack",

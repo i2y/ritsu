@@ -14,10 +14,12 @@
 //! - [`pg`], [`tigerbeetle`], [`chrome`], [`mermaid`], [`http`]: what a test starts — a
 //!   throwaway PostgreSQL cluster, one TigerBeetle replica, a headless Chrome, Mermaid in that
 //!   Chrome, a small HTTP server — each stopped when its value is dropped.
+//! - [`cedar`]: the official Cedar CLI, at the version the tests are written for.
 //!
 //! Nothing here depends on anything but std (DESIGN 3.1). Every crate takes it as a
 //! dev-dependency only.
 
+pub mod cedar;
 pub mod chrome;
 pub mod golden;
 pub mod http;

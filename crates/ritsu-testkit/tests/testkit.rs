@@ -1,12 +1,12 @@
 //! What the testkit does, held to itself: directories that remove themselves and those of ended
-//! test processes, finding a program, the time limit, golden files, the SKIP line and its log,
-//! the levels, and what a test starts — PostgreSQL, TigerBeetle, Chrome, Mermaid, a small HTTP
-//! server — each stopped when it is dropped.
+//! test processes, finding a program (the Cedar CLI at its version), the time limit, golden files,
+//! the SKIP line and its log, the levels, and what a test starts — PostgreSQL, TigerBeetle, Chrome,
+//! Mermaid, a small HTTP server — each stopped when it is dropped.
 //!
 //! What reads an environment variable (`RITSU_SKIP_LOG`, `RITSU_TEST_LEVEL`, `RITSU_BLESS`) is
 //! tried in a child: this test binary run again on one test, with the variable set for it alone.
 
-use ritsu_testkit::{TempDir, chrome, golden, level, mermaid, pg, run, skip, tigerbeetle, tmp, tools};
+use ritsu_testkit::{TempDir, cedar, chrome, golden, level, mermaid, pg, run, skip, tigerbeetle, tmp, tools};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::Command;
@@ -232,6 +232,61 @@ fn ready_asks_the_level_then_the_machine() {
         assert!(r.ok, "{}", r.both());
         let logged = skip::read_log(&std::fs::read_to_string(&log).unwrap());
         assert_eq!(logged.iter().map(|l| l.why).collect::<Vec<_>>(), want, "RITSU_TEST_LEVEL={top}");
+    }
+}
+
+/// The Cedar CLI is taken only at the version the tests are written for. A SKIP says why it is
+/// not taken: the level, a machine without it, or another version. Two stand-ins answer
+/// `--version` as 4.13.0 and as 4.12.0 would.
+#[cfg(unix)]
+#[test]
+fn the_cedar_cli_is_taken_at_its_version() {
+    use level::{Level, Need};
+    use std::os::unix::fs::PermissionsExt;
+    if in_child() {
+        let got = cedar::cli();
+        match std::env::var("CEDAR_EXPECTED").ok().filter(|v| !v.is_empty()) {
+            Some(p) => assert_eq!(got.as_deref(), Some(Path::new(&p))),
+            None => assert_eq!(got, None),
+        }
+        return;
+    }
+    assert_eq!(Need::Cedar.level(), Level::Tools);
+    assert_eq!(cedar::version_line(), "cedar-policy-cli 4.13.0");
+    let t = TempDir::new("cedar");
+    let stand_in = |dir: &str, says: &str| {
+        let p = t.write(&format!("{dir}/cedar"), format!("#!/bin/sh\necho '{says}'\n"));
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        p.to_string_lossy().to_string()
+    };
+    let right = stand_in("right", "cedar-policy-cli 4.13.0");
+    let older = stand_in("older", "cedar-policy-cli 4.12.0");
+    // kill and ps stay on the PATH, for the sweep of the child's first directory
+    let no_cedar = "/usr/bin:/bin";
+    /// A child's environment, the CLI it is to take (none when empty), and what its SKIP says
+    /// (no SKIP when empty).
+    struct Case<'a> {
+        what: &'a str,
+        envs: Vec<(&'a str, &'a str)>,
+        expected: &'a str,
+        said: &'a str,
+    }
+    let cases = [
+        Case { what: "at its version", envs: vec![("RITSU_CEDAR", &right)], expected: &right, said: "" },
+        Case { what: "another version", envs: vec![("RITSU_CEDAR", &older)], expected: "", said: "answers `cedar-policy-cli 4.12.0` to --version; the tests are written for cedar-policy-cli 4.13.0" },
+        Case { what: "not on the machine", envs: vec![("RITSU_CEDAR", ""), ("PATH", no_cedar)], expected: "", said: "SKIP: ritsu-testkit: the Cedar CLI is not found (RITSU_CEDAR, or cedar on the PATH)" },
+        Case { what: "left to the tools level", envs: vec![("RITSU_CEDAR", &right), ("RITSU_TEST_LEVEL", "fast")], expected: "", said: "SKIP: ritsu-testkit: needs cedar (the tools level); RITSU_TEST_LEVEL is fast" },
+    ];
+    for c in cases {
+        let mut all = vec![("RITSU_TESTKIT_CEDAR", ""), ("CEDAR_EXPECTED", c.expected)];
+        all.extend(c.envs);
+        let r = child("the_cedar_cli_is_taken_at_its_version", &all);
+        assert!(r.ok, "{}: {}", c.what, r.both());
+        if c.said.is_empty() {
+            assert!(!r.stdout.contains("SKIP:"), "{}: {}", c.what, r.stdout);
+        } else {
+            assert!(r.stdout.contains(c.said), "{}: {}", c.what, r.stdout);
+        }
     }
 }
 
