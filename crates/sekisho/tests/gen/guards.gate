@@ -1,0 +1,22 @@
+gate guards v1
+description "An action that guards two operations, one of them named by its method and path; a description with \"quotes\" and a back\\slash"
+namespace Ops
+
+use openapi orders from "../../examples/refunds/api/orders.json"
+
+principal User
+  description "Someone \"quoted\", with a back\\slash"
+
+resource Order
+  description "An order"
+
+action look
+  description "Look at an order, or at what was refunded"
+  guards orders getOrder
+  guards orders "POST /orders/{orderId}/refunds"
+  principal User
+  resource Order
+
+permit users_look
+  principal is User
+  action look

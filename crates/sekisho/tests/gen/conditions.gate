@@ -1,0 +1,86 @@
+gate conditions v1
+description "Every form of condition the generator of Cedar writes: an attribute that may be absent, one that only some types have, two attributes compared, membership of a group, not, or, two resource types, and a forbid of every action"
+namespace Lab
+
+enum level = low | high
+enum dept = sales | support
+
+role editor
+  description "Edits documents"
+
+role viewer
+  description "Reads documents"
+
+principal User
+  description "A person of a tenant"
+  roles editor, viewer
+  attributes
+    clearance : number  range >=0 <=5
+    dept      : dept
+    tenant    : Tenant
+    on_leave  : bool?
+
+principal Bot
+  description "A program that reads for a department"
+  attributes
+    dept : dept
+
+resource Tenant
+  description "A tenant"
+
+resource Team
+  description "A team of a tenant"
+
+resource Doc
+  description "A document"
+  attributes
+    tenant   : Tenant
+    team     : Team
+    level    : level
+    dept     : dept
+    reviewer : User?
+    archived : bool?
+
+resource Folder
+  description "A folder"
+  attributes
+    tenant : Tenant
+
+action read
+  description "Read a document or a folder"
+  principal User, Bot
+  resource Doc, Folder
+  input
+    urgent : bool
+    pages  : number  range >=1 <=500
+
+action edit
+  description "Edit a document"
+  principal User
+  resource Doc
+
+permit readers_read
+  description "An editor or a viewer reads what is not archived, within the tenant"
+  principal in editor, viewer
+  action read
+  when resource.tenant is principal.tenant
+  unless resource.archived
+
+permit bots_read_their_department
+  description "A bot reads a document of its department, when it has 20 pages or fewer, or is urgent"
+  principal is Bot
+  action read
+  when principal.dept is resource.dept
+  when pages <= 20 or urgent
+
+permit editors_edit
+  description "An editor in the document's team, or who reviews it, edits it when it is not high or the editor's clearance is 3 or more"
+  principal in editor
+  action edit
+  when principal in resource.team or resource.reviewer is principal
+  when resource.level is not high or principal.clearance >= 3
+
+forbid nobody_on_leave
+  description "Whoever is on leave does nothing"
+  action any
+  when principal.on_leave is true

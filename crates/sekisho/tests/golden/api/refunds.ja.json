@@ -1,0 +1,473 @@
+{
+  "sekisho": "<version>",
+  "name": "返金",
+  "alias": "refunds_ja",
+  "version": "v1",
+  "source_sha256": "371be7754cdffe7ef4bd87ee47865e977363518384c5ca64486bafa60f51956b",
+  "description": "店の注文を見ること、返金すること、返金の記録を書き出すことを、だれがしてよいか。店の決まりの一例として書いた sekisho の例で、refunds.gate の日本語の版",
+  "namespace": "ShopJa",
+  "uses": [
+    {
+      "kind": "rule",
+      "name": "返金の上限",
+      "path": "rules/返金の上限.rule",
+      "line": 5
+    },
+    {
+      "kind": "dates",
+      "name": "返金の期限",
+      "path": "dates/返金の期限.cal",
+      "line": 6
+    },
+    {
+      "kind": "calendar",
+      "name": "英国",
+      "path": "calendars/england_and_wales.cal",
+      "line": 7
+    },
+    {
+      "kind": "openapi",
+      "name": "注文",
+      "path": "api/orders.json",
+      "line": 8
+    }
+  ],
+  "today": {
+    "min": "2026-10-01",
+    "max": "2028-10-31",
+    "offset": "+00:00",
+    "line": 12
+  },
+  "cedar": {
+    "policies": "cedar/refunds_ja.cedar",
+    "schema": "cedar/refunds_ja.cedarschema",
+    "schema_json": "cedar/refunds_ja.cedarschema.json",
+    "policies_json": "cedar/refunds_ja.policies.json"
+  },
+  "roles": [
+    {
+      "name": "係",
+      "alias": "clerk",
+      "line": 16,
+      "entity": "ShopJa::Role::\"clerk\"",
+      "includes": [],
+      "can": [
+        "view_order",
+        "refund_order"
+      ]
+    },
+    {
+      "name": "責任者",
+      "alias": "manager",
+      "line": 20,
+      "entity": "ShopJa::Role::\"manager\"",
+      "includes": [
+        "clerk"
+      ],
+      "can": [
+        "view_order",
+        "refund_order"
+      ]
+    },
+    {
+      "name": "監査",
+      "alias": "auditor",
+      "line": 25,
+      "entity": "ShopJa::Role::\"auditor\"",
+      "includes": [],
+      "can": [
+        "view_order",
+        "export_refunds"
+      ]
+    }
+  ],
+  "types": [
+    {
+      "name": "職員",
+      "alias": "User",
+      "kind": "principal",
+      "line": 29,
+      "entity_type": "ShopJa::User",
+      "roles": [
+        "clerk",
+        "manager",
+        "auditor"
+      ],
+      "member_of": [
+        "Role"
+      ],
+      "attributes": [
+        {
+          "name": "返金できる額",
+          "alias": "refund_limit",
+          "type": "money[GBP, incl_tax]",
+          "range": {
+            "min": 0,
+            "max": 10000
+          },
+          "values": null,
+          "optional": false,
+          "in_cedar": false
+        },
+        {
+          "name": "停止中",
+          "alias": "suspended",
+          "type": "bool",
+          "range": null,
+          "values": null,
+          "optional": false,
+          "in_cedar": true
+        }
+      ]
+    },
+    {
+      "name": "顧客",
+      "alias": "Customer",
+      "kind": "principal",
+      "line": 36,
+      "entity_type": "ShopJa::Customer",
+      "roles": [],
+      "member_of": [],
+      "attributes": []
+    },
+    {
+      "name": "注文",
+      "alias": "Order",
+      "kind": "resource",
+      "line": 42,
+      "entity_type": "ShopJa::Order",
+      "roles": [],
+      "member_of": [],
+      "attributes": [
+        {
+          "name": "状態",
+          "alias": "status",
+          "type": "order_status",
+          "range": null,
+          "values": [
+            "paid",
+            "shipped",
+            "returned",
+            "refunded"
+          ],
+          "optional": false,
+          "in_cedar": true
+        },
+        {
+          "name": "支払日",
+          "alias": "paid_on",
+          "type": "date",
+          "range": {
+            "min": "2026-01-01",
+            "max": "2028-09-30"
+          },
+          "values": null,
+          "optional": false,
+          "in_cedar": false
+        },
+        {
+          "name": "注文した人",
+          "alias": "customer",
+          "type": "Customer",
+          "range": null,
+          "values": null,
+          "optional": false,
+          "in_cedar": true
+        }
+      ]
+    },
+    {
+      "name": "返金の記録",
+      "alias": "RefundRecord",
+      "kind": "resource",
+      "line": 49,
+      "entity_type": "ShopJa::RefundRecord",
+      "roles": [],
+      "member_of": [],
+      "attributes": []
+    },
+    {
+      "name": "Workflow",
+      "alias": "Workflow",
+      "kind": "workflow",
+      "line": null,
+      "entity_type": "ShopJa::Workflow",
+      "roles": [],
+      "member_of": [],
+      "attributes": []
+    }
+  ],
+  "workflows": [
+    {
+      "name": "返品",
+      "alias": "returns",
+      "line": 39,
+      "entity": "ShopJa::Workflow::\"returns\"",
+      "flow": "flows/returns.flow"
+    }
+  ],
+  "actions": [
+    {
+      "name": "注文を見る",
+      "alias": "view_order",
+      "line": 52,
+      "entity": "ShopJa::Action::\"view_order\"",
+      "guards": [
+        {
+          "reference": "openapi \"api/orders.json\" operation getOrder",
+          "line": 54
+        }
+      ],
+      "principals": [
+        "User",
+        "Customer"
+      ],
+      "resources": [
+        "Order"
+      ],
+      "from": "orderId",
+      "nobody": null,
+      "inputs": [],
+      "context": []
+    },
+    {
+      "name": "返金する",
+      "alias": "refund_order",
+      "line": 58,
+      "entity": "ShopJa::Action::\"refund_order\"",
+      "guards": [
+        {
+          "reference": "openapi \"api/orders.json\" operation refundOrder",
+          "line": 60
+        }
+      ],
+      "principals": [
+        "User",
+        "Workflow"
+      ],
+      "resources": [
+        "Order"
+      ],
+      "from": "orderId",
+      "nobody": null,
+      "inputs": [
+        {
+          "name": "金額",
+          "alias": "amount",
+          "type": "money[GBP, incl_tax]",
+          "range": {
+            "min": 1,
+            "max": 10000
+          },
+          "values": null,
+          "optional": false,
+          "in_cedar": true
+        }
+      ],
+      "context": [
+        {
+          "name": "返金の区分",
+          "alias": "refund_band",
+          "line": 66,
+          "computed": "返金の上限(金額: 金額, 上限: principal.返金できる額).区分",
+          "type": "enum",
+          "values": [
+            "within_limit",
+            "over_limit"
+          ],
+          "optional": true
+        },
+        {
+          "name": "期間内",
+          "alias": "in_period",
+          "line": 67,
+          "computed": "today <= 返金の期限.最終日(支払日: resource.支払日)",
+          "type": "bool",
+          "values": null,
+          "optional": false
+        },
+        {
+          "name": "営業日",
+          "alias": "business_day",
+          "line": 68,
+          "computed": "today is open in 英国",
+          "type": "bool",
+          "values": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "返金を書き出す",
+      "alias": "export_refunds",
+      "line": 70,
+      "entity": "ShopJa::Action::\"export_refunds\"",
+      "guards": [
+        {
+          "reference": "openapi \"api/orders.json\" operation exportRefunds",
+          "line": 72
+        }
+      ],
+      "principals": [
+        "User"
+      ],
+      "resources": [
+        "RefundRecord"
+      ],
+      "from": null,
+      "nobody": null,
+      "inputs": [],
+      "context": []
+    }
+  ],
+  "policies": [
+    {
+      "name": "職員は注文を見られる",
+      "alias": "staff_view_orders",
+      "id": "refunds_ja/staff_view_orders",
+      "effect": "permit",
+      "actions": [
+        "view_order"
+      ],
+      "file": "refunds.ja.gate",
+      "line": 76
+    },
+    {
+      "name": "顧客は自分の注文を見られる",
+      "alias": "customers_view_their_orders",
+      "id": "refunds_ja/customers_view_their_orders",
+      "effect": "permit",
+      "actions": [
+        "view_order"
+      ],
+      "file": "refunds.ja.gate",
+      "line": 81
+    },
+    {
+      "name": "係は上限まで返金できる",
+      "alias": "clerks_refund_within_their_limit",
+      "id": "refunds_ja/clerks_refund_within_their_limit",
+      "effect": "permit",
+      "actions": [
+        "refund_order"
+      ],
+      "file": "refunds.ja.gate",
+      "line": 87
+    },
+    {
+      "name": "責任者は期間内なら返金できる",
+      "alias": "managers_refund_in_period",
+      "id": "refunds_ja/managers_refund_in_period",
+      "effect": "permit",
+      "actions": [
+        "refund_order"
+      ],
+      "file": "refunds.ja.gate",
+      "line": 94
+    },
+    {
+      "name": "責任者は期間後も営業日なら返金できる",
+      "alias": "managers_refund_late_on_business_days",
+      "id": "refunds_ja/managers_refund_late_on_business_days",
+      "effect": "permit",
+      "actions": [
+        "refund_order"
+      ],
+      "file": "refunds.ja.gate",
+      "line": 100
+    },
+    {
+      "name": "返品のワークフローは返品済の注文を返金できる",
+      "alias": "returns_refunds_returned_orders",
+      "id": "refunds_ja/returns_refunds_returned_orders",
+      "effect": "permit",
+      "actions": [
+        "refund_order"
+      ],
+      "file": "refunds.ja.gate",
+      "line": 107
+    },
+    {
+      "name": "監査は返金の記録を書き出せる",
+      "alias": "auditors_export_refunds",
+      "id": "refunds_ja/auditors_export_refunds",
+      "effect": "permit",
+      "actions": [
+        "export_refunds"
+      ],
+      "file": "refunds.ja.gate",
+      "line": 114
+    },
+    {
+      "name": "二度は返金しない",
+      "alias": "no_second_refund",
+      "id": "refunds_ja/no_second_refund",
+      "effect": "forbid",
+      "actions": [
+        "refund_order"
+      ],
+      "file": "refunds.ja.gate",
+      "line": 119
+    },
+    {
+      "name": "監査は返金しない",
+      "alias": "auditors_do_not_refund",
+      "id": "refunds_ja/auditors_do_not_refund",
+      "effect": "forbid",
+      "actions": [
+        "refund_order"
+      ],
+      "file": "refunds.ja.gate",
+      "line": 124
+    },
+    {
+      "name": "停止中の職員は何もできない",
+      "alias": "suspended_staff_do_nothing",
+      "id": "refunds_ja/suspended_staff_do_nothing",
+      "effect": "forbid",
+      "actions": [
+        "view_order",
+        "refund_order",
+        "export_refunds"
+      ],
+      "file": "refunds.ja.gate",
+      "line": 129
+    }
+  ],
+  "expects": [
+    {
+      "name": "係は上限を超えて返金しない",
+      "expect": "deny",
+      "actions": [
+        "refund_order"
+      ],
+      "line": 135
+    },
+    {
+      "name": "返金済の注文は返金しない",
+      "expect": "deny",
+      "actions": [
+        "refund_order"
+      ],
+      "line": 142
+    },
+    {
+      "name": "責任者は期間内に返金できる",
+      "expect": "allow",
+      "actions": [
+        "refund_order"
+      ],
+      "line": 147
+    }
+  ],
+  "separations": [
+    {
+      "name": "返金と監査を分ける",
+      "actions": [
+        "refund_order",
+        "export_refunds"
+      ],
+      "line": 156
+    }
+  ]
+}

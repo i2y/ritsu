@@ -1,0 +1,19 @@
+sekisho api — print JSON for other tools: the namespace and the files gen writes, the roles, types and workflows with their entities in Cedar, the actions with the operations they guard and their context, the policies with their @id, the expectations and the separations
+
+Usage:
+  sekisho api <file.gate>
+
+Arguments:
+  <file.gate>  a .gate file that passes check
+
+Flags:
+  --lang ja|en  the language of the text; else the SEKISHO_LANG environment variable, then RITSU_LANG, else en (default en)
+  --help        print this page
+
+Exit codes:
+  0  printed
+  1  the file does not pass check
+  2  bad arguments, a file that cannot be read, or a file that reads another language run with this sekisho, which reads none (E209)
+
+Examples:
+  $ ritsu sekisho api examples/refunds/refunds.gate

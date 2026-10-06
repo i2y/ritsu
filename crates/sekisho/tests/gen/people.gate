@@ -1,0 +1,18 @@
+gate people v1
+description "The people of the lab, read by papers.gate"
+namespace Lab
+
+role member
+  description "A member of the lab"
+
+principal Person
+  description "A person of the lab"
+  roles member
+  attributes
+    suspended : bool
+
+forbid suspended_do_nothing
+  description "A suspended person does nothing"
+  principal is Person
+  action any
+  when principal.suspended

@@ -1,0 +1,24 @@
+sekisho gen — Cedar のスキーマとポリシーを生成する。検査を通らないファイルからは生成しない
+
+使い方:
+  sekisho gen <file.gate>... --target cedar [--out <dir>] [--check] [--lang ja|en]
+
+引数:
+  <file.gate>...  .gate のファイル
+
+フラグ:
+  --target cedar  生成するもの。cedar は <out>/cedar/ に、別名ごとに四つのファイル（.cedar、.cedarschema、.cedarschema.json、.policies.json）を書く。sekisho が書く文（頭と、計算した値の @doc）は --lang の言語になる
+  --out <dir>     生成物を書くディレクトリ（既定 generated）
+  --check         書き出さずに、ディスクの生成物が、いま生成するものと一字一句同じかを見る。違えば 1（CI 用）
+  --lang ja|en    文面の言語。無ければ環境変数 SEKISHO_LANG、次に RITSU_LANG、どちらも無ければ en（既定 en）
+  --help          この画面を出す
+
+exit code:
+  0  生成した、または --check で全部が同じだった
+  1  検査を通らないファイルがある、または --check で違う・無いファイルがある
+  2  引数の誤り、読めないファイル、書けないファイル、ほかの言語を読むファイルを、それを読めないこの sekisho で走らせた（E209）
+
+例:
+  $ ritsu sekisho gen examples/refunds/refunds.gate --target cedar
+  $ ritsu sekisho gen examples/refunds/refunds.gate --target cedar --check
+  $ sekisho gen shop.gate --target cedar --out generated --lang ja

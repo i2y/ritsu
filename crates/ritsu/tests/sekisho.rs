@@ -89,3 +89,28 @@ fn a_mistake_in_a_gate_fails_ritsu_check() {
     let d = v["diagnostics"].as_array().unwrap().iter().find(|d| d["tool"] == "sekisho").expect("sekisho's diagnostic");
     assert_eq!((d["code"].as_str(), d["file"].as_str()), (Some("E101"), Some("refunds.gate")));
 }
+
+/// The commands of sekisho's stage B through `ritsu sekisho`, with every language joined: `gen
+/// --target cedar` writes the four files of the example's Cedar, `vectors` prints its combinations
+/// as the tests of `cedar run-tests`, and `api` its declarations as JSON.
+#[test]
+fn ritsu_sekisho_generates_the_cedar() {
+    let t = TempDir::new("sekisho-gen");
+    let out = t.path().to_string_lossy().to_string();
+    let (code, said, err) = ritsu_in(&sekisho_dir(), &["sekisho", "gen", "examples/refunds/refunds.gate", "--target", "cedar", "--out", &out]);
+    assert_eq!(code, 0, "{said}{err}");
+    for f in ["refunds.cedar", "refunds.cedarschema", "refunds.cedarschema.json", "refunds.policies.json"] {
+        assert!(said.contains(&format!("generated: {out}/cedar/{f}\n")), "{said}");
+    }
+    let (code, said, _) = ritsu_in(&sekisho_dir(), &["sekisho", "gen", "examples/refunds/refunds.gate", "--target", "cedar", "--out", &out, "--check"]);
+    assert_eq!((code, said.as_str()), (0, ""));
+    let (code, said, _) = ritsu_in(&sekisho_dir(), &["sekisho", "vectors", "examples/refunds/refunds.gate", "--action", "export_refunds"]);
+    assert_eq!(code, 0);
+    let v: serde_json::Value = serde_json::from_str(&said).unwrap();
+    assert_eq!(v.as_array().unwrap().len(), 4);
+    assert_eq!(v[0]["request"]["action"], "Shop::Action::\"export_refunds\"");
+    let (code, said, _) = ritsu_in(&sekisho_dir(), &["sekisho", "api", "examples/refunds/refunds.ja.gate"]);
+    assert_eq!(code, 0);
+    let v: serde_json::Value = serde_json::from_str(&said).unwrap();
+    assert_eq!((v["namespace"].as_str(), v["policies"][2]["id"].as_str()), (Some("ShopJa"), Some("refunds_ja/clerks_refund_within_their_limit")));
+}

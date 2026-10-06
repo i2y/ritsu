@@ -1,0 +1,116 @@
+{
+  "sekisho": "<version>",
+  "name": "papers",
+  "alias": "papers",
+  "version": "v1",
+  "source_sha256": "ea900e1f0dbdb8fd30f61350690d356eebeb2bc80ca699223f47d0babe6d6928",
+  "description": "The papers of the lab: the forbid people.gate holds for every action holds for this file's, under the id papers/people/suspended_do_nothing",
+  "namespace": "Lab",
+  "uses": [
+    {
+      "kind": "gate",
+      "name": null,
+      "path": "people.gate",
+      "line": 5
+    }
+  ],
+  "today": null,
+  "cedar": {
+    "policies": "cedar/papers.cedar",
+    "schema": "cedar/papers.cedarschema",
+    "schema_json": "cedar/papers.cedarschema.json",
+    "policies_json": "cedar/papers.policies.json"
+  },
+  "roles": [
+    {
+      "name": "member",
+      "alias": "member",
+      "line": 5,
+      "entity": "Lab::Role::\"member\"",
+      "includes": [],
+      "can": null
+    }
+  ],
+  "types": [
+    {
+      "name": "Person",
+      "alias": "Person",
+      "kind": "principal",
+      "line": 8,
+      "entity_type": "Lab::Person",
+      "roles": [
+        "member"
+      ],
+      "member_of": [
+        "Role"
+      ],
+      "attributes": [
+        {
+          "name": "suspended",
+          "alias": "suspended",
+          "type": "bool",
+          "range": null,
+          "values": null,
+          "optional": false,
+          "in_cedar": true
+        }
+      ]
+    },
+    {
+      "name": "Paper",
+      "alias": "Paper",
+      "kind": "resource",
+      "line": 7,
+      "entity_type": "Lab::Paper",
+      "roles": [],
+      "member_of": [],
+      "attributes": []
+    }
+  ],
+  "workflows": [],
+  "actions": [
+    {
+      "name": "read_paper",
+      "alias": "read_paper",
+      "line": 10,
+      "entity": "Lab::Action::\"read_paper\"",
+      "guards": [],
+      "principals": [
+        "Person"
+      ],
+      "resources": [
+        "Paper"
+      ],
+      "from": null,
+      "nobody": null,
+      "inputs": [],
+      "context": []
+    }
+  ],
+  "policies": [
+    {
+      "name": "members_read",
+      "alias": "members_read",
+      "id": "papers/members_read",
+      "effect": "permit",
+      "actions": [
+        "read_paper"
+      ],
+      "file": "papers.gate",
+      "line": 15
+    },
+    {
+      "name": "suspended_do_nothing",
+      "alias": "suspended_do_nothing",
+      "id": "papers/people/suspended_do_nothing",
+      "effect": "forbid",
+      "actions": [
+        "read_paper"
+      ],
+      "file": "people.gate",
+      "line": 14
+    }
+  ],
+  "expects": [],
+  "separations": []
+}

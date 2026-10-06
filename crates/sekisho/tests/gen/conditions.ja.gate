@@ -1,0 +1,86 @@
+gate 条件(conditions_ja) v1
+description "Cedar の生成器が書く条件の形を、全部並べたもの。無いことがある属性、一部の型だけが持つ属性、二つの属性の比べ、グループのメンバー、not、or、二つの resource の型、全部の action に効く forbid。conditions.gate の日本語の版"
+namespace LabJa
+
+enum 機密度(level) = 低(low) | 高(high)
+enum 部署(dept) = 営業(sales) | サポート(support)
+
+role 編集者(editor)
+  description "文書を直す"
+
+role 閲覧者(viewer)
+  description "文書を読む"
+
+principal 利用者(User)
+  description "テナントに属する人"
+  roles 編集者, 閲覧者
+  attributes
+    クリアランス(clearance) : number  range >=0 <=5
+    部署(dept)               : 部署
+    テナント(tenant)         : テナント
+    休職中(on_leave)         : bool?
+
+principal ボット(Bot)
+  description "部署のために文書を読むプログラム"
+  attributes
+    部署(dept) : 部署
+
+resource テナント(Tenant)
+  description "テナント"
+
+resource チーム(Team)
+  description "テナントの中のチーム"
+
+resource 文書(Doc)
+  description "文書"
+  attributes
+    テナント(tenant)     : テナント
+    チーム(team)         : チーム
+    機密度(level)        : 機密度
+    部署(dept)           : 部署
+    確かめる人(reviewer) : 利用者?
+    保管済(archived)     : bool?
+
+resource フォルダー(Folder)
+  description "フォルダー"
+  attributes
+    テナント(tenant) : テナント
+
+action 読む(read)
+  description "文書かフォルダーを読む"
+  principal 利用者, ボット
+  resource 文書, フォルダー
+  input
+    急ぎ(urgent)    : bool
+    ページ数(pages) : number  range >=1 <=500
+
+action 直す(edit)
+  description "文書を直す"
+  principal 利用者
+  resource 文書
+
+permit 編集者と閲覧者は読める(readers_read)
+  description "編集者と閲覧者は、同じテナントの、保管済でないものを読める"
+  principal in 編集者, 閲覧者
+  action 読む
+  when resource.テナント is principal.テナント
+  unless resource.保管済
+
+permit ボットは自分の部署の文書を読める(bots_read_their_department)
+  description "ボットは、自分の部署の文書を、20 ページまでか急ぎなら読める"
+  principal is ボット
+  action 読む
+  when principal.部署 is resource.部署
+  when ページ数 <= 20 or 急ぎ
+
+permit 編集者は直せる(editors_edit)
+  description "文書のチームにいるか、文書を確かめる編集者は、文書の機密度が高くないか、クリアランスが 3 以上なら直せる"
+  principal in 編集者
+  action 直す
+  when principal in resource.チーム or resource.確かめる人 is principal
+  when resource.機密度 is not 高 or principal.クリアランス >= 3
+
+forbid 休職中の人は何もできない(nobody_on_leave)
+  description "休職中の人は何もできない"
+  action any
+  when principal.休職中 is true

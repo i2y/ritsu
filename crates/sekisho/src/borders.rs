@@ -429,7 +429,12 @@ fn rule_value(g: &Gate, a: &Action, c: &Computed, rule: usize, facts: &RuleFacts
             Some((i.name.clone(), values))
         })
         .collect();
-    domain.map(|domain| Kn::Rule { file: u.file.clone(), output: column(&facts.outputs, output).map(|c| c.name.clone()).unwrap_or_default(), domain, inputs, enums })
+    // the name of each value of an enum output in the generated code, which a condition may write too
+    let members: Vec<String> = match column(&facts.outputs, output).map(|c| &c.ty) {
+        Some(ColumnType::Enum(e)) => facts.enums.iter().find(|x| x.name == *e).map(|x| x.values.iter().map(|v| v.alias.clone()).collect()).unwrap_or_default(),
+        _ => Vec::new(),
+    };
+    domain.map(|domain| Kn::Rule { file: u.file.clone(), output: column(&facts.outputs, output).map(|c| c.name.clone()).unwrap_or_default(), domain, inputs, enums, members })
 }
 
 fn column_type(t: &ColumnType) -> String {

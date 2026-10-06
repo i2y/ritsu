@@ -1,0 +1,30 @@
+gate two_spellings v1
+description "One attribute written by its name in one policy and by its alias in another: one term of the relation, as in Cedar"
+namespace Spell
+
+principal Customer
+  description "A customer"
+
+resource Order
+  description "An order"
+  attributes
+    ordered_by(customer) : Customer
+    rush                 : bool
+
+action view
+  description "Look at an order"
+  principal Customer
+  resource Order
+
+permit own
+  description "A customer looks at an order of their own"
+  principal is Customer
+  action view
+  when resource.ordered_by is principal
+
+forbid no_rush
+  description "A customer does not look at a rushed order of their own"
+  principal is Customer
+  action view
+  when resource.customer is principal
+  when resource.rush

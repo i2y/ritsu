@@ -4,8 +4,8 @@
 //! flag given twice stop the run with exit 2. The table is sekisho's; how it is drawn and read is
 //! ritsu-base's ([`ritsu_base::cli`]).
 //!
-//! `check` and `explain` are the commands of stage A; `gen`, `doc`, `vectors` and `api` join the
-//! table as they are written (DESIGN 11).
+//! `check` and `explain` came with stage A, and `gen` (Cedar), `vectors` and `api` with stage B;
+//! `doc` joins the table when it is written (DESIGN 11).
 
 use crate::check::{self, Options};
 use crate::suite::Suite;
@@ -48,6 +48,76 @@ pub fn table() -> Table {
                 codes: every_code(),
             },
             Cmd {
+                usage: Some("sekisho gen <file.gate>... --target cedar [--out <dir>] [--check] [--lang ja|en]"),
+                name: "gen",
+                args: "<file.gate>...",
+                purpose: tr!(
+                    "Cedar のスキーマとポリシーを生成する。検査を通らないファイルからは生成しない",
+                    "generate the Cedar schema and policies; nothing is generated from a file that does not pass check"
+                ),
+                params: vec![("<file.gate>...", tr!(".gate のファイル", "the .gate files"))],
+                flags: vec![
+                    flag(
+                        "--target",
+                        Some("cedar"),
+                        tr!(
+                            "生成するもの。cedar は <out>/cedar/ に、別名ごとに四つのファイル（.cedar、.cedarschema、.cedarschema.json、.policies.json）を書く。sekisho が書く文（頭と、計算した値の @doc）は --lang の言語になる",
+                            "what to generate: cedar writes four files a gate into <out>/cedar/, named by its alias (.cedar, .cedarschema, .cedarschema.json, .policies.json); what sekisho writes in them (the head, the @doc of a computed value) is in the language of --lang"
+                        ),
+                    )
+                    .choices(&crate::r#gen::TARGETS),
+                    flag("--out", Some("<dir>"), tr!("生成物を書くディレクトリ", "the directory the generated files go to")).default("generated"),
+                    flag("--check", None, tr!("書き出さずに、ディスクの生成物が、いま生成するものと一字一句同じかを見る。違えば 1（CI 用）", "write nothing; exit 1 if a file on disk differs from what gen would write (for CI)")),
+                ],
+                exits: vec![
+                    (0, tr!("生成した、または --check で全部が同じだった", "generated, or --check found every file the same")),
+                    (1, tr!("検査を通らないファイルがある、または --check で違う・無いファイルがある", "a file does not pass check, or --check found a file that differs or is missing")),
+                    (2, tr!("引数の誤り、読めないファイル、書けないファイル、ほかの言語を読むファイルを、それを読めないこの sekisho で走らせた（E209）", "bad arguments, a file that cannot be read or written, or a file that reads another language run with this sekisho, which reads none (E209)")),
+                ],
+                examples: vec!["ritsu sekisho gen examples/refunds/refunds.gate --target cedar", "ritsu sekisho gen examples/refunds/refunds.gate --target cedar --check", "sekisho gen shop.gate --target cedar --out generated --lang ja"],
+                codes: vec![],
+            },
+            Cmd {
+                usage: None,
+                name: "vectors",
+                args: "<file.gate>",
+                purpose: tr!(
+                    "全部の組み合わせを、cedar run-tests が読むテストにして出す（リクエスト、エンティティ、sekisho の参照の評価が言う答えと決めたポリシー）",
+                    "print every combination as a test of cedar run-tests: the request, the entities, and the decision and the deciding policies by sekisho's reference evaluation"
+                ),
+                params: vec![("<file.gate>", tr!("検査を通る .gate のファイル", "a .gate file that passes check"))],
+                flags: vec![flag("--action", Some("<action>"), tr!("この action の組み合わせだけ（名前か別名）", "the combinations of this action only (its name or its alias)"))],
+                exits: vec![
+                    (0, tr!("出した", "printed")),
+                    (1, tr!("ファイルが検査を通らない", "the file does not pass check")),
+                    (2, tr!("引数の誤り、読めないファイル、無い action、ほかの言語を読むファイルを、それを読めないこの sekisho で走らせた（E209）", "bad arguments, a file that cannot be read, no such action, or a file that reads another language run with this sekisho, which reads none (E209)")),
+                ],
+                examples: vec![
+                    "ritsu sekisho vectors examples/refunds/refunds.gate > refunds.tests.json",
+                    "cedar run-tests --policies generated/cedar/refunds.cedar --schema generated/cedar/refunds.cedarschema --tests refunds.tests.json",
+                    "ritsu sekisho vectors examples/refunds/refunds.gate --action refund_order",
+                ],
+                codes: vec![],
+            },
+            Cmd {
+                usage: None,
+                name: "api",
+                args: "<file.gate>",
+                purpose: tr!(
+                    "ほかのツールのための JSON を出す。名前空間と生成するファイル、役割・型・ワークフローと Cedar でのエンティティ、action と守る操作と context、ポリシーの @id、期待と職務の分離",
+                    "print JSON for other tools: the namespace and the files gen writes, the roles, types and workflows with their entities in Cedar, the actions with the operations they guard and their context, the policies with their @id, the expectations and the separations"
+                ),
+                params: vec![("<file.gate>", tr!("検査を通る .gate のファイル", "a .gate file that passes check"))],
+                flags: vec![],
+                exits: vec![
+                    (0, tr!("出した", "printed")),
+                    (1, tr!("ファイルが検査を通らない", "the file does not pass check")),
+                    (2, tr!("引数の誤り、読めないファイル、ほかの言語を読むファイルを、それを読めないこの sekisho で走らせた（E209）", "bad arguments, a file that cannot be read, or a file that reads another language run with this sekisho, which reads none (E209)")),
+                ],
+                examples: vec!["ritsu sekisho api examples/refunds/refunds.gate"],
+                codes: vec![],
+            },
+            Cmd {
                 usage: Some("sekisho explain <code> | --all [--format markdown|json] [--lang ja|en]"),
                 name: "explain",
                 args: "<code>",
@@ -73,7 +143,8 @@ pub fn table() -> Table {
     }
 }
 
-fn refuse(w: &mut dyn Write, msg: Text, lang: Lang) -> u8 {
+/// Say what is wrong with the command line, or with a file it cannot read: one line on `w`, exit 2.
+pub(crate) fn refuse(w: &mut dyn Write, msg: Text, lang: Lang) -> u8 {
     let head = if lang == Lang::Ja { "エラー" } else { "error" };
     let _ = writeln!(w, "{head}: {}", msg.get(lang));
     2
@@ -141,6 +212,9 @@ pub fn run(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dyn Wr
     }
     match cmd.name {
         "check" => check_cmd(&a, lang, suite, out, err),
+        "gen" => crate::r#gen::run(&a, lang, suite, out, err),
+        "vectors" => vectors_cmd(&a, lang, suite, out, err),
+        "api" => api_cmd(&a, lang, suite, out, err),
         "explain" => explain_cmd(&a, lang, out, err),
         _ => unreachable!("every command in the table is dispatched"),
     }
@@ -177,6 +251,67 @@ fn check_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut
         }
     }
     worst
+}
+
+/// A file a command reads whole (`vectors`, `api`): checked with the languages `suite` joins. Err
+/// is the exit code, the reason said: a file that cannot be read (2), one that reads a language
+/// the run does not join (E209, 2), one that does not pass (1).
+pub(crate) fn passing(f: &str, what: Text, suite: &Suite, lang: Lang, out: &mut dyn Write, err: &mut dyn Write) -> Result<check::Outcome, u8> {
+    let o = match check::check_file(f, suite, &Options::default()) {
+        Ok(o) => o,
+        Err(e) => return Err(refuse(err, tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}"), lang)),
+    };
+    if o.unjoined() {
+        let _ = write!(out, "{}", check::render(&o, lang));
+        return Err(2);
+    }
+    if o.has_errors() || o.walked.is_none() || o.scope.is_none() {
+        let _ = write!(out, "{}", check::render(&o, lang));
+        let head = if lang == Lang::Ja { "エラー" } else { "error" };
+        let _ = writeln!(err, "{head}: {}", what.get(lang));
+        return Err(1);
+    }
+    Ok(o)
+}
+
+fn vectors_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let [f] = a.pos.as_slice() else {
+        return refuse(err, tr!("`sekisho vectors` には .gate のファイルを一つ渡してください", "`sekisho vectors` takes one .gate file"), lang);
+    };
+    let o = match passing(f, tr!("`{f}` は検査を通らないので、ベクタを出しません", "`{f}` does not pass check, so it has no vectors"), suite, lang, out, err) {
+        Ok(o) => o,
+        Err(code) => return code,
+    };
+    let (Some(scope), Some(checked)) = (o.scope.as_ref(), o.walked.as_ref()) else { return 1 };
+    let g = &checked.gate;
+    let only = match a.get("--action") {
+        None => None,
+        Some(w) => match g.actions.iter().position(|x| x.named.is(w)) {
+            Some(i) => Some(i),
+            None => {
+                let names: Vec<String> = g.actions.iter().map(|x| format!("`{}`", x.named.name)).collect();
+                let l = names.join(", ");
+                return refuse(err, tr!("`{f}` に action `{w}` はありません（{l}）", "`{f}` has no action `{w}` ({l})"), lang);
+            }
+        },
+    };
+    let shape = crate::cedar::shape(g, scope, checked);
+    let tests = crate::vectors::tests(g, &shape, &checked.report, only);
+    let _ = write!(out, "{}", crate::vectors::text(&tests));
+    0
+}
+
+fn api_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let [f] = a.pos.as_slice() else {
+        return refuse(err, tr!("`sekisho api` には .gate のファイルを一つ渡してください", "`sekisho api` takes one .gate file"), lang);
+    };
+    let o = match passing(f, tr!("`{f}` は検査を通らないので、api を出しません", "`{f}` does not pass check, so it has no api"), suite, lang, out, err) {
+        Ok(o) => o,
+        Err(code) => return code,
+    };
+    let (Some(scope), Some(checked)) = (o.scope.as_ref(), o.walked.as_ref()) else { return 1 };
+    let _ = writeln!(out, "{}", crate::api::json(scope, checked).pretty());
+    0
 }
 
 fn explain_cmd(a: &Args, lang: Lang, out: &mut dyn Write, err: &mut dyn Write) -> u8 {

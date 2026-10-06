@@ -9,13 +9,18 @@
 //! - [`names`]: what each name refers to, its alias, and the types and units of the values
 //!   ([`types`]), reading the rules and the dates files through the ports of [`suite`].
 //! - [`check`]: a file from its text to its diagnostics ([`diag`], the codes of [`codes`]).
+//! - [`cedar`] and [`r#gen`]: the Cedar a file that passes compiles to, and the command that writes it;
+//!   [`vectors`]: every combination, as the tests of `cedar run-tests`; [`api`]: what the file
+//!   declares, as JSON.
 //! - [`cli`] and [`run`]: the `sekisho` command, which the binary runs and so does `ritsu sekisho`.
 
 #[macro_use]
 extern crate ritsu_base;
 
+pub mod api;
 pub mod ast;
 pub mod borders;
+pub mod cedar;
 pub mod cells;
 pub mod check;
 pub mod checks;
@@ -24,6 +29,8 @@ pub mod codes;
 pub mod contracts;
 pub mod diag;
 pub mod eval;
+/// `sekisho gen` (the file is `gen.rs`; `gen` is a keyword of Rust 2024).
+pub mod r#gen;
 pub mod kw;
 pub mod lex;
 pub mod model;
@@ -35,4 +42,5 @@ pub mod run;
 pub mod suite;
 pub mod table;
 pub mod types;
+pub mod vectors;
 pub mod walk;

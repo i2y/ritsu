@@ -1,0 +1,22 @@
+sekisho vectors — print every combination as a test of cedar run-tests: the request, the entities, and the decision and the deciding policies by sekisho's reference evaluation
+
+Usage:
+  sekisho vectors <file.gate> [--action <action>]
+
+Arguments:
+  <file.gate>  a .gate file that passes check
+
+Flags:
+  --action <action>  the combinations of this action only (its name or its alias)
+  --lang ja|en       the language of the text; else the SEKISHO_LANG environment variable, then RITSU_LANG, else en (default en)
+  --help             print this page
+
+Exit codes:
+  0  printed
+  1  the file does not pass check
+  2  bad arguments, a file that cannot be read, no such action, or a file that reads another language run with this sekisho, which reads none (E209)
+
+Examples:
+  $ ritsu sekisho vectors examples/refunds/refunds.gate > refunds.tests.json
+  $ cedar run-tests --policies generated/cedar/refunds.cedar --schema generated/cedar/refunds.cedarschema --tests refunds.tests.json
+  $ ritsu sekisho vectors examples/refunds/refunds.gate --action refund_order

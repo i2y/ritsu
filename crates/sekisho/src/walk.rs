@@ -331,8 +331,10 @@ pub enum Kn {
     /// A rule's output: the file, the output, its values, each input of the rule by name with its
     /// unit when it is a number, and for an input that is an enum, each value as the rule's
     /// evaluator takes it (its name) with the words that name it (the name, the alias in the
-    /// generated code, the public name).
-    Rule { file: PathBuf, output: String, domain: Domain, inputs: Vec<(String, Option<Unit>)>, enums: Vec<(String, EnumInput)> },
+    /// generated code, the public name). `members` is the name of each value of an enum output in
+    /// the generated code (`WithinLimit`), in the order of the domain: a condition may name a value
+    /// by it too (DESIGN 3.2).
+    Rule { file: PathBuf, output: String, domain: Domain, inputs: Vec<(String, Option<Unit>)>, enums: Vec<(String, EnumInput)>, members: Vec<String> },
     /// A date of a dates file: the file, the date, and the file's inputs (name, whether a date).
     Date { file: PathBuf, function: String, inputs: Vec<(String, bool)> },
     /// A date attribute compared with `today`.
@@ -629,6 +631,16 @@ impl<'g> Compiler<'g> {
         }
     }
 
+    /// The value of a rule's enum output a word names by the name of the generated code
+    /// (`WithinLimit`), by its place in the domain.
+    fn member(&self, s: &Slot, word: &str) -> Option<usize> {
+        let Slot::Computed(i) = s else { return None };
+        match self.known.computed.get(&(self.action, *i)) {
+            Some(Kn::Rule { members, .. }) => members.iter().position(|m| m == word),
+            _ => None,
+        }
+    }
+
     /// The entity type a term points to, in this frame.
     fn term_type(&self, t: &Term) -> Option<usize> {
         match t {
@@ -641,6 +653,15 @@ impl<'g> Compiler<'g> {
     }
 
     fn term(&mut self, ty: usize, t: &Term) -> (usize, usize) {
+        // an attribute is one term however it is written (by its name in one condition, by its
+        // alias in another): by the name it is declared with
+        let t = &match t {
+            Term::Attr(o, n) => match self.g.owner_type(*o, self.principal, self.resource).attr(n) {
+                Some((_, f)) => Term::Attr(*o, f.named.name.clone()),
+                None => t.clone(),
+            },
+            Term::Principal => Term::Principal,
+        };
         let terms = self.terms.entry(ty).or_default();
         let i = match terms.iter().position(|x| x == t) {
             Some(i) => i,
@@ -691,7 +712,7 @@ impl<'g> Compiler<'g> {
                     Some(v) => CAtom::Enum(self.place(s), v),
                     None => CAtom::Const(false),
                 },
-                (Some((s, Ty::Computed(Some(vs)))), Literal::Word(w)) => match vs.iter().position(|v| v.is(w)) {
+                (Some((s, Ty::Computed(Some(vs)))), Literal::Word(w)) => match vs.iter().position(|v| v.is(w)).or_else(|| self.member(&s, w)) {
                     Some(v) => CAtom::Enum(self.place(s), v),
                     None => CAtom::Const(false),
                 },
@@ -1422,7 +1443,7 @@ pub fn confirm(g: &Gate, s: &Space, k: &Kept, known: &Known, ask: &dyn Ask) -> b
         let found = product(&cands).into_iter().any(|asg| {
             outputs.iter().all(|&(at, ci)| {
                 let want = value_at(at);
-                let (Some(Kn::Rule { file, output, domain, inputs, enums }), How::Rule { args, .. }) = (known.computed.get(&(s.action, ci)), &a.computed[ci].how) else { return false };
+                let (Some(Kn::Rule { file, output, domain, inputs, enums, .. }), How::Rule { args, .. }) = (known.computed.get(&(s.action, ci)), &a.computed[ci].how) else { return false };
                 // a value of an enum input, as the rule's evaluator takes it: the rule's name of the
                 // value that answers to the word (or to the alias of the gate's value of that name)
                 let to_rule = |input: &str, v: Value| -> Value {

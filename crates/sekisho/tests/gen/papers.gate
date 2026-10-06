@@ -1,0 +1,18 @@
+gate papers v1
+description "The papers of the lab: the forbid people.gate holds for every action holds for this file's, under the id papers/people/suspended_do_nothing"
+namespace Lab
+
+use gate "people.gate"
+
+resource Paper
+  description "A paper"
+
+action read_paper
+  description "Read a paper"
+  principal Person
+  resource Paper
+
+permit members_read
+  description "A member reads a paper"
+  principal in member
+  action read_paper

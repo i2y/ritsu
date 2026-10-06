@@ -1,0 +1,30 @@
+gate 二つの綴り(two_spellings_ja) v1
+description "一つの属性を、一つのポリシーでは名前で、もう一つのポリシーでは別名で書いたもの。Cedar と同じく、関係の項は一つになる。two_spellings.gate の日本語の版"
+namespace SpellJa
+
+principal 顧客(Customer)
+  description "お客さま"
+
+resource 注文(Order)
+  description "注文"
+  attributes
+    注文した人(customer) : 顧客
+    急ぎ(rush)           : bool
+
+action 見る(view)
+  description "注文を見る"
+  principal 顧客
+  resource 注文
+
+permit 自分の注文を見る(own)
+  description "お客さまは自分の注文を見られる"
+  principal is 顧客
+  action 見る
+  when resource.注文した人 is principal
+
+forbid 急ぎの自分の注文は見ない(no_rush)
+  description "急ぎの注文は、自分のものでも見ない"
+  principal is 顧客
+  action 見る
+  when resource.customer is principal
+  when resource.急ぎ
