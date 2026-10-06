@@ -280,17 +280,19 @@ E の最初の部分で、三つの言語がほかの言語を読めないとき
 
 | 口 | 出す側 | 受け取る側 | 中身 |
 |---|---|---|---|
-| `Rules` | rulec | dandori、yuen、sakai、ritsu-cross | 入力と出力（名前、別名、単位の付いた型、範囲、率の刻み）、列挙（値の名前と、Connect のワイヤでの名前と番号）、ステートマシン（軸、行が受け付ける座標、遷移、書く値、held）、前提（`constraint`・`sum`・`length`）、Connect のサービスの形、生成したコードの呼び方、`rulec doc` が描いたもの。問いは「この範囲の値で、前提は必ず成り立つか」と「この入力の値をこの集合に限ったとき、表は完全で、重なりが無く、当てはまらない行が無いか」。評価は入力から出力 |
-| `Dates` | koyomi | dandori、rulec、sakai（doc のため。F.2）、ritsu-cross | 関数、引数の型と範囲、カレンダーとデータの範囲、`at` の時刻と UTC オフセット、条件の名前と文。問いは「入力の範囲で、関数がとりうる値の集合」と「入力から値までの日数の最小と最大」。評価 |
-| `Books` | chobo | dandori、sakai（doc のため。D.8）、ritsu-cross | 単位（ritsu の単位の型。D.9）、勘定と境界と拒否の理由、振替の種類（引数と単位、キー、仮押さえと有効期限、移動）、仮押さえのステートマシン。問いは「額がこの範囲のとき、どの操作が、どの理由で拒否されうるか」。評価（帳簿の状態を持つ） |
+| `Rules` | rulec | dandori、yuen、sakai、ritsu-cross、sekisho | 入力と出力（名前、別名、単位の付いた型、範囲、率の刻み）、列挙（値の名前と、生成したコードのメンバーの名前と、`.rule` に書いた別名（公開名）と、Connect のワイヤでの名前と番号）、ステートマシン（軸、行が受け付ける座標、遷移、書く値、held）、前提（`constraint`・`sum`・`length`）、Connect のサービスの形、生成したコードの呼び方、`rulec doc` が描いたもの。問いは「この範囲の値で、前提は必ず成り立つか」と「この入力の値をこの集合に限ったとき、表は完全で、重なりが無く、当てはまらない行が無いか」と「入力をこの区間に限ったとき、この出力（列挙か真偽）がとる値と、そこに届く入力」（`outputs_over`。2026-10-06 に sekisho のために足した）。評価は入力から出力 |
+| `Dates` | koyomi | dandori、rulec、sakai（doc のため。F.2）、ritsu-cross、sekisho | 関数、引数の型と範囲、カレンダーとデータの範囲、`at` の時刻と UTC オフセット、条件の名前と文、`koyomi doc` が描いたもの。問いは「入力の範囲で、関数がとりうる値の集合」と「入力から値までの日数の最小と最大」と「カレンダーのデータの範囲と、休みの日の全部」（`calendar`）。`calendar` と `doc` は 2026-10-06 に sekisho のために足した。評価 |
+| `Books` | chobo | dandori、sakai（doc のため。D.8）、ritsu-cross、sekisho（`GatePorts`） | 単位（ritsu の単位の型。D.9）、勘定と境界と拒否の理由、振替の種類（引数と単位、キー、仮押さえと有効期限、移動）、仮押さえのステートマシン。問いは「額がこの範囲のとき、どの操作が、どの理由で拒否されうるか」。評価（帳簿の状態を持つ） |
 | `Claims` | geas | yuen、ritsu-cross | 主張の一覧（名前、行、書いたとおりの手順）。map の記録の読み方。差分が主張に何をもたらすか（geas の `affected`。D.7 で足した） |
-| `Items` | 七つ全部 | yuen、sakai | 中のもの（種類、名前、行の範囲、定義の文）。6.4 |
+| `Items` | 七つ全部 | yuen、sakai、sekisho（`GatePorts`） | 中のもの（種類、名前、行の範囲、定義の文）。6.4 |
 | `References` | 七つ全部 | sakai、yuen | 参照（行、先の名指し、参照の仕方）。6.4 |
 | `Sources` | rulec、koyomi | yuen | ファイルが宣言して保存している出典（法令の ID と時点と条ごとの固定、文書のパスと url と固定）。検査を通るファイルにだけ答える。D.7 で足した（下の段落） |
 | 索引（`Index`） | （口ではなく、`Items` と `References` の答えを持つもの） | yuen、sakai、ritsu-cross | 各言語の `Items` と `References` の答えをファイルごとに一度だけ尋ねて持ち、名指しで引く。E.1 で足した（6.4） |
-| `Flows` | dandori | ritsu-cross | 検査を通るフローが、規則・koyomi の日付・chobo の振替を呼ぶところと、渡す値がどこから来うるか、期限のある仮押さえを確定か取消をするまでの長さ。E.4 と E.5 で足した（下の段落）。秘密の値をプロジェクトの中の成果物へ送る呼び出し（`sends`。2026-10-06 に足した。16.8）：呼び出しの行、タスクか規則、送る先のファイル（OpenAPI の文書、`.proto`、Connect の規則、子の `.flow`、帳簿、日付のファイル。dandori が届くパス）、引数ごとの秘密の値（フローの書き方、印のファイルと行と印）、`discloses` の引数と理由 |
+| `Flows` | dandori | ritsu-cross、sekisho（`crossings` で、`.flow` が dandori の検査を通るかを尋ねる。`GatePorts`） | 検査を通るフローが、規則・koyomi の日付・chobo の振替を呼ぶところと、渡す値がどこから来うるか、期限のある仮押さえを確定か取消をするまでの長さ。E.4 と E.5 で足した（下の段落）。秘密の値をプロジェクトの中の成果物へ送る呼び出し（`sends`。2026-10-06 に足した。16.8）：呼び出しの行、タスクか規則、送る先のファイル（OpenAPI の文書、`.proto`、Connect の規則、子の `.flow`、帳簿、日付のファイル。dandori が届くパス）、引数ごとの秘密の値（フローの書き方、印のファイルと行と印）、`discloses` の引数と理由 |
 | `Maps` | sakai | ritsu-cross | 地図のコンテキストと関係、ファイルがどのコンテキストに属するか。sakai の検査の段 1 と段 2（構文、名前、パスと、属し方）だけで答える。2026-10-06 に足した（16.8、16.9） |
 | `Undecided` | ritsu-cross（`ritsu_cross::UndecidedCalls`） | dandori | フローの規則の呼び出しごとに、X2 が決められなかった前提（呼び出しの行、規則のファイル、前提）。dandori の生成したコードが、ワークフローを走らせたときに確かめる（7.4 の 3）。E.5 で足した |
+| `Gates` | sekisho（段階 D で `Engine` が実装する） | ritsu-cross（X15、X16） | `.gate` の action と守る操作（参照の書き方）、ワークフロー、ポリシーの `@id`、期待と職務の分離の名前と行。問いは「この principal（ワークフローか、型と役割の組）は、この action を、全部の組み合わせでいつも・組み合わせによって・決して許されるか」。2026-10-06 に型を足した（下の段落） |
+| `GatePorts` | （口ではなく、sekisho が読む口のまとまり） | sekisho | `Rules`・`Dates`・`Books`・`Flows`・`Items` の五つの口。`ritsu-project` の `Joined::sekisho` が作る。`ports()` が、`Flows::crossings` に渡す三つの口の組（`Ports`）を返す。2026-10-06 に足した |
 
 どの問いの答えも、P5 の三つのどれかになる。値を尋ねる問い（koyomi の日付がとりうる値の集合など）は、その値か、決められない理由かの二つになる。
 
@@ -308,10 +310,11 @@ pub trait Rules {
     fn date_range(&self, rule: &Path, input: &str) -> Result<(Option<i64>, Option<i64>), Vec<Said>>;
     fn eval(&self, rule: &Path, inputs: &Values) -> Result<Values, RuleError>;
     fn doc(&self, rule: &Path, shown: &str, html: bool, lang: Lang) -> Result<String, Vec<Said>>;
+    fn outputs_over(&self, rule: &Path, output: &str, ranges: &[(String, Option<i128>, Option<i128>)]) -> Result<Found<Vec<(Value, Values)>>, Vec<Said>>;   // 既定は決められない。sekisho のために足した（2026-10-06）
     fn joined(&self) -> bool;   // 何も読まない口（dandori の NoRules など）は false
 }
 // `..` は `&self, file: &Path`。`Dates`・`Books`・`Claims` の答えは `Result<_, Vec<Said>>` に包む（`Ledger` の `apply` と `balance` は `Result<_, Text>`）
-pub trait Dates { fn facts(..) -> DateFacts; fn values(.., date) -> Found<DaySet>; fn days(.., date) -> Found<(i64, i64)>; fn span(.., date) -> Found<DaySpan>; fn input_for(.., date, day) -> Option<inputs>; fn eval(.., inputs) -> Vec<(String, DateValue)>; fn joined(&self) -> bool; }
+pub trait Dates { fn facts(..) -> DateFacts; fn values(.., date) -> Found<DaySet>; fn days(.., date) -> Found<(i64, i64)>; fn span(.., date) -> Found<DaySpan>; fn input_for(.., date, day) -> Option<inputs>; fn eval(.., inputs) -> Vec<(String, DateValue)>; fn calendar(..) -> CalendarFacts; fn doc(.., shown, html, lang) -> String; fn joined(&self) -> bool; }   // calendar と doc の既定は答えない。sekisho のために足した（2026-10-06）
 pub trait Books { fn facts(..) -> BookFacts; fn refusals(.., transfer, amounts) -> Found<Vec<(op, reasons)>>; fn open(..) -> Box<dyn Ledger>; fn joined(&self) -> bool; }
 pub trait Ledger { fn apply(&mut self, &BookCall) -> Result<BookOutcome, Text>; fn pass(&mut self, seconds) -> expired; fn balance(&self, account, args) -> Balance; fn accounts(&self) -> named; fn holds(&self) -> holds; }
 pub trait Claims { fn claims(..) -> Vec<Claim>; fn map_record(..) -> Option<MapRecord>; fn affected(.., root, diff, diff_shown, records) -> Affected; }
@@ -322,6 +325,8 @@ pub struct Ports { rules: Rc<dyn Rules>, dates: Rc<dyn Dates>, books: Rc<dyn Boo
 pub trait Flows { fn rule_calls(.., rules) -> Vec<RuleCall>; fn crossings(.., ports: &Ports) -> Crossings; fn sends(.., ports: &Ports) -> Vec<Send>; }   // dandori が答える。E.4 と E.5、sends は 16.8
 pub trait Undecided { fn preconditions(&self, file: &Path) -> Vec<UndecidedPrecondition>; }   // ritsu-cross が答え、dandori が受け取る。E.5
 pub trait Maps { fn map(&self, root: &Path, map: &str) -> Result<Option<MapFacts>, Vec<Said>>; fn context_of(&self, root: &Path, map: &str, file: &str) -> Result<Option<String>, Vec<Said>>; }   // sakai が答え、ritsu-cross が受け取る。16.8
+pub trait Gates { fn facts(..) -> GateFacts; fn allowed(.., action, asker: &Asker) -> Found<Allowance>; fn joined(&self) -> bool; }   // sekisho が答え（段階 D）、ritsu-cross が受け取る。2026-10-06 に型を足した
+pub struct GatePorts { rules: Rc<dyn Rules>, dates: Rc<dyn Dates>, books: Rc<dyn Books>, flows: Rc<dyn Flows>, items: Rc<dyn Items> }   // sekisho が読む五つの口。ritsu-project の Joined::sekisho が作り、ports() が Flows::crossings に渡す Ports を返す
 ```
 
 `RuleFacts` は、dandori の `src/rulec.rs` がいま三つの JSON から組み立てている `RuleInfo`（入力と出力の `Column`、列挙、`Machine`、前提、`walks`）を、単位の型（5 章）の付いた形にしたものである。D の段階では、例のすべての規則について、型の付いた呼び出しで得た事実と、いまの JSON から読んだ事実が同じになることを一度確かめてから、JSON の読み手を消す。D の二つ目の部分でそうした。rulec のコーパスの 50 本と dandori の 14 本の規則で、dandori が読む 1,939 の項目を突き合わせ、違った 7 か所は、どれも JSON の側の読み違えだった（規則がたどる並びを入力に数えて文字列と読んだこと 5 本、無いことがある入力を文字列と読んだこと 2 本）。ステートマシンの状態の軸（口では `Option`）は、dandori も `Option` で持ち、None は「表が状態を読まないので、どの状態からも同じ行が当てはまる」と読む（前の dandori は null を最初の軸と読み違えていた）。くわしくは PLAN の D.3。
@@ -379,6 +384,15 @@ ritsu-ports には、秒を最も大きな単位で書く `seconds_text`（`17 d
 **E の二つ目の部分で足したもの**（PLAN の E.6）。`ritsu run` が帳簿の終わりを見せるために、`Ledger` に問いを二つ足した。`accounts` は `do` と `hold` が名指した勘定の全部（拒否された操作が名指した勘定も入る）とその残高、`holds` は仮押さえの全部といまの状態で、どちらも `chobo run` がシナリオの終わりに出すものと同じものを同じ順に返す（chobo の DESIGN 8 章）。
 
 **2026-10-06 に足したもの**（16 章のセキュリティの検査）。`Flows::sends` は、秘密の値をプロジェクトの中のファイルへ渡す呼び出しを返し、新しい口 `Maps` は、sakai の地図のコンテキストと関係と、ファイルがどのコンテキストに属するかを返す。ritsu-cross の X14 が二つを合わせ、秘密の値の送り先が地図の上で送ってよいところかを確かめる。どちらも、検査を通らないもの（フローか地図）には、その検査の診断を `Said` で返す。型と決まりは 16.9 に書いた。
+
+**2026-10-06 に足したもの**（八つ目の言語 sekisho の段階 A。PLAN の 7.12）。sekisho は、規則と日付の答えを Cedar のリクエストの context に入れ、許すか拒むかを全部の組み合わせで数える（sekisho の DESIGN 3 章、4 章）。そのための問いと型を足した。
+
+- `Rules::outputs_over`（rulec が答える）：列挙か真偽の出力の名前と、入力ごとの区間（受け渡す整数で、日付は日の番号。両端を含み、None の端は宣言した範囲のまま）を受け取り、出力がとる値の一つ一つに、そこに届く入力を添えて返す（値を宣言した順。区間の中に入力が無ければ空）。rulec は、入力を区間に限って規則を読み直し、出力を決める表の行のうち、ある入力が届きうる行を、完全性の証明のふるいと導出の届く区間で求め、その行が書く値に届く入力を規則のベクタから探して評価器で確かめる。二つがそろえば正確で、そろわなければ値と行を言って決められないと答える。rulec のコーパスとテストの規則の 323 の問いのうち 322 が、区間の中の全部の入力を流した答えと同じに正確に答えられた（rulec の DESIGN 15.188）。`rulec check` の答えは変わらない（E102 は強めていない）。既定の実装は決められないと答えるので、いま口を実装しているもの（dandori の `NoRules` など）は直していない。
+- `EnumValue::public`：口の事実の列挙の値に、公開名（`.rule` が括弧の中に書いた別名、無ければ名前。`上限まで(within_limit)` なら `within_limit`）を足した。sekisho が Cedar に入れる文字列で、`outputs_over` も列挙の値をこれで返す（添える入力は `eval` が受け取る形で、列挙の値は名前）。前からの `alias`（生成したコードのメンバーの名前、`WithinLimit`）と `name` は変えていないので、dandori と yuen の答えは変わらない。
+- `Dates::calendar` と `Dates::doc`（koyomi が答える）：`calendar` は、カレンダーのファイルの名前と別名、データの範囲、UTC オフセット、データの範囲の中で休みの日の全部（`CalendarFacts`）を返す。`doc` は `koyomi doc` と同じページを返し、頭の「ファイル」の行だけを呼ぶ側の書き方にする（`Rules::doc` と同じ使い方）。どちらも `check` を通るファイルにだけ答え、既定の実装は答えない（`Err`）。
+- 口 `Gates` の型（`GateFacts`・`GateAction`・`GateWorkflow`・`GatePolicy`・`Asker`・`Allowance`）と、口のまとまり `GatePorts`（`crates/ritsu-ports/src/gates.rs`）。`Gates` に答える `Engine` は段階 D で作る。`GatePorts` は、sekisho のクレートに依存せずに `ritsu-project` が作れるよう、ritsu-ports に置いた（dandori の `Ports` と同じ形）。契約（OpenAPI と AsyncAPI の文書、`.proto`）は口を通さず、土台の読み手（4.20、ritsu-proto）で読む。
+
+同じ日に、koyomi の口（`koyomi::ports::Engine`）が、同じファイルを何度尋ねられても検査を一度で済ませるようにした。sekisho は日付の関数を、渡す値ごとに `Dates::eval` で呼ぶ（例の `.gate` では、注文の支払日がとる 1,004 日について一回ずつ）。前の口は、尋ねられるたびにファイルを検査し直していた。いまの口は、検査の結果を、呼ぶ側が書いたパスごとに、その検査が読んだファイルの全部（そのファイル、カレンダー、祝日の表、法令のコピー）とその中身と一緒に覚え、次に尋ねられたら読んだファイルを読み直して、どれも同じときだけ覚えた結果で答える。読んだファイルは、検査が `ritsu_base::fs` に頼んだ読みを記録して知る（結果の型から集めると、読みが増えたときに集め忘れる）。土台に、外側の `ritsu_base::fs::with` を返す `fs::current` を足した。覚えるのはスレッドごとで、256 件を超えたら覚え直す。`Engine` は値を持たない型のままにした（ritsu の三十を超える所が `koyomi::ports::Engine` と値で書いている）。`ritsu check` の `koyomi check`（`Engine::checked`）は、前のとおりファイルごとに検査する。速さは、例の `refunds.gate` の検査が 1.8 秒ほどから 0.46 秒ほどになった（test の構成。koyomi の DESIGN 11 章）。
 
 中のものの定義の文は、6.4 の表のとおりにした。rulec は `rulec fmt` が書く形の行、koyomi は `date … =` の塊の行と条件の行（コメントと前後の空白を除く）、chobo は yuen の DESIGN 3.2 の形の JSON（yuen の試作が計算したハッシュと同じになる）、geas は主張の塊の行、dandori はタスク・案件・レコードの宣言の塊の行（コメントと前後の空白を除き、文字列の外の続いた空白を一つにし、字下げは深さごとに空白二つに直す。dandori の DESIGN 0.3）である。表に無かった yuen は要件の端の中身（yuen の DESIGN 4.1）と出典の固定の行、sakai はコンテキストのファイルの行と語の塊の行にした。
 
@@ -697,6 +711,12 @@ YAML と JSON を、値ごとに行と列を持つ値（`yaml::Node`）に読む
 
 `ritsu-proto` は `extend` を読むようにした（前は読み飛ばしていた）。トップレベルとメッセージの中の `extend` のフィールドを `ProtoFile::extensions` に入れ、メッセージの中で宣言したものはメッセージからの名前（`Holder.tag`）にする。フィールドとして読めない文は、前と同じく読み飛ばす。`Protos::redaction` は、フィールドが `debug_redact` の印を持つかを、直に書いたもの（`[debug_redact = true]`）と、`debug_redact` を付けた列挙の値をカスタムのオプションで付けたもの（`[(acme.v1.sensitivity) = PERSONAL]`）の両方で答える。オプションは、フィールドのファイルが見るファイル（自分、import するもの、それが `import public` するもの）の `extend google.protobuf.FieldOptions` から、protobuf の名前の決まり（フィールドのメッセージから外へ）で探し、列挙の型は `extend` を書いたところから探す。三つの読み手の golden（`tests/golden/` の三つ）は変わらない。
 
+### 4.20 OpenAPI と AsyncAPI の操作の読み手（`ritsu_base::openapi`、2026-10-06 に sekisho のために足した）
+
+契約の文書の操作（`operationId`、方法とパス、引数、本文のフィールドの型と範囲と列挙、`security`、レスポンスの状態）を読む読み手を、土台に一つ置く。sekisho の `guards`・`input`・`from` が操作を引き、型と範囲を比べる（sekisho の DESIGN 2.6、E202〜E205）。いま dandori（`use openapi`。JSON だけ）と sakai（`src/contracts.rs`）が別々に読んでいるので、三つ目を書かないためである。読むのは OpenAPI 3.0〜3.2 と AsyncAPI 3.0〜3.1 で、YAML と JSON は 4.17 の読み手で読む。Swagger 2.0 と AsyncAPI 2 は、読まずに理由を言う。`$ref` は文書の中と、呼ぶ側が渡す読み手で外のファイルもたどり、たどれないものは推測せずに一覧にする（その先の引数、本文、スキーマは読まない）。`security` の無い操作は、だれでも呼べるとは読まない。`Document::operation` が、`operationId` か `"POST /orders/{orderId}/refunds"` の形で操作を引く。
+
+確かめ方：`crates/ritsu-base/tests/openapi.rs`。材料の六つの文書（`tests/fixtures/openapi/`。OpenAPI が四つで、そのうち一つは日本語の版。AsyncAPI が二つ）は、Redocly CLI 2.58.1 と AsyncAPI のパーサー 3.6.3 が誤りを言わないもので、操作の始まる位置は Redocly が言う行と列と同じ、AsyncAPI の操作のフィールド・必須か・content type・チャネルのアドレスはパーサーが読むものと同じである（どちらも手で走らせて確かめた。テストは Node を要らない）。dandori と sakai の読み手をこれに替えるのは、出力が変わらないことを確かめる仕事と一緒に、あとでする。
+
 
 ## 5. 単位の型
 
@@ -783,13 +803,13 @@ rulec の組み込みの名前空間は、十三か国の一段目の区分で�
 
 `ritsu check <パス>...` は、渡したファイルとディレクトリを一つのプロジェクトとして読む。ルートは 6.2 の 3 のとおり（4.7）。ディレクトリは、4.7 の飛ばす名前を除いて下まで歩く。
 
-ファイルの種類は拡張子で決める：`.rule`（rulec）、`.flow`（dandori。`.ja.flow` も）、`.cal`（koyomi）、`.book`（chobo）、`.geas`（geas）、`.req`（yuen）、`.ctx`（sakai）、`.proto`。ほかのファイルは、誰かが名指したとき（yuen と sakai の `file "…"`、dandori の `use openapi|smithy` のパス）にだけ読む。
+ファイルの種類は拡張子で決める：`.rule`（rulec）、`.flow`（dandori。`.ja.flow` も）、`.cal`（koyomi）、`.book`（chobo）、`.geas`（geas）、`.req`（yuen）、`.ctx`（sakai）、`.proto`、`.gate`（sekisho。2026-10-06 から）。ほかのファイルは、誰かが名指したとき（yuen と sakai の `file "…"`、dandori の `use openapi|smithy` のパス）にだけ読む。
 
 読み方の順：
 
 1. 全部のファイルを一度ずつ読み、言語ごとに字句、構文、ファイルの中の名前の解決まで進める。
 2. ファイルをまたぐ参照（dandori の `use rule … from "…"` や `flow "…"`、rulec の `import proto`、koyomi の `use calendar`、yuen と sakai の名指し）を、索引（6.4）で解決する。
-3. 各言語の検査を、出す側から順に走らせる（rulec、koyomi、chobo、geas と `.proto` のあとに dandori、そのあとに yuen と sakai）。受け取る側は、出す側の結果を口から受け取る。
+3. 各言語の検査を、出す側から順に走らせる（rulec、koyomi、chobo、geas と `.proto` のあとに dandori、そのあとに sekisho、そのあとに yuen と sakai）。受け取る側は、出す側の結果を口から受け取る。sekisho は、規則と日付とワークフローを受け取り、`Gates` を出す（3.2）。
 4. 言語をまたぐ検査（7 章）。
 
 一つのファイルのエラーは、ほかのファイルの検査を止めない。受け取る側が、エラーのある出す側を参照していれば、その参照のところで、出す側の診断を名指す診断を出す（yuen の E203 にあたるものを、子プロセスの終了コードではなく型で）。
@@ -798,9 +818,9 @@ rulec の組み込みの名前空間は、十三か国の一段目の区分で�
 
 **E.1 で作った形**（`crates/ritsu-project`。PLAN の E.1）。
 
-- `Project::load(パス, --root)` が、渡したパス（無ければ `.`）の下のファイルを、土台の `paths::walk`（4.7 の名前を飛ばす）で歩き、拡張子で言語を決める。ルートは `--root`、無ければ最初のパスの上でいちばん近い `.git` のあるディレクトリ、それも無ければ最初のパスである（6.2 の 3）。並びは、上の 3 の順の言語（rulec、koyomi、chobo、geas、`.proto`、dandori、yuen、sakai。`ORDER`）、言語の中ではパスの順である。止めるのは四つで、どれも使う人が直すもの（使い方の誤り。8.4 の exit 2）である。無いパス、ルートの外のパス、名前で渡した言語の無いファイル（`.py` など）、言語のファイルが一つも無いプロジェクト。最後のものを止めるのは、何も確かめずに通ったように見せないためである（rulec の `check` が、無いディレクトリを空のまま通さないのと同じ考え）。
-- 言語は `Joined` が一度だけ作る。rulec の `Engine`（確かめた規則を覚える）、koyomi・chobo・geas・dandori・sakai の `Engine`、その上の索引（6.4）である。`ritsu dandori` と `ritsu check` の dandori には規則と日付と帳簿の口を、`ritsu yuen` と `ritsu sakai` には索引を含む口のまとまりを、ここから渡す。dandori の口は、E の二つ目の部分から三つになった（前は規則の口だけで、日付か帳簿を使うフローは E018 で止まっていた）。`Joined::ports` が三つの口の組 `ritsu_ports::Ports` を作り、`ritsu check` は `dandori::ports::Engine::checked_with(root, files, &Ports, lang)` を呼ぶ。`ritsu run` の担当と言語をまたぐ検査の担当がそれぞれ足した入口（`checked_with_ports` と `checked_with`）は、取り込むときに `checked_with` 一つにした。`ritsu dandori` には、ritsu-cross の `Undecided` も渡す（7.4）。D の入口では三つがそれぞれ rulec の `Engine` を作り、同じ規則を別々に読んでいた（PLAN の 7.8）。
-- 一度だけ読むことの中身は、口の問いを同じファイルに一度しか問わないことである（索引、rulec の `Engine` の覚え書き、yuen と sakai の口のまとまりの覚え書き）。`ritsu check`（E.2）は、rulec の `check` の報告も rulec の `Engine` から作る。`Engine` は報告をファイルと中身で覚え、dandori や sakai がその規則の事実を尋ねたら、報告から検査を通ったかを読んで、規則を検査し直さない（パスの書き方が違っても同じファイルとみなす。`rulec/tests/ports.rs` が、コーパスの 50 本で、`check` と事実の二つを尋ねても検査は一回ずつであることを確かめる）。各言語の `check` の文は、頼まれた言語で一度作る。
+- `Project::load(パス, --root)` が、渡したパス（無ければ `.`）の下のファイルを、土台の `paths::walk`（4.7 の名前を飛ばす）で歩き、拡張子で言語を決める。ルートは `--root`、無ければ最初のパスの上でいちばん近い `.git` のあるディレクトリ、それも無ければ最初のパスである（6.2 の 3）。並びは、上の 3 の順の言語（rulec、koyomi、chobo、geas、`.proto`、dandori、sekisho、yuen、sakai。`ORDER`。sekisho は 2026-10-06 に dandori のあとに足した）、言語の中ではパスの順である。止めるのは四つで、どれも使う人が直すもの（使い方の誤り。8.4 の exit 2）である。無いパス、ルートの外のパス、名前で渡した言語の無いファイル（`.py` など）、言語のファイルが一つも無いプロジェクト。最後のものを止めるのは、何も確かめずに通ったように見せないためである（rulec の `check` が、無いディレクトリを空のまま通さないのと同じ考え）。
+- 言語は `Joined` が一度だけ作る。rulec の `Engine`（確かめた規則を覚える）、koyomi・chobo・geas・dandori・sakai の `Engine`、その上の索引（6.4）である。`ritsu dandori` と `ritsu check` の dandori には規則と日付と帳簿の口を、`ritsu yuen` と `ritsu sakai` には索引を含む口のまとまりを、ここから渡す。dandori の口は、E の二つ目の部分から三つになった（前は規則の口だけで、日付か帳簿を使うフローは E018 で止まっていた）。`Joined::ports` が三つの口の組 `ritsu_ports::Ports` を作り、`ritsu check` は `dandori::ports::Engine::checked_with(root, files, &Ports, lang)` を呼ぶ。`ritsu run` の担当と言語をまたぐ検査の担当がそれぞれ足した入口（`checked_with_ports` と `checked_with`）は、取り込むときに `checked_with` 一つにした。`ritsu dandori` には、ritsu-cross の `Undecided` も渡す（7.4）。`ritsu sekisho` と `ritsu check` の sekisho には、`Joined::sekisho` が口のまとまり `GatePorts`（3.2）を渡す（2026-10-06）。D の入口では三つがそれぞれ rulec の `Engine` を作り、同じ規則を別々に読んでいた（PLAN の 7.8）。
+- 一度だけ読むことの中身は、口の問いを同じファイルに一度しか問わないことである（索引、rulec の `Engine` の覚え書き、yuen と sakai の口のまとまりの覚え書き、koyomi の口の覚え書き（2026-10-06。3.2））。`ritsu check`（E.2）は、rulec の `check` の報告も rulec の `Engine` から作る。`Engine` は報告をファイルと中身で覚え、dandori や sakai がその規則の事実を尋ねたら、報告から検査を通ったかを読んで、規則を検査し直さない（パスの書き方が違っても同じファイルとみなす。`rulec/tests/ports.rs` が、コーパスの 50 本で、`check` と事実の二つを尋ねても検査は一回ずつであることを確かめる）。各言語の `check` の文は、頼まれた言語で一度作る。
 - ファイルをまたぐ参照（上の 2）は `Project::references` が解く。各ファイルの言語が `References` で言う名指しごとに、行き着くファイル、そのファイルがプロジェクトのものか、行き着き方（`Landing`：ファイルが無い、索引が読むファイルならその言語の答え、`.proto` なら ritsu-proto で読んでその要素があるか、索引が読まないファイル）を返す。参照の誤りは、これまでどおり各言語が自分の `check` と自分のコードで言う（7.10）ので、これは言語をまたぐ検査（E.4）が読み、LSP を作るならそれも読む、プロジェクトの一枚の見取り図である。テストは、sakai の例をコピーした `crates/ritsu/tests/projects/通販` の参照の全部（`crates/ritsu-project/tests/golden/shop.references.txt`）を golden にする。
 
 ### 6.2 名指しを処理系全体のものにする

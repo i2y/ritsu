@@ -1208,3 +1208,40 @@ ritsu を使う人のプロジェクトのファイルから見える、セキ�
 - sakai の参照の口は、公表された言語の `openapi "…"`・`asyncapi "…"` の文書も返す。ritsu-cross の W901 が、地図だけが読む文書の鍵も言う（DESIGN 16.3）。
 - `.github/secret_scanning.yml` を置き、`paths-ignore` で、偽の鍵を書いた材料と、生成する codes のページを外す（DESIGN 16.10）。
 - 契約の文書の W901 は、`ritsu check` だけに出す（DESIGN 16.1）。E905 と E906 はエラーにする（DESIGN 16.2）。
+
+**sekisho の段階 A**（sekisho-a1、sekisho-a2、sekisho-a3 の担当）
+
+八つ目の言語 sekisho の芯を、三人の担当が並べて作った（設計は `crates/sekisho/DESIGN.md`）。`ritsu sekisho check` が例の二つの版（`crates/sekisho/examples/refunds/` の `refunds.gate` と `refunds.ja.gate`）を通し、変異の全部が設計のコードを出す。Cedar はまだ生成しない（段階 B）。
+
+- **sekisho-a1（構文と名前）**：クレート `crates/sekisho` を足し、字句と構文、名前と型（E001〜E008、E101〜E108、E201、E209〜E211）、診断の台帳、`check` と `explain` を作った。`ritsu sekisho` の入口と、`ritsu check` が `.gate` を sekisho に渡すこと（`ritsu-project` の `ORDER` の dandori のあと、`ritsu_base::naming` の `Tool::Sekisho`、地図の `contexts/gates.ctx`）を先に入れた。`ritsu --help` の言語の一覧、リンク、リリースは D3 で足す。`cargo xtask deps` の言語に sekisho を足した。sekisho の DESIGN の 2.10、9〜12 章、15 章、16 章を書いた。
+- **sekisho-a2（口とほかの言語）**：ritsu-ports に、口 `Gates` の型と、sekisho が読む口のまとまり `GatePorts` を足した（DESIGN 3.2）。rulec は `Rules::outputs_over` に答え（rulec の DESIGN 15.188。コーパスとテストの規則の 323 の問いを総当たりと突き合わせ、322 が正確に答え、わざと作った一つは決められないと答えた）、口の事実の列挙の値に公開名（`EnumValue::public`）を持たせた。koyomi は `Dates::calendar` と `doc` に答える。土台に `ritsu_base::openapi`（DESIGN 4.20）を、`ritsu-project` に `Joined::sekisho()` を置いた。koyomi の口が検査したファイルを覚えるようにした（DESIGN 3.2。例の `.gate` の検査が 1.8 秒ほどから 0.46 秒ほどになった）。
+- **sekisho-a3（検査）**：有限のモデルと、定数で区間に切ること、参照の評価（Cedar の意味）、組み合わせの数え方（rulec の `outputs_over` と koyomi の `eval`・`calendar` に尋ねる。予算と E307）を作った。その上に、E301〜E307 と W301〜W304、契約と境目の検査（E202〜E208、カレンダーと帳簿の E201）、行を合わせた表を置いた。例の組み合わせは 1,078 通り（`view_order` 18、`refund_order` 1,056、`export_refunds` 4）で、`refund_order` の表は 26 行（許す行が 5 行）になる。
+
+取り込み：三人のパッチを一つの worktree に当て、ぶつかったところを直して、全体のテストを一回回した。sekisho のテストは 63 件（lib 15、`cli` 6、`codes` 4、`contracts` 7、`design` 1、`mutants` 3、`names` 13、`parse` 2、`walk` 12）。台帳のコードは 40、変異は英語と日本語の対で 112。全体は 2,219 件で、落ちたものは 0。
+
+```
+$ ritsu check crates/sekisho/examples/refunds
+ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; borders between the languages: 0 checked, 0 undecided
+$ ritsu check ritsu.ctx
+ritsu.ctx: ok — 13 contexts, 30 relationships; 473 artifacts, each in one context; 66 crossings checked (rust 66)
+```
+
+残したこと：
+
+- 段階 B〜D（Cedar の生成と公式の CLI との突き合わせ、TypeScript・Python・Go のリクエストを組み立てるコード、`sekisho doc`、X15 と X16、八つ目の言語としての取り込み）。
+- W201 の再現。いまは範囲に端の無い値を規則に渡せない（E103）ので、W201 は出ない。安全網として残し、台帳の再現は「まだ無い」のままにした（sekisho の DESIGN 3.2）。
+- rulec の E102 を、導出の届く区間とふるいで強める（2026-10-06 に決めた。作っている）。強めると `rulec check` の答えと golden が変わり、`crates/rulec/tests/over/reach.rule` の行が E102 になる。コーパスの検査を通る 87 の規則では、区間に限らずに届きうる行を求めても、E102 が通す行で落ちるものは 0 本だった（変異と golden の材料は数えていない）。
+- 本物の Verified Permissions で確かめるか（決めていない。sekisho の DESIGN 15 章）。
+- dandori と sakai の OpenAPI の読み手を `ritsu_base::openapi` に替えること（出力が変わらないことの突き合わせと一緒に）。
+- 参照の書き方のツール名 `sekisho`（`Tool::ALL`、`naming.tsv`、yuen と sakai の文）。`Tool::Sekisho` はいま `Tool::ALL` の外にあり、拡張子と種類だけを持つ。
+
+決めたこと：
+
+- 名前にも別名にもできない語は、条件と計算と型を書く 16 語だけにする。E008 の生成先の予約語は、TypeScript の予約語と strict モードの予約語、Python のキーワード、Go のキーワードにする。`use gate` で読み合うファイルは名前空間をそろえ（E210）、読んだ二つのファイルは同じ型・列挙・役割・ワークフローを宣言しない（E211）。役割の `includes` の輪は E108（sekisho の DESIGN 16.1 の 15〜18）。
+- 口のまとまり `GatePorts` は ritsu-ports に置き、sekisho の `Suite` は `From<GatePorts>` で作る。`.flow` が dandori の検査を通るか（E208）は、`Flows::crossings` で尋ねる（dandori の `Items` は検査をせずに読む）。
+- Cedar に渡す規則の列挙の値は、`.rule` に書いた別名（`EnumValue::public`）にする。
+- 役割の組は、action ごとに、そのポリシーと期待が読む役割だけを数える（例は 1,078 通り）。`nobody` を書いた action をだれかが許されれば E304。E203 の範囲の向きは dandori の E016 と同じ。値が無いとき、`x is not v` は成り立つ。何も選ばない期待は W304（警告）。
+- koyomi の口が覚える検査はスレッドごとに置き、`Engine` は値を持たない型のままにした（ほかのクレートの三十を超える所が値で書いている）。
+- 表は、規則の値を `.rule` に書いた名前で出す（`.gate` と並べて読むため）。Cedar に渡す文字列（別名）は、ページのポリシーのところに出る（sekisho の DESIGN 7 章）。
+- 名前の検査は、規則の値を、`.rule` に書いた名前、生成したコードの名前、`.rule` の別名のどれでも引く（sekisho の DESIGN 3.2）。
+- 二人の担当が同じ名前で作った E201 の変異（rulec の検査を通らない規則を読むもの。日本語の版の名前が重なった）は両方残し、返金の例を元にしたほうを `E201_通らない規則を読む返金` にした（sekisho の DESIGN 4.3）。
