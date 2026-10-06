@@ -121,6 +121,10 @@ fn 変異は決めたコードだけを出す() {
         ("m_e103fold.rule", &[("E103", 1)], "畳み込みの empty の答えを銭で書いた（円として読まれていた）"),
         ("m_e103elem.rule", &[("E103", 1)], "要素のフィールドの範囲を違う単位で書いた（診断が捨てられていた）"),
         ("m_e103step.rule", &[("E103", 1)], "型の刻みを違う単位で書いた（1 に落ちて範囲の目盛りが変わっていた）"),
+        // §15.191: a bare decimal in an expression had no value; the evaluator answered nothing
+        // and the generated code multiplied by 0. The English rule, and its Japanese version.
+        ("m_e103bare.rule", &[("E103", 1)], "定義の率 80% を 0.8 と転記した（単位の無い小数には値が無く、生成コードは 0 を掛けていた）"),
+        ("m_e103bareja.rule", &[("E103", 1)], "上と同じ規則の日本語の版"),
         ("m_e012group.rule", &[("E012", 1)], "群の一員を打ち間違えた（黙って群から外れていた）"),
         // §15.88. The walk and the count had no mutant of any kind: their diagnostics were
         // exercised only by their own minimal examples in the ledger, never by a rule a

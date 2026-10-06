@@ -128,6 +128,7 @@ golden!(e102_unreachable, "E102", "tests/mutants/m_e102.rule", "E102");
 golden!(e102_upstream_value, "E102-b", "tests/mutants/m_e102b.rule", "E102");
 golden!(e102_upstream_pair, "E102-c", "tests/mutants/m_e102c.rule", "E102");
 golden!(e103_unit, "E103", "tests/mutants/m_e103.rule", "E103");
+golden!(e103_bare_decimal, "E103-bare", "tests/mutants/m_e103bare.rule", "E103");
 golden!(e104_rounding_lookup, "E104-b", "tests/mutants/m_e104.rule", "E104");
 golden!(e104_rounding_fraction, "E104-a", "tests/mutants/m_e104b.rule", "E104");
 golden!(e105_overlap, "E105", "tests/mutants/m_e105.rule", "E105");

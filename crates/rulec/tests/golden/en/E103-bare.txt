@@ -1,0 +1,8 @@
+error[E103]: A bare decimal `0.8` cannot be written
+  --> tests/mutants/m_e103bare.rule:23
+   |
+23 | define reduced : money[JPY] = full * 0.8
+   |                                      ^^^ as a rate, `80%`
+   |
+ A number with no unit is a `number`, and a `number` is whole: `0.8` has no value, and the expression has no answer.
+ To multiply by a rate, write it with `%` (`0.8` is `80%`). An amount or a quantity takes its unit.

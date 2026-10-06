@@ -165,6 +165,11 @@ y="$C/ゆうパック運賃.rule"
 awk '/^group 近畿圏/ { sub(/大阪府/, "大阪") } { print }'                   "$y" > "$M/m_e012group.rule"
 # A step, in the wrong unit. It was taken as 1, so the runtime value counted whole units.
 awk '/^  料率\(rate\)/ { sub(/step 0.1%/, "step 0.1g") } { print }'      "$C/厚生年金保険料.rule" > "$M/m_e103step.rule"
+# A rate transcribed as a bare decimal, `80%` written `0.8`. A number with no unit is a
+# `number`, which is whole, so it had no value: the evaluator answered nothing and the
+# generated code multiplied by 0 (§15.191). The English rule, and its Japanese version beside it.
+awk '{ sub(/full \* 80%/, "full * 0.8"); print }'                       "$C/retirement_pay.rule" > "$M/m_e103bare.rule"
+awk '{ sub(/満額 × 80%/, "満額 × 0.8"); print }'                         "$C/退職手当.rule" > "$M/m_e103bareja.rule"
 
 # --- The walk and the count. Neither shape was in the mutants at all, so the diagnostics
 # that hold a `fold` and a `count` together (§15.56, §15.58) were exercised only by their own

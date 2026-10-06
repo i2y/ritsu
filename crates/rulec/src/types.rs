@@ -1264,6 +1264,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             Item::Derived(d) => {
                 let ty = c.resolve(&d.ty);
                 let got = c.expr_ty(&d.expr, path);
+                c.literal_values(&d.expr, path);
                 c.check_same(&ty, &got, &d.span, path, &tr!("導出", "derived value"));
                 c.derived_range(d, &ty, path);
                 c.overflow(&d.expr, &ty, &d.span, path, &d.name.text);
@@ -1279,6 +1280,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             Item::Define(d) => {
                 let ty = c.resolve(&d.ty);
                 let got = c.expr_ty(&d.expr, path);
+                c.literal_values(&d.expr, path);
                 c.check_same(&ty, &got, &d.span, path, &tr!("定義", "definition"));
                 c.overflow(&d.expr, &ty, &d.span, path, &d.name.text);
                 c.record_value(&d.name.text, &d.expr, &ty);
@@ -1742,6 +1744,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     if let Some(r) = &f.result {
         c.used.insert(r.name.clone());
         let got = c.expr_ty(&r.expr, path);
+        c.literal_values(&r.expr, path);
         if let Some(s) = c.syms.get(&r.name).cloned() {
             c.check_same(&s.ty, &got, &r.span, path, &tr!("結果", "result"));
             // E108 holds for `result` too. The proof used to be stated over the two `Item`s
@@ -2010,6 +2013,67 @@ impl Checked {
                     .at(format!("{path}:{} {what}", span.line))
                     .mark(span.clone(), ""),
             );
+        }
+    }
+
+    /// The number literals of an expression, each held to the unit it is written in (§15.191).
+    /// A literal in an expression is read in its own unit, as the reference evaluator and every
+    /// generator read it, and one with no value there came out as no answer from the evaluator
+    /// and as 0 in the generated code, with nothing said: a bare decimal (`0.4` is a `number`,
+    /// and a `number` is whole) and a fraction of a unit (`0.5GBP`). The language writes a
+    /// rate with `%` and an amount with its unit, so a bare decimal is answered with the rate it
+    /// would be. A divisor is E115's: it has to be a whole constant anyway.
+    fn literal_values(&mut self, e: &Expr, path: &str) {
+        match e {
+            Expr::Lit(Lit::Num(n), sp) => {
+                let ty = lit_ty(n);
+                if ty == Ty::Unknown || lit_value_in(n, &ty).is_some() {
+                    return;
+                }
+                let raw = &n.raw;
+                let d = if n.unit.is_none() {
+                    let pct = magnitude(n).map(|v| format!("{}%", v.mul(Rat::int(100))));
+                    let d = Diag::error("E103", tr!("単位の無い小数 `{raw}` は書けません", "A bare decimal `{raw}` cannot be written"))
+                        .at(format!("{path}:{}", sp.line))
+                        .mark(sp.clone(), pct.as_ref().map(|p| tr!("率なら `{p}`", "as a rate, `{p}`")).unwrap_or_default())
+                        .note(tr!(
+                            "単位の無い数は `number` で、`number` は整数です。`{raw}` には値が無く、この式は答えを出せません。",
+                            "A number with no unit is a `number`, and a `number` is whole: `{raw}` has no value, and the expression has no answer."
+                        ))
+                        .note(match &pct {
+                            Some(p) => tr!(
+                                "率を掛けるなら `%` で書いてください（`{raw}` は `{p}`）。金額や量なら、単位を付けてください。",
+                                "To multiply by a rate, write it with `%` (`{raw}` is `{p}`). An amount or a quantity takes its unit."
+                            ),
+                            None => tr!("率なら `%` で、金額や量なら単位を付けて書いてください。", "Write a rate with `%`, and an amount or a quantity with its unit."),
+                        });
+                    match pct {
+                        Some(p) => d.fix(crate::diag::FixKind::RewriteLiteral, p),
+                        None => d,
+                    }
+                } else {
+                    Diag::error("E103", tr!("`{raw}` は {ty} の値ではありません", "`{raw}` is not a value of {ty}"))
+                        .at(format!("{path}:{}", sp.line))
+                        .mark(sp.clone(), "")
+                        .note(tr!(
+                            "金額と量は、その単位の整数です。細かい値が要るなら、細かい単位の型で書いてください（`mass[g]` の `1500g` など）。",
+                            "Money and quantities are whole numbers of their unit. A finer value needs a finer unit in the types (`1500g` in `mass[g]`)."
+                        ))
+                };
+                self.diags.push(d);
+            }
+            Expr::Bin(l, op, r, _) => {
+                self.literal_values(l, path);
+                if *op != BinOp::Div {
+                    self.literal_values(r, path);
+                }
+            }
+            Expr::Call(_, args, _) => {
+                for a in args {
+                    self.literal_values(a, path);
+                }
+            }
+            _ => {}
         }
     }
 

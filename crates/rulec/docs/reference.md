@@ -131,7 +131,10 @@ optionally followed by a multiplier and then a unit:
 
 `1000万円` is 10,000,000 yen, which `10_000_000JPY` writes as well. **A number in a cell must carry its unit**: a bare `2000` where
 a quantity is expected is an error. `2kg` and `2000g` are the same value; the stored integer
-is always in the unit the type declares.
+is always in the unit the type declares. In an expression a number is read in the unit it is
+written in, and it has to be a value of it: a bare number is a `number`, which is whole, so a
+fraction is written as the rate it is — `amount * 40%`, not `amount * 0.4` — and `0.5JPY` is
+no amount at all. Either is E103, and for a bare decimal its `fix.text` is the `%` form.
 
 **A thousands separator is not written** (E049): `,` separates the members of a set, so the
 `1,000JPY` a document prints would be two values. Write `1000JPY`, or `1_000JPY` to group the

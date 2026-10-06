@@ -187,6 +187,55 @@ fn 単位の違うリテラルはどの位置でも止まる() {
 /// The same table, for a value that is a **name** rather than a literal: an enum value that
 /// is not one. A group's members went unchecked, so a group of 47 prefectures with one
 /// misspelling was a group of 46 and said nothing (§15.86).
+/// A literal with no value in its own unit stops wherever it is written (§15.191): a bare
+/// decimal — a `number`, which is whole — and a fraction of a unit. In an expression it passed,
+/// and the reference evaluator answered nothing while the generated code multiplied by 0. A
+/// decimal that is a whole number of its unit (`100.0g`, `10.0円`) has a value, and passes.
+#[test]
+fn 値の無いリテラルはどの位置でも止まる() {
+    seed("導出の式（単位の無い小数）", PLAIN, "= 重さ + 100g", "= 重さ * 0.5 + 100g", "E103");
+    seed("導出の式（単位の端数）", PLAIN, "= 重さ + 100g", "= 重さ + 100.5g", "E103");
+    seed("定義の式", PLAIN, ">= 500g", ">= 500.5g", "E103");
+    seed("result の式", PLAIN, "+ 10円", "+ 10.5円", "E103");
+    seed("式の中の丸めの格子", PLAIN, "= 基本額 + 10円", "= up(基本額 + 10円, 0.5円)", "E103");
+    seed("節の when", PLAIN, "when 割合 >=90%", "when 割合 >=0.9", "E103");
+    seed("節の then", PLAIN, "then 100円", "then 100.5円", "E103");
+    seed("表の出力セル", PLAIN, "| 800円 ", "| 800.5円 ", "E103");
+    seed("例の期待値", PLAIN, "| 510円   |", "| 510.5円 |", "E103");
+    for (from, to) in [("= 重さ + 100g", "= 重さ + 100.0g"), ("+ 10円", "+ 10.0円")] {
+        let src = PLAIN.replace(from, to);
+        assert!(codes(&src).is_empty(), "`{to}` は単位の整数なので通る: {:?}", codes(&src));
+    }
+}
+
+/// The fix a bare decimal gets is the rate it stands for (§15.191). The seeded mutants write the
+/// corpus's `80%` as `0.8`; the fix is `80%`, and put where the mark points it gives the corpus
+/// rule back, in English and in the Japanese version.
+#[test]
+fn 単位の無い小数は率の形に直せる() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    for (m, corpus) in [("m_e103bare.rule", "retirement_pay.rule"), ("m_e103bareja.rule", "退職手当.rule")] {
+        let src = std::fs::read_to_string(root.join("tests/mutants").join(m)).unwrap();
+        let ds = rulec::check_source(&src, m);
+        let [d] = ds.as_slice() else { panic!("{m}: {:?}", ds.iter().map(|d| d.code).collect::<Vec<_>>()) };
+        assert_eq!(d.code, "E103", "{m}");
+        let json = rulec::json::parse(&rulec::diag::render_json(d, m)).unwrap();
+        let fix = json.get("fix").unwrap();
+        assert_eq!(fix.get("kind").and_then(|k| k.as_str()), Some("rewrite_literal"), "{m}");
+        assert_eq!(fix.get("text").and_then(|t| t.as_str()), Some("80%"), "{m}");
+        let span = &json.get("spans").and_then(|s| s.as_arr()).unwrap()[0];
+        let at = |k: &str| span.get(k).and_then(|v| v.as_int()).unwrap() as usize;
+        let mut lines: Vec<String> = src.lines().map(String::from).collect();
+        let line = &mut lines[at("line") - 1];
+        let (from, len) = (at("column") - 1, at("length"));
+        assert_eq!(&line[from..from + len], "0.8", "{m}: the mark is on the literal");
+        line.replace_range(from..from + len, "80%");
+        let fixed = format!("{}\n", lines.join("\n"));
+        let want = std::fs::read_to_string(root.join("tests/corpus").join(corpus)).unwrap();
+        assert_eq!(fixed, want, "{m}: the fix gives {corpus} back");
+    }
+}
+
 #[test]
 fn 存在しない値はどの位置でも止まる() {
     seed("群の一員", PLAIN, "group 前半(first_half) = 甲", "group 前半(first_half) = 甲, 丙", "E012");

@@ -284,8 +284,8 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
                   settles its claim, and the re-checker
 src/              53 modules, and 6 more under codegen/
 tests/corpus/     87 rules, and the copies of the documents they cite
-tests/mutants/    111 files, each with one mistake planted in it
-tests/golden/     the diagnostic prose snapshot by snapshot: 56 in Japanese, 45 in English
+tests/mutants/    113 files, each with one mistake planted in it
+tests/golden/     the diagnostic prose snapshot by snapshot: 57 in Japanese, 46 in English
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs
 ```
 
