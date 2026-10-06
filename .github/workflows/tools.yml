@@ -247,8 +247,10 @@ jobs:
       # dandori's tests/examples.rs runs the books its examples call on chobo's clients, through
       # chobo's runners, on a throwaway PostgreSQL cluster (the step below) and a TigerBeetle
       # replica; ritsu's tests/gen.rs type-checks the packages with chobo's tigerbeetle packages
-      # and koyomi's mypy. They are installed as the others' steps install them.
-      - name: "dandori: chobo's runners and TigerBeetle, for the books; koyomi's mypy, for ritsu's packages"
+      # and koyomi's mypy, which dandori's tests/secrets.rs also takes (DANDORI_MYPY) to hold the
+      # Python of a flow with `history encrypted` to `mypy --strict`. They are installed as the
+      # others' steps install them.
+      - name: "dandori: chobo's runners and TigerBeetle, for the books; koyomi's mypy, for ritsu's packages and dandori's encrypted history"
         if: matrix.group == 'dandori'
         run: |
           set -eu
@@ -259,6 +261,7 @@ jobs:
           echo "RITSU_TIGERBEETLE=$GITHUB_WORKSPACE/crates/chobo/tools/tigerbeetle/tigerbeetle" >> "$GITHUB_ENV"
           uv venv --python 3.13 crates/koyomi/tools/.venv
           uv pip install --python crates/koyomi/tools/.venv/bin/python -r crates/koyomi/tools/requirements.txt
+          echo "DANDORI_MYPY=$GITHUB_WORKSPACE/crates/koyomi/tools/.venv/bin/mypy" >> "$GITHUB_ENV"
 
       # --- koyomi, chobo, geas, yuen, sakai, and the test kit's own tests.
       - name: "PostgreSQL 18's programs, for the throwaway clusters the tests start (dandori's too)"
