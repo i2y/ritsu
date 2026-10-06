@@ -208,7 +208,7 @@ The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file 
 ## How it is checked
 
 `cargo test -p sakai` runs the language on its fixtures and on the example, and runs the real tools.
-On one run of `cargo test -p sakai -- --nocapture` on macOS on Apple silicon, with every tool there and no test skipped: 205 tests, 26 seconds once built.
+On one run of `cargo test -p sakai -- --nocapture` on macOS on Apple silicon, with every tool there and no test skipped: 205 tests, 28 seconds once built.
 
 - 170 mutants, each a fixture or an example with one change, are held to the diagnostics they give, in English and in Japanese (83 of them with Japanese names, each with an English twin, and 4 for Rust).
 - The four import linters run on 56 copies (14 for each tool): the example and a map whose generated code sits inside a context, each as it is and with imports added that the map forbids, with English and Japanese names. Every tool passes the copies as they are and catches each added import.
