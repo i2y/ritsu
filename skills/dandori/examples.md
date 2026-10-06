@@ -1,17 +1,18 @@
 # Examples
 
-Six examples. Five are each written for Temporal, for AWS and for pydantic-graph: the same flow,
+Seven examples. Five are each written for Temporal, for AWS and for pydantic-graph: the same flow,
 with its tasks called and its news brought in the way the platform does. Temporal is dandori's main
-platform, and its version is the one to read first. The sixth, invoice, is written once and runs as it
-is on every platform. The version for Temporal, and invoice, are also drawn by `dandori doc`, on a
-page where each scenario lights up the way its run goes ([Draw a workflow](diagrams.md)).
+platform, and its version is the one to read first. The other two, invoice and payout, are written
+once and run as they are on every platform. The version for Temporal, invoice and payout are also
+drawn by `dandori doc`, on a page where each scenario lights up the way its run goes
+([Draw a workflow](diagrams.md)).
 
 Every version has a Japanese twin beside it, `<name>.ja.flow` (fulfillment's child too,
 `arrange_delivery.ja.flow`), which names everything in Japanese but what an API description fixes:
 Stripe's fields and states, the warehouse's `.proto`, the SNS and SQS APIs. The Japanese versions of
 fulfillment implement a service of their own, `fulfillment.ja.proto`, whose names in JSON are
-Japanese. The Japanese rules sit beside the English ones in each `rules/`, and the Japanese site
-draws the Japanese versions.
+Japanese. So does payout's bank, `payout.ja.proto`. The Japanese rules sit beside the English ones
+in each `rules/`, and the Japanese site draws the Japanese versions.
 
 | Example | For Temporal | For AWS (Step Functions, Lambda durable functions) | For pydantic-graph | Drawn |
 |---|---|---|---|---|
@@ -21,6 +22,7 @@ draws the Japanese versions.
 | an inquiry sorted by [Jev](jev.md), with an agent's reading when Jev is not sure, a rule that routes it, and an agent that drafts the reply | [temporal](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/inquiry/temporal/inquiry.flow) | [aws](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/inquiry/aws/inquiry.flow) | [pydantic-graph](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/inquiry/pydantic-graph/inquiry.flow) | [page](https://i2y.github.io/ritsu/dandori/doc/inquiry.html) |
 | an application scored by [Jev](jev.md), and a rule that weighs how sure the score is and sends the rest to a person's approval; also [for Argo Workflows](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/review/argo/review.flow) | [temporal](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/review/temporal/review.flow) | [aws](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/review/aws/review.flow) (Lambda durable functions) | [pydantic-graph](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/review/pydantic-graph/review.flow) | [page](https://i2y.github.io/ritsu/dandori/doc/review.html) |
 | an order's goods held in stock until its payment is due, then shipped once paid or put back: the stock a book of chobo's, the due date a date of koyomi's ([Dates and books](dates-and-books.md)) | [invoice](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/invoice/invoice.flow), the same for every platform | the same | the same | [page](https://i2y.github.io/ritsu/dandori/doc/invoice.html) |
+| a payout to a seller: the bank's API pays the account by its id, and a model drafts the notice; the bank's `.proto` marks the account's number and holder secret, and the flow carries neither, so no check of [secrets](secrets.md) says anything | [payout](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/payout/payout.flow), the same for every platform | the same | the same | [page](https://i2y.github.io/ritsu/dandori/doc/payout.html) |
 
 ## How the versions differ
 

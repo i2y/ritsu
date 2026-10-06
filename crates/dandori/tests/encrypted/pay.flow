@@ -1,0 +1,21 @@
+workflow pay v1
+  history encrypted
+description "A payout whose history is encrypted: tests/secrets.rs runs it on Temporal with a codec, and reads the history the server keeps"
+
+record Account
+  id     : string
+  number : string  secret
+
+inputs
+  account : Account
+
+outputs
+  receipt : string
+
+task pay(account: Account) -> string
+  errors refused
+
+flow
+  let receipt = pay(account: account)
+    on refused => fail Refused "the bank refused to pay {account.number}"
+  succeed receipt = receipt

@@ -1,0 +1,10 @@
+workflow agent_url v1
+description "W902: an agent whose Open Responses endpoint is on another machine, over plain HTTP"
+
+task read(text: string) -> string
+  agent "Say what the text is about, in one sentence."
+  model "gpt-oss:20b"
+  url "http://ollama.internal:11434/v1"
+
+flow
+  let gist = read(text: "a parcel came broken")

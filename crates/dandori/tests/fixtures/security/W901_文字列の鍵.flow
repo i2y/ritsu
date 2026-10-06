@@ -1,0 +1,9 @@
+workflow 文字列の鍵 v1
+description "W901：文字列に書いた鍵"
+
+task 探す(語: string) -> string
+  http GET "https://maps.example.com/v1/find?key=AIzaSyD-ritsu-fake-key-for-tests-000000"
+  idempotent
+
+flow
+  let 場所 = 探す(語: "東京")

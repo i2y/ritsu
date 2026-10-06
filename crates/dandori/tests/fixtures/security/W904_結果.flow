@@ -1,0 +1,9 @@
+workflow 結果 v1
+description "W904：秘密と印を付けたタスクの結果。フローが読まなくても残る"
+
+task トークンを出す(利用者: string) -> string  secret
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:issue-token"
+  idempotent
+
+flow
+  トークンを出す(利用者: "ana")

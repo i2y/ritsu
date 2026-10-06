@@ -169,7 +169,39 @@ pub struct RecordDef {
     pub fields: Vec<(String, Ty)>,
     /// the fields that have a range
     pub ranges: BTreeMap<String, Range>,
+    /// the fields marked secret: `secret` after a field's type, or a `.proto`'s `debug_redact` on the
+    /// field of the message the record is made from (DESIGN 1.18)
+    pub secrets: BTreeMap<String, SecretMark>,
     pub origin: RecordOrigin,
+}
+
+/// Where a place a value is put is marked secret (DESIGN 1.18): the file that writes the mark, as
+/// dandori reaches it (a `.proto`, an OpenAPI document, or the `.flow` itself for `secret`), the
+/// line, and the mark as the file writes it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SecretMark {
+    pub file: String,
+    pub line: usize,
+    /// `secret`, `debug_redact = true`, `(acme.v1.sensitivity) = PERSONAL`, `x-data-classification`,
+    /// `x-sensitive-data`, `format: password`
+    pub mark: String,
+    /// where a message says the mark is: `specs/payout.proto:14`, and in an OpenAPI document its
+    /// JSON Pointer, `specs/crm.json#/components/schemas/Customer/properties/email`
+    pub at: String,
+    /// what the mark says besides (`PII, confidential`), and for a custom option, where its value is
+    /// marked: in both languages
+    pub detail: Option<Text>,
+}
+
+impl SecretMark {
+    /// What a message says of it: `The mark is `debug_redact = true` at specs/payout.proto:14.`
+    pub fn note(&self) -> Text {
+        let (at, mark) = (&self.at, &self.mark);
+        match &self.detail {
+            Some(Text { en, ja }) => tr!("印は {at} の `{mark}`（{ja}）です。", "The mark is `{mark}` at {at} ({en})."),
+            None => tr!("印は {at} の `{mark}` です。", "The mark is `{mark}` at {at}."),
+        }
+    }
 }
 
 /// A rule called as a Connect service (`connect "<url>"` under `use rule`): where to POST, what the
@@ -499,6 +531,18 @@ pub struct TaskDef {
     /// sends (DESIGN 1.14): the zero values protobuf's JSON leaves out of the method's request, which
     /// the workflow's code fills in when the value comes, before it checks it
     pub answer_zeros: Option<serde_json::Value>,
+    /// the parameters marked secret, each with the place inside it that is (empty: the whole value)
+    /// and the mark: `secret` after its type, or the property of the OpenAPI operation it is held to
+    /// (DESIGN 1.18)
+    pub param_secrets: BTreeMap<String, Vec<(String, SecretMark)>>,
+    /// the same for the answer: `-> T secret`, or the properties of the operation's answer
+    pub result_secrets: Vec<(String, SecretMark)>,
+    /// `discloses <param> "<why>"`: the parameters whose secrets the task sends where it calls, on
+    /// purpose, with why (DESIGN 1.18)
+    pub discloses: Vec<(String, String)>,
+    /// the description of the API the task calls an operation of (`http` of `use openapi`, `connect`
+    /// of `use proto`), as dandori reaches it: a file of the project the task sends to
+    pub api_file: Option<String>,
     pub line: usize,
 }
 
@@ -931,6 +975,17 @@ pub struct Model {
     pub monitors: BTreeMap<usize, (usize, Vec<String>)>,
     /// the service of a `.proto` the workflow implements
     pub service: Option<ServiceUse>,
+    /// the inputs and the outputs marked secret (`secret` after the type; DESIGN 1.18)
+    pub input_secrets: BTreeMap<String, SecretMark>,
+    pub output_secrets: BTreeMap<String, SecretMark>,
+    /// the line each input and each output is declared on
+    pub input_lines: BTreeMap<String, usize>,
+    pub output_lines: BTreeMap<String, usize>,
+    /// `history encrypted`, by its line: the history of a run is encrypted with a key only those who
+    /// may read its secrets hold; Temporal's code then needs a payload codec (DESIGN 1.18)
+    pub history_encrypted: Option<usize>,
+    /// the `.flow` as dandori reached it, which a mark written in it names (`SecretMark::file`)
+    pub source_reached: String,
 }
 
 impl Model {

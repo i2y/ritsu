@@ -1,0 +1,13 @@
+error[E007]: tests/fixtures/security/E007_平文.flow:6:3: `plaintext` says that a rule's service is reached without encryption on purpose, and the rule `振り分け` has no `connect`
+     6 |   plaintext "規則は同じアカウントにある"
+warning[W902]: tests/fixtures/security/E007_平文.flow:7:13: the tasks that call `顧客` send their requests to crm.internal, the first server of `../secrets/plain.json`, over plain HTTP
+     7 | use openapi 顧客 from "../secrets/plain.json"
+  = Whoever is on the network between can read and change the requests, the answers, and any key in the headers.
+  = Use https://. If the connection is protected another way (a service mesh, a private link), say so under `use openapi 顧客` with `plaintext "<why>"`.
+error[E007]: tests/fixtures/security/E007_平文.flow:22:3: `plaintext` says that a URL is reached without encryption on purpose, and `残す` has no URL of its own
+    22 |   plaintext "関数は自分たちのもの"
+error[E007]: tests/fixtures/security/E007_平文.flow:26:3: `plaintext` says that a URL is reached without encryption on purpose, and `顧客を取る` has no URL of its own
+    26 |   plaintext "顧客の API は自分たちのもの"
+  = `顧客を取る` sends to the URL of the `use` that reads `顧客`; write `plaintext` under that `use`.
+error[E007]: tests/fixtures/security/E007_平文.flow:31:3: give `plaintext` the reason the connection is not encrypted; it is an empty string
+    31 |   plaintext ""

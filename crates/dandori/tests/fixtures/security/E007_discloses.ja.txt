@@ -1,0 +1,4 @@
+エラー[E007]: tests/fixtures/security/E007_discloses.flow:7:13: `discloses` が書く `body` は、`read` の引数ではありません
+     7 |   discloses body "the provider keeps nothing"
+エラー[E007]: tests/fixtures/security/E007_discloses.flow:8:3: `discloses` には、秘密の値をそこへ送る理由を書いてください（空の文字列です）
+     8 |   discloses text ""

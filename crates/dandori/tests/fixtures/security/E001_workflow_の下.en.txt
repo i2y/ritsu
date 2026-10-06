@@ -1,0 +1,2 @@
+error[E001]: tests/fixtures/security/E001_workflow_の下.flow:2:3: only `history encrypted` can be written under `workflow`
+     2 |   履歴 暗号化

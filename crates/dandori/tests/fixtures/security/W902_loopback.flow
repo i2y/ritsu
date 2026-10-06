@@ -1,0 +1,20 @@
+workflow loopback v1
+description "W902: nothing, for these calls stay on this machine"
+
+task notify(text: string)
+  http POST "http://localhost:8080/v1/messages"
+  idempotent
+
+task log(text: string)
+  http POST "http://127.0.0.1:9000/log"
+  idempotent
+
+task read(text: string) -> string
+  agent "Say what the text is about, in one sentence."
+  model "gpt-oss:20b"
+  url "http://[::1]:11434/v1"
+
+flow
+  let gist = read(text: "a parcel came broken")
+  notify(text: gist)
+  log(text: gist)

@@ -622,7 +622,7 @@ service FulfillmentService {
 
 **ペイロード**：値は JSON で、形は protojson である。Temporal では `json/plain` のペイロードになる。ペイロードのコンバーターは使わない。dandori が生成するクライアント（`client.ts`・`client.py`・`client.go`）は、値を JSON のまま送る。protobuf のメッセージを持つほかのクライアントは、メッセージを protojson にし、それを JSON の値としてペイロードに入れればよい（Go なら `json.RawMessage(protojson.Marshal(m))`、Python なら `json_format.MessageToDict(m)`）。protojson を文字列のまま渡すと、ワークフローには文字列が届いて `Dandori.BadInput` になる。Temporal の Go の SDK は、proto のメッセージをそのまま渡すと `json/protobuf` のペイロードに書き、TypeScript の既定のコンバーターはそれを読まない（7 章）。
 
-**Temporal での名前**：ワークフローの型はいまのまま `<名前>_v<版>` で、`event` は Update `dandori.event`、`answer` は Update `dandori.answer`、`status` はクエリ `dandori.status` である。生成する `client.ts`・`client.py`・`client.go` には、メソッドの名前の関数（`fulfill`、`answerPacking`。Python では `answer_packing`、Go では `Fulfill`、`AnswerPacking`）と、メッセージの名前の型（`FulfillRequest` は `WorkflowInput`）を足す。関数の名前がクライアントにもとからある関数と同じになるときは、同じことをするなら書かず（`Start` は `start`、`GetStatus` が返す `dandori.v1.Status` の型は `Status`）、違うことをするなら末尾に `Rpc`（Python では `_rpc`、Go では `RPC`）を付ける。イベントとコールバックの関数はリクエストの値だけを送り（`{ ok: 値 }`）、エラーの名前を送りたいときは、いまの `send` と `answer` を使う。提供側のスタブは、いまの生成物（ワークフローとワーカー）そのものである。ほかの言語のクライアントは、この `.proto` から protoc のプラグインで作れるが、そのプラグインはまだ作らない（7 章）。
+**Temporal での名前**：ワークフローの型はいまのまま `<名前>_v<版>` で、`event` は Update `dandori.event`、`answer` は Update `dandori.answer`、`status` はクエリ `dandori.status` である。生成する `client.ts`・`client.py`・`client.go` には、メソッドの名前の関数（`fulfill`、`answerPacking`。Python では `answer_packing`、Go では `Fulfill`、`AnswerPacking`）と、メッセージの名前の型（`FulfillRequest` は `WorkflowInput`）を足す。関数の名前がクライアントにもとからある関数と同じになるときは、同じことをするなら書かず（`Start` は `start`、`GetStatus` が返す `dandori.v1.Status` の型は `Status`）、違うことをするなら末尾に `Rpc`（Python では `_rpc`、Go では `RPC`）を付ける。`history encrypted` のフローでは、クライアントが暗号化のために持つ名前（1.18）も、もとからある名前に数える。イベントとコールバックの関数はリクエストの値だけを送り（`{ ok: 値 }`）、エラーの名前を送りたいときは、いまの `send` と `answer` を使う。提供側のスタブは、いまの生成物（ワークフローとワーカー）そのものである。ほかの言語のクライアントは、この `.proto` から protoc のプラグインで作れるが、そのプラグインはまだ作らない（7 章）。
 
 **ほかのプラットフォーム**：start と `answer` は、どのプラットフォームでも同じ意味で作る（入口で埋める）。`event` は、いまと同じく Temporal のほかでは E050 である。`status` のメソッドを持つサービスも、Temporal のほかでは E050 にする。実行がいまどこにいるかを答えるクエリが、ほかのプラットフォームに無いからである（P6）。Step Functions と durable functions は、実行の中のコードに問い合わせる手段を持たない。Argo（ワークフローの出力のパラメータ）と pydantic-graph（`Deps` の状態）は答えられるはずだが、まだ書いていないので、診断もそう言う（7 章）。
 
@@ -761,6 +761,63 @@ Temporal では、確かめる文が増えても減ってもコマンドは変�
 
 あわせて、規則の日付の入力と出力を、つなぐコードで日の番号に直すようにした。rulec の生成したコードは、日付を 1970-01-01 からの日数で受け取り、返す。つなぐコード（`rules.ts`、`rules.py`、Lambda の Python、`rules.go`）は、それを数として読んでいた（Lambda の Python は `int("2026-02-10")` で止まり、`rules.ts` は `tsc --strict` を通らなかった）。日付の入力を持つ規則が例とテストに無かったので、表に出ていなかった。
 
+### 1.18 秘密の値と、外へ出す通信（2026-10-06）
+
+ritsu の言語としてのセキュリティの検査（ritsu の DESIGN 16 章）のうち、四つを dandori が受け持つ。どれもファイル一つで決まるので `dandori check` に置き、`ritsu check` は dandori の出力をそのまま並べる。
+
+| コード | 重さ | 見ること | 意図を書く書き方 |
+|---|---|---|---|
+| W901 | 警告 | 鍵の形の値が `.flow` に書いてある | 同じ行のコメントに `ritsu: test secret` |
+| W902 | 警告 | タスクが呼ぶ URL が、このマシンの外への `http://` である | URL を書いたところに `plaintext "<理由>"` |
+| W904 | 警告 | 秘密の値が、プラットフォームの履歴に残る | `workflow` の下に `history encrypted` |
+| E906 | エラー | 秘密の値を、プロジェクトの外の相手に送る | タスクの下に `discloses <引数>, … "<理由>"` |
+
+**W901。** ritsu-base の `secrets` が、ファイルの全文（文字列もコメントも）から、プロバイダーが形を決めている鍵を探す（ritsu の DESIGN 16.3）。構文の誤りがあっても出す。診断には種類と接頭辞と長さだけを出す（`a Google API key is written here (AIza…, 39 characters)`）。dandori の診断は原文の行を引いて見せるので、どの診断でも、引いた行は ritsu-base の `secrets::mask` を通し、行の鍵を（テスト用の値も）`AIza…` の形にして見せる（`Diag::render`）。そうしないと、見出しで伏せた鍵や、同じ行に出たほかの診断の行から、鍵がそのまま CI のログに残る。
+
+**W902。** 見る URL は、タスクとその呼び出し方が実際に送る先である。`http` のタスクの URL とエージェントの `url` はタスクの下に、規則のサービスは `use rule … connect` の下に、`use openapi` と `use proto` から呼ぶ操作は `use` の下（`url`、無ければ OpenAPI の文書の最初のサーバー）に書いてある。`plaintext` は URL を書いたところに書く。`use` から呼ぶタスクの下の `plaintext` は E007 で、その `use` の下に書くよう注で言う。`use` の URL の W902 は、それを呼ぶタスクがあるときだけ、`url` の行（無ければ `use` の行）に一つ出す。タスクごとに出すと、一つの直し方（`use` の下の `plaintext` か、`url` を https にすること）に、同じ警告がタスクの数だけ並ぶからである。このマシン（`localhost`、`.localhost`、`127.0.0.0/8`、`::1`）への `http://` は出さない（ritsu-base の `urls`）。Step Functions の E050（HTTPS でない送り先）はそのまま残り、`plaintext` を書いても Step Functions には出せない。
+
+**秘密の値。** 次のところから読んだ値を秘密とする。
+
+- `.flow` の `secret`：入力、出力、レコードのフィールド、タスクの引数と結果の型のあと（`range` と両方なら `range` のあと）に書く。予約語には足さず、書ける位置でだけ読むので、`secret` という名前はいまも使える。
+- `.proto` の `debug_redact`：フィールドに直に書いたものと、`debug_redact` を付けた列挙の値をカスタムのオプションで付けたもの（`ritsu_proto::Protos::redaction`）。メッセージから作ったレコード（1.12）のフィールドと、`connect` のタスクの引数と結果（リクエストとレスポンスのフィールドと突き合わせるところ）に効く。
+- OpenAPI のスキーマのプロパティの `x-data-classification`（`confidential` か `restricted`）、`x-sensitive-data`、`format: password`（ritsu-base の `marks`）。操作と突き合わせるタスクの引数と結果に効く。`writeOnly` だけのプロパティと `internal` は印にしない。
+
+レコードは印の付いたフィールドの秘密を、リストは項目の秘密を、値を埋め込んだ文字列は埋め込んだ値の秘密を持つ。`json` の値は、秘密の値から作ったなら全体が秘密になる。規則の結果と、印の無いタスクの結果は秘密にしない。変数が何を持つかは、範囲（1.3）と同じく、変数に値を入れるすべての場所を合わせて決める。診断は、秘密の値を、フローがそれを読んだ書き方（`account.number`）で言い、印がどこに書いてあるかを注に出す。一つの値に印が二つあれば（入力の `secret` と、引数の `format: password`）、診断は一つにして、注に印を二つ並べる。
+
+**W904。** 出すところは四つある。入力と出力（宣言の行。`succeed` が出力に書いた秘密の値は、その行）、フローが呼ぶタスクの結果（タスクの宣言の行。結果はフローが読まなくても履歴に残る）、タスク・規則・日付・帳簿・子のフローへの呼び出しの引数（呼び出しの行）、`fail` の理由（その行）。`history encrypted` を書いたフローには出さない。
+
+```
+warning[W904]: tests/fixtures/security/W904_payout_number.flow:39:1: the secret `account.number` is kept in the history of the workflow, as the argument `reference` of `pay`
+    39 |   let paid = pay(account_id: account_id, amount: amount, reference: "Sales payout to {account.number}")
+  = The mark is `debug_redact = true` at ../../../examples/payout/specs/payout.proto:34.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Pass a reference instead (an ID, the name of a secret) and fetch the value inside the task. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.
+```
+
+**`history encrypted`。** 実行の履歴を、秘密を読んでよい人だけが持つ鍵で暗号化してある、という宣言で、`workflow` の行の下に書く。
+
+- Temporal（TypeScript・Python・Go）：ワーカーとクライアントを、ペイロードのコーデックを渡さないと作れない形にする。TypeScript は `WorkerConfig.codec` を要るフィールドにし、クライアントの関数は `encryptedClient(connection, codec)` だけが返す `EncryptedClient`（`Client` に、モジュールの外から作れない印を足した型）を受け取る。Python は `client.connect(target, codec)` だけが返す `EncryptedClient`（`NewType`）を、関数と `make_worker` が受け取る。Go は、このパッケージの外では作れない `EncryptedClient` インターフェースを `Dial(options, codec)` だけが返し、関数と `NewWorker` が受け取る。どれも、失敗のコンバーターを、失敗の文とスタックトレースを符号化して持つもの（TypeScript は `failure.ts` の `DefaultFailureConverter({ encodeCommonAttributes: true })`、Python は `DefaultFailureConverterWithEncodedAttributes`、Go は `temporal.NewDefaultFailureConverter(… EncodeCommonAttributes: true)`）にし、再生（`replay`）もコーデックを受け取る。宣言の無いフローの生成物は一バイトも変えない。
+- Step Functions と Lambda durable functions：生成物を変えない。鍵はステートマシンと関数のリソースに設定するもの（カスタマー管理の KMS キー）で、dandori が書く ASL と関数のコードの外にあり、dandori はそれを確かめられない。
+- Argo Workflows：E050。パラメーターを鍵で暗号化する手段が無いので、宣言を守れない（P6）。秘密は Kubernetes の Secret から環境変数かボリュームで渡す。
+- pydantic-graph：履歴を残さないので、何もしない。
+
+**クライアントが増やす名前。** `history encrypted` のとき、生成するクライアントが宣言し読み込む名前が増える。TypeScript の `client.ts` は `Connection`・`ClientOptions`・`PayloadCodec`・`encrypted`・`EncryptedClient`・`encryptedClient`、Python の `client.py` は `dataclasses`・`NewType`・`temporalio`・`DataConverter`・`DefaultFailureConverterWithEncodedAttributes`・`PayloadCodec`・`EncryptedClient`・`data_converter`・`connect`、Go のパッケージは `EncryptedClient`・`encryptedClient`・`CodecDataConverter`・`CodecFailureConverter`・`Dial` である。これらは、クライアントがもとから持つ名前と同じに扱う。実装するサービスのメソッドの関数とメッセージの型がこの名前になるときは、1.14 のとおり末尾に `Rpc`（Python は `_rpc`、Go は `RPC`）を付ける。Go のレコードと列挙の型は、どのパッケージにもある名前（`Workflow`、`Start` など）とぶつかるときと同じく、`_` を付けた名前にする（`record Dial` は `Dial_`）。E006 にはしない。どちらも dandori が付ける名前なので生成する側で避けられ、検査で止めると、`.proto` を変えられない利用者が暗号化を宣言できなくなる。TypeScript と Python のレコードと列挙は `types.ts`・`types.py` にあって `T.` を付けて読み、規則の別名は TypeScript と Python では `rules.ts`・`rules.py` にだけ読み込まれ、Go では小文字だけのパッケージの名前になるので、どれもこの名前とはぶつからない。表は各生成器の `ENCRYPTED_CLIENT`（Go は `ENCRYPTED`）に置いた。宣言の無いフローの検査と生成物は変わらない。
+
+**E906。** 送る先は、モデルのプロバイダー（`url` の無いエージェントの OpenAI と Anthropic、このマシンでない `url` のサーバー）、Jev（TypeSafe）、URL だけで書いた `http` の送り先（このマシンを除く）、AWS のサービスである。タスクが `discloses <引数> "<理由>"` で書いた引数は通す。`discloses` は E906 だけを通し、W904 は通さない（送ることと、履歴に残ることは別のことである）。
+
+```
+エラー[E906]: tests/fixtures/security/E906_payout_holder.flow:41:1: タスク `draft_notice` が、秘密の値 `account.holder` をプロジェクトの外の OpenAI に送ります
+    41 |   let notice = draft_notice(amount: amount, payout_id: paid.payoutId, holder: account.holder)
+  = 印は ../../../examples/payout/specs/payout.proto:35 の `debug_redact = true` です。
+  = 参照か、相手に要るものだけを送ってください。そこへ送ることを意図しているなら、タスクの下に `discloses holder "<理由>"` と書いてください。
+```
+
+**プロジェクトの中へ送ること。** 秘密の値を、プロジェクトの中のファイル（OpenAPI の文書、`.proto`、Connect の規則、子の `.flow`、帳簿、日付のファイル）へ送る呼び出しは、ritsu の口 `Flows::sends`（`src/secrets.rs` の `sends`）で渡し、地図の上で送ってよいかを ritsu-cross が確かめる（ritsu の E905）。dandori は地図を読まない。パスは `RuleCall::rule` と同じく、dandori が届くパスである。
+
+**例。** `examples/payout`（英語の `payout.flow` と日本語の `payout.ja.flow`、契約は `specs/payout.proto` と JSON の名前を日本語にした `payout.ja.proto`）は、口座の番号と名義に `debug_redact` を付けた銀行の契約を使い、口座の ID だけを運ぶので、どの検査も何も言わない。どのプラットフォームでも走る例で、シナリオを全部のプラットフォームで突き合わせる。`tests/fixtures/security` の変異が、番号を運ぶ形（W904）、名義をエージェントに読ませる形（E906）、`discloses` で通す形を作る。問い合わせの例の Temporal 版は、Open Responses のエンドポイント（この例では Ollama）を `http://ollama.internal:11434/v1` で呼ぶので、`plaintext "<理由>"` を書き足した。
+
+**確かめ方。** `tests/fixtures/secrets.flow`（英語）と `secrets.ja.flow`（日本語）は、三つの印の出どころ、レコード、リスト、文字列への埋め込み、`for`、`some`、`json`、規則の結果（秘密にならない）、`writeOnly` だけのプロパティと `internal`（印にならない）、`discloses` を一つのフローで見せ、`check` の英語と日本語のテキストと JSON、`Flows::sends` の答えを golden にする。`tests/fixtures/security` に、四つのコードと E007・E001・E050 の変異を英語と日本語の対で置いた。`tests/secrets.rs` は、`history encrypted` の生成物が、コーデックを渡すプログラムでは `tsc --strict`・`mypy --strict`・`go vet` を通り、渡さないプログラムでは型の誤りになることと、`tests/encrypted/pay.flow` を Temporal の dev server で三つの SDK から、ペイロードを base64 にするコーデックで走らせ、コーデックの無いクライアントで読んだ履歴に、入力の値も失敗の文も平文で残らないことを確かめる。クライアントが増やす名前は、二つで確かめる。一つは、暗号化したときに増える名前が三つの表とちょうど同じであること（`tests/encrypted/pay.flow` と、そこから宣言を除いたフローの生成物を比べる）。もう一つは、レコード・列挙・メソッド・メッセージにその名前を付けた `tests/encrypted/names.flow`（英語）と `names.ja.flow`（日本語）で、生成物の名前が変わり、`tsc --strict` と `go vet` が通り、`mypy --strict` が名前の二重の定義を言わないこと（サービスを実装するフローの Python は、もとから、始めるメソッドが `start` に TypedDict を渡すところで `mypy --strict` を通らない）。名前を変えない生成器では、`tsc` が `Import declaration conflicts with local declaration of 'Connection'` を、`go vet` が `CodecDataConverter redeclared in this block` を言うことを、実際に走らせて確かめた。
+
 ## 2. 案件とステートマシン
 
 ### 2.1 案件の状態を追う
@@ -871,7 +928,7 @@ chobo の DESIGN 5 章の案は、案件に `external expire` と `refused when 
 | E004 | 引数や出力の過不足、`{…}` のレコードのフィールドの不足 |
 | E005 | 規則・日付のファイル・帳簿を読めなかった（rulec の検査を通らない規則、規則を読まない dandori のクレートのバイナリで読もうとした規則、要素の並びをたどる規則、無いことがある入力か出力（`T?`）を持つ規則も。`connect` で呼ぶ規則について、rulec が Connect のサービスを言わないとき、サービスが列挙の値を何と呼ぶかを言わないときも。koyomi の検査を通らない日付のファイル、chobo の検査を通らない帳簿、無いファイルも） |
 | E006 | 二度の宣言（生成するコードで同じ名前になる型、規則と API に付けた同じ名前、規則・日付のファイル・帳簿に付けた同じ名前も）。生成するコードでぶつかる規則の名前（規則の別名がまわりのコードの名前と同じ、別名が同じ二つの規則、タスクと規則のアクティビティが同じ名前。1.15） |
-| E007 | タスクの項目の誤り（`flow` のタスクのほかの呼び出し方と `image`、OpenAPI の操作を呼ぶタスクの `form`、Connect のエラーコードの誤り、ステータスの付け忘れ、同じステータスの二つのエラー、呼び出し方の重なり、`aws` の `key` の引数、`callback` にできない呼び出し方、知らない AWS のサービス、子ワークフローの `key`、エージェントの `model` の書き忘れ・宣言したエラー・`key`・Schema に書けない応答・知らないプロバイダー・Claude で大文字と小文字だけが違う列挙の値、`event` のタスクの引数・呼び出し方・`retry`・`key`・案件を始めることなど、エージェントでないタスクや Claude の `url`、http でも https でもない `url`、Jev が答えられない結果の型・尋ねていないフィールド・意味の誤り・下限の誤り・`confidence` のエラーのリトライ・ステータスの無いエラー）。規則の項目の誤り（`lambda` と `connect` の重なり、`connect` の無い規則の `connection`、http でも https でもない `connect`）も。帳簿の操作のタスクの、振替に無い操作、`key`、`refused as`、エラーの `= …` も |
+| E007 | タスクの項目の誤り（`flow` のタスクのほかの呼び出し方と `image`、OpenAPI の操作を呼ぶタスクの `form`、Connect のエラーコードの誤り、ステータスの付け忘れ、同じステータスの二つのエラー、呼び出し方の重なり、`aws` の `key` の引数、`callback` にできない呼び出し方、知らない AWS のサービス、子ワークフローの `key`、エージェントの `model` の書き忘れ・宣言したエラー・`key`・Schema に書けない応答・知らないプロバイダー・Claude で大文字と小文字だけが違う列挙の値、`event` のタスクの引数・呼び出し方・`retry`・`key`・案件を始めることなど、エージェントでないタスクや Claude の `url`、http でも https でもない `url`、Jev が答えられない結果の型・尋ねていないフィールド・意味の誤り・下限の誤り・`confidence` のエラーのリトライ・ステータスの無いエラー）。規則の項目の誤り（`lambda` と `connect` の重なり、`connect` の無い規則の `connection`、http でも https でもない `connect`）も。帳簿の操作のタスクの、振替に無い操作、`key`、`refused as`、エラーの `= …` も。`plaintext` を自分の URL を持たないタスク・`connect` の無い `use rule`・URL の無い `use` に書く、`discloses` がタスクに無い引数を書く、`plaintext` と `discloses` の理由が空の文字列（1.18）も |
 | E008 | 案件の宣言や、案件に何をするかの誤り（`.proto` から作った列挙の値がステートマシンの状態と違う、案件の型も。帳簿の仮押さえでは、案件に合わない操作、`expire` のほかの `external`、`refused when` も） |
 | E009 | 文の置き場所の誤り（`yield`、並列のイテレーションの中の `break`・`succeed`・案件の呼び出し・イベントの待ち、`on failure` と `on cancel` の中の `succeed`、中と外の両方で値を入れる変数、規則を `let` なしで呼ぶことも） |
 | E010 | `match` のどの分岐にも当たらない値がある |
@@ -889,13 +946,17 @@ chobo の DESIGN 5 章の案は、案件に `external expire` と `refused when 
 | E030 | 外部のデータを変える呼び出しを、`key` なしでリトライする |
 | E031 | Express でできないこと（五分を超える待ち、コールバック、ネストした実行、`key` なしで外部のデータを変える呼び出し） |
 | E040 | プラットフォームで、一回の実行が大きくなりすぎうる（ビルドがプラットフォームごとに見る）。実行履歴が上限を超えうる（Step Functions は 25,000 件、Temporal は 51,200 件、Lambda durable functions は 3,000 操作）。Argo Workflows では、一回の実行のノードが目安の 10,000 個を超えうる |
-| E050 | プラットフォームに出すのに要るものが無い、またはプラットフォームでできないこと（Step Functions では呼び出し方か `connection`（エージェントと Jev、`connect` で呼ぶ規則にも要る）、ネストした実行の宣言したエラー、`http`・`agent`・`jev` の 60 秒を超える `timeout`、HTTPS でない送り先（規則のサービスも）。Temporal のほかでは `on cancel` と `event` のタスク、サービスの `status` のメソッド。Step Functions と durable functions では、呼ばれる規則の `lambda` か `connect` と、呼ばれる日付の `lambda`。Step Functions では、帳簿の `lambda`。durable functions では invoke する関数の `timeout`。Argo では呼び出し方か `image`、`workflow template` の宣言したエラー、`callback` のタスクの `retry`） |
+| E050 | プラットフォームに出すのに要るものが無い、またはプラットフォームでできないこと（Step Functions では呼び出し方か `connection`（エージェントと Jev、`connect` で呼ぶ規則にも要る）、ネストした実行の宣言したエラー、`http`・`agent`・`jev` の 60 秒を超える `timeout`、HTTPS でない送り先（規則のサービスも）。Temporal のほかでは `on cancel` と `event` のタスク、サービスの `status` のメソッド。Step Functions と durable functions では、呼ばれる規則の `lambda` か `connect` と、呼ばれる日付の `lambda`。Step Functions では、帳簿の `lambda`。durable functions では invoke する関数の `timeout`。Argo では呼び出し方か `image`、`workflow template` の宣言したエラー、`callback` のタスクの `retry`、`history encrypted`（1.18）） |
+| E906 | 秘密の値を、プロジェクトの外の相手（モデルのプロバイダー、Jev、URL だけで書いた相手、AWS のサービス）へ送る（1.18） |
 | W030 | 外部のデータを変えるかもしれない呼び出しを `key` なしでリトライする |
 | W032 | 確信度を使う Jev のタスクが、モデルをバージョンではなくエイリアスで書いている |
 | W101 | 処理されないエラーで、案件を終わりでない状態に残して失敗することがある（`on failure` や `on cancel` の片付けの最中も） |
 | W102 | 動くことのない `on <拒否>` |
 | W103 | 案件を始めるタスクに `key` が無い |
 | W104 | 範囲のあるところに、範囲の分からない値を渡した |
+| W901 | 鍵の形の値が `.flow` に書いてある（1.18） |
+| W902 | このマシンの外へ、暗号化しない HTTP で送る（1.18） |
+| W904 | 秘密の値が、プラットフォームの履歴に残る（1.18） |
 
 診断には、そうなる例（その点までの短い流れ）が付く。例は、状態・変数・`match` で絞った値ごとに持っているので、例の中で値が途中で変わることはない。
 
@@ -934,6 +995,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - **日付**（1.16）は、規則と同じく Lambda の Task にする。呼ばれる日付ごとに、koyomi が生成した Python を呼ぶ Lambda 関数のコード（`lambda/<ファイルの別名>_<日付の別名>_handler.py`）を出す。時刻の入力は、カレンダーのオフセットでその日に読み、日付と `at`（時刻を言う日付なら）を返す。
 - **帳簿の操作**（1.16）は、`use book` の `lambda` の Lambda 関数を呼ぶ Task にする。payload は `{transfer, op, args, amounts?}`。帳簿ごとに、chobo の Python のクライアントで操作する Lambda 関数のコード（`lambda/book_<帳簿>_handler.py`）を出す。利用者は `handler = make_handler(lambda: tigerbeetle(ClientSync(…)))` のように、帳簿の値を作る関数を渡す。拒否されたら、理由を名前にした例外を投げる。Lambda はその名前を `errorType` に入れ、Step Functions はそれをエラーの名前として Catch に渡す（宣言したエラーの名前は、帳簿の理由そのもの）。通ったら、仮押さえのレコードを Task の Assign の JSONata で、渡した引数から作る。Retry は書いたとおりで、キーで冪等なので、二度目は `done_before` で通る。
 - **`now`**（1.16）は、`($substring($states.context.State.EnteredTime, 0, 19) & "Z")`。そのステートに入った時刻を秒までにしたもので、Retry のあいだも変わらない。
+- **`history encrypted`**（1.18）は、生成物を変えない。実行の履歴を暗号化するのは、ステートマシンの `EncryptionConfiguration`（`Type: CUSTOMER_MANAGED_KMS_KEY` と `KmsKeyId`）に設定するカスタマー管理の KMS キーで、dandori が書く ASL の外にある。鍵を設定すると、`GetExecutionHistory` と `DescribeExecution` を呼ぶ人に `kms:Decrypt` が要る（2026-10-06 に AWS の文書の本文で確かめた）。
 - **規則の前提の確かめ**（1.17）は、条件を JSONata で書いた Choice（日は `$v in ["2026-02-10", …]`）で、成り立たなければ `Dandori.BrokenPrecondition` の Fail へ進む。並列のイテレーションの中では、`fail` と同じく失敗をイテレーションの結果にして運ぶ。
 
 ### 4.2 Temporal
@@ -972,6 +1034,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - **日付**（1.16）は、規則と同じ proxy で呼ぶアクティビティ `dates_<ファイル>_<日付>` にする（`local` ならローカルアクティビティ）。`rules.ts` が、koyomi が生成した TypeScript（`koyomi/typescript/<別名>.ts`）の関数を、入力を位置の順に並べて呼ぶ。時刻の入力は、カレンダーのオフセットでその日に読む（`day`）。`at` は koyomi の `<日付>_at` が返す。
 - **帳簿の操作**（1.16）は、dandori が書くアクティビティ（名前はタスクの名前）にし、`Transport` の `book` で chobo のクライアントを呼ぶ。`io.ts` は、フローが帳簿を使うときだけ、`BookCall`・`BookResult`・`book`、帳簿ごとの名前の表（振替のメンバーと数の引数）と、既定の `Transport` の実装を持つ。既定の実装は、利用者が渡す帳簿の値（`transport({ books: { stock: postgres(pool, { tenant }) } })`。chobo の TypeScript のクライアントが作るもの）のメンバーを呼び、数の引数を bigint にする。答えは `io.booked` が読み、拒否されたら理由の名前の宣言したエラー（無ければ `Dandori.Failure.<理由>`）として失敗させ、通れば仮押さえのレコードを引数から作る。
 - **`now`**（1.16）は、ワークフローの `Date.now()`（再生でも同じ時刻を返す）を秒までにした `dd.now()`。
+- **`history encrypted`**（1.18）のフローでは、`worker.ts` の `WorkerConfig.codec`（ペイロードのコーデック）を要るフィールドにし、ワーカーの `dataConverter` にそれと `failure.ts` の失敗のコンバーター（`encodeCommonAttributes`）を入れる。`client.ts` の関数は、`encryptedClient(connection, codec)` だけが返す `EncryptedClient` を受け取る。`replay` もコーデックを受け取る。Python では `client.py` の `connect(target, codec)` が返す `EncryptedClient`（`NewType`）を、関数と `make_worker` が受け取り、データコンバーターは `DefaultFailureConverterWithEncodedAttributes` を使う。Go では `client.go` の `Dial(options, codec)` だけが `EncryptedClient` を返し、関数と `NewWorker` が受け取る。宣言の無いフローの生成物は変わらない。
 - **規則の前提の確かめ**（1.17）は、ワークフローのコードの `if (!(asked! <= paid)) throw dd.fail("Dandori.BrokenPrecondition", …)`（日は `[…].includes(day!)`）。アクティビティもタイマーも使わないので、履歴は増えない。
 
 **Python SDK 向け**（`--target temporal-python`）も出す。ワークフローの名前のパッケージに、`types.py`、`activities.py`（`make_activities(own, transport)`）、`io.py`、`rules.py`、`runtime.py`、`workflow.py`（ワークフローのクラスと、ワーカーに渡す `workflows`）を置く。`worker.py`（`worker_options` と `make_worker`）と `client.py`（`start`・`answer`・`status`）も同じ形で出す。意味は TypeScript 版と同じで、線に乗る名前もそろえた。ワークフローの型、アクティビティの名前、コールバックの Update とシグナル、クエリ、search attribute、子ワークフローとコールバックの ID が同じなので、TypeScript のワーカーが持つアクティビティを Python のワークフローから呼べ、その逆もできる（5 章で、全部のシナリオを両方向に走らせて確かめている）。書き方が違うのは次のところ。
@@ -1024,6 +1087,7 @@ Temporal と同じく、コードを書き、チェックポイントと再生�
 - `connect` で呼ぶ規則は、`context.invoke` ではなく、dandori が書く実装（`tasks.ts` の `rule_<名前>`）を step の中で呼ぶ。`lambda` は要らない。サービスを実装するフローでは、ハンドラが入力の型を確かめる前にゼロ値を埋め、サービスに書かれたコールバックの応答も埋める。`status` のメソッドを持つサービスは E050。
 - 日付は、規則と同じく `context.invoke` で Lambda を呼ぶ（Step Functions と同じ関数）。帳簿の操作は、dandori が書く実装（`tasks.ts`）を step の中で呼び、`Transport` の `book` で chobo のクライアントを呼ぶ（Temporal と同じ `io.ts`）。`now` は、その文の前の step（`<行> clock`）で読む。答えはチェックポイントに残るので、再生でも同じ時刻になる。step は操作を一回使うので、E040 の見積もりは `now` を読む文ごとに 1 を足す。
 - 規則の前提の確かめ（1.17）は、Temporal と同じワークフローのコードの `if` で、step を使わないので操作は増えない。
+- `history encrypted`（1.18）は、生成物を変えない。durable の実行のデータを暗号化するのは、関数の `DurableConfig.KMSKeyArn` に設定するカスタマー管理の KMS キーで、dandori が書くコードの外にある。鍵を設定すると、実行のデータを読む `GetDurableExecution` と `GetDurableExecutionHistory`（`IncludeExecutionData=true`）を呼ぶ人に `kms:Decrypt` が要る。実行は、始まったときの鍵を最後まで使う（2026-10-06 に AWS の文書の本文で確かめた）。
 
 ### 4.4 Argo Workflows
 
@@ -1047,6 +1111,7 @@ Temporal と同じく、コードを書き、チェックポイントと再生�
 - サービスを実装するフローでは、始まりのテンプレートの出力の式が、入力のゼロ値を `sprig.set` で埋めてから確かめる。表はビルドのときに分かるので、メッセージの入れ子とメッセージのリストの形に合わせて式を書く。`sprig.set` は map をその場で書き換えて返すので、式は「フィールドごとの `sprig.set` と、中のメッセージを埋める式と、リストの各項目を埋める `map` を並べたリストのあとに、値そのものを置き、その最後を読む」形にした（`[sprig.set(x, "k", x["k"] ?? 0), …, x][n]`）。中のメッセージは map のときだけ、リストは配列のときだけ埋め、無いものに鍵を足さない。`sprig.set` を入れ子に重ねる形では、無いメッセージにも `null` の鍵ができ、`json` のフィールドがあるかどうかの判定が参照インタプリタと変わる。リストの項目は `map` の `#` で、項目の中のリストはその内側の `map` の `#` で埋めるので、内側の `#` が外側の項目を指すことはない。この形が、null の項目を埋め、宣言していない鍵と、map でない値を残し、中のメッセージとリストの中のリストでも埋め、無いメッセージに鍵を足さないことを、kind の上の v4.1.4 で確かめた（2026-10-01）。サービスに書かれたコールバックの応答も、それを読む式で埋める。`status` のメソッドを持つサービスは E050。
 - 日付は、ほかの規則と同じく caller のコンテナで、`caller/rules.ts` が koyomi の TypeScript を呼ぶ（読み込みは `.ts` を付けて書く）。帳簿の操作も caller のコンテナで、`transport.ts` で利用者が渡す帳簿の値を `Transport` の `book` が呼ぶ。`now` は、値を計算するテンプレートの出力の式の `now().UTC().Format("2006-01-02T15:04:05Z")` で、そのテンプレートに来たときに一度だけ評価される（上の項）。
 - 規則の前提の確かめ（1.17）は、値を計算するテンプレート一つ（`s<場所>-check`）で、出力の式が前提を計算し、成り立たなければ `dd_ctl` を `fail` に、`dd_error` を `Dandori.BrokenPrecondition` のエラーにし、`go` を `false` にする。成り立てば、どちらも元の値を書き戻す。ノードは 4 個で、E040 の見積もりに足す。
+- `history encrypted`（1.18）は E050。Argo はテンプレートの入力と出力のパラメーターを Workflow のオブジェクトにそのまま残し、それを鍵で暗号化する手段が無い。
 
 ### 4.5 pydantic-graph
 

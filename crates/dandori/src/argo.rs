@@ -76,6 +76,18 @@ fn fit(m: &Model) -> Result<(), Vec<Diag>> {
     errs.extend(crate::check::history_limit(m, Platform::Argo));
     errs.extend(m.refuse_events(Platform::Argo));
     errs.extend(m.refuse_status(Platform::Argo));
+    // the parameters of a Workflow are kept as they are, in the object any reader of the workflows reads
+    if let Some(line) = m.history_encrypted {
+        errs.push(Diag::error(
+            "E050",
+            line,
+            1,
+            tr!(
+                "Argo Workflows はテンプレートの入力と出力のパラメーターを Workflow のオブジェクトにそのまま残し、それを鍵で暗号化する手段がないので、`history encrypted` を守れません。秘密の値はパラメーターで渡さず、Kubernetes の Secret から環境変数かボリュームで渡してください",
+                "Argo Workflows keeps the parameters of every template, in and out, as they are in the Workflow object, and has no way to encrypt them with a key, so it cannot keep `history encrypted`; give a secret to a task from a Kubernetes Secret, as an environment variable or a volume, and not as a parameter"
+            ),
+        ));
+    }
     for t in &m.tasks {
         match t.via(Platform::Argo) {
             // refused above

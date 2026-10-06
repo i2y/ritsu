@@ -1,0 +1,70 @@
+// tests/encrypted/names.ja.flow が実装するサービス（protos/calls.proto の日本語の版）。メソッドと
+// メッセージの名前は calls.proto と同じで、履歴を暗号化するワークフローに dandori が生成する
+// クライアントの名前と重なる。JSON の名前は、フローの名前に合わせて日本語にした。
+syntax = "proto3";
+
+package calls.ja.v1;
+
+import "dandori/v1/options.proto";
+
+service CallService {
+  option (dandori.v1.workflow) = {name: "名前の重なり", version: 1};
+
+  rpc Connect(Connection) returns (NewType) {
+    option (dandori.v1.start) = {fails: ["出ない", "確かめられない"]};
+  }
+
+  rpc EncryptedClient(PayloadCodec) returns (Ack) {
+    option (dandori.v1.event) = {task: "出る"};
+  }
+
+  rpc Encrypted(ClientOptions) returns (Ack) {
+    option (dandori.v1.event) = {task: "待たせる"};
+  }
+
+  rpc Dial(DataConverter) returns (Ack) {
+    option (dandori.v1.answer) = {task: "かける"};
+  }
+
+  rpc CodecFailureConverter(CodecDataConverter) returns (Ack) {
+    option (dandori.v1.answer) = {task: "確かめる"};
+  }
+
+  rpc GetStatus(StatusRequest) returns (dandori.v1.Status) {
+    option (dandori.v1.status) = {};
+  }
+}
+
+message Connection {
+  string number = 1 [json_name = "番号"];
+  Line line = 2 [json_name = "回線"];
+}
+
+enum Line {
+  landline = 0;
+  mobile = 1;
+}
+
+message NewType {
+  string memo = 1 [json_name = "記録"];
+}
+
+message PayloadCodec {
+  bool answered = 1 [json_name = "出た"];
+}
+
+message ClientOptions {
+  string reason = 1 [json_name = "理由"];
+}
+
+message DataConverter {
+  string answer = 1 [json_name = "答え"];
+}
+
+message CodecDataConverter {
+  string note = 1 [json_name = "確認"];
+}
+
+message Ack {}
+
+message StatusRequest {}

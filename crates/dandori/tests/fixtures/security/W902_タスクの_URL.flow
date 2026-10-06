@@ -1,0 +1,9 @@
+workflow タスクの_URL v1
+description "W902：ほかのマシンに暗号化しない HTTP で送るタスク"
+
+task 知らせる(本文: string)
+  http POST "http://notify.example.com/v1/messages"
+  idempotent
+
+flow
+  知らせる(本文: "届きました")

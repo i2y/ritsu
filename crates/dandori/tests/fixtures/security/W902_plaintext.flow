@@ -1,0 +1,32 @@
+workflow plaintext v1
+description "W902: nothing, for each URL says why it is not encrypted"
+
+use rule routing from "../../../examples/inquiry/rules/inquiry_routing.rule"
+  connect "http://rules.internal"
+  plaintext "The rules run beside the workflow, in the cluster network the service mesh encrypts"
+use openapi crm from "../secrets/plain.json"
+  plaintext "The CRM is reached through a private link"
+
+record Customer
+  id      : string
+  email   : string
+  segment : string
+  pin     : string?
+
+inputs
+  kind : routing.kind
+  id   : string
+
+task read(text: string) -> string
+  agent "Say what the text is about, in one sentence."
+  model "gpt-oss:20b"
+  url "http://ollama.internal:11434/v1"
+  plaintext "The model server is reached only inside the cluster network, which the service mesh encrypts"
+
+task get_customer(id: string) -> Customer
+  http GET crm "/customers/{id}"
+
+flow
+  let route = routing(kind: kind, member: true)
+  let customer = get_customer(id: id)
+  let gist = read(text: "a parcel came broken")

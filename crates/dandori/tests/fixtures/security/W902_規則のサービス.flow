@@ -1,0 +1,11 @@
+workflow 規則のサービス v1
+description "W902：Connect のサービスを暗号化しない HTTP で呼ぶ規則"
+
+use rule 振り分け from "../../../examples/inquiry/rules/問い合わせの振り分け.rule"
+  connect "http://rules.example.com"
+
+inputs
+  種類 : 振り分け.種類
+
+flow
+  let 行き先 = 振り分け(種類: 種類, 会員: true)

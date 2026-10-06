@@ -1,0 +1,3 @@
+build --target asl:
+エラー[E050]: tests/fixtures/security/W901_テスト用の鍵.flow:4:1: `探す` には `connection "<EventBridge の接続の ARN>"` が要ります
+     4 | task 探す(語: string) -> string

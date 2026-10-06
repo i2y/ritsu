@@ -10,6 +10,7 @@ task read_inquiry(text: string) -> Reading
   model "gpt-oss:20b"
   effort low
   url "http://ollama.internal:11434/v1"
+  plaintext "The model server is reached only inside the cluster network, which the service mesh encrypts"
   timeout 60 seconds
   retry 2 times every 10 seconds
 
@@ -48,7 +49,7 @@ flow
 
 **OpenAI** には、`url` を書かないときに送ります。Step Functions では、HTTP Task から Responses API に送ります。API キーは、タスクの `connection` に書いた EventBridge の接続に置きます。ほかのプラットフォーム向けに生成したコードは、`Transport` を通し、OpenAI の Agents SDK で呼びます。キーは `OPENAI_API_KEY` から読みます。自分で用意した実行の設定を渡すこともできます。OpenAI には Go の Agents SDK が無いので、Go 版は OpenAI の Go のクライアントで、Step Functions と同じリクエストを Responses API に送ります。
 
-**Open Responses のエンドポイント**には、`url "<base>"` を書くと送ります。Open Responses は、OpenAI の Responses API をもとにしたオープンな仕様です。2026 年 1 月に、OpenAI、Hugging Face、OpenRouter、Ollama、vLLM、LM Studio、Vercel が採用しました。リクエストは、Step Functions が送るのと同じ形で、そのエンドポイントの `<base>/responses` へ送ります。生成したコードは、SDK を使わずに HTTP で直接送ります。SDK は仕様に無い項目まで送ることがあるからです。認証は `Transport` のヘッダで渡します。受け付ける Schema の制限はサーバーごとに違うので、応答の型を OpenAI の制限に照らして検査するのは、OpenAI に送るときだけです。
+**Open Responses のエンドポイント**には、`url "<base>"` を書くと送ります。Open Responses は、OpenAI の Responses API をもとにしたオープンな仕様です。2026 年 1 月に、OpenAI、Hugging Face、OpenRouter、Ollama、vLLM、LM Studio、Vercel が採用しました。リクエストは、Step Functions が送るのと同じ形で、そのエンドポイントの `<base>/responses` へ送ります。生成したコードは、SDK を使わずに HTTP で直接送ります。SDK は仕様に無い項目まで送ることがあるからです。認証は `Transport` のヘッダで渡します。受け付ける Schema の制限はサーバーごとに違うので、応答の型を OpenAI の制限に照らして検査するのは、OpenAI に送るときだけです。`url` がほかのマシンへの `http://` なら警告（W902）になります。ほかの仕組みで通信を守っているなら、問い合わせの例のように、タスクの下に `plaintext "<理由>"` と書きます（[秘密の値](secrets.md)）。
 
 **Claude** には、`agent claude "…"` と書くと送ります。指示はシステムプロンプトに、引数の JSON の文字列はユーザーのメッセージに、Schema は `output_config.format` に入れ、`max_tokens` は 16000 にします。Step Functions では HTTP Task から送り、キーは接続に `x-api-key` として置きます。ほかのプラットフォームでは Anthropic の SDK を使い、キーは `ANTHROPIC_API_KEY` から読みます。Claude は、列挙の値の大文字と小文字を変えて返すことがあります。そこで、Claude のエージェントの応答にある列挙の値は、大文字と小文字を区別せずに受け取ります。そのため、大文字と小文字だけが違う値を持つ列挙は、この応答には使えません（E007）。
 

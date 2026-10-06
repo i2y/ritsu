@@ -1,0 +1,14 @@
+workflow jev v1
+description "E906: a secret Jev reads"
+
+enum Kind = returns | delivery
+
+inputs
+  email : string  secret
+
+task pick(text: string) -> Kind
+  jev "Which kind of inquiry is this?"
+  model "jev-1.13.0"
+
+flow
+  let kind = pick(text: email)

@@ -1,0 +1,8 @@
+warning[W901]: tests/fixtures/security/W901_key_in_a_string.flow:5:50: a Google API key is written here (AIza…, 39 characters)
+     5 |   http GET "https://maps.example.com/v1/find?key=AIza…"
+  = A key in a file reaches everyone who can read the repository, its history and its builds. Keep it where the code runs (an environment variable, the platform's connection or secret store) and read it from there.
+  = If this key is real, revoke it with Google first: taking it out of the file leaves it in the history of the repository.
+  = If it is a value for tests, write `ritsu: test secret` in a comment on the same line.
+build --target asl:
+error[E050]: tests/fixtures/security/W901_key_in_a_string.flow:4:1: `find` needs `connection "<EventBridge connection ARN>"`
+     4 | task find(q: string) -> string

@@ -164,6 +164,29 @@ impl ritsu_ports::Flows for Engine {
     fn crossings(&self, file: &Path, ports: &ritsu_ports::Ports) -> Result<ritsu_ports::Crossings, Vec<Said>> {
         crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || Engine::model_with(file).map(|m| crate::crossings::of(&m)))
     }
+
+    /// Every call of a flow that passes `dandori check` that gives a secret to a file of the project
+    /// (dandori's DESIGN 1.18): an OpenAPI document whose operation a task calls, a `.proto` whose
+    /// method a `connect` task calls, a rule called at its Connect service, a child `.flow`, a book, a
+    /// dates file; each secret with the parameter that carries it and the place that marks it, and the
+    /// parameters the task says it discloses. The paths are as dandori reaches them. The parties
+    /// outside the project are dandori's own to say (its E906).
+    fn sends(&self, file: &Path, ports: &ritsu_ports::Ports) -> Result<Vec<ritsu_ports::Send>, Vec<Said>> {
+        crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || {
+            Engine::model_with(file).map(|m| {
+                crate::secrets::sends(&m)
+                    .into_iter()
+                    .map(|s| ritsu_ports::Send {
+                        line: s.line,
+                        task: s.callee,
+                        to: ritsu_ports::Destination::File(s.to.into()),
+                        secrets: s.secrets.into_iter().map(|(p, h)| (p, ritsu_ports::Secret { shown: h.shown, marked_in: h.mark.file.into(), line: h.mark.line, mark: h.mark.mark })).collect(),
+                        disclosed: s.disclosed,
+                    })
+                    .collect()
+            })
+        })
+    }
 }
 
 impl Engine {

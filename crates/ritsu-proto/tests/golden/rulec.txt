@@ -90,6 +90,36 @@ message ReserveResponse
 message ReleaseRequest
   id string
 message ReleaseResponse
+== ../dandori/examples/payout/specs/payout.ja.proto
+package Some("payout.ja.v1") imports []
+message PayRequest
+  account_id string json_name="口座ID"
+  amount int32 json_name="金額"
+  reference string json_name="摘要"
+message PayResponse
+  payout_id string json_name="送金ID"
+message GetAccountRequest
+  id string
+message Account
+  id string
+  number string json_name="番号"
+  holder string json_name="名義"
+  bank_name string json_name="銀行名"
+== ../dandori/examples/payout/specs/payout.proto
+package Some("payout.v1") imports []
+message PayRequest
+  account_id string
+  amount int32
+  reference string
+message PayResponse
+  payout_id string
+message GetAccountRequest
+  id string
+message Account
+  id string
+  number string
+  holder string
+  bank_name string
 == ../dandori/proto/dandori/v1/options.proto
 package Some("dandori.v1") imports ["google/protobuf/descriptor.proto", "google/protobuf/struct.proto"]
 message WorkflowOptions
@@ -105,6 +135,42 @@ message StatusOptions
 message Status
   at int32 optional
   events string repeated
+== ../dandori/tests/encrypted/protos/calls.ja.proto
+package Some("calls.ja.v1") imports ["dandori/v1/options.proto"]
+enum Line landline=0 mobile=1
+message Connection
+  number string json_name="番号"
+  line Line json_name="回線"
+message NewType
+  memo string json_name="記録"
+message PayloadCodec
+  answered bool json_name="出た"
+message ClientOptions
+  reason string json_name="理由"
+message DataConverter
+  answer string json_name="答え"
+message CodecDataConverter
+  note string json_name="確認"
+message Ack
+message StatusRequest
+== ../dandori/tests/encrypted/protos/calls.proto
+package Some("calls.v1") imports ["dandori/v1/options.proto"]
+enum Line landline=0 mobile=1
+message Connection
+  number string
+  line Line
+message NewType
+  receipt string
+message PayloadCodec
+  answered bool
+message ClientOptions
+  reason string
+message DataConverter
+  answer string
+message CodecDataConverter
+  note string
+message Ack
+message StatusRequest
 == ../dandori/tests/fixtures/apis/warehouse.proto
 package Some("warehouse.v1") imports ["google/protobuf/timestamp.proto"]
 enum Stock unspecified=0 secured=1 short=2
@@ -223,6 +289,33 @@ enum Status ACTIVE=0 CLOSED=1
 == ../dandori/tests/fixtures/rules/order.proto
 package Some("shop.v1") imports []
 enum MemberTier MEMBER_TIER_UNSPECIFIED=0 MEMBER_TIER_BASIC=1 MEMBER_TIER_GOLD=2
+== ../dandori/tests/fixtures/secrets/acme/v1/sensitivity.proto
+package Some("acme.v1") imports ["google/protobuf/descriptor.proto"]
+enum Sensitivity SENSITIVITY_UNSPECIFIED=0 PUBLIC=1 PERSONAL=2
+== ../dandori/tests/fixtures/secrets/bank/v1/bank.proto
+package Some("bank.v1") imports ["acme/v1/sensitivity.proto"]
+message Account
+  id string
+  number string
+  holder string
+  branch string
+  sort_code string
+message GetAccountRequest
+  id string
+message PayRequest
+  account_id string
+  amount int32
+  note string
+  account_number string
+message PayResponse
+  payment_id string
+== ../dandori/tests/fixtures/secrets/receipts.proto
+package Some("receipts.v1") imports []
+message GetReceiptRequest
+  id string
+message Receipt
+  id string
+  amount int32
 == ../dandori/tests/fixtures/services/methods.proto
 package Some("shop.v1") imports []
 message FulfillRequest

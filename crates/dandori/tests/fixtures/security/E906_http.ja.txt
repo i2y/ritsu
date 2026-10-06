@@ -1,0 +1,14 @@
+警告[W904]: tests/fixtures/security/E906_http.flow:5:1: 入力 `email` は秘密の値で、ワークフローの履歴に残ります
+     5 |   email : string  secret
+  = 印は E906_http.flow:5 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = ワークフローには値の代わりに参照（ID やシークレットの名前）を渡し、それを使うタスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+エラー[E906]: tests/fixtures/security/E906_http.flow:12:1: タスク `notify` が、秘密の値 `email` をプロジェクトの外の mail.example.com に送ります
+    12 |   notify(to: email)
+  = 印は E906_http.flow:5 の `secret` です。
+  = 参照か、相手に要るものだけを送ってください。そこへ送ることを意図しているなら、タスクの下に `discloses to "<理由>"` と書いてください。
+警告[W904]: tests/fixtures/security/E906_http.flow:12:1: 秘密の値 `email` が、`notify` の引数 `to` として、ワークフローの履歴に残ります
+    12 |   notify(to: email)
+  = 印は E906_http.flow:5 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。

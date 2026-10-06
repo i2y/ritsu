@@ -63,6 +63,15 @@ fn e(code: &'static str, sp: Span, message: Text) -> Diag {
     Diag::error(code, sp.line, sp.col, message)
 }
 
+/// W902: a call that goes without encryption to a host that is not this machine (DESIGN 1.18), at
+/// `at`, said as `said`; `under` is where `plaintext` goes.
+fn plain_call(at: Span, said: Text, under: Text) -> Diag {
+    let Text { en, ja } = under;
+    Diag::warning("W902", at.line, at.col, said)
+        .note(tr!("途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。", "Whoever is on the network between can read and change the requests, the answers, and any key in the headers."))
+        .note(tr!("https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、{ja}に `plaintext \"<理由>\"` と書いてください。", "Use https://. If the connection is protected another way (a service mesh, a private link), say so {en} with `plaintext \"<why>\"`."))
+}
+
 /// The zero values protobuf's JSON leaves out of a rule's response: each field the rule always
 /// answers, by its JSON key (`apis::fill` reads this form). A number is the string `"0"`, as the
 /// 64-bit integer it is; an enum is the `.proto`'s name for its value 0: `<ENUM>_UNSPECIFIED`, which
@@ -126,6 +135,12 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
             on_cancel_line: 0,
             monitors: BTreeMap::new(),
             service: None,
+            input_secrets: BTreeMap::new(),
+            output_secrets: BTreeMap::new(),
+            input_lines: BTreeMap::new(),
+            output_lines: BTreeMap::new(),
+            history_encrypted: prog.history_encrypted.map(|s| s.line),
+            source_reached: file.to_string_lossy().to_string(),
         },
         enum_ix: BTreeMap::new(),
         record_ix: BTreeMap::new(),
@@ -155,6 +170,7 @@ pub fn lower(prog: &Program, file: &Path) -> (Option<Model>, Vec<Diag>) {
     lw.local_types();
     lw.io();
     lw.tasks();
+    lw.plaintexts();
     lw.service();
     lw.cases();
     lw.variables();
@@ -286,7 +302,7 @@ impl<'a> Lowerer<'a> {
             let fields: Vec<(String, Ty)> = info.outputs.iter().map(|c| (c.name.clone(), self.rty(name, &c.ty))).collect();
             let ranges = info.outputs.iter().filter_map(|c| Some((c.name.clone(), c.range()?))).collect();
             let rec = self.m.records.len();
-            self.m.records.push(RecordDef { name: format!("{name}.outputs"), fields, ranges, origin: RecordOrigin::RuleOutputs(ix) });
+            self.m.records.push(RecordDef { name: format!("{name}.outputs"), fields, ranges, secrets: BTreeMap::new(), origin: RecordOrigin::RuleOutputs(ix) });
             self.rule_ix.insert(name.clone(), ix);
             let connect = self.rule_connect(u, &info);
             self.m.rules.push(RuleUse {
@@ -346,7 +362,7 @@ impl<'a> Lowerer<'a> {
                     fields.push(("at".to_string(), Ty::Timestamp));
                 }
                 let rec = self.m.records.len();
-                self.m.records.push(RecordDef { name: callee.clone(), fields, ranges: BTreeMap::new(), origin: RecordOrigin::RuleOutputs(ix) });
+                self.m.records.push(RecordDef { name: callee.clone(), fields, ranges: BTreeMap::new(), secrets: BTreeMap::new(), origin: RecordOrigin::RuleOutputs(ix) });
                 let number = ritsu_units::Unit::parse("number").ok();
                 let column = |(n, a, day): &(String, String, bool)| rulec::Column {
                     name: n.clone(),
@@ -443,7 +459,7 @@ impl<'a> Lowerer<'a> {
                 let ix = self.m.rules.len();
                 let rec = self.m.records.len();
                 self.record_ix.insert(rname.clone(), rec);
-                self.m.records.push(RecordDef { name: rname.clone(), fields, ranges: BTreeMap::new(), origin: RecordOrigin::Hold { book: bix, transfer: t.name.clone() } });
+                self.m.records.push(RecordDef { name: rname.clone(), fields, ranges: BTreeMap::new(), secrets: BTreeMap::new(), origin: RecordOrigin::Hold { book: bix, transfer: t.name.clone() } });
                 let none = ritsu_ports::Call { module: String::new(), function: String::new(), input_type: String::new(), params: vec![], outputs: vec![], enums: vec![] };
                 let info = rulec::RuleInfo {
                     rule: facts.name.clone(),
@@ -565,7 +581,7 @@ impl<'a> Lowerer<'a> {
                 continue;
             }
             self.record_ix.insert(name.clone(), self.m.records.len());
-            self.m.records.push(RecordDef { name: name.clone(), fields: vec![], ranges: BTreeMap::new(), origin: RecordOrigin::Local });
+            self.m.records.push(RecordDef { name: name.clone(), fields: vec![], ranges: BTreeMap::new(), secrets: BTreeMap::new(), origin: RecordOrigin::Local });
         }
         for r in &self.prog.records {
             let ix = match self.record_ix.get(&r.name.0) {
@@ -574,6 +590,7 @@ impl<'a> Lowerer<'a> {
             };
             let mut fields = Vec::new();
             let mut ranges = BTreeMap::new();
+            let mut secrets = BTreeMap::new();
             for f in &r.fields {
                 if fields.iter().any(|(n, _): &(String, Ty)| *n == f.name.0) {
                     self.push(e("E006", f.name.1, tr!("フィールド `{}` が二度書かれています", "the field `{}` is written twice", f.name.0)));
@@ -583,11 +600,15 @@ impl<'a> Lowerer<'a> {
                     if let Some(rg) = self.range(&t, f.range.as_ref()) {
                         ranges.insert(f.name.0.clone(), rg);
                     }
+                    if let Some(ssp) = f.secret {
+                        secrets.insert(f.name.0.clone(), self.written_mark(ssp));
+                    }
                     fields.push((f.name.0.clone(), t));
                 }
             }
             self.m.records[ix].fields = fields;
             self.m.records[ix].ranges = ranges;
+            self.m.records[ix].secrets = secrets;
         }
     }
 
@@ -792,10 +813,14 @@ impl<'a> Lowerer<'a> {
         let ix = self.m.records.len();
         self.record_ix.insert(name.clone(), ix);
         self.made_at.entry(name.clone()).or_insert(sp);
-        self.m.records.push(RecordDef { name, fields: vec![], ranges: BTreeMap::new(), origin: RecordOrigin::Proto { api: api.to_string() } });
+        self.m.records.push(RecordDef { name, fields: vec![], ranges: BTreeMap::new(), secrets: BTreeMap::new(), origin: RecordOrigin::Proto { api: api.to_string() } });
         let mut fields = Vec::new();
         let mut ranges = BTreeMap::new();
+        let mut secrets = BTreeMap::new();
         for f in crate::apis::made_fields(pf, full) {
+            if let Some(r) = &f.redact {
+                secrets.insert(f.name.clone(), self.proto_mark(r));
+            }
             fn range_of(t: &MadeTy) -> Option<Range> {
                 match t {
                     MadeTy::Int(r) => *r,
@@ -822,7 +847,31 @@ impl<'a> Lowerer<'a> {
         }
         self.m.records[ix].fields = fields;
         self.m.records[ix].ranges = ranges;
+        self.m.records[ix].secrets = secrets;
         ix
+    }
+
+    /// A path dandori reaches, as a message says it: from the `.flow`'s directory, where it is under it.
+    fn shown_path(&self, p: &Path) -> String {
+        p.strip_prefix(&self.dir).unwrap_or(p).to_string_lossy().to_string()
+    }
+
+    /// The mark of a property of an OpenAPI document (DESIGN 1.18): its line, read from the document
+    /// as written (ritsu-base's reader keeps the lines), and its JSON Pointer.
+    fn doc_mark(&self, file: &Path, d: &crate::apis::DocMark) -> SecretMark {
+        let line = crate::sources::read(file).ok().and_then(|text| ritsu_base::yaml::read_json(&text).ok()).and_then(|n| n.pointer(&d.pointer).map(|x| x.line)).unwrap_or(1);
+        let detail = (!d.mark.detail.is_empty()).then(|| Text::same(d.mark.detail.clone()));
+        SecretMark { file: file.to_string_lossy().to_string(), line, mark: d.mark.keyword.to_string(), at: format!("{}#{}", self.shown_path(file), d.pointer), detail }
+    }
+
+    /// The mark of a field of a `.proto` that `debug_redact` marks secret (DESIGN 1.18).
+    fn proto_mark(&self, r: &crate::proto::Redact) -> SecretMark {
+        let at = format!("{}:{}", self.shown_path(&r.file), r.line);
+        let detail = r.by.as_ref().map(|(value, vf, vl)| {
+            let vat = format!("{}:{vl}", self.shown_path(vf));
+            tr!("値 {value} は {vat} で `debug_redact = true` を付けたもの", "the value {value} is marked `debug_redact = true` at {vat}")
+        });
+        SecretMark { file: r.file.to_string_lossy().to_string(), line: r.line, mark: r.mark.clone(), at, detail }
     }
 
     /// E002 for a made record with a field whose type no file read has, which an import that was not
@@ -1192,6 +1241,11 @@ impl<'a> Lowerer<'a> {
                 if let Some(rg) = self.range(&t, f.range.as_ref()) {
                     self.m.input_ranges.insert(f.name.0.clone(), rg);
                 }
+                if let Some(ssp) = f.secret {
+                    let mark = self.written_mark(ssp);
+                    self.m.input_secrets.insert(f.name.0.clone(), mark);
+                }
+                self.m.input_lines.insert(f.name.0.clone(), f.name.1.line);
                 self.m.inputs.push((f.name.0.clone(), t));
             }
         }
@@ -1206,6 +1260,11 @@ impl<'a> Lowerer<'a> {
                 if let Some(rg) = self.range(&t, f.range.as_ref()) {
                     self.m.output_ranges.insert(f.name.0.clone(), rg);
                 }
+                if let Some(ssp) = f.secret {
+                    let mark = self.written_mark(ssp);
+                    self.m.output_secrets.insert(f.name.0.clone(), mark);
+                }
+                self.m.output_lines.insert(f.name.0.clone(), f.name.1.line);
                 self.m.outputs.push((f.name.0.clone(), t));
             }
         }
@@ -1220,6 +1279,7 @@ impl<'a> Lowerer<'a> {
             }
             let mut params = Vec::new();
             let mut param_ranges = BTreeMap::new();
+            let mut param_secrets: BTreeMap<String, Vec<(String, SecretMark)>> = BTreeMap::new();
             for p in &t.params {
                 if params.iter().any(|(n, _): &(String, Ty)| *n == p.name.0) {
                     self.push(e("E006", p.name.1, tr!("引数 `{}` が二度書かれています", "the parameter `{}` is written twice", p.name.0)));
@@ -1228,6 +1288,10 @@ impl<'a> Lowerer<'a> {
                 if let Some(ty) = self.ty(&p.ty) {
                     if let Some(rg) = self.range(&ty, p.range.as_ref()) {
                         param_ranges.insert(p.name.0.clone(), rg);
+                    }
+                    if let Some(ssp) = p.secret {
+                        let mark = self.written_mark(ssp);
+                        param_secrets.entry(p.name.0.clone()).or_default().push((String::new(), mark));
                     }
                     params.push((p.name.0.clone(), ty));
                 }
@@ -1240,6 +1304,7 @@ impl<'a> Lowerer<'a> {
                 None => None,
             };
             let result_range = result.as_ref().and_then(|r| self.range(r, t.result_range.as_ref()));
+            let mut result_secrets: Vec<(String, SecretMark)> = t.result_secret.map(|ssp| (String::new(), self.written_mark(ssp))).into_iter().collect();
             // an operation of an API's description: its URL and body come from there
             let mut described: Option<(crate::apis::Api, syntax::Binding)> = None;
             let mut connect = None;
@@ -1612,6 +1677,15 @@ impl<'a> Lowerer<'a> {
                     self.push(d);
                 }
             }
+            let discloses = self.discloses(t, &params);
+            // the description of the API whose operation the task calls, as dandori reaches it
+            let api_file = match &t.binding {
+                Some((syntax::Binding::Http { api: Some(a), .. }, _)) | Some((syntax::Binding::Connect { api: a, .. }, _)) => {
+                    self.prog.apis.iter().find(|u| u.name.0 == a.0).map(|u| self.dir.join(&u.path).to_string_lossy().to_string())
+                }
+                _ => None,
+            };
+            self.plaintext_task(t);
             self.task_ix.insert(name.clone(), self.m.tasks.len());
             self.m.tasks.push(TaskDef {
                 name: name.clone(),
@@ -1641,6 +1715,10 @@ impl<'a> Lowerer<'a> {
                 flow,
                 connect,
                 answer_zeros: None,
+                param_secrets,
+                result_secrets: std::mem::take(&mut result_secrets),
+                discloses,
+                api_file,
                 line: sp.line,
             });
             let task = self.m.tasks.last().expect("just pushed");
@@ -1657,6 +1735,31 @@ impl<'a> Lowerer<'a> {
                 let bsp = t.binding.as_ref().map(|(_, s)| *s).unwrap_or(*sp);
                 match op {
                     Ok(op) => {
+                        // the properties of the operation that mark what the task gives it and reads from it secret
+                        if let syntax::Binding::Http { method, url, .. } = b {
+                            let task = self.m.tasks.last().expect("just pushed");
+                            let (params, answer) = crate::apis::openapi_marks(api, method, url, &self.m, task);
+                            let file = self.prog.apis.iter().find(|u| u.name.0 == api.name).map(|u| self.dir.join(&u.path)).unwrap_or_default();
+                            let params: Vec<(String, String, SecretMark)> = params.into_iter().map(|(p, d)| (p, d.path.clone(), self.doc_mark(&file, &d))).collect();
+                            let answer: Vec<(String, SecretMark)> = answer.into_iter().map(|d| (d.path.clone(), self.doc_mark(&file, &d))).collect();
+                            let task = self.m.tasks.last_mut().expect("just pushed");
+                            for (p, path, mark) in params {
+                                task.param_secrets.entry(p).or_default().push((path, mark));
+                            }
+                            task.result_secrets.extend(answer);
+                        }
+                        // and the fields of the `.proto`'s request and response, for a `connect` task
+                        if let syntax::Binding::Connect { method, .. } = b {
+                            let task = self.m.tasks.last().expect("just pushed");
+                            let (params, answer) = crate::apis::proto_marks(api, method, &self.m, task);
+                            let params: Vec<(String, String, SecretMark)> = params.into_iter().map(|(p, path, r)| (p, path, self.proto_mark(&r))).collect();
+                            let answer: Vec<(String, SecretMark)> = answer.into_iter().map(|(path, r)| (path, self.proto_mark(&r))).collect();
+                            let task = self.m.tasks.last_mut().expect("just pushed");
+                            for (p, path, mark) in params {
+                                task.param_secrets.entry(p).or_default().push((path, mark));
+                            }
+                            task.result_secrets.extend(answer);
+                        }
                         let task = self.m.tasks.last().expect("just pushed");
                         let path_params = match b {
                             syntax::Binding::Http { url, .. } => placeholders(url),
@@ -1678,6 +1781,120 @@ impl<'a> Lowerer<'a> {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    /// The mark `secret` written on the line of `sp` of this `.flow` (DESIGN 1.18).
+    fn written_mark(&self, sp: Span) -> SecretMark {
+        SecretMark { file: self.m.source_reached.clone(), line: sp.line, mark: "secret".into(), at: format!("{}:{}", self.m.source_file, sp.line), detail: None }
+    }
+
+    /// `discloses <param>, … "<why>"` under a task: each parameter it names, with why (E007 for a
+    /// name the task has no parameter of, and for an empty why).
+    fn discloses(&mut self, t: &syntax::TaskDecl, params: &[(String, Ty)]) -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        for (names, why, sp) in &t.discloses {
+            if why.trim().is_empty() {
+                self.push(e("E007", *sp, tr!("`discloses` には、秘密の値をそこへ送る理由を書いてください（空の文字列です）", "give `discloses` the reason the task sends the secrets there; it is an empty string")));
+            }
+            for (p, psp) in names {
+                if !params.iter().any(|(n, _)| n == p) {
+                    let task = &t.name.0;
+                    self.push(e("E007", *psp, tr!("`discloses` が書く `{p}` は、`{task}` の引数ではありません", "`discloses` names `{p}`, which is not a parameter of `{task}`")));
+                    continue;
+                }
+                out.push((p.clone(), why.clone()));
+            }
+        }
+        out
+    }
+
+    /// `plaintext` under a task (E007 when the task has no URL of its own, and for an empty why),
+    /// and W902 for a URL the task calls without encryption, to a host that is not this machine:
+    /// an `http` task's own URL, an agent's `url` (DESIGN 1.18). The URL of an API's operation is
+    /// the `use`'s, and said there (`plaintexts`).
+    fn plaintext_task(&mut self, t: &syntax::TaskDecl) {
+        let name = &t.name.0;
+        let own = match (&t.binding, &t.url) {
+            (Some((syntax::Binding::Http { url, api: None, .. }, bsp)), _) => Some((url.clone(), *bsp, false)),
+            (Some((syntax::Binding::Agent { .. }, _)), Some((url, usp))) => Some((url.clone(), *usp, true)),
+            _ => None,
+        };
+        if let Some((why, psp)) = &t.plaintext {
+            if own.is_none() {
+                let mut d = e("E007", *psp, tr!("`plaintext` は、URL に暗号化せずに送ることを意図していると書くところですが、`{name}` は自分の URL を持ちません", "`plaintext` says that a URL is reached without encryption on purpose, and `{name}` has no URL of its own"));
+                if let Some((syntax::Binding::Http { api: Some(a), .. }, _)) | Some((syntax::Binding::Connect { api: a, .. }, _)) = &t.binding {
+                    let a = &a.0;
+                    d = d.note(tr!("`{name}` が送る先は、`{a}` を読む `use` の URL です。`plaintext` はその `use` の下に書いてください。", "`{name}` sends to the URL of the `use` that reads `{a}`; write `plaintext` under that `use`."));
+                }
+                self.push(d);
+            } else if why.trim().is_empty() {
+                self.push(e("E007", *psp, tr!("`plaintext` には、暗号化しない理由を書いてください（空の文字列です）", "give `plaintext` the reason the connection is not encrypted; it is an empty string")));
+            }
+        }
+        let Some((url, at, agent)) = own else { return };
+        if t.plaintext.is_some() {
+            return;
+        }
+        if let Some((_, host)) = crate::secrets::plain_url(&url) {
+            let said = if agent {
+                tr!("エージェント `{name}` は、{host} に暗号化しない HTTP でリクエストを送ります", "the agent `{name}` sends its requests to {host} over plain HTTP")
+            } else {
+                tr!("タスク `{name}` は、{host} に暗号化しない HTTP でリクエストを送ります", "the task `{name}` sends its requests to {host} over plain HTTP")
+            };
+            self.push(plain_call(at, said, tr!("タスクの下", "under the task")));
+        }
+    }
+
+    /// `plaintext` under `use rule … connect` and `use openapi|proto` (E007 where there is no URL,
+    /// and for an empty why), and W902 for the service of a rule and the API that the tasks call
+    /// without encryption, to a host that is not this machine (DESIGN 1.18): the URL under `use`,
+    /// else an OpenAPI document's first server. Said at the `use`, once for every task that calls it.
+    fn plaintexts(&mut self) {
+        let no_why = || tr!("`plaintext` には、暗号化しない理由を書いてください（空の文字列です）", "give `plaintext` the reason the connection is not encrypted; it is an empty string");
+        for u in &self.prog.uses {
+            let rule = &u.name.0;
+            match (&u.plaintext, &u.connect) {
+                (Some((_, psp)), None) => self.diags.push(e("E007", *psp, tr!("`plaintext` は、規則のサービスに暗号化せずに送ることを意図していると書くところですが、規則 `{rule}` には `connect` がありません", "`plaintext` says that a rule's service is reached without encryption on purpose, and the rule `{rule}` has no `connect`"))),
+                (Some((why, psp)), Some(_)) if why.trim().is_empty() => self.diags.push(e("E007", *psp, no_why())),
+                (None, Some((url, csp))) => {
+                    if let Some((_, host)) = crate::secrets::plain_url(url) {
+                        self.diags.push(plain_call(*csp, tr!("規則 `{rule}` のサービスは、{host} に暗号化しない HTTP で呼ばれます", "the service of the rule `{rule}` is called at {host} over plain HTTP"), tr!("`use rule` の下", "under `use rule`")));
+                    }
+                }
+                _ => {}
+            }
+        }
+        for u in &self.prog.apis {
+            let api = &u.name.0;
+            let word = u.kind.word();
+            let base = self.apis.get(api).and_then(|(_, a)| if u.kind == ApiKind::Smithy { None } else { a.base_url() });
+            match (&u.plaintext, &base) {
+                (Some((_, psp)), None) => {
+                    self.diags.push(e("E007", *psp, tr!("`plaintext` は、API に暗号化せずに送ることを意図していると書くところですが、`{api}` には送る先の URL がありません", "`plaintext` says that an API is reached without encryption on purpose, and `{api}` has no URL to reach")));
+                    continue;
+                }
+                (Some((why, psp)), Some(_)) => {
+                    if why.trim().is_empty() {
+                        self.diags.push(e("E007", *psp, no_why()));
+                    }
+                    continue;
+                }
+                (None, None) => continue,
+                (None, Some(_)) => {}
+            }
+            let called = self.prog.tasks.iter().any(|t| matches!(&t.binding, Some((syntax::Binding::Http { api: Some(a), .. }, _)) | Some((syntax::Binding::Connect { api: a, .. }, _)) if a.0 == *api));
+            let (Some(base), true) = (base, called) else { continue };
+            if let Some((_, host)) = crate::secrets::plain_url(&base) {
+                let at = u.url_at.unwrap_or(u.name.1);
+                let said = if u.url.is_some() {
+                    tr!("`{api}` を呼ぶタスクは、{host} に暗号化しない HTTP でリクエストを送ります", "the tasks that call `{api}` send their requests to {host} over plain HTTP")
+                } else {
+                    let file = &u.path;
+                    tr!("`{api}` を呼ぶタスクは、{host}（`{file}` の最初のサーバー）に暗号化しない HTTP でリクエストを送ります", "the tasks that call `{api}` send their requests to {host}, the first server of `{file}`, over plain HTTP")
+                };
+                self.diags.push(plain_call(at, said, tr!("`use {word} {api}` の下", "under `use {word} {api}`")));
             }
         }
     }

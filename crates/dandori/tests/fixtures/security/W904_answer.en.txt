@@ -1,0 +1,5 @@
+warning[W904]: tests/fixtures/security/W904_answer.flow:4:1: the answer of `issue_token` is a secret, kept in the history of the workflow
+     4 | task issue_token(user: string) -> string  secret
+  = The mark is `secret` at W904_answer.flow:4.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Have the task answer a reference instead (an ID, the name of a secret), and fetch the value inside the task that uses it. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.

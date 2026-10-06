@@ -1,0 +1,13 @@
+build --target asl:
+error[E050]: tests/fixtures/security/W902_意図を書いたもの.flow:20:1: Step Functions calls the agent `読む` through an HTTP Task, which needs `connection "<EventBridge connection ARN>"` that holds the key of the server (an EventBridge connection has one, even for a server that wants none)
+    20 | task 読む(本文: string) -> string
+error[E050]: tests/fixtures/security/W902_意図を書いたもの.flow:20:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `読む` sends to `http://ollama.internal:11434/v1/responses`
+    20 | task 読む(本文: string) -> string
+error[E050]: tests/fixtures/security/W902_意図を書いたもの.flow:26:1: `顧客を取る` needs `connection "<EventBridge connection ARN>"`
+    26 | task 顧客を取る(id: string) -> 顧客情報
+error[E050]: tests/fixtures/security/W902_意図を書いたもの.flow:26:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `顧客を取る` sends to `http://crm.internal:8080/customers/{id}`
+    26 | task 顧客を取る(id: string) -> 顧客情報
+error[E050]: tests/fixtures/security/W902_意図を書いたもの.flow:4:1: Step Functions calls the rule `振り分け` by Connect through an HTTP Task, which needs `connection "<EventBridge connection ARN>"` under `use rule`
+     4 | use rule 振り分け from "../../../examples/inquiry/rules/問い合わせの振り分け.rule"
+error[E050]: tests/fixtures/security/W902_意図を書いたもの.flow:4:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and the rule `振り分け` is served at `http://rules.internal/rulec.inquiry_routing.v1.InquiryRoutingService/Decide`
+     4 | use rule 振り分け from "../../../examples/inquiry/rules/問い合わせの振り分け.rule"

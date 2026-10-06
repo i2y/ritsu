@@ -1,0 +1,9 @@
+warning[W902]: tests/fixtures/security/W902_エージェントの_URL.flow:7:3: the agent `読む` sends its requests to ollama.internal over plain HTTP
+     7 |   url "http://ollama.internal:11434/v1"
+  = Whoever is on the network between can read and change the requests, the answers, and any key in the headers.
+  = Use https://. If the connection is protected another way (a service mesh, a private link), say so under the task with `plaintext "<why>"`.
+build --target asl:
+error[E050]: tests/fixtures/security/W902_エージェントの_URL.flow:4:1: Step Functions calls the agent `読む` through an HTTP Task, which needs `connection "<EventBridge connection ARN>"` that holds the key of the server (an EventBridge connection has one, even for a server that wants none)
+     4 | task 読む(本文: string) -> string
+error[E050]: tests/fixtures/security/W902_エージェントの_URL.flow:4:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `読む` sends to `http://ollama.internal:11434/v1/responses`
+     4 | task 読む(本文: string) -> string

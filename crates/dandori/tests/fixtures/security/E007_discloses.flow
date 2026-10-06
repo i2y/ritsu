@@ -1,0 +1,11 @@
+workflow discloses v1
+description "E007: discloses naming what is not a parameter, and with an empty reason"
+
+task read(text: string) -> string
+  agent "Say what the text is about, in one sentence."
+  model "gpt-5.4-mini"
+  discloses body "the provider keeps nothing"
+  discloses text ""
+
+flow
+  let gist = read(text: "hi")

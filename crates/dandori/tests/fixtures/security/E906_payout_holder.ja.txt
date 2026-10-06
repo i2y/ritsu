@@ -1,0 +1,19 @@
+警告[W904]: tests/fixtures/security/E906_payout_holder.flow:15:1: `get_account` の結果が持つ秘密の値 `number` が、ワークフローの履歴に残ります
+    15 | task get_account(id: string) -> bank.Account
+  = 印は ../../../examples/payout/specs/payout.proto:34 の `debug_redact = true` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = タスクには値の代わりに参照（ID やシークレットの名前）を返させ、値はそれを使うタスクの中で取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+警告[W904]: tests/fixtures/security/E906_payout_holder.flow:15:1: `get_account` の結果が持つ秘密の値 `holder` が、ワークフローの履歴に残ります
+    15 | task get_account(id: string) -> bank.Account
+  = 印は ../../../examples/payout/specs/payout.proto:35 の `debug_redact = true` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = タスクには値の代わりに参照（ID やシークレットの名前）を返させ、値はそれを使うタスクの中で取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+エラー[E906]: tests/fixtures/security/E906_payout_holder.flow:41:1: タスク `draft_notice` が、秘密の値 `account.holder` をプロジェクトの外の OpenAI に送ります
+    41 |   let notice = draft_notice(amount: amount, payout_id: paid.payoutId, holder: account.holder)
+  = 印は ../../../examples/payout/specs/payout.proto:35 の `debug_redact = true` です。
+  = 参照か、相手に要るものだけを送ってください。そこへ送ることを意図しているなら、タスクの下に `discloses holder "<理由>"` と書いてください。
+警告[W904]: tests/fixtures/security/E906_payout_holder.flow:41:1: 秘密の値 `account.holder` が、`draft_notice` の引数 `holder` として、ワークフローの履歴に残ります
+    41 |   let notice = draft_notice(amount: amount, payout_id: paid.payoutId, holder: account.holder)
+  = 印は ../../../examples/payout/specs/payout.proto:35 の `debug_redact = true` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。

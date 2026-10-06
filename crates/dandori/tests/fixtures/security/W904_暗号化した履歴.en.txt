@@ -1,0 +1,3 @@
+build --target argo:
+error[E050]: tests/fixtures/security/W904_暗号化した履歴.flow:2:1: Argo Workflows keeps the parameters of every template, in and out, as they are in the Workflow object, and has no way to encrypt them with a key, so it cannot keep `history encrypted`; give a secret to a task from a Kubernetes Secret, as an environment variable or a volume, and not as a parameter
+     2 |   history encrypted

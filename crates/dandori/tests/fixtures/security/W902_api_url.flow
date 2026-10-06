@@ -1,0 +1,25 @@
+workflow api_url v1
+description "W902: the url of a .proto's service and an OpenAPI document's first server, over plain HTTP"
+
+use proto receipts from "../secrets/receipts.proto"
+  url "http://receipts.internal:8080"
+use openapi crm from "../secrets/plain.json"
+
+record Customer
+  id      : string
+  email   : string
+  segment : string
+  pin     : string?
+
+task get_receipt(id: string) -> receipts.Receipt
+  connect receipts "ReceiptService/GetReceipt"
+
+task get_customer(id: string) -> Customer
+  http GET crm "/customers/{id}"
+
+inputs
+  id : string
+
+flow
+  let receipt = get_receipt(id: id)
+  let customer = get_customer(id: id)

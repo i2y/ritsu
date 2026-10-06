@@ -1,0 +1,15 @@
+warning[W904]: tests/fixtures/security/E906_送金の名義を開示.flow:15:1: the answer of `口座を取る` holds the secret `番号`, kept in the history of the workflow
+    15 | task 口座を取る(id: string) -> 銀行.Account
+  = The mark is `debug_redact = true` at ../../../examples/payout/specs/payout.ja.proto:36.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Have the task answer a reference instead (an ID, the name of a secret), and fetch the value inside the task that uses it. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.
+warning[W904]: tests/fixtures/security/E906_送金の名義を開示.flow:15:1: the answer of `口座を取る` holds the secret `名義`, kept in the history of the workflow
+    15 | task 口座を取る(id: string) -> 銀行.Account
+  = The mark is `debug_redact = true` at ../../../examples/payout/specs/payout.ja.proto:37.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Have the task answer a reference instead (an ID, the name of a secret), and fetch the value inside the task that uses it. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.
+warning[W904]: tests/fixtures/security/E906_送金の名義を開示.flow:42:1: the secret `口座.名義` is kept in the history of the workflow, as the argument `名義` of `知らせを書く`
+    42 |   let 知らせ = 知らせを書く(金額: 金額, 送金ID: 送金.送金ID, 名義: 口座.名義)
+  = The mark is `debug_redact = true` at ../../../examples/payout/specs/payout.ja.proto:37.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Pass a reference instead (an ID, the name of a secret) and fetch the value inside the task. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.

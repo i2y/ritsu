@@ -1,0 +1,12 @@
+workflow URL v1
+description "E906：URL だけで書いた相手に送る秘密の値"
+
+inputs
+  メール : string  secret
+
+task 知らせる(宛先: string)
+  http POST "https://mail.example.com/v1/send"
+  idempotent
+
+flow
+  知らせる(宛先: メール)

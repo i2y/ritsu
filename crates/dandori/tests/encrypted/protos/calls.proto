@@ -1,0 +1,75 @@
+// The service tests/encrypted/names.flow implements, whose history is encrypted. Its methods and
+// messages have the names the client dandori writes declares for such a workflow: the method
+// Connect is `connect` in Python, EncryptedClient and Encrypted are `encryptedClient` and
+// `encrypted` in TypeScript, and EncryptedClient, Dial and CodecFailureConverter are Go's own; the
+// messages Connection, PayloadCodec and ClientOptions are TypeScript's, NewType, PayloadCodec and
+// DataConverter Python's, and CodecDataConverter Go's. In each client, a function or a type of one
+// of these names takes `Rpc`, `_rpc` or `RPC`. (A method cannot have the name of a message the
+// service takes: inside the service, protoc reads the name as the method's.)
+syntax = "proto3";
+
+package calls.v1;
+
+import "dandori/v1/options.proto";
+
+service CallService {
+  option (dandori.v1.workflow) = {name: "names", version: 1};
+
+  rpc Connect(Connection) returns (NewType) {
+    option (dandori.v1.start) = {fails: ["NoAnswer", "Unconfirmed"]};
+  }
+
+  rpc EncryptedClient(PayloadCodec) returns (Ack) {
+    option (dandori.v1.event) = {task: "pick_up"};
+  }
+
+  rpc Encrypted(ClientOptions) returns (Ack) {
+    option (dandori.v1.event) = {task: "hold"};
+  }
+
+  rpc Dial(DataConverter) returns (Ack) {
+    option (dandori.v1.answer) = {task: "call"};
+  }
+
+  rpc CodecFailureConverter(CodecDataConverter) returns (Ack) {
+    option (dandori.v1.answer) = {task: "confirm"};
+  }
+
+  rpc GetStatus(StatusRequest) returns (dandori.v1.Status) {
+    option (dandori.v1.status) = {};
+  }
+}
+
+message Connection {
+  string number = 1;
+  Line line = 2;
+}
+
+enum Line {
+  landline = 0;
+  mobile = 1;
+}
+
+message NewType {
+  string receipt = 1;
+}
+
+message PayloadCodec {
+  bool answered = 1;
+}
+
+message ClientOptions {
+  string reason = 1;
+}
+
+message DataConverter {
+  string answer = 1;
+}
+
+message CodecDataConverter {
+  string note = 1;
+}
+
+message Ack {}
+
+message StatusRequest {}

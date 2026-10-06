@@ -1,0 +1,9 @@
+警告[W902]: tests/fixtures/security/W902_task_url.flow:5:3: タスク `notify` は、notify.example.com に暗号化しない HTTP でリクエストを送ります
+     5 |   http POST "http://notify.example.com/v1/messages"
+  = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
+  = https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、タスクの下に `plaintext "<理由>"` と書いてください。
+build --target asl:
+エラー[E050]: tests/fixtures/security/W902_task_url.flow:4:1: `notify` には `connection "<EventBridge の接続の ARN>"` が要ります
+     4 | task notify(text: string)
+エラー[E050]: tests/fixtures/security/W902_task_url.flow:4:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`notify` の送信先は `http://notify.example.com/v1/messages` です
+     4 | task notify(text: string)

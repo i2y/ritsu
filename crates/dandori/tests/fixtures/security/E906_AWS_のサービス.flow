@@ -1,0 +1,12 @@
+workflow AWS v1
+description "E906：AWS のサービスに送る秘密の値"
+
+inputs
+  電話 : string  secret
+
+task 送る(PhoneNumber: string, Message: string)
+  aws sns:publish
+  idempotent
+
+flow
+  送る(PhoneNumber: 電話, Message: "荷物を発送しました")

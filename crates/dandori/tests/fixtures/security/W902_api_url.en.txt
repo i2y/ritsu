@@ -1,0 +1,17 @@
+warning[W902]: tests/fixtures/security/W902_api_url.flow:5:3: the tasks that call `receipts` send their requests to receipts.internal over plain HTTP
+     5 |   url "http://receipts.internal:8080"
+  = Whoever is on the network between can read and change the requests, the answers, and any key in the headers.
+  = Use https://. If the connection is protected another way (a service mesh, a private link), say so under `use proto receipts` with `plaintext "<why>"`.
+warning[W902]: tests/fixtures/security/W902_api_url.flow:6:13: the tasks that call `crm` send their requests to crm.internal, the first server of `../secrets/plain.json`, over plain HTTP
+     6 | use openapi crm from "../secrets/plain.json"
+  = Whoever is on the network between can read and change the requests, the answers, and any key in the headers.
+  = Use https://. If the connection is protected another way (a service mesh, a private link), say so under `use openapi crm` with `plaintext "<why>"`.
+build --target asl:
+error[E050]: tests/fixtures/security/W902_api_url.flow:14:1: `get_receipt` needs `connection "<EventBridge connection ARN>"`
+    14 | task get_receipt(id: string) -> receipts.Receipt
+error[E050]: tests/fixtures/security/W902_api_url.flow:14:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `get_receipt` sends to `http://receipts.internal:8080/receipts.v1.ReceiptService/GetReceipt`
+    14 | task get_receipt(id: string) -> receipts.Receipt
+error[E050]: tests/fixtures/security/W902_api_url.flow:17:1: `get_customer` needs `connection "<EventBridge connection ARN>"`
+    17 | task get_customer(id: string) -> Customer
+error[E050]: tests/fixtures/security/W902_api_url.flow:17:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `get_customer` sends to `http://crm.internal:8080/customers/{id}`
+    17 | task get_customer(id: string) -> Customer

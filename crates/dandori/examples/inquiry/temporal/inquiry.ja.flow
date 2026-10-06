@@ -43,6 +43,7 @@ task 読み取る(本文: string) -> 読み取り
   model "gpt-oss:20b"
   effort low
   url "http://ollama.internal:11434/v1"
+  plaintext "モデルのサーバーにはクラスターのネットワークの中だけで届き、そこはサービスメッシュが暗号化する"
   timeout 60 seconds
   retry 2 times every 10 seconds
 

@@ -1,0 +1,13 @@
+build --target asl:
+エラー[E050]: tests/fixtures/security/W902_このマシン.flow:4:1: `知らせる` には `connection "<EventBridge の接続の ARN>"` が要ります
+     4 | task 知らせる(本文: string)
+エラー[E050]: tests/fixtures/security/W902_このマシン.flow:4:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`知らせる` の送信先は `http://localhost:8080/v1/messages` です
+     4 | task 知らせる(本文: string)
+エラー[E050]: tests/fixtures/security/W902_このマシン.flow:8:1: `記録する` には `connection "<EventBridge の接続の ARN>"` が要ります
+     8 | task 記録する(本文: string)
+エラー[E050]: tests/fixtures/security/W902_このマシン.flow:8:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`記録する` の送信先は `http://127.0.0.1:9000/log` です
+     8 | task 記録する(本文: string)
+エラー[E050]: tests/fixtures/security/W902_このマシン.flow:12:1: Step Functions はエージェント `読む` を HTTP Task で呼ぶので、サーバーの鍵（鍵の要らないサーバーでも、EventBridge の接続には何かの値が要ります）を持つ `connection "<EventBridge の接続の ARN>"` が要ります
+    12 | task 読む(本文: string) -> string
+エラー[E050]: tests/fixtures/security/W902_このマシン.flow:12:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`読む` の送信先は `http://[::1]:11434/v1/responses` です
+    12 | task 読む(本文: string) -> string

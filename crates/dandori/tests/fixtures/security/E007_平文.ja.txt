@@ -1,0 +1,13 @@
+エラー[E007]: tests/fixtures/security/E007_平文.flow:6:3: `plaintext` は、規則のサービスに暗号化せずに送ることを意図していると書くところですが、規則 `振り分け` には `connect` がありません
+     6 |   plaintext "規則は同じアカウントにある"
+警告[W902]: tests/fixtures/security/E007_平文.flow:7:13: `顧客` を呼ぶタスクは、crm.internal（`../secrets/plain.json` の最初のサーバー）に暗号化しない HTTP でリクエストを送ります
+     7 | use openapi 顧客 from "../secrets/plain.json"
+  = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
+  = https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、`use openapi 顧客` の下に `plaintext "<理由>"` と書いてください。
+エラー[E007]: tests/fixtures/security/E007_平文.flow:22:3: `plaintext` は、URL に暗号化せずに送ることを意図していると書くところですが、`残す` は自分の URL を持ちません
+    22 |   plaintext "関数は自分たちのもの"
+エラー[E007]: tests/fixtures/security/E007_平文.flow:26:3: `plaintext` は、URL に暗号化せずに送ることを意図していると書くところですが、`顧客を取る` は自分の URL を持ちません
+    26 |   plaintext "顧客の API は自分たちのもの"
+  = `顧客を取る` が送る先は、`顧客` を読む `use` の URL です。`plaintext` はその `use` の下に書いてください。
+エラー[E007]: tests/fixtures/security/E007_平文.flow:31:3: `plaintext` には、暗号化しない理由を書いてください（空の文字列です）
+    31 |   plaintext ""

@@ -1,0 +1,8 @@
+workflow fail v1
+description "W904: a secret put in the reason of fail"
+
+inputs
+  token : string  secret
+
+flow
+  fail Rejected "the token {token} was rejected"

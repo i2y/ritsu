@@ -49,12 +49,12 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 61 | `reading = read_inquiry(…)` | `agent · gpt-oss:20b · http://ollama.internal:11434/v1` | 10 秒おきに 2 回（failure・timeout） | 1 分 | `timeout`・`failure` → 62 行目 |
-| 63 | `by_hand = file_ticket(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
-| 66 | `kind = pick_kind(…)` | `jev · jev-1.13.0 · confidence 0.8 else unsure` | 1 秒おきに 2 回（failure・timeout） | 10 秒 | `unsure`・`timeout`・`failure` → 67 行目 |
-| 68 | `decision = routing(…)` | 規則 `inquiry_routing.rule`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
-| 73 | `draft = draft_reply(…)` | `agent claude · claude-sonnet-5` | — | 1 分 | `timeout`・`failure` → 74 行目 |
-| 75 | `t = file_ticket(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 62 | `reading = read_inquiry(…)` | `agent · gpt-oss:20b · http://ollama.internal:11434/v1` | 10 秒おきに 2 回（failure・timeout） | 1 分 | `timeout`・`failure` → 63 行目 |
+| 64 | `by_hand = file_ticket(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 67 | `kind = pick_kind(…)` | `jev · jev-1.13.0 · confidence 0.8 else unsure` | 1 秒おきに 2 回（failure・timeout） | 10 秒 | `unsure`・`timeout`・`failure` → 68 行目 |
+| 69 | `decision = routing(…)` | 規則 `inquiry_routing.rule`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 74 | `draft = draft_reply(…)` | `agent claude · claude-sonnet-5` | — | 1 分 | `timeout`・`failure` → 75 行目 |
+| 76 | `t = file_ticket(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 
@@ -62,8 +62,8 @@ flowchart TD
 
 | 行 | 終わり方 |
 |---:|---|
-| 64 | `succeed ticket_id = by_hand.ticket_id, desk = general` |
-| 76 | `succeed ticket_id = t.ticket_id, desk = decision.desk` |
+| 65 | `succeed ticket_id = by_hand.ticket_id, desk = general` |
+| 77 | `succeed ticket_id = t.ticket_id, desk = decision.desk` |
 
 ## 規則
 

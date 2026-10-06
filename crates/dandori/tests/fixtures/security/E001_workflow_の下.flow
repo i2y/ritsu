@@ -1,0 +1,6 @@
+workflow workflow_の下 v1
+  履歴 暗号化
+description "E001：workflow の下に書けるのは history encrypted だけ"
+
+flow
+  pass

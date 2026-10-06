@@ -1,0 +1,9 @@
+警告[W902]: tests/fixtures/security/W902_agent_url.flow:7:3: エージェント `read` は、ollama.internal に暗号化しない HTTP でリクエストを送ります
+     7 |   url "http://ollama.internal:11434/v1"
+  = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
+  = https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、タスクの下に `plaintext "<理由>"` と書いてください。
+build --target asl:
+エラー[E050]: tests/fixtures/security/W902_agent_url.flow:4:1: Step Functions はエージェント `read` を HTTP Task で呼ぶので、サーバーの鍵（鍵の要らないサーバーでも、EventBridge の接続には何かの値が要ります）を持つ `connection "<EventBridge の接続の ARN>"` が要ります
+     4 | task read(text: string) -> string
+エラー[E050]: tests/fixtures/security/W902_agent_url.flow:4:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`read` の送信先は `http://ollama.internal:11434/v1/responses` です
+     4 | task read(text: string) -> string

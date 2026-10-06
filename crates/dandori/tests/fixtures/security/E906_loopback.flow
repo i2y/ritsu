@@ -1,0 +1,18 @@
+workflow loopback v1
+description "E906: nothing for the calls to this machine; W904 still, for the history keeps what is given"
+
+inputs
+  email : string  secret
+
+task read(text: string) -> string
+  agent "Say what the text is about, in one sentence."
+  model "gpt-oss:20b"
+  url "http://localhost:11434/v1"
+
+task log(text: string)
+  http POST "http://127.0.0.1:9000/log"
+  idempotent
+
+flow
+  let gist = read(text: email)
+  log(text: email)

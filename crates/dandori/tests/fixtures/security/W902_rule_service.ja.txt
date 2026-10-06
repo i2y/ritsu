@@ -1,0 +1,9 @@
+警告[W902]: tests/fixtures/security/W902_rule_service.flow:5:3: 規則 `routing` のサービスは、rules.example.com に暗号化しない HTTP で呼ばれます
+     5 |   connect "http://rules.example.com"
+  = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
+  = https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、`use rule` の下に `plaintext "<理由>"` と書いてください。
+build --target asl:
+エラー[E050]: tests/fixtures/security/W902_rule_service.flow:4:1: Step Functions は規則 `routing` を Connect で HTTP Task から呼ぶので、`use rule` の下に `connection "<EventBridge の接続の ARN>"` が要ります
+     4 | use rule routing from "../../../examples/inquiry/rules/inquiry_routing.rule"
+エラー[E050]: tests/fixtures/security/W902_rule_service.flow:4:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。規則 `routing` のサービスは `http://rules.example.com/rulec.inquiry_routing.v1.InquiryRoutingService/Decide` です
+     4 | use rule routing from "../../../examples/inquiry/rules/inquiry_routing.rule"

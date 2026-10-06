@@ -1,0 +1,12 @@
+workflow aws v1
+description "E906: a secret sent to an AWS service"
+
+inputs
+  phone : string  secret
+
+task text(PhoneNumber: string, Message: string)
+  aws sns:publish
+  idempotent
+
+flow
+  text(PhoneNumber: phone, Message: "Your parcel is on its way")

@@ -1,0 +1,13 @@
+build --target asl:
+error[E050]: tests/fixtures/security/W902_このマシン.flow:4:1: `知らせる` needs `connection "<EventBridge connection ARN>"`
+     4 | task 知らせる(本文: string)
+error[E050]: tests/fixtures/security/W902_このマシン.flow:4:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `知らせる` sends to `http://localhost:8080/v1/messages`
+     4 | task 知らせる(本文: string)
+error[E050]: tests/fixtures/security/W902_このマシン.flow:8:1: `記録する` needs `connection "<EventBridge connection ARN>"`
+     8 | task 記録する(本文: string)
+error[E050]: tests/fixtures/security/W902_このマシン.flow:8:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `記録する` sends to `http://127.0.0.1:9000/log`
+     8 | task 記録する(本文: string)
+error[E050]: tests/fixtures/security/W902_このマシン.flow:12:1: Step Functions calls the agent `読む` through an HTTP Task, which needs `connection "<EventBridge connection ARN>"` that holds the key of the server (an EventBridge connection has one, even for a server that wants none)
+    12 | task 読む(本文: string) -> string
+error[E050]: tests/fixtures/security/W902_このマシン.flow:12:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `読む` sends to `http://[::1]:11434/v1/responses`
+    12 | task 読む(本文: string) -> string

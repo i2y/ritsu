@@ -1,3 +1,7 @@
+warning[W902]: tests/fixtures/rule_connect_targets.flow:8:3: the service of the rule `平文` is called at rules.example.com over plain HTTP
+     8 |   connect "http://rules.example.com"
+  = Whoever is on the network between can read and change the requests, the answers, and any key in the headers.
+  = Use https://. If the connection is protected another way (a service mesh, a private link), say so under `use rule` with `plaintext "<why>"`.
 build --target asl:
 error[E050]: tests/fixtures/rule_connect_targets.flow:4:1: Step Functions calls the rule `接続なし` by Connect through an HTTP Task, which needs `connection "<EventBridge connection ARN>"` under `use rule`
      4 | use rule 接続なし from "../../examples/order/rules/出荷の急ぎ.rule"

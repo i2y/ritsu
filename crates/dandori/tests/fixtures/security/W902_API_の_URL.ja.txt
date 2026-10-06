@@ -1,0 +1,17 @@
+警告[W902]: tests/fixtures/security/W902_API_の_URL.flow:5:3: `領収書` を呼ぶタスクは、receipts.internal に暗号化しない HTTP でリクエストを送ります
+     5 |   url "http://receipts.internal:8080"
+  = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
+  = https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、`use proto 領収書` の下に `plaintext "<理由>"` と書いてください。
+警告[W902]: tests/fixtures/security/W902_API_の_URL.flow:6:13: `顧客` を呼ぶタスクは、crm.internal（`../secrets/plain.json` の最初のサーバー）に暗号化しない HTTP でリクエストを送ります
+     6 | use openapi 顧客 from "../secrets/plain.json"
+  = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
+  = https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、`use openapi 顧客` の下に `plaintext "<理由>"` と書いてください。
+build --target asl:
+エラー[E050]: tests/fixtures/security/W902_API_の_URL.flow:14:1: `領収書を取る` には `connection "<EventBridge の接続の ARN>"` が要ります
+    14 | task 領収書を取る(id: string) -> 領収書.Receipt
+エラー[E050]: tests/fixtures/security/W902_API_の_URL.flow:14:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`領収書を取る` の送信先は `http://receipts.internal:8080/receipts.v1.ReceiptService/GetReceipt` です
+    14 | task 領収書を取る(id: string) -> 領収書.Receipt
+エラー[E050]: tests/fixtures/security/W902_API_の_URL.flow:17:1: `顧客を取る` には `connection "<EventBridge の接続の ARN>"` が要ります
+    17 | task 顧客を取る(id: string) -> 顧客情報
+エラー[E050]: tests/fixtures/security/W902_API_の_URL.flow:17:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`顧客を取る` の送信先は `http://crm.internal:8080/customers/{id}` です
+    17 | task 顧客を取る(id: string) -> 顧客情報

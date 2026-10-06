@@ -1,0 +1,10 @@
+workflow コメントの鍵 v1
+description "W901：コメントに残した鍵"
+
+# 動いた鍵：AIzaSyD-ritsu-fake-key-for-tests-000000
+task 探す(語: string) -> string
+  http GET "https://maps.example.com/v1/find"
+  idempotent
+
+flow
+  let 場所 = 探す(語: "東京")

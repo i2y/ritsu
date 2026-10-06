@@ -101,6 +101,11 @@ pub fn task_function(task: &str) -> String {
     format!("ddTask_{}", ident(task))
 }
 
+/// The names client.go declares when the workflow says `history encrypted` (DESIGN 1.18). A record's
+/// or an enum's type, and a method's function or a message's type of the service, of one of these
+/// names takes `_` or `RPC`, as for the names every package has (`GO_EXPORTED`; 1.14).
+pub const ENCRYPTED: &[&str] = &["EncryptedClient", "encryptedClient", "CodecDataConverter", "CodecFailureConverter", "Dial"];
+
 /// The Go names of what the package exports for the flow: the records' and enums' types, and the
 /// methods of `OwnTasks`, each made unique.
 struct Names {
@@ -112,6 +117,10 @@ impl Names {
     fn new(m: &Model) -> Names {
         let (enums, recs) = crate::temporal::used_types(m);
         let mut taken: BTreeSet<String> = GO_EXPORTED.iter().map(|s| s.to_string()).collect();
+        // and the names client.go declares when the history is encrypted
+        if m.history_encrypted.is_some() {
+            taken.extend(ENCRYPTED.iter().map(|s| s.to_string()));
+        }
         // a flow of a package declares Books too (io_books.go)
         if m.package.is_some() {
             taken.insert("Books".to_string());
@@ -2708,8 +2717,64 @@ func ddBooked(r BookResult, err error, names map[string]string, args map[string]
 /// `now` on Temporal: the workflow's clock, which a replay reads again the same.
 const NOW_GO: &str = "\n// ddNow is `now`: the moment, by the workflow's clock, which a replay reads again the same; to the\n// second, in UTC.\nfunc ddNow(ctx workflow.Context) string {\n\treturn workflow.Now(ctx).UTC().Format(\"2006-01-02T15:04:05Z\")\n}\n";
 
-/// client.go: starting the workflow, answering its callbacks, and asking where it is.
+/// client.go: starting the workflow, answering its callbacks, and asking where it is. For a workflow
+/// whose history is encrypted, every function, and the worker, takes a client whose payloads go
+/// through the codec, which only `Dial` makes: a value of the interface `EncryptedClient` comes from
+/// this package alone, so that a client without the codec is a type error (DESIGN 1.18).
 fn client_file(m: &Model, n: &Names, pkg: &str, header: &str) -> String {
+    let c = plain_client_file(m, n, pkg, header);
+    if m.history_encrypted.is_none() {
+        return c;
+    }
+    let c = c
+        .replace("\t\"go.temporal.io/sdk/client\"\n)\n", "\t\"go.temporal.io/sdk/client\"\n\t\"go.temporal.io/sdk/converter\"\n\t\"go.temporal.io/sdk/temporal\"\n)\n")
+        .replace("context.Context, c client.Client,", "context.Context, c EncryptedClient,");
+    let at = c.find("// WorkflowType is the workflow's type.").unwrap_or(c.len());
+    let mut out = c[..at].to_string();
+    out.push_str("// EncryptedClient is a client of the SDK whose payloads go through a codec that encrypts them with a
+// key only those who may read the workflow's secrets hold, and the messages and the stack traces of
+// its failures too: the workflow says `history encrypted`, so every function here, and the worker
+// (worker.go), takes one, which only Dial makes.
+type EncryptedClient interface {
+	client.Client
+	sdkClient() client.Client
+}
+
+type encryptedClient struct{ client.Client }
+
+// sdkClient is the client the SDK made, which a worker of the SDK takes as it is.
+func (e encryptedClient) sdkClient() client.Client { return e.Client }
+
+");
+    out.push_str("// CodecDataConverter is the workflow's data converter, whose payloads go through codec.
+func CodecDataConverter(codec converter.PayloadCodec) converter.DataConverter {
+	return converter.NewCodecDataConverter(converter.GetDefaultDataConverter(), codec)
+}
+
+");
+    out.push_str("// CodecFailureConverter puts the messages and the stack traces of failures where codec encrypts them.
+func CodecFailureConverter(codec converter.PayloadCodec) converter.FailureConverter {
+	return temporal.NewDefaultFailureConverter(temporal.DefaultFailureConverterOptions{DataConverter: CodecDataConverter(codec), EncodeCommonAttributes: true})
+}
+
+");
+    out.push_str("// Dial is a client of the SDK, made with options, whose payloads go through codec.
+func Dial(options client.Options, codec converter.PayloadCodec) (EncryptedClient, error) {
+	options.DataConverter = CodecDataConverter(codec)
+	options.FailureConverter = CodecFailureConverter(codec)
+	c, err := client.Dial(options)
+	if err != nil {
+		return nil, err
+	}
+	return encryptedClient{c}, nil
+}
+
+");
+    out.push_str(&c[at..]);
+    out
+}
+
+fn plain_client_file(m: &Model, n: &Names, pkg: &str, header: &str) -> String {
     let ty = crate::temporal::workflow_type(m);
     let mut c = header.to_string();
     c.push_str(&format!("// Starting {} v{}, answering its callbacks, sending it events, and asking where it is.\n\npackage {pkg}\n\n", m.name, m.version));
@@ -2743,7 +2808,8 @@ fn service_client_go(m: &Model, n: &Names, s: &ServiceUse) -> String {
     let mut c = String::new();
     c.push_str(&format!("\n// Service is the service the workflow implements, which `{}` describes. Its methods are the functions below.\nconst Service = {}\n", s.file, q(&s.name)));
     let mut written: Vec<String> = Vec::new();
-    let others: Vec<String> = GO_EXPORTED.iter().map(|x| x.to_string()).chain(n.types.values().cloned()).chain(n.types.values().map(|t| format!("Is{t}"))).chain(n.types.values().map(|t| format!("{t}Values"))).collect();
+    let encrypted: &[&str] = if m.history_encrypted.is_some() { ENCRYPTED } else { &[] };
+    let others: Vec<String> = GO_EXPORTED.iter().chain(encrypted).map(|x| x.to_string()).chain(n.types.values().cloned()).chain(n.types.values().map(|t| format!("Is{t}"))).chain(n.types.values().map(|t| format!("{t}Values"))).collect();
     let alias = |c: &mut String, written: &mut Vec<String>, message: &str, ty: &str, same: bool, what: String| -> String {
         let name = exported(message.rsplit('.').next().unwrap_or(message));
         let taken: Vec<&str> = others.iter().map(|x| x.as_str()).chain(FUNCTIONS.iter().copied()).chain(written.iter().map(|x| x.as_str())).collect();
@@ -2812,8 +2878,22 @@ fn service_client_go(m: &Model, n: &Names, s: &ServiceUse) -> String {
     c
 }
 
-/// worker.go: the worker that runs the workflow, its tasks and its rules.
+/// worker.go: the worker that runs the workflow, its tasks and its rules. For a workflow whose
+/// history is encrypted, the worker takes the client Dial makes, which carries the codec, and the
+/// replay takes the codec (DESIGN 1.18).
 fn worker_file(m: &Model, pkg: &str, header: &str, rules: bool, build: &str) -> String {
+    let w = plain_worker_file(m, pkg, header, rules, build);
+    if m.history_encrypted.is_none() {
+        return w;
+    }
+    w.replace("\t\"go.temporal.io/sdk/client\"\n", "\t\"go.temporal.io/sdk/converter\"\n")
+        .replace("func NewWorker(c client.Client,", "func NewWorker(c EncryptedClient,")
+        .replace("\tw := worker.New(c, TaskQueue, WorkerOptions(deployment))\n", "\tw := worker.New(c.sdkClient(), TaskQueue, WorkerOptions(deployment))\n")
+        .replace("// NewWorker is the worker on TaskQueue, with the workflow and the activities registered (\"\": no\n// deployment).\n", "// NewWorker is the worker on TaskQueue, with the workflow and the activities registered (\"\": no\n// deployment). The client carries the codec every payload of the workflow goes through (client.go: Dial).\n")
+        .replace("func Replay(histories []History) []ReplayFailure {\n\tvar failed []ReplayFailure\n\tfor _, h := range histories {\n\t\tr := worker.NewWorkflowReplayer()\n", "func Replay(histories []History, codec converter.PayloadCodec) []ReplayFailure {\n\tvar failed []ReplayFailure\n\tfor _, h := range histories {\n\t\tr, err := worker.NewWorkflowReplayerWithOptions(worker.WorkflowReplayerOptions{DataConverter: CodecDataConverter(codec), FailureConverter: CodecFailureConverter(codec)})\n\t\tif err != nil {\n\t\t\treturn append(failed, ReplayFailure{WorkflowID: h.WorkflowID, Error: err.Error()})\n\t\t}\n")
+}
+
+fn plain_worker_file(m: &Model, pkg: &str, header: &str, rules: bool, build: &str) -> String {
     let mut w = header.to_string();
     w.push_str(&format!("// The worker of {} v{}: the workflow, the tasks dandori writes and the ones you write, and the rules.\n\npackage {pkg}\n\n", m.name, m.version));
     w.push_str("import (\n\t\"go.temporal.io/sdk/activity\"\n\t\"go.temporal.io/sdk/client\"\n\t\"go.temporal.io/sdk/worker\"\n\t\"go.temporal.io/sdk/workflow\"\n)\n\n");

@@ -1,0 +1,9 @@
+workflow task_url v1
+description "W902: an http task that sends to another machine over plain HTTP"
+
+task notify(text: string)
+  http POST "http://notify.example.com/v1/messages"
+  idempotent
+
+flow
+  notify(text: "hi")

@@ -1,0 +1,10 @@
+workflow key_in_a_comment v1
+description "W901: a key left in a comment"
+
+# the key that worked: AIzaSyD-ritsu-fake-key-for-tests-000000
+task find(q: string) -> string
+  http GET "https://maps.example.com/v1/find"
+  idempotent
+
+flow
+  let place = find(q: "Tokyo")

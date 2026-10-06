@@ -156,6 +156,7 @@ task read_inquiry(text: string) -> Reading
   model "gpt-oss:20b"
   effort low
   url "http://ollama.internal:11434/v1"
+  plaintext "The model server is reached only inside the cluster network, which the service mesh encrypts"
   timeout 60 seconds
   retry 2 times every 10 seconds
 ```

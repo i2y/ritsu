@@ -14,6 +14,7 @@ task read_inquiry(text: string) -> Reading
   model "gpt-oss:20b"
   effort low
   url "http://ollama.internal:11434/v1"
+  plaintext "The model server is reached only inside the cluster network, which the service mesh encrypts"
   timeout 60 seconds
   retry 2 times every 10 seconds
 
@@ -71,7 +72,9 @@ does.
   Step Functions sends, which the code dandori writes sends over HTTP with no SDK, since an SDK may
   send what the specification does not have. The server's credentials come from the `Transport`'s
   headers. Its limits on a schema are its own, so the checker holds the answer to OpenAI's limits only
-  when the call goes to OpenAI.
+  when the call goes to OpenAI. A `url` that is `http://`, on another machine, is a warning (W902);
+  when the connection is protected another way, the task says so with `plaintext "<why>"`, as the
+  inquiry example does ([Secrets](secrets.md)).
 - **Claude**, with `agent claude "…"`. It gets the instructions as the system prompt, the arguments'
   JSON text as the user's message, and the schema as `output_config.format`, with `max_tokens` 16000.
   Step Functions sends it from an HTTP Task, with the key in the connection as `x-api-key`; the other

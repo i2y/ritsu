@@ -30,10 +30,18 @@ error[E007]: tests/fixtures/agents.flow:110:3: the answer's JSON Schema, in `{"a
    110 |   agent claude "読んでください。"
 error[E007]: tests/fixtures/agents.flow:114:3: Claude may answer an enum's value in another case, and dandori takes it as the value it matches without regard to case, so `low` and `Low` of `大小` would be the same; give them names that differ in more than case
    114 |   agent claude "読んでください。"
+warning[W902]: tests/fixtures/agents.flow:124:3: the agent `手元で深く読む` sends its requests to ollama.internal over plain HTTP
+   124 |   url "http://ollama.internal:11434/v1"
+  = Whoever is on the network between can read and change the requests, the answers, and any key in the headers.
+  = Use https://. If the connection is protected another way (a service mesh, a private link), say so under the task with `plaintext "<why>"`.
 error[E007]: tests/fixtures/agents.flow:128:3: `url` says which server an agent's Open Responses API is on; this task has no `agent` (an HTTP task writes its URL after `http`)
    128 |   url "http://ollama.internal:11434/v1"
 error[E007]: tests/fixtures/agents.flow:133:3: `url` names a server of Open Responses (OpenAI's Responses API, as others serve it); a Claude agent is called on Anthropic's Messages API, which is not among them
    133 |   url "http://ollama.internal:11434"
+warning[W902]: tests/fixtures/agents.flow:133:3: the agent `クロードの送り先` sends its requests to ollama.internal over plain HTTP
+   133 |   url "http://ollama.internal:11434"
+  = Whoever is on the network between can read and change the requests, the answers, and any key in the headers.
+  = Use https://. If the connection is protected another way (a service mesh, a private link), say so under the task with `plaintext "<why>"`.
 error[E007]: tests/fixtures/agents.flow:138:3: `ollama.internal:11434/v1` is not an http:// or https:// URL
    138 |   url "ollama.internal:11434/v1"
 error[E007]: tests/fixtures/agents.flow:142:3: `effort` says how hard an agent's model reasons; this task has no `agent`

@@ -58,7 +58,7 @@ rulec state machine. The workflow says which events happen on their own
 (`external authenticate, settle, expire`), and the checker follows them too: waiting until
 check-out, the authorization can expire, and then the capture is refused. Every diagnostic comes
 with a run that gets there; [Diagnostics](https://i2y.github.io/ritsu/dandori/reference/codes/) lists
-all 31 codes.
+all 35 codes.
 
 ## A workflow
 
@@ -158,9 +158,24 @@ it calls come with it, each as the page for people that `rulec doc` renders.
 [Build for a platform](https://i2y.github.io/ritsu/dandori/platforms/) has what each of them writes, and
 [What a task calls](https://i2y.github.io/ritsu/dandori/tasks/) what a task becomes on each.
 
+### Secrets and keys
+
+`dandori check` also looks for what a workflow does with secrets, and so does `ritsu check`, which
+prints dandori's findings as they are. A key in the shape a provider gives it, written in the
+`.flow` (W901); a URL a task calls over plain HTTP, to a host that is not this machine (W902); a value
+the contracts mark secret (`debug_redact` in a `.proto`, `x-data-classification`,
+`x-sensitive-data` or `format: password` in an OpenAPI document, or `secret` after a type in the
+`.flow`) that the platform keeps in the history of a run (W904), or that a task sends to a party
+outside the project: a model's provider, Jev, a host named by its URL alone, an AWS service (E906,
+an error). What is meant is written where it is: `plaintext "<why>"` where the URL is,
+`discloses <parameter> "<why>"` under the task, `history encrypted` under `workflow`, for which the
+Temporal code takes a payload codec and Argo Workflows is refused. A secret sent to another file of
+the project is held to the map by `ritsu check` (its E905).
+[Secrets](https://i2y.github.io/ritsu/dandori/secrets/) says how a secret is followed.
+
 ## Examples
 
-[examples/](examples/) has six. Five are each written for Temporal, for AWS and for pydantic-graph: a
+[examples/](examples/) has seven. Five are each written for Temporal, for AWS and for pydantic-graph: a
 hotel booking held to Stripe's OpenAPI document; an order in a warehouse's system, whose AWS version
 calls a rule at the rule's own Connect service; the fulfillment of an order, with a child flow, which
 implements a service of a `.proto` and takes the types of the warehouse's answers from the
@@ -168,7 +183,10 @@ warehouse's `.proto`; an inquiry sorted by Jev and read and answered by agents; 
 scored by Jev and, when a rule says so, approved by a person. The sixth, an invoice, is written once
 for every platform: it holds an order's goods in a book of chobo's until the payment is due by a date
 of koyomi's, then ships them once paid or puts them back
-([Dates and books](https://i2y.github.io/ritsu/dandori/dates-and-books/)). Every example has a Japanese
+([Dates and books](https://i2y.github.io/ritsu/dandori/dates-and-books/)). The seventh, a payout to a
+seller, is written once for every platform too: the bank's contract marks the number of an account
+and the name it is held in secret, and the flow carries the account's id alone, so no check of
+[secrets](https://i2y.github.io/ritsu/dandori/secrets/) says anything. Every example has a Japanese
 twin beside it (`hotel.ja.flow`), with Japanese names everywhere but where an API description fixes
 them.
 [Examples](https://i2y.github.io/ritsu/dandori/examples/) says how the versions differ.

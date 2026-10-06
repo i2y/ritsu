@@ -1,0 +1,19 @@
+warning[W904]: tests/fixtures/security/E906_payout_holder.flow:15:1: the answer of `get_account` holds the secret `number`, kept in the history of the workflow
+    15 | task get_account(id: string) -> bank.Account
+  = The mark is `debug_redact = true` at ../../../examples/payout/specs/payout.proto:34.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Have the task answer a reference instead (an ID, the name of a secret), and fetch the value inside the task that uses it. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.
+warning[W904]: tests/fixtures/security/E906_payout_holder.flow:15:1: the answer of `get_account` holds the secret `holder`, kept in the history of the workflow
+    15 | task get_account(id: string) -> bank.Account
+  = The mark is `debug_redact = true` at ../../../examples/payout/specs/payout.proto:35.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Have the task answer a reference instead (an ID, the name of a secret), and fetch the value inside the task that uses it. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.
+error[E906]: tests/fixtures/security/E906_payout_holder.flow:41:1: the task `draft_notice` sends the secret `account.holder` to OpenAI, outside the project
+    41 |   let notice = draft_notice(amount: amount, payout_id: paid.payoutId, holder: account.holder)
+  = The mark is `debug_redact = true` at ../../../examples/payout/specs/payout.proto:35.
+  = Send a reference or only what the other side needs. If sending it there is intended, write `discloses holder "<why>"` under the task.
+warning[W904]: tests/fixtures/security/E906_payout_holder.flow:41:1: the secret `account.holder` is kept in the history of the workflow, as the argument `holder` of `draft_notice`
+    41 |   let notice = draft_notice(amount: amount, payout_id: paid.payoutId, holder: account.holder)
+  = The mark is `debug_redact = true` at ../../../examples/payout/specs/payout.proto:35.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Pass a reference instead (an ID, the name of a secret) and fetch the value inside the task. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.

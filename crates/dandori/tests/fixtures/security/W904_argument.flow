@@ -1,0 +1,17 @@
+workflow argument v1
+description "W904: a secret given to a call, through a variable, a record, a list and a string"
+
+record Note
+  to   : string
+  text : string
+
+inputs
+  token : string  secret
+
+task keep(note: Note, tags: list[string])
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:keep"
+  idempotent
+
+flow
+  let copy = token
+  keep(note: {to: "desk", text: "token {copy}"}, tags: [token])

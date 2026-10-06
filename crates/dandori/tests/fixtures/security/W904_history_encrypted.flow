@@ -1,0 +1,24 @@
+workflow history_encrypted v1
+  history encrypted
+description "W904: nothing, for the history of a run is encrypted with a key only those who may read its secrets hold; Temporal's code takes a payload codec, and Argo Workflows cannot keep the promise (E050)"
+
+record Account
+  id     : string
+  number : string  secret
+
+inputs
+  account : Account
+  token   : string  secret
+
+outputs
+  receipt : string
+
+task pay(account: Account, token: string) -> string
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:pay"
+  key
+  errors refused
+
+flow
+  let receipt = pay(account: account, token: token)
+    on refused => fail Refused "the bank refused to pay {account.number}"
+  succeed receipt = receipt

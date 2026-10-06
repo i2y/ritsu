@@ -1,0 +1,13 @@
+workflow discloses v1
+description "E906: nothing, for the task says it sends the secret there on purpose; W904 still, for the history keeps it"
+
+inputs
+  email : string  secret
+
+task read(text: string) -> string
+  agent "Say what the text is about, in one sentence."
+  model "gpt-5.4-mini"
+  discloses text "The model reads the inquiry to sort it; the provider keeps no data under the agreement with it"
+
+flow
+  let gist = read(text: email)

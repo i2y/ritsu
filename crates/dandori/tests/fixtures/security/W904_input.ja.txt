@@ -1,0 +1,10 @@
+警告[W904]: tests/fixtures/security/W904_input.flow:10:1: 入力 `token` は秘密の値で、ワークフローの履歴に残ります
+    10 |   token    : string  secret
+  = 印は W904_input.flow:10 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = ワークフローには値の代わりに参照（ID やシークレットの名前）を渡し、それを使うタスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+警告[W904]: tests/fixtures/security/W904_input.flow:11:1: 入力 `card` が持つ秘密の値 `card.number` が、ワークフローの履歴に残ります
+    11 |   card     : Card
+  = 印は W904_input.flow:6 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = ワークフローには値の代わりに参照（ID やシークレットの名前）を渡し、それを使うタスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。

@@ -1,0 +1,13 @@
+警告[W904]: tests/fixtures/security/E906_意図を書いたもの.flow:5:1: 入力 `メール` は秘密の値で、ワークフローの履歴に残ります
+     5 |   メール : string  secret
+  = 印は E906_意図を書いたもの.flow:5 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = ワークフローには値の代わりに参照（ID やシークレットの名前）を渡し、それを使うタスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+警告[W904]: tests/fixtures/security/E906_意図を書いたもの.flow:13:1: 秘密の値 `メール` が、`読む` の引数 `本文` として、ワークフローの履歴に残ります
+    13 |   let 要点 = 読む(本文: メール)
+  = 印は E906_意図を書いたもの.flow:5 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+build --target asl:
+エラー[E050]: tests/fixtures/security/E906_意図を書いたもの.flow:7:1: Step Functions はエージェント `読む` を HTTP Task で呼ぶので、OpenAI の API キーを持つ `connection "<EventBridge の接続の ARN>"` が要ります
+     7 | task 読む(本文: string) -> string

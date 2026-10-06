@@ -1,3 +1,7 @@
+警告[W902]: tests/fixtures/rule_connect_targets.flow:8:3: 規則 `平文` のサービスは、rules.example.com に暗号化しない HTTP で呼ばれます
+     8 |   connect "http://rules.example.com"
+  = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
+  = https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、`use rule` の下に `plaintext "<理由>"` と書いてください。
 build --target asl:
 エラー[E050]: tests/fixtures/rule_connect_targets.flow:4:1: Step Functions は規則 `接続なし` を Connect で HTTP Task から呼ぶので、`use rule` の下に `connection "<EventBridge の接続の ARN>"` が要ります
      4 | use rule 接続なし from "../../examples/order/rules/出荷の急ぎ.rule"

@@ -1,0 +1,23 @@
+警告[W904]: tests/fixtures/security/E906_エージェント.flow:5:1: 入力 `メール` は秘密の値で、ワークフローの履歴に残ります
+     5 |   メール : string  secret
+  = 印は E906_エージェント.flow:5 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = ワークフローには値の代わりに参照（ID やシークレットの名前）を渡し、それを使うタスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+エラー[E906]: tests/fixtures/security/E906_エージェント.flow:16:1: タスク `読む` が、秘密の値 `メール` をプロジェクトの外の OpenAI に送ります
+    16 |   let 要点 = 読む(本文: メール)
+  = 印は E906_エージェント.flow:5 の `secret` です。
+  = 参照か、相手に要るものだけを送ってください。そこへ送ることを意図しているなら、タスクの下に `discloses 本文 "<理由>"` と書いてください。
+警告[W904]: tests/fixtures/security/E906_エージェント.flow:16:1: 秘密の値 `メール` が、`読む` の引数 `本文` として、ワークフローの履歴に残ります
+    16 |   let 要点 = 読む(本文: メール)
+  = 印は E906_エージェント.flow:5 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+エラー[E906]: tests/fixtures/security/E906_エージェント.flow:17:1: タスク `下書きする` が、秘密の値 `メール` をプロジェクトの外の Anthropic に送ります
+    17 |   let 返事 = 下書きする(本文: "{メール} から問い合わせがありました")
+  = 印は E906_エージェント.flow:5 の `secret` です。
+  = 参照か、相手に要るものだけを送ってください。そこへ送ることを意図しているなら、タスクの下に `discloses 本文 "<理由>"` と書いてください。
+警告[W904]: tests/fixtures/security/E906_エージェント.flow:17:1: 秘密の値 `メール` が、`下書きする` の引数 `本文` として、ワークフローの履歴に残ります
+    17 |   let 返事 = 下書きする(本文: "{メール} から問い合わせがありました")
+  = 印は E906_エージェント.flow:5 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。

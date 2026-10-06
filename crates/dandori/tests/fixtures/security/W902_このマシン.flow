@@ -1,0 +1,20 @@
+workflow このマシン v1
+description "W902：何も出ない。どの呼び出しもこのマシンにとどまる"
+
+task 知らせる(本文: string)
+  http POST "http://localhost:8080/v1/messages"
+  idempotent
+
+task 記録する(本文: string)
+  http POST "http://127.0.0.1:9000/log"
+  idempotent
+
+task 読む(本文: string) -> string
+  agent "本文が何についてのものかを、一文で答えてください。"
+  model "gpt-oss:20b"
+  url "http://[::1]:11434/v1"
+
+flow
+  let 要点 = 読む(本文: "荷物が壊れて届きました")
+  知らせる(本文: 要点)
+  記録する(本文: 要点)

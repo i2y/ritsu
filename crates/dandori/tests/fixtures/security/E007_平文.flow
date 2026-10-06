@@ -1,0 +1,37 @@
+workflow 平文 v1
+description "E007：URL の無いところの plaintext と、理由の空の plaintext"
+
+use rule 振り分け from "../../../examples/inquiry/rules/問い合わせの振り分け.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:inquiry-routing"
+  plaintext "規則は同じアカウントにある"
+use openapi 顧客 from "../secrets/plain.json"
+
+record 顧客情報
+  id      : string
+  email   : string
+  segment : string
+  pin     : string?
+
+inputs
+  種類 : 振り分け.種類
+  番号 : string
+
+task 残す(本文: string)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:keep"
+  idempotent
+  plaintext "関数は自分たちのもの"
+
+task 顧客を取る(id: string) -> 顧客情報
+  http GET 顧客 "/customers/{id}"
+  plaintext "顧客の API は自分たちのもの"
+
+task 知らせる(本文: string)
+  http POST "http://notify.example.com/v1/messages"
+  idempotent
+  plaintext ""
+
+flow
+  let 行き先 = 振り分け(種類: 種類, 会員: true)
+  残す(本文: "こんにちは")
+  let 顧客 = 顧客を取る(id: 番号)
+  知らせる(本文: "こんにちは")

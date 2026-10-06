@@ -83,6 +83,13 @@ and outputs are the start's request and response, every name it fails with is li
 events and callbacks the service names are tasks of the flow that read what the service sends (E017).
 [Implement a service](services.md)
 
+**Secrets and keys.** A value the contracts mark secret (`debug_redact` in a `.proto`,
+`x-data-classification`, `x-sensitive-data` or `format: password` in an OpenAPI document, `secret`
+in the `.flow`) is kept in the history of a run as an input, an output, an answer, an argument or a
+`fail`'s reason (W904), and is sent outside the project only where the task says it `discloses` it
+(E906). A key written in the `.flow` (W901) and a call over plain HTTP to another machine (W902) are
+warnings, unless the line or the URL says why. [Secrets](secrets.md)
+
 **The platform.** `dandori build` also checks what only the platform decides: a run whose history
 could outgrow the platform's limit (E040), and what the platform needs or cannot do (E050).
 
@@ -100,4 +107,4 @@ loop, or one round that is too large, and the diagnostic says which.
 
 ## Every code
 
-[Diagnostics](codes.md) lists all 31, with what each one finds.
+[Diagnostics](codes.md) lists all 35, with what each one finds.

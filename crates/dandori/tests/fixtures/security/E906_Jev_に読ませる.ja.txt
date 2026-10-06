@@ -1,0 +1,14 @@
+警告[W904]: tests/fixtures/security/E906_Jev_に読ませる.flow:7:1: 入力 `メール` は秘密の値で、ワークフローの履歴に残ります
+     7 |   メール : string  secret
+  = 印は E906_Jev_に読ませる.flow:7 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = ワークフローには値の代わりに参照（ID やシークレットの名前）を渡し、それを使うタスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+エラー[E906]: tests/fixtures/security/E906_Jev_に読ませる.flow:14:1: タスク `選ぶ` が、秘密の値 `メール` をプロジェクトの外の TypeSafe (Jev) に送ります
+    14 |   let 種類 = 選ぶ(本文: メール)
+  = 印は E906_Jev_に読ませる.flow:7 の `secret` です。
+  = 参照か、相手に要るものだけを送ってください。そこへ送ることを意図しているなら、タスクの下に `discloses 本文 "<理由>"` と書いてください。
+警告[W904]: tests/fixtures/security/E906_Jev_に読ませる.flow:14:1: 秘密の値 `メール` が、`選ぶ` の引数 `本文` として、ワークフローの履歴に残ります
+    14 |   let 種類 = 選ぶ(本文: メール)
+  = 印は E906_Jev_に読ませる.flow:7 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。

@@ -489,6 +489,9 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
     if !bundled.is_empty() {
         files.push((format!("{dir}/rules.ts"), rules_file(m, &header, &bundled)));
     }
+    if m.history_encrypted.is_some() {
+        files.push((format!("{dir}/failure.ts"), failure_ts(m, &header)));
+    }
     let id = build_id(&files);
     files.push((format!("{dir}/worker.ts"), worker_file(m, &header, !bundled.is_empty(), &id)));
     Ok(files)
@@ -539,7 +542,56 @@ fn client_file(m: &Model, header: &str) -> String {
     if let Some(s) = &m.service {
         c.push_str(&service_client_ts(m, s));
     }
+    if m.history_encrypted.is_some() {
+        return encrypted_client_ts(c);
+    }
     c
+}
+
+/// failure.ts, for a workflow whose history is encrypted (`history encrypted`, DESIGN 1.18): the
+/// failure converter that puts the message and the stack trace of a failure into its encoded
+/// attributes, which the payload codec encrypts with the rest. The worker's workflows load it by its
+/// path, as a converter in the workflow's sandbox has to be.
+fn failure_ts(m: &Model, header: &str) -> String {
+    let mut f = header.to_string();
+    f.push_str(&format!("// The failure converter of {} v{}, whose history is encrypted: the message and the stack trace of
+// a failure go into its encoded attributes, which the payload codec encrypts with the rest.
+
+", m.name, m.version));
+    f.push_str("import { DefaultFailureConverter } from \"@temporalio/common\";
+
+export const failureConverter = new DefaultFailureConverter({ encodeCommonAttributes: true });
+");
+    f
+}
+
+/// client.ts, for a workflow whose history is encrypted: every function takes a client whose
+/// payloads go through the codec, which only `encryptedClient` makes, so that a client without the
+/// codec is a type error (DESIGN 1.18).
+fn encrypted_client_ts(c: String) -> String {
+    let c = c
+        .replace("import { type Client, type WorkflowHandle } from \"@temporalio/client\";\nimport { WorkflowIdReusePolicy } from \"@temporalio/common\";\n", "import { Client, type ClientOptions, type Connection, type WorkflowHandle } from \"@temporalio/client\";\nimport { type PayloadCodec, WorkflowIdReusePolicy } from \"@temporalio/common\";\n")
+        .replace("(client: Client,", "(client: EncryptedClient,");
+    let at = c.find("/** The workflow's type.").unwrap_or(c.len());
+    let mut out = c[..at].to_string();
+    out.push_str("/**
+ * The workflow says `history encrypted`: what it is given and what it answers, and the messages and
+ * the stack traces of its failures, go through a payload codec that encrypts them with a key only
+ * those who may read its secrets hold. Every function here takes a client made with the codec,
+ * which only `encryptedClient` makes; the worker takes the same codec (worker.ts).
+ */
+declare const encrypted: unique symbol;
+export type EncryptedClient = Client & { readonly [encrypted]: true };
+
+");
+    out.push_str("/** A client on `connection` whose payloads go through `codec`, and its failures' messages and stack traces too. */
+export function encryptedClient(connection: Connection, codec: PayloadCodec, options: Omit<ClientOptions, \"connection\" | \"dataConverter\"> = {}): EncryptedClient {
+  return new Client({ ...options, connection, dataConverter: { payloadCodecs: [codec], failureConverterPath: require.resolve(\"./failure\") } }) as EncryptedClient;
+}
+
+");
+    out.push_str(&c[at..]);
+    out
 }
 
 /// What a client of a method of the service is: the name of a function, a type, or an answer
@@ -564,19 +616,26 @@ pub(crate) fn client_name(name: String, taken: &[&str], same: bool, suffix: &str
     }
 }
 
+/// The names client.ts has besides its own when the workflow says `history encrypted` (DESIGN 1.18):
+/// what it imports for the codec, and what it declares. A method's function or a message's type of
+/// one of these names takes `Rpc`, as one of the client's own names does (1.14).
+pub const ENCRYPTED_CLIENT: &[&str] = &["Connection", "ClientOptions", "PayloadCodec", "encrypted", "EncryptedClient", "encryptedClient"];
+
 /// client.ts, for a workflow that implements a service: the service's name, a type for each
 /// message by the name the `.proto` gives it, and a function for each method, which calls the
 /// client's own `start`, `send`, `answer` or `status`.
 fn service_client_ts(m: &Model, s: &ServiceUse) -> String {
     const FUNCTIONS: &[&str] = &["start", "answer", "send", "status", "histories"];
     const OTHERS: &[&str] = &["Status", "StartOptions", "CallbackAnswer", "EventName", "Client", "WorkflowHandle", "T", "EVENTS", "WORKFLOW_TYPE", "TASK_QUEUE", "SERVICE", "WorkflowIdReusePolicy"];
+    let encrypted: &[&str] = if m.history_encrypted.is_some() { ENCRYPTED_CLIENT } else { &[] };
+    let others: Vec<&str> = OTHERS.iter().chain(encrypted).copied().collect();
     let mut c = String::new();
     c.push_str(&format!("\n/** The service the workflow implements, which `{}` describes. Its methods are the functions below. */\nexport const SERVICE = {};\n", s.file, q(&s.name)));
     let mut written: Vec<String> = Vec::new();
     // a type for a message, by its name in the .proto, unless the client has one of the name already
     let alias = |c: &mut String, written: &mut Vec<String>, message: &str, ty: &str, same: bool, what: String| -> String {
         let name = type_name(message.rsplit('.').next().unwrap_or(message));
-        let taken: Vec<&str> = OTHERS.iter().copied().chain(FUNCTIONS.iter().copied()).chain(written.iter().map(|x| x.as_str())).collect();
+        let taken: Vec<&str> = others.iter().copied().chain(FUNCTIONS.iter().copied()).chain(written.iter().map(|x| x.as_str())).collect();
         match client_name(name, &taken, same, "Rpc") {
             Named::Same => ty.to_string(),
             Named::New(n) => {
@@ -594,7 +653,7 @@ fn service_client_ts(m: &Model, s: &ServiceUse) -> String {
             let mut cs = mt.name.chars();
             ident(&cs.next().map(|f| f.to_lowercase().chain(cs).collect::<String>()).unwrap_or_default())
         };
-        let taken: Vec<String> = OTHERS.iter().map(|x| x.to_string()).chain(written.iter().cloned()).collect();
+        let taken: Vec<String> = others.iter().map(|x| x.to_string()).chain(written.iter().cloned()).collect();
         let named = |same: bool| match client_name(lower.clone(), FUNCTIONS, same, "Rpc") {
             Named::New(n) if taken.contains(&n) => Named::New(format!("{n}Rpc")),
             other => other,
@@ -637,8 +696,23 @@ fn service_client_ts(m: &Model, s: &ServiceUse) -> String {
     c
 }
 
-/// worker.ts: the worker that runs the workflow, its tasks and its rules.
+/// worker.ts: the worker that runs the workflow, its tasks and its rules. For a workflow whose history
+/// is encrypted, the worker, its options and the replay take the payload codec, which the type of
+/// their arguments requires (DESIGN 1.18).
 fn worker_file(m: &Model, header: &str, rules: bool, build: &str) -> String {
+    let w = plain_worker_file(m, header, rules, build);
+    if m.history_encrypted.is_none() {
+        return w;
+    }
+    w.replace("import { NativeConnection, Worker,", "import { type PayloadCodec } from \"@temporalio/common\";\nimport { NativeConnection, Worker,")
+        .replace("  transport?: io.Transport;\n  namespace?: string;\n", "  transport?: io.Transport;\n  namespace?: string;\n  /**\n   * The codec every payload of the workflow goes through: the workflow says `history encrypted`, so\n   * what it is given and answers, and its failures' messages and stack traces, are encrypted with a\n   * key only those who may read its secrets hold. The client takes the same one (client.ts).\n   */\n  codec: PayloadCodec;\n")
+        .replace("export function workerOptions(own: OwnTasks, config: WorkerConfig = {}): Omit<WorkerOptions, \"connection\"> {\n  return {\n", "export function workerOptions(own: OwnTasks, config: WorkerConfig): Omit<WorkerOptions, \"connection\"> {\n  return {\n    dataConverter: { payloadCodecs: [config.codec], failureConverterPath: require.resolve(\"./failure\") },\n")
+        .replace("config: WorkerConfig & { connection?: NativeConnection } = {}): Promise<Worker>", "config: WorkerConfig & { connection?: NativeConnection }): Promise<Worker>")
+        .replace("export async function replay(histories: ReplayHistoriesIterable, options: Partial<ReplayWorkerOptions> = {}): Promise<Array<{ workflowId: string; error: string }>> {", "export async function replay(histories: ReplayHistoriesIterable, codec: PayloadCodec, options: Partial<ReplayWorkerOptions> = {}): Promise<Array<{ workflowId: string; error: string }>> {")
+        .replace("  for await (const r of Worker.runReplayHistories({ ...options, workflowsPath }, histories)) {", "  const dataConverter = { payloadCodecs: [codec], failureConverterPath: require.resolve(\"./failure\") };\n  for await (const r of Worker.runReplayHistories({ ...options, workflowsPath, dataConverter }, histories)) {")
+}
+
+fn plain_worker_file(m: &Model, header: &str, rules: bool, build: &str) -> String {
     let mut w = header.to_string();
     w.push_str(&format!("// The worker of {} v{}: the workflow, the tasks dandori writes and the ones you write, and the rules.\n\n", m.name, m.version));
     w.push_str("import { NativeConnection, Worker, type ReplayHistoriesIterable, type ReplayWorkerOptions, type WorkerOptions } from \"@temporalio/worker\";\n");

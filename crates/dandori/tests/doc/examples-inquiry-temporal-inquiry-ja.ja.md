@@ -49,12 +49,12 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 61 | `読み = 読み取る(…)` | `agent · gpt-oss:20b · http://ollama.internal:11434/v1` | 10 秒おきに 2 回（failure・timeout） | 1 分 | `timeout`・`failure` → 62 行目 |
-| 63 | `手作業 = 起票する(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
-| 66 | `種類 = 種類を選ぶ(…)` | `jev · jev-1.13.0 · confidence 0.8 else 迷い` | 1 秒おきに 2 回（failure・timeout） | 10 秒 | `迷い`・`timeout`・`failure` → 67 行目 |
-| 68 | `判定 = 振り分け(…)` | 規則 `問い合わせの振り分け.rule`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
-| 73 | `下書き = 下書きする(…)` | `agent claude · claude-sonnet-5` | — | 1 分 | `timeout`・`failure` → 74 行目 |
-| 75 | `票 = 起票する(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 62 | `読み = 読み取る(…)` | `agent · gpt-oss:20b · http://ollama.internal:11434/v1` | 10 秒おきに 2 回（failure・timeout） | 1 分 | `timeout`・`failure` → 63 行目 |
+| 64 | `手作業 = 起票する(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 67 | `種類 = 種類を選ぶ(…)` | `jev · jev-1.13.0 · confidence 0.8 else 迷い` | 1 秒おきに 2 回（failure・timeout） | 10 秒 | `迷い`・`timeout`・`failure` → 68 行目 |
+| 69 | `判定 = 振り分け(…)` | 規則 `問い合わせの振り分け.rule`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 74 | `下書き = 下書きする(…)` | `agent claude · claude-sonnet-5` | — | 1 分 | `timeout`・`failure` → 75 行目 |
+| 76 | `票 = 起票する(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 
@@ -62,8 +62,8 @@ flowchart TD
 
 | 行 | 終わり方 |
 |---:|---|
-| 64 | `succeed チケットID = 手作業.チケットID, 窓口 = 総合` |
-| 76 | `succeed チケットID = 票.チケットID, 窓口 = 判定.窓口` |
+| 65 | `succeed チケットID = 手作業.チケットID, 窓口 = 総合` |
+| 77 | `succeed チケットID = 票.チケットID, 窓口 = 判定.窓口` |
 
 ## 規則
 

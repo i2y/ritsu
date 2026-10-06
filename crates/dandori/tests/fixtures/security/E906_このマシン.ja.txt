@@ -1,0 +1,24 @@
+警告[W904]: tests/fixtures/security/E906_このマシン.flow:5:1: 入力 `メール` は秘密の値で、ワークフローの履歴に残ります
+     5 |   メール : string  secret
+  = 印は E906_このマシン.flow:5 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = ワークフローには値の代わりに参照（ID やシークレットの名前）を渡し、それを使うタスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+警告[W904]: tests/fixtures/security/E906_このマシン.flow:17:1: 秘密の値 `メール` が、`読む` の引数 `本文` として、ワークフローの履歴に残ります
+    17 |   let 要点 = 読む(本文: メール)
+  = 印は E906_このマシン.flow:5 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+警告[W904]: tests/fixtures/security/E906_このマシン.flow:18:1: 秘密の値 `メール` が、`記録する` の引数 `本文` として、ワークフローの履歴に残ります
+    18 |   記録する(本文: メール)
+  = 印は E906_このマシン.flow:5 の `secret` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+build --target asl:
+エラー[E050]: tests/fixtures/security/E906_このマシン.flow:7:1: Step Functions はエージェント `読む` を HTTP Task で呼ぶので、サーバーの鍵（鍵の要らないサーバーでも、EventBridge の接続には何かの値が要ります）を持つ `connection "<EventBridge の接続の ARN>"` が要ります
+     7 | task 読む(本文: string) -> string
+エラー[E050]: tests/fixtures/security/E906_このマシン.flow:7:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`読む` の送信先は `http://localhost:11434/v1/responses` です
+     7 | task 読む(本文: string) -> string
+エラー[E050]: tests/fixtures/security/E906_このマシン.flow:12:1: `記録する` には `connection "<EventBridge の接続の ARN>"` が要ります
+    12 | task 記録する(本文: string)
+エラー[E050]: tests/fixtures/security/E906_このマシン.flow:12:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`記録する` の送信先は `http://127.0.0.1:9000/log` です
+    12 | task 記録する(本文: string)

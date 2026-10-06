@@ -1,0 +1,12 @@
+workflow http v1
+description "E906: a secret sent to a host named by its URL alone"
+
+inputs
+  email : string  secret
+
+task notify(to: string)
+  http POST "https://mail.example.com/v1/send"
+  idempotent
+
+flow
+  notify(to: email)

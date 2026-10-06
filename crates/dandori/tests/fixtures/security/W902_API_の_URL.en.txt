@@ -1,0 +1,17 @@
+warning[W902]: tests/fixtures/security/W902_API_の_URL.flow:5:3: the tasks that call `領収書` send their requests to receipts.internal over plain HTTP
+     5 |   url "http://receipts.internal:8080"
+  = Whoever is on the network between can read and change the requests, the answers, and any key in the headers.
+  = Use https://. If the connection is protected another way (a service mesh, a private link), say so under `use proto 領収書` with `plaintext "<why>"`.
+warning[W902]: tests/fixtures/security/W902_API_の_URL.flow:6:13: the tasks that call `顧客` send their requests to crm.internal, the first server of `../secrets/plain.json`, over plain HTTP
+     6 | use openapi 顧客 from "../secrets/plain.json"
+  = Whoever is on the network between can read and change the requests, the answers, and any key in the headers.
+  = Use https://. If the connection is protected another way (a service mesh, a private link), say so under `use openapi 顧客` with `plaintext "<why>"`.
+build --target asl:
+error[E050]: tests/fixtures/security/W902_API_の_URL.flow:14:1: `領収書を取る` needs `connection "<EventBridge connection ARN>"`
+    14 | task 領収書を取る(id: string) -> 領収書.Receipt
+error[E050]: tests/fixtures/security/W902_API_の_URL.flow:14:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `領収書を取る` sends to `http://receipts.internal:8080/receipts.v1.ReceiptService/GetReceipt`
+    14 | task 領収書を取る(id: string) -> 領収書.Receipt
+error[E050]: tests/fixtures/security/W902_API_の_URL.flow:17:1: `顧客を取る` needs `connection "<EventBridge connection ARN>"`
+    17 | task 顧客を取る(id: string) -> 顧客情報
+error[E050]: tests/fixtures/security/W902_API_の_URL.flow:17:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `顧客を取る` sends to `http://crm.internal:8080/customers/{id}`
+    17 | task 顧客を取る(id: string) -> 顧客情報

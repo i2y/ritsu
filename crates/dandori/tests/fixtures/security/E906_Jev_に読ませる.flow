@@ -1,0 +1,14 @@
+workflow Jev v1
+description "E906：Jev に読ませる秘密の値"
+
+enum 種類 = 返品 | 配送
+
+inputs
+  メール : string  secret
+
+task 選ぶ(本文: string) -> 種類
+  jev "これはどの種類の問い合わせですか"
+  model "jev-1.13.0"
+
+flow
+  let 種類 = 選ぶ(本文: メール)

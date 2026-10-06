@@ -256,7 +256,47 @@ fn client_file(m: &Model, header: &str) -> String {
     if let Some(s) = &m.service {
         c.push_str(&service_client_py(m, s));
     }
+    if m.history_encrypted.is_some() {
+        return encrypted_client_py(c);
+    }
     c
+}
+
+/// client.py, for a workflow whose history is encrypted: every function, and the worker, takes a
+/// client whose payloads go through the codec, which only `connect` makes, so that a client without
+/// the codec is a type error to mypy (DESIGN 1.18). The failure converter puts the messages and the
+/// stack traces of failures where the codec encrypts them.
+fn encrypted_client_py(c: String) -> String {
+    let c = c
+        .replace("from __future__ import annotations\n\nimport json\nfrom typing import Any, AsyncIterator\n\n", "from __future__ import annotations\n\nimport dataclasses\nimport json\nfrom typing import Any, AsyncIterator, NewType\n\nimport temporalio.converter\n")
+        .replace("from temporalio.common import WorkflowIDReusePolicy\n", "from temporalio.common import WorkflowIDReusePolicy\nfrom temporalio.converter import DataConverter, DefaultFailureConverterWithEncodedAttributes, PayloadCodec\n")
+        .replace("(client: Client,", "(client: EncryptedClient,");
+    let at = c.find("\n\nasync def start(").map(|i| i + 2).unwrap_or(c.len());
+    let mut out = c[..at].to_string();
+    out.push_str("# The workflow says `history encrypted`: what it is given and what it answers, and the messages and
+# the stack traces of its failures, go through a payload codec that encrypts them with a key only
+# those who may read its secrets hold. Every function here, and the worker (worker.py), takes a
+# client made with the codec, which only `connect` makes.
+EncryptedClient = NewType(\"EncryptedClient\", Client)
+
+
+");
+    out.push_str("def data_converter(codec: PayloadCodec) -> DataConverter:
+    \"\"\"The workflow's data converter: the codec, and a failure converter that puts the messages and the
+    stack traces of failures where the codec encrypts them.\"\"\"
+    return dataclasses.replace(temporalio.converter.default(), payload_codec=codec, failure_converter_class=DefaultFailureConverterWithEncodedAttributes)
+
+
+");
+    out.push_str("async def connect(target_host: str, codec: PayloadCodec, **more: Any) -> EncryptedClient:
+    \"\"\"A client of the server at `target_host` whose payloads go through `codec`, with `more` of
+    Client.connect's keyword arguments.\"\"\"
+    return EncryptedClient(await Client.connect(target_host, data_converter=data_converter(codec), **more))
+
+
+");
+    out.push_str(&c[at..]);
+    out
 }
 
 /// A method's name in snake case, as a Python function is named: `AnswerPacking` is `answer_packing`.
@@ -278,6 +318,11 @@ pub(crate) fn snake(name: &str) -> String {
     out
 }
 
+/// The names client.py has besides its own when the workflow says `history encrypted` (DESIGN 1.18):
+/// what it imports for the codec, and what it declares. A method's function or a message's type of
+/// one of these names takes `_rpc`, as one of the client's own names does (1.14).
+pub const ENCRYPTED_CLIENT: &[&str] = &["dataclasses", "NewType", "temporalio", "DataConverter", "DefaultFailureConverterWithEncodedAttributes", "PayloadCodec", "EncryptedClient", "data_converter", "connect"];
+
 /// client.py, for a workflow that implements a service: the service's name, a name for each
 /// message's type, and a function for each method, which calls the client's own `start`, `send`,
 /// `answer` or `status`. The names are those of client.ts, in Python's way.
@@ -285,13 +330,15 @@ fn service_client_py(m: &Model, s: &ServiceUse) -> String {
     use crate::temporal::{client_name, Named};
     const FUNCTIONS: &[&str] = &["start", "answer", "send", "status", "histories"];
     const OTHERS: &[&str] = &["WORKFLOW_TYPE", "TASK_QUEUE", "EVENTS", "SERVICE", "json", "Any", "AsyncIterator", "Client", "WorkflowHandle", "WorkflowHistory", "WorkflowIDReusePolicy", "T", "annotations"];
+    let encrypted: &[&str] = if m.history_encrypted.is_some() { ENCRYPTED_CLIENT } else { &[] };
+    let others: Vec<&str> = OTHERS.iter().chain(encrypted).copied().collect();
     let mut c = String::new();
     c.push_str(&format!("\n\n# The service the workflow implements, which `{}` describes. Its methods are the functions below.\nSERVICE = {}\n", s.file, q(&s.name)));
     let mut written: Vec<String> = Vec::new();
     // a name for a message's type, by its name in the .proto
     let alias = |c: &mut String, written: &mut Vec<String>, message: &str, ty: &str, what: String| -> String {
         let name = type_name(message.rsplit('.').next().unwrap_or(message));
-        let taken: Vec<&str> = OTHERS.iter().copied().chain(FUNCTIONS.iter().copied()).chain(written.iter().map(|x| x.as_str())).collect();
+        let taken: Vec<&str> = others.iter().copied().chain(FUNCTIONS.iter().copied()).chain(written.iter().map(|x| x.as_str())).collect();
         match client_name(name, &taken, false, "_rpc") {
             Named::Same => ty.to_string(),
             Named::New(n) => {
@@ -305,7 +352,7 @@ fn service_client_py(m: &Model, s: &ServiceUse) -> String {
     for mt in &s.methods {
         let label = s.label(mt);
         let base = py_name(&snake(&mt.name));
-        let taken: Vec<String> = OTHERS.iter().map(|x| x.to_string()).chain(written.iter().cloned()).collect();
+        let taken: Vec<String> = others.iter().map(|x| x.to_string()).chain(written.iter().cloned()).collect();
         let named = |same: bool| match client_name(base.clone(), FUNCTIONS, same, "_rpc") {
             Named::New(n) if taken.contains(&n) => Named::New(format!("{n}_rpc")),
             other => other,
@@ -356,8 +403,24 @@ fn service_client_py(m: &Model, s: &ServiceUse) -> String {
     c
 }
 
-/// worker.py: the worker that runs the workflow, its tasks and its rules.
+/// worker.py: the worker that runs the workflow, its tasks and its rules. For a workflow whose history
+/// is encrypted, the worker takes the client `connect` makes, which carries the codec, and the replay
+/// takes the codec (DESIGN 1.18).
 fn worker_file(m: &Model, header: &str, rules: bool, build: &str) -> String {
+    let w = plain_worker_file(m, header, rules, build);
+    if m.history_encrypted.is_none() {
+        return w;
+    }
+    w.replace("from temporalio.client import Client, WorkflowHistory\n", "from temporalio.client import WorkflowHistory\n")
+        .replace("from temporalio.common import VersioningBehavior, WorkerDeploymentVersion\n", "from temporalio.common import VersioningBehavior, WorkerDeploymentVersion\nfrom temporalio.converter import PayloadCodec\n")
+        .replace("from .client import TASK_QUEUE\n", "from .client import TASK_QUEUE, EncryptedClient, data_converter\n")
+        .replace("def make_worker(client: Client,", "def make_worker(client: EncryptedClient,")
+        .replace("    \"\"\"The worker, with `more` of the worker's keyword arguments of your own.\"\"\"\n", "    \"\"\"The worker, with `more` of the worker's keyword arguments of your own. The client carries the codec\n    every payload of the workflow goes through (client.py: connect).\"\"\"\n")
+        .replace("async def replay(histories: Iterable[WorkflowHistory] | AsyncIterable[WorkflowHistory]) -> list[tuple[str, str]]:", "async def replay(histories: Iterable[WorkflowHistory] | AsyncIterable[WorkflowHistory], codec: PayloadCodec) -> list[tuple[str, str]]:")
+        .replace("    replayer = Replayer(workflows=workflows)\n", "    replayer = Replayer(workflows=workflows, data_converter=data_converter(codec))\n")
+}
+
+fn plain_worker_file(m: &Model, header: &str, rules: bool, build: &str) -> String {
     let mut w = header.to_string();
     w.push_str(&format!("# The worker of {} v{}: the workflow, the tasks dandori writes and the ones you write, and the rules.\n\n", m.name, m.version));
     w.push_str("from __future__ import annotations\n\nfrom typing import Any, AsyncIterable, Iterable\n\n");

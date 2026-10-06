@@ -1,0 +1,3 @@
+build --target argo:
+エラー[E050]: tests/fixtures/security/W904_history_encrypted.flow:2:1: Argo Workflows はテンプレートの入力と出力のパラメーターを Workflow のオブジェクトにそのまま残し、それを鍵で暗号化する手段がないので、`history encrypted` を守れません。秘密の値はパラメーターで渡さず、Kubernetes の Secret から環境変数かボリュームで渡してください
+     2 |   history encrypted

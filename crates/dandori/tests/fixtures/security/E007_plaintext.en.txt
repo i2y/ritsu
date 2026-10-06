@@ -1,0 +1,13 @@
+error[E007]: tests/fixtures/security/E007_plaintext.flow:6:3: `plaintext` says that a rule's service is reached without encryption on purpose, and the rule `routing` has no `connect`
+     6 |   plaintext "the rule is in the same account"
+warning[W902]: tests/fixtures/security/E007_plaintext.flow:7:13: the tasks that call `crm` send their requests to crm.internal, the first server of `../secrets/plain.json`, over plain HTTP
+     7 | use openapi crm from "../secrets/plain.json"
+  = Whoever is on the network between can read and change the requests, the answers, and any key in the headers.
+  = Use https://. If the connection is protected another way (a service mesh, a private link), say so under `use openapi crm` with `plaintext "<why>"`.
+error[E007]: tests/fixtures/security/E007_plaintext.flow:22:3: `plaintext` says that a URL is reached without encryption on purpose, and `keep` has no URL of its own
+    22 |   plaintext "the function is ours"
+error[E007]: tests/fixtures/security/E007_plaintext.flow:26:3: `plaintext` says that a URL is reached without encryption on purpose, and `get_customer` has no URL of its own
+    26 |   plaintext "the CRM is ours"
+  = `get_customer` sends to the URL of the `use` that reads `crm`; write `plaintext` under that `use`.
+error[E007]: tests/fixtures/security/E007_plaintext.flow:31:3: give `plaintext` the reason the connection is not encrypted; it is an empty string
+    31 |   plaintext ""

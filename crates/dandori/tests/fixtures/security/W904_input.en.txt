@@ -1,0 +1,10 @@
+warning[W904]: tests/fixtures/security/W904_input.flow:10:1: the input `token` is a secret, kept in the history of the workflow
+    10 |   token    : string  secret
+  = The mark is `secret` at W904_input.flow:10.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Start the workflow with a reference instead (an ID, the name of a secret), and fetch the value inside the task that uses it. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.
+warning[W904]: tests/fixtures/security/W904_input.flow:11:1: the input `card` holds the secret `card.number`, kept in the history of the workflow
+    11 |   card     : Card
+  = The mark is `secret` at W904_input.flow:6.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Start the workflow with a reference instead (an ID, the name of a secret), and fetch the value inside the task that uses it. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.

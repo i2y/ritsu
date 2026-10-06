@@ -64,8 +64,8 @@ does to a case, its retries, its timeout.
 `--format html` writes one page that needs nothing else: the picture is drawn by dandori itself, and
 the page works without a network. The page of each example, as written for Temporal:
 [hotel](https://i2y.github.io/ritsu/dandori/doc/hotel.html), [order](https://i2y.github.io/ritsu/dandori/doc/order.html), [fulfillment](https://i2y.github.io/ritsu/dandori/doc/fulfillment.html),
-[inquiry](https://i2y.github.io/ritsu/dandori/doc/inquiry.html) and [review](https://i2y.github.io/ritsu/dandori/doc/review.html); and of [invoice](https://i2y.github.io/ritsu/dandori/doc/invoice.html), which
-is written once for every platform. A date is drawn as a rule is, with the dates file it is of.
+[inquiry](https://i2y.github.io/ritsu/dandori/doc/inquiry.html) and [review](https://i2y.github.io/ritsu/dandori/doc/review.html); and of [invoice](https://i2y.github.io/ritsu/dandori/doc/invoice.html) and
+[payout](https://i2y.github.io/ritsu/dandori/doc/payout.html), which are written once for every platform. A date is drawn as a rule is, with the dates file it is of.
 
 - **Pick a step.** The pane on the right shows its lines of the `.flow`, what each case can be when
   a run gets there, what the call calls, its retries and timeout, where each of its errors goes,

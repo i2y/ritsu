@@ -1,0 +1,6 @@
+workflow under_workflow v1
+  history kept
+description "E001: only history encrypted goes under workflow"
+
+flow
+  pass

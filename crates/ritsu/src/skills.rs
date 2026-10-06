@@ -56,6 +56,7 @@ pub const SKILLS: &[Skill] = &[
             ("examples.md", include_str!("../../../skills/dandori/examples.md")),
             ("jev.md", include_str!("../../../skills/dandori/jev.md")),
             ("platforms.md", include_str!("../../../skills/dandori/platforms.md")),
+            ("secrets.md", include_str!("../../../skills/dandori/secrets.md")),
             ("services.md", include_str!("../../../skills/dandori/services.md")),
             ("tasks.md", include_str!("../../../skills/dandori/tasks.md")),
             ("tour.md", include_str!("../../../skills/dandori/tour.md")),

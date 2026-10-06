@@ -1,0 +1,38 @@
+workflow payout v1
+description "Pay a seller what their sales came to: the bank's API pays the account the seller keeps on file, and a model drafts the notice. The flow carries the account's id, and never its number or the name it is held in, which the bank's contract marks secret"
+
+use proto bank from "specs/payout.proto"
+  url "https://bank.example.com"
+
+inputs
+  seller_id  : string
+  account_id : string
+  amount     : money[JPY, incl_tax]  range >=1 <=10000000
+
+outputs
+  payout_id : string
+
+# The bank pays the account it holds the number of; the flow names it by its id.
+task pay(account_id: string, amount: money[JPY, incl_tax], reference: string) -> bank.PayResponse
+  connect bank "PayoutService/Pay"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/bank/7c1e2d"
+  key
+  errors refused = failed_precondition
+
+# The model reads the amount and the payout's id, and nothing of the account.
+task draft_notice(amount: money[JPY, incl_tax], payout_id: string) -> string
+  agent "Draft a short notice to the seller that their payout was sent, with its amount in yen and its id. Say nothing of the account."
+  model "gpt-5.4-mini"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/openai/3f2a1b"
+  timeout 60 seconds
+
+task send_notice(seller_id: string, text: string)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:send-notice"
+  idempotent
+
+flow
+  let paid = pay(account_id: account_id, amount: amount, reference: "Sales payout")
+    on refused => fail Refused "the bank refused the payout to the account {account_id}"
+  let notice = draft_notice(amount: amount, payout_id: paid.payoutId)
+  send_notice(seller_id: seller_id, text: notice)
+  succeed payout_id = paid.payoutId

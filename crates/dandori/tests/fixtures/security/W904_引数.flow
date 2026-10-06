@@ -1,0 +1,17 @@
+workflow 引数 v1
+description "W904：変数、レコード、リスト、文字列を通して、呼び出しに渡した秘密の値"
+
+record メモ
+  宛先 : string
+  本文 : string
+
+inputs
+  トークン : string  secret
+
+task 残す(メモ: メモ, 札: list[string])
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:keep"
+  idempotent
+
+flow
+  let 写し = トークン
+  残す(メモ: {宛先: "窓口", 本文: "トークン {写し}"}, 札: [トークン])

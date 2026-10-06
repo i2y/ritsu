@@ -1,3 +1,11 @@
+警告[W902]: tests/fixtures/agent_targets.flow:28:3: エージェント `手元で読む` は、ollama.internal に暗号化しない HTTP でリクエストを送ります
+    28 |   url "http://ollama.internal:11434/v1"
+  = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
+  = https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、タスクの下に `plaintext "<理由>"` と書いてください。
+警告[W902]: tests/fixtures/agent_targets.flow:32:3: タスク `平文で送る` は、example.com に暗号化しない HTTP でリクエストを送ります
+    32 |   http POST "http://example.com/v1/notes"
+  = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
+  = https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、タスクの下に `plaintext "<理由>"` と書いてください。
 build --target asl:
 エラー[E050]: tests/fixtures/agent_targets.flow:10:1: Step Functions はエージェント `読む` を HTTP Task で呼ぶので、OpenAI の API キーを持つ `connection "<EventBridge の接続の ARN>"` が要ります
     10 | task 読む(本文: string) -> string

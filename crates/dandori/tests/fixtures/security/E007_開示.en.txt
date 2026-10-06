@@ -1,0 +1,4 @@
+error[E007]: tests/fixtures/security/E007_開示.flow:7:13: `discloses` names `文面`, which is not a parameter of `読む`
+     7 |   discloses 文面 "プロバイダーは何も残さない"
+error[E007]: tests/fixtures/security/E007_開示.flow:8:3: give `discloses` the reason the task sends the secrets there; it is an empty string
+     8 |   discloses 本文 ""

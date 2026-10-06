@@ -1,0 +1,25 @@
+workflow API_の_URL v1
+description "W902：.proto のサービスの url と、OpenAPI の文書の最初のサーバーを、暗号化しない HTTP で呼ぶ"
+
+use proto 領収書 from "../secrets/receipts.proto"
+  url "http://receipts.internal:8080"
+use openapi 顧客 from "../secrets/plain.json"
+
+record 顧客情報
+  id      : string
+  email   : string
+  segment : string
+  pin     : string?
+
+task 領収書を取る(id: string) -> 領収書.Receipt
+  connect 領収書 "ReceiptService/GetReceipt"
+
+task 顧客を取る(id: string) -> 顧客情報
+  http GET 顧客 "/customers/{id}"
+
+inputs
+  番号 : string
+
+flow
+  let 控え = 領収書を取る(id: 番号)
+  let 顧客 = 顧客を取る(id: 番号)

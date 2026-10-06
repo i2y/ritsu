@@ -1,0 +1,11 @@
+workflow rule_service v1
+description "W902: a rule called at its Connect service over plain HTTP"
+
+use rule routing from "../../../examples/inquiry/rules/inquiry_routing.rule"
+  connect "http://rules.example.com"
+
+inputs
+  kind : routing.kind
+
+flow
+  let route = routing(kind: kind, member: true)

@@ -1,0 +1,39 @@
+// 支払いの例の日本語の版が呼ぶ、銀行の送金。payout.proto と同じ形で、protobuf の JSON での名前
+// （`json_name`）を日本語にしてある。それが版のタスクの引数と結果の名前になる。口座の番号と名義には
+// `debug_redact` を付けた。protobuf はそれをデバッグの出力から外し、ritsu はその印を、契約がその値を
+// 秘密と言っていると読む。呼ぶ側は、口座を ID で指す。フィールド、メッセージ、サービスの名前は、protoc が
+// 求めるとおり ASCII のままにした。
+syntax = "proto3";
+
+package payout.ja.v1;
+
+service PayoutService {
+  // 口座に、ID で指して、円で金額を送る。
+  rpc Pay(PayRequest) returns (PayResponse);
+}
+
+service AccountService {
+  rpc GetAccount(GetAccountRequest) returns (Account);
+}
+
+message PayRequest {
+  string account_id = 1 [json_name = "口座ID"];
+  int32 amount = 2 [json_name = "金額"];
+  // 売り手の明細に出る文言
+  string reference = 3 [json_name = "摘要"];
+}
+
+message PayResponse {
+  string payout_id = 1 [json_name = "送金ID"];
+}
+
+message GetAccountRequest {
+  string id = 1;
+}
+
+message Account {
+  string id = 1;
+  string number = 2 [debug_redact = true, json_name = "番号"];
+  string holder = 3 [debug_redact = true, json_name = "名義"];
+  string bank_name = 4 [json_name = "銀行名"];
+}

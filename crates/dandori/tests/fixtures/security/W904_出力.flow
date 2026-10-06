@@ -1,0 +1,12 @@
+workflow 出力 v1
+description "W904：秘密と印を付けた出力と、出力に書いた秘密の値"
+
+inputs
+  トークン : string  secret
+
+outputs
+  発行したもの : string  secret
+  控え         : string
+
+flow
+  succeed 発行したもの = "新規", 控え = "{トークン} で支払いました"

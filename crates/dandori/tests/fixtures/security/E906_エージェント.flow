@@ -1,0 +1,17 @@
+workflow エージェント v1
+description "E906：OpenAI と Anthropic のモデルに読ませる秘密の値"
+
+inputs
+  メール : string  secret
+
+task 読む(本文: string) -> string
+  agent "本文が何についてのものかを、一文で答えてください。"
+  model "gpt-5.4-mini"
+
+task 下書きする(本文: string) -> string
+  agent claude "本文への返事を一文で下書きしてください。"
+  model "claude-sonnet-5"
+
+flow
+  let 要点 = 読む(本文: メール)
+  let 返事 = 下書きする(本文: "{メール} から問い合わせがありました")

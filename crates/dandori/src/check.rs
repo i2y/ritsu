@@ -92,6 +92,14 @@ fn checked_parts(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, 
 }
 
 fn check_one(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, Vec<Diag>) {
+    let (model, facts, mut diags) = checked_text(src, path);
+    // a key written in the file is said whatever else the file has (W901)
+    diags.extend(crate::secrets::keys(src));
+    diags.sort_by(|a, b| (a.line, a.col, a.code).cmp(&(b.line, b.col, b.code)));
+    (model, facts, diags)
+}
+
+fn checked_text(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, Vec<Diag>) {
     let prog = match syntax::parse(src) {
         Ok(p) => p,
         Err(d) => return (None, Default::default(), vec![d]),
@@ -130,6 +138,7 @@ fn check_one(src: &str, path: &Path) -> (Option<Model>, crate::flow::Facts, Vec<
     diags.extend(whole(&model));
     diags.extend(crate::ranges::check(&model));
     diags.extend(crate::service::check(&model));
+    diags.extend(crate::secrets::check(&model));
     diags.sort_by(|a, b| (a.line, a.col, a.code).cmp(&(b.line, b.col, b.code)));
     (Some(model), fr.facts, diags)
 }

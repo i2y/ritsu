@@ -1,0 +1,18 @@
+workflow このマシン v1
+description "E906：このマシンへの呼び出しには出ない。履歴には残るので W904 は出る"
+
+inputs
+  メール : string  secret
+
+task 読む(本文: string) -> string
+  agent "本文が何についてのものかを、一文で答えてください。"
+  model "gpt-oss:20b"
+  url "http://localhost:11434/v1"
+
+task 記録する(本文: string)
+  http POST "http://127.0.0.1:9000/log"
+  idempotent
+
+flow
+  let 要点 = 読む(本文: メール)
+  記録する(本文: メール)

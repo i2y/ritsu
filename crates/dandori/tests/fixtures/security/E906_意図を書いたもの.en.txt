@@ -1,0 +1,13 @@
+warning[W904]: tests/fixtures/security/E906_意図を書いたもの.flow:5:1: the input `メール` is a secret, kept in the history of the workflow
+     5 |   メール : string  secret
+  = The mark is `secret` at E906_意図を書いたもの.flow:5.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Start the workflow with a reference instead (an ID, the name of a secret), and fetch the value inside the task that uses it. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.
+warning[W904]: tests/fixtures/security/E906_意図を書いたもの.flow:13:1: the secret `メール` is kept in the history of the workflow, as the argument `本文` of `読む`
+    13 |   let 要点 = 読む(本文: メール)
+  = The mark is `secret` at E906_意図を書いたもの.flow:5.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Pass a reference instead (an ID, the name of a secret) and fetch the value inside the task. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.
+build --target asl:
+error[E050]: tests/fixtures/security/E906_意図を書いたもの.flow:7:1: Step Functions calls the agent `読む` through an HTTP Task, which needs `connection "<EventBridge connection ARN>"` that holds the OpenAI API key
+     7 | task 読む(本文: string) -> string

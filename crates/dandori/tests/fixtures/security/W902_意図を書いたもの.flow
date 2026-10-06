@@ -1,0 +1,32 @@
+workflow 意図を書いたもの v1
+description "W902：何も出ない。どの URL にも、暗号化しない理由が書いてある"
+
+use rule 振り分け from "../../../examples/inquiry/rules/問い合わせの振り分け.rule"
+  connect "http://rules.internal"
+  plaintext "規則はワークフローと同じクラスターのネットワークで動き、サービスメッシュが暗号化する"
+use openapi 顧客 from "../secrets/plain.json"
+  plaintext "顧客の API にはプライベートな接続で届く"
+
+record 顧客情報
+  id      : string
+  email   : string
+  segment : string
+  pin     : string?
+
+inputs
+  種類 : 振り分け.種類
+  番号 : string
+
+task 読む(本文: string) -> string
+  agent "本文が何についてのものかを、一文で答えてください。"
+  model "gpt-oss:20b"
+  url "http://ollama.internal:11434/v1"
+  plaintext "モデルのサーバーにはクラスターのネットワークの中だけで届き、サービスメッシュが暗号化する"
+
+task 顧客を取る(id: string) -> 顧客情報
+  http GET 顧客 "/customers/{id}"
+
+flow
+  let 行き先 = 振り分け(種類: 種類, 会員: true)
+  let 顧客 = 顧客を取る(id: 番号)
+  let 要点 = 読む(本文: "荷物が壊れて届きました")

@@ -1,0 +1,14 @@
+workflow 入力 v1
+description "W904：秘密と印を付けた入力と、秘密のフィールドを持つレコードの入力"
+
+record カード
+  名義 : string
+  番号 : string  secret
+
+inputs
+  注文番号 : string
+  トークン : string  secret
+  カード   : カード
+
+flow
+  pass

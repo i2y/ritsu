@@ -1,0 +1,9 @@
+warning[W902]: tests/fixtures/security/W902_規則のサービス.flow:5:3: the service of the rule `振り分け` is called at rules.example.com over plain HTTP
+     5 |   connect "http://rules.example.com"
+  = Whoever is on the network between can read and change the requests, the answers, and any key in the headers.
+  = Use https://. If the connection is protected another way (a service mesh, a private link), say so under `use rule` with `plaintext "<why>"`.
+build --target asl:
+error[E050]: tests/fixtures/security/W902_規則のサービス.flow:4:1: Step Functions calls the rule `振り分け` by Connect through an HTTP Task, which needs `connection "<EventBridge connection ARN>"` under `use rule`
+     4 | use rule 振り分け from "../../../examples/inquiry/rules/問い合わせの振り分け.rule"
+error[E050]: tests/fixtures/security/W902_規則のサービス.flow:4:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and the rule `振り分け` is served at `http://rules.example.com/rulec.inquiry_routing.v1.InquiryRoutingService/Decide`
+     4 | use rule 振り分け from "../../../examples/inquiry/rules/問い合わせの振り分け.rule"

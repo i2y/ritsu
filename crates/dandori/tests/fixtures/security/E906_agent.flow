@@ -1,0 +1,17 @@
+workflow agent v1
+description "E906: a secret read by a model of OpenAI's and of Anthropic's"
+
+inputs
+  email : string  secret
+
+task read(text: string) -> string
+  agent "Say what the text is about, in one sentence."
+  model "gpt-5.4-mini"
+
+task draft(text: string) -> string
+  agent claude "Draft a reply to the text, in one sentence."
+  model "claude-sonnet-5"
+
+flow
+  let gist = read(text: email)
+  let reply = draft(text: "{email} wrote in")

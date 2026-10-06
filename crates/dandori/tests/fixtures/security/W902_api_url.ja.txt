@@ -1,0 +1,17 @@
+警告[W902]: tests/fixtures/security/W902_api_url.flow:5:3: `receipts` を呼ぶタスクは、receipts.internal に暗号化しない HTTP でリクエストを送ります
+     5 |   url "http://receipts.internal:8080"
+  = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
+  = https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、`use proto receipts` の下に `plaintext "<理由>"` と書いてください。
+警告[W902]: tests/fixtures/security/W902_api_url.flow:6:13: `crm` を呼ぶタスクは、crm.internal（`../secrets/plain.json` の最初のサーバー）に暗号化しない HTTP でリクエストを送ります
+     6 | use openapi crm from "../secrets/plain.json"
+  = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
+  = https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、`use openapi crm` の下に `plaintext "<理由>"` と書いてください。
+build --target asl:
+エラー[E050]: tests/fixtures/security/W902_api_url.flow:14:1: `get_receipt` には `connection "<EventBridge の接続の ARN>"` が要ります
+    14 | task get_receipt(id: string) -> receipts.Receipt
+エラー[E050]: tests/fixtures/security/W902_api_url.flow:14:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`get_receipt` の送信先は `http://receipts.internal:8080/receipts.v1.ReceiptService/GetReceipt` です
+    14 | task get_receipt(id: string) -> receipts.Receipt
+エラー[E050]: tests/fixtures/security/W902_api_url.flow:17:1: `get_customer` には `connection "<EventBridge の接続の ARN>"` が要ります
+    17 | task get_customer(id: string) -> Customer
+エラー[E050]: tests/fixtures/security/W902_api_url.flow:17:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`get_customer` の送信先は `http://crm.internal:8080/customers/{id}` です
+    17 | task get_customer(id: string) -> Customer

@@ -29,6 +29,7 @@ nav = [
   { Jev = "jev.md" },
   { "Dates and books" = "dates-and-books.md" },
   { "What it checks" = "checks.md" },
+  { Secrets = "secrets.md" },
   { "Draw a workflow" = "diagrams.md" },
   { "Build for a platform" = "platforms.md" },
   { Examples = "examples.md" },

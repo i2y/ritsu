@@ -138,6 +138,46 @@ enum Stock 23
 service StockService 7
   method Reserve ReserveRequest ReserveResponse false false 10
   method Release ReleaseRequest ReleaseResponse false false 12
+== examples/payout/specs/payout.ja.proto
+syntax proto3
+package payout.ja.v1
+message PayRequest 19
+  field account_id 1 None Scalar("string") json=Some("口座ID") oneof=None line=20
+  field amount 2 None Scalar("int32") json=Some("金額") oneof=None line=21
+  field reference 3 None Scalar("string") json=Some("摘要") oneof=None line=23
+message PayResponse 26
+  field payout_id 1 None Scalar("string") json=Some("送金ID") oneof=None line=27
+message GetAccountRequest 30
+  field id 1 None Scalar("string") json=None oneof=None line=31
+message Account 34
+  field id 1 None Scalar("string") json=None oneof=None line=35
+  field number 2 None Scalar("string") json=Some("番号") oneof=None line=36
+  field holder 3 None Scalar("string") json=Some("名義") oneof=None line=37
+  field bank_name 4 None Scalar("string") json=Some("銀行名") oneof=None line=38
+service PayoutService 10
+  method Pay PayRequest PayResponse false false 12
+service AccountService 15
+  method GetAccount GetAccountRequest Account false false 16
+== examples/payout/specs/payout.proto
+syntax proto3
+package payout.v1
+message PayRequest 17
+  field account_id 1 None Scalar("string") json=None oneof=None line=18
+  field amount 2 None Scalar("int32") json=None oneof=None line=19
+  field reference 3 None Scalar("string") json=None oneof=None line=21
+message PayResponse 24
+  field payout_id 1 None Scalar("string") json=None oneof=None line=25
+message GetAccountRequest 28
+  field id 1 None Scalar("string") json=None oneof=None line=29
+message Account 32
+  field id 1 None Scalar("string") json=None oneof=None line=33
+  field number 2 None Scalar("string") json=None oneof=None line=34
+  field holder 3 None Scalar("string") json=None oneof=None line=35
+  field bank_name 4 None Scalar("string") json=None oneof=None line=36
+service PayoutService 8
+  method Pay PayRequest PayResponse false false 10
+service AccountService 13
+  method GetAccount GetAccountRequest Account false false 14
 == proto/dandori/v1/options.proto
 syntax proto3
 package dandori.v1
@@ -157,6 +197,78 @@ message Status 69
   field at 1 Optional Scalar("int32") json=None oneof=None line=71
   field cases 2 None Map("string", Named("google.protobuf.Value")) json=None oneof=None line=73
   field events 3 Repeated Scalar("string") json=None oneof=None line=75
+== tests/encrypted/protos/calls.ja.proto
+syntax proto3
+package calls.ja.v1
+import dandori/v1/options.proto 8:1 public=false weak=false
+message Connection 38
+  field number 1 None Scalar("string") json=Some("番号") oneof=None line=39
+  field line 2 None Named("Line") json=Some("回線") oneof=None line=40
+message NewType 48
+  field memo 1 None Scalar("string") json=Some("記録") oneof=None line=49
+message PayloadCodec 52
+  field answered 1 None Scalar("bool") json=Some("出た") oneof=None line=53
+message ClientOptions 56
+  field reason 1 None Scalar("string") json=Some("理由") oneof=None line=57
+message DataConverter 60
+  field answer 1 None Scalar("string") json=Some("答え") oneof=None line=61
+message CodecDataConverter 64
+  field note 1 None Scalar("string") json=Some("確認") oneof=None line=65
+message Ack 68
+message StatusRequest 70
+enum Line 43
+  value landline 0 44
+  value mobile 1 45
+service CallService 10
+  option (dandori.v1.workflow) = {name: "名前の重なり", version: 1}
+  method Connect Connection NewType false false 13
+    option (dandori.v1.start) = {fails: ["出ない", "確かめられない"]}
+  method EncryptedClient PayloadCodec Ack false false 17
+    option (dandori.v1.event) = {task: "出る"}
+  method Encrypted ClientOptions Ack false false 21
+    option (dandori.v1.event) = {task: "待たせる"}
+  method Dial DataConverter Ack false false 25
+    option (dandori.v1.answer) = {task: "かける"}
+  method CodecFailureConverter CodecDataConverter Ack false false 29
+    option (dandori.v1.answer) = {task: "確かめる"}
+  method GetStatus StatusRequest dandori.v1.Status false false 33
+    option (dandori.v1.status) = {}
+== tests/encrypted/protos/calls.proto
+syntax proto3
+package calls.v1
+import dandori/v1/options.proto 13:1 public=false weak=false
+message Connection 43
+  field number 1 None Scalar("string") json=None oneof=None line=44
+  field line 2 None Named("Line") json=None oneof=None line=45
+message NewType 53
+  field receipt 1 None Scalar("string") json=None oneof=None line=54
+message PayloadCodec 57
+  field answered 1 None Scalar("bool") json=None oneof=None line=58
+message ClientOptions 61
+  field reason 1 None Scalar("string") json=None oneof=None line=62
+message DataConverter 65
+  field answer 1 None Scalar("string") json=None oneof=None line=66
+message CodecDataConverter 69
+  field note 1 None Scalar("string") json=None oneof=None line=70
+message Ack 73
+message StatusRequest 75
+enum Line 48
+  value landline 0 49
+  value mobile 1 50
+service CallService 15
+  option (dandori.v1.workflow) = {name: "names", version: 1}
+  method Connect Connection NewType false false 18
+    option (dandori.v1.start) = {fails: ["NoAnswer", "Unconfirmed"]}
+  method EncryptedClient PayloadCodec Ack false false 22
+    option (dandori.v1.event) = {task: "pick_up"}
+  method Encrypted ClientOptions Ack false false 26
+    option (dandori.v1.event) = {task: "hold"}
+  method Dial DataConverter Ack false false 30
+    option (dandori.v1.answer) = {task: "call"}
+  method CodecFailureConverter CodecDataConverter Ack false false 34
+    option (dandori.v1.answer) = {task: "confirm"}
+  method GetStatus StatusRequest dandori.v1.Status false false 38
+    option (dandori.v1.status) = {}
 == tests/fixtures/apis/warehouse.proto
 syntax proto3
 package warehouse.v1
@@ -334,6 +446,47 @@ enum MemberTier 3
   value MEMBER_TIER_UNSPECIFIED 0 4
   value MEMBER_TIER_BASIC 1 5
   value MEMBER_TIER_GOLD 2 6
+== tests/fixtures/secrets/acme/v1/sensitivity.proto
+syntax proto3
+package acme.v1
+import google/protobuf/descriptor.proto 5:1 public=false weak=false
+enum Sensitivity 8
+  value SENSITIVITY_UNSPECIFIED 0 9
+  value PUBLIC 1 10
+  value PERSONAL 2 11
+== tests/fixtures/secrets/bank/v1/bank.proto
+syntax proto3
+package bank.v1
+import acme/v1/sensitivity.proto 5:1 public=false weak=false
+message Account 9
+  field id 1 None Scalar("string") json=None oneof=None line=10
+  field number 2 None Scalar("string") json=None oneof=None line=11
+  field holder 3 None Scalar("string") json=None oneof=None line=12
+  field branch 4 None Scalar("string") json=None oneof=None line=13
+  field sort_code 5 None Scalar("string") json=None oneof=None line=14
+message GetAccountRequest 17
+  field id 1 None Scalar("string") json=None oneof=None line=18
+message PayRequest 21
+  field account_id 1 None Scalar("string") json=None oneof=None line=22
+  field amount 2 None Scalar("int32") json=None oneof=None line=23
+  field note 3 None Scalar("string") json=None oneof=None line=24
+  field account_number 4 None Scalar("string") json=None oneof=None line=25
+message PayResponse 28
+  field payment_id 1 None Scalar("string") json=None oneof=None line=29
+service AccountService 32
+  method GetAccount GetAccountRequest Account false false 33
+service PayoutService 36
+  method Pay PayRequest PayResponse false false 37
+== tests/fixtures/secrets/receipts.proto
+syntax proto3
+package receipts.v1
+message GetReceiptRequest 5
+  field id 1 None Scalar("string") json=None oneof=None line=6
+message Receipt 9
+  field id 1 None Scalar("string") json=None oneof=None line=10
+  field amount 2 None Scalar("int32") json=None oneof=None line=11
+service ReceiptService 14
+  method GetReceipt GetReceiptRequest Receipt false false 15
 == tests/fixtures/services/methods.proto
 syntax proto3
 package shop.v1
@@ -621,8 +774,30 @@ examples/fulfillment/specs/warehouse.proto sees
   ReserveResponse.stock: warehouse.v1.Stock (examples/fulfillment/specs/warehouse.proto, enum)
   StockService.Reserve: warehouse.v1.ReserveRequest (examples/fulfillment/specs/warehouse.proto) -> warehouse.v1.ReserveResponse (examples/fulfillment/specs/warehouse.proto)
   StockService.Release: warehouse.v1.ReleaseRequest (examples/fulfillment/specs/warehouse.proto) -> warehouse.v1.ReleaseResponse (examples/fulfillment/specs/warehouse.proto)
+examples/payout/specs/payout.ja.proto sees 
+  PayoutService.Pay: payout.ja.v1.PayRequest (examples/payout/specs/payout.ja.proto) -> payout.ja.v1.PayResponse (examples/payout/specs/payout.ja.proto)
+  AccountService.GetAccount: payout.ja.v1.GetAccountRequest (examples/payout/specs/payout.ja.proto) -> payout.ja.v1.Account (examples/payout/specs/payout.ja.proto)
+examples/payout/specs/payout.proto sees 
+  PayoutService.Pay: payout.v1.PayRequest (examples/payout/specs/payout.proto) -> payout.v1.PayResponse (examples/payout/specs/payout.proto)
+  AccountService.GetAccount: payout.v1.GetAccountRequest (examples/payout/specs/payout.proto) -> payout.v1.Account (examples/payout/specs/payout.proto)
 proto/dandori/v1/options.proto sees 
   Status.cases: known google.protobuf.Value
+tests/encrypted/protos/calls.ja.proto sees 
+  Connection.line: calls.ja.v1.Line (tests/encrypted/protos/calls.ja.proto, enum)
+  CallService.Connect: calls.ja.v1.Connection (tests/encrypted/protos/calls.ja.proto) -> calls.ja.v1.NewType (tests/encrypted/protos/calls.ja.proto)
+  CallService.EncryptedClient: calls.ja.v1.PayloadCodec (tests/encrypted/protos/calls.ja.proto) -> calls.ja.v1.Ack (tests/encrypted/protos/calls.ja.proto)
+  CallService.Encrypted: calls.ja.v1.ClientOptions (tests/encrypted/protos/calls.ja.proto) -> calls.ja.v1.Ack (tests/encrypted/protos/calls.ja.proto)
+  CallService.Dial: calls.ja.v1.DataConverter (tests/encrypted/protos/calls.ja.proto) -> calls.ja.v1.Ack (tests/encrypted/protos/calls.ja.proto)
+  CallService.CodecFailureConverter: calls.ja.v1.CodecDataConverter (tests/encrypted/protos/calls.ja.proto) -> calls.ja.v1.Ack (tests/encrypted/protos/calls.ja.proto)
+  CallService.GetStatus: calls.ja.v1.StatusRequest (tests/encrypted/protos/calls.ja.proto) -> known dandori.v1.Status
+tests/encrypted/protos/calls.proto sees 
+  Connection.line: calls.v1.Line (tests/encrypted/protos/calls.proto, enum)
+  CallService.Connect: calls.v1.Connection (tests/encrypted/protos/calls.proto) -> calls.v1.NewType (tests/encrypted/protos/calls.proto)
+  CallService.EncryptedClient: calls.v1.PayloadCodec (tests/encrypted/protos/calls.proto) -> calls.v1.Ack (tests/encrypted/protos/calls.proto)
+  CallService.Encrypted: calls.v1.ClientOptions (tests/encrypted/protos/calls.proto) -> calls.v1.Ack (tests/encrypted/protos/calls.proto)
+  CallService.Dial: calls.v1.DataConverter (tests/encrypted/protos/calls.proto) -> calls.v1.Ack (tests/encrypted/protos/calls.proto)
+  CallService.CodecFailureConverter: calls.v1.CodecDataConverter (tests/encrypted/protos/calls.proto) -> calls.v1.Ack (tests/encrypted/protos/calls.proto)
+  CallService.GetStatus: calls.v1.StatusRequest (tests/encrypted/protos/calls.proto) -> known dandori.v1.Status
 tests/fixtures/apis/warehouse.proto sees 
   ReserveResponse.stock: warehouse.v1.Stock (tests/fixtures/apis/warehouse.proto, enum)
   ReserveResponse.reserved_at: known google.protobuf.Timestamp
@@ -675,6 +850,12 @@ tests/fixtures/protos/unread.proto sees
   CatalogService.Cancel: unknown -> shop.v1.Item (tests/fixtures/protos/unread.proto)
 tests/fixtures/rules/account.proto sees 
 tests/fixtures/rules/order.proto sees 
+tests/fixtures/secrets/acme/v1/sensitivity.proto sees 
+tests/fixtures/secrets/bank/v1/bank.proto sees tests/fixtures/secrets/acme/v1/sensitivity.proto
+  AccountService.GetAccount: bank.v1.GetAccountRequest (tests/fixtures/secrets/bank/v1/bank.proto) -> bank.v1.Account (tests/fixtures/secrets/bank/v1/bank.proto)
+  PayoutService.Pay: bank.v1.PayRequest (tests/fixtures/secrets/bank/v1/bank.proto) -> bank.v1.PayResponse (tests/fixtures/secrets/bank/v1/bank.proto)
+tests/fixtures/secrets/receipts.proto sees 
+  ReceiptService.GetReceipt: receipts.v1.GetReceiptRequest (tests/fixtures/secrets/receipts.proto) -> receipts.v1.Receipt (tests/fixtures/secrets/receipts.proto)
 tests/fixtures/services/methods.proto sees 
   MethodsService.Fulfill: shop.v1.FulfillRequest (tests/fixtures/services/methods.proto) -> shop.v1.FulfillResponse (tests/fixtures/services/methods.proto)
   MethodsService.Begin: shop.v1.BeginRequest (tests/fixtures/services/methods.proto) -> shop.v1.BeginResponse (tests/fixtures/services/methods.proto)

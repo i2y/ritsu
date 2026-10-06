@@ -52,6 +52,21 @@ pub struct PField {
     /// what `(buf.validate.field)` says of the field, as the tree its options build:
     /// `{"int32": {"gte": 1}, "required": true}`; Null when it says nothing
     pub rules: Value,
+    /// the field is marked secret: `debug_redact`, written on it or on the enum value of a custom
+    /// option it is given (ritsu's DESIGN 16.6)
+    pub redact: Option<Redact>,
+}
+
+/// How a field of a message is marked secret (ritsu's DESIGN 16.6): the file of the field, as dandori
+/// reaches it, its line, and the mark as written; for a custom option, the value and where the value
+/// is marked `debug_redact = true`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Redact {
+    pub file: PathBuf,
+    pub line: usize,
+    /// `debug_redact = true`, or the option with its value: `(acme.v1.sensitivity) = PERSONAL`
+    pub mark: String,
+    pub by: Option<(String, PathBuf, usize)>,
 }
 
 #[derive(Clone, Debug)]
@@ -123,6 +138,8 @@ struct Reading {
     /// the file each name stands for, by its canonical path, so that a file is read once
     seen: Vec<(PathBuf, String)>,
     unread: Vec<String>,
+    /// each file's path as dandori reached it, by the name the file is known by
+    reached: BTreeMap<String, PathBuf>,
 }
 
 pub fn load(path: &Path) -> Result<ProtoFile, String> {
@@ -148,6 +165,7 @@ fn read(path: &Path, text: Option<&str>, rd: &mut Reading) -> Result<String, Str
     }
     let name = canon.to_string_lossy().to_string();
     rd.seen.push((canon, name.clone()));
+    rd.reached.insert(name.clone(), path.to_path_buf());
     let src = match text {
         Some(t) => t.to_string(),
         None => crate::sources::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?,
@@ -241,7 +259,8 @@ fn json(j: &ritsu_base::json::Json) -> Value {
 /// it: it stays as written, a type that is not known, and is told where a flow comes to it.
 fn resolve_all(first: &str, rd: Reading) -> Result<ProtoFile, String> {
     use ritsu_proto::{Label, Resolved, Type};
-    let Reading { ps, unread, .. } = rd;
+    let Reading { ps, unread, reached, .. } = rd;
+    let reached_as = |name: &str| reached.get(name).cloned().unwrap_or_else(|| PathBuf::from(name));
     let lenient = !unread.is_empty();
     let resolve = |file: &str, scope: &str, name: &str| -> Result<String, String> {
         match ps.resolve(file, scope, name) {
@@ -287,7 +306,11 @@ fn resolve_all(first: &str, rd: Reading) -> Result<ProtoFile, String> {
                 // a singular message field says whether it is set
                 let message = matches!(&ty, PType::Named(n) if !repeated && !f.enums.contains_key(n) && n != "google.protobuf.NullValue");
                 let rules = options(&x.options).remove("buf.validate.field").unwrap_or(Value::Null);
-                fields.push(PField { name: x.name.clone(), json: x.json(), ty, repeated, presence: x.label == Label::Optional || x.oneof.is_some() || message, rules });
+                let redact = ps.redaction(file, x).map(|r| match r {
+                    ritsu_proto::Redaction::Direct { line } => Redact { file: reached_as(file), line, mark: "debug_redact = true".into(), by: None },
+                    ritsu_proto::Redaction::ByOption { option, value, file: vf, line: vl } => Redact { file: reached_as(file), line: x.line, mark: format!("{option} = {value}"), by: Some((value, reached_as(&vf), vl)) },
+                });
+                fields.push(PField { name: x.name.clone(), json: x.json(), ty, repeated, presence: x.label == Label::Optional || x.oneof.is_some() || message, rules, redact });
             }
             f.messages.insert(scope, fields);
         }

@@ -1,0 +1,12 @@
+workflow output v1
+description "W904: an output marked secret, and a secret written to an output"
+
+inputs
+  token : string  secret
+
+outputs
+  issued   : string  secret
+  receipt  : string
+
+flow
+  succeed issued = "new", receipt = "paid with {token}"

@@ -1,0 +1,13 @@
+build --target asl:
+エラー[E050]: tests/fixtures/security/W902_意図を書いたもの.flow:20:1: Step Functions はエージェント `読む` を HTTP Task で呼ぶので、サーバーの鍵（鍵の要らないサーバーでも、EventBridge の接続には何かの値が要ります）を持つ `connection "<EventBridge の接続の ARN>"` が要ります
+    20 | task 読む(本文: string) -> string
+エラー[E050]: tests/fixtures/security/W902_意図を書いたもの.flow:20:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`読む` の送信先は `http://ollama.internal:11434/v1/responses` です
+    20 | task 読む(本文: string) -> string
+エラー[E050]: tests/fixtures/security/W902_意図を書いたもの.flow:26:1: `顧客を取る` には `connection "<EventBridge の接続の ARN>"` が要ります
+    26 | task 顧客を取る(id: string) -> 顧客情報
+エラー[E050]: tests/fixtures/security/W902_意図を書いたもの.flow:26:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`顧客を取る` の送信先は `http://crm.internal:8080/customers/{id}` です
+    26 | task 顧客を取る(id: string) -> 顧客情報
+エラー[E050]: tests/fixtures/security/W902_意図を書いたもの.flow:4:1: Step Functions は規則 `振り分け` を Connect で HTTP Task から呼ぶので、`use rule` の下に `connection "<EventBridge の接続の ARN>"` が要ります
+     4 | use rule 振り分け from "../../../examples/inquiry/rules/問い合わせの振り分け.rule"
+エラー[E050]: tests/fixtures/security/W902_意図を書いたもの.flow:4:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。規則 `振り分け` のサービスは `http://rules.internal/rulec.inquiry_routing.v1.InquiryRoutingService/Decide` です
+     4 | use rule 振り分け from "../../../examples/inquiry/rules/問い合わせの振り分け.rule"

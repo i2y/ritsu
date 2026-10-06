@@ -1,0 +1,62 @@
+workflow 名前の重なり v1 implements 通話.CallService
+  history encrypted
+description "履歴を暗号化するワークフローのクライアントが宣言する名前を、レコードと列挙と、実装するサービスのメソッドとメッセージに付ける。tests/secrets.rs が Temporal の三つの SDK に生成し、どの名前もクライアントがもとから持つ名前と同じように別の名前になることと、型の検査が通ることを確かめる"
+
+use proto 通話 from "protos/calls.ja.proto"
+
+# 履歴を暗号化するとき、Go の client.go は Dial・EncryptedClient・CodecFailureConverter・
+# CodecDataConverter を宣言するので、dandori が生成する Go では、これらの型の名前に `_` が付く。
+record Dial
+  答え : string
+
+record EncryptedClient
+  出た : bool
+
+record CodecFailureConverter
+  確認 : string
+
+record 保留
+  理由 : string
+
+enum CodecDataConverter = landline | mobile
+
+inputs
+  番号 : string  secret
+  回線 : CodecDataConverter
+
+outputs
+  記録 : string
+
+# 電話を受けた人が出ると、実行にイベントを送って知らせる。
+task 出る() -> EncryptedClient
+  event
+  timeout 1 day
+
+task 待たせる() -> 保留
+  event
+  timeout 1 day
+
+# 電話は自分のツールがかけ、コールバックに応答する。
+task かける(番号: string) -> Dial
+  callback
+  timeout 1 day
+
+task 確かめる(答え: string) -> CodecFailureConverter
+  callback
+  timeout 1 day
+
+flow
+  let 応答 = 出る()
+    on timeout => fail 出ない "だれも電話に出ません"
+  match 応答.出た
+    true => pass
+    false => fail 出ない "電話に出ませんでした"
+  let 保留中 = 待たせる()
+    on timeout => fail 出ない "保留の知らせがありません"
+  let 返事 = かける(番号: 番号)
+    on timeout => fail 出ない "電話の返事がありません"
+  let 確認済み = 確かめる(答え: 返事.答え)
+    on timeout => fail 確かめられない "答えを確かめられませんでした"
+  match 回線
+    landline => succeed 記録 = "{返事.答え}（固定電話。保留の理由は {保留中.理由}、確認は {確認済み.確認}）"
+    mobile => succeed 記録 = "{返事.答え}（携帯電話。保留の理由は {保留中.理由}、確認は {確認済み.確認}）"

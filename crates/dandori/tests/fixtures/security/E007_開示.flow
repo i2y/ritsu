@@ -1,0 +1,11 @@
+workflow 開示 v1
+description "E007：引数でないものを書く discloses と、理由の空の discloses"
+
+task 読む(本文: string) -> string
+  agent "本文が何についてのものかを、一文で答えてください。"
+  model "gpt-5.4-mini"
+  discloses 文面 "プロバイダーは何も残さない"
+  discloses 本文 ""
+
+flow
+  let 要点 = 読む(本文: "こんにちは")

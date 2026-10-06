@@ -386,6 +386,10 @@ error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here wi
 | W101 | a failure that can leave a case unfinished | handle the error at the call, or settle the case in `on failure` |
 | W102 | an `on <refusal>` that cannot happen | remove it |
 | W103 | a task that starts a case without `key` | add `key` |
+| E906 | a secret sent outside the project: a model's provider, Jev, a host named by its URL alone, an AWS service | send a reference; or, when it is meant, `discloses <parameter> "<why>"` under the task |
+| W901 | a key in the shape a provider gives it, in the `.flow` | keep it where the code runs; for a value for tests, `# ritsu: test secret` on its line |
+| W902 | a call over plain HTTP to another machine | `https://`; or `plaintext "<why>"` where the URL is written |
+| W904 | a secret kept in the history of the workflow | carry a reference; or `history encrypted` under `workflow`, when a key you hold encrypts the history |
 
 E006 also refuses a rule whose alias (the `urgency` of `rule 出荷の急ぎ(urgency) v1`) is a name the
 code dandori writes around the rule uses already (`rules`, `args`, `out`, `activity`, `handler`,
@@ -421,8 +425,8 @@ checker looks at.
 | `argo` | a WorkflowTemplate and the caller image | a task of your own is a container of its `image` |
 | `pydantic-graph` | a graph in Python | runs in your own process, and keeps nothing when it stops |
 
-[platforms.md](platforms.md) has the details, and [examples.md](examples.md) the six examples: five
-written for Temporal, for AWS and for pydantic-graph, and one that runs as it is on every platform.
+[platforms.md](platforms.md) has the details, and [examples.md](examples.md) the seven examples: five
+written for Temporal, for AWS and for pydantic-graph, and two that run as they are on every platform.
 
 ## 7. The files bundled with this skill
 
@@ -435,11 +439,12 @@ written for Temporal, for AWS and for pydantic-graph, and one that runs as it is
 | [jev.md](jev.md) | Jev tasks: the answer type as the question, confidence, rates for a rule |
 | [dates-and-books.md](dates-and-books.md) | koyomi's dates and chobo's books: calling a date, `now`, a book's operations, a hold as a case, what each platform writes |
 | [checks.md](checks.md) | what the checker looks at, with a diagnostic |
+| [secrets.md](secrets.md) | what is secret, kept in the history, sent outside the project; keys in the file and plain HTTP; `history encrypted` on each platform |
 | [codes.md](codes.md) | every diagnostic code and what it finds |
 | [diagrams.md](diagrams.md) | `ritsu dandori doc`: the workflow drawn for the person who reviews it |
 | [commands.md](commands.md) | the commands, the flags, the exit codes |
 | [platforms.md](platforms.md) | what each target writes and how it runs |
-| [examples.md](examples.md) | the six examples and how their versions differ |
+| [examples.md](examples.md) | the seven examples and how their versions differ |
 | [design.md](design.md) | the six principles the language keeps |
 
 They are copies of the pages of <https://i2y.github.io/ritsu/dandori/>, which has them in Japanese too.

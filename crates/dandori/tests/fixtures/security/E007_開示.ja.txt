@@ -1,0 +1,4 @@
+エラー[E007]: tests/fixtures/security/E007_開示.flow:7:13: `discloses` が書く `文面` は、`読む` の引数ではありません
+     7 |   discloses 文面 "プロバイダーは何も残さない"
+エラー[E007]: tests/fixtures/security/E007_開示.flow:8:3: `discloses` には、秘密の値をそこへ送る理由を書いてください（空の文字列です）
+     8 |   discloses 本文 ""

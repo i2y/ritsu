@@ -93,6 +93,9 @@ task get_intent(intent: string) -> PaymentIntent
   not the task's declared errors; `retry … on busy` retries only what it names.
 - `timeout 2 days` bounds a call, and `callback` makes a task wait for an answer that comes later
   (an approval, a packing crew's report).
+- **Secrets and plain HTTP**: `discloses <parameter> "<why>"` says the task sends that parameter's
+  secret where it calls, on purpose, and `plaintext "<why>"`, under a task with a URL of its own, that
+  the URL is reached without encryption on purpose ([Secrets](secrets.md)).
 
 ## Cases
 
@@ -227,6 +230,22 @@ A variable's range is that of every value put in it, anywhere in the flow. Since
 arithmetic, a range travels as it is, from where a value comes to where it goes. On Temporal, adding
 a range or narrowing one changes what a running workflow does when its values fall outside, so it
 ships as a new version or through Worker Deployment Versioning.
+
+## Secrets
+
+A place a value is put can also say that what is put there is secret: `secret` after the type of an
+input, an output, a field, or a task's parameter or answer (`api_token    : string  secret`), as a
+`.proto`'s `debug_redact` and an OpenAPI document's `x-data-classification` say it of their fields.
+The checker follows a secret, as it follows a range, to where the platform keeps it in the history of
+the run (W904) and to a task that sends it outside the project (E906). A workflow whose history is
+encrypted with a key says so under its first line, and its Temporal code then takes a payload codec:
+
+```flow
+workflow payout v1
+  history encrypted
+```
+
+[Secrets](secrets.md) has the rest.
 
 ## See it drawn
 

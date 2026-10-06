@@ -1,0 +1,8 @@
+workflow 失敗の理由 v1
+description "W904：fail の理由に埋め込んだ秘密の値"
+
+inputs
+  トークン : string  secret
+
+flow
+  fail 拒否 "トークン {トークン} は受け付けられませんでした"

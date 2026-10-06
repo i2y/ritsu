@@ -1,0 +1,43 @@
+workflow 送金の名義 v1
+description "E906：examples/payout の日本語の版を、口座の名義をモデルに読ませるように変えたもの"
+
+use proto 銀行 from "../../../examples/payout/specs/payout.ja.proto"
+  url "https://bank.example.com"
+
+inputs
+  売り手ID : string
+  口座ID   : string
+  金額     : money[円, incl_tax]  range >=1 <=10000000
+
+outputs
+  送金ID : string
+
+task 口座を取る(id: string) -> 銀行.Account
+  connect 銀行 "AccountService/GetAccount"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/bank/7c1e2d"
+
+# 銀行は、番号を持っている口座に送金する。フローは口座を ID で指す。
+task 送金する(口座ID: string, 金額: money[円, incl_tax], 摘要: string) -> 銀行.PayResponse
+  connect 銀行 "PayoutService/Pay"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/bank/7c1e2d"
+  key
+  errors 拒否 = failed_precondition
+
+# モデルが読むのは金額と送金の ID で、口座のことは何も読まない。
+task 知らせを書く(金額: money[円, incl_tax], 送金ID: string, 名義: string) -> string
+  agent "売り手に、売上の送金を済ませたことを知らせる短い文面を下書きしてください。金額（円）と送金の ID を書き、口座のことは書かないでください。"
+  model "gpt-5.4-mini"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/openai/3f2a1b"
+  timeout 60 seconds
+
+task 知らせる(売り手ID: string, 本文: string)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:send-notice"
+  idempotent
+
+flow
+  let 口座 = 口座を取る(id: 口座ID)
+  let 送金 = 送金する(口座ID: 口座ID, 金額: 金額, 摘要: "売上の支払い")
+    on 拒否 => fail 拒否 "銀行が口座 {口座ID} への送金を拒否しました"
+  let 知らせ = 知らせを書く(金額: 金額, 送金ID: 送金.送金ID, 名義: 口座.名義)
+  知らせる(売り手ID: 売り手ID, 本文: 知らせ)
+  succeed 送金ID = 送金.送金ID

@@ -53,6 +53,9 @@ pub struct Program {
     /// `implements <api>.<Service>` on the `workflow` line: the service of a `.proto` the workflow implements
     pub implements: Option<Vec<Name>>,
     pub description: Option<String>,
+    /// `history encrypted` under the `workflow` line: the history of a run is encrypted with a key
+    /// only those who may read its secrets hold (DESIGN 1.18)
+    pub history_encrypted: Option<Span>,
     pub kind: Kind,
     pub uses: Vec<UseRule>,
     /// `use openapi|smithy|proto <name> from "<path>"`: the descriptions of the APIs the tasks call
@@ -85,6 +88,8 @@ pub struct UseRule {
     pub connect: Option<(String, Span)>,
     /// `connection "<EventBridge connection>"`: how Step Functions' HTTP Task reaches the service
     pub connection: Option<(String, Span)>,
+    /// `plaintext "<why>"`: the service at `connect` is reached without encryption on purpose
+    pub plaintext: Option<(String, Span)>,
 }
 
 /// `use dates terms from "dates/payment_terms.cal"`: a dates file of koyomi's, whose dates the flow
@@ -117,6 +122,10 @@ pub struct UseApi {
     pub path: String,
     /// `url "<base>"`: where the API is, in place of an OpenAPI document's server (a `.proto` needs it)
     pub url: Option<String>,
+    /// where `url` is written
+    pub url_at: Option<Span>,
+    /// `plaintext "<why>"`: the API is reached without encryption on purpose
+    pub plaintext: Option<(String, Span)>,
 }
 
 #[derive(Clone, Debug)]
@@ -136,6 +145,8 @@ pub struct Field {
     pub name: Name,
     pub ty: TypeExpr,
     pub range: Option<RangeDecl>,
+    /// `secret` after the type (and its range): what is put here is a secret (DESIGN 1.18)
+    pub secret: Option<Span>,
 }
 
 /// `range >=1 <=30`, `range >=1kg`: the whole numbers a value may be, both ends included, in the
@@ -265,6 +276,8 @@ pub struct TaskDecl {
     pub result: Option<TypeExpr>,
     /// `-> int range >=0 <=100`
     pub result_range: Option<RangeDecl>,
+    /// `-> Account secret`: the answer is a secret (DESIGN 1.18)
+    pub result_secret: Option<Span>,
     pub binding: Option<(Binding, Span)>,
     /// the model an `agent` task runs on
     pub model: Option<(String, Span)>,
@@ -302,6 +315,11 @@ pub struct TaskDecl {
     /// `flow "<path>"`: the child workflow is another `.flow`, whose inputs, outputs and
     /// errors the task is held to
     pub flow: Option<(String, Span)>,
+    /// `plaintext "<why>"`: the task's URL is reached without encryption on purpose (DESIGN 1.18)
+    pub plaintext: Option<(String, Span)>,
+    /// `discloses <param>, … "<why>"`: the task sends the secrets of these parameters where it
+    /// calls, on purpose (DESIGN 1.18); each clause as written
+    pub discloses: Vec<(Vec<Name>, String, Span)>,
 }
 
 #[derive(Clone, Debug)]
@@ -886,7 +904,15 @@ fn field(cur: &mut Cur) -> Result<Field, Diag> {
     cur.expect_sym(":")?;
     let ty = type_expr(cur)?;
     let range = range_decl(cur)?;
-    Ok(Field { name, ty, range })
+    let secret = secret_mark(cur);
+    Ok(Field { name, ty, range, secret })
+}
+
+/// `secret`, after a type and its range: the place holds a secret (DESIGN 1.18). Read only here,
+/// so that `secret` stays a name a flow can use.
+fn secret_mark(cur: &mut Cur) -> Option<Span> {
+    let sp = cur.span();
+    cur.eat_kw("secret").then_some(sp)
 }
 
 /// `range >=1 <=30`, `range >=0`, `range <=100`, `range >=1kg`, after a type.
@@ -1379,6 +1405,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
         version: 1,
         implements: None,
         description: None,
+        history_encrypted: None,
         kind: Kind::Standard,
         uses: vec![],
         apis: vec![],
@@ -1428,6 +1455,23 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 cur.expect_end()?;
                 prog.name = Some(name);
                 p.pos += 1;
+                // under it: `history encrypted` (DESIGN 1.18)
+                while let Some(cl) = p.cur_line() {
+                    if cl.indent == 0 {
+                        break;
+                    }
+                    let cl = cl.clone();
+                    let mut cc = Cur::new(&cl);
+                    let at = cc.span();
+                    if cc.eat_kw("history") {
+                        cc.expect_kw("encrypted")?;
+                        cc.expect_end()?;
+                        prog.history_encrypted = Some(at);
+                    } else {
+                        return Err(err(at, tr!("`workflow` の下に書けるのは `history encrypted` だけです", "only `history encrypted` can be written under `workflow`")));
+                    }
+                    p.pos += 1;
+                }
             }
             "description" => {
                 prog.description = Some(cur.string(tr!("説明", "a description"))?.0);
@@ -1497,21 +1541,28 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 cur.expect_end()?;
                 p.pos += 1;
                 let mut url = None;
+                let mut url_at = None;
+                let mut plaintext = None;
                 while let Some(cl) = p.cur_line() {
                     if cl.indent == 0 {
                         break;
                     }
                     let cl = cl.clone();
                     let mut cc = Cur::new(&cl);
+                    let at = cc.span();
                     if cc.eat_kw("url") {
                         url = Some(cc.string(tr!("API の場所", "where the API is"))?.0);
+                        url_at = Some(at);
+                        cc.expect_end()?;
+                    } else if cc.eat_kw("plaintext") {
+                        plaintext = Some((cc.string(tr!("暗号化しない通信にする理由", "why the connection is not encrypted"))?.0, at));
                         cc.expect_end()?;
                     } else {
-                        return Err(err(cc.span(), tr!("`use openapi`・`use smithy`・`use proto` の下に書けるのは `url \"<API の場所>\"` だけです", "only `url \"<where the API is>\"` can be written under `use openapi`, `use smithy` and `use proto`")));
+                        return Err(err(cc.span(), tr!("`use openapi`・`use smithy`・`use proto` の下に書けるのは `url \"<API の場所>\"` と `plaintext \"<理由>\"` だけです", "only `url \"<where the API is>\"` and `plaintext \"<why>\"` can be written under `use openapi`, `use smithy` and `use proto`")));
                     }
                     p.pos += 1;
                 }
-                prog.apis.push(UseApi { kind, name, path, url });
+                prog.apis.push(UseApi { kind, name, path, url, url_at, plaintext });
             }
             "use" => {
                 cur.expect_kw("rule")?;
@@ -1524,6 +1575,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 let mut local = false;
                 let mut connect = None;
                 let mut connection = None;
+                let mut plaintext = None;
                 while let Some(cl) = p.cur_line() {
                     if cl.indent == 0 {
                         break;
@@ -1543,15 +1595,18 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     } else if cc.eat_kw("local") {
                         local = true;
                         cc.expect_end()?;
+                    } else if cc.eat_kw("plaintext") {
+                        plaintext = Some((cc.string(tr!("暗号化しない通信にする理由", "why the connection is not encrypted"))?.0, at));
+                        cc.expect_end()?;
                     } else {
                         return Err(err(
                             cc.span(),
-                            tr!("`use rule` の下に書けるのは `lambda \"<関数>\"`・`connect \"<URL>\"`・`connection \"<接続>\"`・`local` だけです", "only `lambda \"<function>\"`, `connect \"<url>\"`, `connection \"<connection>\"` and `local` can be written under `use rule`"),
+                            tr!("`use rule` の下に書けるのは `lambda \"<関数>\"`・`connect \"<URL>\"`・`connection \"<接続>\"`・`local`・`plaintext \"<理由>\"` だけです", "only `lambda \"<function>\"`, `connect \"<url>\"`, `connection \"<connection>\"`, `local` and `plaintext \"<why>\"` can be written under `use rule`"),
                         ));
                     }
                     p.pos += 1;
                 }
-                prog.uses.push(UseRule { name, path, lambda, local, connect, connection });
+                prog.uses.push(UseRule { name, path, lambda, local, connect, connection, plaintext });
             }
             "enum" => {
                 let name = cur.ident(tr!("列挙の名前", "the enum's name"))?;
@@ -1603,6 +1658,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                 }
                 let result = if cur.eat_sym("->") { Some(type_expr(&mut cur)?) } else { None };
                 let result_range = if result.is_some() { range_decl(&mut cur)? } else { None };
+                let result_secret = if result.is_some() { secret_mark(&mut cur) } else { None };
                 cur.expect_end()?;
                 p.pos += 1;
                 let mut t = TaskDecl {
@@ -1610,6 +1666,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     params,
                     result,
                     result_range,
+                    result_secret,
                     binding: None,
                     model: None,
                     effort: None,
@@ -1633,6 +1690,8 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     callback: None,
                     event: None,
                     flow: None,
+                    plaintext: None,
+                    discloses: vec![],
                 };
                 while let Some(cl) = p.cur_line() {
                     if cl.indent == 0 {
@@ -1938,6 +1997,12 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
         "callback" => t.callback = Some(sp),
         "event" => t.event = Some(sp),
         "flow" => t.flow = Some((cc.string(tr!("子の .flow のパス", "the path of the child's .flow"))?.0, sp)),
+        "plaintext" => t.plaintext = Some((cc.string(tr!("暗号化しない通信にする理由", "why the connection is not encrypted"))?.0, sp)),
+        "discloses" => {
+            let params = cc.names(tr!("秘密の値を渡す引数", "a parameter whose secret the task sends"))?;
+            let (why, _) = cc.string(tr!("秘密の値をそこへ送る理由", "why the task sends the secret there"))?;
+            t.discloses.push((params, why, sp));
+        }
         "starts" => {
             let machine = cc.qualname()?;
             let mut then = Vec::new();
@@ -1963,7 +2028,7 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
         other => {
             return Err(err(
                 sp,
-                tr!("`{other}` はタスクの項目ではありません（lambda・http・connect・aws・agent・jev・model・effort・confidence・url・connection・flow・queue・workflow・state machine・durable function・image・workflow template・errors・retry・timeout・key・idempotent・callback・event・starts・sends・observes・refused as）", "`{other}` is not a task clause; expected lambda, http, connect, aws, agent, jev, model, effort, confidence, url, connection, flow, queue, workflow, state machine, durable function, image, workflow template, errors, retry, timeout, key, idempotent, callback, event, starts, sends, observes or refused as"),
+                tr!("`{other}` はタスクの項目ではありません（lambda・http・connect・aws・agent・jev・model・effort・confidence・url・connection・flow・queue・workflow・state machine・durable function・image・workflow template・errors・retry・timeout・key・idempotent・callback・event・starts・sends・observes・refused as・plaintext・discloses）", "`{other}` is not a task clause; expected lambda, http, connect, aws, agent, jev, model, effort, confidence, url, connection, flow, queue, workflow, state machine, durable function, image, workflow template, errors, retry, timeout, key, idempotent, callback, event, starts, sends, observes, refused as, plaintext or discloses"),
             ))
         }
     }

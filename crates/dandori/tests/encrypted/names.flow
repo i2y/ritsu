@@ -1,0 +1,62 @@
+workflow names v1 implements calls.CallService
+  history encrypted
+description "The names the client of an encrypted history declares, given to records, an enum, and the methods and messages of the service the workflow implements: tests/secrets.rs builds it for Temporal's three SDKs, where each gives way as one of the client's own names does, and type-checks the code"
+
+use proto calls from "protos/calls.proto"
+
+# Go's client.go declares Dial, EncryptedClient, CodecFailureConverter and CodecDataConverter when
+# the history is encrypted, so these types take `_` in the Go dandori writes.
+record Dial
+  answer : string
+
+record EncryptedClient
+  answered : bool
+
+record CodecFailureConverter
+  note : string
+
+record Pause
+  reason : string
+
+enum CodecDataConverter = landline | mobile
+
+inputs
+  number : string  secret
+  line   : CodecDataConverter
+
+outputs
+  receipt : string
+
+# The one called picks up, and says so by an event sent to the run.
+task pick_up() -> EncryptedClient
+  event
+  timeout 1 day
+
+task hold() -> Pause
+  event
+  timeout 1 day
+
+# A tool of your own makes the call, and answers the callback.
+task call(number: string) -> Dial
+  callback
+  timeout 1 day
+
+task confirm(answer: string) -> CodecFailureConverter
+  callback
+  timeout 1 day
+
+flow
+  let picked = pick_up()
+    on timeout => fail NoAnswer "nobody picked up"
+  match picked.answered
+    true => pass
+    false => fail NoAnswer "the call was not picked up"
+  let pause = hold()
+    on timeout => fail NoAnswer "no word on the hold"
+  let reply = call(number: number)
+    on timeout => fail NoAnswer "no answer to the call"
+  let checked = confirm(answer: reply.answer)
+    on timeout => fail Unconfirmed "the answer was not confirmed"
+  match line
+    landline => succeed receipt = "{reply.answer} by landline, held for {pause.reason}, noted {checked.note}"
+    mobile => succeed receipt = "{reply.answer} by mobile, held for {pause.reason}, noted {checked.note}"

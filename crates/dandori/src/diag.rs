@@ -95,7 +95,9 @@ impl Diag {
         }
     }
 
-    /// The text a person reads: the headline, the source line, the notes, and the run.
+    /// The text a person reads: the headline, the source line, the notes, and the run. A key on the
+    /// source line is shown masked (ritsu-base's `secrets::mask`), whichever diagnostic shows the
+    /// line: a key in the file must not reach the logs through the line (DESIGN 1.18).
     pub fn render(&self, file: &str, src: &str, lang: Lang) -> String {
         let kind = match (self.severity, lang) {
             (Severity::Error, Lang::En) => "error",
@@ -106,7 +108,7 @@ impl Diag {
         let mut out = format!("{kind}[{}]: {file}:{}:{}: {}\n", self.code, self.line, self.col, self.message(lang));
         if let Some(text) = src.lines().nth(self.line.saturating_sub(1)) {
             if self.line > 0 {
-                out.push_str(&format!("  {:>4} | {}\n", self.line, text));
+                out.push_str(&format!("  {:>4} | {}\n", self.line, ritsu_base::secrets::mask(text)));
             }
         }
         for n in &self.notes {

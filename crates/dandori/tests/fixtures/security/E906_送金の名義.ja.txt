@@ -1,0 +1,19 @@
+警告[W904]: tests/fixtures/security/E906_送金の名義.flow:15:1: `口座を取る` の結果が持つ秘密の値 `番号` が、ワークフローの履歴に残ります
+    15 | task 口座を取る(id: string) -> 銀行.Account
+  = 印は ../../../examples/payout/specs/payout.ja.proto:36 の `debug_redact = true` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = タスクには値の代わりに参照（ID やシークレットの名前）を返させ、値はそれを使うタスクの中で取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+警告[W904]: tests/fixtures/security/E906_送金の名義.flow:15:1: `口座を取る` の結果が持つ秘密の値 `名義` が、ワークフローの履歴に残ります
+    15 | task 口座を取る(id: string) -> 銀行.Account
+  = 印は ../../../examples/payout/specs/payout.ja.proto:37 の `debug_redact = true` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = タスクには値の代わりに参照（ID やシークレットの名前）を返させ、値はそれを使うタスクの中で取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。
+エラー[E906]: tests/fixtures/security/E906_送金の名義.flow:41:1: タスク `知らせを書く` が、秘密の値 `口座.名義` をプロジェクトの外の OpenAI に送ります
+    41 |   let 知らせ = 知らせを書く(金額: 金額, 送金ID: 送金.送金ID, 名義: 口座.名義)
+  = 印は ../../../examples/payout/specs/payout.ja.proto:37 の `debug_redact = true` です。
+  = 参照か、相手に要るものだけを送ってください。そこへ送ることを意図しているなら、タスクの下に `discloses 名義 "<理由>"` と書いてください。
+警告[W904]: tests/fixtures/security/E906_送金の名義.flow:41:1: 秘密の値 `口座.名義` が、`知らせを書く` の引数 `名義` として、ワークフローの履歴に残ります
+    41 |   let 知らせ = 知らせを書く(金額: 金額, 送金ID: 送金.送金ID, 名義: 口座.名義)
+  = 印は ../../../examples/payout/specs/payout.ja.proto:37 の `debug_redact = true` です。
+  = Temporal、Step Functions、Lambda durable functions、Argo Workflows は、ワークフローとすべての呼び出しの入力と出力を履歴に残し、実行を読める人はだれでもそれを読めます。
+  = 値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら（Temporal はペイロードのコーデック、Step Functions と Lambda durable functions はカスタマー管理の KMS キー）、`workflow` の下に `history encrypted` と書いてください。

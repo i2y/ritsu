@@ -1,0 +1,37 @@
+workflow plaintext v1
+description "E007: plaintext where there is no URL, and plaintext and discloses with an empty reason"
+
+use rule routing from "../../../examples/inquiry/rules/inquiry_routing.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:inquiry-routing"
+  plaintext "the rule is in the same account"
+use openapi crm from "../secrets/plain.json"
+
+record Customer
+  id      : string
+  email   : string
+  segment : string
+  pin     : string?
+
+inputs
+  kind : routing.kind
+  id   : string
+
+task keep(text: string)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:keep"
+  idempotent
+  plaintext "the function is ours"
+
+task get_customer(id: string) -> Customer
+  http GET crm "/customers/{id}"
+  plaintext "the CRM is ours"
+
+task notify(text: string)
+  http POST "http://notify.example.com/v1/messages"
+  idempotent
+  plaintext ""
+
+flow
+  let route = routing(kind: kind, member: true)
+  keep(text: "hi")
+  let customer = get_customer(id: id)
+  notify(text: "hi")

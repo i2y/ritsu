@@ -1,0 +1,2 @@
+エラー[E001]: tests/fixtures/security/E001_under_workflow.flow:2:11: ここには `encrypted` が要ります
+     2 |   history kept

@@ -1,0 +1,8 @@
+警告[W901]: tests/fixtures/security/W901_key_in_a_comment.flow:4:24: Google の API キーがここに書かれています（AIza…、39 文字）
+     4 | # the key that worked: AIza…
+  = ファイルに書いた鍵は、リポジトリとその履歴とビルドを読めるすべての人に渡ります。鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置き、そこから読んでください。
+  = 本物の鍵なら、まず Google で無効にしてください。ファイルから消しても、リポジトリの履歴には残ります。
+  = テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。
+build --target asl:
+エラー[E050]: tests/fixtures/security/W901_key_in_a_comment.flow:5:1: `find` には `connection "<EventBridge の接続の ARN>"` が要ります
+     5 | task find(q: string) -> string

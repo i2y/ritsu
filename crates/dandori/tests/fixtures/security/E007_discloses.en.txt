@@ -1,0 +1,4 @@
+error[E007]: tests/fixtures/security/E007_discloses.flow:7:13: `discloses` names `body`, which is not a parameter of `read`
+     7 |   discloses body "the provider keeps nothing"
+error[E007]: tests/fixtures/security/E007_discloses.flow:8:3: give `discloses` the reason the task sends the secrets there; it is an empty string
+     8 |   discloses text ""

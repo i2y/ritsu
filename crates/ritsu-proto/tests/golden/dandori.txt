@@ -166,6 +166,46 @@ service warehouse.v1.StockService imports_options=false
   method Reserve in=warehouse.v1.ReserveRequest out=warehouse.v1.ReserveResponse streams=false
   method Release in=warehouse.v1.ReleaseRequest out=warehouse.v1.ReleaseResponse streams=false
 unread
+== ../dandori/examples/payout/specs/payout.ja.proto
+package payout.ja.v1
+message payout.ja.v1.Account
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field number json=番号 ty=Scalar("string") repeated=false presence=false rules=null
+  field holder json=名義 ty=Scalar("string") repeated=false presence=false rules=null
+  field bank_name json=銀行名 ty=Scalar("string") repeated=false presence=false rules=null
+message payout.ja.v1.GetAccountRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message payout.ja.v1.PayRequest
+  field account_id json=口座ID ty=Scalar("string") repeated=false presence=false rules=null
+  field amount json=金額 ty=Scalar("int32") repeated=false presence=false rules=null
+  field reference json=摘要 ty=Scalar("string") repeated=false presence=false rules=null
+message payout.ja.v1.PayResponse
+  field payout_id json=送金ID ty=Scalar("string") repeated=false presence=false rules=null
+service payout.ja.v1.PayoutService imports_options=false
+  method Pay in=payout.ja.v1.PayRequest out=payout.ja.v1.PayResponse streams=false
+service payout.ja.v1.AccountService imports_options=false
+  method GetAccount in=payout.ja.v1.GetAccountRequest out=payout.ja.v1.Account streams=false
+unread
+== ../dandori/examples/payout/specs/payout.proto
+package payout.v1
+message payout.v1.Account
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field number json=number ty=Scalar("string") repeated=false presence=false rules=null
+  field holder json=holder ty=Scalar("string") repeated=false presence=false rules=null
+  field bank_name json=bankName ty=Scalar("string") repeated=false presence=false rules=null
+message payout.v1.GetAccountRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message payout.v1.PayRequest
+  field account_id json=accountId ty=Scalar("string") repeated=false presence=false rules=null
+  field amount json=amount ty=Scalar("int32") repeated=false presence=false rules=null
+  field reference json=reference ty=Scalar("string") repeated=false presence=false rules=null
+message payout.v1.PayResponse
+  field payout_id json=payoutId ty=Scalar("string") repeated=false presence=false rules=null
+service payout.v1.PayoutService imports_options=false
+  method Pay in=payout.v1.PayRequest out=payout.v1.PayResponse streams=false
+service payout.v1.AccountService imports_options=false
+  method GetAccount in=payout.v1.GetAccountRequest out=payout.v1.Account streams=false
+unread
 == ../dandori/proto/dandori/v1/options.proto
 package dandori.v1
 message dandori.v1.AnswerOptions
@@ -182,6 +222,100 @@ message dandori.v1.StatusOptions
 message dandori.v1.WorkflowOptions
   field name json=name ty=Scalar("string") repeated=false presence=false rules=null
   field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
+unread
+== ../dandori/tests/encrypted/protos/calls.ja.proto
+package calls.ja.v1
+message calls.ja.v1.Ack
+message calls.ja.v1.ClientOptions
+  field reason json=理由 ty=Scalar("string") repeated=false presence=false rules=null
+message calls.ja.v1.CodecDataConverter
+  field note json=確認 ty=Scalar("string") repeated=false presence=false rules=null
+message calls.ja.v1.Connection
+  field number json=番号 ty=Scalar("string") repeated=false presence=false rules=null
+  field line json=回線 ty=Named("calls.ja.v1.Line") repeated=false presence=false rules=null
+message calls.ja.v1.DataConverter
+  field answer json=答え ty=Scalar("string") repeated=false presence=false rules=null
+message calls.ja.v1.NewType
+  field memo json=記録 ty=Scalar("string") repeated=false presence=false rules=null
+message calls.ja.v1.PayloadCodec
+  field answered json=出た ty=Scalar("bool") repeated=false presence=false rules=null
+message calls.ja.v1.StatusRequest
+message dandori.v1.AnswerOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.EventOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.StartOptions
+  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.Status
+  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
+  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
+  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.StatusOptions
+message dandori.v1.WorkflowOptions
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
+enum calls.ja.v1.Line = landline mobile
+service calls.ja.v1.CallService imports_options=true
+  option dandori.v1.workflow = {"name":"名前の重なり","version":1}
+  method Connect in=calls.ja.v1.Connection out=calls.ja.v1.NewType streams=false
+    option dandori.v1.start = {"fails":["出ない","確かめられない"]}
+  method EncryptedClient in=calls.ja.v1.PayloadCodec out=calls.ja.v1.Ack streams=false
+    option dandori.v1.event = {"task":"出る"}
+  method Encrypted in=calls.ja.v1.ClientOptions out=calls.ja.v1.Ack streams=false
+    option dandori.v1.event = {"task":"待たせる"}
+  method Dial in=calls.ja.v1.DataConverter out=calls.ja.v1.Ack streams=false
+    option dandori.v1.answer = {"task":"かける"}
+  method CodecFailureConverter in=calls.ja.v1.CodecDataConverter out=calls.ja.v1.Ack streams=false
+    option dandori.v1.answer = {"task":"確かめる"}
+  method GetStatus in=calls.ja.v1.StatusRequest out=dandori.v1.Status streams=false
+    option dandori.v1.status = {}
+unread
+== ../dandori/tests/encrypted/protos/calls.proto
+package calls.v1
+message calls.v1.Ack
+message calls.v1.ClientOptions
+  field reason json=reason ty=Scalar("string") repeated=false presence=false rules=null
+message calls.v1.CodecDataConverter
+  field note json=note ty=Scalar("string") repeated=false presence=false rules=null
+message calls.v1.Connection
+  field number json=number ty=Scalar("string") repeated=false presence=false rules=null
+  field line json=line ty=Named("calls.v1.Line") repeated=false presence=false rules=null
+message calls.v1.DataConverter
+  field answer json=answer ty=Scalar("string") repeated=false presence=false rules=null
+message calls.v1.NewType
+  field receipt json=receipt ty=Scalar("string") repeated=false presence=false rules=null
+message calls.v1.PayloadCodec
+  field answered json=answered ty=Scalar("bool") repeated=false presence=false rules=null
+message calls.v1.StatusRequest
+message dandori.v1.AnswerOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.EventOptions
+  field task json=task ty=Scalar("string") repeated=false presence=false rules=null
+message dandori.v1.StartOptions
+  field fails json=fails ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.Status
+  field at json=at ty=Scalar("int32") repeated=false presence=true rules=null
+  field cases json=cases ty=Map(Scalar("string"), Named("google.protobuf.Value")) repeated=false presence=false rules=null
+  field events json=events ty=Scalar("string") repeated=true presence=false rules=null
+message dandori.v1.StatusOptions
+message dandori.v1.WorkflowOptions
+  field name json=name ty=Scalar("string") repeated=false presence=false rules=null
+  field version json=version ty=Scalar("uint32") repeated=false presence=false rules=null
+enum calls.v1.Line = landline mobile
+service calls.v1.CallService imports_options=true
+  option dandori.v1.workflow = {"name":"names","version":1}
+  method Connect in=calls.v1.Connection out=calls.v1.NewType streams=false
+    option dandori.v1.start = {"fails":["NoAnswer","Unconfirmed"]}
+  method EncryptedClient in=calls.v1.PayloadCodec out=calls.v1.Ack streams=false
+    option dandori.v1.event = {"task":"pick_up"}
+  method Encrypted in=calls.v1.ClientOptions out=calls.v1.Ack streams=false
+    option dandori.v1.event = {"task":"hold"}
+  method Dial in=calls.v1.DataConverter out=calls.v1.Ack streams=false
+    option dandori.v1.answer = {"task":"call"}
+  method CodecFailureConverter in=calls.v1.CodecDataConverter out=calls.v1.Ack streams=false
+    option dandori.v1.answer = {"task":"confirm"}
+  method GetStatus in=calls.v1.StatusRequest out=dandori.v1.Status streams=false
+    option dandori.v1.status = {}
 unread
 == ../dandori/tests/fixtures/apis/warehouse.proto
 package warehouse.v1
@@ -330,6 +464,43 @@ unread
 == ../dandori/tests/fixtures/rules/order.proto
 package shop.v1
 enum shop.v1.MemberTier = MEMBER_TIER_UNSPECIFIED MEMBER_TIER_BASIC MEMBER_TIER_GOLD
+unread
+== ../dandori/tests/fixtures/secrets/acme/v1/sensitivity.proto
+package acme.v1
+enum acme.v1.Sensitivity = SENSITIVITY_UNSPECIFIED PUBLIC PERSONAL
+unread
+== ../dandori/tests/fixtures/secrets/bank/v1/bank.proto
+package bank.v1
+message bank.v1.Account
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field number json=number ty=Scalar("string") repeated=false presence=false rules=null
+  field holder json=holder ty=Scalar("string") repeated=false presence=false rules=null
+  field branch json=branch ty=Scalar("string") repeated=false presence=false rules=null
+  field sort_code json=sortCode ty=Scalar("string") repeated=false presence=false rules=null
+message bank.v1.GetAccountRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message bank.v1.PayRequest
+  field account_id json=accountId ty=Scalar("string") repeated=false presence=false rules=null
+  field amount json=amount ty=Scalar("int32") repeated=false presence=false rules=null
+  field note json=note ty=Scalar("string") repeated=false presence=false rules=null
+  field account_number json=accountNumber ty=Scalar("string") repeated=false presence=false rules=null
+message bank.v1.PayResponse
+  field payment_id json=paymentId ty=Scalar("string") repeated=false presence=false rules=null
+enum acme.v1.Sensitivity = SENSITIVITY_UNSPECIFIED PUBLIC PERSONAL
+service bank.v1.AccountService imports_options=false
+  method GetAccount in=bank.v1.GetAccountRequest out=bank.v1.Account streams=false
+service bank.v1.PayoutService imports_options=false
+  method Pay in=bank.v1.PayRequest out=bank.v1.PayResponse streams=false
+unread
+== ../dandori/tests/fixtures/secrets/receipts.proto
+package receipts.v1
+message receipts.v1.GetReceiptRequest
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+message receipts.v1.Receipt
+  field id json=id ty=Scalar("string") repeated=false presence=false rules=null
+  field amount json=amount ty=Scalar("int32") repeated=false presence=false rules=null
+service receipts.v1.ReceiptService imports_options=false
+  method GetReceipt in=receipts.v1.GetReceiptRequest out=receipts.v1.Receipt streams=false
 unread
 == ../dandori/tests/fixtures/services/methods.proto
 package shop.v1

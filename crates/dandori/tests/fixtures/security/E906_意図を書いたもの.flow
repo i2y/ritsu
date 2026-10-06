@@ -1,0 +1,13 @@
+workflow 意図を書いたもの v1
+description "E906：何も出ない。そこへ送ることをタスクに書いてある。履歴には残るので W904 は出る"
+
+inputs
+  メール : string  secret
+
+task 読む(本文: string) -> string
+  agent "本文が何についてのものかを、一文で答えてください。"
+  model "gpt-5.4-mini"
+  discloses 本文 "問い合わせを振り分けるためにモデルが読む。プロバイダーとの取り決めで、データは残らない"
+
+flow
+  let 要点 = 読む(本文: メール)

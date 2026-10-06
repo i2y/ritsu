@@ -98,8 +98,8 @@ pub fn ledger() -> Ledger {
             "E007",
             tr!("タスクや規則の書き方が合いません", "Clauses of a task or a rule that do not go together"),
             tr!(
-                "タスクの書き方が合わないとき。呼び出し方が二つある、`flow` のタスクにほかの呼び出し方や `image` がある、Connect に無いエラーコード、ステータスの無い HTTP のエラー、呼び出し方が持てない `key` や `callback`、dandori の知らない AWS のサービス、`agent` の無い `model`、Jev が答えられない結果の型などです（一覧はサイトの診断コードの表にあります）。帳簿の操作のタスクでは、振替に無い操作（すぐに確定する振替の hold・post・void、仮押さえにする振替の do）、`key`、`refused as`、エラーの `= …` で出ます。規則の書き方が合わないとき（`lambda` と `connect` の両方、`connect` の無い `connection`、http:// でも https:// でもない `connect`）にも出ます。",
-                "A task's clauses that do not go together: two ways of calling, a `flow` task with another one or with an `image`, a Connect error code that is not one, an HTTP error without its status, a `key` or a `callback` the way of calling cannot have, an AWS service it does not know, `model` without an `agent`, an answer Jev cannot give, and the others the site's table of codes lists; for a task that runs an operation of a book, an operation the transfer does not have (hold, post or void of a transfer done at once, do of one that holds first), `key`, `refused as`, an error's `= …`; and a rule's: `lambda` and `connect` together, a `connection` without `connect`, a `connect` that is not http:// or https://."
+                "タスクの書き方が合わないとき。呼び出し方が二つある、`flow` のタスクにほかの呼び出し方や `image` がある、Connect に無いエラーコード、ステータスの無い HTTP のエラー、呼び出し方が持てない `key` や `callback`、dandori の知らない AWS のサービス、`agent` の無い `model`、Jev が答えられない結果の型などです（一覧はサイトの診断コードの表にあります）。帳簿の操作のタスクでは、振替に無い操作（すぐに確定する振替の hold・post・void、仮押さえにする振替の do）、`key`、`refused as`、エラーの `= …` で出ます。規則の書き方が合わないとき（`lambda` と `connect` の両方、`connect` の無い `connection`、http:// でも https:// でもない `connect`）にも出ます。自分の URL を持たないタスクや、`connect` の無い `use rule`、URL の無い `use` の下の `plaintext`、タスクに無い引数を書く `discloses`、理由が空の文字列の `plaintext` と `discloses` でも出ます。",
+                "A task's clauses that do not go together: two ways of calling, a `flow` task with another one or with an `image`, a Connect error code that is not one, an HTTP error without its status, a `key` or a `callback` the way of calling cannot have, an AWS service it does not know, `model` without an `agent`, an answer Jev cannot give, and the others the site's table of codes lists; for a task that runs an operation of a book, an operation the transfer does not have (hold, post or void of a transfer done at once, do of one that holds first), `key`, `refused as`, an error's `= …`; and a rule's: `lambda` and `connect` together, a `connection` without `connect`, a `connect` that is not http:// or https://; `plaintext` under a task with no URL of its own, under `use rule` without `connect` or under a `use` with no URL, `discloses` naming what is not a parameter of the task, and an empty reason of `plaintext` or `discloses`."
             ),
             tr!("メッセージに挙がった句を外すか、ほかの句と合う句に替えてください。", "Take out the clause the message names, or put in one that goes with the others."),
             "workflow w v1\n\ntask send(text: string)\n  lambda \"arn:aws:lambda:ap-northeast-1:123456789012:function:send\"\n  http POST \"https://example.com/send\"\n\nflow\n  send(text: \"hi\")\n",
@@ -260,13 +260,25 @@ pub fn ledger() -> Ledger {
             "E050",
             tr!("プラットフォームに要るものが無いか、できないことです", "What the platform needs is missing, or it cannot do it"),
             tr!(
-                "プラットフォームに要るものが無いときや、プラットフォームにできないことが書かれているとき（`dandori build` が出します）。Step Functions では、呼び出し方や `connection` が無いとき、ネストした実行がエラーを宣言しているとき、`http`・`agent`・`jev` の `timeout` が 60 秒を超えるとき、送信先が HTTPS でないときです。Temporal 以外では、`on cancel`、`event` のタスク、実装するサービスの、実行がいまどこにいるかを聞くメソッドがあるときです。Step Functions と Lambda durable functions では、呼ばれる規則に `lambda` か `connect` が無いとき、呼ばれる日付に `lambda` が無いときです。Step Functions では、帳簿に `lambda` が無いときにも出ます。Lambda durable functions では、invoke する関数に `timeout` があるときです。Argo では、呼び出し方や `image` が無いとき、`workflow template` がエラーを宣言しているとき、`callback` のタスクに `retry` があるときです。",
-                "From `dandori build`. On Step Functions, a way of calling or a `connection`, a nested execution's declared errors, a `timeout` over 60 seconds on `http`, `agent` and `jev`, a destination that is not HTTPS; off Temporal, `on cancel`, `event` tasks, and a method of the service the workflow implements that asks where a run is; on Step Functions and Lambda durable functions, a called rule's `lambda` or `connect`, and a called date's `lambda`; on Step Functions, a book's `lambda`; on Lambda durable functions, a `timeout` on a function it invokes; on Argo, a way of calling or an `image`, a `workflow template`'s declared errors, `retry` on a `callback` task."
+                "プラットフォームに要るものが無いときや、プラットフォームにできないことが書かれているとき（`dandori build` が出します）。Step Functions では、呼び出し方や `connection` が無いとき、ネストした実行がエラーを宣言しているとき、`http`・`agent`・`jev` の `timeout` が 60 秒を超えるとき、送信先が HTTPS でないときです。Temporal 以外では、`on cancel`、`event` のタスク、実装するサービスの、実行がいまどこにいるかを聞くメソッドがあるときです。Step Functions と Lambda durable functions では、呼ばれる規則に `lambda` か `connect` が無いとき、呼ばれる日付に `lambda` が無いときです。Step Functions では、帳簿に `lambda` が無いときにも出ます。Lambda durable functions では、invoke する関数に `timeout` があるときです。Argo では、呼び出し方や `image` が無いとき、`workflow template` がエラーを宣言しているとき、`callback` のタスクに `retry` があるとき、`history encrypted` と書いたとき（パラメーターを鍵で暗号化する手段が Argo にありません）です。",
+                "From `dandori build`. On Step Functions, a way of calling or a `connection`, a nested execution's declared errors, a `timeout` over 60 seconds on `http`, `agent` and `jev`, a destination that is not HTTPS; off Temporal, `on cancel`, `event` tasks, and a method of the service the workflow implements that asks where a run is; on Step Functions and Lambda durable functions, a called rule's `lambda` or `connect`, and a called date's `lambda`; on Step Functions, a book's `lambda`; on Lambda durable functions, a `timeout` on a function it invokes; on Argo, a way of calling or an `image`, a `workflow template`'s declared errors, `retry` on a `callback` task, `history encrypted` (Argo has no way to encrypt its parameters with a key)."
             ),
             tr!("メッセージに挙がったものを書き足すか、そのプラットフォームにできる書き方にしてください。", "Add what the message says the platform needs, or write it in a way the platform can do."),
             "workflow w v1\n\nflow\n  pass\n\non cancel\n  pass\n",
             &["E040", "E007"],
         ),
+        Entry::new(
+            "E906",
+            tr!("秘密の値をプロジェクトの外へ送っています", "A secret sent outside the project"),
+            tr!(
+                "秘密と印を付けた値（`.flow` の `secret`、`.proto` の `debug_redact`、OpenAPI の `x-data-classification`・`x-sensitive-data`・`format: password`）を、プロジェクトの外の相手に送る呼び出しがあるとき。相手は、モデルのプロバイダー（OpenAI、Anthropic。`url` がこのマシンでない Open Responses のサーバーも）、Jev、URL だけで書いた `http` の送り先、AWS のサービスです。プロジェクトの中のファイル（OpenAPI の文書、`.proto`、Connect の規則、子の `.flow`、帳簿、日付のファイル）へ送ることは、ritsu の E905 が地図の上で確かめます。",
+                "A call gives a value marked secret (`secret` in the `.flow`, `debug_redact` in a `.proto`, `x-data-classification`, `x-sensitive-data` or `format: password` in an OpenAPI document) to a party outside the project: a model's provider (OpenAI, Anthropic, or an Open Responses server whose `url` is not this machine), Jev, a host an `http` task names by its URL alone, an AWS service. Sending one to a file of the project (an OpenAPI document, a `.proto`, a rule's Connect service, a child `.flow`, a book, a dates file) is held to the map by ritsu's E905."
+            ),
+            tr!("参照か、相手に要るものだけを送ってください。そこへ送ることを意図しているなら、タスクの下に `discloses <引数> \"<理由>\"` と書いてください。", "Send a reference, or only what the other side needs. If sending it there is intended, write `discloses <parameter> \"<why>\"` under the task."),
+            Repro::File { body: "workflow 例 v1\n\ninputs\n  メール : string  secret\n\ntask 読む(本文: string) -> string\n  agent \"本文が何についてのものかを、一文で答えてください。\"\n  model \"gpt-5.4-mini\"\n\nflow\n  let 要点 = 読む(本文: メール)\n", beside: &[] },
+            &["W904"],
+        )
+        .english(Repro::File { body: "workflow w v1\n\ninputs\n  email : string  secret\n\ntask read(text: string) -> string\n  agent \"Say what the text is about, in one sentence.\"\n  model \"gpt-5.4-mini\"\n\nflow\n  let gist = read(text: email)\n", beside: &[] }),
         // ── Warnings ──
         e(
             "W030",
@@ -316,6 +328,42 @@ pub fn ledger() -> Ledger {
             "workflow w v1\n\ninputs\n  n : int\n\ntask take(n: int range >=0 <=10)\n\nflow\n  take(n: n)\n",
             &["E014"],
         ),
+        Entry::new(
+            "W901",
+            tr!("鍵の形の値がファイルに書かれています", "A key written in the file"),
+            tr!(
+                "AWS のアクセスキー ID、GitHub・Slack・Stripe・OpenAI・Anthropic・Google の鍵やトークン、Slack の Incoming Webhook の URL、PEM の秘密鍵の形をした値が、`.flow` のどこか（文字列でもコメントでも）に書かれているとき。ritsu のどの言語も同じ形を探します。診断には鍵の種類と接頭辞と長さだけを出し、鍵そのものは出しません。",
+                "A value in the shape of a key (an AWS access key ID, a GitHub, Slack, Stripe, OpenAI, Anthropic or Google key or token, a Slack incoming webhook URL, a PEM private key) written anywhere in the `.flow`, in a string or in a comment. Every language of ritsu looks for the same shapes. The diagnostic shows the kind of key, its prefix and its length, never the key."
+            ),
+            tr!("鍵はコードが動くところ（環境変数、プラットフォームの接続やシークレットの置き場）に置いて、そこから読んでください。本物の鍵なら、まずプロバイダーで無効にしてください。テスト用の値なら、同じ行のコメントに `ritsu: test secret` と書いてください。", "Keep the key where the code runs (an environment variable, the platform's connection or secret store) and read it from there; revoke a real key with its provider first. For a value for tests, write `ritsu: test secret` in a comment on the same line."),
+            Repro::File { body: concat!("workflow 例 v1\n\ntask 探す(語: string) -> string\n  http GET \"https://maps.example.com/v1/find?key=", "AIza", "SyD-ritsu-fake-key-for-tests-000000", "\"\n  idempotent\n\nflow\n  let 場所 = 探す(語: \"東京\")\n"), beside: &[] },
+            &["W902"],
+        )
+        .english(Repro::File { body: concat!("workflow w v1\n\ntask find(q: string) -> string\n  http GET \"https://maps.example.com/v1/find?key=", "AIza", "SyD-ritsu-fake-key-for-tests-000000", "\"\n  idempotent\n\nflow\n  let place = find(q: \"Tokyo\")\n"), beside: &[] }),
+        Entry::new(
+            "W902",
+            tr!("暗号化しない HTTP で送っています", "A call sent over plain HTTP"),
+            tr!(
+                "タスクが呼ぶ URL（`http` のタスクの URL、エージェントの `url`、`use rule … connect`、`use openapi` と `use proto` の `url` か、OpenAPI の文書の最初のサーバー）が `http://` で、送り先がこのマシン（`localhost`、`127.0.0.0/8`、`::1`）の外のとき。途中のネットワークにいる人は、リクエストとレスポンスとヘッダーの鍵を読んだり書き換えたりできます。Step Functions に出すときは、これとは別に E050 になります。",
+                "A URL a task calls (an `http` task's URL, an agent's `url`, `use rule … connect`, the `url` under `use openapi` or `use proto`, or an OpenAPI document's first server) is `http://`, to a host that is not this machine (`localhost`, `127.0.0.0/8`, `::1`). Whoever is on the network between can read and change the requests, the answers and the keys in the headers. A build for Step Functions refuses it besides (E050)."
+            ),
+            tr!("`https://` にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、URL を書いたところ（タスクか `use` の下）に `plaintext \"<理由>\"` と書いてください。", "Use `https://`. If the connection is protected another way (a service mesh, a private link), write `plaintext \"<why>\"` where the URL is written, under the task or the `use`."),
+            Repro::File { body: "workflow 例 v1\n\ntask 知らせる(本文: string)\n  http POST \"http://notify.example.com/v1/messages\"\n  idempotent\n\nflow\n  知らせる(本文: \"届きました\")\n", beside: &[] },
+            &["E050"],
+        )
+        .english(Repro::File { body: "workflow w v1\n\ntask notify(text: string)\n  http POST \"http://notify.example.com/v1/messages\"\n  idempotent\n\nflow\n  notify(text: \"hi\")\n", beside: &[] }),
+        Entry::new(
+            "W904",
+            tr!("秘密の値がワークフローの履歴に残ります", "A secret kept in the history of the workflow"),
+            tr!(
+                "秘密と印を付けた値（`.flow` の `secret`、`.proto` の `debug_redact`、OpenAPI の `x-data-classification`・`x-sensitive-data`・`format: password`）が、ワークフローの入力・出力、タスクの結果、呼び出しの引数、`fail` の理由になっているとき。Temporal、Step Functions、Lambda durable functions、Argo Workflows は、それを実行の履歴に残し、実行を読める人はだれでもそれを読めます。変数が何を持つかは、範囲と同じく、変数に値を入れるすべての場所を合わせて決めます。",
+                "A value marked secret (`secret` in the `.flow`, `debug_redact` in a `.proto`, `x-data-classification`, `x-sensitive-data` or `format: password` in an OpenAPI document) is an input or an output of the workflow, the answer of a task, an argument of a call, or the reason of a `fail`: Temporal, Step Functions, Lambda durable functions and Argo Workflows keep those in the history of the run, which whoever may read the executions can read. What a variable holds is gathered from every value put in it, as its range is."
+            ),
+            tr!("値の代わりに参照（ID やシークレットの名前）を渡し、タスクの中で値を取ってきてください。履歴を自分の持つ鍵で暗号化しているなら、`workflow` の下に `history encrypted` と書いてください（Temporal ではペイロードのコーデックを要る生成コードになり、Argo Workflows では E050 になります）。", "Pass a reference instead (an ID, the name of a secret) and fetch the value inside the task. If the history is encrypted with a key you hold, write `history encrypted` under `workflow` (Temporal's code then takes a payload codec; on Argo Workflows it is E050)."),
+            Repro::File { body: "workflow 例 v1\n\ninputs\n  トークン : string  secret\n\ntask 呼ぶ(トークン: string)\n  lambda \"arn:aws:lambda:ap-northeast-1:123456789012:function:call\"\n  idempotent\n\nflow\n  呼ぶ(トークン: トークン)\n", beside: &[] },
+            &["E906", "E050"],
+        )
+        .english(Repro::File { body: "workflow w v1\n\ninputs\n  token : string  secret\n\ntask call(token: string)\n  lambda \"arn:aws:lambda:ap-northeast-1:123456789012:function:call\"\n  idempotent\n\nflow\n  call(token: token)\n", beside: &[] }),
     ];
     Ledger {
         tool: "dandori",

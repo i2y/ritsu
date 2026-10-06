@@ -1,0 +1,24 @@
+workflow 暗号化した履歴 v1
+  history encrypted
+description "W904：何も出ない。実行の履歴は、秘密を読んでよい人だけが持つ鍵で暗号化してある。Temporal のコードはペイロードのコーデックを受け取り、Argo Workflows はそれを守れない（E050）"
+
+record 口座
+  id   : string
+  番号 : string  secret
+
+inputs
+  口座     : 口座
+  トークン : string  secret
+
+outputs
+  控え : string
+
+task 払う(口座: 口座, トークン: string) -> string
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:pay"
+  key
+  errors 拒否
+
+flow
+  let 控え = 払う(口座: 口座, トークン: トークン)
+    on 拒否 => fail 拒否 "銀行が {口座.番号} への支払いを拒否しました"
+  succeed 控え = 控え

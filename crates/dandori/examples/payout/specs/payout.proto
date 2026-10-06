@@ -1,0 +1,37 @@
+// The bank's payouts to the accounts sellers keep on file. The number of an account and the name it
+// is held in are marked `debug_redact`: protobuf keeps them out of its debug formats, and ritsu reads
+// the mark as the contract saying they are secret. A caller names an account by its id.
+syntax = "proto3";
+
+package payout.v1;
+
+service PayoutService {
+  // Pay an account, by its id, an amount in yen.
+  rpc Pay(PayRequest) returns (PayResponse);
+}
+
+service AccountService {
+  rpc GetAccount(GetAccountRequest) returns (Account);
+}
+
+message PayRequest {
+  string account_id = 1;
+  int32 amount = 2;
+  // What the seller sees on their statement.
+  string reference = 3;
+}
+
+message PayResponse {
+  string payout_id = 1;
+}
+
+message GetAccountRequest {
+  string id = 1;
+}
+
+message Account {
+  string id = 1;
+  string number = 2 [debug_redact = true];
+  string holder = 3 [debug_redact = true];
+  string bank_name = 4;
+}

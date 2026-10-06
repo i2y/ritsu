@@ -1,0 +1,9 @@
+warning[W902]: tests/fixtures/security/W902_task_url.flow:5:3: the task `notify` sends its requests to notify.example.com over plain HTTP
+     5 |   http POST "http://notify.example.com/v1/messages"
+  = Whoever is on the network between can read and change the requests, the answers, and any key in the headers.
+  = Use https://. If the connection is protected another way (a service mesh, a private link), say so under the task with `plaintext "<why>"`.
+build --target asl:
+error[E050]: tests/fixtures/security/W902_task_url.flow:4:1: `notify` needs `connection "<EventBridge connection ARN>"`
+     4 | task notify(text: string)
+error[E050]: tests/fixtures/security/W902_task_url.flow:4:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `notify` sends to `http://notify.example.com/v1/messages`
+     4 | task notify(text: string)

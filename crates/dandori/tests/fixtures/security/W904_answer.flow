@@ -1,0 +1,9 @@
+workflow answer v1
+description "W904: the answer of a task marked secret, kept whether the flow reads it or not"
+
+task issue_token(user: string) -> string  secret
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:issue-token"
+  idempotent
+
+flow
+  issue_token(user: "ana")

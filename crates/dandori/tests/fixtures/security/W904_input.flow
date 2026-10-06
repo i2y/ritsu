@@ -1,0 +1,14 @@
+workflow input v1
+description "W904: an input marked secret, and an input of a record with a field marked secret"
+
+record Card
+  holder : string
+  number : string  secret
+
+inputs
+  order_id : string
+  token    : string  secret
+  card     : Card
+
+flow
+  pass

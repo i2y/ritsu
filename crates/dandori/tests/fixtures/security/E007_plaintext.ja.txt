@@ -1,0 +1,13 @@
+エラー[E007]: tests/fixtures/security/E007_plaintext.flow:6:3: `plaintext` は、規則のサービスに暗号化せずに送ることを意図していると書くところですが、規則 `routing` には `connect` がありません
+     6 |   plaintext "the rule is in the same account"
+警告[W902]: tests/fixtures/security/E007_plaintext.flow:7:13: `crm` を呼ぶタスクは、crm.internal（`../secrets/plain.json` の最初のサーバー）に暗号化しない HTTP でリクエストを送ります
+     7 | use openapi crm from "../secrets/plain.json"
+  = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
+  = https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、`use openapi crm` の下に `plaintext "<理由>"` と書いてください。
+エラー[E007]: tests/fixtures/security/E007_plaintext.flow:22:3: `plaintext` は、URL に暗号化せずに送ることを意図していると書くところですが、`keep` は自分の URL を持ちません
+    22 |   plaintext "the function is ours"
+エラー[E007]: tests/fixtures/security/E007_plaintext.flow:26:3: `plaintext` は、URL に暗号化せずに送ることを意図していると書くところですが、`get_customer` は自分の URL を持ちません
+    26 |   plaintext "the CRM is ours"
+  = `get_customer` が送る先は、`crm` を読む `use` の URL です。`plaintext` はその `use` の下に書いてください。
+エラー[E007]: tests/fixtures/security/E007_plaintext.flow:31:3: `plaintext` には、暗号化しない理由を書いてください（空の文字列です）
+    31 |   plaintext ""

@@ -314,6 +314,191 @@ fn local(id: &str) -> &str {
     id.rsplit('#').next().unwrap_or(id)
 }
 
+/// A property of an OpenAPI document that marks a value secret (ritsu's DESIGN 16.6): the place in
+/// the parameter or the answer it marks (dotted; empty: the value itself), the mark, and where the
+/// mark is, as a JSON Pointer.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DocMark {
+    pub path: String,
+    pub mark: ritsu_base::marks::SchemaMark,
+    pub pointer: String,
+}
+
+/// What the three keywords of a schema say of it (`format`, `x-sensitive-data`,
+/// `x-data-classification`), as ritsu-base's `schema_mark` reads them. `writeOnly` is not one.
+fn schema_mark(v: &Value) -> Option<ritsu_base::marks::SchemaMark> {
+    let format = v.get("format").and_then(Value::as_str);
+    let sensitive = v.get("x-sensitive-data").is_some_and(|x| *x != Value::Bool(false) && !x.is_null());
+    let class = v.get("x-data-classification").map(|c| (c.get("category").and_then(Value::as_str).unwrap_or(""), c.get("sensitivity").and_then(Value::as_str)));
+    ritsu_base::marks::schema_mark(format, sensitive, class)
+}
+
+/// A key as a JSON Pointer writes it (RFC 6901): `~` as `~0`, `/` as `~1`.
+fn pointer_key(k: &str) -> String {
+    k.replace('~', "~0").replace('/', "~1")
+}
+
+/// Every marked property under `schema` (at `pointer` in `doc`), followed down by the type `t` the
+/// flow reads or writes there: a property that is marked marks the place as a whole, and the places
+/// under it are not looked into.
+#[allow(clippy::too_many_arguments)]
+fn marks_in(doc: &Value, schema: &Value, pointer: &str, m: &Model, t: &Ty, path: &mut Vec<String>, seen: &mut Vec<RecordId>, out: &mut Vec<DocMark>) {
+    let (mut s, mut at) = (schema.clone(), pointer.to_string());
+    for _ in 0..16 {
+        if let Some(mark) = schema_mark(&s) {
+            out.push(DocMark { path: path.join("."), mark, pointer: at });
+            return;
+        }
+        let Some(r) = s.get("$ref").and_then(|r| r.as_str()).and_then(|r| r.strip_prefix('#')).map(String::from) else { break };
+        s = doc.pointer(&r).cloned().unwrap_or(Value::Null);
+        at = r;
+    }
+    for key in ["anyOf", "oneOf", "allOf"] {
+        for (i, b) in s[key].as_array().into_iter().flatten().enumerate() {
+            marks_in(doc, b, &format!("{at}/{key}/{i}"), m, t, path, seen, out);
+        }
+    }
+    match t {
+        Ty::Opt(x) => marks_in(doc, &s, &at, m, x, path, seen, out),
+        Ty::List(x) if s.get("items").is_some() => marks_in(doc, &s["items"], &format!("{at}/items"), m, x, path, seen, out),
+        Ty::Record(r) if !seen.contains(r) => {
+            seen.push(*r);
+            for (f, ft) in &m.records[*r].fields {
+                if let Some(p) = s["properties"].get(f) {
+                    path.push(f.clone());
+                    marks_in(doc, p, &format!("{at}/properties/{}", pointer_key(f)), m, ft, path, seen, out);
+                    path.pop();
+                }
+            }
+            seen.pop();
+        }
+        _ => {}
+    }
+}
+
+/// The marks of a `.proto`'s method (`Service/Method`) on what a `connect` task gives it and reads
+/// from it: the fields of its request and its response that `debug_redact` marks, followed down by the
+/// task's types. A parameter is a field of the request by its name or its JSON name.
+#[allow(clippy::type_complexity)]
+pub fn proto_marks(api: &Api, method: &str, m: &Model, task: &TaskDef) -> (Vec<(String, String, crate::proto::Redact)>, Vec<(String, crate::proto::Redact)>) {
+    let ApiDoc::Proto(pf) = &api.doc else { return (vec![], vec![]) };
+    let Some((svc, mname)) = method.split_once('/') else { return (vec![], vec![]) };
+    let Some(found) = pf.services.iter().find(|s| s.name == svc || s.name.rsplit('.').next() == Some(svc)).and_then(|s| s.methods.iter().find(|x| x.name == mname)) else { return (vec![], vec![]) };
+    fn walk(pf: &ProtoFile, msg: &str, m: &Model, t: &Ty, path: &mut Vec<String>, seen: &mut Vec<RecordId>, out: &mut Vec<(String, crate::proto::Redact)>) {
+        let Ty::Record(r) = t.inner() else {
+            if let Ty::List(x) = t.inner() {
+                walk(pf, msg, m, x, path, seen, out);
+            }
+            return;
+        };
+        if seen.contains(r) {
+            return;
+        }
+        seen.push(*r);
+        for (f, ft) in &m.records[*r].fields {
+            let Some(pfl) = pf.messages.get(msg).into_iter().flatten().find(|x| x.json == *f || x.name == *f) else { continue };
+            path.push(f.clone());
+            match (&pfl.redact, &pfl.ty) {
+                (Some(rd), _) => out.push((path.join("."), rd.clone())),
+                (None, PType::Named(n)) if pf.messages.contains_key(n) => walk(pf, n, m, ft, path, seen, out),
+                _ => {}
+            }
+            path.pop();
+        }
+        seen.pop();
+    }
+    let mut params = Vec::new();
+    for (p, pt) in &task.params {
+        let Some(pfl) = pf.messages.get(&found.input).into_iter().flatten().find(|x| x.json == *p || x.name == *p) else { continue };
+        match (&pfl.redact, &pfl.ty) {
+            (Some(rd), _) => params.push((p.clone(), String::new(), rd.clone())),
+            (None, PType::Named(n)) if pf.messages.contains_key(n) => {
+                let mut inner = Vec::new();
+                walk(pf, n, m, pt, &mut vec![], &mut vec![], &mut inner);
+                params.extend(inner.into_iter().map(|(path, rd)| (p.clone(), path, rd)));
+            }
+            _ => {}
+        }
+    }
+    let mut answer = Vec::new();
+    if let Some(t) = &task.result {
+        walk(pf, &found.output, m, t, &mut vec![], &mut vec![], &mut answer);
+    }
+    (params, answer)
+}
+
+/// The marks of the OpenAPI operation at `method` and `path` on what `task` gives it and reads from
+/// it: for each parameter, those of the parameter of the path or the query, or of the body's property,
+/// it is sent as; and those of the answer. Read as far as the task's types go.
+pub fn openapi_marks(api: &Api, method: &str, path: &str, m: &Model, task: &TaskDef) -> (Vec<(String, DocMark)>, Vec<DocMark>) {
+    let ApiDoc::OpenApi(doc) = &api.doc else { return (vec![], vec![]) };
+    let op_at = format!("/paths/{}/{}", pointer_key(path), method.to_ascii_lowercase());
+    let item = &doc["paths"][path];
+    let op = &item[method.to_ascii_lowercase()];
+    let (mut params, mut answer) = (Vec::new(), Vec::new());
+    let get = method == "GET" || method == "DELETE";
+    let in_path = crate::lower::placeholders(path);
+    // the parameters of the path and the query, behind their `$ref`
+    let mut listed: Vec<(Value, String)> = Vec::new();
+    for (list, at) in [(&item["parameters"], format!("/paths/{}/parameters", pointer_key(path))), (&op["parameters"], format!("{op_at}/parameters"))] {
+        for (i, p) in list.as_array().into_iter().flatten().enumerate() {
+            let (mut p, mut at) = (p.clone(), format!("{at}/{i}"));
+            if let Some(r) = p.get("$ref").and_then(|r| r.as_str()).and_then(|r| r.strip_prefix('#')).map(String::from) {
+                p = doc.pointer(&r).cloned().unwrap_or(Value::Null);
+                at = r;
+            }
+            listed.push((p, at));
+        }
+    }
+    // the body's schema, behind the request body's `$ref`
+    let (mut body, mut body_at) = (op["requestBody"].clone(), format!("{op_at}/requestBody"));
+    if let Some(r) = body.get("$ref").and_then(|r| r.as_str()).and_then(|r| r.strip_prefix('#')).map(String::from) {
+        body = doc.pointer(&r).cloned().unwrap_or(Value::Null);
+        body_at = r;
+    }
+    let body_schema = ["application/json", "application/x-www-form-urlencoded"].iter().find_map(|ct| body["content"].get(*ct).map(|c| (c["schema"].clone(), format!("{body_at}/content/{}/schema", pointer_key(ct)))));
+    for (p, pt) in &task.params {
+        let mut found = Vec::new();
+        if in_path.contains(p) || get {
+            if let Some((q, at)) = listed.iter().find(|(q, _)| q["name"] == **p && matches!(q["in"].as_str(), Some("query") | Some("path"))) {
+                marks_in(doc, &q["schema"], &format!("{at}/schema"), m, pt, &mut vec![], &mut vec![], &mut found);
+            }
+        } else if let Some((s, at)) = &body_schema {
+            // the property of the body the parameter is, through the body's `$ref`, `allOf`, `anyOf` and `oneOf`
+            let mut bodies = vec![(s.clone(), at.clone())];
+            while let Some((s, at)) = bodies.pop() {
+                let (s, at) = match s.get("$ref").and_then(|r| r.as_str()).and_then(|r| r.strip_prefix('#')).map(String::from) {
+                    Some(r) => (doc.pointer(&r).cloned().unwrap_or(Value::Null), r),
+                    None => (s, at),
+                };
+                for key in ["allOf", "anyOf", "oneOf"] {
+                    for (i, b) in s[key].as_array().into_iter().flatten().enumerate() {
+                        bodies.push((b.clone(), format!("{at}/{key}/{i}")));
+                    }
+                }
+                if let Some(prop) = s["properties"].get(p.as_str()) {
+                    marks_in(doc, prop, &format!("{at}/properties/{}", pointer_key(p)), m, pt, &mut vec![], &mut vec![], &mut found);
+                }
+            }
+        }
+        params.extend(found.into_iter().map(|d| (p.clone(), d)));
+    }
+    if let (Some(t), false) = (&task.result, task.callback) {
+        let responses = op["responses"].as_object().cloned().unwrap_or_default();
+        if let Some((status, r)) = responses.iter().find(|(s, _)| s.starts_with('2')) {
+            let (mut r, mut at) = (r.clone(), format!("{op_at}/responses/{}", pointer_key(status)));
+            if let Some(x) = r.get("$ref").and_then(|x| x.as_str()).and_then(|x| x.strip_prefix('#')).map(String::from) {
+                r = doc.pointer(&x).cloned().unwrap_or(Value::Null);
+                at = x;
+            }
+            if let Some(c) = r["content"].get("application/json") {
+                marks_in(doc, &c["schema"], &format!("{at}/content/application~1json/schema"), m, t, &mut vec![], &mut vec![], &mut answer);
+            }
+        }
+    }
+    (params, answer)
+}
+
 /// An OpenAPI object behind its `$ref`, if it has one (a reference within the document).
 fn resolve(doc: &Value, v: &Value) -> Value {
     let mut v = v.clone();
@@ -996,6 +1181,8 @@ pub enum MadeTy {
 pub struct MadeField {
     pub name: String,
     pub ty: MadeTy,
+    /// the field is marked secret (`debug_redact`)
+    pub redact: Option<crate::proto::Redact>,
 }
 
 /// What a type of a `.proto` is, with `range` for a 32-bit integer. A 64-bit integer is a
@@ -1052,7 +1239,7 @@ pub fn made_fields(pf: &ProtoFile, msg: &str) -> Vec<MadeField> {
                     t
                 }
             };
-            MadeField { name: fl.json.clone(), ty }
+            MadeField { name: fl.json.clone(), ty, redact: fl.redact.clone() }
         })
         .collect()
 }

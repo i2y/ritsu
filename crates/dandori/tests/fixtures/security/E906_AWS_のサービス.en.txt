@@ -1,0 +1,14 @@
+warning[W904]: tests/fixtures/security/E906_AWS_のサービス.flow:5:1: the input `電話` is a secret, kept in the history of the workflow
+     5 |   電話 : string  secret
+  = The mark is `secret` at E906_AWS_のサービス.flow:5.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Start the workflow with a reference instead (an ID, the name of a secret), and fetch the value inside the task that uses it. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.
+error[E906]: tests/fixtures/security/E906_AWS_のサービス.flow:12:1: the task `送る` sends the secret `電話` to AWS (sns), outside the project
+    12 |   送る(PhoneNumber: 電話, Message: "荷物を発送しました")
+  = The mark is `secret` at E906_AWS_のサービス.flow:5.
+  = Send a reference or only what the other side needs. If sending it there is intended, write `discloses PhoneNumber "<why>"` under the task.
+warning[W904]: tests/fixtures/security/E906_AWS_のサービス.flow:12:1: the secret `電話` is kept in the history of the workflow, as the argument `PhoneNumber` of `送る`
+    12 |   送る(PhoneNumber: 電話, Message: "荷物を発送しました")
+  = The mark is `secret` at E906_AWS_のサービス.flow:5.
+  = Temporal, Step Functions, Lambda durable functions and Argo Workflows keep the inputs and outputs of the workflow and of every call in the history, which whoever may read the executions can read.
+  = Pass a reference instead (an ID, the name of a secret) and fetch the value inside the task. If the history is encrypted with a key you hold (Temporal: a payload codec; Step Functions and Lambda durable functions: a customer managed KMS key), write `history encrypted` under `workflow`.
