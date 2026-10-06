@@ -716,7 +716,10 @@ derive net : money[JPY, incl_tax] = subtotal - discount  range >=0JPY <=1_000_00
 The right-hand side may use inputs, `+`, `-`, and multiplication by a constant. `range` is
 required. What the derive can actually come to is its expression computed over the inputs'
 ranges and the `constraint` lines: the `range` has to contain it (E112), and a row that asks the
-derive only for values outside it is E102, however wide the `range` is written.
+derive only for values outside it is E102, however wide the `range` is written. A constant that
+is a fraction puts the values between whole units — `amount * 10%` comes in tenths of a pound —
+and the checks read them on that step: rows `<=1GBP` and `>=2GBP` leave `1.1GBP` to no row, and
+E101 says so with the amount that makes it (`amount = 11`).
 
 ## 6. define
 

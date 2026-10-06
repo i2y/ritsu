@@ -219,7 +219,19 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
             }
             ts.finish()
         })
-        .raw("ranges", ranges.finish());
+        .raw("ranges", ranges.finish())
+        // The scale every name is stored at (§7.1): its value is a whole number of `1/scale`.
+        // A re-checker works out from these and from the values' expressions the step each
+        // column's values sit on, and holds the step an axis is cut at to it (§15.190).
+        .raw("scales", {
+            let mut s = Obj::new();
+            let mut names: Vec<&String> = c.syms.keys().filter(|n| c.scales.contains_key(*n)).collect();
+            names.sort();
+            for n in names {
+                s = s.int(n, c.scales[n]);
+            }
+            s.finish()
+        });
     let o = match days {
         Some(d) => o.raw("days", d),
         None => o,

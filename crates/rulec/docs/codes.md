@@ -2169,7 +2169,7 @@ Related codes: [E129](#e129), [E130](#e130)
 
 `error` — **Completeness gap: some input matches no row**
 
-**When.** The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached.
+**When.** The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached. Where a column is a derive, the example gives its value, and the input that produces it too, once the reference evaluator has confirmed it. A derive's values can fall finer than the units a cell is written in (`amount * 10%` comes in tenths), and they are read on that step.
 
 **Fix.** Add a row that matches the witness. If a new enum value caused it, add a row for that value or a `-` row that catches everything. If the value needs no row of its own, mark it `default` in the enum declaration.
 

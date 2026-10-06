@@ -1,0 +1,11 @@
+error[E102]: Unreachable row: row 3 never matches
+  --> tests/reach/E102_金額の一割が届かない行.rule:20 table 確認表
+   |
+20 | | >15円       | 多額           |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3: no input reaches here
+13 | derive 手数料(commission) : money[円] = 金額 × 10% + 固定額  range >=0円 <=100円
+   |                                         ^^^^^^^^^^^^^^^^^^^ the reachable interval is >=0.1円 <=15円
+   |
+ Over the ranges of the inputs, `手数料` can only come to >=0.1円 <=15円. None of those values meets this row's conditions.
+ hint: rewrite the condition within the values `手数料` can come to, or delete this row. Widening a derive's `range` does not change the values it can come to.
+

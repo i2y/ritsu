@@ -84,10 +84,22 @@ impl Audit {
     }
 }
 
-/// The smallest step of a number or date. Only a rate takes it from the column's storage scale.
+/// The smallest step of a number or date: the step every value of the column and every cell
+/// written in it is a multiple of. A rate takes it from the column's storage scale. Money, a
+/// quantity and `number` are written in whole units, and a value that comes in is whole too; a
+/// value the rule computes can take less than a whole unit (`amount × 10%` takes tenths), and
+/// then the step is the one its values and the whole units share (§15.190). The axes of §6 are
+/// cut on this step and the boundary vectors of §9 step by it, so a column of tenths is not
+/// read as if nothing lay between two whole pounds.
 pub fn quantum(c: &Checked, col: &str, ty: &Ty) -> Rat {
     match ty {
         Ty::Rate => Rat::new(1, *c.scales.get(col).unwrap_or(&100)),
+        Ty::Money { .. } | Ty::Qty { .. } | Ty::Number => {
+            let own = c.value_step(col);
+            // Past what 128 bits hold, the finer of the two still has nothing between its steps.
+            crate::types::common_step(own, Rat::int(1))
+                .unwrap_or(if own.cmp_to(Rat::int(1)) == std::cmp::Ordering::Less { own } else { Rat::int(1) })
+        }
         _ => Rat::int(1),
     }
 }

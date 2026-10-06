@@ -38,7 +38,11 @@ row that asks `excess` only for more than 100GBP is reached by no input, and it 
 message marks `>=-99GBP <=100GBP` on the `derive` line, and widening the `range` does not make
 the row reachable. Completeness reads the same interval, so no row is demanded beyond it
 either, and deleting such a row never opens a gap. The interval takes the `constraint` lines
-in: under `constraint paid <= billed`, `billed - paid` never goes below zero.
+in: under `constraint paid <= billed`, `billed - paid` never goes below zero. The values in it
+are read on the step they take, which can be finer than the whole units a cell is written in:
+`commission = amount * 10%` comes in tenths of a pound, so rows `<=1GBP` and `>=2GBP` leave
+`1.1GBP` to no row, and completeness stops with it and with the amount that makes it,
+`amount = 11`.
 
 In a rule that binds an enum to a `.proto` with `import proto`,
 completeness reaches **across the contract**. Every `rulec check` reads
@@ -179,7 +183,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 109 deliberately broken
+   and that implementation has not been proved correct. The evidence is 111 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**

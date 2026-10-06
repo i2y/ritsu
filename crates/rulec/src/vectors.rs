@@ -1809,7 +1809,35 @@ fn reach_row(
 }
 
 fn row_holds(f: &RuleFile, c: &Checked, t: &Table, row: &Row, a: &BTreeMap<String, Val>) -> bool {
+    row_holds_in(c, t, row, &bind(f, c, a))
+}
+
+/// The values the reference evaluator gives the columns of `t` for an input a caller can send and
+/// no row of `t` takes (§15.190): every input on its step and inside its range, the `constraint`s
+/// and koyomi's days kept, every column the table reads given a value — a column a table above
+/// leaves unset says nothing about this one — and no row's cells holding of them. The generated
+/// code stops on such an input, so it is what E101 can hand over. `None` for any other input.
+pub fn no_row_takes(f: &RuleFile, c: &Checked, t: &Table, a: &BTreeMap<String, Val>) -> Option<BTreeMap<String, Val>> {
+    let sendable = f.inputs.iter().all(|i| {
+        let Some(ty) = c.ty_of(&i.name.text) else { return false };
+        match a.get(&i.name.text) {
+            Some(Val::Num(v)) => {
+                within(c, &i.name.text, *v)
+                    && v.checked_div(crate::coverage::quantum(c, &i.name.text, &ty)).is_some_and(|k| k.is_int())
+            }
+            Some(_) => true,
+            None => false,
+        }
+    });
+    if !sendable || !allowed(f, a) || !days_ok(c, a) {
+        return None;
+    }
     let binds = bind(f, c, a);
+    let none = t.inputs.iter().all(|(col, _)| binds.contains_key(col)) && t.rows.iter().all(|row| !row_holds_in(c, t, row, &binds));
+    none.then(|| t.inputs.iter().filter_map(|(col, _)| Some((col.clone(), binds.get(col)?.clone()))).collect())
+}
+
+fn row_holds_in(c: &Checked, t: &Table, row: &Row, binds: &BTreeMap<String, Val>) -> bool {
     t.inputs.iter().enumerate().all(|(ci, (col, _))| {
         let Some(cell) = row.cells.get(ci) else { return true };
         if matches!(cell, Cell::DontCare) {
@@ -2081,6 +2109,13 @@ fn satisfy_all(
     None
 }
 
+/// An input to start from: the first candidate value of every input. `pair_witness` builds on it,
+/// and so does the input E101 gives behind a gap on derived columns (§15.190).
+pub fn first_input(f: &RuleFile, c: &Checked) -> Option<BTreeMap<String, Val>> {
+    let cands = candidates(f, c);
+    f.inputs.iter().map(|x| Some((x.name.text.clone(), cands.get(&x.name.text)?.first()?.clone()))).collect()
+}
+
 /// Actually construct an input that matches **both** row i and row j (§6.2, "witness on a
 /// definition axis"). If one is found the overlap is real, and E105 under `unique`. If none is
 /// found it stays unconfirmed and is demoted to W114 and the runtime guard. **Not finding one
@@ -2093,11 +2128,7 @@ pub fn pair_witness(
     j: usize,
 ) -> Option<BTreeMap<String, Val>> {
     let cands = candidates(f, c);
-    let mut a: BTreeMap<String, Val> = f
-        .inputs
-        .iter()
-        .map(|x| Some((x.name.text.clone(), cands.get(&x.name.text)?.first()?.clone())))
-        .collect::<Option<BTreeMap<_, _>>>()?;
+    let mut a: BTreeMap<String, Val> = first_input(f, c)?;
     // A witness has to be a case somebody could really send (§6.1). An assignment that
     // breaks a `constraint` is not one, and calling such a pair an overlap would name an
     // input the caller has already guaranteed cannot arrive. Where the columns are derived

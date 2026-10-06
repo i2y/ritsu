@@ -362,6 +362,12 @@ pub struct Checked {
     /// Name → reciprocal of the step: the value is a multiple of 1/k. Under §7.1's
     /// "a single int64 plus a static rational scale", the stored integer is value×k.
     pub scales: HashMap<String, i128>,
+    /// A computed value → the step its values sit on, worked out from its expression
+    /// (§15.190): `amount × 10%` takes tenths of a pound. The storage step above can be finer
+    /// (`10%` brings a hundredth along), and the axes of §6 and the boundary vectors of §9 need
+    /// the step the values really take. [`Checked::value_step`] reads it, falling back to the
+    /// storage step.
+    pub grids: HashMap<String, Rat>,
     /// A rate output → the reciprocal of the step it travels at: the step it declares, or
     /// with none declared its rounding grid, which every answer sits on (§15.144). `scales`
     /// holds the value inside the code, which may be finer; this is what a caller counts.
@@ -517,6 +523,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         out_values: HashMap::new(),
         at_most: HashSet::new(),
         scales: HashMap::new(),
+        grids: HashMap::new(),
         out_scales: HashMap::new(),
         enums: HashMap::new(),
         groups: HashMap::new(),
@@ -1260,10 +1267,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 c.check_same(&ty, &got, &d.span, path, &tr!("導出", "derived value"));
                 c.derived_range(d, &ty, path);
                 c.overflow(&d.expr, &ty, &d.span, path, &d.name.text);
-                if let (Some(iv), Some(sc)) = (c.interval(&d.expr, &ty), c.scale(&d.expr)) {
-                    c.ranges.insert(d.name.text.clone(), (Some(iv.0), Some(iv.1)));
-                    c.scales.insert(d.name.text.clone(), sc);
-                }
+                c.record_value(&d.name.text, &d.expr, &ty);
                 let mut deps = Vec::new();
                 collect_names(&d.expr, &mut deps);
                 c.derived_deps.insert(d.name.text.clone(), deps);
@@ -1277,10 +1281,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 let got = c.expr_ty(&d.expr, path);
                 c.check_same(&ty, &got, &d.span, path, &tr!("定義", "definition"));
                 c.overflow(&d.expr, &ty, &d.span, path, &d.name.text);
-                if let (Some(iv), Some(sc)) = (c.interval(&d.expr, &ty), c.scale(&d.expr)) {
-                    c.ranges.insert(d.name.text.clone(), (Some(iv.0), Some(iv.1)));
-                    c.scales.insert(d.name.text.clone(), sc);
-                }
+                c.record_value(&d.name.text, &d.expr, &ty);
                 c.syms.insert(
                     d.name.text.clone(),
                     Sym { ty, span: d.name.span.clone(), kind: SymKind::Define, contract_only: false },
@@ -3521,6 +3522,97 @@ impl Checked {
             _ => 1,
         }
     }
+
+    /// What `check` keeps of a computed value: its range where the arithmetic bounds it, the
+    /// scale it is stored at, and the step its values land on (§15.190). The scale does not wait
+    /// for the range. The generated code holds the value at its expression's scale either way,
+    /// and a name recorded at none was read back as whole units: `amount × 10%` over an amount
+    /// with no range was held in pennies and compared with whole pounds.
+    fn record_value(&mut self, name: &str, e: &Expr, ty: &Ty) {
+        let sc = self.scale(e);
+        if let (Some(iv), Some(_)) = (self.interval(e, ty), sc) {
+            self.ranges.insert(name.to_string(), (Some(iv.0), Some(iv.1)));
+        }
+        if let Some(sc) = sc {
+            self.scales.insert(name.to_string(), sc);
+        }
+        if let Some(g) = self.lattice(e).filter(|g| g.num != 0) {
+            self.grids.insert(name.to_string(), g);
+        }
+    }
+
+    /// The step every value of `name` is a multiple of (§15.190): for a computed value, the step
+    /// its expression lands on ([`Checked::grids`]); for anything else, the step it is stored
+    /// at, which holds every value it takes and perhaps more. An input of money, a quantity or
+    /// `number` is whole; a rate input is on its declared step.
+    pub fn value_step(&self, name: &str) -> Rat {
+        self.grids.get(name).copied().unwrap_or_else(|| Rat::new(1, self.scales.get(name).copied().unwrap_or(1).max(1)))
+    }
+
+    /// The step every value of an expression is a multiple of, from its leaves up: a name is on
+    /// its own step and a literal on its value; a sum or a difference on the step both sides
+    /// share, a product on the product of the two, a quotient by a whole constant on its left
+    /// side's step over the constant; `min` and `max` give one of their sides, so the step both
+    /// share; a rounding lands on its grid, `allocate` on whole units. `amount × 10%` is on
+    /// tenths whatever `10%` is stored at, `12570GBP − above × 50%` on halves.
+    ///
+    /// Zero, for an expression that is always zero, divides nothing and is what a sum leaves
+    /// out. `None` for a shape this does not read; the storage step stands in for it.
+    fn lattice(&self, e: &Expr) -> Option<Rat> {
+        let abs = |r: Rat| -> Option<Rat> { if r.num < 0 { Some(Rat { num: r.num.checked_neg()?, den: r.den }) } else { Some(r) } };
+        let share = |a: Rat, b: Rat| -> Option<Rat> {
+            if a.num == 0 {
+                Some(b)
+            } else if b.num == 0 {
+                Some(a)
+            } else {
+                common_step(a, b)
+            }
+        };
+        match e {
+            Expr::Name(n, _) => Some(self.value_step(n)),
+            Expr::Lit(Lit::Num(n), _) => abs(lit_value_in(n, &lit_ty(n))?),
+            Expr::Lit(..) => None,
+            Expr::Bin(l, op, r, _) => match op {
+                BinOp::Add | BinOp::Sub => share(self.lattice(l)?, self.lattice(r)?),
+                BinOp::Mul => self.lattice(l)?.checked_mul(self.lattice(r)?),
+                // §2.3: the divisor is a whole constant, as `scale` reads it.
+                BinOp::Div => self.lattice(l)?.checked_div(Rat::int(const_value(r)?)),
+                _ => None,
+            },
+            Expr::Call(name, args, _) => {
+                if name == crate::kw::MIN || name == crate::kw::MAX {
+                    let [x, y] = args.as_slice() else { return None };
+                    return share(self.lattice(x)?, self.lattice(y)?);
+                }
+                if crate::num::RoundMode::parse(name).is_some() {
+                    return match args.get(1)? {
+                        Expr::Lit(Lit::Num(g), _) => abs(lit_value_in(g, &lit_ty(g))?),
+                        _ => None,
+                    };
+                }
+                (name == crate::kw::ALLOCATE).then_some(Rat::int(1))
+            }
+        }
+    }
+}
+
+/// The largest step two positive steps are both whole multiples of: a sixth and a fourth share a
+/// twelfth, a tenth and a whole unit a tenth (§15.190). `None` where the arithmetic does not fit.
+pub fn common_step(a: Rat, b: Rat) -> Option<Rat> {
+    fn gcd(mut x: i128, mut y: i128) -> i128 {
+        while y != 0 {
+            let t = x % y;
+            x = y;
+            y = t;
+        }
+        x
+    }
+    let n = gcd(a.num.checked_mul(b.den)?.checked_abs()?, b.num.checked_mul(a.den)?.checked_abs()?);
+    if n == 0 {
+        return None;
+    }
+    Rat::checked_new(n, a.den.checked_mul(b.den)?)
 }
 
 /// A value as the integer it travels as, at the scale `Checked::wire_scale` gives.
@@ -4091,6 +4183,12 @@ impl Checked {
                 // steps of the three it is computed from (§15.102).
                 if name == crate::kw::ALLOCATE {
                     return Some(1);
+                }
+                // `min` and `max` give one of their sides, so the scale both sides sit on, as
+                // the generator holds them. The first side's alone read `min(amount, amount ×
+                // 10%)` as whole pounds while the code held it in pennies (§15.190).
+                if let (crate::kw::MIN | crate::kw::MAX, [x, y]) = (name.as_str(), args.as_slice()) {
+                    return Some(lcm(self.scale(x)?, self.scale(y)?));
                 }
                 args.first().and_then(|a| self.scale(a))
             }

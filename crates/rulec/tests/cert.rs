@@ -457,6 +457,41 @@ fn 軸は宣言範囲を敷き詰める() {
     }
 }
 
+/// A commission of a tenth of the amount, in two rows that meet at 1GBP.
+const TENTHS: &str = "rule commission_band v1\n\ninputs\n  amount : money[GBP]  range >=1GBP <=100GBP\n\noutputs\n  reviewed : bool\n\nderive commission : money[GBP] = amount * 10%  range >=0GBP <=10GBP\n\ntable review\npolicy unique\n| commission | -> reviewed : bool |\n| <=1GBP     | false              |\n| >1GBP      | true               |\n";
+
+/// The certificate without its `scales`, as rulec wrote it before §15.190.
+fn without_scales(cert: &str) -> String {
+    let at = cert.find(r#""scales":{"#).expect("証明書に scales が無い");
+    let end = at + cert[at..].find("},").unwrap() + 2;
+    format!("{}{}", &cert[..at], &cert[end..])
+}
+
+/// The step an axis is cut at has to be one its column's values sit on (§15.190). The commission
+/// comes in tenths of a pound, so an axis cut every whole pound — what rulec wrote before — has
+/// values between two of its coordinates, and the certificate is refused. One with no `scales`,
+/// from before, rests the step on its own word, and the re-checker says so.
+#[test]
+fn 軸の刻みは値の載る刻みに合う() {
+    if !ready(Need::Python, have_python, "python3 が無い") {
+        return;
+    }
+    let cert = chain_cert("tenths", TENTHS);
+    assert!(cert.contains(r#""step":"1/10""#), "{cert}");
+    let (code, said) = recheck(&cert);
+    assert_eq!(code, 0, "{said}");
+    assert!(!said.contains("bears out"), "{said}");
+
+    let forged = cert.replacen(r#""step":"1/10""#, r#""step":"1""#, 1);
+    let (code, said) = recheck(&forged);
+    assert_eq!(code, 1, "整数の刻みで切った軸が通ってしまった:\n{said}");
+    assert!(said.contains("its values sit on a step of 1/10"), "{said}");
+
+    let (code, said) = recheck(&without_scales(&cert));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("which no scale here bears out"), "{said}");
+}
+
 /// What the certificate does **not** cover is said out loud, because a certificate that
 /// looks complete is worse than one that names its edges (§15.47).
 #[test]

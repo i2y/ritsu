@@ -44,13 +44,19 @@ exact, and that meaning is written down in `Semantics.lean` rather than in prose
 Four things the document states and this program cannot re-check. It names them in a line
 of its own rather than printing a clean "ok": the row pairs the axes do not part, rows an
 `apply` brought in from another file, rows the sieve rules out entirely, and a reach point
-handed over with no values behind it. A contract adds three: a condition with parts that
+handed over with no values behind it. A certificate from before rulec's §15.190, which states
+no `scales`, adds the step an axis is cut at where the step of its column's values cannot be
+worked out without them. A contract adds three: a condition with parts that
 could not be read and were taken as true, one that opens into too many cases, and a thing
 the door asks that the document gives no proof for. A machine adds one: a claim the document
 lists under `uncertified`, which it could not lay on the rows.
 
 Beyond those, the document's own account of the rule — the declared ranges, the types, the
-groups, the enums, the constraints, each value's expression and scale — is its word. The
+groups, the enums, the constraints, each value's expression and scale, the scale of every name —
+is its word. What is worked out from it is checked: the step a numeric axis is cut at has to
+divide the step its column's values take, worked out from the expressions and the scales the
+way rulec works it out (`checkSteps` in `RulecMain.lean`), so an axis of tenths of a pound cut
+every whole pound is refused. The
 digest ties the certificate to one text and every cell is read back from its own line and
 column in it; going behind the rest would take a parser for the rule, and a checker that
 reads a rule the way rulec reads it is not independent of it. A contract's section is the

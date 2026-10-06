@@ -54,6 +54,7 @@ macro_rules! golden {
 // The five that §13 decided to "print as is".
 golden!(e101_完全性, "E101", "tests/mutants/m_e101.rule", "E101");
 golden!(e101_日付の穴, "E101-date", "tests/mutants/m_e101d.rule", "E101");
+golden!(e101_端数の刻み, "E101-frac", "tests/mutants/m_e101fracja.rule", "E101");
 golden!(e102_冗長, "E102", "tests/mutants/m_e102.rule", "E102");
 golden!(e102_上流の値, "E102-b", "tests/mutants/m_e102b.rule", "E102");
 golden!(e102_上流の相関, "E102-c", "tests/mutants/m_e102c.rule", "E102");

@@ -2539,8 +2539,8 @@ pub fn ledger() -> Vec<Entry> {
             "E101",
             tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"),
             tr!(
-                "行を全部合わせても、宣言した範囲の入力を覆いきれていないとき。完全性は宣言で外せず、常に必須です。当てはまらない入力の具体例が必ず付きます。",
-                "The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached."
+                "行を全部合わせても、宣言した範囲の入力を覆いきれていないとき。完全性は宣言で外せず、常に必須です。当てはまらない入力の具体例が必ず付きます。列が導出なら、例はその値で書かれ、その値を作る入力も、参照の評価器で確かめられたときは付きます。導出の値は、セルを書く単位より細かい刻みをとることがあり（`amount * 10%` は 0.1 刻み）、その刻みで調べます。",
+                "The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached. Where a column is a derive, the example gives its value, and the input that produces it too, once the reference evaluator has confirmed it. A derive's values can fall finer than the units a cell is written in (`amount * 10%` comes in tenths), and they are read on that step."
             ),
             tr!(
                 "それを起こす入力に当てはまる行を足してください。列挙の値が増えたのが原因なら、その値の行か、全部を受ける `-` の行を足してください。値に専用の行が要らないなら、列挙の宣言に `default` を付けてください。",

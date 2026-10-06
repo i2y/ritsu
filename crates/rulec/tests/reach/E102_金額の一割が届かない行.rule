@@ -1,0 +1,20 @@
+rule 手数料の確認(commission_review) v1
+description "注文を手数料で分ける。手数料は金額の一割と固定額の和。手数料の範囲を広めに書き、最後の行は入力からは届かない額を求めている"
+
+enum 区分(band) = 少額(small) | 通常(usual) | 多額(large)
+
+inputs
+  金額(amount)  : money[円]  range >=1円 <=100円
+  固定額(fixed) : money[円]  range >=0円 <=5円
+
+outputs
+  確認(review) : 区分
+
+derive 手数料(commission) : money[円] = 金額 × 10% + 固定額  range >=0円 <=100円
+
+table 確認表(review_of)
+policy unique
+| 手数料      | -> 確認 : 区分 |
+| <=1円       | 少額           |
+| >1円 <=15円 | 通常           |
+| >15円       | 多額           |

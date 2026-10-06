@@ -68,6 +68,11 @@ fn 変異は決めたコードだけを出す() {
         ("m_e102b.rule", &[("E102", 3), ("E107", 2)], "上流が出さない値を下流が名指しした"),
         ("m_e102c.rule", &[("E102", 1)], "上流の二つの表が同時には出さない組を名指しした（§15.114）"),
         ("m_e101e.rule", &[("E101", 1), ("E107", 2)], "起こりうる組を覆わずに残した（上流の篩が刈りすぎていないことの裏）"),
+        // §15.190: the axis of a derive was cut in whole pounds, though its values come in
+        // tenths, and the gap between the two rows was not seen. The English rule, and its
+        // Japanese version beside it.
+        ("m_e101frac.rule", &[("E101", 1)], "金額の 10% の手数料に、1 ポンド単位の境目で区分を書いた（軸が 1 ポンドで切られ、穴を見逃していた）"),
+        ("m_e101fracja.rule", &[("E101", 1)], "上と同じ規則の日本語の版"),
         ("m_e103.rule", &[("E103", 1)], "長さの列に金額を書いた"),
         ("m_e104.rule", &[("E104", 1)], "出力の丸め宣言を消した"),
         ("m_e104b.rule", &[("E104", 1)], "端数の出る式から丸めを消した"),
@@ -662,6 +667,11 @@ fn 変異はコーパスから作り直せる() {
         // arithmetic ones is two boolean definitions off one input, and no corpus rule has
         // one — the corpus is made of rules that are right.
         "m_w114.rule",
+        // §15.190: no corpus rule has a table over a derive whose values fall between whole
+        // units, so the gap between two whole-pound rows is written here, in English and in
+        // Japanese.
+        "m_e101frac.rule",
+        "m_e101fracja.rule",
     ];
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let t = TempDir::new("mutants");

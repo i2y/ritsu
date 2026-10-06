@@ -1,0 +1,16 @@
+rule commission_band v1
+description "§15.190: the bands are written in whole pounds, as if the commission came in whole pounds. It is a tenth of the amount, so 1.1GBP to 1.9GBP falls in neither row"
+
+inputs
+  amount : money[GBP]  range >=1GBP <=100GBP
+
+outputs
+  reviewed : bool
+
+derive commission : money[GBP] = amount * 10%  range >=0GBP <=10GBP
+
+table review
+policy unique
+| commission | -> reviewed : bool |
+| <=1GBP     | false              |
+| >=2GBP     | true               |

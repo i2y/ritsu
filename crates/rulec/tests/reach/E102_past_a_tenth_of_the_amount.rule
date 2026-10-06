@@ -1,0 +1,20 @@
+rule commission_review v1
+description "Sorts an order by its commission: a tenth of the amount, and a fixed part. The range of the commission was written wide, and the last row asks for more than the inputs can make"
+
+enum band = small | usual | large
+
+inputs
+  amount : money[GBP]  range >=1GBP <=100GBP
+  fixed  : money[GBP]  range >=0GBP <=5GBP
+
+outputs
+  review : band
+
+derive commission : money[GBP] = amount * 10% + fixed  range >=0GBP <=100GBP
+
+table review_of
+policy unique
+| commission    | -> review : band |
+| <=1GBP        | small            |
+| >1GBP <=15GBP | usual            |
+| >15GBP        | large            |

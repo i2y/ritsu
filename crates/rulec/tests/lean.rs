@@ -440,6 +440,40 @@ fn 線形のモデルの乗数は証明付きの検査器でも確かめられ�
     }
 }
 
+/// A commission of a tenth of the amount, in two rows that meet at 1GBP.
+const TENTHS: &str = "rule commission_band v1\n\ninputs\n  amount : money[GBP]  range >=1GBP <=100GBP\n\noutputs\n  reviewed : bool\n\nderive commission : money[GBP] = amount * 10%  range >=0GBP <=10GBP\n\ntable review\npolicy unique\n| commission | -> reviewed : bool |\n| <=1GBP     | false              |\n| >1GBP      | true               |\n";
+
+/// The step an axis is cut at has to be one its column's values sit on (§15.190), here as under
+/// `tools/recheck.py`: an axis of tenths of a pound cut every whole pound is refused, and a
+/// certificate with no `scales` rests the step on its own word and is said to.
+#[test]
+fn 軸の刻みは証明付きの検査器でも値の載る刻みに合う() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    let tmp = TempDir::new("lean-tenths");
+    let p = tmp.path().join("tenths.rule");
+    std::fs::write(&p, TENTHS).unwrap();
+    let (c, cert) = rulec(&["certificate", p.to_str().unwrap()]);
+    assert_eq!(c, 0, "{cert}");
+    assert!(cert.contains(r#""step":"1/10""#), "{cert}");
+    let (code, said) = lean(&bin, &cert, Some(p.to_str().unwrap()));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("OK: every claim"), "{said}");
+
+    let forged = cert.replacen(r#""step":"1/10""#, r#""step":"1""#, 1);
+    let (code, said) = lean(&bin, &forged, None);
+    assert_eq!(code, 1, "整数の刻みで切った軸が通ってしまった:\n{said}");
+    assert!(said.contains("its values sit on a step of 1/10"), "{said}");
+
+    let at = cert.find(r#""scales":{"#).expect("証明書に scales が無い");
+    let end = at + cert[at..].find("},").unwrap() + 2;
+    let old = format!("{}{}", &cert[..at], &cert[end..]);
+    let (code, said) = lean(&bin, &old, Some(p.to_str().unwrap()));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("which no scale here bears out"), "{said}");
+}
+
 /// Ways to lie about a contract, on the certificate of 速達の見積 (§15.142): each with
 /// whether it has to fail, or be said out loud as not shown.
 fn contract_lies(cert: &str) -> Vec<(&'static str, String, bool)> {

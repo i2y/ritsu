@@ -64,7 +64,12 @@ enum Axis {
     /// `days` is the set a date input takes when its range is a date of a koyomi file
     /// (`range from koyomi …`, §15.174): a coordinate with no day of it in is one no input
     /// reaches, and a witness on the axis is always one of its days.
-    Num { unit: String, date: bool, coords: Vec<Coord>, shown: i128, wire: i128, step: Rat, days: Option<std::sync::Arc<Vec<i64>>> },
+    ///
+    /// `grid` is the step the column's values take (§15.190), which `step` divides: they are
+    /// the same but where the values are coarser than the whole units a cell is written in
+    /// (`amount × 30%` takes 0.3, and the axis is cut at 0.1). A witness inside an interval
+    /// coordinate is put on it where it can be, so that it is a value the column can hold.
+    Num { unit: String, date: bool, coords: Vec<Coord>, shown: i128, wire: i128, step: Rat, grid: Rat, days: Option<std::sync::Arc<Vec<i64>>> },
     Bool,
     /// A `string` column, cut by the prefixes its own cells name (§15.101).
     ///
@@ -115,6 +120,36 @@ fn inside(a: Option<Rat>, b: Option<Rat>, step: Rat) -> Rat {
     }
 }
 
+/// A value strictly inside `(a, b)` on `grid`, the step a column's values take (§15.190): the
+/// first after `a`, or with `a` open the last before `b`. Where `grid` has no value in there, or
+/// is the axis's own step, the axis's step past the end, as [`inside`] gives it.
+fn inside_on(a: Option<Rat>, b: Option<Rat>, step: Rat, grid: Rat) -> Rat {
+    let at = inside(a, b, step);
+    if grid.cmp_to(step) == std::cmp::Ordering::Equal || grid.num <= 0 {
+        return at;
+    }
+    let lt = |x: Rat, y: Rat| x.cmp_to(y) == std::cmp::Ordering::Less;
+    let on = (|| -> Option<Rat> {
+        let k = |v: Rat| -> Option<i128> {
+            let q = v.checked_div(grid)?;
+            Some(q.num.div_euclid(q.den))
+        };
+        match (a, b) {
+            (Some(a), _) => grid.checked_mul(Rat::int(k(a)?.checked_add(1)?)),
+            (None, Some(b)) => {
+                let q = b.checked_div(grid)?;
+                let below = if q.is_int() { q.num.checked_sub(1)? } else { q.num.div_euclid(q.den) };
+                grid.checked_mul(Rat::int(below))
+            }
+            (None, None) => Some(Rat::zero()),
+        }
+    })();
+    match on {
+        Some(v) if a.is_none_or(|a| lt(a, v)) && b.is_none_or(|b| lt(v, b)) => v,
+        _ => at,
+    }
+}
+
 impl Axis {
     fn len(&self) -> usize {
         match self {
@@ -137,12 +172,12 @@ impl Axis {
         }
         match self {
             Axis::Enum { .. } | Axis::Bool | Axis::Prefix { .. } => None,
-            Axis::Num { coords, step, days, .. } => match coords.get(i) {
+            Axis::Num { coords, step, grid, days, .. } => match coords.get(i) {
                 Some(Coord::Point(v)) => Some(*v),
                 // On an axis of koyomi's days, the first day inside the interval (§15.174).
                 Some(Coord::Open(a, b)) => match days {
                     Some(ds) => day_inside(ds, *a, *b).map(|d| Rat::int(d as i128)).or(Some(inside(*a, *b, *step))),
-                    None => Some(inside(*a, *b, *step)),
+                    None => Some(inside_on(*a, *b, *step, *grid)),
                 },
                 None => None,
             },
@@ -223,8 +258,24 @@ impl Axis {
             // Empty unit means "a date"; the display form is already `YYYY-MM-DD`.
             Axis::Num { date: true, .. } => WVal::Str(self.witness_at(i, chosen)),
             Axis::Num { wire, .. } => {
-                WVal::Int(crate::types::wire_int(self.value_at(i, chosen).unwrap_or(Rat::zero()), *wire))
+                let v = self.value_at(i, chosen).unwrap_or(Rat::zero());
+                // A value the rule computes can fall between the integers of the wire — a derive
+                // of tenths of a pound is 1.1 (§15.190). It travels on no wire, so it is written
+                // as the number it is rather than cut to an integer it is not.
+                match v.checked_mul(Rat::int(*wire)) {
+                    Some(s) if s.is_int() => WVal::Int(s.num),
+                    _ => WVal::Str(v.to_string()),
+                }
             }
+        }
+    }
+
+    /// Whether `v` can be written in a cell of this axis's column: a whole number of the unit
+    /// for money, a quantity and `number`, which is all their cells take (§15.190).
+    fn writable(&self, v: Rat) -> bool {
+        match self {
+            Axis::Num { date: false, unit, shown, .. } if *shown == 1 && unit != "%" => v.is_int(),
+            _ => true,
         }
     }
 }
@@ -1006,6 +1057,7 @@ impl TableRegion {
                         shown: 1,
                         wire: 1,
                         step: Rat::int(1),
+                        grid: Rat::int(1),
                         days,
                     }
                 }
@@ -1041,13 +1093,13 @@ impl TableRegion {
                         // write after the digits (§2.1).
                         _ => String::new(),
                     };
-                    // The runtime representation is a single integer in the declared unit
-                    // (§7.1), so the step is 1 for money and quantities and the declared step
-                    // for rates.
-                    let q = match &ty {
-                        Ty::Rate => Rat::new(1, *c.scales.get(name).unwrap_or(&100)),
-                        _ => Rat::int(1),
-                    };
+                    // The step every value of the column and every cell of it is a multiple of:
+                    // 1 for money and quantities that come in, the declared step for rates, and
+                    // for a value the rule computes, the step its values take (§15.190). The
+                    // axis was cut at whole units whatever the column was, and a derive of
+                    // tenths lost the open coordinate between two whole pounds a step apart:
+                    // `<=1GBP` and `>=2GBP` passed as complete while 1.1 to 1.9 matched nothing.
+                    let q = crate::coverage::quantum(c, name, &ty);
                     Axis::Num {
                         unit,
                         date: false,
@@ -1056,6 +1108,12 @@ impl TableRegion {
                         shown: if matches!(ty, Ty::Rate) { 100 } else { 1 },
                         wire: c.wire_scale(name),
                         step: q,
+                        // The values' own step, which `q` divides; only where the two agree
+                        // on a whole multiple is it used.
+                        grid: {
+                            let g = c.value_step(name);
+                            if g.checked_div(q).is_some_and(|k| k.is_int()) { g } else { q }
+                        },
                         days: None,
                     }
                 }
@@ -1515,17 +1573,113 @@ impl TableRegion {
         items.into_iter().map(|(_, p)| p).collect()
     }
 
+    /// The input behind a gap that lies on a column the rule computes (§15.190). The witness
+    /// says what the derived columns come to, and no caller sends those, so the input is worked
+    /// out: the linear model solved with every numeric column held at the value the witness
+    /// shows, the inputs the table reads at their own witness values, and the rest at the first
+    /// value they can take. It is handed over only when the reference evaluator gives every
+    /// column the table reads the very value the witness shows and no row takes them, which is
+    /// the input the generated code stops on. `None` for a gap on inputs alone, where the witness
+    /// is the input already, and when nothing could be built, which proves nothing either way.
+    fn input_behind(&self, path: &[usize], t: &Table, c: &Checked, f: &RuleFile) -> Option<BTreeMap<String, crate::eval::Val>> {
+        use crate::eval::Val;
+        use crate::fourier::{Lin, Origin};
+        if !(0..self.axes.len()).any(|ai| self.derived[ai].is_some() || self.is_define[ai]) {
+            return None;
+        }
+        let vals = self.witness_values(path)?;
+        let coord = |ai: usize| path.get(ai).copied().unwrap_or(0);
+        let at_axis = |ai: usize| self.axes[ai].witness_num(coord(ai), vals.get(ai).copied().flatten());
+        let as_val = |name: &str, v: Rat| -> Val {
+            if c.ty_of(name) == Some(Ty::Date) {
+                let (y, m, d) = crate::types::ord_to_date(v);
+                Val::Date(y, m, d)
+            } else {
+                Val::Num(v)
+            }
+        };
+        let mut a = crate::vectors::first_input(f, c)?;
+        for (ai, name) in self.col_names.iter().enumerate() {
+            if !a.contains_key(name) {
+                continue;
+            }
+            let v = match &self.axes[ai] {
+                Axis::Num { .. } => as_val(name, at_axis(ai)?),
+                Axis::Enum { values } => Val::Enum(values.get(coord(ai))?.clone()),
+                Axis::Bool => Val::Bool(coord(ai) == 0),
+                Axis::Prefix { .. } => match self.axes[ai].witness_val(coord(ai), None) {
+                    crate::diag::WVal::Str(s) => Val::Str(s),
+                    _ => return None,
+                },
+            };
+            a.insert(name.clone(), v);
+        }
+        for g in &self.model {
+            let mut sys = g.sys.clone();
+            for (ai, name) in self.col_names.iter().enumerate() {
+                if !g.vars.contains(name) {
+                    continue;
+                }
+                let Some(v) = at_axis(ai) else { continue };
+                let d = Lin::var(name).plus(&Lin::con(v.mul(Rat::int(-1))));
+                sys.push(d.clone().le(false).tag(Origin::Coord { axis: ai, hi: true }));
+                sys.push(d.ge(false).tag(Origin::Coord { axis: ai, hi: false }));
+            }
+            let got = crate::fourier::solve(sys.clone())?;
+            if !sys.iter().all(|q| q.holds_at(&got) == Some(true)) {
+                return None;
+            }
+            for (n, v) in got {
+                if a.contains_key(&n) {
+                    a.insert(n.clone(), as_val(&n, v));
+                }
+            }
+        }
+        let got = crate::vectors::no_row_takes(f, c, t, &a)?;
+        // Every column at the witness's own value: what the note says the input makes is what
+        // it makes, not merely some point of the same gap.
+        let same = self.col_names.iter().enumerate().all(|(ai, name)| match (&self.axes[ai], got.get(name)) {
+            (Axis::Num { .. }, Some(Val::Num(v))) => at_axis(ai).is_some_and(|w| w.cmp_to(*v) == std::cmp::Ordering::Equal),
+            (Axis::Num { .. }, Some(Val::Date(y, m, d))) => {
+                at_axis(ai).is_some_and(|w| w.cmp_to(crate::types::date_ord(*y, *m, *d)) == std::cmp::Ordering::Equal)
+            }
+            (Axis::Enum { values }, Some(Val::Enum(v))) => values.get(coord(ai)) == Some(v),
+            (Axis::Bool, Some(Val::Bool(b))) => *b == (coord(ai) == 0),
+            (Axis::Prefix { .. }, Some(Val::Str(s))) => {
+                matches!(self.axes[ai].witness_val(coord(ai), None), crate::diag::WVal::Str(w) if w == *s)
+            }
+            _ => false,
+        });
+        same.then_some(a)
+    }
+
     /// A row that matches the witness, written out so it can be pasted into the table. The
     /// output cells are copied from the table's first row: **the tool does not know the
     /// amount**, only the shape, and the notes say so. This is E101's `fix.text`.
     fn row_text(&self, path: &[usize], t: &Table) -> Option<String> {
         let vals = self.witness_values(path);
-        let mut cells: Vec<(usize, String)> = (0..self.axes.len())
-            .map(|ai| {
-                let v = vals.as_ref().and_then(|w| w.get(ai).copied().flatten());
-                (self.display_of[ai], self.axes[ai].witness_at(path.get(ai).copied().unwrap_or(0), v))
-            })
-            .collect();
+        let mut cells: Vec<(usize, String)> = Vec::new();
+        for ai in 0..self.axes.len() {
+            let ci = path.get(ai).copied().unwrap_or(0);
+            let v = vals.as_ref().and_then(|w| w.get(ai).copied().flatten());
+            // A value between whole units (a derive of tenths, §15.190) is no cell its column
+            // takes, so the coordinate it lies in is written instead, `>1GBP <2GBP`, when its
+            // ends are values a cell takes. When they are not, there is no row to write.
+            let cell = match (&self.axes[ai], self.axes[ai].witness_num(ci, v)) {
+                (Axis::Num { coords, unit, .. }, Some(x)) if !self.axes[ai].writable(x) => match coords.get(ci) {
+                    Some(Coord::Open(a, b)) => {
+                        if a.iter().chain(b.iter()).any(|e| !self.axes[ai].writable(*e)) {
+                            return None;
+                        }
+                        let ends: Vec<String> = [a.map(|a| format!(">{a}{unit}")), b.map(|b| format!("<{b}{unit}"))].into_iter().flatten().collect();
+                        if ends.is_empty() { "-".to_string() } else { ends.join(" ") }
+                    }
+                    _ => return None,
+                },
+                _ => self.axes[ai].witness_at(ci, v),
+            };
+            cells.push((self.display_of[ai], cell));
+        }
         cells.sort_by_key(|(d, _)| *d);
         let mut out: Vec<String> = cells.into_iter().map(|(_, c)| c).collect();
         for o in &t.rows.first()?.outs {
@@ -2227,11 +2381,11 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
     }
 
     // --- Unreachable rows
-    // The third form (§15.189) reads the reach of the derived columns, and only where every
-    // numeric axis, here and in the tables above, has a coordinate for each value its column
-    // takes. Its walk has a budget of its own for the whole table; past it, a row passes as it
-    // did before.
-    let reach = (reg.steps_exact(c) && ups.iter().all(|u| u.reg.steps_exact(c))).then(|| reg.reach_of(f, c)).filter(|r| r.axes.iter().any(|x| *x));
+    // The third form (§15.189) reads the reach of the derived columns. Every axis has a
+    // coordinate for each value its column takes since the axes are cut on the step the
+    // values take (§15.190), so it reads every table that has such a column. Its walk has a
+    // budget of its own for the whole table; past it, a row passes as it did before.
+    let reach = Some(reg.reach_of(f, c)).filter(|r| r.axes.iter().any(|x| *x));
     let mut reach_left = budget;
     for i in 0..t.rows.len() {
         let up_dead = upstream_dead(&t.rows[i], &ups, c, t);
@@ -2377,6 +2531,15 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                     .wit(pairs_to_witness(reg.witness_pairs(&hole)))
                     .mark(head_span.clone(), tr!("起こりうる入力を網羅していません", "the input space is not fully covered"))
                     .note(tr!("当てはまらない例: {}", "An input that matches no row: {}", reg.witness_text(&hole)))
+                    // A gap on a computed column names values no caller sends; the input behind
+                    // them is what the generated code stops on (§15.190).
+                    .note(match reg.input_behind(&hole, t, c, f) {
+                        Some(a) => {
+                            let b = a.iter().map(|(n, v)| format!("{n} = {}", crate::vectors::show_named(c, n, v))).collect::<Vec<_>>().join(", ");
+                            tr!("この例を作る入力: {b}", "An input producing this example: {b}")
+                        }
+                        None => String::new(),
+                    })
                     .note(tr!("ヒント: この入力に当てはまる行を足してください。", "hint: add a row that matches this input."));
                 let d = if merged {
                     d.note(tr!(
@@ -2761,20 +2924,6 @@ impl OutOfReach {
 }
 
 impl TableRegion {
-    /// Whether every numeric axis has a coordinate for each value its column can take. A derive
-    /// with a fractional factor (`amount × 10%`) takes values between the whole units its axis
-    /// is cut at, and the open coordinate between two boundaries one unit apart is left out of
-    /// such an axis, so a row there would look reached by fewer values than it is.
-    fn steps_exact(&self, c: &Checked) -> bool {
-        self.axes.iter().zip(&self.col_names).all(|(a, n)| match a {
-            Axis::Num { date: false, step, .. } => {
-                let scale = c.scales.get(n).copied().unwrap_or(1).max(1);
-                step.cmp_to(Rat::new(1, scale)) != std::cmp::Ordering::Greater
-            }
-            _ => true,
-        })
-    }
-
     /// What the third form of E102 may read here (§15.189).
     fn reach_of(&self, f: &RuleFile, c: &Checked) -> Reach {
         use crate::fourier::{Ground, Origin};

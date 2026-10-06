@@ -33,6 +33,11 @@ What it checks, per table:
     `constraint` that cannot hold there, a derived value whose coordinate lies outside
     what the derive can produce, or multipliers that add the box's ends, the derives and
     the constraints up to a contradiction (§15.141). All of those are re-checked here.
+  * every numeric axis **tiles**, and on the step its column's values really take
+    (§15.190): the coordinates run from one end of the range to the other, each touching the
+    next or one step past it, and that step has to divide the one worked out here from the
+    values' expressions and the `scales` the certificate states — a column of tenths of a
+    pound cut every whole pound leaves the values between two coordinates to no row.
 
 What it checks, per contract (§15.142): the rule's door — each numeric input's declared
 range at the scale the value travels at, each `constraint` between two of them, each enum
@@ -1115,7 +1120,87 @@ def check_axis(t, ai):
             if vals[0][0] != lo or vals[-1][1] != hi:
                 raise Bad(f"{t['table']}: {a['column']} runs from {vals[0][0]} to "
                           f"{vals[-1][1]}, and the rule declares {lo} to {hi}")
+    # "One step past it, with nothing between" is only so on the grid the column's values
+    # really sit on (§15.190). A column of tenths of a pound cut every whole pound has values
+    # between two coordinates, and the gap under them was covered by nothing.
+    g = column_grid(t.get("_cert") or {}, a["column"])
+    if g is None:
+        STATED.append(f"{t['table']}: the step {a['column']} is cut at, which no scale here bears out")
+        return 1
+    if (g / step).denominator != 1:
+        raise Bad(f"{t['table']}: {a['column']} is cut every {step}, and its values sit on a step of {g}, "
+                  f"so a value can fall between two coordinates")
+    for lo, hi in vals:
+        for e in (lo, hi):
+            if e is not None and (e / step).denominator != 1:
+                raise Bad(f"{t['table']}: {a['column']} has a coordinate ending at {e}, off its step of {step}")
     return 1
+
+
+ROUNDINGS = ("up", "down", "half_up", "half_even", "half_down")
+
+
+def share(a, b):
+    """The largest step two steps are both whole multiples of: a tenth and a whole unit share a
+    tenth. Zero, the step of a value that is always zero, divides nothing and is left out."""
+    if a == 0:
+        return b
+    if b == 0:
+        return a
+    return Fraction(math.gcd(a.numerator * b.denominator, b.numerator * a.denominator),
+                    a.denominator * b.denominator)
+
+
+def expr_grid(e, grid_of):
+    """The step every value of an expression is a multiple of, from its leaves up, as `rulec`
+    works it out (§15.190): a name is on its own step and a literal on its value; a sum or a
+    difference on the step both sides share, a product on the product of the two, a quotient
+    by a whole constant on its left side's over the constant; `min` and `max` on the step both
+    sides share, a rounding on its grid, `allocate` on whole units. None for anything else."""
+    if "name" in e:
+        return grid_of(e["name"])
+    if "num" in e:
+        v = num(e.get("value"))
+        return None if v is None else abs(v)
+    op = e.get("op")
+    if op in ("+", "-", "*"):
+        a, b = expr_grid(e["l"], grid_of), expr_grid(e["r"], grid_of)
+        if a is None or b is None:
+            return None
+        return a * b if op == "*" else share(a, b)
+    if op == "/":
+        a = expr_grid(e["l"], grid_of)
+        k = num(e["r"].get("value")) if "num" in e["r"] else None
+        if a is None or k is None or k.denominator != 1 or k <= 0:
+            return None
+        return a / k
+    if "call" in e:
+        args = e.get("args", [])
+        if e["call"] in ("min", "max") and len(args) == 2:
+            a, b = expr_grid(args[0], grid_of), expr_grid(args[1], grid_of)
+            return None if a is None or b is None else share(a, b)
+        if e["call"] in ROUNDINGS and len(args) == 2 and "num" in args[1]:
+            v = num(args[1].get("value"))
+            return None if v is None else abs(v)
+        if e["call"] == "allocate":
+            return Fraction(1)
+    return None
+
+
+def column_grid(cert, name, seen=()):
+    """The step every value of a column is a multiple of, from the document's own account: a
+    value's expression read from its leaves up, and otherwise — and for a value whose
+    expression gives no step — the scale the name is stored at (`scales`). None when neither
+    says, which a certificate from before §15.190 does not."""
+    if name in seen:
+        return None
+    v = next((x for x in cert.get("values", []) if x.get("name") == name), None)
+    if v is not None and v.get("expr") is not None:
+        g = expr_grid(v["expr"], lambda n: column_grid(cert, n, seen + (name,)))
+        if g is not None and g != 0:
+            return g
+    s = (cert.get("scales") or {}).get(name)
+    return Fraction(1, s) if isinstance(s, int) and s > 0 else None
 
 
 def axis_splits(axis, tests):

@@ -246,6 +246,86 @@ def checkAxes (t : ReadTable) (r : Report) : Report × Nat := Id.run do
             tiled := tiled + 1
   return (r, tiled)
 
+/-- The largest step two steps are both whole multiples of (rulec's §15.190): a tenth and a
+    whole unit share a tenth. Zero, the step of a value that is always zero, divides nothing
+    and is left out. -/
+def shareStep (a b : Rat) : Rat :=
+  if a == 0 then b
+  else if b == 0 then a
+  else ((Int.gcd (a.num * b.den) (b.num * a.den) : Nat) : Rat) / ((a.den * b.den : Nat) : Rat)
+
+def ratAbs (a : Rat) : Rat := if a < 0 then -a else a
+
+/-- The step every value of an expression is a multiple of, from its leaves up, as rulec works
+    it out (its §15.190): a name is on its own step and a literal on its value; a sum, a
+    difference, a `min` or a `max` on the step both sides share, a product on the product of
+    the two, a quotient by a whole constant on its left side's over the constant; a rounding
+    on its grid, a share on whole units. `none` for anything else. -/
+def exprStep (stepOf : String → Option Rat) : RulecCert.Expr → Option Rat
+  | .name n => stepOf n
+  | .lit v _ => some (ratAbs v)
+  | .add a b | .sub a b | .minOf a b | .maxOf a b => do
+      let x ← exprStep stepOf a
+      let y ← exprStep stepOf b
+      pure (shareStep x y)
+  | .mul a b => do
+      let x ← exprStep stepOf a
+      let y ← exprStep stepOf b
+      pure (x * y)
+  | .divc a k _ => do
+      let x ← exprStep stepOf a
+      if k.den == 1 && k > 0 then some (x / k) else none
+  | .roundTo _ g => some (ratAbs g)
+  | .alloc _ _ _ => some 1
+  | _ => none
+
+/-- The step every value of a column is a multiple of, from the document's own account: a
+    value's expression read from its leaves up, and otherwise — and for a value whose
+    expression gives no step — the scale the name is stored at (`scales`). `none` when
+    neither says, which a certificate from before rulec's §15.190 does not. -/
+partial def columnStep (cert : Json) (seen : List String) (name : String) : Option Rat :=
+  if seen.contains name then none else
+  let fromExpr : Option Rat := do
+    let v ← (fieldArr cert "values").find? (fun v => fieldStr v "name" == name)
+    let e ← field v "expr" >>= exprOfJson
+    let g ← exprStep (columnStep cert (name :: seen)) e
+    if g == 0 then none else some g
+  match fromExpr with
+  | some g => some g
+  | none => do
+      let s ← field ((field cert "scales").getD Json.null) name >>= nat
+      if s == 0 then none else some (1 / (s : Rat))
+
+/-- **A numeric axis is cut on the step its values sit on** (rulec's §15.190). "One grid step
+    past it, with nothing between" is only so on that grid: a column of tenths of a pound cut
+    every whole pound has values between two coordinates, and no box covered them. The step
+    the certificate gives has to divide the one the column's values are worked out to sit on,
+    and every end of a coordinate has to lie on it. -/
+def checkSteps (t : ReadTable) (stepOf : String → Option Rat) (r : Report) : Report := Id.run do
+  let mut r := r
+  for ai in [0 : t.columns.length] do
+    let bs := t.spans[ai]!
+    if bs.isEmpty || bs.all (·.isNone) then continue
+    match t.steps[ai]! with
+    | none => pure ()
+    | some step =>
+      if step ≤ 0 then continue
+      let col := t.columns[ai]!
+      match stepOf col with
+      | none => r := r.state s!"the step {t.name}'s {col} is cut at, which no scale here bears out"
+      | some g =>
+        if (g / step).den != 1 then
+          r := r.fail s!"{t.name}: {col} is cut every {ratText step}, and its values sit on a step of {ratText g}, so a value can fall between two coordinates"
+        else
+          let ends := bs.flatMap (fun x => match x with
+            | some c => [c.span.1, c.span.2]
+            | none => [])
+          if ends.any (fun e => match e with
+              | some v => (v / step).den != 1
+              | none => false) then
+            r := r.fail s!"{t.name}: {col} has a coordinate ending off its step of {ratText step}"
+  return r
+
 /-- The byte ranges a table row's `|` separators cut the line into, each trimmed. What
     follows the last `|` is a comment, not a cell. -/
 def fieldsOf (line : ByteArray) : Array (Nat × Nat) := Id.run do
@@ -1029,6 +1109,7 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
       | some t =>
         r := checkAbove tj (fieldArr cert "tables") r
         r := checkTable t r
+        r := checkSteps t (columnStep cert []) r
         tables := tables.push t
     r := checkContracts cert r
     r := checkMachine cert tables r

@@ -1,0 +1,16 @@
+rule 手数料の区分(commission_band) v1
+description "§15.190: 区分を、手数料が 1 円単位で決まるかのように書いた。手数料は金額の 10% なので、1.1円 から 1.9円 はどちらの行にも入らない"
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100円
+
+outputs
+  確認(reviewed) : bool
+
+derive 手数料(commission) : money[円] = 金額 × 10%  range >=0円 <=10円
+
+table 確認の要否(review)
+policy unique
+| 手数料 | -> 確認(reviewed) : bool |
+| <=1円  | false                    |
+| >=2円  | true                     |

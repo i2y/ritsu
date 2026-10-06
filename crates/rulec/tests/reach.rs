@@ -6,9 +6,10 @@
 //!
 //! The row is reached by no input: every input inside the ranges goes through the reference
 //! evaluator, and none of them makes the row fire. Deleting the row leaves the table complete, so
-//! E101 never asks for what E102 called dead. And what the form does not read — a derive whose
-//! values fall between the whole units its axis is cut at, a `define` in a column, a row only a
-//! `constraint` rules out, a derive that reads a table's output — passes as it did before.
+//! E101 never asks for what E102 called dead. A derive whose values fall between whole units — a
+//! tenth of an amount — is read too, since its axis is cut on the step its values take (§15.190).
+//! And what the form does not read — a `define` in a column, a row only a `constraint` rules out,
+//! a derive that reads a table's output — passes as it did before.
 
 use rulec::eval::Val;
 use rulec::i18n::{self, Lang};
@@ -26,6 +27,7 @@ const PAIRS: &[(&str, &str, usize)] = &[
     ("E102_earlier_rows_take_the_rest", "E102_残りは上の行が取る", 4),
     ("E102_reach_under_a_constraint", "E102_制約で狭まる導出", 1),
     ("E102_two_derives_together", "E102_二つの導出の組", 1),
+    ("E102_past_a_tenth_of_the_amount", "E102_金額の一割が届かない行", 3),
 ];
 
 fn source(stem: &str) -> (String, String) {
@@ -230,8 +232,6 @@ fn the_days_of_a_koyomi_date_are_said_when_they_take_part() {
 fn what_the_third_form_does_not_read_passes_as_before() {
     let head = "rule v v1\n\nenum band = small | big | huge\n\ninputs\n  amount : money[GBP]  range >=1GBP <=100GBP\n  limit  : money[GBP]  range >=0GBP <=100GBP\n  k      : bool\n\noutputs\n  out : band\n\n";
     let cases = [
-        // a fractional factor: the values fall between the whole pounds the axis is cut at
-        ("a derive with a fractional factor", "derive tenth : money[GBP] = amount * 10%  range >=0GBP <=10GBP\n\ntable t\npolicy unique\n| tenth          | -> out : band |\n| <=1GBP         | small         |\n| >1GBP <=10GBP  | big           |\n| >10GBP         | huge          |\n"),
         // a define in a column: E101 does not read its reach either, and would ask for the row back
         ("a define in a column", "derive total : money[GBP] = amount + limit  range >=0GBP <=1000GBP\ndefine double : money[GBP] = total * 2\n\ntable t\npolicy unique\n| double           | -> out : band |\n| <=200GBP         | small         |\n| >200GBP <=400GBP | big           |\n| >400GBP          | huge          |\n"),
         // a row only a `constraint` rules out, with no derive in it
