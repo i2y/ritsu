@@ -105,9 +105,10 @@ pub fn check_text(path: &str, src: &str, suite: &Suite, opts: &Options) -> Outco
     Outcome { path: path.to_string(), diags, scope, walked, ok }
 }
 
-/// Check the file at `path`; Err when it cannot be read.
+/// Check the file at `path`; Err when it cannot be read. It is read through ritsu-base's `fs`, the
+/// disk or the files a page in the browser holds (ritsu's DESIGN 4.15).
 pub fn check_file(path: &str, suite: &Suite, opts: &Options) -> Result<Outcome, String> {
-    let src = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let src = ritsu_base::fs::read_to_string(path).map_err(|e| e.to_string())?;
     Ok(check_text(path, &src, suite, opts))
 }
 

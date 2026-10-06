@@ -31,8 +31,8 @@ the browser.
 A project here is a handful of files, one to a tab. Every time a file changes, the page hands all of
 them to the module, which runs the command as it would run in a directory holding the same files:
 `ritsu check .` for the project, and the generator or the page of the file that is open. The list
-holds a small shop where every language meets, the examples of rulec and dandori, and an empty
-project to start from one file of your own. The tests hold what this page answers to what the
+holds a small shop where the languages meet, the examples of rulec and dandori, sekisho's example,
+and an empty project to start from one file of your own. The tests hold what this page answers to what the
 `ritsu` binary prints and writes on the same files, word for word
 (`crates/ritsu/tests/playground.rs`).
 
@@ -110,11 +110,33 @@ the English versions, and the Japanese page the Japanese ones.
    through and no Lambda function for the rule. *Hotel booking · for AWS* is the version written for
    it.
 
+## Who may do what: sekisho's example
+
+Under **sekisho: a gate and the files it reads** is sekisho's example: who may look at an order of a
+shop, refund it and export the record of refunds. The gate reads a rule for the clerk's limit, a
+dates file for the refund period, the bank holidays of England and Wales, the OpenAPI document of
+the operations its actions guard, and the workflow that refunds returned orders, each at the path
+it names it by.
+
+1. **Read the check.** The gate passes, and the last line counts one border between the languages:
+   the workflow `returns` calls `refundOrder`, the gate allows it for a returned order up to 50
+   pounds, and the task declares the error of a denial.
+2. **Cover the permits with a forbid.** In `refunds.gate`, under the forbid
+   `auditors_do_not_refund`, change `principal in auditor` to `principal in clerk`. A manager
+   includes clerk, so sekisho says that the permit of the clerks and both permits of the managers
+   now allow nothing (`` The permit `managers_refund_in_period` allows nothing: a forbid denies
+   every combination it would allow ``), each with a combination it would have allowed, and that the
+   expectation that a manager refunds while the period lasts no longer holds.
+3. **Generate.** Press *generate* on the gate: the Cedar schema and policies, in their text and in
+   their JSON, the files `sekisho gen --target cedar` writes.
+4. **Open the page for people**: each action's table of the combinations allowed and denied, each
+   policy beside the Cedar it becomes, and the pages of the rule and the dates the conditions read.
+
 ## Start from one file
 
 To try one rule or one flow of your own, pick **An empty project** in the list. It has no file yet,
 so *add a file* is the way in: give the file a path that ends in the extension of its language
-(`fee.rule`, `order.flow`, `days.cal`, `stock.book`, …), and paste the file into its tab. A file it
+(`fee.rule`, `order.flow`, `days.cal`, `stock.book`, `refunds.gate`, …), and paste the file into its tab. A file it
 reads, such as a rule a flow calls, is one more file of the project, at the path the first one names
 it by.
 

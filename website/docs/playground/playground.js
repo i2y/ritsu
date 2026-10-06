@@ -5,9 +5,9 @@
 // a directory holding the same files: `ritsu check .` over the whole project, and a language's
 // generator and page on the file that is open. The projects the page opens come from
 // projects.json, written by crates/ritsu/tests/playground.rs from the files they are made of: the
-// shop (website/playground/), the examples of the playground rulec's site had (one rule each) and
-// those of dandori's (each flow with the files it reads). Each page lists the projects of its
-// language.
+// shop (website/playground/), the examples of the playground rulec's site had (one rule each),
+// those of dandori's (each flow with the files it reads), and sekisho's example (its gate with the
+// files it reads). Each page lists the projects of its language.
 //
 // A link opens the page on a project as the reader made it: the project, the file, the view, the
 // target, and what the reader changed, packed (see `pack`). The page reads the links dandori's
@@ -26,8 +26,8 @@ const TEXT = {
     status: (ms, ...what) => [`ritsu ${VERSION}`, `${ms} ms`, ...what].join(" · "),
     counts: (e, w) => (e || w ? `${e} error${e === 1 ? "" : "s"}, ${w} warning${w === 1 ? "" : "s"}` : "all pass"),
     files: (n) => `${n} file${n === 1 ? "" : "s"}`,
-    projects: { shop: "A small shop", "shop.ja": "A small shop, in Japanese", empty: "An empty project" },
-    groups: { ritsu: "ritsu: every language in one project", own: "Start from one file", rulec: "rulec: one rule", dandori: "dandori: a flow and the files it reads" },
+    projects: { shop: "A small shop", "shop.ja": "A small shop, in Japanese", empty: "An empty project", "sekisho/refunds": "Who may refund an order of a shop" },
+    groups: { ritsu: "ritsu: many languages in one project", own: "Start from one file", rulec: "rulec: one rule", dandori: "dandori: a flow and the files it reads", sekisho: "sekisho: a gate and the files it reads" },
     rules: { gap: "The table with a row missing", full: "The whole table", multi: "Tables in stages", big: "A bigger rule", walk: "Walking a list" },
     draft: "A first draft of the hotel booking, with errors",
     and: " · ",
@@ -35,7 +35,7 @@ const TEXT = {
     versions: { temporal: "for Temporal", aws: "for AWS", "pydantic-graph": "for pydantic-graph", argo: "for Argo Workflows" },
     everywhere: "for every platform",
     beside: (name) => `${name}, the child flow, for every platform`,
-    empty: "This project has no file yet. Press “add a file”, give the file a path that ends in the extension of its language (fee.rule, order.flow, days.cal, stock.book, needs.req, shop.ctx, greeter.geas, order.proto), and paste the file into its tab. A file it reads, such as a rule a flow calls, is one more file of the project, at the path the first one names.",
+    empty: "This project has no file yet. Press “add a file”, give the file a path that ends in the extension of its language (fee.rule, order.flow, days.cal, stock.book, needs.req, shop.ctx, refunds.gate, greeter.geas, order.proto), and paste the file into its tab. A file it reads, such as a rule a flow calls, is one more file of the project, at the path the first one names.",
     share: "copy a link",
     shared: "a link to this is copied, and in the address bar",
     sharedHere: "a link to this is in the address bar",
@@ -85,8 +85,8 @@ const TEXT = {
     status: (ms, ...what) => [`ritsu ${VERSION}`, `${ms} ms`, ...what].join(" ・ "),
     counts: (e, w) => (e || w ? `エラー ${e} 件、警告 ${w} 件` : "どれも検査を通りました"),
     files: (n) => `${n} ファイル`,
-    projects: { shop: "小さな通販（英語）", "shop.ja": "小さな通販（日本語）", empty: "空のプロジェクト" },
-    groups: { ritsu: "ritsu（全部の言語を一つのプロジェクトに）", own: "ファイル一つから始める", rulec: "rulec（規則一つ）", dandori: "dandori（フローと、フローが読むファイル）" },
+    projects: { shop: "小さな通販（英語）", "shop.ja": "小さな通販（日本語）", empty: "空のプロジェクト", "sekisho/refunds.ja": "店の注文を返金してよい人" },
+    groups: { ritsu: "ritsu（いくつもの言語を一つのプロジェクトに）", own: "ファイル一つから始める", rulec: "rulec（規則一つ）", dandori: "dandori（フローと、フローが読むファイル）", sekisho: "sekisho（ゲートと、ゲートが読むファイル）" },
     rules: { gap: "一行足りない表", full: "そろった表", multi: "表をつなぐ", big: "大きい規則", walk: "並びを歩く" },
     draft: "ホテルの予約の最初の下書き（エラーあり）",
     and: "・",
@@ -94,7 +94,7 @@ const TEXT = {
     versions: { temporal: "Temporal 版", aws: "AWS 版", "pydantic-graph": "pydantic-graph 版", argo: "Argo Workflows 版" },
     everywhere: "どのプラットフォームでもそのまま動く版",
     beside: (name) => `${name}（子のフロー。どのプラットフォームでもそのまま動く）`,
-    empty: "このプロジェクトには、まだファイルがありません。「ファイルを足す」を押して、言語の拡張子で終わるパス（fee.rule、order.flow、days.cal、stock.book、needs.req、shop.ctx、greeter.geas、order.proto）を付け、開いたタブにファイルの中身を貼り付けてください。フローが呼ぶ規則のように、そのファイルが読むファイルは、そこに書いてあるパスに、もう一つのファイルとして足してください。",
+    empty: "このプロジェクトには、まだファイルがありません。「ファイルを足す」を押して、言語の拡張子で終わるパス（fee.rule、order.flow、days.cal、stock.book、needs.req、shop.ctx、refunds.gate、greeter.geas、order.proto）を付け、開いたタブにファイルの中身を貼り付けてください。フローが呼ぶ規則のように、そのファイルが読むファイルは、そこに書いてあるパスに、もう一つのファイルとして足してください。",
     share: "リンクをコピー",
     shared: "この状態へのリンクをコピーしました。アドレスバーにも入っています",
     sharedHere: "この状態へのリンクをアドレスバーに入れました",
@@ -196,6 +196,7 @@ const KINDS = [
   [".geas", "geas"],
   [".proto", "proto"],
   [".flow", "dandori"],
+  [".gate", "sekisho"],
   [".req", "yuen"],
   [".ctx", "sakai"],
 ];

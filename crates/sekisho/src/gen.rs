@@ -236,7 +236,7 @@ pub fn run(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
     for (rel, body, _) in &planned {
         let p = out_dir.join(rel);
         let shown = p.to_string_lossy().to_string();
-        let existing = std::fs::read(&p).ok();
+        let existing = ritsu_base::fs::read(&p).ok();
         if existing.as_deref() == Some(body.as_bytes()) {
             continue;
         }
@@ -250,11 +250,11 @@ pub fn run(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
             continue;
         }
         if let Some(dir) = p.parent()
-            && std::fs::create_dir_all(dir).is_err()
+            && ritsu_base::fs::create_dir_all(dir).is_err()
         {
             return refuse(err, tr!("`{}` を作れません", "cannot create `{}`", dir.display()), lang);
         }
-        if std::fs::write(&p, body).is_err() {
+        if ritsu_base::fs::write(&p, body).is_err() {
             return refuse(err, tr!("`{shown}` に書けません", "cannot write `{shown}`"), lang);
         }
         let _ = writeln!(out, "{}", tr!("生成しました: {shown}", "generated: {shown}").get(lang));

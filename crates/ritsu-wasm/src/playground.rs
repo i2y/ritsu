@@ -9,14 +9,14 @@
 //!   then what ritsu checks across them. It is ritsu's own `check` (`ritsu::check::run`), so a check
 //!   ritsu gains later is in the page with nothing changed here.
 //! - [`generate`]: one file's generator: `rulec gen`, `koyomi gen`, `chobo build`, `dandori build`,
-//!   `sakai export cml`, `yuen export` (the last two given the project's root, as `ritsu check` gives
-//!   it them). geas and `.proto` files generate nothing.
+//!   `sakai export cml`, `yuen export`, `sekisho gen --target cedar` (the last three given the
+//!   project's root, as `ritsu check` gives it them). geas and `.proto` files generate nothing.
 //! - [`doc`]: one file's page for the people who read it, as HTML and as Markdown: `rulec doc`,
-//!   `koyomi doc`, `chobo doc`, `dandori doc`.
+//!   `koyomi doc`, `chobo doc`, `dandori doc`, `sekisho doc`.
 //!
 //! Each answer is what the command prints (`out`, `err`), its exit code, and what it writes. Where
 //! a language's command takes the writers it prints to (ritsu's `check`, rulec's `gen`, dandori,
-//! yuen, sakai), the command itself runs; dandori's as `ritsu dandori` runs it, with a flow's rules,
+//! yuen, sakai, sekisho), the command itself runs; dandori's as `ritsu dandori` runs it, with a flow's rules,
 //! dates files and books read in the same process (`ritsu::languages::dandori`). rulec's `doc`, koyomi's and chobo's commands print to the
 //! process's own output, which a page has none of; for them the functions here call the functions
 //! the command calls, in its order, and say what it says. crates/ritsu/tests/playground.rs holds
@@ -177,8 +177,13 @@ pub fn generate(r: &Request) -> Value {
                 let (args, shown) = words(&["yuen", "export", target.as_deref().unwrap_or_default(), p, "--root", "."], l);
                 ran(shown, |o, e| yuen::run::run(&args[1..], joined.yuen(), o, e))
             }
-            // a gate's Cedar comes to the page with its generator (sekisho's DESIGN 12)
-            Tool::Geas | Tool::Proto | Tool::Openapi | Tool::Asyncapi | Tool::Cedar | Tool::File | Tool::Sekisho => return None,
+            // a gate's Cedar, the schema and the policies in their text and their JSON, as `ritsu
+            // sekisho` writes them with the rules, the dates and the flows a gate reads joined
+            Tool::Sekisho => {
+                let (args, shown) = words(&["sekisho", "gen", p, "--target", "cedar", "--root", ".", "--out", OUT], l);
+                ran(shown, |o, e| sekisho::run::run(&args[1..], joined.sekisho().into(), o, e))
+            }
+            Tool::Geas | Tool::Proto | Tool::Openapi | Tool::Asyncapi | Tool::Cedar | Tool::File => return None,
         })
     });
     let Some(did) = did else {
@@ -208,6 +213,11 @@ pub fn doc(r: &Request) -> Value {
                 Tool::Rulec => rulec_doc(p, l, html),
                 Tool::Koyomi => koyomi_doc(p, l, html),
                 Tool::Chobo => chobo_doc(p, l, html),
+                Tool::Sekisho => {
+                    let w: &[&str] = if html { &["sekisho", "doc", p, "--root", ".", "--format", "html"] } else { &["sekisho", "doc", p, "--root", "."] };
+                    let (args, shown) = words(w, l);
+                    ran(shown, |o, e| sekisho::run::run(&args[1..], Joined::new().sekisho().into(), o, e))
+                }
                 _ => {
                     let w: &[&str] = if html { &["dandori", "doc", p, "--format", "html"] } else { &["dandori", "doc", p] };
                     let (args, shown) = words(w, l);
@@ -216,7 +226,7 @@ pub fn doc(r: &Request) -> Value {
             }
         };
         match tool {
-            Tool::Rulec | Tool::Koyomi | Tool::Chobo | Tool::Dandori => Some((one(true), one(false))),
+            Tool::Rulec | Tool::Koyomi | Tool::Chobo | Tool::Dandori | Tool::Sekisho => Some((one(true), one(false))),
             _ => None,
         }
     });

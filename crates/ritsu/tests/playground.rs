@@ -12,8 +12,9 @@
 //! from the files they are made of (`RITSU_BLESS=1` writes it anew), and ritsu.wasm, built by
 //! website/tools/make_wasm.sh. Both can go stale, and these tests are what says so. The projects
 //! are the shop (website/playground/), an empty one, the examples of rulec's playground (one rule
-//! each, from rulec's corpus and the table on rulec's front page) and the examples of dandori's
-//! (each flow with every file it reads, from dandori's examples). Node drives the module, and
+//! each, from rulec's corpus and the table on rulec's front page), the examples of dandori's (each
+//! flow with every file it reads, from dandori's examples) and sekisho's example (each version of
+//! its gate with every file it reads). Node drives the module, and
 //! Chrome the page (ritsu-testkit's: `RITSU_CHROME`, else where macOS keeps it, else on the PATH).
 //! A test that cannot find what it needs prints `SKIP: ritsu: …` and passes.
 
@@ -218,8 +219,10 @@ fn dandori_flows(tag: &str) -> Vec<String> {
 /// Where the examples are held in memory while what a flow reads is found.
 const EXAMPLES_HOME: &str = "/dandori";
 
-/// Files in memory, with every file read out of them noted, by its path from the working directory.
+/// Files in memory, with every file read out of them noted, by its path from the working directory
+/// (`home`).
 struct Noting {
+    home: &'static str,
     inner: Memory,
     read: RefCell<BTreeSet<String>>,
 }
@@ -228,7 +231,7 @@ impl Files for Noting {
     fn read(&self, p: &Path) -> std::io::Result<Vec<u8>> {
         let got = self.inner.read(p)?;
         let abs = ritsu_base::paths::absolute(p);
-        if let Ok(rel) = abs.strip_prefix(EXAMPLES_HOME) {
+        if let Ok(rel) = abs.strip_prefix(self.home) {
             self.read.borrow_mut().insert(rel.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect::<Vec<_>>().join("/"));
         }
         Ok(got)
@@ -265,7 +268,7 @@ fn reads_of(flow: &str, every: &[(String, String)]) -> BTreeSet<String> {
         for (p, text) in every {
             inner.add(p, text.as_bytes().to_vec());
         }
-        let noting = Rc::new(Noting { inner, read: RefCell::default() });
+        let noting = Rc::new(Noting { home: EXAMPLES_HOME, inner, read: RefCell::default() });
         ritsu_base::fs::with(noting.clone(), || {
             let mut args: Vec<String> = vec!["--root".into(), ".".into()];
             args.extend(members.iter().filter(|p| ritsu_project::project::kind_of(p).is_some()).cloned());
@@ -326,9 +329,67 @@ fn dandori_examples() -> Vec<Project> {
     out
 }
 
+/// sekisho's example, whose gate reads a rule, a dates file, a calendar and its data, a contract and
+/// a flow, each version (English, then Japanese) at its path in the example's directory.
+const SEKISHO: &str = "crates/sekisho/examples/refunds";
+const GATES: [(&str, &str); 2] = [("en", "refunds.gate"), ("ja", "refunds.ja.gate")];
+/// Where the example is held in memory while what a gate reads is found.
+const GATES_HOME: &str = "/sekisho";
+
+/// What a gate reads of its example (the gate too): what `ritsu check` reads when it checks the
+/// gate, then the files it read with it, until it reads nothing new, and what `sekisho doc` reads
+/// to draw it, as [`reads_of`] finds what a flow reads.
+fn gate_reads(gate: &str, every: &[(String, String)]) -> BTreeSet<String> {
+    let mut members = BTreeSet::from([gate.to_string()]);
+    loop {
+        let inner = Memory::new(GATES_HOME);
+        for (p, text) in every {
+            inner.add(p, text.as_bytes().to_vec());
+        }
+        let noting = Rc::new(Noting { home: GATES_HOME, inner, read: RefCell::default() });
+        ritsu_base::fs::with(noting.clone(), || {
+            let mut args: Vec<String> = vec!["--root".into(), ".".into()];
+            args.extend(members.iter().filter(|p| ritsu_project::project::kind_of(p).is_some()).cloned());
+            args.extend(["--lang".to_string(), "en".to_string()]);
+            let (mut o, mut e) = (Vec::new(), Vec::new());
+            ritsu::check::run(&args, Lang::En, &mut o, &mut e);
+            let doc: Vec<String> = ["doc", gate, "--root", ".", "--format", "html", "--lang", "en"].map(String::from).to_vec();
+            sekisho::run::run(&doc, ritsu_project::Joined::new().sekisho().into(), &mut o, &mut e);
+        });
+        let before = members.len();
+        members.extend(noting.read.borrow().iter().cloned());
+        if members.len() == before {
+            return members;
+        }
+    }
+}
+
+/// sekisho's example, as projects of the page: each version of the gate with every file it reads,
+/// open on the gate, listed on the page of its language.
+fn sekisho_examples() -> Vec<Project> {
+    let every = files_of(&repo().join(SEKISHO));
+    GATES
+        .iter()
+        .map(|(lang, gate)| {
+            let mut files: Vec<(String, String)> = gate_reads(gate, &every)
+                .into_iter()
+                .map(|p| {
+                    let text = every.iter().find(|(q, _)| *q == p).map(|(_, t)| t.clone()).unwrap_or_else(|| panic!("{gate} reads {p}, which is not a file of sekisho's example"));
+                    (p, text)
+                })
+                .collect();
+            in_order(&mut files);
+            let from = files.iter().map(|(p, _)| format!("{SEKISHO}/{p}")).collect();
+            let name = if *lang == "ja" { "sekisho/refunds.ja" } else { "sekisho/refunds" };
+            Project { name: name.into(), group: "sekisho".into(), lang: Some(lang.to_string()), open: gate.to_string(), files, from, ..Project::default() }
+        })
+        .collect()
+}
+
 /// The projects the page opens, in the order its list has them (each page lists those of its
 /// language): the shop in English and in Japanese, an empty project to start from one file, the
-/// examples of rulec's page in English and then in Japanese, and the examples of dandori's page.
+/// examples of rulec's page in English and then in Japanese, the examples of dandori's page, and
+/// sekisho's example in English and in Japanese.
 fn made() -> Vec<Project> {
     let mut out = vec![shop("shop"), shop("shop.ja")];
     out.push(Project { name: "empty".into(), group: "own".into(), ..Project::default() });
@@ -338,6 +399,7 @@ fn made() -> Vec<Project> {
         }
     }
     out.extend(dandori_examples());
+    out.extend(sekisho_examples());
     out
 }
 
@@ -423,7 +485,7 @@ fn the_projects_are_what_the_page_opens() {
         return;
     }
     let was = std::fs::read_to_string(&file).unwrap_or_default();
-    assert!(was == now, "website/docs/playground/projects.json is not what website/playground, rulec's corpus and dandori's examples hold now; write it anew with RITSU_BLESS=1 cargo test -p ritsu --test playground");
+    assert!(was == now, "website/docs/playground/projects.json is not what website/playground, rulec's corpus, dandori's examples and sekisho's example hold now; write it anew with RITSU_BLESS=1 cargo test -p ritsu --test playground");
 }
 
 /// The page opens every example the playgrounds of rulec's and dandori's sites opened, as they
@@ -493,7 +555,7 @@ fn every_example_of_the_pages_before_is_a_project() {
 fn ritsu_in(dir: &Path, args: &[String]) -> (u8, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args);
-    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG"] {
+    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG"] {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run ritsu");
@@ -1073,11 +1135,11 @@ fn the_page_starts_in_chrome() {
             assert!(dom.contains(&format!("class=\"pg-file err\" role=\"tab\" aria-selected=\"false\">{marked}")), "{page}: the tab of {marked} is not marked");
         }
         assert!(dom.contains(&format!("aria-selected=\"true\">{contract}")), "{page}: the page does not open on the contract");
-        // the list: the projects of this page's language, in their four groups
+        // the list: the projects of this page's language, in their five groups
         let listed: Vec<&str> = dom.match_indices("data-name=\"").map(|(i, m)| &dom[i + m.len()..i + m.len() + dom[i + m.len()..].find('"').unwrap()]).collect();
         let mine: Vec<&str> = projects.iter().filter(|p| p.langs().contains(&tag)).map(|p| p.name.as_str()).collect();
         assert_eq!(listed, mine, "{page}: the list has other projects than projects.json has for this page");
-        assert_eq!(dom.matches("<optgroup label=").count(), 4, "{page}: the list does not have its four groups");
+        assert_eq!(dom.matches("<optgroup label=").count(), 5, "{page}: the list does not have its five groups");
         looked += 1;
 
         // a link to a file, a view and a target
@@ -1097,6 +1159,17 @@ fn the_page_starts_in_chrome() {
         assert_eq!(text_in(&dom, "pg-out", "</div>"), said(&want), "{page}: the page shows another check of {}", gap.name);
         assert!(text_in(&dom, "pg-status", "</span>").ends_with(&counts(&want)), "{page}: the status of {} is not its check's", gap.name);
         looked += 1;
+
+        // sekisho's example: the check of its gate, and the first file of the Cedar it writes
+        let gate = project(if tag == "ja" { "sekisho/refunds.ja" } else { "sekisho/refunds" });
+        let dom = dump_dom(&chrome, &format!("{base}/#project={}", gate.name));
+        let want = playground::check(&ask(&gate.files, "", None));
+        assert_eq!(text_in(&dom, "pg-out", "</div>"), said(&want), "{page}: the page shows another check of {}", gate.name);
+        assert!(dom.contains(&format!("aria-selected=\"true\">{}", gate.open)), "{page}: {} does not open on its gate", gate.name);
+        let dom = dump_dom(&chrome, &format!("{base}/#project={}&file={}&view=gen", gate.name, gate.open));
+        let want = playground::generate(&ask(&gate.files, &gate.open, None));
+        assert_eq!(text_in(&dom, "pg-out", "</div>"), want["files"][0]["body"].as_str().unwrap(), "{page}: the page shows another first file of the Cedar of {}", gate.open);
+        looked += 2;
 
         // the links dandori's page gave: the first draft, a version built for a platform it cannot
         // run on, and the rules tab

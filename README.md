@@ -282,13 +282,14 @@ upstream Base conformist
 
 ### sekisho — who may do what
 
-A gate says which principal may do which action on which resource, with roles, attributes and
-relations, and with the answers of a rule and of dates as conditions. `sekisho check` asks rulec
-which answers the rule can give and koyomi which dates can come together, walks every combination
-that can happen, and decides each as Cedar does: an action no one can do, a permit a forbid covers,
-an expectation that does not hold, two duties one person is allowed, all stop the check. Only a
-gate that passes compiles, into Cedar's schema and policies, and into TypeScript, Python and Go that
-compute the conditions from the service's own data and ask Cedar, so a caller cannot hand them in.
+A gate (a `.gate` file) says which principal may do which action on which resource, with roles,
+attributes and relations, and with the answers of a rule and of dates as conditions.
+`sekisho check` asks rulec which answers the rule can give and koyomi which dates can come
+together, walks every combination that can happen, and decides each as Cedar does: an action no
+one can do, a permit a forbid covers, an expectation that does not hold, two duties one person is
+allowed, all stop the check. Only a gate that passes compiles, into Cedar's schema and policies,
+and into TypeScript, Python and Go that compute the conditions from the service's own data and ask
+Cedar, so a caller cannot hand them in.
 
 ```gate
 action refund_order

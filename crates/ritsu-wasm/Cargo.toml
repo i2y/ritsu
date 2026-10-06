@@ -25,6 +25,7 @@ dandori = { path = "../dandori" }
 koyomi = { path = "../koyomi" }
 rulec = { path = "../rulec" }
 sakai = { path = "../sakai" }
+sekisho = { path = "../sekisho" }
 yuen = { path = "../yuen" }
 serde_json = { version = "1", features = ["preserve_order"] }
 

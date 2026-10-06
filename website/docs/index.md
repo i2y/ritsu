@@ -60,11 +60,11 @@ people.
 - **sakai** maps which context owns which files and who may depend on whom, and checks every
   reference that crosses contexts, in the files of every language here, in the OpenAPI and AsyncAPI
   documents services keep as their contracts, and in the code.
-- **sekisho** says which principal may do which action on which resource, with roles, attributes
-  and relations, and with the answers of a rule and of dates as conditions. `sekisho check` walks
-  every combination that can happen and decides each as Cedar does; only a gate that passes
-  compiles, into Cedar's schema and policies, and into TypeScript, Python and Go that compute the
-  conditions from the service's own data and ask Cedar.
+- **sekisho** says, in a gate (a `.gate` file), which principal may do which action on which
+  resource, with roles, attributes and relations, and with the answers of a rule and of dates as
+  conditions. `sekisho check` walks every combination that can happen and decides each as Cedar
+  does; only a gate that passes compiles, into Cedar's schema and policies, and into TypeScript,
+  Python and Go that compute the conditions from the service's own data and ask Cedar.
 
 ## Where the languages meet
 

@@ -511,7 +511,7 @@ pub fn check(file: File, suite: &Suite) -> Named {
 
 /// A path as one file is told from another: what the file system says, or as written.
 fn normal(p: &str) -> PathBuf {
-    std::fs::canonicalize(p).unwrap_or_else(|_| PathBuf::from(p))
+    ritsu_base::fs::canonicalize(p).unwrap_or_else(|_| PathBuf::from(p))
 }
 
 fn check_reading(file: File, suite: &Suite, reading: &mut Vec<PathBuf>) -> Named {
@@ -560,7 +560,7 @@ fn read_gates(scope: &mut Scope, suite: &Suite, reading: &mut Vec<PathBuf>, diag
         if scope.files.iter().any(|g| normal(&g.path) == key) {
             continue;
         }
-        let text = match std::fs::read_to_string(&target) {
+        let text = match ritsu_base::fs::read_to_string(&target) {
             Ok(t) => t,
             Err(e) => {
                 diags.push(at(tr!("`{shown}` を読めません: {e}", "cannot read `{shown}`: {e}")));
