@@ -225,3 +225,7 @@ denied, the policies beside the Cedar they become, the pages of the rules and da
 read, the expectations, the separations and the roles, the workflows and what their flows call.
 The Markdown is for a pull request; the HTML is one file that reads nothing from outside. Show it
 to the people who decide, and change the gate, not the page.
+
+The page on the site, <https://i2y.github.io/ritsu/sekisho/>, follows one worked example through all
+of this, a shop's refunds with a rule's answer as a condition: the check, the Cedar, the code and the
+page.

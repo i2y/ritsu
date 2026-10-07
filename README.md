@@ -325,6 +325,9 @@ $ sekisho check refunds.gate
 refunds.gate: ok — 3 actions, 10 policies (7 permits, 3 forbids), 3 expectations, 1 separation
 ```
 
+The [page on the site](https://i2y.github.io/ritsu/sekisho/) follows this example through: what the
+check asks the rule, the Cedar and the code it writes, and the page for people.
+
 ## Where the languages meet
 
 The languages share one toolchain so that what one has checked, another can take as given.
