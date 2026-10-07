@@ -323,7 +323,8 @@ jobs:
 
       # sekisho's tests/cedar.rs holds the Cedar it generates to the official CLI: validate,
       # format --check, run-tests on every combination, and the JSON of translate-policy and
-      # translate-schema (sekisho's DESIGN 6.1). ritsu-base's Cedar fixtures are written with the
+      # translate-schema (sekisho's DESIGN 6.1), and tests/cedar_in.rs holds sekisho's answers for
+      # Cedar written by hand to it (DESIGN 6.5). ritsu-base's Cedar fixtures are written with the
       # same binary (tests/fixtures/cedar/expected.sh). ritsu's tests/playground.rs holds the Cedar
       # of the gate of the shop the playground opens to it too, so the dandori group, which runs
       # ritsu's tests, has it as well. The release's archive, held to the checksum it had when this
