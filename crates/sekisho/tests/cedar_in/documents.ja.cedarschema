@@ -1,0 +1,69 @@
+// テストのために手で書いたスキーマ。会社のフォルダと文書、文書の元になるテンプレート、文書を読み書きする職員、
+// 文書のインデックスを作るボット。
+namespace Docs {
+  @doc("職員のグループ")
+  entity Group;
+
+  @doc("職員のチーム。文書はどれか一つのチームに属する")
+  entity Team;
+
+  @doc("職員")
+  entity User in [Group, Team] = {
+    @doc("職員が働く部署")
+    department: String,
+    contractor: Bool
+  };
+
+  @doc("文書のインデックスを作るプログラム")
+  entity Bot;
+
+  @doc("フォルダ。いちばん上にあるか、ほかのフォルダの中にある")
+  entity Folder in [Folder] = {
+    owner?: User
+  };
+
+  @doc("フォルダの中の文書")
+  entity Doc in [Folder] = {
+    @doc("文書が属する部署")
+    department: String,
+    owner: User,
+    team: Team,
+    confidential: Bool,
+    @doc("職員ではなく契約社員向けに書いた文書かどうか")
+    for_contractors: Bool
+  };
+
+  @doc("文書の元になるテンプレート。どのフォルダにも入れない")
+  entity Template;
+
+  @doc("文書を読む。またはフォルダの中を見る")
+  action "read" appliesTo {
+    principal: [User, Bot],
+    resource: [Doc, Folder],
+    context: {
+      @doc("リクエストのもとになった障害の番号。あるときだけ")
+      incident?: Long
+    }
+  };
+
+  @doc("文書を編集する")
+  action "edit" appliesTo {
+    principal: [User, Bot],
+    resource: [Doc],
+    context: {}
+  };
+
+  @doc("テンプレートから文書を作る")
+  action "use_template" appliesTo {
+    principal: [User],
+    resource: [Template],
+    context: {}
+  };
+
+  @doc("フォルダのインデックスを一から作り直す")
+  action "reindex" appliesTo {
+    principal: [User, Bot],
+    resource: [Folder],
+    context: {}
+  };
+}

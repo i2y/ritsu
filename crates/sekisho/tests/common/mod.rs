@@ -1,7 +1,9 @@
 //! What the tests share: the languages joined as `ritsu sekisho` joins them, and a file checked
-//! with them.
+//! with them; and the official Cedar CLI, as the tests that hold Cedar to it run it ([`cedar_cli`]).
 
 #![allow(dead_code)]
+
+pub mod cedar_cli;
 
 use sekisho::check::{Options, Outcome};
 use sekisho::suite::Suite;

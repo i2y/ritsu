@@ -1,0 +1,69 @@
+// A schema written by hand for a test: a company's documents in folders, the templates they start
+// from, the staff who read and edit them, and a bot that indexes them.
+namespace Docs {
+  @doc("A group of the staff")
+  entity Group;
+
+  @doc("A team of the staff; each document belongs to one")
+  entity Team;
+
+  @doc("A member of the staff")
+  entity User in [Group, Team] = {
+    @doc("The department the member works in")
+    department: String,
+    contractor: Bool
+  };
+
+  @doc("A program that indexes the documents")
+  entity Bot;
+
+  @doc("A folder, at the top or inside another")
+  entity Folder in [Folder] = {
+    owner?: User
+  };
+
+  @doc("A document, in a folder")
+  entity Doc in [Folder] = {
+    @doc("The department the document belongs to")
+    department: String,
+    owner: User,
+    team: Team,
+    confidential: Bool,
+    @doc("Whether the document is written for contractors rather than for the staff")
+    for_contractors: Bool
+  };
+
+  @doc("A template a document starts from, kept in no folder")
+  entity Template;
+
+  @doc("Read a document, or list a folder")
+  action "read" appliesTo {
+    principal: [User, Bot],
+    resource: [Doc, Folder],
+    context: {
+      @doc("The number of the incident the request is made for, when there is one")
+      incident?: Long
+    }
+  };
+
+  @doc("Edit a document")
+  action "edit" appliesTo {
+    principal: [User, Bot],
+    resource: [Doc],
+    context: {}
+  };
+
+  @doc("Start a document from a template")
+  action "use_template" appliesTo {
+    principal: [User],
+    resource: [Template],
+    context: {}
+  };
+
+  @doc("Index a folder again, from scratch")
+  action "reindex" appliesTo {
+    principal: [User, Bot],
+    resource: [Folder],
+    context: {}
+  };
+}

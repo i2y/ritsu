@@ -204,6 +204,7 @@ $ sekisho explain E302 --lang ja
 
 - 120 の変異（例か fixture を一か所だけ変えたもの）が出す診断を、英語と日本語の両方で golden と突き合わせます。日本語の名前のもの 60 には、それぞれ英語の名前の対があります。
 - 例とテストの材料のうち検査を通るすべてのゲートから生成した Cedar を、公式の Cedar の CLI 4.13.0 にかけます。`cedar validate` の strict の検証が何も言わないこと、`cedar format --check` が通ること、`cedar run-tests` がすべての組み合わせを sekisho の参照の評価と同じ答え、同じ決めたポリシーで答えること、JSON の形が `cedar translate-schema` と `translate-policy` の出力と一字も違わないことを確かめます。
+- 手で書いた Cedar に sekisho が返す答えも、公式の CLI の答えと同じです。ポリシーとスキーマの組（`tests/cedar_in/` に置いたものと、それを一か所ずつ変えたもの、検査を通るすべてのゲートから生成した Cedar を手で書いたものとして読ませたもの）について、sekisho が数えるすべての組み合わせをリクエストとエンティティにして `cedar run-tests` にかけ、許すか拒むかと決めたポリシーが同じになることを確かめます。sekisho が決められない問いでは、ポリシーのどの部分を数えないのかを理由に挙げます。
 - TypeScript、Python、Go に生成したコードで、すべての組み合わせのリクエストを生の値から組み立て、cedar-wasm 4.13.0、cedarpy 4.12.1、cedar-go v1.8.0 に尋ね、参照の評価と同じ答えになることを確かめます。生成したコードは `tsc --strict`、`mypy --strict`、`go vet` と gofmt を通ります。
 - `doc` のページは golden で、中の規則と日付のページは rulec と koyomi が描いたものです。HTML は Chrome で開いて確かめます。
 - この README と `docs/` とスキルに載せた出力、診断、`.gate` と Cedar の行は本物です。`tests/docs.rs` が走らせて突き合わせ、上の `ritsu check` は ritsu の `tests/sekisho.rs` が走らせます。
