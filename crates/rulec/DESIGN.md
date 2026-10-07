@@ -2653,6 +2653,14 @@ count 一致数(hits) over 候補 where 照合結果 = 一致  range >=0 <=50
 
 **確かめたこと**：`cargo test -p rulec -p ritsu`（`proofs/` を組み、PostgreSQL を立てて）の全体で、872 件のうち 871 件が通った。落ちた 1 件は `tests/website.rs` の `言語の数を書いた文は登録簿と合っている` で、入れ方のページに書いた「seven languages」（ritsu の言語の数）を、生成先の言語の数を書いた文として読んだ。ページを言語の数を言わない文に直し、ページと DESIGN を読む六つのテスト（rulec の `website`・`docs`・`skill`、ritsu の `website`・`readme`・`skill`）を回し直して、全部通った。SKIP の行は 0 だった。
 
+**0.24.0 で取り直した（2026-10-07）**：README、`AGENTS.md`（とスキルのコピー）、入れ方のページ（英日）に貼った出力と版を、0.24.0 のリリースの実物で取り直した。0.23.0 の歴史を言う文（ritsu の最初のリリースが rulec の番号を引き継ぐこと）は残した。
+
+- アーカイブ（macOS の arm64）は、ページのコマンドでダウンロードし、`SHA256SUMS` と突き合わせ（`ritsu-v0.24.0-aarch64-apple-darwin.tar.gz: OK`）、使い捨ての HOME の `~/.local/bin` に展開して、`rulec --version` が `rulec 0.24.0` を返した。0.24.0 のアーカイブは、`ritsu`、リンク八つ、ライセンス二つに加えて THIRD_PARTY_NOTICES を持つ。中身を言う文を「0.23.0 より後のリリースは足す」から「0.24.0 から」の形にした。
+- `.deb`・`.rpm` は、ダウンロードと、Debian のコンテナの GNU の `sha256sum -c`（coreutils 9.7）での突き合わせまでを走らせた。`.deb` の中身が `/usr/bin/ritsu` とリンク八つで、`rulec` のパッケージを置き換えること（`Replaces`・`Provides`・`Conflicts`）も `dpkg-deb` で見た。
+- Homebrew は、作者の Homebrew とは別の場所に置いた使い捨ての Homebrew 7.0.8（`HOME` もキャッシュも別）で、0.23.0 のときと同じ場合を一つずつ新しい Homebrew で走らせた。何も入っていないところへの `brew install i2y/tap/ritsu`。古い名前の `brew install i2y/tap/rulec`（formula を信頼する前は `Refusing to load formula i2y/tap/ritsu from untrusted tap i2y/tap.` で止まり、`brew trust --formula i2y/tap/ritsu` のあとは ritsu を入れる）。tap を rulec 0.22.1 の時点に戻して rulec を入れ、tap を今の状態に進めたあとの `brew install i2y/tap/ritsu`（rulec が入っていて移していないと警告する）・`brew migrate ritsu`・`brew upgrade ritsu`。同じ状態からの `brew trust --formula i2y/tap/ritsu`・`brew upgrade`（移すことと上げることを一度にする）。どれも最後の `rulec --version` が `rulec 0.24.0` を返した。使い捨ての Homebrew は `/tmp` の外に置く。`/private/tmp` の下に置くと、7.0.8 は入れる段で `Inherited sandbox permits writes to …/bin/brew` と言って止まる。リリースのワークフローの `homebrew` の段（macOS と Linux）も、0.24.0 の formula を `brew install` で入れ、九つの名前の `--version` が版と合うことを確かめて通っている。
+- `experiments/library/` の CI の見本を `uses: i2y/ritsu@v0.24.0` にした。リリースの rulec 0.24.0 が、ライブラリの五つの規則で `fmt --check`・`check`・`coverage` を通すことを確かめた。
+- 文書を読むテスト（rulec の `docs`・`mcp`・`readme`・`skill`・`website`・`library`、ritsu の `release`・`readme`・`sekisho`・`skill`・`website`）が全部通った。SKIP の行は 0 だった。
+
 ### 15.187 生成物の頭とページのスクリプトの外に、規則の文字列を出さない（2026-10-06）
 
 **きっかけ**：生成物の頭のコメントには、規則のファイルの名前、出典のパスと URL（`source … = file "…" url "…"`）、準用する規則のパスが入る。どれも規則に書いた文字列で、rulec の文字列は `"` のほかにどの文字でも持てる。行を終える文字を書けば、コメントはそこで終わり、続きは生成したコードの行になる。U+2028 は TypeScript と JavaScript の行を、`\r` は Python の行を終える。`rulec check` は、そういう規則も通していた。もう一つ、`rulec gen` が書くページ（`<別名>_page.html`）は、生成した JavaScript を頭ごと `<script type="module">` に埋め込む。URL に `</script>` があると要素がそこで閉じ、続き（`<img src=x onerror=…>` など）が HTML として読まれて、ページを開いた人のブラウザでスクリプトが動いた。

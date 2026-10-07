@@ -196,16 +196,16 @@ Every release carries a `.deb` and an `.rpm` as well, which replace the package 
 
 By hand: every release publishes a binary for macOS (arm64, x64) and Linux (x64, arm64), with
 the SHA-256 of each beside it. The Linux ones are statically linked; the macOS ones link only
-the system library every Mac has. The archive holds `ritsu`, the links and the two licenses (the
-releases after 0.23.0 add THIRD_PARTY_NOTICES, the notices of what the binary holds from others):
+the system library every Mac has. The archive holds `ritsu`, the links, the two licenses and, from
+0.24.0 on, THIRD_PARTY_NOTICES, the notices of what the binary holds from others:
 
 ```console
-$ v=v0.23.0; t=aarch64-apple-darwin     # or x86_64-apple-darwin, x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
+$ v=v0.24.0; t=aarch64-apple-darwin     # or x86_64-apple-darwin, x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
 $ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/$v/ritsu-$v-$t.tar.gz"
 $ curl -fsSL "https://github.com/i2y/ritsu/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
 $ tar -xzf "ritsu-$v-$t.tar.gz" -C ~/.local/bin --exclude 'LICENSE-*' --exclude THIRD_PARTY_NOTICES
 $ rulec --version
-rulec 0.23.0
+rulec 0.24.0
 ```
 
 ritsu's first release continues rulec's numbering (0.23.0); rulec's own releases end at 0.22.1.
@@ -222,7 +222,7 @@ $ cargo install --git https://github.com/i2y/ritsu --locked rulec
 That builds rulec alone, which needs no other language and fetches nothing, because there are no
 dependencies. With the package `ritsu` in its place, you have `ritsu` and every language of it, and
 `ritsu rulec <command>` is every command below; a rule over the days of a koyomi date
-(`range from koyomi`) is checked by `ritsu rulec check`. In CI, `uses: i2y/ritsu@v0.23.0` does the
+(`range from koyomi`) is checked by `ritsu rulec check`. In CI, `uses: i2y/ritsu@v0.24.0` does the
 download and the check ([In CI](#in-ci)).
 
 ## Using it
@@ -255,7 +255,7 @@ once, in `src/codes.rs`, and [`docs/codes.md`](docs/codes.md) is literally the
 
 ```yaml
 - uses: actions/checkout@v7                  # with fetch-depth: 0, so --diff-base can read origin/main
-- uses: i2y/ritsu@v0.23.0                     # ritsu's release with the link rulec, verified against its checksums
+- uses: i2y/ritsu@v0.24.0                     # ritsu's release with the link rulec, verified against its checksums
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main
 - run: rulec gen rules/ --out generated/ --check

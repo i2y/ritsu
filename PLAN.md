@@ -1154,7 +1154,7 @@ OpenSpec の仕様（要件とシナリオ）と変更の提案を、yuen と ge
 - Dependabot と Renovate は入れない。osv-scanner の結果を SARIF で code scanning に上げることもしない（3.6）。
 - `SECURITY.md` を置く（3.6）。GitHub の private vulnerability reporting は、push のときにリポジトリの設定で有効にする。
 - rulec が含む Unicode CLDR のデータは、`license` に書き、配るものに通知を入れる。koyomi が含む WHATWG の表と、バイナリが含む外のクレートと、`explain` の例のための法令のコピーも同じに扱う（2.3、13.2）。同じ日に作った。式は `(MIT OR Apache-2.0) AND Unicode-3.0`（rulec）、`(MIT OR Apache-2.0) AND BSD-3-Clause`（koyomi）、三つを合わせたもの（ritsu、ritsu-wasm、`.deb`・`.rpm`、formula）。
-- 次のリリース（0.23.0 の次）で、アーカイブ、`.deb`・`.rpm`、formula に `THIRD_PARTY_NOTICES` が入ったことを実物で確かめる（`release.yml` の homebrew のジョブが `brew audit --strict --online`、install、test を通す）。rulec の入れ方のページと README の「0.23.0 より後のリリース」の言い方は、そのとき実物の出力を取り直すのに合わせて直す。
+- 次のリリース（0.23.0 の次）で、アーカイブ、`.deb`・`.rpm`、formula に `THIRD_PARTY_NOTICES` が入ったことを実物で確かめる（`release.yml` の homebrew のジョブが `brew audit --strict --online`、install、test を通す）。rulec の入れ方のページと README の「0.23.0 より後のリリース」の言い方は、そのとき実物の出力を取り直すのに合わせて直す。（2026-10-07 に 0.24.0 で確かめた。アーカイブ、`.deb`・`.rpm` は `THIRD_PARTY_NOTICES` を持ち、formula はそれを keg に入れる。言い方は「0.24.0 から」にした。7.13）
 - 依存を上げたら（`cargo update` など）、`THIRD_PARTY_NOTICES` の版と節を直す。`release.rs` が、どの名前・バージョン・行が違うかを言って落ちる。
 - OpenSpec の決め方（仕様の要件を固定していなければ W102 の警告、シナリオと主張は書いたとおりの名前で突き合わせる）と、sakai の決め方（契約の文書かどうかを中身で決める）は、このままにする。
 
@@ -1413,6 +1413,8 @@ derive の範囲を入力から計算して、届かない行を E102 にした�
 線形でない導出（`min(amount, amount * 10%)` など）、数の `define`、上の表が出す値の列の穴でも、E101 が例を作る入力を添えるようにした（rulec の DESIGN 15.194）。線形のモデルで組み立てた入力が例を作らないとき、入力の組み合わせが 16,384 通りまでの規則では総当たりで探し、参照の評価器で確かめた入力だけを添える。組み合わせがそれより多い規則には、これまでどおり添えない。木にある `.rule` で変わったのは、上の表が出す値の列に穴がある変異の四本（`m_e101`、`m_e101e`、`m_e101en`、`m_e105`）の E101 の注に入力の行が一つ増えたところだけで、コーパスの規則は一字も変わらなかった。README とサイトと `docs/formats.md` の E101 の抜粋は、実物で取り直した。
 
 網羅の検査の総当たり（`exhaust_tie`、`exhaust_pair`）と、行の固定の判定（`value_duties`）も、出力のセルに書いた列挙の値と `true`・`false` を、動かす入力に数えないようにした（`exhaust_input` と同じ読み方。rulec の DESIGN 15.194）。これまでは、そうした表を通る名前では、いつも調べられないと答えていた。言いすぎの側の誤りで、見逃しにはならない。木の 308 本の出力は一字も変わらなかった。
+
+**rulec の入れ方の出力を 0.24.0 で取り直した**：rulec の README、`AGENTS.md`（とスキルのコピー）、入れ方のページ（英日）に貼った出力と版を、0.24.0 のリリースの実物で取り直した（rulec の DESIGN §15.186 の 2026-10-07 の段落）。アーカイブ（macOS の arm64）はページのコマンドで落として `SHA256SUMS` と突き合わせ、`.deb`・`.rpm` は Debian のコンテナの GNU の `sha256sum -c` で突き合わせた。三つとも `THIRD_PARTY_NOTICES` を持ち、formula はそれを keg に入れる。Homebrew は、使い捨ての Homebrew 7.0.8 で四つの場合（何も無いところへ入れる、古い名前、rulec 0.22.1 からの `brew migrate` と `brew trust`）を走らせ、どれも `rulec 0.24.0` になった。使い捨ての Homebrew は `/tmp` の外に置く（`/private/tmp` の下では、7.0.8 が入れる段で `Inherited sandbox permits writes to …/bin/brew` と言って止まる）。`experiments/library/` の CI の見本も `uses: i2y/ritsu@v0.24.0` にした（リリースの rulec 0.24.0 が五つの規則で `fmt --check`・`check`・`coverage` を通す）。
 
 **次のリリースノートに書くこと**（v0.24.0 のあと）
 

@@ -22,7 +22,7 @@ On macOS and on Linux:
 ```console
 $ brew install i2y/tap/ritsu
 $ rulec --version
-rulec 0.23.0
+rulec 0.24.0
 ```
 
 That puts `ritsu` on the path with the eight links beside it, so `rulec` is a
@@ -43,18 +43,18 @@ Every release carries a `.deb` and an `.rpm` for x64 and arm64. They hold the
 same static binary as the archives, so they depend on nothing:
 
 ```console
-$ v=0.23.0; a=amd64                  # arm64 on ARM
+$ v=0.24.0; a=amd64                  # arm64 on ARM
 $ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/v$v/ritsu_$v-1_$a.deb"
 $ curl -fsSL "https://github.com/i2y/ritsu/releases/download/v$v/SHA256SUMS" | grep "ritsu_$v-1_$a.deb" | sha256sum -c
-ritsu_0.23.0-1_amd64.deb: OK
+ritsu_0.24.0-1_amd64.deb: OK
 $ sudo apt install "./ritsu_$v-1_$a.deb"
 ```
 
 ```console
-$ v=0.23.0; a=x86_64                 # aarch64 on ARM
+$ v=0.24.0; a=x86_64                 # aarch64 on ARM
 $ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/v$v/ritsu-$v-1.$a.rpm"
 $ curl -fsSL "https://github.com/i2y/ritsu/releases/download/v$v/SHA256SUMS" | grep "ritsu-$v-1.$a.rpm" | sha256sum -c
-ritsu-0.23.0-1.x86_64.rpm: OK
+ritsu-0.24.0-1.x86_64.rpm: OK
 $ sudo dnf install "./ritsu-$v-1.$a.rpm"
 ```
 
@@ -82,19 +82,19 @@ no dependencies.
 ## The release binary
 
 ```console
-$ v=v0.23.0; t=aarch64-apple-darwin
+$ v=v0.24.0; t=aarch64-apple-darwin
 $ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/$v/ritsu-$v-$t.tar.gz"
 $ curl -fsSL "https://github.com/i2y/ritsu/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
-ritsu-v0.23.0-aarch64-apple-darwin.tar.gz: OK
+ritsu-v0.24.0-aarch64-apple-darwin.tar.gz: OK
 $ tar -xzf "ritsu-$v-$t.tar.gz" -C ~/.local/bin --exclude 'LICENSE-*' --exclude THIRD_PARTY_NOTICES
 $ rulec --version
-rulec 0.23.0
+rulec 0.24.0
 ```
 
 The archive holds `ritsu`, a link to it for each language (`rulec`, `dandori`,
-`koyomi`, `chobo`, `geas`, `yuen`, `sakai`, `sekisho`) and the two licenses, side by side;
-the releases after 0.23.0 add THIRD_PARTY_NOTICES, the notices and licenses of
-what the binary holds from others. The links are relative, so unpacking it into a
+`koyomi`, `chobo`, `geas`, `yuen`, `sakai`, `sekisho`), the two licenses and, from
+0.24.0 on, THIRD_PARTY_NOTICES, the notices and licenses of what the binary holds
+from others, side by side. The links are relative, so unpacking it into a
 directory on the path is the whole install;
 `--exclude 'LICENSE-*' --exclude THIRD_PARTY_NOTICES` leaves the licenses and the
 notices in the archive.
@@ -114,23 +114,23 @@ move an installed rulec over to ritsu. Homebrew 7 reads a formula from a tap
 other than its own only once that tap is trusted, and naming the formula with
 its tap trusts it. `brew install` then says that rulec is installed but not
 migrated; `brew migrate ritsu` moves it over, and `brew upgrade ritsu` takes it
-to 0.23.0:
+to 0.24.0:
 
 ```console
 $ brew install i2y/tap/ritsu
 $ brew migrate ritsu
 $ brew upgrade ritsu
 $ rulec --version
-rulec 0.23.0
+rulec 0.24.0
 ```
 
 `brew trust --formula i2y/tap/ritsu` followed by `brew upgrade` does the same:
-the upgrade migrates rulec and takes it to 0.23.0 in one go.
+the upgrade migrates rulec and takes it to 0.24.0 in one go.
 
 Installing ritsu's `.deb` or `.rpm` as above removes the package `rulec`, and
 `/usr/bin/rulec` becomes a link to `ritsu`. ritsu's archive, unpacked into the
 directory that holds the old `rulec`, puts the link in place of the old binary. In CI, the line `uses: i2y/rulec@v0.22.1` becomes
-`uses: i2y/ritsu@v0.23.0` ([In CI](#in-ci)).
+`uses: i2y/ritsu@v0.24.0` ([In CI](#in-ci)).
 
 ## From source
 
@@ -253,7 +253,7 @@ it runs on.
 
 ## In CI
 
-`uses: i2y/ritsu@v0.23.0` puts that release of ritsu on the runner's `PATH`,
+`uses: i2y/ritsu@v0.24.0` puts that release of ritsu on the runner's `PATH`,
 `rulec` and the other links with it, verified against the checksums
 published with it. The ref the action is referenced with is the release, so
 by default the two cannot drift apart (`with: { version: … }` is how you ask
@@ -273,7 +273,7 @@ check:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0                   # --diff-base reads origin/main
-    - uses: i2y/ritsu@v0.23.0
+    - uses: i2y/ritsu@v0.24.0
     - run: rulec fmt --check rules/
     - run: rulec check rules/ --diff-base origin/main
     - run: rulec gen rules/ --out generated/ --check
@@ -311,7 +311,7 @@ replay:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0                   # origin/main is where the old version is read from
-    - uses: i2y/ritsu@v0.23.0
+    - uses: i2y/ritsu@v0.24.0
     # a step of your own puts the records at $FIXTURES: an artifact, or protected storage
     - run: rulec diff rules/shipping_fee.rule@origin/main rules/shipping_fee.rule --fixtures "$FIXTURES" --format markdown --terse > diff.md || [ $? -eq 1 ]
       env:
