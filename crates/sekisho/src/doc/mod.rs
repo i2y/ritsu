@@ -663,7 +663,7 @@ impl<'a> Builder<'a> {
         let rows = denied.len();
         let marks = vec![Mark::Deny; rows];
         self.push(Block::Fold {
-            summary: self.t(Text::new(format!("拒む行の表（{rows} 行）"), format!("The {rows} {} that deny", if rows == 1 { "row" } else { "rows" }))),
+            summary: self.t(Text::new(format!("拒む行の表（{rows} 行）"), if rows == 1 { "The 1 row that denies".to_string() } else { format!("The {rows} rows that deny") })),
             body: vec![Block::Table { head, rows: denied, marks }],
         });
     }

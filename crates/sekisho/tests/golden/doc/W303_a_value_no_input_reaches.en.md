@@ -49,7 +49,7 @@ Look at an order
 - No permit applies to the 2 combinations that are denied.
 
 <details>
-<summary>The 1 row that deny</summary>
+<summary>The 1 row that denies</summary>
 
 | principal | clerk | kind | Deciding policies |
 |---|---|---|---|
