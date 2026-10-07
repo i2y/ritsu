@@ -944,24 +944,35 @@ fn machine_section(f: &RuleFile, c: &Checked, lines: &[&str]) -> String {
             crate::machine::Verdict::Undecided(_) => tr!("決めきれませんでした（W127）", "could not be settled (W127)"),
         }
     };
+    // A claim the walk did not settle is said to be so, as `check` says it (W127): saying it broke
+    // would state an E124 or an E125 that `check` never reported.
+    let summary = |claims: &[(String, crate::machine::Verdict)], yes: String, no: String, open: String| -> String {
+        if claims.iter().all(|(_, v)| v.holds()) {
+            yes
+        } else if claims.iter().any(|(_, v)| matches!(v, crate::machine::Verdict::Broken(_))) {
+            no
+        } else {
+            open
+        }
+    };
     if !a.finals.is_empty() {
-        let all_final = a.final_claims.iter().all(|(_, v)| v.holds());
         o.push_str(&format!(
             "- {}\n",
-            if all_final {
-                tr!("終わりの状態 {} からは、ほかの状態へ移る呼び出しがありません。", "No call moves a case out of the final states {}.", a.finals.join(&tr!("・", ", ")))
-            } else {
-                tr!("終わりの状態から出る呼び出しがあります（E124）。", "A call moves a case out of a final state (E124).")
-            }
+            summary(
+                &a.final_claims,
+                tr!("終わりの状態 {} からは、ほかの状態へ移る呼び出しがありません。", "No call moves a case out of the final states {}.", a.finals.join(&tr!("・", ", "))),
+                tr!("終わりの状態から出る呼び出しがあります（E124）。", "A call moves a case out of a final state (E124)."),
+                tr!("終わりの状態から出る呼び出しがあるかは、決めきれませんでした（W127）。", "Whether a call moves a case out of a final state could not be settled (W127)."),
+            )
         ));
-        let all_finish = a.finish_claims.iter().all(|(_, v)| v.holds());
         o.push_str(&format!(
             "- {}\n",
-            if all_finish {
-                tr!("どの状態に着いても、終わりの状態へ行く手順が残っています。", "Whatever state a case reaches, a way to a final state remains.")
-            } else {
-                tr!("終わりの状態に着けなくなる状態があります（E125）。", "A case can reach a state it can never finish from (E125).")
-            }
+            summary(
+                &a.finish_claims,
+                tr!("どの状態に着いても、終わりの状態へ行く手順が残っています。", "Whatever state a case reaches, a way to a final state remains."),
+                tr!("終わりの状態に着けなくなる状態があります（E125）。", "A case can reach a state it can never finish from (E125)."),
+                tr!("どの状態からも終わりの状態へ行けるかは、決めきれませんでした（W127）。", "Whether a case can get to a final state from every state it reaches could not be settled (W127)."),
+            )
         ));
     }
     for (nv, v) in m.nevers.iter().zip(&a.never_claims) {

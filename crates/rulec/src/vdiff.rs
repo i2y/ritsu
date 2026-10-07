@@ -623,17 +623,10 @@ pub(crate) fn run(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> An
 
 /// Whether the `constraint` lines hold of an assignment. They are a promise the caller
 /// makes, not something the evaluator enforces, so a cell realized by inputs that break one
-/// is a cell no caller reaches (§15.55).
+/// is a cell no caller reaches (§15.55). Two dates compare by their day numbers, as the
+/// vectors' filter compares them (§15.198).
 fn constraints_hold(f: &RuleFile, m: &HashMap<String, Val>) -> bool {
-    f.constraints.iter().all(|k| match (m.get(&k.left), m.get(&k.right)) {
-        (Some(Val::Num(a)), Some(Val::Num(b))) => match k.op {
-            CmpOp::Le => a.cmp_to(*b) != Ordering::Greater,
-            CmpOp::Lt => a.cmp_to(*b) == Ordering::Less,
-            CmpOp::Ge => a.cmp_to(*b) != Ordering::Less,
-            CmpOp::Gt => a.cmp_to(*b) == Ordering::Greater,
-        },
-        _ => true,
-    })
+    f.constraints.iter().all(|k| crate::vectors::constraint_holds(k, m.get(&k.left), m.get(&k.right)))
 }
 
 /// A value on the axis's own grid, inside the coordinate.
@@ -2748,8 +2741,11 @@ fn solved_point(
 ) -> Option<HashMap<String, Val>> {
     use crate::fourier::{grounds, Lin};
     // Only a cell whose computed columns are correlated is worth solving; where they are
-    // not, the walk already reached whatever there was.
-    if !scalars.iter().any(|(n, _)| axes.iter().any(|a| a.col == *n)) {
+    // not, the walk already reached whatever there was. A `constraint` between two inputs
+    // correlates them too: the walk stands on one point of each coordinate, and where that
+    // point is on the wrong side of the constraint the cell may still hold others (§15.198).
+    let tied = f.constraints.iter().any(|k| axes.iter().any(|a| a.col == k.left) && axes.iter().any(|a| a.col == k.right));
+    if !tied && !scalars.iter().any(|(n, _)| axes.iter().any(|a| a.col == *n)) {
         return None;
     }
     let seed: Vec<String> = axes.iter().map(|a| a.col.clone()).collect();
@@ -2795,8 +2791,10 @@ fn solved_point(
             continue;
         }
         match at.get(&a.col) {
+            // A date the system placed is a day number, and goes in as the date it is
+            // (§15.198): as a number it compared with no date cell.
             Some(v) if v.is_int() => {
-                out.insert(a.col.clone(), Val::Num(*v));
+                out.insert(a.col.clone(), val_of(a, *v));
             }
             // A free input the system said nothing about keeps the coordinate the cell gave
             // it; one the system placed off the grid is not a value a caller can send.
@@ -2808,7 +2806,7 @@ fn solved_point(
         }
     }
     let _ = inputs;
-    (!out.is_empty()).then_some(out)
+    (!out.is_empty() && constraints_hold(f, &out)).then_some(out)
 }
 
 /// Whether no input of this version reaches the cell, as far as linear arithmetic can tell
@@ -2849,10 +2847,14 @@ fn linearly_empty(axes: &[Axis], cell: &[usize], v: (&RuleFile, &Checked)) -> bo
     }
     // Nothing correlated: the walk already sees everything this would.
     let computed = |n: &str| f.items.iter().any(|it| matches!(it, Item::Derived(d) if d.name.text == n));
+    // A `constraint` between two names of the system correlates them as a derive does: a cell
+    // on the wrong side of it has no input, and the walk can only fail to build one there
+    // (§15.198).
+    let tied = |g: &crate::fourier::Ground| f.constraints.iter().any(|k| g.vars.contains(&k.left) && g.vars.contains(&k.right));
     // One system per type of number; any of them with no solution empties the cell, because
     // each is the cell with some of its conditions left out.
     grounds(&seed, f, c).into_iter().any(|g| {
-        if pins.is_empty() && !g.vars.iter().any(|n| computed(n)) {
+        if pins.is_empty() && !g.vars.iter().any(|n| computed(n)) && !tied(&g) {
             return false;
         }
         let mut sys = g.sys;

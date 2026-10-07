@@ -920,11 +920,7 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
             let a: std::collections::BTreeMap<String, Val> = env.clone().into_iter().collect();
             if !crate::vectors::allowed(f, &a) {
                 for k in &f.constraints {
-                    let one: std::collections::BTreeMap<String, Val> =
-                        a.iter().map(|(x, y)| (x.clone(), y.clone())).collect();
-                    let mut only = RuleFile { constraints: vec![k.clone()], ..f.clone() };
-                    only.constraints = vec![k.clone()];
-                    if crate::vectors::allowed(&only, &one) {
+                    if crate::vectors::constraint_holds(k, a.get(&k.left), a.get(&k.right)) {
                         continue;
                     }
                     let said = format!("{} {} {}", k.left, k.op.word(), k.right);

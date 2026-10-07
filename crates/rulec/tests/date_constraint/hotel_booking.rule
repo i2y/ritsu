@@ -1,0 +1,47 @@
+rule hotel_booking v1
+description "Where a hotel booking goes on an event, and the fee a cancellation costs. A state machine whose held inputs are the two dates of the stay, under a constraint between them. A sketch written for rulec's tests; it is not a transcription of any document"
+
+enum stage = booked | staying | left | cancelled
+enum event = arrive | leave | cancel
+
+inputs
+  stage     : stage
+  event     : event
+  check_in  : date  range >=2026-01-01 <=2026-12-31
+  check_out : date  range >=2026-01-01 <=2026-12-31
+
+# The stay never ends before it begins.
+constraint check_in <= check_out
+
+outputs
+  next_stage : stage
+  fee        : money[USD]  round half_up(1USD)
+
+# A booking cancelled before the stay is charged by the seasons the stay would have begun and ended in.
+table step
+policy unique
+| stage     | event          | check_in     | check_out    | -> next_stage | fee   |
+| booked    | arrive         | -            | -            | staying       | 0USD  |
+| booked    | cancel         | <=2026-06-30 | <=2026-06-30 | cancelled     | 0USD  |
+| booked    | cancel         | <=2026-06-30 | >=2026-07-01 | cancelled     | 30USD |
+| booked    | cancel         | >=2026-07-01 | >=2026-07-01 | cancelled     | 50USD |
+| booked    | leave          | -            | -            | stage         | 0USD  |
+| staying   | leave          | -            | -            | left          | 0USD  |
+| staying   | arrive, cancel | -            | -            | stage         | 0USD  |
+| left      | -              | -            | -            | stage         | 0USD  |
+| cancelled | -              | -            | -            | stage         | 0USD  |
+
+machine booking over step
+  carry   stage -> next_stage
+  held    check_in, check_out
+  initial booked
+  final   left, cancelled
+
+scenario a_summer_stay
+| event  | check_in   | check_out  | -> next_stage | fee  |
+| arrive | 2026-07-01 | 2026-07-03 | staying       | 0USD |
+| leave  | 2026-07-01 | 2026-07-03 | left          | 0USD |
+
+scenario cancelled_in_june
+| event  | check_in   | check_out  | -> next_stage | fee   |
+| cancel | 2026-06-28 | 2026-07-02 | cancelled     | 30USD |

@@ -760,6 +760,40 @@ fn 上の表の行で分かれる対は証明付きの検査器でも確かめ�
     }
 }
 
+/// A constraint between two dates, read by the day numbers of its two sides (§15.198): the point
+/// that reaches a row keeps it, and a leaf that says it rules a box out is held to the box's ends.
+/// The two lies `tests/cert.rs` tells are refused here too.
+#[test]
+fn 日付どうしの制約は証明付きの検査器でも到達点と葉で確かめられる() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    for (path, check_in, check_out) in [
+        ("tests/date_constraint/hotel_stay.rule", "check_in", "check_out"),
+        ("tests/date_constraint/宿泊料金.rule", "チェックイン日", "チェックアウト日"),
+    ] {
+        let (c, cert) = rulec(&["certificate", path]);
+        assert_eq!(c, 0, "{cert}");
+        assert_eq!(lean(&bin, &cert, Some(path)).0, 0, "{path}: そのままの証明書が通らない");
+        let point = format!(r#"{{"row":3,"at":[3,3],"values":{{"{check_in}":"2026-07-01","{check_out}":"2026-07-01"}},"at_values":["20635","20635"],"extra_values":[]}}"#);
+        let moved = format!(r#"{{"row":3,"at":[4,4],"values":{{"{check_in}":"2026-07-10","{check_out}":"2026-07-05"}},"at_values":["20644","20639"],"extra_values":[]}}"#);
+        let leaf = r#"{"split":[{"constraint":0},{"constraint":0},{"constraint":0},{"row":3}"#;
+        assert!(cert.contains(&point) && cert.contains(leaf), "{path}: 証明書の形が変わっていて、偽れない:\n{cert}");
+        for (what, forged, why) in [
+            ("到達点のチェックアウト日をチェックイン日より前にする", cert.replacen(&point, &moved, 1), "a row has no point, or the values behind its point do not hold"),
+            (
+                "同じ日に始まり終わる箱を制約で落とす",
+                cert.replacen(leaf, r#"{"split":[{"constraint":0},{"constraint":0},{"constraint":0},{"constraint":0}"#, 1),
+                "the cover does not tile the space",
+            ),
+        ] {
+            let (code, said) = lean(&bin, &forged, Some(path));
+            assert_eq!(code, 1, "{path}: {what}: 偽った証明書が通ってしまった\n{said}");
+            assert!(said.contains(why), "{path}: {what}: {said}");
+        }
+    }
+}
+
 /// Every `.rule` under the workspace's crates and site, by its path from the workspace's root.
 fn tree_rules() -> Vec<String> {
     fn walk(dir: &std::path::Path, base: &std::path::Path, out: &mut Vec<String>) {

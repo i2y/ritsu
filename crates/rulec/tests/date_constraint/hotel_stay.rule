@@ -1,0 +1,34 @@
+rule hotel_stay v1
+description "The rate of a hotel stay from its check-in and check-out dates. An example of a constraint between two dates: a stay never ends before it begins, so the table writes no row for a check-out before the check-in. A sketch written for rulec's tests; it is not a transcription of any document"
+
+enum stay_band = low | shoulder | summer
+
+inputs
+  check_in  : date  range >=2026-01-01 <=2026-12-31
+  check_out : date  range >=2026-01-01 <=2026-12-31
+
+# A stay that leaves on the day it arrives is a day use, so the two dates may be the same.
+constraint check_in <= check_out
+
+outputs
+  rate : money[USD]  round half_up(1USD)
+  band : stay_band
+
+# The summer season runs from July 1 to August 31, and a stay is charged by the seasons it begins and ends in.
+# The constraint is why no row is written for a stay that ends in an earlier season than it begins in.
+table by_season
+policy unique
+| check_in                  | check_out                 | -> rate : money[USD] | band : stay_band |
+| <=2026-06-30              | <=2026-06-30              | 120USD               | low              |
+| <=2026-06-30              | >=2026-07-01              | 150USD               | shoulder         |
+| >=2026-07-01 <=2026-08-31 | >=2026-07-01 <=2026-08-31 | 180USD               | summer           |
+| >=2026-07-01 <=2026-08-31 | >=2026-09-01              | 150USD               | shoulder         |
+| >=2026-09-01              | >=2026-09-01              | 120USD               | low              |
+
+examples
+| check_in   | check_out  | -> rate | band     |
+| 2026-03-10 | 2026-03-12 | 120USD  | low      |
+| 2026-06-29 | 2026-07-02 | 150USD  | shoulder |
+| 2026-08-01 | 2026-08-01 | 180USD  | summer   |
+| 2026-08-30 | 2026-09-02 | 150USD  | shoulder |
+| 2026-12-30 | 2026-12-31 | 120USD  | low      |

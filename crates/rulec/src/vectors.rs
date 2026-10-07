@@ -1292,13 +1292,6 @@ fn example_inputs(f: &RuleFile, c: &Checked) -> Vec<BTreeMap<String, Val>> {
     out
 }
 
-/// Evaluate the candidate population and deterministically select a subset that satisfies
-/// coverage.
-/// Whether an input satisfies every `constraint` the rule declares (§15.55).
-///
-/// A combination the caller says does not happen is not a test case: the generated code
-/// refuses it at the door, and the checker never demanded a row for it. Filtering here is
-/// what keeps the suite and the proof talking about the same set of inputs.
 /// Whether every date input of koyomi's days takes one of them (§15.174): the generated code
 /// refuses any other day at its door, so no vector names one.
 pub fn days_ok(c: &Checked, a: &BTreeMap<String, Val>) -> bool {
@@ -1311,19 +1304,34 @@ pub fn days_ok(c: &Checked, a: &BTreeMap<String, Val>) -> bool {
     })
 }
 
+/// Whether an input satisfies every `constraint` the rule declares (§15.55).
+///
+/// A combination the caller says does not happen is not a test case: the generated code
+/// refuses it at the door, and the checker never demanded a row for it. Filtering here is
+/// what keeps the suite and the proof talking about the same set of inputs.
 pub fn allowed(f: &RuleFile, a: &BTreeMap<String, Val>) -> bool {
-    f.constraints.iter().all(|k| match (a.get(&k.left), a.get(&k.right)) {
-        (Some(Val::Num(x)), Some(Val::Num(y))) => {
-            let o = x.cmp_to(*y);
-            match k.op {
-                crate::ast::CmpOp::Le => o != std::cmp::Ordering::Greater,
-                crate::ast::CmpOp::Lt => o == std::cmp::Ordering::Less,
-                crate::ast::CmpOp::Ge => o != std::cmp::Ordering::Less,
-                crate::ast::CmpOp::Gt => o == std::cmp::Ordering::Greater,
-            }
-        }
-        _ => true,
-    })
+    f.constraints.iter().all(|k| constraint_holds(k, a.get(&k.left), a.get(&k.right)))
+}
+
+/// Whether one `constraint` holds of the values its two sides take. The two sides are inputs of
+/// one type with an order (E018): two numbers compare as numbers, and two dates by their day
+/// numbers (§2.1), the way the generated code's door compares them. Reading only numbers here
+/// let every pair of dates through, so `check_in <= check_out` filtered nothing (§15.198). A side
+/// with no value is not held to it, the way the door compares only what it was passed.
+pub fn constraint_holds(k: &Constraint, left: Option<&Val>, right: Option<&Val>) -> bool {
+    let ord = |v: Option<&Val>| match v {
+        Some(Val::Num(x)) => Some(*x),
+        Some(Val::Date(y, m, d)) => Some(crate::types::date_ord(*y, *m, *d)),
+        _ => None,
+    };
+    let (Some(x), Some(y)) = (ord(left), ord(right)) else { return true };
+    let o = x.cmp_to(y);
+    match k.op {
+        CmpOp::Le => o != std::cmp::Ordering::Greater,
+        CmpOp::Lt => o == std::cmp::Ordering::Less,
+        CmpOp::Ge => o != std::cmp::Ordering::Less,
+        CmpOp::Gt => o == std::cmp::Ordering::Greater,
+    }
 }
 
 /// The whole suite: the cases the reference evaluator answers, and the cases it **refuses**.
@@ -1341,6 +1349,8 @@ pub fn generate(f: &RuleFile, c: &Checked) -> Vec<Vector> {
     suite(f, c).vectors
 }
 
+/// Evaluate the candidate population and deterministically select a subset that satisfies
+/// coverage.
 pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
     let cands = candidates(f, c);
     let raw: Vec<_> = pool(f, c, &cands).into_iter().filter(|(a, _)| allowed(f, a) && days_ok(c, a)).collect();

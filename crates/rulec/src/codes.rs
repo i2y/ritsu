@@ -1980,8 +1980,8 @@ pub fn ledger() -> Vec<Entry> {
             "E019",
             tr!("例が、生成コードが入口で受け付けない入力です", "An example is an input the generated code refuses at its door"),
             tr!(
-                "例の入力が `constraint` を満たしていないとき、または入力（並びの要素のフィールドを含む）の値が宣言した範囲の外にあるとき。制約は「この組み合わせは起きない」という宣言で、範囲は「この外の値は来ない」という宣言です。完全性の検査はそれを信じて、そこには行を要求していません。生成コードもその入力を入口で受け付けません。そのため、規則はその入力の答えを決めていません。範囲の外の例は、いままで検査を通り、その例から作ったベクタは、生成コードでエラーになっていました。",
-                "An example's inputs do not satisfy a `constraint`, or the value of an input — a field of an element of the sequence included — lies outside its declared range. A constraint declares that a combination does not happen and a range that no value outside it arrives; the completeness check believed them and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for. An example outside the range used to pass the check, and the vector made from it was then refused by the generated code."
+                "例の入力が `constraint` を満たしていないとき、または入力（並びの要素のフィールドを含む）の値が宣言した範囲の外にあるとき。制約は「この組み合わせは起きない」という宣言で、範囲は「この外の値は来ない」という宣言です。完全性の検査はそれを信じて、そこには行を要求していません。生成コードもその入力を入口で受け付けません。そのため、規則はその入力の答えを決めていません。範囲の外の例と、二つの日付のあいだの `constraint` を破る例は、いままで検査を通り、その例から作ったベクタは、生成コードでエラーになっていました。",
+                "An example's inputs do not satisfy a `constraint`, or the value of an input — a field of an element of the sequence included — lies outside its declared range. A constraint declares that a combination does not happen and a range that no value outside it arrives; the completeness check believed them and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for. An example outside the range, and one that breaks a `constraint` between two dates, used to pass the check, and the vector made from it was then refused by the generated code."
             ),
             tr!(
                 "例の値を直してください。その値や組み合わせが本当に来るなら、範囲を広げるか、制約を消してください。",

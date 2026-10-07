@@ -551,7 +551,7 @@ Related codes: [E017](#e017), [W111](#w111)
 
 `error` — **An example is an input the generated code refuses at its door**
 
-**When.** An example's inputs do not satisfy a `constraint`, or the value of an input — a field of an element of the sequence included — lies outside its declared range. A constraint declares that a combination does not happen and a range that no value outside it arrives; the completeness check believed them and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for. An example outside the range used to pass the check, and the vector made from it was then refused by the generated code.
+**When.** An example's inputs do not satisfy a `constraint`, or the value of an input — a field of an element of the sequence included — lies outside its declared range. A constraint declares that a combination does not happen and a range that no value outside it arrives; the completeness check believed them and demanded no row there, and the generated code refuses that input at the door. It is not an input an answer can be claimed for. An example outside the range, and one that breaks a `constraint` between two dates, used to pass the check, and the vector made from it was then refused by the generated code.
 
 **Fix.** Correct the example's values — or, if that value or combination really does arrive, widen the range or drop the constraint.
 

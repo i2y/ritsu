@@ -788,7 +788,8 @@ Three things follow from one line.
   code has to insist on it.
 
 The vectors follow the same line: `rulec vectors` never produces a combination a constraint
-excludes, and an `examples` row that breaks one is an error (E019) rather than a case.
+excludes, and an `examples` row that breaks one is an error (E019) rather than a case. Two
+dates are compared by the days they are, in all of these as at the door.
 
 Writing `-` in a cell says "this column does not matter here". Before constraints it also
 had to stand in for "this cannot happen", and the two read the same on the page. A constraint

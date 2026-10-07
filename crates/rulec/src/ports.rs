@@ -354,12 +354,19 @@ impl ritsu_ports::Rules for Engine {
                         // the corner: the left side as large as it gets against the right as small,
                         // for `<` and `<=`; the other way round for `>` and `>=`
                         let corner = if op.starts_with('<') { (lhi, rlo) } else { (llo, rhi) };
+                        // A date at the corner is a date, as the port gives every other date
+                        // (§15.198); a number goes on the wire as its integer.
+                        let at = |name: &str, v: Rat| -> Value {
+                            if c.ty_of(name) == Some(Ty::Date) {
+                                let (y, m, d) = crate::types::ord_to_date(v);
+                                from_val(c, name, &crate::eval::Val::Date(y, m, d))
+                            } else {
+                                Value::Int(crate::types::wire_int(v, c.wire_scale(name)))
+                            }
+                        };
                         match corner {
                             (Some(l), Some(r)) if holds(l, op, r) => Answer::Holds,
-                            (Some(l), Some(r)) => Answer::Fails(vec![
-                                (left.clone(), Value::Int(crate::types::wire_int(l, c.wire_scale(left)))),
-                                (right.clone(), Value::Int(crate::types::wire_int(r, c.wire_scale(right)))),
-                            ]),
+                            (Some(l), Some(r)) => Answer::Fails(vec![(left.clone(), at(left, l)), (right.clone(), at(right, r))]),
                             _ => Answer::Undecided(ritsu_base::tr!(
                                 "`{left}` か `{right}` の範囲に上限か下限が無いので、`{left} {op} {right}` がどの値でも成り立つとは言えません",
                                 "`{left}` or `{right}` has an open end, so `{left} {op} {right}` cannot be shown to hold for every value"
@@ -518,12 +525,30 @@ impl ritsu_ports::Rules for Engine {
                 continue;
             }
             let val = to_val(c, name, &ty, v).map_err(RuleError::Input)?;
-            if let (Val::Num(x), Some((lo, hi))) = (&val, c.ranges.get(name)) {
+            // A date is held to its range by its day number, the way the generated code's door
+            // holds it; reading only numbers here let any date through (§15.198).
+            let at = match &val {
+                Val::Num(x) => Some(*x),
+                Val::Date(y, m, d) => Some(crate::types::date_ord(*y, *m, *d)),
+                _ => None,
+            };
+            if let (Some(x), Some((lo, hi))) = (at, c.ranges.get(name)) {
                 let below = lo.is_some_and(|lo| x.cmp_to(lo) == std::cmp::Ordering::Less);
                 let above = hi.is_some_and(|hi| x.cmp_to(hi) == std::cmp::Ordering::Greater);
                 if below || above {
                     return Err(RuleError::Input(ritsu_base::tr!("入力 `{name}` が範囲の外です", "the input `{name}` is outside its range")));
                 }
+            }
+            // A date of koyomi's days takes those days only, and the door refuses any other
+            // (§15.174).
+            if let (Val::Date(y, m, d), Some(set)) = (&val, c.day_sets.get(name))
+                && set.days.binary_search(&(crate::types::date_ord(*y, *m, *d).num as i64)).is_err()
+            {
+                let (file, date) = set.from.as_ref().map(|fr| (fr.file.clone(), fr.date.clone())).unwrap_or_default();
+                return Err(RuleError::Input(ritsu_base::tr!(
+                    "入力 `{name}` は、{file} の {date} がとる日ではありません",
+                    "the input `{name}` is not a day {date} of {file} comes to"
+                )));
             }
             vals.insert(name.clone(), val);
         }
@@ -549,17 +574,17 @@ impl ritsu_ports::Rules for Engine {
             }
             vals.insert(name.clone(), Val::Seq(seq));
         }
+        // Two dates compare by their day numbers, as the generated code's door compares them
+        // (§15.198).
         for k in &f.constraints {
-            if let (Some(Val::Num(l)), Some(Val::Num(r))) = (vals.get(&k.left), vals.get(&k.right)) {
-                if !holds(*l, k.op.word(), *r) {
-                    return Err(RuleError::Input(ritsu_base::tr!(
-                        "`{} {} {}` が成り立ちません",
-                        "`{} {} {}` does not hold",
-                        k.left,
-                        k.op.word(),
-                        k.right
-                    )));
-                }
+            if !crate::vectors::constraint_holds(k, vals.get(&k.left), vals.get(&k.right)) {
+                return Err(RuleError::Input(ritsu_base::tr!(
+                    "`{} {} {}` が成り立ちません",
+                    "`{} {} {}` does not hold",
+                    k.left,
+                    k.op.word(),
+                    k.right
+                )));
             }
         }
         let (outs, _, _) = crate::eval::run_all(f, c, vals);

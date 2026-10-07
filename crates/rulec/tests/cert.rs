@@ -901,6 +901,52 @@ pub(crate) fn tree_rules() -> Vec<String> {
     out
 }
 
+/// The two hotel materials of `tests/date_constraint/`, with the names they give the two dates.
+const STAYS: [(&str, &str, &str); 2] = [
+    ("tests/date_constraint/hotel_stay.rule", "check_in", "check_out"),
+    ("tests/date_constraint/宿泊料金.rule", "チェックイン日", "チェックアウト日"),
+];
+
+/// Two lies about a constraint between two dates: the point that reaches row 3 moved to a
+/// check-out five days before the check-in, inside the box the row takes, and a leaf that says the
+/// constraint rules out the box where the stay begins and ends on 2026-07-01. A certificate that
+/// no longer has the shape the lies are written against stops the test, so it cannot pass by
+/// lying about nothing.
+fn date_lies(cert: &str, check_in: &str, check_out: &str) -> Vec<(&'static str, String)> {
+    let point = format!(r#"{{"row":3,"at":[3,3],"values":{{"{check_in}":"2026-07-01","{check_out}":"2026-07-01"}},"at_values":["20635","20635"],"extra_values":[]}}"#);
+    let moved = format!(r#"{{"row":3,"at":[4,4],"values":{{"{check_in}":"2026-07-10","{check_out}":"2026-07-05"}},"at_values":["20644","20639"],"extra_values":[]}}"#);
+    let leaf = r#"{"split":[{"constraint":0},{"constraint":0},{"constraint":0},{"row":3}"#;
+    assert!(cert.contains(&point) && cert.contains(leaf), "証明書の形が変わっていて、偽れない:\n{cert}");
+    vec![
+        ("到達点のチェックアウト日をチェックイン日より前にする", cert.replacen(&point, &moved, 1)),
+        ("同じ日に始まり終わる箱を制約で落とす", cert.replacen(leaf, r#"{"split":[{"constraint":0},{"constraint":0},{"constraint":0},{"constraint":0}"#, 1)),
+    ]
+}
+
+/// A constraint between two dates is read by the day numbers of its two sides (§15.198): the point
+/// that reaches a row has to keep it, and a leaf that says it rules a box out is held to the box's
+/// ends. A point with the check-out before the check-in, and a leaf on a box where the stay can
+/// begin and end on one day, are refused.
+#[test]
+fn 日付どうしの制約は到達点と葉で確かめられる() {
+    if !ready(Need::Python, have_python, "python3 が無い") {
+        return;
+    }
+    for (path, check_in, check_out) in STAYS {
+        let (c, cert) = rulec(&["certificate", path]);
+        assert_eq!(c, 0, "{cert}");
+        let (code, said) = recheck_rule(&cert, path);
+        assert_eq!(code, 0, "{path}: {said}");
+        let why = [format!("{check_in} <= {check_out} does not hold at 20644, 20639"), format!("{check_in} <= {check_out} can hold here, so the box is not impossible")];
+        for ((what, forged), why) in date_lies(&cert, check_in, check_out).into_iter().zip(why) {
+            assert_ne!(forged, cert, "{path}: {what}: 偽れていない");
+            let (code, said) = recheck_rule(&forged, path);
+            assert_eq!(code, 1, "{path}: {what}: 偽った証明書が通ってしまった\n{said}");
+            assert!(said.contains(&why), "{path}: {what}: {said}");
+        }
+    }
+}
+
 /// Every rule in the tree that states a certificate — the corpus, the mutants, the materials of
 /// these tests, the examples and the site's rules — is re-checked held to its own file. An error
 /// that only `--rule` reads, a cell quoted from the wrong place, hides nowhere (§15.196).
