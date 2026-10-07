@@ -212,7 +212,8 @@ One JSON object: module and function names, the parameters in order with
 their brands, units and ranges, the outputs with their rounding, the
 enum members **under the spelling each language gives them**
 (`CouponKind.PERCENT` in Python, `singlecoupon.CouponKindPercent` in Go),
-and the errors that can come out.
+and the errors that can come out: which one is the caller's mistake and
+which one the rule's own, and what each carries.
 
 A calling convention written by hand goes quietly wrong the day a name
 changes, so this one is built next to the emitters and held to the

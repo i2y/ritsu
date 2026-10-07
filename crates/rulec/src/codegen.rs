@@ -6575,6 +6575,9 @@ impl Gen<'_> {
     pub fn api(&self) -> String {
         let alias = pub_name(&self.f.name);
         let pkg = crate::backend::go_package(&alias);
+        // The two errors of the languages that raise or return one of their own (§15.202). Most
+        // carry the sentence and the refused value under these two names.
+        let (what_value, what): (&[&str], &[&str]) = (&["what", "value"], &["what"]);
         let outs = &self.f.outputs;
 
         // The record function's own parameter names (§15.35): a temporary that no declared
@@ -6642,6 +6645,7 @@ impl Gen<'_> {
             // A Python enum member is the alias in upper case (`CouponKind.PERCENT`).
             .raw("enums", self.enums_json(|_, a| a.to_uppercase()))
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
+            .raw("error_types", api_error_types(("RuleInputError", what_value), ("RuleContradictionError", what)))
             .finish();
 
         // --- TypeScript
@@ -6702,6 +6706,7 @@ impl Gen<'_> {
             // (`CouponKind.PERCENT`), the same spelling Python uses.
             .raw("enums", self.enums_json(|_, a| a.to_uppercase()))
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
+            .raw("error_types", api_error_types(("RuleInputError", what_value), ("RuleContradictionError", what)))
             .finish();
 
         // --- JavaScript: the TypeScript names without the types (§15.36). A value is what it
@@ -6764,6 +6769,7 @@ impl Gen<'_> {
             .raw("outputs", crate::json::arr(&js_outs))
             .raw("enums", self.enums_json(|_, a| a.to_uppercase()))
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
+            .raw("error_types", api_error_types(("RuleInputError", what_value), ("RuleContradictionError", what)))
             .finish();
 
         // --- Rust
@@ -6821,6 +6827,8 @@ impl Gen<'_> {
             // A Rust enum member is the alias in PascalCase on the enum's own type.
             .raw("enums", self.enums_json(|_, a| pascal(a)))
             .raw("errors", crate::json::strs(&["RuleError::Input", "RuleError::Contradiction"]))
+            // The two variants are struct variants; these are their fields.
+            .raw("error_types", api_error_types(("RuleError::Input", what_value), ("RuleError::Contradiction", what)))
             // The proof harnesses beside the module (§15.95): the file, and the name of
             // every harness in it, so `kani --harness <name>` can be written from here.
             .str("proof", &format!("{alias}_proof.rs"))
@@ -6885,6 +6893,7 @@ impl Gen<'_> {
             // A Ruby enum member is a constant under the type's module (`Band::SHORT`).
             .raw("enums", self.enums_json(|_, a| a.to_uppercase()))
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
+            .raw("error_types", api_error_types(("RuleInputError", what_value), ("RuleContradictionError", what)))
             .finish();
 
         // --- PHP. The type is written down (§15.77) but carries no unit, so a param's
@@ -6962,6 +6971,7 @@ impl Gen<'_> {
             // Python and TypeScript spell theirs (`CouponKind::PERCENT`).
             .raw("enums", self.enums_json(|t, a| format!("{}::{}", crate::codegen::php::php_name(t), crate::codegen::php::php_name(&a.to_uppercase()))))
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
+            .raw("error_types", api_error_types(("RuleInputError", what_value), ("RuleContradictionError", what)))
             .finish();
 
         // --- Swift. The unit is in the type here, as it is in Rust, so a param's `type`
@@ -7025,6 +7035,8 @@ impl Gen<'_> {
             // enum's own type (`Band.short`).
             .raw("enums", self.enums_json(|_, a| sw_name(a)))
             .raw("errors", crate::json::strs(&["RuleError.input", "RuleError.contradiction"]))
+            // The two cases carry associated values; these are their labels.
+            .raw("error_types", api_error_types(("RuleError.input", what_value), ("RuleError.contradiction", what)))
             .finish();
 
         // --- Java. `long` is the int64 the proof is about, and no brand rides in the
@@ -7088,6 +7100,7 @@ impl Gen<'_> {
             .raw("outputs", crate::json::arr(&jv_outs))
             .raw("enums", self.enums_json(|t, a| format!("{}.{}", crate::codegen::java_class(t), a.to_uppercase())))
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
+            .raw("error_types", api_error_types(("RuleInputError", what_value), ("RuleContradictionError", what)))
             .finish();
 
         // --- Go
@@ -7139,6 +7152,13 @@ impl Gen<'_> {
             .raw("output_fields", crate::json::arr(&go_outs))
             // A Go enum member is the type name followed by the alias (`CouponKindPercent`).
             .raw("enums", self.enums_json(|t, a| format!("{t}{a}")))
+            // The error comes back as a pointer to one of two types, which `errors.As` tells
+            // apart (§15.202). `HasValue` says whether `Value` holds the refused value.
+            .raw("errors", crate::json::strs(&["*RuleInputError", "*RuleContradictionError"]))
+            .raw(
+                "error_types",
+                api_error_types(("*RuleInputError", &["What", "Value", "HasValue"]), ("*RuleContradictionError", &["What"])),
+            )
             .finish();
 
         crate::json::Obj::new()
@@ -7201,6 +7221,18 @@ impl Gen<'_> {
             .raw("wasm", self.api_wasm())
             .finish()
     }
+}
+
+/// `error_types` in `rulec api` (§15.202): the two errors a language's code raises or returns,
+/// in the order `errors` names them, each with `kind` — `input` for an input the entry guard
+/// refuses, `contradiction` for the W114 guard — its name, and the fields a caller reads, so
+/// that catching the caller's own mistake and reading the refused value takes no reading of
+/// the sentence.
+pub(crate) fn api_error_types(input: (&str, &[&str]), contradiction: (&str, &[&str])) -> String {
+    let one = |kind: &str, (name, fields): (&str, &[&str])| {
+        crate::json::Obj::new().str("kind", kind).str("name", name).raw("fields", crate::json::strs(fields)).finish()
+    };
+    crate::json::arr(&[one("input", input), one("contradiction", contradiction)])
 }
 
 // ---------------------------------------------------------------------------

@@ -568,6 +568,8 @@ fn 生成物の文書が実物の名前を使っている() {
         s(jv_j, "traced_signature"),
         "RuleInputError".into(),
         "RuleContradictionError".into(),
+        // The fields an error carries are listed beside its name (§15.202), and the page says so.
+        "error_types".into(),
         "rulec api".into(),
         "gen --check".into(),
     ] {

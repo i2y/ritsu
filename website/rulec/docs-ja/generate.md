@@ -135,7 +135,7 @@ $ rulec api rules/クーポン一枚.rule | jq -r .python.signature
 def coupon_step(subtotal: YenInclTax, applied: YenInclTax, kind: CouponKind, rate: Rate, face: YenInclTax, dup: bool) -> Output:
 ```
 
-一つの JSON に、module と関数名、引数（和名・エイリアス・型・単位・範囲）、出力（丸めつき）、列挙の値の**その言語での綴り**（Python は `CouponKind.PERCENT`、Go は `couponstep.CouponKindPercent`）、投げられる例外が入っています。
+一つの JSON に、module と関数名、引数（和名・エイリアス・型・単位・範囲）、出力（丸めつき）、列挙の値の**その言語での綴り**（Python は `CouponKind.PERCENT`、Go は `couponstep.CouponKindPercent`）、投げられる例外（どちらが呼び出し側の誤りで、どちらが規則そのものの矛盾か、それぞれが持つ値）が入っています。
 
 手で書いた呼び出し規約は、ジェネレーターが名前を変えた日から静かに嘘になります。だからこの一覧はジェネレーターの隣で組み立て、テストが生成物そのものに縛ります — 一覧が言う名前が生成ファイルにそのまま書かれていること、Python は import して `inspect.signature` と比べること、Go は**一覧だけから呼び出しプログラムを組み立てて** `go vet` に通すこと（名前が一つでも違えばコンパイルが通りません）。
 

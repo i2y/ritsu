@@ -378,8 +378,18 @@ A Go enum member is the type name followed by the alias
 (`singlecoupon.CouponKindPercent`). Each enum also gets `Valid()`, `String()` (which returns
 the name from the rule) and `ParseXxx(string)`.
 
-Go returns an `error` where Python raises. A contract violation and a contradiction in the
-rule both arrive as an `error`; the message says which.
+Go returns an `error` where Python raises, and it is a pointer to one of two types:
+`*RuleInputError` for a contract violation by the caller and `*RuleContradictionError` for the
+runtime guard below — the same split as Python's two exception classes. `errors.As` tells them
+apart; the first carries `What`, `Value` and `HasValue` (whether `Value` holds the refused
+value), the second `What`, and printing either gives the message.
+
+```go
+var refused *singlecoupon.RuleInputError
+if errors.As(err, &refused) {
+    fmt.Println(refused.What, refused.Value)
+}
+```
 
 ### Swift
 
@@ -898,7 +908,10 @@ if not _isinstance(rate, int) or _isinstance(rate, bool):
 ```
 
 `rulec api` states the same bounds, taken from the same place, so an integration built from
-the inventory cannot send values the guard rejects.
+the inventory cannot send values the guard rejects. It names each language's two errors too:
+`errors` gives the names to catch, and `error_types` says which one the entry guard raises
+(`input`) and which one the guard below raises (`contradiction`), with the fields a caller reads
+from each ([formats.md](formats.md#api)).
 
 The NumPy plan carries the same guard as data, in the language the code was generated in, and
 its evaluator checks a whole column at a time in the same order: each column's type, enum
@@ -911,7 +924,9 @@ rulec_np.RuleInputError: the constraint does not hold: declared <= cover (row 1)
 ```
 
 A value that is not a whole number is refused there too; a float that is a whole number is
-the integer it equals, as SQL's guard reads it.
+the integer it equals, as SQL's guard reads it. The error carries the place as `row` beside
+`what` and `value` (`None` when a whole column is refused, missing or of another length), and
+`rulec api` lists the two errors and their fields under the `numpy` entry.
 
 **The contradiction guard** is the other half of W114. When two rows of a `policy unique`
 table might overlap and the checker could neither construct an input that proves it nor prove

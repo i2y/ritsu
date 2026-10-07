@@ -397,7 +397,9 @@ value refused at its own boundary and one refused after it is recorded (§15.116
                        "optional":false,"rounding":{"mode":"down","grid":1}}],
            "enums":[{"name":"coupon_kind","alias":"CouponKind",
                      "values":[{"name":"percent","alias":"PERCENT"},…]}],
-           "errors":["RuleInputError","RuleContradictionError"]},
+           "errors":["RuleInputError","RuleContradictionError"],
+           "error_types":[{"kind":"input","name":"RuleInputError","fields":["what","value"]},
+                          {"kind":"contradiction","name":"RuleContradictionError","fields":["what"]}]},
  "typescript":{"module":"single_coupon.ts","mcp":"single_coupon_mcp.ts","page":"single_coupon_page.html","function":"single_coupon",
                "signature":"export function single_coupon(subtotal: JPYInclTax, …): Output",
                "params":[…],"returns":"Output","outputs":[…],
@@ -433,7 +435,10 @@ value refused at its own boundary and one refused after it is recorded (§15.116
        "input_type":"Input","input_fields":[…],
        "output_type":"Output","output_fields":[…],
        "enums":[{"name":"coupon_kind","alias":"CouponKind",
-                 "values":[{"name":"percent","alias":"CouponKindPercent"},…]}]},
+                 "values":[{"name":"percent","alias":"CouponKindPercent"},…]}],
+       "errors":["*RuleInputError","*RuleContradictionError"],
+       "error_types":[{"kind":"input","name":"*RuleInputError","fields":["What","Value","HasValue"]},
+                      {"kind":"contradiction","name":"*RuleContradictionError","fields":["What"]}]},
  "swift":{"module":"single_coupon.swift","function":"singleCoupon",
           "signature":"func singleCoupon(subtotal: JPYInclTax, …) throws -> Output",
           "params":[…],"returns":"Output","outputs":[…],
@@ -447,6 +452,18 @@ value refused at its own boundary and one refused after it is recorded (§15.116
          "enums":[{"name":"coupon_kind","alias":"CouponKind",
                    "values":[{"name":"percent","alias":"CouponKind.PERCENT"},…]}],
          "errors":["RuleInputError","RuleContradictionError"]},
+ "numpy":{"plan":"single_coupon.json","runtime":"rulec_np.py",
+          "load":"rule = rulec_np.load(\"single_coupon.json\")",
+          "call":"rule(**{column: sequence}) -> {output: ndarray}",
+          "traced":"rule.traced(**{column: sequence}) -> (outputs, fired)",
+          "wire":"One equal-length sequence per column. …",
+          "columns":[{"name":"subtotal","alias":"subtotal","type":"ndarray[int64]","unit":"JPY",
+                      "range":{"min":0,"max":1000000},"optional":false},…],
+          "outputs":[…],
+          "errors":["RuleInputError","RuleContradictionError"],
+          "error_types":[{"kind":"input","name":"RuleInputError","fields":["what","value","row","word"]},
+                         {"kind":"contradiction","name":"RuleContradictionError","fields":["what","row","word"]}],
+          "needs":["numpy"]},
  "connect":{"proto":"proto/rulec/single_coupon/v1/single_coupon.proto","package":"rulec.single_coupon.v1",
             "service":"SingleCouponService","method":"Decide",
             "path":"/rulec.single_coupon.v1.SingleCouponService/Decide",
@@ -493,7 +510,27 @@ value refused at its own boundary and one refused after it is recorded (§15.116
 ```
 
 Everything here is a name or a number the generated code really uses, so nothing in it moves
-with `--lang`. Every language's entry carries `traced` and `traced_signature` as the Python
+with `--lang`.
+
+**`errors` and `error_types`** (DESIGN §15.202). The entry of every language but SQL and Wasm —
+the languages whose code raises or returns errors of its own, NumPy among them — names its two
+errors under `errors`, the input error first, and describes them under `error_types`. `kind` is `input` for an input the entry
+guard refuses (a value of the wrong type, not a member of its enum, outside its range, a
+`constraint` that does not hold, a day its koyomi date does not come to, a break of one of the
+`preconditions`) and `contradiction` for the W114 guard, which is never the caller's fault.
+`name` is the name to catch or to match, spelled as `errors` spells it: `RuleError::Input` in
+Rust, `RuleError.input` in Swift, `*RuleInputError` in Go, where `errors.As` tells the two
+apart. `fields` are what a caller reads from it. `what` is the sentence, in the language the
+code was generated in, and `value` the value refused; where the refusal is about no one value
+— a `constraint` between two inputs, an input that is missing — `value` holds the language's
+own mark of none: `_NOVALUE` in the Python module and in `rulec_np`, the exported `NO_VALUE`
+in TypeScript and JavaScript, `RuleInputError::NO_VALUE` in Ruby, `null` in PHP and Java,
+`None` in Rust and `nil` in Swift, and Go says it with `HasValue`. NumPy adds `row`, the place
+of the element refused (`None` when a whole column is refused: missing, or of another length),
+and `word`, the word its sentence calls a place by (`row`, `行`). The `connect`, `sql` and
+`wasm` entries have no errors of their own and neither key: a Connect call fails with
+`invalid_argument` or `internal`, the SQL query answers with its `guard` column and the
+function raises the SQLSTATE under `raises`, and the Wasm module answers `{"error":…}`. Every language's entry carries `traced` and `traced_signature` as the Python
 one does — the twin that returns the rows that matched beside the outputs — and `record`
 and `record_signature`, the function that writes one call as a fixtures record
 ([generated-code.md](generated-code.md#the-rows-that-matched)). `range` states the bounds **the entry guard enforces**, and `alias` states the
@@ -506,7 +543,7 @@ type has none. `range` and `rounding.grid` are integers the way the value itself
 for a rate they count its steps: a rate stored in tenths of a percent with `round
 half_up(0.1%)` says `"grid":1`. The NumPy entry is shaped differently from the rest, because it names no
 function: it carries `plan` and `runtime`, the two files, `load`, `call` and `traced`, and
-`columns` and `outputs` in place of parameters. The Ruby entry also carries `rbs`, the path of the signature file that ships
+`columns` and `outputs` in place of parameters, beside `errors` and `error_types` as the languages' entries have them. The Ruby entry also carries `rbs`, the path of the signature file that ships
 with the module, and an entry whose language gets a server carries `mcp`, the file beside the
 module that serves the rule as one MCP tool
 ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)). A rule that walks a

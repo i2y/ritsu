@@ -3172,7 +3172,41 @@ count 一致数(hits) over 候補 where 照合結果 = 一致  range >=0 <=50
 - **`rulec test` が入口を確かめるのは、受け付けない入力のファイルにある入力だけである。** `gen` がそこに書くのは、参照評価器が矛盾で止まる入力（§15.56）だけである。だから NumPy の入口が制約を見なくても、`rulec test` は通っていた。制約を破る入力、koyomi の日でない日、範囲の外の値を一つずつ書けば、どの言語の入口も `rulec test` が確かめる。ただし、制約や範囲を持つ全部の規則の生成物と、`rulec test` の件数が変わる。
 - **`optional` の数と日付の入力で、検査が表の穴を見落とす。** `due : date? range >=2026-01-01 <=2026-12-31` に `<2026-07-01` の一行だけを書くと、`check` は ok と言う。生成した Python は 2026-08-01 で `unreachable: completeness was statically checked by rulec` の `AssertionError` になり、不在の値（`null`）では `TypeError` になり、範囲の外の 2025-01-01 には答える（入口が範囲を見ない）。`bonus : number?` に `<5` の一行だけでも同じく ok になる。逆に `none`・`<5`・`>=5` の三行を書くと、E105（`bonus = 4` で行 2 と行 3 が当たる）と E102（行 1）になる。`?` を外して `none` の行を消すと、どれも正しく E101（`due = 2026-07-01`、`bonus = 5`）か ok になる。替える前の rulec でも同じだった。リファレンスは、どの型にも `?` を付けられると言う。NumPy の実行時も、不在の値を数の列に入れられない（`astype(np.int64)` で落ちる）。検査の不具合で、生成器の外なので、ここでは直していない。
 - **真偽の入力に真偽でない値が来ると、言語ごとに答えが割れる。** NumPy は `astype(bool)` で何でも真偽にし、`express` が文字列の `"false"` の入力に 1,200 円（真として）と答える。同じ入力を `rulec test` の受け付けない入力のファイルに書くと、拒んだのは MCP の口（Python、TypeScript、JavaScript の stdio と HTTP）だけだった。真として 1,200 円と答えたのは Python（runner と Connect）、Ruby、PHP、NumPy、SQL、偽として 700 円と答えたのは TypeScript、JavaScript、Rust（runner と WASI）、Go、Swift、Java、Wasm である（PostgreSQL の関数は走らせていない）。NumPy と Python は、替える前の rulec でも同じ答えだった。値が型に合うかを runner と入口のどちらで確かめるかは、全部の言語にまたがる決めなので、ここでは直さず、NumPy は Python と同じ読み方のままにした。
-- **`rulec api` の NumPy の項目は、上げる例外を挙げない。** Python、TypeScript、JavaScript、Rust、Ruby、PHP、Swift、Java の項目は `errors` を持つ（Python なら `RuleInputError` と `RuleContradictionError`）が、NumPy の項目には無い。NumPy の実行時も同じ二つを上げるようになったので、`errors` を足せば、呼び出し側は生成物を読まずにそれを知れる。足すと全部の規則の `rulec api` の出力に鍵が一つ増える（互換のページの、1.x が足してよい形）ので、ここでは足していない。
+- **`rulec api` の NumPy の項目は、上げる例外を挙げない。** Python、TypeScript、JavaScript、Rust、Ruby、PHP、Swift、Java の項目は `errors` を持つ（Python なら `RuleInputError` と `RuleContradictionError`）が、NumPy の項目には無い。NumPy の実行時も同じ二つを上げるようになったので、`errors` を足せば、呼び出し側は生成物を読まずにそれを知れる。足すと全部の規則の `rulec api` の出力に鍵が一つ増える（互換のページの、1.x が足してよい形）ので、ここでは足していない。§15.202 で足した（NumPy と Go の `errors`、十の項目の `error_types`）。
+
+### 15.202 `rulec api` の言語の項目に、上げる例外の種類と、それが持つ値を挙げる（2026-10-08）
+
+**きっかけ**：§15.200 の「見つけて直していないもの」の四つ目。NumPy の項目は、上げる例外を挙げていなかった。NumPy の実行時は、Python の生成物と同じ二つ（`RuleInputError` と `RuleContradictionError`）を上げ、拒んだ要素の位置を持つ（§15.200）。それでも呼び出し側は、生成物を読まないとそれを知れなかった。ほかの言語の項目を調べると、`errors` を持つのは Python・TypeScript・JavaScript・Rust・Ruby・PHP・Swift・Java の八つで、どれも名前の並びだけだった。Go の生成物も型のある二つ（`*RuleInputError` と `*RuleContradictionError`）を返すのに、Go の項目には `errors` が無かった。`docs/generated-code.md` も「どちらも `error` で届き、文がどちらかを言う」と書いていた。どの項目も、どちらが呼び出し側の誤りか、例外から何を読めるか（文と、拒んだ値と、NumPy では要素の位置）を言わなかった。
+
+**決定**：
+
+1. **NumPy と Go の項目にも `errors` を足す。** 形はほかの八つと同じで、名前の並び（入力の誤りが先、矛盾が後）である。NumPy は `RuleInputError` と `RuleContradictionError`、Go は `*RuleInputError` と `*RuleContradictionError` と書く。Go の書き方は、`errors.As` に渡す形である。
+2. ★ **十の項目の全部に `error_types` を足す。** 例外ごとに、`kind`（`input` は入口が拒んだ入力、`contradiction` は W114 のガード）、`name`（`errors` と同じ綴り）、`fields`（呼び出し側が読める値の名前）を持つ。NumPy の `RuleInputError` は `what`・`value`・`row`・`word`、`RuleContradictionError` は `what`・`row`・`word` である。Go は `What`・`Value`・`HasValue` と `What`、ほかの八つは `what`・`value` と `what` である。いつ上げるかは `kind` が言い、文ではなく決まった語にした。`api` の出力は、`--lang` で変わらない名前と数でできているからである。
+3. ★ **`errors` の形は変えない。** 名前の並びを、種類と名前と値の名前の組の並びに替えれば、鍵は一つで済む。ただ、それはすでにある鍵の形を変えることになる。互換のページは、1.x が鍵を足すことは許し、ある鍵の形を変えることは許さない。そこで名前は `errors` に残し、組は新しい鍵に置いた。
+4. **Connect・SQL・Wasm の項目には足さない。** この三つの生成物は、自分の例外の型を持たないからである。Connect は `invalid_argument` と `internal` で失敗する。SQL の問い合わせは `guard` の列で答え、関数は `raises` の SQLSTATE を上げる。Wasm のモジュールは `{"error":…}` を返す。どれも、それぞれの項目か文書がすでに言っている（足りない所は、下の「見つけて直していないもの」）。
+
+**捨てたもの**：
+
+- **`errors` を組の並びに替える。** 3 のとおり、ある鍵の形を変えることになる。
+- **いつ上げるかを文で書く。** `--lang` で変わる文は `api` に置かない（NumPy の項目の `wire` は、前からある例外である）。
+- **NumPy の項目にだけ組を足す。** ほかの言語の項目と形がそろわない。呼び出し側は、言語ごとに読み方を変えることになる。
+
+**確かめたこと**：
+
+- `tests/api_errors.rs` の三つ。英語の規則（コーパスの `express_delivery_quote.rule`）を先に、日本語の版（`速達の見積.rule`）を横に置く。
+  - 十の項目が `errors` と `error_types` を持ち、種類は入力、矛盾の順で、名前は二つの鍵で同じである。どの名前も、どの値の名前も、その言語の生成物に宣言がある（Python と NumPy は `self.<名前> =`、TypeScript は `readonly`、JavaScript は `this.<名前> =`、Ruby は `attr_reader`、PHP は `$<名前>`、Java は `public final`、Go は構造体のフィールド、Rust は構造体のヴァリアントのフィールド、Swift は関連値のラベル）。Connect・SQL・Wasm の項目には無い。
+  - Python と NumPy は、二つの例外を生成物のとおりに作り、挙げた値を全部読める。NumPy の実行時は、範囲の外の要素を持つ列を `RuleInputError` で拒み、`row` は 1、`what` はその列の名前で始まり、`word` は英語なら `row`、日本語なら `行` である。
+  - 目録だけから組んだ Go の呼び出しが、`errors.As` で二つを見分け、挙げたフィールドを全部読んで、`go vet` を通る。フィールドの名前を一つ違えると通らないことも確かめた。
+- `tests/api.rs` の `生成物の文書が実物の名前を使っている` に、`error_types` を足した。
+- 替える前と後の突き合わせ。木の 335 の `.rule` を英語と日本語で、`api` と `gen`（全部の生成先）の 670 回ずつ走らせた。`gen` は 670 回とも同じで、生成できた 410 回の 24,078 のファイルが一字も変わらない。`api` は、答えた 410 回の全部で、足した鍵（十の項目の `error_types`、NumPy と Go の `errors`）を除くと一字も変わらない。検査が通らない規則の 260 回は、前と同じ終了コードと同じ文で止まる。生成できる 205 の規則で、それぞれの rulec が生成したものに `rulec test` をかけた結果も、前と後で同じだった（PostgreSQL を立てて、関数の側も走らせた）。
+- 文書：`docs/formats.md`（とスキルのコピー）の `api` の例を、実物で取り直した（Python と Go の `error_types`、NumPy の項目）。`errors` と `error_types` の段落を足した。`docs/generated-code.md`（とスキルのコピー）では、Go の節（二つの型と `errors.As`）、入口のガードの節（`rulec api` が二つの例外を挙げること）、NumPy の段落（`row`）を直した。サイトの生成のページ（英日）にも書いた。互換のページは変えていない。足したのは鍵だけで、1.x が足してよい範囲である。
+
+**見つけて直していないもの**：
+
+- **SQL の項目は、矛盾の側を言わない。** 規則が W114 の対を持つとき、問い合わせは `_contradiction` の列を持ち、関数は SQLSTATE `P0001` を上げる。それでも `sql` の項目は、`guard`（`_input_error`）と `raises`（`22023`）しか挙げない。
+- **Wasm の項目は、拒んだときの答えの形（`{"error":…}`）を言わない。** 生成した Wasm は、入力の誤りも矛盾も、同じ形で返す。
+- **Connect の項目は、失敗の符号（`invalid_argument` と `internal`）を挙げない。**
+- この三つは、例外の型ではない形で拒む。挙げるなら、鍵の形をそれぞれに決める要がある。
 
 ## 16. この設計で最も危うい点
 

@@ -617,6 +617,17 @@ for n, r in enumerate(rows):
             )
             .raw("columns", crate::json::arr(&columns))
             .raw("outputs", crate::json::arr(&outputs))
+            // The runtime raises the two errors the Python module raises (§15.200), and says
+            // which element it refused: `row` is its place, absent for a whole column, and `word`
+            // the word the sentence calls a place by (§15.202).
+            .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
+            .raw(
+                "error_types",
+                super::api_error_types(
+                    ("RuleInputError", &["what", "value", "row", "word"]),
+                    ("RuleContradictionError", &["what", "row", "word"]),
+                ),
+            )
             .raw("needs", crate::json::strs(&["numpy"]))
             .finish()
     }
