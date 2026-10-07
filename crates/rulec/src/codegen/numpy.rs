@@ -305,6 +305,28 @@ impl<'a> Gen<'a> {
                 )
             })
             .collect();
+        // W114: a pair of rows whose exclusivity could not be proven statically. The other
+        // languages stop when both match, and so does this one: the plan names the pair by the
+        // places of its rows here, with the sentence the others raise (§15.200).
+        let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+        let guards: Vec<String> = self
+            .w114
+            .get(&tname)
+            .map(|pairs| {
+                pairs
+                    .iter()
+                    .map(|(i, j)| {
+                        let what = tr!(
+                            "表 {tname}: {} と {} が同時に当てはまりました",
+                            "table {tname}: {} and {} matched at the same time",
+                            self.row_name(t, *i),
+                            self.row_name(t, *j)
+                        );
+                        Obj::new().int("a", *i as i128).int("b", *j as i128).str("what", &what).finish()
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         Obj::new()
             .str("op", "table")
             .raw("outs", crate::json::strs(&t.outputs.iter().map(|o| o.name.text.clone()).collect::<Vec<_>>()))
@@ -315,6 +337,7 @@ impl<'a> Gen<'a> {
                 ),
             )
             .raw("rows", format!("[{}]", rows.join(",")))
+            .opt_raw("guards", (!guards.is_empty()).then(|| format!("[{}]", guards.join(","))))
             .finish()
     }
 
@@ -330,6 +353,24 @@ impl<'a> Gen<'a> {
                 Ty::Opt(t) => t.as_ref(),
                 other => other,
             };
+            // What the door says when it refuses this column, in the language the code is
+            // generated in and in the words the other languages raise (§15.200). The runtime is
+            // one file for every rule, so the sentences travel in the plan.
+            let mut say = Obj::new()
+                .str("missing", &tr!("{} がありません", "{} is missing", name))
+                .str("length", &tr!("{} の列の長さが、前の列と揃っていません", "{} is not as long as the columns before it", name));
+            match kind {
+                "int" => say = say.str("integer", &tr!("{} が整数ではありません", "{} is not an integer", name)),
+                "date" => say = say.str("date", &tr!("{} が日付ではありません", "{} is not a date", name)),
+                _ => {}
+            }
+            if let Ty::Enum(en) = inner {
+                say = say.str("enum", &tr!("{} が列挙 {} の値ではありません", "{} is not a value of enum {}", name, en));
+            }
+            if kind == "int" || kind == "date" {
+                say = say.str("range", &tr!("{} が範囲の外です", "{} is out of range", name));
+            }
+            o = o.raw("say", say.finish());
             // An optional column carries one more value. The plan encodes a `none` cell as
             // `eq "none"` (`np_cell`), but said nothing about the column — so the runtime
             // turned the wire's `null` into the string "None" and refused it as not a value
@@ -426,12 +467,53 @@ impl<'a> Gen<'a> {
             ),
             _ => None,
         };
+        // The `constraint` lines and the days of a koyomi date: the door every other language
+        // has (`Gen::constraint_guards`), as data (§15.55, §15.174, §15.200). Each side of a
+        // constraint is brought to the step the two share before they are compared, as the
+        // others bring them (§15.139); a date is its day number already.
+        let constraints: Vec<String> = self
+            .f
+            .constraints
+            .iter()
+            .map(|k| {
+                let (sa, sb) = (self.scale(&k.left).max(1), self.scale(&k.right).max(1));
+                let common = lcm(sa, sb);
+                let said = format!("{} {} {}", k.left, k.op.word(), k.right);
+                Obj::new()
+                    .str("left", &k.left)
+                    .str("op", k.op.word())
+                    .str("right", &k.right)
+                    .int("left_times", common / sa)
+                    .int("right_times", common / sb)
+                    .str("what", &tr!("制約が成り立ちません: {said}", "the constraint does not hold: {said}"))
+                    .finish()
+            })
+            .collect();
+        let mut day_inputs: Vec<&String> = self.c.day_sets.keys().collect();
+        day_inputs.sort();
+        let days: Vec<String> = day_inputs
+            .into_iter()
+            .map(|name| {
+                let set = &self.c.day_sets[name];
+                let runs: Vec<String> = super::day_runs(&set.days).into_iter().map(|(a, b)| format!("[{a},{b}]")).collect();
+                let (file, date) = set.from.as_ref().map(|fr| (fr.file.clone(), fr.date.clone())).unwrap_or_default();
+                Obj::new()
+                    .str("name", name)
+                    .raw("runs", format!("[{}]", runs.join(",")))
+                    .str("what", &tr!("{name} は {file} の {date} がとる日ではありません", "{name} is not a day {date} of {file} comes to"))
+                    .finish()
+            })
+            .collect();
         Obj::new()
             .str("rule", &self.f.name.text)
             .str("alias", pub_name(&self.f.name))
             .str("version", &self.f.version)
             .str("sha256", &self.src_hash)
+            // the word a refusal puts before the place of the element it is about
+            .str("row", &tr!("行", "row"))
             .raw("inputs", format!("[{}]", inputs.join(",")))
+            .opt_raw("constraints", (!constraints.is_empty()).then(|| format!("[{}]", constraints.join(","))))
+            .opt_raw("days", (!days.is_empty()).then(|| format!("[{}]", days.join(","))))
             .raw("outputs", format!("[{}]", outputs.join(",")))
             .raw("steps", format!("[{}]", steps.join(",")))
             .opt_raw("machine", machine)

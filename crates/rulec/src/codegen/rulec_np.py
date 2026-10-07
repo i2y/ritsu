@@ -37,29 +37,86 @@ class RuleInputError(ValueError):
     """An input outside what the rule declares. The same refusal the generated code makes.
 
     The sentence, the value and the row travel apart, so a caller can react to
-    which row was refused without parsing the text back.
+    which row was refused without parsing the text back. The sentence is the one the
+    other languages raise for the same input, in the language the plan was written in.
     """
 
-    def __init__(self, what: str, value: object = _NOVALUE, row: int | None = None) -> None:
+    def __init__(self, what: str, value: object = _NOVALUE, row: int | None = None, word: str = "row") -> None:
         super().__init__(what)
         self.what = what
         self.value = value
         self.row = row
+        self.word = word
 
     def __str__(self) -> str:
         if self.value is _NOVALUE:
             m = self.what
         else:
-            # A number prints as itself (a numpy scalar's repr says `np.int64(5)`);
-            # anything else prints as its repr, so a string keeps its quotes.
-            num = isinstance(self.value, (int, float, np.integer, np.floating)) and not isinstance(self.value, bool)
-            m = f"{self.what}: {self.value}" if num else f"{self.what}: {self.value!r}"
-        return m if self.row is None else f"{m} (行 {self.row})"
+            # A number prints as itself and anything else as its repr, so a string keeps its
+            # quotes; a numpy scalar first becomes the Python value it holds (its repr says
+            # `np.int64(5)` and `np.True_`).
+            v = self.value.item() if isinstance(self.value, np.generic) else self.value
+            num = isinstance(v, (int, float)) and not isinstance(v, bool)
+            m = f"{self.what}: {v}" if num else f"{self.what}: {v!r}"
+        return m if self.row is None else f"{m} ({self.word} {self.row})"
+
+
+class RuleContradictionError(AssertionError):
+    """Two rows of a `unique` table matched one element: the rule contradicted itself.
+
+    The guard W114 leaves where the checker could not decide a pair. It is never the
+    caller's fault, and it names the element as the input error does.
+    """
+
+    def __init__(self, what: str, row: int | None = None, word: str = "row") -> None:
+        super().__init__(what)
+        self.what = what
+        self.row = row
+        self.word = word
+
+    def __str__(self) -> str:
+        return self.what if self.row is None else f"{self.what} ({self.word} {self.row})"
+
+
+def _not_whole(v):
+    """The elements of a column of numbers that are not whole numbers, as a mask.
+
+    Every generated door refuses a number that is not an integer before it looks at the
+    range: a float sits inside any range, and 18.3 for a rate in steps of 0.1% would be
+    taken as 1.83%. A whole float is the integer it equals, as SQL's door reads it, and a
+    boolean is no number at all.
+    """
+    if v.dtype == bool:
+        return np.ones(len(v), dtype=bool)
+    if np.issubdtype(v.dtype, np.integer):
+        return np.zeros(len(v), dtype=bool)
+    if np.issubdtype(v.dtype, np.floating):
+        with np.errstate(invalid="ignore"):
+            return ~np.isfinite(v) | (v != np.floor(v))
+
+    def bad(x):
+        if isinstance(x, (bool, np.bool_)):
+            return True
+        if isinstance(x, (int, np.integer)):
+            return False
+        if isinstance(x, (float, np.floating)):
+            return not (np.isfinite(x) and float(x).is_integer())
+        return True
+
+    return np.array([bad(x) for x in v], dtype=bool)
 
 
 def _ord(s: str) -> int:
     y, m, d = (int(x) for x in s.split("-"))
     return (datetime.date(y, m, d) - _EPOCH).days
+
+
+def _ord_or_none(x):
+    """A date on the wire as its day number, or None when it is not a date."""
+    try:
+        return _ord(str(x))
+    except ValueError:
+        return None
 
 
 # --- The five roundings, one array at a time. Every one of them is the generated
@@ -203,16 +260,29 @@ class Rule:
         return f"<rulec.Rule {self.name} v{self.version} {self.sha256[:12]}>"
 
     def _columns(self, cols: dict):
-        """The entry guard, and the wire turned into integers. Refusing is part of the rule."""
+        """The entry guard, and the wire turned into integers. Refusing is part of the rule.
+
+        It refuses what every other generated door refuses, in the same order and with the
+        same sentences: each column's type, enum and range, then each `constraint` between
+        two columns, then the days of a koyomi date. Each refusal names the first element
+        it is about.
+        """
         env, n = {}, None
+        word = self.plan.get("row", "row")
+
+        def refuse(what, value=_NOVALUE, row=None):
+            return RuleInputError(what, value, row, word)
+
         for spec in self.plan["inputs"]:
             name = spec["name"]
+            say = spec.get("say", {})
             if name not in cols:
-                raise RuleInputError(f"{name}: 渡されていません")
+                raise refuse(say.get("missing", f"{name} is missing"))
             v = np.asarray(cols[name])
             n = len(v) if n is None else n
             if len(v) != n:
-                raise RuleInputError(f"{name}: 列の長さが揃っていません ({len(v)} ≠ {n})")
+                raise refuse(f"{say.get('length', name)} ({len(v)} ≠ {n})")
+            wire = v
             # The absent value of an optional column. It arrives as JSON null (`None` here,
             # or a NaN once numpy has widened the column), and the plan tests it as the word
             # "none" — `astype(str)` alone turned it into "None" and the guard refused it.
@@ -222,9 +292,20 @@ class Rule:
                     dtype=object,
                 )
             kind = spec["kind"]
+            # The absent value of an optional column is the word itself, not a wrong type.
+            absent = np.array([x == "none" for x in v], dtype=bool) if spec.get("optional") else np.zeros(n, dtype=bool)
             if kind == "date":
-                v = np.array([_ord(str(x)) for x in v], dtype=np.int64)
+                days = [_ord_or_none(x) for x in v]
+                bad = np.array([d is None for d in days], dtype=bool) & ~absent
+                if bad.any():
+                    i = int(np.argmax(bad))
+                    raise refuse(say["date"], wire[i], i)
+                v = np.array(days, dtype=np.int64)
             elif kind == "int":
+                bad = _not_whole(v) & ~absent
+                if bad.any():
+                    i = int(np.argmax(bad))
+                    raise refuse(say["integer"], wire[i], i)
                 v = v.astype(np.int64)
             elif kind == "bool":
                 v = v.astype(bool)
@@ -234,7 +315,7 @@ class Rule:
                 bad = ~np.isin(v, spec["values"])
                 if bad.any():
                     i = int(np.argmax(bad))
-                    raise RuleInputError(f"{name}: 列挙 {spec['enum']} の値ではありません", v[i], i)
+                    raise refuse(say["enum"], v[i], i)
             lo, hi = spec.get("min"), spec.get("max")
             if lo is not None or hi is not None:
                 bad = np.zeros(n, dtype=bool)
@@ -244,9 +325,27 @@ class Rule:
                     bad |= v > hi
                 if bad.any():
                     i = int(np.argmax(bad))
-                    raise RuleInputError(f"{name}: 範囲の外です", v[i], i)
+                    raise refuse(say["range"], wire[i], i)
             env[name] = v
-        return env, (0 if n is None else n)
+        n = 0 if n is None else n
+        # A combination the caller said does not happen: no row was demanded for it, so it is
+        # refused rather than answered. Both sides are brought to the step they share first.
+        for k in self.plan.get("constraints", []):
+            a, b = env[k["left"]] * k["left_times"], env[k["right"]] * k["right_times"]
+            op = k["op"]
+            holds = a <= b if op == "<=" else a < b if op == "<" else a >= b if op == ">=" else a > b
+            bad = ~np.asarray(holds, dtype=bool)
+            if bad.any():
+                raise refuse(k["what"], row=int(np.argmax(bad)))
+        # A date of koyomi's days takes those days only.
+        for d in self.plan.get("days", []):
+            v = env[d["name"]]
+            on = np.zeros(n, dtype=bool)
+            for lo, hi in d["runs"]:
+                on |= (v >= lo) & (v <= hi)
+            if (~on).any():
+                raise refuse(d["what"], row=int(np.argmax(~on)))
+        return env, n
 
     def traced(self, **cols):
         """The outputs and, per table, the 1-based row that decided each element."""
@@ -266,6 +365,12 @@ class Rule:
             # The default is never selected: E101 proved the rows cover the declared space
             # and the entry guard above is what holds the input inside it. It is written all
             # the same, because `np.select` has to be told the dtype of a column of words.
+            # W114: a pair of rows the checker could not prove apart. Where both match one
+            # element, the rule contradicts itself, and the element is not answered.
+            for g in st.get("guards", []):
+                both = conds[g["a"]] & conds[g["b"]]
+                if both.any():
+                    raise RuleContradictionError(g["what"], int(np.argmax(both)), self.plan.get("row", "row"))
             for oi, out in enumerate(st["outs"]):
                 env[out] = np.select(
                     conds, [_val(p[oi], env) for p in picks], default=_unreachable(st["kinds"][oi])

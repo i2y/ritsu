@@ -867,10 +867,11 @@ writes beside the vectors is in the same format, so `rulec test` holds the recor
 ## The two guards
 
 **The entry guard** enforces at run time what the proof assumed. Every numeric input is
-checked against its declared `range`, and every enum input against its set of values. If the
-check were absent, a caller outside the declared domain would get a silently wrong number
-instead of an error — and the completeness proof says nothing about inputs the rule never
-declared.
+checked against its declared `range`, and every enum input against its set of values; then
+every `constraint` between two inputs, and a date input that takes its range from a koyomi
+date against the days that date comes to. If the check were absent, a caller outside the
+declared domain would get a silently wrong number instead of an error — and the completeness
+proof says nothing about inputs the rule never declared.
 
 ```python
 if not 0 <= subtotal <= 1000000:
@@ -899,6 +900,19 @@ if not _isinstance(rate, int) or _isinstance(rate, bool):
 `rulec api` states the same bounds, taken from the same place, so an integration built from
 the inventory cannot send values the guard rejects.
 
+The NumPy plan carries the same guard as data, in the language the code was generated in, and
+its evaluator checks a whole column at a time in the same order: each column's type, enum
+and range, then each constraint, then the days. It refuses the first element that fails,
+with the sentence the other languages raise and the place of that element, so a caller
+can tell which one it was without parsing the text:
+
+```text
+rulec_np.RuleInputError: the constraint does not hold: declared <= cover (row 1)
+```
+
+A value that is not a whole number is refused there too; a float that is a whole number is
+the integer it equals, as SQL's guard reads it.
+
 **The contradiction guard** is the other half of W114. When two rows of a `policy unique`
 table might overlap and the checker could neither construct an input that proves it nor prove
 that none exists, it does not pretend either way: it warns, and the generated code carries a
@@ -916,7 +930,9 @@ Derived values that share an input, and the thresholds inside a boolean definiti
 guard any more: they are proved apart.
 
 If this ever fires in production, it is evidence — the overlap the checker could not decide is
-real, and the rule needs fixing.
+real, and the rule needs fixing. The NumPy plan names each such pair by the places of its rows,
+and its evaluator raises `RuleContradictionError` with the same sentence and the place of the
+element both rows matched.
 
 ---
 

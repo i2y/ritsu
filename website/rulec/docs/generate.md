@@ -270,12 +270,17 @@ input, and the function's name and signature in each of the five.
 
 **The entry guard** enforces at run time what the proof assumed. Every
 numeric input is checked against its declared range and every enum input
-against its values. Without it, a caller outside the declared domain
-would get a silently wrong number — and the completeness proof says
-nothing about inputs that were never declared. A number that is not an
-integer is refused before the range is looked at, in the languages where
-a caller can pass one: a float sits inside any range, and 18.3 for a
-rate in steps of 0.1% would otherwise be taken as 1.83%.
+against its values; then every `constraint` between two inputs, and a
+date input that takes its range from a koyomi date against the days that
+date comes to. Without it, a caller outside the declared domain would get
+a silently wrong number — and the completeness proof says nothing about
+inputs that were never declared. A number that is not an integer is refused before the range is
+looked at, in the languages where a caller can pass one: a float sits
+inside any range, and 18.3 for a rate in steps of 0.1% would otherwise be
+taken as 1.83%. The NumPy plan carries the same guard as data, and its
+evaluator refuses the first element that fails with the sentence the
+other languages raise and that element's place: `the constraint does not
+hold: declared <= cover (row 1)`.
 
 **The contradiction guard** is the other half of W114. Where the checker
 could not decide whether two rows of a `unique` table can overlap, the
