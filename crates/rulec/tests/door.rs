@@ -16,7 +16,7 @@
 //! its Japanese version `tests/mutants/m_w114.rule` for the W114 guard.
 
 use ritsu_testkit::tmp::tmpdir_in;
-use ritsu_testkit::{Need, TempDir, ready, skip};
+use ritsu_testkit::{Need, TempDir, need, ready, skip};
 use rulec::json::Json;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -143,6 +143,10 @@ fn every_language_refuses_an_input_that_breaks_a_constraint() {
 /// sentence — the one the rule's messages were generated in.
 #[test]
 fn every_language_says_the_same_sentence() {
+    // Every language there is a toolchain for, the tools level's (ritsu's DESIGN 10.2).
+    if !need(Need::Python) {
+        return;
+    }
     let ready_b = |b: &rulec::backend::Backend| b.ready.map(|r| r()).unwrap_or(Ok(()));
     let present: Vec<&rulec::backend::Backend> =
         rulec::backend::ALL.iter().filter(|b| have(b.tool, &["--version"]) || have(b.tool, &["version"])).filter(|b| ready_b(b).is_ok()).collect();

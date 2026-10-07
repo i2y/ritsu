@@ -15,7 +15,7 @@
 //! `tests/golden/optional` (`RULEC_BLESS=1 cargo test --test optional` writes them again).
 
 use ritsu_testkit::tmp::tmpdir_in;
-use ritsu_testkit::{Need, TempDir, ready, skip};
+use ritsu_testkit::{Need, TempDir, need, ready, skip};
 use rulec::eval::Val;
 use rulec::i18n::{self, Lang};
 use rulec::json::Json;
@@ -318,6 +318,10 @@ fn every_language_agrees_and_refuses_a_value_outside_the_range() {
 /// answers.
 #[test]
 fn every_language_says_the_same_sentence_for_a_value_outside_the_range() {
+    // Every language there is a toolchain for, the tools level's (ritsu's DESIGN 10.2).
+    if !need(Need::Python) {
+        return;
+    }
     let ready_b = |b: &rulec::backend::Backend| b.ready.map(|r| r()).unwrap_or(Ok(()));
     let present: Vec<&rulec::backend::Backend> =
         rulec::backend::ALL.iter().filter(|b| have(b.tool, &["--version"]) || have(b.tool, &["version"])).filter(|b| ready_b(b).is_ok()).collect();
