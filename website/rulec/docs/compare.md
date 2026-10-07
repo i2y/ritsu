@@ -31,7 +31,8 @@ in JSON Lines over stdin and stdout**, so its language and its location
 do not matter. Mismatches are clustered by the rows that fired, with
 counts, amounts and a witness, and a cluster whose differences are all
 smaller than the output's rounding grid is tagged "suspected rounding
-difference".
+difference". An answer is compared as the value it is: `11.0` from a float
+is 11, and `22.5` is half a dollar off, not a malformed answer.
 
 A record the adapter says it cannot answer is **excluded from the
 denominator** and reported separately — otherwise refusing the hard
@@ -70,6 +71,17 @@ $ rulec replay rules/parcel_rate.rule --fixtures replay/2025-08.jsonl
 Records written by the generated code carry the rows that matched (the `_record`
 function writes them), and `replay` compares those too: a record whose amount agrees but
 whose row differs from the rule's is reported apart, as a moved row, clustered by the move.
+
+What came out is compared as the value it is. An answer the rule cannot
+produce at all — below its lowest fee, above its highest — is not a broken
+record: it is the legacy implementation disagreeing with the rule, so it is
+compared and counted as a mismatch, and the report says how many there
+were. `fixtures lint` lists those values apart from its problems, because a
+record written before a step or a unit changed looks the same, and
+`--read-as` reads it the way that version wrote it. A decimal is read as it
+is: an implementation that computed finer than the output's step, and is
+off by less than it, gets its cluster tagged as a suspected rounding
+difference.
 
 ## Between two versions with no records at all
 
@@ -127,6 +139,12 @@ where they disagree; or neither, which says so. The differing cells are
 covered with boxes again and written in the notation a cell is written
 in.
 
+Answers are compared as values, so a version that only counts an output
+in another unit or at another step moves no answer. What the generated
+code hands its callers is a different integer all the same, and that is
+listed at the top with the other declarations that changed ("an output
+changed type: fee  money[USD] → money[USDc]").
+
 The two answers are meant to be held against each other. Run this
 first — it says what *can* change — and `--fixtures` second, which says
 how many of your records land in it. They agree over the whole corpus,
@@ -154,7 +172,10 @@ that branch, which is what a pull request compares against.
 A diff clusters on **the transition of the fired row** — `row 2→row 1`
 says where the decision moved — and each cluster carries the count, the
 total amount, the minimum and maximum, and a witness. A uniform shift
-folds into one line.
+folds into one line. The two versions' answers are compared as values, as
+`diff` without records compares them: a version that only changes a step
+or a unit moves nothing, and one that rounds to a coarser step moves each
+answer the new step rounds, with the difference shown unrounded.
 
 `diff` reads the records the way the old version reads them, because the
 old version's system wrote them, and it reads only their inputs: what
@@ -241,7 +262,7 @@ $ rulec verify rules/parcel_rate.rule --format json --adapter python3 adapter.py
               "witness":{"in":{"dest":"overseas","girth":1,"signature":true,"weight":1},"ours":{"fee":22},"theirs":{"fee":23}},
               "records":[{"line":10,"tag":""},{"line":65,"tag":""},…],
               "suspect_rounding":false},…],
- "moved":[],"refused":[],"excluded":{},"filled":{"count":0,"by_field":{},"defaults":{}},"cases":null}
+ "moved":[],"refused":[],"excluded":{},"out_of_reach":{},"filled":{"count":0,"by_field":{},"defaults":{}},"cases":null}
 ```
 
 The same shape for all three commands, defined in

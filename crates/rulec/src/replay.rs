@@ -16,7 +16,7 @@
 use crate::ast::RuleFile;
 use crate::eval;
 use crate::fixtures::{Load, Manifest};
-use crate::report::{wire, Fired, Mismatch, Refusal, Report};
+use crate::report::{same_answer, wire, Fired, Mismatch, Out, Refusal, Report};
 use crate::types::Checked;
 
 /// Run the records through the rule and compare against `observed`.
@@ -31,16 +31,20 @@ pub fn replay(f: &RuleFile, c: &Checked, l: &Load, m: &Manifest, source: &str) -
         rep.excluded.push(("bad_format", tr!("形式が宣言と食い違う", "not matching the declared format"), l.problems.len()));
     }
 
+    // §15.199: what a record says came out is compared exactly, a value the rule cannot
+    // produce included; the count of those stands beside the headline.
+    let mut beyond: std::collections::BTreeMap<usize, Vec<&str>> = std::collections::BTreeMap::new();
+    for b in &l.beyond {
+        beyond.entry(b.line).or_default().push(b.field.as_str());
+    }
+    for outputs in beyond.values() {
+        rep.count_beyond(outputs.iter().copied());
+    }
+
     for r in l.records.iter() {
         let (outs, _, fired, _) = eval::run_all_traced(f, c, r.input.clone().into_iter().collect());
-        let pairs: Vec<(String, Option<crate::eval::Val>, Option<String>)> = outs
-            .into_iter()
-            .map(|(n, v)| {
-                let theirs = wire(c, &n, r.observed.get(&n));
-                (n, v, theirs)
-            })
-            .collect();
-        let same = pairs.iter().all(|(n, a, b)| wire(c, n, a.as_ref()) == *b);
+        let pairs: Vec<Out> = outs.into_iter().map(|(n, v)| Out::against(c, &n, v, r.observed.get(&n).cloned(), None)).collect();
+        let same = pairs.iter().all(|o| o.same);
 
         // §10.3: observed and filled records are always tallied separately; the headline
         // match rate comes from the observed records only.
@@ -67,7 +71,7 @@ pub fn replay(f: &RuleFile, c: &Checked, l: &Load, m: &Manifest, source: &str) -
         (f, c),
         l,
         &|_, ins| Call::Take(ins.clone()),
-        &|r, _| f.outputs.iter().map(|o| (o.name.text.clone(), wire(c, &o.name.text, r.observed.get(&o.name.text)))).collect(),
+        &|r, _, mine| mine.iter().all(|(n, v)| same_answer(n, v.as_ref(), c, r.observed.get(n), c)),
     );
     rep
 }
@@ -130,7 +134,7 @@ pub fn diff(
                     line: r.line,
                     tag: r.tag.clone(),
                     input: r.input.clone(),
-                    outs: o_outs.iter().map(|(n, v)| (n.clone(), None, wire(old.1, n, v.as_ref()))).collect(),
+                    outs: o_outs.iter().map(|(n, v)| Out::between(n, None, new.1, v.clone(), old.1)).collect(),
                     err: None,
                     fired: Vec::new(),
                     shown: shown(&r.input, &std::collections::HashMap::new(), &[], old.1, new.1),
@@ -141,15 +145,16 @@ pub fn diff(
         };
         let (n_outs, _, n_fired, _) = eval::run_all_traced(new.0, new.1, ins_new.clone());
 
-        let pairs: Vec<(String, Option<crate::eval::Val>, Option<String>)> = n_outs
+        // §15.199: the two answers are compared as values, never at either version's step, so
+        // 12.3% and 12% differ even where the new version's step is 1%.
+        let pairs: Vec<Out> = n_outs
             .into_iter()
             .map(|(n, v)| {
-                let theirs =
-                    o_outs.iter().find(|(m, _)| *m == n).and_then(|(_, v)| wire(new.1, &n, v.as_ref()));
-                (n, v, theirs)
+                let was = o_outs.iter().find(|(m, _)| *m == n).and_then(|(_, v)| v.clone());
+                Out::between(&n, v, new.1, was, old.1)
             })
             .collect();
-        let same = pairs.iter().all(|(n, a, b)| wire(new.1, n, a.as_ref()) == *b);
+        let same = pairs.iter().all(|o| o.same);
         let filled: Vec<String> = r.filled.iter().chain(more.iter()).cloned().collect();
         tally(&mut rep, &filled, same);
         if !same {
@@ -188,9 +193,10 @@ pub fn diff(
                 Took::Short => Call::Skip,
             }
         },
-        &|_, ins| {
+        &|_, ins, mine| {
             let (outs, _, _, _) = eval::run_all_traced(old.0, old.1, ins.clone());
-            outs.iter().map(|(n, v)| (n.clone(), wire(new.1, n, v.as_ref()))).collect()
+            outs.len() == mine.len()
+                && outs.iter().zip(mine).all(|((n, a), (m, b))| n == m && same_answer(n, a.as_ref(), old.1, b.as_ref(), new.1))
         },
     );
     rep
@@ -336,15 +342,16 @@ pub enum Call {
 /// A machine's records as cases (§15.148). The records that share a `tag` are one case's
 /// calls in the order they came in. The case is played again from its first record — its
 /// recorded state — and each later call is passed the state `now` answered to the call before,
-/// not the state the record says; `before` gives, per record, what the call answered before
-/// (the record's own `observed` for `replay`, the old version's answer for `diff`). `take`
+/// not the state the record says; `alike` says whether `now`'s answers to a call are the same
+/// values as what the call answered before (the record's own `observed` for `replay`, the old
+/// version's answer for `diff`), compared exactly (§15.199). `take`
 /// hands each call to `now`: as it is for `replay`, and for `diff` brought to the new version
 /// the way a single record is (§15.197), so a call it turns away refuses its case there.
 pub fn cases(
     now: (&RuleFile, &Checked),
     l: &Load,
     take: &dyn Fn(&crate::fixtures::Record, &std::collections::HashMap<String, crate::eval::Val>) -> Call,
-    before: &dyn Fn(&crate::fixtures::Record, &std::collections::HashMap<String, crate::eval::Val>) -> Vec<(String, Option<String>)>,
+    alike: &dyn Fn(&crate::fixtures::Record, &std::collections::HashMap<String, crate::eval::Val>, &[(String, Option<crate::eval::Val>)]) -> bool,
 ) -> Option<crate::report::Cases> {
     let (f, c) = now;
     let m = f.machine.as_ref()?;
@@ -429,8 +436,7 @@ pub fn cases(
                 first = Some(call.clone());
             }
             let (outs, _, _, _) = eval::run_all_traced(f, c, call);
-            let mine: Vec<(String, Option<String>)> = outs.iter().map(|(n, v)| (n.clone(), wire(c, n, v.as_ref()))).collect();
-            if parted.is_none() && mine != before(r, &ins) {
+            if parted.is_none() && !alike(r, &ins, &outs) {
                 parted = Some(r.line);
             }
             state = outs.iter().find(|(n, _)| n == cout).and_then(|(_, v)| v.clone());

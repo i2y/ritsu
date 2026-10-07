@@ -193,13 +193,19 @@ fn an_answer_moved_out_of_the_new_range_is_compared() {
         assert!(text.starts_with(head), "{}: {text}", a.lang);
         assert!(!text.contains("--read-as"), "{}: 読めているのに読み方を案内している: {text}", a.lang);
 
-        // Against the version that wrote them, the records have no problem; against the new one
-        // their `observed` is out of range. That is the new version's business only in `lint`.
+        // Against the version that wrote them, the records have no problem. Against the new one
+        // their `observed` is outside what it can produce: no problem of the form either
+        // (§15.199), but `lint` says so, as a note.
         let (c, out, _) = rulec(d, a.lang, &["fixtures", "lint", "records.jsonl", &old, "--format", "json"]);
         assert_eq!(c, 0, "{}: {out}", a.lang);
+        assert!(out.contains("\"out_of_reach\":[]"), "{}: {out}", a.lang);
         let (c, out, _) = rulec(d, a.lang, &["fixtures", "lint", "records.jsonl", &new, "--format", "json"]);
-        assert_eq!(c, 1, "{}: {out}", a.lang);
-        assert!(out.contains("\"kind\":\"bad_observed\""), "{}: {out}", a.lang);
+        assert_eq!(c, 0, "{}: {out}", a.lang);
+        let j = json(&out);
+        assert!(arr(&j, "problems").is_empty(), "{}: {out}", a.lang);
+        let beyond = arr(&j, "out_of_reach");
+        assert_eq!(beyond.len(), 1, "{}: {out}", a.lang);
+        assert_eq!(int(&beyond[0], "count"), 6, "{}: 60 万円に届かない六件: {out}", a.lang);
     }
 }
 

@@ -14,6 +14,7 @@
 
 use crate::ast::RuleFile;
 use crate::eval::Val;
+use crate::num::Rat;
 use crate::types::Checked;
 use crate::vectors;
 use std::collections::BTreeMap;
@@ -79,9 +80,9 @@ pub struct Mismatch {
     /// The record's label (e.g. `order:1234567`). Empty when there is none.
     pub tag: String,
     pub input: BTreeMap<String, Val>,
-    /// (output name, our value, the counterpart's value) in declaration order. With several
-    /// outputs, all of them are listed here.
-    pub outs: Vec<(String, Option<Val>, Option<String>)>,
+    /// Every output in declaration order, the rule's answer beside the counterpart's. With
+    /// several outputs, all of them are listed here.
+    pub outs: Vec<Out>,
     pub err: Option<String>,
     /// The rows that fired. They form the cluster key.
     pub fired: Vec<Fired>,
@@ -106,11 +107,91 @@ pub struct Refusal {
     pub what: String,
 }
 
+/// One output of one record: the rule's answer beside the counterpart's (§15.199).
+#[derive(Debug, Clone)]
+pub struct Out {
+    pub name: String,
+    /// The rule's answer (for `diff`, the new version's), in the rule's own terms.
+    pub ours: Option<Val>,
+    /// The counterpart's answer as a value in the rule's terms, exactly: the old version's
+    /// brought to the new version's unit, the record's or the adapter's as read. None when it
+    /// gave none, or gave something that is no value of the rule's type.
+    pub theirs: Option<Val>,
+    /// The counterpart's answer as its own wire writes it, for `--format json`: the old
+    /// version's step and unit for `diff` (as `diff` without records writes `old`), the rule's
+    /// wire unit for a record — a decimal where the record held one — and the adapter's text
+    /// as it came for `verify`.
+    pub theirs_wire: Option<String>,
+    /// The same as a person reads it, in the counterpart's own unit.
+    pub theirs_shown: Option<String>,
+    /// The rule's answer as a person reads it.
+    pub ours_shown: Option<String>,
+    /// Whether the two are the same value: exactly, never at one side's step.
+    pub same: bool,
+}
+
+impl Out {
+    /// One output of `replay` or `verify`: both answers in the rule's terms. `written` is the
+    /// adapter's text as it came, where there is one.
+    pub fn against(c: &Checked, name: &str, ours: Option<Val>, theirs: Option<Val>, written: Option<String>) -> Out {
+        let same = same_answer(name, ours.as_ref(), c, theirs.as_ref(), c);
+        let theirs_shown = theirs.as_ref().map(|v| shown(c, name, v)).or_else(|| written.clone());
+        let theirs_wire = written.or_else(|| wire_exact(c, name, theirs.as_ref()));
+        let ours_shown = ours.as_ref().map(|v| shown(c, name, v));
+        Out { name: name.to_string(), ours, theirs, theirs_wire, theirs_shown, ours_shown, same }
+    }
+
+    /// One output of `diff`: the new version's answer, and the old version's in its own
+    /// version's terms (§15.199).
+    pub fn between(name: &str, ours: Option<Val>, new: &Checked, was: Option<Val>, old: &Checked) -> Out {
+        let same = same_answer(name, was.as_ref(), old, ours.as_ref(), new);
+        let theirs = was.as_ref().and_then(|v| bring(name, v, old, new));
+        let theirs_wire = wire_exact(old, name, was.as_ref());
+        let (theirs_shown, ours_shown) = shown_pair(name, was.as_ref(), old, ours.as_ref(), new);
+        Out { name: name.to_string(), ours, theirs, theirs_wire, theirs_shown, ours_shown, same }
+    }
+
+    /// `ours - theirs` in the rule's wire unit, exactly: a whole number of its steps when the
+    /// two sit on the rule's step, a decimal where the counterpart's answer is finer (§15.199).
+    fn delta(&self, c: &Checked) -> Option<Rat> {
+        match (&self.ours, &self.theirs) {
+            (Some(Val::Num(a)), Some(Val::Num(b))) => Some(a.sub(*b).mul(Rat::int(c.wire_scale(&self.name)))),
+            _ => None,
+        }
+    }
+}
+
+/// Whether two answers to one output are the same value (§15.199). Numbers are compared
+/// exactly, never at either side's step: money and quantities as amounts of their dimension
+/// (yen and sen, kilograms and grams), rates and numbers as they are. An answer and no answer
+/// differ; two absent answers are the same.
+pub fn same_answer(name: &str, a: Option<&Val>, ac: &Checked, b: Option<&Val>, bc: &Checked) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(Val::Num(x)), Some(Val::Num(y))) => match (ac.ty_of(name), bc.ty_of(name)) {
+            (Some(ta), Some(tb)) => crate::fixtures::convert(*x, &ta, &tb) == Some(*y),
+            _ => x == y,
+        },
+        (Some(x), Some(y)) => x == y,
+        _ => false,
+    }
+}
+
+/// A value of `from`'s output, in `to`'s terms: an amount brought to `to`'s unit; anything
+/// else as it is. None for an amount no conversion carries.
+fn bring(name: &str, v: &Val, from: &Checked, to: &Checked) -> Option<Val> {
+    match (v, from.ty_of(name), to.ty_of(name)) {
+        (Val::Num(x), Some(a), Some(b)) => crate::fixtures::convert(*x, &a, &b).map(Val::Num),
+        (Val::Num(_), _, _) => None,
+        (other, _, _) => Some(other.clone()),
+    }
+}
+
 impl Mismatch {
     /// Only the outputs that differ. When the counterpart gave no answer, all of them count
     /// as differing.
-    pub fn differing(&self, c: &Checked) -> Vec<&(String, Option<Val>, Option<String>)> {
-        self.outs.iter().filter(|(n, a, b)| wire(c, n, a.as_ref()) != *b).collect()
+    pub fn differing(&self) -> Vec<&Out> {
+        self.outs.iter().filter(|o| !o.same).collect()
     }
 
     /// The inputs as (name, as a person reads it, as the wire writes it): the ones made when
@@ -134,6 +215,109 @@ pub fn wire(c: &Checked, name: &str, v: Option<&Val>) -> Option<String> {
         Val::Bool(b) => format!("{b}"),
         other => vectors::show(other),
     })
+}
+
+/// [`wire`], without cutting a value that is not a whole number of the step: `123.4` where
+/// an implementation answered 12.34% at a step of 0.1% (§15.199). A value on the step is the
+/// integer `wire` gives.
+pub fn wire_exact(c: &Checked, name: &str, v: Option<&Val>) -> Option<String> {
+    v.map(|o| match o {
+        Val::Num(r) => exact_text(r.mul(Rat::int(c.wire_scale(name)))),
+        Val::Bool(b) => format!("{b}"),
+        other => vectors::show(other),
+    })
+}
+
+/// An answer as a person reads it, exactly and in the rule's own terms: what
+/// [`vectors::show_named`] writes — a rate with its `%` — with the sign kept on a value between
+/// -1 and 0, which `Rat`'s own `Display` drops (§15.199). A decimal an implementation answered,
+/// `-0.5`, shows as it was.
+pub fn shown(c: &Checked, name: &str, v: &Val) -> String {
+    match (v, c.ty_of(name)) {
+        (Val::Num(r), Some(crate::types::Ty::Rate)) => format!("{}%", exact_text(r.mul(Rat::int(100)))),
+        (Val::Num(r), _) => exact_text(*r),
+        _ => vectors::show_named(c, name, v),
+    }
+}
+
+/// The unit an amount of `name` is counted in, as the rule writes it after a number: `円`,
+/// `銭`, `kg`. None for anything but money and quantities.
+fn unit_of(c: &Checked, name: &str) -> Option<String> {
+    let ty = match c.ty_of(name)? {
+        crate::types::Ty::Opt(t) => *t,
+        t => t,
+    };
+    match ty {
+        crate::types::Ty::Money { cur, .. } => Some(cur),
+        crate::types::Ty::Qty { unit, .. } => Some(unit),
+        _ => None,
+    }
+}
+
+/// Two versions' answers to one output as a person reads them, each in its own version's terms
+/// (§15.199). Where the versions count the output in different units, each number carries its
+/// unit — `2000円` beside `200050銭` — because the two numbers alone would read as one unit.
+pub fn shown_pair(name: &str, a: Option<&Val>, ac: &Checked, b: Option<&Val>, bc: &Checked) -> (Option<String>, Option<String>) {
+    let (ua, ub) = (unit_of(ac, name), unit_of(bc, name));
+    let label = |v: &Val, c: &Checked, u: &Option<String>| {
+        let t = shown(c, name, v);
+        match (v, u) {
+            (Val::Num(_), Some(u)) if ua != ub => format!("{t}{u}"),
+            _ => t,
+        }
+    };
+    (a.map(|v| label(v, ac, &ua)), b.map(|v| label(v, bc, &ub)))
+}
+
+/// `r` written exactly: an integer, a decimal where the decimals end, else a fraction (a third
+/// of a yen has no decimal). The sign is kept for a value between -1 and 0.
+fn exact_text(r: Rat) -> String {
+    if r.is_int() {
+        return r.num.to_string();
+    }
+    let sign = if r.num < 0 { "-" } else { "" };
+    let a = Rat::new(r.num.abs(), r.den);
+    match decimals(a) {
+        Some((int, frac)) => format!("{sign}{int}.{frac}"),
+        None => format!("{sign}{}/{}", a.num, a.den),
+    }
+}
+
+/// A value that is not negative as its whole part and its decimals, when the decimals end.
+fn decimals(r: Rat) -> Option<(i128, String)> {
+    let (mut d, mut twos, mut fives) = (r.den, 0u32, 0u32);
+    while d % 2 == 0 {
+        d /= 2;
+        twos += 1;
+    }
+    while d % 5 == 0 {
+        d /= 5;
+        fives += 1;
+    }
+    if d != 1 {
+        return None;
+    }
+    let places = twos.max(fives);
+    let scale = 10i128.checked_pow(places)?;
+    let v = r.num.checked_mul(scale)? / r.den;
+    Some((v / scale, format!("{:0width$}", v % scale, width = places as usize)))
+}
+
+/// A number for `--format json`, exactly: an integer or a decimal as a JSON number, and the
+/// rare value no decimal writes (a fraction) as the string of the fraction.
+fn num_json(r: Rat) -> String {
+    let t = exact_text(r);
+    if t.contains('/') { crate::json::quote(&t) } else { t }
+}
+
+/// Whether a wire value goes into the JSON bare: a number (whole or decimal) or a boolean.
+fn json_scalar(v: &str) -> bool {
+    let digits = v.strip_prefix('-').unwrap_or(v);
+    let number = match digits.split_once('.') {
+        Some((i, f)) => !i.is_empty() && !f.is_empty() && i.bytes().all(|b| b.is_ascii_digit()) && f.bytes().all(|b| b.is_ascii_digit()),
+        None => !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()),
+    };
+    number || v == "true" || v == "false"
 }
 
 pub struct Report {
@@ -171,6 +355,15 @@ pub struct Report {
     /// (§15.197). They are compared — counted in `total`, never in `agreed` — because a version
     /// that turns an input away answers it differently; the reason is in each one's `refusal`.
     pub refused: Vec<Mismatch>,
+    /// `replay` and `verify`: per output, how many records the counterpart answered with a
+    /// value outside what the rule can produce (§15.199). They are compared and counted as
+    /// mismatches — the counterpart and the rule disagree there — and the count says so.
+    pub out_of_reach: BTreeMap<String, usize>,
+    /// How many records hold at least one such value.
+    pub beyond: usize,
+    /// Whether the counterpart is a file of records (`replay`, `diff`) rather than a running
+    /// implementation (`verify`): only records can have been written at another step.
+    pub records: bool,
     /// A machine's records read as cases (§15.148). `None` for a rule that is not a machine,
     /// or records that carry no tag.
     pub cases: Option<Cases>,
@@ -213,7 +406,23 @@ impl Report {
             excluded: Vec::new(),
             moved: Vec::new(),
             refused: Vec::new(),
+            out_of_reach: BTreeMap::new(),
+            beyond: 0,
+            records: true,
             cases: None,
+        }
+    }
+
+    /// Count a record whose answers include values outside what the rule can produce, by
+    /// output (§15.199).
+    pub fn count_beyond<'a>(&mut self, outputs: impl IntoIterator<Item = &'a str>) {
+        let mut any = false;
+        for n in outputs {
+            *self.out_of_reach.entry(n.to_string()).or_insert(0) += 1;
+            any = true;
+        }
+        if any {
+            self.beyond += 1;
         }
     }
 
@@ -239,10 +448,12 @@ impl Report {
         self.total <= self.errored && self.filled_total == 0
     }
 
-    /// What to say when records were thrown out for their format and nothing was left: the
-    /// likeliest cause is a step or a unit that changed since they were written (§15.145).
+    /// What to say when records were thrown out for their format and nothing was left, or
+    /// when what they say came out is something the rule cannot produce: the likeliest cause
+    /// of either is a step or a unit that changed since they were written (§15.145, §15.199).
     fn read_as_hint(&self) -> Option<String> {
-        (self.compared_nothing() && self.excluded.iter().any(|(k, ..)| *k == "bad_format")).then(|| {
+        let thrown = self.compared_nothing() && self.excluded.iter().any(|(k, ..)| *k == "bad_format");
+        (thrown || (self.records && self.beyond > 0)).then(|| {
             tr!(
                 "刻みや単位を変える前に書いた記録なら、`--read-as <規則>@<版>` でその版の読み方で読めます。",
                 "If the records were written before a step or a unit changed, `--read-as <rule>@<rev>` reads them the way that version wrote them."
@@ -265,31 +476,52 @@ fn group(n: i128) -> String {
     format!("{}{out}", if n < 0 { "-" } else { "+" })
 }
 
+/// An exact difference, the way `group` writes a whole one: the sign always and thousands
+/// separators, with the decimals it has where the counterpart answered finer than the step,
+/// and as a fraction where no decimal writes it (§15.199). Never rounded.
+fn group_rat(r: Rat) -> String {
+    if r.is_int() {
+        return group(r.num);
+    }
+    let sign = if r.num < 0 { "-" } else { "+" };
+    let a = Rat::new(r.num.abs(), r.den);
+    match decimals(a) {
+        Some((int, frac)) => format!("{sign}{}.{frac}", &group(int)[1..]),
+        None => format!("{sign}{}/{}", a.num, a.den),
+    }
+}
+
 /// The word after a record count: `件` in Japanese, `record`/`records` in English.
 fn records(n: usize) -> &'static str {
     if crate::i18n::ja() { "件" } else if n == 1 { "record" } else { "records" }
 }
 
 /// Statistics of Δ within a cluster (§10.4). Always carries the count, the total and the
-/// min/max.
+/// min/max. Δ is counted in the rule's wire unit — steps of its rate, units of its money — and
+/// exactly: a whole number when both answers sit on the rule's step, a decimal where the
+/// counterpart's answer is finer (§15.199).
 pub struct Delta {
     pub n: usize,
-    pub sum: i128,
-    pub lo: i128,
-    pub hi: i128,
+    pub sum: Rat,
+    pub lo: Rat,
+    pub hi: Rat,
 }
 
 impl Delta {
-    fn push(&mut self, d: i128) {
+    fn push(&mut self, d: Rat) {
         if self.n == 0 {
             self.lo = d;
             self.hi = d;
         } else {
-            self.lo = self.lo.min(d);
-            self.hi = self.hi.max(d);
+            if d.cmp_to(self.lo) == std::cmp::Ordering::Less {
+                self.lo = d;
+            }
+            if d.cmp_to(self.hi) == std::cmp::Ordering::Greater {
+                self.hi = d;
+            }
         }
         self.n += 1;
-        self.sum += d;
+        self.sum = self.sum.add(d);
     }
     pub fn uniform(&self) -> bool {
         self.lo == self.hi
@@ -302,16 +534,16 @@ impl Delta {
             tr!(
                 "差 {} 一様  合計 {}",
                 "difference {} uniform  total {}",
-                group(self.lo),
-                group(self.sum)
+                group_rat(self.lo),
+                group_rat(self.sum)
             )
         } else {
             tr!(
                 "合計 {}  Δ {}..{}",
                 "total {}  Δ {}..{}",
-                group(self.sum),
-                group(self.lo),
-                group(self.hi)
+                group_rat(self.sum),
+                group_rat(self.lo),
+                group_rat(self.hi)
             )
         }
     }
@@ -321,13 +553,11 @@ impl Delta {
 fn deltas(ms: &[&Mismatch], c: &Checked) -> BTreeMap<String, Delta> {
     let mut out: BTreeMap<String, Delta> = BTreeMap::new();
     for m in ms {
-        for (n, a, b) in m.differing(c) {
-            let (Some(Val::Num(a)), Some(b)) = (a, b) else { continue };
-            let Ok(b) = b.parse::<i128>() else { continue };
-            // Both sides are wire integers, so a rate's Δ is counted in steps.
-            out.entry(n.clone())
-                .or_insert(Delta { n: 0, sum: 0, lo: 0, hi: 0 })
-                .push(crate::types::wire_int(*a, c.wire_scale(n)) - b);
+        for o in m.differing() {
+            // Both answers are values; the difference is counted in the rule's wire unit, so a
+            // rate's Δ is in its steps.
+            let Some(d) = o.delta(c) else { continue };
+            out.entry(o.name.clone()).or_insert(Delta { n: 0, sum: Rat::zero(), lo: Rat::zero(), hi: Rat::zero() }).push(d);
         }
     }
     out.retain(|_, d| d.n > 0);
@@ -347,19 +577,16 @@ fn witness(ex: &Mismatch, theirs: &str, c: &Checked) -> String {
     let inp: Vec<String> = ex.inputs(c).iter().map(|(n, shown, _)| format!("{n}={shown}")).collect();
     if ex.refusal.is_some() {
         // The new version gave no answer: what is shown is the input and the old version's.
-        let old: Vec<String> = ex.outs.iter().filter_map(|(n, _, b)| Some(format!("{theirs} {n}={}", b.as_ref()?))).collect();
+        let old: Vec<String> = ex.outs.iter().filter_map(|o| Some(format!("{theirs} {}={}", o.name, o.theirs_shown.as_ref()?))).collect();
         return if old.is_empty() { inp.join(", ") } else { format!("{} → {}", inp.join(", "), old.join(", ")) };
     }
+    // Each answer as its own side writes it, unrounded (§15.199): 12% beside 12.3%.
     let diff: Vec<String> = ex
-        .differing(c)
+        .differing()
         .iter()
-        .filter_map(|(n, a, b)| {
-            let (a, b) = (a.as_ref()?, b.as_ref()?);
-            Some(tr!(
-                "規則 {n}={} / {theirs} {n}={b}",
-                "rule {n}={} / {theirs} {n}={b}",
-                vectors::show_named(c, n, a)
-            ))
+        .filter_map(|o| {
+            let (a, b, n) = (o.ours_shown.as_ref()?, o.theirs_shown.as_ref()?, &o.name);
+            Some(tr!("規則 {n}={a} / {theirs} {n}={b}", "rule {n}={a} / {theirs} {n}={b}"))
         })
         .collect();
     if diff.is_empty() {
@@ -492,6 +719,24 @@ fn provenance(rep: &Report) -> Vec<String> {
         let unit = records(*n);
         o.push(tr!("{why}記録を {n} {unit}外しました", "Excluded {n} {unit} ({why})"));
     }
+    // §15.199: what the counterpart answered that the rule cannot produce is compared, not
+    // left out, and the count stands beside the headline.
+    if rep.beyond > 0 {
+        let by: Vec<String> = rep.out_of_reach.iter().map(|(n, k)| tr!("{n} {k} 件", "{n}: {k}")).collect();
+        let by = by.join(if crate::i18n::ja() { "、" } else { ", " });
+        let (theirs, n) = (&rep.theirs, rep.beyond);
+        o.push(if rep.records {
+            tr!(
+                "{theirs}の値が規則の取りうる範囲の外にある記録 {n} 件（{by}）。不一致に数えています",
+                "Records whose {theirs} value is outside what the rule can produce: {n} ({by}); counted as mismatches"
+            )
+        } else {
+            tr!(
+                "{theirs}の答えが規則の取りうる範囲の外だったもの {n} 件（{by}）。不一致に数えています",
+                "Answers of the {theirs} implementation outside what the rule can produce: {n} ({by}); counted as mismatches"
+            )
+        });
+    }
     if rep.filled_total > 0 {
         let by: Vec<String> =
             rep.filled.iter().map(|(n, k)| tr!("{n} {k} 件", "{n}: {k}")).collect();
@@ -525,7 +770,7 @@ fn impact(rep: &Report, c: &Checked) -> String {
         .iter()
         .map(|(name, d)| {
             let label = if rep.multi { format!("{name} ") } else { String::new() };
-            tr!("  差の合計 {label}{}", "  amount {label}{}", group(d.sum))
+            tr!("  差の合計 {label}{}", "  amount {label}{}", group_rat(d.sum))
         })
         .collect();
     tr!(
@@ -553,14 +798,23 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked, terse: bool) -> String {
         o.push_str(&l);
         o.push('\n');
     }
+    let hint = rep.read_as_hint();
     if rep.compared_nothing() {
         o.push_str(&tr!("照合できた記録はありません。\n", "Not one record was compared.\n"));
-        if let Some(h) = rep.read_as_hint() {
-            o.push_str(&h);
+        if let Some(h) = &hint {
+            o.push_str(h);
             o.push('\n');
         }
-    } else if !rep.differs() {
-        o.push_str(&tr!("不一致はありません。\n", "No mismatches.\n"));
+    } else {
+        // Records whose answers the rule cannot produce were compared: the reading that
+        // explains them most often is said right under the count.
+        if let Some(h) = &hint {
+            o.push_str(h);
+            o.push('\n');
+        }
+        if !rep.differs() {
+            o.push_str(&tr!("不一致はありません。\n", "No mismatches.\n"));
+        }
     }
     if !rep.compared_nothing() && !rep.mismatches.is_empty() {
         o.push_str(&format!("\n{}\n", impact(rep, c)));
@@ -681,15 +935,23 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str, terse: boo
             o.push_str(&format!("- {}\n", esc(l)));
         }
     }
+    let hint = rep.read_as_hint();
     if rep.compared_nothing() {
         o.push_str(&tr!("\n照合できた記録はありません。\n", "\nNot one record was compared.\n"));
-        if let Some(h) = rep.read_as_hint() {
+        if let Some(h) = &hint {
             o.push('\n');
-            o.push_str(&h);
+            o.push_str(h);
             o.push('\n');
         }
-    } else if !rep.differs() {
-        o.push_str(&tr!("\n不一致はありません。\n", "\nNo mismatches.\n"));
+    } else {
+        if let Some(h) = &hint {
+            o.push('\n');
+            o.push_str(h);
+            o.push('\n');
+        }
+        if !rep.differs() {
+            o.push_str(&tr!("\n不一致はありません。\n", "\nNo mismatches.\n"));
+        }
     }
     if !rep.compared_nothing() && !rep.mismatches.is_empty() {
         o.push_str(&format!("\n**{}**\n", impact(rep, c)));
@@ -761,10 +1023,10 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
     let pairs = |ps: &[(String, String)]| {
         let mut o = crate::json::Obj::new();
         for (n, v) in ps {
-            // A wire value is already the canonical integer, a boolean, or a name. Numbers
-            // and booleans go in bare; anything else is a string.
-            let looks_scalar = v.parse::<i128>().is_ok() || v == "true" || v == "false";
-            o = if looks_scalar { o.raw(n, v) } else { o.str(n, v) };
+            // A wire value is already the canonical integer — or, for a counterpart that
+            // answered finer than the step, a decimal — a boolean, or a name. Numbers and
+            // booleans go in bare; anything else is a string.
+            o = if json_scalar(v) { o.raw(n, v) } else { o.str(n, v) };
         }
         o.finish()
     };
@@ -783,25 +1045,21 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
                 delta = delta.raw(
                     n,
                     crate::json::Obj::new()
-                        .int("min", d.lo)
-                        .int("max", d.hi)
+                        .raw("min", num_json(d.lo))
+                        .raw("max", num_json(d.hi))
                         .bool("uniform", d.uniform())
-                        .int("total", d.sum)
+                        .raw("total", num_json(d.sum))
                         .finish(),
                 );
             }
             let ex = cl.example;
             let ins: Vec<(String, String)> = ex.inputs(c).into_iter().map(|(n, _, w)| (n, w)).collect();
-            let ours: Vec<(String, String)> = ex
-                .differing(c)
-                .iter()
-                .filter_map(|(n, a, _)| Some((n.clone(), wire(c, n, a.as_ref())?)))
-                .collect();
-            let theirs: Vec<(String, String)> = ex
-                .differing(c)
-                .iter()
-                .filter_map(|(n, _, b)| Some((n.clone(), b.clone()?)))
-                .collect();
+            // Each answer in its own side's step and unit (§15.199): the rule's wire, and the
+            // counterpart's as it writes it — `diff`'s `old` and `new` are written the same way.
+            let ours: Vec<(String, String)> =
+                ex.differing().iter().filter_map(|o| Some((o.name.clone(), wire(c, &o.name, o.ours.as_ref())?))).collect();
+            let theirs: Vec<(String, String)> =
+                ex.differing().iter().filter_map(|o| Some((o.name.clone(), o.theirs_wire.clone()?))).collect();
             let wit = crate::json::Obj::new()
                 .raw("in", pairs(&ins))
                 .raw("ours", pairs(&ours))
@@ -829,7 +1087,7 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
                 cl.members.iter().map(|m| crate::json::Obj::new().int("line", m.line as i128).str("tag", &m.tag).finish()).collect();
             let ex = cl.example;
             let ins: Vec<(String, String)> = ex.inputs(c).into_iter().map(|(n, _, w)| (n, w)).collect();
-            let theirs: Vec<(String, String)> = ex.outs.iter().filter_map(|(n, _, b)| Some((n.clone(), b.clone()?))).collect();
+            let theirs: Vec<(String, String)> = ex.outs.iter().filter_map(|o| Some((o.name.clone(), o.theirs_wire.clone()?))).collect();
             let mut o = crate::json::Obj::new().str("kind", cl.kind);
             if !cl.field.is_empty() {
                 o = o.str("field", &cl.field);
@@ -870,6 +1128,13 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
         .raw("moved", crate::json::arr(&moved))
         .raw("refused", crate::json::arr(&refused))
         .raw("excluded", excluded.finish())
+        .raw("out_of_reach", {
+            let mut o = crate::json::Obj::new();
+            for (n, k) in &rep.out_of_reach {
+                o = o.int(n, *k as i128);
+            }
+            o.finish()
+        })
         .raw("filled", filled)
         .raw("cases", match &rep.cases {
             None => "null".into(),
@@ -902,22 +1167,25 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
 fn sub_grid(ms: &[&Mismatch], f: &RuleFile, c: &Checked) -> Option<String> {
     let mut grids: BTreeMap<String, String> = BTreeMap::new();
     for m in ms {
-        let diff = m.differing(c);
+        let diff = m.differing();
         if diff.is_empty() {
             return None;
         }
-        for (n, a, b) in diff {
-            let od = f.outputs.iter().find(|o| o.name.text == *n)?;
+        for o in diff {
+            let n = &o.name;
+            let od = f.outputs.iter().find(|x| x.name.text == *n)?;
             let rd = od.rounding.as_ref()?;
             let ty = c.ty_of(n)?;
             let q = crate::types::lit_value_in_pub(&rd.grid, &ty)?;
             if q.num <= 0 {
                 return None;
             }
-            let (Some(Val::Num(a)), Some(b)) = (a, b) else { return None };
-            let d = crate::types::wire_int(*a, c.wire_scale(n)) - b.parse::<i128>().ok()?;
-            // Compare |d| < q in integers by clearing the denominator.
-            if d == 0 || d.abs() * q.den >= q.num {
+            // The two answers as values, exactly (§15.199): a counterpart that answered finer
+            // than the grid shows its fraction here instead of having it cut away first.
+            let (Some(Val::Num(a)), Some(Val::Num(b))) = (&o.ours, &o.theirs) else { return None };
+            let d = a.sub(*b);
+            let d = if d.num < 0 { Rat::new(-d.num, d.den) } else { d };
+            if d.num == 0 || d.cmp_to(q) != std::cmp::Ordering::Less {
                 return None;
             }
             grids.insert(n.clone(), rd.grid.raw.clone());

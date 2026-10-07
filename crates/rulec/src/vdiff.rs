@@ -97,8 +97,12 @@ pub struct DomainChange {
 #[derive(Debug, Clone)]
 pub struct Change {
     pub region: Region,
-    /// Output name → (old, new) **at the witness**, as the wire writes them.
+    /// Output name → (old, new) **at the witness**, as the wire writes them: each version's
+    /// own step and unit.
     pub outs: Vec<(String, String, String)>,
+    /// The same as a person reads them, each in its own version's terms — a rate in percent —
+    /// the way `diff` with records writes the two answers of a record (§15.199).
+    pub shown: Vec<(String, String, String)>,
     /// Whether every cell of the box moves the same way. False when the amounts come out
     /// of an expression rather than off the row, and then `outs` is the witness's own
     /// transition and not the box's.
@@ -1526,6 +1530,17 @@ fn domain_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> Vec<Domain
         match o.0.outputs.iter().find(|a| a.name.text == b.name.text) {
             None => out.push(DomainChange { what: "output_added", name: b.name.text.clone(), old: None, new: None }),
             Some(_) => {
+                // Answers are compared as values (§15.199), so a version that counts an output in
+                // another unit or at another step moves no answer; what its callers receive does
+                // change, and this is where that is said.
+                let name = &b.name.text;
+                let (ta, tb) = (o.1.ty_of(name).map(|x| x.to_string()), n.1.ty_of(name).map(|x| x.to_string()));
+                if ta != tb {
+                    out.push(DomainChange { what: "output_type", name: name.clone(), old: ta, new: tb });
+                } else if o.1.wire_scale(name) != n.1.wire_scale(name) {
+                    let step = |c: &Checked| Some(format!("{}%", Rat::new(100, c.wire_scale(name))));
+                    out.push(DomainChange { what: "output_step", name: name.clone(), old: step(o.1), new: step(n.1) });
+                }
                 let r = |c: &Checked| c.roundings.get(&b.name.text).map(|(m, g)| format!("{} {g}", m.name()));
                 let (ra, rb) = (r(o.1), r(n.1));
                 if ra != rb {
@@ -1540,6 +1555,33 @@ fn domain_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> Vec<Domain
 // ---------------------------------------------------------------------------------------
 // The walk
 // ---------------------------------------------------------------------------------------
+
+/// Whether the two versions' answers at one input are the same values, output by output
+/// (§15.199): exactly, never at either version's step. An answer the step of one version would
+/// cut to the other's is a different answer — 12.3% is not 12% — and two that only spell one
+/// value at two steps are the same.
+fn answers_alike(o: &Checked, ao: &[(String, Option<Val>)], n: &Checked, an: &[(String, Option<Val>)]) -> bool {
+    ao.len() == an.len()
+        && ao.iter().all(|(k, v)| match an.iter().find(|(k2, _)| k2 == k) {
+            Some((_, nv)) => crate::report::same_answer(k, v.as_ref(), o, nv.as_ref(), n),
+            None => false,
+        })
+}
+
+/// The two versions' answers at one input, output by output: as each version's wire writes
+/// them, and as a person reads them in each version's own terms.
+#[allow(clippy::type_complexity)]
+fn outs_of(o: &Checked, ao: &Answer, n: &Checked, an: &Answer) -> (Vec<(String, String, String)>, Vec<(String, String, String)>) {
+    ao.outs
+        .iter()
+        .map(|(k, v)| {
+            let nv = an.outs.iter().find(|(k2, _)| k2 == k).and_then(|(_, v)| v.clone());
+            let (so, sn) = crate::report::shown_pair(k, v.as_ref(), o, nv.as_ref(), n);
+            let dash = |s: Option<String>| s.unwrap_or_else(|| "-".into());
+            ((k.clone(), wire_of(o, k, v), wire_of(n, k, &nv)), (k.clone(), dash(so), dash(sn)))
+        })
+        .unzip()
+}
 
 fn wire_of(c: &Checked, name: &str, v: &Option<Val>) -> String {
     crate::report::wire(c, name, v.as_ref()).unwrap_or_else(|| "-".into())
@@ -1622,8 +1664,7 @@ fn machine_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), d: &VDiff, b
                 }
                 let env: HashMap<String, Val> = last.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                 let (ao, an) = (run(o.0, o.1, env.clone()), run(n.0, n.1, env));
-                let wire = |f: &Checked, outs: &[(String, Option<Val>)]| -> Vec<String> { outs.iter().map(|(k, v)| wire_of(f, k, v)).collect() };
-                if wire(o.1, &ao.outs) == wire(n.1, &an.outs) {
+                if answers_alike(o.1, &ao.outs, n.1, &an.outs) {
                     continue;
                 }
                 let mut steps: Vec<MStep> = path
@@ -1842,15 +1883,8 @@ fn diff_cells(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize)
             reached[at] = true;
             considered[at] = true;
             let an = run(n.0, n.1, inputs.clone());
-            let ow: Vec<(String, String, String)> = ao
-                .outs
-                .iter()
-                .map(|(k, v)| {
-                    let nv = an.outs.iter().find(|(k2, _)| k2 == k).and_then(|(_, v)| v.clone());
-                    (k.clone(), wire_of(o.1, k, v), wire_of(n.1, k, &nv))
-                })
-                .collect();
-            let moved = ow.iter().any(|(_, a, b)| a != b) || ao.outs.len() != an.outs.len();
+            let (ow, shown) = outs_of(o.1, &ao, n.1, &an);
+            let moved = !answers_alike(o.1, &ao.outs, n.1, &an.outs);
             if moved {
                 out.differing += 1;
                 diffs.push((
@@ -1859,6 +1893,7 @@ fn diff_cells(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize)
                     an.rows.clone(),
                     ow,
                     inputs.into_iter().collect(),
+                    shown,
                 ));
             } else if identical_run(&ao, &an, &om, &nm, machinery)
                 || (constant_here(o.0, o.1, &axes, &cell, &ao) && constant_here(n.0, n.1, &axes, &cell, &an))
@@ -1879,24 +1914,17 @@ fn diff_cells(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize)
                         continue;
                     };
                     let an2 = run(n.0, n.1, alt.clone());
-                    let ow2: Vec<(String, String, String)> = ao2
-                        .outs
-                        .iter()
-                        .map(|(k, v)| {
-                            let nv = an2.outs.iter().find(|(k2, _)| k2 == k).and_then(|(_, v)| v.clone());
-                            (k.clone(), wire_of(o.1, k, v), wire_of(n.1, k, &nv))
-                        })
-                        .collect();
-                    if ow2.iter().any(|(_, a, b)| a != b) {
-                        parted = Some((alt, ao2, an2, ow2));
+                    if !answers_alike(o.1, &ao2.outs, n.1, &an2.outs) {
+                        let (ow2, shown2) = outs_of(o.1, &ao2, n.1, &an2);
+                        parted = Some((alt, ao2, an2, ow2, shown2));
                         break;
                     }
                     let _ = &ao2;
                 }
                 match parted {
-                    Some((alt, ao2, an2, ow2)) => {
+                    Some((alt, ao2, an2, ow2, shown2)) => {
                         out.differing += 1;
-                        diffs.push((at, ao2.rows.clone(), an2.rows.clone(), ow2, alt.into_iter().collect()));
+                        diffs.push((at, ao2.rows.clone(), an2.rows.clone(), ow2, alt.into_iter().collect(), shown2));
                     }
                     None => {
                         out.unsettled += 1;
@@ -2133,7 +2161,7 @@ fn product(lists: &[Vec<usize>], strides: &[usize]) -> impl Iterator<Item = usiz
     })
 }
 
-type Diffed = (usize, Vec<(String, usize)>, Vec<(String, usize)>, Vec<(String, String, String)>, BTreeMap<String, Val>);
+type Diffed = (usize, Vec<(String, usize)>, Vec<(String, usize)>, Vec<(String, String, String)>, BTreeMap<String, Val>, Vec<(String, String, String)>);
 
 /// Group the cells that differ by the rows that fired, then cover each group with boxes.
 /// The grouping is the one `rulec diff` already uses on records (§10.4), so the two answers
@@ -2163,6 +2191,7 @@ fn cluster(diffs: &[Diffed], reached: &[bool], axes: &[Axis], strides: &[usize])
             out.push(Change {
                 region,
                 outs: pick.3.clone(),
+                shown: pick.5.clone(),
                 uniform,
                 old_rows: orows.clone(),
                 new_rows: nrows.clone(),
@@ -2275,6 +2304,8 @@ fn domain_word(what: &str) -> String {
         "output_added" => tr!("出力が増えた", "an output was added"),
         "output_removed" => tr!("出力が消えた", "an output was removed"),
         "output_rounding" => tr!("出力の丸めが変わった", "an output changed rounding"),
+        "output_type" => tr!("出力の型が変わった", "an output changed type"),
+        "output_step" => tr!("出力の刻みが変わった", "an output changed step"),
         other => other.to_string(),
     }
 }
@@ -2409,7 +2440,7 @@ pub fn render(d: &VDiff, c: &Checked, terse: bool) -> String {
 
     for ch in &d.changes {
         s.push_str(&format!("\n  {}\n", show_region(&ch.region, &d.axes, c)));
-        for (k, a, b) in &ch.outs {
+        for (k, a, b) in &ch.shown {
             let note = if ch.uniform { String::new() } else { tr!("（この例での差。同じ範囲でも入力によって差は変わります）", " (at the example; not uniform over the box)") };
             s.push_str(&format!("    {k}: {a} → {b}{note}\n"));
         }
@@ -2649,7 +2680,7 @@ pub fn markdown(d: &VDiff, c: &Checked, old: &str, new: &str, terse: bool) -> St
     s.push_str(&head);
     for ch in &d.changes {
         let mark = if ch.uniform { "" } else { "*" };
-        let outs: Vec<String> = ch.outs.iter().map(|(k, a, b)| format!("{k}: {a} → {b}{mark}")).collect();
+        let outs: Vec<String> = ch.shown.iter().map(|(k, a, b)| format!("{k}: {a} → {b}{mark}")).collect();
         let region = show_region(&ch.region, &d.axes, c);
         if terse {
             s.push_str(&format!("| {region} | {} | {} |\n", outs.join("<br>"), ch.cells));

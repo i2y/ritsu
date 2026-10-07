@@ -285,7 +285,8 @@ for line in sys.stdin:
 /// The example on the compare page is what the tool prints: the head of the report in each
 /// language, and the JSON beside it. Nothing held it to the output, and the page went on saying
 /// 207 cases after the suite had grown to 209 (§15.155). `tests/vdiff.rs` holds the page's
-/// `diff` example the same way.
+/// `diff` example the same way. The JSON example of docs/formats.md is the English one; it had
+/// stayed at an older fake implementation's run until it was taken again (§15.199).
 #[test]
 fn 文書に載せた実演は_いまの出力と一致する() {
     // Each page shows a rule written in its language: the Japanese page the parcel fee of Japan
@@ -304,7 +305,9 @@ fn 文書に載せた実演は_いまの出力と一致する() {
     };
     for (lang, page) in [("en", "website/rulec/docs/compare.md"), ("ja", "website/rulec/docs-ja/compare.md")] {
         let page = std::fs::read_to_string(repo().join(page)).unwrap();
-        // The page shows the head of the report: the totals, the counterpart, the first cluster.
+        // The page shows the head of the report: the totals, the counterpart and the lines under
+        // it (on the Japanese page, the answers outside what the rule can produce), the first
+        // cluster.
         let out = run(lang, false);
         for line in out.lines().take(6).filter(|l| !l.trim().is_empty()) {
             assert!(page.contains(line), "{lang}: 実演に無い行:\n{line}\n出力:\n{out}");
@@ -322,5 +325,14 @@ fn 文書に載せた実演は_いまの出力と一致する() {
         ] {
             assert!(page.contains(piece), "{lang}: JSON の実演に無い部分:\n{piece}\n出力:\n{js}");
         }
+    }
+    // docs/formats.md shows the English JSON as the example of the shape, broken over more lines:
+    // its head, a cluster's difference and its tail are held to the output the same way.
+    let js = run("en", true);
+    let doc = std::fs::read_to_string(root().join("docs/formats.md")).unwrap();
+    let at = |k: &str| js.find(k).unwrap_or_else(|| panic!("{k} が無い:\n{js}"));
+    let tail = js.rfind("\"moved\":").expect("moved が無い");
+    for piece in [&js[..at("\"clusters\":")], &js[at("\"delta\":")..at("\"witness\":")], js[tail..].trim_end()] {
+        assert!(doc.contains(piece), "formats.md: JSON の例に無い部分:\n{piece}\n出力:\n{js}");
     }
 }

@@ -5,10 +5,9 @@
 //! surface shared across languages, and it is written the same way in Python and in Go.
 
 use crate::ast::{Name, RuleFile};
-use crate::eval::Val;
 use crate::json::Json;
 use crate::types::{Checked, Ty};
-use crate::report::{Mismatch, Report, wire};
+use crate::report::{Mismatch, Out, Report};
 use crate::vectors::{self, Vector};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
@@ -89,7 +88,7 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
     let impl_id = hello.get("impl").map(|j| j.as_str().map(str::to_string).unwrap_or_else(|| crate::json::show(j))).unwrap_or_default();
 
     let mut rep =
-        Report { impl_id, ..Report::new(f, if crate::i18n::ja() { "現行" } else { "legacy" }) };
+        Report { impl_id, records: false, ..Report::new(f, if crate::i18n::ja() { "現行" } else { "legacy" }) };
 
     for (id, v) in vs.iter().enumerate() {
         writeln!(si, "{{\"id\":{id},\"in\":{}}}", vectors::in_object(f, c, v)).map_err(|e| e.to_string())?;
@@ -119,10 +118,18 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
             ));
         }
         rep.total += 1;
-        let pairs: Vec<(String, Option<Val>, Option<String>)> = v
+        // §15.199: each answer is read as the value it is — a decimal included, where the
+        // implementation computed finer than the step — and compared exactly; the text it came
+        // as is kept for the JSON, and is what a person sees of an answer that is no value of
+        // the rule's type.
+        let pairs: Vec<Out> = v
             .outputs
             .iter()
-            .map(|(n, val)| (n.clone(), val.clone(), out.and_then(|o| o.get(n)).map(|j| observed(c, n, j))))
+            .map(|(n, val)| {
+                let j = out.and_then(|o| o.get(n));
+                let theirs = j.and_then(|j| c.ty_of(n).and_then(|ty| crate::fixtures::observed_as(j, &ty, c, n, None).ok()));
+                Out::against(c, n, val.clone(), theirs, j.map(|j| observed(c, n, j)))
+            })
             .collect();
         if let Some(e) = err {
             rep.errored += 1;
@@ -138,8 +145,12 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
             });
             continue;
         }
+        // An answer the rule cannot produce is counted beside the headline (§15.199).
+        rep.count_beyond(
+            pairs.iter().filter(|o| o.theirs.as_ref().is_some_and(|t| crate::fixtures::beyond_reach(c, &o.name, t).is_some())).map(|o| o.name.as_str()),
+        );
         // With two or more outputs, a record matches only when all of them match (§8.5).
-        if pairs.iter().all(|(n, a, b)| wire(c, n, a.as_ref()) == *b) {
+        if pairs.iter().all(|o| o.same) {
             rep.agreed += 1;
         } else {
             rep.mismatches.push(Mismatch {

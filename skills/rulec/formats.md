@@ -14,7 +14,9 @@ Three rules hold everywhere.
   languages.
 - **A number is an integer in the canonical unit** (§10.2): yen for `money[JPY, …]`, the
   declared unit for a quantity, the number of steps for a rate, `YYYY-MM-DD` as a string for
-  a date, `true`/`false` for a boolean, the value's own name for an enum.
+  a date, `true`/`false` for a boolean, the value's own name for an enum. Where a value can be
+  finer, the field says so: a match `rate` is a fraction, and the reports of `verify`, `replay`
+  and `diff` keep the decimals of a difference or an answer finer than the rule's step.
 
 Exit codes are unchanged by `--format json`: 0 notes only, 1 findings, 2 bad arguments or an
 internal failure. **Read the exit code, not the emptiness of the output.**
@@ -181,17 +183,16 @@ splits them the same way: `disagrees with the reference evaluator` against `coul
 The same shape for all three: they differ only in what the rule is compared against.
 
 ```json
-{"compared":96,"matched":87,"rate":0.90625,"counterpart":"legacy@fake-1","unanswered":0,
- "clusters":[{"rows":[{"table":"size_of","row":3},{"table":"base_rate","row":5},
-                      {"table":"fuel_rate","row":1},{"table":"signature_fee","row":1}],
-              "count":9,
-              "delta":{"fee":{"min":-1,"max":-1,"uniform":true,"total":-9}},
-              "witness":{"in":{"dest":"domestic","girth":61,"signature":true,"weight":11},
-                         "ours":{"fee":36},"theirs":{"fee":37}},
-              "records":[{"line":9,"tag":""},{"line":45,"tag":""},{"line":46,"tag":""},…],
-              "suspect_rounding":false}],
- "moved":[],"refused":[],
- "excluded":{},"filled":{"count":0,"by_field":{},"defaults":{}},"cases":null}
+{"compared":96,"matched":79,"rate":0.82292,"counterpart":"legacy@fake-1","unanswered":0,
+ "clusters":[{"rows":[{"table":"size_of","row":1},{"table":"base_rate","row":6},
+                      {"table":"fuel_rate","row":2},{"table":"signature_fee","row":1}],
+              "count":10,
+              "delta":{"fee":{"min":-1,"max":-1,"uniform":true,"total":-10}},
+              "witness":{"in":{"dest":"overseas","girth":1,"signature":true,"weight":1},
+                         "ours":{"fee":22},"theirs":{"fee":23}},
+              "records":[{"line":10,"tag":""},{"line":65,"tag":""},{"line":66,"tag":""},…],
+              "suspect_rounding":false},…],
+ "moved":[],"refused":[],"excluded":{},"out_of_reach":{},"filled":{"count":0,"by_field":{},"defaults":{}},"cases":null}
 ```
 
 | field | meaning |
@@ -205,7 +206,8 @@ The same shape for all three: they differ only in what the rule is compared agai
 | `clusters[].records` | **every** record in the cluster, in the order they came in — `line` is the record's line in the fixtures file (for `verify`, the vector's place in the stream) and `tag` is its label, empty when it has none. `witness` shows one of them; this names them all, which is what something that has to act on the records needs. `count` is its length |
 | `moved` | `replay` only: records whose values matched but whose recorded rows differ from the rule's, in the same shape as `clusters` with an empty `delta`. Only a record carrying a `trace` can appear here. They count as matched |
 | `refused` | `diff` only (empty for the other two): records whose input the old version takes and the new one does not, grouped by the reason — `{"kind":…,"field":…,"count":…,"witness":{"in":{…},"theirs":{…}},"records":[{"line":…,"tag":…},…],"what":…}`. They count as compared and never as matched, and the run exits 1 when there are any. `kind` is one of `input_range` (outside the new version's range), `enum_value` (a value its enum does not have), `input_type` (`null` for an input that is not optional, or a type the value does not carry into), `input_step` (no whole number of its step or unit), `input_day` (not a day its koyomi date comes to), `constraint` (a `constraint` that does not hold); `field` is the input at fault, absent for a constraint. `witness.in` is the record's input as the record has it and `theirs` the old version's answer; the new version gives none. `what` is **prose**, without the record's own value except an enum's |
-| `excluded` | records dropped before comparison, keyed by a stable reason: `missing_field`, `bad_format`. For `diff`, `bad_format` is a record the **old** version does not read: `diff` reads the records the way the version that wrote them reads them |
+| `excluded` | records dropped before comparison, keyed by a stable reason: `missing_field`, `bad_format`. `bad_format` is a record whose form is wrong — a type, an enum's value, an input outside its declared range — and never an answer the rule does not give (`out_of_reach`). For `diff`, `bad_format` is a record the **old** version does not read: `diff` reads the records the way the version that wrote them reads them |
+| `out_of_reach` | `verify` and `replay` (empty for `diff`): per output, how many records the counterpart answered with a value outside what the rule can produce, `{"fee":3}`. They are compared and count as mismatches — the counterpart and the rule disagree there — and are never excluded. For records, the other reading is a record written before a step or a unit changed, which `--read-as` reads ([Fixtures](#fixtures-rulec-fixtures-lint-replay-diff)) |
 | `filled` | `count`, `by_field` (field → how many records were filled), `defaults` (field → the value used). §10.3 requires the report to carry this |
 | `cases` | `replay` and `diff` of a rule with a `machine` (§15.148), when the records carry a `tag`; `null` otherwise. The records that share a tag are **one case's calls**, in the order they came in, and each case is played again from its first record with the version carrying its own answer from one call to the next: `total`, `followed` (every call answered as before — the record's answer for `replay`, the old version's for `diff`), `diverged` and `refused` (`[{"tag":…,"line":…}]`, the first call where the answer parts, or that the version refuses — a state it no longer has, a record that changes a `held` input, which one case does not do, or for `diff` an input the new version does not take, as in `refused` above), `stranded` (`[{"tag":…,"state":…}]`, left where the version reaches no final state), `ended` (how many end in a final state) |
 
@@ -232,9 +234,27 @@ apply here; it cannot be combined with `--format json` at all.
 independently. `uniform` is true when every record in the cluster moved by the same amount,
 which is what folds a cluster into one line in the text rendering.
 
+**Two answers are compared as the values they are, never at either side's step** (DESIGN
+§15.199): an amount in another unit of its dimension is the same amount (yen and sen), and an
+answer a coarser step rounds is a different one (12.3% is not 12%). A difference is the rule's
+answer less the counterpart's, in the rule's wire unit — for `diff`, the new version's; for a
+rate, its steps — and exact: a whole number when both answers sit on the rule's step, a decimal
+where the counterpart's is finer (`-0.3` for a version at 1% that answers 12% where the old one
+answered 12.3%, `-0.5` for a recorded `820.5`), and in the rare case no decimal writes it — 6℃ against an old
+version's 42℉ — the fraction as a string (`"4/9"`). `min`, `max` and `total` are
+written the same way.
+
+`witness.ours` is the rule's answer as its wire writes it. `witness.theirs` is the
+counterpart's as its own side writes it: for `diff` the old version's wire, its step and its
+unit (as `old` in [`diff` with no records](#diff-with-no-records-the-region)); for `replay` the
+recorded value in the rule's wire unit, with its decimals if it has them (`123.4` for 12.34% at
+a step of 0.1%); for `verify` the adapter's answer as it came. The text and Markdown renderings
+write the two answers as a person reads them, unrounded, and put the unit beside each when the
+two versions count in different units.
+
 `suspect_rounding` is true when **every** differing record in the cluster differs by less
-than the output's own rounding grid — a difference in rounding convention rather than in the
-values (§10.4). It is a conjunction over the whole cluster, so values that really differ are
+than the output's own rounding grid, compared exactly — a difference in rounding convention
+rather than in the values (§10.4). It is a conjunction over the whole cluster, so values that really differ are
 never blamed on rounding.
 
 ## `diff` with no records: the region
@@ -280,7 +300,7 @@ answer, and is there anything outside them" (DESIGN §15.122).
 | `feasible` | of those, how many an input could be built for. The rest are combinations of coordinates no caller can send |
 | `same` / `differing` / `unsettled` | settled alike / settled apart / neither |
 | `unrealized` | cells that were not shown to be impossible and that no input could be built for. They are also listed in `unknown`. A cell the arithmetic proves no input reaches is not one of these: it is passed over like a cell the shape ruled out |
-| `domain` | what the rule **accepts**, where that changed: `{"what":…,"name":…,"old":…,"new":…}`. `what` is one of `input_added`, `input_removed`, `input_type`, `input_range`, `enum_added`, `enum_removed`, `enum_value_added`, `enum_value_removed`, `output_added`, `output_removed`, `output_rounding`. A wider door is not a different answer, so it is reported apart from `changes` |
+| `domain` | what the rule **accepts**, where that changed: `{"what":…,"name":…,"old":…,"new":…}`. `what` is one of `input_added`, `input_removed`, `input_type`, `input_range`, `enum_added`, `enum_removed`, `enum_value_added`, `enum_value_removed`, `output_added`, `output_removed`, `output_rounding`, `output_type`, `output_step`. A wider door is not a different answer, so it is reported apart from `changes`. `output_type` (`money[USD]` to `money[USDc]`) and `output_step` (a rate's step, `0.1%` to `1%`) are what callers of the generated code receive changing: answers are compared as values, so a version that only counts an output in another unit or at another step moves no answer, and is told here |
 | `changes` | the regions where the two answer differently |
 | `unknown` | the regions that could not be settled, each with `why` |
 | `blocked` | present only when the two cannot be compared cell by cell at all, with the reason. A rule that folds a sequence is the case that exists today: its answer depends on the whole sequence, so it is not a function of finitely many columns |
@@ -296,7 +316,11 @@ same thing worded in the rule's own notation, in the language `--lang` selects; 
 else is fixed in English.
 
 `outputs` is the transition **at the witness**, and `uniform` says whether every cell of
-the box moves that way. It is false where the amounts come out of an expression rather
+the box moves that way. `old` and `new` are each version's own wire integers; whether an
+answer moved is decided by value, as with records, so a version that only changes a step or a
+unit moves nothing (DESIGN §15.199). The text rendering writes the two answers as a person reads
+them — `rate: 12.3% → 12%`, with the unit beside each when the two versions count in different
+units. It is false where the amounts come out of an expression rather
 than off the row, and then the numbers are the witness's own and not the box's.
 
 `old_rows` and `new_rows` are the rows that fired, in the shape a fixture's `trace` uses.
@@ -317,7 +341,8 @@ One object for the run.
  "problems":[{"kind":"bad_input","field":"dest","count":1,
               "example":{"line":25,"tag":"order:b3"},
               "what":"`in.dest`: `mars` is not a value of enum zone",
-              "hint":"The type or range disagrees with the declaration."}]}
+              "hint":"The type or range disagrees with the declaration."}],
+ "out_of_reach":[]}
 ```
 
 `kind` is one of `not_json`, `no_in`, `no_observed`, `unknown_field`, `bad_input`,
@@ -325,6 +350,14 @@ One object for the run.
 when the problem is about the record as a whole — or, for a `bad_input` that is a `constraint`
 not holding, about two of its inputs. `what` and `hint` are **prose**; `kind`,
 `field`, `count` and `example` are not.
+
+The problems are exactly the records `replay` leaves out for their form: what `lint` passes,
+`replay` compares, and the exit code depends on `problems` alone. `bad_observed` is an observed
+value of the wrong form — a type, an enum's value, something that is not a number. A value
+outside what the rule can produce is not one of them: `replay` compares it and counts the
+mismatch. `out_of_reach` lists those values apart, by output, in the shape of a problem
+(`field`, `count`, `example`, `what`, `hint`), because a record written before a step or a unit
+changed looks the same and `--read-as` reads it (DESIGN §15.199).
 
 ## `api`
 
@@ -958,15 +991,20 @@ the inputs, the outputs and the rows that matched and returns the record, so a l
 generated code needs no extraction. What still has to be extracted is a log of an
 implementation rulec did not generate.
 
-A number must be an integer in the canonical unit; a decimal is refused, naming the field.
-A field the rule does not know is an error, not something to ignore — discarding it silently
+An input must be an integer in the canonical unit; a decimal is refused, naming the field.
+An observed value is read as the value it is, decimals included: `11.0` is 11, and an
+implementation that computed finer than the output's step (`820.5` yen, `123.4` for 12.34% at a
+step of 0.1%) answered something the rule does not, which `replay` compares exactly — below the
+output's rounding grid, a suspected rounding difference. A field the rule does not know is an error, not something to ignore — discarding it silently
 would turn a misspelling into "filled with the default value", and only the match rate would
 move.
 
 **A record does not say what its integers count.** They are in the steps and the units of the
 version of the rule that wrote them, so a record written before a declared step or unit
-changed no longer reads as what it meant: its values fall outside the declared ranges and
-the record is excluded. `--read-as <file.rule[@rev]>` (on `fixtures lint`, `replay`, and
+changed no longer reads as what it meant. An input that falls outside its declared range
+excludes the record; an observed value that falls outside what the rule can produce is compared
+like any answer the rule does not give, counts as a mismatch, and is reported apart
+(`out_of_reach`) with this reading suggested. `--read-as <file.rule[@rev]>` (on `fixtures lint`, `replay`, and
 `diff` with records) reads every number at the steps and in the units of that version — a
 file, or a git revision such as `rules/rates.rule@v1` — and brings it to the one the records
 are read as: the rule for `lint` and `replay`, the old version for `diff`. A rate kept in
@@ -1060,7 +1098,9 @@ legacy ← {"id":9,"err":"unsupported: signature to overseas"}
 Names and values on the wire are the rule's own names and integers in the canonical unit.
 Every line is read as JSON, so any encoder's output will do: a key or a value written with
 `\u` escapes, as Python's `json.dumps` and PHP's `json_encode` write them by default, reads
-the same as one written out. An optional output with no value is `null`, the way the vectors
+the same as one written out. An answer is read as the value it is, as a recorded `observed` is:
+`11.0`, as a float is written, is 11, and a decimal finer than the output's step is compared
+exactly and counts as a mismatch. An optional output with no value is `null`, the way the vectors
 write it. A line that is not JSON, an answer carrying another record's `id`, and an answer
 with neither `out` nor `err` stop the run with exit 2, naming the record (§15.151).
 `rulec schema` prints the JSON Schema of `in` and `out`, and `rulec adapter --template

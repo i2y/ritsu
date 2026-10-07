@@ -198,7 +198,7 @@ fn 汚れた記録は種類ごとに数えて報告する() {
         r#"{"tag":"order:b3","in":{"あて先":"江戸","三辺合計":50,"重量":1000},"observed":{"運賃":820}}"#,
         r#"{"tag":"order:b4","in":{"あて先":"東京都","三辺合計":900,"重量":1000},"observed":{"運賃":820}}"#,
         r#"{"tag":"order:b5","in":{"あて先":"東京都","三辺合計":50,"重量":1000},"observed":{}}"#,
-        r#"{"tag":"order:b6","in":{"あて先":"東京都","三辺合計":50,"重量":1000},"observed":{"運賃":820.5}}"#,
+        r#"{"tag":"order:b6","in":{"あて先":"東京都","三辺合計":50,"重量":1000.5},"observed":{"運賃":820}}"#,
     ];
     for b in bad {
         lines.push(b.into());
@@ -216,9 +216,10 @@ fn 汚れた記録は種類ごとに数えて報告する() {
     assert_eq!(c, 1, "壊れた記録があれば 1 で終わる: {out}");
     for want in [
         "JSON として読めません",
-        // A decimal is refused at the field, naming it: §10.2 wants an integer in the
-        // canonical unit, and the record says which field broke that.
-        "`observed.運賃`: 決まった単位の整数 を期待しましたが 小数 でした",
+        // A decimal input is refused at the field, naming it: §10.2 wants an integer in the
+        // canonical unit, and the record says which field broke that. (What came out may carry
+        // decimals — an implementation answering finer than the step, §15.199.)
+        "`in.重量`: 決まった単位の整数 を期待しましたが 小数 でした",
         "規則が知らないフィールド",
         "列挙 都道府県 の値ではありません",
         // The range is written the way the rule writes it, and so is what the integer means.

@@ -59,6 +59,20 @@ pub struct Load {
     /// How many records were excluded outright because a field was missing (mode 1 of
     /// §10.3).
     pub dropped: usize,
+    /// The observed values of the records read that lie outside what the rule can produce
+    /// (§15.199). Not a problem of the form — the records are read and `replay` counts them as
+    /// mismatches — but what a record written before a step or a unit changed looks like.
+    pub beyond: Vec<Beyond>,
+}
+
+/// One observed value outside what the rule can produce (§15.199).
+pub struct Beyond {
+    pub line: usize,
+    pub tag: String,
+    /// The output.
+    pub field: String,
+    /// What the rule can produce, as the rule writes values (`60万円..2000万円`).
+    pub range: String,
 }
 
 impl Load {
@@ -118,7 +132,7 @@ pub fn to_val_as(j: &Json, ty: &Ty, c: &Checked, name: &str, then: Option<&Check
             // The wire carries an integer in the canonical unit; a rate carries a count of
             // steps (§10.2). The range was declared in true values, so convert first.
             let v = match then {
-                Some(t) => read_as(*n, name, &inner, t)?,
+                Some(t) => read_as(Rat::int(*n), name, &inner, t)?,
                 None => crate::types::from_wire(*n, c.wire_scale(name)),
             };
             if let Some((lo, hi)) = c.ranges.get(name) {
@@ -145,33 +159,99 @@ pub fn to_val_as(j: &Json, ty: &Ty, c: &Checked, name: &str, then: Option<&Check
     }
 }
 
-/// An integer another version of the rule wrote, read at that version's step and in its
-/// unit, then brought to the unit `now` counts in. `円` and `銭` are one dimension and
-/// convert; two currencies, or a rate and an amount, do not.
-fn read_as(n: i128, name: &str, now: &Ty, then: &Checked) -> Result<Rat, String> {
+/// A number another version of the rule wrote, read at that version's step and in its unit,
+/// then brought to the unit `now` counts in. `円` and `銭` are one dimension and convert; two
+/// currencies, or a rate and an amount, do not. The number is what the record holds — an
+/// integer, or for an output a decimal (§15.199).
+fn read_as(w: Rat, name: &str, now: &Ty, then: &Checked) -> Result<Rat, String> {
     let was = match then.ty_of(name) {
         Some(Ty::Opt(t)) => *t,
         Some(t) => t,
         None => return Err(tr!("読む版の規則に {name} がありません", "the version the records are read as has no {name}")),
     };
-    let v = crate::types::from_wire(n, then.wire_scale(name));
-    // One of the unit a type counts in, in the base unit of its dimension.
-    let one = |ty: &Ty| -> Option<(Option<String>, Rat)> {
-        let unit = match ty {
-            Ty::Money { cur, .. } => cur,
-            Ty::Qty { unit, .. } => unit,
-            _ => return None,
-        };
-        crate::lex::number(&format!("1{unit}")).and_then(|(num, _)| crate::types::comparable(&num))
-    };
-    match (one(&was), one(now)) {
-        (Some((d1, b1)), Some((d2, b2))) if d1 == d2 => Ok(v.mul(b1).div(b2)),
-        (None, None) if std::mem::discriminant(&was) == std::mem::discriminant(now) => Ok(v),
-        _ => Err(tr!(
+    let v = w.div(Rat::int(then.wire_scale(name)));
+    convert(v, &was, now).ok_or_else(|| {
+        tr!(
             "読む版の {name} は {was} で、いまは {now} なので、値を移せません",
             "{name} is {was} in the version the records are read as and {now} now, and a value does not carry across"
-        )),
+        )
+    })
+}
+
+/// `v`, counted in `from`'s unit, counted in `to`'s, exactly (§15.199): money in another
+/// spelling or subunit of its currency (yen and sen, `JPY` and `円`), a quantity in another unit
+/// of its dimension (kilograms and grams, ℃ and ℉ — the offset as well as the factor). The tax
+/// brand of money does not change the amount. A rate and a number are what they are. None
+/// between two kinds of value, two currencies or two dimensions.
+pub fn convert(v: Rat, from: &Ty, to: &Ty) -> Option<Rat> {
+    let bare = |t: &Ty| match t {
+        Ty::Opt(t) => (**t).clone(),
+        other => other.clone(),
+    };
+    let unit = |t: &Ty| match t {
+        Ty::Money { cur, .. } => ritsu_units::Unit::money(cur, None),
+        Ty::Qty { dim, unit } => ritsu_units::Unit::quantity(dim, unit),
+        _ => None,
+    };
+    match (bare(from), bare(to)) {
+        (Ty::Rate, Ty::Rate) | (Ty::Number, Ty::Number) => Some(v),
+        (a, b) => unit(&a)?.convert(v, &unit(&b)?),
     }
+}
+
+/// A decimal as the JSON reader keeps it (`123.4`, `-0.5`), as the exact rational it is.
+fn decimal(text: &str) -> Option<Rat> {
+    let (int, frac) = text.split_once('.')?;
+    let den = 10i128.checked_pow(frac.len() as u32)?;
+    let num = format!("{int}{frac}").parse::<i128>().ok()?;
+    Rat::checked_new(num, den)
+}
+
+/// An output's value as a record holds it, or as an implementation answered it (§15.199). The
+/// type, the enum's value and the unit are held to the declaration, as an input's are; what
+/// the rule can produce is not. It is not a declaration of the record's: an implementation
+/// that answered outside it, or finer than the output's step, disagrees with the rule, and
+/// `replay` and `verify` count that as a mismatch rather than leave the record out. A number
+/// may carry decimals for the same reason — 12.34% where the rule's step is 0.1% is `123.4` —
+/// and is read exactly, never at the step.
+pub fn observed_as(j: &Json, ty: &Ty, c: &Checked, name: &str, then: Option<&Checked>) -> Result<Val, String> {
+    let inner = match ty {
+        Ty::Opt(_) if *j == Json::Null => return Ok(Val::Enum(crate::kw::NONE.into())),
+        Ty::Opt(t) => (**t).clone(),
+        other => other.clone(),
+    };
+    let wire = match j {
+        Json::Int(n) => Some(Rat::int(*n)),
+        Json::Frac(s) => decimal(s),
+        _ => None,
+    };
+    match (&inner, wire) {
+        (Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number, Some(w)) => Ok(Val::Num(match then {
+            Some(t) => read_as(w, name, &inner, t)?,
+            None => w.div(Rat::int(c.wire_scale(name))),
+        })),
+        (Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number, None) => Err(tr!(
+            "決まった単位の数（整数か小数）を期待しましたが {} でした",
+            "expected a number in the canonical unit (whole or decimal), found {}",
+            crate::json::kind(j)
+        )),
+        _ => to_val_as(j, ty, c, name, then),
+    }
+}
+
+/// What the rule can produce for an output, when its value lies outside it: the range as the
+/// rule writes values (§15.199). It is computed, not declared, so a value outside it is no
+/// fault of the record's form.
+pub fn beyond_reach(c: &Checked, name: &str, v: &Val) -> Option<String> {
+    let Val::Num(x) = v else { return None };
+    let (lo, hi) = c.ranges.get(name)?;
+    let below = lo.is_some_and(|l| x.cmp_to(l) == std::cmp::Ordering::Less);
+    let above = hi.is_some_and(|h| x.cmp_to(h) == std::cmp::Ordering::Greater);
+    let ty = match c.ty_of(name)? {
+        Ty::Opt(t) => *t,
+        t => t,
+    };
+    (below || above).then(|| format!("{}..{}", end(*lo, &ty), end(*hi, &ty)))
 }
 
 /// Why the generated code's entry turns an input away (§15.197). `fixtures lint` reports it
@@ -333,20 +413,8 @@ pub fn carry(v: &Val, name: &str, from: &Checked, to: &Checked) -> Result<Val, S
         }
         (Val::Bool(_), Ty::Bool) | (Val::Str(_), Ty::Str) | (Val::Date(..), Ty::Date) => Ok(v.clone()),
         (Val::Num(x), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number) => {
-            // One of the unit a type counts in, in the base unit of its dimension (as `read_as`).
-            let one = |ty: &Ty| -> Option<(Option<String>, Rat)> {
-                let unit = match ty {
-                    Ty::Money { cur, .. } => cur,
-                    Ty::Qty { unit, .. } => unit,
-                    _ => return None,
-                };
-                crate::lex::number(&format!("1{unit}")).and_then(|(num, _)| crate::types::comparable(&num))
-            };
-            let y = match (one(&was_in), one(&now_in)) {
-                (Some((d1, b1)), Some((d2, b2))) if d1 == d2 => x.mul(b1).div(b2),
-                (None, None) if std::mem::discriminant(&was_in) == std::mem::discriminant(&now_in) => *x,
-                _ => return Err(other_kind()),
-            };
+            // The same amount in the new unit (as `read_as`), the offset of ℉ included.
+            let Some(y) = convert(*x, &was_in, &now_in) else { return Err(other_kind()) };
             // The wire carries a whole number of the new step: 1.5円 has no integer in yen.
             let scale = to.wire_scale(name);
             if !y.mul(Rat::int(scale)).is_int() {
@@ -532,7 +600,7 @@ pub fn load_inputs(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Opt
 
 /// `whole` reads `observed` and `trace` as well.
 fn read(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<&Checked>, whole: bool) -> Load {
-    let mut out = Load { records: Vec::new(), problems: Vec::new(), dropped: 0 };
+    let mut out = Load { records: Vec::new(), problems: Vec::new(), dropped: 0, beyond: Vec::new() };
     for (li, raw) in src.lines().enumerate() {
         let line = li + 1;
         if raw.trim().is_empty() {
@@ -665,12 +733,18 @@ fn read(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<&Checke
                 continue;
             }
         };
+        // The outputs whose value is outside what the rule can produce: kept, and counted
+        // once the record is read (§15.199).
+        let mut beyond: Vec<(String, String)> = Vec::new();
         for o in &f.outputs {
             let name = &o.name.text;
             let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
             match obs.get(name.as_str()) {
-                Some(v) => match to_val_as(v, &ty, c, name, then) {
+                Some(v) => match observed_as(v, &ty, c, name, then) {
                     Ok(v) => {
+                        if let Some(range) = beyond_reach(c, name, &v) {
+                            beyond.push((name.clone(), range));
+                        }
                         observed.insert(name.clone(), v);
                     }
                     Err(e) => {
@@ -747,6 +821,7 @@ fn read(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<&Checke
                 continue;
             }
         }
+        out.beyond.extend(beyond.into_iter().map(|(field, range)| Beyond { line, tag: tag.clone(), field, range }));
         out.records.push(Record { line, tag, ts, input, observed, filled, trace, trace_labels });
     }
     out
@@ -766,6 +841,7 @@ pub fn render_lint(l: &Load, path: &str) -> String {
     }
     if l.problems.is_empty() {
         o.push_str(&tr!("形式の問題はありません。\n", "No format problems.\n"));
+        o.push_str(&beyond_text(l));
         return o;
     }
     o.push_str(&tr!("\n問題 {} 件:\n", "\n{} problems:\n", l.problems.len()));
@@ -783,6 +859,50 @@ pub fn render_lint(l: &Load, path: &str) -> String {
             tr!("{} 行目 ({})", "line {} ({})", ex.line, ex.tag)
         };
         o.push_str(&tr!("  {what}\n    {} 件。例: {where_}\n    {}\n", "  {what}\n    {} record(s). Example: {where_}\n    {}\n", ps.len(), ex.hint));
+    }
+    o.push_str(&beyond_text(l));
+    o
+}
+
+/// The observed values outside what the rule can produce, grouped by output (§15.199). Not a
+/// problem: `replay` reads the records and counts each such value as a mismatch. They are
+/// listed because they are also what a record written before a step or a unit changed looks
+/// like, and that has a reading of its own.
+fn beyond_groups(l: &Load) -> Vec<(String, Vec<&Beyond>)> {
+    let mut by: BTreeMap<String, Vec<&Beyond>> = BTreeMap::new();
+    for b in &l.beyond {
+        by.entry(beyond_what(b)).or_default().push(b);
+    }
+    by.into_iter().collect()
+}
+
+fn beyond_what(b: &Beyond) -> String {
+    tr!("`observed.{}`: 規則が取りうる範囲 {} の外です", "`observed.{}`: outside what the rule can produce, {}", b.field, b.range)
+}
+
+fn beyond_hint() -> String {
+    tr!(
+        "replay は不一致として数えます。刻みや単位を変える前に書いた記録なら、`--read-as <規則>@<版>` でその版の読み方で読めます。",
+        "replay counts them as mismatches. If the records were written before a step or a unit changed, `--read-as <rule>@<rev>` reads them the way that version wrote them."
+    )
+}
+
+fn beyond_text(l: &Load) -> String {
+    if l.beyond.is_empty() {
+        return String::new();
+    }
+    let mut o = tr!(
+        "\nobserved の値が規則の取りうる範囲の外にある記録（形式の問題ではありません）:\n",
+        "\nObserved values outside what the rule can produce (not problems of the format):\n"
+    );
+    for (what, bs) in beyond_groups(l) {
+        let ex = bs[0];
+        let where_ = if ex.tag.is_empty() {
+            tr!("{} 行目", "line {}", ex.line)
+        } else {
+            tr!("{} 行目 ({})", "line {} ({})", ex.line, ex.tag)
+        };
+        o.push_str(&tr!("  {what}\n    {} 件。例: {where_}\n    {}\n", "  {what}\n    {} record(s). Example: {where_}\n    {}\n", bs.len(), beyond_hint()));
     }
     o
 }
@@ -814,6 +934,20 @@ pub fn render_lint_json(l: &Load, path: &str) -> String {
                 .finish()
         })
         .collect();
+    // §15.199: what the rule cannot produce, grouped the same way; not problems.
+    let beyond: Vec<String> = beyond_groups(l)
+        .iter()
+        .map(|(what, bs)| {
+            let ex = bs[0];
+            crate::json::Obj::new()
+                .str("field", &ex.field)
+                .int("count", bs.len() as i128)
+                .raw("example", crate::json::Obj::new().int("line", ex.line as i128).str("tag", &ex.tag).finish())
+                .str("what", what)
+                .str("hint", &beyond_hint())
+                .finish()
+        })
+        .collect();
     crate::json::Obj::new()
         .str("file", path)
         .int("records", l.records.len() as i128)
@@ -821,5 +955,6 @@ pub fn render_lint_json(l: &Load, path: &str) -> String {
         .int("filled", l.filled() as i128)
         .int("dropped", l.dropped as i128)
         .raw("problems", crate::json::arr(&problems))
+        .raw("out_of_reach", crate::json::arr(&beyond))
         .finish()
 }
