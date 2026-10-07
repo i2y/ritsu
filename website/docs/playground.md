@@ -31,7 +31,7 @@ the browser.
 A project here is a handful of files, one to a tab. Every time a file changes, the page hands all of
 them to the module, which runs the command as it would run in a directory holding the same files:
 `ritsu check .` for the project, and the generator or the page of the file that is open. The list
-holds a small shop where the languages meet, the examples of rulec and dandori, sekisho's example,
+holds a small shop where every language meets, the examples of rulec and dandori, sekisho's example,
 and an empty project to start from one file of your own. The tests hold what this page answers to what the
 `ritsu` binary prints and writes on the same files, word for word
 (`crates/ritsu/tests/playground.rs`).
@@ -48,7 +48,9 @@ billing's layer against ordering. One line in one file, and three languages say 
    value the rule does not have. yuen: `rulec cannot answer for rulec "billing/rules/billing_need.rule"
    table decide`, the end of a requirement it can no longer hash. sakai: `The file
    billing/rules/billing_need.rule does not pass rulec's check, or cannot be read`. Click where a
-   finding is, such as `billing/rules/billing_need.rule:5`, to go to that line.
+   finding is, such as `billing/rules/billing_need.rule:5`, to go to that line. The shop's gate
+   passes sekisho's check, and the last line counts two borders between the languages checked: the
+   two operations ordering opens in `OrderService`, each guarded by an action of the gate.
 2. **Put it right in the contract.** Take the line out of the `.proto`, and every file passes.
 3. **Or put it right in the rule.** Press *undo my edits*, and in `billing/rules/billing_need.rule`
    add `| returned` to the end of the enum. rulec now says `` A value of the imported enum
@@ -61,15 +63,26 @@ billing's layer against ordering. One line in one file, and three languages say 
    rulec passes. dandori, which reads the rule's outputs from rulec in the same process, says
    `` `urgency.outputs` has no field `carrier` (urgent, courier) `` on the two lines of
    `ordering/ship_order.flow` that read it.
-5. **Generate.** Open `ordering/ship_order.flow` and press *generate*: what Temporal runs, in
+5. **Let a customer refund.** `gates/orders.gate` says who may look at an order and who may cancel
+   it, and guards the two operations of `OrderService` in the `.proto`. Whether an order can be
+   cancelled at all, it asks `ordering/rules/order_state.rule`, the rule the workflow follows;
+   whether the office is open, billing's calendar `billing/shop_days.cal`, which the map has
+   ordering and billing share (`shared kernel with`). In the permit
+   `customers_cancel_their_unpaid_orders`, take out the line `unless resource.state is paid`.
+   sekisho says `` The expectation `customers_do_not_refund` does not hold: 2 of the 4 combinations
+   it picks are allowed ``, with one of them, a customer's own paid order. yuen, whose
+   `requirements/ordering.req` names the permit, says it `changed after customer_care looked at
+   this link on 2026-10-07`, and shows the line that went.
+6. **Generate.** Open `ordering/ship_order.flow` and press *generate*: what Temporal runs, in
    TypeScript, eight files. Pick Step Functions beside it, and nothing is written: the flow waits
    for an event sent to the workflow and cleans up in `on cancel`, which Step Functions cannot do,
    and its tasks name no connection to call the warehouse through. Every language that generates
    does it here: a rule its code in twelve languages, a calendar in five, the book its SQL and its
-   clients, the map its Context Mapper CML, the requirements ReqIF or W3C PROV.
-6. **Open the page for people** of a rule, a calendar, the book or the flow: the page for those who
-   read to understand and check what the code is to carry out. It is laid out for a whole window,
-   so it opens in a tab of its own; the Markdown each writes for a pull request is below the link.
+   clients, the gate its Cedar, the map its Context Mapper CML, the requirements ReqIF or W3C PROV.
+7. **Open the page for people** of a rule, a calendar, the book, the flow or the gate: the page for
+   those who read to understand and check what the code is to carry out. It is laid out for a whole
+   window, so it opens in a tab of its own; the Markdown each writes for a pull request is below the
+   link.
 
 *A small shop, in Japanese* in the list is the same project with Japanese names, and the same steps
 work there.

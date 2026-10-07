@@ -2,9 +2,11 @@ syntax = "proto3";
 
 package shop.v1;
 
-// What ordering publishes: the states of an order, and the service that answers an order.
+// What ordering publishes: the states of an order, and the service that answers an order and
+// cancels it.
 service OrderService {
   rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+  rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
 }
 
 enum OrderStatus {
@@ -27,5 +29,13 @@ message GetOrderRequest {
 }
 
 message GetOrderResponse {
+  Order order = 1;
+}
+
+message CancelOrderRequest {
+  string id = 1;
+}
+
+message CancelOrderResponse {
   Order order = 1;
 }

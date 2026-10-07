@@ -9,3 +9,6 @@ upstream 受注 anticorruption layer
   through shop.v1
   layer rulec "../billing/rules/請求の要否.rule"
   enum OrderStatus -> rulec "../billing/rules/請求の要否.rule" enum 注文の状態
+
+shared kernel with 受注
+  koyomi "../billing/店の休み.cal"

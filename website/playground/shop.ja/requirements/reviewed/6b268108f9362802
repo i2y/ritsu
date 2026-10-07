@@ -1,0 +1,7 @@
+permit 係は営業日に返金できる(clerks_refund_on_office_days)
+  description "係は、事務所の開いている日に、入金済の注文を取り消せる。取り消すと支払額を返金することになり、返金は経理が行う"
+  principal in 係
+  action 注文を取り消す
+  when 取り消せる
+  when resource.状態 is 入金済
+  when 営業日

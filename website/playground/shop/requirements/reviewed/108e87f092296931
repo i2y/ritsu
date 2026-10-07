@@ -1,0 +1,7 @@
+permit customers_cancel_their_unpaid_orders
+  description "A customer cancels their own order while it waits for the payment"
+  principal is Customer
+  action cancel_order
+  when resource.customer is principal
+  when cancellable
+  unless resource.state is paid

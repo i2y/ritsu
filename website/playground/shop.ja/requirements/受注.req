@@ -1,0 +1,24 @@
+requirements 受注 v1
+description "注文の取消について、受注の決め方がどこから来たか。書き下ろしの例"
+
+role 顧客対応 "お客さまが注文に何をしてよいかを決める"
+
+requirement 入金までは顧客が取り消せる(customers_cancel_until_paid)
+  text "お客さまは、入金までは自分の注文を取り消せる。入金済の注文は、事務所の開いている日に職員が取り消し、支払額を返金する"
+  owner 顧客対応
+  decided 2026-10-01 by 顧客対応 "店の販売条件"
+  satisfied by sekisho "../gates/注文.gate" policy 顧客は入金前の自分の注文を取り消せる
+    reviewed 2026-10-07 by 顧客対応 sha256:0a9cbe45a19b8645 -> sha256:f282ee290429be9c
+  satisfied by sekisho "../gates/注文.gate" policy 係は営業日に返金できる
+    reviewed 2026-10-07 by 顧客対応 sha256:0a9cbe45a19b8645 -> sha256:6b268108f9362802
+  verified by sekisho "../gates/注文.gate" expect 顧客は返金しない
+    reviewed 2026-10-07 by 顧客対応 sha256:0a9cbe45a19b8645 -> sha256:d56e6122c9788a4b
+
+requirement 出荷後は取り消さない(nothing_cancelled_after_shipping)
+  text "出荷した注文は取り消さない。返品として戻ってくる"
+  owner 顧客対応
+  decided 2026-10-01 by 顧客対応 "倉庫がまだ止められるもの"
+  satisfied by rulec "../ordering/rules/注文の状態.rule" table 遷移
+    reviewed 2026-10-07 by 顧客対応 sha256:1935afe01f7b65e8 -> sha256:19583f447476c0da
+  verified by sekisho "../gates/注文.gate" expect 出荷した注文は取り消さない
+    reviewed 2026-10-07 by 顧客対応 sha256:1935afe01f7b65e8 -> sha256:6bd706cc5663153e

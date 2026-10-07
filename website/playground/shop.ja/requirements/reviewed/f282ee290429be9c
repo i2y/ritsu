@@ -1,0 +1,7 @@
+permit 顧客は入金前の自分の注文を取り消せる(customers_cancel_their_unpaid_orders)
+  description "お客さまは、入金を待っている自分の注文を取り消せる"
+  principal is 顧客
+  action 注文を取り消す
+  when resource.注文した人 is principal
+  when 取り消せる
+  unless resource.状態 is 入金済

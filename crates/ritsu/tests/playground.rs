@@ -1,7 +1,8 @@
 //! The playground on the site (website/docs/playground, DESIGN 8.7): the page answers what the
 //! `ritsu` binary answers in a directory holding the same files, the module it runs answers what the
 //! library answers, and the page starts in Chrome, shows what `ritsu check` prints, lists every
-//! project it opens, and opens the links it reads and the links it gives.
+//! project it opens, and opens the links it reads and the links it gives. The shop's gate writes
+//! Cedar that the official Cedar CLI holds, in both versions of the shop.
 //!
 //! It took over from the playgrounds rulec's and dandori's sites had (DESIGN 13.2): it opens every
 //! example they opened, and their pages (website/rulec/docs/playground.md, website/dandori/docs/
@@ -14,9 +15,10 @@
 //! are the shop (website/playground/), an empty one, the examples of rulec's playground (one rule
 //! each, from rulec's corpus and the table on rulec's front page), the examples of dandori's (each
 //! flow with every file it reads, from dandori's examples) and sekisho's example (each version of
-//! its gate with every file it reads). Node drives the module, and
-//! Chrome the page (ritsu-testkit's: `RITSU_CHROME`, else where macOS keeps it, else on the PATH).
-//! A test that cannot find what it needs prints `SKIP: ritsu: …` and passes.
+//! its gate with every file it reads). Node drives the module, Chrome the page (ritsu-testkit's:
+//! `RITSU_CHROME`, else where macOS keeps it, else on the PATH), and the Cedar CLI is
+//! ritsu-testkit's too (`RITSU_CEDAR`, else on the PATH, at 4.13.0). A test that cannot find what it
+//! needs prints `SKIP: ritsu: …` and passes.
 
 use ritsu_base::fs::{Files, Kind, Memory, Meta};
 use ritsu_base::naming::Tool;
@@ -638,8 +640,10 @@ fn files_json(files: &[(String, String)]) -> Value {
 
 /// Edits a reader might make, each reaching a way the page answers that the projects as they open
 /// do not. In the shop: the contract put right, the rule given the value instead (one row short,
-/// then whole), a rule's output renamed under the flow that reads it, a flow that does not parse, a
-/// file of no language added, and a geas spec that does not parse (a spec that parses runs
+/// then whole), a rule's output renamed under the flow that reads it, the gate's permit for the
+/// customers let to cancel a paid order (an expectation of the gate's broken, and a requirement's
+/// link to the permit no longer as it was looked at), a flow that does not parse, a file of no
+/// language added, and a geas spec that does not parse (a spec that parses runs
 /// programs, which the page cannot: it is not held to the binary). Then the steps the playgrounds of
 /// rulec and dandori had the reader take (a band widened over the next one, a rounding taken off,
 /// a failure that hands the case over, an arm of a `match` taken out), one file of the reader's own
@@ -687,6 +691,14 @@ fn edits() -> Vec<(&'static str, &'static str, Vec<(String, String)>)> {
             x.1 = x.1.replace(from, to);
         }
         out.push(("a rule's output renamed under the flow", lang, renamed));
+        // the customers' permit let to cancel a paid order: sekisho's expectation does not hold,
+        // and yuen's link to the permit is no longer as it was looked at
+        let (gate, from, to) = if name == "shop" {
+            ("gates/orders.gate", "  when cancellable\n  unless resource.state is paid\n\npermit clerks_cancel_unpaid_orders\n", "  when cancellable\n\npermit clerks_cancel_unpaid_orders\n")
+        } else {
+            ("gates/注文.gate", "  when 取り消せる\n  unless resource.状態 is 入金済\n\npermit 係は入金前の注文を取り消せる", "  when 取り消せる\n\npermit 係は入金前の注文を取り消せる")
+        };
+        out.push(("a customer let to cancel a paid order", lang, swap(&fixed, gate, from, to)));
         out.push(("a flow that does not parse", lang, swap(&fixed, flow, "flow\n", "flow =\n")));
         let mut more = fixed.clone();
         more.push(("notes.txt".into(), "what the shop has yet to decide\n".into()));
@@ -838,6 +850,95 @@ fn compare(what: &str, lang: &str, files: &[(String, String)], failures: &mut Ve
         }
     }
     n
+}
+
+/// The shop's gate (sekisho's DESIGN 6.1), in English and in Japanese: the Cedar `sekisho gen
+/// --target cedar` writes from it is what the official CLI (ritsu-testkit's, at 4.13.0) validates
+/// strictly, in its text and in its JSON, without a warning, and lays out as it is written (`format
+/// --check`); and the CLI answers every combination the check walks as sekisho does (`sekisho
+/// vectors`, through `run-tests`: the decision, and the policies that decide it). The two versions
+/// write the same Cedar but for the names and the descriptions (`@name`, `@doc`, and the lines of
+/// the header).
+#[test]
+fn the_shop_s_gate_is_cedar_the_official_cli_holds() {
+    let Some(cli) = ritsu_testkit::cedar::cli() else {
+        return;
+    };
+    // what the CLI prints, its colours taken out
+    let cedar = |dir: &Path, args: &[&str]| -> (bool, String) {
+        let o = Command::new(&cli).current_dir(dir).args(args).env("CEDAR_ERROR_FORMAT", "plain").env("NO_COLOR", "1").output().expect("could not run the Cedar CLI");
+        let said = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+        let mut plain = String::new();
+        let mut cs = said.chars();
+        while let Some(c) = cs.next() {
+            if c == '\u{1b}' {
+                cs.by_ref().find(|x| x.is_ascii_alphabetic());
+            } else {
+                plain.push(c);
+            }
+        }
+        (o.status.success(), plain)
+    };
+    let words = |s: &[&str]| -> Vec<String> { s.iter().map(|x| x.to_string()).collect() };
+    let mut versions: Vec<Vec<Value>> = Vec::new();
+    for (name, gate, lang) in [("shop", "gates/orders.gate", "en"), ("shop.ja", "gates/注文.gate", "ja")] {
+        let dir = written_out(&files_of(&repo().join("website/playground").join(name)));
+        let (code, out, err) = ritsu_in(dir.path(), &words(&["sekisho", "gen", gate, "--target", "cedar", "--root", ".", "--out", "generated", "--lang", lang]));
+        assert_eq!(code, 0, "{name}: {out}{err}");
+        let (code, vectors, err) = ritsu_in(dir.path(), &words(&["sekisho", "vectors", gate, "--root", "."]));
+        assert_eq!(code, 0, "{name}: {err}");
+        let tests = serde_json::from_str::<Value>(&vectors).unwrap().as_array().map_or(0, Vec::len);
+        let at = dir.path().join("generated/cedar");
+        std::fs::write(at.join("vectors.json"), &vectors).unwrap();
+        for json in [false, true] {
+            let (schema, policies) = if json { ("orders.cedarschema.json", "orders.policies.json") } else { ("orders.cedarschema", "orders.cedar") };
+            let formats = if json { vec!["--schema-format", "json", "--policy-format", "json"] } else { vec![] };
+            let mut args = vec!["validate", "--schema", schema, "--policies", policies, "--validation-mode", "strict", "--deny-warnings"];
+            args.extend(&formats);
+            let (ok, said) = cedar(&at, &args);
+            assert!(ok && said.contains("no errors or warnings"), "{name}: cedar {}\n{said}", args.join(" "));
+            let mut args = vec!["run-tests", "--policies", policies, "--schema", schema, "--tests", "vectors.json"];
+            args.extend(&formats);
+            let (ok, said) = cedar(&at, &args);
+            assert!(ok && said.lines().any(|l| l == format!("results: {tests} passed, 0 failed")), "{name}: cedar {}\n{said}", args.join(" "));
+        }
+        let text = std::fs::read_to_string(at.join("orders.cedar")).unwrap();
+        let (ok, laid) = cedar(&at, &["format", "--check", "--policies", "orders.cedar"]);
+        assert!(ok && laid == text, "{name}: cedar format --check lays the policies out otherwise:\n{}", ritsu_testkit::golden::line_diff(&text, &laid));
+        // the four files, but for the names, the descriptions and the header
+        let bare = |text: &str| -> Value { Value::String(text.lines().filter(|l| !l.starts_with("// ") && !l.trim_start().starts_with("@doc(") && !l.trim_start().starts_with("@name(")).collect::<Vec<_>>().join("\n")) };
+        fn unnamed(v: &mut Value) {
+            match v {
+                Value::Object(m) => {
+                    if let Some(Value::Object(a)) = m.get_mut("annotations") {
+                        a.remove("doc");
+                        a.remove("name");
+                        // what had only those has nothing left: one version writes none of them
+                        if a.is_empty() {
+                            m.remove("annotations");
+                        }
+                    }
+                    m.values_mut().for_each(unnamed);
+                }
+                Value::Array(xs) => xs.iter_mut().for_each(unnamed),
+                _ => {}
+            }
+        }
+        let mut four = Vec::new();
+        for f in ["orders.cedar", "orders.cedarschema", "orders.cedarschema.json", "orders.policies.json"] {
+            let body = std::fs::read_to_string(at.join(f)).unwrap_or_else(|e| panic!("{name}: {f}: {e}"));
+            four.push(if f.ends_with(".json") {
+                let mut v: Value = serde_json::from_str(&body).unwrap();
+                unnamed(&mut v);
+                v
+            } else {
+                bare(&body)
+            });
+        }
+        versions.push(four);
+        eprintln!("compared: {name}: the Cedar of {gate} validated in both of its formats, and {tests} combinations answered alike by the Cedar CLI");
+    }
+    assert_eq!(versions[0], versions[1], "the shop's two versions of the gate write other Cedar than for the names and the descriptions");
 }
 
 /// The page's side of the boundary: allocate, write, call, read the length out of the header,

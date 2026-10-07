@@ -1,0 +1,24 @@
+requirements ordering v1
+description "Where ordering's decisions about cancelling an order come from. Written for the example"
+
+role customer_care "decides what a customer may do with an order"
+
+requirement customers_cancel_until_paid
+  text "A customer cancels their own order until it is paid; a paid order is cancelled by the staff, on a day the office is open, and the payment is refunded"
+  owner customer_care
+  decided 2026-10-01 by customer_care "the terms the shop sells on"
+  satisfied by sekisho "../gates/orders.gate" policy customers_cancel_their_unpaid_orders
+    reviewed 2026-10-07 by customer_care sha256:2fea5c2145cd01f6 -> sha256:108e87f092296931
+  satisfied by sekisho "../gates/orders.gate" policy clerks_refund_on_office_days
+    reviewed 2026-10-07 by customer_care sha256:2fea5c2145cd01f6 -> sha256:b8c2639083caa568
+  verified by sekisho "../gates/orders.gate" expect customers_do_not_refund
+    reviewed 2026-10-07 by customer_care sha256:2fea5c2145cd01f6 -> sha256:f8a2aac73ceb4642
+
+requirement nothing_cancelled_after_shipping
+  text "An order that has shipped is not cancelled: it comes back as a return"
+  owner customer_care
+  decided 2026-10-01 by customer_care "what the warehouse can still stop"
+  satisfied by rulec "../ordering/rules/order_state.rule" table step
+    reviewed 2026-10-07 by customer_care sha256:78eabbb381dc42c6 -> sha256:1fd38cf6bcf7a033
+  verified by sekisho "../gates/orders.gate" expect nothing_shipped_is_cancelled
+    reviewed 2026-10-07 by customer_care sha256:78eabbb381dc42c6 -> sha256:9a88f98f6d78004a

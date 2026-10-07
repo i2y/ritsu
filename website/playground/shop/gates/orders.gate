@@ -1,0 +1,91 @@
+gate orders v1
+description "Who may look at an order of the shop, and who may cancel it. Whether an order can be cancelled at all is the rule order_state's to say, the rule the workflow that ships it follows. Written for the example"
+namespace Shop
+
+use rule order_state from "../ordering/rules/order_state.rule"
+use calendar shop_days from "../billing/shop_days.cal"
+use proto shop from "../proto/shop/v1/order.proto"
+
+# The day of the request, from the clock of the server that asks the gate; the day changes at
+# midnight in Japan. The check walks every day of this range, and the generated code refuses any other.
+today range >=2026-10-01 <=2027-12-31 offset +09:00
+
+enum state = received | paid | shipped | delivered | cancelled
+
+role clerk
+  description "Answers customers, and cancels orders for them"
+  can view_order, cancel_order
+
+principal Staff
+  description "A member of the shop's staff, signed in"
+  roles clerk
+
+principal Customer
+  description "A customer of the shop, signed in"
+
+resource Order
+  description "An order of the shop"
+  attributes
+    state       : state
+    amount_paid : money[JPY, incl_tax]  range >=0JPY <=1000000JPY
+    customer    : Customer
+
+action view_order
+  description "Look at an order"
+  guards shop "OrderService/GetOrder"
+  principal Staff, Customer
+  resource Order from id
+
+action cancel_order
+  description "Cancel an order before it ships; a paid order is refunded what was paid"
+  guards shop "OrderService/CancelOrder"
+  principal Staff, Customer
+  resource Order from id
+  context
+    cancellable = order_state(state: resource.state, event: cancel, amount_paid: resource.amount_paid).accepted
+    office_open = today is open in shop_days
+
+permit staff_view_orders
+  description "The staff look at any order"
+  principal in clerk
+  action view_order
+
+permit customers_view_their_orders
+  description "A customer looks at their own orders"
+  principal is Customer
+  action view_order
+  when resource.customer is principal
+
+permit customers_cancel_their_unpaid_orders
+  description "A customer cancels their own order while it waits for the payment"
+  principal is Customer
+  action cancel_order
+  when resource.customer is principal
+  when cancellable
+  unless resource.state is paid
+
+permit clerks_cancel_unpaid_orders
+  description "A clerk cancels an order that waits for the payment"
+  principal in clerk
+  action cancel_order
+  when cancellable
+  unless resource.state is paid
+
+permit clerks_refund_on_office_days
+  description "A clerk cancels a paid order on a day the office is open: cancelling it refunds the payment, which the accounts team pays out"
+  principal in clerk
+  action cancel_order
+  when cancellable
+  when resource.state is paid
+  when office_open
+
+expect deny nothing_shipped_is_cancelled
+  description "No one cancels an order that has shipped: it comes back as a return"
+  action cancel_order
+  when resource.state is shipped or resource.state is delivered
+
+expect deny customers_do_not_refund
+  description "A customer never cancels an order that is paid: a refund is the staff's to make"
+  principal is Customer
+  action cancel_order
+  when resource.state is paid

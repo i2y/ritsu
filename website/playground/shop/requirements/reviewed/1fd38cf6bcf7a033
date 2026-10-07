@@ -1,0 +1,13 @@
+table step
+policy unique
+| state     | event             | -> next_state | refund      | accepted |
+| received  | pay               | paid          | 0JPY        | true     |
+| received  | cancel            | cancelled     | 0JPY        | true     |
+| received  | ship, deliver     | state         | 0JPY        | false    |
+| paid      | ship              | shipped       | 0JPY        | true     |
+| paid      | cancel            | cancelled     | amount_paid | true     |
+| paid      | pay, deliver      | state         | 0JPY        | false    |
+| shipped   | deliver           | delivered     | 0JPY        | true     |
+| shipped   | pay, ship, cancel | state         | 0JPY        | false    |  # a cancel after the shipment goes through a return
+| delivered | -                 | state         | 0JPY        | false    |
+| cancelled | -                 | state         | 0JPY        | false    |  # a payment that comes after a cancel does not bring the order back

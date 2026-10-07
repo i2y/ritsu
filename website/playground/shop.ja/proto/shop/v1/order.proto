@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package shop.v1;
 
-// 受注が公表するもの。注文の状態と、注文を答えるサービス。
+// 受注が公表するもの。注文の状態と、注文を答え、取り消すサービス。
 service OrderService {
   rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+  rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
 }
 
 enum OrderStatus {
@@ -27,5 +28,13 @@ message GetOrderRequest {
 }
 
 message GetOrderResponse {
+  Order order = 1;
+}
+
+message CancelOrderRequest {
+  string id = 1;
+}
+
+message CancelOrderResponse {
   Order order = 1;
 }

@@ -1,0 +1,91 @@
+gate 注文(orders) v1
+description "店の注文を見ることと、取り消すことを、だれがしてよいか。注文をそもそも取り消せるかは、出荷のワークフローも従う規則「注文の状態」が決める。書き下ろしの例"
+namespace Shop
+
+use rule 注文の状態 from "../ordering/rules/注文の状態.rule"
+use calendar 店の休み from "../billing/店の休み.cal"
+use proto 受注 from "../proto/shop/v1/order.proto"
+
+# リクエストの日。ゲートに問い合わせるサーバーの時計から取り、日本時間の 0 時に変わる。
+# 検査はこの範囲のすべての日を数え、生成したコードはほかの日を受け付けない。
+today range >=2026-10-01 <=2027-12-31 offset +09:00
+
+enum 状態(state) = 受付(received) | 入金済(paid) | 出荷済(shipped) | 配達済(delivered) | 取消(cancelled)
+
+role 係(clerk)
+  description "お客さまに応対し、お客さまに代わって注文を取り消す"
+  can 注文を見る, 注文を取り消す
+
+principal 職員(Staff)
+  description "サインインした店の職員"
+  roles 係
+
+principal 顧客(Customer)
+  description "サインインした店のお客さま"
+
+resource 注文(Order)
+  description "店の注文"
+  attributes
+    状態(state)          : 状態
+    支払額(amount_paid)  : money[円, incl_tax]  range >=0円 <=100万円
+    注文した人(customer) : 顧客
+
+action 注文を見る(view_order)
+  description "注文を見る"
+  guards 受注 "OrderService/GetOrder"
+  principal 職員, 顧客
+  resource 注文 from id
+
+action 注文を取り消す(cancel_order)
+  description "出荷の前に注文を取り消す。入金済の注文は、支払額を返金する"
+  guards 受注 "OrderService/CancelOrder"
+  principal 職員, 顧客
+  resource 注文 from id
+  context
+    取り消せる(cancellable) = 注文の状態(状態: resource.状態, イベント: 取消依頼, 支払額: resource.支払額).受理
+    営業日(office_open)     = today is open in 店の休み
+
+permit 職員は注文を見られる(staff_view_orders)
+  description "職員はどの注文も見られる"
+  principal in 係
+  action 注文を見る
+
+permit 顧客は自分の注文を見られる(customers_view_their_orders)
+  description "お客さまは自分の注文を見られる"
+  principal is 顧客
+  action 注文を見る
+  when resource.注文した人 is principal
+
+permit 顧客は入金前の自分の注文を取り消せる(customers_cancel_their_unpaid_orders)
+  description "お客さまは、入金を待っている自分の注文を取り消せる"
+  principal is 顧客
+  action 注文を取り消す
+  when resource.注文した人 is principal
+  when 取り消せる
+  unless resource.状態 is 入金済
+
+permit 係は入金前の注文を取り消せる(clerks_cancel_unpaid_orders)
+  description "係は、入金を待っている注文を取り消せる"
+  principal in 係
+  action 注文を取り消す
+  when 取り消せる
+  unless resource.状態 is 入金済
+
+permit 係は営業日に返金できる(clerks_refund_on_office_days)
+  description "係は、事務所の開いている日に、入金済の注文を取り消せる。取り消すと支払額を返金することになり、返金は経理が行う"
+  principal in 係
+  action 注文を取り消す
+  when 取り消せる
+  when resource.状態 is 入金済
+  when 営業日
+
+expect deny 出荷した注文は取り消さない
+  description "出荷した注文は、だれも取り消さない。返品として戻ってくる"
+  action 注文を取り消す
+  when resource.状態 is 出荷済 or resource.状態 is 配達済
+
+expect deny 顧客は返金しない
+  description "入金済の注文を、お客さまが取り消すことはない。返金は職員がする"
+  principal is 顧客
+  action 注文を取り消す
+  when resource.状態 is 入金済

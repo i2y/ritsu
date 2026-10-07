@@ -4,6 +4,7 @@ owner "the ordering team"
 
 owns
   dir "../ordering", "../proto/shop"
+  sekisho "../gates/orders.gate"
 
 published language shop.v1
   proto "../proto/shop/v1/order.proto"
@@ -16,3 +17,6 @@ terms
     means enum OrderStatus value ORDER_STATUS_CANCELLED
 
 partnership with Warehouse
+
+shared kernel with Billing
+  koyomi "../billing/shop_days.cal"

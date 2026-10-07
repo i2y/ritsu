@@ -1,0 +1,4 @@
+expect deny nothing_shipped_is_cancelled
+  description "No one cancels an order that has shipped: it comes back as a return"
+  action cancel_order
+  when resource.state is shipped or resource.state is delivered

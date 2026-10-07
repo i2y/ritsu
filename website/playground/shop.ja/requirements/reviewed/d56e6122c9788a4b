@@ -1,0 +1,5 @@
+expect deny 顧客は返金しない
+  description "入金済の注文を、お客さまが取り消すことはない。返金は職員がする"
+  principal is 顧客
+  action 注文を取り消す
+  when resource.状態 is 入金済

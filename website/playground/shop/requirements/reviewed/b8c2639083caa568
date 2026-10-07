@@ -1,0 +1,7 @@
+permit clerks_refund_on_office_days
+  description "A clerk cancels a paid order on a day the office is open: cancelling it refunds the payment, which the accounts team pays out"
+  principal in clerk
+  action cancel_order
+  when cancellable
+  when resource.state is paid
+  when office_open

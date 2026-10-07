@@ -1,0 +1,4 @@
+expect deny 出荷した注文は取り消さない
+  description "出荷した注文は、だれも取り消さない。返品として戻ってくる"
+  action 注文を取り消す
+  when resource.状態 is 出荷済 or resource.状態 is 配達済

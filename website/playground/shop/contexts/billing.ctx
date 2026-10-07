@@ -9,3 +9,6 @@ upstream Ordering anticorruption layer
   through shop.v1
   layer rulec "../billing/rules/billing_need.rule"
   enum OrderStatus -> rulec "../billing/rules/billing_need.rule" enum order_status
+
+shared kernel with Ordering
+  koyomi "../billing/shop_days.cal"

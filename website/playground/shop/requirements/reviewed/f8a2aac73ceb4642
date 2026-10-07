@@ -1,0 +1,5 @@
+expect deny customers_do_not_refund
+  description "A customer never cancels an order that is paid: a refund is the staff's to make"
+  principal is Customer
+  action cancel_order
+  when resource.state is paid
