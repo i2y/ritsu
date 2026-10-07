@@ -174,6 +174,201 @@ fn read_as(n: i128, name: &str, now: &Ty, then: &Checked) -> Result<Rat, String>
     }
 }
 
+/// Why the generated code's entry turns an input away (§15.197). `fixtures lint` reports it
+/// against the version that reads the records; `diff` reports it as the new version's refusal
+/// of an input the old version took. The shape is data, and the two word it each their own way.
+#[derive(Debug, Clone)]
+pub enum Shut {
+    /// A number or a date outside the declared range. The ends are written the way the rule
+    /// writes them.
+    Range { name: String, value: String, lo: String, hi: String },
+    /// A value the enum does not have.
+    EnumValue { name: String, value: String, en: String },
+    /// `null` for an input that is not optional.
+    NotOptional { name: String },
+    /// A value that does not carry into the other version's type: another kind of value,
+    /// another currency, another dimension.
+    Type { name: String, was: String, now: String },
+    /// A number that is not a whole count of the other version's step or unit.
+    Step { name: String, ty: String },
+    /// A date that is not one of the days a koyomi date comes to.
+    Day { name: String, value: String, from: String },
+    /// A `constraint` that does not hold.
+    Constraint { said: String },
+}
+
+impl Shut {
+    /// A stable identifier for `--format json`: the same words `diff` without records uses for
+    /// what a version accepts, where there is one.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Shut::Range { .. } => "input_range",
+            Shut::EnumValue { .. } => "enum_value",
+            Shut::NotOptional { .. } | Shut::Type { .. } => "input_type",
+            Shut::Step { .. } => "input_step",
+            Shut::Day { .. } => "input_day",
+            Shut::Constraint { .. } => "constraint",
+        }
+    }
+
+    /// The input at fault; empty for a constraint, which is about two of them.
+    pub fn field(&self) -> &str {
+        match self {
+            Shut::Range { name, .. }
+            | Shut::EnumValue { name, .. }
+            | Shut::NotOptional { name }
+            | Shut::Type { name, .. }
+            | Shut::Step { name, .. }
+            | Shut::Day { name, .. } => name,
+            Shut::Constraint { .. } => "",
+        }
+    }
+
+    /// The reason as `diff` gives it, about the new version. The record's own value is left out
+    /// where it varies from record to record, so the records refused for one reason read as
+    /// one line; an enum's value stays, because the values are few and each is its own reason.
+    pub fn refusal(&self) -> String {
+        match self {
+            Shut::Range { name, lo, hi, .. } => tr!("{name} が新しい版の範囲 {lo}..{hi} の外です", "{name} is outside the new version's range {lo}..{hi}"),
+            Shut::EnumValue { name, value, en } => tr!("{name} = {value} は、新しい版の列挙 {en} の値ではありません", "{name} = {value} is not a value of the new version's enum {en}"),
+            Shut::NotOptional { name } => tr!("{name} が none（null）ですが、新しい版の {name} は optional ではありません", "{name} is none (null), and the new version's {name} is not optional"),
+            Shut::Type { name, was, now } => tr!("{name} は旧版では {was}、新しい版では {now} で、値を移せません", "{name} is {was} in the old version and {now} in the new one, and a value does not carry across"),
+            Shut::Step { name, ty } => tr!("{name} の値が、新しい版の {ty} の刻みに載りません", "{name} does not sit on the step of the new version's {ty}"),
+            Shut::Day { name, from, .. } => tr!("{name} が、新しい版の {from} がとる日ではありません", "{name} is not a day the new version's {from} comes to"),
+            Shut::Constraint { said } => tr!("新しい版の制約 `{said}` が成り立ちません", "the new version's constraint `{said}` does not hold"),
+        }
+    }
+}
+
+/// One end of a range, the way the rule writes it: an amount in its unit, a rate in percent, a
+/// date as a date. `…` for an end that is open.
+fn end(x: Option<Rat>, ty: &Ty) -> String {
+    match x {
+        None => "…".into(),
+        Some(v) if *ty == Ty::Date => date_text(v),
+        Some(v) => crate::types::fmt_val(v, ty),
+    }
+}
+
+fn date_text(ord: Rat) -> String {
+    let (y, m, d) = crate::types::ord_to_date(ord);
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+/// Whether one `constraint` holds for these inputs. Numbers and dates are what it compares
+/// (E018); an input that is not there is not held to it, the way the generated code compares
+/// only what it was passed.
+fn holds(k: &crate::ast::Constraint, a: &BTreeMap<String, Val>) -> bool {
+    let num = |v: Option<&Val>| match v {
+        Some(Val::Num(x)) => Some(*x),
+        Some(Val::Date(y, m, d)) => Some(crate::types::date_ord(*y, *m, *d)),
+        _ => None,
+    };
+    let (Some(x), Some(y)) = (num(a.get(&k.left)), num(a.get(&k.right))) else { return true };
+    let o = x.cmp_to(y);
+    match k.op {
+        crate::ast::CmpOp::Le => o != std::cmp::Ordering::Greater,
+        crate::ast::CmpOp::Lt => o == std::cmp::Ordering::Less,
+        crate::ast::CmpOp::Ge => o != std::cmp::Ordering::Less,
+        crate::ast::CmpOp::Gt => o == std::cmp::Ordering::Greater,
+    }
+}
+
+/// What the generated code's entry turns away besides one number's type and range, which
+/// [`to_val`] holds a value to as it reads it: a date outside its declared range, a date that
+/// is not one of the days a koyomi date comes to, and a combination a `constraint` rules out
+/// (§15.197). Those need the whole input, or a date's place among the days. `None` when the
+/// entry lets the input through.
+pub fn door(f: &RuleFile, c: &Checked, input: &BTreeMap<String, Val>) -> Option<Shut> {
+    for i in &f.inputs {
+        let name = &i.name.text;
+        let Some(Val::Date(y, m, d)) = input.get(name) else { continue };
+        let ord = crate::types::date_ord(*y, *m, *d);
+        let value = format!("{y:04}-{m:02}-{d:02}");
+        if let Some((lo, hi)) = c.ranges.get(name) {
+            let below = lo.is_some_and(|l| ord.cmp_to(l) == std::cmp::Ordering::Less);
+            let above = hi.is_some_and(|h| ord.cmp_to(h) == std::cmp::Ordering::Greater);
+            if below || above {
+                return Some(Shut::Range { name: name.clone(), value, lo: end(*lo, &Ty::Date), hi: end(*hi, &Ty::Date) });
+            }
+        }
+        if let Some(days) = c.day_sets.get(name) {
+            if days.days.binary_search(&(ord.num as i64)).is_err() {
+                let from = days.from.as_ref().map(|fr| format!("koyomi \"{}\" date {}", fr.file, fr.date)).unwrap_or_default();
+                return Some(Shut::Day { name: name.clone(), value, from });
+            }
+        }
+    }
+    f.constraints
+        .iter()
+        .find(|k| !holds(k, input))
+        .map(|k| Shut::Constraint { said: format!("{} {} {}", k.left, k.op.word(), k.right) })
+}
+
+/// A value of one version's input, as another version of the rule takes it (§15.197). `diff`
+/// reads a record the way the old version reads it and hands its inputs to the new one. Money
+/// and a quantity are brought to the new unit when the dimension is the same. A value that
+/// does not land on a whole count of the new step or unit, that is outside the new range, or
+/// that the new enum does not have is turned away, with why; so is one of another kind.
+pub fn carry(v: &Val, name: &str, from: &Checked, to: &Checked) -> Result<Val, Shut> {
+    let was = from.ty_of(name).unwrap_or(Ty::Unknown);
+    let now = to.ty_of(name).unwrap_or(Ty::Unknown);
+    let bare = |t: &Ty| match t {
+        Ty::Opt(t) => (**t).clone(),
+        other => other.clone(),
+    };
+    let (was_in, now_in) = (bare(&was), bare(&now));
+    // The `none` of an optional travels as `null` and reads back as this word (`to_val`).
+    if matches!(was, Ty::Opt(_)) && *v == Val::Enum(crate::kw::NONE.into()) {
+        return if matches!(now, Ty::Opt(_)) { Ok(v.clone()) } else { Err(Shut::NotOptional { name: name.into() }) };
+    }
+    let other_kind = || Shut::Type { name: name.into(), was: was_in.to_string(), now: now_in.to_string() };
+    match (v, &now_in) {
+        (Val::Enum(s), Ty::Enum(en)) if matches!(was_in, Ty::Enum(_)) => {
+            if to.enums.get(en).is_some_and(|vs| vs.iter().any(|x| x == s)) {
+                Ok(v.clone())
+            } else {
+                Err(Shut::EnumValue { name: name.into(), value: s.clone(), en: en.clone() })
+            }
+        }
+        (Val::Bool(_), Ty::Bool) | (Val::Str(_), Ty::Str) | (Val::Date(..), Ty::Date) => Ok(v.clone()),
+        (Val::Num(x), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number) => {
+            // One of the unit a type counts in, in the base unit of its dimension (as `read_as`).
+            let one = |ty: &Ty| -> Option<(Option<String>, Rat)> {
+                let unit = match ty {
+                    Ty::Money { cur, .. } => cur,
+                    Ty::Qty { unit, .. } => unit,
+                    _ => return None,
+                };
+                crate::lex::number(&format!("1{unit}")).and_then(|(num, _)| crate::types::comparable(&num))
+            };
+            let y = match (one(&was_in), one(&now_in)) {
+                (Some((d1, b1)), Some((d2, b2))) if d1 == d2 => x.mul(b1).div(b2),
+                (None, None) if std::mem::discriminant(&was_in) == std::mem::discriminant(&now_in) => *x,
+                _ => return Err(other_kind()),
+            };
+            // The wire carries a whole number of the new step: 1.5円 has no integer in yen.
+            let scale = to.wire_scale(name);
+            if !y.mul(Rat::int(scale)).is_int() {
+                let ty = match now_in {
+                    Ty::Rate => format!("{}[step {}]", crate::kw::RATE, crate::types::fmt_val(Rat::new(1, scale), &Ty::Rate)),
+                    ref t => t.to_string(),
+                };
+                return Err(Shut::Step { name: name.into(), ty });
+            }
+            if let Some((lo, hi)) = to.ranges.get(name) {
+                let below = lo.is_some_and(|l| y.cmp_to(l) == std::cmp::Ordering::Less);
+                let above = hi.is_some_and(|h| y.cmp_to(h) == std::cmp::Ordering::Greater);
+                if below || above {
+                    return Err(Shut::Range { name: name.into(), value: crate::types::fmt_val(y, &now_in), lo: end(*lo, &now_in), hi: end(*hi, &now_in) });
+                }
+            }
+            Ok(Val::Num(y))
+        }
+        _ => Err(other_kind()),
+    }
+}
+
 fn ty_word(ty: &Ty) -> String {
     match ty {
         Ty::Enum(e) => tr!("列挙 {e} の値（文字列）", "value of enum {e} (string)"),
@@ -208,20 +403,46 @@ pub struct Manifest {
     /// Field → default value. A record missing a field that is not listed here is excluded
     /// outright rather than filled in.
     pub fills: BTreeMap<String, Val>,
+    /// `diff` only: the default values of the inputs only the new version takes, at the new
+    /// version's types (§15.197). The records were written without them, so a record the new
+    /// version answers with one is a filled record.
+    pub fills_new: BTreeMap<String, Val>,
     /// The spelling exactly as written, for the stamp in the report.
     pub shown: BTreeMap<String, String>,
+}
+
+/// The version a default value belongs to: the one the records are read as, or — for `diff`
+/// — the new version, when only it has the input.
+fn owner<'a>(name: &str, read: (&'a RuleFile, &'a Checked), new: Option<(&'a RuleFile, &'a Checked)>) -> Option<(&'a Checked, bool)> {
+    let has = |f: &RuleFile| f.inputs.iter().any(|i| i.name.text == name);
+    if has(read.0) {
+        Some((read.1, false))
+    } else {
+        new.filter(|(f, _)| has(f)).map(|(_, c)| (c, true))
+    }
 }
 
 impl Manifest {
     /// Read the `会員=一般` form (a one-off override for sensitivity analysis, §10.3).
     pub fn add(&mut self, spec: &str, f: &RuleFile, c: &Checked) -> Result<(), String> {
+        self.add_to(spec, (f, c), None)
+    }
+
+    /// [`Manifest::add`] for `diff`, whose records are read as the old version reads them: a
+    /// field the old version has is read at its types, one only the new version has at the new
+    /// version's (§15.197).
+    pub fn add_two(&mut self, spec: &str, old: (&RuleFile, &Checked), new: (&RuleFile, &Checked)) -> Result<(), String> {
+        self.add_to(spec, old, Some(new))
+    }
+
+    fn add_to(&mut self, spec: &str, read: (&RuleFile, &Checked), new: Option<(&RuleFile, &Checked)>) -> Result<(), String> {
         let (name, text) = spec.split_once('=').ok_or_else(|| {
             tr!("`{spec}` は `フィールド=値` の形ではありません", "`{spec}` is not of the form `field=value`")
         })?;
         let (name, text) = (name.trim(), text.trim());
-        if !f.inputs.iter().any(|i| i.name.text == name) {
+        let Some((c, only_new)) = owner(name, read, new) else {
             return Err(tr!("`{name}` は規則の入力ではありません", "`{name}` is not an input of the rule"));
-        }
+        };
         let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
         // Quantities, money, and rates are read as integers; everything else as a string.
         let j = match &ty {
@@ -238,12 +459,30 @@ impl Manifest {
         };
         let v = to_val(&j, &ty, c, name).map_err(|e| format!("`{name}`: {e}"))?;
         self.shown.insert(name.into(), text.into());
-        self.fills.insert(name.into(), v);
+        self.put(name, v, only_new);
         Ok(())
+    }
+
+    fn put(&mut self, name: &str, v: Val, only_new: bool) {
+        if only_new {
+            self.fills_new.insert(name.into(), v);
+        } else {
+            self.fills.insert(name.into(), v);
+        }
     }
 
     /// Read the manifest JSON.
     pub fn load(src: &str, f: &RuleFile, c: &Checked) -> Result<Manifest, String> {
+        Manifest::load_to(src, (f, c), None)
+    }
+
+    /// [`Manifest::load`] for `diff`, read the way [`Manifest::add_two`] reads one field.
+    pub fn load_two(src: &str, old: (&RuleFile, &Checked), new: (&RuleFile, &Checked)) -> Result<Manifest, String> {
+        Manifest::load_to(src, old, Some(new))
+    }
+
+    fn load_to(src: &str, read: (&RuleFile, &Checked), new: Option<(&RuleFile, &Checked)>) -> Result<Manifest, String> {
+        let f = read.0;
         let j = crate::json::parse(src.trim()).map_err(|e| tr!("マニフェストが読めません: {e}", "Cannot read the manifest: {e}"))?;
         if let Some(r) = j.get("rule").and_then(|x| x.as_str()) {
             if r != f.name.text {
@@ -259,13 +498,13 @@ impl Manifest {
             return Ok(m);
         };
         for (name, v) in fills {
-            if !f.inputs.iter().any(|i| i.name.text == name) {
+            let Some((c, only_new)) = owner(name, read, new) else {
                 return Err(tr!("`{name}` は規則の入力ではありません", "`{name}` is not an input of the rule"));
-            }
+            };
             let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
             let val = to_val(v, &ty, c, name).map_err(|e| tr!("既定値 `{name}`: {e}", "default value `{name}`: {e}"))?;
             m.shown.insert(name.to_string(), crate::json::show(v));
-            m.fills.insert(name.to_string(), val);
+            m.put(name, val, only_new);
         }
         Ok(m)
     }
@@ -280,6 +519,19 @@ pub fn load(src: &str, f: &RuleFile, c: &Checked, m: &Manifest) -> Load {
 /// [`load`], with every number read the way `then` — the version that wrote the records —
 /// wrote it (§15.145).
 pub fn load_as(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<&Checked>) -> Load {
+    read(src, f, c, m, then, true)
+}
+
+/// [`load_as`], reading what `diff` uses and nothing else: the inputs, and `tag` and `ts`
+/// (§15.197). Two versions' answers to the same input are compared, so what came out at the
+/// time plays no part; `observed` and `trace` are neither required nor read here. Holding
+/// them to a version is `fixtures lint`'s work, against the version that wrote the records.
+pub fn load_inputs(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<&Checked>) -> Load {
+    read(src, f, c, m, then, false)
+}
+
+/// `whole` reads `observed` and `trace` as well.
+fn read(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<&Checked>, whole: bool) -> Load {
     let mut out = Load { records: Vec::new(), problems: Vec::new(), dropped: 0 };
     for (li, raw) in src.lines().enumerate() {
         let line = li + 1;
@@ -317,10 +569,11 @@ pub fn load_as(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<
             bad("no_in", "", tr!("`in` がありません", "`in` is missing"), &tr!("入力は、`in` の下に規則の名前（別名ではないほう）で置いてください。", "Inputs go under `in`, keyed by the names used in the rule."));
             continue;
         };
-        let Some(obs) = crate::json::members_of(&j, "observed") else {
+        let obs = crate::json::members_of(&j, "observed");
+        if whole && obs.is_none() {
             bad("no_observed", "", tr!("`observed` がありません", "`observed` is missing"), &tr!("そのとき実際に出た値を `observed` に置いてください。", "Put the values that actually came out at the time under `observed`."));
             continue;
-        };
+        }
 
         // A field the rule does not know is reported as an error. Discarding it silently turns
         // a spelling mistake into "filled in with the default value", and only the agreement
@@ -375,8 +628,43 @@ pub fn load_as(src: &str, f: &RuleFile, c: &Checked, m: &Manifest, then: Option<
         if broken {
             continue;
         }
+        // The rest of what the generated code's entry turns away (§15.197). A number outside
+        // its range has always been a problem of the record; a date outside its range, a day
+        // the koyomi date does not come to and a combination a `constraint` rules out are the
+        // same entry's declarations, and the rule answers none of them.
+        if let Some(s) = door(f, c, &input) {
+            let range = tr!("型か範囲が宣言と食い違っています。", "The type or range disagrees with the declaration.");
+            let (what, hint) = match &s {
+                Shut::Range { name, value, lo, hi } => (
+                    tr!("`in.{name}`: {value} は宣言した範囲 {lo}..{hi} の外です", "`in.{name}`: {value} is outside the declared range {lo}..{hi}"),
+                    range,
+                ),
+                Shut::Day { name, value, from } => (
+                    tr!("`in.{name}`: {value} は {from} がとる日ではありません", "`in.{name}`: {value} is not a day {from} comes to"),
+                    range,
+                ),
+                Shut::Constraint { said } => (
+                    tr!("`in`: 制約 `{said}` が成り立ちません", "`in`: the constraint `{said}` does not hold"),
+                    tr!(
+                        "制約は、その組み合わせが起きないという宣言です。記録の値か、規則の制約を確かめてください。",
+                        "A constraint declares that the combination does not happen; check the record's values, or the rule's constraint."
+                    ),
+                ),
+                // `door` says nothing else; the rest is what `carry` says about another version.
+                other => (format!("`in.{}`: {}", other.field(), other.refusal()), range),
+            };
+            bad("bad_input", s.field(), what, &hint);
+            continue;
+        }
 
         let mut observed: BTreeMap<String, Val> = BTreeMap::new();
+        let obs = match obs {
+            Some(obs) if whole => obs,
+            _ => {
+                out.records.push(Record { line, tag, ts, input, observed, filled, trace: Vec::new(), trace_labels: Vec::new() });
+                continue;
+            }
+        };
         for o in &f.outputs {
             let name = &o.name.text;
             let ty = c.ty_of(name).unwrap_or(Ty::Unknown);

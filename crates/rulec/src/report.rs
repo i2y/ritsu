@@ -85,6 +85,25 @@ pub struct Mismatch {
     pub err: Option<String>,
     /// The rows that fired. They form the cluster key.
     pub fired: Vec<Fired>,
+    /// The inputs as `diff` shows them, made when the record was read: (name, as a person
+    /// reads it, as the wire writes it). A record is read the way the old version reads it,
+    /// and an input the new version counts in another unit, or does not take at all, is
+    /// shown the way the record has it (§15.197). Empty for `verify` and `replay`, which show
+    /// `input` in the rule's own terms.
+    pub shown: Vec<(String, String, String)>,
+    /// `diff` only: why the new version does not take this record's input. `outs` then holds
+    /// the old version's answers alone.
+    pub refusal: Option<Refusal>,
+}
+
+/// Why the new version does not take a record's input (§15.197): a stable kind for
+/// `--format json`, the input at fault (empty for a constraint, which is about two), and the
+/// reason as prose.
+#[derive(Debug, Clone)]
+pub struct Refusal {
+    pub kind: &'static str,
+    pub field: String,
+    pub what: String,
 }
 
 impl Mismatch {
@@ -92,6 +111,18 @@ impl Mismatch {
     /// as differing.
     pub fn differing(&self, c: &Checked) -> Vec<&(String, Option<Val>, Option<String>)> {
         self.outs.iter().filter(|(n, a, b)| wire(c, n, a.as_ref()) != *b).collect()
+    }
+
+    /// The inputs as (name, as a person reads it, as the wire writes it): the ones made when
+    /// the record was read, or `input` in `c`'s terms.
+    fn inputs(&self, c: &Checked) -> Vec<(String, String, String)> {
+        if !self.shown.is_empty() {
+            return self.shown.clone();
+        }
+        self.input
+            .iter()
+            .map(|(n, v)| (n.clone(), vectors::show_named(c, n, v), wire(c, n, Some(v)).unwrap_or_default()))
+            .collect()
     }
 }
 
@@ -136,6 +167,10 @@ pub struct Report {
     /// Only a record that carries a `trace` can land here. They count as matched — the amount
     /// is right — and are reported apart, clustered by the move.
     pub moved: Vec<Mismatch>,
+    /// `diff` only: records whose input the old version takes and the new one does not
+    /// (§15.197). They are compared — counted in `total`, never in `agreed` — because a version
+    /// that turns an input away answers it differently; the reason is in each one's `refusal`.
+    pub refused: Vec<Mismatch>,
     /// A machine's records read as cases (§15.148). `None` for a rule that is not a machine,
     /// or records that carry no tag.
     pub cases: Option<Cases>,
@@ -177,8 +212,15 @@ impl Report {
             filled_agreed: 0,
             excluded: Vec::new(),
             moved: Vec::new(),
+            refused: Vec::new(),
             cases: None,
         }
+    }
+
+    /// Whether anything differs: a mismatch, or a record the new version does not take. The
+    /// exit code of `verify`, `replay` and `diff` is this, or not one record compared.
+    pub fn differs(&self) -> bool {
+        !self.mismatches.is_empty() || !self.refused.is_empty()
     }
     /// The headline match rate is computed from observed records only (§10.3).
     /// Records the counterpart declared unsupported are excluded from the denominator.
@@ -302,8 +344,12 @@ fn money_text(ds: &BTreeMap<String, Delta>, multi: bool) -> String {
 }
 
 fn witness(ex: &Mismatch, theirs: &str, c: &Checked) -> String {
-    let inp: Vec<String> =
-        ex.input.iter().map(|(n, v)| format!("{n}={}", vectors::show_named(c, n, v))).collect();
+    let inp: Vec<String> = ex.inputs(c).iter().map(|(n, shown, _)| format!("{n}={shown}")).collect();
+    if ex.refusal.is_some() {
+        // The new version gave no answer: what is shown is the input and the old version's.
+        let old: Vec<String> = ex.outs.iter().filter_map(|(n, _, b)| Some(format!("{theirs} {n}={}", b.as_ref()?))).collect();
+        return if old.is_empty() { inp.join(", ") } else { format!("{} → {}", inp.join(", "), old.join(", ")) };
+    }
     let diff: Vec<String> = ex
         .differing(c)
         .iter()
@@ -371,6 +417,48 @@ pub fn clusters<'a>(rep: &'a Report, f: &RuleFile, c: &Checked) -> Vec<Cluster<'
 /// The clusters of moved rows (§15.35): the same shape, with nothing in `deltas`.
 pub fn moved_clusters<'a>(rep: &'a Report, f: &RuleFile, c: &Checked) -> Vec<Cluster<'a>> {
     build(&rep.moved, f, c)
+}
+
+/// The records the new version does not take, under one reason (§15.197). The three
+/// renderings are built from these, as they are from [`Cluster`].
+pub struct RefusedCluster<'a> {
+    pub kind: &'static str,
+    /// The input at fault; empty for a constraint.
+    pub field: String,
+    /// The reason. **Prose.**
+    pub what: String,
+    pub count: usize,
+    /// The record shown as the example: the first of `members`.
+    pub example: &'a Mismatch,
+    /// Every record refused for this reason, in the order they came in.
+    pub members: Vec<&'a Mismatch>,
+}
+
+/// The records the new version does not take, grouped by the reason, in the order the
+/// renderings show them. The reason leaves out a value that varies from record to record, so
+/// a narrowed range is one line however many amounts fell outside it.
+pub fn refused_clusters(rep: &Report) -> Vec<RefusedCluster<'_>> {
+    let mut by: BTreeMap<&str, Vec<&Mismatch>> = BTreeMap::new();
+    for m in &rep.refused {
+        if let Some(r) = &m.refusal {
+            by.entry(r.what.as_str()).or_default().push(m);
+        }
+    }
+    by.into_iter()
+        .filter_map(|(what, ms)| {
+            let r = ms[0].refusal.as_ref()?;
+            Some(RefusedCluster { kind: r.kind, field: r.field.clone(), what: what.to_string(), count: ms.len(), example: ms[0], members: ms })
+        })
+        .collect()
+}
+
+/// The headline of the records the new version does not take, beside §10.4's for the answers
+/// that moved, over the same denominator.
+fn refused_head(rep: &Report) -> String {
+    let n = rep.total - rep.errored;
+    let k = rep.refused.len();
+    let pct = if n == 0 { 0.0 } else { k as f64 * 100.0 / n as f64 };
+    tr!("新しい版が受け付けない入力 {k} 件 ({pct:.3}%)", "Not accepted by the new version {k} ({pct:.3}%)")
 }
 
 fn build<'a>(ms: &'a [Mismatch], f: &RuleFile, c: &Checked) -> Vec<Cluster<'a>> {
@@ -471,9 +559,10 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked, terse: bool) -> String {
             o.push_str(&h);
             o.push('\n');
         }
-    } else if rep.mismatches.is_empty() {
+    } else if !rep.differs() {
         o.push_str(&tr!("不一致はありません。\n", "No mismatches.\n"));
-    } else {
+    }
+    if !rep.compared_nothing() && !rep.mismatches.is_empty() {
         o.push_str(&format!("\n{}\n", impact(rep, c)));
         for cl in clusters(rep, f, c) {
             let money = money_text(&cl.deltas, rep.multi);
@@ -487,6 +576,17 @@ pub fn render(rep: &Report, f: &RuleFile, c: &Checked, terse: bool) -> String {
                     "    Suspected rounding difference (only fractions below the output grid {q})\n"
                 ));
             }
+            if !terse {
+                o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(cl.example, &rep.theirs, c)));
+            }
+        }
+    }
+    // §15.197: the inputs the new version turns away, apart from the answers that moved. They
+    // have no amount, so they are kept out of the total above.
+    if !rep.refused.is_empty() {
+        o.push_str(&format!("\n{}\n", refused_head(rep)));
+        for cl in refused_clusters(rep) {
+            o.push_str(&format!("  {:<48} {:>5} {}\n", cl.what, cl.count, records(cl.count)));
             if !terse {
                 o.push_str(&tr!("    例: {}\n", "    Example: {}\n", witness(cl.example, &rep.theirs, c)));
             }
@@ -568,6 +668,9 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str, terse: boo
         rep.rate() * 100.0
     ));
     o.push_str(&tr!("| 不一致 | {} 件 |\n", "| Mismatches | {} |\n", rep.mismatches.len()));
+    if !rep.refused.is_empty() {
+        o.push_str(&tr!("| 新しい版が受け付けない | {} 件 |\n", "| Not accepted by the new version | {} |\n", rep.refused.len()));
+    }
     if !rep.impl_id.is_empty() {
         o.push_str(&tr!("| 相手 | `{}` |\n", "| Counterpart | `{}` |\n", esc(&rep.impl_id)));
     }
@@ -585,9 +688,10 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str, terse: boo
             o.push_str(&h);
             o.push('\n');
         }
-    } else if rep.mismatches.is_empty() {
+    } else if !rep.differs() {
         o.push_str(&tr!("\n不一致はありません。\n", "\nNo mismatches.\n"));
-    } else {
+    }
+    if !rep.compared_nothing() && !rep.mismatches.is_empty() {
         o.push_str(&format!("\n**{}**\n", impact(rep, c)));
         o.push_str(&tr!("\n#### 不一致の内訳\n\n", "\n#### Mismatch breakdown\n\n"));
         o.push_str(if terse {
@@ -608,6 +712,19 @@ pub fn markdown(rep: &Report, f: &RuleFile, c: &Checked, title: &str, terse: boo
                 ));
             }
             o.push_str(&format!("| {} | {} | {} |{}\n", esc(&cl.label), cl.count, esc(&money), ex(cl.example)));
+        }
+    }
+    if !rep.refused.is_empty() {
+        o.push_str(&format!("\n**{}**\n", refused_head(rep)));
+        o.push_str(&tr!("\n#### 新しい版が受け付けない入力の内訳\n\n", "\n#### Not accepted by the new version, by reason\n\n"));
+        o.push_str(if terse {
+            tr!("| 理由 | 件数 |\n|---|---:|\n", "| Reason | Count |\n|---|---:|\n")
+        } else {
+            tr!("| 理由 | 件数 | 入力例 |\n|---|---:|---|\n", "| Reason | Count | Witness |\n|---|---:|---|\n")
+        }
+        .as_str());
+        for cl in refused_clusters(rep) {
+            o.push_str(&format!("| {} | {} |{}\n", esc(&cl.what), cl.count, ex(cl.example)));
         }
     }
     if !rep.moved.is_empty() {
@@ -674,8 +791,7 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
                 );
             }
             let ex = cl.example;
-            let ins: Vec<(String, String)> =
-                ex.input.iter().map(|(n, v)| (n.clone(), wire(c, n, Some(v)).unwrap_or_default())).collect();
+            let ins: Vec<(String, String)> = ex.inputs(c).into_iter().map(|(n, _, w)| (n, w)).collect();
             let ours: Vec<(String, String)> = ex
                 .differing(c)
                 .iter()
@@ -703,6 +819,28 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
     };
     let cls: Vec<String> = clusters(rep, f, c).iter().map(one).collect();
     let moved: Vec<String> = moved_clusters(rep, f, c).iter().map(one).collect();
+    // §15.197: the records the new version does not take, by reason. Every one by name, as in
+    // `clusters`; the witness is the input and the old version's answer, the new version
+    // having given none.
+    let refused: Vec<String> = refused_clusters(rep)
+        .iter()
+        .map(|cl| {
+            let members: Vec<String> =
+                cl.members.iter().map(|m| crate::json::Obj::new().int("line", m.line as i128).str("tag", &m.tag).finish()).collect();
+            let ex = cl.example;
+            let ins: Vec<(String, String)> = ex.inputs(c).into_iter().map(|(n, _, w)| (n, w)).collect();
+            let theirs: Vec<(String, String)> = ex.outs.iter().filter_map(|(n, _, b)| Some((n.clone(), b.clone()?))).collect();
+            let mut o = crate::json::Obj::new().str("kind", cl.kind);
+            if !cl.field.is_empty() {
+                o = o.str("field", &cl.field);
+            }
+            o.int("count", cl.count as i128)
+                .raw("witness", crate::json::Obj::new().raw("in", pairs(&ins)).raw("theirs", pairs(&theirs)).finish())
+                .raw("records", format!("[{}]", members.join(",")))
+                .str("what", &cl.what)
+                .finish()
+        })
+        .collect();
 
     let mut excluded = crate::json::Obj::new();
     for (kind, _, n) in &rep.excluded {
@@ -730,6 +868,7 @@ pub fn render_json(rep: &Report, f: &RuleFile, c: &Checked) -> String {
         .int("unanswered", rep.errored as i128)
         .raw("clusters", crate::json::arr(&cls))
         .raw("moved", crate::json::arr(&moved))
+        .raw("refused", crate::json::arr(&refused))
         .raw("excluded", excluded.finish())
         .raw("filled", filled)
         .raw("cases", match &rep.cases {

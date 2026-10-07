@@ -325,8 +325,8 @@ The cluster and its witness are what tell them apart.
 a region in the rule's own columns, plus the claim that there are none outside — withheld when
 it was not earned. Run it first: the region is what the whole rule does with the change, not
 what the changed row says (a base fee a later table multiplies by 0% moves nobody). **With
-`--fixtures`** it answers how many of your records move and by how much, which is the number a
-person needs before approving; run `fixtures lint` first, always, and `replay` against the log.
+`--fixtures`** it answers how many of your records move and by how much, read as the old version
+reads them; inputs the new one does not take are listed apart. Run `fixtures lint` first, always.
 
 A version is named by its file, its git tag (`parcel@v3` is `rules/parcel/v3`, else the revision
 `v3`), or a path at a revision — on a PR, `rules/parcel.rule@origin/main`. `--format markdown` is

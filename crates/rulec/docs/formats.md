@@ -190,7 +190,7 @@ The same shape for all three: they differ only in what the rule is compared agai
                          "ours":{"fee":36},"theirs":{"fee":37}},
               "records":[{"line":9,"tag":""},{"line":45,"tag":""},{"line":46,"tag":""},…],
               "suspect_rounding":false}],
- "moved":[],
+ "moved":[],"refused":[],
  "excluded":{},"filled":{"count":0,"by_field":{},"defaults":{}},"cases":null}
 ```
 
@@ -204,15 +204,24 @@ The same shape for all three: they differ only in what the rule is compared agai
 | `clusters` | mismatches grouped by the rows that matched |
 | `clusters[].records` | **every** record in the cluster, in the order they came in — `line` is the record's line in the fixtures file (for `verify`, the vector's place in the stream) and `tag` is its label, empty when it has none. `witness` shows one of them; this names them all, which is what something that has to act on the records needs. `count` is its length |
 | `moved` | `replay` only: records whose values matched but whose recorded rows differ from the rule's, in the same shape as `clusters` with an empty `delta`. Only a record carrying a `trace` can appear here. They count as matched |
-| `excluded` | records dropped before comparison, keyed by a stable reason: `missing_field`, `bad_format` |
+| `refused` | `diff` only (empty for the other two): records whose input the old version takes and the new one does not, grouped by the reason — `{"kind":…,"field":…,"count":…,"witness":{"in":{…},"theirs":{…}},"records":[{"line":…,"tag":…},…],"what":…}`. They count as compared and never as matched, and the run exits 1 when there are any. `kind` is one of `input_range` (outside the new version's range), `enum_value` (a value its enum does not have), `input_type` (`null` for an input that is not optional, or a type the value does not carry into), `input_step` (no whole number of its step or unit), `input_day` (not a day its koyomi date comes to), `constraint` (a `constraint` that does not hold); `field` is the input at fault, absent for a constraint. `witness.in` is the record's input as the record has it and `theirs` the old version's answer; the new version gives none. `what` is **prose**, without the record's own value except an enum's |
+| `excluded` | records dropped before comparison, keyed by a stable reason: `missing_field`, `bad_format`. For `diff`, `bad_format` is a record the **old** version does not read: `diff` reads the records the way the version that wrote them reads them |
 | `filled` | `count`, `by_field` (field → how many records were filled), `defaults` (field → the value used). §10.3 requires the report to carry this |
-| `cases` | `replay` and `diff` of a rule with a `machine` (§15.148), when the records carry a `tag`; `null` otherwise. The records that share a tag are **one case's calls**, in the order they came in, and each case is played again from its first record with the version carrying its own answer from one call to the next: `total`, `followed` (every call answered as before — the record's answer for `replay`, the old version's for `diff`), `diverged` and `refused` (`[{"tag":…,"line":…}]`, the first call where the answer parts, or that the version refuses — a state it no longer has, or a record that changes a `held` input, which one case does not do), `stranded` (`[{"tag":…,"state":…}]`, left where the version reaches no final state), `ended` (how many end in a final state) |
+| `cases` | `replay` and `diff` of a rule with a `machine` (§15.148), when the records carry a `tag`; `null` otherwise. The records that share a tag are **one case's calls**, in the order they came in, and each case is played again from its first record with the version carrying its own answer from one call to the next: `total`, `followed` (every call answered as before — the record's answer for `replay`, the old version's for `diff`), `diverged` and `refused` (`[{"tag":…,"line":…}]`, the first call where the answer parts, or that the version refuses — a state it no longer has, a record that changes a `held` input, which one case does not do, or for `diff` an input the new version does not take, as in `refused` above), `stranded` (`[{"tag":…,"state":…}]`, left where the version reaches no final state), `ended` (how many end in a final state) |
 
 A cluster's `rows` entry is `{"table":…,"row":…}` for `verify` and for `replay` over records
 without a `trace`; for `diff` it is `{"table":…,"from":…,"to":…}`, the transition of the row
 that matched between the two versions, and `replay` uses the same transition for a record
 that carries a `trace` — `from` is the recorded row, `to` the rule's. A row that exists on one
 side only has `from` or `to` set to `null`.
+
+`diff` reads the records the way the **old** version reads them — its names, types, steps,
+units, ranges and enums — because the old version's system wrote them, and it reads only
+their inputs: `observed` and `trace` play no part in comparing two versions, and are neither
+required nor checked (run `fixtures lint` against the old version for that). Each input is
+then brought to the new version's type and held to what the new version's generated code
+takes at its entry; a record it does not take is reported under `refused` instead of being
+dropped (DESIGN §15.197).
 
 A record is named by `line` and `tag` together, the same pair `fixtures lint` uses, because
 a record need not carry a tag: the line always finds it. Nothing else in this report names a
@@ -313,7 +322,8 @@ One object for the run.
 
 `kind` is one of `not_json`, `no_in`, `no_observed`, `unknown_field`, `bad_input`,
 `bad_observed`, `missing_observed`, `bad_trace`. `field` is the field of the record at fault, or absent
-when the problem is about the record as a whole. `what` and `hint` are **prose**; `kind`,
+when the problem is about the record as a whole — or, for a `bad_input` that is a `constraint`
+not holding, about two of its inputs. `what` and `hint` are **prose**; `kind`,
 `field`, `count` and `example` are not.
 
 ## `api`
@@ -937,7 +947,7 @@ rulec only validates types and ranges (§10.2).
 | field | required | meaning |
 |---|---|---|
 | `in` | yes | the inputs as they were at the time |
-| `observed` | yes | the values that actually came out. **Every output is required** |
+| `observed` | yes | the values that actually came out. **Every output is required**. `diff` does not read it: it compares two versions' answers to `in` |
 | `tag` | no | a label for the record, shown in witnesses. For a rule that is one step of a state machine, it also says **which case** the record belongs to: the records that share a `tag` are one case's calls, in the order the file has them, and `replay` and `diff` count cases as well as records (`cases` in their JSON) |
 | `ts` | no | when it happened |
 | `by` | no | where an input came from, when it was not read as it stood ([below](#where-a-value-came-from-by)). **rulec does not read it** |
@@ -958,10 +968,16 @@ version of the rule that wrote them, so a record written before a declared step 
 changed no longer reads as what it meant: its values fall outside the declared ranges and
 the record is excluded. `--read-as <file.rule[@rev]>` (on `fixtures lint`, `replay`, and
 `diff` with records) reads every number at the steps and in the units of that version — a
-file, or a git revision such as `rules/rates.rule@v1` — and brings it to this one's: a rate
-kept in whole percents is read as the rate it was, yen become sen. It has to be the same
-rule. A replay that compared nothing because every record was excluded says so and exits 1
+file, or a git revision such as `rules/rates.rule@v1` — and brings it to the one the records
+are read as: the rule for `lint` and `replay`, the old version for `diff`. A rate kept in
+whole percents is read as the rate it was, yen become sen. It has to be the same rule. A
+replay that compared nothing because every record was excluded says so and exits 1
 (§15.144, §15.145).
+
+An input is held to what the generated code takes at its entry, not to its type and range
+alone: a date outside its range, a date that is not one of the days a koyomi date comes to
+(`range from koyomi`), and a combination a `constraint` rules out are problems of the record
+too (`bad_input`; a constraint names two inputs, so the problem has no `field`).
 
 **Fixtures are not committed to a repository**: they hold order amounts. Pass them to CI as
 an artifact or from protected storage.
@@ -1005,7 +1021,11 @@ One JSON object declaring the default values used to fill a missing field (§10.
 ```
 
 `rule` is optional and, when present, must match the rule being replayed. Every key of
-`fills` must be an input of the rule, and its value is in the canonical unit. A record
+`fills` must be an input of the rule, and its value is in the canonical unit. For `diff`, a
+key is an input of the old version, read at its types as the records are, or an input only
+the new version takes: the old version's records do not have it, so its value, read at the
+new version's types, is what every record is answered with, and every such record is a filled
+record. A record
 missing a field that `fills` does not cover is **excluded outright** rather than guessed at;
 a record filled from `fills` is marked a filled record, counted separately, and kept out of
 the headline match rate. `--fill weight=5` overrides one entry on the command line, for a

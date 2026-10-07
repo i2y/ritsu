@@ -133,6 +133,8 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
                 outs: pairs,
                 err: Some(e.as_str().map(str::to_string).unwrap_or_else(|| crate::json::show(e))),
                 fired: fired_of(v),
+                shown: Vec::new(),
+                refusal: None,
             });
             continue;
         }
@@ -147,6 +149,8 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
                 outs: pairs,
                 err: None,
                 fired: fired_of(v),
+                shown: Vec::new(),
+                refusal: None,
             });
         }
     }

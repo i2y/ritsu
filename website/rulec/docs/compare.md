@@ -138,7 +138,7 @@ and `tests/vdiff.rs` is what holds them to it.
 $ rulec diff parcel_rate@v1 parcel_rate@v2 --fixtures replay/2025-08.jsonl
 Compared 95 / matched 86 (90.526%)
 Counterpart: parcel_rate@v1 → parcel_rate@v2
-Excluded 1 record (not matching the declared format)
+Excluded 1 record (not matching the old version's declared format)
 
 Affected 9 (9.474%)  amount -91
   table size_of row 2→row 1 / table base_rate row 2→row 1 / table fuel_rate row 1 / table signature_fee row 1     4 records  difference -6 uniform  total -24
@@ -155,6 +155,34 @@ A diff clusters on **the transition of the fired row** — `row 2→row 1`
 says where the decision moved — and each cluster carries the count, the
 total amount, the minimum and maximum, and a witness. A uniform shift
 folds into one line.
+
+`diff` reads the records the way the old version reads them, because the
+old version's system wrote them, and it reads only their inputs: what
+came out at the time plays no part in comparing two versions. So a
+record whose answer the change moves past anything the new version
+could have answered is compared like any other. The one record excluded
+above has a `dest` that neither version has; `fixtures lint` against the
+old version names it.
+
+An input the new version does not take is not excluded either: a range
+it narrows, a value its enum no longer has, a `constraint` it adds, a
+step a recorded value is no whole number of. The record counts as
+compared and not matched, and the report lists it apart, by reason. Here
+a pull request caps the weight at 50lb:
+
+```console
+$ rulec diff rules/parcel_rate.rule@origin/main rules/parcel_rate.rule --fixtures replay/2025-08.jsonl
+Compared 95 / matched 73 (76.842%)
+Counterpart: rules/parcel_rate.rule@origin/main → rules/parcel_rate.rule
+Excluded 1 record (not matching the old version's declared format)
+
+Not accepted by the new version 22 (23.158%)
+  weight is outside the new version's range 1lb..50lb    22 records
+    Example: dest=domestic, girth=2, signature=true, weight=69 → old version fee=11
+```
+
+The JSON names every one of them under `refused`, with the `kind` of
+the reason.
 
 `--format markdown` produces what goes into a PR, and `--terse` leaves the
 witness column out of it, because a comment is read by everyone with
@@ -213,7 +241,7 @@ $ rulec verify rules/parcel_rate.rule --format json --adapter python3 adapter.py
               "witness":{"in":{"dest":"overseas","girth":1,"signature":true,"weight":1},"ours":{"fee":22},"theirs":{"fee":23}},
               "records":[{"line":10,"tag":""},{"line":65,"tag":""},…],
               "suspect_rounding":false},…],
- "moved":[],"excluded":{},"filled":{"count":0,"by_field":{},"defaults":{}},"cases":null}
+ "moved":[],"refused":[],"excluded":{},"filled":{"count":0,"by_field":{},"defaults":{}},"cases":null}
 ```
 
 The same shape for all three commands, defined in

@@ -643,10 +643,10 @@ fn commands() -> Vec<Cmd> {
                 ("<new>", tr!("新しい版の規則。書き方は <old> と同じ", "the new rule, written the same way")),
             ],
             flags: vec![
-                flag("--fixtures", Some("<f.jsonl>"), tr!("過去の記録。付けなければ、入力の全体で比べる", "the past records; with none, the two versions are compared over the whole input space")),
+                flag("--fixtures", Some("<f.jsonl>"), tr!("過去の記録。旧版の読み方で入力だけを読み、observed は読まない。付けなければ、入力の全体で比べる", "the past records, whose inputs are read the way the old version reads them (`observed` is not read); with none, the two versions are compared over the whole input space")),
                 flag("--manifest", Some("<m.json>"), tr!("補完の既定値の宣言（--fixtures のとき）", "the declaration of the default values used for filling (with --fixtures)")),
                 flag("--fill", Some(if crate::i18n::ja() { "<フィールド=値>" } else { "<field=value>" }), tr!("既定値をその場で上書きする（何度でも書ける）", "override one default value in place (may be repeated)")).repeat(),
-                flag("--read-as", Some("<file.rule[@rev]>"), tr!("記録を、この版の規則の刻みと単位で読む（--fixtures のとき）", "read the records at the steps and units of this version of the rule (with --fixtures)")),
+                flag("--read-as", Some("<file.rule[@rev]>"), tr!("記録を、旧版ではなくこの版の規則の刻みと単位で読む（--fixtures のとき）", "read the records at the steps and units of this version of the rule instead of the old version's (with --fixtures)")),
                 flag("--budget", Some("<n>"), tr!("調べる入力の組み合わせの上限。超えたら、どこで違うかは出さず、超えたことだけを出す（既定 1000000。--fixtures を付けないときだけ）", "how many cells of the space of columns to visit before saying so instead of working out a region (default 1000000; only without --fixtures)")),
                 flag("--format", Some("markdown|json"), tr!("PR に貼れる markdown、または機械向けの JSON（docs/formats.md）", "markdown to paste into a PR, or machine-facing JSON (docs/formats.md)")).choices(&["markdown", "json"]),
                 flag("--terse", None, tr!("入力例を出さない。--fixtures のときは本番の記録の値を PR に貼らないために、無いときは領域だけを短く出すために使う", "leave the examples out: with --fixtures so that no value from a production record is pasted into a pull request, without it so that the regions stand alone")),
@@ -661,7 +661,7 @@ fn commands() -> Vec<Cmd> {
                 ),
                 (
                     1,
-                    tr!("影響がある。答えが違う入力があるか、受け付ける入力そのものが変わった。--fixtures で一件も照合できなかったときも 1", "there is an impact: inputs that answer differently, or a change in what the rule accepts; with --fixtures, also when not one record was compared"),
+                    tr!("影響がある。答えが違う入力があるか、受け付ける入力そのものが変わった。--fixtures では、新しい版が受け付けない入力の記録があるときと、一件も照合できなかったときも 1", "there is an impact: inputs that answer differently, or a change in what the rule accepts; with --fixtures, also when the new version does not accept a record's input, and when not one record was compared"),
                 ),
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],
@@ -1549,15 +1549,40 @@ fn build_manifest(
     f: &crate::ast::RuleFile,
     c: &crate::types::Checked,
 ) -> Result<crate::fixtures::Manifest, String> {
+    manifest_of(a, (f, c), None)
+}
+
+/// [`build_manifest`] for `diff`, which reads the records the way the old version reads them
+/// (§15.197): a default for an input the old version has is read at its types, and one for an
+/// input only the new version takes, at the new version's.
+fn build_manifest_two(
+    a: &Args,
+    old: (&crate::ast::RuleFile, &crate::types::Checked),
+    new: (&crate::ast::RuleFile, &crate::types::Checked),
+) -> Result<crate::fixtures::Manifest, String> {
+    manifest_of(a, old, Some(new))
+}
+
+fn manifest_of(
+    a: &Args,
+    read: (&crate::ast::RuleFile, &crate::types::Checked),
+    new: Option<(&crate::ast::RuleFile, &crate::types::Checked)>,
+) -> Result<crate::fixtures::Manifest, String> {
     let mut m = match a.get("--manifest") {
         Some(path) => {
             let src = std::fs::read_to_string(path).map_err(|_| tr!("`{path}` を読めません", "cannot read `{path}`"))?;
-            crate::fixtures::Manifest::load(&src, f, c)?
+            match new {
+                Some(new) => crate::fixtures::Manifest::load_two(&src, read, new)?,
+                None => crate::fixtures::Manifest::load(&src, read.0, read.1)?,
+            }
         }
         None => crate::fixtures::Manifest::default(),
     };
     for spec in a.all("--fill") {
-        m.add(spec, f, c)?;
+        match new {
+            Some(new) => m.add_two(spec, read, new)?,
+            None => m.add(spec, read.0, read.1)?,
+        }
     }
     Ok(m)
 }
@@ -1759,7 +1784,7 @@ fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
                 of.name.text, nf.name.text
             ));
         }
-        let m = build_manifest(opts, &nf, &nc)?;
+        let m = build_manifest_two(opts, (&of, &oc), (&nf, &nc))?;
         let (path, src) = fixtures_arg(opts)?;
         Ok((of, oc, nf, nc, m, path, src))
     })();
@@ -1770,14 +1795,18 @@ fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let then = match read_as(opts, &nf) {
+    let then = match read_as(opts, &of) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("error: {e}");
             return ExitCode::from(2);
         }
     };
-    let l = crate::fixtures::load_as(&src, &nf, &nc, &m, then.as_ref());
+    // §15.197: the records are the old version's — its system wrote them — so they are read
+    // the way it reads them, or at the steps and units of the version `--read-as` names. Only
+    // the inputs are read: what came out at the time plays no part in comparing two versions,
+    // and holding it to a version is `fixtures lint`'s work.
+    let l = crate::fixtures::load_inputs(&src, &of, &oc, &m, then.as_ref());
     let rep = crate::replay::diff((&of, &oc), (&nf, &nc), &l, &m, (a, b));
     let _ = path;
     if json {
@@ -1787,7 +1816,7 @@ fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
     } else {
         print!("{}", crate::report::render(&rep, &nf, &nc, terse));
     }
-    ExitCode::from(u8::from(!rep.mismatches.is_empty() || rep.compared_nothing()))
+    ExitCode::from(u8::from(rep.differs() || rep.compared_nothing()))
 }
 
 /// §9.2: decide whether the generated vectors meet the three coverage criteria. The
