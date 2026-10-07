@@ -1,0 +1,27 @@
+rule 返金の回し先(refund_route) v1
+description "返金をどこへ回すかを決める。少額の返金はすぐに返し、上限を 50 円より多く超える返金は人が確かめる。少額になるのは 50 円までの返金だけなので、両方に当たる返金は無い。二つの行は交わらないので、行の順は何も決めない"
+
+enum 大きさ(size) = 少額(small) | 多額(large)
+enum 回し方(channel) = すぐ返す(at_once) | 人が確かめる(by_hand) | 郵送(by_post)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100円
+  上限(limit)  : money[円]  range >=0円 <=100円
+
+outputs
+  回し先(route) : 回し方
+
+derive 超過額(excess) : money[円] = 金額 - 上限  range >=-100円 <=100円
+
+table 大きさ表(size_of)
+policy unique
+| 金額   | -> 返金の大きさ(refund_size) : 大きさ |
+| <=50円 | 少額                                  |
+| >50円  | 多額                                  |
+
+table 回し先表(route_of)
+policy first
+| 返金の大きさ | 超過額 | -> 回し先 : 回し方 |
+| 少額         | -      | すぐ返す           |
+| -            | >50円  | 人が確かめる       |
+| 多額         | <=50円 | 郵送               |

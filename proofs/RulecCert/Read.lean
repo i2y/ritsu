@@ -248,6 +248,7 @@ partial def coverOfJson : Option Json → Option Cover
           || (field c "derived_axis").isSome || (field c "every_point_ruled_out").isSome
           || (field c "farkas").isSome || (field c "days_axis").isSome
           || (field c "define_axis").isSome || (field c "above_rows").isSome
+          || (field c "truth_axis").isSome
         then some .impossible else none
 
 partial def kidsOfJson : List Json → Option Kids
@@ -266,6 +267,16 @@ structure SrcSpan where
   len : Nat
   text : String
 
+/-- What a row writes into a column of numbers (rulec's §15.196), as the cell check reads it back:
+    the column, the cell, what the certificate says the cell is — the literal as written or the
+    name — and, for a literal, the number it stands for. -/
+structure WriteCell where
+  column : String
+  span : Option SrcSpan
+  says : String
+  value : Option Rat
+  isName : Bool
+
 /-- One row, as the cell check reads it. -/
 structure ReadRow where
   index : Nat
@@ -277,6 +288,8 @@ structure ReadRow where
   /-- `none` for a row an `apply` brought in; `none` inside for a column the row has no
       cell in. -/
   source : Option (List (Option SrcSpan))
+  /-- What the row writes into each column of numbers, in the order the table decides them. -/
+  writes : List (Option WriteCell) := []
 
 structure ReadTable where
   name : String
@@ -393,7 +406,8 @@ def aboveRowsOf (all : Array Json) (column value : String) (idx : String → Opt
 def readTable (rangesOf : String → Option Span2) (groups : String → List String)
     (declaredOf : String → Option Span2)
     (factOf : Json → Option (List (String × Rat) × Rat × Bool))
-    (daysOf : String → Option (List Rat)) (all : Array Json) (j : Json) : Option ReadTable := do
+    (daysOf : String → Option (List Rat)) (all : Array Json)
+    (truthOf : String → Option (Cmp × Span2 × Span2) := fun _ => none) (j : Json) : Option ReadTable := do
   let name := fieldStr j "table"
   let policy ← (if fieldStr j "policy" == "unique" then some Policy.unique
                 else if fieldStr j "policy" == "first" then some Policy.first else none)
@@ -483,6 +497,44 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
           | some rows => acc ++ [{ axis := ai, coord := ci, rows := rows }]
           | none => acc
         | _, _ => acc) []
+  -- The pairs the rows of a table above part (rulec's §15.196): each value both rows take on the
+  -- column that table decides, with the rows that write it read from that table, as for a leaf.
+  let pairAbove := (fieldArr j "above_apart").toList
+  let aboveCols : List AboveCol := pairAbove.foldl (fun acc d =>
+    match fieldNat d "axis" with
+    | none => acc
+    | some ai => (fieldArr d "at").toList.foldl (fun acc x =>
+        match fieldNat x "coord" with
+        | none => acc
+        | some ci =>
+          if acc.any (fun e => e.axis == ai && e.coord == ci) then acc else
+          match columns[ai]?, (labels[ai]?).bind (fun ls => ls[ci]?) with
+          | some col, some val =>
+            match aboveRowsOf all col val idx columns labels numeric with
+            | some rows => acc ++ [{ axis := ai, coord := ci, rows := rows }]
+            | none => acc
+          | _, _ => acc) acc) aboveCols
+  -- The reasons a leaf or a pair gives, one for each row of the table above that writes the value,
+  -- in the order of those rows.
+  let reasonsOf : Json → AboveCol → Option (List RowOut) := fun a e => do
+    let given := (fieldArr a "rows").toList
+    e.rows.mapM (fun r => do
+      let g ← given.find? (fun x => fieldNat x "row" == some r.index)
+      match fieldNat g "clash" with
+      | some aj => some (RowOut.clash aj)
+      | none => do
+        let refs ← (field g "farkas" >>= arr) >>= (fun xs => xs.toList.mapM (refOfJsonIn idx))
+        some (RowOut.farkas refs))
+  let aboveApartL : List (Nat × Nat × (Nat × List (Nat × List RowOut))) := pairAbove.filterMap (fun d => do
+    let a ← fieldNat d "a"
+    let b ← fieldNat d "b"
+    let ai ← fieldNat d "axis"
+    let outs ← (fieldArr d "at").toList.mapM (fun x => do
+      let ci ← fieldNat x "coord"
+      let e ← aboveCols.find? (fun e => e.axis == ai && e.coord == ci)
+      let rs ← reasonsOf ((field x "above_rows").getD Json.null) e
+      some (ci, rs))
+    some (a, b, (ai, outs)))
   let aboveAts : List (Point × (Nat × List RowOut)) := aboveLs.filterMap (fun (path, a) => do
     let ai ← fieldNat a "axis"
     let ci ← path[ai]?
@@ -501,8 +553,23 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
     let tests ← (fieldArr r "tests").toList.mapM (cellOfJson groups)
     let accepts := (fieldArr r "accepts").toList.map (fun xs =>
       (arr xs).getD #[] |>.toList.filterMap nat)
+    let decides := (fieldArr j "decides").toList.filterMap str
+    let writes := ((fieldArr r "writes").toList.zip (List.range (fieldArr r "writes").size)).map (fun (w, oi) => do
+      let e ← field w "expr"
+      let isName := (field e "name").isSome
+      let says ← if isName then field e "name" >>= str else field e "num" >>= str
+      let sp : Option SrcSpan := match field w "source" with
+        | some x => do
+            let line ← fieldNat x "line"
+            let col ← fieldNat x "col"
+            let len ← fieldNat x "len"
+            some { line := line, col := col, len := len, text := fieldStr x "text" }
+        | none => none
+      some { column := (decides[oi]?).getD "", span := sp, says := says
+             value := field e "value" >>= optRat, isName := isName })
     some { index := i, origin := fieldStr r "origin", line := (fieldNat r "line").getD 0
-           tests := tests, accepts := accepts, source := (field r "source").bind srcOfJson })
+           tests := tests, accepts := accepts, source := (field r "source").bind srcOfJson
+           writes := writes })
   some {
     name := name
     outputs := (fieldNat j "outputs").getD 0
@@ -547,7 +614,14 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
                  -- The days an input takes from a koyomi file (rulec's §15.174), on its axis.
                  days := axes.toList.map (fun a =>
                    if fieldStr a "kind" == "input" then daysOf (fieldStr a "column") else none)
-                 above := aboveCols }
+                 above := aboveCols
+                 -- A boolean `define` of one comparison, read on its axis (rulec's §15.196): the
+                 -- comparison and its two sides' intervals, worked out by the caller from the
+                 -- define's expression, and the coordinate written `true`.
+                 truth := (List.range columns.length).map (fun ai => do
+                   let (op, L, R) ← truthOf ((columns[ai]?).getD "")
+                   let ta ← ((labels[ai]?).getD []).idxOf? "true"
+                   some { op := op, l := L, r := R, trueAt := ta }) }
       cover := cover
       told := fun a b => (told.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2)
       witness := fun i => (wit.find? (fun w => w.1 == i)).map (fun w => (w.2.1, w.2.2))
@@ -555,6 +629,7 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
       refuted := fun a b => (refuted.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2)
       farkasAt := fun p => (leaves.find? (fun l => l.1 == p)).map (fun l => l.2)
       daysApart := fun a b => (byDays.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2)
-      aboveAt := fun p => (aboveAts.find? (fun l => l.1 == p)).map (fun l => l.2) } }
+      aboveAt := fun p => (aboveAts.find? (fun l => l.1 == p)).map (fun l => l.2)
+      aboveApart := fun a b => (aboveApartL.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2) } }
 
 end RulecCert

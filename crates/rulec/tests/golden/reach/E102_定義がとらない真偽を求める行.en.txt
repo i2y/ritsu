@@ -1,0 +1,11 @@
+error[E102]: Unreachable row: row 2 never matches
+  --> tests/reach/E102_定義がとらない真偽を求める行.rule:16 table 税額表
+   |
+16 | | false    | 400円               |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2: no input reaches here
+10 | define 軽減期間(reduced) : bool = 作成日 <= 2027-03-31
+   |                                   ^^^^^^^^^^^^^^^^^^^^ always true over the ranges of the inputs
+   |
+ Over the ranges of the inputs, `軽減期間` is always true, and this row asks for it to be false.
+ hint: rewrite the condition on `軽減期間` to the value it always takes, or delete this row.
+

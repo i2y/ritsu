@@ -138,6 +138,17 @@ structure AboveCol where
   rows : List AboveRow
   deriving Repr, Inhabited
 
+/-- A boolean `define` of one comparison, read on its axis (rulec's §15.196): the comparison, the
+    intervals its two sides are forced into (`RulecCert.interval`, or a date's day number), and the
+    coordinate of the axis that stands for `true`. The define is true exactly where its two sides
+    compare that way. -/
+structure Truth where
+  op : Cmp
+  l : Rat × Rat
+  r : Rat × Rat
+  trueAt : Nat
+  deriving Repr, Inhabited
+
 /-- Everything about a table that decides whether a combination can arrive: the values each
     coordinate stands for, the constraints, and — for a column the rule computes, a derive or
     a `define` of a number — the interval its expression is forced into. -/
@@ -177,6 +188,9 @@ structure Sieve where
   /-- The values decided above that the certificate rests on the rows of (rulec's §15.195):
       at each, the rows of the table above that write it, read on this table. -/
   above : List AboveCol := []
+  /-- One entry per axis: for a boolean `define` of one comparison whose two sides have intervals,
+      the comparison read on the axis (rulec's §15.196); `none` on every other axis. -/
+  truth : List (Option Truth) := []
 
 def Sieve.coordAt (s : Sieve) (i c : Nat) : Option Coord :=
   match s.coords[i]? with
@@ -203,7 +217,9 @@ def Sieve.asked (s : Sieve) (p : Point) : Prop :=
     (∀ qr ∈ s.apart, ¬(p[qr.1.1]? = some qr.1.2 ∧ p[qr.2.1]? = some qr.2.2)) ∧
     (∀ q ∈ s.facts, q.holds v) ∧
     (∀ (i : Nat) (D : List Rat), s.days[i]? = some (some D) → ∃ w, v[i]? = some w ∧ w ∈ D) ∧
-    (∀ e ∈ s.above, p[e.axis]? = some e.coord → ∃ r ∈ e.rows, r.fires p v)
+    (∀ e ∈ s.above, p[e.axis]? = some e.coord → ∃ r ∈ e.rows, r.fires p v) ∧
+    (∀ (i : Nat) (T : Truth), s.truth[i]? = some (some T) → ∀ c, p[i]? = some c →
+      ∃ x y, T.l.1 ≤ x ∧ x ≤ T.l.2 ∧ T.r.1 ≤ y ∧ y ≤ T.r.2 ∧ (c = T.trueAt ↔ T.op.holds x y))
 
 /-! ## One constraint rules a box out -/
 
@@ -241,6 +257,80 @@ def derivedRulesOut (s : Sieve) (i : Nat) (p : Point) : Bool :=
       (match x.span.1, I.2 with | some a, some b => decide (b < a) || (x.opn && decide (b ≤ a)) | _, _ => false)
     | none => false
   | _, _ => false
+
+/-- The comparison holds of every pair of values the two sides can take. -/
+def Truth.always (T : Truth) : Bool :=
+  match T.op with
+  | .le => decide (T.l.2 ≤ T.r.1)
+  | .lt => decide (T.l.2 < T.r.1)
+  | .ge => decide (T.r.2 ≤ T.l.1)
+  | .gt => decide (T.r.2 < T.l.1)
+  | .eq => false
+
+/-- The comparison holds of no pair of values the two sides can take. -/
+def Truth.never (T : Truth) : Bool :=
+  match T.op with
+  | .le => decide (T.r.2 < T.l.1)
+  | .lt => decide (T.r.2 ≤ T.l.1)
+  | .ge => decide (T.l.2 < T.r.1)
+  | .gt => decide (T.l.2 ≤ T.r.1)
+  | .eq => false
+
+theorem Truth.always_sound {T : Truth} {x y : Rat} (h : T.always = true)
+    (hx2 : x ≤ T.l.2) (hx1 : T.l.1 ≤ x) (hy1 : T.r.1 ≤ y) (hy2 : y ≤ T.r.2) : T.op.holds x y := by
+  cases hop : T.op with
+  | le =>
+    simp only [Truth.always, hop, decide_eq_true_eq] at h
+    exact Rat.le_trans hx2 (Rat.le_trans h hy1)
+  | lt =>
+    simp only [Truth.always, hop, decide_eq_true_eq] at h
+    exact lelt hx2 (ltle h hy1)
+  | ge =>
+    simp only [Truth.always, hop, decide_eq_true_eq] at h
+    exact Rat.le_trans hy2 (Rat.le_trans h hx1)
+  | gt =>
+    simp only [Truth.always, hop, decide_eq_true_eq] at h
+    exact lelt hy2 (ltle h hx1)
+  | eq => simp [Truth.always, hop] at h
+
+theorem Truth.never_sound {T : Truth} {x y : Rat} (h : T.never = true)
+    (hx1 : T.l.1 ≤ x) (hx2 : x ≤ T.l.2) (hy1 : T.r.1 ≤ y) (hy2 : y ≤ T.r.2) : ¬ T.op.holds x y := by
+  cases hop : T.op with
+  | le =>
+    simp only [Truth.never, hop, decide_eq_true_eq] at h
+    exact fun hxy => no_room (Rat.le_trans hx1 hxy) hy2 h
+  | lt =>
+    simp only [Truth.never, hop, decide_eq_true_eq] at h
+    exact fun hxy => Rat.lt_irrefl (ltle (lelt hx1 (ltle hxy hy2)) h)
+  | ge =>
+    simp only [Truth.never, hop, decide_eq_true_eq] at h
+    exact fun hyx => no_room (Rat.le_trans hy1 hyx) hx2 h
+  | gt =>
+    simp only [Truth.never, hop, decide_eq_true_eq] at h
+    exact fun hyx => Rat.lt_irrefl (ltle (lelt hy1 (ltle hyx hx2)) h)
+  | eq => simp [Truth.never, hop] at h
+
+/-- The axis of a boolean `define` at the truth value its comparison never takes over the
+    intervals of its two sides (rulec's §15.196). -/
+def truthRulesOut (s : Sieve) (i : Nat) (p : Point) : Bool :=
+  match p[i]?, s.truth[i]? with
+  | some c, some (some T) => if c = T.trueAt then T.never else T.always
+  | _, _ => false
+
+/-- **A boolean `define` never stands at a truth value its comparison cannot take.** -/
+theorem not_asked_of_truth {s : Sieve} {i : Nat} {p : Point}
+    (h : truthRulesOut s i p = true) : ¬ s.asked p := by
+  rintro ⟨v, _, _, _, _, _, _, _, _, ht⟩
+  unfold truthRulesOut at h
+  split at h
+  case _ c T hp hT =>
+    obtain ⟨x, y, hx1, hx2, hy1, hy2, hiff⟩ := ht i T hT c hp
+    by_cases hc : c = T.trueAt
+    · simp only [hc, ↓reduceIte] at h
+      exact Truth.never_sound h hx1 hx2 hy1 hy2 (hiff.1 hc)
+    · simp only [hc, ↓reduceIte] at h
+      exact hc (hiff.2 (Truth.always_sound h hx2 hx1 hy1 hy2))
+  case _ => exact absurd h (by simp)
 
 /-- A coordinate no table above ever writes. -/
 def neverRulesOut (s : Sieve) (p : Point) : Bool :=
@@ -417,17 +507,19 @@ def pointRuledOut (s : Sieve) (p : Point) : Bool :=
   s.cons.any (fun k => constraintRulesOut s k p) ||
     (List.range p.length).any (fun i => derivedRulesOut s i p) ||
     neverRulesOut s p || apartRulesOut s p ||
-    (List.range p.length).any (fun i => daysRulesOut s i p)
+    (List.range p.length).any (fun i => daysRulesOut s i p) ||
+    (List.range p.length).any (fun i => truthRulesOut s i p)
 
 theorem not_asked_of_pointRuledOut {s : Sieve} {p : Point} (h : pointRuledOut s p = true) :
     ¬ s.asked p := by
   simp only [pointRuledOut, Bool.or_eq_true, List.any_eq_true] at h
-  rcases h with (((⟨k, hk, hkr⟩ | ⟨i, _, hir⟩) | hn) | hab) | ⟨i, _, hdy⟩
+  rcases h with ((((⟨k, hk, hkr⟩ | ⟨i, _, hir⟩) | hn) | hab) | ⟨i, _, hdy⟩) | ⟨i, _, htr⟩
   · exact not_asked_of_constraint hk hkr
   · exact not_asked_of_derived hir
   · exact not_asked_of_never (by simpa [neverRulesOut] using hn)
   · exact not_asked_of_apart (by simpa [apartRulesOut] using hab)
   · exact not_asked_of_days hdy
+  · exact not_asked_of_truth htr
 
 
 /-! ## A whole box, not one corner of it
@@ -484,15 +576,24 @@ theorem apartRulesOut_mono {s : Sieve} {path p : Point} (hpre : path <+: p)
   exact ⟨qr, hqr, by rw [prefix_getElem? hpre (lt_of_getElem? hq)]; exact hq,
          by rw [prefix_getElem? hpre (lt_of_getElem? hr)]; exact hr⟩
 
+theorem truthRulesOut_mono {s : Sieve} {i : Nat} {path p : Point}
+    (hpre : path <+: p) (h : truthRulesOut s i path = true) :
+    truthRulesOut s i p = true := by
+  unfold truthRulesOut at h ⊢
+  split at h
+  case _ c T hp hT => rw [prefix_getElem? hpre (lt_of_getElem? hp), hp, hT]; exact h
+  case _ => exact absurd h (by simp)
+
 theorem pointRuledOut_mono {s : Sieve} {path p : Point} (hpre : path <+: p)
     (h : pointRuledOut s path = true) : pointRuledOut s p = true := by
   simp only [pointRuledOut, Bool.or_eq_true, List.any_eq_true, List.mem_range] at h ⊢
-  rcases h with (((⟨k, hk, hkr⟩ | ⟨i, hi, hir⟩) | hn) | hab) | ⟨i, hi, hdy⟩
-  · exact Or.inl (Or.inl (Or.inl (Or.inl ⟨k, hk, constraintRulesOut_mono hpre hkr⟩)))
-  · exact Or.inl (Or.inl (Or.inl (Or.inr ⟨i, Nat.lt_of_lt_of_le hi hpre.length_le, derivedRulesOut_mono hpre hir⟩)))
-  · exact Or.inl (Or.inl (Or.inr (by simpa [neverRulesOut] using neverRulesOut_mono hpre (by simpa [neverRulesOut] using hn))))
-  · exact Or.inl (Or.inr (by simpa [apartRulesOut] using apartRulesOut_mono hpre (by simpa [apartRulesOut] using hab)))
-  · exact Or.inr ⟨i, Nat.lt_of_lt_of_le hi hpre.length_le, daysRulesOut_mono hpre hdy⟩
+  rcases h with ((((⟨k, hk, hkr⟩ | ⟨i, hi, hir⟩) | hn) | hab) | ⟨i, hi, hdy⟩) | ⟨i, hi, htr⟩
+  · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl ⟨k, hk, constraintRulesOut_mono hpre hkr⟩))))
+  · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inr ⟨i, Nat.lt_of_lt_of_le hi hpre.length_le, derivedRulesOut_mono hpre hir⟩))))
+  · exact Or.inl (Or.inl (Or.inl (Or.inr (by simpa [neverRulesOut] using neverRulesOut_mono hpre (by simpa [neverRulesOut] using hn)))))
+  · exact Or.inl (Or.inl (Or.inr (by simpa [apartRulesOut] using apartRulesOut_mono hpre (by simpa [apartRulesOut] using hab))))
+  · exact Or.inl (Or.inr ⟨i, Nat.lt_of_lt_of_le hi hpre.length_le, daysRulesOut_mono hpre hdy⟩)
+  · exact Or.inr ⟨i, Nat.lt_of_lt_of_le hi hpre.length_le, truthRulesOut_mono hpre htr⟩
 
 /-- Every point the path opens onto. The walk stops where the axes do, so the list is the
     box below the path and nothing else. -/
@@ -610,6 +711,47 @@ theorem AboveRow.fires_of_firesB {r : AboveRow} {p : Point} {v : List Rat}
       rw [hc] at hq'
       exact ⟨c, rfl, by simpa using hq'⟩
 
+/-- Some pair of values the two sides can take gives the comparison the truth value `b`: the two
+    intervals are not empty, and the pair at the ends that suits `b` does. -/
+def Truth.can (T : Truth) (b : Bool) : Bool :=
+  decide (T.l.1 ≤ T.l.2) && decide (T.r.1 ≤ T.r.2) &&
+  match T.op, b with
+  | .le, true => decide (T.l.1 ≤ T.r.2)
+  | .le, false => decide (T.r.1 < T.l.2)
+  | .lt, true => decide (T.l.1 < T.r.2)
+  | .lt, false => decide (T.r.1 ≤ T.l.2)
+  | .ge, true => decide (T.r.1 ≤ T.l.2)
+  | .ge, false => decide (T.l.1 < T.r.2)
+  | .gt, true => decide (T.r.1 < T.l.2)
+  | .gt, false => decide (T.l.1 ≤ T.r.2)
+  | .eq, _ => false
+
+theorem Truth.exists_of_can {T : Truth} {b : Bool} (h : T.can b = true) :
+    ∃ x y, T.l.1 ≤ x ∧ x ≤ T.l.2 ∧ T.r.1 ≤ y ∧ y ≤ T.r.2 ∧ (b = true ↔ T.op.holds x y) := by
+  unfold Truth.can at h
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  obtain ⟨⟨hl, hr⟩, h⟩ := h
+  cases hop : T.op <;> cases b <;> simp only [hop, decide_eq_true_eq] at h
+  -- `le`, false: the high end of the left over the low end of the right
+  · refine ⟨T.l.2, T.r.1, hl, Rat.le_refl, Rat.le_refl, hr, ?_⟩
+    simp only [Cmp.holds, Bool.false_eq_true, false_iff]
+    exact fun hle => Rat.lt_irrefl (ltle h hle)
+  · exact ⟨T.l.1, T.r.2, Rat.le_refl, hl, hr, Rat.le_refl, by simp [Cmp.holds, h]⟩
+  · refine ⟨T.l.2, T.r.1, hl, Rat.le_refl, Rat.le_refl, hr, ?_⟩
+    simp only [Cmp.holds, Bool.false_eq_true, false_iff]
+    exact fun hlt => Rat.lt_irrefl (lelt h hlt)
+  · exact ⟨T.l.1, T.r.2, Rat.le_refl, hl, hr, Rat.le_refl, by simp [Cmp.holds, h]⟩
+  · refine ⟨T.l.1, T.r.2, Rat.le_refl, hl, hr, Rat.le_refl, ?_⟩
+    simp only [Cmp.holds, Bool.false_eq_true, false_iff]
+    exact fun hle => Rat.lt_irrefl (ltle h hle)
+  · exact ⟨T.l.2, T.r.1, hl, Rat.le_refl, Rat.le_refl, hr, by simp [Cmp.holds, h]⟩
+  · refine ⟨T.l.1, T.r.2, Rat.le_refl, hl, hr, Rat.le_refl, ?_⟩
+    simp only [Cmp.holds, Bool.false_eq_true, false_iff]
+    exact fun hlt => Rat.lt_irrefl (lelt h hlt)
+  · exact ⟨T.l.2, T.r.1, hl, Rat.le_refl, Rat.le_refl, hr, by simp [Cmp.holds, h]⟩
+  · exact absurd h (by simp)
+  · exact absurd h (by simp)
+
 /-- **The values behind a point check out**: each one sits in the coordinate it stands for
     and inside its column's reach, and together they satisfy every constraint. -/
 def witnessOk (s : Sieve) (p : Point) (v : List Rat) : Bool :=
@@ -637,13 +779,17 @@ def witnessOk (s : Sieve) (p : Point) (v : List Rat) : Bool :=
     | some (some D), some w => decide (w ∈ D)
     | some none, _ => true
     | _, _ => false) &&
-  s.above.all (fun e => !(p[e.axis]? == some e.coord) || e.rows.any (fun r => r.firesB p v))
+  s.above.all (fun e => !(p[e.axis]? == some e.coord) || e.rows.any (fun r => r.firesB p v)) &&
+  (List.range p.length).all (fun i =>
+    match p[i]?, s.truth[i]? with
+    | some c, some (some T) => T.can (c == T.trueAt)
+    | _, _ => true)
 
 theorem asked_of_witnessOk {s : Sieve} {p : Point} {v : List Rat}
     (h : witnessOk s p v = true) : s.asked p := by
   simp only [witnessOk, Bool.and_eq_true] at h
-  obtain ⟨⟨⟨⟨⟨⟨⟨hco, hre⟩, hcs⟩, hnv⟩, hap⟩, hfa⟩, hdy⟩, hab⟩ := h
-  refine ⟨v, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨hco, hre⟩, hcs⟩, hnv⟩, hap⟩, hfa⟩, hdy⟩, hab⟩, htr⟩ := h
+  refine ⟨v, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro i c x hp hx
     have hi := List.all_eq_true.1 hco i (List.mem_range.2 (lt_of_getElem? hp))
     cases hv : v[i]? with
@@ -692,6 +838,12 @@ theorem asked_of_witnessOk {s : Sieve} {p : Point} {v : List Rat}
     simp only [beq_self_eq_true, Bool.not_true, Bool.false_or, List.any_eq_true] at he'
     obtain ⟨r, hr, hf⟩ := he'
     exact ⟨r, hr, AboveRow.fires_of_firesB hf⟩
+  · intro i T hT c hp
+    have hi := List.all_eq_true.1 htr i (List.mem_range.2 (lt_of_getElem? hp))
+    simp only [hp, hT] at hi
+    obtain ⟨x, y, h1, h2, h3, h4, hiff⟩ := Truth.exists_of_can hi
+    rw [beq_iff_eq] at hiff
+    exact ⟨x, y, h1, h2, h3, h4, hiff⟩
 
 /-! ## A box the linear model leaves no values in (§15.141)
 
@@ -972,7 +1124,7 @@ theorem rowOut_sound {s : Sieve} {box : Box} {r : AboveRow} {o : RowOut} {p : Po
 theorem not_asked_of_aboveRuledOut {s : Sieve} {box : Box} {axis : Nat} {outs : List RowOut}
     {p : Point} (h : aboveRuledOut s box axis outs = true) (hin : inBox box p = true) :
     ¬ s.asked p := by
-  rintro ⟨v, hf, _, _, _, _, hfa, _, hab⟩
+  rintro ⟨v, hf, _, _, _, _, hfa, _, hab, _⟩
   unfold aboveRuledOut at h
   split at h
   · rename_i coord hbx
@@ -1102,5 +1254,65 @@ theorem not_asked_of_daysPart {s : Sieve} {a b : Box} {i : Nat} {p : Point}
       rcases hall with hno | hout
       · rw [hdy] at hno; exact absurd hno (by simp)
       · exact not_asked_of_days (daysRulesOut_of_coord hc hout)
+
+/-! ## Two rows the rows of a table above part (rulec's §15.196) -/
+
+theorem box_length_of_inBox {b : Box} {p : Point} (h : inBox b p = true) : b.length = p.length := by
+  induction b generalizing p with
+  | nil => cases p with
+    | nil => rfl
+    | cons _ _ => simp [inBox] at h
+  | cons x xs ih => cases p with
+    | nil => simp [inBox] at h
+    | cons c cs =>
+      simp only [inBox, Bool.and_eq_true] at h
+      simp [ih h.2]
+
+/-- A point of a box is a point of the box with one axis narrowed to the coordinate it takes there. -/
+theorem inBox_set {b : Box} {p : Point} {i c : Nat} (h : inBox b p = true) (hp : p[i]? = some c) :
+    inBox (b.set i [c]) p = true := by
+  have hlen := box_length_of_inBox h
+  apply inBox_of_getElem
+  · simp [hlen]
+  · intro j xs d hb hd
+    by_cases hji : i = j
+    · subst hji
+      have hi : i < b.length := by rw [hlen]; exact lt_of_getElem? hp
+      rw [List.getElem?_set_self hi] at hb
+      rw [hp] at hd
+      simp only [Option.some.injEq] at hb hd
+      subst hb; subst hd
+      simp
+    · rw [List.getElem?_set_ne hji] at hb
+      obtain ⟨e, he, hm⟩ := inBox_getElem h hb
+      rw [hd] at he
+      simp only [Option.some.injEq] at he
+      subst he
+      exact hm
+
+/-- Two boxes the rows of a table above part: for every coordinate both take on the axis of the
+    column that table decides, the box they share narrowed to it is one `aboveRuledOut` settles,
+    with the reasons given for that coordinate. -/
+def abovePart (s : Sieve) (a b : Box) (axis : Nat) (at_ : List (Nat × List RowOut)) : Bool :=
+  match (pairBox a b)[axis]? with
+  | some cs => cs.all (fun c => match at_.find? (fun q => q.1 == c) with
+      | some q => aboveRuledOut s ((pairBox a b).set axis [c]) axis q.2
+      | none => false)
+  | none => false
+
+/-- **No point the rule is asked about lies in two boxes the rows of a table above part.** -/
+theorem not_asked_of_abovePart {s : Sieve} {a b : Box} {axis : Nat} {at_ : List (Nat × List RowOut)}
+    {p : Point} (h : abovePart s a b axis at_ = true) (ha : inBox a p = true) (hb : inBox b p = true) :
+    ¬ s.asked p := by
+  have hpb := inBox_pairBox ha hb
+  unfold abovePart at h
+  split at h
+  case _ cs hcs =>
+    obtain ⟨c, hpc, hc⟩ := inBox_getElem hpb hcs
+    have hall := List.all_eq_true.1 h c (List.contains_iff_mem.1 hc)
+    split at hall
+    case _ q _ => exact not_asked_of_aboveRuledOut hall (inBox_set hpb hpc)
+    case _ => exact absurd hall (by simp)
+  case _ => exact absurd h (by simp)
 
 end RulecCert

@@ -34,6 +34,10 @@ const PAIRS: &[(&str, &str, usize)] = &[
     ("E102_past_what_a_table_above_allows", "E102_上の表が許さない行", 2),
 ];
 
+/// A row that asks a boolean `define` for the truth value it never takes over the ranges of the
+/// inputs (§15.196): the English rule, its Japanese version, and the row.
+const TRUTH: &[(&str, &str, usize)] = &[("E102_asks_what_a_define_never_is", "E102_定義がとらない真偽を求める行", 2)];
+
 fn source(stem: &str) -> (String, String) {
     let rel = format!("tests/reach/{stem}.rule");
     let src = std::fs::read_to_string(root().join(&rel)).unwrap_or_else(|_| panic!("cannot read {rel}"));
@@ -63,9 +67,9 @@ fn found(src: &str, rel: &str) -> Vec<(String, usize)> {
 fn a_row_past_a_derives_reach_is_e102_with_what_the_derive_comes_to() {
     let mut names: Vec<String> = std::fs::read_dir(root().join("tests/reach")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
     names.sort();
-    let mut listed: Vec<String> = PAIRS.iter().flat_map(|(en, ja, _)| [format!("{en}.rule"), format!("{ja}.rule")]).collect();
+    let mut listed: Vec<String> = PAIRS.iter().chain(TRUTH).flat_map(|(en, ja, _)| [format!("{en}.rule"), format!("{ja}.rule")]).collect();
     listed.sort();
-    assert_eq!(names, listed, "every rule of tests/reach is in PAIRS, with its Japanese version");
+    assert_eq!(names, listed, "every rule of tests/reach is in PAIRS or TRUTH, with its Japanese version");
     let mut failures = Vec::new();
     for (en, ja, row) in PAIRS {
         for stem in [en, ja] {
@@ -322,4 +326,52 @@ fn the_json_marks_the_row_and_the_derive_the_same_in_both_languages() {
     for k in ["where", "rows", "fix", "witness"] {
         assert_eq!(format!("{:?}", en.get(k)), format!("{:?}", ja.get(k)), "{k}");
     }
+}
+
+/// A row that asks a boolean `define` for the truth value it never takes is E102's third form
+/// (§15.196): the define's line is marked with the value it always takes, the note says so, and
+/// deleting the row leaves the rule passing. The same findings on the same lines in both versions.
+#[test]
+fn a_row_that_asks_what_a_define_never_is_is_e102() {
+    let mut failures = Vec::new();
+    for (en, ja, row) in TRUTH {
+        for stem in [en, ja] {
+            let (rel, src) = source(stem);
+            let ds = i18n::with(Lang::En, || rulec::check_source(&src, &rel));
+            let errors: Vec<_> = ds.iter().filter(|d| d.severity == rulec::diag::Severity::Error).collect();
+            if errors.len() != 1 || errors[0].code != "E102" || !errors[0].title.contains(&format!("row {row} ")) {
+                failures.push(format!("{rel}: {:?}, not one E102 on row {row}", errors.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>()));
+                continue;
+            }
+            for (lang, tag) in [(Lang::En, "en"), (Lang::Ja, "ja")] {
+                let out = printed(&rel, &src, lang);
+                let (mark, said) = if lang == Lang::En {
+                    ("always true over the ranges of the inputs", "is always true, and this row asks for it to be false.")
+                } else {
+                    ("入力の範囲では、いつも true です", "はいつも true です。この行は false を求めています。")
+                };
+                if !out.contains(mark) || !out.contains(said) {
+                    failures.push(format!("{rel} ({tag}) does not say what the define always is:\n{out}"));
+                }
+                if let Err(e) = ritsu_testkit::golden::check(&root().join(format!("tests/golden/reach/{stem}.{tag}.txt")), &out) {
+                    failures.push(e);
+                }
+            }
+            // deleting the row: the table's header is the first line with an answer column
+            let lines: Vec<&str> = src.lines().collect();
+            let head = lines.iter().position(|l| l.starts_with("| ") && l.contains("->")).unwrap();
+            let kept: Vec<&str> = lines.iter().enumerate().filter(|(k, _)| *k != head + row).map(|(_, l)| *l).collect();
+            let without = format!("{}\n", kept.join("\n"));
+            let codes: Vec<String> = found(&without, &rel).into_iter().map(|(c, _)| c).collect();
+            if codes.iter().any(|c| c.starts_with('E')) {
+                failures.push(format!("{rel} without row {row}: {codes:?}"));
+            }
+        }
+        let (re, se) = source(en);
+        let (rj, sj) = source(ja);
+        if found(&se, &re) != found(&sj, &rj) {
+            failures.push(format!("{en} and {ja} say different things"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

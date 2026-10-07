@@ -318,6 +318,11 @@ pub struct TableRegion {
     /// every value it takes (§15.195). The completeness check and the third form of E102 read it
     /// as they read a derive's; nothing else here does, so an overlap is decided as before.
     define_reach: Vec<Option<Ival>>,
+    /// If the axis is a boolean `define` of one comparison that takes one truth value over the
+    /// ranges it is read with, that value ([`truth_of_expr`]); the other coordinate is a point no
+    /// input reaches (§15.196). Read by the whole sieve, `feasible` included, so the completeness
+    /// check, the overlap checks and ritsu's port see the same points.
+    define_truth: Vec<Option<bool>>,
     /// Every `derive` in the rule, by name. A derived column is a **linear combination of
     /// inputs** (§5), so the interval it can actually reach is decidable by arithmetic on the
     /// intervals of those inputs — which is what the per-axis sieve does not look at.
@@ -972,6 +977,48 @@ fn cell_mask(axis: &Axis, cell: Option<&Cell>, ty: &Ty, c: &Checked) -> Vec<bool
     v
 }
 
+/// The truth value a `define` of one comparison always takes over the values its two sides come
+/// to, when it always takes one (§15.196): `made <= 2027-03-31` with `made` declared up to the end
+/// of 2026 is always true, and `a_due <= b_due` with both dates held to one day each is true or
+/// false whatever else the input is. The sides are read as `Checked::interval` reads any value —
+/// the inputs' ranges, what the derives and other defines come to, the values a table above
+/// writes — and a date literal as its day number. `None` when the comparison can go either way,
+/// or a side has no interval.
+pub(crate) fn truth_of_expr(e: &Expr, chk: &Checked) -> Option<bool> {
+    let Expr::Bin(l, op, r, _) = e else { return None };
+    let ty = |e: &Expr| match e {
+        Expr::Name(n, _) => chk.ty_of(n),
+        _ => None,
+    };
+    let want = ty(l).or_else(|| ty(r))?;
+    let side = |e: &Expr| -> Option<(Rat, Rat)> {
+        match e {
+            Expr::Lit(Lit::Date(y, m, d), _) => {
+                let v = crate::types::date_ord(*y, *m, *d);
+                Some((v, v))
+            }
+            _ => chk.interval(e, &want),
+        }
+    };
+    let ((al, ah), (bl, bh)) = (side(l)?, side(r)?);
+    use std::cmp::Ordering::*;
+    let le = |x: Rat, y: Rat| x.cmp_to(y) != Greater;
+    let lt = |x: Rat, y: Rat| x.cmp_to(y) == Less;
+    match op {
+        BinOp::Le if le(ah, bl) => Some(true),
+        BinOp::Le if lt(bh, al) => Some(false),
+        BinOp::Lt if lt(ah, bl) => Some(true),
+        BinOp::Lt if le(bh, al) => Some(false),
+        BinOp::Ge if le(bh, al) => Some(true),
+        BinOp::Ge if lt(ah, bl) => Some(false),
+        BinOp::Gt if lt(bh, al) => Some(true),
+        BinOp::Gt if le(ah, bl) => Some(false),
+        // `=` is left to the comparison's own values: the two re-checkers read the four
+        // orderings only, and a truth value no one can check is not one to rest on.
+        _ => None,
+    }
+}
+
 impl TableRegion {
     pub fn build(t: &Table, c: &Checked, f: &RuleFile) -> Option<TableRegion> {
         let inputs = &f.inputs;
@@ -1161,6 +1208,11 @@ impl TableRegion {
                 c.ranges.get(n).copied().filter(|(lo, hi)| lo.is_some() && hi.is_some())
             })
             .collect();
+        let define_truth: Vec<Option<bool>> = col_names
+            .iter()
+            .zip(&axes)
+            .map(|(n, a)| if matches!(a, Axis::Bool) { defines.get(n).and_then(|e| truth_of_expr(e, c)) } else { None })
+            .collect();
 
 
         // The coordinates of the values an upstream table can produce. Only enum axes have them.
@@ -1228,6 +1280,7 @@ impl TableRegion {
             is_define,
             derived,
             define_reach,
+            define_truth,
             exprs,
             defines,
             spans,
@@ -1515,7 +1568,13 @@ impl TableRegion {
             return None;
         }
         if p.len() == self.axes.len() {
-            if self.feasible(p) == Feasible::No || self.upstream_dead_at(p, ups, chk) || self.refutes_path(p) {
+            // The same sieve the completeness check reads (§15.196): what a table above writes a
+            // value under, together with the linear model, as well.
+            if self.feasible(p) == Feasible::No
+                || self.upstream_dead_at(p, ups, chk)
+                || self.refutes_path(p)
+                || self.above_rows_out(p, ups, chk).is_some()
+            {
                 return None;
             }
             return Some(p.clone());
@@ -2440,13 +2499,15 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
     }
 
     // --- Unreachable rows
-    // The third form (§15.189) reads the reach of the derived and `define` columns, and what a
-    // table above writes a value under together with them (§15.195). Every axis has a
+    // The third form (§15.189) reads the reach of the derived and `define` columns, the truth
+    // value a boolean `define` always takes (§15.196), and what a table above writes a value under
+    // together with them (§15.195). Every axis has a
     // coordinate for each value its column takes since the axes are cut on the step the
     // values take (§15.190), so it reads every table that has such a column or a column a
     // table above decides. Its walk has a budget of its own for the whole table; past it, a row
     // passes as it did before.
-    let reach = Some(reg.reach_of()).filter(|r| r.axes.iter().any(|x| *x) || ups.iter().any(|u| reg.above_can(u)));
+    let reach = Some(reg.reach_of())
+        .filter(|r| r.axes.iter().any(|x| *x) || reg.define_truth.iter().any(|t| t.is_some()) || ups.iter().any(|u| reg.above_can(u)));
     let mut reach_left = budget;
     for i in 0..t.rows.len() {
         let up_dead = upstream_dead(&t.rows[i], &ups, c, t);
@@ -2703,8 +2764,38 @@ fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, c: &Checked, f: &RuleF
         }
         names.push(Took { name: n, span, derive, iv });
     }
+    // The boolean `define`s at the truth value they never take (§15.196): each one's line,
+    // marked with the value it always takes, and a note that says so.
+    let truth_word = |t: bool| if t { crate::kw::TRUE } else { crate::kw::FALSE };
+    let mut d = d;
+    let mut truths: Vec<String> = Vec::new();
+    for &ai in &w.truth {
+        let name = &reg.col_names[ai];
+        let Some(t) = reg.define_truth.get(ai).copied().flatten() else { continue };
+        if let Some(e) = f.items.iter().find_map(|it| match it {
+            Item::Define(dv) if dv.name.text == *name => Some(&dv.expr),
+            _ => None,
+        }) && !name.contains(':')
+        {
+            d = d.mark(e.span().clone(), tr!("入力の範囲では、いつも {} です", "always {} over the ranges of the inputs", truth_word(t)));
+        }
+        d = d.note(tr!(
+            "入力の範囲では、`{name}` はいつも {} です。この行は {} を求めています。",
+            "Over the ranges of the inputs, `{name}` is always {}, and this row asks for it to be {}.",
+            truth_word(t),
+            truth_word(!t)
+        ));
+        truths.push(format!("`{name}`"));
+    }
     // A value the form reads always has an interval; were none to be had, the row is still
     // reached by no input, and is said so plainly.
+    if names.is_empty() && !truths.is_empty() {
+        let who = truths.join(if ja { "、" } else { ", " });
+        return d.note(tr!(
+            "ヒント: この行の {who} の条件を、それがいつもとる値に書き直すか、この行を削除してください。",
+            "hint: rewrite the condition on {who} to the value it always takes, or delete this row."
+        ));
+    }
     if names.is_empty() {
         return d
             .note(tr!("この行の条件を同時に満たす入力がありません。", "No input satisfies all of this row's conditions at once."))
@@ -2752,7 +2843,6 @@ fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, c: &Checked, f: &RuleF
     let quoted: Vec<String> = reached.iter().map(|t| format!("`{}`", t.name)).collect();
     let one = reached.len() == 1;
     let from_above = reached.iter().any(|t| reads_a_table(t.name, f, c, 0));
-    let mut d = d;
     // Each value's line, with what it can come to. One a rule applied is written in the other
     // file, so its line is not marked here.
     for t in &names {
@@ -3044,7 +3134,7 @@ impl TableRegion {
                 || self.upstream_dead_at(path, ups, chk)
                 || self.refutes_path(path)
                 || self.above_rows_out(path, ups, chk).is_some()
-                || self.truth_rules_out(path, chk)
+                || self.truth_rules_out(path).is_some()
             {
                 return None;
             }
@@ -3109,6 +3199,8 @@ pub(crate) struct OutOfReach {
     covered: bool,
     /// The axes of derived and `define` columns whose reach leaves a point out.
     reach: BTreeSet<usize>,
+    /// The axes of boolean `define`s at the truth value they never take (§15.196).
+    truth: BTreeSet<usize>,
     /// The `constraint` lines (by index) that leave a point out, read one at a time.
     constraints: BTreeSet<usize>,
     /// The axes of koyomi's days that leave a point out.
@@ -3131,7 +3223,7 @@ impl OutOfReach {
     /// row left out only by `constraint` lines, the tables above or koyomi's days is not reported
     /// by it.
     fn by_a_derive(&self) -> bool {
-        !self.reach.is_empty() || !self.derives.is_empty() || !self.above_by.is_empty()
+        !self.reach.is_empty() || !self.truth.is_empty() || !self.derives.is_empty() || !self.above_by.is_empty()
     }
 }
 
@@ -3245,6 +3337,10 @@ impl TableRegion {
     fn left_out(&self, path: &[usize], ups: &[Upstream], chk: &Checked, rs: &Reach, leaf: bool, why: &mut OutOfReach) -> bool {
         use std::cmp::Ordering::{Greater, Less};
         for (ai, &ci) in path.iter().enumerate() {
+            if self.truth_never(ai, ci) {
+                why.truth.insert(ai);
+                return true;
+            }
             if !rs.axes[ai] {
                 continue;
             }
@@ -3991,6 +4087,12 @@ impl TableRegion {
         if self.days_rule_out(path).is_some() {
             return Feasible::No;
         }
+        // A `define` whose coordinate lies outside what it can come to, and a boolean one at the
+        // truth value it never takes, are points no input reaches: the overlap checks read them
+        // as the completeness check does (§15.196).
+        if self.defines_rule_out(path).is_some() || self.truth_rules_out(path).is_some() {
+            return Feasible::No;
+        }
         for k in &self.constraints {
             if self.constraint_impossible(k, path) {
                 return Feasible::No;
@@ -4091,52 +4193,75 @@ impl TableRegion {
         for up in ups {
             let Some(ai) = self.col_names.iter().position(|n| *n == up.name) else { continue };
             let Some(&ci) = path.get(ai) else { continue };
-            let value = match &self.axes[ai] {
-                Axis::Enum { values } => match values.get(ci) {
-                    Some(v) => v.clone(),
-                    None => continue,
-                },
-                Axis::Bool => if ci == 0 { crate::kw::TRUE.to_string() } else { crate::kw::FALSE.to_string() },
-                _ => continue,
-            };
-            if !self.above_can(up) {
-                continue;
+            if let Some(a) = self.above_rows_in(&bx, up, ai, ci, chk) {
+                return Some(a);
             }
-            let mut writers: Vec<usize> = Vec::new();
-            let mut unknown = false;
-            for (ri, r) in up.table.rows.iter().enumerate() {
-                match r.outs.get(up.oi) {
-                    Some(OutCell::Lit(Lit::Word(w))) | Some(OutCell::Name(w)) if !chk.syms.contains_key(w) => {
-                        if *w == value {
-                            writers.push(ri);
-                        }
-                    }
-                    _ => {
-                        unknown = true;
-                        break;
+        }
+        None
+    }
+
+    /// The same, for any box that takes coordinate `ci` alone on the axis `ai` of the column `up`
+    /// decides: every row of that table that writes the value, with why it fires nowhere in the box.
+    fn above_rows_in(&self, bx: &[Vec<usize>], up: &Upstream, ai: usize, ci: usize, chk: &Checked) -> Option<AboveRows> {
+        let value = match &self.axes[ai] {
+            Axis::Enum { values } => values.get(ci)?.clone(),
+            Axis::Bool => if ci == 0 { crate::kw::TRUE.to_string() } else { crate::kw::FALSE.to_string() },
+            _ => return None,
+        };
+        if !self.above_can(up) {
+            return None;
+        }
+        let mut writers: Vec<usize> = Vec::new();
+        for (ri, r) in up.table.rows.iter().enumerate() {
+            match r.outs.get(up.oi) {
+                Some(OutCell::Lit(Lit::Word(w))) | Some(OutCell::Name(w)) if !chk.syms.contains_key(w) => {
+                    if *w == value {
+                        writers.push(ri);
                     }
                 }
+                _ => return None,
             }
-            // A value no row writes is the second form's business, and the masks have it already.
-            if unknown || writers.is_empty() {
+        }
+        // A value no row writes is the second form's business, and the masks have it already.
+        if writers.is_empty() {
+            return None;
+        }
+        let mut rows: Vec<(usize, RowOut)> = Vec::new();
+        for &ri in &writers {
+            rows.push((ri, self.row_out(bx, up, ri, chk)?));
+        }
+        Some(AboveRows {
+            axis: ai,
+            coord: ci,
+            column: up.name.clone(),
+            value,
+            table: up.table.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(),
+            rows,
+        })
+    }
+
+    /// Two rows that meet only where the rows of a table above leave no values (§15.196): on the
+    /// axis of a column that table decides, for every value both rows take there, every row that
+    /// writes it fires nowhere in what both rows take. The pair is apart on the points the rule is
+    /// asked about, and each value comes with its reasons, as a cover's leaf does.
+    fn above_apart(&self, i: usize, j: usize, ups: &[Upstream], chk: &Checked) -> Option<(usize, Vec<AboveRows>)> {
+        let pb = self.pair_box(i, j);
+        for up in ups {
+            let Some(ai) = self.col_names.iter().position(|n| *n == up.name) else { continue };
+            if pb[ai].is_empty() {
                 continue;
             }
-            let mut rows: Vec<(usize, RowOut)> = Vec::new();
-            for &ri in &writers {
-                match self.row_out(&bx, up, ri, chk) {
-                    Some(o) => rows.push((ri, o)),
+            let mut all = Vec::new();
+            for &c in &pb[ai] {
+                let mut sub = pb.clone();
+                sub[ai] = vec![c];
+                match self.above_rows_in(&sub, up, ai, c, chk) {
+                    Some(a) => all.push(a),
                     None => break,
                 }
             }
-            if rows.len() == writers.len() {
-                return Some(AboveRows {
-                    axis: ai,
-                    coord: ci,
-                    column: up.name.clone(),
-                    value,
-                    table: up.table.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(),
-                    rows,
-                });
+            if all.len() == pb[ai].len() {
+                return Some((ai, all));
             }
         }
         None
@@ -4240,51 +4365,16 @@ impl TableRegion {
         None
     }
 
-    /// The truth value a `define` of one comparison always takes over the values its two sides
-    /// come to, when it always takes one: `a_due <= b_due` with both dates held to one day each is
-    /// true or false whatever else the input is. Read for ritsu's port only ([`live_rows`]), where
-    /// the inputs are held to part of their ranges; `check` reads a boolean `define` as any value.
-    fn truth_of(&self, name: &str, chk: &Checked) -> Option<bool> {
-        let Expr::Bin(l, op, r, _) = self.defines.get(name)? else { return None };
-        let ty = |e: &Expr| match e {
-            Expr::Name(n, _) => chk.ty_of(n),
-            _ => None,
-        };
-        let want = ty(l).or_else(|| ty(r))?;
-        let side = |e: &Expr| -> Option<(Rat, Rat)> {
-            match e {
-                Expr::Lit(Lit::Date(y, m, d), _) => {
-                    let v = crate::types::date_ord(*y, *m, *d);
-                    Some((v, v))
-                }
-                _ => chk.interval(e, &want),
-            }
-        };
-        let ((al, ah), (bl, bh)) = (side(l)?, side(r)?);
-        use std::cmp::Ordering::*;
-        let le = |x: Rat, y: Rat| x.cmp_to(y) != Greater;
-        let lt = |x: Rat, y: Rat| x.cmp_to(y) == Less;
-        match op {
-            BinOp::Le if le(ah, bl) => Some(true),
-            BinOp::Le if lt(bh, al) => Some(false),
-            BinOp::Lt if lt(ah, bl) => Some(true),
-            BinOp::Lt if le(bh, al) => Some(false),
-            BinOp::Ge if le(bh, al) => Some(true),
-            BinOp::Ge if lt(ah, bl) => Some(false),
-            BinOp::Gt if lt(bh, al) => Some(true),
-            BinOp::Gt if le(ah, bl) => Some(false),
-            BinOp::Eq if al.cmp_to(ah) == Equal && bl.cmp_to(bh) == Equal && al.cmp_to(bl) == Equal => Some(true),
-            BinOp::Eq if lt(ah, bl) || lt(bh, al) => Some(false),
-            _ => None,
-        }
+    /// Whether coordinate `ci` of axis `ai` is the truth value a boolean `define` on it never
+    /// takes ([`truth_of_expr`]): `true` is the first coordinate of a boolean axis.
+    pub(crate) fn truth_never(&self, ai: usize, ci: usize) -> bool {
+        self.define_truth.get(ai).copied().flatten().is_some_and(|t| t != (ci == 0))
     }
 
-    /// Whether the path takes, on the axis of a boolean `define`, the truth value the define never
-    /// takes ([`TableRegion::truth_of`]).
-    fn truth_rules_out(&self, path: &[usize], chk: &Checked) -> bool {
-        path.iter().enumerate().any(|(ai, &ci)| {
-            self.is_define[ai] && matches!(self.axes[ai], Axis::Bool) && self.truth_of(&self.col_names[ai], chk).is_some_and(|t| t != (ci == 0))
-        })
+    /// The first axis of a boolean `define` on which the path takes the truth value the define
+    /// never takes (§15.196).
+    pub(crate) fn truth_rules_out(&self, path: &[usize]) -> Option<usize> {
+        path.iter().enumerate().find(|(ai, ci)| self.truth_never(*ai, **ci)).map(|(ai, _)| ai)
     }
 }
 
@@ -4388,6 +4478,14 @@ pub struct CertRow {
     /// reads these to learn which rows of this one can put a column at a value, which is
     /// what turns an upstream leaf from a claim into a check (§15.115).
     pub produces: Vec<Option<String>>,
+    /// What the row writes into each of the table's own output columns that holds a number,
+    /// in the order `CertTable::decides` names them — a literal or a name, the only two things
+    /// an answer cell can be (§3.2) — with where the cell stands, and `None` for a column that
+    /// holds no number. A re-checker works out from these the values the column can take, and
+    /// so the range a table below reads it with, rather than taking the certificate's word for
+    /// it (§15.196).
+    #[allow(clippy::type_complexity)]
+    pub writes: Vec<Option<(Expr, crate::types::Ty, Option<(usize, usize, usize)>)>>,
     /// The member table the row was written in. Rows that share one were written in one
     /// table, so they have a cell in the same columns and in no others.
     pub origin: String,
@@ -4475,6 +4573,10 @@ pub struct CertTable {
     /// The pairs the axes do not part and koyomi's days do (§15.174): on this axis of days, every
     /// coordinate both rows take holds none of them, so no input reaches both.
     pub days_apart: Vec<(usize, usize, usize)>,
+    /// The pairs the rows of a table above part (§15.196): on the axis of a column that table
+    /// decides, every value both rows take is written only by rows that fire nowhere in what
+    /// both rows take, each with why.
+    pub above_apart: Vec<(usize, usize, usize, Vec<AboveRows>)>,
 }
 
 /// The certificate of one definition set (§15.96), or nothing when the set has no region to
@@ -4554,7 +4656,10 @@ impl TableRegion {
                 name: self.col_names[ai].clone(),
                 kind: if self.derived[ai].is_some() {
                     "derived"
-                } else if self.is_define[ai] {
+                } else if self.is_define[ai] || f.items.iter().any(|it| matches!(it, Item::Define(d) if d.name.text == self.col_names[ai])) {
+                    // A `define` of any type: a truth value and a number alike (§15.196). A
+                    // number's column was called `upstream` here before, which said the wrong
+                    // thing about where its points come from.
                     "define"
                 } else if inputs.iter().any(|i| i.name.text == self.col_names[ai]) {
                     "input"
@@ -4600,6 +4705,26 @@ impl TableRegion {
                             Some(w.clone())
                         }
                         _ => None,
+                    })
+                    .collect(),
+                writes: (0..t.outputs.len())
+                    .map(|oi| {
+                        let ty = chk.ty_of(&t.outputs[oi].name.text)?;
+                        let ty = match ty {
+                            crate::types::Ty::Opt(t) => *t,
+                            t => t,
+                        };
+                        if !matches!(ty, crate::types::Ty::Money { .. } | crate::types::Ty::Qty { .. } | crate::types::Ty::Rate | crate::types::Ty::Number) {
+                            return None;
+                        }
+                        let span = row.out_spans.get(oi).cloned().unwrap_or_else(|| row.span.clone());
+                        let e = match row.outs.get(oi)? {
+                            OutCell::Lit(Lit::Num(n)) => Expr::Lit(Lit::Num(n.clone()), span.clone()),
+                            OutCell::Name(w) => Expr::Name(w.clone(), span.clone()),
+                            _ => return None,
+                        };
+                        let at = (!applied.get(ri).copied().unwrap_or(false)).then_some((span.line, span.col, span.len));
+                        Some((e, ty, at))
                     })
                     .collect(),
                 origin: row.origin.clone().unwrap_or_else(|| t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default()),
@@ -4667,6 +4792,17 @@ impl TableRegion {
                 None => true,
             }
         });
+        // Or the rows of a table above do: every value both take on a column that table decides is
+        // written only by rows that fire nowhere in what both take (§15.196).
+        let ups = upstreams(t, chk, f);
+        let mut above_apart = Vec::new();
+        undecided.retain(|&(a, b)| match self.above_apart(a - 1, b - 1, &ups, chk) {
+            Some((ai, at)) => {
+                above_apart.push((a, b, ai, at));
+                false
+            }
+            None => true,
+        });
         let model: Vec<crate::fourier::Origin> = self.model.iter().flat_map(|g| g.sys.iter().map(|q| q.origin.clone())).collect();
         let mut model_extra: Vec<String> = self
             .model
@@ -4682,7 +4818,6 @@ impl TableRegion {
         // The values a column decided above holds where the cover rests on the rows of that table
         // (§15.195): a point that reaches a row with one of them has values one of those rows
         // fires on, and the re-checkers hold it to that.
-        let ups = upstreams(t, chk, f);
         let mut keys: Vec<(usize, usize)> = Vec::new();
         if let Some(cv) = cover.as_ref() {
             gather_above_rows(cv, &mut keys);
@@ -4745,6 +4880,7 @@ impl TableRegion {
             model_extra,
             refuted,
             days_apart,
+            above_apart,
         }
     }
 
@@ -5118,6 +5254,9 @@ pub enum Cover {
     /// The coordinate the path takes on the axis of a `define` lies outside the values the
     /// define can come to (§15.195), as `ByDerived` says it of a derive.
     ByDefine(usize),
+    /// The coordinate the path takes on the axis of a boolean `define` is the truth value the
+    /// define never takes over the ranges of the inputs (§15.196).
+    ByTruth(usize),
     /// The value a column decided above holds here is written only by rows of that table none of
     /// which fires anywhere in the box, each with why (§15.195).
     ByAboveRows(AboveRows),
@@ -5198,6 +5337,9 @@ impl TableRegion {
             if self.define_out_of_reach(ai2, path) {
                 return Some(Cover::ByDefine(ai2));
             }
+        }
+        if let Some(ai2) = self.truth_rules_out(path) {
+            return Some(Cover::ByTruth(ai2));
         }
         if path.len() == self.axes.len() && self.upstream_dead_at(path, ups, chk) {
             let apart = self.apart_at(path, ups, chk);

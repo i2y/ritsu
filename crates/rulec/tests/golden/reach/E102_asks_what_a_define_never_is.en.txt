@@ -1,0 +1,11 @@
+error[E102]: Unreachable row: row 2 never matches
+  --> tests/reach/E102_asks_what_a_define_never_is.rule:16 table duty_of
+   |
+16 | | false   | 400JPY               |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2: no input reaches here
+10 | define reduced : bool = made <= 2027-03-31
+   |                         ^^^^^^^^^^^^^^^^^^ always true over the ranges of the inputs
+   |
+ Over the ranges of the inputs, `reduced` is always true, and this row asks for it to be false.
+ hint: rewrite the condition on `reduced` to the value it always takes, or delete this row.
+

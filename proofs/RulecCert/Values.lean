@@ -901,4 +901,77 @@ theorem stored_in_i64 {I : Span2} {v scale storedMax : Rat} (hv : inSpan I v)
   exact Rat.le_trans
     (Rat.le_trans (Rat.mul_le_mul_of_nonneg_right (absR_le_of_inSpan hv) hs) hm) hmx
 
+/-! ## What a table writes into a column of numbers (rulec's §15.196)
+
+A row's answer cell is a literal or a name (§3.2), so what it writes is an expression like any
+other, and its interval is worked out the same way. A table above writes into its column only what
+one of its rows writes, so the column's values lie in the hull of those intervals: that hull, not
+the range the certificate states, is what a table below reads the column with. The stated range is
+then held to it. -/
+
+/-- The smallest span that holds the interval of every row's answer; `none` where one of them has
+    no interval, or there is no row. -/
+def hullOf (ranges : String → Option Span2) (within : Expr → Expr → Bool) : List Expr → Option Span2
+  | [] => none
+  | [e] => interval ranges within e
+  | e :: es =>
+    match interval ranges within e, hullOf ranges within es with
+    | some I, some J => some (rmin I.1 J.1, rmax I.2 J.2)
+    | _, _ => none
+
+/-- **Every value a row writes lies in the hull.** -/
+theorem eval_mem_hull {ranges : String → Option Span2} {env : String → Option UVal}
+    {within : Expr → Expr → Bool} {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd)
+    (henv : ∀ n I w t, ranges n = some I → env n = some (w, t) → inSpan I w)
+    (hwithin : ∀ a b va vb ta tb, within a b = true →
+      eval rnd env a = some (va, ta) → eval rnd env b = some (vb, tb) → va ≤ vb) :
+    ∀ (es : List Expr) (H : Span2), hullOf ranges within es = some H →
+      ∀ e ∈ es, ∀ (v : Rat) (t : Ty), eval rnd env e = some (v, t) → inSpan H v
+  | [], _, h => by simp [hullOf] at h
+  | [e], H, h => by
+    intro e' he' v t hv
+    simp only [List.mem_singleton] at he'
+    subst he'
+    exact eval_mem_interval hrnd henv hwithin e' H v t (by simpa [hullOf] using h) hv
+  | e :: e2 :: es, H, h => by
+    intro e' he' v t hv
+    simp only [hullOf] at h
+    split at h
+    case _ I J hI hJ =>
+      simp only [Option.some.injEq] at h
+      subst h
+      simp only [List.mem_cons] at he'
+      rcases he' with rfl | he'
+      · obtain ⟨h1, h2⟩ := eval_mem_interval hrnd henv hwithin e' I v t hI hv
+        exact ⟨Rat.le_trans (rmin_le_left _ _) h1, Rat.le_trans h2 (left_le_rmax _ _)⟩
+      · obtain ⟨h1, h2⟩ := eval_mem_hull hrnd henv hwithin (e2 :: es) J hJ e'
+          (by simpa [List.mem_cons] using he') v t hv
+        exact ⟨Rat.le_trans (rmin_le_right _ _) h1, Rat.le_trans h2 (right_le_rmax _ _)⟩
+    case _ => exact absurd h (by simp)
+
+/-- The range a certificate states for the column holds the interval of every row's answer. -/
+def writesWithin (ranges : String → Option Span2) (within : Expr → Expr → Bool) (S : Span2)
+    (es : List Expr) : Bool :=
+  es.all (fun e => match interval ranges within e with
+    | some I => decide (S.1 ≤ I.1) && decide (I.2 ≤ S.2)
+    | none => false)
+
+/-- **The stated range of a column a table writes numbers into holds every value its rows write**:
+    a table below that read the column with that range would read it soundly too. -/
+theorem eval_mem_stated {ranges : String → Option Span2} {env : String → Option UVal}
+    {within : Expr → Expr → Bool} {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd)
+    (henv : ∀ n I w t, ranges n = some I → env n = some (w, t) → inSpan I w)
+    (hwithin : ∀ a b va vb ta tb, within a b = true →
+      eval rnd env a = some (va, ta) → eval rnd env b = some (vb, tb) → va ≤ vb)
+    {S : Span2} {es : List Expr} (h : writesWithin ranges within S es = true) :
+    ∀ e ∈ es, ∀ (v : Rat) (t : Ty), eval rnd env e = some (v, t) → inSpan S v := by
+  intro e he v t hv
+  have he' := List.all_eq_true.1 h e he
+  split at he'
+  case _ I hI =>
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at he'
+    obtain ⟨hv1, hv2⟩ := eval_mem_interval hrnd henv hwithin e I v t hI hv
+    exact ⟨Rat.le_trans he'.1 hv1, Rat.le_trans hv2 he'.2⟩
+  case _ => exact absurd he' (by simp)
+
 end RulecCert

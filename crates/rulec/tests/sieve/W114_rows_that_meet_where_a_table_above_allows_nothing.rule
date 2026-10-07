@@ -1,0 +1,27 @@
+rule refund_route v1
+description "Routes a refund. A small refund goes back at once, and one more than 50 pounds over the limit is looked at by hand. A refund is small only up to 50 pounds, so no refund is both. The two rows never meet, so the table is unique"
+
+enum size = small | large
+enum channel = at_once | by_hand | by_post
+
+inputs
+  amount : money[GBP]  range >=1GBP <=100GBP
+  limit  : money[GBP]  range >=0GBP <=100GBP
+
+outputs
+  route : channel
+
+derive excess : money[GBP] = amount - limit  range >=-100GBP <=100GBP
+
+table size_of
+policy unique
+| amount  | -> refund_size : size |
+| <=50GBP | small                 |
+| >50GBP  | large                 |
+
+table route_of
+policy unique
+| refund_size | excess  | -> route : channel |
+| small       | -       | at_once            |
+| -           | >50GBP  | by_hand            |
+| large       | <=50GBP | by_post            |

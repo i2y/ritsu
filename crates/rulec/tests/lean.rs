@@ -116,7 +116,7 @@ fn 偽った証明書は証明付きの検査器でも落ちる() {
         // An interval narrower than the expression really reaches (E108).
         ("区間を狭く言う", cert.replace(r#""interval":["0","173750"]"#, r#""interval":["0","2"]"#)),
         // A type that does not follow from the expression (E103).
-        ("型を偽る", cert.replace(r#""name":"合算率","type":"rate""#, r#""name":"合算率","type":"money[円]""#)),
+        ("型を偽る", cert.replace(r#""name":"合算率","of":"derive","type":"rate""#, r#""name":"合算率","of":"derive","type":"money[円]""#)),
         // A box widened without touching the cell it was read from.
         ("箱を広げる", cert.replacen(r#""accepts":[[0,1]]"#, r#""accepts":[[0,1,2]]"#, 1)),
         // A coordinate removed from an axis: the gap under it is then covered by nothing.
@@ -369,6 +369,11 @@ fn 定理が立つ公理は三つだけ() {
         "RulecCert.not_asked_of_farkas",
         "RulecCert.not_asked_of_derived",
         "RulecCert.not_asked_of_aboveRuledOut",
+        "RulecCert.not_asked_of_truth",
+        "RulecCert.not_asked_of_abovePart",
+        "RulecCert.asked_of_witnessOk",
+        "RulecCert.eval_mem_hull",
+        "RulecCert.eval_mem_stated",
         "RulecCert.included_sound",
         "RulecCert.admits_iff",
         "RulecCert.mem_boxOf_cmp_iff",
@@ -649,4 +654,168 @@ fn 定義と上の表の行の葉は証明付きの検査器でも確かめら�
         assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
         assert!(said.contains("FAILED"), "{what}: {said}");
     }
+}
+
+/// The kind of every column is worked out from `inputs`, `walks` and `values`, and held to what
+/// the certificate calls it (§15.196).
+#[test]
+fn 列の種類は証明付きの検査器でも求め直される() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    let (c, cert) = rulec(&["certificate", "tests/corpus/rating_grade.rule"]);
+    assert_eq!(c, 0, "{cert}");
+    let axis = r#""column":"ratio","kind":"define""#;
+    assert!(cert.contains(axis), "{cert}");
+    assert_eq!(lean(&bin, &cert, None).0, 0, "そのままの証明書が通らない");
+    for kind in ["input", "upstream", "derived"] {
+        let (code, said) = lean(&bin, &cert.replacen(axis, &axis.replace("define", kind), 1), None);
+        assert_eq!(code, 1, "{kind}: 種類を偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains("ratio is a column of kind `define`"), "{kind}: {said}");
+    }
+    let (c, cert) = rulec(&["certificate", "tests/corpus/送料.rule"]);
+    assert_eq!(c, 0, "{cert}");
+    let inputs = r#""inputs":["届け先","重量","注文金額","会員"]"#;
+    assert!(cert.contains(inputs), "{cert}");
+    let (code, said) = lean(&bin, &cert.replacen(inputs, r#""inputs":["届け先","重量","注文金額"]"#, 1), None);
+    assert_eq!(code, 1, "入力を落とした証明書が通ってしまった\n{said}");
+    assert!(said.contains("会員 is a column of kind `upstream`"), "{said}");
+}
+
+/// The range of a column a table writes numbers into is the hull of what its rows write, worked out
+/// here; the stated range is held to it, and with the file each answer cell is read back (§15.196).
+#[test]
+fn 上の表が書く数の範囲は証明付きの検査器でも行から計算し直される() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    let rel = "tests/apply_fixtures/規程.rule";
+    let (c, cert) = rulec(&["certificate", rel]);
+    assert_eq!(c, 0, "{cert}");
+    let range = r#""率":["1/5","1"]"#;
+    let cell = r#"{"num":"50%","value":"1/2","type":"rate"}"#;
+    assert!(cert.contains(range) && cert.contains(cell), "{cert}");
+    let (code, said) = lean(&bin, &cert, Some(rel));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("1 columns a table writes numbers into hold every value their rows write"), "{said}");
+    let (code, said) = lean(&bin, &cert.replacen(range, r#""率":["1/5","4/5"]"#, 1), None);
+    assert_eq!(code, 1, "狭く言った範囲が通ってしまった\n{said}");
+    assert!(said.contains("its rows write a value outside the range the certificate states for it"), "{said}");
+    let forged = cert.replacen(cell, r#"{"num":"50%","value":"3/5","type":"rate"}"#, 1);
+    assert_eq!(lean(&bin, &forged, None).0, 0, "ファイル無しでは区別できない書き換えのはず");
+    let (code, said) = lean(&bin, &forged, Some(rel));
+    assert_eq!(code, 1, "セルの値を書き換えた証明書が通ってしまった\n{said}");
+    assert!(said.contains("the file writes `50%`, and the certificate reads it as another number"), "{said}");
+    let (code, said) = lean(&bin, &cert.replacen(cell, r#"{"num":"60%","value":"3/5","type":"rate"}"#, 1), Some(rel));
+    assert_eq!(code, 1, "セルの字を書き換えた証明書が通ってしまった\n{said}");
+    assert!(said.contains("the file does not say `60%` there"), "{said}");
+}
+
+/// The other truth value of a boolean `define` that always takes one is a box no input reaches,
+/// worked out again from the comparison (§15.196, `not_asked_of_truth`).
+#[test]
+fn 真偽の定義がとらない値の葉は証明付きの検査器でも計算し直される() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    let cert = sieve_cert("E101_a_define_that_is_always_true");
+    let cover = r#""cover":{"split":[{"row":1},{"truth_axis":0}]}"#;
+    assert!(cert.contains(cover), "{cert}");
+    assert_eq!(lean(&bin, &cert, None).0, 0, "そのままの証明書が通らない");
+    for (what, forged) in [
+        ("葉を true の側に置く", cert.replacen(cover, r#""cover":{"split":[{"truth_axis":0},{"row":1}]}"#, 1)),
+        ("比べる日を動かす", cert.replacen(r#""value":"20908""#, r#""value":"20000""#, 1)),
+        ("入力の範囲を延ばす", cert.replacen(r#""made":["19814","20818"]"#, r#""made":["19814","21000"]"#, 1)),
+    ] {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = lean(&bin, &forged, None);
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains("the cover does not tile the space"), "{what}: {said}");
+    }
+}
+
+/// Two rows the rows of a table above part: the pair is proved apart on the points the rule is asked
+/// about (§15.196, `not_asked_of_abovePart`), and three ways of lying about it are refused.
+#[test]
+fn 上の表の行で分かれる対は証明付きの検査器でも確かめられる() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    let cert = sieve_cert("E105_rows_that_meet_where_a_table_above_allows_nothing");
+    let pair = r#"{"a":1,"b":2,"axis":0,"at":[{"coord":0,"above_rows":{"axis":0,"column":"refund_size","value":"small","rows":[{"row":1,"farkas":["#;
+    assert!(cert.contains(pair), "{cert}");
+    let (code, said) = lean(&bin, &cert, None);
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("no two rows meet"), "{said}");
+    let end = r#"{"coord":{"axis":1,"hi":false,"at":"60","open":true},"y":"1/10"}"#;
+    for (what, forged) in [
+        ("別の値の理由を書く", cert.replacen(pair, &pair.replace(r#""at":[{"coord":0,"#, r#""at":[{"coord":1,"#), 1)),
+        ("乗数を変える", cert.replacen(end, &end.replace(r#""y":"1/10""#, r#""y":"1/5""#), 1)),
+        ("別の対に付ける", cert.replacen(pair, &pair.replace(r#""b":2"#, r#""b":3"#), 1)),
+    ] {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = lean(&bin, &forged, None);
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains("two rows are neither proved apart nor named as undecided"), "{what}: {said}");
+    }
+}
+
+/// Every `.rule` under the workspace's crates and site, by its path from the workspace's root.
+fn tree_rules() -> Vec<String> {
+    fn walk(dir: &std::path::Path, base: &std::path::Path, out: &mut Vec<String>) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for e in rd.flatten() {
+            let p = e.path();
+            let name = e.file_name().to_string_lossy().into_owned();
+            if p.is_dir() {
+                if !matches!(name.as_str(), "target" | "node_modules" | ".venv" | ".lake" | ".git") {
+                    walk(&p, base, out);
+                }
+            } else if name.ends_with(".rule") {
+                out.push(p.strip_prefix(base).unwrap().to_string_lossy().into_owned());
+            }
+        }
+    }
+    let base = root().join("../..").canonicalize().unwrap();
+    let mut out = Vec::new();
+    for d in ["crates", "website"] {
+        walk(&base.join(d), &base, &mut out);
+    }
+    out.sort();
+    out
+}
+
+/// Every rule in the tree that states a certificate passes here too, held to its own file
+/// (§15.196): the cells of a rule that applies another, and of a mutant, are read back as well.
+#[test]
+fn 木の規則の証明書は証明付きの検査器でもファイルを添えて通る() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    use std::io::Write;
+    use std::process::Stdio;
+    let base = root().join("../..").canonicalize().unwrap();
+    let (mut held, mut failures) = (0usize, Vec::new());
+    for rel in tree_rules() {
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(&base).args(["certificate", &rel]).output().unwrap();
+        if !o.status.success() {
+            continue;
+        }
+        let mut p = Command::new(&bin)
+            .current_dir(&base)
+            .args(["--rule", &rel])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("Lean の検査器を起動できない");
+        p.stdin.as_mut().unwrap().write_all(&o.stdout).unwrap();
+        let q = p.wait_with_output().unwrap();
+        if !q.status.success() {
+            failures.push(format!("{rel}:\n{}", String::from_utf8_lossy(&q.stdout)));
+        }
+        held += 1;
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    assert!(held >= 190, "証明書の出る規則が減っている: {held}");
 }

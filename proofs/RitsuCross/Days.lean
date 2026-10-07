@@ -218,8 +218,8 @@ open RulecCert
 
 /-- Everything `Sieve.asked` asks of the values `v` behind the point `p`, but the days of the axis
     `i`: their coordinates, the constraints, the reach of the columns the rule computes, the tables
-    above, the linear model, the days of every other axis, and the rows above a value a column
-    decided above holds. -/
+    above, the linear model, the days of every other axis, the rows above a value a column decided
+    above holds, and the truth value of a boolean `define` (rulec's §15.196). -/
 def AskedBut (s : Sieve) (i : Nat) (p : Point) (v : List Rat) : Prop :=
   (∀ (j c : Nat) (x : Coord), p[j]? = some c → s.coordAt j c = some x →
     ∃ w, v[j]? = some w ∧ x.holds w) ∧
@@ -229,15 +229,17 @@ def AskedBut (s : Sieve) (i : Nat) (p : Point) (v : List Rat) : Prop :=
   (∀ qr ∈ s.apart, ¬(p[qr.1.1]? = some qr.1.2 ∧ p[qr.2.1]? = some qr.2.2)) ∧
   (∀ q ∈ s.facts, q.holds v) ∧
   (∀ (j : Nat) (D : List Rat), j ≠ i → s.days[j]? = some (some D) → ∃ w, v[j]? = some w ∧ w ∈ D) ∧
-  (∀ e ∈ s.above, p[e.axis]? = some e.coord → ∃ r ∈ e.rows, r.fires p v)
+  (∀ e ∈ s.above, p[e.axis]? = some e.coord → ∃ r ∈ e.rows, r.fires p v) ∧
+  (∀ (j : Nat) (T : Truth), s.truth[j]? = some (some T) → ∀ c, p[j]? = some c →
+    ∃ x y, T.l.1 ≤ x ∧ x ≤ T.l.2 ∧ T.r.1 ≤ y ∧ y ≤ T.r.2 ∧ (c = T.trueAt ↔ T.op.holds x y))
 
 /-- A point is asked about when its values satisfy the rest and the axis `i` holds a day of its
     set. -/
 theorem asked_of_askedBut {s : Sieve} {i : Nat} {p : Point} {v : List Rat} {D : List Rat}
     {w : Rat} (hD : s.days[i]? = some (some D)) (hrest : AskedBut s i p v) (hw : v[i]? = some w)
     (hmem : w ∈ D) : s.asked p := by
-  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8⟩ := hrest
-  refine ⟨v, h1, h2, h3, h4, h5, h6, fun j D' hj => ?_, h8⟩
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := hrest
+  refine ⟨v, h1, h2, h3, h4, h5, h6, fun j D' hj => ?_, h8, h9⟩
   by_cases hji : j = i
   · subst hji
     rw [hD] at hj

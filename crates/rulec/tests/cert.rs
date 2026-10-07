@@ -239,7 +239,7 @@ fn 偽った覆いとint64も落ちる() {
         // A box widened without touching the cell it was read from.
         ("箱を広げる", cert.replacen(r#""accepts":[[0,1]]"#, r#""accepts":[[0,1,2]]"#, 1)),
         // A type that does not follow from the expression.
-        ("型を偽る", cert.replace(r#""name":"合算率","type":"rate""#, r#""name":"合算率","type":"money[円]""#)),
+        ("型を偽る", cert.replace(r#""name":"合算率","of":"derive","type":"rate""#, r#""name":"合算率","of":"derive","type":"money[円]""#)),
     ] {
         assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
         let (code, said) = recheck(&forged);
@@ -752,4 +752,187 @@ fn 上の表の行の葉は行を数え直して確かめる() {
         assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
         assert!(said.contains(why), "{what}: {said}");
     }
+}
+
+/// The kind of every column is worked out by the re-checker from `inputs`, `walks` and `values`,
+/// and held to what the certificate calls it (§15.196): the reach of a point and the tiling of an
+/// axis are read by kind, so a column called by the wrong one would be read the wrong way.
+#[test]
+fn 列の種類は再検査で求め直される() {
+    if !ready(Need::Python, have_python, "python3 が無い") {
+        return;
+    }
+    let (c, cert) = rulec(&["certificate", "tests/corpus/rating_grade.rule"]);
+    assert_eq!(c, 0, "{cert}");
+    let axis = r#""column":"ratio","kind":"define""#;
+    assert!(cert.contains(axis), "数を計算する define の列が define と書かれていない:\n{cert}");
+    assert_eq!(recheck(&cert).0, 0, "そのままの証明書が通らない");
+    for kind in ["input", "upstream", "derived"] {
+        let forged = cert.replacen(axis, &axis.replace("define", kind), 1);
+        let (code, said) = recheck(&forged);
+        assert_eq!(code, 1, "{kind}: 種類を偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains("ratio is a column of kind `define`"), "{kind}: {said}");
+    }
+    // an input left out of `inputs`: the axis that reads it is then not an input's
+    let (c, cert) = rulec(&["certificate", "tests/corpus/送料.rule"]);
+    assert_eq!(c, 0, "{cert}");
+    let inputs = r#""inputs":["届け先","重量","注文金額","会員"]"#;
+    assert!(cert.contains(inputs), "{cert}");
+    let forged = cert.replacen(inputs, r#""inputs":["届け先","重量","注文金額"]"#, 1);
+    let (code, said) = recheck(&forged);
+    assert_eq!(code, 1, "入力を落とした証明書が通ってしまった\n{said}");
+    assert!(said.contains("会員 is a column of kind `upstream`"), "{said}");
+}
+
+/// What the rows of a table write into a column of numbers comes with the certificate, and the
+/// re-checker works the column's range out from it rather than taking the certificate's word
+/// (§15.196): a range stated narrower than what the rows write is refused, and — with the file —
+/// so is a cell read as another number than the one written.
+#[test]
+fn 上の表が書く数の範囲は行から計算し直される() {
+    if !ready(Need::Python, have_python, "python3 が無い") {
+        return;
+    }
+    let rel = "tests/apply_fixtures/規程.rule";
+    let (c, cert) = rulec(&["certificate", rel]);
+    assert_eq!(c, 0, "{cert}");
+    let range = r#""率":["1/5","1"]"#;
+    let cell = r#"{"num":"50%","value":"1/2","type":"rate"}"#;
+    assert!(cert.contains(range) && cert.contains(cell), "{cert}");
+    let (code, said) = recheck_rule(&cert, rel);
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("1 columns a table writes numbers into hold every value their rows write"), "{said}");
+    // the range stated narrower than the rows write: 100% is written, and four fifths stated
+    let forged = cert.replacen(range, r#""率":["1/5","4/5"]"#, 1);
+    let (code, said) = recheck(&forged);
+    assert_eq!(code, 1, "狭く言った範囲が通ってしまった\n{said}");
+    assert!(said.contains("its rows write values from 1/5 to 1"), "{said}");
+    // a cell read as another number inside the range: the certificate alone cannot tell, the file can
+    let forged = cert.replacen(cell, r#"{"num":"50%","value":"3/5","type":"rate"}"#, 1);
+    assert_eq!(recheck(&forged).0, 0, "ファイル無しでは区別できない書き換えのはず");
+    let (code, said) = recheck_rule(&forged, rel);
+    assert_eq!(code, 1, "セルの値を書き換えた証明書が通ってしまった\n{said}");
+    assert!(said.contains("the file writes `50%`, the certificate reads it as 3/5"), "{said}");
+    // and a cell said to be another literal than the one the file writes there
+    let forged = cert.replacen(cell, r#"{"num":"60%","value":"3/5","type":"rate"}"#, 1);
+    let (code, said) = recheck_rule(&forged, rel);
+    assert_eq!(code, 1, "セルの字を書き換えた証明書が通ってしまった\n{said}");
+    assert!(said.contains("the certificate reads it as `60%`"), "{said}");
+}
+
+/// A boolean `define` that always takes one truth value over the ranges of the inputs: its other
+/// value is a box no input reaches, and the re-checker works the truth out again from the
+/// comparison and the ranges it reads (§15.196).
+#[test]
+fn 真偽の定義がとらない値の葉は比べ方から計算し直される() {
+    if !ready(Need::Python, have_python, "python3 が無い") {
+        return;
+    }
+    let cert = sieve_cert("E101_a_define_that_is_always_true");
+    let cover = r#""cover":{"split":[{"row":1},{"truth_axis":0}]}"#;
+    assert!(cert.contains(cover), "{cert}");
+    let (code, said) = recheck(&cert);
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("impossible at a truth value a define never takes"), "{said}");
+    let lies = [
+        ("葉を true の側に置く", cert.replacen(cover, r#""cover":{"split":[{"truth_axis":0},{"row":1}]}"#, 1), "reduced can be true here"),
+        ("比べる日を動かす", cert.replacen(r#""value":"20908""#, r#""value":"20000""#, 1), "reduced can be false here"),
+        ("入力の範囲を延ばす", cert.replacen(r#""made":["19814","20818"]"#, r#""made":["19814","21000"]"#, 1), "reduced can be false here"),
+    ];
+    for (what, forged, why) in lies {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = recheck(&forged);
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains(why), "{what}: {said}");
+    }
+}
+
+/// Two rows that meet only where the rows of a table above leave no values (§15.196): the pair is
+/// stated apart, with the rows that write each value both rows take counted again from the table
+/// above and each one's multipliers added up.
+#[test]
+fn 上の表の行で分かれる対は行を数え直して確かめる() {
+    if !ready(Need::Python, have_python, "python3 が無い") {
+        return;
+    }
+    let cert = sieve_cert("E105_rows_that_meet_where_a_table_above_allows_nothing");
+    let pair = r#"{"a":1,"b":2,"axis":0,"at":[{"coord":0,"above_rows":{"axis":0,"column":"refund_size","value":"small","rows":[{"row":1,"farkas":["#;
+    assert!(cert.contains(pair), "{cert}");
+    let (code, said) = recheck(&cert);
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("1 apart on the rows of a table above"), "{said}");
+    let end = r#"{"coord":{"axis":1,"hi":false,"at":"60","open":true},"y":"1/10"}"#;
+    assert!(cert.contains(end), "{cert}");
+    let lies = [
+        ("別の値の理由を書く", cert.replacen(pair, &pair.replace(r#""at":[{"coord":0,"#, r#""at":[{"coord":1,"#), 1), "reasons are given for"),
+        ("乗数を変える", cert.replacen(end, &end.replace(r#""y":"1/10""#, r#""y":"1/5""#), 1), "the names do not cancel"),
+        ("別の対に付ける", cert.replacen(pair, &pair.replace(r#""b":2"#, r#""b":3"#), 1), "rows 1 and 3"),
+    ];
+    for (what, forged, why) in lies {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = recheck(&forged);
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains(why), "{what}: {said}");
+    }
+}
+
+/// Every `.rule` under the workspace's crates and site, by its path from the workspace's root.
+pub(crate) fn tree_rules() -> Vec<String> {
+    fn walk(dir: &std::path::Path, base: &std::path::Path, out: &mut Vec<String>) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for e in rd.flatten() {
+            let p = e.path();
+            let name = e.file_name().to_string_lossy().into_owned();
+            if p.is_dir() {
+                if !matches!(name.as_str(), "target" | "node_modules" | ".venv" | ".lake" | ".git") {
+                    walk(&p, base, out);
+                }
+            } else if name.ends_with(".rule") {
+                out.push(p.strip_prefix(base).unwrap().to_string_lossy().into_owned());
+            }
+        }
+    }
+    let base = root().join("../..").canonicalize().unwrap();
+    let mut out = Vec::new();
+    for d in ["crates", "website"] {
+        walk(&base.join(d), &base, &mut out);
+    }
+    out.sort();
+    out
+}
+
+/// Every rule in the tree that states a certificate — the corpus, the mutants, the materials of
+/// these tests, the examples and the site's rules — is re-checked held to its own file. An error
+/// that only `--rule` reads, a cell quoted from the wrong place, hides nowhere (§15.196).
+#[test]
+fn 木の規則の証明書はファイルを添えても再検査を通る() {
+    if !ready(Need::Python, have_python, "python3 が無い") {
+        return;
+    }
+    use std::io::Write;
+    let base = root().join("../..").canonicalize().unwrap();
+    let (mut held, mut failures) = (0usize, Vec::new());
+    for rel in tree_rules() {
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(&base).args(["certificate", &rel]).output().unwrap();
+        // a rule that does not pass `check` states no certificate
+        if !o.status.success() {
+            continue;
+        }
+        let mut p = Command::new("python3")
+            .current_dir(&base)
+            .args([root().join("tools/recheck.py").to_str().unwrap(), "--rule", &rel])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("python3 を起動できない");
+        p.stdin.as_mut().unwrap().write_all(&o.stdout).unwrap();
+        let q = p.wait_with_output().unwrap();
+        if !q.status.success() {
+            failures.push(format!("{rel}:\n{}", String::from_utf8_lossy(&q.stdout)));
+        }
+        held += 1;
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    assert!(held >= 190, "証明書の出る規則が減っている: {held}");
 }

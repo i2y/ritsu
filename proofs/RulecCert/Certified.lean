@@ -39,6 +39,10 @@ structure Certified where
       each: the axis of the column that table decides, and a reason for each row of it that
       writes the value the path holds there. -/
   aboveAt : Point → Option (Nat × List RowOut) := fun _ => none
+  /-- The pairs the axes do not part and the rows of a table above do (rulec's §15.196): the axis
+      of the column that table decides, and for each value both rows take there, a reason for each
+      row of it that writes the value. -/
+  aboveApart : Nat → Nat → Option (Nat × List (Nat × List RowOut)) := fun _ _ => none
 
 /-- The table the certificate is about. Its `asked` is the sieve's: a combination counts
     when the values behind it satisfy everything the rule declares. -/
@@ -98,7 +102,8 @@ def Certified.pairChecks (C : Certified) : Bool :=
     or the pair is named as undecided. -/
 def pairsApart (s : Sieve) (rows : List Row) (told : Nat → Nat → Option Nat)
     (refuted : Nat → Nat → Option (List (Ref × Rat))) (undecided : Nat → Nat → Bool)
-    (daysApart : Nat → Nat → Option Nat := fun _ _ => none) : Bool :=
+    (daysApart : Nat → Nat → Option Nat := fun _ _ => none)
+    (aboveApart : Nat → Nat → Option (Nat × List (Nat × List RowOut)) := fun _ _ => none) : Bool :=
   rows.all (fun r =>
     rows.all (fun q =>
       if r.index < q.index then
@@ -110,14 +115,17 @@ def pairsApart (s : Sieve) (rows : List Row) (told : Nat → Nat → Option Nat)
           | none =>
             match daysApart r.index q.index with
             | some axis => daysPart s r.box q.box axis
-            | none => undecided r.index q.index
+            | none =>
+              match aboveApart r.index q.index with
+              | some e => abovePart s r.box q.box e.1 e.2
+              | none => undecided r.index q.index
       else true))
 
 theorem disjointAsked_of_pairsApart {s : Sieve} {rows : List Row} {told : Nat → Nat → Option Nat}
     {refuted : Nat → Nat → Option (List (Ref × Rat))} {undecided : Nat → Nat → Bool}
-    {daysApart : Nat → Nat → Option Nat}
+    {daysApart : Nat → Nat → Option Nat} {aboveApart : Nat → Nat → Option (Nat × List (Nat × List RowOut))}
     (hshape : rowsDistinct rows = true) (hnone : ∀ a b, undecided a b = false)
-    (h : pairsApart s rows told refuted undecided daysApart = true) :
+    (h : pairsApart s rows told refuted undecided daysApart aboveApart = true) :
     ∀ p, s.asked p → ((rows.filter (fun r => inBox r.box p)).length ≤ 1) := by
   intro p hask
   refine length_filter_le_one ?_
@@ -145,14 +153,20 @@ theorem disjointAsked_of_pairsApart {s : Sieve} {rows : List Row} {told : Nat �
         | some axis =>
           rw [hda] at hxy
           exact not_asked_of_daysPart hxy hxp hyp hask
-        | none => rw [hda, hnone] at hxy; exact absurd hxy (by simp)
+        | none =>
+          rw [hda] at hxy
+          cases hab : aboveApart x.index y.index with
+          | some e =>
+            rw [hab] at hxy
+            exact not_asked_of_abovePart hxy hxp hyp hask
+          | none => rw [hab, hnone] at hxy; exact absurd hxy (by simp)
   rcases Nat.lt_or_ge r.index q.index with hlt | hge
   · exact key r q hr hq hlt hrp hqp
   · exact key q r hq hr (Nat.lt_of_le_of_ne hge (Ne.symm hne)) hqp hrp
 
 /-- The overlap check on the points the rule is asked about, for a table's certificate. -/
 def Certified.pairAskedChecks (C : Certified) : Bool :=
-  rowsDistinct C.rows && pairsApart C.sieve C.rows C.told C.refuted C.undecided C.daysApart
+  rowsDistinct C.rows && pairsApart C.sieve C.rows C.told C.refuted C.undecided C.daysApart C.aboveApart
 
 theorem Certified.complete (C : Certified) (h : C.coverChecks = true) :
     C.table.completeHolds := by

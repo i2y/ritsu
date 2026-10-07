@@ -192,6 +192,35 @@ def interval(e, ranges, le=frozenset()):
     return None
 
 
+def truth_of(e, ranges, le=frozenset()):
+    """The truth value a comparison always takes over the intervals of its two sides, or None
+    when it can take either, or a side has no interval (§15.196). What `rulec` reads a boolean
+    `define` of one comparison with: `made <= 2027-03-31` with `made` declared up to the end of
+    2026 is always true."""
+    if not isinstance(e, dict) or e.get("op") not in ("<=", "<", ">=", ">"):
+        return None
+
+    def side(x):
+        # A date literal stands for its day number, on the scale `ranges` gives a date input.
+        if isinstance(x, dict) and x.get("type") == "date" and "lit" in x and x.get("value") is not None:
+            v = num(x["value"])
+            return (v, v)
+        return interval(x, ranges, le)
+
+    a, b = side(e["l"]), side(e["r"])
+    if a is None or b is None:
+        return None
+    (al, ah), (bl, bh) = a, b
+    op = e["op"]
+    if op == "<=":
+        return True if ah <= bl else (False if bh < al else None)
+    if op == "<":
+        return True if ah < bl else (False if bh <= al else None)
+    if op == ">=":
+        return True if bh <= al else (False if ah < bl else None)
+    return True if bh < al else (False if ah <= bl else None)
+
+
 def unify(a, b):
     """Two types meet when they are the same, or when one is money with no tax flag and the
     other is the same currency with one — which is how a bare amount is written (§2.1)."""
@@ -298,21 +327,103 @@ def check_types(cert):
     return n, unread
 
 
-def check_values(cert):
-    """int64: recompute each value's interval and hold the integer it stores to i64."""
+def numeric_outputs(cert):
+    """For every column a table writes numbers into, what its rows write there, as expressions
+    (§15.196): `None` where a row writes something this program cannot read. And the columns
+    whose rows state nothing they write — a certificate from before they did."""
+    types = cert.get("types", {})
+    outs, unstated = {}, []
+    for t in cert.get("tables", []):
+        rows = t.get("rows", [])
+        for oi, col in enumerate(t.get("decides", [])):
+            if not numeric(types.get(col)):
+                continue
+            if not any("writes" in r for r in rows):
+                if col not in unstated:
+                    unstated.append(col)
+                continue
+            if col in outs and outs[col] is None:
+                continue
+            es = outs.setdefault(col, [])
+            for r in rows:
+                ws = r.get("writes") or []
+                w = ws[oi] if oi < len(ws) else None
+                if not isinstance(w, dict) or not isinstance(w.get("expr"), dict):
+                    outs[col] = None
+                    break
+                es.append(w["expr"])
+    return outs, unstated
+
+
+def worked_ranges(cert):
+    """The interval every value the rule computes and every column a table writes numbers into
+    is forced into, worked out here: a value from its expression, a table's column from what
+    each of its rows writes (§15.196). A name the rule declares is bounded by its declared range;
+    a column a table writes numbers into, never by the certificate's word for it. Returns the
+    intervals, the columns' expressions, and the columns whose rows state nothing."""
     le = guarantees(cert)
+    stated = {k: (num(v[0]), num(v[1])) for k, v in cert.get("ranges", {}).items()}
+    values = cert.get("values", [])
+    outs, unstated = numeric_outputs(cert)
+    known = {}
+
+    def env():
+        r = {k: (None if a is None else str(a), None if b is None else str(b))
+             for k, (a, b) in stated.items() if k not in outs}
+        r.update({k: (str(a), str(b)) for k, (a, b) in known.items()})
+        return r
+
+    # What depends on what runs both ways — a `define` over a table's column, a table writing a
+    # `define` — so the two are worked out together until nothing more can be.
+    for _ in range(len(values) + len(outs) + 1):
+        moved = False
+        for v in values:
+            if v["name"] in known:
+                continue
+            got = interval(v["expr"], env(), le)
+            if got is not None:
+                known[v["name"]] = got
+                moved = True
+        for col, es in outs.items():
+            if col in known or not es:
+                continue
+            e = env()
+            ivs = [interval(x, e, le) for x in es]
+            if all(i is not None for i in ivs):
+                known[col] = (min(i[0] for i in ivs), max(i[1] for i in ivs))
+                moved = True
+        if not moved:
+            break
+    return known, outs, unstated
+
+
+def check_outputs(cert, known, outs):
+    """The range the certificate states for a column a table writes numbers into holds every
+    value its rows write (§15.196). Returns how many were held to that."""
+    stated = cert.get("ranges", {})
+    n = 0
+    for col, es in outs.items():
+        s = stated.get(col)
+        if col not in known:
+            if s is not None:
+                raise Bad(f"{col}: the certificate states a range for it, and this program cannot work one out from what its rows write")
+            continue
+        if s is None:
+            continue
+        lo, hi = known[col]
+        a, b = num(s[0]), num(s[1])
+        if a is None or b is None or a > lo or b < hi:
+            raise Bad(f"{col}: its rows write values from {lo} to {hi}, and the certificate states the range [{s[0]}, {s[1]}]")
+        n += 1
+    return n
+
+
+def check_values(cert, known):
+    """int64: hold each value's interval, worked out here, to the one stated and to i64."""
     declared = {k: (num(v[0]), num(v[1])) for k, v in cert.get("ranges", {}).items()}
-    # What bounds a name: the interval this program computed for it where there is one,
-    # and the declared range otherwise. Reading the declared range in preference would let
-    # a forged `ranges` entry override the arithmetic.
-    computed = {}
-    ranges = {}
     checked = none_stated = 0
     for v in cert.get("values", []):
-        ranges = {**{k: (None if a is None else str(a), None if b is None else str(b))
-                     for k, (a, b) in declared.items()},
-                  **{k: (str(a), str(b)) for k, (a, b) in computed.items()}}
-        got = interval(v["expr"], ranges, le)
+        got = known.get(v["name"])
         said = v.get("interval")
         if got is None:
             if said is not None:
@@ -326,7 +437,6 @@ def check_values(cert):
         d = declared.get(v["name"])
         if d is not None and d[0] is not None and d[1] is not None and (got[0] < d[0] or got[1] > d[1]):
             raise Bad(f"{v['name']}: the range the rule declares is narrower than what its expression reaches")
-        computed[v["name"]] = got
         said = (num(said[0]), num(said[1]))
         if got[0] < said[0] or got[1] > said[1]:
             raise Bad(f"{v['name']}: the interval here is [{got[0]}, {got[1]}], wider than the stated [{said[0]}, {said[1]}]")
@@ -337,6 +447,33 @@ def check_values(cert):
             raise Bad(f"{v['name']}: stores up to {int(stored)}, more than the stated {v['stored_max']}")
         checked += 1
     return checked, none_stated
+
+
+def column_kinds(cert):
+    """What kind of column each name makes (§15.196): a `derive` is `derived`, a `define` of any
+    type `define`, an input `input`, what a walk leaves behind (`count`, `sum`) `walk`; anything
+    else — a column a table above decides, a field of the elements a fold walks — `upstream`."""
+    out = {}
+    for v in cert.get("values", []):
+        if v.get("of") == "derive":
+            out[v["name"]] = "derived"
+        elif v.get("of") == "define":
+            out[v["name"]] = "define"
+    for n in cert.get("inputs", []):
+        out.setdefault(n, "input")
+    for n in cert.get("walks", []):
+        out.setdefault(n, "walk")
+    return out
+
+
+def check_kinds(t, kinds):
+    """Each axis says the kind of column it is, and it is the kind worked out here: the reach of a
+    point and the tiling of an axis are read by kind, so a column called by the wrong one would be
+    read the wrong way."""
+    for a in t["axes"]:
+        want = kinds.get(a["column"], "upstream")
+        if a.get("kind") != want:
+            raise Bad(f"{t['table']}: {a['column']} is a column of kind `{want}`, and the certificate calls it `{a.get('kind')}`")
 
 
 def bound_at(t, ai, ci):
@@ -664,13 +801,29 @@ def day_rules_out(t, ai, path):
     return not any((lo is None or lo <= d) and (hi is None or d <= hi) for d in days)
 
 
+def truth_rules_out(t, ai, path):
+    """Whether the path takes, on the axis of a boolean `define`, the truth value the define
+    never takes over the ranges it is read with — worked out here from its comparison
+    (§15.196)."""
+    if ai >= len(path) or ai >= len(t["axes"]):
+        return False
+    tv = t.get("_truth", {}).get(t["axes"][ai]["column"])
+    if tv is None:
+        return False
+    label = t["axes"][ai]["coords"][path[ai]]
+    return label in ("true", "false") and (label == "true") != tv
+
+
 def point_ruled_out(t, path):
     """Whether the sieve rules this point out: some constraint cannot hold at it, some
-    derived column cannot reach it, or it takes no day of koyomi's on an axis of them."""
+    derived column cannot reach it, a boolean `define` stands at the truth value it never
+    takes, or it takes no day of koyomi's on an axis of them."""
     for k in t.get("constraints", []):
         if constraint_rules_out(t, k, path):
             return True
     if any(day_rules_out(t, ai, path) for ai in range(len(path))):
+        return True
+    if any(truth_rules_out(t, ai, path) for ai in range(len(path))):
         return True
     return any(derived_rules_out(t, ai, path) for ai in range(len(path)))
 
@@ -760,6 +913,10 @@ def model_facts(t, cert):
             # A value the rule computes is bounded by the interval worked out here from its
             # expression, not by the document's word for it (§15.195); an input by its range.
             got = t.get("_reach_of", {}).get(f["range"])
+            if got is None:
+                # A column a table writes numbers into is bounded by what its rows write, worked
+                # out here, not by the document's word for it (§15.196).
+                got = t.get("_written", {}).get(f["range"])
             r = cert.get("ranges", {}).get(f["range"]) if got is None else (str(got[0]), str(got[1]))
             end = None if r is None else num(r[1] if f["hi"] else r[0])
             if end is None:
@@ -1154,7 +1311,7 @@ def check_cover(t):
     axes, rows = t["axes"], {r["row"]: r for r in t["rows"]}
     if t.get("cover") is None:
         raise Bad(f"{t['table']}: no cover is stated, so completeness is not shown")
-    seen = {"rows": 0, "constraint": 0, "derived": 0, "define": 0, "above": 0, "above_rows": 0,
+    seen = {"rows": 0, "constraint": 0, "derived": 0, "define": 0, "truth": 0, "above": 0, "above_rows": 0,
             "points": 0, "model": 0, "days": 0}
 
     def walk(node, path):
@@ -1214,6 +1371,18 @@ def check_cover(t):
             if not out:
                 raise Bad(f"{t['table']}: {axes[ai]['column']} can reach this box, so it is not impossible")
             seen["define"] += 1
+            return
+        if "truth_axis" in node:
+            # The axis of a boolean `define` at the truth value it never takes: its comparison,
+            # read over the intervals of its two sides worked out here (§15.196).
+            ai = node["truth_axis"]
+            if not isinstance(ai, int) or not 0 <= ai < len(axes):
+                raise Bad(f"{t['table']}: a leaf points at axis {ai}, which does not exist")
+            if ai >= len(path):
+                raise Bad(f"{t['table']}: a leaf points at axis {ai}, which this box has not fixed")
+            if not truth_rules_out(t, ai, path):
+                raise Bad(f"{t['table']}: {axes[ai]['column']} can be {axes[ai]['coords'][path[ai]]} here, so the box is not impossible")
+            seen["truth"] += 1
             return
         if "above_rows" in node:
             # A value decided above that only some rows of that table write, none of which fires
@@ -1518,7 +1687,11 @@ def sieve_admits(t, values, at):
     for ai, (v, c) in enumerate(zip(vs, at)):
         b = (axes[ai].get("bounds") or [None] * len(axes[ai]["coords"]))[c]
         if b is None:
-            continue  # an enum or a flag: the sieve has nothing to say about it
+            # An enum or a flag: the sieve has nothing to say about it, but where it is a
+            # boolean `define` that always takes one value (§15.196).
+            if truth_rules_out(t, ai, at):
+                return f"{axes[ai]['column']} is never {axes[ai]['coords'][c]}"
+            continue
         if v is None:
             return f"no value is given for {axes[ai]['column']}"
         lo, hi = num(b[0]), num(b[1])
@@ -1589,7 +1762,7 @@ def check_table(t):
         from_cells += 1
 
     # (1) No two rows of a `unique` table meet.
-    pairs = model_pairs = days_pairs = 0
+    pairs = model_pairs = days_pairs = above_pairs = 0
     if t["policy"] == "unique":
         told = {}
         for d in t["disjoint"]:
@@ -1632,13 +1805,58 @@ def check_table(t):
                 raise Bad(f"{name}: rows {a} and {b} are said to part on koyomi's days, and both take a day of them on {axes[ai]['column']}")
             told[(a, b)] = None
             days_pairs += 1
+        # The pairs the rows of a table above part (§15.196): for each value both rows take on
+        # the column it decides, every row of it that writes the value — counted here — fires
+        # nowhere in what both rows take, for a reason that is checked.
+        for d in t.get("above_apart", []):
+            a, b, ai = d.get("a"), d.get("b"), d.get("axis")
+            if a not in rows or b not in rows:
+                raise Bad(f"{name}: rows {a} and {b} are not both in the table")
+            if not isinstance(ai, int) or not 0 <= ai < len(axes):
+                raise Bad(f"{name}: rows {a} and {b} name axis {ai}, which does not exist")
+            pb = [sorted(set(rows[a]["accepts"][x]) & set(rows[b]["accepts"][x])) for x in range(len(axes))]
+            at = {}
+            for x in d.get("at") or []:
+                c = x.get("coord") if isinstance(x, dict) else None
+                if not isinstance(c, int) or c in at:
+                    raise Bad(f"{name}: rows {a} and {b} give a value of {axes[ai]['column']} it cannot, or twice")
+                at[c] = x.get("above_rows")
+            if sorted(at) != pb[ai]:
+                raise Bad(f"{name}: rows {a} and {b} both take {[axes[ai]['coords'][c] for c in pb[ai]]} on {axes[ai]['column']}, "
+                          f"and reasons are given for {[axes[ai]['coords'][c] for c in sorted(at) if c < len(axes[ai]['coords'])]}")
+            column = axes[ai]["column"]
+            for c in pb[ai]:
+                ar, value = at[c], axes[ai]["coords"][c]
+                if not isinstance(ar, dict) or ar.get("axis") != ai or ar.get("column") != column or ar.get("value") != value:
+                    raise Bad(f"{name}: rows {a} and {b}: the reason for {column} = {value} speaks of something else")
+                u, ws = writers(t, column, value)
+                if not ws:
+                    raise Bad(f"{name}: no row of {u['table']} writes {column} = {value}, which is a fact, not a reason")
+                given = {}
+                for r in ar.get("rows") or []:
+                    n = r.get("row") if isinstance(r, dict) else None
+                    if not isinstance(n, int) or n in given:
+                        raise Bad(f"{name}: rows {a} and {b}: a row of {u['table']} is named that cannot be, or twice")
+                    given[n] = r
+                want = sorted(r["row"] for r in ws)
+                if sorted(given) != want:
+                    raise Bad(f"{name}: the rows of {u['table']} that write {column} = {value} are {want}, "
+                              f"and rows {a} and {b} give reasons for {sorted(given)}")
+                box = [list(x) for x in pb]
+                box[ai] = [c]
+                for r in ws:
+                    why = row_out_holds(t, t["_cert"], u, r, given[r["row"]], box)
+                    if why is not None:
+                        raise Bad(f"{name}: rows {a} and {b} are said to part on what {u['table']} writes, and row {r['row']} of it {why}")
+            told[(a, b)] = None
+            above_pairs += 1
         undecided = {(u["a"], u["b"]) for u in t["undecided"]}
         numbers = sorted(rows)
         for i, a in enumerate(numbers):
             for b in numbers[i + 1:]:
                 if (a, b) not in told and (a, b) not in undecided:
                     raise Bad(f"{name}: rows {a} and {b} are neither proved apart nor listed as undecided")
-    elif t["disjoint"] or t.get("refuted") or t.get("days_apart"):
+    elif t["disjoint"] or t.get("refuted") or t.get("days_apart") or t.get("above_apart"):
         raise Bad(f"{name}: a `first` table cannot claim its rows are disjoint")
 
     # (2) Every row is reached.
@@ -1698,6 +1916,7 @@ def check_table(t):
         cover_note = f", {seen['rows']} boxes covered"
         for k, word in (("constraint", "by a constraint"), ("derived", "out of a derive's reach"),
                         ("define", "out of a define's reach"),
+                        ("truth", "at a truth value a define never takes"),
                         ("above", "for the tables above"),
                         ("above_rows", "by the rows of a table above"), ("points", "point by point"),
                         ("model", "by the linear model"), ("days", "outside koyomi's days")):
@@ -1716,6 +1935,8 @@ def check_table(t):
     apart = f" + {model_pairs} apart on the linear model" if model_pairs else ""
     if days_pairs:
         apart += f" + {days_pairs} apart on koyomi's days"
+    if above_pairs:
+        apart += f" + {above_pairs} apart on the rows of a table above"
     return (f"{name}: {t['policy']}, {len(rows)} rows — {pairs} pairs disjoint{apart}, "
             f"{len(reached)} rows reached{unused_note}{cover_note}{boxes}{note}, "
             f"{tiled} axes tiled")
@@ -1776,8 +1997,11 @@ def parse_cell(text):
                 return None
             ws.append(part[1:-1])
         return ("prefix", ws) if ws else None
-    if s.startswith("not:"):
-        return ("not", split_words(s[4:]))
+    # `not: a, b` and `not a, b` alike (§15.196): the colon is optional, and a word that only
+    # begins with the letters (`notice`) is a literal.
+    if s.startswith("not") and (s[3:4] == ":" or s[3:4].isspace()):
+        rest = s[3:].lstrip()
+        return ("not", split_words(rest[1:] if rest.startswith(":") else rest))
     if any(s.startswith(o) for o in OPS):
         cs = split_cmp(s)
         return ("cmp", cs) if cs else None
@@ -1878,8 +2102,14 @@ def check_cells(cert, path):
                     raise Bad(f"{t['table']}: rows of `{a}` and `{b}` are written among "
                               f"each other, which no two tables are")
         if lines_of and not all(seen_axis):
-            missing = [axes[i]["column"] for i, v in enumerate(seen_axis) if not v]
-            raise Bad(f"{t['table']}: no row is written with a cell in {', '.join(missing)}")
+            # A column of a table an `apply` brought in has its cells in that rule's file, where
+            # its own certificate reads them back (§15.196): only a column no row has a cell in,
+            # here or there, is one no cell is written for.
+            applied = [any(r.get("source") is None and i < len(r.get("tests") or []) and r["tests"][i].get("cell") != "any"
+                           for r in t["rows"]) for i in range(len(axes))]
+            missing = [axes[i]["column"] for i, v in enumerate(seen_axis) if not v and not applied[i]]
+            if missing:
+                raise Bad(f"{t['table']}: no row is written with a cell in {', '.join(missing)}")
         for row in t.get("unused", []):
             src = next((r.get("source") for r in t["rows"] if r["row"] == row), 0)
             if src is not None:
@@ -1917,6 +2147,40 @@ def check_cells(cert, path):
             if bars and len(bars) != len(got) + t.get("outputs", 0):
                 raise Bad(f"{t['table']}: row {r['row']} is written with {len(bars)} cells, "
                           f"and the certificate accounts for {len(got)} of them")
+            # What the row writes into a column that holds a number is the cell in the file
+            # (§15.196): the same line, one of the cells after the ones the tests read, and the
+            # literal or the name the certificate says it is.
+            outs_here = bars[len(got):] if bars else []
+            for oi, w in enumerate(r.get("writes") or []):
+                if not isinstance(w, dict):
+                    continue
+                wsp, e = w.get("source"), w.get("expr") or {}
+                col = (t.get("decides") or [None] * (oi + 1))[oi] if oi < len(t.get("decides") or []) else None
+                where = f"{t['table']}: row {r['row']}, -> {col}"
+                if not isinstance(wsp, dict) or not isinstance(wsp.get("line"), int):
+                    raise Bad(f"{where}: the row is written in this file, and no cell is named for what it writes")
+                if bars:
+                    # A table's row: the answer is one of the cells after the ones its tests read,
+                    # on the row's own line.
+                    if wsp["line"] != ln or (wsp["col"], wsp["col"] + wsp["len"]) not in outs_here:
+                        raise Bad(f"{where}: the cell named is not one of the row's answer cells")
+                    wline = line
+                else:
+                    # A `clause`: what it writes stands on its `then` line.
+                    wline = lines[wsp["line"] - 1] if 0 < wsp["line"] <= len(lines) else b""
+                text = wline[wsp["col"]:wsp["col"] + wsp["len"]].decode("utf-8", "replace")
+                if text != wsp.get("text"):
+                    raise Bad(f"{where}: the file says `{text}` where the certificate quotes `{wsp.get('text')}`")
+                if "name" in e:
+                    if text.strip() != e["name"]:
+                        raise Bad(f"{where}: the file writes `{text}`, the certificate reads it as the name {e['name']}")
+                elif "num" in e:
+                    if text.strip() != e["num"]:
+                        raise Bad(f"{where}: the file writes `{text}`, the certificate reads it as `{e['num']}`")
+                    loose += output_literal_agrees(where, (cert.get("types") or {}).get(col), text, e.get("value"))
+                else:
+                    raise Bad(f"{where}: the certificate reads the cell as something an answer cell cannot be")
+                read += 1
             for ai, (sp, st) in enumerate(zip(src, r["tests"])):
                 if sp is None:
                     # A column the `when` line of a clause does not mention, or one a merged
@@ -1981,6 +2245,26 @@ def cell_agrees(t, axis, row, shape, st):
             raise Bad(f"{where}: the file writes `{op}`, the certificate states `{x['op']}`")
         loose += literal_agrees(where, axis, lit, x["value"])
     return loose
+
+
+def output_literal_agrees(where, ty, text, value):
+    """1 when the literal's number could not be pinned: a unit this program does not convert.
+    Otherwise the number the file writes is the value the certificate states for it, or the
+    certificate is reading the cell as something the file does not say (§15.196)."""
+    k = lit_key(text)
+    if k[0] != "n":
+        raise Bad(f"{where}: the file writes `{text}`, which is not a number")
+    n, unit = k[1], k[2]
+    cur = ty[len("money["):-1].split(",")[0].strip() if isinstance(ty, str) and ty.startswith("money[") else None
+    if unit == "%":
+        v = n / 100
+    elif unit == "" or (cur is not None and unit == cur):
+        v = n
+    else:
+        return 1
+    if value is None or v != num(value):
+        raise Bad(f"{where}: the file writes `{text}`, the certificate reads it as {value}")
+    return 0
 
 
 def axis_span(axis):
@@ -2282,8 +2566,20 @@ def check(cert):
     except Bad as e:
         out.append(f"  FAILED units: {e}")
         ok = False
+    # Every value the rule computes and every column a table writes numbers into, worked out
+    # here: a value from its expression, a column from what its rows write (§15.196).
+    known, outs, unstated = worked_ranges(cert)
     try:
-        checked, none_stated = check_values(cert)
+        held = check_outputs(cert, known, outs)
+        if held:
+            out.append(f"  ranges: {held} columns a table writes numbers into hold every value their rows write")
+        if unstated:
+            STATED.append(f"the ranges of {', '.join(unstated)}: their rows state nothing they write")
+    except Bad as e:
+        out.append(f"  FAILED ranges: {e}")
+        ok = False
+    try:
+        checked, none_stated = check_values(cert, known)
         rest = f", {none_stated} with no interval to claim" if none_stated else ""
         out.append(f"  int64: {checked} values fit{rest}")
     except Bad as e:
@@ -2291,15 +2587,36 @@ def check(cert):
         ok = False
     # The reach of a derived value is the interval its own expression is forced into — the
     # cover's "out of reach" leaves are held to that, recomputed here.
-    reach = {}
+    computed = {v["name"] for v in cert.get("values", [])}
+    reach = {k: iv for k, iv in known.items() if k in computed}
+    written = {k: iv for k, iv in known.items() if k in outs}
+    # The truth value a boolean `define` of one comparison always takes, where it takes one
+    # (§15.196), over the intervals worked out here.
+    env = {k: (None if a is None else a, None if b is None else b) for k, (a, b) in ranges.items() if k not in outs}
+    env.update({k: (str(a), str(b)) for k, (a, b) in known.items()})
+    truth = {}
     for v in cert.get("values", []):
-        got = interval(v["expr"], {**ranges, **{k: (str(a), str(b)) for k, (a, b) in reach.items()}})
-        if got is not None:
-            reach[v["name"]] = got
+        if v.get("type") == "bool" and v.get("of", "define") == "define":
+            tv = truth_of(v.get("expr"), env, guarantees(cert))
+            if tv is not None:
+                truth[v["name"]] = tv
+    # The kind of every column, worked out here from `inputs`, `walks` and `values` (§15.196);
+    # a certificate from before it carried them leaves the kinds its own word.
+    kinds = column_kinds(cert) if "inputs" in cert else None
+    if kinds is None:
+        STATED.append("the kinds of the columns: the certificate does not say what the rule's inputs are")
     if not cert["tables"]:
         out.append("  no table states a certificate")
     for t in cert["tables"]:
+        if kinds is not None:
+            try:
+                check_kinds(t, kinds)
+            except Bad as e:
+                out.append(f"  FAILED {e}")
+                ok = False
         t["_reach_of"] = reach
+        t["_written"] = written
+        t["_truth"] = truth
         t["_tables"] = cert["tables"]
         t["_ranges"] = cert.get("ranges", {})
         # The days a date input takes from a koyomi file (§15.174) are the document's word, as

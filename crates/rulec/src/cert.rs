@@ -54,7 +54,12 @@ fn expr_json(e: &Expr, ty: &crate::types::Ty) -> String {
         Expr::Lit(l, _) => {
             let o = Obj::new().str("lit", &format!("{l:?}"));
             match l {
-                Lit::Date(..) => o.str("type", "date").finish(),
+                // A date stands for its day number, on the scale `ranges` gives date inputs, so
+                // that a re-checker can compare it with them (§15.196).
+                Lit::Date(y, m, d) => {
+                    let v = crate::types::date_ord(*y, *m, *d);
+                    o.str("type", "date").str("value", rat(&v)).finish()
+                }
                 Lit::Str(_) => o.str("type", "string").finish(),
                 _ => o.finish(),
             }
@@ -95,23 +100,25 @@ fn values_json(f: &RuleFile, c: &Checked) -> Vec<String> {
     // Every value `check` holds to E103 and E108, which is `derive`, `define` **and**
     // `result` — the last of these is neither `Item`, and leaving it out meant a rule whose
     // whole arithmetic is one `result` line stated no values at all (§15.99).
-    let mut named: Vec<(&crate::ast::Name, &Expr)> = Vec::new();
+    // What each one is — a `derive`, a `define` or the `result` — travels with it, so that a
+    // re-checker can tell for itself what kind of column an axis is (§15.196).
+    let mut named: Vec<(&crate::ast::Name, &Expr, &str)> = Vec::new();
     for it in &f.items {
         match it {
-            Item::Derived(d) => named.push((&d.name, &d.expr)),
-            Item::Define(d) => named.push((&d.name, &d.expr)),
+            Item::Derived(d) => named.push((&d.name, &d.expr, "derive")),
+            Item::Define(d) => named.push((&d.name, &d.expr, "define")),
             _ => {}
         }
     }
     let result_name;
     if let Some(r) = &f.result {
         result_name = crate::ast::Name { text: r.name.clone(), ascii: None, span: r.span.clone() };
-        named.push((&result_name, &r.expr));
+        named.push((&result_name, &r.expr, "result"));
     }
     let mut out = Vec::new();
-    for (name, e) in named {
+    for (name, e, of) in named {
         let Some(sym) = c.syms.get(&name.text) else { continue };
-        let obj = Obj::new().str("name", &name.text).str("type", &sym.ty.to_string()).raw("expr", expr_json(e, &sym.ty));
+        let obj = Obj::new().str("name", &name.text).str("of", of).str("type", sym.ty.to_string()).raw("expr", expr_json(e, &sym.ty));
         // A value the tool could not bound is stated with no interval rather than left out.
         // Omitting it hid the value itself: a reader could not tell it existed, and neither
         // re-checker could say that the int64 claim had not been made for it.
@@ -268,6 +275,15 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
             }
             e.finish()
         })
+        // The rule's inputs and the values its walks leave behind (`count`, `sum`), each by
+        // name: with `values` and the tables' `decides`, what a re-checker works the kind of
+        // every axis out from (§15.196). They are also the names whose ranges are declared
+        // rather than computed.
+        .raw("inputs", crate::json::strs(&f.inputs.iter().map(|i| i.name.text.clone()).collect::<Vec<_>>()))
+        .raw(
+            "walks",
+            crate::json::strs(&f.items.iter().filter_map(|it| if let Item::Agg(d) = it { Some(d.name.text.clone()) } else { None }).collect::<Vec<_>>()),
+        )
         .raw("values", arr(&values_json(f, c)))
         .raw("tables", arr(&tables))
         .raw("contracts", arr(&contracts))
@@ -906,12 +922,37 @@ fn table_json(t: CertTable, src: &str) -> String {
                 .finish()
         })
         .collect();
+    // What the rows write into the columns that hold a number, for a table that has one: written
+    // only there, so no other certificate changes (§15.196).
+    let writes_numbers = t.rows.iter().any(|r| r.writes.iter().any(|w| w.is_some()));
     let rows: Vec<String> = t
         .rows
         .iter()
         .map(|r| {
             let accepts: Vec<String> = r.accepts.iter().map(|xs| arr(&xs.iter().map(|x| x.to_string()).collect::<Vec<_>>())).collect();
-            Obj::new()
+            let writes = arr(&r
+                .writes
+                .iter()
+                .map(|w| match w {
+                    Some((e, ty, at)) => Obj::new()
+                        .raw("expr", expr_json(e, ty))
+                        .raw(
+                            "source",
+                            match at {
+                                Some((line, col, len)) => Obj::new()
+                                    .int("line", *line as i128)
+                                    .int("col", *col as i128)
+                                    .int("len", *len as i128)
+                                    .str("text", at_span(src, *line, *col, *len))
+                                    .finish(),
+                                None => "null".into(),
+                            },
+                        )
+                        .finish(),
+                    None => "null".into(),
+                })
+                .collect::<Vec<_>>());
+            let o = Obj::new()
                 .int("row", r.row as i128)
                 .str("label", &r.label)
                 .raw("cells", crate::json::strs(&r.cells))
@@ -930,8 +971,8 @@ fn table_json(t: CertTable, src: &str) -> String {
                             None => "null".into(),
                         })
                         .collect::<Vec<_>>()),
-                )
-                .finish()
+                );
+            if writes_numbers { o.raw("writes", writes).finish() } else { o.finish() }
         })
         .collect();
     let disjoint: Vec<String> = t
@@ -996,6 +1037,28 @@ fn table_json(t: CertTable, src: &str) -> String {
         o
     } else {
         o.raw("days_apart", arr(&t.days_apart.iter().map(|(a, b, ai)| Obj::new().int("a", *a as i128).int("b", *b as i128).int("axis", *ai as i128).finish()).collect::<Vec<_>>()))
+    };
+    // The pairs the rows of a table above part (§15.196): the axis, and for each value both rows
+    // take there, the rows that write it with why each fires nowhere in what both take. Written
+    // only for a table that has them.
+    let o = if t.above_apart.is_empty() {
+        o
+    } else {
+        o.raw(
+            "above_apart",
+            arr(&t
+                .above_apart
+                .iter()
+                .map(|(a, b, ai, at)| {
+                    Obj::new()
+                        .int("a", *a as i128)
+                        .int("b", *b as i128)
+                        .int("axis", *ai as i128)
+                        .raw("at", arr(&at.iter().map(|x| Obj::new().int("coord", x.coord as i128).raw("above_rows", above_rows_json(x, &t.model)).finish()).collect::<Vec<_>>()))
+                        .finish()
+                })
+                .collect::<Vec<_>>()),
+        )
     };
     o
         .raw("undecided", arr(&undecided))
@@ -1110,32 +1173,35 @@ fn cover_json(c: &Cover, model: &[crate::fourier::Origin]) -> String {
         Cover::ByPoints => Obj::new().bool("every_point_ruled_out", true).finish(),
         Cover::ByDays(ai) => Obj::new().int("days_axis", *ai as i128).finish(),
         Cover::ByDefine(ai) => Obj::new().int("define_axis", *ai as i128).finish(),
+        Cover::ByTruth(ai) => Obj::new().int("truth_axis", *ai as i128).finish(),
         // The column a table above decides, the value the box takes, and every row of that
         // table that writes the value, by its number there, each with why it fires nowhere in
         // the box: an axis of this table on which the box takes none of the words the row lets
         // in, or the multipliers of a refutation (§15.195).
-        Cover::ByAboveRows(a) => Obj::new()
-            .raw(
-                "above_rows",
-                Obj::new()
-                    .int("axis", a.axis as i128)
-                    .str("column", &a.column)
-                    .str("value", &a.value)
-                    .raw(
-                        "rows",
-                        arr(&a
-                            .rows
-                            .iter()
-                            .map(|(ri, o)| match o {
-                                crate::region::RowOut::Clash(aj) => Obj::new().int("row", *ri as i128 + 1).int("clash", *aj as i128).finish(),
-                                crate::region::RowOut::Farkas(r) => Obj::new().int("row", *ri as i128 + 1).raw("farkas", farkas_json(r, model)).finish(),
-                            })
-                            .collect::<Vec<_>>()),
-                    )
-                    .finish(),
-            )
-            .finish(),
+        Cover::ByAboveRows(a) => Obj::new().raw("above_rows", above_rows_json(a, model)).finish(),
     }
+}
+
+/// The rows of a table above that write the value a box holds on the column it decides, each with
+/// why it fires nowhere in the box: a cover's leaf, and each value of a pair the rows part
+/// (§15.195, §15.196).
+fn above_rows_json(a: &crate::region::AboveRows, model: &[crate::fourier::Origin]) -> String {
+    Obj::new()
+        .int("axis", a.axis as i128)
+        .str("column", &a.column)
+        .str("value", &a.value)
+        .raw(
+            "rows",
+            arr(&a
+                .rows
+                .iter()
+                .map(|(ri, o)| match o {
+                    crate::region::RowOut::Clash(aj) => Obj::new().int("row", *ri as i128 + 1).int("clash", *aj as i128).finish(),
+                    crate::region::RowOut::Farkas(r) => Obj::new().int("row", *ri as i128 + 1).raw("farkas", farkas_json(r, model)).finish(),
+                })
+                .collect::<Vec<_>>()),
+        )
+        .finish()
 }
 
 /// What the tables above rule out, on this table's own axes.

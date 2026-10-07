@@ -1,0 +1,20 @@
+rule 印紙税の行(stamp_duty_rows) v1
+description "契約書の印紙税を、作成日で決める。軽減の額は 2027年3月31日までに作られた契約書のもので、入力が許す日はどれもその前にあるので、`軽減期間` はいつも true になり、false の行に当てはまる入力は無い"
+
+inputs
+  作成日(made) : date  range >=2024-04-01 <=2026-12-31
+
+outputs
+  税額(duty) : money[円]  round down(1円)
+
+define 軽減期間(reduced) : bool = 作成日 <= 2027-03-31
+
+table 税額表(duty_of)
+policy unique
+| 軽減期間 | -> 税額 : money[円] |
+| true     | 200円               |
+| false    | 400円               |
+
+examples
+| 作成日     | -> 税額 |
+| 2025-06-01 | 200円   |

@@ -754,6 +754,12 @@ and the other defines come to, the values a table above writes — whatever the 
 comes to 0% up to 100%. The checks read that as they read a derive's reach: E101 asks no row for a
 share past 100%, and a row that asks only for one is E102.
 
+A boolean `define` of one comparison is read the same way for the truth value it takes. Where the
+intervals of its two sides settle the comparison over the inputs' ranges — `made <= 2027-03-31`
+with `made` declared up to the end of 2026 — it is always true, or always false: E101 asks no row
+for the other value, a row that asks only for that is E102, and two rows that meet only there do
+not overlap.
+
 ## 6.1 constraint
 
 A relation between two inputs that the caller guarantees. It computes nothing; it says

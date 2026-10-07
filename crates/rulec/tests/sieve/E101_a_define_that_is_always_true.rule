@@ -1,0 +1,19 @@
+rule stamp_duty_reduced v1
+description "The stamp duty on a contract, by the day it is made. The reduced amount is for contracts made up to 31 March 2027, and every day the input allows falls before it, so `reduced` is always true and the table has no row for false"
+
+inputs
+  made : date  range >=2024-04-01 <=2026-12-31
+
+outputs
+  duty : money[JPY]  round down(1JPY)
+
+define reduced : bool = made <= 2027-03-31
+
+table duty_of
+policy unique
+| reduced | -> duty : money[JPY] |
+| true    | 200JPY               |
+
+examples
+| made       | -> duty |
+| 2025-06-01 | 200JPY  |

@@ -62,8 +62,41 @@ def guarantees (cert : Json) : List (String × String) :=
     | _ => none)
   closeLe raw.length raw
 
-/-- The units and int64 claims, over the `values` section. -/
-def checkValues (cert : Json) (r : Report) : Report × (String → Option Span2) := Id.run do
+/-- The columns a table writes numbers into, each with what every row of the table that decides
+    it writes there, as expressions (rulec's §15.196): `none` where a row writes something this
+    program cannot read. And the columns whose rows state nothing they write — a certificate from
+    before they did. -/
+def writtenCols (cert : Json) (types : String → Option Ty) :
+    List (String × Option (List RulecCert.Expr)) × List String := Id.run do
+  let mut outs : List (String × Option (List RulecCert.Expr)) := []
+  let mut unstated : List String := []
+  for t in fieldArr cert "tables" do
+    let rows := fieldArr t "rows"
+    let ds := (fieldArr t "decides").toList.filterMap str
+    for (col, oi) in ds.zip (List.range ds.length) do
+      let some ty := types col | continue
+      if !ty.numeric then continue
+      if !rows.any (fun r => (field r "writes").isSome) then
+        if !unstated.contains col then unstated := unstated ++ [col]
+        continue
+      let es : Option (List RulecCert.Expr) := rows.toList.mapM (fun r => do
+        let w ← (fieldArr r "writes")[oi]?
+        field w "expr" >>= exprOfJson)
+      outs := outs ++ [(col, es)]
+  return (outs, unstated)
+
+/-- What `checkValues` works out: each value's interval, the hull of each column a table writes
+    numbers into, and what bounds a name — the one of those that applies, and otherwise the range
+    the rule declares, never the stated range of a column a table writes. -/
+structure Worked where
+  reachOf : String → Option Span2
+  writtenOf : String → Option Span2
+  rangesOf : String → Option Span2
+  within : RulecCert.Expr → RulecCert.Expr → Bool
+
+/-- The units and int64 claims, over the `values` section, and the ranges of the columns tables
+    write numbers into (rulec's §15.196). -/
+def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
   let typesJson := (field cert "types").getD Json.null
   let types : String → Option Ty := fun n =>
     (objPairs typesJson).find? (fun p => p.1 == n) |>.bind (fun p => str p.2 >>= tyOfString)
@@ -83,8 +116,76 @@ def checkValues (cert : Json) (r : Report) : Report × (String → Option Span2)
     | .name x, .name y => le.any (fun p => p.1 == x && p.2 == y)
     | _, _ => false
   let vals := fieldArr cert "values"
+  let (outs, unstated) := writtenCols cert types
+  let isOut : String → Bool := fun n => outs.any (fun o => o.1 == n)
+  -- What bounds a name: the interval this program computed for it where there is one, and the
+  -- declared range otherwise. Taking the declared range in preference would let a forged
+  -- `ranges` entry override the arithmetic — the theorem needs the bound that really holds of
+  -- the value, and for a computed value that is the computed one. A column a table writes
+  -- numbers into is bounded by the hull of what its rows write, never by the stated range.
   let mut got : List (String × Span2) := []
+  let mut wrote : List (String × Span2) := []
+  -- What depends on what runs both ways — a `define` over a table's column, a table writing a
+  -- `define` — so the two are worked out together until nothing more can be.
+  for _ in [0 : vals.size + outs.length + 1] do
+    let mut moved := false
+    for v in vals do
+      let name := fieldStr v "name"
+      if got.any (fun p => p.1 == name) then continue
+      let some e := (field v "expr" >>= exprOfJson) | continue
+      let gotNow := got
+      let wroteNow := wrote
+      let ranges : String → Option Span2 := fun n =>
+        match (gotNow.find? (fun p => p.1 == n)).map (fun p => p.2) with
+        | some I => some I
+        | none => match (wroteNow.find? (fun p => p.1 == n)).map (fun p => p.2) with
+          | some I => some I
+          | none => if isOut n then none else declared n
+      match interval ranges within e with
+      | some I => got := got ++ [(name, I)]; moved := true
+      | none => pure ()
+    for (col, es) in outs do
+      if wrote.any (fun p => p.1 == col) then continue
+      let some es := es | continue
+      let gotNow := got
+      let wroteNow := wrote
+      let ranges : String → Option Span2 := fun n =>
+        match (gotNow.find? (fun p => p.1 == n)).map (fun p => p.2) with
+        | some I => some I
+        | none => match (wroteNow.find? (fun p => p.1 == n)).map (fun p => p.2) with
+          | some I => some I
+          | none => if isOut n then none else declared n
+      match hullOf ranges within es with
+      | some H => wrote := wrote ++ [(col, H)]; moved := true
+      | none => pure ()
+    if !moved then break
+  let gotF := got
+  let wroteF := wrote
+  let rangesF : String → Option Span2 := fun n =>
+    match (gotF.find? (fun p => p.1 == n)).map (fun p => p.2) with
+    | some I => some I
+    | none => match (wroteF.find? (fun p => p.1 == n)).map (fun p => p.2) with
+      | some I => some I
+      | none => if isOut n then none else declared n
   let mut r := r
+  -- The range the certificate states for a column a table writes numbers into holds every value
+  -- its rows write (`eval_mem_stated`).
+  let mut heldCols := 0
+  for (col, es) in outs do
+    match declared col, es with
+    | some S, some es =>
+      if wroteF.any (fun p => p.1 == col) then
+        if writesWithin rangesF within S es then heldCols := heldCols + 1
+        else r := r.fail s!"{col}: its rows write a value outside the range the certificate states for it"
+      else
+        r := r.fail s!"{col}: the certificate states a range for it, and this program cannot work one out from what its rows write"
+    | some _, none =>
+      r := r.fail s!"{col}: the certificate states a range for it, and a row writes something this program cannot read"
+    | none, _ => pure ()
+  if heldCols > 0 then
+    r := r.say s!"  ranges: {heldCols} columns a table writes numbers into hold every value their rows write"
+  for col in unstated do
+    r := r.state s!"the range of {col}: its rows state nothing they write"
   let mut typed := 0
   let mut held := 0
   let mut unread := 0
@@ -107,20 +208,12 @@ def checkValues (cert : Json) (r : Report) : Report × (String → Option Span2)
         | some w =>
           if declaresAs w τ then typed := typed + 1
           else r := r.fail s!"{name}: the expression gives a different type from the declared one"
-    -- What bounds a name: the interval this program computed for it where there is one,
-    -- and the declared range otherwise. Taking the declared range in preference would let
-    -- a forged `ranges` entry override the arithmetic — the theorem needs the bound that
-    -- really holds of the value, and for a computed value that is the computed one.
-    let ranges : String → Option Span2 := fun n =>
-      match (got.find? (fun p => p.1 == n)).map (fun p => p.2) with
-      | some I => some I
-      | none => declared n
     let stated : Option Span2 := do
       let a ← field v "interval" >>= arr
       let lo ← a[0]? >>= optRat
       let hi ← a[1]? >>= optRat
       some (lo, hi)
-    match interval ranges within e with
+    match (gotF.find? (fun p => p.1 == name)).map (fun p => p.2) with
     | none =>
       -- A value with no interval of its own. `check` makes an int64 claim about every
       -- value that is stored as an integer, so a numeric one that states none is refused;
@@ -139,7 +232,6 @@ def checkValues (cert : Json) (r : Report) : Report × (String → Option Span2)
         if !(D.1 ≤ I.1 && I.2 ≤ D.2) then
           r := r.fail s!"{name}: the range the rule declares is narrower than what its expression reaches"
       | none => pure ()
-      got := got ++ [(name, I)]
       match stated with
       | none => r := r.fail s!"{name}: it states no interval, and this program derives one"
       | some S =>
@@ -154,8 +246,47 @@ def checkValues (cert : Json) (r : Report) : Report × (String → Option Span2)
     let notes := (if unread > 0 then s!", {unread} whose units rest on a leaf this program cannot type" else "")
       ++ (if noInterval > 0 then s!", {noInterval} with no interval to claim" else "")
     r := r.say s!"  values: {typed} typed, {held} held to int64{notes}"
-  let reachOf : String → Option Span2 := fun n => (got.find? (fun p => p.1 == n)).map (·.2)
-  return (r, reachOf)
+  let reachOf : String → Option Span2 := fun n => (gotF.find? (fun p => p.1 == n)).map (·.2)
+  let writtenOf : String → Option Span2 := fun n => (wroteF.find? (fun p => p.1 == n)).map (·.2)
+  return (r, { reachOf := reachOf, writtenOf := writtenOf, rangesOf := rangesF, within := within })
+
+/-- What kind of column each name makes (rulec's §15.196): a `derive` is `derived`, a `define` of
+    any type `define`, an input `input`, what a walk leaves behind `walk`; anything else — a column
+    a table above decides, a field of the elements a fold walks — `upstream`. -/
+def kindOf (cert : Json) (n : String) : String :=
+  match (fieldArr cert "values").toList.find? (fun v => fieldStr v "name" == n) with
+  | some v =>
+    if fieldStr v "of" == "derive" then "derived"
+    else if fieldStr v "of" == "define" then "define"
+    else "upstream"
+  | none =>
+    if (fieldArr cert "inputs").toList.any (fun x => str x == some n) then "input"
+    else if (fieldArr cert "walks").toList.any (fun x => str x == some n) then "walk"
+    else "upstream"
+
+/-- A boolean `define` of one comparison whose two sides have intervals (rulec's §15.196): the
+    comparison and the two intervals — a date literal as its day number, any other side worked out
+    the way every value is. -/
+def truthOfValue (cert : Json) (w : Worked) (n : String) : Option (Cmp × Span2 × Span2) := do
+  let v ← (fieldArr cert "values").toList.find? (fun v => fieldStr v "name" == n)
+  if fieldStr v "type" != "bool" then none
+  let e ← field v "expr"
+  let op ← match fieldStr e "op" with
+    | "<=" => some Cmp.le
+    | "<" => some Cmp.lt
+    | ">=" => some Cmp.ge
+    | ">" => some Cmp.gt
+    | _ => none
+  let side : Json → Option Span2 := fun x =>
+    if (field x "lit").isSome && fieldStr x "type" == "date" then do
+      let d ← field x "value" >>= optRat
+      some (d, d)
+    else do
+      let ex ← exprOfJson x
+      interval w.rangesOf w.within ex
+  let L ← field e "l" >>= side
+  let R ← field e "r" >>= side
+  some (op, L, R)
 
 /-- **The box each row states is the box its own cells describe** (§6.2). A box widened
     without touching the cell it was read from is caught here and nowhere else, and
@@ -341,13 +472,46 @@ def fieldsOf (line : ByteArray) : Array (Nat × Nat) := Id.run do
     out := out.push (a, b)
   return out
 
+/-- The number a cell of digits stands for: `ds` read in base ten. -/
+def digitsVal (ds : List Char) : Nat := ds.foldl (fun n c => n * 10 + (c.toNat - '0'.toNat)) 0
+
+/-- The number an answer cell writes (rulec's §15.196), with the one multiplier §2.1 allows (`万`,
+    `億`, `兆`) and its unit: `%` is a hundredth, no unit or the currency of a money column the
+    number itself. `none` when the text is not a number; `some none` for a unit this program does
+    not convert — a unit table is what it deliberately does not have. -/
+def literalValue (text : String) (cur : Option String) : Option (Option Rat) :=
+  let cs := ((text.toList.dropWhile Char.isWhitespace).reverse.dropWhile Char.isWhitespace).reverse
+  let (neg, cs) := match cs with
+    | '-' :: rest => (true, rest)
+    | _ => (false, cs)
+  let whole := (cs.takeWhile (fun c => c.isDigit || c == '_')).filter (· != '_')
+  let rest := cs.dropWhile (fun c => c.isDigit || c == '_')
+  if whole.isEmpty then none else
+  let (frac, rest) := match rest with
+    | '.' :: r => (r.takeWhile Char.isDigit, r.dropWhile Char.isDigit)
+    | _ => ([], rest)
+  let base : Rat := (digitsVal whole : Rat) + (digitsVal frac : Rat) / ((10 ^ frac.length : Nat) : Rat)
+  let (mult, rest) : Rat × List Char := match rest with
+    | '万' :: r => (10000, r)
+    | '億' :: r => (100000000, r)
+    | '兆' :: r => (1000000000000, r)
+    | _ => (1, rest)
+  let v := (if neg then -base else base) * mult
+  let unit := ((rest.dropWhile Char.isWhitespace).reverse.dropWhile Char.isWhitespace).reverse
+  if unit == ['%'] then some (some (v / 100))
+  else if unit.isEmpty then some (some v)
+  else match cur with
+    | some c => if unit == c.toList then some (some v) else some none
+    | none => some none
+
 /-- **The certificate quotes the file.** Every cell is read back out of the `.rule` text at
     the byte span the certificate names — and the span has to be that cell's place, not
     somewhere else on the page that happens to read the same. A row is one line; its cells
     are that line's own `|`-separated fields, all of them; the rows of one table are
     written one under another with no other table's rows between them; and a column no row
     is written with is a column this table does not have. -/
-def checkSpans (t : ReadTable) (lines : Array ByteArray) (r : Report) : Report × Nat × Nat :=
+def checkSpans (t : ReadTable) (lines : Array ByteArray) (r : Report)
+    (curOf : String → Option String := fun _ => none) : Report × Nat × Nat :=
   Id.run do
   let mut r := r
   let mut read := 0
@@ -426,6 +590,37 @@ def checkSpans (t : ReadTable) (lines : Array ByteArray) (r : Report) : Report �
                   r := r.fail s!"{t.name}: row {row.index}, {t.columns[ai]!}: the file does not say `{sp.text}` there"
                 else
                   read := read + 1
+          -- What the row writes into a column of numbers is the cell in the file (rulec's §15.196):
+          -- one of the cells after the ones its tests read, on its own line — or, for a `clause`,
+          -- on its `then` line — and the literal or the name the certificate says it is.
+          for w in row.writes do
+            match w with
+            | none => pure ()
+            | some wc =>
+              match wc.span with
+              | none =>
+                r := r.fail s!"{t.name}: row {row.index}, -> {wc.column}: the row is written in this file, and no cell is named for what it writes"
+              | some sp =>
+                let answers := bars.extract got.size bars.size
+                if bars.size > 0 && (sp.line != ln || !answers.contains (sp.col, sp.col + sp.len)) then
+                  r := r.fail s!"{t.name}: row {row.index}, -> {wc.column}: the cell named is not one of the row's answer cells"
+                else
+                  let wline := if bars.size > 0 then line
+                    else if 0 < sp.line && sp.line ≤ lines.size then lines[sp.line - 1]! else .empty
+                  let out := if sp.col + sp.len ≤ wline.size then
+                      String.fromUTF8? (wline.extract sp.col (sp.col + sp.len)) else none
+                  if out != some sp.text || sp.text != wc.says then
+                    r := r.fail s!"{t.name}: row {row.index}, -> {wc.column}: the file does not say `{wc.says}` there"
+                  else if wc.isName then
+                    read := read + 1
+                  else
+                    match literalValue sp.text (curOf wc.column) with
+                    | none => r := r.fail s!"{t.name}: row {row.index}, -> {wc.column}: `{sp.text}` is not a number"
+                    | some none =>
+                      r := r.state s!"{t.name}: row {row.index}, -> {wc.column}: `{sp.text}` is in a unit this program does not convert"
+                    | some (some x) =>
+                      if wc.value == some x then read := read + 1
+                      else r := r.fail s!"{t.name}: row {row.index}, -> {wc.column}: the file writes `{sp.text}`, and the certificate reads it as another number"
   -- No two tables of a merged set are written among each other.
   for (a, (alo, ahi)) in lineOf do
     for (b, (blo, bhi)) in lineOf do
@@ -433,7 +628,15 @@ def checkSpans (t : ReadTable) (lines : Array ByteArray) (r : Report) : Report �
         r := r.fail s!"{t.name}: rows of `{a}` and `{b}` are written among each other, which no two tables are"
   if !lineOf.isEmpty then
     for ai in [0 : t.columns.length] do
-      if !seenAxis[ai]! then
+      -- A column of a table an `apply` brought in has its cells in that rule's file, where its own
+      -- certificate reads them back (rulec's §15.196): only a column no row has a cell in, here or
+      -- there, is one no cell is written for.
+      let applied := t.rowsRaw.any (fun row =>
+        row.source.isNone && match row.tests[ai]? with
+          | some CellTest.any => false
+          | some _ => true
+          | none => false)
+      if !seenAxis[ai]! && !applied then
         r := r.fail s!"{t.name}: no row is written with a cell in {t.columns[ai]!}"
   -- A row called unused is one an `apply` brought in, not one written here.
   for u in t.unused do
@@ -1042,7 +1245,17 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
       return 1
     let mut r : Report := {}
     r := r.say s!"{fieldStr cert "rule"} ({fieldStr cert "rulec"}), re-checked against the Lean proofs"
-    let (r', reachOf) := checkValues cert r
+    let (r', worked) := checkValues cert r
+    -- The currency a money column is written in, for reading an answer cell back (§15.196).
+    let curOf : String → Option String := fun n =>
+      match (objPairs ((field cert "types").getD Json.null)).find? (fun p => p.1 == n) with
+      | some (_, j) => match str j with
+        | some ty => if ty.startsWith "money[" then
+            (((ty.drop 6).takeWhile (fun c => c != ',' && c != ']')).toString.trimAscii.toString : String) |> some
+          else none
+        | none => none
+      | none => none
+    let reachOf := worked.reachOf
     r := r'
     let declaredRange : String → Option Span2 := fun n =>
       match (objPairs ((field cert "ranges").getD Json.null)).find? (fun p => p.1 == n) with
@@ -1085,9 +1298,12 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
             let hi ← field f "hi" >>= boolOf
             -- A value the rule computes is bounded by the interval worked out here from its
             -- expression, not by the document's word for it (rulec's §15.195); an input by its range.
+            -- A column a table writes numbers into, by the hull of what its rows write (§15.196).
             let e ← match reachOf n with
               | some I => some (if hi then I.2 else I.1)
-              | none => rangeEnd n hi
+              | none => match worked.writtenOf n with
+                | some H => some (if hi then H.2 else H.1)
+                | none => rangeEnd n hi
             if hi then some ([(n, 1)], -e, false) else some ([(n, -1)], e, false)
         | none => do
             let i ← fieldNat f "constraint"
@@ -1106,9 +1322,20 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
     let daysOf : String → Option (List Rat) := fun n => do
       let d ← field daysJ n
       (fieldArr d "days").toList.mapM optRat
+    -- The kind of every column, worked out from `inputs`, `walks` and `values` (§15.196); a
+    -- certificate from before it carried them leaves the kinds its own word.
+    let kindsKnown := (field cert "inputs").isSome
+    if !kindsKnown then
+      r := r.state "the kinds of the columns: the certificate does not say what the rule's inputs are"
     let mut tables : Array ReadTable := #[]
     for tj in fieldArr cert "tables" do
-      match readTable reachOf groups declaredRange factOf daysOf (fieldArr cert "tables") tj with
+      if kindsKnown then
+        for a in fieldArr tj "axes" do
+          let col := fieldStr a "column"
+          let want := kindOf cert col
+          if fieldStr a "kind" != want then
+            r := r.fail s!"{fieldStr tj "table"}: {col} is a column of kind `{want}`, and the certificate calls it `{fieldStr a "kind"}`"
+      match readTable reachOf groups declaredRange factOf daysOf (fieldArr cert "tables") (truthOfValue cert worked) tj with
       | none => r := r.fail s!"{fieldStr tj "table"}: this program cannot read the table"
       | some t =>
         r := checkAbove tj (fieldArr cert "tables") r
@@ -1129,7 +1356,7 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
         let mut read := 0
         let mut apart := 0
         for t in tables do
-          let (r', n, a) := checkSpans t lines r
+          let (r', n, a) := checkSpans t lines r curOf
           r := r'; read := read + n; apart := apart + a
         let (r', mread) := checkMachineSpans cert lines r
         r := r'; read := read + mread

@@ -19,7 +19,7 @@ empty.
 | | |
 |---|---|
 | **Completeness** | if some input matches no row, it stops — **with that input** |
-| **Overlap** | under `policy unique`, an overlap is an error. Under `policy first`, structural shadowing (the staircase) is told apart from the pairs whose outputs differ and therefore deserve a decision |
+| **Overlap** | under `policy unique`, an overlap is an error. Under `policy first`, structural shadowing (the staircase) is told apart from the pairs whose outputs differ and therefore deserve a decision. Two rows that meet only where no input reaches overlap nothing |
 | **Dead rows** | a row nothing reaches. The message tells apart "earlier rows already cover it", "the upstream table never emits the value it names" and "the derive or the `define` never comes to the values the row asks for", the last with the interval it does come to — or with the row of the table above that writes the value the row asks for, and what the derive comes to while that row fires |
 | **Units** | adding yen to grams stops. So does tax-inclusive plus tax-exclusive |
 | **Rounding** | a numeric output must declare one. Without it, the message shows the money: "down(1JPY) gives 0JPY, half_up(1JPY) gives 0JPY and up(10JPY) gives 10JPY, so the rounding mode moves the result by up to 10JPY" |
@@ -51,9 +51,15 @@ beside the value a table above writes into another column, only for values the d
 comes to while the rows that write that value fire: when `small` is written only for an amount
 up to 50GBP, `small` beside an excess over the limit past 50GBP is reached by no input. The
 message names that row of the table above and what `excess` comes to there, `>=-99GBP <=50GBP`,
-and completeness asks no row for the combination either. The certificate gives the reason for
-both, and the two re-checkers work them out again rather than taking its word: the interval from
-the `define`'s own expression, and the rows that write the value from the table above.
+and completeness asks no row for the combination either. A boolean `define` of one comparison
+is read for the truth value it takes: with `made` declared only up to the end of 2026,
+`define reduced : bool = made <= 2027-03-31` is always true, so completeness asks no row for
+`false`, and a row that asks only for `false` is E102. The overlap checks read the same: two
+rows that meet only where no input reaches — the combination above, for one — are no E105, W105
+or W114. The certificate gives the reason for each, and the two re-checkers work them out again
+rather than taking its word: the interval from the `define`'s own expression, the truth value
+from its comparison, and the rows that write the value from the table above — and the values a
+table above writes into a column of numbers from what each of its rows writes.
 
 In a rule that binds an enum to a `.proto` with `import proto`,
 completeness reaches **across the contract**. Every `rulec check` reads
