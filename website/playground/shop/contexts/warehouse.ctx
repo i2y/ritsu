@@ -4,5 +4,10 @@ owner "the warehouse team"
 
 owns
   dir "../warehouse"
+  sekisho "../gates/warehouse.gate"
+
+published language warehouse.v1
+  openapi "../warehouse/api/warehouse.json"
+  open host service getOrder, requestShipment, requestCancellation
 
 partnership with Ordering

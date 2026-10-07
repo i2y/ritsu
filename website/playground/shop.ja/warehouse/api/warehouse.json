@@ -1,0 +1,100 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "倉庫の注文",
+    "version": "1.0.0",
+    "description": "倉庫が受注に公開するもの。倉庫のシステムにある注文と、その注文の出荷と取消の依頼。それに伴う在庫の動きは、倉庫のシステムが帳簿に書く。書き下ろしの例"
+  },
+  "servers": [
+    { "url": "https://warehouse.example.com" }
+  ],
+  "paths": {
+    "/v1/orders/{id}": {
+      "get": {
+        "operationId": "getOrder",
+        "summary": "倉庫のシステムにある、いまの注文",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "expand", "in": "query", "required": false, "schema": { "type": "string" }, "description": "注文のほかに答えに入れるもの。items なら注文の明細" }
+        ],
+        "security": [ { "workflow": [] }, { "staff": [] } ],
+        "responses": {
+          "200": {
+            "description": "注文",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Order" } } }
+          },
+          "403": { "description": "呼んだ相手には、この注文を見ることが許されていない" },
+          "429": { "description": "倉庫のシステムが混んでいる。少し待ってから呼び直す" }
+        }
+      }
+    },
+    "/v1/orders/{id}/shipments": {
+      "post": {
+        "operationId": "requestShipment",
+        "summary": "注文を、指定した便で出荷するよう頼む",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "security": [ { "workflow": [] }, { "staff": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["便"],
+                "properties": {
+                  "便": { "type": "string", "enum": ["通常便", "翌日便"], "description": "通常の便か、翌日に届く便か" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "出荷した注文。押さえていた在庫は棚から出ている",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Order" } } }
+          },
+          "403": { "description": "呼んだ相手には、この注文の出荷を頼むことが許されていない" },
+          "409": { "description": "いまの注文は出荷できない。まだ入金がないか、取り消されている" }
+        }
+      }
+    },
+    "/v1/orders/{id}/cancellations": {
+      "post": {
+        "operationId": "requestCancellation",
+        "summary": "出荷の前に、注文の取消を頼む",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "security": [ { "workflow": [] }, { "staff": [] } ],
+        "responses": {
+          "200": {
+            "description": "取り消した注文。押さえていた在庫は棚に戻っている",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Order" } } }
+          },
+          "403": { "description": "呼んだ相手には、この注文の取消を頼むことが許されていない" },
+          "409": { "description": "注文を取り消せない。もう出荷したか、もう取り消されている" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "workflow": { "type": "mutualTLS", "description": "受注のワークフロー。自分の証明書で呼ぶ" },
+      "staff": { "type": "openIdConnect", "openIdConnectUrl": "https://id.example.com/.well-known/openid-configuration", "description": "サインインした倉庫の職員" }
+    },
+    "schemas": {
+      "Order": {
+        "type": "object",
+        "required": ["id", "状態", "金額", "会員"],
+        "properties": {
+          "id": { "type": "string" },
+          "状態": { "type": "string", "enum": ["受付", "入金済", "出荷済", "配達済", "取消"], "description": "注文の状態。受注の規則「注文の状態」のとおりに移る" },
+          "金額": { "type": "integer", "minimum": 0, "maximum": 1000000, "description": "注文の金額。税込みの円" },
+          "会員": { "type": "boolean", "description": "注文したお客さまが会員か" }
+        }
+      }
+    }
+  }
+}

@@ -3,6 +3,7 @@ description "For an order in the warehouse's system, ask for the payment, have i
 
 use rule order_state from "rules/order_state.rule"
 use rule urgency from "rules/urgency.rule"
+use openapi warehouse from "../warehouse/api/warehouse.json"
 
 record Order
   id     : string
@@ -20,21 +21,21 @@ outputs
   carrier : urgency.carrier
 
 task get_order(id: string, expand: string) -> Order
-  http GET "https://warehouse.example.com/v1/orders/{id}"
+  http GET warehouse "/v1/orders/{id}"
   observes
   idempotent
   errors busy = 429
   retry 3 times every 1 second on busy
 
 task request_shipment(id: string, carrier: urgency.carrier) -> Order
-  http POST "https://warehouse.example.com/v1/orders/{id}/shipments"
+  http POST warehouse "/v1/orders/{id}/shipments"
   sends ship
   errors conflict = 409
   refused as conflict
   key
 
 task request_cancel(id: string) -> Order
-  http POST "https://warehouse.example.com/v1/orders/{id}/cancellations"
+  http POST warehouse "/v1/orders/{id}/cancellations"
   sends cancel
   errors conflict = 409
   refused as conflict

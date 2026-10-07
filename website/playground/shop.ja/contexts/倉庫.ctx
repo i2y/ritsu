@@ -4,5 +4,10 @@ owner "倉庫チーム"
 
 owns
   dir "../warehouse"
+  sekisho "../gates/倉庫.gate"
+
+published language warehouse.v1
+  openapi "../warehouse/api/warehouse.json"
+  open host service getOrder, requestShipment, requestCancellation
 
 partnership with 受注

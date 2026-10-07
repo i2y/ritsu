@@ -1,0 +1,73 @@
+{
+  "accounts": {
+    "在庫": {
+      "description": "倉庫の棚にある数",
+      "lower": {
+        "refused_as": "在庫切れ",
+        "value": 0
+      },
+      "outside": false,
+      "params": [
+        "sku"
+      ],
+      "unit": "個",
+      "upper": null
+    },
+    "客": {
+      "description": null,
+      "lower": null,
+      "outside": true,
+      "params": [],
+      "unit": "個",
+      "upper": null
+    }
+  },
+  "description": "出荷で確定し、キャンセルで取り消す",
+  "key": [
+    "注文",
+    "sku"
+  ],
+  "moves": [
+    {
+      "amount": {
+        "param": "数"
+      },
+      "from": {
+        "account": "在庫",
+        "args": [
+          {
+            "param": "sku"
+          }
+        ]
+      },
+      "to": {
+        "account": "客",
+        "args": []
+      }
+    }
+  ],
+  "operation": "hold",
+  "params": [
+    {
+      "name": "注文",
+      "type": "string"
+    },
+    {
+      "name": "sku",
+      "type": "string"
+    },
+    {
+      "name": "数",
+      "type": "amount",
+      "unit": "個"
+    }
+  ],
+  "pending": {
+    "expires_after_seconds": 1800
+  },
+  "refusals": [
+    "在庫切れ",
+    "key_conflict",
+    "already_refused"
+  ]
+}

@@ -4,7 +4,7 @@
 
 名前は関所（せきしょ）から取った。
 
-この文書は設計の段階（2026-10-06）に書き、言語の芯を作った段階（A）で、作ったものに合わせて直した。設計の段階では、ritsu 0.23.0 を読み、2026-10 の時点の Cedar とまわりの道具を調べて決めた。決めたことのうち、Cedar で本当にそうなるかが分かれ目になるものは、手で書いた例を公式の Cedar の CLI 4.13.0、cedar-wasm 4.13.0、cedarpy 4.12.1、cedar-go v1.8.0 にかけて確かめた（6 章）。例の規則・日付・ワークフローは、ritsu 0.23.0 の `rulec check`・`koyomi check`・`dandori check` と `ritsu check` を通してある。例の Cedar とリクエストを組み立てるコードは、sekisho が生成する形を手で書いた見本である。`.gate` の検査の結果として載せた数は、設計の段階には、検査が数える形を Python で書いた使い捨ての試作の出力（1,090 通りなど）だった。A で全部の組み合わせの検査を作り、4 章、7 章、10 章の数と文を実物の出力に差し替えた（6.2 の表は、試作を四つの実装に流した記録なので残した）。A では、字句と構文、名前と型、診断の台帳、`check` と `explain` のコマンド、`ritsu sekisho` と `ritsu check` の入口、口のまとまり `GatePorts` と口 `Gates` の型、rulec の `outputs_over`、koyomi の `calendar` と `doc`、OpenAPI と AsyncAPI の操作の読み手、全部の組み合わせの検査と参照の評価、行を合わせた表を作った。2.8、2.10、3 章、4 章、7〜10 章をそれに合わせて直し、16 章を決めたことの形に書き直した。段階 B では、Cedar のスキーマとポリシーの生成（`gen --target cedar`）、全部の組み合わせを `cedar run-tests` のテストにする `vectors`、外のツールのための JSON の `api`、生成した Cedar を公式の CLI にかけるテスト（`tests/cedar.rs`）を作り、5 章、6.1、6.2、11 章を作ったものに合わせて直し、16.1 に段階 B で決めたことを足した。取り込みのときに、守る操作を、参照の書き方とルートからのパスで言うようにした（2.6）。段階 C では、action ごとにリクエストを組み立てて尋ねるコードの生成（`gen --target typescript|python|go` と `--authorizer`、`--module`）、組み合わせごとの生の値と、それを参照の評価にかけた答え（`src/raw.rs`）、生成したコードを本物の Cedar の実装（cedar-wasm、cedarpy、cedar-go）にかけてその答えと突き合わせるテスト、Verified Permissions の上限の警告（W401）、`ritsu gen` のパッケージへの取り込みを作り、2.9、3.8、5 章、6.3、11 章を直し、16.1 に段階 C で決めたことを足した。段階 D では、人が読むページ（`doc`）を作り、7 章と 11 章を作ったものに合わせて直し、16.1 に決めたことを足した。段階 D の最後（D3）で、八つ目の言語として ritsu の看板、README、CLI、リリース、スキル、サイト、地図、ブラウザで試すページに入れ、言語の文書（`docs/reference.md`）、README、スキル（`skills/sekisho`）を書き、12 章を直し、16.1 に決めたことを足した。2026-10-07 に、規則に渡す列挙と真偽を、組み合わせの値と定数に限って rulec に尋ねるようにし、3.2、4.1、16 章を直した。
+この文書は設計の段階（2026-10-06）に書き、言語の芯を作った段階（A）で、作ったものに合わせて直した。設計の段階では、ritsu 0.23.0 を読み、2026-10 の時点の Cedar とまわりの道具を調べて決めた。決めたことのうち、Cedar で本当にそうなるかが分かれ目になるものは、手で書いた例を公式の Cedar の CLI 4.13.0、cedar-wasm 4.13.0、cedarpy 4.12.1、cedar-go v1.8.0 にかけて確かめた（6 章）。例の規則・日付・ワークフローは、ritsu 0.23.0 の `rulec check`・`koyomi check`・`dandori check` と `ritsu check` を通してある。例の Cedar とリクエストを組み立てるコードは、sekisho が生成する形を手で書いた見本である。`.gate` の検査の結果として載せた数は、設計の段階には、検査が数える形を Python で書いた使い捨ての試作の出力（1,090 通りなど）だった。A で全部の組み合わせの検査を作り、4 章、7 章、10 章の数と文を実物の出力に差し替えた（6.2 の表は、試作を四つの実装に流した記録なので残した）。A では、字句と構文、名前と型、診断の台帳、`check` と `explain` のコマンド、`ritsu sekisho` と `ritsu check` の入口、口のまとまり `GatePorts` と口 `Gates` の型、rulec の `outputs_over`、koyomi の `calendar` と `doc`、OpenAPI と AsyncAPI の操作の読み手、全部の組み合わせの検査と参照の評価、行を合わせた表を作った。2.8、2.10、3 章、4 章、7〜10 章をそれに合わせて直し、16 章を決めたことの形に書き直した。段階 B では、Cedar のスキーマとポリシーの生成（`gen --target cedar`）、全部の組み合わせを `cedar run-tests` のテストにする `vectors`、外のツールのための JSON の `api`、生成した Cedar を公式の CLI にかけるテスト（`tests/cedar.rs`）を作り、5 章、6.1、6.2、11 章を作ったものに合わせて直し、16.1 に段階 B で決めたことを足した。取り込みのときに、守る操作を、参照の書き方とルートからのパスで言うようにした（2.6）。段階 C では、action ごとにリクエストを組み立てて尋ねるコードの生成（`gen --target typescript|python|go` と `--authorizer`、`--module`）、組み合わせごとの生の値と、それを参照の評価にかけた答え（`src/raw.rs`）、生成したコードを本物の Cedar の実装（cedar-wasm、cedarpy、cedar-go）にかけてその答えと突き合わせるテスト、Verified Permissions の上限の警告（W401）、`ritsu gen` のパッケージへの取り込みを作り、2.9、3.8、5 章、6.3、11 章を直し、16.1 に段階 C で決めたことを足した。段階 D では、人が読むページ（`doc`）を作り、7 章と 11 章を作ったものに合わせて直し、16.1 に決めたことを足した。段階 D の最後（D3）で、八つ目の言語として ritsu の看板、README、CLI、リリース、スキル、サイト、地図、ブラウザで試すページに入れ、言語の文書（`docs/reference.md`）、README、スキル（`skills/sekisho`）を書き、12 章を直し、16.1 に決めたことを足した。2026-10-07 に、規則に渡す列挙と真偽を、組み合わせの値と定数に限って rulec に尋ねるようにし、3.2、4.1、16 章を直した。同じ日に、ワークフローが帳簿の振替を直接呼ぶ形を X16 が見ないことと、その理由を 3.4 と 15 章に書き、ブラウザで試すページの通販に倉庫の契約とゲートを置いた形を 3.4 と 4.6 に足した。
 
 ## 0. 全体像
 
@@ -368,7 +368,9 @@ today range >=2026-10-01 <=2028-10-31 offset +00:00
 
 - 「在庫が足りるときだけ出荷してよい」は認可ではなく、帳簿の境界である。chobo は、どの振替でも、一度の書き込みの中で境界を守り、守れなければ理由の名前つきで拒否する（ritsu の DESIGN 0.1）。認可の判断の時点で残高を読んで許しても、振替を書くまでに別の振替が残高を変えうる。判断と書き込みが別の時点になるので、残高は認可の条件として信用できない。
 - 残高は状態で、有限の値にならない（P3）。
-- 認可が受け持つのは、だれがどの振替を動かしてよいか（倉庫の人だけが入荷を記帳できる）である。これは、操作を守る action として書ける。dandori のワークフローが振替を呼ぶときは、ワークフローを principal にして X16 で確かめられる。
+- 認可が受け持つのは、だれがどの振替を動かしてよいか（倉庫の人だけが入荷を記帳できる）である。これは、操作を守る action として書ける。ゲートが効くのは、帳簿を持つサービスが、振替を動かす前にゲートに尋ねるときである（生成したコードの `authorize…` で許されてから、chobo のクライアントを呼ぶ）。
+- dandori のワークフローが振替を直接呼ぶ形（`book <帳簿>.<振替>.<操作>` のタスク）は、X16 が見ない（2026-10-07）。そのタスクで dandori が書くアクティビティ（Step Functions では帳簿の Lambda 関数）は、chobo のクライアントを呼ぶだけで、ゲートに尋ねない。拒まれたときにワークフローに何が返るかも決まっていない。chobo が振替を拒否する理由は、勘定の境界、仮押さえの状態、キーのぶつかり（`out_of_stock`、`expired`、`key_conflict` など）のどれかで、OpenAPI の操作の 403 や Connect の `permission_denied` に当たるものが無い。尋ねる者も、拒まれたときの答えも無いので、E908（いつも拒まれる）と W909（拒まれたときのエラーを宣言していない）は、帳簿の呼び出しには意味を持たない。そこで、dandori の口 `Flows::operation_calls` は帳簿の呼び出しを返さない（8.3）。ワークフローが帳簿を直接呼ぶ形を X16 で確かめるのは、だれがゲートに尋ね、拒まれたときにタスクに何が返るかを決めてからにする（15 章）。
+- ritsu のブラウザで試すページの通販は、ワークフローが帳簿を直接呼ばない形にした（2026-10-07）。受注のワークフロー `ship_order` は、倉庫の契約（OpenAPI の文書 `warehouse/api/warehouse.json`）の三つの操作を呼ぶ。倉庫のゲート `gates/warehouse.gate` は、その三つの操作と、帳簿 `warehouse/inventory.book` の振替の五つの操作を守り、ワークフローを principal に書く。帳簿は倉庫のシステムが動かす。ゲートは、入荷と返品の記帳を入荷係に許し、注文の分の在庫を押さえることと、仮押さえの確定と取消を倉庫のシステムに許す。受注のフローが倉庫の帳簿を直接動かすより、倉庫が公開する操作を呼び、帳簿は倉庫の中で動かすほうが、コンテキストの境界として自然だからである。フローの呼び出しは X16 が確かめ（4.6）、帳簿の振替の操作を守る action は、帳簿を持つ倉庫のシステムが尋ねる。
 
 ### 3.5 A・B・C の比較と決定
 
@@ -579,6 +581,14 @@ ritsu-cross に置き、口だけを通す（ritsu の DESIGN 7 章）。番号�
 - 呼ぶ操作は、dandori の `Flows::operation_calls`（8.3）が、守る操作と同じ参照で言う（`use openapi` の `http` は `operationId` で、無ければ方法とパス。`use proto` の `connect` はサービスとメソッド）。だから、`guards` の参照と一字ずつ突き合わせられる。
 - 境界の数え方（ritsu の DESIGN 7 章の `borders`）：X15 は公開する操作ごとに一つで、守られている操作とだれでも呼べる操作が通り、E907 が落ち、W907 の操作は決められない。X16 は呼び出しごとに一つで、E908 が落ち、W909 は決められず、ほかは通る。W908 は呼び出しではないので数えない。
 - 例（`examples/refunds`）は、二つの版のゲートがそれぞれワークフロー `returns` を書き、フローの返金の呼び出しは、どちらのゲートでも組み合わせによって許され、タスクが `errors denied = 403` を宣言しているので通る。`ritsu check examples/refunds` の最後の行は「borders between the languages: 2 checked, 0 undecided」になる。
+- ritsu のブラウザで試すページの通販（`website/playground/shop/`。日本語の版は `shop.ja/`）は、2026-10-07 から X15 と X16 の両方を持つ。地図は、受注の公表された言語に `.proto` の `OrderService` の二つのメソッドを、倉庫の公表された言語に OpenAPI の文書 `warehouse/api/warehouse.json` の三つの操作を、公開ホストサービスとして並べ、受注のゲート `gates/orders.gate` と倉庫のゲート `gates/warehouse.gate` が五つとも守る（X15 で五つ）。倉庫のゲートはワークフロー `ship_order` を書き、フロー `ordering/ship_order.flow` は倉庫の操作を五か所で呼ぶ（`get_order` と `request_cancel` が二か所ずつ、`request_shipment` が一か所）。ゲートはワークフローに三つの action をどの組み合わせでも許すので、五か所とも通る（X16 で五つ）。最後の行は、ページが開いたとき（受注が `.proto` に値を足し、請求の規則が rulec の検査を通らない）も、契約を直したあとも「borders between the languages: 10 checked, 0 undecided」である。注文の状態でワークフローを拒まないのは、出荷と取消を受け付けるかを倉庫のシステムが規則 `order_state` で決め、受け付けないときは 409 で返すからである。ゲートが状態で拒めば、同じ呼び出しが 403 で返ることになり、フローは一つのことを二つのエラーで扱うことになる。ページの手順の一つは、ワークフローの permit から `view_order` を外す。ピッキング係には注文を見ることを許したままなのでゲートは検査を通り、X16 が `get_order` の二か所に E908 を言い、permit を指す要件のリンクに yuen が E303 を言う。
+
+```
+error[ritsu E908]: ordering/ship_order.flow:62: The task `get_order` calls openapi "warehouse/api/warehouse.json" operation getOrder, and the action `view_order` of gates/warehouse.gate that guards it allows the workflow `ship_order` in no combination
+    62 |   order <- get_order(id: order_id, expand: "items")
+  = Every run that comes to the call is denied there.
+  = Write a permit in gates/warehouse.gate that allows the workflow (`principal is workflow ship_order`), or take the call out.
+```
 
 ### 4.7 Cedar の解析との関係
 
@@ -1202,7 +1212,7 @@ fn published_operations(&self, root: &Path, map: &str) -> Result<Vec<PublishedOp
 
 - 問いは、ファイルをルートとルートからのパスで受け取る（`Items` と `References` と同じ）。答えの参照がルートからのパスなので、問う側も同じ形で渡す。上の計画の `&Path` の一つの引数からは、そこを変えた。
 - `GateWorkflow` には、別名（Cedar の `Workflow::"…"` の ID。`Gates::allowed` の `Asker::Workflow` はこれで尋ねる）を足し、`.flow` はルートからの参照（`dandori "flows/returns.flow"`）にした。
-- `Flows::operation_calls`（dandori の `src/ports.rs`）：dandori の検査を通るフローだけに答える（規則と日付と帳簿は `ports` で読む）。タスクの呼び出しのうち、`use openapi` の `http` と `use proto` の `connect` のタスクのものを、行の順に返す。操作は、`ritsu_base::openapi` で文書を読んで `operationId` を引き（無ければ方法とパス）、proto はサービスの最後の名前とメソッドで書く。拒まれたときのエラーは、タスクが宣言したエラーのうち状態が 403 のもの（Connect の `permission_denied` も dandori は 403 に読む）。テストは dandori の `tests/ports.rs` の `a_flow_says_which_operations_it_calls`（例の `hotel` と `fulfillment`、一時ディレクトリのフロー、検査を通らないフロー）。
+- `Flows::operation_calls`（dandori の `src/ports.rs`）：dandori の検査を通るフローだけに答える（規則と日付と帳簿は `ports` で読む）。タスクの呼び出しのうち、`use openapi` の `http` と `use proto` の `connect` のタスクのものを、行の順に返す。操作は、`ritsu_base::openapi` で文書を読んで `operationId` を引き（無ければ方法とパス）、proto はサービスの最後の名前とメソッドで書く。拒まれたときのエラーは、タスクが宣言したエラーのうち状態が 403 のもの（Connect の `permission_denied` も dandori は 403 に読む）。帳簿の振替のタスク（`book`）は返さない（3.4）。テストは dandori の `tests/ports.rs` の `a_flow_says_which_operations_it_calls`（例の `hotel` と `fulfillment`、一時ディレクトリのフロー、検査を通らないフロー）。
 - `Maps::published_operations`（sakai の `src/ports.rs`）：sakai の段 1 と段 2 を通る地図に答える。コンテキストの `open host service` に並べた名前ごとに、proto のサービスならメソッドの全部、OpenAPI の文書の操作（webhook でないもの）ならその操作を返す。`open_to_anyone` は、操作の `security: []`。AsyncAPI のチャネルと、規則の Connect のサービスは返さない（X15 が求めないもので、`guards` で守るものでもない。4.6）。`file` と `line` は、その名前を並べた context のファイルと行。テストは sakai の `tests/maps.rs` で、四つの例の golden の「published operations」の節。
 - sekisho の `Engine` が `Gates`、`Items`、`References` に答え、同じファイルの検査の結果を、一つの実行の中で（ルートとファイルごとに）一度だけ持つ。`ritsu check` も `.gate` の検査をこの `Engine` で走らせるので、口に答えるときに検査をやり直さない。`Items` と `References` の `use` と `workflow` の行は構文だけから読み、`guards` の先だけが検査の結果を使う。
 
@@ -1582,6 +1592,7 @@ Zanzibar の形（OpenFGA、SpiceDB、Permify、Topaz のディレクトリ）�
 - **Lean のモデル**：区間に分けて数えることが、全部のリクエストを覆うことの証明（ritsu の P7）。Cedar の意味は Cedar の Lean の形式化に任せ、sekisho の数え方だけをモデルにする。
 - **LSP**：ritsu の LSP と同じく作らない（ritsu の DESIGN 15 章）。
 - **手で書いた Cedar のワークフロー（X16）**：Cedar には `Workflow` のエンティティと `.flow` を結ぶ書き方が無いので、X16 は `.gate` だけを見る（1.3）。`@guards` と同じく、スキーマの注釈で `.flow` を書く形が候補。
+- **ワークフローが帳簿の振替を直接呼ぶ形（X16）**：dandori の `book <帳簿>.<振替>.<操作>` のタスクは、X16 が見ない（3.4）。足すには二つを決める要がある。一つは、だれがゲートに尋ねるかである。dandori が書くアクティビティ（Step Functions では帳簿の Lambda 関数）に、chobo のクライアントを呼ぶ前にゲートの生成したコードを呼ばせるか、chobo のクライアントに尋ねる口を持たせるかの、どちらかになる。もう一つは、拒まれたときにタスクに何が返るかである。chobo の拒否の理由に、認可で拒まれたことを表す名前（たとえば `denied`）を足し、タスクがそれを `errors` に宣言できるようにする形が候補で、それがあれば `operation_calls` が帳簿の呼び出しも返し、W909 がその宣言を求められる。
 - **手で書いた Cedar の役割の中の役割**：だれがどこに入るかはエンティティのデータが持つので、口は尋ねる側が並べた役割だけを数える（1.3）。役割の親子を書いたエンティティの JSON を読む形が候補。
 - **Cedar の JSON の形のポリシー**：ritsu-base が読まないので、口も読まない（ritsu の DESIGN 4.18）。
 - **手で書いた Cedar の `vectors`**：`sekisho vectors` は `.gate` だけを読む。手で書いた Cedar の組み合わせを `run-tests` のテストにするのは、テストが使う `cedar_in::cases` だけで、コマンドにはしていない（6.5）。コマンドにするには、尋ねる側（principal の型と、持つ役割の組）を指定する書き方が要る。テストは、型のそれぞれに、ポリシーが書く役割のどの組も持たせている。
@@ -1701,6 +1712,7 @@ Zanzibar の形（OpenFGA、SpiceDB、Permify、Topaz のディレクトリ）�
 2026-10-07 に決めたもの：
 
 86. **規則に渡す列挙と真偽は、組み合わせの値と定数に限って rulec に尋ねる（3.2）。** ポリシーも読む列挙と真偽の属性は組み合わせの値に、定数はその値に、規則の列挙より値の少ないゲートの列挙はその値に限る。口の `outputs_over` の問いは数と日付の区間のまま、列挙は値の位置、真偽は 0 と 1 で渡す（口の型を変えず、rulec と sekisho の決まりにした）。前は、列挙と真偽を限れずに多めに数え、規則の答えに頼る期待を決められないとしていた。
+87. **ワークフローが帳簿の振替を直接呼ぶ形は、X16 で確かめない（3.4、15 章）。** dandori が書くアクティビティはゲートに尋ねず、chobo の拒否の理由には、認可で拒まれたことに当たるものが無い。尋ねる者と、拒まれたときの答えが決まらないうちは、E908 と W909 が意味を持たない。帳簿の振替の操作を守る action は、帳簿を持つサービスが振替を動かす前に尋ねるときに効く。ブラウザで試すページの通販は、受注のワークフローが倉庫の契約の操作を呼び、帳簿は倉庫のシステムが動かす形にした。
 
 ### 16.2 危ないところ
 

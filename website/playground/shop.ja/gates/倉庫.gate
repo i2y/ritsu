@@ -1,0 +1,108 @@
+gate 倉庫(warehouse) v1
+description "倉庫のシステムにある注文を見ることと、その出荷や取消を頼むこと、棚の在庫を動かすことを、だれがしてよいか。倉庫のシステムは、API の呼び出しに答える前と、帳簿を動かす前に、このゲートに尋ねる。書き下ろしの例"
+namespace Warehouse
+
+use openapi 倉庫 from "../warehouse/api/warehouse.json"
+use book 在庫の引当 from "../warehouse/在庫.book"
+
+role ピッキング係(picker)
+  description "注文の品を棚から取り出し、梱包する"
+  can 注文を見る
+
+role 入荷係(receiver)
+  description "仕入先から届いた品を記帳し、お客さまから返ってきた品を棚に戻す"
+  can 入荷を記帳する, 返品を棚に戻す
+
+principal 職員(Staff)
+  description "サインインした倉庫の職員"
+  roles ピッキング係, 入荷係
+
+principal 倉庫のシステム(System)
+  description "倉庫自身のシステム。自分の資格で呼ぶ。注文の分の在庫を押さえ、注文が出荷されたら仮押さえを確定し、取り消されたら仮押さえを取り消す"
+
+workflow 出荷(ship_order) from "../ordering/出荷.flow"
+  description "注文を出荷させる受注のワークフロー。自分の資格で倉庫の API を呼ぶ"
+
+resource 注文(Order)
+  description "倉庫のシステムにある注文"
+
+resource 在庫(Stock)
+  description "棚にある、一つの SKU の在庫"
+
+action 注文を見る(view_order)
+  description "注文を見る"
+  guards 倉庫 getOrder
+  principal 職員, Workflow
+  resource 注文 from id
+
+action 出荷を頼む(request_shipment)
+  description "注文の出荷を頼む"
+  guards 倉庫 requestShipment
+  principal 職員, Workflow
+  resource 注文 from id
+
+action 取消を頼む(request_cancellation)
+  description "出荷の前に、注文の取消を頼む"
+  guards 倉庫 requestCancellation
+  principal 職員, Workflow
+  resource 注文 from id
+
+action 入荷を記帳する(receive_delivery)
+  description "仕入先から届いた品を記帳する"
+  guards 在庫の引当 入荷.do
+  principal 職員
+  resource 在庫 from sku
+
+action 返品を棚に戻す(put_back_return)
+  description "お客さまから返ってきた品を、棚に戻す"
+  guards 在庫の引当 返品.do
+  principal 職員
+  resource 在庫 from sku
+
+action 在庫を押さえる(hold_stock)
+  description "注文の分の在庫を、30 分まで押さえる"
+  guards 在庫の引当 引当.hold
+  principal 職員, 倉庫のシステム
+  resource 在庫 from sku
+
+action 仮押さえを確定する(post_hold)
+  description "注文の出荷に合わせて、仮押さえを確定する"
+  guards 在庫の引当 引当.post
+  principal 職員, 倉庫のシステム
+  resource 在庫 from sku
+
+action 仮押さえを取り消す(void_hold)
+  description "取り消された注文の仮押さえを取り消す。在庫は棚に戻る"
+  guards 在庫の引当 引当.void
+  principal 職員, 倉庫のシステム
+  resource 在庫 from sku
+
+permit ピッキング係は注文を見られる(pickers_view_orders)
+  description "ピッキング係は、品を取り出して梱包するために、注文を見られる"
+  principal in ピッキング係
+  action 注文を見る
+
+permit 出荷のワークフローは倉庫を呼べる(ship_order_calls_the_warehouse)
+  description "受注のワークフローは、注文を見て、その出荷と取消を頼める"
+  principal is workflow 出荷
+  action 注文を見る, 出荷を頼む, 取消を頼む
+
+permit 入荷係は入荷と返品を記帳できる(receivers_book_stock_in)
+  description "入荷係は、届いた品を記帳し、返ってきた品を棚に戻せる"
+  principal in 入荷係
+  action 入荷を記帳する, 返品を棚に戻す
+
+permit 倉庫のシステムは仮押さえを動かせる(the_system_keeps_the_holds)
+  description "倉庫のシステムは、注文の分の在庫を押さえ、注文が出荷されたら仮押さえを確定し、注文が取り消されたら仮押さえを取り消せる"
+  principal is 倉庫のシステム
+  action 在庫を押さえる, 仮押さえを確定する, 仮押さえを取り消す
+
+expect deny 職員は出荷も取消も頼まない
+  description "職員が注文の出荷や取消を頼むことはない。いつ出荷するかは、受注が決める"
+  principal is 職員
+  action 出荷を頼む, 取消を頼む
+
+expect deny 仮押さえは手で動かさない
+  description "職員が手で注文の在庫を押さえたり、その仮押さえを確定したり取り消したりすることはない。仮押さえは注文に合わせて動く"
+  principal is 職員
+  action 在庫を押さえる, 仮押さえを確定する, 仮押さえを取り消す

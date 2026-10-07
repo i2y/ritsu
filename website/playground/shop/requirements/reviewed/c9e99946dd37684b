@@ -1,0 +1,4 @@
+expect deny holds_are_not_moved_by_hand
+  description "No member of the staff holds, posts or voids the stock of an order by hand: the holds go with the orders"
+  principal is Staff
+  action hold_stock, post_hold, void_hold

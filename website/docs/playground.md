@@ -48,9 +48,13 @@ billing's layer against ordering. One line in one file, and three languages say 
    value the rule does not have. yuen: `rulec cannot answer for rulec "billing/rules/billing_need.rule"
    table decide`, the end of a requirement it can no longer hash. sakai: `The file
    billing/rules/billing_need.rule does not pass rulec's check, or cannot be read`. Click where a
-   finding is, such as `billing/rules/billing_need.rule:5`, to go to that line. The shop's gate
-   passes sekisho's check, and the last line counts two borders between the languages checked: the
-   two operations ordering opens in `OrderService`, each guarded by an action of the gate.
+   finding is, such as `billing/rules/billing_need.rule:5`, to go to that line. The shop's two
+   gates pass sekisho's check, and the last line counts ten borders between the languages checked:
+   the five operations ordering and the warehouse open to the other contexts (the two of
+   `OrderService` in the `.proto`, and the three of the warehouse's API in
+   `warehouse/api/warehouse.json`), each guarded by an action of a gate; and the five calls
+   `ordering/ship_order.flow` makes of the warehouse's API, each allowed to the workflow by the
+   warehouse's gate.
 2. **Put it right in the contract.** Take the line out of the `.proto`, and every file passes.
 3. **Or put it right in the rule.** Press *undo my edits*, and in `billing/rules/billing_need.rule`
    add `| returned` to the end of the enum. rulec now says `` A value of the imported enum
@@ -73,16 +77,33 @@ billing's layer against ordering. One line in one file, and three languages say 
    it picks are allowed ``, with one of them, a customer's own paid order. yuen, whose
    `requirements/ordering.req` names the permit, says it `changed after customer_care looked at
    this link on 2026-10-07`, and shows the line that went.
-6. **Generate.** Open `ordering/ship_order.flow` and press *generate*: what Temporal runs, in
-   TypeScript, eight files. Pick Step Functions beside it, and nothing is written: the flow waits
-   for an event sent to the workflow and cleans up in `on cancel`, which Step Functions cannot do,
-   and its tasks name no connection to call the warehouse through. Every language that generates
-   does it here: a rule its code in twelve languages, a calendar in five, the book its SQL and its
-   clients, the gate its Cedar, the map its Context Mapper CML, the requirements ReqIF or W3C PROV.
-7. **Open the page for people** of a rule, a calendar, the book, the flow or the gate: the page for
-   those who read to understand and check what the code is to carry out. It is laid out for a whole
-   window, so it opens in a tab of its own; the Markdown each writes for a pull request is below the
-   link.
+6. **Take an operation away from the workflow.** `gates/warehouse.gate` is the warehouse's gate. It
+   guards the three operations of the warehouse's API that the workflow calls, and the operations of
+   the transfers of `warehouse/inventory.book`: a receiver books deliveries and returns in, and the
+   warehouse's system holds the stock an order takes, then posts the hold or voids it. It names the
+   workflow `ship_order` as a principal, so `ritsu check` holds every call the flow makes of the API
+   to what the gate allows the workflow. In the permit `ship_order_calls_the_warehouse`, take
+   `view_order, ` out of the `action` line. The gate still passes, since the pickers are still
+   allowed to look at the orders. But at both calls of `get_order` in `ordering/ship_order.flow`,
+   ritsu says `` the action `view_order` of gates/warehouse.gate that guards it allows the workflow
+   `ship_order` in no combination ``: every run that comes to the call is denied there. yuen, whose
+   `requirements/warehouse.req` names the permit, says it `changed after warehouse_lead looked at
+   this link on 2026-10-07`, and shows the line that changed.
+7. **Generate.** Open `ordering/ship_order.flow` and press *generate*: what Temporal runs, in
+   TypeScript, eight files. The three tasks that call the warehouse call operations of its contract,
+   so dandori holds their arguments, their results and their errors to
+   `warehouse/api/warehouse.json`, and the activities it writes send them to the server the document
+   names. Pick Step Functions beside it, and nothing is written: the flow waits for an event sent to
+   the workflow and cleans up in `on cancel`, which Step Functions cannot do, and its tasks name no
+   connection to call the warehouse through. Every language that generates does it here: a rule its
+   code in twelve languages, a calendar in five, the book its SQL and its clients, a gate its Cedar,
+   the map its Context Mapper CML, the requirements ReqIF or W3C PROV.
+8. **Open the page for people** of a rule, a calendar, the book, the flow or a gate: the page for
+   those who read to understand and check what the code is to carry out. The page of the
+   warehouse's gate lists each call the flow makes, the action that guards it and whether the
+   workflow is allowed it, and the operations of the book each action guards. A page is laid out for
+   a whole window, so it opens in a tab of its own; the Markdown each writes for a pull request is
+   below the link.
 
 *A small shop, in Japanese* in the list is the same project with Japanese names, and the same steps
 work there.

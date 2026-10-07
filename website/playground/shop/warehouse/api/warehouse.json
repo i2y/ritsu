@@ -1,0 +1,100 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "The warehouse's orders",
+    "version": "1.0.0",
+    "description": "What the warehouse opens to ordering: an order as the warehouse's system has it, and a request to ship it or to cancel it. The warehouse's system moves the stock that goes with each. Written for the example"
+  },
+  "servers": [
+    { "url": "https://warehouse.example.com" }
+  ],
+  "paths": {
+    "/v1/orders/{id}": {
+      "get": {
+        "operationId": "getOrder",
+        "summary": "An order, as the warehouse's system has it now",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "expand", "in": "query", "required": false, "schema": { "type": "string" }, "description": "What to put in the answer besides the order itself: items, the lines of the order" }
+        ],
+        "security": [ { "workflow": [] }, { "staff": [] } ],
+        "responses": {
+          "200": {
+            "description": "The order",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Order" } } }
+          },
+          "403": { "description": "The caller may not look at this order" },
+          "429": { "description": "The warehouse's system is busy; try again in a moment" }
+        }
+      }
+    },
+    "/v1/orders/{id}/shipments": {
+      "post": {
+        "operationId": "requestShipment",
+        "summary": "Ask for an order to be shipped, by the carrier named",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "security": [ { "workflow": [] }, { "staff": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["carrier"],
+                "properties": {
+                  "carrier": { "type": "string", "enum": ["standard", "next_day"], "description": "Standard delivery, or next-day delivery" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The order, shipped: the stock held for it has left the shelves",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Order" } } }
+          },
+          "403": { "description": "The caller may not ask for this order to be shipped" },
+          "409": { "description": "The order cannot ship as it is: it is not paid yet, or it is cancelled" }
+        }
+      }
+    },
+    "/v1/orders/{id}/cancellations": {
+      "post": {
+        "operationId": "requestCancellation",
+        "summary": "Ask for an order to be cancelled before it ships",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "security": [ { "workflow": [] }, { "staff": [] } ],
+        "responses": {
+          "200": {
+            "description": "The order, cancelled: the stock held for it is back on the shelves",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Order" } } }
+          },
+          "403": { "description": "The caller may not ask for this order to be cancelled" },
+          "409": { "description": "The order cannot be cancelled: it has shipped, or it is cancelled already" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "workflow": { "type": "mutualTLS", "description": "A workflow of ordering, calling with a certificate of its own" },
+      "staff": { "type": "openIdConnect", "openIdConnectUrl": "https://id.example.com/.well-known/openid-configuration", "description": "A member of the warehouse's staff, signed in" }
+    },
+    "schemas": {
+      "Order": {
+        "type": "object",
+        "required": ["id", "state", "amount", "member"],
+        "properties": {
+          "id": { "type": "string" },
+          "state": { "type": "string", "enum": ["received", "paid", "shipped", "delivered", "cancelled"], "description": "Where the order is: it moves as ordering's rule order_state says" },
+          "amount": { "type": "integer", "minimum": 0, "maximum": 1000000, "description": "What the order comes to, in yen, tax included" },
+          "member": { "type": "boolean", "description": "Whether the customer is a member" }
+        }
+      }
+    }
+  }
+}

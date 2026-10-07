@@ -1,0 +1,1 @@
+text Ordering decides when an order ships or is cancelled, and its workflow asks the warehouse's API for it; no one in the warehouse asks for either

@@ -1,0 +1,28 @@
+requirements warehouse v1
+description "Where the warehouse's decisions about who moves its stock, and who asks for an order to ship, come from. Written for the example"
+
+role warehouse_lead "runs the warehouse, and decides who moves its stock and how"
+
+requirement ordering_decides_when_an_order_ships
+  text "Ordering decides when an order ships or is cancelled, and its workflow asks the warehouse's API for it; no one in the warehouse asks for either"
+  owner warehouse_lead
+  decided 2026-10-07 by warehouse_lead "how ordering and the warehouse share the work of an order"
+  satisfied by sekisho "../gates/warehouse.gate" policy ship_order_calls_the_warehouse
+    reviewed 2026-10-07 by warehouse_lead sha256:011fc21483e66565 -> sha256:c51b498a78b22719
+  verified by sekisho "../gates/warehouse.gate" expect staff_neither_ship_nor_cancel
+    reviewed 2026-10-07 by warehouse_lead sha256:011fc21483e66565 -> sha256:814b1ecabb025d55
+
+requirement holds_go_with_the_orders
+  text "The stock an order takes is held for it by the warehouse's system, which posts the hold when the order ships and voids it when the order is cancelled; no one moves a hold by hand"
+  owner warehouse_lead
+  decided 2026-10-07 by warehouse_lead "the stock on the shelves agrees with the orders"
+  satisfied by sekisho "../gates/warehouse.gate" policy the_system_keeps_the_holds
+    reviewed 2026-10-07 by warehouse_lead sha256:3bb72bea70d71547 -> sha256:58cddfdbadbc62da
+  satisfied by chobo "../warehouse/inventory.book" transfer reserve operation hold
+    reviewed 2026-10-07 by warehouse_lead sha256:3bb72bea70d71547 -> sha256:ef505e9c8dbb3bf1
+  satisfied by chobo "../warehouse/inventory.book" transfer reserve operation post
+    reviewed 2026-10-07 by warehouse_lead sha256:3bb72bea70d71547 -> sha256:5a8d93c09a369494
+  satisfied by chobo "../warehouse/inventory.book" transfer reserve operation void
+    reviewed 2026-10-07 by warehouse_lead sha256:3bb72bea70d71547 -> sha256:cf25ce9611880093
+  verified by sekisho "../gates/warehouse.gate" expect holds_are_not_moved_by_hand
+    reviewed 2026-10-07 by warehouse_lead sha256:3bb72bea70d71547 -> sha256:c9e99946dd37684b

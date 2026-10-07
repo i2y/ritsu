@@ -1,0 +1,4 @@
+expect deny 職員は出荷も取消も頼まない
+  description "職員が注文の出荷や取消を頼むことはない。いつ出荷するかは、受注が決める"
+  principal is 職員
+  action 出荷を頼む, 取消を頼む

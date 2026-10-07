@@ -1,0 +1,28 @@
+requirements 倉庫 v1
+description "倉庫で、だれが在庫を動かし、だれが注文の出荷を頼むかの決め方が、どこから来たか。書き下ろしの例"
+
+role 倉庫の責任者 "倉庫を回し、だれがどう在庫を動かすかを決める"
+
+requirement 出荷を決めるのは受注(ordering_decides_when_an_order_ships)
+  text "注文をいつ出荷するか、取り消すかは受注が決め、受注のワークフローが倉庫の API に頼む。倉庫の中では、だれもどちらも頼まない"
+  owner 倉庫の責任者
+  decided 2026-10-07 by 倉庫の責任者 "受注と倉庫での、注文の仕事の分け方"
+  satisfied by sekisho "../gates/倉庫.gate" policy 出荷のワークフローは倉庫を呼べる
+    reviewed 2026-10-07 by 倉庫の責任者 sha256:79ff5c2957c88db9 -> sha256:d70fb6c0e4d3c9f7
+  verified by sekisho "../gates/倉庫.gate" expect 職員は出荷も取消も頼まない
+    reviewed 2026-10-07 by 倉庫の責任者 sha256:79ff5c2957c88db9 -> sha256:d05c421760f6206c
+
+requirement 仮押さえは注文とともに動く(holds_go_with_the_orders)
+  text "注文の分の在庫は倉庫のシステムが押さえ、注文が出荷されたら仮押さえを確定し、取り消されたら仮押さえを取り消す。だれも手で仮押さえを動かさない"
+  owner 倉庫の責任者
+  decided 2026-10-07 by 倉庫の責任者 "棚の在庫を注文と合わせておくこと"
+  satisfied by sekisho "../gates/倉庫.gate" policy 倉庫のシステムは仮押さえを動かせる
+    reviewed 2026-10-07 by 倉庫の責任者 sha256:68556fb30e4f69df -> sha256:aed9dc2491ee44dc
+  satisfied by chobo "../warehouse/在庫.book" transfer 引当 operation hold
+    reviewed 2026-10-07 by 倉庫の責任者 sha256:68556fb30e4f69df -> sha256:a740810644b16d29
+  satisfied by chobo "../warehouse/在庫.book" transfer 引当 operation post
+    reviewed 2026-10-07 by 倉庫の責任者 sha256:68556fb30e4f69df -> sha256:bdd6f12fcccc3e18
+  satisfied by chobo "../warehouse/在庫.book" transfer 引当 operation void
+    reviewed 2026-10-07 by 倉庫の責任者 sha256:68556fb30e4f69df -> sha256:0359afdd623f62ff
+  verified by sekisho "../gates/倉庫.gate" expect 仮押さえは手で動かさない
+    reviewed 2026-10-07 by 倉庫の責任者 sha256:68556fb30e4f69df -> sha256:1e023182bd8a1eb9

@@ -1,0 +1,4 @@
+permit the_system_keeps_the_holds
+  description "The warehouse's system holds the stock an order takes, posts the hold as the order ships, and voids it when the order is cancelled"
+  principal is System
+  action hold_stock, post_hold, void_hold

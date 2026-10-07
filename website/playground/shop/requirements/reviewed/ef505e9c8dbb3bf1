@@ -1,0 +1,73 @@
+{
+  "accounts": {
+    "customers": {
+      "description": null,
+      "lower": null,
+      "outside": true,
+      "params": [],
+      "unit": "pcs",
+      "upper": null
+    },
+    "stock": {
+      "description": "what is on the shelves",
+      "lower": {
+        "refused_as": "out_of_stock",
+        "value": 0
+      },
+      "outside": false,
+      "params": [
+        "sku"
+      ],
+      "unit": "pcs",
+      "upper": null
+    }
+  },
+  "description": "posted when the order ships, voided when it is cancelled",
+  "key": [
+    "order",
+    "sku"
+  ],
+  "moves": [
+    {
+      "amount": {
+        "param": "qty"
+      },
+      "from": {
+        "account": "stock",
+        "args": [
+          {
+            "param": "sku"
+          }
+        ]
+      },
+      "to": {
+        "account": "customers",
+        "args": []
+      }
+    }
+  ],
+  "operation": "hold",
+  "params": [
+    {
+      "name": "order",
+      "type": "string"
+    },
+    {
+      "name": "sku",
+      "type": "string"
+    },
+    {
+      "name": "qty",
+      "type": "amount",
+      "unit": "pcs"
+    }
+  ],
+  "pending": {
+    "expires_after_seconds": 1800
+  },
+  "refusals": [
+    "out_of_stock",
+    "key_conflict",
+    "already_refused"
+  ]
+}

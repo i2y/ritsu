@@ -3,6 +3,7 @@ description "倉庫のシステムにある注文について、入金を催促�
 
 use rule 注文の状態 from "rules/注文の状態.rule"
 use rule 急ぎ from "rules/出荷の急ぎ.rule"
+use openapi 倉庫 from "../warehouse/api/warehouse.json"
 
 record 注文
   id   : string
@@ -20,21 +21,21 @@ outputs
   便 : 急ぎ.便
 
 task 注文を見る(id: string, expand: string) -> 注文
-  http GET "https://warehouse.example.com/v1/orders/{id}"
+  http GET 倉庫 "/v1/orders/{id}"
   observes
   idempotent
   errors 混雑 = 429
   retry 3 times every 1 second on 混雑
 
 task 出荷を頼む(id: string, 便: 急ぎ.便) -> 注文
-  http POST "https://warehouse.example.com/v1/orders/{id}/shipments"
+  http POST 倉庫 "/v1/orders/{id}/shipments"
   sends 出荷
   errors 拒否された = 409
   refused as 拒否された
   key
 
 task 取消を頼む(id: string) -> 注文
-  http POST "https://warehouse.example.com/v1/orders/{id}/cancellations"
+  http POST 倉庫 "/v1/orders/{id}/cancellations"
   sends 取消依頼
   errors 拒否された = 409
   refused as 拒否された

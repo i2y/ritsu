@@ -1,0 +1,4 @@
+permit ship_order_calls_the_warehouse
+  description "Ordering's workflow looks at an order, asks for it to be shipped, and asks for it to be cancelled"
+  principal is workflow ship_order
+  action view_order, request_shipment, request_cancellation

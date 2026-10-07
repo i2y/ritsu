@@ -435,7 +435,10 @@ them (ritsu's codes, which `ritsu explain` looks up):
   for a call its gate allows in no combination; W909 for a call that can be denied, or where
   whether it is allowed cannot be decided, while the task declares no error for a denial (status
   403, or Connect's `permission_denied`); W908 for an action the workflow is allowed and never
-  calls.
+  calls. A flow's calls of a book's transfers (dandori's `book` tasks) are not among them: the code
+  dandori writes calls chobo's client without asking a gate, and chobo refuses for no reason that
+  stands for a denial. An action that guards a transfer's operation holds where the service that
+  keeps the book asks the gate before it moves the book.
 
 A file of Cedar written by hand, with its schema, takes part in the same checks when the map
 (`owns`) or a requirement names it, and its schema says with `@guards` which operation an action

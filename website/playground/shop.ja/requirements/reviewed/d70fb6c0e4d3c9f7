@@ -1,0 +1,4 @@
+permit 出荷のワークフローは倉庫を呼べる(ship_order_calls_the_warehouse)
+  description "受注のワークフローは、注文を見て、その出荷と取消を頼める"
+  principal is workflow 出荷
+  action 注文を見る, 出荷を頼む, 取消を頼む

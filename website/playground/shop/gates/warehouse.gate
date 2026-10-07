@@ -1,0 +1,108 @@
+gate warehouse v1
+description "Who may look at an order in the warehouse's system, ask for it to be shipped or cancelled, and move the stock on the shelves. The warehouse's system asks it before it answers a call of its API, and before it moves the book. Written for the example"
+namespace Warehouse
+
+use openapi warehouse from "../warehouse/api/warehouse.json"
+use book inventory from "../warehouse/inventory.book"
+
+role picker
+  description "Picks the orders off the shelves and packs them"
+  can view_order
+
+role receiver
+  description "Books in what the suppliers deliver, and puts back on the shelves what the customers send back"
+  can receive_delivery, put_back_return
+
+principal Staff
+  description "A member of the warehouse's staff, signed in"
+  roles picker, receiver
+
+principal System
+  description "The warehouse's own system, calling as itself: it holds the stock an order takes, posts the hold when the order ships, and voids it when the order is cancelled"
+
+workflow ship_order from "../ordering/ship_order.flow"
+  description "Ordering's workflow that has an order shipped; it calls the warehouse's API as itself"
+
+resource Order
+  description "An order in the warehouse's system"
+
+resource Stock
+  description "The stock of one SKU on the shelves"
+
+action view_order
+  description "Look at an order"
+  guards warehouse getOrder
+  principal Staff, Workflow
+  resource Order from id
+
+action request_shipment
+  description "Ask for an order to be shipped"
+  guards warehouse requestShipment
+  principal Staff, Workflow
+  resource Order from id
+
+action request_cancellation
+  description "Ask for an order to be cancelled before it ships"
+  guards warehouse requestCancellation
+  principal Staff, Workflow
+  resource Order from id
+
+action receive_delivery
+  description "Book in what a supplier delivers"
+  guards inventory receive.do
+  principal Staff
+  resource Stock from sku
+
+action put_back_return
+  description "Put what a customer sends back on the shelves again"
+  guards inventory take_back.do
+  principal Staff
+  resource Stock from sku
+
+action hold_stock
+  description "Hold the stock an order takes, for 30 minutes at most"
+  guards inventory reserve.hold
+  principal Staff, System
+  resource Stock from sku
+
+action post_hold
+  description "Post what is held for an order, as the order ships"
+  guards inventory reserve.post
+  principal Staff, System
+  resource Stock from sku
+
+action void_hold
+  description "Void the hold of an order that is cancelled, which puts the stock back on the shelves"
+  guards inventory reserve.void
+  principal Staff, System
+  resource Stock from sku
+
+permit pickers_view_orders
+  description "A picker looks at the orders, to pick and pack them"
+  principal in picker
+  action view_order
+
+permit ship_order_calls_the_warehouse
+  description "Ordering's workflow looks at an order, asks for it to be shipped, and asks for it to be cancelled"
+  principal is workflow ship_order
+  action view_order, request_shipment, request_cancellation
+
+permit receivers_book_stock_in
+  description "A receiver books in a delivery, and puts a return back on the shelves"
+  principal in receiver
+  action receive_delivery, put_back_return
+
+permit the_system_keeps_the_holds
+  description "The warehouse's system holds the stock an order takes, posts the hold as the order ships, and voids it when the order is cancelled"
+  principal is System
+  action hold_stock, post_hold, void_hold
+
+expect deny staff_neither_ship_nor_cancel
+  description "No member of the staff asks for an order to be shipped or cancelled: when an order ships is ordering's to decide"
+  principal is Staff
+  action request_shipment, request_cancellation
+
+expect deny holds_are_not_moved_by_hand
+  description "No member of the staff holds, posts or voids the stock of an order by hand: the holds go with the orders"
+  principal is Staff
+  action hold_stock, post_hold, void_hold

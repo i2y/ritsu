@@ -1,0 +1,4 @@
+expect deny staff_neither_ship_nor_cancel
+  description "No member of the staff asks for an order to be shipped or cancelled: when an order ships is ordering's to decide"
+  principal is Staff
+  action request_shipment, request_cancellation
