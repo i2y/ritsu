@@ -732,7 +732,9 @@ pub fn value_duties(f: &RuleFile, c: &Checked) -> Vec<ValueDuty> {
                 if !bound(f, n) {
                     continue;
                 }
-                if pins.contains(n.as_str()) || leaves(&reads, n).iter().all(|l| pins.contains(l.as_str())) {
+                // A word an output cell writes on the way (`small`, `true`) is a value of that cell,
+                // not something the row has to pin (§15.194).
+                if pins.contains(n.as_str()) || leaves(&reads, n).iter().filter(|l| c.ty_of(l).is_some()).all(|l| pins.contains(l.as_str())) {
                     continue;
                 }
                 // Where the row wins: its own cells, the rows before it, the derived columns and

@@ -1118,10 +1118,13 @@ fn one_value(c: &Checked, n: &str, ty: &Ty) -> Val {
 
 /// Every input that output `name` can turn on, evaluated, for one that lands it on its tie:
 /// `Some(Some(input))`, `Some(None)` when no input does, `None` when there are too many to try
-/// (§15.153). What the arithmetic leaves open, a small enough domain settles.
+/// (§15.153). What the arithmetic leaves open, a small enough domain settles. The words an output
+/// cell writes on the way (`small`, `true`) are values of the cell, not inputs, and are not walked
+/// (§15.194).
 pub fn exhaust_tie(f: &RuleFile, c: &Checked, name: &str, grid: Rat) -> Option<Option<BTreeMap<String, Val>>> {
     let reads = reads_of(f);
-    let dom = Domain::of(f, c, &leaves_of(f, &reads, name))?;
+    let on: BTreeSet<String> = leaves_of(f, &reads, name).into_iter().filter(|n| c.ty_of(n).is_some()).collect();
+    let dom = Domain::of(f, c, &on)?;
     let mut found = None;
     dom.each(|_, a| {
         if crate::vectors::allowed(f, &a) {
@@ -1157,6 +1160,8 @@ pub fn exhaust_pair(
             on.extend(leaves_of(f, &reads, &o.name.text));
         }
     }
+    // The words an output cell writes (`small`, `true`) are not values that come in (§15.194).
+    on.retain(|n| c.ty_of(n).is_some());
     let dom = Domain::of(f, c, &on)?;
     // Each input met so far, grouped once per name by every other name's value: two in one
     // group are one input apart. A pair is looked for as each input comes, and the walk stops
