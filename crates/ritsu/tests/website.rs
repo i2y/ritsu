@@ -5,7 +5,19 @@
 //! https://i2y.github.io/ritsu/. This holds:
 //!
 //! - every relative link of ritsu's pages leads to one of its pages, or to the site of a language
-//!   that build.sh builds, and every `#anchor` to a heading of the page it names;
+//!   that build.sh builds, read as Zensical reads it (a link that names no `.md` from the directory
+//!   of the page's file, and none climbing out of the site), and every `#anchor` to a heading of the
+//!   page it names, or, on a link to the playground, to a project the playground lists in the
+//!   page's language (`#project=shop&file=gates/orders.gate`);
+//! - the English pages and the Japanese ones are the same pages, the two navs list them in the same
+//!   order (all but the page of yuen's namespace), and each home page links to every other page its
+//!   nav lists;
+//! - the pages of sekisho (website/docs/sekisho.md and website/docs-ja/sekisho.md) show sekisho's
+//!   example as the tools have it: the lines of its files, what the commands print (a `gen` into a
+//!   scratch directory), the Cedar and the code `ritsu gen` writes, the table `sekisho doc` draws
+//!   and the count of combinations it says, and what `sekisho check` says of each edit a ```diff
+//!   shows; the two show the same kinds of blocks and tables, as many of each; and sekisho's
+//!   READMEs link to them;
 //! - every link into ritsu's repository, on ritsu's pages and on the pages of every language's
 //!   site, names a file or a directory that is there, and no page links to the repository of one
 //!   language by itself, its releases included (ritsu's releases hand out every language);
@@ -29,16 +41,19 @@
 //!   command prints;
 //! - and, when Zensical is in website/.venv, build.sh builds the tree that is published, in a copy
 //!   of website/: the index pages of ritsu's site and of each language's, in both languages, the
-//!   playground, the pages the languages' playgrounds had, each with nothing beside it and its link
-//!   and the nav of its site leading to the playground in the tree, the marketplace of Claude Code as
-//!   it is written, and a file of the tree for every link of ritsu's built pages that stays in the
-//!   site. Without Zensical the test says SKIP.
+//!   playground, the pages of sekisho, the pages the languages' playgrounds had, each with nothing
+//!   beside it and its link and the nav of its site leading to the playground in the tree, the
+//!   marketplace of Claude Code as it is written, and a file of the tree for every relative link of
+//!   ritsu's built pages, none of which climbs out of /ritsu/. Without Zensical the test says SKIP.
 //!
 //! (tests/common/mod.rs holds what this file shares with tests/readme.rs.)
 
 mod common;
 
-use common::{Page, code_from_files, commands_named, inline_code, link_targets, page, root, run_the_consoles};
+use common::{
+    Block, Page, code_from_files, commands_named, inline_code, lines_in_order, lines_of, link_targets, links, page, root, run_the_consoles, sh, shown_lines,
+    trimmed,
+};
 use ritsu_testkit::{Need, TempDir, ready};
 use std::collections::BTreeSet;
 use std::fs;
@@ -114,6 +129,35 @@ fn normal(path: &str) -> String {
     out
 }
 
+/// A relative path followed from a directory of the built site (`/`, `/ja/`, `/sekisho/`): the
+/// path it leads to, or `None` when it climbs out of the site, which is published under /ritsu/ and
+/// has nothing of its own above its root.
+fn follow(base: &str, rel: &str) -> Option<String> {
+    let mut parts: Vec<&str> = base.split('/').filter(|p| !p.is_empty()).collect();
+    for p in rel.split('/') {
+        match p {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            p => parts.push(p),
+        }
+    }
+    let mut out = format!("/{}", parts.join("/"));
+    if rel.ends_with('/') && out != "/" {
+        out.push('/');
+    }
+    Some(out)
+}
+
+/// The directory of the built site that a page's file is in (`/`, `/ja/`, `/ns/`): Zensical reads a
+/// relative link that names no page (`rulec/`, `playground/#project=…`) from there, and writes it,
+/// in a page it publishes a directory deeper (`sekisho.md` at `/sekisho/`), with one more `../`.
+fn dir_of(name: &str) -> String {
+    let (rest, at) = name.strip_prefix("website/docs-ja/").map(|r| (r, "/ja/")).or_else(|| name.strip_prefix("website/docs/").map(|r| (r, "/"))).unwrap_or_else(|| panic!("{name} is no page of ritsu's site"));
+    rest.rsplit_once('/').map_or(at.to_string(), |(d, _)| format!("{at}{d}/"))
+}
+
 /// The Markdown a path of the built site is made from: ritsu's pages at the root and under `/ja/`,
 /// a language's site under `/<language>/` and `/<language>/ja/`.
 fn source_of(url: &str, sites: &[String]) -> Option<PathBuf> {
@@ -148,7 +192,7 @@ fn the_links_of_ritsus_pages_lead_to_pages_headings_and_sites() {
     let sites = sites();
     let mut wrong = Vec::new();
     let mut seen = 0;
-    for (p, url) in pages() {
+    for (p, _) in pages() {
         let dir = Path::new(&p.name).parent().unwrap().to_path_buf();
         for (line, target) in link_targets(&p.text) {
             if target.starts_with("https://") || target.starts_with("http://") {
@@ -163,11 +207,21 @@ fn the_links_of_ritsus_pages_lead_to_pages_headings_and_sites() {
                 let at = root().join(normal(&format!("/{}/{file}", dir.display())).trim_start_matches('/'));
                 at.is_file().then_some(at)
             } else {
-                // A path of the built site, from the page's place in it.
-                source_of(&normal(&format!("{url}{file}")), &sites)
+                // A path of the built site, from the directory of the page's file, as Zensical
+                // reads it; one that climbs out of the site leads nowhere.
+                follow(&dir_of(&p.name), file).and_then(|at| source_of(&at, &sites))
             };
             match (to, frag) {
                 (None, _) => wrong.push(format!("{}:{line}: `{target}` leads to no page of the site", p.name)),
+                // A link that opens the playground on a project (`#project=shop&file=…`), which
+                // the playground reads and no heading is anchored by.
+                (Some(at), Some(a)) if a.contains('=') => {
+                    let ja = p.name.starts_with("website/docs-ja/");
+                    let playground = website().join(if ja { "docs-ja/playground.md" } else { "docs/playground.md" });
+                    if at != playground || !opens_a_project(a, ja) {
+                        wrong.push(format!("{}:{line}: `{target}` opens no project the playground of the page's language lists", p.name));
+                    }
+                }
                 (Some(at), Some(a)) if !anchors_of(&at).iter().any(|h| h == a) => {
                     wrong.push(format!("{}:{line}: `{target}`: no heading of {} is anchored `#{a}`", p.name, at.strip_prefix(root()).unwrap().display()))
                 }
@@ -335,20 +389,28 @@ fn attribute_of(html: &str, id: &str, attr: &str) -> Option<String> {
     Some(tag[from..from + tag[from..].find('"')?].replace("&amp;", "&"))
 }
 
-/// What a link of the playground opens it on (`#project=rulec/gap`, `#flow=tests/…`): a project the
-/// page lists in its language, by projects.json.
+/// What a link of the playground opens it on (`#project=rulec/gap`, `#flow=tests/…`,
+/// `#project=shop&file=gates/orders.gate&view=doc`): a project the page lists in its language, by
+/// projects.json, and, when the link names them, a file of that project and a view the page has.
 fn opens_a_project(fragment: &str, ja: bool) -> bool {
     let v: serde_json::Value = serde_json::from_str(&read(&website().join("docs/playground/projects.json"))).expect("projects.json");
     let lang = if ja { "ja" } else { "en" };
     let listed = |p: &&serde_json::Value| p["lang"].as_str().is_none_or(|l| l == lang);
     let projects: Vec<&serde_json::Value> = v["projects"].as_array().unwrap().iter().filter(listed).collect();
-    if let Some(name) = fragment.strip_prefix("project=") {
-        projects.iter().any(|p| p["name"] == name)
-    } else if let Some(flow) = fragment.strip_prefix("flow=") {
-        projects.iter().any(|p| p["group"] == "dandori" && p["open"] == flow)
-    } else {
-        false
+    let parts: Vec<(&str, &str)> = fragment.split('&').map(|kv| kv.split_once('=').unwrap_or((kv, ""))).collect();
+    let part = |key: &str| parts.iter().find(|(k, _)| *k == key).map(|(_, v)| *v);
+    // the words the playground's script reads of a link (playground.js, `follow`)
+    if !parts.iter().all(|(k, _)| ["project", "flow", "file", "view", "target", "edits"].contains(k)) {
+        return false;
     }
+    let project = match (part("project"), part("flow")) {
+        (Some(name), _) => projects.iter().find(|p| p["name"] == name),
+        (None, Some(flow)) => projects.iter().find(|p| p["group"] == "dandori" && p["open"] == flow),
+        (None, None) => None,
+    };
+    let Some(project) = project else { return false };
+    let files: Vec<&str> = project["files"].as_array().unwrap().iter().filter_map(|f| f[0].as_str()).collect();
+    part("file").is_none_or(|f| files.contains(&f)) && part("view").is_none_or(|v| ["check", "gen", "doc", "build", "rules"].contains(&v))
 }
 
 /// The playgrounds rulec's and dandori's sites had are ritsu's now (DESIGN 13.2). The page each had
@@ -570,6 +632,273 @@ fn the_example_on_the_pages_of_yuens_namespace_is_what_the_command_prints() {
     }
 }
 
+/// The `"page.md"` targets of the `nav` of a configuration of ritsu's pages, in order.
+fn nav_targets(config: &str) -> Vec<String> {
+    let text = read(&website().join(config));
+    let nav = text.split("nav = [").nth(1).unwrap_or_else(|| panic!("website/{config} has no nav")).split("\n]").next().unwrap();
+    nav.lines().filter_map(|l| l.rsplit_once("= \"")).map(|(_, t)| t.split('"').next().unwrap().to_string()).collect()
+}
+
+/// The Markdown pages under a directory of ritsu's pages (`docs`, `docs-ja`), as paths from it.
+fn pages_under(dir: &str) -> BTreeSet<String> {
+    let base = website().join(dir);
+    let mut out = BTreeSet::new();
+    let mut todo = vec![base.clone()];
+    while let Some(d) = todo.pop() {
+        for e in fs::read_dir(&d).unwrap().flatten() {
+            let p = e.path();
+            if e.file_type().unwrap().is_dir() {
+                todo.push(p);
+            } else if p.extension().is_some_and(|x| x == "md") {
+                out.insert(p.strip_prefix(&base).unwrap().display().to_string());
+            }
+        }
+    }
+    out
+}
+
+/// The pages of ritsu's site that no nav lists: the page of yuen's namespace, which the IRI of a word
+/// opens, and yuen's reference links to (website/README.md).
+const OFF_THE_NAV: [&str; 1] = ["ns/yuen.md"];
+
+/// A page in one language and not in the other would leave a reader of the other without it; the
+/// nav lists every page a reader is meant to find (the same, in the same order, in both), and the
+/// home page leads to each of them too.
+#[test]
+fn the_two_languages_have_the_same_pages_and_the_navs_list_them() {
+    let (en, ja) = (pages_under("docs"), pages_under("docs-ja"));
+    assert_eq!(en, ja, "website/docs and website/docs-ja hold other pages");
+    let (nav_en, nav_ja) = (nav_targets("zensical.toml"), nav_targets("zensical.ja.toml"));
+    assert_eq!(nav_en, nav_ja, "the two navs list other pages, or the same in another order");
+    let listed: BTreeSet<String> = nav_en.iter().cloned().collect();
+    assert_eq!(listed.len(), nav_en.len(), "the nav lists a page twice: {nav_en:?}");
+    let want: BTreeSet<String> = en.iter().filter(|p| !OFF_THE_NAV.contains(&p.as_str())).cloned().collect();
+    assert_eq!(listed, want, "the nav lists other pages than website/docs holds, leaving out {OFF_THE_NAV:?}");
+    assert!(listed.contains("sekisho.md"), "the nav lists no page of sekisho");
+    for (index, nav) in [("website/docs/index.md", &nav_en), ("website/docs-ja/index.md", &nav_ja)] {
+        let links: BTreeSet<String> = link_targets(&read(&root().join(index))).into_iter().map(|(_, t)| t.split('#').next().unwrap().to_string()).collect();
+        for p in nav.iter().filter(|p| *p != "index.md") {
+            assert!(links.contains(p), "{index} does not link to {p}, which its nav lists");
+        }
+    }
+}
+
+/// The pages of sekisho, in English and in Japanese. Their example is sekisho's own
+/// (`SEKISHO_EXAMPLE`): a gate that reads a rule of rulec, a dates file and a calendar of koyomi, an
+/// OpenAPI document and a workflow of dandori, in an English version and a Japanese one.
+const SEKISHO_PAGES: [&str; 2] = ["website/docs/sekisho.md", "website/docs-ja/sekisho.md"];
+
+/// sekisho's example, from the root of the repository.
+const SEKISHO_EXAMPLE: &str = "crates/sekisho/examples/refunds";
+
+/// Whether a page of ritsu's site is a Japanese one: what it shows is the Japanese version of the
+/// example, and what the tools say in Japanese.
+fn japanese(name: &str) -> bool {
+    name.starts_with("website/docs-ja/")
+}
+
+#[test]
+fn the_pages_of_sekisho_show_the_files_and_what_the_commands_print() {
+    let pages: Vec<Page> = SEKISHO_PAGES.iter().map(|n| page(n)).collect();
+    let (seen, wrong) = code_from_files(&pages);
+    // the gate, the rule, the expectation, the files the action reads, the task and the
+    // workflow's permit, on each of the two pages
+    assert!(seen >= 2 * 6, "{seen} blocks of code on the pages: were the fences changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    let (ran, wrong) = run_the_consoles(&pages);
+    // check, gen --target cedar, ritsu gen and ritsu check, on each of the two pages
+    assert!(ran >= 2 * 4, "{ran} commands run: were the fences changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    let (named, wrong) = commands_named(&pages);
+    assert!(named >= 2 * 4, "{named} commands named in the prose: were they changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The words after the fence of a block whose lines are lines `ritsu gen` writes.
+const GENERATED: [&str; 5] = ["cedar", "cedarschema", "typescript", "python", "go"];
+
+/// Every file `ritsu gen` writes for sekisho's example into `out` (`--lang ja` for the Japanese
+/// pages), with its lines.
+fn written_for_the_example(links: &Path, out: &Path, ja: bool) -> Vec<(String, Vec<String>)> {
+    let cmd = format!("ritsu gen --out {}{}", out.display(), if ja { " --lang ja" } else { "" });
+    let said = sh(links, &root().join(SEKISHO_EXAMPLE), &cmd);
+    assert!(out.join("cedar").is_dir(), "`{cmd}` wrote no Cedar:\n{said}");
+    let mut files = Vec::new();
+    let mut todo = vec![out.to_path_buf()];
+    while let Some(d) = todo.pop() {
+        for e in fs::read_dir(&d).unwrap().flatten() {
+            let p = e.path();
+            if e.file_type().unwrap().is_dir() {
+                todo.push(p);
+            } else if let Ok(text) = fs::read_to_string(&p) {
+                files.push((p.display().to_string(), trimmed(&text)));
+            }
+        }
+    }
+    files
+}
+
+#[test]
+fn the_cedar_and_the_code_on_the_pages_of_sekisho_are_what_ritsu_gen_writes() {
+    let links = links();
+    let t = TempDir::new("sekisho-pages-gen");
+    let mut wrong = Vec::new();
+    let mut seen = 0;
+    for name in SEKISHO_PAGES {
+        let p = page(name);
+        let ja = japanese(name);
+        let files = written_for_the_example(links.path(), &t.path().join(if ja { "ja" } else { "en" }), ja);
+        for b in p.blocks.iter().filter(|b| GENERATED.contains(&b.info.as_str())) {
+            seen += 1;
+            if !files.iter().any(|(_, file)| lines_in_order(&shown_lines(b), file)) {
+                wrong.push(format!("{name}:{}: a ```{} block that is the lines of no one file `ritsu gen` writes for {SEKISHO_EXAMPLE}, in order", b.at, b.info));
+            }
+        }
+    }
+    // the clerks' permit, the computed value in the schema and the code of the request, on each page
+    assert!(seen >= 2 * 3, "{seen} blocks of generated code on the pages: were the fences changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The tables of a page, outside its fences: the line each starts on, from 1, and its lines.
+fn tables(text: &str) -> Vec<(usize, Vec<String>)> {
+    let mut out: Vec<(usize, Vec<String>)> = Vec::new();
+    let (mut fence, mut open) = (false, false);
+    for (i, line) in text.lines().enumerate() {
+        if line.trim_start().starts_with("```") {
+            fence = !fence;
+            open = false;
+        } else if !fence && line.starts_with('|') {
+            if !open {
+                out.push((i + 1, Vec::new()));
+                open = true;
+            }
+            out.last_mut().unwrap().1.push(line.trim_end().to_string());
+        } else {
+            open = false;
+        }
+    }
+    out
+}
+
+/// A table on a page of sekisho is one of the page `sekisho doc` draws of the example, row for row,
+/// and the count of the combinations the page says the check walks is the one that page says.
+#[test]
+fn the_tables_on_the_pages_of_sekisho_are_what_sekisho_doc_draws() {
+    let links = links();
+    let mut wrong = Vec::new();
+    for name in SEKISHO_PAGES {
+        let ja = japanese(name);
+        let text = read(&root().join(name));
+        let cmd = if ja { "sekisho doc refunds.ja.gate --lang ja" } else { "sekisho doc refunds.gate" };
+        let doc = sh(links.path(), &root().join(SEKISHO_EXAMPLE), cmd);
+        let drawn: Vec<String> = doc.lines().map(|l| l.trim_end().to_string()).collect();
+        let found = tables(&text);
+        assert!(!found.is_empty(), "{name} shows no table of the page `{cmd}` draws");
+        for (at, rows) in found {
+            if !drawn.windows(rows.len()).any(|w| w == rows.as_slice()) {
+                wrong.push(format!("{name}:{at}: a table that is no table of what `{cmd}` draws, row for row"));
+            }
+        }
+        let (before, after) = if ja { ("の組み合わせ ", " 通りをすべて数え") } else { ("walked all ", " combinations") };
+        let n = doc.split_once(before).and_then(|(_, rest)| rest.split_once(after)).map(|(n, _)| n.to_string()).unwrap_or_else(|| panic!("`{cmd}` says no count of the combinations it walked:\n{doc}"));
+        let says = if ja { format!("組み合わせは {n} 通り") } else { format!("{n} combinations") };
+        if !text.contains(&says) {
+            wrong.push(format!("{name}: does not say `{says}`, the count `{cmd}` says"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The two pages of sekisho show the same things, the Japanese one with the Japanese version of the
+/// example and in its own words: as many blocks of each kind, and as many tables.
+#[test]
+fn the_two_pages_of_sekisho_show_the_same_things() {
+    let shown = |name: &str| {
+        let p = page(name);
+        let mut kinds: Vec<String> = p.blocks.iter().map(|b| b.info.clone()).collect();
+        kinds.sort();
+        (kinds, tables(&p.text).len())
+    };
+    let [en, ja] = SEKISHO_PAGES.map(shown);
+    assert_eq!(en, ja, "the pages of sekisho show other kinds of blocks, or other numbers of blocks or tables ({SEKISHO_PAGES:?})");
+}
+
+/// The lines of a ```diff block as the file has them, and as the edit leaves them: a line is ` `
+/// (in both), `-` (taken out) or `+` (put in), then the line.
+fn sides(b: &Block) -> (Vec<String>, Vec<String>) {
+    let (mut old, mut new) = (Vec::new(), Vec::new());
+    for l in &b.lines {
+        let (mark, rest) = l.split_at(l.chars().next().map_or(0, char::len_utf8));
+        match mark {
+            " " => {
+                old.push(rest.to_string());
+                new.push(rest.to_string());
+            }
+            "-" => old.push(rest.to_string()),
+            "+" => new.push(rest.to_string()),
+            _ => panic!("a line of a ```diff that is not ` `, `-` or `+` before the line: `{l}`"),
+        }
+    }
+    (old, new)
+}
+
+/// A page of sekisho shows an edit of the example as a ```diff, and what `sekisho check` says of the
+/// gate so edited in the ```text block after it; every ```text block on it is one of those.
+#[test]
+fn what_the_pages_of_sekisho_say_of_an_edit_is_what_sekisho_check_says() {
+    let links = links();
+    let example = root().join(SEKISHO_EXAMPLE);
+    let gates: Vec<String> = fs::read_dir(&example).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.ends_with(".gate")).collect();
+    let mut wrong = Vec::new();
+    let mut edits = 0;
+    for name in SEKISHO_PAGES {
+        let p = page(name);
+        let ja = japanese(name);
+        for (i, b) in p.blocks.iter().enumerate() {
+            if b.info == "text" && i.checked_sub(1).is_none_or(|j| p.blocks[j].info != "diff") {
+                wrong.push(format!("{name}:{}: a ```text block after no ```diff: what edit does it show the check of?", b.at));
+            }
+            if b.info != "diff" {
+                continue;
+            }
+            edits += 1;
+            let (old, new) = sides(b);
+            let (old, new) = (old.join("\n") + "\n", new.join("\n") + "\n");
+            let hit: Vec<&String> = gates.iter().filter(|g| read(&example.join(g)).matches(&old).count() == 1).collect();
+            let [gate] = hit[..] else {
+                wrong.push(format!("{name}:{}: the lines the ```diff edits are once in {} gates of the example, not in one", b.at, hit.len()));
+                continue;
+            };
+            let Some(said) = p.blocks.get(i + 1).filter(|n| n.info == "text") else {
+                wrong.push(format!("{name}:{}: no ```text block after the ```diff shows what the check says", b.at));
+                continue;
+            };
+            let t = TempDir::new("sekisho-pages-edit");
+            ritsu_testkit::tmp::copy_dir(&example, t.path());
+            fs::write(t.path().join(gate), read(&example.join(gate)).replacen(&old, &new, 1)).unwrap();
+            let cmd = format!("sekisho check {gate} --root .{}", if ja { " --lang ja" } else { "" });
+            let got = sh(links.path(), t.path(), &cmd);
+            if lines_of(&said.lines.join("\n")) != lines_of(&got) {
+                wrong.push(format!("{name}:{}: after the edit, `{cmd}` prints\n{got}--- and the page shows\n{}", said.at, said.lines.join("\n")));
+            }
+        }
+    }
+    // the clerks' permit without the line on the rule's answer, on each of the two pages
+    assert!(edits >= 2, "{edits} edits shown on the pages: were the fences changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// sekisho's READMEs lead to its page on the site, each to the page in its own language.
+#[test]
+fn the_readmes_of_sekisho_link_to_its_pages() {
+    for (readme, under, page) in [("crates/sekisho/README.md", "", "docs/sekisho.md"), ("crates/sekisho/README.ja.md", "ja/", "docs-ja/sekisho.md")] {
+        let url = format!("{PUBLISHED}{under}sekisho/");
+        assert!(read(&root().join(readme)).contains(&url), "{readme} does not link to {url}");
+        assert_eq!(source_of(&format!("/{under}sekisho/"), &sites()), Some(website().join(page)), "{url} is no page of the site");
+    }
+}
+
 /// `from` copied to `to`, without what a build, Zensical's cache or the virtual environment left.
 fn copy_tree(from: &Path, to: &Path) {
     fs::create_dir_all(to).unwrap();
@@ -618,7 +947,20 @@ fn build_sh_builds_the_tree_that_is_published() {
     assert!(o.status.success(), "build.sh failed:\n{}\n{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
     let built = copy.join("build");
 
-    let mut want: Vec<String> = ["index.html", "ja/index.html", "playground/index.html", "playground/ritsu.wasm", "ja/playground/index.html", "ja/playground/projects.json", "ns/yuen/index.html", "ja/ns/yuen/index.html"].map(String::from).to_vec();
+    let mut want: Vec<String> = [
+        "index.html",
+        "ja/index.html",
+        "playground/index.html",
+        "playground/ritsu.wasm",
+        "ja/playground/index.html",
+        "ja/playground/projects.json",
+        "sekisho/index.html",
+        "ja/sekisho/index.html",
+        "ns/yuen/index.html",
+        "ja/ns/yuen/index.html",
+    ]
+    .map(String::from)
+    .to_vec();
     let mut before = Vec::new();
     for s in sites() {
         want.extend([format!("{s}/index.html"), format!("{s}/ja/index.html")]);
@@ -684,8 +1026,12 @@ fn build_sh_builds_the_tree_that_is_published() {
             } else if path.starts_with('/') {
                 wrong.push(format!("{file} (from {}): `{target}` leaves the site", p.name));
                 continue;
+            } else if let Some(at) = follow(&url, path) {
+                at
             } else {
-                normal(&format!("{url}{path}"))
+                // from /ritsu/<page>/, a `../` too many leaves /ritsu/
+                wrong.push(format!("{file} (from {}): `{target}` climbs out of the site", p.name));
+                continue;
             };
             seen += 1;
             let f = built.join(at.trim_start_matches('/'));

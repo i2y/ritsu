@@ -22,7 +22,7 @@ ritsu は、そのそれぞれに小さな言語を一つずつ与えます。�
 | geas | `.geas` | エージェントが書いたコードについての主張 | [README](https://github.com/i2y/ritsu/blob/main/crates/geas/README.ja.md) |
 | yuen | `.req` | 要件の出どころと、それを満たすもの | [README](https://github.com/i2y/ritsu/blob/main/crates/yuen/README.ja.md) |
 | sakai | `.ctx` | 境界づけられたコンテキストの地図 | [README](https://github.com/i2y/ritsu/blob/main/crates/sakai/README.ja.md) |
-| sekisho | `.gate` | だれが何をしてよいか：役割、属性、関係。規則と日付を条件に使える | [README](https://github.com/i2y/ritsu/blob/main/crates/sekisho/README.ja.md) |
+| sekisho | `.gate` | だれが何をしてよいか：役割、属性、関係。規則と日付を条件に使える | [sekisho のページ](sekisho.md) |
 
 どの言語も、それだけで使えます。`.flow` を書かずに rulec だけを使うこともできます。一つのファイルに二つの言語を混ぜることはしません。運賃、暦、帳簿、ワークフローを読む人は、それぞれ違うからです。
 
@@ -33,7 +33,7 @@ ritsu は、そのそれぞれに小さな言語を一つずつ与えます。�
 - **geas** は、プログラムについての主張を一つずつ、動いているプログラム（コマンドライン、HTTP のサービス、ブラウザのページ）に当てて確かめ、差分を渡せば、それがどの主張にかかわるかを答えます。OpenSpec の仕様を渡せば、同じ名前の主張で確かめていないシナリオを挙げます。
 - **yuen** では、要件ごとに、どこから来たか、誰が受け持つか、何が満たし何が確かめるかを書きます。どのリンクも両端のハッシュで固定されます。OpenSpec の仕様の要件も、同じように固定します。
 - **sakai** では、どのコンテキストがどのファイルを持ち、誰が誰に依存してよいかを地図に書きます。コンテキストのあいだをまたぐすべての参照を、ここにあるすべての言語のファイルと、サービスが契約として持つ OpenAPI と AsyncAPI の文書と、コードについて確かめます。
-- **sekisho** では、どの principal がどの resource にどの action をしてよいかを、ゲート（`.gate` のファイル）に書きます。条件には、役割、属性、関係のほかに、規則の答えと日付の答えを使えます。`sekisho check` は起こりうる組み合わせを全部たどり、どれも Cedar と同じ決まりで答えを決めます。検査を通ったゲートだけが、Cedar のスキーマとポリシーと、条件の値をサービス自身のデータから計算して Cedar に尋ねる TypeScript、Python、Go のコードになります。
+- **sekisho** では、どの principal がどの resource にどの action をしてよいかを、ゲート（`.gate` のファイル）に書きます。条件には、役割、属性、関係のほかに、規則の答えと日付の答えを使えます。`sekisho check` は起こりうる組み合わせを全部たどり、どれも Cedar と同じ決まりで答えを決めます。検査を通ったゲートだけが、Cedar のスキーマとポリシーと、条件の値をサービス自身のデータから計算して Cedar に尋ねる TypeScript、Python、Go のコードになります。規則の答えがゲートから Cedar に届くまでを、[sekisho のページ](sekisho.md)で例に沿って読めます。
 
 ## 言語が出会うところ
 

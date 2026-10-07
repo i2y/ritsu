@@ -1524,6 +1524,8 @@ sekisho explain <code> | --all [--format markdown|json]
 - スキル `skills/sekisho`：`SKILL.md` は手で書き、`reference.md` と `codes.md` は `skills/sync.sh` が `docs/` からコピーする（`tests/skill.rs`）。ritsu のバイナリが九つのスキルを持ち、`skills/ritsu/SKILL.md` に sekisho の行を足した。
 - ブラウザで試すページ：生成は `gen --target cedar`、ページは `doc`。例の二つの版を、ゲートと、ゲートが読むファイル（規則、日付のファイル、カレンダーとそのデータ、契約、フロー）のプロジェクトにした（グループ `sekisho`）。ページの中では、sekisho がファイルを ritsu-base の `fs` で読み書きする（`check_file`、`gen` の書き出し、`use gate` の読み込み）。
 
+2026-10-08 に、ritsu のサイトに、規則の答えを条件に使う例を芯にした sekisho のページを英語と日本語で一枚ずつ足し（`website/docs/sekisho.md`、`website/docs-ja/sekisho.md`）、載せた出力を ritsu の `tests/website.rs` が実物と突き合わせるようにした。
+
 ## 13. 先にあるもの（2026-10 の時点）
 
 ### 13.1 Cedar

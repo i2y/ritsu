@@ -3,6 +3,8 @@
 A small language for who may do what: principals, roles, attributes and relations, with the answers of business rules and dates as conditions, checked on every combination it declares and compiled to [Cedar](https://www.cedarpolicy.com/).
 sekisho is one of the eight languages of [ritsu](../../README.md): it reads the rules of rulec, the dates and calendars of koyomi and the workflows of dandori through ritsu, and the contracts services keep in OpenAPI, AsyncAPI and `.proto` files.
 
+On ritsu's site, **[the page of sekisho](https://i2y.github.io/ritsu/sekisho/)** follows the example below from the answer of a rule to the Cedar and the code generated from it.
+
 Authorization is usually a set of policies nobody can read whole: which role may do what is spread over the policies, and a condition such as "while the refund period lasts" or "up to the clerk's own limit" is computed somewhere in the service and handed in as a fact.
 sekisho writes the policies of one part of a service in one `.gate` file, beside the contract whose operations they guard, and takes the conditions from the languages that decide them:
 

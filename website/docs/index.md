@@ -31,7 +31,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 | geas | `.geas` | claims about the code an agent wrote | [README](https://github.com/i2y/ritsu/blob/main/crates/geas/README.md) |
 | yuen | `.req` | where requirements come from, and what satisfies them | [README](https://github.com/i2y/ritsu/blob/main/crates/yuen/README.md) |
 | sakai | `.ctx` | the map of bounded contexts | [README](https://github.com/i2y/ritsu/blob/main/crates/sakai/README.md) |
-| sekisho | `.gate` | who may do what: roles, attributes, relations, with rules and dates as conditions | [README](https://github.com/i2y/ritsu/blob/main/crates/sekisho/README.md) |
+| sekisho | `.gate` | who may do what: roles, attributes, relations, with rules and dates as conditions | [the sekisho page](sekisho.md) |
 
 Each language stands on its own: you can use rulec without writing a `.flow`. A file never mixes
 two languages, because a tariff, a calendar, a ledger and a workflow are read by different
@@ -65,6 +65,7 @@ people.
   conditions. `sekisho check` walks every combination that can happen and decides each as Cedar
   does; only a gate that passes compiles, into Cedar's schema and policies, and into TypeScript,
   Python and Go that compute the conditions from the service's own data and ask Cedar.
+  [The sekisho page](sekisho.md) follows the answer of a rule from a gate to Cedar.
 
 ## Where the languages meet
 

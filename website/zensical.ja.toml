@@ -16,6 +16,7 @@ use_directory_urls = true
 nav = [
   { "ホーム" = "index.md" },
   { "ブラウザで試す" = "playground.md" },
+  { sekisho = "sekisho.md" },
 ]
 
 # ---- Language switcher ----------------------------------------------------

@@ -175,9 +175,13 @@ pub fn runs(block: &Block) -> Vec<(String, Vec<String>)> {
 /// A command is run in the root of the repository, in the directory of a `$ cd` before it in its
 /// block, or in the files of a reproduction of the ledger when the code blocks above it in the same
 /// section are those files. A command shown without its output, in a list, is only held to be a
-/// command of `ritsu` when it starts with that.
+/// command of `ritsu` when it starts with that. A `gen` writes into a scratch directory in place
+/// of the `--out <dir>` the page shows, and what it prints is read with that `<dir>` in the scratch
+/// directory's place, so the repository is not written into; a `gen` shown without `--out` is
+/// wrong.
 pub fn run_the_consoles(pages: &[Page]) -> (usize, Vec<String>) {
     let links = links();
+    let scratch = TempDir::new("pages-out");
     let commands: Vec<&str> = ritsu::cli::commands().iter().map(|c| c.name).collect();
     let mut wrong = Vec::new();
     let mut ran = 0;
@@ -217,7 +221,24 @@ pub fn run_the_consoles(pages: &[Page]) -> (usize, Vec<String>) {
                     wrong.push(format!("{}:{}: `$ {cmd}` is shown after no files of a reproduction in the ledger, and in no directory of the repository", p.name, block.at));
                     continue;
                 }
-                let got = sh(links.path(), &cwd, &cmd);
+                // A `gen` writes into the scratch directory in place of the `--out` the page shows
+                // (without one, it would write `generated/` into the repository), and the paths it
+                // prints are read as the page shows them.
+                let mut words: Vec<String> = cmd.split_whitespace().map(String::from).collect();
+                let mut shown_out = None;
+                if let Some(i) = words.iter().position(|w| w == "--out")
+                    && let Some(dir) = words.get_mut(i + 1)
+                {
+                    let scratch_out = scratch.path().join(format!("out{ran}")).display().to_string();
+                    shown_out = Some((scratch_out.clone(), std::mem::replace(dir, scratch_out)));
+                } else if words.iter().take(3).any(|w| w == "gen") {
+                    wrong.push(format!("{}:{}: `$ {cmd}` would write into the repository: show it with `--out <dir>`", p.name, block.at));
+                    continue;
+                }
+                let mut got = sh(links.path(), &cwd, &words.join(" "));
+                if let Some((scratch_out, shown)) = &shown_out {
+                    got = got.replace(scratch_out.as_str(), shown);
+                }
                 if !same(&lines_of(&out.join("\n")), &lines_of(&got)) {
                     let shown: String = got.lines().take(40).map(|l| format!("{l}\n")).collect();
                     wrong.push(format!("{}:{}: $ {cmd}\n--- the page shows\n{}\n--- it prints\n{shown}", p.name, block.at, out.join("\n")));
