@@ -543,16 +543,23 @@ fn an_output_over_ranges_leaves_out_the_rows_past_a_derives_reach() {
     let dead: Vec<String> = rulec::report(&src, path).diags.iter().filter(|d| d.code == "E102").map(|d| d.where_.clone()).collect();
     assert_eq!(dead, [format!("{path}:20 table t")]);
     assert!(e.outputs_over(Path::new(path), "out", &[]).is_err());
-    // a row past the reach of a `define`, which E102 does not read, passes check, and no input
-    // comes to its value
+    // a row past the reach of a `define` no longer passes check either: E102's third form reads a
+    // define's reach too (DESIGN §15.195)
     let path = "tests/over/define_reach.rule";
+    let src = std::fs::read_to_string(path).unwrap();
+    let dead: Vec<String> = rulec::report(&src, path).diags.iter().filter(|d| d.code == "E102").map(|d| d.where_.clone()).collect();
+    assert_eq!(dead, [format!("{path}:20 table t")]);
+    assert!(e.outputs_over(Path::new(path), "out", &[]).is_err());
+    // a row only a `constraint` rules out, which E102 does not stop a rule on, passes check, and no
+    // input comes to its value
+    let path = "tests/over/constraint_reach.rule";
     let src = std::fs::read_to_string(path).unwrap();
     assert!(!rulec::has_error(&rulec::report(&src, path).diags));
     let found = e.outputs_over(Path::new(path), "out", &[]).unwrap();
     witnesses_hold(&e, path, "out", &[], &found);
     assert_eq!(values_of(&found), [Value::Enum("small".into()), Value::Enum("big".into())]);
     let found = e.outputs_over(Path::new(path), "out", &[("limit".into(), Some(0), Some(0)), ("amount".into(), Some(1), Some(1))]).unwrap();
-    assert_eq!(values_of(&found), [Value::Enum("big".into())]);
+    assert_eq!(values_of(&found), [Value::Enum("small".into())]);
 }
 
 /// What the question does not answer, it says why: a name that is no output or no input, an
@@ -986,6 +993,44 @@ fn an_output_over_values_is_what_every_input_held_to_them_comes_to() {
         println!("  undecided: {w}");
     }
     assert!(rules_asked >= 10 && exact * 10 >= cases * 9, "{exact} of {cases} answered exactly, over {rules_asked} rules");
+}
+
+/// Two dates held to one day each, and a table that reads a bool `define` comparing them: over the
+/// days held, the comparison comes to one value, so a row asking for the other is left out, and so
+/// is a row under `policy first` that the rows above it always take over. The answer is exact, each
+/// value with an input that holds to the days (DESIGN §15.195). The rule that orders two coupons and
+/// its Japanese twin, which answer by the aliases; the places of the kinds: percent 0, fixed 1.
+#[test]
+fn an_output_over_values_reads_what_a_bool_define_comes_to() {
+    let e = Engine::new();
+    let day = |y: i32, m: u32, d: u32| {
+        let r = rulec::types::date_ord(y, m, d);
+        r.num / r.den
+    };
+    let (april, may) = (day(2026, 4, 1), day(2026, 5, 1));
+    let (first, second) = (|| Value::Enum("first".into()), || Value::Enum("second".into()));
+    for (path, a_kind, b_kind, a_due, b_due, out) in [
+        ("tests/corpus/coupon_order.rule", "a_kind", "b_kind", "a_due", "b_due", "a_order"),
+        ("tests/corpus/適用順序.rule", "A種別", "B種別", "A期限", "B期限", "A順序"),
+    ] {
+        let ask = |kinds: Option<(i128, i128)>, dues: (i128, i128)| {
+            let mut held: Vec<(String, Option<i128>, Option<i128>)> = vec![(a_due.to_string(), Some(dues.0), Some(dues.0)), (b_due.to_string(), Some(dues.1), Some(dues.1))];
+            if let Some((a, b)) = kinds {
+                held.push((a_kind.to_string(), Some(a), Some(a)));
+                held.push((b_kind.to_string(), Some(b), Some(b)));
+            }
+            let found = e.outputs_over(Path::new(path), out, &held).unwrap_or_else(|x| panic!("{path}: {x:?}"));
+            witnesses_hold(&e, path, out, &held, &found);
+            values_of(&found)
+        };
+        // two fixed coupons: the one due first, or on the same day, goes first
+        assert_eq!(ask(Some((1, 1)), (april, may)), [first()], "{path}");
+        assert_eq!(ask(Some((1, 1)), (april, april)), [first()], "{path}");
+        assert_eq!(ask(Some((1, 1)), (may, april)), [second()], "{path}");
+        // a rate coupon goes first whatever the days, and the days decide only between the rest
+        assert_eq!(ask(Some((0, 1)), (may, april)), [first()], "{path}");
+        assert_eq!(ask(None, (may, april)), [first(), second()], "{path}");
+    }
 }
 
 /// A row whose two derived columns over the same inputs ask for what only numbers between whole

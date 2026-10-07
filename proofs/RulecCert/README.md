@@ -20,7 +20,7 @@ $ .lake/build/bin/rulec-recheck --rule rules/shipping_fee.rule cert.json
 | `RulecCert/Semantics.lean` | what a table claims. Points, boxes, rows, a policy, and the three propositions `uniqueHolds`, `completeHolds`, `reachedHolds` |
 | `RulecCert/Check.lean` | the checks, as functions: the pairs part, the cover tiles the space, every row has a point |
 | `RulecCert/Sound.lean` | the theorems. A `true` from each check settles the matching proposition |
-| `RulecCert/Sieve.lean` | which combinations the rule is **asked about**, from the `constraint` lines and the reach of each derived column — and the proof that a box the cover calls impossible really is one |
+| `RulecCert/Sieve.lean` | which combinations the rule is **asked about**, from the `constraint` lines, the reach of each derived column and each `define` of a number, and the rows of a table above that write a value — and the proof that a box the cover calls impossible really is one (`not_asked_of_derived`, `not_asked_of_farkas`, `not_asked_of_aboveRuledOut`) |
 | `RulecCert/Linear.lean` | linear inequalities and the multipliers that refute a system of them: when the sum `farkasOk` checks comes out false, no values satisfy them all (`farkas_sound`) |
 | `RulecCert/Contract.lean` | what a contract lets through, opened into cases, held to what the rule's door asks: when the proof for every case passes, any values the contract admits are ones the door takes (`included_sound`) |
 | `RulecCert/Values.lean` | expressions, their evaluation, the units (E103) and int64 (E108) claims, and the proofs — and, for the share `allocate` works out, that a run of them hands out the amount exactly (`runTotal_exact`) |
@@ -56,7 +56,11 @@ groups, the enums, the constraints, each value's expression and scale, the scale
 is its word. What is worked out from it is checked: the step a numeric axis is cut at has to
 divide the step its column's values take, worked out from the expressions and the scales the
 way rulec works it out (`checkSteps` in `RulecMain.lean`), so an axis of tenths of a pound cut
-every whole pound is refused. The
+every whole pound is refused; and the interval each value the rule computes is forced into is
+worked out from its expression (`interval`), which is where the reach of a derived or `define`
+column and the ranges of those values in a linear model come from, not the `ranges` the
+document states for them (rulec's §15.195). Where a leaf rests on the rows of a table above that
+write a value, those rows are counted from that table's part of the document, not from the leaf. The
 digest ties the certificate to one text and every cell is read back from its own line and
 column in it; going behind the rest would take a parser for the rule, and a checker that
 reads a rule the way rulec reads it is not independent of it. A contract's section is the

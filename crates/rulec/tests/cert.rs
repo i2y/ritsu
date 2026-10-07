@@ -687,3 +687,69 @@ fn 知らない形式の版の証明書は受け付けない() {
     let unmarked = cert.replacen(r#"{"v":1,"#, "{", 1);
     assert_eq!(recheck(&unmarked).0, 0, "v の無い証明書を版 1 として読まない");
 }
+
+/// The certificate of a rule in `tests/sieve` (DESIGN §15.195).
+fn sieve_cert(stem: &str) -> String {
+    let (c, cert) = rulec(&["certificate", &format!("tests/sieve/{stem}.rule")]);
+    assert_eq!(c, 0, "{cert}");
+    cert
+}
+
+/// A coordinate of a `define` past what the define comes to is a box no input reaches, and the
+/// re-checker works the reach out again from the define's own expression rather than taking the
+/// certificate's word for it (§15.195): a leaf on a coordinate the define does reach is refused.
+#[test]
+fn 定義の取りうる値の外の葉は再検査で計算し直される() {
+    if !ready(Need::Python, have_python, "python3 が無い") {
+        return;
+    }
+    let cert = sieve_cert("E101_past_a_defines_reach");
+    assert!(cert.contains(r#"{"define_axis":0}"#), "{cert}");
+    let (code, said) = recheck(&cert);
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("impossible out of a define's reach"), "{said}");
+    // the leaf put on the first coordinate, below a half, which the share does reach
+    let forged = cert.replacen(r#"{"split":[{"row":1},"#, r#"{"split":[{"define_axis":0},"#, 1);
+    assert_ne!(forged, cert, "証明書の形が変わっていて、偽れていない");
+    let (code, said) = recheck(&forged);
+    assert_eq!(code, 1, "届く座標の葉が通ってしまった:\n{said}");
+    assert!(said.contains("can reach this box"), "{said}");
+    // and the certificate's own word for the reach narrowed to a half: the leaf on the coordinate
+    // between a half and the whole still fails, since the reach is worked out again
+    let narrowed = cert.replacen(r#""share":["0","1"]"#, r#""share":["0","1/2"]"#, 1).replacen(r#"{"row":2},{"row":2},"#, r#"{"row":2},{"define_axis":0},"#, 1);
+    assert_ne!(narrowed, cert, "証明書の形が変わっていて、偽れていない");
+    let (code, said) = recheck(&narrowed);
+    assert_eq!(code, 1, "証明書の言う取りうる値を信じてしまった:\n{said}");
+    assert!(said.contains("can reach this box"), "{said}");
+}
+
+/// A value a table above writes only in rows none of which fires in the box (§15.195). The
+/// re-checker counts those rows itself from the table above, and adds up each one's multipliers;
+/// five ways of lying about it are refused.
+#[test]
+fn 上の表の行の葉は行を数え直して確かめる() {
+    if !ready(Need::Python, have_python, "python3 が無い") {
+        return;
+    }
+    let cert = sieve_cert("E101_past_what_a_table_above_allows");
+    let leaf = r#"{"above_rows":{"axis":0,"column":"refund_size","value":"small","rows":[{"row":1,"farkas":["#;
+    assert!(cert.contains(leaf), "{cert}");
+    let (code, said) = recheck(&cert);
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("impossible by the rows of a table above"), "{said}");
+    let end = r#"{"cond":{"name":"amount","hi":true,"at":"50","open":false},"y":"1"}"#;
+    assert!(cert.contains(end), "{cert}");
+    let lies = [
+        ("行の理由を落とす", cert.replacen(leaf, &leaf.replace(r#"{"row":1,"#, r#"{"row":2,"#), 1), "the rows of size_of that write refund_size = small are [1]"),
+        ("乗数を変える", cert.replacen(end, &end.replace(r#""y":"1""#, r#""y":"2""#), 1), "the names do not cancel"),
+        ("行の端を動かす", cert.replacen(end, &end.replace(r#""at":"50""#, r#""at":"60""#), 1), "what is left is not false"),
+        ("ほかの行も同じ値を書く", cert.replacen(r#""produces":["large"]"#, r#""produces":["small"]"#, 1), "are [1, 2]"),
+        ("点の値を行の外に置く", cert.replacen(r#""at_values":[null,"1"],"extra_values":["1","0"]"#, r#""at_values":[null,"1"],"extra_values":["60","59"]"#, 1), "no row of size_of that writes refund_size = small fires on the values behind it"),
+    ];
+    for (what, forged, why) in lies {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = recheck(&forged);
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains(why), "{what}: {said}");
+    }
+}

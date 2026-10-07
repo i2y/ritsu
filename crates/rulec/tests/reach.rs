@@ -1,15 +1,17 @@
-//! E102's third form (DESIGN §15.189): a row that asks a derived column only for values the
-//! derive never comes to. Each rule of `tests/reach` is written in English, with a Japanese
-//! version beside it, and `rulec check` says E102 once, with the values the derive can come to
-//! marked on its line; what it prints in English and in Japanese is the rule's golden file in
-//! `tests/golden/reach` (`RULEC_BLESS=1 cargo test --test reach` writes them again).
+//! E102's third form (DESIGN §15.189, §15.195): a row that asks a derived or `define` column only
+//! for values it never comes to, or only for values it never comes to while a table above writes
+//! the value another column of the row asks for. Each rule of `tests/reach` is written in English,
+//! with a Japanese version beside it, and `rulec check` says E102 once, with the values the column
+//! can come to marked on its line; what it prints in English and in Japanese is the rule's golden
+//! file in `tests/golden/reach` (`RULEC_BLESS=1 cargo test --test reach` writes them again).
 //!
 //! The row is reached by no input: every input inside the ranges goes through the reference
 //! evaluator, and none of them makes the row fire. Deleting the row leaves the table complete, so
 //! E101 never asks for what E102 called dead. A derive whose values fall between whole units — a
-//! tenth of an amount — is read too, since its axis is cut on the step its values take (§15.190).
-//! And what the form does not read — a `define` in a column, a row only a `constraint` rules out,
-//! a derive that reads a table's output — passes as it did before.
+//! tenth of an amount — is read too, since its axis is cut on the step its values take (§15.190);
+//! so is a `define`, and a derive over a product, a rounding or a table's output, whatever its
+//! expression's interval holds (§15.195). What the form does not read — a row only a `constraint`
+//! rules out, or one only the tables above do — passes as it did before.
 
 use rulec::eval::Val;
 use rulec::i18n::{self, Lang};
@@ -28,6 +30,8 @@ const PAIRS: &[(&str, &str, usize)] = &[
     ("E102_reach_under_a_constraint", "E102_制約で狭まる導出", 1),
     ("E102_two_derives_together", "E102_二つの導出の組", 1),
     ("E102_past_a_tenth_of_the_amount", "E102_金額の一割が届かない行", 3),
+    ("E102_past_a_defines_reach", "E102_定義の届かない行", 3),
+    ("E102_past_what_a_table_above_allows", "E102_上の表が許さない行", 2),
 ];
 
 fn source(stem: &str) -> (String, String) {
@@ -110,13 +114,15 @@ fn no_input_reaches_the_row() {
         for stem in [en, ja] {
             let (rel, src) = source(stem);
             let (f, c) = rulec::prepare(&src, &rel).unwrap_or_else(|_| panic!("{rel} does not read"));
+            // the last table, which holds the row (a table above, where there is one, comes first)
             let table = f
                 .items
                 .iter()
-                .find_map(|it| match it {
+                .filter_map(|it| match it {
                     rulec::ast::Item::Table(t) => t.name.as_ref().map(|n| n.text.clone()),
                     _ => None,
                 })
+                .last()
                 .unwrap();
             let axes: Vec<(String, Vec<Val>)> = f
                 .inputs
@@ -160,9 +166,9 @@ fn deleting_the_row_leaves_no_gap() {
     for (en, ja, row) in PAIRS {
         for stem in [en, ja] {
             let (rel, src) = source(stem);
-            // the row's line: the n-th line of the table after its header
+            // the row's line: the n-th line of the last table after its header
             let lines: Vec<&str> = src.lines().collect();
-            let head = lines.iter().position(|l| l.starts_with("| ") && l.contains("->")).unwrap();
+            let head = lines.iter().rposition(|l| l.starts_with("| ") && l.contains("->")).unwrap();
             let kept: Vec<&str> = lines.iter().enumerate().filter(|(k, _)| *k != head + row).map(|(_, l)| *l).collect();
             let without = format!("{}\n", kept.join("\n"));
             let codes: Vec<String> = found(&without, &rel).into_iter().map(|(c, _)| c).collect();
@@ -227,22 +233,23 @@ fn the_days_of_a_koyomi_date_are_said_when_they_take_part() {
 }
 
 /// What the third form does not read passes as it did before, though the row in each is reached
-/// by no input: it stops a rule only where the reach is certain and E101 reads the same.
+/// by no input: a row only a `constraint` rules out, and one the tables above rule out together
+/// with a `constraint` and no derived or `define` value. It stops a rule only where such a value
+/// takes part (§15.189, §15.195); E101 reads the same, so it never asks for the rows back.
 #[test]
 fn what_the_third_form_does_not_read_passes_as_before() {
-    let head = "rule v v1\n\nenum band = small | big | huge\n\ninputs\n  amount : money[GBP]  range >=1GBP <=100GBP\n  limit  : money[GBP]  range >=0GBP <=100GBP\n  k      : bool\n\noutputs\n  out : band\n\n";
+    let head = "rule v v1\n\nenum band = small | big | huge\nenum size = low | high\n\ninputs\n  amount : money[GBP]  range >=1GBP <=100GBP\n  limit  : money[GBP]  range >=0GBP <=100GBP\n  k      : bool  contract_only\n\noutputs\n  out : band\n\n";
     let cases = [
-        // a define in a column: E101 does not read its reach either, and would ask for the row back
-        ("a define in a column", "derive total : money[GBP] = amount + limit  range >=0GBP <=1000GBP\ndefine double : money[GBP] = total * 2\n\ntable t\npolicy unique\n| double           | -> out : band |\n| <=200GBP         | small         |\n| >200GBP <=400GBP | big           |\n| >400GBP          | huge          |\n"),
         // a row only a `constraint` rules out, with no derive in it
         ("a row only a constraint rules out", "constraint limit <= amount\n\ntable t\npolicy unique\n| amount  | limit   | -> out : band |\n| >50GBP  | -       | small         |\n| <=50GBP | <=50GBP | big           |\n| <=50GBP | >50GBP  | huge          |\n"),
-        // a derive that reads a table's output: a value that depends on which row matched
-        ("a derive that reads a table's output", "table fee_of\npolicy unique\n| k     | -> fee : money[GBP] |\n| true  | 10GBP               |\n| false | 20GBP               |\n\nderive net : money[GBP] = amount - fee  range >=-1000GBP <=1000GBP\n\ntable t\npolicy unique\n| net            | -> out : band |\n| <=0GBP         | small         |\n| >0GBP <=200GBP | big           |\n| >200GBP        | huge          |\n"),
+        // a value decided above and a `constraint`: `low` is written only for an amount up to 50
+        // pounds, and the limit never passes the amount
+        ("a row the table above and a constraint rule out", "constraint limit <= amount\n\ntable size_of\npolicy unique\n| amount  | -> s : size |\n| <=50GBP | low         |\n| >50GBP  | high        |\n\ntable t\npolicy unique\n| s    | limit   | -> out : band |\n| low  | <=50GBP | small         |\n| low  | >50GBP  | huge          |\n| high | -       | big           |\n"),
     ];
     for (what, body) in cases {
         let src = format!("{head}{body}");
         let codes: Vec<String> = found(&src, "v.rule").into_iter().map(|(c, _)| c).collect();
-        assert!(!codes.contains(&"E102".to_string()), "{what}: {codes:?}\n{src}");
+        assert!(!codes.iter().any(|c| c.starts_with('E')), "{what}: {codes:?}\n{src}");
         // and the row is reached by no input all the same: its value is never the answer
         let (f, c) = rulec::prepare(&src, "v.rule").unwrap();
         let mut answers = std::collections::BTreeSet::new();
@@ -261,6 +268,36 @@ fn what_the_third_form_does_not_read_passes_as_before() {
             }
         }
         assert!(!answers.iter().any(|a| a.contains("huge")), "{what}: the last row is reached: {answers:?}");
+    }
+}
+
+/// What the third form reads since §15.195, which passed before though the row in each is reached
+/// by no input: a `define` in a column, a derive that reads a table's output, a derive of a
+/// product. Each comes to the interval its expression is forced into, and the row asks only past
+/// it.
+#[test]
+fn a_define_and_a_derive_of_any_shape_are_read() {
+    let head = "rule v v1\n\nenum band = small | big | huge\n\ninputs\n  amount : money[GBP]  range >=1GBP <=100GBP\n  limit  : money[GBP]  range >=0GBP <=100GBP\n  k      : bool  contract_only\n\noutputs\n  out : band\n\n";
+    let cases = [
+        ("a define in a column", "derive total : money[GBP] = amount + limit  range >=0GBP <=1000GBP\ndefine double : money[GBP] = total * 2\n\ntable t\npolicy unique\n| double           | -> out : band |\n| <=200GBP         | small         |\n| >200GBP <=400GBP | big           |\n| >400GBP          | huge          |\n", "`double` can only come to >=2GBP <=400GBP. None of those values meets this row's conditions.", "`double` が取りうる値は、入力の範囲から計算すると >=2GBP <=400GBP です。"),
+        ("a derive that reads a table's output", "table fee_of\npolicy unique\n| k     | -> fee : money[GBP] |\n| true  | 10GBP               |\n| false | 20GBP               |\n\nderive net : money[GBP] = amount - fee  range >=-1000GBP <=1000GBP\n\ntable t\npolicy unique\n| net            | -> out : band |\n| <=0GBP         | small         |\n| >0GBP <=200GBP | big           |\n| >200GBP        | huge          |\n", "Over the ranges of the inputs and the values the tables above produce, `net` can only come to >=-19GBP <=90GBP.", "`net` が取りうる値は、入力の範囲と、上流の表が出す値から計算すると >=-19GBP <=90GBP です。"),
+        ("a derive of a product", "derive area : money[GBP] = amount * 3  range >=0GBP <=1000GBP\n\ntable t\npolicy unique\n| area             | -> out : band |\n| <=100GBP         | small         |\n| >100GBP <=300GBP | big           |\n| >300GBP          | huge          |\n", "`area` can only come to >=3GBP <=300GBP.", "`area` が取りうる値は、入力の範囲から計算すると >=3GBP <=300GBP です。"),
+    ];
+    for (what, body, en, ja) in cases {
+        let src = format!("{head}{body}");
+        let notes = |lang: Lang| -> String {
+            i18n::with(lang, || {
+                let ds = rulec::check_source(&src, "v.rule");
+                let d: Vec<_> = ds.iter().filter(|d| d.code == "E102").collect();
+                assert_eq!(d.len(), 1, "{what}: {ds:?}");
+                assert!(d[0].title.contains(if lang == Lang::En { "row 3" } else { "行3" }), "{what}: {}", d[0].title);
+                d[0].notes.join("\n")
+            })
+        };
+        let got = notes(Lang::En);
+        assert!(got.contains(en), "{what}: {got}");
+        let got = notes(Lang::Ja);
+        assert!(got.contains(ja), "{what}: {got}");
     }
 }
 

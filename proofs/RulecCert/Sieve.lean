@@ -6,8 +6,10 @@
   hypothesis: a box the cover calls impossible really is one no input reaches. This file is
   where that hypothesis is discharged. A point is asked about when there are values behind
   its coordinates — one per axis, each inside the coordinate it names — that satisfy every
-  `constraint` the rule declares and put every derived column inside the interval its own
-  expression is forced into.
+  `constraint` the rule declares, put every derived column and every column of a `define` of a
+  number inside the interval its own expression is forced into, and, where a column decided by
+  a table above holds a value the certificate rests on the rows of, let one of the rows that
+  write that value fire (rulec's §15.195).
 
   Read that definition twice before trusting the word "impossible". It is **consistency
   with what the rule declares**, not "some real input produces this": whether a derived
@@ -115,15 +117,39 @@ structure Constraint where
   right : Nat
   deriving Repr, Inhabited
 
+/-- One row of a table above that writes the value a column of this table holds (rulec's
+    §15.195), read on this table: what its box says about the values this table numbers — for
+    each numbered value it bounds, the coordinates the row takes on that value's axis in its own
+    table — and about this table's own axes of words both tables cut — for each, the coordinates
+    of this table's axis the row lets in. The row fires only where both hold, so a value decided
+    above arrives only where one of its rows does. -/
+structure AboveRow where
+  /-- The row's number in its own table, for a reader. -/
+  index : Nat
+  nums : List (Nat × List Coord)
+  words : List (Nat × List Nat)
+  deriving Repr, Inhabited
+
+/-- A column a table above decides, at one of its values: the coordinate `coord` of axis `axis`
+    holds only where one of `rows` — every row of that table that writes the value — fires. -/
+structure AboveCol where
+  axis : Nat
+  coord : Nat
+  rows : List AboveRow
+  deriving Repr, Inhabited
+
 /-- Everything about a table that decides whether a combination can arrive: the values each
-    coordinate stands for, the constraints, and — for a derived column — the interval its
-    expression is forced into. -/
+    coordinate stands for, the constraints, and — for a column the rule computes, a derive or
+    a `define` of a number — the interval its expression is forced into. -/
 structure Sieve where
   /-- One entry per axis, one per coordinate. `none` where the coordinate stands for no
       number — an enum, a flag, the absent value of an optional column — which is also
       every coordinate no constraint and no derive can speak about. -/
   coords : List (List (Option Coord))
   cons : List Constraint
+  /-- One entry per axis: the interval the expression of a derived or `define` column is forced
+      into (`RulecCert.interval`, which `eval_mem_interval` shows holds the value), `none` on an
+      axis of inputs or of a value decided above. -/
   reach : List (Option Ival)
   /-- `(axis, coordinate)` pairs no table above ever writes: not one row of the table that
       decides the column puts it there. -/
@@ -148,6 +174,9 @@ structure Sieve where
       (`range from koyomi`, rulec's §15.174), as day numbers; `none` on every other axis. A
       value no day of the list equals is one no caller sends: the generated code refuses it. -/
   days : List (Option (List Rat)) := []
+  /-- The values decided above that the certificate rests on the rows of (rulec's §15.195):
+      at each, the rows of the table above that write it, read on this table. -/
+  above : List AboveCol := []
 
 def Sieve.coordAt (s : Sieve) (i c : Nat) : Option Coord :=
   match s.coords[i]? with
@@ -155,6 +184,12 @@ def Sieve.coordAt (s : Sieve) (i c : Nat) : Option Coord :=
   | some cs => match cs[c]? with
                | none => none
                | some x => x
+
+/-- A row of a table above fires on these values at this point: every value it bounds lies in
+    one of the coordinates it takes, and this table's axis of words holds a word it lets in. -/
+def AboveRow.fires (r : AboveRow) (p : Point) (v : List Rat) : Prop :=
+  (∀ q ∈ r.nums, ∃ w, v[q.1]? = some w ∧ ∃ x ∈ q.2, x.holds w) ∧
+  (∀ q ∈ r.words, ∃ c, p[q.1]? = some c ∧ c ∈ q.2)
 
 /-- **The point is asked about**: values exist behind its coordinates that satisfy
     everything the rule declares. -/
@@ -167,7 +202,8 @@ def Sieve.asked (s : Sieve) (p : Point) : Prop :=
     (∀ q ∈ s.never, p[q.1]? ≠ some q.2) ∧
     (∀ qr ∈ s.apart, ¬(p[qr.1.1]? = some qr.1.2 ∧ p[qr.2.1]? = some qr.2.2)) ∧
     (∀ q ∈ s.facts, q.holds v) ∧
-    (∀ (i : Nat) (D : List Rat), s.days[i]? = some (some D) → ∃ w, v[i]? = some w ∧ w ∈ D)
+    (∀ (i : Nat) (D : List Rat), s.days[i]? = some (some D) → ∃ w, v[i]? = some w ∧ w ∈ D) ∧
+    (∀ e ∈ s.above, p[e.axis]? = some e.coord → ∃ r ∈ e.rows, r.fires p v)
 
 /-! ## One constraint rules a box out -/
 
@@ -193,14 +229,16 @@ def constraintRulesOut (s : Sieve) (k : Constraint) (p : Point) : Bool :=
     | _, _ => false
   | _, _ => false
 
-/-- A derived column whose coordinate lies outside what its own expression can produce. -/
+/-- A derived or `define` column whose coordinate lies outside what its own expression can
+    produce. An interval coordinate leaves its ends out, so one that starts where the reach ends
+    lies outside it too (rulec's §15.195). -/
 def derivedRulesOut (s : Sieve) (i : Nat) (p : Point) : Bool :=
   match p[i]?, s.reach[i]? with
   | some c, some (some I) =>
     match s.coordAt i c with
     | some x =>
-      (match x.span.2, I.1 with | some b, some a => decide (b < a) | _, _ => false) ||
-      (match x.span.1, I.2 with | some a, some b => decide (b < a) | _, _ => false)
+      (match x.span.2, I.1 with | some b, some a => decide (b < a) || (x.opn && decide (b ≤ a)) | _, _ => false) ||
+      (match x.span.1, I.2 with | some a, some b => decide (b < a) || (x.opn && decide (b ≤ a)) | _, _ => false)
     | none => false
   | _, _ => false
 
@@ -247,7 +285,7 @@ def daysRulesOut (s : Sieve) (i : Nat) (p : Point) : Bool :=
 
 theorem not_asked_of_days {s : Sieve} {i : Nat} {p : Point}
     (h : daysRulesOut s i p = true) : ¬ s.asked p := by
-  rintro ⟨v, hf, _, _, _, _, _, hd⟩
+  rintro ⟨v, hf, _, _, _, _, _, hd, _⟩
   unfold daysRulesOut at h
   split at h
   case _ c D hp hD =>
@@ -332,7 +370,8 @@ theorem not_asked_of_derived {s : Sieve} {i : Nat} {p : Point}
   case _ c I hp hri =>
     split at h
     case _ x hc =>
-      obtain ⟨w, hw, hb⟩ := value_at hf hp hc
+      obtain ⟨w, hw, hh⟩ := hf i c x hp hc
+      have hb := Coord.holds_span hh
       obtain ⟨w', hw', hI⟩ := hr i I hri
       rw [hw] at hw'
       obtain rfl : w = w' := Option.some.inj hw'
@@ -340,13 +379,19 @@ theorem not_asked_of_derived {s : Sieve} {i : Nat} {p : Point}
       rcases h with h | h
       · split at h
         case _ b a hs hl =>
-          simp only [decide_eq_true_eq] at h
-          exact no_room (hI.1 a hl) (hb.2 b hs) h
+          simp only [Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h
+          rcases h with h | ⟨ho, h⟩
+          · exact no_room (hI.1 a hl) (hb.2 b hs) h
+          · -- a ≤ w < b ≤ a
+            exact Rat.lt_irrefl (lelt (hI.1 a hl) (ltle (Coord.holds_hi_lt hh ho hs) h))
         case _ => exact absurd h (by simp)
       · split at h
         case _ a b hs hl =>
-          simp only [decide_eq_true_eq] at h
-          exact no_room (hb.1 a hs) (hI.2 b hl) h
+          simp only [Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h
+          rcases h with h | ⟨ho, h⟩
+          · exact no_room (hb.1 a hs) (hI.2 b hl) h
+          · -- b ≤ a < w ≤ b
+            exact Rat.lt_irrefl (ltle (lelt h (Coord.holds_lo_lt hh ho hs)) (hI.2 b hl))
         case _ => exact absurd h (by simp)
     case _ => exact absurd h (by simp)
   case _ => exact absurd h (by simp)
@@ -534,6 +579,37 @@ def cmpHolds : Cmp → Rat → Rat → Bool
 theorem holds_of_cmpHolds {op : Cmp} {x y : Rat} (h : cmpHolds op x y = true) : op.holds x y := by
   cases op <;> simpa [cmpHolds, Cmp.holds] using h
 
+/-- `AboveRow.fires` as a test. -/
+def AboveRow.firesB (r : AboveRow) (p : Point) (v : List Rat) : Bool :=
+  r.nums.all (fun q => match v[q.1]? with
+    | some w => q.2.any (fun x => coordHolds x w)
+    | none => false) &&
+  r.words.all (fun q => match p[q.1]? with
+    | some c => q.2.contains c
+    | none => false)
+
+theorem AboveRow.fires_of_firesB {r : AboveRow} {p : Point} {v : List Rat}
+    (h : r.firesB p v = true) : r.fires p v := by
+  simp only [AboveRow.firesB, Bool.and_eq_true, List.all_eq_true] at h
+  obtain ⟨hn, hw⟩ := h
+  refine ⟨?_, ?_⟩
+  · intro q hq
+    have hq' := hn q hq
+    cases hv : v[q.1]? with
+    | none => rw [hv] at hq'; exact absurd hq' (by simp)
+    | some w =>
+      rw [hv] at hq'
+      simp only [List.any_eq_true] at hq'
+      obtain ⟨x, hx, hxw⟩ := hq'
+      exact ⟨w, rfl, x, hx, holds_of_coordHolds hxw⟩
+  · intro q hq
+    have hq' := hw q hq
+    cases hc : p[q.1]? with
+    | none => rw [hc] at hq'; exact absurd hq' (by simp)
+    | some c =>
+      rw [hc] at hq'
+      exact ⟨c, rfl, by simpa using hq'⟩
+
 /-- **The values behind a point check out**: each one sits in the coordinate it stands for
     and inside its column's reach, and together they satisfy every constraint. -/
 def witnessOk (s : Sieve) (p : Point) (v : List Rat) : Bool :=
@@ -560,13 +636,14 @@ def witnessOk (s : Sieve) (p : Point) (v : List Rat) : Bool :=
     match s.days[i]?, v[i]? with
     | some (some D), some w => decide (w ∈ D)
     | some none, _ => true
-    | _, _ => false)
+    | _, _ => false) &&
+  s.above.all (fun e => !(p[e.axis]? == some e.coord) || e.rows.any (fun r => r.firesB p v))
 
 theorem asked_of_witnessOk {s : Sieve} {p : Point} {v : List Rat}
     (h : witnessOk s p v = true) : s.asked p := by
   simp only [witnessOk, Bool.and_eq_true] at h
-  obtain ⟨⟨⟨⟨⟨⟨hco, hre⟩, hcs⟩, hnv⟩, hap⟩, hfa⟩, hdy⟩ := h
-  refine ⟨v, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  obtain ⟨⟨⟨⟨⟨⟨⟨hco, hre⟩, hcs⟩, hnv⟩, hap⟩, hfa⟩, hdy⟩, hab⟩ := h
+  refine ⟨v, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro i c x hp hx
     have hi := List.all_eq_true.1 hco i (List.mem_range.2 (lt_of_getElem? hp))
     cases hv : v[i]? with
@@ -609,6 +686,12 @@ theorem asked_of_witnessOk {s : Sieve} {p : Point} {v : List Rat}
     | some w =>
       simp only [hD, hv] at hi
       exact ⟨w, rfl, of_decide_eq_true hi⟩
+  · intro e he hp
+    have he' := List.all_eq_true.1 hab e he
+    rw [hp] at he'
+    simp only [beq_self_eq_true, Bool.not_true, Bool.false_or, List.any_eq_true] at he'
+    obtain ⟨r, hr, hf⟩ := he'
+    exact ⟨r, hr, AboveRow.fires_of_firesB hf⟩
 
 /-! ## A box the linear model leaves no values in (§15.141)
 
@@ -626,6 +709,10 @@ inductive Ref where
   /-- An end of the coordinates the box allows on an axis: `v[axis] ≥ at` below, or
       `v[axis] ≤ at` above, strict where the end is left out. -/
   | coord : (axis : Nat) → (hi : Bool) → (at_ : Rat) → (opn : Bool) → Ref
+  /-- An end of the coordinates a row of a table above takes on the axis of the numbered value
+      `value` in its own table (rulec's §15.195), read the same way. Only a refutation about one
+      such row may name one. -/
+  | cond : (value : Nat) → (hi : Bool) → (at_ : Rat) → (opn : Bool) → Ref
   deriving Repr, Inhabited
 
 /-- Whether every value of a coordinate lies on the right side of an end. -/
@@ -651,18 +738,34 @@ def endHolds (s : Sieve) (box : Box) (i : Nat) (hi : Bool) (at_ : Rat) (opn : Bo
       | none => false)
   | none => false
 
-/-- The inequalities a refutation names, built again from the sieve and the box; `none`
-    where a fact is not there or an end does not hold. -/
-def refIneqs (s : Sieve) (box : Box) : List (Ref × Rat) → Option (List (Rat × LinIneq))
+/-- Whether an end holds of every coordinate a row above takes on the axis of the numbered value
+    `j`, read from the row's entry for it. -/
+def condHolds (conds : List (Nat × List Coord)) (j : Nat) (hi : Bool) (at_ : Rat) (opn : Bool) : Bool :=
+  match conds.find? (fun q => q.1 == j) with
+  | some q => q.2.all (fun x => beyondEnd x hi at_ opn)
+  | none => false
+
+/-- The inequalities a refutation names, built again from the sieve, the box and — for a
+    refutation about a row of a table above — what that row takes on the numbered values
+    (`conds`); `none` where a fact is not there or an end does not hold. -/
+def refIneqsIn (s : Sieve) (box : Box) (conds : List (Nat × List Coord)) :
+    List (Ref × Rat) → Option (List (Rat × LinIneq))
   | [] => some []
   | (r, y) :: rest =>
-    match refIneqs s box rest with
+    match refIneqsIn s box conds rest with
     | none => none
     | some qs =>
       match r with
       | .fact i => (s.facts[i]?).map (fun q => (y, q) :: qs)
       | .coord i hi at_ opn =>
         if endHolds s box i hi at_ opn then some ((y, endIneq i hi at_ opn) :: qs) else none
+      | .cond j hi at_ opn =>
+        if condHolds conds j hi at_ opn then some ((y, endIneq j hi at_ opn) :: qs) else none
+
+/-- The inequalities of a refutation of the model in a box: no row above is in question, so an
+    end of one is not there. -/
+def refIneqs (s : Sieve) (box : Box) (refs : List (Ref × Rat)) : Option (List (Rat × LinIneq)) :=
+  refIneqsIn s box [] refs
 
 /-- **The linear model leaves the box no values**: the inequalities the refutation names are
     what it says they are, and `farkasOk` accepts their sum. -/
@@ -703,22 +806,24 @@ theorem endIneq_holds {x : Coord} {w at_ : Rat} {hi opn : Bool} {i : Nat} {v : L
             have := hup h rfl
             cases opn <;> simp only [ite_true, Bool.false_eq_true, ite_false] <;> grind)
 
-/-- Every inequality `refIneqs` builds holds at the values behind a point of the box that the
-    rule is asked about. -/
-theorem refIneqs_hold {s : Sieve} {box : Box} {p : Point} {v : List Rat}
+/-- Every inequality `refIneqsIn` builds holds at the values behind a point of the box that the
+    rule is asked about, where the row above whose entries are `conds` fires on those values. -/
+theorem refIneqsIn_hold {s : Sieve} {box : Box} {conds : List (Nat × List Coord)} {p : Point}
+    {v : List Rat}
     (hin : inBox box p = true)
     (hf : ∀ (i c : Nat) (x : Coord), p[i]? = some c → s.coordAt i c = some x →
       ∃ w, v[i]? = some w ∧ x.holds w)
-    (hfa : ∀ q ∈ s.facts, q.holds v) :
-    ∀ (refs : List (Ref × Rat)) (ps : List (Rat × LinIneq)), refIneqs s box refs = some ps →
-      ∀ q ∈ ps, q.2.holds v
-  | [], ps, h => by simp only [refIneqs, Option.some.injEq] at h; subst h; simp
+    (hfa : ∀ q ∈ s.facts, q.holds v)
+    (hc : ∀ q ∈ conds, ∃ w, v[q.1]? = some w ∧ ∃ x ∈ q.2, x.holds w) :
+    ∀ (refs : List (Ref × Rat)) (ps : List (Rat × LinIneq)),
+      refIneqsIn s box conds refs = some ps → ∀ q ∈ ps, q.2.holds v
+  | [], ps, h => by simp only [refIneqsIn, Option.some.injEq] at h; subst h; simp
   | (r, y) :: rest, ps, h => by
-    simp only [refIneqs] at h
+    simp only [refIneqsIn] at h
     split at h
     · exact absurd h (by simp)
     · rename_i qs hqs
-      have ih := refIneqs_hold hin hf hfa rest qs hqs
+      have ih := refIneqsIn_hold hin hf hfa hc rest qs hqs
       cases r with
       | fact i =>
         simp only [Option.map_eq_some_iff] at h
@@ -749,6 +854,37 @@ theorem refIneqs_hold {s : Sieve} {box : Box} {p : Point} {v : List Rat}
           · exact ih e he
         · simp only [hend, Bool.false_eq_true, ite_false] at h
           exact absurd h (by simp)
+      | cond j hi at_ opn =>
+        by_cases hend : condHolds conds j hi at_ opn = true
+        · simp only [hend, ite_true, Option.some.injEq] at h
+          subst h
+          intro e he
+          simp only [List.mem_cons] at he
+          rcases he with rfl | he
+          · unfold condHolds at hend
+            split at hend
+            · rename_i q hq
+              have hmem := List.mem_of_find?_eq_some hq
+              have hj : q.1 = j := by simpa using List.find?_some hq
+              obtain ⟨w, hw, x, hx, hxw⟩ := hc q hmem
+              have hall := List.all_eq_true.1 hend x hx
+              rw [hj] at hw
+              exact endIneq_holds hall hxw (getD_of_getElem? hw)
+            · exact absurd hend (by simp)
+          · exact ih e he
+        · simp only [hend, Bool.false_eq_true, ite_false] at h
+          exact absurd h (by simp)
+
+/-- Every inequality `refIneqs` builds holds at the values behind a point of the box that the
+    rule is asked about. -/
+theorem refIneqs_hold {s : Sieve} {box : Box} {p : Point} {v : List Rat}
+    (hin : inBox box p = true)
+    (hf : ∀ (i c : Nat) (x : Coord), p[i]? = some c → s.coordAt i c = some x →
+      ∃ w, v[i]? = some w ∧ x.holds w)
+    (hfa : ∀ q ∈ s.facts, q.holds v) :
+    ∀ (refs : List (Ref × Rat)) (ps : List (Rat × LinIneq)), refIneqs s box refs = some ps →
+      ∀ q ∈ ps, q.2.holds v :=
+  refIneqsIn_hold hin hf hfa (by simp)
 
 /-- **A box the linear model leaves no values in holds no point the rule is asked about.** -/
 theorem not_asked_of_farkas {s : Sieve} {box : Box} {refs : List (Ref × Rat)} {p : Point}
@@ -758,6 +894,108 @@ theorem not_asked_of_farkas {s : Sieve} {box : Box} {refs : List (Ref × Rat)} {
   split at h
   · rename_i ps hps
     exact farkas_sound h v (refIneqs_hold hin hf hfa refs ps hps)
+  · exact absurd h (by simp)
+
+/-! ## A box the rows of a table above leave no values in (rulec's §15.195)
+
+A column a table above decides holds a value only where a row of that table that writes it
+fires. The certificate names the column's axis on a box that fixes it; every row that writes
+the value comes with a reason it fires nowhere in the box — the box takes none of the words the
+row lets in on a column both tables cut, or a refutation that adds the model's facts, the ends of
+the box and the ends of the row's own box up to a contradiction. The rows themselves are read
+from the table above when the sieve is built, not from the leaf. -/
+
+/-- Why a row of a table above fires nowhere in a box. -/
+inductive RowOut where
+  /-- On this axis the box takes none of the words the row lets in. -/
+  | clash : Nat → RowOut
+  /-- The multipliers of a refutation that may name the row's own ends. -/
+  | farkas : List (Ref × Rat) → RowOut
+  deriving Repr, Inhabited
+
+def rowOutOk (s : Sieve) (box : Box) (r : AboveRow) : RowOut → Bool
+  | .clash j =>
+    match r.words.find? (fun q => q.1 == j), box[j]? with
+    | some q, some cs => cs.all (fun c => !q.2.contains c)
+    | _, _ => false
+  | .farkas refs =>
+    match refIneqsIn s box r.nums refs with
+    | some ps => farkasOk ps
+    | none => false
+
+/-- **The rows above leave the box no values**: the box fixes the axis to one coordinate, the
+    sieve has the rows that write its value, and each of them comes with a reason that holds. -/
+def aboveRuledOut (s : Sieve) (box : Box) (axis : Nat) (outs : List RowOut) : Bool :=
+  match box[axis]? with
+  | some [coord] =>
+    match s.above.find? (fun e => e.axis == axis && e.coord == coord) with
+    | some e => e.rows.length == outs.length && (e.rows.zip outs).all (fun ro => rowOutOk s box ro.1 ro.2)
+    | none => false
+  | _ => false
+
+theorem rowOut_sound {s : Sieve} {box : Box} {r : AboveRow} {o : RowOut} {p : Point} {v : List Rat}
+    (h : rowOutOk s box r o = true) (hin : inBox box p = true)
+    (hf : ∀ (i c : Nat) (x : Coord), p[i]? = some c → s.coordAt i c = some x →
+      ∃ w, v[i]? = some w ∧ x.holds w)
+    (hfa : ∀ q ∈ s.facts, q.holds v) (hr : r.fires p v) : False := by
+  cases o with
+  | clash j =>
+    simp only [rowOutOk] at h
+    cases hq : r.words.find? (fun q => q.1 == j) with
+    | none => rw [hq] at h; exact absurd h (by simp)
+    | some q =>
+      cases hbj : box[j]? with
+      | none => rw [hq, hbj] at h; exact absurd h (by simp)
+      | some cs =>
+        rw [hq, hbj] at h
+        have hmem := List.mem_of_find?_eq_some hq
+        have hj : q.1 = j := by simpa using List.find?_some hq
+        obtain ⟨c, hpc, hcok⟩ := hr.2 q hmem
+        obtain ⟨c', hpc', hc'⟩ := inBox_getElem hin hbj
+        rw [hj, hpc'] at hpc
+        obtain rfl : c' = c := Option.some.inj hpc
+        have hall := List.all_eq_true.1 h c' (List.contains_iff_mem.1 hc')
+        simp only [Bool.not_eq_true'] at hall
+        have hin' : q.2.contains c' = true := List.contains_iff_mem.2 hcok
+        rw [hall] at hin'
+        exact absurd hin' (by simp)
+  | farkas refs =>
+    simp only [rowOutOk] at h
+    cases hps : refIneqsIn s box r.nums refs with
+    | none => rw [hps] at h; exact absurd h (by simp)
+    | some ps =>
+      rw [hps] at h
+      exact farkas_sound h v (refIneqsIn_hold hin hf hfa hr.1 refs ps hps)
+
+/-- **A box the rows of a table above leave no values in holds no point the rule is asked
+    about.** -/
+theorem not_asked_of_aboveRuledOut {s : Sieve} {box : Box} {axis : Nat} {outs : List RowOut}
+    {p : Point} (h : aboveRuledOut s box axis outs = true) (hin : inBox box p = true) :
+    ¬ s.asked p := by
+  rintro ⟨v, hf, _, _, _, _, hfa, _, hab⟩
+  unfold aboveRuledOut at h
+  split at h
+  · rename_i coord hbx
+    split at h
+    · rename_i e he
+      simp only [Bool.and_eq_true, beq_iff_eq, List.all_eq_true] at h
+      obtain ⟨hlen, hall⟩ := h
+      have hmem : e ∈ s.above := List.mem_of_find?_eq_some he
+      have hpred := List.find?_some he
+      simp only [Bool.and_eq_true, beq_iff_eq] at hpred
+      obtain ⟨hax, hco⟩ := hpred
+      obtain ⟨c, hpc, hcc⟩ := inBox_getElem hin hbx
+      have hc : c = coord := by simpa using hcc
+      obtain ⟨r, hr, hfires⟩ := hab e hmem (by rw [hax, hco, ← hc]; exact hpc)
+      obtain ⟨i, hi, hri⟩ := List.mem_iff_getElem.1 hr
+      have hio : i < outs.length := by rw [← hlen]; exact hi
+      have hzl : i < (e.rows.zip outs).length := by simp [List.length_zip]; omega
+      have hz : (e.rows.zip outs)[i] ∈ e.rows.zip outs := List.getElem_mem hzl
+      have hok := hall _ hz
+      simp only [List.getElem_zip] at hok
+      rw [hri] at hok
+      exact rowOut_sound hok hin hf hfa hfires
+    · exact absurd h (by simp)
   · exact absurd h (by simp)
 
 /-! ## The boxes a refutation speaks about -/

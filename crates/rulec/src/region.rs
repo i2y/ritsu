@@ -312,6 +312,12 @@ pub struct TableRegion {
     /// If the axis is a derived value, its reachable interval and the names of the inputs it
     /// depends on.
     derived: Vec<Option<((Option<Rat>, Option<Rat>), Vec<String>)>>,
+    /// If the axis is a `define` that computes a number, the values it can come to: its
+    /// expression over the intervals of what it reads (`Checked::ranges`) — the inputs' ranges,
+    /// the derives' and the other defines' reach, the values a table above writes — which holds
+    /// every value it takes (§15.195). The completeness check and the third form of E102 read it
+    /// as they read a derive's; nothing else here does, so an overlap is decided as before.
+    define_reach: Vec<Option<Ival>>,
     /// Every `derive` in the rule, by name. A derived column is a **linear combination of
     /// inputs** (§5), so the interval it can actually reach is decidable by arithmetic on the
     /// intervals of those inputs — which is what the per-axis sieve does not look at.
@@ -1143,6 +1149,18 @@ impl TableRegion {
             .iter()
             .map(|n| c.derived_deps.get(n).map(|deps| (c.ranges.get(n).copied().unwrap_or((None, None)), deps.clone())))
             .collect();
+        let define_reach: Vec<Option<Ival>> = col_names
+            .iter()
+            .zip(&axes)
+            .map(|(n, a)| {
+                let numeric = matches!(a, Axis::Num { date: false, .. });
+                let a_define = f.items.iter().any(|it| matches!(it, Item::Define(d) if d.name.text == *n));
+                if !numeric || !a_define {
+                    return None;
+                }
+                c.ranges.get(n).copied().filter(|(lo, hi)| lo.is_some() && hi.is_some())
+            })
+            .collect();
 
 
         // The coordinates of the values an upstream table can produce. Only enum axes have them.
@@ -1209,6 +1227,7 @@ impl TableRegion {
             display_of: cell_of,
             is_define,
             derived,
+            define_reach,
             exprs,
             defines,
             spans,
@@ -1408,8 +1427,10 @@ impl TableRegion {
     /// silent pass.
     ///
     /// With `linear`, a point the sieve lets through is also held to the rule's linear model
-    /// (§15.141), and one the model rules out is no gap either. The cover's point-by-point
-    /// leaf walks without it, because that leaf is re-checked by walking the sieve alone.
+    /// (§15.141), and to what a table above writes a value under together with it (§15.195), and
+    /// one either rules out is no gap either. The cover's point-by-point leaf walks without them,
+    /// because that leaf is re-checked by walking the sieve alone. The reach of a `define` is part
+    /// of the sieve (§15.195).
     fn first_reachable(
         &self,
         path: &[usize],
@@ -1418,7 +1439,10 @@ impl TableRegion {
         budget: &mut i64,
         linear: bool,
     ) -> Option<Vec<usize>> {
-        if self.feasible(path) == Feasible::No || (linear && self.refutes_path(path)) {
+        if self.feasible(path) == Feasible::No
+            || self.defines_rule_out(path).is_some()
+            || (linear && (self.refutes_path(path) || self.above_rows_out(path, ups, chk).is_some()))
+        {
             return None;
         }
         let mut p = path.to_vec();
@@ -1438,7 +1462,11 @@ impl TableRegion {
             return None;
         }
         if p.len() == self.axes.len() {
-            if self.feasible(p) == Feasible::No || self.upstream_dead_at(p, ups, chk) || (linear && self.refutes_path(p)) {
+            if self.feasible(p) == Feasible::No
+                || self.defines_rule_out(p).is_some()
+                || self.upstream_dead_at(p, ups, chk)
+                || (linear && (self.refutes_path(p) || self.above_rows_out(p, ups, chk).is_some()))
+            {
                 return None;
             }
             return Some(p.clone());
@@ -1446,7 +1474,7 @@ impl TableRegion {
         let ai = p.len();
         for c in 0..self.axes[ai].len() {
             p.push(c);
-            let keep = self.feasible(p) != Feasible::No;
+            let keep = self.feasible(p) != Feasible::No && !self.define_out_of_reach(ai, p);
             let got = if keep { self.first_reachable_rec(p, ups, chk, budget, linear) } else { None };
             p.pop();
             if got.is_some() {
@@ -1544,7 +1572,11 @@ impl TableRegion {
     /// Witnesses are written in the table's column order. The search's convenience (narrow
     /// axes first) is not shown to the reader.
     fn witness_text(&self, path: &[usize]) -> String {
-        let vals = self.witness_values(path);
+        self.witness_text_with(path, self.witness_values(path))
+    }
+
+    /// The same, with the values behind the point already chosen.
+    fn witness_text_with(&self, path: &[usize], vals: Option<Vec<Option<Rat>>>) -> String {
         let mut items: Vec<(usize, String)> = (0..self.axes.len())
             .map(|ai| {
                 let v = vals.as_ref().and_then(|w| w.get(ai).copied().flatten());
@@ -1595,7 +1627,7 @@ impl TableRegion {
     /// shows and no row takes them, which is the input the generated code stops on. `None` for a
     /// gap on inputs alone, where the witness is the input already, and when nothing could be
     /// built or there were too many inputs to walk, which proves nothing either way.
-    fn input_behind(&self, path: &[usize], t: &Table, c: &Checked, f: &RuleFile) -> Option<BTreeMap<String, crate::eval::Val>> {
+    fn input_behind(&self, path: &[usize], vals: Option<Vec<Option<Rat>>>, t: &Table, c: &Checked, f: &RuleFile) -> Option<BTreeMap<String, crate::eval::Val>> {
         use crate::eval::Val;
         use crate::fourier::{Lin, Origin};
         // A column the rule computes is any column no caller sends: a derive, a define of any type
@@ -1603,7 +1635,7 @@ impl TableRegion {
         if self.col_names.iter().all(|n| f.inputs.iter().any(|i| i.name.text == *n)) {
             return None;
         }
-        let vals = self.witness_values(path)?;
+        let vals = vals?;
         let coord = |ai: usize| path.get(ai).copied().unwrap_or(0);
         let at_axis = |ai: usize| self.axes[ai].witness_num(coord(ai), vals.get(ai).copied().flatten());
         let as_val = |name: &str, v: Rat| -> Val {
@@ -1684,8 +1716,7 @@ impl TableRegion {
     /// A row that matches the witness, written out so it can be pasted into the table. The
     /// output cells are copied from the table's first row: **the tool does not know the
     /// amount**, only the shape, and the notes say so. This is E101's `fix.text`.
-    fn row_text(&self, path: &[usize], t: &Table) -> Option<String> {
-        let vals = self.witness_values(path);
+    fn row_text(&self, path: &[usize], vals: Option<Vec<Option<Rat>>>, t: &Table) -> Option<String> {
         let mut cells: Vec<(usize, String)> = Vec::new();
         for ai in 0..self.axes.len() {
             let ci = path.get(ai).copied().unwrap_or(0);
@@ -2409,11 +2440,13 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
     }
 
     // --- Unreachable rows
-    // The third form (§15.189) reads the reach of the derived columns. Every axis has a
+    // The third form (§15.189) reads the reach of the derived and `define` columns, and what a
+    // table above writes a value under together with them (§15.195). Every axis has a
     // coordinate for each value its column takes since the axes are cut on the step the
-    // values take (§15.190), so it reads every table that has such a column. Its walk has a
-    // budget of its own for the whole table; past it, a row passes as it did before.
-    let reach = Some(reg.reach_of(f, c)).filter(|r| r.axes.iter().any(|x| *x));
+    // values take (§15.190), so it reads every table that has such a column or a column a
+    // table above decides. Its walk has a budget of its own for the whole table; past it, a row
+    // passes as it did before.
+    let reach = Some(reg.reach_of()).filter(|r| r.axes.iter().any(|x| *x) || ups.iter().any(|u| reg.above_can(u)));
     let mut reach_left = budget;
     for i in 0..t.rows.len() {
         let up_dead = upstream_dead(&t.rows[i], &ups, c, t);
@@ -2486,8 +2519,8 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                 .rowref(tn.clone(), t.rows[i].index)
                 .fix_kind(crate::diag::FixKind::RemoveRow)
                 .mark(t.rows[i].span.clone(), tr!("{}: ここに到達する入力はありません", "{}: no input reaches here", rn(i)));
-            if let (Some(w), Some(rs)) = (&beyond, &reach) {
-                out.push(third_form(d, w, &reg, rs, c, f, by_position, &winner_tables));
+            if let Some(w) = &beyond {
+                out.push(third_form(d, w, &reg, c, f, by_position, &winner_tables));
                 continue;
             }
             out.push(
@@ -2553,15 +2586,18 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
     if let Some(hole) = hole {
         out.push(
             {
+                // The values behind the gap, each computed column's inside what it comes to
+                // (§15.195): the example is one that occurs.
+                let vals = reg.reach_values(&hole);
                 let d = Diag::error("E101", tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"))
                     .at(at(head_span.line, 0))
                     .table(anchor.clone())
-                    .wit(pairs_to_witness(reg.witness_pairs(&hole)))
+                    .wit(pairs_to_witness(reg.witness_pairs_with(&hole, vals.clone())))
                     .mark(head_span.clone(), tr!("起こりうる入力を網羅していません", "the input space is not fully covered"))
-                    .note(tr!("当てはまらない例: {}", "An input that matches no row: {}", reg.witness_text(&hole)))
+                    .note(tr!("当てはまらない例: {}", "An input that matches no row: {}", reg.witness_text_with(&hole, vals.clone())))
                     // A gap on a computed column names values no caller sends; the input behind
                     // them is what the generated code stops on (§15.190).
-                    .note(match reg.input_behind(&hole, t, c, f) {
+                    .note(match reg.input_behind(&hole, vals.clone(), t, c, f) {
                         Some(a) => {
                             let b = a.iter().map(|(n, v)| format!("{n} = {}", crate::vectors::show_named(c, n, v))).collect::<Vec<_>>().join(", ");
                             tr!("この例を作る入力: {b}", "An input producing this example: {b}")
@@ -2583,7 +2619,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                 // a shape that parses. **The amount has to come from the written rule**, which
                 // the note says and `fix.text` — being prose-free and language independent —
                 // cannot. A merged set has no one table the row belongs to, so no `fix.text`.
-                match reg.row_text(&hole, t) {
+                match reg.row_text(&hole, vals.clone(), t) {
                     Some(row) if !merged => d
                         .note(tr!(
                             "足す行の形: `{row}`。出力の値は表の一行目からコピーした仮の値で、正しい値とは限りません。規約か Excel か、いま動いている実装か、どれが出どころかを決めて、そこから書いてください。この一行で埋まるのは、いま出た入力の穴だけです。ほかにも抜けがあれば、次の入力が出ます。",
@@ -2632,28 +2668,42 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
     TableCheck { diags: out, w114, quiet, shadow, nodes, overlaps, edge_pairs, dead: dead_rows }
 }
 
-/// The third form of E102 (§15.189): the derived columns whose reach left the row out, each with
-/// the values it can come to — marked on its `derive` line and said in the note, over the ranges
-/// of the inputs and the `constraint` lines that narrow it — and what took the rest of the row,
-/// the rows that take precedence first.
+/// The third form of E102 (§15.189, §15.195): the derived and `define` columns whose reach left the
+/// row out, each with the values it can come to — marked on its line and said in the note, over
+/// the ranges of the inputs and the `constraint` lines that narrow it — what a table above writes
+/// a value under, where that left the rest out together with a derived or `define` value, and what
+/// took the rest of the row, the rows that take precedence first.
 #[allow(clippy::too_many_arguments)]
-fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, rs: &Reach, c: &Checked, f: &RuleFile, by_position: bool, winner_tables: &[String]) -> Diag {
+fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, c: &Checked, f: &RuleFile, by_position: bool, winner_tables: &[String]) -> Diag {
     let ja = crate::i18n::ja();
-    // The derives that took part, in the order the rule declares them, and the `constraint`
-    // lines that narrow what they come to.
-    let mut names: Vec<(&DerivedDecl, Ival)> = Vec::new();
+    // The derived and `define` values that took part, in the order the rule declares them, each
+    // with its line, whether it is a derive (a `define` has no `range` to widen), and the
+    // `constraint` lines that narrow what it comes to.
+    struct Took<'a> {
+        name: &'a str,
+        span: &'a Span,
+        derive: bool,
+        iv: Ival,
+    }
+    let mut names: Vec<Took> = Vec::new();
     let mut ks: BTreeSet<usize> = BTreeSet::new();
+    let by_reach = |n: &str| w.reach.iter().any(|&ai| reg.col_names[ai] == n) || w.derives.contains(n);
     for it in &f.items {
-        let Item::Derived(dv) = it else { continue };
-        let n = &dv.name.text;
-        if !(w.reach.iter().any(|&ai| reg.col_names[ai] == *n) || w.derives.contains(n)) {
+        let (n, span, derive) = match it {
+            Item::Derived(dv) => (&dv.name.text, dv.expr.span(), true),
+            Item::Define(dv) => (&dv.name.text, dv.expr.span(), false),
+            _ => continue,
+        };
+        if !(by_reach(n) || w.above_by.contains(n)) {
             continue;
         }
-        let Some((iv, by)) = reg.reach_interval(n, rs, c) else { continue };
-        ks.extend(by);
-        names.push((dv, iv));
+        let Some((iv, by)) = reg.reach_interval(n, c) else { continue };
+        if by_reach(n) {
+            ks.extend(by);
+        }
+        names.push(Took { name: n, span, derive, iv });
     }
-    // A derive the form reads always has an interval; were none to be had, the row is still
+    // A value the form reads always has an interval; were none to be had, the row is still
     // reached by no input, and is said so plainly.
     if names.is_empty() {
         return d
@@ -2672,7 +2722,7 @@ fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, rs: &Reach, c: &Checke
         }
         s.join(" ")
     };
-    let ty_of = |dv: &DerivedDecl| c.ty_of(&dv.name.text).unwrap_or(Ty::Unknown);
+    let ty_of = |n: &str| c.ty_of(n).unwrap_or(Ty::Unknown);
     // A list of names, values or lines: `a`, `a` と `b`, `a`、`b`、`c` — and in English `a`,
     // `a` and `b`, `a`, `b` and `c`.
     let list = |xs: &[String]| -> String {
@@ -2684,7 +2734,8 @@ fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, rs: &Reach, c: &Checke
             _ => format!("{} and {}", xs[..xs.len() - 1].join(", "), xs[xs.len() - 1]),
         }
     };
-    // Where the reach comes from: the inputs' ranges, and the `constraint` lines that narrow it.
+    // Where the reach comes from: the inputs' ranges, the values a table above writes where an
+    // expression reads one, and the `constraint` lines that narrow it.
     let line_of = |k: &usize| -> Option<String> {
         let con = f.constraints.get(*k)?;
         let op = match con.op {
@@ -2697,73 +2748,92 @@ fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, rs: &Reach, c: &Checke
     };
     let lines: Vec<String> = ks.iter().filter_map(line_of).collect();
     let other_lines: Vec<String> = others.iter().filter_map(line_of).collect();
-    let quoted: Vec<String> = names.iter().map(|(dv, _)| format!("`{}`", dv.name.text)).collect();
-    let one = names.len() == 1;
-    // What the derives come to.
-    let reach = if ja {
-        let ivs: Vec<String> = names.iter().map(|(dv, iv)| ends(*iv, &ty_of(dv))).collect();
-        let basis = if lines.is_empty() { "入力の範囲から".to_string() } else { format!("入力の範囲と、{} から", list(&lines)) };
-        if one {
-            format!("{} が取りうる値は、{basis}計算すると {} です。", quoted[0], ivs[0])
-        } else {
-            format!("{} が取りうる値は、{basis}計算すると、それぞれ {} です。", list(&quoted), list(&ivs))
-        }
-    } else {
-        let mut basis = vec!["the ranges of the inputs".to_string()];
-        basis.extend(lines.iter().cloned());
-        let basis = list(&basis);
-        let mut parts: Vec<String> = Vec::new();
-        for (k, (dv, iv)) in names.iter().enumerate() {
-            parts.push(if k == 0 { format!("`{}` can only come to {}", dv.name.text, ends(*iv, &ty_of(dv))) } else { format!("`{}` to {}", dv.name.text, ends(*iv, &ty_of(dv))) });
-        }
-        format!("Over {basis}, {}.", if parts.len() > 1 { format!("{}, and {}", parts[..parts.len() - 1].join(", "), parts[parts.len() - 1]) } else { parts.join("") })
-    };
-    // What becomes of the row's values among them.
-    let rest = if w.covered {
-        let who_ja = if by_position {
-            "上にある行".to_string()
-        } else if !winner_tables.is_empty() {
-            format!("優先する {} の行", winner_tables.join("、"))
-        } else {
-            "優先する行".to_string()
-        };
-        let who_en = if by_position {
-            "the earlier rows".to_string()
-        } else if !winner_tables.is_empty() {
-            format!("the rows of {}, which take precedence,", winner_tables.join(", "))
-        } else {
-            "the rows that take precedence".to_string()
-        };
-        let lead = if by_position { tr!("`{} {}` なので、", "Because of `{} {}`, ", crate::kw::POLICY, crate::kw::FIRST) } else { String::new() };
-        let who_en = if by_position { who_en } else { capital(&who_en) };
-        if one {
-            tr!(
-                "{lead}その中でこの行の条件に当てはまる値は、{who_ja}がすべて先に取ります。",
-                "{lead}{who_en} take first every one of those values that meets this row's conditions."
-            )
-        } else {
-            tr!(
-                "{lead}その中でこの行の条件をすべて満たす値の組は、{who_ja}がすべて先に取ります。",
-                "{lead}{who_en} take first every combination of those values that meets all of this row's conditions."
-            )
-        }
-    } else if one {
-        tr!("この行の条件に当てはまる値は、その中にありません。", "None of those values meets this row's conditions.")
-    } else {
-        tr!("この行の条件をすべて満たす値の組は、その中にありません。", "No combination of those values meets all of this row's conditions.")
-    };
+    let reached: Vec<&Took> = names.iter().filter(|t| by_reach(t.name)).collect();
+    let quoted: Vec<String> = reached.iter().map(|t| format!("`{}`", t.name)).collect();
+    let one = reached.len() == 1;
+    let from_above = reached.iter().any(|t| reads_a_table(t.name, f, c, 0));
     let mut d = d;
-    // Each derive's line, with what it can come to. A derive a rule applied is written in the
-    // other file, so its line is not marked here.
-    for (dv, iv) in &names {
-        if dv.name.text.contains(':') {
+    // Each value's line, with what it can come to. One a rule applied is written in the other
+    // file, so its line is not marked here.
+    for t in &names {
+        if t.name.contains(':') {
             continue;
         }
-        let iv = ends(*iv, &ty_of(dv));
-        d = d.mark(dv.expr.span().clone(), tr!("実際に取りうる値は {iv} です", "the reachable interval is {iv}"));
+        let iv = ends(t.iv, &ty_of(t.name));
+        d = d.mark(t.span.clone(), tr!("実際に取りうる値は {iv} です", "the reachable interval is {iv}"));
     }
-    d = d.note(format!("{reach}{}{rest}", if ja { "" } else { " " }));
-    // What else left a point out: a `constraint` that does not bear on the derives, the tables
+    // What becomes of the row's values among them: the rows that take precedence take them, or
+    // none of them meets the row. Where a table above leaves the rest out, that is said below.
+    let who_ja = if by_position {
+        "上にある行".to_string()
+    } else if !winner_tables.is_empty() {
+        format!("優先する {} の行", winner_tables.join("、"))
+    } else {
+        "優先する行".to_string()
+    };
+    let who_en = if by_position {
+        "the earlier rows".to_string()
+    } else if !winner_tables.is_empty() {
+        format!("the rows of {}, which take precedence,", winner_tables.join(", "))
+    } else {
+        "the rows that take precedence".to_string()
+    };
+    let lead = if by_position { tr!("`{} {}` なので、", "Because of `{} {}`, ", crate::kw::POLICY, crate::kw::FIRST) } else { String::new() };
+    let who_en_cap = if by_position { who_en.clone() } else { capital(&who_en) };
+    if !reached.is_empty() {
+        // What the values come to.
+        let reach = if ja {
+            let ivs: Vec<String> = reached.iter().map(|t| ends(t.iv, &ty_of(t.name))).collect();
+            let inputs = if from_above { "入力の範囲と、上流の表が出す値" } else { "入力の範囲" };
+            let basis = if lines.is_empty() { format!("{inputs}から") } else { format!("{inputs}と、{} から", list(&lines)) };
+            if one {
+                format!("{} が取りうる値は、{basis}計算すると {} です。", quoted[0], ivs[0])
+            } else {
+                format!("{} が取りうる値は、{basis}計算すると、それぞれ {} です。", list(&quoted), list(&ivs))
+            }
+        } else {
+            let mut basis = vec![if from_above { "the ranges of the inputs and the values the tables above produce".to_string() } else { "the ranges of the inputs".to_string() }];
+            basis.extend(lines.iter().cloned());
+            let basis = list(&basis);
+            let mut parts: Vec<String> = Vec::new();
+            for (k, t) in reached.iter().enumerate() {
+                parts.push(if k == 0 { format!("`{}` can only come to {}", t.name, ends(t.iv, &ty_of(t.name))) } else { format!("`{}` to {}", t.name, ends(t.iv, &ty_of(t.name))) });
+            }
+            format!("Over {basis}, {}.", if parts.len() > 1 { format!("{}, and {}", parts[..parts.len() - 1].join(", "), parts[parts.len() - 1]) } else { parts.join("") })
+        };
+        let rest = if !w.above.is_empty() {
+            String::new()
+        } else if w.covered {
+            if one {
+                tr!(
+                    "{lead}その中でこの行の条件に当てはまる値は、{who_ja}がすべて先に取ります。",
+                    "{lead}{who_en_cap} take first every one of those values that meets this row's conditions."
+                )
+            } else {
+                tr!(
+                    "{lead}その中でこの行の条件をすべて満たす値の組は、{who_ja}がすべて先に取ります。",
+                    "{lead}{who_en_cap} take first every combination of those values that meets all of this row's conditions."
+                )
+            }
+        } else if one {
+            tr!("この行の条件に当てはまる値は、その中にありません。", "None of those values meets this row's conditions.")
+        } else {
+            tr!("この行の条件をすべて満たす値の組は、その中にありません。", "No combination of those values meets all of this row's conditions.")
+        };
+        d = d.note(if rest.is_empty() { reach } else { format!("{reach}{}{rest}", if ja { "" } else { " " }) });
+    }
+    // What a table above writes a value under (§15.195): the rows that write it, and what the
+    // derived and `define` values come to where they fire.
+    for a in &w.above {
+        d = d.note(above_note(a, reg, c, f, &ends, &list));
+    }
+    if !w.above.is_empty() && w.covered {
+        d = d.note(tr!(
+            "{lead}この行の残りの値は、{who_ja}が先に取ります。",
+            "{lead}{who_en_cap} take the rest of this row's values first."
+        ));
+    }
+    // What else left a point out: a `constraint` that does not bear on the values, the tables
     // above, koyomi's days.
     if !other_lines.is_empty() {
         let ls = list(&other_lines);
@@ -2778,11 +2848,137 @@ fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, rs: &Reach, c: &Checke
         let from = c.day_sets.get(col).and_then(|x| x.from.as_ref()).map(|fr| format!("koyomi \"{}\" date {}", fr.file, fr.date)).unwrap_or_default();
         d = d.note(tr!("{col} は {from} がとる日だけです。", "{col} takes only the days {from} comes to."));
     }
-    let who = list(&quoted);
-    d.note(tr!(
-        "ヒント: 条件を {who} の取りうる値の中に書き直すか、この行を削除してください。導出の `range` を広げても、取りうる値は変わりません。",
-        "hint: rewrite the condition within the values {who} can come to, or delete this row. Widening a derive's `range` does not change the values it can come to."
-    ))
+    let all: Vec<String> = names.iter().map(|t| format!("`{}`", t.name)).collect();
+    let who = list(&all);
+    if names.iter().any(|t| t.derive) {
+        d.note(tr!(
+            "ヒント: 条件を {who} の取りうる値の中に書き直すか、この行を削除してください。導出の `range` を広げても、取りうる値は変わりません。",
+            "hint: rewrite the condition within the values {who} can come to, or delete this row. Widening a derive's `range` does not change the values it can come to."
+        ))
+    } else {
+        d.note(tr!(
+            "ヒント: 条件を {who} の取りうる値の中に書き直すか、この行を削除してください。",
+            "hint: rewrite the condition within the values {who} can come to, or delete this row."
+        ))
+    }
+}
+
+/// Whether a computed value reads, through the derives and `define`s it is computed from, a value a
+/// table writes.
+fn reads_a_table(name: &str, f: &RuleFile, c: &Checked, depth: usize) -> bool {
+    if depth > 16 {
+        return false;
+    }
+    let expr = f.items.iter().find_map(|it| match it {
+        Item::Derived(d) if d.name.text == name => Some(&d.expr),
+        Item::Define(d) if d.name.text == name => Some(&d.expr),
+        _ => None,
+    });
+    let Some(e) = expr else { return false };
+    let mut ns = Vec::new();
+    names_in(e, &mut ns);
+    ns.iter().any(|n| matches!(c.syms.get(n).map(|s| &s.kind), Some(crate::types::SymKind::TableOut)) || reads_a_table(n, f, c, depth + 1))
+}
+
+/// The note of E102's third form for a value decided above (§15.195): which rows of the table
+/// above write it, and — where one row does — what the derived and `define` values come to while
+/// it fires.
+fn above_note(a: &AboveRows, reg: &TableRegion, c: &Checked, f: &RuleFile, ends: &dyn Fn(Ival, &Ty) -> String, list: &dyn Fn(&[String]) -> String) -> String {
+    let ja = crate::i18n::ja();
+    let Some(set) = c.sets.iter().find(|s| s.table.outputs.iter().any(|o| o.name.text == a.column)) else {
+        return tr!("上流の表が同時には出さない値の組み合わせも来ません。", "The combinations of values the tables above never produce together never come either.");
+    };
+    let t = &set.table;
+    let table = |ri: usize| t.rows.get(ri).and_then(|r| r.origin.clone()).unwrap_or_else(|| a.table.clone());
+    let index = |ri: usize| t.rows.get(ri).map(|r| r.index).unwrap_or(ri + 1);
+    let label = |ri: usize| -> String { tr!("表 {t} の 行{n}", "row {n} of table {t}", t = table(ri), n = index(ri)) };
+    let conds = |ri: usize| -> String {
+        let Some(r) = t.rows.get(ri) else { return String::new() };
+        let parts: Vec<String> = t
+            .inputs
+            .iter()
+            .zip(&r.cells)
+            .filter(|(_, cell)| !matches!(cell, Cell::DontCare))
+            .map(|((col, _), cell)| format!("{col} {}", cell_text(cell)))
+            .collect();
+        parts.join(if ja { " かつ " } else { " and " })
+    };
+    let col = &a.column;
+    let val = &a.value;
+    if let [(ri, RowOut::Farkas(_))] = a.rows.as_slice() {
+        // One row writes the value: what the values come to while it fires.
+        let up = TableRegion::build(t, c, f);
+        let mut said: Vec<(String, String)> = Vec::new();
+        for it in &f.items {
+            let n = match it {
+                Item::Derived(d) => &d.name.text,
+                Item::Define(d) => &d.name.text,
+                _ => continue,
+            };
+            if !reg.col_names.iter().any(|m| m == n) || reg.reach_at(reg.col_names.iter().position(|m| m == n).unwrap_or(0)).is_none() {
+                continue;
+            }
+            let Some(iv) = up.as_ref().and_then(|u| reg.reach_under(n, u, *ri, c)) else { continue };
+            said.push((format!("`{n}`"), ends(iv, &c.ty_of(n).unwrap_or(Ty::Unknown))));
+        }
+        let cs = conds(*ri);
+        let at = if cs.is_empty() { label(*ri) } else { tr!("{}（{cs}）", "{} ({cs})", label(*ri)) };
+        if said.is_empty() {
+            return tr!(
+                "`{col}` が {val} になるのは、{at}が当たるときだけです。そのとき、この行の条件をすべて満たす値の組はありません。",
+                "`{col}` is {val} only where {at} fires, and there no combination of values meets all of this row's conditions."
+            );
+        }
+        let who: Vec<String> = said.iter().map(|(n, _)| n.clone()).collect();
+        let ivs: Vec<String> = said.iter().map(|(_, v)| v.clone()).collect();
+        return if said.len() == 1 {
+            tr!(
+                "`{col}` が {val} になるのは、{at}が当たるときだけです。そのとき {} が取りうる値は {} で、この行の条件に当てはまる値はその中にありません。",
+                "`{col}` is {val} only where {at} fires. There {} can only come to {}, and none of those values meets this row's conditions.",
+                who[0],
+                ivs[0]
+            )
+        } else {
+            tr!(
+                "`{col}` が {val} になるのは、{at}が当たるときだけです。そのとき {} が取りうる値は、それぞれ {} で、この行の条件をすべて満たす値の組はその中にありません。",
+                "`{col}` is {val} only where {at} fires. There {} can only come to {} respectively, and no combination of those values meets all of this row's conditions.",
+                list(&who),
+                list(&ivs)
+            )
+        };
+    }
+    // Several rows write the value: grouped by the table each is written in, `表 k の 行1 か 行3`.
+    let mut groups: Vec<(String, Vec<usize>)> = Vec::new();
+    for (ri, _) in &a.rows {
+        match groups.iter_mut().find(|(tn, _)| *tn == table(*ri)) {
+            Some((_, ns)) => ns.push(index(*ri)),
+            None => groups.push((table(*ri), vec![index(*ri)])),
+        }
+    }
+    let two = a.rows.len() == 2;
+    let either = |ns: &[usize]| -> String {
+        let ws: Vec<String> = ns.iter().map(|n| tr!("行{n}", "{n}")).collect();
+        match ws.as_slice() {
+            [w] => tr!("{w}", "row {w}"),
+            [a, b] => tr!("{a} か {b}", "row {a} or row {b}"),
+            _ => tr!("{} のどれか", "one of rows {}", if ja { ws.join("、") } else { format!("{} and {}", ws[..ws.len() - 1].join(", "), ws[ws.len() - 1]) }),
+        }
+    };
+    let rows: Vec<String> = groups.iter().map(|(tn, ns)| tr!("表 {tn} の {}", "{} of table {tn}", either(ns))).collect();
+    let rows = if ja { rows.join(" か ") } else { rows.join(" or ") };
+    // A row's label is followed by a space, as the messages write `行1 と 行2`; a word is not.
+    let rows = if ja && !rows.ends_with("どれか") { format!("{rows} ") } else { rows };
+    if two {
+        tr!(
+            "`{col}` が {val} になるのは、{rows}が当たるときだけです。どちらが当たるときも、この行の条件をすべて満たす値の組はありません。",
+            "`{col}` is {val} only where {rows} fires, and where either does, no combination of values meets all of this row's conditions."
+        )
+    } else {
+        tr!(
+            "`{col}` が {val} になるのは、{rows}が当たるときだけです。どれが当たるときも、この行の条件をすべて満たす値の組はありません。",
+            "`{col}` is {val} only where {rows} fires, and wherever one does, no combination of values meets all of this row's conditions."
+        )
+    }
 }
 
 /// The first letter in upper case, for a phrase that starts a sentence.
@@ -2797,12 +2993,13 @@ fn capital(s: &str) -> String {
 /// Which rows of a definition set some input may reach (`outputs_over`, ritsu's port), on the
 /// merged table: a row is live when some point of its region that no row taking precedence over
 /// it covers is left standing by the sieve — koyomi's days, the `constraint`s, a derived value's
-/// reach, the tables above, and the rule's linear model — and the reach of every numeric column,
-/// a `define`'s and a table output's included, with the open ends of a coordinate left out. E102
-/// reads the same sieve only where a derive that is a linear form of the inputs takes part, on
-/// axes cut finely enough for its values (§15.189), so a row it lets through can still be dead
-/// here: one that takes only values of a `define` the define never reaches, or one only a
-/// `constraint` rules out.
+/// reach, the tables above (with what a table above writes a value under, together with the
+/// linear model, §15.195), and the rule's linear model — and the reach of every numeric column,
+/// a `define`'s and a table output's included, with the open ends of a coordinate left out, and
+/// the truth value a boolean `define` of one comparison always takes over the held ranges. E102
+/// reads the same sieve only where a derived or `define` column takes part (§15.189, §15.195),
+/// so a row it lets through can still be dead here: one only a `constraint` rules out, or one
+/// that asks a boolean `define` for the truth value it never takes.
 ///
 /// A dead row is never reached. A live row may still be out of reach where the sieve cannot
 /// tell (two derived values over the same inputs), so a caller that needs an exact answer finds
@@ -2841,7 +3038,14 @@ impl TableRegion {
             return None;
         }
         if path.len() == self.axes.len() {
-            if !rows.is_empty() || self.feasible(path) == Feasible::No || self.beyond_reach(path, chk) || self.upstream_dead_at(path, ups, chk) || self.refutes_path(path) {
+            if !rows.is_empty()
+                || self.feasible(path) == Feasible::No
+                || self.beyond_reach(path, chk)
+                || self.upstream_dead_at(path, ups, chk)
+                || self.refutes_path(path)
+                || self.above_rows_out(path, ups, chk).is_some()
+                || self.truth_rules_out(path, chk)
+            {
                 return None;
             }
             return Some(path.clone());
@@ -2888,38 +3092,12 @@ impl TableRegion {
     }
 }
 
-/// The names whose values the third form of E102 reads a reach from (§15.189): the inputs (the
-/// generated code refuses a value outside the range at its door), what a walk counts or sums
-/// (refused the same way), and every `derive` that is a linear form of such names — sums,
-/// differences and constant multiples, which interval arithmetic bounds exactly. A `define`,
-/// a table's output, and a derive that reads one of them or multiplies two names are left out:
-/// their reach is computed too, but the third form does not stop a rule on it.
-fn reach_names(f: &RuleFile, c: &Checked) -> BTreeSet<String> {
-    let mut ok: BTreeSet<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
-    for it in &f.items {
-        match it {
-            Item::Agg(d) => {
-                ok.insert(d.name.text.clone());
-            }
-            Item::Derived(d) => {
-                let Some(ty) = c.ty_of(&d.name.text) else { continue };
-                if crate::fourier::linear(&d.expr, &ty, c).is_some_and(|l| l.terms.keys().all(|n| ok.contains(n))) {
-                    ok.insert(d.name.text.clone());
-                }
-            }
-            _ => {}
-        }
-    }
-    ok
-}
-
-/// What the third form of E102 may read a row's reach from (§15.189).
+/// What the third form of E102 may read a row's reach from (§15.189, §15.195).
 pub(crate) struct Reach {
-    /// Axis → whether it is a derived column whose reach the third form reads (`reach_names`).
+    /// Axis → whether it is a derived or `define` column with a reach: its expression over the
+    /// intervals of what it reads, which holds every value it takes — a product, a rounding, a
+    /// `min` or a value a table above writes as much as a sum.
     axes: Vec<bool>,
-    /// The table's linear model with the facts about every other name left out. It is a
-    /// relaxation of the model E101 reads, so a box it rules out, the whole model rules out too.
-    model: Vec<crate::fourier::Ground>,
 }
 
 /// Why a row the first two forms of E102 let through is reached by no input all the same
@@ -2929,52 +3107,78 @@ pub(crate) struct Reach {
 pub(crate) struct OutOfReach {
     /// Some points are taken by the rows that take precedence.
     covered: bool,
-    /// The axes of derived columns whose reach leaves a point out.
+    /// The axes of derived and `define` columns whose reach leaves a point out.
     reach: BTreeSet<usize>,
     /// The `constraint` lines (by index) that leave a point out, read one at a time.
     constraints: BTreeSet<usize>,
     /// The axes of koyomi's days that leave a point out.
     days: BTreeSet<usize>,
-    /// The tables above leave a point out.
+    /// The tables above leave a point out, with no derived or `define` value taking part.
     upstream: bool,
-    /// The derives whose equations, and the `constraint` lines, a refutation of the linear
-    /// model used.
+    /// The derives and `define`s whose equations or reach a refutation used, and the `constraint`
+    /// lines it used.
     derives: BTreeSet<String>,
     model_constraints: BTreeSet<usize>,
+    /// The values decided above whose rows, together with a derived or `define` value, leave a
+    /// point out (§15.195), the first time each is met, and the derived and `define` values
+    /// that took part.
+    above: Vec<AboveRows>,
+    above_by: BTreeSet<String>,
 }
 
 impl OutOfReach {
-    /// Whether a derived value took part, which is what the third form is about. A row left out
-    /// only by `constraint` lines, the tables above or koyomi's days is not reported by it.
+    /// Whether a derived or `define` value took part, which is what the third form is about. A
+    /// row left out only by `constraint` lines, the tables above or koyomi's days is not reported
+    /// by it.
     fn by_a_derive(&self) -> bool {
-        !self.reach.is_empty() || !self.derives.is_empty()
+        !self.reach.is_empty() || !self.derives.is_empty() || !self.above_by.is_empty()
     }
 }
 
 impl TableRegion {
-    /// What the third form of E102 may read here (§15.189).
-    fn reach_of(&self, f: &RuleFile, c: &Checked) -> Reach {
-        use crate::fourier::{Ground, Origin};
-        let names = reach_names(f, c);
-        let axes = (0..self.axes.len()).map(|ai| self.derived[ai].is_some() && names.contains(&self.col_names[ai])).collect();
-        let keep = |o: &Origin| match o {
-            Origin::Derive { name, .. } | Origin::Range { name, .. } => names.contains(name),
-            Origin::Constraint(_) => true,
-            _ => false,
-        };
-        let model = self
-            .model
-            .iter()
-            .map(|g| Ground { vars: g.vars.clone(), want: g.want.clone(), sys: g.sys.iter().filter(|q| keep(&q.origin)).cloned().collect() })
-            .collect();
-        Reach { axes, model }
+    /// What the third form of E102 may read here (§15.189, §15.195).
+    fn reach_of(&self) -> Reach {
+        Reach { axes: (0..self.axes.len()).map(|ai| self.reach_at(ai).is_some()).collect() }
+    }
+
+    /// Whether the name is computed by a `derive` or by a `define` of a number.
+    fn computed(&self, name: &str) -> bool {
+        self.exprs.contains_key(name) || (self.defines.contains_key(name) && !self.a_truth_value(name))
+    }
+
+    /// Whether the name is a column of truth values here, as a boolean `define` is.
+    fn a_truth_value(&self, name: &str) -> bool {
+        self.col_names.iter().zip(&self.axes).any(|(n, a)| n == name && matches!(a, Axis::Bool))
+    }
+
+    /// The derived and `define` values a refutation leans on — an equation, a reach, the end of a
+    /// coordinate on such a column — written into `by`, and the `constraint` lines into `ks`.
+    fn leaned_on(&self, r: &crate::fourier::Refutation, by: &mut BTreeSet<String>, ks: &mut BTreeSet<usize>) {
+        use crate::fourier::Origin;
+        for (q, _) in r.used() {
+            match &q.origin {
+                Origin::Derive { name, .. } => {
+                    by.insert(name.clone());
+                }
+                Origin::Range { name, .. } if self.computed(name) => {
+                    by.insert(name.clone());
+                }
+                Origin::Coord { axis, .. } if self.reach_at(*axis).is_some() => {
+                    by.insert(self.col_names[*axis].clone());
+                }
+                Origin::Constraint(k) => {
+                    ks.insert(*k);
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Whether row `target` is reached by no input although the first two forms of E102 let it
     /// through (§15.189): every point of its region is taken by `rows` (the rows that take
-    /// precedence over it and meet it) or left out by the sieve, read only from what
-    /// [`Reach`] holds — koyomi's days, the `constraint` lines, the reach of the derived columns,
-    /// the tables above, and the linear model where the whole model agrees. Each test is one
+    /// precedence over it and meet it) or left out by the sieve — koyomi's days, the `constraint`
+    /// lines, the reach of the derived and `define` columns, the tables above, the linear model,
+    /// and what a table above writes a value under together with it (§15.195). Each test is one
     /// E101 makes as well, so a box this leaves out is a box E101 never asks a row for: deleting
     /// the row leaves no gap behind.
     ///
@@ -3035,13 +3239,18 @@ impl TableRegion {
 
     /// Whether the sieve of the third form leaves out every point below `path`, written into
     /// `why`. On a prefix only the tests that read the axes one at a time are asked; at a whole
-    /// point (`leaf`), the tables above and the linear model too. The reach of a derived column
-    /// is asked first, since it is what the form is about, and read as `feasible` reads it.
+    /// point (`leaf`), the tables above, the linear model and the rows above together with it
+    /// too. The reach of a derived or `define` column is asked first, since it is what the form
+    /// is about, and read as `feasible` reads a derive's.
     fn left_out(&self, path: &[usize], ups: &[Upstream], chk: &Checked, rs: &Reach, leaf: bool, why: &mut OutOfReach) -> bool {
         use std::cmp::Ordering::{Greater, Less};
         for (ai, &ci) in path.iter().enumerate() {
             if !rs.axes[ai] {
                 continue;
+            }
+            if self.define_out_of_reach(ai, path) {
+                why.reach.insert(ai);
+                return true;
             }
             let (Some(((rl, rh), _)), Some((cl, ch))) = (&self.derived[ai], self.coord_span(ai, ci)) else { continue };
             let apart = matches!((ch, rl), (Some(a), Some(b)) if a.cmp_to(*b) == Less) || matches!((cl, rh), (Some(a), Some(b)) if a.cmp_to(*b) == Greater);
@@ -3067,22 +3276,29 @@ impl TableRegion {
             why.upstream = true;
             return true;
         }
-        if let Some(r) = self.refute_in(&rs.model, &self.path_box(path))
-            && self.refutes_path(path)
+        if !self.model.is_empty()
+            && let Some(r) = self.refute_box(&self.path_box(path))
         {
-            for (q, _) in r.used() {
-                match &q.origin {
-                    // A derive's equation, or the interval it reaches, which is its range here
-                    crate::fourier::Origin::Derive { name, .. } => {
-                        why.derives.insert(name.clone());
-                    }
-                    crate::fourier::Origin::Range { name, .. } if self.exprs.contains_key(name) => {
-                        why.derives.insert(name.clone());
-                    }
-                    crate::fourier::Origin::Constraint(k) => {
-                        why.model_constraints.insert(*k);
-                    }
-                    _ => {}
+            let mut by = BTreeSet::new();
+            self.leaned_on(&r, &mut by, &mut why.model_constraints);
+            // the coordinates of a derived column are no derive's equation or reach
+            by.retain(|n| r.used().iter().any(|(q, _)| matches!(&q.origin, crate::fourier::Origin::Derive { name, .. } | crate::fourier::Origin::Range { name, .. } if name == n)));
+            why.derives.extend(by);
+            return true;
+        }
+        if let Some(a) = self.above_rows_out(path, ups, chk) {
+            let mut by = BTreeSet::new();
+            for (_, o) in &a.rows {
+                if let RowOut::Farkas(r) = o {
+                    self.leaned_on(r, &mut by, &mut why.model_constraints);
+                }
+            }
+            if by.is_empty() {
+                why.upstream = true;
+            } else {
+                why.above_by.extend(by);
+                if !why.above.iter().any(|b| b.axis == a.axis && b.coord == a.coord) {
+                    why.above.push(a);
                 }
             }
             return true;
@@ -3090,16 +3306,61 @@ impl TableRegion {
         false
     }
 
+    /// What a derived or `define` column comes to while row `ri` of a table above fires (its region
+    /// `up`), for the message of E102's third form (§15.195): the bounds the linear model puts on
+    /// it with the ends of the row's own box lent, pulled in to the step its values sit on.
+    fn reach_under(&self, name: &str, up: &TableRegion, ri: usize, c: &Checked) -> Option<Ival> {
+        use crate::fourier::Lin;
+        let ty = c.ty_of(name)?;
+        let g = self.model.iter().find(|g| g.want == ty && g.vars.iter().any(|v| v == name))?;
+        let mut sys = g.sys.clone();
+        let mut lent = false;
+        for (ua, n) in up.col_names.iter().enumerate() {
+            if !g.vars.contains(n) || !matches!(up.axes[ua], Axis::Num { .. }) {
+                continue;
+            }
+            let cs: Vec<usize> = (0..up.axes[ua].len()).filter(|&x| up.masks[ri][ua][x]).collect();
+            let Some((lo, hi)) = up.ends_of(ua, &cs) else { continue };
+            let off = |x: Rat| Lin::var(n).plus(&Lin::con(x.mul(Rat::int(-1))));
+            if let Some((x, strict)) = lo {
+                sys.push(off(x).ge(strict));
+                lent = true;
+            }
+            if let Some((x, strict)) = hi {
+                sys.push(off(x).le(strict));
+                lent = true;
+            }
+        }
+        if !lent {
+            return None;
+        }
+        let grid = Rat::new(1, c.scales.get(name).copied().unwrap_or(1).max(1));
+        let (lo, hi) = crate::fourier::bounds(sys, name)??;
+        let up_to = |x: Rat, strict: bool| {
+            let k = x.div(grid);
+            let ce = Rat::int(-((-k.num).div_euclid(k.den)));
+            let ce = if strict && ce.cmp_to(k) == std::cmp::Ordering::Equal { ce.add(Rat::int(1)) } else { ce };
+            ce.mul(grid)
+        };
+        let down_to = |x: Rat, strict: bool| {
+            let k = x.div(grid);
+            let fl = Rat::int(k.num.div_euclid(k.den));
+            let fl = if strict && fl.cmp_to(k) == std::cmp::Ordering::Equal { fl.sub(Rat::int(1)) } else { fl };
+            fl.mul(grid)
+        };
+        Some((lo.map(|(x, s)| up_to(x, s)), hi.map(|(x, s)| down_to(x, s))))
+    }
+
     /// The interval a derived column comes to (§15.189), for the message: the bounds the linear
-    /// model of [`Reach`] puts on it once every other name is eliminated, pulled in to the grid
+    /// model puts on it once every other name is eliminated, pulled in to the grid
     /// its values sit on, or the interval its expression reaches when the model says nothing.
     /// With the `constraint` lines (by index) that narrow it: those of its system, when the
     /// bounds without them are wider.
     #[allow(clippy::type_complexity)]
-    fn reach_interval(&self, name: &str, rs: &Reach, c: &Checked) -> Option<(Ival, Vec<usize>)> {
+    fn reach_interval(&self, name: &str, c: &Checked) -> Option<(Ival, Vec<usize>)> {
         use crate::fourier::Origin;
         let plain = c.ranges.get(name).copied()?;
-        let Some(g) = rs.model.iter().find(|g| g.vars.iter().any(|v| v == name)) else { return Some((plain, Vec::new())) };
+        let Some(g) = self.model.iter().find(|g| g.vars.iter().any(|v| v == name)) else { return Some((plain, Vec::new())) };
         let grid = Rat::new(1, c.scales.get(name).copied().unwrap_or(1).max(1));
         let inward = |b: Option<(Option<(Rat, bool)>, Option<(Rat, bool)>)>| -> Option<Ival> {
             let (lo, hi) = b?;
@@ -3620,6 +3881,66 @@ impl TableRegion {
         Some(vals)
     }
 
+    /// The same values, with the value of each derived or `define` column moved inside what the
+    /// column can come to where its coordinate reaches past it (§15.195): a gap of E101 and a
+    /// point that reaches a row are examples of values that occur, and the first value of an
+    /// interval coordinate is not one where the reach starts later. A `constraint` names inputs
+    /// only, so moving these breaks none.
+    fn reach_values(&self, path: &[usize]) -> Option<Vec<Option<Rat>>> {
+        let mut vals = self.witness_values(path)?;
+        for (ai, v) in vals.iter_mut().enumerate() {
+            if let (Some(x), Some(&ci)) = (*v, path.get(ai)) {
+                *v = Some(self.inside_reach(ai, ci, x));
+            }
+        }
+        Some(vals)
+    }
+
+    /// The reach of a derived or `define` column, if it has one.
+    fn reach_at(&self, ai: usize) -> Option<Ival> {
+        self.define_reach.get(ai).copied().flatten().or_else(|| self.derived.get(ai).and_then(|d| d.as_ref().map(|(r, _)| *r)))
+    }
+
+    /// `v`, or where it lies outside the reach of its column, the value nearest the reach that
+    /// lies inside both the reach and the interval coordinate `ci`, on the step the column's
+    /// values take. `v` again where there is none, which the sieve does not let happen.
+    fn inside_reach(&self, ai: usize, ci: usize, v: Rat) -> Rat {
+        use std::cmp::Ordering::*;
+        let Some((rl, rh)) = self.reach_at(ai) else { return v };
+        let Axis::Num { coords, grid, step, date: false, .. } = &self.axes[ai] else { return v };
+        let Some(Coord::Open(a, b)) = coords.get(ci) else { return v };
+        let g = if grid.num > 0 { *grid } else { *step };
+        let inside = |x: Rat| {
+            a.is_none_or(|a| a.cmp_to(x) == Less)
+                && b.is_none_or(|b| x.cmp_to(b) == Less)
+                && rl.is_none_or(|l| l.cmp_to(x) != Greater)
+                && rh.is_none_or(|h| x.cmp_to(h) != Greater)
+        };
+        let k = |x: Rat| x.checked_div(g);
+        if let Some(l) = rl
+            && v.cmp_to(l) == Less
+        {
+            // the first value on the step at or above the reach's low end
+            let up = k(l).map(|q| Rat::int(-((-q.num).div_euclid(q.den))));
+            if let Some(x) = up.and_then(|n| n.checked_mul(g))
+                && inside(x)
+            {
+                return x;
+            }
+        }
+        if let Some(h) = rh
+            && v.cmp_to(h) == Greater
+        {
+            let down = k(h).map(|q| Rat::int(q.num.div_euclid(q.den)));
+            if let Some(x) = down.and_then(|n| n.checked_mul(g))
+                && inside(x)
+            {
+                return x;
+            }
+        }
+        v
+    }
+
     /// Whether a `constraint` can hold anywhere in this box. Interval arithmetic, the same
     /// shape the derived sieve uses: only a relation that is impossible for **every** pair of
     /// values the box allows takes the box out (§15.55).
@@ -3697,6 +4018,273 @@ impl TableRegion {
             }
         }
         Feasible::Yes
+    }
+}
+
+/// Why a row of a table above, one that writes the value a column of this table holds, fires
+/// nowhere in a box (§15.195).
+#[derive(Debug, Clone)]
+pub enum RowOut {
+    /// On this axis of the table below, the box takes no coordinate the row lets in: the two
+    /// tables cut a column of words or truth values they share, and they do not agree.
+    Clash(usize),
+    /// The linear model of the table below, the ends of the box, and the ends of what the row
+    /// takes on the numeric columns it cuts leave no values: the multipliers say so.
+    Farkas(crate::fourier::Refutation),
+}
+
+/// A box no input reaches because the value a column decided above holds there is written only by
+/// rows of that table, and none of them can fire in the box (§15.195): the table above writes
+/// `low` only for an amount up to 50 pounds, and the box asks for an excess over the limit past
+/// 50 pounds, which no amount up to 50 pounds makes.
+#[derive(Debug, Clone)]
+pub struct AboveRows {
+    /// The axis of the column a table above decides, and the coordinate (the value) the box takes.
+    pub axis: usize,
+    pub coord: usize,
+    /// That column, the value, and the table that decides it.
+    pub column: String,
+    pub value: String,
+    pub table: String,
+    /// Each row of that table that writes the value (0-based, in that table's order), and why it
+    /// does not fire here.
+    pub rows: Vec<(usize, RowOut)>,
+}
+
+impl TableRegion {
+    /// Whether the coordinate this path takes on the axis of a `define` lies outside the values the
+    /// define can come to (§15.195). An interval coordinate leaves its ends out, so `>100%` lies
+    /// outside a reach that ends at 100%. A derive's coordinate is read with its ends in, and the
+    /// linear model, which holds the derive's reach as two facts with the coordinate's open ends,
+    /// leaves out the rest; a `define` has no equation in the model, and its reach is read here.
+    fn define_out_of_reach(&self, ai: usize, path: &[usize]) -> bool {
+        use std::cmp::Ordering::*;
+        let Some((rl, rh)) = self.define_reach.get(ai).copied().flatten() else { return false };
+        let Some(&ci) = path.get(ai) else { return false };
+        let Axis::Num { coords, .. } = &self.axes[ai] else { return false };
+        match coords.get(ci) {
+            Some(Coord::Point(v)) => rl.is_some_and(|l| v.cmp_to(l) == Less) || rh.is_some_and(|h| v.cmp_to(h) == Greater),
+            Some(Coord::Open(a, b)) => {
+                matches!((b, rl), (Some(b), Some(l)) if b.cmp_to(l) != Greater) || matches!((a, rh), (Some(a), Some(h)) if a.cmp_to(h) != Less)
+            }
+            None => false,
+        }
+    }
+
+    /// The first axis of a `define` on which this path takes a coordinate the define never comes to.
+    pub(crate) fn defines_rule_out(&self, path: &[usize]) -> Option<usize> {
+        (0..path.len()).find(|&ai| self.define_out_of_reach(ai, path))
+    }
+
+    /// Whether a column a table above decides holds, in this box, a value whose every row in that
+    /// table fails to fire here (§15.195). A row fails where the box takes none of what the row
+    /// lets in on a column of words both tables cut, or where the table's linear model, the ends
+    /// of the box and the ends of the row's own box on the numeric columns it cuts have no
+    /// solution — the multipliers of the refutation are kept, so a certificate can hand them on.
+    ///
+    /// A row's box holds every input on which it fires, also under `policy first`, where an
+    /// earlier row takes part of it: what is read is wider than the truth, which is the safe side.
+    /// A table above that writes a name rather than a value may write the value anywhere, and is
+    /// not read. `None` when nothing is ruled out this way.
+    fn above_rows_out(&self, path: &[usize], ups: &[Upstream], chk: &Checked) -> Option<AboveRows> {
+        let bx = self.path_box(path);
+        for up in ups {
+            let Some(ai) = self.col_names.iter().position(|n| *n == up.name) else { continue };
+            let Some(&ci) = path.get(ai) else { continue };
+            let value = match &self.axes[ai] {
+                Axis::Enum { values } => match values.get(ci) {
+                    Some(v) => v.clone(),
+                    None => continue,
+                },
+                Axis::Bool => if ci == 0 { crate::kw::TRUE.to_string() } else { crate::kw::FALSE.to_string() },
+                _ => continue,
+            };
+            if !self.above_can(up) {
+                continue;
+            }
+            let mut writers: Vec<usize> = Vec::new();
+            let mut unknown = false;
+            for (ri, r) in up.table.rows.iter().enumerate() {
+                match r.outs.get(up.oi) {
+                    Some(OutCell::Lit(Lit::Word(w))) | Some(OutCell::Name(w)) if !chk.syms.contains_key(w) => {
+                        if *w == value {
+                            writers.push(ri);
+                        }
+                    }
+                    _ => {
+                        unknown = true;
+                        break;
+                    }
+                }
+            }
+            // A value no row writes is the second form's business, and the masks have it already.
+            if unknown || writers.is_empty() {
+                continue;
+            }
+            let mut rows: Vec<(usize, RowOut)> = Vec::new();
+            for &ri in &writers {
+                match self.row_out(&bx, up, ri, chk) {
+                    Some(o) => rows.push((ri, o)),
+                    None => break,
+                }
+            }
+            if rows.len() == writers.len() {
+                return Some(AboveRows {
+                    axis: ai,
+                    coord: ci,
+                    column: up.name.clone(),
+                    value,
+                    table: up.table.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(),
+                    rows,
+                });
+            }
+        }
+        None
+    }
+
+    /// Whether a table above can rule anything out here this way: it cuts a numeric column this
+    /// table numbers a value for (an axis of its, or a name of its linear model), or a column of
+    /// words both cut. Asked first, since the rest is a system to eliminate per row.
+    fn above_can(&self, up: &Upstream) -> bool {
+        up.reg.col_names.iter().enumerate().any(|(ua, n)| match &up.reg.axes[ua] {
+            Axis::Num { .. } => self.numbered(n),
+            Axis::Enum { .. } | Axis::Bool => self.col_names.iter().zip(&self.axes).any(|(m, a)| m == n && matches!(a, Axis::Enum { .. } | Axis::Bool)),
+            Axis::Prefix { .. } => false,
+        })
+    }
+
+    /// Whether this table numbers a value for the name: a numeric axis of its, or a name of its
+    /// linear model. A certificate numbers them the same way (the axes, then `linear.extra`).
+    fn numbered(&self, n: &str) -> bool {
+        self.col_names.iter().zip(&self.axes).any(|(m, a)| m == n && matches!(a, Axis::Num { .. })) || self.model.iter().any(|g| g.vars.iter().any(|v| v == n))
+    }
+
+    /// Why row `ri` of the table above fires nowhere in the box `bx`, or nothing when it may.
+    fn row_out(&self, bx: &[Vec<usize>], up: &Upstream, ri: usize, chk: &Checked) -> Option<RowOut> {
+        use crate::fourier::{Lin, Origin, Refutation};
+        // A column of words or truth values both tables cut, on which the box takes nothing the
+        // row lets in.
+        for (ua, n) in up.reg.col_names.iter().enumerate() {
+            let Some(aj) = self.col_names.iter().position(|m| m == n) else { continue };
+            let same = matches!((&self.axes[aj], &up.reg.axes[ua]), (Axis::Enum { .. }, Axis::Enum { .. }) | (Axis::Bool, Axis::Bool));
+            if !same {
+                continue;
+            }
+            let mut mine = vec![false; self.axes[aj].len()];
+            for &c in &bx[aj] {
+                mine[c] = true;
+            }
+            let lets = carry(&self.axes[aj], &mine, &up.reg.axes[ua]);
+            if !(0..up.reg.axes[ua].len()).any(|x| up.reg.masks[ri][ua][x] && lets[x]) {
+                return Some(RowOut::Clash(aj));
+            }
+        }
+        // The systems, one per type of number: this table's linear model where it has one for
+        // the type, and otherwise its own numeric axes of that type with nothing else.
+        let mut systems: Vec<(Ty, Vec<String>, Vec<crate::fourier::Ineq>)> =
+            self.model.iter().map(|g| (g.want.clone(), g.vars.clone(), g.sys.clone())).collect();
+        for (aj, n) in self.col_names.iter().enumerate() {
+            if !matches!(self.axes[aj], Axis::Num { .. }) {
+                continue;
+            }
+            let Some(ty) = chk.ty_of(n) else { continue };
+            match systems.iter_mut().find(|s| s.0 == ty) {
+                Some(s) => {
+                    if !s.1.contains(n) {
+                        s.1.push(n.clone());
+                    }
+                }
+                None => systems.push((ty, vec![n.clone()], Vec::new())),
+            }
+        }
+        for (_, vars, facts) in systems {
+            let mut sys = facts;
+            let mut lent = false;
+            for (ua, n) in up.reg.col_names.iter().enumerate() {
+                if !vars.contains(n) || !matches!(up.reg.axes[ua], Axis::Num { .. }) {
+                    continue;
+                }
+                let cs: Vec<usize> = (0..up.reg.axes[ua].len()).filter(|&x| up.reg.masks[ri][ua][x]).collect();
+                let Some((lo, hi)) = up.reg.ends_of(ua, &cs) else { continue };
+                let off = |x: Rat| Lin::var(n).plus(&Lin::con(x.mul(Rat::int(-1))));
+                if let Some((x, strict)) = lo {
+                    sys.push(off(x).ge(strict).tag(Origin::Above { name: n.clone(), hi: false }));
+                    lent = true;
+                }
+                if let Some((x, strict)) = hi {
+                    sys.push(off(x).le(strict).tag(Origin::Above { name: n.clone(), hi: true }));
+                    lent = true;
+                }
+            }
+            // A row that bounds none of these names adds nothing the model does not say alone.
+            if !lent {
+                continue;
+            }
+            for (aj, n) in self.col_names.iter().enumerate() {
+                if !vars.contains(n) {
+                    continue;
+                }
+                let Some((lo, hi)) = bx.get(aj).and_then(|cs| self.ends_of(aj, cs)) else { continue };
+                let off = |x: Rat| Lin::var(n).plus(&Lin::con(x.mul(Rat::int(-1))));
+                if let Some((x, strict)) = lo {
+                    sys.push(off(x).ge(strict).tag(Origin::Coord { axis: aj, hi: false }));
+                }
+                if let Some((x, strict)) = hi {
+                    sys.push(off(x).le(strict).tag(Origin::Coord { axis: aj, hi: true }));
+                }
+            }
+            if let Some(r) = Refutation::of(sys) {
+                return Some(RowOut::Farkas(r));
+            }
+        }
+        None
+    }
+
+    /// The truth value a `define` of one comparison always takes over the values its two sides
+    /// come to, when it always takes one: `a_due <= b_due` with both dates held to one day each is
+    /// true or false whatever else the input is. Read for ritsu's port only ([`live_rows`]), where
+    /// the inputs are held to part of their ranges; `check` reads a boolean `define` as any value.
+    fn truth_of(&self, name: &str, chk: &Checked) -> Option<bool> {
+        let Expr::Bin(l, op, r, _) = self.defines.get(name)? else { return None };
+        let ty = |e: &Expr| match e {
+            Expr::Name(n, _) => chk.ty_of(n),
+            _ => None,
+        };
+        let want = ty(l).or_else(|| ty(r))?;
+        let side = |e: &Expr| -> Option<(Rat, Rat)> {
+            match e {
+                Expr::Lit(Lit::Date(y, m, d), _) => {
+                    let v = crate::types::date_ord(*y, *m, *d);
+                    Some((v, v))
+                }
+                _ => chk.interval(e, &want),
+            }
+        };
+        let ((al, ah), (bl, bh)) = (side(l)?, side(r)?);
+        use std::cmp::Ordering::*;
+        let le = |x: Rat, y: Rat| x.cmp_to(y) != Greater;
+        let lt = |x: Rat, y: Rat| x.cmp_to(y) == Less;
+        match op {
+            BinOp::Le if le(ah, bl) => Some(true),
+            BinOp::Le if lt(bh, al) => Some(false),
+            BinOp::Lt if lt(ah, bl) => Some(true),
+            BinOp::Lt if le(bh, al) => Some(false),
+            BinOp::Ge if le(bh, al) => Some(true),
+            BinOp::Ge if lt(ah, bl) => Some(false),
+            BinOp::Gt if lt(bh, al) => Some(true),
+            BinOp::Gt if le(ah, bl) => Some(false),
+            BinOp::Eq if al.cmp_to(ah) == Equal && bl.cmp_to(bh) == Equal && al.cmp_to(bl) == Equal => Some(true),
+            BinOp::Eq if lt(ah, bl) || lt(bh, al) => Some(false),
+            _ => None,
+        }
+    }
+
+    /// Whether the path takes, on the axis of a boolean `define`, the truth value the define never
+    /// takes ([`TableRegion::truth_of`]).
+    fn truth_rules_out(&self, path: &[usize], chk: &Checked) -> bool {
+        path.iter().enumerate().any(|(ai, &ci)| {
+            self.is_define[ai] && matches!(self.axes[ai], Axis::Bool) && self.truth_of(&self.col_names[ai], chk).is_some_and(|t| t != (ci == 0))
+        })
     }
 }
 
@@ -3907,7 +4495,7 @@ pub fn certificate_of(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile) ->
         .iter()
         .filter_map(|it| if let crate::ast::Item::Agg(d) = it { Some(d.name.text.clone()) } else { None })
         .collect();
-    Some(reg.certificate(t, &w114, &f.inputs, &walked, &applied, cover, c))
+    Some(reg.certificate(t, &w114, &walked, &applied, cover, c, f))
 }
 
 /// One cell, resolved only as far as the units: the re-checker does the geometry.
@@ -3957,7 +4545,9 @@ impl TableRegion {
     /// that is reached is reached by some point, and naming the point turns the check into
     /// one lookup. Neither asks the reader to search, which is the whole difference between
     /// evidence and a second run of the same program.
-    pub fn certificate(&self, t: &Table, w114: &[(usize, usize)], inputs: &[crate::ast::VarDecl], walked: &[String], applied: &[bool], cover: Option<Cover>, chk: &Checked) -> CertTable {
+    #[allow(clippy::too_many_arguments)]
+    pub fn certificate(&self, t: &Table, w114: &[(usize, usize)], walked: &[String], applied: &[bool], cover: Option<Cover>, chk: &Checked, f: &RuleFile) -> CertTable {
+        let inputs = &f.inputs;
         let unique = t.policy == crate::ast::Policy::Unique;
         let axes: Vec<CertAxis> = (0..self.axes.len())
             .map(|ai| CertAxis {
@@ -4089,23 +4679,35 @@ impl TableRegion {
 
         let (mut reach, mut unused, mut unreachable) = (Vec::new(), Vec::new(), Vec::new());
         let mut left = crate::region::DEFAULT_BUDGET;
+        // The values a column decided above holds where the cover rests on the rows of that table
+        // (§15.195): a point that reaches a row with one of them has values one of those rows
+        // fires on, and the re-checkers hold it to that.
+        let ups = upstreams(t, chk, f);
+        let mut keys: Vec<(usize, usize)> = Vec::new();
+        if let Some(cv) = cover.as_ref() {
+            gather_above_rows(cv, &mut keys);
+        }
+        let held = |p: &[usize]| -> bool {
+            self.above_rows_out(p, &ups, chk).is_none()
+                && (!keys.iter().any(|&(a, c)| p.get(a) == Some(&c)) || self.above_values(p, &model_extra, &ups, chk, &keys).is_some())
+        };
         for ri in 0..t.rows.len() {
-            match self.reach_point(ri, unique, &mut left) {
+            match self.reach_point(ri, unique, &mut left, &held) {
                 Some(p) => {
                     // The values behind the point, solved against the constraints — or,
                     // where there is a linear model, against the model. Where no assignment
                     // was found the certificate states none, and a re-checker falls back to
                     // the weaker reading and says which one it used (§15.99).
-                    let (nums, extra, input) = match self.model_values(&p, &model_extra) {
+                    let solved = self.above_values(&p, &model_extra, &ups, chk, &keys).or_else(|| self.model_values(&p, &model_extra));
+                    let (nums, extra, input) = match solved {
                         Some((nums, extra)) => {
                             let input = self.witness_pairs_with(&p, Some(nums.clone()));
                             (nums, extra, input)
                         }
-                        None if self.model.is_empty() => (
-                            self.witness_values(&p).unwrap_or_else(|| vec![None; self.axes.len()]),
-                            Vec::new(),
-                            self.witness_pairs(&p),
-                        ),
+                        None if self.model.is_empty() => {
+                            let vals = self.reach_values(&p);
+                            (vals.clone().unwrap_or_else(|| vec![None; self.axes.len()]), Vec::new(), self.witness_pairs_with(&p, vals))
+                        }
                         None => (vec![None; self.axes.len()], vec![None; model_extra.len()], self.witness_pairs(&p)),
                     };
                     reach.push((ri + 1, p, input, nums, extra));
@@ -4183,7 +4785,187 @@ impl TableRegion {
         }
         let axes = (0..self.axes.len())
             .map(|ai| match &self.axes[ai] {
-                Axis::Num { .. } => at.get(&self.col_names[ai]).copied().or_else(|| self.axes[ai].witness_num(p[ai], None)),
+                Axis::Num { .. } => at.get(&self.col_names[ai]).copied().or_else(|| self.axes[ai].witness_num(p[ai], None).map(|x| self.inside_reach(ai, p[ai], x))),
+                _ => None,
+            })
+            .collect();
+        Some((axes, extra.iter().map(|n| at.get(n).copied()).collect()))
+    }
+
+    /// The values behind a point that takes one of `keys` — a column decided above, at a value
+    /// the cover rests on the rows of that table for (§15.195) — chosen so that one of the rows
+    /// that write the value fires on them: the linear model (or, for a type it says nothing
+    /// about, the numeric axes alone, each inside its reach) solved with the point's coordinates
+    /// held and that row's ends lent, and the answer held to the row's own coordinates — not
+    /// merely to their hull — and to its words. The rows are tried in their table's order, and
+    /// the first that holds is taken. `None` when the point takes none of the keys, or no row
+    /// holds; the caller then picks another point.
+    #[allow(clippy::type_complexity)]
+    fn above_values(&self, p: &[usize], extra: &[String], ups: &[Upstream], chk: &Checked, keys: &[(usize, usize)]) -> Option<(Vec<Option<Rat>>, Vec<Option<Rat>>)> {
+        // For each key the point takes, the rows that write its value.
+        let mut choices: Vec<Vec<(&Upstream, usize)>> = Vec::new();
+        for &(axis, coord) in keys {
+            if p.get(axis) != Some(&coord) {
+                continue;
+            }
+            let up = ups.iter().find(|u| self.col_names.get(axis) == Some(&u.name))?;
+            let value = match &self.axes[axis] {
+                Axis::Enum { values } => values.get(coord)?.clone(),
+                Axis::Bool => if coord == 0 { crate::kw::TRUE.to_string() } else { crate::kw::FALSE.to_string() },
+                _ => return None,
+            };
+            let mut writers = Vec::new();
+            for (ri, r) in up.table.rows.iter().enumerate() {
+                match r.outs.get(up.oi) {
+                    Some(OutCell::Lit(Lit::Word(w))) | Some(OutCell::Name(w)) if !chk.syms.contains_key(w) => {
+                        if *w == value {
+                            writers.push((up, ri));
+                        }
+                    }
+                    _ => return None,
+                }
+            }
+            choices.push(writers);
+        }
+        if choices.is_empty() {
+            return None;
+        }
+        // One row per key, every combination in turn: a point takes few keys, and the first row
+        // that holds is the usual answer.
+        let mut at_k = vec![0usize; choices.len()];
+        for _ in 0..256 {
+            let combo: Vec<(&Upstream, usize)> = choices.iter().zip(&at_k).filter_map(|(c, &k)| c.get(k).copied()).collect();
+            if combo.len() == choices.len()
+                && let Some(v) = self.values_under(p, extra, chk, &combo)
+            {
+                return Some(v);
+            }
+            let mut k = 0;
+            loop {
+                if k == at_k.len() {
+                    return None;
+                }
+                at_k[k] += 1;
+                if at_k[k] < choices[k].len() {
+                    break;
+                }
+                at_k[k] = 0;
+                k += 1;
+            }
+        }
+        None
+    }
+
+    /// The values behind point `p` with the rows `combo` of the tables above firing (see
+    /// [`TableRegion::above_values`]).
+    #[allow(clippy::type_complexity)]
+    fn values_under(&self, p: &[usize], extra: &[String], chk: &Checked, combo: &[(&Upstream, usize)]) -> Option<(Vec<Option<Rat>>, Vec<Option<Rat>>)> {
+        use crate::fourier::{Lin, Origin};
+        // the words each row asks of a column both tables cut, held to the point exactly
+        for (up, ri) in combo {
+            for (ua, n) in up.reg.col_names.iter().enumerate() {
+                let Some(aj) = self.col_names.iter().position(|m| m == n) else { continue };
+                if !matches!((&self.axes[aj], &up.reg.axes[ua]), (Axis::Enum { .. }, Axis::Enum { .. }) | (Axis::Bool, Axis::Bool)) {
+                    continue;
+                }
+                let mut mine = vec![false; self.axes[aj].len()];
+                mine[p[aj]] = true;
+                let lets = carry(&self.axes[aj], &mine, &up.reg.axes[ua]);
+                if !(0..up.reg.axes[ua].len()).any(|x| up.reg.masks[*ri][ua][x] && lets[x]) {
+                    return None;
+                }
+            }
+        }
+        let bx = self.path_box(p);
+        let mut systems: Vec<(Ty, Vec<String>, Vec<crate::fourier::Ineq>)> =
+            self.model.iter().map(|g| (g.want.clone(), g.vars.clone(), g.sys.clone())).collect();
+        for (aj, n) in self.col_names.iter().enumerate() {
+            if !matches!(self.axes[aj], Axis::Num { .. }) {
+                continue;
+            }
+            let Some(ty) = chk.ty_of(n) else { continue };
+            // the reach of a derived or `define` column, which a re-checker holds the value to
+            let mut bound = Vec::new();
+            if let Some((lo, hi)) = self.reach_at(aj) {
+                let off = |x: Rat| Lin::var(n).plus(&Lin::con(x.mul(Rat::int(-1))));
+                if let Some(x) = lo {
+                    bound.push(off(x).ge(false));
+                }
+                if let Some(x) = hi {
+                    bound.push(off(x).le(false));
+                }
+            }
+            match systems.iter_mut().find(|s| s.0 == ty) {
+                Some(s) => {
+                    if !s.1.contains(n) {
+                        s.1.push(n.clone());
+                    }
+                    s.2.extend(bound);
+                }
+                None => systems.push((ty, vec![n.clone()], bound)),
+            }
+        }
+        let mut at: BTreeMap<String, Rat> = BTreeMap::new();
+        for (_, vars, facts) in systems {
+            let mut sys = facts;
+            for (aj, n) in self.col_names.iter().enumerate() {
+                if !vars.contains(n) {
+                    continue;
+                }
+                let Some((lo, hi)) = self.ends_of(aj, &bx[aj]) else { continue };
+                let off = |x: Rat| Lin::var(n).plus(&Lin::con(x.mul(Rat::int(-1))));
+                if let Some((x, strict)) = lo {
+                    sys.push(off(x).ge(strict).tag(Origin::Coord { axis: aj, hi: false }));
+                }
+                if let Some((x, strict)) = hi {
+                    sys.push(off(x).le(strict).tag(Origin::Coord { axis: aj, hi: true }));
+                }
+            }
+            for (up, ri) in combo {
+                for (ua, n) in up.reg.col_names.iter().enumerate() {
+                    if !vars.contains(n) || !matches!(up.reg.axes[ua], Axis::Num { .. }) {
+                        continue;
+                    }
+                    let cs: Vec<usize> = (0..up.reg.axes[ua].len()).filter(|&x| up.reg.masks[*ri][ua][x]).collect();
+                    let Some((lo, hi)) = up.reg.ends_of(ua, &cs) else { continue };
+                    let off = |x: Rat| Lin::var(n).plus(&Lin::con(x.mul(Rat::int(-1))));
+                    if let Some((x, strict)) = lo {
+                        sys.push(off(x).ge(strict));
+                    }
+                    if let Some((x, strict)) = hi {
+                        sys.push(off(x).le(strict));
+                    }
+                }
+            }
+            let got = crate::fourier::solve(sys.clone())?;
+            if !sys.iter().all(|q| q.holds_at(&got) == Some(true)) {
+                return None;
+            }
+            at.extend(got);
+        }
+        // Each row's own coordinates, exactly: a value inside the hull of a row that takes two
+        // coordinates apart is not a value the row takes.
+        for (up, ri) in combo {
+            for (ua, n) in up.reg.col_names.iter().enumerate() {
+                let Axis::Num { coords, .. } = &up.reg.axes[ua] else { continue };
+                let Some(v) = at.get(n) else { continue };
+                let takes = coords.iter().enumerate().any(|(x, cd)| {
+                    up.reg.masks[*ri][ua][x]
+                        && match cd {
+                            Coord::Point(w) => w.cmp_to(*v) == std::cmp::Ordering::Equal,
+                            Coord::Open(a, b) => {
+                                a.is_none_or(|a| a.cmp_to(*v) == std::cmp::Ordering::Less) && b.is_none_or(|b| v.cmp_to(b) == std::cmp::Ordering::Less)
+                            }
+                        }
+                });
+                if !takes {
+                    return None;
+                }
+            }
+        }
+        let axes = (0..self.axes.len())
+            .map(|ai| match &self.axes[ai] {
+                Axis::Num { .. } => at.get(&self.col_names[ai]).copied().or_else(|| self.axes[ai].witness_num(p[ai], None).map(|x| self.inside_reach(ai, p[ai], x))),
                 _ => None,
             })
             .collect();
@@ -4199,9 +4981,9 @@ impl TableRegion {
     /// as §6.3: a wide table's full-depth points are a product, and asking the sieve only
     /// at the bottom walks all of them. Twelve columns of eleven coordinates is 11¹¹
     /// points, and the tool sat there (§15.99).
-    fn reach_point(&self, ri: usize, unique: bool, budget: &mut i64) -> Option<Vec<usize>> {
+    fn reach_point(&self, ri: usize, unique: bool, budget: &mut i64, held: &dyn Fn(&[usize]) -> bool) -> Option<Vec<usize>> {
         let mut p: Vec<usize> = Vec::new();
-        self.reach_rec(ri, unique, &mut p, budget, &[])
+        self.reach_rec(ri, unique, &mut p, budget, &[], held)
     }
 
     /// A point that reaches a row **with one axis held at one coordinate** (§15.148): a call
@@ -4229,7 +5011,7 @@ impl TableRegion {
     ) -> Option<(Vec<usize>, Vec<(String, crate::diag::WVal)>, Vec<Option<Rat>>, Vec<Option<Rat>>)> {
         let mut left = DEFAULT_BUDGET;
         let mut path = Vec::new();
-        let p = self.reach_rec(ri, unique, &mut path, &mut left, fix)?;
+        let p = self.reach_rec(ri, unique, &mut path, &mut left, fix, &|_| true)?;
         let model_extra = self.model_extra_names();
         let (nums, extra, input) = match self.model_values(&p, &model_extra) {
             Some((nums, extra)) => {
@@ -4237,7 +5019,8 @@ impl TableRegion {
                 (nums, extra, input)
             }
             None if self.model.is_empty() => {
-                (self.witness_values(&p).unwrap_or_else(|| vec![None; self.axes.len()]), Vec::new(), self.witness_pairs(&p))
+                let vals = self.reach_values(&p);
+                (vals.clone().unwrap_or_else(|| vec![None; self.axes.len()]), Vec::new(), self.witness_pairs_with(&p, vals))
             }
             None => (vec![None; self.axes.len()], vec![None; model_extra.len()], self.witness_pairs(&p)),
         };
@@ -4258,16 +5041,21 @@ impl TableRegion {
         model_extra
     }
 
-    fn reach_rec(&self, ri: usize, unique: bool, p: &mut Vec<usize>, budget: &mut i64, fix: &[(usize, usize)]) -> Option<Vec<usize>> {
+    /// `held` is asked of a whole point last: what the caller holds a point to besides the sieve.
+    #[allow(clippy::too_many_arguments)]
+    fn reach_rec(&self, ri: usize, unique: bool, p: &mut Vec<usize>, budget: &mut i64, fix: &[(usize, usize)], held: &dyn Fn(&[usize]) -> bool) -> Option<Vec<usize>> {
         *budget -= 1;
         if *budget < 0 {
             return None;
         }
         if p.len() == self.axes.len() {
-            if self.feasible(p) == Feasible::No || self.refutes_path(p) {
+            if self.feasible(p) == Feasible::No || self.defines_rule_out(p).is_some() || self.refutes_path(p) {
                 return None;
             }
             if !unique && (0..ri).any(|k| (0..self.axes.len()).all(|a| self.masks[k][a][p[a]])) {
+                return None;
+            }
+            if !held(p) {
                 return None;
             }
             return Some(p.clone());
@@ -4278,14 +5066,27 @@ impl TableRegion {
                 continue;
             }
             p.push(c);
-            let keep = self.feasible(p) != Feasible::No;
-            let got = if keep { self.reach_rec(ri, unique, p, budget, fix) } else { None };
+            let keep = self.feasible(p) != Feasible::No && !self.define_out_of_reach(ai, p);
+            let got = if keep { self.reach_rec(ri, unique, p, budget, fix, held) } else { None };
             p.pop();
             if got.is_some() {
                 return got;
             }
         }
         None
+    }
+}
+
+/// The (axis, coordinate) pairs a cover rests on the rows of a table above for (§15.195), each once.
+fn gather_above_rows(cv: &Cover, out: &mut Vec<(usize, usize)>) {
+    match cv {
+        Cover::Split(kids) => kids.iter().for_each(|k| gather_above_rows(k, out)),
+        Cover::ByAboveRows(a) => {
+            if !out.contains(&(a.axis, a.coord)) {
+                out.push((a.axis, a.coord));
+            }
+        }
+        _ => {}
     }
 }
 
@@ -4314,6 +5115,12 @@ pub enum Cover {
     /// The rule's linear model has no solution anywhere in the box, and the multipliers that
     /// say so (§15.141).
     ByFarkas(crate::fourier::Refutation),
+    /// The coordinate the path takes on the axis of a `define` lies outside the values the
+    /// define can come to (§15.195), as `ByDerived` says it of a derive.
+    ByDefine(usize),
+    /// The value a column decided above holds here is written only by rows of that table none of
+    /// which fires anywhere in the box, each with why (§15.195).
+    ByAboveRows(AboveRows),
 }
 
 impl TableRegion {
@@ -4387,19 +5194,37 @@ impl TableRegion {
                 return Some(Cover::ByDerived(ai2));
             }
         }
+        for ai2 in 0..path.len() {
+            if self.define_out_of_reach(ai2, path) {
+                return Some(Cover::ByDefine(ai2));
+            }
+        }
         if path.len() == self.axes.len() && self.upstream_dead_at(path, ups, chk) {
-            return Some(Cover::ByUpstream(self.witness_text(path), self.apart_at(path, ups, chk)));
+            let apart = self.apart_at(path, ups, chk);
+            // With no reason small enough to write, the rows that write the value are one, each
+            // with why it does not fire here (§15.195); a bare leaf is stated rather than proved.
+            if apart.is_none()
+                && let Some(a) = self.above_rows_out(path, ups, chk)
+            {
+                return Some(Cover::ByAboveRows(a));
+            }
+            return Some(Cover::ByUpstream(self.witness_text(path), apart));
         }
         if !self.model.is_empty() {
             if let Some(r) = self.refute_box(&self.path_box(path)) {
                 return Some(Cover::ByFarkas(r));
             }
         }
+        if let Some(a) = self.above_rows_out(path, ups, chk) {
+            return Some(Cover::ByAboveRows(a));
+        }
         // Point by point, then: the box is only impossible when every point in it is.
         if self.first_reachable(path, ups, chk, budget, false).is_none() {
             return Some(Cover::ByPoints);
         }
-        if path.len() == self.axes.len() || self.model.is_empty() {
+        // What the model or a table above rules out may hold only of parts of the box.
+        let parts = !self.model.is_empty() || ups.iter().any(|u| self.above_can(u));
+        if path.len() == self.axes.len() || !parts {
             return None;
         }
         let ai = path.len();

@@ -1,0 +1,19 @@
+rule 得点の区分(score_band) v1
+description "得点を、満点 200 点に対する割合で分ける。割合は define で、最後の行は満点を超える割合を求めている。そうなる得点はない"
+
+enum 区分(band) = 低い(low) | 高い(high) | 超え(beyond)
+
+inputs
+  得点(score) : number  range >=0 <=200
+
+outputs
+  判定(grade) : 区分
+
+define 割合(share) : rate = 得点 / 200
+
+table 判定表(grade_of)
+policy unique
+| 割合         | -> 判定 : 区分 |
+| <50%         | 低い           |
+| >=50% <=100% | 高い           |
+| >100%        | 超え           |

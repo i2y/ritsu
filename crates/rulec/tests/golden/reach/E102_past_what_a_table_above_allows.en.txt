@@ -1,0 +1,11 @@
+error[E102]: Unreachable row: row 2 never matches
+  --> tests/reach/E102_past_what_a_table_above_allows.rule:26 table decision_of
+   |
+26 | | small       | >50GBP  | by_hand              |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2: no input reaches here
+14 | derive excess : money[GBP] = amount - limit  range >=-100GBP <=100GBP
+   |                              ^^^^^^^^^^^^^^ the reachable interval is >=-99GBP <=100GBP
+   |
+ `refund_size` is small only where row 1 of table size_of (amount <= 50GBP) fires. There `excess` can only come to >=-99GBP <=50GBP, and none of those values meets this row's conditions.
+ hint: rewrite the condition within the values `excess` can come to, or delete this row. Widening a derive's `range` does not change the values it can come to.
+

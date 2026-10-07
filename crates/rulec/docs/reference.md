@@ -718,8 +718,12 @@ derive net : money[JPY, incl_tax] = subtotal - discount  range >=0JPY <=1_000_00
 
 The right-hand side may use inputs, `+`, `-`, and multiplication by a constant. `range` is
 required. What the derive can actually come to is its expression computed over the inputs'
-ranges and the `constraint` lines: the `range` has to contain it (E112), and a row that asks the
-derive only for values outside it is E102, however wide the `range` is written. A constant that
+ranges, the `constraint` lines and the values the tables above write: the `range` has to contain
+it (E112), and a row that asks the derive only for values outside it is E102, however wide the
+`range` is written. So is a row that asks it, beside the value a table above writes into another
+column, only for values it never comes to while the rows that write that value fire: when `low`
+is written only for an amount up to 50 pounds, `low` beside an excess over the limit past 50
+pounds is E102, and E101 asks no row for it. A constant that
 is a fraction puts the values between whole units — `amount * 10%` comes in tenths of a pound —
 and the checks read them on that step: rows `<=1GBP` and `>=2GBP` leave `1.1GBP` to no row, and
 E101 says so with the amount that makes it (`amount = 11`).
@@ -742,6 +746,13 @@ The condition of a boolean `define` must be one of exactly two shapes (E113):
 
 A direct comparison of two numbers is neither. Declare the difference as a `derive` and
 compare that with a constant; the analysis is exact that way, and the message says so.
+
+A `define` that computes a number may be a table column too. What it can come to is its
+expression computed over the intervals of what it reads — the inputs' ranges, what the derives
+and the other defines come to, the values a table above writes — whatever the expression's shape
+(a product, a rounding, `min`): `define share : rate = score / 200` with `score` from 0 to 200
+comes to 0% up to 100%. The checks read that as they read a derive's reach: E101 asks no row for a
+share past 100%, and a row that asks only for one is E102.
 
 ## 6.1 constraint
 

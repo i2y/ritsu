@@ -163,6 +163,21 @@ def refOfJson (j : Json) : Option (Ref × Rat) := do
 def refsOfJson (j : Json) : Option (List (Ref × Rat)) :=
   (arr j) >>= (fun a => a.toList.mapM refOfJson)
 
+/-- One inequality of a refutation about a row of a table above (rulec's §15.195): what
+    `refOfJson` reads, and an end of the row's own box on a numeric column of its table, which
+    names the column — `idx` numbers it the way this table numbers its values. -/
+def refOfJsonIn (idx : String → Option Nat) (j : Json) : Option (Ref × Rat) :=
+  match field j "cond" with
+  | some c => do
+    let y ← field j "y" >>= optRat
+    let n ← field c "name" >>= str
+    let vi ← idx n
+    let hi ← field c "hi" >>= boolOf
+    let at_ ← field c "at" >>= optRat
+    let opn ← field c "open" >>= boolOf
+    some (.cond vi hi at_ opn, y)
+  | none => refOfJson j
+
 /-- The cover's leaves the linear model rules out, with the path to each. A leaf whose
     refutation cannot be read is left out, and then nothing rules its box out: the cover
     check fails there rather than passing over it. -/
@@ -196,6 +211,16 @@ def coordOfJson (j : Json) : Option Coord :=
     | _, _ => none
   | none => none
 
+/-- The cover's leaves that rest on the rows of a table above (rulec's §15.195), with the path to
+    each. -/
+partial def aboveLeaves (c : Json) (path : Point) : List (Point × Json) :=
+  match field c "split" >>= arr with
+  | some kids => ((List.range kids.size).zip kids.toList).flatMap (fun (i, k) => aboveLeaves k (path ++ [i]))
+  | none =>
+    match field c "above_rows" with
+    | some a => [(path, a)]
+    | none => []
+
 /-- Whether the cover written in the document rests anywhere on the tables above. The
     reading below turns such a leaf into an ordinary impossible box, settled by the facts
     this table states about those tables, so the shape alone no longer says it. -/
@@ -222,6 +247,7 @@ partial def coverOfJson : Option Json → Option Cover
         if (field c "upstream").isSome || (field c "constraint").isSome
           || (field c "derived_axis").isSome || (field c "every_point_ruled_out").isSome
           || (field c "farkas").isSome || (field c "days_axis").isSome
+          || (field c "define_axis").isSome || (field c "above_rows").isSome
         then some .impossible else none
 
 partial def kidsOfJson : List Json → Option Kids
@@ -320,10 +346,54 @@ def srcOfJson (j : Json) : Option (List (Option SrcSpan)) :=
           let len ← fieldNat x "len"
           some { line := line, col := col, len := len, text := fieldStr x "text" }))
 
+/-- The table of a certificate that decides a column, and where the column sits among its outputs. -/
+def deciderOf (all : Array Json) (column : String) : Option (Json × Nat) :=
+  all.findSome? (fun u =>
+    let ds := (fieldArr u "decides").toList.filterMap str
+    (ds.findIdx? (· == column)).map (fun i => (u, i)))
+
+/-- The rows of the table above that write `value` into `column`, read on this table (rulec's
+    §15.195): for each, what its box says about the values this table numbers (`idx`, where the
+    value's axis here is a number or the value is a name of the model) and about this table's own
+    axes of words (`columns`, `labels`, `numeric`). `none` when no table decides the column, or a
+    row of it writes something that is not a word — the rows cannot then be counted. -/
+def aboveRowsOf (all : Array Json) (column value : String) (idx : String → Option Nat)
+    (columns : List String) (labels : List (List String)) (numeric : List Bool) : Option (List AboveRow) := do
+  let (u, oi) ← deciderOf all column
+  let uaxes := (fieldArr u "axes").toList
+  let rows := (fieldArr u "rows").toList
+  let outs ← rows.mapM (fun r => (fieldArr r "produces")[oi]? >>= str)
+  let writers := (rows.zip outs).filter (fun ro => ro.2 == value)
+  writers.mapM (fun (r, _) => do
+    let i ← fieldNat r "row"
+    let accepts : List (List Nat) := (fieldArr r "accepts").toList.map (fun xs => ((arr xs).getD #[]).toList.filterMap nat)
+    let nums ← ((List.range uaxes.length).filterMap (fun ua =>
+      let ax := (uaxes[ua]?).getD Json.null
+      let bs := fieldArr ax "bounds"
+      if !bs.any (fun b => !b.isNull) then none else
+      match idx (fieldStr ax "column") with
+      | none => none
+      | some vi =>
+        let mine := (columns.idxOf? (fieldStr ax "column")).map (fun aj => (numeric[aj]?).getD false)
+        if mine == some false then none else
+        some ((((accepts[ua]?).getD []).mapM (fun x => bs[x]? >>= coordOfJson)).map (fun cs => (vi, cs))))).mapM id
+    let words := (List.range uaxes.length).filterMap (fun ua => do
+      let ax ← uaxes[ua]?
+      if (fieldArr ax "bounds").any (fun b => !b.isNull) then none else
+      let aj ← columns.idxOf? (fieldStr ax "column")
+      if (numeric[aj]?).getD true then none else
+      let ulabels := (fieldArr ax "coords").toList.filterMap str
+      let lets := ((accepts[ua]?).getD []).filterMap (fun x => ulabels[x]?)
+      let mineLabels := (labels[aj]?).getD []
+      some (aj, (List.range mineLabels.length).filter (fun c => match mineLabels[c]? with
+        | some l => lets.contains l
+        | none => false)))
+    some { index := i, nums := nums, words := words })
+
 def readTable (rangesOf : String → Option Span2) (groups : String → List String)
     (declaredOf : String → Option Span2)
     (factOf : Json → Option (List (String × Rat) × Rat × Bool))
-    (daysOf : String → Option (List Rat)) (j : Json) : Option ReadTable := do
+    (daysOf : String → Option (List Rat)) (all : Array Json) (j : Json) : Option ReadTable := do
   let name := fieldStr j "table"
   let policy ← (if fieldStr j "policy" == "unique" then some Policy.unique
                 else if fieldStr j "policy" == "first" then some Policy.first else none)
@@ -342,10 +412,11 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
     let r ← columns.idxOf? (fieldStr k "right")
     let op ← cmpOfString (fieldStr k "op")
     some { left := l, op := op, right := r })
-  -- A derived column can only produce values its own expression can reach.
+  -- A column the rule computes — a derive, or a `define` of a number (rulec's §15.195) — can
+  -- only produce values its own expression can reach: the interval worked out here from it.
   let reach : List (Option Ival) := columns.map (fun n =>
     if (axes.toList.find? (fun a => fieldStr a "column" == n)).map
-        (fun a => fieldStr a "kind") == some "derived" then
+        (fun a => fieldStr a "kind") != some "input" then
       (rangesOf n).map (fun I => (some I.1, some I.2))
     else none)
   let rows : List Row := (fieldArr j "rows").toList.filterMap (fun r => do
@@ -391,6 +462,40 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
     let xs := (fieldArr w "extra_values").toList.map (fun v => (optRat v).getD 0)
     some (i, at_, vs ++ xs))
   let cover ← coverOfJson (field j "cover")
+  -- The leaves that rest on the rows of a table above (rulec's §15.195): the rows are read
+  -- from that table's part of the document, and each leaf's reasons in the order of those rows.
+  let labels := axes.toList.map (fun a => (fieldArr a "coords").toList.filterMap str)
+  let numeric := axes.toList.map (fun a => (fieldArr a "bounds").any (fun b => !b.isNull))
+  let aboveLs := match field j "cover" with
+    | some c => aboveLeaves c []
+    | none => []
+  let aboveCols : List AboveCol := aboveLs.foldl (fun acc (path, a) =>
+    match fieldNat a "axis" with
+    | none => acc
+    | some ai =>
+      match path[ai]? with
+      | none => acc
+      | some ci =>
+        if acc.any (fun e => e.axis == ai && e.coord == ci) then acc else
+        match columns[ai]?, (labels[ai]?).bind (fun ls => ls[ci]?) with
+        | some col, some val =>
+          match aboveRowsOf all col val idx columns labels numeric with
+          | some rows => acc ++ [{ axis := ai, coord := ci, rows := rows }]
+          | none => acc
+        | _, _ => acc) []
+  let aboveAts : List (Point × (Nat × List RowOut)) := aboveLs.filterMap (fun (path, a) => do
+    let ai ← fieldNat a "axis"
+    let ci ← path[ai]?
+    let e ← aboveCols.find? (fun e => e.axis == ai && e.coord == ci)
+    let given := (fieldArr a "rows").toList
+    let outs ← e.rows.mapM (fun r => do
+      let g ← given.find? (fun x => fieldNat x "row" == some r.index)
+      match fieldNat g "clash" with
+      | some aj => some (RowOut.clash aj)
+      | none => do
+        let refs ← (field g "farkas" >>= arr) >>= (fun xs => xs.toList.mapM (refOfJsonIn idx))
+        some (RowOut.farkas refs))
+    some (path, (ai, outs)))
   let rowsRaw : List ReadRow := (fieldArr j "rows").toList.filterMap (fun r => do
     let i ← fieldNat r "row"
     let tests ← (fieldArr r "tests").toList.mapM (cellOfJson groups)
@@ -441,13 +546,15 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
                  facts := facts
                  -- The days an input takes from a koyomi file (rulec's §15.174), on its axis.
                  days := axes.toList.map (fun a =>
-                   if fieldStr a "kind" == "input" then daysOf (fieldStr a "column") else none) }
+                   if fieldStr a "kind" == "input" then daysOf (fieldStr a "column") else none)
+                 above := aboveCols }
       cover := cover
       told := fun a b => (told.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2)
       witness := fun i => (wit.find? (fun w => w.1 == i)).map (fun w => (w.2.1, w.2.2))
       undecided := fun a b => (undec.find? (fun u => u.1 == a && u.2 == b)).isSome
       refuted := fun a b => (refuted.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2)
       farkasAt := fun p => (leaves.find? (fun l => l.1 == p)).map (fun l => l.2)
-      daysApart := fun a b => (byDays.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2) } }
+      daysApart := fun a b => (byDays.find? (fun t => t.1 == a && t.2.1 == b)).map (fun t => t.2.2)
+      aboveAt := fun p => (aboveAts.find? (fun l => l.1 == p)).map (fun l => l.2) } }
 
 end RulecCert

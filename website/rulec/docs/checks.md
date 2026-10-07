@@ -20,7 +20,7 @@ empty.
 |---|---|
 | **Completeness** | if some input matches no row, it stops — **with that input** |
 | **Overlap** | under `policy unique`, an overlap is an error. Under `policy first`, structural shadowing (the staircase) is told apart from the pairs whose outputs differ and therefore deserve a decision |
-| **Dead rows** | a row nothing reaches. The message tells apart "earlier rows already cover it", "the upstream table never emits the value it names" and "the derive never comes to the values the row asks for", the last with the interval the derive does come to |
+| **Dead rows** | a row nothing reaches. The message tells apart "earlier rows already cover it", "the upstream table never emits the value it names" and "the derive or the `define` never comes to the values the row asks for", the last with the interval it does come to — or with the row of the table above that writes the value the row asks for, and what the derive comes to while that row fires |
 | **Units** | adding yen to grams stops. So does tax-inclusive plus tax-exclusive |
 | **Rounding** | a numeric output must declare one. Without it, the message shows the money: "down(1JPY) gives 0JPY, half_up(1JPY) gives 0JPY and up(10JPY) gives 10JPY, so the rounding mode moves the result by up to 10JPY" |
 | **Overflow** | that every intermediate fits in int64, proved from the declared ranges and steps |
@@ -43,6 +43,17 @@ are read on the step they take, which can be finer than the whole units a cell i
 `commission = amount * 10%` comes in tenths of a pound, so rows `<=1GBP` and `>=2GBP` leave
 `1.1GBP` to no row, and completeness stops with it and with the amount that makes it,
 `amount = 11`.
+
+A `define` that computes a number is read the same way. With `score` from 0 to 200,
+`define share : rate = score / 200` comes to 0% up to 100%, so completeness demands no row for
+a share past 100%, and a row that asks only for one is E102. So is a row that asks a derive,
+beside the value a table above writes into another column, only for values the derive never
+comes to while the rows that write that value fire: when `small` is written only for an amount
+up to 50GBP, `small` beside an excess over the limit past 50GBP is reached by no input. The
+message names that row of the table above and what `excess` comes to there, `>=-99GBP <=50GBP`,
+and completeness asks no row for the combination either. The certificate gives the reason for
+both, and the two re-checkers work them out again rather than taking its word: the interval from
+the `define`'s own expression, and the rows that write the value from the table above.
 
 In a rule that binds an enum to a `.proto` with `import proto`,
 completeness reaches **across the contract**. Every `rulec check` reads

@@ -367,6 +367,8 @@ fn 定理が立つ公理は三つだけ() {
         "RulecCert.Certified.unique",
         "RulecCert.farkas_sound",
         "RulecCert.not_asked_of_farkas",
+        "RulecCert.not_asked_of_derived",
+        "RulecCert.not_asked_of_aboveRuledOut",
         "RulecCert.included_sound",
         "RulecCert.admits_iff",
         "RulecCert.mem_boxOf_cmp_iff",
@@ -591,4 +593,60 @@ fn 知らない形式の版の証明書は証明付きの検査器でも受け�
     assert!(said.contains("format version"), "{said}");
     let unmarked = cert.replacen(r#"{"v":1,"#, "{", 1);
     assert_eq!(lean(&bin, &unmarked, None).0, 0, "v の無い証明書を版 1 として読まない");
+}
+
+/// The certificate of a rule in `tests/sieve` (DESIGN §15.195).
+fn sieve_cert(stem: &str) -> String {
+    let (c, cert) = rulec(&["certificate", &format!("tests/sieve/{stem}.rule")]);
+    assert_eq!(c, 0, "{cert}");
+    cert
+}
+
+/// The same leaves through the proved checks (§15.195): a coordinate of a `define` past its reach,
+/// which `not_asked_of_derived` settles with the reach worked out from the define's expression,
+/// and a value a table above writes only in rows that do not fire, which
+/// `not_asked_of_aboveRuledOut` settles with the rows read from that table. The same lies as under
+/// `tools/recheck.py` are refused.
+#[test]
+fn 定義と上の表の行の葉は証明付きの検査器でも確かめられる() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    let define = sieve_cert("E101_past_a_defines_reach");
+    let rel = "tests/sieve/E101_past_a_defines_reach.rule";
+    let (code, said) = lean(&bin, &define, Some(rel));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("OK: every claim"), "{said}");
+    let lies = [
+        ("届く座標に葉を置く", define.replacen(r#"{"split":[{"row":1},"#, r#"{"split":[{"define_axis":0},"#, 1)),
+        ("取りうる値を狭く書く", define.replacen(r#""share":["0","1"]"#, r#""share":["0","1/2"]"#, 1).replacen(r#"{"row":2},{"row":2},"#, r#"{"row":2},{"define_axis":0},"#, 1)),
+    ];
+    for (what, forged) in lies {
+        assert_ne!(forged, define, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = lean(&bin, &forged, Some(rel));
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains("FAILED"), "{what}: {said}");
+    }
+
+    let above = sieve_cert("E101_past_what_a_table_above_allows");
+    let rel = "tests/sieve/E101_past_what_a_table_above_allows.rule";
+    let (code, said) = lean(&bin, &above, Some(rel));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("OK: every claim"), "{said}");
+    let leaf = r#"{"above_rows":{"axis":0,"column":"refund_size","value":"small","rows":[{"row":1,"farkas":["#;
+    let end = r#"{"cond":{"name":"amount","hi":true,"at":"50","open":false},"y":"1"}"#;
+    assert!(above.contains(leaf) && above.contains(end), "{above}");
+    let lies = [
+        ("行の理由を落とす", above.replacen(leaf, &leaf.replace(r#"{"row":1,"#, r#"{"row":2,"#), 1)),
+        ("乗数を変える", above.replacen(end, &end.replace(r#""y":"1""#, r#""y":"2""#), 1)),
+        ("行の端を動かす", above.replacen(end, &end.replace(r#""at":"50""#, r#""at":"60""#), 1)),
+        ("ほかの行も同じ値を書く", above.replacen(r#""produces":["large"]"#, r#""produces":["small"]"#, 1)),
+        ("点の値を行の外に置く", above.replacen(r#""at_values":[null,"1"],"extra_values":["1","0"]"#, r#""at_values":[null,"1"],"extra_values":["60","59"]"#, 1)),
+    ];
+    for (what, forged) in lies {
+        assert_ne!(forged, above, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = lean(&bin, &forged, Some(rel));
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains("FAILED"), "{what}: {said}");
+    }
 }

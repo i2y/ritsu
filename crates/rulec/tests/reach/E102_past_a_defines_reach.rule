@@ -1,0 +1,19 @@
+rule score_band v1
+description "Sorts a score by the share of the full 200 points it reaches. The share is a define, and the last row asks for more than the full score, which no score reaches"
+
+enum band = low | high | beyond
+
+inputs
+  score : number  range >=0 <=200
+
+outputs
+  grade : band
+
+define share : rate = score / 200
+
+table grade_of
+policy unique
+| share        | -> grade : band |
+| <50%         | low             |
+| >=50% <=100% | high            |
+| >100%        | beyond          |

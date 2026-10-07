@@ -108,32 +108,42 @@ fn 台帳の例は本当にそのコードを出す() {
     }
 }
 
-/// The other form an entry reproduces is that form, not the first one again: E102's is a row past
-/// what a derive reaches, and its note says what the derive comes to, in both languages
-/// (§15.189). Its English twin says the same things in the same places as the Japanese one.
+/// The other forms an entry reproduces are those forms, not the first one again: E102's are a row
+/// past what a derive reaches (§15.189), past what a `define` reaches, and past what a derive
+/// reaches while a table above writes the value the row asks for (§15.195), and each note says what
+/// the value comes to, in both languages. Each English twin says the same things in the same places
+/// as the Japanese one.
 #[test]
 fn 台帳の別の形の再現はその形を出す() {
     let e = rulec::codes::find("E102").unwrap();
-    assert_eq!(e.also.len(), 1);
-    let a = &e.also[0];
-    for (lang, said) in [(Lang::En, "can only come to >=-99JPY <=100JPY"), (Lang::Ja, "が取りうる値は、入力の範囲から計算すると >=-99円 <=100円 です。")] {
-        let r = a.repro(lang);
-        let notes = rulec::i18n::with(lang, || rulec::check_source(r.example, "explain.rule").iter().filter(|d| d.code == "E102").flat_map(|d| d.notes.clone()).collect::<Vec<_>>().join("\n"));
-        assert!(notes.contains(said), "{lang:?}:\n{notes}");
+    assert_eq!(e.also.len(), 3);
+    let says: [[(Lang, &str); 2]; 3] = [
+        [(Lang::En, "can only come to >=-99JPY <=100JPY"), (Lang::Ja, "が取りうる値は、入力の範囲から計算すると >=-99円 <=100円 です。")],
+        [(Lang::En, "`share` can only come to >=0% <=100%"), (Lang::Ja, "`割合` が取りうる値は、入力の範囲から計算すると >=0% <=100% です。")],
+        [(Lang::En, "`band` is small only where row 1 of table k (amount <= 50JPY) fires. There `excess` can only come to >=-99JPY <=50JPY"), (Lang::Ja, "`区分` が 少額 になるのは、表 k の 行1（額 <= 50円）が当たるときだけです。そのとき `超過` が取りうる値は >=-99円 <=50円 で")],
+    ];
+    for (a, said) in e.also.iter().zip(says) {
+        for (lang, said) in said {
+            let r = a.repro(lang);
+            let notes = rulec::i18n::with(lang, || rulec::check_source(r.example, "explain.rule").iter().filter(|d| d.code == "E102").flat_map(|d| d.notes.clone()).collect::<Vec<_>>().join("\n"));
+            assert!(notes.contains(said), "{lang:?}:\n{notes}");
+        }
+        assert_eq!(printed(&e, a.repro(Lang::En)), printed(&e, a.repro(Lang::Ja)));
     }
-    assert_eq!(printed(&e, a.repro(Lang::En)), printed(&e, a.repro(Lang::Ja)));
     // the entries that show another form: E102 alone
     let with: Vec<&str> = rulec::codes::ledger().iter().filter(|e| !e.also.is_empty()).map(|e| e.code).collect();
     assert_eq!(with, ["E102"]);
-    // `explain` shows it under a heading of its own, in the language asked for, and the JSON under
-    // `also`, a key no other entry has
+    // `explain` shows each under a heading of its own, in the language asked for, and the JSON
+    // under `also`, a key no other entry has
     let (_, en) = run(&["explain", "E102", "--lang", "en"]);
     assert!(en.contains("Smallest reproduction of the third form") && en.contains("amount(a) : money[JPY, incl_tax]"), "{en}");
+    assert!(en.contains("a row outside what a `define` can reach") && en.contains("define share(s) : rate = score / 200"), "{en}");
     let (_, ja) = run(&["explain", "E102", "--lang", "ja"]);
     assert!(ja.contains("三つ目の形") && ja.contains("額(a)   : money[円, incl_tax]"), "{ja}");
+    assert!(ja.contains("`define` の取りうる値の外にある行") && ja.contains("define 割合(s) : rate = 点 / 200"), "{ja}");
     let (_, j) = run(&["explain", "E102", "--format", "json", "--lang", "en"]);
     let j = rulec::json::parse(&j).unwrap();
-    assert!(j.get("also").and_then(|a| a.as_arr()).is_some_and(|a| a.len() == 1), "{j:?}");
+    assert!(j.get("also").and_then(|a| a.as_arr()).is_some_and(|a| a.len() == 3), "{j:?}");
     let (_, j) = run(&["explain", "E101", "--format", "json", "--lang", "en"]);
     assert!(rulec::json::parse(&j).unwrap().get("also").is_none());
 }

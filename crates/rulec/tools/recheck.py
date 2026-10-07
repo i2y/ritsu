@@ -381,15 +381,22 @@ def constraint_rules_out(t, k, path):
 
 
 def derived_rules_out(t, ai, path):
-    """Whether a derived column's coordinate lies outside what its own expression can
-    produce. `None` when this program has no expression for it."""
+    """Whether the coordinate of a column the rule computes — a derive, or a `define` of a
+    number (§15.195) — lies outside what its own expression can produce, the interval this
+    program works out for it. An interval coordinate leaves its ends out, so one that starts
+    where the reach ends lies outside it. `None` when this program has no expression for it."""
     if ai >= len(path) or ai >= len(t["axes"]):
+        return None
+    if t["axes"][ai].get("kind") == "input":
         return None
     reach = t.get("_reach_of", {}).get(t["axes"][ai]["column"])
     if reach is None:
         return None
     lo, hi = bound_at(t, ai, path[ai])
-    return (hi is not None and hi < reach[0]) or (lo is not None and lo > reach[1])
+    point = lo is not None and hi is not None and lo == hi
+    if point:
+        return hi < reach[0] or lo > reach[1]
+    return (hi is not None and hi <= reach[0]) or (lo is not None and lo >= reach[1])
 
 
 def closed_at(u, ai, x):
@@ -750,7 +757,10 @@ def model_facts(t, cert):
                 terms, k = {n: -c for n, c in terms.items()}, -k
             out.append((terms, k, False))
         elif "range" in f:
-            r = cert.get("ranges", {}).get(f["range"])
+            # A value the rule computes is bounded by the interval worked out here from its
+            # expression, not by the document's word for it (§15.195); an input by its range.
+            got = t.get("_reach_of", {}).get(f["range"])
+            r = cert.get("ranges", {}).get(f["range"]) if got is None else (str(got[0]), str(got[1]))
             end = None if r is None else num(r[1] if f["hi"] else r[0])
             if end is None:
                 raise Bad(f"{t['table']}: the model names an end of {f['range']}'s range that the rule does not declare")
@@ -789,9 +799,13 @@ def beyond(t, ai, coords, hi, at, strict):
     return True
 
 
-def farkas_holds(t, cert, refs, box):
+def farkas_holds(t, cert, refs, box, above=None):
     """Whether the multipliers refute the model inside the box. Returns None when they do,
-    or what is wrong."""
+    or what is wrong.
+
+    `above` is a row of a table above, `(that table, the row)`, whose box lends its ends: an
+    end on a numeric column it cuts (`cond`) holds of every coordinate the row takes there,
+    and the column has to be one this table numbers a value for (§15.195)."""
     facts = t.setdefault("_facts", model_facts(t, cert))
     total, k, strict = {}, Fraction(0), False
     for ref in refs:
@@ -812,6 +826,20 @@ def farkas_holds(t, cert, refs, box):
                 return f"a coordinate of {t['axes'][ai]['column']} in this box lies beyond the end it names"
             col = t["axes"][ai]["column"]
             terms, fk, fs = ({col: Fraction(1)}, -at, left_out) if hi else ({col: Fraction(-1)}, at, left_out)
+        elif "cond" in ref:
+            if above is None:
+                return "it names the end of a row above, and no row above is in question"
+            u, row = above
+            cr = ref["cond"]
+            name, hi, at, left_out = cr.get("name"), cr.get("hi"), num(cr.get("at")), bool(cr.get("open"))
+            ua = axis_of(u, name) if isinstance(name, str) else None
+            if ua is None or at is None or not numeric_axis(u["axes"][ua]):
+                return f"it names an end of {name}, which {u['table']} does not cut as a number"
+            if not numbered(t, name):
+                return f"it names {name}, which this table numbers no value for"
+            if not beyond(u, ua, row["accepts"][ua], hi, at, left_out):
+                return f"a coordinate row {row['row']} of {u['table']} takes on {name} lies beyond the end it names"
+            terms, fk, fs = ({name: Fraction(1)}, -at, left_out) if hi else ({name: Fraction(-1)}, at, left_out)
         else:
             return "it names an inequality from nowhere this program knows"
         for n, c in terms.items():
@@ -996,12 +1024,138 @@ def check_contract(cert, k):
     return f"contract {name}: {shown} of {len(doors)} things the door asks hold in all {len(cases)} cases"
 
 
+def axis_of(u, column):
+    """Where a table cuts a column, or None."""
+    return next((i for i, a in enumerate(u["axes"]) if a["column"] == column), None)
+
+
+def numeric_axis(a):
+    """Whether the coordinates of an axis stand for numbers."""
+    return any(b is not None for b in (a.get("bounds") or []))
+
+
+def numbered(t, name):
+    """Whether this table numbers a value for the name: a numeric axis of its, or a name of its
+    linear model (`linear.extra`). The proved checker numbers the values the same way."""
+    if any(a["column"] == name and numeric_axis(a) for a in t["axes"]):
+        return True
+    return name in (t.get("linear") or {}).get("extra", [])
+
+
+def writers(t, column, value):
+    """The table that decides a column, and the rows of it that write the value — counted here,
+    from that table's own `produces`. A row that writes something this program cannot read
+    leaves the rows uncounted, and the leaf that rests on them is refused."""
+    u, oi = decider(t.get("_tables") or [], column)
+    if u is None:
+        raise Bad(f"{t['table']}: a leaf rests on the rows that write {column} = {value}, and no table here decides {column}")
+    rows = []
+    for r in u["rows"]:
+        p = r.get("produces")
+        if not isinstance(p, list) or oi >= len(p) or p[oi] is None:
+            raise Bad(f"{t['table']}: row {r['row']} of {u['table']} writes something this program cannot read, "
+                      f"so the rows that write {column} = {value} cannot be counted")
+        if p[oi] == value:
+            rows.append(r)
+    return u, rows
+
+
+def row_out_holds(t, cert, u, row, proof, box):
+    """Why a row of a table above fires nowhere in the box: on a column of words both tables
+    cut, the box takes none of the words the row lets in (`clash`); or the linear model, the
+    box's ends and the row's own ends add up to a contradiction (`farkas`). None when the reason
+    holds, or what is wrong."""
+    if not isinstance(proof, dict):
+        return "a reason this program cannot read"
+    if "clash" in proof:
+        aj = proof["clash"]
+        if not isinstance(aj, int) or not 0 <= aj < len(t["axes"]):
+            return f"it names axis {aj}, which does not exist"
+        a = t["axes"][aj]
+        ua = axis_of(u, a["column"])
+        if ua is None:
+            return f"{u['table']} does not cut {a['column']}"
+        if numeric_axis(a) or numeric_axis(u["axes"][ua]):
+            return f"{a['column']} is a number, which a clash of words does not settle"
+        mine = {a["coords"][c] for c in box[aj]}
+        lets = {u["axes"][ua]["coords"][x] for x in row["accepts"][ua]}
+        if mine & lets:
+            return f"the box and row {row['row']} of {u['table']} both take {sorted(mine & lets)[0]} on {a['column']}"
+        return None
+    if "farkas" in proof:
+        return farkas_holds(t, cert, proof["farkas"], box, (u, row))
+    return "a reason of a kind this program does not know"
+
+
+def above_keys(node, path=(), out=None):
+    """The (axis, coordinate) pairs the cover rests on the rows of a table above for."""
+    out = [] if out is None else out
+    if "split" in node:
+        for c, kid in enumerate(node["split"]):
+            above_keys(kid, path + (c,), out)
+    elif "above_rows" in node:
+        ai = node["above_rows"].get("axis")
+        if isinstance(ai, int) and ai < len(path) and (ai, path[ai]) not in out:
+            out.append((ai, path[ai]))
+    return out
+
+
+def coord_holds(u, ua, x, v):
+    """Whether a value lies in one coordinate of a table's axis, read exactly: the one value of
+    a point, strictly between the ends of an interval."""
+    lo, hi = bound_at(u, ua, x)
+    if lo is not None and hi is not None and lo == hi:
+        return v == lo
+    return (lo is None or lo < v) and (hi is None or v < hi)
+
+
+def above_admits(t, at, values, extra):
+    """Where the cover rests on the rows of a table above for a value a point takes, one of
+    those rows has to fire on the values behind the point (§15.195): each numeric column it cuts
+    that this table numbers a value for holds a value inside one of the row's own coordinates,
+    and each column of words both tables cut holds a word the row lets in. None when it does,
+    or why not."""
+    if t.get("cover") is None:
+        return None
+    cols = [a["column"] for a in t["axes"]]
+    vals = {n: num(v) for n, v in zip(cols, values or []) if v is not None}
+    vals.update({n: num(v) for n, v in zip((t.get("linear") or {}).get("extra", []), extra or []) if v is not None})
+    for ai, ci in above_keys(t["cover"]):
+        if at[ai] != ci:
+            continue
+        column, value = cols[ai], t["axes"][ai]["coords"][ci]
+        u, ws = writers(t, column, value)
+        for r in ws:
+            fires = True
+            for ua, ax in enumerate(u["axes"]):
+                n = ax["column"]
+                if numeric_axis(ax):
+                    if not numbered(t, n):
+                        continue
+                    if n not in vals or not any(coord_holds(u, ua, x, vals[n]) for x in r["accepts"][ua]):
+                        fires = False
+                        break
+                else:
+                    aj = axis_of(t, n)
+                    if aj is None or numeric_axis(t["axes"][aj]):
+                        continue
+                    if t["axes"][aj]["coords"][at[aj]] not in {ax["coords"][x] for x in r["accepts"][ua]}:
+                        fires = False
+                        break
+            if fires:
+                break
+        else:
+            return f"no row of {u['table']} that writes {column} = {value} fires on the values behind it"
+    return None
+
+
 def check_cover(t):
     """Completeness: the cover has to tile the space, and every leaf has to hold."""
     axes, rows = t["axes"], {r["row"]: r for r in t["rows"]}
     if t.get("cover") is None:
         raise Bad(f"{t['table']}: no cover is stated, so completeness is not shown")
-    seen = {"rows": 0, "constraint": 0, "derived": 0, "above": 0, "points": 0, "model": 0, "days": 0}
+    seen = {"rows": 0, "constraint": 0, "derived": 0, "define": 0, "above": 0, "above_rows": 0,
+            "points": 0, "model": 0, "days": 0}
 
     def walk(node, path):
         if "split" in node:
@@ -1044,6 +1198,53 @@ def check_cover(t):
             if not out:
                 raise Bad(f"{t['table']}: {axes[ai]['column']} can reach this box, so it is not impossible")
             seen["derived"] += 1
+            return
+        if "define_axis" in node:
+            # The axis of a `define` of a number, whose coordinate lies outside what the define's
+            # own expression reaches — the interval worked out here, with an interval coordinate's
+            # ends left out (§15.195).
+            ai = node["define_axis"]
+            if not isinstance(ai, int) or not 0 <= ai < len(axes):
+                raise Bad(f"{t['table']}: a leaf points at axis {ai}, which does not exist")
+            if ai >= len(path):
+                raise Bad(f"{t['table']}: a leaf points at axis {ai}, which this box has not fixed")
+            out = derived_rules_out(t, ai, path)
+            if out is None:
+                raise Bad(f"{t['table']}: {axes[ai]['column']} is called out of reach, but no expression for it is in the certificate")
+            if not out:
+                raise Bad(f"{t['table']}: {axes[ai]['column']} can reach this box, so it is not impossible")
+            seen["define"] += 1
+            return
+        if "above_rows" in node:
+            # A value decided above that only some rows of that table write, none of which fires
+            # in the box (§15.195). The rows are counted here from that table's `produces`, and
+            # each comes with a reason that is checked: a clash of words, or multipliers.
+            a = node["above_rows"]
+            ai = a.get("axis") if isinstance(a, dict) else None
+            if not isinstance(ai, int) or not 0 <= ai < len(axes) or ai >= len(path):
+                raise Bad(f"{t['table']}: a leaf rests on a table above for axis {ai}, which this box has not fixed")
+            column, value = axes[ai]["column"], axes[ai]["coords"][path[ai]]
+            if a.get("column") != column or a.get("value") != value:
+                raise Bad(f"{t['table']}: a leaf speaks of {a.get('column')} = {a.get('value')}, and the box holds {column} = {value}")
+            u, ws = writers(t, column, value)
+            if not ws:
+                raise Bad(f"{t['table']}: no row of {u['table']} writes {column} = {value}, which is a fact, not this leaf")
+            given = {}
+            for r in a.get("rows") or []:
+                n = r.get("row") if isinstance(r, dict) else None
+                if not isinstance(n, int) or n in given:
+                    raise Bad(f"{t['table']}: a leaf names a row of {u['table']} it cannot, or twice")
+                given[n] = r
+            want = sorted(r["row"] for r in ws)
+            if sorted(given) != want:
+                raise Bad(f"{t['table']}: the rows of {u['table']} that write {column} = {value} are {want}, "
+                          f"and the leaf gives reasons for {sorted(given)}")
+            box = [[c] for c in path] + [list(range(len(x["coords"]))) for x in axes[len(path):]]
+            for r in ws:
+                why = row_out_holds(t, t["_cert"], u, r, given[r["row"]], box)
+                if why is not None:
+                    raise Bad(f"{t['table']}: row {r['row']} of {u['table']} is said to fire nowhere in this box, and {why}")
+            seen["above_rows"] += 1
             return
         if "days_axis" in node:
             ai = node["days_axis"]
@@ -1330,7 +1531,7 @@ def sieve_admits(t, values, at):
             if hi is not None and not v < hi:
                 return f"{axes[ai]['column']} = {v} is not below {hi}"
         reach = t.get("_reach_of", {}).get(axes[ai]["column"])
-        if reach is not None and axes[ai]["kind"] == "derived" and not (reach[0] <= v <= reach[1]):
+        if reach is not None and axes[ai]["kind"] != "input" and not (reach[0] <= v <= reach[1]):
             return f"{axes[ai]['column']} = {v} is outside what its own expression reaches"
         days = days_of_axis(t, ai)
         if days is not None and v not in days:
@@ -1457,6 +1658,8 @@ def check_table(t):
         why = sieve_admits(t, r.get("at_values"), at)
         if why is None:
             why = facts_hold(t, t["_cert"], r.get("at_values"), r.get("extra_values"))
+        if why is None:
+            why = above_admits(t, at, r.get("at_values"), r.get("extra_values"))
         if why is not None:
             # Where the certificate hands over no values, the claim falls back to the
             # weaker reading — "the sieve does not exclude this point" — and says so.
@@ -1494,7 +1697,9 @@ def check_table(t):
     if True:
         cover_note = f", {seen['rows']} boxes covered"
         for k, word in (("constraint", "by a constraint"), ("derived", "out of a derive's reach"),
-                        ("above", "for the tables above"), ("points", "point by point"),
+                        ("define", "out of a define's reach"),
+                        ("above", "for the tables above"),
+                        ("above_rows", "by the rows of a table above"), ("points", "point by point"),
                         ("model", "by the linear model"), ("days", "outside koyomi's days")):
             if seen[k]:
                 cover_note += f" + {seen[k]} impossible {word}"

@@ -1,5 +1,5 @@
 rule define_reach v1
-description "A table over a define whose last row lies past what the define reaches: the check lets the row through, since E102 does not read the reach of a define, and a question over ranges of the inputs leaves it out"
+description "A table over a define whose last row lies past what the define reaches: E102 reads the reach of a define, so the check stops the rule, and the port answers nothing for it"
 
 enum band = small | big | huge
 

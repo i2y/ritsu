@@ -2169,7 +2169,7 @@ Related codes: [E129](#e129), [E130](#e130)
 
 `error` — **Completeness gap: some input matches no row**
 
-**When.** The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached. Where a column is a value the rule computes (a derive, a `define`, the output of a table above), the example gives its value, and the input that produces it too, once the reference evaluator has confirmed it. That input is worked out from the expression where a derive only adds, subtracts and multiplies by constants, and otherwise (a `min` or a rounding, a `define`, a table above) looked for among every combination of the inputs when there are no more than 16,384. A derive's values can fall finer than the units a cell is written in (`amount * 10%` comes in tenths), and they are read on that step.
+**When.** The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached. Where a column is a value the rule computes (a derive, a `define`, the output of a table above), the example gives its value, and the input that produces it too, once the reference evaluator has confirmed it. That input is worked out from the expression where a derive only adds, subtracts and multiplies by constants, and otherwise (a `min` or a rounding, a `define`, a table above) looked for among every combination of the inputs when there are no more than 16,384. A derive's values can fall finer than the units a cell is written in (`amount * 10%` comes in tenths), and they are read on that step. No row is asked for where no input reaches: on the column of a derive or of a `define` that computes a number, past what it can actually come to (its expression computed over the inputs' ranges and the values the tables above produce, and for a derive over the `constraint` lines too); on a column a table above decides, at values of the other columns that the rows writing its value never let come with it.
 
 **Fix.** Add a row that matches the witness. If a new enum value caused it, add a row for that value or a `-` row that catches everything. If the value needs no row of its own, mark it `default` in the enum declaration.
 
@@ -2199,9 +2199,9 @@ Related codes: [E102](#e102), [E105](#e105), [W111](#w111)
 
 `error` — **Unreachable row: the row never matches**
 
-**When.** No input matches the row. There are three forms, told apart in the wording. In the first, every input the row would take is already taken by an earlier row, or by a row that takes precedence through `overrides`. In the second, the row names a value that the upstream table never produces. In the third, the row asks a derived column only for values outside what the derive can actually reach, the part inside (if any) being taken first by earlier rows. What a derive can reach is its expression computed over the inputs' ranges and the `constraint` lines, not the `range` written on it. The third form reads derives that add, subtract and multiply the inputs by constants.
+**When.** No input matches the row. There are three forms, told apart in the wording. In the first, every input the row would take is already taken by an earlier row, or by a row that takes precedence through `overrides`. In the second, the row names a value that the upstream table never produces. In the third, the row asks a derived column, or the column of a `define` that computes a number, only for values outside what it can actually reach, the part inside (if any) being taken first by earlier rows; so does a row that asks a column a table above decides and a derived column for values the derive never comes to while the rows that write that value fire. What a value can reach is its expression computed over the inputs' ranges and the values the tables above produce (for a derive, over the `constraint` lines too), not the `range` written on it.
 
-**Fix.** If the row is the newer intent, move it above the row that covers it. If it is dead, delete it. If it names a value the upstream never emits, either add a row upstream that emits it, or delete this row. If it asks a derive for values it never reaches, rewrite the condition within the values the derive can come to, or delete the row; widening the derive's `range` does not change those values.
+**Fix.** If the row is the newer intent, move it above the row that covers it. If it is dead, delete it. If it names a value the upstream never emits, either add a row upstream that emits it, or delete this row. If it asks a derive or a `define` for values it never reaches, rewrite the condition within the values it can come to, or delete the row; widening a derive's `range` does not change those values.
 
 **Smallest reproduction**:
 
@@ -2241,6 +2241,57 @@ policy unique
 | <=0JPY         | false          |
 | >0JPY <=100JPY | true           |
 | >100JPY        | true           |
+```
+
+**Smallest reproduction of the third form (a row outside what a `define` can reach)**:
+
+```rule
+rule t(t) v1
+
+inputs
+  score(p) : number  range >=0 <=200
+
+outputs
+  r(r) : bool
+
+define share(s) : rate = score / 200
+
+table j(j)
+policy unique
+| share        | -> r(r) : bool |
+| <50%         | false          |
+| >=50% <=100% | true           |
+| >100%        | true           |
+```
+
+**Smallest reproduction of the third form (a row asking a derive for values it never comes to while a table above writes the value the row asks for)**:
+
+```rule
+rule t(t) v1
+
+enum size(z) = small(small) | large(large)
+
+inputs
+  amount(a) : money[JPY, incl_tax]  range >=1JPY <=100JPY
+  limit(l)  : money[JPY, incl_tax]  range >=0JPY <=100JPY
+
+outputs
+  r(r) : bool
+
+derive excess(x) : money[JPY, incl_tax] = amount - limit  range >=-100JPY <=100JPY
+
+table k(k)
+policy unique
+| amount  | -> band(c) : size |
+| <=50JPY | small             |
+| >50JPY  | large             |
+
+table j(j)
+policy unique
+| band  | excess  | -> r(r) : bool |
+| small | <=50JPY | false          |
+| small | >50JPY  | true           |
+| large | -       | true           |
 ```
 
 Related codes: [E101](#e101), [W105](#w105), [W110](#w110), [E112](#e112)

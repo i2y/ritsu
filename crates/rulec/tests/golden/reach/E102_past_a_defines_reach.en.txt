@@ -1,0 +1,11 @@
+error[E102]: Unreachable row: row 3 never matches
+  --> tests/reach/E102_past_a_defines_reach.rule:19 table grade_of
+   |
+19 | | >100%        | beyond          |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3: no input reaches here
+12 | define share : rate = score / 200
+   |                       ^^^^^^^^^^^ the reachable interval is >=0% <=100%
+   |
+ Over the ranges of the inputs, `share` can only come to >=0% <=100%. None of those values meets this row's conditions.
+ hint: rewrite the condition within the values `share` can come to, or delete this row.
+

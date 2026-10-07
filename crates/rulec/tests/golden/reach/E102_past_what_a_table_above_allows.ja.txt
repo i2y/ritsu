@@ -1,0 +1,11 @@
+エラー[E102]: 行2 はどの入力にも当てはまりません
+  --> tests/reach/E102_past_what_a_table_above_allows.rule:26 表 decision_of
+   |
+26 | | small       | >50GBP  | by_hand              |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 行2: ここに到達する入力はありません
+14 | derive excess : money[GBP] = amount - limit  range >=-100GBP <=100GBP
+   |                              ^^^^^^^^^^^^^^ 実際に取りうる値は >=-99GBP <=100GBP です
+   |
+ `refund_size` が small になるのは、表 size_of の 行1（amount <= 50GBP）が当たるときだけです。そのとき `excess` が取りうる値は >=-99GBP <=50GBP で、この行の条件に当てはまる値はその中にありません。
+ ヒント: 条件を `excess` の取りうる値の中に書き直すか、この行を削除してください。導出の `range` を広げても、取りうる値は変わりません。
+

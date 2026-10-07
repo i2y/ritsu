@@ -321,18 +321,23 @@ fn past_the_budget_no_input_is_named() {
     assert_eq!(behind(&d, EN), None, "{:?}", d.notes);
 }
 
-/// An example no input makes gets no input. A `define` of a share asks here for a row at 310/3%,
-/// past the 100% the share reaches, because E101 does not read what a `define` can come to
-/// (§15.189, what was found); the walk tries all 31 totals, none makes it, and nothing is named.
+/// A gap no input reaches is no gap (§15.195). A `define` of a share asked here for a row at 310/3%,
+/// past the 100% the share reaches, while E101 did not read what a `define` can come to (§15.189,
+/// what was found); the walk tried all 31 totals, none made it, and nothing was named. E101 now
+/// reads the share's reach, so the table that ends at 100% is complete, and no total makes a share
+/// past it. Where the gap lies inside the reach, the input behind it is named as on any column.
 #[test]
-fn an_example_no_input_makes_names_no_input() {
+fn a_share_past_what_a_define_reaches_is_no_gap() {
     let src = "rule share v1\n\ninputs\n  total : number  range >=0 <=30\n\noutputs\n  full : bool\n\ndefine ratio : rate = total / 30\n\ntable t\npolicy unique\n| ratio | -> full : bool |\n| <100% | false          |\n| 100%  | true           |\n";
-    let (d, _) = the_error(src, "share.rule", Lang::En);
-    assert!(d.notes.iter().any(|n| n == "An input that matches no row: ratio = 310/3%"), "{:?}", d.notes);
-    assert_eq!(behind(&d, EN), None, "{:?}", d.notes);
-    let reached = (0..=30).any(|t| {
+    assert!(errors(src, "share.rule", Lang::En).is_empty(), "{:?}", errors(src, "share.rule", Lang::En));
+    let past = (0..=30).any(|t| {
         let (_, b) = evaluate(src, "share.rule", &[("total", t)]);
-        b.get("ratio") == Some(&Val::Num(Rat::new(31, 30)))
+        matches!(b.get("ratio"), Some(Val::Num(v)) if v.cmp_to(Rat::int(1)) == std::cmp::Ordering::Greater)
     });
-    assert!(!reached, "a total makes the example");
+    assert!(!past, "a total makes a share past 100%");
+    // A gap inside the reach: the share of a half, which a total of 15 makes.
+    let gap = src.replace("| <100% | false          |", "| <50%  | false          |");
+    let (d, _) = the_error(&gap, "share.rule", Lang::En);
+    assert!(d.notes.iter().any(|n| n == "An input that matches no row: ratio = 50%"), "{:?}", d.notes);
+    assert_eq!(behind(&d, EN), Some("total = 15"));
 }

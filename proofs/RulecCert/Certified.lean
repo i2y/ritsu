@@ -35,6 +35,10 @@ structure Certified where
   /-- The pairs the axes do not part and koyomi's days do (rulec's §15.174): the axis of days
       on which every coordinate both rows take holds none of the days. -/
   daysApart : Nat → Nat → Option Nat := fun _ _ => none
+  /-- The cover's leaves the rows of a table above rule out (rulec's §15.195), by the path to
+      each: the axis of the column that table decides, and a reason for each row of it that
+      writes the value the path holds there. -/
+  aboveAt : Point → Option (Nat × List RowOut) := fun _ => none
 
 /-- The table the certificate is about. Its `asked` is the sieve's: a combination counts
     when the values behind it satisfy everything the rule declares. -/
@@ -44,12 +48,15 @@ def Certified.table (C : Certified) : Table where
   policy := C.policy
   asked := C.sieve.asked
 
-/-- What rules a box of the cover out: the sieve, or the refutation the linear model gives
-    for it (§15.141). -/
+/-- What rules a box of the cover out: the sieve, the refutation the linear model gives for it
+    (§15.141), or the rows of a table above with a reason for each (rulec's §15.195). -/
 def Certified.ruledOut (C : Certified) (path : Point) : Bool :=
   boxRuledOut C.sieve C.arities path ||
     (match C.farkasAt path with
      | some refs => farkasRuledOut C.sieve (pathBox C.arities path) refs
+     | none => false) ||
+    (match C.aboveAt path with
+     | some (axis, outs) => aboveRuledOut C.sieve (pathBox C.arities path) axis outs
      | none => false)
 
 theorem Certified.not_asked_of_ruledOut (C : Certified) {path p : Point}
@@ -57,10 +64,13 @@ theorem Certified.not_asked_of_ruledOut (C : Certified) {path p : Point}
     ¬ C.sieve.asked p := by
   unfold Certified.ruledOut at h
   simp only [Bool.or_eq_true] at h
-  rcases h with h | h
+  rcases h with (h | h) | h
   · exact not_asked_of_boxRuledOut h hpre hsp
   · split at h
     · exact not_asked_of_farkas h (inBox_pathBox hpre hsp)
+    · exact absurd h (by simp)
+  · split at h
+    · exact not_asked_of_aboveRuledOut h (inBox_pathBox hpre hsp)
     · exact absurd h (by simp)
 
 /-- The completeness check: the rows are shaped like the axes, and the walk goes through.

@@ -1,0 +1,27 @@
+rule 返金の確認(refund_review) v1
+description "返金を人が確かめるかを決める。少額になるのは 50 円までの返金だけなので、少額の返金が上限を 50 円より多く超えることはなく、そこを求める行もない"
+
+enum 大きさ(size) = 少額(small) | 多額(large)
+enum 確認(review) = 不要(waved) | 人が確かめる(by_hand)
+
+inputs
+  金額(amount) : money[円]  range >=1円 <=100円
+  上限(limit)  : money[円]  range >=0円 <=100円
+
+outputs
+  確認方法(decision) : 確認
+
+derive 超過額(excess) : money[円] = 金額 - 上限  range >=-100円 <=100円
+
+table 大きさ表(size_of)
+policy unique
+| 金額   | -> 返金の大きさ(refund_size) : 大きさ |
+| <=50円 | 少額                                  |
+| >50円  | 多額                                  |
+
+table 確認表(decision_of)
+policy unique
+| 返金の大きさ | 超過額       | -> 確認方法 : 確認 |
+| 少額         | <=0円        | 不要               |
+| 少額         | >0円 <=50円  | 人が確かめる       |
+| 多額         | -            | 人が確かめる       |

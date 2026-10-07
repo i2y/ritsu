@@ -50,8 +50,10 @@ pub struct Entry {
     /// The same reproduction written with English names, when `example` has Japanese ones:
     /// what `explain` shows in English. The budget is the same for both.
     pub english: Option<Repro>,
-    /// A form of the code the first reproduction does not show, with a reproduction of its
-    /// own. Only E102 has one: its third form, a row past what a derive reaches (§15.189).
+    /// Forms of the code the first reproduction does not show, each with a reproduction of its
+    /// own. Only E102 has them: its third form, a row past what a derive reaches (§15.189), past
+    /// what a `define` reaches, and past what a derive reaches while a table above writes the
+    /// value the row asks for (§15.195).
     pub also: Vec<Also>,
     pub related: &'static [&'static str],
 }
@@ -1099,6 +1101,96 @@ policy unique
 | <=0JPY         | false          |
 | >0JPY <=100JPY | true           |
 | >100JPY        | true           |
+"##;
+// E102's third form on a `define` (§15.195): `割合` comes to 0% up to 100% over the input's range, so
+// the last row asks for a share no input makes.
+const X_E102_DEFINE: &str = r##"rule t(t) v1
+
+inputs
+  点(p) : number  range >=0 <=200
+
+outputs
+  r(r) : bool
+
+define 割合(s) : rate = 点 / 200
+
+table j(j)
+policy unique
+| 割合         | -> r(r) : bool |
+| <50%         | false          |
+| >=50% <=100% | true           |
+| >100%        | true           |
+"##;
+const X_E102_DEFINE_EN: &str = r##"rule t(t) v1
+
+inputs
+  score(p) : number  range >=0 <=200
+
+outputs
+  r(r) : bool
+
+define share(s) : rate = score / 200
+
+table j(j)
+policy unique
+| share        | -> r(r) : bool |
+| <50%         | false          |
+| >=50% <=100% | true           |
+| >100%        | true           |
+"##;
+// E102's third form across a table above (§15.195): `区分` is 少額 only for an amount up to 50円, and
+// then `超過` is 50円 at most, so the second row of `j` is reached by no input.
+const X_E102_ABOVE: &str = r##"rule t(t) v1
+
+enum 大きさ(z) = 少額(small) | 多額(large)
+
+inputs
+  額(a)   : money[円, incl_tax]  range >=1円 <=100円
+  上限(l) : money[円, incl_tax]  range >=0円 <=100円
+
+outputs
+  r(r) : bool
+
+derive 超過(x) : money[円, incl_tax] = 額 - 上限  range >=-100円 <=100円
+
+table k(k)
+policy unique
+| 額     | -> 区分(c) : 大きさ |
+| <=50円 | 少額                |
+| >50円  | 多額                |
+
+table j(j)
+policy unique
+| 区分 | 超過   | -> r(r) : bool |
+| 少額 | <=50円 | false          |
+| 少額 | >50円  | true           |
+| 多額 | -      | true           |
+"##;
+const X_E102_ABOVE_EN: &str = r##"rule t(t) v1
+
+enum size(z) = small(small) | large(large)
+
+inputs
+  amount(a) : money[JPY, incl_tax]  range >=1JPY <=100JPY
+  limit(l)  : money[JPY, incl_tax]  range >=0JPY <=100JPY
+
+outputs
+  r(r) : bool
+
+derive excess(x) : money[JPY, incl_tax] = amount - limit  range >=-100JPY <=100JPY
+
+table k(k)
+policy unique
+| amount  | -> band(c) : size |
+| <=50JPY | small             |
+| >50JPY  | large             |
+
+table j(j)
+policy unique
+| band  | excess  | -> r(r) : bool |
+| small | <=50JPY | false          |
+| small | >50JPY  | true           |
+| large | -       | true           |
 "##;
 const X_E103: &str = "rule t(t) v1\n\ninputs\n  w(w) : mass[g]  range >=0g <=10kg\n  \
                       p(p) : money[円, incl_tax]  range >=0円 <=1万円\n\n\
@@ -2539,8 +2631,8 @@ pub fn ledger() -> Vec<Entry> {
             "E101",
             tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"),
             tr!(
-                "行を全部合わせても、宣言した範囲の入力を覆いきれていないとき。完全性は宣言で外せず、常に必須です。当てはまらない入力の具体例が必ず付きます。列が規則の計算する値（導出、`define`、上の表の出力）なら、例はその値で書かれ、その値を作る入力も、参照の評価器で確かめられたときは付きます。その入力は、導出が足し算・引き算・定数倍だけなら式から求め、ほかの列（`min` や丸めを使う導出、`define`、上の表の出力）では、入力の組み合わせが 16,384 通りまでなら全部を確かめて探します。導出の値は、セルを書く単位より細かい刻みをとることがあり（`amount * 10%` は 0.1 刻み）、その刻みで調べます。",
-                "The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached. Where a column is a value the rule computes (a derive, a `define`, the output of a table above), the example gives its value, and the input that produces it too, once the reference evaluator has confirmed it. That input is worked out from the expression where a derive only adds, subtracts and multiplies by constants, and otherwise (a `min` or a rounding, a `define`, a table above) looked for among every combination of the inputs when there are no more than 16,384. A derive's values can fall finer than the units a cell is written in (`amount * 10%` comes in tenths), and they are read on that step."
+                "行を全部合わせても、宣言した範囲の入力を覆いきれていないとき。完全性は宣言で外せず、常に必須です。当てはまらない入力の具体例が必ず付きます。列が規則の計算する値（導出、`define`、上の表の出力）なら、例はその値で書かれ、その値を作る入力も、参照の評価器で確かめられたときは付きます。その入力は、導出が足し算・引き算・定数倍だけなら式から求め、ほかの列（`min` や丸めを使う導出、`define`、上の表の出力）では、入力の組み合わせが 16,384 通りまでなら全部を確かめて探します。導出の値は、セルを書く単位より細かい刻みをとることがあり（`amount * 10%` は 0.1 刻み）、その刻みで調べます。どの入力も届かない値には、行を求めません。導出と、数を計算する `define` の列では、その列が実際に取りうる値の外に、行を求めません（取りうる値は、式を入力の範囲と上流の表が出す値で計算したもので、導出では `constraint` も読みます）。上流の表が出す値の列では、上流の表がその値を出す行の条件と合わせて、ほかの列が取りえない値に、行を求めません。",
+                "The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached. Where a column is a value the rule computes (a derive, a `define`, the output of a table above), the example gives its value, and the input that produces it too, once the reference evaluator has confirmed it. That input is worked out from the expression where a derive only adds, subtracts and multiplies by constants, and otherwise (a `min` or a rounding, a `define`, a table above) looked for among every combination of the inputs when there are no more than 16,384. A derive's values can fall finer than the units a cell is written in (`amount * 10%` comes in tenths), and they are read on that step. No row is asked for where no input reaches: on the column of a derive or of a `define` that computes a number, past what it can actually come to (its expression computed over the inputs' ranges and the values the tables above produce, and for a derive over the `constraint` lines too); on a column a table above decides, at values of the other columns that the rows writing its value never let come with it."
             ),
             tr!(
                 "それを起こす入力に当てはまる行を足してください。列挙の値が増えたのが原因なら、その値の行か、全部を受ける `-` の行を足してください。値に専用の行が要らないなら、列挙の宣言に `default` を付けてください。",
@@ -2553,12 +2645,12 @@ pub fn ledger() -> Vec<Entry> {
             "E102",
             tr!("どの入力にも当てはまらない行があります", "Unreachable row: the row never matches"),
             tr!(
-                "どの入力もその行に当てはまらないとき。形は三つあり、診断の文が原因を書き分けます。一つ目は、先行する行（`overrides` で優先する行も含む）にすべて覆われている行です。二つ目は、上流の表が決して出さない値を指している行です。三つ目は、導出の列に、その導出が実際に取りうる値の外だけを求めている行です（取りうる値の中の部分を、先行する行が先に取っている場合も含みます）。取りうる値は、導出の式を入力の範囲と `constraint` で計算したもので、導出に書いた `range` ではありません。三つ目の形は、入力の足し算、引き算、定数倍だけでできた導出を見ます。",
-                "No input matches the row. There are three forms, told apart in the wording. In the first, every input the row would take is already taken by an earlier row, or by a row that takes precedence through `overrides`. In the second, the row names a value that the upstream table never produces. In the third, the row asks a derived column only for values outside what the derive can actually reach, the part inside (if any) being taken first by earlier rows. What a derive can reach is its expression computed over the inputs' ranges and the `constraint` lines, not the `range` written on it. The third form reads derives that add, subtract and multiply the inputs by constants."
+                "どの入力もその行に当てはまらないとき。形は三つあり、診断の文が原因を書き分けます。一つ目は、先行する行（`overrides` で優先する行も含む）にすべて覆われている行です。二つ目は、上流の表が決して出さない値を指している行です。三つ目は、導出か、数を計算する `define` の列に、その列が実際に取りうる値の外だけを求めている行です（取りうる値の中の部分を、先行する行が先に取っている場合も含みます）。上流の表が出す値と導出の両方を列に持つ表で、上流の表がその値を出すときには導出が取りえない値を求めている行も、この形です。取りうる値は、式を入力の範囲と上流の表が出す値で計算したもので（導出では `constraint` も読みます）、導出に書いた `range` ではありません。",
+                "No input matches the row. There are three forms, told apart in the wording. In the first, every input the row would take is already taken by an earlier row, or by a row that takes precedence through `overrides`. In the second, the row names a value that the upstream table never produces. In the third, the row asks a derived column, or the column of a `define` that computes a number, only for values outside what it can actually reach, the part inside (if any) being taken first by earlier rows; so does a row that asks a column a table above decides and a derived column for values the derive never comes to while the rows that write that value fire. What a value can reach is its expression computed over the inputs' ranges and the values the tables above produce (for a derive, over the `constraint` lines too), not the `range` written on it."
             ),
             tr!(
-                "その行が新しい仕様なら、覆っている行より上へ移してください。不要なら削除してください。上流が出さない値を指しているなら、上流の表にその値を出す行を足すか、この行を消してください。導出が取りえない値を求めているなら、条件を導出の取りうる値の中に書き直すか、この行を削除してください。導出の `range` を広げても、取りうる値は変わりません。",
-                "If the row is the newer intent, move it above the row that covers it. If it is dead, delete it. If it names a value the upstream never emits, either add a row upstream that emits it, or delete this row. If it asks a derive for values it never reaches, rewrite the condition within the values the derive can come to, or delete the row; widening the derive's `range` does not change those values."
+                "その行が新しい仕様なら、覆っている行より上へ移してください。不要なら削除してください。上流が出さない値を指しているなら、上流の表にその値を出す行を足すか、この行を消してください。導出や `define` が取りえない値を求めているなら、条件をその取りうる値の中に書き直すか、この行を削除してください。導出の `range` を広げても、取りうる値は変わりません。",
+                "If the row is the newer intent, move it above the row that covers it. If it is dead, delete it. If it names a value the upstream never emits, either add a row upstream that emits it, or delete this row. If it asks a derive or a `define` for values it never reaches, rewrite the condition within the values it can come to, or delete the row; widening a derive's `range` does not change those values."
             ),
             X_E102,
             &["E101", "W105", "W110", "E112"],
@@ -2567,6 +2659,19 @@ pub fn ledger() -> Vec<Entry> {
             tr!("三つ目の形（導出の取りうる値の外にある行）の最小の再現", "Smallest reproduction of the third form (a row outside what a derive can reach)"),
             X_E102_REACH,
             X_E102_REACH_EN,
+        )
+        .also(
+            tr!("三つ目の形（`define` の取りうる値の外にある行）の最小の再現", "Smallest reproduction of the third form (a row outside what a `define` can reach)"),
+            X_E102_DEFINE,
+            X_E102_DEFINE_EN,
+        )
+        .also(
+            tr!(
+                "三つ目の形（上流の表がその値を出すときには、導出が取りえない値を求める行）の最小の再現",
+                "Smallest reproduction of the third form (a row asking a derive for values it never comes to while a table above writes the value the row asks for)"
+            ),
+            X_E102_ABOVE,
+            X_E102_ABOVE_EN,
         ),
         err(
             "E103",

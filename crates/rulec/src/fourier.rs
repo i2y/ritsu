@@ -53,6 +53,10 @@ pub enum Origin {
     /// One end of the coordinates a box allows on an axis: the lowest of their low ends, or
     /// the highest of their high ends (§15.141).
     Coord { axis: usize, hi: bool },
+    /// One end of what a row of a table above takes on one of its own numeric columns, `name`:
+    /// while the column that table decides holds the value the row writes, the row has fired, so
+    /// the name lies inside the row's box there (§15.195).
+    Above { name: String, hi: bool },
 }
 
 /// One inequality: `Σ c·x + k < 0` when `strict`, `<= 0` otherwise.

@@ -1,0 +1,25 @@
+rule constraint_reach v1
+description "A table whose last row only a constraint rules out: the check lets the row through, since E102 stops a rule only where a derived or define value takes part, and a question over ranges of the inputs leaves it out"
+
+enum band = small | big | huge
+
+inputs
+  amount : money[GBP]  range >=1GBP <=100GBP
+  limit  : money[GBP]  range >=0GBP <=100GBP
+
+constraint limit <= amount
+
+outputs
+  out : band
+
+table t
+policy unique
+| amount  | limit   | -> out : band |
+| >50GBP  | -       | big           |
+| <=50GBP | <=50GBP | small         |
+| <=50GBP | >50GBP  | huge          |
+
+examples
+| amount | limit | -> out |
+| 1GBP   | 0GBP  | small  |
+| 100GBP | 0GBP  | big    |

@@ -1079,6 +1079,13 @@ fn farkas_json(r: &crate::fourier::Refutation, model: &[crate::fourier::Origin])
                         Obj::new().int("axis", *axis as i128).bool("hi", *hi).str("at", &rat(&at)).bool("open", q.strict).finish(),
                     )
                 }
+                // One end of what a row of a table above takes on a numeric column of its own,
+                // by the column's name (§15.195): a re-checker holds every coordinate the row
+                // takes there to it, in that table's own part of the certificate.
+                Origin::Above { name, hi } => {
+                    let at = if *hi { q.k.mul(Rat::int(-1)) } else { q.k };
+                    Obj::new().raw("cond", Obj::new().str("name", name).bool("hi", *hi).str("at", rat(&at)).bool("open", q.strict).finish())
+                }
                 other => match model.iter().position(|m| m == other) {
                     Some(i) => Obj::new().int("fact", i as i128),
                     None => Obj::new().str("unknown", ""),
@@ -1102,6 +1109,32 @@ fn cover_json(c: &Cover, model: &[crate::fourier::Origin]) -> String {
         Cover::ByUpstream(what, _) => Obj::new().str("upstream", what).finish(),
         Cover::ByPoints => Obj::new().bool("every_point_ruled_out", true).finish(),
         Cover::ByDays(ai) => Obj::new().int("days_axis", *ai as i128).finish(),
+        Cover::ByDefine(ai) => Obj::new().int("define_axis", *ai as i128).finish(),
+        // The column a table above decides, the value the box takes, and every row of that
+        // table that writes the value, by its number there, each with why it fires nowhere in
+        // the box: an axis of this table on which the box takes none of the words the row lets
+        // in, or the multipliers of a refutation (§15.195).
+        Cover::ByAboveRows(a) => Obj::new()
+            .raw(
+                "above_rows",
+                Obj::new()
+                    .int("axis", a.axis as i128)
+                    .str("column", &a.column)
+                    .str("value", &a.value)
+                    .raw(
+                        "rows",
+                        arr(&a
+                            .rows
+                            .iter()
+                            .map(|(ri, o)| match o {
+                                crate::region::RowOut::Clash(aj) => Obj::new().int("row", *ri as i128 + 1).int("clash", *aj as i128).finish(),
+                                crate::region::RowOut::Farkas(r) => Obj::new().int("row", *ri as i128 + 1).raw("farkas", farkas_json(r, model)).finish(),
+                            })
+                            .collect::<Vec<_>>()),
+                    )
+                    .finish(),
+            )
+            .finish(),
     }
 }
 

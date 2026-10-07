@@ -204,7 +204,7 @@ meet while transcribing:
   unique` that is an error; under `policy first` the earlier row wins and you are being asked
   whether that is intended.
 - **E102 unreachable row** — a row nothing can reach: earlier rows cover it, the upstream table
-  never produces its value, or a derive never comes to what it asks for (the message says why).
+  never produces its value, or a derive or a `define` never comes to what it asks for.
 - **E103 unit mismatch** — you are adding or comparing values of different units, currencies
   or tax flags. The fix is a table, not a cast.
 - **E104 no rounding** / **E106 off the grid** — see §3.

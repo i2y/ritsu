@@ -1083,7 +1083,11 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
         match field f "range" >>= str with
         | some n => do
             let hi ← field f "hi" >>= boolOf
-            let e ← rangeEnd n hi
+            -- A value the rule computes is bounded by the interval worked out here from its
+            -- expression, not by the document's word for it (rulec's §15.195); an input by its range.
+            let e ← match reachOf n with
+              | some I => some (if hi then I.2 else I.1)
+              | none => rangeEnd n hi
             if hi then some ([(n, 1)], -e, false) else some ([(n, -1)], e, false)
         | none => do
             let i ← fieldNat f "constraint"
@@ -1104,7 +1108,7 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
       (fieldArr d "days").toList.mapM optRat
     let mut tables : Array ReadTable := #[]
     for tj in fieldArr cert "tables" do
-      match readTable reachOf groups declaredRange factOf daysOf tj with
+      match readTable reachOf groups declaredRange factOf daysOf (fieldArr cert "tables") tj with
       | none => r := r.fail s!"{fieldStr tj "table"}: this program cannot read the table"
       | some t =>
         r := checkAbove tj (fieldArr cert "tables") r

@@ -1,0 +1,11 @@
+error[E102]: Unreachable row: row 3 never matches
+  --> tests/reach/E102_定義の届かない行.rule:19 table 判定表
+   |
+19 | | >100%        | 超え           |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3: no input reaches here
+12 | define 割合(share) : rate = 得点 / 200
+   |                             ^^^^^^^^^^ the reachable interval is >=0% <=100%
+   |
+ Over the ranges of the inputs, `割合` can only come to >=0% <=100%. None of those values meets this row's conditions.
+ hint: rewrite the condition within the values `割合` can come to, or delete this row.
+
