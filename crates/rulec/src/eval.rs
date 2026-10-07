@@ -107,6 +107,10 @@ impl<'a> Env<'a> {
     }
 
     fn matches(&self, cell: &Cell, v: &Val, ty: &Ty) -> bool {
+        // A literal in an optional column is read in the type the column wraps: a number was
+        // read in `number?` itself, where no number is a value, so `<5` matched nothing at all.
+        // The absent value is `none`, which no literal and no comparison takes (§15.201).
+        let ty = ty.present();
         let lit_hit = |l: &Lit| -> bool {
             match (l, v) {
                 (Lit::Word(w), Val::Enum(e)) => {
@@ -706,7 +710,7 @@ pub fn seq_value(f: &RuleFile, c: &Checked, name: &str) -> Option<Val> {
         for (ci, (col, _)) in sq.cols.iter().enumerate() {
             let ty = c.ty_of(col)?;
             let Some(Cell::Lit(l)) = row.cells.get(ci) else { continue };
-            one.insert(col.clone(), lit_to_val(l, &ty)?);
+            one.insert(col.clone(), lit_to_val(l, ty.present())?);
         }
         rows.push(one);
     }
@@ -729,8 +733,9 @@ pub fn example_env(f: &RuleFile, c: &Checked, ex: &crate::ast::Table, row: &Row)
         }
         let Some(ty) = c.ty_of(col) else { continue };
         match row.cells.get(ci) {
+            // A value of an optional input is read in the type it wraps (§15.201).
             Some(Cell::Lit(l)) => {
-                if let Some(v) = lit_to_val(l, &ty) {
+                if let Some(v) = lit_to_val(l, ty.present()) {
                     env.insert(col.clone(), v);
                 }
             }

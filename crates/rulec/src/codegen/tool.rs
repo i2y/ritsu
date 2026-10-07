@@ -116,13 +116,21 @@ impl<'a> Gen<'a> {
                 .map(|fd| {
                     let k = format!("{:?}", fd.name.text);
                     let t = self.ty_of(&fd.name.text);
+                    let one = |t: &Ty| -> String {
+                        match t {
+                            Ty::Enum(n) => format!("_enum({k}, m.{}, _el({k}, e)[{k}])", self.enum_names.get(n).cloned().unwrap_or_default()),
+                            Ty::Bool => format!("_bool({k}, _el({k}, e)[{k}])"),
+                            Ty::Date => format!("_date({k}, _el({k}, e)[{k}])"),
+                            Ty::Str => format!("_str({k}, _el({k}, e)[{k}])"),
+                            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("m.{}(_int({k}, _el({k}, e)[{k}]))", brand_of(t)),
+                            _ => format!("_int({k}, _el({k}, e)[{k}])"),
+                        }
+                    };
+                    // An optional field reads `null` as the absent value, as an optional input
+                    // does; it was held to be an integer (§15.201).
                     match &t {
-                        Ty::Enum(n) => format!("_enum({k}, m.{}, _el({k}, e)[{k}])", self.enum_names.get(n).cloned().unwrap_or_default()),
-                        Ty::Bool => format!("_bool({k}, _el({k}, e)[{k}])"),
-                        Ty::Date => format!("_date({k}, _el({k}, e)[{k}])"),
-                        Ty::Str => format!("_str({k}, _el({k}, e)[{k}])"),
-                        Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("m.{}(_int({k}, _el({k}, e)[{k}]))", brand_of(&t)),
-                        _ => format!("_int({k}, _el({k}, e)[{k}])"),
+                        Ty::Opt(inner) => format!("(None if _el({k}, e)[{k}] is None else {})", one(inner)),
+                        t => one(t),
                     }
                 })
                 .collect();
@@ -252,19 +260,27 @@ impl<'a> Gen<'a> {
                     let k = format!("{:?}", fd.name.text);
                     let t = self.ty_of(&fd.name.text);
                     let src = format!("_el({k}, e)[{k}]");
-                    let body = match &t {
-                        Ty::Enum(n) => format!("m.parse{}(_str({k}, {src}))", self.enum_names.get(n).cloned().unwrap_or_default()),
-                        Ty::Bool => format!("_bool({k}, {src})"),
-                        Ty::Date => format!("_date({k}, {src})"),
-                        Ty::Str => format!("_str({k}, {src})"),
-                        Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
-                            let b = brand_of(&t);
-                            if !brands.contains(&b) {
-                                brands.push(b.clone());
+                    let mut one = |t: &Ty| -> String {
+                        match t {
+                            Ty::Enum(n) => format!("m.parse{}(_str({k}, {src}))", self.enum_names.get(n).cloned().unwrap_or_default()),
+                            Ty::Bool => format!("_bool({k}, {src})"),
+                            Ty::Date => format!("_date({k}, {src})"),
+                            Ty::Str => format!("_str({k}, {src})"),
+                            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
+                                let b = brand_of(t);
+                                if !brands.contains(&b) {
+                                    brands.push(b.clone());
+                                }
+                                format!("_int({k}, {src}) as {b}")
                             }
-                            format!("_int({k}, {src}) as {b}")
+                            _ => format!("_int({k}, {src})"),
                         }
-                        _ => format!("_int({k}, {src})"),
+                    };
+                    // An optional field reads `null` as the absent value, as an optional input
+                    // does (§15.201).
+                    let body = match &t {
+                        Ty::Opt(inner) => format!("({src} === null ? null : {})", one(inner)),
+                        t => one(t),
                     };
                     format!("{}: {body}", pub_name(&fd.name))
                 })

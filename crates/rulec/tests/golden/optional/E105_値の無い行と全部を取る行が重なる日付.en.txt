@@ -1,0 +1,11 @@
+error[E105]: Overlapping rows: the same input matches row 1 and row 2
+  --> tests/optional/E105_値の無い行と全部を取る行が重なる日付.rule:14 table 判定
+   |
+13 | | none | false          |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^ row 1
+14 | | -    | true           |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^ row 2
+   |
+ Both rows match: 期日 = none
+ `policy unique` does not allow overlapping rows. Decide which row is right, or declare `policy first` if the order is meant to matter.
+

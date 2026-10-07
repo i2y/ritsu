@@ -913,6 +913,23 @@ the inventory cannot send values the guard rejects. It names each language's two
 (`input`) and which one the guard below raises (`contradiction`), with the fields a caller reads
 from each ([formats.md](formats.md#api)).
 
+An optional input is held to the same checks whenever it has a value, and passes the door
+when it has none, on its way to the row the table writes for the absent value. Its range and
+its step are those of the type it wraps:
+
+```python
+if ship_on is not None:
+    if not _isinstance(ship_on, int) or _isinstance(ship_on, bool):
+        raise RuleInputError("ship_on is not an integer", ship_on)
+    if not 20454 <= ship_on <= 20818:
+        raise RuleInputError("ship_on is out of range", ship_on)
+```
+
+A cell of an optional column tests a value that is there: a comparison, a literal and a set
+of values are false of the absent value in every language, and `-` and `not:` take it, as
+`check` reads them. Before each comparison asked first whether there was a value, the absent
+value raised in some languages and was read as a value in others.
+
 The NumPy plan carries the same guard as data, in the language the code was generated in, and
 its evaluator checks a whole column at a time in the same order: each column's type, enum
 and range, then each constraint, then the days. It refuses the first element that fails,

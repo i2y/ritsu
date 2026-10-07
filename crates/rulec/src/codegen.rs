@@ -906,6 +906,7 @@ impl<'a> Gen<'a> {
             Ty::Opt(t) => t.as_ref(),
             other => other,
         };
+        let optional = matches!(ty, Ty::Opt(_));
         let lit = |l: &Lit| -> String {
             match l {
                 Lit::Word(w) if w == crate::kw::TRUE => "True".into(),
@@ -942,6 +943,10 @@ impl<'a> Gen<'a> {
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
                 format!("{var} in _{}", self.ident(w))
             }
+            // An optional truth value is `None` when it is absent, and `not None` is true: the
+            // `false` row took the absent value (§15.201).
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE && optional => format!("{var} is True"),
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE && optional => format!("{var} is False"),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("not {var}"),
             Cell::Lit(l) => format!("{var} == {}", lit(l)),
@@ -951,19 +956,23 @@ impl<'a> Gen<'a> {
                 format!("{var} not in _{}", self.ident(w))
             }
             Cell::Not(ls) => format!("{var} not in {}", members(ls)),
-            Cell::Cmp(cs) => cs
-                .iter()
-                .map(|(o, l)| {
-                    let op = match o {
-                        CmpOp::Le => "<=",
-                        CmpOp::Ge => ">=",
-                        CmpOp::Lt => "<",
-                        CmpOp::Gt => ">",
-                    };
-                    format!("{var} {op} {}", lit(l))
-                })
-                .collect::<Vec<_>>()
-                .join(" and "),
+            Cell::Cmp(cs) => {
+                let c = cs
+                    .iter()
+                    .map(|(o, l)| {
+                        let op = match o {
+                            CmpOp::Le => "<=",
+                            CmpOp::Ge => ">=",
+                            CmpOp::Lt => "<",
+                            CmpOp::Gt => ">",
+                        };
+                        format!("{var} {op} {}", lit(l))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" and ");
+                // A comparison holds only of a value that is there: `None < 5` raises (§15.201).
+                if optional { format!("{var} is not None and {c}") } else { c }
+            }
         })
     }
 
@@ -978,7 +987,9 @@ impl<'a> Gen<'a> {
         // Brands. They work with mypy and pyright and cost nothing at runtime.
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
         for v in self.branded() {
-            let ty = self.ty_of(v);
+            // An optional amount is the same brand when it is there: the runner builds it, and
+            // a rule whose only amount is optional declared none (§15.201).
+            let ty = self.ty_of(v).present().clone();
             // A number gets no brand: it is a plain integer on purpose, and branding it
             // would shadow the language's own `int`.
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
@@ -1411,6 +1422,10 @@ impl<'a> Gen<'a> {
         for i in self.element_fields() {
             let v = local(&i.name.text);
             let ty = self.ty_of(&i.name.text);
+            // An optional field is guarded as the type it wraps when it has a value (§15.201).
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
+            let mut o = Guarded::new(&mut o, optional.then(|| (format!("    if {v} is not None:\n"), String::new())), "    ");
             match &ty {
                 Ty::Enum(_) => o.push_str(&format!(
                     "    if not _isinstance({v}, {}):\n        raise RuleInputError(\"{}\", {v})\n",
@@ -1501,6 +1516,12 @@ impl<'a> Gen<'a> {
         for i in &self.f.inputs {
             let v = pub_name(&i.name);
             let ty = self.ty_of(&i.name.text);
+            // An optional input is guarded as the type it wraps whenever it has a value: its
+            // range, its step and its type were never looked at, so 2025-01-01 was answered for a
+            // date declared over 2026 (§15.201).
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
+            let mut o = Guarded::new(&mut o, optional.then(|| (format!("    if {v} is not None:\n"), String::new())), "    ");
             match &ty {
                 Ty::Enum(_) => o.push_str(&format!(
                     "    if not _isinstance({v}, {}):\n        raise RuleInputError(\"{}\", {v})\n",
@@ -2028,19 +2049,23 @@ impl<'a> Gen<'a> {
                 guarded(format!("!is{}({var})", pascal(&self.ident(w))), true)
             }
             Cell::Not(ls) => guarded(set(ls, true), true),
-            Cell::Cmp(cs) => cs
-                .iter()
-                .map(|(o, l)| {
-                    let op = match o {
-                        CmpOp::Le => "<=",
-                        CmpOp::Ge => ">=",
-                        CmpOp::Lt => "<",
-                        CmpOp::Gt => ">",
-                    };
-                    format!("{var} {op} {}", lit(l))
-                })
-                .collect::<Vec<_>>()
-                .join(" && "),
+            // A comparison reads through the pointer too, so it takes the nil guard as every other
+            // test does: without it a nil value panicked (§15.201).
+            Cell::Cmp(cs) => guarded(
+                cs.iter()
+                    .map(|(o, l)| {
+                        let op = match o {
+                            CmpOp::Le => "<=",
+                            CmpOp::Ge => ">=",
+                            CmpOp::Lt => "<",
+                            CmpOp::Gt => ">",
+                        };
+                        format!("{var} {op} {}", lit(l))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" && "),
+                false,
+            ),
         })
     }
 
@@ -2052,7 +2077,9 @@ impl<'a> Gen<'a> {
 
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
         for v in self.branded() {
-            let ty = self.ty_of(v);
+            // An optional amount is the same brand when it is there: the runner builds it, and
+            // a rule whose only amount is optional declared none (§15.201).
+            let ty = self.ty_of(v).present().clone();
             // A number gets no brand: it is a plain integer on purpose, and branding it
             // would shadow the language's own `int`.
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
@@ -2367,8 +2394,19 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         for i in self.element_fields() {
             let v = local(&i.name.text);
-            let val = go_i64(&v);
             let ty = self.ty_of(&i.name.text);
+            // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
+            // A pointer: the guard reads what it points at, under the name of the field.
+            let (v, wrap) = if optional {
+                let x = self.ident(&i.name.text);
+                (x.clone(), Some((format!("\tif {v} != nil {{\n\t\t{x} := *{v}\n"), "\t}\n".to_string())))
+            } else {
+                (v, None)
+            };
+            let val = go_i64(&v);
+            let mut o = Guarded::new(&mut o, wrap, "\t");
             match &ty {
                 Ty::Enum(_) => o.push_str(&format!(
                     "\tif !{v}.Valid() {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
@@ -2487,8 +2525,19 @@ impl<'a> Gen<'a> {
 
         for i in &self.f.inputs {
             let v = local(&i.name.text);
-            let val = go_i64(&v);
             let ty = self.ty_of(&i.name.text);
+            // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
+            // A pointer: the guard reads what it points at, under the name of the input.
+            let (v, wrap) = if optional {
+                let x = self.ident(&i.name.text);
+                (x.clone(), Some((format!("\tif {v} != nil {{\n\t\t{x} := *{v}\n"), "\t}\n".to_string())))
+            } else {
+                (v, None)
+            };
+            let val = go_i64(&v);
+            let mut o = Guarded::new(&mut o, wrap, "\t");
             match &ty {
                 Ty::Enum(_) => o.push_str(&format!(
                     "\tif !{v}.Valid() {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
@@ -3336,6 +3385,49 @@ function _roundBankers(x: bigint, g: bigint): bigint {{
 }
 
 /// A sorted set of days as runs of consecutive ones, each its first and last.
+/// The entry guards of one optional input, held back until they are written and then put under
+/// the test that the input has a value (§15.201). The guard of the type it wraps is the same text
+/// either way, so each language writes it once: `o.push_str` reads as it does on a `String`.
+pub(crate) struct Guarded<'a> {
+    out: &'a mut String,
+    buf: String,
+    /// The line that opens the test and the one that closes it; `None` for an input that is not
+    /// optional, whose guards go out as they are.
+    wrap: Option<(String, String)>,
+    indent: &'static str,
+}
+
+impl<'a> Guarded<'a> {
+    pub(crate) fn new(out: &'a mut String, wrap: Option<(String, String)>, indent: &'static str) -> Guarded<'a> {
+        Guarded { out, buf: String::new(), wrap, indent }
+    }
+
+    pub(crate) fn push_str(&mut self, s: &str) {
+        self.buf.push_str(s);
+    }
+}
+
+impl Drop for Guarded<'_> {
+    fn drop(&mut self) {
+        match &self.wrap {
+            Some((open, close)) if !self.buf.trim().is_empty() => {
+                self.out.push_str(open);
+                for l in self.buf.lines() {
+                    if l.trim().is_empty() {
+                        self.out.push_str(l);
+                    } else {
+                        self.out.push_str(self.indent);
+                        self.out.push_str(l);
+                    }
+                    self.out.push('\n');
+                }
+                self.out.push_str(close);
+            }
+            _ => self.out.push_str(&self.buf),
+        }
+    }
+}
+
 pub(crate) fn day_runs(days: &[i64]) -> Vec<(i64, i64)> {
     let mut runs: Vec<(i64, i64)> = Vec::new();
     for &d in days {
@@ -3453,6 +3545,9 @@ impl<'a> Gen<'a> {
             other => other,
         };
         let numeric = inner.is_numeric() || matches!(inner, Ty::Date);
+        // An optional number, date or truth value is `null` when it is absent: a comparison and
+        // a set are about the value that is there, and `!null` is true (§15.201).
+        let present = matches!(ty, Ty::Opt(_)) && !matches!(inner, Ty::Enum(_));
         let lit = |l: &Lit| -> String {
             match l {
                 Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
@@ -3498,29 +3593,37 @@ impl<'a> Gen<'a> {
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
                 format!("_{}.has({var})", self.ident(w))
             }
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE && present => format!("{var} === true"),
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE && present => format!("{var} === false"),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("!{var}"),
             Cell::Lit(l) => format!("{var} === {}", lit(l)),
+            Cell::Set(ls) if present => format!("{var} !== null && {}.includes({var})", members(ls)),
+            Cell::Not(ls) if present => format!("({var} === null || !{}.includes({var}))", members(ls)),
             Cell::Set(ls) => format!("{}.includes({var})", widened(members(ls))),
             Cell::Not(ls) if ls.len() == 1 && matches!(&ls[0], Lit::Word(w) if self.c.groups.contains_key(w)) => {
                 let Lit::Word(w) = &ls[0] else { unreachable!() };
                 format!("!_{}.has({var})", self.ident(w))
             }
             Cell::Not(ls) => format!("!{}.includes({var})", widened(members(ls))),
-            Cell::Cmp(cs) => cs
-                .iter()
-                .map(|(o, l)| {
-                    let op = match o {
-                        CmpOp::Le => "<=",
-                        CmpOp::Ge => ">=",
-                        CmpOp::Lt => "<",
-                        CmpOp::Gt => ">",
-                    };
-                    let _ = numeric;
-                    format!("{var} {op} {}", lit(l))
-                })
-                .collect::<Vec<_>>()
-                .join(" && "),
+            Cell::Cmp(cs) => {
+                let c = cs
+                    .iter()
+                    .map(|(o, l)| {
+                        let op = match o {
+                            CmpOp::Le => "<=",
+                            CmpOp::Ge => ">=",
+                            CmpOp::Lt => "<",
+                            CmpOp::Gt => ">",
+                        };
+                        let _ = numeric;
+                        format!("{var} {op} {}", lit(l))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" && ");
+                // `null <= 5n` is true in JavaScript, so the absent value took the row (§15.201).
+                if present { format!("{var} !== null && {c}") } else { c }
+            }
         })
     }
 
@@ -3532,7 +3635,9 @@ impl<'a> Gen<'a> {
         // the type checker, exactly as `NewType` does on the Python side.
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
         for v in self.branded() {
-            let ty = self.ty_of(v);
+            // An optional amount is the same brand when it is there: the runner builds it, and
+            // a rule whose only amount is optional declared none (§15.201).
+            let ty = self.ty_of(v).present().clone();
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
                 brands.insert(brand_of(&ty), format!("{ty}"));
             }
@@ -3762,6 +3867,10 @@ impl<'a> Gen<'a> {
         for i in self.element_fields() {
             let v = local(&i.name.text);
             let ty = self.ty_of(&i.name.text);
+            // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
+            let mut o = Guarded::new(&mut o, optional.then(|| (format!("  if ({v} !== null) {{\n"), "  }\n".to_string())), "  ");
             match &ty {
                 Ty::Enum(n) => {
                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
@@ -3892,6 +4001,10 @@ impl<'a> Gen<'a> {
         for i in &self.f.inputs {
             let v = pub_name(&i.name);
             let ty = self.ty_of(&i.name.text);
+            // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
+            let mut o = Guarded::new(&mut o, optional.then(|| (format!("  if ({v} !== null) {{\n"), "  }\n".to_string())), "  ");
             match &ty {
                 Ty::Enum(n) => {
                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
@@ -4360,7 +4473,9 @@ impl<'a> Gen<'a> {
         // value, and that is how the checker reads it too.
         let optional = matches!(ty, Ty::Opt(_));
         let raw = var.to_string();
-        let bound = if optional { "__v".to_string() } else { raw.clone() };
+        // A branded value is an i64 inside, which is what a cell compares (§15.201).
+        let branded = matches!(inner, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate);
+        let bound = if optional { if branded { "__v.0".to_string() } else { "__v".to_string() } } else { raw.clone() };
         let var = bound.as_str();
         let wrap = |c: String, neg: bool| -> String {
             if !optional {
@@ -4419,19 +4534,23 @@ impl<'a> Gen<'a> {
             Cell::Not(ls) => {
                 if optional { wrap(any_of(ls, false), true) } else { any_of(ls, true) }
             }
-            Cell::Cmp(cs) => cs
-                .iter()
-                .map(|(o, l)| {
-                    let op = match o {
-                        CmpOp::Le => "<=",
-                        CmpOp::Ge => ">=",
-                        CmpOp::Lt => "<",
-                        CmpOp::Gt => ">",
-                    };
-                    format!("{var} {op} {}", lit(l))
-                })
-                .collect::<Vec<_>>()
-                .join(" && "),
+            // A comparison is about the value inside the `Option` too: it was written against
+            // `__v` and never put in `matches!`, so the module did not build (§15.201).
+            Cell::Cmp(cs) => wrap(
+                cs.iter()
+                    .map(|(o, l)| {
+                        let op = match o {
+                            CmpOp::Le => "<=",
+                            CmpOp::Ge => ">=",
+                            CmpOp::Lt => "<",
+                            CmpOp::Gt => ">",
+                        };
+                        format!("{var} {op} {}", lit(l))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" && "),
+                false,
+            ),
         })
     }
 
@@ -4444,7 +4563,9 @@ impl<'a> Gen<'a> {
         // Brands: a newtype over i64, which is what the overflow proof is stated in.
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
         for v in self.branded() {
-            let ty = self.ty_of(v);
+            // An optional amount is the same brand when it is there: the runner builds it, and
+            // a rule whose only amount is optional declared none (§15.201).
+            let ty = self.ty_of(v).present().clone();
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
                 brands.insert(brand_of(&ty), format!("{ty}"));
             }
@@ -4716,6 +4837,16 @@ impl<'a> Gen<'a> {
         for i in self.element_fields() {
             let v = local(&i.name.text);
             let ty = self.ty_of(&i.name.text);
+            // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
+            let inside = if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) { "__v.0" } else { "__v" };
+            let (v, wrap) = if optional {
+                (inside.to_string(), Some((format!("    if let Some(__v) = {v} {{\n"), "    }\n".to_string())))
+            } else {
+                (v, None)
+            };
+            let mut o = Guarded::new(&mut o, wrap, "    ");
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                     let sc = self.c.wire_scale(&i.name.text);
@@ -4821,6 +4952,9 @@ impl<'a> Gen<'a> {
         // run time is already made by the compiler.
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
+            // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
             if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 continue;
             }
@@ -4829,6 +4963,14 @@ impl<'a> Gen<'a> {
             };
             let sc = self.c.wire_scale(&i.name.text);
             let v = local(&i.name.text);
+            // A branded value is an i64 inside, which is what the guard compares.
+            let inside = if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) { "__v.0" } else { "__v" };
+            let (v, wrap) = if optional {
+                (inside.to_string(), Some((format!("    if let Some(__v) = {v} {{\n"), "    }\n".to_string())))
+            } else {
+                (v, None)
+            };
+            let mut o = Guarded::new(&mut o, wrap, "    ");
             // Rust's inline format arguments take a name, not a field access, so the value
             // goes in as a positional argument.
             o.push_str(&format!(
@@ -7336,6 +7478,9 @@ impl<'a> Gen<'a> {
             Ty::Opt(t) => t.as_ref(),
             other => other,
         };
+        // An optional value is `nil` when it is absent: `!nil` is true and `nil < 5` raises, so a
+        // truth value is compared and a comparison asks first (§15.201).
+        let optional = matches!(ty, Ty::Opt(_));
         let lit = |l: &Lit| -> String {
             match l {
                 Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
@@ -7375,6 +7520,8 @@ impl<'a> Gen<'a> {
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
                 format!("GROUP_{}.include?({var})", self.rb_group(w))
             }
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE && optional => format!("{var} == true"),
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE && optional => format!("{var} == false"),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("!{var}"),
             Cell::Lit(l) => format!("{var} == {}", lit(l)),
@@ -7384,19 +7531,22 @@ impl<'a> Gen<'a> {
                 format!("!GROUP_{}.include?({var})", self.rb_group(w))
             }
             Cell::Not(ls) => any_of(ls, true),
-            Cell::Cmp(cs) => cs
-                .iter()
-                .map(|(o, l)| {
-                    let op = match o {
-                        CmpOp::Le => "<=",
-                        CmpOp::Ge => ">=",
-                        CmpOp::Lt => "<",
-                        CmpOp::Gt => ">",
-                    };
-                    format!("{var} {op} {}", lit(l))
-                })
-                .collect::<Vec<_>>()
-                .join(" && "),
+            Cell::Cmp(cs) => {
+                let c = cs
+                    .iter()
+                    .map(|(o, l)| {
+                        let op = match o {
+                            CmpOp::Le => "<=",
+                            CmpOp::Ge => ">=",
+                            CmpOp::Lt => "<",
+                            CmpOp::Gt => ">",
+                        };
+                        format!("{var} {op} {}", lit(l))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" && ");
+                if optional { format!("!{var}.nil? && {c}") } else { c }
+            }
         })
     }
 }
@@ -7672,6 +7822,10 @@ impl<'a> Gen<'a> {
         for i in self.element_fields() {
             let v = local(&i.name.text);
             let ty = self.ty_of(&i.name.text);
+            // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
+            let mut o = Guarded::new(&mut o, optional.then(|| (format!("    unless {v}.nil?\n"), "    end\n".to_string())), "  ");
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 o.push_str(&format!(
                     "    raise RuleInputError.new(\"{}\", {v}) unless {v}.is_a?(Integer)\n",
@@ -7747,6 +7901,10 @@ impl<'a> Gen<'a> {
         for i in &self.f.inputs {
             let v = pub_name(&i.name);
             let ty = self.ty_of(&i.name.text);
+            // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
+            let mut o = Guarded::new(&mut o, optional.then(|| (format!("    unless {v}.nil?\n"), "    end\n".to_string())), "  ");
             match &ty {
                 Ty::Enum(n) => {
                     let cls = rb_const(&self.enum_names.get(n).cloned().unwrap_or_default());
@@ -7913,7 +8071,9 @@ impl<'a> Gen<'a> {
                 Ty::Date => format!("_ord(d[{jp:?}])"),
                 // `null` on the wire is `nil` here. It used to fall to `.to_i`, which turns
                 // `nil` into 0 — a value no row of the table matches, so the module raised
-                // "unreachable" on a case it answers perfectly well (§15.88).
+                // "unreachable" on a case it answers perfectly well (§15.88). A date that is
+                // there is read as one, or it arrived as its text (§15.201).
+                Ty::Opt(t) if **t == Ty::Date => format!("(d[{jp:?}].nil? ? nil : _ord(d[{jp:?}]))"),
                 Ty::Opt(_) => format!("d[{jp:?}]"),
                 _ => format!("d[{jp:?}].to_i"),
             });
@@ -7930,6 +8090,7 @@ impl<'a> Gen<'a> {
                         Ty::Enum(_) | Ty::Str => format!("e[{k:?}]"),
                         Ty::Bool => format!("e[{k:?}] ? true : false"),
                         Ty::Date => format!("_ord(e[{k:?}])"),
+                        Ty::Opt(t) if **t == Ty::Date => format!("(e[{k:?}].nil? ? nil : _ord(e[{k:?}]))"),
                         Ty::Opt(_) => format!("e[{k:?}]"),
                         _ => format!("e[{k:?}].to_i"),
                     }
@@ -8480,6 +8641,12 @@ impl<'a> Gen<'a> {
             Ty::Opt(t) => t.as_ref(),
             other => other,
         };
+        // An optional value is an `Optional`, which has no `<` and is no `Bool`: the module did
+        // not build. A comparison is made on the value inside, and is false of `nil` (§15.201).
+        let optional = matches!(ty, Ty::Opt(_));
+        // A branded value is a struct around its integer: what a cell compares is the integer.
+        let branded = optional && matches!(inner, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate);
+        let inside = if branded { format!("{var}?.value") } else { var.to_string() };
         let lit = |l: &Lit| -> String {
             match l {
                 Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
@@ -8516,28 +8683,34 @@ impl<'a> Gen<'a> {
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
                 format!("{}.contains({var})", self.sw_group(w))
             }
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE && optional => format!("{var} == true"),
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE && optional => format!("{var} == false"),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("!{var}"),
-            Cell::Lit(l) => format!("{var} == {}", lit(l)),
-            Cell::Set(ls) => format!("{}.contains({var})", members(ls)),
+            Cell::Lit(l) => format!("{inside} == {}", lit(l)),
+            Cell::Set(ls) => format!("{}.contains({inside})", members(ls)),
             Cell::Not(ls) if ls.len() == 1 && matches!(&ls[0], Lit::Word(w) if self.c.groups.contains_key(w)) => {
                 let Lit::Word(w) = &ls[0] else { unreachable!() };
                 format!("!{}.contains({var})", self.sw_group(w))
             }
-            Cell::Not(ls) => format!("!{}.contains({var})", members(ls)),
-            Cell::Cmp(cs) => cs
-                .iter()
-                .map(|(o, l)| {
-                    let op = match o {
-                        CmpOp::Le => "<=",
-                        CmpOp::Ge => ">=",
-                        CmpOp::Lt => "<",
-                        CmpOp::Gt => ">",
-                    };
-                    format!("{var} {op} {}", lit(l))
-                })
-                .collect::<Vec<_>>()
-                .join(" && "),
+            Cell::Not(ls) => format!("!{}.contains({inside})", members(ls)),
+            Cell::Cmp(cs) => {
+                let on = if branded { "$0.value" } else if optional { "$0" } else { var };
+                let c = cs
+                    .iter()
+                    .map(|(o, l)| {
+                        let op = match o {
+                            CmpOp::Le => "<=",
+                            CmpOp::Ge => ">=",
+                            CmpOp::Lt => "<",
+                            CmpOp::Gt => ">",
+                        };
+                        format!("{on} {op} {}", lit(l))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" && ");
+                if optional { format!("({var}.map {{ {c} }} ?? false)") } else { c }
+            }
         })
     }
 
@@ -8549,7 +8722,9 @@ impl<'a> Gen<'a> {
         // type costs nothing at run time — the same bargain the Rust backend makes.
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
         for v in self.branded() {
-            let ty = self.ty_of(v);
+            // An optional amount is the same brand when it is there: the runner builds it, and
+            // a rule whose only amount is optional declared none (§15.201).
+            let ty = self.ty_of(v).present().clone();
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
                 brands.insert(brand_of(&ty), format!("{ty}"));
             }
@@ -8846,6 +9021,9 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         for i in self.element_fields() {
             let ty = self.ty_of(&i.name.text);
+            // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
             if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 continue;
             }
@@ -8854,6 +9032,14 @@ impl<'a> Gen<'a> {
             };
             let sc = self.c.wire_scale(&i.name.text);
             let v = local(&i.name.text);
+            // A branded value is a struct around its integer, which is what the guard compares.
+            let inside = if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) { "__v.value" } else { "__v" };
+            let (v, wrap) = if optional {
+                (inside.to_string(), Some((format!("    if let __v = {v} {{\n"), "    }\n".to_string())))
+            } else {
+                (v, None)
+            };
+            let mut o = Guarded::new(&mut o, wrap, "    ");
             o.push_str(&format!(
                 "    if {v} < {} || {v} > {} {{\n        throw RuleError.input(what: \"{}\", value: Int64({v}))\n    }}\n",
                 crate::types::wire_int(lo, sc),
@@ -8970,6 +9156,9 @@ impl<'a> Gen<'a> {
         // already made by the compiler, exactly as in Rust.
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
+            // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
             if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 continue;
             }
@@ -8978,6 +9167,14 @@ impl<'a> Gen<'a> {
             };
             let sc = self.c.wire_scale(&i.name.text);
             let v = local(&i.name.text);
+            // A branded value is a struct around its integer, which is what the guard compares.
+            let inside = if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) { "__v.value" } else { "__v" };
+            let (v, wrap) = if optional {
+                (inside.to_string(), Some((format!("    if let __v = {v} {{\n"), "    }\n".to_string())))
+            } else {
+                (v, None)
+            };
+            let mut o = Guarded::new(&mut o, wrap, "    ");
             o.push_str(&format!(
                 "    if {v} < {} || {v} > {} {{\n        throw RuleError.input(what: \"{}\", value: Int64({v}))\n    }}\n",
                 crate::types::wire_int(lo, sc),
@@ -9219,6 +9416,22 @@ impl<'a> Gen<'a> {
                         Ty::Bool => format!("_b({ev}, {jf:?})"),
                         Ty::Date => format!("_ord(_s({ev}, {jf:?}))"),
                         Ty::Number => format!("_n({ev}, {jf:?})"),
+                        // An optional field reads `null` as `nil`, as an optional input does; it
+                        // was read as 0 (§15.201).
+                        Ty::Opt(inner) => {
+                            let one = match inner.as_ref() {
+                                Ty::Enum(n) => {
+                                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                                    format!("{cls}(rawValue: _s({ev}, {jf:?}))!")
+                                }
+                                Ty::Bool => format!("_b({ev}, {jf:?})"),
+                                Ty::Date => format!("_ord(_s({ev}, {jf:?}))"),
+                                Ty::Number => format!("_n({ev}, {jf:?})"),
+                                Ty::Str => format!("_s({ev}, {jf:?})"),
+                                other => format!("{}(_n({ev}, {jf:?}))", self.sw_ty(other)),
+                            };
+                            format!("({ev}[{jf:?}] is NSNull || {ev}[{jf:?}] == nil ? nil : {one})")
+                        }
                         _ => format!("{}(_n({ev}, {jf:?}))", self.sw_ty(&ty)),
                     };
                     format!("{}: {v}", sw_name(&pub_name(&fd.name)))
@@ -9658,11 +9871,14 @@ impl<'a> Gen<'a> {
                 .iter()
                 .map(|fd| {
                     let ty = self.ty_of(&fd.name.text);
-                    format!(
-                        "\"\\\"{}\\\":\" + {}",
-                        fd.name.text,
-                        Self::go_wire(&format!("e.{}", pascal(&pub_name(&fd.name))), &wire_of(&ty))
-                    )
+                    let at = format!("e.{}", pascal(&pub_name(&fd.name)));
+                    // An optional field is a pointer: `null` when it is nil, and what it points at
+                    // otherwise. It was read through with no test, and a nil one panicked (§15.201).
+                    let value = match wire_of(&ty) {
+                        Wire::Opt(w) => format!("func() string {{ if {at} == nil {{ return \"null\" }}; return {} }}()", Self::go_wire(&format!("(*{at})"), &w)),
+                        w => Self::go_wire(&at, &w),
+                    };
+                    format!("\"\\\"{}\\\":\" + {}", fd.name.text, value)
                 })
                 .collect();
             o.push_str(&format!("\t{seq} := \"\\\"{}\\\":[\"\n", el.name.text));

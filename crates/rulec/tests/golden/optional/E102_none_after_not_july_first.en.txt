@@ -1,0 +1,22 @@
+warning[W105]: Overlapping rows: the same input matches row 1 and row 2
+  --> tests/optional/E102_none_after_not_july_first.rule:14 table pick
+   |
+13 | | not: 2026-07-01  | false          |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1
+14 | | none             | true           |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2
+   |
+ Both rows match: due = none
+ Because of `policy first`, row 1 wins. Is this intended?
+ If this is intended, leave it as is. In CI, check --diff-base reports only newly introduced instances.
+
+error[E102]: Unreachable row: row 2 never matches
+  --> tests/optional/E102_none_after_not_july_first.rule:14 table pick
+   |
+14 | | none             | true           |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 2: no input reaches here
+   |
+ Because of `policy first`, the earlier rows take all of this row's range first.
+ hint: if this is a new specification, move it up; if it is not needed, delete it.
+
+note tests/optional/E102_none_after_not_july_first.rule: 1 shadow pairs (0 structural, 0 equivalent, 1 needs review)

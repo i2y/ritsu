@@ -1,0 +1,15 @@
+rule big_bonus v1
+description "Says whether a bonus is big, from a number that may be missing. A missing bonus is none of the values `not: 5` names, so the last row takes it too and meets the first"
+
+inputs
+  bonus : number?  range >=0 <=10
+
+outputs
+  big : bool
+
+table pick
+policy unique
+| bonus  | -> big : bool |
+| none   | false         |
+| 5      | true          |
+| not: 5 | false         |

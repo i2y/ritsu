@@ -1,0 +1,15 @@
+rule late_flag v1
+description "Flags a return as late from the day it is due, which may be missing. The rows are tried in order, and `not: 2026-07-01` takes a return with no day before the row written for it is reached"
+
+inputs
+  due : date?  range >=2026-01-01 <=2026-12-31
+
+outputs
+  late : bool
+
+table pick
+policy first
+| due              | -> late : bool |
+| not: 2026-07-01  | false          |
+| none             | true           |
+| 2026-07-01       | true           |

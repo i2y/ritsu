@@ -435,7 +435,9 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                 continue;
             }
             for (ci, (col, _)) in t.inputs.iter().enumerate() {
-                let Some(ty) = c.ty_of(col) else { continue };
+                // An optional number or date has the same boundaries when it has a value; its
+                // cells are read in the type it wraps (§15.201).
+                let Some(ty) = c.ty_of(col).map(|t| t.present().clone()) else { continue };
                 if !is_numeric(&ty) {
                     continue;
                 }

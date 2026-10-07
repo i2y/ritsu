@@ -200,6 +200,9 @@ impl<'a> Gen<'a> {
         };
         Some(match cell {
             Cell::DontCare => return None,
+            // The absent value of an optional number, date or truth value has no word in its
+            // column, which holds numbers: the runtime keeps where it is absent apart (§15.201).
+            Cell::Nothing if !matches!(inner, Ty::Enum(_)) => format!(r#"{{"col":{c},"op":"none"}}"#),
             Cell::Nothing => format!(r#"{{"col":{c},"op":"eq","v":{}}}"#, quote(crate::kw::NONE)),
             Cell::Prefix(ps) => format!(
                 r#"{{"any":[{}]}}"#,

@@ -191,7 +191,54 @@ def boxOf (labels : List String) (coords : List (Option Coord)) : CellTest → L
   | .notInVals ws => (List.range labels.length).filter (fun c =>
       match coords[c]? with
       | some (some x) => !ws.any (fun w => admitsCmp x .eq w)
+      -- The absent value of an optional input is none of the values, so `not:` takes it
+      -- (rulec's §15.201).
+      | some none => labels[c]? == some "none"
       | _ => false)
+
+/-! ## The absent value
+
+An optional input (`T?`) takes one value more than the type it wraps: none at all, which the
+cell `none` tests. On the axis it is the first coordinate, written `none`; on a numeric axis
+it stands for no number (rulec's §15.201). -/
+
+/-- Whether a cell takes the absent value: `-` and `none` do, `not:` does (the absent value is
+    none of the values it names), a set of words does when it names `none`, and a comparison,
+    a set of numbers and a prefix do not — they are about a value that is there. This is how
+    rulec's reference evaluator reads a cell (its `eval.rs`). -/
+def CellTest.takesAbsent : CellTest → Bool
+  | .any => true
+  | .nothing => true
+  | .isIn ws => ws.contains "none"
+  | .notIn ws => !ws.contains "none"
+  | .cmp _ => false
+  | .prefixOf _ => false
+  | .inVals _ => false
+  | .notInVals _ => true
+
+/-- **The box says what the cell says of the absent value.** On an axis that starts with the
+    absent value — written `none`, standing for no number — the first coordinate is in a
+    cell's box exactly when the cell takes the absent value. -/
+theorem mem_boxOf_absent_iff {labels : List String} {coords : List (Option Coord)}
+    (hl : labels[0]? = some "none") (hc : coords[0]? = some none) (t : CellTest)
+    (ht : ∀ ps, t ≠ .prefixOf ps) :
+    0 ∈ boxOf labels coords t ↔ t.takesAbsent = true := by
+  have hlen : 0 < labels.length := by
+    cases labels with
+    | nil => simp at hl
+    | cons _ _ => simp
+  have h0 : labels[0]'hlen = "none" := by
+    rw [List.getElem?_eq_getElem hlen] at hl
+    exact Option.some.inj hl
+  cases t with
+  | any => simp [boxOf, CellTest.takesAbsent, hlen]
+  | nothing => simp [boxOf, CellTest.takesAbsent, hl]
+  | isIn ws => simp [boxOf, CellTest.takesAbsent, hlen, h0]
+  | notIn ws => simp [boxOf, CellTest.takesAbsent, hlen, h0]
+  | cmp ts => simp [boxOf, CellTest.takesAbsent, hc]
+  | prefixOf ps => exact absurd rfl (ht ps)
+  | inVals ws => simp [boxOf, CellTest.takesAbsent, hc]
+  | notInVals ws => simp [boxOf, CellTest.takesAbsent, hlen, hc, h0]
 
 /-! Every value a cell compares against falls outside every coordinate of the axis, so no
     coordinate is split by it. This is §6.2's construction, checked rather than assumed. -/

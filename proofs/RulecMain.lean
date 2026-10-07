@@ -335,8 +335,18 @@ def checkAxes (t : ReadTable) (r : Report) : Report × Nat := Id.run do
   let mut r := r
   let mut tiled := 0
   for ai in [0 : t.columns.length] do
-    let bs := t.spans[ai]!
-    if bs.isEmpty then
+    let mut bs := t.spans[ai]!
+    -- An optional input's axis starts with the absent value, which stands for no number; the
+    -- values that are there tile the rest (rulec's §15.201). Without it, the cover leaves out
+    -- an input the rule takes.
+    if (t.optional[ai]?).getD false then
+      let first := match bs[0]? with | some none => true | _ => false
+      if (t.labels[ai]!)[0]? != some "none" || !first then
+        r := r.fail s!"{t.name}: {t.columns[ai]!} is optional, and its axis has no coordinate for the absent value"
+      bs := bs.drop 1
+    if bs.isEmpty && (t.optional[ai]?).getD false then
+      pure ()
+    else if bs.isEmpty then
       r := r.fail s!"{t.name}: {t.columns[ai]!} has no coordinates, so it stands for nothing"
     else if bs.all (·.isNone) then
       pure ()  -- an enum or a flag: no grid, and nothing to tile
@@ -373,6 +383,11 @@ def checkAxes (t : ReadTable) (r : Report) : Report × Nat := Id.run do
               | some d, some first, some last =>
                 if first.span.1 != some d.1 || last.span.2 != some d.2 then
                   r := r.fail s!"{t.name}: {t.columns[ai]!} does not run the whole of the range the rule declares"
+                -- An interval leaves its ends out, so an end of the declared range is covered
+                -- only by a point on it (rulec's §15.201): an axis whose last point was taken
+                -- away still reached the end with the interval before it.
+                else if first.span.2 != some d.1 || last.span.1 != some d.2 then
+                  r := r.fail s!"{t.name}: {t.columns[ai]!} does not end on the ends of the range the rule declares, so a value at an end is in no coordinate"
               | _, _, _ => pure ()
             tiled := tiled + 1
   return (r, tiled)
@@ -1335,7 +1350,9 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
           let want := kindOf cert col
           if fieldStr a "kind" != want then
             r := r.fail s!"{fieldStr tj "table"}: {col} is a column of kind `{want}`, and the certificate calls it `{fieldStr a "kind"}`"
-      match readTable reachOf groups declaredRange factOf daysOf (fieldArr cert "tables") (truthOfValue cert worked) tj with
+      -- An input the rule declares optional: its type, as the certificate states it, ends in `?`.
+      let optionalOf : String → Bool := fun n => (fieldStr ((field cert "types").getD Json.null) n).endsWith "?"
+      match readTable reachOf groups declaredRange factOf daysOf (fieldArr cert "tables") (truthOfValue cert worked) optionalOf tj with
       | none => r := r.fail s!"{fieldStr tj "table"}: this program cannot read the table"
       | some t =>
         r := checkAbove tj (fieldArr cert "tables") r

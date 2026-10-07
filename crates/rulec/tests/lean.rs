@@ -379,6 +379,7 @@ fn 定理が立つ公理は三つだけ() {
         "RulecCert.mem_boxOf_cmp_iff",
         "RulecCert.mem_boxOf_in_iff",
         "RulecCert.mem_boxOf_notIn_iff",
+        "RulecCert.mem_boxOf_absent_iff",
         "RulecCert.eval_type_of_typeOf",
         "RulecCert.eval_mem_interval",
         "RulecCert.runTotal_exact",

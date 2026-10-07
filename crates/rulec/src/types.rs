@@ -69,6 +69,16 @@ impl Ty {
     pub fn is_numeric(&self) -> bool {
         matches!(self, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number)
     }
+
+    /// The type of a value that is there: the type itself, or the one an optional wraps. A
+    /// cell, a range and a step of an optional column are read in it, and only `none` tests the
+    /// absent value (§2.1, §15.201).
+    pub fn present(&self) -> &Ty {
+        match self {
+            Ty::Opt(t) => t.as_ref(),
+            t => t,
+        }
+    }
     /// Do two types describe the same quantity? Money literals carry no tax brand,
     /// so they unify with either.
     pub fn unifies(&self, o: &Ty) -> bool {
@@ -674,7 +684,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         if let Some(from) = i.range.as_ref().and_then(|r| r.days.clone()) {
             koyomi_days(&mut c, i, &ty, &from, path, &at);
         } else if let Some(r) = &i.range {
-            let (b, bad) = bounds_of(r, &ty);
+            // An optional input's range is the range its values take when there is one: the
+            // bounds are read in the type it wraps. They were read in `T?` itself, where no
+            // number is a value, so `number?` said E103 and `date?` dropped its bounds without a
+            // word, leaving no range to prove completeness over or to guard (§15.201).
+            let (b, bad) = bounds_of(r, ty.present());
             for n in bad {
                 c.diags.push(
                     Diag::error("E103", tr!("範囲の `{}` は {ty} の値ではありません", "The bound `{}` is not a value of {ty}", n.raw))
@@ -688,14 +702,14 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 );
             }
             c.ranges.insert(i.name.text.clone(), b);
-        } else if matches!(ty, Ty::Rate) {
+        } else if matches!(ty.present(), Ty::Rate) {
             // A rate input that declares no range is 0%..100%. The overflow proof always
             // assumed as much; recording it here is what makes the entry guard, the
             // inventory and the vectors say the same thing (§15.34). A rate that can exceed
             // 100% declares its range like any other number.
             c.ranges.insert(i.name.text.clone(), (Some(Rat::zero()), Some(Rat::int(1))));
         }
-        if ty == Ty::Date
+        if *ty.present() == Ty::Date
             && let Some(given) = crate::days::held_over(&i.name.text)
         {
             // `checked_over` (ritsu's port): the input takes only the days given, inside what the
@@ -719,7 +733,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 d.days.retain(|x| held_one(*x, lo, hi));
             }
         }
-        if let Some(n) = unreadable_step(&i.ty, &ty) {
+        if let Some(n) = unreadable_step(&i.ty, ty.present()) {
             c.diags.push(
                 Diag::error("E103", tr!("刻み `{}` は {ty} の値ではありません", "The step `{}` is not a value of {ty}", n.raw))
                     .at(at(i.name.span.line))
@@ -732,10 +746,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     )),
             );
         }
-        if let Some(d) = missing_step(&i.name, &i.ty, &ty, i.name.span.line, path) {
+        if let Some(d) = missing_step(&i.name, &i.ty, ty.present(), i.name.span.line, path) {
             c.diags.push(d);
         }
-        c.scales.insert(i.name.text.clone(), scale_of_type(&i.ty, &ty));
+        c.scales.insert(i.name.text.clone(), scale_of_type(&i.ty, ty.present()));
         c.syms.insert(
             i.name.text.clone(),
             Sym { ty, span: i.name.span.clone(), kind: SymKind::Input, contract_only: i.contract_only },
@@ -775,7 +789,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 // read is the same error there — but the diagnostics were dropped on the
                 // floor here, so `額 : money[円] range >=0円 <=1000g` passed with no upper
                 // bound at all, over which completeness was then proved (§15.86).
-                let (b, bad) = bounds_of(r, &ty);
+                let (b, bad) = bounds_of(r, ty.present());
                 for n in bad {
                     c.diags.push(
                         Diag::error("E103", tr!("範囲の `{}` は {ty} の値ではありません", "The bound `{}` is not a value of {ty}", n.raw))
@@ -789,10 +803,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                     );
                 }
                 c.ranges.insert(i.name.text.clone(), b);
-            } else if matches!(ty, Ty::Rate) {
+            } else if matches!(ty.present(), Ty::Rate) {
                 c.ranges.insert(i.name.text.clone(), (Some(Rat::zero()), Some(Rat::int(1))));
             }
-            if let Some(n) = unreadable_step(&i.ty, &ty) {
+            if let Some(n) = unreadable_step(&i.ty, ty.present()) {
                 c.diags.push(
                     Diag::error("E103", tr!("刻み `{}` は {ty} の値ではありません", "The step `{}` is not a value of {ty}", n.raw))
                         .at(at(i.name.span.line))
@@ -805,10 +819,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                         )),
                 );
             }
-            if let Some(d) = missing_step(&i.name, &i.ty, &ty, i.name.span.line, path) {
+            if let Some(d) = missing_step(&i.name, &i.ty, ty.present(), i.name.span.line, path) {
                 c.diags.push(d);
             }
-            c.scales.insert(i.name.text.clone(), scale_of_type(&i.ty, &ty));
+            c.scales.insert(i.name.text.clone(), scale_of_type(&i.ty, ty.present()));
             c.syms.insert(
                 i.name.text.clone(),
                 Sym { ty, span: i.name.span.clone(), kind: SymKind::Element, contract_only: i.contract_only },
@@ -911,7 +925,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             for a in &t.args {
                 if let TypeArg::Scaled(w, n) = a
                     && w == crate::kw::STEP
-                    && lit_value_in(n, &ty).is_some_and(|v| v.num <= 0)
+                    && lit_value_in(n, ty.present()).is_some_and(|v| v.num <= 0)
                 {
                     c.diags.push(nonpositive(n, t.span.clone(), at(t.span.line), tr!("型の刻み", "the step of a type")));
                 }
@@ -930,7 +944,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         let mut ranged: Vec<(&crate::ast::Range, Ty)> = Vec::new();
         for i in f.inputs.iter().chain(f.elements.iter().flat_map(|el| el.fields.iter())) {
             if let Some(r) = &i.range {
-                ranged.push((r, c.resolve(&i.ty)));
+                // An optional input's range is read in the type it wraps (§15.201).
+                ranged.push((r, c.resolve(&i.ty).present().clone()));
             }
         }
         for it in &f.items {
@@ -3581,7 +3596,8 @@ impl Checked {
         if let Some(s) = self.out_scales.get(name) {
             return *s;
         }
-        match self.ty_of(name) {
+        // An optional rate travels as the same count of steps when it is there (§15.201).
+        match self.ty_of(name).as_ref().map(Ty::present) {
             Some(Ty::Rate) => *self.scales.get(name).unwrap_or(&100),
             _ => 1,
         }

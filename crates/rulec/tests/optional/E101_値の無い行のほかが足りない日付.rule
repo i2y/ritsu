@@ -1,0 +1,14 @@
+rule 遅れ(late_flag) v1
+description "返却が遅れたかどうかを、無いことのある期日から決める。表は期日の無い返却の行と、7 月より前の日の行を書いていて、年の残りの日が抜けている"
+
+inputs
+  期日(due) : date?  range >=2026-01-01 <=2026-12-31
+
+outputs
+  遅れ(late) : bool
+
+table 判定(pick)
+policy unique
+| 期日        | -> 遅れ : bool |
+| none        | false          |
+| <2026-07-01 | false          |

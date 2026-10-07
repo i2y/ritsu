@@ -1,0 +1,53 @@
+rule parcel_cover v1
+description "The cover fee of a parcel, whether it is bulky, whether it travels as a rush and whether it is handed over in person, from the value its sender declares, the number of pieces, the day it ships and whether it is to be signed for, each of which may be missing. An example of optional inputs that are an amount, a number, a date and a truth value: each table writes a row for the absent value and covers the declared range when there is a value. A sketch written for rulec's tests; it is not a transcription of any document"
+
+inputs
+  declared  : money[JPY]?  range >=0JPY <=300_000JPY
+  pieces    : number?  range >=1 <=20
+  ship_on   : date?  range >=2026-01-01 <=2026-12-31
+  signature : bool?
+
+outputs
+  fee     : money[JPY]  round down(1JPY)
+  bulky   : bool
+  rush    : bool
+  handled : bool
+
+# A parcel whose sender declares no value is covered as one declared at nothing.
+table by_value
+policy unique
+| declared                | -> fee : money[JPY] |
+| none                    | 0JPY                |
+| <=30_000JPY             | 0JPY                |
+| >30_000JPY <=100_000JPY | 300JPY              |
+| >100_000JPY             | 800JPY              |
+
+# Five pieces or more make a parcel bulky; a parcel with no count yet is not.
+table by_pieces
+policy unique
+| pieces | -> bulky : bool |
+| none   | false           |
+| <5     | false           |
+| >=5    | true            |
+
+# A parcel that ships in the last days of the year is a rush, and one with no day fixed yet is not.
+# The row for the absent value comes last here, and in the middle in the next table: the generated code takes the rows in their order.
+table by_day
+policy unique
+| ship_on      | -> rush : bool |
+| <2026-12-20  | false          |
+| >=2026-12-20 | true           |
+| none         | false          |
+
+table by_signature
+policy unique
+| signature | -> handled : bool |
+| true      | true              |
+| none      | false             |
+| false     | false             |
+
+examples
+| declared   | pieces | ship_on    | signature | -> fee  | bulky | rush  | handled |
+| none       | none   | none       | none      | 0JPY    | false | false | false   |
+| 50_000JPY  | 5      | 2026-12-24 | true      | 300JPY  | true  | true  | true    |
+| 300_000JPY | 4      | 2026-12-19 | false     | 800JPY  | false | false | false   |

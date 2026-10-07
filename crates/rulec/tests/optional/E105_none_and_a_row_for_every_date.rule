@@ -1,0 +1,14 @@
+rule late_flag v1
+description "Flags a return as late from the day it is due, which may be missing. The second row takes every value, the absent one too, so it meets the row for a return with no day"
+
+inputs
+  due : date?  range >=2026-01-01 <=2026-12-31
+
+outputs
+  late : bool
+
+table pick
+policy unique
+| due  | -> late : bool |
+| none | false          |
+| -    | true           |

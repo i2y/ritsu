@@ -219,26 +219,35 @@ def _unreachable(kind):
     return 0 if kind in ("int", "date") else False if kind == "bool" else ""
 
 
-def _test(t, v):
-    """One cell, over a whole column. `None` would be a `-`, which the plan leaves out."""
+def _test(t, v, absent=None):
+    """One cell, over a whole column. `None` would be a `-`, which the plan leaves out.
+
+    `absent` is where an optional number, date or truth value has no value: its column holds a
+    placeholder there, which no test but `none` and `not:` may take."""
     op = t["op"]
+    if op == "none":
+        return absent if absent is not None else np.zeros(len(v), dtype=bool)
     if op == "true":
-        return v
-    if op == "false":
-        return ~v
-    if op == "eq":
-        return v == t["v"]
-    if op == "in":
-        return np.isin(v, t["vals"])
-    if op == "notin":
-        return ~np.isin(v, t["vals"])
-    if op == "cmp":
+        c = v
+    elif op == "false":
+        c = ~v
+    elif op == "eq":
+        c = v == t["v"]
+    elif op == "in":
+        c = np.isin(v, t["vals"])
+    elif op == "notin":
+        c = ~np.isin(v, t["vals"])
+    elif op == "cmp":
         c = None
         for o, lit in t["tests"]:
             one = v <= lit if o == "<=" else v >= lit if o == ">=" else v < lit if o == "<" else v > lit
             c = one if c is None else (c & one)
+    else:
+        raise ValueError(f"unknown cell: {op}")
+    if absent is None:
         return c
-    raise ValueError(f"unknown cell: {op}")
+    # `not:` holds of the absent value; every other test is about a value that is there.
+    return c | absent if op == "notin" else c & ~absent
 
 
 class Rule:
@@ -294,8 +303,12 @@ class Rule:
             kind = spec["kind"]
             # The absent value of an optional column is the word itself, not a wrong type.
             absent = np.array([x == "none" for x in v], dtype=bool) if spec.get("optional") else np.zeros(n, dtype=bool)
+            # A number, a date or a truth value holds a placeholder where it is absent, and the
+            # cells read where it is absent from beside it: a column of numbers has no word in
+            # it to test (§15.201).
+            fill = lambda x, z: np.array([z if a else e for e, a in zip(x, absent)], dtype=object)
             if kind == "date":
-                days = [_ord_or_none(x) for x in v]
+                days = [0 if a else _ord_or_none(x) for x, a in zip(v, absent)]
                 bad = np.array([d is None for d in days], dtype=bool) & ~absent
                 if bad.any():
                     i = int(np.argmax(bad))
@@ -306,11 +319,13 @@ class Rule:
                 if bad.any():
                     i = int(np.argmax(bad))
                     raise refuse(say["integer"], wire[i], i)
-                v = v.astype(np.int64)
+                v = (fill(v, 0) if spec.get("optional") else v).astype(np.int64)
             elif kind == "bool":
-                v = v.astype(bool)
+                v = (fill(v, False) if spec.get("optional") else v).astype(bool)
             else:
                 v = v.astype(str)
+            if spec.get("optional") and kind in ("date", "int", "bool"):
+                env[("absent", name)] = absent
             if "values" in spec:
                 bad = ~np.isin(v, spec["values"])
                 if bad.any():
@@ -323,6 +338,8 @@ class Rule:
                     bad |= v < lo
                 if hi is not None:
                     bad |= v > hi
+                # The range is the range of the values that are there (§15.201).
+                bad &= ~absent
                 if bad.any():
                     i = int(np.argmax(bad))
                     raise refuse(say["range"], wire[i], i)
@@ -359,7 +376,7 @@ class Rule:
             for row in st["rows"]:
                 c = np.ones(n, dtype=bool)
                 for t in row["tests"]:
-                    c = c & _test(t, env[t["col"]])
+                    c = c & _test(t, env[t["col"]], env.get(("absent", t["col"])))
                 conds.append(c)
                 picks.append(row["vals"])
             # The default is never selected: E101 proved the rows cover the declared space

@@ -760,7 +760,8 @@ impl<'a> Gen<'a> {
             Dir::In => ins.collect(),
             Dir::Out => outs.collect(),
         };
-        names.iter().any(|n| matches!(wire_of(&self.ty_of(n)), Wire::Date))
+        // An optional date is a date on the wire when it is there (§15.201).
+        names.iter().any(|n| matches!(wire_of(self.ty_of(n).present()), Wire::Date))
     }
 
     /// `python/<alias>_service.py`: the rule behind a Connect endpoint.
@@ -1214,17 +1215,26 @@ impl<'a> Gen<'a> {
             }
         }
         if let Some(el) = &self.f.elements {
+            // An optional field that is absent is left unset, as an optional input is (§15.201).
+            let optional = el.fields.iter().any(|fd| matches!(self.ty_of(&fd.name.text), Ty::Opt(_)));
             let fields: Vec<String> = el
                 .fields
                 .iter()
-                .map(|fd| format!("{}={}", pub_name(&fd.name), self.to_request(&fd.name.text, &self.ty_of(&fd.name.text)).replace("d[", "e[")))
+                .map(|fd| {
+                    let one = self.to_request(&fd.name.text, &self.ty_of(&fd.name.text)).replace("d[", "e[");
+                    if matches!(self.ty_of(&fd.name.text), Ty::Opt(_)) {
+                        format!("{}=(None if e[{:?}] is None else {one})", pub_name(&fd.name), fd.name.text)
+                    } else {
+                        format!("{}={one}", pub_name(&fd.name))
+                    }
+                })
                 .collect();
-            kw.push_str(&format!(
-                "    kw[{:?}] = [pb.Element({}) for e in d[{:?}]]\n",
-                pub_name(&el.name),
-                fields.join(", "),
-                el.name.text
-            ));
+            let element = if optional {
+                format!("pb.Element(**{{k: v for k, v in dict({}).items() if v is not None}})", fields.join(", "))
+            } else {
+                format!("pb.Element({})", fields.join(", "))
+            };
+            kw.push_str(&format!("    kw[{:?}] = [{element} for e in d[{:?}]]\n", pub_name(&el.name), el.name.text));
         }
         // The arguments are read from the same line the request was built from, because the
         // record names its inputs as the rule does and the message names them by their alias.

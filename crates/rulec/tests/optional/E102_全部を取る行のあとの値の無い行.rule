@@ -1,0 +1,14 @@
+rule 大きい加点(big_bonus) v1
+description "加点が大きいかどうかを、無いことのある数から決める。行は順に見られ、一行目が値の無いことも含めてどの値も取るので、加点の無いときの行には届かない"
+
+inputs
+  加点(bonus) : number?  range >=0 <=10
+
+outputs
+  大きい(big) : bool
+
+table 判定(pick)
+policy first
+| 加点 | -> 大きい : bool |
+| -    | false            |
+| none | true             |

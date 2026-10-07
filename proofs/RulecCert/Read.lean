@@ -317,6 +317,9 @@ structure ReadTable where
   /-- Per axis: the prefix each coordinate stands for, on a string axis; empty elsewhere. -/
   prefixes : List (List (Option (List Char)))
   declared : List (Option Span2)
+  /-- Per axis: whether the column is an input the rule declares optional (`T?`). Its axis
+      starts with the absent value, `none`, which stands for no number (rulec's §15.201). -/
+  optional : List Bool := []
   /-- Leaves the cover rests on an upstream table for. -/
   upstream : Bool
 
@@ -407,7 +410,8 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
     (declaredOf : String → Option Span2)
     (factOf : Json → Option (List (String × Rat) × Rat × Bool))
     (daysOf : String → Option (List Rat)) (all : Array Json)
-    (truthOf : String → Option (Cmp × Span2 × Span2) := fun _ => none) (j : Json) : Option ReadTable := do
+    (truthOf : String → Option (Cmp × Span2 × Span2) := fun _ => none)
+    (optionalOf : String → Bool := fun _ => false) (j : Json) : Option ReadTable := do
   let name := fieldStr j "table"
   let policy ← (if fieldStr j "policy" == "unique" then some Policy.unique
                 else if fieldStr j "policy" == "first" then some Policy.first else none)
@@ -585,11 +589,17 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
     valuesStated := (fieldArr j "reach").toList.all (fun w =>
       let vs := fieldArr w "at_values"
       let xs := fieldArr w "extra_values"
+      let atJ := fieldArr w "at"
       vs.size == axes.size &&
         (List.range axes.size).all (fun ai =>
           match (coords[ai]?).getD [] with
           | [] => true
-          | cs => cs.all (·.isNone) || !(vs[ai]!).isNull) &&
+          | cs => cs.all (·.isNone) || !(vs[ai]!).isNull ||
+              -- The absent value of an optional input has no number behind it (rulec's §15.201).
+              (match atJ[ai]? >>= nat with
+               | some c => (match cs[c]? with | some none => true | _ => false) &&
+                   ((labels[ai]?).getD [])[c]? == some "none"
+               | none => false)) &&
         (facts.isEmpty || (xs.size == extra.length && xs.all (fun x => !x.isNull))))
     kinds := axes.toList.map (fun a => fieldStr a "kind")
     steps := axes.toList.map (fun a => field a "step" >>= optRat)
@@ -598,6 +608,7 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
       | some ps => ps.toList.map (fun x => (str x).map String.toList)
       | none => [])
     declared := columns.map declaredOf
+    optional := axes.toList.map (fun a => fieldStr a "kind" == "input" && optionalOf (fieldStr a "column"))
     upstream := leansAbove ((field j "cover").getD Json.null)
     cert := {
       arities := arities, rows := rows, policy := policy

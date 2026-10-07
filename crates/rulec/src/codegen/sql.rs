@@ -272,6 +272,9 @@ impl<'a> Gen<'a> {
             Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("NOT {col}"),
             Cell::Lit(x) => format!("{col} = {}", l(x)),
             Cell::Set(ls) => format!("{col} IN {}", members(ls)),
+            // `NULL NOT IN (…)` is NULL, which no `WHEN` takes, and `not:` holds of the absent
+            // value in every other language (§15.201).
+            Cell::Not(ls) if matches!(ty, Ty::Opt(_)) => format!("({col} IS NULL OR {col} NOT IN {})", members(ls)),
             Cell::Not(ls) => format!("{col} NOT IN {}", members(ls)),
             Cell::Cmp(cs) => cs
                 .iter()

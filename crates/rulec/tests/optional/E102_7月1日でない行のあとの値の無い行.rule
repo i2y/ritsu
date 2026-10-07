@@ -1,0 +1,15 @@
+rule 遅れ(late_flag) v1
+description "返却が遅れたかどうかを、無いことのある期日から決める。行は順に見られ、`not: 2026-07-01` が期日の無い返却を取ってしまうので、そのために書いた行には届かない"
+
+inputs
+  期日(due) : date?  range >=2026-01-01 <=2026-12-31
+
+outputs
+  遅れ(late) : bool
+
+table 判定(pick)
+policy first
+| 期日            | -> 遅れ : bool |
+| not: 2026-07-01 | false          |
+| none            | true           |
+| 2026-07-01      | true           |

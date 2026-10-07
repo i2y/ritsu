@@ -1,0 +1,10 @@
+error[E101]: Completeness gap: some input matches no row
+  --> tests/optional/E101_値の無い行のほかが足りない日付.rule:10 table 判定
+   |
+10 | table 判定(pick)
+   |       ^^^^ the input space is not fully covered
+   |
+ An input that matches no row: 期日 = 2026-07-01
+ hint: add a row that matches this input.
+ The shape of the row to add: `| 2026-07-01 | false |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
+

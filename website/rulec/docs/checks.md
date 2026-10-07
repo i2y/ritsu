@@ -363,6 +363,21 @@ file's SHA-256. The days are read through ritsu, with koyomi joined
 check the rule over every day instead, and says so (E129). See
 [the reference](reference.md#range-from-koyomi--the-days-a-koyomi-date-comes-to).
 
+## An input that may be missing
+
+An optional input (`T?`) takes one value more than the type it wraps:
+none at all, which the cell `none` tests. Completeness asks for a row for
+it and for the whole declared range beside it. A date declared as
+`due : date?  range >=2026-01-01 <=2026-12-31`, with the one row
+`<2026-07-01`, stops with `due = none`, and once a `none` row is written,
+with `due = 2026-07-01`.
+A comparison, a literal and a set of values match only a value that is
+there, while `-` and `not:` take the absent value too, so a `none` row
+meets either of them (E105). The generated code checks a value that is
+there against the range and the step of the type it wraps, and lets the
+absent value through to its row. See
+[the reference](reference.md#3-types).
+
 ## Showing it to people
 
 ```console

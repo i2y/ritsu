@@ -1,0 +1,53 @@
+rule 小包の補償(parcel_cover_ja) v1
+description "小包の補償料、大口かどうか、急ぎかどうか、手渡しかどうかを、差出人が申告した額、個数、発送日、署名の要否から決める。四つの入力はどれも無いことがある。金額、数、日付、真偽の optional の入力の例で、どの表も値が無いときの行を書き、値があるときは宣言した範囲を全部覆う。rulec のテストのために書いたもので、どの文書の転記でもない。parcel_cover.rule の日本語の版"
+
+inputs
+  申告額(declared)   : money[円]?  range >=0円 <=300_000円
+  個数(pieces)       : number?  range >=1 <=20
+  発送日(ship_on)    : date?  range >=2026-01-01 <=2026-12-31
+  署名(signature)    : bool?
+
+outputs
+  補償料(fee)        : money[円]  round down(1円)
+  大口(bulky)        : bool
+  急ぎ(rush)         : bool
+  手渡し(handled)    : bool
+
+# 申告額の無い小包は、申告額 0 円として補償する。
+table 申告額の表(by_value)
+policy unique
+| 申告額               | -> 補償料 : money[円] |
+| none                 | 0円                   |
+| <=30_000円           | 0円                   |
+| >30_000円 <=100_000円 | 300円                |
+| >100_000円           | 800円                 |
+
+# 5 個以上で大口。個数がまだ無い小包は大口ではない。
+table 個数の表(by_pieces)
+policy unique
+| 個数 | -> 大口 : bool |
+| none | false          |
+| <5   | false          |
+| >=5  | true           |
+
+# 年末に発送する小包は急ぎで、発送日がまだ決まっていない小包は急ぎではない。
+# 値が無いときの行を、この表では最後に、次の表では真ん中に置く。生成したコードは行を書いた順に見る。
+table 発送日の表(by_day)
+policy unique
+| 発送日       | -> 急ぎ : bool |
+| <2026-12-20  | false          |
+| >=2026-12-20 | true           |
+| none         | false          |
+
+table 署名の表(by_signature)
+policy unique
+| 署名  | -> 手渡し : bool |
+| true  | true             |
+| none  | false            |
+| false | false            |
+
+examples
+| 申告額    | 個数 | 発送日     | 署名  | -> 補償料 | 大口  | 急ぎ  | 手渡し |
+| none      | none | none       | none  | 0円       | false | false | false  |
+| 50_000円  | 5    | 2026-12-24 | true  | 300円     | true  | true  | true   |
+| 300_000円 | 4    | 2026-12-19 | false | 800円     | false | false | false  |

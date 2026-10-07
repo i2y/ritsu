@@ -1,0 +1,13 @@
+rule big_bonus v1
+description "Says whether a bonus is big, from a number that may be missing. The table writes one row, for less than five: it covers neither five and above nor a bonus that is missing"
+
+inputs
+  bonus : number?
+
+outputs
+  big : bool
+
+table pick
+policy unique
+| bonus | -> big : bool |
+| <5    | false         |

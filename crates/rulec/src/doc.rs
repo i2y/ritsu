@@ -153,14 +153,16 @@ fn ty_text(c: &Checked, name: &str) -> String {
 
 fn range_text(c: &Checked, name: &str) -> String {
     let Some((lo, hi)) = c.ranges.get(name) else { return String::new() };
-    let unit = match c.ty_of(name) {
+    // An optional input's range is the range of its values when it has one (§15.201).
+    let ty = c.ty_of(name).map(|t| t.present().clone());
+    let unit = match ty.clone() {
         Some(Ty::Qty { unit, .. }) => unit,
         Some(Ty::Money { cur, .. }) => cur,
         _ => String::new(),
     };
     // What the source wrote as `100万円` must not be shown as `1000000円` (§1.6; the same
     // write-back as §2.1).
-    let is_date = matches!(c.ty_of(name), Some(Ty::Date));
+    let is_date = matches!(ty, Some(Ty::Date));
     let s = |b: &Option<crate::num::Rat>| match b {
         // A date is held as its day number (§2.1); the reader reads the calendar date the
         // rule wrote, not `16161 〜 22279` (§15.71).
@@ -2293,7 +2295,9 @@ fn rounding_verb(r: &Rounding) -> String {
 /// What an input can be, for the customer: the values of a small enum, the name of a large
 /// one, the range of a quantity with its unit, yes/no for a flag.
 fn customer_input(c: &Checked, name: &str) -> String {
-    let range = match (c.ty_of(name), c.ranges.get(name)) {
+    // An optional input is what it is when it has a value, or none (§15.201).
+    let ty = c.ty_of(name);
+    let range = match (ty.as_ref().map(|t| t.present().clone()), c.ranges.get(name)) {
         (Some(Ty::Qty { unit, .. }), Some((lo, hi))) => {
             let s = |b: &Option<crate::num::Rat>| b.map(|v| qty_words(v, &unit)).unwrap_or_else(|| "…".into());
             match (lo, hi) {
@@ -2303,19 +2307,36 @@ fn customer_input(c: &Checked, name: &str) -> String {
         }
         _ => range_text(c, name),
     };
-    match c.ty_of(name) {
-        Some(Ty::Enum(e)) => {
-            let vs = c.enums.get(&e).cloned().unwrap_or_default();
-            if vs.len() <= 8 {
-                tr!("{}のいずれか", "one of {}", vs.join(if crate::i18n::ja() { "・" } else { ", " }))
-            } else {
-                tr!("{e}のいずれか", "one of {e}")
+    let present = |ty: Option<Ty>| -> String {
+        match ty {
+            Some(Ty::Enum(e)) => {
+                let vs = c.enums.get(&e).cloned().unwrap_or_default();
+                if vs.len() <= 8 {
+                    tr!("{}のいずれか", "one of {}", vs.join(if crate::i18n::ja() { "・" } else { ", " }))
+                } else {
+                    tr!("{e}のいずれか", "one of {e}")
+                }
             }
+            t => customer_present(t, &range),
         }
+    };
+    match ty {
         Some(Ty::Opt(inner)) => match *inner {
             Ty::Enum(e) => tr!("{e}のいずれか、または無し", "one of {e}, or none"),
-            _ => tr!("任意", "optional"),
+            inner => match present(Some(inner)) {
+                p if p.is_empty() => tr!("任意", "optional"),
+                p => tr!("{p}、または無し", "{p}, or none"),
+            },
         },
+        t => present(t),
+    }
+}
+
+/// What a value that is there can be, for the customer: everything [`customer_input`] says but
+/// for an enum and the absent value.
+fn customer_present(ty: Option<Ty>, range: &str) -> String {
+    let range = range.to_string();
+    match ty {
         Some(Ty::Bool) => tr!("はい／いいえ", "yes / no"),
         Some(Ty::Money { tax, .. }) => {
             let t = tax.map(|x| tax_words(&x)).unwrap_or_default();

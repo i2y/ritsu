@@ -38,6 +38,10 @@ fn scale(v: Ival, k: Rat) -> Ival {
 
 #[derive(Debug, Clone)]
 enum Coord {
+    /// The absent value of an optional number or date: the first coordinate of its axis, as
+    /// `none` is the first value of an optional enum's (§15.201). No comparison and no literal
+    /// takes it; `none` takes it alone, and `-` and `not:` take it with the rest.
+    Absent,
     /// Exactly this value.
     Point(Rat),
     /// Strictly between two boundaries (neither end included). A `None` end means the interval
@@ -173,6 +177,7 @@ impl Axis {
         match self {
             Axis::Enum { .. } | Axis::Bool | Axis::Prefix { .. } => None,
             Axis::Num { coords, step, grid, days, .. } => match coords.get(i) {
+                Some(Coord::Absent) => None,
                 Some(Coord::Point(v)) => Some(*v),
                 // On an axis of koyomi's days, the first day inside the interval (§15.174).
                 Some(Coord::Open(a, b)) => match days {
@@ -189,6 +194,8 @@ impl Axis {
     fn holds_a_day(&self, i: usize) -> bool {
         match self {
             Axis::Num { coords, days: Some(ds), .. } => match coords.get(i) {
+                // The absent value is no day, and it is a value the input takes (§15.201).
+                Some(Coord::Absent) => true,
                 Some(Coord::Point(v)) => v.den == 1 && ds.binary_search(&(v.num as i64)).is_ok(),
                 Some(Coord::Open(a, b)) => day_inside(ds, *a, *b).is_some(),
                 None => true,
@@ -211,6 +218,9 @@ impl Axis {
                 Some(p) => format!("\"{p}\""),
                 None => format!("\"{}\"", outside_all(patterns)),
             },
+            // The absent value of an optional number or date is written as the cell that tests
+            // it (§15.201).
+            Axis::Num { coords, .. } if matches!(coords.get(i), Some(Coord::Absent)) => crate::kw::NONE.into(),
             // Dates are serial day numbers, so every value on the axis — the ends of a
             // coordinate included — is a real calendar day. Print that day.
             Axis::Num { date: true, .. } => match self.value_at(i, chosen) {
@@ -249,12 +259,20 @@ impl Axis {
     fn witness_val(&self, i: usize, chosen: Option<Rat>) -> crate::diag::WVal {
         use crate::diag::WVal;
         match self {
+            // An optional truth value's axis is the enum of `none`, `true` and `false` (§15.201);
+            // its two values are still truth values. No enum has a value called either.
+            Axis::Enum { values } if matches!(values.get(i).map(String::as_str), Some(crate::kw::TRUE | crate::kw::FALSE)) => {
+                WVal::Bool(values[i] == crate::kw::TRUE)
+            }
             Axis::Enum { .. } => WVal::Str(self.witness_at(i, chosen)),
             Axis::Prefix { patterns } => WVal::Str(match patterns.get(i) {
                 Some(p) => p.clone(),
                 None => outside_all(patterns),
             }),
             Axis::Bool => WVal::Bool(i == 0),
+            // The absent value is written as the word the cell tests it with, as an optional
+            // enum's is (§15.201).
+            Axis::Num { coords, .. } if matches!(coords.get(i), Some(Coord::Absent)) => WVal::Str(crate::kw::NONE.into()),
             // Empty unit means "a date"; the display form is already `YYYY-MM-DD`.
             Axis::Num { date: true, .. } => WVal::Str(self.witness_at(i, chosen)),
             Axis::Num { wire, .. } => {
@@ -458,6 +476,8 @@ fn cmp_holds(op: CmpOp, v: Rat, bound: Rat) -> bool {
 /// coordinates buy us).
 fn coord_satisfies(c: &Coord, op: CmpOp, bound: Rat) -> bool {
     match c {
+        // A comparison holds only of a value that is there (§2.1, §15.201).
+        Coord::Absent => false,
         Coord::Point(v) => cmp_holds(op, *v, bound),
         Coord::Open(a, b) => match op {
             CmpOp::Le | CmpOp::Lt => b.is_some_and(|b| cmp_holds(CmpOp::Le, b, bound)),
@@ -541,7 +561,7 @@ fn upstream_dead(row: &Row, ups: &[Upstream], c: &Checked, t: &Table) -> bool {
             .map(|(ai, n)| {
                 let dc = t.inputs.iter().position(|(m, _)| m == n).and_then(|i| row.cells.get(i));
                 match c.ty_of(n) {
-                    Some(ty) => cell_mask(&up.reg.axes[ai], dc, &ty, c),
+                    Some(ty) => cell_mask(&up.reg.axes[ai], dc, ty.present(), c),
                     None => vec![true; up.reg.axes[ai].len()],
                 }
             })
@@ -625,6 +645,8 @@ fn upstream_blocked(
 /// step on each side it has.
 fn coord_ends(cd: &Coord, step: Rat) -> Ival {
     match cd {
+        // No number at all: `carry` meets it with the other axis's absent value only.
+        Coord::Absent => (None, None),
         Coord::Point(v) => (Some(*v), Some(*v)),
         Coord::Open(a, b) => (a.map(|v| v.add(step)), b.map(|v| v.sub(step))),
     }
@@ -655,8 +677,13 @@ fn carry(from: &Axis, mask: &[bool], to: &Axis) -> Vec<bool> {
         (Axis::Num { coords: fc, step: fs, .. }, Axis::Num { coords: tc, step: ts, .. }) => tc
             .iter()
             .map(|t| {
+                // The absent value meets the absent value and nothing else (§15.201).
+                let absent = |c: &Coord| matches!(c, Coord::Absent);
+                if absent(t) {
+                    return fc.iter().zip(mask).any(|(f, &m)| m && absent(f));
+                }
                 let te = coord_ends(t, *ts);
-                fc.iter().zip(mask).any(|(f, &m)| m && ivals_meet(coord_ends(f, *fs), te))
+                fc.iter().zip(mask).any(|(f, &m)| m && !absent(f) && ivals_meet(coord_ends(f, *fs), te))
             })
             .collect(),
         // Prefix classes are cut by the patterns each table happens to name, and two tables
@@ -926,9 +953,12 @@ fn cell_mask(axis: &Axis, cell: Option<&Cell>, ty: &Ty, c: &Checked) -> Vec<bool
     let mut v = vec![false; n];
         match cell {
             None | Some(Cell::DontCare) => v.iter_mut().for_each(|x| *x = true),
-            // `none` matches only the first coordinate of an optional axis.
+            // `none` matches only the first coordinate of an optional axis: the value `none` of
+            // an enum's, the absent value of a number's or a date's (§15.201).
             Some(Cell::Nothing) => {
-                if matches!(axis, Axis::Enum { values } if values.first().map(|s| s.as_str()) == Some(crate::kw::NONE)) {
+                if matches!(axis, Axis::Enum { values } if values.first().map(|s| s.as_str()) == Some(crate::kw::NONE))
+                    || matches!(axis, Axis::Num { coords, .. } if matches!(coords.first(), Some(Coord::Absent)))
+                {
                     v[0] = true;
                 }
             }
@@ -1043,9 +1073,12 @@ impl TableRegion {
         for (ci, (name, _)) in t.inputs.iter().enumerate() {
             let ty = c.ty_of(name)?;
             col_names.push(name.clone());
-            // An optional column is treated as an enum with one extra value, `none`. Since
-            // §2.1 rules that it "can only be consumed by a `none` cell and never appears in
-            // an expression", the axis merely gains one value.
+            // An optional column has one value more than the type it wraps: `none`, the absent
+            // value. Since §2.1 rules that it "can only be consumed by a `none` cell and never
+            // appears in an expression", the axis merely gains one coordinate. It used to gain
+            // it on an enum only: a number's or a date's axis had no coordinate for the absent
+            // value, and its cells were read in `T?`, where no number is a value — so `<5` took
+            // every coordinate and `none` took none, and a table with a gap passed (§15.201).
             let (ty, opt) = match &ty {
                 Ty::Opt(inner) => ((**inner).clone(), true),
                 other => (other.clone(), false),
@@ -1058,6 +1091,11 @@ impl TableRegion {
                     }
                     Axis::Enum { values: vs }
                 }
+                // An optional truth value is the enum of `none`, `true` and `false`: three values,
+                // and a cell of `true` or `false` names one of them (§15.201).
+                Ty::Bool if opt => Axis::Enum {
+                    values: vec![crate::kw::NONE.into(), crate::kw::TRUE.into(), crate::kw::FALSE.into()],
+                },
                 Ty::Bool => Axis::Bool,
                 // §6.2 on a `string` column: the prefixes its own cells name cut the
                 // strings into finitely many classes, and that is all the compression
@@ -1178,6 +1216,18 @@ impl TableRegion {
                     Axis::Bool
                 }
             };
+            // The absent value of an optional number or date goes first on its axis, as `none`
+            // goes first among an optional enum's values (§15.201). An input ritsu's port holds
+            // to values or days it is given takes none but those, as an enum held to its values
+            // does not take `none`.
+            let held_here = crate::over::held(name).is_some() || crate::days::held_over(name).is_some();
+            let axis = match axis {
+                Axis::Num { unit, date, mut coords, shown, wire, step, grid, days } if opt && !held_here => {
+                    coords.insert(0, Coord::Absent);
+                    Axis::Num { unit, date, coords, shown, wire, step, grid, days }
+                }
+                a => a,
+            };
             axes.push(axis);
         }
 
@@ -1245,7 +1295,8 @@ impl TableRegion {
             let mut m = Vec::new();
             for (ai, axis) in axes.iter().enumerate() {
                 let ty = c.ty_of(&col_names[ai])?;
-                let v = cell_mask(axis, row.cells.get(cell_of[ai]), &ty, c);
+                // A cell of an optional column is read in the type it wraps (§15.201).
+                let v = cell_mask(axis, row.cells.get(cell_of[ai]), ty.present(), c);
                 m.push(v);
             }
             // A row that names only values the upstream table never produces is dead
@@ -1320,6 +1371,8 @@ impl TableRegion {
         let mut ends: Option<(Option<(Rat, bool)>, Option<(Rat, bool)>)> = None;
         for &c in cs {
             let (a, b) = match coords.get(c)? {
+                // The absent value has no number to put an end on (§15.201).
+                Coord::Absent => continue,
                 Coord::Point(v) => (Some((*v, false)), Some((*v, false))),
                 Coord::Open(a, b) => (a.map(|x| (x, true)), b.map(|x| (x, true))),
             };
@@ -1698,7 +1751,7 @@ impl TableRegion {
         let coord = |ai: usize| path.get(ai).copied().unwrap_or(0);
         let at_axis = |ai: usize| self.axes[ai].witness_num(coord(ai), vals.get(ai).copied().flatten());
         let as_val = |name: &str, v: Rat| -> Val {
-            if c.ty_of(name) == Some(Ty::Date) {
+            if c.ty_of(name).is_some_and(|t| *t.present() == Ty::Date) {
                 let (y, m, d) = crate::types::ord_to_date(v);
                 Val::Date(y, m, d)
             } else {
@@ -1711,7 +1764,13 @@ impl TableRegion {
                 continue;
             }
             let v = match &self.axes[ai] {
+                // The absent value of an optional input, and an optional truth value's two
+                // values, as the evaluator reads them (§15.201).
+                Axis::Num { coords, .. } if matches!(coords.get(coord(ai)), Some(Coord::Absent)) => Val::Enum(crate::kw::NONE.into()),
                 Axis::Num { .. } => as_val(name, at_axis(ai)?),
+                Axis::Enum { values } if matches!(values.get(coord(ai)).map(String::as_str), Some(crate::kw::TRUE | crate::kw::FALSE)) => {
+                    Val::Bool(values[coord(ai)] == crate::kw::TRUE)
+                }
                 Axis::Enum { values } => Val::Enum(values.get(coord(ai))?.clone()),
                 Axis::Bool => Val::Bool(coord(ai) == 0),
                 Axis::Prefix { .. } => match self.axes[ai].witness_val(coord(ai), None) {
@@ -1726,6 +1785,8 @@ impl TableRegion {
         let makes = |b: &BTreeMap<String, Val>| -> bool {
             let Some(got) = crate::vectors::no_row_takes(f, c, t, b) else { return false };
             self.col_names.iter().enumerate().all(|(ai, name)| match (&self.axes[ai], got.get(name)) {
+                (Axis::Num { coords, .. }, Some(Val::Enum(w))) if matches!(coords.get(coord(ai)), Some(Coord::Absent)) => w == crate::kw::NONE,
+                (Axis::Enum { values }, Some(Val::Bool(b))) => values.get(coord(ai)).map(String::as_str) == Some(if *b { crate::kw::TRUE } else { crate::kw::FALSE }),
                 (Axis::Num { .. }, Some(Val::Num(v))) => at_axis(ai).is_some_and(|w| w.cmp_to(*v) == std::cmp::Ordering::Equal),
                 (Axis::Num { .. }, Some(Val::Date(y, m, d))) => {
                     at_axis(ai).is_some_and(|w| w.cmp_to(crate::types::date_ord(*y, *m, *d)) == std::cmp::Ordering::Equal)
@@ -3172,7 +3233,8 @@ impl TableRegion {
             let outside = match coords.get(ci) {
                 Some(Coord::Point(v)) => rl.is_some_and(|l| v.cmp_to(l) == Less) || rh.is_some_and(|h| v.cmp_to(h) == Greater),
                 Some(Coord::Open(a, b)) => matches!((b, rl), (Some(b), Some(l)) if b.cmp_to(l) != Greater) || matches!((a, rh), (Some(a), Some(h)) if a.cmp_to(h) != Less),
-                None => false,
+                // The absent value is one the input takes, outside any range (§15.201).
+                Some(Coord::Absent) | None => false,
             };
             if outside {
                 return true;
@@ -3544,6 +3606,7 @@ impl TableRegion {
     fn coord_span(&self, ai: usize, ci: usize) -> Option<(Option<Rat>, Option<Rat>)> {
         match &self.axes[ai] {
             Axis::Num { coords, .. } => match coords.get(ci)? {
+                Coord::Absent => None,
                 Coord::Point(v) => Some((Some(*v), Some(*v))),
                 Coord::Open(a, b) => Some((*a, *b)),
             },
@@ -3559,6 +3622,7 @@ impl TableRegion {
     fn coord_closed(&self, ai: usize, ci: usize) -> Option<Ival> {
         let Axis::Num { coords, step, .. } = &self.axes[ai] else { return None };
         match coords.get(ci)? {
+            Coord::Absent => None,
             Coord::Point(v) => Some((Some(*v), Some(*v))),
             Coord::Open(a, b) => Some((a.map(|v| v.add(*step)), b.map(|v| v.sub(*step)))),
         }
@@ -3668,12 +3732,17 @@ impl TableRegion {
                 None => all,
             },
             (Axis::Bool, Axis::Bool) => (0..uaxis.len()).map(|x| x == ci).collect(),
-            (Axis::Num { .. }, Axis::Num { coords, step, .. }) => {
+            (Axis::Num { coords: own, .. }, Axis::Num { coords, step, .. }) => {
+                // The absent value stands for the absent value there (§15.201).
+                if matches!(own.get(ci), Some(Coord::Absent)) {
+                    return coords.iter().map(|cd| matches!(cd, Coord::Absent)).collect();
+                }
                 let Some((lo, hi)) = self.coord_closed(ai, ci) else { return all };
                 coords
                     .iter()
                     .map(|cd| {
                         let (a, b) = match cd {
+                            Coord::Absent => return false,
                             Coord::Point(v) => (Some(*v), Some(*v)),
                             Coord::Open(x, y) => (x.map(|v| v.add(*step)), y.map(|v| v.sub(*step))),
                         };
@@ -4073,7 +4142,7 @@ impl TableRegion {
                 match coords.get(ci) {
                     Some(Coord::Point(v)) => return Some(((Some(*v), false), (Some(*v), false))),
                     Some(Coord::Open(a, b)) => return Some(((*a, true), (*b, true))),
-                    None => {}
+                    Some(Coord::Absent) | None => {}
                 }
             }
         }
@@ -4169,7 +4238,7 @@ impl TableRegion {
             Some(Coord::Open(a, b)) => {
                 matches!((b, rl), (Some(b), Some(l)) if b.cmp_to(l) != Greater) || matches!((a, rh), (Some(a), Some(h)) if a.cmp_to(h) != Less)
             }
-            None => false,
+            Some(Coord::Absent) | None => false,
         }
     }
 
@@ -4694,7 +4763,8 @@ impl TableRegion {
                 label: row.label.as_ref().map(|l| l.text.clone()).unwrap_or_default(),
                 cells: row.cells.iter().map(cell_text).collect(),
                 tests: (0..self.axes.len())
-                    .map(|ai| cert_cell(row.cells.get(self.display_of[ai]), chk.ty_of(&self.col_names[ai])))
+                    // A cell of an optional column is read in the type it wraps (§15.201).
+                    .map(|ai| cert_cell(row.cells.get(self.display_of[ai]), chk.ty_of(&self.col_names[ai]).map(|t| t.present().clone())))
                     .collect(),
                 accepts: (0..self.axes.len())
                     .map(|ai| (0..self.axes[ai].len()).filter(|&c| self.masks[ri][ai][c]).collect())
@@ -5088,6 +5158,7 @@ impl TableRegion {
                 let takes = coords.iter().enumerate().any(|(x, cd)| {
                     up.reg.masks[*ri][ua][x]
                         && match cd {
+                            Coord::Absent => false,
                             Coord::Point(w) => w.cmp_to(*v) == std::cmp::Ordering::Equal,
                             Coord::Open(a, b) => {
                                 a.is_none_or(|a| a.cmp_to(*v) == std::cmp::Ordering::Less) && b.is_none_or(|b| v.cmp_to(b) == std::cmp::Ordering::Less)

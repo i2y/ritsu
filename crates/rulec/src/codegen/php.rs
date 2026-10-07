@@ -284,6 +284,9 @@ impl<'a> Gen<'a> {
             Ty::Opt(t) => t.as_ref(),
             other => other,
         };
+        // An optional value is `null` when it is absent: `!null` is true and `null < 5` is true
+        // in PHP, so the absent value took the `false` row and every `<` row (§15.201).
+        let optional = matches!(ty, Ty::Opt(_));
         let lit = |l: &Lit| -> String {
             match l {
                 Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
@@ -320,6 +323,8 @@ impl<'a> Gen<'a> {
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
                 format!("in_array({var}, {}, true)", self.php_group(w))
             }
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE && optional => format!("{var} === true"),
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE && optional => format!("{var} === false"),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("!{var}"),
             Cell::Lit(l) => format!("{var} === {}", lit(l)),
@@ -329,19 +334,22 @@ impl<'a> Gen<'a> {
                 format!("!in_array({var}, {}, true)", self.php_group(w))
             }
             Cell::Not(ls) => format!("!in_array({var}, {}, true)", members(ls)),
-            Cell::Cmp(cs) => cs
-                .iter()
-                .map(|(o, l)| {
-                    let op = match o {
-                        CmpOp::Le => "<=",
-                        CmpOp::Ge => ">=",
-                        CmpOp::Lt => "<",
-                        CmpOp::Gt => ">",
-                    };
-                    format!("{var} {op} {}", lit(l))
-                })
-                .collect::<Vec<_>>()
-                .join(" && "),
+            Cell::Cmp(cs) => {
+                let c = cs
+                    .iter()
+                    .map(|(o, l)| {
+                        let op = match o {
+                            CmpOp::Le => "<=",
+                            CmpOp::Ge => ">=",
+                            CmpOp::Lt => "<",
+                            CmpOp::Gt => ">",
+                        };
+                        format!("{var} {op} {}", lit(l))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" && ");
+                if optional { format!("{var} !== null && {c}") } else { c }
+            }
         })
     }
 
@@ -626,6 +634,10 @@ impl<'a> Gen<'a> {
         for i in self.element_fields() {
             let v = local(&i.name.text);
             let ty = self.ty_of(&i.name.text);
+            // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
+            let mut o = super::Guarded::new(&mut o, optional.then(|| (format!("    if ({v} !== null) {{\n"), "    }\n".to_string())), "    ");
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                     let sc = self.c.wire_scale(&i.name.text);
@@ -747,6 +759,10 @@ impl<'a> Gen<'a> {
         for i in &self.f.inputs {
             let v = php_var(&pub_name(&i.name));
             let ty = self.ty_of(&i.name.text);
+            // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
+            let mut o = super::Guarded::new(&mut o, optional.then(|| (format!("    if ({v} !== null) {{\n"), "    }\n".to_string())), "    ");
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                     let sc = self.c.wire_scale(&i.name.text);
@@ -1145,8 +1161,9 @@ impl<'a> Gen<'a> {
              }}\n",
             ritsu_emit::header::VERSION,
             args.join(", "),
-            ord = if self.f.inputs.iter().any(|i| matches!(self.ty_of(&i.name.text), Ty::Date))
-                || self.element_fields().iter().any(|f| matches!(self.ty_of(&f.name.text), Ty::Date))
+            // An optional date is read with it too (§15.201).
+            ord = if self.f.inputs.iter().any(|i| matches!(self.ty_of(&i.name.text).present(), Ty::Date))
+                || self.element_fields().iter().any(|f| matches!(self.ty_of(&f.name.text).present(), Ty::Date))
             {
                 "/// A date as its day number from 1970-01-01, by the same civil-date arithmetic\n\
                  /// the tool uses.\n\

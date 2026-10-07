@@ -258,7 +258,21 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
 fn prop(name: &Name, ty: &Ty, c: &Checked, alias: bool) -> String {
     let key = if alias { name.ascii.clone().unwrap_or_else(|| name.text.clone()) } else { name.text.clone() };
     let name = name.text.as_str();
-    let body = match ty {
+    let body = prop_body(name, ty, c);
+    // Keyed by alias, the rule's own name still travels, as the property's title.
+    let body = if alias && key != name {
+        format!("{{\"title\":{},{}", crate::json::quote(name), &body[1..])
+    } else {
+        body
+    };
+    format!("{}:{body}", crate::json::quote(&key))
+}
+
+/// The schema of one value of a property: of the value an optional wraps too, which is the same
+/// value with `null` beside it. An optional date was an integer here and an optional number had
+/// no range, while the entry guard holds both to what the plain type is held to (§15.201).
+fn prop_body(name: &str, ty: &Ty, c: &Checked) -> String {
+    match ty {
         Ty::Enum(en) => {
             let vs: Vec<String> = c
                 .enums
@@ -276,7 +290,7 @@ fn prop(name: &Name, ty: &Ty, c: &Checked, alias: bool) -> String {
             "{{\"type\":\"string\",\"format\":\"date\",\"description\":\"a date, YYYY-MM-DD\"}}"
         ),
         Ty::Str => "{\"type\":\"string\"}".into(),
-        Ty::Opt(t) => format!("{{\"oneOf\":[{},{{\"type\":\"null\"}}]}}", prop_inner(t, c)),
+        Ty::Opt(t) => format!("{{\"oneOf\":[{},{{\"type\":\"null\"}}]}}", prop_body(name, t, c)),
         _ => {
             // The schema describes the wire, so the bounds are converted the same way a
             // value is: a rate's 100% is 100 steps, not 1 (§10.2).
@@ -293,14 +307,7 @@ fn prop(name: &Name, ty: &Ty, c: &Checked, alias: bool) -> String {
             s.push('}');
             s
         }
-    };
-    // Keyed by alias, the rule's own name still travels, as the property's title.
-    let body = if alias && key != name {
-        format!("{{\"title\":{},{}", crate::json::quote(name), &body[1..])
-    } else {
-        body
-    };
-    format!("{}:{body}", crate::json::quote(&key))
+    }
 }
 
 /// What one number on the wire is, in words: which unit the integer is in, and for a rate
@@ -543,24 +550,6 @@ pub fn schema(f: &RuleFile, c: &Checked, alias: bool) -> String {
             ),
         }
     )
-}
-
-fn prop_inner(ty: &Ty, c: &Checked) -> String {
-    match ty {
-        Ty::Enum(en) => {
-            let vs: Vec<String> = c
-                .enums
-                .get(en)
-                .cloned()
-                .unwrap_or_default()
-                .iter()
-                .map(|v| format!("{v:?}"))
-                .collect();
-            format!("{{\"type\":\"string\",\"enum\":[{}]}}", vs.join(","))
-        }
-        Ty::Bool => "{\"type\":\"boolean\"}".into(),
-        _ => "{\"type\":\"integer\"}".into(),
-    }
 }
 
 /// A vector's fired rows, in the shape the clustering uses.

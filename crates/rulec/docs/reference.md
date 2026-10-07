@@ -180,7 +180,7 @@ Fourteen, and no others.
 | number | `number` | a whole number with no unit — a count of things, a number of days, a score |
 | date | `date` | comparison and range only. **There is no date arithmetic** (E048) |
 | string | `string` | **cannot be a table column** (E110). Use it for an output, or for an input that only passes through. A value that decides a branch belongs in an `enum` |
-| optional | `member_kind?` | any of the above, plus the absent value. Consumed by the cell `none` |
+| optional | `member_kind?` | any of the above, plus the absent value, which the cell `none` tests. Its `range` and its step are those of the type it wraps and hold the value when there is one; it never appears in an expression or a `constraint`. A comparison, a literal and a set of values match only a value that is there, while `-` and `not:` match the absent value too. Completeness asks for a row for the absent value and for the whole declared range beside it (E101), and the generated code guards a value that is there as it guards the type it wraps |
 
 Every quantity, money, rate, number and date is an **integer** internally. No floating point appears
 anywhere in the tool or in the generated code.
@@ -1267,7 +1267,7 @@ name the callee and its digest in their header, `rulec api` lists them under `ap
 | `<=2000g` | comparison. `<=`, `>=`, `<`, `>` |
 | `>=1000JPY <20000JPY` | an interval — two comparisons side by side mean "and" |
 | `starts_with "CH-"` | a prefix, on a `string` column. Two or more are separated by a comma |
-| `none` | an optional that is absent |
+| `none` | an optional that is absent. `-` and `not:` match it too; a comparison, a literal and a set of values do not |
 
 **A `string` column takes a prefix and nothing else** (E110). Strings cannot be enumerated,
 so equality and sets have no finite reading here — where the values *can* be listed, make it

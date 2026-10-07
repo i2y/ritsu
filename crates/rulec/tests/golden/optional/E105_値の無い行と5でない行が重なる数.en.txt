@@ -1,0 +1,11 @@
+error[E105]: Overlapping rows: the same input matches row 1 and row 3
+  --> tests/optional/E105_値の無い行と5でない行が重なる数.rule:15 table 判定
+   |
+13 | | none   | false            |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1
+15 | | not: 5 | false            |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 3
+   |
+ Both rows match: 加点 = none
+ `policy unique` does not allow overlapping rows. Decide which row is right, or declare `policy first` if the order is meant to matter.
+

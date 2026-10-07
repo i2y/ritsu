@@ -1,0 +1,14 @@
+rule big_bonus v1
+description "Says whether a bonus is big, from a number that may be missing. The rows are tried in order, and the first takes every value, the absent one too: the row for a missing bonus is never reached"
+
+inputs
+  bonus : number?  range >=0 <=10
+
+outputs
+  big : bool
+
+table pick
+policy first
+| bonus | -> big : bool |
+| -     | false         |
+| none  | true          |

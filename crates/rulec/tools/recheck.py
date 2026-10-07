@@ -1456,13 +1456,29 @@ def check_cover(t):
     return seen
 
 
+def optional_input(t, a):
+    """Whether an axis is an input the rule declares optional (`T?`): its type, as the
+    certificate states it, ends in `?`."""
+    types = (t.get("_cert") or {}).get("types", {})
+    return a.get("kind") == "input" and str(types.get(a["column"], "")).endswith("?")
+
+
 def check_axis(t, ai):
     """A numeric axis has to tile: its coordinates run from the declared range's low end to
     its high end, each touching the next or one grid step past it, with nothing between.
     §6.2 builds it that way; without this check a coordinate could be quietly removed and
-    the gap under it would never be covered by anything (§15.99)."""
+    the gap under it would never be covered by anything (§15.99).
+
+    An optional input's axis starts with the absent value, `none`, which stands for no number
+    at all; the values that are there tile the rest (§15.201). A certificate that leaves the
+    absent value out has covered less than the inputs the rule takes."""
     a = t["axes"][ai]
     bs = a.get("bounds") or []
+    if optional_input(t, a):
+        coords = a.get("coords") or []
+        if not coords or coords[0] != "none" or (bs and bs[0] is not None):
+            raise Bad(f"{t['table']}: {a['column']} is optional, and its axis has no coordinate for the absent value")
+        bs = bs[1:]
     if not bs or all(b is None for b in bs):
         return 0
     step = num(a.get("step"))
@@ -1490,6 +1506,13 @@ def check_axis(t, ai):
             if vals[0][0] != lo or vals[-1][1] != hi:
                 raise Bad(f"{t['table']}: {a['column']} runs from {vals[0][0]} to "
                           f"{vals[-1][1]}, and the rule declares {lo} to {hi}")
+            # A coordinate that is an interval leaves its ends out, so an end of the declared
+            # range is only covered by a point on it. An axis whose last point was taken away
+            # still reached the end with the interval before it, and the value at the end was
+            # covered by nothing (§15.201).
+            if (lo is not None and vals[0][1] != lo) or (hi is not None and vals[-1][0] != hi):
+                raise Bad(f"{t['table']}: {a['column']} does not end on the ends of the range the rule declares, "
+                          f"so a value at an end is in no coordinate")
     # "One step past it, with nothing between" is only so on the grid the column's values
     # really sit on (§15.190). A column of tenths of a pound cut every whole pound has values
     # between two coordinates, and the gap under them was covered by nothing.
@@ -1647,6 +1670,9 @@ def box_from_cells(t, row, groups):
             hit = []
             for i in range(len(coords)):
                 b = bounds[i]
+                # The absent value of an optional input is none of the values (§15.201).
+                if b is None and coords[i] == "none":
+                    continue
                 if b is None:
                     return None
                 if any(coord_admits((num(b[0]), num(b[1])), op, v) for op, v in tests):
@@ -1663,6 +1689,9 @@ def box_from_cells(t, row, groups):
             hit = []
             for i in range(len(coords)):
                 b = bounds[i]
+                # A comparison holds only of a value that is there (§15.201).
+                if b is None and coords[i] == "none":
+                    continue
                 if b is None:
                     return None
                 if all(coord_admits((num(b[0]), num(b[1])), op, v) for op, v in tests):

@@ -1,0 +1,13 @@
+rule 大きい加点(big_bonus) v1
+description "加点が大きいかどうかを、無いことのある数から決める。表は 5 未満の一行だけで、5 以上も、加点の無いときも覆わない"
+
+inputs
+  加点(bonus) : number?
+
+outputs
+  大きい(big) : bool
+
+table 判定(pick)
+policy unique
+| 加点 | -> 大きい : bool |
+| <5   | false            |

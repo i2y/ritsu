@@ -434,6 +434,12 @@ impl<'a> Gen<'a> {
             other => other,
         };
         let text = matches!(inner, Ty::Str);
+        // An optional value is a `Long`, a `Boolean` or an enum reference, `null` when it is
+        // absent. Comparing a `Long` or reading a `Boolean` unboxes it and throws, and so does
+        // `List.of(…).contains(null)`: every test but `none` asks first that there is a value,
+        // and `not:` holds of the absent value (§15.201).
+        let optional = matches!(ty, Ty::Opt(_));
+        let present = |c: String| -> String { if optional { format!("{var} != null && {c}") } else { c } };
         let lit = |l: &Lit| -> String {
             match l {
                 Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
@@ -476,30 +482,39 @@ impl<'a> Gen<'a> {
                 .collect::<Vec<_>>()
                 .join(" || "),
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
-                format!("{}.contains({var})", self.java_group(w))
+                present(format!("{}.contains({var})", self.java_group(w)))
             }
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE && optional => format!("Boolean.TRUE.equals({var})"),
+            Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE && optional => format!("Boolean.FALSE.equals({var})"),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::TRUE => var.to_string(),
             Cell::Lit(Lit::Word(w)) if w == crate::kw::FALSE => format!("!{var}"),
-            Cell::Lit(l) => eq(l),
-            Cell::Set(ls) => format!("{}.contains({var})", members(ls)),
+            // `==` on a string literal's `equals` and on an enum reference is false of `null`.
+            Cell::Lit(l) if text || matches!(inner, Ty::Enum(_)) => eq(l),
+            Cell::Lit(l) => present(eq(l)),
+            Cell::Set(ls) => present(format!("{}.contains({var})", members(ls))),
             Cell::Not(ls) if ls.len() == 1 && matches!(&ls[0], Lit::Word(w) if self.c.groups.contains_key(w)) => {
                 let Lit::Word(w) = &ls[0] else { unreachable!() };
-                format!("!{}.contains({var})", self.java_group(w))
+                let c = format!("!{}.contains({var})", self.java_group(w));
+                if optional { format!("({var} == null || {c})") } else { c }
             }
-            Cell::Not(ls) => format!("!{}.contains({var})", members(ls)),
-            Cell::Cmp(cs) => cs
-                .iter()
-                .map(|(o, l)| {
-                    let op = match o {
-                        CmpOp::Le => "<=",
-                        CmpOp::Ge => ">=",
-                        CmpOp::Lt => "<",
-                        CmpOp::Gt => ">",
-                    };
-                    format!("{var} {op} {}", lit(l))
-                })
-                .collect::<Vec<_>>()
-                .join(" && "),
+            Cell::Not(ls) => {
+                let c = format!("!{}.contains({var})", members(ls));
+                if optional { format!("({var} == null || {c})") } else { c }
+            }
+            Cell::Cmp(cs) => present(
+                cs.iter()
+                    .map(|(o, l)| {
+                        let op = match o {
+                            CmpOp::Le => "<=",
+                            CmpOp::Ge => ">=",
+                            CmpOp::Lt => "<",
+                            CmpOp::Gt => ">",
+                        };
+                        format!("{var} {op} {}", lit(l))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" && "),
+            ),
         })
     }
 
@@ -834,6 +849,10 @@ impl<'a> Gen<'a> {
         for i in self.element_fields() {
             let v = local(&i.name.text);
             let ty = self.ty_of(&i.name.text);
+            // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
+            let mut o = super::Guarded::new(&mut o, optional.then(|| (format!("        if ({v} != null) {{\n"), "        }\n".to_string())), "    ");
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                     let sc = self.c.wire_scale(&i.name.text);
@@ -937,6 +956,10 @@ impl<'a> Gen<'a> {
         for i in &self.f.inputs {
             let v = java_name(&pub_name(&i.name));
             let ty = self.ty_of(&i.name.text);
+            // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
+            let optional = matches!(ty, Ty::Opt(_));
+            let ty = ty.present().clone();
+            let mut o = super::Guarded::new(&mut o, optional.then(|| (format!("        if ({v} != null) {{\n"), "        }\n".to_string())), "    ");
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                     let sc = self.c.wire_scale(&i.name.text);
