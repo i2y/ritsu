@@ -241,9 +241,11 @@ A value given to a rule or a date is an attribute of the principal or the resour
 constant or `today`; another computed value cannot be (E105). Its range has to fit within what the
 rule or the date takes, and a precondition of the rule (its `constraint`) has to hold over it
 (E206; W201 when rulec cannot decide). A calendar has to have data for every day of `today`'s range
-and every day the dates can come to (E207). What a rule's output can be over the stretches the
-policies cut its inputs into, and which answers of the dates can come together on one day, sekisho
-asks rulec and koyomi, so that the check counts what can happen and nothing else.
+and every day the dates can come to (E207). What a rule's output can be (over the stretches the
+policies cut its number inputs into, at each value of an enum or a bool the policies read too or
+the gate writes as a constant, and over only the values of an enum of the gate's that has fewer
+than the rule's), and which answers of the dates can come together on one day, sekisho asks rulec
+and koyomi, so that the check counts what can happen and nothing else.
 
 ## Policies
 

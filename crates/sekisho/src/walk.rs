@@ -12,9 +12,11 @@
 //! - the entities the policies relate (`resource.customer is principal`): each way the terms of a
 //!   type can be the same entity or not, and for each, whether the principal is a member of each
 //!   group a policy asks of;
-//! - a rule's output, with the numbers it reads that a policy also compares: the cells of those
-//!   numbers, each with the values rulec says the output can come to over it
-//!   (`Rules::outputs_over`);
+//! - a rule's output, with the numbers, the enums and the bools it reads that a policy also reads:
+//!   the cells of those numbers and each value of those enums and bools, each with the values
+//!   rulec says the output can come to there (`Rules::outputs_over`, the rule's input held to the
+//!   cell or the value; an enum or a bool given as a constant is held to it, and an enum of the
+//!   gate's with fewer values than the rule's to those values);
 //! - the dates of `today`: every combination of truths the dates can come to together, from
 //!   koyomi's days over every day of `today` and every value the dates are given.
 //!
@@ -983,7 +985,22 @@ impl<'g> Compiler<'g> {
             let mut per: Vec<(Vec<Val>, bool)> = Vec::new();
             for &(_, ci) in outputs {
                 let c = &a.computed[ci];
-                let (Some(Kn::Rule { file, output, domain, inputs, .. }), How::Rule { args, .. }) = (self.known.computed.get(&(self.action, ci)), &c.how) else { return Err(Stop::Unknown) };
+                let (Some(Kn::Rule { file, output, domain, inputs, enums, .. }), How::Rule { args, .. }) = (self.known.computed.get(&(self.action, ci)), &c.how) else { return Err(Stop::Unknown) };
+                // the place of a value in the order the rule declares the values of the enum the
+                // input takes: how rulec is told to hold an enum input to that value
+                let place = |input: &str, words: &[&str]| -> Option<i128> {
+                    let (_, values) = enums.iter().find(|(n, _)| n == input)?;
+                    values.iter().position(|(_, ws)| ws.iter().any(|w| words.contains(&w.as_str()))).map(|k| k as i128)
+                };
+                // the places of the values of the gate's enum `e`
+                let places_of = |input: &str, e: usize, only: Option<usize>| -> Option<Vec<i128>> {
+                    let values = &self.g.enums[e].values;
+                    let picked: Vec<&Named> = match only {
+                        Some(v) => vec![&values[v]],
+                        None => values.iter().collect(),
+                    };
+                    picked.iter().map(|v| place(input, &[v.name.as_str(), v.alias.as_str()])).collect()
+                };
                 let mut ranges = Vec::new();
                 let mut absent = false;
                 let mut exact = !loose;
@@ -1005,27 +1022,47 @@ impl<'g> Compiler<'g> {
                             }
                             exact = false;
                         }
-                        // a bool or an enum given as a constant: rulec is asked over all of the input
-                        (Source::Lit(_), _) => exact = false,
+                        // a bool or an enum given as a constant: rulec holds the input to it (a bool
+                        // as 0 or 1, an enum by the place of its value)
+                        (Source::Lit(Literal::Bool(b)), _) => ranges.push((input.clone(), Some(i128::from(*b)), Some(i128::from(*b)))),
+                        (Source::Lit(Literal::Word(w)), _) => match place(input, &[w.as_str()]) {
+                            Some(k) => ranges.push((input.clone(), Some(k), Some(k))),
+                            None => exact = false,
+                        },
                         (_, Some(slot)) => {
                             let f = self.field(&slot).ok_or(Stop::Unknown)?;
                             match cut.iter().position(|at| self.slots[*at] == slot) {
-                                Some(k) => match &assignment[k] {
-                                    Val::Cell(cell) if !many => ranges.push((input.clone(), Some(cell.lo), Some(cell.hi))),
-                                    Val::Cell(_) => {
+                                Some(k) => match (&assignment[k], &f.ty) {
+                                    (Val::Cell(cell), _) if !many => ranges.push((input.clone(), Some(cell.lo), Some(cell.hi))),
+                                    (Val::Cell(_), _) => {
                                         if let FieldType::Num { lo, hi, .. } = &f.ty {
                                             ranges.push((input.clone(), Some(*lo), Some(*hi)));
                                         }
                                         exact = false;
                                     }
-                                    Val::Absent => absent = true,
+                                    (Val::Absent, _) => absent = true,
+                                    // the value of the combination, held as a constant is
+                                    (Val::Bool(b), _) if !many => ranges.push((input.clone(), Some(i128::from(*b)), Some(i128::from(*b)))),
+                                    (Val::Enum(v), FieldType::Enum(e)) if !many => match places_of(input, *e, Some(*v)) {
+                                        Some(ks) => ranges.extend(ks.into_iter().map(|k| (input.clone(), Some(k), Some(k)))),
+                                        None => exact = false,
+                                    },
                                     _ => exact = false,
                                 },
                                 None => {
                                     match &f.ty {
                                         FieldType::Num { lo, hi, .. } => ranges.push((input.clone(), Some(*lo), Some(*hi))),
                                         FieldType::Date { lo, hi } => ranges.push((input.clone(), Some(*lo as i128), Some(*hi as i128))),
-                                        FieldType::Bool | FieldType::Enum(_) => {}
+                                        // an enum of the gate's with fewer values than the rule's:
+                                        // rulec holds the input to the values the gate's takes
+                                        FieldType::Enum(e) => match places_of(input, *e, None) {
+                                            Some(ks) if (ks.len()) < enums.iter().find(|(n, _)| n == input).map_or(0, |(_, vs)| vs.len()) => {
+                                                ranges.extend(ks.into_iter().map(|k| (input.clone(), Some(k), Some(k))));
+                                            }
+                                            Some(_) => {}
+                                            None => exact = false,
+                                        },
+                                        FieldType::Bool => {}
                                         FieldType::Entity(_) => exact = false,
                                     }
                                     maybe_absent |= f.optional;

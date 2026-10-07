@@ -1146,17 +1146,26 @@ impl TableRegion {
 
 
         // The coordinates of the values an upstream table can produce. Only enum axes have them.
+        // `outputs_over` (ritsu's port) holds an enum or a bool input to some of its values the
+        // same way: the coordinates of the others are values no input takes.
         let reachable: Vec<Option<Vec<bool>>> = (0..axes.len())
-            .map(|ai| match (&axes[ai], c.out_values.get(&col_names[ai])) {
-                (Axis::Enum { values }, Some(vs)) => {
-                    Some(values.iter().map(|v| vs.contains(v)).collect())
+            .map(|ai| {
+                let name = &col_names[ai];
+                let held = f.inputs.iter().any(|i| i.name.text == *name).then(|| crate::over::held_values(name)).flatten();
+                let mut out: Option<Vec<bool>> = None;
+                for vs in [c.out_values.get(name), held.as_ref()].into_iter().flatten() {
+                    let these: Vec<bool> = match &axes[ai] {
+                        Axis::Enum { values } => values.iter().map(|v| vs.contains(v)).collect(),
+                        // A boolean can be an upstream output too. Coordinate 0 is true, 1 is false.
+                        Axis::Bool => vec![vs.iter().any(|v| v == crate::kw::TRUE), vs.iter().any(|v| v == crate::kw::FALSE)],
+                        _ => continue,
+                    };
+                    out = Some(match out {
+                        Some(was) => was.iter().zip(&these).map(|(a, b)| *a && *b).collect(),
+                        None => these,
+                    });
                 }
-                // A boolean can be an upstream output too. Coordinate 0 is true, 1 is false.
-                (Axis::Bool, Some(vs)) => Some(vec![
-                    vs.iter().any(|v| v == crate::kw::TRUE),
-                    vs.iter().any(|v| v == crate::kw::FALSE),
-                ]),
-                _ => None,
+                out
             })
             .collect();
 

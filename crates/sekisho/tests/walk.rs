@@ -2,8 +2,9 @@
 //! `ritsu sekisho` joins them: the example's two versions pass and come to the same counts, the
 //! table of `refund_order` merges to its five rows that allow, relations are counted by which terms
 //! are one entity, the budget stops a walk (E307), an answer that rests on a value no language
-//! vouches for is undecided (W303), and how far a workflow and a role are allowed an action (the
-//! port `Gates::allowed`). The mutants of the example are `tests/mutants/`, run by `tests/mutants.rs`.
+//! vouches for is undecided (W303), an enum and a bool given to a rule are held to their values,
+//! and how far a workflow and a role are allowed an action (the port `Gates::allowed`). The
+//! mutants of the example are `tests/mutants/`, run by `tests/mutants.rs`.
 //!
 //! The goldens are `tests/walk/golden/`; `SEKISHO_BLESS=1` (or `RITSU_BLESS=1`) writes them again.
 
@@ -130,6 +131,33 @@ fn an_answer_no_language_vouches_for_is_undecided() {
     let (diags, _) = check_with("tests/walk/undecided/W303_undecided.gate", &suite, checks::BUDGET as u64);
     assert!(diags.iter().any(|d| d.code == "W303"), "{}", rendered(&diags));
     ritsu_testkit::golden("tests/walk/golden/W303_undecided.txt", &rendered(&diags));
+}
+
+/// A rule given an enum attribute its policies read too, an enum and a bool as constants, and an
+/// enum attribute with fewer values than the rule's enum: rulec is asked with each held to its
+/// values (DESIGN 3.2), so what the rule answers is exact, nothing is counted in case, and the
+/// expectations that rest on it hold, rather than being undecided (W303). The English version and
+/// the Japanese one come to the same counts.
+#[test]
+fn an_enum_and_a_bool_given_to_a_rule_are_held_to_their_values() {
+    let mut reports = Vec::new();
+    for path in ["tests/walk/held/held.gate", "tests/walk/held/held.ja.gate"] {
+        let (diags, c) = check(path, checks::BUDGET as u64);
+        assert!(diags.is_empty(), "{path}: {}", rendered(&diags));
+        assert!(c.report.spaces.iter().flatten().all(|s| !s.inexact()), "{path}: a value is counted in case");
+        // cancel: 4 states x rushed or not, each with the one answer the rule gives, 3 of them
+        // allowed (received, and paid without a hurry); pay: an order first received, paid or
+        // shipped, which a payment leaves paid or shipped (never cancelled, the rule's fourth
+        // state, which the gate's enum does not have), 1 of the 2 allowed
+        let counts: Vec<(u128, u128)> = c.report.actions.iter().map(|a| (a.combinations, a.allowed)).collect();
+        assert_eq!(counts, [(8, 3), (2, 1)], "{path}");
+        let expects: Vec<(u128, u128)> = c.report.expects.iter().map(|e| (e.picked, e.broken)).collect();
+        assert_eq!(expects, [(4, 0), (1, 0), (2, 0)], "{path}");
+        reports.push(c.report);
+    }
+    assert_eq!(reports[0].actions, reports[1].actions);
+    assert_eq!(reports[0].policies, reports[1].policies);
+    assert_eq!(reports[0].expects, reports[1].expects);
 }
 
 #[test]

@@ -1,0 +1,59 @@
+gate 限る(held_ja) v1
+description "規則に、ポリシーも読む列挙の属性、定数の列挙と真偽、規則の列挙より値の少ない列挙の属性を渡すゲート。rulec にはどれも値に限って尋ねるので、多めに数えるものが無い"
+namespace ShopJa
+
+use rule 注文の状態 from "注文の状態.rule"
+
+enum 状態(state) = 受付(received) | 入金済(paid) | 出荷済(shipped) | 取消(cancelled)
+enum はじめ(early) = 受付(received) | 入金済(paid) | 出荷済(shipped)
+
+principal 利用者(User)
+  description "店が入れる人"
+
+resource 注文(Order)
+  description "注文"
+  attributes
+    状態(state)   : 状態
+    急ぎ(rush)    : bool
+    最初(first)   : はじめ
+
+action 取り消す(cancel_order)
+  description "注文を取り消す"
+  principal 利用者
+  resource 注文
+  context
+    取り消せる(cancellable) = 注文の状態(状態: resource.状態, イベント: 取消依頼, 急ぎ: resource.急ぎ).受理
+
+action 支払う(pay_order)
+  description "注文の代金を払う"
+  principal 利用者
+  resource 注文
+  context
+    支払いのあと(after) = 注文の状態(状態: resource.最初, イベント: 入金, 急ぎ: false).次
+
+permit 規則が受け付ける取消はできる(users_cancel_what_the_rule_accepts)
+  description "規則が取消を受け付ける注文は、取り消せる"
+  principal is 利用者
+  action 取り消す
+  when 取り消せる
+
+permit 入金済になる支払いはできる(users_pay_into_paid)
+  description "支払いのあとに入金済になる注文は、払える"
+  principal is 利用者
+  action 支払う
+  when 支払いのあと is 入金済
+
+expect deny 出荷済と取消済の注文は取り消さない
+  description "出荷した注文と、もう取り消した注文は、取り消さない"
+  action 取り消す
+  when resource.状態 is 出荷済 or resource.状態 is 取消
+
+expect deny 急ぎの入金済の注文は取り消さない
+  description "急ぎの入金済の注文は、もう箱に詰めてあるので、取り消さない"
+  action 取り消す
+  when resource.状態 is 入金済 and resource.急ぎ
+
+expect allow 受付の注文は取り消せる
+  description "受け付けて入金の前の注文は、取り消せる"
+  action 取り消す
+  when resource.状態 is 受付

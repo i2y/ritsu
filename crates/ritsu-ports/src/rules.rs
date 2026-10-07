@@ -289,7 +289,10 @@ pub trait Rules {
     /// `ranges` are held to them (by name, as the integers on the wire, both ends in; None at an
     /// open end, where the rule's own range holds) and every other input takes its whole range,
     /// each with an input that reaches it (sekisho's DESIGN 3.2: the computed values a policy
-    /// reads, counted over the intervals its conditions cut). An enum's value is its public name
+    /// reads, counted over the intervals its conditions cut and the values of the enums and the
+    /// bools it reads). An enum input is held by the places of its values, from 0 in the order
+    /// `RuleFacts::enums` lists them, and a bool input as 0 for false and 1 for true; an enum or a
+    /// bool input named more than once takes the values of each. An enum's value is its public name
     /// (`EnumValue::public`, what a gate writes into Cedar); the input is as `eval` takes it.
     /// Exact, or undecided with the reason: a value the rule's own analysis cannot rule out and
     /// no input is found to reach. An empty list when no input is inside the ranges. The default

@@ -1,0 +1,59 @@
+gate held v1
+description "A gate that gives a rule an enum attribute its policies read too, an enum and a bool as constants, and an enum attribute with fewer values than the rule's enum: rulec is asked with each held to its values, so nothing is counted in case"
+namespace Shop
+
+use rule order_state from "order_state.rule"
+
+enum state = received | paid | shipped | cancelled
+enum early = received | paid | shipped
+
+principal User
+  description "Someone the shop lets in"
+
+resource Order
+  description "An order"
+  attributes
+    state : state
+    rush  : bool
+    first : early
+
+action cancel_order
+  description "Cancel an order"
+  principal User
+  resource Order
+  context
+    cancellable = order_state(state: resource.state, event: cancel, rush: resource.rush).accepted
+
+action pay_order
+  description "Pay for an order"
+  principal User
+  resource Order
+  context
+    after = order_state(state: resource.first, event: pay, rush: false).next_state
+
+permit users_cancel_what_the_rule_accepts
+  description "An order is cancelled when the rule accepts the cancel"
+  principal is User
+  action cancel_order
+  when cancellable
+
+permit users_pay_into_paid
+  description "An order is paid for when a payment leaves it paid"
+  principal is User
+  action pay_order
+  when after is paid
+
+expect deny nothing_shipped_or_cancelled_is_cancelled
+  description "A shipped order, or one cancelled already, is not cancelled"
+  action cancel_order
+  when resource.state is shipped or resource.state is cancelled
+
+expect deny a_rushed_paid_order_is_not_cancelled
+  description "A paid order in a hurry is packed already, and is not cancelled"
+  action cancel_order
+  when resource.state is paid and resource.rush
+
+expect allow a_received_order_is_cancelled
+  description "An order received and not paid is cancelled"
+  action cancel_order
+  when resource.state is received

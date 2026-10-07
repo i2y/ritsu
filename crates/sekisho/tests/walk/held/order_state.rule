@@ -1,0 +1,27 @@
+rule order_state v1
+description "Where an order goes on an event, and whether the event is accepted: an enum input, an enum input given a constant and a bool input, which ritsu's port outputs_over holds to some of their values"
+
+enum state = received | paid | shipped | cancelled
+enum event = pay | ship | cancel
+
+inputs
+  state : state
+  event : event
+  rush  : bool
+
+outputs
+  accepted   : bool
+  next_state : state
+
+table step
+policy unique
+| state     | event  | rush  | -> accepted | next_state |
+| received  | pay    | -     | true        | paid       |
+| received  | cancel | -     | true        | cancelled  |
+| received  | ship   | -     | false       | state      |
+| paid      | ship   | -     | true        | shipped    |
+| paid      | cancel | false | true        | cancelled  |
+| paid      | cancel | true  | false       | state      |  # a rushed order is packed already
+| paid      | pay    | -     | false       | state      |
+| shipped   | -      | -     | false       | state      |
+| cancelled | -      | -     | false       | state      |

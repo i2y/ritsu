@@ -38,7 +38,10 @@ fn candidates(f: &RuleFile, c: &Checked) -> BTreeMap<String, Vec<Val>> {
             other => other.clone(),
         };
         let mut vs: Vec<Val> = Vec::new();
-        if matches!(ty, Ty::Opt(_)) {
+        // `outputs_over` (ritsu's port) may hold an enum or a bool input to some of its values:
+        // then those are its only candidates, and `none` is not among them
+        let held = crate::over::held_values(name);
+        if matches!(ty, Ty::Opt(_)) && held.is_none() {
             // An optional column gets `none` plus the candidates of the present side (§9.1).
             vs.push(Val::Enum(crate::kw::NONE.into()));
         }
@@ -49,7 +52,10 @@ fn candidates(f: &RuleFile, c: &Checked) -> BTreeMap<String, Vec<Val>> {
                 // are visited. A class is determined by the sequence of "which cells match", so
                 // overlapping groups and `not:` fold correctly on their own. Values no cell names
                 // fall into one class, which becomes the representative of the `not:` side.
-                let all = c.enums.get(en).cloned().unwrap_or_default();
+                let mut all = c.enums.get(en).cloned().unwrap_or_default();
+                if let Some(h) = &held {
+                    all.retain(|v| h.contains(v));
+                }
                 let cells = enum_cells(f, name);
                 let mut seen: BTreeSet<Vec<bool>> = BTreeSet::new();
                 for v in &all {
@@ -62,8 +68,11 @@ fn candidates(f: &RuleFile, c: &Checked) -> BTreeMap<String, Vec<Val>> {
                 }
             }
             Ty::Bool => {
-                vs.push(Val::Bool(true));
-                vs.push(Val::Bool(false));
+                for b in [true, false] {
+                    if held.as_ref().is_none_or(|h| h.contains(&b.to_string())) {
+                        vs.push(Val::Bool(b));
+                    }
+                }
             }
             // §9.1 on a `string` column: one representative per class the prefixes cut it
             // into — the prefix itself for each one, and one string under none of them

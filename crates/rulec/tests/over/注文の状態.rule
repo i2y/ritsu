@@ -1,0 +1,27 @@
+rule 注文の状態(order_state) v1
+description "注文がイベントでどこへ移り、そのイベントを受け付けるか。列挙の入力、定数を渡す列挙の入力、真偽の入力を、ritsu の口 outputs_over が値に限る"
+
+enum 状態(state) = 受付(received) | 入金済(paid) | 出荷済(shipped) | 取消(cancelled)
+enum イベント(event) = 入金(pay) | 出荷(ship) | 取消依頼(cancel)
+
+inputs
+  状態(state)     : 状態
+  イベント(event) : イベント
+  急ぎ(rush)      : bool
+
+outputs
+  受理(accepted) : bool
+  次(next_state) : 状態
+
+table 遷移(step)
+policy unique
+| 状態   | イベント | 急ぎ  | -> 受理 | 次     |
+| 受付   | 入金     | -     | true    | 入金済 |
+| 受付   | 取消依頼 | -     | true    | 取消   |
+| 受付   | 出荷     | -     | false   | 状態   |
+| 入金済 | 出荷     | -     | true    | 出荷済 |
+| 入金済 | 取消依頼 | false | true    | 取消   |
+| 入金済 | 取消依頼 | true  | false   | 状態   |  # 急ぎの注文は、もう箱に詰めてある
+| 入金済 | 入金     | -     | false   | 状態   |
+| 出荷済 | -        | -     | false   | 状態   |
+| 取消   | -        | -     | false   | 状態   |
