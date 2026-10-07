@@ -75,6 +75,7 @@ error[E101]: Completeness gap: some input matches no row
    |       ^^^^^^^^^ the input space is not fully covered
    |
  An input that matches no row: dest = overseas, size = small, weight = 1lb
+ An input producing this example: dest = overseas, girth = 23, signature = true, weight = 1
  hint: add a row that matches this input.
  The shape of the row to add: `| overseas | small | 1lb | 6USD |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.
 ```
@@ -284,8 +285,8 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
                   settles its claim, and the re-checker
 src/              53 modules, and 6 more under codegen/
 tests/corpus/     87 rules, and the copies of the documents they cite
-tests/mutants/    113 files, each with one mistake planted in it
-tests/golden/     the diagnostic prose snapshot by snapshot: 57 in Japanese, 46 in English
+tests/mutants/    115 files, each with one mistake planted in it
+tests/golden/     the diagnostic prose snapshot by snapshot: 58 in Japanese, 47 in English
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs
 ```
 

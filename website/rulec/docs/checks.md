@@ -183,7 +183,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 113 deliberately broken
+   and that implementation has not been proved correct. The evidence is 115 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**
@@ -221,6 +221,7 @@ error[E101]: Completeness gap: some input matches no row
    |       ^^^^^^^^^ the input space is not fully covered
    |
  An input that matches no row: dest = overseas, size = small, weight = 1lb
+ An input producing this example: dest = overseas, girth = 23, signature = true, weight = 1
  hint: add a row that matches this input.
  The shape of the row to add: `| overseas | small | 1lb | 6USD |`. Its output values are copied
  from the first row to give a shape that parses; they are not the right amounts. …
@@ -228,7 +229,9 @@ error[E101]: Completeness gap: some input matches no row
 
 The witness is the part to reason about. `dest = overseas, size = small, weight = 1lb`
 is not an illustration — it is an input the checker constructed, and it
-is the sentence you hand to whoever knows the answer.
+is the sentence you hand to whoever knows the answer. `size` is a value the rule
+works out from the girth, so the line under it gives the values a caller sends to
+get there.
 
 ### `--terse`, when there are many
 

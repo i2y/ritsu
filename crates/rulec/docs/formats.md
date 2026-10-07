@@ -34,7 +34,7 @@ still means the same thing, and `v` says which version wrote the line.
 ```json
 {"v":2,"severity":"error","code":"E101","file":"rules/parcel_rate.rule","line":30,"column":7,
  "title":"Completeness gap: some input matches no row",
- "notes":["An input that matches no row: dest = overseas, size = small, weight = 1lb","hint: …",…],
+ "notes":["An input that matches no row: dest = overseas, size = small, weight = 1lb","An input producing this example: dest = overseas, girth = 23, signature = true, weight = 1","hint: …",…],
  "where":{"file":"rules/parcel_rate.rule","line":30,"column":7,"table":"base_rate"},
  "spans":[{"line":30,"column":7,"length":9,"label":"the input space is not fully covered"}],
  "witness":{"inputs":{"dest":"overseas","size":"small","weight":1}},

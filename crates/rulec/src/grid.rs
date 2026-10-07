@@ -979,6 +979,12 @@ impl Domain {
     /// an input (a field of an element, a count), cannot be listed (a string), or there are
     /// more combinations than `EXHAUST`.
     fn of(f: &RuleFile, c: &Checked, reads: &BTreeSet<String>) -> Option<Domain> {
+        Domain::holding(f, c, reads, &BTreeSet::new())
+    }
+
+    /// The same, with the inputs in `held` left out of the walk: each stays at one value, and a
+    /// `constraint` brings in nothing through it, since it does not move (§15.194).
+    fn holding(f: &RuleFile, c: &Checked, reads: &BTreeSet<String>, held: &BTreeSet<String>) -> Option<Domain> {
         if f.fold.is_some() || f.elements.is_some() {
             return None;
         }
@@ -988,14 +994,19 @@ impl Domain {
             if !inputs.contains(n.as_str()) {
                 return None;
             }
-            names.insert(n.clone());
+            if !held.contains(n) {
+                names.insert(n.clone());
+            }
         }
         loop {
             let before = names.len();
             for k in &f.constraints {
                 if names.contains(&k.left) || names.contains(&k.right) {
-                    names.insert(k.left.clone());
-                    names.insert(k.right.clone());
+                    for side in [&k.left, &k.right] {
+                        if !held.contains(side) {
+                            names.insert(side.clone());
+                        }
+                    }
                 }
             }
             if names.len() == before {
@@ -1176,6 +1187,47 @@ pub fn exhaust_pair(
                 }
             }
             members.push(here);
+        }
+        true
+    });
+    Some(found)
+}
+
+/// Every input the columns `cols` of a table turn on, evaluated, for one `makes` takes: the input
+/// behind a gap on columns the rule computes, where the linear model does not tie a column to the
+/// inputs — a `min`, a rounding, a `define`, a value read off a table above (§15.194).
+/// `Some(Some(input))` is the first the walk meets, which is the same input every run;
+/// `Some(None)` when none is taken, and `None` when there are too many to try (§15.153). The
+/// inputs in `held` stay at their value in `base`, and so does every input no column turns on.
+pub fn exhaust_input(
+    f: &RuleFile,
+    c: &Checked,
+    cols: &[String],
+    base: &BTreeMap<String, Val>,
+    held: &BTreeSet<String>,
+    mut makes: impl FnMut(&BTreeMap<String, Val>) -> bool,
+) -> Option<Option<BTreeMap<String, Val>>> {
+    let reads = reads_of(f);
+    // An enum value a table writes in an output cell (`small`) is among what `reads_of` says the
+    // output reads, and it has no type: it is the cell's own word, not a value that comes in, so
+    // there is nothing to walk for it.
+    let on: BTreeSet<String> = cols
+        .iter()
+        .filter(|n| !held.contains(*n))
+        .flat_map(|n| leaves_of(f, &reads, n))
+        .filter(|n| c.ty_of(n).is_some())
+        .collect();
+    let mut dom = Domain::holding(f, c, &on, held)?;
+    for (n, v) in base {
+        if !dom.names.contains(n) {
+            dom.rest.insert(n.clone(), v.clone());
+        }
+    }
+    let mut found = None;
+    dom.each(|_, a| {
+        if makes(&a) {
+            found = Some(a);
+            return false;
         }
         true
     });

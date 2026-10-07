@@ -124,6 +124,7 @@ macro_rules! golden {
 golden!(e101_completeness, "E101", "tests/mutants/m_e101.rule", "E101");
 golden!(e101_date_gap, "E101-date", "tests/mutants/m_e101d.rule", "E101");
 golden!(e101_fractional_step, "E101-frac", "tests/mutants/m_e101frac.rule", "E101");
+golden!(e101_define_column, "E101-ratio", "tests/mutants/m_e101ratio.rule", "E101");
 golden!(e102_unreachable, "E102", "tests/mutants/m_e102.rule", "E102");
 golden!(e102_upstream_value, "E102-b", "tests/mutants/m_e102b.rule", "E102");
 golden!(e102_upstream_pair, "E102-c", "tests/mutants/m_e102c.rule", "E102");

@@ -32,6 +32,12 @@ awk '{ sub(/, 山梨県/, ""); print }'                                 "$y" > "
 # The same defect in English, which is the one the README shows: a reader who meets the
 # message first should be able to read it (§15.110).
 awk '/38USD/ { next } { print }'                        "$C/parcel_rate.rule" > "$M/m_e101en.rule"
+# The lowest band written `<50%` where the catch-all was, leaving 50% to 58% in no row. The
+# column is a `define`, the share of the full score, which the linear model does not tie to the
+# four scores, so the input behind the gap is found by walking them (§15.194). The English
+# rule, and its Japanese version beside it.
+awk '/^\| *- *\| *C *\|/ { sub(/-/, "<50%") } { print }'             "$C/rating_grade.rule" > "$M/m_e101ratio.rule"
+awk '/^\| *- *\| *C *\|/ { sub(/-/, "<50%") } { print }'             "$C/評価ランク.rule" > "$M/m_e101ratioja.rule"
 awk '{ print } /^\| *- *\| *S170 /{ print "| <=60cm | S60 |" }'        "$y" > "$M/m_e102.rule"
 awk '/<=60cm/ { sub(/<=60cm/, "<=1200円") } { print }'                 "$y" > "$M/m_e103.rule"
 awk '/運賃\(fee\)/ { sub(/  round up\(10円\)/, "") } { print }'    "$y" > "$M/m_e104.rule"

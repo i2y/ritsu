@@ -28,6 +28,9 @@ Obj(
                     "An input that matches no row: あて先 = 山梨県, サイズ = S60",
                 ),
                 Str(
+                    "An input producing this example: あて先 = 山梨県, 三辺合計 = 1, 重量 = 1",
+                ),
+                Str(
                     "hint: add a row that matches this input.",
                 ),
                 Str(

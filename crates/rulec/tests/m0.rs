@@ -73,6 +73,11 @@ fn 変異は決めたコードだけを出す() {
         // Japanese version beside it.
         ("m_e101frac.rule", &[("E101", 1)], "金額の 10% の手数料に、1 ポンド単位の境目で区分を書いた（軸が 1 ポンドで切られ、穴を見逃していた）"),
         ("m_e101fracja.rule", &[("E101", 1)], "上と同じ規則の日本語の版"),
+        // §15.194: the column is a `define`, which the linear model does not tie to the inputs,
+        // so the input behind the gap is found by walking them. The English rule, and its
+        // Japanese version beside it.
+        ("m_e101ratio.rule", &[("E101", 1)], "いちばん下の受け皿の行 `-` を `<50%` にした（50% から 58% がどの行にも入らない。列は define なので、例を作る入力は四つの評価を総当たりにして見つける）"),
+        ("m_e101ratioja.rule", &[("E101", 1)], "上と同じ規則の日本語の版"),
         ("m_e103.rule", &[("E103", 1)], "長さの列に金額を書いた"),
         ("m_e104.rule", &[("E104", 1)], "出力の丸め宣言を消した"),
         ("m_e104b.rule", &[("E104", 1)], "端数の出る式から丸めを消した"),

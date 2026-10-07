@@ -1,0 +1,10 @@
+error[E101]: Completeness gap: some input matches no row
+  --> tests/mutants/m_e101ratio.rule:19 table grade_table
+   |
+19 | table grade_table
+   |       ^^^^^^^^^^^ the input space is not fully covered
+   |
+ An input that matches no row: ratio = 50%
+ An input producing this example: delivery = 5, price = 0, quality = 10, support = 0
+ hint: add a row that matches this input.
+ The shape of the row to add: `| 50% | S |`. Its output values are copied from the first row to give a shape that parses; they are not the right amounts. Decide whether the written rule, the spreadsheet or the legacy implementation is the source, and take them from there. One row closes the gap this witness names; if more is left, the next run names the next one.

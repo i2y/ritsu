@@ -1586,14 +1586,21 @@ impl TableRegion {
     /// says what the derived columns come to, and no caller sends those, so the input is worked
     /// out: the linear model solved with every numeric column held at the value the witness
     /// shows, the inputs the table reads at their own witness values, and the rest at the first
-    /// value they can take. It is handed over only when the reference evaluator gives every
-    /// column the table reads the very value the witness shows and no row takes them, which is
-    /// the input the generated code stops on. `None` for a gap on inputs alone, where the witness
-    /// is the input already, and when nothing could be built, which proves nothing either way.
+    /// value they can take. Where that input does not make the witness — the model ties no `min`,
+    /// rounding, `define` or table above to the inputs, so nothing pins them — and the inputs the
+    /// computed columns are worked out from are few, every combination of those is walked
+    /// instead, the inputs the table reads still at their witness values, and the first that
+    /// makes it is taken (§15.194, `grid::exhaust_input`). Either way it is handed over only when
+    /// the reference evaluator gives every column the table reads the very value the witness
+    /// shows and no row takes them, which is the input the generated code stops on. `None` for a
+    /// gap on inputs alone, where the witness is the input already, and when nothing could be
+    /// built or there were too many inputs to walk, which proves nothing either way.
     fn input_behind(&self, path: &[usize], t: &Table, c: &Checked, f: &RuleFile) -> Option<BTreeMap<String, crate::eval::Val>> {
         use crate::eval::Val;
         use crate::fourier::{Lin, Origin};
-        if !(0..self.axes.len()).any(|ai| self.derived[ai].is_some() || self.is_define[ai]) {
+        // A column the rule computes is any column no caller sends: a derive, a define of any type
+        // (`is_define` marks the boolean ones only) and what a table above gives (§15.194).
+        if self.col_names.iter().all(|n| f.inputs.iter().any(|i| i.name.text == *n)) {
             return None;
         }
         let vals = self.witness_values(path)?;
@@ -1623,43 +1630,55 @@ impl TableRegion {
             };
             a.insert(name.clone(), v);
         }
-        for g in &self.model {
-            let mut sys = g.sys.clone();
-            for (ai, name) in self.col_names.iter().enumerate() {
-                if !g.vars.contains(name) {
-                    continue;
-                }
-                let Some(v) = at_axis(ai) else { continue };
-                let d = Lin::var(name).plus(&Lin::con(v.mul(Rat::int(-1))));
-                sys.push(d.clone().le(false).tag(Origin::Coord { axis: ai, hi: true }));
-                sys.push(d.ge(false).tag(Origin::Coord { axis: ai, hi: false }));
-            }
-            let got = crate::fourier::solve(sys.clone())?;
-            if !sys.iter().all(|q| q.holds_at(&got) == Some(true)) {
-                return None;
-            }
-            for (n, v) in got {
-                if a.contains_key(&n) {
-                    a.insert(n.clone(), as_val(&n, v));
-                }
-            }
-        }
-        let got = crate::vectors::no_row_takes(f, c, t, &a)?;
         // Every column at the witness's own value: what the note says the input makes is what
         // it makes, not merely some point of the same gap.
-        let same = self.col_names.iter().enumerate().all(|(ai, name)| match (&self.axes[ai], got.get(name)) {
-            (Axis::Num { .. }, Some(Val::Num(v))) => at_axis(ai).is_some_and(|w| w.cmp_to(*v) == std::cmp::Ordering::Equal),
-            (Axis::Num { .. }, Some(Val::Date(y, m, d))) => {
-                at_axis(ai).is_some_and(|w| w.cmp_to(crate::types::date_ord(*y, *m, *d)) == std::cmp::Ordering::Equal)
+        let makes = |b: &BTreeMap<String, Val>| -> bool {
+            let Some(got) = crate::vectors::no_row_takes(f, c, t, b) else { return false };
+            self.col_names.iter().enumerate().all(|(ai, name)| match (&self.axes[ai], got.get(name)) {
+                (Axis::Num { .. }, Some(Val::Num(v))) => at_axis(ai).is_some_and(|w| w.cmp_to(*v) == std::cmp::Ordering::Equal),
+                (Axis::Num { .. }, Some(Val::Date(y, m, d))) => {
+                    at_axis(ai).is_some_and(|w| w.cmp_to(crate::types::date_ord(*y, *m, *d)) == std::cmp::Ordering::Equal)
+                }
+                (Axis::Enum { values }, Some(Val::Enum(v))) => values.get(coord(ai)) == Some(v),
+                (Axis::Bool, Some(Val::Bool(b))) => *b == (coord(ai) == 0),
+                (Axis::Prefix { .. }, Some(Val::Str(s))) => {
+                    matches!(self.axes[ai].witness_val(coord(ai), None), crate::diag::WVal::Str(w) if w == *s)
+                }
+                _ => false,
+            })
+        };
+        let solved = || -> Option<BTreeMap<String, Val>> {
+            let mut b = a.clone();
+            for g in &self.model {
+                let mut sys = g.sys.clone();
+                for (ai, name) in self.col_names.iter().enumerate() {
+                    if !g.vars.contains(name) {
+                        continue;
+                    }
+                    let Some(v) = at_axis(ai) else { continue };
+                    let d = Lin::var(name).plus(&Lin::con(v.mul(Rat::int(-1))));
+                    sys.push(d.clone().le(false).tag(Origin::Coord { axis: ai, hi: true }));
+                    sys.push(d.ge(false).tag(Origin::Coord { axis: ai, hi: false }));
+                }
+                let got = crate::fourier::solve(sys.clone())?;
+                if !sys.iter().all(|q| q.holds_at(&got) == Some(true)) {
+                    return None;
+                }
+                for (n, v) in got {
+                    if b.contains_key(&n) {
+                        b.insert(n.clone(), as_val(&n, v));
+                    }
+                }
             }
-            (Axis::Enum { values }, Some(Val::Enum(v))) => values.get(coord(ai)) == Some(v),
-            (Axis::Bool, Some(Val::Bool(b))) => *b == (coord(ai) == 0),
-            (Axis::Prefix { .. }, Some(Val::Str(s))) => {
-                matches!(self.axes[ai].witness_val(coord(ai), None), crate::diag::WVal::Str(w) if w == *s)
-            }
-            _ => false,
-        });
-        same.then_some(a)
+            Some(b)
+        };
+        if let Some(b) = solved().filter(|b| makes(b)) {
+            return Some(b);
+        }
+        // What the model could not tie to the inputs (§15.194): the inputs behind the computed
+        // columns, walked when they are few, with the inputs the table reads kept at the witness.
+        let held: BTreeSet<String> = self.col_names.iter().filter(|n| a.contains_key(*n)).cloned().collect();
+        crate::grid::exhaust_input(f, c, &self.col_names, &a, &held, makes).flatten()
     }
 
     /// A row that matches the witness, written out so it can be pasted into the table. The

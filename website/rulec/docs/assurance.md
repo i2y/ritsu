@@ -27,7 +27,7 @@ down, and nothing here can check that reading.
 | **5. The seven coverage criteria** | the vector suite actually reaches every row, every boundary pair, every shadowed pair, every computed value at two values, every rounding tie, every fold transition and every transition of a state machine | `rulec coverage` |
 | **6. The model checker** | the generated Rust, over every input in the declared domain, read by a tool that shares no code with rulec | `rulec test --proofs` |
 | **7. The certificate** | the evidence, small enough to hand over, re-checked by two programs that share no code with rulec — one of them carrying machine-checked proofs | `rulec certificate` |
-| **8. The repository's own tests** | 113 deliberately broken rules each produce the diagnostic they should; 87 rules are checked, generated and run on every commit | `cargo test` |
+| **8. The repository's own tests** | 115 deliberately broken rules each produce the diagnostic they should; 87 rules are checked, generated and run on every commit | `cargo test` |
 | **9. The source** | an amount that disagrees with the document the row cites fails | `rulec source fetch`, then `rulec check` |
 
 ---
@@ -170,7 +170,7 @@ the contract's text by a digest, and neither re-checker reads CEL or a schema.
 The five proofs come out of rulec's implementation, and **that implementation has not been
 proved correct**. What stands in for a proof is evidence, and it is kept deliberately:
 
-- **113 deliberately broken rules**, each producing the diagnostic it should — and the
+- **115 deliberately broken rules**, each producing the diagnostic it should — and the
   expected codes are pinned, so a mutant that starts reporting something else fails.
 - **87 rules** — 34 transcribed from a published source, 53 written to reach the corners of
   the language — checked, generated and run on every commit, in every language that takes
