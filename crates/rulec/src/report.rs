@@ -135,9 +135,9 @@ impl Out {
     /// adapter's text as it came, where there is one.
     pub fn against(c: &Checked, name: &str, ours: Option<Val>, theirs: Option<Val>, written: Option<String>) -> Out {
         let same = same_answer(name, ours.as_ref(), c, theirs.as_ref(), c);
-        let theirs_shown = theirs.as_ref().map(|v| shown(c, name, v)).or_else(|| written.clone());
+        let theirs_shown = theirs.as_ref().map(|v| vectors::show_named(c, name, v)).or_else(|| written.clone());
         let theirs_wire = written.or_else(|| wire_exact(c, name, theirs.as_ref()));
-        let ours_shown = ours.as_ref().map(|v| shown(c, name, v));
+        let ours_shown = ours.as_ref().map(|v| vectors::show_named(c, name, v));
         Out { name: name.to_string(), ours, theirs, theirs_wire, theirs_shown, ours_shown, same }
     }
 
@@ -219,25 +219,14 @@ pub fn wire(c: &Checked, name: &str, v: Option<&Val>) -> Option<String> {
 
 /// [`wire`], without cutting a value that is not a whole number of the step: `123.4` where
 /// an implementation answered 12.34% at a step of 0.1% (§15.199). A value on the step is the
-/// integer `wire` gives.
+/// integer `wire` gives. `Rat` writes itself exactly: an integer, a decimal where the decimals
+/// end, else a fraction (a third of a yen has no decimal).
 pub fn wire_exact(c: &Checked, name: &str, v: Option<&Val>) -> Option<String> {
     v.map(|o| match o {
-        Val::Num(r) => exact_text(r.mul(Rat::int(c.wire_scale(name)))),
+        Val::Num(r) => r.mul(Rat::int(c.wire_scale(name))).to_string(),
         Val::Bool(b) => format!("{b}"),
         other => vectors::show(other),
     })
-}
-
-/// An answer as a person reads it, exactly and in the rule's own terms: what
-/// [`vectors::show_named`] writes — a rate with its `%` — with the sign kept on a value between
-/// -1 and 0, which `Rat`'s own `Display` drops (§15.199). A decimal an implementation answered,
-/// `-0.5`, shows as it was.
-pub fn shown(c: &Checked, name: &str, v: &Val) -> String {
-    match (v, c.ty_of(name)) {
-        (Val::Num(r), Some(crate::types::Ty::Rate)) => format!("{}%", exact_text(r.mul(Rat::int(100)))),
-        (Val::Num(r), _) => exact_text(*r),
-        _ => vectors::show_named(c, name, v),
-    }
 }
 
 /// The unit an amount of `name` is counted in, as the rule writes it after a number: `円`,
@@ -260,7 +249,7 @@ fn unit_of(c: &Checked, name: &str) -> Option<String> {
 pub fn shown_pair(name: &str, a: Option<&Val>, ac: &Checked, b: Option<&Val>, bc: &Checked) -> (Option<String>, Option<String>) {
     let (ua, ub) = (unit_of(ac, name), unit_of(bc, name));
     let label = |v: &Val, c: &Checked, u: &Option<String>| {
-        let t = shown(c, name, v);
+        let t = vectors::show_named(c, name, v);
         match (v, u) {
             (Val::Num(_), Some(u)) if ua != ub => format!("{t}{u}"),
             _ => t,
@@ -269,44 +258,10 @@ pub fn shown_pair(name: &str, a: Option<&Val>, ac: &Checked, b: Option<&Val>, bc
     (a.map(|v| label(v, ac, &ua)), b.map(|v| label(v, bc, &ub)))
 }
 
-/// `r` written exactly: an integer, a decimal where the decimals end, else a fraction (a third
-/// of a yen has no decimal). The sign is kept for a value between -1 and 0.
-fn exact_text(r: Rat) -> String {
-    if r.is_int() {
-        return r.num.to_string();
-    }
-    let sign = if r.num < 0 { "-" } else { "" };
-    let a = Rat::new(r.num.abs(), r.den);
-    match decimals(a) {
-        Some((int, frac)) => format!("{sign}{int}.{frac}"),
-        None => format!("{sign}{}/{}", a.num, a.den),
-    }
-}
-
-/// A value that is not negative as its whole part and its decimals, when the decimals end.
-fn decimals(r: Rat) -> Option<(i128, String)> {
-    let (mut d, mut twos, mut fives) = (r.den, 0u32, 0u32);
-    while d % 2 == 0 {
-        d /= 2;
-        twos += 1;
-    }
-    while d % 5 == 0 {
-        d /= 5;
-        fives += 1;
-    }
-    if d != 1 {
-        return None;
-    }
-    let places = twos.max(fives);
-    let scale = 10i128.checked_pow(places)?;
-    let v = r.num.checked_mul(scale)? / r.den;
-    Some((v / scale, format!("{:0width$}", v % scale, width = places as usize)))
-}
-
 /// A number for `--format json`, exactly: an integer or a decimal as a JSON number, and the
 /// rare value no decimal writes (a fraction) as the string of the fraction.
 fn num_json(r: Rat) -> String {
-    let t = exact_text(r);
+    let t = r.to_string();
     if t.contains('/') { crate::json::quote(&t) } else { t }
 }
 
@@ -484,10 +439,11 @@ fn group_rat(r: Rat) -> String {
         return group(r.num);
     }
     let sign = if r.num < 0 { "-" } else { "+" };
-    let a = Rat::new(r.num.abs(), r.den);
-    match decimals(a) {
+    // `Rat`'s own text of the magnitude, with its whole part grouped as `group` groups it.
+    let t = Rat::new(r.num.abs(), r.den).to_string();
+    match t.split_once('.').and_then(|(int, frac)| Some((int.parse::<i128>().ok()?, frac))) {
         Some((int, frac)) => format!("{sign}{}.{frac}", &group(int)[1..]),
-        None => format!("{sign}{}/{}", a.num, a.den),
+        None => format!("{sign}{t}"),
     }
 }
 

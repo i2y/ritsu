@@ -63,8 +63,9 @@ pub fn show(v: i128, unit: &Unit) -> String {
         Dim::Number | Dim::Count(_) => n,
         Dim::Rate => match unit.step {
             Some(step) => {
-                let r = Rat::int(v).mul(step).mul(Rat::int(100));
-                format!("{}%", rat_text(r))
+                // `Rat`'s own text: a step is a decimal fraction, so this is a decimal, and a
+                // value between -1% and 0% keeps its sign (2026-10-08).
+                format!("{}%", Rat::int(v).mul(step).mul(Rat::int(100)))
             }
             None => n,
         },
@@ -80,24 +81,6 @@ pub fn show_cell(c: Cell, unit: &Unit) -> Text {
         let (a, b) = (show(c.lo, unit), show(c.hi, unit));
         Text { ja: format!("{a}〜{b}"), en: format!("{a} to {b}") }
     }
-}
-
-fn rat_text(r: Rat) -> String {
-    if r.is_int() {
-        return r.num.to_string();
-    }
-    // a step is a decimal fraction, so the value has a finite decimal expansion
-    let mut out = format!("{}.", r.num / r.den);
-    let mut rem = (r.num % r.den).abs();
-    for _ in 0..18 {
-        if rem == 0 {
-            break;
-        }
-        rem *= 10;
-        out.push_str(&(rem / r.den).to_string());
-        rem %= r.den;
-    }
-    out
 }
 
 #[cfg(test)]
@@ -123,5 +106,18 @@ mod tests {
         assert_eq!(show_cell(Cell { lo: 1, hi: 50 }, &gbp).en, "1GBP to 50GBP");
         assert_eq!(show_cell(Cell { lo: 1, hi: 50 }, &gbp).ja, "1GBP〜50GBP");
         assert_eq!(show(-3, &Unit::number()), "-3");
+    }
+
+    /// A rate between -1% and 0% keeps its sign: the text took it from the whole part, and the
+    /// whole part of -0.5 is 0, so -0.5% was shown `0.5%` (2026-10-08).
+    #[test]
+    fn a_rate_below_zero_keeps_its_sign() {
+        let rate = Unit::parse("rate[step 0.1%]").unwrap();
+        assert_eq!(show(-5, &rate), "-0.5%");
+        assert_eq!(show(-1, &rate), "-0.1%");
+        assert_eq!(show(-15, &rate), "-1.5%");
+        assert_eq!(show(0, &rate), "0%");
+        assert_eq!(show_cell(Cell { lo: -5, hi: 5 }, &rate).en, "-0.5% to 0.5%");
+        assert_eq!(show_cell(Cell { lo: -5, hi: 5 }, &rate).ja, "-0.5%〜0.5%");
     }
 }

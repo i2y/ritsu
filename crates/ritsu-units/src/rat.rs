@@ -100,32 +100,36 @@ impl Rat {
 }
 
 impl std::fmt::Display for Rat {
+    /// The value written out: a whole number as it is, a decimal where the denominator is made
+    /// of 2s and 5s (the values a rule file holds always are), and a fraction otherwise (`1/3`).
+    ///
+    /// The sign is written first and the magnitude after it. The whole part of a value between
+    /// −1 and 0 is 0, and taking the sign from it dropped the sign: −1/2 came out `0.5` (2026-10-08).
+    /// The arithmetic is checked, and a decimal too long for 128 bits is written as the fraction.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.den == 1 {
-            write!(f, "{}", self.num)
+            return write!(f, "{}", self.num);
+        }
+        let sign = if self.num < 0 { "-" } else { "" };
+        let (num, den) = (self.num.unsigned_abs(), self.den.unsigned_abs());
+        let (mut rest, mut twos, mut fives) = (den, 0u32, 0u32);
+        while rest % 2 == 0 {
+            rest /= 2;
+            twos += 1;
+        }
+        while rest % 5 == 0 {
+            rest /= 5;
+            fives += 1;
+        }
+        let places = twos.max(fives);
+        let decimal = if rest == 1 {
+            10u128.checked_pow(places).and_then(|scale| Some((num.checked_mul(scale)? / den, scale)))
         } else {
-            // Decimal when the denominator allows it; the values a rule file holds always do.
-            let mut den = self.den;
-            let mut digits = 0;
-            while den % 2 == 0 {
-                den /= 2;
-                digits += 1;
-            }
-            let mut d5 = den;
-            let mut p5 = 0;
-            while d5 % 5 == 0 {
-                d5 /= 5;
-                p5 += 1;
-            }
-            if d5 == 1 {
-                let places = digits.max(p5);
-                let scale = 10i128.pow(places as u32);
-                let v = self.num * scale / self.den;
-                let (int, frac) = (v / scale, (v % scale).abs());
-                write!(f, "{int}.{frac:0width$}", width = places as usize)
-            } else {
-                write!(f, "{}/{}", self.num, self.den)
-            }
+            None
+        };
+        match decimal {
+            Some((v, scale)) => write!(f, "{sign}{}.{:0width$}", v / scale, v % scale, width = places as usize),
+            None => write!(f, "{sign}{num}/{den}"),
         }
     }
 }

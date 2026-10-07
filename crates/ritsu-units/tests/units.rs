@@ -222,3 +222,29 @@ fn rationals_are_exact_and_say_when_they_do_not_fit() {
     assert_eq!(Rat::checked_new(1, 0), None);
     assert_eq!(r(1, 3).checked_cmp(r(1, 2)), Some(std::cmp::Ordering::Less));
 }
+
+/// The sign is written before the magnitude. It used to come from the whole part, and the whole
+/// part of a value between -1 and 0 is 0: -1/2 was written `0.5`, -1/20 `0.05`.
+#[test]
+fn a_value_between_minus_one_and_zero_keeps_its_sign() {
+    assert_eq!(r(-1, 2).to_string(), "-0.5");
+    assert_eq!(r(-1, 20).to_string(), "-0.05");
+    assert_eq!(r(-1, 200).to_string(), "-0.005");
+    assert_eq!(r(-3, 10).to_string(), "-0.3");
+    // a fraction keeps the sign it always had
+    assert_eq!(r(-1, 3).to_string(), "-1/3");
+    assert_eq!(r(-4, 3).to_string(), "-4/3");
+    // zero, positive values and values at or below -1 are written as before
+    assert_eq!(Rat::zero().to_string(), "0");
+    assert_eq!(r(1, 2).to_string(), "0.5");
+    assert_eq!(r(5, 4).to_string(), "1.25");
+    assert_eq!(Rat::int(-1).to_string(), "-1");
+    assert_eq!(r(-13, 10).to_string(), "-1.3");
+    assert_eq!(r(-2005, 1000).to_string(), "-2.005");
+    // a rate written as its percentage, the way rulec writes `-0.5%`
+    assert_eq!(format!("{}%", r(-1, 200).mul(Rat::int(100))), "-0.5%");
+    // a decimal too long for 128 bits is written as the fraction rather than overflowing
+    let tiny = Rat::new(1, 1i128 << 126);
+    assert_eq!(tiny.to_string(), format!("1/{}", 1i128 << 126));
+    assert_eq!(Rat::new(-1, 1i128 << 126).to_string(), format!("-1/{}", 1i128 << 126));
+}
