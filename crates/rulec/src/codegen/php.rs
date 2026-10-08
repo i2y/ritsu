@@ -26,8 +26,8 @@
 //! which side of the proof the language sits on.
 
 use super::{
-    cell_src, civil_needed, fired_doc, mode_fn, out_src, pascal, plain_doc, pub_name, raw_base,
-    record_doc, round_cases, traced_doc, unparen, wire_of, Expr2, Gen, Lang, Phase, Wire,
+    cell_src, civil_needed, fired_doc, mode_fn, not_bool, out_src, pascal, plain_doc, pub_name,
+    raw_base, record_doc, round_cases, traced_doc, unparen, wire_of, Expr2, Gen, Lang, Phase, Wire,
 };
 use crate::ast::{Arm, Cell, CmpOp, Item, Lit, OutCell, Table};
 use crate::num::{Rat, RoundMode};
@@ -1048,7 +1048,7 @@ impl<'a> Gen<'a> {
                     php_name(&self.enum_names.get(n).cloned().unwrap_or_default())
                 ),
                 Ty::Str => format!("(string) {d}[{k}]"),
-                Ty::Bool => format!("(bool) {d}[{k}]"),
+                Ty::Bool => format!("_bool({d}[{k}], {})", php_str(&not_bool(jp))),
                 Ty::Date => format!("_ord({d}[{k}])"),
                 // `null` on the wire is PHP's `null`, and the module's parameter is `?Kind`. It
                 // used to fall to `(int)`, which hands 0 to a nullable enum and PHP refuses the
@@ -1060,7 +1060,7 @@ impl<'a> Gen<'a> {
                             php_name(&self.enum_names.get(nm).cloned().unwrap_or_default())
                         ),
                         Ty::Str => format!("(string) {d}[{k}]"),
-                        Ty::Bool => format!("(bool) {d}[{k}]"),
+                        Ty::Bool => format!("_bool({d}[{k}], {})", php_str(&not_bool(jp))),
                         Ty::Date => format!("_ord({d}[{k}])"),
                         _ => format!("(int) {d}[{k}]"),
                     };
@@ -1085,7 +1085,7 @@ impl<'a> Gen<'a> {
                             php_name(&self.enum_names.get(n).cloned().unwrap_or_default())
                         ),
                         Ty::Str => format!("(string) {e}[{k}]"),
-                        Ty::Bool => format!("(bool) {e}[{k}]"),
+                        Ty::Bool => format!("_bool({e}[{k}], {})", php_str(&not_bool(&fd.name.text))),
                         Ty::Date => format!("_ord({e}[{k}])"),
                         // `null` on the wire is PHP's `null`, and the module's parameter is `?Kind`. It
                         // used to fall to `(int)`, which hands 0 to a nullable enum and PHP refuses the
@@ -1097,7 +1097,7 @@ impl<'a> Gen<'a> {
                                     php_name(&self.enum_names.get(nm).cloned().unwrap_or_default())
                                 ),
                                 Ty::Str => format!("(string) {e}[{k}]"),
-                                Ty::Bool => format!("(bool) {e}[{k}]"),
+                                Ty::Bool => format!("_bool({e}[{k}], {})", php_str(&not_bool(&fd.name.text))),
                                 Ty::Date => format!("_ord({e}[{k}])"),
                                 _ => format!("(int) {e}[{k}]"),
                             };
@@ -1146,6 +1146,7 @@ impl<'a> Gen<'a> {
              ini_set('display_errors', 'stderr');\n\n\
              require_once __DIR__ . '/{alias}.php';\n\n\
              {ord}\
+             {boolean}\
              {head}\
              while (({line} = fgets(STDIN)) !== false) {{\n    \
              {line} = trim({line});\n    \
@@ -1178,6 +1179,21 @@ impl<'a> Gen<'a> {
                  return $era * 146097 + $doe - 719468;\n}\n\n"
             } else {
                 ""
+            },
+            // A truth value is read as JSON has it, where `(bool)` read `"false"` and `0` as
+            // true (§15.203).
+            boolean = if self.f.inputs.iter().any(|i| matches!(self.ty_of(&i.name.text).present(), Ty::Bool))
+                || self.element_fields().iter().any(|f| matches!(self.ty_of(&f.name.text).present(), Ty::Bool))
+            {
+                format!(
+                    "/// {}\n\
+                     function _bool(mixed $v, string $what): bool\n{{\n    \
+                     if (!is_bool($v)) {{\n        throw new \\{ns}\\RuleInputError($what);\n    }}\n    \
+                     return $v;\n}}\n\n",
+                    tr!("真偽は JSON の true か false だけ。", "A truth value is JSON's true or false and nothing else.")
+                )
+            } else {
+                String::new()
             },
         )
     }
@@ -1219,16 +1235,17 @@ pub fn round_tests_php() -> String {
 
 impl<'a> Gen<'a> {
     /// One projected value as the PHP the module takes (§15.125).
-    fn php_take(&self, ty: &Ty, e: String) -> String {
+    fn php_take(&self, ty: &Ty, e: String, name: &str) -> String {
         let ns = self.php_ns();
         match ty {
             Ty::Enum(n) => {
                 format!("\\{ns}\\{}::from((string) {e})", php_name(&self.enum_names.get(n).cloned().unwrap_or_default()))
             }
             Ty::Str => format!("(string) {e}"),
-            Ty::Bool => format!("(bool) {e}"),
+            // `true` and `false` and nothing else, where `(bool)` read `"false"` as true (§15.203).
+            Ty::Bool => format!("({e} === true || {e} === false ? {e} : throw new RuleInputError({}))", php_str(&not_bool(name))),
             Ty::Date => format!("_days((string) {e})"),
-            Ty::Opt(inner) => format!("({e} === null ? null : {})", self.php_take(inner, e.clone())),
+            Ty::Opt(inner) => format!("({e} === null ? null : {})", self.php_take(inner, e.clone(), name)),
             _ => format!("(int) {e}"),
         }
     }
@@ -1248,8 +1265,8 @@ impl<'a> Gen<'a> {
         };
         match p.kind {
             // `??` reads a missing key, at any depth, as null (§15.132).
-            crate::ast::ProjKind::Field if matches!(p.ty, crate::types::Ty::Opt(_)) => self.php_take(&p.ty, format!("({walk} ?? null)")),
-            crate::ast::ProjKind::Field => self.php_take(&p.ty, walk),
+            crate::ast::ProjKind::Field if matches!(p.ty, crate::types::Ty::Opt(_)) => self.php_take(&p.ty, format!("({walk} ?? null)"), &p.jp),
+            crate::ast::ProjKind::Field => self.php_take(&p.ty, walk, &p.jp),
             crate::ast::ProjKind::Any(..) => format!("count(array_filter({walk}, fn($e) => {})) > 0", cond()),
             crate::ast::ProjKind::All(..) => {
                 format!("count(array_filter({walk}, fn($e) => {})) === count({walk})", cond())
@@ -1281,7 +1298,7 @@ impl<'a> Gen<'a> {
             (None, _) => "true".into(),
         };
         match p.kind {
-            crate::ast::ProjKind::Field => self.php_take(&p.ty, walk),
+            crate::ast::ProjKind::Field => self.php_take(&p.ty, walk, &p.jp),
             crate::ast::ProjKind::Any(..) => format!("count(array_filter({walk}, fn($e) => {})) > 0", cond()),
             crate::ast::ProjKind::All(..) => format!("count(array_filter({walk}, fn($e) => {})) === count({walk})", cond()),
             crate::ast::ProjKind::Count(None) => format!("count({walk})"),

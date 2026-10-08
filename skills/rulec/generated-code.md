@@ -907,6 +907,21 @@ if not _isinstance(rate, int) or _isinstance(rate, bool):
     raise RuleInputError("rate is not an integer", rate)
 ```
 
+A truth value is JSON's `true` or `false` and nothing else, at every door that reads one: the
+module's entry guard where a caller can pass any value, and every reader of the wire — the
+runners, the MCP servers, the Connect runner, the Wasm entry, the runners of the query and of
+the function, and the NumPy plan. The string `"false"`, the numbers `0` and `1` and any other
+value are refused the way a number that is not an integer is, with the same sentence in every
+language and in the language the code was generated in; an optional truth value takes `null`
+as the absent value and holds anything else to the same. The projection functions hand what
+the caller's object holds to that guard as it came. Before, `"false"` was true in five
+languages and false in seven, and only the MCP servers refused it (§15.203).
+
+```python
+if not _isinstance(express, bool):
+    raise RuleInputError("express is not a boolean", express)
+```
+
 `rulec api` states the same bounds, taken from the same place, so an integration built from
 the inventory cannot send values the guard rejects. It names each language's two errors too:
 `errors` gives the names to catch, and `error_types` says which one the entry guard raises
@@ -1016,7 +1031,7 @@ the record the next revision is measured against.
 
 A call the rule cannot take is refused, not answered: `isError` is set and the text names the
 argument — one missing, one extra, a value outside its range, a name that is not a member of
-the enum, a number that is not an integer (18.3 for a rate in steps of 0.1% is refused, not
+the enum, a truth value that is not `true` or `false`, a number that is not an integer (18.3 for a rate in steps of 0.1% is refused, not
 read as 1.83%). The module's two error classes are what reach the caller, under their names.
 
 ### The answer, with the table beside it

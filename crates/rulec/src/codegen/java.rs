@@ -32,8 +32,9 @@
 //! locale with its own digits would not be the bytes the other ten targets write.
 
 use super::{
-    camel, cell_src, civil_needed, fired_doc, mode_fn, out_src, pascal, plain_doc, pub_name,
-    raw_base, record_doc, round_cases, traced_doc, unparen, wire_of, Expr2, Gen, Lang, Phase, Wire,
+    camel, cell_src, civil_needed, fired_doc, mode_fn, not_bool, out_src, pascal, plain_doc,
+    pub_name, raw_base, record_doc, round_cases, traced_doc, unparen, wire_of, Expr2, Gen, Lang,
+    Phase, Wire,
 };
 use crate::ast::{Arm, Cell, CmpOp, Item, Lit, OutCell, Table};
 use crate::num::{Rat, RoundMode};
@@ -255,7 +256,7 @@ const JAVA_JSON_HELPERS: &str = r##"    /** 読んだ文字列と、閉じ引用
             char c = b.charAt(i);
             if (c == '"') {
                 Str s = stringAt(b, i);
-                v = s.text();
+                v = "\"" + s.text();
                 i = s.next();
             } else if (c == '[' || c == '{') {
                 Str s = balanced(b, i);
@@ -337,18 +338,15 @@ const JAVA_JSON_HELPERS: &str = r##"    /** 読んだ文字列と、閉じ引用
 
     private static long n(Map<String, String> d, String k) {
         try {
-            return Long.parseLong(get(d, k));
+            return Long.parseLong(s(d, k));
         } catch (NumberFormatException e) {
             return 0;
         }
     }
 
     private static String s(Map<String, String> d, String k) {
-        return get(d, k);
-    }
-
-    private static boolean b(Map<String, String> d, String k) {
-        return get(d, k).equals("true");
+        String v = get(d, k);
+        return v.startsWith("\"") ? v.substring(1) : v;
     }
 
     /** 1970-01-01 からの通算日。rulec が使うのと同じ暦の計算。 */
@@ -1250,7 +1248,7 @@ impl<'a> Gen<'a> {
                     java_class(&self.enum_names.get(n).cloned().unwrap_or_default())
                 ),
                 Ty::Str => format!("s({d}, {jp})"),
-                Ty::Bool => format!("b({d}, {jp})"),
+                Ty::Bool => format!("b({d}, {jp}, {})", java_str(&not_bool(&i.name.text))),
                 Ty::Date => format!("ord(s({d}, {jp}))"),
                 // `null` on the wire is a null reference; the module's parameter is the
                 // enum itself, which Java lets be null. It used to fall to `n(...)`, which
@@ -1262,11 +1260,12 @@ impl<'a> Gen<'a> {
                             java_class(&self.enum_names.get(nm).cloned().unwrap_or_default())
                         ),
                         Ty::Str => format!("s({d}, {jp})"),
-                        Ty::Bool => format!("b({d}, {jp})"),
+                        Ty::Bool => format!("b({d}, {jp}, {})", java_str(&not_bool(&i.name.text))),
                         Ty::Date => format!("ord(s({d}, {jp}))"),
                         _ => format!("n({d}, {jp})"),
                     };
-                    format!("(\"null\".equals(s({d}, {jp})) ? null : {one})")
+                    // A string keeps its quote, so the text "null" does not look like `null`.
+                    format!("(\"null\".equals(get({d}, {jp})) ? null : {one})")
                 }
                 _ => format!("n({d}, {jp})"),
             });
@@ -1287,7 +1286,7 @@ impl<'a> Gen<'a> {
                             java_class(&self.enum_names.get(n).cloned().unwrap_or_default())
                         ),
                         Ty::Str => format!("s({e}, {k})"),
-                        Ty::Bool => format!("b({e}, {k})"),
+                        Ty::Bool => format!("b({e}, {k}, {})", java_str(&not_bool(&fd.name.text))),
                         Ty::Date => format!("ord(s({e}, {k}))"),
                         // `null` on the wire is a null reference; the module's parameter is the
                         // enum itself, which Java lets be null. It used to fall to `n(...)`, which
@@ -1299,11 +1298,11 @@ impl<'a> Gen<'a> {
                                     java_class(&self.enum_names.get(nm).cloned().unwrap_or_default())
                                 ),
                                 Ty::Str => format!("s({e}, {k})"),
-                                Ty::Bool => format!("b({e}, {k})"),
+                                Ty::Bool => format!("b({e}, {k}, {})", java_str(&not_bool(&fd.name.text))),
                                 Ty::Date => format!("ord(s({e}, {k}))"),
                                 _ => format!("n({e}, {k})"),
                             };
-                            format!("(\"null\".equals(s({e}, {k})) ? null : {one})")
+                            format!("(\"null\".equals(get({e}, {k})) ? null : {one})")
                         }
                         _ => format!("n({e}, {k})"),
                     }
@@ -1337,7 +1336,7 @@ impl<'a> Gen<'a> {
                      out.println(\"{{\\\"initial\\\":\\\"\" + {cls}.INITIAL.value() + \"\\\",\\\"final\\\":[\" + String.join(\",\", fin) + \"]}}\");\n                    \
                      continue;\n                }}\n                \
                  boolean {stepping} = {top}.containsKey(\"step\");\n                \
-                 if (\"start\".equals({top}.get(\"step\"))) {{\n                    {state} = {ety}.from({top}.get(\"state\"));\n                }}\n"
+                 if (\"start\".equals(s({top}, \"step\"))) {{\n                    {state} = {ety}.from(s({top}, \"state\"));\n                }}\n"
             );
             tail = format!(
                 "                if ({stepping}) {{\n                    {state} = {};\n                }}\n",
@@ -1372,10 +1371,21 @@ impl<'a> Gen<'a> {
              out.println({cls}.{fname}Record({args}, {r}.value(), {r}.trace(), \"\"));\n\
              {tail}            \
              }}\n        }}\n    }}\n\n\
-             {helpers}}}\n",
+             {helpers}{boolean}}}\n",
             ritsu_emit::header::VERSION,
             args = args.join(", "),
             helpers = JAVA_JSON_HELPERS,
+            // JSON's `true` or `false` and nothing else, where `equals("true")` read the text
+            // "true" as true and anything else as false (§15.203).
+            boolean = format!(
+                "\n    /** {} */\n    \
+                 private static boolean b(Map<String, String> d, String k, String what) {{\n        \
+                 String v = get(d, k);\n        \
+                 if (v.equals(\"true\")) {{\n            return true;\n        }}\n        \
+                 if (v.equals(\"false\")) {{\n            return false;\n        }}\n        \
+                 throw new {cls}.RuleInputError(what);\n    }}\n",
+                tr!("真偽は JSON の true か false だけ。ほかは、ほかの言語と同じ文で拒む。", "A truth value is JSON's true or false; anything else is refused with the sentence the other languages say.")
+            ),
         )
     }
 

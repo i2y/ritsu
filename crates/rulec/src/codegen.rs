@@ -109,6 +109,12 @@ fn pub_name(n: &Name) -> String {
     n.ascii.clone().unwrap_or_else(|| n.text.clone())
 }
 
+/// What every door says of a truth value that is not JSON's `true` or `false`, in the language
+/// the code is generated in (§15.203).
+fn not_bool(name: &str) -> String {
+    tr!("{} が真偽ではありません", "{} is not a boolean", name)
+}
+
 /// The public name of the value `v` of the enum `en`, as the rule writes it: its alias in
 /// parentheses, else its name; a value of an enum the rule takes from the prelude is its name as
 /// written. What ritsu's port hands over beside the generated member (`EnumValue::public`).
@@ -1432,6 +1438,10 @@ impl<'a> Gen<'a> {
                     self.py_ty(&ty),
                     tr!("{} が列挙 {} の値ではありません", "{} is not a value of enum {}", i.name.text, self.py_ty(&ty))
                 )),
+                Ty::Bool => o.push_str(&format!(
+                    "    if not _isinstance({v}, bool):\n        raise RuleInputError(\"{}\", {v})\n",
+                    not_bool(&i.name.text)
+                )),
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     o.push_str(&format!(
                         "    if not _isinstance({v}, int) or _isinstance({v}, bool):\n        raise RuleInputError(\"{}\", {v})\n",
@@ -1532,6 +1542,11 @@ impl<'a> Gen<'a> {
                         i.name.text,
                         self.py_ty(&ty)
                     )
+                )),
+                // A truth value is `True` or `False` and nothing else (§15.203).
+                Ty::Bool => o.push_str(&format!(
+                    "    if not _isinstance({v}, bool):\n        raise RuleInputError(\"{}\", {v})\n",
+                    not_bool(&i.name.text)
                 )),
                 // A date is an ordinal, and its declared range is the universe the
                 // completeness proof used, so it is guarded like any other number. Without
@@ -3036,7 +3051,9 @@ impl<'a> Gen<'a> {
                 let cls = self.enum_names.get(n).cloned().unwrap_or_default();
                 format!("m.{cls}({expr})")
             }
-            Ty::Bool => format!("bool({expr})"),
+            // A truth value goes in as it came, and the module's door refuses anything but
+            // `true` and `false`: `bool("false")` is true (§15.203).
+            Ty::Bool => expr,
             Ty::Date => format!("_ord({expr})"),
             Ty::Str => format!("str({expr})"),
             // A branded input has to be constructed, exactly as a caller must.
@@ -3138,7 +3155,9 @@ impl<'a> Gen<'a> {
                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
                     format!("{ind}v{g}, _ := r.Parse{cls}(str({src}[{jp:?}]))\n{ind}{into}.{g} = v{g}\n")
                 }
-                Ty::Bool => format!("{ind}{into}.{g} = {src}[{jp:?}] == true\n"),
+                // `== true` read `"true"` as false; a truth value is JSON's and nothing else
+                // (§15.203).
+                Ty::Bool => format!("{ind}{into}.{g} = boolean({src}[{jp:?}], {:?})\n", not_bool(jp)),
                 Ty::Date => format!("{ind}{into}.{g} = ord(str({src}[{jp:?}]))\n"),
                 Ty::Str => format!("{ind}{into}.{g} = str({src}[{jp:?}])\n"),
                 // A number is a plain int64, not a type the package declares, so it must not
@@ -3153,7 +3172,7 @@ impl<'a> Gen<'a> {
                             let cls = self.enum_names.get(n).cloned().unwrap_or_default();
                             format!("{ind}\tv{g}, _ := r.Parse{cls}(str({src}[{jp:?}]))\n")
                         }
-                        Ty::Bool => format!("{ind}\tv{g} := {src}[{jp:?}] == true\n"),
+                        Ty::Bool => format!("{ind}\tv{g} := boolean({src}[{jp:?}], {:?})\n", not_bool(jp)),
                         Ty::Date => format!("{ind}\tv{g} := ord(str({src}[{jp:?}]))\n"),
                         Ty::Str => format!("{ind}\tv{g} := str({src}[{jp:?}])\n"),
                         Ty::Number => format!("{ind}\tv{g} := int64(num({src}[{jp:?}]))\n"),
@@ -3226,6 +3245,7 @@ impl<'a> Gen<'a> {
              func num(v any) int64 {{ f, _ := v.(float64); return int64(f) }}\n\n\
              func arr(v any) []any {{ a, _ := v.([]any); return a }}\n\n\
              func obj(v any) map[string]any {{ m, _ := v.(map[string]any); return m }}\n\n\
+             {boolean}\
              func ord(s string) int64 {{\n\t\
                  t, _ := time.Parse(\"2006-01-02\", s)\n\t\
                  return int64(t.Sub(time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)).Hours() / 24)\n}}\n\n\
@@ -3242,7 +3262,20 @@ impl<'a> Gen<'a> {
                      fmt.Println(r.{fname}Record(in, got, trace, \"\"))\n\
                  {tail}\t}}\n}}\n",
             ritsu_emit::header::VERSION,
-            fields.join("")
+            fields.join(""),
+            boolean = if self.f.inputs.iter().any(|i| matches!(self.ty_of(&i.name.text).present(), Ty::Bool))
+                || self.element_fields().iter().any(|f| matches!(self.ty_of(&f.name.text).present(), Ty::Bool))
+            {
+                format!(
+                    "// {}\nfunc boolean(v any, what string) bool {{\n\t\
+                     b, ok := v.(bool)\n\t\
+                     if !ok {{\n\t\tpanic(&r.RuleInputError{{What: what}})\n\t}}\n\t\
+                     return b\n}}\n\n",
+                    tr!("真偽は JSON の true か false だけ。", "A truth value is JSON's true or false and nothing else.")
+                )
+            } else {
+                String::new()
+            }
         )
     }
 }
@@ -3871,6 +3904,12 @@ impl<'a> Gen<'a> {
             let optional = matches!(ty, Ty::Opt(_));
             let ty = ty.present().clone();
             let mut o = Guarded::new(&mut o, optional.then(|| (format!("  if ({v} !== null) {{\n"), "  }\n".to_string())), "  ");
+            if ty == Ty::Bool {
+                o.push_str(&format!(
+                    "  if (typeof {v} !== \"boolean\") {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
+                    not_bool(&i.name.text)
+                ));
+            }
             match &ty {
                 Ty::Enum(n) => {
                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
@@ -4005,6 +4044,13 @@ impl<'a> Gen<'a> {
             let optional = matches!(ty, Ty::Opt(_));
             let ty = ty.present().clone();
             let mut o = Guarded::new(&mut o, optional.then(|| (format!("  if ({v} !== null) {{\n"), "  }\n".to_string())), "  ");
+            // A truth value is `true` or `false` and nothing else (§15.203).
+            if ty == Ty::Bool {
+                o.push_str(&format!(
+                    "  if (typeof {v} !== \"boolean\") {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
+                    not_bool(&i.name.text)
+                ));
+            }
             match &ty {
                 Ty::Enum(n) => {
                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
@@ -4215,7 +4261,9 @@ impl<'a> Gen<'a> {
                     }
                     format!("parse{cls}(String({src}))")
                 }
-                Ty::Bool => format!("{src} === true"),
+                // As it came: the module's door refuses anything but `true` and `false`, and
+                // `=== true` read `"true"` as false (§15.203).
+                Ty::Bool => format!("{src} as boolean"),
                 Ty::Date => format!("_ord(String({src}))"),
                 Ty::Str => format!("String({src})"),
                 Ty::Number => format!("BigInt({src} as number)"),
@@ -5499,7 +5547,7 @@ impl<'a> Gen<'a> {
                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
                     format!("r::{cls}::parse(s(&d, {jp:?})).expect({jp:?})")
                 }
-                Ty::Bool => format!("b(&d, {jp:?})"),
+                Ty::Bool => format!("b(&d, {jp:?}, {:?})", not_bool(jp)),
                 Ty::Date => format!("ord(s(&d, {jp:?}))"),
                 Ty::Number => format!("n(&d, {jp:?})"),
                 Ty::Str => format!("s(&d, {jp:?}).to_string()"),
@@ -5511,16 +5559,16 @@ impl<'a> Gen<'a> {
                             let cls = self.enum_names.get(n).cloned().unwrap_or_default();
                             format!("r::{cls}::parse(s(&d, {jp:?})).expect({jp:?})")
                         }
-                        Ty::Bool => format!("b(&d, {jp:?})"),
+                        Ty::Bool => format!("b(&d, {jp:?}, {:?})", not_bool(jp)),
                         Ty::Date => format!("ord(s(&d, {jp:?}))"),
                         Ty::Number => format!("n(&d, {jp:?})"),
                         Ty::Str => format!("s(&d, {jp:?}).to_string()"),
                         other => format!("r::{}(n(&d, {jp:?}))", self.rs_ty(other)),
                     };
                     // The runner's own scanner keeps an unquoted token as its text, so a JSON
-    // null arrives as the four letters. An optional string input cannot occur
-    // (a string is not a table column, E110), so nothing else can look like it.
-    format!("if s(&d, {jp:?}) != \"null\" {{ Some({one}) }} else {{ None }}")
+                    // null arrives as the four letters, and a string keeps its quote, so the
+                    // text "null" does not look like it.
+                    format!("if get(&d, {jp:?}) != \"null\" {{ Some({one}) }} else {{ None }}")
                 }
                 _ => format!("r::{}(n(&d, {jp:?}))", self.rs_ty(&ty)),
             });
@@ -5539,7 +5587,7 @@ impl<'a> Gen<'a> {
                             let cls = self.enum_names.get(n).cloned().unwrap_or_default();
                             format!("r::{cls}::parse(s(e, {k:?})).expect({k:?})")
                         }
-                        Ty::Bool => format!("b(e, {k:?})"),
+                        Ty::Bool => format!("b(e, {k:?}, {:?})", not_bool(k)),
                         Ty::Date => format!("ord(s(e, {k:?}))"),
                         Ty::Number => format!("n(e, {k:?})"),
                         Ty::Str => format!("s(e, {k:?}).to_string()"),
@@ -5551,13 +5599,13 @@ impl<'a> Gen<'a> {
                                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
                                     format!("r::{cls}::parse(s(e, {k:?})).expect({k:?})")
                                 }
-                                Ty::Bool => format!("b(e, {k:?})"),
+                                Ty::Bool => format!("b(e, {k:?}, {:?})", not_bool(k)),
                                 Ty::Date => format!("ord(s(e, {k:?}))"),
                                 Ty::Number => format!("n(e, {k:?})"),
                                 Ty::Str => format!("s(e, {k:?}).to_string()"),
                                 other => format!("r::{}(n(e, {k:?}))", self.rs_ty(other)),
                             };
-                            format!("if s(e, {k:?}) != \"null\" {{ Some({one}) }} else {{ None }}")
+                            format!("if get(e, {k:?}) != \"null\" {{ Some({one}) }} else {{ None }}")
                         }
                         _ => format!("r::{}(n(e, {k:?}))", self.rs_ty(&ty)),
                     };
@@ -5610,7 +5658,7 @@ impl<'a> Gen<'a> {
             head = "    let mut state = r::INITIAL;\n".to_string();
             meta = format!(
                 "        let top = pairs_from(&line.chars().collect::<Vec<char>>(), 0).0;\n        \
-                 let get = |k: &str| top.iter().find(|(a, _)| a == k).map(|(_, v)| v.clone());\n        \
+                 let get = |k: &str| top.iter().find(|(a, _)| a == k).map(|(_, v)| v.strip_prefix('\"').unwrap_or(v).to_string());\n        \
                  if get(\"machine\").is_some() {{\n            \
                      let fin: Vec<String> = [{}].iter().filter(|s| r::is_final(**s)).map(|s| format!(\"\\\"{{}}\\\"\", s.as_str())).collect();\n            \
                      println!(\"{{{{\\\"initial\\\":\\\"{{}}\\\",\\\"final\\\":[{{}}]}}}}\", r::INITIAL.as_str(), fin.join(\",\"));\n            \
@@ -5672,13 +5720,13 @@ use std::io::Read;
                 match ty {
                     Ty::Enum(n) => {
                         let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                        let text = or_err(format!("need({src}, {name:?})"));
+                        let text = or_err(format!("text_of({src}, {name:?})"));
                         format!("match r::{cls}::parse({text}) {{ Some(v) => v, None => return error(&format!(\"{name}: {{:?}}\", s({src}, {name:?}))) }}")
                     }
-                    Ty::Bool => or_err(format!("b_of({src}, {name:?})")),
+                    Ty::Bool => or_err(format!("b_of({src}, {name:?}, {:?})", not_bool(name))),
                     Ty::Date => or_err(format!("date_of({src}, {name:?})")),
                     Ty::Number => or_err(format!("n_of({src}, {name:?})")),
-                    Ty::Str => format!("{}.to_string()", or_err(format!("need({src}, {name:?})"))),
+                    Ty::Str => format!("{}.to_string()", or_err(format!("text_of({src}, {name:?})"))),
                     other => format!("r::{}({})", self.rs_ty(other), or_err(format!("n_of({src}, {name:?})"))),
                 }
             };
@@ -5832,21 +5880,28 @@ fn need<'a>(d: &'a [(String, String)], k: &str) -> Result<&'a str, String> {
     d.iter().find(|(a, _)| a == k).map(|(_, v)| v.as_str()).ok_or_else(|| format!("{k}: missing"))
 }
 
-fn n_of(d: &[(String, String)], k: &str) -> Result<i64, String> {
+/// The text of a string under `k`, or of anything else as it was written.
+fn text_of<'a>(d: &'a [(String, String)], k: &str) -> Result<&'a str, String> {
     let v = need(d, k)?;
+    Ok(v.strip_prefix('"').unwrap_or(v))
+}
+
+fn n_of(d: &[(String, String)], k: &str) -> Result<i64, String> {
+    let v = text_of(d, k)?;
     v.parse().map_err(|_| format!("{k}: {v:?} is not a whole number"))
 }
 
-fn b_of(d: &[(String, String)], k: &str) -> Result<bool, String> {
+/// JSON's `true` or `false` and nothing else, refused with the sentence the other languages say.
+fn b_of(d: &[(String, String)], k: &str, what: &str) -> Result<bool, String> {
     match need(d, k)? {
         "true" => Ok(true),
         "false" => Ok(false),
-        v => Err(format!("{k}: {v:?} is neither true nor false")),
+        _ => Err(what.to_string()),
     }
 }
 
 fn date_of(d: &[(String, String)], k: &str) -> Result<i64, String> {
-    let v = need(d, k)?;
+    let v = text_of(d, k)?;
     let p: Vec<&str> = v.split('-').collect();
     let ok = p.len() == 3
         && [4, 2, 2].iter().zip(&p).all(|(n, x)| x.len() == *n && x.chars().all(|c| c.is_ascii_digit()))
@@ -5910,10 +5965,12 @@ fn pairs_from(b: &[char], mut i: usize) -> (Vec<(String, String)>, usize) {
         if i >= b.len() {
             break;
         }
+        // A string keeps its opening quote, so that the text `true` is not the value `true`
+        // (§15.203); `s` takes it off.
         let v = if b[i] == '"' {
             let (v, ni) = string_at(b, i);
             i = ni;
-            v
+            format!("\"{v}")
         } else if b[i] == '[' || b[i] == '{' {
             let (v, ni) = balanced(b, i);
             i = ni;
@@ -6011,20 +6068,30 @@ fn string_at(b: &[char], i: usize) -> (String, usize) {
     (s, i + 1)
 }
 
+/// The value under `k` as it was written: a string with its opening quote, anything else as
+/// its text, and nothing when there is none.
 fn get<'a>(d: &'a [(String, String)], k: &str) -> &'a str {
     d.iter().find(|(a, _)| a == k).map(|(_, v)| v.as_str()).unwrap_or("")
 }
 
 fn n(d: &[(String, String)], k: &str) -> i64 {
-    get(d, k).parse().unwrap_or(0)
+    s(d, k).parse().unwrap_or(0)
 }
 
+/// The text of a string, or of anything else as it was written.
 fn s<'a>(d: &'a [(String, String)], k: &str) -> &'a str {
-    get(d, k)
+    let v = get(d, k);
+    v.strip_prefix('"').unwrap_or(v)
 }
 
-fn b(d: &[(String, String)], k: &str) -> bool {
-    get(d, k) == "true"
+/// JSON's `true` or `false` and nothing else: a string, a number and `null` are refused with
+/// the sentence the other languages say.
+fn b(d: &[(String, String)], k: &str, what: &'static str) -> bool {
+    match get(d, k) {
+        "true" => true,
+        "false" => false,
+        _ => panic!("{}", r::RuleError::Input { what, value: None }),
+    }
 }
 
 /// A date as its day number from 1970-01-01, by the same civil-date arithmetic the tool uses.
@@ -7826,6 +7893,12 @@ impl<'a> Gen<'a> {
             let optional = matches!(ty, Ty::Opt(_));
             let ty = ty.present().clone();
             let mut o = Guarded::new(&mut o, optional.then(|| (format!("    unless {v}.nil?\n"), "    end\n".to_string())), "  ");
+            if ty == Ty::Bool {
+                o.push_str(&format!(
+                    "    raise RuleInputError.new(\"{}\", {v}) unless {v} == true || {v} == false\n",
+                    not_bool(&i.name.text)
+                ));
+            }
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 o.push_str(&format!(
                     "    raise RuleInputError.new(\"{}\", {v}) unless {v}.is_a?(Integer)\n",
@@ -7906,6 +7979,11 @@ impl<'a> Gen<'a> {
             let ty = ty.present().clone();
             let mut o = Guarded::new(&mut o, optional.then(|| (format!("    unless {v}.nil?\n"), "    end\n".to_string())), "  ");
             match &ty {
+                // A truth value is `true` or `false` and nothing else (§15.203).
+                Ty::Bool => o.push_str(&format!(
+                    "    raise RuleInputError.new(\"{}\", {v}) unless {v} == true || {v} == false\n",
+                    not_bool(&i.name.text)
+                )),
                 Ty::Enum(n) => {
                     let cls = rb_const(&self.enum_names.get(n).cloned().unwrap_or_default());
                     o.push_str(&format!(
@@ -8066,8 +8144,9 @@ impl<'a> Gen<'a> {
             let jp = &i.name.text;
             args.push(match &self.ty_of(&i.name.text) {
                 // An enum member is the source string, which is what the wire carries.
-                Ty::Enum(_) | Ty::Str => format!("d[{jp:?}]"),
-                Ty::Bool => format!("d[{jp:?}] ? true : false"),
+                // A truth value goes in as it came: the module's door refuses anything but `true`
+                // and `false`, where `? true : false` read `"false"` and `0` as true (§15.203).
+                Ty::Enum(_) | Ty::Str | Ty::Bool => format!("d[{jp:?}]"),
                 Ty::Date => format!("_ord(d[{jp:?}])"),
                 // `null` on the wire is `nil` here. It used to fall to `.to_i`, which turns
                 // `nil` into 0 — a value no row of the table matches, so the module raised
@@ -8087,8 +8166,7 @@ impl<'a> Gen<'a> {
                 .map(|fd| {
                     let k = &fd.name.text;
                     match &self.ty_of(k) {
-                        Ty::Enum(_) | Ty::Str => format!("e[{k:?}]"),
-                        Ty::Bool => format!("e[{k:?}] ? true : false"),
+                        Ty::Enum(_) | Ty::Str | Ty::Bool => format!("e[{k:?}]"),
                         Ty::Date => format!("_ord(e[{k:?}])"),
                         Ty::Opt(t) if **t == Ty::Date => format!("(e[{k:?}].nil? ? nil : _ord(e[{k:?}]))"),
                         Ty::Opt(_) => format!("e[{k:?}]"),
@@ -9363,7 +9441,7 @@ impl<'a> Gen<'a> {
                     format!("{cls}(rawValue: _s({d}, {jp:?}))!")
                 }
                 Ty::Str => format!("_s({d}, {jp:?})"),
-                Ty::Bool => format!("_b({d}, {jp:?})"),
+                Ty::Bool => format!("_b({d}, {jp:?}, {:?})", not_bool(jp)),
                 Ty::Date => format!("_ord(_s({d}, {jp:?}))"),
                 Ty::Number => format!("_n({d}, {jp:?})"),
                 // `null` on the wire is `nil`. The brand of an optional is `Kind?`, which
@@ -9374,7 +9452,7 @@ impl<'a> Gen<'a> {
                             let cls = self.enum_names.get(n).cloned().unwrap_or_default();
                             format!("{cls}(rawValue: _s({d}, {jp:?}))!")
                         }
-                        Ty::Bool => format!("_b({d}, {jp:?})"),
+                        Ty::Bool => format!("_b({d}, {jp:?}, {:?})", not_bool(jp)),
                         Ty::Date => format!("_ord(_s({d}, {jp:?}))"),
                         Ty::Number => format!("_n({d}, {jp:?})"),
                         Ty::Str => format!("_s({d}, {jp:?})"),
@@ -9392,6 +9470,9 @@ impl<'a> Gen<'a> {
             } else {
                 v
             };
+            // A truth value can be refused, and `try` has to stand at the left of the whole
+            // expression (§15.203).
+            let v = if v.contains("_b(") { format!("try {v}") } else { v };
             binds.push(format!("            let {local} = {v}\n"));
             args.push(format!("{label}: {local}"));
         }
@@ -9413,7 +9494,7 @@ impl<'a> Gen<'a> {
                             format!("{cls}(rawValue: _s({ev}, {jf:?}))!")
                         }
                         Ty::Str => format!("_s({ev}, {jf:?})"),
-                        Ty::Bool => format!("_b({ev}, {jf:?})"),
+                        Ty::Bool => format!("_b({ev}, {jf:?}, {:?})", not_bool(jf)),
                         Ty::Date => format!("_ord(_s({ev}, {jf:?}))"),
                         Ty::Number => format!("_n({ev}, {jf:?})"),
                         // An optional field reads `null` as `nil`, as an optional input does; it
@@ -9424,7 +9505,7 @@ impl<'a> Gen<'a> {
                                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
                                     format!("{cls}(rawValue: _s({ev}, {jf:?}))!")
                                 }
-                                Ty::Bool => format!("_b({ev}, {jf:?})"),
+                                Ty::Bool => format!("_b({ev}, {jf:?}, {:?})", not_bool(jf)),
                                 Ty::Date => format!("_ord(_s({ev}, {jf:?}))"),
                                 Ty::Number => format!("_n({ev}, {jf:?})"),
                                 Ty::Str => format!("_s({ev}, {jf:?})"),
@@ -9437,9 +9518,11 @@ impl<'a> Gen<'a> {
                     format!("{}: {v}", sw_name(&pub_name(&fd.name)))
                 })
                 .collect();
+            let refuses = inner.iter().any(|f| f.contains("_b("));
             binds.push(format!(
-                "            let {local} = ({d}[{jp:?}] as! [[String: Any]]).map {{ {ev} in Element({}) }}\n",
-                inner.join(", ")
+                "            let {local} = {t}({d}[{jp:?}] as! [[String: Any]]).map {{ {ev} in {t}Element({}) }}\n",
+                inner.join(", "),
+                t = if refuses { "try " } else { "" }
             ));
             args.push(format!("{label}: {local}"));
         }
@@ -9489,8 +9572,13 @@ enum Runner {{
         d[k] as? String ?? ""
     }}
 
-    static func _b(_ d: [String: Any], _ k: String) -> Bool {{
-        (d[k] as? NSNumber)?.boolValue ?? false
+    /// JSON's `true` or `false` and nothing else. Foundation reads a number and a truth value
+    /// both as an NSNumber, and the one made from a truth value has the type code `c`.
+    static func _b(_ d: [String: Any], _ k: String, _ what: String) throws -> Bool {{
+        guard let v = d[k] as? NSNumber, String(cString: v.objCType) == "c" else {{
+            throw RuleError.input(what: what, value: nil)
+        }}
+        return v.boolValue
     }}
 
     /// A date as its day number from 1970-01-01, by the same civil-date arithmetic the tool
@@ -10607,7 +10695,9 @@ impl<'a> Gen<'a> {
     fn py_take(&self, ty: &Ty, expr: String) -> String {
         match ty {
             Ty::Enum(n) => format!("{}({expr})", self.enum_names.get(n).cloned().unwrap_or_default()),
-            Ty::Bool => format!("bool({expr})"),
+            // As it came, for the module's door to hold to `True` and `False`: `bool("false")`
+            // is true (§15.203).
+            Ty::Bool => expr,
             Ty::Date => format!("_days({expr})"),
             Ty::Str => format!("str({expr})"),
             Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("{}(int({expr}))", brand_of(ty)),
@@ -10732,7 +10822,8 @@ impl<'a> Gen<'a> {
     fn ts_take(&self, ty: &Ty, e: String) -> String {
         match ty {
             Ty::Enum(n) => format!("parse{}(String({e}))", self.enum_names.get(n).cloned().unwrap_or_default()),
-            Ty::Bool => format!("Boolean({e})"),
+            // As it came, for the module's door to hold to `true` and `false` (§15.203).
+            Ty::Bool => format!("({e} as boolean)"),
             Ty::Date => format!("_days(String({e}))"),
             Ty::Str => format!("String({e})"),
             Ty::Number => format!("BigInt({e} as number)"),
@@ -10840,7 +10931,8 @@ impl<'a> Gen<'a> {
     fn rb_take(&self, ty: &Ty, e: String) -> String {
         match ty {
             Ty::Enum(_) | Ty::Str => format!("{e}.to_s"),
-            Ty::Bool => format!("{e} ? true : false"),
+            // As it came, for the module's door to hold to `true` and `false` (§15.203).
+            Ty::Bool => e,
             Ty::Date => format!("_days({e})"),
             Ty::Opt(inner) => format!("({e}.nil? ? nil : {})", self.rb_take(inner, e.clone())),
             _ => format!("{e}.to_i"),

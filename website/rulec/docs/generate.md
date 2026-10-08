@@ -278,7 +278,11 @@ a silently wrong number — and the completeness proof says nothing about
 inputs that were never declared. A number that is not an integer is refused before the range is
 looked at, in the languages where a caller can pass one: a float sits
 inside any range, and 18.3 for a rate in steps of 0.1% would otherwise be
-taken as 1.83%. The NumPy plan carries the same guard as data, and its
+taken as 1.83%. A truth value is JSON's `true` or `false` and nothing
+else: the string `"false"`, the numbers `0` and `1` and any other value
+are refused with the same sentence in every language (`express is not a
+boolean`), where `"false"` used to be true in some languages and false in
+the others. The NumPy plan carries the same guard as data, and its
 evaluator refuses the first element that fails with the sentence the
 other languages raise and that element's place: `the constraint does not
 hold: declared <= cover (row 1)`.
@@ -384,7 +388,7 @@ revision is measured against.
 
 A call the rule cannot take is refused with the argument named — a value
 outside its range, a name that is not in the enum, a number that is not
-an integer. 18.3 for a rate declared in steps of 0.1% is refused, not
+an integer, a truth value that is not `true` or `false`. 18.3 for a rate declared in steps of 0.1% is refused, not
 read as 1.83%.
 
 The server is generated code like everything else here: nothing to

@@ -169,7 +169,8 @@ impl<'a> Gen<'a> {
             .replace("@M_MISSING@", &tr!("f\"足りない引数: {{', '.join(missing)}}\"", "f\"missing arguments: {{', '.join(missing)}}\""))
             .replace("@M_INT@", &tr!("f\"{{name}}: 整数で渡す。{{v!r}} は整数ではない\"", "f\"{{name}}: an integer is expected, not {{v!r}}\""))
             .replace("@M_STR@", &tr!("f\"{{name}}: 文字列で渡す。{{v!r}} は文字列ではない\"", "f\"{{name}}: a string is expected, not {{v!r}}\""))
-            .replace("@M_BOOL@", &tr!("f\"{{name}}: true か false で渡す。{{v!r}} はどちらでもない\"", "f\"{{name}}: true or false is expected, not {{v!r}}\""))
+            // The sentence every door says of a truth value that is not one (§15.203).
+            .replace("@M_BOOL@", &tr!("f\"{{name}} が真偽ではありません\"", "f\"{{name}} is not a boolean\""))
             .replace("@M_DATE@", &tr!("f\"{{name}}: 日付は YYYY-MM-DD で: {{v!r}}\"", "f\"{{name}}: not a YYYY-MM-DD date: {{v!r}}\""))
             .replace("@M_ENUM@", &tr!("f\"{{name}}: {{cls.__name__}} に無い: {{v!r}}\"", "f\"{{name}}: not in {{cls.__name__}}: {{v!r}}\""))
             .replace("@D_CALL@", &tr!("入力を一つの辞書で受け、規則を当てて、記録の一行を返す。", "Take the inputs as one dict, apply the rule, and return the record line."))
@@ -316,7 +317,7 @@ impl<'a> Gen<'a> {
             ("@M_MISSING@", tr!("`足りない引数: ${{missing.join(\", \")}}`", "`missing arguments: ${{missing.join(\", \")}}`")),
             ("@M_INT@", tr!("`${{name}}: 整数で渡す。${{JSON.stringify(v)}} は整数ではない`", "`${{name}}: an integer is expected, not ${{JSON.stringify(v)}}`")),
             ("@M_STR@", tr!("`${{name}}: 文字列で渡す。${{JSON.stringify(v)}} は文字列ではない`", "`${{name}}: a string is expected, not ${{JSON.stringify(v)}}`")),
-            ("@M_BOOL@", tr!("`${{name}}: true か false で渡す。${{JSON.stringify(v)}} はどちらでもない`", "`${{name}}: true or false is expected, not ${{JSON.stringify(v)}}`")),
+            ("@M_BOOL@", tr!("`${{name}} が真偽ではありません`", "`${{name}} is not a boolean`")),
             ("@M_DATE@", tr!("`${{name}}: 日付は YYYY-MM-DD で渡す。${{JSON.stringify(v)}} は読めない`", "`${{name}}: a date as YYYY-MM-DD is expected, not ${{JSON.stringify(v)}}`")),
             ("@D_CALL@", tr!("入力を一つのオブジェクトで受け、規則を当てて、記録の一行を返す。", "Take the inputs as one object, apply the rule, and return the record line.")),
             ("@D_SERVE@", tr!("stdin の JSON-RPC を一行ずつ読み、stdout に一行ずつ返す。", "Read JSON-RPC from stdin one line at a time and answer on stdout one line at a time.")),
@@ -410,7 +411,7 @@ def _str(name: str, v: object) -> str:
 
 def _bool(name: str, v: object) -> bool:
     if not isinstance(v, bool):
-        raise m.RuleInputError(@M_BOOL@)
+        raise m.RuleInputError(@M_BOOL@, v)
     return v
 
 
@@ -726,7 +727,7 @@ function _str(name: string, v: unknown): string {
 
 function _bool(name: string, v: unknown): boolean {
   if (typeof v !== "boolean") {
-    throw new m.RuleInputError(@M_BOOL@);
+    throw new m.RuleInputError(@M_BOOL@, v);
   }
   return v;
 }

@@ -27,7 +27,7 @@
 //! function writes, so one call is one fixtures record and `--record` turns a running
 //! service into the file `rulec replay` and `rulec diff` read (§10.3).
 
-use super::{brand_of, pascal, pub_name, wire_of, Gen, Wire};
+use super::{brand_of, not_bool, pascal, pub_name, wire_of, Gen, Wire};
 use crate::ast::EnumSource;
 use crate::types::Ty;
 use std::path::{Path, PathBuf};
@@ -1172,7 +1172,8 @@ impl<'a> Gen<'a> {
                 let cls = self.enum_names.get(n).cloned().unwrap_or_else(|| pascal(n));
                 format!("_PB_{}[m.{cls}({src})]", crate::proto::upper_snake(&cls))
             }
-            Ty::Bool => format!("bool({src})"),
+            // `bool("false")` is true; a truth value is JSON's and nothing else (§15.203).
+            Ty::Bool => format!("_bool({src}, {:?})", not_bool(name)),
             Ty::Date | Ty::Str => format!("str({src})"),
             _ => format!("int({src})"),
         }
@@ -1338,6 +1339,14 @@ impl<'a> Gen<'a> {
                     if self.has_date(Dir::In) || self.has_date(Dir::Out) {
                         pre.push_str(PY_RUNNER_DATES);
                     }
+                    if self.f.inputs.iter().any(|i| matches!(self.ty_of(&i.name.text).present(), Ty::Bool))
+                        || self.element_fields().iter().any(|f| matches!(self.ty_of(&f.name.text).present(), Ty::Bool))
+                    {
+                        pre.push_str(&PY_RUNNER_BOOL.replace(
+                            "@D_BOOL@",
+                            &tr!("真偽は JSON の true か false だけ。ほかは、ほかの言語と同じ文で拒む。", "A truth value is JSON's true or false; anything else is refused with the sentence the other languages say."),
+                        ));
+                    }
                     pre
                 },
             )
@@ -1363,6 +1372,15 @@ def _ord(s: str) -> int:
     return (datetime.date(y, mo, d) - datetime.date(1970, 1, 1)).days
 "#;
 
+
+const PY_RUNNER_BOOL: &str = r#"
+
+def _bool(v: Any, what: str) -> bool:
+    """@D_BOOL@"""
+    if not isinstance(v, bool):
+        raise m.RuleInputError(what, v)
+    return v
+"#;
 
 const PY_CONNECT_RUNNER: &str = r#"@HEADER@
 """@DOC@

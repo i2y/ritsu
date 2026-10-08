@@ -106,6 +106,38 @@ def _not_whole(v):
     return np.array([bad(x) for x in v], dtype=bool)
 
 
+def _column(col):
+    """A column as a one-dimensional array of what it holds.
+
+    `np.asarray` makes a list of lists two-dimensional, and the element that was a list was then
+    no element at all: a column with `[]` in it lost its length, and nothing refused it. A value
+    that is a list is no value of any input, and the checks below refuse it as one.
+    """
+    v = np.asarray(col)
+    return v if v.ndim == 1 else _objects(col)
+
+
+def _objects(xs):
+    """A one-dimensional array of objects, whatever they are: `np.array(xs, dtype=object)` makes
+    a list of lists two-dimensional too."""
+    out = np.empty(len(xs), dtype=object)
+    for i, x in enumerate(xs):
+        out[i] = x
+    return out
+
+
+def _not_bool(col):
+    """The elements of a column of truth values that are not `True` or `False`, as a mask.
+
+    Every generated door takes JSON's true and false and nothing else: `astype(bool)` read
+    the string "false" and the number 1 as true. The column is read as it came, because
+    `np.asarray` makes strings of a list that mixes a truth value with a string.
+    """
+    if isinstance(col, np.ndarray) and col.dtype == bool:
+        return np.zeros(len(col), dtype=bool)
+    return np.array([not isinstance(x, (bool, np.bool_)) for x in col], dtype=bool)
+
+
 def _ord(s: str) -> int:
     y, m, d = (int(x) for x in s.split("-"))
     return (datetime.date(y, m, d) - _EPOCH).days
@@ -287,7 +319,7 @@ class Rule:
             say = spec.get("say", {})
             if name not in cols:
                 raise refuse(say.get("missing", f"{name} is missing"))
-            v = np.asarray(cols[name])
+            v = _column(cols[name])
             n = len(v) if n is None else n
             if len(v) != n:
                 raise refuse(f"{say.get('length', name)} ({len(v)} ≠ {n})")
@@ -296,17 +328,14 @@ class Rule:
             # or a NaN once numpy has widened the column), and the plan tests it as the word
             # "none" — `astype(str)` alone turned it into "None" and the guard refused it.
             if spec.get("optional"):
-                v = np.array(
-                    ["none" if x is None or (isinstance(x, float) and x != x) else x for x in v],
-                    dtype=object,
-                )
+                v = _objects(["none" if x is None or (isinstance(x, float) and x != x) else x for x in v])
             kind = spec["kind"]
             # The absent value of an optional column is the word itself, not a wrong type.
             absent = np.array([x == "none" for x in v], dtype=bool) if spec.get("optional") else np.zeros(n, dtype=bool)
             # A number, a date or a truth value holds a placeholder where it is absent, and the
             # cells read where it is absent from beside it: a column of numbers has no word in
             # it to test (§15.201).
-            fill = lambda x, z: np.array([z if a else e for e, a in zip(x, absent)], dtype=object)
+            fill = lambda x, z: _objects([z if a else e for e, a in zip(x, absent)])
             if kind == "date":
                 days = [0 if a else _ord_or_none(x) for x, a in zip(v, absent)]
                 bad = np.array([d is None for d in days], dtype=bool) & ~absent
@@ -321,6 +350,10 @@ class Rule:
                     raise refuse(say["integer"], wire[i], i)
                 v = (fill(v, 0) if spec.get("optional") else v).astype(np.int64)
             elif kind == "bool":
+                bad = _not_bool(cols[name]) & ~absent
+                if bad.any():
+                    i = int(np.argmax(bad))
+                    raise refuse(say["boolean"], cols[name][i], i)
                 v = (fill(v, False) if spec.get("optional") else v).astype(bool)
             else:
                 v = v.astype(str)

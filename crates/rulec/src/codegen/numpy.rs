@@ -16,7 +16,7 @@
 //! other backend: `rulec test` runs this one over the vectors and compares its records to
 //! the reference evaluator's, byte for byte.
 
-use super::{lcm, pub_name, round_cases, Gen};
+use super::{lcm, not_bool, pub_name, round_cases, Gen};
 use crate::ast::{BinOp, Cell, CmpOp, Expr, Item, Lit, OutCell, Table};
 use crate::json::{quote, Obj};
 use crate::num::{Rat, RoundMode};
@@ -365,6 +365,7 @@ impl<'a> Gen<'a> {
             match kind {
                 "int" => say = say.str("integer", &tr!("{} が整数ではありません", "{} is not an integer", name)),
                 "date" => say = say.str("date", &tr!("{} が日付ではありません", "{} is not a date", name)),
+                "bool" => say = say.str("boolean", &not_bool(name)),
                 _ => {}
             }
             if let Ty::Enum(en) = inner {

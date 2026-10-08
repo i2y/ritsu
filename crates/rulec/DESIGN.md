@@ -3252,6 +3252,32 @@ count 一致数(hits) over 候補 where 照合結果 = 一致  range >=0 <=50
 - **Connect の項目は、失敗の符号（`invalid_argument` と `internal`）を挙げない。**
 - この三つは、例外の型ではない形で拒む。挙げるなら、鍵の形をそれぞれに決める要がある。
 
+### 15.203 真偽の入力は、どの入口でも JSON の true と false だけを受け付ける（2026-10-08）
+
+**きっかけ**：§15.200 の「見つけて直していないもの」の三つ目。真偽の入力に JSON の真偽でない値が来ると、言語ごとに答えが割れた。文字列の `"false"` は、Python・Ruby・PHP・NumPy・SQL が真と読み、TypeScript・JavaScript・Rust・Go・Swift・Java・Wasm が偽と読み、拒んだのは MCP のサーバだけだった。数の `1` は、Python・NumPy・Ruby・PHP・Swift・SQL が真、TypeScript・JavaScript・Rust・Go・Java が偽と読み、Wasm だけが拒んだ。`null` は、SQL（「がありません」）と Wasm のほかは偽として答えた。どれも、規則が書いていない値に答えを返している。
+
+**決定**：
+
+1. **真偽は JSON の `true` と `false` だけである。** 文字列の `"true"`・`"false"`、数の `0`・`1`、ほかの型の値は、整数でない数と同じ形で拒む。モジュールの `RuleInputError` で、文は「{入力} が真偽ではありません」（英語なら `{input} is not a boolean`）。文は生成した言語で一つに決まり、十二の言語と MCP、Connect、Wasm、SQL、NumPy のあいだで一字も違わない。`optional` の真偽は、`null` を値の無いことと読み（§15.201）、ほかの値は同じに確かめる。文字列の `"null"` は値の無いことではない。
+2. **確かめるのは、値が入ってくる所の全部である。** 呼び出し側が何でも渡せる言語のモジュールの入口（Python、TypeScript、JavaScript、Ruby。並びの要素のフィールドも）と、JSON を読む口の全部（十二の言語の runner、MCP のサーバ、Python の Connect の runner、Wasm の入口、SQL の二つの runner、NumPy の計画）である。Python・Ruby・TypeScript・JavaScript の runner は値を受け取ったまま渡し、モジュールの入口が拒む。型を持つ言語（Rust、Go、Swift、Java）と PHP の runner、Wasm の入口、SQL の runner、NumPy の計画は、読むところで拒む。
+3. **Rust・Java・Wasm の読み手は、文字列に印を残す。** この三つは JSON を自前で読み、文字列の値を引用符を外して持っていたので、文字列の `"true"` と真偽の `true` を区別できなかった。文字列の値は開きの引用符を一つ残して持ち、文字列として読む所でそれを外す。`optional` の `null` も印の無い四文字で見るので、文字列の `"null"` は値の無いことにならない。Swift は、Foundation が数と真偽を同じ `NSNumber` で返すので、型の符号（真偽は `c`）で見分ける。
+4. **射影の関数は、呼び出し側のオブジェクトの値を受け取ったまま入口へ渡す**（§15.125）。Python の `bool(…)`、TypeScript と JavaScript の `Boolean(…)`、Ruby の `? true : false` は、文字列の `"false"` を真にしていた。PHP は、射影の中で同じ文で拒む（PHP の `(bool)` も真にしていた）。
+5. **NumPy の計画は、列をいつも一次元に持つ。** 要素に配列（`[]`）のある列を `np.asarray` が二次元にし、拒むべき要素が見えなくなって、`optional` の真偽の列で落ちていた。
+
+**捨てたもの**：
+
+- **runner で文字列の `"true"`・`"false"` を真偽に読み替える形。** 型の違う値を言語ごとの読み替えで救えば、救い方がまた割れる。JSON の真偽でない値は、どの言語でも同じに拒む。
+- **PHP のモジュールの引数を `mixed` にして、入口で確かめる形。** PHP のモジュールは引数に型を宣言していて、`declare(strict_types=1)` のある呼び出し側（生成した runner と射影の関数はそう）からは、真偽でない値が型の誤り（`TypeError`）になる。宣言の無い呼び出し側では PHP が値を読み替えるが、それは PHP の呼び出しの規則で、整数の引数でも同じである。型を外せば、モジュールを読む人の手がかりが減る。
+
+**確かめたこと**：
+
+- `tests/boolean.rs` の四つ。英語の規則（コーパスの `express_delivery_quote.rule`、§15.201 の `parcel_cover.rule`）を先に、日本語の版（`速達の見積.rule`、`小包の補償.rule`）を横に置いた。
+  - `"false"`、`"true"`、`1`、`0`、`[]`、`null` の六つを受け付けない入力のファイルに書くと、`rulec test` の全部の実行（十二の言語の runner、Rust の WASI、Python の MCP と Connect の四つ、TypeScript と JavaScript の MCP）が六つとも拒み、ベクタの答えは変わらない。PostgreSQL の関数は、PostgreSQL を立てたワークスペースの全体で確かめた。
+  - `optional` の真偽（`signature`、`署名`）は、`null` を値の無いことと読み（ベクタが通る）、`"true"`、`0`、`"null"` を拒む。
+  - 全部の言語の runner が、`"false"`、`"true"`、`1`、`0`、`[]` に同じ文で止まる。英語で生成すれば `express is not a boolean`、日本語で生成すれば `速達 が真偽ではありません` で、`false` には答える。
+  - 射影の関数（Python、TypeScript、JavaScript、Ruby、PHP）が、`.proto` の契約の `express` に文字列の `"false"` と数の `1` を入れたオブジェクトを同じ文で拒み、`false` には答える。
+- 替える前と後の突き合わせ。木の 353 の `.rule` で、`gen` を英語と日本語で 706 回走らせ、生成できた 414 回のうち、17,626 のファイルが同じで、6,688 のファイルが変わった。変わったのは、真偽の読み方と入口だけである。どの規則でも変わったのは、真偽を読む部分を持つ Rust の runner と Wasm の入口（文字列の印、各 414）、Java の runner（414）、Swift の runner（414）、SQL の二つの runner（各 396）、Python・TypeScript・JavaScript の MCP（文、各 414）、NumPy の実行時（392、どれも同じ一つのファイル）である。真偽の入力を持つ 87 の規則の英日（174 回）では、ほかに Python・TypeScript・JavaScript・Ruby のモジュールの入口と runner、ページ、Go・PHP の runner、Python の Connect の runner、NumPy の計画（168）、射影を持つ三つの規則の PHP のモジュール（6）が変わった。`rulec api` と `rulec schema` は、英日の 1,412 回のどれも変わらない。`rulec test` は、生成できた 207 の規則で替える前と後の結果が同じだった（23 の通り道で 7,205 の実行、通らない 3 は替える前から Rust がコンパイルできない変異 `m_w121.rule` の三つ。PostgreSQL の関数は立てずに走らせた）。
+
 ## 16. この設計で最も危うい点
 
 第一に、**rulec が消したかった二重実装が、一段上で小さく再発する**。

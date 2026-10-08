@@ -16,7 +16,7 @@
 //! and integer division truncates toward zero in both. `min`/`max` are LEAST and GREATEST,
 //! which the SQLite runner registers.
 
-use super::{cell_src, mode_fn, out_src, pub_name, round_cases, Gen};
+use super::{cell_src, mode_fn, not_bool, out_src, pub_name, round_cases, Gen};
 use crate::ast::{Cell, CmpOp, Item, Lit, OutCell, Policy, Table};
 use crate::num::{Rat, RoundMode};
 use crate::types::Ty;
@@ -1064,6 +1064,19 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// The sentence each truth value is refused with when it is not JSON's `true` or `false`, in
+    /// the language the code is generated in (§15.203), as a Python dict's body.
+    fn sql_not_bool(&self) -> String {
+        let py = |s: &str| format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""));
+        self.f
+            .inputs
+            .iter()
+            .filter(|i| matches!(self.ty_of(&i.name.text).present(), Ty::Bool))
+            .map(|i| format!("{}: {}", py(&i.name.text), py(&not_bool(&i.name.text))))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
     pub fn sql_runner(&self) -> String {
         let (ins, outs, tables, labels, any_w114) = self.sql_runner_lists();
         let (meta, carry) = self.sql_machine_literals();
@@ -1073,6 +1086,7 @@ impl<'a> Gen<'a> {
             .replace("@HEADER@", self.header("#").trim_end())
             .replace("@ALIAS@", &pub_name(&self.f.name))
             .replace("@INPUTS@", &ins)
+            .replace("@NOT_BOOL@", &self.sql_not_bool())
             .replace("@OUTPUTS@", &outs)
             .replace("@TABLES@", &tables)
             .replace("@LABELS@", &labels)
@@ -1102,6 +1116,7 @@ impl<'a> Gen<'a> {
             .replace("@ALIAS@", &pub_name(&self.f.name))
             .replace("@ARGTYPES@", &types.join(", "))
             .replace("@INPUTS@", &ins)
+            .replace("@NOT_BOOL@", &self.sql_not_bool())
             .replace("@OUTPUTS@", &outs)
             .replace("@TABLES@", &tables)
             .replace("@LABELS@", &labels)
@@ -1120,6 +1135,7 @@ MACHINE = @MACHINE@
 CARRY = @CARRY@
 INPUT = "@ALIAS@_input"
 INPUTS = [@INPUTS@]
+NOT_BOOL = {@NOT_BOOL@}
 OUTPUTS = [@OUTPUTS@]
 TABLES = [@TABLES@]
 LABELS = {@LABELS@}
@@ -1135,10 +1151,13 @@ def _civil(days: int) -> str:
     return (datetime.date(1970, 1, 1) + datetime.timedelta(days=days)).isoformat()
 
 
-def _to_sql(kind: str, v: object) -> object:
+def _to_sql(jp: str, kind: str, v: object) -> object:
     if v is None:
         return None
     if kind == "bool":
+        # JSON's true or false and nothing else: `1 if v else 0` read "false" as true.
+        if not isinstance(v, bool):
+            raise ValueError(NOT_BOOL[jp])
         return 1 if v else 0
     if kind == "date":
         return _ord(str(v))
@@ -1180,7 +1199,7 @@ def _decide(cases):
     for n, d in enumerate(cases):
         db.execute(
             'INSERT INTO "%s" VALUES (?%s)' % (INPUT, ", ?" * len(INPUTS)),
-            (n, *[_to_sql(k, d[jp]) for jp, _, k in INPUTS]),
+            (n, *[_to_sql(jp, k, d[jp]) for jp, _, k in INPUTS]),
         )
     got = {}
     for r in db.execute(SQL):
@@ -1242,6 +1261,7 @@ CARRY = @CARRY@
 FN = "@ALIAS@"
 ARGTYPES = [t.strip() for t in "@ARGTYPES@".split(",")]
 INPUTS = [@INPUTS@]
+NOT_BOOL = {@NOT_BOOL@}
 OUTPUTS = [@OUTPUTS@]
 TABLES = [@TABLES@]
 LABELS = {@LABELS@}
@@ -1260,10 +1280,13 @@ def _civil(days: int) -> str:
     return (datetime.date(1970, 1, 1) + datetime.timedelta(days=days)).isoformat()
 
 
-def _lit(kind: str, v: object) -> str:
+def _lit(jp: str, kind: str, v: object) -> str:
     if v is None:
         return "NULL"
     if kind == "bool":
+        # JSON's true or false and nothing else: `"TRUE" if v` read "false" as true.
+        if not isinstance(v, bool):
+            raise ValueError(NOT_BOOL[jp])
         return "TRUE" if v else "FALSE"
     if kind == "date":
         return str(_ord(str(v)))
@@ -1306,7 +1329,7 @@ def _decide(cases):
         # to the type it was declared with. Both matter: a rule whose alias is also the name of
         # a built-in function (`rank`) cannot be called positionally without ambiguity, and a
         # named argument is the one form a variadic built-in cannot answer to.
-        args = ", ".join('"%s" => %s::%s' % (a, _lit(k, d[jp]), t) for (jp, a, k), t in zip(INPUTS, ARGTYPES))
+        args = ", ".join('"%s" => %s::%s' % (a, _lit(jp, k, d[jp]), t) for (jp, a, k), t in zip(INPUTS, ARGTYPES))
         # Through a subquery, so that the answer is a row however many columns it has: a
         # function that returns one column — one output and no table to name a row of — is that
         # column's type in FROM, and row_to_json has no form for a bare bigint.
