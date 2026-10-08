@@ -1,6 +1,6 @@
 # 挨拶 — where the requirements come from
 
-yuen 0.24.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
+yuen 0.25.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
 
 - `greeter.ja.req` (挨拶 v1, `sha256:56bec55280e19241`)
 

@@ -4,9 +4,9 @@ Only the days Article 142 of the Civil Code names are closed: Sundays, and the d
 
 - File: `civil_code_142_days.cal` (calendar civil_code_142_days v1, sha256:dd534a7343411409)
 - Table: national_holidays = `data/syukujitsu.csv` (sha256:cec37a743c96995c, a copy of https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv, covers 1955-01-01..2027-12-31)
-- koyomi: 0.24.0
+- koyomi: 0.25.0
 
-koyomi 0.24.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
+koyomi 0.25.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
 
 ## Closed days
 

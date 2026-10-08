@@ -1,5 +1,5 @@
 {
-  "koyomi": "0.24.0",
+  "koyomi": "0.25.0",
   "kind": "dates",
   "name": "締め日と支払日を受け取る",
   "alias": "closing_and_payment_days",

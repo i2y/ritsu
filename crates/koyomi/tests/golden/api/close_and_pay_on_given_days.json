@@ -1,5 +1,5 @@
 {
-  "koyomi": "0.24.0",
+  "koyomi": "0.25.0",
   "kind": "dates",
   "name": "close_and_pay_on_given_days",
   "alias": "close_and_pay_on_given_days",

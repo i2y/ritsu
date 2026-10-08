@@ -6,9 +6,9 @@
 - Calendar: `calendars/民法142条の休日.cal` (calendar 民法142条の休日 v1, sha256:d150b087e76b2009)
 - Table: 祝日 = `calendars/data/syukujitsu.csv` (sha256:cec37a743c96995c, a copy of https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv, covers 1955-01-01..2027-12-31)
 - Law: 民法 = law 129AC0000000089 on e-Gov as of 2026-10-01 (revision 129AC0000000089_20260624_508AC0000000045): 第140条 sha256:e880059021fbb67d, 第141条 sha256:0575c131b9f08063, 第142条 sha256:fc8c35a0769d3b35, 第143条 sha256:6950bdfb988439b6
-- koyomi: 0.24.0
+- koyomi: 0.25.0
 
-koyomi 0.24.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
+koyomi 0.25.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
 
 > [!WARNING]
 > The claim 二つの読み方 fails for 121 of the 4,380 combinations of 起点 and 月数.

@@ -1,5 +1,5 @@
 {
-  "yuen": "0.24.0",
+  "yuen": "0.25.0",
   "root": "tests/fixtures/delivery_flow",
   "files": [
     {

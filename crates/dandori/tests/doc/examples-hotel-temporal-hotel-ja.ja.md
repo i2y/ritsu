@@ -170,7 +170,7 @@ flowchart TD
 <details>
 <summary><code>与信</code> · 宿泊の与信額 v1 · <code>../rules/宿泊の与信額.rule</code></summary>
 
-<!-- rulec 0.24.0 が 宿泊の与信額.rule (sha256:7c4298374720) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.25.0 が 宿泊の与信額.rule (sha256:7c4298374720) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 宿泊の与信額 v1
 
 予約のときにカードで押さえる額と、フロントの確認に回すかどうか。客室の一泊の額に泊数を掛ける。15 泊以上は確認に回す。書き下ろしの例
@@ -255,7 +255,7 @@ flowchart TD
 <details>
 <summary><code>payment_intent</code> · payment_intent v1 · <code>../rules/payment_intent.rule</code></summary>
 
-<!-- rulec 0.24.0 が payment_intent.rule (sha256:ec6477bfd9ec) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.25.0 が payment_intent.rule (sha256:ec6477bfd9ec) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 payment_intent v1
 
 Where a Stripe PaymentIntent's status goes when it is confirmed, authenticated, captured or canceled, and when a delayed payment settles. Transcribed from Stripe's documentation

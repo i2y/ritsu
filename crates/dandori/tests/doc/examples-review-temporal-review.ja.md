@@ -65,7 +65,7 @@ flowchart TD
 <details>
 <summary><code>policy</code> · review_policy v1 · <code>../rules/review_policy.rule</code></summary>
 
-<!-- rulec 0.24.0 が review_policy.rule (sha256:d71c8b54077c) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.25.0 が review_policy.rule (sha256:d71c8b54077c) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 review_policy v1
 
 Whether the scoring's verdict on an application is acted on at once or goes to a person, by how sure the scoring is of it: approving at once asks more certainty than rejecting at once. Written for the example

@@ -5,9 +5,9 @@ The end of a period of months counted from a day, written as this example reads 
 - ファイル: `period_of_months.cal`（dates period_of_months v1、sha256:0f1a06d9b71a39f6）
 - カレンダー: `calendars/england_and_wales.cal`（calendar england_and_wales v1、sha256:00a0d8a87344f4f4）
 - 表: bank_holidays = `calendars/data/bank-holidays.json`（sha256:538b3482c28b85ec、https://www.gov.uk/bank-holidays.json のコピー、covers listed years = 2019-01-01..2028-12-31）
-- koyomi: 0.24.0
+- koyomi: 0.25.0
 
-上のファイルを koyomi 0.24.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
+上のファイルを koyomi 0.25.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
 
 > [!NOTE]
 > 4 つの条件が、origin 2026-01-01〜2026-12-31、month_count 1〜12 の 4,380 通りのすべてで成り立ちます。

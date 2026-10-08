@@ -6,9 +6,9 @@ The last day of a period, computed by writing Articles 140, 141 and 143 of the C
 - Calendar: `calendars/civil_code_142_days.cal` (calendar civil_code_142_days v1, sha256:dd534a7343411409)
 - Table: national_holidays = `calendars/data/syukujitsu.csv` (sha256:cec37a743c96995c, a copy of https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv, covers 1955-01-01..2027-12-31)
 - Law: civil_code = law 129AC0000000089 on e-Gov as of 2026-10-01 (revision 129AC0000000089_20260624_508AC0000000045): 第140条 sha256:e880059021fbb67d, 第141条 sha256:0575c131b9f08063, 第142条 sha256:fc8c35a0769d3b35, 第143条 sha256:6950bdfb988439b6
-- koyomi: 0.24.0
+- koyomi: 0.25.0
 
-koyomi 0.24.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
+koyomi 0.25.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
 
 > [!NOTE]
 > 4 claims hold on all 4,380 combinations of origin (2026-01-01..2026-12-31) and month_count (1..12).

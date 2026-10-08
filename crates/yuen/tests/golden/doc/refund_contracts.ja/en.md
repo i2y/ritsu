@@ -1,6 +1,6 @@
 # 返金の契約 — where the requirements come from
 
-yuen 0.24.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
+yuen 0.25.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
 
 - `refund_contracts.ja.req` (返金の契約 v1, `sha256:4738e5072c85cd5d`)
 

@@ -179,7 +179,7 @@ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 from 0.23.0 on (continuing rulec's numbering), carries archives for macOS and Linux and `.deb` and
 `.rpm` packages, on the [releases page](https://github.com/i2y/ritsu/releases); an archive holds
 `ritsu` and a link to it named for each language, which runs as that language. With Homebrew it is
-`brew install i2y/tap/ritsu`, and in GitHub Actions `uses: i2y/ritsu@v0.23.0`.
+`brew install i2y/tap/ritsu`, and in GitHub Actions `uses: i2y/ritsu@v0.25.0`.
 
 The design of the whole is in [DESIGN.md](https://github.com/i2y/ritsu/blob/main/DESIGN.md), in
 Japanese. ritsu is MIT OR Apache-2.0.
