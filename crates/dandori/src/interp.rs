@@ -550,13 +550,17 @@ impl<'a> Run<'a> {
             self.callees.push(CallInfo { task, callback, kind: ans.get("error").and_then(|e| e.as_str()).map(String::from) });
             if let Some(v) = ans.get("ok") {
                 self.steps.push(json!({ "call": wire, "answer": { "ok": v } }));
-                // Jev's answer is read into the task's type; one less sure than the task asks fails
-                // the call with the task's error, which no retry takes
+                // a decision task's answer is read into the task's type; a refused question, and then
+                // an answer less sure than the task asks, fail the call with the task's error, which
+                // no retry takes
                 if let Some(j) = match callee {
                     Callee::Task(t) => m.tasks[*t].jev(),
                     Callee::Rule(_) => None,
                 } {
-                    let (read, low) = render::jev_read(j, v);
+                    let (read, low, refused) = render::jev_read(j, v);
+                    if let (true, Some(error), Callee::Task(t)) = (refused, j.refusal_error(), callee) {
+                        break Err(CallError { kind: error.to_string(), target_name: error.to_string(), cause: render::jev_refused_cause(&m.tasks[*t]) });
+                    }
                     if let (true, Some((_, error)), Callee::Task(t)) = (low, &j.floor, callee) {
                         break Err(CallError { kind: error.clone(), target_name: error.clone(), cause: render::jev_low_cause(&m.tasks[*t]) });
                     }

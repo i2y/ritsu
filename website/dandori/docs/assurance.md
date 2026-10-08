@@ -93,7 +93,7 @@ platform could not run one of a real run's pods (it ended in Error, or Unknown w
 containerd in the node image of kind 0.29.0 made them now and then under load), the runner plays the
 run again, at most twice, and the test says so.
 
-## Agents, Jev and the default Transport
+## Agents, decision models and the default Transport
 
 - An agent's call is recorded as the `Transport` gets it, and the stand-in answers `{"answer": …}` as
   the model would. The ASL runner answers an HTTP Task to the Responses API or the Messages API with a
@@ -110,14 +110,16 @@ run again, at most twice, and the test says so.
   which must get the very request Step Functions sends, once. Nothing goes to OpenAI or Anthropic. When Ollama runs on this machine, one call of each such agent
   also goes to it for real, without its effort (a model that does not reason is refused one), and each
   answer must fit the task's type (`DANDORI_OLLAMA` names where it runs, `DANDORI_OLLAMA_MODEL` the
-  model; else the smallest one it has).
+  model; else the smallest one it has that writes text, as `/api/show` lists its capabilities).
 - The rest of the default `Transport` (`fetch` and the AWS SDK in TypeScript, the standard library and
   boto3 in Python, `net/http` and the AWS SDK for Go v2 in Go) sends every HTTP, Lambda and AWS call of
   the scenarios to stand-ins on this machine: a server that answers HTTP and Lambda's Invoke, and moto
   for SNS and SQS. What arrives must be the call, in the same text from TypeScript and Python, and an AWS
   error must come back by the name the task declares (`NotFoundException`). Go's maps keep no order, so
   Go writes the keys of an object, and the pairs of a query or a form, in the order of their names: the
-  same JSON and the same pairs, in another order.
+  same JSON and the same pairs, in another order. A decision task's state and questions are the
+  exception: a model reads the options in their order, and answers a little otherwise in another, so
+  Go sends them as the other languages write them.
 - A rule called at its service (`connect` under `use rule`) is an HTTP request on every platform, and the
   scenarios answer it as the service writes: the record they chose as protobuf's JSON, with the zero
   values left out and the numbers as strings. They also answer with the false and the 0 left out (and an
@@ -152,10 +154,23 @@ run again, at most twice, and the test says so.
   sure than asked leaves the variable as it was, and the next call sends it, so a platform that kept the
   answer would show. The default `Transport`'s request to Jev goes to the stand-in server too, where
   TypeSafe's key from `TYPESAFE_API_KEY` must arrive as `Authorization: Bearer <key>`.
+- A task of another server of the System One API (`url`) is answered the same way, at its own URL. A
+  task of OpenAI's Decisions API (`jev openai`) is answered in that API's shape: the answers in a list,
+  each by its question's name, a predicate's probability of yes, and a refusal of the first question,
+  which must fail the call with the task's refusal error, or with `Dandori.Refused` that `on failure`
+  takes, before anything else is read. The default `Transport`'s request to the Decisions API must
+  carry OpenAI's key from `OPENAI_API_KEY`, and a request to a server `url` names must carry neither
+  key. Leaving out the reading of a refusal in TypeScript, or its Choice in the state machine, makes
+  the scenarios differ.
 - When `TYPESAFE_API_KEY` is set, the first call of each Jev task of the examples and the test flows
   also goes to TypeSafe for real, from the default `Transport` of TypeScript, of Python and of Go. The
   response must answer every question, and each answer must read into the task's type, or fail the
   call with the task's error when Jev is not sure enough. Without the key, nothing goes to TypeSafe.
+- The same goes for the other two servers. With `OPENAI_API_KEY` set, the tasks of the Decisions API
+  go to OpenAI; when Ollama runs on this machine and has a decision model (`decision` among its
+  capabilities; `DANDORI_OLLAMA_DECISIONS` names one), the tasks of a server of the System One API go to
+  it, without a key. Each answer must read into the task's type, or fail the call with the task's own
+  error: not sure enough, or a question refused.
 
 ## The services
 

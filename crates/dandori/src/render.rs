@@ -154,7 +154,7 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
             }
         }
         // an HTTP request, which every target sends as Step Functions' HTTP Task does
-        Some(Via::Jev(j)) => json!({ "http": "POST", "url": JEV_URL, "body": jev_request(j, Value::Object(agent_input(task, args))) }),
+        Some(Via::Jev(j)) => json!({ "http": "POST", "url": j.endpoint(), "body": jev_request(j, Value::Object(agent_input(task, args))) }),
         Some(Via::StateMachine(arn)) => json!({ "state_machine": arn, "input": args }),
         // nothing is called: the workflow waits for the event by its name
         Some(Via::Event) => json!({ "event": task.name }),
@@ -286,16 +286,60 @@ pub fn agent_request(p: Provider, model: &str, instructions: &str, input: Value,
     }
 }
 
-/// The body of a Jev task's request: its state (the arguments, as an agent's input), the model,
-/// and the questions by their ids, as TypeSafe's API takes them.
+/// The body of a decision task's request, as every target sends it. The System One API (TypeSafe's
+/// Jev, and the servers `url` names) takes the state (the arguments, as an agent's input), the
+/// model, and the questions by their ids; OpenAI's Decisions API takes the model, the input as the
+/// arguments' JSON text (as an agent's is), and the questions in a list, each by its name.
 pub fn jev_request(j: &Jev, state: Value) -> Value {
-    json!({ "state": state, "model": j.model, "questions": jev_questions(j) })
+    match j.api {
+        DecisionApi::SystemOne => json!({ "state": state, "model": j.model, "questions": jev_questions(j) }),
+        DecisionApi::Decisions => json!({ "model": j.model, "input": state.to_string(), "questions": jev_questions(j) }),
+    }
 }
 
-/// The questions of a Jev task: a choice's `criteria` are its options with what each means (null
-/// where the task says nothing), a score's the levels' meanings from the lowest, and a noul's what
-/// yes and no mean, when the task says.
+/// The questions of a decision task. On the System One API, by their ids: a choice's `criteria` are
+/// its options with what each means (null where the task says nothing), a score's the levels'
+/// meanings from the lowest, and a noul's what yes and no mean, when the task says. On the
+/// Decisions API, a list with each question's name: a choice's `choices` (each value, with its
+/// `description` when the task says one), a score's `levels` from the lowest (the value as the
+/// `label`, what it means as the `description`), and a `predicate` for yes or no.
 pub fn jev_questions(j: &Jev) -> Value {
+    if j.api == DecisionApi::Decisions {
+        return Value::Array(
+            j.questions
+                .iter()
+                .map(|q| {
+                    let mut o = Map::new();
+                    let kind = match q.kind {
+                        QuestionKind::Choice => "choice",
+                        QuestionKind::Score => "score",
+                        QuestionKind::Noul => "predicate",
+                    };
+                    o.insert("type".into(), json!(kind));
+                    o.insert("name".into(), json!(q.id));
+                    o.insert("instructions".into(), json!(q.instructions));
+                    let option = |(v, m): &(String, Option<String>), key: &str| {
+                        let mut c = Map::new();
+                        c.insert(key.into(), json!(v));
+                        if let Some(m) = m {
+                            c.insert("description".into(), json!(m));
+                        }
+                        Value::Object(c)
+                    };
+                    match q.kind {
+                        QuestionKind::Choice => {
+                            o.insert("choices".into(), Value::Array(q.options.iter().map(|x| option(x, "value")).collect()));
+                        }
+                        QuestionKind::Score => {
+                            o.insert("levels".into(), Value::Array(q.options.iter().map(|x| option(x, "label")).collect()));
+                        }
+                        QuestionKind::Noul => {}
+                    }
+                    Value::Object(o)
+                })
+                .collect(),
+        );
+    }
     let mut qs = Map::new();
     for q in &j.questions {
         let mut o = Map::new();
@@ -323,11 +367,12 @@ pub fn jev_questions(j: &Jev) -> Value {
     Value::Object(qs)
 }
 
-/// Jev's answer to one question, read: the value it takes and how sure Jev is of it, from 0 to 1.
-/// A choice and a score say how sure (`confidence`); a score's place is taken at the nearest
-/// level, a half going up; a noul's answer is yes when its probability is over one half, and Jev
-/// is as sure of it as its probability. None when the answer is not there or not of its kind.
-fn jev_one(q: &Question, a: &Value) -> Option<(Value, f64)> {
+/// The answer to one question, read: the value it takes and how sure the model is of it, from 0 to
+/// 1. A choice and a score say how sure (`confidence`); a score's place is taken at the nearest
+/// level, a half going up; yes or no is yes when its probability (`noul` on the System One API,
+/// `probability` on the Decisions API) is over one half, and the model is as sure of it as its
+/// probability. None when the answer is not there or not of its kind.
+fn jev_one(api: DecisionApi, q: &Question, a: &Value) -> Option<(Value, f64)> {
     let unit = |x: Option<&Value>| x.and_then(|x| x.as_f64()).filter(|c| (0.0..=1.0).contains(c));
     match q.kind {
         QuestionKind::Choice => {
@@ -345,7 +390,7 @@ fn jev_one(q: &Question, a: &Value) -> Option<(Value, f64)> {
             Some((json!(q.options[level as usize].0), unit(a.get("confidence"))?))
         }
         QuestionKind::Noul => {
-            let p = unit(a.get("noul"))?;
+            let p = unit(a.get(if api == DecisionApi::Decisions { "probability" } else { "noul" }))?;
             Some((json!(p > 0.5), if p > 0.5 { p } else { 1.0 - p }))
         }
     }
@@ -358,13 +403,25 @@ pub fn rate_steps(c: f64, per: u64) -> i64 {
     (c * per as f64 + 1e-9).floor() as i64
 }
 
-/// A Jev task's answer, read from the body of Jev's response as every target reads it: the value
-/// of the task's type, null where an answer is not there or not of its kind (which the answer's
-/// check then refuses), and whether every answer is there and one is less sure than the task's
-/// `confidence`, which fails the call with its error.
-pub fn jev_read(j: &Jev, body: &Value) -> (Value, bool) {
-    let answers = body.get("answers").filter(|a| a.is_object());
-    let read: Vec<Option<(Value, f64)>> = j.questions.iter().map(|q| answers.and_then(|a| a.get(&q.id)).filter(|a| a.is_object()).and_then(|a| jev_one(q, a))).collect();
+/// A decision task's answer, read from the body of the response as every target reads it: the
+/// value of the task's type, null where an answer is not there or not of its kind (which the
+/// answer's check then refuses); whether every answer is there and one is less sure than the
+/// task's `confidence`, which fails the call with its error; and whether the Decisions API refused
+/// a question (`{"type": "refusal", "name": …}`), which fails the call with the task's refusal
+/// error before anything else. The System One API's answers are by the questions' ids; the
+/// Decisions API's in a list, each by its name.
+pub fn jev_read(j: &Jev, body: &Value) -> (Value, bool, bool) {
+    let found: Vec<Option<&Value>> = j
+        .questions
+        .iter()
+        .map(|q| match j.api {
+            DecisionApi::SystemOne => body.get("answers").filter(|a| a.is_object()).and_then(|a| a.get(&q.id)),
+            DecisionApi::Decisions => body.get("answers").and_then(|a| a.as_array()).and_then(|l| l.iter().find(|a| a.get("name") == Some(&json!(q.id)))),
+        })
+        .map(|a| a.filter(|a| a.is_object()))
+        .collect();
+    let refused = j.api == DecisionApi::Decisions && found.iter().flatten().any(|a| a.get("type") == Some(&json!("refusal")));
+    let read: Vec<Option<(Value, f64)>> = j.questions.iter().zip(&found).map(|(q, a)| a.and_then(|a| jev_one(j.api, q, a))).collect();
     let all = read.iter().all(|x| x.is_some());
     let low = all && j.floor.as_ref().is_some_and(|(f, _)| read.iter().flatten().any(|(_, c)| c < f));
     let value = match j.questions.as_slice() {
@@ -380,13 +437,14 @@ pub fn jev_read(j: &Jev, body: &Value) -> (Value, bool) {
             Value::Object(o)
         }
     };
-    (value, low)
+    (value, low, refused)
 }
 
-/// Jev's response to a task's questions, with `v` the value of the task's type it reads as: every
-/// answer as sure as the task's `confidence` asks and no more (wholly sure without one), or with
-/// `low`, less sure. The scenarios answer the calls with it.
-pub fn jev_wire(j: &Jev, v: &Value, low: bool) -> Value {
+/// The response to a decision task's questions, in its API's shape, with `v` the value of the
+/// task's type it reads as: every answer as sure as the task's `confidence` asks and no more
+/// (wholly sure without one), or with `low`, less sure; with `refused`, the Decisions API's
+/// refusal of the first question. The scenarios answer the calls with it.
+pub fn jev_wire(j: &Jev, v: &Value, low: bool, refused: bool) -> Value {
     let floor = j.floor.as_ref().map(|(f, _)| *f);
     // numbers of a few decimals, as Jev gives them, which every language reads back alike; a
     // whole number is written as one (1, not 1.0), as JavaScript writes it
@@ -443,6 +501,36 @@ pub fn jev_wire(j: &Jev, v: &Value, low: bool) -> Value {
         };
         answers.insert(q.id.clone(), a);
     }
+    if j.api == DecisionApi::Decisions {
+        // the same answers, each in the Decisions API's shape, by its name in a list
+        let list: Vec<Value> = j
+            .questions
+            .iter()
+            .enumerate()
+            .map(|(i, q)| {
+                let a = &answers[&q.id];
+                if refused && i == 0 {
+                    return json!({ "type": "refusal", "name": q.id });
+                }
+                match q.kind {
+                    QuestionKind::Choice => {
+                        let probabilities: Vec<Value> = q.options.iter().map(|(o, _)| json!({ "value": o, "probability": a["probabilities"][o] })).collect();
+                        json!({ "type": "choice", "name": q.id, "choice": a["choice"], "probabilities": probabilities, "confidence": a["confidence"] })
+                    }
+                    QuestionKind::Score => {
+                        let probabilities: Vec<Value> = q.options.iter().enumerate().map(|(i, (o, _))| json!({ "value": i, "label": o, "probability": a["probabilities"][&i.to_string()] })).collect();
+                        json!({ "type": "score", "name": q.id, "score": a["score"], "probabilities": probabilities, "confidence": a["confidence"] })
+                    }
+                    QuestionKind::Noul => json!({ "type": "predicate", "name": q.id, "probability": a["noul"] }),
+                }
+            })
+            .collect();
+        return json!({
+            "model": j.model,
+            "answers": list,
+            "usage": { "input_tokens": 120, "input_tokens_details": { "cached_tokens": 0, "cache_write_tokens": 0 }, "output_tokens": 0, "output_tokens_details": { "reasoning_tokens": 0 }, "total_tokens": 120 }
+        });
+    }
     json!({ "model": j.model, "answers": answers, "usage": { "input_tokens": 120, "output_tokens": 20 } })
 }
 
@@ -474,14 +562,30 @@ pub fn jev_spec(task: &TaskDef, j: &Jev) -> Value {
     if let Some((at, error)) = &j.floor {
         spec["floor"] = json!({ "at": at, "error": error, "cause": jev_low_cause(task) });
     }
+    // the Decisions API's answers come in a list, and any of them may be a refusal
+    if let Some(error) = j.refusal_error() {
+        spec["api"] = json!("decisions");
+        spec["refusal"] = json!({ "error": error, "cause": jev_refused_cause(task) });
+    }
     spec
 }
 
-/// What a Jev task's call fails with when Jev is less sure of an answer than the task asks: the
-/// cause beside the error `confidence … else <error>` names, the same on every target.
+/// What a decision task's call fails with when the model is less sure of an answer than the task
+/// asks: the cause beside the error `confidence … else <error>` names, the same on every target.
 pub fn jev_low_cause(task: &TaskDef) -> String {
-    let floor = task.jev().and_then(|j| j.floor.as_ref()).map(|(f, _)| *f).unwrap_or(0.0);
-    format!("Jev is less sure of an answer of {} than {floor}", task.name)
+    let j = task.jev();
+    let floor = j.and_then(|j| j.floor.as_ref()).map(|(f, _)| *f).unwrap_or(0.0);
+    match j.map(|j| (j.api, j.url.is_some())) {
+        Some((DecisionApi::SystemOne, false)) | None => format!("Jev is less sure of an answer of {} than {floor}", task.name),
+        Some(_) => format!("the model is less sure of an answer of {} than {floor}", task.name),
+    }
+}
+
+/// What a `jev openai` task's call fails with when the model refuses one of its questions: the
+/// cause beside the error `refusal else <error>` names (`Dandori.Refused` without it), the same on
+/// every target.
+pub fn jev_refused_cause(task: &TaskDef) -> String {
+    format!("the model refused to answer a question of {}", task.name)
 }
 
 /// What an agent task answers in (`answer_schema`).

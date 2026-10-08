@@ -134,7 +134,7 @@ pub fn generate(m: &Model) -> Vec<Value> {
                 }
                 // Jev's response, whose answers read as the value chosen: as sure as the task asks, or less
                 if let Some(j) = a.get("jev").and_then(|t| t.as_u64()).and_then(|t| m.tasks[t as usize].jev()) {
-                    return json!({ "ok": render::jev_wire(j, &filled["ok"], a.get("low") == Some(&json!(true))) });
+                    return json!({ "ok": render::jev_wire(j, &filled["ok"], a.get("low") == Some(&json!(true)), a.get("refused") == Some(&json!(true))) });
                 }
                 // a rule's service writes the record chosen as protobuf's JSON: zero values left out, numbers as strings
                 if let Some(c) = a.get("rule").and_then(|r| r.as_u64()).and_then(|r| m.rules[r as usize].connect.as_ref()) {
@@ -1015,6 +1015,8 @@ impl<'a> Ex<'a> {
             Cancelled,
             /// Jev's answer, less sure than the task asks: the task's error, from an answer
             Low(String),
+            /// the Decisions API's answer with a question refused: the task's refusal error
+            Refused(String),
         }
         let mut ways: Vec<(String, Way)> = Vec::new();
         let case = match target {
@@ -1092,6 +1094,11 @@ impl<'a> Ex<'a> {
             Callee::Task(t) => m.tasks[*t].jev().and_then(|j| j.floor.as_ref()).map(|(_, e)| e.clone()),
             Callee::Rule(_) => None,
         };
+        // a `jev openai` task's error for a question the model refuses
+        let refusal = match callee {
+            Callee::Task(t) => m.tasks[*t].jev().and_then(|j| j.refusal_error()).map(String::from),
+            Callee::Rule(_) => None,
+        };
         for h in handlers {
             let kind = match h.errors.first() {
                 Some(HErr::Declared(n)) => n.clone(),
@@ -1102,6 +1109,8 @@ impl<'a> Ex<'a> {
             if !ways.iter().any(|(l, _)| *l == label) {
                 if floor.as_deref() == Some(kind.as_str()) {
                     ways.push((label, Way::Low(kind)));
+                } else if refusal.as_deref() == Some(kind.as_str()) {
+                    ways.push((label, Way::Refused(kind)));
                 } else {
                     ways.push((label, Way::Err(kind, None)));
                 }
@@ -1111,6 +1120,12 @@ impl<'a> Ex<'a> {
             // the error nothing at the call takes, or `on failure` takes
             if !ways.iter().any(|(l, _)| *l == format!("on:{e}")) {
                 ways.push((format!("less sure:{e}"), Way::Low(e.clone())));
+            }
+        }
+        if let Some(e) = &refusal {
+            // the same for a refusal: its own error, or `Dandori.Refused` that `on failure` takes
+            if !ways.iter().any(|(l, _)| *l == format!("on:{e}")) {
+                ways.push((format!("refused:{e}"), Way::Refused(e.clone())));
             }
         }
         let caught_all = handlers.iter().any(|h| h.errors.contains(&HErr::Failure));
@@ -1229,6 +1244,12 @@ impl<'a> Ex<'a> {
                 // not a value the variable may hold already, so that a target that keeps it shows
                 let v = self.unlike(result_ty.as_ref().unwrap_or(&Ty::Json), "value", m.answer_range(callee));
                 self.answers.push(json!({ "ok": v, "jev": jev_task, "low": true }));
+                self.take_error(callee, &kind, &kind, handlers)
+            }
+            Way::Refused(kind) => {
+                // the other answers are there, and not what the variable may hold already
+                let v = self.unlike(result_ty.as_ref().unwrap_or(&Ty::Json), "value", m.answer_range(callee));
+                self.answers.push(json!({ "ok": v, "jev": jev_task, "refused": true }));
                 self.take_error(callee, &kind, &kind, handlers)
             }
             Way::Recased(st) => {

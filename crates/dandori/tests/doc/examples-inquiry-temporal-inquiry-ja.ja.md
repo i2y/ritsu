@@ -1,6 +1,6 @@
 # 問い合わせ v1
 
-お客さまの問い合わせの種類を Jev が選び、その確信度も返す。エージェントは問い合わせを読んで注文番号と要点を取り出し、種類も読む。Jev が種類に十分な確信を持てないときは、エージェントが読んだ種類を使う。受け持つ窓口と最初の返事までの時間は規則が決め、返事の下書きは別のエージェントが書き、窓口のシステムに起票する。選ぶことは Jev が、読むことと書くことはエージェント（読むのは会社が自分で動かしているモデル、書くのは Claude）が、決めることは規則が受け持つ。Temporal 向けの版：Jev とエージェントは生成したアクティビティで、Jev は TypeSafe の API キー（TYPESAFE_API_KEY）で呼び、読み取りは Open Responses を話す会社の Ollama に（`url`）、下書きはワーカーが持つ鍵で Claude に送る。規則はワークフローと同じワーカーでローカルアクティビティとして動き、その結果はマーカーとして履歴に残る。起票は自分で書くアクティビティ
+お客さまの問い合わせの種類を判断のモデルが選び、その確信度も返す。エージェントは問い合わせを読んで注文番号と要点を取り出し、種類も読む。判断のモデルが種類に十分な確信を持てないときは、エージェントが読んだ種類を使う。受け持つ窓口と最初の返事までの時間は規則が決め、返事の下書きは別のエージェントが書き、窓口のシステムに起票する。選ぶことは判断のモデルが、読むことと書くことはエージェントが、決めることは規則が受け持つ（選ぶのと読むのは会社が自分で動かしているモデル、書くのは Claude）。Temporal 向けの版：判断とエージェントは生成したアクティビティで、種類は System One の API（TypeSafe の Jev の API）を話すサーバーに尋ね（`url`。この例では会社の Ollama）、読み取りは Open Responses を話すサーバーに（`url`。同じ Ollama）、下書きはワーカーが持つ鍵で Claude に送る。規則はワークフローと同じワーカーでローカルアクティビティとして動き、その結果はマーカーとして履歴に残る。起票は自分で書くアクティビティ
 
 `examples/inquiry/temporal/inquiry.ja.flow` を `dandori doc` で描いたものです。入力は `問い合わせ: 問い合わせ`、出力は `チケットID: string`・`窓口: 振り分け.窓口` です。
 
@@ -12,7 +12,7 @@ flowchart TD
     s1["読み = 読み取る(…)<br>agent · gpt-oss:20b · http://ollama.internal:11434/v1<br>retry 2 times every 10 seconds · timeout 1 minute"]
     s2["手作業 = 起票する(…)<br>自分で書くタスク<br>retry 2 times every 5 seconds"]
     s3(["succeed チケットID = 手作業.チケットID, 窓口 = 総合"])
-    s4["種類 = 種類を選ぶ(…)<br>jev · jev-1.13.0 · confidence 0.8 else 迷い<br>retry 2 times every 1 second · timeout 10 seconds"]
+    s4["種類 = 種類を選ぶ(…)<br>jev · nimble:9b-q4_K_M · http://ollama.internal:11434/v1 · confidence 0.8 else 迷い<br>retry 2 times every 1 second · timeout 10 seconds"]
     s5["let 種類 = 読み.種類"]
     s6[["判定 = 振り分け(…)<br>rule 問い合わせの振り分け.rule · local"]]
     s7["let 件名 = #quot;{種類}の問い合わせ#quot;"]
@@ -49,12 +49,12 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 62 | `読み = 読み取る(…)` | `agent · gpt-oss:20b · http://ollama.internal:11434/v1` | 10 秒おきに 2 回（failure・timeout） | 1 分 | `timeout`・`failure` → 63 行目 |
-| 64 | `手作業 = 起票する(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
-| 67 | `種類 = 種類を選ぶ(…)` | `jev · jev-1.13.0 · confidence 0.8 else 迷い` | 1 秒おきに 2 回（failure・timeout） | 10 秒 | `迷い`・`timeout`・`failure` → 68 行目 |
-| 69 | `判定 = 振り分け(…)` | 規則 `問い合わせの振り分け.rule`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
-| 74 | `下書き = 下書きする(…)` | `agent claude · claude-sonnet-5` | — | 1 分 | `timeout`・`failure` → 75 行目 |
-| 76 | `票 = 起票する(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 66 | `読み = 読み取る(…)` | `agent · gpt-oss:20b · http://ollama.internal:11434/v1` | 10 秒おきに 2 回（failure・timeout） | 1 分 | `timeout`・`failure` → 67 行目 |
+| 68 | `手作業 = 起票する(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 71 | `種類 = 種類を選ぶ(…)` | `jev · nimble:9b-q4_K_M · http://ollama.internal:11434/v1 · confidence 0.8 else 迷い` | 1 秒おきに 2 回（failure・timeout） | 10 秒 | `迷い`・`timeout`・`failure` → 72 行目 |
+| 73 | `判定 = 振り分け(…)` | 規則 `問い合わせの振り分け.rule`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 78 | `下書き = 下書きする(…)` | `agent claude · claude-sonnet-5` | — | 1 分 | `timeout`・`failure` → 79 行目 |
+| 80 | `票 = 起票する(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 
@@ -62,8 +62,8 @@ flowchart TD
 
 | 行 | 終わり方 |
 |---:|---|
-| 65 | `succeed チケットID = 手作業.チケットID, 窓口 = 総合` |
-| 77 | `succeed チケットID = 票.チケットID, 窓口 = 判定.窓口` |
+| 69 | `succeed チケットID = 手作業.チケットID, 窓口 = 総合` |
+| 81 | `succeed チケットID = 票.チケットID, 窓口 = 判定.窓口` |
 
 ## 規則
 

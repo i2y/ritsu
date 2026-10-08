@@ -1,6 +1,6 @@
 # inquiry v1
 
-Jev picks the kind of a customer's inquiry and says how sure it is; an agent reads the inquiry for an order number and its point, and for its kind too, which the flow takes when Jev is not sure enough of its own. A rule decides the desk that takes it and how soon it is answered; another agent drafts the first reply; and a ticket goes into the desk's system. Jev picks, agents read and write (a model the company runs itself reads, Claude writes), and the rule decides. Written for Temporal: Jev and the agents are activities dandori writes, Jev called with TypeSafe's key (TYPESAFE_API_KEY), the reading sent to the company's Ollama, which serves Open Responses (`url`), and the draft to Claude with the key the worker has; the rule runs in the worker of the workflow as a local activity, its answer kept in the history as a marker; and filing the ticket is an activity you write
+A decision model picks the kind of a customer's inquiry and says how sure it is; an agent reads the inquiry for an order number and its point, and for its kind too, which the flow takes when the decision model is not sure enough of its own. A rule decides the desk that takes it and how soon it is answered; another agent drafts the first reply; and a ticket goes into the desk's system. The decision model picks, agents read and write (models the company runs itself pick and read, Claude writes), and the rule decides. Written for Temporal: the decision and the agents are activities dandori writes; the kind is asked at a server of the System One API, the API of TypeSafe's Jev (`url`; here the company's Ollama), the reading is sent to a server of Open Responses (`url`; the same Ollama), and the draft to Claude with the key the worker has; the rule runs in the worker of the workflow as a local activity, its answer kept in the history as a marker; and filing the ticket is an activity you write
 
 `examples/inquiry/temporal/inquiry.flow` を `dandori doc` で描いたものです。入力は `inquiry: Inquiry`、出力は `ticket_id: string`・`desk: routing.desk` です。
 
@@ -12,7 +12,7 @@ flowchart TD
     s1["reading = read_inquiry(…)<br>agent · gpt-oss:20b · http://ollama.internal:11434/v1<br>retry 2 times every 10 seconds · timeout 1 minute"]
     s2["by_hand = file_ticket(…)<br>自分で書くタスク<br>retry 2 times every 5 seconds"]
     s3(["succeed ticket_id = by_hand.ticket_id, desk = general"])
-    s4["kind = pick_kind(…)<br>jev · jev-1.13.0 · confidence 0.8 else unsure<br>retry 2 times every 1 second · timeout 10 seconds"]
+    s4["kind = pick_kind(…)<br>jev · nimble:9b-q4_K_M · http://ollama.internal:11434/v1 · confidence 0.8 else unsure<br>retry 2 times every 1 second · timeout 10 seconds"]
     s5["let kind = reading.kind"]
     s6[["decision = routing(…)<br>rule inquiry_routing.rule · local"]]
     s7["let subject = #quot;An inquiry about {kind}#quot;"]
@@ -49,12 +49,12 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 62 | `reading = read_inquiry(…)` | `agent · gpt-oss:20b · http://ollama.internal:11434/v1` | 10 秒おきに 2 回（failure・timeout） | 1 分 | `timeout`・`failure` → 63 行目 |
-| 64 | `by_hand = file_ticket(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
-| 67 | `kind = pick_kind(…)` | `jev · jev-1.13.0 · confidence 0.8 else unsure` | 1 秒おきに 2 回（failure・timeout） | 10 秒 | `unsure`・`timeout`・`failure` → 68 行目 |
-| 69 | `decision = routing(…)` | 規則 `inquiry_routing.rule`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
-| 74 | `draft = draft_reply(…)` | `agent claude · claude-sonnet-5` | — | 1 分 | `timeout`・`failure` → 75 行目 |
-| 76 | `t = file_ticket(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 66 | `reading = read_inquiry(…)` | `agent · gpt-oss:20b · http://ollama.internal:11434/v1` | 10 秒おきに 2 回（failure・timeout） | 1 分 | `timeout`・`failure` → 67 行目 |
+| 68 | `by_hand = file_ticket(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 71 | `kind = pick_kind(…)` | `jev · nimble:9b-q4_K_M · http://ollama.internal:11434/v1 · confidence 0.8 else unsure` | 1 秒おきに 2 回（failure・timeout） | 10 秒 | `unsure`・`timeout`・`failure` → 72 行目 |
+| 73 | `decision = routing(…)` | 規則 `inquiry_routing.rule`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 78 | `draft = draft_reply(…)` | `agent claude · claude-sonnet-5` | — | 1 分 | `timeout`・`failure` → 79 行目 |
+| 80 | `t = file_ticket(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 
@@ -62,8 +62,8 @@ flowchart TD
 
 | 行 | 終わり方 |
 |---:|---|
-| 65 | `succeed ticket_id = by_hand.ticket_id, desk = general` |
-| 77 | `succeed ticket_id = t.ticket_id, desk = decision.desk` |
+| 69 | `succeed ticket_id = by_hand.ticket_id, desk = general` |
+| 81 | `succeed ticket_id = t.ticket_id, desk = decision.desk` |
 
 ## 規則
 

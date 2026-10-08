@@ -12,7 +12,7 @@
 
 use dandori::diag::Lang;
 use dandori::interp::CallInfo;
-use dandori::model::{Callee, Model, Platform, Via, TK};
+use dandori::model::{Callee, DecisionApi, Model, Platform, Via, TK};
 use dandori::render::View;
 use serde_json::{json, Value};
 use ritsu_testkit::{need, ready, skip, Need, TempDir};
@@ -586,10 +586,10 @@ fn transport_spec(m: &Model, p: Platform) -> (Vec<Value>, Vec<Value>) {
                 let errors: serde_json::Map<String, Value> = t.errors.iter().filter_map(|e| e.status.map(|s| (e.name.clone(), json!(s)))).collect();
                 http.push(json!({ "method": method, "url": url, "errors": errors }));
             }
-            // every Jev task sends to one URL; an error's status is the task's that declares it
-            Some(Via::Jev(_)) => {
+            // the decision tasks of one API send to one URL; an error's status is the task's that declares it
+            Some(Via::Jev(j)) => {
                 let errors: serde_json::Map<String, Value> = t.errors.iter().filter_map(|e| e.status.map(|s| (e.name.clone(), json!(s)))).collect();
-                http.push(json!({ "method": "POST", "url": dandori::model::JEV_URL, "errors": errors }));
+                http.push(json!({ "method": "POST", "url": j.endpoint(), "errors": errors }));
             }
             Some(Via::Aws { service, action }) => {
                 let errors: serde_json::Map<String, Value> = t.errors.iter().map(|e| (e.name.clone(), json!(e.exception.clone().unwrap_or_else(|| e.name.clone())))).collect();
@@ -1384,12 +1384,12 @@ fn wire_cases(m: &Model) -> Vec<Value> {
             let kind = ans.get("error").and_then(|e| e.as_str());
             let case = if let Some(method) = call.get("http").and_then(|x| x.as_str()) {
                 let url = call["url"].as_str().unwrap();
-                // a Jev task's call: every one goes to TypeSafe's URL, and the one that declares the error names its status
-                let jev = url == dandori::model::JEV_URL;
+                // a decision task's call: the tasks of one API go to one URL, and the one that declares the error names its status
+                let jevs: Vec<&dandori::model::TaskDef> = m.tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Jev(j)) if j.endpoint() == url)).collect();
+                let jev = !jevs.is_empty();
                 // a rule called at its Connect service sends a POST of its own: no task declares an error for it, so any failure is a 500
                 let service = m.rules.iter().any(|r| r.connect.as_ref().is_some_and(|c| method == "POST" && c.url == url));
                 let task = if jev {
-                    let jevs: Vec<&dandori::model::TaskDef> = m.tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Jev(_)))).collect();
                     jevs.iter().find(|t| kind.is_some_and(|k| t.errors.iter().any(|e| e.name == k))).or(jevs.first()).copied()
                 } else if service {
                     None
@@ -1399,8 +1399,11 @@ fn wire_cases(m: &Model) -> Vec<Value> {
                 let form = task.is_some_and(|t| matches!(t.via(p), Some(Via::Http { form: true, .. })));
                 let mut request = call.clone();
                 request["form"] = json!(form);
-                if jev {
-                    request["typesafe"] = json!(true);
+                // whose key the default Transport adds: TypeSafe's, OpenAI's, or none at another server
+                match task.and_then(|t| t.jev()).map(|j| j.key()) {
+                    Some(Some(k)) => request[k] = json!(true),
+                    Some(None) => request["keyless"] = json!(true),
+                    None => {}
                 }
                 let reply = match kind {
                     None => json!({ "status": 200, "body": ans["ok"] }),
@@ -1510,8 +1513,8 @@ fn default_transports_send_what_the_calls_say() {
             std::fs::write(&cases_file, serde_json::to_string(&cases).unwrap()).unwrap();
             let mut by_lang = Vec::new();
             for (lang, out) in [
-                ("TypeScript", Command::new("node").arg(wire.join("check.mjs")).arg(dir.join(dandori::render::ident(&m.name))).arg(&cases_file).arg(dir.join("ts.json")).arg(&address).env("TYPESAFE_API_KEY", "wire-typesafe-key").output().unwrap()),
-                ("Python", Command::new(&python).arg(wire.join("check.py")).arg(dir.join(dandori::temporal_py::package(&m))).arg(&cases_file).arg(dir.join("py.json")).arg(&address).env("TYPESAFE_API_KEY", "wire-typesafe-key").output().unwrap()),
+                ("TypeScript", Command::new("node").arg(wire.join("check.mjs")).arg(dir.join(dandori::render::ident(&m.name))).arg(&cases_file).arg(dir.join("ts.json")).arg(&address).env("TYPESAFE_API_KEY", "wire-typesafe-key").env("OPENAI_API_KEY", "wire-openai-key").output().unwrap()),
+                ("Python", Command::new(&python).arg(wire.join("check.py")).arg(dir.join(dandori::temporal_py::package(&m))).arg(&cases_file).arg(dir.join("py.json")).arg(&address).env("TYPESAFE_API_KEY", "wire-typesafe-key").env("OPENAI_API_KEY", "wire-openai-key").output().unwrap()),
             ] {
                 assert!(out.status.success(), "{}: the {lang} check failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
                 let results: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(dir.join(if lang == "Python" { "py.json" } else { "ts.json" })).unwrap()).unwrap();
@@ -1546,9 +1549,16 @@ fn default_transports_send_what_the_calls_say() {
                                 assert_eq!(got["headers"][k.to_lowercase()], *v, "{}: the header {k}", at());
                             }
                             assert_eq!(got["headers"]["x-dandori-check"], json!("wire"), "{}: the headers the options add", at());
-                            // Jev's call carries TypeSafe's key, from TYPESAFE_API_KEY
+                            // Jev's call carries TypeSafe's key, from TYPESAFE_API_KEY, and the Decisions API's
+                            // OpenAI's, from OPENAI_API_KEY; neither goes to another server
                             if req["typesafe"] == json!(true) {
                                 assert_eq!(got["headers"]["authorization"], json!("Bearer wire-typesafe-key"), "{}: TypeSafe's key", at());
+                            }
+                            if req["openai"] == json!(true) {
+                                assert_eq!(got["headers"]["authorization"], json!("Bearer wire-openai-key"), "{}: OpenAI's key", at());
+                            }
+                            if req["keyless"] == json!(true) {
+                                assert!(got["headers"]["authorization"].is_null(), "{}: no key goes to another server: {}", at(), got["headers"]);
                             }
                             let want_body = if req["body"].is_null() {
                                 Value::Null
@@ -1607,7 +1617,7 @@ fn default_transports_send_what_the_calls_say() {
             // writes an object's keys, and a query's and a form's pairs, in the order of their names
             if let Some(go) = go_runner() {
                 let results_file = dir.join("go.json");
-                let out = Command::new(&go.bin).arg("--wire").arg(go.key(&rel(&f))).arg(&cases_file).arg(&results_file).arg(&address).env("TYPESAFE_API_KEY", "wire-typesafe-key").output().unwrap();
+                let out = Command::new(&go.bin).arg("--wire").arg(go.key(&rel(&f))).arg(&cases_file).arg(&results_file).arg(&address).env("TYPESAFE_API_KEY", "wire-typesafe-key").env("OPENAI_API_KEY", "wire-openai-key").output().unwrap();
                 assert!(out.status.success(), "{}: the Go check failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
                 let results: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
                 let sorted = |v: &Value| -> Value {
@@ -1630,6 +1640,12 @@ fn default_transports_send_what_the_calls_say() {
                             assert_eq!(got["headers"]["x-dandori-check"], json!("wire"), "{}: the headers the options add", at());
                             if c["request"]["typesafe"] == json!(true) {
                                 assert_eq!(got["headers"]["authorization"], json!("Bearer wire-typesafe-key"), "{}: TypeSafe's key", at());
+                            }
+                            if c["request"]["openai"] == json!(true) {
+                                assert_eq!(got["headers"]["authorization"], json!("Bearer wire-openai-key"), "{}: OpenAI's key", at());
+                            }
+                            if c["request"]["keyless"] == json!(true) {
+                                assert!(got["headers"]["authorization"].is_null(), "{}: no key goes to another server: {}", at(), got["headers"]);
                             }
                             if c["request"]["form"] == json!(true) {
                                 assert_eq!(sorted(&got["body"]), sorted(&want["body"]), "{}: the form", at());
@@ -2997,7 +3013,8 @@ fn agents_sdk_is_asked_what_step_functions_asks() {
 /// the default Transport of TypeScript, Python and Go: for each such agent, the arguments of the first call
 /// the scenarios answer, with the model swapped for one Ollama has. Each answer must fit the
 /// task's type. Skipped when no Ollama answers at DANDORI_OLLAMA (http://127.0.0.1:11434) or it
-/// has no model; DANDORI_OLLAMA_MODEL picks the model, else the smallest there is.
+/// has no model that writes text; DANDORI_OLLAMA_MODEL picks the model, else the smallest that
+/// writes text (`completion` among its capabilities: a decision model such as tev1 writes none).
 #[test]
 fn open_responses_agents_answer_on_ollama() {
     if !need(Need::Ollama) {
@@ -3014,10 +3031,10 @@ fn open_responses_agents_answer_on_ollama() {
     };
     let mut models: Vec<(u64, String)> = tags["models"].as_array().into_iter().flatten().filter_map(|m| Some((m["size"].as_u64().unwrap_or(u64::MAX), m["name"].as_str()?.to_string()))).collect();
     models.sort();
-    let model = match std::env::var("DANDORI_OLLAMA_MODEL").ok().or(models.first().map(|m| m.1.clone())) {
+    let model = match std::env::var("DANDORI_OLLAMA_MODEL").ok().or_else(|| models.iter().find(|m| ollama_can(&base, &m.1, "completion")).map(|m| m.1.clone())) {
         Some(m) => m,
         None => {
-            skip(&format!("Ollama at {base} has no model; pull one, or name one with DANDORI_OLLAMA_MODEL"));
+            skip(&format!("Ollama at {base} has no model that writes text; pull one, or name one with DANDORI_OLLAMA_MODEL"));
             return;
         }
     };
@@ -3115,9 +3132,8 @@ fn open_responses_agents_answer_on_ollama() {
 }
 
 /// Every Jev task of the examples and of tests/flows, asked of the real Jev when TYPESAFE_API_KEY is
-/// set: the first call of each that the scenarios make, sent to TypeSafe's API by the default
-/// Transport of TypeScript, of Python and of Go, which add the key, and read with their io.jev
-/// (Go's ddJev). The
+/// set: the first call of each, as the scenarios make it, through the default Transport of
+/// TypeScript, Python and Go, read as each language reads it (io.jev, io.jev, and Go's ddJev). The
 /// response must be the API's shape, with an answer to every question, and it must read into the
 /// task's type, or fail the call with the task's own error when Jev is less sure than the task
 /// asks. What Jev answered, and how sure it was, is printed. It costs next to nothing: the API
@@ -3131,62 +3147,177 @@ fn jev_tasks_answer_on_typesafe() {
         skip("TYPESAFE_API_KEY is not set; the Jev tasks are not sent to TypeSafe");
         return;
     }
+    let sent = decisions_for_real(&RealDecisions {
+        at: "TypeSafe",
+        pick: &|j| j.api == DecisionApi::SystemOne && j.url.is_none(),
+        url: &|j| j.endpoint(),
+        key: Some("typesafe"),
+        model: &|j| j.model.clone(),
+    });
+    assert!(sent > 0, "no Jev task was sent to TypeSafe");
+}
+
+/// The decision tasks on a server of the System One API (`jev` with `url`), sent for real to
+/// Ollama on this machine (0.35 or later serves the API at /v1/systemone): the first call of each
+/// task, as the scenarios make it, through the default Transport of TypeScript, Python and Go,
+/// without a key. The model is the one DANDORI_OLLAMA_DECISIONS names, else the smallest decision
+/// model Ollama has (`decision` among its capabilities; `tev1:0.8b` is the smallest there is).
+/// Skipped when no Ollama answers at DANDORI_OLLAMA (http://127.0.0.1:11434), or it has no decision
+/// model; the test lets the model go when it is done, unless it was loaded before.
+#[test]
+fn decision_tasks_answer_on_ollama() {
+    if !need(Need::Ollama) {
+        return;
+    }
+    let base = std::env::var("DANDORI_OLLAMA").unwrap_or_else(|_| "http://127.0.0.1:11434".into());
+    let get = |path: &str| -> Option<Value> {
+        let out = Command::new("curl").args(["-s", "-m", "3", &format!("{base}{path}")]).output().ok()?;
+        serde_json::from_slice(&out.stdout).ok()
+    };
+    let (Some(_), Some(tags)) = (get("/api/version"), get("/api/tags")) else {
+        skip(&format!("no Ollama answers at {base}; the decision tasks on a server of the System One API are not sent to a real one"));
+        return;
+    };
+    let mut models: Vec<(u64, String)> = tags["models"].as_array().into_iter().flatten().filter_map(|m| Some((m["size"].as_u64().unwrap_or(u64::MAX), m["name"].as_str()?.to_string()))).collect();
+    models.sort();
+    let Some(wanted) = std::env::var("DANDORI_OLLAMA_DECISIONS").ok().or_else(|| models.iter().find(|m| ollama_can(&base, &m.1, "decision")).map(|m| m.1.clone())) else {
+        skip(&format!("Ollama at {base} has no decision model; pull one (`ollama pull tev1:0.8b`), or name one with DANDORI_OLLAMA_DECISIONS"));
+        return;
+    };
+    struct LetGo(Option<(String, String)>);
+    impl Drop for LetGo {
+        fn drop(&mut self) {
+            if let Some((base, model)) = &self.0 {
+                let _ = Command::new("curl").args(["-s", "-m", "10", &format!("{base}/api/generate"), "-d", &json!({ "model": model, "keep_alive": 0 }).to_string()]).output();
+            }
+        }
+    }
+    let loaded = get("/api/ps").is_some_and(|ps| ps["models"].as_array().into_iter().flatten().any(|x| x["name"].as_str() == Some(wanted.as_str())));
+    let _let_go = LetGo((!loaded).then(|| (base.clone(), wanted.clone())));
+    let sent = decisions_for_real(&RealDecisions {
+        at: "Ollama",
+        pick: &|j| j.api == DecisionApi::SystemOne && j.url.is_some(),
+        url: &|_| format!("{base}/v1/systemone"),
+        key: None,
+        model: &|_| wanted.clone(),
+    });
+    assert!(sent > 0, "no decision task was sent to Ollama");
+}
+
+/// The tasks of OpenAI's Decisions API (`jev openai`), sent for real when OPENAI_API_KEY is set:
+/// the first call of each, as the scenarios make it, through the default Transport of TypeScript,
+/// Python and Go, which adds OpenAI's key; a task that names another server (`url`) goes to
+/// OpenAI's here. It costs next to nothing: the API charges $0.10 a million input tokens, and a
+/// call here takes a few hundred. CI has no key, and does not send.
+#[test]
+fn decision_tasks_answer_on_openai() {
+    if !need(Need::OpenAi) {
+        return;
+    }
+    if std::env::var("OPENAI_API_KEY").map_or(true, |k| k.is_empty()) {
+        skip("OPENAI_API_KEY is not set; the tasks of the Decisions API are not sent to OpenAI");
+        return;
+    }
+    let sent = decisions_for_real(&RealDecisions {
+        at: "OpenAI",
+        pick: &|j| j.api == DecisionApi::Decisions,
+        url: &|_| dandori::model::DECISIONS_URL.to_string(),
+        key: Some("openai"),
+        model: &|j| j.model.clone(),
+    });
+    assert!(sent > 0, "no task of the Decisions API was sent to OpenAI");
+}
+
+/// Whether the model Ollama at `base` has can do `what`, by the capabilities `/api/show` lists
+/// (`completion` for a model that writes text, `decision` for one that answers the System One API).
+fn ollama_can(base: &str, model: &str, what: &str) -> bool {
+    let out = Command::new("curl").args(["-s", "-m", "5", &format!("{base}/api/show"), "-d", &json!({ "model": model }).to_string()]).output();
+    out.ok()
+        .and_then(|o| serde_json::from_slice::<Value>(&o.stdout).ok())
+        .is_some_and(|v| v["capabilities"].as_array().is_some_and(|c| c.iter().any(|x| x == what)))
+}
+
+/// Where the real tests of the decision tasks send which of them: the tasks `pick` takes, to
+/// `url`, with the key the default Transport adds and the model.
+struct RealDecisions<'a> {
+    at: &'a str,
+    pick: &'a dyn Fn(&dandori::model::Jev) -> bool,
+    url: &'a dyn Fn(&dandori::model::Jev) -> String,
+    key: Option<&'a str>,
+    model: &'a dyn Fn(&dandori::model::Jev) -> String,
+}
+
+/// The first call of each decision task `r` picks, of the examples and of tests/flows, sent for real
+/// from the default Transport of TypeScript, Python and Go, and read as each language reads it. The
+/// response must have an answer to every question, and read into the task's type, or fail the call
+/// with the task's own error: less sure than the task asks, or a question refused. What the model
+/// answered, and how sure it was, is printed. How many requests went.
+fn decisions_for_real(r: &RealDecisions) -> usize {
     let python = Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success());
     let mut sent = 0;
     for f in runnable() {
         let (_, checked) = check_file(&f).unwrap();
         let m = checked.model.expect("the flows pass check");
-        // the first call of each Jev task, as the scenarios make it
+        // the first call of each such task, as the scenarios make it
         let mut cases = Vec::new();
         let mut tasks: Vec<&dandori::model::TaskDef> = Vec::new();
         for sc in dandori::scenarios::generate(&m) {
-            let r = dandori::interp::run(&m, &sc, View::Temporal).unwrap();
-            for s in r["steps"].as_array().unwrap() {
+            let run = dandori::interp::run(&m, &sc, View::Temporal).unwrap();
+            for s in run["steps"].as_array().unwrap() {
                 let call = &s["call"];
-                if call["url"].as_str() != Some(dandori::model::JEV_URL) {
-                    continue;
-                }
-                let Some(task) = m.tasks.iter().find(|t| t.jev().is_some_and(|j| dandori::render::jev_questions(j) == call["body"]["questions"])) else { continue };
+                let Some(task) = m.tasks.iter().find(|t| t.jev().is_some_and(|j| (r.pick)(j) && call["url"].as_str() == Some(j.endpoint().as_str()) && dandori::render::jev_questions(j) == call["body"]["questions"])) else { continue };
                 if tasks.iter().any(|t| t.name == task.name) {
                     continue;
                 }
-                cases.push(json!({ "request": call, "spec": dandori::render::jev_spec(task, task.jev().unwrap()) }));
+                let j = task.jev().unwrap();
+                let mut request = call.clone();
+                request["url"] = json!((r.url)(j));
+                request["body"]["model"] = json!((r.model)(j));
+                cases.push(json!({ "request": request, "spec": dandori::render::jev_spec(task, j), "key": r.key }));
                 tasks.push(task);
             }
         }
         if cases.is_empty() {
             continue;
         }
-        let dir = scratch(&format!("typesafe-{}", key(&f)));
+        let dir = scratch(&format!("decisions-{}-{}", r.at.to_lowercase(), key(&f)));
         let cases_file = dir.join("cases.json");
         std::fs::write(&cases_file, serde_json::to_string(&cases).unwrap()).unwrap();
         let check = |lang: &str, results: &Path| {
             let got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(results).unwrap()).unwrap();
             for (g, t) in got.iter().zip(&tasks) {
                 let j = t.jev().unwrap();
-                let at = || format!("{}: `{}` at TypeSafe, from the default Transport in {lang}", rel(&f), t.name);
+                let at = || format!("{}: `{}` at {}, from the default Transport in {lang}", rel(&f), t.name, r.at);
                 assert_eq!(g["status"], json!(200), "{}: {}", at(), serde_json::to_string(&g["body"]).unwrap());
                 assert!(g["body"]["model"].is_string(), "{}: the response names no model: {}", at(), g["body"]);
+                // the answer to each question: by its id on the System One API, by its name in a list on the Decisions API
+                let answer = |id: &str| -> Value {
+                    match j.api {
+                        DecisionApi::SystemOne => g["body"]["answers"][id].clone(),
+                        DecisionApi::Decisions => g["body"]["answers"].as_array().into_iter().flatten().find(|a| a["name"] == json!(id)).cloned().unwrap_or(Value::Null),
+                    }
+                };
                 for q in &j.questions {
-                    assert!(g["body"]["answers"][&q.id].is_object(), "{}: no answer to `{}`: {}", at(), q.id, g["body"]);
+                    assert!(answer(&q.id).is_object(), "{}: no answer to `{}`: {}", at(), q.id, g["body"]);
                 }
-                match (&g["error"], j.floor.as_ref()) {
-                    (Value::Null, _) => assert!(
+                match &g["error"] {
+                    Value::Null => assert!(
                         dandori::render::value_fits(&m, &g["value"], t.result.as_ref().unwrap(), t.result_range),
-                        "{}: Jev's answer does not read into the task's type: {}",
+                        "{}: the answer does not read into the task's type: {}",
                         at(),
                         serde_json::to_string(g).unwrap()
                     ),
-                    (e, Some((_, error))) if e["kind"] == json!(error) => {}
-                    (e, _) => panic!("{}: reading the answer failed with {e}: {}", at(), g["body"]),
+                    e if j.floor.as_ref().is_some_and(|(_, error)| e["kind"] == json!(error)) => {}
+                    e if j.refusal_error().is_some_and(|error| e["kind"] == json!(error)) => {}
+                    e => panic!("{}: reading the answer failed with {e}: {}", at(), g["body"]),
                 }
-                // what Jev answered, for a person to look at
+                // what the model answered, for a person to look at
                 let sure: Vec<String> = j
                     .questions
                     .iter()
                     .map(|q| {
-                        let a = &g["body"]["answers"][&q.id];
-                        let said = a.get("choice").or(a.get("score")).or(a.get("noul")).cloned().unwrap_or(Value::Null);
+                        let a = answer(&q.id);
+                        let said = a.get("choice").or(a.get("score")).or(a.get("noul")).or(a.get("probability")).cloned().unwrap_or_else(|| a.get("type").cloned().unwrap_or(Value::Null));
                         match a.get("confidence") {
                             Some(c) => format!("{} {said} (confidence {c})", q.id),
                             None => format!("{} {said}", q.id),
@@ -3215,17 +3346,18 @@ fn jev_tasks_answer_on_typesafe() {
             check("Python", &results);
             sent += cases.len();
         } else {
-            skip("python3 is missing; the Jev tasks are not sent from Python");
+            skip(&format!("python3 is missing; the decision tasks are not sent to {} from Python", r.at));
         }
         if let Some(go) = go_runner() {
             let results = dir.join("results-go.json");
             let out = Command::new(&go.bin).arg("--jev").arg(go.key(&rel(&f))).arg(&cases_file).arg(&results).output().unwrap();
-            assert!(out.status.success(), "{}: the Go check of Jev failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+            assert!(out.status.success(), "{}: the Go check of the decision tasks failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
             check("Go", &results);
             sent += cases.len();
         }
     }
-    assert!(sent > 0, "no Jev task was sent to TypeSafe");
+    eprintln!("sent {sent} request(s) of the decision tasks to {}", r.at);
+    sent
 }
 
 /// rules.py of the Python builds — the activities for Temporal and the functions for

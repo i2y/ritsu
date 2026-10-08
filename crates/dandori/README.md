@@ -13,8 +13,9 @@ retries, and drives things like a Stripe PaymentIntent from state to state.
   runs is played against one reference interpreter, on every scenario the tests generate.
 - **Decisions come from outside the workflow.** A `.flow` branches only on what a rule or a task
   answered: an API, an agent (OpenAI's models, Claude, or any Open Responses endpoint) whose
-  answer comes back in a declared type, TypeSafe's Jev, which answers typed questions with how sure
-  it is, your own code, a person's approval. A decision that must
+  answer comes back in a declared type, a decision model that answers typed questions with how sure
+  it is (TypeSafe's Jev, any server of its System One API such as Ollama, or OpenAI's Decisions API),
+  your own code, a person's approval. A decision that must
   have no gaps can be a table in [rulec](https://github.com/i2y/ritsu/tree/main/crates/rulec), which proves it complete
   and free of overlaps, and a rule's state machine can be the type of the thing a workflow drives.
 - **Due dates and stock come from outside too.** A due date can be a date of koyomi's, checked on
@@ -172,7 +173,8 @@ prints dandori's findings as they are. A key in the shape a provider gives it, w
 the contracts mark secret (`debug_redact` in a `.proto`, `x-data-classification`,
 `x-sensitive-data` or `format: password` in an OpenAPI document, or `secret` after a type in the
 `.flow`) that the platform keeps in the history of a run (W904), or that a task sends to a party
-outside the project: a model's provider, Jev, a host named by its URL alone, an AWS service (E906,
+outside the project: a model's provider, the API of a decision model (Jev, OpenAI's Decisions API, a
+server that is not this machine), a host named by its URL alone, an AWS service (E906,
 an error). What is meant is written where it is: `plaintext "<why>"` where the URL is,
 `discloses <parameter> "<why>"` under the task, `history encrypted` under `workflow`, for which the
 Temporal code takes a payload codec and Argo Workflows is refused. A secret sent to another file of
@@ -185,7 +187,9 @@ the project is held to the map by `ritsu check` (its E905).
 hotel booking held to Stripe's OpenAPI document; an order in a warehouse's system, whose AWS version
 calls a rule at the rule's own Connect service; the fulfillment of an order, with a child flow, which
 implements a service of a `.proto` and takes the types of the warehouse's answers from the
-warehouse's `.proto`; an inquiry sorted by Jev and read and answered by agents; and an application
+warehouse's `.proto`; an inquiry sorted by a decision model (Jev, or on Temporal a model on the
+company's own server of the System One API, Ollama in the example) and read and answered by agents;
+and an application
 scored by Jev and, when a rule says so, approved by a person. The sixth, an invoice, is written once
 for every platform: it holds an order's goods in a book of chobo's until the payment is due by a date
 of koyomi's, then ships them once paid or puts them back

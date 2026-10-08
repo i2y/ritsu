@@ -5,7 +5,8 @@
 # transport.mjs, shared by temporal-python/run.py and pydantic-graph/run.py.
 #
 # spec["http"]: [ { method, url, errors: { <error>: <status> } } ]  (url with {placeholders}; the
-#   Jev tasks all send to one URL, and an error takes its status from the task that declares it)
+#   decision tasks of one API send to one URL, and an error takes its status from the task that
+#   declares it)
 # spec["aws"]:  [ { api: "<service>:<action>", errors: { <error>: <exception> }, keyParam } ]
 #
 # A callback task's submit hands on `callback_id` (in the Lambda payload, or in the SQS
@@ -14,8 +15,9 @@
 # the answer the scenario gives the callback.
 #
 # An agent answers {"answer": <the scenario's value>}, as the model would under the schema; its
-# failure is raised, as the Agents SDK raises a refusal. A Jev task's call is an HTTP request, whose
-# body is the scenario's answer (Jev's response); `typesafe`, which says it is one, is not written down.
+# failure is raised, as the Agents SDK raises a refusal. A decision task's call is an HTTP request, whose
+# body is the scenario's answer (the API's response); `typesafe` and `openai`, which say whose key it
+# takes, are not written down.
 #
 # A call that the scenario times out, or cancels the workflow during, goes to `run.hold(answer)`
 # when the runner has one: the runner keeps the call from answering until the platform times it
@@ -59,7 +61,7 @@ def make_transport(spec: dict[str, Any], run: Any) -> Any:
             return {"error": error_name(ans["error"]), "message": "scripted"}
 
         async def http(self, req: dict[str, Any]) -> dict[str, Any]:
-            ans = run.take({k: v for k, v in req.items() if k not in ("form", "typesafe")}, None)
+            ans = run.take({k: v for k, v in req.items() if k not in ("form", "typesafe", "openai")}, None)
             if held(ans):
                 return await run.hold(ans)
             if "ok" in ans:

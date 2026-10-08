@@ -34,7 +34,7 @@ warning[W902]: tests/fixtures/agents.flow:124:3: the agent `手元で深く読�
    124 |   url "http://ollama.internal:11434/v1"
   = Whoever is on the network between can read and change the requests, the answers, and any key in the headers.
   = Use https://. If the connection is protected another way (a service mesh, a private link), say so under the task with `plaintext "<why>"`.
-error[E007]: tests/fixtures/agents.flow:128:3: `url` says which server an agent's Open Responses API is on; this task has no `agent` (an HTTP task writes its URL after `http`)
+error[E007]: tests/fixtures/agents.flow:128:3: `url` says which server an agent's Open Responses API, or a decision model's (`jev`) API, is on; this task has neither `agent` nor `jev` (an HTTP task writes its URL after `http`)
    128 |   url "http://ollama.internal:11434/v1"
 error[E007]: tests/fixtures/agents.flow:133:3: `url` names a server of Open Responses (OpenAI's Responses API, as others serve it); a Claude agent is called on Anthropic's Messages API, which is not among them
    133 |   url "http://ollama.internal:11434"

@@ -4,7 +4,7 @@
 //! to a file of the project — an OpenAPI document a task calls, a `.proto` a `connect` task calls, a
 //! rule at its Connect service, a child `.flow`, a book, a dates file (`Flows::sends`); sakai says
 //! which context of a map each file belongs to, and how the contexts are related (`Maps`). The
-//! parties outside the project (a model's provider, Jev, a URL, an AWS service) are dandori's own
+//! parties outside the project (a model's provider, a decision model's API, a URL, an AWS service) are dandori's own
 //! check (its E906), which needs no map.
 //!
 //! A flow that belongs to no context of any map is not looked at: the map says nothing of it. For

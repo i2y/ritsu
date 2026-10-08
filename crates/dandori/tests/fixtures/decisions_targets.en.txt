@@ -1,0 +1,9 @@
+build --target asl:
+error[E050]: tests/fixtures/decisions_targets.flow:12:1: Step Functions asks for the decision of `on_openai` through an HTTP Task, which needs `connection "<EventBridge connection ARN>"` that holds OpenAI's API key (as the header Authorization, `Bearer <key>`)
+    12 | task on_openai(text: string) -> kind
+error[E050]: tests/fixtures/decisions_targets.flow:16:1: Step Functions asks for the decision of `on_a_server` through an HTTP Task, which needs `connection "<EventBridge connection ARN>"` that holds the key of the server (an EventBridge connection has one, even for a server that wants none)
+    16 | task on_a_server(text: string) -> kind
+error[E050]: tests/fixtures/decisions_targets.flow:21:1: Step Functions' HTTP Task calls HTTPS APIs only (a private one too, under a public domain name with a publicly trusted certificate), and `over_plain_http` sends to `http://127.0.0.1:11434/v1/systemone`
+    21 | task over_plain_http(text: string) -> kind
+error[E050]: tests/fixtures/decisions_targets.flow:27:1: Step Functions ends an HTTP Task's request after 60 seconds, so the `timeout` of `waits_long` can be at most that
+    27 | task waits_long(text: string) -> kind

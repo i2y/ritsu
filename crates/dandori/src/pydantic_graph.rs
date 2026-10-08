@@ -153,8 +153,9 @@ fn tasks_file(m: &Model, header: &str) -> String {
     a.push_str("#   would send, through a Transport (io.py), where the credentials and the clients are yours to set.\n");
     a.push_str("# - So is a task that says `agent`: the model gets the arguments as JSON text, as from Step\n");
     a.push_str("#   Functions, and answers {\"answer\": …} in the JSON Schema below; the Transport runs the agent.\n");
-    a.push_str("# - So is a task that says `jev`: TypeSafe's Jev reads the arguments as its state and answers the\n");
-    a.push_str("#   questions below, sent over HTTP (io.JEV_URL) with TypeSafe's key, and io.jev reads the answer.\n");
+    a.push_str("# - So is a task that says `jev`: a decision model reads the arguments and answers the questions\n");
+    a.push_str("#   below, sent over HTTP: TypeSafe's Jev (io.JEV_URL, with TypeSafe's key), OpenAI's Decisions API\n");
+    a.push_str("#   (io.DECISIONS_URL, with OpenAI's key), or the server `url` names; io.jev reads the answer.\n");
     if !connected.is_empty() {
         a.push_str("# - So is a rule that says `connect` under `use rule`: it is called at its Connect service, over HTTP\n");
         a.push_str("#   through the Transport, and the answer is read as the rule's record (io.rule). Its method is\n");

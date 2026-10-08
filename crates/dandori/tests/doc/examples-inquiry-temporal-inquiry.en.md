@@ -1,6 +1,6 @@
 # inquiry v1
 
-Jev picks the kind of a customer's inquiry and says how sure it is; an agent reads the inquiry for an order number and its point, and for its kind too, which the flow takes when Jev is not sure enough of its own. A rule decides the desk that takes it and how soon it is answered; another agent drafts the first reply; and a ticket goes into the desk's system. Jev picks, agents read and write (a model the company runs itself reads, Claude writes), and the rule decides. Written for Temporal: Jev and the agents are activities dandori writes, Jev called with TypeSafe's key (TYPESAFE_API_KEY), the reading sent to the company's Ollama, which serves Open Responses (`url`), and the draft to Claude with the key the worker has; the rule runs in the worker of the workflow as a local activity, its answer kept in the history as a marker; and filing the ticket is an activity you write
+A decision model picks the kind of a customer's inquiry and says how sure it is; an agent reads the inquiry for an order number and its point, and for its kind too, which the flow takes when the decision model is not sure enough of its own. A rule decides the desk that takes it and how soon it is answered; another agent drafts the first reply; and a ticket goes into the desk's system. The decision model picks, agents read and write (models the company runs itself pick and read, Claude writes), and the rule decides. Written for Temporal: the decision and the agents are activities dandori writes; the kind is asked at a server of the System One API, the API of TypeSafe's Jev (`url`; here the company's Ollama), the reading is sent to a server of Open Responses (`url`; the same Ollama), and the draft to Claude with the key the worker has; the rule runs in the worker of the workflow as a local activity, its answer kept in the history as a marker; and filing the ticket is an activity you write
 
 `examples/inquiry/temporal/inquiry.flow`, drawn by `dandori doc`. Inputs: `inquiry: Inquiry`. Outputs: `ticket_id: string`, `desk: routing.desk`.
 
@@ -12,7 +12,7 @@ flowchart TD
     s1["reading = read_inquiry(…)<br>agent · gpt-oss:20b · http://ollama.internal:11434/v1<br>retry 2 times every 10 seconds · timeout 1 minute"]
     s2["by_hand = file_ticket(…)<br>a task you write<br>retry 2 times every 5 seconds"]
     s3(["succeed ticket_id = by_hand.ticket_id, desk = general"])
-    s4["kind = pick_kind(…)<br>jev · jev-1.13.0 · confidence 0.8 else unsure<br>retry 2 times every 1 second · timeout 10 seconds"]
+    s4["kind = pick_kind(…)<br>jev · nimble:9b-q4_K_M · http://ollama.internal:11434/v1 · confidence 0.8 else unsure<br>retry 2 times every 1 second · timeout 10 seconds"]
     s5["let kind = reading.kind"]
     s6[["decision = routing(…)<br>rule inquiry_routing.rule · local"]]
     s7["let subject = #quot;An inquiry about {kind}#quot;"]
@@ -49,12 +49,12 @@ A rectangle is a task, one with a line down each side a rule, a slanted one a ta
 
 | Line | Call | Calls | Retries | Timeout | When it fails |
 |---:|---|---|---|---|---|
-| 62 | `reading = read_inquiry(…)` | `agent · gpt-oss:20b · http://ollama.internal:11434/v1` | 2 times every 10 seconds (failure, timeout) | 1 minute | `timeout`, `failure` → line 63 |
-| 64 | `by_hand = file_ticket(…)` | a task you write, `key` | 2 times every 5 seconds (failure, timeout) | — | `timeout`, `failure` → the workflow fails |
-| 67 | `kind = pick_kind(…)` | `jev · jev-1.13.0 · confidence 0.8 else unsure` | 2 times every 1 second (failure, timeout) | 10 seconds | `unsure`, `timeout`, `failure` → line 68 |
-| 69 | `decision = routing(…)` | rule `inquiry_routing.rule`, a local activity on Temporal | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
-| 74 | `draft = draft_reply(…)` | `agent claude · claude-sonnet-5` | — | 1 minute | `timeout`, `failure` → line 75 |
-| 76 | `t = file_ticket(…)` | a task you write, `key` | 2 times every 5 seconds (failure, timeout) | — | `timeout`, `failure` → the workflow fails |
+| 66 | `reading = read_inquiry(…)` | `agent · gpt-oss:20b · http://ollama.internal:11434/v1` | 2 times every 10 seconds (failure, timeout) | 1 minute | `timeout`, `failure` → line 67 |
+| 68 | `by_hand = file_ticket(…)` | a task you write, `key` | 2 times every 5 seconds (failure, timeout) | — | `timeout`, `failure` → the workflow fails |
+| 71 | `kind = pick_kind(…)` | `jev · nimble:9b-q4_K_M · http://ollama.internal:11434/v1 · confidence 0.8 else unsure` | 2 times every 1 second (failure, timeout) | 10 seconds | `unsure`, `timeout`, `failure` → line 72 |
+| 73 | `decision = routing(…)` | rule `inquiry_routing.rule`, a local activity on Temporal | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 78 | `draft = draft_reply(…)` | `agent claude · claude-sonnet-5` | — | 1 minute | `timeout`, `failure` → line 79 |
+| 80 | `t = file_ticket(…)` | a task you write, `key` | 2 times every 5 seconds (failure, timeout) | — | `timeout`, `failure` → the workflow fails |
 
 ## Ends
 
@@ -62,8 +62,8 @@ Every way the workflow can end.
 
 | Line | End |
 |---:|---|
-| 65 | `succeed ticket_id = by_hand.ticket_id, desk = general` |
-| 77 | `succeed ticket_id = t.ticket_id, desk = decision.desk` |
+| 69 | `succeed ticket_id = by_hand.ticket_id, desk = general` |
+| 81 | `succeed ticket_id = t.ticket_id, desk = decision.desk` |
 
 ## Rules
 

@@ -1,5 +1,5 @@
 workflow inquiry v1
-description "Jev picks the kind of a customer's inquiry and says how sure it is; an agent reads the inquiry for an order number and its point, and for its kind too, which the flow takes when Jev is not sure enough of its own. A rule decides the desk that takes it and how soon it is answered; another agent drafts the first reply; and a ticket goes into the desk's system. Jev picks, agents read and write (a model the company runs itself reads, Claude writes), and the rule decides. Written for Temporal: Jev and the agents are activities dandori writes, Jev called with TypeSafe's key (TYPESAFE_API_KEY), the reading sent to the company's Ollama, which serves Open Responses (`url`), and the draft to Claude with the key the worker has; the rule runs in the worker of the workflow as a local activity, its answer kept in the history as a marker; and filing the ticket is an activity you write"
+description "A decision model picks the kind of a customer's inquiry and says how sure it is; an agent reads the inquiry for an order number and its point, and for its kind too, which the flow takes when the decision model is not sure enough of its own. A rule decides the desk that takes it and how soon it is answered; another agent drafts the first reply; and a ticket goes into the desk's system. The decision model picks, agents read and write (models the company runs itself pick and read, Claude writes), and the rule decides. Written for Temporal: the decision and the agents are activities dandori writes; the kind is asked at a server of the System One API, the API of TypeSafe's Jev (`url`; here the company's Ollama), the reading is sent to a server of Open Responses (`url`; the same Ollama), and the draft to Claude with the key the worker has; the rule runs in the worker of the workflow as a local activity, its answer kept in the history as a marker; and filing the ticket is an activity you write"
 
 use rule routing from "../rules/inquiry_routing.rule"
   local
@@ -24,14 +24,18 @@ outputs
   ticket_id : string
   desk      : routing.desk
 
-# Jev picks one of the rule's kinds, knowing what each means, and says how sure it is.
+# A decision model on the company's own Ollama picks one of the rule's kinds, knowing what each
+# means, and says how sure it is, through the System One API; the model is named with its tag, so
+# that it does not move to another one, whose answers would be sure in another way.
 task pick_kind(text: string) -> routing.kind
   jev "Which kind of inquiry is this?"
     returns "The customer wants to send an item back or exchange it"
     delivery "A parcel is late, lost or damaged, or the customer asks where it is"
     billing "A charge, an invoice, a payment or a refund"
     other "None of the above"
-  model "jev-1.13.0"
+  model "nimble:9b-q4_K_M"
+  url "http://ollama.internal:11434/v1"
+  plaintext "The model server is reached only inside the cluster network, which the service mesh encrypts"
   confidence 0.8 else unsure
   timeout 10 seconds
   retry 2 times every 1 second

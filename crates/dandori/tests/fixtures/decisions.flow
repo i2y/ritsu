@@ -1,0 +1,143 @@
+workflow decisions v1
+description "What is wrong in decision tasks beyond TypeSafe's Jev: an API dandori does not know, `refusal` on the System One API and without `jev`, `failure` and an error declared twice as the refusal's error, a retry of the refusal's error, the meanings of yes and no on a predicate of the Decisions API, no model on the Decisions API and on a server of the System One API, a choice and a score of one value, a `url` that is not http:// or https://, an error of the Decisions API without its status; and what is not wrong: a score of 11 levels on the Decisions API and on a server (TypeSafe's API takes 10 at most), a refusal declared and handled. The warnings: W032 for a model without a tag and for `:latest` on a server of the System One API, and for the Decisions API with a floor of how sure, but none without one; W902 for a server reached over plain HTTP"
+
+enum kind = returns | delivery | other
+enum one = only
+enum eleven = a | b | c | d | e | f | g | h | i | j | k
+
+inputs
+  text : string
+
+task unknown_api(text: string) -> kind
+  jev gemini "Which kind is it?"
+  model "gemini-3"
+
+task refused_on_system_one(text: string) -> kind
+  jev "Which kind is it?"
+  model "jev-1.13.0"
+  refusal else declined
+
+task refused_without_jev(text: string) -> kind
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:pick"
+  refusal else declined
+
+task refused_as_failure(text: string) -> kind
+  jev openai "Which kind is it?"
+  model "gpt-6-luna"
+  refusal else failure
+
+task refused_twice(text: string) -> kind
+  jev openai "Which kind is it?"
+  model "gpt-6-luna"
+  refusal else declined
+  errors declined = 409
+
+task refusal_retried(text: string) -> kind
+  jev openai "Which kind is it?"
+  model "gpt-6-luna"
+  refusal else declined
+  retry 2 times every 1 second on declined
+
+task predicate_meanings(text: string) -> bool
+  jev openai "Is the customer upset?"
+    true "The customer says they are angry"
+    false "The customer does not say so"
+  model "gpt-6-luna"
+
+task no_model_on_openai(text: string) -> kind
+  jev openai "Which kind is it?"
+
+task no_model_on_a_server(text: string) -> kind
+  jev "Which kind is it?"
+  url "https://decisions.example.com/v1"
+
+task choice_of_one(text: string) -> one
+  jev openai "Which is it?"
+  model "gpt-6-luna"
+
+task score_of_one(text: string) -> one
+  jev openai score "How far is it?"
+    only "The only level"
+  model "gpt-6-luna"
+
+task not_a_url(text: string) -> kind
+  jev openai "Which kind is it?"
+  model "gpt-6-luna"
+  url "gateway.example.com/v1"
+
+task error_without_status(text: string) -> kind
+  jev openai "Which kind is it?"
+  model "gpt-6-luna"
+  errors busy
+
+# not wrong: eleven levels where TypeSafe's API takes ten at most
+task eleven_levels_on_openai(text: string) -> eleven
+  jev openai score "Where on the scale is it?"
+    a "1"
+    b "2"
+    c "3"
+    d "4"
+    e "5"
+    f "6"
+    g "7"
+    h "8"
+    i "9"
+    j "10"
+    k "11"
+  model "gpt-6-luna"
+
+task eleven_levels_on_a_server(text: string) -> eleven
+  jev score "Where on the scale is it?"
+    a "1"
+    b "2"
+    c "3"
+    d "4"
+    e "5"
+    f "6"
+    g "7"
+    h "8"
+    i "9"
+    j "10"
+    k "11"
+  model "tev1:4b"
+  url "https://decisions.example.com/v1"
+
+# warnings: W032 in its three forms and none without a floor; W902 for plain HTTP
+task untagged(text: string) -> kind
+  jev "Which kind is it?"
+  model "nimble"
+  url "https://decisions.example.com/v1"
+  confidence 0.8 else unsure
+
+task latest(text: string) -> kind
+  jev "Which kind is it?"
+  model "nimble:latest"
+  url "https://decisions.example.com/v1"
+  confidence 0.8 else unsure
+
+task openai_with_a_floor(text: string) -> kind
+  jev openai "Which kind is it?"
+  model "gpt-6-luna"
+  confidence 0.8 else unsure
+  refusal else declined
+
+task openai_without_a_floor(text: string) -> kind
+  jev openai "Which kind is it?"
+  model "gpt-6-luna"
+
+task plain_http(text: string) -> kind
+  jev "Which kind is it?"
+  model "tev1:0.8b"
+  url "http://decisions.internal:11434/v1"
+
+flow
+  let a = eleven_levels_on_openai(text: text)
+  let b = eleven_levels_on_a_server(text: text)
+  let c = untagged(text: text)
+    on unsure => pass
+  let d = latest(text: text)
+    on unsure => pass
+  let e = openai_with_a_floor(text: text)
+    on unsure, declined => pass
+  let f = openai_without_a_floor(text: text)
+  let g = plain_http(text: text)

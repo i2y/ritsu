@@ -58,8 +58,8 @@
    168 |   key
 エラー[E007]: tests/fixtures/jev.flow:173:3: `callback` のタスクがトークンを渡せるのは `lambda` か `aws sqs:sendMessage` です
    173 |   callback
-エラー[E007]: tests/fixtures/jev.flow:178:3: dandori は、Jev をいつも TypeSafe の API で呼びます。`url` は、エージェントの Open Responses の API がどのサーバーにあるかを書くところです
-   178 |   url "https://api.example.com/v1"
+エラー[E007]: tests/fixtures/jev.flow:178:3: `api.example.com/v1` は http:// や https:// の URL ではありません
+   178 |   url "api.example.com/v1"
 エラー[E007]: tests/fixtures/jev.flow:183:3: Jev はすぐに答え、長く推論しません。`effort` はエージェントのモデルが推論にどれだけ力を入れるかを書くところです
    183 |   effort high
 エラー[E007]: tests/fixtures/jev.flow:186:7: 結果はレコードなので、Jev にはフィールドごとに尋ねます。`jev` だけを書き、その下にフィールドごとに `<フィールド> "<質問>"` を書いてください

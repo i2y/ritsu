@@ -1,0 +1,38 @@
+workflow decisions_targets v1
+description "What passes check but Step Functions cannot run: the Decisions API without a connection that holds OpenAI's key, a server of the System One API without a connection, one reached over plain HTTP (an HTTP Task calls HTTPS APIs only), and a timeout over the HTTP Task's 60 seconds"
+
+enum kind = returns | delivery | other
+
+inputs
+  text : string
+
+outputs
+  kind : kind
+
+task on_openai(text: string) -> kind
+  jev openai "Which kind of inquiry is this?"
+  model "gpt-6-luna"
+
+task on_a_server(text: string) -> kind
+  jev "Which kind of inquiry is this?"
+  model "tev1:0.8b"
+  url "https://decisions.example.com/v1"
+
+task over_plain_http(text: string) -> kind
+  jev "Which kind of inquiry is this?"
+  model "tev1:0.8b"
+  url "http://127.0.0.1:11434/v1"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/decisions/1"
+
+task waits_long(text: string) -> kind
+  jev openai "Which kind of inquiry is this?"
+  model "gpt-6-luna"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/openai/1"
+  timeout 2 minutes
+
+flow
+  let a = on_openai(text: text)
+  let b = on_a_server(text: text)
+  let c = over_plain_http(text: text)
+  let d = waits_long(text: text)
+  succeed kind = d

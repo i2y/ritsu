@@ -211,8 +211,9 @@ pub enum Binding {
     /// an agent that reads the arguments and answers in the task's type, told what to do by
     /// `instructions`; `agent claude "…"` names whose models it runs on (OpenAI's when it does not)
     Agent { provider: Option<Name>, instructions: String },
-    /// Jev, TypeSafe's System One model, asked what the answer's type asks: `jev "…"` one
-    /// question, whose answer is the task's; `jev` alone a question for each field of a record
+    /// a decision model, asked what the answer's type asks: `jev "…"` one question, whose answer
+    /// is the task's; `jev` alone a question for each field of a record. TypeSafe's Jev by the
+    /// System One API, or another server of it (`url`); `jev openai` OpenAI's Decisions API
     Jev(JevDecl),
     /// `book stock.reserve.hold`: an operation of a transfer of a book `use book` reads
     Book { book: Name, transfer: Name, op: Name },
@@ -222,6 +223,8 @@ pub enum Binding {
 /// field of a record answer is in `fields`.
 #[derive(Clone, Debug)]
 pub struct JevDecl {
+    /// `jev openai`: whose API it speaks (`typesafe`, the System One API, when it says none)
+    pub provider: Option<Name>,
     pub ask: Option<JevAsk>,
     pub fields: Vec<(Name, JevField)>,
 }
@@ -287,6 +290,8 @@ pub struct TaskDecl {
     pub effort: Option<(String, Span)>,
     /// `confidence 0.8 else unsure`: a Jev answer less sure than this fails the call with the error
     pub confidence: Option<(f64, Name, Span)>,
+    /// `refusal else declined`: a question the Decisions API refuses fails the call with the error
+    pub refusal: Option<(Name, Span)>,
     pub connection: Option<String>,
     /// Temporal: the task queue of the activity or the child workflow
     pub queue: Option<String>,
@@ -1671,6 +1676,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     model: None,
                     effort: None,
                     confidence: None,
+                    refusal: None,
                     url: None,
                     connection: None,
                     queue: None,
@@ -1894,7 +1900,12 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
             t.binding = Some((Binding::Agent { provider, instructions }, sp));
         }
         "jev" => {
-            // `jev score "…"` or `jev "…"`: one question; `jev` alone: a question for each field
+            // `jev openai …`: whose API; then `jev score "…"` or `jev "…"`: one question; `jev`
+            // alone: a question for each field
+            let provider = match cc.peek() {
+                Some(Tok::Ident(w)) if w != "score" => Some(cc.ident(tr!("どこの API か（typesafe か openai）", "whose API it is, typesafe or openai"))?),
+                _ => None,
+            };
             let score = if cc.is_kw("score") && matches!(cc.peek_at(1), Some(Tok::Str(_))) {
                 let ssp = cc.span();
                 cc.i += 1;
@@ -1910,7 +1921,7 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
                 _ if score.is_some() => return Err(err(cc.span(), tr!("`jev score` のあとに、尋ねることを二重引用符で囲んで書いてください", "write the question after `jev score`, in double quotes"))),
                 _ => None,
             };
-            t.binding = Some((Binding::Jev(JevDecl { ask, fields: vec![] }), sp));
+            t.binding = Some((Binding::Jev(JevDecl { provider, ask, fields: vec![] }), sp));
         }
         "confidence" => {
             let vsp = cc.span();
@@ -1927,8 +1938,13 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
             let e = cc.ident(tr!("確信度が足りない答えで呼び出しが失敗するときのエラー", "the error a less sure answer fails the call with"))?;
             t.confidence = Some((v, e, sp));
         }
+        "refusal" => {
+            cc.expect_kw("else")?;
+            let e = cc.ident(tr!("モデルが答えなかったときに呼び出しが失敗するエラー", "the error a refused question fails the call with"))?;
+            t.refusal = Some((e, sp));
+        }
         "model" => t.model = Some((cc.string(tr!("モデル", "the model"))?.0, sp)),
-        "url" => t.url = Some((cc.string(tr!("エージェントのサーバーの場所", "where the agent's server is"))?.0, sp)),
+        "url" => t.url = Some((cc.string(tr!("サーバーのベース URL", "the server's base URL"))?.0, sp)),
         "effort" => t.effort = Some((cc.ident(tr!("low・medium・high のようなエフォート", "an effort, such as low, medium or high"))?.0, sp)),
         "connection" => t.connection = Some(cc.string(tr!("EventBridge の接続", "the EventBridge connection"))?.0),
         "errors" => loop {
@@ -2028,7 +2044,7 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
         other => {
             return Err(err(
                 sp,
-                tr!("`{other}` はタスクの項目ではありません（lambda・http・connect・aws・agent・jev・model・effort・confidence・url・connection・flow・queue・workflow・state machine・durable function・image・workflow template・errors・retry・timeout・key・idempotent・callback・event・starts・sends・observes・refused as・plaintext・discloses）", "`{other}` is not a task clause; expected lambda, http, connect, aws, agent, jev, model, effort, confidence, url, connection, flow, queue, workflow, state machine, durable function, image, workflow template, errors, retry, timeout, key, idempotent, callback, event, starts, sends, observes, refused as, plaintext or discloses"),
+                tr!("`{other}` はタスクの項目ではありません（lambda・http・connect・aws・agent・jev・model・effort・confidence・refusal・url・connection・flow・queue・workflow・state machine・durable function・image・workflow template・errors・retry・timeout・key・idempotent・callback・event・starts・sends・observes・refused as・plaintext・discloses）", "`{other}` is not a task clause; expected lambda, http, connect, aws, agent, jev, model, effort, confidence, refusal, url, connection, flow, queue, workflow, state machine, durable function, image, workflow template, errors, retry, timeout, key, idempotent, callback, event, starts, sends, observes, refused as, plaintext or discloses"),
             ))
         }
     }

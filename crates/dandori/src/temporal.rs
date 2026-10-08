@@ -784,8 +784,9 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
     a.push_str("// - So is a task that says `agent`: the model gets the arguments as JSON text, as from Step\n");
     a.push_str("//   Functions, and answers { \"answer\": … } in the JSON Schema below; the Transport runs the agent.\n");
     a.push_str("//   A Claude agent's enum values are taken without regard to case (io.fold).\n");
-    a.push_str("// - So is a task that says `jev`: TypeSafe's Jev reads the arguments as its state and answers the\n");
-    a.push_str("//   questions below, sent over HTTP (io.JEV_URL) with TypeSafe's key, and io.jev reads the answer.\n");
+    a.push_str("// - So is a task that says `jev`: a decision model reads the arguments and answers the questions\n");
+    a.push_str("//   below, sent over HTTP: TypeSafe's Jev (io.JEV_URL, with TypeSafe's key), OpenAI's Decisions API\n");
+    a.push_str("//   (io.DECISIONS_URL, with OpenAI's key), or the server `url` names; io.jev reads the answer.\n");
     if !connected.is_empty() {
         a.push_str("// - So is a rule that says `connect` under `use rule`: it is called at its Connect service, over HTTP\n");
         a.push_str("//   through the Transport, and the answer is read as the rule's record (io.rule). Its name is the\n");
@@ -1020,10 +1021,23 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
             Some(Via::Jev(j)) => {
                 let state: Vec<String> = task.params.iter().map(|(p, _)| format!("{}: args[{}]", q(p), q(p))).collect();
                 let statuses = task.errors.iter().filter_map(|e| e.status.map(|s| format!("{}: {}", q(&s.to_string()), q(&e.name)))).collect::<Vec<_>>().join(", ");
+                let url = match (j.api, &j.url) {
+                    (DecisionApi::SystemOne, None) => "io.JEV_URL".to_string(),
+                    (DecisionApi::Decisions, None) => "io.DECISIONS_URL".to_string(),
+                    (_, Some(_)) => q(&j.endpoint()),
+                };
+                // the System One API takes the arguments as the state; the Decisions API as their JSON text
+                let body = match j.api {
+                    DecisionApi::SystemOne => format!("{{ state: {}, model: {}, questions: JEV[{}].questions }}", braces(&state.join(", ")), q(&j.model), q(&task.name)),
+                    DecisionApi::Decisions => format!("{{ model: {}, input: JSON.stringify({}), questions: JEV[{}].questions }}", q(&j.model), braces(&state.join(", ")), q(&task.name)),
+                };
                 a.push_str(&format!("    {name}: async (args) =>\n      io.jev(\n        io.status(\n          await transport.http({{\n"));
-                a.push_str("            http: \"POST\",\n            url: io.JEV_URL,\n");
-                a.push_str(&format!("            body: {{ state: {}, model: {}, questions: JEV[{}].questions }},\n", braces(&state.join(", ")), q(&j.model), q(&task.name)));
-                a.push_str("            typesafe: true,\n          }),\n");
+                a.push_str(&format!("            http: \"POST\",\n            url: {url},\n"));
+                a.push_str(&format!("            body: {body},\n"));
+                if let Some(k) = j.key() {
+                    a.push_str(&format!("            {k}: true,\n"));
+                }
+                a.push_str("          }),\n");
                 a.push_str(&format!("          {},\n          fail,\n        ),\n        JEV[{}],\n        fail,\n      ) as {},\n", braces(&statuses), q(&task.name), task_result(m, task)));
             }
             _ => {}
@@ -1385,15 +1399,17 @@ const IO: &str = r#"// How the tasks that say `lambda`, `http`, `aws`, `agent` o
 // through a Transport, so that the credentials, the clients and a test's stand-in are yours to
 // set; the default one uses fetch, the AWS SDK for JavaScript v3, OpenAI's Agents SDK
 // (@openai/agents, which reads OPENAI_API_KEY) and Anthropic's SDK (@anthropic-ai/sdk, which
-// reads ANTHROPIC_API_KEY), each loaded when first needed. Jev is called over HTTP with fetch,
-// with TypeSafe's API key (TYPESAFE_API_KEY).
+// reads ANTHROPIC_API_KEY), each loaded when first needed. A decision task (`jev`) is called over
+// HTTP with fetch: TypeSafe's Jev with TypeSafe's API key (TYPESAFE_API_KEY), OpenAI's Decisions
+// API with OpenAI's (OPENAI_API_KEY), and another server (`url`) with what the headers option adds.
 
 /** What Lambda or an AWS API answered: the value, or an error by the name the other side gives it. */
 export type Answer = { ok: unknown } | { error: string; message: string };
 
 /**
  * An HTTP request as Step Functions' HTTP Task sends it; `form` asks for a URL-encoded body, and
- * `typesafe` says it is a call of Jev, to which the default transport adds TypeSafe's API key.
+ * `typesafe` and `openai` say it is a call of TypeSafe's Jev or of OpenAI's Decisions API, to
+ * which the default transport adds that API's key.
  */
 export interface HttpRequest {
   http: string;
@@ -1403,10 +1419,14 @@ export interface HttpRequest {
   query?: Record<string, unknown>;
   form?: boolean;
   typesafe?: boolean;
+  openai?: boolean;
 }
 
 /** Where every target sends a Jev task's request: TypeSafe's API. */
 export const JEV_URL = "https://api.typesafe.ai/v1/systemone";
+
+/** Where every target sends a `jev openai` task's request: OpenAI's Decisions API. */
+export const DECISIONS_URL = "https://api.openai.com/v1/decisions";
 
 /**
  * What a Jev task asks, and how its answer is read (jev): the questions of the request by their
@@ -1416,10 +1436,13 @@ export const JEV_URL = "https://api.typesafe.ai/v1/systemone";
  * how sure every answer must be, with the error the call fails with when one is not.
  */
 export interface JevTask {
-  questions: Record<string, unknown>;
+  questions: Record<string, unknown> | unknown[];
   read: { id: string; field?: string; kind: "choice" | "score" | "noul"; values: string[] }[];
   confidences: { field: string; question: number; per: number }[];
   floor?: { at: number; error: string; cause: string };
+  /** the Decisions API's: its answers come in a list, each by its question's name, and a refusal fails the call with this */
+  api?: "decisions";
+  refusal?: { error: string; cause: string };
 }
 
 /** A call of an agent: the model is told `instructions`, reads `input` as JSON text, and answers in `schema`. */
@@ -1489,6 +1512,8 @@ export interface Options {
    * client does not retry by itself unless these say so: the workflow retries, as `retry` says.
    */
   claude?: Record<string, unknown>;
+  /** OpenAI's API key for the tasks of OpenAI's Decisions API (`jev openai`), in place of OPENAI_API_KEY. */
+  openai?: { apiKey?: string };
   /** TypeSafe's API key for the Jev tasks, in place of TYPESAFE_API_KEY. */
   typesafe?: { apiKey?: string };
 }
@@ -1530,6 +1555,11 @@ export function transport(options: Options = {}): Transport {
     if (req.typesafe && !Object.keys(headers).some((h) => h.toLowerCase() === "authorization")) {
       const key = options.typesafe?.apiKey ?? process.env.TYPESAFE_API_KEY;
       if (!key) throw new Error("no API key for Jev: set TYPESAFE_API_KEY, or give the transport { typesafe: { apiKey } }");
+      headers["Authorization"] = `Bearer ${key}`;
+    }
+    if (req.openai && !Object.keys(headers).some((h) => h.toLowerCase() === "authorization")) {
+      const key = options.openai?.apiKey ?? process.env.OPENAI_API_KEY;
+      if (!key) throw new Error("no API key for OpenAI's Decisions API: set OPENAI_API_KEY, or give the transport { openai: { apiKey } }");
       headers["Authorization"] = `Bearer ${key}`;
     }
     let body: string | undefined;
@@ -1776,10 +1806,10 @@ function isObject(x: unknown): x is Record<string, unknown> {
  * yes when the probability of yes is over one half, and Jev is as sure as the probability of the
  * answer taken.
  */
-function jevOne(q: JevTask["read"][number], a: Record<string, unknown>): [unknown, number] | undefined {
+function jevOne(q: JevTask["read"][number], a: Record<string, unknown>, decisions: boolean): [unknown, number] | undefined {
   const unit = (x: unknown) => (typeof x === "number" && x >= 0 && x <= 1 ? x : undefined);
   if (q.kind === "noul") {
-    const p = unit(a.noul);
+    const p = unit(decisions ? a.probability : a.noul);
     return p === undefined ? undefined : [p > 0.5, p > 0.5 ? p : 1 - p];
   }
   const c = unit(a.confidence);
@@ -1791,18 +1821,25 @@ function jevOne(q: JevTask["read"][number], a: Record<string, unknown>): [unknow
 }
 
 /**
- * A Jev task's answer, read from the body of Jev's response as every target reads it: the value of
- * the task's type, null where an answer is not there or not of its kind (the workflow's check of
- * the answer refuses it), and how sure Jev is as a count of a rate's steps, rounded down after a
- * billionth that takes up how a decimal falls between binary fractions. When every answer is
- * there and one is less sure than the task asks, the call fails with the task's error.
+ * A decision task's answer, read from the body of the response as every target reads it: the value
+ * of the task's type, null where an answer is not there or not of its kind (the workflow's check of
+ * the answer refuses it), and how sure the model is as a count of a rate's steps, rounded down after
+ * a billionth that takes up how a decimal falls between binary fractions. When the Decisions API
+ * refused a question, the call fails with the task's refusal error; else, when every answer is
+ * there and one is less sure than the task asks, with the task's error.
  */
 export function jev(body: unknown, t: JevTask, fail: (kind: string, message: string) => never): unknown {
+  const decisions = t.api === "decisions";
+  // the System One API answers by the questions' ids; the Decisions API in a list, by their names
+  const list = isObject(body) && Array.isArray(body.answers) ? (body.answers as unknown[]) : undefined;
   const answers = isObject(body) && isObject(body.answers) ? body.answers : undefined;
-  const read = t.read.map((q) => {
-    const a = answers?.[q.id];
-    return isObject(a) ? jevOne(q, a) : undefined;
+  const found = t.read.map((q) => {
+    const a = decisions ? list?.find((x) => isObject(x) && x.name === q.id) : answers?.[q.id];
+    return isObject(a) ? a : undefined;
   });
+  // a refused question fails the call before anything else
+  if (t.refusal !== undefined && found.some((a) => a?.type === "refusal")) fail(t.refusal.error, t.refusal.cause);
+  const read = t.read.map((q, i) => (found[i] === undefined ? undefined : jevOne(q, found[i]!, decisions)));
   if (t.floor !== undefined && read.every((r) => r !== undefined) && read.some((r) => r![1] < t.floor!.at)) fail(t.floor.error, t.floor.cause);
   if (t.read.length === 1 && t.read[0].field === undefined) return read[0]?.[0] ?? null;
   const out: Record<string, unknown> = {};

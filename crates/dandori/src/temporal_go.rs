@@ -426,6 +426,27 @@ func ddJSONText(v any) string {
 	return string(bytes.TrimRight(b.Bytes(), "\n"))
 }
 
+// ddInputText is the arguments as JSON text in the order of the task's parameters, as Step
+// Functions and the TypeScript code write them; Go's encoding would sort a map's keys.
+func ddInputText(names []string, args map[string]any) string {
+	var b bytes.Buffer
+	b.WriteString("{")
+	for _, n := range names {
+		v, ok := args[n]
+		if !ok {
+			continue
+		}
+		if b.Len() > 1 {
+			b.WriteString(",")
+		}
+		b.WriteString(ddJSONText(n))
+		b.WriteString(":")
+		b.WriteString(ddJSONText(v))
+	}
+	b.WriteString("}")
+	return b.String()
+}
+
 // ddText is a value put into a string or a URL: text as it is, nothing for none, anything else as JSON.
 func ddText(v any) string {
 	switch x := v.(type) {
@@ -1096,7 +1117,7 @@ fn io_file(n: &Needs, pkg: &str, header: &str) -> String {
     let mut t = header.to_string();
     t.push_str("// How the tasks that say `lambda`, `http`, `aws`, `agent` or `jev` reach the other side. They go\n");
     t.push_str("// through a Transport, so that the credentials, the clients and a test's stand-in are yours to\n");
-    t.push_str(&format!("// set; the default one uses {}. Jev is called over HTTP with TypeSafe's API key (TYPESAFE_API_KEY).\n", sdks.join(", ")));
+    t.push_str(&format!("// set; the default one uses {}. A decision task (`jev`) is called over HTTP: TypeSafe's Jev with\n// TypeSafe's API key (TYPESAFE_API_KEY), OpenAI's Decisions API with OpenAI's (OPENAI_API_KEY), and\n// another server (`url`) with what Headers adds.\n", sdks.join(", ")));
     t.push_str(&format!("\npackage {pkg}\n\nimport (\n"));
     for i in ["context", "encoding/json", "errors", "fmt", "io", "math", "net/http", "os", "regexp", "sort", "strconv", "strings", "sync", "time"] {
         t.push_str(&format!("\t{}\n", q(i)));
@@ -1116,6 +1137,7 @@ fn io_file(n: &Needs, pkg: &str, header: &str) -> String {
     t.push_str("\t// Headers to add to an HTTP request, such as the credentials the other side wants (a server of Open Responses too).\n\tHeaders func(url string) map[string]string\n");
     t.push_str("\t// HTTPClient sends the HTTP requests, the agents' too; http.DefaultClient when it is nil.\n\tHTTPClient *http.Client\n");
     t.push_str("\t// TypeSafeAPIKey is TypeSafe's API key for the Jev tasks, in place of TYPESAFE_API_KEY.\n\tTypeSafeAPIKey string\n");
+    t.push_str("\t// OpenAIAPIKey is OpenAI's API key for the tasks of OpenAI's Decisions API (`jev openai`), in place of\n\t// OPENAI_API_KEY.\n\tOpenAIAPIKey string\n");
     if n.lambda || !n.aws.is_empty() {
         t.push_str("\t// AWS is the configuration of the AWS SDK's clients, such as the region; without it, what\n\t// config.LoadDefaultConfig finds.\n\tAWS *aws.Config\n");
     }
@@ -1143,7 +1165,8 @@ type Outcome struct {
 }
 
 // HTTPRequest is an HTTP request as Step Functions' HTTP Task sends it. Form asks for a URL-encoded
-// body, and TypeSafe says it is a call of Jev, to which the default Transport adds TypeSafe's API key.
+// body, and TypeSafe and OpenAI say it is a call of TypeSafe's Jev or of OpenAI's Decisions API, to
+// which the default Transport adds that API's key.
 type HTTPRequest struct {
 	Method   string            `json:"http"`
 	URL      string            `json:"url"`
@@ -1152,6 +1175,7 @@ type HTTPRequest struct {
 	Query    any               `json:"query,omitempty"`
 	Form     bool              `json:"form,omitempty"`
 	TypeSafe bool              `json:"typesafe,omitempty"`
+	OpenAI   bool              `json:"openai,omitempty"`
 }
 
 // HTTPResponse is the status of an HTTP answer and its body, parsed when it is JSON.
@@ -1162,6 +1186,14 @@ type HTTPResponse struct {
 
 // JevURL is where every target sends a Jev task's request: TypeSafe's API.
 const JevURL = "https://api.typesafe.ai/v1/systemone"
+
+// DecisionsURL is where every target sends a `jev openai` task's request: OpenAI's Decisions API.
+const DecisionsURL = "https://api.openai.com/v1/decisions"
+
+// ddRaw is JSON text sent as it is, in its own order (a decision task's questions and state).
+func ddRaw(s string) json.RawMessage {
+	return json.RawMessage(s)
+}
 
 // AgentCall is a call of an agent: the model is told Instructions, reads Input as JSON text, and
 // answers in Schema, the JSON Schema of {"answer": …} in the strict form of OpenAI's Structured
@@ -1357,6 +1389,16 @@ func (t *DefaultTransport) HTTP(ctx context.Context, req HTTPRequest) (HTTPRespo
 		}
 		if key == "" {
 			return HTTPResponse{}, errors.New("no API key for Jev: set TYPESAFE_API_KEY, or give the transport TransportOptions.TypeSafeAPIKey")
+		}
+		headers["Authorization"] = "Bearer " + key
+	}
+	if req.OpenAI && !ddHasHeader(headers, "Authorization") {
+		key := t.o.OpenAIAPIKey
+		if key == "" {
+			key = os.Getenv("OPENAI_API_KEY")
+		}
+		if key == "" {
+			return HTTPResponse{}, errors.New("no API key for OpenAI's Decisions API: set OPENAI_API_KEY, or give the transport TransportOptions.OpenAIAPIKey")
 		}
 		headers["Authorization"] = "Bearer " + key
 	}
@@ -1680,13 +1722,18 @@ func ddUnit(x any) (float64, bool) {
 	return f, ok && f >= 0 && f <= 1
 }
 
-// ddJevOne is Jev's answer to one question: the value it takes and how sure Jev is of it, from 0
-// to 1, and whether it is there and of its kind. A choice and a score say how sure ("confidence");
-// a score's place goes to the nearest level, a half going up; a noul's answer is yes when the
-// probability of yes is over one half, and Jev is as sure as the probability of the answer taken.
-func ddJevOne(q map[string]any, a map[string]any) (any, float64, bool) {
+// ddJevOne is the answer to one question: the value it takes and how sure the model is of it, from
+// 0 to 1, and whether it is there and of its kind. A choice and a score say how sure ("confidence");
+// a score's place goes to the nearest level, a half going up; yes or no is yes when the probability
+// of yes ("noul" on the System One API, "probability" on the Decisions API) is over one half, and
+// the model is as sure as the probability of the answer taken.
+func ddJevOne(q map[string]any, a map[string]any, decisions bool) (any, float64, bool) {
 	if q["kind"] == "noul" {
-		p, ok := ddUnit(a["noul"])
+		key := "noul"
+		if decisions {
+			key = "probability"
+		}
+		p, ok := ddUnit(a[key])
 		if !ok {
 			return nil, 0, false
 		}
@@ -1721,25 +1768,52 @@ func ddJevOne(q map[string]any, a map[string]any) (any, float64, bool) {
 	return nil, 0, false
 }
 
-// ddJev is a Jev task's answer, read from the body of Jev's response as every target reads it: the
-// value of the task's type, nil where an answer is not there or not of its kind (the workflow's
-// check of the answer refuses it), and how sure Jev is as a count of a rate's steps, rounded down
-// after a billionth that takes up how a decimal falls between binary fractions. When every answer
-// is there and one is less sure than the task asks, the call fails with the task's error. task is
+// ddJev is a decision task's answer, read from the body of the response as every target reads it:
+// the value of the task's type, nil where an answer is not there or not of its kind (the workflow's
+// check of the answer refuses it), and how sure the model is as a count of a rate's steps, rounded
+// down after a billionth that takes up how a decimal falls between binary fractions. When the
+// Decisions API refused a question, the call fails with the task's refusal error; else, when every
+// answer is there and one is less sure than the task asks, with the task's error. task is
 // {"questions", "read": [{"id", "field", "kind", "values"}], "confidences": [{"field", "question",
-// "per"}], "floor": {"at", "error", "cause"}}.
+// "per"}], "floor": {"at", "error", "cause"}}, and for the Decisions API "api": "decisions" and
+// "refusal": {"error", "cause"}.
 func ddJev(body any, task any) (any, error) {
-	answers := ddObject(ddGet(body, "answers"))
+	decisions := ddGet(task, "api") == "decisions"
 	read := ddList(ddGet(task, "read"))
 	type taken struct {
 		v    any
 		sure float64
 		ok   bool
 	}
+	// the System One API answers by the questions' ids; the Decisions API in a list, by their names
+	found := make([]map[string]any, len(read))
+	for i, q := range read {
+		id := ddStr(ddGet(q, "id"))
+		if decisions {
+			if list, ok := ddGet(body, "answers").([]any); ok {
+				for _, x := range list {
+					if a, ok := x.(map[string]any); ok && a["name"] == id {
+						found[i] = a
+						break
+					}
+				}
+			}
+		} else if a, ok := ddObject(ddGet(body, "answers"))[id].(map[string]any); ok {
+			found[i] = a
+		}
+	}
+	// a refused question fails the call before anything else
+	if refusal := ddObject(ddGet(task, "refusal")); refusal != nil {
+		for _, a := range found {
+			if a != nil && a["type"] == "refusal" {
+				return nil, ddFailure(ddStr(refusal["error"]), ddStr(refusal["cause"]))
+			}
+		}
+	}
 	got := make([]taken, len(read))
 	for i, q := range read {
-		if a, ok := answers[ddStr(ddGet(q, "id"))].(map[string]any); ok {
-			v, sure, ok := ddJevOne(ddObject(q), a)
+		if found[i] != nil {
+			v, sure, ok := ddJevOne(ddObject(q), found[i], decisions)
 			got[i] = taken{v, sure, ok}
 		}
 	}
@@ -2225,13 +2299,28 @@ fn task_body(m: &Model, task: &TaskDef) -> Vec<String> {
         }
         Some(Via::Jev(j)) => {
             let state: Vec<String> = task.params.iter().map(|(p, _)| format!("{}: args[{}]", q(p), q(p))).collect();
+            let url = match (j.api, &j.url) {
+                (DecisionApi::SystemOne, None) => "JevURL".to_string(),
+                (DecisionApi::Decisions, None) => "DecisionsURL".to_string(),
+                (_, Some(_)) => q(&j.endpoint()),
+            };
+            // the System One API takes the arguments as the state; the Decisions API as their JSON
+            // text. Both in the order of the parameters, and the questions as the other languages
+            // write them, options in the order the task lists them: Go's encoding sorts a map's
+            // keys, and what a model reads in another order may be answered a little otherwise
+            let names = task.params.iter().map(|(p, _)| q(p)).collect::<Vec<_>>().join(", ");
+            let body = match j.api {
+                DecisionApi::SystemOne => format!("map[string]any{{\"state\": ddRaw(ddInputText([]string{{{names}}}, args)), \"model\": {}, \"questions\": ddRaw(ddJevQuestions[{}])}}", q(&j.model), q(&task.name)),
+                DecisionApi::Decisions => format!("map[string]any{{\"model\": {}, \"input\": ddInputText([]string{{{names}}}, args), \"questions\": ddRaw(ddJevQuestions[{}])}}", q(&j.model), q(&task.name)),
+            };
+            let _ = &state;
+            let key = match j.key() {
+                Some("typesafe") => ", TypeSafe: true",
+                Some(_) => ", OpenAI: true",
+                None => "",
+            };
             vec![
-                format!(
-                    "res, err := t.HTTP(ctx, HTTPRequest{{Method: \"POST\", URL: JevURL, Body: map[string]any{{\"state\": map[string]any{{{}}}, \"model\": {}, \"questions\": ddGet(ddJevs[{}], \"questions\")}}, TypeSafe: true}})",
-                    state.join(", "),
-                    q(&j.model),
-                    q(&task.name)
-                ),
+                format!("res, err := t.HTTP(ctx, HTTPRequest{{Method: \"POST\", URL: {url}, Body: {body}{key}}})"),
                 format!("body, err := ddStatus(res, err, {})", statuses()),
                 "if err != nil {".into(),
                 "\treturn nil, err".into(),
@@ -2257,8 +2346,9 @@ fn activities_file(m: &Model, n: &Names, pkg: &str, header: &str) -> String {
     a.push_str("// - So is a task that says `agent`: the model gets the arguments as JSON text, as from Step\n");
     a.push_str("//   Functions, and answers {\"answer\": …} in the JSON Schema below; the Transport runs the agent.\n");
     a.push_str("//   A Claude agent's enum values are taken without regard to case (ddFold).\n");
-    a.push_str("// - So is a task that says `jev`: TypeSafe's Jev reads the arguments as its state and answers the\n");
-    a.push_str("//   questions below, sent over HTTP (JevURL) with TypeSafe's key, and ddJev reads the answer.\n");
+    a.push_str("// - So is a task that says `jev`: a decision model reads the arguments and answers the questions\n");
+    a.push_str("//   below, sent over HTTP: TypeSafe's Jev (JevURL, with TypeSafe's key), OpenAI's Decisions API\n");
+    a.push_str("//   (DecisionsURL, with OpenAI's key), or the server `url` names; ddJev reads the answer.\n");
     if !connected.is_empty() {
         a.push_str("// - So is a rule that says `connect` under `use rule`: it is called at its Connect service, over HTTP\n");
         a.push_str("//   through the Transport, and the answer is read as the rule's record (ddConnectRule). Its name is the\n");
@@ -2300,9 +2390,16 @@ fn activities_file(m: &Model, n: &Names, pkg: &str, header: &str) -> String {
     let jevs: Vec<&&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Jev(_)))).collect();
     if !jevs.is_empty() {
         a.push_str("\n// ddJevs are what each Jev task asks, and how ddJev reads the answer.\nvar ddJevs = map[string]any{\n");
-        for task in jevs {
+        for task in &jevs {
             let spec = render::jev_spec(task, task.jev().expect("a Jev task"));
             a.push_str(&format!("\t{}: {},\n", q(&task.name), json_value(&spec)));
+        }
+        a.push_str("}\n");
+        // the questions as JSON text, sent as they are: a map would lose the order of the options
+        a.push_str("\n// ddJevQuestions are the questions each Jev task sends, as JSON text, the options in the task's order.\nvar ddJevQuestions = map[string]string{\n");
+        for task in jevs.iter() {
+            let j = task.jev().expect("a Jev task");
+            a.push_str(&format!("\t{}: {},\n", q(&task.name), q(&render::jev_questions(j).to_string())));
         }
         a.push_str("}\n");
     }

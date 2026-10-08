@@ -1487,11 +1487,19 @@ impl<'a> Lowerer<'a> {
                         self.push(e("E007", *esp, tr!("`{en}` が返ってくるときの HTTP ステータスを、`{en} = 402` のように書いてください", "give `{en}` the HTTP status it comes back with, as `{en} = 402`")));
                     }
                     // TypeSafe's API says an error by its status: 429 for the rate limit, 529 when it is overloaded
-                    (Some(Binding::Jev(_)), None, _) => {
+                    (Some(Binding::Jev(j)), None, _) if j.api == DecisionApi::SystemOne && j.url.is_none() => {
                         self.push(e(
                             "E007",
                             *esp,
                             tr!("Jev の API はエラーを HTTP ステータスで伝えます。`{en}` が返ってくるときのステータスを、`{en} = 429`（レート制限）や `{en} = 529`（過負荷）のように書いてください", "Jev's API says an error by its HTTP status; give `{en}` the one it comes back with, as `{en} = 429` (the rate limit) or `{en} = 529` (overloaded)"),
+                        ));
+                    }
+                    // so do the other servers of decisions: OpenAI's, and those `url` names
+                    (Some(Binding::Jev(_)), None, _) => {
+                        self.push(e(
+                            "E007",
+                            *esp,
+                            tr!("判断の API はエラーを HTTP ステータスで伝えます。`{en}` が返ってくるときのステータスを、`{en} = 429`（レート制限）のように書いてください", "the API of decisions says an error by its HTTP status; give `{en}` the one it comes back with, as `{en} = 429` (the rate limit)"),
                         ));
                     }
                     (Some(Binding::Jev(_)), Some(_), _) => {}
@@ -1534,6 +1542,30 @@ impl<'a> Lowerer<'a> {
                 } else {
                     errors.push(ErrDef { name: fe.clone(), status: None, exception: None });
                 }
+            }
+            // the error a refused question fails the call with: the Decisions API's alone refuses
+            if let Some(((re, rsp), _)) = &t.refusal {
+                match &jev {
+                    Some(j) if j.api == DecisionApi::Decisions => {
+                        if re == "timeout" || re == "failure" {
+                            self.push(e("E007", *rsp, tr!("`{re}` はいつもあるエラーです。モデルが答えなかったときには、タスク自身のエラーの名前を付けてください", "`{re}` is always there; name an error of the task's own for a question the model refuses")));
+                        } else if errors.iter().any(|x| x.name == *re) {
+                            self.push(e("E006", *rsp, tr!("エラー `{re}` が二度書かれています。`refusal else {re}` がそれを宣言します", "the error `{re}` is written twice: `refusal else {re}` declares it")));
+                        } else {
+                            errors.push(ErrDef { name: re.clone(), status: None, exception: None });
+                        }
+                    }
+                    Some(_) => self.push(e(
+                        "E007",
+                        *rsp,
+                        tr!("System One の API（TypeSafe の Jev や、`url` のサーバー）は、どの質問にも答えを返し、答えないことはありません。`refusal` は `jev openai` のタスクに書くところです", "the System One API (TypeSafe's Jev, and the servers `url` names) answers every question and refuses none; `refusal` is for a `jev openai` task"),
+                    )),
+                    None => self.push(e("E007", *rsp, tr!("`refusal` は、OpenAI の Decisions API が質問に答えなかったときのエラーを書くところです。このタスクには `jev openai` がありません", "`refusal` says the error of a question OpenAI's Decisions API refuses; this task has no `jev openai`"))),
+                }
+            } else if jev.as_ref().is_some_and(|j| j.api == DecisionApi::Decisions) {
+                // without it, a refusal fails the call with an error of dandori's that `on failure` takes,
+                // and that no retry takes, as it does not take the task's own
+                errors.push(ErrDef { name: REFUSED.to_string(), status: None, exception: None });
             }
             if let Some((syntax::Binding::Http { url, .. }, bsp)) = t.binding.as_ref().map(|(b, s)| (b, s)) {
                 for ph in placeholders(url) {
@@ -1624,6 +1656,13 @@ impl<'a> Lowerer<'a> {
                             "E007",
                             *osp,
                             tr!("Jev は同じ入力にはほぼ同じように答えるので、尋ね直しても確信度は上がりません。`{on}` はリトライできません", "Jev answers the same input much the same way each time, so asking again is not surer; `{on}` is not retried"),
+                        ));
+                    }
+                    if jev.as_ref().and_then(|j| j.refusal.as_ref()).is_some_and(|re| re == on) {
+                        self.diags.push(e(
+                            "E007",
+                            *osp,
+                            tr!("答えなかった質問は、同じ入力で尋ね直しても答えないことが多いので、`{on}` はリトライできません（確信度の下限と同じです）", "a question the model refused is mostly refused again when asked again with the same input, so `{on}` is not retried, as a floor of how sure is not"),
                         ));
                     }
                 }
@@ -1812,13 +1851,15 @@ impl<'a> Lowerer<'a> {
 
     /// `plaintext` under a task (E007 when the task has no URL of its own, and for an empty why),
     /// and W902 for a URL the task calls without encryption, to a host that is not this machine:
-    /// an `http` task's own URL, an agent's `url` (DESIGN 1.18). The URL of an API's operation is
-    /// the `use`'s, and said there (`plaintexts`).
+    /// an `http` task's own URL, an agent's `url`, a decision task's `url` (DESIGN 1.18). The URL of
+    /// an API's operation is the `use`'s, and said there (`plaintexts`).
     fn plaintext_task(&mut self, t: &syntax::TaskDecl) {
         let name = &t.name.0;
+        // what calls: "task", "agent" or "decision"
         let own = match (&t.binding, &t.url) {
-            (Some((syntax::Binding::Http { url, api: None, .. }, bsp)), _) => Some((url.clone(), *bsp, false)),
-            (Some((syntax::Binding::Agent { .. }, _)), Some((url, usp))) => Some((url.clone(), *usp, true)),
+            (Some((syntax::Binding::Http { url, api: None, .. }, bsp)), _) => Some((url.clone(), *bsp, "task")),
+            (Some((syntax::Binding::Agent { .. }, _)), Some((url, usp))) => Some((url.clone(), *usp, "agent")),
+            (Some((syntax::Binding::Jev(_), _)), Some((url, usp))) => Some((url.clone(), *usp, "decision")),
             _ => None,
         };
         if let Some((why, psp)) = &t.plaintext {
@@ -1833,15 +1874,15 @@ impl<'a> Lowerer<'a> {
                 self.push(e("E007", *psp, tr!("`plaintext` には、暗号化しない理由を書いてください（空の文字列です）", "give `plaintext` the reason the connection is not encrypted; it is an empty string")));
             }
         }
-        let Some((url, at, agent)) = own else { return };
+        let Some((url, at, what)) = own else { return };
         if t.plaintext.is_some() {
             return;
         }
         if let Some((_, host)) = crate::secrets::plain_url(&url) {
-            let said = if agent {
-                tr!("エージェント `{name}` は、{host} に暗号化しない HTTP でリクエストを送ります", "the agent `{name}` sends its requests to {host} over plain HTTP")
-            } else {
-                tr!("タスク `{name}` は、{host} に暗号化しない HTTP でリクエストを送ります", "the task `{name}` sends its requests to {host} over plain HTTP")
+            let said = match what {
+                "agent" => tr!("エージェント `{name}` は、{host} に暗号化しない HTTP でリクエストを送ります", "the agent `{name}` sends its requests to {host} over plain HTTP"),
+                "decision" => tr!("判断のタスク `{name}` は、{host} に暗号化しない HTTP でリクエストを送ります", "the decision task `{name}` sends its requests to {host} over plain HTTP"),
+                _ => tr!("タスク `{name}` は、{host} に暗号化しない HTTP でリクエストを送ります", "the task `{name}` sends its requests to {host} over plain HTTP"),
             };
             self.push(plain_call(at, said, tr!("タスクの下", "under the task")));
         }
@@ -2127,13 +2168,12 @@ impl<'a> Lowerer<'a> {
     /// moves a case.
     fn agent(&mut self, t: &syntax::TaskDecl, result: Option<&Ty>, rg: Option<Range>) {
         let jev = matches!(t.binding, Some((syntax::Binding::Jev(_), _)));
-        if let (Some((_, usp)), true) = (&t.url, jev) {
-            self.push(e(
-                "E007",
-                *usp,
-                tr!("dandori は、Jev をいつも TypeSafe の API で呼びます。`url` は、エージェントの Open Responses の API がどのサーバーにあるかを書くところです", "Jev is always called at TypeSafe's API; `url` says which server an agent's Open Responses API is on"),
-            ));
-            return;
+        // a server of the same API as TypeSafe's (System One) or OpenAI's (Decisions)
+        if let (Some((u, usp)), true) = (&t.url, jev) {
+            if !(u.starts_with("https://") || u.starts_with("http://")) {
+                self.push(e("E007", *usp, tr!("`{u}` は http:// や https:// の URL ではありません", "`{u}` is not an http:// or https:// URL")));
+                return;
+            }
         }
         if let (Some((_, esp)), true) = (&t.effort, jev) {
             self.push(e("E007", *esp, tr!("Jev はすぐに答え、長く推論しません。`effort` はエージェントのモデルが推論にどれだけ力を入れるかを書くところです", "Jev answers at once and does not reason at length; `effort` says how hard an agent's model reasons")));
@@ -2146,7 +2186,7 @@ impl<'a> Lowerer<'a> {
             self.push(e(
                 "E007",
                 *usp,
-                tr!("`url` はエージェントの Open Responses の API がどのサーバーにあるかを書くところです。このタスクには `agent` がありません（HTTP のタスクの URL は `http` のあとに書いてください）", "`url` says which server an agent's Open Responses API is on; this task has no `agent` (an HTTP task writes its URL after `http`)"),
+                tr!("`url` は、エージェントの Open Responses の API や、判断のモデル（`jev`）の API がどのサーバーにあるかを書くところです。このタスクには `agent` も `jev` もありません（HTTP のタスクの URL は `http` のあとに書いてください）", "`url` says which server an agent's Open Responses API, or a decision model's (`jev`) API, is on; this task has neither `agent` nor `jev` (an HTTP task writes its URL after `http`)"),
             ));
         }
         if let (Some((_, esp)), false) = (&t.effort, matches!(t.binding, Some((syntax::Binding::Agent { .. }, _)))) {
@@ -2296,13 +2336,30 @@ impl<'a> Lowerer<'a> {
     fn jev(&mut self, t: &syntax::TaskDecl, jd: &syntax::JevDecl, bsp: Span, result: Option<&Ty>) -> Jev {
         let model = t.model.as_ref().map(|x| x.0.clone()).unwrap_or_default();
         let floor = t.confidence.as_ref().map(|(v, e, _)| (*v, e.0.clone()));
-        let mut out = Jev { model, questions: vec![], confidences: vec![], floor };
+        // whose API: TypeSafe's System One (which other servers speak too), or OpenAI's Decisions
+        let api = match &jd.provider {
+            None => DecisionApi::SystemOne,
+            Some((p, _)) if p == "typesafe" => DecisionApi::SystemOne,
+            Some((p, _)) if p == "openai" => DecisionApi::Decisions,
+            Some((p, psp)) => {
+                self.push(e(
+                    "E007",
+                    *psp,
+                    tr!("`{p}` は dandori の知らない判断の API です。`jev \"…\"`（TypeSafe の Jev が答える System One の API。`jev typesafe \"…\"` と書いても同じ）か `jev openai \"…\"`（OpenAI の Decisions API）と書いてください", "`{p}` is not an API of decisions dandori knows; write `jev \"…\"` (the System One API that TypeSafe's Jev answers on, also written `jev typesafe \"…\"`) or `jev openai \"…\"` (OpenAI's Decisions API)"),
+                ));
+                DecisionApi::SystemOne
+            }
+        };
+        let url = t.url.as_ref().map(|x| x.0.clone());
+        let refusal = t.refusal.as_ref().map(|((e, _), _)| e.clone());
+        let mut out = Jev { api, url: url.clone(), model, questions: vec![], confidences: vec![], floor, refusal };
         if t.model.is_none() {
-            self.push(e(
-                "E007",
-                bsp,
-                tr!("Jev には、尋ねるモデルを `model \"jev-1.13.0\"` のようにバージョンで書いてください", "Jev needs the model it asks; write the version, as `model \"jev-1.13.0\"`"),
-            ));
+            let Text { en, ja } = match (api, &url) {
+                (DecisionApi::SystemOne, None) => tr!("Jev には、尋ねるモデルを `model \"jev-1.13.0\"` のようにバージョンで書いてください", "Jev needs the model it asks; write the version, as `model \"jev-1.13.0\"`"),
+                (DecisionApi::SystemOne, Some(_)) => tr!("System One の API のサーバーには、尋ねるモデルを `model \"tev1:0.8b\"` のように、名前とタグで書いてください", "the server of the System One API needs the model it asks; write its name and tag, as `model \"tev1:0.8b\"`"),
+                (DecisionApi::Decisions, _) => tr!("Decisions API には、尋ねるモデルを `model \"gpt-6-luna\"` のように書いてください", "the Decisions API needs the model it asks; write it, as `model \"gpt-6-luna\"`"),
+            };
+            self.push(e("E007", bsp, Text { en, ja }));
         }
         if let Some((_, msp)) = &t.machine {
             self.push(e("E007", *msp, tr!("Jev は渡されたものを読んで答えるだけで、案件を始めたり動かしたり見たりはしません", "Jev reads what it is given and answers; it has no case on the other side to start, move or look at")));
@@ -2315,7 +2372,7 @@ impl<'a> Lowerer<'a> {
         };
         match (&jd.ask, r) {
             (Some(ask), Ty::Enum(_) | Ty::Bool) => {
-                if let Some(q) = self.jev_question(ask, r, None) {
+                if let Some(q) = self.jev_question(ask, r, None, api, url.is_none() && api == DecisionApi::SystemOne) {
                     out.questions.push(q);
                 }
             }
@@ -2357,7 +2414,7 @@ impl<'a> Lowerer<'a> {
                     if let syntax::JevField::Ask(ask) = what {
                         match fty {
                             Ty::Enum(_) | Ty::Bool => {
-                                if let Some(q) = self.jev_question(ask, fty, Some(fname)) {
+                                if let Some(q) = self.jev_question(ask, fty, Some(fname), api, url.is_none() && api == DecisionApi::SystemOne) {
                                     out.questions.push(q);
                                 }
                             }
@@ -2413,20 +2470,36 @@ impl<'a> Lowerer<'a> {
         }
         // a floor, or how sure it is, means one version's answers; an alias moves to the next
         if let (true, Some((m, msp))) = (out.uses_confidence(), &t.model) {
-            if m == "jev-latest" || m == "jev-preview" {
-                self.diags.push(Diag::warning(
-                    "W032",
-                    msp.line,
-                    msp.col,
-                    tr!("`{m}` はエイリアスで、ここを変えなくても Jev の新しいバージョンに移ります。確信度の意味はバージョンごとに違うので、確信度を合わせたバージョンを `model \"jev-1.13.0\"` のように書いてください", "`{m}` is an alias, which moves to a new version of Jev without a change here, and how sure one version is means something else to the next; name the version the confidence is set for, as `model \"jev-1.13.0\"`"),
-                ));
+            let moves = match (api, &url) {
+                (DecisionApi::SystemOne, None) if m == "jev-latest" || m == "jev-preview" => Some(tr!(
+                    "`{m}` はエイリアスで、ここを変えなくても Jev の新しいバージョンに移ります。確信度の意味はバージョンごとに違うので、確信度を合わせたバージョンを `model \"jev-1.13.0\"` のように書いてください",
+                    "`{m}` is an alias, which moves to a new version of Jev without a change here, and how sure one version is means something else to the next; name the version the confidence is set for, as `model \"jev-1.13.0\"`"
+                )),
+                // Ollama's name without a tag is `:latest`, which a pull of the model moves to its newest
+                (DecisionApi::SystemOne, Some(_)) if !m.contains(':') => Some(tr!(
+                    "`{m}` にはタグが無いので、サーバーがモデルを取り直すと、ここを変えなくても新しいモデルに移ります（Ollama の名前の付け方では `:latest` と同じです）。確信度の意味はモデルごとに違うので、確信度を合わせたモデルを `model \"tev1:0.8b\"` のようにタグまで書いてください",
+                    "`{m}` has no tag, so it moves to a newer model when the server pulls the model again, with no change here (as Ollama names models, it is `:latest`); how sure one model is means something else to the next, so name the model the confidence is set for with its tag, as `model \"tev1:0.8b\"`"
+                )),
+                (DecisionApi::SystemOne, Some(_)) if m.ends_with(":latest") => Some(tr!(
+                    "`{m}` のタグ `latest` は、サーバーがモデルを取り直すと、ここを変えなくても新しいモデルに移ります（Ollama の名前の付け方）。確信度の意味はモデルごとに違うので、確信度を合わせたモデルを `model \"tev1:0.8b\"` のようにタグまで書いてください",
+                    "the tag `latest` of `{m}` moves to a newer model when the server pulls the model again, with no change here (how Ollama names models); how sure one model is means something else to the next, so name the model the confidence is set for with its tag, as `model \"tev1:0.8b\"`"
+                )),
+                // OpenAI names no version of the model the Decisions API runs
+                (DecisionApi::Decisions, _) => Some(tr!(
+                    "OpenAI の Decisions API には、モデルのバージョンを固定する名前がありません（`{m}`）。モデルが替わると、ここを変えなくても確信度の意味が変わることがあるので、確信度の下限と確信度を受け取るフィールドを、ときどき実際の答えで確かめ直してください",
+                    "OpenAI's Decisions API names no version of its model (`{m}`), so how sure an answer is may come to mean something else when the model changes, with no change here; check the floor of how sure, and the fields that take it, against real answers from time to time"
+                )),
+                _ => None,
+            };
+            if let Some(text) = moves {
+                self.diags.push(Diag::warning("W032", msp.line, msp.col, text));
             }
         }
         out
     }
 
     /// One question of a Jev task, whose answer is of type `ty` (an enum or `bool`).
-    fn jev_question(&mut self, ask: &syntax::JevAsk, ty: &Ty, field: Option<&str>) -> Option<Question> {
+    fn jev_question(&mut self, ask: &syntax::JevAsk, ty: &Ty, field: Option<&str>, api: DecisionApi, typesafe: bool) -> Option<Question> {
         let id = field.unwrap_or("answer").to_string();
         let mut seen: BTreeMap<String, Span> = BTreeMap::new();
         for (v, vsp) in ask.criteria.iter().map(|(n, _)| n) {
@@ -2447,13 +2520,18 @@ impl<'a> Lowerer<'a> {
                     }
                 }
                 if let Some(ssp) = ask.score {
-                    // the levels are the values, each with what it means, from the lowest
-                    if !(2..=10).contains(&def.values.len()) {
+                    // the levels are the values, each with what it means, from the lowest; TypeSafe's
+                    // API takes 2 to 10, and the others say no more than 2 at least (Ollama 26 at most)
+                    if typesafe && !(2..=10).contains(&def.values.len()) {
                         self.push(e(
                             "E007",
                             ssp,
                             tr!("score の段階は 2 から 10 までで、`{}` の値は {} 個です", "a score has from 2 to 10 levels, and `{}` has {} values", def.name, def.values.len()),
                         ));
+                        return None;
+                    }
+                    if def.values.len() < 2 {
+                        self.push(e("E007", ssp, tr!("score の段階は二つ以上で、`{}` の値は一つだけです", "a score has two levels at least, and `{}` has one value only", def.name)));
                         return None;
                     }
                     let missing: Vec<&String> = def.values.iter().filter(|v| meaning(v).is_none()).collect();
@@ -2473,6 +2551,10 @@ impl<'a> Lowerer<'a> {
                         self.push(e("E007", ask.span, tr!("Jev が選べるのは 255 個までで、`{}` の値は {} 個です", "Jev chooses among at most 255 options, and `{}` has {} values", def.name, def.values.len())));
                         return None;
                     }
+                    if def.values.len() < 2 {
+                        self.push(e("E007", ask.span, tr!("choice の選択肢は二つ以上で、`{}` の値は一つだけです", "a choice has two options at least, and `{}` has one value only", def.name)));
+                        return None;
+                    }
                     let options = def.values.iter().map(|v| (v.clone(), meaning(v))).collect();
                     Some(Question { id, field: field.map(String::from), kind: QuestionKind::Choice, instructions: ask.instructions.clone(), options })
                 }
@@ -2489,6 +2571,14 @@ impl<'a> Lowerer<'a> {
                     }
                 }
                 let options: Vec<(String, Option<String>)> = match (meaning("true"), meaning("false")) {
+                    (Some(_), Some(_)) if api == DecisionApi::Decisions => {
+                        self.push(e(
+                            "E007",
+                            ask.span,
+                            tr!("Decisions API の predicate は、はいといいえの意味を受け取りません。`true` と `false` の意味を外し、尋ねることの中に書いてください", "a predicate of the Decisions API takes no meanings of yes and no; leave out what `true` and `false` mean, and say it in the question"),
+                        ));
+                        return None;
+                    }
                     (Some(y), Some(n)) => vec![("true".into(), Some(y)), ("false".into(), Some(n))],
                     (None, None) => vec![],
                     _ => {

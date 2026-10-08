@@ -428,7 +428,7 @@ reads what the project says.
 | W902 | a connection that is not encrypted, to a host that is not this machine | `dandori check`, for the URLs a task calls; `sakai check`, for the servers of a map's OpenAPI and AsyncAPI documents |
 | W903 | an operation or a channel of a published language whose document has no `security` | `sakai check` |
 | W904 | a secret the platform keeps in the history of a run: an input, an output, an argument, an answer | `dandori check` |
-| E906 | a secret sent outside the project: to a model's provider, Jev, a host named by its URL alone, an AWS service | `dandori check` |
+| E906 | a secret sent outside the project: to a model's provider, the API of a decision model (Jev, OpenAI's Decisions API, a server that is not this machine), a host named by its URL alone, an AWS service | `dandori check` |
 | E905, W905 | a secret sent to a file outside the map, or to a context the map does not relate to the one that marked it; or, with a map that does not pass sakai's check, where it goes cannot be decided | `ritsu check` |
 | W910 | an input of a gate's action that a policy reads and that the contract of the operation it guards marks secret: the value goes into the request Cedar is asked, and stays in the record of the decision | `sekisho check` |
 | E907, W907 | an operation a context opens (`open host service`) that no action of a gate guards; a context none of whose operations is guarded yet | `ritsu check`, in a project with a gate |

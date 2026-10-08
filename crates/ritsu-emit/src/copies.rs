@@ -264,7 +264,7 @@ pub mod dandori {
         "History", "ReplayFailure", "Replay", "Start", "CallbackAnswer", "Answer", "Send", "Where",
         "Status", "Histories", "Outcome", "HTTPRequest", "HTTPResponse", "AgentCall", "Transport",
         "TransportOptions", "NewTransport", "DefaultTransport", "AgentHTTPError", "AgentStopped",
-        "JevURL", "ClaudeMaxTokens", "WorkflowInput", "WorkflowOutput", "IsWorkflowInput",
+        "JevURL", "DecisionsURL", "ClaudeMaxTokens", "WorkflowInput", "WorkflowOutput", "IsWorkflowInput",
         "Decode", "TIMESTAMP", "Service",
     ];
 

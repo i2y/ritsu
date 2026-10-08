@@ -77,9 +77,10 @@ the run can no longer go another way before the call. A run whose values break i
 `Dandori.BrokenPrecondition`, on every platform.
 
 **What a task calls.** A task that runs another `.flow` fits the child's inputs, outputs and failures
-(E015), and a task that calls a described API fits the description (E016). A Jev task answers what
-Jev can answer (E007), and one that relies on how sure Jev is names the version it relies on (W032).
-[Jev](jev.md)
+(E015), and a task that calls a described API fits the description (E016). A decision task (`jev`) answers what
+a decision model can answer (E007), and one that relies on how sure the model is names a model that
+does not move to another by itself (W032); a refusal is declared on the Decisions API alone (E007).
+[Decision models](jev.md)
 [What a task calls](tasks.md)
 
 **The service a workflow implements.** A workflow whose entry is a proto service fits it: its inputs

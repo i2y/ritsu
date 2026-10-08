@@ -1,0 +1,111 @@
+workflow decisions v1
+description "The decision tasks on their servers: TypeSafe's Jev; a server of the System One API (`url`), such as Ollama; OpenAI's Decisions API (`jev openai`), and another server of it (`url`). A choice with a meaning for some of its values only, a score, yes or no with meanings and without, a record of three answers and how sure of one as a rate, floors of how sure, a refusal declared and one not, each handled at the call and not, a call whose answer is not read, an error by its status retried, and the two forms of W032: a model without a tag on the server of the System One API, and the Decisions API, which names no version of its model"
+
+enum kind = returns | delivery | billing | other
+enum urgency = low | medium | high
+
+record Reading
+  kind    : kind
+  urgency : urgency
+  person  : bool
+  sure    : rate[step 0.01%]
+
+inputs
+  texts  : list[string]
+  text   : string
+  member : bool
+
+outputs
+  kinds   : list[kind]
+  kind    : kind
+  urgency : urgency
+  person  : bool
+  upset   : bool
+  sure    : rate[step 0.01%]
+
+# TypeSafe's Jev; the values without a meaning go to it as options with none
+task pick_kind(text: string) -> kind
+  jev "Which kind of inquiry is this?"
+    returns "The customer wants to send an item back or exchange it"
+    delivery "A parcel is late, lost or damaged"
+  model "jev-1.13.0"
+  confidence 0.8 else unsure
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/typesafe/1a2b3c4d"
+  errors busy = 429, overloaded = 529
+  retry 2 times every 1 second on busy, overloaded
+  timeout 10 seconds
+
+# a server of the System One API (Ollama serves it at /v1/systemone), its model named with its tag
+task measure_urgency(text: string, kind: kind) -> urgency
+  jev score "How urgent is it for the customer?"
+    low "The customer does not say it is urgent"
+    medium "The customer names a date, but not a near one"
+    high "The customer asks for an answer today"
+  model "tev1:0.8b"
+  url "https://decisions.example.com/v1"
+  confidence 0.7 else unmeasured
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/decisions/5e6f7a8b"
+  errors busy = 429
+  retry 1 times every 1 second on busy
+
+# the same server, a model without a tag, which moves when the server pulls it again (W032)
+task wants_person(text: string, member: bool) -> bool
+  jev "Does the customer ask to talk to a person?"
+    true "The customer says plainly they want a person or an agent"
+    false "The customer does not say so"
+  model "nimble"
+  url "https://decisions.example.com/v1/"
+  confidence 0.9 else undecided
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/decisions/5e6f7a8b"
+
+# OpenAI's Decisions API: three answers in one request and how sure of the kind, a refusal declared;
+# the API names no version of its model (W032)
+task read(text: string) -> Reading
+  jev openai
+    kind "Which kind of inquiry is this?"
+      returns "The customer wants to send an item back or exchange it"
+      billing "A charge, an invoice, a payment or a refund"
+    urgency score "How urgent is it for the customer?"
+      low "The customer does not say it is urgent"
+      medium "The customer names a date, but not a near one"
+      high "The customer asks for an answer today"
+    person "Does the customer ask to talk to a person?"
+    sure confidence of kind
+  model "gpt-6-luna"
+  confidence 0.6 else unsure
+  refusal else declined
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/openai/9c0d1e2f"
+  errors busy = 429
+  retry 2 times every 1 second on busy
+  timeout 10 seconds
+
+# another server of the Decisions API (`url`), a predicate, and no refusal declared: a refused
+# question fails the call with Dandori.Refused, which `on failure` takes
+task is_upset(text: string) -> bool
+  jev openai "Is the customer upset?"
+  model "gpt-6-luna"
+  url "https://gateway.example.com/v1"
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/gateway/3a4b5c6d"
+
+flow
+  # the answer is not read, but how sure it is still is
+  wants_person(text: text, member: member)
+    on undecided => pass
+  let kinds = for one in texts at most 3 in parallel
+    let k = pick_kind(text: one)
+      on unsure => let k = other
+    yield k
+  let kind = pick_kind(text: text)
+    on unsure => let kind = other
+  let u = measure_urgency(text: text, kind: kind)
+    on unmeasured => let u = high
+  let r = read(text: text)
+    on declined => fail Declined "The model would not read the inquiry"
+  let upset = is_upset(text: text)
+    on failure => let upset = true
+  # a refusal nothing at the call takes goes to `on failure`, though the answer is not read
+  is_upset(text: text)
+  succeed kinds = kinds, kind = kind, urgency = u, person = r.person, upset = upset, sure = r.sure
+
+on failure
+  fail Unreadable "Could not read the inquiry"

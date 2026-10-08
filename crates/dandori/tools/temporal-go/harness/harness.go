@@ -103,6 +103,7 @@ type HTTPRequest struct {
 	Query    any               `json:"query,omitempty"`
 	Form     bool              `json:"form,omitempty"`
 	TypeSafe bool              `json:"typesafe,omitempty"`
+	OpenAI   bool              `json:"openai,omitempty"`
 }
 
 // HTTPResponse is the status of an HTTP answer, and its body (parsed when it is JSON).

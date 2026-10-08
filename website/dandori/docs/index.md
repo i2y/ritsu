@@ -191,13 +191,14 @@ task pick_kind(text: string) -> routing.kind
 </div>
 <div markdown>
 
-### Jev decides, and says how sure
+### A decision model decides, and says how sure
 
-A task can ask TypeSafe's Jev, which writes no text: it answers typed questions, each with how sure
-it is. The task's answer type is the question, a choice among an enum's values, a place on a scale
-of them, or yes or no, and an answer less sure than the task asks fails the call with an error the
-flow handles. How sure is enough for what can be a rule's table.
-[Jev](jev.md)
+A task can ask a decision model, which writes no text: it answers typed questions, each with how sure
+it is. TypeSafe's Jev, another server of its System One API such as Ollama, and OpenAI's Decisions
+API are asked the same way. The task's answer type is the question, a choice among an enum's values,
+a place on a scale of them, or yes or no, and an answer less sure than the task asks fails the call
+with an error the flow handles. How sure is enough for what can be a rule's table.
+[Decision models](jev.md)
 
 </div>
 </div>

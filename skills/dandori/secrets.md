@@ -97,8 +97,10 @@ workflow payout v1
 
 ## Sent outside the project (E906)
 
-A model's provider (OpenAI, Anthropic, or an Open Responses server that is not this machine), Jev, a
-host an `http` task names by its URL alone, and an AWS service are outside the project. A task that
+A model's provider (OpenAI, Anthropic, or an Open Responses server that is not this machine), the API
+of a decision model (TypeSafe's Jev, OpenAI's Decisions API, or a server of either API that is not
+this machine), a host an `http` task names by its URL alone, and an AWS service are outside the
+project. A task that
 sends one a secret is an error. When it is meant, the task says so, and the history still keeps the
 value (W904):
 

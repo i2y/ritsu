@@ -6,7 +6,8 @@ package harness
 // twin of ../../transport.py: the calls are written down in the shapes it writes them in.
 //
 // spec "http": [ { method, url, errors: { <error>: <status> } } ]  (url with {placeholders}; the
-//   Jev tasks all send to one URL, and an error takes its status from the task that declares it)
+//   decision tasks of one API send to one URL, and an error takes its status from the task that
+//   declares it)
 // spec "aws":  [ { api: "<service>:<action>", errors: { <error>: <exception> }, keyParam } ]
 //
 // A callback task's submit hands on `callback_id` (in the Lambda payload, or in the SQS
@@ -14,9 +15,9 @@ package harness
 // the answer the scenario gives the callback.
 //
 // An agent answers {"answer": <the scenario's value>}, as the model would under the schema; its
-// failure is an error, as the default transport's refusal is. A Jev task's call is an HTTP
-// request, whose body is the scenario's answer (Jev's response); `typesafe`, which says it is
-// one, is not written down.
+// failure is an error, as the default transport's refusal is. A decision task's (`jev`) call is an
+// HTTP request, whose body is the scenario's answer (the API's response); `typesafe` and `openai`,
+// which say whose key it takes, are not written down.
 //
 // A call that the scenario times out, or cancels the workflow during, goes to `run.hold(answer)`:
 // the runner keeps the call from answering until the server times it out, or cancels the
@@ -130,6 +131,7 @@ func (s *standIn) HTTP(ctx context.Context, req HTTPRequest) (HTTPResponse, erro
 	}
 	delete(call, "form")
 	delete(call, "typesafe")
+	delete(call, "openai")
 	ans, err := s.run.take(ctx, call)
 	if err != nil {
 		return HTTPResponse{}, err

@@ -1,0 +1,36 @@
+エラー[E007]: tests/fixtures/decisions.flow:12:7: `gemini` は dandori の知らない判断の API です。`jev "…"`（TypeSafe の Jev が答える System One の API。`jev typesafe "…"` と書いても同じ）か `jev openai "…"`（OpenAI の Decisions API）と書いてください
+    12 |   jev gemini "Which kind is it?"
+エラー[E007]: tests/fixtures/decisions.flow:18:16: System One の API（TypeSafe の Jev や、`url` のサーバー）は、どの質問にも答えを返し、答えないことはありません。`refusal` は `jev openai` のタスクに書くところです
+    18 |   refusal else declined
+エラー[E007]: tests/fixtures/decisions.flow:22:16: `refusal` は、OpenAI の Decisions API が質問に答えなかったときのエラーを書くところです。このタスクには `jev openai` がありません
+    22 |   refusal else declined
+エラー[E007]: tests/fixtures/decisions.flow:27:16: `failure` はいつもあるエラーです。モデルが答えなかったときには、タスク自身のエラーの名前を付けてください
+    27 |   refusal else failure
+エラー[E006]: tests/fixtures/decisions.flow:32:16: エラー `declined` が二度書かれています。`refusal else declined` がそれを宣言します
+    32 |   refusal else declined
+エラー[E007]: tests/fixtures/decisions.flow:39:35: 答えなかった質問は、同じ入力で尋ね直しても答えないことが多いので、`declined` はリトライできません（確信度の下限と同じです）
+    39 |   retry 2 times every 1 second on declined
+エラー[E007]: tests/fixtures/decisions.flow:42:14: Decisions API の predicate は、はいといいえの意味を受け取りません。`true` と `false` の意味を外し、尋ねることの中に書いてください
+    42 |   jev openai "Is the customer upset?"
+エラー[E007]: tests/fixtures/decisions.flow:48:3: Decisions API には、尋ねるモデルを `model "gpt-6-luna"` のように書いてください
+    48 |   jev openai "Which kind is it?"
+エラー[E007]: tests/fixtures/decisions.flow:51:3: System One の API のサーバーには、尋ねるモデルを `model "tev1:0.8b"` のように、名前とタグで書いてください
+    51 |   jev "Which kind is it?"
+エラー[E007]: tests/fixtures/decisions.flow:55:14: choice の選択肢は二つ以上で、`one` の値は一つだけです
+    55 |   jev openai "Which is it?"
+エラー[E007]: tests/fixtures/decisions.flow:59:14: score の段階は二つ以上で、`one` の値は一つだけです
+    59 |   jev openai score "How far is it?"
+エラー[E007]: tests/fixtures/decisions.flow:66:3: `gateway.example.com/v1` は http:// や https:// の URL ではありません
+    66 |   url "gateway.example.com/v1"
+エラー[E007]: tests/fixtures/decisions.flow:71:10: 判断の API はエラーを HTTP ステータスで伝えます。`busy` が返ってくるときのステータスを、`busy = 429`（レート制限）のように書いてください
+    71 |   errors busy
+警告[W032]: tests/fixtures/decisions.flow:108:3: `nimble` にはタグが無いので、サーバーがモデルを取り直すと、ここを変えなくても新しいモデルに移ります（Ollama の名前の付け方では `:latest` と同じです）。確信度の意味はモデルごとに違うので、確信度を合わせたモデルを `model "tev1:0.8b"` のようにタグまで書いてください
+   108 |   model "nimble"
+警告[W032]: tests/fixtures/decisions.flow:114:3: `nimble:latest` のタグ `latest` は、サーバーがモデルを取り直すと、ここを変えなくても新しいモデルに移ります（Ollama の名前の付け方）。確信度の意味はモデルごとに違うので、確信度を合わせたモデルを `model "tev1:0.8b"` のようにタグまで書いてください
+   114 |   model "nimble:latest"
+警告[W032]: tests/fixtures/decisions.flow:120:3: OpenAI の Decisions API には、モデルのバージョンを固定する名前がありません（`gpt-6-luna`）。モデルが替わると、ここを変えなくても確信度の意味が変わることがあるので、確信度の下限と確信度を受け取るフィールドを、ときどき実際の答えで確かめ直してください
+   120 |   model "gpt-6-luna"
+警告[W902]: tests/fixtures/decisions.flow:131:3: 判断のタスク `plain_http` は、decisions.internal に暗号化しない HTTP でリクエストを送ります
+   131 |   url "http://decisions.internal:11434/v1"
+  = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
+  = https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、タスクの下に `plaintext "<理由>"` と書いてください。

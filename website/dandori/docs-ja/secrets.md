@@ -79,7 +79,7 @@ workflow 支払い v1
 
 ## プロジェクトの外へ送る（E906）
 
-モデルのプロバイダー（OpenAI、Anthropic、このマシンでない Open Responses のサーバー）、Jev、URL だけで書いた `http` の送り先、AWS のサービスは、プロジェクトの外です。タスクがそこへ秘密の値を送るとエラーになります。意図しているなら、タスクにそう書きます。履歴には残るので、W904 は出たままです。
+モデルのプロバイダー（OpenAI、Anthropic、このマシンでない Open Responses のサーバー）、判断のモデルの API（TypeSafe の Jev、OpenAI の Decisions API、どちらかの API を話すこのマシンでないサーバー）、URL だけで書いた `http` の送り先、AWS のサービスは、プロジェクトの外です。タスクがそこへ秘密の値を送るとエラーになります。意図しているなら、タスクにそう書きます。履歴には残るので、W904 は出たままです。
 
 ```flow
 task 知らせを書く(金額: money[円, incl_tax], 送金ID: string, 名義: string) -> string

@@ -443,9 +443,10 @@ fn kept(m: &Model, vars: &BTreeMap<String, Vec<Held>>) -> Vec<Diag> {
 // ── E906 ────────────────────────────────────────────────────────────────────
 
 /// Who a task sends what it is given to, when that is outside the project: a model provider, Jev,
-/// the host an `http` task names by its URL alone, an AWS service. None for a call that stays in the
-/// project or on this machine (an operation of an API's description, a `.proto`'s method, a rule, a
-/// child flow, a book, the user's own code, an agent or an `http` call to this machine).
+/// OpenAI's Decisions API, the host an `http` task names by its URL alone, an AWS service. None for a
+/// call that stays in the project or on this machine (an operation of an API's description, a
+/// `.proto`'s method, a rule, a child flow, a book, the user's own code, an agent, a decision task
+/// or an `http` call to this machine).
 pub fn outside(t: &TaskDef) -> Option<String> {
     match &t.binding {
         Some(Binding::Agent { provider, url: None, .. }) => Some(match provider {
@@ -453,7 +454,11 @@ pub fn outside(t: &TaskDef) -> Option<String> {
             Provider::Claude => "Anthropic".to_string(),
         }),
         Some(Binding::Agent { url: Some(u), .. }) => host_of(u).filter(|(_, local)| !local).map(|(h, _)| h),
-        Some(Binding::Jev(_)) => Some("TypeSafe (Jev)".to_string()),
+        Some(Binding::Jev(j)) => match (j.api, &j.url) {
+            (DecisionApi::SystemOne, None) => Some("TypeSafe (Jev)".to_string()),
+            (DecisionApi::Decisions, None) => Some("OpenAI (the Decisions API)".to_string()),
+            (_, Some(u)) => host_of(u).filter(|(_, local)| !local).map(|(h, _)| h),
+        },
         Some(Binding::Http { url, .. }) if t.api_file.is_none() => host_of(url).filter(|(_, local)| !local).map(|(h, _)| h),
         Some(Binding::Aws { service, .. }) => Some(format!("AWS ({service})")),
         _ => None,

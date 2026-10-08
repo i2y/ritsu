@@ -58,8 +58,8 @@ error[E007]: tests/fixtures/jev.flow:168:3: Jev only answers, and changes nothin
    168 |   key
 error[E007]: tests/fixtures/jev.flow:173:3: a `callback` task hands its token over by `lambda` or by `aws sqs:sendMessage`
    173 |   callback
-error[E007]: tests/fixtures/jev.flow:178:3: Jev is always called at TypeSafe's API; `url` says which server an agent's Open Responses API is on
-   178 |   url "https://api.example.com/v1"
+error[E007]: tests/fixtures/jev.flow:178:3: `api.example.com/v1` is not an http:// or https:// URL
+   178 |   url "api.example.com/v1"
 error[E007]: tests/fixtures/jev.flow:183:3: Jev answers at once and does not reason at length; `effort` says how hard an agent's model reasons
    183 |   effort high
 error[E007]: tests/fixtures/jev.flow:186:7: the answer is a record, so Jev is asked a question for each of its fields: write `jev` alone, and under it `<field> "<question>"` for each

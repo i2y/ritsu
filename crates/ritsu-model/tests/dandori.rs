@@ -48,8 +48,9 @@ fn flows_in(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// What dandori reads an answer as before the flow sees it, for a callee that reads one: Jev's
-/// answer (or the error of one less sure than the task asks), protobuf's zero values put back, a
+/// What dandori reads an answer as before the flow sees it, for a callee that reads one: a decision
+/// model's answer (or the error of a question refused, or of one less sure than the task asks),
+/// protobuf's zero values put back, a
 /// Claude agent's enum values spelled as the enum spells them, a rule's answer from its Connect
 /// service. None for a callee that takes an answer as it is. These are dandori's own functions; the
 /// model is handed what they give and holds what the flow does with it.
@@ -61,7 +62,10 @@ fn read_as(m: &Model, callee: &Callee, v: &Value) -> Option<Value> {
             let claude = matches!(task.via(Platform::Temporal), Some(Via::Agent { provider: Provider::Claude, .. })) && task.result.is_some();
             let fold = |x: Value| if claude { render::fold_enums(m, &x, task.result.as_ref().unwrap()) } else { x };
             if let Some(j) = task.jev() {
-                let (read, low) = render::jev_read(j, v);
+                let (read, low, refused) = render::jev_read(j, v);
+                if let (true, Some(error)) = (refused, j.refusal_error()) {
+                    return Some(json!({"error": error, "cause": render::jev_refused_cause(task)}));
+                }
                 if let (true, Some((_, error))) = (low, &j.floor) {
                     return Some(json!({"error": error, "cause": render::jev_low_cause(task)}));
                 }

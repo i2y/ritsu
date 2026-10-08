@@ -1,0 +1,36 @@
+error[E007]: tests/fixtures/decisions.flow:12:7: `gemini` is not an API of decisions dandori knows; write `jev "…"` (the System One API that TypeSafe's Jev answers on, also written `jev typesafe "…"`) or `jev openai "…"` (OpenAI's Decisions API)
+    12 |   jev gemini "Which kind is it?"
+error[E007]: tests/fixtures/decisions.flow:18:16: the System One API (TypeSafe's Jev, and the servers `url` names) answers every question and refuses none; `refusal` is for a `jev openai` task
+    18 |   refusal else declined
+error[E007]: tests/fixtures/decisions.flow:22:16: `refusal` says the error of a question OpenAI's Decisions API refuses; this task has no `jev openai`
+    22 |   refusal else declined
+error[E007]: tests/fixtures/decisions.flow:27:16: `failure` is always there; name an error of the task's own for a question the model refuses
+    27 |   refusal else failure
+error[E006]: tests/fixtures/decisions.flow:32:16: the error `declined` is written twice: `refusal else declined` declares it
+    32 |   refusal else declined
+error[E007]: tests/fixtures/decisions.flow:39:35: a question the model refused is mostly refused again when asked again with the same input, so `declined` is not retried, as a floor of how sure is not
+    39 |   retry 2 times every 1 second on declined
+error[E007]: tests/fixtures/decisions.flow:42:14: a predicate of the Decisions API takes no meanings of yes and no; leave out what `true` and `false` mean, and say it in the question
+    42 |   jev openai "Is the customer upset?"
+error[E007]: tests/fixtures/decisions.flow:48:3: the Decisions API needs the model it asks; write it, as `model "gpt-6-luna"`
+    48 |   jev openai "Which kind is it?"
+error[E007]: tests/fixtures/decisions.flow:51:3: the server of the System One API needs the model it asks; write its name and tag, as `model "tev1:0.8b"`
+    51 |   jev "Which kind is it?"
+error[E007]: tests/fixtures/decisions.flow:55:14: a choice has two options at least, and `one` has one value only
+    55 |   jev openai "Which is it?"
+error[E007]: tests/fixtures/decisions.flow:59:14: a score has two levels at least, and `one` has one value only
+    59 |   jev openai score "How far is it?"
+error[E007]: tests/fixtures/decisions.flow:66:3: `gateway.example.com/v1` is not an http:// or https:// URL
+    66 |   url "gateway.example.com/v1"
+error[E007]: tests/fixtures/decisions.flow:71:10: the API of decisions says an error by its HTTP status; give `busy` the one it comes back with, as `busy = 429` (the rate limit)
+    71 |   errors busy
+warning[W032]: tests/fixtures/decisions.flow:108:3: `nimble` has no tag, so it moves to a newer model when the server pulls the model again, with no change here (as Ollama names models, it is `:latest`); how sure one model is means something else to the next, so name the model the confidence is set for with its tag, as `model "tev1:0.8b"`
+   108 |   model "nimble"
+warning[W032]: tests/fixtures/decisions.flow:114:3: the tag `latest` of `nimble:latest` moves to a newer model when the server pulls the model again, with no change here (how Ollama names models); how sure one model is means something else to the next, so name the model the confidence is set for with its tag, as `model "tev1:0.8b"`
+   114 |   model "nimble:latest"
+warning[W032]: tests/fixtures/decisions.flow:120:3: OpenAI's Decisions API names no version of its model (`gpt-6-luna`), so how sure an answer is may come to mean something else when the model changes, with no change here; check the floor of how sure, and the fields that take it, against real answers from time to time
+   120 |   model "gpt-6-luna"
+warning[W902]: tests/fixtures/decisions.flow:131:3: the decision task `plain_http` sends its requests to decisions.internal over plain HTTP
+   131 |   url "http://decisions.internal:11434/v1"
+  = Whoever is on the network between can read and change the requests, the answers, and any key in the headers.
+  = Use https://. If the connection is protected another way (a service mesh, a private link), say so under the task with `plaintext "<why>"`.

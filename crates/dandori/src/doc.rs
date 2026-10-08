@@ -389,12 +389,22 @@ pub fn how_called(i: &Input, t: &TaskDef) -> (String, bool) {
             Some(s)
         }
         Some(Binding::Jev(j)) => {
-            let mut s = "jev".to_string();
+            // whose API, as the `.flow` writes it: `jev` for TypeSafe's System One, `jev openai`
+            let mut s = match j.api {
+                DecisionApi::SystemOne => "jev".to_string(),
+                DecisionApi::Decisions => "jev openai".to_string(),
+            };
             if !j.model.is_empty() {
                 s.push_str(&format!(" · {}", j.model));
             }
+            if let Some(u) = &j.url {
+                s.push_str(&format!(" · {u}"));
+            }
             if let Some((f, e)) = &j.floor {
                 s.push_str(&format!(" · confidence {f} else {e}"));
+            }
+            if let Some(e) = &j.refusal {
+                s.push_str(&format!(" · refusal else {e}"));
             }
             Some(s)
         }

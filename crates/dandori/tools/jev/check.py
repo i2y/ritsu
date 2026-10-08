@@ -1,7 +1,8 @@
-# Sends Jev tasks' requests to TypeSafe's API for real, through the default Transport that dandori
-# writes for Python (io.py), and reads each answer with io.jev, as the generated activities do. The
-# Transport adds TypeSafe's key from TYPESAFE_API_KEY. The Python twin of check.mjs; it needs
-# nothing but the standard library.
+# Sends decision tasks' requests for real — to TypeSafe's API, OpenAI's Decisions API, or a server
+# of the System One API such as Ollama — through the default Transport that dandori writes for
+# Python (io.py), and reads each answer with io.jev, as the generated activities do. The Transport
+# adds the key the case names ("typesafe", "openai", or none; TypeSafe's when left out). The Python
+# twin of check.mjs; it needs nothing but the standard library.
 #
 #   python3 tools/jev/check.py <io.py> <cases.json> <results.json>
 
@@ -36,7 +37,8 @@ async def main() -> None:
     results = []
     for c in cases:
         began = time.monotonic()
-        res = await transport.http({**c["request"], "typesafe": True})
+        key = c.get("key", "typesafe")
+        res = await transport.http({**c["request"], **({key: True} if key else {})})
         r = {"status": res["status"], "body": res["body"], "ms": round((time.monotonic() - began) * 1000)}
         if 200 <= res["status"] < 300:
             try:

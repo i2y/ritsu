@@ -34,7 +34,7 @@
    124 |   url "http://ollama.internal:11434/v1"
   = 途中のネットワークにいる人は、リクエストとレスポンスと、ヘッダーの鍵を読んだり書き換えたりできます。
   = https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、タスクの下に `plaintext "<理由>"` と書いてください。
-エラー[E007]: tests/fixtures/agents.flow:128:3: `url` はエージェントの Open Responses の API がどのサーバーにあるかを書くところです。このタスクには `agent` がありません（HTTP のタスクの URL は `http` のあとに書いてください）
+エラー[E007]: tests/fixtures/agents.flow:128:3: `url` は、エージェントの Open Responses の API や、判断のモデル（`jev`）の API がどのサーバーにあるかを書くところです。このタスクには `agent` も `jev` もありません（HTTP のタスクの URL は `http` のあとに書いてください）
    128 |   url "http://ollama.internal:11434/v1"
 エラー[E007]: tests/fixtures/agents.flow:133:3: `url` は Open Responses（OpenAI の Responses API を、ほかのサーバーも同じ形で出すもの）のサーバーを書くところです。Claude のエージェントは Anthropic の Messages API で呼び、それは Open Responses ではありません
    133 |   url "http://ollama.internal:11434"

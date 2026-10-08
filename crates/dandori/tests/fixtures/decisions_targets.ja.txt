@@ -1,0 +1,9 @@
+build --target asl:
+エラー[E050]: tests/fixtures/decisions_targets.flow:12:1: Step Functions は `on_openai` の判断を HTTP Task で呼ぶので、OpenAI の API キー（ヘッダ Authorization に `Bearer <キー>`）を持つ `connection "<EventBridge の接続の ARN>"` が要ります
+    12 | task on_openai(text: string) -> kind
+エラー[E050]: tests/fixtures/decisions_targets.flow:16:1: Step Functions は `on_a_server` の判断を HTTP Task で呼ぶので、サーバーの鍵（鍵の要らないサーバーでも、EventBridge の接続には何かの値が要ります）を持つ `connection "<EventBridge の接続の ARN>"` が要ります
+    16 | task on_a_server(text: string) -> kind
+エラー[E050]: tests/fixtures/decisions_targets.flow:21:1: Step Functions の HTTP Task が呼べるのは HTTPS の API だけです（非公開の API でも、公開のドメイン名と広く信頼された証明書が要ります）。`over_plain_http` の送信先は `http://127.0.0.1:11434/v1/systemone` です
+    21 | task over_plain_http(text: string) -> kind
+エラー[E050]: tests/fixtures/decisions_targets.flow:27:1: Step Functions は HTTP Task のリクエストを 60 秒で打ち切るので、`waits_long` の `timeout` はそれより長くできません
+    27 | task waits_long(text: string) -> kind

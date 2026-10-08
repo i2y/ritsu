@@ -591,16 +591,30 @@ pub(crate) fn task_impl(m: &Model, task: &TaskDef, p: Platform) -> Vec<String> {
         Some(Via::Jev(j)) => {
             let state: Vec<String> = task.params.iter().map(|(p, _)| format!("{}: args.get({})", q(p), q(p))).collect();
             let statuses = task.errors.iter().filter_map(|e| e.status.map(|s| format!("{}: {}", q(&s.to_string()), q(&e.name)))).collect::<Vec<_>>().join(", ");
-            vec![
+            let url = match (j.api, &j.url) {
+                (DecisionApi::SystemOne, None) => "io.JEV_URL".to_string(),
+                (DecisionApi::Decisions, None) => "io.DECISIONS_URL".to_string(),
+                (_, Some(_)) => q(&j.endpoint()),
+            };
+            // the System One API takes the arguments as the state; the Decisions API as their JSON text
+            let body = match j.api {
+                DecisionApi::SystemOne => format!("{{\"state\": {{{}}}, \"model\": {}, \"questions\": JEV[{}][\"questions\"]}}", state.join(", "), q(&j.model), q(&task.name)),
+                DecisionApi::Decisions => format!("{{\"model\": {}, \"input\": io.json_text({{{}}}), \"questions\": JEV[{}][\"questions\"]}}", q(&j.model), state.join(", "), q(&task.name)),
+            };
+            let mut lines = vec![
                 "return io.jev(".to_string(),
                 "    io.status(".into(),
                 "        await t.http(".into(),
                 "            {".into(),
                 "                \"http\": \"POST\",".into(),
-                "                \"url\": io.JEV_URL,".into(),
-                format!("                \"body\": {{\"state\": {{{}}}, \"model\": {}, \"questions\": JEV[{}][\"questions\"]}},", state.join(", "), q(&j.model), q(&task.name)),
-                "                \"typesafe\": True,".into(),
-                "            }".into(),
+                format!("                \"url\": {url},"),
+                format!("                \"body\": {body},"),
+            ];
+            if let Some(k) = j.key() {
+                lines.push(format!("                {}: True,", q(k)));
+            }
+            lines.extend([
+                "            }".to_string(),
                 "        ),".into(),
                 format!("        {{{statuses}}},"),
                 "        fail,".into(),
@@ -608,7 +622,8 @@ pub(crate) fn task_impl(m: &Model, task: &TaskDef, p: Platform) -> Vec<String> {
                 format!("    JEV[{}],", q(&task.name)),
                 "    fail,".into(),
                 ")".into(),
-            ]
+            ]);
+            lines
         }
         Some(Via::Book(b)) => {
             // the book's operation, on chobo's client through the transport; a refusal is the declared error its reason names
@@ -680,8 +695,9 @@ fn tasks_file(m: &Model, header: &str) -> String {
     a.push_str("# - So is a task that says `agent`: the model gets the arguments as JSON text, as from Step\n");
     a.push_str("#   Functions, and answers {\"answer\": …} in the JSON Schema below; the Transport runs the agent.\n");
     a.push_str("#   A Claude agent's enum values are taken without regard to case (io.fold).\n");
-    a.push_str("# - So is a task that says `jev`: TypeSafe's Jev reads the arguments as its state and answers the\n");
-    a.push_str("#   questions below, sent over HTTP (io.JEV_URL) with TypeSafe's key, and io.jev reads the answer.\n");
+    a.push_str("# - So is a task that says `jev`: a decision model reads the arguments and answers the questions\n");
+    a.push_str("#   below, sent over HTTP: TypeSafe's Jev (io.JEV_URL, with TypeSafe's key), OpenAI's Decisions API\n");
+    a.push_str("#   (io.DECISIONS_URL, with OpenAI's key), or the server `url` names; io.jev reads the answer.\n");
     if !connected.is_empty() {
         a.push_str("# - So is a rule that says `connect` under `use rule`: it is called at its Connect service, over HTTP\n");
         a.push_str("#   through the Transport, and the answer is read as the rule's record (io.rule). Its name is the\n");
@@ -980,10 +996,10 @@ fn io_py_alone(m: &Model) -> String {
             "    async def agent(self, call: AgentCall) -> Any:\n        \"\"\"Run an agent once; the answer is the JSON it gave, as `schema` says. A refusal raises.\"\"\"\n        ...\n",
             "    async def agent(self, call: AgentCall) -> Any:\n        \"\"\"Run an agent once; the answer is the JSON it gave, as `schema` says. A refusal raises.\"\"\"\n        ...\n\n    async def book(self, call: dict[str, Any]) -> dict[str, Any]:\n        \"\"\"Run an operation of a book of chobo's (do, hold, post or void) on chobo's client: {\"book\", \"transfer\",\n        \"op\", \"args\", \"amounts\"?}, by the book's names; the answer is {\"result\", \"reason\"?}, a refusal too.\"\"\"\n        ...\n",
         )
-        .replace("        typesafe: dict[str, Any] | None = None,\n    ) -> None:", "        typesafe: dict[str, Any] | None = None,\n        books: dict[str, Any] | None = None,\n    ) -> None:")
-        .replace("TypeSafe's API key for the Jev tasks, in place of TYPESAFE_API_KEY.\"\"\"\n        self._headers = headers", "TypeSafe's API key for the Jev tasks, in place of TYPESAFE_API_KEY. `books`: the books the tasks run\n        operations on, by the book's name: the value chobo's Python client makes (`tigerbeetle(client)` or\n        `postgres(connection)`).\"\"\"\n        self._books = books or {}\n        self._headers = headers")
+        .replace("        openai: dict[str, Any] | None = None,\n    ) -> None:", "        openai: dict[str, Any] | None = None,\n        books: dict[str, Any] | None = None,\n    ) -> None:")
+        .replace("OpenAI's API key for the tasks of OpenAI's Decisions API, in place of OPENAI_API_KEY.\"\"\"\n        self._headers = headers", "OpenAI's API key for the tasks of OpenAI's Decisions API, in place of OPENAI_API_KEY. `books`: the books\n        the tasks run operations on, by the book's name: the value chobo's Python client makes\n        (`tigerbeetle(client)` or `postgres(connection)`).\"\"\"\n        self._books = books or {}\n        self._headers = headers")
         .replace("    def _client(self, service: str) -> Any:", &format!("{BOOK_PY}    def _client(self, service: str) -> Any:"))
-        .replace("    typesafe: dict[str, Any] | None = None,\n) -> Transport:\n    return DefaultTransport(headers, aws, agents, claude, typesafe)", "    typesafe: dict[str, Any] | None = None,\n    books: dict[str, Any] | None = None,\n) -> Transport:\n    return DefaultTransport(headers, aws, agents, claude, typesafe, books)")
+        .replace("    openai: dict[str, Any] | None = None,\n) -> Transport:\n    return DefaultTransport(headers, aws, agents, claude, typesafe, openai)", "    openai: dict[str, Any] | None = None,\n    books: dict[str, Any] | None = None,\n) -> Transport:\n    return DefaultTransport(headers, aws, agents, claude, typesafe, openai, books)")
         + crate::asl::PY_BOOK_RUN
         + BOOKED_PY
 }
@@ -1020,8 +1036,9 @@ const IO: &str = r#"# How the tasks that say `lambda`, `http`, `aws`, `agent` or
 # set; the default one uses the standard library for HTTP, boto3 (the AWS SDK for Python) for
 # Lambda and the AWS APIs, OpenAI's Agents SDK (openai-agents, which reads OPENAI_API_KEY) for
 # OpenAI's agents and Anthropic's SDK (anthropic, which reads ANTHROPIC_API_KEY) for Claude's,
-# each imported when first needed. Jev is called over HTTP with the standard library, with
-# TypeSafe's API key (TYPESAFE_API_KEY).
+# each imported when first needed. A decision task (`jev`) is called over HTTP with the standard
+# library: TypeSafe's Jev with TypeSafe's API key (TYPESAFE_API_KEY), OpenAI's Decisions API with
+# OpenAI's (OPENAI_API_KEY), and another server (`url`) with what `headers` adds.
 
 from __future__ import annotations
 
@@ -1040,19 +1057,25 @@ from typing import Any, Callable, Protocol
 Answer = dict[str, Any]
 
 # An HTTP request as Step Functions' HTTP Task sends it: {"http": method, "url", "headers",
-# "body", "query", "form", "typesafe"}; `form` asks for a URL-encoded body, and `typesafe` says it
-# is a call of Jev, to which the default transport adds TypeSafe's API key.
+# "body", "query", "form", "typesafe", "openai"}; `form` asks for a URL-encoded body, and
+# `typesafe` and `openai` say it is a call of TypeSafe's Jev or of OpenAI's Decisions API, to which
+# the default transport adds that API's key.
 HttpRequest = dict[str, Any]
 
 # Where every target sends a Jev task's request: TypeSafe's API.
 JEV_URL = "https://api.typesafe.ai/v1/systemone"
+
+# Where every target sends a `jev openai` task's request: OpenAI's Decisions API.
+DECISIONS_URL = "https://api.openai.com/v1/decisions"
 
 # What a Jev task asks, and how its answer is read (jev): {"questions": the questions of the
 # request by their ids, "read": for each question {"id", "field" (none: the answer is its value),
 # "kind" ("choice", "score" or "noul"), "values" (a score's from the lowest level)}, "confidences":
 # the fields that take how sure Jev is of a question's answer, as a count of a rate's steps
 # [{"field", "question", "per"}], "floor": how sure every answer must be, with the error the call
-# fails with when one is not {"at", "error", "cause"}}.
+# fails with when one is not {"at", "error", "cause"}}; for the Decisions API, "api": "decisions"
+# (its answers come in a list, each by its question's name) and "refusal": the error a refused
+# question fails the call with {"error", "cause"}.
 JevTask = dict[str, Any]
 
 # A call of an agent: {"agent": the task's name, "provider", "model", "instructions", "input",
@@ -1140,6 +1163,7 @@ class DefaultTransport:
         agents: Any = None,
         claude: dict[str, Any] | None = None,
         typesafe: dict[str, Any] | None = None,
+        openai: dict[str, Any] | None = None,
     ) -> None:
         """`headers`: what to add to an HTTP request, such as the credentials the other side
         wants (a server of Open Responses too); `aws`: the keyword arguments of boto3's clients, such as `region_name`;
@@ -1148,11 +1172,13 @@ class DefaultTransport:
         retry by itself); `claude`: the keyword arguments of Anthropic's client for the
         Claude agents, such as `api_key` or `base_url`. That client does not retry by itself
         unless they say so: the workflow retries, as `retry` says. `typesafe`: {"api_key"},
-        TypeSafe's API key for the Jev tasks, in place of TYPESAFE_API_KEY."""
+        TypeSafe's API key for the Jev tasks, in place of TYPESAFE_API_KEY. `openai`: {"api_key"},
+        OpenAI's API key for the tasks of OpenAI's Decisions API, in place of OPENAI_API_KEY."""
         self._headers = headers
         self._aws = aws or {}
         self._agents = agents
         self._typesafe = typesafe or {}
+        self._openai = openai or {}
         self._claude_options = claude or {}
         self._claude: Any = None
         self._clients: dict[str, Any] = {}
@@ -1189,6 +1215,11 @@ class DefaultTransport:
                 key = self._typesafe.get("api_key") or os.environ.get("TYPESAFE_API_KEY")
                 if not key:
                     raise RuntimeError("no API key for Jev: set TYPESAFE_API_KEY, or give the transport typesafe={\"api_key\": ...}")
+                headers["Authorization"] = f"Bearer {key}"
+            if req.get("openai") and not any(h.lower() == "authorization" for h in headers):
+                key = self._openai.get("api_key") or os.environ.get("OPENAI_API_KEY")
+                if not key:
+                    raise RuntimeError("no API key for OpenAI's Decisions API: set OPENAI_API_KEY, or give the transport openai={\"api_key\": ...}")
                 headers["Authorization"] = f"Bearer {key}"
             data = None
             if req.get("body") is not None:
@@ -1331,8 +1362,9 @@ def transport(
     agents: Any = None,
     claude: dict[str, Any] | None = None,
     typesafe: dict[str, Any] | None = None,
+    openai: dict[str, Any] | None = None,
 ) -> Transport:
-    return DefaultTransport(headers, aws, agents, claude, typesafe)
+    return DefaultTransport(headers, aws, agents, claude, typesafe, openai)
 
 
 def workflow_of(callback_id: str) -> str:
@@ -1456,14 +1488,14 @@ def _unit(x: Any) -> float | None:
     return x if isinstance(x, (int, float)) and not isinstance(x, bool) and 0 <= x <= 1 else None
 
 
-def _jev_one(q: dict[str, Any], a: dict[str, Any]) -> tuple[Any, float] | None:
-    """Jev's answer to one question: the value it takes and how sure Jev is of it, from 0 to 1, or
-    None when it is not there or not of its kind. A choice and a score say how sure
-    ("confidence"); a score's place goes to the nearest level, a half going up; a noul's answer is
-    yes when the probability of yes is over one half, and Jev is as sure as the probability of the
-    answer taken."""
+def _jev_one(q: dict[str, Any], a: dict[str, Any], decisions: bool) -> tuple[Any, float] | None:
+    """The answer to one question: the value it takes and how sure the model is of it, from 0 to 1,
+    or None when it is not there or not of its kind. A choice and a score say how sure
+    ("confidence"); a score's place goes to the nearest level, a half going up; yes or no is yes
+    when the probability of yes ("noul" on the System One API, "probability" on the Decisions API)
+    is over one half, and the model is as sure as the probability of the answer taken."""
     if q["kind"] == "noul":
-        p = _unit(a.get("noul"))
+        p = _unit(a.get("probability" if decisions else "noul"))
         return None if p is None else (p > 0.5, p if p > 0.5 else 1 - p)
     c = _unit(a.get("confidence"))
     if c is None:
@@ -1479,19 +1511,28 @@ def _jev_one(q: dict[str, Any], a: dict[str, Any]) -> tuple[Any, float] | None:
 
 
 def jev(body: Any, t: JevTask, fail: Callable[[str, str], Exception]) -> Any:
-    """A Jev task's answer, read from the body of Jev's response as every target reads it: the
+    """A decision task's answer, read from the body of the response as every target reads it: the
     value of the task's type, None where an answer is not there or not of its kind (the
-    workflow's check of the answer refuses it), and how sure Jev is as a count of a rate's steps,
-    rounded down after a billionth that takes up how a decimal falls between binary fractions.
-    When every answer is there and one is less sure than the task asks, the call fails with the
+    workflow's check of the answer refuses it), and how sure the model is as a count of a rate's
+    steps, rounded down after a billionth that takes up how a decimal falls between binary
+    fractions. When the Decisions API refused a question, the call fails with the task's refusal
+    error; else, when every answer is there and one is less sure than the task asks, with the
     task's error."""
+    decisions = t.get("api") == "decisions"
     answers = body.get("answers") if isinstance(body, dict) else None
-    if not isinstance(answers, dict):
-        answers = {}
-    read = []
+    found: list[dict[str, Any] | None] = []
     for q in t["read"]:
-        a = answers.get(q["id"])
-        read.append(_jev_one(q, a) if isinstance(a, dict) else None)
+        # the System One API answers by the questions' ids; the Decisions API in a list, by their names
+        if decisions:
+            a = next((x for x in answers if isinstance(x, dict) and x.get("name") == q["id"]), None) if isinstance(answers, list) else None
+        else:
+            a = answers.get(q["id"]) if isinstance(answers, dict) else None
+        found.append(a if isinstance(a, dict) else None)
+    # a refused question fails the call before anything else
+    refusal = t.get("refusal")
+    if refusal is not None and any(a is not None and a.get("type") == "refusal" for a in found):
+        raise fail(refusal["error"], refusal["cause"])
+    read = [_jev_one(q, a, decisions) if a is not None else None for q, a in zip(t["read"], found)]
     floor = t.get("floor")
     if floor is not None and all(r is not None for r in read) and any(r[1] < floor["at"] for r in read if r is not None):
         raise fail(floor["error"], floor["cause"])

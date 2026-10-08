@@ -11,7 +11,7 @@
 | `connect <API> "<Service>/<Method>"` | HTTP Task（Connect の JSON） | 生成したアクティビティ（`fetch`） | 生成したステップ（`fetch`） | 同じく `fetch` | 同じく urllib |
 | `aws sns:publish` | AWS SDK の統合 | 生成したアクティビティ（AWS SDK） | 生成したステップ（AWS SDK） | 同じく AWS SDK | 同じく boto3 |
 | `agent …`（[エージェント](agents.md)） | モデルの API への HTTP Task | 生成したアクティビティ | 生成したステップ | 同じ | 同じ |
-| `jev …`（[Jev](jev.md)） | TypeSafe の API への HTTP Task | 生成したアクティビティ（`fetch`） | 生成したステップ（`fetch`） | 同じく `fetch` | 同じく urllib |
+| `jev …`（[判断のモデル](jev.md)） | TypeSafe の API、System One の API のほかのサーバー（`url`）、OpenAI の Decisions API（`jev openai`）への HTTP Task | 生成したアクティビティ（`fetch`） | 生成したステップ（`fetch`） | 同じく `fetch` | 同じく urllib |
 | `book <帳簿>.<振替>.<操作>`（[日付と帳簿](dates-and-books.md)） | 帳簿の Lambda 関数の Task（chobo の Python のクライアントを呼ぶ関数を dandori が書く） | 生成したアクティビティが、`Transport` を通して chobo のクライアントを呼ぶ | 生成したステップ（同じ） | 同じく caller のイメージで | 生成した関数（同じ） |
 | `state machine "<ARN>"` | ネストした実行（`startExecution.sync:2`） | | | | |
 | `flow "<パス>"`（[子の .flow](#子の-flow)） | ネストした実行（`state machine` も書く） | 子のタスクキューで子ワークフロー `<名前>_v<バージョン>` を始める | invoke（`durable function` も書く） | 子の WorkflowTemplate から Workflow を作る | 自分で書く関数 |
@@ -24,7 +24,7 @@
 
 Temporal の表は TypeScript 版のものです。Python 版は `fetch` と AWS SDK の代わりに urllib と boto3 で、Go 版は `net/http` と AWS SDK for Go v2 で呼びます。
 
-生成した呼び出しは、どれも `Transport`（`io.ts`、`io.py`、`io.go`）を通ります。HTTP の API のヘッダ、AWS SDK のクライアント、エージェントの API キー、Jev のための TypeSafe の API キー、フローが操作する帳簿のクライアントといった認証や接続の設定は、ここで渡します。テストでは、ここを差し替えます。
+生成した呼び出しは、どれも `Transport`（`io.ts`、`io.py`、`io.go`）を通ります。HTTP の API のヘッダ、AWS SDK のクライアント、エージェントの API キー、Jev のための TypeSafe の API キーと Decisions API のための OpenAI の API キー、フローが操作する帳簿のクライアントといった認証や接続の設定は、ここで渡します。テストでは、ここを差し替えます。
 
 `queue "<名前>"` を書くと、Temporal のアクティビティや子ワークフローを、そのタスクキューへ送ります。そのキューは、三つの言語のどのワーカーでも受け持てます。
 

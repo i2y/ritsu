@@ -92,12 +92,24 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
                 tr!("`{}` を Step Functions で動かすには `lambda`・`http`・`aws`・`agent`・`jev`・`state machine` のどれかが要ります", "`{}` needs `lambda`, `http`, `aws`, `agent`, `jev` or `state machine` to run on Step Functions", t.name),
             )),
             Some(Via::Http { .. }) if t.connection.is_none() => errs.push(Diag::error("E050", t.line, 1, tr!("`{}` には `connection \"<EventBridge の接続の ARN>\"` が要ります", "`{}` needs `connection \"<EventBridge connection ARN>\"`", t.name))),
-            Some(Via::Jev(_)) if t.connection.is_none() => errs.push(Diag::error(
+            Some(Via::Jev(j)) if t.connection.is_none() && j.key() == Some("typesafe") => errs.push(Diag::error(
                 "E050",
                 t.line,
                 1,
                 tr!("Step Functions は `{}` の Jev を HTTP Task で呼ぶので、TypeSafe の API キー（ヘッダ Authorization に `Bearer <キー>`）を持つ `connection \"<EventBridge の接続の ARN>\"` が要ります", "Step Functions calls Jev for `{}` through an HTTP Task, which needs `connection \"<EventBridge connection ARN>\"` that holds TypeSafe's API key (as the header Authorization, `Bearer <key>`)", t.name),
             )),
+            Some(Via::Jev(j)) if t.connection.is_none() => {
+                let Text { en: whose_en, ja: whose_ja } = match j.key() {
+                    Some(_) => tr!("OpenAI の API キー（ヘッダ Authorization に `Bearer <キー>`）", "OpenAI's API key (as the header Authorization, `Bearer <key>`)"),
+                    None => tr!("サーバーの鍵（鍵の要らないサーバーでも、EventBridge の接続には何かの値が要ります）", "the key of the server (an EventBridge connection has one, even for a server that wants none)"),
+                };
+                errs.push(Diag::error(
+                    "E050",
+                    t.line,
+                    1,
+                    tr!("Step Functions は `{}` の判断を HTTP Task で呼ぶので、{whose_ja}を持つ `connection \"<EventBridge の接続の ARN>\"` が要ります", "Step Functions asks for the decision of `{}` through an HTTP Task, which needs `connection \"<EventBridge connection ARN>\"` that holds {whose_en}", t.name),
+                ))
+            }
             Some(Via::Agent { provider, url, .. }) if t.connection.is_none() => {
                 let Text { en: whose_en, ja: whose_ja } = match (provider, url) {
                     (Provider::OpenAi, None) => tr!("OpenAI の API キー", "the OpenAI API key"),
@@ -124,6 +136,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         let endpoint = match t.via(Platform::StepFunctions) {
             Some(Via::Http { url, .. }) => Some(url.to_string()),
             Some(Via::Agent { provider, url, .. }) => Some(render::agent_url(provider, url)),
+            Some(Via::Jev(j)) => Some(j.endpoint()),
             _ => None,
         };
         if let Some(u) = endpoint.filter(|u| !u.starts_with("https://")) {
@@ -836,18 +849,32 @@ impl<'a> Gen<'a> {
                         ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), answer, task.timeout, retry)
                     }
                     Via::Jev(j) => {
-                        // the state is the arguments, in the order of the parameters
-                        let mut state = Map::new();
-                        for (p, _) in &task.params {
-                            if let Some((_, e)) = args.iter().find(|(a, _)| a == p) {
-                                state.insert(p.clone(), arg_value(e));
+                        // the state is the arguments, in the order of the parameters; the Decisions
+                        // API takes them as their JSON text, as an agent does
+                        let body = match j.api {
+                            DecisionApi::SystemOne => {
+                                let mut state = Map::new();
+                                for (p, _) in &task.params {
+                                    if let Some((_, e)) = args.iter().find(|(a, _)| a == p) {
+                                        state.insert(p.clone(), arg_value(e));
+                                    }
+                                }
+                                render::jev_request(j, Value::Object(state))
                             }
-                        }
+                            DecisionApi::Decisions => {
+                                let input: Vec<String> = task
+                                    .params
+                                    .iter()
+                                    .filter_map(|(p, _)| args.iter().find(|(a, _)| a == p).map(|(_, e)| format!("{}: {}", jsonata_string(p), jsonata_expr(e))))
+                                    .collect();
+                                json!({ "model": j.model, "input": format!("{{% $string({{{}}}) %}}", input.join(", ")), "questions": render::jev_questions(j) })
+                            }
+                        };
                         let mut w = Map::new();
-                        w.insert("ApiEndpoint".into(), json!(JEV_URL));
+                        w.insert("ApiEndpoint".into(), json!(j.endpoint()));
                         w.insert("Method".into(), json!("POST"));
                         w.insert("InvocationConfig".into(), json!({ "ConnectionArn": task.connection.clone().unwrap_or_default() }));
-                        w.insert("RequestBody".into(), render::jev_request(j, Value::Object(state)));
+                        w.insert("RequestBody".into(), body);
                         ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), jev_answer(j), task.timeout, retry)
                     }
                     // the book's Lambda function runs the operation, and answers the hold, or fails with the reason
@@ -1017,7 +1044,21 @@ impl<'a> Gen<'a> {
                 })
             }
         };
+        // a question the Decisions API refused: the task's refusal error, before anything else
+        let refused_to = match j.refusal_error() {
+            None => None,
+            Some(error) => {
+                let handled = entries.iter().find(|(errs, _)| errs.iter().any(|e| matches!(e, HErr::Failure) || matches!(e, HErr::Declared(n) if n == error)));
+                Some(match handled {
+                    Some((_, entry)) => entry.clone(),
+                    None => self.raising(&format!("{} {} refused", s.line, cname), error, &render::jev_refused_cause(task)),
+                })
+            }
+        };
         let mut choices = Vec::new();
+        if let Some(to) = &refused_to {
+            choices.push(json!({ "Condition": "{% $states.input.refused %}", "Next": to }));
+        }
         if var.is_empty() {
             // the answer is not kept, and only how sure it is matters
             if let Some(to) = &low_to {
@@ -1069,16 +1110,23 @@ impl<'a> Gen<'a> {
     }
 }
 
-/// A Jev task's answer, read from the body of Jev's response as `render::jev_read` reads it:
+/// A decision task's answer, read from the body of the response as `render::jev_read` reads it:
 /// `{"answer": <the value, null where an answer is not there or not of its kind>, "low": <whether
-/// every answer is there and one is less sure than the task's confidence>}`. JSONata errors on
-/// comparing values of different types, so a value is tested for its type before it is compared.
+/// every answer is there and one is less sure than the task's confidence>}`, and for the Decisions
+/// API `"refused": <whether it refused one of the questions>`. The System One API's answers are by
+/// the questions' ids, the Decisions API's in a list by their names. JSONata errors on comparing
+/// values of different types, so a value is tested for its type before it is compared.
 fn jev_answer(j: &Jev) -> String {
     let unit = |c: &str| format!("($type({c}) = \"number\" ? ({c} >= 0 and {c} <= 1) : false)");
     let none = "{\"v\": null, \"c\": null, \"ok\": false}";
+    let decisions = j.api == DecisionApi::Decisions;
     let mut lets = vec!["$dd_a := $states.result.ResponseBody.answers".to_string()];
     for (i, q) in j.questions.iter().enumerate() {
-        let x = format!("($type($dd_a) = \"object\" ? $lookup($dd_a, {}) : null)", jsonata_string(&q.id));
+        let x = if decisions {
+            format!("($type($dd_a) = \"array\" ? $filter($dd_a, function($v) {{ $type($v) = \"object\" and $v.name = {} }})[0] : null)", jsonata_string(&q.id))
+        } else {
+            format!("($type($dd_a) = \"object\" ? $lookup($dd_a, {}) : null)", jsonata_string(&q.id))
+        };
         let get = |k: &str| format!("($type($dd_x) = \"object\" ? $lookup($dd_x, {}) : null)", jsonata_string(k));
         let one = match q.kind {
             QuestionKind::Choice => {
@@ -1104,7 +1152,7 @@ fn jev_answer(j: &Jev) -> String {
             }
             QuestionKind::Noul => format!(
                 "($dd_x := {x}; $dd_p := {}; {} ? {{\"v\": $dd_p > 0.5, \"c\": $dd_p > 0.5 ? $dd_p : 1 - $dd_p, \"ok\": true}} : {none})",
-                get("noul"),
+                get(if decisions { "probability" } else { "noul" }),
                 unit("$dd_p")
             ),
         };
@@ -1125,6 +1173,11 @@ fn jev_answer(j: &Jev) -> String {
             format!("{{{}}}", parts.join(", "))
         }
     };
+    if decisions {
+        let ids: Vec<String> = j.questions.iter().map(|q| q.id.clone()).collect();
+        let refused = format!("($type($dd_a) = \"array\" ? $count($filter($dd_a, function($v) {{ $type($v) = \"object\" and $v.type = \"refusal\" and $v.name in {} }})) > 0 : false)", jsonata_list(&ids));
+        return format!("({}; {{\"answer\": {answer}, \"low\": {low}, \"refused\": {refused}}})", lets.join("; "));
+    }
     format!("({}; {{\"answer\": {answer}, \"low\": {low}}})", lets.join("; "))
 }
 

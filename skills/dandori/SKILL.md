@@ -1,6 +1,6 @@
 ---
 name: dandori
-description: Write, check and build dandori workflows (`.flow` files), typed workflows that call APIs, rules, agents, TypeSafe's Jev, koyomi's dates, chobo's books and code of your own, checked before they run and built for Temporal (TypeScript, Python or Go), AWS Step Functions, AWS Lambda durable functions, Argo Workflows and pydantic-graph. Use when a workflow (take a payment now and capture it later, reserve and ship an order, route an inquiry, wait for a person's approval) has to be written or changed as a `.flow`; when a dandori diagnostic (E001-E050, W030, W032, W101-W104) has to be fixed; when a workflow has to be shown to the person who reviews it, drawn; or when a `.flow` has to be built for a platform and its generated code wired up.
+description: Write, check and build dandori workflows (`.flow` files), typed workflows that call APIs, rules, agents, decision models (TypeSafe's Jev, a server of its System One API such as Ollama, OpenAI's Decisions API), koyomi's dates, chobo's books and code of your own, checked before they run and built for Temporal (TypeScript, Python or Go), AWS Step Functions, AWS Lambda durable functions, Argo Workflows and pydantic-graph. Use when a workflow (take a payment now and capture it later, reserve and ship an order, route an inquiry, wait for a person's approval) has to be written or changed as a `.flow`; when a dandori diagnostic (E001-E050, W030, W032, W101-W104) has to be fixed; when a workflow has to be shown to the person who reviews it, drawn; or when a `.flow` has to be built for a platform and its generated code wired up.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run dandori as `ritsu dandori <command>`, or as `dandori <command>` through a link to ritsu named for it. Either way the rules (`use rule`), dates (`use dates`) and books (`use book`) a workflow uses are read with rulec, koyomi and chobo in the same process.
 license: MIT OR Apache-2.0
 ---
@@ -199,7 +199,8 @@ how it is called: one of these, or none for a task you write
   http GET|POST|PUT|PATCH|DELETE "<url>" [form]      http POST <api> "<path>"  (an OpenAPI operation)
   connect <api> "<Service>/<Method>"                 aws <service>:<action>
   lambda "<function>"                                agent "<instructions>"  |  agent claude "<instructions>"
-  jev "<question>"  |  jev score "<question>"  |  jev   (TypeSafe's Jev; see below)
+  jev "<question>"  |  jev score "<question>"  |  jev   (a decision model; see below)
+  jev openai "<question>"  …                        (OpenAI's Decisions API)
   book <book>.<transfer>.do|hold|post|void           an operation of a book's transfer (no key: the
                                                      book's own key makes it happen once)
   event                                              a value sent to the workflow by name (Temporal)
@@ -216,9 +217,11 @@ errors and retries
   timeout <duration>       key [<parameter>]          idempotent
 the rest
   callback                 queue "<task queue>"       image "<image>" (Argo, a task you write)
-  connection "<EventBridge connection>"               model "<model>"     url "<base>" (agents)
+  connection "<EventBridge connection>"               model "<model>"     url "<base>" (agents, decision models)
   effort none|minimal|low|medium|high|xhigh|max       how hard an agent's model reasons (Claude: low and up)
-  confidence <0 to 1> else <error>                    a Jev answer less sure than this fails with <error>
+  confidence <0 to 1> else <error>                    a decision less sure than this fails with <error>
+  refusal else <error>                                a question the Decisions API refuses fails with <error>
+                                                     (without it, Dandori.Refused, which on failure takes)
 ```
 
 A `jev` task asks what its answer type asks, and writes the meanings under the `jev` line: an enum
@@ -226,8 +229,13 @@ is a choice (`<value> "<what it means>"` for some or all values), `jev score` a 
 values from the lowest (every one with its meaning, 2 to 10), `bool` a yes or no (`true "…"` and
 `false "…"`, or neither), and a record `jev` alone with a line a field (`<field> "<question>"`,
 `<field> score "<question>"`, or `<field> confidence of <field>` for a `rate[step <n>%]` field that
-takes how sure Jev is). Pin the model's version (`model "jev-1.13.0"`) when a confidence is used
-(W032); a threshold that depends on the action belongs in a rule's table, fed the confidence.
+takes how sure the model is). `jev` asks TypeSafe's Jev (`TYPESAFE_API_KEY`); with `url "<base>"`,
+another server of the same System One API (Ollama, at `<base>/systemone`, with no key); `jev openai`
+asks OpenAI's Decisions API (`OPENAI_API_KEY`; with `url`, another server of it), whose yes or no
+takes no meanings and which may refuse a question (`refusal else <error>`). Name a model that does
+not move by itself (`model "jev-1.13.0"`, `model "tev1:0.8b"`) when a confidence is used (W032; the
+Decisions API has no such name, and always warns). How sure means something else on each server and
+model: a threshold that depends on the action belongs in a rule's table, fed the confidence.
 
 A duration is `10 seconds`, `1 minute`, `2 hours`, `3 days`. The hotel booking's tasks, held to
 Stripe's OpenAPI document:

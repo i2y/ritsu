@@ -358,7 +358,7 @@ task draft_reply(kind: routing.kind, point: string, order_id: string?, within: d
 - **エラーは宣言しない**（E007）。モデルが拒否したとき、応答を読めなかったとき、呼び出しが失敗したときは `failure`、時間を過ぎたときは `timeout` になる。Claude では、応答が一つの手番として終わらなかったとき（`stop_reason` が `end_turn` でないとき。拒否と、上限で切れた応答）も `failure` になる。拒否も `failure` なので、`retry` でリトライでき、`on failure` で処理できる。
 - `callback` にはできず、案件に何かするタスク（`starts`・`sends`・`observes`）にもできない（E007）。応答の型を書かないエージェントも E007。
 - 応答の型が Schema に書けないもの（`json`、ほかのレコードを通して自分を含むレコード）と、プロバイダーの受け付ける大きさを超えるものも E007 にする。OpenAI の Structured Outputs は、オブジェクトのネストが 10 段、プロパティが 5,000 個、列挙の値が 1,000 個まで。Claude の構造化出力は、null との選択（`anyOf`）が一つのリクエストの中で 16 個までなので、`T?` が 16 個を超える応答は書けない。Claude には文書に数の無い上限（Schema から作る文法の大きさ）もあり、これは送るまで分からない。
-- プロバイダーは `openai` と `claude` だけで、ほかの名前は E007。`url` の誤り（エージェントでないタスクの `url`、Claude の `url`、http:// でも https:// でもない `url`）も E007。
+- プロバイダーは `openai` と `claude` だけで、ほかの名前は E007。`url` の誤り（エージェントでも判断のタスク（1.11）でもないタスクの `url`、Claude の `url`、http:// でも https:// でもない `url`）も E007。
 
 ### 1.8 並列のイテレーション
 
@@ -440,7 +440,9 @@ task reserve_stock(sku: string, quantity: int) -> Reservation
 
 **Connect の呼び出し。** POST で `<url>/<パッケージ>.<サービス>/<メソッド>` に、JSON の本文とヘッダ `Connect-Protocol-Version: 1` を送る。Step Functions の HTTP Task も、dandori が書く実装も同じものを送る（5 章で比べる）。`key` は、ほかの HTTP のタスクと同じく `Idempotency-Key` ヘッダで送る。
 
-### 1.11 Jev
+### 1.11 判断のモデル（Jev、System One の API のサーバー、OpenAI の Decisions API）
+
+`jev` のタスクは、判断のモデルに型の付いた質問をする。送り先は三つある。TypeSafe の Jev（下）、Jev と同じ形の API（System One の API）を話すほかのサーバー（`url`。Ollama など）、OpenAI の Decisions API（`jev openai`）である。後の二つは、この節の終わりの「同じ種類の API のほかの送り先」に書く。
 
 TypeSafe AI の Jev（2026 年 9 月 15 日に早期アクセス）は、判断のためのモデルで、文章を書かない。渡した入力（state）について型の付いた質問に答え、答えごとに確信度を返す。質問は三種類ある。choice は選択肢から一つを選び、選択肢ごとの確率と確信度を返す。score は順序のある段階（2〜10）のどこかを答え、段階の番号の期待値、段階ごとの確率、確信度を返す。noul は、はいの確率だけを返し、確信度は無い。一回のリクエストで複数の質問に並列に答える。送り先は `POST https://api.typesafe.ai/v1/systemone` で、キーは `Authorization: Bearer <キー>`。
 
@@ -469,9 +471,58 @@ task score(purpose: string) -> Score
 - **確信度の下限は、宣言したエラーにする。** `confidence 0.8 else 迷い` と書くと、答えがすべてそろっていて、どれかの確信度が 0.8 より小さいとき、呼び出しは `迷い` で失敗する。この行が `迷い` を宣言する。フローは `on 迷い` で処理し（`on failure` も受ける）、数を比べないまま、TypeSafe の勧める「確信度で行き先を変える」形が書ける。確信度が足りない答えは変数に入れない。Step Functions では、Task の出力を Choice で確かめてから Pass で変数に入れる。Task の Assign で入れると、`on 迷い => pass` のあとに、前の値ではなく足りない答えが残ってしまう。Temporal などでは、答えを読むアクティビティがエラーを投げるので、変数には何も入らない。尋ね直してもほぼ同じ答えが返るので、`retry … on 迷い` は E007。bool だけの結果は確信度がいつも 0.5 以上なので、0.5 以下の下限も E007。
 - **行動ごとのしきい値は規則に任せる。** 確信度はフィールドで受け取れる（`<フィールド> confidence of <フィールド>`、型は `rate[step <n>%]` で、刻みは 100% を割り切るもの）。値は刻みの個数で、切り捨てる（1% 刻みなら 0.87 は 87）。0.29 × 100 が 28.999… になる浮動小数の誤差を吸収するため、10 億分の 1 を足してから切り捨て、どのプラットフォームも同じ式にした。rulec の率も刻みの個数でやりとりするので、そのまま規則に渡せ、「そのまま承認するのは 90% 以上、却下は 80% 以上、あとは人」のような表に抜けが無いことを rulec が証明する（審査の例）。rulec の certificate は率の型を `rate` としか書かないので、刻みは schema の説明（「100% is 100」）から読み、`rate[step 1%]` の形にする。`.flow` に書いた `rate[step 0.01%]` も同じ形に直すので、型が合う。
 - **モデルはバージョンで書く。** TypeSafe の文書は、確信度のしきい値を合わせたらバージョンを固定するよう勧める。確信度を使うタスク（下限か、確信度を受け取るフィールドがある）がエイリアス（`jev-latest`、`jev-preview`）を書いたら W032。
-- **どのプラットフォームも同じ HTTP の呼び出しで、SDK は使わない。** Step Functions は HTTP Task で送り、キーは EventBridge の接続にヘッダ `Authorization` として置く（無ければ E050）。ほかのプラットフォームで dandori が書く実装は、`Transport` の `http` を通す（`HttpRequest` の `typesafe`）。既定の `Transport` は、`TYPESAFE_API_KEY` か `typesafe` のオプションからキーを足す。`Transport` に新しいメソッドを足さなかったのは、利用者が自分で書いた `Transport` がそのまま使えるようにするためである。答えを読むのは、Step Functions では Task の出力の JSONata、ほかでは `io.jev`。JSONata は型の違う値を大小で比べるとエラーになるので、数を比べる前に型を確かめる。エラーはステータスで宣言する（429 はレート制限、529 は過負荷）。ステータスの無いエラーは E007 で、宣言していないステータスは `failure`。`key`、`callback`、`url`、`effort`、案件に何かすることも E007。
+- **どのプラットフォームも同じ HTTP の呼び出しで、SDK は使わない。** Step Functions は HTTP Task で送り、キーは EventBridge の接続にヘッダ `Authorization` として置く（無ければ E050）。ほかのプラットフォームで dandori が書く実装は、`Transport` の `http` を通す（`HttpRequest` の `typesafe`）。既定の `Transport` は、`TYPESAFE_API_KEY` か `typesafe` のオプションからキーを足す。`Transport` に新しいメソッドを足さなかったのは、利用者が自分で書いた `Transport` がそのまま使えるようにするためである。答えを読むのは、Step Functions では Task の出力の JSONata、ほかでは `io.jev`。JSONata は型の違う値を大小で比べるとエラーになるので、数を比べる前に型を確かめる。エラーはステータスで宣言する（429 はレート制限、529 は過負荷）。ステータスの無いエラーは E007 で、宣言していないステータスは `failure`。`key`、`callback`、`effort`、案件に何かすることも E007。`url` は、同じ形の API を話すほかのサーバーに送るときに書く（この節の終わり）。
 - **シナリオの Jev はスタブが答える。** シナリオは、Jev の呼び出しに API リファレンスの形の答えを返す。確信度は、下限ちょうど（境目の `<` と `<=` の違いが出る）と、下限をわずかに下回るもの。型に合わない答えも返す。確信度が足りない答えには、変数にありそうな値（列挙の最初の値、true）と違う値（最後の値、false）を入れ、試験用のフローは、そのあとの呼び出しで変数を送る。こうして、足りない答えを変数に入れてしまう誤りが食い違いとして出る。比較の `<` を `<=` に変える誤りと、Step Functions で Task の Assign に入れる誤りを入れてみて、どちらも突き合わせで捕まることを確かめた（2026-09-29）。数は、Jev が返すような小数第 4 位までにして、どの言語でも同じ double に読めるようにし、dandori も serde_json の `float_roundtrip` で読む（それが無いと、ほかの言語が書いた 0.20500000000000002 を隣の double に読んでいた）。
 - **本物の Jev にも送る。** `TYPESAFE_API_KEY` があれば、例と試験用のフローの Jev のタスクを一つずつ、TypeScript と Python と Go の既定の `Transport` から TypeSafe に送り、答えがタスクの型に読めることを確かめる（`jev_tasks_answer_on_typesafe`。キーが無ければ SKIP。Go は 2026-10-02 から）。2026-09-29 には 18 のタスクを二つの言語から送り、36 回すべてが型に読めた。一回は 200〜500 ms で、入力は 400 トークン前後だった。同じリクエストでも答えは少しぶれる（審査の score は 0.87〜0.89、確信度は 0.78〜0.81）。実際の文でも試した。種類のはっきりした問い合わせは、英語でも日本語でも確信度 0.99 以上で正しい種類になった。「靴のサイズが合わないので、代金を返してほしいです」は請求 0.52・返品 0.48 で確信度 0.36（英語の同じ内容は returns で 0.96）で、`confidence 0.8` によってエージェントの読み取りに回る。審査の「半分はオーブン、半分は家族旅行」は却下 0.47・承認 0.38 に割れて確信度 0.00、score は 0.91 で保留になり、規則が人に回した。
+
+#### 同じ種類の API のほかの送り先（2026-10-08）
+
+Jev と同じ種類の API が二つ出た。
+
+- **System One の API のほかのサーバー。** Ollama は 0.35 から、Jev の API と同じ形（System One の API）を `POST <サーバー>/v1/systemone` で受け、手元の判断のモデル（`nimble` の 9B、`tev1` の 4B と 0.8B）が答える。キーは要らない。リクエストと答えの形は Jev と同じで、質問は 64 個まで、score の段階は 2〜26、リクエストは画像なしで 64 KiB まで（Ollama の API の文書）。確信度は「分布の集中の度合い（1 − H(p) / ln N）で、正しさの確率ではない」と文書が書いている。
+- **OpenAI の Decisions API。** `POST https://api.openai.com/v1/decisions`、キーは `Authorization: Bearer <キー>`。公開ベータで、モデルは `gpt-6-luna` だけ（バージョンを固定する名前は無い）。入力は `input`（文字列か、ユーザーのメッセージの配列）で、質問は名前（`name`）を付けた配列、答えも質問の順の配列で、それぞれが自分の名前を返す。質問の型は choice（`choices` は値と説明の組で 2〜255 個）、score（`levels` はラベルと説明の組）、predicate（はいの確率 `probability`。確信度は無い）。どの質問にも、答えの代わりに拒否（`{"type": "refusal", "name": …}`）が返りうる。課金は入力だけ（100 万トークンで $0.10）。上限とエラーのコードは文書に無い。
+
+**決定**：キーワードは `jev` のままにし、`agent` のタスクと同じ作りで二つを足す。`url "<ベース URL>"` は System One の API を話すほかのサーバーに `<ベース URL>/systemone` で送り、`jev openai` は Decisions API に送る（`url` を書けば、Decisions API を話すほかのサーバーの `<ベース URL>/decisions` に）。ベース URL は、エージェントの `url` と同じく `/v1` までを書く。`jev typesafe "…"` は `jev "…"` と同じで、ほかの名前は E007。どの送り先も、答えの型から質問を作り、同じ式で読み、確信度の下限と確信度のフィールドもそのまま使える。フローの分岐は、これまでどおり答えの `match` と規則だけである（P1）。
+
+```
+task pick_kind(text: string) -> routing.kind
+  jev "Which kind of inquiry is this?"
+    returns "The customer wants to send an item back or exchange it"
+    …
+  model "nimble:9b-q4_K_M"
+  url "http://ollama.internal:11434/v1"
+  plaintext "The model server is reached only inside the cluster network, which the service mesh encrypts"
+  confidence 0.8 else unsure
+
+task read(text: string) -> Reading
+  jev openai
+    kind "Which kind of inquiry is this?"
+      …
+    urgency score "How urgent is it for the customer?"
+      …
+    person "Does the customer ask to talk to a person?"
+    sure confidence of kind
+  model "gpt-6-luna"
+  confidence 0.6 else unsure
+  refusal else declined
+  connection "arn:aws:events:ap-northeast-1:123456789012:connection/openai/9c0d1e2f"
+```
+
+- **質問の対応。** 列挙の choice はどちらの API でも choice、`jev score` は score、bool は System One では noul、Decisions API では predicate。Decisions API の choice の `choices` は値と説明の組（説明を書かない値は `description` を省く）、score の `levels` は、列挙の値を `label` に、段階の意味を `description` にする。レコードの結果は、どちらも一回のリクエストで全部を尋ね、Decisions API では配列の `name` がフィールドの名前（結果がその値そのものなら `answer`）になる。Decisions API の predicate は、はいといいえの意味を受け取らないので、`true` と `false` の意味を書くと E007 にした（尋ねることの中に書く）。
+- **入力。** System One の API には、いまどおり引数の名前をキーにしたオブジェクトを `state` に渡す。Decisions API には、引数を JSON にした文字列を `input` に渡す（エージェントの入力と同じ文字列。引数の順で、空白を入れない）。Go の `encoding/json` は map のキーを並べ替えるので、Go では引数の順に書く関数（`ddInputText`）を生成する。画像は入れない（7 章）。
+- **Go も、宣言の順で送る。** System One の API の `state` と、質問の選択肢（`criteria` のキー）も、Go の map では名前の順になっていた（Jev を足したときから）。判断のモデルは選択肢を並んだ順に読むので、順が違うと答えも少し違う。実際、同じ問い合わせを Ollama の `tev1:0.8b` に尋ねると、TypeScript と Python から送ったものは確信度 0.81、Go から送ったものは 0.87 だった（2026-10-09）。そこで Go の生成コードは、`state` を引数の順の JSON の文字列に、質問を、ほかの言語と同じ JSON の文字列（`ddJevQuestions`）にして、そのまま送る（`json.RawMessage`）。ほかの HTTP の呼び出しのキーの順は、これまでどおり名前の順のままである（意味は同じ JSON で、読むのはプログラムなので）。
+- **答えの読み方は同じ式。** choice は選んだ値、score は `floor(score + 0.5)` の段階、はいかいいえは確率が 0.5 を超えれば true で、その確信度は選んだ側の確率。Decisions API の答えは、配列の中を質問の名前で探す。はいの確率は、System One では `noul`、Decisions API では `probability` にある。答えが無い、知らない値、確率や確信度が 0〜1 でないときは null にし、結果の検査で `Dandori.BadResponse` になる。
+- **拒否は、宣言したエラーにする。** `refusal else <エラー>` と書くと、Decisions API がどれかの質問を拒否したとき、呼び出しはそのエラーで失敗する。この行がエラーを宣言する（`confidence … else` と同じ）。書かなければ、呼び出しは `Dandori.Refused` で失敗し、`on failure` が受ける。拒否は確信度の下限より先に見る（拒否した質問には確信度が無い）。同じ入力で尋ね直しても拒否されることが多いので、確信度の下限と同じくリトライしない（`retry … on <拒否のエラー>` は E007。`Dandori.Refused` も、宣言したエラーと同じく、`on` の無い `retry` の受けるものから外す）。System One の API は拒否を返さないので、System One のタスクの `refusal` は E007。Step Functions では、Task の出力の JSONata が `refused` も返し、確信度より前の Choice で分ける。
+- **確信度の意味は、プロバイダーとモデルごとに違う。** TypeSafe は確率の散らばりから計算した値、Ollama は分布の集中の度合い（正しさの確率ではないと文書が書く）で、OpenAI は文書に計算の仕方が無い。同じ文に同じ質問をしても、確信度は送り先で大きく違った（下の本物の答え）。だから、下限やしきい値は、タスクのプロバイダーとモデルに結び付いた値である。行動ごとのしきい値は規則（rulec の表）で決め、送り先かモデルを替えたら、規則の表を実際の答えで合わせ直すことを勧める（サイトの判断のモデルのページ）。
+- **W032 は、送り先ごとの「バージョンが動く名前」で出す。** 確信度を使うタスク（下限か、確信度のフィールドがある）が、TypeSafe ではエイリアス（`jev-latest`、`jev-preview`）、`url` のサーバーではタグの無い名前と `:latest`（Ollama の名前の付け方。取り直すと新しいモデルに替わる）、Decisions API ではいつも（バージョンを固定する名前が無い）。Decisions API の W032 は、直す書き方が無いので、確信度の下限とフィールドを実際の答えでときどき確かめ直すよう書いた。
+- **上限。** TypeSafe の score の段階の 2〜10 は、`url` の無い System One のタスクにだけ当てる（Ollama は 26 まで、Decisions API は文書に無い）。choice の選択肢の 255 個までと、choice と score の二つ以上は、どの送り先にも当てる（どちらの API の文書も 2 個以上と書く）。ほかの上限は、送るまで分からないので答えの検査に任せる。
+- **キー。** 既定の `Transport` は、`HttpRequest` の `typesafe` に TypeSafe のキー（`TYPESAFE_API_KEY` か `typesafe` のオプション）を、`openai` に OpenAI のキー（`OPENAI_API_KEY` か `openai` のオプション）を足す。`url` のサーバーには、どちらのキーも送らず、鍵が要るなら `Transport` の `headers` で足す（エージェントの `url` と同じ）。`Transport` に新しいメソッドは足さない（Jev と同じ理由）。
+- **Step Functions。** どの送り先も HTTP Task で送り、キーは EventBridge の接続に置く（`connection` が無ければ E050。鍵の要らないサーバーでも、接続には何かの値が要る）。HTTP Task は HTTPS の API しか呼べないので、`http://` の `url`（この機械の Ollama など）は E050。60 秒を超える `timeout` も E050。
+- **E906 と W902。** 秘密の値を送る相手として、Decisions API は「OpenAI（the Decisions API）」、`url` のサーバーはこのマシンでなければそのホストを言う（エージェントの `url` と同じ）。`http://` の `url` がこのマシンでないホストに向くときは W902 で、タスクの下の `plaintext "<理由>"` で受け止める。
+- **確かめ方。** `tests/flows/decisions.flow`（日本語の版は `decisions.ja.flow`）が、三つの送り先、choice・score・はいかいいえ、一部の値にだけ意味を書いた choice、三つの答えと確信度の率のレコード、確信度の下限、宣言した拒否と宣言しない拒否（呼び出しで処理するものとしないもの）、結果を読まない呼び出し、ステータスで宣言したエラーのリトライ、W032 の二つの形を、どのプラットフォームでも参照インタプリタと突き合わせる（それぞれ 20 本）。シナリオのスタブは、Decisions API の答えの形（配列、拒否を含む）も返す。TypeScript の `io.jev` から拒否の確かめを外す誤りと、Step Functions の Choice から拒否の分かれ目を外す誤りを入れると、どちらも突き合わせで食い違った（2026-10-09）。診断は `tests/fixtures/decisions.flow` と `decisions_targets.flow` にある。既定の `Transport` の確かめ（`tools/wire`）は、Decisions API に OpenAI のキーが付き、`url` のサーバーにはキーが付かないことも見る。
+- **本物にも送る。** Ollama（`decision_tasks_answer_on_ollama`）は、`url` の System One のタスクを、この機械の Ollama の判断のモデル（`DANDORI_OLLAMA_DECISIONS`、無ければいちばん小さいもの。いまは `tev1:0.8b`）に送る。OpenAI（`decision_tasks_answer_on_openai`）は、`OPENAI_API_KEY` があれば、Decisions API のタスクを本物に送る（`url` のタスクも OpenAI に）。どちらも TypeScript・Python・Go の既定の `Transport` から一つずつ送り、答えがタスクの型に読めるか、宣言したエラー（下限か拒否）で失敗することを確かめる。Ollama が無いか判断のモデルが無ければ SKIP、キーが無ければ SKIP。CI にはキーを置かない。2026-10-08 の試験用のフローでは、OpenAI に 12 回送り、どれも型に読めた（一回は 220〜400 ms、最初の一回だけ 3.4 秒）。日本語の質問の名前（`種類`、`急ぎ`、`人`）も、そのまま名前として返った。
+- **本物の答え（2026-10-09）。** 問い合わせの例の四つの種類（意味つき）を尋ねた。Ollama の `tev1:0.8b` は「My parcel arrived broken and I want my money back.」を returns 0.59・billing 0.31 で確信度 0.30、「The shoes don't fit, and I want my money back.」を returns 0.60 で 0.43、「靴のサイズが合わないので、代金を返してほしいです」を returns 0.68 で 0.48 とした（`confidence 0.8` では、どれもエージェントの読み取りに回る）。OpenAI の `gpt-6-luna` は、最初の文を delivery 0.51・billing 0.45 で確信度 0.35、日本語の文を billing 0.85 で 0.80 とした。同じ文でも、送り先とモデルで確信度がこれだけ違う。
+
 
 ### 1.12 記述から型を作る
 
@@ -809,7 +860,7 @@ warning[W904]: tests/fixtures/security/W904_payout_number.flow:39:1: the secret 
 
 **クライアントが増やす名前。** `history encrypted` のとき、生成するクライアントが宣言し読み込む名前が増える。TypeScript の `client.ts` は `Connection`・`ClientOptions`・`PayloadCodec`・`encrypted`・`EncryptedClient`・`encryptedClient`、Python の `client.py` は `dataclasses`・`NewType`・`temporalio`・`DataConverter`・`DefaultFailureConverterWithEncodedAttributes`・`PayloadCodec`・`EncryptedClient`・`data_converter`・`connect`、Go のパッケージは `EncryptedClient`・`encryptedClient`・`CodecDataConverter`・`CodecFailureConverter`・`Dial` である。これらは、クライアントがもとから持つ名前と同じに扱う。実装するサービスのメソッドの関数とメッセージの型がこの名前になるときは、1.14 のとおり末尾に `Rpc`（Python は `_rpc`、Go は `RPC`）を付ける。Go のレコードと列挙の型は、どのパッケージにもある名前（`Workflow`、`Start` など）とぶつかるときと同じく、`_` を付けた名前にする（`record Dial` は `Dial_`）。E006 にはしない。どちらも dandori が付ける名前なので生成する側で避けられ、検査で止めると、`.proto` を変えられない利用者が暗号化を宣言できなくなる。TypeScript と Python のレコードと列挙は `types.ts`・`types.py` にあって `T.` を付けて読み、規則の別名は TypeScript と Python では `rules.ts`・`rules.py` にだけ読み込まれ、Go では小文字だけのパッケージの名前になるので、どれもこの名前とはぶつからない。表は各生成器の `ENCRYPTED_CLIENT`（Go は `ENCRYPTED`）に置いた。宣言の無いフローの検査と生成物は変わらない。
 
-**E906。** 送る先は、モデルのプロバイダー（`url` の無いエージェントの OpenAI と Anthropic、このマシンでない `url` のサーバー）、Jev（TypeSafe）、URL だけで書いた `http` の送り先（このマシンを除く）、AWS のサービスである。タスクが `discloses <引数> "<理由>"` で書いた引数は通す。`discloses` は E906 だけを通し、W904 は通さない（送ることと、履歴に残ることは別のことである）。
+**E906。** 送る先は、モデルのプロバイダー（`url` の無いエージェントの OpenAI と Anthropic、このマシンでない `url` のサーバー）、判断のモデルの API（Jev（TypeSafe）、OpenAI の Decisions API、このマシンでない `url` のサーバー。1.11）、URL だけで書いた `http` の送り先（このマシンを除く）、AWS のサービスである。タスクが `discloses <引数> "<理由>"` で書いた引数は通す。`discloses` は E906 だけを通し、W904 は通さない（送ることと、履歴に残ることは別のことである）。
 
 ```
 エラー[E906]: tests/fixtures/security/E906_payout_holder.flow:41:1: タスク `draft_notice` が、秘密の値 `account.holder` をプロジェクトの外の OpenAI に送ります
@@ -934,7 +985,7 @@ chobo の DESIGN 5 章の案は、案件に `external expire` と `refused when 
 | E004 | 引数や出力の過不足、`{…}` のレコードのフィールドの不足 |
 | E005 | 規則・日付のファイル・帳簿を読めなかった（rulec の検査を通らない規則、規則を読まない dandori のクレートのバイナリで読もうとした規則、要素の並びをたどる規則、無いことがある入力か出力（`T?`）を持つ規則も。`connect` で呼ぶ規則について、rulec が Connect のサービスを言わないとき、サービスが列挙の値を何と呼ぶかを言わないときも。koyomi の検査を通らない日付のファイル、chobo の検査を通らない帳簿、無いファイルも） |
 | E006 | 二度の宣言（生成するコードで同じ名前になる型、規則と API に付けた同じ名前、規則・日付のファイル・帳簿に付けた同じ名前も）。生成するコードでぶつかる規則の名前（規則の別名がまわりのコードの名前と同じ、別名が同じ二つの規則、タスクと規則のアクティビティが同じ名前。1.15） |
-| E007 | タスクの項目の誤り（`flow` のタスクのほかの呼び出し方と `image`、OpenAPI の操作を呼ぶタスクの `form`、Connect のエラーコードの誤り、ステータスの付け忘れ、同じステータスの二つのエラー、呼び出し方の重なり、`aws` の `key` の引数、`callback` にできない呼び出し方、知らない AWS のサービス、子ワークフローの `key`、エージェントの `model` の書き忘れ・宣言したエラー・`key`・Schema に書けない応答・知らないプロバイダー・Claude で大文字と小文字だけが違う列挙の値、`event` のタスクの引数・呼び出し方・`retry`・`key`・案件を始めることなど、エージェントでないタスクや Claude の `url`、http でも https でもない `url`、Jev が答えられない結果の型・尋ねていないフィールド・意味の誤り・下限の誤り・`confidence` のエラーのリトライ・ステータスの無いエラー）。規則の項目の誤り（`lambda` と `connect` の重なり、`connect` の無い規則の `connection`、http でも https でもない `connect`）も。帳簿の操作のタスクの、振替に無い操作、`key`、`refused as`、エラーの `= …` も。`plaintext` を自分の URL を持たないタスク・`connect` の無い `use rule`・URL の無い `use` に書く、`discloses` がタスクに無い引数を書く、`plaintext` と `discloses` の理由が空の文字列（1.18）も |
+| E007 | タスクの項目の誤り（`flow` のタスクのほかの呼び出し方と `image`、OpenAPI の操作を呼ぶタスクの `form`、Connect のエラーコードの誤り、ステータスの付け忘れ、同じステータスの二つのエラー、呼び出し方の重なり、`aws` の `key` の引数、`callback` にできない呼び出し方、知らない AWS のサービス、子ワークフローの `key`、エージェントの `model` の書き忘れ・宣言したエラー・`key`・Schema に書けない応答・知らないプロバイダー・Claude で大文字と小文字だけが違う列挙の値、`event` のタスクの引数・呼び出し方・`retry`・`key`・案件を始めることなど、エージェントでないタスクや Claude の `url`、http でも https でもない `url`、判断のモデル（`jev`）が答えられない結果の型・尋ねていないフィールド・意味の誤り・下限の誤り・`confidence` のエラーのリトライ・ステータスの無いエラー・知らない API・System One のタスクの `refusal`・`refusal` のエラーのリトライ・Decisions API の predicate のはいといいえの意味・選択肢や段階が一つだけの列挙）。規則の項目の誤り（`lambda` と `connect` の重なり、`connect` の無い規則の `connection`、http でも https でもない `connect`）も。帳簿の操作のタスクの、振替に無い操作、`key`、`refused as`、エラーの `= …` も。`plaintext` を自分の URL を持たないタスク・`connect` の無い `use rule`・URL の無い `use` に書く、`discloses` がタスクに無い引数を書く、`plaintext` と `discloses` の理由が空の文字列（1.18）も |
 | E008 | 案件の宣言や、案件に何をするかの誤り（`.proto` から作った列挙の値がステートマシンの状態と違う、案件の型も。帳簿の仮押さえでは、案件に合わない操作、`expire` のほかの `external`、`refused when` も） |
 | E009 | 文の置き場所の誤り（`yield`、並列のイテレーションの中の `break`・`succeed`・案件の呼び出し・イベントの待ち、`on failure` と `on cancel` の中の `succeed`、中と外の両方で値を入れる変数、規則を `let` なしで呼ぶことも） |
 | E010 | `match` のどの分岐にも当たらない値がある |
@@ -952,10 +1003,10 @@ chobo の DESIGN 5 章の案は、案件に `external expire` と `refused when 
 | E030 | 外部のデータを変える呼び出しを、`key` なしでリトライする |
 | E031 | Express でできないこと（五分を超える待ち、コールバック、ネストした実行、`key` なしで外部のデータを変える呼び出し） |
 | E040 | プラットフォームで、一回の実行が大きくなりすぎうる（ビルドがプラットフォームごとに見る）。実行履歴が上限を超えうる（Step Functions は 25,000 件、Temporal は 51,200 件、Lambda durable functions は 3,000 操作）。Argo Workflows では、一回の実行のノードが目安の 10,000 個を超えうる |
-| E050 | プラットフォームに出すのに要るものが無い、またはプラットフォームでできないこと（Step Functions では呼び出し方か `connection`（エージェントと Jev、`connect` で呼ぶ規則にも要る）、ネストした実行の宣言したエラー、`http`・`agent`・`jev` の 60 秒を超える `timeout`、HTTPS でない送り先（規則のサービスも）。Temporal のほかでは `on cancel` と `event` のタスク、サービスの `status` のメソッド。Step Functions と durable functions では、呼ばれる規則の `lambda` か `connect` と、呼ばれる日付の `lambda`。Step Functions では、帳簿の `lambda`。durable functions では invoke する関数の `timeout`。Argo では呼び出し方か `image`、`workflow template` の宣言したエラー、`callback` のタスクの `retry`、`history encrypted`（1.18）） |
-| E906 | 秘密の値を、プロジェクトの外の相手（モデルのプロバイダー、Jev、URL だけで書いた相手、AWS のサービス）へ送る（1.18） |
+| E050 | プラットフォームに出すのに要るものが無い、またはプラットフォームでできないこと（Step Functions では呼び出し方か `connection`（エージェントと判断のタスク、`connect` で呼ぶ規則にも要る）、ネストした実行の宣言したエラー、`http`・`agent`・`jev` の 60 秒を超える `timeout`、HTTPS でない送り先（規則のサービスも）。Temporal のほかでは `on cancel` と `event` のタスク、サービスの `status` のメソッド。Step Functions と durable functions では、呼ばれる規則の `lambda` か `connect` と、呼ばれる日付の `lambda`。Step Functions では、帳簿の `lambda`。durable functions では invoke する関数の `timeout`。Argo では呼び出し方か `image`、`workflow template` の宣言したエラー、`callback` のタスクの `retry`、`history encrypted`（1.18）） |
+| E906 | 秘密の値を、プロジェクトの外の相手（モデルのプロバイダー、判断のモデルの API（Jev、OpenAI の Decisions API、このマシンでない `url` のサーバー）、URL だけで書いた相手、AWS のサービス）へ送る（1.18） |
 | W030 | 外部のデータを変えるかもしれない呼び出しを `key` なしでリトライする |
-| W032 | 確信度を使う Jev のタスクが、モデルをバージョンではなくエイリアスで書いている |
+| W032 | 確信度を使う判断のタスクのモデルが、ここを変えなくても別のバージョンに移る（Jev のエイリアス、`url` のサーバーのタグの無い名前と `:latest`、バージョンを固定する名前の無い OpenAI の Decisions API。1.11） |
 | W101 | 処理されないエラーで、案件を終わりでない状態に残して失敗することがある（`on failure` や `on cancel` の片付けの最中も） |
 | W102 | 動くことのない `on <拒否>` |
 | W103 | 案件を始めるタスクに `key` が無い |
@@ -1143,7 +1194,7 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
 | 冪等キー | `$states.context.Execution.Name` から | `workflowInfo().workflowId` から | `durableExecutionArn` から | `workflow.name` から | `Deps.run_id` から |
 | `lambda`・`http`・`aws` のタスク | Task（Lambda、HTTP、AWS SDK 統合） | dandori が書くアクティビティ（`Transport` を通す） | dandori が書く実装を step の中で | dandori が書く実装をコンテナで | dandori が書く関数（`Transport` を通す） |
 | `agent` のタスク | HTTP Task（Responses API か Messages API）、応答は `$parse` で読む | dandori が書くアクティビティ（`Transport` を通し、Agents SDK か Anthropic の SDK で。Go 版は openai-go の Responses API か Anthropic の Go の SDK で） | dandori が書く実装を step の中で | dandori が書く実装をコンテナで | dandori が書く関数（`Transport` を通し、Agents SDK か Anthropic の SDK で） |
-| `jev` のタスク | HTTP Task（TypeSafe の API）、答えは Task の出力の JSONata で読み、Choice で確信度を確かめてから変数に入れる | dandori が書くアクティビティ（`Transport` の `http` を通し、`io.jev` で読む） | dandori が書く実装を step の中で | dandori が書く実装をコンテナで | dandori が書く関数（`Transport` の `http` を通し、`io.jev` で読む） |
+| `jev` のタスク | HTTP Task（TypeSafe の API、`url` のサーバー、OpenAI の Decisions API）、答えは Task の出力の JSONata で読み、Choice で拒否と確信度を確かめてから変数に入れる | dandori が書くアクティビティ（`Transport` の `http` を通し、`io.jev` で読む） | dandori が書く実装を step の中で | dandori が書く実装をコンテナで | dandori が書く関数（`Transport` の `http` を通し、`io.jev` で読む） |
 | それ以外のタスク | 作れない | 利用者のアクティビティ | 利用者の実装を step の中で | `image` のコンテナ（無ければ作れない） | 利用者の関数 |
 | 子ワークフロー | ネストした実行 | `executeChild` | `context.invoke` | WorkflowTemplate から Workflow を作る | 利用者の関数 |
 | コールバック | `.waitForTaskToken` | シグナル | `createCallback` | suspend と `argo node set` | `Deps.callbacks` |
@@ -1547,7 +1598,9 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
 - pydantic-graph の実行を、止まったあとに続けること。2.x が状態を外に置く手段を持たないので、今はプロセスの中の実行だけにしている。
 - エージェントを OpenAI と Anthropic の API に本当に向ける確認。構造化出力が生成した Schema を受け付けるか（Claude では、文法の大きさの上限に当たらないかも）、Step Functions の HTTP Task と EventBridge の接続で呼べるか、どちらも確かめていない。
 - エージェントの拒否や API のエラー（429 など）を、名前の付いたエラーとして処理すること。いまは `failure` にまとめている。
-- Step Functions の HTTP Task と EventBridge の接続から、本物の Jev を呼ぶ確認（既定の `Transport` からは、キーがあれば送っている）。日本語の入力での精度は、いくつかの文で試しただけである。
+- Step Functions の HTTP Task と EventBridge の接続から、本物の Jev と OpenAI の Decisions API を呼ぶ確認（既定の `Transport` からは、キーがあれば送っている）。日本語の入力での精度は、いくつかの文で試しただけである。
+- 判断のモデルへの画像の入力。OpenAI の Decisions API はユーザーのメッセージの中の画像（base64 の data URL、128 枚まで）を、Ollama の System One の API は `images`（Clef と Clef Flash のモデル）を受けるが、dandori の型に画像が無いので、入力はいまどおり引数の文字列と値だけにした。Ollama の `keep_alive`（モデルを読み込んだままにする長さ）も送らない。
+- Decisions API の `safety_identifier`（エンドユーザーの識別子）は送らない。dandori のタスクには、それを書く場所がまだ無い。
 - Claude のエージェントを、Anthropic の API のほかの場所（ゲートウェイなど）に送ること。Open Responses の適合テスト（openresponses.org の acceptance tests）を、dandori が送るリクエストと読むレスポンスに当てること。
 - OpenAI が走らせる Agents API（長く動くエージェント）を、コールバックで待つ呼び出し方。
 - エージェントにツールを持たせること、指示をファイルから読むこと、エフォートのほかのモデルの設定（温度など）を `.flow` に書くこと。

@@ -339,12 +339,32 @@ pub struct BookOp {
     pub op: String,
 }
 
-/// Where every target sends a Jev task's request.
+/// Where every target sends a Jev task's request when it says no `url`: TypeSafe's System One API.
 pub const JEV_URL: &str = "https://api.typesafe.ai/v1/systemone";
+
+/// Where every target sends a `jev openai` task's request when it says no `url`: OpenAI's
+/// Decisions API.
+pub const DECISIONS_URL: &str = "https://api.openai.com/v1/decisions";
+
+/// The error a `jev openai` task's call fails with when the model refuses a question and the task
+/// declares no error for it (`refusal else <error>`): `on failure` takes it, and no retry does.
+pub const REFUSED: &str = "Dandori.Refused";
+
+/// The API a decision task (`jev`) speaks: the System One API of TypeSafe's Jev, which Ollama and
+/// other servers speak too (`url`), or OpenAI's Decisions API (`jev openai`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DecisionApi {
+    SystemOne,
+    Decisions,
+}
 
 /// What a Jev task asks, and how its answer is read.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Jev {
+    pub api: DecisionApi,
+    /// `url "<base>"`: another server of the same API, its base URL (`/systemone` or `/decisions`
+    /// follows it); none: TypeSafe's, or OpenAI's
+    pub url: Option<String>,
     pub model: String,
     /// in the order of the answer's fields; one, whose `field` is None, when the answer is the
     /// question's own value
@@ -354,6 +374,9 @@ pub struct Jev {
     pub confidences: Vec<(String, usize, u64)>,
     /// `confidence 0.8 else unsure`: an answer less sure than this fails the call with the error
     pub floor: Option<(f64, String)>,
+    /// `refusal else declined`: the Decisions API's refusal of a question fails the call with the
+    /// error; without it, with `REFUSED`
+    pub refusal: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -384,6 +407,45 @@ impl Jev {
     /// Whether the task says how sure an answer must be, or hands on how sure it is.
     pub fn uses_confidence(&self) -> bool {
         self.floor.is_some() || !self.confidences.is_empty()
+    }
+
+    /// Where every target sends the request: the API's path after the base URL of the task's
+    /// server (`url`), or TypeSafe's or OpenAI's.
+    pub fn endpoint(&self) -> String {
+        match (self.api, &self.url) {
+            (DecisionApi::SystemOne, None) => JEV_URL.to_string(),
+            (DecisionApi::Decisions, None) => DECISIONS_URL.to_string(),
+            (DecisionApi::SystemOne, Some(u)) => format!("{}/systemone", u.trim_end_matches('/')),
+            (DecisionApi::Decisions, Some(u)) => format!("{}/decisions", u.trim_end_matches('/')),
+        }
+    }
+
+    /// Whose API key the default Transport adds: TypeSafe's or OpenAI's, at their own servers
+    /// only; another server's key goes in the Transport's headers.
+    pub fn key(&self) -> Option<&'static str> {
+        match (self.api, &self.url) {
+            (DecisionApi::SystemOne, None) => Some("typesafe"),
+            (DecisionApi::Decisions, None) => Some("openai"),
+            (_, Some(_)) => None,
+        }
+    }
+
+    /// The error a refused question fails the call with: the Decisions API's only.
+    pub fn refusal_error(&self) -> Option<&str> {
+        match self.api {
+            DecisionApi::Decisions => Some(self.refusal.as_deref().unwrap_or(REFUSED)),
+            DecisionApi::SystemOne => None,
+        }
+    }
+
+    /// Who answers, as the messages and the comments say it.
+    pub fn who(&self) -> &'static str {
+        match (self.api, &self.url) {
+            (DecisionApi::SystemOne, None) => "Jev",
+            (DecisionApi::SystemOne, Some(_)) => "the server of the System One API",
+            (DecisionApi::Decisions, None) => "OpenAI's Decisions API",
+            (DecisionApi::Decisions, Some(_)) => "the server of the Decisions API",
+        }
     }
 }
 
@@ -446,7 +508,7 @@ pub enum Via<'a> {
     /// an agent of OpenAI's or Claude's (see `Provider`), or on another server that speaks
     /// OpenAI's Responses API as Open Responses specifies it (`url`)
     Agent { provider: Provider, instructions: &'a str, model: &'a str, url: Option<&'a str>, effort: Option<&'a str> },
-    /// Jev, over HTTP: a POST to `JEV_URL`, the same on every platform
+    /// a decision task, over HTTP: a POST to its endpoint (`Jev::endpoint`), the same on every platform
     Jev(&'a Jev),
     /// an operation of a book of chobo's: through the transport, by chobo's client; on Step
     /// Functions, by the book's Lambda function

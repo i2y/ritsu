@@ -4,6 +4,10 @@
 
 # The Jev tasks are never sent to TypeSafe from CI (every call is paid for); the key is empty there.
 dandori jev_tasks_answer_on_typesafe
+# Nor are the tasks of OpenAI's Decisions API sent to OpenAI, for the same reason.
+dandori decision_tasks_answer_on_openai
 # No Ollama on GitHub's runner: the agents on a server of Open Responses are sent to a real one
 # where Ollama answers, as on the machine the tests were written on.
 dandori open_responses_agents_answer_on_ollama
+# Nor are the decision tasks on a server of the System One API.
+dandori decision_tasks_answer_on_ollama

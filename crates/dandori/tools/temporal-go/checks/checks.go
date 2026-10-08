@@ -560,30 +560,51 @@ func ReadRule(read func(wire, body any) (any, error), casesFile, outFile string)
 	return writeJSON(outFile, results)
 }
 
-// Jev sends every case's request to TypeSafe's API through the default Transport, which adds the
-// key from TYPESAFE_API_KEY, and reads the answer as the task's spec says (read: the package's ddJev).
+// Jev sends every case's request for real — to TypeSafe's API, OpenAI's Decisions API, or a server
+// of the System One API such as Ollama — through the default Transport, which adds the key the case
+// names ("typesafe", "openai", or none; TypeSafe's when left out), and reads the answer as the
+// task's spec says (read: the package's ddJev).
 func Jev(f harness.Flow, read func(body, spec any) (any, error), casesFile, outFile string) error {
-	var raw any
+	// each case's parts as they are written, so that the body goes in the order it has (the options
+	// of a question, the parameters of the state), as the package's own activities send it
+	var raw []map[string]json.RawMessage
 	if err := readJSON(casesFile, &raw); err != nil {
 		return err
 	}
 	t := f.NewTransport(nil, nil)
 	var results []any
-	for _, x := range raw.([]any) {
-		c := x.(map[string]any)
+	for _, parts := range raw {
+		c := map[string]any{}
+		for k, v := range parts {
+			var x any
+			d := json.NewDecoder(bytes.NewReader(v))
+			d.UseNumber()
+			if err := d.Decode(&x); err != nil {
+				return err
+			}
+			c[k] = x
+		}
 		var req harness.HTTPRequest
-		b, _ := json.Marshal(c["request"])
-		if err := json.Unmarshal(b, &req); err != nil {
+		if err := json.Unmarshal(parts["request"], &req); err != nil {
 			return err
 		}
-		req.Body = c["request"].(map[string]any)["body"]
-		req.TypeSafe = true
+		var request map[string]json.RawMessage
+		if err := json.Unmarshal(parts["request"], &request); err != nil {
+			return err
+		}
+		req.Body = request["body"]
+		switch key, named := c["key"]; {
+		case !named || key == "typesafe":
+			req.TypeSafe = true
+		case key == "openai":
+			req.OpenAI = true
+		}
 		started := time.Now()
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		res, err := t.HTTP(ctx, req)
 		cancel()
 		if err != nil {
-			return fmt.Errorf("the call of Jev failed: %w", err)
+			return fmt.Errorf("the call of %s failed: %w", req.URL, err)
 		}
 		out := map[string]any{"status": res.Status, "body": res.Body, "ms": time.Since(started).Milliseconds()}
 		if res.Status == 200 {

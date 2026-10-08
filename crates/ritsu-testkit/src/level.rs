@@ -4,7 +4,7 @@
 //! |---|---|
 //! | `fast` | nothing but cargo (git may be used, and curl, to ask a server the test itself started) |
 //! | `tools` | the tools installed on the machine: compilers and checkers of generated code, PostgreSQL, TigerBeetle, Chrome, Mermaid, xmllint, Lean, the linters, pixie's greeter, the Cedar CLI, the binaries of the other languages a test runs (rulec, koyomi, chobo and dandori for sakai's) |
-//! | `platforms` | services and clusters a test starts, and the network: Temporal, Argo on kind, LocalStack, Ollama, TypeSafe, e-Gov and the eCFR, Kani |
+//! | `platforms` | services and clusters a test starts, and the network: Temporal, Argo on kind, LocalStack, Ollama, TypeSafe, OpenAI, e-Gov and the eCFR, Kani |
 //!
 //! `RITSU_TEST_LEVEL` names the highest level to run; a test that needs a higher one prints a
 //! SKIP line and passes. Without it, every test runs what the machine has, as the crates did
@@ -83,6 +83,8 @@ pub enum Need {
     LocalStack,
     Ollama,
     TypeSafe,
+    /// OpenAI's API, with the key of `OPENAI_API_KEY` (dandori's decision tasks of the Decisions API).
+    OpenAi,
     /// e-Gov, the eCFR, or any server outside the machine.
     Network,
     Kani,
@@ -91,7 +93,7 @@ pub enum Need {
 impl Need {
     pub fn level(self) -> Level {
         match self {
-            Need::Temporal | Need::Argo | Need::LocalStack | Need::Ollama | Need::TypeSafe | Need::Network | Need::Kani => Level::Platforms,
+            Need::Temporal | Need::Argo | Need::LocalStack | Need::Ollama | Need::TypeSafe | Need::OpenAi | Need::Network | Need::Kani => Level::Platforms,
             _ => Level::Tools,
         }
     }
@@ -122,6 +124,7 @@ impl Need {
             Need::LocalStack => "localstack",
             Need::Ollama => "ollama",
             Need::TypeSafe => "typesafe",
+            Need::OpenAi => "openai",
             Need::Network => "network",
             Need::Kani => "kani",
         }
