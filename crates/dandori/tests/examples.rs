@@ -861,14 +861,12 @@ fn temporal_go_runs_as_the_reference_says() {
     temporal_all(Sdk::Go);
 }
 
-/// Every flow on Temporal at once, each with a runner and a dev server of its own, in one language.
+/// Every flow on Temporal, each with a runner and a dev server of its own, in one language: twice
+/// as many flows at a time as `at_once` says, since each starts one worker, where a run of
+/// `temporal_activities_run_in_the_other_language` starts two.
 fn temporal_all(lang: Sdk) {
     let _turn = heavy();
-    std::thread::scope(|scope| {
-        for f in runnable_on(Platform::Temporal) {
-            scope.spawn(move || temporal_one(&f, lang, None));
-        }
-    });
+    some_at_a_time(&runnable_on(Platform::Temporal), 2 * at_once(), |f| temporal_one(f, lang, None));
 }
 
 /// The workflow in one language, and its activities in another: the workers of the build that
@@ -911,22 +909,32 @@ fn temporal_activities_run_in_the_other_language() {
     }
     for pairs in &rounds {
         let runs: Vec<(&PathBuf, Sdk, Sdk)> = flows.iter().flat_map(|f| pairs.iter().map(move |(wf, acts)| (f, *wf, *acts))).collect();
-        for some in runs.chunks(at_once()) {
-            std::thread::scope(|scope| {
-                for (f, wf, acts) in some {
-                    scope.spawn(move || temporal_one(f, *wf, Some(*acts)));
-                }
-            });
-        }
+        some_at_a_time(&runs, at_once(), |(f, wf, acts)| temporal_one(f, *wf, Some(*acts)));
     }
 }
 
-/// How many flows `temporal_activities_run_in_the_other_language` runs at once: as many as the
-/// machine has cores, or `DANDORI_AT_ONCE`. Each of its runs starts a worker in each of two
-/// languages, and starting them all at once on the four cores of a GitHub runner left the first
-/// activities of some runs past their StartToClose timeouts (DESIGN 10.6).
+/// How many runs of `temporal_activities_run_in_the_other_language` go at once, each with a worker
+/// in each of two languages: as many as the machine has cores, or `DANDORI_AT_ONCE`; `temporal_all`
+/// runs twice as many flows, each with one worker. Starting every flow at once on the four cores of
+/// a GitHub runner left the first activities of some runs past their StartToClose timeouts, and
+/// some events past their waits (DESIGN 10.6).
 fn at_once() -> usize {
     std::env::var("DANDORI_AT_ONCE").ok().and_then(|n| n.parse().ok()).filter(|n| *n > 0).unwrap_or_else(|| std::thread::available_parallelism().map_or(4, |n| n.get()))
+}
+
+/// Run `each` on every item, `n` of them at a time: the next starts as soon as one ends. A thread
+/// whose item fails stops there, and the others go on with the rest.
+fn some_at_a_time<T: Sync>(items: &[T], n: usize, each: impl Fn(&T) + Sync) {
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    std::thread::scope(|scope| {
+        for _ in 0..n.min(items.len()) {
+            scope.spawn(|| {
+                while let Some(item) = items.get(next.fetch_add(1, std::sync::atomic::Ordering::Relaxed)) {
+                    each(item);
+                }
+            });
+        }
+    });
 }
 
 /// One flow on Temporal, its workflow in `wf`; with `acts`, its activities in that other language,
