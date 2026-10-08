@@ -1492,12 +1492,14 @@ derive の範囲を入力から計算して、届かない行を E102 にした�
 - 値が整数の数は、どの入口でも整数として受け付ける（rulec の DESIGN §15.205）。`1000.0`、`1e3`、`1.5e3`、`-0.0` を、十二の言語の runner とモジュールの入口（並びの要素も）、MCP のサーバ、Connect の runner、Wasm の入口、SQL の二つの runner、NumPy、参照評価器と `fixtures` の入口が、1000、1000、1500、0 として読み、範囲と刻みをいままでどおり確かめる。`1000.5` と `"1000"` はいままでどおり拒む。前は TypeScript と JavaScript だけが受け付け（`JSON.parse` が `1000.0` を `1000` にする）、NumPy は記録に `1.0` と書き、ほかは拒んでいた。Go・Rust・Java・Wasm は桁と指数から値を正確に求める。rulec 自身の読み手（ritsu-base）は指数を読まないので、参照評価器には `1e3` は来ない。新しいテスト `crates/rulec/tests/whole_numbers.rs`。
 - `rulec api` の Wasm の項目に `answers`（記録と拒む行の二つの形、拒む行の鍵と `refused` の値）を足し、Rust の項目の `wasi` の `wire` に拒む行を書いた（§15.206）。Connect と SQL の項目には足さない（§15.202 のまま）。テストは `crates/rulec/tests/api_errors.rs` に一つ。
 - 見つけて直していないもの：倍精度で持つ読み手は、2^53 を超える値を小数の形で書くと最も近い倍精度の値として読む。射影の関数は、整数でない数を言語ごとに違って読む（Python と Ruby は切り捨て、TypeScript と JavaScript は `RangeError`）。
+- 2026-10-09 に決めたこと：次の六つはいまのままにする。ritsu-base の JSON の読み手が指数の形を読まないこと、倍精度で読む言語が 2^53 を超える値の小数の形を最も近い倍精度の値として読むこと、PHP のモジュールの入口が引数の型の宣言のままであること、`rulec test` に小数の形の確かめを足さないこと（`tests/whole_numbers.rs` が確かめる）、`answers` の鍵の形、Wasm の項目に `error_types` を足さないこと。
 
 **判断のタスクの送り先と、定時の platforms の食い違い**（dandori-decisions の担当）
 
 - dandori の判断のタスク（`jev`）を、`url` で System One の API を話すほかのサーバー（Ollama は 0.35 から `/v1/systemone`）に、`jev openai` で OpenAI の Decisions API（`/v1/decisions`、`gpt-6-luna`）に送れるようにした。拒否（`refusal else <エラー>`。書かなければ `Dandori.Refused`）、W032 の三つの形、E050・E906・W902 の送り先、五つのプラットフォームの生成、参照インタプリタ、シナリオ、`dandori doc`、サイトのページ（「判断のモデル」）、スキルまで（dandori の DESIGN 1.11）。試験用のフロー `tests/flows/decisions.flow`（日本語の版も）は、どのプラットフォームでも 20 本ずつ参照と一致し、本物の Ollama（`tev1:0.8b`）と OpenAI にも送った。問い合わせの例の Temporal 版は、会社が自分で動かしている System One の API のサーバー（この例では Ollama）に種類を尋ねる。
-- 定時の platforms のジョブの Temporal の食い違いは、ローカルアクティビティの走り直しにスタブが次の応答を渡していたためで、三つの言語のランナーを直した。ほかはランナーが混んだときのタイムアウトで、`temporal_all` を `at_once()` の何倍かずつ流す案を残した。
+- 定時の platforms のジョブの Temporal の食い違いは、ローカルアクティビティの走り直しにスタブが次の応答を渡していたためで、三つの言語のランナーを直した。ほかはランナーが混んだときのタイムアウトで、一つの言語で全部のフローを流す三つの突き合わせが同時に流すフローを、コアの数の 2 倍までにした（2026-10-09。一つ終わるたびに次を始める。言語をまたぐ確かめも同じ形にした。手元の 14 コアで TypeScript の 853 本が 78 秒、GitHub のランナーと同じ 8 本ずつで 84 秒）。
 - 残したこと：判断のモデルへの画像、Ollama の `keep_alive`、Decisions API の `safety_identifier`。OpenAI の例（W032 が必ず出るため）。Step Functions から本物の Decisions API を呼ぶ確認。
+- 2026-10-09 に決めたこと：OpenAI の Decisions API の例は入れない（例は警告を出さない。入れるなら、W032 を承知したと書ける句が先に要る）。拒否を宣言しないときのエラーの名前は `Dandori.Refused` のままにし、リトライしない。
 
 **rulec の入れ方の出力を 0.24.0 で取り直した**：rulec の README、`AGENTS.md`（とスキルのコピー）、入れ方のページ（英日）に貼った出力と版を、0.24.0 のリリースの実物で取り直した（rulec の DESIGN §15.186 の 2026-10-07 の段落）。アーカイブ（macOS の arm64）はページのコマンドで落として `SHA256SUMS` と突き合わせ、`.deb`・`.rpm` は Debian のコンテナの GNU の `sha256sum -c` で突き合わせた。三つとも `THIRD_PARTY_NOTICES` を持ち、formula はそれを keg に入れる。Homebrew は、使い捨ての Homebrew 7.0.8 で四つの場合（何も無いところへ入れる、古い名前、rulec 0.22.1 からの `brew migrate` と `brew trust`）を走らせ、どれも `rulec 0.24.0` になった。使い捨ての Homebrew は `/tmp` の外に置く（`/private/tmp` の下では、7.0.8 が入れる段で `Inherited sandbox permits writes to …/bin/brew` と言って止まる）。`experiments/library/` の CI の見本も `uses: i2y/ritsu@v0.24.0` にした（リリースの rulec 0.24.0 が五つの規則で `fmt --check`・`check`・`coverage` を通す）。
 
