@@ -1493,6 +1493,12 @@ derive の範囲を入力から計算して、届かない行を E102 にした�
 - `rulec api` の Wasm の項目に `answers`（記録と拒む行の二つの形、拒む行の鍵と `refused` の値）を足し、Rust の項目の `wasi` の `wire` に拒む行を書いた（§15.206）。Connect と SQL の項目には足さない（§15.202 のまま）。テストは `crates/rulec/tests/api_errors.rs` に一つ。
 - 見つけて直していないもの：倍精度で持つ読み手は、2^53 を超える値を小数の形で書くと最も近い倍精度の値として読む。射影の関数は、整数でない数を言語ごとに違って読む（Python と Ruby は切り捨て、TypeScript と JavaScript は `RangeError`）。
 
+**判断のタスクの送り先と、定時の platforms の食い違い**（dandori-decisions の担当）
+
+- dandori の判断のタスク（`jev`）を、`url` で System One の API を話すほかのサーバー（Ollama は 0.35 から `/v1/systemone`）に、`jev openai` で OpenAI の Decisions API（`/v1/decisions`、`gpt-6-luna`）に送れるようにした。拒否（`refusal else <エラー>`。書かなければ `Dandori.Refused`）、W032 の三つの形、E050・E906・W902 の送り先、五つのプラットフォームの生成、参照インタプリタ、シナリオ、`dandori doc`、サイトのページ（「判断のモデル」）、スキルまで（dandori の DESIGN 1.11）。試験用のフロー `tests/flows/decisions.flow`（日本語の版も）は、どのプラットフォームでも 20 本ずつ参照と一致し、本物の Ollama（`tev1:0.8b`）と OpenAI にも送った。問い合わせの例の Temporal 版は、会社が自分で動かしている System One の API のサーバー（この例では Ollama）に種類を尋ねる。
+- 定時の platforms のジョブの Temporal の食い違いは、ローカルアクティビティの走り直しにスタブが次の応答を渡していたためで、三つの言語のランナーを直した。ほかはランナーが混んだときのタイムアウトで、`temporal_all` を `at_once()` の何倍かずつ流す案を残した。
+- 残したこと：判断のモデルへの画像、Ollama の `keep_alive`、Decisions API の `safety_identifier`。OpenAI の例（W032 が必ず出るため）。Step Functions から本物の Decisions API を呼ぶ確認。
+
 **rulec の入れ方の出力を 0.24.0 で取り直した**：rulec の README、`AGENTS.md`（とスキルのコピー）、入れ方のページ（英日）に貼った出力と版を、0.24.0 のリリースの実物で取り直した（rulec の DESIGN §15.186 の 2026-10-07 の段落）。アーカイブ（macOS の arm64）はページのコマンドで落として `SHA256SUMS` と突き合わせ、`.deb`・`.rpm` は Debian のコンテナの GNU の `sha256sum -c` で突き合わせた。三つとも `THIRD_PARTY_NOTICES` を持ち、formula はそれを keg に入れる。Homebrew は、使い捨ての Homebrew 7.0.8 で四つの場合（何も無いところへ入れる、古い名前、rulec 0.22.1 からの `brew migrate` と `brew trust`）を走らせ、どれも `rulec 0.24.0` になった。使い捨ての Homebrew は `/tmp` の外に置く（`/private/tmp` の下では、7.0.8 が入れる段で `Inherited sandbox permits writes to …/bin/brew` と言って止まる）。`experiments/library/` の CI の見本も `uses: i2y/ritsu@v0.24.0` にした（リリースの rulec 0.24.0 が五つの規則で `fmt --check`・`check`・`coverage` を通す）。
 
 **次のリリースノートに書くこと**（v0.24.0 のあと）
@@ -1533,3 +1539,5 @@ derive の範囲を入力から計算して、届かない行を E102 にした�
 - 前は、TypeScript と JavaScript の runner と MCP のサーバだけが受け付け、ほかの言語の runner、Python の MCP のサーバと Connect の runner、Wasm の入口、SQL の runner、参照評価器と `rulec fixtures` は「整数ではありません」で拒んでいた。NumPy の runner は受け付けたが、記録の `in` に `1.0` と書いていた。Python・TypeScript・JavaScript・Ruby のモジュールの入口（並びの要素も）も、値が整数の小数（TypeScript と JavaScript では値が整数の `number`）を受け付ける。PHP のモジュールの引数は型の宣言のまま。
 - `rulec api` の Wasm の項目に `answers` が増えた。`call` の答えの二つの形（記録と、拒む行）と、拒む行の鍵（`refused`、`error`）と `refused` の値（`input`、`contradiction`）を言う。Rust の項目の `wasi` の `wire` の文も、拒む行を言う。
 - 生成物が変わるので、`rulec gen` をし直す（`rulec gen --check` は、し直すまで落ちる）。
+- dandori：判断のタスクの送り先が増えた。`jev` のタスクは、`url "<ベース URL>"` で System One の API を話すどのサーバー（Ollama は 0.35 から `/v1/systemone`）にも、`jev openai "<質問>"` で OpenAI の Decisions API（`gpt-6-luna`。`url` でそのほかのサーバー）にも尋ねられるようになった。答えの型、確信度の下限、確信度のフィールドは、三つの送り先のどれでも、どのプラットフォームでも同じに使える。Decisions API が質問に答えないと、呼び出しは `refusal else <エラー>` が宣言したエラーか、`on failure` が受ける `Dandori.Refused` で失敗する。W032 は、送り先ごとにひとりでに移るモデルを警告する（Jev のエイリアス、タグの無いか `:latest` の Ollama のモデル、バージョンを固定する名前の無い Decisions API）。既定の `Transport` は、`OPENAI_API_KEY`（`openai` オプション）から OpenAI のキーを足し、`url` のサーバーにはどのキーも送らない。
+- dandori で変わったこと：`jev` のタスクの `url` はこれまで E007 だったが、送り先のサーバーを書くところになった。値が一つだけの列挙を choice や score で尋ねると、どの送り先でも E007 になる。

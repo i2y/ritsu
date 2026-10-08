@@ -1472,7 +1472,7 @@ E.2 で、入口を 8.1 の形にした（`ritsu check`、七つの全部の `ri
 - `ritsu_doc`：rulec・koyomi・chobo・dandori・sekisho の `doc` の HTML と Markdown。
 - 書き出し先を引数に取るコマンド（ritsu の check、rulec の gen、dandori、yuen、sakai、sekisho）はそのまま呼ぶ。標準出力に直接書くコマンド（rulec の doc、koyomi の gen と doc、chobo の build と doc）は、コマンドが呼ぶ関数を同じ順に呼び、同じ文を返す。四つの言語のコマンドを書き出し先を引数に取る形に直すことは捨て、テストがページの答えを全部 `ritsu` のバイナリの出力と突き合わせる。
 
-ページは根の `website/` にある（英語の `website/docs/playground.md` と日本語の `website/docs-ja/playground.md`、`website/docs/playground/` の `playground.js`・`playground.css`・`projects.json`・`ritsu.wasm`、wasm を作る `website/tools/make_wasm.sh`）。ページが開くプロジェクトは、ここで書き下ろした小さな通販の英語版（`website/playground/shop/`）と、二つ目に置く日本語版（`shop.ja/`）で、rulec の規則三つ、koyomi の二つ、chobo の帳簿、`.proto` 一つと OpenAPI の文書一つ、dandori のフロー一つ、sekisho のゲート二つ、yuen の要件三つと見た記録のコピー、sakai の地図を持つ。geas のほかの七つの言語が入る（geas は主張を確かめるのにプログラムを走らせ、ページはプロセスを起こせない）。開いたときは、受注が `.proto` に `ORDER_STATUS_RETURNED = 5;` を足したところで、rulec（E032）、yuen（E203）、sakai（E105）の三つが答える状態にした。二つのゲートは請求の規則を読まないので、sekisho は答えない。最後の行は、受注と倉庫が公開する五つの操作（ゲートの action が守る。X15）と、フローが倉庫の操作を呼ぶ五か所（倉庫のゲートがワークフローに許す。X16）を、言語の境目として数える（10 か所）。`make_wasm.sh` はビルドの置き場所を `cargo metadata` に尋ねるので、ワークスペースの `target/` でも `CARGO_TARGET_DIR` でも動く。2026-10-06 に、sekisho の例（`crates/sekisho/examples/refunds`）の二つの版を、ゲートとゲートが読むファイル（規則、日付のファイル、カレンダーとそのデータ、OpenAPI の文書、フロー）のプロジェクトとして足した（グループ `sekisho`。英語のページに `sekisho/refunds`、日本語のページに `sekisho/refunds.ja`）。読むファイルは、dandori の例と同じく、`ritsu check` と `sekisho doc` が読むものを、増えなくなるまでたどって決める。ページの中では、sekisho もファイルを ritsu-base の `fs` で読み書きする。ritsu.wasm は 12.5 MB（12,537,181 バイト。gzip で 3.7 MB）で、八つの言語の検査と生成器が全部入る。
+ページは根の `website/` にある（英語の `website/docs/playground.md` と日本語の `website/docs-ja/playground.md`、`website/docs/playground/` の `playground.js`・`playground.css`・`projects.json`・`ritsu.wasm`、wasm を作る `website/tools/make_wasm.sh`）。ページが開くプロジェクトは、ここで書き下ろした小さな通販の英語版（`website/playground/shop/`）と、二つ目に置く日本語版（`shop.ja/`）で、rulec の規則三つ、koyomi の二つ、chobo の帳簿、`.proto` 一つと OpenAPI の文書一つ、dandori のフロー一つ、sekisho のゲート二つ、yuen の要件三つと見た記録のコピー、sakai の地図を持つ。geas のほかの七つの言語が入る（geas は主張を確かめるのにプログラムを走らせ、ページはプロセスを起こせない）。開いたときは、受注が `.proto` に `ORDER_STATUS_RETURNED = 5;` を足したところで、rulec（E032）、yuen（E203）、sakai（E105）の三つが答える状態にした。二つのゲートは請求の規則を読まないので、sekisho は答えない。最後の行は、受注と倉庫が公開する五つの操作（ゲートの action が守る。X15）と、フローが倉庫の操作を呼ぶ五か所（倉庫のゲートがワークフローに許す。X16）を、言語の境目として数える（10 か所）。`make_wasm.sh` はビルドの置き場所を `cargo metadata` に尋ねるので、ワークスペースの `target/` でも `CARGO_TARGET_DIR` でも動く。2026-10-06 に、sekisho の例（`crates/sekisho/examples/refunds`）の二つの版を、ゲートとゲートが読むファイル（規則、日付のファイル、カレンダーとそのデータ、OpenAPI の文書、フロー）のプロジェクトとして足した（グループ `sekisho`。英語のページに `sekisho/refunds`、日本語のページに `sekisho/refunds.ja`）。読むファイルは、dandori の例と同じく、`ritsu check` と `sekisho doc` が読むものを、増えなくなるまでたどって決める。ページの中では、sekisho もファイルを ritsu-base の `fs` で読み書きする。ritsu.wasm は 12.6 MB（12,578,668 バイト。gzip で 3.7 MB）で、八つの言語の検査と生成器が全部入る。
 
 2026-10-07 に、通販にゲート（`gates/orders.gate`。日本語の版は `gates/注文.gate`）を足した。受注のゲートで、注文を見ることと取り消すことを、職員とお客さまのだれがしてよいかを書き、`.proto` の `OrderService` の二つの操作（`GetOrder` と、足した `CancelOrder`）を守る。取り消せるかは、ワークフローも従う規則 `order_state` に、事務所の開いている日かは、請求のカレンダー `shop_days` に尋ねる。カレンダーは、地図で受注と請求の共有カーネルにした（受注のゲートが請求の内側のファイルを読むと sakai の E202 になる）。要件 `requirements/ordering.req` は、ゲートの permit と期待、規則の表を指す。帳簿とフローは、ゲートが読まない。帳簿の振替は倉庫の操作で、受注のゲートが守れば sakai の E211 になり、残高は認可の条件にしない（sekisho の DESIGN 3.4）。フローは倉庫のシステムを契約の無い URL で呼ぶので、ゲートにワークフローを書いても、X16 が確かめる呼び出しが無い（許す action を書けば W908 になる。同じ日に、倉庫の契約とゲートで、帳簿とフローをゲートに入れた。次の段落）。ゲートの検査が規則の答えを多めに数えないよう、規則に渡す列挙と真偽を値に限って rulec に尋ねるようにした（sekisho の DESIGN 3.2、rulec の DESIGN 15.188）。ページの手順に、お客さまの permit から入金済の除外を消すと、sekisho の期待（E304）と yuen のリンク（E303）の二つが答えることを足した。グループの名前とページの文は「全部の言語がそろう」に戻した。projects.json は 566,130 バイトになった。
 
@@ -1614,7 +1614,7 @@ C.10 で `ritsu-emit` を作り、koyomi と chobo をこれに替えた。生�
 | | 件数と時間 | 外のもの |
 |---|---|---|
 | rulec | 727 件が飛ばし 0 で通った（0.22.1 のリリースのとき、2026-10-01 の記録）。GitHub の CI の test のジョブは 28 分（2026-09-25 の記録）。Kani は 118 のハーネスで 192 秒 | python3（NumPy、mypy、ruff、Connect の venv）、node、rustc、ruby（rbs と steep）、php、go、swiftc、JDK、protoc と buf、PostgreSQL、Lean。CI では Kani と wasmtime も |
-| dandori | 全体で 6 分 20 秒、SKIP 0（2026-10-02 の記録）。大半は examples の 24 件で、同じ日の別の実行では 365 秒 | rulec 0.22.0、Node のツール（npm の六か所）、Python の venv、Go、Temporal の dev server、kind の上の Argo と argo CLI、LocalStack 4.14.0 の Docker イメージ、Chrome、Mermaid。任意で Ollama と TypeSafe の Jev（通信する） |
+| dandori | 全体で 6 分 20 秒、SKIP 0（2026-10-02 の記録）。大半は examples の 24 件で、同じ日の別の実行では 365 秒 | rulec 0.22.0、Node のツール（npm の六か所）、Python の venv、Go、Temporal の dev server、kind の上の Argo と argo CLI、LocalStack 4.14.0 の Docker イメージ、Chrome、Mermaid。任意で Ollama、TypeSafe の Jev、OpenAI の Decisions API（通信する） |
 | koyomi | 99 件、SKIP 0、39〜52 秒（2026-10-03 の記録） | tsc、mypy、go、rustc、PostgreSQL、Chrome |
 | chobo | 63 件、SKIP 0、約 1 分（2026-10-03 の記録） | PostgreSQL、TigerBeetle、Node と Python のランナー、Go、Chrome、Mermaid |
 | geas | 236 件、SKIP 0、77 秒（2026-10-03 の記録） | pixie で作った greeter、Chrome、LLVM のツール、Go、Node、Python |
@@ -1638,7 +1638,7 @@ rulec の Kani の記録（`crates/rulec/experiments/kani/report.txt`）は、�
 |---|---|---|
 | `fast` | cargo のほかに何も要らないテスト。字句、構文、検査、診断の golden、変異、`explain` の再現、`naming.tsv`、api の JSON、外のツールを走らせない文書のテスト。git は使ってよい。curl も、テストが自分の中に立てたサーバー（e-Gov と eCFR の代わり）に問い合わせるためなら使ってよい（土台の `sources` が curl で問い合わせるため） | ワークスペース全体で数分（2026-10-03、この機械で 2 分 15 秒） |
 | `tools` | 手元に入れるツールが要るテスト。生成したコードの型の検査と突き合わせ（Node、Python、Go、rustc、Ruby、PHP、Swift、Java、protoc と buf）、PostgreSQL、TigerBeetle、Chrome、Mermaid、xmllint、Lean、sakai の四つのリンター、Cedar の CLI（sekisho が生成した Cedar をかける） | 数十分 |
-| `platforms` | サービスやクラスタを立てるか、外と通信するテスト。dandori の Temporal の dev server、kind の上の Argo、LocalStack、Ollama、TypeSafe、e-Gov と eCFR に本当に問い合わせるもの、Kani | 長い。揺れがある |
+| `platforms` | サービスやクラスタを立てるか、外と通信するテスト。dandori の Temporal の dev server、kind の上の Argo、LocalStack、Ollama、TypeSafe、OpenAI、e-Gov と eCFR に本当に問い合わせるもの、Kani | 長い。揺れがある |
 
 テストは、要るものを `ritsu-testkit` で言う（`need(Tool::Postgres)` など）。`RITSU_TEST_LEVEL` が `fast`、`tools`、`platforms` のどれかなら、その段までのテストだけを走らせ、それより上の段のテストは SKIP の行を出して通す。`RITSU_TEST_LEVEL` が無ければ、いまと同じく、見つかったツールで走れるものを全部走らせる（B と C の振る舞いを変えないため）。
 
@@ -1676,7 +1676,7 @@ C.12 で、`release` のほかの五つを根の `.github/workflows/` に書い�
 - `tools`：クレートを三つの組（rulec、dandori、それ以外の六つの言語と `ritsu-base`・`ritsu-testkit`・`ritsu-proto`・`ritsu-emit`・xtask）に分け、matrix で並べて走らせる。組ごとに要るものだけを入れる。PostgreSQL は、rulec の組がサービスのサーバーを libpq の環境変数で使い、ほかの組は PGDG の PostgreSQL 18 のプログラムで使い捨てのクラスタを立てる（`RITSU_PG_BIN`）。dandori の組は、rulec 0.22.0 のリリースのバイナリをチェックサムで確かめて `DANDORI_RULEC` に渡し（D.3 まで）、protoc 35.1 のリリースの zip を、書いたときに取ったチェックサムで確かめて入れる。rulec の `ci.yml` が `cargo test` のあとに走らせていたもの（`rulec test --require-all` で飛ばした側が無いこと、証明書の再検査、`fmt --check` と `check`）は、rulec の組の最後に残した。`--proofs` の付いた回は `kani` に移した。`ci/skips/tools.txt` は、PLAN の C.12 が空としていたのと違い、geas の pixie の四つを許す。pixie は ritsu の外でビルドするもので、pixie のテストは CI では回さず、greeter のある手元の機械で回すと決めた。 dandori の組は、ritsu の `tests/website.rs` がサイトを組むために、Zensical を `website/.venv` に入れる（F.7）。2026-10-06 に、それ以外の組に sekisho を足し、Cedar の CLI 4.13.0 の Linux の x86-64 のリリースのアーカイブを、書いたときに取ったチェックサム（リリースの `.sha256` と `sha256.sum` と同じ）で確かめて入れ、`RITSU_CEDAR` に渡す段を足した（sekisho の `tests/cedar.rs` と `tests/cedar_in.rs`）。数 MB なのでキャッシュはしない。同じ組で、同じバイナリで ritsu-base の Cedar の材料を `expected.sh` で作り直し、材料が一字も変わらないことと、リポジトリに無いファイルができないことを確かめる段も足した（4.18）。手元で確かめたのは、actionlint 1.7.12 が `tools.yml` に何も言わないこと、二つの段の `run` が `bash -n` を通ること、CLI を入れる段を `sha256sum` だけ `shasum -a 256` に替えて流すと、ダウンロード、チェックサム、展開、`RITSU_CEDAR` の行まで通ること、材料を確かめる段の `run` を手元の CLI 4.13.0 で流すと通ることである。GitHub ではまだ走らせていない。許す SKIP は足していない。同じ日に、sekisho の段階 C で、それ以外の組に sekisho のランナーの段を二つ足した（`npm ci --prefix crates/sekisho/tools/runner-ts` と、`crates/sekisho/tools/runner-py/install.sh`・`runner-go/install.sh`）。sekisho の `tests/typescript.rs`・`python.rs`・`go.rs` が、生成した TypeScript・Python・Go を型の検査にかけ、生の値の全部の件を cedar-wasm、cedarpy、cedar-go で答えさせる。dandori の組でも同じ三つを入れる（ritsu の `tests/gen.rs` がゲートのパッケージを型の検査にかけるため）。ツールの版を出す段は、runner-ts の tsc の版も出す。手元で確かめたのは、三つのコマンドがこの機械で通ることと、それで入れたもので両方のテストが通ることである。この二つの段には actionlint を走らせていない（段階 C のときは手元に無かった）。GitHub ではまだ走らせていない。許す SKIP は足していない。2026-10-07 に、Cedar の CLI を入れる段を、dandori の組でも走らせるようにした（`if: matrix.group != 'rulec'`）。dandori の組が走らせる ritsu の `tests/playground.rs` が、ブラウザで試すページの通販のゲートの Cedar を CLI にかけるからである。ritsu-base の材料を作り直す段は、それ以外の組のままにした。手元で確かめたのは、actionlint 1.7.12 が `tools.yml` に何も言わないことである。GitHub ではまだ走らせていない。許す SKIP は足していない。
 - `proofs`：根の `proofs/` で `lake build` を一度だけ走らせ（五つのライブラリと、`rulec-recheck` と `ritsu-model`）、コーパスの全部の証明書を `rulec-recheck` にかけ、rulec の `tests/lean.rs` と `cargo test --release -p ritsu-model` を `tools` の段で回す。どちらも SKIP の行が一つでもあれば落ちる（突き合わせが走らなかったことになる）。走るのは、`proofs/`、`crates/ritsu-model/`、rulec の src・コーパス・`tests/days/`・`tests/lean.rs`・`tools/recheck.py`、土台の src、口（`ritsu-ports`）と `ritsu-cross` の src、chobo・koyomi・dandori の src と突き合わせが読む例とテストの材料、`Cargo.lock` のどれかが変わったときである。`tools` の rulec の組は、rulec のテストが使う `RulecCert` と `rulec-recheck` だけを作る。`fast` のジョブでは、`ritsu-model` の文字で穴を探すテストだけが走り、ほかは段の SKIP になる。C.12 では rulec の `ci.yml` の `proofs` のジョブをコピーしていたが、F.6 で rulec の証明を根に移したので、この形にした。
 - `kani`：rulec の `ci.yml` の Kani の段（コーパスの全部の規則を Rust にして Kani で証明する）と、`rulec test --proofs` の回（`フラグを付ければ証明が走る` を platforms の段で）。毎晩と、rulec の生成器、`ritsu-emit` の src、コーパスが変わったとき。
-- `platforms`：kind の上の Argo（kind 0.33 は Go の `go install` で、argo CLI v4.1.4 はチェックサムで確かめて入れ、`crates/dandori/tools/argo/setup.sh` でクラスタを作る）、LocalStack 4.14.0 のイメージ、Temporal の dev server（TypeScript の SDK の `@temporalio/testing` が取ってくる）を用意し、dandori の platforms の段のテストを一つずつ回す（10.6 のとおり、落ちたら一度だけ回し直し、そのことを出力に書く）。最後に kind の上にワークフローが残っていないことを確かめる。そのあと、外のサーバーに問い合わせるテスト（土台、koyomi、yuen の本物の e-Gov と eCFR、rulec の Buf Schema Registry）を platforms の段で回す。10.5 の表に無かったこの四つは、ほかにどのジョブも回さないので、ここに置いた。TypeSafe には CI から送らない。呼ぶたびにお金がかかり、CI では呼ぶ回数を見込めないので、鍵をリポジトリの secret にも置かない。ワークフローは `TYPESAFE_API_KEY` を空にして走らせるので、secret があっても読まず、Jev のテストは SKIP になる。それと Ollama の無い runner での SKIP を、`ci/skips/platforms.txt` で許す。
+- `platforms`：kind の上の Argo（kind 0.33 は Go の `go install` で、argo CLI v4.1.4 はチェックサムで確かめて入れ、`crates/dandori/tools/argo/setup.sh` でクラスタを作る）、LocalStack 4.14.0 のイメージ、Temporal の dev server（TypeScript の SDK の `@temporalio/testing` が取ってくる）を用意し、dandori の platforms の段のテストを一つずつ回す（10.6 のとおり、落ちたら一度だけ回し直し、そのことを出力に書く）。最後に kind の上にワークフローが残っていないことを確かめる。そのあと、外のサーバーに問い合わせるテスト（土台、koyomi、yuen の本物の e-Gov と eCFR、rulec の Buf Schema Registry）を platforms の段で回す。10.5 の表に無かったこの四つは、ほかにどのジョブも回さないので、ここに置いた。TypeSafe には CI から送らない。呼ぶたびにお金がかかり、CI では呼ぶ回数を見込めないので、鍵をリポジトリの secret にも置かない。ワークフローは `TYPESAFE_API_KEY` を空にして走らせるので、secret があっても読まず、Jev のテストは SKIP になる。OpenAI にも CI からは送らず、ワークフローは `OPENAI_API_KEY` も空にするので、dandori の `decision_tasks_answer_on_openai` も SKIP になる。それらと、Ollama の無い runner での SKIP（`decision_tasks_answer_on_ollama` も）を、`ci/skips/platforms.txt` で許す。
 
 クレートの中に残っていた `.github/workflows/` は、GitHub が走らせない（2.1）。どれも消した。
 
@@ -1702,6 +1702,7 @@ CI を初めて回したときに落ちた四つは、どれも GitHub の環境
 - chobo の `every_scenario_matches_on_every_target`：テストのコピーの仮押さえは本当の時間の 3 秒で切れるが、参照インタプリタは `pass` でしか時間を進めない。CI の遅い機械では、与信の `together` の終わりの読み取りが仮押さえから 3 秒より後になり、TigerBeetle が仮押さえを `expired` にした。ランナーは、そういうシナリオに `late` を付け、テストは、遅れて食い違ったシナリオだけを別のテナントでもう一度流す（chobo の DESIGN 6 章の突き合わせ）。
 - chobo の `what_only_postgres_has`：REPEATABLE READ では、続けざまに呼ぶ呼び出し元がいると、負けた呼び出し元は相手が呼び終えるまで失敗し続ける。生成するクライアントのやり直しを 10 回から 30 回にした（chobo の DESIGN 4.1）。PLAN 7.9 に「ほかの作業で機械が混んでいて使い切ったと見られる」と書いた落ち方も、これである。
 - dandori の `temporal_activities_run_in_the_other_language`（2026-10-06、毎日の `platforms` で）：ワークフローとアクティビティを別の言語で動かすこのテストは、全部のフロー（およそ 25 本）を二つの組み合わせで同時に走らせ、フローごとに二つの言語のワーカーを立てていた。GitHub のランナーの 4 コアでは、いくつかの実行で、最初のアクティビティが StartToClose の時間切れ（規則・日付・帳簿の呼び出しは 10 秒）になった。落ちるフローは回ごとに違い、答えの食い違いではなかった。生成するコードの時間切れは変えず、テストが同時に走らせるフローの数を、機械のコアの数（`DANDORI_AT_ONCE` で変えられる）までにした。
+- dandori の Temporal の突き合わせ（2026-10-06 から、毎日の `platforms` で）：`tests/flows/connect_rules.flow` の、規則のサービスが崩れた答え（`[]`）を返す場面で、参照は `Dandori.BadResponse` で失敗するのに、生成したコードは受け入れて先へ進んだ。原因は生成したコードではなく、テストのスタブだった。規則のローカルアクティビティは少なくとも一度走り、ワークフロータスクが時間切れになると走り直す。そのたびに、スタブが次の呼び出しの応答を渡していた。三つの言語のランナーは、同じ実行・アクティビティ ID・試行の番号のローカルアクティビティに同じ応答を渡す（2026-10-08、dandori の DESIGN 5 章）。ほかの食い違い（`events.flow` など）は、4 コアのランナーが混んだときの時間切れ（アクティビティの 20 秒、イベントの待ちの 5 秒）で、手元では出ない。
 
 ### 10.7 golden と取り直し
 
@@ -1995,7 +1996,7 @@ ritsu を使う人のプロジェクトの成果物から見える、セキュ�
 2. このマシンの外（ループバックでない相手）へ、暗号化しない通信をすること（W902）。
 3. コンテキストが公開する OpenAPI の操作と AsyncAPI のチャネルに、認証の指定が無いこと（W903）。
 4. 契約が秘密と印を付けた値が、ワークフローの入力・出力・タスクの引数や結果として、プラットフォームの履歴に残ること（W904）。
-5. 秘密の値を、外のサービス（モデルのプロバイダー、Jev、URL だけで書いた相手、AWS のサービス）へ送ること（dandori の E906）、地図の外や、地図の上で印を付けたコンテキストと関係の無いコンテキストへ送ること（ritsu の E905・W905。言語をまたぐ検査の X14）。
+5. 秘密の値を、外のサービス（モデルのプロバイダー、判断のモデルの API（Jev、OpenAI の Decisions API、このマシンでないサーバー）、URL だけで書いた相手、AWS のサービス）へ送ること（dandori の E906）、地図の外や、地図の上で印を付けたコンテキストと関係の無いコンテキストへ送ること（ritsu の E905・W905。言語をまたぐ検査の X14）。
 
 **前からあるもの（2026-10-06 に作った）。** 検査を通ったファイルの文字列が、生成したコードのコメントや文字列の外に出ないこと（9.2）。ritsu の言語は、人が読んで確かめるのはソースのファイル（`.rule`、`.flow` など）で、生成したコードは「DO NOT EDIT」として読まない、という前提に立つ。その前提のもとでは、ソースの文字列が生成したコードの中でコードになることは、検査の抜け穴になる。次の四つが見つかり、直した（9.2、dandori の DESIGN 4.7、rulec の §15.187）。
 
@@ -2050,7 +2051,7 @@ Tells the customer, a > b and R&D. &lt;img src=x onerror=alert(1)> &lt;!-- c -->
 | W904 | 警告 | dandori | 秘密の値が、ワークフローの入力・出力、呼び出しの引数や結果、`fail` の理由として、プラットフォームの履歴に残る |
 | E905 | エラー | ritsu | フローが、秘密の値を、地図の外のファイルか、印を付けたコンテキストと関係の無いコンテキストの成果物へ送る（X14） |
 | W905 | 警告 | ritsu | フローが秘密の値を送る先が地図のどこかを、決められない（X14） |
-| E906 | エラー | dandori | 秘密の値を、プロジェクトの外の相手（モデルのプロバイダー、Jev、URL だけで書いた相手、AWS のサービス）へ送る |
+| E906 | エラー | dandori | 秘密の値を、プロジェクトの外の相手（モデルのプロバイダー、判断のモデルの API（Jev、OpenAI の Decisions API、このマシンでないサーバー）、URL だけで書いた相手、AWS のサービス）へ送る |
 | E907 | エラー | ritsu | 公開する操作を守る action が無い（X15。同じコンテキストのほかの操作は守られている） |
 | W907 | 警告 | ritsu | コンテキストが公開する操作を、どれも守る action が無い（X15） |
 | E908 | エラー | ritsu | ワークフローが呼ぶ操作を、守る action がそのワークフローにどの組み合わせでも許さない（X16） |
@@ -2154,7 +2155,7 @@ ritsu check: ファイル 1 個（proto 1）。どれも検査を通りました
 - `use rule … connect "<URL>"`（規則の Connect のサービス）。
 - `connect` のタスクが呼ぶ、`use proto` の下の `url`。
 
-`lambda`、`aws`、Jev、`url` の無いエージェントは、プラットフォームや SDK が HTTPS で送るので見ない。`use` の URL の W902 は、それを呼ぶタスクがあるときだけ、`url` の行（無ければ `use` の行）に、`use` ごとに一つ出す。タスクごとに出すと、一つの直し方に、同じ警告がタスクの数だけ並ぶからである。
+`lambda`、`aws`、`url` の無い判断のタスクとエージェントは、プラットフォームや SDK が HTTPS で送るので見ない。判断のタスクの `url` は、エージェントの `url` と同じく見る（`plaintext` で受け止められる）。`use` の URL の W902 は、それを呼ぶタスクがあるときだけ、`url` の行（無ければ `use` の行）に、`use` ごとに一つ出す。タスクごとに出すと、一つの直し方に、同じ警告がタスクの数だけ並ぶからである。
 
 **sakai が見るサーバー**：地図の成果物の OpenAPI と AsyncAPI の文書の、ルートの `servers`（OpenAPI はパスの項と操作の `servers`、OpenAPI 3.2 の `additionalOperations` も）である。公表された言語に入れたかは問わない。
 
@@ -2409,7 +2410,9 @@ warning[W904]: tests/fixtures/security/W904_payout_number.flow:39:1: the secret 
 | 呼び出し | 宛先 | 判定する検査 |
 |---|---|---|
 | `agent`（`url` が無い、またはループバックでない `url`） | モデルのプロバイダー（OpenAI、Anthropic）か、`url` のサーバー | dandori の E906 |
-| `jev` | TypeSafe | dandori の E906 |
+| `jev`（`url` が無い） | TypeSafe | dandori の E906 |
+| `jev openai`（`url` が無い） | OpenAI（the Decisions API） | dandori の E906 |
+| `jev` と `jev openai` の、ループバックでない `url` | `url` のサーバー | dandori の E906 |
 | `http`（`use openapi` の文書を使わず、URL だけで書いたもの。ホストがループバックのものは除く） | URL のホスト | dandori の E906 |
 | `aws` | その AWS のサービス | dandori の E906 |
 | `http` で `use openapi` の操作を呼ぶもの | その文書のファイル | ritsu の E905 |
@@ -2417,9 +2420,9 @@ warning[W904]: tests/fixtures/security/W904_payout_number.flow:39:1: the secret 
 | `use rule … connect` の規則の呼び出し | その規則のファイル | ritsu の E905 |
 | `flow "<パス>"` | 子の `.flow` | ritsu の E905 |
 | 帳簿の操作、日付の呼び出し | その `.book`、`.cal` | ritsu の E905 |
-| `lambda`、`image`、利用者が書く実装、dandori で書いていない子ワークフロー、同梱の規則、ループバックの `url` のエージェントと `http` | フローと同じところ（利用者のコードと、このマシン） | 見ない |
+| `lambda`、`image`、利用者が書く実装、dandori で書いていない子ワークフロー、同梱の規則、ループバックの `url` のエージェント・判断のタスク・`http` | フローと同じところ（利用者のコードと、このマシン） | 見ない |
 
-**dandori の E906**：秘密の値を、プロジェクトの外の相手へ送る。地図が要らないので dandori の検査に置き、`dandori check` を単体で使う人にも届く。モデルのプロバイダーに個人の情報を読ませる、というよくある漏れ方がここに入る。診断は宛先を、OpenAI、Anthropic、`url` のホスト、`TypeSafe (Jev)`、`AWS (<サービス>)`、`http` の URL のホストと言う。
+**dandori の E906**：秘密の値を、プロジェクトの外の相手へ送る。地図が要らないので dandori の検査に置き、`dandori check` を単体で使う人にも届く。モデルのプロバイダーに個人の情報を読ませる、というよくある漏れ方がここに入る。診断は宛先を、OpenAI、Anthropic、`url` のホスト、`TypeSafe (Jev)`、`OpenAI (the Decisions API)`、`AWS (<サービス>)`、`http` の URL のホストと言う。
 
 **ritsu の E905**（X14）：秘密の値を、プロジェクトの中の成果物へ送るとき、地図の上で送ってよいかを確かめる。
 
