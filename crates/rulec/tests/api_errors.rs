@@ -11,6 +11,10 @@
 //! code itself: Python and NumPy build the errors and read the fields, NumPy refuses a column and
 //! says which element, and Go compiles a caller that tells the two apart with `errors.As`.
 //!
+//! The Wasm entry has no errors, since the module raises nothing: what it answers is its only way
+//! of saying a refusal, so the entry says the two shapes of that answer instead (§15.206), and the
+//! module built the way the entry says is held to them.
+//!
 //! Every case is written twice: first in English, then the Japanese version beside it.
 
 use ritsu_testkit::tmp::tmpdir_in;
@@ -266,5 +270,114 @@ fn a_go_caller_built_from_the_inventory_reads_each_error() {
             .output()
             .unwrap();
         assert!(o.status.success(), "{rule}: the caller built from the inventory does not compile\n{body}\n{}", String::from_utf8_lossy(&o.stderr));
+    }
+}
+
+/// The keys of a JSON object, in the order they were written.
+fn keys(j: &Json) -> Vec<String> {
+    match j {
+        Json::Obj(m) => m.iter().map(|(k, _)| k.clone()).collect(),
+        _ => panic!("not an object: {}", rulec::json::show(j)),
+    }
+}
+
+fn strings(j: &Json, k: &str) -> Vec<String> {
+    arr(j, k).iter().map(|v| v.as_str().unwrap_or_else(|| panic!("{k}: {}", rulec::json::show(v))).to_string()).collect()
+}
+
+/// The Wasm entry says what `call` answers (§15.206): the record, with the keys every language's
+/// record function writes, and in its place the line of a refusal, with its two keys and the
+/// values `refused` takes. The module built the way the entry says answers in exactly those
+/// shapes: a case it decides with the record's keys, an input its door refuses with `input`, and a
+/// walk the rule contradicts itself on with `contradiction`, each with the sentence. The WASI
+/// runner's `wire` says the same line.
+#[test]
+fn the_wasm_entry_says_what_its_module_answers() {
+    // A walk, so that both refusals can be had: (the rule, an element its door takes, an element
+    // past its range and the sentence, two elements both taking and the sentence).
+    for (lang, rule, take, (past, past_said), (both, both_said)) in [
+        (
+            "en",
+            "tests/corpus/nationwide_freight.rule",
+            r#"{"freight_rows":[{"row_zone":"kinki","threshold":1000,"row_fee":500}]}"#,
+            (r#"{"freight_rows":[{"row_zone":"kinki","threshold":1000,"row_fee":200000}]}"#, "row_fee is out of range: 200000"),
+            (
+                r#"{"freight_rows":[{"row_zone":"kinki","threshold":1000,"row_fee":500},{"row_zone":"kinki","threshold":900,"row_fee":700}]}"#,
+                "fold verdict: two elements matched a take_unique",
+            ),
+        ),
+        (
+            "ja",
+            "tests/corpus/全国運賃.rule",
+            r#"{"運賃行":[{"行ゾーン":"近畿圏","閾値":1000,"行運賃":500}]}"#,
+            (r#"{"運賃行":[{"行ゾーン":"近畿圏","閾値":1000,"行運賃":200000}]}"#, "行運賃 が範囲の外です: 200000"),
+            (
+                r#"{"運賃行":[{"行ゾーン":"近畿圏","閾値":1000,"行運賃":500},{"行ゾーン":"近畿圏","閾値":900,"行運賃":700}]}"#,
+                "畳み込み 採用: take_unique に二件当たりました",
+            ),
+        ),
+    ] {
+        let (c, api, e) = rulec(lang, &["api", rule]);
+        assert_eq!(c, 0, "{rule}: {e}");
+        let j = rulec::json::parse(api.trim()).unwrap();
+        let w = j.get("wasm").unwrap_or_else(|| panic!("{rule}: no wasm entry"));
+        let answers = arr(w, "answers");
+        let kinds: Vec<String> = answers.iter().map(|a| s(a, "kind")).collect();
+        assert_eq!(kinds, ["record", "refusal"], "{rule}");
+        let (record_keys, refusal_keys) = (strings(&answers[0], "keys"), strings(&answers[1], "keys"));
+        assert_eq!(record_keys, ["in", "observed", "trace"], "{rule}");
+        assert_eq!(refusal_keys, ["refused", "error"], "{rule}");
+        let refused = strings(&answers[1], "refused");
+        assert_eq!(refused, ["input", "contradiction"], "{rule}: the values of refused are the kinds of error_types");
+        let wire = j.get("rust").and_then(|r| r.get("wasi")).and_then(|x| x.get("wire")).and_then(|x| x.as_str()).unwrap_or_default();
+        assert!(wire.contains("\"refused\"") && wire.contains("\"error\""), "{rule}: the WASI runner's wire does not say the refusal line: {wire}");
+
+        let toolchain = || have("node", &["--version"]) && have("rustc", &["--version"]) && rulec::backend::rust_target("wasm32-unknown-unknown");
+        if !ready(Need::Rustc, toolchain, "node, rustc or its wasm32-unknown-unknown target is missing; the Wasm module's answers are not read") {
+            continue;
+        }
+        let t = TempDir::new(&format!("api-wasm-{lang}"));
+        let out = t.path().to_path_buf();
+        let (c, _, e) = rulec(lang, &["gen", rule, "--out", &out.to_string_lossy()]);
+        assert_eq!(c, 0, "{rule}: {e}");
+        // Built the way the entry says.
+        let line = s(w, "build");
+        let words: Vec<&str> = line.split(' ').collect();
+        let o = Command::new(words[0]).current_dir(out.join("wasm")).args(&words[1..]).env("TMPDIR", tmpdir_in(&out)).output().unwrap();
+        assert!(o.status.success(), "{rule}: {}", String::from_utf8_lossy(&o.stderr));
+        // A host of its own, called with the names the entry gives.
+        let host = format!(
+            "import {{ readFileSync }} from \"node:fs\";\n\
+             const {{ instance }} = await WebAssembly.instantiate(readFileSync({module:?}), {{}});\n\
+             const ex = instance.exports;\n\
+             function call(text) {{\n\
+               const b = new TextEncoder().encode(text);\n\
+               const ptr = ex.{realloc}(0, 0, 1, b.length);\n\
+               new Uint8Array(ex.{memory}.buffer, ptr, b.length).set(b);\n\
+               const ret = ex.{call}(ptr, b.length);\n\
+               const [p, n] = new Uint32Array(ex.{memory}.buffer, ret, 2);\n\
+               const out = new TextDecoder().decode(new Uint8Array(ex.{memory}.buffer, p, n));\n\
+               ex.{post}(ret);\n\
+               return out;\n\
+             }}\n\
+             for (const line of process.argv.slice(2)) console.log(call(line));\n",
+            module = s(w, "module"),
+            realloc = s(w, "realloc"),
+            memory = s(w, "memory"),
+            call = s(w, "call"),
+            post = s(w, "post_return"),
+        );
+        std::fs::write(out.join("wasm").join("host.mjs"), host).unwrap();
+        let o = Command::new("node").current_dir(out.join("wasm")).args(["host.mjs", take, past, both]).output().unwrap();
+        assert!(o.status.success(), "{rule}: {}", String::from_utf8_lossy(&o.stderr));
+        let said: Vec<Json> = String::from_utf8_lossy(&o.stdout).lines().map(|l| rulec::json::parse(l).unwrap_or_else(|x| panic!("{rule}: {x}: {l}"))).collect();
+        assert_eq!(said.len(), 3, "{rule}: {said:?}");
+        assert_eq!(keys(&said[0]), record_keys, "{rule}: the record");
+        for (a, kind, sentence) in [(&said[1], "input", past_said), (&said[2], "contradiction", both_said)] {
+            assert_eq!(keys(a), refusal_keys, "{rule}: {}", rulec::json::show(a));
+            assert_eq!(s(a, "refused"), kind, "{rule}");
+            assert!(refused.iter().any(|r| r == kind), "{rule}: {kind}");
+            assert_eq!(s(a, "error"), sentence, "{rule}");
+        }
     }
 }

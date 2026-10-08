@@ -508,7 +508,9 @@ value refused at its own boundary and one refused after it is recorded (§15.116
          "call":"call","call_signature":"call: func(input: string) -> string",
          "post_return":"cabi_post_call","realloc":"cabi_realloc","memory":"memory",
          "runner":"single_coupon_runner.mjs",
-         "component":"wasm-tools component embed single_coupon.wit single_coupon.wasm -o single_coupon.embedded.wasm && wasm-tools component new single_coupon.embedded.wasm -o single_coupon.component.wasm"}}
+         "component":"wasm-tools component embed single_coupon.wit single_coupon.wasm -o single_coupon.embedded.wasm && wasm-tools component new single_coupon.embedded.wasm -o single_coupon.component.wasm",
+         "answers":[{"kind":"record","keys":["in","observed","trace"]},
+                    {"kind":"refusal","keys":["refused","error"],"refused":["input","contradiction"]}]}}
 ```
 
 Everything here is a name or a number the generated code really uses, so nothing in it moves
@@ -533,7 +535,8 @@ and `word`, the word its sentence calls a place by (`row`, `行`). The `connect`
 `wasm` entries have no errors of their own and neither key: a Connect call fails with
 `invalid_argument` or `internal`, the SQL query answers with its `guard` column and the
 function raises the SQLSTATE under `raises`, and the Wasm module answers with the refusal
-line the runners print, `{"refused":…,"error":…}` (§15.204). Every language's entry carries `traced` and `traced_signature` as the Python
+line the runners print, `{"refused":…,"error":…}` (§15.204), which its entry describes under
+`answers` (below). Every language's entry carries `traced` and `traced_signature` as the Python
 one does — the twin that returns the rows that matched beside the outputs — and `record`
 and `record_signature`, the function that writes one call as a fixtures record
 ([generated-code.md](generated-code.md#the-rows-that-matched)). `range` states the bounds **the entry guard enforces**, and `alias` states the
@@ -578,6 +581,14 @@ names no function in a language either: it gives the source and the module it bu
 calls (`call`, `post_return`, `realloc`) and the `memory`, the `runner` that `rulec test`
 drives, and the `component` line that wraps the module for the component model
 ([generated-code.md](generated-code.md#wasm)).
+
+**`answers`** (DESIGN §15.206). The module raises nothing, so what `call` answers is the one way
+it has of saying a refusal, and the `wasm` entry lists the two shapes in that order: the record,
+`kind` `record`, with the `keys` every language's record function writes; and in its place the
+line of a refusal, `kind` `refusal`, with its `keys` and the values `refused` takes — `input` for
+an input the door refuses and `contradiction` for the W114 guard, the `kind`s of `error_types`.
+`error` is the sentence, with the value after it where the module holds one as a number. The
+`wire` of the Rust entry's `wasi` says the same line for the WASI runner.
 
 The `connect` entry is the wire a caller writes by hand, without the stubs: the method's
 `path`, the two message names, and under `request_fields` and `response_fields` each field by

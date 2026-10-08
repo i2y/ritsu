@@ -308,7 +308,7 @@ $ rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols \
     --target wasm32-unknown-unknown --crate-type cdylib shipping_fee_wasm.rs -o shipping_fee.wasm
 ```
 
-ホストは、入力を JSON のオブジェクトにしてモジュールのメモリに書き、`call` を呼んで、記録の行を読み取ります。行の形はほかの言語の `_record` が書くものと同じで、契約の外の入力には、runner が書くのと同じ拒む行（`{"refused":"input","error":"…"}`）が返ります。`.wit` があるので、`wasm-tools component new` でモジュールを変えずに component にでき、wasmtime のような component の実行環境からは `call("{…}")` の形で呼べます。ホストの書き方、component にする手順、`rulec api` の `wasm` の項は[生成物](generated-code.md#wasm)にあります。
+ホストは、入力を JSON のオブジェクトにしてモジュールのメモリに書き、`call` を呼んで、記録の行を読み取ります。行の形はほかの言語の `_record` が書くものと同じで、契約の外の入力には、runner が書くのと同じ拒む行（`{"refused":"input","error":"…"}`）が返ります。二つの形は `rulec api` が `answers` に書いています。`.wit` があるので、`wasm-tools component new` でモジュールを変えずに component にでき、wasmtime のような component の実行環境からは `call("{…}")` の形で呼べます。ホストの書き方、component にする手順、`rulec api` の `wasm` の項は[生成物](generated-code.md#wasm)にあります。
 
 `rulec test` はモジュールを組み、ほかの言語と同じようにベクタと突き合わせます。
 

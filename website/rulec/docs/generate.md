@@ -532,13 +532,13 @@ $ rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols \
     --target wasm32-unknown-unknown --crate-type cdylib member_shipping_fee_wasm.rs -o member_shipping_fee.wasm
 ```
 
-A host writes a JSON object of the inputs into the module's memory, calls `call`, and reads
-the record line back — the same line every other language's `_record` writes, or, for an
-input outside the contract, the refusal line the runners print:
-`{"refused":"input","error":"…"}`. With the `.wit`, `wasm-tools component new`
-makes a component of the module without a change, and a component runtime such as wasmtime
-invokes it as `call("{…}")`. [Generated code](generated-code.md#wasm) shows the host, the
-component step, and what `rulec api` says under `wasm`.
+A host writes a JSON object of the inputs into the module's memory, calls `call`, and reads the
+record line back — the same line every other language's `_record` writes, or, for an input
+outside the contract, the refusal line the runners print: `{"refused":"input","error":"…"}`, as
+`rulec api` says under `answers`. With the `.wit`, `wasm-tools component new` makes a component
+of the module without a change, and a component runtime such as wasmtime invokes it as
+`call("{…}")`. [Generated code](generated-code.md#wasm) shows the host, the component step, and
+what `rulec api` says under `wasm`.
 
 `rulec test` builds the module and holds it to the vectors like every other language:
 

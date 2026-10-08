@@ -5788,7 +5788,10 @@ use std::io::Read;
                 &format!("rustc --edition 2021 {WASI_RUSTC_FLAGS} {alias}_runner.rs -o {alias}_runner.wasm"),
             )
             .str("run", &format!("wasmtime {alias}_runner.wasm"))
-            .str("wire", "one vectors line on stdin, one fixtures record per line on stdout")
+            .str(
+                "wire",
+                "one vectors line on stdin, one fixtures record per line on stdout, or {\"refused\":…,\"error\":…} in the place of the record for a line it refuses",
+            )
             .raw("needs", crate::json::strs(&["wasmtime", "rustup target add wasm32-wasip1"]))
             .finish()
     }
@@ -5815,8 +5818,28 @@ use std::io::Read;
                 "component",
                 &format!("wasm-tools component embed {alias}.wit {alias}.wasm -o {alias}.embedded.wasm && wasm-tools component new {alias}.embedded.wasm -o {alias}.component.wasm"),
             )
+            // What `call` answers (§15.206): the record of the call, or in its place the line of a
+            // refusal, which says which of the two the door refused for — the caller's input, or
+            // the rule's own contradiction — and the sentence. The module raises nothing: the
+            // answer is its only way of saying either, so the inventory says both.
+            .raw("answers", api_wasm_answers())
             .finish()
     }
+}
+
+/// The two shapes of the Wasm module's answer (§15.206), as `rulec api` states them: the record,
+/// with the keys every language's record function writes, and the refusal, with its two keys and
+/// the values `refused` takes — `input` and `contradiction`, the `kind`s of `error_types`.
+fn api_wasm_answers() -> String {
+    use crate::json::{Obj, arr, strs};
+    arr(&[
+        Obj::new().str("kind", "record").raw("keys", strs(&["in", "observed", "trace"])).finish(),
+        Obj::new()
+            .str("kind", "refusal")
+            .raw("keys", strs(&["refused", "error"]))
+            .raw("refused", strs(&["input", "contradiction"]))
+            .finish(),
+    ])
 }
 
 /// How the generated Python runners read the wire (§15.204): an input there at all, of its

@@ -614,18 +614,19 @@ $ rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols \
 The module exports the canonical ABI of one function, `call: func(input: string) -> string`:
 `cabi_realloc` to place the input in the module's memory, `call(ptr, len)`, which returns a
 pointer to a (pointer, length) pair holding the answer, and `cabi_post_call(ret)` to free it.
-The input is a JSON object with the inputs by name, in the wire form of
-[formats.md](formats.md) (a record with them under `"in"` is read the same way); the answer
-is the record line the other languages' `_record` writes, or, for an input outside the
-contract — an unknown enum value, an input that is not there, a number that is not a whole
-number and a date that is not `YYYY-MM-DD` included — the refusal line the runners print,
-`{"refused":"input","error":"weight is out of range: 0"}`: the sentence every language says,
-followed by the value where the module has one as a number, and `"contradiction"` in the place
-of `"input"` for a case the rule itself cannot answer. A host is answered rather than trapped,
-and never computed on a value it did not send (§15.151, §15.204). Any JSON encoder will do: a
-name or a value written with `\u` escapes reads as the characters it stands for. The module
-imports nothing, so it instantiates with an empty import object anywhere WebAssembly runs; the
-shipping rule is thirty-seven kilobytes.
+The input is a JSON object with the inputs by name, in the wire form of [formats.md](formats.md)
+(a record with them under `"in"` is read the same way); the answer is the record line the other
+languages' `_record` writes, or, for an input outside the contract — an unknown enum value, an
+input that is not there, a number that is not a whole number and a date that is not `YYYY-MM-DD`
+included — the refusal line the runners print, `{"refused":"input","error":"weight is out of
+range: 0"}`: the sentence every language says, followed by the value where the module has one as
+a number, and `"contradiction"` in the place of `"input"` for a case the rule itself cannot
+answer. A host is answered rather than trapped, and never computed on a value it did not send
+(§15.151, §15.204); `rulec api` lists the two shapes under `answers`, with the keys of each and
+the values `refused` takes (§15.206). Any JSON encoder will do: a name or a value written with
+`\u` escapes reads as the characters it stands for. The module imports nothing, so it
+instantiates with an empty import object anywhere WebAssembly runs; the shipping rule is
+thirty-seven kilobytes.
 
 ```js
 const { instance } = await WebAssembly.instantiate(bytes, {});
@@ -1328,7 +1329,7 @@ that has it:
             "module": "member_shipping_fee_runner.wasm",
             "build":  "rustc --edition 2021 -O --target wasm32-wasip1 member_shipping_fee_runner.rs -o member_shipping_fee_runner.wasm",
             "run":    "wasmtime member_shipping_fee_runner.wasm",
-            "wire":   "one vectors line on stdin, one fixtures record per line on stdout",
+            "wire":   "one vectors line on stdin, one fixtures record per line on stdout, or {\"refused\":…,\"error\":…} in the place of the record for a line it refuses",
             "needs":  ["wasmtime", "rustup target add wasm32-wasip1"] } }
 ```
 
