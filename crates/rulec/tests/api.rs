@@ -179,14 +179,15 @@ fn 形だけでは足りない前提が_目録に並び_実際にエラーにな
             "{rule}: 境目の内側でエラーになった:\n{}",
             String::from_utf8_lossy(&inside.stderr)
         );
+        // The runner prints the door's refusal in the place of the record (§15.204).
         let outside = run_one(over);
+        let said = String::from_utf8_lossy(&outside.stdout);
         assert!(
-            !outside.status.success(),
+            outside.status.success() && !said.starts_with("{\"in\""),
             "{rule}: 形には合っているのに前提を破った入力が通ってしまった。\
              目録に並べた前提が、生成コードのエラーと結びついていない"
         );
-        let said = String::from_utf8_lossy(&outside.stderr);
-        assert!(said.contains("RuleInputError"), "{rule}: 入口でのエラーではない:\n{said}");
+        assert!(said.starts_with("{\"refused\":\"input\""), "{rule}: 入口でのエラーではない:\n{said}");
     }
 }
 

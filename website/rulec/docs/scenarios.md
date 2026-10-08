@@ -116,8 +116,8 @@ Who: the agent. rulec checks that the twelve languages agree
 ```console
 $ rulec gen rules/stamp_duty.rule --out generated/
 $ rulec test generated/
-ok    japan_stamp_duty_split (Python) 296 vectors
-ok    japan_stamp_duty_split (SQL) 296 vectors
+ok    japan_stamp_duty_split (Python) 296 vectors, 13 refused
+ok    japan_stamp_duty_split (SQL) 296 vectors, 13 refused
 …
 ```
 
@@ -520,11 +520,11 @@ Every generated language is run over the cases built from the table's boundaries
 
 ```console
 $ rulec test generated/
-ok    shipping_fee (Python) 68 vectors
-ok    shipping_fee (TypeScript) 68 vectors
-ok    shipping_fee (Go) 68 vectors
-ok    shipping_fee (SQL) 68 vectors
-ok    shipping_fee (Wasm) 68 vectors
+ok    shipping_fee (Python) 70 vectors, 16 refused
+ok    shipping_fee (TypeScript) 70 vectors, 16 refused
+ok    shipping_fee (Go) 70 vectors, 16 refused
+ok    shipping_fee (SQL) 70 vectors, 16 refused
+ok    shipping_fee (Wasm) 70 vectors, 16 refused
 …
 ```
 

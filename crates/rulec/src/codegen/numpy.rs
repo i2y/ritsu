@@ -16,7 +16,7 @@
 //! other backend: `rulec test` runs this one over the vectors and compares its records to
 //! the reference evaluator's, byte for byte.
 
-use super::{lcm, not_bool, pub_name, round_cases, Gen};
+use super::{lcm, pub_name, round_cases, Gen};
 use crate::ast::{BinOp, Cell, CmpOp, Expr, Item, Lit, OutCell, Table};
 use crate::json::{quote, Obj};
 use crate::num::{Rat, RoundMode};
@@ -360,19 +360,20 @@ impl<'a> Gen<'a> {
             // generated in and in the words the other languages raise (§15.200). The runtime is
             // one file for every rule, so the sentences travel in the plan.
             let mut say = Obj::new()
-                .str("missing", &tr!("{} がありません", "{} is missing", name))
+                .str("missing", &crate::door::missing(&name))
                 .str("length", &tr!("{} の列の長さが、前の列と揃っていません", "{} is not as long as the columns before it", name));
             match kind {
-                "int" => say = say.str("integer", &tr!("{} が整数ではありません", "{} is not an integer", name)),
-                "date" => say = say.str("date", &tr!("{} が日付ではありません", "{} is not a date", name)),
-                "bool" => say = say.str("boolean", &not_bool(name)),
+                "int" => say = say.str("integer", &crate::door::not_integer(&name)),
+                "date" => say = say.str("date", &crate::door::not_date(&name)),
+                "bool" => say = say.str("boolean", &crate::door::not_bool(name)),
+                "str" => say = say.str("string", &crate::door::not_string(name)),
                 _ => {}
             }
             if let Ty::Enum(en) = inner {
-                say = say.str("enum", &tr!("{} が列挙 {} の値ではありません", "{} is not a value of enum {}", name, en));
+                say = say.str("enum", &crate::door::not_in_enum(name, en));
             }
             if kind == "int" || kind == "date" {
-                say = say.str("range", &tr!("{} が範囲の外です", "{} is out of range", name));
+                say = say.str("range", &crate::door::out_of_range(&name));
             }
             o = o.raw("say", say.finish());
             // An optional column carries one more value. The plan encodes a `none` cell as
@@ -489,7 +490,7 @@ impl<'a> Gen<'a> {
                     .str("right", &k.right)
                     .int("left_times", common / sa)
                     .int("right_times", common / sb)
-                    .str("what", &tr!("制約が成り立ちません: {said}", "the constraint does not hold: {said}"))
+                    .str("what", &crate::door::constraint(&said))
                     .finish()
             })
             .collect();
@@ -504,7 +505,7 @@ impl<'a> Gen<'a> {
                 Obj::new()
                     .str("name", name)
                     .raw("runs", format!("[{}]", runs.join(",")))
-                    .str("what", &tr!("{name} は {file} の {date} がとる日ではありません", "{name} is not a day {date} of {file} comes to"))
+                    .str("what", &crate::door::not_a_day(&name, &file, &date))
                     .finish()
             })
             .collect();
@@ -541,7 +542,6 @@ import rulec_np
 
 rule = rulec_np.load("{alias}.json")
 rows = [json.loads(l) for l in sys.stdin if l.strip()]
-cols = {{i: [r["in"][i] for r in rows] for i in rule.inputs}}
 
 
 def _wire(v):
@@ -552,22 +552,40 @@ def _wire(v):
     return str(v)
 
 
-try:
-    out, fired = rule.traced(**cols)
-except rulec_np.RuleInputError as e:
-    print(f"error: {{e}}", file=sys.stderr)
-    sys.exit(1)
+def _print(rows, out, fired):
+    for n, r in enumerate(rows):
+        trace = []
+        for picked, rows_ in fired:
+            trace.append(rows_[int(picked[n])])
+        rec = {{
+            "in": r["in"],
+            "observed": {{k: _wire(v[n]) for k, v in out.items()}},
+            "trace": trace,
+        }}
+        print(json.dumps(rec, ensure_ascii=False, separators=(",", ":")))
 
-for n, r in enumerate(rows):
-    trace = []
-    for picked, rows_ in fired:
-        trace.append(rows_[int(picked[n])])
-    rec = {{
-        "in": r["in"],
-        "observed": {{k: _wire(v[n]) for k, v in out.items()}},
-        "trace": trace,
-    }}
-    print(json.dumps(rec, ensure_ascii=False, separators=(",", ":")))
+
+def _columns(rows):
+    # A column a line leaves out is left out here too, and the plan refuses it as missing.
+    return {{i: [r["in"][i] for r in rows] for i in rule.inputs if all(i in r["in"] for r in rows)}}
+
+
+# The whole file in one pass. When the plan refuses it, every line is decided on its own, so
+# that the line it refuses gets the refusal in the place of its record and the others their
+# records (§15.204).
+try:
+    _print(rows, *rule.traced(**_columns(rows)))
+except (rulec_np.RuleInputError, rulec_np.RuleContradictionError):
+    for r in rows:
+        try:
+            out, fired = rule.traced(**_columns([r]))
+        except rulec_np.RuleInputError as e:
+            print(json.dumps({{"refused": "input", "error": e.what}}, ensure_ascii=False, separators=(",", ":")))
+            continue
+        except rulec_np.RuleContradictionError as e:
+            print(json.dumps({{"refused": "contradiction", "error": e.what}}, ensure_ascii=False, separators=(",", ":")))
+            continue
+        _print([r], out, fired)
 "#
         );
         format!("{}{body}", self.header("#"))
@@ -701,12 +719,9 @@ def _wire(v):
 
 
 def _decide(ins):
-    cols = {{i: [x[i] for x in ins] for i in rule.inputs}}
-    try:
-        out, fired = rule.traced(**cols)
-    except rulec_np.RuleInputError as e:
-        print(f"error: {{e}}", file=sys.stderr)
-        sys.exit(1)
+    # A column a line leaves out is left out here too, and the plan refuses it as missing.
+    cols = {{i: [x[i] for x in ins] for i in rule.inputs if all(i in x for x in ins)}}
+    out, fired = rule.traced(**cols)
     recs = []
     for n, x in enumerate(ins):
         trace = []
@@ -742,7 +757,20 @@ if lines and "machine" in lines[0]:
         for rec in recs:
             _line(rec)
 else:
-    for rec in _decide([x["in"] for x in lines]):
+    # The whole file in one pass; when the plan refuses it, every line on its own, so that the
+    # line it refuses gets the refusal in the place of its record (§15.204).
+    try:
+        recs = _decide([x["in"] for x in lines])
+    except (rulec_np.RuleInputError, rulec_np.RuleContradictionError):
+        recs = []
+        for x in lines:
+            try:
+                recs.extend(_decide([x["in"]]))
+            except rulec_np.RuleInputError as e:
+                recs.append({{"refused": "input", "error": e.what}})
+            except rulec_np.RuleContradictionError as e:
+                recs.append({{"refused": "contradiction", "error": e.what}})
+    for rec in recs:
         _line(rec)
 "#
     )

@@ -80,14 +80,16 @@ impl<'a> Gen<'a> {
         for i in &self.f.inputs {
             let jp = format!("{:?}", i.name.text);
             let ty = self.ty_of(&i.name.text);
-            let conv = |t: &Ty| -> String {
+            // What every door reads (§15.204): `null` for an input that is not optional is one
+            // that is not there, and a value is held to its kind with the door's sentence.
+            let conv = |t: &Ty, v: &str| -> String {
                 match t {
-                    Ty::Enum(n) => format!("_enum({jp}, m.{}, o[{jp}])", self.enum_names.get(n).cloned().unwrap_or_default()),
-                    Ty::Bool => format!("_bool({jp}, o[{jp}])"),
-                    Ty::Date => format!("_date({jp}, o[{jp}])"),
-                    Ty::Str => format!("_str({jp}, o[{jp}])"),
-                    Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("m.{}(_int({jp}, o[{jp}]))", brand_of(t)),
-                    _ => format!("_int({jp}, o[{jp}])"),
+                    Ty::Enum(n) => format!("_enum({jp}, m.{}, {n:?}, {v})", self.enum_names.get(n).cloned().unwrap_or_default()),
+                    Ty::Bool => format!("_bool({jp}, {v})"),
+                    Ty::Date => format!("_date({jp}, {v})"),
+                    Ty::Str => format!("_str({jp}, {v})"),
+                    Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("m.{}(_int({jp}, {v}))", brand_of(t)),
+                    _ => format!("_int({jp}, {v})"),
                 }
             };
             let qualified = |t: &Ty| -> String {
@@ -96,11 +98,11 @@ impl<'a> Gen<'a> {
             };
             match &ty {
                 Ty::Opt(t) => {
-                    convs.push(format!("None if o[{jp}] is None else {}", conv(t)));
+                    convs.push(format!("None if o[{jp}] is None else {}", conv(t, &format!("o[{jp}]"))));
                     tys.push(format!("{} | None", qualified(t)));
                 }
                 t => {
-                    convs.push(conv(t));
+                    convs.push(conv(t, &format!("_need({jp}, o[{jp}])")));
                     tys.push(qualified(t));
                 }
             }
@@ -116,25 +118,27 @@ impl<'a> Gen<'a> {
                 .map(|fd| {
                     let k = format!("{:?}", fd.name.text);
                     let t = self.ty_of(&fd.name.text);
-                    let one = |t: &Ty| -> String {
+                    let optional = matches!(t, Ty::Opt(_));
+                    let src = format!("_field({jp}, e, {k}{})", if optional { ", True" } else { "" });
+                    let one = |t: &Ty, v: &str| -> String {
                         match t {
-                            Ty::Enum(n) => format!("_enum({k}, m.{}, _el({k}, e)[{k}])", self.enum_names.get(n).cloned().unwrap_or_default()),
-                            Ty::Bool => format!("_bool({k}, _el({k}, e)[{k}])"),
-                            Ty::Date => format!("_date({k}, _el({k}, e)[{k}])"),
-                            Ty::Str => format!("_str({k}, _el({k}, e)[{k}])"),
-                            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("m.{}(_int({k}, _el({k}, e)[{k}]))", brand_of(t)),
-                            _ => format!("_int({k}, _el({k}, e)[{k}])"),
+                            Ty::Enum(n) => format!("_enum({k}, m.{}, {n:?}, {v})", self.enum_names.get(n).cloned().unwrap_or_default()),
+                            Ty::Bool => format!("_bool({k}, {v})"),
+                            Ty::Date => format!("_date({k}, {v})"),
+                            Ty::Str => format!("_str({k}, {v})"),
+                            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("m.{}(_int({k}, {v}))", brand_of(t)),
+                            _ => format!("_int({k}, {v})"),
                         }
                     };
                     // An optional field reads `null` as the absent value, as an optional input
                     // does; it was held to be an integer (§15.201).
                     match &t {
-                        Ty::Opt(inner) => format!("(None if _el({k}, e)[{k}] is None else {})", one(inner)),
-                        t => one(t),
+                        Ty::Opt(inner) => format!("(None if {src} is None else {})", one(inner, &src)),
+                        t => one(t, &src),
                     }
                 })
                 .collect();
-            convs.push(format!("[m.Element({}) for e in _seq({jp}, o[{jp}])]", fields.join(", ")));
+            convs.push(format!("[m.Element({}) for e in _seq({jp}, _need({jp}, o[{jp}]))]", fields.join(", ")));
             tys.push("list[m.Element]".to_string());
         }
         let doc = tr!(
@@ -166,13 +170,14 @@ impl<'a> Gen<'a> {
             )
             .replace("@M_OBJECT@", &py_str(&tr!("引数はオブジェクト（名前と値の組）で渡す", "the arguments must be an object of name and value")))
             .replace("@M_EXTRA@", &tr!("f\"知らない引数: {{', '.join(extra)}}\"", "f\"unknown arguments: {{', '.join(extra)}}\""))
-            .replace("@M_MISSING@", &tr!("f\"足りない引数: {{', '.join(missing)}}\"", "f\"missing arguments: {{', '.join(missing)}}\""))
-            .replace("@M_INT@", &tr!("f\"{{name}}: 整数で渡す。{{v!r}} は整数ではない\"", "f\"{{name}}: an integer is expected, not {{v!r}}\""))
-            .replace("@M_STR@", &tr!("f\"{{name}}: 文字列で渡す。{{v!r}} は文字列ではない\"", "f\"{{name}}: a string is expected, not {{v!r}}\""))
-            // The sentence every door says of a truth value that is not one (§15.203).
-            .replace("@M_BOOL@", &tr!("f\"{{name}} が真偽ではありません\"", "f\"{{name}} is not a boolean\""))
-            .replace("@M_DATE@", &tr!("f\"{{name}}: 日付は YYYY-MM-DD で: {{v!r}}\"", "f\"{{name}}: not a YYYY-MM-DD date: {{v!r}}\""))
-            .replace("@M_ENUM@", &tr!("f\"{{name}}: {{cls.__name__}} に無い: {{v!r}}\"", "f\"{{name}}: not in {{cls.__name__}}: {{v!r}}\""))
+            // The sentences every door says (§15.203, §15.204), the value beside them.
+            .replace("@M_MISSING@", &format!("f\"{}\"", crate::door::missing("{missing[0]}")))
+            .replace("@M_NEED@", &format!("f\"{}\"", crate::door::missing("{name}")))
+            .replace("@M_INT@", &format!("f\"{}\"", crate::door::not_integer("{name}")))
+            .replace("@M_STR@", &format!("f\"{}\"", crate::door::not_string("{name}")))
+            .replace("@M_BOOL@", &format!("f\"{}\"", crate::door::not_bool("{name}")))
+            .replace("@M_DATE@", &format!("f\"{}\"", crate::door::not_date("{name}")))
+            .replace("@M_ENUM@", &format!("f\"{}\"", crate::door::not_in_enum("{name}", "{en}")))
             .replace("@D_CALL@", &tr!("入力を一つの辞書で受け、規則を当てて、記録の一行を返す。", "Take the inputs as one dict, apply the rule, and return the record line."))
             .replace("@D_SERVE@", &tr!("stdin の JSON-RPC を一行ずつ読み、stdout に一行ずつ返す。", "Read JSON-RPC from stdin one line at a time and answer on stdout one line at a time."))
             .replace("@D_HANDLE@", &tr!("メッセージ一つを受けて、返すメッセージ一つを返す（通知には返さない）。二つの経路はここを通る。", "One message in, one message out (none for a notification). Both transports come through here."))
@@ -184,8 +189,8 @@ impl<'a> Gen<'a> {
             .replace("@D_DELETE@", &tr!("セッションを終える。", "End the session."))
             .replace("@D_SEQ@", &tr!("並びは配列で渡す。", "The sequence is passed as an array."))
             .replace("@D_EL@", &tr!("要素はオブジェクトで渡す。", "An element is passed as an object."))
-            .replace("@M_SEQ@", &tr!("f\"{{name}}: 配列で渡す。{{v!r}} は配列ではない\"", "f\"{{name}}: an array is expected, not {{v!r}}\""))
-            .replace("@M_EL@", &tr!("f\"{{name}}: 要素はオブジェクトで渡す。{{v!r}} はオブジェクトではない\"", "f\"{{name}}: an element must be an object, not {{v!r}}\""))
+            .replace("@M_SEQ@", &format!("f\"{}\"", crate::door::not_sequence("{name}")))
+            .replace("@M_EL@", &format!("f\"{}\"", crate::door::not_object("{seq}")))
             .replace("@D_MAIN@", &tr!("引数を読んで、stdio か HTTP のどちらかで待つ。", "Read the arguments and listen, on stdio or on HTTP."))
             .replace("@D_PAGE@", &tr!("隣にある、人が読むページ。無ければ None で、そのときツールは記録だけを返す。", "The page for people from beside this file, or None — and then the tool answers with the record alone."))
             .replace("@UI_DESC@", &py_str(&self.ui_description()))
@@ -229,25 +234,35 @@ impl<'a> Gen<'a> {
         for i in &self.f.inputs {
             let jp = format!("{:?}", i.name.text);
             let ty = self.ty_of(&i.name.text);
-            let mut conv = |t: &Ty| -> String {
+            // What every door reads (§15.204): `null` for an input that is not optional is one
+            // that is not there, and a value is held to its kind with the door's sentence.
+            let mut conv = |t: &Ty, v: &str| -> String {
                 match t {
-                    Ty::Enum(n) => format!("m.parse{}(_str({jp}, o[{jp}]))", self.enum_names.get(n).cloned().unwrap_or_default()),
-                    Ty::Bool => format!("_bool({jp}, o[{jp}])"),
-                    Ty::Date => format!("_date({jp}, o[{jp}])"),
-                    Ty::Str => format!("_str({jp}, o[{jp}])"),
+                    // The cast names the type through `import type`, which the JavaScript
+                    // loses whole; `as m.Kind` would leave `.Kind` behind.
+                    Ty::Enum(n) => {
+                        let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                        if !brands.contains(&cls) {
+                            brands.push(cls.clone());
+                        }
+                        format!("_enum({jp}, Object.values(m.{cls}), {n:?}, {v}) as {cls}")
+                    }
+                    Ty::Bool => format!("_bool({jp}, {v})"),
+                    Ty::Date => format!("_date({jp}, {v})"),
+                    Ty::Str => format!("_str({jp}, {v})"),
                     Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
                         let b = brand_of(t);
                         if !brands.contains(&b) {
                             brands.push(b.clone());
                         }
-                        format!("_int({jp}, o[{jp}]) as {b}")
+                        format!("_int({jp}, {v}) as {b}")
                     }
-                    _ => format!("_int({jp}, o[{jp}])"),
+                    _ => format!("_int({jp}, {v})"),
                 }
             };
             match &ty {
-                Ty::Opt(t) => convs.push(format!("o[{jp}] === null ? null : {}", conv(t))),
-                t => convs.push(conv(t)),
+                Ty::Opt(t) => convs.push(format!("o[{jp}] === null ? null : {}", conv(t, &format!("o[{jp}]")))),
+                t => convs.push(conv(t, &format!("_need({jp}, o[{jp}])"))),
             }
         }
         // The sequence a walk reads, one element at a time (§15.56).
@@ -260,33 +275,40 @@ impl<'a> Gen<'a> {
                 .map(|fd| {
                     let k = format!("{:?}", fd.name.text);
                     let t = self.ty_of(&fd.name.text);
-                    let src = format!("_el({k}, e)[{k}]");
-                    let mut one = |t: &Ty| -> String {
+                    let optional = matches!(t, Ty::Opt(_));
+                    let src = format!("_field({jp}, e, {k}{})", if optional { ", true" } else { "" });
+                    let mut one = |t: &Ty, v: &str| -> String {
                         match t {
-                            Ty::Enum(n) => format!("m.parse{}(_str({k}, {src}))", self.enum_names.get(n).cloned().unwrap_or_default()),
-                            Ty::Bool => format!("_bool({k}, {src})"),
-                            Ty::Date => format!("_date({k}, {src})"),
-                            Ty::Str => format!("_str({k}, {src})"),
+                            Ty::Enum(n) => {
+                                let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                                if !brands.contains(&cls) {
+                                    brands.push(cls.clone());
+                                }
+                                format!("_enum({k}, Object.values(m.{cls}), {n:?}, {v}) as {cls}")
+                            }
+                            Ty::Bool => format!("_bool({k}, {v})"),
+                            Ty::Date => format!("_date({k}, {v})"),
+                            Ty::Str => format!("_str({k}, {v})"),
                             Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
                                 let b = brand_of(t);
                                 if !brands.contains(&b) {
                                     brands.push(b.clone());
                                 }
-                                format!("_int({k}, {src}) as {b}")
+                                format!("_int({k}, {v}) as {b}")
                             }
-                            _ => format!("_int({k}, {src})"),
+                            _ => format!("_int({k}, {v})"),
                         }
                     };
                     // An optional field reads `null` as the absent value, as an optional input
                     // does (§15.201).
                     let body = match &t {
-                        Ty::Opt(inner) => format!("({src} === null ? null : {})", one(inner)),
-                        t => one(t),
+                        Ty::Opt(inner) => format!("({src} === null ? null : {})", one(inner, &src)),
+                        t => one(t, &src),
                     };
                     format!("{}: {body}", pub_name(&fd.name))
                 })
                 .collect();
-            convs.push(format!("_seq({jp}, o[{jp}]).map((e) => ({{ {} }}))", fields.join(", ")));
+            convs.push(format!("_seq({jp}, _need({jp}, o[{jp}])).map((e) => ({{ {} }}))", fields.join(", ")));
         }
         let code = TS_MCP
             .replace("@HEADER@", self.header("//").trim_end())
@@ -314,11 +336,14 @@ impl<'a> Gen<'a> {
             ("@INSTRUCTIONS@", quote(&self.tool_instructions())),
             ("@M_OBJECT@", quote(&tr!("引数はオブジェクト（名前と値の組）で渡す", "the arguments must be an object of name and value"))),
             ("@M_EXTRA@", tr!("`知らない引数: ${{extra.join(\", \")}}`", "`unknown arguments: ${{extra.join(\", \")}}`")),
-            ("@M_MISSING@", tr!("`足りない引数: ${{missing.join(\", \")}}`", "`missing arguments: ${{missing.join(\", \")}}`")),
-            ("@M_INT@", tr!("`${{name}}: 整数で渡す。${{JSON.stringify(v)}} は整数ではない`", "`${{name}}: an integer is expected, not ${{JSON.stringify(v)}}`")),
-            ("@M_STR@", tr!("`${{name}}: 文字列で渡す。${{JSON.stringify(v)}} は文字列ではない`", "`${{name}}: a string is expected, not ${{JSON.stringify(v)}}`")),
-            ("@M_BOOL@", tr!("`${{name}} が真偽ではありません`", "`${{name}} is not a boolean`")),
-            ("@M_DATE@", tr!("`${{name}}: 日付は YYYY-MM-DD で渡す。${{JSON.stringify(v)}} は読めない`", "`${{name}}: a date as YYYY-MM-DD is expected, not ${{JSON.stringify(v)}}`")),
+            // The sentences every door says (§15.203, §15.204), the value beside them.
+            ("@M_MISSING@", format!("`{}`", crate::door::missing("${missing[0]}"))),
+            ("@M_NEED@", format!("`{}`", crate::door::missing("${name}"))),
+            ("@M_INT@", format!("`{}`", crate::door::not_integer("${name}"))),
+            ("@M_STR@", format!("`{}`", crate::door::not_string("${name}"))),
+            ("@M_BOOL@", format!("`{}`", crate::door::not_bool("${name}"))),
+            ("@M_DATE@", format!("`{}`", crate::door::not_date("${name}"))),
+            ("@M_ENUM@", format!("`{}`", crate::door::not_in_enum("${name}", "${en}"))),
             ("@D_CALL@", tr!("入力を一つのオブジェクトで受け、規則を当てて、記録の一行を返す。", "Take the inputs as one object, apply the rule, and return the record line.")),
             ("@D_SERVE@", tr!("stdin の JSON-RPC を一行ずつ読み、stdout に一行ずつ返す。", "Read JSON-RPC from stdin one line at a time and answer on stdout one line at a time.")),
             ("@D_HANDLE@", tr!("メッセージ一つを受けて、返すメッセージ一つを返す（通知には返さない）。二つの経路はここを通る。", "One message in, one message out (none for a notification). Both transports come through here.")),
@@ -327,8 +352,8 @@ impl<'a> Gen<'a> {
             ("@D_GET@", tr!("こちらから送るものは無いので、ストリームも開かない。", "Nothing is ever sent unasked, so there is no stream to open.")),
             ("@D_SEQ@", tr!("並びは配列で渡す。", "The sequence is passed as an array.")),
             ("@D_EL@", tr!("要素はオブジェクトで渡す。", "An element is passed as an object.")),
-            ("@M_SEQ@", tr!("`${{name}}: 配列で渡す。${{JSON.stringify(v)}} は配列ではない`", "`${{name}}: an array is expected, not ${{JSON.stringify(v)}}`")),
-            ("@M_EL@", tr!("`${{name}}: 要素はオブジェクトで渡す。${{JSON.stringify(v)}} はオブジェクトではない`", "`${{name}}: an element must be an object, not ${{JSON.stringify(v)}}`")),
+            ("@M_SEQ@", format!("`{}`", crate::door::not_sequence("${name}"))),
+            ("@M_EL@", format!("`{}`", crate::door::not_object("${seq}"))),
             ("@D_PORT@", tr!("0 を渡せば空いている番号が選ばれるので、どこで待っているかを一行出す。", "A port of 0 means any free one, so where it is listening is printed as one line.")),
             ("@D_PAGE@", tr!("隣にある、人が読むページ。無ければ null で、そのときツールは記録だけを返す。", "The page for people from beside this file, or null — and then the tool answers with the record alone.")),
             ("@UI_DESC@", quote(&self.ui_description())),
@@ -397,15 +422,21 @@ def _object(d: object, names: tuple[str, ...]) -> dict[str, object]:
     return d
 
 
+def _need(name: str, v: object) -> object:
+    if v is None:
+        raise m.RuleInputError(@M_NEED@)
+    return v
+
+
 def _int(name: str, v: object) -> int:
     if not isinstance(v, int) or isinstance(v, bool):
-        raise m.RuleInputError(@M_INT@)
+        raise m.RuleInputError(@M_INT@, v)
     return v
 
 
 def _str(name: str, v: object) -> str:
     if not isinstance(v, str):
-        raise m.RuleInputError(@M_STR@)
+        raise m.RuleInputError(@M_STR@, v)
     return v
 
 
@@ -416,33 +447,37 @@ def _bool(name: str, v: object) -> bool:
 
 
 def _date(name: str, v: object) -> int:
-    s = _str(name, v)
+    digits = isinstance(v, str) and len(v) == 10 and v[4] == "-" and v[7] == "-"
+    if not isinstance(v, str) or not digits or not all(c in "0123456789" for c in v[:4] + v[5:7] + v[8:]):
+        raise m.RuleInputError(@M_DATE@, v)
     try:
-        y, mo, d = (int(x) for x in s.split("-"))
+        y, mo, d = (int(x) for x in v.split("-"))
         return (datetime.date(y, mo, d) - datetime.date(1970, 1, 1)).days
     except ValueError:
-        raise m.RuleInputError(@M_DATE@) from None
+        raise m.RuleInputError(@M_DATE@, v) from None
 
 
-def _enum(name: str, cls: type[E], v: object) -> E:
+def _enum(name: str, cls: type[E], en: str, v: object) -> E:
     try:
-        return cls(_str(name, v))
-    except ValueError:
-        raise m.RuleInputError(@M_ENUM@) from None
+        return cls(v)
+    except (ValueError, TypeError):
+        raise m.RuleInputError(@M_ENUM@, v) from None
 
 
 def _seq(name: str, v: object) -> list[object]:
     """@D_SEQ@"""
     if not isinstance(v, list):
-        raise m.RuleInputError(@M_SEQ@)
+        raise m.RuleInputError(@M_SEQ@, v)
     return v
 
 
-def _el(name: str, v: object) -> dict[str, object]:
+def _field(seq: str, e: object, name: str, optional: bool = False) -> object:
     """@D_EL@"""
-    if not isinstance(v, dict):
-        raise m.RuleInputError(@M_EL@)
-    return v
+    if not isinstance(e, dict):
+        raise m.RuleInputError(@M_EL@, e)
+    if name not in e or (e[name] is None and not optional):
+        raise m.RuleInputError(@M_NEED@)
+    return e[name]
 
 
 def _args(d: object) -> tuple[@TYPES@]:
@@ -711,16 +746,30 @@ function _object(d: unknown, names: readonly string[]): Record<string, unknown> 
   return o;
 }
 
+function _need(name: string, v: unknown): unknown {
+  if (v === null) {
+    throw new m.RuleInputError(@M_NEED@);
+  }
+  return v;
+}
+
 function _int(name: string, v: unknown): bigint {
   if (typeof v === "number" && Number.isInteger(v)) {
     return BigInt(v);
   }
-  throw new m.RuleInputError(@M_INT@);
+  throw new m.RuleInputError(@M_INT@, v);
 }
 
 function _str(name: string, v: unknown): string {
   if (typeof v !== "string") {
-    throw new m.RuleInputError(@M_STR@);
+    throw new m.RuleInputError(@M_STR@, v);
+  }
+  return v;
+}
+
+function _enum(name: string, values: readonly unknown[], en: string, v: unknown): unknown {
+  if (!values.includes(v)) {
+    throw new m.RuleInputError(@M_ENUM@, v);
   }
   return v;
 }
@@ -733,28 +782,35 @@ function _bool(name: string, v: unknown): boolean {
 }
 
 function _date(name: string, v: unknown): bigint {
-  const parts = _str(name, v).split("-").map(Number);
-  if (parts.length !== 3 || parts.some((x) => !Number.isInteger(x))) {
-    throw new m.RuleInputError(@M_DATE@);
+  if (typeof v !== "string" || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(v)) {
+    throw new m.RuleInputError(@M_DATE@, v);
   }
-  const [y, mo, d] = parts;
-  return BigInt(Math.round(Date.UTC(y, mo - 1, d) / 86400000));
+  const [y, mo, d] = v.split("-").map(Number);
+  const at = new Date(Date.UTC(y, mo - 1, d));
+  if (at.getUTCFullYear() !== y || at.getUTCMonth() !== mo - 1 || at.getUTCDate() !== d) {
+    throw new m.RuleInputError(@M_DATE@, v);
+  }
+  return BigInt(Math.round(at.getTime() / 86400000));
 }
 
 /** @D_SEQ@ */
 function _seq(name: string, v: unknown): unknown[] {
   if (!Array.isArray(v)) {
-    throw new m.RuleInputError(@M_SEQ@);
+    throw new m.RuleInputError(@M_SEQ@, v);
   }
   return v;
 }
 
 /** @D_EL@ */
-function _el(name: string, v: unknown): Record<string, unknown> {
-  if (typeof v !== "object" || v === null || Array.isArray(v)) {
-    throw new m.RuleInputError(@M_EL@);
+function _field(seq: string, e: unknown, name: string, optional = false): unknown {
+  if (typeof e !== "object" || e === null || Array.isArray(e)) {
+    throw new m.RuleInputError(@M_EL@, e);
   }
-  return v as Record<string, unknown>;
+  const o = e as Record<string, unknown>;
+  if (!(name in o) || (o[name] === null && !optional)) {
+    throw new m.RuleInputError(@M_NEED@);
+  }
+  return o[name];
 }
 
 function _args(d: unknown) {

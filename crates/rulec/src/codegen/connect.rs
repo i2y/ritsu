@@ -720,7 +720,7 @@ impl<'a> Gen<'a> {
             }
             Ty::Enum(n) => {
                 let cls = self.enum_names.get(n).cloned().unwrap_or_else(|| pascal(n));
-                format!("_member({name:?}, {cls:?}, ENUM_{}, {src})", crate::proto::upper_snake(&cls))
+                format!("_member({name:?}, {n:?}, ENUM_{}, {src})", crate::proto::upper_snake(&cls))
             }
             Ty::Date => format!("_ord({name:?}, {src})"),
             Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("m.{}({src})", brand_of(ty)),
@@ -824,7 +824,7 @@ impl<'a> Gen<'a> {
                 table(needed(el.fields.iter().map(|fd| &fd.name).collect()))
             ));
             required.push_str(&format!(
-                "    for i, e in enumerate(request.{}):\n        _required(e, ELEMENT_REQUIRED, f\"{}[{{i}}].\")\n",
+                "    for i, e in enumerate(request.{}):\n        _required(e, ELEMENT_REQUIRED, f\" ({}[{{i}}])\")\n",
                 pub_name(&el.name),
                 el.name.text
             ));
@@ -904,12 +904,13 @@ impl<'a> Gen<'a> {
             )
             .replace("@D_CODECS@", &tr!("JSON のパーサーは、知らないフィールドと列挙の値を受け付けない。Connect の既定はそれを捨てるので、\n# 綴りを誤った入力が、ゼロ値として判断されてしまう。", "The JSON reader refuses a field or an enum value it does not know. Connect's default\n# drops it, and a misspelt input would then be decided as if it were zero."))
             .replace("@D_REQUIRED@", &tr!("規則が要るフィールドが省かれていたら、リクエストを受け付けない。proto3 は省かれたフィールドをゼロ値として\n    読むので、これが無いと、何も指定しなかったリクエストが、0 と false を指定したものとして判断される。", "Refuse a request that left out a field the rule needs. proto3 reads a field left out\n    as its zero, so without this a request that named nothing would be decided as 0 and false."))
-            .replace("@M_REQUIRED@", &tr!("設定されていません", "not set"))
+            // The sentences every door says (§15.204), the place of an element after it.
+            .replace("@M_REQUIRED@", &crate::door::missing("{name}"))
             .replace("@D_SHA@", &tr!("どの版の表が答えたか。答えを保存しておく呼び出し側のために、レスポンスのヘッダーに入れる。", "Which version of the table answered; it goes in a response header for a caller that keeps the answer."))
             .replace("@D_MEMBER@", &tr!("列挙の値一つ。契約に無い番号は、呼び出し側の契約違反である。", "One value of an enum. A number the contract does not have is a contract violation by the caller."))
-            .replace("@M_MEMBER@", &tr!("{{ty}} の値ではありません: {{v}}", "not a value of {{ty}}: {{v}}"))
+            .replace("@M_MEMBER@", &format!("{}: {{v}}", crate::door::not_in_enum("{name}", "{ty}")))
             .replace("@D_ORD@", &tr!("日付は YYYY-MM-DD の文字列で受け、日数に直す。", "A date arrives as a YYYY-MM-DD string and is read as a day number."))
-            .replace("@M_ORD@", &tr!("日付は YYYY-MM-DD で: {{v!r}}", "not a YYYY-MM-DD date: {{v!r}}"))
+            .replace("@M_ORD@", &format!("{}: {{v!r}}", crate::door::not_date("{name}")))
             .replace("@D_CIVIL@", &tr!("日数を YYYY-MM-DD に戻す。", "A day number as YYYY-MM-DD."))
             .replace("@D_ASYNC@", &tr!("ASGI の側。規則は純関数なので待つものが無く、中身は下の同期の側と同じ一本である。", "The ASGI side. A rule is a pure function with nothing to await, so this and the sync class below are two doors on one body."))
             .replace("@D_SYNC@", &tr!("WSGI の側。", "The WSGI side."))
@@ -962,7 +963,7 @@ def _required(message: Any, fields: tuple[tuple[str, str], ...], at: str = "") -
     """@D_REQUIRED@"""
     for field, name in fields:
         if not message.has_field(field):
-            raise ConnectError(Code.INVALID_ARGUMENT, f"{at}{name}: @M_REQUIRED@")
+            raise ConnectError(Code.INVALID_ARGUMENT, f"@M_REQUIRED@{at}")
 "#;
 
 /// The enum tables and the one reader of them, for a rule that has an enum on the wire.
@@ -977,7 +978,7 @@ def _member(name: str, ty: str, table: Mapping[Any, E], v: int) -> E:
     try:
         return table[v]
     except KeyError:
-        raise ConnectError(Code.INVALID_ARGUMENT, f"{name}: @M_MEMBER@") from None
+        raise ConnectError(Code.INVALID_ARGUMENT, f"@M_MEMBER@") from None
 "#;
 
 const PY_SERVICE_DATES: &str = r#"
@@ -988,7 +989,7 @@ def _ord(name: str, v: str) -> int:
         y, mo, d = (int(x) for x in v.split("-"))
         return (datetime.date(y, mo, d) - datetime.date(1970, 1, 1)).days
     except ValueError:
-        raise ConnectError(Code.INVALID_ARGUMENT, f"{name}: @M_ORD@") from None
+        raise ConnectError(Code.INVALID_ARGUMENT, f"@M_ORD@") from None
 
 
 def _civil(n: int) -> str:
@@ -1239,20 +1240,12 @@ impl<'a> Gen<'a> {
         }
         // The arguments are read from the same line the request was built from, because the
         // record names its inputs as the rule does and the message names them by their alias.
-        let mut args: Vec<String> = self
-            .f
-            .inputs
-            .iter()
-            .map(|i| self.py_read(&self.ty_of(&i.name.text), format!("d[{:?}]", i.name.text)))
-            .collect();
+        // Read the way the runner beside it reads them, so a refusal is the same line (§15.204);
+        // the request is built only from a line that was read.
+        let mut args: Vec<String> = self.f.inputs.iter().map(|i| self.py_read(&self.ty_of(&i.name.text), "d", &i.name.text)).collect();
         let mut prelude = String::new();
         if let Some(el) = &self.f.elements {
-            let fields: Vec<String> = el
-                .fields
-                .iter()
-                .map(|fd| self.py_read(&self.ty_of(&fd.name.text), format!("e[{:?}]", fd.name.text)))
-                .collect();
-            prelude = format!("            rows = [m.Element({}) for e in d[{:?}]]\n", fields.join(", "), el.name.text);
+            prelude = format!("                rows = {}\n", self.py_read_elements(el));
             args.push("rows".to_string());
         }
         let out = if self.f.outputs.len() == 1 {
@@ -1336,23 +1329,15 @@ impl<'a> Gen<'a> {
                         pre.push_str(reverse.trim_end());
                         pre.push('\n');
                     }
-                    if self.has_date(Dir::In) || self.has_date(Dir::Out) {
-                        pre.push_str(PY_RUNNER_DATES);
-                    }
-                    if self.f.inputs.iter().any(|i| matches!(self.ty_of(&i.name.text).present(), Ty::Bool))
-                        || self.element_fields().iter().any(|f| matches!(self.ty_of(&f.name.text).present(), Ty::Bool))
-                    {
-                        pre.push_str(&PY_RUNNER_BOOL.replace(
-                            "@D_BOOL@",
-                            &tr!("真偽は JSON の true か false だけ。ほかは、ほかの言語と同じ文で拒む。", "A truth value is JSON's true or false; anything else is refused with the sentence the other languages say."),
-                        ));
-                    }
+                    pre.push_str("\n\n");
+                    pre.push_str(super::PY_WIRE.trim_end());
+                    pre.push('\n');
                     pre
                 },
             )
             .replace("@KW@", kw.trim_end())
             .replace("@PRELUDE@", &prelude)
-            .replace("@STDLIB@", if self.has_date(Dir::In) || self.has_date(Dir::Out) { "import datetime\n" } else { "" })
+            .replace("@STDLIB@", "import datetime\nimport enum\n")
             // One argument keeps the comma a tuple of one needs; two or more must not have it.
             .replace("@ARGS@", &if args.len() == 1 { format!("{},", args[0]) } else { args.join(", ") })
             .replace("@OUT@", &out)
@@ -1365,22 +1350,6 @@ impl<'a> Gen<'a> {
     }
 }
 
-const PY_RUNNER_DATES: &str = r#"
-
-def _ord(s: str) -> int:
-    y, mo, d = (int(x) for x in s.split("-"))
-    return (datetime.date(y, mo, d) - datetime.date(1970, 1, 1)).days
-"#;
-
-
-const PY_RUNNER_BOOL: &str = r#"
-
-def _bool(v: Any, what: str) -> bool:
-    """@D_BOOL@"""
-    if not isinstance(v, bool):
-        raise m.RuleInputError(what, v)
-    return v
-"#;
 
 const PY_CONNECT_RUNNER: &str = r#"@HEADER@
 """@DOC@
@@ -1392,7 +1361,10 @@ from __future__ import annotations
 import sys
 import threading
 import time
-from typing import Any
+from typing import Any, Callable, TypeVar
+
+from connectrpc.code import Code
+from connectrpc.errors import ConnectError
 
 import @ALIAS@ as m
 from @PKG@ import @ALIAS@_pb as pb
@@ -1440,8 +1412,16 @@ def main(argv: list[str]) -> None:
             line = line.strip()
             if not line:
                 continue
-@MLINE@@PRELUDE@            args = (@ARGS@)
-            res = client.decide(_request(d), use_get=use_get)
+@MLINE@            try:
+@PRELUDE@                args = (@ARGS@)
+                res = client.decide(_request(d), use_get=use_get)
+            except m.RuleInputError as e:
+                _refused("input", e.what)
+                continue
+            except ConnectError as e:
+                # The service answers the module's two refusals with these two codes.
+                _refused("contradiction" if e.code == Code.INTERNAL else "input", e.message)
+                continue
             trace = [m.Fired(f.table, f.row, f.label) for f in res.trace]
             print(m.@ALIAS@_record(*args, @OUT@, trace))
 @MTAIL@

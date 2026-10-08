@@ -66,7 +66,7 @@ def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
 
 def fee_demo_traced(dest: Prefecture, girth: Cm, weight: Gram) -> tuple[YenInclTax, list[Fired]]:
     if not _isinstance(dest, Prefecture):
-        raise RuleInputError("あて先 is not a value of enum Prefecture", dest)
+        raise RuleInputError("あて先 is not a value of enum 都道府県", dest)
     if not 1 <= girth <= 100:
         raise RuleInputError("三辺合計 is out of range", girth)
     trace: _Trace = []
@@ -289,15 +289,15 @@ JSON Schema は、OpenAPI のパラメータやリクエストボディにその
 
 ```console
 $ rulec test generated/ --lang ja
-ok    shipping_fee (Python) ベクタ 68 件
-ok    shipping_fee (Go) ベクタ 68 件
+ok    shipping_fee (Python) ベクタ 70 件、受け付けない入力 16 件
+ok    shipping_fee (Go) ベクタ 70 件、受け付けない入力 16 件
 ok    丸めヘルパ (Python) 単体ベクタ
 ok    丸めヘルパ (Go) 単体ベクタ
 
 4 件すべて一致しました。
 ```
 
-出力の「ベクタ」は、**規則の境界から自動で作ったテストケース**のことです。出どころが規則の境界であって、生成コードではないところが要点です。丸めヘルパにも専用のテストが付きます — 表ごとの一致だけを見ていると、端数の出ない表ではヘルパの誤りが隠れてしまうからです。
+出力の「ベクタ」は、**規則の境界から自動で作ったテストケース**のことです。出どころが規則の境界であって、生成コードではないところが要点です。丸めヘルパにも専用のテストが付きます — 表ごとの一致だけを見ていると、端数の出ない表ではヘルパの誤りが隠れてしまうからです。「受け付けない入力」は、その裏側です。入口が拒む理由ごとに一つずつ（渡していない入力、型の違う値、範囲の端の外の値、`constraint` が除く組み合わせなど）、どの言語も参照評価器と同じ文で拒むことを確かめます。
 
 ## Wasm: どの実行環境にも入る一つのモジュール
 
@@ -308,15 +308,15 @@ $ rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols \
     --target wasm32-unknown-unknown --crate-type cdylib shipping_fee_wasm.rs -o shipping_fee.wasm
 ```
 
-ホストは、入力を JSON のオブジェクトにしてモジュールのメモリに書き、`call` を呼んで、記録の行を読み取ります。行の形はほかの言語の `_record` が書くものと同じで、契約の外の入力には `{"error":"…"}` が返ります。`.wit` があるので、`wasm-tools component new` でモジュールを変えずに component にでき、wasmtime のような component の実行環境からは `call("{…}")` の形で呼べます。ホストの書き方、component にする手順、`rulec api` の `wasm` の項は[生成物](generated-code.md#wasm)にあります。
+ホストは、入力を JSON のオブジェクトにしてモジュールのメモリに書き、`call` を呼んで、記録の行を読み取ります。行の形はほかの言語の `_record` が書くものと同じで、契約の外の入力には、runner が書くのと同じ拒む行（`{"refused":"input","error":"…"}`）が返ります。`.wit` があるので、`wasm-tools component new` でモジュールを変えずに component にでき、wasmtime のような component の実行環境からは `call("{…}")` の形で呼べます。ホストの書き方、component にする手順、`rulec api` の `wasm` の項は[生成物](generated-code.md#wasm)にあります。
 
 `rulec test` はモジュールを組み、ほかの言語と同じようにベクタと突き合わせます。
 
 ```console
 $ rulec test generated/ --lang ja
-ok    shipping_fee (Rust) ベクタ 68 件
-ok    shipping_fee (Rust, WASI) ベクタ 68 件
-ok    shipping_fee (Wasm) ベクタ 68 件
+ok    shipping_fee (Rust) ベクタ 70 件、受け付けない入力 16 件
+ok    shipping_fee (Rust, WASI) ベクタ 70 件、受け付けない入力 16 件
+ok    shipping_fee (Wasm) ベクタ 70 件、受け付けない入力 16 件
 …
 ```
 

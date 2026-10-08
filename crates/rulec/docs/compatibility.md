@@ -63,6 +63,11 @@ as well: "the crate `rulec`", after `i2y/tap/ritsu` in Homebrew. -->
 - **An answer that disagreed with the reference evaluator.** If the code generated in some
   language answered differently from the reference evaluator, the fix makes it agree, and
   the release notes name it.
+- **An input a door let through.** If the code generated in some language answered an input
+  outside its contract that the reference evaluator refuses — a value of another kind, an input
+  that is not there, a combination a `constraint` rules out — the fix makes it refuse the input,
+  as the other languages do, so a call that was answered can fail from then on. The sentence a
+  door says is prose. The release notes name the change.
 - **How long a check takes,** as long as a rule that finished within the default budget
   still does.
 

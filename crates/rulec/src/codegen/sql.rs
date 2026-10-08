@@ -16,7 +16,7 @@
 //! and integer division truncates toward zero in both. `min`/`max` are LEAST and GREATEST,
 //! which the SQLite runner registers.
 
-use super::{cell_src, mode_fn, not_bool, out_src, pub_name, round_cases, Gen};
+use super::{cell_src, mode_fn, out_src, pub_name, round_cases, Gen};
 use crate::ast::{Cell, CmpOp, Item, Lit, OutCell, Policy, Table};
 use crate::num::{Rat, RoundMode};
 use crate::types::Ty;
@@ -421,7 +421,7 @@ impl<'a> Gen<'a> {
                 other => other,
             };
             if !matches!(ty, Ty::Opt(_)) {
-                guard.push(format!("WHEN {col} IS NULL THEN {}", lit(&tr!("{} がありません", "{} is missing", i.name.text))));
+                guard.push(format!("WHEN {col} IS NULL THEN {}", lit(&crate::door::missing(&i.name.text))));
             }
             match inner {
                 Ty::Enum(en) => {
@@ -429,13 +429,13 @@ impl<'a> Gen<'a> {
                     guard.push(format!(
                         "WHEN {col} NOT IN ({}) THEN {}",
                         vs.join(", "),
-                        lit(&tr!("{} が列挙 {en} の値ではありません", "{} is not a value of enum {en}", i.name.text))
+                        lit(&crate::door::not_in_enum(&i.name.text, en))
                     ));
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     guard.push(format!(
                         "WHEN {col} <> CAST({col} AS BIGINT) THEN {}",
-                        lit(&tr!("{} が整数ではありません", "{} is not an integer", i.name.text))
+                        lit(&crate::door::not_integer(&i.name.text))
                     ));
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                         let sc = self.c.wire_scale(&i.name.text);
@@ -443,7 +443,7 @@ impl<'a> Gen<'a> {
                             "WHEN {col} < {} OR {col} > {} THEN {}",
                             crate::types::wire_int(lo, sc),
                             crate::types::wire_int(hi, sc),
-                            lit(&tr!("{} が範囲の外です", "{} is out of range", i.name.text))
+                            lit(&crate::door::out_of_range(&i.name.text))
                         ));
                     }
                 }
@@ -458,7 +458,7 @@ impl<'a> Gen<'a> {
             let (a, b) = self.constraint_sides(k, q(&local(&k.left)), q(&local(&k.right)));
             guard.push(format!(
                 "WHEN NOT ({a} {op} {b}) THEN {}",
-                lit(&tr!("制約が成り立ちません: {said}", "the constraint does not hold: {said}"))
+                lit(&crate::door::constraint(&said))
             ));
         }
         // The days of a koyomi date (§15.174), refused as the other backends refuse them.
@@ -474,7 +474,7 @@ impl<'a> Gen<'a> {
             let from = set.from.as_ref().map(|fr| format!("koyomi \"{}\" date {}", fr.file, fr.date)).unwrap_or_default();
             let _ = from;
             let (file, date) = set.from.as_ref().map(|fr| (fr.file.replace(['"', '\\', '`', '\'', '$'], ""), fr.date.clone())).unwrap_or_default();
-            guard.push(format!("WHEN NOT ({}) THEN {}", tests.join(" OR "), lit(&tr!("{name} は {file} の {date} がとる日ではありません", "{name} is not a day {date} of {file} comes to"))));
+            guard.push(format!("WHEN NOT ({}) THEN {}", tests.join(" OR "), lit(&crate::door::not_a_day(&name, &file, &date))));
         }
         cols.push(if guard.is_empty() {
             format!("NULL AS {}", q("_input_error"))
@@ -1064,15 +1064,28 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The sentence each truth value is refused with when it is not JSON's `true` or `false`, in
-    /// the language the code is generated in (§15.203), as a Python dict's body.
-    fn sql_not_bool(&self) -> String {
+    /// What the door says of each input, in the language the code is generated in (§15.204), as
+    /// the body of a Python dict: the sentence for one that is not there, the one for a value
+    /// of another kind — a truth value that is not `true` or `false` among them (§15.203) — and
+    /// whether it takes `null`.
+    fn sql_say(&self) -> String {
         let py = |s: &str| format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""));
         self.f
             .inputs
             .iter()
-            .filter(|i| matches!(self.ty_of(&i.name.text).present(), Ty::Bool))
-            .map(|i| format!("{}: {}", py(&i.name.text), py(&not_bool(&i.name.text))))
+            .map(|i| {
+                let name = &i.name.text;
+                let ty = self.ty_of(name);
+                let wrong = match ty.present() {
+                    Ty::Bool => crate::door::not_bool(name),
+                    Ty::Date => crate::door::not_date(name),
+                    Ty::Enum(en) => crate::door::not_in_enum(name, en),
+                    Ty::Str => crate::door::not_string(name),
+                    _ => crate::door::not_integer(name),
+                };
+                let optional = if matches!(ty, Ty::Opt(_)) { "True" } else { "False" };
+                format!("{}: ({}, {}, {optional})", py(name), py(&crate::door::missing(name)), py(&wrong))
+            })
             .collect::<Vec<_>>()
             .join(", ")
     }
@@ -1086,7 +1099,7 @@ impl<'a> Gen<'a> {
             .replace("@HEADER@", self.header("#").trim_end())
             .replace("@ALIAS@", &pub_name(&self.f.name))
             .replace("@INPUTS@", &ins)
-            .replace("@NOT_BOOL@", &self.sql_not_bool())
+            .replace("@SAY@", &self.sql_say())
             .replace("@OUTPUTS@", &outs)
             .replace("@TABLES@", &tables)
             .replace("@LABELS@", &labels)
@@ -1116,7 +1129,7 @@ impl<'a> Gen<'a> {
             .replace("@ALIAS@", &pub_name(&self.f.name))
             .replace("@ARGTYPES@", &types.join(", "))
             .replace("@INPUTS@", &ins)
-            .replace("@NOT_BOOL@", &self.sql_not_bool())
+            .replace("@SAY@", &self.sql_say())
             .replace("@OUTPUTS@", &outs)
             .replace("@TABLES@", &tables)
             .replace("@LABELS@", &labels)
@@ -1135,7 +1148,8 @@ MACHINE = @MACHINE@
 CARRY = @CARRY@
 INPUT = "@ALIAS@_input"
 INPUTS = [@INPUTS@]
-NOT_BOOL = {@NOT_BOOL@}
+# What the door says of each input: missing, of another kind, and whether it takes null.
+SAY = {@SAY@}
 OUTPUTS = [@OUTPUTS@]
 TABLES = [@TABLES@]
 LABELS = {@LABELS@}
@@ -1151,17 +1165,59 @@ def _civil(days: int) -> str:
     return (datetime.date(1970, 1, 1) + datetime.timedelta(days=days)).isoformat()
 
 
-def _to_sql(jp: str, kind: str, v: object) -> object:
+def _to_sql(kind: str, v: object) -> object:
     if v is None:
         return None
     if kind == "bool":
-        # JSON's true or false and nothing else: `1 if v else 0` read "false" as true.
-        if not isinstance(v, bool):
-            raise ValueError(NOT_BOOL[jp])
         return 1 if v else 0
-    if kind == "date":
-        return _ord(str(v))
     return v
+
+
+def _is_date(v: object) -> bool:
+    if not isinstance(v, str) or len(v) != 10 or v[4] != "-" or v[7] != "-":
+        return False
+    if not all(c in "0123456789" for c in v[:4] + v[5:7] + v[8:]):
+        return False
+    try:
+        _ord(v)
+    except ValueError:
+        return False
+    return True
+
+
+def _read(d: object):
+    """One case's inputs as the query takes them, or the sentence its door refuses it with: an
+    input not there, or of another kind (§15.204). What lies outside a range, a constraint and
+    the days is the query's own `_input_error` to say."""
+    vals = []
+    for jp, _, k in INPUTS:
+        missing, wrong, optional = SAY[jp]
+        if not isinstance(d, dict) or jp not in d or (d[jp] is None and not optional):
+            return None, missing
+        v = d[jp]
+        if v is None:
+            vals.append(None)
+        elif k == "int":
+            if not isinstance(v, int) or isinstance(v, bool):
+                return None, wrong
+            vals.append(v)
+        elif k == "bool":
+            if not isinstance(v, bool):
+                return None, wrong
+            vals.append(v)
+        elif k == "date":
+            if not _is_date(v):
+                return None, wrong
+            vals.append(_ord(v))
+        else:
+            if not isinstance(v, str):
+                return None, wrong
+            vals.append(v)
+    return vals, None
+
+
+def _refused(kind: str, what: str) -> str:
+    return json.dumps({"refused": kind, "error": what}, ensure_ascii=False, separators=(",", ":"))
 
 
 def _echo(v: object) -> str:
@@ -1188,26 +1244,35 @@ def _from_sql(kind: str, v: object) -> str:
 
 db = sqlite3.connect(":memory:")
 db.row_factory = sqlite3.Row
-db.create_function("LEAST", 2, min, deterministic=True)
-db.create_function("GREATEST", 2, max, deterministic=True)
+# PostgreSQL's LEAST and GREATEST pass over a NULL. Inside the declared domain none arrives, but a
+# row the door refuses is decided all the same, and a value outside an enum leaves one (§15.204).
+db.create_function("LEAST", 2, lambda a, b: b if a is None else a if b is None else min(a, b), deterministic=True)
+db.create_function("GREATEST", 2, lambda a, b: b if a is None else a if b is None else max(a, b), deterministic=True)
 db.execute('CREATE TABLE "%s" ("_id" INTEGER PRIMARY KEY, %s)' % (INPUT, ", ".join('"%s"' % a for _, a, _ in INPUTS)))
 
 
 def _decide(cases):
     """One pass of the query over these cases: each case's record, and its answer."""
     db.execute('DELETE FROM "%s"' % INPUT)
+    # A case its door refuses gets a line saying so in the place of the record (§15.204).
+    got = {}
     for n, d in enumerate(cases):
+        vals, why = _read(d)
+        if why is not None:
+            got[n] = (_refused("input", why), None)
+            continue
         db.execute(
             'INSERT INTO "%s" VALUES (?%s)' % (INPUT, ", ?" * len(INPUTS)),
-            (n, *[_to_sql(jp, k, d[jp]) for jp, _, k in INPUTS]),
+            (n, *[_to_sql(k, v) for (_, _, k), v in zip(INPUTS, vals)]),
         )
-    got = {}
     for r in db.execute(SQL):
         d = cases[r["_id"]]
         if r["_input_error"] is not None:
-            raise ValueError(r["_input_error"])
+            got[r["_id"]] = (_refused("input", r["_input_error"]), None)
+            continue
         if CONTRADICTION is not None and r[CONTRADICTION] is not None:
-            raise AssertionError(r[CONTRADICTION])
+            got[r["_id"]] = (_refused("contradiction", r[CONTRADICTION]), None)
+            continue
         ins = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _echo(d[jp]) for jp, _, _ in INPUTS)
         obs = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _from_sql(k, r[a]) for jp, a, k in OUTPUTS)
         rows = ",".join(
@@ -1261,7 +1326,8 @@ CARRY = @CARRY@
 FN = "@ALIAS@"
 ARGTYPES = [t.strip() for t in "@ARGTYPES@".split(",")]
 INPUTS = [@INPUTS@]
-NOT_BOOL = {@NOT_BOOL@}
+# What the door says of each input: missing, of another kind, and whether it takes null.
+SAY = {@SAY@}
 OUTPUTS = [@OUTPUTS@]
 TABLES = [@TABLES@]
 LABELS = {@LABELS@}
@@ -1280,19 +1346,75 @@ def _civil(days: int) -> str:
     return (datetime.date(1970, 1, 1) + datetime.timedelta(days=days)).isoformat()
 
 
-def _lit(jp: str, kind: str, v: object) -> str:
+def _lit(kind: str, v: object) -> str:
     if v is None:
         return "NULL"
     if kind == "bool":
-        # JSON's true or false and nothing else: `"TRUE" if v` read "false" as true.
-        if not isinstance(v, bool):
-            raise ValueError(NOT_BOOL[jp])
         return "TRUE" if v else "FALSE"
-    if kind == "date":
-        return str(_ord(str(v)))
-    if kind == "int":
+    if kind in ("date", "int"):
         return str(v)
     return "'" + str(v).replace("'", "''") + "'"
+
+
+def _is_date(v: object) -> bool:
+    if not isinstance(v, str) or len(v) != 10 or v[4] != "-" or v[7] != "-":
+        return False
+    if not all(c in "0123456789" for c in v[:4] + v[5:7] + v[8:]):
+        return False
+    try:
+        _ord(v)
+    except ValueError:
+        return False
+    return True
+
+
+def _read(d: object):
+    """One case's inputs as the query takes them, or the sentence its door refuses it with: an
+    input not there, or of another kind (§15.204). What lies outside a range, a constraint and
+    the days is the query's own `_input_error` to say."""
+    vals = []
+    for jp, _, k in INPUTS:
+        missing, wrong, optional = SAY[jp]
+        if not isinstance(d, dict) or jp not in d or (d[jp] is None and not optional):
+            return None, missing
+        v = d[jp]
+        if v is None:
+            vals.append(None)
+        elif k == "int":
+            if not isinstance(v, int) or isinstance(v, bool):
+                return None, wrong
+            vals.append(v)
+        elif k == "bool":
+            if not isinstance(v, bool):
+                return None, wrong
+            vals.append(v)
+        elif k == "date":
+            if not _is_date(v):
+                return None, wrong
+            vals.append(_ord(v))
+        else:
+            if not isinstance(v, str):
+                return None, wrong
+            vals.append(v)
+    return vals, None
+
+
+def _refused(kind: str, what: str) -> str:
+    return json.dumps({"refused": kind, "error": what}, ensure_ascii=False, separators=(",", ":"))
+
+
+# One call, answered as its row or as the refusal it raised: the input's sentence under SQLSTATE
+# 22023, the rule's own contradiction under P0001 (§15.204).
+TRY = """CREATE FUNCTION pg_temp._case(q text) RETURNS text LANGUAGE plpgsql AS $try$
+DECLARE r text;
+BEGIN
+  EXECUTE q INTO r;
+  RETURN r;
+EXCEPTION
+  WHEN SQLSTATE '22023' THEN RETURN json_build_object('refused', 'input', 'error', SQLERRM)::text;
+  WHEN SQLSTATE 'P0001' THEN RETURN json_build_object('refused', 'contradiction', 'error', SQLERRM)::text;
+END
+$try$;"""
 
 
 def _echo(v: object) -> str:
@@ -1323,17 +1445,24 @@ def _psql(script: str) -> "subprocess.CompletedProcess[str]":
 
 def _decide(cases):
     """One psql session over these cases: each case's record, and its answer."""
-    script = [SQL]
-    for d in cases:
+    script = [SQL, TRY]
+    got, asked = {}, []
+    for n, d in enumerate(cases):
+        vals, why = _read(d)
+        if why is not None:
+            got[n] = (_refused("input", why), None)
+            continue
+        asked.append(n)
         # Called the way PostgREST calls it — by argument name — and with every argument cast
         # to the type it was declared with. Both matter: a rule whose alias is also the name of
         # a built-in function (`rank`) cannot be called positionally without ambiguity, and a
         # named argument is the one form a variadic built-in cannot answer to.
-        args = ", ".join('"%s" => %s::%s' % (a, _lit(jp, k, d[jp]), t) for (jp, a, k), t in zip(INPUTS, ARGTYPES))
+        args = ", ".join('"%s" => %s::%s' % (a, _lit(k, v), t) for (_, a, k), t, v in zip(INPUTS, ARGTYPES, vals))
         # Through a subquery, so that the answer is a row however many columns it has: a
         # function that returns one column — one output and no table to name a row of — is that
         # column's type in FROM, and row_to_json has no form for a bare bigint.
-        script.append('SELECT row_to_json(t) FROM (SELECT * FROM "%s"(%s)) AS t;' % (FN, args))
+        one = 'SELECT row_to_json(t)::text FROM (SELECT * FROM "%s"(%s)) AS t' % (FN, args)
+        script.append("SELECT pg_temp._case($rulec_case$%s$rulec_case$);" % one)
     p = _psql("\n".join(script))
     # However it went, the function does not stay behind in somebody's database.
     _psql('DROP FUNCTION IF EXISTS "%s"(%s);' % (FN, ", ".join(ARGTYPES)))
@@ -1341,12 +1470,14 @@ def _decide(cases):
         sys.stderr.write(p.stderr)
         sys.exit(1)
     answers = [l for l in p.stdout.splitlines() if l.startswith("{")]
-    if len(answers) != len(cases):
-        sys.stderr.write("psql answered %d of %d cases\n%s" % (len(answers), len(cases), p.stderr))
+    if len(answers) != len(asked):
+        sys.stderr.write("psql answered %d of %d cases\n%s" % (len(answers), len(asked), p.stderr))
         sys.exit(1)
-    out = []
-    for d, answer in zip(cases, answers):
-        r = json.loads(answer)
+    for n, answer in zip(asked, answers):
+        d, r = cases[n], json.loads(answer)
+        if "refused" in r:
+            got[n] = (_refused(r["refused"], r["error"]), None)
+            continue
         ins = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _echo(d[jp]) for jp, _, _ in INPUTS)
         obs = ",".join(json.dumps(jp, ensure_ascii=False) + ":" + _from_sql(k, r[a]) for jp, a, k in OUTPUTS)
         rows = ",".join(
@@ -1356,8 +1487,8 @@ def _decide(cases):
             for t, c in TABLES
             if r[c] is not None
         )
-        out.append(('{"in":{' + ins + '},"observed":{' + obs + '},"trace":[' + rows + "]}", {jp: r[a] for jp, a, _ in OUTPUTS}))
-    return out
+        got[n] = ('{"in":{' + ins + '},"observed":{' + obs + '},"trace":[' + rows + "]}", {jp: r[a] for jp, a, _ in OUTPUTS})
+    return [got[n] for n in range(len(cases))]
 
 
 lines = [json.loads(l) for l in sys.stdin if l.strip()]

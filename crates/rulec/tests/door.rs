@@ -139,7 +139,7 @@ fn every_language_refuses_an_input_that_breaks_a_constraint() {
     }
 }
 
-/// Each language's runner, handed the input that breaks the constraint, stops and says the same
+/// Each language's runner, handed the input that breaks the constraint, refuses it with the same
 /// sentence — the one the rule's messages were generated in.
 #[test]
 fn every_language_says_the_same_sentence() {
@@ -180,7 +180,13 @@ fn every_language_says_the_same_sentence() {
                 .output()
                 .unwrap_or_else(|e| panic!("{}: {}: {e}", c.rule, b.name));
             let said = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
-            assert!(!o.status.success(), "{}: {} answered an input that breaks the constraint:\n{said}", c.rule, b.name);
+            // A refusal is a line of its own, in the place of the record (§15.204).
+            assert!(
+                o.status.success() && said.starts_with("{\"refused\":\"input\""),
+                "{}: {} did not refuse an input that breaks the constraint:\n{said}",
+                c.rule,
+                b.name
+            );
             assert!(said.contains(c.said), "{}: {} does not say `{}`:\n{said}", c.rule, b.name, c.said);
         }
     }

@@ -144,18 +144,19 @@ case can make, and every two that can follow one another, each met by a trace of
 makes it. An entry of `missing` is
 `{"what": …, "hint": …}`, both **prose**. `refused` counts the cases in the suite that the
 reference evaluator has **no answer** for; they discharge obligations like any other case, and
-what is asked of the generated code there is that it refuse them too (below).
+what is asked of the generated code there is that it refuse them too (below). The inputs the
+door refuses, which `gen` writes beside them (§15.204), discharge none and are not counted here.
 
 ## `test`
 
 One object for the run.
 
 ```json
-{"results":[{"rule":"member_shipping_fee","lang":"python","via":"runner","vectors":70,"refused":0,
+{"results":[{"rule":"member_shipping_fee","lang":"python","via":"runner","vectors":70,"refused":16,
               "ok":true,"ran":true,"first_diff":null,"error":null},
-             {"rule":"member_shipping_fee","lang":"python","via":"mcp","vectors":70,"refused":0,
+             {"rule":"member_shipping_fee","lang":"python","via":"mcp","vectors":70,"refused":16,
               "ok":true,"ran":true,"first_diff":null,"error":null},
-             {"rule":"member_shipping_fee","lang":"go","via":"runner","vectors":70,"refused":0,
+             {"rule":"member_shipping_fee","lang":"go","via":"runner","vectors":70,"refused":16,
               "ok":false,"ran":false,"first_diff":null,
               "error":"does not compile:\n…"}],
  "skipped":[]}
@@ -165,9 +166,9 @@ One object for the run.
 |---|---|
 | `via` | how the generated code was reached: `runner`, the vectors piped through the generated runner; `mcp`, one `tools/call` per vector through the generated server over stdio; `mcp-http`, the same conversation over the same server's Streamable HTTP ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)); `connect-asgi`, `connect-asgi-get`, `connect-wsgi` and `connect-wsgi-get`, one call per vector through the generated Connect service — the ASGI application and the WSGI one, each by POST and by GET ([generated-code.md](generated-code.md#the-rule-as-a-connect-service)); `wasi`, the Rust runner compiled for `wasm32-wasip1` and run under wasmtime ([generated-code.md](generated-code.md#the-rust-runner-as-a-wasi-module)); `function`, the rule as a function on a real PostgreSQL, called once per vector by argument name through `psql` ([generated-code.md](generated-code.md#sql)); or `proof`, the generated Rust read by a model checker ([generated-code.md](generated-code.md#the-proofs)) — the one way that is not the vectors, so its `vectors` is the number of harnesses and its `refused` is 0; the `wasm/` target itself is a language of its own in this list, reached through its runner, so `wasm` names a language here and `wasi` a way of reaching one |
 | `vectors` | how many vectors were put to it — or, when `via` is `proof`, how many harnesses the checker read |
-| `refused` | how many inputs with no answer were put to it. Each one is given on its own, and what is asked is that the run stop without an answer |
+| `refused` | how many of the inputs the reference evaluator refuses were put to it, all in one run: each has to be answered with a refusal of the same kind (`input` or `contradiction`) and the same sentence the evaluator gives, in the place of the record (§15.204) |
 | `calls` | how many calls a machine's traces made (§15.148): each one passed the state the language under test answered to the call before. 0 for a rule without a `machine` |
-| `ok` | the generated code and the reference evaluator agreed on every vector, and refused every input the evaluator refuses |
+| `ok` | the generated code and the reference evaluator agreed on every vector, and refused every input the evaluator refuses, for the reason it gives |
 | `ran` | whether the generated code ran far enough to be compared **at all** |
 | `first_diff` | `null`, or `{"line":12,"generated":"…","expected":"…"}` — the first line of the canonical JSON they disagreed on |
 | `error` | `null`, or **prose** for a failure with no single line to point at |
@@ -530,7 +531,8 @@ of the element refused (`None` when a whole column is refused: missing, or of an
 and `word`, the word its sentence calls a place by (`row`, `行`). The `connect`, `sql` and
 `wasm` entries have no errors of their own and neither key: a Connect call fails with
 `invalid_argument` or `internal`, the SQL query answers with its `guard` column and the
-function raises the SQLSTATE under `raises`, and the Wasm module answers `{"error":…}`. Every language's entry carries `traced` and `traced_signature` as the Python
+function raises the SQLSTATE under `raises`, and the Wasm module answers with the refusal
+line the runners print, `{"refused":…,"error":…}` (§15.204). Every language's entry carries `traced` and `traced_signature` as the Python
 one does — the twin that returns the rows that matched beside the outputs — and `record`
 and `record_signature`, the function that writes one call as a fixtures record
 ([generated-code.md](generated-code.md#the-rows-that-matched)). `range` states the bounds **the entry guard enforces**, and `alias` states the
@@ -965,21 +967,46 @@ own record function, and that is what `rulec test` compares, byte for byte: the 
 checked row by row, and over the wire form of every input. Being a fixtures file, it is also
 what `rulec fixtures lint` and `replay` accept.
 
-A rule that walks a sequence (§15.56) can have inputs the reference evaluator **refuses**:
-two elements both taking under `take_unique` is a contradiction, and there is no answer to
-expect. Those go to a third file, `<alias>.refused.jsonl`, written only when there are any:
+The inputs the reference evaluator **refuses** go to a third file, `<alias>.refused.jsonl`: an
+input for every reason the generated code's door has to turn one away, and, for a rule that
+walks a sequence (§15.56), the walks it has no answer for — two elements both taking under
+`take_unique` is a contradiction.
 
 ```json
 {"in":{"freight_rows":[{"row_zone":"kinki","threshold":1000,"row_fee":100000},
                        {"row_zone":"kinki","threshold":1000,"row_fee":100000}]},
- "refused":"contradiction","why":"take then take"}
+ "refused":"contradiction","error":"fold verdict: two elements matched a take_unique",
+ "why":"take then take"}
+{"in":{"weight":1,"express":"false","declared":0,"cover":0},
+ "refused":"input","error":"express is not a boolean",
+ "why":"express as the string \"false\", not a truth value"}
 ```
 
-`in` is the same shape the vectors file uses, so the same runner reads it. `rulec test` puts
-each of them in **on its own** — the generated code raises on the first one it is given — and
-the run is green only if every language stops without an answer. A generated MCP server is
-asked the same thing and has to answer `isError`. `rulec verify` does not use this file: it
-asks an implementation for answers, and here there is none to compare.
+| field | meaning |
+|---|---|
+| `in` | the inputs, in the shape the vectors file uses, so the same runner reads it |
+| `refused` | `input`, an input outside the contract, which the generated code raises as `RuleInputError`; or `contradiction`, a case the rule cannot answer, raised as `RuleContradictionError` |
+| `error` | the sentence the reference evaluator says, in the language the files were generated in; every language says the same |
+| `why` | which reason the case is in the file for. **Prose** |
+
+Each is a vector of the suite with one thing changed (§15.204): for each input, the input left
+out and a value of another kind; for a number, one that is not whole (off its step, for a
+rate) and one past each end of its range, an optional input's with a value; for a date, a day
+the calendar does not have, one past each end and a day its koyomi date does not come to; for
+an enum, a word it does not have; for a truth value, the string `"false"` and the number `1`;
+for each `constraint`, a combination it rules out; and for the sequence a walk reads, the
+same of the sequence and of the fields of one element, one element past what a `count` over
+it can be, and a `sum` over a field past the top of its range. A case the reference evaluator
+answers is not written.
+
+`rulec test` puts them all in **one run**: every generated runner answers an input its door
+refuses with a line of its own in the place of the record — `{"refused":…,"error":…}` — and
+reads on, and the run is green only if every language refuses every one of them with the kind
+and the sentence the file gives (the value the language prints after the sentence is not
+compared). A generated MCP server is asked the same and has to answer `isError` with the same
+class and sentence. A line without `refused` or `error` — one written by hand — asks only that
+the input be refused. `rulec verify` does not use this file: it asks an implementation for
+answers, and here there is none to compare.
 
 A rule that is one step of a state machine (§15.148) gets two more files, `<alias>.traces.jsonl`
 and `<alias>.traces.expected.jsonl`: sequences of calls, where the single vectors are single

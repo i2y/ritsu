@@ -448,12 +448,19 @@ fn 受け付けない入力は生成コードでもエラーになる() {
 
     let body = std::fs::read_to_string(out.join("vectors/freight.refused.jsonl")).expect("受け付けない入力の一覧が無い");
     let lines: Vec<&str> = body.lines().filter(|l| !l.trim().is_empty()).collect();
-    assert_eq!(lines.len(), 1, "受け付けない入力は一件のはず: {body}");
+    // The walk's contradiction comes first, and after it the inputs the door refuses (§15.204).
+    let contradictions: Vec<&&str> = lines.iter().filter(|l| l.contains("\"refused\":\"contradiction\"")).collect();
+    assert_eq!(contradictions.len(), 1, "矛盾で止まる入力は一件のはず: {body}");
+    assert_eq!(lines[0], *contradictions[0], "矛盾の入力が先頭に無い: {body}");
     let j = rulec::json::parse(lines[0]).unwrap();
-    assert_eq!(j.get("refused").and_then(|v| v.as_str()), Some("contradiction"), "{body}");
     assert!(j.get("in").and_then(|i| i.get("運賃行")).is_some(), "入力が読めない形: {body}");
-    // It is the transition no answer can reach, and the file says so.
+    // It is the transition no answer can reach, and the file says so; the sentence is the one the
+    // generated code raises.
     assert!(lines[0].contains("確定"), "どの遷移か言っていない: {body}");
+    assert!(
+        j.get("error").and_then(|v| v.as_str()).is_some_and(|e| e.contains("take_unique")),
+        "参照評価器の言う理由が無い: {body}"
+    );
 
     // As generated, every language refuses it.
     let (_, said, _) = run_tmp(&tmpdir_in(&out), &["test", out.to_str().unwrap(), "--format", "json"]);
@@ -465,7 +472,7 @@ fn 受け付けない入力は生成コードでもエラーになる() {
             continue;
         }
         assert_eq!(r.get("ok"), Some(&rulec::json::Json::Bool(true)), "{said}");
-        assert_eq!(r.get("refused").and_then(|v| v.as_int()), Some(1), "受け付けない入力が試されていない: {said}");
+        assert_eq!(r.get("refused").and_then(|v| v.as_int()), Some(lines.len() as i128), "受け付けない入力が試されていない: {said}");
         checked += 1;
     }
     assert!(checked >= 1, "どの言語も走らなかった: {said}");

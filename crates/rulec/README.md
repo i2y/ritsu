@@ -91,7 +91,7 @@ def fee_demo(dest: Zone, girth: Inch, weight: Pound) -> USDInclTax:
 
 def fee_demo_traced(dest: Zone, girth: Inch, weight: Pound) -> tuple[USDInclTax, list[Fired]]:
     if not _isinstance(dest, Zone):
-        raise RuleInputError("dest is not a value of enum Zone", dest)
+        raise RuleInputError("dest is not a value of enum zone", dest)
     if not 1 <= girth <= 130:
         raise RuleInputError("girth is out of range", girth)
     trace: _Trace = []
@@ -283,7 +283,7 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
 ../../proofs/     the Lean 4 development, RulecCert in ritsu's one Lean package: what a table
                   means, the checks a certificate has to pass, the theorems that each check
                   settles its claim, and the re-checker
-src/              53 modules, and 6 more under codegen/
+src/              54 modules, and 6 more under codegen/
 tests/corpus/     87 rules, and the copies of the documents they cite
 tests/mutants/    115 files, each with one mistake planted in it
 tests/golden/     the diagnostic prose snapshot by snapshot: 58 in Japanese, 47 in English

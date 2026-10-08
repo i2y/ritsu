@@ -112,7 +112,7 @@ fn pub_name(n: &Name) -> String {
 /// What every door says of a truth value that is not JSON's `true` or `false`, in the language
 /// the code is generated in (§15.203).
 fn not_bool(name: &str) -> String {
-    tr!("{} が真偽ではありません", "{} is not a boolean", name)
+    crate::door::not_bool(name)
 }
 
 /// The public name of the value `v` of the enum `en`, as the rule writes it: its alias in
@@ -1371,11 +1371,7 @@ impl<'a> Gen<'a> {
         if let Some(cap) = self.count_cap() {
             o.push_str(&format!(
                 "    if len({seq}) > {cap}:\n        raise RuleInputError(\"{}\", len({seq}))\n",
-                tr!(
-                    "{} の要素が多すぎます（上限 {cap}）",
-                    "{} has too many elements (at most {cap})",
-                    el.name.text
-                )
+                crate::door::too_many(&el.name.text, cap)
             ));
         }
         for d in self.counts() {
@@ -1414,7 +1410,7 @@ impl<'a> Gen<'a> {
             let n = self.ident(&d.name.text);
             o.push_str(&format!(
                 "    if {n} > {cap}:\n        raise RuleInputError(\"{}\", {n})\n",
-                tr!("{} が範囲の外です", "{} is out of range", d.name.text)
+                crate::door::out_of_range(&d.name.text)
             ));
         }
         o.push_str(&self.py_items(outer, trace, Phase::Main));
@@ -1433,10 +1429,10 @@ impl<'a> Gen<'a> {
             let ty = ty.present().clone();
             let mut o = Guarded::new(&mut o, optional.then(|| (format!("    if {v} is not None:\n"), String::new())), "    ");
             match &ty {
-                Ty::Enum(_) => o.push_str(&format!(
+                Ty::Enum(n) => o.push_str(&format!(
                     "    if not _isinstance({v}, {}):\n        raise RuleInputError(\"{}\", {v})\n",
                     self.py_ty(&ty),
-                    tr!("{} が列挙 {} の値ではありません", "{} is not a value of enum {}", i.name.text, self.py_ty(&ty))
+                    crate::door::not_in_enum(&i.name.text, n)
                 )),
                 Ty::Bool => o.push_str(&format!(
                     "    if not _isinstance({v}, bool):\n        raise RuleInputError(\"{}\", {v})\n",
@@ -1445,7 +1441,7 @@ impl<'a> Gen<'a> {
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     o.push_str(&format!(
                         "    if not _isinstance({v}, int) or _isinstance({v}, bool):\n        raise RuleInputError(\"{}\", {v})\n",
-                        tr!("{} が整数ではありません", "{} is not an integer", i.name.text)
+                        crate::door::not_integer(&i.name.text)
                     ));
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                         let sc = self.c.wire_scale(&i.name.text);
@@ -1453,7 +1449,7 @@ impl<'a> Gen<'a> {
                             "    if not {} <= {v} <= {}:\n        raise RuleInputError(\"{}\", {v})\n",
                             crate::types::wire_int(lo, sc),
                             crate::types::wire_int(hi, sc),
-                            tr!("{} が範囲の外です", "{} is out of range", i.name.text)
+                            crate::door::out_of_range(&i.name.text)
                         ));
                     }
                 }
@@ -1533,15 +1529,11 @@ impl<'a> Gen<'a> {
             let ty = ty.present().clone();
             let mut o = Guarded::new(&mut o, optional.then(|| (format!("    if {v} is not None:\n"), String::new())), "    ");
             match &ty {
-                Ty::Enum(_) => o.push_str(&format!(
+                // The enum by the name the rule declares it under, as every door says it (§15.204).
+                Ty::Enum(n) => o.push_str(&format!(
                     "    if not _isinstance({v}, {}):\n        raise RuleInputError(\"{}\", {v})\n",
                     self.py_ty(&ty),
-                    tr!(
-                        "{} が列挙 {} の値ではありません",
-                        "{} is not a value of enum {}",
-                        i.name.text,
-                        self.py_ty(&ty)
-                    )
+                    crate::door::not_in_enum(&i.name.text, n)
                 )),
                 // A truth value is `True` or `False` and nothing else (§15.203).
                 Ty::Bool => o.push_str(&format!(
@@ -1559,7 +1551,7 @@ impl<'a> Gen<'a> {
                     // `bool` is an `int` in Python, and a bool here is a mistake too.
                     o.push_str(&format!(
                         "    if not _isinstance({v}, int) or _isinstance({v}, bool):\n        raise RuleInputError(\"{}\", {v})\n",
-                        tr!("{} が整数ではありません", "{} is not an integer", i.name.text)
+                        crate::door::not_integer(&i.name.text)
                     ));
                     if let Some((lo, hi)) = self.c.ranges.get(&i.name.text) {
                         if let (Some(lo), Some(hi)) = (lo, hi) {
@@ -1572,7 +1564,7 @@ impl<'a> Gen<'a> {
                                 "    if not {} <= {v} <= {}:\n        raise RuleInputError(\"{}\", {v})\n",
                                 crate::types::wire_int(*lo, sc),
                                 crate::types::wire_int(*hi, sc),
-                                tr!("{} が範囲の外です", "{} is out of range", i.name.text)
+                                crate::door::out_of_range(&i.name.text)
                             ));
                         }
                     }
@@ -1771,7 +1763,7 @@ impl<'a> Gen<'a> {
                 tr!("制約: {said}", "constraint: {said}")
             ));
             o.push_str(&format!("{indent}{}\n", (sp.if_head)(&format!("{}({a} {op} {b})", lang.not()))));
-            o.push_str(&raise(&tr!("制約が成り立ちません: {said}", "the constraint does not hold: {said}")));
+            o.push_str(&raise(&crate::door::constraint(&said)));
             if !sp.close.is_empty() {
                 o.push_str(&format!("{indent}{}\n", sp.close));
             }
@@ -1813,7 +1805,7 @@ impl<'a> Gen<'a> {
             // The message goes inside a string literal of every language as it is, like the
             // constraint's: the file is written without the characters a literal would need escaped.
             let (file, date) = set.from.as_ref().map(|fr| (fr.file.replace(['"', '\\', '`', '\'', '$'], ""), fr.date.clone())).unwrap_or_default();
-            o.push_str(&raise(&tr!("{name} は {file} の {date} がとる日ではありません", "{name} is not a day {date} of {file} comes to")));
+            o.push_str(&raise(&crate::door::not_a_day(&name, &file, &date)));
             if !sp.close.is_empty() {
                 o.push_str(&format!("{indent}{}\n", sp.close));
             }
@@ -2365,7 +2357,7 @@ impl<'a> Gen<'a> {
         if let Some(cap) = self.count_cap() {
             o.push_str(&format!(
                 "\tif len({seq}) > {cap} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: int64(len({seq})), HasValue: true}}\n\t}}\n",
-                tr!("{} の要素が多すぎます（上限 {cap}）", "{} has too many elements (at most {cap})", el.name.text)
+                crate::door::too_many(&el.name.text, cap)
             ));
         }
         for d in self.counts() {
@@ -2393,7 +2385,7 @@ impl<'a> Gen<'a> {
             let n = self.ident(&d.name.text);
             o.push_str(&format!(
                 "\tif {n} > {cap} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {n}, HasValue: true}}\n\t}}\n",
-                tr!("{} が範囲の外です", "{} is out of range", d.name.text)
+                crate::door::out_of_range(&d.name.text)
             ));
         }
         for d in self.counts() {
@@ -2423,9 +2415,9 @@ impl<'a> Gen<'a> {
             let val = go_i64(&v);
             let mut o = Guarded::new(&mut o, wrap, "\t");
             match &ty {
-                Ty::Enum(_) => o.push_str(&format!(
+                Ty::Enum(n) => o.push_str(&format!(
                     "\tif !{v}.Valid() {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
-                    tr!("{} が列挙の値ではありません", "{} is not a value of the enum", i.name.text)
+                    crate::door::not_in_enum(&i.name.text, n)
                 )),
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
@@ -2434,7 +2426,7 @@ impl<'a> Gen<'a> {
                             "\tif {v} < {} || {v} > {} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
                             crate::types::wire_int(lo, sc),
                             crate::types::wire_int(hi, sc),
-                            tr!("{} が範囲の外です", "{} is out of range", i.name.text)
+                            crate::door::out_of_range(&i.name.text)
                         ));
                     }
                 }
@@ -2554,9 +2546,9 @@ impl<'a> Gen<'a> {
             let val = go_i64(&v);
             let mut o = Guarded::new(&mut o, wrap, "\t");
             match &ty {
-                Ty::Enum(_) => o.push_str(&format!(
+                Ty::Enum(n) => o.push_str(&format!(
                     "\tif !{v}.Valid() {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
-                    tr!("{} が列挙の値ではありません", "{} is not a value of the enum", i.name.text)
+                    crate::door::not_in_enum(&i.name.text, n)
                 )),
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text) {
@@ -2565,7 +2557,7 @@ impl<'a> Gen<'a> {
                             "\tif {v} < {} || {v} > {} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
                             crate::types::wire_int(*lo, sc),
                             crate::types::wire_int(*hi, sc),
-                            tr!("{} が範囲の外です", "{} is out of range", i.name.text)
+                            crate::door::out_of_range(&i.name.text)
                         ));
                     }
                 }
@@ -3045,49 +3037,68 @@ impl<'a> Gen<'a> {
     /// Connect runner (§15.112). There used to be a second copy inline in `python_runner`,
     /// and it was the one that ran — which is how the optional input got no arm anywhere and
     /// came out as `int(d[…])` (§15.88).
-    pub fn py_read(&self, ty: &Ty, expr: String) -> String {
+    /// One input read off the wire for the Python module, the way every door reads it
+    /// (§15.204): there at all, of its kind, and only then built into the module's type. `src`
+    /// is the object it is read from and `name` the input; a refusal is the module's own
+    /// `RuleInputError`, with the sentence every language says. What is left to the module's
+    /// door is what it holds a caller to as well: the range, the constraints, the days.
+    pub fn py_read(&self, ty: &Ty, src: &str, name: &str) -> String {
+        let optional = matches!(ty, Ty::Opt(_));
+        let take = format!(
+            "_take({src}, {name:?}, {:?}{})",
+            crate::door::missing(name),
+            if optional { ", True" } else { "" }
+        );
+        let one = |t: &Ty, v: &str| -> String {
+            match t {
+                Ty::Enum(n) => {
+                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                    format!("_enum(m.{cls}, {v}, {:?})", crate::door::not_in_enum(name, n))
+                }
+                Ty::Bool => format!("_bool({v}, {:?})", crate::door::not_bool(name)),
+                Ty::Date => format!("_date({v}, {:?})", crate::door::not_date(name)),
+                Ty::Str => format!("_str({v}, {:?})", crate::door::not_string(name)),
+                // A branded input has to be constructed, exactly as a caller must.
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
+                    format!("m.{}(_int({v}, {:?}))", brand_of(t), crate::door::not_integer(name))
+                }
+                _ => format!("_int({v}, {:?})", crate::door::not_integer(name)),
+            }
+        };
         match ty {
-            Ty::Enum(n) => {
-                let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                format!("m.{cls}({expr})")
-            }
-            // A truth value goes in as it came, and the module's door refuses anything but
-            // `true` and `false`: `bool("false")` is true (§15.203).
-            Ty::Bool => expr,
-            Ty::Date => format!("_ord({expr})"),
-            Ty::Str => format!("str({expr})"),
-            // A branded input has to be constructed, exactly as a caller must.
-            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
-                format!("m.{}(int({expr}))", brand_of(ty))
-            }
             // The absent value is `null` on the wire (§10.2), and `None` in Python.
-            Ty::Opt(inner) => {
-                format!("(None if {expr} is None else {})", self.py_read(inner, expr.clone()))
-            }
-            _ => format!("int({expr})"),
+            Ty::Opt(inner) => format!("_maybe({take}, lambda x: {})", one(inner, "x")),
+            t => one(t, &take),
         }
+    }
+
+    /// The elements of the sequence a walk reads, read the way one call's inputs are (§15.56,
+    /// §15.204): the sequence an array, each element an object, each field as an input.
+    pub fn py_read_elements(&self, el: &crate::ast::ElementsDecl) -> String {
+        let seq = &el.name.text;
+        let e = format!("_obj(e, {:?})", crate::door::not_object(seq));
+        let fields: Vec<String> = el.fields.iter().map(|fd| self.py_read(&self.ty_of(&fd.name.text), &e, &fd.name.text)).collect();
+        // `m.Element(x)` is a call, not a tuple: the trailing comma a one-element tuple needs
+        // would only make the formatter explode the line (§15.105).
+        format!(
+            "[m.Element({}) for e in _seq(_take(d, {seq:?}, {:?}), {:?})]",
+            fields.join(", "),
+            crate::door::missing(seq),
+            crate::door::not_sequence(seq)
+        )
     }
 
     pub fn python_runner(&self) -> String {
         let alias = pub_name(&self.f.name);
         let mut args: Vec<String> = Vec::new();
-        let read = |ty: &Ty, expr: String| -> String { self.py_read(ty, expr) };
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
-            args.push(read(&ty, format!("d[{:?}]", i.name.text)));
+            args.push(self.py_read(&ty, "d", &i.name.text));
         }
         // The sequence a walk reads is built the same way, one element at a time (§15.56).
         let mut prelude = String::new();
         if let Some(el) = &self.f.elements {
-            let jp = &el.name.text;
-            let fields: Vec<String> = el
-                .fields
-                .iter()
-                .map(|fd| read(&self.ty_of(&fd.name.text), format!("e[{:?}]", fd.name.text)))
-                .collect();
-            // `m.Element(x)` is a call, not a tuple: the trailing comma a one-element
-            // tuple needs would only make the formatter explode the line (§15.105).
-            prelude = format!("    rows = [m.Element({}) for e in d[{jp:?}]]\n", fields.join(", "));
+            prelude = format!("        rows = {}\n", self.py_read_elements(el));
             args.push("rows".to_string());
         }
         // A machine's traces (§15.148): the carried input is the state this language answered
@@ -3112,35 +3123,47 @@ impl<'a> Gen<'a> {
         }
         // The runner prints the record the module itself writes, so the agreement test
         // holds the record function — the wire form of every input, dates included — to
-        // the reference evaluator in every language (§15.35).
+        // the reference evaluator in every language (§15.35). An input the door refuses gets a
+        // line saying so in the place of the record, and the next line is read (§15.204).
         format!(
             "# Code generated by rulec {}. DO NOT EDIT.\n\
              import datetime\n\
+             import enum\n\
              import json\n\
-             import sys\n\n\
+             import sys\n\
+             from typing import Any, Callable, TypeVar\n\n\
              import {alias} as m\n\n\
-             def _ord(s: str) -> int:\n    \
-                 y, mo, d = (int(x) for x in s.split(\"-\"))\n    \
-                 return (datetime.date(y, mo, d) - datetime.date(1970, 1, 1)).days\n\n\
+             {}\
              {head}\
              for line in sys.stdin:\n    \
                  line = line.strip()\n    \
                  if not line:\n        \
                      continue\n\
-                 {}\
                  {}    \
-                 args = ({})\n    \
-                 r, trace = m.{alias}_traced(*args)\n    \
+                 try:\n\
+                 {}        \
+                     args = ({})\n        \
+                     r, trace = m.{alias}_traced(*args)\n    \
+                 except m.RuleInputError as e:\n        \
+                     _refused(\"input\", e.what)\n        \
+                     continue\n    \
+                 except m.RuleContradictionError as e:\n        \
+                     _refused(\"contradiction\", e.what)\n        \
+                     continue\n    \
                  print(m.{alias}_record(*args, r, trace))\n\
                  {tail}",
             ritsu_emit::header::VERSION,
+            PY_WIRE,
             if meta.is_empty() { "    d = json.loads(line)[\"in\"]\n".to_string() } else { format!("    v = json.loads(line)\n{meta}") },
             prelude,
             if args.len() == 1 { format!("{},", args[0]) } else { args.join(", ") }
         )
     }
 
-    /// A Go runner that does the same. encoding/json is in the standard library.
+    /// A Go runner that does the same. encoding/json is in the standard library. An input is
+    /// read the way every door reads it (§15.204) — the numbers as the digits that were written,
+    /// so that 1.5 is not read as 1 — and one the door refuses gets a line saying so in the
+    /// place of the record.
     pub fn go_runner(&self) -> String {
         let alias = pub_name(&self.f.name);
         let pkg = crate::backend::go_package(&alias);
@@ -3150,69 +3173,63 @@ impl<'a> Gen<'a> {
         let field = |name: &crate::ast::Name, ty: &Ty, into: &str, src: &str, ind: &str| -> String {
             let jp = &name.text;
             let g = pascal(&pub_name(name));
-            match ty {
-                Ty::Enum(n) => {
-                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                    format!("{ind}v{g}, _ := r.Parse{cls}(str({src}[{jp:?}]))\n{ind}{into}.{g} = v{g}\n")
+            let optional = matches!(ty, Ty::Opt(_));
+            let take = format!("take({src}, {jp:?}, {:?}, {optional})", crate::door::missing(jp));
+            let one = |v: &str| -> String {
+                match ty.present() {
+                    Ty::Enum(n) => {
+                        let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                        format!("member(r.Parse{cls}, {v}, {:?})", crate::door::not_in_enum(jp, n))
+                    }
+                    Ty::Bool => format!("boolean({v}, {:?})", crate::door::not_bool(jp)),
+                    Ty::Date => format!("date({v}, {:?})", crate::door::not_date(jp)),
+                    Ty::Str => format!("text({v}, {:?})", crate::door::not_string(jp)),
+                    // A number is a plain int64, not a type the package declares, so it must
+                    // not be qualified with the package name.
+                    Ty::Number => format!("integer({v}, {:?})", crate::door::not_integer(jp)),
+                    other => format!("r.{}(integer({v}, {:?}))", self.go_ty(other), crate::door::not_integer(jp)),
                 }
-                // `== true` read `"true"` as false; a truth value is JSON's and nothing else
-                // (§15.203).
-                Ty::Bool => format!("{ind}{into}.{g} = boolean({src}[{jp:?}], {:?})\n", not_bool(jp)),
-                Ty::Date => format!("{ind}{into}.{g} = ord(str({src}[{jp:?}]))\n"),
-                Ty::Str => format!("{ind}{into}.{g} = str({src}[{jp:?}])\n"),
-                // A number is a plain int64, not a type the package declares, so it must not
-                // be qualified with the package name.
-                Ty::Number => format!("{ind}{into}.{g} = int64(num({src}[{jp:?}]))\n"),
-                // `null` on the wire is a nil pointer. It used to fall through to the
-                // branded number, so the runner would not compile at all (§15.88).
-                Ty::Opt(inner) => {
-                    let inner_ty = inner.as_ref();
-                    let take = match inner_ty {
-                        Ty::Enum(n) => {
-                            let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                            format!("{ind}\tv{g}, _ := r.Parse{cls}(str({src}[{jp:?}]))\n")
-                        }
-                        Ty::Bool => format!("{ind}\tv{g} := boolean({src}[{jp:?}], {:?})\n", not_bool(jp)),
-                        Ty::Date => format!("{ind}\tv{g} := ord(str({src}[{jp:?}]))\n"),
-                        Ty::Str => format!("{ind}\tv{g} := str({src}[{jp:?}])\n"),
-                        Ty::Number => format!("{ind}\tv{g} := int64(num({src}[{jp:?}]))\n"),
-                        other => format!("{ind}\tv{g} := r.{}(num({src}[{jp:?}]))\n", self.go_ty(other)),
-                    };
-                    format!(
-                        "{ind}if {src}[{jp:?}] != nil {{\n{take}{ind}\t{into}.{g} = &v{g}\n{ind}}}\n"
-                    )
-                }
-                _ => format!("{ind}{into}.{g} = r.{}(num({src}[{jp:?}]))\n", self.go_ty(ty)),
+            };
+            if optional {
+                // `null` on the wire is a nil pointer (§15.88).
+                format!("{ind}if v := {take}; v != nil {{\n{ind}\tv{g} := {}\n{ind}\t{into}.{g} = &v{g}\n{ind}}}\n", one("v"))
+            } else {
+                format!("{ind}{into}.{g} = {}\n", one(&take))
             }
         };
         let mut fields: Vec<String> = Vec::new();
         let carried = self.carried().map(|(i, _)| i);
         for i in &self.f.inputs {
-            let one = field(&i.name, &self.ty_of(&i.name.text), "in", "d", "\t\t\t");
+            let one = field(&i.name, &self.ty_of(&i.name.text), "in", "d", "\t\t\t\t");
             // A machine's traces (§15.148): the carried input is the state this language
             // answered to the call before, handed over as the value it is.
             if carried.as_deref() == Some(i.name.text.as_str()) {
                 let g = pascal(&pub_name(&i.name));
-                fields.push(format!("\t\tif stepping {{\n\t\t\tin.{g} = state\n\t\t}} else {{\n{one}\t\t}}\n"));
+                fields.push(format!("\t\t\tif stepping {{\n\t\t\t\tin.{g} = state\n\t\t\t}} else {{\n{one}\t\t\t}}\n"));
             } else {
-                fields.push(field(&i.name, &self.ty_of(&i.name.text), "in", "d", "\t\t"));
+                fields.push(field(&i.name, &self.ty_of(&i.name.text), "in", "d", "\t\t\t"));
             }
         }
         // The sequence arrives as an array of objects (§10.2), one per element.
         if let Some(el) = &self.f.elements {
             let jp = &el.name.text;
             let g = pascal(&pub_name(&el.name));
-            let mut body = format!("\t\tfor _, ev := range arr(d[{jp:?}]) {{\n\t\t\te := obj(ev)\n\t\t\tvar el r.Element\n");
+            let mut body = format!(
+                "\t\t\tfor _, ev := range list(take(d, {jp:?}, {:?}, false), {:?}) {{\n\t\t\t\te := object(ev, {:?})\n\t\t\t\tvar el r.Element\n",
+                crate::door::missing(jp),
+                crate::door::not_sequence(jp),
+                crate::door::not_object(jp)
+            );
             for fd in &el.fields {
-                body.push_str(&field(&fd.name, &self.ty_of(&fd.name.text), "el", "e", "\t\t\t"));
+                body.push_str(&field(&fd.name, &self.ty_of(&fd.name.text), "el", "e", "\t\t\t\t"));
             }
-            body.push_str(&format!("\t\t\tin.{g} = append(in.{g}, el)\n\t\t}}\n"));
+            body.push_str(&format!("\t\t\t\tin.{g} = append(in.{g}, el)\n\t\t\t}}\n"));
             fields.push(body);
         }
         let (mut head, mut read, mut tail) = (
             String::new(),
             "\t\tvar rec struct {\n\t\t\tIn map[string]any `json:\"in\"`\n\t\t}\n\t\t\
-             if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {\n\t\t\tpanic(err)\n\t\t}\n\t\t\
+             if err := decode(sc.Bytes(), &rec); err != nil {\n\t\t\tpanic(err)\n\t\t}\n\t\t\
              d := rec.In\n"
                 .to_string(),
             String::new(),
@@ -3223,32 +3240,25 @@ impl<'a> Gen<'a> {
             head = "\tstate := r.Initial\n".to_string();
             read = format!(
                 "\t\tvar top map[string]any\n\t\t\
-                 if err := json.Unmarshal(sc.Bytes(), &top); err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\t\t\
+                 if err := decode(sc.Bytes(), &top); err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\t\t\
                  if _, ok := top[\"machine\"]; ok {{\n\t\t\t\
                      fin := []string{{}}\n\t\t\t\
                      for _, s := range []r.{cls}{{{}}} {{\n\t\t\t\tif r.IsFinal(s) {{\n\t\t\t\t\tfin = append(fin, s.String())\n\t\t\t\t}}\n\t\t\t}}\n\t\t\t\
                      meta, _ := json.Marshal(struct {{\n\t\t\t\tInitial string   `json:\"initial\"`\n\t\t\t\tFinal   []string `json:\"final\"`\n\t\t\t}}{{r.Initial.String(), fin}})\n\t\t\t\
                      fmt.Println(string(meta))\n\t\t\t\
                      continue\n\t\t}}\n\t\t\
-                 d := obj(top[\"in\"])\n\t\t\
+                 d, _ := top[\"in\"].(map[string]any)\n\t\t\
                  step, stepping := top[\"step\"].(string)\n\t\t\
-                 if step == \"start\" {{\n\t\t\tstate, _ = r.Parse{cls}(str(top[\"state\"]))\n\t\t}}\n",
+                 if step == \"start\" {{\n\t\t\tstate, _ = r.Parse{cls}(top[\"state\"].(string))\n\t\t}}\n",
                 all.join(", ")
             );
-            tail = format!("\t\tif stepping {{\n\t\t\tstate = {}\n\t\t}}\n", self.next_state_of("got", &format!(".{}", pascal(&out))));
+            tail = format!("\t\t\tif stepping {{\n\t\t\t\tstate = {}\n\t\t\t}}\n", self.next_state_of("got", &format!(".{}", pascal(&out))));
         }
         format!(
             "// Code generated by rulec {}. DO NOT EDIT.\n\
              package main\n\n\
-             import (\n\t\"bufio\"\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"os\"\n\t\"time\"\n\n\tr \"{pkg}\"\n)\n\n\
-             func str(v any) string {{ s, _ := v.(string); return s }}\n\n\
-             func num(v any) int64 {{ f, _ := v.(float64); return int64(f) }}\n\n\
-             func arr(v any) []any {{ a, _ := v.([]any); return a }}\n\n\
-             func obj(v any) map[string]any {{ m, _ := v.(map[string]any); return m }}\n\n\
-             {boolean}\
-             func ord(s string) int64 {{\n\t\
-                 t, _ := time.Parse(\"2006-01-02\", s)\n\t\
-                 return int64(t.Sub(time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)).Hours() / 24)\n}}\n\n\
+             import (\n\t\"bufio\"\n\t\"bytes\"\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"os\"\n\t\"strconv\"\n\t\"time\"\n\n\tr \"{pkg}\"\n)\n\n\
+             {GO_WIRE}\
              func main() {{\n\t\
                  sc := bufio.NewScanner(os.Stdin)\n\t\
                  sc.Buffer(make([]byte, 1<<20), 1<<20)\n\
@@ -3256,26 +3266,17 @@ impl<'a> Gen<'a> {
                  for sc.Scan() {{\n\t\t\
                      if len(sc.Bytes()) == 0 {{\n\t\t\tcontinue\n\t\t}}\n\
                  {read}\t\t\
-                     var in r.Input\n{}\t\t\
-                     got, trace, err := r.{fname}Traced(in)\n\t\t\
-                     if err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\t\t\
-                     fmt.Println(r.{fname}Record(in, got, trace, \"\"))\n\
-                 {tail}\t}}\n}}\n",
+                     func() {{\n\t\t\t\
+                         defer refuse()\n\t\t\t\
+                         var in r.Input\n{}\t\t\t\
+                         got, trace, err := r.{fname}Traced(in)\n\t\t\t\
+                         if err != nil {{\n\t\t\t\tpanic(err)\n\t\t\t}}\n\t\t\t\
+                         fmt.Println(r.{fname}Record(in, got, trace, \"\"))\n\
+                 {tail}\t\t\
+                     }}()\n\t\
+                 }}\n}}\n",
             ritsu_emit::header::VERSION,
-            fields.join(""),
-            boolean = if self.f.inputs.iter().any(|i| matches!(self.ty_of(&i.name.text).present(), Ty::Bool))
-                || self.element_fields().iter().any(|f| matches!(self.ty_of(&f.name.text).present(), Ty::Bool))
-            {
-                format!(
-                    "// {}\nfunc boolean(v any, what string) bool {{\n\t\
-                     b, ok := v.(bool)\n\t\
-                     if !ok {{\n\t\tpanic(&r.RuleInputError{{What: what}})\n\t}}\n\t\
-                     return b\n}}\n\n",
-                    tr!("真偽は JSON の true か false だけ。", "A truth value is JSON's true or false and nothing else.")
-                )
-            } else {
-                String::new()
-            }
+            fields.join("")
         )
     }
 }
@@ -3856,7 +3857,7 @@ impl<'a> Gen<'a> {
         if let Some(cap) = self.count_cap() {
             o.push_str(&format!(
                 "  if ({seq}.length > {cap}) {{\n    throw new RuleInputError(`{}`, {seq}.length);\n  }}\n",
-                tr!("{} の要素が多すぎます（上限 {cap}）", "{} has too many elements (at most {cap})", el.name.text)
+                crate::door::too_many(&el.name.text, cap)
             ));
         }
         for d in self.counts() {
@@ -3888,7 +3889,7 @@ impl<'a> Gen<'a> {
             let n = self.ident(&d.name.text);
             o.push_str(&format!(
                 "  if ({n} > {cap}n) {{\n    throw new RuleInputError(`{}`, {n});\n  }}\n",
-                tr!("{} が範囲の外です", "{} is out of range", d.name.text)
+                crate::door::out_of_range(&d.name.text)
             ));
         }
         o.push_str(&self.ts_items(outer, trace, Phase::Main));
@@ -3915,13 +3916,13 @@ impl<'a> Gen<'a> {
                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
                     o.push_str(&format!(
                         "  if (!Object.values({cls}).includes({v})) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
-                        tr!("{} が列挙 {cls} の値ではありません", "{} is not a value of enum {cls}", i.name.text)
+                        crate::door::not_in_enum(&i.name.text, n)
                     ));
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     o.push_str(&format!(
                         "  if (typeof {v} !== \"bigint\") {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
-                        tr!("{} が整数ではありません", "{} is not an integer", i.name.text)
+                        crate::door::not_integer(&i.name.text)
                     ));
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                         let sc = self.c.wire_scale(&i.name.text);
@@ -3929,7 +3930,7 @@ impl<'a> Gen<'a> {
                             "  if ({v} < {}n || {v} > {}n) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
                             crate::types::wire_int(lo, sc),
                             crate::types::wire_int(hi, sc),
-                            tr!("{} が範囲の外です", "{} is out of range", i.name.text)
+                            crate::door::out_of_range(&i.name.text)
                         ));
                     }
                 }
@@ -4057,11 +4058,7 @@ impl<'a> Gen<'a> {
                     o.push_str(&format!(
                         "  if (!Object.values({cls}).includes({v})) {{\n    \
                          throw new RuleInputError(`{}`, {v});\n  }}\n",
-                        tr!(
-                            "{} が列挙 {cls} の値ではありません",
-                            "{} is not a value of enum {cls}",
-                            i.name.text
-                        )
+                        crate::door::not_in_enum(&i.name.text, n)
                     ));
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
@@ -4070,7 +4067,7 @@ impl<'a> Gen<'a> {
                     // (§15.43).
                     o.push_str(&format!(
                         "  if (typeof {v} !== \"bigint\") {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
-                        tr!("{} が整数ではありません", "{} is not an integer", i.name.text)
+                        crate::door::not_integer(&i.name.text)
                     ));
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                         let sc = self.c.wire_scale(&i.name.text);
@@ -4078,7 +4075,7 @@ impl<'a> Gen<'a> {
                             "  if ({v} < {}n || {v} > {}n) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
                             crate::types::wire_int(lo, sc),
                             crate::types::wire_int(hi, sc),
-                            tr!("{} が範囲の外です", "{} is out of range", i.name.text)
+                            crate::door::out_of_range(&i.name.text)
                         ));
                     }
                 }
@@ -4242,73 +4239,62 @@ impl<'a> Gen<'a> {
         let trace = runner_local("trace", &alias);
         let a = runner_local("a", &alias);
         let mut args: Vec<String> = Vec::new();
-        let mut imports: Vec<String> = vec![format!("{alias}_traced"), format!("{alias}_record")];
+        let mut imports: Vec<String> =
+            vec![format!("{alias}_traced"), format!("{alias}_record"), "RuleInputError".into(), "RuleContradictionError".into()];
         // A brand is a type, and node's type stripping can only erase a whole `import type`
         // statement — a type name mixed into a value import is a syntax error there.
         let mut type_imports: Vec<String> = Vec::new();
-        fn ts_read(
-            g: &Gen,
-            ty: &Ty,
-            src: String,
-            imports: &mut Vec<String>,
-            type_imports: &mut Vec<String>,
-        ) -> String {
-            match ty {
+        // One input read off the wire the way every door reads it (§15.204): there at all, of
+        // its kind, and then built into the module's type. A refusal is the module's own
+        // `RuleInputError`, with the sentence every language says.
+        fn ts_read(g: &Gen, ty: &Ty, src: &str, name: &str, imports: &mut Vec<String>, type_imports: &mut Vec<String>) -> String {
+            let optional = matches!(ty, Ty::Opt(_));
+            let take = format!("_take({src}, {name:?}, {:?}{})", crate::door::missing(name), if optional { ", true" } else { "" });
+            let q = if optional { "q" } else { "" };
+            match ty.present() {
                 Ty::Enum(n) => {
                     let cls = g.enum_names.get(n).cloned().unwrap_or_default();
-                    if !imports.contains(&format!("parse{cls}")) {
-                        imports.push(format!("parse{cls}"));
+                    if !imports.contains(&cls) {
+                        imports.push(cls.clone());
                     }
-                    format!("parse{cls}(String({src}))")
+                    format!("_enum{q}(Object.values({cls}), {take}, {:?}) as {cls}", crate::door::not_in_enum(name, n))
                 }
-                // As it came: the module's door refuses anything but `true` and `false`, and
-                // `=== true` read `"true"` as false (§15.203).
-                Ty::Bool => format!("{src} as boolean"),
-                Ty::Date => format!("_ord(String({src}))"),
-                Ty::Str => format!("String({src})"),
-                Ty::Number => format!("BigInt({src} as number)"),
-                // The absent value is `null` on the wire (§10.2). Its brand is a compound
-                // type (`Kind | null`), which was being pushed into an `import type {…}` as
-                // if it were a name — a syntax error before anything ran (§15.88).
-                Ty::Opt(inner) => {
-                    let one = ts_read(g, inner, src.clone(), imports, type_imports);
-                    format!("({src} === null ? null : {one})")
-                }
-                _ => {
-                    let brand = g.ts_ty(ty);
+                Ty::Bool => format!("_bool{q}({take}, {:?})", crate::door::not_bool(name)),
+                Ty::Date => format!("_date{q}({take}, {:?})", crate::door::not_date(name)),
+                Ty::Str => format!("_str{q}({take}, {:?})", crate::door::not_string(name)),
+                Ty::Number => format!("_int{q}({take}, {:?})", crate::door::not_integer(name)),
+                t => {
+                    let brand = g.ts_ty(t);
                     if !type_imports.contains(&brand) {
                         type_imports.push(brand.clone());
                     }
-                    format!("BigInt({src} as number) as {brand}")
+                    format!("_int{q}({take}, {:?}) as {brand}", crate::door::not_integer(name))
                 }
             }
         }
-        let read = |ty: &Ty, src: String, imports: &mut Vec<String>, type_imports: &mut Vec<String>| -> String {
-            ts_read(self, ty, src, imports, type_imports)
-        };
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
-            let jp = &i.name.text;
-            let src = format!("{d}[{jp:?}]");
-            args.push(read(&ty, src, &mut imports, &mut type_imports));
+            args.push(ts_read(self, &ty, &d, &i.name.text, &mut imports, &mut type_imports));
         }
         // The sequence a walk reads, one element at a time (§15.56).
         let mut prelude = String::new();
         if let Some(el) = &self.f.elements {
-            let jp = &el.name.text;
+            let seq = &el.name.text;
             let e = runner_local("e", &alias);
+            let obj = format!("_obj({e}, {:?})", crate::door::not_object(seq));
             let fields: Vec<String> = el
                 .fields
                 .iter()
                 .map(|fd| {
                     let ty = self.ty_of(&fd.name.text);
-                    let src = format!("({e} as Record<string, unknown>)[{:?}]", fd.name.text);
-                    format!("{}: {}", pub_name(&fd.name), read(&ty, src, &mut imports, &mut type_imports))
+                    format!("{}: {}", pub_name(&fd.name), ts_read(self, &ty, &obj, &fd.name.text, &mut imports, &mut type_imports))
                 })
                 .collect();
             let rows = runner_local("rows", &alias);
             prelude = format!(
-                "  const {rows} = ({d}[{jp:?}] as unknown[]).map(({e}) => ({{ {} }}));\n",
+                "    const {rows} = _seq(_take({d}, {seq:?}, {:?}), {:?}).map(({e}) => ({{ {} }}));\n",
+                crate::door::missing(seq),
+                crate::door::not_sequence(seq),
                 fields.join(", ")
             );
             args.push(rows);
@@ -4317,8 +4303,8 @@ impl<'a> Gen<'a> {
         // to the call before, handed over as the value it is.
         let v = runner_local("v", &alias);
         let state = runner_local("state", &alias);
-        let (mut head, mut meta, mut tail) = (String::new(), String::new(), String::new());
-        let mut body = format!("  const {d} = JSON.parse({line}).in as Record<string, unknown>;\n");
+        let (mut head, mut tail) = (String::new(), String::new());
+        let mut body = format!("  const {d} = JSON.parse({line}).in as unknown;\n");
         if let (Some((en, _, _)), Some((cin, _)), Some(out)) = (self.machine_consts(), self.carried(), self.carried_out_alias()) {
             let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
             for w in ["INITIAL".to_string(), "isFinal".to_string(), cls.clone(), format!("parse{cls}")] {
@@ -4335,30 +4321,32 @@ impl<'a> Gen<'a> {
                  if (\"machine\" in {v}) {{\n    \
                    console.log(JSON.stringify({{ initial: INITIAL, final: Object.values({cls}).filter((s) => isFinal(s)) }}));\n    \
                    continue;\n  }}\n  \
-                 const {d} = {v}.in as Record<string, unknown>;\n  \
+                 const {d} = {v}.in as unknown;\n  \
                  if ({v}.step === \"start\") {{\n    {state} = parse{cls}(String({v}.state));\n  }}\n"
             );
-            tail = format!("  if (\"step\" in {v}) {{\n    {state} = {};\n  }}\n", self.next_state_of(&r, &format!(".{out}")));
-            meta = String::new();
+            tail = format!("    if (\"step\" in {v}) {{\n      {state} = {};\n    }}\n", self.next_state_of(&r, &format!(".{out}")));
         }
-        let _ = &meta;
         format!(
             "// Code generated by rulec {}. DO NOT EDIT.\n\
              import {{ readFileSync }} from \"node:fs\";\n\
              import {{ {} }} from \"./{alias}.ts\";\n{}\n\
-             function _ord(s: string): bigint {{\n  \
-                 const [y, m, d] = s.split(\"-\").map(Number);\n  \
-                 return BigInt(Math.round(Date.UTC(y, m - 1, d) / 86400000));\n}}\n\n\
+             {TS_WIRE}\
              const {lines} = readFileSync(0, \"utf8\").split(\"\\n\");\n\
              {head}\
              for (const {line} of {lines}) {{\n  \
                  if ({line}.trim() === \"\") {{\n    continue;\n  }}\n\
-                 {body}\
-                 {}  \
-                 const {a} = [{}] as const;\n  \
-                 const [{r}, {trace}] = {alias}_traced(...{a});\n  \
-                 console.log({alias}_record(...{a}, {r}, {trace}));\n\
-                 {tail}}}\n",
+                 {body}  \
+                 try {{\n\
+                 {}    \
+                     const {a} = [{}] as const;\n    \
+                     const [{r}, {trace}] = {alias}_traced(...{a});\n    \
+                     console.log({alias}_record(...{a}, {r}, {trace}));\n\
+                 {tail}  \
+                 }} catch (e) {{\n    \
+                     if (e instanceof RuleInputError) {{\n      _refused(\"input\", e.what);\n    \
+                     }} else if (e instanceof RuleContradictionError) {{\n      _refused(\"contradiction\", e.what);\n    \
+                     }} else {{\n      throw e;\n    }}\n  }}\n\
+                 }}\n",
             ritsu_emit::header::VERSION,
             imports.join(", "),
             if type_imports.is_empty() {
@@ -4841,7 +4829,7 @@ impl<'a> Gen<'a> {
         if let Some(cap) = self.count_cap() {
             o.push_str(&format!(
                 "    if {seq}.len() > {cap} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({seq}.len() as i64) }});\n    }}\n",
-                tr!("{} の要素が多すぎます（上限 {cap}）", "{} has too many elements (at most {cap})", el.name.text)
+                crate::door::too_many(&el.name.text, cap)
             ));
         }
         for d in self.counts() {
@@ -4873,7 +4861,7 @@ impl<'a> Gen<'a> {
             let n = self.ident(&d.name.text);
             o.push_str(&format!(
                 "    if {n} > {cap} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({n}) }});\n    }}\n",
-                tr!("{} が範囲の外です", "{} is out of range", d.name.text)
+                crate::door::out_of_range(&d.name.text)
             ));
         }
         o.push_str(&self.rs_items(outer, trace, Phase::Main));
@@ -4902,7 +4890,7 @@ impl<'a> Gen<'a> {
                         "    if {v} < {} || {v} > {} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({v}) }});\n    }}\n",
                         crate::types::wire_int(lo, sc),
                         crate::types::wire_int(hi, sc),
-                        tr!("{} が範囲の外です", "{} is out of range", i.name.text)
+                        crate::door::out_of_range(&i.name.text)
                     ));
                 }
             }
@@ -5025,7 +5013,7 @@ impl<'a> Gen<'a> {
                 "    if {v} < {} || {v} > {} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({v}) }});\n    }}\n",
                 crate::types::wire_int(lo, sc),
                 crate::types::wire_int(hi, sc),
-                tr!("{} が範囲の外です", "{} is out of range", i.name.text)
+                crate::door::out_of_range(&i.name.text)
             ));
         }
 
@@ -5536,125 +5524,92 @@ impl<'a> Gen<'a> {
         o.push_str("        )\n    }\n\n");
         Some(o)
     }
-    pub fn rs_runner(&self) -> String {
-        let alias = pub_name(&self.f.name);
-        let mut args: Vec<String> = Vec::new();
-        for i in &self.f.inputs {
-            let ty = self.ty_of(&i.name.text);
-            let jp = &i.name.text;
-            args.push(match &ty {
+    /// One input read off the wire for the Rust module, the way every door reads it (§15.204):
+    /// an expression that `?` stops with the module's own `RuleError`, inside a closure that
+    /// returns one. The Rust runner, its WASI build and the Wasm entry all read with it.
+    fn rs_bind(&self, ty: &Ty, src: &str, name: &str) -> String {
+        let optional = matches!(ty, Ty::Opt(_));
+        let take = format!("take({src}, {name:?}, {:?}, {optional})?", crate::door::missing(name));
+        let one = |v: &str| -> String {
+            match ty.present() {
                 Ty::Enum(n) => {
                     let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                    format!("r::{cls}::parse(s(&d, {jp:?})).expect({jp:?})")
+                    format!("member(r::{cls}::parse, {v}, {:?})?", crate::door::not_in_enum(name, n))
                 }
-                Ty::Bool => format!("b(&d, {jp:?}, {:?})", not_bool(jp)),
-                Ty::Date => format!("ord(s(&d, {jp:?}))"),
-                Ty::Number => format!("n(&d, {jp:?})"),
-                Ty::Str => format!("s(&d, {jp:?}).to_string()"),
-                Ty::Opt(inner) => {
-                    // `null` on the wire is `None`. The brand of an optional is `Option<Kind>`,
-                    // which used to be pasted in as if it were a constructor (§15.88).
-                    let one = match inner.as_ref() {
-                        Ty::Enum(n) => {
-                            let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                            format!("r::{cls}::parse(s(&d, {jp:?})).expect({jp:?})")
-                        }
-                        Ty::Bool => format!("b(&d, {jp:?}, {:?})", not_bool(jp)),
-                        Ty::Date => format!("ord(s(&d, {jp:?}))"),
-                        Ty::Number => format!("n(&d, {jp:?})"),
-                        Ty::Str => format!("s(&d, {jp:?}).to_string()"),
-                        other => format!("r::{}(n(&d, {jp:?}))", self.rs_ty(other)),
-                    };
-                    // The runner's own scanner keeps an unquoted token as its text, so a JSON
-                    // null arrives as the four letters, and a string keeps its quote, so the
-                    // text "null" does not look like it.
-                    format!("if get(&d, {jp:?}) != \"null\" {{ Some({one}) }} else {{ None }}")
-                }
-                _ => format!("r::{}(n(&d, {jp:?}))", self.rs_ty(&ty)),
-            });
+                Ty::Bool => format!("boolean({v}, {:?})?", crate::door::not_bool(name)),
+                Ty::Date => format!("date({v}, {:?})?", crate::door::not_date(name)),
+                Ty::Number => format!("int({v}, {:?})?", crate::door::not_integer(name)),
+                Ty::Str => format!("text({v}, {:?})?", crate::door::not_string(name)),
+                other => format!("r::{}(int({v}, {:?})?)", self.rs_ty(other), crate::door::not_integer(name)),
+            }
+        };
+        if optional {
+            // `null` on the wire is `None`: the scanner keeps an unquoted token as its text and a
+            // string with its quote, so the four letters are the test (§15.88).
+            format!("{{ let v = {take}; if v == \"null\" {{ None }} else {{ Some({}) }} }}", one("v"))
+        } else {
+            one(&take)
         }
-        // The sequence a walk reads, one element at a time (§15.56).
+    }
+
+    /// The statements that read the inputs into `a0`, `a1`, …, and the sequence into the one
+    /// after them, for the closure `rs_bind` writes into.
+    fn rs_binds(&self, d: &str, indent: &str, carried: Option<(usize, &str)>) -> String {
+        let mut o = String::new();
+        for (i, inp) in self.f.inputs.iter().enumerate() {
+            let read = self.rs_bind(&self.ty_of(&inp.name.text), d, &inp.name.text);
+            match carried {
+                Some((k, state)) if k == i => o.push_str(&format!("{indent}let a{i} = if stepping {{ {state} }} else {{ {read} }};\n")),
+                _ => o.push_str(&format!("{indent}let a{i} = {read};\n")),
+            }
+        }
         if let Some(el) = &self.f.elements {
-            let jp = &el.name.text;
+            let n = self.f.inputs.len();
+            let seq = &el.name.text;
             let fields: Vec<String> = el
                 .fields
                 .iter()
-                .map(|fd| {
-                    let k = &fd.name.text;
-                    let ty = self.ty_of(k);
-                    let body = match &ty {
-                        Ty::Enum(n) => {
-                            let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                            format!("r::{cls}::parse(s(e, {k:?})).expect({k:?})")
-                        }
-                        Ty::Bool => format!("b(e, {k:?}, {:?})", not_bool(k)),
-                        Ty::Date => format!("ord(s(e, {k:?}))"),
-                        Ty::Number => format!("n(e, {k:?})"),
-                        Ty::Str => format!("s(e, {k:?}).to_string()"),
-                        Ty::Opt(inner) => {
-                            // `null` on the wire is `None`. The brand of an optional is `Option<Kind>`,
-                            // which used to be pasted in as if it were a constructor (§15.88).
-                            let one = match inner.as_ref() {
-                                Ty::Enum(n) => {
-                                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                                    format!("r::{cls}::parse(s(e, {k:?})).expect({k:?})")
-                                }
-                                Ty::Bool => format!("b(e, {k:?}, {:?})", not_bool(k)),
-                                Ty::Date => format!("ord(s(e, {k:?}))"),
-                                Ty::Number => format!("n(e, {k:?})"),
-                                Ty::Str => format!("s(e, {k:?}).to_string()"),
-                                other => format!("r::{}(n(e, {k:?}))", self.rs_ty(other)),
-                            };
-                            format!("if get(e, {k:?}) != \"null\" {{ Some({one}) }} else {{ None }}")
-                        }
-                        _ => format!("r::{}(n(e, {k:?}))", self.rs_ty(&ty)),
-                    };
-                    format!("{}: {body}", pub_name(&fd.name))
-                })
+                .map(|fd| format!("{}: {}", pub_name(&fd.name), self.rs_bind(&self.ty_of(&fd.name.text), "e", &fd.name.text)))
                 .collect();
-            args.push(format!(
-                "rows(s(&d, {jp:?})).iter().map(|e| r::Element {{ {} }}).collect::<Vec<_>>()",
+            o.push_str(&format!(
+                "{indent}let mut a{n}: Vec<r::Element> = Vec::new();\n{indent}for e in &list(take({d}, {seq:?}, {:?}, false)?, {:?}, {:?})? {{\n{indent}    a{n}.push(r::Element {{ {} }});\n{indent}}}\n",
+                crate::door::missing(seq),
+                crate::door::not_sequence(seq),
+                crate::door::not_object(seq),
                 fields.join(", ")
             ));
         }
-        // The inputs are bound once and handed to both calls. Everything is `Copy` except a
-        // string, which the first call takes as a clone.
-        let binds: String = args.iter().enumerate().map(|(i, a)| format!("        let a{i} = {a};\n")).collect();
+        o
+    }
+
+    /// The arguments of one call: every input, the sequence borrowed, a string cloned for the
+    /// first of two calls.
+    fn rs_pass(&self, clone: bool) -> String {
         let n_ins = self.f.inputs.len();
-        let has_seq = self.f.elements.is_some();
-        let pass = |clone: bool| -> String {
-            let mut v: Vec<String> = self
-                .f
-                .inputs
-                .iter()
-                .enumerate()
-                .map(|(i, inp)| {
-                    if clone && matches!(self.ty_of(&inp.name.text), Ty::Str) {
-                        format!("a{i}.clone()")
-                    } else {
-                        format!("a{i}")
-                    }
-                })
-                .collect();
-            if has_seq {
-                v.push(format!("&a{n_ins}"));
-            }
-            v.join(", ")
-        };
-        let (first, second) = (pass(true), pass(false));
+        let mut v: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .enumerate()
+            .map(|(i, inp)| if clone && matches!(self.ty_of(&inp.name.text), Ty::Str) { format!("a{i}.clone()") } else { format!("a{i}") })
+            .collect();
+        if self.f.elements.is_some() {
+            v.push(format!("&a{n_ins}"));
+        }
+        v.join(", ")
+    }
+
+    pub fn rs_runner(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        let (first, second) = (self.rs_pass(true), self.rs_pass(false));
         // A machine's traces (§15.148): the carried input is the state this language answered
         // to the call before, handed over as the value it is.
-        let (mut head, mut meta, mut tail, mut binds) = (String::new(), String::new(), String::new(), binds);
+        let (mut head, mut meta, mut tail, mut keep, mut next) = (String::new(), String::new(), String::new(), String::new(), "()".to_string());
+        let mut carried: Option<(usize, &str)> = None;
         if let (Some((en, _, _)), Some((cin, _)), Some(out)) = (self.machine_consts(), self.carried(), self.carried_out_alias()) {
             let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
             let all: Vec<String> = self.c.enums.get(&en).into_iter().flatten().map(|v| format!("r::{}", self.rs_value(v, &Ty::Enum(en.clone())))).collect();
-            if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
-                binds = args
-                    .iter()
-                    .enumerate()
-                    .map(|(i, a)| if i == k { format!("        let a{i} = if stepping {{ state }} else {{ {a} }};\n") } else { format!("        let a{i} = {a};\n") })
-                    .collect();
-            }
+            carried = self.f.inputs.iter().position(|i| i.name.text == cin).map(|k| (k, "state"));
             head = "    let mut state = r::INITIAL;\n".to_string();
             meta = format!(
                 "        let top = pairs_from(&line.chars().collect::<Vec<char>>(), 0).0;\n        \
@@ -5668,23 +5623,22 @@ impl<'a> Gen<'a> {
                      state = r::{cls}::parse(&get(\"state\").unwrap_or_default()).expect(\"state\");\n        }}\n",
                 all.join(", ")
             );
-            tail = format!("        if stepping {{\n            state = next;\n        }}\n");
-            let _ = &out;
+            keep = format!("            let next = {};\n", self.next_state_of("got", &format!(".{out}")));
+            next = "next".to_string();
+            tail = "                if stepping {\n                    state = next;\n                }\n".to_string();
         }
-        let keep = match self.carried_out_alias() {
-            Some(out) if self.f.machine.is_some() => format!("        let next = {};\n", self.next_state_of("got", &format!(".{out}"))),
-            _ => String::new(),
-        };
+        let binds = self.rs_binds("&d", "            ", carried);
+        let ok = if next == "()" { "Ok((record, ()))" } else { "Ok((record, next))" };
         format!(
             r#"// Code generated by rulec {ver}. DO NOT EDIT.
-#![allow(non_snake_case, uncommon_codepoints, unused_parens)]
+#![allow(non_snake_case, uncommon_codepoints, unused_parens, dead_code)]
 
 #[path = "{alias}.rs"]
 mod r;
 
 use std::io::Read;
 
-{helpers}fn main() {{
+{helpers}{json_str}fn main() {{
     let mut src = String::new();
     std::io::stdin().read_to_string(&mut src).unwrap();
 {head}    for line in src.lines() {{
@@ -5692,16 +5646,24 @@ use std::io::Read;
             continue;
         }}
 {meta}        let d = fields(line);
-{binds}        let (got, trace) = r::{alias}_traced({first}).unwrap();
-{keep}        println!("{{}}", r::{alias}_record({second}, got, &trace, ""));
-{tail}    }}
+        // One call, or the refusal its door gives, in the place of the record (§15.204).
+        let res = (|| -> Result<_, r::RuleError> {{
+{binds}            let (got, trace) = r::{alias}_traced({first})?;
+{keep}            Ok((r::{alias}_record({second}, got, &trace, ""), {next}))
+        }})();
+        match res {{
+            {ok} => {{
+                println!("{{record}}");
+{tail}            }}
+            Err(r::RuleError::Input {{ what, .. }}) => println!("{{{{\"refused\":\"input\",\"error\":{{}}}}}}", json_str(what)),
+            Err(r::RuleError::Contradiction {{ what }}) => println!("{{{{\"refused\":\"contradiction\",\"error\":{{}}}}}}", json_str(what)),
+        }}
+    }}
 }}
 "#,
             ver = ritsu_emit::header::VERSION,
             helpers = RS_JSON_HELPERS,
-            binds = binds,
-            first = first,
-            second = second
+            json_str = RS_JSON_STR,
         )
     }
 
@@ -5709,86 +5671,21 @@ use std::io::Read;
     /// canonical ABI of `call: func(input: string) -> string`. A JavaScript host drives the
     /// core module through `cabi_realloc`, `call` and `cabi_post_call`; with the `.wit` beside
     /// it, `wasm-tools component new` makes a component of the same file without a change.
+    /// An input outside the contract is answered as the refusal the runners print (§15.204):
+    /// a host gets a line it can read, not a trap.
     pub fn rs_wasm(&self) -> String {
         let alias = pub_name(&self.f.name);
-        // An unknown enum value is answered as an error, where the runner would panic: a host
-        // gets a line it can read, not a trap.
-        // An input that is not there, or not of its type, is answered as an error too (§15.151).
-        let bind_of = |src: &str, name: &str, ty: &Ty| -> String {
-            let or_err = |e: String| format!("match {e} {{ Ok(v) => v, Err(e) => return error(&e) }}");
-            let one = |ty: &Ty| -> String {
-                match ty {
-                    Ty::Enum(n) => {
-                        let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                        let text = or_err(format!("text_of({src}, {name:?})"));
-                        format!("match r::{cls}::parse({text}) {{ Some(v) => v, None => return error(&format!(\"{name}: {{:?}}\", s({src}, {name:?}))) }}")
-                    }
-                    Ty::Bool => or_err(format!("b_of({src}, {name:?}, {:?})", not_bool(name))),
-                    Ty::Date => or_err(format!("date_of({src}, {name:?})")),
-                    Ty::Number => or_err(format!("n_of({src}, {name:?})")),
-                    Ty::Str => format!("{}.to_string()", or_err(format!("text_of({src}, {name:?})"))),
-                    other => format!("r::{}({})", self.rs_ty(other), or_err(format!("n_of({src}, {name:?})"))),
-                }
-            };
-            match ty {
-                // `null` on the wire is `None`; the scanner keeps an unquoted token as its
-                // text, so the four letters are the test (DESIGN §15.88).
-                Ty::Opt(inner) => format!(
-                    "if {} != \"null\" {{ Some({}) }} else {{ None }}",
-                    or_err(format!("need({src}, {name:?})")),
-                    one(inner)
-                ),
-                _ => one(ty),
-            }
-        };
-        let mut binds = String::new();
-        for (i, inp) in self.f.inputs.iter().enumerate() {
-            binds.push_str(&format!("    let a{i} = {};\n", bind_of("&d", &inp.name.text, &self.ty_of(&inp.name.text))));
-        }
-        let n_ins = self.f.inputs.len();
-        let has_seq = self.f.elements.is_some();
-        if let Some(el) = &self.f.elements {
-            let fields: Vec<String> = el
-                .fields
-                .iter()
-                .map(|fd| format!("{}: {}", pub_name(&fd.name), bind_of("e", &fd.name.text, &self.ty_of(&fd.name.text))))
-                .collect();
-            binds.push_str(&format!(
-                "    let mut a{n_ins}: Vec<r::Element> = Vec::new();\n    for e in &rows(match need(&d, {:?}) {{ Ok(v) => v, Err(e) => return error(&e) }}) {{\n        a{n_ins}.push(r::Element {{ {} }});\n    }}\n",
-                el.name.text,
-                fields.join(", ")
-            ));
-        }
-        let pass = |clone: bool| -> String {
-            let mut v: Vec<String> = self
-                .f
-                .inputs
-                .iter()
-                .enumerate()
-                .map(|(i, inp)| {
-                    if clone && matches!(self.ty_of(&inp.name.text), Ty::Str) {
-                        format!("a{i}.clone()")
-                    } else {
-                        format!("a{i}")
-                    }
-                })
-                .collect();
-            if has_seq {
-                v.push(format!("&a{n_ins}"));
-            }
-            v.join(", ")
-        };
-        let (first, second) = (pass(true), pass(false));
+        let (first, second) = (self.rs_pass(true), self.rs_pass(false));
+        let binds = self.rs_binds("&d", "        ", None);
         let mut o = format!(
             "// Code generated by rulec {}. DO NOT EDIT.\n#![allow(non_snake_case, uncommon_codepoints, unused_parens, dead_code)]\n\n#[path = \"{alias}.rs\"]\nmod r;\n\nuse std::alloc::{{alloc, realloc, Layout}};\n\n",
             ritsu_emit::header::VERSION
         );
         o.push_str(RS_JSON_HELPERS);
-        o.push_str(RS_JSON_STRICT);
         o.push_str(RS_JSON_STR);
         o.push_str(RS_WASM_ABI);
         o.push_str(&format!(
-            "/// The inputs read, the rule called, the record line written.\nfn answer(text: &str) -> String {{\n    let chars: Vec<char> = text.chars().collect();\n    let top = pairs_from(&chars, 0).0;\n    // A record carries the inputs under \"in\"; a bare object is the inputs themselves.\n    let inner: Option<String> = top.iter().find(|(k, _)| k == \"in\").map(|(_, v)| v.clone());\n    let d = match inner {{\n        Some(v) => pairs_from(&v.chars().collect::<Vec<_>>(), 0).0,\n        None => top,\n    }};\n{binds}    match r::{alias}_traced({first}) {{\n        Ok((got, trace)) => r::{alias}_record({second}, got, &trace, \"\"),\n        Err(e) => error(&e.to_string()),\n    }}\n}}\n"
+            "/// The inputs read, the rule called, the record line written — or the refusal.\nfn answer(input: &str) -> String {{\n    let chars: Vec<char> = input.chars().collect();\n    let top = pairs_from(&chars, 0).0;\n    // A record carries the inputs under \"in\"; a bare object is the inputs themselves.\n    let inner: Option<String> = top.iter().find(|(k, _)| k == \"in\").map(|(_, v)| v.clone());\n    let d = match inner {{\n        Some(v) => pairs_from(&v.chars().collect::<Vec<_>>(), 0).0,\n        None => top,\n    }};\n    let res = (|| -> Result<String, r::RuleError> {{\n{binds}        let (got, trace) = r::{alias}_traced({first})?;\n        Ok(r::{alias}_record({second}, got, &trace, \"\"))\n    }})();\n    match res {{\n        Ok(record) => record,\n        Err(e) => refusal(&e),\n    }}\n}}\n"
         ));
         o
     }
@@ -5806,7 +5703,7 @@ use std::io::Read;
         }
         o.push_str(&format!("\nworld {world} {{\n"));
         o.push_str(
-            "    /// One call. `input` is a JSON object with the rule's inputs by their names, in the\n    /// wire form (whole numbers in the declared unit, enum values by name, dates as\n    /// YYYY-MM-DD); a record with them under \"in\" is read the same way. Back comes the\n    /// record line {\"in\":…,\"out\":…,\"trace\":[…]}, or {\"error\":\"…\"} for an input outside\n    /// the contract.\n    ///\n    /// Inputs:\n",
+            "    /// One call. `input` is a JSON object with the rule's inputs by their names, in the\n    /// wire form (whole numbers in the declared unit, enum values by name, dates as\n    /// YYYY-MM-DD); a record with them under \"in\" is read the same way. Back comes the\n    /// record line {\"in\":…,\"out\":…,\"trace\":[…]}, or {\"refused\":\"input\",\"error\":\"…\"} for an\n    /// input outside the contract (\"contradiction\" for one the rule cannot answer).\n    ///\n    /// Inputs:\n",
         );
         for i in &self.f.inputs {
             o.push_str(&format!("    ///   {}: {}\n", i.name.text, self.ty_of(&i.name.text)));
@@ -5871,47 +5768,398 @@ use std::io::Read;
     }
 }
 
-/// The JSON string escaper the generated Rust module and the Wasm entry share.
-/// What the Wasm entry reads inputs with. A host is not rulec, and the runner's readers take a
-/// missing key or a number they cannot read for 0 — an answer computed on an input the host
-/// never sent (§15.151). These say which input, and the entry answers `{"error":…}`.
-pub(crate) const RS_JSON_STRICT: &str = r##"/// The value under `k`, or which input is not there.
-fn need<'a>(d: &'a [(String, String)], k: &str) -> Result<&'a str, String> {
-    d.iter().find(|(a, _)| a == k).map(|(_, v)| v.as_str()).ok_or_else(|| format!("{k}: missing"))
+/// How the generated Python runners read the wire (§15.204): an input there at all, of its
+/// kind, refused with the module's own `RuleInputError` and the sentence every language says;
+/// and the line a refusal prints in the place of the record. The Python runner and the Connect
+/// runner share it, so the two read a line the same way.
+pub(crate) const PY_WIRE: &str = r#"E = TypeVar("E", bound=enum.Enum)
+T = TypeVar("T")
+
+
+def _ord(s: str) -> int:
+    y, mo, d = (int(x) for x in s.split("-"))
+    return (datetime.date(y, mo, d) - datetime.date(1970, 1, 1)).days
+
+
+def _take(d: Any, k: str, missing: str, optional: bool = False) -> Any:
+    if not isinstance(d, dict) or k not in d or (d[k] is None and not optional):
+        raise m.RuleInputError(missing)
+    return d[k]
+
+
+def _int(v: Any, what: str) -> int:
+    if not isinstance(v, int) or isinstance(v, bool):
+        raise m.RuleInputError(what, v)
+    return v
+
+
+def _bool(v: Any, what: str) -> bool:
+    if not isinstance(v, bool):
+        raise m.RuleInputError(what, v)
+    return v
+
+
+def _str(v: Any, what: str) -> str:
+    if not isinstance(v, str):
+        raise m.RuleInputError(what, v)
+    return v
+
+
+def _date(v: Any, what: str) -> int:
+    digits = isinstance(v, str) and len(v) == 10 and v[4] == "-" and v[7] == "-"
+    if not digits or not all(c in "0123456789" for c in v[:4] + v[5:7] + v[8:]):
+        raise m.RuleInputError(what, v)
+    try:
+        return _ord(v)
+    except ValueError:
+        raise m.RuleInputError(what, v) from None
+
+
+def _enum(cls: type[E], v: Any, what: str) -> E:
+    try:
+        return cls(v)
+    except (ValueError, TypeError):
+        raise m.RuleInputError(what, v) from None
+
+
+def _seq(v: Any, what: str) -> list[Any]:
+    if not isinstance(v, list):
+        raise m.RuleInputError(what, v)
+    return v
+
+
+def _obj(v: Any, what: str) -> dict[str, Any]:
+    if not isinstance(v, dict):
+        raise m.RuleInputError(what, v)
+    return v
+
+
+def _maybe(v: Any, read: Callable[[Any], T]) -> T | None:
+    return None if v is None else read(v)
+
+
+def _refused(kind: str, what: str) -> None:
+    print(json.dumps({"refused": kind, "error": what}, ensure_ascii=False, separators=(",", ":")))
+
+
+"#;
+
+/// How the generated TypeScript runner reads the wire (§15.204), and the JavaScript one with its
+/// types taken off: the readers of `PY_WIRE`, one per kind, with a second for an optional input
+/// that takes `null`, and no generics, which the type stripping does not read.
+pub(crate) const TS_WIRE: &str = r#"function _take(d: unknown, k: string, missing: string, optional = false): unknown {
+  if (typeof d !== "object" || d === null || Array.isArray(d) || !(k in d)) {
+    throw new RuleInputError(missing);
+  }
+  const v = (d as Record<string, unknown>)[k];
+  if (v === null && !optional) {
+    throw new RuleInputError(missing);
+  }
+  return v;
 }
 
-/// The text of a string under `k`, or of anything else as it was written.
-fn text_of<'a>(d: &'a [(String, String)], k: &str) -> Result<&'a str, String> {
-    let v = need(d, k)?;
-    Ok(v.strip_prefix('"').unwrap_or(v))
+function _int(v: unknown, what: string): bigint {
+  if (typeof v !== "number" || !Number.isInteger(v)) {
+    throw new RuleInputError(what, v);
+  }
+  return BigInt(v);
 }
 
-fn n_of(d: &[(String, String)], k: &str) -> Result<i64, String> {
-    let v = text_of(d, k)?;
-    v.parse().map_err(|_| format!("{k}: {v:?} is not a whole number"))
+function _intq(v: unknown, what: string): bigint | null {
+  return v === null ? null : _int(v, what);
 }
 
-/// JSON's `true` or `false` and nothing else, refused with the sentence the other languages say.
-fn b_of(d: &[(String, String)], k: &str, what: &str) -> Result<bool, String> {
-    match need(d, k)? {
-        "true" => Ok(true),
-        "false" => Ok(false),
-        _ => Err(what.to_string()),
+function _bool(v: unknown, what: string): boolean {
+  if (typeof v !== "boolean") {
+    throw new RuleInputError(what, v);
+  }
+  return v;
+}
+
+function _boolq(v: unknown, what: string): boolean | null {
+  return v === null ? null : _bool(v, what);
+}
+
+function _str(v: unknown, what: string): string {
+  if (typeof v !== "string") {
+    throw new RuleInputError(what, v);
+  }
+  return v;
+}
+
+function _strq(v: unknown, what: string): string | null {
+  return v === null ? null : _str(v, what);
+}
+
+function _date(v: unknown, what: string): bigint {
+  if (typeof v !== "string" || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(v)) {
+    throw new RuleInputError(what, v);
+  }
+  const [y, m, d] = v.split("-").map(Number);
+  const at = new Date(Date.UTC(y, m - 1, d));
+  if (at.getUTCFullYear() !== y || at.getUTCMonth() !== m - 1 || at.getUTCDate() !== d) {
+    throw new RuleInputError(what, v);
+  }
+  return BigInt(Math.round(at.getTime() / 86400000));
+}
+
+function _dateq(v: unknown, what: string): bigint | null {
+  return v === null ? null : _date(v, what);
+}
+
+function _enum(values: readonly unknown[], v: unknown, what: string): unknown {
+  if (!values.includes(v)) {
+    throw new RuleInputError(what, v);
+  }
+  return v;
+}
+
+function _enumq(values: readonly unknown[], v: unknown, what: string): unknown {
+  return v === null ? null : _enum(values, v, what);
+}
+
+function _seq(v: unknown, what: string): unknown[] {
+  if (!Array.isArray(v)) {
+    throw new RuleInputError(what, v);
+  }
+  return v;
+}
+
+function _obj(v: unknown, what: string): Record<string, unknown> {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) {
+    throw new RuleInputError(what, v);
+  }
+  return v as Record<string, unknown>;
+}
+
+function _refused(kind: string, what: string): void {
+  console.log(JSON.stringify({ refused: kind, error: what }));
+}
+
+"#;
+
+/// How the generated Go runner reads the wire (§15.204): the readers of the Python runner's,
+/// panicking with the package's own `RuleInputError`, and `refuse`, which turns that panic — or
+/// either of the package's errors returned — into the line a refusal prints.
+const GO_WIRE: &str = r#"// The line one call is read from, with its numbers kept as the digits that were written.
+func decode(b []byte, into any) error {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	return dec.Decode(into)
+}
+
+func take(d map[string]any, k string, missing string, optional bool) any {
+	v, ok := d[k]
+	if !ok || (v == nil && !optional) {
+		panic(&r.RuleInputError{What: missing})
+	}
+	return v
+}
+
+func integer(v any, what string) int64 {
+	n, ok := v.(json.Number)
+	if !ok {
+		panic(&r.RuleInputError{What: what})
+	}
+	i, err := strconv.ParseInt(string(n), 10, 64)
+	if err != nil {
+		panic(&r.RuleInputError{What: what})
+	}
+	return i
+}
+
+func boolean(v any, what string) bool {
+	b, ok := v.(bool)
+	if !ok {
+		panic(&r.RuleInputError{What: what})
+	}
+	return b
+}
+
+func text(v any, what string) string {
+	s, ok := v.(string)
+	if !ok {
+		panic(&r.RuleInputError{What: what})
+	}
+	return s
+}
+
+func date(v any, what string) int64 {
+	s, ok := v.(string)
+	if !ok || len(s) != 10 {
+		panic(&r.RuleInputError{What: what})
+	}
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		panic(&r.RuleInputError{What: what})
+	}
+	return int64(t.Sub(time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)).Hours() / 24)
+}
+
+func member[T any](parse func(string) (T, bool), v any, what string) T {
+	s, ok := v.(string)
+	if !ok {
+		panic(&r.RuleInputError{What: what})
+	}
+	e, ok := parse(s)
+	if !ok {
+		panic(&r.RuleInputError{What: what})
+	}
+	return e
+}
+
+func list(v any, what string) []any {
+	a, ok := v.([]any)
+	if !ok {
+		panic(&r.RuleInputError{What: what})
+	}
+	return a
+}
+
+func object(v any, what string) map[string]any {
+	m, ok := v.(map[string]any)
+	if !ok {
+		panic(&r.RuleInputError{What: what})
+	}
+	return m
+}
+
+// A refusal, in the place of the record: which of the two the door raised, and its sentence.
+func refuse() {
+	x := recover()
+	if x == nil {
+		return
+	}
+	kind, what := "", ""
+	switch e := x.(type) {
+	case *r.RuleInputError:
+		kind, what = "input", e.What
+	case *r.RuleContradictionError:
+		kind, what = "contradiction", e.What
+	default:
+		panic(x)
+	}
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(struct {
+		Refused string `json:"refused"`
+		Error   string `json:"error"`
+	}{kind, what})
+	fmt.Print(b.String())
+}
+
+"#;
+
+/// How the generated Swift runner reads the wire (§15.204): the readers of the Python runner's,
+/// throwing the module's own `RuleError.input`. Foundation reads a number and a truth value
+/// both as an NSNumber; the type code tells them apart (`c` is a truth value, `d` a fraction).
+const SWIFT_WIRE: &str = r#"    static func _take(_ d: Any?, _ k: String, _ missing: String, _ optional: Bool = false) throws -> Any {
+        guard let o = d as? [String: Any], let v = o[k], optional || !(v is NSNull) else {
+            throw RuleError.input(what: missing, value: nil)
+        }
+        return v
     }
-}
 
-fn date_of(d: &[(String, String)], k: &str) -> Result<i64, String> {
-    let v = text_of(d, k)?;
-    let p: Vec<&str> = v.split('-').collect();
-    let ok = p.len() == 3
-        && [4, 2, 2].iter().zip(&p).all(|(n, x)| x.len() == *n && x.chars().all(|c| c.is_ascii_digit()))
-        && (1..=12).contains(&p[1].parse::<i64>().unwrap_or(0))
-        && (1..=31).contains(&p[2].parse::<i64>().unwrap_or(0));
-    if ok { Ok(ord(v)) } else { Err(format!("{k}: {v:?} is not a YYYY-MM-DD date")) }
-}
+    static func _int(_ v: Any, _ what: String) throws -> Int64 {
+        guard let n = v as? NSNumber, ["i", "s", "l", "q", "I", "S", "L", "Q"].contains(String(cString: n.objCType)) else {
+            throw RuleError.input(what: what, value: nil)
+        }
+        return n.int64Value
+    }
 
-"##;
+    static func _bool(_ v: Any, _ what: String) throws -> Bool {
+        guard let n = v as? NSNumber, String(cString: n.objCType) == "c" else {
+            throw RuleError.input(what: what, value: nil)
+        }
+        return n.boolValue
+    }
 
+    static func _str(_ v: Any, _ what: String) throws -> String {
+        guard let s = v as? String else {
+            throw RuleError.input(what: what, value: nil)
+        }
+        return s
+    }
+
+    static func _date(_ v: Any, _ what: String) throws -> Int64 {
+        guard let s = v as? String else {
+            throw RuleError.input(what: what, value: nil)
+        }
+        let b = Array(s.utf8)
+        let digit = { (c: UInt8) in c >= 48 && c <= 57 }
+        guard b.count == 10, b[4] == 45, b[7] == 45, b.enumerated().allSatisfy({ $0.offset == 4 || $0.offset == 7 || digit($0.element) }) else {
+            throw RuleError.input(what: what, value: nil)
+        }
+        let (y, m, d) = (Int64(s.prefix(4))!, Int64(s.dropFirst(5).prefix(2))!, Int64(s.suffix(2))!)
+        let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+        let last: Int64 = [1, 3, 5, 7, 8, 10, 12].contains(m) ? 31 : [4, 6, 9, 11].contains(m) ? 30 : m == 2 ? (leap ? 29 : 28) : 0
+        guard d >= 1, d <= last else {
+            throw RuleError.input(what: what, value: nil)
+        }
+        return _ord(s)
+    }
+
+    static func _enum<T: RawRepresentable>(_ t: T.Type, _ v: Any, _ what: String) throws -> T where T.RawValue == String {
+        guard let s = v as? String, let e = T(rawValue: s) else {
+            throw RuleError.input(what: what, value: nil)
+        }
+        return e
+    }
+
+    static func _seq(_ v: Any, _ what: String) throws -> [Any] {
+        guard let a = v as? [Any] else {
+            throw RuleError.input(what: what, value: nil)
+        }
+        return a
+    }
+
+    static func _obj(_ v: Any, _ what: String) throws -> [String: Any] {
+        guard let o = v as? [String: Any] else {
+            throw RuleError.input(what: what, value: nil)
+        }
+        return o
+    }
+
+    static func _maybe<T>(_ v: Any, _ read: (Any) throws -> T) rethrows -> T? {
+        v is NSNull ? nil : try read(v)
+    }
+
+    /// A refusal, in the place of the record: which of the two the door raised, and its sentence.
+    static func _refused(_ kind: String, _ what: String) {
+        var o = "\""
+        for c in what.unicodeScalars {
+            switch c {
+            case "\"": o += "\\\""
+            case "\\": o += "\\\\"
+            default:
+                if c.value < 0x20 {
+                    o += String(format: "\\u%04x", c.value)
+                } else {
+                    o.unicodeScalars.append(c)
+                }
+            }
+        }
+        print("{\"refused\":\"\(kind)\",\"error\":\(o)\"}")
+    }
+
+    /// A date as its day number from 1970-01-01, by the same civil-date arithmetic the tool
+    /// uses. Foundation's own parsers carry a calendar and a time zone; this carries none.
+    static func _ord(_ s: String) -> Int64 {
+        let p = s.split(separator: "-").map { Int64($0) ?? 0 }
+        let (y, m, d) = (p[0], p[1], p[2])
+        let y2 = m <= 2 ? y - 1 : y
+        let era = (y2 >= 0 ? y2 : y2 - 399) / 400
+        let yoe = y2 - era * 400
+        let mp = (m + 9) % 12
+        let doy = (153 * mp + 2) / 5 + d - 1
+        let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+        return era * 146097 + doe - 719468
+    }
+
+"#;
+
+/// The JSON string escaper the generated Rust module and the Wasm entry share.
 pub(crate) const RS_JSON_STR: &str = "fn json_str(s: &str) -> String {\n    let mut o = String::from(\"\\\"\");\n    for ch in s.chars() {\n        match ch {\n            '\"' => o.push_str(\"\\\\\\\"\"),\n            '\\\\' => o.push_str(\"\\\\\\\\\"),\n            c if (c as u32) < 32 => o.push_str(&format!(\"\\\\u{:04x}\", c as u32)),\n            c => o.push(c),\n        }\n    }\n    o.push('\"');\n    o\n}\n\n";
 
 /// The flags the Wasm module is built with, as one line for `rulec api` and as arguments for
@@ -6012,22 +6260,6 @@ fn balanced(b: &[char], i: usize) -> (String, usize) {
     (b[i..j].iter().collect(), j)
 }
 
-/// An array of flat objects, as the pairs of each.
-fn rows(v: &str) -> Vec<Vec<(String, String)>> {
-    let b: Vec<char> = v.chars().collect();
-    let (mut i, mut out) = (0usize, Vec::new());
-    while i < b.len() {
-        if b[i] == '{' {
-            let (p, ni) = pairs_from(&b, i);
-            out.push(p);
-            i = ni;
-        } else {
-            i += 1;
-        }
-    }
-    out
-}
-
 /// The string starting at `i`, and the index just past its closing quote. Every escape JSON
 /// has is read, `\u` with its surrogate pairs too: a host's encoder may write `入金` as
 /// `\u5165\u91d1`, and Python's does unless told otherwise.
@@ -6068,29 +6300,90 @@ fn string_at(b: &[char], i: usize) -> (String, usize) {
     (s, i + 1)
 }
 
-/// The value under `k` as it was written: a string with its opening quote, anything else as
-/// its text, and nothing when there is none.
-fn get<'a>(d: &'a [(String, String)], k: &str) -> &'a str {
-    d.iter().find(|(a, _)| a == k).map(|(_, v)| v.as_str()).unwrap_or("")
+/// The value under `k` as it was written — a string with its opening quote, anything else as
+/// its text — or the input refused as missing: a key the object does not have, or `null` for an
+/// input that is not optional (§15.204).
+fn take<'a>(d: &'a [(String, String)], k: &str, missing: &'static str, optional: bool) -> Result<&'a str, r::RuleError> {
+    match d.iter().find(|(a, _)| a == k) {
+        Some((_, v)) if optional || v != "null" => Ok(v.as_str()),
+        _ => Err(r::RuleError::Input { what: missing, value: None }),
+    }
 }
 
-fn n(d: &[(String, String)], k: &str) -> i64 {
-    s(d, k).parse().unwrap_or(0)
+fn refused(what: &'static str) -> r::RuleError {
+    r::RuleError::Input { what, value: None }
 }
 
-/// The text of a string, or of anything else as it was written.
-fn s<'a>(d: &'a [(String, String)], k: &str) -> &'a str {
-    let v = get(d, k);
-    v.strip_prefix('"').unwrap_or(v)
+/// A JSON integer: digits, a minus before them at most. A string keeps its quote, so `"12"` is
+/// not one, and neither is `1.5`.
+fn int(v: &str, what: &'static str) -> Result<i64, r::RuleError> {
+    let digits = v.strip_prefix('-').unwrap_or(v);
+    if digits.is_empty() || !digits.bytes().all(|c| c.is_ascii_digit()) {
+        return Err(refused(what));
+    }
+    v.parse().map_err(|_| refused(what))
 }
 
-/// JSON's `true` or `false` and nothing else: a string, a number and `null` are refused with
-/// the sentence the other languages say.
-fn b(d: &[(String, String)], k: &str, what: &'static str) -> bool {
-    match get(d, k) {
-        "true" => true,
-        "false" => false,
-        _ => panic!("{}", r::RuleError::Input { what, value: None }),
+/// JSON's `true` or `false` and nothing else (§15.203).
+fn boolean(v: &str, what: &'static str) -> Result<bool, r::RuleError> {
+    match v {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err(refused(what)),
+    }
+}
+
+fn text(v: &str, what: &'static str) -> Result<String, r::RuleError> {
+    v.strip_prefix('"').map(str::to_string).ok_or_else(|| refused(what))
+}
+
+/// A `YYYY-MM-DD` string of a day the calendar has, as its day number.
+fn date(v: &str, what: &'static str) -> Result<i64, r::RuleError> {
+    let s = v.strip_prefix('"').ok_or_else(|| refused(what))?;
+    let b = s.as_bytes();
+    let shape = b.len() == 10 && b[4] == b'-' && b[7] == b'-';
+    if !shape || !b.iter().enumerate().all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit()) {
+        return Err(refused(what));
+    }
+    let (y, m, d): (i64, i64, i64) = (s[0..4].parse().unwrap_or(0), s[5..7].parse().unwrap_or(0), s[8..10].parse().unwrap_or(0));
+    let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+    let last = match m {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return Err(refused(what)),
+    };
+    if !(1..=last).contains(&d) {
+        return Err(refused(what));
+    }
+    Ok(ord(s))
+}
+
+fn member<T>(parse: fn(&str) -> Option<T>, v: &str, what: &'static str) -> Result<T, r::RuleError> {
+    v.strip_prefix('"').and_then(parse).ok_or_else(|| refused(what))
+}
+
+/// The elements of an array, each an object read as its pairs: the sequence a walk reads.
+fn list(v: &str, not_sequence: &'static str, not_object: &'static str) -> Result<Vec<Vec<(String, String)>>, r::RuleError> {
+    let b: Vec<char> = v.chars().collect();
+    if b.first() != Some(&'[') {
+        return Err(refused(not_sequence));
+    }
+    let (mut i, mut out) = (1usize, Vec::new());
+    loop {
+        while i < b.len() && (b[i].is_whitespace() || b[i] == ',') {
+            i += 1;
+        }
+        if i >= b.len() || b[i] == ']' {
+            return Ok(out);
+        }
+        if b[i] != '{' {
+            return Err(refused(not_object));
+        }
+        let (p, ni) = pairs_from(&b, i);
+        out.push(p);
+        i = ni;
     }
 }
 
@@ -6149,8 +6442,14 @@ pub unsafe extern "C" fn cabi_post_call(ret: *mut [u32; 2]) {
     drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(p, n) as *mut str));
 }
 
-fn error(message: &str) -> String {
-    format!("{{\"error\":{}}}", json_str(message))
+/// A refusal, as the line the runners print in the place of a record (§15.204): which of the
+/// module's two errors it is, and its sentence, the value after it.
+fn refusal(e: &r::RuleError) -> String {
+    let kind = match e {
+        r::RuleError::Input { .. } => "input",
+        r::RuleError::Contradiction { .. } => "contradiction",
+    };
+    format!("{{\"refused\":\"{kind}\",\"error\":{}}}", json_str(&e.to_string()))
 }
 
 "##;
@@ -6254,11 +6553,9 @@ for (const line of readFileSync(0, "utf8").split("\n")) {
     text = JSON.stringify({ in: { ...v.in, [CARRY[0]]: state } });
   }
   const out = call(text);
-  if (out.startsWith('{"error":')) {
-    console.error(out);
-    process.exit(1);
-  }
   console.log(out);
+  // A refusal is the module's own line, in the place of the record (§15.204).
+  if (out.startsWith('{"refused":')) continue;
   if (CARRY !== null && "step" in v) {
     state = JSON.parse(out).observed[CARRY[1]];
   }
@@ -7849,7 +8146,7 @@ impl<'a> Gen<'a> {
         if let Some(cap) = self.count_cap() {
             o.push_str(&format!(
                 "    raise RuleInputError.new(\"{}\", {seq}.length) if {seq}.length > {cap}\n",
-                tr!("{} の要素が多すぎます（上限 {cap}）", "{} has too many elements (at most {cap})", el.name.text)
+                crate::door::too_many(&el.name.text, cap)
             ));
         }
         for d in self.counts() {
@@ -7877,7 +8174,7 @@ impl<'a> Gen<'a> {
             let n = self.ident(&d.name.text);
             o.push_str(&format!(
                 "    raise RuleInputError.new(\"{}\", {n}) if {n} > {cap}\n",
-                tr!("{} が範囲の外です", "{} is out of range", d.name.text)
+                crate::door::out_of_range(&d.name.text)
             ));
         }
         o.push_str(&self.rb_items(outer, trace, Phase::Main));
@@ -7899,16 +8196,25 @@ impl<'a> Gen<'a> {
                     not_bool(&i.name.text)
                 ));
             }
+            // A field of an enum is held to its values, as the main door holds an input and the
+            // other languages' element doors hold a field (§15.204).
+            if let Ty::Enum(n) = &ty {
+                let cls = rb_const(&self.enum_names.get(n).cloned().unwrap_or_default());
+                o.push_str(&format!(
+                    "    raise RuleInputError.new(\"{}\", {v}) unless {cls}::ALL.include?({v})\n",
+                    crate::door::not_in_enum(&i.name.text, n)
+                ));
+            }
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 o.push_str(&format!(
                     "    raise RuleInputError.new(\"{}\", {v}) unless {v}.is_a?(Integer)\n",
-                    tr!("{} が整数ではありません", "{} is not an integer", i.name.text)
+                    crate::door::not_integer(&i.name.text)
                 ));
                 if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                     let sc = self.c.wire_scale(&i.name.text);
                     o.push_str(&format!(
                         "    raise RuleInputError.new(\"{}\", {v}) unless ({}..{}).cover?({v})\n",
-                        tr!("{} が範囲の外です", "{} is out of range", i.name.text),
+                        crate::door::out_of_range(&i.name.text),
                         crate::types::wire_int(lo, sc),
                         crate::types::wire_int(hi, sc),
                     ));
@@ -7988,7 +8294,7 @@ impl<'a> Gen<'a> {
                     let cls = rb_const(&self.enum_names.get(n).cloned().unwrap_or_default());
                     o.push_str(&format!(
                         "    raise RuleInputError.new(\"{}\", {v}) unless {cls}::ALL.include?({v})\n",
-                        tr!("{} が列挙 {} の値ではありません", "{} is not a value of enum {}", i.name.text, cls)
+                        crate::door::not_in_enum(&i.name.text, n)
                     ));
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
@@ -7996,14 +8302,14 @@ impl<'a> Gen<'a> {
                     // first (§15.43).
                     o.push_str(&format!(
                         "    raise RuleInputError.new(\"{}\", {v}) unless {v}.is_a?(Integer)\n",
-                        tr!("{} が整数ではありません", "{} is not an integer", i.name.text)
+                        crate::door::not_integer(&i.name.text)
                     ));
                     if let Some((lo, hi)) = self.c.ranges.get(&i.name.text) {
                         if let (Some(lo), Some(hi)) = (lo, hi) {
                             let sc = self.c.wire_scale(&i.name.text);
                             o.push_str(&format!(
                                 "    raise RuleInputError.new(\"{}\", {v}) unless ({}..{}).cover?({v})\n",
-                                tr!("{} が範囲の外です", "{} is out of range", i.name.text),
+                                crate::door::out_of_range(&i.name.text),
                                 crate::types::wire_int(*lo, sc),
                                 crate::types::wire_int(*hi, sc),
                             ));
@@ -8139,43 +8445,40 @@ impl<'a> Gen<'a> {
     pub fn ruby_runner(&self) -> String {
         let alias = pub_name(&self.f.name);
         let m = self.rb_module();
-        let mut args: Vec<String> = Vec::new();
-        for i in &self.f.inputs {
-            let jp = &i.name.text;
-            args.push(match &self.ty_of(&i.name.text) {
-                // An enum member is the source string, which is what the wire carries.
-                // A truth value goes in as it came: the module's door refuses anything but `true`
-                // and `false`, where `? true : false` read `"false"` and `0` as true (§15.203).
-                Ty::Enum(_) | Ty::Str | Ty::Bool => format!("d[{jp:?}]"),
-                Ty::Date => format!("_ord(d[{jp:?}])"),
-                // `null` on the wire is `nil` here. It used to fall to `.to_i`, which turns
-                // `nil` into 0 — a value no row of the table matches, so the module raised
-                // "unreachable" on a case it answers perfectly well (§15.88). A date that is
-                // there is read as one, or it arrived as its text (§15.201).
-                Ty::Opt(t) if **t == Ty::Date => format!("(d[{jp:?}].nil? ? nil : _ord(d[{jp:?}]))"),
-                Ty::Opt(_) => format!("d[{jp:?}]"),
-                _ => format!("d[{jp:?}].to_i"),
-            });
-        }
+        // One input read off the wire the way every door reads it (§15.204): there at all, of
+        // its kind, a date turned into its day number. A refusal is the module's own
+        // `RuleInputError`, with the sentence every language says.
+        let read = |ty: &Ty, src: &str, name: &str| -> String {
+            let optional = matches!(ty, Ty::Opt(_));
+            let take = format!("_take({src}, {name:?}, {:?}{})", crate::door::missing(name), if optional { ", true" } else { "" });
+            let one = |v: &str| -> String {
+                match ty.present() {
+                    Ty::Enum(n) => {
+                        let cls = rb_const(&self.enum_names.get(n).cloned().unwrap_or_default());
+                        format!("_enum({m}::{cls}::ALL, {v}, {:?})", crate::door::not_in_enum(name, n))
+                    }
+                    Ty::Bool => format!("_bool({v}, {:?})", crate::door::not_bool(name)),
+                    Ty::Date => format!("_date({v}, {:?})", crate::door::not_date(name)),
+                    Ty::Str => format!("_str({v}, {:?})", crate::door::not_string(name)),
+                    _ => format!("_int({v}, {:?})", crate::door::not_integer(name)),
+                }
+            };
+            if optional {
+                format!("_maybe({take}) {{ |x| {} }}", one("x"))
+            } else {
+                one(&take)
+            }
+        };
+        let mut args: Vec<String> = self.f.inputs.iter().map(|i| read(&self.ty_of(&i.name.text), "d", &i.name.text)).collect();
         // The sequence a walk reads, one element at a time (§15.56).
         if let Some(el) = &self.f.elements {
-            let jp = &el.name.text;
-            let fields: Vec<String> = el
-                .fields
-                .iter()
-                .map(|fd| {
-                    let k = &fd.name.text;
-                    match &self.ty_of(k) {
-                        Ty::Enum(_) | Ty::Str | Ty::Bool => format!("e[{k:?}]"),
-                        Ty::Date => format!("_ord(e[{k:?}])"),
-                        Ty::Opt(t) if **t == Ty::Date => format!("(e[{k:?}].nil? ? nil : _ord(e[{k:?}]))"),
-                        Ty::Opt(_) => format!("e[{k:?}]"),
-                        _ => format!("e[{k:?}].to_i"),
-                    }
-                })
-                .collect();
+            let seq = &el.name.text;
+            let obj = format!("_obj(e, {:?})", crate::door::not_object(seq));
+            let fields: Vec<String> = el.fields.iter().map(|fd| read(&self.ty_of(&fd.name.text), &obj, &fd.name.text)).collect();
             args.push(format!(
-                "d[{jp:?}].map {{ |e| {m}::Element.new({}) }}",
+                "_seq(_take(d, {seq:?}, {:?}), {:?}).map {{ |e| {m}::Element.new({}) }}",
+                crate::door::missing(seq),
+                crate::door::not_sequence(seq),
                 fields.join(", ")
             ));
         }
@@ -8205,24 +8508,98 @@ impl<'a> Gen<'a> {
              require \"date\"\n\
              require \"json\"\n\
              require_relative \"{alias}\"\n\n\
-             def _ord(s)\n  \
-               Date.iso8601(s).jd - Date.new(1970, 1, 1).jd\n\
-             end\n\n\
+             {}\
              {head}\
              STDIN.each_line do |line|\n  \
                line = line.strip\n  \
                next if line.empty?\n  \
                {body}\
-               args = [{}]\n  \
-               r, trace = {m}.{alias}_traced(*args)\n  \
+               begin\n    \
+                 args = [{}]\n    \
+                 r, trace = {m}.{alias}_traced(*args)\n  \
+               rescue {m}::RuleInputError => e\n    \
+                 _refused(\"input\", e.what)\n    \
+                 next\n  \
+               rescue {m}::RuleContradictionError => e\n    \
+                 _refused(\"contradiction\", e.what)\n    \
+                 next\n  \
+               end\n  \
                puts {m}.{alias}_record(*args, r, trace)\n\
              {tail}\
              end\n",
             ritsu_emit::header::VERSION,
+            RB_WIRE.replace("@M@", &m),
             args.join(", ")
         )
     }
 }
+
+/// How the generated Ruby runner reads the wire (§15.204): the readers of `PY_WIRE` in Ruby.
+const RB_WIRE: &str = r#"def _ord(s)
+  Date.iso8601(s).jd - Date.new(1970, 1, 1).jd
+end
+
+def _take(d, k, missing, optional = false)
+  raise @M@::RuleInputError.new(missing) unless d.is_a?(Hash) && d.key?(k) && (optional || !d[k].nil?)
+
+  d[k]
+end
+
+def _int(v, what)
+  raise @M@::RuleInputError.new(what, v) unless v.is_a?(Integer)
+
+  v
+end
+
+def _bool(v, what)
+  raise @M@::RuleInputError.new(what, v) unless v == true || v == false
+
+  v
+end
+
+def _str(v, what)
+  raise @M@::RuleInputError.new(what, v) unless v.is_a?(String)
+
+  v
+end
+
+def _date(v, what)
+  raise @M@::RuleInputError.new(what, v) unless v.is_a?(String) && v.match?(/\A[0-9]{4}-[0-9]{2}-[0-9]{2}\z/)
+
+  begin
+    _ord(v)
+  rescue Date::Error
+    raise @M@::RuleInputError.new(what, v)
+  end
+end
+
+def _enum(all, v, what)
+  raise @M@::RuleInputError.new(what, v) unless all.include?(v)
+
+  v
+end
+
+def _seq(v, what)
+  raise @M@::RuleInputError.new(what, v) unless v.is_a?(Array)
+
+  v
+end
+
+def _obj(v, what)
+  raise @M@::RuleInputError.new(what, v) unless v.is_a?(Hash)
+
+  v
+end
+
+def _maybe(v)
+  v.nil? ? nil : yield(v)
+end
+
+def _refused(kind, what)
+  puts JSON.generate({ "refused" => kind, "error" => what })
+end
+
+"#;
 
 /// The five modes of §7.3 in Ruby, checked against the same reference cases the other
 /// others are checked against. `rulec test` runs it beside the generated module.
@@ -9060,7 +9437,7 @@ impl<'a> Gen<'a> {
         if let Some(cap) = self.count_cap() {
             o.push_str(&format!(
                 "    if {seq}.count > {cap} {{\n        throw RuleError.input(what: \"{}\", value: Int64({seq}.count))\n    }}\n",
-                tr!("{} の要素が多すぎます（上限 {cap}）", "{} has too many elements (at most {cap})", el.name.text)
+                crate::door::too_many(&el.name.text, cap)
             ));
         }
         for d in self.counts() {
@@ -9088,7 +9465,7 @@ impl<'a> Gen<'a> {
             let n = self.sw_ident(&d.name.text);
             o.push_str(&format!(
                 "    if {n} > {cap} {{\n        throw RuleError.input(what: \"{}\", value: Int64({n}))\n    }}\n",
-                tr!("{} が範囲の外です", "{} is out of range", d.name.text)
+                crate::door::out_of_range(&d.name.text)
             ));
         }
         o.push_str(&self.sw_items(outer, trace, Phase::Main));
@@ -9122,7 +9499,7 @@ impl<'a> Gen<'a> {
                 "    if {v} < {} || {v} > {} {{\n        throw RuleError.input(what: \"{}\", value: Int64({v}))\n    }}\n",
                 crate::types::wire_int(lo, sc),
                 crate::types::wire_int(hi, sc),
-                tr!("{} が範囲の外です", "{} is out of range", i.name.text)
+                crate::door::out_of_range(&i.name.text)
             ));
         }
         o
@@ -9257,7 +9634,7 @@ impl<'a> Gen<'a> {
                 "    if {v} < {} || {v} > {} {{\n        throw RuleError.input(what: \"{}\", value: Int64({v}))\n    }}\n",
                 crate::types::wire_int(lo, sc),
                 crate::types::wire_int(hi, sc),
-                tr!("{} が範囲の外です", "{} is out of range", i.name.text)
+                crate::door::out_of_range(&i.name.text)
             ));
         }
 
@@ -9429,39 +9806,38 @@ impl<'a> Gen<'a> {
         let root = runner_local("root", &fname);
         let trace = runner_local("trace", &fname);
         let (state, stepping) = (runner_local("state", &fname), runner_local("stepping", &fname));
+        // One input read off the wire the way every door reads it (§15.204). Every reader
+        // throws the module's own `RuleError.input`, with the sentence every language says; a
+        // statement that reads one starts with `try`, which covers the whole of it.
+        let read = |ty: &Ty, src: &str, name: &str| -> String {
+            let optional = matches!(ty, Ty::Opt(_));
+            let take = format!("_take({src}, {name:?}, {:?}{})", crate::door::missing(name), if optional { ", true" } else { "" });
+            let one = |v: &str| -> String {
+                match ty.present() {
+                    Ty::Enum(n) => {
+                        let cls = self.enum_names.get(n).cloned().unwrap_or_default();
+                        format!("_enum({cls}.self, {v}, {:?})", crate::door::not_in_enum(name, n))
+                    }
+                    Ty::Bool => format!("_bool({v}, {:?})", crate::door::not_bool(name)),
+                    Ty::Date => format!("_date({v}, {:?})", crate::door::not_date(name)),
+                    Ty::Str => format!("_str({v}, {:?})", crate::door::not_string(name)),
+                    Ty::Number => format!("_int({v}, {:?})", crate::door::not_integer(name)),
+                    other => format!("{}(_int({v}, {:?}))", self.sw_ty(other), crate::door::not_integer(name)),
+                }
+            };
+            if optional {
+                // `null` on the wire is `nil` (DESIGN §15.88).
+                format!("_maybe({take}) {{ try {} }}", one("$0"))
+            } else {
+                one(&take)
+            }
+        };
         let mut args: Vec<String> = Vec::new();
         let mut binds: Vec<String> = Vec::new();
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
-            let jp = &i.name.text;
             let label = sw_label(&pub_name(&i.name));
-            let v = match &ty {
-                Ty::Enum(n) => {
-                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                    format!("{cls}(rawValue: _s({d}, {jp:?}))!")
-                }
-                Ty::Str => format!("_s({d}, {jp:?})"),
-                Ty::Bool => format!("_b({d}, {jp:?}, {:?})", not_bool(jp)),
-                Ty::Date => format!("_ord(_s({d}, {jp:?}))"),
-                Ty::Number => format!("_n({d}, {jp:?})"),
-                // `null` on the wire is `nil`. The brand of an optional is `Kind?`, which
-                // used to be pasted in as if it were an initialiser (DESIGN §15.88).
-                Ty::Opt(inner) => {
-                    let one = match inner.as_ref() {
-                        Ty::Enum(n) => {
-                            let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                            format!("{cls}(rawValue: _s({d}, {jp:?}))!")
-                        }
-                        Ty::Bool => format!("_b({d}, {jp:?}, {:?})", not_bool(jp)),
-                        Ty::Date => format!("_ord(_s({d}, {jp:?}))"),
-                        Ty::Number => format!("_n({d}, {jp:?})"),
-                        Ty::Str => format!("_s({d}, {jp:?})"),
-                        other => format!("{}(_n({d}, {jp:?}))", self.sw_ty(other)),
-                    };
-                    format!("({d}[{jp:?}] is NSNull || {d}[{jp:?}] == nil ? nil : {one})")
-                }
-                _ => format!("{}(_n({d}, {jp:?}))", self.sw_ty(&ty)),
-            };
+            let v = read(&ty, &d, &i.name.text);
             let local = runner_local(&format!("a{}", args.len()), &fname);
             // A machine's traces (§15.148): the carried input is the state this language
             // answered to the call before, handed over as the value it is.
@@ -9470,62 +9846,27 @@ impl<'a> Gen<'a> {
             } else {
                 v
             };
-            // A truth value can be refused, and `try` has to stand at the left of the whole
-            // expression (§15.203).
-            let v = if v.contains("_b(") { format!("try {v}") } else { v };
-            binds.push(format!("            let {local} = {v}\n"));
+            binds.push(format!("                let {local} = try {v}\n"));
             args.push(format!("{label}: {local}"));
         }
         // The sequence arrives as an array of objects (§10.2), one per element.
         if let Some(el) = &self.f.elements {
-            let jp = &el.name.text;
+            let seq = &el.name.text;
             let label = sw_label(&pub_name(&el.name));
             let local = runner_local(&format!("a{}", args.len()), &fname);
             let ev = runner_local("e", &fname);
-            let inner: Vec<String> = el
-                .fields
-                .iter()
-                .map(|fd| {
-                    let ty = self.ty_of(&fd.name.text);
-                    let jf = &fd.name.text;
-                    let v = match &ty {
-                        Ty::Enum(n) => {
-                            let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                            format!("{cls}(rawValue: _s({ev}, {jf:?}))!")
-                        }
-                        Ty::Str => format!("_s({ev}, {jf:?})"),
-                        Ty::Bool => format!("_b({ev}, {jf:?}, {:?})", not_bool(jf)),
-                        Ty::Date => format!("_ord(_s({ev}, {jf:?}))"),
-                        Ty::Number => format!("_n({ev}, {jf:?})"),
-                        // An optional field reads `null` as `nil`, as an optional input does; it
-                        // was read as 0 (§15.201).
-                        Ty::Opt(inner) => {
-                            let one = match inner.as_ref() {
-                                Ty::Enum(n) => {
-                                    let cls = self.enum_names.get(n).cloned().unwrap_or_default();
-                                    format!("{cls}(rawValue: _s({ev}, {jf:?}))!")
-                                }
-                                Ty::Bool => format!("_b({ev}, {jf:?}, {:?})", not_bool(jf)),
-                                Ty::Date => format!("_ord(_s({ev}, {jf:?}))"),
-                                Ty::Number => format!("_n({ev}, {jf:?})"),
-                                Ty::Str => format!("_s({ev}, {jf:?})"),
-                                other => format!("{}(_n({ev}, {jf:?}))", self.sw_ty(other)),
-                            };
-                            format!("({ev}[{jf:?}] is NSNull || {ev}[{jf:?}] == nil ? nil : {one})")
-                        }
-                        _ => format!("{}(_n({ev}, {jf:?}))", self.sw_ty(&ty)),
-                    };
-                    format!("{}: {v}", sw_name(&pub_name(&fd.name)))
-                })
-                .collect();
-            let refuses = inner.iter().any(|f| f.contains("_b("));
+            let obj = format!("_obj({ev}, {:?})", crate::door::not_object(seq));
+            let inner: Vec<String> =
+                el.fields.iter().map(|fd| format!("{}: {}", sw_name(&pub_name(&fd.name)), read(&self.ty_of(&fd.name.text), &obj, &fd.name.text))).collect();
             binds.push(format!(
-                "            let {local} = {t}({d}[{jp:?}] as! [[String: Any]]).map {{ {ev} in {t}Element({}) }}\n",
-                inner.join(", "),
-                t = if refuses { "try " } else { "" }
+                "                let {local} = try _seq(_take({d}, {seq:?}, {:?}), {:?}).map {{ {ev} in try Element({}) }}\n",
+                crate::door::missing(seq),
+                crate::door::not_sequence(seq),
+                inner.join(", ")
             ));
             args.push(format!("{label}: {local}"));
         }
+        let args = args.join(", ");
         // The record function's own parameter names, which are the call's labels.
         let (p_out, p_trace) = (sw_name(&self.temp("out")), sw_name(&self.temp("trace")));
         let (mut head, mut meta, mut tail) = (String::new(), String::new(), String::new());
@@ -9538,8 +9879,7 @@ impl<'a> Gen<'a> {
                  print(\"{{\\\"initial\\\":\\\"\\(initialState.rawValue)\\\",\\\"final\\\":[\\(fin)]}}\")\n                \
                  continue\n            }}\n"
             );
-            let _ = &meta;
-            tail = format!("            if {stepping} {{\n                {state} = {}\n            }}\n", self.next_state_of(&got, &format!(".{}", sw_name(&out))));
+            tail = format!("                if {stepping} {{\n                    {state} = {}\n                }}\n", self.next_state_of(&got, &format!(".{}", sw_name(&out))));
             meta.push_str(&format!(
                 "            let {stepping} = {root}[\"step\"] != nil\n            \
                  if ({root}[\"step\"] as? String) == \"start\" {{\n                {state} = {cls}(rawValue: {root}[\"state\"] as! String)!\n            }}\n"
@@ -9557,49 +9897,24 @@ enum Runner {{
                 continue
             }}
             let {root} = try JSONSerialization.jsonObject(with: Data({line}.utf8)) as! [String: Any]
-{meta}            let {d} = {root}["in"] as! [String: Any]
-{binds}            let ({got}, {trace}) = try {fname}Traced({args})
-            print({fname}Record({args}, {p_out}: {got}, {p_trace}: {trace}))
-{tail}        }}
-    }}
-
-    /// A number, as NSNumber on both Darwin and the corelibs Foundation on Linux.
-    static func _n(_ d: [String: Any], _ k: String) -> Int64 {{
-        (d[k] as? NSNumber)?.int64Value ?? 0
-    }}
-
-    static func _s(_ d: [String: Any], _ k: String) -> String {{
-        d[k] as? String ?? ""
-    }}
-
-    /// JSON's `true` or `false` and nothing else. Foundation reads a number and a truth value
-    /// both as an NSNumber, and the one made from a truth value has the type code `c`.
-    static func _b(_ d: [String: Any], _ k: String, _ what: String) throws -> Bool {{
-        guard let v = d[k] as? NSNumber, String(cString: v.objCType) == "c" else {{
-            throw RuleError.input(what: what, value: nil)
+{meta}            let {d}: Any? = {root}["in"]
+            // One call, or the refusal its door gives, in the place of the record (§15.204).
+            do {{
+{binds}                let ({got}, {trace}) = try {fname}Traced({args})
+                print({fname}Record({args}, {p_out}: {got}, {p_trace}: {trace}))
+{tail}            }} catch RuleError.input(let what, _) {{
+                _refused("input", what)
+            }} catch RuleError.contradiction(let what) {{
+                _refused("contradiction", what)
+            }}
         }}
-        return v.boolValue
     }}
 
-    /// A date as its day number from 1970-01-01, by the same civil-date arithmetic the tool
-    /// uses. Foundation's own parsers carry a calendar and a time zone; this carries none.
-    static func _ord(_ s: String) -> Int64 {{
-        let p = s.split(separator: "-").map {{ Int64($0) ?? 0 }}
-        let (y, m, d) = (p[0], p[1], p[2])
-        let y2 = m <= 2 ? y - 1 : y
-        let era = (y2 >= 0 ? y2 : y2 - 399) / 400
-        let yoe = y2 - era * 400
-        let mp = (m + 9) % 12
-        let doy = (153 * mp + 2) / 5 + d - 1
-        let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
-        return era * 146097 + doe - 719468
-    }}
-
-}}
+{wire}}}
 "#,
             ver = ritsu_emit::header::VERSION,
-            args = args.join(", "),
-            binds = binds.join("")
+            binds = binds.join(""),
+            wire = SWIFT_WIRE,
         )
     }
 
@@ -11169,18 +11484,19 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
         }
         targets.push((format!("{out_dir}/vectors/{alias}.jsonl"), vec_body));
         targets.push((format!("{out_dir}/vectors/{alias}.expected.jsonl"), exp_body));
-        // The cases the reference evaluator refuses, where there are any. They have no
-        // expected record — refusing is the expectation — so they get a file of their own
-        // and `rulec test` holds every generated language to raising on them (§15.56).
-        if !suite.refused.is_empty() {
-            let body: String = suite
-                .refused
-                .iter()
-                .map(|v| crate::vectors::refused_json(&f, &c, v))
-                .collect::<Vec<_>>()
-                .join("\n")
-                + "\n";
-            targets.push((format!("{out_dir}/vectors/{alias}.refused.jsonl"), body));
+        // The cases the reference evaluator refuses: the walks it has no answer for, and an
+        // input for every reason the door has (§15.204). They have no expected record —
+        // refusing is the expectation — so they get a file of their own, and `rulec test` holds
+        // every generated language to refusing each of them with the reference's sentence
+        // (§15.56).
+        let refused: Vec<String> = suite
+            .refused
+            .iter()
+            .map(|v| crate::vectors::refused_json(&f, &c, v))
+            .chain(crate::vectors::door_cases(&f, &c, &suite.vectors))
+            .collect();
+        if !refused.is_empty() {
+            targets.push((format!("{out_dir}/vectors/{alias}.refused.jsonl"), refused.join("\n") + "\n"));
         }
         // The sequences of calls a machine is played through (§15.148): each runner passes
         // the state its own language answered to the next call, and prints its constants

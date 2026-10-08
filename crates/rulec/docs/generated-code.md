@@ -515,7 +515,8 @@ PostgreSQL — the inputs are cast to `BIGINT` on the way in, because the produc
 SQLite runs as well, which is how `rulec test` holds it to the reference evaluator with
 nothing but `python3`: the runner beside it loads the vectors into an in-memory SQLite and
 prints the same records the other runners print. `min` and `max` are `LEAST` and `GREATEST`,
-which the runner registers for SQLite.
+which the runner registers for SQLite, passing over a NULL as PostgreSQL's do — a row the door
+refuses is still worked out, and a value outside an enum leaves one behind.
 
 **The dialect is part of the claim.** Postgres and SQLite agree on the one thing the rounding
 leans on — `/` between integers truncates toward zero — which is why proving on the second
@@ -537,8 +538,9 @@ entry guard is `_input_error`: NULL for a row inside the declared domain, and ot
 same sentence the others raise — a missing input, a value outside its range, a name that is
 not a member of the enum, a number that is not an integer (18.3 in a column of steps is
 refused, not truncated to 18). Where two rows of a `unique` table could not be proved
-exclusive (W114), a `_contradiction` column names them when both match. The runner stops on
-either, as the other languages raise.
+exclusive (W114), a `_contradiction` column names them when both match. The runner prints
+either as the refusal line the other languages' runners print, in the place of the record
+(below).
 
 **The other door — `member_shipping_fee_function.sql`.** The same query, asked for one case at a time:
 
@@ -614,13 +616,16 @@ The module exports the canonical ABI of one function, `call: func(input: string)
 pointer to a (pointer, length) pair holding the answer, and `cabi_post_call(ret)` to free it.
 The input is a JSON object with the inputs by name, in the wire form of
 [formats.md](formats.md) (a record with them under `"in"` is read the same way); the answer
-is the record line the other languages' `_record` writes, or `{"error":"…"}` for an input
-outside the contract — an unknown enum value, an input that is not there, a number that is not
-a whole number and a date that is not `YYYY-MM-DD` included, so a host is answered rather than
-trapped, and never computed on a value it did not send (§15.151). Any JSON encoder will do: a
+is the record line the other languages' `_record` writes, or, for an input outside the
+contract — an unknown enum value, an input that is not there, a number that is not a whole
+number and a date that is not `YYYY-MM-DD` included — the refusal line the runners print,
+`{"refused":"input","error":"weight is out of range: 0"}`: the sentence every language says,
+followed by the value where the module has one as a number, and `"contradiction"` in the place
+of `"input"` for a case the rule itself cannot answer. A host is answered rather than trapped,
+and never computed on a value it did not send (§15.151, §15.204). Any JSON encoder will do: a
 name or a value written with `\u` escapes reads as the characters it stands for. The module
 imports nothing, so it instantiates with an empty import object anywhere WebAssembly runs; the
-shipping rule is forty-four kilobytes.
+shipping rule is thirty-six kilobytes.
 
 ```js
 const { instance } = await WebAssembly.instantiate(bytes, {});
@@ -871,6 +876,21 @@ for it.
 The generated runner prints exactly this line for every vector, and the expected file `gen`
 writes beside the vectors is in the same format, so `rulec test` holds the record function
 — the wire form of every input, dates included — to the reference evaluator in every language.
+An input the door refuses gets a line of its own in the place of the record, and the runner
+reads on: which of the two errors the module raised, and its sentence (§15.204).
+
+```json
+{"refused":"input","error":"weight is out of range"}
+```
+
+Every runner reads the wire the way the module's door would hold it: an input that is not
+there, or `null` for one that is not optional, is `weight is missing`; a value of another kind
+is the sentence of its kind (`is not an integer`, `is not a date`, `is not a value of enum
+zone` — the enum by the name the rule declares it under — `is not a boolean`, `is not a
+string`), and the sequence a walk reads `is not a sequence` or has `an element of … that is not
+an object`. A string that holds a number is not one, a date the calendar does not have
+(2026-02-30) is not a date, and 1000.5 is not a whole count of its unit. The sentence is the
+same in every language and is the one the reference evaluator says of the same input.
 `rulec api` names the function under `record` and gives its signature under
 `record_signature`.
 
@@ -1029,7 +1049,9 @@ with `--record calls.jsonl`, the server appends every answered call to that file
 `rulec fixtures lint`, `replay` and `diff` read as it stands: what the agent asked becomes
 the record the next revision is measured against.
 
-A call the rule cannot take is refused, not answered: `isError` is set and the text names the
+A call the rule cannot take is refused, not answered: `isError` is set, the text is the error's
+class and the sentence every door says, the value after it (`RuleInputError: weight is out of
+range: 0`), and it names the
 argument — one missing, one extra, a value outside its range, a name that is not a member of
 the enum, a truth value that is not `true` or `false`, a number that is not an integer (18.3 for a rate in steps of 0.1% is refused, not
 read as 1.83%). The module's two error classes are what reach the caller, under their names.
@@ -1212,7 +1234,7 @@ mistake it was:
 | what happened | code | HTTP |
 |---|---|---|
 | outside the declared domain — out of range, not an integer, not a member of the enum | `invalid_argument` | 400 |
-| an input the rule needs was left out — `member: not set`, `lines[2].amount: not set` for a field of one element | `invalid_argument` | 400 |
+| an input the rule needs was left out — `member is missing`, `amount is missing (lines[2])` for a field of one element | `invalid_argument` | 400 |
 | a field or an enum value the message does not have — a misspelt name | `invalid_argument` | 400 |
 | the runtime guard of a W114 pair fired (§8.1) | `internal` | 500 |
 

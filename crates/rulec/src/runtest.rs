@@ -116,6 +116,51 @@ fn first_diff(got: &str, want: &str) -> Failure {
     ))
 }
 
+/// What a runner printed for the refused inputs, held to what the reference evaluator says of
+/// each (§15.204): one line per input, in their order, each a refusal — `{"refused":…,"error":…}`
+/// — of the same kind, with the same sentence, or the sentence and the value after it as the
+/// language prints a value. A line that does not say `refused` is an answer. A refused input
+/// that carries no `refused` or no `error` — one written by hand — asks only that the runner
+/// refuse it.
+fn refusals_differ(refused: &[String], said: &str) -> Option<Failure> {
+    let got: Vec<&str> = said.lines().collect();
+    if got.len() != refused.len() {
+        return Some(Failure::Lines(tr!(
+            "受け付けない入力 {} 件に {} 行が返りました",
+            "{} refused inputs were answered with {} lines",
+            refused.len(),
+            got.len()
+        )));
+    }
+    for (k, (want, g)) in refused.iter().zip(got).enumerate() {
+        let w = crate::json::parse(want).unwrap_or(crate::json::Json::Null);
+        let (kind, error) = (w.get("refused").and_then(|v| v.as_str()), w.get("error").and_then(|v| v.as_str()));
+        let gj = crate::json::parse(g).ok();
+        let Some(gkind) = gj.as_ref().and_then(|j| j.get("refused")).and_then(|v| v.as_str()) else {
+            return Some(Failure::Lines(tr!(
+                "参照評価器が受け付けない入力に、答えを返しました（{}行目）: {}",
+                "answered an input the reference evaluator refuses (line {}): {}",
+                k + 1,
+                g.trim()
+            )));
+        };
+        let gerror = gj.as_ref().and_then(|j| j.get("error")).and_then(|v| v.as_str()).unwrap_or_default();
+        let same_kind = kind.is_none_or(|x| x == gkind);
+        let same_error = error.is_none_or(|e| gerror == e || gerror.strip_prefix(e).is_some_and(|rest| rest.starts_with(": ")));
+        if !(same_kind && same_error) {
+            let mut expected = crate::json::Obj::new();
+            if let Some(x) = kind {
+                expected = expected.str("refused", x);
+            }
+            if let Some(e) = error {
+                expected = expected.str("error", e);
+            }
+            return Some(Failure::Diff { line: k + 1, generated: g.to_string(), expected: expected.finish() });
+        }
+    }
+    None
+}
+
 pub fn run(dir: &Path) -> Result<Run, String> {
     run_with(dir, false)
 }
@@ -336,40 +381,26 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
             if !wrote(dir, b.id, &crate::backend::stem(b, alias)) {
                 continue;
             }
-            // One plan held to the rule: the vectors through it, then each refused input on its
-            // own — the generated code raises on the first one it is given, so a file of them
-            // would only ever prove the first (§15.56).
+            // One plan held to the rule: the vectors through it, then the refused inputs, all in
+            // one run. A runner prints a refusal in the place of the record — which of the two
+            // the door raised, and its sentence — and goes on to the next line, so every one of
+            // them is held to the reason the reference evaluator gives (§15.56, §15.204).
             let held = |plan: &crate::backend::Plan| -> Option<Failure> {
                 let mut diff = match exec(plan, Some(&vec_path)) {
                     Err(f) => Some(f),
                     Ok(got) => (got != want).then(|| first_diff(&got, &want)),
                 };
-                if diff.is_none() {
-                    for (k, line) in refused.iter().enumerate() {
-                        let one = dir.join("vectors").join(format!(".{alias}.refused.{k}.jsonl"));
-                        if std::fs::write(&one, format!("{line}\n")).is_err() {
-                            diff = Some(broken(tr!("受け付けない入力を書けません", "cannot write the refused input")));
-                            break;
-                        }
-                        let got = exec(plan, Some(&one));
-                        let _ = std::fs::remove_file(&one);
-                        match got {
-                            // Refusing is what was asked for: the run stopped without an answer.
-                            Err(Failure::Broken(_)) => {}
-                            Err(f) => {
-                                diff = Some(f);
-                                break;
-                            }
-                            Ok(said) => {
-                                diff = Some(Failure::Lines(tr!(
-                                    "参照評価器が受け付けない入力に、答えを返しました（{}行目）: {}",
-                                    "answered an input the reference evaluator refuses (line {}): {}",
-                                    k + 1,
-                                    said.trim()
-                                )));
-                                break;
-                            }
-                        }
+                if diff.is_none() && !refused.is_empty() {
+                    let all = dir.join("vectors").join(format!(".{alias}.refused.all.jsonl"));
+                    if std::fs::write(&all, refused.join("\n") + "\n").is_err() {
+                        diff = Some(broken(tr!("受け付けない入力を書けません", "cannot write the refused input")));
+                    } else {
+                        let got = exec(plan, Some(&all));
+                        let _ = std::fs::remove_file(&all);
+                        diff = match got {
+                            Err(f) => Some(f),
+                            Ok(said) => refusals_differ(&refused, &said),
+                        };
                     }
                 }
                 // The traces: one call after another, each passed the state the runner's own
@@ -599,6 +630,27 @@ fn via_mcp(
                 "answered an input the reference evaluator refuses (line {})",
                 k + 1
             )));
+        }
+        // The text names the class the module raised and says its sentence, the value after it.
+        let text = r
+            .get("content")
+            .and_then(|c| match c {
+                crate::json::Json::Arr(a) => a.first(),
+                _ => None,
+            })
+            .and_then(|c| c.get("text"))
+            .and_then(|t| t.as_str())
+            .unwrap_or_default();
+        let said = match text.split_once(": ") {
+            Some(("RuleInputError", rest)) => format!("{{\"refused\":\"input\",\"error\":{}}}", crate::json::quote(rest)),
+            Some(("RuleContradictionError", rest)) => format!("{{\"refused\":\"contradiction\",\"error\":{}}}", crate::json::quote(rest)),
+            _ => text.to_string(),
+        };
+        if let Some(f) = refusals_differ(std::slice::from_ref(line), &format!("{said}\n")) {
+            return Err(match f {
+                Failure::Diff { generated, expected, .. } => Failure::Diff { line: k + 1, generated, expected },
+                other => other,
+            });
         }
     }
     // A machine's traces (§15.148). The tool carries no constants, so the line that asks for

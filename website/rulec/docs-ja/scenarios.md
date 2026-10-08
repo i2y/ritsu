@@ -116,8 +116,8 @@ $ rulec doc rules/印紙税.rule --lang ja > 印紙税.md
 ```console
 $ rulec gen rules/印紙税.rule --out generated/
 $ rulec test generated/
-ok    stamp_duty_split (Python) ベクタ 296 件
-ok    stamp_duty_split (SQL) ベクタ 296 件
+ok    stamp_duty_split (Python) ベクタ 296 件、受け付けない入力 13 件
+ok    stamp_duty_split (SQL) ベクタ 296 件、受け付けない入力 13 件
 …
 ```
 
@@ -552,11 +552,11 @@ func ShippingFee(in Input) (YenInclTax, error)
 
 ```console
 $ rulec test generated/
-ok    shipping_fee (Python) ベクタ 68 件
-ok    shipping_fee (TypeScript) ベクタ 68 件
-ok    shipping_fee (Go) ベクタ 68 件
-ok    shipping_fee (SQL) ベクタ 68 件
-ok    shipping_fee (Wasm) ベクタ 68 件
+ok    shipping_fee (Python) ベクタ 70 件、受け付けない入力 16 件
+ok    shipping_fee (TypeScript) ベクタ 70 件、受け付けない入力 16 件
+ok    shipping_fee (Go) ベクタ 70 件、受け付けない入力 16 件
+ok    shipping_fee (SQL) ベクタ 70 件、受け付けない入力 16 件
+ok    shipping_fee (Wasm) ベクタ 70 件、受け付けない入力 16 件
 …
 ```
 

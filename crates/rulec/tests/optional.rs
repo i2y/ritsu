@@ -314,7 +314,7 @@ fn every_language_agrees_and_refuses_a_value_outside_the_range() {
 }
 
 /// Each language's runner, handed an amount past the end of its range with the other inputs
-/// absent, stops and says the sentence the other languages say; handed every input absent, it
+/// absent, refuses it with the sentence the other languages say; handed every input absent, it
 /// answers.
 #[test]
 fn every_language_says_the_same_sentence_for_a_value_outside_the_range() {
@@ -365,11 +365,12 @@ fn every_language_says_the_same_sentence_for_a_value_outside_the_range() {
                     .unwrap_or_else(|e| panic!("{stem}: {}: {e}", b.name));
                 (o.status.success(), format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr)))
             };
+            // A refusal is a line of its own, in the place of the record (§15.204).
             let (ok, text) = run(&wrong);
-            assert!(!ok, "{stem}: {} answered an amount outside its range:\n{text}", b.name);
+            assert!(ok && text.starts_with("{\"refused\":\"input\""), "{stem}: {} did not refuse an amount outside its range:\n{text}", b.name);
             assert!(text.contains(said), "{stem}: {} does not say `{said}`:\n{text}", b.name);
             let (ok, text) = run(&absent);
-            assert!(ok, "{stem}: {} did not answer every input absent:\n{text}", b.name);
+            assert!(ok && text.starts_with("{\"in\""), "{stem}: {} did not answer every input absent:\n{text}", b.name);
         }
     }
 }

@@ -908,7 +908,11 @@ each one joins the generated vector suite.
 A sequence where `take_unique` matches twice is a contradiction: the reference evaluator has
 no answer and the generated code raises. Such an input is still part of the suite — it goes to
 `vectors/<alias>.refused.jsonl`, and `rulec test` requires every generated language to refuse
-it. That is what makes the last fold transition covered rather than merely named.
+it, as the contradiction it is. That is what makes the last fold transition covered rather than
+merely named. The same file holds an input for every reason the door turns one away — the
+sequence and the fields of its elements among them — and every language has to refuse each for
+that reason, with the sentence the reference evaluator says
+([formats.md](formats.md#vectors-rulec-vectors-generatedvectorsaliasjsonl), §15.204).
 
 ## 6.3 count and sum
 

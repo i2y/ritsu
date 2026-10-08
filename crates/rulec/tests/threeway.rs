@@ -192,6 +192,7 @@ fn 評価器と生成コードが全言語で一致する() {
     assert!(!present.is_empty(), "どの toolchain も無いので一致を確かめられない");
 
     let mut total = 0usize;
+    let mut total_refused = 0usize;
     for (file, alias) in CORPUS {
         let vec_path = dir.join("vectors").join(format!("{alias}.jsonl"));
         let exp = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.expected.jsonl")))
@@ -199,6 +200,7 @@ fn 評価器と生成コードが全言語で一致する() {
         let vectors = std::fs::read_to_string(&vec_path).expect("ベクタが無い");
         assert!(!vectors.trim().is_empty(), "{alias}: ベクタがゼロ件");
         total += vectors.lines().count();
+        total_refused += std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.refused.jsonl"))).map(|s| s.lines().count()).unwrap_or(0);
         let pkg = alias.replace('_', "");
 
         // A rule that walks a sequence — folding it or counting it — is not generated for a
@@ -241,6 +243,33 @@ fn 評価器と生成コードが全言語で一致する() {
                 String::from_utf8_lossy(&o.stderr)
             );
             assert_eq!(got, exp, "{alias}: 評価器と生成 {} が食い違う", b.name);
+            // The inputs the reference evaluator refuses, all in one run: each answered with a
+            // refusal of the kind and with the sentence the file gives, the value the language
+            // prints after the sentence aside (§15.204).
+            let refused_path = dir.join("vectors").join(format!("{alias}.refused.jsonl"));
+            if let Ok(want) = std::fs::read_to_string(&refused_path) {
+                let o = Command::new(&plan.cmd)
+                    .current_dir(&cwd)
+                    .args(&plan.args)
+                    .stdin(std::fs::File::open(&refused_path).unwrap())
+                    .output()
+                    .unwrap_or_else(|e| panic!("{}: 起動できない: {e}", b.name));
+                assert!(o.status.success(), "{alias}: {} が受け付けない入力で落ちた: {}", b.name, String::from_utf8_lossy(&o.stderr));
+                let said = String::from_utf8_lossy(&o.stdout).into_owned();
+                assert_eq!(said.lines().count(), want.lines().count(), "{alias}: {} の受け付けない入力への答えの行数が違う:\n{said}", b.name);
+                for (w, g) in want.lines().zip(said.lines()) {
+                    let (w, g) = (rulec::json::parse(w).unwrap(), rulec::json::parse(g).unwrap_or(rulec::json::Json::Null));
+                    let field = |j: &rulec::json::Json, k: &str| j.get(k).and_then(|v| v.as_str()).map(str::to_string);
+                    let (kind, error) = (field(&w, "refused").unwrap(), field(&w, "error").unwrap());
+                    let said_error = field(&g, "error").unwrap_or_default();
+                    assert_eq!(field(&g, "refused").as_deref(), Some(kind.as_str()), "{alias}: {} は {w:?} を {g:?} とした", b.name);
+                    assert!(
+                        said_error == error || said_error.strip_prefix(error.as_str()).is_some_and(|r| r.starts_with(": ")),
+                        "{alias}: {} の拒む文が違う: {said_error} / {error}",
+                        b.name
+                    );
+                }
+            }
             // A machine's traces (§15.148): the same runner, handed the state its own
             // language answered to the call before.
             let traces = dir.join("vectors").join(format!("{alias}.traces.jsonl"));
@@ -259,7 +288,7 @@ fn 評価器と生成コードが全言語で一致する() {
         }
     }
     eprintln!(
-        "一致: 規則 {} 本 / ベクタ {total} 件（{}）",
+        "一致: 規則 {} 本 / ベクタ {total} 件 / 受け付けない入力 {total_refused} 件（{}）",
         CORPUS.len(),
         present.iter().map(|b| b.name).collect::<Vec<_>>().join(" / ")
     );

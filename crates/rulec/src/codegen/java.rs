@@ -32,7 +32,7 @@
 //! locale with its own digits would not be the bytes the other ten targets write.
 
 use super::{
-    camel, cell_src, civil_needed, fired_doc, mode_fn, not_bool, out_src, pascal, plain_doc,
+    camel, cell_src, civil_needed, fired_doc, mode_fn, out_src, pascal, plain_doc,
     pub_name, raw_base, record_doc, round_cases, traced_doc, unparen, wire_of, Expr2, Gen, Lang,
     Phase, Wire,
 };
@@ -300,22 +300,6 @@ const JAVA_JSON_HELPERS: &str = r##"    /** 読んだ文字列と、閉じ引用
         return new Str(b.substring(i, j), j);
     }
 
-    /** 平たいオブジェクトの並び。 */
-    private static List<Map<String, String>> rows(String v) {
-        List<Map<String, String>> out = new ArrayList<>();
-        int i = 0;
-        while (i < v.length()) {
-            if (v.charAt(i) == '{') {
-                Pairs p = pairsFrom(v, i);
-                out.add(p.map());
-                i = p.next();
-            } else {
-                i++;
-            }
-        }
-        return out;
-    }
-
     private static Str stringAt(String b, int i) {
         StringBuilder s = new StringBuilder();
         int j = i + 1;
@@ -334,14 +318,6 @@ const JAVA_JSON_HELPERS: &str = r##"    /** 読んだ文字列と、閉じ引用
 
     private static String get(Map<String, String> d, String k) {
         return d.getOrDefault(k, "");
-    }
-
-    private static long n(Map<String, String> d, String k) {
-        try {
-            return Long.parseLong(s(d, k));
-        } catch (NumberFormatException e) {
-            return 0;
-        }
     }
 
     private static String s(Map<String, String> d, String k) {
@@ -793,11 +769,7 @@ impl<'a> Gen<'a> {
             o.push_str(&format!("        if ({seq}.size() > {cap}) {{\n"));
             o.push_str(&format!(
                 "            throw new RuleInputError({}, (long) {seq}.size());\n        }}\n",
-                java_str(&tr!(
-                    "{} の要素が多すぎます（上限 {cap}）",
-                    "{} has too many elements (at most {cap})",
-                    el.name.text
-                ))
+                java_str(&crate::door::too_many(&el.name.text, cap))
             ));
         }
         for d in self.counts() {
@@ -833,7 +805,7 @@ impl<'a> Gen<'a> {
             let n = java_name(&self.ident(&d.name.text));
             o.push_str(&format!(
                 "        if ({n} > {cap}L) {{\n            throw new RuleInputError({}, {n});\n        }}\n",
-                java_str(&tr!("{} が範囲の外です", "{} is out of range", d.name.text)),
+                java_str(&crate::door::out_of_range(&d.name.text)),
             ));
         }
         o.push_str(&self.java_items(outer, trace, Phase::Main));
@@ -858,7 +830,7 @@ impl<'a> Gen<'a> {
                         "        if ({v} < {}L || {v} > {}L) {{\n            throw new RuleInputError({}, {v});\n        }}\n",
                         crate::types::wire_int(lo, sc),
                         crate::types::wire_int(hi, sc),
-                        java_str(&tr!("{} が範囲の外です", "{} is out of range", i.name.text)),
+                        java_str(&crate::door::out_of_range(&i.name.text)),
                     ));
                 }
             }
@@ -965,7 +937,7 @@ impl<'a> Gen<'a> {
                         "        if ({v} < {}L || {v} > {}L) {{\n            throw new RuleInputError({}, {v});\n        }}\n",
                         crate::types::wire_int(lo, sc),
                         crate::types::wire_int(hi, sc),
-                        java_str(&tr!("{} が範囲の外です", "{} is out of range", i.name.text)),
+                        java_str(&crate::door::out_of_range(&i.name.text)),
                     ));
                 }
             }
@@ -1239,82 +1211,55 @@ impl<'a> Gen<'a> {
         let cls = self.java_class();
         let fname = self.java_fname();
         let d = java_name(&self.temp("d"));
-        let mut args: Vec<String> = Vec::new();
-        for i in &self.f.inputs {
-            let jp = java_str(&i.name.text);
-            args.push(match &self.ty_of(&i.name.text) {
-                Ty::Enum(n) => format!(
-                    "{cls}.{}.from(s({d}, {jp}))",
-                    java_class(&self.enum_names.get(n).cloned().unwrap_or_default())
-                ),
-                Ty::Str => format!("s({d}, {jp})"),
-                Ty::Bool => format!("b({d}, {jp}, {})", java_str(&not_bool(&i.name.text))),
-                Ty::Date => format!("ord(s({d}, {jp}))"),
-                // `null` on the wire is a null reference; the module's parameter is the
-                // enum itself, which Java lets be null. It used to fall to `n(...)`, which
-                // hands a long to an enum and does not compile (DESIGN §15.89).
-                Ty::Opt(inner) => {
-                    let one = match inner.as_ref() {
-                        Ty::Enum(nm) => format!(
-                            "{cls}.{}.from(s({d}, {jp}))",
-                            java_class(&self.enum_names.get(nm).cloned().unwrap_or_default())
-                        ),
-                        Ty::Str => format!("s({d}, {jp})"),
-                        Ty::Bool => format!("b({d}, {jp}, {})", java_str(&not_bool(&i.name.text))),
-                        Ty::Date => format!("ord(s({d}, {jp}))"),
-                        _ => format!("n({d}, {jp})"),
-                    };
-                    // A string keeps its quote, so the text "null" does not look like `null`.
-                    format!("(\"null\".equals(get({d}, {jp})) ? null : {one})")
+        // One input read off the wire the way every door reads it (§15.204): there at all, of
+        // its kind, and only then the module's type. Every reader throws the module's own
+        // `RuleInputError`, with the sentence every language says.
+        let read = |ty: &Ty, src: &str, name: &str| -> String {
+            let optional = matches!(ty, Ty::Opt(_));
+            let take = format!("take({src}, {}, {}, {optional})", java_str(name), java_str(&crate::door::missing(name)));
+            let one = |v: &str| -> String {
+                match ty.present() {
+                    Ty::Enum(n) => format!(
+                        "member({v}, {}, {cls}.{}::from)",
+                        java_str(&crate::door::not_in_enum(name, n)),
+                        java_class(&self.enum_names.get(n).cloned().unwrap_or_default())
+                    ),
+                    Ty::Bool => format!("b({v}, {})", java_str(&crate::door::not_bool(name))),
+                    Ty::Date => format!("date({v}, {})", java_str(&crate::door::not_date(name))),
+                    Ty::Str => format!("text({v}, {})", java_str(&crate::door::not_string(name))),
+                    _ => format!("integer({v}, {})", java_str(&crate::door::not_integer(name))),
                 }
-                _ => format!("n({d}, {jp})"),
-            });
+            };
+            if optional {
+                // `null` on the wire is a null reference (DESIGN §15.89).
+                format!("maybe({take}, x -> {})", one("x"))
+            } else {
+                one(&take)
+            }
+        };
+        let mut binds = String::new();
+        let mut args: Vec<String> = Vec::new();
+        for (k, i) in self.f.inputs.iter().enumerate() {
+            let a = java_name(&self.temp(&format!("a{k}")));
+            binds.push_str(&format!("                    var {a} = {};\n", read(&self.ty_of(&i.name.text), &d, &i.name.text)));
+            args.push(a);
         }
         // The sequence a walk reads, one element at a time (§15.56).
-        let mut seq = String::new();
         if let Some(el) = &self.f.elements {
             let e = java_name(&self.temp("e"));
             let v = java_name(&self.temp("els"));
-            let fields: Vec<String> = el
-                .fields
-                .iter()
-                .map(|fd| {
-                    let k = java_str(&fd.name.text);
-                    match &self.ty_of(&fd.name.text) {
-                        Ty::Enum(n) => format!(
-                            "{cls}.{}.from(s({e}, {k}))",
-                            java_class(&self.enum_names.get(n).cloned().unwrap_or_default())
-                        ),
-                        Ty::Str => format!("s({e}, {k})"),
-                        Ty::Bool => format!("b({e}, {k}, {})", java_str(&not_bool(&fd.name.text))),
-                        Ty::Date => format!("ord(s({e}, {k}))"),
-                        // `null` on the wire is a null reference; the module's parameter is the
-                        // enum itself, which Java lets be null. It used to fall to `n(...)`, which
-                        // hands a long to an enum and does not compile (DESIGN §15.89).
-                        Ty::Opt(inner) => {
-                            let one = match inner.as_ref() {
-                                Ty::Enum(nm) => format!(
-                                    "{cls}.{}.from(s({e}, {k}))",
-                                    java_class(&self.enum_names.get(nm).cloned().unwrap_or_default())
-                                ),
-                                Ty::Str => format!("s({e}, {k})"),
-                                Ty::Bool => format!("b({e}, {k}, {})", java_str(&not_bool(&fd.name.text))),
-                                Ty::Date => format!("ord(s({e}, {k}))"),
-                                _ => format!("n({e}, {k})"),
-                            };
-                            format!("(\"null\".equals(get({e}, {k})) ? null : {one})")
-                        }
-                        _ => format!("n({e}, {k})"),
-                    }
-                })
-                .collect();
-            seq = format!(
-                "                List<{cls}.Element> {v} = new ArrayList<>();\n                \
-                 for (Map<String, String> {e} : rows(get({d}, {}))) {{\n                    \
-                 {v}.add(new {cls}.Element({}));\n                }}\n",
-                java_str(&el.name.text),
+            let seq = &el.name.text;
+            let fields: Vec<String> = el.fields.iter().map(|fd| read(&self.ty_of(&fd.name.text), &e, &fd.name.text)).collect();
+            binds.push_str(&format!(
+                "                    List<{cls}.Element> {v} = new ArrayList<>();\n                    \
+                 for (Map<String, String> {e} : list(take({d}, {}, {}, false), {}, {})) {{\n                        \
+                 {v}.add(new {cls}.Element({}));\n                    }}\n",
+                java_str(seq),
+                java_str(&crate::door::missing(seq)),
+                java_str(&crate::door::not_sequence(seq)),
+                java_str(&crate::door::not_object(seq)),
                 fields.join(", ")
-            );
+            ));
             args.push(v);
         }
         let (r, line) = (java_name(&self.temp("r")), java_name(&self.temp("line")));
@@ -1325,7 +1270,8 @@ impl<'a> Gen<'a> {
         if let (Some((en, _, _)), Some((cin, _)), Some(out)) = (self.machine_consts(), self.carried(), self.carried_out_alias()) {
             let ety = format!("{cls}.{}", java_class(&self.enum_names.get(&en).cloned().unwrap_or_default()));
             if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
-                args[k] = format!("({stepping} ? {state} : {})", args[k]);
+                let a = &args[k];
+                binds = binds.replace(&format!("var {a} = "), &format!("var {a} = {stepping} ? {state} : "));
             }
             head = format!("        {ety} {state} = {cls}.INITIAL;\n");
             meta = format!(
@@ -1339,7 +1285,7 @@ impl<'a> Gen<'a> {
                  if (\"start\".equals(s({top}, \"step\"))) {{\n                    {state} = {ety}.from(s({top}, \"state\"));\n                }}\n"
             );
             tail = format!(
-                "                if ({stepping}) {{\n                    {state} = {};\n                }}\n",
+                "                    if ({stepping}) {{\n                        {state} = {};\n                    }}\n",
                 self.next_state_of(&format!("{r}.value()"), &format!(".{}()", java_name(&out)))
             );
         }
@@ -1365,26 +1311,29 @@ impl<'a> Gen<'a> {
              {line} = {line}.trim();\n            \
              if (!{line}.isEmpty()) {{\n\
              {meta}                \
-             Map<String, String> {d} = fields({line});\n\
-             {seq}                \
-             {cls}.Traced {r} = {cls}.{fname}Traced({args});\n                \
+             Map<String, String> {d} = fields({line});\n                \
+             // One call, or the refusal its door gives, in the place of the record (§15.204).\n                \
+             try {{\n\
+             {binds}                    \
+             {cls}.Traced {r} = {cls}.{fname}Traced({args});\n                    \
              out.println({cls}.{fname}Record({args}, {r}.value(), {r}.trace(), \"\"));\n\
-             {tail}            \
+             {tail}                \
+             }} catch ({cls}.RuleInputError e) {{\n                    \
+             out.println(refusal(\"input\", e.what));\n                \
+             }} catch ({cls}.RuleContradictionError e) {{\n                    \
+             out.println(refusal(\"contradiction\", e.what));\n                \
+             }}\n            \
              }}\n        }}\n    }}\n\n\
-             {helpers}{boolean}}}\n",
+             {helpers}{wire}}}\n",
             ritsu_emit::header::VERSION,
             args = args.join(", "),
             helpers = JAVA_JSON_HELPERS,
-            // JSON's `true` or `false` and nothing else, where `equals("true")` read the text
-            // "true" as true and anything else as false (§15.203).
-            boolean = format!(
-                "\n    /** {} */\n    \
-                 private static boolean b(Map<String, String> d, String k, String what) {{\n        \
-                 String v = get(d, k);\n        \
-                 if (v.equals(\"true\")) {{\n            return true;\n        }}\n        \
-                 if (v.equals(\"false\")) {{\n            return false;\n        }}\n        \
-                 throw new {cls}.RuleInputError(what);\n    }}\n",
-                tr!("真偽は JSON の true か false だけ。ほかは、ほかの言語と同じ文で拒む。", "A truth value is JSON's true or false; anything else is refused with the sentence the other languages say.")
+            wire = JAVA_WIRE.replace("@CLS@", &cls).replace(
+                "@D_WIRE@",
+                &tr!(
+                    "線の上の入力を、どの入口とも同じに読む。無いもの、型の違うものは、ほかの言語と同じ文で拒む。",
+                    "An input read off the wire the way every door reads it: one not there, or of another kind, is refused with the sentence the other languages say."
+                )
             ),
         )
     }
@@ -1444,3 +1393,109 @@ pub fn round_tests_java() -> String {
     ));
     o
 }
+
+/// How the generated Java runner reads the wire (§15.204): the readers of the Python runner's,
+/// throwing the module's own `RuleInputError`. A string keeps its opening quote in the reader
+/// above, so `"12"` is not a number and the text `true` is not a truth value.
+const JAVA_WIRE: &str = r##"
+    /** @D_WIRE@ */
+    private static String take(Map<String, String> d, String k, String missing, boolean optional) {
+        String v = d.get(k);
+        if (v == null || (v.equals("null") && !optional)) {
+            throw new @CLS@.RuleInputError(missing);
+        }
+        return v;
+    }
+
+    private static <T> T maybe(String v, java.util.function.Function<String, T> read) {
+        return v.equals("null") ? null : read.apply(v);
+    }
+
+    private static long integer(String v, String what) {
+        String digits = v.startsWith("-") ? v.substring(1) : v;
+        if (digits.isEmpty() || !digits.chars().allMatch(c -> c >= '0' && c <= '9')) {
+            throw new @CLS@.RuleInputError(what);
+        }
+        try {
+            return Long.parseLong(v);
+        } catch (NumberFormatException e) {
+            throw new @CLS@.RuleInputError(what);
+        }
+    }
+
+    private static boolean b(String v, String what) {
+        if (v.equals("true")) {
+            return true;
+        }
+        if (v.equals("false")) {
+            return false;
+        }
+        throw new @CLS@.RuleInputError(what);
+    }
+
+    private static String text(String v, String what) {
+        if (!v.startsWith("\"")) {
+            throw new @CLS@.RuleInputError(what);
+        }
+        return v.substring(1);
+    }
+
+    private static long date(String v, String what) {
+        String s = text(v, what);
+        if (!s.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")) {
+            throw new @CLS@.RuleInputError(what);
+        }
+        try {
+            java.time.LocalDate.parse(s);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new @CLS@.RuleInputError(what);
+        }
+        return ord(s);
+    }
+
+    private static <E> E member(String v, String what, java.util.function.Function<String, E> from) {
+        String s = text(v, what);
+        try {
+            return from.apply(s);
+        } catch (IllegalArgumentException e) {
+            throw new @CLS@.RuleInputError(what);
+        }
+    }
+
+    private static List<Map<String, String>> list(String v, String notSequence, String notObject) {
+        if (!v.startsWith("[")) {
+            throw new @CLS@.RuleInputError(notSequence);
+        }
+        List<Map<String, String>> out = new ArrayList<>();
+        int i = 1;
+        while (true) {
+            while (i < v.length() && (Character.isWhitespace(v.charAt(i)) || v.charAt(i) == ',')) {
+                i++;
+            }
+            if (i >= v.length() || v.charAt(i) == ']') {
+                return out;
+            }
+            if (v.charAt(i) != '{') {
+                throw new @CLS@.RuleInputError(notObject);
+            }
+            Pairs p = pairsFrom(v, i);
+            out.add(p.map());
+            i = p.next();
+        }
+    }
+
+    /** A refusal, in the place of the record: which of the two the door raised, and its sentence. */
+    private static String refusal(String kind, String what) {
+        StringBuilder o = new StringBuilder("{\"refused\":\"").append(kind).append("\",\"error\":\"");
+        for (char c : what.toCharArray()) {
+            if (c == '"' || c == '\\') {
+                o.append('\\').append(c);
+            } else if (c < 0x20) {
+                o.append(String.format("\\u%04x", (int) c));
+            } else {
+                o.append(c);
+            }
+        }
+        return o.append("\"}").toString();
+    }
+"##;

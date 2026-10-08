@@ -118,7 +118,7 @@ def fee_demo(dest: Zone, girth: Inch, weight: Pound) -> USDInclTax:
 
 def fee_demo_traced(dest: Zone, girth: Inch, weight: Pound) -> tuple[USDInclTax, list[Fired]]:
     if not _isinstance(dest, Zone):
-        raise RuleInputError("dest is not a value of enum Zone", dest)
+        raise RuleInputError("dest is not a value of enum zone", dest)
     if not 1 <= girth <= 130:
         raise RuleInputError("girth is out of range", girth)
     trace: _Trace = []
@@ -498,10 +498,10 @@ in the rule.
 
 ```console
 $ rulec test generated/
-ok    member_shipping_fee (Python) 70 vectors
-ok    member_shipping_fee (Python, MCP) 70 vectors
+ok    member_shipping_fee (Python) 70 vectors, 16 refused
+ok    member_shipping_fee (Python, MCP) 70 vectors, 16 refused
 …
-ok    member_shipping_fee (Go) 70 vectors
+ok    member_shipping_fee (Go) 70 vectors, 16 refused
 …
 ok    rounding helper (Python) unit vectors
 ok    rounding helper (NumPy) unit vectors
@@ -513,7 +513,11 @@ All 36 matched.
 The vectors are built from the boundaries of the rule, not from the
 generated code, and the rounding helpers get their own unit vectors —
 table-level agreement alone would hide a helper bug in a table that
-never produces fractions.
+never produces fractions. The refused inputs are the other half: an
+input for every reason the door turns one away — one left out, one of
+another kind, one past an end of its range, a combination a `constraint`
+rules out — and every language has to refuse each of them with the
+sentence the reference evaluator says.
 
 ## Wasm: one module for any host
 
@@ -521,7 +525,7 @@ The ninth target is a module rather than a function in a language. `wasm/` holds
 Rust module `rust/` gets, a crate root that puts it behind the canonical ABI of
 `call: func(input: string) -> string`, a `.wit` that names that function as the export of a
 world, and the Node runner `rulec test` drives. `rustc` alone builds it, with no cargo and no
-crate; the shipping rule comes to forty-four kilobytes and imports nothing.
+crate; the shipping rule comes to thirty-six kilobytes and imports nothing.
 
 ```console
 $ rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols \
@@ -529,8 +533,9 @@ $ rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols \
 ```
 
 A host writes a JSON object of the inputs into the module's memory, calls `call`, and reads
-the record line back — the same line every other language's `_record` writes, or
-`{"error":"…"}` for an input outside the contract. With the `.wit`, `wasm-tools component new`
+the record line back — the same line every other language's `_record` writes, or, for an
+input outside the contract, the refusal line the runners print:
+`{"refused":"input","error":"…"}`. With the `.wit`, `wasm-tools component new`
 makes a component of the module without a change, and a component runtime such as wasmtime
 invokes it as `call("{…}")`. [Generated code](generated-code.md#wasm) shows the host, the
 component step, and what `rulec api` says under `wasm`.
@@ -539,10 +544,10 @@ component step, and what `rulec api` says under `wasm`.
 
 ```console
 $ rulec test generated/
-ok    member_shipping_fee (Rust) 70 vectors
-ok    member_shipping_fee (Rust, WASI) 70 vectors
+ok    member_shipping_fee (Rust) 70 vectors, 16 refused
+ok    member_shipping_fee (Rust, WASI) 70 vectors, 16 refused
 …
-ok    member_shipping_fee (Wasm) 70 vectors
+ok    member_shipping_fee (Wasm) 70 vectors, 16 refused
 …
 ```
 

@@ -139,11 +139,18 @@ console.log(call('{"届け先":"北海道","重量":"2.5kg","注文金額":12000
     let lines: Vec<&str> = out.lines().collect();
     assert_eq!(lines.len(), 6, "{out}");
     assert!(lines[0].starts_with("{\"in\":{\"届け先\":\"北海道\"") && lines[0].contains("\"observed\":{\"送料\":1800}"), "{out}");
-    assert!(lines[1].starts_with("{\"error\":") && lines[1].contains("火星"), "{out}");
-    assert!(lines[2].starts_with("{\"error\":") && lines[2].contains("重量"), "{out}");
+    // A refusal is the line the runners print: which error, and the sentence every door says,
+    // the value after it (§15.204).
+    let said = |l: &str| -> String {
+        let j = rulec::json::parse(l).unwrap_or_else(|e| panic!("{e}: {l}"));
+        assert_eq!(j.get("refused").and_then(|v| v.as_str()), Some("input"), "{l}");
+        j.get("error").and_then(|v| v.as_str()).unwrap_or_default().to_string()
+    };
+    assert!(said(lines[1]).starts_with("届け先 が列挙 都道府県 の値ではありません"), "{out}");
+    assert!(said(lines[2]).starts_with("重量 が範囲の外です"), "{out}");
     assert_eq!(lines[3], lines[0], "エスケープした入力で答えが変わった\n{out}");
-    assert!(lines[4].starts_with("{\"error\":") && lines[4].contains("重量") && lines[4].contains("missing"), "{out}");
-    assert!(lines[5].starts_with("{\"error\":") && lines[5].contains("重量") && lines[5].contains("whole number"), "{out}");
+    assert_eq!(said(lines[4]), "重量 がありません", "{out}");
+    assert_eq!(said(lines[5]), "重量 が整数ではありません", "{out}");
 }
 
 #[test]

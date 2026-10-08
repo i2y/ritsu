@@ -710,8 +710,9 @@ print(json.dumps(out, ensure_ascii=False))
         .collect();
     assert_eq!(got[0], (200, "fee 400".to_string()));
     assert_eq!(got[1], (200, "fee 1200".to_string()), "0 を明示した入力は受け取る");
-    assert_eq!(got[2], (400, "状態: not set".to_string()), "省いた列挙が 0 番の値として判断された");
-    assert_eq!(got[3], (400, "急ぎ: not set".to_string()));
+    // The sentence every door says of an input that is not there (§15.204).
+    assert_eq!(got[2], (400, "状態 is missing".to_string()), "省いた列挙が 0 番の値として判断された");
+    assert_eq!(got[3], (400, "急ぎ is missing".to_string()));
     assert_eq!(got[4].0, 400, "知らない列挙の名前が通った: {}", got[4].1);
     assert!(got[4].1.contains("STATUS_CLOSD"), "{}", got[4].1);
     assert_eq!(got[5].0, 400, "知らないフィールドが通った: {}", got[5].1);

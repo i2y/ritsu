@@ -39,6 +39,7 @@ pub mod days;
 pub mod defset;
 pub mod diag;
 pub mod doc;
+pub mod door;
 pub mod docx;
 pub mod enums;
 pub mod eval;

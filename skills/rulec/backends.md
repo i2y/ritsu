@@ -361,7 +361,7 @@ the input and writes the operations through imported host calls rather than thro
 the Shopify Wasm API, which the `shopify_function` crate wraps. The module has to stay under
 256 kB, the run under 11 million instructions, and the `input_query` that shapes the input
 under 3,000 bytes. No network anywhere. None of that is a shape `gen` emits, and none of it
-has to be: the decision itself is small — the `wasm/` module for `member_shipping_fee` is 44 kB, built with
+has to be: the decision itself is small — the `wasm/` module for `member_shipping_fee` is 36 kB, built with
 `rustc` alone — so what the budget goes on is the boundary, not the table.
 
 The rule stays a rule: flat inputs, one decision. What the function adds is the boundary —

@@ -580,11 +580,7 @@ impl<'a> Gen<'a> {
             o.push_str(&format!("    if (count({seq}) > {cap}) {{\n"));
             o.push_str(&format!(
                 "        throw new RuleInputError({}, count({seq}));\n    }}\n",
-                php_str(&tr!(
-                    "{} の要素が多すぎます（上限 {cap}）",
-                    "{} has too many elements (at most {cap})",
-                    el.name.text
-                ))
+                php_str(&crate::door::too_many(&el.name.text, cap))
             ));
         }
         for d in self.counts() {
@@ -620,7 +616,7 @@ impl<'a> Gen<'a> {
             let n = php_var(&self.ident(&d.name.text));
             o.push_str(&format!(
                 "    if ({n} > {cap}) {{\n        throw new RuleInputError({}, {n});\n    }}\n",
-                php_str(&tr!("{} が範囲の外です", "{} is out of range", d.name.text)),
+                php_str(&crate::door::out_of_range(&d.name.text)),
             ));
         }
         o.push_str(&self.php_items(outer, trace, Phase::Main));
@@ -645,7 +641,7 @@ impl<'a> Gen<'a> {
                         "    if ({v} < {} || {v} > {}) {{\n        throw new RuleInputError({}, {v});\n    }}\n",
                         crate::types::wire_int(lo, sc),
                         crate::types::wire_int(hi, sc),
-                        php_str(&tr!("{} が範囲の外です", "{} is out of range", i.name.text)),
+                        php_str(&crate::door::out_of_range(&i.name.text)),
                     ));
                 }
             }
@@ -770,7 +766,7 @@ impl<'a> Gen<'a> {
                         "    if ({v} < {} || {v} > {}) {{\n        throw new RuleInputError({}, {v});\n    }}\n",
                         crate::types::wire_int(lo, sc),
                         crate::types::wire_int(hi, sc),
-                        php_str(&tr!("{} が範囲の外です", "{} is out of range", i.name.text)),
+                        php_str(&crate::door::out_of_range(&i.name.text)),
                     ));
                 }
             }
@@ -1032,84 +1028,55 @@ impl<'a> Gen<'a> {
     }
 
     /// A PHP runner that reads JSONL on stdin and prints one record per line. `ext/json` is
-    /// compiled into every 8.x build and cannot be disabled, so this needs no composer.
+    /// compiled into every 8.x build and cannot be disabled, so this needs no composer. An input
+    /// is read the way every door reads it (§15.204), and one the door refuses gets a line saying
+    /// so in the place of the record.
     pub fn php_runner(&self) -> String {
         let alias = pub_name(&self.f.name);
         let fname = self.php_fname();
         let ns = self.php_ns();
         let d = php_var(&self.temp("d"));
-        let mut args: Vec<String> = Vec::new();
-        for i in &self.f.inputs {
-            let jp = &i.name.text;
-            let k = php_str(jp);
-            args.push(match &self.ty_of(&i.name.text) {
-                Ty::Enum(n) => format!(
-                    "\\{ns}\\{}::from({d}[{k}])",
-                    php_name(&self.enum_names.get(n).cloned().unwrap_or_default())
-                ),
-                Ty::Str => format!("(string) {d}[{k}]"),
-                Ty::Bool => format!("_bool({d}[{k}], {})", php_str(&not_bool(jp))),
-                Ty::Date => format!("_ord({d}[{k}])"),
-                // `null` on the wire is PHP's `null`, and the module's parameter is `?Kind`. It
-                // used to fall to `(int)`, which hands 0 to a nullable enum and PHP refuses the
-                // call outright (DESIGN §15.88).
-                Ty::Opt(inner) => {
-                    let one = match inner.as_ref() {
-                        Ty::Enum(nm) => format!(
-                            "\\{ns}\\{}::from({d}[{k}])",
-                            php_name(&self.enum_names.get(nm).cloned().unwrap_or_default())
-                        ),
-                        Ty::Str => format!("(string) {d}[{k}]"),
-                        Ty::Bool => format!("_bool({d}[{k}], {})", php_str(&not_bool(jp))),
-                        Ty::Date => format!("_ord({d}[{k}])"),
-                        _ => format!("(int) {d}[{k}]"),
-                    };
-                    format!("({d}[{k}] === null ? null : {one})")
+        let read = |ty: &Ty, src: &str, name: &str| -> String {
+            let optional = matches!(ty, Ty::Opt(_));
+            let take = format!(
+                "_take({src}, {}, {}{})",
+                php_str(name),
+                php_str(&crate::door::missing(name)),
+                if optional { ", true" } else { "" }
+            );
+            let one = |v: &str| -> String {
+                match ty.present() {
+                    Ty::Enum(n) => format!(
+                        "_enum(\\{ns}\\{}::class, {v}, {})",
+                        php_name(&self.enum_names.get(n).cloned().unwrap_or_default()),
+                        php_str(&crate::door::not_in_enum(name, n))
+                    ),
+                    Ty::Bool => format!("_bool({v}, {})", php_str(&crate::door::not_bool(name))),
+                    Ty::Date => format!("_date({v}, {})", php_str(&crate::door::not_date(name))),
+                    Ty::Str => format!("_str({v}, {})", php_str(&crate::door::not_string(name))),
+                    _ => format!("_int({v}, {})", php_str(&crate::door::not_integer(name))),
                 }
-                _ => format!("(int) {d}[{k}]"),
-            });
-        }
+            };
+            if optional {
+                format!("_maybe({take}, fn($x) => {})", one("$x"))
+            } else {
+                one(&take)
+            }
+        };
+        let mut args: Vec<String> = self.f.inputs.iter().map(|i| read(&self.ty_of(&i.name.text), &d, &i.name.text)).collect();
         // The sequence a walk reads, one element at a time (§15.56).
         let mut seq = String::new();
         if let Some(el) = &self.f.elements {
             let e = php_var(&self.temp("e"));
             let v = php_var(&self.temp("els"));
-            let fields: Vec<String> = el
-                .fields
-                .iter()
-                .map(|fd| {
-                    let k = php_str(&fd.name.text);
-                    match &self.ty_of(&fd.name.text) {
-                        Ty::Enum(n) => format!(
-                            "\\{ns}\\{}::from({e}[{k}])",
-                            php_name(&self.enum_names.get(n).cloned().unwrap_or_default())
-                        ),
-                        Ty::Str => format!("(string) {e}[{k}]"),
-                        Ty::Bool => format!("_bool({e}[{k}], {})", php_str(&not_bool(&fd.name.text))),
-                        Ty::Date => format!("_ord({e}[{k}])"),
-                        // `null` on the wire is PHP's `null`, and the module's parameter is `?Kind`. It
-                        // used to fall to `(int)`, which hands 0 to a nullable enum and PHP refuses the
-                        // call outright (DESIGN §15.88).
-                        Ty::Opt(inner) => {
-                            let one = match inner.as_ref() {
-                                Ty::Enum(nm) => format!(
-                                    "\\{ns}\\{}::from({e}[{k}])",
-                                    php_name(&self.enum_names.get(nm).cloned().unwrap_or_default())
-                                ),
-                                Ty::Str => format!("(string) {e}[{k}]"),
-                                Ty::Bool => format!("_bool({e}[{k}], {})", php_str(&not_bool(&fd.name.text))),
-                                Ty::Date => format!("_ord({e}[{k}])"),
-                                _ => format!("(int) {e}[{k}]"),
-                            };
-                            format!("({e}[{k}] === null ? null : {one})")
-                        }
-                        _ => format!("(int) {e}[{k}]"),
-                    }
-                })
-                .collect();
+            let s = &el.name.text;
+            let obj = format!("_obj({e}, {})", php_str(&crate::door::not_object(s)));
+            let fields: Vec<String> = el.fields.iter().map(|fd| read(&self.ty_of(&fd.name.text), &obj, &fd.name.text)).collect();
             seq = format!(
-                "    {v} = [];\n    foreach ({d}[{}] as {e}) {{\n        {v}[] = new \\{ns}\\Element({});\n    }}\n",
-                php_str(&el.name.text),
+                "        {v} = [];\n        foreach (_seq(_take({d}, {}, {}), {}) as {e}) {{\n            {v}[] = new \\{ns}\\Element({});\n        }}\n",
+                php_str(s),
+                php_str(&crate::door::missing(s)),
+                php_str(&crate::door::not_sequence(s)),
                 fields.join(", ")
             );
             args.push(v);
@@ -1145,56 +1112,31 @@ impl<'a> Gen<'a> {
              // engine has to say goes to stderr whatever the machine's php.ini says.\n\
              ini_set('display_errors', 'stderr');\n\n\
              require_once __DIR__ . '/{alias}.php';\n\n\
-             {ord}\
-             {boolean}\
+             {}\
              {head}\
              while (({line} = fgets(STDIN)) !== false) {{\n    \
              {line} = trim({line});\n    \
              if ({line} === '') {{\n        continue;\n    }}\n    \
-             {body}\
-             {seq}    \
-             {a} = [{}];\n    \
+             {body}    \
+             try {{\n\
+             {seq}        \
+             {a} = [{}];\n        \
              [{r}, {trace}] = \\{ns}\\{fname}_traced(...{a});\n    \
+             }} catch (\\{ns}\\RuleInputError $e) {{\n        \
+             _refused('input', $e->what);\n        \
+             continue;\n    \
+             }} catch (\\{ns}\\RuleContradictionError $e) {{\n        \
+             _refused('contradiction', $e->what);\n        \
+             continue;\n    \
+             }}\n    \
              {a}[] = {r};\n    \
              {a}[] = {trace};\n    \
              echo \\{ns}\\{fname}_record(...{a}), \"\\n\";\n\
              {tail}\
              }}\n",
             ritsu_emit::header::VERSION,
+            PHP_WIRE.replace("@NS@", &ns),
             args.join(", "),
-            // An optional date is read with it too (§15.201).
-            ord = if self.f.inputs.iter().any(|i| matches!(self.ty_of(&i.name.text).present(), Ty::Date))
-                || self.element_fields().iter().any(|f| matches!(self.ty_of(&f.name.text).present(), Ty::Date))
-            {
-                "/// A date as its day number from 1970-01-01, by the same civil-date arithmetic\n\
-                 /// the tool uses.\n\
-                 function _ord(string $s): int\n{\n    \
-                 [$y, $m, $d] = array_map('intval', explode('-', $s));\n    \
-                 $y2 = $m <= 2 ? $y - 1 : $y;\n    \
-                 $era = intdiv($y2 >= 0 ? $y2 : $y2 - 399, 400);\n    \
-                 $yoe = $y2 - $era * 400;\n    \
-                 $mp = ($m + 9) % 12;\n    \
-                 $doy = intdiv(153 * $mp + 2, 5) + $d - 1;\n    \
-                 $doe = $yoe * 365 + intdiv($yoe, 4) - intdiv($yoe, 100) + $doy;\n    \
-                 return $era * 146097 + $doe - 719468;\n}\n\n"
-            } else {
-                ""
-            },
-            // A truth value is read as JSON has it, where `(bool)` read `"false"` and `0` as
-            // true (§15.203).
-            boolean = if self.f.inputs.iter().any(|i| matches!(self.ty_of(&i.name.text).present(), Ty::Bool))
-                || self.element_fields().iter().any(|f| matches!(self.ty_of(&f.name.text).present(), Ty::Bool))
-            {
-                format!(
-                    "/// {}\n\
-                     function _bool(mixed $v, string $what): bool\n{{\n    \
-                     if (!is_bool($v)) {{\n        throw new \\{ns}\\RuleInputError($what);\n    }}\n    \
-                     return $v;\n}}\n\n",
-                    tr!("真偽は JSON の true か false だけ。", "A truth value is JSON's true or false and nothing else.")
-                )
-            } else {
-                String::new()
-            },
         )
     }
 
@@ -1377,3 +1319,103 @@ impl Gen<'_> {
         format!("function {}_from({})", self.php_fname(), params.join(", "))
     }
 }
+
+/// How the generated PHP runner reads the wire (§15.204): the readers of the Python runner's, in
+/// PHP. The error carries no value here, because PHP's `RuleInputError` holds an integer and a
+/// value that is not one is what is being refused.
+const PHP_WIRE: &str = r#"/// A date as its day number from 1970-01-01, by the same civil-date arithmetic the tool uses.
+function _ord(string $s): int
+{
+    [$y, $m, $d] = array_map('intval', explode('-', $s));
+    $y2 = $m <= 2 ? $y - 1 : $y;
+    $era = intdiv($y2 >= 0 ? $y2 : $y2 - 399, 400);
+    $yoe = $y2 - $era * 400;
+    $mp = ($m + 9) % 12;
+    $doy = intdiv(153 * $mp + 2, 5) + $d - 1;
+    $doe = $yoe * 365 + intdiv($yoe, 4) - intdiv($yoe, 100) + $doy;
+    return $era * 146097 + $doe - 719468;
+}
+
+function _take(mixed $d, string $k, string $missing, bool $optional = false): mixed
+{
+    if (!is_array($d) || !array_key_exists($k, $d) || ($d[$k] === null && !$optional)) {
+        throw new \@NS@\RuleInputError($missing);
+    }
+    return $d[$k];
+}
+
+function _int(mixed $v, string $what): int
+{
+    if (!is_int($v)) {
+        throw new \@NS@\RuleInputError($what);
+    }
+    return $v;
+}
+
+function _bool(mixed $v, string $what): bool
+{
+    if (!is_bool($v)) {
+        throw new \@NS@\RuleInputError($what);
+    }
+    return $v;
+}
+
+function _str(mixed $v, string $what): string
+{
+    if (!is_string($v)) {
+        throw new \@NS@\RuleInputError($what);
+    }
+    return $v;
+}
+
+function _date(mixed $v, string $what): int
+{
+    if (!is_string($v) || preg_match('/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/D', $v) !== 1) {
+        throw new \@NS@\RuleInputError($what);
+    }
+    [$y, $m, $d] = array_map('intval', explode('-', $v));
+    if (!checkdate($m, $d, $y)) {
+        throw new \@NS@\RuleInputError($what);
+    }
+    return _ord($v);
+}
+
+/** @param class-string<\BackedEnum> $cls */
+function _enum(string $cls, mixed $v, string $what): \BackedEnum
+{
+    $e = is_string($v) ? $cls::tryFrom($v) : null;
+    if ($e === null) {
+        throw new \@NS@\RuleInputError($what);
+    }
+    return $e;
+}
+
+/** @return list<mixed> */
+function _seq(mixed $v, string $what): array
+{
+    if (!is_array($v) || !array_is_list($v)) {
+        throw new \@NS@\RuleInputError($what);
+    }
+    return $v;
+}
+
+/** @return array<string, mixed> */
+function _obj(mixed $v, string $what): array
+{
+    if (!is_array($v) || ($v !== [] && array_is_list($v))) {
+        throw new \@NS@\RuleInputError($what);
+    }
+    return $v;
+}
+
+function _maybe(mixed $v, callable $read): mixed
+{
+    return $v === null ? null : $read($v);
+}
+
+function _refused(string $kind, string $what): void
+{
+    echo json_encode(['refused' => $kind, 'error' => $what], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), "\n";
+}
+
+"#;

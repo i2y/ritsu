@@ -161,7 +161,7 @@ fn an_optional_truth_value_takes_null_and_nothing_else() {
     }
 }
 
-/// Each language's runner, handed a truth value that is not one, stops and says the same sentence,
+/// Each language's runner, handed a truth value that is not one, refuses it with the same sentence,
 /// in the language the rule's messages were generated in; `false` itself is answered.
 #[test]
 fn every_language_says_the_same_sentence() {
@@ -203,13 +203,14 @@ fn every_language_says_the_same_sentence() {
                     .unwrap_or_else(|e| panic!("{}: {}: {e}", c.rule, b.name));
                 (o.status.success(), format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr)))
             };
+            // A refusal is a line of its own, in the place of the record (§15.204).
             for value in NOT_ONE {
-                let (answered, said) = run(value);
-                assert!(!answered, "{}: {} answered {} = {value}:\n{said}", c.rule, b.name, c.input);
+                let (ran, said) = run(value);
+                assert!(ran && said.starts_with("{\"refused\":\"input\""), "{}: {} did not refuse {} = {value}:\n{said}", c.rule, b.name, c.input);
                 assert!(said.contains(c.said), "{}: {} does not say `{}` of {value}:\n{said}", c.rule, b.name, c.said);
             }
-            let (answered, said) = run("false");
-            assert!(answered, "{}: {} refused {} = false:\n{said}", c.rule, b.name, c.input);
+            let (ran, said) = run("false");
+            assert!(ran && said.starts_with("{\"in\""), "{}: {} did not answer {} = false:\n{said}", c.rule, b.name, c.input);
         }
     }
 }

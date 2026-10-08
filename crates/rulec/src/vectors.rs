@@ -10,6 +10,7 @@
 use crate::ast::*;
 use crate::eval::{self, Val};
 use crate::num::{Rat, RoundTo};
+use crate::json::Json;
 use crate::types::{Checked, Ty};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -1457,15 +1458,254 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
 }
 
 /// One refused case, as a line of `vectors/<alias>.refused.jsonl`: the inputs in the same
-/// wire form the vectors file uses, and why the case is in the suite. The generated runners
-/// read `in` and nothing else, so the same line drives them (§15.56).
+/// wire form the vectors file uses, what the reference evaluator refuses them for and the
+/// sentence it says, and why the case is in the suite. The generated runners read `in` and
+/// nothing else, so the same line drives them (§15.56); `rulec test` holds what they say to
+/// `refused` and `error` (§15.204).
 pub fn refused_json(f: &RuleFile, c: &Checked, v: &Vector) -> String {
-    let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+    let inp = in_object(f, c, v);
+    let r = crate::json::parse(&inp)
+        .ok()
+        .and_then(|j| crate::door::refusal(f, c, &j))
+        .unwrap_or(crate::door::Refusal {
+            kind: "contradiction",
+            error: crate::door::fold_contradiction(f.fold.as_ref().map(|d| d.verdict.as_str()).unwrap_or_default()),
+        });
+    refused_line(&inp, &r, &v.why)
+}
+
+fn refused_line(inp: &str, r: &crate::door::Refusal, why: &str) -> String {
     format!(
-        "{{\"in\":{},\"refused\":\"contradiction\",\"why\":\"{}\"}}",
-        in_object(f, c, v),
-        esc(&v.why)
+        "{{\"in\":{inp},\"refused\":{},\"error\":{},\"why\":{}}}",
+        crate::json::quote(r.kind),
+        crate::json::quote(&r.error),
+        crate::json::quote(why)
     )
+}
+
+/// The inputs the door of every generated language refuses, as lines of the same file
+/// (§15.204): for each input, the input left out and a value of another kind; for a number, one
+/// that is not whole (off its step, for a rate) and one past each end of its range; for a date,
+/// a day the calendar does not have, one past each end and a day its koyomi date does not come
+/// to; for an enum, a word it does not have; for a truth value, the string "false"; for each
+/// `constraint`, a combination it rules out; and for the sequence a walk reads, the same of the
+/// sequence and of one element's fields, and one element past what a count over it can be. Each
+/// is a vector of the suite with one thing changed, so the door has one thing to say, and the
+/// line carries what the reference evaluator refuses it for. A case the reference evaluator does
+/// not refuse — an end the type already closes — is not written.
+pub fn door_cases(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<String> {
+    let parsed = |v: &Vector| crate::json::parse(&in_object(f, c, v)).ok();
+    let Some(base) = vectors.first().and_then(parsed) else { return Vec::new() };
+    let mut out: Vec<String> = Vec::new();
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    let mut push = |obj: Json, why: String| {
+        let text = obj.compact();
+        if !seen.insert(text.clone()) {
+            return;
+        }
+        if let Some(r) = crate::door::refusal(f, c, &obj) {
+            out.push(refused_line(&text, &r, &why));
+        }
+    };
+    for i in &f.inputs {
+        let name = &i.name.text;
+        let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
+        push(without(&base, name), tr!("{name} を渡さない", "{name} left out"));
+        for (value, why) in wrong_values(c, name, &ty, base.get(name)) {
+            push(with(&base, name, value), why);
+        }
+    }
+    for k in &f.constraints {
+        if let Some(obj) = breaking(f, c, k, &base) {
+            push(obj, tr!("制約 {} {} {} を破る組み合わせ", "a combination the constraint {} {} {} rules out", k.left, k.op.word(), k.right));
+        }
+    }
+    if let Some(el) = &f.elements {
+        let seq = &el.name.text;
+        let with_one = vectors
+            .iter()
+            .find(|v| matches!(v.input.get(seq), Some(Val::Seq(xs)) if !xs.is_empty()))
+            .and_then(parsed);
+        let top = with_one.clone().unwrap_or_else(|| base.clone());
+        push(without(&top, seq), tr!("{seq} を渡さない", "{seq} left out"));
+        push(with(&top, seq, Json::Int(0)), tr!("{seq} に並びでない値", "{seq} not a sequence"));
+        push(with(&top, seq, Json::Arr(vec![Json::Int(0)])), tr!("{seq} にオブジェクトでない要素", "an element of {seq} that is not an object"));
+        if let Some(first) = with_one.as_ref().and_then(|t| t.get(seq)).and_then(|s| s.as_arr()).and_then(|xs| xs.first()).cloned() {
+            let cap = crate::door::count_cap(f, c);
+            if let Some(cap) = cap.filter(|cap| *cap <= 50) {
+                let many = Json::Arr(vec![first.clone(); cap as usize + 1]);
+                push(with(&top, seq, many), tr!("{seq} の要素を、数え上げの上限より一つ多く", "{seq} one element past what a count over it can be"));
+            }
+            // A sum over a field past the top of its range: as many elements at the field's own
+            // top as it takes, where that is a few dozen.
+            for d in crate::door::sums(f) {
+                let (Some(hi), Some((_, Some(fhi)))) = (c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi), c.ranges.get(&d.column.text).copied()) else {
+                    continue;
+                };
+                if !el.fields.iter().any(|fd| fd.name.text == d.column.text) || fhi.num <= 0 {
+                    continue;
+                }
+                let q = hi.div(fhi);
+                let n = q.num.div_euclid(q.den) + 1;
+                if n > 50 || cap.is_some_and(|cap| n > cap) {
+                    continue;
+                }
+                let top_value = with(&first, &d.column.text, Json::Int(crate::types::wire_int(fhi, c.wire_scale(&d.column.text))));
+                let many = Json::Arr(vec![top_value; n as usize]);
+                push(with(&top, seq, many), tr!("{} の合計 {} を範囲の上端の先に", "the sum {1} of {0} past the top of its range", seq, d.name.text));
+            }
+            for fd in &el.fields {
+                let name = &fd.name.text;
+                let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
+                let mut cases = vec![(None, tr!("{seq} の要素の {name} を渡さない", "{name} left out of an element of {seq}"))];
+                for (value, why) in wrong_values(c, name, &ty, first.get(name)) {
+                    cases.push((Some(value), tr!("{seq} の要素の {why}", "{why}, in an element of {seq}")));
+                }
+                for (value, why) in cases {
+                    let el1 = match value {
+                        None => without(&first, name),
+                        Some(v) => with(&first, name, v),
+                    };
+                    let mut xs = top.get(seq).and_then(|s| s.as_arr()).map(|a| a.to_vec()).unwrap_or_default();
+                    xs[0] = el1;
+                    push(with(&top, seq, Json::Arr(xs)), why);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The values of another kind, or outside what the input takes, that its door refuses, each
+/// with why it is in the file: the reasons the door has for an input of this type.
+fn wrong_values(c: &Checked, name: &str, ty: &Ty, at: Option<&Json>) -> Vec<(Json, String)> {
+    let mut out = Vec::new();
+    let present = ty.present();
+    let (lo, hi) = c.ranges.get(name).copied().unwrap_or((None, None));
+    match present {
+        Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => {
+            let sc = c.wire_scale(name);
+            let (lo_w, hi_w) = (lo.map(|x| crate::types::wire_int(x, sc)), hi.map(|x| crate::types::wire_int(x, sc)));
+            let n = at.and_then(|j| j.as_int()).or(lo_w).or(hi_w).unwrap_or(0);
+            out.push((Json::Str(n.to_string()), tr!("{name} に数でなく文字列", "{name} as a string, not a number")));
+            // Half a step past the vector's own value: the door looks at the kind before the range.
+            let half = format!("{n}.5");
+            let why = if *present == Ty::Rate { tr!("{name} を刻みに載らない値に", "{name} off its step") } else { tr!("{name} を整数でない数に", "{name} not a whole number") };
+            out.push((Json::Frac(half), why));
+            if let Some(l) = lo_w {
+                out.push((Json::Int(l - 1), tr!("{name} を範囲の下端の一つ下に", "{name} one below its range")));
+            }
+            if let Some(h) = hi_w {
+                out.push((Json::Int(h + 1), tr!("{name} を範囲の上端の一つ上に", "{name} one above its range")));
+            }
+        }
+        Ty::Date => {
+            let ord = at.and_then(|j| j.as_str()).and_then(crate::door::civil).map(|(y, m, d)| crate::types::date_ord(y, m, d).num);
+            let ord = ord.or(lo.map(|l| l.num / l.den)).unwrap_or(20454);
+            out.push((Json::Int(ord), tr!("{name} に日付でなく数", "{name} as a number, not a date")));
+            out.push((Json::Str("2026-02-30".into()), tr!("{name} に暦に無い日", "{name} a day the calendar does not have")));
+            if let Some(l) = lo {
+                out.push((Json::Str(date_text(l.num / l.den - 1)), tr!("{name} を範囲の初日の前の日に", "{name} the day before its range")));
+            }
+            if let Some(h) = hi {
+                out.push((Json::Str(date_text(h.num / h.den + 1)), tr!("{name} を範囲の終わりの次の日に", "{name} the day after its range")));
+            }
+            if let Some(set) = c.day_sets.get(name) {
+                let (first, last) = (lo.map(|l| (l.num / l.den) as i64), hi.map(|h| (h.num / h.den) as i64));
+                let from = set.days.first().copied().unwrap_or(0).max(first.unwrap_or(i64::MIN));
+                let to = set.days.last().copied().unwrap_or(0).min(last.unwrap_or(i64::MAX));
+                if let Some(off) = (from..=to).find(|d| set.days.binary_search(d).is_err()) {
+                    let what = set.from.as_ref().map(|fr| format!("koyomi \"{}\" date {}", fr.file, fr.date)).unwrap_or_default();
+                    out.push((Json::Str(date_text(off as i128)), tr!("{name} を {what} がとらない日に", "{name} a day {what} does not come to")));
+                }
+            }
+        }
+        Ty::Enum(en) => {
+            let vs = c.enums.get(en).cloned().unwrap_or_default();
+            out.push((Json::Int(0), tr!("{name} に列挙の値でなく数", "{name} as a number, not a value of its enum")));
+            let mut word = format!("{}?", vs.first().cloned().unwrap_or_default());
+            while vs.contains(&word) {
+                word.push('?');
+            }
+            out.push((Json::Str(word), tr!("{name} に列挙 {en} に無い値", "{name} a value enum {en} does not have")));
+        }
+        Ty::Bool => {
+            out.push((Json::Str("false".into()), tr!("{name} に真偽でなく文字列の \"false\"", "{name} as the string \"false\", not a truth value")));
+            out.push((Json::Int(1), tr!("{name} に真偽でなく数の 1", "{name} as the number 1, not a truth value")));
+        }
+        Ty::Str => {
+            out.push((Json::Int(0), tr!("{name} に文字列でなく数", "{name} as a number, not a string")));
+        }
+        _ => {}
+    }
+    out
+}
+
+/// A combination `k` rules out, both sides inside what each takes: the ends of each side's range
+/// (or of its days), and the value the vector gives it, tried in turn.
+fn breaking(f: &RuleFile, c: &Checked, k: &Constraint, base: &Json) -> Option<Json> {
+    let said = crate::door::constraint(&format!("{} {} {}", k.left, k.op.word(), k.right));
+    let candidates = |name: &str| -> Vec<Json> {
+        let mut out = Vec::new();
+        let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
+        let (lo, hi) = c.ranges.get(name).copied().unwrap_or((None, None));
+        match ty.present() {
+            Ty::Date => {
+                let mut ords: Vec<i128> = Vec::new();
+                match c.day_sets.get(name) {
+                    Some(set) => ords.extend(set.days.first().iter().chain(set.days.last().iter()).map(|d| **d as i128)),
+                    None => ords.extend(lo.iter().chain(hi.iter()).map(|x| x.num / x.den)),
+                }
+                out.extend(ords.into_iter().map(|o| Json::Str(date_text(o))));
+            }
+            _ => {
+                let sc = c.wire_scale(name);
+                out.extend(lo.iter().chain(hi.iter()).map(|x| Json::Int(crate::types::wire_int(*x, sc))));
+            }
+        }
+        if let Some(v) = base.get(name) {
+            out.push(v.clone());
+        }
+        out
+    };
+    let (ls, rs) = (candidates(&k.left), candidates(&k.right));
+    for l in &ls {
+        for r in &rs {
+            let obj = with(&with(base, &k.left, l.clone()), &k.right, r.clone());
+            if crate::door::refusal(f, c, &obj).is_some_and(|x| x.error == said) {
+                return Some(obj);
+            }
+        }
+    }
+    None
+}
+
+fn date_text(ord: i128) -> String {
+    let (y, m, d) = crate::types::ord_to_date(Rat::int(ord));
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+/// The object with `key` left out.
+fn without(obj: &Json, key: &str) -> Json {
+    match obj {
+        Json::Obj(ps) => Json::Obj(ps.iter().filter(|(k, _)| k != key).cloned().collect()),
+        other => other.clone(),
+    }
+}
+
+/// The object with `key` set to `v`, in the place it had.
+fn with(obj: &Json, key: &str, v: Json) -> Json {
+    match obj {
+        Json::Obj(ps) => {
+            let mut ps = ps.clone();
+            match ps.iter_mut().find(|(k, _)| k == key) {
+                Some(p) => p.1 = v,
+                None => ps.push((key.to_string(), v)),
+            }
+            Json::Obj(ps)
+        }
+        other => other.clone(),
+    }
 }
 
 /// Canonical JSON. Three-way agreement is judged on these bytes (§8.5).

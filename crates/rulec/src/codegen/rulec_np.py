@@ -113,7 +113,11 @@ def _column(col):
     no element at all: a column with `[]` in it lost its length, and nothing refused it. A value
     that is a list is no value of any input, and the checks below refuse it as one.
     """
-    v = np.asarray(col)
+    try:
+        v = np.asarray(col)
+    except (ValueError, TypeError):
+        # A list and a number in one column is no array numpy will make.
+        return _objects(col)
     return v if v.ndim == 1 else _objects(col)
 
 
@@ -144,9 +148,14 @@ def _ord(s: str) -> int:
 
 
 def _ord_or_none(x):
-    """A date on the wire as its day number, or None when it is not a date."""
+    """A date on the wire as its day number, or None when it is not a date: a YYYY-MM-DD
+    string of a day the calendar has, as every door reads one."""
+    if not isinstance(x, str) or len(x) != 10 or x[4] != "-" or x[7] != "-":
+        return None
+    if not all(c in "0123456789" for c in x[:4] + x[5:7] + x[8:]):
+        return None
     try:
-        return _ord(str(x))
+        return _ord(x)
     except ValueError:
         return None
 
@@ -330,6 +339,11 @@ class Rule:
             if spec.get("optional"):
                 v = _objects(["none" if x is None or (isinstance(x, float) and x != x) else x for x in v])
             kind = spec["kind"]
+            # `null` in a column that is not optional is an input that is not there.
+            if not spec.get("optional"):
+                bad = np.array([x is None for x in cols[name]], dtype=bool)
+                if bad.any():
+                    raise refuse(say.get("missing", f"{name} is missing"), None, int(np.argmax(bad)))
             # The absent value of an optional column is the word itself, not a wrong type.
             absent = np.array([x == "none" for x in v], dtype=bool) if spec.get("optional") else np.zeros(n, dtype=bool)
             # A number, a date or a truth value holds a placeholder where it is absent, and the
@@ -356,6 +370,10 @@ class Rule:
                     raise refuse(say["boolean"], cols[name][i], i)
                 v = (fill(v, False) if spec.get("optional") else v).astype(bool)
             else:
+                bad = np.array([not isinstance(x, str) for x in cols[name]], dtype=bool) & ~absent
+                if kind == "str" and bad.any():
+                    i = int(np.argmax(bad))
+                    raise refuse(say["string"], cols[name][i], i)
                 v = v.astype(str)
             if spec.get("optional") and kind in ("date", "int", "bool"):
                 env[("absent", name)] = absent
