@@ -165,6 +165,8 @@ type runState struct {
 	next    int
 	steps   []any
 	done    bool
+	// the answers the local activities took, by workflow, run, activity and attempt (takeFor)
+	locals map[string]map[string]any
 }
 
 // runner holds the runs by their workflows' ids; mu guards them, since activities, the event
@@ -220,16 +222,36 @@ func (r *runner) settleEvents(run *runState) {
 }
 
 // takeFor gives the run its next answer, and writes the call down with it at once, so that the
-// calls are written down in the order they took their answers.
-func (r *runner) takeFor(run *runState, label string, call map[string]any) (map[string]any, error) {
+// calls are written down in the order they took their answers. Temporal runs a local activity at
+// least once: when the workflow task that ran it fails or times out before the server records its
+// result, the next workflow task runs it again, with the same id and attempt (a machine that keeps
+// the worker waiting does that; the platforms job of CI met it). That is the call it was: it gets
+// the answer it took before, and neither takes the next answer nor is written down again. A retry
+// is a new attempt, and takes the next answer.
+func (r *runner) takeFor(ctx context.Context, run *runState, label string, call map[string]any) (map[string]any, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	info := activity.GetInfo(ctx)
+	key := ""
+	if info.IsLocalActivity {
+		k, _ := json.Marshal([]any{info.WorkflowExecution.ID, info.WorkflowExecution.RunID, info.ActivityID, info.Attempt})
+		key = string(k)
+		if ans, ok := run.locals[key]; ok {
+			return ans, nil
+		}
+	}
 	r.settleEvents(run)
 	if run.next >= len(run.answers) {
 		return nil, temporal.NewNonRetryableApplicationError(fmt.Sprintf("no answer for call %d (%s)", run.next+1, label), "Dandori.Test.NoAnswer", nil)
 	}
 	ans := run.answers[run.next]
 	run.next++
+	if key != "" {
+		if run.locals == nil {
+			run.locals = map[string]map[string]any{}
+		}
+		run.locals[key] = ans
+	}
 	run.steps = append(run.steps, map[string]any{"call": frozen(call), "answer": recorded(ans)})
 	return ans, nil
 }
@@ -388,7 +410,7 @@ func (r *runner) take(ctx context.Context, call map[string]any) (map[string]any,
 		return nil, err
 	}
 	label, _ := json.Marshal(call)
-	return r.takeFor(run, firstRunes(string(label), 80), call)
+	return r.takeFor(ctx, run, firstRunes(string(label), 80), call)
 }
 
 func (r *runner) hold(ctx context.Context, ans map[string]any) error {
@@ -425,7 +447,7 @@ func (r *runner) ownTask(ctx context.Context, task string, args map[string]any) 
 		label = t.Name
 	}
 	if t.Callback {
-		ans, err := r.takeFor(run, label, map[string]any{"activity": t.Name, "args": without(args, "callback_id")})
+		ans, err := r.takeFor(ctx, run, label, map[string]any{"activity": t.Name, "args": without(args, "callback_id")})
 		if err != nil {
 			return nil, err
 		}
@@ -434,7 +456,7 @@ func (r *runner) ownTask(ctx context.Context, task string, args map[string]any) 
 		}
 		return result(nil), nil
 	}
-	ans, err := r.takeFor(run, label, map[string]any{"activity": t.Name, "args": args})
+	ans, err := r.takeFor(ctx, run, label, map[string]any{"activity": t.Name, "args": args})
 	if err != nil {
 		return nil, err
 	}
@@ -448,7 +470,7 @@ func (r *runner) rule(name string) func(ctx context.Context, args map[string]any
 		if err != nil {
 			return nil, err
 		}
-		ans, err := r.takeFor(run, name, map[string]any{"activity": name, "args": args})
+		ans, err := r.takeFor(ctx, run, name, map[string]any{"activity": name, "args": args})
 		if err != nil {
 			return nil, err
 		}
@@ -463,7 +485,7 @@ func (r *runner) testChild(ctx context.Context, a map[string]any) (any, error) {
 		return nil, err
 	}
 	typ, _ := a["type"].(string)
-	ans, err := r.takeFor(run, typ, map[string]any{"child_workflow": typ, "args": a["args"]})
+	ans, err := r.takeFor(ctx, run, typ, map[string]any{"child_workflow": typ, "args": a["args"]})
 	if err != nil {
 		return nil, err
 	}

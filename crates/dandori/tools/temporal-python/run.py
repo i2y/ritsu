@@ -235,6 +235,24 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
                 continue
             await asyncio.sleep(0.02)
 
+    def take_once(run: dict[str, Any], label: str, call: dict[str, Any]) -> dict[str, Any]:
+        """The answer a call takes, written down with the call. Temporal runs a local activity at
+        least once: when the workflow task that ran it fails or times out before the server records
+        its result, the next workflow task runs it again, with the same id and attempt (a machine
+        that keeps the worker waiting does that; the platforms job of CI met it). That is the call it
+        was: it gets the answer it took before, and neither takes the next answer nor is written down
+        again. A retry is a new attempt, and takes the next answer."""
+        info = activity.info()
+        key = (info.workflow_id, info.workflow_run_id, info.activity_id, info.attempt) if info.is_local else None
+        taken_before = run.setdefault("locals", {})
+        if key is not None and key in taken_before:
+            return taken_before[key]
+        ans = take(run, label)
+        if key is not None:
+            taken_before[key] = ans
+        run["steps"].append({"call": call, "answer": recorded(ans)})
+        return ans
+
     def take(run: dict[str, Any], label: str) -> dict[str, Any]:
         settle_events(run)
         if run["next"] >= len(run["answers"]):
@@ -319,9 +337,7 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
 
         def take(self, call: dict[str, Any], callback_id: str | None = None) -> dict[str, Any]:
             run = current()
-            ans = take(run, json.dumps(call, ensure_ascii=False)[:80])
-            run["steps"].append({"call": call, "answer": recorded(ans)})
-            return ans
+            return take_once(run, json.dumps(call, ensure_ascii=False)[:80], call)
 
         def answer_later(self, callback_id: str, ans: dict[str, Any]) -> Any:
             return answer_later(callback_id, ans)
@@ -341,14 +357,12 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
         def own_task(t: dict[str, Any]) -> Any:
             async def call(args: dict[str, Any]) -> Any:
                 run = current()
-                ans = take(run, t["method"])
                 if t["callback"]:
                     rest = {k: v for k, v in args.items() if k != "callback_id"}
-                    run["steps"].append({"call": {"activity": t["name"], "args": rest}, "answer": recorded(ans)})
+                    ans = take_once(run, t["method"], {"activity": t["name"], "args": rest})
                     await answer_later(args["callback_id"], ans)
                     return None
-                run["steps"].append({"call": {"activity": t["name"], "args": args}, "answer": recorded(ans)})
-                return await answer(run, ans)
+                return await answer(run, take_once(run, t["method"], {"activity": t["name"], "args": args}))
 
             return call
 
@@ -361,9 +375,7 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
             @activity.defn(name=name)
             async def call(args: dict[str, Any]) -> Any:
                 run = current()
-                ans = take(run, name)
-                run["steps"].append({"call": {"activity": name, "args": args}, "answer": recorded(ans)})
-                return await answer(run, ans)
+                return await answer(run, take_once(run, name, {"activity": name, "args": args}))
 
             return call
 
@@ -372,9 +384,7 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
     @activity.defn(name="dd_test_child")
     async def test_child(a: dict[str, Any]) -> Any:
         run = current()
-        ans = take(run, a["type"])
-        run["steps"].append({"call": {"child_workflow": a["type"], "args": a["args"]}, "answer": recorded(ans)})
-        return await answer(run, ans)
+        return await answer(run, take_once(run, a["type"], {"child_workflow": a["type"], "args": a["args"]}))
 
     activities.append(test_child)
 

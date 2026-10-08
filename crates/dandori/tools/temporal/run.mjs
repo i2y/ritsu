@@ -257,6 +257,25 @@ async function sendEvents(run) {
   }
 }
 
+/**
+ * The answer a call takes, written down with the call. Temporal runs a local activity at least once:
+ * when the workflow task that ran it fails or times out before the server records its result, the
+ * next workflow task runs it again, with the same id and attempt (a machine that keeps the worker
+ * waiting does that; the platforms job of CI met it). That is the call it was: it gets the answer it
+ * took before, and neither takes the next answer nor is written down again. A retry is a new attempt,
+ * and takes the next answer.
+ */
+function takeOnce(run, label, call) {
+  const { isLocal, workflowExecution, activityId, attempt } = Context.current().info;
+  const key = isLocal ? JSON.stringify([workflowExecution.workflowId, workflowExecution.runId, activityId, attempt]) : undefined;
+  run.locals ??= new Map();
+  if (key !== undefined && run.locals.has(key)) return run.locals.get(key);
+  const ans = take(run, label);
+  if (key !== undefined) run.locals.set(key, ans);
+  run.steps.push({ call, answer: recorded(ans) });
+  return ans;
+}
+
 function take(run, label) {
   settleEvents(run);
   const ans = run.answers[run.next++];
@@ -350,9 +369,7 @@ async function mustRefuse(callbackId, a, why) {
 const transportRun = {
   take: (call) => {
     const run = current();
-    const ans = take(run, JSON.stringify(call).slice(0, 80));
-    run.steps.push({ call, answer: recorded(ans) });
-    return ans;
+    return takeOnce(run, JSON.stringify(call).slice(0, 80), call);
   },
   answerLater: (id, ans) => answerLater(id, ans),
   hold: (ans) => hold(current(), ans),
@@ -362,15 +379,13 @@ const own = {};
 for (const t of spec.own ?? []) {
   own[t.method] = async (args) => {
     const run = current();
-    const ans = take(run, t.method);
     if (t.callback) {
       const { callback_id, ...rest } = args;
-      run.steps.push({ call: { activity: t.name, args: rest }, answer: recorded(ans) });
+      const ans = takeOnce(run, t.method, { activity: t.name, args: rest });
       await answerLater(callback_id, ans);
       return;
     }
-    run.steps.push({ call: { activity: t.name, args }, answer: recorded(ans) });
-    return reply(run, ans);
+    return reply(run, takeOnce(run, t.method, { activity: t.name, args }));
   };
 }
 const transport = makeTransport(spec, transportRun);
@@ -378,16 +393,12 @@ const activities = {};
 for (const name of spec.rules ?? []) {
   activities[name] = async (args) => {
     const run = current();
-    const ans = take(run, name);
-    run.steps.push({ call: { activity: name, args }, answer: recorded(ans) });
-    return reply(run, ans);
+    return reply(run, takeOnce(run, name, { activity: name, args }));
   };
 }
 activities.dd_test_child = async ({ type, args }) => {
   const run = current();
-  const ans = take(run, type);
-  run.steps.push({ call: { child_workflow: type, args }, answer: recorded(ans) });
-  return reply(run, ans);
+  return reply(run, takeOnce(run, type, { child_workflow: type, args }));
 };
 
 if (serving) {
