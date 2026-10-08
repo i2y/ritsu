@@ -552,13 +552,19 @@ def _wire(v):
     return str(v)
 
 
+def _in(x):
+    # A whole number written with a point or an exponent, 1000.0 or 1e3, was read as the integer
+    # it is, and the record says it as one (§15.205).
+    return {{k: int(v) if isinstance(v, float) and v.is_integer() else v for k, v in x.items()}}
+
+
 def _print(rows, out, fired):
     for n, r in enumerate(rows):
         trace = []
         for picked, rows_ in fired:
             trace.append(rows_[int(picked[n])])
         rec = {{
-            "in": r["in"],
+            "in": _in(r["in"]),
             "observed": {{k: _wire(v[n]) for k, v in out.items()}},
             "trace": trace,
         }}
@@ -718,6 +724,12 @@ def _wire(v):
     return str(v)
 
 
+def _in(x):
+    # A whole number written with a point or an exponent, 1000.0 or 1e3, was read as the integer
+    # it is, and the record says it as one (§15.205).
+    return {{k: int(v) if isinstance(v, float) and v.is_integer() else v for k, v in x.items()}}
+
+
 def _decide(ins):
     # A column a line leaves out is left out here too, and the plan refuses it as missing.
     cols = {{i: [x[i] for x in ins] for i in rule.inputs if all(i in x for x in ins)}}
@@ -727,7 +739,7 @@ def _decide(ins):
         trace = []
         for picked, rows_ in fired:
             trace.append(rows_[int(picked[n])])
-        recs.append({{"in": x, "observed": {{k: _wire(v[n]) for k, v in out.items()}}, "trace": trace}})
+        recs.append({{"in": _in(x), "observed": {{k: _wire(v[n]) for k, v in out.items()}}, "trace": trace}})
     return recs
 
 

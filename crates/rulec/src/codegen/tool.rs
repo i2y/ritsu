@@ -429,6 +429,9 @@ def _need(name: str, v: object) -> object:
 
 
 def _int(name: str, v: object) -> int:
+    # A whole number written with a point or an exponent, 1000.0 or 1e3, is that integer.
+    if isinstance(v, float) and v.is_integer():
+        return int(v)
     if not isinstance(v, int) or isinstance(v, bool):
         raise m.RuleInputError(@M_INT@, v)
     return v

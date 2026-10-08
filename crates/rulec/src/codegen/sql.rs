@@ -1198,6 +1198,10 @@ def _read(d: object):
         if v is None:
             vals.append(None)
         elif k == "int":
+            # A whole number written with a point or an exponent, 1000.0 or 1e3, is that
+            # integer, and the record says it as one (§15.205).
+            if isinstance(v, float) and v.is_integer():
+                v = d[jp] = int(v)
             if not isinstance(v, int) or isinstance(v, bool):
                 return None, wrong
             vals.append(v)
@@ -1381,6 +1385,10 @@ def _read(d: object):
         if v is None:
             vals.append(None)
         elif k == "int":
+            # A whole number written with a point or an exponent, 1000.0 or 1e3, is that
+            # integer, and the record says it as one (§15.205).
+            if isinstance(v, float) and v.is_integer():
+                v = d[jp] = int(v)
             if not isinstance(v, int) or isinstance(v, bool):
                 return None, wrong
             vals.append(v)

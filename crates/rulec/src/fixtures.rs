@@ -106,6 +106,12 @@ pub fn to_val_as(j: &Json, ty: &Ty, c: &Checked, name: &str, then: Option<&Check
         }
         other => other.clone(),
     };
+    // A whole number written with a point, `1000.0`, is the integer it is (§15.205).
+    let whole = matches!(inner, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number)
+        .then(|| crate::door::whole(j))
+        .flatten()
+        .map(Json::Int);
+    let j = whole.as_ref().unwrap_or(j);
     match (&inner, j) {
         (Ty::Enum(en), Json::Str(s)) => {
             let vs = c.enums.get(en).cloned().unwrap_or_default();

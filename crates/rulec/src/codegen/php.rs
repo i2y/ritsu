@@ -1346,6 +1346,11 @@ function _take(mixed $d, string $k, string $missing, bool $optional = false): mi
 
 function _int(mixed $v, string $what): int
 {
+    // A whole number written with a point or an exponent, 1000.0 or 1e3, is that integer: as
+    // long as it is an int at all (§15.205). 2 ** 63 and past are not.
+    if (is_float($v) && is_finite($v) && floor($v) == $v && $v >= -9.2233720368547758E18 && $v < 9.2233720368547758E18) {
+        return (int) $v;
+    }
     if (!is_int($v)) {
         throw new \@NS@\RuleInputError($what);
     }

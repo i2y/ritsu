@@ -68,6 +68,10 @@ as well: "the crate `rulec`", after `i2y/tap/ritsu` in Homebrew. -->
   that is not there, a combination a `constraint` rules out — the fix makes it refuse the input,
   as the other languages do, so a call that was answered can fail from then on. The sentence a
   door says is prose. The release notes name the change.
+- **An input a door refused inside its contract.** If the code generated in some language, or
+  the reference evaluator, refused an input its contract allows — a whole number written with
+  a point or an exponent, `1000.0` or `1e3` — the fix makes it take the input, so a call that
+  failed can be answered from then on. The release notes name the change.
 - **How long a check takes,** as long as a rule that finished within the default budget
   still does.
 

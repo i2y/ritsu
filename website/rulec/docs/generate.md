@@ -525,7 +525,7 @@ The ninth target is a module rather than a function in a language. `wasm/` holds
 Rust module `rust/` gets, a crate root that puts it behind the canonical ABI of
 `call: func(input: string) -> string`, a `.wit` that names that function as the export of a
 world, and the Node runner `rulec test` drives. `rustc` alone builds it, with no cargo and no
-crate; the shipping rule comes to thirty-six kilobytes and imports nothing.
+crate; the shipping rule comes to thirty-seven kilobytes and imports nothing.
 
 ```console
 $ rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols \

@@ -625,7 +625,7 @@ of `"input"` for a case the rule itself cannot answer. A host is answered rather
 and never computed on a value it did not send (§15.151, §15.204). Any JSON encoder will do: a
 name or a value written with `\u` escapes reads as the characters it stands for. The module
 imports nothing, so it instantiates with an empty import object anywhere WebAssembly runs; the
-shipping rule is thirty-six kilobytes.
+shipping rule is thirty-seven kilobytes.
 
 ```js
 const { instance } = await WebAssembly.instantiate(bytes, {});
@@ -889,7 +889,8 @@ is the sentence of its kind (`is not an integer`, `is not a date`, `is not a val
 zone` — the enum by the name the rule declares it under — `is not a boolean`, `is not a
 string`), and the sequence a walk reads `is not a sequence` or has `an element of … that is not
 an object`. A string that holds a number is not one, a date the calendar does not have
-(2026-02-30) is not a date, and 1000.5 is not a whole count of its unit. The sentence is the
+(2026-02-30) is not a date, and 1000.5 is not a whole count of its unit, where `1000.0` and
+`1e3` are 1000 (§15.205). The sentence is the
 same in every language and is the one the reference evaluator says of the same input.
 `rulec api` names the function under `record` and gives its signature under
 `record_signature`.
@@ -926,6 +927,31 @@ sentence outside it ([below](#sql)).
 if not _isinstance(rate, int) or _isinstance(rate, bool):
     raise RuleInputError("rate is not an integer", rate)
 ```
+
+A number whose value is whole is the integer it is, at every door (§15.205): `1000.0`, `1e3`,
+`1.5e3` and `-0.0`, which JSON does not tell apart from `1000`, `1000`, `1500` and `0`, and which
+a caller's `float` writes. The door takes it as that integer and holds it to the range and the
+step like any other; `1000.5` is still not an integer, and the string `"1000"` still not a
+number. The module of a language a caller can pass anything to takes it at its own door too — a
+float, or a whole `number` where the type says `bigint` — and goes on with the integer, in an
+element of a walk as in an input:
+
+```python
+if _isinstance(rate, float) and float(rate).is_integer():
+    rate = Rate(int(rate))
+if not _isinstance(rate, int) or _isinstance(rate, bool):
+    raise RuleInputError("rate is not an integer", rate)
+```
+
+The readers that keep a number as its digits — Go's `json.Number`, and the readers the Rust and
+Java runners and the Wasm entry carry — work the value out of the digits and the exponent
+exactly and take only what fits in 64 bits. The ones that hold it as a double — the runners of
+Python, Ruby, PHP, Swift, NumPy and SQL — take a double whose value is whole, and read a number
+past 2^53 written with a point as the double nearest it; PHP and Swift refuse what does not fit
+in 64 bits, as before. TypeScript and JavaScript took it already, since `JSON.parse` makes
+`1000.0` the number `1000`. PHP's module keeps its declared `int` (§15.203), so a caller with
+`declare(strict_types=1)` gets PHP's own `TypeError` for a float, and the runner hands it the
+integer. A record says the input as the integer it read.
 
 A truth value is JSON's `true` or `false` and nothing else, at every door that reads one: the
 module's entry guard where a caller can pass any value, and every reader of the wire — the
@@ -975,8 +1001,8 @@ can tell which one it was without parsing the text:
 rulec_np.RuleInputError: the constraint does not hold: declared <= cover (row 1)
 ```
 
-A value that is not a whole number is refused there too; a float that is a whole number is
-the integer it equals, as SQL's guard reads it. The error carries the place as `row` beside
+A value that is not a whole number is refused there too; a float that is a whole number is the
+integer it equals, as every door reads it (§15.205). The error carries the place as `row` beside
 `what` and `value` (`None` when a whole column is refused, missing or of another length), and
 `rulec api` lists the two errors and their fields under the `numpy` entry.
 

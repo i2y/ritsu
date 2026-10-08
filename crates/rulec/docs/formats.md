@@ -14,8 +14,9 @@ Three rules hold everywhere.
   languages.
 - **A number is an integer in the canonical unit** (§10.2): yen for `money[JPY, …]`, the
   declared unit for a quantity, the number of steps for a rate, `YYYY-MM-DD` as a string for
-  a date, `true`/`false` for a boolean, the value's own name for an enum. Where a value can be
-  finer, the field says so: a match `rate` is a fraction, and the reports of `verify`, `replay`
+  a date, `true`/`false` for a boolean, the value's own name for an enum. A number whose value
+  is whole is that integer wherever an input is read, written with a point or an exponent
+  (`1000.0`, `1e3`) or not (§15.205). Where a value can be finer, the field says so: a match `rate` is a fraction, and the reports of `verify`, `replay`
   and `diff` keep the decimals of a difference or an answer finer than the rule's step.
 
 Exit codes are unchanged by `--format json`: 0 notes only, 1 findings, 2 bad arguments or an
@@ -1058,7 +1059,8 @@ the inputs, the outputs and the rows that matched and returns the record, so a l
 generated code needs no extraction. What still has to be extracted is a log of an
 implementation rulec did not generate.
 
-An input must be an integer in the canonical unit; a decimal is refused, naming the field.
+An input must be an integer in the canonical unit; a decimal is refused, naming the field,
+unless its value is whole: `1000.0` is 1000 (§15.205).
 An observed value is read as the value it is, decimals included: `11.0` is 11, and an
 implementation that computed finer than the output's step (`820.5` yen, `123.4` for 12.34% at a
 step of 0.1%) answered something the rule does not, which `replay` compares exactly — below the

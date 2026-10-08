@@ -114,8 +114,8 @@ fn one(c: &Checked, name: &str, ty: &Ty, j: Option<&Json>) -> Result<Val, String
     };
     match &inner {
         Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => {
-            let Json::Int(n) = j else { return Err(not_integer(name)) };
-            let v = crate::types::from_wire(*n, c.wire_scale(name));
+            let Some(n) = whole(j) else { return Err(not_integer(name)) };
+            let v = crate::types::from_wire(n, c.wire_scale(name));
             range(v)?;
             Ok(Val::Num(v))
         }
@@ -137,6 +137,21 @@ fn one(c: &Checked, name: &str, ty: &Ty, j: Option<&Json>) -> Result<Val, String
             _ => Err(not_string(name)),
         },
         _ => Err(not_integer(name)),
+    }
+}
+
+/// A JSON number whose value is a whole number, as that integer (§15.205): `1000`, and `1000.0`
+/// or `-0.0`, which JSON does not tell apart from it and a caller's `float` writes. `1000.5` is
+/// none, and neither is anything that is not a number. The reader keeps a fraction as the digits
+/// it was written with and reads no exponent (ritsu's DESIGN 4.9), so `1e3` never comes this far.
+pub fn whole(j: &Json) -> Option<i128> {
+    match j {
+        Json::Int(n) => Some(*n),
+        Json::Frac(s) => {
+            let (int, frac) = s.split_once('.')?;
+            frac.bytes().all(|b| b == b'0').then(|| int.parse::<i128>().ok())?
+        }
+        _ => None,
     }
 }
 

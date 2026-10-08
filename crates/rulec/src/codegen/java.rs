@@ -1411,14 +1411,21 @@ const JAVA_WIRE: &str = r##"
         return v.equals("null") ? null : read.apply(v);
     }
 
+    // A JSON number whose value is a whole number, as that integer: `1000`, and `1000.0`, `1e3` or
+    // `-0.0` too (§15.205). A string keeps its quote, so `"12"` is not one, and neither is `1.5`
+    // or a value past 64 bits.
     private static long integer(String v, String what) {
         String digits = v.startsWith("-") ? v.substring(1) : v;
-        if (digits.isEmpty() || !digits.chars().allMatch(c -> c >= '0' && c <= '9')) {
+        if (digits.isEmpty() || digits.charAt(0) < '0' || digits.charAt(0) > '9') {
             throw new @CLS@.RuleInputError(what);
         }
         try {
-            return Long.parseLong(v);
-        } catch (NumberFormatException e) {
+            return new java.math.BigDecimal(v).longValueExact();
+        } catch (NumberFormatException | ArithmeticException e) {
+            // An exponent past an int: zero is still zero, and anything else does not fit.
+            if (v.matches("-?0+(\\.0+)?[eE][-+]?[0-9]+")) {
+                return 0;
+            }
             throw new @CLS@.RuleInputError(what);
         }
     }
