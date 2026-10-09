@@ -239,5 +239,5 @@ Two answers differ from the reference interpreter, and the tests do not reach ei
 
 The TypeScript clients use only types that can be stripped as they are, so Node.js runs them as
 written, and `tsc --strict` compiles them. The tests run them with Node.js 23.11, Python 3.13 and
-Go 1.25.5, on PostgreSQL 18.0 and TigerBeetle 0.17.9, with `pg` 8.23.1, psycopg 3.3.6 and pgx
+Go 1.26, on PostgreSQL 18.0 and TigerBeetle 0.17.9, with `pg` 8.23.1, psycopg 3.3.6 and pgx
 5.11.0.

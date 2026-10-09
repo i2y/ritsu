@@ -147,7 +147,7 @@ const GO_MODULES: &[(&str, &str)] = &[
 /// be built with the vulnerable one; doc.go says to raise it (DESIGN 9.3). pgx v5.11.0 asks for
 /// golang.org/x/text v0.29.0, whose normalization its SCRAM authentication reaches (GO-2026-5970,
 /// fixed in v0.39.0). An entry goes once the module on the left asks for a fixed version.
-const GO_RAISED: &[(&str, &str, &str, &str)] = &[("github.com/jackc/pgx/v5", "golang.org/x/text", "v0.41.0", "GO-2026-5970")];
+const GO_RAISED: &[(&str, &str, &str, &str)] = &[("github.com/jackc/pgx/v5", "golang.org/x/text", "v0.42.0", "GO-2026-5970")];
 
 /// A package: each file by its path under the package's directory, with the file of the project it
 /// is made from (None for what the package itself is made of: the index and the manifest).

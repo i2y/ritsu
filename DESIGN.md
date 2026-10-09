@@ -472,12 +472,22 @@ osv-scanner は `--no-resolve` で走らせる。`requirements.txt` が入れた
 |---|---|---|
 | `crates/dandori/tools/agents`（`@openai/agents` が任意の依存として `^2.0.0` で求める） | `@modelcontextprotocol/client` 2.1.0、GHSA-6qxp-vccf-f47h（高。MCP の TypeScript SDK の OAuth のクライアントが、MCP サーバーが選んだ認可サーバーに資格情報を送りうる。2.2.0 で直った） | 依存の範囲の中で、`@modelcontextprotocol/client` と `@modelcontextprotocol/core` を 2.3.1 に上げた（`npm update --package-lock-only`）。2.3 系から、二つのライセンスは MIT から Apache-2.0 になった。テストの道具で、`ritsu` にも生成するコードにも入らない。dandori の `agents_sdk_is_asked_what_step_functions_asks` が、上げた版で通る |
 
+#### 2026-10-09 に見つかったものと、したこと
+
+v0.25.0 のリリースのワークフローの `audit` が、前の夜に出たアドバイザリで落ちた。
+
+| どこ | 何 | したこと |
+|---|---|---|
+| `crates/dandori/tools/temporal-go`（Temporal の Go の SDK、gRPC、openai-go が求める） | golang.org/x/net 0.58.0、GO-2026-6603・6611・6612・6617（どれも HTTP/2 のサーバーの欠陥。Trailer によるメモリの枯渇、初期ウィンドウの変更の繰り返しによる CPU の消費、フロー制御の二重の払い戻し、HPACK のエンコーダーの競合によるクラッシュ） | 0.60.0 に上げた（`go mod tidy` で golang.org/x/sync v0.23.0、x/sys v0.48.0、x/text v0.42.0 も）。x/text v0.42.0 は Go 1.26 を求める。三つのランナーと `ritsu gen` が書くパッケージは同じバージョンを求めることになっている（9.3）ので、chobo の `tools/runner/go` の x/text と x/sync、`doc.go` が上げるよう書く x/text（`GO_RAISED`）も同じバージョンにし、chobo のランナーの `go` の行を 1.26.0 に（dandori のランナーはもとから 1.26.0）、`tools.yml` の Go を全部の組で 1.26 にした。sekisho のランナーは 1.25.0 のままにした（cedar-go と AWS の SDK は 1.26 を求めない。sekisho のテストは `GOTOOLCHAIN=local` で手元の Go でビルドする）。dandori のランナーだけを上げたときは、そろえる検査（`crates/ritsu/tests/audit.rs`）が fast と tools の段で落ちた |
+
+Go 1.26 を求めることについて：Go は新しい二つのメジャーリリースをサポートし、2026-10-09 の時点では 1.27（1.27.2）と 1.26（1.26.9）である（<https://go.dev/dl/?mode=json>）。1.25 はもうサポートの外なので、サポートされている Go を使う人には何も変わらない。フローのある Go のパッケージは、Temporal の Go SDK 1.49.0 が `go 1.26.0` を求めるので、もとから Go 1.26 が要った。
+
 #### 調べていないもの
 
 - `fetch.sh` と `install.sh` で取ってくるバイナリ（TigerBeetle、sakai の Java のツールと Context Mapper、wasm-tools、protoc）。チェックサムで確かめているが、OSV では調べていない。
 - Lean の依存（`proofs/lake-manifest.json`）。OSV に Lean のエコシステムが無い。
 - ワークフローが使う action（タグで指している）。`release.yml` は GitHub のもの（checkout、upload-artifact、download-artifact）しか使わず、ほかの action を使うのは、読むだけの権限で、secret を持たないジョブだけである。
-- 手元と CI のツールチェーンそのもの。この機械の Go 1.25.5 の標準ライブラリには、1.25.6〜1.25.10 で直ったアドバイザリが 30 ほどある（govulncheck の結果）。CI は `setup-go` の `1.25` で最新のパッチを入れる。
+- 手元と CI のツールチェーンそのもの。この機械の Go は 1.25.5 で、その標準ライブラリには、1.25.6〜1.25.10 で直ったアドバイザリが 30 ほどある（govulncheck の結果）。dandori と chobo のランナーは、`go 1.26.0` の行を読んだ go コマンドが取ってくる Go 1.26.0 で動き、それも 1.26 の最新のパッチ（1.26.9）ではない。CI は `setup-go` の `1.26` で最新のパッチを入れる（2026-10-09 までは、dandori の組のほかは `1.25`）。
 - yuen の `tools/requirements.txt`（prov と reqif の二つの名前だけ）。依存まではまだ固定していないので、osv-scanner は二つだけを調べる。
 
 #### 捨てたもの
@@ -1571,14 +1581,14 @@ generated/typescript/          generated/python/              generated/go/
 - ワークフローは、規則と期日と帳簿を、同じパッケージの `rules/`・`dates/`・`books/` から読む。import はパッケージのモジュールを指し、帳簿のトランスポートが受け取るクライアントは、パッケージの `books/` のクライアントの型である（TypeScript の `Books`、Python の `TypedDict` の `Books`、Go の `Books` と `Map()`）。渡すクライアントが帳簿と違えば、その言語の型の検査が言う。dandori のモデルに `package`（`InPackage`）があるときだけ、Temporal の三つの SDK のビルドが読み込む先を替える。`package` が無い `dandori build` の生成物は前と同じである（dandori の DESIGN 4.2）。
 - 依存は、入れたものが要るものだけを書く。TypeScript の `package.json` は、生成物が読み込むパッケージ（フローがあれば `@temporalio/*` 1.24.0、TigerBeetle の帳簿なら `tigerbeetle-node` 0.17.9）。Python の `pyproject.toml` は `temporalio==1.33.0` と `tigerbeetle==0.17.9`。`.gate` があれば、TypeScript は `@cedar-policy/cedar-wasm` 4.13.0（`--authorizer avp` なら `@aws-sdk/client-verifiedpermissions` 3.1146.0）、Python は `cedarpy==4.12.1`（avp なら `boto3==1.43.103`）、Go の `doc.go` は `github.com/cedar-policy/cedar-go v1.8.0`（avp なら `github.com/aws/aws-sdk-go-v2 v1.47.1` と `github.com/aws/aws-sdk-go-v2/service/verifiedpermissions v1.41.1`）。PostgreSQL の帳簿のクライアントは、呼ぶ側が渡す接続を使うので依存を持たない（Go の pgx だけは import する）。バージョンは、ここで生成物を確かめているもの（dandori、chobo、sekisho のランナー）。★Go のパッケージは `go.mod` を書かず、利用者のモジュールのディレクトリとして置く（`--module` が import のパス）。`go mod tidy` が書き換える `go.mod` を生成すると、`--check` が古いと言うからである。生成物が import するモジュールとバージョンは `doc.go` に書く。
 - **書くバージョンは、ツールのロックファイルのバージョンと同じにし、その既知の脆弱性を監査で見る（2026-10-06）。** パッケージが書くバージョン（`package.json` の `@temporalio/*` 1.24.0 と `tigerbeetle-node` 0.17.9、`pyproject.toml` の `temporalio==1.33.0` と `tigerbeetle==0.17.9`、`doc.go` の Go のモジュール）と、生成したコードがコメントに書くバージョン（chobo のクライアントの「through tigerbeetle-node 0.17.9」、dandori の Go の「written against go.temporal.io/sdk v1.49.0」など）は、dandori の `tools/temporal`・`tools/temporal-python`・`tools/temporal-go`、chobo の `tools/runner` と `tools/runner/go`、sekisho の `tools/runner-ts`・`tools/runner-py`・`tools/runner-go` のロックファイルのバージョンと同じである。`crates/ritsu/tests/audit.rs` が、stockroom のパッケージを帳簿の二つの置き場所で、sekisho の例のパッケージを二つの authorizer で生成して、それを確かめる。だから、監査（3.6）がツールのロックファイルを調べることは、パッケージが求めるバージョンと、ここでそれを確かめたときの依存の依存を調べることになる。リリースの前にも調べる（13.2）。
-- **Go の依存の依存は、`doc.go` に上げるよう書く（2026-10-06）。** Go のモジュールは、求められたうちで最小のバージョンを選ぶ（minimal version selection）。npm や PyPI と違い、利用者が `go mod tidy` をしても、依存の依存は新しくならない。pgx v5.11.0（いま一番新しい）は golang.org/x/text v0.29.0 を求め、そのバージョンには GO-2026-5970 があり、pgx の SCRAM の認証から届く。PostgreSQL の帳簿の Go のクライアントは pgx を import するので、そのままだと利用者のモジュールは v0.29.0 でビルドされる（ほかの依存が上げなければ）。`ritsu gen` は、pgx を import するパッケージの `doc.go` に、次の行を足す（表は `src/package.rs` の `GO_RAISED`。pgx が直ったバージョンを求めるようになったら外す）。
+- **Go の依存の依存は、`doc.go` に上げるよう書く（2026-10-06）。** Go のモジュールは、求められたうちで最小のバージョンを選ぶ（minimal version selection）。npm や PyPI と違い、利用者が `go mod tidy` をしても、依存の依存は新しくならない。pgx v5.11.0（いま一番新しい）は golang.org/x/text v0.29.0 を求め、そのバージョンには GO-2026-5970 があり、pgx の SCRAM の認証から届く。PostgreSQL の帳簿の Go のクライアントは pgx を import するので、そのままだと利用者のモジュールは v0.29.0 でビルドされる（ほかの依存が上げなければ）。`ritsu gen` は、pgx を import するパッケージの `doc.go` に、次の行を足す（表は `src/package.rs` の `GO_RAISED`。バージョンはランナーが試しているもので、2026-10-09 に v0.41.0 から v0.42.0 にした（3.6）。v0.42.0 は Go 1.26 を求める。pgx が直ったバージョンを求めるようになったら外す）。
 
   ```go
   //
   // Of the modules those require, these are tested at a later version than the one asked for, which
   // has a known vulnerability; raise them in the go.mod (`go get <module>@<version>`):
   //
-  //	golang.org/x/text v0.41.0 (GO-2026-5970, through github.com/jackc/pgx/v5)
+  //	golang.org/x/text v0.42.0 (GO-2026-5970, through github.com/jackc/pgx/v5)
   ```
 
 - **パッケージに SBOM は書かない（2026-10-06）。** 確かめたこと：osv-scanner 2.6.0 は、生成したパッケージの `package.json`（ロックファイルが無い）、`pyproject.toml`、`doc.go` のどれも読まない（三つとも「No package sources found」）。同じ依存を並べた CycloneDX 1.6 の `bom.cdx.json` を手で書いて置くと読み、x/text v0.29.0 の GO-2026-5970 などを見つけた。それでも書かない理由は三つある。一つ目に、ritsu が書ける SBOM は、パッケージが直接求めるものだけか、ここで確かめたときの依存の依存で、利用者の npm や uv が解決するものではない。利用者のロックファイル（`npm install` の `package-lock.json`、`uv lock`、`go mod tidy` の `go.mod` と `go.sum`）が、スキャナーが読むべきものである。二つ目に、直接の依存は、GitHub の依存関係グラフ（Dependabot）が `package.json` と `pyproject.toml` からそのまま読む。三つ目に、ritsu の書くバージョンが利用者の依存の依存を決めるのは Go だけで、それは上の `doc.go` の行が言う。作るなら、`ritsu gen --sbom` が、直接の依存と、生成したファイル（頭のハッシュ）を部品にした CycloneDX 1.7 を書く形がよい（15 章）。
