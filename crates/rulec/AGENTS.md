@@ -296,7 +296,7 @@ to mean the agreement held across all of them.
 
 ```yaml
 - uses: actions/checkout@v7                  # with fetch-depth: 0, so --diff-base can read origin/main
-- uses: i2y/ritsu@v0.24.0                     # ritsu's release with the link rulec, verified against its checksums
+- uses: i2y/ritsu@v0.25.0                     # ritsu's release with the link rulec, verified against its checksums
 - run: rulec fmt --check rules/
 - run: rulec check rules/ --diff-base origin/main
 - run: rulec gen rules/ --out generated/ --check

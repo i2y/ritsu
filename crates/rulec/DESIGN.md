@@ -2676,6 +2676,14 @@ count 一致数(hits) over 候補 where 照合結果 = 一致  range >=0 <=50
 - `experiments/library/` の CI の見本を `uses: i2y/ritsu@v0.24.0` にした。リリースの rulec 0.24.0 が、ライブラリの五つの規則で `fmt --check`・`check`・`coverage` を通すことを確かめた。
 - 文書を読むテスト（rulec の `docs`・`mcp`・`readme`・`skill`・`website`・`library`、ritsu の `release`・`readme`・`sekisho`・`skill`・`website`）が全部通った。SKIP の行は 0 だった。
 
+**0.25.0 で取り直した（2026-10-09）**：README、`AGENTS.md`（とスキルのコピー）、入れ方のページ（英日）に貼った出力と版を、0.25.0 のリリースの実物で取り直した。THIRD_PARTY_NOTICES が 0.24.0 から入ったことを言う文と、0.23.0 の歴史を言う文は残した。
+
+- アーカイブ（macOS の arm64）は、ページのコマンドでダウンロードし、`SHA256SUMS` と突き合わせ（`ritsu-v0.25.0-aarch64-apple-darwin.tar.gz: OK`）、使い捨ての HOME の `~/.local/bin` に展開して、`rulec --version` が `rulec 0.25.0` を返した。中身は 0.24.0 と同じく、`ritsu`、リンク八つ、ライセンス二つ、THIRD_PARTY_NOTICES である。
+- `.deb`・`.rpm` は、ダウンロードと、Debian のコンテナの GNU の `sha256sum -c`（coreutils 9.7）での突き合わせまでを走らせた。`.deb` の中身が `/usr/bin/ritsu` とリンク八つで、`rulec` のパッケージを置き換えること（`Replaces`・`Provides`・`Conflicts`）も、`ar` と `tar` で開いて見た。
+- Homebrew は、2026-10-09 の時点で最新の 7.0.9 を使い捨てで置き（`HOME` もキャッシュも別）、0.24.0 のときと同じ四つの場合を走らせた。どれも最後の `rulec --version` が `rulec 0.25.0` を返した。7.0.8 と違ったのは一つで、formula を信頼する前の `brew install i2y/tap/rulec` が、同じ文（`Refusing to load formula i2y/tap/ritsu from untrusted tap i2y/tap.`）を Ruby の backtrace つきで出し、続けて `i2y/tap/rulec resolves to i2y/tap/ritsu` と言って `brew trust --formula i2y/tap/ritsu` を勧める（7.0.8 は `Error:` の一行だった）。止まることと、そのあとの手順は変わらないので、ページは版だけを直した。
+- `experiments/library/` の CI の見本を `uses: i2y/ritsu@v0.25.0` にした。リリースの rulec 0.25.0 が、ライブラリの五つの規則で `fmt --check`・`check`・`coverage` を通すことを確かめた。
+- 文書を読むテスト（上と同じ十一）が全部通った。SKIP の行は 0 だった。
+
 ### 15.187 生成物の頭とページのスクリプトの外に、規則の文字列を出さない（2026-10-06）
 
 **きっかけ**：生成物の頭のコメントには、規則のファイルの名前、出典のパスと URL（`source … = file "…" url "…"`）、準用する規則のパスが入る。どれも規則に書いた文字列で、rulec の文字列は `"` のほかにどの文字でも持てる。行を終える文字を書けば、コメントはそこで終わり、続きは生成したコードの行になる。U+2028 は TypeScript と JavaScript の行を、`\r` は Python の行を終える。`rulec check` は、そういう規則も通していた。もう一つ、`rulec gen` が書くページ（`<別名>_page.html`）は、生成した JavaScript を頭ごと `<script type="module">` に埋め込む。URL に `</script>` があると要素がそこで閉じ、続き（`<img src=x onerror=…>` など）が HTML として読まれて、ページを開いた人のブラウザでスクリプトが動いた。

@@ -11,7 +11,7 @@ macOS でも Linux でも使えます。
 ```console
 $ brew install i2y/tap/ritsu
 $ rulec --version
-rulec 0.24.0
+rulec 0.25.0
 ```
 
 `ritsu` と八つのリンクが PATH に入るので、`rulec` はこれまでどおりコマンドとして使えます。古い名前の `i2y/tap/rulec` も同じ formula を指しますが、Homebrew 7 では、その formula を信頼してからでないと使えません。信頼する前に `brew install i2y/tap/rulec` を走らせると、`Refusing to load formula i2y/tap/ritsu from untrusted tap i2y/tap` と言って止まります。`brew trust --formula i2y/tap/ritsu` のあとなら、古い名前でも ritsu が入ります。
@@ -23,18 +23,18 @@ formula が入れるのは、その環境向けのリリースのアーカイブ
 リリースごとに、x64 と arm64 の `.deb` と `.rpm` も置いています。中身はアーカイブと同じ静的リンクのバイナリなので、依存するパッケージはありません。
 
 ```console
-$ v=0.24.0; a=amd64                  # ARM なら arm64
+$ v=0.25.0; a=amd64                  # ARM なら arm64
 $ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/v$v/ritsu_$v-1_$a.deb"
 $ curl -fsSL "https://github.com/i2y/ritsu/releases/download/v$v/SHA256SUMS" | grep "ritsu_$v-1_$a.deb" | sha256sum -c
-ritsu_0.24.0-1_amd64.deb: OK
+ritsu_0.25.0-1_amd64.deb: OK
 $ sudo apt install "./ritsu_$v-1_$a.deb"
 ```
 
 ```console
-$ v=0.24.0; a=x86_64                 # ARM なら aarch64
+$ v=0.25.0; a=x86_64                 # ARM なら aarch64
 $ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/v$v/ritsu-$v-1.$a.rpm"
 $ curl -fsSL "https://github.com/i2y/ritsu/releases/download/v$v/SHA256SUMS" | grep "ritsu-$v-1.$a.rpm" | sha256sum -c
-ritsu-0.24.0-1.x86_64.rpm: OK
+ritsu-0.25.0-1.x86_64.rpm: OK
 $ sudo dnf install "./ritsu-$v-1.$a.rpm"
 ```
 
@@ -56,13 +56,13 @@ $ cargo install rulec          # ビルドする。ほかに取りに行くも�
 ## リリースのバイナリ
 
 ```console
-$ v=v0.24.0; t=aarch64-apple-darwin
+$ v=v0.25.0; t=aarch64-apple-darwin
 $ curl -fsSLO "https://github.com/i2y/ritsu/releases/download/$v/ritsu-$v-$t.tar.gz"
 $ curl -fsSL "https://github.com/i2y/ritsu/releases/download/$v/SHA256SUMS" | grep "$t" | shasum -a 256 -c
-ritsu-v0.24.0-aarch64-apple-darwin.tar.gz: OK
+ritsu-v0.25.0-aarch64-apple-darwin.tar.gz: OK
 $ tar -xzf "ritsu-$v-$t.tar.gz" -C ~/.local/bin --exclude 'LICENSE-*' --exclude THIRD_PARTY_NOTICES
 $ rulec --version
-rulec 0.24.0
+rulec 0.25.0
 ```
 
 アーカイブには、`ritsu` と、言語ごとにそれを指すリンク（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`、`sekisho`）と、二つのライセンスと、バイナリが含む他者のものの通知とライセンスの文（THIRD_PARTY_NOTICES。0.24.0 から）が、同じ階層に入っています。リンクは相対なので、PATH にあるディレクトリに展開するだけで入ります。`--exclude 'LICENSE-*' --exclude THIRD_PARTY_NOTICES` を付けると、ライセンスと通知は展開しません。`t` は `aarch64-apple-darwin`・`x86_64-apple-darwin`・`x86_64-unknown-linux-musl`・`aarch64-unknown-linux-musl` のどれかです。Linux の二つは静的リンクなので、どのディストリビューションでも動きます。Linux では `sha256sum -c` を使います。走らせる前に `SHA256SUMS` と突き合わせる、この一行が検証の全部なので、ここは飛ばさないでください。
@@ -71,19 +71,19 @@ rulec 0.24.0
 
 rulec は 0.22.1 まで、自分のリリースを出していました。ritsu のリリースは `rulec` をリンクとして持つので、移って変わるのは入っているものの名前で、コマンドは変わりません。
 
-Homebrew では、tap が formula の名前を `rulec` から `ritsu` に変えたので、brew が、入っている rulec を ritsu に移せます。Homebrew 7 は、公式以外の tap の formula を、その tap を信頼するまで読みません。tap の名前ごと formula を指定して入れると、その tap を信頼したことになります。そのとき `brew install` は、rulec がすでに入っていて、まだ移していないと警告します。`brew migrate ritsu` で ritsu に移し、`brew upgrade ritsu` で 0.24.0 に上げます。
+Homebrew では、tap が formula の名前を `rulec` から `ritsu` に変えたので、brew が、入っている rulec を ritsu に移せます。Homebrew 7 は、公式以外の tap の formula を、その tap を信頼するまで読みません。tap の名前ごと formula を指定して入れると、その tap を信頼したことになります。そのとき `brew install` は、rulec がすでに入っていて、まだ移していないと警告します。`brew migrate ritsu` で ritsu に移し、`brew upgrade ritsu` で 0.25.0 に上げます。
 
 ```console
 $ brew install i2y/tap/ritsu
 $ brew migrate ritsu
 $ brew upgrade ritsu
 $ rulec --version
-rulec 0.24.0
+rulec 0.25.0
 ```
 
-`brew trust --formula i2y/tap/ritsu` のあとに `brew upgrade` を走らせても同じです。`brew upgrade` が、移すことと 0.24.0 に上げることを一度にします。
+`brew trust --formula i2y/tap/ritsu` のあとに `brew upgrade` を走らせても同じです。`brew upgrade` が、移すことと 0.25.0 に上げることを一度にします。
 
-ritsu の `.deb` か `.rpm` を上の手順で入れると、`rulec` のパッケージは取り除かれ、`/usr/bin/rulec` は `ritsu` を指すリンクになります。アーカイブで入れていたなら、古い `rulec` があるディレクトリに ritsu のアーカイブを展開すると、古いバイナリがリンクに置き換わります。CI では、`uses: i2y/rulec@v0.22.1` の行が `uses: i2y/ritsu@v0.24.0` になります（[CI に置く](#ci-に置く)）。
+ritsu の `.deb` か `.rpm` を上の手順で入れると、`rulec` のパッケージは取り除かれ、`/usr/bin/rulec` は `ritsu` を指すリンクになります。アーカイブで入れていたなら、古い `rulec` があるディレクトリに ritsu のアーカイブを展開すると、古いバイナリがリンクに置き換わります。CI では、`uses: i2y/rulec@v0.22.1` の行が `uses: i2y/ritsu@v0.25.0` になります（[CI に置く](#ci-に置く)）。
 
 ## ソースから
 
@@ -166,7 +166,7 @@ $ RULEC_LANG=ja rulec check rules/送料.rule
 
 ## CI に置く
 
-`uses: i2y/ritsu@v0.24.0` の一行で、そのリリースの ritsu が検査済みで runner の `PATH` に入ります。`rulec` などのリンクも一緒です。action を指す ref がそのままリリースなので、既定では二つがずれません（別のリリースを入れたいときだけ `with: { version: … }` で明示します）。`SHA256SUMS` との突き合わせは**必ず走ります** — その行が無いだけでも落ちます。アーカイブのハッシュを workflow 側にも書いて固定したいなら、`with: { sha256: … }` を足します。検査が一つ増えます。rulec 自身の最後のリリースを指す `uses: i2y/rulec@v0.22.1` も、rulec のリポジトリが残っているあいだは動きます。
+`uses: i2y/ritsu@v0.25.0` の一行で、そのリリースの ritsu が検査済みで runner の `PATH` に入ります。`rulec` などのリンクも一緒です。action を指す ref がそのままリリースなので、既定では二つがずれません（別のリリースを入れたいときだけ `with: { version: … }` で明示します）。`SHA256SUMS` との突き合わせは**必ず走ります** — その行が無いだけでも落ちます。アーカイブのハッシュを workflow 側にも書いて固定したいなら、`with: { sha256: … }` を足します。検査が一つ増えます。rulec 自身の最後のリリースを指す `uses: i2y/rulec@v0.22.1` も、rulec のリポジトリが残っているあいだは動きます。
 
 **入れるのに要るのはその一行だけ**ですが、その前に `actions/checkout` が要ります — rulec が読むのは、あなたのリポジトリの `rules/` だからです。ジョブ全体ではこうなります。
 
@@ -177,7 +177,7 @@ check:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0                   # --diff-base が origin/main を読む
-    - uses: i2y/ritsu@v0.24.0
+    - uses: i2y/ritsu@v0.25.0
     - run: rulec fmt --check rules/
     - run: rulec check rules/ --diff-base origin/main
     - run: rulec gen rules/ --out generated/ --check
@@ -205,7 +205,7 @@ replay:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0                   # 旧の版は origin/main から読む
-    - uses: i2y/ritsu@v0.24.0
+    - uses: i2y/ritsu@v0.25.0
     # 記録を $FIXTURES に置くところはご自身で: アーティファクトか、権限を絞った保管先から
     - run: rulec diff rules/送料.rule@origin/main rules/送料.rule --fixtures "$FIXTURES" --format markdown --terse > diff.md || [ $? -eq 1 ]
       env:

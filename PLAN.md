@@ -1543,3 +1543,15 @@ derive の範囲を入力から計算して、届かない行を E102 にした�
 - 生成物が変わるので、`rulec gen` をし直す（`rulec gen --check` は、し直すまで落ちる）。
 - dandori：判断のタスクの送り先が増えた。`jev` のタスクは、`url "<ベース URL>"` で System One の API を話すどのサーバー（Ollama は 0.35 から `/v1/systemone`）にも、`jev openai "<質問>"` で OpenAI の Decisions API（`gpt-6-luna`。`url` でそのほかのサーバー）にも尋ねられるようになった。答えの型、確信度の下限、確信度のフィールドは、三つの送り先のどれでも、どのプラットフォームでも同じに使える。Decisions API が質問に答えないと、呼び出しは `refusal else <エラー>` が宣言したエラーか、`on failure` が受ける `Dandori.Refused` で失敗する。W032 は、送り先ごとにひとりでに移るモデルを警告する（Jev のエイリアス、タグの無いか `:latest` の Ollama のモデル、バージョンを固定する名前の無い Decisions API）。既定の `Transport` は、`OPENAI_API_KEY`（`openai` オプション）から OpenAI のキーを足し、`url` のサーバーにはどのキーも送らない。
 - dandori で変わったこと：`jev` のタスクの `url` はこれまで E007 だったが、送り先のサーバーを書くところになった。値が一つだけの列挙を choice や score で尋ねると、どの送り先でも E007 になる。
+
+### 7.14 v0.25.0（2026-10-09）
+
+2026-10-09 に v0.25.0 をリリースした。版を上げたコミットと注釈つきのタグを push したが、ワークフローの最初の段の `audit` が、その朝に出た golang.org/x/net 0.58.0 の四つのアドバイザリ（dandori の `tools/temporal-go`。OSV の published は 2026-10-08T22:31Z）で止まった。x/net を 0.60.0 に上げたコミットにタグを付け直して（リリースはまだ作られていなかった）流し直し、ワークフローがアーカイブ、`.deb`・`.rpm`、スキルの zip、Homebrew の formula を出した。本文には、新しいものと、前は通っていた実行が落ちうる変更を、英語と日本語で書いた。
+
+**Go のランナーを Go 1.26 にそろえた**：x/net 0.60.0 は golang.org/x/text v0.42.0 を、x/text v0.42.0 は Go 1.26 を求める。ランナーと `ritsu gen` が書くパッケージは同じバージョンを求めることになっていて（DESIGN 9.3）、dandori のランナーだけを上げたところで、`crates/ritsu/tests/audit.rs` が fast と tools の段で落ちた。chobo のランナー（x/text v0.42.0 と x/sync v0.23.0、`go 1.26.0`）と、`doc.go` が上げるよう書く x/text（`GO_RAISED`）を同じバージョンにし、`tools.yml` の Go を全部の組で 1.26 にした。Go がサポートするのは 1.27 と 1.26 で、フローのある Go のパッケージは Temporal の Go SDK のために、もとから 1.26 が要った（DESIGN 3.6 の 2026-10-09 の表）。tools の段の全体で 2,441 件のうち 2,439 件が通り、落ちた 2 件は sekisho の Go のテストだった。sekisho のテストは `GOTOOLCHAIN=local` で手元の Go（1.25.5）でビルドするので、sekisho のランナーの `go` の行は 1.25.0 のままにし、回し直して通った。
+
+**rulec の入れ方の出力を 0.25.0 で取り直した**：rulec の README、`AGENTS.md`（とスキルのコピー）、入れ方のページ（英日）、`experiments/library/` の CI の見本を、0.25.0 のリリースの実物で取り直した（rulec の DESIGN §15.186 の 2026-10-09 の段落）。Homebrew は使い捨ての 7.0.9 で四つの場合を走らせ、どれも `rulec 0.25.0` になった。信頼する前の古い名前の `brew install` は、7.0.9 では同じ文を backtrace つきで出す。
+
+**次のリリースノートに書くこと**（v0.25.0 のあと）
+
+- `ritsu gen` が書く Go のパッケージで、PostgreSQL の帳簿のクライアント（pgx）を import するものの `doc.go` は、golang.org/x/text を v0.42.0 に上げるよう言う（v0.25.0 は v0.41.0）。v0.42.0 は Go 1.26 を求める。フローのある Go のパッケージは、Temporal の Go SDK 1.49.0 のために、もとから Go 1.26 が要る。
