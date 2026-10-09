@@ -68,6 +68,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
+          check-latest: true
 
       - name: uv
         uses: astral-sh/setup-uv@v10.0.1

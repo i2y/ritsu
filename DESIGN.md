@@ -487,7 +487,7 @@ Go 1.26 を求めることについて：Go は新しい二つのメジャーリ
 - `fetch.sh` と `install.sh` で取ってくるバイナリ（TigerBeetle、sakai の Java のツールと Context Mapper、wasm-tools、protoc）。チェックサムで確かめているが、OSV では調べていない。
 - Lean の依存（`proofs/lake-manifest.json`）。OSV に Lean のエコシステムが無い。
 - ワークフローが使う action（タグで指している）。`release.yml` は GitHub のもの（checkout、upload-artifact、download-artifact）しか使わず、ほかの action を使うのは、読むだけの権限で、secret を持たないジョブだけである。
-- 手元と CI のツールチェーンそのもの。この機械の Go は 1.25.5 で、その標準ライブラリには、1.25.6〜1.25.10 で直ったアドバイザリが 30 ほどある（govulncheck の結果）。dandori と chobo のランナーは、`go 1.26.0` の行を読んだ go コマンドが取ってくる Go 1.26.0 で動き、それも 1.26 の最新のパッチ（1.26.9）ではない。CI は `setup-go` の `1.26` で最新のパッチを入れる（2026-10-09 までは、dandori の組のほかは `1.25`）。
+- 手元と CI のツールチェーンそのもの。この機械の Go は 1.25.5 で、その標準ライブラリには、1.25.6〜1.25.10 で直ったアドバイザリが 30 ほどある（govulncheck の結果）。dandori と chobo のランナーは、`go 1.26.0` の行を読んだ go コマンドが取ってくる Go 1.26.0 で動き、それも 1.26 の最新のパッチ（1.26.9）ではない。CI は `setup-go` の `1.26` に `check-latest: true` を付けて、1.26 の最新のパッチを入れる（2026-10-10 から。付けないとランナーに入っている版を使い、2026-10-09 の実行では、最新の 1.26.9 ではなく 1.26.8 だった。2026-10-09 までは、dandori の組のほかは `1.25`）。
 - yuen の `tools/requirements.txt`（prov と reqif の二つの名前だけ）。依存まではまだ固定していないので、osv-scanner は二つだけを調べる。
 
 #### 捨てたもの
