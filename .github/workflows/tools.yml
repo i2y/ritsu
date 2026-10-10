@@ -12,7 +12,8 @@ name: tools
 # rulec (the twelve languages it writes, a PostgreSQL server, Lean), dandori (the SDKs and
 # runners under its tools/; its tests read the rules through rulec's library, PLAN D.3, and run
 # the books its examples call on chobo's clients) with ritsu, and the other six languages with
-# the base layer, the test kit and xtask.
+# the base layer, the test kit and xtask. The tests of the npm package (ritsu's tests/npm.rs)
+# run in a job of their own, once for each Node the package is for (DESIGN 8.8).
 
 on:
   push:
@@ -49,7 +50,8 @@ jobs:
           - group: rulec
             crates: -p rulec
           - group: dandori
-            crates: -p dandori -p ritsu
+            # the npm package's tests are the job `npm`'s
+            crates: "-p dandori -p ritsu -- --skip npm::"
           - group: the others
             crates: -p koyomi -p chobo -p geas -p yuen -p sakai -p sekisho -p ritsu-base -p ritsu-units -p ritsu-ports -p ritsu-testkit -p ritsu-proto -p ritsu-emit -p xtask
 
@@ -463,3 +465,83 @@ jobs:
           set -eu
           target/debug/rulec fmt --check crates/rulec/tests/corpus/
           target/debug/rulec check crates/rulec/tests/corpus/
+
+  # The npm package @i2y/ritsu: ritsu built for WASI (wasm32-wasip1), which Node runs (DESIGN 8.8).
+  # packaging/npm/build.sh builds it as a release does, with cargo-auditable; then ritsu's
+  # tests/npm.rs holds it to the native binary on every example, project and command a person runs
+  # there, holds the commands that need another program to what they say, and runs the tests of
+  # the package itself (`node --test`), the install as a job over many repositories makes it among
+  # them: from the .tgz, --ignore-scripts, offline, the standard input closed, with the network
+  # taken away. Node's WASI is part of Node, and has differed between its versions (DESIGN 8.8), so
+  # every Node the package is for runs it: 22 (maintenance), 24 (active) and 26 (current) on Linux,
+  # and 24 on macOS, whose directories Node's WASI read otherwise before.
+  npm:
+    name: npm (node ${{ matrix.node }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        node: ["22", "24", "26"]
+        include:
+          - os: macos-latest
+            node: "24"
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust, with the target of WASI
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-npm-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-npm-${{ runner.os }}-
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          check-latest: true
+
+      # As release.yml takes it, held to the SHA-256 its release gives each archive.
+      - name: cargo-auditable 0.7.7
+        run: |
+          set -eu
+          case "$RUNNER_OS-$RUNNER_ARCH" in
+            Linux-X64) host=x86_64-unknown-linux-gnu; sum=4c8d3b08c3c34e9f2333367224dbbfb4aab68067698b43de59fe19aded3416dd ;;
+            macOS-ARM64) host=aarch64-apple-darwin; sum=a66ad6392861ca1abfe0b02b522622d91edf63e5d7b60f4d3088b5c23d240c72 ;;
+            *) echo "::error::no cargo-auditable for $RUNNER_OS-$RUNNER_ARCH"; exit 1 ;;
+          esac
+          d="$RUNNER_TEMP/cargo-auditable"
+          mkdir -p "$d"
+          curl -fsSL -o "$d/a.tar.xz" "https://github.com/rust-secure-code/cargo-auditable/releases/download/v0.7.7/cargo-auditable-$host.tar.xz"
+          echo "$sum  $d/a.tar.xz" | shasum -a 256 -c -
+          tar -xJf "$d/a.tar.xz" -C "$d" --strip-components=1
+          echo "$d" >> "$GITHUB_PATH"
+
+      # The install test takes the network away from npm and the package: a network namespace on
+      # Linux, which Ubuntu 24.04 lets an unprivileged user make only when AppArmor is told so;
+      # sandbox-exec on macOS.
+      - name: Let a test make a network namespace
+        if: runner.os == 'Linux'
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          unshare -rn true
+
+      - name: The toolchains this run has
+        run: |
+          rustc --version && cargo --version && node --version && npm --version
+
+      - name: The package
+        run: bash packaging/npm/build.sh target/npm
+
+      - name: The tests of the package
+        run: "cargo xtask test --level tools -p ritsu -- npm::"

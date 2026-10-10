@@ -180,10 +180,10 @@ fn the_names_and_the_platforms_are_the_same_in_every_file() {
         assert!(smoke.lines().any(|s| s.starts_with(&format!("step {l} "))), "smoke.sh has no step for {l}");
     }
     assert!(smoke.lines().any(|s| s.starts_with("step ritsu check ")), "smoke.sh has no step for ritsu check");
-    // the workflow and the package run: every name is asked its version, and every package is
-    // removed with all nine files
+    // the workflow and the package run: every name is asked its version (of the archive, of brew's
+    // install and of the npm package's), and every package is removed with all nine files
     let all = format!("ritsu {names}");
-    assert_eq!(read(".github/workflows/release.yml").matches(&format!("for n in {all}; do")).count(), 2, "release.yml");
+    assert_eq!(read(".github/workflows/release.yml").matches(&format!("for n in {all}; do")).count(), 3, "release.yml");
     assert_eq!(read("packaging/linux.sh").matches(&format!("for n in {all}; do")).count(), 2, "linux.sh");
     // DESIGN 2.3 lists them in this order too
     assert!(read("DESIGN.md").contains(&format!("`{}`", LANGUAGES.join("`、`"))), "DESIGN 2.3 lists the eight names");
@@ -246,12 +246,15 @@ fn the_packages_take_the_place_of_the_rulec_package() {
 fn the_workflows_run_the_scripts_and_the_action_unpacks_what_they_write() {
     let release = read(".github/workflows/release.yml");
     let packages = read(".github/workflows/packages.yml");
+    let tools = read(".github/workflows/tools.yml");
     for (workflow, script) in [
         (&release, "packaging/archive.sh"),
         (&release, "packaging/smoke.sh"),
         (&release, "packaging/linux.sh"),
         (&release, "packaging/homebrew.sh"),
         (&release, "packaging/skills.sh"),
+        (&release, "packaging/npm/build.sh"),
+        (&tools, "packaging/npm/build.sh"),
         (&packages, "packaging/archive.sh"),
         (&packages, "packaging/smoke.sh"),
         (&packages, "packaging/linux.sh"),
@@ -263,11 +266,14 @@ fn the_workflows_run_the_scripts_and_the_action_unpacks_what_they_write() {
     assert!(read("packaging/archive.sh").contains("ritsu-$tag-$target.tar.gz"));
     assert!(read("action.yml").contains("name=\"ritsu-$ver-$target.tar.gz\""));
     assert!(read("packaging/homebrew.sh").contains("ritsu-$tag-$1.tar.gz"));
-    // the SHA256SUMS holds the archive, both packages and the zip of the skills, and the release
-    // hands out each of them (tests/skill.rs holds what is in the zip)
-    assert!(release.contains("sha256sum ritsu-*.tar.gz ritsu_*.deb ritsu-*.rpm ritsu-skills-*.zip"));
-    assert!(release.contains("dist/ritsu-*.tar.gz dist/ritsu_*.deb dist/ritsu-*.rpm dist/ritsu-skills-*.zip dist/SHA256SUMS"));
+    // the SHA256SUMS holds the archive, both packages, the zip of the skills and the npm package,
+    // and the release hands out each of them (tests/skill.rs holds what is in the zip, tests/npm.rs
+    // what is in the npm package), which no job publishes anywhere else
+    assert!(release.contains("sha256sum ritsu-*.tar.gz ritsu_*.deb ritsu-*.rpm ritsu-skills-*.zip i2y-ritsu-*.tgz"));
+    assert!(release.contains("dist/ritsu-*.tar.gz dist/ritsu_*.deb dist/ritsu-*.rpm dist/ritsu-skills-*.zip dist/i2y-ritsu-*.tgz dist/SHA256SUMS"));
     assert!(read("packaging/skills.sh").contains("ritsu-skills-$tag.zip"));
+    assert!(read("packaging/npm/build.sh").contains("i2y-ritsu-$version.tgz"));
+    assert!(!release.contains("npm publish"), "the npm package goes out with the release, not to the registry");
     // the packages are named as the script names them, the formula's test and the release's
     // checks hold every name to one version
     let linux = read("packaging/linux.sh");
@@ -386,14 +392,14 @@ fn crate_sections(sections: &[Notice]) -> Vec<&Notice> {
 }
 
 /// THIRD_PARTY_NOTICES names the crates `ritsu` and `ritsu.wasm` are built from, each at the version
-/// and under the license `cargo tree` gives, on each of the four platforms and in wasm32; and its
-/// list at the top has a line for every section.
+/// and under the license `cargo tree` gives, on each of the four platforms, in wasm32 and for WASI
+/// (the npm package's module); and its list at the top has a line for every section.
 #[test]
 fn the_notices_name_the_crates_the_binary_is_built_from() {
     let (intro, sections) = notices();
     let host = built_from("ritsu", None);
     assert!(!host.is_empty(), "ritsu is built from no crate outside the workspace?");
-    for (package, target) in TARGETS.iter().map(|t| ("ritsu", Some(*t))).chain([("ritsu-wasm", None), ("ritsu-wasm", Some("wasm32-unknown-unknown"))]) {
+    for (package, target) in TARGETS.iter().map(|t| ("ritsu", Some(*t))).chain([("ritsu", Some("wasm32-wasip1")), ("ritsu-wasm", None), ("ritsu-wasm", Some("wasm32-unknown-unknown"))]) {
         assert_eq!(built_from(package, target), host, "{package} for {target:?} is built from other crates than ritsu here");
     }
     let named: Vec<(String, String, String)> = {

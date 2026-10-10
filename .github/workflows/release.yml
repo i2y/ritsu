@@ -20,6 +20,7 @@ name: release
 #   ritsu_0.23.0-1_amd64.deb      ritsu-0.23.0-1.x86_64.rpm
 #   ritsu_0.23.0-1_arm64.deb      ritsu-0.23.0-1.aarch64.rpm
 #   ritsu-skills-v0.23.0.zip
+#   i2y-ritsu-0.26.0.tgz          (from 0.26.0)
 #   SHA256SUMS
 #
 # An archive holds `ritsu` and, beside it, `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `yuen`,
@@ -28,6 +29,9 @@ name: release
 # the same three files in /usr/share/doc/ritsu, and the formula in the keg. The zip holds the
 # nine Agent Skills of skills/, a folder each, and the two licenses (packaging/skills.sh): the same
 # files `ritsu skills install` writes, for an agent that is given folders rather than the binary.
+# The .tgz is the npm package @i2y/ritsu: `ritsu` built for WASI, which Node runs with no native
+# binary, the same on every platform, so it is packed once (packaging/npm/build.sh, DESIGN 8.8). It
+# is not published to the npm registry; `npm install <its URL>` installs it from the release.
 
 on:
   push:
@@ -142,8 +146,99 @@ jobs:
           path: dist/
           if-no-files-found: error
 
+  # The npm package, packed once from the tag: its version has to be the tag's too, and the module
+  # carries the list of its crates, as the binaries do.
+  npm:
+    needs: audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: The tag is the version of the workspace and of the package
+        run: |
+          v=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          p=$(node -p 'require("./packaging/npm/package.json").version')
+          test "v$v" = "$GITHUB_REF_NAME" && test "$p" = "$v" || { echo "::error::tag $GITHUB_REF_NAME, the workspace '$v', packaging/npm/package.json '$p'"; exit 1; }
+
+      - name: Add the target
+        run: rustup target add wasm32-wasip1
+
+      - name: cargo-auditable 0.7.7
+        run: |
+          set -eu
+          d="$RUNNER_TEMP/cargo-auditable"
+          mkdir -p "$d"
+          curl -fsSL -o "$d/a.tar.xz" "https://github.com/rust-secure-code/cargo-auditable/releases/download/v0.7.7/cargo-auditable-x86_64-unknown-linux-gnu.tar.xz"
+          echo "4c8d3b08c3c34e9f2333367224dbbfb4aab68067698b43de59fe19aded3416dd  $d/a.tar.xz" | shasum -a 256 -c -
+          tar -xJf "$d/a.tar.xz" -C "$d" --strip-components=1
+          echo "$d" >> "$GITHUB_PATH"
+
+      - name: Build
+        run: bash packaging/npm/build.sh dist
+
+      - name: The module carries its crates, and says the version of the tag
+        run: |
+          set -eu
+          node -e 'const s = WebAssembly.Module.customSections(new WebAssembly.Module(require("fs").readFileSync("dist/package/ritsu.wasm")), ".dep-v0"); if (s.length !== 1) { console.error("::error::ritsu.wasm has no .dep-v0"); process.exit(1); }'
+          test "$(node dist/package/bin/ritsu.js --version)" = "ritsu ${GITHUB_REF_NAME#v}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm
+          path: dist/i2y-ritsu-*.tgz
+          if-no-files-found: error
+
+  # The package installed as a job over many repositories installs it: from the file, with no
+  # script run, offline, nothing on the standard input, and the network taken away (a network
+  # namespace on Linux, sandbox-exec on macOS); then every name says the version of the tag, and
+  # `ritsu gen` writes the packages of a project, which `--check` then finds current.
+  npm-check:
+    needs: npm
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm
+          path: dist
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: Installed offline, every name says the version, and ritsu gen writes a package
+        run: |
+          set -eu
+          v="${GITHUB_REF_NAME#v}"
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+            offline() { unshare -rn "$@"; }
+          else
+            offline() { sandbox-exec -p '(version 1)(allow default)(deny network*)' "$@"; }
+          fi
+          d=$(mktemp -d)
+          cp -R crates/ritsu/tests/projects/stockroom/. "$d/"
+          cd "$d"
+          echo '{ "name": "a-service", "private": true }' > package.json
+          offline npm install --ignore-scripts --offline --no-audit --no-fund --cache "$RUNNER_TEMP/npm-cache" "$GITHUB_WORKSPACE/dist/i2y-ritsu-$v.tgz" < /dev/null
+          for n in ritsu rulec dandori koyomi chobo geas yuen sakai sekisho; do
+            test "$(offline "node_modules/.bin/$n" --version < /dev/null)" = "$n $v" || { echo "::error::$n --version says '$(offline "node_modules/.bin/$n" --version < /dev/null)'"; exit 1; }
+          done
+          offline node_modules/.bin/ritsu gen < /dev/null
+          offline node_modules/.bin/ritsu gen --check --format json < /dev/null > check.json
+          node -e 'const r = JSON.parse(require("fs").readFileSync("check.json", "utf8")); if (!r.ok || r.files.length === 0) { console.error("::error::ritsu gen --check: " + JSON.stringify(r)); process.exit(1); }'
+
   publish:
-    needs: build
+    needs: [build, npm-check]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -164,7 +259,7 @@ jobs:
           done
 
       - name: Checksums
-        run: cd dist && sha256sum ritsu-*.tar.gz ritsu_*.deb ritsu-*.rpm ritsu-skills-*.zip | tee SHA256SUMS
+        run: cd dist && sha256sum ritsu-*.tar.gz ritsu_*.deb ritsu-*.rpm ritsu-skills-*.zip i2y-ritsu-*.tgz | tee SHA256SUMS
 
       - name: Release
         env:
@@ -172,8 +267,8 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "ritsu $GITHUB_REF_NAME" \
-            --notes "One static binary per platform, with a link to it for each of the eight languages (rulec, dandori, koyomi, chobo, geas, yuen, sakai, sekisho); on Linux also as a .deb and an .rpm. The Agent Skills of ritsu and the eight languages are in ritsu-skills-$GITHUB_REF_NAME.zip, a folder each, to unzip where an agent reads skills. Verify a download against SHA256SUMS before running it; the install page says how." \
-            dist/ritsu-*.tar.gz dist/ritsu_*.deb dist/ritsu-*.rpm dist/ritsu-skills-*.zip dist/SHA256SUMS
+            --notes "One static binary per platform, with a link to it for each of the eight languages (rulec, dandori, koyomi, chobo, geas, yuen, sakai, sekisho); on Linux also as a .deb and an .rpm. The Agent Skills of ritsu and the eight languages are in ritsu-skills-$GITHUB_REF_NAME.zip, a folder each, to unzip where an agent reads skills. The npm package @i2y/ritsu, ritsu built for WebAssembly, which Node 22 or later runs with no native binary, is i2y-ritsu-${GITHUB_REF_NAME#v}.tgz; npm install its URL. Verify a download against SHA256SUMS before running it; the install page says how." \
+            dist/ritsu-*.tar.gz dist/ritsu_*.deb dist/ritsu-*.rpm dist/ritsu-skills-*.zip dist/i2y-ritsu-*.tgz dist/SHA256SUMS
 
   # The formula is written once, from the SHA256SUMS that was just published, so it points at
   # these very archives; the jobs below test that file and push that file.
