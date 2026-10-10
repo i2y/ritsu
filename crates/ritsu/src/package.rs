@@ -26,11 +26,13 @@
 //! as `rulec gen --check` does.
 
 use crate::cli;
+use ritsu_base::diag::Severity;
+use ritsu_base::json::Json;
 use ritsu_base::naming::Tool;
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
 use ritsu_emit::header::{Comment, Origin};
-use ritsu_ports::{Part, Verdict};
+use ritsu_ports::{Finding, Part, Verdict};
 use ritsu_project::{File, Joined, Project};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
@@ -155,21 +157,43 @@ pub struct Package {
     pub files: Vec<(String, String, Option<String>)>,
 }
 
-/// Why nothing is generated: what to print, and the exit code.
+/// Why nothing is generated: what the text prints (on the standard error), the exit code, and for
+/// the JSON the sentence that says why and the diagnostics behind it, each as `ritsu check
+/// --format json` writes one.
 pub struct Refusal {
     pub said: String,
     pub code: u8,
+    pub message: String,
+    pub diagnostics: Vec<Json>,
 }
 
 fn refusal(code: u8, said: Text, lang: Lang) -> Refusal {
     let head = if lang == Lang::Ja { "エラー" } else { "error" };
-    Refusal { said: format!("{head}: {}\n", said.get(lang)), code }
+    let message = said.get(lang).to_string();
+    Refusal { said: format!("{head}: {message}\n"), code, message, diagnostics: Vec::new() }
+}
+
+/// A generator's own diagnostics, which stop it after the files passed their checks: printed as
+/// the language prints them, and in the JSON with the sentence `why`.
+fn stopped(said: String, code: u8, why: Text, diagnostics: Vec<Json>, lang: Lang) -> Refusal {
+    Refusal { said, code, message: why.get(lang).to_string(), diagnostics }
+}
+
+/// A diagnostic of a language, from its own JSON, as `ritsu check --format json` writes it.
+fn diagnostic(tool: &str, file: Option<String>, json: Json) -> Json {
+    crate::check::entry(tool, &Finding { code: String::new(), severity: Severity::Error, file, line: None, text: String::new(), json })
+}
+
+/// A value of serde_json (dandori's and chobo's diagnostics), as ritsu-base's JSON.
+fn from_serde(v: &serde_json::Value) -> Json {
+    ritsu_base::json::parse(&v.to_string()).unwrap_or(Json::Null)
 }
 
 /// Whether every file of the four languages a package is made of passes its language's check; the
 /// diagnostics of those that do not, as `ritsu check` prints them, when one does not.
 fn checked(project: &Project, joined: &Joined, lang: Lang) -> Result<(), Refusal> {
     let mut said = String::new();
+    let mut found: Vec<Json> = Vec::new();
     let mut worst = 0u8;
     let mut failing: Vec<String> = Vec::new();
     for tool in [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Sekisho] {
@@ -187,7 +211,10 @@ fn checked(project: &Project, joined: &Joined, lang: Lang) -> Result<(), Refusal
             worst = worst.max(if u.verdict == Verdict::Unchecked { 2 } else { 1 });
             for p in &u.parts {
                 match p {
-                    Part::Finding(f) => said.push_str(&f.text_of(tool.word())),
+                    Part::Finding(f) => {
+                        said.push_str(&f.text_of(tool.word()));
+                        found.push(crate::check::entry(tool.word(), f));
+                    }
                     Part::Text(s) => said.push_str(s),
                 }
             }
@@ -212,6 +239,7 @@ fn checked(project: &Project, joined: &Joined, lang: Lang) -> Result<(), Refusal
                         Some(at) => format!("{}[dandori {}]{}", &text[..at], d.code, &text[at + tag.len()..]),
                         None => text,
                     });
+                    found.push(diagnostic("dandori", Some(f.rel.clone()), from_serde(&d.to_json(lang))));
                 }
                 failing.push(f.shown.clone());
             }
@@ -228,7 +256,7 @@ fn checked(project: &Project, joined: &Joined, lang: Lang) -> Result<(), Refusal
         tr!("検査を通らないファイルが {n} 個あるので、何も生成しません: {list}", "{n} file(s) do not pass check, so nothing is generated: {list}"),
         lang,
     );
-    Err(Refusal { said: format!("{said}{}", r.said), code: r.code })
+    Err(Refusal { said: format!("{said}{}", r.said), diagnostics: found, ..r })
 }
 
 /// `f`, with the ports of the rules, the dates and the books joined, as dandori reads a flow.
@@ -295,7 +323,9 @@ pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) 
         for ct in wanted {
             let built = chobo::target::build(book, &stem, ct, &origin).map_err(|ds| {
                 let text: String = ds.iter().map(|d| chobo::diag::Show::shown(d, &f.shown, &src, lang)).collect();
-                Refusal { said: text, code: 1 }
+                let json = ds.iter().map(|d| diagnostic("chobo", Some(f.rel.clone()), from_serde(&chobo::diag::Show::json_in(d, &f.shown, &src, lang)))).collect();
+                let (shown, to) = (&f.shown, target.key());
+                stopped(text, 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, lang)
             })?;
             for (rel, body) in built {
                 if ct != chobo::target::Target::Postgres {
@@ -339,7 +369,11 @@ pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) 
             };
             match dandori::commands::build(&m, target.dandori()) {
                 Some(Ok(files)) => Ok((files, dir, src)),
-                Some(Err(diags)) => Err(Refusal { said: dandori::commands::render(&diags, &f.shown, &src, lang), code: 1 }),
+                Some(Err(diags)) => {
+                    let json = diags.iter().map(|d| diagnostic("dandori", Some(f.rel.clone()), from_serde(&d.to_json(lang)))).collect();
+                    let (shown, to) = (&f.shown, target.key());
+                    Err(stopped(dandori::commands::render(&diags, &f.shown, &src, lang), 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, lang))
+                }
                 None => unreachable!("the three targets are dandori's"),
             }
         })?;
@@ -424,16 +458,18 @@ fn gate(project: &Project, suite: &sekisho::suite::Suite, f: &File, lang: Lang) 
 
 /// The Cedar of the project's gates, written once beside the packages (`<out>/cedar/`; sekisho's
 /// DESIGN 5.6): each file by its path under that directory; and, for Verified Permissions, what of
-/// it is over a quota (W401), as `sekisho gen --authorizer avp` says it.
-pub fn cedar(project: &Project, joined: &Joined, authorizer: sekisho::r#gen::Authorizer, lang: Lang) -> Result<(Package, String), Refusal> {
+/// it is over a quota (W401), as `sekisho gen --authorizer avp` says it, and in JSON.
+pub fn cedar(project: &Project, joined: &Joined, authorizer: sekisho::r#gen::Authorizer, lang: Lang) -> Result<(Package, String, Vec<Json>), Refusal> {
     let gates: sekisho::suite::Suite = joined.sekisho().into();
     let mut files = Vec::new();
     let mut said = String::new();
+    let mut warned = Vec::new();
     for f in project.of(Tool::Sekisho) {
         let outcome = gate(project, &gates, f, lang)?;
         if authorizer == sekisho::r#gen::Authorizer::Avp {
             for d in sekisho::r#gen::quotas(&outcome, lang) {
                 said.push_str(&d.render(lang));
+                warned.push(diagnostic("sekisho", Some(f.rel.clone()), d.to_json(lang)));
             }
         }
         let to = sekisho::r#gen::Target { name: "cedar", authorizer, go_module: String::new() };
@@ -445,13 +481,13 @@ pub fn cedar(project: &Project, joined: &Joined, authorizer: sekisho::r#gen::Aut
             files.push((rel.strip_prefix("cedar/").unwrap_or(&rel).to_string(), body, Some(f.rel.clone())));
         }
     }
-    Ok((Package { files }, said))
+    Ok((Package { files }, said, warned))
 }
 
 /// The file of the project, read.
 fn read(project: &Project, f: &File, lang: Lang) -> Result<String, Refusal> {
     let p = ritsu_base::paths::on_disk(&project.root, &f.rel);
-    std::fs::read_to_string(&p).map_err(|e| {
+    ritsu_base::fs::read_to_string(&p).map_err(|e| {
         let shown = &f.shown;
         refusal(2, tr!("`{shown}` を読めません: {e}", "cannot read `{shown}`: {e}"), lang)
     })
@@ -627,7 +663,8 @@ fn good_module(m: &str) -> bool {
     !m.is_empty() && !m.starts_with('/') && !m.ends_with('/') && m.split('/').all(|p| !p.is_empty() && p != "." && p != ".." && p.chars().all(|c| c.is_ascii_alphanumeric() || "-._~".contains(c)))
 }
 
-/// What a write or a check came to.
+/// What a write or a check came to: each state's files as the text lists them, and every file
+/// of the packages with its state, for the JSON.
 #[derive(Default)]
 struct Emitted {
     written: Vec<String>,
@@ -635,6 +672,27 @@ struct Emitted {
     stale: Vec<String>,
     missing: Vec<String>,
     left: Vec<String>,
+    files: Vec<Emit>,
+}
+
+/// One file of a package, as the JSON says it.
+struct Emit {
+    /// `typescript`, `python`, `go`, or `cedar` for the gates' Cedar beside them.
+    target: &'static str,
+    /// The path as the text says it: under `--out`, from where ritsu runs.
+    path: String,
+    /// The file of the project it is made from, from the root; None for what the package itself
+    /// is made of (the index, the manifest) and for a file that is generated no more.
+    from: Option<String>,
+    /// `written`, `same` or `removed` when ritsu writes; `same`, `missing`, `stale` or `left` under
+    /// `--check`.
+    state: &'static str,
+}
+
+impl Emitted {
+    fn note(&mut self, target: &'static str, path: &str, from: &Option<String>, state: &'static str) {
+        self.files.push(Emit { target, path: path.to_string(), from: from.clone(), state });
+    }
 }
 
 /// The files of the package's directory that ritsu wrote before (their head says so) and this run
@@ -643,7 +701,7 @@ fn leftovers(dir: &Path, planned: &BTreeSet<PathBuf>) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut todo = vec![dir.to_path_buf()];
     while let Some(d) = todo.pop() {
-        let Ok(rd) = std::fs::read_dir(&d) else { continue };
+        let Ok(rd) = ritsu_base::fs::read_dir(&d) else { continue };
         let mut entries: Vec<_> = rd.flatten().collect();
         entries.sort_by_key(|e| e.file_name());
         for e in entries {
@@ -670,17 +728,24 @@ fn generated_here(p: &Path) -> bool {
 }
 
 /// Write the package into `dir`, or under `check` say what differs from it.
-fn emit(dir: &Path, p: &Package, check: bool, st: &mut Emitted, lang: Lang) -> Result<(), Refusal> {
+fn emit(dir: &Path, target: &'static str, p: &Package, check: bool, st: &mut Emitted, lang: Lang) -> Result<(), Refusal> {
     let planned: BTreeSet<PathBuf> = p.files.iter().map(|(rel, _, _)| dir.join(rel)).collect();
-    for (rel, body, _) in &p.files {
+    for (rel, body, from) in &p.files {
         let path = dir.join(rel);
         let shown = path.display().to_string();
         let existing = std::fs::read(&path).ok();
         if existing.as_deref() == Some(body.as_bytes()) {
+            st.note(target, &shown, from, "same");
             continue;
         }
         if check {
-            if existing.is_none() { st.missing.push(shown) } else { st.stale.push(shown) }
+            if existing.is_none() {
+                st.note(target, &shown, from, "missing");
+                st.missing.push(shown);
+            } else {
+                st.note(target, &shown, from, "stale");
+                st.stale.push(shown);
+            }
             continue;
         }
         if let Some(parent) = path.parent()
@@ -692,53 +757,127 @@ fn emit(dir: &Path, p: &Package, check: bool, st: &mut Emitted, lang: Lang) -> R
         if std::fs::write(&path, body).is_err() {
             return Err(refusal(2, tr!("`{shown}` に書けません", "cannot write `{shown}`"), lang));
         }
+        st.note(target, &shown, from, "written");
         st.written.push(shown);
     }
     for p in leftovers(dir, &planned) {
         let shown = p.display().to_string();
         if check {
+            st.note(target, &shown, &None, "left");
             st.left.push(shown);
         } else if std::fs::remove_file(&p).is_ok() {
+            st.note(target, &shown, &None, "removed");
             st.removed.push(shown);
         }
     }
     Ok(())
 }
 
+/// Whether the line asks for JSON (`--format json`, `--format=json`): read before the line is, so
+/// that a line that does not read is answered in JSON too.
+fn asks_json(args: &[String]) -> bool {
+    args.iter().enumerate().any(|(i, x)| x == "--format=json" || (x == "--format" && args.get(i + 1).is_some_and(|v| v == "json")))
+}
+
+/// What `ritsu gen --format json` prints (DESIGN 8.5, 9.3): one object, its first keys those of
+/// `ritsu check --format json` — the version, the root as seen from where ritsu runs (null when
+/// no project was read), whether all is well (the exit code is 0) — then whether it was `--check`,
+/// `--out` and the languages asked for, every file of the packages with its state, the
+/// diagnostics that stopped it or warn (each as `ritsu check --format json` writes one), and why
+/// nothing was generated, with the exit code (null when something was).
+struct Answer {
+    root: Option<String>,
+    check: bool,
+    out: String,
+    targets: Vec<&'static str>,
+    files: Vec<Emit>,
+    diagnostics: Vec<Json>,
+    error: Option<(u8, String)>,
+}
+
+impl Answer {
+    fn json(&self, code: u8) -> Json {
+        let file = |e: &Emit| {
+            Json::obj([
+                ("target", Json::str(e.target)),
+                ("path", Json::str(&e.path)),
+                ("from", e.from.as_deref().map(Json::str).unwrap_or(Json::Null)),
+                ("state", Json::str(e.state)),
+            ])
+        };
+        let error = match &self.error {
+            Some((c, m)) => Json::obj([("code", Json::int(i128::from(*c))), ("message", Json::str(m))]),
+            None => Json::Null,
+        };
+        Json::obj([
+            ("ritsu", Json::str(env!("CARGO_PKG_VERSION"))),
+            ("root", self.root.as_deref().map(Json::str).unwrap_or(Json::Null)),
+            ("ok", Json::Bool(code == 0)),
+            ("check", Json::Bool(self.check)),
+            ("out", Json::str(&self.out)),
+            ("targets", Json::arr(self.targets.iter().map(|t| Json::str(*t)))),
+            ("files", Json::arr(self.files.iter().map(file))),
+            ("diagnostics", Json::arr(self.diagnostics.iter().cloned())),
+            ("error", error),
+        ])
+    }
+}
+
 /// `ritsu gen [<path>...] [--target typescript|python|go] [--out <dir>] [--check] [--books
-/// postgres|tigerbeetle] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]`:
-/// the exit code.
+/// postgres|tigerbeetle] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]
+/// [--format json]`: the exit code.
 pub fn command(args: &[String], lang: Lang) -> u8 {
     let table = cli::table();
     let cmd = table.command("gen").expect("gen is in the table");
     let asked = args.iter().enumerate().find_map(|(i, x)| if x == "--lang" { args.get(i + 1).cloned() } else { x.strip_prefix("--lang=").map(str::to_string) });
     let lang = if asked.is_some() { Lang::pick(asked.as_deref(), "RITSU_LANG") } else { lang };
-    let say = |r: Refusal| -> u8 {
-        eprint!("{}", r.said);
+    let json = asks_json(args);
+    let mut answer = Answer { root: None, check: args.iter().any(|a| a == "--check"), out: "generated".to_string(), targets: Vec::new(), files: Vec::new(), diagnostics: Vec::new(), error: None };
+    let code = generate(args, &table, cmd, lang, json, &mut answer);
+    if json {
+        println!("{}", answer.json(code).pretty());
+    }
+    code
+}
+
+/// [`command`], the answer kept for the JSON as it goes.
+fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::cli::Cmd, lang: Lang, json: bool, answer: &mut Answer) -> u8 {
+    // Nothing generated: the text says why on the standard error; the JSON keeps it.
+    let say = |r: Refusal, answer: &mut Answer| -> u8 {
+        if json {
+            answer.diagnostics.extend(r.diagnostics);
+            answer.error = Some((r.code, r.message));
+        } else {
+            eprint!("{}", r.said);
+        }
         r.code
     };
     let a = match table.parse(cmd, args) {
         Ok(a) => a,
-        Err(e) => return say(refusal(2, e, lang)),
+        Err(e) => return say(refusal(2, e, lang), answer),
     };
     if a.has("--help") {
         print!("{}", table.help_cmd(cmd, lang));
         return 0;
     }
+    answer.out = a.get("--out").unwrap_or("generated").to_string();
     let name = a.get("--name").unwrap_or("generated").to_string();
     if !good_name(&name) {
-        return say(refusal(
-            2,
-            tr!(
-                "`--name {name}` は使えません。名前は小文字の英字で始め、小文字の英字、数字、`_` だけで書いてください（Python の予約語は使えません）",
-                "`--name {name}` cannot name a package: it starts with a lowercase letter and has only lowercase letters, digits and `_` (and is not a word Python keeps)"
+        return say(
+            refusal(
+                2,
+                tr!(
+                    "`--name {name}` は使えません。名前は小文字の英字で始め、小文字の英字、数字、`_` だけで書いてください（Python の予約語は使えません）",
+                    "`--name {name}` cannot name a package: it starts with a lowercase letter and has only lowercase letters, digits and `_` (and is not a word Python keeps)"
+                ),
+                lang,
             ),
-            lang,
-        ));
+            answer,
+        );
     }
     let module = a.get("--module").unwrap_or(&name).to_string();
     if !good_module(&module) {
-        return say(refusal(2, tr!("`--module {module}` は Go の import のパスになりません", "`--module {module}` is not a Go import path"), lang));
+        return say(refusal(2, tr!("`--module {module}` は Go の import のパスになりません", "`--module {module}` is not a Go import path"), lang), answer);
     }
     let books = if a.get("--books") == Some("tigerbeetle") { Books::TigerBeetle } else { Books::Postgres };
     let authorizer = a.get("--authorizer").and_then(sekisho::r#gen::Authorizer::parse).unwrap_or(sekisho::r#gen::Authorizer::Cedar);
@@ -746,33 +885,38 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
         Some(t) => Target::parse(t).into_iter().collect(),
         None => Target::ALL.to_vec(),
     };
+    answer.targets = targets.iter().map(|t| t.key()).collect();
     let project = match Project::load(&a.pos, a.get("--root")) {
         Ok(p) => p,
-        Err(e) => return say(refusal(2, e, lang)),
+        Err(e) => return say(refusal(2, e, lang), answer),
     };
+    answer.root = Some(project.root_shown());
     if [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Dandori, Tool::Sekisho].iter().all(|t| project.of(*t).is_empty()) {
         let given = project.given.join(" ");
-        return say(refusal(
-            2,
-            tr!(
-                "{given} には、パッケージにするファイル（.rule、.cal、.book、.flow、.gate）がありません",
-                "there is no file to make a package of (.rule, .cal, .book, .flow, .gate) in {given}"
+        return say(
+            refusal(
+                2,
+                tr!(
+                    "{given} には、パッケージにするファイル（.rule、.cal、.book、.flow、.gate）がありません",
+                    "there is no file to make a package of (.rule, .cal, .book, .flow, .gate) in {given}"
+                ),
+                lang,
             ),
-            lang,
-        ));
+            answer,
+        );
     }
     let joined = Joined::new();
     if let Err(r) = checked(&project, &joined, lang) {
-        return say(r);
+        return say(r, answer);
     }
     let o = Options { name, module, books, authorizer, lang };
-    let out = PathBuf::from(a.get("--out").unwrap_or("generated"));
+    let out = PathBuf::from(&answer.out);
     let check = a.has("--check");
     let mut st = Emitted::default();
     for t in targets {
         let p = match package(&project, &joined, t, &o) {
             Ok(p) => p,
-            Err(r) => return say(r),
+            Err(r) => return say(r, answer),
         };
         // two files of the project that would write one file of the package
         let mut by: BTreeMap<&str, &Option<String>> = BTreeMap::new();
@@ -780,47 +924,60 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
             if let Some(prev) = by.insert(rel.as_str(), from) {
                 let (a1, b1) = (prev.clone().unwrap_or_default(), from.clone().unwrap_or_default());
                 let at = format!("{}/{rel}", t.key());
-                return say(refusal(
-                    2,
-                    tr!(
-                        "`{a1}` と `{b1}` が、パッケージの同じ {at} を書きます。どちらかの名前を変えてください（規則と日付のファイルは別名、帳簿は名前、ワークフローは名前かファイルの名前を ASCII で）",
-                        "`{a1}` and `{b1}` both write {at} of the package; give one of them another name (a rule or a dates file another alias, a book another name, a workflow a name or a file name in ASCII)"
+                return say(
+                    refusal(
+                        2,
+                        tr!(
+                            "`{a1}` と `{b1}` が、パッケージの同じ {at} を書きます。どちらかの名前を変えてください（規則と日付のファイルは別名、帳簿は名前、ワークフローは名前かファイルの名前を ASCII で）",
+                            "`{a1}` and `{b1}` both write {at} of the package; give one of them another name (a rule or a dates file another alias, a book another name, a workflow a name or a file name in ASCII)"
+                        ),
+                        lang,
                     ),
-                    lang,
-                ));
+                    answer,
+                );
             }
         }
-        if let Err(r) = emit(&out.join(t.key()), &p, check, &mut st, lang) {
-            return say(r);
+        let emitted = emit(&out.join(t.key()), t.key(), &p, check, &mut st, lang);
+        answer.files.append(&mut st.files);
+        if let Err(r) = emitted {
+            return say(r, answer);
         }
     }
     // the gates' Cedar, once beside the packages, whatever the targets
     if !project.of(Tool::Sekisho).is_empty() || out.join("cedar").exists() {
-        let (p, warnings) = match cedar(&project, &joined, authorizer, lang) {
+        let (p, warnings, warned) = match cedar(&project, &joined, authorizer, lang) {
             Ok(p) => p,
-            Err(r) => return say(r),
+            Err(r) => return say(r, answer),
         };
-        print!("{warnings}");
-        if let Err(r) = emit(&out.join("cedar"), &p, check, &mut st, lang) {
-            return say(r);
+        if json {
+            answer.diagnostics.extend(warned);
+        } else {
+            print!("{warnings}");
+        }
+        let emitted = emit(&out.join("cedar"), "cedar", &p, check, &mut st, lang);
+        answer.files.append(&mut st.files);
+        if let Err(r) = emitted {
+            return say(r, answer);
         }
     }
-    let mut stdout = std::io::stdout();
-    for p in &st.written {
-        let _ = writeln!(stdout, "{}", tr!("生成しました: {p}", "generated: {p}").get(lang));
+    if !json {
+        let mut stdout = std::io::stdout();
+        for p in &st.written {
+            let _ = writeln!(stdout, "{}", tr!("生成しました: {p}", "generated: {p}").get(lang));
+        }
+        for p in &st.removed {
+            let _ = writeln!(stdout, "{}", tr!("もう生成しないので消しました: {p}", "removed, as it is generated no more: {p}").get(lang));
+        }
+        for p in &st.missing {
+            let _ = writeln!(stdout, "{}", tr!("ありません: {p}", "missing: {p}").get(lang));
+        }
+        for p in &st.stale {
+            let _ = writeln!(stdout, "{}", tr!("生成物が古いか手で編集されています: {p}", "generated file is stale or hand-edited: {p}").get(lang));
+        }
+        for p in &st.left {
+            let _ = writeln!(stdout, "{}", tr!("もう生成しないファイルが残っています: {p}", "generated no more, and still there: {p}").get(lang));
+        }
+        let _ = stdout.flush();
     }
-    for p in &st.removed {
-        let _ = writeln!(stdout, "{}", tr!("もう生成しないので消しました: {p}", "removed, as it is generated no more: {p}").get(lang));
-    }
-    for p in &st.missing {
-        let _ = writeln!(stdout, "{}", tr!("ありません: {p}", "missing: {p}").get(lang));
-    }
-    for p in &st.stale {
-        let _ = writeln!(stdout, "{}", tr!("生成物が古いか手で編集されています: {p}", "generated file is stale or hand-edited: {p}").get(lang));
-    }
-    for p in &st.left {
-        let _ = writeln!(stdout, "{}", tr!("もう生成しないファイルが残っています: {p}", "generated no more, and still there: {p}").get(lang));
-    }
-    let _ = stdout.flush();
     u8::from(check && !(st.missing.is_empty() && st.stale.is_empty() && st.left.is_empty()))
 }

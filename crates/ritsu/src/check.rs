@@ -166,8 +166,8 @@ impl Report<'_> {
 
 /// One diagnostic of the JSON: the language's own object, with the tool put first and the file
 /// written from the project's root (in place of the language's own `file`, or after the tool when
-/// the language writes none).
-fn entry(tool: &str, f: &Finding) -> Json {
+/// the language writes none). `ritsu gen --format json` writes the diagnostics that stop it so.
+pub fn entry(tool: &str, f: &Finding) -> Json {
     let file = match &f.file {
         Some(p) => Json::str(p),
         None => Json::Null,

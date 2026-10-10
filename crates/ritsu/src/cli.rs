@@ -146,6 +146,15 @@ pub fn commands() -> Vec<Cmd> {
             flag("--target", Some("<language>"), tr!("書くパッケージの言語。無ければ三つとも", "the language of the package to write; else all three")).choices(&["typescript", "python", "go"]),
             flag("--out", Some("<dir>"), tr!("パッケージを書く先。言語ごとに <dir>/<language> に書く", "where the packages go: each in <dir>/<language>")).default("generated"),
             flag("--check", None, tr!("書かずに、パッケージが古ければ 1 で落ちる（CI 用）", "write nothing, and exit 1 if a package is stale (for CI)")),
+            flag(
+                "--format",
+                Some("json"),
+                tr!(
+                    "一つの JSON で出す（パッケージのファイルごとに、書いたか、同じか、--check で無いか古いか。生成を止めたときは、その理由と診断）",
+                    "print one JSON object: each file of the packages with what became of it (written, the same, or under --check missing or stale), or why nothing was generated, with the diagnostics"
+                ),
+            )
+            .choices(&["json"]),
             flag("--books", Some("<database>"), tr!("帳簿のクライアントがつなぐ先", "what the clients of the books call")).choices(&["postgres", "tigerbeetle"]).default("postgres"),
             flag(
                 "--authorizer",
@@ -169,7 +178,7 @@ pub fn commands() -> Vec<Cmd> {
                 "bad arguments, a file that cannot be read or written, two files that write one file of a package, or a module named by a word the language keeps"
             )),
         ],
-        examples: vec!["ritsu gen", "ritsu gen --target typescript --out generated --books tigerbeetle", "ritsu gen --check"],
+        examples: vec!["ritsu gen", "ritsu gen --target typescript --out generated --books tigerbeetle", "ritsu gen --check", "ritsu gen --check --format json"],
         codes: vec![],
     });
     cmds.push(Cmd {

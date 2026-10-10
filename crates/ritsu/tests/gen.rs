@@ -577,6 +577,77 @@ fn gen_check_says_what_is_stale() {
     assert_eq!(stdout, format!("生成しました: {j}/typescript/rules/delivery.ts\n生成しました: {j}/python/generated/dates/payment_terms.py\nもう生成しないので消しました: {j}/go/rules/delivery/old.go\n"));
 }
 
+/// `--format json` (DESIGN 9.3): what the lines say, as one object for a program: every file of the
+/// packages with what became of it (the ones that stayed the same too), and, when nothing is
+/// generated, why, with the exit code and the diagnostics of the files that stopped it. Nothing goes
+/// to the standard error, and the exit codes are the text's.
+#[test]
+fn gen_says_what_it_did_as_json() {
+    let t = TempDir::new("gen-json");
+    let project = t.path().join("stockroom");
+    ritsu_testkit::tmp::copy_dir(&here().join(STOCKROOM), &project);
+    let out = t.path().join("out");
+    let o = out.display().to_string();
+    let json = |more: &[&str]| -> (i32, serde_json::Value) {
+        let mut args = vec!["--target", "typescript", "--format", "json"];
+        args.extend_from_slice(more);
+        let (code, stdout, stderr) = generate(&project, &out, &args);
+        assert_eq!(stderr, "", "`ritsu gen {}` writes nothing to the standard error", args.join(" "));
+        (code, serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("{e}: {stdout}")))
+    };
+    // the files that did not stay the same, each with its state, in the order of the JSON
+    let moved = |v: &serde_json::Value| -> Vec<(String, String)> {
+        v["files"].as_array().unwrap().iter().filter(|f| f["state"] != "same").map(|f| (f["state"].as_str().unwrap().to_string(), f["path"].as_str().unwrap().replace(&o, "<out>"))).collect()
+    };
+    let (code, v) = json(&[]);
+    assert_eq!(code, 0);
+    let keys: Vec<&str> = v.as_object().unwrap().keys().map(String::as_str).collect();
+    assert_eq!(keys, ["ritsu", "root", "ok", "check", "out", "targets", "files", "diagnostics", "error"], "the keys, in their order");
+    assert_eq!((&v["ritsu"], &v["root"], &v["ok"], &v["check"], &v["out"]), (&serde_json::json!(env!("CARGO_PKG_VERSION")), &serde_json::json!("."), &serde_json::json!(true), &serde_json::json!(false), &serde_json::json!(o)));
+    assert_eq!((&v["targets"], &v["diagnostics"], &v["error"]), (&serde_json::json!(["typescript"]), &serde_json::json!([]), &serde_json::Value::Null));
+    let written = v["files"].as_array().unwrap();
+    assert_eq!(written.len(), files(&out.join("typescript")).len(), "every file of the package, once");
+    assert!(written.iter().all(|f| f["state"] == "written" && f["target"] == "typescript"));
+    let file = |rel: &str| written.iter().find(|f| f["path"] == format!("{o}/typescript/{rel}")).unwrap_or_else(|| panic!("no {rel}"));
+    assert_eq!(file("rules/delivery.ts")["from"], "rules/delivery.rule");
+    assert_eq!(file("flows/order/workflow.ts")["from"], "orders/order.flow");
+    assert_eq!(file("index.ts")["from"], serde_json::Value::Null, "what the package itself is made of comes from no file");
+    let (code, v) = json(&["--check"]);
+    assert_eq!((code, &v["ok"], &v["check"]), (0, &serde_json::json!(true), &serde_json::json!(true)));
+    assert_eq!(moved(&v), Vec::<(String, String)>::new(), "a package just written is the same");
+    // a file edited, one taken away, and one an earlier gen wrote that this one does not; a file a
+    // person put there, without the head of ritsu's generators, is not ritsu's to count (DESIGN 9.3)
+    let rule = out.join("typescript/rules/delivery.ts");
+    std::fs::write(&rule, read(&rule).replace("next_day", "next-day")).unwrap();
+    std::fs::remove_file(out.join("typescript/dates/payment_terms.ts")).unwrap();
+    std::fs::copy(out.join("typescript/rules/delivery.ts"), out.join("typescript/rules/old.ts")).unwrap();
+    std::fs::write(out.join("typescript/rules/notes.ts"), "// a person's notes, beside the package\n").unwrap();
+    let (code, v) = json(&["--check"]);
+    assert_eq!((code, &v["ok"]), (1, &serde_json::json!(false)));
+    let state = |s: &str, p: &str| (s.to_string(), format!("<out>/typescript/{p}"));
+    assert_eq!(moved(&v), [state("stale", "rules/delivery.ts"), state("missing", "dates/payment_terms.ts"), state("left", "rules/old.ts")]);
+    let (code, v) = json(&[]);
+    assert_eq!(code, 0);
+    assert_eq!(moved(&v), [state("written", "rules/delivery.ts"), state("written", "dates/payment_terms.ts"), state("removed", "rules/old.ts")]);
+    assert!(out.join("typescript/rules/notes.ts").is_file(), "a file without the head stays where it is");
+    // nothing generated: the arguments, then a file that does not pass its check
+    let (code, v) = json(&["--name", "Bad"]);
+    assert_eq!((code, &v["ok"], &v["root"], &v["files"]), (2, &serde_json::json!(false), &serde_json::Value::Null, &serde_json::json!([])));
+    assert_eq!(v["error"]["code"], 2);
+    assert!(v["error"]["message"].as_str().unwrap().starts_with("`--name Bad` cannot name a package"), "{}", v["error"]);
+    let src = project.join("rules/delivery.rule");
+    std::fs::write(&src, read(&src).replacen("\nenum ", "\nenumx ", 1)).unwrap();
+    let (code, v) = json(&[]);
+    assert_eq!((code, &v["files"], &v["error"]["code"]), (1, &serde_json::json!([]), &serde_json::json!(1)));
+    assert_eq!(v["error"]["message"], "2 file(s) do not pass check, so nothing is generated: rules/delivery.rule, orders/order.flow");
+    let tools: Vec<(&str, &str)> = v["diagnostics"].as_array().unwrap().iter().map(|d| (d["tool"].as_str().unwrap(), d["file"].as_str().unwrap())).collect();
+    assert_eq!(tools.first(), Some(&("rulec", "rules/delivery.rule")), "rulec's diagnostic first, as `ritsu check --format json` writes it");
+    assert!(tools.iter().skip(1).all(|t| *t == ("dandori", "orders/order.flow")) && tools.len() > 1, "{tools:?}");
+    assert_eq!(v["diagnostics"][0]["code"], "E005");
+    let (_, v) = json(&["--lang", "ja"]);
+    assert_eq!(v["error"]["message"], "検査を通らないファイルが 2 個あるので、何も生成しません: rules/delivery.rule, orders/order.flow");
+}
+
 // ── the heads ────────────────────────────────────────────────────────────────────────────────────
 
 /// Every file of a package begins with the head of DESIGN 9.2: what wrote it, with ritsu's version,
