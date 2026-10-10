@@ -235,4 +235,4 @@ Maps `proto "proto/shop/ordering/v1/order.proto" enum OrderStatus` to `rulec "bi
 - What a term's definition says.
 - The imports of the code: the settings `sakai build` writes have import-linter, dependency-cruiser, ArchUnit and go-arch-lint check them in CI.
 
-Written by sakai 0.25.0 from `shop.ctx`.
+Written by sakai 0.26.0 from `shop.ctx`.

@@ -5,9 +5,9 @@ Takes the closing day, the month of payment and the day of payment as integers, 
 - ファイル: `closing_and_payment_days_as_inputs.cal`（dates closing_and_payment_days_as_inputs v1、sha256:e4aef610c514fd26）
 - カレンダー: `calendars/tokyo_business_days.cal`（calendar tokyo_business_days v1、sha256:37af228cf6ba7b95）
 - 表: national_holidays = `calendars/data/syukujitsu.csv`（sha256:cec37a743c96995c、https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv のコピー、covers 1955-01-01..2027-12-31）
-- koyomi: 0.25.0
+- koyomi: 0.26.0
 
-上のファイルを koyomi 0.25.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
+上のファイルを koyomi 0.26.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
 
 > [!NOTE]
 > 3 つの条件が、received 2026-01-01〜2027-10-01、closing_day 1〜31、payment_month 1〜2、payment_day 10〜31 の 871,596 通りのすべてで成り立ちます。

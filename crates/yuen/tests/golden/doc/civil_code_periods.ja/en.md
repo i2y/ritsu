@@ -1,6 +1,6 @@
 # 民法の期間 — where the requirements come from
 
-yuen 0.25.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
+yuen 0.26.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
 
 - `civil_code_periods.ja.req` (民法の期間 v1, `sha256:810f491b0587c912`)
 

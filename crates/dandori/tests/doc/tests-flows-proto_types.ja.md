@@ -87,7 +87,7 @@ flowchart TD
 <details>
 <summary><code>order_state</code> · order_state v1 · <code>../../examples/order/rules/order_state.rule</code></summary>
 
-<!-- rulec 0.25.0 が order_state.rule (sha256:5b6ae1fbd5cf) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.26.0 が order_state.rule (sha256:5b6ae1fbd5cf) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 order_state v1
 
 Where an online order goes on a payment, a shipment, a delivery or a request to cancel it, and how much is refunded. The caller keeps the state; the rule decides one event at a time. Written for the example

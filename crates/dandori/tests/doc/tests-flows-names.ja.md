@@ -56,7 +56,7 @@ flowchart TD
 <details>
 <summary><code>急ぎ</code> · urgency v1 · <code>../../examples/order/rules/urgency.rule</code></summary>
 
-<!-- rulec 0.25.0 が urgency.rule (sha256:5ff6efc93a9b) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.26.0 が urgency.rule (sha256:5ff6efc93a9b) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 urgency v1
 
 Whether an order goes out in a hurry, and by which carrier: a member's always does, and anyone else's from 30,000 yen. Written for the example
@@ -117,7 +117,7 @@ Whether an order goes out in a hurry, and by which carrier: a member's always do
 <details>
 <summary><code>与信</code> · hold_amount v1 · <code>../../examples/hotel/rules/hold_amount.rule</code></summary>
 
-<!-- rulec 0.25.0 が hold_amount.rule (sha256:0ce5f2bc9d81) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.26.0 が hold_amount.rule (sha256:0ce5f2bc9d81) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 hold_amount v1
 
 How much a booking holds on the card, and whether the front desk looks at it first: the nightly rate times the nights, and a stay of fifteen nights or more goes to the desk. Written for the example
@@ -202,7 +202,7 @@ How much a booking holds on the card, and whether the front desk looks at it fir
 <details>
 <summary><code>扱い</code> · 部屋の扱い v1 · <code>rules/部屋の扱い.rule</code></summary>
 
-<!-- rulec 0.25.0 が 部屋の扱い.rule (sha256:416d7544b916) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.26.0 が 部屋の扱い.rule (sha256:416d7544b916) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 部屋の扱い v1
 
 生成するコードの名前を試す規則（tests/flows/names.flow）。別名 rule は、dandori が規則のまわりに書く名前（rules、rule_<規則>）に近い。客室の列挙は、hold_amount.rule の列挙と、生成するコードで同じ名前（Room）になる。書き下ろしの例
@@ -259,7 +259,7 @@ How much a booking holds on the card, and whether the front desk looks at it fir
 <details>
 <summary><code>要否</code> · 記録の要否 v1 · <code>rules/記録の要否.rule</code></summary>
 
-<!-- rulec 0.25.0 が 記録の要否.rule (sha256:a1abbceb3d77) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.26.0 が 記録の要否.rule (sha256:a1abbceb3d77) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 記録の要否 v1
 
 生成するコードの名前を試す規則（tests/flows/names.flow）。別名 activities は、dandori が書くモジュール（activities.ts、activities.py）と同じ名前だが、rulec の生成したコードは別のディレクトリ（rulec/）に置くのでぶつからない。返金の型は、urgency.rule の金額と、生成するコードで同じ型（JPYInclTax）になる。書き下ろしの例
@@ -312,7 +312,7 @@ How much a booking holds on the card, and whether the front desk looks at it fir
 <details>
 <summary><code>状態</code> · order_state v1 · <code>../../examples/order/rules/order_state.rule</code></summary>
 
-<!-- rulec 0.25.0 が order_state.rule (sha256:5b6ae1fbd5cf) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.26.0 が order_state.rule (sha256:5b6ae1fbd5cf) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 order_state v1
 
 Where an online order goes on a payment, a shipment, a delivery or a request to cancel it, and how much is refunded. The caller keeps the state; the rule decides one event at a time. Written for the example

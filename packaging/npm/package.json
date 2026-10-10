@@ -1,6 +1,6 @@
 {
   "name": "@i2y/ritsu",
-  "version": "0.25.0",
+  "version": "0.26.0",
   "description": "ritsu and its eight small languages (rulec, dandori, koyomi, chobo, geas, yuen, sakai, sekisho) built for WebAssembly (WASI) and run by Node: every command, and run() and runSync() from JavaScript, with no native binary",
   "keywords": [
     "ritsu",

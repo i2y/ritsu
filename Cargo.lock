@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "chobo"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "ritsu-base",
  "ritsu-emit",
@@ -16,7 +16,7 @@ dependencies = [
 
 [[package]]
 name = "dandori"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "chobo",
  "koyomi",
@@ -38,7 +38,7 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "geas"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "ritsu-base",
  "ritsu-ports",
@@ -69,7 +69,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "koyomi"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "ritsu-base",
  "ritsu-emit",
@@ -104,7 +104,7 @@ dependencies = [
 
 [[package]]
 name = "ritsu"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "chobo",
  "dandori",
@@ -126,14 +126,14 @@ dependencies = [
 
 [[package]]
 name = "ritsu-base"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "ritsu-testkit",
 ]
 
 [[package]]
 name = "ritsu-cross"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "chobo",
  "koyomi",
@@ -147,7 +147,7 @@ dependencies = [
 
 [[package]]
 name = "ritsu-emit"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "ritsu-base",
  "ritsu-testkit",
@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "ritsu-model"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "chobo",
  "dandori",
@@ -171,7 +171,7 @@ dependencies = [
 
 [[package]]
 name = "ritsu-ports"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "ritsu-base",
  "ritsu-units",
@@ -179,7 +179,7 @@ dependencies = [
 
 [[package]]
 name = "ritsu-project"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "chobo",
  "dandori",
@@ -197,7 +197,7 @@ dependencies = [
 
 [[package]]
 name = "ritsu-proto"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "ritsu-base",
  "ritsu-testkit",
@@ -205,18 +205,18 @@ dependencies = [
 
 [[package]]
 name = "ritsu-testkit"
-version = "0.25.0"
+version = "0.26.0"
 
 [[package]]
 name = "ritsu-units"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "ritsu-base",
 ]
 
 [[package]]
 name = "ritsu-wasm"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "chobo",
  "dandori",
@@ -234,7 +234,7 @@ dependencies = [
 
 [[package]]
 name = "rulec"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "koyomi",
  "ritsu-base",
@@ -247,7 +247,7 @@ dependencies = [
 
 [[package]]
 name = "sakai"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "chobo",
  "dandori",
@@ -263,7 +263,7 @@ dependencies = [
 
 [[package]]
 name = "sekisho"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "chobo",
  "dandori",
@@ -339,14 +339,14 @@ checksum = "d245f478577f809a851594d02313b640fb437e0bb33866753cff937863096954"
 
 [[package]]
 name = "xtask"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "yuen"
-version = "0.25.0"
+version = "0.26.0"
 dependencies = [
  "chobo",
  "dandori",

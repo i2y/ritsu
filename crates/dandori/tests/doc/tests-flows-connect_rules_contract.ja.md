@@ -53,7 +53,7 @@ flowchart TD
 <details>
 <summary><code>手数料</code> · 口座の手数料 v1 · <code>../fixtures/rules/account_fee.rule</code></summary>
 
-<!-- rulec 0.25.0 が account_fee.rule (sha256:bdb2f090c3a1) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.26.0 が account_fee.rule (sha256:bdb2f090c3a1) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 口座の手数料 v1
 
 口座の月の手数料と、次の月の状態。状態の列挙は契約（account.proto）から取り込む。契約の値には接頭辞が無く、0 番も「有効」という状態の一つである。書き下ろしの例

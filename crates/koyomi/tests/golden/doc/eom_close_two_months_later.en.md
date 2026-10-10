@@ -5,9 +5,9 @@ Closes at the end of the month; pays at the end of the month two months later, o
 - File: `eom_close_two_months_later.cal` (dates eom_close_two_months_later v1, sha256:0e16bdf8d3db5f22)
 - Calendar: `calendars/tokyo_business_days.cal` (calendar tokyo_business_days v1, sha256:37af228cf6ba7b95)
 - Table: national_holidays = `calendars/data/syukujitsu.csv` (sha256:cec37a743c96995c, a copy of https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv, covers 1955-01-01..2027-12-31)
-- koyomi: 0.25.0
+- koyomi: 0.26.0
 
-koyomi 0.25.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
+koyomi 0.26.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
 
 > [!WARNING]
 > The claim within_60_days_of_receipt fails for 648 of the 669 days of received.

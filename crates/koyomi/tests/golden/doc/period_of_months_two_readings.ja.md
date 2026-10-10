@@ -5,9 +5,9 @@ Breaks its claims on purpose. It writes moving an end on a closed day to the day
 - ファイル: `period_of_months_two_readings.cal`（dates period_of_months_two_readings v1、sha256:4fd356c038abcbd2）
 - カレンダー: `calendars/england_and_wales.cal`（calendar england_and_wales v1、sha256:00a0d8a87344f4f4）
 - 表: bank_holidays = `calendars/data/bank-holidays.json`（sha256:538b3482c28b85ec、https://www.gov.uk/bank-holidays.json のコピー、covers listed years = 2019-01-01..2028-12-31）
-- koyomi: 0.25.0
+- koyomi: 0.26.0
 
-上のファイルを koyomi 0.25.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
+上のファイルを koyomi 0.26.0 で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。
 
 > [!WARNING]
 > 条件「the_two_readings_agree」が、origin と month_count の 4,380 通りのうち 709 通りで成り立ちません。

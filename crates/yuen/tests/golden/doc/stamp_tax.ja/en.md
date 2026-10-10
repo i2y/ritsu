@@ -1,6 +1,6 @@
 # 印紙税 — where the requirements come from
 
-yuen 0.25.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
+yuen 0.26.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
 
 - `stamp_tax.ja.req` (印紙税 v1, `sha256:50d3ff9eb3aeaf60`)
 

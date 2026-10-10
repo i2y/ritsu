@@ -5,9 +5,9 @@
 - File: `eom_close_two_months_later.ja.cal` (dates 月末締め翌々月末払い v1, sha256:77b908bfcae37887)
 - Calendar: `calendars/東京の営業日.cal` (calendar 東京の営業日 v1, sha256:d7b6134e23a8cb9f)
 - Table: 祝日 = `calendars/data/syukujitsu.csv` (sha256:cec37a743c96995c, a copy of https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv, covers 1955-01-01..2027-12-31)
-- koyomi: 0.25.0
+- koyomi: 0.26.0
 
-koyomi 0.25.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
+koyomi 0.26.0 made this page by checking the files above. If a file's digest is no longer what it says here, the page is out of date.
 
 > [!WARNING]
 > The claim 受領から60日以内 fails for 648 of the 669 days of 受領日.

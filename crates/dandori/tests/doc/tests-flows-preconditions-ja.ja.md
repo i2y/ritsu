@@ -78,7 +78,7 @@ flowchart TD
 <details>
 <summary><code>確認</code> · 返金の確認 v1 · <code>rules/返金の確認.rule</code></summary>
 
-<!-- rulec 0.25.0 が 返金の確認.rule (sha256:1fa3e261e2c7) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.26.0 が 返金の確認.rule (sha256:1fa3e261e2c7) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 返金の確認 v1
 
 返金をすぐに払うか、確かめに回すか。返金は払った額を超えないことを、規則は前提にする。求める額が範囲の無いタスクの結果から来るところでは、dandori はこの前提を示せないので、ワークフローが走るときに確かめる（tests/flows/preconditions.ja.flow）
@@ -141,7 +141,7 @@ flowchart TD
 <details>
 <summary><code>精算</code> · 精算 v1 · <code>rules/精算.rule</code></summary>
 
-<!-- rulec 0.25.0 が 精算.rule (sha256:2707c4c4a6fe) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.26.0 が 精算.rule (sha256:2707c4c4a6fe) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 精算 v1
 
 支払日が入る精算の回。日は 支払条件.cal が払う日なので、表はその日だけを書き、あいだの日は書かない。dandori は日の範囲を運ばないので、渡す日はワークフローが走るときに確かめる（tests/flows/preconditions.ja.flow）

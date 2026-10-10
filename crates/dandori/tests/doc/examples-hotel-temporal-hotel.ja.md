@@ -170,7 +170,7 @@ flowchart TD
 <details>
 <summary><code>hold</code> · hold_amount v1 · <code>../rules/hold_amount.rule</code></summary>
 
-<!-- rulec 0.25.0 が hold_amount.rule (sha256:0ce5f2bc9d81) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.26.0 が hold_amount.rule (sha256:0ce5f2bc9d81) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 hold_amount v1
 
 How much a booking holds on the card, and whether the front desk looks at it first: the nightly rate times the nights, and a stay of fifteen nights or more goes to the desk. Written for the example
@@ -255,7 +255,7 @@ How much a booking holds on the card, and whether the front desk looks at it fir
 <details>
 <summary><code>payment_intent</code> · payment_intent v1 · <code>../rules/payment_intent.rule</code></summary>
 
-<!-- rulec 0.25.0 が payment_intent.rule (sha256:ec6477bfd9ec) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.26.0 が payment_intent.rule (sha256:ec6477bfd9ec) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 payment_intent v1
 
 Where a Stripe PaymentIntent's status goes when it is confirmed, authenticated, captured or canceled, and when a delayed payment settles. Transcribed from Stripe's documentation

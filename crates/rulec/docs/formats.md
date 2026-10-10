@@ -719,7 +719,7 @@ produces runs those very functions, so what it prints is the theorems applied to
 document. The tests hold both to forged certificates as well as to the corpus.
 
 ```json
-{"v":1,"rule":"coupon_stacking","alias":"coupon_stacking","version":"1","source_sha256":"200912693e01…","rulec":"0.25.0",
+{"v":1,"rule":"coupon_stacking","alias":"coupon_stacking","version":"1","source_sha256":"200912693e01…","rulec":"0.26.0",
  "ranges":{"disc_a":["0","100000"],"disc_b":["0","100000"],"rest_a":["-100000","1000000"],"rest_b":["-200000","1000000"],"total":["0","1000000"]},
  "constraints":[],"inputs":["total","disc_a","disc_b"],"walks":[],
  "values":[{"name":"rest_a","of":"derive","type":"money[JPY, incl_tax]","expr":{"op":"-","l":{"name":"total"},"r":{"name":"disc_a"}},
@@ -842,7 +842,7 @@ parsed form instead. A rule that does not pass `check` produces no certificate a
 ```console
 $ rulec certificate rules/health_insurance_premium.rule > cert.json
 $ python3 tools/recheck.py --rule rules/health_insurance_premium.rule cert.json
-health_insurance_premium (health_insurance_premium v1, sha256:a5c5cf4eaf62) — certificate by rulec 0.25.0
+health_insurance_premium (health_insurance_premium v1, sha256:a5c5cf4eaf62) — certificate by rulec 0.26.0
   units: 4 values keep the type the rule declares
   int64: 4 values fit
   grade: unique, 50 rows — 1225 pairs disjoint, 50 rows reached, 101 boxes covered, 50 boxes read back from their cells, 1 axes tiled
@@ -852,7 +852,7 @@ health_insurance_premium (health_insurance_premium v1, sha256:a5c5cf4eaf62) — 
   every claim this program states was proved
 
 $ (cd proofs && lake build) && proofs/.lake/build/bin/rulec-recheck --rule rules/health_insurance_premium.rule cert.json
-health_insurance_premium (0.25.0), re-checked against the Lean proofs
+health_insurance_premium (0.26.0), re-checked against the Lean proofs
   values: 4 typed, 4 held to int64
   grade: 50 rows — complete, 50 rows reached, no two rows meet, 1 axes tiled
     50 boxes read back from the cells they were written as

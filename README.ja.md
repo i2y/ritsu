@@ -447,7 +447,7 @@ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 cargo install --git https://github.com/i2y/ritsu --locked rulec
 ```
 
-リリースは 0.23.0 から（rulec の番号の続き）で、リリースごとに macOS と Linux のアーカイブと、`.deb` と `.rpm` を[リリースのページ](https://github.com/i2y/ritsu/releases)に置いています。Homebrew なら `brew install i2y/tap/ritsu`、GitHub Actions なら `uses: i2y/ritsu@v0.25.0` で入ります。
+リリースは 0.23.0 から（rulec の番号の続き）で、リリースごとに macOS と Linux のアーカイブと、`.deb` と `.rpm` を[リリースのページ](https://github.com/i2y/ritsu/releases)に置いています。Homebrew なら `brew install i2y/tap/ritsu`、GitHub Actions なら `uses: i2y/ritsu@v0.26.0` で入ります。
 
 0.26.0 からは、リリースに `i2y-ritsu-<バージョン>.tgz` も付きます。npm のパッケージ `@i2y/ritsu` で、中身は WebAssembly 向けに組んだ ritsu です。ネイティブのバイナリなしに Node 22 以降で動き、ネイティブのバイナリと同じコマンドと、JavaScript から呼ぶための API があります。npm のレジストリには置いていないので、リリースから入れます。
 
