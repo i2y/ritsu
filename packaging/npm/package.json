@@ -1,0 +1,65 @@
+{
+  "name": "@i2y/ritsu",
+  "version": "0.25.0",
+  "description": "ritsu and its eight small languages (rulec, dandori, koyomi, chobo, geas, yuen, sakai, sekisho) built for WebAssembly (WASI) and run by Node: every command, and run() and runSync() from JavaScript, with no native binary",
+  "keywords": [
+    "ritsu",
+    "rulec",
+    "dandori",
+    "koyomi",
+    "chobo",
+    "geas",
+    "yuen",
+    "sakai",
+    "sekisho",
+    "business-rules",
+    "workflow",
+    "authorization",
+    "code-generation",
+    "wasi",
+    "webassembly"
+  ],
+  "homepage": "https://i2y.github.io/ritsu/",
+  "bugs": {
+    "url": "https://github.com/i2y/ritsu/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/i2y/ritsu.git",
+    "directory": "packaging/npm"
+  },
+  "license": "(MIT OR Apache-2.0) AND Unicode-3.0 AND BSD-3-Clause",
+  "author": "i2y",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./lib/index.d.ts",
+  "bin": {
+    "ritsu": "bin/ritsu.js",
+    "rulec": "bin/rulec.js",
+    "dandori": "bin/dandori.js",
+    "koyomi": "bin/koyomi.js",
+    "chobo": "bin/chobo.js",
+    "geas": "bin/geas.js",
+    "yuen": "bin/yuen.js",
+    "sakai": "bin/sakai.js",
+    "sekisho": "bin/sekisho.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "ritsu.wasm",
+    "LICENSE-MIT",
+    "LICENSE-APACHE",
+    "THIRD_PARTY_NOTICES"
+  ],
+  "engines": {
+    "node": ">=22"
+  }
+}

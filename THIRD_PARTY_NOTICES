@@ -3,8 +3,9 @@ Third-party notices for ritsu
 
 ritsu's own code is under the MIT License or the Apache License, Version 2.0, at your option
 (LICENSE-MIT, LICENSE-APACHE). The `ritsu` binary of a release, with the links `rulec`,
-`dandori`, `koyomi`, `chobo`, `geas`, `yuen`, `sakai` and `sekisho` beside it, and `ritsu.wasm`,
-the module loaded by the page that runs ritsu in the browser, also hold the work of others:
+`dandori`, `koyomi`, `chobo`, `geas`, `yuen`, `sakai` and `sekisho` beside it, `ritsu.wasm`,
+the module loaded by the page that runs ritsu in the browser, and the `ritsu.wasm` of the npm
+package @i2y/ritsu, which is `ritsu` built for WASI, also hold the work of others:
 
   Unicode CLDR 48.2             the names of rulec's built-in divisions  Unicode-3.0
   The WHATWG Encoding Standard  koyomi's Shift_JIS table                 BSD-3-Clause
@@ -18,15 +19,18 @@ the module loaded by the page that runs ritsu in the browser, also hold the work
   serde_json 1.0.151            a crate from crates.io                   MIT OR Apache-2.0
   zmij 1.0.23                   a crate from crates.io                   MIT
   Żmij, by Victor Zverovich     the code zmij is a port of               MIT
+  wasi-libc of wasi-sdk 29.0    the C library of WASI, in the npm module (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) AND BSD-2-Clause AND MIT AND CC0-1.0
 
 Each has a section below that says where it comes from and gives the text of its license, or its
 terms, as its source gives it. ritsu's own code and the names and the table above are under
-(MIT OR Apache-2.0) AND Unicode-3.0 AND BSD-3-Clause, the license Cargo.toml, the .deb, the .rpm
-and the Homebrew formula give. The copies of laws are left out of it: e-Gov's terms, PDL1.0,
+(MIT OR Apache-2.0) AND Unicode-3.0 AND BSD-3-Clause, the license Cargo.toml, the .deb, the .rpm,
+the Homebrew formula and the npm package give. The copies of laws are left out of it: e-Gov's terms, PDL1.0,
 which has no SPDX identifier, ask that the source be given, which their section does, and the
 CFR is under no copyright in the United States. The crates are compiled in under their own
 licenses: ritsu takes each under the MIT License, which all eight offer, and the section of a
-crate gives the crate's LICENSE-MIT as it is.
+crate gives the crate's LICENSE-MIT as it is. wasi-libc is linked into the npm package's module
+alone, under its own licenses, which its section gives: wasi-libc's own code taken under the MIT
+License, which it offers, and the parts of the three works it is made from under theirs.
 
 --------------------------------------------------------------------------------
 Unicode CLDR 48.2
@@ -496,3 +500,126 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+--------------------------------------------------------------------------------
+wasi-libc of wasi-sdk 29.0
+--------------------------------------------------------------------------------
+
+In the `ritsu.wasm` of the npm package only. Rust links a program for wasm32-wasip1 with the C
+library of WASI that it carries for that target, and Rust 1.94.1, which built the module, carries
+the one wasi-sdk 29.0 built (its libc.a names wasi-sdk v29.0 and clang 21.1.4). The native
+binaries are linked with the C library of the system, and the module of the page in the browser
+with none. Of the library, the module holds 67 objects (the linker's map): wasi-libc's own code
+(how a program starts, the directories it is given, the working directory), and parts of three
+works wasi-libc is made from: cloudlibc (files, directories and clocks), musl (strings, the words
+of an error number, getenv, exp, log and round) and dlmalloc (malloc and free).
+Source:     https://github.com/WebAssembly/wasi-libc/tree/ac020b86fd44bafe60aa4fa12f407d16e3731329
+            (the commit wasi-sdk 29.0 builds)
+Text:       LICENSE, LICENSE-MIT, libc-bottom-half/cloudlibc/LICENSE and the license of
+            libc-top-half/musl/COPYRIGHT at that commit, and the notice at the head of
+            dlmalloc/src/malloc.c
+
+wasi-libc's LICENSE:
+
+wasi-libc as a whole is multi-licensed under the
+Apache License v2.0 with LLVM Exceptions, the Apache License v2.0, and
+the MIT License. See the LICENSE-APACHE-LLVM, LICENSE-APACHE and LICENSE-MIT
+files, respectively, for details.
+
+Portions of this software are derived from third-party works covered by
+their own licenses:
+
+dlmalloc/                     - CC0; see the notice in malloc.c for details
+emmalloc/                     - MIT; see the notice in emmalloc.c for details
+libc-bottom-half/cloudlibc/   - BSD-2-Clause; see the LICENSE file for details
+libc-top-half/musl/           - MIT; see the COPYRIGHT file for details
+fts/musl-fts/                 - BSD-3-Clause; see the COPYING file for details
+
+wasi-libc's changes to these files are multi-licensed under the
+Apache License v2.0 with LLVM Exceptions, the Apache License v2.0,
+the MIT License, and the original licenses of the third-party works.
+
+wasi-libc's own code, taken under the MIT License (LICENSE-MIT):
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+cloudlibc (libc-bottom-half/cloudlibc/LICENSE), BSD-2-Clause:
+
+Copyright (c) 2015-2017 Nuxi (https://nuxi.nl/) and contributors.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.
+
+musl (libc-top-half/musl/COPYRIGHT), MIT:
+
+Copyright © 2005-2020 Rich Felker, et al.
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+The math functions the module holds (exp, log and their tables) carry, in their files, Arm's
+copyright and the same MIT License: "Copyright (c) 2018, Arm Limited. SPDX-License-Identifier:
+MIT".
+
+dlmalloc (dlmalloc/src/malloc.c), CC0-1.0:
+
+  This is a version (aka dlmalloc) of malloc/free/realloc written by
+  Doug Lea and released to the public domain, as explained at
+  http://creativecommons.org/publicdomain/zero/1.0/ Send questions,
+  comments, complaints, performance data, etc to dl@cs.oswego.edu
