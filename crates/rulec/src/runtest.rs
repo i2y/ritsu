@@ -195,6 +195,12 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
     if aliases.is_empty() {
         return Err(tr!("`{}` にベクタがありません", "no vectors in `{}`", vdir.display()));
     }
+    // Where no program can be started at all (ritsu built for WASI, its npm package), no
+    // toolchain is missing: none of them can run there, which is said once rather than as every
+    // language skipped.
+    if !ritsu_base::wasi::can_start_programs() {
+        return Err(crate::i18n::text(&ritsu_base::wasi::cannot_start_programs()));
+    }
 
     // Which toolchains are here. The set of backends lives in src/backend.rs, so a new
     // language is a row there rather than five more blocks in this file.

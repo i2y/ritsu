@@ -757,7 +757,7 @@ pub fn via(cmd: &[String], doc: &Path) -> Result<(String, Vec<(Option<i64>, Vec<
     // Stopped when a line that cannot be read ends this early (§15.163); the other ways out wait
     // for it to end.
     let mut child = crate::child::Owned::spawn(std::process::Command::new(bin).args(args).arg(doc).stdout(std::process::Stdio::piped()))
-        .map_err(|e| tr!("抽出器を起動できません: {e}", "Cannot start the extractor: {e}"))?;
+        .map_err(|e| if ritsu_base::wasi::unsupported(&e) { crate::i18n::text(&ritsu_base::wasi::cannot_start(bin)) } else { tr!("抽出器を起動できません: {e}", "Cannot start the extractor: {e}") })?;
     let so = child.stdout.take().ok_or_else(|| tr!("stdout を取得できません", "Cannot open the extractor's stdout"))?;
 
     let mut impl_id = String::new();

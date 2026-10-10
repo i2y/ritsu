@@ -173,7 +173,15 @@ fn local_offset(secs: i64) -> i64 {
     if r.is_null() { 0 } else { tm.gmtoff }
 }
 
-#[cfg(not(unix))]
+/// Built for WASI (ritsu's npm package, ritsu's DESIGN 8.8), whose C library knows no time zone:
+/// the offset the loader read from the clock of the machine it runs on, which it hands over as
+/// `RITSU_WASI_UTC_OFFSET` (seconds east of UTC, now); without it, UTC.
+#[cfg(target_os = "wasi")]
+fn local_offset(_secs: i64) -> i64 {
+    std::env::var("RITSU_WASI_UTC_OFFSET").ok().and_then(|v| v.trim().parse::<i64>().ok()).filter(|o| o.abs() <= 18 * 3600).unwrap_or(0)
+}
+
+#[cfg(not(any(unix, target_os = "wasi")))]
 fn local_offset(_secs: i64) -> i64 {
     0
 }

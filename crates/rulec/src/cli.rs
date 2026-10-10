@@ -1302,13 +1302,16 @@ fn fmt(files: &[&String], check_only: bool, json: bool) -> ExitCode {
     ExitCode::from(dirty)
 }
 
-/// Fetch the same file at the base revision. None when it is absent (the file is new).
-fn base_source(rev: &str, path: &str) -> Option<String> {
-    let out = std::process::Command::new("git")
-        .args(["show", &format!("{rev}:{path}")])
-        .output()
-        .ok()?;
-    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+/// Fetch the same file at the base revision. None when it is absent (the file is new). Err when
+/// git cannot start where no program can (ritsu built for WASI, its npm package), rather than
+/// every finding read as new.
+fn base_source(rev: &str, path: &str) -> Result<Option<String>, ritsu_base::text::Text> {
+    let out = match std::process::Command::new("git").args(["show", &format!("{rev}:{path}")]).output() {
+        Ok(o) => o,
+        Err(e) if ritsu_base::wasi::unsupported(&e) => return Err(ritsu_base::wasi::cannot_start("git")),
+        Err(_) => return Ok(None),
+    };
+    Ok(out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned()))
 }
 
 fn check(
@@ -1335,8 +1338,12 @@ fn check(
         let mut suppressed = 0usize;
         if let Some(rev) = diff_base {
             let known: std::collections::HashSet<String> = match base_source(rev, path) {
-                Some(b) => crate::vfs::with_git_rev(rev, || crate::report(&b, path)).diags.iter().filter_map(|d| d.key.clone()).collect(),
-                None => Default::default(),
+                Ok(Some(b)) => crate::vfs::with_git_rev(rev, || crate::report(&b, path)).diags.iter().filter_map(|d| d.key.clone()).collect(),
+                Ok(None) => Default::default(),
+                Err(t) => {
+                    eprintln!("error: {}", crate::i18n::text(&t));
+                    return ExitCode::from(2);
+                }
             };
             let before = diags.len();
             diags.retain(|d| match &d.key {
@@ -1402,7 +1409,7 @@ fn expand(arg: &str) -> Vec<String> {
 }
 
 fn collect_rules(dir: &std::path::Path, out: &mut Vec<String>) {
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let Ok(rd) = ritsu_base::fs::read_dir(dir) else { return };
     for e in rd.flatten() {
         let p = e.path();
         if p.is_dir() {
@@ -1508,7 +1515,7 @@ fn git(args: &[&str]) -> Result<Option<String>, String> {
     let o = std::process::Command::new("git")
         .args(args)
         .output()
-        .map_err(|e| tr!("git を起動できません: {e}", "cannot run git: {e}"))?;
+        .map_err(|e| if ritsu_base::wasi::unsupported(&e) { crate::i18n::text(&ritsu_base::wasi::cannot_start("git")) } else { tr!("git を起動できません: {e}", "cannot run git: {e}") })?;
     Ok(o.status.success().then(|| String::from_utf8_lossy(&o.stdout).into_owned()))
 }
 

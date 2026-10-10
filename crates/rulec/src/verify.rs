@@ -50,7 +50,7 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
     // An adapter that broke the protocol is stopped when this returns, rather than left to run
     // on after rulec (§15.163).
     let mut child = crate::child::Owned::spawn(Command::new(cmd).args(args).stdin(Stdio::piped()).stdout(Stdio::piped()))
-        .map_err(|e| tr!("アダプタを起動できません: {e}", "Cannot start the adapter: {e}"))?;
+        .map_err(|e| if ritsu_base::wasi::unsupported(&e) { crate::i18n::text(&ritsu_base::wasi::cannot_start(cmd)) } else { tr!("アダプタを起動できません: {e}", "Cannot start the adapter: {e}") })?;
     let mut si = child
         .stdin
         .take()

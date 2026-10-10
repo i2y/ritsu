@@ -500,7 +500,7 @@ fn cmd_run(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
         Err(c) => return c,
     };
     let sc = match &a.scenario {
-        Some(p) => match std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|t| serde_json::from_str(&t).map_err(|e| e.to_string())) {
+        Some(p) => match ritsu_base::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|t| serde_json::from_str(&t).map_err(|e| e.to_string())) {
             Ok(v) => v,
             Err(e) => {
                 let _ = writeln!(err, "cannot read the scenario: {e}");

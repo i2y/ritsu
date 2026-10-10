@@ -57,7 +57,7 @@ fn e090(path: &str, why: Text) -> (String, Diag) {
 /// The `spec.md` files under a directory, in path order, leaving out `archive/` and what a walk
 /// passes over (names starting with `.`, `target`, `node_modules`).
 fn spec_files(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let Ok(rd) = ritsu_base::fs::read_dir(dir) else { return };
     let mut names: Vec<String> = rd.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).collect();
     names.sort();
     for n in names {
@@ -97,7 +97,7 @@ fn read_openspec(given: &[String]) -> Result<Vec<File>, Vec<(String, Diag)>> {
     let mut files = Vec::new();
     for p in paths {
         let path = shown(&p);
-        let bytes = match std::fs::read(&p) {
+        let bytes = match ritsu_base::fs::read(&p) {
             Ok(b) => b,
             Err(e) => {
                 errs.push(e081(&path, Text::same(e.to_string())));
@@ -140,7 +140,7 @@ fn read_claims(specs: &[String]) -> Result<Vec<Claim>, Vec<(String, Diag, String
     let mut out = Vec::new();
     let mut errs = Vec::new();
     for f in specs {
-        let src = match std::fs::read_to_string(f) {
+        let src = match ritsu_base::fs::read_to_string(f) {
             Ok(s) => s,
             Err(e) => {
                 let (p, d) = e081(f, Text::same(e.to_string()));

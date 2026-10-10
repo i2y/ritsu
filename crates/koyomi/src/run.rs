@@ -106,7 +106,7 @@ fn expand(arg: &str) -> Vec<String> {
     }
     let mut out = Vec::new();
     fn walk(d: &std::path::Path, out: &mut Vec<String>) {
-        let Ok(rd) = std::fs::read_dir(d) else { return };
+        let Ok(rd) = ritsu_base::fs::read_dir(d) else { return };
         let mut es: Vec<_> = rd.filter_map(|e| e.ok()).map(|e| e.path()).collect();
         es.sort();
         for e in es {

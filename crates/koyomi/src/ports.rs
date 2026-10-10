@@ -51,75 +51,39 @@ const KEEP: usize = 256;
 /// before (the disk, or the files of an outer `ritsu_base::fs::with`), and every read noted with
 /// what it got. koyomi's check reads files and does nothing else with them.
 struct Recorder {
-    outer: Option<Rc<dyn Files>>,
+    outer: Rc<dyn Files>,
     reads: RefCell<Reads>,
-}
-
-fn kind_of(t: &std::fs::FileType) -> Kind {
-    if t.is_file() {
-        Kind::File
-    } else if t.is_dir() {
-        Kind::Dir
-    } else {
-        Kind::Other
-    }
 }
 
 impl Files for Recorder {
     fn read(&self, p: &Path) -> io::Result<Vec<u8>> {
-        let got = match &self.outer {
-            Some(o) => o.read(p),
-            None => std::fs::read(p),
-        };
+        let got = self.outer.read(p);
         self.reads.borrow_mut().push((p.to_path_buf(), got.as_ref().ok().cloned()));
         got
     }
 
     fn metadata(&self, p: &Path) -> io::Result<Meta> {
-        match &self.outer {
-            Some(o) => o.metadata(p),
-            None => std::fs::metadata(p).map(|m| Meta { kind: kind_of(&m.file_type()), len: m.len() }),
-        }
+        self.outer.metadata(p)
     }
 
     fn read_dir(&self, p: &Path) -> io::Result<Vec<(OsString, Kind)>> {
-        match &self.outer {
-            Some(o) => o.read_dir(p),
-            None => std::fs::read_dir(p)?
-                .map(|e| {
-                    let e = e?;
-                    Ok((e.file_name(), kind_of(&e.file_type()?)))
-                })
-                .collect(),
-        }
+        self.outer.read_dir(p)
     }
 
     fn write(&self, p: &Path, bytes: &[u8]) -> io::Result<()> {
-        match &self.outer {
-            Some(o) => o.write(p, bytes),
-            None => std::fs::write(p, bytes),
-        }
+        self.outer.write(p, bytes)
     }
 
     fn create_dir_all(&self, p: &Path) -> io::Result<()> {
-        match &self.outer {
-            Some(o) => o.create_dir_all(p),
-            None => std::fs::create_dir_all(p),
-        }
+        self.outer.create_dir_all(p)
     }
 
     fn current_dir(&self) -> io::Result<PathBuf> {
-        match &self.outer {
-            Some(o) => o.current_dir(),
-            None => std::env::current_dir(),
-        }
+        self.outer.current_dir()
     }
 
     fn canonicalize(&self, p: &Path) -> io::Result<PathBuf> {
-        match &self.outer {
-            Some(o) => o.canonicalize(p),
-            None => std::fs::canonicalize(p),
-        }
+        self.outer.canonicalize(p)
     }
 }
 
@@ -134,7 +98,8 @@ fn checked_file(file: &Path) -> Result<Rc<check::Outcome>, Vec<Said>> {
     {
         return Ok(out);
     }
-    let rec = Rc::new(Recorder { outer: ritsu_base::fs::current(), reads: RefCell::new(Vec::new()) });
+    let outer = ritsu_base::fs::current().unwrap_or_else(|| Rc::new(ritsu_base::fs::Disk));
+    let rec = Rc::new(Recorder { outer, reads: RefCell::new(Vec::new()) });
     let got = ritsu_base::fs::with(rec.clone(), || check::check_file(&path, &Options::default(), &mut Loader::default()));
     CHECKS.with(|c| c.set(c.get() + 1));
     let out = Rc::new(got.map_err(|e| vec![Said::unreadable(&path, &e)])?);

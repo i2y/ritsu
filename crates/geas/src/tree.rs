@@ -103,7 +103,7 @@ pub fn sources(root: &Path) -> io::Result<Vec<String>> {
 }
 
 fn walk(dir: &Path, rel: &str, out: &mut Vec<String>) -> io::Result<()> {
-    for entry in std::fs::read_dir(dir)? {
+    for entry in ritsu_base::fs::read_dir(dir)? {
         let entry = entry?;
         let Some(name) = entry.file_name().to_str().map(String::from) else {
             continue;

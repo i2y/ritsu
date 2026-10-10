@@ -110,3 +110,66 @@ fn with_nests() {
         assert!(fs::is_file("rules/fee.rule"));
     });
 }
+
+/// `realpath`, which `canonicalize` is built for WASI (whose std has none), gives the answer of
+/// `std::fs::canonicalize`: through a link of the system (macOS's `/tmp` is `/private/tmp`), a
+/// relative link, an absolute one, a link to a link, `..` after a link (which leaves where the
+/// link led), `.`; and an error where `canonicalize` gives one (nothing there, a file with more
+/// after it, a loop of links).
+#[test]
+fn realpath_is_what_canonicalize_answers() {
+    use std::os::unix::fs::symlink;
+    let t = TempDir::new("realpath");
+    let d = t.path();
+    t.write("real/sub/file.txt", "x");
+    t.write("other/inner/b.txt", "y");
+    symlink("real", d.join("rel")).unwrap();
+    symlink(d.join("real/sub"), d.join("abs")).unwrap();
+    symlink("rel", d.join("chain")).unwrap();
+    symlink("../other/inner", d.join("real/up")).unwrap();
+    symlink("loop-b", d.join("loop-a")).unwrap();
+    symlink("loop-a", d.join("loop-b")).unwrap();
+    let mut ok = vec![
+        PathBuf::from("/tmp"),
+        PathBuf::from("/"),
+        d.to_path_buf(),
+        d.join("rel/sub/file.txt"),
+        d.join("abs/file.txt"),
+        d.join("chain/sub/./file.txt"),
+        d.join("rel/sub/../sub/file.txt"),
+        d.join("real/up/b.txt"),
+        d.join("real/up/../../real/sub"),
+        d.join("abs/.."),
+        PathBuf::from("tests/fs.rs"),
+        PathBuf::from("./src/../tests"),
+    ];
+    // the temporary directory as the system names it: through /var on macOS, as it is elsewhere
+    ok.push(std::env::temp_dir());
+    for p in &ok {
+        assert_eq!(fs::realpath(p).unwrap(), std::fs::canonicalize(p).unwrap(), "{}", p.display());
+    }
+    for p in [d.join("missing"), d.join("rel/missing/x")] {
+        assert_eq!(std::fs::canonicalize(&p).unwrap_err().kind(), std::io::ErrorKind::NotFound, "{}", p.display());
+        assert_eq!(fs::realpath(&p).unwrap_err().kind(), std::io::ErrorKind::NotFound, "{}", p.display());
+    }
+    // (`file.txt/..` is not here: macOS's realpath(3) takes it to the directory, Linux's refuses it)
+    for p in [d.join("real/sub/file.txt/x"), d.join("loop-a")] {
+        assert!(std::fs::canonicalize(&p).is_err() && fs::realpath(&p).is_err(), "{} leads nowhere", p.display());
+    }
+}
+
+/// An error of WASI says the system's number where Linux and macOS give the same words and number
+/// (the ten of `renumbered`); any other is left as it is.
+#[test]
+fn an_error_of_wasi_takes_the_systems_number() {
+    assert_eq!(fs::renumbered("No such file or directory (os error 44)", 44).as_deref(), Some("No such file or directory (os error 2)"));
+    assert_eq!(fs::renumbered("Permission denied (os error 2)", 2).as_deref(), Some("Permission denied (os error 13)"));
+    assert_eq!(fs::renumbered("Is a directory (os error 31)", 31).as_deref(), Some("Is a directory (os error 21)"));
+    assert_eq!(fs::renumbered("Not a directory (os error 54)", 54).as_deref(), Some("Not a directory (os error 20)"));
+    assert_eq!(fs::renumbered("Symbolic link loop (os error 32)", 32), None, "ELOOP is 40 on Linux and 62 on macOS, and worded otherwise");
+    assert_eq!(fs::renumbered("No such file or directory", 44), None, "only the words std writes are renumbered");
+    // natively nothing changes
+    let e = std::fs::read("/no/such/file").unwrap_err();
+    let words = e.to_string();
+    assert_eq!(fs::as_native(e).to_string(), words);
+}

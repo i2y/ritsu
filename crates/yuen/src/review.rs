@@ -121,7 +121,7 @@ fn apply(src: &str, mut edits: Vec<Edit>) -> String {
 fn parse_at(at: &str) -> Option<(PathBuf, usize)> {
     let (f, l) = at.rsplit_once(':')?;
     let line = l.parse().ok()?;
-    let abs = std::fs::canonicalize(f).ok()?;
+    let abs = ritsu_base::fs::canonicalize(f).ok()?;
     Some((abs, line))
 }
 
@@ -278,7 +278,7 @@ pub fn review_with(args: &[String], root: Option<&str>, c: &Choice, by: &str, da
 /// hex digits (DESIGN 4.4).
 fn clear(dir: &Path) {
     let Some(parent) = dir.parent() else { return };
-    let Ok(rd) = std::fs::read_dir(parent) else { return };
+    let Ok(rd) = ritsu_base::fs::read_dir(parent) else { return };
     let mut wanted = BTreeSet::new();
     for e in rd.filter_map(|e| e.ok()) {
         let path = e.path();
@@ -288,7 +288,7 @@ fn clear(dir: &Path) {
             wanted.extend(crate::marks::hashes_in(&src));
         }
     }
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let Ok(rd) = ritsu_base::fs::read_dir(dir) else { return };
     for e in rd.filter_map(|e| e.ok()) {
         let name = e.file_name().to_string_lossy().to_string();
         if name.len() == 16 && name.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()) && !wanted.contains(&name) {

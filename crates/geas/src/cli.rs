@@ -502,7 +502,7 @@ fn write_journal(p: &Paths, journal: &[String]) -> Result<(), (String, Diag)> {
 /// check, snap or drift on one spec; its exit status.
 fn run_file(file: &str, a: &Args) -> i32 {
     let lang = a.lang;
-    let src = match std::fs::read_to_string(file) {
+    let src = match ritsu_base::fs::read_to_string(file) {
         Ok(s) => s,
         Err(e) => {
             let d = diag::error("E081", 0, 0, tr!("このファイルを読めません: {e}", "cannot read this file: {e}"));
@@ -540,7 +540,7 @@ fn run_file(file: &str, a: &Args) -> i32 {
 
     // what GUI targets write goes under `.geas/`, named absolutely, since the
     // programs that write it run in the spec's directory
-    let geas_dir = std::fs::canonicalize(&p.cwd).map(|d| d.join(".geas")).unwrap_or_else(|_| p.geas.clone());
+    let geas_dir = ritsu_base::fs::canonicalize(&p.cwd).map(|d| d.join(".geas")).unwrap_or_else(|_| p.geas.clone());
     let (results, journal) = run::run_spec(&spec, &p.cwd, &geas_dir, &p.stem, a.jobs);
     // a signal killed what the run started: nothing it says now would be true
     if let Some(sig) = proc::signalled() {
@@ -633,7 +633,7 @@ fn map_file(file: &str, a: &Args, src: &str, spec: &model::Spec, p: &Paths) -> i
         Ok(x) => x,
         Err(d) => return early(d),
     };
-    let cwd = match std::fs::canonicalize(&p.cwd) {
+    let cwd = match ritsu_base::fs::canonicalize(&p.cwd) {
         Ok(c) => c,
         Err(e) => {
             return early(diag::error(

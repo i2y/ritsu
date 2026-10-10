@@ -90,10 +90,11 @@ pub fn each<T: Send>(spec: &Spec, jobs: usize, run: impl Fn(usize, usize) -> T +
     let state = Mutex::new(State { started: vec![false; n], ports: BTreeSet::new(), serial: BTreeSet::new() });
     let turn = Condvar::new();
     let results: Vec<Mutex<Option<T>>> = (0..n).map(|_| Mutex::new(None)).collect();
+    let mut started = 0;
     thread::scope(|scope| {
         for worker in 0..jobs.min(n) {
             let (state, turn, holds, results, run) = (&state, &turn, &holds, &results, &run);
-            scope.spawn(move || {
+            let spawned = thread::Builder::new().spawn_scoped(scope, move || {
                 loop {
                     let i = {
                         let mut st = state.lock().unwrap_or_else(|e| e.into_inner());
@@ -115,8 +116,17 @@ pub fn each<T: Send>(spec: &Spec, jobs: usize, run: impl Fn(usize, usize) -> T +
                     *results[i].lock().unwrap_or_else(|e| e.into_inner()) = Some(r);
                 }
             });
+            // A platform with no threads (ritsu built for WASI, its npm package) starts none; the
+            // workers that did start take every claim.
+            if spawned.is_err() {
+                break;
+            }
+            started += 1;
         }
     });
+    if started == 0 {
+        return (0..n).map(|i| run(0, i)).collect();
+    }
     results
         .into_iter()
         .map(|m| m.into_inner().unwrap_or_else(|e| e.into_inner()).expect("every claim ran"))

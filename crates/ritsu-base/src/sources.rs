@@ -677,6 +677,7 @@ fn is_date(s: &str) -> bool {
 fn curl_once(url: &str) -> Result<Vec<u8>, Result<String, Text>> {
     let out = match Command::new("curl").args(["-fsSL", "--compressed", "--max-time", "120", url]).output() {
         Ok(o) => o,
+        Err(e) if crate::wasi::unsupported(&e) => return Err(Err(crate::wasi::cannot_start("curl"))),
         Err(e) => return Err(Err(tr!("curl を走らせられません（PATH にありますか）: {e}", "cannot run curl (is it on the PATH?): {e}"))),
     };
     if out.status.success() { Ok(out.stdout) } else { Err(Ok(String::from_utf8_lossy(&out.stderr).trim().to_string())) }
@@ -720,7 +721,9 @@ pub fn github_json(url: &str) -> Result<Json, Text> {
         args.push(format!("Authorization: Bearer {t}"));
     }
     args.push(url.to_string());
-    let out = Command::new("curl").args(&args).output().map_err(|e| tr!("curl を走らせられません（PATH にありますか）: {e}", "cannot run curl (is it on the PATH?): {e}"))?;
+    let out = Command::new("curl").args(&args).output().map_err(|e| {
+        if crate::wasi::unsupported(&e) { crate::wasi::cannot_start("curl") } else { tr!("curl を走らせられません（PATH にありますか）: {e}", "cannot run curl (is it on the PATH?): {e}") }
+    })?;
     if !out.status.success() {
         let said = String::from_utf8_lossy(&out.stderr).trim().to_string();
         return Err(tr!("{url} に問い合わせられません: {said}", "cannot query {url}: {said}"));

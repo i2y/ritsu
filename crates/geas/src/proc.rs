@@ -465,7 +465,7 @@ fn ended(st: ExitStatus) -> Text {
 /// a `/` is a path from the spec's directory, any other is looked for on PATH.
 pub fn resolve(word: &str, dir: &Path) -> Option<PathBuf> {
     let p = if word.contains('/') { dir.join(word) } else { crate::cover::on_path(word)? };
-    std::fs::canonicalize(p).ok()
+    ritsu_base::fs::canonicalize(p).ok()
 }
 
 /// Starts a program in a process group of its own. `shown` is the command as a
@@ -504,7 +504,8 @@ fn spawn_with(target: &str, words: &[String], shown: &[String], launch: &Launch,
     };
     let child = spawned.map_err(|e| Failure {
         code: "E030",
-        msg: tr!("`{prog}` を起動できません: {e}", "cannot start `{prog}`: {e}"),
+        // ritsu built for WASI (its npm package) starts no program: said as what to do instead
+        msg: if ritsu_base::wasi::unsupported(&e) { ritsu_base::wasi::cannot_start(prog) } else { tr!("`{prog}` を起動できません: {e}", "cannot start `{prog}`: {e}") },
         notes: vec![command_note(shown)],
     })?;
     pid_log(format!("start {} {}\n", child.id(), target));

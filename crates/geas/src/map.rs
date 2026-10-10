@@ -235,13 +235,13 @@ fn ran_entry(v: &J, r: &Record) -> Result<RecRan, Text> {
 /// above the spec holding `.git`, else the spec's own directory; and the spec's path
 /// relative to it.
 pub fn root_and_spec(file: &str, root_flag: Option<&str>) -> Result<(PathBuf, String), Diag> {
-    let spec_abs = std::fs::canonicalize(file).map_err(|e| {
+    let spec_abs = ritsu_base::fs::canonicalize(file).map_err(|e| {
         diag::error("E081", 0, 0, tr!("このファイルを読めません: {e}", "cannot read this file: {e}"))
     })?;
     let spec_dir = spec_abs.parent().expect("a file is in a directory");
     let root = match root_flag {
         Some(r) => {
-            let p = std::fs::canonicalize(r).map_err(|e| {
+            let p = ritsu_base::fs::canonicalize(r).map_err(|e| {
                 diag::error(
                     "E081",
                     0,
@@ -484,7 +484,7 @@ fn build(spec: &Spec, place: &Place, results: &[ClaimResult], slices: &[BTreeMap
     }
     let mut files = Vec::new();
     for path in &sources {
-        let bytes = std::fs::read(place.root.join(path)).map_err(|e| e081(path.clone(), e))?;
+        let bytes = ritsu_base::fs::read(place.root.join(path)).map_err(|e| e081(path.clone(), e))?;
         files.push(RecFile {
             path: path.clone(),
             blob: hash::blob(&bytes),

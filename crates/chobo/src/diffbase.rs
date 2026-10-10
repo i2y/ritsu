@@ -9,14 +9,20 @@ use crate::model::{self, *};
 use std::path::Path;
 
 /// The book at `rev`, read with git; Ok(None) when the revision has no such file. What git
-/// answers is read from its exit codes, not its messages, which follow the user's locale.
-pub fn read_at(path: &Path, rev: &str) -> Result<Option<String>, String> {
+/// answers is read from its exit codes, not its messages, which follow the user's locale. Built
+/// for WASI (ritsu's npm package), where no program starts, the error says so (ritsu-base's
+/// `wasi`).
+pub fn read_at(path: &Path, rev: &str) -> Result<Option<String>, Text> {
     let dir = path.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
-    let name = path.file_name().ok_or("no file name")?.to_string_lossy().to_string();
-    let git = |args: &[&str]| std::process::Command::new("git").arg("-C").arg(dir).args(args).output().map_err(|e| format!("cannot run git: {e}"));
+    let name = path.file_name().ok_or(Text::same("no file name"))?.to_string_lossy().to_string();
+    let git = |args: &[&str]| {
+        std::process::Command::new("git").arg("-C").arg(dir).args(args).output().map_err(|e| {
+            if ritsu_base::wasi::unsupported(&e) { ritsu_base::wasi::cannot_start("git") } else { Text::same(format!("cannot run git: {e}")) }
+        })
+    };
     let found = git(&["rev-parse", "--verify", "--quiet", &format!("{rev}^{{commit}}")])?;
     if !found.status.success() {
-        return Err(format!("git: no revision `{rev}` in {}", dir.display()));
+        return Err(Text::same(format!("git: no revision `{rev}` in {}", dir.display())));
     }
     let spec = format!("{rev}:./{name}");
     if !git(&["cat-file", "-e", &spec])?.status.success() {
@@ -24,7 +30,7 @@ pub fn read_at(path: &Path, rev: &str) -> Result<Option<String>, String> {
     }
     let out = git(&["show", &spec])?;
     if !out.status.success() {
-        return Err(format!("git show {spec}: {}", String::from_utf8_lossy(&out.stderr).trim()));
+        return Err(Text::same(format!("git show {spec}: {}", String::from_utf8_lossy(&out.stderr).trim())));
     }
     Ok(Some(String::from_utf8_lossy(&out.stdout).to_string()))
 }

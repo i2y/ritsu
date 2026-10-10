@@ -121,3 +121,8 @@ pub fn current() -> Lang {
 pub fn ja() -> bool {
     current() == Lang::Ja
 }
+
+/// A sentence of ritsu-base's (`ritsu_base::text::Text`), in the current output language.
+pub fn text(t: &ritsu_base::text::Text) -> String {
+    if ja() { t.ja.clone() } else { t.en.clone() }
+}

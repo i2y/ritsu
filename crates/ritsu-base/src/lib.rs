@@ -39,6 +39,8 @@
 //! - [`definition`]: the definition of a thing written as a block of lines (a task of dandori's, a
 //!   policy of sekisho's), the text yuen takes the hash of: its lines without their comments and
 //!   alignment, each under the one above by its depth.
+//! - [`wasi`]: what a command says when it needs another program or the network and runs where it
+//!   can have neither: ritsu built for WASI, the npm package (DESIGN 8.8).
 //!
 //! Nothing here depends on anything but std (DESIGN 3.1, P9).
 
@@ -62,4 +64,5 @@ pub mod sources;
 pub mod text;
 pub mod udiff;
 pub mod urls;
+pub mod wasi;
 pub mod yaml;

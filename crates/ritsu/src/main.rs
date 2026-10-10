@@ -85,6 +85,13 @@ fn main() -> ExitCode {
     restore_sigpipe();
     // A panic is a bug in ritsu: exit 2, as DESIGN 8.4 says, rather than Rust's 101.
     std::panic::set_hook(Box::new(|info| {
+        // Built for WASI there is no SIGPIPE: a reader that went away (`| head`) is an error of the
+        // write, which std's printing panics on. The native binary dies of the signal quietly, as
+        // `cat` does; this one goes quietly too, with the code a shell gives that death (DESIGN 8.8).
+        #[cfg(target_os = "wasi")]
+        if info.payload_as_str().is_some_and(|s| s.starts_with("failed printing to std") && s.contains("Broken pipe")) {
+            std::process::exit(128 + 13);
+        }
         eprintln!("ritsu: a bug in ritsu, please report it: {info}");
     }));
     match std::panic::catch_unwind(run) {
@@ -93,10 +100,33 @@ fn main() -> ExitCode {
     }
 }
 
+/// Built for WASI (the npm package, DESIGN 8.8), ritsu starts in the directory the host gives
+/// it, which is `/` under Node; the loader names the one it was run in (`RITSU_WASI_CWD`), and
+/// ritsu works there, as the native binary works in the one its shell gives it. A directory it
+/// cannot enter stops it, rather than leaving it to read from the root of the disk. Without the
+/// variable (wasmtime and other hosts, which give the directory with their own flags) ritsu
+/// stays where the host put it.
+#[cfg(target_os = "wasi")]
+fn enter_the_directory(args: &[String]) -> Result<(), ExitCode> {
+    let Some(dir) = std::env::var_os("RITSU_WASI_CWD") else { return Ok(()) };
+    match std::env::set_current_dir(&dir) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let lang = Lang::pick(lang_asked(args).as_deref(), "RITSU_LANG");
+            let (d, e) = (std::path::Path::new(&dir).display().to_string(), ritsu_base::fs::as_native(e));
+            Err(refuse(tr!("RITSU_WASI_CWD のディレクトリ `{d}` で作業できません: {e}", "cannot work in `{d}`, the directory RITSU_WASI_CWD names: {e}"), lang))
+        }
+    }
+}
+
 fn run() -> ExitCode {
     let mut argv = std::env::args();
     let called = argv.next().unwrap_or_default();
     let args: Vec<String> = argv.collect();
+    #[cfg(target_os = "wasi")]
+    if let Err(code) = enter_the_directory(&args) {
+        return code;
+    }
     // called by a language's name, ritsu is that command
     let name = std::path::Path::new(&called).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
     if cli::LANGUAGES.contains(&name.as_str()) {

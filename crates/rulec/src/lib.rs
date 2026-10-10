@@ -30,8 +30,10 @@ pub mod backend;
 pub mod cel;
 pub mod cert;
 pub mod child;
-/// The `rulec` command, as a function: the binary runs it, and so does `ritsu rulec`.
-#[cfg(not(target_arch = "wasm32"))]
+/// The `rulec` command, as a function: the binary runs it, and so does `ritsu rulec`. Everywhere but
+/// the page in the browser (wasm32-unknown-unknown, which has no command line): the `ritsu` built for
+/// WASI runs it too (ritsu's DESIGN 8.8).
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 pub mod cli;
 /// The days a date input takes from a koyomi file (`range from koyomi …`, §15.174), read
 /// through ritsu's port of dates.

@@ -228,7 +228,7 @@ fn base_head(line: &str) -> Option<Result<Vec<(String, String)>, Text>> {
 }
 
 pub fn read_baseline(path: &Path) -> Result<Baseline, BaselineError> {
-    let s = match std::fs::read_to_string(path) {
+    let s = match ritsu_base::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(BaselineError::Missing),
         Err(e) => return Err(BaselineError::Unreadable(e)),

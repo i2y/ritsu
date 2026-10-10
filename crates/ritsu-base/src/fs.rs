@@ -9,6 +9,11 @@
 //! [`with`], they read and write what it was given — [`Memory`], or any other [`Files`] — on this
 //! thread only. Where the disk has no answer (a symbolic link, permissions), memory has none
 //! either: it holds files and the directories they are in.
+//!
+//! Built for WASI (the npm package, DESIGN 8.8), they are `std::fs` with two differences that make
+//! the answers the native binary's: an error of the disk says the system's number rather than
+//! WASI's ([`as_native`]), and [`canonicalize`], which WASI's std does not have, is made by hand
+//! ([`realpath`]).
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -138,7 +143,7 @@ pub fn current() -> Option<Rc<dyn Files>> {
 pub fn read(p: impl AsRef<Path>) -> io::Result<Vec<u8>> {
     match held() {
         Some(f) => f.read(p.as_ref()),
-        None => std::fs::read(p),
+        None => Disk.read(p.as_ref()),
     }
 }
 
@@ -146,7 +151,7 @@ pub fn read(p: impl AsRef<Path>) -> io::Result<Vec<u8>> {
 pub fn read_to_string(p: impl AsRef<Path>) -> io::Result<String> {
     match held() {
         Some(f) => String::from_utf8(f.read(p.as_ref())?).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "stream did not contain valid UTF-8")),
-        None => std::fs::read_to_string(p),
+        None => std::fs::read_to_string(p).map_err(as_native),
     }
 }
 
@@ -154,7 +159,7 @@ pub fn read_to_string(p: impl AsRef<Path>) -> io::Result<String> {
 pub fn write(p: impl AsRef<Path>, bytes: impl AsRef<[u8]>) -> io::Result<()> {
     match held() {
         Some(f) => f.write(p.as_ref(), bytes.as_ref()),
-        None => std::fs::write(p, bytes),
+        None => Disk.write(p.as_ref(), bytes.as_ref()),
     }
 }
 
@@ -162,7 +167,7 @@ pub fn write(p: impl AsRef<Path>, bytes: impl AsRef<[u8]>) -> io::Result<()> {
 pub fn create_dir_all(p: impl AsRef<Path>) -> io::Result<()> {
     match held() {
         Some(f) => f.create_dir_all(p.as_ref()),
-        None => std::fs::create_dir_all(p),
+        None => Disk.create_dir_all(p.as_ref()),
     }
 }
 
@@ -170,7 +175,7 @@ pub fn create_dir_all(p: impl AsRef<Path>) -> io::Result<()> {
 pub fn metadata(p: impl AsRef<Path>) -> io::Result<Meta> {
     match held() {
         Some(f) => f.metadata(p.as_ref()),
-        None => std::fs::metadata(p).map(|m| Meta::of(&m)),
+        None => Disk.metadata(p.as_ref()),
     }
 }
 
@@ -178,7 +183,7 @@ pub fn metadata(p: impl AsRef<Path>) -> io::Result<Meta> {
 pub fn symlink_metadata(p: impl AsRef<Path>) -> io::Result<Meta> {
     match held() {
         Some(f) => f.metadata(p.as_ref()),
-        None => std::fs::symlink_metadata(p).map(|m| Meta::of(&m)),
+        None => std::fs::symlink_metadata(p).map(|m| Meta::of(&m)).map_err(as_native),
     }
 }
 
@@ -187,29 +192,17 @@ pub fn read_dir(p: impl AsRef<Path>) -> io::Result<std::vec::IntoIter<io::Result
     let dir = p.as_ref().to_path_buf();
     let entries: Vec<io::Result<Entry>> = match held() {
         Some(f) => f.read_dir(&dir)?.into_iter().map(|(name, kind)| Ok(Entry { dir: dir.clone(), name, kind })).collect(),
-        None => std::fs::read_dir(&dir)?
-            .map(|e| {
-                let e = e?;
-                let t = e.file_type()?;
-                let kind = if t.is_file() {
-                    Kind::File
-                } else if t.is_dir() {
-                    Kind::Dir
-                } else {
-                    Kind::Other
-                };
-                Ok(Entry { dir: dir.clone(), name: e.file_name(), kind })
-            })
-            .collect(),
+        None => disk_entries(&dir)?.into_iter().map(|e| e.map(|(name, kind)| Entry { dir: dir.clone(), name, kind })).collect(),
     };
     Ok(entries.into_iter())
 }
 
-/// `std::fs::canonicalize`. In memory, the path made absolute with `.` and `..` folded.
+/// `std::fs::canonicalize`. In memory, the path made absolute with `.` and `..` folded. Built
+/// for WASI, whose std has no `canonicalize` (it answers that it is not supported), [`realpath`].
 pub fn canonicalize(p: impl AsRef<Path>) -> io::Result<PathBuf> {
     match held() {
         Some(f) => f.canonicalize(p.as_ref()),
-        None => std::fs::canonicalize(p),
+        None => Disk.canonicalize(p.as_ref()),
     }
 }
 
@@ -217,9 +210,309 @@ pub fn canonicalize(p: impl AsRef<Path>) -> io::Result<PathBuf> {
 pub fn current_dir() -> io::Result<PathBuf> {
     match held() {
         Some(f) => f.current_dir(),
-        None => std::env::current_dir(),
+        None => Disk.current_dir(),
     }
 }
+
+/// The disk, as the native binary reads it: what the functions of this module read when no
+/// [`with`] holds other files, and what a [`Files`] that hands its calls on (koyomi's ports) hands
+/// them to then. `std::fs`, with an error of the disk in the system's words ([`as_native`]);
+/// built for WASI, a directory read whole ([`disk_entries`]) and `canonicalize` made by hand
+/// ([`realpath`]).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Disk;
+
+impl Files for Disk {
+    fn read(&self, p: &Path) -> io::Result<Vec<u8>> {
+        std::fs::read(p).map_err(as_native)
+    }
+
+    fn metadata(&self, p: &Path) -> io::Result<Meta> {
+        std::fs::metadata(p).map(|m| Meta::of(&m)).map_err(as_native)
+    }
+
+    fn read_dir(&self, p: &Path) -> io::Result<Vec<(OsString, Kind)>> {
+        disk_entries(p)?.into_iter().collect()
+    }
+
+    fn write(&self, p: &Path, bytes: &[u8]) -> io::Result<()> {
+        std::fs::write(p, bytes).map_err(as_native)
+    }
+
+    fn create_dir_all(&self, p: &Path) -> io::Result<()> {
+        std::fs::create_dir_all(p).map_err(as_native)
+    }
+
+    fn current_dir(&self) -> io::Result<PathBuf> {
+        std::env::current_dir().map_err(as_native)
+    }
+
+    fn canonicalize(&self, p: &Path) -> io::Result<PathBuf> {
+        #[cfg(target_os = "wasi")]
+        return realpath(p);
+        #[cfg(not(target_os = "wasi"))]
+        std::fs::canonicalize(p)
+    }
+}
+
+/// The entries of a directory on the disk, each with what it is (a symbolic link not followed),
+/// in the order the directory gives.
+#[cfg(not(target_os = "wasi"))]
+fn disk_entries(dir: &Path) -> io::Result<Vec<io::Result<(OsString, Kind)>>> {
+    Ok(std::fs::read_dir(dir)
+        .map_err(as_native)?
+        .map(|e| {
+            let e = e.map_err(as_native)?;
+            let t = e.file_type().map_err(as_native)?;
+            Ok((e.file_name(), kind_of(t.is_file(), t.is_dir())))
+        })
+        .collect())
+}
+
+/// Built for WASI: every entry of the directory, read with one call of WASI's `fd_readdir` from
+/// its start, into a buffer made larger until the whole directory fits. std reads a directory a
+/// few entries at a time, each call going on from the cookie the entry before gave; Node's WASI
+/// before uvwasi 0.0.23 (Node 23.11.0; older Node 22 too) gives macOS's `telldir` as that cookie
+/// and opens the directory again for every call, where the cookie means nothing, and std reads
+/// the first entries over and over: a directory of more than about 96 entries never ended, and
+/// what was read missed some. A read from the start never seeks.
+#[cfg(target_os = "wasi")]
+fn disk_entries(dir: &Path) -> io::Result<Vec<io::Result<(OsString, Kind)>>> {
+    use std::os::fd::AsRawFd;
+    use std::os::wasi::ffi::OsStrExt;
+    #[link(wasm_import_module = "wasi_snapshot_preview1")]
+    unsafe extern "C" {
+        fn fd_readdir(fd: i32, buf: *mut u8, buf_len: usize, cookie: u64, bufused: *mut usize) -> u16;
+    }
+    let f = std::fs::File::open(dir).map_err(as_native)?;
+    let mut len = 64 * 1024;
+    loop {
+        let mut buf = vec![0u8; len];
+        let mut used = 0usize;
+        // SAFETY: the buffer is `len` bytes the call writes at most, and `used` is where it says how many
+        let errno = unsafe { fd_readdir(f.as_raw_fd(), buf.as_mut_ptr(), len, 0, &mut used) };
+        if errno != 0 {
+            return Err(as_native(io::Error::from_raw_os_error(i32::from(errno))));
+        }
+        // a full buffer may hold the directory cut short: read it again into a larger one
+        if used >= len {
+            len *= 4;
+            continue;
+        }
+        // each entry: d_next (u64), d_ino (u64), d_namlen (u32), d_type (u8), three bytes, the name
+        let mut out = Vec::new();
+        let mut at = 0;
+        while at + 24 <= used {
+            let namlen = u32::from_le_bytes([buf[at + 16], buf[at + 17], buf[at + 18], buf[at + 19]]) as usize;
+            let kind = buf[at + 20];
+            let (from, to) = (at + 24, at + 24 + namlen);
+            if to > used {
+                break;
+            }
+            at = to;
+            let name = std::ffi::OsStr::from_bytes(&buf[from..to]);
+            if name == "." || name == ".." {
+                continue;
+            }
+            // 3 is a directory, 4 a regular file, 7 a symbolic link; 0 is a host that did not say
+            let kind = match kind {
+                3 => Kind::Dir,
+                4 => Kind::File,
+                0 => match std::fs::symlink_metadata(dir.join(name)) {
+                    Ok(m) => kind_of(m.file_type().is_file(), m.file_type().is_dir()),
+                    Err(e) => {
+                        out.push(Err(as_native(e)));
+                        continue;
+                    }
+                },
+                _ => Kind::Other,
+            };
+            out.push(Ok((name.to_os_string(), kind)));
+        }
+        return Ok(out);
+    }
+}
+
+fn kind_of(file: bool, dir: bool) -> Kind {
+    if file {
+        Kind::File
+    } else if dir {
+        Kind::Dir
+    } else {
+        Kind::Other
+    }
+}
+
+/// The path `realpath(3)` answers, made by hand from what the disk says of each part: absolute
+/// from the working directory; each part that is a symbolic link replaced by where it points (a
+/// relative link read from the directory it is in), however many links in a row; `..` taken
+/// after the part before it is followed, so that it leaves where the link led; an error when a
+/// part is not there (`NotFound`), when a part with more after it is not a directory, or after
+/// 40 links (a loop). What `canonicalize` is built for WASI, and the same answer as
+/// `std::fs::canonicalize` everywhere (`tests/fs.rs` holds the two to each other natively).
+///
+/// Built for WASI, the walk starts from the deepest directory the host opened for the module that
+/// holds the path (its preopens), taken as it is, and starts there again for a link that points
+/// by an absolute path: a loader that opens a project's directory alone (the npm package's
+/// `dirs`) leaves the directories above it out of the module's sight, and a walk from the root
+/// would stop at the first of them. The npm package's loader opens each directory at its real
+/// path, so nothing above it needs following, and at the path it was given as well when that goes
+/// through a link; a path under the second is walked from the first, which is the same directory
+/// (the same device and inode), so that it ends where `realpath(3)` ends.
+pub fn realpath(p: &Path) -> io::Result<PathBuf> {
+    let start = if crate::paths::rooted(p) { p.to_path_buf() } else { std::env::current_dir().map_err(as_native)?.join(p) };
+    // what is left to walk, the next part last
+    let mut todo: Vec<OsString> = Vec::new();
+    let mut out = walked_from(&start, &mut todo);
+    let mut links = 0;
+    while let Some(part) = todo.pop() {
+        if part == ".." {
+            out.pop();
+            continue;
+        }
+        let next = out.join(&part);
+        let meta = std::fs::symlink_metadata(&next).map_err(as_native)?;
+        if meta.file_type().is_symlink() {
+            links += 1;
+            if links > 40 {
+                return Err(io::Error::other(format!("too many symbolic links in a row at {}", next.display())));
+            }
+            let to = std::fs::read_link(&next).map_err(as_native)?;
+            if crate::paths::rooted(&to) {
+                out = walked_from(&to, &mut todo);
+            } else {
+                push_parts(&mut todo, &to);
+            }
+        } else if !meta.is_dir() && !todo.is_empty() {
+            return Err(not_a_directory());
+        } else {
+            out = next;
+        }
+    }
+    Ok(out)
+}
+
+/// Where the walk of the absolute path `p` starts, with the parts of `p` after it pushed onto
+/// `todo`: the deepest directory the host opened for the module that `p` lies under, by its parts
+/// (the first opened of that directory, when it is opened twice); else, and natively, the root.
+fn walked_from(p: &Path, todo: &mut Vec<OsString>) -> PathBuf {
+    let above = opened().iter().filter(|(d, _)| d.as_os_str() != "/" && p.starts_with(d)).max_by_key(|(d, _)| d.components().count());
+    match above {
+        Some((d, first)) => {
+            push_parts(todo, p.strip_prefix(d).unwrap_or(Path::new("")));
+            first.clone()
+        }
+        None => {
+            push_parts(todo, p);
+            PathBuf::from("/")
+        }
+    }
+}
+
+/// The directories the host opened for the module (WASI's preopens), as `fd_prestat_get` and
+/// `fd_prestat_dir_name` say them, from descriptor 3 on: what wasi-libc reads at the start too.
+/// Each comes with the first of them that is the same directory (the same device and inode, from
+/// `fd_filestat_get`), itself when no other is.
+#[cfg(target_os = "wasi")]
+fn opened() -> &'static [(PathBuf, PathBuf)] {
+    use std::os::wasi::ffi::OsStrExt;
+    static OPENED: std::sync::OnceLock<Vec<(PathBuf, PathBuf)>> = std::sync::OnceLock::new();
+    #[link(wasm_import_module = "wasi_snapshot_preview1")]
+    unsafe extern "C" {
+        fn fd_prestat_get(fd: i32, prestat: *mut u32) -> u16;
+        fn fd_prestat_dir_name(fd: i32, path: *mut u8, len: usize) -> u16;
+        fn fd_filestat_get(fd: i32, filestat: *mut u64) -> u16;
+    }
+    OPENED.get_or_init(|| {
+        let mut out: Vec<(PathBuf, Option<[u64; 2]>)> = Vec::new();
+        for fd in 3..1024 {
+            // a prestat is its tag (0, a directory) and the length of the directory's name
+            let mut prestat = [0u32; 2];
+            // SAFETY: the two words are the eight bytes a prestat takes
+            if unsafe { fd_prestat_get(fd, prestat.as_mut_ptr()) } != 0 {
+                break;
+            }
+            if prestat[0] & 0xff != 0 {
+                continue;
+            }
+            let mut name = vec![0u8; prestat[1] as usize];
+            // SAFETY: the buffer is the length the prestat gave
+            if unsafe { fd_prestat_dir_name(fd, name.as_mut_ptr(), name.len()) } != 0 {
+                continue;
+            }
+            while name.len() > 1 && name.last() == Some(&b'/') {
+                name.pop();
+            }
+            let dir = PathBuf::from(std::ffi::OsStr::from_bytes(&name));
+            if crate::paths::rooted(&dir) {
+                // a filestat is eight words: the device and the inode first
+                let mut stat = [0u64; 8];
+                // SAFETY: the eight words are the 64 bytes a filestat takes
+                let id = (unsafe { fd_filestat_get(fd, stat.as_mut_ptr()) } == 0).then_some([stat[0], stat[1]]);
+                out.push((dir, id));
+            }
+        }
+        out.iter()
+            .map(|(dir, id)| {
+                let first = id.and_then(|id| out.iter().find(|(_, other)| *other == Some(id))).map_or(dir, |(d, _)| d);
+                (dir.clone(), first.clone())
+            })
+            .collect()
+    })
+}
+
+#[cfg(not(target_os = "wasi"))]
+fn opened() -> &'static [(PathBuf, PathBuf)] {
+    &[]
+}
+
+/// The parts of `p` that name something (its root and its `.` left out), pushed onto `todo` so
+/// that the first part is the last pushed.
+fn push_parts(todo: &mut Vec<OsString>, p: &Path) {
+    for c in p.components().rev() {
+        match c {
+            Component::ParentDir => todo.push(OsString::from("..")),
+            Component::Normal(n) => todo.push(n.to_os_string()),
+            Component::RootDir | Component::CurDir | Component::Prefix(_) => {}
+        }
+    }
+}
+
+/// An error of the disk as the native binary words it. Built for WASI, an error of the disk
+/// carries WASI's number (`No such file or directory (os error 44)`) rather than the system's,
+/// and a message that quotes one would read otherwise than the native binary's; the errors whose
+/// words and number are one on Linux (musl and glibc) and on macOS take that number. Any other
+/// error, and every error on any other target, is as it was.
+pub fn as_native(e: io::Error) -> io::Error {
+    #[cfg(target_os = "wasi")]
+    if let Some(text) = e.raw_os_error().and_then(|n| renumbered(&e.to_string(), n)) {
+        return io::Error::new(e.kind(), text);
+    }
+    e
+}
+
+/// `<words> (os error <n>)`, WASI's number `n` (wasi_snapshot_preview1's errno) given as the
+/// system's, for the errors the systems number and word alike: EPERM, ENOENT, EBADF, EACCES,
+/// EEXIST, ENOTDIR, EISDIR, EINVAL, ENOSPC and EROFS. None for any other.
+pub fn renumbered(text: &str, wasi: i32) -> Option<String> {
+    let native = match wasi {
+        63 => 1,
+        44 => 2,
+        8 => 9,
+        2 => 13,
+        20 => 17,
+        54 => 20,
+        31 => 21,
+        28 => 22,
+        51 => 28,
+        69 => 30,
+        _ => return None,
+    };
+    let words = text.strip_suffix(&format!(" (os error {wasi})"))?;
+    Some(format!("{words} (os error {native})"))
+}
+
+
 
 /// `Path::exists`.
 pub fn exists(p: impl AsRef<Path>) -> bool {

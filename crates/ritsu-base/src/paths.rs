@@ -100,9 +100,11 @@ pub fn relative(from: &str, p: &str) -> String {
 
 /// `Path::is_absolute`, on every target: wasm32-unknown-unknown's std says false of every path,
 /// since it knows no root without a drive, and there a path that starts at the root is absolute
-/// too (the files a page in the browser hands over are under one, `crate::fs::Memory`).
+/// too (the files a page in the browser hands over are under one, `crate::fs::Memory`). Built
+/// for WASI (the npm package, DESIGN 8.8), std's own answer is already that one: a path is
+/// absolute when it starts at the root, as on Unix.
 pub fn rooted(p: &Path) -> bool {
-    if cfg!(target_arch = "wasm32") { p.has_root() } else { p.is_absolute() }
+    if cfg!(all(target_arch = "wasm32", target_os = "unknown")) { p.has_root() } else { p.is_absolute() }
 }
 
 /// A path made absolute against the working directory, `.` and `..` folded by their letters

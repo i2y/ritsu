@@ -411,7 +411,7 @@ fn cmd_check(a: &Args) -> u8 {
                     note = n;
                 }
                 Err(e) => {
-                    eprintln!("{e}");
+                    eprintln!("{}", e.get(a.lang));
                     return 2;
                 }
             }
@@ -450,7 +450,7 @@ fn cmd_run(a: &Args) -> u8 {
         Ok(x) => x,
         Err(c) => return c,
     };
-    let v: Value = match std::fs::read_to_string(sc).map_err(|e| e.to_string()).and_then(|t| serde_json::from_str(&t).map_err(|e| e.to_string())) {
+    let v: Value = match ritsu_base::fs::read_to_string(sc).map_err(|e| e.to_string()).and_then(|t| serde_json::from_str(&t).map_err(|e| e.to_string())) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("{sc}: {e}");

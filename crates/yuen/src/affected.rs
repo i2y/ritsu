@@ -159,7 +159,7 @@ pub fn command(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &m
         }
         ("<stdin>".to_string(), b)
     } else {
-        match std::fs::read(diff_arg) {
+        match ritsu_base::fs::read(diff_arg) {
             Ok(b) => (diff_arg.to_string(), b),
             Err(e) => return refuse(err, tr!("`{diff_arg}` を読めません: {e}", "Cannot read `{diff_arg}`: {e}"), lang),
         }
@@ -176,7 +176,7 @@ pub fn command(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &m
         let Some((spec, record)) = m.split_once('=') else {
             return refuse(err, tr!("`--map {m}` は `<spec.geas>=<記録>` の形ではありません", "`--map {m}` is not `<spec.geas>=<record>`"), lang);
         };
-        let Ok(abs) = std::fs::canonicalize(spec) else {
+        let Ok(abs) = ritsu_base::fs::canonicalize(spec) else {
             return refuse(err, tr!("`--map` の spec `{spec}` がありません", "The spec `{spec}` of `--map` is not there"), lang);
         };
         maps.push((abs, record.to_string()));
@@ -474,7 +474,7 @@ fn answer(c: &Checked, files: &[FileDiff], bytes: &[u8], diff_shown: &str, maps:
         }
     }
     for (abs, _) in maps {
-        let known = spec_paths.iter().any(|s| std::fs::canonicalize(p.root.join(s)).is_ok_and(|x| x == *abs));
+        let known = spec_paths.iter().any(|s| ritsu_base::fs::canonicalize(p.root.join(s)).is_ok_and(|x| x == *abs));
         if !known {
             let shown = abs.strip_prefix(&p.root).map(|r| p.shown(&r.to_string_lossy())).unwrap_or_else(|_| abs.display().to_string());
             return Err(tr!("`--map` の spec {shown} を、プロジェクトのどのリンクも指していません", "No link of the project names the spec {shown} of `--map`"));
@@ -491,7 +491,7 @@ fn answer(c: &Checked, files: &[FileDiff], bytes: &[u8], diff_shown: &str, maps:
     };
     for spec in &spec_paths {
         let spec_abs = p.root.join(spec);
-        let canon = std::fs::canonicalize(&spec_abs).unwrap_or_else(|_| spec_abs.clone());
+        let canon = ritsu_base::fs::canonicalize(&spec_abs).unwrap_or_else(|_| spec_abs.clone());
         let records: Vec<String> = maps.iter().filter(|(a, _)| *a == canon).map(|(_, r)| r.clone()).collect();
         let spec_name = Name { tool: Tool::Geas, path: spec.clone(), items: vec![] };
         consumed.insert(spec.clone());
@@ -914,7 +914,7 @@ fn reach_json(p: &Project, reqs: &[Reach]) -> Value {
 fn rel_of(p: &Project, path: &str) -> String {
     let file = Path::new(path);
     let abs = if file.is_absolute() { file.to_path_buf() } else { p.cwd.join(file) };
-    let abs = std::fs::canonicalize(&abs).unwrap_or(abs);
+    let abs = ritsu_base::fs::canonicalize(&abs).unwrap_or(abs);
     abs.strip_prefix(&p.root).map(|r| r.to_string_lossy().replace('\\', "/")).unwrap_or_else(|_| path.to_string())
 }
 

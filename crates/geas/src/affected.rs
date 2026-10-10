@@ -189,7 +189,7 @@ fn answer(spec_file: &str, diff_arg: &str, o: &Opts) -> Result<Answer, Vec<Probl
         std::io::stdin().read_to_end(&mut b).map_err(|e| vec![e081("-", e)])?;
         ("<stdin>".to_string(), b)
     } else {
-        (diff_arg.to_string(), std::fs::read(diff_arg).map_err(|e| vec![e081(diff_arg, e)])?)
+        (diff_arg.to_string(), ritsu_base::fs::read(diff_arg).map_err(|e| vec![e081(diff_arg, e)])?)
     };
     answer_for(spec_file, o.root, o.maps, diff_shown, bytes)
 }
@@ -365,7 +365,7 @@ fn answer_for(spec_file: &str, root: Option<&str>, maps: &[String], diff_shown: 
 /// Reads a record, and holds it to this spec: E060 when there is none, E061 when
 /// it does not read or is another spec's.
 fn read_record(shown: &str, spec_file: &str, spec_rel: &str) -> Result<Rec, Problem> {
-    let text = match std::fs::read_to_string(shown) {
+    let text = match ritsu_base::fs::read_to_string(shown) {
         Ok(s) => s,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             let d = diag::error("E060", 0, 0, tr!("{shown} に記録がありません", "there is no record at {shown}"))

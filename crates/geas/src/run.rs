@@ -383,6 +383,8 @@ fn take_port(target: &str, port: Port) -> Result<(u16, Option<AutoPort>), Failur
         Port::Fixed(p) => Ok((p, None)),
         Port::Auto => match AutoPort::take() {
             Ok(a) => Ok((a.0, Some(a))),
+            // ritsu built for WASI (its npm package) has no sockets, nor any program to give one to
+            Err(e) if ritsu_base::wasi::unsupported(&e) => Err(Failure { code: "E030", msg: ritsu_base::wasi::cannot_start_programs(), notes: vec![] }),
             Err(e) => Err(Failure {
                 code: "E030",
                 msg: tr!(

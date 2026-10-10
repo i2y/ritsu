@@ -32,6 +32,15 @@ const RESOURCES: &[(&str, &str, &str, &str)] = &[
 ];
 
 pub fn serve(limit: std::time::Duration) -> ExitCode {
+    // Every tool runs rulec as a program of its own. Where no program can be started (ritsu built
+    // for WASI, its npm package), the server would answer every call with an error, so it says
+    // so and does not start.
+    if let Err(e) = std::env::current_exe()
+        && ritsu_base::wasi::unsupported(&e)
+    {
+        eprintln!("error: {}", crate::i18n::text(&ritsu_base::wasi::cannot_start_programs()));
+        return ExitCode::from(2);
+    }
     let cmds = commands();
     let stdin = std::io::stdin();
     let mut out = std::io::stdout().lock();

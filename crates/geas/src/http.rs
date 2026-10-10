@@ -35,7 +35,9 @@ pub fn exchange(target: &str, port: u16, auto: bool, method: &str, path: &str, b
         )
     };
     let mut s = TcpStream::connect_timeout(&addr, STEP_TIMEOUT).map_err(|e| {
-        if matches!(e.kind(), TimedOut | WouldBlock) {
+        if ritsu_base::wasi::unsupported(&e) {
+            Failure { code: "E033", msg: ritsu_base::wasi::cannot_connect(&format!("`{target}`")), notes: vec![] }
+        } else if matches!(e.kind(), TimedOut | WouldBlock) {
             silent()
         } else {
             let (pe, pj) = if auto {

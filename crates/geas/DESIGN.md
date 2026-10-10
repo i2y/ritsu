@@ -1018,6 +1018,9 @@ flaky without a word.
 - The report, the journal and the baseline come out in claim order,
   whatever finishes first, so a run with `-j4` prints and writes, byte for
   byte, what `-j1` does.
+- Where no thread can be started (ritsu built for WASI, its npm package;
+  ritsu's DESIGN 8.8), the claims run one after another on the one thread,
+  whatever `--jobs` says, and each says that it cannot start its program.
 - Ports are what geas can see. `port auto` gives each instance a free port
   on 127.0.0.1: geas binds port 0, reads the number, closes it, and never
   hands one number to two live instances. `{port}` in the target's command

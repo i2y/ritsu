@@ -135,6 +135,8 @@ pub fn read(m: &Model) -> (Option<Crates>, Vec<Diag>) {
     let out = std::process::Command::new(&cargo).args(["metadata", "--format-version", "1", "--no-deps", "--offline", "--manifest-path"]).arg(&manifest).current_dir(&disk).output();
     let out = match out {
         Ok(o) => o,
+        // ritsu built for WASI (its npm package) starts no program: E107 says what to do instead
+        Err(e) if ritsu_base::wasi::unsupported(&e) => return (None, vec![fail(ritsu_base::wasi::cannot_start("cargo"), None)]),
         Err(e) => {
             let e = e.to_string();
             return (None, vec![fail(tr!("cargo を走らせられません（{e}）", "cargo cannot be run ({e})"), None)]);
