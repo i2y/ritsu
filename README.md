@@ -508,6 +508,7 @@ There are four ways to install them:
 ritsu check <dir>         every language's check, then the checks across them
 ritsu run <flow> …        a workflow run with its rules evaluated, dates computed, books moved
 ritsu gen <dir> --out …   one package of TypeScript, Python or Go for the whole project
+ritsu gen --check …       whether the packages are current; with --format json, file by file
 ritsu explain <code>      what a diagnostic means, with a reproduction
 ritsu skills install      the Agent Skills, written where an agent reads them
 ritsu <language> …        a language's own commands, as in ritsu rulec doc fee.rule
@@ -535,6 +536,19 @@ cargo install --git https://github.com/i2y/ritsu --locked rulec
 Every release, from 0.23.0 on (continuing rulec's numbering), carries archives for macOS and
 Linux and `.deb` and `.rpm` packages, on the [releases page](https://github.com/i2y/ritsu/releases).
 With Homebrew it is `brew install i2y/tap/ritsu`, and in GitHub Actions `uses: i2y/ritsu@v0.25.0`.
+
+From 0.26.0, a release also carries `i2y-ritsu-<version>.tgz`, the npm package `@i2y/ritsu`: ritsu
+built for WebAssembly, which Node 22 or later runs with no native binary, with the native binary's
+commands and an API to call them from JavaScript. It is not on the npm registry; install it from
+the release:
+
+```
+npm install --save-dev https://github.com/i2y/ritsu/releases/download/v0.26.0/i2y-ritsu-0.26.0.tgz
+```
+
+[Its README](packaging/npm/README.md) and [ritsu in Node](https://i2y.github.io/ritsu/node/) say
+how to use it, and which commands, starting another program or reaching the network, need the
+native binary.
 
 ## Repository
 

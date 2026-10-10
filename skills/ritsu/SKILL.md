@@ -27,7 +27,11 @@ a gate's `use rule` and `guards`.
 
 Everything is reachable from the command line: `ritsu --help` lists the commands,
 `ritsu <command> --help` says what each takes, and `ritsu explain <CODE>` explains a diagnostic.
-There is no step where you have to read ritsu's source.
+There is no step where you have to read ritsu's source. In a JavaScript or TypeScript project
+without the binary, the npm package `@i2y/ritsu` (a release's `.tgz`, from 0.26.0) runs the same
+commands with Node, as `npx ritsu check` and `npx rulec …`; there the commands that start another
+program or reach the network (`geas check`, `rulec test`, `source fetch`) stop and say to run the
+native binary.
 
 ---
 
@@ -175,7 +179,10 @@ TypeScript, Python and Go (`<out>/<language>/`, `generated` by default): the rul
 clients of the books, the workflows and the code that asks the gates of the project, where a
 workflow reads its rules, dates and books, and a gate's code its rules and dates, from the package
 itself; the gates' Cedar goes once into `<out>/cedar/`. Run it after `ritsu check` passes. `--check`
-writes nothing and exits 1 if a package is stale, for CI; `--books postgres|tigerbeetle` says what
+writes nothing and exits 1 if a package is stale, for CI; `--format json` prints one object instead
+of lines, every file of the packages with what became of it (`written`, `same` or `removed`; under
+`--check`, `same`, `missing`, `stale` or `left`), or why nothing was generated with the diagnostics
+of the files that stopped it; `--books postgres|tigerbeetle` says what
 the clients of the books call; `--authorizer cedar|avp` says whether a gate's code asks the
 language's own Cedar in the process or Amazon Verified Permissions; `--name` and `--module` name
 the package. Each language's own `gen` or `build` still writes that language's code alone (`rulec

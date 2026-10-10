@@ -1555,3 +1555,15 @@ derive の範囲を入力から計算して、届かない行を E102 にした�
 **次のリリースノートに書くこと**（v0.25.0 のあと）
 
 - `ritsu gen` が書く Go のパッケージで、PostgreSQL の帳簿のクライアント（pgx）を import するものの `doc.go` は、golang.org/x/text を v0.42.0 に上げるよう言う（v0.25.0 は v0.41.0）。v0.42.0 は Go 1.26 を求める。フローのある Go のパッケージは、Temporal の Go SDK 1.49.0 のために、もとから Go 1.26 が要る。
+
+### 7.15 npm のパッケージ `@i2y/ritsu`（2026-10-10）
+
+ritsu を wasm32-wasip1 で組み、Node の `node:wasi` で動く npm のパッケージにした（DESIGN 8.8）。リリースに `i2y-ritsu-<版>.tgz` を付けるのは 0.26.0 から。
+
+- Rust：rulec の `cli` をブラウザ向けのときだけ外す cfg、`RITSU_WASI_CWD`、`ritsu_base::fs` の `Disk`・`as_native`・`realpath`・一度に読む `read_dir`、ritsu-base の `wasi`（ほかのプログラムやネットワークが要るときの文）と、それを使う rulec・chobo・geas・sakai・ritsu-base の `sources`、yuen の `RITSU_WASI_UTC_OFFSET`、`crates/ritsu/build.rs`（8 MiB のスタック）、閉じたパイプで 141。
+- `ritsu gen --format json`（DESIGN 9.3）。
+- API の `dirs`（開けるディレクトリを絞る。ローダーがパスを取る WASI の関数を包んで、途中のリンクで外へ出るパスも止める）。
+- `packaging/npm/`（build.sh、package.json、bin、lib、README、test）、`tests/npm.rs`、THIRD_PARTY_NOTICES の wasi-libc の節。
+- tools.yml の `npm` のジョブ（Node 22・24・26、macOS）、release.yml の `npm` と `npm-check`。
+- 文書：README と README.ja.md の入れ方と Commands、サイトの「ritsu in Node」「Node で使う」とホーム、ritsu のスキル、yuen と geas の DESIGN。
+- 突き合わせは、パッケージの bin で 9,952 通り、`dirs` を渡した API で 9,078 通りで、どれも一字も違わなかった。

@@ -17,6 +17,7 @@ nav = [
   { "ホーム" = "index.md" },
   { "ブラウザで試す" = "playground.md" },
   { sekisho = "sekisho.md" },
+  { "Node で使う" = "node.md" },
 ]
 
 # ---- Language switcher ----------------------------------------------------
