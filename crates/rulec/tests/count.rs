@@ -212,7 +212,7 @@ fn 上限を超えた並びはエラーになる() {
     let (code, said, e) = run(&["gen", &p, "--out", out.to_str().unwrap()]);
     assert_eq!(code, 0, "{said}{e}");
     let py = std::fs::read_to_string(out.join("python/supplier_match.py")).unwrap();
-    assert!(py.contains("if len(candidates) > 2:"), "上限の検査が生成されていない:\n{py}");
+    assert!(py.contains("if _len(candidates) > 2:"), "上限の検査が生成されていない:\n{py}");
 
     // Three elements: the rule has no answer, and the generated code says so rather than
     // counting past its own declaration.

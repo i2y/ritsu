@@ -176,7 +176,7 @@ fn python_and_numpy_errors_carry_the_fields_the_inventory_lists() {
             "import importlib, json, sys\n\
              m = importlib.import_module({module:?})\n\
              for kind, name, fields in {py_types}:\n\
-             \x20   e = getattr(m, name)('x', 1) if kind == 'input' else getattr(m, name)('x')\n\
+             \x20   e = getattr(m, name)('x', '1') if kind == 'input' else getattr(m, name)('x')\n\
              \x20   assert all(hasattr(e, f) for f in fields), (name, fields)\n\
              sys.path.insert(0, {np_dir:?})\n\
              import rulec_np\n\

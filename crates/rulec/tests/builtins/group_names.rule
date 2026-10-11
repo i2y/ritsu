@@ -1,0 +1,29 @@
+rule group_names v1
+description "A group called int: its constant would be _int, the name the module gives the builtin int, and a group called json_str would take the name of a helper. An example for rulec's tests; it is not a transcription of any document"
+
+enum size = small | big | huge
+group int = big, huge
+group json_str = small, huge
+
+inputs
+  len : size
+
+outputs
+  float : bool
+  isinstance : bool
+
+table by_int
+policy unique
+| len   | -> float : bool |
+| int   | true            |
+| small | false           |
+
+table by_json_str
+policy unique
+| len      | -> isinstance : bool |
+| json_str | true                 |
+| big      | false                |
+
+examples
+| len   | -> float | isinstance |
+| small | false    | true       |

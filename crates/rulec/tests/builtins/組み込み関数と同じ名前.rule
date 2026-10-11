@@ -1,0 +1,89 @@
+rule 組み込み関数と同じ名前(builtin_names_ja) v1
+description "入力・表の出力・並びの別名を、生成コードが呼ぶ Python の組み込み関数（int、float、bool、repr、len、str、isinstance など）と同じにした料金の例。生成したモジュールが組み込み関数をそのままの名前で呼ばないことを、rulec のテストで確かめるための例で、特定の文書の転記ではない"
+
+enum 大きさ区分(size) = 小(small) | 大(big)
+enum 照合結果(verdict) = 一致(same) | 不一致(diff)
+
+inputs
+  整数(int)   : number  range >=0 <=100
+  小数(float) : number  range >=0 <=100
+  表記(repr)  : number  range >=0 <=100
+  真偽(bool)  : bool
+  長さ(len)   : 大きさ区分
+  金額(abs)   : money[円]  range >=0円 <=10万円
+
+# str という別名の並び。歩きながら len で件数を数え、要素のフィールドはどれも bool の型かどうかを確かめる
+elements 明細(str)
+  条件甲(set)   : bool
+  条件乙(tuple) : bool
+
+outputs
+  合計(isinstance) : money[円]  round up(10円)
+
+table 大きさ別(by_size)
+policy unique
+| 長さ | -> 基本料(list) : money[円] |
+| 小   | 100円                       |
+| 大   | 300円                       |
+
+table 真偽別(by_flag)
+policy unique
+| 真偽  | -> 加算(dict) : money[円] |
+| true  | 50円                      |
+| false | 20円                      |
+
+table 整数別(by_int)
+policy unique
+| 整数 | -> 整数分(int_fee) : money[円] |
+| >=50 | 70円                           |
+| <50  | 0円                            |
+
+table 小数別(by_float)
+policy unique
+| 小数 | -> 小数分(float_fee) : money[円] |
+| >=50 | 30円                             |
+| <50  | 0円                              |
+
+table 表記別(by_repr)
+policy unique
+| 表記 | -> 表記分(repr_fee) : money[円] |
+| >=50 | 10円                            |
+| <50  | 0円                             |
+
+table 一件ごと(each)
+policy unique
+| 条件甲 | 条件乙 | -> 照合(ord) : 照合結果 |
+| true   | true   | 一致                    |
+| true   | false  | 不一致                  |
+| false  | -      | 不一致                  |
+
+count 一致数(hits) over 明細 where 照合 = 一致  range >=0 <=50
+
+table 件数別(by_hits)
+policy unique
+| 一致数 | -> 件数分(sorted) : money[円] |
+| 0      | 0円                           |
+| 1      | 100円                         |
+| >=2    | 200円                         |
+
+result 合計 = 基本料 + 加算 + 整数分 + 小数分 + 表記分 + 金額 + 件数分
+
+sequence 一致なし(none_same)
+| 条件甲 | 条件乙 |
+
+sequence 一件一致(one_same)
+| 条件甲 | 条件乙 |
+| true   | true   |
+| true   | false  |
+
+sequence 二件一致(two_same)
+| 条件甲 | 条件乙 |
+| true   | true   |
+| true   | true   |
+
+examples
+| 整数 | 小数 | 表記 | 真偽  | 長さ | 金額  | 明細     | -> 合計 |
+| 10   | 5    | 0    | true  | 小   | 0円   | 一致なし | 150円   |
+| 1    | 5    | 60   | false | 大   | 100円 | 一件一致 | 530円   |
+| 70   | 0    | 0    | true  | 小   | 5円   | 二件一致 | 430円   |
+| 0    | 80   | 0    | false | 大   | 0円   | 一致なし | 350円   |

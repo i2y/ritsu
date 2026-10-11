@@ -1,0 +1,54 @@
+rule builtin_names_shape v1
+description "A shipping fee read out of an order object whose shape is called len, which is also the name of the builtin the generated function reads a count with (any, all, len and sum are the others it calls). An example for rulec's tests that the projection function does not call a builtin by its bare name; it is not a transcription of any document"
+
+shape len = jsonschema "contracts/order.schema.json" "#/$defs/Order"
+
+enum shipping_zone = honshu | hokkaido | okinawa
+
+inputs
+  zone       : shipping_zone  from len.shipping.zone
+  cold       : bool  from any len.lines where chilled = true
+  all_cold   : bool  from all len.lines where chilled = true
+  lines      : number  range >=1 <=50  from count len.lines
+  cold_lines : number  range >=0 <=50  from count len.lines where chilled = true
+
+outputs
+  fee : money[JPY]  round up(10JPY)
+
+table by_zone
+policy unique
+| zone     | -> zone_fee : money[JPY] |
+| honshu   | 800JPY                   |
+| hokkaido | 1200JPY                  |
+| okinawa  | 1500JPY                  |
+
+table cold_extra
+policy unique
+| cold  | all_cold | -> cold_fee : money[JPY] |
+| true  | true     | 400JPY                   |
+| true  | false    | 500JPY                   |
+| false | -        | 0JPY                     |
+
+table bulk_extra
+policy unique
+| lines | -> bulk_fee : money[JPY] |
+| >10   | 200JPY                   |
+| <=10  | 0JPY                     |
+
+table cold_count
+policy unique
+| cold_lines | -> count_fee : money[JPY] |
+| 0          | 0JPY                      |
+| 1          | 30JPY                     |
+| >=2        | 60JPY                     |
+
+define total : money[JPY] = zone_fee + cold_fee + bulk_fee + count_fee
+
+result fee = total
+
+examples
+| zone     | cold  | all_cold | lines | cold_lines | -> fee  |
+| honshu   | false | false    | 1     | 0          | 800JPY  |
+| honshu   | true  | true     | 1     | 1          | 1230JPY |
+| okinawa  | true  | false    | 11    | 2          | 2260JPY |
+| hokkaido | false | false    | 10    | 0          | 1200JPY |

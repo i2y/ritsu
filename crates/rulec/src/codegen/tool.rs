@@ -433,51 +433,51 @@ def _int(name: str, v: object) -> int:
     if isinstance(v, float) and v.is_integer():
         return int(v)
     if not isinstance(v, int) or isinstance(v, bool):
-        raise m.RuleInputError(@M_INT@, v)
+        raise m.RuleInputError(@M_INT@, repr(v))
     return v
 
 
 def _str(name: str, v: object) -> str:
     if not isinstance(v, str):
-        raise m.RuleInputError(@M_STR@, v)
+        raise m.RuleInputError(@M_STR@, repr(v))
     return v
 
 
 def _bool(name: str, v: object) -> bool:
     if not isinstance(v, bool):
-        raise m.RuleInputError(@M_BOOL@, v)
+        raise m.RuleInputError(@M_BOOL@, repr(v))
     return v
 
 
 def _date(name: str, v: object) -> int:
     digits = isinstance(v, str) and len(v) == 10 and v[4] == "-" and v[7] == "-"
     if not isinstance(v, str) or not digits or not all(c in "0123456789" for c in v[:4] + v[5:7] + v[8:]):
-        raise m.RuleInputError(@M_DATE@, v)
+        raise m.RuleInputError(@M_DATE@, repr(v))
     try:
         y, mo, d = (int(x) for x in v.split("-"))
         return (datetime.date(y, mo, d) - datetime.date(1970, 1, 1)).days
     except ValueError:
-        raise m.RuleInputError(@M_DATE@, v) from None
+        raise m.RuleInputError(@M_DATE@, repr(v)) from None
 
 
 def _enum(name: str, cls: type[E], en: str, v: object) -> E:
     try:
         return cls(v)
     except (ValueError, TypeError):
-        raise m.RuleInputError(@M_ENUM@, v) from None
+        raise m.RuleInputError(@M_ENUM@, repr(v)) from None
 
 
 def _seq(name: str, v: object) -> list[object]:
     """@D_SEQ@"""
     if not isinstance(v, list):
-        raise m.RuleInputError(@M_SEQ@, v)
+        raise m.RuleInputError(@M_SEQ@, repr(v))
     return v
 
 
 def _field(seq: str, e: object, name: str, optional: bool = False) -> object:
     """@D_EL@"""
     if not isinstance(e, dict):
-        raise m.RuleInputError(@M_EL@, e)
+        raise m.RuleInputError(@M_EL@, repr(e))
     if name not in e or (e[name] is None and not optional):
         raise m.RuleInputError(@M_NEED@)
     return e[name]

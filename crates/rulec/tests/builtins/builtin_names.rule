@@ -1,0 +1,89 @@
+rule builtin_names v1
+description "A fee decided from inputs, table outputs and a sequence that are named like the Python builtins the generated code calls (int, float, bool, repr, len, str, isinstance and others). An example for rulec's tests that the generated module does not call a builtin by its bare name; it is not a transcription of any document"
+
+enum size = small | big
+enum verdict = same | diff
+
+inputs
+  int   : number  range >=0 <=100
+  float : number  range >=0 <=100
+  repr  : number  range >=0 <=100
+  bool  : bool
+  len   : size
+  abs   : money[JPY]  range >=0JPY <=100_000JPY
+
+# A sequence called str: the walk over it counts its elements with len, and holds every element to the type bool
+elements str
+  set   : bool
+  tuple : bool
+
+outputs
+  isinstance : money[JPY]  round up(10JPY)
+
+table by_size
+policy unique
+| len   | -> list : money[JPY] |
+| small | 100JPY               |
+| big   | 300JPY               |
+
+table by_flag
+policy unique
+| bool  | -> dict : money[JPY] |
+| true  | 50JPY                |
+| false | 20JPY                |
+
+table by_int
+policy unique
+| int  | -> int_fee : money[JPY] |
+| >=50 | 70JPY                   |
+| <50  | 0JPY                    |
+
+table by_float
+policy unique
+| float | -> float_fee : money[JPY] |
+| >=50  | 30JPY                     |
+| <50   | 0JPY                      |
+
+table by_repr
+policy unique
+| repr | -> repr_fee : money[JPY] |
+| >=50 | 10JPY                    |
+| <50  | 0JPY                     |
+
+table each
+policy unique
+| set   | tuple | -> ord : verdict |
+| true  | true  | same             |
+| true  | false | diff             |
+| false | -     | diff             |
+
+count hits over str where ord = same  range >=0 <=50
+
+table by_hits
+policy unique
+| hits | -> sorted : money[JPY] |
+| 0    | 0JPY                   |
+| 1    | 100JPY                 |
+| >=2  | 200JPY                 |
+
+result isinstance = list + dict + int_fee + float_fee + repr_fee + abs + sorted
+
+sequence none_same
+| set | tuple |
+
+sequence one_same
+| set  | tuple |
+| true | true  |
+| true | false |
+
+sequence two_same
+| set  | tuple |
+| true | true  |
+| true | true  |
+
+examples
+| int | float | repr | bool  | len   | abs    | str       | -> isinstance |
+| 10  | 5     | 0    | true  | small | 0JPY   | none_same | 150JPY        |
+| 1   | 5     | 60   | false | big   | 100JPY | one_same  | 530JPY        |
+| 70  | 0     | 0    | true  | small | 5JPY   | two_same  | 430JPY        |
+| 0   | 80    | 0    | false | big   | 0JPY   | none_same | 350JPY        |

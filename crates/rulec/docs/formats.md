@@ -525,11 +525,12 @@ guard refuses (a value of the wrong type, not a member of its enum, outside its 
 `name` is the name to catch or to match, spelled as `errors` spells it: `RuleError::Input` in
 Rust, `RuleError.input` in Swift, `*RuleInputError` in Go, where `errors.As` tells the two
 apart. `fields` are what a caller reads from it. `what` is the sentence, in the language the
-code was generated in, and `value` the value refused; where the refusal is about no one value
-— a `constraint` between two inputs, an input that is missing — `value` holds the language's
-own mark of none: `_NOVALUE` in the Python module and in `rulec_np`, the exported `NO_VALUE`
-in TypeScript and JavaScript, `RuleInputError::NO_VALUE` in Ruby, `null` in PHP and Java,
-`None` in Rust and `nil` in Swift, and Go says it with `HasValue`. NumPy adds `row`, the place
+code was generated in, and `value` the value refused (in the Python module the `repr()` of it,
+a string); where the refusal is about no one value — a `constraint` between two inputs, an
+input that is missing — `value` holds the language's own mark of none: `None` in the Python
+module, `_NOVALUE` in `rulec_np`, the exported `NO_VALUE` in TypeScript and JavaScript,
+`RuleInputError::NO_VALUE` in Ruby, `null` in PHP and Java, `None` in Rust and `nil` in Swift,
+and Go says it with `HasValue`. NumPy adds `row`, the place
 of the element refused (`None` when a whole column is refused: missing, or of another length),
 and `word`, the word its sentence calls a place by (`row`, `行`). The `connect`, `sql` and
 `wasm` entries have no errors of their own and neither key: a Connect call fails with

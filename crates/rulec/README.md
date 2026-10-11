@@ -91,9 +91,9 @@ def fee_demo(dest: Zone, girth: Inch, weight: Pound) -> USDInclTax:
 
 def fee_demo_traced(dest: Zone, girth: Inch, weight: Pound) -> tuple[USDInclTax, list[Fired]]:
     if not _isinstance(dest, Zone):
-        raise RuleInputError("dest is not a value of enum zone", dest)
+        raise RuleInputError("dest is not a value of enum zone", _repr(dest))
     if not 1 <= girth <= 130:
-        raise RuleInputError("girth is out of range", girth)
+        raise RuleInputError("girth is out of range", _repr(girth))
     trace: _Trace = []
     # table size_of (policy first)
     if girth <= 22:  # row 1: <=22in | envelope

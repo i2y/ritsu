@@ -1,0 +1,29 @@
+rule 集合の名前(group_names_ja) v1
+description "int という別名の集合は、モジュールの中で _int になる。これは、モジュールが組み込み関数 int に付ける名前でもある。json_str という別名の集合は、補助関数の名前になる。rulec のテストのための例で、特定の文書の転記ではない"
+
+enum 大きさ区分(size) = 小(small) | 大(big) | 特大(huge)
+group 大きいもの(int) = 大, 特大
+group 小さいか特大(json_str) = 小, 特大
+
+inputs
+  大きさ(len) : 大きさ区分
+
+outputs
+  判定甲(float)       : bool
+  判定乙(isinstance)  : bool
+
+table 甲の表(by_int)
+policy unique
+| 大きさ     | -> 判定甲(float) : bool |
+| 大きいもの | true                    |
+| 小         | false                   |
+
+table 乙の表(by_json_str)
+policy unique
+| 大きさ       | -> 判定乙(isinstance) : bool |
+| 小さいか特大 | true                         |
+| 大           | false                        |
+
+examples
+| 大きさ | -> 判定甲 | 判定乙 |
+| 小     | false     | true   |

@@ -907,7 +907,7 @@ proof says nothing about inputs the rule never declared.
 
 ```python
 if not 0 <= subtotal <= 1000000:
-    raise RuleInputError("subtotal is out of range", subtotal)
+    raise RuleInputError("subtotal is out of range", _repr(subtotal))
 ```
 
 The sentence and the value travel apart. The error carries both — `what` is the sentence,
@@ -915,7 +915,11 @@ The sentence and the value travel apart. The error carries both — `what` is th
 the message is what it always was and a caller can react to the value without parsing it
 back out of a string. The Rust error is a pair of struct variants for the same reason, and
 nothing on the refusing path formats anything, which is what lets a model checker walk it
-([the proofs](#the-proofs)).
+([the proofs](#the-proofs)). In Python `value` is a string, the `repr()` of what was
+refused (`None` when the refusal is about no one value); the message reads the same. The
+functions that hold the rule's names call the builtins under names the module gives them
+(`_isinstance = isinstance`, `_int = int`, `_repr = repr`, one line each, above the
+functions), so an input called `int` or `len` does not stand in their way.
 
 A number that is not an integer is refused before the range is looked at, in every language
 where a caller can pass one. A float sits inside any range: 18.3 for a rate declared in steps
@@ -925,8 +929,8 @@ is a column, `_input_error`, because a query cannot stop: NULL inside the domain
 sentence outside it ([below](#sql)).
 
 ```python
-if not _isinstance(rate, int) or _isinstance(rate, bool):
-    raise RuleInputError("rate is not an integer", rate)
+if not _isinstance(rate, _int) or _isinstance(rate, _bool):
+    raise RuleInputError("rate is not an integer", _repr(rate))
 ```
 
 A number whose value is whole is the integer it is, at every door (§15.205): `1000.0`, `1e3`,
@@ -938,10 +942,10 @@ float, or a whole `number` where the type says `bigint` — and goes on with the
 element of a walk as in an input:
 
 ```python
-if _isinstance(rate, float) and float(rate).is_integer():
-    rate = Rate(int(rate))
-if not _isinstance(rate, int) or _isinstance(rate, bool):
-    raise RuleInputError("rate is not an integer", rate)
+if _isinstance(rate, _float) and _float(rate).is_integer():
+    rate = Rate(_int(rate))
+if not _isinstance(rate, _int) or _isinstance(rate, _bool):
+    raise RuleInputError("rate is not an integer", _repr(rate))
 ```
 
 The readers that keep a number as its digits — Go's `json.Number`, and the readers the Rust and
@@ -965,8 +969,8 @@ the caller's object holds to that guard as it came. Before, `"false"` was true i
 languages and false in seven, and only the MCP servers refused it (§15.203).
 
 ```python
-if not _isinstance(express, bool):
-    raise RuleInputError("express is not a boolean", express)
+if not _isinstance(express, _bool):
+    raise RuleInputError("express is not a boolean", _repr(express))
 ```
 
 `rulec api` states the same bounds, taken from the same place, so an integration built from
@@ -981,10 +985,10 @@ its step are those of the type it wraps:
 
 ```python
 if ship_on is not None:
-    if not _isinstance(ship_on, int) or _isinstance(ship_on, bool):
-        raise RuleInputError("ship_on is not an integer", ship_on)
+    if not _isinstance(ship_on, _int) or _isinstance(ship_on, _bool):
+        raise RuleInputError("ship_on is not an integer", _repr(ship_on))
     if not 20454 <= ship_on <= 20818:
-        raise RuleInputError("ship_on is out of range", ship_on)
+        raise RuleInputError("ship_on is out of range", _repr(ship_on))
 ```
 
 A cell of an optional column tests a value that is there: a comparison, a literal and a set

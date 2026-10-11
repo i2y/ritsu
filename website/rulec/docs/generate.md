@@ -118,9 +118,9 @@ def fee_demo(dest: Zone, girth: Inch, weight: Pound) -> USDInclTax:
 
 def fee_demo_traced(dest: Zone, girth: Inch, weight: Pound) -> tuple[USDInclTax, list[Fired]]:
     if not _isinstance(dest, Zone):
-        raise RuleInputError("dest is not a value of enum zone", dest)
+        raise RuleInputError("dest is not a value of enum zone", _repr(dest))
     if not 1 <= girth <= 130:
-        raise RuleInputError("girth is out of range", girth)
+        raise RuleInputError("girth is out of range", _repr(girth))
     trace: _Trace = []
     # table size_of (policy first)
     if girth <= 22:  # row 1: <=22in | envelope
@@ -194,8 +194,10 @@ Four rules keep it readable.
 - **Rounding goes through its own helper**, because Python's and Ruby's
   integer division rounds toward −∞ while Rust, Swift, Go, TypeScript,
   JavaScript and SQL truncate toward zero.
-- **No builtin is called bare.** An input aliased `min` or `list` does
-  not break the output: `_min`, `_max` and `_isinstance` are generated.
+- **The functions of a rule call no builtin by its own name.** An input
+  aliased `int`, `len`, `min` or `list` does not break the output: the module
+  binds the builtins it needs to names of its own (`_isinstance`, `_int`,
+  `_len`, …) and defines `_min` and `_max`, and the functions call those.
 
 That the reference evaluator and every generated language answer the same
 is checked by streaming automatically generated boundary cases through all

@@ -1,0 +1,54 @@
+rule 組み込み関数と同じ名前の注文(builtin_names_shape_ja) v1
+description "注文オブジェクトから送料を読む。注文の形の別名が any で、これは生成した関数が「どれかが当てはまるか」を調べるのに呼ぶ Python の組み込み関数の名前でもある（all、len、sum も呼ぶ）。取り出しの関数が組み込み関数をそのままの名前で呼ばないことを、rulec のテストで確かめるための例で、特定の文書の転記ではない"
+
+shape 注文(any) = jsonschema "contracts/order.schema.json" "#/$defs/Order"
+
+enum 地域(shipping_zone) = honshu(honshu) | hokkaido(hokkaido) | okinawa(okinawa)
+
+inputs
+  あて先(zone)         : 地域  from 注文.shipping.zone
+  冷蔵あり(cold)       : bool  from any 注文.lines where chilled = true
+  全部冷蔵(all_cold)   : bool  from all 注文.lines where chilled = true
+  明細数(lines)        : number  range >=1 <=50  from count 注文.lines
+  冷蔵の明細数(cold_lines) : number  range >=0 <=50  from count 注文.lines where chilled = true
+
+outputs
+  送料(fee) : money[円]  round up(10円)
+
+table 地域別(by_zone)
+policy unique
+| あて先   | -> 地域料(zone_fee) : money[円] |
+| honshu   | 800円                           |
+| hokkaido | 1200円                          |
+| okinawa  | 1500円                          |
+
+table 冷蔵の加算(cold_extra)
+policy unique
+| 冷蔵あり | 全部冷蔵 | -> 冷蔵料(cold_fee) : money[円] |
+| true     | true     | 400円                           |
+| true     | false    | 500円                           |
+| false    | -        | 0円                             |
+
+table 明細数の加算(bulk_extra)
+policy unique
+| 明細数 | -> 明細料(bulk_fee) : money[円] |
+| >10    | 200円                           |
+| <=10   | 0円                             |
+
+table 冷蔵件数の加算(cold_count)
+policy unique
+| 冷蔵の明細数 | -> 件数料(count_fee) : money[円] |
+| 0            | 0円                              |
+| 1            | 30円                             |
+| >=2          | 60円                             |
+
+define 合計(total) : money[円] = 地域料 + 冷蔵料 + 明細料 + 件数料
+
+result 送料 = 合計
+
+examples
+| あて先   | 冷蔵あり | 全部冷蔵 | 明細数 | 冷蔵の明細数 | -> 送料 |
+| honshu   | false    | false    | 1      | 0            | 800円   |
+| honshu   | true     | true     | 1      | 1            | 1230円  |
+| okinawa  | true     | false    | 11     | 2            | 2260円  |
+| hokkaido | false    | false    | 10     | 0            | 1200円  |

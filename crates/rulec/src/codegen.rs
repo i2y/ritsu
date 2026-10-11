@@ -906,6 +906,15 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// The constant the module holds a group in: `_remote` for `remote`. A group called `int` or
+    /// `len` would make `_int` or `_len`, the names the module gives the builtins (§15.207), and
+    /// one called `min` or `json_str` the module's own helpers; such a name gets one more `_`.
+    fn py_group(&self, name: &str) -> String {
+        let id = format!("_{}", self.ident(name));
+        let taken = PY_BUILTINS.iter().any(|(alias, _)| *alias == id) || PY_HELPERS.contains(&id.as_str());
+        if taken { format!("{id}_") } else { id }
+    }
+
     /// Render a cell as a Python condition. A don't-care yields None (no condition).
     fn py_cell(&self, cell: &Cell, var: &str, ty: &Ty, col_scale: i128) -> Option<String> {
         let inner = match ty {
@@ -947,7 +956,7 @@ impl<'a> Gen<'a> {
             // A cell that names one group uses the set the module already declares, rather
             // than writing the members out again — otherwise that set is dead code.
             Cell::Lit(Lit::Word(w)) if self.c.groups.contains_key(w) => {
-                format!("{var} in _{}", self.ident(w))
+                format!("{var} in {}", self.py_group(w))
             }
             // An optional truth value is `None` when it is absent, and `not None` is true: the
             // `false` row took the absent value (§15.201).
@@ -959,7 +968,7 @@ impl<'a> Gen<'a> {
             Cell::Set(ls) => format!("{var} in {}", members(ls)),
             Cell::Not(ls) if ls.len() == 1 && matches!(&ls[0], Lit::Word(w) if self.c.groups.contains_key(w)) => {
                 let Lit::Word(w) = &ls[0] else { unreachable!() };
-                format!("{var} not in _{}", self.ident(w))
+                format!("{var} not in {}", self.py_group(w))
             }
             Cell::Not(ls) => format!("{var} not in {}", members(ls)),
             Cell::Cmp(cs) => {
@@ -1041,17 +1050,24 @@ impl<'a> Gen<'a> {
             ));
         }
 
-        // The sentence and the value travel apart (§15.95): nothing is formatted until the
-        // error is printed, and a caller that wants the value does not parse it back out.
+        // The sentence and the value travel apart (§15.95): the sentence and the value are put
+        // together only when the error is printed, and a caller that wants the value does not
+        // parse it back out. The value is the `repr()` of what was refused, taken where it is
+        // refused and held as a `str`, with `None` for a refusal about no one value (§15.207):
+        // an error that took any object, and a sentinel to say "no value", is a type and a
+        // statement that code compiled ahead of time cannot have. The message is the same.
         o.push_str(&format!(
-            "_NOVALUE = object()\n\n\nclass RuleInputError(ValueError):\n    \"\"\"{}\"\"\"\n\n\
-             \x20   def __init__(self, what: str, value: object = _NOVALUE) -> None:\n\
+            "class RuleInputError(ValueError):\n    \"\"\"{}\"\"\"\n\n\
+             \x20   def __init__(self, what: str, value: str | None = None) -> None:\n\
              \x20       super().__init__(what)\n\
              \x20       self.what = what\n\
              \x20       self.value = value\n\n\
              \x20   def __str__(self) -> str:\n\
-             \x20       return self.what if self.value is _NOVALUE else f\"{{self.what}}: {{self.value!r}}\"\n\n",
-            tr!("宣言した範囲の外。呼び出し側の契約違反。", "Outside the declared input domain: a contract violation by the caller.")
+             \x20       return self.what if self.value is None else f\"{{self.what}}: {{self.value}}\"\n\n",
+            tr!(
+                "宣言した範囲の外。呼び出し側の契約違反。value は受け付けなかった値の repr() で、特定の値が理由でないときは None。",
+                "Outside the declared input domain: a contract violation by the caller. `value` is the repr() of the value refused, or None when the refusal is about no one value."
+            )
         ));
         o.push_str(&format!(
             "class RuleContradictionError(AssertionError):\n    \"\"\"{}\"\"\"\n\n\
@@ -1072,22 +1088,92 @@ impl<'a> Gen<'a> {
         // Groups
         for g in &self.f.groups {
             let ms: Vec<String> = g.members.iter().map(|m| self.py_value(&m.text, &self.group_ty(&g.name.text))).collect();
-            o.push_str(&format!("_{} = frozenset({{{}}})\n", self.ident(&g.name.text), ms.join(", ")));
+            o.push_str(&format!("{} = frozenset({{{}}})\n", self.py_group(&g.name.text), ms.join(", ")));
         }
         if !self.f.groups.is_empty() {
             o.push('\n');
         }
 
-        o.push_str(&round_py());
-        o.push_str(&self.py_fn());
-        o.push_str("\n\n");
-        o.push_str(&self.py_record());
+        // The functions first: which builtins they call decides which names are bound above them.
+        let mut body = round_py();
+        body.push_str(&self.py_fn());
+        body.push_str("\n\n");
+        body.push_str(&self.py_record());
         if self.projects() {
-            o.push_str("\n\n");
-            o.push_str(&self.py_from());
+            body.push_str("\n\n");
+            body.push_str(&self.py_from());
         }
+        o.push_str(&py_builtins(&body));
+        o.push_str(&body);
         pep8_blanks(&o)
     }
+}
+
+/// The builtins the functions that hold the rule's names call, and the name the module gives
+/// each (§15.207). Such a function reaches a builtin only through its name here, so a name the
+/// rule declares (an input aliased `int`, a table output called `len`) cannot stand in its way:
+/// the function the rule's alias names, its traced twin, the record function and the
+/// projection function have those names in scope. The helpers below them (rounding, `_json_str`,
+/// `_proto`, …) have none, and call the builtins as they are; an alias of the rule or of an
+/// enum that hides a builtin is W121's. `min` and `max` are the rule language's own functions
+/// and are written as `_min` and `_max`.
+const PY_BUILTINS: [(&str, &str); 10] = [
+    ("_isinstance", "isinstance"),
+    ("_int", "int"),
+    ("_float", "float"),
+    ("_bool", "bool"),
+    ("_str", "str"),
+    ("_repr", "repr"),
+    ("_len", "len"),
+    ("_any", "any"),
+    ("_all", "all"),
+    ("_sum", "sum"),
+];
+
+/// The other names the module defines at its top level beside the bound builtins: the helpers.
+const PY_HELPERS: [&str; 13] = [
+    "_Trace",
+    "_min",
+    "_max",
+    "_round_down",
+    "_round_up",
+    "_round_half",
+    "_round_half_down",
+    "_round_bankers",
+    "_json_str",
+    "_civil",
+    "_proto",
+    "_dig",
+    "_days",
+];
+
+/// Whether `word` stands in `text` as a name of its own, not as part of a longer one.
+fn has_word(text: &str, word: &str) -> bool {
+    let part = |c: char| c.is_alphanumeric() || c == '_';
+    text.match_indices(word).any(|(i, _)| {
+        !text[..i].chars().next_back().is_some_and(part) && !text[i + word.len()..].chars().next().is_some_and(part)
+    })
+}
+
+/// The bindings of the builtins that `body` calls, under the comment that says why: one line
+/// each (`_int = int`), and only the ones the module uses.
+fn py_builtins(body: &str) -> String {
+    let used: String =
+        PY_BUILTINS.iter().filter(|(alias, _)| has_word(body, alias)).map(|(alias, name)| format!("{alias} = {name}\n")).collect();
+    if used.is_empty() {
+        return String::new();
+    }
+    format!(
+        "{}\n{used}\n",
+        tr!(
+            "# 規則の名前を持つ関数は、組み込み関数を、ここで付けた名前（`_int = int` など）か、下の補助関数\n\
+             # （`_min`、`_max`）でしか呼ばない。入力・定義・表の出力の別名が `int`、`len`、`min`、\n\
+             # `list` のような名前でも、壊れないようにするため。",
+            "# A function that holds the rule's names calls a builtin function only through a name bound\n\
+             # here (`_int = int` and the like) or through a helper below (`_min`, `_max`), so that an\n\
+             # input, a definition or a table output aliased `int`, `len`, `min` or `list` does not break it."
+        )
+    )
 }
 
 /// The five modes of §7.3. Negative values and exact halves are pinned to the spec as well;
@@ -1096,10 +1182,6 @@ impl<'a> Gen<'a> {
 fn round_py() -> String {
     format!(
         r#"
-{note}
-_isinstance = isinstance
-
-
 def _min(a: int, b: int) -> int:
     return a if a < b else b
 
@@ -1144,11 +1226,6 @@ def _round_bankers(x: int, g: int) -> int:
     return -v if x < 0 else v
 
 "#,
-        note = tr!(
-            "# 生成コードは組み込み関数を名前だけで呼ばない。入力の ASCII 別名が `min` や `list` の\n# ような名前でも壊れないようにするため（この種の衝突をまとめて防ぐ）。",
-            "# Generated code never calls a builtin bare, so that an input whose ASCII alias is a\n\
-             # name like `min` or `list` does not break it (the whole family of collisions is gone)."
-        ),
         down = tr!("0 へ寄せる。-4.8円 → -4円。", "Toward zero: -4.8 yen → -4 yen."),
         up = tr!("0 から遠ざける。-4.2円 → -5円。", "Away from zero: -4.2 yen → -5 yen."),
         half = tr!("半分ちょうどは 0 から遠ざける。", "An exact half goes away from zero."),
@@ -1370,7 +1447,7 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         if let Some(cap) = self.count_cap() {
             o.push_str(&format!(
-                "    if len({seq}) > {cap}:\n        raise RuleInputError(\"{}\", len({seq}))\n",
+                "    if _len({seq}) > {cap}:\n        raise RuleInputError(\"{}\", _repr(_len({seq})))\n",
                 crate::door::too_many(&el.name.text, cap)
             ));
         }
@@ -1409,7 +1486,7 @@ impl<'a> Gen<'a> {
         for (d, cap) in self.sum_caps() {
             let n = self.ident(&d.name.text);
             o.push_str(&format!(
-                "    if {n} > {cap}:\n        raise RuleInputError(\"{}\", {n})\n",
+                "    if {n} > {cap}:\n        raise RuleInputError(\"{}\", _repr({n}))\n",
                 crate::door::out_of_range(&d.name.text)
             ));
         }
@@ -1430,12 +1507,12 @@ impl<'a> Gen<'a> {
             let mut o = Guarded::new(&mut o, optional.then(|| (format!("    if {v} is not None:\n"), String::new())), "    ");
             match &ty {
                 Ty::Enum(n) => o.push_str(&format!(
-                    "    if not _isinstance({v}, {}):\n        raise RuleInputError(\"{}\", {v})\n",
+                    "    if not _isinstance({v}, {}):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
                     self.py_ty(&ty),
                     crate::door::not_in_enum(&i.name.text, n)
                 )),
                 Ty::Bool => o.push_str(&format!(
-                    "    if not _isinstance({v}, bool):\n        raise RuleInputError(\"{}\", {v})\n",
+                    "    if not _isinstance({v}, _bool):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
                     not_bool(&i.name.text)
                 )),
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
@@ -1444,20 +1521,20 @@ impl<'a> Gen<'a> {
                     if ty != Ty::Date {
                         if let Some((e, field)) = v.rsplit_once('.') {
                             let to = self.py_ty(&ty);
-                            let int = if to == "int" { format!("int({v})") } else { format!("{to}(int({v}))") };
+                            let int = if to == "int" { format!("_int({v})") } else { format!("{to}(_int({v}))") };
                             o.push_str(&format!(
-                                "    if _isinstance({v}, float) and float({v}).is_integer():\n        {e} = {e}._replace({field}={int})\n"
+                                "    if _isinstance({v}, _float) and _float({v}).is_integer():\n        {e} = {e}._replace({field}={int})\n"
                             ));
                         }
                     }
                     o.push_str(&format!(
-                        "    if not _isinstance({v}, int) or _isinstance({v}, bool):\n        raise RuleInputError(\"{}\", {v})\n",
+                        "    if not _isinstance({v}, _int) or _isinstance({v}, _bool):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
                         crate::door::not_integer(&i.name.text)
                     ));
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                         let sc = self.c.wire_scale(&i.name.text);
                         o.push_str(&format!(
-                            "    if not {} <= {v} <= {}:\n        raise RuleInputError(\"{}\", {v})\n",
+                            "    if not {} <= {v} <= {}:\n        raise RuleInputError(\"{}\", _repr({v}))\n",
                             crate::types::wire_int(lo, sc),
                             crate::types::wire_int(hi, sc),
                             crate::door::out_of_range(&i.name.text)
@@ -1474,8 +1551,8 @@ impl<'a> Gen<'a> {
     /// it is before the integer check (§15.205), and kept as the type the parameter declares.
     fn py_whole(&self, v: &str, ty: &Ty) -> String {
         let to = self.py_ty(ty);
-        let int = if to == "int" { format!("int({v})") } else { format!("{to}(int({v}))") };
-        format!("    if _isinstance({v}, float) and float({v}).is_integer():\n        {v} = {int}\n")
+        let int = if to == "int" { format!("_int({v})") } else { format!("{to}(_int({v}))") };
+        format!("    if _isinstance({v}, _float) and _float({v}).is_integer():\n        {v} = {int}\n")
     }
 
     fn py_fn(&self) -> String {
@@ -1550,13 +1627,13 @@ impl<'a> Gen<'a> {
             match &ty {
                 // The enum by the name the rule declares it under, as every door says it (§15.204).
                 Ty::Enum(n) => o.push_str(&format!(
-                    "    if not _isinstance({v}, {}):\n        raise RuleInputError(\"{}\", {v})\n",
+                    "    if not _isinstance({v}, {}):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
                     self.py_ty(&ty),
                     crate::door::not_in_enum(&i.name.text, n)
                 )),
                 // A truth value is `True` or `False` and nothing else (§15.203).
                 Ty::Bool => o.push_str(&format!(
-                    "    if not _isinstance({v}, bool):\n        raise RuleInputError(\"{}\", {v})\n",
+                    "    if not _isinstance({v}, _bool):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
                     not_bool(&i.name.text)
                 )),
                 // A date is an ordinal, and its declared range is the universe the
@@ -1574,7 +1651,7 @@ impl<'a> Gen<'a> {
                         o.push_str(&self.py_whole(&v, &ty));
                     }
                     o.push_str(&format!(
-                        "    if not _isinstance({v}, int) or _isinstance({v}, bool):\n        raise RuleInputError(\"{}\", {v})\n",
+                        "    if not _isinstance({v}, _int) or _isinstance({v}, _bool):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
                         crate::door::not_integer(&i.name.text)
                     ));
                     if let Some((lo, hi)) = self.c.ranges.get(&i.name.text) {
@@ -1585,7 +1662,7 @@ impl<'a> Gen<'a> {
                             // value above one step.
                             let sc = self.c.wire_scale(&i.name.text);
                             o.push_str(&format!(
-                                "    if not {} <= {v} <= {}:\n        raise RuleInputError(\"{}\", {v})\n",
+                                "    if not {} <= {v} <= {}:\n        raise RuleInputError(\"{}\", _repr({v}))\n",
                                 crate::types::wire_int(*lo, sc),
                                 crate::types::wire_int(*hi, sc),
                                 crate::door::out_of_range(&i.name.text)
@@ -2970,36 +3047,52 @@ fn unparen(s: &str) -> &str {
 /// Fix up PEP 8 blank lines (E301–E305) in one place. Output assembly is scattered across the
 /// generator, and forgetting a single blank line turns the formatter red. Rather than being
 /// careful at every emitting site, run one pass at the end: two blank lines around top-level
-/// `class` / `def` / decorators, at most one before any other top-level statement.
+/// `class` / `def` / decorators, at most one before any other top-level statement. A comment
+/// stays against what it is about: the lines of one comment are not parted, and the line under
+/// it is not parted from it. Nor is a run of names bound to other names (`_int = int`).
 fn pep8_blanks(src: &str) -> String {
     let lines: Vec<&str> = src.trim_end().split('\n').collect();
+    let top = |l: &str| !l.is_empty() && !l.starts_with(char::is_whitespace);
+    let is_def = |l: &str| l.starts_with("class ") || l.starts_with("def ") || l.starts_with('@');
+    let is_name = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_alphanumeric() || c == '_');
+    let is_binding = |l: &str| l.split_once(" = ").is_some_and(|(a, b)| is_name(a) && is_name(b));
     let mut out: Vec<String> = Vec::new();
     let mut in_block = false; // whether the previous top-level construct was a def / class body
     // the comments the file begins with, the head (ritsu's DESIGN 9.2), stay together
     let mut in_head = true;
-    for line in lines {
-        let top = !line.is_empty() && !line.starts_with(char::is_whitespace);
+    let mut after_comment = false; // the previous top-level line is a comment, and not of the head
+    let mut after_binding = false; // the previous top-level line binds a name to another name
+    for (i, line) in lines.iter().enumerate() {
         if line.trim().is_empty() {
             in_head = false;
             continue; // blank lines are dropped and reinserted where needed
         }
         in_head = in_head && line.starts_with('#');
-        if top {
-            let starts = line.starts_with("class ")
-                || line.starts_with("def ")
-                || line.starts_with('@');
-            let want = if in_head { 0 } else if starts || in_block { 2 } else { 1 };
+        if top(line) {
+            let comment = line.starts_with('#');
+            // A comment is about the line under it, and that decides what stands above the comment.
+            let about = if comment { lines[i + 1..].iter().find(|l| top(l) && !l.starts_with('#')).unwrap_or(&"") } else { line };
+            let starts = is_def(about);
+            let want = if in_head || after_comment || (after_binding && is_binding(line)) {
+                0
+            } else if starts || in_block {
+                2
+            } else {
+                1
+            };
             if !out.is_empty() {
                 let have = out.iter().rev().take_while(|l| l.is_empty()).count();
                 for _ in have..want {
                     out.push(String::new());
                 }
             }
-            if starts {
+            if is_def(line) {
                 in_block = true;
-            } else if !line.starts_with('#') {
+            } else if !comment {
                 in_block = false;
             }
+            after_comment = comment && !in_head;
+            after_binding = !comment && is_binding(line);
         }
         out.push(line.to_string());
     }
@@ -5866,48 +5959,48 @@ def _int(v: Any, what: str) -> int:
     if isinstance(v, float) and v.is_integer():
         return int(v)
     if not isinstance(v, int) or isinstance(v, bool):
-        raise m.RuleInputError(what, v)
+        raise m.RuleInputError(what, repr(v))
     return v
 
 
 def _bool(v: Any, what: str) -> bool:
     if not isinstance(v, bool):
-        raise m.RuleInputError(what, v)
+        raise m.RuleInputError(what, repr(v))
     return v
 
 
 def _str(v: Any, what: str) -> str:
     if not isinstance(v, str):
-        raise m.RuleInputError(what, v)
+        raise m.RuleInputError(what, repr(v))
     return v
 
 
 def _date(v: Any, what: str) -> int:
     digits = isinstance(v, str) and len(v) == 10 and v[4] == "-" and v[7] == "-"
     if not digits or not all(c in "0123456789" for c in v[:4] + v[5:7] + v[8:]):
-        raise m.RuleInputError(what, v)
+        raise m.RuleInputError(what, repr(v))
     try:
         return _ord(v)
     except ValueError:
-        raise m.RuleInputError(what, v) from None
+        raise m.RuleInputError(what, repr(v)) from None
 
 
 def _enum(cls: type[E], v: Any, what: str) -> E:
     try:
         return cls(v)
     except (ValueError, TypeError):
-        raise m.RuleInputError(what, v) from None
+        raise m.RuleInputError(what, repr(v)) from None
 
 
 def _seq(v: Any, what: str) -> list[Any]:
     if not isinstance(v, list):
-        raise m.RuleInputError(what, v)
+        raise m.RuleInputError(what, repr(v))
     return v
 
 
 def _obj(v: Any, what: str) -> dict[str, Any]:
     if not isinstance(v, dict):
-        raise m.RuleInputError(what, v)
+        raise m.RuleInputError(what, repr(v))
     return v
 
 
@@ -6841,7 +6934,7 @@ pub fn round_tests_python() -> String {
     let mut o = format!(
         "# Code generated by rulec {}. DO NOT EDIT.\n\
          # {}\n\
-         import sys\n\n",
+         import sys\n\n\n",
         ritsu_emit::header::VERSION,
         tr!(
             "丸めの五つのモード。負の向きと半分ちょうどまで、Rust の参照実装と突き合わせる。",
@@ -11111,7 +11204,7 @@ impl<'a> Gen<'a> {
             (Some((_, c)), Some((j, n, z))) => {
                 let at = if j == n { format!("_e.get({j:?}, {})", lit(z)) } else { format!("_e.get({j:?}, _e.get({n:?}, {}))", lit(z)) };
                 // protojson writes a 64-bit integer as a string.
-                let at = if *z == crate::projection::Zero::Int { format!("int({at})") } else { at };
+                let at = if *z == crate::projection::Zero::Int { format!("_int({at})") } else { at };
                 elem_cond(c, &at, &syn)
             }
             (Some((fd, c)), None) => elem_cond(c, &format!("_e[{:?}]", fd.text), &syn),
@@ -11119,10 +11212,10 @@ impl<'a> Gen<'a> {
         };
         match p.kind {
             crate::ast::ProjKind::Field => self.py_take(&p.ty, walk),
-            crate::ast::ProjKind::Any(..) => format!("any({} for _e in {walk})", cond()),
-            crate::ast::ProjKind::All(..) => format!("all({} for _e in {walk})", cond()),
-            crate::ast::ProjKind::Count(None) => format!("len({walk})"),
-            crate::ast::ProjKind::Count(Some(_)) => format!("sum(1 for _e in {walk} if {})", cond()),
+            crate::ast::ProjKind::Any(..) => format!("_any({} for _e in {walk})", cond()),
+            crate::ast::ProjKind::All(..) => format!("_all({} for _e in {walk})", cond()),
+            crate::ast::ProjKind::Count(None) => format!("_len({walk})"),
+            crate::ast::ProjKind::Count(Some(_)) => format!("_sum(1 for _e in {walk} if {})", cond()),
         }
     }
 
@@ -11219,10 +11312,10 @@ impl<'a> Gen<'a> {
             // is true (§15.203).
             Ty::Bool => expr,
             Ty::Date => format!("_days({expr})"),
-            Ty::Str => format!("str({expr})"),
-            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("{}(int({expr}))", brand_of(ty)),
+            Ty::Str => format!("_str({expr})"),
+            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("{}(_int({expr}))", brand_of(ty)),
             Ty::Opt(inner) => format!("(None if {expr} is None else {})", self.py_take(inner, expr.clone())),
-            _ => format!("int({expr})"),
+            _ => format!("_int({expr})"),
         }
     }
 
@@ -11252,10 +11345,10 @@ impl<'a> Gen<'a> {
                 format!("_dig({root}, {})", p.path.iter().map(|s| format!("{s:?}")).collect::<Vec<_>>().join(", ")),
             ),
             crate::ast::ProjKind::Field => self.py_take(&p.ty, walk),
-            crate::ast::ProjKind::Any(..) => format!("any({} for _e in {walk})", cond(p.kind.test())),
-            crate::ast::ProjKind::All(..) => format!("all({} for _e in {walk})", cond(p.kind.test())),
-            crate::ast::ProjKind::Count(None) => format!("len({walk})"),
-            crate::ast::ProjKind::Count(Some(_)) => format!("sum(1 for _e in {walk} if {})", cond(p.kind.test())),
+            crate::ast::ProjKind::Any(..) => format!("_any({} for _e in {walk})", cond(p.kind.test())),
+            crate::ast::ProjKind::All(..) => format!("_all({} for _e in {walk})", cond(p.kind.test())),
+            crate::ast::ProjKind::Count(None) => format!("_len({walk})"),
+            crate::ast::ProjKind::Count(Some(_)) => format!("_sum(1 for _e in {walk} if {})", cond(p.kind.test())),
         }
     }
 

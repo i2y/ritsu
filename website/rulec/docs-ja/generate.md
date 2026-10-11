@@ -66,9 +66,9 @@ def fee_demo(dest: Prefecture, girth: Cm, weight: Gram) -> YenInclTax:
 
 def fee_demo_traced(dest: Prefecture, girth: Cm, weight: Gram) -> tuple[YenInclTax, list[Fired]]:
     if not _isinstance(dest, Prefecture):
-        raise RuleInputError("あて先 is not a value of enum 都道府県", dest)
+        raise RuleInputError("あて先 is not a value of enum 都道府県", _repr(dest))
     if not 1 <= girth <= 100:
-        raise RuleInputError("三辺合計 is out of range", girth)
+        raise RuleInputError("三辺合計 is out of range", _repr(girth))
     trace: _Trace = []
     # table サイズ判定 (policy first)
     if girth <= 60:  # row 1: <=60cm | S60
@@ -124,7 +124,7 @@ func FeeDemoTraced(in Input) (YenInclTax, []Fired, error) {
 - **セルを省略しません。** 手前の分岐で真とわかる条件も書きます（`elif True:` はそのため）。もとの表の行と目で突き合わせられることが、生成物の唯一の読み方です。
 - **単位は型に載せます。** Rust は newtype、Swift は値が一つだけの struct、Go は defined type、TypeScript は branded bigint、Python は `NewType`、Wasm のモジュールは Rust のものなので同じ newtype。`YenInclTax` と `YenExclTax` を取り違えるとコンパイルで止まります。Ruby・PHP・JavaScript・Java・SQL は単位を置ける型が無いので、そこは注記で伝えます。ただし PHP と Java は引数の種類そのものは宣言するので、入口の検査は範囲だけで済みます。
 - **丸めは自前のヘルパで行います。** Python と Ruby の整数除算は −∞ 方向、Rust・Swift・Go・Java・TypeScript・JavaScript・PHP の `intdiv`・SQL は 0 方向で食い違うので、言語の素の除算には任せません。
-- **言語の組み込み関数をそのまま呼びません。** 入力のエイリアスが `min` や `list` でも壊れないよう、`_min` `_max` `_isinstance` を生成側に持っています。
+- **規則の関数は、組み込み関数をそのままの名前で呼びません。** 入力のエイリアスが `int`、`len`、`min`、`list` でも壊れないよう、モジュールは使う組み込み関数に `_isinstance`、`_int`、`_len` などの名前を付け、`_min` と `_max` を定義して、関数はそちらを呼びます。
 
 参照評価器（rulec の中にある「正解」の実装）と生成した各言語が同じ答えを返すことは、境界から自動で作ったテストケースを全部に流し、**決まった形の JSON にしてバイト単位で**突き合わせて確かめています。
 
