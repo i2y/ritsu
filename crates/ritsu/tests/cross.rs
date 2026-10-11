@@ -35,7 +35,10 @@
 //! - X16 (what a workflow calls, against what the gate that names it allows it): `returns` — the
 //!   workflow refunds a returned order: allowed when the order has come back, and the task declares
 //!   the error of a denial (held); allowed in no combination (E908); allowed in some, the task
-//!   declaring nothing (W909); allowed to look at an order too, which it never does (W908).
+//!   declaring nothing (W909); allowed to look at an order too, which it never does (W908). Its
+//!   permit can read another action's answer (sekisho's `allowed`): the workflow refunds a returned
+//!   order unless it would be allowed to have the refund reviewed, which it is for a disputed
+//!   order (held, the answer counted with what decides it).
 //!
 //! The day a flow's date call is given from its own input says nothing of what day it is (W205):
 //! the projects of X3 (a) and X5 show it alongside what they are about.
@@ -269,5 +272,26 @@ fn x16_what_a_workflow_calls() {
     run("x16-E908", &changed("E908", &[]), 1, (0, 1, 0), &mut failures);
     run("x16-W909", &changed("W909", &[]), 0, (0, 0, 1), &mut failures);
     run("x16-W908", &changed("W908", &[]), 0, (1, 0, 0), &mut failures);
+    // held, with the workflow's permit reading another action's answer: it refunds a returned
+    // order unless it would be allowed to have the refund reviewed, which it is for a disputed one
+    let allowed = changed(
+        "W909",
+        &[
+            ("returns.flow", "  key\n", "  errors denied = 403\n  key\n"),
+            ("returns.flow", "  refund_order(orderId: order)\n", "  refund_order(orderId: order)\n    on denied => fail Denied \"the gate did not let the workflow refund\"\n"),
+            ("refunds.gate", "    status : order_status\n", "    status   : order_status\n    disputed : bool\n"),
+            (
+                "refunds.gate",
+                "\npermit clerks_refund\n",
+                "\naction review_refund\n  description \"Have a refund looked at by a person before it is made\"\n  principal User, Workflow\n  resource Order from orderId\n\npermit clerks_refund\n",
+            ),
+            (
+                "refunds.gate",
+                "  description \"The returns workflow refunds an order that has come back\"\n  principal is workflow returns\n  action refund_order\n  when resource.status is returned\n",
+                "  description \"The returns workflow refunds an order that has come back, unless the refund is to be reviewed\"\n  principal is workflow returns\n  action refund_order\n  when resource.status is returned\n  unless allowed review_refund\n\npermit returns_has_disputed_refunds_reviewed\n  description \"The returns workflow has the refund of a disputed order reviewed\"\n  principal is workflow returns\n  action review_refund\n  when resource.disputed\n",
+            ),
+        ],
+    );
+    run("x16-allowed", &allowed, 0, (1, 0, 0), &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

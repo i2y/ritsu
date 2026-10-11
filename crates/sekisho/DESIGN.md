@@ -330,6 +330,7 @@ Cedar のポリシーは、ほかの action の判断を条件に書けない。
 - **一つの action で一通り**：一つの action が同じ action を違う入力で尋ねれば、E110 である（`unless allowed approve` と `when allowed approve(amount: 100GBP)`）。Cedar の context では、`allowed_approve` は一つの値だからである。違う入力で尋ねたいときは、action を分ける。
 - **Cedar に届く形**：ポリシーが読む `allowed approve` は、context の `allowed_approve`（真偽。省けない）になる（5.1）。生成したコードは、`approve` を同じ principal、resource、時刻で `approve` の関数に尋ね、答えを context に入れる（5.3）。`approve` を尋ねて拒まれたとき（リクエストを組み立てられなかったとき）は、同じ種類で、この action も拒む（3.8、P8）。期待だけが読む `allowed` は、Cedar に渡さず、生成したコードも尋ねない。
 - **`today`**：尋ねる action が `today` を読めば、尋ねる側も `today` を範囲で確かめる（5.3 の 2）。範囲の外の日には、どちらも同じ `today` で拒む。
+- **ワークフロー（X16）**：口 `Gates::allowed` は検査と同じ歩きで答えるので、ワークフローの permit が `allowed` を読んでも、X16 は同じ数え方で、呼び出しが許されるかを言う（4.6）。
 
 **数え方：二つの action をいっしょに歩く。** この action の組み合わせを数えるとき、尋ねる action のポリシーが読むものも、同じ組み合わせの値として数える。principal と resource は同じなので、属性、役割、関係は、一つの値を両方の action が読む。尋ねる action の入力は、渡したもの（この action の入力、属性、定数、`today`）に置き換え、尋ねる action の計算した値は、その入力から計算した値として数える。同じ規則を同じ値で計算する二つの値は、一つの値と数える（例の `approve` の `band` と `request_approval` の `band` は、同じ金額と同じ上限で同じ規則を計算する）。`allowed approve` は、組み合わせごとに、`approve` のポリシーから Cedar と同じ読み方で決まる（forbid が一つでも当てはまれば拒み、そうでなく permit が一つでも当てはまれば許す）。だから答えは組み合わせごとに一つに決まり、組み合わせの数は増えず、多めに数えることもない。尋ねる action がさらに `allowed` を読めば、その先も同じに歩く（輪は E109 で止めてある）。
 
@@ -623,7 +624,7 @@ ritsu-cross に置き、口だけを通す（ritsu の DESIGN 7 章）。番号�
   - W908：ワークフローが許される action のうち、フローがどこでも呼ばない操作のもの（要るより多く許している）。
 - 例：ワークフロー `returns` は `refund_order` を 32 通りのうち 4 通りで許され、28 通りで拒まれる。タスク `refund_order` は `errors denied = 403` を宣言しているので W909 は出ない。許されて呼ばないものは無い（試作の出力）。
 
-**段階 D で作った形（2026-10-06）**：ritsu-cross の `src/gates.rs`。コードは ritsu の台帳（ritsu-cross の `src/codes.rs`）にあり、再現は英語と日本語の版のプロジェクトである。`crates/ritsu/tests/cross.rs` が、通るもの（手で書いた Cedar の組が操作を守るもので、組を地図が指すものと要件が指すものを含む）と五つのコードのそれぞれを、出力の golden と境界の数で確かめる。
+**段階 D で作った形（2026-10-06）**：ritsu-cross の `src/gates.rs`。コードは ritsu の台帳（ritsu-cross の `src/codes.rs`）にあり、再現は英語と日本語の版のプロジェクトである。`crates/ritsu/tests/cross.rs` が、通るもの（手で書いた Cedar の組が操作を守るもので、組を地図が指すものと要件が指すものを含む）と五つのコードのそれぞれを、出力の golden と境界の数で確かめる。2026-10-11 に、ワークフローの permit がほかの action の答えを読む形（`x16-allowed`。返品のワークフローは、戻った注文を返金するが、返金の見直しを許される注文（異議のある注文）は返金しない）を足した。呼び出しは組み合わせによって許され、タスクが拒まれたときのエラーを宣言しているので、境界が一つ通る。
 
 - 読むゲートは、プロジェクトの `.gate` の全部と、地図の `owns` と要件が指す Cedar の組（1.3）である。口 `Gates::facts` が答えないゲート（検査を通らない `.gate`、読めない組）は、その言語の検査が理由を言うので、X15 と X16 は黙って外す。
 - X15 は、プロジェクトに `.gate` か Cedar の組が一つでもあるときだけ見る。sekisho で認可を書いていないプロジェクトでは、地図の全部のコンテキストが W907 になり、何も教えない警告で埋まるからである。見るのは、sakai の段 1 と段 2（構文と属し方）を通る地図の `published_operations`（8.3）である。守る action は、どのゲートのものも数える（ほかのコンテキストの操作を守るゲートは、sakai が E211 で言う）。答えないゲートが属するコンテキストは見ない。
