@@ -1719,16 +1719,16 @@ policy unique
 /// E066 (§15.212): a file of enums that holds a table.
 const X_E066: &str = "enums 区分(kinds) v1\n\n\
                       enum 区分(kind) = 冷蔵(chilled) | 常温(ambient)\n\n\
-                      table 送料(fee)\npolicy unique\n| 区分 | -> 送料 : number |\n| -    | 1               |\n";
+                      table 送料(fee)\npolicy unique\n| 区分 | -> 送料 : number |\n| -    | 1                |\n";
 const X_E066_EN: &str = "enums kinds v1\n\n\
                       enum kind = chilled | ambient\n\n\
                       table fee\npolicy unique\n| kind | -> fee : number |\n| -    | 1               |\n";
 /// E069 (§15.210): a comparison on an enum whose values are separated by `|`.
 const X_E069: &str = "rule 会員送料(member_fee) v1\n\n\
-                      enum 段階(tier) = 一般(basic) | 銀(silver) | 金(gold)\n\n\
+                      enum 段階(tier) = 一般(basic) | シルバー(silver) | ゴールド(gold)\n\n\
                       inputs\n  会員(member) : 段階\n\n\
                       outputs\n  送料(fee) : money[円]  round down(1円)\n\n\
-                      table 送料表(fees)\npolicy unique\n| 会員 | -> 送料 |\n| >=銀 | 0円    |\n| 一般 | 500円  |\n";
+                      table 送料表(fees)\npolicy unique\n| 会員       | -> 送料 |\n| >=シルバー | 0円     |\n| 一般       | 500円   |\n";
 const X_E069_EN: &str = "rule member_fee v1\n\n\
                       enum tier = basic | silver | gold\n\n\
                       inputs\n  member : tier\n\n\
@@ -2784,7 +2784,7 @@ pub fn ledger() -> Vec<Entry> {
                 "A cell that compares (`<v`, `>=v`) is written in a column of an enum whose values are separated by `|`, and so have no order; or two values of such an enum are compared with `<` and the like, passed to `max` or `min`, or held to a range on an input. Or one enum separates its values with both `<` and `|`. Or a range lets no value in, or an enum field of an element is given a range. Or a value's display name is empty or holds a control character, or two values of one enum have the same display name. The values of an enum separated by `<` are ordered as written, and a comparison takes the values before (after) the one it is against."
             ),
             tr!(
-                "宣言の順が意味を持つなら、値を `<` で区切ってください（`enum 段階 = 一般 < 銀 < 金`）。持たないなら、値か集合で書いてください。区切りは `<` か `|` のどちらかにそろえ、表示名は空でない、ほかの値と違う名前にしてください。",
+                "宣言の順が意味を持つなら、値を `<` で区切ってください（`enum 段階 = 一般 < シルバー < ゴールド`）。持たないなら、値か集合で書いてください。区切りは `<` か `|` のどちらかにそろえ、表示名は空でない、ほかの値と違う名前にしてください。",
                 "If the order the values are declared in means something, separate them with `<` (`enum tier = basic < silver < gold`); if not, write values or sets. Use one separator throughout, and give each value a display name that is not empty and differs from the others'."
             ),
             X_E069,

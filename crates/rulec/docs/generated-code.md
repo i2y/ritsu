@@ -83,13 +83,13 @@ divisor is below zero. It never meets a zero divisor: the check proved there is 
 rule that takes `mod` gets the remainder from zero up — `_mod`, `modFloor` in Go, `mod_floor` (over
 `rem_euclid`) in Rust, `Math.floorMod` in Java — and one that takes `isqrt` the same binary search
 over whole numbers in every language (`_isqrt`, `isqrtInt` in Go, `isqrtLong` in Java, `isqrt_i64`
-in Rust). Python's `math.isqrt` is not called, so the module still imports nothing but `enum` and
+in Rust, and so in Wasm, whose module is the Rust one). Python's `math.isqrt` is not called, so the module still imports nothing but `enum` and
 `typing`. Only the helpers a rule calls are written into its module. The unit-vector file, which
 every rule generated into the directory shares, carries its own copy of every one of them (Go's,
 written per package, those the package has) and holds each to the reference as it does the five
 modes: dividends and divisors of both signs, exact halves, quotients with nothing left over and
 the ends of int64; remainders of negative numbers; squares, their neighbours and the largest root
-int64 holds. The query divides and takes the remainder as
+int64 holds. The SQL query divides and takes the remainder as
 arithmetic, as it rounds; the root is the one function it calls ([below](#sql)). The NumPy plan
 names the same three, and `rulec_np.py` computes them over whole int64 columns.
 
@@ -243,8 +243,8 @@ Beside the module, `single_coupon_proof.rs` holds proof harnesses for the [Kani 
 Verifier](https://model-checking.github.io/kani/). Everything in it is behind `#[cfg(kani)]`,
 so `rustc` never reads it; `kani single_coupon_proof.rs` does, and so does `rulec test
 --proofs` — a pass of its own, skipped and said so when `kani` is not on PATH. It is behind
-a flag because it is the one pass whose cost is noticeable: on the corpus of 87 rules it
-adds about 770 seconds to a run that otherwise takes seconds. `rulec api` names
+a flag because it is the one pass whose cost is noticeable: on the corpus of 115 rules it
+adds about 370 seconds to a run that otherwise takes seconds. `rulec api` names
 the file under `rust.proof` and every harness under `rust.harnesses`.
 
 What it holds, over **every** input in the declared domain rather than the vectors:

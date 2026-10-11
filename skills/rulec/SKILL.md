@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E065, E075, E101-E130, W105, W110, W111, W114-W128, W901) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E066, E069, E072, E075, E101-E130, E132, E134, E135, E139, W105, W110, W111, W114-W128, W901) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run rulec as `ritsu rulec <command>`, or as `rulec <command>` through a link to ritsu named for it.
 license: MIT OR Apache-2.0
 ---
@@ -119,40 +119,39 @@ A few shapes are worth knowing before the first draft:
 - **A process that goes on is decided one call at a time.** `machine <name>(<alias>) over <table>`
   says which output the caller passes back as which input (`carry`), which inputs a case holds
   (`held`), where it starts and ends, and what no sequence of calls may do; `check` proves that
-  over every sequence (E124–E127) with the shortest breaking one in `witness.trace`, and
-  `scenario` is an example several calls long (§6.4). With two versions, `diff` names the states
-  a case in progress would be stranded in.
-- **A main rule and its special case are two tables, or a table and a clause.** Several
-  tables may define the same output, each transcribed from its own source, and the one that
-  takes precedence says so with `overrides <table>` right after `policy` (`overrides base:r3`
-  for one labelled row). A row is labelled by a word before its first bar (`r3 | … |`), which
-  is also how the trace names it. A proviso whose conditions do not line up as columns is a
-  `clause`: `when <column> <cell> and …` (or `when always`), `then <value>`, and `overrides`
-  — one row written as prose, checked and generated as a one-row table. The definitions of
-  one output are checked together — completeness over their union, every overlap either
-  ordered by an `overrides` line or reported (E105) — and `doc` says which is the exception
-  (§7 of the grammar).
+  over every sequence (E124–E127) with the shortest breaking one in `witness.trace`, and `scenario`
+  is an example several calls long (§6.4). More `carry` lines carry ranged numbers, truth values or
+  enums from an `initial` value, claimed by `always <input> <cell> when <state>` (E072, E134,
+  E135). With two versions, `diff` names the states a case in progress would be stranded in.
+- **A main rule and its special case are two tables, or a table and a clause.** Several tables may
+  define the same output, each transcribed from its own source, and the one that takes precedence
+  says so with `overrides <table>` right after `policy` (`overrides base:r3` for one labelled row).
+  A row is labelled by a word before its first bar (`r3 | … |`), which is also how the trace names
+  it. A proviso whose conditions do not line up as columns is a `clause`: `when <column> <cell> and
+  …` (or `when always`), `then <value>`, and `overrides` — one row written as prose, checked and
+  generated as a one-row table. The definitions of one output are checked together — completeness
+  over their union, every overlap either ordered by an `overrides` line or reported (E105) — and
+  `doc` says which is the exception (§7 of the grammar).
 - **A source is declared, cited and pinned.** `source stamp_act = law "342AC0000000023" asof
-  2026-04-01` names a law on e-Gov and `law ecfr "29 CFR 1910"` one in the US eCFR; the word
-  after `law` picks the database, e-Gov when left out. `@stamp_act 別表第一` at the end of a table,
-  clause, row, derive or define line says what it transcribes, quoted if not one word.
-  `rulec source fetch` puts a copy of each cited fragment beside the rule and `rulec source
-  pin` writes its digest; `check` then holds the rule to the copies (E037–E039, W119) without
-  reading the network, and `doc` quotes the fragment under the definition. Any other document
-  is `source japanpost = file "…" sha256:…`, and a `url "…"` on it says where that copy came from,
-  so `fetch` can bring it again and `outdated` can ask whether it moved on — pinned to a
-  commit the answer names the commits that touched it, otherwise only that the bytes differ.
-  **A document's fragments are its tables**: `@japanpost table1` cites the first table in document
-  order (a sheet, in a workbook), and `fetch` writes it beside the document under
-  `<document>.fragments/`, where it is pinned, checked and quoted exactly as a law's article
-  is. Cite the table the rows came from and a revision that moves it fails the check, naming
-  the rows to reread. The formats read are csv, md, xlsx and docx; for a PDF or a scan,
-  `fetch --via <cmd>` runs an extractor (docling and the like) as a child process and pins
-  what it produced, so the extraction happens once and is reviewed once — `rulec adapter
-  <file.rule> --template docling` prints the shape. **The rows are then held to that copy**:
-  an amount the copy does not show (under the row's own heading, where the copy has one) is E116,
-  a number the copy states that no row uses is W120, and a boundary the copy puts on the other
-  side of itself is E119 — the only checks that look outside the rule at all.
+  2026-04-01` names a law on e-Gov and `law ecfr "29 CFR 1910"` one in the US eCFR; the word after
+  `law` picks the database, e-Gov when left out. `@stamp_act 別表第一` at the end of a table, clause,
+  row, derive or define line says what it transcribes, quoted if not one word. `rulec source fetch`
+  puts a copy of each cited fragment beside the rule and `rulec source pin` writes its digest;
+  `check` then holds the rule to the copies (E037–E039, W119) without reading the network, and
+  `doc` quotes the fragment under the definition. Any other document is `source japanpost = file
+  "…" sha256:…`, and a `url "…"` on it says where that copy came from, so `fetch` can bring it
+  again and `outdated` can ask whether it moved on — pinned to a commit the answer names the
+  commits that touched it, otherwise only that the bytes differ. **A document's fragments are its
+  tables**: `@japanpost table1` cites the first table in document order (a sheet, in a workbook),
+  and `fetch` writes it beside the document under `<document>.fragments/`, where it is pinned,
+  checked and quoted exactly as a law's article is. Cite the table the rows came from and a
+  revision that moves it fails the check, naming the rows to reread. The formats read are csv, md,
+  xlsx and docx; for a PDF or a scan, `fetch --via <cmd>` runs an extractor (docling and the like)
+  as a child process and pins what it produced, so the extraction happens once and is reviewed once
+  — `rulec adapter <file.rule> --template docling` prints the shape. **The rows are then held to
+  that copy**: an amount the copy does not show (under the row's own heading, where the copy has
+  one) is E116, a number the copy states that no row uses is W120, and a boundary the copy puts on
+  the other side of itself is E119 — the only checks that look outside the rule at all.
 - **A provision applied mutatis mutandis is an `apply`.** `apply retirement = "retirement_pay.rule"
   sha256:…` uses another rule with every input bound (`years = tenure`, enums mapped with
   `with term_end -> retirement_age`), definitions left out with `except reduction`, and outputs taken under a
@@ -175,6 +174,9 @@ A few shapes are worth knowing before the first draft:
   `-` row would pass completeness while the new value quietly takes the default amount.
 - **A place is an enum rulec has.** `import std/<country>/<kind>` brings in a country's first-level
   divisions (`std/us/states`, `std/jp/prefectures`, … in [reference.md](reference.md)); `import std/都道府県` spells Japan's in Japanese.
+- **Enums can be ordered, labelled and shared.** `enum tier = basic < silver < gold` takes `>=gold`,
+  `max` and `range` (E069 on a `|` enum), `national "Rest of the country"` labels a value, and an
+  `enums` file holds enums that rules read with `import enum … from "<file>"` (E066).
 - **A date input can range over koyomi's days.** `range from koyomi "<file.cal>" date <name>`, checked by
   `ritsu rulec check`; `ritsu check` then holds a workflow's calls to the rule's `constraint`s (ritsu's E201).
 
@@ -189,13 +191,12 @@ saves the typing, not the reading.
 
 One habit pays for itself at the first revision:
 
-- **Write down where each table came from.** A comment at the end of the `table` line names
-  the source — the document, its edition or date, the page — and a row taken from somewhere
-  else (a later notice, a correction, an answer from a person) carries its own comment at the
-  end of the row. `rulec doc` shows both to its readers, so a review becomes "compare this
-  row with that cell" rather than "read the whole table again", and when the source is
-  revised, the rows to re-read are the ones that cite it. The `description` line stays a
-  one-line summary of what the rule decides.
+- **Write down where each table came from.** A comment at the end of the `table` line names the
+  source — the document, its edition or date, the page — and a row taken from somewhere else (a
+  later notice, a correction, an answer from a person) carries its own comment at the end of the
+  row. `rulec doc` shows both to its readers, so a review becomes "compare this row with that cell"
+  rather than "read the whole table again", and when the source is revised, the rows to re-read are
+  the ones that cite it. The `description` line stays a one-line summary of what the rule decides.
 
 ### `rulec fmt <file>`
 
@@ -252,9 +253,8 @@ meet while transcribing:
   every verdict the table can produce needs an arm. The three are the completeness argument,
   applied to the walk.
 - **E028 / E029 / E030 a count that cannot be counted** — the shape is `count <name> over
-  <sequence> where <column> = <value>`; the column has to be one an element has, with values
-  that are a closed set; and the range is required. E030's message says why it is two things
-  at once.
+  <sequence> where <column> = <value>`; the column has to be one an element has, with values that
+  are a closed set; and the range is required. E030's message says why it is two things at once.
 - **W111 unused declaration** — see §3.
 
 ### `examples`

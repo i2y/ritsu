@@ -1236,7 +1236,7 @@ Lean の `RitsuCross` は、成り立てば渡す値は koyomi の日付の日�
 
 `ritsu run <file.flow> --scenario <file.json>` は、dandori の参照インタプリタで、規則の呼び出しを rulec の評価器で、期日の呼び出しを koyomi のインタプリタで、振替を chobo のインタプリタ（帳簿の状態を持つ）で計算しながら流す。ほかのタスクの結果は、いまと同じくシナリオに書いたものを使う。
 
-いまの `dandori scenarios` は、規則の結果も選ぶ（どの分岐も通るように）。それはそのまま残す（プラットフォームとの突き合わせは、規則の結果を選べる方が分岐を全部通せる）。`ritsu run` は、入力から規則の結果を計算する、もう一つの流し方である。規則の入力の選び方には、rulec の `vectors`（境界から作った入力）を使える。
+dandori の `scenarios::generate`（dandori のクレートの `dandori scenarios` と、プラットフォームとの突き合わせのテストが使う）は、規則の結果も選ぶ（どの分岐も通るように）。プラットフォームとの突き合わせは、規則の結果を選べる方が分岐を全部通せるので、それはそのまま残す。`ritsu dandori scenarios` は、手元の規則の呼び出しを rulec の口で計算し、答えをシナリオに書かず、シナリオに `"rules": "rulec"` を書く（dandori の DESIGN 1.19、rulec の DESIGN §15.209）。`ritsu run` は手元の規則を計算するので、規則の答えを並びに持つシナリオでは、後ろの答えが一つずつずれていた。Connect のサービスとして呼ぶ規則は、これまでどおり答えを書く。`ritsu run` は、入力から規則の結果を計算する、もう一つの流し方である。規則の入力の選び方には、rulec の `vectors`（境界から作った入力）を使える。
 
 これは証明ではない。三つの言語の意味を一度に流せる参照で、一つの生成パッケージ（9.3）との突き合わせの基準にする。
 
@@ -1249,6 +1249,7 @@ Lean の `RitsuCross` は、成り立てば渡す値は koyomi の日付の日�
 - 時間：実行はシナリオの `now` に始まり、`wait`（`wait until` はその時刻まで）、リトライの前の待ち、タイムアウトした呼び出しのタイムアウトの長さだけ進む。結果が返った呼び出しには時間を数えない（シナリオはかかった長さを言わず、0 がありうるうちでいちばん短い）。帳簿にも同じ時間がたち、有効期限の来た仮押さえは期限切れになる。`now` の値は、参照インタプリタのとおり、シナリオの時刻のままにした（dandori の DESIGN 1.16）。
 - テキストは、走らせる前の帳簿の操作、呼び出しごとに誰が結果を返したか（rulec、koyomi、chobo、scenario）とその結果、待ちとその長さ、期限が切れた仮押さえ、終わり方、終わりの帳簿（`chobo run` と同じ勘定と仮押さえ）を出す。JSON は一つのオブジェクトで、キーは `ritsu`、`flow`、`scenario`、`target`、`diagnostics`、`start`、`end`、`elapsed`、`events`、`trace`（`dandori run` が出すもの）、`books`、`replay` の順である。
 - 終了コードは、最後まで流れたら 0（成功、失敗、キャンセルのどれで終わっても）、フローにエラーがあるか流れが途中で止まったら 1（シナリオの結果が足りないなど）、引数の誤り、読めないファイル、流せないシナリオなら 2。
+- 生成器が書いたシナリオ（`covers` がある）に `"rules"` が無ければ、規則の答えを並びに持つ古い形である。`ritsu run` は、その規則の呼び出しに着いたところで止まり、`ritsu dandori scenarios` で書き直すか `ritsu dandori run` で流すよう言って、2 で終わる（シナリオを流せないときの終了コード）。手で書いたシナリオ（`covers` が無い）は、これまでどおり読む。`ritsu dandori run` は、`"rules": "rulec"` のシナリオの規則の呼び出しを口で計算するので、`ritsu run` と同じ実行になる。
 
 テストのプロジェクト `crates/ritsu/tests/projects/invoice/` の請求書払いのフローは、受領が 4 月 21 日なら、支払日が 6 月 10 日の 9 時になり、待ちは 49 日と 23 時間になる。30 日で切れる仮押さえは待ちのあいだに期限切れになり、出荷は chobo が `expired` で拒否する（`crates/ritsu/tests/golden/run/invoice_expired.en.txt`）。X5 の検査（7.7）が「必ず期限が切れる」と言う場合を、一回の実行で見せたものである。
 
@@ -1318,7 +1319,7 @@ ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; border
 ### 8.1 ritsu のコマンド
 
 ```
-ritsu check [<パス>...] [--root <dir>] [--format json] [--lang ja|en]
+ritsu check [<パス>...] [--root <dir>] [--format json] [--budget <n>] [--lang ja|en]
 ritsu run <file.flow> --scenario <file.json> [--target <target>] [--format json]
 ritsu gen [<パス>...] [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle] [--name <name>] [--module <path>] [--root <dir>]
 ritsu explain <コード> | --all [--format markdown|json]
@@ -1327,6 +1328,7 @@ ritsu --help | --version
 ```
 
 - `ritsu check` は、パスを渡さなければ今いるディレクトリを読む。各言語の `check` を全部のファイルに走らせ、言語をまたぐ検査をし、最後に一行の要約（言語ごとのファイルの数、確かめた境目の数、決められなかった数）を出す。
+- `--budget <n>` は、空間を歩く検査の上限で、rulec の検査（区画とステートマシン）が一つの規則で訪れるノード数と、sekisho が一つの action で歩く組み合わせの数に、同じ数を渡す（`ritsu_project::Joined::with_budget`）。既定は言語ごとの既定（rulec は 50,000,000、sekisho は 100,000,000）のまま。koyomi の検査も予算（E305）を持つが、koyomi の口が予算を持たないので、いまは渡さない。
 - `ritsu explain` は、ritsu の台帳（言語をまたぐ検査のコード）を引く。各言語のコードは `ritsu <言語> explain <コード>` で引く。言語ごとにコードの番号が重なる（rulec の E101 と koyomi の E101 は別のもの）からである。
 - `ritsu <言語> …` は、その言語のコマンドと同じものを、すべての口をつないで走らせる。
 - `ritsu sekisho …`（八つ目の言語。sekisho の DESIGN 11 章）は、段階 A で `check` と `explain` を、段階 B で `gen --target cedar`、`vectors`、`api` を、段階 C で `gen --target typescript|python|go` を、段階 D で `doc` を作った（2026-10-06）。段階 D3 で、`ritsu --help` の言語の一覧と `sekisho` という名前のリンクに入れた。

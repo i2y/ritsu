@@ -1327,6 +1327,345 @@ examples
 - **The generated code gets the initial state and a test for a final one** (`INITIAL` and `is_final` in Python). The vectors get sequences of calls, and `rulec test` has each language hand the state it answered to its own next call.
 - **A revision is compared in terms of the cases in progress.** `rulec diff` between two versions gives the shortest sequence of calls the two answer differently, and the states from which a case can no longer finish. `replay` plays a log's records through the new version one case at a time, a case being the records that share a `tag`.
 
+## Shipping by membership tier
+
+The tiers have an order (basic < silver < gold < platinum), and the cells compare against a tier. A campaign lifts a member to the campaign's tier for that order alone.
+
+```rule
+rule member_tier_shipping v1
+description "Shipping by membership tier: gold and above ship free, and a campaign lifts a member to the campaign's tier for that order alone"
+
+# The tiers in order, lowest first: a cell compares against one (`>=gold`).
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier                                 # the member's own tier
+  campaign : tier  range >=basic <=gold         # a campaign lifts a member as far as gold
+  subtotal : money[USD]  range >=0USD <=100000USD
+
+outputs
+  shipping : money[USD]  round down(1USD)
+  effective : tier
+  lifted : bool
+
+# The order ships at the later of the two tiers.
+define effective : tier = max(member, campaign)
+define lifted : bool = campaign > member
+
+table shipping_fee
+policy unique
+| effective | subtotal | -> shipping |
+| >=gold    | -        | 0USD        |
+| silver    | >=50USD  | 0USD        |
+| silver    | <50USD   | 5USD        |
+| basic     | >=100USD | 0USD        |
+| basic     | <100USD  | 8USD        |
+
+examples
+| member   | campaign | subtotal | -> shipping | effective | lifted |
+| platinum | basic    | 10USD    | 0USD        | platinum  | false  |
+| basic    | gold     | 10USD    | 0USD        | gold      | true   |
+| silver   | basic    | 60USD    | 0USD        | silver    | false  |
+| silver   | silver   | 10USD    | 5USD        | silver    | false  |
+| basic    | basic    | 99USD    | 8USD        | basic     | false  |
+```
+
+**What this one shows**
+
+- `enum tier = basic < silver < gold < platinum`, written with `<`, orders the values. The cell `>=gold` means gold or above, and covers gold and platinum both.
+- `max(member, campaign)` is the later of the two tiers, and `campaign > member` is a truth value.
+- An input's range can be written in tiers too: a campaign is `range >=basic <=gold`, so it never lifts anyone to platinum, and the generated code refuses a platinum campaign at its door.
+
+## Two rules share one set of enums
+
+The product categories and the delivery zones are written once, in the `enums` file `shared/catalog.rule`, and both the shipping rule and the returns rule read them with `import enum`.
+
+```rule
+rule catalog_shipping v1
+description "The delivery fee of a parcel: by how far it goes and how heavy it is, with a surcharge for fragile goods"
+
+# The categories and the zones are the catalog's, and so are their order, their display names
+# and the group `fragile`: this rule writes none of them again.
+import enum category from "shared/catalog.rule"
+import enum zone from "shared/catalog.rule"
+
+inputs
+  goods       : category
+  destination : zone
+  weight      : mass[kg]  range >=1kg <=30kg
+
+outputs
+  fee : money[USD]  round up(1USD)
+
+table base_fee
+policy unique
+| destination | weight | -> base : money[USD] |
+| <=regional  | <=5kg  | 5USD                 |
+| <=regional  | >5kg   | 9USD                 |
+| national    | <=5kg  | 8USD                 |
+| national    | >5kg   | 14USD                |
+| overseas    | -      | 30USD                |
+
+# Fragile goods are packed by hand, and the farther they go the more the packing costs.
+table handling
+policy unique
+| goods         | destination | -> surcharge : money[USD] |
+| fragile       | <national   | 3USD                      |
+| fragile       | >=national  | 7USD                      |
+| food, apparel | -           | 0USD                      |
+
+define fee : money[USD] = base + surcharge
+
+examples
+| goods       | destination | weight | -> fee |
+| food        | local       | 2kg    | 5USD   |
+| apparel     | regional    | 6kg    | 9USD   |
+| electronics | national    | 10kg   | 21USD  |
+| furniture   | overseas    | 20kg   | 37USD  |
+| electronics | regional    | 1kg    | 8USD   |
+```
+
+**What this one shows**
+
+- A file headed `enums` holds enums and groups and decides nothing. A rule reads one with `import enum category from "shared/catalog.rule"` and takes its values, order, labels and groups as they are.
+- The zones are ordered (`local < regional < national < overseas`) and compared as `<=regional`; the categories carry labels (`food "Food & drink"`), shown on the pages and by the label function of the generated code.
+- The generated code of both rules uses one type: `rulec gen` writes a module of the enum types alone, and both rules' modules import it.
+
+## Dividing by a value: the average unit price
+
+The average divides the total by the number of units. Only the outermost division inside a rounding may divide by a value, and a divisor that can be 0 stops at E132.
+
+```rule
+rule average_unit_price_split v1
+description "The average price of the units on an order, with the order that has no units set apart by tables. One table picks what to divide by: the number of units where there are some, and one where there are none, so the division never meets zero. Another gives an order with no units an average of nothing"
+
+inputs
+  total : money[JPY]  range >=0JPY <=1_000_000JPY
+  units : number      range >=0 <=1000
+
+outputs
+  average : money[JPY]  round half_up(1JPY)
+
+# Row 2 writes `units` only where its cell keeps it at one or more, so `per` is never zero.
+table divisor
+policy unique
+| units | -> per : number |
+| 0     | 1               |
+| >=1   | units           |
+
+define per_unit : money[JPY] = half_up(total / per, 1JPY)
+
+table answer
+policy unique
+| units | -> average : money[JPY] |
+| 0     | 0JPY                    |
+| >=1   | per_unit                |
+
+examples
+| total   | units | -> average |
+| 1000JPY | 3     | 333JPY     |
+| 1000JPY | 6     | 167JPY     |
+| 1001JPY | 2     | 501JPY     |
+| 500JPY  | 0     | 0JPY       |
+```
+
+**What this one shows**
+
+- A value may divide only where the rounding's first argument begins, as in `half_up(total / per, 1JPY)`; the grid of the rounding gives the quotient its type.
+- An order with no units is set apart by a table: `divisor` writes `units` only on the row whose cell keeps it at one or more, so `per` is never 0, and the check reads that narrowed range and raises no E132.
+- The other way to write it divides by `max(units, 1)`; that is `average_unit_price.rule`.
+
+## A duty rota by remainder
+
+Three teams take turns, week by week, in a fixed order. The weeks since the rotation began, divided by three, leave a remainder that picks the team.
+
+```rule
+rule duty_rotation v1
+description "Which team is on duty in a week. The three teams take turns in a fixed order, counted from the week the rotation started: the weeks since then are divided by three, and what is left over picks the team. A week before the start still falls to a team, because the remainder is never below zero"
+
+enum team = north | east | south
+
+inputs
+  week       : number  range >=1 <=53
+  first_week : number  range >=1 <=53
+
+outputs
+  on_duty : team
+
+# `mod` divides by a positive constant and leaves 0, 1 or 2, whatever the sign of the weeks.
+define turn : number = mod(week - first_week, 3)
+
+table rotation
+policy unique
+| turn | -> on_duty : team |
+| 0    | north             |
+| 1    | east              |
+| 2    | south             |
+
+examples
+| week | first_week | -> on_duty |
+| 10   | 10         | north      |
+| 11   | 10         | east       |
+| 12   | 10         | south      |
+| 13   | 10         | north      |
+| 9    | 10         | south      |
+| 1    | 53         | south      |
+```
+
+**What this one shows**
+
+- `mod(week - first_week, 3)` is 0, 1 or 2. It divides by a positive whole constant, and the remainder is never below zero, even when the subtraction is: a floor remainder.
+- With the remainder known to lie in 0 to 2, three rows cover it with nothing left over, and the check proves so.
+
+## A square root: the economic order quantity
+
+How many units to order at a time, from the yearly demand, the cost of placing one order and the cost of holding one unit for a year.
+
+```rule
+rule economic_order_quantity v1
+description "How many units to order at a time: the square root of twice the yearly demand times the cost of placing one order, over the cost of holding one unit for a year. What is under the root is rounded down to a whole number first, and the root is the largest whole number whose square does not pass it"
+
+inputs
+  yearly_demand : number      range >=1 <=1_000_000
+  order_cost    : money[JPY]  range >=1JPY <=100_000JPY
+  holding_cost  : money[JPY]  range >=1JPY <=100_000JPY
+
+outputs
+  order_quantity : number  round down(1)
+
+# Yen over yen is a ratio with no unit, so the grid of the rounding is the number 1.
+define quantity_squared : number = down(2 * yearly_demand * order_cost / holding_cost, 1)
+
+define quantity : number = isqrt(quantity_squared)
+
+result order_quantity = quantity
+
+examples
+| yearly_demand | order_cost | holding_cost | -> order_quantity |
+| 1000          | 5000JPY    | 100JPY       | 316               |
+| 1200          | 3000JPY    | 200JPY       | 189               |
+| 1             | 1JPY       | 100_000JPY   | 0                 |
+| 1_000_000     | 100_000JPY | 1JPY         | 447213            |
+```
+
+**What this one shows**
+
+- `isqrt(x)` is the largest whole number whose square does not pass x; an argument that can be negative stops at E139.
+- What is under the root is rounded down to a whole number first with `down(…, 1)`: yen over yen is a ratio with no unit, so the grid is the number 1.
+- Every generated language takes the root by the same binary search over whole numbers. There is no floating point, so every language gives the same answer.
+
+## A precondition with a sum: what a quota has left
+
+How much of a quota is left once a request is granted. The caller guarantees that what was used and what is asked for add up to the quota at most.
+
+```rule
+rule quota_request v1
+description "How much of a quota is left once a request is granted. The caller never asks for more than the quota holds: what was used and what is asked for add up to the quota at most, so what is left is never below zero"
+
+enum headroom = used_up | low | ample
+
+inputs
+  used      : number  range >=0 <=1000
+  requested : number  range >=1 <=1000
+  quota     : number  range >=1 <=1000
+
+# One side of a constraint may add inputs up.
+constraint used + requested <= quota
+
+outputs
+  status : headroom
+
+derive left : number = quota - used - requested  range >=-1999 <=999
+
+# No row for a negative `left`: the constraint leaves none, and the check reads it that way.
+table remaining
+policy unique
+| left     | -> status : headroom |
+| 0        | used_up              |
+| >=1 <=99 | low                  |
+| >=100    | ample                |
+
+examples
+| used | requested | quota | -> status |
+| 400  | 600       | 1000  | used_up   |
+| 400  | 550       | 1000  | low       |
+| 0    | 1         | 1000  | ample     |
+| 0    | 1         | 1     | used_up   |
+```
+
+**What this one shows**
+
+- One side of a precondition may add inputs up: `constraint used + requested <= quota`. The generated code refuses a call that breaks it at its door.
+- There is no row for a negative remainder: the precondition leaves no such case, so completeness does not ask for one.
+- A workflow that calls the rule is held to the same precondition (ritsu's check across the languages, E201).
+
+## Carrying a count: retrying a card charge
+
+A charge is tried up to three times, and given up after the third decline. The caller keeps the status and the attempts made; the rule decides one attempt.
+
+```rule
+rule retry_attempts v1
+description "How a collection run moves on after each attempt to charge a card: up to three attempts, and a charge declined three times is given up. The caller keeps the status and the attempts made; the rule decides one attempt. An example written for the purpose"
+
+enum charge_status = pending | collected | given_up
+enum attempt_result = approved | declined
+
+inputs
+  status   : charge_status
+  outcome  : attempt_result
+  attempts : number  range >=0 <=3  # the attempts made before this one
+
+outputs
+  next_status   : charge_status
+  next_attempts : number  round down(1)
+
+define made : number = attempts + 1
+
+table step
+policy unique
+| status    | outcome  | attempts | -> next_status | next_attempts |
+| pending   | approved | -        | collected      | made          |
+| pending   | declined | <=1      | pending        | made          |
+| pending   | declined | >=2      | given_up       | made          |  # the third decline
+| collected | -        | -        | status         | attempts      |
+| given_up  | -        | -        | status         | attempts      |
+
+machine collection over step
+  carry   status -> next_status
+  carry   attempts -> next_attempts
+  initial pending
+  initial attempts 0
+  final   collected, given_up
+  never   collected after given_up
+  always  attempts >=1 when collected
+  always  attempts 3 when given_up
+
+# Declined twice, and given up on the third.
+scenario three_declines
+| outcome  | -> next_status | next_attempts |
+| declined | pending        | 1             |
+| declined | pending        | 2             |
+| declined | given_up       | 3             |
+| approved | given_up       | 3             |
+
+# Declined once, approved on the second attempt.
+scenario approved_on_the_second
+| outcome  | -> next_status | next_attempts |
+| declined | pending        | 1             |
+| approved | collected      | 2             |
+
+examples
+| status  | outcome  | attempts | -> next_status | next_attempts |
+| pending | approved | 0        | collected      | 1             |
+| pending | declined | 2        | given_up       | 3             |
+```
+
+**What this one shows**
+
+- `carry attempts -> next_attempts` carries a number along with the state, starting at `initial attempts 0`.
+- `always attempts 3 when given_up` claims that a charge given up has always been tried three times. The check proves it over every sequence of calls; a sequence that breaks it is E135, the shortest one shown.
+- A call that would carry the count outside its range (0 to 3) is E134.
+
 ## A Stripe PaymentIntent's status (machine)
 
 Transcribed from Stripe's documentation: where a PaymentIntent's status goes when it is confirmed, authenticated, captured or canceled, and when a delayed payment settles. A company's API written down as a rule; the seven statuses are Stripe's own.

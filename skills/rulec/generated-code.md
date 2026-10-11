@@ -22,7 +22,9 @@ spelling each language gives them, and the errors the code can raise. The shape 
 
 ## What it guarantees
 
-**No dependencies.** The generated Python imports `enum` and `typing`; the generated
+**No dependencies.** The generated Python imports `enum` and `typing` (and a rule that reads
+an `enums` file imports the module of that file, which is generated beside it,
+[below](#enums-several-rules-share-their-order-and-display-names)); the generated
 TypeScript and JavaScript import nothing at all; the generated Rust imports nothing outside `std` and needs
 no `Cargo.toml`; the generated Ruby requires nothing at all and needs no gem; the generated
 PHP requires nothing at all and needs no composer; the generated
@@ -35,7 +37,8 @@ is a checked property rather than a claim. The server that offers the rule as an
 ([below](#the-rule-as-an-mcp-tool)) imports the standard library alone in Python and node's
 own modules alone in JavaScript, and the generated SQL calls no function of its own: its
 rounding is arithmetic inside the query, in the file that declares a function as much as in
-the one that does not. **NumPy is the one exception, and a deliberate one**: the plan is
+the one that does not — but for a whole square root, a search no single expression holds,
+which calls `rulec_isqrt`, defined in the rule's own function file ([SQL](#sql)). **NumPy is the one exception, and a deliberate one**: the plan is
 data, and the evaluator that reads it imports `numpy`. That is the target — a host that wants
 whole columns decided at once already has numpy, and the dependency is its own.
 
@@ -71,6 +74,25 @@ run. The query carries no helper: each mode is arithmetic over the bound value �
 `ABS` and `%`, which mean the same in both dialects — and the same unit vectors run over
 those expressions.
 
+**A division by a value, a remainder and a root are helpers too** (§15.213 to §15.215 of
+DESIGN.md). A rule that divides by a value inside a rounding gets one helper for each mode it
+rounds a quotient with — `_div_round_half(n, d)` in Python, Ruby and PHP, `divRoundHalf` in Go and
+Java, `_divRoundHalf` in TypeScript, JavaScript and Swift, `quot_half` in Rust — which divides the
+two integers exactly and rounds the quotient by the mode, turning both signs over first when the
+divisor is below zero. It never meets a zero divisor: the check proved there is none (E132). A
+rule that takes `mod` gets the remainder from zero up — `_mod`, `modFloor` in Go, `mod_floor` (over
+`rem_euclid`) in Rust, `Math.floorMod` in Java — and one that takes `isqrt` the same binary search
+over whole numbers in every language (`_isqrt`, `isqrtInt` in Go, `isqrtLong` in Java, `isqrt_i64`
+in Rust, and so in Wasm, whose module is the Rust one). Python's `math.isqrt` is not called, so the module still imports nothing but `enum` and
+`typing`. Only the helpers a rule calls are written into its module. The unit-vector file, which
+every rule generated into the directory shares, carries its own copy of every one of them (Go's,
+written per package, those the package has) and holds each to the reference as it does the five
+modes: dividends and divisors of both signs, exact halves, quotients with nothing left over and
+the ends of int64; remainders of negative numbers; squares, their neighbours and the largest root
+int64 holds. The SQL query divides and takes the remainder as
+arithmetic, as it rounds; the root is the one function it calls ([below](#sql)). The NumPy plan
+names the same three, and `rulec_np.py` computes them over whole int64 columns.
+
 ---
 
 ## Calling it
@@ -81,9 +103,12 @@ those expressions.
 def single_coupon(subtotal: JPYInclTax, applied: JPYInclTax, kind: CouponKind, rate: Rate, face: JPYInclTax, dup: bool) -> Output:
 ```
 
-Parameters are the rule's inputs in declaration order, named by their ASCII aliases. With one
-output the function returns that value; with two or more it returns a `NamedTuple` called
-`Output` whose fields are the outputs in declaration order.
+Parameters are the rule's inputs in declaration order, named by their ASCII aliases. A name
+with no alias that is a keyword in one of the languages — an input called `class`, `type`,
+`def` — is written with `_` after it in every language (`class_`), and `rulec api` names it so;
+the keys of the wire and of the records keep the declared name (W121). With one output the function
+returns that value; with two or more it returns a `NamedTuple` called `Output` whose fields are
+the outputs in declaration order.
 
 ```python
 from single_coupon import single_coupon, CouponKind
@@ -218,8 +243,8 @@ Beside the module, `single_coupon_proof.rs` holds proof harnesses for the [Kani 
 Verifier](https://model-checking.github.io/kani/). Everything in it is behind `#[cfg(kani)]`,
 so `rustc` never reads it; `kani single_coupon_proof.rs` does, and so does `rulec test
 --proofs` — a pass of its own, skipped and said so when `kani` is not on PATH. It is behind
-a flag because it is the one pass whose cost is noticeable: on the corpus of 87 rules it
-adds about 770 seconds to a run that otherwise takes seconds. `rulec api` names
+a flag because it is the one pass whose cost is noticeable: on the corpus of 115 rules it
+adds about 370 seconds to a run that otherwise takes seconds. `rulec api` names
 the file under `rust.proof` and every harness under `rust.harnesses`.
 
 What it holds, over **every** input in the declared domain rather than the vectors:
@@ -516,7 +541,13 @@ SQLite runs as well, which is how `rulec test` holds it to the reference evaluat
 nothing but `python3`: the runner beside it loads the vectors into an in-memory SQLite and
 prints the same records the other runners print. `min` and `max` are `LEAST` and `GREATEST`,
 which the runner registers for SQLite, passing over a NULL as PostgreSQL's do — a row the door
-refuses is still worked out, and a value outside an enum leaves one behind.
+refuses is still worked out, and a value outside an enum leaves one behind. A division by a
+value is the same arithmetic as a rounding, over a divisor wrapped in `NULLIF(…, 0)`, so a row
+the door refuses with a zero in it is worked out to NULL rather than stopping the query; a
+remainder is `%` turned into the one from zero up. A whole square root is a search, which no
+single expression holds: the query calls `rulec_isqrt`, which the function file (the other
+door, below) defines in PL/pgSQL at its top — create that first on PostgreSQL, as the comment at
+the top of the query says — and which the runner registers for SQLite, as it does `LEAST`.
 
 **The dialect is part of the claim.** Postgres and SQLite agree on the one thing the rounding
 leans on — `/` between integers truncates toward zero — which is why proving on the second
@@ -770,6 +801,64 @@ answers. The MCP tool, the Connect service and the PostgreSQL function are one c
 the function, and are played the same way. On the page for people the machine is drawn beside
 the form, and a button puts the state the call answered back into the form for the next event.
 
+## Enums several rules share, their order and display names
+
+An enum declared with `<` is ordered, and a value may carry a display name
+([reference §3](reference.md#declaring-an-enum)). An `enums` file holds enums for several rules
+to read ([reference §3.1](reference.md#enums-several-rules-share)). The code they generate:
+
+| language | the module an `enums` file becomes | how a rule's module reads it | the place of a value (ordered enums) | the display name |
+|---|---|---|---|---|
+| Python | `catalog.py` | `from catalog import Category, Zone`; `from .catalog import …` in a package of `ritsu gen` | `zone_rank(z)`, from 0 | `category_label(c)` |
+| TypeScript | `catalog.ts` | `import { Category, Zone } from "./catalog.ts"` and `export { Category, Zone }`; `"./catalog"` in a package | `zoneRank(z)` | `categoryLabel(c)` |
+| JavaScript | `catalog.mjs` | `import { … } from "./catalog.mjs"` | `zoneRank(z)` | `categoryLabel(c)` |
+| Rust | `catalog.rs` | `pub use crate::catalog::{Category, Zone};`, the module declared beside the rule's by the crate that builds them (the runner: `#[path = "catalog.rs"] mod catalog;`) | `z.rank()`; the enum derives `PartialOrd` and `Ord` in its order | `c.label()` |
+| Ruby | `catalog.rb`, `module Catalog`, with `sig/catalog.rbs` | `require_relative "catalog"` and `Category = Catalog::Category` (and the same aliases in the `.rbs`) | `Catalog.zone_rank(z)` | `Catalog.category_label(c)` |
+| PHP | `catalog.php`, namespace `Catalog` | `require_once __DIR__ . '/catalog.php';` and `use Catalog\Category;` | `\Catalog\zone_rank($z)` | `\Catalog\category_label($c)` |
+| Go | package `catalog` (`catalog/catalog.go` and its `go.mod`) | imports the package — in `rulec gen`'s output by `replace catalog => ../catalog` in the rule's `go.mod`, in a package of `ritsu gen` by the `--module` path — and declares `type Category = catalog.Category` with the constants and `ParseCategory` beside it | the constant itself: the values are declared in their order, so `z >= ZoneNational` compares places | `c.Label()` |
+| Swift | `catalog.swift` | the same module: built with the rule's file (`rulec test` adds it to the `swiftc` line from `vectors/<rule>.owners.json`) | `z.rank` | `c.label` |
+| Java | `Catalog.java`, the enums nested in `public final class Catalog` | the same package: `Catalog.Category` | `z.ordinal()`, and `compareTo` in the conditions | `c.label()` |
+| SQL | none: an enum is the text of its name | — | a `CASE` in the query | in the file that declares a function, one function per enum with display names, `"catalog_shipping_category_label"(v text)` |
+| NumPy | none: the plan carries the values | — | the plan's `rank` cells | the plan's `labels`, read by `rule.label(enum, value)` |
+| Wasm | none: the types are written into the rule's own crate | — | in the crate | none: the module answers over JSON, which carries values only |
+
+A value without a display name is shown by its declared name, by every one of these. `rulec
+gen` writes the module of each `enums` file a rule reads, whether or not the file is named on
+the command line, once however many of the rules given read it; two different files that would
+write one module are refused. A cell that compares an ordered enum (`>=gold`) is
+written as a comparison of places, `tier_rank(effective) >= tier_rank(Tier.GOLD)` in Python,
+on the same line of the rule as any other condition; `max(a, b)` and `min(a, b)` over one are
+a helper each, and the entry guard of an input with a `range` over one compares places too.
+
+A machine that carries more than its state (reference §6.4) gets one more constant for each
+further carried value: where a case starts, named after its input and typed as the input is.
+From `grace_period.rule`:
+
+```python
+INITIAL: Subscription = Subscription.ACTIVE
+
+FINAL: frozenset[Subscription] = frozenset({Subscription.SUSPENDED})
+
+INITIAL_DAYS_LEFT: int = 0
+```
+
+The caller keeps those values beside the state, starts a case with them, and stores what each
+call answers for them in their place:
+
+```python
+out = grace_period(sub.status, event, sub.days_left)
+sub.status, sub.days_left = out.next_status, out.next_days_left
+```
+
+An amount, a quantity or a rate is the branded type (`INITIAL_BALANCE: JPY = JPY(-5000)`), a
+truth value is `bool`, another enum's value its member. Python, TypeScript, JavaScript, Rust,
+Ruby, PHP and Java spell the constant `INITIAL_DAYS_LEFT`, Go `InitialDaysLeft`, Swift
+`initialDaysLeft`; the NumPy plan lists each under `machine.more` with its wire value; SQL and
+Wasm, with one door and no module, have no constant, and `rulec api` lists the value and every
+language's spelling under `machine.carried`. The traces hand these values over as they hand the
+state: the first call of a trace is passed where each starts, every later one what the language
+itself answered.
+
 ## A rule whose inputs are projected from the caller's object
 
 A rule whose inputs say `from`
@@ -941,8 +1030,9 @@ same in every language and is the one the reference evaluator says of the same i
 
 **The entry guard** enforces at run time what the proof assumed. Every numeric input is
 checked against its declared `range`, and every enum input against its set of values; then
-every `constraint` between two inputs, and a date input that takes its range from a koyomi
-date against the days that date comes to. If the check were absent, a caller outside the
+every `constraint` — between two inputs, or between inputs added up and one more, the sum taken
+on the step the inputs share, which E108 has shown fits in int64 — and a date input that takes
+its range from a koyomi date against the days that date comes to. If the check were absent, a caller outside the
 declared domain would get a silently wrong number instead of an error — and the completeness
 proof says nothing about inputs the rule never declared.
 

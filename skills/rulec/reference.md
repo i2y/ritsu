@@ -27,6 +27,7 @@ description "<one line>"
 import std/<name>
 import proto "<file>" <Enum> -> <enum of this rule>
 import jsonschema "<file>" "<pointer>" -> <enum of this rule>
+import enum <enum> from "<file>" [-> <enum of this rule>]
 source <name> = law [<database>] "<law id>" asof <date>
   <fragment> sha256:<digest>
 source <name> = file "<file>" [url "<url>"] sha256:<digest>
@@ -74,6 +75,10 @@ examples
 - `machine` names the table that decides the state it carries; `scenario` blocks follow it.
 - `examples` comes last. There may be more than one section of them (§9).
 
+A second kind of file starts with `enums <name>(<alias>) v<version>` instead of `rule`. It holds
+enums that several rules share, and nothing that decides: `description`, `import`, `enum` and
+`group` lines only (§3.1, "Enums several rules share").
+
 A blank line separates sections. `#` starts a comment that runs to the end of the line;
 comments may appear anywhere, including at the end of a table row and on a line of their own
 in the middle of a block — **a line that holds nothing but a comment does not end the
@@ -114,10 +119,17 @@ The alias on a **`table`** is the one exception: it is accepted and currently un
 a table is inlined into the one generated function rather than becoming a function of its
 own. It is kept for SQL generation, where a table will need a name of its own.
 
-An alias that is **a word one of the targets has taken** is W121. A keyword is the hard case
-— `type` as an input's alias generates Rust that does not compile — and a builtin is the
-quiet one: the rule's alias names the generated function and an enum's alias names a type,
-so `sum` or `list` there hides Python's. A parameter or a local hides nothing outside its own
+An alias that is **a word one of the targets has taken** is W121. A builtin is the quiet case:
+the rule's alias names the generated function and an enum's alias names a type, so `sum` or
+`list` there hides Python's. A keyword is the hard one — `type` as an input's alias generates
+Rust that does not compile — and an alias stays as written, since it is the identifier its
+author chose. A name with no alias is its own identifier, and there the generated code does
+the renaming: an input, an output, a `derive`, a `define`, a table's output column, a sequence
+or one of its fields called `type`, `class`, `def` or `from` — a keyword in some of the
+languages that write a name as it is — is written with `_` after it in every language
+(`class_`), `rulec api` names it so, and the name a value travels under — the keys of the input
+JSON, the records — stays the one declared. W121 says which languages took the word, and an
+alias chooses the identifier instead. A parameter or a local hides nothing outside its own
 body, so the warning is raised for those only when the word is a keyword. It is a warning
 because a target you do not generate cannot hurt you.
 
@@ -143,7 +155,8 @@ digits; the diagnostic's `fix.text` is the literal rewritten.
 **Dates** are written `YYYY-MM-DD`. They are held as day ordinals, which is what makes an
 interval over dates exact.
 
-**Strings** are double-quoted and must close on the same line (E001).
+**Strings** are double-quoted and must close on the same line (E001). There is no escape: a
+string holds every character up to the next `"`, a backslash included, so it cannot hold a `"`.
 
 **Symbols.** The canonical spellings are ASCII:
 
@@ -225,6 +238,39 @@ enum member_kind = basic default | gold | platinum
 which declares "this value needs no row of its own; being caught by a `-` row is correct" and
 silences W111 for it.
 
+**An ordered enum** separates its values with `<` instead of `|`, lowest first:
+
+```rule
+enum tier = basic < silver < gold < platinum
+```
+
+A cell of a column of it may then compare against a value: `>=gold` is gold and platinum,
+`<gold` is basic and silver, and `>=silver <platinum` is the two between (§7). An expression
+may compare two values of it (`campaign > member`) and take the later or the earlier of two
+(`max(member, campaign)`, `min(…)`); a value of the enum itself is written in a cell, not in an
+expression (E012). An input of the enum may declare a `range` (`range >=basic <=gold`, §4): a
+value outside it is refused at the door as a number outside its range is, and the tables are
+asked to cover only the values inside. The two separators do not mix in one declaration, and
+nothing compares the values of an enum declared with `|`, whose order means nothing (E069).
+Completeness and overlap are checked over the values, as for any enum.
+
+**A display name** is a string after a value:
+
+```rule
+enum zone = local "Same city" < regional "Same region" < national "Rest of the country" < overseas "Abroad"
+```
+
+It is the name the value is shown by: on the page `rulec doc` renders, in the article for
+customers, and through one function or method in each language's generated code
+(`zone_label(Zone.NATIONAL)` is `"Rest of the country"` in Python; generated-code.md lists
+each language's). A value without one is shown by its declared name. A display name is text:
+anything but a line break, not empty, and no two values of one enum share one (E069). It never
+travels: the wire and the records carry the value's name.
+
+**`open`** written after the last value — `enum building = farm | market | temple  open` —
+marks an enum whose list may be extended from outside its file. It is read and kept; nothing
+in this version extends a list, so within a rule the enum is closed as every enum is.
+
 Two enums may have values of the same name — Stripe's `capture_method` and
 `confirmation_method` both have `automatic` and `manual`. A value is read in the enum of the
 place it is written: the column of a cell, the output of an output cell, the carried enum in
@@ -246,7 +292,7 @@ the other enum is E103.
 
 ## 3.1 import
 
-Two lines start with `import`, and both bring in **the values of an enum** — nothing else
+Four lines start with `import`, and each brings in **the values of an enum** — nothing else
 crosses a file boundary. A rule is still one file: what is imported is a set of names, not
 rows, not amounts, not another rule.
 
@@ -255,6 +301,7 @@ rows, not amounts, not another rule.
 | `import std/<name>` | a built-in enum | rulec, frozen |
 | `import proto "<file>" <Enum> -> <enum of this rule>` | the value set of an enum in a `.proto` | that `.proto`, outside this rule |
 | `import jsonschema "<file>" "<pointer>" -> <enum of this rule>` | the value set of an enum in a JSON Schema, OpenAPI included | that file, outside this rule |
+| `import enum <enum> from "<file>" [-> <name>]` | an enum of an `enums` file, whole: its values, their order, their display names and `default` marks, and its groups | that `enums` file, which several rules read |
 
 > `rulec import csv` and `rulec import xlsx` are a different thing that shares the word: a
 > **command** that writes a first draft of a `.rule` from a spreadsheet, once. It leaves no
@@ -368,6 +415,43 @@ refusal is not that a reader would be hard to start: a reader for the subset one
 to use is a reader that goes wrong quietly on the next one, and a value set that is quietly
 wrong is the one thing this must never be. Point at a JSON form of the document, which most
 toolchains can write.
+
+### Enums several rules share
+
+```rule
+enums catalog v1
+description "The product categories and the delivery zones that the shipping and the returns rules share"
+
+enum category = food "Food & drink" | apparel "Clothing & shoes" | electronics "Electronics" | furniture "Furniture"
+enum zone = local "Same city" < regional "Same region" < national "Rest of the country" < overseas "Abroad"
+
+group fragile = electronics, furniture
+```
+
+```rule
+rule catalog_shipping v1
+import enum category from "shared/catalog.rule"
+import enum zone from "shared/catalog.rule"
+```
+
+A file that starts with `enums` holds enums and decides nothing: `description`, `import`, `enum`
+and `group` lines, and any other section is E066. It generates no function. A rule reads one of
+its enums with `import enum <enum> from "<file>"`, the path followed from the rule's directory,
+and `-> <name>` gives the enum another name in the rule. What comes is the whole enum — its
+values, their order, their display names, their `default` marks, and every group of it in the
+file — and none of it is written again. The file is read and checked on every `check` and
+pinned by nothing, as a `.proto` is: a value it gains reaches every rule that reads it, and
+every table there that does not look at the value fails completeness. A file that cannot be
+read, is not an `enums` file, or holds no such enum is E013; an enum or a group the rule
+declares under a name an import brings is E034.
+
+The generated code of a rule declares none of these types. Each language imports them from the
+one module the `enums` file becomes, which `rulec gen` writes beside the rule's whether or not
+the file is named on the command line (generated-code.md), so an app that calls two rules hands
+both the same value. `rulec api` of an `enums` file names that module in each language, and
+`rulec doc` renders its enums with their order and display names. The commands that are about
+a decision — `schema`, `adapter`, `verify`, `replay`, `fixtures lint`, `diff`, and `doc` as
+HTML or for customers — refuse one.
 
 ## 3.2 source — the documents a rule transcribes
 
@@ -630,7 +714,9 @@ One declaration does three jobs.
 
 The form is `range` followed by one or two bounds: `range >=0JPY <=10_000_000JPY`, `range >=1g`.
 A `derive` whose declared range does not contain what it can actually reach is E112, and the
-message states the interval to widen to. A rate input may leave `range` out: it is then
+message states the interval to widen to. An input of an ordered enum (§3) may declare a range
+over its values, `range >=basic <=gold`: the bounds are values of the enum, and the three jobs
+are the same over them. A rate input may leave `range` out: it is then
 `>=0% <=100%`, and the guard enforces that, so a rate that can exceed 100% declares its range
 like any other number. A table's numeric output column needs no range of its own — its cells
 are its range.
@@ -736,13 +822,14 @@ A named boolean or intermediate value. A boolean `define` may be used as a table
 define bulk : bool = total >= 30_000JPY
 define a_earlier : bool = a_due <= b_due
 define rate_off : money[JPY, incl_tax] = list * rate
+define effective : tier = max(member, campaign)
 ```
 
 The condition of a boolean `define` must be one of exactly two shapes (E113):
 
 1. a **unary test on one input or one derived value** — that value compared with a constant;
 2. a comparison of **two values of a type whose difference cannot be derived** (two dates,
-   for instance).
+   for instance, or two values of an ordered enum, §3).
 
 A direct comparison of two numbers is neither. Declare the difference as a `derive` and
 compare that with a constant; the analysis is exact that way, and the message says so.
@@ -750,7 +837,7 @@ compare that with a constant; the analysis is exact that way, and the message sa
 A `define` that computes a number may be a table column too. What it can come to is its
 expression computed over the intervals of what it reads — the inputs' ranges, what the derives
 and the other defines come to, the values a table above writes — whatever the expression's shape
-(a product, a rounding, `min`): `define share : rate = score / 200` with `score` from 0 to 200
+(a product, a rounding, `min`, a remainder, a root): `define share : rate = score / 200` with `score` from 0 to 200
 comes to 0% up to 100%. The checks read that as they read a derive's reach: E101 asks no row for a
 share past 100%, and a row that asks only for one is E102.
 
@@ -772,8 +859,10 @@ Where a row asks a computed column (a derive, a `define`) for values and neither
 reaches the row nor a proof that none does was found, the check says the row is undecided
 (W128) rather than passing it as reached: the product of two numbers is 997 only as one box of
 997 or 997 boxes of one, which no candidate the search walks need be. An example that reaches the
-row decides it, and the warning goes. A row of inputs and enums alone is never undecided: its
-point is an input.
+row decides it, and the warning goes. So does the gap the row leaves: taken out of the table, the
+row leaves inputs no other row covers, the completeness check finds one, and that input — run
+through the rule to confirm it — reaches the row; the vectors take it too. A row of inputs and
+enums alone is never undecided: its point is an input.
 
 ## 6.1 constraint
 
@@ -789,6 +878,22 @@ The shape is `constraint <input> <comparison> <input>`, with one of `<=`, `<`, `
 (E017), an input on each side (E018), and both of a type that has an order — money, a
 quantity, a rate, a `number` or a `date`. Several lines all hold at once, and `A = B`, when
 it is ever wanted, is the two lines `A <= B` and `A >= B`.
+
+One side may add inputs up:
+
+```rule
+constraint used + requested <= quota
+constraint roll < challenger_strength + holder_strength
+```
+
+Only inputs joined by `+`, and on one side only: `a + b <= c + d` and a constant or a factor in
+the sum (`a + 3 <= b`, `2 * a <= b`) are E017, and something other than an input is E018. The
+inputs of a sum are of the other side's type (E103), and a date is not added (E048). A sum is
+read everywhere a pair is: the completeness check drops what the inputs' ranges show it rules
+out and takes it into the elimination with the other linear relations, so a table needs no row
+for a remainder below zero when `used + requested <= quota`; the witnesses and the vectors keep
+to it; the generated code refuses an input that breaks it at the door; an example that breaks it
+is E019.
 
 Three things follow from one line.
 
@@ -1044,8 +1149,9 @@ one element` — which is what keeps E108's int64 claim true of a sequence whose
 caps. To take a difference, sum two non-negative columns and subtract.
 
 Nothing else accumulates. A fold's arms choose an element; a count adds one per element that
-passes a test; a sum adds one column. There is no average and no arm that carries a number
-forward: an average is a sum and a count divided, and the divisor is not a constant (§2.3).
+passes a test; a sum adds one column. There is no average arm and no arm that carries a number
+forward. An average is a sum over a count, divided after the walk inside a rounding (§8):
+`define avg : money[JPY] = half_up(total / max(n, 1), 1JPY)`.
 
 A rule cannot have both a `fold` and a `count` or a `sum` (E031): they are two endings for
 the same walk, and a `fold` may stop partway, which leaves the meaning of a total on that
@@ -1073,12 +1179,14 @@ machine order over step
 | line | what it says |
 |---|---|
 | `machine <name>(<alias>) over <table>` | the table whose rows decide the carried output: its rows are the transitions |
-| `carry <input> -> <output>` | the output the caller passes back as that input on the next call. Both are one enum. **Required** |
+| `carry <input> -> <output>` | the output the caller passes back as that input on the next call. Both are one enum. **Required**. A second and later `carry` line carries a further value along with the state (below) |
 | `held <input>, …` | inputs one case passes with the same value on every call, from its first to its last: the amount of an order, the class of the person who applied (E056 when one is not an input, or is the carried one) |
 | `initial <state>` | the state a case starts in. **Required** |
 | `final <state>, …` | the states a case ends in |
 | `never <state>, … after <state>, …` | no sequence of calls reaches the first states once the case has been in one of the second |
 | `once <output> <cell>` | in one case, at most one call answers an output the cell accepts: a refund paid, a point granted |
+| `initial <input> <value>` | where a further carried value starts. One for every `carry` line after the first (E072) |
+| `always <input> <cell> and … when <state>, …` | in every state a case can reach — every one on the `when` list, when there is one — each carried value named fits its cell |
 
 `carry` is the whole of what is new about the meaning. **The generated function does not
 change** — it takes the state as an argument and answers the next one, and keeps nothing — so
@@ -1093,6 +1201,8 @@ about every **sequence** of calls the caller can make, and `rulec check` proves 
 | finishing | a state a case can reach from which no `final` state can be reached | E125 |
 | `never` | a sequence of calls that reaches the first states after the second | E126 |
 | `once` | a sequence of calls in which two calls answer what the cell accepts | E127 |
+| `always` | a sequence of calls that reaches a state the line speaks of with a carried value its cell does not accept | E135 |
+| a carried number's range | a sequence of calls whose last call answers a carried number outside its input's range | E134 |
 | reach | a state no sequence of calls reaches, and a row that applies only in such states | W125, W126 |
 
 Without `held`, every input may take any value on every call, and a sequence that changes the
@@ -1114,6 +1224,57 @@ error[E126]: A sequence of calls reaches shipped after cancelled
    3. at paid, event = ship, amount_paid = 0JPY → shipped (table step row 4)
 ```
 
+### Carrying a number, a truth value or another enum
+
+A case often holds more than its state: the days left of a grace period, the attempts made, a
+mark that a free trial was taken. A `carry` line after the first carries such a value along,
+and an `initial` line with the input's name says where it starts:
+
+```rule
+machine subscription over step
+  carry   status -> next_status
+  carry   days_left -> next_days_left
+  initial active
+  initial days_left 0
+  final   suspended
+  never   active after suspended
+  always  days_left >=1 <=7 when in_grace
+  always  days_left 0 when active, suspended
+```
+
+What can be carried is a number whose input declares **both ends** of its range (`number`, an
+amount, a quantity, a rate), a truth value, or another enum; the input and the output of a line
+are one type (E051), and every carried value has its `initial` (E072). The first `carry` line is
+the state: the one-word `initial`, `final` and `never` speak of it, and the other values ride
+along. A row writes a carried value the way it writes any output — a value (`7`), the input
+itself (`days_left`, kept as it was), or a computed name (`one_less` from
+`define one_less : number = days_left - 1`). There is no special way to count down: the row for
+the last day has to be written, and that is where a reader sees what happens when the count
+runs out.
+
+What a case is in is then the state together with those values, and every claim — `final`,
+`never`, `once`, finishing, the states no case reaches — is about that. Two more come with it:
+
+- **`always`** names carried inputs with a cell each, joined by `and`, and the states it holds
+  in after `when` (every state, without it). A sequence of calls that reaches one of those
+  states with a value the cell does not accept is E135, the shortest one attached.
+- **a carried number stays within its range.** A call from a state a case reaches that answers
+  it outside the input's range leaves a value no next call can be passed: E134, with the calls
+  that get there. A row that would do so only from values no case holds is W126 instead — in
+  the example, a night of grace at zero days, since a grace period always starts at seven.
+  Such a case has nowhere to go, and E134 is what says so: neither `always` (E135) nor
+  finishing (E125) looks at a value past its range again.
+
+While every combination of the state and the carried values fits the budget, each value of a
+number is a place of its own and the claims are exact. Past that, a number is cut into
+intervals at the boundaries that matter to it — the cells of the tables, the values the rows
+write, the `always` cells and its start — and a call from an interval goes to every interval its
+next value can fall in. That is more calls than happen, so a claim that holds there holds; a
+sequence that breaks a claim there is looked for again among calls that really happen, from
+where a case starts, and is reported as broken only when it is found. Otherwise the claim is
+W127, and so is whether a case can still finish, which the intervals cannot show. `--budget`, or
+a narrower range, brings the walk back to one value at a time.
+
 ### Why the claims stay decidable
 
 The state is a finite enum, and every other input is cut by the rule's own boundaries into
@@ -1122,11 +1283,12 @@ input that realizes it, and what the rule answers there is a transition from the
 class has to the state the rule answers. The claims are then searches over a finite graph.
 The price is the lines this language does not have, and they are left out on purpose:
 
-- **no number is carried from one call to the next.** A total so far — refunds paid, a balance
-  — is kept by the caller and passed in, as it always was. Adding one up in the state would
-  make it a counter, and whether a counter reaches a value is not decidable in general.
-- **one machine per rule, one carried state.** Two machines running side by side is where
-  message order and races live; that is what TLA+ and P are for.
+- **no number without a range is carried from one call to the next.** A total so far — refunds
+  paid, a balance with no limit — is kept by the caller and passed in, as it always was. A
+  number with no end to its range would make the state a counter, and whether a counter
+  reaches a value is not decidable in general; with both ends, the values are finitely many.
+- **one machine per rule.** Two machines running side by side is where message order and races
+  live; that is what TLA+ and P are for.
 - **no calendar.** "Within 14 days" is an input — the days elapsed, counted by the caller —
   compared with a constant, as every date comparison is.
 
@@ -1157,9 +1319,9 @@ scenario late_pay
 | pay    | 3000JPY     | cancelled     | 0JPY    | false    |
 ```
 
-The carried input has **no column**: the first call starts in the `initial` state, and every
-later one in the state the call before it answered. Every other input and every output has a
-column (E055, E111). `rulec check` runs the calls in order through the reference evaluator; a
+The carried input has **no column**, and neither has any further carried value: the first call
+starts in the `initial` state with each carried value at its `initial`, and every later one in
+what the call before it answered. Every other input and every output has a column (E055, E111). `rulec check` runs the calls in order through the reference evaluator; a
 call that does not answer what its row says is E107, reported with the calls that led to it.
 
 ### What a machine generates
@@ -1183,6 +1345,13 @@ ended.
 
 `final` is a keyword in PHP whatever its case, and in Swift, hence the two other spellings.
 
+A further carried value gets the value it starts at, named after its input: `INITIAL_DAYS_LEFT`
+in Python, TypeScript, JavaScript, Rust, Ruby, PHP and Java, `InitialDaysLeft` in Go,
+`initialDaysLeft` in Swift, and `machine.more[k].initial` in the NumPy plan. An amount, a
+quantity or a rate is the language's branded type (`JPY(-5000)` in Python), a truth value its
+`True` or `true`, an enum's value its member. SQL and Wasm have no place for it either: `rulec
+api` gives it under `machine.carried`, with each language's name for it.
+
 The NumPy plan is data, so the state names are the wire form. A target with one door and no
 module has no place for a constant; its caller reads the two off `rulec api`, which lists every
 language's spelling under `machine.constants`.
@@ -1192,7 +1361,8 @@ and every two that can follow one another, the shortest sequence of calls from t
 state that ends with them, and every scenario. `rulec test` has each language's runner play
 them — **the state one call answers is handed to the next call as that language holds it** —
 and prints its constants first, so the traces hold the hand-over and the constants as well as
-the answers (docs/formats.md).
+the answers (docs/formats.md). A further carried value is handed over the same way: the trace's
+first call is passed where each one starts, and every later one what the language answered.
 
 ## 7. Tables
 
@@ -1333,7 +1503,7 @@ name the callee and its digest in their header, `rulec api` lists them under `ap
 | `1200JPY` `2000g` `true` `2026-04-01` `"abc"` | equality with a literal. A quantity must carry its unit |
 | `basic, gold` | a set. Each element is a literal or a group name; on a column of numbers each is a value of its own (`100, 200`) |
 | `not: basic` | the complement of a set |
-| `<=2000g` | comparison. `<=`, `>=`, `<`, `>` |
+| `<=2000g` | comparison. `<=`, `>=`, `<`, `>`. On a column of an ordered enum (§3) it is against a value: `>=gold` |
 | `>=1000JPY <20000JPY` | an interval — two comparisons side by side mean "and" |
 | `starts_with "CH-"` | a prefix, on a `string` column. Two or more are separated by a comma |
 | `none` | an optional that is absent. `-` and `not:` match it too; a comparison, a literal and a set of values do not |
@@ -1381,10 +1551,15 @@ column called `fee` is what the output `fee` returns. Naming a later output in a
 E015; a second `result` line is E016.
 
 Operators, from loosest to tightest: comparison (`<= >= < > =`), then `+ -`, then `* /`.
-Parentheses group. The functions are `min(a, b)`, `max(a, b)` and `allocate(t, c, s)`, and the
-five rounding modes may also be called as functions: `down(x, 1JPY)`, `up(x, 10JPY)`,
-`half_up(x, 1JPY)`, `half_down(x, 1JPY)`, `half_even(x, 1JPY)`. There are no others, and each
-takes the number of arguments written here: anything else is E118.
+Parentheses group. The functions are `min(a, b)`, `max(a, b)`, `allocate(t, c, s)`, `mod(x, n)`
+and `isqrt(x)`, and the five rounding modes may also be called as functions: `down(x, 1JPY)`,
+`up(x, 10JPY)`, `half_up(x, 1JPY)`, `half_down(x, 1JPY)`, `half_even(x, 1JPY)`. There are no
+others, and each takes the number of arguments written here: anything else is E118. `mod` and
+`isqrt` are read as functions only where a call is written, which a name never is, so they are not
+reserved: a rule may still call an input `mod` ([compatibility](compatibility.md), item 2).
+
+A divisor is a constant (E115), with two exceptions: `allocate`, below, and the division a
+rounding makes of its own argument.
 
 ### allocate — one line's share of an amount
 
@@ -1417,6 +1592,64 @@ the product of two ranges rather than the amount. Chains count: two `constraint`
 meet in the middle say what a single one would.
 
 One call decides one line. The loop stays with the caller, as everything else here does.
+
+### Dividing by a value inside a rounding
+
+```rule
+define average_price : money[JPY] = half_up(total / max(units, 1), 1JPY)
+define win_permille : number = half_even(attack * 1000 / (attack + defense), 1)
+```
+
+Inside one of the five roundings, the outermost operation of the first argument may divide by a
+value. The quotient is the exact fraction, and the rounding puts it on its grid the way its mode
+says, below zero as above it — the same in every generated language, since none of them is left
+to its own division. One division to a rounding, and it has to be the outermost operation:
+`down(fee * used / days, 1JPY)` divides by a value, `down(fee * (used / days), 1JPY)` is E115.
+
+- **Its type** is a division's (§3): an amount over an amount of the same unit is a ratio, which
+  is a `number` or a `rate` as the grid says (`half_up(a / b, 1)`, `half_up(a / b, 0.1%)`), and
+  anything over a `number` or a rate keeps its type. The grid is written in the quotient's unit
+  (E103).
+- **The divisor is never zero** (E132). Its interval comes from what it reads — the inputs'
+  ranges, the derives and defines, what a table above writes — and has to stay above zero or
+  below it. The message names an input that makes it zero. The ways out: narrow a range, divide
+  by `max(units, 1)`, or put a table that picks another divisor where it would be zero and
+  divide by that table's output. A row that writes one of its own table's columns writes only
+  what its cell there lets through, so `| >=1 | units |` beside `| 0 | 1 |` makes a column that
+  is never zero (`tests/corpus/average_unit_price_split.rule`). A `constraint` is not read for
+  this: under `constraint a < b`, divide by `max(b - a, 1)`, which is the same value there.
+- **The two integers the generated code divides** — the dividend and the divisor, brought to one
+  step — have to fit int64 (E108).
+- **What the answer can come to** is the quotient's interval (the four corners of the two
+  intervals) pushed out to the grid, and a table can use it as a column.
+
+Any other division by a value is E115, as it was.
+
+### mod — the remainder
+
+```rule
+define turn : number = mod(week - first_week, 3)
+```
+
+`mod(x, n)` is what is left of `x` once the multiples of `n` below it are taken out: from 0 up to
+`n − 1`, whatever the sign of `x` (`mod(-1, 3)` is 2). `n` is a positive whole constant (E115),
+and `x` a whole `number` (E103) — not an amount, a quantity, a rate or a date. What it can come to
+is `x`'s range moved down by the multiples of `n` below it when that range stays inside one
+period of `n`, and 0 to `n − 1` otherwise, so a table over `turn` above needs rows for 0, 1 and 2.
+There is no `%` operator: `7%` is a rate.
+
+### isqrt — the whole square root
+
+```rule
+define quantity : number = isqrt(down(2 * yearly_demand * order_cost / holding_cost, 1))
+```
+
+`isqrt(x)` is the largest whole number whose square does not pass `x`. `x` is a `number` — not an
+amount, a quantity, a rate or a date (E103); of a fraction it is the root of the whole part — and
+cannot go below zero (E139, with an input that takes it there; `max(x, 0)` is a way out). What it
+can come to is the roots of the ends of `x`'s range. There is no `sqrt` that
+answers a fraction and no `pow`: a power is a product, `floor(n^1.5)` is `isqrt(n * n * n)`, and a
+root to two places is `isqrt(x * 10000)`, which counts hundredths.
 
 **There is no loop and no recursion.**
 
@@ -1498,12 +1731,14 @@ An enum **value** never starts a line, so it may be any of them but eleven: `not
 | count and sum | `where` `of` (and `over`, above) |
 | clause body | `when` `then` `always` |
 | apply body | `except` (and `with`, above) |
-| machine body | `carry` `initial` `final` `never` `after` `once` (and `over` and `held`, above) |
+| machine body | `carry` `initial` `final` `never` `after` `once` (and `over` and `held`, above; `always` and `when`, which a `clause` has too) |
 <!-- /RESERVED -->
 
 `step` (inside `rate[step 1%]`), `unique`, `first`, the type words (`money` `mass` `length`
 `area` `volume` `duration` `temperature` `sound` `rate` `number` `bool` `date` `string`), the
-money attributes (`incl_tax` `excl_tax`) and `std` are
-part of the vocabulary but are told apart by position, so they are not reserved as names.
+money attributes (`incl_tax` `excl_tax`), `std`, `enums` (the heading of a file of enums, read
+on its first line only) and `open` (the mark after an enum's last value, §3) are part of the
+vocabulary but are told apart by position, so they are not reserved as names. A value may be
+called `open` too: the mark is only the word that follows the last value.
 
 A test holds this table to `src/kw.rs`, which is the single place the vocabulary is defined.

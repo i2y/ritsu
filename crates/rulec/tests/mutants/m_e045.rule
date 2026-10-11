@@ -3,7 +3,7 @@ description "会員区分と重量から請求額とポイントを一度に出�
 
 enum 会員(member) = 一般(basic) | 上位(gold)
 enum 重さ区分(wclass) = 軽(light) | 中(mid) | 重(heavy)
-enum 帯(tier) = 銅(bronze) | 銀(silver) | 金(gold)
+enum 帯(tier) = ブロンズ(bronze) | シルバー(silver) | ゴールド(gold)
 
 inputs
   会員区分(m)     : 会員
@@ -32,24 +32,24 @@ policy first
 table 帯判定(tier_of)
 policy unique
 | 区分 | 会員区分 | -> 帯(t) : 帯 |
-| 軽   | 一般     | 銅            |
-| 軽   | 上位     | 銀            |
-| 中   | 一般     | 銀            |
-| 中   | 上位     | 金            |
-| 重   | -        | 金            |
+| 軽   | 一般     | ブロンズ      |
+| 軽   | 上位     | シルバー      |
+| 中   | 一般     | シルバー      |
+| 中   | 上位     | ゴールド      |
+| 重   | -        | ゴールド      |
 
 # 一つの表が二つの列を出し、そのうち率の列を下の define が使う。
 # 率の刻み（10%）が列の保持スケールに入らないと、付与点が 10 倍になる。
 table 送料表(ship)
 policy unique
-| 帯 | 支払額   | -> 送料(s) : money[円, incl_tax] | 倍率(r) : rate[step 10%] |
-| 銅 | <3000円  | 800円                            | 100%                     |
-| 銅 | >=3000円 | 400円                            | 100%                     |
-| 銀 | -        | 300円                            | 120%                     |
-| 金 | -        | 0円                              | 150%                     |
+| 帯       | 支払額   | -> 送料(s) : money[円, incl_tax] | 倍率(r) : rate[step 10%] |
+| ブロンズ | <3000円  | 800円                            | 100%                     |
+| ブロンズ | >=3000円 | 400円                            | 100%                     |
+| シルバー | -        | 300円                            | 120%                     |
+| ゴールド | -        | 0円                              | 150%                     |
 
 clause 特例(special) -> 送料
-  when 帯 金
+  when 帯 ゴールド
   then 0円
   overrides 送料表
 

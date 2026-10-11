@@ -71,6 +71,9 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E063](#e063) | error | The cell cannot be read |
 | [E064](#e064) | error | The row does not fit the header |
 | [E065](#e065) | error | `range from koyomi` is misshapen or misplaced |
+| [E066](#e066) | error | An `enums` file, or an `import enum` from one, is misshapen |
+| [E069](#e069) | error | An ordered enum, a comparison on one, or a display name is misshapen |
+| [E072](#e072) | error | A carried value is not written right |
 | [E075](#e075) | error | A word is both a value of an enum and a name |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
 | [E102](#e102) | error | Unreachable row: the row never matches |
@@ -105,6 +108,10 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E128](#e128) | error | The machine's claims could not be checked |
 | [E129](#e129) | error | This rulec reads no koyomi file |
 | [E130](#e130) | error | The days of the koyomi date cannot be read |
+| [E132](#e132) | error | The divisor can be zero |
+| [E139](#e139) | error | The argument of `isqrt` can be below zero |
+| [E134](#e134) | error | A call answers a carried number outside its range |
+| [E135](#e135) | error | An `always` line is broken |
 | [W125](#w125) | warning | No sequence of calls reaches a state |
 | [W126](#w126) | warning | A transition is never taken from a state a case can reach |
 | [W127](#w127) | warning | A claim of the machine could not be settled |
@@ -494,9 +501,9 @@ Related codes: [E015](#e015)
 
 `error` — **A `constraint` is not shaped like this**
 
-**When.** A `constraint` line is not `input comparison input`: either there is no comparison, or a side is not a single name.
+**When.** A `constraint` line is not `input comparison input`: there is no comparison, a side is neither one name nor names added up with `+`, or both sides are sums.
 
-**Fix.** Write `constraint <input> <= <input>`; the comparisons are `<=`, `<`, `>=` and `>`. For `A = B`, write the two lines `A <= B` and `A >= B`.
+**Fix.** Write `constraint <input> <= <input>`; the comparisons are `<=`, `<`, `>=` and `>`. One side may add inputs up (`constraint discount + points <= subtotal`); a coefficient or a constant cannot be written. For `A = B`, write the two lines `A <= B` and `A >= B`.
 
 **Smallest reproduction**:
 
@@ -524,7 +531,7 @@ Related codes: [E018](#e018)
 
 `error` — **A `constraint` relates two inputs**
 
-**When.** A side of a `constraint` is not an input, or has a type with no order. A constraint says which combinations of the values the caller passes can happen, so both sides name something in `inputs`, and each is money, a quantity, a rate, a number or a date.
+**When.** A side of a `constraint` is not an input, or has a type with no order. A constraint says which combinations of the values the caller passes can happen, so both sides name something in `inputs`, and each is money, a quantity, a rate, a number or a date. Every name a sum adds is held to the same.
 
 **Fix.** Name inputs on both sides. A derived or defined value is computed from inputs, so write the relation between those inputs; an enum and a boolean have no order.
 
@@ -1137,9 +1144,9 @@ Related codes: [E032](#e032), [W111](#w111), [E101](#e101)
 
 `error` — **A row label appears twice**
 
-**When.** Two rows of one table carry the same label before their first `|`. A label is how an `overrides` line, a record's trace and a later version name the row, so it is unique within its table.
+**When.** Two rows of one table carry the same label before their first `|`. A label is how an `overrides` line, a record's trace and a later version name the row, so it is unique within its table. Every name that names one thing is held the same way: it also appears when two tables or clauses, or two sources, share a name, and when an enum read with `import enum`, or a group that comes with it, has the name of one this rule declares or another `import enum` reads.
 
-**Fix.** Change one of the two labels.
+**Fix.** Change one of the two labels (names). An enum read with `import enum` can be read under another name with `-> <another name>`.
 
 **Smallest reproduction**:
 
@@ -1686,9 +1693,9 @@ Related codes: [E103](#e103), [E112](#e112), [E115](#e115)
 
 `error` — **The `machine` section is not shaped right**
 
-**When.** The `machine` heading lacks a name or `over <table>`; the `carry` or `initial` line is missing or written twice; a line under `machine` is not `carry`, `initial`, `final`, `never` or `once`; or the rule has two `machine` sections.
+**When.** The `machine` heading lacks a name or `over <table>`; the `carry` or `initial` line is missing, or the state's `initial` line is written twice; a line under `machine` is not `carry`, `held`, `initial`, `final`, `never`, `once` or `always`; or the rule has two `machine` sections.
 
-**Fix.** The shape is `machine <name>(<ascii>) over <table>`, then `carry <input> -> <output>` and `initial <state>` (both required), and `final <state>, …`, `never <state>, … after <state>, …` and `once <output> <cell>` (all optional). To carry two states together, make the pair one enum.
+**Fix.** The shape is `machine <name>(<ascii>) over <table>`, then `carry <input> -> <output>` and `initial <state>` (both required), and `final <state>, …`, `never <state>, … after <state>, …` and `once <output> <cell>` (all optional). To carry more values along, add a `carry` line and an `initial <input> <value>` line for each (E072).
 
 **Smallest reproduction**:
 
@@ -1724,7 +1731,7 @@ Related codes: [E051](#e051), [E052](#e052), [E053](#e053)
 
 `error` — **`carry` or `over` does not fit the declarations**
 
-**When.** The left of `carry` is not an input, the right is not an output, the two are not of one enum, the `over` table does not exist, or it does not decide the carried output. It is because the state is an enum of finitely many values that the claims about sequences of calls are decidable.
+**When.** The left of `carry` is not an input, the right is not an output, the two of the first `carry` line are not of one enum, the two of a later `carry` line are not of one type, the `over` table does not exist, or it does not decide the carried output. It is because the state is an enum of finitely many values that the claims about sequences of calls are decidable.
 
 **Fix.** Declare the state as an input and an output of one enum, write `carry <input> -> <output>`, and name after `over` the table that has the carried output as an output column.
 
@@ -1803,7 +1810,7 @@ Related codes: [E050](#e050), [E126](#e126)
 
 `error` — **The `once` line does not fit the declarations**
 
-**When.** The output of `once` is not declared, is the carried state, or the cell is `-`. A state is answered again on every call that stays in it, so counting it with `once` breaks on the first stay. The cell is held to the output's type exactly as a table's cell is (E103 and the rest).
+**When.** The output of `once` is not declared, is the carried state or another carried value, or the cell is `-`. A carried value is answered again on every call that keeps it, so counting it with `once` breaks on the first call that does. The cell is held to the output's type exactly as a table's cell is (E103 and the rest).
 
 **Fix.** Name an output other than the carried state (`once refund >0JPY`). Say it about states with `never … after …`.
 
@@ -1894,7 +1901,7 @@ Related codes: [E050](#e050), [E028](#e028)
 
 `error` — **A `scenario` is not shaped right**
 
-**When.** A `scenario` is written in a rule without a `machine`; it has no name, or two share one; it has no rows; it has a column for the carried input; or it lacks a column for another input. The first call starts from the `initial` state and every later one from the state the call before it answered, so the carried input has no column.
+**When.** A `scenario` is written in a rule without a `machine`; it has no name, or two share one; it has no rows; it has a column for a carried input (the state, or another carried value); or it lacks a column for another input. The first call starts from the `initial` values and every later one from what the call before it answered, so a carried input has no column.
 
 **Fix.** Write the table right under `scenario <name>(<ascii>)`. The header is every input but the carried one, then `->`, then every output. With no state carried from one call to the next, write the rows as `examples`.
 
@@ -1926,7 +1933,7 @@ Related codes: [E107](#e107), [E111](#e111), [E050](#e050)
 
 `error` — **The `held` line does not fit the declarations**
 
-**When.** `held` names something that is not an input, the carried input, or one name twice. `held` says which inputs one case passes with the same value on every call, from its first to its last — the amount of an order, the class of the person who applied — and the check then stops offering sequences of calls that change one of them as counterexamples.
+**When.** `held` names something that is not an input, a carried input (the state, or another carried value), or one name twice. `held` says which inputs one case passes with the same value on every call, from its first to its last — the amount of an order, the class of the person who applied — and the check then stops offering sequences of calls that change one of them as counterexamples.
 
 **Fix.** Name inputs. The carried input is replaced by the answer of the call before on every call, so it cannot be `held`.
 
@@ -2205,6 +2212,98 @@ policy unique
 ```
 
 Related codes: [E129](#e129), [E130](#e130)
+
+## E066
+
+`error` — **An `enums` file, or an `import enum` from one, is misshapen**
+
+**When.** A file headed `enums` holds a line other than `description`, `import`, `enum` and `group` (a table, inputs, outputs, a definition, an `import enum`, …); or `import enum <enum> from "<file>"` names a file that is not an `enums` file, or one that does not pass check. An `enums` file holds the enums rules share: it decides nothing, and no function is generated from it.
+
+**Fix.** Write the tables and the inputs in a rule that reads the enum with `import enum … from`. Start the file it reads with `enums <name> v<version>`, and make it pass check.
+
+**Smallest reproduction**:
+
+```rule
+enums kinds v1
+
+enum kind = chilled | ambient
+
+table fee
+policy unique
+| kind | -> fee : number |
+| -    | 1               |
+```
+
+Related codes: [E013](#e013), [E034](#e034)
+
+## E069
+
+`error` — **An ordered enum, a comparison on one, or a display name is misshapen**
+
+**When.** A cell that compares (`<v`, `>=v`) is written in a column of an enum whose values are separated by `|`, and so have no order; or two values of such an enum are compared with `<` and the like, passed to `max` or `min`, or held to a range on an input. Or one enum separates its values with both `<` and `|`. Or a range lets no value in, or an enum field of an element is given a range. Or a value's display name is empty or holds a control character, or two values of one enum have the same display name. The values of an enum separated by `<` are ordered as written, and a comparison takes the values before (after) the one it is against.
+
+**Fix.** If the order the values are declared in means something, separate them with `<` (`enum tier = basic < silver < gold`); if not, write values or sets. Use one separator throughout, and give each value a display name that is not empty and differs from the others'.
+
+**Smallest reproduction**:
+
+```rule
+rule member_fee v1
+
+enum tier = basic | silver | gold
+
+inputs
+  member : tier
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fees
+policy unique
+| member   | -> fee |
+| >=silver | 0USD   |
+| basic    | 5USD   |
+```
+
+Related codes: [E012](#e012), [E103](#e103)
+
+## E072
+
+`error` — **A carried value is not written right**
+
+**When.** A `carry` line after the first carries a number whose range lacks an end, or a date, a string or an optional value; a value is carried twice; a carried value has no `initial <input> <value>` line, or two, or one whose value does not fit its type or range; an `initial <input> <value>` line names the state or an input that is not carried; an `always` line is not shaped right; or an `always` line names something that is not a carried value, or the state itself. It is because a carried number has both ends of a range that the values a case can hold are finitely many, and the claims about sequences of calls decidable.
+
+**Fix.** Give a carried number a range with both ends, as in `range >=0 <=7`, and every carried value the value it starts at with `initial <input> <value>`. An `always` line names the input on the left of a later `carry` line with a cell, joined by `and`, and the states it holds in after `when` (`always days_left >=1 <=7 when in_grace`). What is said of the state is said with `never` and `final`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = run(run) | done(done)
+
+inputs
+  st(st) : s
+  n(n)   : number  range >=0 <=3
+
+outputs
+  nx(nx) : s
+  nn(nn) : number  round down(1)
+
+define more(more) : number = n + 1
+
+table m(m)
+policy first
+| st  | n  | -> nx(nx) : s | nn(nn) : number |
+| run | <3 | run           | more            |
+| -   | -  | done          | n               |
+
+machine k(k) over m
+  carry   st -> nx
+  carry   n -> nn
+  initial run
+```
+
+Related codes: [E050](#e050), [E051](#e051), [E135](#e135)
 
 ## E075
 
@@ -2753,9 +2852,9 @@ Related codes: [E103](#e103), [E106](#e106)
 
 `error` — **The divisor is not a positive constant**
 
-**When.** The right of `÷` is neither a positive whole constant nor a positive constant amount or quantity in the same unit: a variable, zero, a negative number or a fraction.
+**When.** The right of `÷` is neither a positive whole constant nor a positive constant amount or quantity in the same unit: a variable, zero, a negative number or a fraction. A division that is the outermost operation of a rounding function's argument may divide by a value (`half_up(total / units, 1JPY)`; E132 sees that the divisor is never zero). The divisor n of `mod(x, n)` is this too when it is not a positive whole constant.
 
-**Fix.** If the divisor is business data, take it as a rate input or look the constant up in a table. Without a statically known step the generated code falls back on the language's own division, and Python rounding toward -inf and Go toward zero disagree.
+**Fix.** To divide by a value, put the division inside a rounding function, with the grid and the way to round (`half_up(total / units, 1JPY)`). If the divisor is business data that can come as a rate, take it as a rate input, or look the constant up in a table. Without a statically known step the generated code falls back on the language's own division, and Python rounding toward -inf and Go toward zero disagree.
 
 **Smallest reproduction**:
 
@@ -2861,7 +2960,7 @@ Related codes: [E115](#e115), [E108](#e108)
 
 `error` — **The call is not written correctly**
 
-**When.** A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)` and the five rounding modes (`down(x, 1JPY)` and the rest).
+**When.** A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)`, `mod(x, n)`, `isqrt(x)` and the five rounding modes (`down(x, 1JPY)` and the rest). A rounding grid that is not a constant is this too.
 
 **Fix.** Check the spelling and the count. A spare argument is dropped on the floor and a missing one leaves no answer — both used to pass unnoticed, and only the generator ran out of cases.
 
@@ -3248,7 +3347,7 @@ Related codes: [E125](#e125), [E126](#e126)
 
 `error` — **A case can reach a state it can never finish from**
 
-**When.** A state a case can reach from `initial` is not final, and no final state can be reached from it: the "option to complete" of workflow-net soundness is broken. The shortest sequence of calls that gets there comes with it.
+**When.** A state a case can reach from `initial` is not final, and no final state can be reached from it: the "option to complete" of workflow-net soundness is broken. The shortest sequence of calls that gets there comes with it. A case whose carried number has left its range, so that no further call can take it, is E134's.
 
 **Fix.** Add a row that moves on to a final state, or, if a case rightly ends there, add the state to `final`.
 
@@ -3283,7 +3382,7 @@ machine k(k) over m
   final   c
 ```
 
-Related codes: [E124](#e124), [W125](#w125)
+Related codes: [E124](#e124), [W125](#w125), [E134](#e134)
 
 ## E126
 
@@ -3492,6 +3591,143 @@ date payment = closing
 
 Related codes: [E065](#e065), [E129](#e129)
 
+## E132
+
+`error` — **The divisor can be zero**
+
+**When.** A rounding function's argument divides by a value (`half_up(total / units, 1JPY)`), and the range of the divisor includes zero. The range is worked out by interval arithmetic from the inputs' ranges, the ranges of the derives and the `define`s, and what the tables above write — where a row writes one of its own table's columns, only the values its cell there lets through (`| >=1 | units |` writes units of one or more). A `constraint` is not read. A divisor that reads a value with no range cannot be shown never to be zero either, and is this too. Where an input that makes the divisor zero is found, the notes name it.
+
+**Fix.** Narrow the divisor's range so that it leaves zero out (`range >=1`), divide by `max(units, 1)`, or put a table that picks another value when it is zero (the two rows `| 0 | 1 |` and `| >=1 | units |`) and divide by that table's output. Dividing by `b - a` under `constraint a < b`, write `max(b - a, 1)` too: under the constraint it is the same value. What to answer when it is zero is a business decision, and rulec does not make it.
+
+**Smallest reproduction**:
+
+```rule
+rule average_price v1
+
+inputs
+  total : money[JPY]  range >=0JPY <=10000JPY
+  units : number  range >=0 <=100
+
+outputs
+  average : money[JPY]  round half_up(1JPY)
+
+define per_unit : money[JPY] = half_up(total / units, 1JPY)
+
+result average = per_unit
+```
+
+Related codes: [E115](#e115), [E108](#e108), [E019](#e019)
+
+## E139
+
+`error` — **The argument of `isqrt` can be below zero**
+
+**When.** The range of x in `isqrt(x)` includes values below zero. The range is worked out by intervals as for E132, and an argument that reads a value with no range is this too. A number below zero has no square root, and the generated code would have no answer on that call. Where an input that makes the argument negative is found, the notes name it.
+
+**Fix.** Narrow the inputs' ranges so that the argument stays at zero or more, or pass `isqrt(max(x, 0))`. A power is written as a product: `isqrt(n * n * n)` is n to the power 1.5, rounded down.
+
+**Smallest reproduction**:
+
+```rule
+rule root_of_gap v1
+
+inputs
+  gap : number  range >=-10 <=100
+
+outputs
+  root : number  round down(1)
+
+define whole_root : number = isqrt(gap)
+
+result root = whole_root
+```
+
+Related codes: [E108](#e108), [E103](#e103)
+
+## E134
+
+`error` — **A call answers a carried number outside its range**
+
+**When.** A call from a state a case can reach from `initial` answers a carried number outside its input's range: the next call cannot be passed it, and the case cannot go on from there. The shortest sequence of calls comes with it as `witness.trace`. A row that leaves the range only from states no case reaches is W126's.
+
+**Fix.** Correct the row that decides the next value (stop at the bound, or move on to another state), or widen the input's range if the value does occur in the business.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = run(run) | done(done)
+
+inputs
+  st(st)       : s
+  again(again) : bool
+  n(n)         : number  range >=0 <=3
+
+outputs
+  nx(nx) : s
+  nn(nn) : number  round down(1)
+
+define more(more) : number = n + 1
+
+table m(m)
+policy first
+| st   | again | n   | -> nx(nx) : s | nn(nn) : number |
+| run  | true  | <=2 | run           | more            |
+| run  | true  | -   | done          | more            |
+| run  | -     | -   | done          | n               |
+| done | -     | -   | done          | n               |
+
+machine k(k) over m
+  carry   st -> nx
+  carry   n -> nn
+  initial run
+  initial n 0
+```
+
+Related codes: [E072](#e072), [E135](#e135), [W126](#w126)
+
+## E135
+
+`error` — **An `always` line is broken**
+
+**When.** Some sequence of calls reaches a state the `always` line speaks of (those after `when`, or any state when there are none) with a carried value its cell does not accept. The shortest one comes with it, and every call in it is an input the rule takes and answers. A place where a carried number has left its range is E134's, and is not looked at here.
+
+**Fix.** Correct the rows that decide where a case goes and what it carries on, or the `always` line if the claim is wrong as business.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum s(s) = run(run) | done(done)
+
+inputs
+  st(st) : s
+  n(n)   : number  range >=0 <=3
+
+outputs
+  nx(nx) : s
+  nn(nn) : number  round down(1)
+
+define more(more) : number = n + 1
+
+table m(m)
+policy first
+| st  | n  | -> nx(nx) : s | nn(nn) : number |
+| run | <3 | run           | more            |
+| -   | -  | done          | n               |
+
+machine k(k) over m
+  carry   st -> nx
+  carry   n -> nn
+  initial run
+  initial n 0
+  always  n <=2 when run
+```
+
+Related codes: [E072](#e072), [E126](#e126), [E134](#e134)
+
 ## W125
 
 `warning` — **No sequence of calls reaches a state**
@@ -3537,7 +3773,7 @@ Related codes: [W126](#w126), [E125](#e125)
 
 `warning` — **A transition is never taken from a state a case can reach**
 
-**When.** A row of the table that decides the transitions applies only in states no sequence of calls from `initial` reaches. It comes with W125.
+**When.** A row of the table that decides the transitions applies only in states no sequence of calls from `initial` reaches. It comes with W125. A row whose state a case does reach, but never with the value of a `held` input or of a carried value (a `carry` line after the first) the row needs, is this warning too — among them a row that would answer a carried number outside its range, from values no case holds.
 
 **Fix.** Add the transition into the state it needs, or drop the row.
 
@@ -3578,9 +3814,9 @@ Related codes: [W125](#w125), [E102](#e102)
 
 `warning` — **A claim of the machine could not be settled**
 
-**When.** A claim turns on a cell for which no input was built and none was shown impossible. Derived values that share an input, with a solution only among the rationals, are what is left here — the place W114 is about. What was not settled is not said to hold.
+**When.** A claim turns on a cell for which no input was built and none was shown impossible. Derived values that share an input, with a solution only among the rationals, are what is left here — the place W114 is about. A machine that carries numbers (a `carry` line after the first) leaves three more: the numbers were walked in intervals, since every value one by one is past the budget, and a sequence that breaks the claim over the intervals could not be made again from calls that really happen; walked in intervals, that every state a case reaches can still get to a final one is not followed; or a carried number's next value moves with another input inside a cell, and the values between the ones the calls seen answered were not each tried. What was not settled is not said to hold.
 
-**Fix.** If no input really falls in the cell, write the condition over whole numbers (`a >= 3JPY` for `twice >= 5JPY`). If one does, write it down as an example or a scenario.
+**Fix.** If no input really falls in the cell, write the condition over whole numbers (`a >= 3JPY` for `twice >= 5JPY`). If one does, write it down as an example or a scenario. Where the carried numbers were walked in intervals, raising `--budget` or narrowing their ranges lets every value be walked one by one, and the claim settled.
 
 **Smallest reproduction**:
 
@@ -3618,7 +3854,7 @@ Related codes: [W114](#w114), [E128](#e128)
 
 `warning` — **No input was found that reaches a row, and none was shown not to**
 
-**When.** A row that writes a cell on a computed column (a derive, a `define`): no input reaching it was found among the rule's examples, by the search the vectors are made with, or among the combinations of the inputs' candidate values (up to 4,096), and it could not be shown that no input does. The point of such a row is not an input, and whether one reaches it turns on how the expressions relate (a value only whole numbers reach, or one they never do). A row nothing decided is not passed in silence. A row of inputs and enums alone needs no search: its point is an input.
+**When.** A row that writes a cell on a computed column (a derive, a `define`): no input reaching it was found among the rule's examples, by the search the vectors are made with, among the combinations of the inputs' candidate values (up to 4,096), or as the input behind the gap the completeness check finds with the row taken out, and it could not be shown that no input does. The point of such a row is not an input, and whether one reaches it turns on how the expressions relate (a value only whole numbers reach, or one they never do). A row nothing decided is not passed in silence. A row of inputs and enums alone needs no search: its point is an input.
 
 **Fix.** Look at the expressions and the row's conditions together. If some input reaches the row, write it as an example and the warning goes; if none does, delete the row. If deleting it brings a completeness gap (E101), rulec cannot show that the combination never comes either, and the row can stay.
 
