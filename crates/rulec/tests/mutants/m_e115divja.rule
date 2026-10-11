@@ -1,0 +1,25 @@
+rule 日割り(prorated_charge) v1
+description "月の途中の料金。月額に使った日数を掛けて、その月の日数で割り、1 円未満を切り捨てる。月の日数より多くの日の料金はかからない"
+
+inputs
+  月額(monthly_fee)       : money[円]  range >=0円 <=100万円
+  使った日数(days_used)   : number     range >=0 <=31
+  月の日数(days_in_month) : number     range >=28 <=31
+
+constraint 使った日数 <= 月の日数
+
+outputs
+  料金(charge) : money[円]  round down(1円)
+
+# 月は少なくとも 28 日あるので、割る数が 0 になることはない。
+define 日割りの額(prorated) : money[円] = down(月額 * (使った日数 / 月の日数), 1円)
+
+result 料金 = 日割りの額
+
+examples
+| 月額   | 使った日数 | 月の日数 | -> 料金 |
+| 3000円 | 10         | 30       | 1000円  |
+| 3000円 | 10         | 31       | 967円   |
+| 3000円 | 31         | 31       | 3000円  |
+| 3000円 | 0          | 28       | 0円     |
+| 1000円 | 15         | 28       | 535円   |

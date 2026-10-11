@@ -346,17 +346,20 @@ impl<'a> Ex<'a> {
     }
 
     /// Change a value left open that a check reads, so that the check comes out as `holds` says,
-    /// where its range has room: the later one made first. A check none of whose values were left
-    /// open comes out as it does.
-    fn steer(&mut self, t: &PreTest, holds: bool) {
+    /// where its range has room: the later one made first, and where the check is to hold, one the
+    /// rule `rule` takes first. A check none of whose values were left open comes out as it does.
+    fn steer(&mut self, t: &PreTest, rule: usize, holds: bool) {
         if crate::prechecks::holds(t, &|e| self.now_of(e)) == holds {
             return;
         }
         match t {
             PreTest::Relation { left, op, right } => {
                 let num = |v: Value| v.as_f64().map(|x| x as i64);
-                let (Some(l), Some(r)) = (num(self.now_of(&left.1)), num(self.now_of(&right.1))) else { return };
-                // the left one given the right, and the right one given the left
+                // each side the values it adds up (rulec's §15.216): one, or several
+                let vals = |s: &[(String, TExpr)]| s.iter().map(|(_, e)| num(self.now_of(e))).collect::<Option<Vec<i64>>>();
+                let (Some(lv), Some(rv)) = (vals(left), vals(right)) else { return };
+                let (l, r): (i64, i64) = (lv.iter().sum(), rv.iter().sum());
+                // the left side given the right, and the right side given the left
                 let lefts = match (op.as_str(), holds) {
                     ("<=", true) | (">=", true) | ("<", false) | (">", false) => r,
                     ("<", true) | (">=", false) => r - 1,
@@ -367,14 +370,34 @@ impl<'a> Ex<'a> {
                     ("<", true) | (">=", false) => l + 1,
                     _ => l - 1,
                 };
-                let mut tries = vec![(self.open_at(&left.1), lefts), (self.open_at(&right.1), rights)];
-                tries.sort_by_key(|(id, _)| std::cmp::Reverse(*id));
-                for (id, n) in tries {
-                    let Some(id) = id else { continue };
-                    if self.holes[id].2.is_none_or(|rg| rg.contains(n)) {
-                        self.holes[id].1 = Some(json!(n));
-                        return;
+                // one value of a side moved, the others as they are, so that its side comes to what
+                // it has to be
+                let mut tries: Vec<(Option<usize>, i64, &str)> = Vec::new();
+                for (i, (n, e)) in left.iter().enumerate() {
+                    tries.push((self.open_at(e), lefts - (l - lv[i]), n.as_str()));
+                }
+                for (i, (n, e)) in right.iter().enumerate() {
+                    tries.push((self.open_at(e), rights - (r - rv[i]), n.as_str()));
+                }
+                tries.sort_by_key(|(id, ..)| std::cmp::Reverse(*id));
+                // Where the check is to hold, the call goes on to the rule, so a value the rule's
+                // own range takes is tried first: with a sum, moving the last value made can take
+                // it below zero when the others already come to the most the other side allows.
+                let takes = |name: &str, n: i64| -> bool {
+                    let Some(c) = self.m.rules.get(rule).and_then(|r| r.info.inputs.iter().find(|c| c.name == name)) else { return true };
+                    match &c.ty {
+                        crate::rulec::RType::Num { min, max, .. } => min.is_none_or(|lo| n >= lo) && max.is_none_or(|hi| n <= hi),
+                        _ => true,
                     }
+                };
+                let fits = |id: usize, n: i64| self.holes[id].2.is_none_or(|rg| rg.contains(n));
+                let pick = tries
+                    .iter()
+                    .filter_map(|(id, n, name)| id.map(|id| (id, *n, *name)))
+                    .find(|(id, n, name)| fits(*id, *n) && (!holds || takes(name, *n)))
+                    .or_else(|| tries.iter().filter_map(|(id, n, name)| id.map(|id| (id, *n, *name))).find(|(id, n, _)| fits(*id, *n)));
+                if let Some((id, n, _)) = pick {
+                    self.holes[id].1 = Some(json!(n));
                 }
             }
             PreTest::Days { value, days, .. } => {
@@ -782,7 +805,7 @@ impl<'a> Ex<'a> {
             // a rule's precondition: a run where the values keep it, and one where they break it
             TK::Check(c) => {
                 let holds = self.choose(&format!("check {}", s.site), 2) == 0;
-                self.steer(&c.test, holds);
+                self.steer(&c.test, c.rule, holds);
                 if crate::prechecks::holds(&c.test, &|e| self.now_of(e)) {
                     self.labels.insert(format!("{}:holds", s.site));
                     Ctl::Next

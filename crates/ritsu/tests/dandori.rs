@@ -143,13 +143,15 @@ fn dandori_lib(dir: &std::path::Path, args: &[&str], undecided: bool) -> u8 {
 /// What ritsu cannot decide of a rule's preconditions where a flow calls it (ritsu-cross's W201)
 /// goes to dandori, and the code `ritsu dandori build` writes checks it when the workflow runs
 /// (DESIGN 7.4 item 3; dandori's DESIGN 1.17). tests/flows/preconditions.flow and its Japanese twin
-/// call rules whose four preconditions ritsu-cross leaves undecided: each builds on every platform
+/// call rules whose four preconditions ritsu-cross leaves undecided, and tests/flows/quota.flow one
+/// whose precondition adds two inputs up: each builds on every platform
 /// exactly as dandori builds it with every precondition left undecided, which dandori's tests run on
 /// every platform against its reference interpreter. A call whose precondition ritsu-cross decides
 /// (shown to hold, or broken by an example, its E201) is built as it is built without ritsu-cross.
 #[test]
 fn ritsu_dandori_checks_the_preconditions_ritsu_cannot_decide() {
-    for flow in ["preconditions.flow", "preconditions.ja.flow"] {
+    // quota.flow's rule has a sum on one side of its constraint (rulec's §15.216)
+    for (flow, at_least) in [("preconditions.flow", 4), ("preconditions.ja.flow", 4), ("quota.flow", 1)] {
         for target in TARGETS {
             let (a, b) = (ritsu_testkit::TempDir::new("xb-ritsu"), ritsu_testkit::TempDir::new("xb-lib"));
             let rel = format!("tests/flows/{flow}");
@@ -162,7 +164,7 @@ fn ritsu_dandori_checks_the_preconditions_ritsu_cannot_decide() {
                 assert!(text == &want[name], "{flow} {target}: {name} is not what dandori writes with every precondition undecided");
             }
             let checks: usize = got.values().map(|t| t.matches("Dandori.BrokenPrecondition").count()).sum();
-            assert!(checks >= 4, "{flow} {target}: {checks} checks");
+            assert!(checks >= at_least, "{flow} {target}: {checks} checks");
         }
     }
     // decided: what is asked kept below what was paid by the ranges (held), and able to pass it (E201)

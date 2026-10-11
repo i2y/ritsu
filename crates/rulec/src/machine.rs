@@ -417,7 +417,7 @@ fn coupled_inputs(f: &RuleFile, fixed: &[String], axes: &[Axis]) -> Vec<String> 
     }
     for k in &f.constraints {
         for x in fixed {
-            if (&k.left == x || &k.right == x) && !out.contains(x) {
+            if k.names().any(|n| n == x) && !out.contains(x) {
                 out.push(x.clone());
             }
         }

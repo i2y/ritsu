@@ -2785,7 +2785,7 @@ impl<'a> Gen<'a> {
             // a rule's precondition ritsu could not decide (DESIGN 1.17), as soon as the values are made
             TK::Check(c) => {
                 let holds = match &c.test {
-                    PreTest::Relation { left, op, right } => format!("{} {op} {}", self.expr(&left.1), self.expr(&right.1)),
+                    PreTest::Relation { left, op, right } => format!("{} {op} {}", side_code(left, &|e| self.expr(e)), side_code(right, &|e| self.expr(e))),
                     PreTest::Days { value, days, .. } => format!("[{}].includes({})", days.iter().map(|x| q(x)).collect::<Vec<_>>().join(", "), self.expr(value)),
                 };
                 self.line(d, &format!("// line {}: the precondition {} of the rule {}, which ritsu could not decide", c.call_line, c.text(), m.rules[c.rule].name));

@@ -81,6 +81,15 @@ def tyOfString (s : String) : Option Ty :=
   else if s.isEmpty then none
   else some (.other s)
 
+/-- One side of a `constraint` line: the names it adds up. A side of one name is written as the
+    name, and a side that adds several as the list of them (rulec's §15.216); anything else is no
+    side at all. -/
+def sideNames (k : Json) (key : String) : List String :=
+  match field k key with
+  | some (.str s) => [s]
+  | some (.arr xs) => xs.toList.filterMap str
+  | _ => []
+
 /-! ## Expressions -/
 
 def cmpOfString (s : String) : Option Cmp :=
@@ -124,7 +133,32 @@ partial def exprOfJson (j : Json) : Option Expr :=
         match field j "call" >>= str with
         | some c => do
             let args := fieldArr j "args"
+            -- A rounding of a quotient by a value (rulec's §15.213): the first argument divides by
+            -- something that is not a number written in the rule, which is read here as one node.
+            let quot : Option (Json × Json) := do
+              let q ← args[0]?
+              guard (["down", "up", "half_up", "half_down", "half_even"].contains c)
+              guard (args.size == 2 && (field q "op" >>= str) == some "/" && (field q "r" >>= fun r => field r "num").isNone)
+              let n ← field q "l"
+              let d ← field q "r"
+              some (n, d)
+            match quot with
+            | some (nj, dj) => do
+              let n ← exprOfJson nj
+              let d ← exprOfJson dj
+              let gj ← args[1]?
+              let g ← field gj "value" >>= optRat
+              let gt := (field gj "type" >>= str >>= tyOfString).getD Ty.number
+              some (.divRound n d g gt)
+            | none => do
             let a ← args[0]? >>= exprOfJson
+            -- A remainder by a positive whole constant, and a whole square root (rulec's §15.214,
+            -- §15.215).
+            if c == "mod" && args.size == 2 then do
+              let k ← args[1]? >>= fun x => field x "value" >>= optRat
+              guard (k.den == 1 && 0 < k.num)
+              some (.modc a k.num.toNat)
+            else if c == "isqrt" && args.size == 1 then some (.isqrt a) else
             if c == "min" && args.size == 2 then some (.minOf a (← args[1]? >>= exprOfJson))
             else if c == "max" && args.size == 2 then some (.maxOf a (← args[1]? >>= exprOfJson))
             -- A share (§15.102). Its three arguments are names — E117 accepts nothing
@@ -424,10 +458,10 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
       match bs[c]? with
       | some b => coordOfJson b
       | none => none))
-  -- A constraint counts for this table only when both its columns are axes of it.
+  -- A constraint counts for this table only when every column it names is an axis of it.
   let cons : List Constraint := (fieldArr j "constraints").toList.filterMap (fun k => do
-    let l ← columns.idxOf? (fieldStr k "left")
-    let r ← columns.idxOf? (fieldStr k "right")
+    let l ← (sideNames k "left").mapM columns.idxOf?
+    let r ← (sideNames k "right").mapM columns.idxOf?
     let op ← cmpOfString (fieldStr k "op")
     some { left := l, op := op, right := r })
   -- A column the rule computes — a derive, or a `define` of a number (rulec's §15.195) — can

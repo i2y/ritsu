@@ -1,0 +1,11 @@
+ok quota_check.rule
+警告[dandori W104]: quota.flow:26:1: `asked` の範囲が分かりません（`ask_amount` の結果に範囲がありません）。規則 `check` の `requested` が受け取るのは `>=0 <=10000` です
+    26 |   let decision = check(used: used, requested: asked, quota: quota)
+警告[dandori W104]: quota.flow:28:1: `asked` の範囲が分かりません（`ask_amount` の結果に範囲がありません）。`grant` の引数 `amount` が受け取るのは `>=0 <=10000` です
+    28 |     at_once => grant(account: account, amount: asked)
+quota.flow: 検査を通りました（警告 2 件）
+警告[ritsu W201]: quota.flow:26:1: 規則 check を呼ぶところで、前提 `used + requested <= quota` が保たれるかを決められません
+    26 |   let decision = check(used: used, requested: asked, quota: quota)
+  = `asked` の範囲が分かりません（`ask_amount` の結果に範囲がありません）
+  = `ritsu dandori build` が書くワークフローのコードが、走らせたときに、値ができたところですぐに確かめます。破る実行は、そこで `Dandori.BrokenPrecondition` で失敗します。
+ritsu check: ファイル 2 個（rulec 1、dandori 1）。どれも検査を通りました（警告 3 件）。言語の境目: 確かめた 1 か所、決められない 1 か所

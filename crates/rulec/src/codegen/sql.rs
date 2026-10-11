@@ -135,6 +135,11 @@ impl Sql {
 
     fn binop(op: &str, a: &str, b: &str) -> String {
         match op {
+            // A divisor that is not a constant (the whole of a share, §15.102) is never zero on an
+            // input the door takes (E117), but the query decides a refused row all the same, and
+            // PostgreSQL raises on a division by zero where SQLite answers NULL: the function form
+            // then stopped on the refused row instead of refusing it. NULLIF makes both NULL.
+            "//" if b.parse::<i128>().is_err() => format!("({a} / NULLIF({b}, 0))"),
             "//" => format!("({a} / {b})"),
             "==" => format!("({a} = {b})"),
             _ => format!("({a} {op} {b})"),
@@ -153,14 +158,34 @@ impl Sql {
         if *i < t.len() && t[*i] == "(" {
             *i += 1;
             let a = self.expr(t, i);
+            // The one call of one argument: the whole square root, which is a function (§15.215).
+            if t[*i] == ")" {
+                *i += 1;
+                assert!(tok == "_isqrt", "a call of one argument: {tok}");
+                return format!("{}({a})", super::arith::SQL_ROOT);
+            }
             assert!(t[*i] == ",", "a call takes two arguments");
             *i += 1;
             let b = self.expr(t, i);
             assert!(t[*i] == ")", "unbalanced");
             *i += 1;
+            // Each operand read several times is bound to a column of its own first.
+            let col = |s: &mut Sql, x: String| if x.starts_with('"') || x.parse::<i128>().is_ok() { x } else { s.bind(x) };
             return match tok.as_str() {
                 "_min" => format!("LEAST({a}, {b})"),
                 "_max" => format!("GREATEST({a}, {b})"),
+                // The remainder by a positive constant (§15.214).
+                "_mod" => {
+                    let x = col(self, a);
+                    super::arith::sql_mod(&x, &b)
+                }
+                // A rounding of a quotient by a value (§15.213), the helper's name read back.
+                f if f.starts_with("_div_round_") => {
+                    let m = super::mode_from_fn(f.trim_start_matches("_div_round_")).expect("a rounded quotient");
+                    let n = col(self, a);
+                    let d = col(self, b);
+                    super::arith::sql_div(m, &n, &d)
+                }
                 f => {
                     // The Python helper's name, not the mode's keyword: `half_up` is spelled
                     // `_round_half` and `half_even` `_round_bankers` there. A callee output
@@ -349,6 +374,16 @@ impl<'a> Gen<'a> {
     /// `sql/<alias>.sql`: the query.
     pub fn sql(&self) -> String {
         let mut o = self.sql_head();
+        // The whole square root is a function (§15.215): the query names it, and the file of the
+        // function form defines it for PostgreSQL.
+        if self.arith_uses().root {
+            o.push_str(&tr!(
+                "-- この問い合わせは {} を呼びます。PostgreSQL では、{}_function.sql の先頭にあるその定義を先に作ってください。\n",
+                "-- This query calls {}. On PostgreSQL, create it first with its definition at the top of {}_function.sql.\n",
+                super::arith::SQL_ROOT,
+                pub_name(&self.f.name)
+            ));
+        }
         o.push_str(&self.sql_query(None));
         o.push_str(";\n");
         o
@@ -454,8 +489,8 @@ impl<'a> Gen<'a> {
         // happen is refused rather than answered, because no row was ever demanded for it.
         for k in &self.f.constraints {
             let op = k.op.word();
-            let said = format!("{} {op} {}", k.left, k.right);
-            let (a, b) = self.constraint_sides(k, q(&local(&k.left)), q(&local(&k.right)));
+            let said = k.said();
+            let (a, b) = self.constraint_sides(k, &|n| q(&local(n)), false);
             guard.push(format!(
                 "WHEN NOT ({a} {op} {b}) THEN {}",
                 lit(&crate::door::constraint(&said))
@@ -748,6 +783,11 @@ impl<'a> Gen<'a> {
         o.push_str("--\n");
         for line in self.sql_function_doc().lines() {
             o.push_str(&format!("-- {line}\n"));
+        }
+        // The whole square root the query calls (§15.215), before anything that calls it.
+        if self.arith_uses().root {
+            o.push('\n');
+            o.push_str(&super::arith::sql_root_function());
         }
         o.push_str(&tr!("--\n-- 引数:\n", "--\n-- The arguments:\n"));
         for i in &self.f.inputs {
@@ -1093,7 +1133,15 @@ impl<'a> Gen<'a> {
     pub fn sql_runner(&self) -> String {
         let (ins, outs, tables, labels, any_w114) = self.sql_runner_lists();
         let (meta, carry) = self.sql_machine_literals();
+        // The whole square root the query calls (§15.215), registered under the name PostgreSQL
+        // gives it, as LEAST and GREATEST are.
+        let root = if self.arith_uses().root {
+            format!("{}db.create_function(\"{}\", 1, _rulec_isqrt, deterministic=True)\n", super::arith::sql_root_python(), super::arith::SQL_ROOT)
+        } else {
+            String::new()
+        };
         SQL_RUNNER
+            .replace("@ROOT@", &root)
             .replace("@MACHINE@", &meta)
             .replace("@CARRY@", &carry)
             .replace("@HEADER@", self.header("#").trim_end())
@@ -1252,7 +1300,7 @@ db.row_factory = sqlite3.Row
 # row the door refuses is decided all the same, and a value outside an enum leaves one (§15.204).
 db.create_function("LEAST", 2, lambda a, b: b if a is None else a if b is None else min(a, b), deterministic=True)
 db.create_function("GREATEST", 2, lambda a, b: b if a is None else a if b is None else max(a, b), deterministic=True)
-db.execute('CREATE TABLE "%s" ("_id" INTEGER PRIMARY KEY, %s)' % (INPUT, ", ".join('"%s"' % a for _, a, _ in INPUTS)))
+@ROOT@db.execute('CREATE TABLE "%s" ("_id" INTEGER PRIMARY KEY, %s)' % (INPUT, ", ".join('"%s"' % a for _, a, _ in INPUTS)))
 
 
 def _decide(cases):
@@ -1528,7 +1576,7 @@ else:
 
 /// `sql/_round_test.py`: the five rounding expressions, evaluated by SQLite over the same
 /// unit vectors every other language gets.
-pub fn round_tests_sql() -> String {
+pub fn round_tests_sql(u: &super::Uses) -> String {
     let mut o = format!(
         "# Code generated by rulec {}. DO NOT EDIT.\n# {}\nimport sqlite3\nimport sys\n\n",
         ritsu_emit::header::VERSION,
@@ -1551,8 +1599,12 @@ pub fn round_tests_sql() -> String {
          got = db.execute(\"SELECT \" + sql).fetchone()[0]\n    \
          if got != want:\n        \
              print(f\"NG {mode}({x}, {g}) = {got}, want {want}\")\n        \
-             bad += 1\nif bad:\n    sys.exit(1)\n",
+             bad += 1\n",
     );
-    o.push_str(&format!("print(f\"{}\")\n", tr!("ok {{len(CASES)}} 件", "ok {{len(CASES)}} cases")));
+    let (arith, n) = super::arith::sql_tests(u);
+    o.push_str(&arith);
+    o.push_str("if bad:\n    sys.exit(1)\n");
+    let count = if n == 0 { "len(CASES)" } else { "len(CASES) + len(ARITH)" };
+    o.push_str(&format!("print(f\"{}\")\n", tr!("ok {{{count}}} 件", "ok {{{count}}} cases")));
     o
 }

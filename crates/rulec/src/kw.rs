@@ -192,6 +192,14 @@ pub const HALF_DOWN: &str = "half_down";
 // --- Functions allowed in the result expression
 pub const MIN: &str = "min";
 pub const MAX: &str = "max";
+/// `mod(<number>, <positive whole constant>)`: the remainder, from 0 to the constant less one,
+/// whatever the sign of the number (§15.214). Read as a function only where a call is written,
+/// which no name can be, so it stays out of [`RESERVED`]: the reserved words are the ones 1.0
+/// fixed (§15.157), and a rule may still call an input `mod`.
+pub const MOD: &str = "mod";
+/// `isqrt(<number>)`: the largest whole number whose square does not pass the number
+/// (§15.215). A function only where a call is written, as `mod` is.
+pub const ISQRT: &str = "isqrt";
 
 // --- The built-in namespace (`import std/us/states`, `import std/都道府県`; the paths are the
 // prelude's, §15.182)

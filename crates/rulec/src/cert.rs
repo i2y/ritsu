@@ -92,6 +92,17 @@ fn expr_json(e: &Expr, ty: &crate::types::Ty) -> String {
     }
 }
 
+/// One `constraint` line: each side a name, or for a side that adds names up the list of them
+/// (§15.216). A side of one name is written as the name, as every certificate before sums wrote
+/// it, so a certificate of a rule with no sum is what it was.
+fn constraint_json(left: &[String], op: &str, right: &[String]) -> String {
+    let side = |names: &[String]| match names {
+        [one] => crate::json::quote(one),
+        many => crate::json::strs(many),
+    };
+    Obj::new().raw("left", side(left)).str("op", op).raw("right", side(right)).finish()
+}
+
 /// Every named value the rule computes, with the expression, the interval the declared
 /// ranges force it into, and the integer that interval stores at its scale (§7.4, E108).
 /// Re-checking one is interval arithmetic over the same expression — which is why the
@@ -261,9 +272,7 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
             arr(&f
                 .constraints
                 .iter()
-                .map(|k| {
-                    Obj::new().str("left", &k.left).str("op", k.op.word()).str("right", &k.right).finish()
-                })
+                .map(|k| constraint_json(&k.left, k.op.word(), &k.right))
                 .collect::<Vec<_>>()),
         )
         .raw("enums", {
@@ -788,7 +797,7 @@ fn coupled_fixed(f: &RuleFile, m: &crate::ast::MachineDecl, ct: &CertTable) -> V
     if ct.axes.iter().any(|a| a.kind != "input") {
         return fixed;
     }
-    fixed.into_iter().filter(|x| f.constraints.iter().any(|k| &k.left == x || &k.right == x)).collect()
+    fixed.into_iter().filter(|x| f.constraints.iter().any(|k| k.names().any(|n| n == x))).collect()
 }
 
 /// One contract's section (§15.142): the condition it places on what the rule reads, as
@@ -933,10 +942,10 @@ fn table_json(t: CertTable, src: &str) -> String {
             let writes = arr(&r
                 .writes
                 .iter()
-                .map(|w| match w {
-                    Some((e, ty, at)) => Obj::new()
-                        .raw("expr", expr_json(e, ty))
-                        .raw(
+                .enumerate()
+                .map(|(oi, w)| match w {
+                    Some((e, ty, at)) => {
+                        let o = Obj::new().raw("expr", expr_json(e, ty)).raw(
                             "source",
                             match at {
                                 Some((line, col, len)) => Obj::new()
@@ -947,8 +956,15 @@ fn table_json(t: CertTable, src: &str) -> String {
                                     .finish(),
                                 None => "null".into(),
                             },
-                        )
-                        .finish(),
+                        );
+                        // The values the row's own cell lets the name it writes take, where that
+                        // narrows the column's range (§15.213). Only there, so no other
+                        // certificate changes.
+                        match r.inside.get(oi).copied().flatten() {
+                            Some((lo, hi)) => o.raw("inside", format!("[{},{}]", end(&Some(lo)), end(&Some(hi)))).finish(),
+                            None => o.finish(),
+                        }
+                    }
                     None => "null".into(),
                 })
                 .collect::<Vec<_>>());
@@ -1070,7 +1086,7 @@ fn table_json(t: CertTable, src: &str) -> String {
             arr(&t
                 .constraints
                 .iter()
-                .map(|(l, op, r)| Obj::new().str("left", l).str("op", op).str("right", r).finish())
+                .map(|(l, op, r)| constraint_json(l, op, r))
                 .collect::<Vec<_>>()),
         )
         .raw(

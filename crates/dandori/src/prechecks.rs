@@ -98,7 +98,15 @@ fn test_of(p: &Precondition, args: &[(String, TExpr)]) -> Option<PreTest> {
             if !matches!(op.as_str(), "<=" | "<" | ">=" | ">") {
                 return None;
             }
-            Some(PreTest::Relation { left: (left.clone(), arg(left)?), op: op.clone(), right: (right.clone(), arg(right)?) })
+            Some(PreTest::Relation { left: vec![(left.clone(), arg(left)?)], op: op.clone(), right: vec![(right.clone(), arg(right)?)] })
+        }
+        // A side that adds inputs up (rulec's §15.216): every one of them is given by the call.
+        Precondition::SumRelation { left, op, right } => {
+            if !matches!(op.as_str(), "<=" | "<" | ">=" | ">") {
+                return None;
+            }
+            let side = |ns: &[String]| -> Option<Vec<(String, TExpr)>> { ns.iter().map(|n| arg(n).map(|e| (n.clone(), e))).collect() };
+            Some(PreTest::Relation { left: side(left)?, op: op.clone(), right: side(right)? })
         }
         Precondition::Days { input, file, date, days } => Some(PreTest::Days { input: input.clone(), value: arg(input)?, file: file.clone(), date: date.clone(), days: days.iter().map(|d| civil(*d)).collect() }),
         Precondition::Sum { .. } | Precondition::Length { .. } => None,
@@ -175,7 +183,8 @@ pub fn civil(days: i64) -> String {
 pub fn holds(t: &PreTest, value: &dyn Fn(&TExpr) -> serde_json::Value) -> bool {
     match t {
         PreTest::Relation { left, op, right } => {
-            let (Some(l), Some(r)) = (value(&left.1).as_f64(), value(&right.1).as_f64()) else { return false };
+            let side = |s: &[(String, TExpr)]| s.iter().try_fold(0.0, |acc, (_, e)| value(e).as_f64().map(|v| acc + v));
+            let (Some(l), Some(r)) = (side(left), side(right)) else { return false };
             match op.as_str() {
                 "<=" => l <= r,
                 "<" => l < r,

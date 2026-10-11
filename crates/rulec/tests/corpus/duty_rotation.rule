@@ -1,0 +1,30 @@
+rule duty_rotation v1
+description "Which team is on duty in a week. The three teams take turns in a fixed order, counted from the week the rotation started: the weeks since then are divided by three, and what is left over picks the team. A week before the start still falls to a team, because the remainder is never below zero"
+
+enum team = north | east | south
+
+inputs
+  week       : number  range >=1 <=53
+  first_week : number  range >=1 <=53
+
+outputs
+  on_duty : team
+
+# `mod` divides by a positive constant and leaves 0, 1 or 2, whatever the sign of the weeks.
+define turn : number = mod(week - first_week, 3)
+
+table rotation
+policy unique
+| turn | -> on_duty : team |
+| 0    | north             |
+| 1    | east              |
+| 2    | south             |
+
+examples
+| week | first_week | -> on_duty |
+| 10   | 10         | north      |
+| 11   | 10         | east       |
+| 12   | 10         | south      |
+| 13   | 10         | north      |
+| 9    | 10         | south      |
+| 1    | 53         | south      |

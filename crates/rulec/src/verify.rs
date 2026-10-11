@@ -401,8 +401,9 @@ pub fn schema_out(f: &RuleFile, c: &Checked, alias: bool) -> String {
 /// refusal happens again on every replay (§15.116).
 #[derive(Debug, Clone)]
 pub enum Pre {
-    /// `constraint <left> <op> <right>`.
-    Rel { left: String, op: &'static str, right: String },
+    /// `constraint <left> <op> <right>`, each side the inputs it adds: one name, or several for a
+    /// side written as a sum (§15.216).
+    Rel { left: Vec<String>, op: &'static str, right: Vec<String> },
     /// The total of one column over a sequence, bounded above.
     Sum { name: String, over: String, of: String, max: i128 },
     /// How many elements a sequence may have.
@@ -463,12 +464,15 @@ pub fn preconditions_json(f: &RuleFile, c: &Checked) -> String {
         &preconditions(f, c)
             .iter()
             .map(|p| match p {
-                Pre::Rel { left, op, right } => crate::json::Obj::new()
-                    .str("kind", "constraint")
-                    .str("left", left)
-                    .str("op", op)
-                    .str("right", right)
-                    .finish(),
+                // A side of one input is its name, as before a side could add inputs up; a side that
+                // does is the list of them (§15.216).
+                Pre::Rel { left, op, right } => {
+                    let side = |ns: &[String]| match ns {
+                        [one] => crate::json::quote(one),
+                        many => crate::json::strs(many),
+                    };
+                    crate::json::Obj::new().str("kind", "constraint").raw("left", side(left)).str("op", op).raw("right", side(right)).finish()
+                }
                 Pre::Sum { name, over, of, max } => crate::json::Obj::new()
                     .str("kind", "sum")
                     .str("name", name)
@@ -509,7 +513,9 @@ pub fn preconditions_json(f: &RuleFile, c: &Checked) -> String {
 fn pre_kinds(f: &RuleFile, c: &Checked) -> Option<String> {
     let ps = preconditions(f, c);
     let mut words: Vec<String> = Vec::new();
-    if ps.iter().any(|p| matches!(p, Pre::Rel { .. })) {
+    if ps.iter().any(|p| matches!(p, Pre::Rel { left, right, .. } if left.len() > 1 || right.len() > 1)) {
+        words.push(tr!("入力どうしの関係", "a relation between inputs"));
+    } else if ps.iter().any(|p| matches!(p, Pre::Rel { .. })) {
         words.push(tr!("入力どうしの関係", "a relation between two inputs"));
     }
     if ps.iter().any(|p| matches!(p, Pre::Sum { .. })) {

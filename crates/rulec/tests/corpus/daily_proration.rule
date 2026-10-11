@@ -1,0 +1,25 @@
+rule daily_proration v1
+description "The charge for part of a month: the monthly fee times the days the service was used, over the days in that month, rounded down to a whole yen. Nobody is charged for more days than the month has"
+
+inputs
+  monthly_fee   : money[JPY]  range >=0JPY <=1_000_000JPY
+  days_used     : number      range >=0 <=31
+  days_in_month : number      range >=28 <=31
+
+constraint days_used <= days_in_month
+
+outputs
+  charge : money[JPY]  round down(1JPY)
+
+# The month has 28 days at the least, so the divisor is never zero.
+define prorated : money[JPY] = down(monthly_fee * days_used / days_in_month, 1JPY)
+
+result charge = prorated
+
+examples
+| monthly_fee | days_used | days_in_month | -> charge |
+| 3000JPY     | 10        | 30            | 1000JPY   |
+| 3000JPY     | 10        | 31            | 967JPY    |
+| 3000JPY     | 31        | 31            | 3000JPY   |
+| 3000JPY     | 0         | 28            | 0JPY      |
+| 1000JPY     | 15        | 28            | 535JPY    |

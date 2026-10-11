@@ -407,6 +407,64 @@ pub struct Checked {
     /// is the hull of the days; the region sieves out every other day, and the generated code
     /// refuses it.
     pub day_sets: HashMap<String, Days>,
+    /// What E132 and E139 were said about: the divisor of a rounding whose range reaches zero,
+    /// and the argument of an `isqrt` whose range goes below it, each with the span its
+    /// diagnostic marks (§15.213, §15.215). Once the check is done, the input that makes one so
+    /// is looked for and named in the diagnostic (`lib::enrich_arith`).
+    pub arith_witness: Vec<Witnessed>,
+    /// The columns of numbers whose range is narrower for what the rows' own cells let through:
+    /// a row that writes one of its table's columns writes only the values its cell there lets
+    /// through (§15.213). The certificate says so on each such row (`inside`).
+    pub narrowed: HashSet<String>,
+}
+
+/// One expression E132 or E139 was said about (see [`Checked::arith_witness`]).
+#[derive(Clone, Debug)]
+pub struct Witnessed {
+    pub code: &'static str,
+    pub span: Span,
+    pub expr: Expr,
+}
+
+/// The two halves of a rounding whose argument divides by a value that is not a constant:
+/// `half_even(attack * 1000 / (attack + defense), 1)` (§15.213). The division is the rounding's
+/// own — the outermost operation of its first argument — and anywhere else `÷` keeps its constant
+/// divisor (E115). A divisor written as a literal is the constant division it always was.
+pub fn var_division<'e>(name: &str, args: &'e [Expr]) -> Option<(&'e Expr, &'e Expr)> {
+    RoundMode::parse(name)?;
+    match args {
+        [Expr::Bin(n, BinOp::Div, d, _), _] if !matches!(**d, Expr::Lit(..)) => Some((n, d)),
+        _ => None,
+    }
+}
+
+/// The largest whole number whose square does not pass `v`, for `v` at least zero: the answer
+/// `isqrt` gives (§15.215). `None` below zero.
+pub fn isqrt_rat(v: Rat) -> Option<Rat> {
+    if v.num < 0 {
+        return None;
+    }
+    let x = v.num.div_euclid(v.den);
+    // The square of anything up to 2^63 fits in an i128, and no value the generated code holds is
+    // larger than that (E108).
+    let (mut lo, mut hi) = (0i128, x.min(1 << 63));
+    while lo < hi {
+        let mid = lo + (hi - lo + 1) / 2;
+        if mid * mid <= x {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    Some(Rat::int(lo))
+}
+
+/// The remainder of `v` divided by the positive whole `n`, from 0 up to but not including `n`,
+/// whatever the sign of `v`: what `mod` gives (§15.214).
+pub fn mod_rat(v: Rat, n: i128) -> Rat {
+    let q = v.div(Rat::int(n));
+    let fl = q.num.div_euclid(q.den);
+    v.sub(Rat::int(n).mul(Rat::int(fl)))
 }
 
 /// The days a date input takes (§15.174).
@@ -837,12 +895,16 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         sets: Vec::new(),
         set_of: HashMap::new(),
         day_sets: HashMap::new(),
+        arith_witness: Vec::new(),
+        narrowed: HashSet::new(),
     };
     // Read the guarantees before anything is typed: `allocate` asks about them, and the
     // order of declarations in the file should not change what is accepted. Whether both
-    // sides are really inputs is E018's business, below.
+    // sides are really inputs is E018's business, below. A constraint with a sum on a side
+    // (§15.216) says nothing of one name against another on its own, and is left out.
     for k in &f.constraints {
-        let (l, r) = (k.left.clone(), k.right.clone());
+        let Some((l, r)) = k.pair() else { continue };
+        let (l, r) = (l.clone(), r.clone());
         match k.op {
             CmpOp::Le | CmpOp::Lt => c.at_most.insert((l, r)),
             CmpOp::Ge | CmpOp::Gt => c.at_most.insert((r, l)),
@@ -1973,10 +2035,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     // refuses them. Both sides have to be inputs of the same comparable type — a relation
     // between a value and something the caller does not pass cannot be checked at the door.
     for k in &f.constraints {
-        let mut sides = Vec::new();
-        for name in [&k.left, &k.right] {
+        let mut syms = Vec::new();
+        for name in k.names() {
             match c.syms.get(name).cloned() {
-                Some(sym) if sym.kind == SymKind::Input => sides.push(Some(sym)),
+                Some(sym) if sym.kind == SymKind::Input => syms.push(Some(sym)),
                 found => {
                     let what = match found {
                         None => tr!("{name} という入力はありません", "there is no input called {name}"),
@@ -1991,21 +2053,22 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                                 "Name something declared in `inputs` on both sides. A derived or defined value is computed from the inputs, so write the relation between those inputs instead."
                             )),
                     );
-                    sides.push(None);
+                    syms.push(None);
                 }
             }
         }
-        let (Some(Some(a)), Some(Some(b))) = (sides.first().cloned(), sides.get(1).cloned()) else {
+        let Some(syms) = syms.into_iter().collect::<Option<Vec<Sym>>>() else {
             continue;
         };
         // Numbers and dates are what the region checker can narrow by arithmetic. An enum or a
         // boolean has no order, so `<=` between two of them would be a shape with no meaning.
         let ordered = |t: &Ty| matches!(t, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date);
-        if !ordered(&a.ty) || !ordered(&b.ty) {
+        if syms.iter().any(|s| !ordered(&s.ty)) {
+            let (l, r) = (Constraint::side_text(&k.left), Constraint::side_text(&k.right));
             c.diags.push(
                 Diag::error("E018", tr!("`constraint` で比べられるのは、大小のある型どうしだけです", "A `constraint` compares two ordered types"))
                     .at(tr!("{path}:{} 制約", "{path}:{} constraint", k.span.line))
-                    .mark(k.span.clone(), tr!("{} と {} は比べられません", "{} and {} cannot be compared", k.left, k.right))
+                    .mark(k.span.clone(), tr!("{l} と {r} は比べられません", "{l} and {r} cannot be compared"))
                     .note(tr!(
                         "比べられるのは、金額・数量・率・number・日付です。列挙や真偽に大小はありません。",
                         "Money, a quantity, a rate, a number and a date can be compared. An enum and a boolean have no order."
@@ -2013,46 +2076,76 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             );
             continue;
         }
-        c.check_same(&a.ty, &b.ty, &k.span, path, &tr!("制約", "constraint"));
+        // A side that adds inputs up adds their values (§15.216), so each has to have arithmetic:
+        // a date, a temperature and a sound level are ordered and are not added (E048).
+        let added = [&k.left, &k.right]
+            .into_iter()
+            .filter(|side| side.len() > 1)
+            .flat_map(|side| side.iter())
+            .filter_map(|n| c.syms.get(n).map(|s| s.ty.clone()))
+            .find(|t| *t == Ty::Date || compares_only(t));
+        if let Some(ty) = added {
+            c.no_arithmetic(&ty, &k.span, path);
+            continue;
+        }
+        let first = syms[0].ty.clone();
+        for s in &syms[1..] {
+            c.check_same(&first, &s.ty, &k.span, path, &tr!("制約", "constraint"));
+        }
         // The door compares the stored integers, and those count steps: a rate in 1% steps and
         // one in 0.1% steps hold 50% as 50 and as 500. The guard brings both to the step they
         // share before comparing (§15.139), which is a multiplication, so its product has to
-        // fit in int64 like any other value the generated code computes (E108).
-        let (sa, sb) = (c.scales.get(&k.left).copied().unwrap_or(1).max(1), c.scales.get(&k.right).copied().unwrap_or(1).max(1));
-        if sa != sb {
-            let g = {
-                let (mut x, mut y) = (sa, sb);
-                while y != 0 {
-                    let t = x % y;
-                    x = y;
-                    y = t;
-                }
-                x.max(1)
-            };
-            let common = sa / g * sb;
-            for side in [&k.left, &k.right] {
-                let Some((Some(lo), Some(hi))) = c.ranges.get(side).cloned() else { continue };
-                let abs = |r: Rat| if r.num < 0 { Rat::zero().sub(r) } else { r };
-                let mag = if abs(lo).cmp_to(abs(hi)).is_gt() { abs(lo) } else { abs(hi) };
-                let stored = mag.mul(Rat::int(common));
-                if stored.num / stored.den > i64::MAX as i128 {
-                    c.diags.push(
-                        Diag::error("E108", tr!("制約 `{} {} {}` の比較が int64 に収まることを証明できません", "Cannot prove that the comparison in the constraint `{} {} {}` fits in int64", k.left, k.op.word(), k.right))
-                            .at(tr!("{path}:{} 制約", "{path}:{} constraint", k.span.line))
-                            .mark(k.span.clone(), tr!("刻みの違う二つは、共通の刻み 1/{common} にそろえて比べます", "the two sides are compared on their common step of 1/{common}"))
-                            .note(tr!(
-                                "{side} は最大で {} になり、共通の刻みで数えると int64 を超えます。範囲を狭めるか、二つの刻みをそろえてください。",
-                                "{side} reaches {}, which on the common step exceeds int64. Narrow the range, or give the two the same step.",
-                                fmt_val(mag, &a.ty)
-                            )),
-                    );
-                }
+        // fit in int64 like any other value the generated code computes (E108). A sum is added
+        // up on that step too, so the sum, not only each of its parts, has to fit.
+        let scale_of = |n: &String| c.scales.get(n).copied().unwrap_or(1).max(1);
+        let common = k.names().map(scale_of).fold(1, lcm_i128);
+        let abs = |r: Rat| if r.num < 0 { Rat::zero().sub(r) } else { r };
+        let mag_of = |n: &String| -> Option<Rat> {
+            let (Some(lo), Some(hi)) = c.ranges.get(n).cloned()? else { return None };
+            Some(if abs(lo).cmp_to(abs(hi)).is_gt() { abs(lo) } else { abs(hi) })
+        };
+        let differ = k.names().any(|n| scale_of(n) != common);
+        for side in [&k.left, &k.right] {
+            if side.len() == 1 && !differ {
+                continue;
+            }
+            let Some(mag) = side.iter().map(mag_of).try_fold(Rat::zero(), |acc, m| m.map(|m| acc.add(m))) else { continue };
+            let stored = mag.mul(Rat::int(common));
+            if stored.num / stored.den > i64::MAX as i128 {
+                let said = k.said();
+                let shown = Constraint::side_text(side);
+                let (mark, note) = if side.len() > 1 {
+                    (
+                        tr!("和は、共通の刻み 1/{common} で数えて足します", "the sum is added up on the common step of 1/{common}"),
+                        tr!(
+                            "{shown} は最大で {} になり、刻み 1/{common} で数えると int64 を超えます。足す入力の範囲を狭めてください。",
+                            "{shown} reaches {}, which counted on the step of 1/{common} exceeds int64. Narrow the ranges of the inputs it adds.",
+                            fmt_val(mag, &first)
+                        ),
+                    )
+                } else {
+                    (
+                        tr!("刻みの違う二つは、共通の刻み 1/{common} にそろえて比べます", "the two sides are compared on their common step of 1/{common}"),
+                        tr!(
+                            "{shown} は最大で {} になり、共通の刻みで数えると int64 を超えます。範囲を狭めるか、二つの刻みをそろえてください。",
+                            "{shown} reaches {}, which on the common step exceeds int64. Narrow the range, or give the two the same step.",
+                            fmt_val(mag, &first)
+                        ),
+                    )
+                };
+                c.diags.push(
+                    Diag::error("E108", tr!("制約 `{said}` の比較が int64 に収まることを証明できません", "Cannot prove that the comparison in the constraint `{said}` fits in int64"))
+                        .at(tr!("{path}:{} 制約", "{path}:{} constraint", k.span.line))
+                        .mark(k.span.clone(), mark)
+                        .note(note),
+                );
             }
         }
         // An input that only ever appears in a constraint is still doing work: it narrows the
         // space the completeness proof walks. W111 is about a declaration nothing reads.
-        c.used.insert(k.left.clone());
-        c.used.insert(k.right.clone());
+        for n in k.names() {
+            c.used.insert(n.clone());
+        }
     }
 
     if let Some(r) = &f.result {
@@ -2393,7 +2486,9 @@ impl Checked {
             }
             Expr::Bin(l, op, r, _) => {
                 self.literal_values(l, path);
-                if *op != BinOp::Div {
+                // A divisor written as a literal is E115's; one that is an expression (inside a
+                // rounding, §15.213) holds its literals to their units like any other.
+                if *op != BinOp::Div || !matches!(**r, Expr::Lit(..)) {
                     self.literal_values(r, path);
                 }
             }
@@ -2436,6 +2531,11 @@ impl Checked {
                 }
             },
             Expr::Call(name, args, sp) => {
+                // A rounding of a quotient by a value (§15.213) is typed as one: the division is
+                // the rounding's, so it is not the `÷` E115 refuses.
+                if let Some((n, d)) = var_division(name, args) {
+                    return self.divided_rounding(name, n, d, &args[0], &args[1], sp, path);
+                }
                 let ats: Vec<Ty> = args.iter().map(|a| self.expr_ty(a, path)).collect();
                 // The set of calls is closed and each one takes a fixed number of
                 // arguments. Until §15.102 neither was checked: `foo(a, b)` and
@@ -2444,8 +2544,9 @@ impl Checked {
                 // the third argument on the floor.
                 let arity = match name.as_str() {
                     crate::kw::DOWN | crate::kw::UP | crate::kw::HALF_UP | crate::kw::HALF_EVEN
-                    | crate::kw::HALF_DOWN | crate::kw::MIN | crate::kw::MAX => Some(2),
+                    | crate::kw::HALF_DOWN | crate::kw::MIN | crate::kw::MAX | crate::kw::MOD => Some(2),
                     crate::kw::ALLOCATE => Some(3),
+                    crate::kw::ISQRT => Some(1),
                     _ => None,
                 };
                 match arity {
@@ -2455,8 +2556,8 @@ impl Checked {
                                 .at(format!("{path}:{}", sp.line))
                                 .mark(sp.clone(), "")
                                 .note(tr!(
-                                    "書けるのは `min` `max` `allocate` と丸めの五つ（`down` `up` `half_up` `half_down` `half_even`）だけです。",
-                                    "The calls are `min`, `max`, `allocate` and the five rounding modes (`down`, `up`, `half_up`, `half_down`, `half_even`)."
+                                    "書けるのは `min` `max` `allocate` `mod` `isqrt` と丸めの五つ（`down` `up` `half_up` `half_down` `half_even`）だけです。",
+                                    "The calls are `min`, `max`, `allocate`, `mod`, `isqrt` and the five rounding modes (`down`, `up`, `half_up`, `half_down`, `half_even`)."
                                 )),
                         );
                         return Ty::Unknown;
@@ -2637,6 +2738,146 @@ impl Checked {
                         }
                         ats.first().cloned().unwrap_or(Ty::Unknown)
                     }
+                    // `mod(x, n)`: the remainder of a number by a positive whole constant, from 0
+                    // up to n − 1 (§15.214). The divisor is a constant for the reason E115 gives
+                    // for any divisor, and the number is a `number`: the remainder of an amount
+                    // or of a rate by a count is not a thing a rule asks for.
+                    crate::kw::MOD => {
+                        let t = ats[0].clone();
+                        if !matches!(t, Ty::Number | Ty::Unknown) {
+                            self.diags.push(
+                                Diag::error("E103", tr!("`mod` が取るのは number だけです: {t} が渡されています", "`mod` takes a number only, and is given {t}"))
+                                    .at(format!("{path}:{}", sp.line))
+                                    .mark(args[0].span().clone(), tr!("{t} です", "this is {t}"))
+                                    .note(tr!(
+                                        "余りを取るのは、通し番号や回数のような単位の無い整数です。金額や率の余りが要るなら、先に `number` の値にしてください。",
+                                        "A remainder is taken of a count with no unit: a running number, a number of turns. Where an amount or a rate is meant, make it a `number` first."
+                                    )),
+                            );
+                        } else if t == Ty::Number && self.lattice(&args[0]).is_none_or(|l| !l.is_int()) {
+                            // A number divided by a constant is a fraction, and the remainder of a
+                            // fraction is not what a turn counter or a running number asks for.
+                            self.diags.push(
+                                Diag::error("E103", tr!("`mod` が取るのは整数だけです", "`mod` takes a whole number only"))
+                                    .at(format!("{path}:{}", sp.line))
+                                    .mark(args[0].span().clone(), tr!("整数にならない値です", "this is not always a whole number"))
+                                    .note(tr!(
+                                        "割り算で端数の出る値は、先に `down(x / 2, 1)` のように丸めてから渡してください。",
+                                        "Round a value that division leaves a fraction in first, as in `down(x / 2, 1)`."
+                                    )),
+                            );
+                        }
+                        let k = match &args[1] {
+                            Expr::Lit(Lit::Num(n), _) if lit_ty(n) == Ty::Number => const_value(&args[1]),
+                            _ => None,
+                        };
+                        if k.is_none() {
+                            let mark = if matches!(args[1], Expr::Lit(..)) {
+                                tr!("割る数が正の整数ではありません", "the divisor is not a positive whole number")
+                            } else {
+                                tr!("割る数が定数ではありません", "the divisor is not a constant")
+                            };
+                            self.diags.push(
+                                Diag::error("E115", tr!("割る数が正の定数ではありません", "The divisor is not a positive constant"))
+                                    .at(format!("{path}:{}", sp.line))
+                                    .mark(args[1].span().clone(), mark)
+                                    .note(tr!(
+                                        "`mod` の割る数は、`mod(x, 7)` のように正の整数の定数で書いてください。答えはいつも 0 から割る数 − 1 までで、範囲も刻みも静的に決まります。",
+                                        "The divisor of `mod` is a positive whole constant, as in `mod(x, 7)`. The answer is then always from 0 to one less than it, and its range and step are known statically."
+                                    ))
+                                    .note(tr!(
+                                        "割る数が変わる余りは、言語ごとに負の値の扱いが違い、0 で割る呼び出しも起こりえます。",
+                                        "A remainder by a value that varies is where languages disagree below zero, and where a call can divide by zero."
+                                    )),
+                            );
+                        }
+                        // The remainder is taken of the stored integer by the divisor at the same
+                        // scale; both have to fit int64.
+                        if let (Some(k), Some((lo, hi)), Some(sc)) = (k, self.interval(&args[0], &t), self.scale(&args[0])) {
+                            let mag = magnitude_of(lo, hi).mul(Rat::int(sc));
+                            let stored = mag.num / mag.den;
+                            let modulus = k.checked_mul(sc);
+                            if stored > i64::MAX as i128 || modulus.is_none_or(|m| m > i64::MAX as i128) {
+                                self.diags.push(
+                                    Diag::error("E108", tr!("`mod` の引数が int64 に収まることを証明できません", "Cannot prove that the argument of `mod` fits in int64"))
+                                        .at(format!("{path}:{}", sp.line))
+                                        .mark(args[0].span().clone(), "")
+                                        .note(tr!(
+                                            "とりうる値は {} から {} で、刻みが 1/{sc} なので、格納される整数は最大 {stored} になります。",
+                                            "It ranges from {} to {} and the step is 1/{sc}, so the stored integer reaches {stored}.",
+                                            fmt_val(lo, &t),
+                                            fmt_val(hi, &t)
+                                        ))
+                                        .note(tr!("ヒント: 入力の範囲を狭めてください。", "Hint: narrow the input ranges.")),
+                                );
+                            }
+                        }
+                        Ty::Number
+                    }
+                    // `isqrt(x)`: the largest whole number whose square does not pass x
+                    // (§15.215). A power is written as a product, so `isqrt(n * n * n)` is
+                    // `floor(n^1.5)` exactly. Below zero there is no root: E139.
+                    crate::kw::ISQRT => {
+                        let t = ats[0].clone();
+                        if !matches!(t, Ty::Number | Ty::Unknown) {
+                            self.diags.push(
+                                Diag::error("E103", tr!("`isqrt` が取るのは number だけです: {t} が渡されています", "`isqrt` takes a number only, and is given {t}"))
+                                    .at(format!("{path}:{}", sp.line))
+                                    .mark(args[0].span().clone(), tr!("{t} です", "this is {t}"))
+                                    .note(tr!(
+                                        "平方根は単位の無い数について取ります。金額や量の平方根は、その単位の値ではありません。",
+                                        "A square root is taken of a number with no unit: the root of an amount or of a quantity is not a value of that unit."
+                                    )),
+                            );
+                            return Ty::Number;
+                        }
+                        let arg = &args[0];
+                        let text = crate::region::expr_text(arg);
+                        let found = self.interval(arg, &t);
+                        let below = match found {
+                            Some((lo, _)) => lo.num < 0,
+                            None => true,
+                        };
+                        if below && t != Ty::Unknown {
+                            let mark = match found {
+                                Some((lo, hi)) => tr!("とりうる値は {} から {} で、負の値を含みます", "it ranges from {} to {}, below zero included", fmt_val(lo, &t), fmt_val(hi, &t)),
+                                None => tr!("範囲の決まらない値を読んでいます", "it reads a value with no range"),
+                            };
+                            self.diags.push(
+                                Diag::error("E139", tr!("`isqrt` の引数 {text} が負になりえます", "The argument {text} of `isqrt` can be below zero"))
+                                    .at(format!("{path}:{}", sp.line))
+                                    .mark(arg.span().clone(), mark)
+                                    .note(tr!(
+                                        "負の数に平方根はありません。生成コードは、その呼び出しで答えを持ちません。rulec は、引数が 0 以上だと範囲から示せた `isqrt` だけを通します。",
+                                        "A number below zero has no square root, and the generated code would have no answer on that call. rulec passes an `isqrt` only where the ranges show its argument is zero or more."
+                                    ))
+                                    .note(tr!(
+                                        "ヒント: 引数の範囲を 0 以上に狭めるか、`max({text}, 0)` のように 0 以上にしてから渡してください。",
+                                        "Hint: narrow the ranges so that the argument stays at zero or more, or pass `max({text}, 0)`."
+                                    )),
+                            );
+                            self.arith_witness.push(Witnessed { code: "E139", span: arg.span().clone(), expr: arg.clone() });
+                        }
+                        if let (Some((lo, hi)), Some(sc)) = (found, self.scale(arg)) {
+                            let mag = magnitude_of(lo, hi).mul(Rat::int(sc));
+                            let stored = mag.num / mag.den;
+                            if stored > i64::MAX as i128 {
+                                self.diags.push(
+                                    Diag::error("E108", tr!("`isqrt` の引数が int64 に収まることを証明できません", "Cannot prove that the argument of `isqrt` fits in int64"))
+                                        .at(format!("{path}:{}", sp.line))
+                                        .mark(arg.span().clone(), "")
+                                        .note(tr!(
+                                            "とりうる値は {} から {} で、刻みが 1/{sc} なので、格納される整数は最大 {stored} になります。冪は掛け算で書くので、`n * n * n` のような積は速く大きくなります。",
+                                            "It ranges from {} to {} and the step is 1/{sc}, so the stored integer reaches {stored}. A power is written as a product, and a product such as `n * n * n` grows fast.",
+                                            fmt_val(lo, &t),
+                                            fmt_val(hi, &t)
+                                        ))
+                                        .note(tr!("ヒント: 入力の範囲を狭めてください。", "Hint: narrow the input ranges.")),
+                                );
+                            }
+                        }
+                        Ty::Number
+                    }
                     _ => Ty::Unknown,
                 }
             }
@@ -2722,7 +2963,15 @@ impl Checked {
                                     .note(tr!(
                                         "刻みが静的に決まらないと、生成コードは言語の除算に頼ることになり、Python は −∞ 方向、Go は 0 方向に丸めて答えが食い違います。",
                                         "Without a statically known step the generated code would fall back on the language's own division, and Python rounding toward -inf and Go toward zero would give different answers."
-                                    )),
+                                    ))
+                                    // A value that varies can still be divided by, inside a
+                                    // rounding (§15.213); this division is not that one.
+                                    .maybe_note((!matches!(r.as_ref(), Expr::Lit(..))).then(|| {
+                                        tr!(
+                                            "ヒント: 値で割れるのは、丸めの引数のいちばん外側の割り算だけです（`down(a * b / c, 1円)`）。答えは正確な商を刻みに乗せたものになります。",
+                                            "Hint: a value can be divided by only as the outermost operation of a rounding's argument (`down(a * b / c, 1JPY)`). The answer is then the exact quotient put on the grid."
+                                        )
+                                    })),
                             );
                             return Ty::Unknown;
                         }
@@ -2749,6 +2998,131 @@ impl Checked {
                 }
             }
         }
+    }
+
+    /// `<mode>(n ÷ d, <grid>)` with a divisor that is not a constant (§15.213).
+    ///
+    /// The quotient is typed by §2.3's rule for a division: a value over another of the same unit
+    /// is a ratio with no unit, and a value over a `number` or a rate keeps its type. The answer
+    /// is the quotient put on the grid, so the grid is written in the quotient's own unit — a
+    /// ratio's grid is a number or a rate, and which of the two it is says which the answer is
+    /// (E103). The divisor's range has to keep it off zero (E132), and the two integers the
+    /// generated code divides have to fit int64 (E108).
+    #[allow(clippy::too_many_arguments)]
+    fn divided_rounding(&mut self, name: &str, n: &Expr, d: &Expr, arg: &Expr, grid: &Expr, sp: &Span, path: &str) -> Ty {
+        let nt = self.expr_ty(n, path);
+        let dt = self.expr_ty(d, path);
+        let asp = arg.span().clone();
+        if let Some(t) = [&nt, &dt].into_iter().find(|t| compares_only(t)).cloned() {
+            self.no_arithmetic(&t, &asp, path);
+            return Ty::Unknown;
+        }
+        let dimensioned = |t: &Ty| matches!(t, Ty::Money { .. } | Ty::Qty { .. });
+        let q = if nt == Ty::Unknown || dt == Ty::Unknown {
+            Ty::Unknown
+        } else if !dimensioned(&dt) {
+            nt.clone()
+        } else if dimensioned(&nt) && nt.unifies(&dt) {
+            // A ratio. Whether it is a rate or a count is the grid's to say, below.
+            Ty::Number
+        } else if dim_of(&nt) == dim_of(&dt) {
+            self.divisor_unit(&nt, &dt, &asp, path);
+            return Ty::Unknown;
+        } else {
+            self.compound(&nt, &dt, &asp, path);
+            return Ty::Unknown;
+        };
+        let Expr::Lit(Lit::Num(g), gsp) = grid else {
+            self.diags.push(
+                Diag::error("E118", tr!("`{name}` の刻みは定数で書いてください", "The grid of `{name}` is a constant"))
+                    .at(format!("{path}:{}", sp.line))
+                    .mark(sp.clone(), tr!("二つめの引数が定数ではありません", "the second argument is not a constant"))
+                    .note(tr!(
+                        "`{name}(<値>, 10円)` のように、丸める刻みを数か金額で書いてください。値によって変わる刻みは、0 になった呼び出しで生成コードが 0 で割ります。",
+                        "Write the grid as a number or an amount, as in `{name}(<value>, 10JPY)`. A grid that moves with the input makes the generated code divide by zero on the call where it is zero."
+                    )),
+            );
+            return q;
+        };
+        let gt = lit_ty(g);
+        let answer = match &q {
+            Ty::Unknown => Ty::Unknown,
+            Ty::Money { .. } | Ty::Qty { .. } if gt.unifies(&q) => q.clone(),
+            Ty::Number | Ty::Rate if matches!(gt, Ty::Number | Ty::Rate) => gt.clone(),
+            _ => {
+                let want = if dimensioned(&q) { tr!("{q} の単位", "the unit of {q}") } else { tr!("数か率", "a number or a rate") };
+                self.diags.push(
+                    Diag::error("E103", tr!("丸めの刻み `{}` は {q} の値ではありません", "The rounding grid `{}` is not a value of {q}", g.raw))
+                        .at(format!("{path}:{}", gsp.line))
+                        .mark(gsp.clone(), tr!("割った値は {q} です", "the quotient is {q}"))
+                        .note(tr!(
+                            "刻みは、割った値の単位で書いてください（ここでは{want}）。同じ単位の値どうしを割った値は単位の無い比なので、刻みは `1` や `0.1%` です。",
+                            "Write the grid in the unit of the quotient (here, {want}). A value divided by another of the same unit is a ratio with no unit, whose grid is `1` or `0.1%`."
+                        )),
+                );
+                return Ty::Unknown;
+            }
+        };
+        if lit_value_in(g, &gt).is_some_and(|v| v.num <= 0) {
+            self.diags.push(nonpositive(g, gsp.clone(), format!("{path}:{}", gsp.line), tr!("丸めの刻み", "the rounding grid")));
+            return answer;
+        }
+        if dt == Ty::Unknown {
+            return answer;
+        }
+        // E132: the divisor stays off zero over every value its ranges allow.
+        let text = crate::region::expr_text(d);
+        let reach = self.interval(d, &dt);
+        let mark = match reach {
+            Some((lo, hi)) if (lo.num > 0 && hi.num > 0) || (lo.num < 0 && hi.num < 0) => None,
+            Some((lo, hi)) => Some(tr!("とりうる値は {} から {} で、0 を含みます", "it ranges from {} to {}, zero included", fmt_val(lo, &dt), fmt_val(hi, &dt))),
+            None => Some(tr!("範囲の決まらない値を読んでいます", "it reads a value with no range")),
+        };
+        if let Some(mark) = mark {
+            self.diags.push(
+                Diag::error("E132", tr!("割る数 {text} が 0 になりえます", "The divisor {text} can be zero"))
+                    .at(format!("{path}:{}", sp.line))
+                    .mark(d.span().clone(), mark)
+                    .note(tr!(
+                        "0 で割った答えは決まっていません。生成コードはその呼び出しで止まります。rulec は、割る数が 0 にならないと範囲から示せた割り算だけを通します。",
+                        "Dividing by zero has no answer, and the generated code would stop on that call. rulec passes a division only where the ranges show its divisor is never zero."
+                    ))
+                    .note(tr!(
+                        "ヒント: 割る数の範囲を 0 を含まないように狭めるか、`max({text}, 1)` のように 1 以上にしてから割るか、0 のときに別の値を選ぶ表を置いて、その表の出力で割ってください。",
+                        "Hint: narrow the ranges so that the divisor cannot be zero, divide by `max({text}, 1)`, or put a table that picks another value when it is zero and divide by that table's output."
+                    )),
+            );
+            self.arith_witness.push(Witnessed { code: "E132", span: d.span().clone(), expr: d.clone() });
+            return answer;
+        }
+        // E108: the generated code divides one integer by another, each the value at its own
+        // scale brought to the grid's (`division_factors`); both have to fit.
+        let parts = (self.interval(n, &nt), self.scale(n), reach, self.scale(d), grid_int(g));
+        if let (Some((nl, nh)), Some(sn), Some((dl, dh)), Some(sd), Some((gi, sg))) = parts {
+            let (ka, kb) = division_factors(sn, sd, gi, sg);
+            for (what, lo, hi, s, k, e, t) in [
+                (tr!("割られる数", "the dividend"), nl, nh, sn, ka, n, &nt),
+                (tr!("割る数", "the divisor"), dl, dh, sd, kb, d, &dt),
+            ] {
+                let stored = magnitude_of(lo, hi).mul(Rat::int(s)).mul(Rat::int(k));
+                let stored = stored.num / stored.den;
+                if stored > i64::MAX as i128 {
+                    self.diags.push(
+                        Diag::error("E108", tr!("`{name}` の{what}が int64 に収まることを証明できません", "Cannot prove that {what} in `{name}` fits in int64"))
+                            .at(format!("{path}:{}", sp.line))
+                            .mark(e.span().clone(), "")
+                            .note(tr!(
+                                "とりうる値は {} から {} で、刻みをそろえて割るので、格納される整数は最大 {stored} になります。",
+                                "It ranges from {} to {}, and the two are brought to one step before the division, so the stored integer reaches {stored}.",
+                                fmt_val(lo, t),
+                                fmt_val(hi, t)
+                            ))
+                            .note(tr!("ヒント: 入力の範囲を狭めるか、丸めの刻みを粗くしてください。", "Hint: narrow the input ranges, or round to a coarser grid.")),
+                    );
+                }
+            }
+        }
+        answer
     }
 
     /// Two values that both carry a unit, multiplied or divided into one another. §2.1 does
@@ -3132,26 +3506,47 @@ impl Checked {
                     // no range rather than a guessed one. A rate column used to be assumed to
                     // lie within 0..100%, and a column holding 150% put a wrong bound into the
                     // overflow proof and into `rulec api` (§15.34).
+                    //
+                    // A cell that names one of the table's own columns writes only what the row's
+                    // cell on that column lets through: `| >=1 | units |` writes `units` at one
+                    // or more. The column is narrowed to that, and remembered as narrowed, only
+                    // where it changes the column's range; the certificate then says so on each
+                    // such row (§15.213).
                     let mut bounds: Vec<(Rat, Rat)> = Vec::new();
+                    let mut plain: Vec<(Rat, Rat)> = Vec::new();
                     let mut known = true;
                     for row in &t.rows {
                         match row.outs.get(oi) {
                             Some(OutCell::Lit(Lit::Num(n))) => {
                                 match lit_value_in(n, &ty).or_else(|| lit_value_in(n, &lit_ty(n))) {
-                                    Some(v) => bounds.push((v, v)),
+                                    Some(v) => {
+                                        bounds.push((v, v));
+                                        plain.push((v, v));
+                                    }
                                     None => known = false,
                                 }
                             }
                             Some(OutCell::Name(w)) => match self.ranges.get(w) {
-                                Some((Some(a), Some(b))) => bounds.push((*a, *b)),
+                                Some((Some(a), Some(b))) => {
+                                    bounds.push(self.row_written(t, row, oi).unwrap_or((*a, *b)));
+                                    plain.push((*a, *b));
+                                }
                                 _ => known = false,
                             },
                             _ => known = false,
                         }
                     }
                     if known && !bounds.is_empty() {
-                        let mut lo = bounds.iter().map(|b| b.0).min_by(|a, b| a.cmp_to(*b)).unwrap();
-                        let mut hi = bounds.iter().map(|b| b.1).max_by(|a, b| a.cmp_to(*b)).unwrap();
+                        let hull = |bs: &[(Rat, Rat)]| {
+                            let lo = bs.iter().map(|b| b.0).min_by(|a, b| a.cmp_to(*b)).unwrap();
+                            let hi = bs.iter().map(|b| b.1).max_by(|a, b| a.cmp_to(*b)).unwrap();
+                            (lo, hi)
+                        };
+                        let (mut lo, mut hi) = hull(&bounds);
+                        let (pl, ph) = hull(&plain);
+                        if lo.cmp_to(pl) != std::cmp::Ordering::Equal || hi.cmp_to(ph) != std::cmp::Ordering::Equal {
+                            self.narrowed.insert(oc.name.text.clone());
+                        }
                         // Widened by what another table of the same output already put there.
                         if let Some((Some(a), Some(b))) = self.ranges.get(&oc.name.text) {
                             if a.cmp_to(lo) == std::cmp::Ordering::Less {
@@ -4297,7 +4692,12 @@ impl Checked {
                         _ => None,
                     };
                 }
-                (name == crate::kw::ALLOCATE).then_some(Rat::int(1))
+                // A remainder of a whole number by n moves it by multiples of n, so it keeps the
+                // step the two share (§15.214); a whole square root is on whole units.
+                if let (crate::kw::MOD, [x, k]) = (name.as_str(), args.as_slice()) {
+                    return common_step(self.lattice(x)?, Rat::int(const_value(k)?));
+                }
+                (name == crate::kw::ALLOCATE || name == crate::kw::ISQRT).then_some(Rat::int(1))
             }
         }
     }
@@ -4319,6 +4719,41 @@ pub fn common_step(a: Rat, b: Rat) -> Option<Rat> {
         return None;
     }
     Rat::checked_new(n, a.den.checked_mul(b.den)?)
+}
+
+/// The larger of the two magnitudes at the ends of an interval: how far from zero a value in it
+/// can be.
+pub fn magnitude_of(lo: Rat, hi: Rat) -> Rat {
+    let abs = |r: Rat| if r.num < 0 { Rat::zero().sub(r) } else { r };
+    if abs(lo).cmp_to(abs(hi)) == std::cmp::Ordering::Greater { abs(lo) } else { abs(hi) }
+}
+
+/// A rounding grid as the generated code holds it: the integer and the scale it is held at,
+/// read in the literal's own unit (`10円` is 10 at 1, `0.1%` is 1 at 1000). The same reading
+/// `codegen` gives a literal, so the factors below are the ones the generated code multiplies by.
+pub fn grid_int(g: &crate::lex::Num) -> Option<(i128, i128)> {
+    let v = lit_value_in(g, &lit_ty(g))?;
+    let den = v.den.max(1);
+    let s = lit_scale(g).filter(|s| s % den == 0).unwrap_or(den);
+    Some((v.num.checked_mul(s / den)?, s))
+}
+
+/// What the two sides of a rounded division are multiplied by before the one integer division
+/// the generated code does (§15.213): the dividend `N` at scale `sn`, the divisor `D` at scale
+/// `sd`, and the grid `G` at scale `sg`. The number of grid steps is `N·sd·sg ÷ (D·sn·G)`, so the
+/// dividend is multiplied by `sd·sg` and the divisor by `sn·G`, each over what the two share.
+pub fn division_factors(sn: i128, sd: i128, gi: i128, sg: i128) -> (i128, i128) {
+    fn gcd(mut a: i128, mut b: i128) -> i128 {
+        while b != 0 {
+            let t = a % b;
+            a = b;
+            b = t;
+        }
+        a.abs().max(1)
+    }
+    let (a, b) = (sd * sg, sn * gi);
+    let g = gcd(a, b);
+    (a / g, b / g)
 }
 
 /// A value as the integer it travels as, at the scale `Checked::wire_scale` gives.
@@ -4603,6 +5038,31 @@ impl Checked {
         }
     }
 
+    /// What a row writes into an output column of numbers, as an interval, when its cell there
+    /// names one of the table's own columns of numbers and the row's cell on that column lets
+    /// through less than the column's range: the range narrowed to what the cell lets through
+    /// (§15.213). `| >=1 | units |` writes `units` only at one or more, so a table that picks
+    /// another divisor where `units` is 0 leaves a column that is never 0. `None` where the cell
+    /// narrows nothing, or lets nothing through (a row that never fires).
+    pub(crate) fn row_written(&self, t: &Table, row: &Row, oi: usize) -> Option<(Rat, Rat)> {
+        let Some(OutCell::Name(w)) = row.outs.get(oi) else { return None };
+        let ci = t.inputs.iter().position(|(c, _)| c == w)?;
+        let (Some(lo), Some(hi)) = self.ranges.get(w).copied()? else { return None };
+        let ty = self.ty_of(w)?;
+        if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number) {
+            return None;
+        }
+        let step = Rat::new(1, (*self.scales.get(w).unwrap_or(&1)).max(1));
+        let (cl, ch) = cell_hull(row.cells.get(ci)?, &ty, step)?;
+        let l = cl.map_or(lo, |c| crate::grid::max_rat(c, lo));
+        let h = ch.map_or(hi, |c| crate::grid::min_rat(c, hi));
+        let same = l.cmp_to(lo) == std::cmp::Ordering::Equal && h.cmp_to(hi) == std::cmp::Ordering::Equal;
+        if same || l.cmp_to(h) == std::cmp::Ordering::Greater {
+            return None;
+        }
+        Some((l, h))
+    }
+
     /// Interval arithmetic from the declared input ranges. The right-hand side of a derived
     /// value is a linear combination of inputs only, so addition, subtraction, and constant
     /// multiples are all that is needed (§5.2).
@@ -4635,10 +5095,12 @@ impl Checked {
                         // the whole of `rulec check` before E115 could say that a divisor has
                         // to be a constant (DESIGN §15.88). Nothing here may outrun a
                         // diagnostic; the interval is simply not known.
-                        if *op == BinOp::Div
-                            && bl.cmp_to(Rat::zero()) != std::cmp::Ordering::Greater
-                            && bh.cmp_to(Rat::zero()) != std::cmp::Ordering::Less
-                        {
+                        // Both ends on one side of zero, too: a range written upside down
+                        // (`>=28 <=0`) has a positive low end and a zero high one, and a division
+                        // by a value took the zero end into `Rat::div` (§15.213).
+                        let above = |v: Rat| v.cmp_to(Rat::zero()) == std::cmp::Ordering::Greater;
+                        let below = |v: Rat| v.cmp_to(Rat::zero()) == std::cmp::Ordering::Less;
+                        if *op == BinOp::Div && !((above(bl) && above(bh)) || (below(bl) && below(bh))) {
                             return None;
                         }
                         // Minimum and maximum over the endpoint combinations. A rate is not
@@ -4706,11 +5168,81 @@ impl Checked {
                         };
                         Some((pick(al, bl), pick(ah, bh)))
                     }
+                    // A remainder: inside one period the argument's interval moved down by the
+                    // multiples of the divisor below it, otherwise the whole of 0 to n − 1
+                    // (§15.214). The argument is whole (E103), and the ends are read as whole too,
+                    // which is what the re-checkers read.
+                    (crate::kw::MOD, [x, k]) => {
+                        let n = const_value(k)?;
+                        let (lo, hi) = self.interval(x, ty)?;
+                        let (a, b) = (lo.num.div_euclid(lo.den), hi.num.div_euclid(hi.den));
+                        if a.div_euclid(n) == b.div_euclid(n) {
+                            let base = a.div_euclid(n) * n;
+                            Some((Rat::int(a - base), Rat::int(b - base)))
+                        } else {
+                            Some((Rat::zero(), Rat::int(n - 1)))
+                        }
+                    }
+                    // A whole square root rises with its argument, so its ends are the roots of the
+                    // argument's ends (§15.215). Below zero there is none, and E139 has said so.
+                    (crate::kw::ISQRT, [x]) => {
+                        let (lo, hi) = self.interval(x, ty)?;
+                        Some((isqrt_rat(lo)?, isqrt_rat(hi)?))
+                    }
                     _ => None,
                 }
             }
             _ => None,
         }
+    }
+}
+
+/// The values a cell on a column of numbers lets through, as the two ends of one interval
+/// (§15.213): a literal its value, a comparison what it leaves, a set of values their hull. A
+/// strict end is moved inward to the next point of `step`, the finest grid the column's values sit
+/// on (its storage step), so `>0` on whole numbers starts at 1. `None` for a cell that says nothing
+/// an interval can (`-`, `not:`, `none`).
+fn cell_hull(cell: &Cell, ty: &Ty, step: Rat) -> Option<(Option<Rat>, Option<Rat>)> {
+    let val = |l: &Lit| match l {
+        Lit::Num(n) => lit_value_in(n, ty),
+        _ => None,
+    };
+    let floor = |v: Rat| {
+        let q = v.div(step);
+        Rat::int(q.num.div_euclid(q.den)).mul(step)
+    };
+    match cell {
+        Cell::Lit(l) => {
+            let v = val(l)?;
+            Some((Some(v), Some(v)))
+        }
+        Cell::Set(ls) if !ls.is_empty() => {
+            let vs = ls.iter().map(val).collect::<Option<Vec<Rat>>>()?;
+            let lo = vs.iter().copied().min_by(|a, b| a.cmp_to(*b))?;
+            let hi = vs.iter().copied().max_by(|a, b| a.cmp_to(*b))?;
+            Some((Some(lo), Some(hi)))
+        }
+        Cell::Cmp(atoms) => {
+            let (mut lo, mut hi): (Option<Rat>, Option<Rat>) = (None, None);
+            for (op, l) in atoms {
+                let v = val(l)?;
+                let (end, upper) = match op {
+                    CmpOp::Ge => (v, false),
+                    // The next point of the grid above `v`.
+                    CmpOp::Gt => (floor(v).add(step), false),
+                    CmpOp::Le => (v, true),
+                    // The point of the grid below `v`.
+                    CmpOp::Lt => (Rat::zero().sub(floor(Rat::zero().sub(v))).sub(step), true),
+                };
+                if upper {
+                    hi = Some(hi.map_or(end, |h| crate::grid::min_rat(h, end)));
+                } else {
+                    lo = Some(lo.map_or(end, |l| crate::grid::max_rat(l, end)));
+                }
+            }
+            Some((lo, hi))
+        }
+        _ => None,
     }
 }
 
@@ -4886,8 +5418,9 @@ impl Checked {
                     return args.get(1).and_then(|g| self.scale(g));
                 }
                 // A share is a whole number of the unit, so its step is 1 whatever the
-                // steps of the three it is computed from (§15.102).
-                if name == crate::kw::ALLOCATE {
+                // steps of the three it is computed from (§15.102). A remainder and a whole
+                // square root are whole numbers too (§15.214, §15.215).
+                if name == crate::kw::ALLOCATE || name == crate::kw::MOD || name == crate::kw::ISQRT {
                     return Some(1);
                 }
                 // `min` and `max` give one of their sides, so the scale both sides sit on, as

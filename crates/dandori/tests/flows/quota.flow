@@ -1,0 +1,30 @@
+workflow quota_requests v1
+description "Grants a request for part of a quota at once or sends it to review. What was used and what is asked come from tasks with no range, so ritsu cannot decide the rule's precondition that the two never come to more than the quota (a sum on one side), and the workflow checks it as soon as both are made. Runs on every platform"
+
+use rule check_quota from "rules/quota_check.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:quota-check"
+
+inputs
+  account : string
+  quota   : int  range >=1 <=1000
+
+task usage(account: string) -> int
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:usage"
+  idempotent
+
+task ask_amount(account: string) -> int
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:ask-amount"
+  idempotent
+
+task grant(account: string, amount: int)
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:grant"
+  key
+
+flow
+  # used + requested <= quota is checked right after ask_amount answers, the later of the two
+  let used = usage(account: account)
+  let asked = ask_amount(account: account)
+  let decision = check_quota(used: used, requested: asked, quota: quota)
+  match decision.route
+    at_once => grant(account: account, amount: asked)
+    review => pass

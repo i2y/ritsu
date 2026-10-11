@@ -279,7 +279,7 @@ pub const ALL: &[Backend] = &[
                 // file for every language and is written outside this registry.
                 (format!("python/{alias}_service.py"), g.py_connect()),
                 (format!("python/{alias}_connect_runner.py"), g.py_connect_runner()),
-                ("python/_round_test.py".into(), crate::codegen::round_tests_python()),
+                ("python/_round_test.py".into(), crate::codegen::round_tests_python(&crate::codegen::Uses::every())),
                 (format!("python/{alias}_page.html"), g.page()),
             ]
         },
@@ -326,7 +326,7 @@ pub const ALL: &[Backend] = &[
                 (format!("numpy/{alias}.json"), g.np_plan()),
                 ("numpy/rulec_np.py".into(), crate::codegen::np_runtime()),
                 (format!("numpy/{alias}_runner.py"), g.np_runner()),
-                ("numpy/_round_test.py".into(), crate::codegen::round_tests_numpy()),
+                ("numpy/_round_test.py".into(), crate::codegen::round_tests_numpy(&crate::codegen::Uses::every())),
             ]
         },
         stem: None,
@@ -370,7 +370,7 @@ pub const ALL: &[Backend] = &[
                 (format!("typescript/{alias}.ts"), g.typescript()),
                 (format!("typescript/{alias}_runner.ts"), g.ts_runner()),
                 (format!("typescript/{alias}_mcp.ts"), g.ts_mcp()),
-                ("typescript/_round_test.ts".into(), crate::codegen::round_tests_typescript()),
+                ("typescript/_round_test.ts".into(), crate::codegen::round_tests_typescript(&crate::codegen::Uses::every())),
                 (format!("typescript/{alias}_page.html"), g.page()),
             ]
         },
@@ -404,7 +404,7 @@ pub const ALL: &[Backend] = &[
                 (format!("javascript/{alias}.mjs"), g.javascript()),
                 (format!("javascript/{alias}_runner.mjs"), g.js_runner()),
                 (format!("javascript/{alias}_mcp.mjs"), g.js_mcp()),
-                ("javascript/_round_test.mjs".into(), crate::codegen::round_tests_javascript()),
+                ("javascript/_round_test.mjs".into(), crate::codegen::round_tests_javascript(&crate::codegen::Uses::every())),
                 (format!("javascript/{alias}_page.html"), g.page()),
             ]
         },
@@ -434,7 +434,7 @@ pub const ALL: &[Backend] = &[
                 (format!("rust/{alias}.rs"), g.rust()),
                 (format!("rust/{alias}_runner.rs"), g.rs_runner()),
                 (format!("rust/{alias}_proof.rs"), g.rs_proof()),
-                ("rust/_round_test.rs".into(), crate::codegen::round_tests_rust()),
+                ("rust/_round_test.rs".into(), crate::codegen::round_tests_rust(&crate::codegen::Uses::every())),
             ]
         },
         stem: None,
@@ -484,7 +484,7 @@ pub const ALL: &[Backend] = &[
                 (format!("ruby/{alias}_runner.rb"), g.ruby_runner()),
                 // The signature goes under sig/, where steep looks by default.
                 (format!("ruby/sig/{alias}.rbs"), g.rbs()),
-                ("ruby/_round_test.rb".into(), crate::codegen::round_tests_ruby()),
+                ("ruby/_round_test.rb".into(), crate::codegen::round_tests_ruby(&crate::codegen::Uses::every())),
             ]
         },
         stem: None,
@@ -512,7 +512,7 @@ pub const ALL: &[Backend] = &[
             vec![
                 (format!("php/{alias}.php"), g.php()),
                 (format!("php/{alias}_runner.php"), g.php_runner()),
-                ("php/_round_test.php".into(), crate::codegen::round_tests_php()),
+                ("php/_round_test.php".into(), crate::codegen::round_tests_php(&crate::codegen::Uses::every())),
             ]
         },
         stem: None,
@@ -548,7 +548,7 @@ pub const ALL: &[Backend] = &[
                     format!("go/{pkg}runner/go.mod"),
                     format!("module {pkg}runner\n\ngo {GO_MIN}\n\nrequire {pkg} v0.0.0\n\nreplace {pkg} => ../{pkg}\n"),
                 ),
-                (format!("go/{pkg}/round_test.go"), crate::codegen::round_tests_go(pkg)),
+                (format!("go/{pkg}/round_test.go"), crate::codegen::round_tests_go(pkg, &g.arith_uses())),
             ]
         },
         stem: None,
@@ -576,7 +576,7 @@ pub const ALL: &[Backend] = &[
             vec![
                 (format!("swift/{alias}.swift"), g.swift()),
                 (format!("swift/{alias}_runner.swift"), g.swift_runner()),
-                ("swift/_round_test.swift".into(), crate::codegen::round_tests_swift()),
+                ("swift/_round_test.swift".into(), crate::codegen::round_tests_swift(&crate::codegen::Uses::every())),
             ]
         },
         stem: None,
@@ -621,7 +621,7 @@ pub const ALL: &[Backend] = &[
             vec![
                 (format!("java/{cls}.java"), g.java()),
                 (format!("java/{cls}Runner.java"), g.java_runner()),
-                ("java/_RoundTest.java".into(), crate::codegen::round_tests_java()),
+                ("java/_RoundTest.java".into(), crate::codegen::round_tests_java(&crate::codegen::Uses::every())),
             ]
         },
         stem: Some(crate::codegen::java_class),
@@ -677,7 +677,7 @@ pub const ALL: &[Backend] = &[
                 (format!("sql/{alias}_function.sql"), g.sql_function()),
                 (format!("sql/{alias}_runner.py"), g.sql_runner()),
                 (format!("sql/{alias}_function_runner.py"), g.sql_function_runner()),
-                ("sql/_round_test.py".into(), crate::codegen::round_tests_sql()),
+                ("sql/_round_test.py".into(), crate::codegen::round_tests_sql(&crate::codegen::Uses::every())),
             ]
         },
         stem: None,
@@ -711,8 +711,8 @@ pub const ALL: &[Backend] = &[
                 (format!("wasm/{alias}_wasm.rs"), g.rs_wasm()),
                 (format!("wasm/{alias}.wit"), g.wit()),
                 (format!("wasm/{alias}_runner.mjs"), g.wasm_runner()),
-                ("wasm/_round.rs".into(), crate::codegen::round_wasm_rust()),
-                ("wasm/_round_test.mjs".into(), crate::codegen::round_tests_wasm_js()),
+                ("wasm/_round.rs".into(), crate::codegen::round_wasm_rust(&crate::codegen::Uses::every())),
+                ("wasm/_round_test.mjs".into(), crate::codegen::round_tests_wasm_js(&crate::codegen::Uses::every())),
             ]
         },
         stem: None,

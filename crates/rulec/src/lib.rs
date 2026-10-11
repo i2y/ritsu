@@ -156,6 +156,7 @@ fn stages(src: &str, path: &str, budget: i64) -> Report {
     diags.extend(projection::check(f, &t, path));
     diags.extend(sources::check(f, path));
     enrich_e104(&mut diags, f, &t);
+    enrich_arith(&mut diags, f, &t);
     if diags.iter().any(|d| d.severity == Severity::Error) {
         return Report { diags, quiet, shadow, nodes };
     }
@@ -244,6 +245,126 @@ pub fn check_tail(shadow: &region::Shadow, diags: &[Diag], path: &str, suppresse
 /// evaluated and the choice depends on whether a fraction appears. An output that is only
 /// looked up from a table never produces a fraction, so for it the second job of the
 /// rounding declaration (checking that literals sit on the grid) is given as the reason.
+/// The input behind E132 and E139: one that makes the divisor of a rounded quotient zero, or the
+/// argument of an `isqrt` negative (§15.213, §15.215), named in the note and in the witness. It is
+/// looked for over the inputs the expression turns on, as E101's example input is (§15.194):
+/// every combination where there are few enough, else each input at the ends of its range and at
+/// zero. The input has to be one the door takes — inside every `constraint` and on koyomi's days —
+/// and the reference evaluator has to say the expression comes to zero, or below it. None found,
+/// nothing is named: the ranges reach the value, and that is what the error says.
+fn enrich_arith(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked) {
+    use eval::Val;
+    use num::Rat;
+    use std::collections::{BTreeMap, BTreeSet};
+    for w in &t.arith_witness {
+        let same = |s: &diag::Span| s.line == w.span.line && s.col == w.span.col && s.len == w.span.len;
+        let Some(d) = diags.iter_mut().find(|d| d.code == w.code && d.marks.first().is_some_and(|m| same(&m.span))) else { continue };
+        let hits = |a: &BTreeMap<String, Val>| -> bool {
+            if !vectors::allowed(f, a) || !vectors::days_ok(t, a) {
+                return false;
+            }
+            let (_, _, b) = eval::run_bindings(f, t, a.clone().into_iter().collect());
+            match eval::Env::new(t, b).expr(&w.expr) {
+                Some(Val::Num(v)) => {
+                    if w.code == "E132" {
+                        v.num == 0
+                    } else {
+                        v.num < 0
+                    }
+                }
+                _ => false,
+            }
+        };
+        let mut names = Vec::new();
+        types::collect_names(&w.expr, &mut names);
+        let found = match grid::exhaust_input(f, t, &names, &BTreeMap::new(), &BTreeSet::new(), hits) {
+            Some(Some(a)) => Some(a),
+            Some(None) => None,
+            // Too many to walk: each input the expression reads at the ends of its range and at
+            // zero, every other input at the bottom of its own.
+            None => {
+                let inputs: Vec<&ast::VarDecl> = f.inputs.iter().collect();
+                let mut leaves: Vec<String> = Vec::new();
+                let reads = coverage::reads_of(f);
+                for n in &names {
+                    for l in coverage::leaves(&reads, n) {
+                        if inputs.iter().any(|i| i.name.text == l) && !leaves.contains(&l) {
+                            leaves.push(l);
+                        }
+                    }
+                }
+                let base: BTreeMap<String, Val> = inputs
+                    .iter()
+                    .filter_map(|i| {
+                        let (lo, _) = t.ranges.get(&i.name.text).copied()?;
+                        Some((i.name.text.clone(), Val::Num(lo?)))
+                    })
+                    .collect();
+                let points = |n: &String| -> Vec<Rat> {
+                    let (lo, hi) = t.ranges.get(n).copied().unwrap_or((None, None));
+                    let mut ps: Vec<Rat> = lo.into_iter().chain(hi).collect();
+                    if lo.is_none_or(|l| l.num <= 0) && hi.is_none_or(|h| h.num >= 0) {
+                        ps.push(Rat::zero());
+                    }
+                    ps
+                };
+                let lists: Vec<Vec<Rat>> = leaves.iter().map(points).collect();
+                if leaves.len() > 6 || lists.iter().any(|l| l.is_empty()) || base.len() != inputs.len() {
+                    None
+                } else {
+                    let mut at = vec![0usize; leaves.len()];
+                    let mut got = None;
+                    'walk: loop {
+                        let mut a = base.clone();
+                        for (i, n) in leaves.iter().enumerate() {
+                            a.insert(n.clone(), Val::Num(lists[i][at[i]]));
+                        }
+                        if hits(&a) {
+                            got = Some(a);
+                            break 'walk;
+                        }
+                        let mut i = 0;
+                        loop {
+                            if i == at.len() {
+                                break 'walk;
+                            }
+                            at[i] += 1;
+                            if at[i] < lists[i].len() {
+                                break;
+                            }
+                            at[i] = 0;
+                            i += 1;
+                        }
+                    }
+                    got
+                }
+            }
+        };
+        let Some(a) = found else { continue };
+        let shown: Vec<String> = f
+            .inputs
+            .iter()
+            .filter(|i| names.iter().any(|n| coverage::leaves(&coverage::reads_of(f), n).contains(&i.name.text)))
+            .filter_map(|i| a.get(&i.name.text).map(|v| (i.name.text.clone(), v.clone())))
+            .map(|(n, v)| format!("{n} = {}", vectors::show_named(t, &n, &v)))
+            .collect();
+        for i in &f.inputs {
+            if let Some(v) = a.get(&i.name.text) {
+                d.witness.inputs.push((i.name.text.clone(), eval::wval(t, &i.name.text, v)));
+            }
+        }
+        let b = shown.join(", ");
+        d.notes.insert(
+            0,
+            if w.code == "E132" {
+                tr!("割る数を 0 にする入力: {b}", "An input that makes the divisor zero: {b}")
+            } else {
+                tr!("引数を負にする入力: {b}", "An input that makes the argument negative: {b}")
+            },
+        );
+    }
+}
+
 fn enrich_e104(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked) {
     use num::{Rat, RoundMode, RoundTo};
     let Some(raw) = eval::unrounded_output(f, t) else { return };

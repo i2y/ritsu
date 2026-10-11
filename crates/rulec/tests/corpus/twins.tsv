@@ -40,3 +40,10 @@ Claude利用料.rule	claude_api_usage_fee.rule
 補償証明書.rule	compensation_certificate.rule
 二つの区分.rule	two_bands_from_weight.rule
 注文の状態.rule	order_lifecycle.rule
+平均単価.rule	average_unit_price.rule
+平均単価の場合分け.rule	average_unit_price_split.rule
+日割り.rule	daily_proration.rule
+当番の持ち回り.rule	duty_rotation.rule
+経済的発注量.rule	economic_order_quantity.rule
+割り当ての申し込み.rule	quota_request.rule
+乱数で決める一回.rule	contested_roll.rule

@@ -1,0 +1,32 @@
+rule 割り当ての申し込み(quota_left) v1
+description "申し込みを受けたあとに、割り当ての残りがどれだけあるか。呼び出し側は割り当てを超えて申し込まない。使った量と申し込む量を足しても割り当てを超えないので、残りは 0 を下回らない"
+
+enum 残りの具合(headroom) = 使い切り(used_up) | 少ない(low) | 十分(ample)
+
+inputs
+  使った量(used)        : number  range >=0 <=1000
+  申し込む量(requested) : number  range >=1 <=1000
+  割り当て(quota)       : number  range >=1 <=1000
+
+# constraint の片側は、入力を足した形にできる。
+constraint 使った量 + 申し込む量 <= 割り当て
+
+outputs
+  状態(status) : 残りの具合
+
+derive 残り(left) : number = 割り当て - 使った量 - 申し込む量  range >=-1999 <=999
+
+# 残りが負の行は無い。constraint がそれを起こさず、検査もそう読む。
+table 残りの表(remaining)
+policy unique
+| 残り     | -> 状態 : 残りの具合 |
+| 0        | 使い切り             |
+| >=1 <=99 | 少ない               |
+| >=100    | 十分                 |
+
+examples
+| 使った量 | 申し込む量 | 割り当て | -> 状態  |
+| 400      | 600        | 1000     | 使い切り |
+| 400      | 550        | 1000     | 少ない   |
+| 0        | 1          | 1000     | 十分     |
+| 0        | 1          | 1        | 使い切り |

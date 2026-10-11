@@ -181,6 +181,12 @@ golden!(e075_value_and_name, "E075", "tests/mutants/m_e075.rule", "E075");
 golden!(e031_element_and_answer, "E031-walk", "tests/mutants/m_e031walk.rule", "E031");
 golden!(w128_undecided_row, "W128", "tests/mutants/m_w128.rule", "W128");
 
+// Arithmetic (§15.213 to §15.216).
+golden!(e132_divisor_can_be_zero, "E132", "tests/mutants/m_e132.rule", "E132");
+golden!(e139_isqrt_below_zero, "E139", "tests/mutants/m_e139.rule", "E139");
+golden!(e115_division_outside_rounding, "E115-div", "tests/mutants/m_e115div.rule", "E115");
+golden!(e115_mod_divisor, "E115-mod", "tests/mutants/m_e115mod.rule", "E115");
+
 // ── The pages and the amounts an English reader sees ─────────────────────────────────────────
 
 /// What a command prints, in a language, as the person who typed it sees it.

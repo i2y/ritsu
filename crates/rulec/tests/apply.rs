@@ -246,7 +246,7 @@ fn リテラルで束縛した入力は列ごと畳まれる() {
         "呼び先の derive が展開されていない"
     );
     assert!(
-        f.constraints.iter().any(|k| k.left == "小" || k.right == "小"),
+        f.constraints.iter().any(|k| k.names().any(|n| n == "小")),
         "呼び先の constraint が呼び出し側の名前で入っていない: {:?}",
         f.constraints.iter().map(|k| (&k.left, &k.right)).collect::<Vec<_>>()
     );

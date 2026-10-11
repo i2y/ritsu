@@ -425,8 +425,8 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                     // input reaches and nothing showed so, used to be put down to the generator.
                     hint: if undecided.contains(&ri) {
                         tr!(
-                            "check が W128 で言った行です。当たる入力が見つからず、当たらないことも示せていません。当たる入力があるなら例に書き、無いならこの行を削除してください（削除して E101 が出るなら、行は残してかまいません）。",
-                            "check named this row with W128: no input was found that reaches it, and none was shown not to. If some input reaches it, write it as an example; if none does, delete the row (if deleting it brings E101, the row can stay)."
+                            "check が W128 で言った行です。当たる入力が、この行を除いたときに完全性の検査が見つける穴の後ろにも見つからず、当たらないことも示せていません。当たる入力があるなら例に書き、無いならこの行を削除してください（削除して E101 が出るなら、行は残してかまいません）。",
+                            "check named this row with W128: no input was found that reaches it, not even behind the gap the completeness check finds with the row taken out, and none was shown not to. If some input reaches it, write it as an example; if none does, delete the row (if deleting it brings E101, the row can stay)."
                         )
                     } else {
                         tr!(

@@ -1,0 +1,25 @@
+rule quota_check v1
+description "Whether a request for part of a quota is granted at once or reviewed. What was used and what is asked never come to more than the quota, which the rule takes for granted: a precondition dandori cannot show where the two come from tasks with no range, so the workflow checks it when it runs (tests/flows/quota.flow)"
+
+enum path = at_once | review
+
+inputs
+  used      : number  range >=0 <=1000
+  requested : number  range >=0 <=1000
+  quota     : number  range >=1 <=1000
+
+constraint used + requested <= quota
+
+outputs
+  route : path
+
+table pick
+policy unique
+| requested | -> route : path |
+| <=100     | at_once         |
+| >100      | review          |
+
+examples
+| used | requested | quota | -> route |
+| 400  | 100       | 1000  | at_once  |
+| 400  | 300       | 1000  | review   |

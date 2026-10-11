@@ -1,0 +1,8 @@
+error[E115]: The divisor is not a positive constant
+  --> tests/mutants/m_e115mod.rule:15
+   |
+15 | define turn : number = mod(week - first_week, teams)
+   |                                               ^^^^^ the divisor is not a constant
+   |
+ The divisor of `mod` is a positive whole constant, as in `mod(x, 7)`. The answer is then always from 0 to one less than it, and its range and step are known statically.
+ A remainder by a value that varies is where languages disagree below zero, and where a call can divide by zero.

@@ -750,7 +750,7 @@ compare that with a constant; the analysis is exact that way, and the message sa
 A `define` that computes a number may be a table column too. What it can come to is its
 expression computed over the intervals of what it reads — the inputs' ranges, what the derives
 and the other defines come to, the values a table above writes — whatever the expression's shape
-(a product, a rounding, `min`): `define share : rate = score / 200` with `score` from 0 to 200
+(a product, a rounding, `min`, a remainder, a root): `define share : rate = score / 200` with `score` from 0 to 200
 comes to 0% up to 100%. The checks read that as they read a derive's reach: E101 asks no row for a
 share past 100%, and a row that asks only for one is E102.
 
@@ -772,8 +772,10 @@ Where a row asks a computed column (a derive, a `define`) for values and neither
 reaches the row nor a proof that none does was found, the check says the row is undecided
 (W128) rather than passing it as reached: the product of two numbers is 997 only as one box of
 997 or 997 boxes of one, which no candidate the search walks need be. An example that reaches the
-row decides it, and the warning goes. A row of inputs and enums alone is never undecided: its
-point is an input.
+row decides it, and the warning goes. So does the gap the row leaves: taken out of the table, the
+row leaves inputs no other row covers, the completeness check finds one, and that input — run
+through the rule to confirm it — reaches the row; the vectors take it too. A row of inputs and
+enums alone is never undecided: its point is an input.
 
 ## 6.1 constraint
 
@@ -789,6 +791,22 @@ The shape is `constraint <input> <comparison> <input>`, with one of `<=`, `<`, `
 (E017), an input on each side (E018), and both of a type that has an order — money, a
 quantity, a rate, a `number` or a `date`. Several lines all hold at once, and `A = B`, when
 it is ever wanted, is the two lines `A <= B` and `A >= B`.
+
+One side may add inputs up:
+
+```rule
+constraint used + requested <= quota
+constraint roll < challenger_strength + holder_strength
+```
+
+Only inputs joined by `+`, and on one side only: `a + b <= c + d` and a constant or a factor in
+the sum (`a + 3 <= b`, `2 * a <= b`) are E017, and something other than an input is E018. The
+inputs of a sum are of the other side's type (E103), and a date is not added (E048). A sum is
+read everywhere a pair is: the completeness check drops what the inputs' ranges show it rules
+out and takes it into the elimination with the other linear relations, so a table needs no row
+for a remainder below zero when `used + requested <= quota`; the witnesses and the vectors keep
+to it; the generated code refuses an input that breaks it at the door; an example that breaks it
+is E019.
 
 Three things follow from one line.
 
@@ -1044,8 +1062,9 @@ one element` — which is what keeps E108's int64 claim true of a sequence whose
 caps. To take a difference, sum two non-negative columns and subtract.
 
 Nothing else accumulates. A fold's arms choose an element; a count adds one per element that
-passes a test; a sum adds one column. There is no average and no arm that carries a number
-forward: an average is a sum and a count divided, and the divisor is not a constant (§2.3).
+passes a test; a sum adds one column. There is no average arm and no arm that carries a number
+forward. An average is a sum over a count, divided after the walk inside a rounding (§8):
+`define avg : money[JPY] = half_up(total / max(n, 1), 1JPY)`.
 
 A rule cannot have both a `fold` and a `count` or a `sum` (E031): they are two endings for
 the same walk, and a `fold` may stop partway, which leaves the meaning of a total on that
@@ -1381,10 +1400,15 @@ column called `fee` is what the output `fee` returns. Naming a later output in a
 E015; a second `result` line is E016.
 
 Operators, from loosest to tightest: comparison (`<= >= < > =`), then `+ -`, then `* /`.
-Parentheses group. The functions are `min(a, b)`, `max(a, b)` and `allocate(t, c, s)`, and the
-five rounding modes may also be called as functions: `down(x, 1JPY)`, `up(x, 10JPY)`,
-`half_up(x, 1JPY)`, `half_down(x, 1JPY)`, `half_even(x, 1JPY)`. There are no others, and each
-takes the number of arguments written here: anything else is E118.
+Parentheses group. The functions are `min(a, b)`, `max(a, b)`, `allocate(t, c, s)`, `mod(x, n)`
+and `isqrt(x)`, and the five rounding modes may also be called as functions: `down(x, 1JPY)`,
+`up(x, 10JPY)`, `half_up(x, 1JPY)`, `half_down(x, 1JPY)`, `half_even(x, 1JPY)`. There are no
+others, and each takes the number of arguments written here: anything else is E118. `mod` and
+`isqrt` are read as functions only where a call is written, which a name never is, so they are not
+reserved: a rule may still call an input `mod` ([compatibility](compatibility.md), item 2).
+
+A divisor is a constant (E115), with two exceptions: `allocate`, below, and the division a
+rounding makes of its own argument.
 
 ### allocate — one line's share of an amount
 
@@ -1417,6 +1441,64 @@ the product of two ranges rather than the amount. Chains count: two `constraint`
 meet in the middle say what a single one would.
 
 One call decides one line. The loop stays with the caller, as everything else here does.
+
+### Dividing by a value inside a rounding
+
+```rule
+define average_price : money[JPY] = half_up(total / max(units, 1), 1JPY)
+define win_permille : number = half_even(attack * 1000 / (attack + defense), 1)
+```
+
+Inside one of the five roundings, the outermost operation of the first argument may divide by a
+value. The quotient is the exact fraction, and the rounding puts it on its grid the way its mode
+says, below zero as above it — the same in every generated language, since none of them is left
+to its own division. One division to a rounding, and it has to be the outermost operation:
+`down(fee * used / days, 1JPY)` divides by a value, `down(fee * (used / days), 1JPY)` is E115.
+
+- **Its type** is a division's (§3): an amount over an amount of the same unit is a ratio, which
+  is a `number` or a `rate` as the grid says (`half_up(a / b, 1)`, `half_up(a / b, 0.1%)`), and
+  anything over a `number` or a rate keeps its type. The grid is written in the quotient's unit
+  (E103).
+- **The divisor is never zero** (E132). Its interval comes from what it reads — the inputs'
+  ranges, the derives and defines, what a table above writes — and has to stay above zero or
+  below it. The message names an input that makes it zero. The ways out: narrow a range, divide
+  by `max(units, 1)`, or put a table that picks another divisor where it would be zero and
+  divide by that table's output. A row that writes one of its own table's columns writes only
+  what its cell there lets through, so `| >=1 | units |` beside `| 0 | 1 |` makes a column that
+  is never zero (`tests/corpus/average_unit_price_split.rule`). A `constraint` is not read for
+  this: under `constraint a < b`, divide by `max(b - a, 1)`, which is the same value there.
+- **The two integers the generated code divides** — the dividend and the divisor, brought to one
+  step — have to fit int64 (E108).
+- **What the answer can come to** is the quotient's interval (the four corners of the two
+  intervals) pushed out to the grid, and a table can use it as a column.
+
+Any other division by a value is E115, as it was.
+
+### mod — the remainder
+
+```rule
+define turn : number = mod(week - first_week, 3)
+```
+
+`mod(x, n)` is what is left of `x` once the multiples of `n` below it are taken out: from 0 up to
+`n − 1`, whatever the sign of `x` (`mod(-1, 3)` is 2). `n` is a positive whole constant (E115),
+and `x` a whole `number` (E103) — not an amount, a quantity, a rate or a date. What it can come to
+is `x`'s range moved down by the multiples of `n` below it when that range stays inside one
+period of `n`, and 0 to `n − 1` otherwise, so a table over `turn` above needs rows for 0, 1 and 2.
+There is no `%` operator: `7%` is a rate.
+
+### isqrt — the whole square root
+
+```rule
+define quantity : number = isqrt(down(2 * yearly_demand * order_cost / holding_cost, 1))
+```
+
+`isqrt(x)` is the largest whole number whose square does not pass `x`. `x` is a `number` — not an
+amount, a quantity, a rate or a date (E103); of a fraction it is the root of the whole part — and
+cannot go below zero (E139, with an input that takes it there; `max(x, 0)` is a way out). What it
+can come to is the roots of the ends of `x`'s range. There is no `sqrt` that
+answers a fraction and no `pow`: a power is a product, `floor(n^1.5)` is `isqrt(n * n * n)`, and a
+root to two places is `isqrt(x * 10000)`, which counts hundredths.
 
 **There is no loop and no recursion.**
 

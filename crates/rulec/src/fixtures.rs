@@ -350,7 +350,9 @@ fn holds(k: &crate::ast::Constraint, a: &BTreeMap<String, Val>) -> bool {
         Some(Val::Date(y, m, d)) => Some(crate::types::date_ord(*y, *m, *d)),
         _ => None,
     };
-    let (Some(x), Some(y)) = (num(a.get(&k.left)), num(a.get(&k.right))) else { return true };
+    // A side that adds inputs up compares their sum (§15.216).
+    let side = |ns: &[String]| ns.iter().try_fold(crate::num::Rat::zero(), |acc, n| num(a.get(n)).map(|v| acc.add(v)));
+    let (Some(x), Some(y)) = (side(&k.left), side(&k.right)) else { return true };
     let o = x.cmp_to(y);
     match k.op {
         crate::ast::CmpOp::Le => o != std::cmp::Ordering::Greater,
@@ -388,7 +390,7 @@ pub fn door(f: &RuleFile, c: &Checked, input: &BTreeMap<String, Val>) -> Option<
     f.constraints
         .iter()
         .find(|k| !holds(k, input))
-        .map(|k| Shut::Constraint { said: format!("{} {} {}", k.left, k.op.word(), k.right) })
+        .map(|k| Shut::Constraint { said: k.said() })
 }
 
 /// A value of one version's input, as another version of the rule takes it (§15.197). `diff`

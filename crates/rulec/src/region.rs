@@ -1828,6 +1828,31 @@ impl TableRegion {
         crate::grid::exhaust_input(f, c, &self.col_names, &a, &held, makes).flatten()
     }
 
+    /// An input that reaches row `i` of the set, found from the gap the check finds with the row
+    /// taken out: no other row takes the input behind that gap, so this one does — which the
+    /// reference evaluator is asked to confirm. `None` where no gap turns up within the budget, or
+    /// no input makes the gap's values (W128 stays then).
+    fn input_by_gap(
+        &self,
+        set: &crate::defset::DefSet,
+        c: &Checked,
+        f: &RuleFile,
+        ups: &[Upstream],
+        i: usize,
+        budget: i64,
+    ) -> Option<BTreeMap<String, crate::eval::Val>> {
+        let t = &set.table;
+        let others: Vec<usize> = (0..t.rows.len()).filter(|r| *r != i).collect();
+        let mut left = budget;
+        let hole = self.find_hole(&others, &mut left, ups, c)?;
+        let vals = self.reach_values(&hole);
+        let mut without = t.clone();
+        without.rows.remove(i);
+        let a = self.input_behind(&hole, vals, &without, c, f)?;
+        let (_, fired, _) = crate::eval::run_bindings(f, c, a.clone().into_iter().collect());
+        fired.contains(&crate::eval::row_tag(set.row_table(i), t.rows[i].index)).then_some(a)
+    }
+
     /// A row that matches the witness, written out so it can be pasted into the table. The
     /// output cells are copied from the table's first row: **the tool does not know the
     /// amount**, only the shape, and the notes say so. This is E101's `fix.text`.
@@ -2156,6 +2181,40 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
 ///
 /// For a set of one table this is exactly the check the table always had: the rows come in
 /// their own order, and the precedence relation is the policy's.
+/// The inputs behind the gaps of rows no search of the vectors reached: for each row of each
+/// definition set the inputs reach before any walk, with a cell on a computed column, that
+/// `covered` says no vector fires, the input `input_by_gap` finds (§15.209, refined). The vectors
+/// take them in, so the generated code is run on the row too.
+pub fn gap_inputs(f: &RuleFile, c: &Checked, covered: &dyn Fn(&str, usize) -> bool) -> Vec<(String, usize, BTreeMap<String, crate::eval::Val>)> {
+    let mut out = Vec::new();
+    if f.fold.is_some() || f.elements.is_some() {
+        return out;
+    }
+    let computed = |col: &str| f.items.iter().any(|it| matches!(it, Item::Derived(d) if d.name.text == col) || matches!(it, Item::Define(d) if d.name.text == col));
+    for set in &c.sets {
+        let t = &set.table;
+        let asks: Vec<usize> = (0..t.rows.len())
+            .filter(|&i| set.applied[set.member_of[i]].is_none())
+            .filter(|&i| !covered(set.row_table(i), t.rows[i].index))
+            .filter(|&i| t.inputs.iter().enumerate().any(|(ci, (col, _))| !matches!(t.rows[i].cells.get(ci), None | Some(Cell::DontCare)) && computed(col)))
+            .collect();
+        if asks.is_empty() {
+            continue;
+        }
+        let Some(reg) = TableRegion::build(t, c, f) else { continue };
+        if reg.axes.is_empty() || reg.unanalyzable.is_some() {
+            continue;
+        }
+        let ups = upstreams(t, c, f);
+        for i in asks {
+            if let Some(a) = reg.input_by_gap(set, c, f, &ups, i, DEFAULT_BUDGET) {
+                out.push((set.row_table(i).to_string(), t.rows[i].index, a));
+            }
+        }
+    }
+    out
+}
+
 pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &str, budget: i64) -> TableCheck {
     let t = &set.table;
     let inputs = &f.inputs;
@@ -2731,6 +2790,16 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
             .collect();
         let rows: Vec<usize> = asks.iter().map(|(i, _)| *i).collect();
         let found_none = crate::vectors::rows_without_input(f, c, set, &rows);
+        // A row completeness asks for: with the row taken out, the check finds a gap, and an
+        // input that makes the gap's values — no other row takes it, so this one does — is an
+        // input the row is reached by. It is looked for the way E101 looks for the input behind a
+        // gap (§15.194) and run through the reference evaluator, which has to fire the row. A gap
+        // no input makes (two truth values no number gives at once, say) decides nothing, and the
+        // row stays undecided; so does a search that runs out of its budget, which is the check's
+        // own for each row. Computed columns no linear model ties to the inputs — a remainder, a
+        // whole square root, a rounded quotient — are where the search of the vectors misses the
+        // most (§15.209's honest limits, the lane of §15.213–§15.215).
+        let found_none: Vec<usize> = found_none.into_iter().filter(|&i| reg.input_by_gap(set, c, f, &ups, i, budget).is_none()).collect();
         undecided = found_none.clone();
         for (i, cols) in asks.iter().filter(|(i, _)| found_none.contains(i)) {
             let i = *i;
@@ -2977,13 +3046,7 @@ fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, c: &Checked, f: &RuleF
     // expression reads one, and the `constraint` lines that narrow it.
     let line_of = |k: &usize| -> Option<String> {
         let con = f.constraints.get(*k)?;
-        let op = match con.op {
-            CmpOp::Le => "<=",
-            CmpOp::Lt => "<",
-            CmpOp::Ge => ">=",
-            CmpOp::Gt => ">",
-        };
-        Some(format!("`{} {} {op} {}`", crate::kw::CONSTRAINT, con.left, con.right))
+        Some(format!("`{} {}`", crate::kw::CONSTRAINT, con.said()))
     };
     let lines: Vec<String> = ks.iter().filter_map(line_of).collect();
     let other_lines: Vec<String> = others.iter().filter_map(line_of).collect();
@@ -3138,7 +3201,83 @@ fn third_form(d: Diag, w: &OutOfReach, reg: &TableRegion, c: &Checked, f: &RuleF
 
 /// An expression as the rule writes it, for a message: names, literals as written, the four
 /// operations and the comparisons, and calls.
-fn expr_text(e: &Expr) -> String {
+/// The bounds of a system of `constraint` lines, some of them with a sum on a side, pushed until
+/// they stop moving, and then each name fixed at its low end in turn with the bounds pushed again
+/// (§15.216). `a + b <= c` lowers the top of `a` to the top of `c` less the bottom of `b`, and
+/// raises the bottom of `c` to the two bottoms added up; a strict comparison keeps one step apart.
+/// What comes out is a point every constraint is checked against afterwards, so a bound pushed
+/// too far costs a witness and never names an input that breaks one. `false` when a name is left
+/// with no value.
+fn settle_sums(b: &mut BTreeMap<String, Ival>, ks: &[&crate::ast::Constraint], step_of: &dyn Fn(&str) -> Rat) -> bool {
+    use std::cmp::Ordering::*;
+    let push = |b: &mut BTreeMap<String, Ival>| -> bool {
+        // Each round moves a bound by at least one step or stops; ranges are finite, and the
+        // number of rounds is held to something a person would wait for all the same.
+        for _ in 0..(64 + 8 * b.len()) {
+            let mut moved = false;
+            for k in ks {
+                // `small <= big`, the smaller side first.
+                let (small, big, strict) = match k.op {
+                    CmpOp::Le => (&k.left, &k.right, false),
+                    CmpOp::Lt => (&k.left, &k.right, true),
+                    CmpOp::Ge => (&k.right, &k.left, false),
+                    CmpOp::Gt => (&k.right, &k.left, true),
+                };
+                let lows = |side: &[String], b: &BTreeMap<String, Ival>| side.iter().try_fold(Rat::zero(), |acc, n| b.get(n)?.0.map(|v| acc.add(v)));
+                let highs = |side: &[String], b: &BTreeMap<String, Ival>| side.iter().try_fold(Rat::zero(), |acc, n| b.get(n)?.1.map(|v| acc.add(v)));
+                let gap = |n: &str| if strict { step_of(n) } else { Rat::zero() };
+                // Each name on the smaller side is at most the larger side's top less the others'
+                // bottoms.
+                if let (Some(top), Some(bottoms)) = (highs(big, b), lows(small, b)) {
+                    for n in small.iter() {
+                        let Some(&(lo, hi)) = b.get(n) else { continue };
+                        let Some(own) = lo else { continue };
+                        let cap = top.sub(bottoms.sub(own)).sub(gap(n));
+                        if hi.is_none_or(|h| cap.cmp_to(h) == Less) {
+                            b.insert(n.clone(), (lo, Some(cap)));
+                            moved = true;
+                        }
+                    }
+                }
+                // Each name on the larger side is at least the smaller side's bottom less the
+                // others' tops.
+                if let (Some(bottom), Some(tops)) = (lows(small, b), highs(big, b)) {
+                    for n in big.iter() {
+                        let Some(&(lo, hi)) = b.get(n) else { continue };
+                        let Some(own) = hi else { continue };
+                        let floor = bottom.sub(tops.sub(own)).add(gap(n));
+                        if lo.is_none_or(|l| floor.cmp_to(l) == Greater) {
+                            b.insert(n.clone(), (Some(floor), hi));
+                            moved = true;
+                        }
+                    }
+                }
+            }
+            if b.values().any(|(lo, hi)| matches!((lo, hi), (Some(x), Some(y)) if x.cmp_to(*y) == Greater)) {
+                return false;
+            }
+            if !moved {
+                return true;
+            }
+        }
+        true
+    };
+    if !push(b) {
+        return false;
+    }
+    let names: Vec<String> = b.keys().cloned().collect();
+    for n in names {
+        let Some(&(lo, hi)) = b.get(&n) else { continue };
+        let Some(v) = lo.or(hi) else { continue };
+        b.insert(n, (Some(v), Some(v)));
+        if !push(b) {
+            return false;
+        }
+    }
+    true
+}
+
+pub(crate) fn expr_text(e: &Expr) -> String {
     match e {
         Expr::Name(n, _) => n.clone(),
         Expr::Lit(Lit::Num(n), _) => n.raw.clone(),
@@ -4126,39 +4265,50 @@ impl TableRegion {
         let mut b: BTreeMap<String, Ival> = BTreeMap::new();
         let mut ks: Vec<&crate::ast::Constraint> = Vec::new();
         for k in &self.constraints {
-            let (Some(l), Some(r)) = (self.closed_of_name(&k.left, path), self.closed_of_name(&k.right, path))
-            else {
+            let Some(ivs) = k.names().map(|n| self.closed_of_name(n, path).map(|iv| (n.clone(), iv))).collect::<Option<Vec<_>>>() else {
                 continue;
             };
-            b.entry(k.left.clone()).or_insert(l);
-            b.entry(k.right.clone()).or_insert(r);
+            for (n, iv) in ivs {
+                b.entry(n).or_insert(iv);
+            }
             ks.push(k);
+        }
+        // A side that adds names up is not a difference constraint, and Bellman-Ford does not
+        // settle it: the bounds of a sum are pushed onto each name it adds, and the names are then
+        // fixed one at a time, each at its low end, with the bounds pushed again after each
+        // (§15.216). Without a sum the system is the difference constraints it always was, and
+        // the chain below is left as it is.
+        if ks.iter().any(|k| k.is_sum()) {
+            if !settle_sums(&mut b, &ks, &step_of) {
+                return None;
+            }
         }
         // Bellman-Ford over the difference constraints: one pass per name is enough for
         // the bounds to travel the longest chain, and a cycle settles on equality.
         for _ in 0..=b.len() {
             let mut moved = false;
             for k in &ks {
-                let (Some(&(ll, lh)), Some(&(rl, rh))) = (b.get(&k.left), b.get(&k.right)) else { continue };
+                let Some((kl, kr)) = k.pair() else { continue };
+                let (Some(&(ll, lh)), Some(&(rl, rh))) = (b.get(kl), b.get(kr)) else { continue };
                 let gap = |n: &str, strict: bool| if strict { step_of(n) } else { Rat::zero() };
                 let (nlh, nrl, nll, nrh) = match k.op {
                     // left <= right: the left cannot pass the right's top, and the right
                     // cannot sit below the left's bottom.
                     CmpOp::Le | CmpOp::Lt => {
-                        let d = gap(&k.left, k.op == CmpOp::Lt);
-                        (drop_to(lh, rh.map(|v| v.sub(d))), raise(rl, ll.map(|v| v.add(gap(&k.right, k.op == CmpOp::Lt)))), ll, rh)
+                        let d = gap(kl, k.op == CmpOp::Lt);
+                        (drop_to(lh, rh.map(|v| v.sub(d))), raise(rl, ll.map(|v| v.add(gap(kr, k.op == CmpOp::Lt)))), ll, rh)
                     }
                     CmpOp::Ge | CmpOp::Gt => {
-                        let d = gap(&k.right, k.op == CmpOp::Gt);
-                        (lh, rl, raise(ll, rl.map(|v| v.add(gap(&k.left, k.op == CmpOp::Gt)))), drop_to(rh, lh.map(|v| v.sub(d))))
+                        let d = gap(kr, k.op == CmpOp::Gt);
+                        (lh, rl, raise(ll, rl.map(|v| v.add(gap(kl, k.op == CmpOp::Gt)))), drop_to(rh, lh.map(|v| v.sub(d))))
                     }
                 };
                 let changed = |a: Option<Rat>, c: Option<Rat>| !matches!((a, c), (None, None)) && a.map(|x| x.num) != c.map(|x| x.num);
                 if changed(lh, nlh) || changed(rl, nrl) || changed(ll, nll) || changed(rh, nrh) {
                     moved = true;
                 }
-                b.insert(k.left.clone(), (nll, nlh));
-                b.insert(k.right.clone(), (nrl, nrh));
+                b.insert(kl.clone(), (nll, nlh));
+                b.insert(kr.clone(), (nrl, nrh));
             }
             if !moved {
                 break;
@@ -4172,7 +4322,8 @@ impl TableRegion {
         }
         // Hand nothing back that does not satisfy what the rule declares.
         for k in &ks {
-            let (Some(x), Some(y)) = (b.get(&k.left).and_then(pick), b.get(&k.right).and_then(pick)) else {
+            let total = |side: &[String]| side.iter().try_fold(Rat::zero(), |acc, n| b.get(n).and_then(pick).map(|v| acc.add(v)));
+            let (Some(x), Some(y)) = (total(&k.left), total(&k.right)) else {
                 continue;
             };
             let ok = match k.op {
@@ -4273,9 +4424,19 @@ impl TableRegion {
     /// the box looked reachable and was reported as a gap (§15.140). The reading stays over
     /// the rationals, which is what the certificate's checker holds it to.
     fn constraint_impossible(&self, k: &crate::ast::Constraint, path: &[usize]) -> bool {
-        let (Some(((la, lo_l), (lb, hi_l))), Some(((ra, lo_r), (rb, hi_r)))) =
-            (self.ends_of_name(&k.left, path), self.ends_of_name(&k.right, path))
-        else {
+        // The ends a side can reach: a name's own, or for a sum the ends of the names it adds,
+        // added up — an end left out when any of the ends it adds is (§15.216).
+        type Ends = ((Option<Rat>, bool), (Option<Rat>, bool));
+        let side = |names: &[String]| -> Option<Ends> {
+            let (mut lo, mut hi): ((Option<Rat>, bool), (Option<Rat>, bool)) = ((Some(Rat::zero()), false), (Some(Rat::zero()), false));
+            for n in names {
+                let ((a, ao), (b, bo)) = self.ends_of_name(n, path)?;
+                lo = (lo.0.zip(a).map(|(x, y)| x.add(y)), lo.1 || ao);
+                hi = (hi.0.zip(b).map(|(x, y)| x.add(y)), hi.1 || bo);
+            }
+            Some((lo, hi))
+        };
+        let (Some(((la, lo_l), (lb, hi_l))), Some(((ra, lo_r), (rb, hi_r)))) = (side(&k.left), side(&k.right)) else {
             return false;
         };
         use std::cmp::Ordering::*;
@@ -4712,6 +4873,10 @@ pub struct CertRow {
     /// it (§15.196).
     #[allow(clippy::type_complexity)]
     pub writes: Vec<Option<(Expr, crate::types::Ty, Option<(usize, usize, usize)>)>>,
+    /// For each write that names one of the table's own columns, the values the row's cell on
+    /// that column lets through, where they narrow the column's range and that changes the
+    /// range of the column written (`Checked::narrowed`, §15.213). `None` everywhere else.
+    pub inside: Vec<Option<(crate::num::Rat, crate::num::Rat)>>,
     /// The member table the row was written in. Rows that share one were written in one
     /// table, so they have a cell in the same columns and in no others.
     pub origin: String,
@@ -4781,7 +4946,8 @@ pub struct CertTable {
     /// budget — a certificate says what it does not have.
     pub cover: Option<Cover>,
     /// The `constraint` lines a cover leaf can point at.
-    pub constraints: Vec<(String, &'static str, String)>,
+    /// Each side the names it adds: one for a side that is not a sum (§15.216).
+    pub constraints: Vec<(Vec<String>, &'static str, Vec<String>)>,
     /// What the tables above rule out, written on this table's own axes. A leaf that rests
     /// on them is settled by a coordinate test; the facts themselves are earned back from
     /// the rows of the tables that decide the columns (§15.115).
@@ -4947,6 +5113,15 @@ impl TableRegion {
                         };
                         let at = (!applied.get(ri).copied().unwrap_or(false)).then_some((span.line, span.col, span.len));
                         Some((e, ty, at))
+                    })
+                    .collect(),
+                inside: (0..t.outputs.len())
+                    .map(|oi| {
+                        if chk.narrowed.contains(&t.outputs[oi].name.text) {
+                            chk.row_written(t, row, oi)
+                        } else {
+                            None
+                        }
                     })
                     .collect(),
                 origin: row.origin.clone().unwrap_or_else(|| t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default()),
@@ -5620,7 +5795,7 @@ impl TableRegion {
     }
 
     /// The rule's `constraint` lines, as the certificate names them.
-    pub fn constraint_list(&self) -> Vec<(String, &'static str, String)> {
+    pub fn constraint_list(&self) -> Vec<(Vec<String>, &'static str, Vec<String>)> {
         self.constraints.iter().map(|k| (k.left.clone(), k.op.word(), k.right.clone())).collect()
     }
 }

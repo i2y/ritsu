@@ -626,7 +626,7 @@ pub(crate) fn run(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> An
 /// is a cell no caller reaches (§15.55). Two dates compare by their day numbers, as the
 /// vectors' filter compares them (§15.198).
 fn constraints_hold(f: &RuleFile, m: &HashMap<String, Val>) -> bool {
-    f.constraints.iter().all(|k| crate::vectors::constraint_holds(k, m.get(&k.left), m.get(&k.right)))
+    f.constraints.iter().all(|k| crate::vectors::constraint_holds(k, &|n| m.get(n)))
 }
 
 /// A value on the axis's own grid, inside the coordinate.
@@ -821,7 +821,7 @@ fn cone_of(axes: &[Axis], f: &RuleFile, c: &Checked, scalars: &[(String, Expr)])
     }
     if !set.is_empty() {
         for k in &f.constraints {
-            for n in [&k.left, &k.right] {
+            for n in k.names() {
                 if let Some(&i) = ax_of.get(n.as_str()) {
                     set.insert(i);
                 }
@@ -1354,7 +1354,7 @@ fn around_rows(f: &RuleFile, c: &Checked) -> Vec<String> {
     out.extend(
         f.constraints
             .iter()
-            .map(|k| format!("constraint {} {} {}", k.left, k.op.word(), k.right)),
+            .map(|k| format!("constraint {}", k.said())),
     );
     out.sort();
     out
@@ -2744,7 +2744,7 @@ fn solved_point(
     // not, the walk already reached whatever there was. A `constraint` between two inputs
     // correlates them too: the walk stands on one point of each coordinate, and where that
     // point is on the wrong side of the constraint the cell may still hold others (§15.198).
-    let tied = f.constraints.iter().any(|k| axes.iter().any(|a| a.col == k.left) && axes.iter().any(|a| a.col == k.right));
+    let tied = f.constraints.iter().any(|k| k.names().filter(|n| axes.iter().any(|a| a.col == **n)).count() >= 2);
     if !tied && !scalars.iter().any(|(n, _)| axes.iter().any(|a| a.col == *n)) {
         return None;
     }
@@ -2850,7 +2850,7 @@ fn linearly_empty(axes: &[Axis], cell: &[usize], v: (&RuleFile, &Checked)) -> bo
     // A `constraint` between two names of the system correlates them as a derive does: a cell
     // on the wrong side of it has no input, and the walk can only fail to build one there
     // (§15.198).
-    let tied = |g: &crate::fourier::Ground| f.constraints.iter().any(|k| g.vars.contains(&k.left) && g.vars.contains(&k.right));
+    let tied = |g: &crate::fourier::Ground| f.constraints.iter().any(|k| k.names().filter(|n| g.vars.contains(*n)).count() >= 2);
     // One system per type of number; any of them with no solution empties the cell, because
     // each is the cell with some of its conditions left out.
     grounds(&seed, f, c).into_iter().any(|g| {

@@ -9,7 +9,7 @@
 use rulec::coverage::{self, BOUND, ROW, SHADOW, TIE, VALUE};
 use rulec::vectors::{self, Vector};
 
-const CORPUS: [&str; 84] = [
+const CORPUS: [&str; 98] = [
     "tests/corpus/速達の見積.rule",
     "tests/corpus/出荷の送料.rule",
     "tests/corpus/注文の送料.rule",
@@ -58,6 +58,13 @@ const CORPUS: [&str; 84] = [
     "tests/corpus/paypal_fee.rule",
     "tests/corpus/注文の状態.rule",
     "tests/corpus/payment_intent.rule",
+    "tests/corpus/平均単価.rule",
+    "tests/corpus/平均単価の場合分け.rule",
+    "tests/corpus/日割り.rule",
+    "tests/corpus/当番の持ち回り.rule",
+    "tests/corpus/経済的発注量.rule",
+    "tests/corpus/割り当ての申し込み.rule",
+    "tests/corpus/乱数で決める一回.rule",
     // The twins (tests/corpus/twins.tsv): their obligations are the originals'.
     "tests/corpus/sku_prefix_handling.rule",
     "tests/corpus/cart_shipping_fee.rule",
@@ -95,6 +102,13 @@ const CORPUS: [&str; 84] = [
     "tests/corpus/cancellation_verdict.rule",
     "tests/corpus/compensation_certificate.rule",
     "tests/corpus/order_lifecycle.rule",
+    "tests/corpus/average_unit_price.rule",
+    "tests/corpus/average_unit_price_split.rule",
+    "tests/corpus/daily_proration.rule",
+    "tests/corpus/duty_rotation.rule",
+    "tests/corpus/economic_order_quantity.rule",
+    "tests/corpus/quota_request.rule",
+    "tests/corpus/contested_roll.rule",
 ];
 
 fn load(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked, Vec<Vector>) {
@@ -172,8 +186,8 @@ fn 行を勝たせる例を抜くと行カバーが欠ける() {
 fn 欠けた行はw128の行かどうかを言う() {
     use rulec::i18n::{self, Lang};
     for (rel, lang, row, want) in [
-        ("tests/mutants/m_w128.rule", Lang::En, "table size_of row 1", "check named this row with W128: no input was found that reaches it, and none was shown not to."),
-        ("tests/mutants/m_w128ja.rule", Lang::Ja, "表 大きさの表 行1", "check が W128 で言った行です。当たる入力が見つからず、当たらないことも示せていません。"),
+        ("tests/mutants/m_w128.rule", Lang::En, "table size_of row 1", "check named this row with W128: no input was found that reaches it, not even behind the gap the completeness check finds with the row taken out, and none was shown not to."),
+        ("tests/mutants/m_w128ja.rule", Lang::Ja, "表 大きさの表 行1", "check が W128 で言った行です。当たる入力が、この行を除いたときに完全性の検査が見つける穴の後ろにも見つからず、当たらないことも示せていません。"),
     ] {
         let a = i18n::with(lang, || {
             let (f, c, vs) = load(rel);
@@ -403,6 +417,21 @@ fn 義務の件数を固定する() {
         ("tests/corpus/cancellation_verdict.rule", 6, 0, 15, 0, 0),
         ("tests/corpus/compensation_certificate.rule", 8, 0, 9, 1, 0),
         ("tests/corpus/order_lifecycle.rule", 10, 0, 0, 1, 0),
+        // Division inside a rounding, `mod`, `isqrt`, a constraint with a sum (§15.213 to §15.216).
+        ("tests/corpus/平均単価.rule", 0, 0, 0, 1, 0),
+        ("tests/corpus/平均単価の場合分け.rule", 4, 4, 0, 2, 0),
+        ("tests/corpus/日割り.rule", 0, 0, 0, 1, 0),
+        ("tests/corpus/当番の持ち回り.rule", 3, 4, 0, 0, 0),
+        ("tests/corpus/経済的発注量.rule", 0, 0, 0, 1, 0),
+        ("tests/corpus/割り当ての申し込み.rule", 3, 4, 0, 0, 0),
+        ("tests/corpus/乱数で決める一回.rule", 2, 2, 0, 0, 0),
+        ("tests/corpus/average_unit_price.rule", 0, 0, 0, 1, 0),
+        ("tests/corpus/average_unit_price_split.rule", 4, 4, 0, 2, 0),
+        ("tests/corpus/daily_proration.rule", 0, 0, 0, 1, 0),
+        ("tests/corpus/duty_rotation.rule", 3, 4, 0, 0, 0),
+        ("tests/corpus/economic_order_quantity.rule", 0, 0, 0, 1, 0),
+        ("tests/corpus/quota_request.rule", 3, 4, 0, 0, 0),
+        ("tests/corpus/contested_roll.rule", 2, 2, 0, 0, 0),
     ];
     // Every rule of the corpus is audited and pinned. `threeway.rs` keeps its own list
     // honest the same way; this one had no such guard, and nine rules had drifted out of it

@@ -201,6 +201,19 @@ impl<'a> Env<'a> {
                     (m, [Val::Num(x), Val::Num(g)]) if RoundMode::parse(m).is_some() => {
                         Some(Val::Num(x.round_to(RoundMode::parse(m).unwrap(), *g)))
                     }
+                    // The remainder of the whole part by a positive whole constant, from 0 to the
+                    // constant less one whatever the sign (§15.214). The argument is whole (E103),
+                    // so the whole part is the argument itself.
+                    (crate::kw::MOD, [Val::Num(x), Val::Num(n)]) => {
+                        if !(n.is_int() && n.num > 0) {
+                            return None;
+                        }
+                        let whole = Rat::int(x.num.div_euclid(x.den));
+                        Some(Val::Num(crate::types::mod_rat(whole, n.num)))
+                    }
+                    // The largest whole number whose square does not pass the argument (§15.215);
+                    // below zero there is none (E139).
+                    (crate::kw::ISQRT, [Val::Num(x)]) => crate::types::isqrt_rat(*x).map(Val::Num),
                     _ => None,
                 }
             }
@@ -874,10 +887,10 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
             let a: std::collections::BTreeMap<String, Val> = env.clone().into_iter().collect();
             if !crate::vectors::allowed(f, &a) {
                 for k in &f.constraints {
-                    if crate::vectors::constraint_holds(k, a.get(&k.left), a.get(&k.right)) {
+                    if crate::vectors::constraint_holds(k, &|n| a.get(n)) {
                         continue;
                     }
-                    let said = format!("{} {} {}", k.left, k.op.word(), k.right);
+                    let said = k.said();
                     let mut d = Diag::error("E019", tr!("例が制約を破っています", "An example breaks a constraint"))
                         .at(tr!("{path}:{} 例", "{path}:{} examples", row.span.line))
                         .mark(row.span.clone(), tr!("この入力では `{said}` が成り立ちません", "`{said}` does not hold for this input"));

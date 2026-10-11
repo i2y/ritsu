@@ -1577,10 +1577,11 @@ impl P {
 
     /// `constraint <input> <= <input>` — one relation per line, and several lines all hold.
     ///
-    /// Only the four comparisons the lexer already knows, and only between two names: what a
+    /// Only the four comparisons the lexer already knows, and only between names: what a
     /// constraint is for is saying which combinations exist, and `A = B` is the two lines
     /// `A <= B` and `A >= B` when it is ever wanted. One shape means one thing to read
-    /// (§15.55).
+    /// (§15.55). One side may add inputs up, `a + b <= c` (§15.216), and that is all the
+    /// arithmetic a constraint takes: no coefficient, no constant, no second sum.
     fn constraint(&mut self, line: &[Token]) -> Option<Constraint> {
         let span = span_of(line);
         let bad = |p: &mut Self, what: String| -> Option<Constraint> {
@@ -1589,8 +1590,8 @@ impl P {
                     .at(p.at(span.line))
                     .mark(span.clone(), what)
                     .note(tr!(
-                        "形は `constraint <入力> <= <入力>` です。比較は `<=` `<` `>=` `>` の四つで、両側とも入力の名前です。",
-                        "The shape is `constraint <input> <= <input>`: one of `<=`, `<`, `>=`, `>`, with the name of an input on each side."
+                        "形は `constraint <入力> <= <入力>` です。比較は `<=` `<` `>=` `>` の四つで、両側とも入力の名前です。片側だけは、入力を `+` で足した和にできます（`constraint 値引き + ポイント <= 小計`）。",
+                        "The shape is `constraint <input> <= <input>`: one of `<=`, `<`, `>=`, `>`, with the name of an input on each side. One side may add inputs up with `+` (`constraint discount + points <= subtotal`)."
                     )),
             );
             None
@@ -1604,15 +1605,27 @@ impl P {
             Kind::Lt => CmpOp::Lt,
             _ => CmpOp::Gt,
         };
-        let name_of = |ts: &[Token]| -> Option<String> {
-            match ts {
-                [t] => t.ident().map(|s| s.to_string()),
-                _ => None,
+        // One name, or names with a `+` between each two: `a`, `a + b + c`.
+        let names_of = |ts: &[Token]| -> Option<Vec<String>> {
+            if ts.len() % 2 == 0 {
+                return None;
             }
+            let mut out = Vec::new();
+            for (i, t) in ts.iter().enumerate() {
+                if i % 2 == 0 {
+                    out.push(t.ident()?.to_string());
+                } else if !t.is(&Kind::Plus) {
+                    return None;
+                }
+            }
+            Some(out)
         };
-        let (Some(left), Some(right)) = (name_of(&line[1..p]), name_of(&line[p + 1..])) else {
-            return bad(self, tr!("両側に入力の名前を一つずつ書いてください", "one input's name is expected on each side"));
+        let (Some(left), Some(right)) = (names_of(&line[1..p]), names_of(&line[p + 1..])) else {
+            return bad(self, tr!("両側に入力の名前を書いてください（片側だけは `+` で足せます）", "the name of an input is expected on each side (one side may add several up with `+`)"));
         };
+        if left.len() > 1 && right.len() > 1 {
+            return bad(self, tr!("和は片側にだけ書けます", "only one side can be a sum"));
+        }
         Some(Constraint { left, op, right, span })
     }
 

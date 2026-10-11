@@ -692,7 +692,7 @@ impl<'a> Gen<'a> {
             TK::Check(c) => {
                 let mut n = self.node(format!("S{site}_check"), format!("line {line}: the precondition {} of the rule {}, which ritsu could not decide", c.text(), m.rules[c.rule].name), (site, 0), cx);
                 let holds = match &c.test {
-                    PreTest::Relation { left, op, right } => format!("{} {op} {}", self.expr(&left.1), self.expr(&right.1)),
+                    PreTest::Relation { left, op, right } => format!("{} {op} {}", side_code(left, &|e| self.expr(e)), side_code(right, &|e| self.expr(e))),
                     PreTest::Days { value, days, .. } => format!("{} in ({},)", self.expr(value), days.iter().map(|x| q(x)).collect::<Vec<_>>().join(", ")),
                 };
                 n.line(0, &format!("if not ({holds}):"));

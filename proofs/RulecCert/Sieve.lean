@@ -111,12 +111,20 @@ def Cmp.holds : Cmp → Rat → Rat → Prop
   | .gt, x, y => y < x
   | .eq, x, y => x = y
 
-/-- `constraint 甲 <= 乙`, read on the axes of one table. -/
+/-- `constraint 甲 <= 乙`, read on the axes of one table: each side the axes it adds up — one, or
+    several where the rule writes a sum on that side (rulec's §15.216). -/
 structure Constraint where
-  left : Nat
+  left : List Nat
   op : Cmp
-  right : Nat
+  right : List Nat
   deriving Repr, Inhabited
+
+/-- What the values on a side's axes add up to; `none` where one of them has no value. -/
+def sideSum (v : List Rat) : List Nat → Option Rat
+  | [] => some 0
+  | i :: is => match v[i]?, sideSum v is with
+    | some w, some r => some (w + r)
+    | _, _ => none
 
 /-- One row of a table above that writes the value a column of this table holds (rulec's
     §15.195), read on this table: what its box says about the values this table numbers — for
@@ -214,7 +222,7 @@ def Sieve.asked (s : Sieve) (p : Point) : Prop :=
   ∃ v : List Rat,
     (∀ (i c : Nat) (x : Coord), p[i]? = some c → s.coordAt i c = some x →
       ∃ w, v[i]? = some w ∧ x.holds w) ∧
-    (∀ k ∈ s.cons, ∃ x y, v[k.left]? = some x ∧ v[k.right]? = some y ∧ k.op.holds x y) ∧
+    (∀ k ∈ s.cons, ∃ x y, sideSum v k.left = some x ∧ sideSum v k.right = some y ∧ k.op.holds x y) ∧
     (∀ (i : Nat) (I : Ival), s.reach[i]? = some (some I) → ∃ w, v[i]? = some w ∧ inIval I w) ∧
     (∀ q ∈ s.never, p[q.1]? ≠ some q.2) ∧
     (∀ qr ∈ s.apart, ¬(p[qr.1.1]? = some qr.1.2 ∧ p[qr.2.1]? = some qr.2.2)) ∧
@@ -226,26 +234,38 @@ def Sieve.asked (s : Sieve) (p : Point) : Prop :=
 
 /-! ## One constraint rules a box out -/
 
-/-- Whether the two coordinates this point fixes leave the comparison no room. Both ends
-    are read off the closed spans, so a `true` here is a fact about every value pair the
-    box allows. Where the two ends of a `≤` or a `≥` meet, the pair is still out of reach
-    when one of the two coordinates leaves its end out (§15.140). -/
+/-- What the coordinates this point fixes on a side's axes allow the side's sum: its low end and
+    its high end — `none` where one of them runs on — and whether any coordinate leaves its ends
+    out. `none` where an axis is not fixed, or its coordinate stands for no number. -/
+def sideSpan (s : Sieve) (p : Point) : List Nat → Option (Option Rat × Option Rat × Bool)
+  | [] => some (some 0, some 0, false)
+  | i :: is => match p[i]? with
+    | some c => match s.coordAt i c, sideSpan s p is with
+      | some x, some (lo, hi, o) =>
+        some (match x.span.1, lo with | some a, some l => some (a + l) | _, _ => none,
+              match x.span.2, hi with | some b, some h => some (b + h) | _, _ => none,
+              x.opn || o)
+      | _, _ => none
+    | none => none
+
+/-- Whether the coordinates this point fixes leave the comparison no room. The ends of each
+    side are read off the closed spans of its coordinates, added up where a side adds axes up
+    (rulec's §15.216), so a `true` here is a fact about every value the box allows. Where the
+    two ends of a `≤` or a `≥` meet, the comparison is still out of reach when one of the
+    coordinates leaves its end out (§15.140): the sum it is in then never reaches that end. -/
 def constraintRulesOut (s : Sieve) (k : Constraint) (p : Point) : Bool :=
-  match p[k.left]?, p[k.right]? with
-  | some cl, some cr =>
-    match s.coordAt k.left cl, s.coordAt k.right cr with
-    | some xl, some xr =>
-      match k.op with
-      | .le => match xl.span.1, xr.span.2 with
-        | some a, some b => decide (b < a) || (decide (a = b) && (xl.opn || xr.opn))
-        | _, _ => false
-      | .lt => match xl.span.1, xr.span.2 with | some a, some b => decide (b ≤ a) | _, _ => false
-      | .ge => match xl.span.2, xr.span.1 with
-        | some a, some b => decide (a < b) || (decide (a = b) && (xl.opn || xr.opn))
-        | _, _ => false
-      | .gt => match xl.span.2, xr.span.1 with | some a, some b => decide (a ≤ b) | _, _ => false
-      | .eq => false
-    | _, _ => false
+  match sideSpan s p k.left, sideSpan s p k.right with
+  | some (ll, lh, lo), some (rl, rh, ro) =>
+    match k.op with
+    | .le => match ll, rh with
+      | some a, some b => decide (b < a) || (decide (a = b) && (lo || ro))
+      | _, _ => false
+    | .lt => match ll, rh with | some a, some b => decide (b ≤ a) | _, _ => false
+    | .ge => match lh, rl with
+      | some a, some b => decide (a < b) || (decide (a = b) && (lo || ro))
+      | _, _ => false
+    | .gt => match lh, rl with | some a, some b => decide (a ≤ b) | _, _ => false
+    | .eq => false
   | _, _ => false
 
 /-- A derived or `define` column whose coordinate lies outside what its own expression can
@@ -404,56 +424,161 @@ private theorem value_at {s : Sieve} {p : Point} {v : List Rat} {i c : Nat} {x :
   obtain ⟨w, hw, hh⟩ := hf i c x hp hx
   exact ⟨w, hw, Coord.holds_span hh⟩
 
+theorem add_le_add' {a b c d : Rat} (h1 : a ≤ b) (h2 : c ≤ d) : a + c ≤ b + d :=
+  Rat.le_trans (Rat.add_le_add_right.2 h1) (Rat.add_le_add_left.2 h2)
+
+theorem add_lt_le {a b c d : Rat} (h1 : a < b) (h2 : c ≤ d) : a + c < b + d :=
+  ltle (Rat.add_lt_add_right.2 h1) (Rat.add_le_add_left.2 h2)
+
+theorem add_le_lt {a b c d : Rat} (h1 : a ≤ b) (h2 : c < d) : a + c < b + d :=
+  lelt (Rat.add_le_add_right.2 h1) (Rat.add_lt_add_left.2 h2)
+
+/-- **A side's sum lies between the ends its coordinates give** (rulec's §15.216), and strictly
+    inside them where a coordinate leaves its ends out: that coordinate's value never reaches
+    its end, so the sum never reaches the sum of the ends. -/
+theorem side_bounds {s : Sieve} {p : Point} {v : List Rat}
+    (hf : ∀ (i c : Nat) (x : Coord), p[i]? = some c → s.coordAt i c = some x →
+      ∃ w, v[i]? = some w ∧ x.holds w) :
+    ∀ (is : List Nat) (lo hi : Option Rat) (o : Bool) (t : Rat),
+      sideSpan s p is = some (lo, hi, o) → sideSum v is = some t →
+      (∀ a, lo = some a → a ≤ t ∧ (o = true → a < t)) ∧
+      (∀ b, hi = some b → t ≤ b ∧ (o = true → t < b)) := by
+  intro is
+  induction is with
+  | nil =>
+    intro lo hi o t hs ht
+    simp only [sideSpan, Option.some.injEq, Prod.mk.injEq] at hs
+    simp only [sideSum, Option.some.injEq] at ht
+    obtain ⟨rfl, rfl, rfl⟩ := hs
+    subst ht
+    refine ⟨fun a ha => ?_, fun b hb => ?_⟩
+    · simp only [Option.some.injEq] at ha; subst ha; exact ⟨Rat.le_refl, by simp⟩
+    · simp only [Option.some.injEq] at hb; subst hb; exact ⟨Rat.le_refl, by simp⟩
+  | cons i is ih =>
+    intro lo hi o t hs ht
+    cases hp : p[i]? with
+    | none => simp [sideSpan, hp] at hs
+    | some c =>
+      cases hx : s.coordAt i c with
+      | none => simp [sideSpan, hp, hx] at hs
+      | some x =>
+        cases hrest : sideSpan s p is with
+        | none => simp [sideSpan, hp, hx, hrest] at hs
+        | some r0 =>
+          obtain ⟨lo', hi', o'⟩ := r0
+          simp only [sideSpan, hp, hx, hrest, Option.some.injEq, Prod.mk.injEq] at hs
+          obtain ⟨hlo, hhi, ho⟩ := hs
+          cases hw : v[i]? with
+          | none => simp [sideSum, hw] at ht
+          | some w =>
+            cases hr : sideSum v is with
+            | none => simp [sideSum, hw, hr] at ht
+            | some r =>
+              simp only [sideSum, hw, hr, Option.some.injEq] at ht
+              subst ht
+              obtain ⟨w', hw', hh⟩ := hf i c x hp hx
+              rw [hw] at hw'
+              obtain rfl : w = w' := Option.some.inj hw'
+              obtain ⟨ihlo, ihhi⟩ := ih lo' hi' o' r hrest hr
+              have hb := Coord.holds_span hh
+              refine ⟨fun a ha => ?_, fun b hbb => ?_⟩
+              · subst hlo
+                cases hxs : x.span.1 with
+                | none => simp [hxs] at ha
+                | some a1 =>
+                  cases hl : lo' with
+                  | none => simp [hxs, hl] at ha
+                  | some l =>
+                    simp only [hxs, hl, Option.some.injEq] at ha
+                    subst ha
+                    obtain ⟨hl1, hl2⟩ := ihlo l hl
+                    refine ⟨add_le_add' (hb.1 a1 hxs) hl1, fun hoo => ?_⟩
+                    subst ho
+                    simp only [Bool.or_eq_true] at hoo
+                    rcases hoo with hxo | hro
+                    · exact add_lt_le (Coord.holds_lo_lt hh hxo hxs) hl1
+                    · exact add_le_lt (hb.1 a1 hxs) (hl2 hro)
+              · subst hhi
+                cases hxs : x.span.2 with
+                | none => simp [hxs] at hbb
+                | some b1 =>
+                  cases hh' : hi' with
+                  | none => simp [hxs, hh'] at hbb
+                  | some h =>
+                    simp only [hxs, hh', Option.some.injEq] at hbb
+                    subst hbb
+                    obtain ⟨hh1, hh2⟩ := ihhi h hh'
+                    refine ⟨add_le_add' (hb.2 b1 hxs) hh1, fun hoo => ?_⟩
+                    subst ho
+                    simp only [Bool.or_eq_true] at hoo
+                    rcases hoo with hxo | hro
+                    · exact add_lt_le (Coord.holds_hi_lt hh hxo hxs) hh1
+                    · exact add_le_lt (hb.2 b1 hxs) (hh2 hro)
+
 theorem not_asked_of_constraint {s : Sieve} {k : Constraint} {p : Point}
     (hk : k ∈ s.cons) (h : constraintRulesOut s k p = true) : ¬ s.asked p := by
   rintro ⟨v, hf, hc, _, _, _⟩
   obtain ⟨x, y, hx, hy, hop⟩ := hc k hk
   unfold constraintRulesOut at h
-  split at h
-  case _ cl cr hpl hpr =>
-    split at h
-    case _ xl xr hcl hcr =>
-      obtain ⟨wl, hwl, hl⟩ := hf _ _ xl hpl hcl
-      obtain ⟨wr, hwr, hr⟩ := hf _ _ xr hpr hcr
-      have hbl := Coord.holds_span hl
-      have hbr := Coord.holds_span hr
-      rw [hx] at hwl; rw [hy] at hwr
-      obtain rfl : x = wl := Option.some.inj hwl
-      obtain rfl : y = wr := Option.some.inj hwr
+  cases hl : sideSpan s p k.left with
+  | none => simp [hl] at h
+  | some L =>
+    cases hr : sideSpan s p k.right with
+    | none => simp [hl, hr] at h
+    | some R =>
+      obtain ⟨ll, lh, lo⟩ := L
+      obtain ⟨rl, rh, ro⟩ := R
+      simp only [hl, hr] at h
+      obtain ⟨hbl, hbh⟩ := side_bounds hf k.left ll lh lo x hl hx
+      obtain ⟨hrl, hrh⟩ := side_bounds hf k.right rl rh ro y hr hy
       cases hop' : k.op <;> simp only [hop', Cmp.holds] at h hop
-      · split at h
-        case _ a b ha hb =>
-          simp only [Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h
-          rcases h with h | ⟨rfl, ho | ho⟩
-          · exact no_room (hbl.1 a ha) (Rat.le_trans hop (hbr.2 b hb)) h
-          · -- a < x ≤ y ≤ a
-            exact Rat.lt_irrefl (ltle (Coord.holds_lo_lt hl ho ha) (Rat.le_trans hop (hbr.2 a hb)))
-          · -- a ≤ x ≤ y < a
-            exact Rat.lt_irrefl (lelt (Rat.le_trans (hbl.1 a ha) hop) (Coord.holds_hi_lt hr ho hb))
-        case _ => exact absurd h (by simp)
-      · split at h
-        case _ a b ha hb =>
-          simp only [decide_eq_true_eq] at h
-          exact no_room' (hbl.1 a ha) hop (hbr.2 b hb) h
-        case _ => exact absurd h (by simp)
-      · split at h
-        case _ a b ha hb =>
-          simp only [Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h
-          rcases h with h | ⟨rfl, ho | ho⟩
-          · exact no_room (Rat.le_trans (hbr.1 b hb) hop) (hbl.2 a ha) h
-          · -- a ≤ y ≤ x < a
-            exact Rat.lt_irrefl (lelt (Rat.le_trans (hbr.1 a hb) hop) (Coord.holds_hi_lt hl ho ha))
-          · -- a < y ≤ x ≤ a
-            exact Rat.lt_irrefl (ltle (Coord.holds_lo_lt hr ho hb) (Rat.le_trans hop (hbl.2 a ha)))
-        case _ => exact absurd h (by simp)
-      · split at h
-        case _ a b ha hb =>
-          simp only [decide_eq_true_eq] at h
-          exact no_room' (hbr.1 b hb) hop (hbl.2 a ha) h
-        case _ => exact absurd h (by simp)
+      · cases ha : ll with
+        | none => simp [ha] at h
+        | some a =>
+          cases hb : rh with
+          | none => simp [ha, hb] at h
+          | some b =>
+            simp only [ha, hb, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h
+            obtain ⟨hax, haxs⟩ := hbl a ha
+            obtain ⟨hyb, hybs⟩ := hrh b hb
+            rcases h with h | ⟨rfl, ho | ho⟩
+            · exact no_room hax (Rat.le_trans hop hyb) h
+            · -- a < x ≤ y ≤ a
+              exact Rat.lt_irrefl (ltle (haxs ho) (Rat.le_trans hop hyb))
+            · -- a ≤ x ≤ y < a
+              exact Rat.lt_irrefl (lelt (Rat.le_trans hax hop) (hybs ho))
+      · cases ha : ll with
+        | none => simp [ha] at h
+        | some a =>
+          cases hb : rh with
+          | none => simp [ha, hb] at h
+          | some b =>
+            simp only [ha, hb, decide_eq_true_eq] at h
+            exact no_room' (hbl a ha).1 hop (hrh b hb).1 h
+      · cases ha : lh with
+        | none => simp [ha] at h
+        | some a =>
+          cases hb : rl with
+          | none => simp [ha, hb] at h
+          | some b =>
+            simp only [ha, hb, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h
+            obtain ⟨hxa, hxas⟩ := hbh a ha
+            obtain ⟨hby, hbys⟩ := hrl b hb
+            rcases h with h | ⟨rfl, ho | ho⟩
+            · exact no_room (Rat.le_trans hby hop) hxa h
+            · -- a ≤ y ≤ x < a
+              exact Rat.lt_irrefl (lelt (Rat.le_trans hby hop) (hxas ho))
+            · -- a < y ≤ x ≤ a
+              exact Rat.lt_irrefl (ltle (hbys ho) (Rat.le_trans hop hxa))
+      · cases ha : lh with
+        | none => simp [ha] at h
+        | some a =>
+          cases hb : rl with
+          | none => simp [ha, hb] at h
+          | some b =>
+            simp only [ha, hb, decide_eq_true_eq] at h
+            exact no_room' (hrl b hb).1 hop (hbh a ha).1 h
       · exact absurd h (by simp)
-    case _ => exact absurd h (by simp)
-  case _ => exact absurd h (by simp)
 
 theorem not_asked_of_derived {s : Sieve} {i : Nat} {p : Point}
     (h : derivedRulesOut s i p = true) : ¬ s.asked p := by
@@ -539,16 +664,41 @@ theorem lt_of_getElem? {α : Type _} {l : List α} {i : Nat} {a : α} (h : l[i]?
   · exact h'
   · rw [List.getElem?_eq_none h'] at h; simp at h
 
+theorem sideSpan_mono {s : Sieve} {path p : Point} (hpre : path <+: p) :
+    ∀ (is : List Nat) (r : Option Rat × Option Rat × Bool),
+      sideSpan s path is = some r → sideSpan s p is = some r := by
+  intro is
+  induction is with
+  | nil => intro r h; simpa [sideSpan] using h
+  | cons i is ih =>
+    intro r h
+    cases hc : path[i]? with
+    | none => simp [sideSpan, hc] at h
+    | some c =>
+      cases hx : s.coordAt i c with
+      | none => simp [sideSpan, hc, hx] at h
+      | some x =>
+        cases hrest : sideSpan s path is with
+        | none => simp [sideSpan, hc, hx, hrest] at h
+        | some r0 =>
+          have hp : p[i]? = some c := by rw [prefix_getElem? hpre (lt_of_getElem? hc), hc]
+          simp only [sideSpan, hc, hx, hrest] at h
+          simp only [sideSpan, hp, hx, ih _ hrest]
+          exact h
+
 theorem constraintRulesOut_mono {s : Sieve} {k : Constraint} {path p : Point}
     (hpre : path <+: p) (h : constraintRulesOut s k path = true) :
     constraintRulesOut s k p = true := by
   unfold constraintRulesOut at h ⊢
-  split at h
-  case _ cl cr hpl hpr =>
-    rw [prefix_getElem? hpre (lt_of_getElem? hpl), prefix_getElem? hpre (lt_of_getElem? hpr),
-      hpl, hpr]
-    exact h
-  case _ => exact absurd h (by simp)
+  cases hl : sideSpan s path k.left with
+  | none => simp [hl] at h
+  | some L =>
+    cases hr : sideSpan s path k.right with
+    | none => simp [hl, hr] at h
+    | some R =>
+      rw [sideSpan_mono hpre _ _ hl, sideSpan_mono hpre _ _ hr]
+      simp only [hl, hr] at h
+      exact h
 
 theorem derivedRulesOut_mono {s : Sieve} {i : Nat} {path p : Point}
     (hpre : path <+: p) (h : derivedRulesOut s i path = true) :
@@ -771,7 +921,7 @@ def witnessOk (s : Sieve) (p : Point) (v : List Rat) : Bool :=
     | some none, _ => true
     | _, _ => false) &&
   s.cons.all (fun k =>
-    match v[k.left]?, v[k.right]? with
+    match sideSum v k.left, sideSum v k.right with
     | some x, some y => cmpHolds k.op x y
     | _, _ => false) &&
   s.never.all (fun q => !(p[q.1]? == some q.2)) &&
@@ -802,10 +952,10 @@ theorem asked_of_witnessOk {s : Sieve} {p : Point} {v : List Rat}
       exact ⟨w, rfl, holds_of_coordHolds hi⟩
   · intro k hk
     have hkk := List.all_eq_true.1 hcs k hk
-    cases hl : v[k.left]? with
+    cases hl : sideSum v k.left with
     | none => simp [hl] at hkk
     | some x =>
-      cases hr : v[k.right]? with
+      cases hr : sideSum v k.right with
       | none => simp [hl, hr] at hkk
       | some y =>
         simp only [hl, hr] at hkk

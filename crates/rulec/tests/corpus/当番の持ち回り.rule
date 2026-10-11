@@ -1,0 +1,30 @@
+rule 当番の持ち回り(duty_turn) v1
+description "ある週に当番をする班。三つの班が決まった順に回り、回し始めた週から数える。それからの週の数を 3 で割った余りで班を決める。回し始める前の週も、余りが負にならないので、どれかの班に当たる"
+
+enum 班(team) = 北(north) | 東(east) | 南(south)
+
+inputs
+  週(week)             : number  range >=1 <=53
+  始めの週(first_week) : number  range >=1 <=53
+
+outputs
+  当番(on_duty) : 班
+
+# `mod` は正の定数で割り、週の差の符号によらず 0、1、2 のどれかを返す。
+define 順番(turn) : number = mod(週 - 始めの週, 3)
+
+table 持ち回り(rotation)
+policy unique
+| 順番 | -> 当番 : 班 |
+| 0    | 北           |
+| 1    | 東           |
+| 2    | 南           |
+
+examples
+| 週 | 始めの週 | -> 当番 |
+| 10 | 10       | 北      |
+| 11 | 10       | 東      |
+| 12 | 10       | 南      |
+| 13 | 10       | 北      |
+| 9  | 10       | 南      |
+| 1  | 53       | 南      |

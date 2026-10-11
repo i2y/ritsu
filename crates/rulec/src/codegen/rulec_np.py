@@ -208,6 +208,65 @@ _ROUND = {
 }
 
 
+# --- A rounding of a quotient by a value (§15.213): the number of grid steps, from the two
+# integers the plan brings to one step. The divisor is never zero (E132); a negative one turns
+# both signs first, and the direction is then about the magnitude, as in the five above.
+
+def _div_round(mode, n, d):
+    flip = d < 0
+    n = np.where(flip, -n, n)
+    d = np.where(flip, -d, d)
+    q, r = np.divmod(np.abs(n), d)
+    if mode == "down":
+        up = np.zeros(np.shape(q), dtype=bool)
+    elif mode == "up":
+        up = r != 0
+    elif mode == "half_up":
+        up = r >= d - r
+    elif mode == "half_down":
+        up = r > d - r
+    else:
+        up = (r > d - r) | ((r == d - r) & (q % 2 == 1))
+    return _signed(n, np.where(up, q + 1, q))
+
+
+# --- The remainder by a positive whole constant, from 0 to the constant less one (§15.214):
+# NumPy's `%` takes the sign of the divisor, which is this one for a positive divisor.
+
+def _mod(x, n):
+    return np.mod(x, n)
+
+
+# --- The whole square root (§15.215), by the binary search every other language runs: the
+# largest whole number whose square does not pass the value. The value is never negative
+# (E139), and no square of what the search tries passes int64.
+
+def _isqrt(x):
+    x = np.asarray(x, dtype=np.int64)
+    lo = np.zeros(np.shape(x), dtype=np.int64)
+    hi = np.minimum(x, np.int64(3037000499))
+    for _ in range(64):
+        go = lo < hi
+        if not go.any():
+            break
+        mid = lo + (hi - lo + 1) // 2
+        ok = mid * mid <= x
+        lo = np.where(go & ok, mid, lo)
+        hi = np.where(go & ~ok, mid - 1, hi)
+    return lo
+
+
+def _side(env, names, times):
+    """One side of a `constraint`: a name at the step the two sides share, or the sum of the
+    names a side adds up, each at that step (§15.216)."""
+    if isinstance(names, list):
+        total = np.int64(0)
+        for name, t in zip(names, times):
+            total = total + env[name] * t
+        return total
+    return env[names] * times
+
+
 def _ev(e, env):
     """One expression node. Values are the stored integers, already at the plan's scale."""
     k = e["k"]
@@ -245,9 +304,15 @@ def _ev(e, env):
             return np.minimum(a[0], a[1])
         if e["f"] == "max":
             return np.maximum(a[0], a[1])
+        if e["f"] == "mod":
+            return _mod(a[0], a[1])
+        if e["f"] == "isqrt":
+            return _isqrt(a[0])
         raise ValueError(f"unknown function: {e['f']}")
     if k == "round":
         return _ROUND[e["mode"]](_ev(e["x"], env), _ev(e["g"], env))
+    if k == "divround":
+        return _div_round(e["mode"], _ev(e["n"], env), _ev(e["d"], env))
     raise ValueError(f"unknown node: {k}")
 
 
@@ -399,7 +464,7 @@ class Rule:
         # A combination the caller said does not happen: no row was demanded for it, so it is
         # refused rather than answered. Both sides are brought to the step they share first.
         for k in self.plan.get("constraints", []):
-            a, b = env[k["left"]] * k["left_times"], env[k["right"]] * k["right_times"]
+            a, b = _side(env, k["left"], k["left_times"]), _side(env, k["right"], k["right_times"])
             op = k["op"]
             holds = a <= b if op == "<=" else a < b if op == "<" else a >= b if op == ">=" else a > b
             bad = ~np.asarray(holds, dtype=bool)

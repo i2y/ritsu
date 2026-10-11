@@ -1,0 +1,31 @@
+rule average_unit_price_split v1
+description "The average price of the units on an order, with the order that has no units set apart by tables. One table picks what to divide by: the number of units where there are some, and one where there are none, so the division never meets zero. Another gives an order with no units an average of nothing"
+
+inputs
+  total : money[JPY]  range >=0JPY <=1_000_000JPY
+  units : number      range >=0 <=1000
+
+outputs
+  average : money[JPY]  round half_up(1JPY)
+
+# Row 2 writes `units` only where its cell keeps it at one or more, so `per` is never zero.
+table divisor
+policy unique
+| units | -> per : number |
+| 0     | 1               |
+| >=1   | units           |
+
+define per_unit : money[JPY] = half_up(total / per, 1JPY)
+
+table answer
+policy unique
+| units | -> average : money[JPY] |
+| 0     | 0JPY                    |
+| >=1   | per_unit                |
+
+examples
+| total   | units | -> average |
+| 1000JPY | 3     | 333JPY     |
+| 1000JPY | 6     | 167JPY     |
+| 1001JPY | 2     | 501JPY     |
+| 500JPY  | 0     | 0JPY       |

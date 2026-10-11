@@ -1,0 +1,9 @@
+error[E139]: The argument quantity_squared - yearly_demand of `isqrt` can be below zero
+  --> tests/mutants/m_e139.rule:15
+   |
+15 | define quantity : number = isqrt(quantity_squared - yearly_demand)
+   |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ it ranges from -1000000 to 199999999999, below zero included
+   |
+ An input that makes the argument negative: yearly_demand = 1, order_cost = 1, holding_cost = 100000
+ A number below zero has no square root, and the generated code would have no answer on that call. rulec passes an `isqrt` only where the ranges show its argument is zero or more.
+ Hint: narrow the ranges so that the argument stays at zero or more, or pass `max(quantity_squared - yearly_demand, 0)`.

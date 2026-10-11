@@ -629,12 +629,49 @@ pub struct FoldDecl {
 /// `constraint 全条件一致数 <= 会社名一致数` — a relation between two inputs that the caller
 /// guarantees. Nothing computes with it: it says which combinations exist, so the checks do
 /// not demand rows for the ones that do not, and the entry guard refuses them (§15.55).
+///
+/// One side may add several inputs up: `constraint roll < to_defender + to_attacker`,
+/// `constraint discount + points <= subtotal` (§15.216). Each side is the list of the inputs it
+/// adds, one name for a side that is not a sum, and at most one side has more than one.
 #[derive(Debug, Clone)]
 pub struct Constraint {
-    pub left: String,
+    pub left: Vec<String>,
     pub op: CmpOp,
-    pub right: String,
+    pub right: Vec<String>,
     pub span: Span,
+}
+
+impl Constraint {
+    /// Every input the constraint names, the left side's first.
+    pub fn names(&self) -> impl Iterator<Item = &String> {
+        self.left.iter().chain(self.right.iter())
+    }
+
+    /// The two inputs of a constraint between two inputs: the shape every constraint had before
+    /// a side could be a sum, and the one the reasoning that chains `a <= b` and `b <= c` reads.
+    /// `None` for a constraint with a sum on a side.
+    pub fn pair(&self) -> Option<(&String, &String)> {
+        match (self.left.as_slice(), self.right.as_slice()) {
+            ([a], [b]) => Some((a, b)),
+            _ => None,
+        }
+    }
+
+    /// Whether a side adds several inputs up (§15.216).
+    pub fn is_sum(&self) -> bool {
+        self.left.len() > 1 || self.right.len() > 1
+    }
+
+    /// One side as it is written: `to_defender + to_attacker`.
+    pub fn side_text(names: &[String]) -> String {
+        names.join(" + ")
+    }
+
+    /// The constraint as it is written, with the operator in its ASCII spelling:
+    /// `discount + points <= subtotal`.
+    pub fn said(&self) -> String {
+        format!("{} {} {}", Self::side_text(&self.left), self.op.word(), Self::side_text(&self.right))
+    }
 }
 
 /// One named list of elements (§15.56). The columns are the fields of `elements` and every

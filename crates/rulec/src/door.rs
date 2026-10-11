@@ -243,8 +243,8 @@ pub fn refusal(f: &RuleFile, c: &Checked, input_obj: &Json) -> Option<Refusal> {
         vals.insert(seq.clone(), Val::Seq(elems));
     }
     for k in &f.constraints {
-        if !crate::vectors::constraint_holds(k, vals.get(&k.left), vals.get(&k.right)) {
-            return Some(input(constraint(&format!("{} {} {}", k.left, k.op.word(), k.right))));
+        if !crate::vectors::constraint_holds(k, &|n| vals.get(n)) {
+            return Some(input(constraint(&k.said())));
         }
     }
     let mut names: Vec<&String> = c.day_sets.keys().collect();

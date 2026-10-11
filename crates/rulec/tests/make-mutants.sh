@@ -331,6 +331,24 @@ awk '{ sub(/^  held    支払額$/, "  held    返金額"); print }'            
 # A state added to the enum, with its row, that no event ever moves an order into
 awk '{ sub(/ \| 取消\(cancelled\)$/, " | 取消(cancelled) | 保留(on_hold)"); print } /^\| 取消   \| - / { print "| 保留 | - | 状態 | 0円 | false |" }' "$o" > "$M/m_w125.rule"
 
+# --- Arithmetic (§15.213 to §15.216). The English rule first, its Japanese version beside it.
+# A divisor whose range reaches zero: the average over the units, with `max(units, 1)` taken away.
+awk '{ sub(/max\(units, 1\)/, "units"); print }'      "$C/average_unit_price.rule" > "$M/m_e132.rule"
+awk '{ sub(/max\(個数, 1\)/, "個数"); print }'         "$C/平均単価.rule"           > "$M/m_e132ja.rule"
+# The argument of `isqrt` let go below zero: the yearly demand taken off what is under the root.
+awk '{ sub(/isqrt\(quantity_squared\)/, "isqrt(quantity_squared - yearly_demand)"); print }' "$C/economic_order_quantity.rule" > "$M/m_e139.rule"
+awk '{ sub(/isqrt\(発注量の二乗\)/, "isqrt(発注量の二乗 - 年間の需要)"); print }'          "$C/経済的発注量.rule"            > "$M/m_e139ja.rule"
+# A division by a value that is not the outermost operation of the rounding's argument: the
+# share of the month put in parentheses first.
+awk '{ sub(/down\(monthly_fee \* days_used \/ days_in_month, 1JPY\)/, "down(monthly_fee * (days_used / days_in_month), 1JPY)"); print }' "$C/daily_proration.rule" > "$M/m_e115div.rule"
+awk '{ sub(/down\(月額 \* 使った日数 \/ 月の日数, 1円\)/, "down(月額 * (使った日数 / 月の日数), 1円)"); print }'                       "$C/日割り.rule"         > "$M/m_e115divja.rule"
+# `mod` by an input: the number of teams passed in rather than written. Two edits, the input and
+# the divisor, because the divisor alone would name nothing there is.
+awk '{ print } /^  first_week : number/ { print "  teams      : number  range >=1 <=3" }' "$C/duty_rotation.rule" |
+  awk '{ sub(/mod\(week - first_week, 3\)/, "mod(week - first_week, teams)"); print }' > "$M/m_e115mod.rule"
+awk '{ print } /^  始めの週\(first_week\) : number/ { print "  班の数(teams)        : number  range >=1 <=3" }' "$C/当番の持ち回り.rule" |
+  awk '{ sub(/mod\(週 - 始めの週, 3\)/, "mod(週 - 始めの週, 班の数)"); print }' > "$M/m_e115modja.rule"
+
 for m in "$M"/m_*.rule; do "$RULEC" fmt "$m" >/dev/null; done
 
 ls "$M" | wc -l | tr -d ' ' | xargs echo "変異ファイル:"

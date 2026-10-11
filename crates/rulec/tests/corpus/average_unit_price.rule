@@ -1,0 +1,23 @@
+rule average_unit_price v1
+description "The average price of the units on an order: the order total over the number of units, rounded half up to a whole yen. An order with no units is divided by one rather than by zero, so its average is its total"
+
+inputs
+  total : money[JPY]  range >=0JPY <=1_000_000JPY
+  units : number      range >=0 <=1000
+
+outputs
+  average : money[JPY]  round half_up(1JPY)
+
+# The division sits inside the rounding, so the answer is the exact quotient put on the grid of
+# one yen. `max(units, 1)` keeps the divisor at one or more, which the check sees from the range.
+define average_price : money[JPY] = half_up(total / max(units, 1), 1JPY)
+
+result average = average_price
+
+examples
+| total   | units | -> average |
+| 1000JPY | 3     | 333JPY     |
+| 1000JPY | 6     | 167JPY     |
+| 1001JPY | 2     | 501JPY     |
+| 500JPY  | 0     | 500JPY     |
+| 0JPY    | 0     | 0JPY       |

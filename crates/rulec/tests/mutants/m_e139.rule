@@ -1,0 +1,24 @@
+rule economic_order_quantity v1
+description "How many units to order at a time: the square root of twice the yearly demand times the cost of placing one order, over the cost of holding one unit for a year. What is under the root is rounded down to a whole number first, and the root is the largest whole number whose square does not pass it"
+
+inputs
+  yearly_demand : number      range >=1 <=1_000_000
+  order_cost    : money[JPY]  range >=1JPY <=100_000JPY
+  holding_cost  : money[JPY]  range >=1JPY <=100_000JPY
+
+outputs
+  order_quantity : number  round down(1)
+
+# Yen over yen is a ratio with no unit, so the grid of the rounding is the number 1.
+define quantity_squared : number = down(2 * yearly_demand * order_cost / holding_cost, 1)
+
+define quantity : number = isqrt(quantity_squared - yearly_demand)
+
+result order_quantity = quantity
+
+examples
+| yearly_demand | order_cost | holding_cost | -> order_quantity |
+| 1000          | 5000JPY    | 100JPY       | 316               |
+| 1200          | 3000JPY    | 200JPY       | 189               |
+| 1             | 1JPY       | 100_000JPY   | 0                 |
+| 1_000_000     | 100_000JPY | 1JPY         | 447213            |

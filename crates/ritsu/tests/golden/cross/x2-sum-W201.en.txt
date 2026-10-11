@@ -1,0 +1,11 @@
+ok quota_check.rule
+warning[dandori W104]: quota.flow:26:1: nothing says what range `asked` is in (the answer of `ask_amount` has no range), and `requested` of the rule `check` takes `>=0 <=10000`
+    26 |   let decision = check(used: used, requested: asked, quota: quota)
+warning[dandori W104]: quota.flow:28:1: nothing says what range `asked` is in (the answer of `ask_amount` has no range), and the parameter `amount` of `grant` takes `>=0 <=10000`
+    28 |     at_once => grant(account: account, amount: asked)
+quota.flow: ok (2 warning(s))
+warning[ritsu W201]: quota.flow:26:1: Whether the call of the rule check keeps its precondition `used + requested <= quota` cannot be decided
+    26 |   let decision = check(used: used, requested: asked, quota: quota)
+  = nothing says what range `asked` is in (the answer of `ask_amount` has no range)
+  = The workflow's code that `ritsu dandori build` writes checks it when the workflow runs, as soon as the values are made; a run that breaks it fails there with `Dandori.BrokenPrecondition`.
+ritsu check: 2 files (rulec 1, dandori 1): all pass (3 warnings); borders between the languages: 1 checked, 1 undecided

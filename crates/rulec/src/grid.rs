@@ -499,8 +499,10 @@ impl<'a> Grid<'a> {
                     return (out.len() <= GRID_BRANCHES).then_some(out);
                 }
                 // `allocate` is rounded down to a whole unit, a rounding to its grid: each
-                // lands on a grid of its own, whatever it was computed from.
-                let step = if name == crate::kw::ALLOCATE {
+                // lands on a grid of its own, whatever it was computed from. A rounded quotient
+                // by a value is a rounding like any other (§15.213); a remainder of a whole number
+                // and a whole square root are whole numbers (§15.214, §15.215).
+                let step = if name == crate::kw::ALLOCATE || name == crate::kw::MOD || name == crate::kw::ISQRT {
                     Rat::int(1)
                 } else if crate::num::RoundMode::parse(name).is_some() {
                     let g = self.forms(args.get(1)?, depth + 1, fresh)?;
@@ -705,19 +707,36 @@ impl<'a> Grid<'a> {
                 }
             }
             for k in &self.f.constraints {
-                let (Some(_), Some(_)) = (self.lattice(&k.left), self.lattice(&k.right)) else { continue };
-                let (ll, lh) = self.span_in(&b, &k.left);
-                let (rl, rh) = self.span_in(&b, &k.right);
-                // `<` and `>` are read as `<=` and `>=`: a step wider, never narrower.
-                let ((ll, lh), (rl, rh)) = match k.op {
-                    CmpOp::Le | CmpOp::Lt => ((ll, min_rat(lh, rh)), (max_rat(rl, ll), rh)),
-                    CmpOp::Ge | CmpOp::Gt => ((max_rat(ll, rl), lh), (rl, min_rat(rh, lh))),
-                };
-                if ll.cmp_to(lh) == std::cmp::Ordering::Greater || rl.cmp_to(rh) == std::cmp::Ordering::Greater {
-                    return None;
+                if k.names().any(|n| self.lattice(n).is_none()) {
+                    continue;
                 }
-                b.insert(k.left.clone(), (ll, lh));
-                b.insert(k.right.clone(), (rl, rh));
+                // `<` and `>` are read as `<=` and `>=`: a step wider, never narrower. The
+                // smaller side first; each side the names it adds (§15.216). A name on the smaller
+                // side is at most the larger side's top less the bottoms of the other names beside
+                // it, and a name on the larger side at least the smaller side's bottom less the
+                // tops of the others beside it. With one name a side, that is the two ends meeting.
+                let (small, big) = match k.op {
+                    CmpOp::Le | CmpOp::Lt => (&k.left, &k.right),
+                    CmpOp::Ge | CmpOp::Gt => (&k.right, &k.left),
+                };
+                let lows = |b: &BTreeMap<String, (Rat, Rat)>, ns: &[String]| ns.iter().fold(Rat::zero(), |acc, n| acc.add(self.span_in(b, n).0));
+                let highs = |b: &BTreeMap<String, (Rat, Rat)>, ns: &[String]| ns.iter().fold(Rat::zero(), |acc, n| acc.add(self.span_in(b, n).1));
+                let (top, bottom) = (highs(&b, big), lows(&b, small));
+                let mut next: Vec<(String, (Rat, Rat))> = Vec::new();
+                for n in small.iter() {
+                    let (l, h) = self.span_in(&b, n);
+                    next.push((n.clone(), (l, min_rat(h, top.sub(bottom.sub(l))))));
+                }
+                for n in big.iter() {
+                    let (l, h) = self.span_in(&b, n);
+                    next.push((n.clone(), (max_rat(l, bottom.sub(top.sub(h))), h)));
+                }
+                for (n, (l, h)) in next {
+                    if l.cmp_to(h) == std::cmp::Ordering::Greater {
+                        return None;
+                    }
+                    b.insert(n, (l, h));
+                }
             }
         }
         Some(b)
@@ -1001,8 +1020,8 @@ impl Domain {
         loop {
             let before = names.len();
             for k in &f.constraints {
-                if names.contains(&k.left) || names.contains(&k.right) {
-                    for side in [&k.left, &k.right] {
+                if k.names().any(|n| names.contains(n)) {
+                    for side in k.names() {
                         if !held.contains(side) {
                             names.insert(side.clone());
                         }

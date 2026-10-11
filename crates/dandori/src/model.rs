@@ -935,20 +935,32 @@ pub struct PreCheck {
 
 #[derive(Clone, Debug)]
 pub enum PreTest {
-    /// `left op right` between two inputs of the rule (`op` is `<=`, `<`, `>=` or `>`): each the
-    /// input's name and the value the call gives it, a whole number on the wire
-    Relation { left: (String, TExpr), op: String, right: (String, TExpr) },
+    /// `left op right` between inputs of the rule (`op` is `<=`, `<`, `>=` or `>`): each side the
+    /// inputs it adds up — one, or several where the rule's constraint has a sum on that side
+    /// (rulec's §15.216) — each the input's name and the value the call gives it, a whole number
+    /// on the wire
+    Relation { left: Vec<(String, TExpr)>, op: String, right: Vec<(String, TExpr)> },
     /// a date input that takes only the days of a koyomi date (rulec's `range from koyomi`): the
     /// input, the value the call gives it, the file and the date as the rule names them, and the
     /// days, `YYYY-MM-DD` in order
     Days { input: String, value: TExpr, file: String, date: String, days: Vec<String> },
 }
 
+/// One side of a relation as the rule writes it: `asked`, or `discount + points`.
+pub fn side_names(side: &[(String, TExpr)]) -> String {
+    side.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>().join(" + ")
+}
+
+/// One side of a relation as a platform's code writes it: each value through `expr`, added up.
+pub fn side_code(side: &[(String, TExpr)], expr: &dyn Fn(&TExpr) -> String) -> String {
+    side.iter().map(|(_, e)| expr(e)).collect::<Vec<_>>().join(" + ")
+}
+
 impl PreCheck {
     /// The values the check reads.
     pub fn exprs(&self) -> Vec<&TExpr> {
         match &self.test {
-            PreTest::Relation { left, right, .. } => vec![&left.1, &right.1],
+            PreTest::Relation { left, right, .. } => left.iter().chain(right.iter()).map(|(_, e)| e).collect(),
             PreTest::Days { value, .. } => vec![value],
         }
     }
@@ -956,7 +968,7 @@ impl PreCheck {
     /// The precondition, as ritsu says it: `asked <= paid`, `pay_day in koyomi "terms.cal" date payment`.
     pub fn text(&self) -> String {
         match &self.test {
-            PreTest::Relation { left, op, right } => format!("{} {op} {}", left.0, right.0),
+            PreTest::Relation { left, op, right } => format!("{} {op} {}", side_names(left), side_names(right)),
             PreTest::Days { input, file, date, .. } => format!("{input} in koyomi \"{file}\" date {date}"),
         }
     }

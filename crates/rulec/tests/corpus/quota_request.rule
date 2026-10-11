@@ -1,0 +1,32 @@
+rule quota_request v1
+description "How much of a quota is left once a request is granted. The caller never asks for more than the quota holds: what was used and what is asked for add up to the quota at most, so what is left is never below zero"
+
+enum headroom = used_up | low | ample
+
+inputs
+  used      : number  range >=0 <=1000
+  requested : number  range >=1 <=1000
+  quota     : number  range >=1 <=1000
+
+# One side of a constraint may add inputs up.
+constraint used + requested <= quota
+
+outputs
+  status : headroom
+
+derive left : number = quota - used - requested  range >=-1999 <=999
+
+# No row for a negative `left`: the constraint leaves none, and the check reads it that way.
+table remaining
+policy unique
+| left     | -> status : headroom |
+| 0        | used_up              |
+| >=1 <=99 | low                  |
+| >=100    | ample                |
+
+examples
+| used | requested | quota | -> status |
+| 400  | 600       | 1000  | used_up   |
+| 400  | 550       | 1000  | low       |
+| 0    | 1         | 1000  | ample     |
+| 0    | 1         | 1     | used_up   |

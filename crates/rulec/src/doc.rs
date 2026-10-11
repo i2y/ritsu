@@ -502,7 +502,7 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
             "Relations between inputs that the caller guarantees. **The checks believed them and demanded no row for the combinations they exclude**, and the generated code refuses such an input at the door.\n\n"
         ));
         for k in &f.constraints {
-            o.push_str(&format!("- `{} {} {}`\n", md_esc(&k.left), k.op.word(), md_esc(&k.right)));
+            o.push_str(&format!("- `{}`\n", md_esc(&k.said())));
         }
         o.push('\n');
     }
@@ -1389,7 +1389,7 @@ fn defs_section(f: &RuleFile, c: &Checked, lines: &[&str], skip: &dyn Fn(&str) -
                 md_esc(&d.name.text),
                 md_esc(&e),
                 md_esc(&range_text(c, &d.name.text)),
-                md_esc(&note_with_cite(d.cite.as_ref(), trailing_comment(&lines, d.name.span.line)))
+                md_esc(&with_checked(note_with_cite(d.cite.as_ref(), trailing_comment(&lines, d.name.span.line)), &arith_facts(c, &d.expr)))
             ));
         }
         for d in &defines {
@@ -1399,7 +1399,7 @@ fn defs_section(f: &RuleFile, c: &Checked, lines: &[&str], skip: &dyn Fn(&str) -
                 "| {} | Definition | `{}` |  | {} |\n",
                 md_esc(&d.name.text),
                 md_esc(&e),
-                md_esc(&note_with_cite(d.cite.as_ref(), trailing_comment(&lines, d.name.span.line)))
+                md_esc(&with_checked(note_with_cite(d.cite.as_ref(), trailing_comment(&lines, d.name.span.line)), &arith_facts(c, &d.expr)))
             ));
         }
         if !derived.is_empty() {
@@ -1410,6 +1410,75 @@ fn defs_section(f: &RuleFile, c: &Checked, lines: &[&str], skip: &dyn Fn(&str) -
         }
     }
     o
+}
+
+/// What the check showed of the divisions and the square roots in an expression (§15.213,
+/// §15.215), one sentence each: the reach of each divisor of a rounded quotient, which stays off
+/// zero, and of each argument of `isqrt`, which stays at zero or above. A reader who sees `÷ (a +
+/// d)` asks whether it can be zero; this is the answer the check gave.
+fn arith_facts(c: &Checked, e: &Expr) -> Vec<String> {
+    let mut out = Vec::new();
+    // The type a divisor is written in, for its unit: the type of the first name it reads.
+    let ty_in = |x: &Expr| -> Ty {
+        let mut ns = Vec::new();
+        crate::types::collect_names(x, &mut ns);
+        ns.first().and_then(|n| c.ty_of(n)).unwrap_or(Ty::Number)
+    };
+    fn walk(c: &Checked, e: &Expr, ty_in: &dyn Fn(&Expr) -> Ty, out: &mut Vec<String>) {
+        match e {
+            Expr::Call(name, args, _) => {
+                if let Some((_, d)) = crate::types::var_division(name, args) {
+                    let ty = ty_in(d);
+                    let text = crate::region::expr_text(d);
+                    match c.interval(d, &ty) {
+                        Some((lo, _)) if lo.num > 0 => out.push(tr!(
+                            "割る数 {text} は {} 以上で、0 になりません",
+                            "the divisor {text} is {} or more, and never zero",
+                            crate::types::fmt_val(lo, &ty)
+                        )),
+                        Some((_, hi)) if hi.num < 0 => out.push(tr!(
+                            "割る数 {text} は {} 以下で、0 になりません",
+                            "the divisor {text} is {} or less, and never zero",
+                            crate::types::fmt_val(hi, &ty)
+                        )),
+                        _ => {}
+                    }
+                }
+                if name == crate::kw::ISQRT {
+                    if let Some(x) = args.first() {
+                        let ty = ty_in(x);
+                        if c.interval(x, &ty).is_some_and(|(lo, _)| lo.num >= 0) {
+                            let text = crate::region::expr_text(x);
+                            out.push(tr!("isqrt の引数 {text} は 0 以上です", "the argument {text} of isqrt is zero or more"));
+                        }
+                    }
+                }
+                for a in args {
+                    walk(c, a, ty_in, out);
+                }
+            }
+            Expr::Bin(l, _, r, _) => {
+                walk(c, l, ty_in, out);
+                walk(c, r, ty_in, out);
+            }
+            _ => {}
+        }
+    }
+    walk(c, e, &ty_in, &mut out);
+    out
+}
+
+/// A note with what the check showed added after it.
+fn with_checked(note: String, facts: &[String]) -> String {
+    if facts.is_empty() {
+        return note;
+    }
+    let shown = facts.join(if crate::i18n::ja() { "。" } else { "; " });
+    if note.is_empty() {
+        shown
+    } else {
+        format!("{note}{}{shown}", if crate::i18n::ja() { "。" } else { "; " })
+    }
 }
 
 /// A rule applied by this one (§15.69): what it is, what is bound to what, what is left out,
@@ -1897,7 +1966,7 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
     if !f.constraints.is_empty() {
         o.push_str(&tr!("\n## 前提\n\n", "\n## Assumptions\n\n"));
         for k in &f.constraints {
-            o.push_str(&format!("- `{} {} {}`\n", md_esc(&k.left), k.op.word(), md_esc(&k.right)));
+            o.push_str(&format!("- `{}`\n", md_esc(&k.said())));
         }
     }
 
@@ -1918,10 +1987,10 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
             o.push_str(&format!("- **{}**: {}\n", md_esc(&d.name.text), md_esc(&what)));
         }
         for d in &derived {
-            o.push_str(&format!("- **{}** = `{}`\n", md_esc(&d.name.text), md_esc(&expr_src(&lines, d.name.span.line))));
+            o.push_str(&format!("- **{}** = `{}`{}\n", md_esc(&d.name.text), md_esc(&expr_src(&lines, d.name.span.line)), customer_reading(&d.expr)));
         }
         for d in &defines {
-            o.push_str(&format!("- **{}** = `{}`\n", md_esc(&d.name.text), md_esc(&expr_src(&lines, d.name.span.line))));
+            o.push_str(&format!("- **{}** = `{}`{}\n", md_esc(&d.name.text), md_esc(&expr_src(&lines, d.name.span.line)), customer_reading(&d.expr)));
         }
     }
 
@@ -2316,6 +2385,26 @@ fn rounding_verb(r: &Rounding) -> String {
         m if m == crate::kw::HALF_EVEN => tr!("{g}単位で偶数側に丸めます", "rounded half to even at {g}"),
         m => format!("{m}({g})"),
     }
+}
+
+/// An expression that is one of the operations §15.213–§15.215 added, said in words for a
+/// customer after the formula: a remainder, a whole square root, a rounded quotient. Anything
+/// else is left as the formula alone.
+fn customer_reading(e: &Expr) -> String {
+    let Expr::Call(name, args, _) = e else { return String::new() };
+    let text = crate::region::expr_text;
+    let words = if let Some((n, d)) = crate::types::var_division(name, args) {
+        let Some(Expr::Lit(Lit::Num(g), sp)) = args.get(1) else { return String::new() };
+        let r = Rounding { mode: name.clone(), grid: g.clone(), span: sp.clone() };
+        tr!("{} を {} で割って、{}", "{} divided by {}, {}", text(n), text(d), rounding_words(&r))
+    } else if let (crate::kw::MOD, [x, k]) = (name.as_str(), args.as_slice()) {
+        tr!("{} を {} で割った余り", "the remainder of {} divided by {}", text(x), text(k))
+    } else if let (crate::kw::ISQRT, [x]) = (name.as_str(), args.as_slice()) {
+        tr!("{} の平方根の整数の部分", "the whole part of the square root of {}", text(x))
+    } else {
+        return String::new();
+    };
+    tr!("（{}）", " ({})", md_esc(&words))
 }
 
 /// What an input can be, for the customer: the values of a small enum, the name of a large

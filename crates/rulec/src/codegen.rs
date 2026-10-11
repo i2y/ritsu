@@ -166,6 +166,8 @@ pub struct Gen<'a> {
     stages: crate::types::Stages,
 }
 
+mod arith;
+pub use arith::Uses;
 mod sql;
 pub use sql::round_tests_sql;
 mod numpy;
@@ -440,6 +442,12 @@ impl<'a> Gen<'a> {
 
     /// The page for people, as `rulec doc --format html` renders it: the same
     /// renderer, running the same generated JavaScript (§15.37, §15.52).
+    /// Which of the helpers of §15.213–§15.215 the rule's expressions call: only those are
+    /// written into its module and its unit vectors.
+    pub fn arith_uses(&self) -> Uses {
+        Uses::of(self.f)
+    }
+
     pub fn page(&self) -> String {
         crate::doc::render_html(self.f, self.c, &self.src, &self.path, &self.javascript())
     }
@@ -644,6 +652,22 @@ impl<'a> Gen<'a> {
                 Expr2 { text: format!("{}", crate::types::date_ord(*y, *m, *d).num), scale: 1 }
             }
             Expr::Lit(..) => Expr2 { text: "0".into(), scale: 1 },
+            // A rounding of a quotient by a value (§15.213): one integer division, by the helper
+            // of the mode, of the dividend and the divisor brought to one step with the grid's
+            // (`types::division_factors`). It answers whole grid steps, which the grid's own
+            // integer brings back to the grid's scale. The divisor is never zero (E132).
+            Expr::Call(name, args, _) if crate::types::var_division(name, args).is_some() => {
+                let (n, d) = crate::types::var_division(name, args).unwrap();
+                let mode = RoundMode::parse(name).unwrap();
+                let (ne, de) = (self.expr(n, local), self.expr(d, local));
+                let Some(Expr::Lit(Lit::Num(g), _)) = args.get(1) else { panic!("gen: the grid of `{name}` is a literal (E118)") };
+                let (gi, sg) = crate::types::grid_int(g).expect("gen: a grid the check read");
+                let (ka, kb) = crate::types::division_factors(ne.scale, de.scale, gi, sg);
+                let top = if ka == 1 { ne.text } else { format!("({} * {ka})", ne.text) };
+                let bot = if kb == 1 { de.text } else { format!("({} * {kb})", de.text) };
+                let steps = format!("{}({top}, {bot})", arith::py_div(mode));
+                Expr2 { text: if gi == 1 { steps } else { format!("({steps} * {gi})") }, scale: sg }
+            }
             Expr::Call(name, args, _) => {
                 let a: Vec<Expr2> = args.iter().map(|x| self.expr(x, local)).collect();
                 match (name.as_str(), a.as_slice()) {
@@ -697,6 +721,19 @@ impl<'a> Gen<'a> {
                         } else {
                             Expr2 { text: format!("({rounded} // {})", s / g.scale), scale: g.scale }
                         }
+                    }
+                    // The remainder of a whole number by a positive constant (§15.214). A whole
+                    // number held at a finer scale is brought back to whole units first, which
+                    // divides exactly; the remainder is then a whole number.
+                    (crate::kw::MOD, [x, k]) => {
+                        let whole = if x.scale == 1 { x.text.clone() } else { format!("({} // {})", x.text, x.scale) };
+                        Expr2 { text: format!("_mod({whole}, {})", k.text), scale: 1 }
+                    }
+                    // The whole square root (§15.215) of the whole part: the argument is never
+                    // negative (E139), so the division to whole units is the floor everywhere.
+                    (crate::kw::ISQRT, [x]) => {
+                        let whole = if x.scale == 1 { x.text.clone() } else { format!("({} // {})", x.text, x.scale) };
+                        Expr2 { text: format!("_isqrt({whole})"), scale: 1 }
                     }
                     // Not a fallback: `check` accepts a fixed set of calls, so anything
                     // else here is a backend that was not taught a new one. Emitting 0
@@ -1096,6 +1133,7 @@ impl<'a> Gen<'a> {
 
         // The functions first: which builtins they call decides which names are bound above them.
         let mut body = round_py();
+        body.push_str(&arith::py_helpers(&arith::Uses::of(self.f)));
         body.push_str(&self.py_fn());
         body.push_str("\n\n");
         body.push_str(&self.py_record());
@@ -1131,7 +1169,7 @@ const PY_BUILTINS: [(&str, &str); 10] = [
 ];
 
 /// The other names the module defines at its top level beside the bound builtins: the helpers.
-const PY_HELPERS: [&str; 13] = [
+const PY_HELPERS: [&str; 20] = [
     "_Trace",
     "_min",
     "_max",
@@ -1140,6 +1178,13 @@ const PY_HELPERS: [&str; 13] = [
     "_round_half",
     "_round_half_down",
     "_round_bankers",
+    "_div_round_down",
+    "_div_round_up",
+    "_div_round_half",
+    "_div_round_half_down",
+    "_div_round_bankers",
+    "_mod",
+    "_isqrt",
     "_json_str",
     "_civil",
     "_proto",
@@ -1863,11 +1908,18 @@ impl<'a> Gen<'a> {
     /// one in 0.1% steps hold 50% as 50 and as 500, and comparing those integers as they stand
     /// let 50% ≤ 10% through. So each side is brought to the step the two share first
     /// (§15.139); E108 has already proved the product fits.
-    fn constraint_sides(&self, k: &crate::ast::Constraint, a: String, b: String) -> (String, String) {
-        let (sa, sb) = (self.scale(&k.left).max(1), self.scale(&k.right).max(1));
-        let common = lcm(sa, sb);
-        let side = |t: String, s: i128| if common / s == 1 { t } else { format!("{t} * {}", common / s) };
-        (side(a, sa), side(b, sb))
+    ///
+    /// A side that adds inputs up (§15.216) adds them on that step too. `tight` writes the sum
+    /// and the products without spaces, the way `gofmt` prints the operands of a comparison.
+    fn constraint_sides(&self, k: &crate::ast::Constraint, name: &dyn Fn(&str) -> String, tight: bool) -> (String, String) {
+        let common = k.names().map(|n| self.scale(n).max(1)).fold(1, lcm);
+        let (plus, times) = if tight { ("+", "*") } else { (" + ", " * ") };
+        let term = |n: &String| {
+            let s = self.scale(n).max(1);
+            if common / s == 1 { name(n) } else { format!("{}{times}{}", name(n), common / s) }
+        };
+        let side = |ns: &[String]| ns.iter().map(term).collect::<Vec<_>>().join(plus);
+        (side(&k.left), side(&k.right))
     }
 
     fn constraint_guards(
@@ -1880,9 +1932,9 @@ impl<'a> Gen<'a> {
         let sp = lang.spelling();
         let mut o = String::new();
         for k in &self.f.constraints {
-            let (a, b) = self.constraint_sides(k, local(&k.left), local(&k.right));
+            let (a, b) = self.constraint_sides(k, local, lang == Lang::Go);
             let op = k.op.word();
-            let said = format!("{} {op} {}", k.left, k.right);
+            let said = k.said();
             o.push_str(&format!(
                 "{indent}{} {}\n",
                 sp.comment,
@@ -2294,6 +2346,7 @@ impl<'a> Gen<'a> {
 
         o.push_str(&format!("// Fired {}\ntype Fired struct {{\n\tTable{CELL}string\n\tRow{CELL}int\n\tLabel{CELL}string\n}}\n\n", fired_doc()));
         o.push_str(&round_go());
+        o.push_str(&arith::go_helpers(&arith::Uses::of(self.f)));
         o.push_str(&self.go_fn());
         o.push('\n');
         o.push_str(&self.go_record());
@@ -2867,7 +2920,7 @@ fn go_typed(s: &str) -> String {
 }
 
 fn go_expr(s: &str) -> String {
-    let t = s
+    let t = arith::go_expr(s)
         .replace(" // ", " / ")
         .replace("True", "true")
         .replace("False", "false")
@@ -3447,7 +3500,7 @@ impl<'a> Gen<'a> {
 /// a JavaScript `number` is exact only to 2^53, so using one would put a silent wrong answer
 /// above nine quadrillion into a tool whose whole claim is that it does not do that.
 fn ts_expr(s: &str) -> String {
-    let t = s
+    let t = arith::ts_expr(s)
         .replace(" // ", " / ")
         .replace("True", "true")
         .replace("False", "false")
@@ -3840,6 +3893,7 @@ impl<'a> Gen<'a> {
 
         // The error classes come first: the enum parsers below throw them.
         o.push_str(&round_ts());
+        o.push_str(&arith::ts_helpers(&arith::Uses::of(self.f)));
         o.push('\n');
 
         // Enums. A frozen object plus a union type, not `enum`: that keeps the file to
@@ -4560,7 +4614,8 @@ impl<'a> Gen<'a> {
 /// and `ts_expr`. Integer division truncates toward zero here, exactly as it does in Go and
 /// on a JavaScript bigint, so the rounding helpers are the Go ones transliterated.
 fn rs_expr(s: &str) -> String {
-    s.replace(" // ", " / ")
+    arith::rs_expr(s)
+        .replace(" // ", " / ")
         .replace("True", "true")
         .replace("False", "false")
         .replace("_round_down(", "round_down(")
@@ -4850,6 +4905,7 @@ impl<'a> Gen<'a> {
         }
 
         o.push_str(round_rs().trim_start_matches('\n'));
+        o.push_str(&arith::rs_helpers(&arith::Uses::of(self.f)));
         o.push('\n');
 
         for g in &self.f.groups {
@@ -5435,9 +5491,9 @@ impl<'a> Gen<'a> {
         // own entry guard turns away. Both sides are inputs (E018), and an input here is the
         // plain i64, before it is branded for the call.
         for k in &self.f.constraints {
-            let name = |n: &String| self.f.inputs.iter().find(|i| &i.name.text == n).map(|i| pub_name(&i.name));
-            if let (Some(a), Some(b)) = (name(&k.left), name(&k.right)) {
-                let (a, b) = self.constraint_sides(k, a, b);
+            let name = |n: &str| self.f.inputs.iter().find(|i| i.name.text == n).map(|i| pub_name(&i.name));
+            if k.names().all(|n| name(n).is_some()) {
+                let (a, b) = self.constraint_sides(k, &|n| name(n).unwrap_or_default(), false);
                 decls.push_str(&format!("        kani::assume({a} {} {b});\n", k.op.word()));
             }
         }
@@ -5549,6 +5605,22 @@ impl<'a> Gen<'a> {
             return Some(tr!(
                 "この規則は `allocate` で配分を出している。変数で割る式が二つ入るとモデル検査器が返ってこないので、ハーネスは出していない。",
                 "This rule works out a share with `allocate`. Two divisions by a value rather than by a constant do not come back from the model checker, so no harness is written."
+            ));
+        }
+        // A rounded quotient by a value is a division of the same kind (§15.213), and a whole
+        // square root is a search that runs up to 32 rounds of a 64-bit square (§15.215): the
+        // model checker bit-blasts both, and a harness that does not come back is not written.
+        let uses = self.arith_uses();
+        if !uses.div.is_empty() {
+            return Some(tr!(
+                "この規則は、値で割った商を丸めている。値で割る式はモデル検査器が返ってこないことがあるので、ハーネスは出していない。",
+                "This rule rounds a quotient by a value. A division by a value need not come back from the model checker, so no harness is written."
+            ));
+        }
+        if uses.root {
+            return Some(tr!(
+                "この規則は `isqrt` を使っている。平方根を二分探索で求めるループはモデル検査器が返ってこないことがあるので、ハーネスは出していない。",
+                "This rule takes an `isqrt`. The search the square root runs is a loop that need not come back from the model checker, so no harness is written."
             ));
         }
         // Anything the harness cannot make symbolic — a string, in an input or in a field of
@@ -6905,7 +6977,7 @@ for (const line of readFileSync(0, "utf8").split("\n")) {
 
 /// The rounding helpers as a module of their own, so that the Wasm side runs the same unit
 /// vectors as every other language (§8.5).
-pub fn round_wasm_rust() -> String {
+pub fn round_wasm_rust(u: &Uses) -> String {
     let mut o = format!(
         "// Code generated by rulec {}. DO NOT EDIT.\n// {}\n#![allow(dead_code, unused_parens)]\n",
         ritsu_emit::header::VERSION,
@@ -6915,13 +6987,15 @@ pub fn round_wasm_rust() -> String {
         )
     );
     o.push_str(round_rs().trim_start_matches('\n'));
+    o.push_str(&arith::rs_helpers(u));
+    o.push_str(&arith::wasm_exports(u));
     for m in ["down", "up", "half", "half_down", "bankers"] {
         o.push_str(&format!("\n#[no_mangle]\npub extern \"C\" fn rulec_round_{m}(x: i64, g: i64) -> i64 {{\n    round_{m}(x, g)\n}}\n"));
     }
     o
 }
 
-pub fn round_tests_wasm_js() -> String {
+pub fn round_tests_wasm_js(u: &Uses) -> String {
     let mut o = format!(
         "// Code generated by rulec {}. DO NOT EDIT.\n// {}\nimport {{ readFileSync }} from \"node:fs\";\nimport {{ dirname, join }} from \"node:path\";\nimport {{ fileURLToPath }} from \"node:url\";\n\nconst here = dirname(fileURLToPath(import.meta.url));\nconst {{ instance }} = await WebAssembly.instantiate(readFileSync(join(here, \"_round.wasm\")), {{}});\nconst ex = instance.exports;\n\nconst CASES = [\n",
         ritsu_emit::header::VERSION,
@@ -6934,14 +7008,18 @@ pub fn round_tests_wasm_js() -> String {
         o.push_str(&format!("  [\"{}\", {x}n, {g}n, {want}n],\n", mode_fn(m)));
     }
     o.push_str(
-        "];\n\nlet bad = 0;\nfor (const [mode, x, g, want] of CASES) {\n  const got = ex[\"rulec_round_\" + mode](x, g);\n  if (got !== want) {\n    console.log(`NG ${mode}(${x}, ${g}) = ${got}, want ${want}`);\n    bad += 1;\n  }\n}\nif (bad > 0) {\n  process.exit(1);\n}\n",
+        "];\n\nlet bad = 0;\nfor (const [mode, x, g, want] of CASES) {\n  const got = ex[\"rulec_round_\" + mode](x, g);\n  if (got !== want) {\n    console.log(`NG ${mode}(${x}, ${g}) = ${got}, want ${want}`);\n    bad += 1;\n  }\n}\n",
     );
-    let line = tr!("ok {{}} 件", "ok {{}} cases").replace("{}", "${CASES.length}");
+    let (arith, n) = arith::wasm_tests(u);
+    o.push_str(&arith);
+    o.push_str("if (bad > 0) {\n  process.exit(1);\n}\n");
+    let count = if n == 0 { "${CASES.length}".to_string() } else { "${CASES.length + ARITH.length}".to_string() };
+    let line = tr!("ok {{}} 件", "ok {{}} cases").replace("{}", &count);
     o.push_str(&format!("console.log(`{line}`);\n"));
     o
 }
 
-pub fn round_tests_rust() -> String {
+pub fn round_tests_rust(u: &Uses) -> String {
     let mut o = format!(
         "// Code generated by rulec {}. DO NOT EDIT.\n// {}\n#![allow(unused_parens)]\n",
         ritsu_emit::header::VERSION,
@@ -6951,6 +7029,7 @@ pub fn round_tests_rust() -> String {
         )
     );
     o.push_str(round_rs().trim_start_matches('\n'));
+    o.push_str(&arith::rs_helpers(u));
     o.push_str("\nconst CASES: &[(&str, i64, i64, i64)] = &[\n");
     for (m, x, g, want) in round_cases() {
         o.push_str(&format!("    (\"{}\", {x}, {g}, {want}),\n", mode_fn(m)));
@@ -6961,10 +7040,14 @@ pub fn round_tests_rust() -> String {
          \"up\" => round_up(*x, *g),\n            \"half\" => round_half(*x, *g),\n            \
          \"half_down\" => round_half_down(*x, *g),\n            _ => round_bankers(*x, *g),\n        };\n        if got != *want {\n            \
          println!(\"NG {mode}({x}, {g}) = {got}, want {want}\");\n            bad += 1;\n        \
-         }\n    }\n    if bad > 0 {\n        std::process::exit(1);\n    }\n",
+         }\n    }\n",
     );
+    let (arith, n) = arith::rs_tests(u);
+    o.push_str(&arith);
+    o.push_str("    if bad > 0 {\n        std::process::exit(1);\n    }\n");
     let line = tr!("ok {{}} 件", "ok {{}} cases");
-    o.push_str(&format!("    println!(\"{line}\", CASES.len());\n}}\n"));
+    let count = if n == 0 { "CASES.len()".to_string() } else { format!("CASES.len() + {n}") };
+    o.push_str(&format!("    println!(\"{line}\", {count});\n}}\n"));
     o
 }
 
@@ -6988,7 +7071,7 @@ fn round_cases() -> Vec<(RoundMode, i128, i128, i128)> {
     out
 }
 
-pub fn round_tests_python() -> String {
+pub fn round_tests_python(u: &Uses) -> String {
     let mut o = format!(
         "# Code generated by rulec {}. DO NOT EDIT.\n\
          # {}\n\
@@ -7000,6 +7083,7 @@ pub fn round_tests_python() -> String {
         )
     );
     o.push_str(round_py().trim_start_matches('\n'));
+    o.push_str(&arith::py_helpers(u));
     o.push_str("\nCASES = [\n");
     for (m, x, g, want) in round_cases() {
         o.push_str(&format!("    (\"{}\", {x}, {g}, {want}),\n", mode_fn(m)));
@@ -7010,13 +7094,17 @@ pub fn round_tests_python() -> String {
          got = FN[mode](x, g)\n    \
          if got != want:\n        \
              print(f\"NG {mode}({x}, {g}) = {got}, want {want}\")\n        \
-             bad += 1\nif bad:\n    sys.exit(1)\n",
+             bad += 1\n",
     );
-    o.push_str(&format!("print(f\"{}\")\n", tr!("ok {{len(CASES)}} 件", "ok {{len(CASES)}} cases")));
+    let (arith, n) = arith::py_tests(u);
+    o.push_str(&arith);
+    o.push_str("if bad:\n    sys.exit(1)\n");
+    let count = if n == 0 { "len(CASES)" } else { "len(CASES) + len(ARITH)" };
+    o.push_str(&format!("print(f\"{}\")\n", tr!("ok {{{count}}} 件", "ok {{{count}}} cases")));
     o
 }
 
-pub fn round_tests_typescript() -> String {
+pub fn round_tests_typescript(u: &Uses) -> String {
     let mut o = format!(
         "// Code generated by rulec {}. DO NOT EDIT.\n// {}\n",
         ritsu_emit::header::VERSION,
@@ -7026,6 +7114,7 @@ pub fn round_tests_typescript() -> String {
         )
     );
     o.push_str(round_ts().trim_start_matches('\n'));
+    o.push_str(&arith::ts_helpers(u));
     o.push_str("\nconst CASES: [string, bigint, bigint, bigint][] = [\n");
     for (m, x, g, want) in round_cases() {
         o.push_str(&format!("  [\"{}\", {x}n, {g}n, {want}n],\n", mode_fn(m)));
@@ -7038,14 +7127,17 @@ pub fn round_tests_typescript() -> String {
              const got = FN[mode](x, g);\n  \
              if (got !== want) {\n    \
                  console.log(`NG ${mode}(${x}, ${g}) = ${got}, want ${want}`);\n    \
-                 bad += 1;\n  }\n}\n\
-         if (bad > 0) {\n  process.exit(1);\n}\n",
+                 bad += 1;\n  }\n}\n",
     );
-    o.push_str(&format!("console.log(`{}`);\n", tr!("ok ${{CASES.length}} 件", "ok ${{CASES.length}} cases")));
+    let (arith, n) = arith::ts_tests(u);
+    o.push_str(&arith);
+    o.push_str("if (bad > 0) {\n  process.exit(1);\n}\n");
+    let count = if n == 0 { "CASES.length" } else { "CASES.length + ARITH.length" };
+    o.push_str(&format!("console.log(`{}`);\n", tr!("ok ${{{count}}} 件", "ok ${{{count}}} cases")));
     o
 }
 
-pub fn round_tests_go(pkg: &str) -> String {
+pub fn round_tests_go(pkg: &str, u: &Uses) -> String {
     let mut o = format!(
         "// Code generated by rulec {}. DO NOT EDIT.\n\
          // {}\n\
@@ -7070,6 +7162,7 @@ pub fn round_tests_go(pkg: &str) -> String {
          case \"bankers\":\n\t\t\tgot = roundBankers(c.x, c.g)\n\t\t}\n\t\t\
          if got != c.want {\n\t\t\tt.Errorf(\"%s(%d, %d) = %d, want %d\", c.mode, c.x, c.g, got, c.want)\n\t\t}\n\t}\n}\n",
     );
+    o.push_str(&arith::go_tests(u).0);
     align(&o)
 }
 
@@ -8348,6 +8441,7 @@ impl<'a> Gen<'a> {
         }
 
         o.push_str(&round_rb());
+        o.push_str(&arith::rb_helpers(&arith::Uses::of(self.f)));
         o.push('\n');
         o.push_str(&self.rb_fn());
         o.push('\n');
@@ -8971,7 +9065,7 @@ end
 
 /// The five modes of §7.3 in Ruby, checked against the same reference cases the other
 /// others are checked against. `rulec test` runs it beside the generated module.
-pub fn round_tests_ruby() -> String {
+pub fn round_tests_ruby(u: &Uses) -> String {
     let mut o = format!(
         "# Code generated by rulec {}. DO NOT EDIT.\n\
          # frozen_string_literal: true\n\
@@ -8984,15 +9078,23 @@ pub fn round_tests_ruby() -> String {
         )
     );
     o.push_str(round_rb().trim_start_matches('\n'));
-    o.push_str("  public_class_method :_round_down, :_round_up, :_round_half, :_round_half_down, :_round_bankers\nend\n\nCASES = [\n");
+    o.push_str(&arith::rb_helpers(u));
+    o.push_str("  public_class_method :_round_down, :_round_up, :_round_half, :_round_half_down, :_round_bankers\n");
+    if u.any() {
+        o.push_str(&format!("  public_class_method {}\n", arith::rb_names(u).join(", ")));
+    }
+    o.push_str("end\n\nCASES = [\n");
     for (m, x, g, want) in round_cases() {
         o.push_str(&format!("  [{:?}, {x}, {g}, {want}],\n", mode_fn(m)));
     }
     o.push_str("].freeze\n\nbad = 0\nCASES.each do |mode, x, g, want|\n  ");
     o.push_str("got = R.send(\"_round_#{mode}\", x, g)\n  next if got == want\n  ");
     o.push_str("puts \"NG #{mode}(#{x}, #{g}) = #{got}, want #{want}\"\n  bad += 1\nend\n");
+    let (arith, n) = arith::rb_tests(u);
+    o.push_str(&arith);
     o.push_str("exit(1) unless bad.zero?\n");
-    o.push_str(&format!("puts \"{}\"\n", tr!("ok #{{CASES.size}} 件", "ok #{{CASES.size}} cases")));
+    let count = if n == 0 { "CASES.size" } else { "CASES.size + ARITH.size" };
+    o.push_str(&format!("puts \"{}\"\n", tr!("ok #{{{count}}} 件", "ok #{{{count}}} cases")));
     o
 }
 
@@ -9135,6 +9237,17 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("  # {}\n", tr!("丸めの補助。実行時には private で、外からは呼べない。", "The rounding helpers, private at run time.")));
         for h in ["_min", "_max", "_round_down", "_round_up", "_round_half", "_round_half_down", "_round_bankers"] {
             o.push_str(&format!("  private def self.{h}: (Integer, Integer) -> Integer\n"));
+        }
+        // And those of the arithmetic, where the rule calls them (§15.213 to §15.215).
+        let uses = self.arith_uses();
+        for m in &uses.div {
+            o.push_str(&format!("  private def self.{}: (Integer, Integer) -> Integer\n", arith::py_div(*m)));
+        }
+        if uses.modulo {
+            o.push_str("  private def self._mod: (Integer, Integer) -> Integer\n");
+        }
+        if uses.root {
+            o.push_str("  private def self._isqrt: (Integer) -> Integer\n");
         }
         o.push('\n');
 
@@ -9322,7 +9435,8 @@ fn sw_typed(s: &str) -> String {
 }
 
 fn sw_expr(s: &str) -> String {
-    s.replace(" // ", " / ")
+    arith::sw_expr(s)
+        .replace(" // ", " / ")
         .replace("True", "true")
         .replace("False", "false")
         .replace("_round_down(", "_roundDown(")
@@ -9605,6 +9719,7 @@ impl<'a> Gen<'a> {
         }
 
         o.push_str(round_sw().trim_start_matches('\n'));
+        o.push_str(&arith::sw_helpers(&arith::Uses::of(self.f)));
         o.push('\n');
 
         // Groups. A `Set` needs Hashable, which a raw-value enum already is.
@@ -10306,7 +10421,7 @@ enum Runner {{
 /// The five modes of §7.3 in Swift, checked against the same reference cases the other five
 /// are. A lone file compiled by `swiftc` is the module's main file, so this one is written
 /// as top-level code and needs no `@main`.
-pub fn round_tests_swift() -> String {
+pub fn round_tests_swift(u: &Uses) -> String {
     let mut o = format!(
         "// Code generated by rulec {}. DO NOT EDIT.\n// {}\nimport Foundation\n",
         ritsu_emit::header::VERSION,
@@ -10316,6 +10431,7 @@ pub fn round_tests_swift() -> String {
         )
     );
     o.push_str(round_sw().trim_start_matches('\n'));
+    o.push_str(&arith::sw_helpers(u));
     o.push_str("\nlet cases: [(String, Int64, Int64, Int64)] = [\n");
     for (m, x, g, want) in round_cases() {
         o.push_str(&format!("    (\"{}\", {x}, {g}, {want}),\n", mode_fn(m)));
@@ -10324,8 +10440,11 @@ pub fn round_tests_swift() -> String {
     o.push_str("    case \"down\": got = _roundDown(x, g)\n    case \"up\": got = _roundUp(x, g)\n");
     o.push_str("    case \"half\": got = _roundHalf(x, g)\n    case \"half_down\": got = _roundHalfDown(x, g)\n    default: got = _roundBankers(x, g)\n    }\n");
     o.push_str("    if got != want {\n        print(\"NG \\(mode)(\\(x), \\(g)) = \\(got), want \\(want)\")\n        bad += 1\n    }\n}\n");
+    let (arith, n) = arith::sw_tests(u);
+    o.push_str(&arith);
     o.push_str("if bad > 0 {\n    exit(1)\n}\n");
-    o.push_str(&format!("print(\"{}\")\n", tr!("ok \\(cases.count) 件", "ok \\(cases.count) cases")));
+    let count = if n == 0 { "cases.count" } else { "cases.count + arith.count" };
+    o.push_str(&format!("print(\"{}\")\n", tr!("ok \\({count}) 件", "ok \\({count}) cases")));
     o
 }
 
@@ -11048,8 +11167,8 @@ impl<'a> Gen<'a> {
     }
 }
 
-pub fn round_tests_javascript() -> String {
-    strip_types(&round_tests_typescript())
+pub fn round_tests_javascript(u: &Uses) -> String {
+    strip_types(&round_tests_typescript(u))
 }
 
 // The projection function (§15.125): the caller's object in, the rule's answer out.

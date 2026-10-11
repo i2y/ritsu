@@ -145,7 +145,19 @@ fn 口の事実はapiと証明書とschemaが言うことと同じ() {
         let want: Vec<Precondition> = arr(api.get("preconditions"))
             .iter()
             .map(|p| match st(p.get("kind")).as_str() {
-                "constraint" => Precondition::Relation { left: st(p.get("left")), op: st(p.get("op")), right: st(p.get("right")) },
+                // A side that adds inputs up is a list (§15.216), and the precondition the port
+                // gives is then the sum's, with a side of one input a list of one.
+                "constraint" => {
+                    let side = |j: Option<&Json>| j.and_then(|x| x.as_arr()).map(|a| a.iter().map(|v| st(Some(v))).collect::<Vec<_>>());
+                    match (side(p.get("left")), side(p.get("right"))) {
+                        (None, None) => Precondition::Relation { left: st(p.get("left")), op: st(p.get("op")), right: st(p.get("right")) },
+                        (l, r) => Precondition::SumRelation {
+                            left: l.unwrap_or_else(|| vec![st(p.get("left"))]),
+                            op: st(p.get("op")),
+                            right: r.unwrap_or_else(|| vec![st(p.get("right"))]),
+                        },
+                    }
+                }
                 "sum" => Precondition::Sum { name: st(p.get("name")), over: st(p.get("over")), of: st(p.get("of")), max: p.get("max").and_then(|x| x.as_int()).unwrap() },
                 _ => Precondition::Length { sequence: st(p.get("sequence")), max: p.get("max").and_then(|x| x.as_int()).unwrap() },
             })

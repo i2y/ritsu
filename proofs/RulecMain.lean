@@ -51,9 +51,10 @@ def closeLe : Nat → List (String × String) → List (String × String)
 /-- The `a ≤ b` pairs the certificate's `constraint` lines guarantee, as names. `<` and `>`
     count too: they say more, not less. -/
 def guarantees (cert : Json) : List (String × String) :=
-  let raw : List (String × String) := (fieldArr cert "constraints").toList.filterMap (fun k =>
-    let l := fieldStr k "left"
-    let r := fieldStr k "right"
+  -- A line with a sum on a side (rulec's §15.216) says nothing of one name against another.
+  let raw : List (String × String) := (fieldArr cert "constraints").toList.filterMap (fun k => do
+    let l ← field k "left" >>= str
+    let r ← field k "right" >>= str
     match fieldStr k "op" with
     | "<=" => some (l, r)
     | "<" => some (l, r)
@@ -65,11 +66,14 @@ def guarantees (cert : Json) : List (String × String) :=
 /-- The columns a table writes numbers into, each with what every row of the table that decides
     it writes there, as expressions (rulec's §15.196): `none` where a row writes something this
     program cannot read. And the columns whose rows state nothing they write — a certificate from
-    before they did. -/
+    before they did. And the columns a row of which says its own cell narrows what it writes there
+    (`inside`, rulec's §15.213): no theorem here reads a row's cell into what the row writes, so the
+    range of such a column is the certificate's word, and is named as stated. -/
 def writtenCols (cert : Json) (types : String → Option Ty) :
-    List (String × Option (List RulecCert.Expr)) × List String := Id.run do
+    List (String × Option (List RulecCert.Expr)) × List String × List String := Id.run do
   let mut outs : List (String × Option (List RulecCert.Expr)) := []
   let mut unstated : List String := []
+  let mut narrowed : List String := []
   for t in fieldArr cert "tables" do
     let rows := fieldArr t "rows"
     let ds := (fieldArr t "decides").toList.filterMap str
@@ -79,11 +83,15 @@ def writtenCols (cert : Json) (types : String → Option Ty) :
       if !rows.any (fun r => (field r "writes").isSome) then
         if !unstated.contains col then unstated := unstated ++ [col]
         continue
+      let cut := rows.any (fun r => match (fieldArr r "writes")[oi]? with
+        | some w => (field w "inside").isSome
+        | none => false)
+      if cut && !narrowed.contains col then narrowed := narrowed ++ [col]
       let es : Option (List RulecCert.Expr) := rows.toList.mapM (fun r => do
         let w ← (fieldArr r "writes")[oi]?
         field w "expr" >>= exprOfJson)
       outs := outs ++ [(col, es)]
-  return (outs, unstated)
+  return (outs, unstated, narrowed)
 
 /-- What `checkValues` works out: each value's interval, the hull of each column a table writes
     numbers into, and what bounds a name — the one of those that applies, and otherwise the range
@@ -116,7 +124,7 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
     | .name x, .name y => le.any (fun p => p.1 == x && p.2 == y)
     | _, _ => false
   let vals := fieldArr cert "values"
-  let (outs, unstated) := writtenCols cert types
+  let (outs, unstated, narrowed) := writtenCols cert types
   let isOut : String → Bool := fun n => outs.any (fun o => o.1 == n)
   -- What bounds a name: the interval this program computed for it where there is one, and the
   -- declared range otherwise. Taking the declared range in preference would let a forged
@@ -125,6 +133,12 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
   -- numbers into is bounded by the hull of what its rows write, never by the stated range.
   let mut got : List (String × Span2) := []
   let mut wrote : List (String × Span2) := []
+  -- A column a row's own cell narrows (rulec's §15.213) is bounded by the range the certificate
+  -- states for it, which the closing line names as stated.
+  for col in narrowed do
+    match declared col with
+    | some S => wrote := wrote ++ [(col, S)]
+    | none => pure ()
   -- What depends on what runs both ways — a `define` over a table's column, a table writing a
   -- `define` — so the two are worked out together until nothing more can be.
   for _ in [0 : vals.size + outs.length + 1] do
@@ -172,6 +186,9 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
   -- its rows write (`eval_mem_stated`).
   let mut heldCols := 0
   for (col, es) in outs do
+    if narrowed.contains col then
+      r := r.state s!"the range of {col}: a row's own cell narrows what it writes there"
+      continue
     match declared col, es with
     | some S, some es =>
       if wroteF.any (fun p => p.1 == col) then
@@ -979,16 +996,23 @@ def checkContracts (cert : Json) (r : Report) : Report := Id.run do
             .num { coeffs := unitAt i 1, k := -(hi * sc), strict := false })]
     for ci in [0 : consJ.size] do
       let c := consJ[ci]!
-      let l := fieldStr c "left"
-      let rr := fieldStr c "right"
       let op := fieldStr c "op"
-      match inputs.lookup l, inputs.lookup rr, nums.idxOf? l, nums.idxOf? rr with
-      | some sl, some sr, some il, some ir =>
-        let d := vadd (unitAt il (1 / sl)) (unitAt ir (-(1 / sr)))
+      -- Each side the inputs it adds up (rulec's §15.216), each at the scale it travels at.
+      let term : Rat → String → Option (List Rat) := fun sign n => do
+        let sc ← inputs.lookup n
+        let i ← nums.idxOf? n
+        some (unitAt i (sign / sc))
+      let ls := sideNames c "left"
+      let rs := sideNames c "right"
+      let parts : Option (List (List Rat)) := (ls.map (term 1) ++ rs.map (term (-1))).mapM id
+      match parts with
+      | some ds =>
+        if ls.isEmpty || rs.isEmpty then pure () else
+        let d := ds.foldl vadd []
         let coeffs := if op == ">=" || op == ">" then vscale (-1) d else d
-        doors := doors ++ [(s!"constraint {ci}", s!"constraint {l} {op} {rr}",
+        doors := doors ++ [(s!"constraint {ci}", s!"constraint {" + ".intercalate ls} {op} {" + ".intercalate rs}",
           .num { coeffs := coeffs, k := 0, strict := op == "<" || op == ">" })]
-      | _, _, _, _ => pure ()
+      | none => pure ()
     for n in strs do
       match enumOf (typeOf n), strs.idxOf? n with
       | some vs, some i => doors := doors ++ [(s!"member {n}", s!"{n} being one of its enum's values", .member i vs)]
@@ -1103,7 +1127,7 @@ def checkMachine (cert : Json) (tables : Array ReadTable) (r : Report) : Report 
   -- is then not shown to be one case's, and none is taken as proof.
   let coupled := !fixedInputs.isEmpty &&
     (axesJ.any (fun ax => fieldStr ax "kind" != "input") ||
-     (fieldArr cert "constraints").any (fun kc => fixedInputs.contains (fieldStr kc "left") || fixedInputs.contains (fieldStr kc "right")))
+     (fieldArr cert "constraints").any (fun kc => (sideNames kc "left" ++ sideNames kc "right").any fixedInputs.contains))
   let neverDefs := (fieldArr mj "never").toList
   let onceDefs := (fieldArr mj "once").toList
   let mut claims : Array String := #[]
@@ -1330,13 +1354,16 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
         | none => do
             let i ← fieldNat f "constraint"
             let k ← consJ[i]?
-            let l := fieldStr k "left"
-            let r := fieldStr k "right"
+            -- Each side the names it adds up (rulec's §15.216).
+            let ls := sideNames k "left"
+            let rs := sideNames k "right"
+            guard (!ls.isEmpty && !rs.isEmpty)
+            let d : List (String × Rat) := ls.map (fun n => (n, (1 : Rat))) ++ rs.map (fun n => (n, (-1 : Rat)))
             match fieldStr k "op" with
-            | "<=" => some ([(l, 1), (r, -1)], 0, false)
-            | "<" => some ([(l, 1), (r, -1)], 0, true)
-            | ">=" => some ([(l, -1), (r, 1)], 0, false)
-            | ">" => some ([(l, -1), (r, 1)], 0, true)
+            | "<=" => some (d, 0, false)
+            | "<" => some (d, 0, true)
+            | ">=" => some (d.map (fun t => (t.1, -t.2)), 0, false)
+            | ">" => some (d.map (fun t => (t.1, -t.2)), 0, true)
             | _ => none
     -- The days a date input takes from a koyomi file (rulec's §15.174): the document's word,
     -- as the ranges are, tied to the koyomi file by the SHA-256 the certificate writes beside them.

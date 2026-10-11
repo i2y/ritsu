@@ -606,7 +606,7 @@ impl<'a> Gen<'a> {
             // template that computes, which lets the flow go on when it holds and fails it when not
             TK::Check(c) => {
                 let holds = match &c.test {
-                    PreTest::Relation { left, op, right } => format!("{} {op} {}", self.ex(&left.1), self.ex(&right.1)),
+                    PreTest::Relation { left, op, right } => format!("{} {op} {}", side_code(left, &|e| self.ex(e)), side_code(right, &|e| self.ex(e))),
                     PreTest::Days { value, days, .. } => format!("{} in [{}]", self.ex(value), days.iter().map(|x| q(x)).collect::<Vec<_>>().join(", ")),
                 };
                 let (ctl, error) = (Gen::ctl(depth), Gen::global_ref("dd_error", depth));

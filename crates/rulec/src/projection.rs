@@ -2334,11 +2334,16 @@ fn wire_ranges(ac: &Across, c: &Checked) -> Vec<fourier::Ineq> {
     out
 }
 
-/// A `constraint` between two inputs the relation names, at the scale they travel at; negated
-/// when `broken`.
+/// A `constraint` between inputs the relation names, at the scale they travel at; negated when
+/// `broken`. A side that adds inputs up is their sum (§15.216).
 fn wire_constraint(k: &crate::ast::Constraint, i: usize, c: &Checked, broken: bool) -> fourier::Ineq {
-    let (sl, sr) = (c.wire_scale(&k.left), c.wire_scale(&k.right));
-    let d = fourier::Lin::var(&k.left).scale(Rat::new(1, sl)).plus(&fourier::Lin::var(&k.right).scale(Rat::new(-1, sr)));
+    let mut d = fourier::Lin::con(Rat::zero());
+    for n in &k.left {
+        d = d.plus(&fourier::Lin::var(n).scale(Rat::new(1, c.wire_scale(n))));
+    }
+    for n in &k.right {
+        d = d.plus(&fourier::Lin::var(n).scale(Rat::new(-1, c.wire_scale(n))));
+    }
     fourier::cmp(d, k.op, broken).tag(fourier::Origin::Constraint(i))
 }
 
@@ -2379,32 +2384,54 @@ fn broken_constraints(f: &RuleFile, c: &Checked, con: &Contract, ac: &Across, ru
     let mut out = Vec::new();
     let proj = |n: &str| f.inputs.iter().find(|i| i.name.text == n).and_then(|i| i.from.as_ref());
     for (idx, k) in f.constraints.iter().enumerate() {
-        let (Some(lt), Some(rt)) = (ac.term(&k.left), ac.term(&k.right)) else { continue };
-        let (Some(lp), Some(rp)) = (proj(&k.left), proj(&k.right)) else { continue };
+        let names: Vec<&String> = k.names().collect();
+        let Some(terms) = names.iter().map(|n| ac.term(n)).collect::<Option<Vec<&Term>>>() else { continue };
+        let Some(paths) = names.iter().map(|n| proj(n).map(full_path)).collect::<Option<Vec<String>>>() else { continue };
         let mut ineqs = wire_ranges(ac, c);
         ineqs.push(wire_constraint(k, idx, c, true));
         let found = ac.rel.find(&Extra { ineqs, ..Extra::default() }, &|t| ac.name(t));
         let point = match found {
             crate::relation::Found::None(_) => continue,
-            crate::relation::Found::Point(at, ..) => at.get(&k.left).zip(at.get(&k.right)).map(|(a, b)| (a.num / a.den, b.num / b.den)),
+            crate::relation::Found::Point(at, ..) => names.iter().map(|n| at.get(*n).map(|v| v.num / v.den)).collect::<Option<Vec<i128>>>(),
             crate::relation::Found::Unknown => None,
         };
-        let (lw, rw) = (full_path(lp), full_path(rp));
-        let rel = format!("{} {} {}", k.left, k.op.word(), k.right);
+        // `a` と `b` と `c`; `a`, `b` and `c`.
+        let all = if crate::i18n::ja() {
+            paths.join("` と `")
+        } else {
+            match paths.split_last() {
+                Some((last, rest)) if !rest.is_empty() => format!("{}` and `{last}", rest.join("`, `")),
+                _ => paths.join(""),
+            }
+        };
+        let rel = k.said();
         let mut d = Diag::error(
             "E123",
             tr!(
-                "契約は `{lw}` と `{rw}` について、`constraint {rel}` を破る組み合わせも通します",
-                "The contract lets `{lw}` and `{rw}` through together where `constraint {rel}` does not hold"
+                "契約は `{all}` について、`constraint {rel}` を破る組み合わせも通します",
+                "The contract lets `{all}` through together where `constraint {rel}` does not hold"
             ),
         )
         .at(tr!("{rule_path}:{} 制約", "{rule_path}:{} constraint", k.span.line))
         .mark(k.span.clone(), tr!("契約はこの関係を約束していません", "the contract does not promise this"));
         match point {
-            Some((a, b)) => {
-                d = d.win(&k.left, WVal::Int(a)).win(&k.right, WVal::Int(b)).note(tr!(
-                    "たとえば `{lw}` が {a}、`{rw}` が {b} のリクエストは、契約の検証を通り、`constraint` を満たしません。",
-                    "A request with `{lw}` at {a} and `{rw}` at {b}, for one, passes the contract's validation and breaks the `constraint`."
+            Some(vs) => {
+                for (n, v) in names.iter().zip(&vs) {
+                    d = d.win(n.as_str(), WVal::Int(*v));
+                }
+                let at: Vec<String> = paths.iter().zip(&vs).map(|(p, v)| tr!("`{p}` が {v}", "`{p}` at {v}")).collect();
+                let at = if crate::i18n::ja() {
+                    at.join("、")
+                } else {
+                    match at.split_last() {
+                        Some((last, [])) => last.clone(),
+                        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+                        None => String::new(),
+                    }
+                };
+                d = d.note(tr!(
+                    "たとえば {at} のリクエストは、契約の検証を通り、`constraint` を満たしません。",
+                    "A request with {at}, for one, passes the contract's validation and breaks the `constraint`."
                 ));
             }
             None => {
@@ -2417,14 +2444,19 @@ fn broken_constraints(f: &RuleFile, c: &Checked, con: &Contract, ac: &Across, ru
         d = d.note(refused_note());
         let fix = match con.kind {
             EnumSource::Proto => {
-                let (sl, sr) = (c.wire_scale(&k.left), c.wire_scale(&k.right));
-                let common = crate::types::lcm_i128(sl, sr);
-                let side = |t: &Term, s: i128| {
+                let common = names.iter().map(|n| c.wire_scale(n)).fold(1, crate::types::lcm_i128);
+                let term = |i: usize| {
+                    let t = terms[i];
                     let base = format!("this.{}", t.path().join("."));
                     let base = if let Term::Size(_) = t { format!("size({base})") } else { base };
+                    let s = c.wire_scale(names[i]);
                     if common / s == 1 { base } else { format!("{base} * {}", common / s) }
                 };
+                // A side that adds inputs up is the sum of their fields (§15.216).
+                let (nl, _) = (k.left.len(), k.right.len());
+                let side = |range: std::ops::Range<usize>| range.map(term).collect::<Vec<_>>().join(" + ");
                 let alias = |n: &str| f.inputs.iter().find(|i| i.name.text == n).and_then(|i| i.name.ascii.clone()).unwrap_or_else(|| n.to_string());
+                let aliases = |ns: &[String]| ns.iter().map(|n| alias(n)).collect::<Vec<_>>().join("_");
                 let op = match k.op {
                     CmpOp::Le => "le",
                     CmpOp::Lt => "lt",
@@ -2433,11 +2465,11 @@ fn broken_constraints(f: &RuleFile, c: &Checked, con: &Contract, ac: &Across, ru
                 };
                 Some(format!(
                     "option (buf.validate.message).cel = {{id: \"{}_{op}_{}\", expression: \"{} {} {}\"}};",
-                    alias(&k.left),
-                    alias(&k.right),
-                    side(lt, sl),
+                    aliases(&k.left),
+                    aliases(&k.right),
+                    side(0..nl),
                     k.op.word(),
-                    side(rt, sr)
+                    side(nl..names.len())
                 ))
             }
             EnumSource::JsonSchema => None,
@@ -2522,7 +2554,7 @@ fn unreachable_rows(f: &RuleFile, c: &Checked, ac: &Across, shape: &str, dead: &
             }
             x.ineqs.extend(wire_ranges(ac, c));
             for (i, k) in f.constraints.iter().enumerate() {
-                if ac.term(&k.left).is_some() && ac.term(&k.right).is_some() {
+                if k.names().all(|n| ac.term(n).is_some()) {
                     x.ineqs.push(wire_constraint(k, i, c, false));
                 }
             }
@@ -2788,7 +2820,7 @@ pub fn contract_certificates(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<
             }
         }
         for (i, k) in f.constraints.iter().enumerate() {
-            if ac.term(&k.left).is_some() && ac.term(&k.right).is_some() {
+            if k.names().all(|n| ac.term(n).is_some()) {
                 let neg = wire_constraint(k, i, c, true).tag(fourier::Origin::None);
                 doors.push((Door::Constraint(i), ac.rel.refute(&Extra { ineqs: vec![neg], ..Extra::default() }, &name)));
             }

@@ -134,6 +134,10 @@ pub struct MachineRow {
 pub enum Precondition {
     /// `constraint <left> <op> <right>`: a relation between two inputs.
     Relation { left: String, op: String, right: String },
+    /// `constraint <a> + <b> <op> <c>`: a relation where one side adds inputs up (rulec's
+    /// §15.216). Each side is the inputs it adds, in the order the rule writes them; at most one
+    /// side has more than one.
+    SumRelation { left: Vec<String>, op: String, right: Vec<String> },
     /// The total of one column over the list the rule walks, bounded above (on the wire).
     Sum { name: String, over: String, of: String, max: i128 },
     /// How many elements the list may have.

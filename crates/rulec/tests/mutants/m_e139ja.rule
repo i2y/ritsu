@@ -1,0 +1,24 @@
+rule 経済的発注量(order_lot) v1
+description "一度に発注する個数。年間の需要と一回の発注の費用を掛けて 2 倍し、一個を一年保管する費用で割った値の平方根。根の中は先に整数に切り捨て、平方根は二乗がそれを超えない最大の整数とする"
+
+inputs
+  年間の需要(yearly_demand) : number     range >=1 <=100万
+  発注の費用(order_cost)    : money[円]  range >=1円 <=10万円
+  保管の費用(holding_cost)  : money[円]  range >=1円 <=10万円
+
+outputs
+  発注量(order_quantity) : number  round down(1)
+
+# 円を円で割ると単位の無い比になるので、丸めの刻みは数の 1。
+define 発注量の二乗(quantity_squared) : number = down(2 * 年間の需要 * 発注の費用 / 保管の費用, 1)
+
+define 量(quantity) : number = isqrt(発注量の二乗 - 年間の需要)
+
+result 発注量 = 量
+
+examples
+| 年間の需要 | 発注の費用 | 保管の費用 | -> 発注量 |
+| 1000       | 5000円     | 100円      | 316       |
+| 1200       | 3000円     | 200円      | 189       |
+| 1          | 1円        | 10万円     | 0         |
+| 100万      | 10万円     | 1円        | 447213    |

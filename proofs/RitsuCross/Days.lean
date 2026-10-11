@@ -223,7 +223,7 @@ open RulecCert
 def AskedBut (s : Sieve) (i : Nat) (p : Point) (v : List Rat) : Prop :=
   (∀ (j c : Nat) (x : Coord), p[j]? = some c → s.coordAt j c = some x →
     ∃ w, v[j]? = some w ∧ x.holds w) ∧
-  (∀ k ∈ s.cons, ∃ x y, v[k.left]? = some x ∧ v[k.right]? = some y ∧ k.op.holds x y) ∧
+  (∀ k ∈ s.cons, ∃ x y, sideSum v k.left = some x ∧ sideSum v k.right = some y ∧ k.op.holds x y) ∧
   (∀ (j : Nat) (I : Ival), s.reach[j]? = some (some I) → ∃ w, v[j]? = some w ∧ inIval I w) ∧
   (∀ q ∈ s.never, p[q.1]? ≠ some q.2) ∧
   (∀ qr ∈ s.apart, ¬(p[qr.1.1]? = some qr.1.2 ∧ p[qr.2.1]? = some qr.2.2)) ∧

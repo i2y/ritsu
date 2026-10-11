@@ -37,8 +37,11 @@ the same thing, and its generated code is called the same way and answers the sa
    release archives and of the packages beside them (`i2y/tap/ritsu` in Homebrew, the `.deb`
    and the `.rpm`) keep every field they have at 1.0, with the same meaning. A 1.x may add a
    field, and may add a value to a set of values the documentation lists — a new diagnostic
-   code, a new `what` in the `domain` of `diff`. **A reader should skip a key it does not know,
-   and treat a value it does not know as it treats an unknown key.** Where a format carries
+   code, a new `what` in the `domain` of `diff`. A new construct may give a field a new shape
+   where it is written, and nowhere else: a `constraint` that adds inputs up is the one place
+   its `left` or `right` is a list of names, in the certificate and under `preconditions` alike.
+   **A reader should skip a key it does not know, and treat a value it does not know as it
+   treats an unknown key.** Where a format carries
    `v`, that is the version of its shape: `check` is at 2 and the certificate at 1, and an
    output without `v` is at 1. A re-checker of certificates refuses a `v` it was not written
    for, as `tools/recheck.py` and the Lean program in `proofs/` do.

@@ -198,6 +198,54 @@ fn decide(rules: &dyn Rules, dates: &dyn Dates, rule: &std::path::Path, p: &Prec
                 },
             }
         }
+        // A side that adds inputs up (rulec's §15.216): every input the call gives has a range,
+        // and rulec decides the sum of them over those ranges.
+        Precondition::SumRelation { left, op, right } => {
+            let said = format!("{} {op} {}", left.join(" + "), right.join(" + "));
+            let mut given: Vec<&CallArg> = Vec::new();
+            for n in left.iter().chain(right.iter()) {
+                let Some(a) = arg(n) else {
+                    return Answer::Undecided(tr!("呼び出しが `{n}` を渡していません", "the call does not give `{n}`"));
+                };
+                if a.range.is_none() {
+                    let from = a.unknown.clone().unwrap_or_else(|| tr!("範囲の無いところ", "a place with no range"));
+                    return Answer::Undecided(tr!(
+                        "`{}` の範囲が分かりません（{}に範囲がありません）",
+                        "nothing says what range `{}` is in ({} has no range)",
+                        a.shown, from.ja; a.shown, from.en
+                    ));
+                }
+                given.push(a);
+            }
+            let ranges: Vec<(String, Option<i128>, Option<i128>)> = left
+                .iter()
+                .chain(right.iter())
+                .zip(&given)
+                .map(|(n, a)| {
+                    let r = a.range.unwrap_or((None, None));
+                    (n.clone(), r.0, r.1)
+                })
+                .collect();
+            match rules.preconditions_hold(rule, &ranges, None) {
+                Err(_) => Answer::Undecided(tr!("rulec からこの規則の情報を得られません", "rulec does not answer for this rule")),
+                Ok(answers) => match answers.into_iter().find(|(q, _)| q == p).map(|(_, a)| a) {
+                    Some(Answer::Holds) => Answer::Holds,
+                    Some(Answer::Fails(ex)) => {
+                        let at: Vec<String> = ex.iter().map(|(n, v)| format!("{n} = {}", shown(v))).collect();
+                        let at = at.join(", ");
+                        let each_ja: Vec<String> = given.iter().map(|a| format!("`{}` は `{}`", a.shown, range_text(a.range.unwrap_or((None, None))))).collect();
+                        let each_en: Vec<String> = given.iter().map(|a| format!("`{}` is `{}`", a.shown, range_text(a.range.unwrap_or((None, None))))).collect();
+                        Answer::Fails(tr!(
+                            "{} で、{} のとき `{}` が成り立ちません",
+                            "{}, and at {} `{}` does not hold",
+                            each_ja.join("、"), at, said; each_en.join(", "), at, said
+                        ))
+                    }
+                    Some(Answer::Undecided(why)) => Answer::Undecided(why),
+                    None => Answer::Undecided(tr!("rulec から、この前提が成り立つかどうかの結果を得られません", "rulec does not answer for this precondition")),
+                },
+            }
+        }
         Precondition::Sum { name, over, .. } => Answer::Undecided(tr!(
             "`{name}` は並び `{over}` の合計の上限ですが、dandori は並びの長さを知りません",
             "`{name}` bounds a total over the list `{over}`, and dandori knows no list's length"
@@ -217,6 +265,7 @@ fn decide(rules: &dyn Rules, dates: &dyn Dates, rule: &std::path::Path, p: &Prec
 fn said(p: &Precondition) -> String {
     match p {
         Precondition::Relation { left, op, right } => format!("{left} {op} {right}"),
+        Precondition::SumRelation { left, op, right } => format!("{} {op} {}", left.join(" + "), right.join(" + ")),
         Precondition::Sum { name, max, .. } => format!("{name} <= {max}"),
         Precondition::Length { sequence, max } => format!("len({sequence}) <= {max}"),
         Precondition::Days { input, file, date, .. } => format!("{input} in koyomi \"{file}\" date {date}"),

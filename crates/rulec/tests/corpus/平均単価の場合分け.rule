@@ -1,0 +1,31 @@
+rule 平均単価の場合分け(average_price_split) v1
+description "注文の品の平均の単価を、品の無い注文を表で分けて出す。一つめの表が割る数を選ぶ。品があればその個数、無ければ 1 なので、割り算が 0 に当たることはない。もう一つの表が、品の無い注文の平均を 0 円にする"
+
+inputs
+  合計(total) : money[円]  range >=0円 <=100万円
+  個数(units) : number     range >=0 <=1000
+
+outputs
+  平均(average) : money[円]  round half_up(1円)
+
+# 行2 は、セルが 個数 を 1 以上に保つところでだけ 個数 を書くので、割る数 は 0 にならない。
+table 割る数の表(divisor)
+policy unique
+| 個数 | -> 割る数(per) : number |
+| 0    | 1                       |
+| >=1  | 個数                    |
+
+define 一つあたり(per_unit) : money[円] = half_up(合計 / 割る数, 1円)
+
+table 答え(answer)
+policy unique
+| 個数 | -> 平均 : money[円] |
+| 0    | 0円                 |
+| >=1  | 一つあたり          |
+
+examples
+| 合計   | 個数 | -> 平均 |
+| 1000円 | 3    | 333円   |
+| 1000円 | 6    | 167円   |
+| 1001円 | 2    | 501円   |
+| 500円  | 0    | 0円     |

@@ -1029,13 +1029,19 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                 );
             }
         }
-        // Constraints of the callee: proved from this rule's constraints or intervals.
+        // Constraints of the callee: proved from this rule's constraints or intervals. A side that
+        // adds inputs up is the sum of what is passed for them (§15.216).
         for k in &cal.constraints {
             let bind = |n: &str| a.bindings.iter().find(|b| b.input == n);
-            let (Some(bl), Some(br)) = (bind(&k.left), bind(&k.right)) else { continue };
-            let names = match (&bl.value, &br.value) {
-                (BindValue::Name(x), BindValue::Name(y)) => Some((x.clone(), y.clone())),
-                _ => None,
+            let Some(bl) = k.left.iter().map(|n| bind(n)).collect::<Option<Vec<&Binding>>>() else { continue };
+            let Some(br) = k.right.iter().map(|n| bind(n)).collect::<Option<Vec<&Binding>>>() else { continue };
+            let names = |bs: &[&Binding]| -> Option<Vec<String>> {
+                bs.iter()
+                    .map(|b| match &b.value {
+                        BindValue::Name(x) => Some(x.clone()),
+                        _ => None,
+                    })
+                    .collect()
             };
             let mirrored = |op: CmpOp| match op {
                 CmpOp::Le => CmpOp::Ge,
@@ -1043,13 +1049,31 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                 CmpOp::Lt => CmpOp::Gt,
                 CmpOp::Gt => CmpOp::Lt,
             };
-            let declared = names.as_ref().is_some_and(|(x, y)| {
-                x == y && matches!(k.op, CmpOp::Le | CmpOp::Ge)
-                    || f.constraints.iter().any(|kc| (kc.left == *x && kc.op == k.op && kc.right == *y) || (kc.left == *y && kc.op == mirrored(k.op) && kc.right == *x))
-            });
+            let same = |p: &[String], q: &[String]| {
+                let (mut p, mut q) = (p.to_vec(), q.to_vec());
+                p.sort();
+                q.sort();
+                p == q
+            };
+            let declared = match (names(&bl), names(&br)) {
+                (Some(x), Some(y)) => {
+                    (x.len() == 1 && x == y && matches!(k.op, CmpOp::Le | CmpOp::Ge))
+                        || f.constraints.iter().any(|kc| {
+                            (kc.op == k.op && same(&kc.left, &x) && same(&kc.right, &y))
+                                || (kc.op == mirrored(k.op) && same(&kc.left, &y) && same(&kc.right, &x))
+                        })
+                }
+                _ => false,
+            };
             // Or the intervals decide it: the whole of one side lies on the right side of the
             // whole of the other.
-            let by_interval = match (interval(bl), interval(br)) {
+            let total = |bs: &[&Binding]| -> Option<(Option<Rat>, Option<Rat>)> {
+                bs.iter().try_fold((Some(Rat::zero()), Some(Rat::zero())), |(lo, hi), b| {
+                    let (l, h) = interval(b)?;
+                    Some((lo.zip(l).map(|(x, y)| x.add(y)), hi.zip(h).map(|(x, y)| x.add(y))))
+                })
+            };
+            let by_interval = match (total(&bl), total(&br)) {
                 (Some((xl, xh)), Some((yl, yh))) => match k.op {
                     CmpOp::Le => xh.zip(yl).is_some_and(|(p, q)| p.cmp_to(q) != std::cmp::Ordering::Greater),
                     CmpOp::Lt => xh.zip(yl).is_some_and(|(p, q)| p.cmp_to(q) == std::cmp::Ordering::Less),
@@ -1059,16 +1083,19 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                 _ => false,
             };
             if !declared && !by_interval {
-                let shown = |b: &Binding| match &b.value {
+                let shown = |b: &&Binding| match &b.value {
                     BindValue::Name(n) => n.clone(),
                     BindValue::Lit(l) => lit_text(l),
                 };
+                let side = |bs: &[&Binding]| bs.iter().map(shown).collect::<Vec<_>>().join(" + ");
+                let (sl, sr) = (side(&bl), side(&br));
+                let (kl, kr) = (crate::ast::Constraint::side_text(&k.left), crate::ast::Constraint::side_text(&k.right));
                 out.push(
-                    Diag::error("E043", tr!("元の規則の制約 `{} {} {}` が、この規則の宣言から導けません", "The callee's constraint `{} {} {}` does not follow from this rule's declarations", k.left, k.op.word(), k.right))
+                    Diag::error("E043", tr!("元の規則の制約 `{}` が、この規則の宣言から導けません", "The callee's constraint `{}` does not follow from this rule's declarations", k.said()))
                         .at(at(a.span.line))
                         .mark(a.span.clone(), "")
-                        .note(tr!("元の規則は `{}` と `{}` にその関係があると宣言していて、完全性はそれを前提に検査されています。この規則が渡すのは `{}` と `{}` です。", "The callee declares that relation between `{}` and `{}`, and its completeness was checked believing it. Here `{}` and `{}` are passed.", k.left, k.right, shown(bl), shown(br)))
-                        .note(tr!("同じ関係を `{} {} {} {}` として宣言するか、範囲でそれが成り立つようにしてください。", "Declare the same relation as `{} {} {} {}`, or make the ranges imply it.", crate::kw::CONSTRAINT, shown(bl), k.op.word(), shown(br))),
+                        .note(tr!("元の規則は `{kl}` と `{kr}` にその関係があると宣言していて、完全性はそれを前提に検査されています。この規則が渡すのは `{sl}` と `{sr}` です。", "The callee declares that relation between `{kl}` and `{kr}`, and its completeness was checked believing it. Here `{sl}` and `{sr}` are passed."))
+                        .note(tr!("同じ関係を `{} {sl} {} {sr}` として宣言するか、範囲でそれが成り立つようにしてください。", "Declare the same relation as `{} {sl} {} {sr}`, or make the ranges imply it.", crate::kw::CONSTRAINT, k.op.word())),
                 );
             }
         }

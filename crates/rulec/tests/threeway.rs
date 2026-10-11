@@ -94,6 +94,15 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/二つの区分.rule", "two_bands"),
     ("tests/corpus/注文の状態.rule", "order_state"),
     ("tests/corpus/payment_intent.rule", "payment_intent"),
+    // Division by a value inside a rounding, `mod`, `isqrt` and a constraint with a sum (§15.213
+    // to §15.216).
+    ("tests/corpus/平均単価.rule", "average_price"),
+    ("tests/corpus/平均単価の場合分け.rule", "average_price_split"),
+    ("tests/corpus/日割り.rule", "prorated_charge"),
+    ("tests/corpus/当番の持ち回り.rule", "duty_turn"),
+    ("tests/corpus/経済的発注量.rule", "order_lot"),
+    ("tests/corpus/割り当ての申し込み.rule", "quota_left"),
+    ("tests/corpus/乱数で決める一回.rule", "one_round"),
     // The twins of the rules written with Japanese names: the same rules with English names
     // (tests/corpus/twins.tsv). Their aliases differ from the originals', which is why they can be
     // generated into the same directory.
@@ -134,6 +143,13 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/compensation_certificate.rule", "compensation_certificate"),
     ("tests/corpus/two_bands_from_weight.rule", "two_bands_from_weight"),
     ("tests/corpus/order_lifecycle.rule", "order_lifecycle"),
+    ("tests/corpus/average_unit_price.rule", "average_unit_price"),
+    ("tests/corpus/average_unit_price_split.rule", "average_unit_price_split"),
+    ("tests/corpus/daily_proration.rule", "daily_proration"),
+    ("tests/corpus/duty_rotation.rule", "duty_rotation"),
+    ("tests/corpus/economic_order_quantity.rule", "economic_order_quantity"),
+    ("tests/corpus/quota_request.rule", "quota_request"),
+    ("tests/corpus/contested_roll.rule", "contested_roll"),
 ];
 
 #[test]

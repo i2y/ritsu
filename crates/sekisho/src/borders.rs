@@ -477,6 +477,7 @@ fn column_type(t: &ColumnType) -> String {
 fn precondition_text(p: &Precondition) -> String {
     match p {
         Precondition::Relation { left, op, right } => format!("`{left} {op} {right}`"),
+        Precondition::SumRelation { left, op, right } => format!("`{} {op} {}`", left.join(" + "), right.join(" + ")),
         Precondition::Sum { name, over, of, max } => format!("`{name}` ({of} over {over} <= {max})"),
         Precondition::Length { sequence, max } => format!("`{sequence}` (<= {max})"),
         Precondition::Days { input, date, .. } => format!("`{input}` ({date})"),

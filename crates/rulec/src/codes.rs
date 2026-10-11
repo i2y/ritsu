@@ -1486,6 +1486,29 @@ const X_E115: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=100\n
                       define r(r) : number = n \u{00f7} d\n\n\
                       table j(j)\npolicy first\n| r | -> o(o) : bool |\n| - | true           |\n";
 
+// E132 (§15.213): the average price of an order, divided by a count that can be zero.
+const X_E132: &str = "rule 平均単価(average_price) v1\n\n\
+                      inputs\n  合計(total) : money[円]  range >=0円 <=10000円\n  件数(units) : number  range >=0 <=100\n\n\
+                      outputs\n  平均(average) : money[円]  round half_up(1円)\n\n\
+                      define 単価(per_unit) : money[円] = half_up(合計 / 件数, 1円)\n\n\
+                      result 平均 = 単価\n";
+const X_E132_EN: &str = "rule average_price v1\n\n\
+                      inputs\n  total : money[JPY]  range >=0JPY <=10000JPY\n  units : number  range >=0 <=100\n\n\
+                      outputs\n  average : money[JPY]  round half_up(1JPY)\n\n\
+                      define per_unit : money[JPY] = half_up(total / units, 1JPY)\n\n\
+                      result average = per_unit\n";
+// E139 (§15.215): a square root of a difference that can go below zero.
+const X_E139: &str = "rule 平方根(root_of_gap) v1\n\n\
+                      inputs\n  差(gap) : number  range >=-10 <=100\n\n\
+                      outputs\n  根(root) : number  round down(1)\n\n\
+                      define 整数の根(whole_root) : number = isqrt(差)\n\n\
+                      result 根 = 整数の根\n";
+const X_E139_EN: &str = "rule root_of_gap v1\n\n\
+                      inputs\n  gap : number  range >=-10 <=100\n\n\
+                      outputs\n  root : number  round down(1)\n\n\
+                      define whole_root : number = isqrt(gap)\n\n\
+                      result root = whole_root\n";
+
 const X_E117: &str = "rule t(t) v1\n\ninputs\n  \u{5024}\u{5f15}\u{304d}(off) : money[\u{5186}]  range >=0\u{5186} <=1000\u{5186}\n  \
                       \u{3053}\u{3053}\u{307e}\u{3067}(upto) : money[\u{5186}]  range >=0\u{5186} <=1000\u{5186}\n  \
                       \u{5408}\u{8a08}(base) : money[\u{5186}]  range >=1\u{5186} <=1000\u{5186}\n\n\
@@ -1999,12 +2022,12 @@ pub fn ledger() -> Vec<Entry> {
             "E017",
             tr!("`constraint` の形が違います", "A `constraint` is not shaped like this"),
             tr!(
-                "`constraint` の行が「入力 比較 入力」になっていないとき。比較が無い、片側が名前一つでない、のどちらかです。",
-                "A `constraint` line is not `input comparison input`: either there is no comparison, or a side is not a single name."
+                "`constraint` の行が「入力 比較 入力」になっていないとき。比較が無い、片側が名前一つでも名前を `+` で足した和でもない、両側とも和になっている、のどれかです。",
+                "A `constraint` line is not `input comparison input`: there is no comparison, a side is neither one name nor names added up with `+`, or both sides are sums."
             ),
             tr!(
-                "`constraint <入力> <= <入力>` の形にしてください。比較は `<=` `<` `>=` `>` の四つです。`A = B` を言いたいなら、`A <= B` と `A >= B` の二行に分けてください。",
-                "Write `constraint <input> <= <input>`; the comparisons are `<=`, `<`, `>=` and `>`. For `A = B`, write the two lines `A <= B` and `A >= B`."
+                "`constraint <入力> <= <入力>` の形にしてください。比較は `<=` `<` `>=` `>` の四つです。片側だけは入力を足した和にできます（`constraint 値引き + ポイント <= 小計`）。係数と定数は書けません。`A = B` を言いたいなら、`A <= B` と `A >= B` の二行に分けてください。",
+                "Write `constraint <input> <= <input>`; the comparisons are `<=`, `<`, `>=` and `>`. One side may add inputs up (`constraint discount + points <= subtotal`); a coefficient or a constant cannot be written. For `A = B`, write the two lines `A <= B` and `A >= B`."
             ),
             X_E017,
             &["E018"],
@@ -2013,8 +2036,8 @@ pub fn ledger() -> Vec<Entry> {
             "E018",
             tr!("`constraint` は入力どうしの関係です", "A `constraint` relates two inputs"),
             tr!(
-                "`constraint` の片側が入力でないか、順序の無い型のとき。制約は「呼び出し側が渡す値の組み合わせのうち、どれが起きるか」を言うものなので、両側とも `inputs` の名前で、型は金額・数量・率・number・日付のどれかでなければなりません。",
-                "A side of a `constraint` is not an input, or has a type with no order. A constraint says which combinations of the values the caller passes can happen, so both sides name something in `inputs`, and each is money, a quantity, a rate, a number or a date."
+                "`constraint` の片側が入力でないか、順序の無い型のとき。制約は「呼び出し側が渡す値の組み合わせのうち、どれが起きるか」を言うものなので、両側とも `inputs` の名前で、型は金額・数量・率・number・日付のどれかでなければなりません。和の側の名前も、一つずつ同じです。",
+                "A side of a `constraint` is not an input, or has a type with no order. A constraint says which combinations of the values the caller passes can happen, so both sides name something in `inputs`, and each is money, a quantity, a rate, a number or a date. Every name a sum adds is held to the same."
             ),
             tr!(
                 "両側を `inputs` の名前にしてください。導出や定義は入力から計算されるので、関係は元の入力どうしで書いてください。列挙や真偽に大小はありません。",
@@ -2965,12 +2988,12 @@ pub fn ledger() -> Vec<Entry> {
             "E115",
             tr!("割る数が正の定数ではありません", "The divisor is not a positive constant"),
             tr!(
-                "`÷` の右が、正の整数の定数でも、同じ単位の正の金額・数量の定数でもないとき。変数、0、負の数、小数がこれに当たります。",
-                "The right of `÷` is neither a positive whole constant nor a positive constant amount or quantity in the same unit: a variable, zero, a negative number or a fraction."
+                "`÷` の右が、正の整数の定数でも、同じ単位の正の金額・数量の定数でもないとき。変数、0、負の数、小数がこれに当たります。ただし、丸めの関数の引数のいちばん外側の割り算は、値で割れます（`half_up(合計 / 件数, 1円)`。割る数が 0 にならないことは E132 が確かめます）。`mod(x, n)` の割る数 n も、正の整数の定数でなければこれです。",
+                "The right of `÷` is neither a positive whole constant nor a positive constant amount or quantity in the same unit: a variable, zero, a negative number or a fraction. A division that is the outermost operation of a rounding function's argument may divide by a value (`half_up(total / units, 1JPY)`; E132 sees that the divisor is never zero). The divisor n of `mod(x, n)` is this too when it is not a positive whole constant."
             ),
             tr!(
-                "割る数が業務のデータなら、率として入力に取るか、定数を引く表として書いてください。刻みが静的に決まらないと生成コードは言語の除算に頼ることになり、Python は −∞ 方向、Go は 0 方向に丸めて答えが食い違います。",
-                "If the divisor is business data, take it as a rate input or look the constant up in a table. Without a statically known step the generated code falls back on the language's own division, and Python rounding toward -inf and Go toward zero disagree."
+                "値で割るなら、割り算を丸めの関数の中に入れて、刻みと丸め方を書いてください（`half_up(合計 / 件数, 1円)`）。割る数が業務のデータで率として渡せるなら、率の入力にするか、定数を引く表として書いてください。刻みが静的に決まらないと生成コードは言語の除算に頼ることになり、Python は −∞ 方向、Go は 0 方向に丸めて答えが食い違います。",
+                "To divide by a value, put the division inside a rounding function, with the grid and the way to round (`half_up(total / units, 1JPY)`). If the divisor is business data that can come as a rate, take it as a rate input, or look the constant up in a table. Without a statically known step the generated code falls back on the language's own division, and Python rounding toward -inf and Go toward zero disagree."
             ),
             X_E115,
             &["E103", "E108"],
@@ -3010,8 +3033,8 @@ pub fn ledger() -> Vec<Entry> {
             "E118",
             tr!("呼び出しの形が違います", "The call is not written correctly"),
             tr!(
-                "無い関数を呼んでいるか、引数の数が合わないとき。書けるのは `min(a, b)` `max(a, b)` `allocate(配る額, 累計, 全体)` と丸めの五つ（`down(x, 1円)` など）だけです。",
-                "A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)` and the five rounding modes (`down(x, 1JPY)` and the rest)."
+                "無い関数を呼んでいるか、引数の数が合わないとき。書けるのは `min(a, b)` `max(a, b)` `allocate(配る額, 累計, 全体)` `mod(x, n)` `isqrt(x)` と丸めの五つ（`down(x, 1円)` など）だけです。丸めの刻みが定数でないときも、これです。",
+                "A call to a function that does not exist, or with the wrong number of arguments. The calls are `min(a, b)`, `max(a, b)`, `allocate(<amount>, <running total>, <whole>)`, `mod(x, n)`, `isqrt(x)` and the five rounding modes (`down(x, 1JPY)` and the rest). A rounding grid that is not a constant is this too."
             ),
             tr!(
                 "綴りと引数の数を確かめてください。引数が多ければ余りは黙って捨てられ、少なければ答えが決まりません。どちらも以前の版では検査を素通りしていて、ジェネレーターで初めて止まっていました。",
@@ -3249,6 +3272,36 @@ pub fn ledger() -> Vec<Entry> {
             &["E065", "E129"],
         )
         .with_files(&[("terms.cal", X_TERMS_CAL)]),
+        err(
+            "E132",
+            tr!("割る数が 0 になりえます", "The divisor can be zero"),
+            tr!(
+                "丸めの関数の引数が値で割る割り算（`half_up(合計 / 件数, 1円)`）で、割る数のとりうる範囲が 0 を含むとき。範囲は、入力の範囲、導出と `define` の範囲、上の表が書く値から区間で求めます。行が自分の表の列をそのまま書くときは、その行のセルがその列に通す値だけを数えます（`| >=1 | 件数 |` は 1 以上の件数だけを書きます）。`constraint` は読みません。範囲の決まらない値を読む割る数も、0 にならないとは言えないので、これに当たります。注には、割る数を 0 にする入力が見つかればそれが出ます。",
+                "A rounding function's argument divides by a value (`half_up(total / units, 1JPY)`), and the range of the divisor includes zero. The range is worked out by interval arithmetic from the inputs' ranges, the ranges of the derives and the `define`s, and what the tables above write — where a row writes one of its own table's columns, only the values its cell there lets through (`| >=1 | units |` writes units of one or more). A `constraint` is not read. A divisor that reads a value with no range cannot be shown never to be zero either, and is this too. Where an input that makes the divisor zero is found, the notes name it."
+            ),
+            tr!(
+                "割る数の範囲を 0 を含まないように狭めるか（`range >=1`）、`max(件数, 1)` のように 1 以上にしてから割るか、0 のときに別の値を選ぶ表（`| 0 | 1 |` と `| >=1 | 件数 |` の二行）を置いて、その表の出力で割ってください。`constraint a < b` のもとで `b - a` で割るときも、`max(b - a, 1)` と書きます（その制約のもとでは同じ値です）。0 のときに何を答えるかは業務の決めなので、rulec は決めません。",
+                "Narrow the divisor's range so that it leaves zero out (`range >=1`), divide by `max(units, 1)`, or put a table that picks another value when it is zero (the two rows `| 0 | 1 |` and `| >=1 | units |`) and divide by that table's output. Dividing by `b - a` under `constraint a < b`, write `max(b - a, 1)` too: under the constraint it is the same value. What to answer when it is zero is a business decision, and rulec does not make it."
+            ),
+            X_E132,
+            &["E115", "E108", "E019"],
+        )
+        .english(X_E132_EN),
+        err(
+            "E139",
+            tr!("`isqrt` の引数が負になりえます", "The argument of `isqrt` can be below zero"),
+            tr!(
+                "`isqrt(x)` の x のとりうる範囲が負の値を含むとき。範囲は E132 と同じく区間で求め、範囲の決まらない値を読む引数もこれに当たります。負の数に平方根は無く、生成コードはその呼び出しで答えを持ちません。注には、引数を負にする入力が見つかればそれが出ます。",
+                "The range of x in `isqrt(x)` includes values below zero. The range is worked out by intervals as for E132, and an argument that reads a value with no range is this too. A number below zero has no square root, and the generated code would have no answer on that call. Where an input that makes the argument negative is found, the notes name it."
+            ),
+            tr!(
+                "引数の範囲が 0 以上になるように入力の範囲を狭めるか、`isqrt(max(x, 0))` のように 0 以上にしてから渡してください。冪の切り捨ては掛け算で書きます（`isqrt(n * n * n)` が n の 1.5 乗の切り捨て）。",
+                "Narrow the inputs' ranges so that the argument stays at zero or more, or pass `isqrt(max(x, 0))`. A power is written as a product: `isqrt(n * n * n)` is n to the power 1.5, rounded down."
+            ),
+            X_E139,
+            &["E108", "E103"],
+        )
+        .english(X_E139_EN),
         warn(
             "W125",
             tr!("どの手順でも着かない状態があります", "No sequence of calls reaches a state"),
@@ -3296,8 +3349,8 @@ pub fn ledger() -> Vec<Entry> {
             "W128",
             tr!("行に当たる入力を見つけられず、当たらないことも示せませんでした", "No input was found that reaches a row, and none was shown not to"),
             tr!(
-                "計算した列（導出、`define`）にセルを書いた行で、その行に当たる入力が、規則の例にも、ベクタを作るときの探し方でも、入力の候補の値の組み合わせ（4,096 通りまで）にも見つからず、どの入力も当たらないことも示せなかったとき。そういう行の点は入力ではなく、そこに届く入力があるかは式どうしの関係で決まります（整数でしか届かない、整数では届かない、など）。届くと決まっていない行を、黙って通しません。入力と列挙だけの行は、点がそのまま入力なので、この探しはしません。",
-                "A row that writes a cell on a computed column (a derive, a `define`): no input reaching it was found among the rule's examples, by the search the vectors are made with, or among the combinations of the inputs' candidate values (up to 4,096), and it could not be shown that no input does. The point of such a row is not an input, and whether one reaches it turns on how the expressions relate (a value only whole numbers reach, or one they never do). A row nothing decided is not passed in silence. A row of inputs and enums alone needs no search: its point is an input."
+                "計算した列（導出、`define`）にセルを書いた行で、その行に当たる入力が、規則の例にも、ベクタを作るときの探し方でも、入力の候補の値の組み合わせ（4,096 通りまで）にも、その行を除いたときに完全性の検査が見つける穴を作る入力にも見つからず、どの入力も当たらないことも示せなかったとき。そういう行の点は入力ではなく、そこに届く入力があるかは式どうしの関係で決まります（整数でしか届かない、整数では届かない、など）。届くと決まっていない行を、黙って通しません。入力と列挙だけの行は、点がそのまま入力なので、この探しはしません。",
+                "A row that writes a cell on a computed column (a derive, a `define`): no input reaching it was found among the rule's examples, by the search the vectors are made with, among the combinations of the inputs' candidate values (up to 4,096), or as the input behind the gap the completeness check finds with the row taken out, and it could not be shown that no input does. The point of such a row is not an input, and whether one reaches it turns on how the expressions relate (a value only whole numbers reach, or one they never do). A row nothing decided is not passed in silence. A row of inputs and enums alone needs no search: its point is an input."
             ),
             tr!(
                 "その行に当たる入力が本当にあるか、式と行の条件を見比べてください。あるなら、その入力を例に書くと、この警告は消えます。無いなら、行を削除してください。削除して完全性の欠落（E101）が出るなら、その組み合わせが起きないことも rulec は示せていないので、行は残してかまいません。",

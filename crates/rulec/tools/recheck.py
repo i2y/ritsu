@@ -102,13 +102,26 @@ def num(x):
     return None if x is None else Fraction(x)
 
 
+def side(x):
+    """One side of a `constraint`: the names it adds up. A side of one name is written as the
+    name, and a side that adds several as the list of them (rulec's §15.216)."""
+    return list(x) if isinstance(x, list) else [x]
+
+
+def side_text(x):
+    return " + ".join(side(x))
+
+
 def guarantees(cert):
     """The `a <= b` pairs the `constraint` lines promise, closed under chains: two lines
     saying a running total never passes the next, and that one never passes the whole,
     together say the first never passes the whole. rulec reads them that way, so a
-    re-checker that did not would refuse an honest certificate."""
+    re-checker that did not would refuse an honest certificate. A line with a sum on a side
+    says nothing of one name against another, and is left out."""
     le = set()
     for k in cert.get("constraints", []) or []:
+        if isinstance(k.get("left"), list) or isinstance(k.get("right"), list):
+            continue
         l, r, op = k.get("left"), k.get("right"), k.get("op")
         if op in ("<=", "<"):
             le.add((l, r))
@@ -130,6 +143,17 @@ def interval(e, ranges, le=frozenset()):
     if "name" in e:
         lo, hi = ranges.get(e["name"], (None, None))
         return None if lo is None or hi is None else (num(lo), num(hi))
+    if "inside" in e:
+        # What a row writes when it names one of its table's own columns (rulec's §15.213): the
+        # name's interval cut to what the row's own cell on that column lets through, worked out
+        # here from the cell (`row_cell_bounds`), never from the certificate's word for it.
+        got = interval(e["inside"], ranges, le)
+        cut = e.get("cell")
+        if got is None or cut is None:
+            return got
+        lo = got[0] if cut[0] is None else max(got[0], cut[0])
+        hi = got[1] if cut[1] is None else min(got[1], cut[1])
+        return (lo, hi) if lo <= hi else got
     if "num" in e:
         v = num(e.get("value"))
         return None if v is None else (v, v)
@@ -143,7 +167,8 @@ def interval(e, ranges, le=frozenset()):
         if e["op"] == "-":
             return (al - bh, ah - bl)
         if e["op"] in ("*", "/"):
-            if e["op"] == "/" and bl <= 0 <= bh:
+            # Both ends on one side of zero: an interval written upside down has no quotient.
+            if e["op"] == "/" and not (bl > 0 and bh > 0 or bl < 0 and bh < 0):
                 return None
             vs = sorted(x * y if e["op"] == "*" else x / y for x in (al, ah) for y in (bl, bh))
             return (vs[0], vs[-1])
@@ -178,6 +203,25 @@ def interval(e, ranges, le=frozenset()):
                 return None
             f = min if e["call"] == "min" else max
             return (f(inner[0], other[0]), f(inner[1], other[1]))
+        # A remainder by a positive whole constant (rulec's §15.214): of the whole part, inside one
+        # period the whole part's interval moved down by the multiples below it, otherwise the
+        # whole of 0 to the constant less one.
+        if e["call"] == "mod" and len(args) == 2:
+            k = interval(args[1], ranges, le)
+            if k is None or k[0] != k[1] or k[0].denominator != 1 or k[0] <= 0:
+                return None
+            n = k[0].numerator
+            a, b = math.floor(inner[0]), math.floor(inner[1])
+            if a // n == b // n:
+                base = (a // n) * n
+                return (Fraction(a - base), Fraction(b - base))
+            return (Fraction(0), Fraction(n - 1))
+        # The whole square root of the whole part (rulec's §15.215): it rises with its argument,
+        # so its ends are the roots of the argument's; below zero there is none.
+        if e["call"] == "isqrt" and len(args) == 1:
+            if inner[0] < 0:
+                return None
+            return (Fraction(math.isqrt(math.floor(inner[0]))), Fraction(math.isqrt(math.floor(inner[1]))))
         # A rounding lands on the grid: the low end toward zero, the high end away from it,
         # whichever way the mode itself rounds.
         grid = interval(args[1], ranges, le) if len(args) > 1 else None
@@ -289,6 +333,12 @@ def type_of(e, types):
         if e["call"] in ("min", "max"):
             if len(args) > 1 and unify(args[0], args[1]) is None:
                 raise Bad(f"{e['call']}(`{args[0]}`, `{args[1]}`): the units do not meet")
+        # A remainder and a whole square root are of a number, and are one (rulec's §15.214,
+        # §15.215).
+        if e["call"] in ("mod", "isqrt"):
+            if args[0] != "number":
+                raise Bad(f"{e['call']}(`{args[0]}`): it takes a number")
+            return "number"
         # The two sides of the ratio have to meet; their common type cancels, and the share
         # keeps the type of the amount being handed out.
         if e["call"] == "allocate":
@@ -351,8 +401,54 @@ def numeric_outputs(cert):
                 if not isinstance(w, dict) or not isinstance(w.get("expr"), dict):
                     outs[col] = None
                     break
-                es.append(w["expr"])
+                e = w["expr"]
+                if "inside" in w:
+                    # The row says its own cell narrows what it writes (rulec's §15.213). What the
+                    # cell lets through is worked out here from the cell; what the row says is
+                    # held to it in `check_outputs`.
+                    name = e.get("name")
+                    e = {"inside": e, "said": w["inside"], "row": r.get("row"), "table": t.get("table"),
+                         "cell": None if name is None else row_cell_bounds(cert, t, r, name)}
+                es.append(e)
     return outs, unstated
+
+
+def row_cell_bounds(cert, t, row, name):
+    """The values row `row` of table `t` lets its column `name` take, read from its own cell on
+    that column (rulec's §15.213): the ends of a comparison — a strict one moved in to the next
+    point of the grid the column's values sit on (`column_grid`) — the value of an `=`, the hull
+    of a set of values. `(lo, hi)`, an end None where the cell leaves it open; None when `name`
+    is not a column of the table or the cell says nothing an interval can."""
+    axes = t.get("axes", [])
+    ai = next((i for i, a in enumerate(axes) if a.get("column") == name), None)
+    tests = row.get("tests") or []
+    if ai is None or ai >= len(tests):
+        return None
+    cell = tests[ai]
+    if cell.get("cell") == "in":
+        vals = [num(v) for v in cell.get("values", [])]
+        if not vals or any(v is None for v in vals):
+            return None
+        return (min(vals), max(vals))
+    if cell.get("cell") != "cmp":
+        return None
+    g = column_grid(cert, name)
+    lo = hi = None
+    for x in cell.get("tests", []):
+        v, op = num(x.get("value")), x.get("op")
+        if v is None:
+            return None
+        # Without a grid a strict end stays where it is: the interval is wider, never wrong.
+        up = v if g is None or g <= 0 else (v // g) * g + g
+        down = v if g is None or g <= 0 else -((-v) // g) * g - g
+        ends = {"=": (v, v), ">=": (v, None), ">": (up, None), "<=": (None, v), "<": (None, down)}.get(op)
+        if ends is None:
+            return None
+        if ends[0] is not None:
+            lo = ends[0] if lo is None else max(lo, ends[0])
+        if ends[1] is not None:
+            hi = ends[1] if hi is None else min(hi, ends[1])
+    return (lo, hi)
 
 
 def worked_ranges(cert):
@@ -402,6 +498,25 @@ def check_outputs(cert, known, outs):
     value its rows write (§15.196). Returns how many were held to that."""
     stated = cert.get("ranges", {})
     n = 0
+    env = {k: (None if a is None else str(a), None if b is None else str(b))
+           for k, (a, b) in ((k, (num(v[0]), num(v[1]))) for k, v in stated.items()) if k not in outs}
+    env.update({k: (str(a), str(b)) for k, (a, b) in known.items()})
+    for col, es in outs.items():
+        for e in es or []:
+            if "inside" not in e:
+                continue
+            if "name" not in e["inside"]:
+                raise Bad(f"{e['table']}: row {e['row']} says it writes {col} only inside a range, and what it writes is no name")
+            if e["cell"] is None:
+                raise Bad(f"{e['table']}: row {e['row']} says its cell on {e['inside']['name']} narrows what it writes, "
+                          f"and {e['inside']['name']} is no column of the table it can read a range from")
+            got = interval(e, env, guarantees(cert))
+            said = e.get("said")
+            a, b = (num(said[0]), num(said[1])) if isinstance(said, list) and len(said) == 2 else (None, None)
+            if got is None or a is None or b is None or a > got[0] or b < got[1]:
+                shown = "no interval" if got is None else f"[{got[0]}, {got[1]}]"
+                raise Bad(f"{e['table']}: row {e['row']}'s cell lets {e['inside']['name']} take {shown}, "
+                          f"and the certificate says the row writes it inside [{a}, {b}]")
     for col, es in outs.items():
         s = stated.get(col)
         if col not in known:
@@ -505,10 +620,18 @@ def left_out(t, name, path):
 def constraint_rules_out(t, k, path):
     """Whether one `constraint` is impossible over the whole of this box. Where the two ends
     meet, the pair is out of reach when one of them is an end its coordinate leaves out
-    (§15.140)."""
-    (ll, lh) = span_of_name(t, k["left"], path)
-    (rl, rh) = span_of_name(t, k["right"], path)
-    shut = left_out(t, k["left"], path) or left_out(t, k["right"], path)
+    (§15.140). A side that adds names up reaches from the sum of their low ends to the sum of
+    their high ends (rulec's §15.216)."""
+    def ends(names):
+        lo, hi = Fraction(0), Fraction(0)
+        for n in names:
+            a, b = span_of_name(t, n, path)
+            lo = None if lo is None or a is None else lo + a
+            hi = None if hi is None or b is None else hi + b
+        return lo, hi
+    (ll, lh) = ends(side(k["left"]))
+    (rl, rh) = ends(side(k["right"]))
+    shut = any(left_out(t, n, path) for n in side(k["left"]) + side(k["right"]))
     return {
         "<=": ll is not None and rh is not None and (ll > rh or (ll == rh and shut)),
         "<": ll is not None and rh is not None and ll >= rh,
@@ -934,8 +1057,11 @@ def model_facts(t, cert):
             if not isinstance(i, int) or not 0 <= i < len(ks):
                 raise Bad(f"{t['table']}: the model names constraint {i}, which the rule does not have")
             k = ks[i]
-            d = {k["left"]: Fraction(1)}
-            d[k["right"]] = d.get(k["right"], Fraction(0)) - 1
+            d = {}
+            for n in side(k["left"]):
+                d[n] = d.get(n, Fraction(0)) + 1
+            for n in side(k["right"]):
+                d[n] = d.get(n, Fraction(0)) - 1
             if k["op"] in (">=", ">"):
                 d = {n: -c for n, c in d.items()}
             out.append((d, Fraction(0), k["op"] in ("<", ">")))
@@ -1063,10 +1189,13 @@ def contract_doors(cert, k):
         if hi is not None:
             out[("range", inp, True)] = ({inp: Fraction(1)}, -hi * sc, False)
     for i, c in enumerate(cert.get("constraints", [])):
-        if c["left"] not in scales or c["right"] not in scales:
+        if any(n not in scales for n in side(c["left"]) + side(c["right"])):
             continue
-        d = {c["left"]: 1 / scales[c["left"]]}
-        d[c["right"]] = d.get(c["right"], Fraction(0)) - 1 / scales[c["right"]]
+        d = {}
+        for n in side(c["left"]):
+            d[n] = d.get(n, Fraction(0)) + 1 / scales[n]
+        for n in side(c["right"]):
+            d[n] = d.get(n, Fraction(0)) - 1 / scales[n]
         if c["op"] in (">=", ">"):
             d = {n: -v for n, v in d.items()}
         out[("constraint", i)] = (d, Fraction(0), c["op"] in ("<", ">"))
@@ -1084,7 +1213,7 @@ def door_text(cert, key):
         return f"the {'high' if key[2] else 'low'} end of {key[1]}'s range"
     if key[0] == "constraint":
         c = cert["constraints"][key[1]]
-        return f"constraint {c['left']} {c['op']} {c['right']}"
+        return f"constraint {side_text(c['left'])} {c['op']} {side_text(c['right'])}"
     return f"{key[1]} being one of its enum's values"
 
 
@@ -1346,7 +1475,7 @@ def check_cover(t):
                 raise Bad(f"{t['table']}: a leaf names constraint {i}, which is not one of this table's")
             k = t["constraints"][i]
             if not constraint_rules_out(t, k, path):
-                raise Bad(f"{t['table']}: {k['left']} {k['op']} {k['right']} can hold here, so the box is not impossible")
+                raise Bad(f"{t['table']}: {side_text(k['left'])} {k['op']} {side_text(k['right'])} can hold here, so the box is not impossible")
             seen["constraint"] += 1
             return
         if "derived_axis" in node:
@@ -1745,14 +1874,17 @@ def sieve_admits(t, values, at):
         if days is not None and v not in days:
             return f"{axes[ai]['column']} = {v} is not one of the days koyomi computes for it"
     for k in t["constraints"]:
-        if k["left"] not in col or k["right"] not in col:
+        names = side(k["left"]) + side(k["right"])
+        if any(n not in col for n in names):
             continue
-        x, y = vs[col.index(k["left"])], vs[col.index(k["right"])]
-        if x is None or y is None:
+        got = {n: vs[col.index(n)] for n in names}
+        if any(v is None for v in got.values()):
             continue
+        x = sum((num(got[n]) for n in side(k["left"])), Fraction(0))
+        y = sum((num(got[n]) for n in side(k["right"])), Fraction(0))
         ok = {"<=": x <= y, "<": x < y, ">=": x >= y, ">": x > y}[k["op"]]
         if not ok:
-            return f"{k['left']} {k['op']} {k['right']} does not hold at {x}, {y}"
+            return f"{side_text(k['left'])} {k['op']} {side_text(k['right'])} does not hold at {x}, {y}"
     return None
 
 
@@ -2425,7 +2557,7 @@ def check_machine(cert):
         raise Bad("machine: the worlds are not every combination of the held columns' coordinates, once each")
     coupled = bool(fixed_inputs) and (
         any(a["kind"] != "input" for a in axes)
-        or any(kc["left"] in fixed_inputs or kc["right"] in fixed_inputs for kc in cert.get("constraints", []))
+        or any(n in fixed_inputs for kc in cert.get("constraints", []) for n in side(kc["left"]) + side(kc["right"]))
     )
 
     init, finals = m["initial"], set(m["finals"])

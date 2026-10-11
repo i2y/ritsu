@@ -128,3 +128,9 @@ golden!(w125_届かない状態, "W125", "tests/mutants/m_w125.rule", "W125");
 golden!(e075_値でも名前でもある語, "E075", "tests/mutants/m_e075ja.rule", "E075");
 golden!(e031_要素とたどった結果, "E031-walk", "tests/mutants/m_e031walkja.rule", "E031");
 golden!(w128_決められない行, "W128", "tests/mutants/m_w128ja.rule", "W128");
+
+// Arithmetic (§15.213 to §15.216).
+golden!(e132_割る数が0になりうる, "E132", "tests/mutants/m_e132ja.rule", "E132");
+golden!(e139_平方根の引数が負になりうる, "E139", "tests/mutants/m_e139ja.rule", "E139");
+golden!(e115_丸めの外の割り算, "E115-div", "tests/mutants/m_e115divja.rule", "E115");
+golden!(e115_余りの割る数, "E115-mod", "tests/mutants/m_e115modja.rule", "E115");

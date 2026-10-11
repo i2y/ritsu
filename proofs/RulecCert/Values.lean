@@ -78,6 +78,17 @@ inductive Expr where
   | maxOf : Expr → Expr → Expr
   /-- Rounded to a literal grid. Which way the mode breaks a tie is not modelled. -/
   | roundTo : Expr → Rat → Expr
+  /-- **A rounded quotient by a value** (rulec's §15.213): `n ÷ d` put on a literal grid, the
+      grid's type beside it. The divisor is an expression — a constant one is `divc` — and that it
+      never comes to zero is what its interval says (E132): the interval below has none where the
+      divisor's reaches zero. Which way the mode breaks a tie is not modelled, as in `roundTo`. -/
+  | divRound : Expr → Expr → Rat → Ty → Expr
+  /-- **A remainder** (rulec's §15.214): of the whole part of a number by a positive whole
+      constant, from 0 up to the constant less one. -/
+  | modc : Expr → Nat → Expr
+  /-- **A whole square root** (rulec's §15.215): the largest whole number whose square does not
+      pass the whole part of a number. -/
+  | isqrt : Expr → Expr
   /-- **A share**: `floor(T × C ÷ S)`, the part of an amount `T` that falls to a line
       whose prices run up to `C` out of a whole `S` (§15.102). All three are names with
       declared ranges, none of them negative and the whole positive (E117), so the floor is the
@@ -144,6 +155,9 @@ def Expr.unreadable : Expr → Bool
   | .minOf a b => a.unreadable || b.unreadable
   | .maxOf a b => a.unreadable || b.unreadable
   | .roundTo a _ => a.unreadable
+  | .divRound a b _ _ => a.unreadable || b.unreadable
+  | .modc a _ => a.unreadable
+  | .isqrt a => a.unreadable
   | .alloc a b c => a.unreadable || b.unreadable || c.unreadable
   | .compare _ a b => a.unreadable || b.unreadable
 
@@ -169,6 +183,25 @@ def divTy (x kt : Ty) : Option Ty :=
 
 /-- `min` and `max` need their two sides to meet, and give back the first one's type. -/
 def pickTy (x y : Ty) : Option Ty := (unify x y).map (fun _ => x)
+
+/-- A quotient by a value, put on a grid of type `g` (rulec's §15.213). A value over another of
+    the same unit is a ratio with none; a value over a number or a rate keeps its type. The grid is
+    a value of what the quotient is: an amount's grid is in the amount's unit, and a ratio's is a
+    number or a rate, which the answer then is. -/
+def quotTy (x y g : Ty) : Option Ty :=
+  if !x.numeric || !y.numeric then none
+  else
+    let q : Option Ty :=
+      if y.dimensioned then (if x.dimensioned && (unify x y).isSome then some Ty.number else none)
+      else some x
+    match q with
+    | none => none
+    | some q =>
+      if q.dimensioned then (unify q g).map (fun _ => q)
+      else if g == Ty.number || g == Ty.rate then some g else none
+
+/-- A remainder and a whole square root are of a number, and are one (rulec's §15.214, §15.215). -/
+def numTy (x : Ty) : Option Ty := if x == Ty.number then some Ty.number else none
 
 /-- A share keeps the type of the amount being handed out. The two sides of the ratio have
     to meet — a running total of prices over a whole made of prices — and their common type
@@ -200,6 +233,15 @@ def typeOf (types : String → Option Ty) : Expr → Option Ty
                   | some x, some y => pickTy x y
                   | _, _ => none
   | .roundTo a _ => typeOf types a
+  | .divRound a b _ g => match typeOf types a, typeOf types b with
+                         | some x, some y => quotTy x y g
+                         | _, _ => none
+  | .modc a _ => match typeOf types a with
+                 | some x => numTy x
+                 | none => none
+  | .isqrt a => match typeOf types a with
+                | some x => numTy x
+                | none => none
   | .alloc a b c => match typeOf types a, typeOf types b, typeOf types c with
                     | some x, some y, some z => shareTy x y z
                     | _, _, _ => none
@@ -232,6 +274,14 @@ def umax (x y : UVal) : Option UVal :=
 def ushare (x y z : UVal) : Option UVal :=
   (unify y.2 z.2).map (fun _ => (((x.1 * y.1 / z.1).floor : Int), x.2))
 
+/-- The remainder of the whole part of `v` by `n`: from 0 to `n − 1` for a positive `n`, whatever
+    the sign (`%` on `Int` is the Euclidean one). -/
+def modR (v : Rat) (n : Nat) : Rat := ((v.floor % (n : Int) : Int) : Rat)
+
+/-- The largest whole number whose square does not pass the whole part of `v` (0 below zero, which
+    E139 keeps from arriving). -/
+def isqrtR (v : Rat) : Rat := ((Nat.sqrt v.floor.toNat : Nat) : Rat)
+
 /-- Evaluation. `rnd g v` is the rounding: only its bounds matter here, and they arrive as
     a hypothesis on the theorem that needs them. -/
 def eval (rnd : Rat → Rat → Rat) (env : String → Option UVal) : Expr → Option UVal
@@ -258,6 +308,15 @@ def eval (rnd : Rat → Rat → Rat) (env : String → Option UVal) : Expr → O
   | .roundTo a g => match eval rnd env a with
                     | some x => some (rnd g x.1, x.2)
                     | none => none
+  | .divRound a b g t => match eval rnd env a, eval rnd env b with
+                         | some x, some y => (quotTy x.2 y.2 t).map (fun ty => (rnd g (x.1 / y.1), ty))
+                         | _, _ => none
+  | .modc a n => match eval rnd env a with
+                 | some x => (numTy x.2).map (fun ty => (modR x.1 n, ty))
+                 | none => none
+  | .isqrt a => match eval rnd env a with
+                | some x => (numTy x.2).map (fun ty => (isqrtR x.1, ty))
+                | none => none
   | .alloc a b c => match eval rnd env a, eval rnd env b, eval rnd env c with
                     | some x, some y, some z => ushare x y z
                     | _, _, _ => none
@@ -338,6 +397,31 @@ theorem eval_type_of_typeOf {types : String → Option Ty} {env : String → Opt
     intro τ h
     obtain ⟨va, hva⟩ := iha τ (by simpa [typeOf] using h)
     exact ⟨rnd g va, by simp [eval, hva]⟩
+  | divRound a b g t iha ihb =>
+    intro τ h
+    simp only [typeOf] at h
+    split at h
+    case _ x y hx hy =>
+      obtain ⟨va, hva⟩ := iha x hx
+      obtain ⟨vb, hvb⟩ := ihb y hy
+      exact ⟨rnd g (va / vb), by simp [eval, hva, hvb, h]⟩
+    case _ => exact absurd h (by simp)
+  | modc a n iha =>
+    intro τ h
+    simp only [typeOf] at h
+    split at h
+    case _ x hx =>
+      obtain ⟨va, hva⟩ := iha x hx
+      exact ⟨modR va n, by simp [eval, hva, h]⟩
+    case _ => exact absurd h (by simp)
+  | isqrt a iha =>
+    intro τ h
+    simp only [typeOf] at h
+    split at h
+    case _ x hx =>
+      obtain ⟨va, hva⟩ := iha x hx
+      exact ⟨isqrtR va, by simp [eval, hva, h]⟩
+    case _ => exact absurd h (by simp)
   | compare op a b iha ihb =>
     intro τ h
     simp only [typeOf] at h
@@ -508,6 +592,89 @@ theorem div_nonneg {x k : Rat} (hx : 0 ≤ x) (hk : 0 < k) : 0 ≤ x / k := by
   have := Rat.mul_le_mul_of_nonneg_left (Rat.le_of_lt (Rat.inv_pos.2 hk)) hx
   simpa using this
 
+/-! ### A quotient by a value, a remainder, a whole square root
+
+What the three operations of rulec's §15.213–§15.215 need: a bounded value over a value whose
+interval stays off zero lies between the four quotients of the ends; a remainder lies between 0
+and the divisor less one, and inside one period it is its argument moved down by the multiples
+below; a whole square root rises with its argument. -/
+
+theorem inv_neg' {a : Rat} (h : a ≠ 0) : (-a)⁻¹ = -a⁻¹ := by
+  apply Rat.inv_eq_of_mul_eq_one
+  rw [Rat.neg_mul, Rat.mul_neg, Rat.neg_neg, Rat.mul_inv_cancel a h]
+
+/-- The inverse of a value whose interval stays off zero lies between the inverses of its ends,
+    on either side of zero: `d⁻¹ ≤ y⁻¹ ≤ c⁻¹` for `y` in `[c, d]`. -/
+theorem inv_between {c d y : Rat} (hc : c ≤ y) (hd : y ≤ d) (h0 : 0 < c ∨ d < 0) :
+    d⁻¹ ≤ y⁻¹ ∧ y⁻¹ ≤ c⁻¹ := by
+  rcases h0 with hpos | hneg
+  · have hy : (0:Rat) < y := Std.lt_of_lt_of_le hpos hc
+    exact ⟨inv_le_inv_of_le hy hd, inv_le_inv_of_le hpos hc⟩
+  · have hy : y < 0 := lelt hd hneg
+    have hc0 : c < 0 := lelt hc hy
+    have pd : (0:Rat) < -d := by have := Rat.neg_lt_neg hneg; simpa using this
+    have py : (0:Rat) < -y := by have := Rat.neg_lt_neg hy; simpa using this
+    have h1 : (-y)⁻¹ ≤ (-d)⁻¹ := inv_le_inv_of_le pd (Rat.neg_le_neg hd)
+    have h2 : (-c)⁻¹ ≤ (-y)⁻¹ := inv_le_inv_of_le py (Rat.neg_le_neg hc)
+    rw [inv_neg' (Rat.ne_of_lt hy), inv_neg' (Rat.ne_of_lt hneg)] at h1
+    rw [inv_neg' (Rat.ne_of_lt hc0), inv_neg' (Rat.ne_of_lt hy)] at h2
+    exact ⟨by simpa using Rat.neg_le_neg h1, by simpa using Rat.neg_le_neg h2⟩
+
+/-- **A bounded value over a value whose interval stays off zero** lies between the four
+    products of the ends of the one and the inverses of the ends of the other. -/
+theorem div_box {a b c d x y : Rat} (hxa : a ≤ x) (hxb : x ≤ b) (hyc : c ≤ y) (hyd : y ≤ d)
+    (h0 : 0 < c ∨ d < 0) :
+    rmin4 (a * d⁻¹) (a * c⁻¹) (b * d⁻¹) (b * c⁻¹) ≤ x / y ∧
+      x / y ≤ rmax4 (a * d⁻¹) (a * c⁻¹) (b * d⁻¹) (b * c⁻¹) := by
+  obtain ⟨h1, h2⟩ := inv_between hyc hyd h0
+  rw [Rat.div_def]
+  exact mul_box hxa hxb h1 h2
+
+/-- A remainder by a positive whole number lies between 0 and the number less one. -/
+theorem modR_bounds (v : Rat) {n : Nat} (hn : n ≠ 0) :
+    0 ≤ modR v n ∧ modR v n ≤ ((((n : Int) - 1 : Int)) : Rat) := by
+  have hpos : (0 : Int) < (n : Int) := by omega
+  have h1 := Int.emod_nonneg v.floor (b := (n : Int)) (by omega)
+  have h2 := Int.emod_lt_of_pos v.floor hpos
+  unfold modR
+  constructor
+  · have := Rat.intCast_le_intCast.2 h1
+    simpa using this
+  · exact Rat.intCast_le_intCast.2 (by omega)
+
+/-- Inside one period the remainder is its argument's whole part moved down by the multiples of
+    the divisor below it: where the whole parts of the two ends have the same quotient, every
+    value between them has it too. -/
+theorem modR_same {lo hi v : Rat} {n : Nat} (hn : n ≠ 0) (h1 : lo ≤ v) (h2 : v ≤ hi)
+    (hq : lo.floor / (n : Int) = hi.floor / (n : Int)) :
+    ((((lo.floor - (n : Int) * (lo.floor / (n : Int))) : Int)) : Rat) ≤ modR v n ∧
+      modR v n ≤ ((((hi.floor - (n : Int) * (lo.floor / (n : Int))) : Int)) : Rat) := by
+  have hpos : (0 : Int) < (n : Int) := by omega
+  have f1 := Rat.floor_monotone h1
+  have f2 := Rat.floor_monotone h2
+  have q1 := Int.ediv_le_ediv hpos f1
+  have q2 := Int.ediv_le_ediv hpos f2
+  rw [← hq] at q2
+  have hv : v.floor / (n : Int) = lo.floor / (n : Int) := Int.le_antisymm q2 q1
+  unfold modR
+  rw [Int.emod_def, hv]
+  exact ⟨Rat.intCast_le_intCast.2 (Int.sub_le_sub_right f1 _), Rat.intCast_le_intCast.2 (Int.sub_le_sub_right f2 _)⟩
+
+/-- A whole square root rises with its argument: were the root of the larger smaller, its next
+    whole number would be at most the other root, and its square would pass the larger. -/
+theorem sqrt_monotone {a b : Nat} (h : a ≤ b) : Nat.sqrt a ≤ Nat.sqrt b := by
+  rcases Nat.lt_or_ge (Nat.sqrt b) (Nat.sqrt a) with hlt | hge
+  · exfalso
+    have h2 : (Nat.sqrt b).succ * (Nat.sqrt b).succ ≤ Nat.sqrt a * Nat.sqrt a := Nat.mul_self_le_mul_self hlt
+    have h3 := Nat.sqrt_le a
+    have h4 := Nat.lt_succ_sqrt b
+    exact Nat.lt_irrefl b (Nat.lt_of_lt_of_le h4 (Nat.le_trans h2 (Nat.le_trans h3 h)))
+  · exact hge
+
+theorem isqrtR_monotone {a b : Rat} (h : a ≤ b) : isqrtR a ≤ isqrtR b := by
+  unfold isqrtR
+  exact Rat.natCast_le_natCast.2 (sqrt_monotone (Int.toNat_le_toNat (Rat.floor_monotone h)))
+
 /-! ### The interval a declared range forces -/
 
 abbrev Span2 := Rat × Rat
@@ -552,6 +719,33 @@ def interval (ranges : String → Option Span2) (within : Expr → Expr → Bool
       | some x => some (floorTo g x.1, ceilTo g x.2)
       | none => none
     else none
+  -- A rounded quotient by a value (rulec's §15.213): where the divisor's interval stays off
+  -- zero, the four quotients of the ends, put on the grid outward. Where it reaches zero there
+  -- is none — that is E132 — and the claim is not re-checked.
+  | .divRound a b g _ => if 0 < g then
+      match interval ranges within a, interval ranges within b with
+      | some x, some y =>
+        if 0 < y.1 || y.2 < 0 then
+          some (floorTo g (rmin4 (x.1 * y.2⁻¹) (x.1 * y.1⁻¹) (x.2 * y.2⁻¹) (x.2 * y.1⁻¹)),
+                ceilTo g (rmax4 (x.1 * y.2⁻¹) (x.1 * y.1⁻¹) (x.2 * y.2⁻¹) (x.2 * y.1⁻¹)))
+        else none
+      | _, _ => none
+    else none
+  -- A remainder (rulec's §15.214): inside one period the whole parts of the ends moved down by
+  -- the multiples below them, otherwise the whole of 0 to the divisor less one.
+  | .modc a n => if n = 0 then none else
+      match interval ranges within a with
+      | some x =>
+        if x.1.floor / (n : Int) = x.2.floor / (n : Int) then
+          some ((((x.1.floor - (n : Int) * (x.1.floor / (n : Int))) : Int) : Rat),
+                (((x.2.floor - (n : Int) * (x.1.floor / (n : Int))) : Int) : Rat))
+        else some (0, ((((n : Int) - 1 : Int)) : Rat))
+      | none => none
+  -- A whole square root (rulec's §15.215) rises with its argument; below zero there is none
+  -- (E139).
+  | .isqrt a => match interval ranges within a with
+      | some x => if 0 ≤ x.1 then some (isqrtR x.1, isqrtR x.2) else none
+      | none => none
   -- A share. The lowest it goes is the smallest amount over the largest whole; the highest
   -- is the amount itself, because the ratio never passes 1 — and that is the one thing the
   -- declared ranges do not say, so `within` has to (§15.102). The three parts are not
@@ -770,6 +964,84 @@ theorem eval_mem_interval {ranges : String → Option Span2} {env : String → O
           obtain ⟨lo, hi⟩ := hrnd g p.1 hg
           exact ⟨Rat.le_trans (floorTo_monotone hg hp1) lo,
             Rat.le_trans hi (ceilTo_monotone hg hp2)⟩
+        case _ => exact absurd hv (by simp)
+      case _ => exact absurd hI (by simp)
+    case _ => exact absurd hI (by simp)
+  | divRound a b g t iha ihb =>
+    intro I v ty hI hv
+    simp only [interval] at hI
+    split at hI
+    case _ hg =>
+      simp only [eval] at hv
+      split at hI
+      case _ x y hx hy =>
+        split at hI
+        case _ h0 =>
+          split at hv
+          case _ p q hp hq =>
+            obtain ⟨hp1, hp2⟩ := iha x p.1 p.2 hx (by rw [hp])
+            obtain ⟨hq1, hq2⟩ := ihb y q.1 q.2 hy (by rw [hq])
+            simp only [Option.map_eq_some_iff] at hv
+            obtain ⟨u, _, hu⟩ := hv
+            simp only [Option.some.injEq, Prod.mk.injEq] at hI hu
+            subst hI
+            rw [← hu.1]
+            have h0' : 0 < y.1 ∨ y.2 < 0 := by
+              simp only [Bool.or_eq_true, decide_eq_true_eq] at h0
+              exact h0
+            obtain ⟨dlo, dhi⟩ := div_box hp1 hp2 hq1 hq2 h0'
+            obtain ⟨lo, hi⟩ := hrnd g (p.1 / q.1) hg
+            exact ⟨Rat.le_trans (floorTo_monotone hg dlo) lo,
+              Rat.le_trans hi (ceilTo_monotone hg dhi)⟩
+          case _ => exact absurd hv (by simp)
+        case _ => exact absurd hI (by simp)
+      case _ => exact absurd hI (by simp)
+    case _ => exact absurd hI (by simp)
+  | modc a n iha =>
+    intro I v ty hI hv
+    simp only [interval] at hI
+    split at hI
+    case _ => exact absurd hI (by simp)
+    case _ hn =>
+      simp only [eval] at hv
+      split at hI
+      case _ x hx =>
+        split at hv
+        case _ p hp =>
+          obtain ⟨hp1, hp2⟩ := iha x p.1 p.2 hx (by rw [hp])
+          simp only [Option.map_eq_some_iff] at hv
+          obtain ⟨u, _, hu⟩ := hv
+          simp only [Prod.mk.injEq] at hu
+          rw [← hu.1]
+          split at hI
+          case _ hq =>
+            simp only [Option.some.injEq] at hI
+            subst hI
+            exact modR_same hn hp1 hp2 hq
+          case _ =>
+            simp only [Option.some.injEq] at hI
+            subst hI
+            exact modR_bounds p.1 hn
+        case _ => exact absurd hv (by simp)
+      case _ => exact absurd hI (by simp)
+  | isqrt a iha =>
+    intro I v ty hI hv
+    simp only [interval] at hI
+    simp only [eval] at hv
+    split at hI
+    case _ x hx =>
+      split at hI
+      case _ h0 =>
+        split at hv
+        case _ p hp =>
+          obtain ⟨hp1, hp2⟩ := iha x p.1 p.2 hx (by rw [hp])
+          simp only [Option.map_eq_some_iff] at hv
+          obtain ⟨u, _, hu⟩ := hv
+          simp only [Prod.mk.injEq] at hu
+          simp only [Option.some.injEq] at hI
+          subst hI
+          rw [← hu.1]
+          exact ⟨isqrtR_monotone hp1, isqrtR_monotone hp2⟩
         case _ => exact absurd hv (by simp)
       case _ => exact absurd hI (by simp)
     case _ => exact absurd hI (by simp)

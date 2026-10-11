@@ -35,7 +35,8 @@ is a checked property rather than a claim. The server that offers the rule as an
 ([below](#the-rule-as-an-mcp-tool)) imports the standard library alone in Python and node's
 own modules alone in JavaScript, and the generated SQL calls no function of its own: its
 rounding is arithmetic inside the query, in the file that declares a function as much as in
-the one that does not. **NumPy is the one exception, and a deliberate one**: the plan is
+the one that does not — but for a whole square root, a search no single expression holds,
+which calls `rulec_isqrt`, defined in the rule's own function file ([SQL](#sql)). **NumPy is the one exception, and a deliberate one**: the plan is
 data, and the evaluator that reads it imports `numpy`. That is the target — a host that wants
 whole columns decided at once already has numpy, and the dependency is its own.
 
@@ -70,6 +71,25 @@ and a unit-vector file next to the generated code checks them against the refere
 run. The query carries no helper: each mode is arithmetic over the bound value — `CASE`,
 `ABS` and `%`, which mean the same in both dialects — and the same unit vectors run over
 those expressions.
+
+**A division by a value, a remainder and a root are helpers too** (§15.213 to §15.215 of
+DESIGN.md). A rule that divides by a value inside a rounding gets one helper for each mode it
+rounds a quotient with — `_div_round_half(n, d)` in Python, Ruby and PHP, `divRoundHalf` in Go and
+Java, `_divRoundHalf` in TypeScript, JavaScript and Swift, `quot_half` in Rust — which divides the
+two integers exactly and rounds the quotient by the mode, turning both signs over first when the
+divisor is below zero. It never meets a zero divisor: the check proved there is none (E132). A
+rule that takes `mod` gets the remainder from zero up — `_mod`, `modFloor` in Go, `mod_floor` (over
+`rem_euclid`) in Rust, `Math.floorMod` in Java — and one that takes `isqrt` the same binary search
+over whole numbers in every language (`_isqrt`, `isqrtInt` in Go, `isqrtLong` in Java, `isqrt_i64`
+in Rust). Python's `math.isqrt` is not called, so the module still imports nothing but `enum` and
+`typing`. Only the helpers a rule calls are written into its module. The unit-vector file, which
+every rule generated into the directory shares, carries its own copy of every one of them (Go's,
+written per package, those the package has) and holds each to the reference as it does the five
+modes: dividends and divisors of both signs, exact halves, quotients with nothing left over and
+the ends of int64; remainders of negative numbers; squares, their neighbours and the largest root
+int64 holds. The query divides and takes the remainder as
+arithmetic, as it rounds; the root is the one function it calls ([below](#sql)). The NumPy plan
+names the same three, and `rulec_np.py` computes them over whole int64 columns.
 
 ---
 
@@ -516,7 +536,13 @@ SQLite runs as well, which is how `rulec test` holds it to the reference evaluat
 nothing but `python3`: the runner beside it loads the vectors into an in-memory SQLite and
 prints the same records the other runners print. `min` and `max` are `LEAST` and `GREATEST`,
 which the runner registers for SQLite, passing over a NULL as PostgreSQL's do — a row the door
-refuses is still worked out, and a value outside an enum leaves one behind.
+refuses is still worked out, and a value outside an enum leaves one behind. A division by a
+value is the same arithmetic as a rounding, over a divisor wrapped in `NULLIF(…, 0)`, so a row
+the door refuses with a zero in it is worked out to NULL rather than stopping the query; a
+remainder is `%` turned into the one from zero up. A whole square root is a search, which no
+single expression holds: the query calls `rulec_isqrt`, which the function file (the other
+door, below) defines in PL/pgSQL at its top — create that first on PostgreSQL, as the comment at
+the top of the query says — and which the runner registers for SQLite, as it does `LEAST`.
 
 **The dialect is part of the claim.** Postgres and SQLite agree on the one thing the rounding
 leans on — `/` between integers truncates toward zero — which is why proving on the second
@@ -941,8 +967,9 @@ same in every language and is the one the reference evaluator says of the same i
 
 **The entry guard** enforces at run time what the proof assumed. Every numeric input is
 checked against its declared `range`, and every enum input against its set of values; then
-every `constraint` between two inputs, and a date input that takes its range from a koyomi
-date against the days that date comes to. If the check were absent, a caller outside the
+every `constraint` — between two inputs, or between inputs added up and one more, the sum taken
+on the step the inputs share, which E108 has shown fits in int64 — and a date input that takes
+its range from a koyomi date against the days that date comes to. If the check were absent, a caller outside the
 declared domain would get a silently wrong number instead of an error — and the completeness
 proof says nothing about inputs the rule never declared.
 

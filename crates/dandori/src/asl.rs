@@ -495,7 +495,7 @@ impl<'a> Gen<'a> {
                 let fail = self.failing(&format!("{} broken precondition", c.call_line), Some(format!("line {}: {text}", c.call_line)), json!(crate::prechecks::ERROR), Some(json!(c.cause(self.m))), false);
                 let n = self.name(&format!("{} precondition {text}", c.call_line));
                 let holds = match &c.test {
-                    PreTest::Relation { left, op, right } => format!("{} {op} {}", jsonata_expr(&left.1), jsonata_expr(&right.1)),
+                    PreTest::Relation { left, op, right } => format!("{} {op} {}", side_code(left, &jsonata_expr), side_code(right, &jsonata_expr)),
                     PreTest::Days { value, days, .. } => format!("{} in [{}]", jsonata_expr(value), days.iter().map(|d| json!(d).to_string()).collect::<Vec<_>>().join(", ")),
                 };
                 let comment = format!("line {}: the precondition {text} of the rule {}, which ritsu could not decide", c.call_line, self.m.rules[c.rule].name);

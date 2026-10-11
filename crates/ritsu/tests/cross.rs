@@ -7,7 +7,7 @@
 //!
 //! - X2 (a rule's preconditions where a workflow calls it): `refund` — the amount asked is kept
 //!   below what was paid by the ranges (held), can pass it (E201), or comes from a task with no
-//!   range (W201).
+//!   range (W201). `quota` is the same with a sum on one side (`used + requested <= quota`).
 //! - X3 (b) (`range from koyomi`, rulec's own check): `settlement` — a rule over the days a koyomi
 //!   date comes to, checked by `ritsu check` with koyomi joined, passing and with a payment day no
 //!   row takes (rulec's E101 with that day).
@@ -117,6 +117,31 @@ fn x2_a_rules_preconditions_where_a_flow_calls_it() {
     // the same value on both sides of `<=` holds whatever it is
     let same = flow.replace("check(paid: paid, asked: asked)", "check(paid: asked, asked: asked)");
     run("x2-same-value", &[("refund_check.rule", rule), ("refund.flow", same)], 0, (1, 0, 0), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// X2 with a sum on one side of the rule's `constraint` (rulec's §15.216): what the call gives the
+/// inputs it adds up is taken at the ends that try the relation hardest, and their sum against the
+/// other side's. Held, an example that breaks it (E201, every input of the sum named), and a value
+/// with no range (W201).
+#[test]
+fn x2_a_sum_as_a_rules_precondition() {
+    let rule = "rule quota_check v1\ndescription \"Whether a request is granted at once or reviewed. What was used and what is asked never come to more than the quota, which the rule takes for granted\"\n\nenum path = at_once | review\n\ninputs\n  used      : number  range >=0 <=10000\n  requested : number  range >=0 <=10000\n  quota     : number  range >=0 <=10000\n\nconstraint used + requested <= quota\n\noutputs\n  route : path\n\ntable pick\npolicy unique\n| requested | -> route : path |\n| <=100     | at_once         |\n| >100      | review          |\n".to_string();
+    let flow = "workflow quota v1\ndescription \"Grants a request at once or sends it to review, as the rule decides\"\n\nuse rule check from \"quota_check.rule\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:quota-check\"\n\ninputs\n  account : string\n  quota   : int  range >=0 <=10000\n\ntask usage(account: string) -> int range >=0 <=10000\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:usage\"\n  idempotent\n\ntask ask_amount(account: string) -> int range >=0 <=10000\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:ask-amount\"\n  idempotent\n\ntask grant(account: string, amount: int range >=0 <=10000)\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:grant\"\n  key\n\nflow\n  let used = usage(account: account)\n  let asked = ask_amount(account: account)\n  let decision = check(used: used, requested: asked, quota: quota)\n  match decision.route\n    at_once => grant(account: account, amount: asked)\n    review => pass\n".to_string();
+    let mut failures = Vec::new();
+    // held: at most 5,000 used and 5,000 asked, against a quota of 10,000
+    let held = flow
+        .replace("quota   : int  range >=0 <=10000", "quota   : int  range >=10000 <=10000")
+        .replace("task usage(account: string) -> int range >=0 <=10000", "task usage(account: string) -> int range >=0 <=5000")
+        .replace("task ask_amount(account: string) -> int range >=0 <=10000", "task ask_amount(account: string) -> int range >=0 <=5000");
+    assert_ne!(held, flow);
+    run("x2-sum-held", &[("quota_check.rule", rule.clone()), ("quota.flow", held)], 0, (1, 0, 0), &mut failures);
+    // an example: what was used and what is asked can come to more than the quota
+    run("x2-sum-E201", &[("quota_check.rule", rule.clone()), ("quota.flow", flow.clone())], 1, (0, 1, 0), &mut failures);
+    // undecided: what is asked comes from a task whose answer has no range
+    let open = flow.replace("task ask_amount(account: string) -> int range >=0 <=10000", "task ask_amount(account: string) -> int");
+    assert_ne!(open, flow);
+    run("x2-sum-W201", &[("quota_check.rule", rule), ("quota.flow", open)], 0, (0, 0, 1), &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

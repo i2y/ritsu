@@ -114,7 +114,10 @@ fn preconditions(f: &RuleFile, c: &Checked) -> Vec<Precondition> {
     crate::verify::preconditions(f, c)
         .into_iter()
         .map(|p| match p {
-            crate::verify::Pre::Rel { left, op, right } => Precondition::Relation { left, op: op.to_string(), right },
+            crate::verify::Pre::Rel { left, op, right } => match (left.as_slice(), right.as_slice()) {
+                ([l], [r]) => Precondition::Relation { left: l.clone(), op: op.to_string(), right: r.clone() },
+                _ => Precondition::SumRelation { left, op: op.to_string(), right },
+            },
             crate::verify::Pre::Sum { name, over, of, max } => Precondition::Sum { name, over, of, max },
             crate::verify::Pre::Length { sequence, max } => Precondition::Length { sequence, max },
             crate::verify::Pre::Days { input, file, date, days } => Precondition::Days { input, file, date, days: days.into_iter().collect() },
@@ -389,6 +392,28 @@ impl ritsu_ports::Rules for Engine {
                             )),
                         }
                     }
+                    // A side that adds inputs up (§15.216): the corner is each of them at the end
+                    // that tries the relation hardest, the sum of those against the other side's.
+                    // Every input is a number here: a date is not added (E048).
+                    Precondition::SumRelation { left, op, right } => {
+                        let small_first = op.starts_with('<');
+                        // the end of each input that tries it hardest: the top of the side that
+                        // should be the smaller, the bottom of the one that should be the larger
+                        let end = |name: &str, top: bool| if top { range(name).1 } else { range(name).0 };
+                        let pick = |ns: &[String], top: bool| -> Option<Vec<(String, Rat)>> { ns.iter().map(|n| end(n, top).map(|v| (n.clone(), v))).collect() };
+                        let total = |vs: &[(String, Rat)]| vs.iter().fold(Rat::zero(), |acc, (_, v)| acc.add(*v));
+                        let said = format!("{} {op} {}", left.join(" + "), right.join(" + "));
+                        match (pick(left, small_first), pick(right, !small_first)) {
+                            (Some(l), Some(r)) if holds(total(&l), op, total(&r)) => Answer::Holds,
+                            (Some(l), Some(r)) => Answer::Fails(
+                                l.iter().chain(r.iter()).map(|(n, v)| (n.clone(), Value::Int(crate::types::wire_int(*v, c.wire_scale(n))))).collect(),
+                            ),
+                            _ => Answer::Undecided(ritsu_base::tr!(
+                                "足す入力のどれかの範囲に上限か下限が無いので、`{said}` がどの値でも成り立つとは言えません",
+                                "one of the inputs it adds has an open end, so `{said}` cannot be shown to hold for every value"
+                            )),
+                        }
+                    }
                     // The total is largest with the list as long as it gets and every element at
                     // the top of its range (none when that top is below zero: the empty list's
                     // total, 0, is then the largest).
@@ -593,14 +618,8 @@ impl ritsu_ports::Rules for Engine {
         // Two dates compare by their day numbers, as the generated code's door compares them
         // (§15.198).
         for k in &f.constraints {
-            if !crate::vectors::constraint_holds(k, vals.get(&k.left), vals.get(&k.right)) {
-                return Err(RuleError::Input(ritsu_base::tr!(
-                    "`{} {} {}` が成り立ちません",
-                    "`{} {} {}` does not hold",
-                    k.left,
-                    k.op.word(),
-                    k.right
-                )));
+            if !crate::vectors::constraint_holds(k, &|n| vals.get(n)) {
+                return Err(RuleError::Input(ritsu_base::tr!("`{}` が成り立ちません", "`{}` does not hold", k.said())));
             }
         }
         let (outs, _, _) = crate::eval::run_all(f, c, vals);

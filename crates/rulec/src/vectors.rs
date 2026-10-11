@@ -1311,21 +1311,24 @@ pub fn days_ok(c: &Checked, a: &BTreeMap<String, Val>) -> bool {
 /// refuses it at the door, and the checker never demanded a row for it. Filtering here is
 /// what keeps the suite and the proof talking about the same set of inputs.
 pub fn allowed(f: &RuleFile, a: &BTreeMap<String, Val>) -> bool {
-    f.constraints.iter().all(|k| constraint_holds(k, a.get(&k.left), a.get(&k.right)))
+    f.constraints.iter().all(|k| constraint_holds(k, &|n| a.get(n)))
 }
 
-/// Whether one `constraint` holds of the values its two sides take. The two sides are inputs of
-/// one type with an order (E018): two numbers compare as numbers, and two dates by their day
-/// numbers (§2.1), the way the generated code's door compares them. Reading only numbers here
-/// let every pair of dates through, so `check_in <= check_out` filtered nothing (§15.198). A side
-/// with no value is not held to it, the way the door compares only what it was passed.
-pub fn constraint_holds(k: &Constraint, left: Option<&Val>, right: Option<&Val>) -> bool {
+/// Whether one `constraint` holds of the values its two sides take, each side's names read with
+/// `value`. The two sides are inputs of one type with an order (E018): two numbers compare as
+/// numbers, and two dates by their day numbers (§2.1), the way the generated code's door compares
+/// them. Reading only numbers here let every pair of dates through, so `check_in <= check_out`
+/// filtered nothing (§15.198). A side that adds names up compares their sum (§15.216). A side
+/// with a name that has no value is not held to it, the way the door compares only what it was
+/// passed.
+pub fn constraint_holds<'v>(k: &Constraint, value: &dyn Fn(&str) -> Option<&'v Val>) -> bool {
     let ord = |v: Option<&Val>| match v {
         Some(Val::Num(x)) => Some(*x),
         Some(Val::Date(y, m, d)) => Some(crate::types::date_ord(*y, *m, *d)),
         _ => None,
     };
-    let (Some(x), Some(y)) = (ord(left), ord(right)) else { return true };
+    let side = |names: &[String]| names.iter().try_fold(Rat::zero(), |acc, n| ord(value(n)).map(|v| acc.add(v)));
+    let (Some(x), Some(y)) = (side(&k.left), side(&k.right)) else { return true };
     let o = x.cmp_to(y);
     match k.op {
         CmpOp::Le => o != std::cmp::Ordering::Greater,
@@ -1398,6 +1401,26 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
             trace,
             fired,
             why: tr!("例 {}行目", "example row {}", n + 1),
+        });
+    }
+
+    // A row with a cell on a computed column that no vector reached may still be one the check
+    // found an input for: the input behind the gap that taking the row out leaves (§15.209,
+    // refined). It goes in like any other, so the generated code is run on that row too.
+    let fired_rows: BTreeSet<(String, usize)> = evaluated.iter().flat_map(|v| v.fired.iter().cloned()).collect();
+    for (table, row, a) in crate::region::gap_inputs(f, c, &|tn, ri| fired_rows.contains(&(tn.to_string(), ri))) {
+        let key = key_of(&a);
+        if seen_in.contains_key(&key) || !allowed(f, &a) || !days_ok(c, &a) {
+            continue;
+        }
+        let (outs, trace, fired, _) = eval::run_all_traced(f, c, a.clone().into_iter().collect());
+        seen_in.insert(key, evaluated.len());
+        evaluated.push(Vector {
+            input: a,
+            outputs: outs,
+            trace,
+            fired,
+            why: tr!("表 {table} 行{row} を除いたときの穴を作る入力", "the input behind the gap table {table} row {row} closes"),
         });
     }
 
@@ -1517,7 +1540,7 @@ pub fn door_cases(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<String> 
     }
     for k in &f.constraints {
         if let Some(obj) = breaking(f, c, k, &base) {
-            push(obj, tr!("制約 {} {} {} を破る組み合わせ", "a combination the constraint {} {} {} rules out", k.left, k.op.word(), k.right));
+            push(obj, tr!("制約 {} を破る組み合わせ", "a combination the constraint {} rules out", k.said()));
         }
     }
     if let Some(el) = &f.elements {
@@ -1644,7 +1667,7 @@ fn wrong_values(c: &Checked, name: &str, ty: &Ty, at: Option<&Json>) -> Vec<(Jso
 /// A combination `k` rules out, both sides inside what each takes: the ends of each side's range
 /// (or of its days), and the value the vector gives it, tried in turn.
 fn breaking(f: &RuleFile, c: &Checked, k: &Constraint, base: &Json) -> Option<Json> {
-    let said = crate::door::constraint(&format!("{} {} {}", k.left, k.op.word(), k.right));
+    let said = crate::door::constraint(&k.said());
     let candidates = |name: &str| -> Vec<Json> {
         let mut out = Vec::new();
         let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
@@ -1668,16 +1691,36 @@ fn breaking(f: &RuleFile, c: &Checked, k: &Constraint, base: &Json) -> Option<Js
         }
         out
     };
-    let (ls, rs) = (candidates(&k.left), candidates(&k.right));
-    for l in &ls {
-        for r in &rs {
-            let obj = with(&with(base, &k.left, l.clone()), &k.right, r.clone());
-            if crate::door::refusal(f, c, &obj).is_some_and(|x| x.error == said) {
-                return Some(obj);
+    // Every name's candidates, combined: the first combination the door refuses for this
+    // constraint and nothing before it. A side that adds names up has a candidate list per name
+    // (§15.216).
+    let names: Vec<&String> = k.names().collect();
+    let lists: Vec<Vec<Json>> = names.iter().map(|n| candidates(n)).collect();
+    let mut at = vec![0usize; names.len()];
+    if lists.iter().any(|l| l.is_empty()) {
+        return None;
+    }
+    loop {
+        let mut obj = base.clone();
+        for (i, n) in names.iter().enumerate() {
+            obj = with(&obj, n, lists[i][at[i]].clone());
+        }
+        if crate::door::refusal(f, c, &obj).is_some_and(|x| x.error == said) {
+            return Some(obj);
+        }
+        let mut i = 0;
+        loop {
+            if i == at.len() {
+                return None;
             }
+            at[i] += 1;
+            if at[i] < lists[i].len() {
+                break;
+            }
+            at[i] = 0;
+            i += 1;
         }
     }
-    None
 }
 
 fn date_text(ord: i128) -> String {

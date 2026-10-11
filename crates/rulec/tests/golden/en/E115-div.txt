@@ -1,0 +1,10 @@
+error[E115]: The divisor is not a positive constant
+  --> tests/mutants/m_e115div.rule:15
+   |
+15 | define prorated : money[JPY] = down(monthly_fee * (days_used / days_in_month), 1JPY)
+   |                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^ the divisor is not a constant
+   |
+ A divisor is a positive whole constant, or a constant amount or quantity in the same unit.
+ If the divisor is business data, it can be written as a rate, or as a table that looks the constant up. To pass a ratio in, make it a `rate` input.
+ Without a statically known step the generated code would fall back on the language's own division, and Python rounding toward -inf and Go toward zero would give different answers.
+ Hint: a value can be divided by only as the outermost operation of a rounding's argument (`down(a * b / c, 1JPY)`). The answer is then the exact quotient put on the grid.

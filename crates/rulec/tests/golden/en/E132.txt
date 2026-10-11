@@ -1,0 +1,9 @@
+error[E132]: The divisor units can be zero
+  --> tests/mutants/m_e132.rule:13
+   |
+13 | define average_price : money[JPY] = half_up(total / units, 1JPY)
+   |                                                     ^^^^^ it ranges from 0 to 1000, zero included
+   |
+ An input that makes the divisor zero: units = 0
+ Dividing by zero has no answer, and the generated code would stop on that call. rulec passes a division only where the ranges show its divisor is never zero.
+ Hint: narrow the ranges so that the divisor cannot be zero, divide by `max(units, 1)`, or put a table that picks another value when it is zero and divide by that table's output.

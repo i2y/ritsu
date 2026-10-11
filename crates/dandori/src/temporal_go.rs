@@ -3496,7 +3496,10 @@ impl<'a> Gen<'a> {
                 self.line(d, &format!("// line {}: the precondition {} of the rule {}, which ritsu could not decide", c.call_line, c.text(), self.m.rules[c.rule].name));
                 match &c.test {
                     PreTest::Relation { left, op, right } => {
-                        self.line(d, &format!("if !(ddNum({}) {op} ddNum({})) {{", self.expr(&left.1), self.expr(&right.1)));
+                        // gofmt writes the tighter operator without spaces where two mix, as in
+                        // `a+b <= c`, so a side that adds up is written that way already
+                        let side = |s: &[(String, TExpr)]| s.iter().map(|(_, e)| format!("ddNum({})", self.expr(e))).collect::<Vec<_>>().join("+");
+                        self.line(d, &format!("if !({} {op} {}) {{", side(left), side(right)));
                         self.line(d + 1, &fail);
                         self.line(d, "}");
                     }

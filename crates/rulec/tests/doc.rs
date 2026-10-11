@@ -122,6 +122,20 @@ const CORPUS: &[&str] = &[
 "tests/corpus/compensation_certificate.rule",
 "tests/corpus/two_bands_from_weight.rule",
 "tests/corpus/order_lifecycle.rule",
+    "tests/corpus/平均単価.rule",
+    "tests/corpus/平均単価の場合分け.rule",
+    "tests/corpus/日割り.rule",
+    "tests/corpus/当番の持ち回り.rule",
+    "tests/corpus/経済的発注量.rule",
+    "tests/corpus/割り当ての申し込み.rule",
+    "tests/corpus/乱数で決める一回.rule",
+    "tests/corpus/average_unit_price.rule",
+    "tests/corpus/average_unit_price_split.rule",
+    "tests/corpus/daily_proration.rule",
+    "tests/corpus/duty_rotation.rule",
+    "tests/corpus/economic_order_quantity.rule",
+    "tests/corpus/quota_request.rule",
+    "tests/corpus/contested_roll.rule",
 ];
 
 /// A rule whose groups are broken in one of three ways. Every variant passes `check` (the `-` row
@@ -225,7 +239,10 @@ fn 表のセルはもとの規則までたどれる() {
                 checked += 1;
             }
         }
-        assert!(checked > 5, "{rel}: セルを一つも検査していない");
+        // A rule whose answer is a formula alone has no table and no cell to trace (the average
+        // over `max(units, 1)`, the proration, the order quantity of §15.213 and §15.215).
+        let tables = src.lines().any(|l| l.starts_with("table ") || l.starts_with("clause "));
+        assert!(!tables || checked > 5, "{rel}: セルを一つも検査していない");
     }
 }
 
@@ -505,7 +522,9 @@ fn 畳んだ見出しは宣言由来のトークンだけでできている() {
                 }
             }
         }
-        assert!(n > 0, "{rel}: 見出しを一つも検査していない");
+        // A rule with no table has no heading of one (§15.213, §15.215).
+        let tables = text.lines().any(|l| l.starts_with("table ") || l.starts_with("clause "));
+        assert!(!tables || n > 0, "{rel}: 見出しを一つも検査していない");
     }
 }
 

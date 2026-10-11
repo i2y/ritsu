@@ -268,11 +268,10 @@ fn ground_in(seed: &[String], want: &Ty, f: &RuleFile, c: &Checked) -> Option<Gr
         // A `constraint` ties a name to another, and that one may be tied to a third: `a <= b`
         // and `b <= x` say `a <= x` only with `b` in the system, though no table has a column
         // for it (§15.141).
+        // A sum on one side ties every name it adds to the other side's (§15.216).
         for k in &f.constraints {
-            if k.left == n {
-                queue.push(k.right.clone());
-            } else if k.right == n {
-                queue.push(k.left.clone());
+            if k.names().any(|x| *x == n) {
+                queue.extend(k.names().filter(|x| **x != n).cloned());
             }
         }
     }
@@ -304,13 +303,25 @@ fn ground_in(seed: &[String], want: &Ty, f: &RuleFile, c: &Checked) -> Option<Gr
         }
     }
     for (i, k) in f.constraints.iter().enumerate() {
-        if !vars.contains(&k.left) || !vars.contains(&k.right) {
+        if !k.names().all(|x| vars.contains(x)) {
             continue;
         }
-        let d = Lin::var(&k.left).plus(&Lin::var(&k.right).scale(Rat::int(-1)));
-        sys.push(cmp(d, k.op, false).tag(Origin::Constraint(i)));
+        sys.push(cmp(constraint_form(k), k.op, false).tag(Origin::Constraint(i)));
     }
     Some(Ground { vars, want: want.clone(), sys })
+}
+
+/// A `constraint` as one form compared with zero: its left side less its right, each side the
+/// sum of the names it adds (§15.216). `a + b <= c` is `a + b − c <= 0`.
+pub fn constraint_form(k: &crate::ast::Constraint) -> Lin {
+    let mut d = Lin::con(Rat::zero());
+    for x in &k.left {
+        d = d.plus(&Lin::var(x));
+    }
+    for x in &k.right {
+        d = d.plus(&Lin::var(x).scale(Rat::int(-1)));
+    }
+    d
 }
 
 /// `form <op> 0`, written the one way this module reads.
