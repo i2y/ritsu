@@ -1,0 +1,8 @@
+warning[W128]: No input was found that reaches row 1, and none was shown not to
+  --> tests/mutants/m_w128.rule:15 table size_of
+   |
+15 | | 2     | 1                |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 1: undecided
+   |
+ This row asks for values of `tiles`, which are computed. An input that gives them was looked for and not found, and it could not be shown that no input does.
+ Look at the expressions and the row's conditions together to see whether some input reaches it. If one does, write it as an example and this warning goes; if none does, delete the row. If deleting it brings a completeness gap (E101), rulec cannot show that the combination never comes either, and the row can stay.

@@ -1,0 +1,24 @@
+rule 上限つきの収量(capped_yield) v1
+description "区画の収量に加算を足したあと、上限を超えた収量は一つ減る。上限を超える分があって収量が一以下になる行は無いが、そこは超過の式が値を残さない。一以上の上限を一以上超えるなら、収量は二以上になる"
+
+inputs
+  基本量(base)     : number  range >=0 <=20
+  上限一(cap_low)  : number  range >=0 <=2
+  上限二(cap_high) : number  range >=0 <=2
+  加算(bonus)      : number  range >=0 <=3
+
+outputs
+  収量(kept) : number  round down(1)
+
+define 上限     : number = 上限一 + 上限二
+define 加算後   : number = 基本量 + 加算
+define 超過     : number = 加算後 - 上限
+define 一つ少ない : number = 加算後 - 1
+
+table 減らし方(penalty)
+policy unique
+| 基本量 | 上限 | 超過 | 加算後 | -> 収量 : number |
+| 0      | -    | -    | -      | 基本量           |
+| >=1    | 0    | -    | -      | 加算後           |
+| >=1    | >=1  | <=0  | -      | 加算後           |
+| >=1    | >=1  | >=1  | >=2    | 一つ少ない       |

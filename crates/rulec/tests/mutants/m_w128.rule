@@ -1,0 +1,17 @@
+rule tile_count v1
+description "Sorts a square floor by how many tiles it takes. A row asks the count to be 2, which no whole side squares to, and neither the vectors nor the check decide it (W128)"
+
+inputs
+  side : number  range >=0 <=10
+
+outputs
+  size : number  round down(1)
+
+define tiles : number = side * side
+
+table size_of
+policy first
+| tiles | -> size : number |
+| 2     | 1                |
+| <=1   | 0                |
+| -     | 2                |

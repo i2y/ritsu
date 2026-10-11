@@ -1,0 +1,96 @@
+rule parcel_charge v1
+description "The charge for a list of parcels, and its tier. The factor comes from the delivery mode, which is no value of a parcel, so its table is decided once before the walk; each parcel's cost reads its weight and that factor; the charge and the count of heavy parcels are what the walk answers; and the tier is decided after the walk, from both"
+
+enum mode = standard | express
+enum weight_class = light | heavy
+enum charge_tier = low | high | bulk
+
+inputs
+  delivery : mode
+
+elements parcels
+  weight : number  range >=0 <=30
+
+outputs
+  charge : number  round down(1)
+  tier   : charge_tier
+
+table factor_of
+policy unique
+| delivery | -> factor : number |
+| standard | 1                  |
+| express  | 2                  |
+
+table class_of
+policy unique
+| weight | -> kind : weight_class |
+| <=10   | light                  |
+| >10    | heavy                  |
+
+define cost : number = weight * factor
+
+sum charge over parcels of cost  range >=0 <=10000
+
+count heavy_parcels over parcels where kind = heavy  range >=0 <=50
+
+table tier_of
+policy unique
+| heavy_parcels | charge | -> tier : charge_tier |
+| >=3           | -      | bulk                  |
+| <=2           | >=100  | high                  |
+| <=2           | <100   | low                   |
+
+sequence mixed
+| weight |
+| 5      |
+| 12     |
+
+sequence two_heavy
+| weight |
+| 30     |
+| 30     |
+
+sequence three_heavy
+| weight |
+| 11     |
+| 12     |
+| 13     |
+
+sequence no_parcels
+| weight |
+
+sequence just_100
+| weight |
+| 30     |
+| 30     |
+| 10     |
+| 10     |
+| 10     |
+| 10     |
+
+sequence just_99
+| weight |
+| 30     |
+| 30     |
+| 10     |
+| 10     |
+| 10     |
+| 9      |
+
+sequence three_heavy_100
+| weight |
+| 30     |
+| 30     |
+| 30     |
+| 10     |
+
+examples
+| delivery | parcels         | -> charge | tier |
+| standard | mixed           | 17        | low  |
+| express  | mixed           | 34        | low  |
+| express  | two_heavy       | 120       | high |
+| standard | three_heavy     | 36        | bulk |
+| express  | no_parcels      | 0         | low  |
+| standard | just_100        | 100       | high |
+| standard | just_99         | 99        | low  |
+| standard | three_heavy_100 | 100       | bulk |

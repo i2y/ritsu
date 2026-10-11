@@ -115,7 +115,9 @@ fn 変異は決めたコードだけを出す() {
         ("m_w123.rule", &[("W123", 1)], "契約が 50 件までしか通さないのに、60 件を超える行を書いた"),
         ("m_e123.rule", &[("E123", 1)], "契約は申告額が補償額と等しい要求を通すのに、制約を `<` にした"),
         ("m_w124.rule", &[("W124", 1)], "契約が 5kg を超える速達を通さないのに、その行を書いた"),
-        ("m_w114.rule", &[("W114", 1)], "境界が導出の取れる値のあいだに落ちている（整数であることまでは見ていない）"),
+        // Row 3 (both definitions false) is reached by no input, and nothing shows it: the
+        // completeness check asks for it all the same, so W128 says it is undecided (§15.209).
+        ("m_w114.rule", &[("W114", 1), ("W128", 1)], "境界が導出の取れる値のあいだに落ちている（整数であることまでは見ていない）"),
         // §15.86. Six positions where a value meets a declared type and nobody compared
         // them. Each of these produced **nothing at all** until that entry: the corpus is
         // made of correct rules, so a position no check visits looks exactly like a position
@@ -143,6 +145,15 @@ fn 変異は決めたコードだけを出す() {
         ("m_e029.rule", &[("E029", 1), ("W111", 1)], "`where` が要素の持たないフィールドを書いている"),
         ("m_e030.rule", &[("E030", 1)], "`count` に範囲が無い（完全性の全体集合と並びの上限を兼ねる）"),
         ("m_e031.rule", &[("E031", 1)], "同じ並びを畳みも数えもしている"),
+        // §15.208. Written by hand (BY_HAND below), in English and in Japanese.
+        ("m_e031walk.rule", &[("E031", 1)], "明細ごとの定義が、明細の金額と注文の合計の両方を読んだ（二度目のたどり方になる）"),
+        ("m_e031walkja.rule", &[("E031", 1)], "上と同じ規則の日本語の版"),
+        ("m_e075.rule", &[("E075", 1)], "列挙の値と同じ名前の入力を足し、出力のセルがどちらにも読めるようになった"),
+        ("m_e075ja.rule", &[("E075", 1)], "上と同じ規則の日本語の版"),
+        // §15.209. A row past what the square of a whole side comes to, which neither the
+        // vectors nor the check decide.
+        ("m_w128.rule", &[("W128", 1)], "辺の二乗が 2 になる行を書いた（どの入力も当たらないが、それを示せない）"),
+        ("m_w128ja.rule", &[("W128", 1)], "上と同じ規則の日本語の版"),
         // §15.148. A rule that is one step of a state machine: the section's shape, and the
         // claims about every sequence of calls, broken the way a revision of the table would.
         ("m_e050.rule", &[("E050", 1)], "`machine` の見出しから `over <表>` を落とした"),
@@ -681,6 +692,17 @@ fn 変異はコーパスから作り直せる() {
         // Japanese.
         "m_e101frac.rule",
         "m_e101fracja.rule",
+        // §15.208: a cell that is both a value of an enum and the name of an input of that enum
+        // (E075), and an item that reads a value of one element and what the walk answers
+        // (E031), are each a second name or a second line no corpus rule has; §15.209: a row
+        // that asks a computed column for a value nothing decides (W128) is one no right rule
+        // keeps. All three in English and in Japanese.
+        "m_e075.rule",
+        "m_e075ja.rule",
+        "m_e031walk.rule",
+        "m_e031walkja.rule",
+        "m_w128.rule",
+        "m_w128ja.rule",
     ];
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let t = TempDir::new("mutants");

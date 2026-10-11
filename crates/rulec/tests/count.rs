@@ -265,3 +265,57 @@ fn sqlには生成しない() {
     assert!(!out.join("sql").exists(), "SQL を書いてしまった");
     assert!(said.contains("SQL"), "生成しなかったことを言っていない:\n{said}");
 }
+
+// --- Named like an output, and the stages of a walk (§15.208)
+
+/// A count, a sum and a derive named like the output they answer are that output, and W111 says
+/// nothing of them: it used to call each "never used". The English rule, and its Japanese version.
+const NAMED_LIKE_OUTPUTS: &[(&str, &str)] = &[
+    (
+        "rule heavy_parcels v1\ndescription \"How many parcels are heavy. The count is named like the output it answers\"\n\nenum weight_class = light | heavy\n\nelements parcels\n  weight : number  range >=0 <=30\n\noutputs\n  heavy_parcels : number  round down(1)\n\ntable class_of\npolicy unique\n| weight | -> kind : weight_class |\n| <=10   | light                  |\n| >10    | heavy                  |\n\ncount heavy_parcels over parcels where kind = heavy  range >=0 <=50\n\nsequence mixed\n| weight |\n| 5      |\n| 12     |\n\nexamples\n| parcels | -> heavy_parcels |\n| mixed   | 1                |\n",
+        "rule 重い荷物の数(heavy_parcels) v1\ndescription \"重い荷物の数。数え上げは、それが答える出力と同じ名前\"\n\nenum 重さの区分(weight_class) = 軽い(light) | 重い(heavy)\n\nelements 荷物(parcels)\n  重さ(weight) : number  range >=0 <=30\n\noutputs\n  重い荷物(heavy_parcels) : number  round down(1)\n\ntable 重さの表(class_of)\npolicy unique\n| 重さ | -> 種類(kind) : 重さの区分 |\n| <=10 | 軽い                       |\n| >10  | 重い                       |\n\ncount 重い荷物 over 荷物 where 種類 = 重い  range >=0 <=50\n\nsequence 混在(mixed)\n| 重さ |\n| 5    |\n| 12   |\n\nexamples\n| 荷物 | -> 重い荷物 |\n| 混在 | 1           |\n",
+    ),
+    (
+        "rule order_total v1\ndescription \"The total of an order: the goods and the shipping. The derive is named like the output it answers\"\n\ninputs\n  goods    : number  range >=0 <=1000\n  shipping : number  range >=0 <=100\n\noutputs\n  total : number  round down(1)\n\nderive total : number = goods + shipping  range >=0 <=1100\n\nexamples\n| goods | shipping | -> total |\n| 300   | 40       | 340      |\n",
+        "rule 注文の合計(order_total) v1\ndescription \"注文の合計。品物と送料。導出は、それが答える出力と同じ名前\"\n\ninputs\n  品物(goods)    : number  range >=0 <=1000\n  送料(shipping) : number  range >=0 <=100\n\noutputs\n  合計(total) : number  round down(1)\n\nderive 合計 : number = 品物 + 送料  range >=0 <=1100\n\nexamples\n| 品物 | 送料 | -> 合計 |\n| 300  | 40   | 340     |\n",
+    ),
+];
+
+#[test]
+fn 出力と同じ名前のまとめと導出は使われている() {
+    for (en, ja) in NAMED_LIKE_OUTPUTS {
+        for (src, lang) in [(en, rulec::i18n::Lang::En), (ja, rulec::i18n::Lang::Ja)] {
+            let ds = rulec::i18n::with(lang, || rulec::check_source(src, "v.rule"));
+            assert!(ds.is_empty(), "{:?}\n{src}", ds.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>());
+        }
+    }
+    // the sum of tests/stages/parcel_charge.rule is named like its output too, and the rule
+    // passes with nothing said (tests/fold.rs)
+    let pc = std::fs::read_to_string(root().join("tests/stages/parcel_charge.rule")).unwrap();
+    assert!(pc.contains("sum charge over parcels") && pc.contains("  charge : number"), "{pc}");
+}
+
+/// What a walk answers is one value for the whole sequence, and what is decided on one element is
+/// gone once the walk moves on: an output that is a value of one element, and an item that reads
+/// both kinds, are E031, each with what it reads named. The English rule of `tests/stages`, and its
+/// Japanese version.
+#[test]
+fn 要素ごとの値と_たどった結果は混ぜられない() {
+    use rulec::i18n::Lang;
+    let en = std::fs::read_to_string(root().join("tests/stages/parcel_charge.rule")).unwrap();
+    let ja = std::fs::read_to_string(root().join("tests/stages/荷物の料金.rule")).unwrap();
+    let cases = [
+        ("an output of one element", Lang::En, en.replace("  tier   : charge_tier\n", "  tier   : charge_tier\n  cost   : number  round down(1)\n"), "Output cost is a value of one element", "once the walk is over, it is not one value"),
+        ("an output of one element (ja)", Lang::Ja, ja.replace("  区分(tier)   : 料金の区分\n", "  区分(tier)   : 料金の区分\n  費用(cost)   : number  round down(1)\n").replace("define 費用(cost) :", "define 費用 :"), "出力 費用 は、要素ごとの値です", "並びをたどり終えたあとには、一つの値に決まりません"),
+        ("both kinds in one item", Lang::En, en.replace("define cost : number = weight * factor\n", "define cost : number = weight * factor\ndefine rest : number = charge - cost\n"), "One item cannot yet read both a value of one element and what the walk answers", "definition rest reads both cost, a value of one element, and charge, what the walk answers"),
+        ("both kinds in one item (ja)", Lang::Ja, ja.replace("define 費用(cost) : number = 重さ * 係数\n", "define 費用(cost) : number = 重さ * 係数\ndefine ほかの荷物(rest) : number = 料金 - 費用\n"), "要素の値と、並びをたどった結果を、一つの項目で読むことはまだできません", "定義 ほかの荷物 は、要素の値 費用 と、たどった結果 料金 の両方を読んでいます"),
+    ];
+    for (what, lang, src, title, mark) in cases {
+        assert_ne!(src, if lang == Lang::En { en.clone() } else { ja.clone() }, "{what}: the rule did not change");
+        let ds = rulec::i18n::with(lang, || rulec::check_source(&src, "v.rule"));
+        let d = ds.iter().find(|d| d.code == "E031").unwrap_or_else(|| panic!("{what}: {:?}", ds.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>()));
+        assert_eq!(d.title, title, "{what}");
+        assert!(d.marks.iter().any(|m| m.label == mark), "{what}: {:?}", d.marks);
+    }
+}
+

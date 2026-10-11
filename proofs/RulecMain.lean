@@ -1286,8 +1286,9 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
       | some (_, v) => ((arr v).getD #[]).toList.filterMap str
       | none => []
     -- The facts of a table's linear model, each built again from where the certificate
-    -- says it comes from (§15.141): a `derive`'s expression, one end of a declared range, a
-    -- `constraint`. What cannot be built leaves the table unread rather than a fact missing.
+    -- says it comes from (§15.141): a `derive`'s expression, or a `define`'s whose expression is
+    -- linear (§15.209), one end of a declared range, a `constraint`. What cannot be built leaves
+    -- the table unread rather than a fact missing.
     let typesJson := (field cert "types").getD Json.null
     let types : String → Option Ty := fun n =>
       (objPairs typesJson).find? (fun p => p.1 == n) |>.bind (fun p => str p.2 >>= tyOfString)
@@ -1297,17 +1298,23 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
       match (objPairs ((field cert "ranges").getD Json.null)).find? (fun p => p.1 == n) with
       | some (_, v) => (arr v) >>= (fun a => a[if hi then 1 else 0]?) >>= optRat
       | none => none
+    -- The equation of a value the rule computes, `n − expr ≤ 0` (`le`) or `≥ 0`, built again from
+    -- the value's own expression: a `derive`'s, or a `define`'s whose expression is linear (rulec's
+    -- §15.209). `of` is what the document calls the value; one it calls otherwise is not read.
+    let equation : String → String → Json → Option (List (String × Rat) × Rat × Bool) := fun of n f => do
+      let v ← valuesJ.find? (fun v => fieldStr v "name" == n)
+      guard (!((field v "of").isSome && fieldStr v "of" != of))
+      let want ← field v "type" >>= str >>= tyOfString
+      let e ← field v "expr" >>= exprOfJson
+      let (terms, k) ← linOf types want e
+      let le ← field f "le" >>= boolOf
+      let d := (n, (1 : Rat)) :: terms.map (fun t => (t.1, -t.2))
+      if le then some (d, -k, false) else some (d.map (fun t => (t.1, -t.2)), k, false)
     let factOf : Json → Option (List (String × Rat) × Rat × Bool) := fun f =>
-      match field f "derive" >>= str with
-      | some n => do
-          let v ← valuesJ.find? (fun v => fieldStr v "name" == n)
-          let want ← field v "type" >>= str >>= tyOfString
-          let e ← field v "expr" >>= exprOfJson
-          let (terms, k) ← linOf types want e
-          let le ← field f "le" >>= boolOf
-          let d := (n, (1 : Rat)) :: terms.map (fun t => (t.1, -t.2))
-          if le then some (d, -k, false) else some (d.map (fun t => (t.1, -t.2)), k, false)
-      | none =>
+      match field f "derive" >>= str, field f "define" >>= str with
+      | some n, _ => equation "derive" n f
+      | none, some n => equation "define" n f
+      | none, none =>
         match field f "range" >>= str with
         | some n => do
             let hi ← field f "hi" >>= boolOf

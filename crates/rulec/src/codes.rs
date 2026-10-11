@@ -1056,6 +1056,53 @@ const X_E031: &str = "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
                       table j(j)\npolicy unique\n| k   | -> d(d) : v |\n| <=5 | a           |\n| >5  | b           |\n\n\
                       count h(h) over xs where d = a  range >=0 <=10\n\n\
                       fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0\n  exhausted -> held\n";
+/// E031's second form (§15.208): one item reads an element's value and what the walk answers.
+const X_E031_BOTH: &str = "rule 部品の費用(parts_cost) v1\n\n\
+                      elements 部品(parts)\n  単価(price) : number  range >=0 <=100\n\n\
+                      outputs\n  合計(total) : number  round down(1)\n\n\
+                      sum 小計(subtotal) over 部品 of 単価  range >=0 <=10000\n\n\
+                      define 残り : number = 小計 - 単価\n\n\
+                      define 合計 : number = 小計\n";
+const X_E031_BOTH_EN: &str = "rule parts_cost v1\n\n\
+                      elements parts\n  price : number  range >=0 <=100\n\n\
+                      outputs\n  total : number  round down(1)\n\n\
+                      sum subtotal over parts of price  range >=0 <=10000\n\n\
+                      define rest : number = subtotal - price\n\n\
+                      define total : number = subtotal\n";
+/// E031's third form (§15.208): an output that is a value of one element.
+const X_E031_OUTPUT: &str = "rule 大きな部品(big_parts) v1\n\n\
+                      elements 部品(parts)\n  単価(price) : number  range >=0 <=100\n\n\
+                      outputs\n  合計(total) : number  round down(1)\n  大きい(big) : bool\n\n\
+                      table 大きさ(big_of)\npolicy unique\n| 単価 | -> 大きい : bool |\n| >=50 | true             |\n| <50  | false            |\n\n\
+                      sum 合計 over 部品 of 単価  range >=0 <=10000\n";
+const X_E031_OUTPUT_EN: &str = "rule big_parts v1\n\n\
+                      elements parts\n  price : number  range >=0 <=100\n\n\
+                      outputs\n  total : number  round down(1)\n  big   : bool\n\n\
+                      table big_of\npolicy unique\n| price | -> big : bool |\n| >=50  | true          |\n| <50   | false         |\n\n\
+                      sum total over parts of price  range >=0 <=10000\n";
+/// E075 (§15.208): a word that is a value of the column's enum and the name of an input of it.
+const X_E075: &str = "rule 段階の引き継ぎ(carry_stage) v1\n\n\
+                      enum 段階(stage) = 新規(fresh) | 前回(previous) | 終了(done)\n\n\
+                      inputs\n  前回(previous) : 段階\n  閉じる(close) : bool\n\n\
+                      outputs\n  次の段階(next_stage) : 段階\n\n\
+                      table 決め方(decide)\npolicy unique\n| 閉じる | -> 次の段階 : 段階 |\n| true   | 終了               |\n| false  | 前回               |\n";
+const X_E075_EN: &str = "rule carry_stage v1\n\n\
+                      enum stage = fresh | previous | done\n\n\
+                      inputs\n  previous : stage\n  close    : bool\n\n\
+                      outputs\n  next_stage : stage\n\n\
+                      table decide\npolicy unique\n| close | -> next_stage : stage |\n| true  | done                  |\n| false | previous              |\n";
+/// W128 (§15.209): a row that asks a computed column for a value no input gives, which nothing
+/// shows.
+const X_W128: &str = "rule 平方の区分(square_band) v1\n\n\
+                      inputs\n  辺(side) : number  range >=0 <=10\n\n\
+                      outputs\n  区分(band) : number  round down(1)\n\n\
+                      define 面積 : number = 辺 * 辺\n\n\
+                      table 区分表(band_of)\npolicy first\n| 面積 | -> 区分 : number |\n| 2    | 1                |\n| -    | 2                |\n";
+const X_W128_EN: &str = "rule square_band v1\n\n\
+                      inputs\n  side : number  range >=0 <=10\n\n\
+                      outputs\n  band : number  round down(1)\n\n\
+                      define area : number = side * side\n\n\
+                      table band_of\npolicy first\n| area | -> band : number |\n| 2    | 1                |\n| -    | 2                |\n";
 const X_E101: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\n\n\
                       inputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| x | -> r(r) : bool |\n\
@@ -2008,12 +2055,12 @@ pub fn ledger() -> Vec<Entry> {
             "E021",
             tr!("`fold` の書き方が正しくありません", "The `fold` is not written correctly"),
             tr!(
-                "`fold <判定の列> over <並びの名前>` になっていないか、判定の行き先が `next` `stop` `stop with <値>` `take_unique <値>` `take_first <値>` `keep_max <値> by <鍵>` のどれでもないか、畳もうとしている列が列挙でないとき。",
-                "The heading is not `fold <verdict column> over <sequence>`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, or the column being folded is not an enum."
+                "`fold <判定の列> over <並びの名前>` になっていないか、判定の行き先が `next` `stop` `stop with <値>` `take_unique <値>` `take_first <値>` `keep_max <値> by <鍵>` のどれでもないか、畳もうとしている列が列挙でないとき。畳み込みの値が、その値を決める時点に無い値を読むときも、これです。`empty` と `exhausted` の値は要素を見ていないところで決まるので、要素の値を読めません。どの値も、この畳み込みの答えから計算する値を読めません。`held` は最後まで見終えたときの値なので、`exhausted` の値にだけ書けます。",
+                "The heading is not `fold <verdict column> over <sequence>`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, or the column being folded is not an enum. So is a value of the fold that reads what is not there when it is decided: `empty` and `exhausted` are decided where no element is being looked at and cannot read an element's value; no value can read what is computed from the fold's own answer; and `held`, what the walk holds once it has seen every element, belongs in `exhausted` only."
             ),
             tr!(
-                "見出しと行き先を上の形に直してください。`take` とだけ書くことはできません。**一件だけ採るのか、最初の一件を採るのか**は、書く人が選ぶことだからです。",
-                "Correct the heading and the arms. A bare `take` cannot be written: whether **one and only one** element may be taken, or the first of several, is for the author to choose."
+                "見出しと行き先を上の形に直してください。`take` とだけ書くことはできません。**一件だけ採るのか、最初の一件を採るのか**は、書く人が選ぶことだからです。要素の値を答えにするなら、`take_unique`・`take_first`・`keep_max` で採ってから、`exhausted -> held` で返してください。",
+                "Correct the heading and the arms. A bare `take` cannot be written: whether **one and only one** element may be taken, or the first of several, is for the author to choose. To answer with a value of an element, take it with `take_unique`, `take_first` or `keep_max`, and answer `exhausted -> held`."
             ),
             X_E021,
             &["E020", "E022", "E023", "E024"],
@@ -2152,18 +2199,24 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E031",
-            tr!("`fold` と `count` は一緒に書けません", "A rule cannot have both a `fold` and a `count`"),
+            tr!("並びをもう一度たどることになります", "This would take a second walk over the sequence"),
             tr!(
-                "一つの規則に `fold` と `count` の両方があるとき。どちらも同じ並びをたどり終えたときの答えを決めるもので、`fold` は途中で打ち切れます。途中で止まったときに、数えた結果が何を意味するのかが決まりません。",
-                "One rule has both. They are two endings for the same walk, and a `fold` can stop partway: what a count means on a walk that stopped is not decided."
+                "一つの規則で、並びのたどり方が二つ要るとき。形は三つあります。一つめは、`fold` と `count`・`sum` が一緒にあるとき。どちらも同じ並びをたどり終えたときの答えを決めるもので、`fold` は途中で打ち切れるので、途中で止まったときに数えた結果が何を意味するのかが決まりません。二つめは、一つの項目（表・節・導出・定義）が、要素の値と、たどった結果（`fold` の答え、`count`・`sum` の値）の両方を読むとき。たどった結果は並びを最後まで見ないと決まらず、要素の値はその要素を見ているあいだにしかないので、両方を読むには、たどり終えてからもう一度並びをたどることになります。三つめは、出力が要素ごとの値のとき。たどり終えたあとには、一つの値に決まりません。規則の項目は、要素によらない項目、要素ごとの項目、たどった結果を読む項目に分かれ、この順に計算されます（たどる前、たどるあいだ、たどったあと）。",
+                "One rule would need two walks over its sequence. There are three forms. A `fold` beside a `count` or a `sum`: they are two endings for the same walk, and a `fold` can stop partway, so what a count means on a walk that stopped is not decided. One item (a table, a clause, a derive or a definition) that reads both a value of one element and what the walk answers (the `fold`'s answer, a `count`, a `sum`): what the walk answers is known only once every element has been seen, and a value of one element exists only while the walk is on it, so reading both would take a second walk after the first. And an output that is a value of one element: once the walk is over, it is not one value. A rule's items fall into those that read no element, those of one element, and those that read what the walk answers, worked out in that order — before the walk, during it, after it."
             ),
             tr!(
-                "数えるなら `fold` を消して、数えた結果を表で判定してください。畳むなら `count` を消してください。",
-                "To count, drop the `fold` and let a table judge the count. To fold, drop the `count`."
+                "数えるなら `fold` を消して、数えた結果を表で判定してください。畳むなら `count` を消してください。要素の値を読む部分と、たどった結果を読む部分は、分けられるなら別の表か定義にしてください。要素ごとの値を出力にするなら、`count` か `sum` で並び全体の一つの値にしてから出力にしてください。",
+                "To count, drop the `fold` and let a table judge the count; to fold, drop the `count`. Where an item can be split, put the part that reads the element and the part that reads what the walk answers in separate tables or definitions. To answer with something each element decides, make it one value for the whole sequence with a `count` or a `sum` first."
             ),
             X_E031,
             &["E021", "E029"],
-        ),
+        )
+        .also(
+            tr!("要素の値と、たどった結果の両方を読む項目", "One item reading an element's value and what the walk answers"),
+            X_E031_BOTH,
+            X_E031_BOTH_EN,
+        )
+        .also(tr!("要素ごとの値の出力", "An output that is a value of one element"), X_E031_OUTPUT, X_E031_OUTPUT_EN),
         err(
             "E032",
             tr!("取り込んだ列挙と宣言がずれています", "The declared enum and the imported one disagree"),
@@ -2662,6 +2715,21 @@ pub fn ledger() -> Vec<Entry> {
             &["E129", "E130"],
         ),
         err(
+            "E075",
+            tr!("列挙の値でも、名前でもある語です", "A word is both a value of an enum and a name"),
+            tr!(
+                "表の出力のセルか `fold` の答えに書いた語が、その列（答え）の列挙の値で、同じ列挙を型にもつ入力・出力・要素のフィールド・導出・定義・表の出力の名前でもあるとき。値としても名前としても読めるので、どちらの意味か決まりません。名前の型が別の型なら、語はその列の値として読みます（数の出力 `gold` があっても、列挙の列に書いた `gold` は列挙の値です）。例と手順の例の期待値のセルは値しか書けないので、いつも値として読みます。",
+                "A word in an output cell of a table, or in an answer of a `fold`, is a value of the column's (the answer's) enum, and also the name of an input, an output, a field of an element, a derive, a definition or a table's output whose type is that enum. It reads either way, and which one is meant is not decided. Where the name's type is another, the word is read as the column's value (an output `gold` that is a number does not stop `gold` in a column of the enum from being the enum's value). An expected value in an example or a scenario is always a value, since nothing else can be written there."
+            ),
+            tr!(
+                "列挙の値か名前のどちらかを、別の名前に変えてください。",
+                "Rename either the enum's value or the name."
+            ),
+            X_E075,
+            &["E103", "E012"],
+        )
+        .english(X_E075_EN),
+        err(
             "E101",
             tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"),
             tr!(
@@ -2753,8 +2821,8 @@ pub fn ledger() -> Vec<Entry> {
                 "In a `policy unique` table, an input matching both rows was actually constructed. An overlap that could not be constructed falls to W114 instead. A pair that meets only on a combination the tables above never produce together, or only where no input reaches — past what a `define` comes to, at the truth value a boolean `define` never takes, where the rows of a table above leave a derive no values — is not reported: the completeness check asks no row there, and E102 calls a row that asks only for such points dead. On an optional column a comparison, a literal and a set of values match only a value that is there, while `-` and `not:` match the absent value too; so a `none` row meets a `-` row, and a `not: 5` row, on the absent value."
             ),
             tr!(
-                "出力が違うなら、どちらが正しいか決めて行を直してください。順序に意味を持たせたいなら `policy first` を宣言してください。出力まで同じなら、片方を削ってください。",
-                "If the outputs differ, decide which is right and fix the rows; to let the order decide, declare `policy first`. If even the outputs agree, delete one of the rows."
+                "出力が違うなら、どちらが正しいか決めて行を直してください。順序に意味を持たせたいなら `policy first` を宣言してください。出力まで同じなら、片方を削ってください。同じ出力を定める二つの表や節が重なるときは、勝つほうに `overrides <相手>` を書いてください。表なら `policy` の次の行に、節なら節の下の行に書きます。二つが同じ答えを返していても、重なりは許しません。今日同じ答えでも、明日の編集で片方だけが変わるからです。",
+                "If the outputs differ, decide which is right and fix the rows; to let the order decide, declare `policy first`. If even the outputs agree, delete one of the rows. Where two tables or clauses that define one output overlap, write `overrides <the other>` on the one that wins: after `policy` on a table, as a line under a clause. The overlap is refused even when the two answer the same, since an edit tomorrow may change one of them and not the other."
             ),
             X_E105,
             &["W105", "W114", "E102"],
@@ -2813,8 +2881,8 @@ pub fn ledger() -> Vec<Entry> {
                 "The region check visited more nodes than `--budget` allows. Failing to prove something is never green here, so this is an error and not a warning."
             ),
             tr!(
-                "表を分けて列の数を減らすか、`--budget` を上げてください。列の積が効くので、一つの表に列を積むより、表を一列につないでいくほうが安く済みます。",
-                "Split the table to reduce the number of columns, or raise `--budget`. The cost is the product of the columns, so chaining tables in a linear pipeline is cheaper than piling columns into one table."
+                "表を分けて列の数を減らすか、`--budget` を上げてください（`rulec check` にも `ritsu check` にもあります）。列の積が効くので、一つの表に列を積むより、表を一列につないでいくほうが安く済みます。",
+                "Split the table to reduce the number of columns, or raise `--budget` (both `rulec check` and `ritsu check` take it). The cost is the product of the columns, so chaining tables in a linear pipeline is cheaper than piling columns into one table."
             ),
             X_E109,
             &["E101", "W114"],
@@ -3144,8 +3212,8 @@ pub fn ledger() -> Vec<Entry> {
                 "The inputs cut into more cells than the budget allows (`--budget` divided by 50), or the rule's answer does not cut into finitely many columns. A claim that was not proven is never green, so this is an error and not a warning."
             ),
             tr!(
-                "`--budget` を上げるか、遷移を決める表の列を減らしてください。列の積が効くので、表を一列につないでいくほうが安く済みます。",
-                "Raise `--budget`, or give the table that decides the transitions fewer columns. The cost is the product of the columns, so a chain of tables is cheaper than one wide one."
+                "`--budget` を上げるか（`rulec check` にも `ritsu check` にもあります）、遷移を決める表の列を減らしてください。列の積が効くので、表を一列につないでいくほうが安く済みます。",
+                "Raise `--budget` (both `rulec check` and `ritsu check` take it), or give the table that decides the transitions fewer columns. The cost is the product of the columns, so a chain of tables is cheaper than one wide one."
             ),
             X_E128,
             &["E109", "W127"],
@@ -3224,6 +3292,21 @@ pub fn ledger() -> Vec<Entry> {
             &["W114", "E128"],
         )
         .english(X_W127_EN),
+        warn(
+            "W128",
+            tr!("行に当たる入力を見つけられず、当たらないことも示せませんでした", "No input was found that reaches a row, and none was shown not to"),
+            tr!(
+                "計算した列（導出、`define`）にセルを書いた行で、その行に当たる入力が、規則の例にも、ベクタを作るときの探し方でも、入力の候補の値の組み合わせ（4,096 通りまで）にも見つからず、どの入力も当たらないことも示せなかったとき。そういう行の点は入力ではなく、そこに届く入力があるかは式どうしの関係で決まります（整数でしか届かない、整数では届かない、など）。届くと決まっていない行を、黙って通しません。入力と列挙だけの行は、点がそのまま入力なので、この探しはしません。",
+                "A row that writes a cell on a computed column (a derive, a `define`): no input reaching it was found among the rule's examples, by the search the vectors are made with, or among the combinations of the inputs' candidate values (up to 4,096), and it could not be shown that no input does. The point of such a row is not an input, and whether one reaches it turns on how the expressions relate (a value only whole numbers reach, or one they never do). A row nothing decided is not passed in silence. A row of inputs and enums alone needs no search: its point is an input."
+            ),
+            tr!(
+                "その行に当たる入力が本当にあるか、式と行の条件を見比べてください。あるなら、その入力を例に書くと、この警告は消えます。無いなら、行を削除してください。削除して完全性の欠落（E101）が出るなら、その組み合わせが起きないことも rulec は示せていないので、行は残してかまいません。",
+                "Look at the expressions and the row's conditions together. If some input reaches the row, write it as an example and the warning goes; if none does, delete the row. If deleting it brings a completeness gap (E101), rulec cannot show that the combination never comes either, and the row can stay."
+            ),
+            X_W128,
+            &["E101", "E102", "W114", "W127"],
+        )
+        .english(X_W128_EN),
         warn(
             "W105",
             tr!("要確認の隠れ: 先の行が後の行の一部を隠しています", "Shadowing that needs review: an earlier row hides part of a later one"),

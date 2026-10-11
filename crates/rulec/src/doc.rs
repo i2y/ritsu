@@ -587,6 +587,16 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
             crate::kw::EMPTY,
             crate::kw::EXHAUSTED
         ));
+        // What `held` is (§15.208): the reference evaluator and every generator agree on it, and the
+        // page says it in the words the grammar does, where the walk answers with it.
+        if reads_held(fold) {
+            o.push_str(&tr!(
+                "`{h}` は、採った値（`take_unique`・`take_first`）、無ければ持ち越した値（`keep_max`）、それも無ければ `{e}` の答えです。\n",
+                "`{h}` is the value taken (`take_unique`, `take_first`), else the value kept (`keep_max`), else the `{e}` answer.\n",
+                h = crate::kw::HELD,
+                e = crate::kw::EMPTY
+            ));
+        }
     }
 
     // --- The named sequences the examples walk. Without them an example reads as a word
@@ -1032,6 +1042,15 @@ fn machine_section(f: &RuleFile, c: &Checked, lines: &[&str]) -> String {
         ));
     }
     o
+}
+
+/// Whether the walk answers with `held` (only `exhausted` may say it, E021).
+fn reads_held(fold: &crate::ast::FoldDecl) -> bool {
+    fold.exhausted.as_ref().is_some_and(|e| {
+        let mut names = Vec::new();
+        crate::types::collect_names(e, &mut names);
+        names.iter().any(|n| n == crate::kw::HELD)
+    })
 }
 
 /// The move one arm of a `fold` declares, verbatim: what is written after the `->`.
@@ -1944,6 +1963,13 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
             if let Some(x) = e {
                 o.push_str(&format!("| {k} | `{}` |\n", md_esc(&arm_src(&lines, x.span().line))));
             }
+        }
+        if reads_held(fold) {
+            o.push_str(&tr!(
+                "\n`{h}` は、採った値、無ければ持ち越した値、それも無ければ一件も無いときの答えです。\n",
+                "\n`{h}` is the value taken, else the value kept, else the answer for no elements.\n",
+                h = crate::kw::HELD
+            ));
         }
     }
 

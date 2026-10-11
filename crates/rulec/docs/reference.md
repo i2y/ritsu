@@ -760,6 +760,21 @@ with `made` declared up to the end of 2026 — it is always true, or always fals
 for the other value, a row that asks only for that is E102, and two rows that meet only there do
 not overlap.
 
+A `define` of a number whose expression only adds, subtracts and multiplies by constants is an
+equation as well as an interval, and the checks read it as one, as they read a derive's
+(§15.209 of DESIGN.md). Each column alone may come to the value a row asks for, and the columns
+still never come to them together: with `excess = added - limit`, an excess of one or more over a
+limit of one or more is an `added` of two or more, so a row asking for that excess, that limit
+and an `added` of at most one is E102, and E101 asks no row for it. The certificate carries the
+equation as a fact of the `define` (formats.md).
+
+Where a row asks a computed column (a derive, a `define`) for values and neither an input that
+reaches the row nor a proof that none does was found, the check says the row is undecided
+(W128) rather than passing it as reached: the product of two numbers is 997 only as one box of
+997 or 997 boxes of one, which no candidate the search walks need be. An example that reaches the
+row decides it, and the warning goes. A row of inputs and enums alone is never undecided: its
+point is an input.
+
 ## 6.1 constraint
 
 A relation between two inputs that the caller guarantees. It computes nothing; it says
@@ -838,7 +853,7 @@ The arms:
 | `take_first <value>` | take the first, ignore any later one |
 | `keep_max <value> by <key>` | hold this element's value, replacing what is held when the key is larger |
 | `empty -> <value>` | the answer when there are no elements. **Required** |
-| `exhausted -> <value>` | the answer when the walk reached the end. **Required**; `held` is the value being held |
+| `exhausted -> <value>` | the answer when the walk reached the end. **Required**; `held` is the value taken (`take_unique`, `take_first`), else the value kept (`keep_max`), else the `empty` answer |
 
 Four things are checked, and each of them is a loop somebody has written by hand and got
 wrong:
@@ -849,6 +864,53 @@ wrong:
    named (W115);
 4. **`take_unique` or `take_first`** — there is no bare `take`. Whether a second matching
    element is an error or is ignored is a decision, and the grammar makes it one (E021).
+
+### Before the walk, on each element, after it
+
+A rule that walks a sequence runs each of its items at one of three places, and which one is
+derived from what the item reads rather than declared (§15.208 of DESIGN.md):
+
+- **before the walk**, once: an item that reads neither a value of one element nor what the
+  walk answers — a table over the ordinary inputs, a `define` computed from them;
+- **on each element**: an item that reads a value of one element (a field of `elements`, or an
+  item that reads one);
+- **after the walk**, once: an item that reads what the walk answers — the fold's answer, which
+  is the rule's first output, or a `count` or a `sum` (§6.3).
+
+```rule
+define opening : number = reserve + fee          # before: inputs only
+define offer   : number = max(amount, opening)   # on each element: `amount` is a field
+
+fold verdict over bids
+  counted   -> keep_max offer by offer
+  ignored   -> next
+  empty     -> opening                           # decided before any element
+  exhausted -> held
+
+table review_of                                  # after: it reads `best`, the answer
+policy unique
+| best  | -> review : bool |
+| >=500 | true             |
+| <500  | false            |
+```
+
+So `opening` exists when the sequence is empty, an element's item can read it, and a table can
+read what the walk answered.
+
+What cannot be written is said where it is written:
+
+- an item that reads both a value of one element and what the walk answers (E031): the answer
+  is known only once every element has been seen, and the element's value only while the walk
+  is on it, so reading both would take a second walk;
+- an output that is a value of one element (E031), and a `result` line that reads one: once the
+  walk is over there is no one value to give;
+- an answer that reads what is not there where it is decided (E021): `empty` and `exhausted`
+  reading a value of one element, `held` anywhere but `exhausted`, and any answer or key reading
+  what is decided after the walk.
+
+The fold's answers are of the first output's type: a word that is a value of its enum is that
+value (`empty -> unavailable`), a word that is neither a value nor a declared name is E012, and a
+value of another type — `true` for an enum — is E103.
 
 ### Why a fold does not cost the checks their decidability
 
@@ -929,10 +991,11 @@ per-element table produces — and its values have to be a closed set, a bool or
 (E029). A bool column needs no `= <value>`: `where name_match` counts the elements where it
 is true.
 
-A rule that counts runs in two phases, and which item belongs to which is derived rather
-than declared: **an item is part of the walk exactly when it reads something that only one
-element has.** So the table that classifies an element runs once per element, and everything
-that reads only the counts and the ordinary inputs runs once, after.
+A rule that counts runs at the three places a fold does (§6.2), and which item belongs to
+which is derived rather than declared: **an item is part of the walk exactly when it reads
+something that only one element has.** So the table that classifies an element runs once per
+element, what reads only the ordinary inputs runs once before the walk (an element's item can
+read it), and what reads the counts runs once, after.
 
 ```rule
 table row_of  # the walk: it reads a field of an element
@@ -986,7 +1049,9 @@ forward: an average is a sum and a count divided, and the divisor is not a const
 
 A rule cannot have both a `fold` and a `count` or a `sum` (E031): they are two endings for
 the same walk, and a `fold` may stop partway, which leaves the meaning of a total on that
-walk undecided. Every target but SQL generates them, for the reason SQL gets no walk at all.
+walk undecided. An item that reads both a value of one element and a count or a sum is E031
+too, for the reason of §6.2. A `count` or a `sum` named like an output is that output, and
+answers it. Every target but SQL generates them, for the reason SQL gets no walk at all.
 
 ## 6.4 machine and scenario
 
@@ -1291,6 +1356,16 @@ comparison operator does.
 
 An output cell holds a literal or the name of a value declared above (an input, a `derive` or
 a `define`). It never holds an expression.
+
+A word in an output cell is read in the type of its column (§15.208 of DESIGN.md). In the
+column of an enum, a value of that enum is the value, even where an output or an input of
+another type has the same name (`gold`, a value of `outcome`, beside an output `gold` that is a
+number). Where a name **of that same enum** is spelled the same — an input `current : plan`
+beside the value `current` of `plan` — the word reads either way, and the check asks for one of
+them to be renamed (E075); the answers of a `fold` are read the same way. A cell that passes an
+input through (`| review, approved | false | current |`) writes only what that row's own cell
+on the input allows, here `review` and `approved`, and the checks of the tables below read it
+so. The expected value of an example is always a value.
 
 ## 8. result
 

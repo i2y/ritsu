@@ -32,6 +32,8 @@ const PAIRS: &[(&str, &str, usize)] = &[
     ("E102_past_a_tenth_of_the_amount", "E102_金額の一割が届かない行", 3),
     ("E102_past_a_defines_reach", "E102_定義の届かない行", 3),
     ("E102_past_what_a_table_above_allows", "E102_上の表が許さない行", 2),
+    // A row the ranges let stand, which the equations of the `define`s rule out (§15.209).
+    ("E102_past_a_defines_equation", "E102_定義の式が許さない行", 4),
 ];
 
 /// A row that asks a boolean `define` for the truth value it never takes over the ranges of the

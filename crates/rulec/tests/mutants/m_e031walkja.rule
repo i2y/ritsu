@@ -1,0 +1,14 @@
+rule 明細の取り分(line_share) v1
+description "明細ごとの、ほかの明細の合計。明細の金額と注文の合計を読むが、合計は明細を全部読み終えるまで決まらない。二度目のたどり方になる（E031）"
+
+elements 明細(lines)
+  金額(amount) : number  range >=0 <=1000
+
+outputs
+  合計(total) : number  round down(1)
+
+sum 注文の合計(order_total) over 明細 of 金額  range >=0 <=100000
+
+define ほかの明細 : number = 注文の合計 - 金額
+
+define 合計 : number = 注文の合計

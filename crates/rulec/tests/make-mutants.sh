@@ -196,8 +196,10 @@ awk '{ sub(/^count 一致数\(hits\) over 候補 /, "count 一致数(hits) "); p
 awk '{ sub(/where 照合結果 = 一致/, "where 会社名一致 = 一致"); print }'      "$n" > "$M/m_e029.rule"
 # A count with no range: the universe of the completeness check, and the cap on the sequence
 awk '{ sub(/  range >=0 <=50/, ""); print }'                            "$n" > "$M/m_e030.rule"
-# A rule that both folds and counts the same walk
-awk '{ print } /^count 一致数/ { print ""; print "fold 照合結果 over 候補"; print "  一致    -> next"; print "  不一致  -> next"; print "  empty     -> false"; print "  exhausted -> false" }' "$n" > "$M/m_e031.rule"
+# A rule that both folds and counts the same walk. The fold's answers are values of the first
+# output's type, so the one seeded error is the second summary (a fold's answer is typed against
+# that output, §15.208).
+awk '{ print } /^count 一致数/ { print ""; print "fold 照合結果 over 候補"; print "  一致    -> next"; print "  不一致  -> next"; print "  empty     -> 新規登録"; print "  exhausted -> 目視確認" }' "$n" > "$M/m_e031.rule"
 
 # --- The expression and the result line.
 # An expression in an output cell

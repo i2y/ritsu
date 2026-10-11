@@ -657,6 +657,34 @@ fn 定義と上の表の行の葉は証明付きの検査器でも確かめら�
     }
 }
 
+/// The equation of a `define` of a number whose expression is linear, as a fact of the linear
+/// model (§15.209), through the proved checks: the box the rows leave open is closed by
+/// `not_asked_of_farkas` with the equation read again from the define's expression (`linOf`), and
+/// the same lies as under `tools/recheck.py` are refused.
+#[test]
+fn 定義の式の事実は証明付きの検査器でも確かめられる() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    let rel = "tests/sieve/E101_closed_by_a_defines_equation.rule";
+    let cert = sieve_cert("E101_closed_by_a_defines_equation");
+    let (code, said) = lean(&bin, &cert, Some(rel));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("OK: every claim"), "{said}");
+    let facts = r#""facts":[{"define":"excess","le":true},{"define":"excess","le":false}"#;
+    let lies = [
+        ("等式の向きを入れ替える", cert.replacen(facts, r#""facts":[{"define":"excess","le":false},{"define":"excess","le":true}"#, 1)),
+        ("別の定義の等式を指す", cert.replacen(facts, r#""facts":[{"define":"added","le":true},{"define":"excess","le":false}"#, 1)),
+        ("定義の等式を導出の等式と呼ぶ", cert.replacen(facts, r#""facts":[{"derive":"excess","le":true},{"define":"excess","le":false}"#, 1)),
+    ];
+    for (what, forged) in lies {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = lean(&bin, &forged, Some(rel));
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains("FAILED"), "{what}: {said}");
+    }
+}
+
 /// The kind of every column is worked out from `inputs`, `walks` and `values`, and held to what
 /// the certificate calls it (§15.196).
 #[test]

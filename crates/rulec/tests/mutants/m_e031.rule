@@ -29,8 +29,8 @@ count 一致数(hits) over 候補 where 照合結果 = 一致  range >=0 <=50
 fold 照合結果 over 候補
   一致    -> next
   不一致  -> next
-  empty     -> false
-  exhausted -> false
+  empty     -> 新規登録
+  exhausted -> 目視確認
 
 table 手続き判定(action_of)
 policy unique

@@ -1,0 +1,57 @@
+rule best_offer v1
+description "The best offer among the bids, never below the opening price, and whether it calls for a review. The opening price is computed from the inputs once, before the walk; each bid's offer reads its amount and that price; no bids at all answers the opening price; and the review is decided after the walk, from the answer"
+
+enum bid_verdict = counted | ignored
+
+inputs
+  reserve : number  range >=0 <=1000
+  fee     : number  range >=0 <=100
+
+elements bids
+  amount    : number  range >=0 <=1000
+  withdrawn : bool
+
+outputs
+  best   : number  round down(1)
+  review : bool
+
+define opening : number = reserve + fee
+define offer   : number = max(amount, opening)
+
+table judge
+policy unique
+| withdrawn | -> verdict : bid_verdict |
+| false     | counted                  |
+| true      | ignored                  |
+
+fold verdict over bids
+  counted   -> keep_max offer by offer
+  ignored   -> next
+  empty     -> opening
+  exhausted -> held
+
+table review_of
+policy unique
+| best  | -> review : bool |
+| >=500 | true             |
+| <500  | false            |
+
+sequence two_bids
+| amount | withdrawn |
+| 300    | false     |
+| 700    | false     |
+
+sequence only_withdrawn
+| amount | withdrawn |
+| 900    | true      |
+
+sequence no_bids
+| amount | withdrawn |
+
+examples
+| reserve | fee | bids           | -> best | review |
+| 100     | 0   | two_bids       | 700     | true   |
+| 800     | 50  | two_bids       | 850     | true   |
+| 400     | 10  | only_withdrawn | 410     | false  |
+| 600     | 0   | no_bids        | 600     | true   |
+| 0       | 20  | no_bids        | 20      | false  |

@@ -33,6 +33,9 @@ pub struct Engine {
     /// The port of dates a rule's `range from koyomi` is read through (§15.174); None where no
     /// koyomi is joined.
     dates: Option<crate::days::Port>,
+    /// The most nodes one check of a rule visits (`--budget`), when it is not the default
+    /// (§15.209).
+    budget: Option<i64>,
 }
 
 /// The file a path names, its links followed and `..` folded: how the reports are kept.
@@ -70,9 +73,10 @@ fn refused(path: &str, src: &str) -> Vec<Said> {
         .collect()
 }
 
-/// The rule, when it passes the whole of check (as `api` and `certificate` ask of it).
-fn checked(path: &str, src: &str) -> Result<(RuleFile, Checked), Vec<Said>> {
-    let rep = crate::report(src, path);
+/// The rule, when it passes the whole of check (as `api` and `certificate` ask of it), the check
+/// held to `budget`.
+fn checked(path: &str, src: &str, budget: i64) -> Result<(RuleFile, Checked), Vec<Said>> {
+    let rep = crate::report_with(src, path, budget);
     if crate::has_error(&rep.diags) {
         return Err(refused(path, src));
     }
@@ -129,6 +133,18 @@ impl Engine {
         Engine { dates: Some(dates), ..Engine::default() }
     }
 
+    /// The same engine, with every check of a rule held to `budget` nodes, the region checks and
+    /// the machine's alike: what `ritsu check --budget` passes on (§15.209).
+    pub fn with_budget(mut self, budget: i64) -> Engine {
+        self.budget = Some(budget);
+        self
+    }
+
+    /// The budget a check of a rule is held to.
+    fn budget(&self) -> i64 {
+        self.budget.unwrap_or(crate::region::DEFAULT_BUDGET)
+    }
+
     /// Runs `f` with this engine's port of dates joined on the thread.
     fn joined<R>(&self, f: impl FnOnce() -> R) -> R {
         crate::days::with(self.dates.clone(), f)
@@ -153,7 +169,7 @@ impl Engine {
                     Some(_) => crate::prepare(&src, &path).map_err(|_| refused(&path, &src)),
                     None => {
                         self.checks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        checked(&path, &src)
+                        checked(&path, &src, self.budget())
                     }
                 })
             })
@@ -174,7 +190,7 @@ impl Engine {
             return r.clone();
         }
         self.checks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let r = std::sync::Arc::new(self.joined(|| i18n::with(lang, || crate::report(src, path))));
+        let r = std::sync::Arc::new(self.joined(|| i18n::with(lang, || crate::report_with(src, path, self.budget()))));
         reports.insert(key, (path.to_string(), lang, r.clone()));
         r
     }
@@ -599,7 +615,7 @@ impl ritsu_ports::Rules for Engine {
     fn doc(&self, rule: &Path, shown: &str, html: bool, lang: Lang) -> Result<String, Vec<Said>> {
         let (path, src) = read(rule)?;
         self.joined(|| i18n::with(rlang(lang), || {
-            let (f, c) = checked(&path, &src)?;
+            let (f, c) = checked(&path, &src, self.budget())?;
             Ok(if html {
                 let js = crate::codegen::Gen::new(&f, &c, &src, &path).javascript();
                 crate::doc::render_html_named(&f, &c, &src, &path, shown, &js)

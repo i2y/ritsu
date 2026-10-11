@@ -61,6 +61,14 @@ rather than taking its word: the interval from the `define`'s own expression, th
 from its comparison, and the rows that write the value from the table above — and the values a
 table above writes into a column of numbers from what each of its rows writes.
 
+A `define` whose expression only adds, subtracts and multiplies by constants is read as an
+equation as well. Each column may come to the value a row asks for while the columns never come
+to them together: with `excess = added - limit`, an excess of one or more over a limit of one or
+more is an `added` of two or more, so a row asking for that excess and that limit with an
+`added` of at most one is E102, and completeness asks no row for it. The certificate carries
+the equation as a fact of the `define`, and the two re-checkers build it again from the
+expression rather than taking the certificate's word for it.
+
 In a rule that binds an enum to a `.proto` with `import proto`,
 completeness reaches **across the contract**. Every `rulec check` reads
 that file: a set that no longer agrees is E032, and once the sets agree,
@@ -200,7 +208,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 115 deliberately broken
+   and that implementation has not been proved correct. The evidence is 121 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**
@@ -337,7 +345,8 @@ change introduced.
 It says so. It does not approximate and pass.
 
 - **E109** — the check ran out of its node budget, so completeness was
-  not proved. Split the table or raise `--budget`; nothing is assumed.
+  not proved. Split the table or raise `--budget` (`rulec check` and
+  `ritsu check` both take it); nothing is assumed.
 - **W114** — two rows of a `unique` table might overlap, and the checker
   could neither construct an input that proves it nor prove that none
   exists. It warns, and **the generated code carries a guard** that
@@ -347,6 +356,13 @@ It says so. It does not approximate and pass.
   land here: those are decided by eliminating one variable at a time.
   What is left is what that cannot decide because it works over the
   rationals — a pair kept apart only by the values being whole.
+- **W128** — a row asks a computed column (a derive, a `define`) for
+  values, and no input was found that reaches it, nor was it shown that
+  none does. It warns rather than passing the row as reached: `ok` would
+  otherwise read as "every row is reached". An example that reaches the
+  row decides it, and the warning goes. If no input does, delete the row
+  — unless completeness then asks for it back, which means the combination
+  cannot be shown impossible either, and the row can stay.
 
 ## Over the days a koyomi date comes to
 

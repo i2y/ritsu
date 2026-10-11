@@ -397,6 +397,7 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
         let set = &c.sets[ti];
         let chk = checks.get(ti);
         let dead: BTreeSet<usize> = chk.map(|k| k.dead.iter().copied().collect()).unwrap_or_default();
+        let undecided: BTreeSet<usize> = chk.map(|k| k.undecided.iter().copied().collect()).unwrap_or_default();
 
         // --- row coverage
         for (ri, _) in t.rows.iter().enumerate() {
@@ -416,15 +417,23 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                 missing.push(Missing {
                     kind: ROW,
                     what: tag.clone(),
-                    // A row nothing can reach is named by E102 — including one only the
-                    // tables above rule out — and E102 rows are left out of this tally, so what
-                    // is left here is usually the generator not getting there. Usually, not
-                    // always: reading the tables above is an under-approximation, so a dead row
-                    // it could not prove dead still lands in this bucket.
-                    hint: tr!(
-                        "この行が勝つ入力を、ベクタが一つも作れていません。到達できない行は E102 が挙げるので、ここに出る行の多くは、ジェネレーターが届いていない行です。",
-                        "No vector produces an input on which this row wins. A row nothing can reach is named by E102 instead, so this is usually the generator not getting there."
-                    ),
+                    // A row nothing can reach is named by E102 and left out of this tally. A row
+                    // with a computed column for which neither an input nor a proof that none
+                    // exists was found is named by W128 (§15.209), and is said to be one here; any
+                    // other row is one the vectors did not find an input for. Which of the two is
+                    // said, rather than "usually the generator": a row of A08's kind, which no
+                    // input reaches and nothing showed so, used to be put down to the generator.
+                    hint: if undecided.contains(&ri) {
+                        tr!(
+                            "check が W128 で言った行です。当たる入力が見つからず、当たらないことも示せていません。当たる入力があるなら例に書き、無いならこの行を削除してください（削除して E101 が出るなら、行は残してかまいません）。",
+                            "check named this row with W128: no input was found that reaches it, and none was shown not to. If some input reaches it, write it as an example; if none does, delete the row (if deleting it brings E101, the row can stay)."
+                        )
+                    } else {
+                        tr!(
+                            "この行が勝つ入力を、ベクタが一つも作れていません。check は、この行を届かない行（E102）とも、決められない行（W128）とも言っていません。ベクタを作るときに、当たる入力が見つからなかった行です。",
+                            "No vector produces an input on which this row wins. check named it neither unreachable (E102) nor undecided (W128): the vectors did not find an input for it."
+                        )
+                    },
                 });
             }
         }

@@ -1,0 +1,25 @@
+rule capped_yield v1
+description "What a plot yields after a bonus, when a yield over the cap loses one unit. The row that takes the yield to nothing asks for an excess over the cap and a yield of at most one, which the excess's own equation never allows: an excess of one or more over a cap of one or more is a yield of two or more"
+
+inputs
+  base     : number  range >=0 <=20
+  cap_low  : number  range >=0 <=2
+  cap_high : number  range >=0 <=2
+  bonus    : number  range >=0 <=3
+
+outputs
+  kept : number  round down(1)
+
+define limit    : number = cap_low + cap_high
+define added    : number = base + bonus
+define excess   : number = added - limit
+define less_one : number = added - 1
+
+table penalty
+policy unique
+| base | limit | excess | added | -> kept : number |
+| 0    | -     | -      | -     | base             |
+| >=1  | 0     | -      | -     | added            |
+| >=1  | >=1   | <=0    | -     | added            |
+| >=1  | >=1   | >=1    | <=1   | 0                |
+| >=1  | >=1   | >=1    | >=2   | less_one         |

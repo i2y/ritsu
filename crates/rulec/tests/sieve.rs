@@ -14,6 +14,11 @@
 //! read the sieve as the completeness check does, so two rows that meet only where the rows of a
 //! table above leave no values are no overlap. The certificate states such a pair apart, with the
 //! rows of the table above that it rests on.
+//!
+//! And after §15.209: the equation of a `define` of a number whose expression is linear is part of
+//! the linear model, as a derive's is. A box the rows leave open, each of whose values the column
+//! does come to but never together, is no gap, and the certificate closes it with the equation's
+//! multiplier, named as a fact of the `define`.
 
 use rulec::eval::Val;
 use rulec::i18n::{self, Lang};
@@ -34,6 +39,13 @@ const PAIRS: &[(&str, &str, &str)] = &[
 /// A boolean `define` that always takes one truth value (§15.196): the English rule and its Japanese
 /// version.
 const TRUTH: &[(&str, &str)] = &[("E101_a_define_that_is_always_true", "E101_いつも真になる定義")];
+
+/// A hole the equations of the `define`s close (§15.209): the English rule and its Japanese version.
+/// The rows leave open an excess of one or more over a cap of one or more with a yield of at most
+/// one, each value inside what its column comes to; `excess = added - limit` leaves no values there.
+/// The four `define`s come in the same order in both: the cap, the yield, the excess, and the yield
+/// less one.
+const EQUATIONS: &[(&str, &str)] = &[("E101_closed_by_a_defines_equation", "E101_定義の式が閉じる穴")];
 
 /// Two rows that meet only where the rows of a table above leave no values (§15.196): the English
 /// rule, its Japanese version, the code the overlap was reported as before, and the column a table
@@ -102,10 +114,11 @@ fn a_value_no_input_reaches_is_no_gap() {
         .map(|(en, ja, _)| (en, ja))
         .chain(TRUTH.iter().map(|(en, ja)| (en, ja)))
         .chain(OVERLAPS.iter().map(|(en, ja, ..)| (en, ja)))
+        .chain(EQUATIONS.iter().map(|(en, ja)| (en, ja)))
         .flat_map(|(en, ja)| [format!("{en}.rule"), format!("{ja}.rule")])
         .collect();
     listed.sort();
-    assert_eq!(names, listed, "every rule of tests/sieve is in PAIRS, TRUTH or OVERLAPS, with its Japanese version");
+    assert_eq!(names, listed, "every rule of tests/sieve is in PAIRS, TRUTH, OVERLAPS or EQUATIONS, with its Japanese version");
     for (en, ja, _) in PAIRS {
         for stem in [en, ja] {
             let (rel, src) = source(stem);
@@ -345,6 +358,82 @@ fn a_real_overlap_is_still_named() {
             let ds = i18n::with(Lang::En, || rulec::check_source(&moved, &rel));
             let want = if *code == "W105" { "W105" } else { "E105" };
             assert!(ds.iter().any(|d| d.code == want), "{rel}: {:?}", ds.iter().map(|d| d.code).collect::<Vec<_>>());
+        }
+    }
+}
+
+/// The names of the `define`s of a rule, in the order it declares them.
+fn defines(f: &rulec::ast::RuleFile) -> Vec<String> {
+    f.items
+        .iter()
+        .filter_map(|it| match it {
+            rulec::ast::Item::Define(d) => Some(d.name.text.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A hole the rows leave open, which the equation of a `define` closes (§15.209), is no gap: the
+/// rule passes with nothing said, in both languages, and no input inside the ranges comes to an
+/// excess of one or more over a cap of one or more with a yield of at most one. The certificate
+/// closes the box with the equation's multiplier, naming it as a fact of the `define`.
+#[test]
+fn a_hole_the_equations_close_is_no_gap() {
+    for (en, ja) in EQUATIONS {
+        for stem in [en, ja] {
+            let (rel, src) = source(stem);
+            for lang in [Lang::En, Lang::Ja] {
+                let ds = i18n::with(lang, || rulec::check_source(&src, &rel));
+                assert!(ds.is_empty(), "{rel}: {:?}", ds.iter().map(|d| d.code).collect::<Vec<_>>());
+            }
+            let (f, c) = rulec::prepare(&src, &rel).unwrap_or_else(|_| panic!("{rel} does not read"));
+            let names = defines(&f);
+            let (limit, added, excess) = (&names[0], &names[1], &names[2]);
+            let inputs = every_input(&f, &c);
+            assert!(inputs.len() > 100, "{rel}: only {} inputs", inputs.len());
+            for input in inputs {
+                let (_, _, b) = i18n::with(Lang::En, || rulec::eval::run_all(&f, &c, input.clone().into_iter().collect::<HashMap<_, _>>()));
+                let num = |n: &String| match b.get(n) {
+                    Some(Val::Num(v)) => *v,
+                    other => panic!("{rel}: {n} is {other:?} for {input:?}"),
+                };
+                let one = Rat::int(1);
+                let hole = num(limit).cmp_to(one) != std::cmp::Ordering::Less
+                    && num(excess).cmp_to(one) != std::cmp::Ordering::Less
+                    && num(added).cmp_to(one) != std::cmp::Ordering::Greater;
+                assert!(!hole, "{rel}: {input:?} comes into the hole");
+            }
+            let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(root()).args(["certificate", &rel]).output().unwrap();
+            assert!(o.status.success(), "{rel}");
+            let cert = String::from_utf8_lossy(&o.stdout);
+            let fact = format!(r#""facts":[{{"define":"{excess}","le":true}}"#);
+            assert!(cert.contains(&fact) && cert.contains(r#"{"farkas":[{"fact":0,"y":"1"}"#), "{rel}: the equation is not what closes the box:\n{cert}");
+        }
+        let (re, se) = source(en);
+        let (rj, sj) = source(ja);
+        assert_eq!(found(&se, &re), found(&sj, &rj), "{en} and {ja}");
+    }
+}
+
+/// The equation is what closes the hole: with the excess written as the yield plus the cap, inputs
+/// come into it, and E101 names the gap with one of them.
+#[test]
+fn with_another_equation_the_hole_is_a_gap() {
+    for (en, ja) in EQUATIONS {
+        for (stem, lang) in [(en, Lang::En), (ja, Lang::Ja)] {
+            let (rel, src) = source(stem);
+            let (f, _) = rulec::prepare(&src, &rel).unwrap();
+            let names = defines(&f);
+            let (limit, added) = (&names[0], &names[1]);
+            let minus = format!("= {added} - {limit}");
+            assert!(src.contains(&minus), "{rel}: no `{minus}`");
+            let changed = src.replacen(&minus, &format!("= {added} + {limit}"), 1);
+            let ds = i18n::with(lang, || rulec::check_source(&changed, &rel));
+            let gaps: Vec<_> = ds.iter().filter(|d| d.code == "E101").collect();
+            assert_eq!(gaps.len(), 1, "{rel}: {:?}", ds.iter().map(|d| d.code).collect::<Vec<_>>());
+            let notes = gaps[0].notes.join("\n");
+            let input = if lang == Lang::En { "An input producing this example:" } else { "この例を作る入力:" };
+            assert!(notes.contains(input), "{rel}: {notes}");
         }
     }
 }

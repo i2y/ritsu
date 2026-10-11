@@ -1,0 +1,18 @@
+rule プランの更新(plan_renewal) v1
+description "更新のときに契約が移るプラン。`現在のプラン` は、プランをそのままにする値でもあり、更新の前のプランを持つ入力の名前でもあるので、セルの `現在のプラン` はどちらにも読める（E075）"
+
+enum プラン(plan) = 基本(basic) | 上位(pro) | 現在のプラン(current)
+
+inputs
+  現在のプラン(current) : プラン
+  上げる(upgrade)        : bool
+
+outputs
+  次のプラン(next_plan) : プラン
+
+table 更新(renewal)
+policy first
+| 現在のプラン | 上げる | -> 次のプラン : プラン |
+| 基本         | false  | 基本                   |
+| -            | true   | 上位                   |
+| -            | false  | 現在のプラン           |

@@ -115,6 +115,34 @@ fn 呼び先が無ければ_e044_で止まる() {
     assert_eq!(ds.iter().map(|d| d.code).collect::<Vec<_>>(), vec!["E044"]);
 }
 
+/// A table of the callee whose output is one of the callee's enums cannot be expanded yet (E044),
+/// and the sentence names the table and the output each in its own place, in English and in
+/// Japanese: the two used to be given in one order for both sentences, so one of them named the
+/// output as the table (§15.208). The English rules, and their Japanese versions.
+#[test]
+fn 呼び先の列挙を出す表のe044は表と出力をそれぞれの所で言う() {
+    let callee_en = "rule grade v1\n\nenum level = low | high\n\ninputs\n  score : number  range >=0 <=100\n\noutputs\n  passed : bool\n\ntable level_of\npolicy unique\n| score | -> band : level |\n| <50   | low             |\n| >=50  | high            |\n\ntable pass_of\npolicy unique\n| band | -> passed : bool |\n| low  | false            |\n| high | true             |\n";
+    let caller_en = "rule review v1\n\ninputs\n  points : number  range >=0 <=100\n\noutputs\n  ok : bool\n\napply grade = \"grade.rule\" sha256:0000000000000000\n  score = points\n  passed -> ok\n";
+    let callee_ja = "rule 評価(grade) v1\n\nenum 水準(level) = 低い(low) | 高い(high)\n\ninputs\n  点数(score) : number  range >=0 <=100\n\noutputs\n  合格(passed) : bool\n\ntable 水準の表(level_of)\npolicy unique\n| 点数 | -> 段(band) : 水準 |\n| <50  | 低い               |\n| >=50 | 高い               |\n\ntable 合否の表(pass_of)\npolicy unique\n| 段   | -> 合格 : bool |\n| 低い | false          |\n| 高い | true           |\n";
+    let caller_ja = "rule 審査(review) v1\n\ninputs\n  得点(points) : number  range >=0 <=100\n\noutputs\n  可(ok) : bool\n\napply 評価(grade) = \"評価.rule\" sha256:0000000000000000\n  点数 = 得点\n  合格 -> 可\n";
+    let tmp = TempDir::new("apply-e044");
+    let dir = tmp.path().to_path_buf();
+    std::fs::write(dir.join("grade.rule"), callee_en).unwrap();
+    std::fs::write(dir.join("評価.rule"), callee_ja).unwrap();
+    for (caller, name, lang, want) in [
+        (caller_en, "review.rule", rulec::i18n::Lang::En, "`grade` cannot be applied: the output `band` of table level_of is an enum the callee declares"),
+        (caller_ja, "審査.rule", rulec::i18n::Lang::Ja, "`評価` を準用できません: 表 水準の表 の出力 `段` は、元の規則が宣言した列挙です"),
+    ] {
+        let path = dir.join(name);
+        std::fs::write(&path, caller).unwrap();
+        let ds = rulec::i18n::with(lang, || rulec::report(caller, &path.to_string_lossy()).diags);
+        // the digest is not the callee's (E040), and the check goes on to the expansion
+        let e044: Vec<_> = ds.iter().filter(|d| d.code == "E044").collect();
+        assert_eq!(e044.len(), 1, "{:?}", ds.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>());
+        assert_eq!(e044[0].title, want);
+    }
+}
+
 #[test]
 fn 整形は呼び出しの本体を二字下げる() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);

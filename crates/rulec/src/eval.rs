@@ -297,21 +297,8 @@ pub fn run_bindings(
 ) -> (Option<Val>, Vec<String>, HashMap<String, Val>) {
     // A sequence of exactly one element **is** one element's case, and the coverage audit
     // reads it that way: the element's fields and everything the tables bound from them
-    // (§15.56). A longer sequence has no single set of bindings, and nothing asks it for one.
-    if let Some(fold) = &f.fold {
-        if let Some(Val::Seq(xs)) = inputs.get(&fold.over) {
-            if xs.len() == 1 {
-                let mut m: HashMap<String, Val> =
-                    inputs.iter().filter(|(k, _)| *k != &fold.over).map(|(k, v)| (k.clone(), v.clone())).collect();
-                for (k, v) in &xs[0] {
-                    m.insert(k.clone(), v.clone());
-                }
-                let (fired, _, _, binds) = run_tables(f, c, m);
-                let (outs, _, _, _) = run_fold(f, c, inputs);
-                return (outs.into_iter().next().and_then(|(_, v)| v), fired, binds);
-            }
-        }
-    }
+    // (§15.56), beside what was bound before and after the walk. A longer sequence has no single
+    // set of bindings for an element, and nothing asks it for one (`run_walking`).
     let (outs, fired, mut binds) = run_all(f, c, inputs);
     // A `result` line binds nothing of its own: the first output is its expression, read at
     // the end. The audit asks for the value before rounding by the output's name — whether it
@@ -339,59 +326,184 @@ pub fn run_all(
     (outs, fired, binds)
 }
 
-/// `run_all`, plus the fired rows as `(table, row)` for a diagnostic's structured half.
+/// One item, run in an environment: a derived value or a definition bound to its name, a table
+/// evaluated (§5.1).
+fn run_item(it: &Item, env: &mut Env) {
+    match it {
+        Item::Derived(d) => {
+            if let Some(v) = env.expr(&d.expr) {
+                env.vals.insert(d.name.text.clone(), v);
+            }
+        }
+        Item::Define(d) => {
+            if let Some(v) = env.expr(&d.expr) {
+                env.vals.insert(d.name.text.clone(), v);
+            }
+        }
+        Item::Table(t) => {
+            env.table(t);
+        }
+        // A summary is the walk itself, not something a stage runs.
+        Item::Agg(_) => {}
+    }
+}
+
+/// The items of one stage of a walk, in the order they are written (§15.208).
+fn run_stage(f: &RuleFile, st: &crate::types::Stages, stage: crate::types::Stage, env: &mut Env) {
+    for (i, it) in f.items.iter().enumerate() {
+        if st.at(i) == stage {
+            run_item(it, env);
+        }
+    }
+}
+
+/// Run the rule's items over one environment, without the walk: what one element sees — the
+/// items before the walk and the items of one element (§15.208) — and everything they bound. The
+/// vector generator and the coverage audit use it to ask what verdict an element lands on
+/// (§15.56).
+pub fn run_tables(
+    f: &RuleFile,
+    c: &Checked,
+    inputs: HashMap<String, Val>,
+) -> (Vec<String>, Vec<(String, usize)>, Vec<String>, HashMap<String, Val>) {
+    let st = crate::types::stages(f);
+    let mut env = Env::new(c, inputs);
+    for (i, it) in f.items.iter().enumerate() {
+        if st.at(i) != crate::types::Stage::After {
+            run_item(it, &mut env);
+        }
+    }
+    (env.fired.clone(), env.fired_rows.clone(), Vec::new(), env.vals)
+}
+
+/// Does this element's column hold the value the count is looking for?
+fn counts_here(v: Option<&Val>, want: &Option<crate::ast::Name>) -> bool {
+    match (v, want) {
+        (Some(Val::Bool(b)), None) => *b,
+        (Some(Val::Bool(b)), Some(w)) => *b == (w.text == crate::kw::TRUE),
+        (Some(Val::Enum(x)), Some(w)) => *x == w.text,
+        _ => false,
+    }
+}
+
+/// A rule that walks a sequence (§15.56, §15.58), in the three stages its items fall into
+/// (§15.208).
+///
+/// The items **before** the walk run once, on the inputs. The items of **one element** run once
+/// per element, with that element's fields and everything before the walk in scope, and the
+/// walk reduces them: the fold reads the column of verdicts, each `count` and `sum` adds up its
+/// column. The items **after** the walk run once, with what the walk answered bound to its name
+/// — the fold's answer to the first output, each summary to its own — and the outputs are read
+/// out of that, the way every rule's are (`outputs_of`). The first two stages used to be one, run
+/// per element, and the third did not exist: a table after a fold never ran, an answer of a fold
+/// that named a value computed from the inputs had nothing to read, and an element's table that
+/// read a table of the inputs ran before it (§15.208).
+///
+/// A fold's `held` is what the walk has picked up — by `take_unique`, `take_first` or
+/// `keep_max`. A walk that picked nothing up holds the `empty` answer, which is what makes
+/// `exhausted -> held` total. `empty` and `exhausted` are read with what the items before the
+/// walk bound, and `held`. Two elements taking under `take_unique` is a contradiction, and every
+/// output is **no answer** — the shape the generated code raises on.
+///
+/// A summary over a column one element leaves without a value has no value either. It used to
+/// count as zero, and a total came out 0 where the walk had read nothing at all.
+///
+/// The bindings returned are what the items before and after the walk bound, and — when the
+/// sequence has exactly one element, which **is** one element's case (§15.56) — the element's
+/// own: the coverage audit reads a row of an element's table off them.
 #[allow(clippy::type_complexity)]
-/// A rule that walks a sequence (§15.56).
-///
-/// The items run once per element with that element's fields in scope, and the fold reduces
-/// the column of verdicts. `held` is what the walk has picked up — by `take_unique`,
-/// `take_first` or `keep_max`. A walk that picked nothing up holds the `empty` answer, which
-/// is what makes `exhausted -> held` total: it is either what was taken, or the answer for a
-/// sequence with nothing in it.
-///
-/// Two elements taking under `take_unique` is a contradiction, and the answer is **no
-/// answer** — the same shape the generated code raises on. No vector carries one: the
-/// generator drops a case its own evaluator cannot answer.
-fn run_fold(
+fn run_walking(
     f: &RuleFile,
     c: &Checked,
     inputs: HashMap<String, Val>,
 ) -> (Vec<(String, Option<Val>)>, Vec<String>, Vec<(String, usize)>, HashMap<String, Val>) {
-    let fold = f.fold.as_ref().expect("run_fold is only called for a rule that has one");
-    let seq = match inputs.get(&fold.over) {
+    use crate::types::Stage;
+    let st = crate::types::stages(f);
+    let over = f
+        .elements
+        .as_ref()
+        .map(|e| e.name.text.clone())
+        .or_else(|| f.fold.as_ref().map(|d| d.over.clone()))
+        .unwrap_or_default();
+    let seq = match inputs.get(&over) {
         Some(Val::Seq(xs)) => xs.clone(),
         _ => Vec::new(),
     };
     let scalars: HashMap<String, Val> =
-        inputs.iter().filter(|(k, _)| *k != &fold.over).map(|(k, v)| (k.clone(), v.clone())).collect();
+        inputs.iter().filter(|(k, _)| *k != &over).map(|(k, v)| (k.clone(), v.clone())).collect();
+    let counts: Vec<&crate::ast::AggDecl> =
+        f.items.iter().filter_map(|it| if let Item::Agg(d) = it { Some(d) } else { None }).collect();
+    let nothing = || -> Vec<(String, Option<Val>)> { f.outputs.iter().map(|od| (od.name.text.clone(), None)).collect() };
 
+    // The sequence is capped by the smallest bound any count declares, and a longer one has no
+    // answer here for the same reason the generated code refuses it: the completeness proof was
+    // made over the declared universe (§15.58). A sum's range bounds its total, not the length.
+    let cap = counts
+        .iter()
+        .filter(|d| d.kind == AggKind::Count)
+        .filter_map(|d| c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi))
+        .map(|hi| hi.num / hi.den)
+        .min();
+    if cap.is_some_and(|cap| seq.len() as i128 > cap) {
+        return (nothing(), Vec::new(), Vec::new(), HashMap::new());
+    }
+
+    // Before the walk.
+    let mut env = Env::new(c, scalars);
+    run_stage(f, &st, Stage::Before, &mut env);
+    let before = env.vals.clone();
+    let mut fired = std::mem::take(&mut env.fired);
+    let mut fired_rows = std::mem::take(&mut env.fired_rows);
+
+    let fold = f.fold.as_ref();
     let answer_of = |expr: &Option<Expr>, held: Option<Val>| -> Option<Val> {
         let e = expr.as_ref()?;
-        let mut m = scalars.clone();
+        let mut m = before.clone();
         if let Some(h) = held {
             m.insert(crate::kw::HELD.to_string(), h);
         }
         Env::new(c, m).expr(e)
     };
-    let empty_answer = answer_of(&fold.empty, None);
-
-    let (mut fired, mut fired_rows) = (Vec::new(), Vec::new());
+    let empty_answer = fold.and_then(|d| answer_of(&d.empty, None));
     let mut held: Option<Val> = None;
     let mut taken: Option<Val> = None;
     let mut best: Option<Val> = None;
     let mut broken = false;
     let mut stopped: Option<Option<Val>> = None;
+    let mut tally: HashMap<String, Option<Rat>> = counts.iter().map(|d| (d.name.text.clone(), Some(Rat::zero()))).collect();
+    let mut one: Option<HashMap<String, Val>> = None;
+
+    // One element at a time.
     for e in &seq {
-        let mut m = scalars.clone();
+        let mut m = before.clone();
         for (k, v) in e {
             m.insert(k.clone(), v.clone());
         }
-        let (ef, er, _, vals) = run_tables(f, c, m.clone());
-        fired.extend(ef);
-        fired_rows.extend(er);
         let mut env = Env::new(c, m);
-        env.vals = vals.clone();
-        let Some(Val::Enum(v)) = vals.get(&fold.verdict).cloned() else { continue };
+        run_stage(f, &st, Stage::Each, &mut env);
+        fired.append(&mut env.fired);
+        fired_rows.append(&mut env.fired_rows);
+        for d in &counts {
+            // A count adds one per element that passes its test; a sum adds the column itself
+            // (§15.100). A column with no value leaves the summary with none.
+            let add = match (d.kind, env.vals.get(&d.column.text)) {
+                (_, None) => None,
+                (AggKind::Count, v) => Some(if counts_here(v, &d.value) { Rat::int(1) } else { Rat::zero() }),
+                (AggKind::Sum, Some(Val::Num(v))) => Some(*v),
+                (AggKind::Sum, Some(_)) => None,
+            };
+            if let Some(t) = tally.get_mut(&d.name.text) {
+                *t = match (*t, add) {
+                    (Some(t), Some(a)) => Some(t.add(a)),
+                    _ => None,
+                };
+            }
+        }
+        if seq.len() == 1 {
+            one = Some(env.vals.clone());
+        }
+        let Some(fold) = fold else { continue };
+        let Some(Val::Enum(v)) = env.vals.get(&fold.verdict).cloned() else { continue };
         let Some((_, arm, _)) = fold.arms.iter().find(|(n, _, _)| n.text == v) else { continue };
         match arm {
             Arm::Next => {}
@@ -432,203 +544,41 @@ fn run_fold(
         }
     }
 
-    let answer = if broken {
-        None
-    } else if seq.is_empty() {
-        empty_answer
-    } else {
-        match stopped {
-            Some(Some(v)) => Some(v),
-            _ => answer_of(&fold.exhausted, taken.or(held).or(empty_answer)),
+    // After the walk: what it answered, under its name.
+    let mut after = before.clone();
+    if let Some(fold) = fold {
+        if broken {
+            return (nothing(), fired, fired_rows, HashMap::new());
         }
-    };
-
-    let mut outs: Vec<(String, Option<Val>)> = Vec::new();
-    for (oi, od) in f.outputs.iter().enumerate() {
-        let name = od.name.text.clone();
-        let mut v = if oi == 0 { answer.clone() } else { None };
-        if let Some(Val::Num(x)) = &v {
-            if let Some(rd) = &od.rounding {
-                let ty = c.ty_of(&name).unwrap_or(Ty::Unknown);
-                if let (Some(g), Some(m)) = (lit_value_in_pub(&rd.grid, &ty), RoundMode::parse(&rd.mode)) {
-                    v = Some(Val::Num(x.round_to(m, g)));
-                }
+        let answer = if seq.is_empty() {
+            empty_answer
+        } else {
+            match stopped {
+                Some(Some(v)) => Some(v),
+                _ => answer_of(&fold.exhausted, taken.or(held).or(empty_answer)),
             }
-        }
-        outs.push((name, v));
-    }
-    (outs, fired, fired_rows, HashMap::new())
-}
-
-/// Run the rule's items over one environment, without the fold: the tables, the derived
-/// values and the definitions, and everything they bound. A rule that walks a sequence uses
-/// it once per element, and so does the vector generator when it asks what verdict an
-/// element lands on (§15.56).
-pub fn run_tables(
-    f: &RuleFile,
-    c: &Checked,
-    inputs: HashMap<String, Val>,
-) -> (Vec<String>, Vec<(String, usize)>, Vec<String>, HashMap<String, Val>) {
-    let mut env = Env::new(c, inputs);
-    for it in &f.items {
-        match it {
-            Item::Derived(d) => {
-                if let Some(v) = env.expr(&d.expr) {
-                    env.vals.insert(d.name.text.clone(), v);
-                }
-            }
-            Item::Define(d) => {
-                if let Some(v) = env.expr(&d.expr) {
-                    env.vals.insert(d.name.text.clone(), v);
-                }
-            }
-            Item::Table(t) => {
-                env.table(t);
-            }
-            // A count is what the walk leaves behind, not something one element does.
-            Item::Agg(_) => {}
+        };
+        if let (Some(v), Some(od)) = (answer, f.outputs.first()) {
+            after.insert(od.name.text.clone(), v);
         }
     }
-    (env.fired.clone(), env.fired_rows.clone(), Vec::new(), env.vals)
-}
-
-/// One element of a counting walk: the items that only have a value inside it (§15.58).
-///
-/// A rule that counts has items on both sides of the walk, so — unlike a fold, where every
-/// item belongs to one element — the element phase runs a subset. Running the rest here as
-/// well would put rows in the trace that fired once per element and answer with a count
-/// nothing had counted yet.
-fn run_walk(
-    f: &RuleFile,
-    c: &Checked,
-    scoped: &std::collections::HashSet<String>,
-    inputs: HashMap<String, Val>,
-) -> (Vec<String>, Vec<(String, usize)>, HashMap<String, Val>) {
-    let mut env = Env::new(c, inputs);
-    for it in &f.items {
-        match it {
-            Item::Derived(d) if scoped.contains(&d.name.text) => {
-                if let Some(v) = env.expr(&d.expr) {
-                    env.vals.insert(d.name.text.clone(), v);
-                }
-            }
-            Item::Define(d) if scoped.contains(&d.name.text) => {
-                if let Some(v) = env.expr(&d.expr) {
-                    env.vals.insert(d.name.text.clone(), v);
-                }
-            }
-            Item::Table(t) if t.outputs.iter().any(|o| scoped.contains(&o.name.text)) => {
-                env.table(t);
-            }
-            _ => {}
+    for (name, t) in &tally {
+        if let Some(t) = t {
+            after.insert(name.clone(), Val::Num(*t));
         }
     }
-    (env.fired.clone(), env.fired_rows.clone(), env.vals)
-}
-
-/// Does this element's column hold the value the count is looking for?
-fn counts_here(v: Option<&Val>, want: &Option<crate::ast::Name>) -> bool {
-    match (v, want) {
-        (Some(Val::Bool(b)), None) => *b,
-        (Some(Val::Bool(b)), Some(w)) => *b == (w.text == crate::kw::TRUE),
-        (Some(Val::Enum(x)), Some(w)) => *x == w.text,
-        _ => false,
-    }
-}
-
-/// A rule that counts (§15.58) runs in two phases: the walk, which is the element-scoped
-/// items once per element with the counters beside them, and then the rule proper, with
-/// each count bound like any other number.
-///
-/// The second phase is an ordinary rule — tables, `result`, rounding — which is the whole
-/// point of counting rather than folding: what turns the count into a class is a table, and
-/// a table is checked.
-fn run_counted(
-    f: &RuleFile,
-    c: &Checked,
-    inputs: HashMap<String, Val>,
-) -> (Vec<(String, Option<Val>)>, Vec<String>, Vec<(String, usize)>, HashMap<String, Val>) {
-    let scoped = crate::types::element_scoped(f);
-    let counts: Vec<&crate::ast::AggDecl> = f
-        .items
-        .iter()
-        .filter_map(|it| if let Item::Agg(d) = it { Some(d) } else { None })
-        .collect();
-    let over = counts.first().map(|d| d.over.clone()).unwrap_or_default();
-    let seq = match inputs.get(&over) {
-        Some(Val::Seq(xs)) => xs.clone(),
-        _ => Vec::new(),
-    };
-    let scalars: HashMap<String, Val> =
-        inputs.iter().filter(|(k, _)| *k != &over).map(|(k, v)| (k.clone(), v.clone())).collect();
-
-    // The sequence is capped by the smallest bound any count declares, and a longer one has
-    // no answer here for the same reason the generated code refuses it: the completeness
-    // proof was made over the declared universe (§15.58).
-    let cap = counts
-        .iter()
-        .filter_map(|d| c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi))
-        .map(|hi| hi.num / hi.den)
-        .min();
-    if cap.is_some_and(|cap| seq.len() as i128 > cap) {
-        let outs = f.outputs.iter().map(|od| (od.name.text.clone(), None)).collect();
-        return (outs, Vec::new(), Vec::new(), HashMap::new());
-    }
-
-    let (mut fired, mut fired_rows) = (Vec::new(), Vec::new());
-    let mut tally: HashMap<String, Rat> = counts.iter().map(|d| (d.name.text.clone(), Rat::zero())).collect();
-    for e in &seq {
-        let mut m = scalars.clone();
-        for (k, v) in e {
-            m.insert(k.clone(), v.clone());
-        }
-        let (ef, er, vals) = run_walk(f, c, &scoped, m);
-        fired.extend(ef);
-        fired_rows.extend(er);
-        for d in &counts {
-            // A count adds one per element that passes its test; a sum adds the column
-            // itself (§15.100).
-            let add = match d.kind {
-                AggKind::Count => {
-                    if counts_here(vals.get(&d.column.text), &d.value) { Rat::int(1) } else { Rat::zero() }
-                }
-                AggKind::Sum => match vals.get(&d.column.text) {
-                    Some(Val::Num(v)) => *v,
-                    _ => Rat::zero(),
-                },
-            };
-            let e = tally.entry(d.name.text.clone()).or_insert(Rat::zero());
-            *e = e.add(add);
-        }
-    }
-
-    let mut m = scalars;
-    for (name, n) in &tally {
-        m.insert(name.clone(), Val::Num(*n));
-    }
-    let mut env = Env::new(c, m);
+    let mut env = Env::new(c, after);
     env.fired = fired;
     env.fired_rows = fired_rows;
-    for it in &f.items {
-        match it {
-            Item::Derived(d) if !scoped.contains(&d.name.text) => {
-                if let Some(v) = env.expr(&d.expr) {
-                    env.vals.insert(d.name.text.clone(), v);
-                }
-            }
-            Item::Define(d) if !scoped.contains(&d.name.text) => {
-                if let Some(v) = env.expr(&d.expr) {
-                    env.vals.insert(d.name.text.clone(), v);
-                }
-            }
-            Item::Table(t) if !t.outputs.iter().any(|o| scoped.contains(&o.name.text)) => {
-                env.table(t);
-            }
-            _ => {}
+    run_stage(f, &st, Stage::After, &mut env);
+    let outs = outputs_of(f, c, &mut env);
+    let mut binds = env.vals.clone();
+    if let Some(one) = one {
+        for (k, v) in one {
+            binds.entry(k).or_insert(v);
         }
     }
-    let outs = outputs_of(f, c, &mut env);
-    (outs, env.fired.clone(), env.fired_rows.clone(), env.vals)
+    (outs, env.fired, env.fired_rows, binds)
 }
 
 /// The rule's outputs, read out of an environment that has finished running: the `result`
@@ -657,16 +607,15 @@ fn outputs_of(f: &RuleFile, c: &Checked, env: &mut Env) -> Vec<(String, Option<V
     outs
 }
 
+/// `run_all`, plus the fired rows as `(table, row)` for a diagnostic's structured half.
+#[allow(clippy::type_complexity)]
 pub fn run_all_traced(
     f: &RuleFile,
     c: &Checked,
     inputs: HashMap<String, Val>,
 ) -> (Vec<(String, Option<Val>)>, Vec<String>, Vec<(String, usize)>, HashMap<String, Val>) {
-    if f.fold.is_some() {
-        return run_fold(f, c, inputs);
-    }
-    if f.items.iter().any(|it| matches!(it, Item::Agg(_))) {
-        return run_counted(f, c, inputs);
+    if f.fold.is_some() || f.items.iter().any(|it| matches!(it, Item::Agg(_))) {
+        return run_walking(f, c, inputs);
     }
     let mut env = Env::new(c, inputs);
     for it in &f.items {

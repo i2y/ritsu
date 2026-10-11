@@ -1,0 +1,16 @@
+error[E102]: Unreachable row: row 4 never matches
+  --> tests/reach/E102_past_a_defines_equation.rule:24 table penalty
+   |
+24 | | >=1  | >=1   | >=1    | <=1   | 0                |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 4: no input reaches here
+13 | define limit    : number = cap_low + cap_high
+   |                            ^^^^^^^^^^^^^^^^^^ the reachable interval is >=0 <=4
+14 | define added    : number = base + bonus
+   |                            ^^^^^^^^^^^^ the reachable interval is >=0 <=23
+15 | define excess   : number = added - limit
+   |                            ^^^^^^^^^^^^^ the reachable interval is >=-4 <=23
+   |
+ Over the ranges of the inputs, `limit` can only come to >=0 <=4, `added` to >=0 <=23, and `excess` to >=-4 <=23.
+ `added = base + bonus` and `excess = added - limit` hold for every input, and with them no values meet all of this row's conditions.
+ hint: delete this row. To keep it, rewrite its conditions to values the equations allow together.
+

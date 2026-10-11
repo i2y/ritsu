@@ -1,0 +1,7 @@
+error[E075]: `current` is both a value of enum plan and the name of an input
+  --> tests/mutants/m_e075.rule:18 table renewal
+   |
+18 | | -       | false   | current             |
+   |                       ^^^^^^^ it reads either way
+   |
+ rulec cannot tell which of the two is meant here. Rename one of them.

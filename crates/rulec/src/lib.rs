@@ -142,6 +142,9 @@ fn stages(src: &str, path: &str, budget: i64) -> Report {
         diags.extend(spelled);
         return Report { diags, quiet, shadow, nodes };
     }
+    // A bare word is read where the type of the place says what it is: a value of the column's
+    // enum, or a name (§15.208). Two readings left open (E075) go on with the type errors.
+    diags.extend(types::read_words(&mut f, path));
     let f = &f;
 
     let t = types::check(f, path);
@@ -341,6 +344,10 @@ fn prepare_with(src: &str, path: &str, tolerate_pin: bool) -> Result<(ast::RuleF
         return Err(ds);
     }
     let ds = prelude::normalize(&mut f, path);
+    if has_error(&ds) {
+        return Err(ds);
+    }
+    let ds = types::read_words(&mut f, path);
     if has_error(&ds) {
         return Err(ds);
     }

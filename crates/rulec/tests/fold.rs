@@ -641,3 +641,202 @@ fn たどり方はベクタで覆われる() {
     assert_eq!(met, 21, "受け付けない入力も義務を果たす");
     assert_eq!(j.get("refused").and_then(|v| v.as_int()), Some(1), "受け付けない入力が数えられていない: {cov}");
 }
+
+// --- The walk's three stages (§15.208)
+
+/// The rules of `tests/stages`: what a walk reads once before it starts, on each element, and
+/// once it is over. Each is written in English, with its Japanese version beside it. A value the
+/// inputs alone decide (the opening price, the factor of the delivery mode) is decided before the
+/// walk; an answer for no elements reads it; a table that reads what the walk answers is decided
+/// after it; and a fold answers a value of the enum its first output has.
+const STAGES: &[(&str, &str)] = &[("best_offer", "最高の申し出"), ("parcel_charge", "荷物の料金"), ("size_to_ship", "送るサイズ")];
+
+fn stage_source(stem: &str) -> (String, String) {
+    let rel = format!("tests/stages/{stem}.rule");
+    let src = std::fs::read_to_string(root().join(&rel)).unwrap_or_else(|_| panic!("cannot read {rel}"));
+    (rel, src)
+}
+
+/// What the checker says of a rule's text, in `lang`, as (code, title).
+fn said(src: &str, rel: &str, lang: rulec::i18n::Lang) -> Vec<(String, String)> {
+    rulec::i18n::with(lang, || rulec::check_source(src, rel).iter().map(|d| (d.code.to_string(), d.title.clone())).collect())
+}
+
+/// Every rule of `tests/stages` passes with nothing said, in both languages, so its examples hold
+/// on the reference evaluator: before §15.208 each of them answered no value (the opening price,
+/// the factor and the enum's value were not there when the walk read them). And the vector suite
+/// meets all seven criteria over every one of them, the table after the walk included; where the
+/// search finds no sequence whose total sits on a boundary, the examples give one.
+#[test]
+fn 歩きの前と後の項目は一度だけ決まる() {
+    use rulec::i18n::Lang;
+    let mut names: Vec<String> = std::fs::read_dir(root().join("tests/stages")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    names.sort();
+    let mut listed: Vec<String> = STAGES.iter().flat_map(|(en, ja)| [format!("{en}.rule"), format!("{ja}.rule")]).collect();
+    listed.sort();
+    assert_eq!(names, listed, "every rule of tests/stages is in STAGES, with its Japanese version");
+    for (en, ja) in STAGES {
+        for stem in [en, ja] {
+            let (rel, src) = stage_source(stem);
+            for lang in [Lang::En, Lang::Ja] {
+                let ds = said(&src, &rel, lang);
+                assert!(ds.is_empty(), "{rel}: {ds:?}");
+            }
+            let (f, c) = rulec::prepare(&src, &rel).unwrap_or_else(|_| panic!("{rel} does not read"));
+            let (a, vs, refused) = rulec::i18n::with(Lang::En, || rulec::coverage::audit_file(&f, &c, &rel));
+            assert!(a.ok(), "{rel}\n{}", rulec::i18n::with(Lang::En, || rulec::coverage::render(&a, &vs, &refused)));
+        }
+    }
+}
+
+/// The generated code keeps the stages: what is decided before the walk comes above the loop,
+/// once, and what reads the walk's answer comes after it.
+#[test]
+fn 歩きの段の順に生成される() {
+    let (_tmp, d) = dir("stages-shape");
+    for (stem, before, walk, after) in [
+        ("best_offer", "opening = ", "for elem in bids:", "review = "),
+        ("parcel_charge", "factor = 1", "for elem in parcels:", "tier = "),
+    ] {
+        let (rel, _) = stage_source(stem);
+        let out = d.join(stem);
+        let (code, said, e) = run(&["gen", &rel, "--out", out.to_str().unwrap()]);
+        assert_eq!(code, 0, "{said}{e}");
+        let py = std::fs::read_to_string(out.join(format!("python/{stem}.py"))).unwrap();
+        let at = |what: &str| py.find(what).unwrap_or_else(|| panic!("{stem}: no `{what}` in\n{py}"));
+        assert!(at(before) < at(walk) && at(walk) < at(after), "{stem}: the stages are out of order:\n{py}");
+        assert_eq!(py.matches(before).count(), 1, "{stem}: `{before}` is written more than once:\n{py}");
+    }
+}
+
+/// The generated walks answer what the reference evaluator answered over each rule's vectors, in
+/// English and in Japanese. A language whose toolchain is missing is skipped by `rulec test`.
+#[test]
+fn 歩きの段の生成コードは参照評価器と一致する() {
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
+        return;
+    }
+    let (_tmp, d) = dir("stages-agree");
+    for (en, ja) in STAGES {
+        for stem in [en, ja] {
+            let (rel, _) = stage_source(stem);
+            let out = d.join(stem);
+            let (code, said, e) = run(&["gen", &rel, "--out", out.to_str().unwrap()]);
+            assert_eq!(code, 0, "{stem}: {said}{e}");
+            let (_, said, _) = run_tmp(&tmpdir_in(&out), &["test", out.to_str().unwrap(), "--format", "json"]);
+            let j = rulec::json::parse(said.lines().next().expect("結果が無い")).unwrap();
+            let rulec::json::Json::Arr(rs) = j.get("results").unwrap() else { panic!("{said}") };
+            let mut ran = 0;
+            for r in rs {
+                if r.get("ran") != Some(&rulec::json::Json::Bool(true)) {
+                    continue;
+                }
+                ran += 1;
+                assert_eq!(r.get("ok"), Some(&rulec::json::Json::Bool(true)), "{stem}: {said}");
+            }
+            assert!(ran >= 1, "{stem}: どの言語も走らなかった: {said}");
+        }
+    }
+}
+
+/// Each answer of a fold reads only what there is where it is decided: no element where the walk
+/// has none (`empty`) or is past the last (`exhausted`), `held` only once the walk is over, and
+/// nothing decided from the answer itself. And the answer is of the first output's type: a word
+/// that is no value of it, and a truth value for an enum, are said as such.
+#[test]
+fn 畳み込みの答えは決まる所にある値だけを読む() {
+    use rulec::i18n::Lang;
+    let (_, offer_en) = stage_source("best_offer");
+    let (_, offer_ja) = stage_source("最高の申し出");
+    let (_, size_en) = stage_source("size_to_ship");
+    let (_, size_ja) = stage_source("送るサイズ");
+    let cases: [(&str, String, &str, &str); 10] = [
+        ("an element's value for no elements", offer_en.replace("  empty     -> opening", "  empty     -> amount"), "E021", "The answer for no elements cannot read amount, a value of one element"),
+        ("an element's value for no elements (ja)", offer_ja.replace("  empty     -> 開始価格", "  empty     -> 金額"), "E021", "要素ゼロ件のときの答えは、要素の値 金額 を読めません"),
+        ("held for no elements", offer_en.replace("  empty     -> opening", "  empty     -> held"), "E021", "`held` can only be written in the `exhausted` answer"),
+        ("held for no elements (ja)", offer_ja.replace("  empty     -> 開始価格", "  empty     -> held"), "E021", "`held` は `exhausted` の値にだけ書けます"),
+        ("a key decided from the answer", offer_en.replace("keep_max offer by offer", "keep_max offer by review"), "E021", "A value of the fold cannot read review, which is computed from what the walk answers"),
+        ("a key decided from the answer (ja)", offer_ja.replace("keep_max 申し出 by 申し出", "keep_max 申し出 by 要確認"), "E021", "畳み込みの値は、たどった結果から計算する 要確認 を読めません"),
+        ("a word that is no value of the answer's enum", size_en.replace("  empty        -> unavailable", "  empty        -> purple"), "E012", "`purple` is neither a value of size, the type the fold answers with, nor a declared name"),
+        ("a word that is no value of the answer's enum (ja)", size_ja.replace("  empty     -> 在庫なし", "  empty     -> 紫"), "E012", "`紫` は、答えの型 サイズ の値でも、宣言された名前でもありません"),
+        ("a truth value for an enum", size_en.replace("  empty        -> unavailable", "  empty        -> true"), "E103", "This fold answers with size, but `true` is written here"),
+        ("a truth value for an enum (ja)", size_ja.replace("  empty     -> 在庫なし", "  empty     -> true"), "E103", "この畳み込みの答えは サイズ ですが `true` が書かれています"),
+    ];
+    for (what, src, code, title) in cases {
+        let lang = if what.ends_with("(ja)") { Lang::Ja } else { Lang::En };
+        let ds = said(&src, "v.rule", lang);
+        assert!(ds.iter().any(|(c, t)| c == code && t == title), "{what}: {ds:?}");
+        assert!(!ds.iter().any(|(c, _)| c == "E107"), "{what}: the examples were run past an error: {ds:?}");
+    }
+}
+
+/// The `result` line is read once the walk is over: it may read the fold's answer and a value
+/// decided before the walk, and not a value of one element (E031).
+#[test]
+fn resultの行はたどったあとに読む() {
+    use rulec::eval::Val;
+    use rulec::i18n::Lang;
+    for (stem, line, bad, title) in [
+        ("best_offer", "result best = best + fee", "result best = best + amount", "Output best is a value of one element"),
+        ("最高の申し出", "result 最高額 = 最高額 + 手数料", "result 最高額 = 最高額 + 金額", "出力 最高額 は、要素ごとの値です"),
+    ] {
+        let (rel, src) = stage_source(stem);
+        // the examples answer without the line, so they are left out, with the sequences they
+        // name
+        let body = &src[..src.find("\nsequence ").unwrap()];
+        let review = body.rfind("\ntable ").unwrap();
+        let with = |l: &str| format!("{}\n{l}\n{}\n", &body[..review], &body[review..]);
+        let lang = if stem.is_ascii() { Lang::En } else { Lang::Ja };
+        let ds = said(&with(bad), &rel, lang);
+        assert!(ds.iter().any(|(c, t)| c == "E031" && t == title), "{stem}: {ds:?}");
+
+        let src = with(line);
+        assert!(said(&src, &rel, lang).is_empty(), "{stem}: {:?}", said(&src, &rel, lang));
+        let (f, c) = rulec::prepare(&src, &rel).unwrap_or_else(|_| panic!("{stem} does not read"));
+        // the names of the Japanese version, found by their aliases
+        let n = |alias: &str| -> String {
+            let names = f.inputs.iter().chain(f.elements.iter().flat_map(|e| &e.fields)).map(|d| &d.name);
+            names.into_iter().find(|m| m.ascii.as_deref() == Some(alias) || m.text == alias).unwrap().text.clone()
+        };
+        let bid = |amount: i128| std::collections::BTreeMap::from([(n("amount"), Val::Num(rulec::num::Rat::int(amount))), (n("withdrawn"), Val::Bool(false))]);
+        let seq = f.elements.as_ref().unwrap().name.text.clone();
+        let inputs = std::collections::HashMap::from([
+            (n("reserve"), Val::Num(rulec::num::Rat::int(100))),
+            (n("fee"), Val::Num(rulec::num::Rat::int(5))),
+            (seq, Val::Seq(vec![bid(300), bid(700)])),
+        ]);
+        let (outs, _, _) = rulec::i18n::with(Lang::En, || rulec::eval::run_all(&f, &c, inputs));
+        // the best offer is 700, and the line adds the fee once the walk is over
+        assert_eq!(outs[0].1, Some(Val::Num(rulec::num::Rat::int(705))), "{stem}: {outs:?}");
+    }
+}
+
+/// The page says what `held` is where the walk answers with it, on the page for people and on the
+/// customer's article, in the grammar's words: the value taken, else the value kept, else the
+/// answer for no elements. A walk that answers otherwise is not told about it.
+#[test]
+fn ページはheldが何かを言う() {
+    let (_tmp, d) = dir("held-page");
+    for (stem, lang, page, article) in [
+        ("best_offer", "en", "`held` is the value taken (`take_unique`, `take_first`), else the value kept (`keep_max`), else the `empty` answer.", "`held` is the value taken, else the value kept, else the answer for no elements."),
+        ("最高の申し出", "ja", "`held` は、採った値（`take_unique`・`take_first`）、無ければ持ち越した値（`keep_max`）、それも無ければ `empty` の答えです。", "`held` は、採った値、無ければ持ち越した値、それも無ければ一件も無いときの答えです。"),
+    ] {
+        let (rel, src) = stage_source(stem);
+        for (audience, want) in [("approver", page), ("customer", article)] {
+            let (code, out, e) = run(&["doc", &rel, "--audience", audience, "--lang", lang]);
+            assert_eq!(code, 0, "{stem}: {out}{e}");
+            assert!(out.contains(want), "{stem} ({audience}): {out}");
+        }
+        // answered with the opening price instead, the walk says nothing of `held`; the examples
+        // answer with the best offer, so they are left out with the sequences they name
+        let opening = if lang == "en" { "opening" } else { "開始価格" };
+        let other = src[..src.find("\nsequence ").unwrap()].replace("  exhausted -> held", &format!("  exhausted -> {opening}"));
+        let p = write(&d, &format!("{stem}.rule"), &other);
+        for audience in ["approver", "customer"] {
+            let (code, out, e) = run(&["doc", &p, "--audience", audience, "--lang", lang]);
+            assert_eq!(code, 0, "{stem}: {out}{e}");
+            assert!(!out.contains("`held`"), "{stem} ({audience}): {out}");
+        }
+    }
+}
+

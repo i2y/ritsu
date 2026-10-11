@@ -123,3 +123,8 @@ golden!(e126_取消のあとの出荷, "E126", "tests/mutants/m_e126.rule", "E12
 golden!(e127_二度目の返金, "E127", "tests/mutants/m_e127.rule", "E127");
 golden!(e107_手順の例, "E107-scenario", "tests/mutants/m_e126.rule", "E107");
 golden!(w125_届かない状態, "W125", "tests/mutants/m_w125.rule", "W125");
+
+// The walk's stages and the words of a cell (§15.208), and the rows nothing decides (§15.209).
+golden!(e075_値でも名前でもある語, "E075", "tests/mutants/m_e075ja.rule", "E075");
+golden!(e031_要素とたどった結果, "E031-walk", "tests/mutants/m_e031walkja.rule", "E031");
+golden!(w128_決められない行, "W128", "tests/mutants/m_w128ja.rule", "W128");

@@ -1,0 +1,8 @@
+error[E031]: One item cannot yet read both a value of one element and what the walk answers
+  --> tests/mutants/m_e031walk.rule:12
+   |
+12 | define others : number = order_total - amount
+   |        ^^^^^^ definition others reads both amount, a value of one element, and order_total, what the walk answers
+   |
+ What the walk answers is known only once every element has been seen, and a value of one element exists only while the walk is on that element. Reading both would take a second walk over the sequence.
+ Where it can be split, put the part that reads the element and the part that reads what the walk answers in separate tables or definitions.

@@ -1,0 +1,18 @@
+rule plan_renewal v1
+description "Which plan a subscription moves to at renewal. `current` is a value of plan, which keeps the plan as it is, and also the input that holds the plan before the renewal, so the cell `current` reads either way (E075)"
+
+enum plan = basic | pro | current
+
+inputs
+  current : plan
+  upgrade : bool
+
+outputs
+  next_plan : plan
+
+table renewal
+policy first
+| current | upgrade | -> next_plan : plan |
+| basic   | false   | basic               |
+| -       | true    | pro                 |
+| -       | false   | current             |

@@ -1,0 +1,17 @@
+rule タイルの枚数(tile_count) v1
+description "正方形の床を、要るタイルの枚数で分ける。枚数が 2 になる行があるが、整数の辺の二乗は 2 にならず、ベクタも検査も決められない（W128）"
+
+inputs
+  辺(side) : number  range >=0 <=10
+
+outputs
+  大きさ(size) : number  round down(1)
+
+define 枚数 : number = 辺 * 辺
+
+table 大きさの表(size_of)
+policy first
+| 枚数 | -> 大きさ : number |
+| 2    | 1                  |
+| <=1  | 0                  |
+| -    | 2                  |

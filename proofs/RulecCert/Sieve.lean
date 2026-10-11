@@ -6,10 +6,11 @@
   hypothesis: a box the cover calls impossible really is one no input reaches. This file is
   where that hypothesis is discharged. A point is asked about when there are values behind
   its coordinates — one per axis, each inside the coordinate it names — that satisfy every
-  `constraint` the rule declares, put every derived column and every column of a `define` of a
-  number inside the interval its own expression is forced into, and, where a column decided by
-  a table above holds a value the certificate rests on the rows of, let one of the rows that
-  write that value fire (rulec's §15.195).
+  `constraint` the rule declares and the equations of the linear model — a derive's, and a
+  `define`'s whose expression is linear (rulec's §15.209) — put every derived column and every
+  column of a `define` of a number inside the interval its own expression is forced into, and,
+  where a column decided by a table above holds a value the certificate rests on the rows of,
+  let one of the rows that write that value fire (rulec's §15.195).
 
   Read that definition twice before trusting the word "impossible". It is **consistency
   with what the rule declares**, not "some real input produces this": whether a derived
@@ -176,10 +177,12 @@ structure Sieve where
       carries, so the checker earns each pair back rather than believing it; what is settled
       **here** is the step from the pair to the box, which is the step the cover rests on. -/
   apart : List ((Nat × Nat) × (Nat × Nat))
-  /-- The rule's linear model around the table (§15.141): each `derive`'s equation, the
+  /-- The rule's linear model around the table (§15.141): each `derive`'s equation and each
+      equation of a `define` of a number whose expression is linear (rulec's §15.209), the
       declared ranges and the `constraint`s, over numbered values — the axes first, in axis
-      order, then the names the model uses that are not columns of the table. Values that
-      satisfy the coordinates and not these are values no input produces. -/
+      order, then the names the model uses that are not columns of the table. Each equation is
+      built again from the value's own expression (`linOf`), not taken from the document's word.
+      Values that satisfy the coordinates and not these are values no input produces. -/
   facts : List LinIneq := []
   /-- One entry per axis: the days an input takes when its range is a date of a koyomi file
       (`range from koyomi`, rulec's §15.174), as day numbers; `none` on every other axis. A

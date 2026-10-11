@@ -909,6 +909,14 @@ variable, so it belongs before the call, as a value. A rule cannot hold both a
 `fold` and a `count` or `sum` (E031): two endings for one walk, and a fold may
 stop partway.
 
+**What is computed once and what is computed per element follows from what
+each item reads.** An item that reads only the inputs — a table over them, a
+`define` — is computed once before the walk, so `empty` may answer it and an
+element's item may read it; an item that reads a value of one element is
+computed on each element; one that reads what the walk answers (the fold's
+answer, a count, a sum) once after it. An item that reads both a value of one
+element and the answer would take a second walk, and stops as E031.
+
 A rule that runs is in [Examples](examples.md), under "Counting a sequence, and
 deciding from the count".
 

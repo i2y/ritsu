@@ -841,8 +841,8 @@ def completions(axes, path):
 # --- The linear model (§15.141) ------------------------------------------------------------
 #
 # A table's certificate names the facts of its linear model by where each comes from — a
-# `derive`'s equation, a declared range, a `constraint` — and this program builds each one
-# again from the rule's own values, ranges and constraints. A refutation is then a list of
+# `derive`'s equation, a `define`'s whose expression is linear, a declared range, a `constraint`
+# — and this program builds each one again from the rule's own values, ranges and constraints. A refutation is then a list of
 # those facts and of the ends of a box's coordinates, each with a multiplier, and checking it
 # is addition: every name cancels and what is left is false.
 
@@ -896,15 +896,21 @@ def model_facts(t, cert):
     types = cert.get("types", {})
     out = []
     for f in lin["facts"]:
-        if "derive" in f:
-            v = values.get(f["derive"])
+        # A `derive`'s equation, or a `define`'s whose expression is linear (rulec's §15.209): the
+        # same equation, built from the value's own expression.
+        eq = f.get("derive", f.get("define"))
+        if eq is not None:
+            of = "derive" if "derive" in f else "define"
+            v = values.get(eq)
             if v is None:
-                raise Bad(f"{t['table']}: the model names the equation of {f['derive']}, which states no expression")
+                raise Bad(f"{t['table']}: the model names the equation of {eq}, which states no expression")
+            if v.get("of") not in (None, of):
+                raise Bad(f"{t['table']}: the model names the equation of {eq} as a {of}, and it is a {v.get('of')}")
             got = linearize(v["expr"], v.get("type"), types)
             if got is None:
-                raise Bad(f"{t['table']}: the model takes {f['derive']} as linear, and its expression is not")
+                raise Bad(f"{t['table']}: the model takes {eq} as linear, and its expression is not")
             terms = {n: -c for n, c in got[0].items()}
-            terms[f["derive"]] = terms.get(f["derive"], Fraction(0)) + 1
+            terms[eq] = terms.get(eq, Fraction(0)) + 1
             k = -got[1]
             if not f["le"]:
                 terms, k = {n: -c for n, c in terms.items()}, -k

@@ -1,0 +1,43 @@
+rule size_to_ship v1
+description "The size to ship: the first size on the customer's list that is in stock. The fold answers a value of the enum the first output has, and `unavailable`, a value of that enum, when the list is empty or nothing on it is in stock"
+
+enum size = small | medium | large | unavailable
+enum stock = in_stock | out_of_stock
+
+elements choices
+  wanted    : size
+  available : bool
+
+outputs
+  shipped : size
+
+table stock_of
+policy unique
+| available | -> state : stock |
+| true      | in_stock         |
+| false     | out_of_stock     |
+
+fold state over choices
+  in_stock     -> take_first wanted
+  out_of_stock -> next
+  empty        -> unavailable
+  exhausted    -> held
+
+sequence second_in_stock
+| wanted | available |
+| small  | false     |
+| medium | true      |
+| large  | true      |
+
+sequence none_in_stock
+| wanted | available |
+| large  | false     |
+
+sequence empty_list
+| wanted | available |
+
+examples
+| choices         | -> shipped  |
+| second_in_stock | medium      |
+| none_in_stock   | unavailable |
+| empty_list      | unavailable |

@@ -1109,12 +1109,16 @@ fn table_json(t: CertTable, src: &str) -> String {
 
 /// One fact of a table's linear model, named by where it comes from, so that a re-checker
 /// builds the inequality again from the rule rather than reading it here (§15.141). A
-/// `derive`'s equation is two facts, `name − expr <= 0` (`le`) and `>= 0`; a range is two,
+/// `derive`'s equation is two facts, `name − expr <= 0` (`le`) and `>= 0`, and so is the
+/// equation of a `define` of a number whose expression is linear (§15.209); a range is two,
 /// its low end and its high end; a `constraint` is one, by its place in `constraints`.
 fn fact_json(o: &crate::fourier::Origin) -> String {
     use crate::fourier::Origin;
     match o {
         Origin::Derive { name, le } => Obj::new().str("derive", name).bool("le", *le).finish(),
+        // A `define` of a number whose expression is linear: the same equation, built again from
+        // the define's expression in `values` (§15.209).
+        Origin::Define { name, le } => Obj::new().str("define", name).bool("le", *le).finish(),
         Origin::Range { name, hi } => Obj::new().str("range", name).bool("hi", *hi).finish(),
         Origin::Constraint(i) => Obj::new().int("constraint", *i as i128).finish(),
         // Nothing else is a fact of the model; a re-checker refuses what it cannot rebuild.

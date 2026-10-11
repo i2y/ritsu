@@ -1,0 +1,96 @@
+rule 荷物の料金(parcel_charge) v1
+description "荷物の一覧の料金と、その区分。係数は配達の方法から決まり、どの荷物の値でもないので、その表はたどる前に一度だけ決める。荷物ごとの費用は、重さとその係数を読む。料金と重い荷物の数は、たどった結果。区分は、たどったあとで両方から決める"
+
+enum 配達の方法(mode) = 通常(standard) | 速達(express)
+enum 重さの区分(weight_class) = 軽い(light) | 重い(heavy)
+enum 料金の区分(charge_tier) = 低い(low) | 高い(high) | 大口(bulk)
+
+inputs
+  配達(delivery) : 配達の方法
+
+elements 荷物(parcels)
+  重さ(weight) : number  range >=0 <=30
+
+outputs
+  料金(charge) : number  round down(1)
+  区分(tier)   : 料金の区分
+
+table 係数の表(factor_of)
+policy unique
+| 配達 | -> 係数(factor) : number |
+| 通常 | 1                        |
+| 速達 | 2                        |
+
+table 重さの表(class_of)
+policy unique
+| 重さ | -> 種類(kind) : 重さの区分 |
+| <=10 | 軽い                       |
+| >10  | 重い                       |
+
+define 費用(cost) : number = 重さ * 係数
+
+sum 料金 over 荷物 of 費用  range >=0 <=10000
+
+count 重い荷物(heavy_parcels) over 荷物 where 種類 = 重い  range >=0 <=50
+
+table 区分の表(tier_of)
+policy unique
+| 重い荷物 | 料金  | -> 区分 : 料金の区分 |
+| >=3      | -     | 大口                 |
+| <=2      | >=100 | 高い                 |
+| <=2      | <100  | 低い                 |
+
+sequence 混在(mixed)
+| 重さ |
+| 5    |
+| 12   |
+
+sequence 重い二つ(two_heavy)
+| 重さ |
+| 30   |
+| 30   |
+
+sequence 重い三つ(three_heavy)
+| 重さ |
+| 11   |
+| 12   |
+| 13   |
+
+sequence 荷物なし(no_parcels)
+| 重さ |
+
+sequence ちょうど100(just_100)
+| 重さ |
+| 30   |
+| 30   |
+| 10   |
+| 10   |
+| 10   |
+| 10   |
+
+sequence ちょうど99(just_99)
+| 重さ |
+| 30   |
+| 30   |
+| 10   |
+| 10   |
+| 10   |
+| 9    |
+
+sequence 重い三つで100(three_heavy_100)
+| 重さ |
+| 30   |
+| 30   |
+| 30   |
+| 10   |
+
+examples
+| 配達 | 荷物          | -> 料金 | 区分 |
+| 通常 | 混在          | 17      | 低い |
+| 速達 | 混在          | 34      | 低い |
+| 速達 | 重い二つ      | 120     | 高い |
+| 通常 | 重い三つ      | 36      | 大口 |
+| 速達 | 荷物なし      | 0       | 低い |
+| 通常 | ちょうど100   | 100     | 高い |
+| 通常 | ちょうど99    | 99      | 低い |
+| 通常 | 重い三つで100 | 100     | 大口 |

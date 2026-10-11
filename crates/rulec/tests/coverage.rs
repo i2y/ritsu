@@ -163,6 +163,44 @@ fn 行を勝たせる例を抜くと行カバーが欠ける() {
     assert_eq!(rows, vec![tag], "欠けた行を挙げていない: {rows:?}");
 }
 
+/// A missing row says why it is missing (§15.209): a row `check` named with W128 says so, the row
+/// no input was found for and none was shown not to reach; any other is one the vectors did not
+/// find an input for. It used to put every such row down to the generator, the W128 kind too. The
+/// English rule, and its Japanese version; the reachable row of the test above, its vectors taken
+/// out.
+#[test]
+fn 欠けた行はw128の行かどうかを言う() {
+    use rulec::i18n::{self, Lang};
+    for (rel, lang, row, want) in [
+        ("tests/mutants/m_w128.rule", Lang::En, "table size_of row 1", "check named this row with W128: no input was found that reaches it, and none was shown not to."),
+        ("tests/mutants/m_w128ja.rule", Lang::Ja, "表 大きさの表 行1", "check が W128 で言った行です。当たる入力が見つからず、当たらないことも示せていません。"),
+    ] {
+        let a = i18n::with(lang, || {
+            let (f, c, vs) = load(rel);
+            coverage::audit(&f, &c, rel, &vs, &[])
+        });
+        let rows: Vec<_> = a.missing.iter().filter(|m| m.kind == ROW).collect();
+        assert_eq!(rows.len(), 1, "{rel}: {:?}", rows.iter().map(|m| &m.what).collect::<Vec<_>>());
+        assert_eq!(rows[0].what, row);
+        assert!(rows[0].hint.starts_with(want), "{rel}: {}", rows[0].hint);
+    }
+    let rel = "tests/corpus/ゆうパック運賃.rule";
+    for (lang, tag, want) in [
+        (Lang::En, "table 運賃表 row 42", "check named it neither unreachable (E102) nor undecided (W128): the vectors did not find an input for it."),
+        (Lang::Ja, "表 運賃表 行42", "check は、この行を届かない行（E102）とも、決められない行（W128）とも言っていません。"),
+    ] {
+        let a = i18n::with(lang, || {
+            let (f, c, vs) = load(rel);
+            let kept: Vec<Vector> = vs.iter().filter(|v| !v.trace.iter().any(|t| t == tag)).cloned().collect();
+            assert!(kept.len() < vs.len(), "抜く対象がない: {tag}");
+            coverage::audit(&f, &c, rel, &kept, &[])
+        });
+        let rows: Vec<_> = a.missing.iter().filter(|m| m.kind == ROW).collect();
+        assert_eq!(rows.len(), 1, "{:?}", rows.iter().map(|m| &m.what).collect::<Vec<_>>());
+        assert!(rows[0].hint.contains(want), "{}", rows[0].hint);
+    }
+}
+
 /// Removing the vectors that step on the outside of a boundary leaves both-sides boundary coverage
 /// missing. An auditor that goes green on the inside alone cannot catch a boundary's ±1.
 #[test]

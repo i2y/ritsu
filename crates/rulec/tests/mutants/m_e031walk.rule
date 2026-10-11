@@ -1,0 +1,14 @@
+rule line_share v1
+description "What the other lines of an order come to, line by line. It reads a line's amount and the order's total, which is known only once every line has been read: a second walk (E031)"
+
+elements lines
+  amount : number  range >=0 <=1000
+
+outputs
+  total : number  round down(1)
+
+sum order_total over lines of amount  range >=0 <=100000
+
+define others : number = order_total - amount
+
+define total : number = order_total

@@ -1,0 +1,43 @@
+rule 送るサイズ(size_to_ship) v1
+description "送るサイズ。客の一覧で、在庫のある最初のサイズ。畳み込みは最初の出力の列挙の値を答え、一覧が空のときと、どれも在庫が無いときは、同じ列挙の値の `在庫なし` を答える"
+
+enum サイズ(size) = 小(small) | 中(medium) | 大(large) | 在庫なし(unavailable)
+enum 在庫(stock) = 有る(in_stock) | 無い(out_of_stock)
+
+elements 候補(choices)
+  希望(wanted)       : サイズ
+  在庫あり(available) : bool
+
+outputs
+  送るもの(shipped) : サイズ
+
+table 在庫の表(stock_of)
+policy unique
+| 在庫あり | -> 状態(state) : 在庫 |
+| true     | 有る                  |
+| false    | 無い                  |
+
+fold 状態 over 候補
+  有る      -> take_first 希望
+  無い      -> next
+  empty     -> 在庫なし
+  exhausted -> held
+
+sequence 二つめに在庫(second_in_stock)
+| 希望 | 在庫あり |
+| 小   | false    |
+| 中   | true     |
+| 大   | true     |
+
+sequence 在庫なしだけ(none_in_stock)
+| 希望 | 在庫あり |
+| 大   | false    |
+
+sequence 空の一覧(empty_list)
+| 希望 | 在庫あり |
+
+examples
+| 候補         | -> 送るもの |
+| 二つめに在庫 | 中          |
+| 在庫なしだけ | 在庫なし    |
+| 空の一覧     | 在庫なし    |

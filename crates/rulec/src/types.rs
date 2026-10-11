@@ -478,48 +478,341 @@ impl Checked {
 }
 
 /// The names that only have a value **inside the walk**: a field of one element, and
-/// everything computed from one (§15.58).
-///
-/// A rule with `elements` runs in two phases — the items in this set once per element, the
-/// rest once, with the counts in scope — and the split is derived rather than declared: an
-/// item is element-scoped exactly when it reads something that is. The loop repeats until
-/// nothing changes so that the answer cannot depend on the order the items are written in.
+/// everything computed from one (§15.58). The middle one of the three stages (§15.208).
 pub fn element_scoped(f: &RuleFile) -> HashSet<String> {
-    let mut set: HashSet<String> =
-        f.elements.iter().flat_map(|e| &e.fields).map(|v| v.name.text.clone()).collect();
-    loop {
-        let before = set.len();
-        for it in &f.items {
-            match it {
-                Item::Derived(d) => {
-                    let mut deps = Vec::new();
-                    collect_names(&d.expr, &mut deps);
-                    if deps.iter().any(|n| set.contains(n)) {
-                        set.insert(d.name.text.clone());
-                    }
-                }
-                Item::Define(d) => {
-                    let mut deps = Vec::new();
-                    collect_names(&d.expr, &mut deps);
-                    if deps.iter().any(|n| set.contains(n)) {
-                        set.insert(d.name.text.clone());
-                    }
-                }
-                Item::Table(t) => {
-                    if t.inputs.iter().any(|(n, _)| set.contains(n)) {
-                        for oc in &t.outputs {
-                            set.insert(oc.name.text.clone());
-                        }
-                    }
-                }
-                // A count is what the walk leaves behind, so it is not in the walk.
-                Item::Agg(_) => {}
-            }
-        }
-        if set.len() == before {
-            return set;
+    stages(f).each
+}
+
+/// What a rule that walks a sequence answers with once the walk is over (§15.208): the first
+/// output, for a `fold` — the walk binds its answer to that name — and the name of every
+/// `count` and `sum`. Nothing, for a rule that walks no sequence.
+pub fn walk_answers(f: &RuleFile) -> Vec<String> {
+    let mut out = Vec::new();
+    if f.fold.is_some() {
+        if let Some(o) = f.outputs.first() {
+            out.push(o.name.text.clone());
         }
     }
+    for it in &f.items {
+        if let Item::Agg(d) = it {
+            out.push(d.name.text.clone());
+        }
+    }
+    out
+}
+
+/// Where an item of a rule that walks a sequence runs (§15.208).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stage {
+    /// It reads neither an element nor what the walk answers: it runs once, before the walk.
+    Before,
+    /// It reads a field of an element, or something computed from one: it runs once per
+    /// element, inside the walk.
+    Each,
+    /// It reads what the walk answers, or something computed from it: it runs once, after the
+    /// walk.
+    After,
+}
+
+/// The three stages of a rule's items, and the names on each side of the walk (§15.208).
+pub struct Stages {
+    /// One per item of the rule, in the order written. A `count` or a `sum` is the walk
+    /// itself and is marked `Each`; a rule that walks nothing has every item `Before`.
+    pub of: Vec<Stage>,
+    /// The names that have a value only inside the walk: the fields of an element and
+    /// everything computed from one.
+    pub each: HashSet<String>,
+    /// What the walk answers, and everything computed from it.
+    pub after: HashSet<String>,
+    /// The items that read both an element's value and what the walk answers, by index, each
+    /// with one name of each kind it reads. Reading both takes a second walk (E031).
+    pub both: Vec<(usize, String, String)>,
+}
+
+impl Stages {
+    /// The stage of the item at `i`.
+    pub fn at(&self, i: usize) -> Stage {
+        self.of.get(i).copied().unwrap_or(Stage::Before)
+    }
+}
+
+/// The names an item binds: a `derive`'s or a `define`'s name, a table's output columns, a
+/// summary's name.
+pub fn item_names(it: &Item) -> Vec<String> {
+    match it {
+        Item::Derived(d) => vec![d.name.text.clone()],
+        Item::Define(d) => vec![d.name.text.clone()],
+        Item::Table(t) => t.outputs.iter().map(|o| o.name.text.clone()).collect(),
+        Item::Agg(d) => vec![d.name.text.clone()],
+    }
+}
+
+/// The names an item reads: a `derive`'s or a `define`'s expression, a table's columns and the
+/// names its output cells write (an output cell that names an input passes it on, so the table
+/// reads it as surely as a column), a summary's column.
+pub fn item_reads(it: &Item) -> Vec<String> {
+    let mut out = Vec::new();
+    match it {
+        Item::Derived(d) => collect_names(&d.expr, &mut out),
+        Item::Define(d) => collect_names(&d.expr, &mut out),
+        Item::Table(t) => {
+            out.extend(t.inputs.iter().map(|(n, _)| n.clone()));
+            for row in &t.rows {
+                for o in &row.outs {
+                    if let OutCell::Name(w) = o {
+                        out.push(w.clone());
+                    }
+                }
+            }
+        }
+        Item::Agg(d) => out.push(d.column.text.clone()),
+    }
+    out
+}
+
+/// The stages of the items of a rule that walks a sequence (§15.208).
+///
+/// An item runs **before** the walk when it reads neither an element's field nor what the walk
+/// answers, **inside** it once per element when it reads an element's field or something that
+/// does (§15.58), and **after** it when it reads what the walk answers — a `fold`'s answer, a
+/// `count`, a `sum` — or something that does. The split is derived rather than declared, and
+/// the loop repeats until nothing changes, so that it cannot depend on the order the items are
+/// written in. An item before the walk never reads one after it: the items are written define
+/// before use (§5.1). An item that reads both an element and the walk's answer belongs to
+/// neither side, and is listed in `both`.
+pub fn stages(f: &RuleFile) -> Stages {
+    let mut each: HashSet<String> = f.elements.iter().flat_map(|e| &e.fields).map(|v| v.name.text.clone()).collect();
+    let mut after: HashSet<String> = walk_answers(f).into_iter().collect();
+    // The tables that define one output are evaluated together, as one merged table at the last
+    // of them (§15.66), so each of them reads what any of them reads and they share a stage.
+    let mut by_output: HashMap<String, Vec<String>> = HashMap::new();
+    for it in &f.items {
+        if let Item::Table(t) = it {
+            for oc in &t.outputs {
+                by_output.entry(oc.name.text.clone()).or_default().extend(item_reads(it));
+            }
+        }
+    }
+    let reads: Vec<Vec<String>> = f
+        .items
+        .iter()
+        .map(|it| match it {
+            Item::Table(t) => t.outputs.iter().flat_map(|oc| by_output.get(&oc.name.text).cloned().unwrap_or_default()).collect(),
+            _ => item_reads(it),
+        })
+        .collect();
+    loop {
+        let before = (each.len(), after.len());
+        for (it, rs) in f.items.iter().zip(&reads) {
+            // A summary is the walk itself: its column is an element's, and its name is what
+            // the walk answers with.
+            if matches!(it, Item::Agg(_)) {
+                continue;
+            }
+            if rs.iter().any(|n| each.contains(n)) {
+                each.extend(item_names(it));
+            }
+            if rs.iter().any(|n| after.contains(n)) {
+                after.extend(item_names(it));
+            }
+        }
+        if (each.len(), after.len()) == before {
+            break;
+        }
+    }
+    let mut of = Vec::new();
+    let mut both = Vec::new();
+    for (i, (it, rs)) in f.items.iter().zip(&reads).enumerate() {
+        if matches!(it, Item::Agg(_)) {
+            of.push(Stage::Each);
+            continue;
+        }
+        let e = rs.iter().find(|n| each.contains(*n));
+        let a = rs.iter().find(|n| after.contains(*n));
+        of.push(match (e, a) {
+            (Some(e), Some(a)) => {
+                both.push((i, e.clone(), a.clone()));
+                Stage::Each
+            }
+            (Some(_), None) => Stage::Each,
+            (None, Some(_)) => Stage::After,
+            (None, None) => Stage::Before,
+        });
+    }
+    Stages { of, each, after, both }
+}
+
+/// The enum a declared type names, or `None` for a type of numbers, truth values, strings or
+/// dates. Every other word a type is written with is the name of an enum (`resolve`).
+fn enum_named(t: &TypeRef) -> Option<String> {
+    use crate::kw;
+    match t.base.as_str() {
+        kw::MONEY | kw::MASS | kw::LENGTH | kw::AREA | kw::VOLUME | kw::DURATION | kw::TEMPERATURE | kw::SOUND
+        | kw::RATE | kw::NUMBER | kw::BOOL | kw::STRING | kw::DATE => None,
+        other => Some(other.to_string()),
+    }
+}
+
+/// Reads a bare word where the place it is written in says what it is (§15.208): an output cell
+/// of a table, and an answer of a `fold`.
+///
+/// The parser cannot tell an enum value from a name, so it keeps both as a name, and everything
+/// downstream settled the two its own way. The type check looked the name up first, so `gold`, a
+/// value of the column's enum, was read as the number output spelled the same and refused (E103);
+/// the evaluator looked a fold's answer up as a name, so `empty -> none_color` gave no value at
+/// all, and the generated code wrote the bare word. The type of the place decides now, once,
+/// and what it decides is written back into the rule, so that the checks, the evaluator and every
+/// generator read the word the same way:
+///
+/// - a word that is a value of the column's enum, in a column of that enum, is that value. A
+///   name spelled the same whose type is another (`gold : number`) is not what the cell means,
+///   and the word becomes the literal value. A name of that same enum spelled the same leaves
+///   both readings open, and the author has to rename one (E075).
+/// - in an answer of a `fold`, the same for the type the fold answers with — the rule's first
+///   output — and `true` and `false` are the truth values in an answer of `bool`.
+///
+/// A word that is a value and no name stays as the parser wrote it: everything downstream reads
+/// that as the value already.
+pub fn read_words(f: &mut RuleFile, path: &str) -> Vec<Diag> {
+    let mut out = Vec::new();
+    let mut enums: HashMap<String, Vec<String>> = HashMap::new();
+    for (p, _) in &f.imports {
+        if let Some(im) = crate::prelude::lookup(p) {
+            enums.insert(im.ty.to_string(), im.values());
+        }
+    }
+    for e in &f.enums {
+        enums.insert(e.name.text.clone(), e.values.iter().map(|v| v.text.clone()).collect());
+    }
+    // Every name the rule declares, with the enum its type names and what kind of name it is.
+    let mut declared: HashMap<String, (Option<String>, String)> = HashMap::new();
+    for i in &f.inputs {
+        declared.insert(i.name.text.clone(), (enum_named(&i.ty), tr!("入力", "an input")));
+    }
+    for i in f.elements.iter().flat_map(|e| &e.fields) {
+        declared.insert(i.name.text.clone(), (enum_named(&i.ty), tr!("要素のフィールド", "an element field")));
+    }
+    for o in &f.outputs {
+        declared.insert(o.name.text.clone(), (enum_named(&o.ty), tr!("出力", "an output")));
+    }
+    // The type of each table's output columns, in the order written: a column with no type of its
+    // own takes the output's, or what a table above gave the same name.
+    let mut col_enum: Vec<Vec<Option<String>>> = Vec::new();
+    for it in &f.items {
+        match it {
+            Item::Derived(d) => {
+                declared.insert(d.name.text.clone(), (enum_named(&d.ty), tr!("導出", "a derived value")));
+                col_enum.push(Vec::new());
+            }
+            Item::Define(d) => {
+                declared.insert(d.name.text.clone(), (enum_named(&d.ty), tr!("定義", "a definition")));
+                col_enum.push(Vec::new());
+            }
+            Item::Agg(d) => {
+                declared.entry(d.name.text.clone()).or_insert((None, tr!("まとめ", "a summary")));
+                col_enum.push(Vec::new());
+            }
+            Item::Table(t) => {
+                let mut cols = Vec::new();
+                for oc in &t.outputs {
+                    let e = match &oc.ty {
+                        Some(ty) => enum_named(ty),
+                        None => declared.get(&oc.name.text).and_then(|(e, _)| e.clone()),
+                    };
+                    declared.entry(oc.name.text.clone()).or_insert((e.clone(), tr!("表の出力", "a table output")));
+                    cols.push(e);
+                }
+                col_enum.push(cols);
+            }
+        }
+    }
+    let ambiguous = |w: &str, en: &str, kind: &str, sp: &Span, at: String| -> Diag {
+        Diag::error("E075", tr!("`{w}` は、列挙 {en} の値でも、{kind}の名前でもあります", "`{w}` is both a value of enum {en} and the name of {kind}"))
+            .at(at)
+            .mark(sp.clone(), tr!("どちらとしても読めます", "it reads either way"))
+            .note(tr!(
+                "値と名前のどちらの意味か決まらないので、rulec はこのセルを読めません。どちらかの名前を変えてください。",
+                "rulec cannot tell which of the two is meant here. Rename one of them."
+            ))
+    };
+    // How the place reads a word: `Some(true)` for the value, `Some(false)` for both readings (an
+    // error, already reported), `None` for a name or a word the type check will look at.
+    let read = |w: &str, en: Option<&String>, boolean: bool| -> Option<bool> {
+        if boolean && (w == crate::kw::TRUE || w == crate::kw::FALSE) {
+            return Some(true);
+        }
+        let en = en?;
+        if !enums.get(en).is_some_and(|vs| vs.iter().any(|v| v == w)) {
+            return None;
+        }
+        match declared.get(w) {
+            Some((Some(e), _)) if e == en => Some(false),
+            _ => Some(true),
+        }
+    };
+    for (k, it) in f.items.iter_mut().enumerate() {
+        let Item::Table(t) = it else { continue };
+        let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+        let clause = t.clause;
+        for row in &mut t.rows {
+            for (oi, o) in row.outs.iter_mut().enumerate() {
+                let OutCell::Name(w) = o else { continue };
+                let Some(en) = col_enum.get(k).and_then(|cs| cs.get(oi)).cloned().flatten() else { continue };
+                match read(w, Some(&en), false) {
+                    // A value no name shares stays as the parser wrote it.
+                    Some(true) if declared.contains_key(w.as_str()) => {
+                        *o = OutCell::Lit(Lit::Word(w.clone()));
+                    }
+                    Some(false) => {
+                        let kind = declared.get(w.as_str()).map(|(_, k)| k.clone()).unwrap_or_default();
+                        let sp = row.out_spans.get(oi).cloned().unwrap_or_else(|| row.span.clone());
+                        let at = if clause {
+                            tr!("{path}:{} 節 {tname}", "{path}:{} clause {tname}", sp.line)
+                        } else {
+                            tr!("{path}:{} 表 {tname}", "{path}:{} table {tname}", sp.line)
+                        };
+                        out.push(ambiguous(w, &en, &kind, &sp, at));
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    // The answers of a fold, read in the type of the rule's first output.
+    let answer = f.outputs.first().map(|o| (enum_named(&o.ty), o.ty.base == crate::kw::BOOL));
+    if let (Some(fold), Some((en, boolean))) = (f.fold.as_mut(), answer) {
+        let line = fold.span.line;
+        let mut values: Vec<&mut Expr> = Vec::new();
+        values.extend(fold.empty.as_mut());
+        values.extend(fold.exhausted.as_mut());
+        for (_, arm, _) in fold.arms.iter_mut() {
+            match arm {
+                Arm::Stop(Some(x)) => values.push(x),
+                Arm::Take { expr, .. } => values.push(expr),
+                Arm::KeepMax { expr, .. } => values.push(expr),
+                _ => {}
+            }
+        }
+        for e in values {
+            let Expr::Name(w, sp) = e else { continue };
+            // A truth value is one whatever the answer's type: written for an answer that is no
+            // truth value, it is the wrong type (E103), not an unknown name.
+            if w == crate::kw::TRUE || w == crate::kw::FALSE {
+                *e = Expr::Lit(Lit::Word(w.clone()), sp.clone());
+                continue;
+            }
+            match read(w, en.as_ref(), boolean) {
+                Some(true) => *e = Expr::Lit(Lit::Word(w.clone()), sp.clone()),
+                Some(false) => {
+                    let kind = declared.get(w.as_str()).map(|(_, k)| k.clone()).unwrap_or_default();
+                    let at = tr!("{path}:{line} 畳み込み", "{path}:{line} fold");
+                    out.push(ambiguous(w, en.as_deref().unwrap_or_default(), &kind, sp, at));
+                }
+                None => {}
+            }
+        }
+    }
+    out
 }
 
 pub fn check(f: &RuleFile, path: &str) -> Checked {
@@ -1527,6 +1820,12 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
     }
 
+    // The three stages of a walk (§15.208): what each item, each output and each answer of the
+    // fold may read, given when it runs.
+    if f.elements.is_some() && (f.fold.is_some() || f.items.iter().any(|it| matches!(it, Item::Agg(_)))) {
+        c.walk_stages(f, path);
+    }
+
     // `sequence` (§15.56): one named list of elements, which an example names in a cell.
     // Everything in it is a value — this is not a table, so nothing here narrows a range.
     {
@@ -1832,22 +2131,37 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             );
         }
     }
+    // A declaration named like an output is read: the output answers with its value (§15.208).
+    let answers = |n: &str| f.outputs.iter().any(|o| o.name.text == n);
     for it in &f.items {
         if let Item::Agg(d) = it {
-            if !c.used.contains(&d.name.text) {
-                c.diags.push(
-                    Diag::warning("W111", tr!("数え上げ {} はどこでも使われていません", "Count {} is never used", d.name.text))
-                        .at(at(d.span.line))
-                        .mark(d.name.span.clone(), tr!("どの列にも式にも現れません", "appears in no column and no expression"))
-                        .note(tr!(
+            if !c.used.contains(&d.name.text) && !answers(&d.name.text) {
+                let (title, note) = match d.kind {
+                    AggKind::Count => (
+                        tr!("数え上げ {} はどこでも使われていません", "Count {} is never used", d.name.text),
+                        tr!(
                             "数えた結果を使わないなら、並びをたどる意味がありません。表の列に置くか、消してください。",
                             "A count nothing reads is a walk for nothing. Put it in a column, or remove it."
-                        )),
+                        ),
+                    ),
+                    AggKind::Sum => (
+                        tr!("合計 {} はどこでも使われていません", "Sum {} is never used", d.name.text),
+                        tr!(
+                            "合計を使わないなら、並びをたどる意味がありません。表の列か式に置くか、消してください。",
+                            "A sum nothing reads is a walk for nothing. Put it in a column or an expression, or remove it."
+                        ),
+                    ),
+                };
+                c.diags.push(
+                    Diag::warning("W111", title)
+                        .at(at(d.span.line))
+                        .mark(d.name.span.clone(), tr!("どの列にも式にも現れません", "appears in no column and no expression"))
+                        .note(note),
                 );
             }
         }
         if let Item::Derived(d) = it {
-            if !c.used.contains(&d.name.text) {
+            if !c.used.contains(&d.name.text) && !answers(&d.name.text) {
                 c.diags.push(
                     Diag::warning("W111", tr!("導出 {} はどこでも使われていません", "Derived value {} is never used", d.name.text))
                         .at(at(d.span.line))
@@ -2860,17 +3174,19 @@ impl Checked {
         }
 
         // Collect the values the upstream table can produce. Only enums and booleans reach a
-        // downstream column (§5.3).
+        // downstream column (§5.3). A cell that names one of the table's own columns passes on
+        // what that column holds in the row, and a name of anything else whatever its type
+        // holds (`row_writes`, §15.208).
         if t.name.is_some() {
             for (oi, oc) in t.outputs.iter().enumerate() {
                 if !matches!(out_ty.get(oi), Some(Ty::Enum(_)) | Some(Ty::Bool)) {
                     continue;
                 }
                 let mut vs: Vec<String> = Vec::new();
-                for row in &t.rows {
-                    if let Some(OutCell::Name(w)) = row.outs.get(oi) {
-                        if !vs.contains(w) {
-                            vs.push(w.clone());
+                for ri in 0..t.rows.len() {
+                    for w in self.row_writes(t, ri, oi).unwrap_or_default() {
+                        if !vs.contains(&w) {
+                            vs.push(w);
                         }
                     }
                 }
@@ -2931,10 +3247,32 @@ impl Checked {
                             }
                         }
                     },
+                    // A word the type of the column reads as a value (`read_words`, §15.208): a
+                    // value of the column's enum that a name of another type is spelled like.
+                    OutCell::Lit(Lit::Word(w)) => {
+                        if w == crate::kw::TRUE || w == crate::kw::FALSE {
+                            if !matches!(want.present(), Ty::Bool | Ty::Unknown) {
+                                self.diags.push(
+                                    Diag::error("E103", tr!("この列は {want} ですが 真偽 が書かれています", "This column is {want}, but a boolean is written here"))
+                                        .at(at(row.span.line))
+                                        .mark(osp.clone(), ""),
+                                );
+                            }
+                        } else if let Some(e) = self.enum_of_value_in(w, want) {
+                            self.used_values.insert((e.clone(), w.clone()));
+                            self.value_of_other_enum(w, &e, want, &at(row.span.line), &osp);
+                        }
+                    }
                     OutCell::Name(w) => {
                         // An enum value, or (§3.2) the name of an input / derived / define.
                         if let Some(s) = self.syms.get(w).cloned() {
                             self.used.insert(w.clone());
+                            // A name still here that is also a value of the column's enum is the
+                            // cell E075 stops on (`read_words`): it names the value as much as
+                            // the input, so W111 does not add that the value appears nowhere.
+                            if let Some(e) = self.enum_of_value_in(w, want) {
+                                self.used_values.insert((e.clone(), w.clone()));
+                            }
                             if !s.ty.unifies(want) {
                                 self.diags.push(
                                     Diag::error("E103", tr!("この列は {want} ですが `{w}` は {} です", "This column is {want}, but `{w}` is {}", s.ty))
@@ -3070,8 +3408,13 @@ impl Checked {
                                 )),
                         );
                     }
+                    // An expected value is a value: the evaluator reads the cell as one, so a value
+                    // of the column's enum is that value even where a name of another type is
+                    // spelled the same (§15.208).
                     OutCell::Name(w) => {
-                        if let Some(s) = self.syms.get(w).cloned() {
+                        if let Some(e) = self.enum_of_value_in(w, &want) {
+                            self.value_of_other_enum(w, &e, &want, &at(row.span.line), &osp);
+                        } else if let Some(s) = self.syms.get(w).cloned() {
                             if !s.ty.unifies(&want) {
                                 self.diags.push(
                                     Diag::error("E103", tr!("この列は {want} ですが `{w}` は {} です", "This column is {want}, but `{w}` is {}", s.ty))
@@ -3079,8 +3422,6 @@ impl Checked {
                                         .mark(osp, ""),
                                 );
                             }
-                        } else if let Some(e) = self.enum_of_value_in(w, &want) {
-                            self.value_of_other_enum(w, &e, &want, &at(row.span.line), &osp);
                         } else if w != crate::kw::TRUE && w != crate::kw::FALSE {
                             self.diags.push(
                                 Diag::error("E012", tr!("`{w}` は値の名前としても、宣言された名前としても見つかりません", "`{w}` is found neither as a value nor as a declared name"))
@@ -3097,6 +3438,239 @@ impl Checked {
 
         self.used = used;
         self.used_values = used_values;
+    }
+
+    /// What the items, the outputs and the answers of a fold read, given the stage each runs in
+    /// (§15.208).
+    ///
+    /// An item that reads both a value of one element and what the walk answers, and an output
+    /// that is a value of one element, would take a second walk over the sequence (E031). A
+    /// fold's answers are decided where some values are not there: `empty` and `exhausted` see no
+    /// element, no answer sees what is computed from the fold's own answer, and `held` is only
+    /// there once the walk is over (E021). Each answer is read in the type the fold answers with,
+    /// which is the rule's first output (E012, E103) — none of them was read at all, so
+    /// `empty -> nonexistent` passed `check`.
+    fn walk_stages(&mut self, f: &RuleFile, path: &str) {
+        let st = stages(f);
+        let at = |line: usize| format!("{path}:{line}");
+        for (i, e, a) in &st.both {
+            let (what, sp) = match &f.items[*i] {
+                Item::Derived(d) => (tr!("導出 {}", "derived value {}", d.name.text), d.name.span.clone()),
+                Item::Define(d) => (tr!("定義 {}", "definition {}", d.name.text), d.name.span.clone()),
+                Item::Table(t) => {
+                    let n = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+                    let sp = t.name.as_ref().map(|n| n.span.clone()).unwrap_or_else(|| t.span.clone());
+                    (if t.clause { tr!("節 {n}", "clause {n}") } else { tr!("表 {n}", "table {n}") }, sp)
+                }
+                Item::Agg(_) => continue,
+            };
+            self.diags.push(
+                Diag::error(
+                    "E031",
+                    tr!(
+                        "要素の値と、並びをたどった結果を、一つの項目で読むことはまだできません",
+                        "One item cannot yet read both a value of one element and what the walk answers"
+                    ),
+                )
+                .at(at(sp.line))
+                .mark(sp, tr!("{what} は、要素の値 {e} と、たどった結果 {a} の両方を読んでいます", "{what} reads both {e}, a value of one element, and {a}, what the walk answers"))
+                .note(tr!(
+                    "たどった結果は、並びを最後まで見ないと決まりません。要素の値は、その要素を見ているあいだにしかありません。両方を読むには、たどり終えてから、もう一度並びをたどることになります。",
+                    "What the walk answers is known only once every element has been seen, and a value of one element exists only while the walk is on that element. Reading both would take a second walk over the sequence."
+                ))
+                .note(tr!(
+                    "分けられるなら、要素の値を読む部分と、たどった結果を読む部分を、別の表か定義にしてください。",
+                    "Where it can be split, put the part that reads the element and the part that reads what the walk answers in separate tables or definitions."
+                )),
+            );
+        }
+        // The outputs are read once the walk is over. A fold answers the first one itself, and a
+        // `result` line is read below.
+        let per_element = |s: &mut Self, name: &str, sp: &Span, what: String| {
+            s.diags.push(
+                Diag::error("E031", tr!("出力 {name} は、要素ごとの値です", "Output {name} is a value of one element"))
+                    .at(at(sp.line))
+                    .mark(sp.clone(), what)
+                    .note(tr!(
+                        "要素ごとの値は、その要素を見ているあいだにしかありません。並び全体で一つの値にしてから、出力にしてください。",
+                        "A value of one element exists only while the walk is on that element. Make it one value for the whole sequence first, and make that the output."
+                    )),
+            );
+        };
+        for (oi, od) in f.outputs.iter().enumerate() {
+            if oi == 0 && (f.fold.is_some() || f.result.is_some()) {
+                continue;
+            }
+            if st.each.contains(&od.name.text) {
+                per_element(self, &od.name.text, &od.name.span, tr!("並びをたどり終えたあとには、一つの値に決まりません", "once the walk is over, it is not one value"));
+            }
+        }
+        if let (Some(r), Some(od)) = (&f.result, f.outputs.first()) {
+            let mut names = Vec::new();
+            collect_names(&r.expr, &mut names);
+            if let Some(n) = names.iter().find(|n| st.each.contains(*n)) {
+                per_element(self, &od.name.text, &r.span, tr!("`result` が、要素の値 {n} を読んでいます", "`result` reads {n}, a value of one element"));
+            }
+        }
+
+        let Some(fold) = &f.fold else { return };
+        let out_ty = f.outputs.first().and_then(|o| self.syms.get(&o.name.text)).map(|s| s.ty.clone()).unwrap_or(Ty::Unknown);
+        let at_fold = tr!("{path}:{} 畳み込み", "{path}:{} fold", fold.span.line);
+        // Where an answer is decided: before any element (`empty`), after the last (`exhausted`),
+        // or on one element (an arm, and the key of `keep_max`, which is no answer).
+        #[derive(PartialEq, Clone, Copy)]
+        enum Place {
+            Empty,
+            Exhausted,
+            Arm,
+            Key,
+        }
+        let mut values: Vec<(Place, &Expr)> = Vec::new();
+        if let Some(e) = &fold.empty {
+            values.push((Place::Empty, e));
+        }
+        if let Some(e) = &fold.exhausted {
+            values.push((Place::Exhausted, e));
+        }
+        for (_, arm, _) in &fold.arms {
+            match arm {
+                Arm::Stop(Some(x)) => values.push((Place::Arm, x)),
+                Arm::Take { expr, .. } => values.push((Place::Arm, expr)),
+                Arm::KeepMax { expr, key } => {
+                    values.push((Place::Arm, expr));
+                    values.push((Place::Key, key));
+                }
+                _ => {}
+            }
+        }
+        let fold_bad = |s: &mut Self, sp: &Span, title: String, note: String| {
+            s.diags.push(Diag::error("E021", title).at(at_fold.clone()).mark(sp.clone(), "").note(note));
+        };
+        for (place, e) in values {
+            // A word E075 stopped on (`read_words`): a value of the answer's enum and a name of
+            // that enum at once. Nothing more is said of it, and its value is not then said to
+            // appear nowhere (W111).
+            if let (Expr::Name(w, _), Ty::Enum(en), false) = (e, out_ty.present(), place == Place::Key) {
+                if self.enum_has(en, w) && self.syms.get(w).is_some_and(|s| matches!(s.ty.present(), Ty::Enum(x) if x == en)) {
+                    self.used_values.insert((en.clone(), w.clone()));
+                    continue;
+                }
+            }
+            let mut names = Vec::new();
+            collect_names(e, &mut names);
+            let sp = e.span().clone();
+            if place != Place::Exhausted && names.iter().any(|n| n == crate::kw::HELD) {
+                fold_bad(
+                    self,
+                    &sp,
+                    tr!("`{h}` は `{x}` の値にだけ書けます", "`{h}` can only be written in the `{x}` answer", h = crate::kw::HELD, x = crate::kw::EXHAUSTED),
+                    tr!(
+                        "`{}` は、最後まで見終えたときに保持している値です。ほかの値を決める時点では、まだ決まっていません。",
+                        "`{}` is what the walk holds once it has seen every element. Where any other answer is decided, it is not decided yet.",
+                        crate::kw::HELD
+                    ),
+                );
+                continue;
+            }
+            let none_seen = match place {
+                Place::Empty => Some(tr!("要素ゼロ件のときの答え", "The answer for no elements")),
+                Place::Exhausted => Some(tr!("最後まで見終えたときの答え", "The answer for a walk that reached the end")),
+                _ => None,
+            };
+            if let (Some(which), Some(n)) = (&none_seen, names.iter().find(|n| st.each.contains(*n))) {
+                fold_bad(
+                    self,
+                    &sp,
+                    tr!("{which}は、要素の値 {n} を読めません", "{which} cannot read {n}, a value of one element"),
+                    tr!(
+                        "この答えは、どの要素も見ていないところで決まります。要素の値を答えにするなら、`take_unique`・`take_first`・`keep_max` で採ってから、`exhausted -> {}` で返してください。",
+                        "It is decided where no element is being looked at. To answer with a value of an element, take it with `take_unique`, `take_first` or `keep_max`, and answer `exhausted -> {}`.",
+                        crate::kw::HELD
+                    ),
+                );
+                continue;
+            }
+            if let Some(n) = names.iter().find(|n| *n != crate::kw::HELD && st.after.contains(*n)) {
+                fold_bad(
+                    self,
+                    &sp,
+                    tr!("畳み込みの値は、たどった結果から計算する {n} を読めません", "A value of the fold cannot read {n}, which is computed from what the walk answers"),
+                    tr!("{n} は、この畳み込みが答えを出したあとで決まる値です。", "{n} is decided only once the fold has answered."),
+                );
+                continue;
+            }
+            if place == Place::Key {
+                continue;
+            }
+            // The type the fold answers with. A literal number is read above (E103, §15.86); a
+            // word was settled by `read_words` into a value where it is one of this type.
+            match e {
+                Expr::Lit(Lit::Num(_), _) => {}
+                Expr::Lit(Lit::Word(v), lsp) => {
+                    let fits = match out_ty.present() {
+                        Ty::Bool => v == crate::kw::TRUE || v == crate::kw::FALSE,
+                        Ty::Enum(en) => self.enum_has(en, v),
+                        Ty::Unknown => true,
+                        _ => false,
+                    };
+                    if let (true, Ty::Enum(en)) = (fits, out_ty.present()) {
+                        self.used_values.insert((en.clone(), v.clone()));
+                    }
+                    if !fits {
+                        self.diags.push(
+                            Diag::error("E103", tr!("この畳み込みの答えは {out_ty} ですが `{v}` が書かれています", "This fold answers with {out_ty}, but `{v}` is written here"))
+                                .at(at_fold.clone())
+                                .mark(lsp.clone(), "")
+                                .note(tr!(
+                                    "畳み込みの答えは、この規則の最初の出力そのものです。その型の値を書いてください。",
+                                    "What a fold answers is the rule's first output itself. Write a value of its type."
+                                )),
+                        );
+                    }
+                }
+                Expr::Name(w, wsp) if w != crate::kw::HELD && !self.syms.contains_key(w) => {
+                    self.diags.push(
+                        Diag::error("E012", tr!("`{w}` は、答えの型 {out_ty} の値でも、宣言された名前でもありません", "`{w}` is neither a value of {out_ty}, the type the fold answers with, nor a declared name"))
+                            .at(at_fold.clone())
+                            .mark(wsp.clone(), "")
+                            .maybe_note(crate::prelude::hint(w, &self.imported))
+                            .note(tr!(
+                                "畳み込みの答えは、この規則の最初の出力に入ります。その型の値か、上で宣言した名前を書いてください。",
+                                "What a fold answers becomes the rule's first output. Write a value of its type, or a name declared above."
+                            )),
+                    );
+                }
+                _ => {
+                    // `held` is what the walk holds: a value of the type the fold answers with.
+                    let held = (place == Place::Exhausted).then(|| {
+                        self.syms.insert(
+                            crate::kw::HELD.to_string(),
+                            Sym { ty: out_ty.clone(), span: fold.span.clone(), kind: SymKind::Derived, contract_only: false },
+                        )
+                    });
+                    let got = self.expr_ty(e, path);
+                    if let Some(was) = held {
+                        match was {
+                            Some(s) => {
+                                self.syms.insert(crate::kw::HELD.to_string(), s);
+                            }
+                            None => {
+                                self.syms.remove(crate::kw::HELD);
+                            }
+                        }
+                    }
+                    if out_ty != Ty::Unknown {
+                        let before = self.diags.len();
+                        self.check_same(&out_ty, &got, &sp, path, &tr!("畳み込みの答え", "fold answer"));
+                        if self.diags.len() > before {
+                            if let Some(d) = self.diags.last_mut() {
+                                d.where_ = at_fold.clone();
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// `machine` and `scenario` (§15.148): the names they use exist and fit.
@@ -3578,6 +4152,58 @@ impl Checked {
 impl Checked {
     pub fn ty_of(&self, name: &str) -> Option<Ty> {
         self.syms.get(name).map(|s| s.ty.clone())
+    }
+
+    /// Every value of a type of words: an enum's values, or the two truth values. `None` for any
+    /// other type.
+    pub fn values_of(&self, ty: &Ty) -> Option<Vec<String>> {
+        match ty.present() {
+            Ty::Enum(e) => self.enums.get(e).cloned(),
+            Ty::Bool => Some(vec![crate::kw::TRUE.to_string(), crate::kw::FALSE.to_string()]),
+            _ => None,
+        }
+    }
+
+    /// The values row `ri` of table `t` can write into its output column `oi`, for a column of
+    /// an enum or of truth values (§15.208).
+    ///
+    /// A value written in the cell is that value. A name stands for what it holds when the row
+    /// fires: when it is one of the table's own columns, the values this row's cell for it lets
+    /// through — `| c | x |` writes `c`, the only value of `x` the row takes — and otherwise every
+    /// value of its type. That is the safe side for both of the checks that read it: E102 never
+    /// takes a row below for dead when a name above can reach it, and E101 asks no row for a value
+    /// nothing above can write. The two used to read the cell differently — the values the cells
+    /// write, with the name taken for a value of its own, against "a name can be anything" — so the
+    /// same rule was told to delete a row (E102) and to add it (E101) at once. `None` for a
+    /// column of another type, or a name whose type is not one of words.
+    pub fn row_writes(&self, t: &Table, ri: usize, oi: usize) -> Option<Vec<String>> {
+        let row = t.rows.get(ri)?;
+        let col = self.ty_of(&t.outputs.get(oi)?.name.text)?;
+        self.values_of(&col)?;
+        match row.outs.get(oi)? {
+            OutCell::Lit(Lit::Word(w)) => Some(vec![w.clone()]),
+            OutCell::Lit(_) => None,
+            OutCell::Name(w) => {
+                let Some(ty) = self.ty_of(w) else {
+                    // No name of that spelling where the cell is: the word is a value.
+                    return Some(vec![w.clone()]);
+                };
+                let all = self.values_of(&ty)?;
+                let Some(ci) = t.inputs.iter().position(|(n, _)| n == w) else { return Some(all) };
+                let Some(cell) = row.cells.get(ci) else { return Some(all) };
+                Some(
+                    all.into_iter()
+                        .filter(|v| {
+                            let val = match ty.present() {
+                                Ty::Bool => crate::eval::Val::Bool(v == crate::kw::TRUE),
+                                _ => crate::eval::Val::Enum(v.clone()),
+                            };
+                            crate::eval::cell_matches(self, cell, &val, &ty)
+                        })
+                        .collect(),
+                )
+            }
+        }
     }
 
     /// The factor a named value is multiplied by to become the integer it travels as.
@@ -4377,7 +5003,8 @@ impl Checked {
     }
 }
 
-fn collect_names(e: &Expr, out: &mut Vec<String>) {
+/// The names an expression reads, in order, with repeats.
+pub fn collect_names(e: &Expr, out: &mut Vec<String>) {
     match e {
         Expr::Name(n, _) => out.push(n.clone()),
         Expr::Bin(l, _, r, _) => {

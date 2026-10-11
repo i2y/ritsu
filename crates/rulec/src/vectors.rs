@@ -2368,6 +2368,80 @@ fn satisfy_all(
     None
 }
 
+/// The rows of a set among `rows` for which the search the vector generator runs for a row finds
+/// no input a caller can send that makes the row win: W128 asks it of the rows with a cell on a
+/// derived or `define` column, whose point on the axes is not an input (§15.209). It starts where
+/// the generator does (every input at its first candidate) and holds what it finds to the ranges,
+/// the `constraint` lines and koyomi's days.
+pub fn rows_without_input(f: &RuleFile, c: &Checked, set: &crate::defset::DefSet, rows: &[usize]) -> Vec<usize> {
+    if rows.is_empty() {
+        return Vec::new();
+    }
+    // The rows an example of the rule reaches: an author who knows of an input the search misses
+    // writes it as an example, and the row is decided.
+    let t = &set.table;
+    let mut by_example: BTreeSet<usize> = BTreeSet::new();
+    for a in example_inputs(f, c) {
+        if !allowed(f, &a) || !days_ok(c, &a) {
+            continue;
+        }
+        let (_, fired, _) = eval::run_bindings(f, c, a.into_iter().collect());
+        for &ri in rows {
+            if fired.contains(&eval::row_tag(set.row_table(ri), t.rows[ri].index)) {
+                by_example.insert(ri);
+            }
+        }
+    }
+    let cands = candidates(f, c);
+    let Some(seed) = f.inputs.iter().map(|x| Some((x.name.text.clone(), cands.get(&x.name.text)?.first()?.clone()))).collect::<Option<BTreeMap<String, Val>>>() else {
+        return rows.iter().copied().filter(|ri| !by_example.contains(ri)).collect();
+    };
+    let left: Vec<usize> = rows
+        .iter()
+        .copied()
+        .filter(|ri| !by_example.contains(ri))
+        .filter(|&ri| !win_row(f, c, &cands, &seed, set, ri).is_some_and(|a| allowed(f, &a) && days_ok(c, &a)))
+        .collect();
+    if left.is_empty() {
+        return left;
+    }
+    // What the row-by-row search misses — a row whose columns pull one input two ways, say — the
+    // candidates taken together may still reach: every combination of them, up to a bound, each
+    // run through the reference evaluator.
+    let mut combos: Vec<BTreeMap<String, Val>> = vec![BTreeMap::new()];
+    for i in &f.inputs {
+        let Some(vs) = cands.get(&i.name.text) else { return left };
+        let mut next = Vec::new();
+        for base in &combos {
+            for v in vs {
+                let mut m = base.clone();
+                m.insert(i.name.text.clone(), v.clone());
+                next.push(m);
+            }
+        }
+        if next.len() > 4096 {
+            return left;
+        }
+        combos = next;
+    }
+    let mut reached: BTreeSet<usize> = BTreeSet::new();
+    for a in combos {
+        if !allowed(f, &a) || !days_ok(c, &a) {
+            continue;
+        }
+        let (_, fired, _) = eval::run_bindings(f, c, a.into_iter().collect());
+        for &ri in &left {
+            if fired.contains(&eval::row_tag(set.row_table(ri), t.rows[ri].index)) {
+                reached.insert(ri);
+            }
+        }
+        if reached.len() == left.len() {
+            break;
+        }
+    }
+    left.into_iter().filter(|ri| !reached.contains(ri)).collect()
+}
+
 /// An input to start from: the first candidate value of every input. `pair_witness` builds on it,
 /// and so does the input E101 gives behind a gap on derived columns (§15.190).
 pub fn first_input(f: &RuleFile, c: &Checked) -> Option<BTreeMap<String, Val>> {

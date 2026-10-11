@@ -1,0 +1,57 @@
+rule 最高の申し出(best_offer) v1
+description "入札の中で一番よい申し出と、それが確認を要するか。申し出は開始価格を下回らない。開始価格は入力から、たどる前に一度だけ計算する。入札ごとの申し出は、その金額と開始価格を読む。入札が一件も無ければ開始価格が答えになる。確認の要否は、たどったあとで答えから決める"
+
+enum 入札の扱い(bid_verdict) = 数える(counted) | 数えない(ignored)
+
+inputs
+  最低価格(reserve) : number  range >=0 <=1000
+  手数料(fee)       : number  range >=0 <=100
+
+elements 入札(bids)
+  金額(amount)        : number  range >=0 <=1000
+  取り下げ(withdrawn) : bool
+
+outputs
+  最高額(best)   : number  round down(1)
+  要確認(review) : bool
+
+define 開始価格(opening) : number = 最低価格 + 手数料
+define 申し出(offer)     : number = max(金額, 開始価格)
+
+table 判定(judge)
+policy unique
+| 取り下げ | -> 扱い(verdict) : 入札の扱い |
+| false    | 数える                        |
+| true     | 数えない                      |
+
+fold 扱い over 入札
+  数える    -> keep_max 申し出 by 申し出
+  数えない  -> next
+  empty     -> 開始価格
+  exhausted -> held
+
+table 確認の要否(review_of)
+policy unique
+| 最高額 | -> 要確認 : bool |
+| >=500  | true             |
+| <500   | false            |
+
+sequence 二件(two_bids)
+| 金額 | 取り下げ |
+| 300  | false    |
+| 700  | false    |
+
+sequence 取り下げだけ(only_withdrawn)
+| 金額 | 取り下げ |
+| 900  | true     |
+
+sequence 入札なし(no_bids)
+| 金額 | 取り下げ |
+
+examples
+| 最低価格 | 手数料 | 入札         | -> 最高額 | 要確認 |
+| 100      | 0      | 二件         | 700       | true   |
+| 800      | 50     | 二件         | 850       | true   |
+| 400      | 10     | 取り下げだけ | 410       | false  |
+| 600      | 0      | 入札なし     | 600       | true   |
+| 0        | 20     | 入札なし     | 20        | false  |

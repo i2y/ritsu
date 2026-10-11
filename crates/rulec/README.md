@@ -285,12 +285,12 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
                   settles its claim, and the re-checker
 src/              54 modules, and 6 more under codegen/
 tests/corpus/     87 rules, and the copies of the documents they cite
-tests/mutants/    115 files, each with one mistake planted in it
-tests/golden/     the diagnostic prose snapshot by snapshot: 58 in Japanese, 47 in English
+tests/mutants/    121 files, each with one mistake planted in it
+tests/golden/     the diagnostic prose snapshot by snapshot: 61 in Japanese, 50 in English
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs
 ```
 
-87 rules — 34 transcribed from a published source, 53 written to reach the rest of the language — are checked, generated and run on every commit, and all 113 diagnostics are implemented.
+87 rules — 34 transcribed from a published source, 53 written to reach the rest of the language — are checked, generated and run on every commit, and all 115 diagnostics are implemented.
 Those rules come from **public information**: Japan Post's tariff, Yamato's size classes, the coupon
 terms of Rakuten and Yahoo, Article 7 of EU Regulation 261/2004, the National Tax Agency's
 income-tax and stamp-duty tables, the Stamp Tax Act and the Special Taxation Measures Act as

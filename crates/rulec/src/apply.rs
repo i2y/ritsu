@@ -302,8 +302,11 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             if let Item::Table(t) = it {
                 for oc in &t.outputs {
                     if cc.ty_of(&oc.name.text).is_some_and(|ty| callee_enum(&ty)) {
+                        // Named, so that each language reads the two in its own order (§15.208).
+                        let table = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+                        let output = &oc.name.text;
                         out.push(e044(
-                            tr!("表 {} の出力 `{}` は、元の規則が宣言した列挙です", "the output `{}` of table {} is an enum the callee declares", t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(), oc.name.text),
+                            tr!("表 {table} の出力 `{output}` は、元の規則が宣言した列挙です", "the output `{output}` of table {table} is an enum the callee declares"),
                             tr!("元の規則の列挙を出力に持つ表や節は、まだ準用できません。入力の列挙なら `with` で値を対応づけられます。", "Expanding a table or clause that produces one of the callee's enums is not accepted yet. An enum input is mapped with `with`."),
                         ));
                         bad = true;

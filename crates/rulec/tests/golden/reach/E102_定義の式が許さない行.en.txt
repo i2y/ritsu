@@ -1,0 +1,16 @@
+error[E102]: Unreachable row: row 4 never matches
+  --> tests/reach/E102_定義の式が許さない行.rule:24 table 減らし方
+   |
+24 | | >=1    | >=1  | >=1  | <=1    | 0                |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ row 4: no input reaches here
+13 | define 上限     : number = 上限一 + 上限二
+   |                            ^^^^^^^^^^^^^^^ the reachable interval is >=0 <=4
+14 | define 加算後   : number = 基本量 + 加算
+   |                            ^^^^^^^^^^^^^ the reachable interval is >=0 <=23
+15 | define 超過     : number = 加算後 - 上限
+   |                            ^^^^^^^^^^^^^ the reachable interval is >=-4 <=23
+   |
+ Over the ranges of the inputs, `上限` can only come to >=0 <=4, `加算後` to >=0 <=23, and `超過` to >=-4 <=23.
+ `加算後 = 基本量 + 加算` and `超過 = 加算後 - 上限` hold for every input, and with them no values meet all of this row's conditions.
+ hint: delete this row. To keep it, rewrite its conditions to values the equations allow together.
+

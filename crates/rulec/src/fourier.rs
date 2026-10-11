@@ -37,6 +37,10 @@ pub enum Origin {
     /// One side of a `derive`'s defining equation: `name − expr <= 0` when `le`, `>= 0`
     /// otherwise.
     Derive { name: String, le: bool },
+    /// The same, of a `define` of a number whose expression is linear (§15.209). Its value is its
+    /// expression in every evaluation, as a derive's is; it has no range declared, and is bounded
+    /// by what its expression reaches.
+    Define { name: String, le: bool },
     /// One end of a declared range.
     Range { name: String, hi: bool },
     /// The `constraint` at this index in the file.
@@ -239,9 +243,15 @@ fn numeric(ty: &Ty) -> bool {
 }
 
 fn ground_in(seed: &[String], want: &Ty, f: &RuleFile, c: &Checked) -> Option<Ground> {
-    let expr_of = |n: &str| -> Option<&Expr> {
+    // The values the rule computes by an expression: a `derive`, and a `define` of a number. A
+    // `define` is the value of its expression in every evaluation as surely as a derive is, so its
+    // equation is as true a fact of the model; leaving it out let a row that asks
+    // `excess >= 1` and `added <= 1` with `excess = added − limit` and `limit >= 1` pass for one
+    // some input reaches (§15.209).
+    let expr_of = |n: &str| -> Option<(&Expr, bool)> {
         f.items.iter().find_map(|it| match it {
-            crate::ast::Item::Derived(d) if d.name.text == n => Some(&d.expr),
+            crate::ast::Item::Derived(d) if d.name.text == n => Some((&d.expr, false)),
+            crate::ast::Item::Define(d) if d.name.text == n => Some((&d.expr, true)),
             _ => None,
         })
     };
@@ -252,7 +262,7 @@ fn ground_in(seed: &[String], want: &Ty, f: &RuleFile, c: &Checked) -> Option<Gr
             continue;
         }
         vars.push(n.clone());
-        if let Some(l) = expr_of(&n).and_then(|e| linear(e, want, c)) {
+        if let Some(l) = expr_of(&n).and_then(|(e, _)| linear(e, want, c)) {
             queue.extend(l.terms.keys().cloned());
         }
         // A `constraint` ties a name to another, and that one may be tied to a third: `a <= b`
@@ -271,13 +281,16 @@ fn ground_in(seed: &[String], want: &Ty, f: &RuleFile, c: &Checked) -> Option<Gr
     }
     let mut sys: Vec<Ineq> = Vec::new();
     for n in &vars {
-        if let Some(l) = expr_of(n).and_then(|e| linear(e, want, c)) {
-            // Every name the expression reads is in the system, because the closure above put
-            // it there; a name of another type made `linear` refuse, and then there is no
-            // equation to add.
-            let d = Lin::var(n).plus(&l.scale(Rat::int(-1)));
-            sys.push(d.clone().le(false).tag(Origin::Derive { name: n.clone(), le: true }));
-            sys.push(d.ge(false).tag(Origin::Derive { name: n.clone(), le: false }));
+        if let Some((e, define)) = expr_of(n) {
+            if let Some(l) = linear(e, want, c) {
+                // Every name the expression reads is in the system, because the closure above put
+                // it there; a name of another type made `linear` refuse, and then there is no
+                // equation to add.
+                let d = Lin::var(n).plus(&l.scale(Rat::int(-1)));
+                let side = |le: bool| if define { Origin::Define { name: n.clone(), le } } else { Origin::Derive { name: n.clone(), le } };
+                sys.push(d.clone().le(false).tag(side(true)));
+                sys.push(d.ge(false).tag(side(false)));
+            }
         }
         if let Some((lo, hi)) = c.ranges.get(n) {
             if let Some(lo) = lo {

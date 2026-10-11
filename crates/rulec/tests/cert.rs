@@ -723,6 +723,38 @@ fn 定義の取りうる値の外の葉は再検査で計算し直される() {
     assert!(said.contains("can reach this box"), "{said}");
 }
 
+/// The equation of a `define` of a number whose expression is linear is a fact of the linear model,
+/// as a derive's is (§15.209): the re-checker builds it again from the define's expression and adds
+/// it up with the multipliers. The equation's direction turned, another define's equation, and the
+/// define's equation called a derive's are each refused, held to the rule's file or not.
+#[test]
+fn 定義の式の事実は式から組み直される() {
+    if !ready(Need::Python, have_python, "python3 が無い") {
+        return;
+    }
+    let rel = "tests/sieve/E101_closed_by_a_defines_equation.rule";
+    let cert = sieve_cert("E101_closed_by_a_defines_equation");
+    let facts = r#""facts":[{"define":"excess","le":true},{"define":"excess","le":false}"#;
+    assert!(cert.contains(facts) && cert.contains(r#"{"farkas":[{"fact":0,"y":"1"}"#), "{cert}");
+    let (code, said) = recheck(&cert);
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("impossible by the linear model"), "{said}");
+    let (code, said) = recheck_rule(&cert, rel);
+    assert_eq!(code, 0, "{said}");
+    let lies = [
+        ("等式の向きを入れ替える", cert.replacen(facts, r#""facts":[{"define":"excess","le":false},{"define":"excess","le":true}"#, 1), "the names do not cancel"),
+        ("別の定義の等式を指す", cert.replacen(facts, r#""facts":[{"define":"added","le":true},{"define":"excess","le":false}"#, 1), "the names do not cancel"),
+        ("定義の等式を導出の等式と呼ぶ", cert.replacen(facts, r#""facts":[{"derive":"excess","le":true},{"define":"excess","le":false}"#, 1), "the model names the equation of excess as a derive, and it is a define"),
+    ];
+    for (what, forged, why) in lies {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        for (code, said) in [recheck(&forged), recheck_rule(&forged, rel)] {
+            assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+            assert!(said.contains(why), "{what}: {said}");
+        }
+    }
+}
+
 /// A value a table above writes only in rows none of which fires in the box (§15.195). The
 /// re-checker counts those rows itself from the table above, and adds up each one's multipliers;
 /// five ways of lying about it are refused.

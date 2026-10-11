@@ -122,17 +122,18 @@ pub fn public_value(f: &RuleFile, en: &str, v: &str) -> String {
     f.enums.iter().find(|e| e.name.text == en).and_then(|e| e.values.iter().find(|x| x.text == v)).map(pub_name).unwrap_or_else(|| v.to_string())
 }
 
-/// Which side of a counting walk an item is emitted on (§15.58).
+/// Which stage of a walk an item is emitted in (§15.58, §15.208).
 ///
-/// A rule that counts has items before the walk's summary and after it, so the body is
-/// written in two passes over the same list: `Walk` for what one element does, `Main` for
-/// the rule that the counts feed. Everything else is `All`, which is every rule that came
-/// before counting existed.
+/// A rule that walks a sequence has items before the walk, items of one element, and items
+/// after it, so the body is written in three passes over the same list: `Before` above the
+/// loop, `Each` inside it, `After` below it — the stages the evaluator runs (`types::stages`).
+/// Every rule that walks nothing is `All`.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Phase {
     All,
-    Walk,
-    Main,
+    Before,
+    Each,
+    After,
 }
 
 pub struct Gen<'a> {
@@ -161,6 +162,8 @@ pub struct Gen<'a> {
     /// The rule's file as the head of every generated file names it (ritsu's DESIGN 9.2): its name,
     /// or under `ritsu gen` its path from the project's root (`shown`).
     shown: String,
+    /// The stage each item of a walk runs in (§15.208).
+    stages: crate::types::Stages,
 }
 
 mod sql;
@@ -269,23 +272,19 @@ impl<'a> Gen<'a> {
             && d.value.as_ref().is_some_and(|v| v.text == crate::kw::FALSE)
     }
 
-    /// Whether an item is emitted in this phase. The split is the evaluator's: an item is
-    /// element-scoped exactly when it reads something that is (§15.58).
-    fn in_phase(&self, it: &Item, phase: Phase) -> bool {
+    /// Whether the item at `i` is emitted in this phase. The split is the evaluator's: the
+    /// stage `types::stages` gives it (§15.208).
+    fn in_phase(&self, i: usize, it: &Item, phase: Phase) -> bool {
+        use crate::types::Stage;
         if matches!(it, Item::Agg(_)) {
             return false;
         }
-        if phase == Phase::All {
-            return true;
+        match phase {
+            Phase::All => true,
+            Phase::Before => self.stages.at(i) == Stage::Before,
+            Phase::Each => self.stages.at(i) == Stage::Each,
+            Phase::After => self.stages.at(i) == Stage::After,
         }
-        let scoped = crate::types::element_scoped(self.f);
-        let walk = match it {
-            Item::Derived(d) => scoped.contains(&d.name.text),
-            Item::Define(d) => scoped.contains(&d.name.text),
-            Item::Table(t) => t.outputs.iter().any(|o| scoped.contains(&o.name.text)),
-            Item::Agg(_) => false,
-        };
-        walk == (phase == Phase::Walk)
     }
 
     /// The definition set a table stands for: the merged table's name is the set's key, and
@@ -428,6 +427,7 @@ impl<'a> Gen<'a> {
             src: src.to_string(),
             path: path.to_string(),
             shown: ritsu_emit::header::file_name(path),
+            stages: crate::types::stages(f),
         }
     }
 
@@ -1199,7 +1199,7 @@ def _round_down(x: int, g: int) -> int:
 def _round_up(x: int, g: int) -> int:
     """{up}"""
     q, r = abs(x) // g, abs(x) % g
-    v = (q + 1) * g if r else q * g
+    v = (q + 1) * g if r != 0 else q * g
     return -v if x < 0 else v
 
 
@@ -1313,8 +1313,8 @@ impl<'a> Gen<'a> {
     /// element's own fields.
     fn py_items(&self, local: &dyn Fn(&str) -> String, trace: &str, phase: Phase) -> String {
         let mut o = String::new();
-        for it in &self.f.items {
-            if !self.in_phase(it, phase) {
+        for (i, it) in self.f.items.iter().enumerate() {
+            if !self.in_phase(i, it, phase) {
                 continue;
             }
             match it {
@@ -1340,7 +1340,7 @@ impl<'a> Gen<'a> {
     /// The walk itself (§15.56): the accumulators, one pass per element with the body inside
     /// it, and the answer bound to the output's own name so that the rounding and the return
     /// below are the ones every rule uses.
-    fn py_walk(&self, fold: &crate::ast::FoldDecl, trace: &str) -> String {
+    fn py_walk(&self, fold: &crate::ast::FoldDecl, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
         let el = self.f.elements.as_ref().expect("a fold has elements");
         let seq = pub_name(&el.name);
         let fields: BTreeMap<String, String> =
@@ -1353,26 +1353,41 @@ impl<'a> Gen<'a> {
             match fields.get(n) {
                 Some(f) => format!("{e}.{f}"),
                 None if n == crate::kw::HELD => held.clone(),
-                None => self.ident(n),
+                None => outer(n),
             }
         };
         let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
         let out_ty = self.ty_of(&out_name);
         let acc_ty = if out_ty.is_numeric() { "int".to_string() } else { self.py_ty(&out_ty) };
-        let text = |x: &Option<Expr>| -> String {
-            x.as_ref().map(|x| unparen(&self.expr(x, &local).text).to_string()).unwrap_or_else(|| "0".to_string())
+        // An answer is read in the type the fold answers with: a value of its enum is that
+        // enum's member (§15.208).
+        let val = |x: &Expr| -> String {
+            match x {
+                Expr::Lit(Lit::Word(w), _) if w != crate::kw::TRUE && w != crate::kw::FALSE => self.py_value(w, &out_ty),
+                _ => unparen(&self.expr(x, &local).text).to_string(),
+            }
         };
+        let text = |x: &Option<Expr>| -> String { x.as_ref().map(&val).unwrap_or_else(|| "0".to_string()) };
+        // Only the accumulators an arm uses are declared: one nothing reads is an unused local to
+        // a strict type checker.
+        let takes = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { .. }));
+        let keeps = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::KeepMax { .. }));
 
-        let mut o = String::new();
+        // What the walk does not depend on is worked out once, before it (§15.208).
+        let mut o = self.py_items(&local, trace, Phase::Before);
         o.push_str(&format!("    {answer}: {acc_ty} = {}  # {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
         o.push_str(&format!("    {stopped} = False\n"));
-        o.push_str(&format!("    {taken}: {acc_ty} | None = None\n"));
-        o.push_str(&format!("    {kept}: {acc_ty} | None = None\n"));
-        o.push_str(&format!("    {best}: int | None = None\n"));
+        if takes {
+            o.push_str(&format!("    {taken}: {acc_ty} | None = None\n"));
+        }
+        if keeps {
+            o.push_str(&format!("    {kept}: {acc_ty} | None = None\n"));
+            o.push_str(&format!("    {best}: int | None = None\n"));
+        }
         o.push_str(&format!("    for {e} in {seq}:\n"));
 
         let mut body = self.py_element_guards(&local);
-        body.push_str(&self.py_items(&local, trace, Phase::All));
+        body.push_str(&self.py_items(&local, trace, Phase::Each));
         // The verdict the table wrote for this element, and what the walk does about it.
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
@@ -1383,7 +1398,7 @@ impl<'a> Gen<'a> {
                 Arm::Next => body.push_str("        pass\n"),
                 Arm::Stop(None) => body.push_str("        break\n"),
                 Arm::Stop(Some(x)) => {
-                    body.push_str(&format!("        {answer} = {}\n", unparen(&self.expr(x, &local).text)));
+                    body.push_str(&format!("        {answer} = {}\n", val(x)));
                     body.push_str(&format!("        {stopped} = True\n        break\n"));
                 }
                 Arm::Take { expr, unique } => {
@@ -1397,10 +1412,10 @@ impl<'a> Gen<'a> {
                                 fold.verdict
                             )
                         ));
-                        body.push_str(&format!("        {taken} = {}\n", unparen(&self.expr(expr, &local).text)));
+                        body.push_str(&format!("        {taken} = {}\n", val(expr)));
                     } else {
                         body.push_str(&format!("        if {taken} is None:\n"));
-                        body.push_str(&format!("            {taken} = {}\n", unparen(&self.expr(expr, &local).text)));
+                        body.push_str(&format!("            {taken} = {}\n", val(expr)));
                     }
                 }
                 Arm::KeepMax { expr, key } => {
@@ -1408,7 +1423,7 @@ impl<'a> Gen<'a> {
                     body.push_str(&format!("        {k} = {}\n", unparen(&self.expr(key, &local).text)));
                     body.push_str(&format!("        if {best} is None or {k} > {best}:\n"));
                     body.push_str(&format!("            {best} = {k}\n"));
-                    body.push_str(&format!("            {kept} = {}\n", unparen(&self.expr(expr, &local).text)));
+                    body.push_str(&format!("            {kept} = {}\n", val(expr)));
                 }
             }
         }
@@ -1416,13 +1431,21 @@ impl<'a> Gen<'a> {
 
         // A sequence with nothing in it answers `empty` and never reaches `exhausted`; a walk
         // that ended on `stop with` has its answer already.
-        o.push_str(&format!("    if {seq} and not {stopped}:\n"));
-        o.push_str(&format!(
-            "        {held} = {taken} if {taken} is not None else ({kept} if {kept} is not None else {})\n",
-            text(&fold.empty)
-        ));
-        o.push_str(&format!("        {answer} = {}\n", text(&fold.exhausted)));
+        o.push_str(&format!("    if _len({seq}) > 0 and not {stopped}:\n"));
+        let ex = text(&fold.exhausted);
+        if ex.contains(&held) {
+            let fallback = match (takes, keeps) {
+                (true, true) => format!("{taken} if {taken} is not None else ({kept} if {kept} is not None else {})", text(&fold.empty)),
+                (true, false) => format!("{taken} if {taken} is not None else {}", text(&fold.empty)),
+                (false, true) => format!("{kept} if {kept} is not None else {}", text(&fold.empty)),
+                (false, false) => text(&fold.empty),
+            };
+            o.push_str(&format!("        {held} = {fallback}\n"));
+        }
+        o.push_str(&format!("        {answer} = {ex}\n"));
         o.push_str(&format!("    {} = {answer}\n", self.ident(&out_name)));
+        // What reads the answer is worked out once, after the walk (§15.208).
+        o.push_str(&self.py_items(&local, trace, Phase::After));
         o
     }
 
@@ -1440,7 +1463,7 @@ impl<'a> Gen<'a> {
         let local = |n: &str| -> String {
             match fields.get(n) {
                 Some(f) => format!("{e}.{f}"),
-                None => self.ident(n),
+                None => outer(n),
             }
         };
 
@@ -1451,6 +1474,8 @@ impl<'a> Gen<'a> {
                 crate::door::too_many(&el.name.text, cap)
             ));
         }
+        // What the walk does not depend on is worked out once, before it (§15.208).
+        o.push_str(&self.py_items(outer, trace, Phase::Before));
         for d in self.counts() {
             o.push_str(&format!(
                 "    {} = 0  # {}\n",
@@ -1460,7 +1485,7 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&format!("    for {e} in {seq}:\n"));
         let mut body = self.py_element_guards(&local);
-        body.push_str(&self.py_items(&local, trace, Phase::Walk));
+        body.push_str(&self.py_items(&local, trace, Phase::Each));
         for d in self.counts() {
             let v = local(&d.column.text);
             if d.kind == crate::ast::AggKind::Sum {
@@ -1490,7 +1515,7 @@ impl<'a> Gen<'a> {
                 crate::door::out_of_range(&d.name.text)
             ));
         }
-        o.push_str(&self.py_items(outer, trace, Phase::Main));
+        o.push_str(&self.py_items(outer, trace, Phase::After));
         o
     }
 
@@ -1685,7 +1710,7 @@ impl<'a> Gen<'a> {
         // A walk runs the same body once per element, so it is written once and moved in
         // (§15.56).
         match &self.f.fold {
-            Some(fold) => o.push_str(&self.py_walk(fold, &trace)),
+            Some(fold) => o.push_str(&self.py_walk(fold, &local, &trace)),
             None if self.counts().is_empty() => o.push_str(&self.py_items(&local, &trace, Phase::All)),
             None => o.push_str(&self.py_count_walk(&local, &trace)),
         }
@@ -2287,8 +2312,8 @@ impl<'a> Gen<'a> {
     /// The rule's items as Go, at the base indentation (§15.56).
     fn go_items(&self, local: &dyn Fn(&str) -> String, trace: &str, phase: Phase) -> String {
         let mut o = String::new();
-        for it in &self.f.items {
-            if !self.in_phase(it, phase) {
+        for (i, it) in self.f.items.iter().enumerate() {
+            if !self.in_phase(i, it, phase) {
                 continue;
             }
             match it {
@@ -2314,7 +2339,7 @@ impl<'a> Gen<'a> {
     }
 
     /// The walk, in Go (§15.56).
-    fn go_walk(&self, fold: &crate::ast::FoldDecl, trace: &str, zero: &str) -> String {
+    fn go_walk(&self, fold: &crate::ast::FoldDecl, outer: &dyn Fn(&str) -> String, trace: &str, zero: &str) -> String {
         let el = self.f.elements.as_ref().expect("a fold has elements");
         let seq = format!("in.{}", pascal(&pub_name(&el.name)));
         let fields: BTreeMap<String, String> =
@@ -2338,21 +2363,28 @@ impl<'a> Gen<'a> {
                     }
                 }
                 None if n == crate::kw::HELD => held.clone(),
-                None => self.ident(n),
+                None => outer(n),
             }
         };
         let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
         let out_ty = self.ty_of(&out_name);
         let acc_ty = if out_ty.is_numeric() { "int64".to_string() } else { self.go_ty(&out_ty) };
         let acc_zero = if out_ty.is_numeric() { "0".to_string() } else { self.go_zero(&out_ty) };
-        let text = |x: &Option<Expr>| -> String {
-            x.as_ref().map(|x| go_expr(&self.expr(x, &local).text)).unwrap_or_else(|| "0".to_string())
+        // An answer is read in the type the fold answers with: a value of its enum is that
+        // enum's member (§15.208).
+        let val = |x: &Expr| -> String {
+            match x {
+                Expr::Lit(Lit::Word(w), _) if w != crate::kw::TRUE && w != crate::kw::FALSE => self.go_value(w, &out_ty),
+                _ => go_expr(&self.expr(x, &local).text),
+            }
         };
+        let text = |x: &Option<Expr>| -> String { x.as_ref().map(&val).unwrap_or_else(|| "0".to_string()) };
         // Go refuses to compile a local nothing reads, so only the arms that are written get one.
         let takes = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { .. }));
         let keeps = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::KeepMax { .. }));
 
-        let mut o = String::new();
+        // What the walk does not depend on is worked out once, before it (§15.208).
+        let mut o = self.go_items(&local, trace, Phase::Before);
         o.push_str(&format!("\tvar {answer} {acc_ty} = {}{CELL}// {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
         o.push_str(&format!("\t{stopped} := false\n"));
         if takes {
@@ -2365,7 +2397,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("\tfor _, {e} := range {seq} {{\n"));
 
         let mut body = self.go_element_guards(&local, zero);
-        body.push_str(&self.go_items(&local, trace, Phase::All));
+        body.push_str(&self.go_items(&local, trace, Phase::Each));
         // The verdict the table wrote for this element, and what the walk does about it.
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
@@ -2374,7 +2406,7 @@ impl<'a> Gen<'a> {
                 Arm::Next => body.push_str(&format!("\t\t// {}\n", crate::kw::NEXT)),
                 Arm::Stop(None) => body.push_str("\t\tbreak\n"),
                 Arm::Stop(Some(x)) => {
-                    body.push_str(&format!("\t\t{answer} = {}\n", go_expr(&self.expr(x, &local).text)));
+                    body.push_str(&format!("\t\t{answer} = {}\n", val(x)));
                     body.push_str(&format!("\t\t{stopped} = true\n\t\tbreak\n"));
                 }
                 Arm::Take { expr, unique } => {
@@ -2388,10 +2420,10 @@ impl<'a> Gen<'a> {
                                 fold.verdict
                             )
                         ));
-                        body.push_str(&format!("\t\t{taken} = {}\n\t\t{has_taken} = true\n", go_expr(&self.expr(expr, &local).text)));
+                        body.push_str(&format!("\t\t{taken} = {}\n\t\t{has_taken} = true\n", val(expr)));
                     } else {
                         body.push_str(&format!("\t\tif !{has_taken} {{\n"));
-                        body.push_str(&format!("\t\t\t{taken} = {}\n\t\t\t{has_taken} = true\n\t\t}}\n", go_expr(&self.expr(expr, &local).text)));
+                        body.push_str(&format!("\t\t\t{taken} = {}\n\t\t\t{has_taken} = true\n\t\t}}\n", val(expr)));
                     }
                 }
                 Arm::KeepMax { expr, key } => {
@@ -2399,7 +2431,7 @@ impl<'a> Gen<'a> {
                     body.push_str(&format!("\t\t{k} := {}\n", go_expr(&self.expr(key, &local).text)));
                     body.push_str(&format!("\t\tif !{has_best} || {k} > {best} {{\n"));
                     body.push_str(&format!("\t\t\t{best} = {k}\n\t\t\t{has_best} = true\n"));
-                    body.push_str(&format!("\t\t\t{kept} = {}\n\t\t\t{has_kept} = true\n\t\t}}\n", go_expr(&self.expr(expr, &local).text)));
+                    body.push_str(&format!("\t\t\t{kept} = {}\n\t\t\t{has_kept} = true\n\t\t}}\n", val(expr)));
                 }
             }
             body.push_str("\t}\n");
@@ -2431,6 +2463,8 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("\t\t{answer} = {ex}\n\t}}\n"));
         o.push_str(&format!("\t{} := {answer}\n", self.ident(&out_name)));
         o.push_str(&self.go_unread(&out_name));
+        // What reads the answer is worked out once, after the walk (§15.208).
+        o.push_str(&self.go_items(&local, trace, Phase::After));
         o
     }
 
@@ -2451,7 +2485,7 @@ impl<'a> Gen<'a> {
                         v
                     }
                 }
-                None => self.ident(n),
+                None => outer(n),
             }
         };
         let mut o = String::new();
@@ -2461,12 +2495,14 @@ impl<'a> Gen<'a> {
                 crate::door::too_many(&el.name.text, cap)
             ));
         }
+        // What the walk does not depend on is worked out once, before it (§15.208).
+        o.push_str(&self.go_items(outer, trace, Phase::Before));
         for d in self.counts() {
             o.push_str(&format!("\tvar {} int64 = 0{CELL}// {}\n", self.ident(&d.name.text), self.agg_word(d)));
         }
         o.push_str(&format!("\tfor _, {e} := range {seq} {{\n"));
         let mut body = self.go_element_guards(&local, zero);
-        body.push_str(&self.go_items(&local, trace, Phase::Walk));
+        body.push_str(&self.go_items(&local, trace, Phase::Each));
         for d in self.counts() {
             let v = local(&d.column.text);
             if d.kind == crate::ast::AggKind::Sum {
@@ -2492,7 +2528,7 @@ impl<'a> Gen<'a> {
         for d in self.counts() {
             o.push_str(&self.go_unread(&d.name.text));
         }
-        o.push_str(&self.go_items(outer, trace, Phase::Main));
+        o.push_str(&self.go_items(outer, trace, Phase::After));
         o
     }
 
@@ -2674,7 +2710,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("\tvar {trace} []Fired\n"));
 
         match &self.f.fold {
-            Some(fold) => o.push_str(&self.go_walk(fold, &trace, &zero)),
+            Some(fold) => o.push_str(&self.go_walk(fold, &local, &trace, &zero)),
             None if self.counts().is_empty() => o.push_str(&self.go_items(&local, &trace, Phase::All)),
             None => o.push_str(&self.go_count_walk(&local, &trace, &zero)),
         }
@@ -3876,7 +3912,7 @@ impl<'a> Gen<'a> {
     /// The walk, in TypeScript (§15.56). The shape is the one `py_walk` writes: accumulators,
     /// one pass per element with the body inside it, and the answer bound to the output's own
     /// name so the rounding and the return below are the ones every rule uses.
-    fn ts_walk(&self, fold: &crate::ast::FoldDecl, trace: &str) -> String {
+    fn ts_walk(&self, fold: &crate::ast::FoldDecl, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
         let el = self.f.elements.as_ref().expect("a fold has elements");
         let seq = pub_name(&el.name);
         let fields: BTreeMap<String, String> =
@@ -3888,17 +3924,24 @@ impl<'a> Gen<'a> {
             match fields.get(n) {
                 Some(f) => format!("{e}.{f}"),
                 None if n == crate::kw::HELD => held.clone(),
-                None => self.ident(n),
+                None => outer(n),
             }
         };
         let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
         let out_ty = self.ty_of(&out_name);
         let acc_ty = if out_ty.is_numeric() { "bigint".to_string() } else { self.ts_ty(&out_ty) };
-        let text = |x: &Option<Expr>| -> String {
-            x.as_ref().map(|x| ts_expr(unparen(&self.expr(x, &local).text)).to_string()).unwrap_or_else(|| "0n".to_string())
+        // An answer is read in the type the fold answers with: a value of its enum is that
+        // enum's member (§15.208).
+        let val = |x: &Expr| -> String {
+            match x {
+                Expr::Lit(Lit::Word(w), _) if w != crate::kw::TRUE && w != crate::kw::FALSE => self.ts_value(w, &out_ty),
+                _ => ts_expr(unparen(&self.expr(x, &local).text)).to_string(),
+            }
         };
+        let text = |x: &Option<Expr>| -> String { x.as_ref().map(&val).unwrap_or_else(|| "0n".to_string()) };
 
-        let mut o = String::new();
+        // What the walk does not depend on is worked out once, before it (§15.208).
+        let mut o = self.ts_items(&local, trace, Phase::Before);
         o.push_str(&format!("  let {answer}: {acc_ty} = {}; // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
         o.push_str(&format!("  let {stopped} = false;\n"));
         o.push_str(&format!("  let {taken}: {acc_ty} | null = null;\n"));
@@ -3907,7 +3950,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("  for ({} {e} of {seq}) {{\n", self.ts_elem_binding()));
 
         let mut body = self.ts_element_guards(&local);
-        body.push_str(&self.ts_items(&local, trace, Phase::All));
+        body.push_str(&self.ts_items(&local, trace, Phase::Each));
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
             let cls = self.ts_ty(&self.ty_of(&fold.verdict));
@@ -3917,7 +3960,7 @@ impl<'a> Gen<'a> {
                 Arm::Next => body.push_str("    // next\n"),
                 Arm::Stop(None) => body.push_str("    break;\n"),
                 Arm::Stop(Some(x)) => {
-                    body.push_str(&format!("    {answer} = {};\n", ts_expr(unparen(&self.expr(x, &local).text))));
+                    body.push_str(&format!("    {answer} = {};\n", val(x)));
                     body.push_str(&format!("    {stopped} = true;\n    break;\n"));
                 }
                 Arm::Take { expr, unique } => {
@@ -3927,10 +3970,10 @@ impl<'a> Gen<'a> {
                             "      throw new RuleContradictionError(`{}`);\n    }}\n",
                             tr!("畳み込み {}: take_unique に二件当たりました", "fold {}: two elements matched a take_unique", fold.verdict)
                         ));
-                        body.push_str(&format!("    {taken} = {};\n", ts_expr(unparen(&self.expr(expr, &local).text))));
+                        body.push_str(&format!("    {taken} = {};\n", val(expr)));
                     } else {
                         body.push_str(&format!("    if ({taken} === null) {{\n"));
-                        body.push_str(&format!("      {taken} = {};\n    }}\n", ts_expr(unparen(&self.expr(expr, &local).text))));
+                        body.push_str(&format!("      {taken} = {};\n    }}\n", val(expr)));
                     }
                 }
                 Arm::KeepMax { expr, key } => {
@@ -3938,7 +3981,7 @@ impl<'a> Gen<'a> {
                     body.push_str(&format!("    const {k} = {};\n", ts_expr(unparen(&self.expr(key, &local).text))));
                     body.push_str(&format!("    if ({best} === null || {k} > {best}) {{\n"));
                     body.push_str(&format!("      {best} = {k};\n"));
-                    body.push_str(&format!("      {kept} = {};\n    }}\n", ts_expr(unparen(&self.expr(expr, &local).text))));
+                    body.push_str(&format!("      {kept} = {};\n    }}\n", val(expr)));
                 }
             }
             body.push_str("  }\n");
@@ -3953,6 +3996,8 @@ impl<'a> Gen<'a> {
         ));
         o.push_str(&format!("    {answer} = {};\n  }}\n", text(&fold.exhausted)));
         o.push_str(&format!("  const {} = {answer};\n", self.ident(&out_name)));
+        // What reads the answer is worked out once, after the walk (§15.208).
+        o.push_str(&self.ts_items(&local, trace, Phase::After));
         o
     }
 
@@ -3967,7 +4012,7 @@ impl<'a> Gen<'a> {
         let local = |n: &str| -> String {
             match fields.get(n) {
                 Some(f) => format!("{e}.{f}"),
-                None => self.ident(n),
+                None => outer(n),
             }
         };
         let mut o = String::new();
@@ -3977,12 +4022,14 @@ impl<'a> Gen<'a> {
                 crate::door::too_many(&el.name.text, cap)
             ));
         }
+        // What the walk does not depend on is worked out once, before it (§15.208).
+        o.push_str(&self.ts_items(outer, trace, Phase::Before));
         for d in self.counts() {
-            o.push_str(&format!("  let {}: bigint = 0n; // {}\n", self.ident(&d.name.text), tr!("数え上げ", "count")));
+            o.push_str(&format!("  let {}: bigint = 0n; // {}\n", self.ident(&d.name.text), self.agg_word(d)));
         }
         o.push_str(&format!("  for ({} {e} of {seq}) {{\n", self.ts_elem_binding()));
         let mut body = self.ts_element_guards(&local);
-        body.push_str(&self.ts_items(&local, trace, Phase::Walk));
+        body.push_str(&self.ts_items(&local, trace, Phase::Each));
         for d in self.counts() {
             let v = local(&d.column.text);
             if d.kind == crate::ast::AggKind::Sum {
@@ -4009,7 +4056,7 @@ impl<'a> Gen<'a> {
                 crate::door::out_of_range(&d.name.text)
             ));
         }
-        o.push_str(&self.ts_items(outer, trace, Phase::Main));
+        o.push_str(&self.ts_items(outer, trace, Phase::After));
         o
     }
 
@@ -4079,8 +4126,8 @@ impl<'a> Gen<'a> {
 
     fn ts_items(&self, local: &dyn Fn(&str) -> String, trace: &str, phase: Phase) -> String {
         let mut o = String::new();
-        for it in &self.f.items {
-            if !self.in_phase(it, phase) {
+        for (i, it) in self.f.items.iter().enumerate() {
+            if !self.in_phase(i, it, phase) {
                 continue;
             }
             match it {
@@ -4235,7 +4282,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("  const {trace}: Fired[] = [];\n"));
 
         match &self.f.fold {
-            Some(fold) => o.push_str(&self.ts_walk(fold, &trace)),
+            Some(fold) => o.push_str(&self.ts_walk(fold, &local, &trace)),
             None if self.counts().is_empty() => o.push_str(&self.ts_items(&local, &trace, Phase::All)),
             None => o.push_str(&self.ts_count_walk(&local, &trace)),
         }
@@ -4829,8 +4876,8 @@ impl<'a> Gen<'a> {
     /// The rule's items as Rust, at the base indentation (§15.56).
     fn rs_items(&self, local: &dyn Fn(&str) -> String, trace: &str, phase: Phase) -> String {
         let mut o = String::new();
-        for it in &self.f.items {
-            if !self.in_phase(it, phase) {
+        for (i, it) in self.f.items.iter().enumerate() {
+            if !self.in_phase(i, it, phase) {
                 continue;
             }
             match it {
@@ -4859,7 +4906,7 @@ impl<'a> Gen<'a> {
 
     /// The walk, in Rust (§15.56). Same shape as the other backends: accumulators, one pass
     /// per element, and the answer bound to the output's own name.
-    fn rs_walk(&self, fold: &crate::ast::FoldDecl, trace: &str) -> String {
+    fn rs_walk(&self, fold: &crate::ast::FoldDecl, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
         let el = self.f.elements.as_ref().expect("a fold has elements");
         let seq = pub_name(&el.name);
         let fields: BTreeMap<String, String> =
@@ -4880,17 +4927,24 @@ impl<'a> Gen<'a> {
                     }
                 }
                 None if n == crate::kw::HELD => held.clone(),
-                None => self.ident(n),
+                None => outer(n),
             }
         };
         let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
         let out_ty = self.ty_of(&out_name);
         let acc_ty = if out_ty.is_numeric() { "i64".to_string() } else { self.rs_ty(&out_ty) };
-        let text = |x: &Option<Expr>| -> String {
-            x.as_ref().map(|x| rs_expr(unparen(&self.expr(x, &local).text)).to_string()).unwrap_or_else(|| "0".to_string())
+        // An answer is read in the type the fold answers with: a value of its enum is that
+        // enum's member (§15.208).
+        let val = |x: &Expr| -> String {
+            match x {
+                Expr::Lit(Lit::Word(w), _) if w != crate::kw::TRUE && w != crate::kw::FALSE => self.rs_value(w, &out_ty),
+                _ => rs_expr(unparen(&self.expr(x, &local).text)).to_string(),
+            }
         };
+        let text = |x: &Option<Expr>| -> String { x.as_ref().map(&val).unwrap_or_else(|| "0".to_string()) };
 
-        let mut o = String::new();
+        // What the walk does not depend on is worked out once, before it (§15.208).
+        let mut o = self.rs_items(&local, trace, Phase::Before);
         o.push_str(&format!("    let mut {answer}: {acc_ty} = {}; // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
         o.push_str(&format!("    let mut {stopped} = false;\n"));
         o.push_str(&format!("    let mut {taken}: Option<{acc_ty}> = None;\n"));
@@ -4899,7 +4953,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    for {e} in {seq} {{\n"));
 
         let mut body = self.rs_element_guards(&local);
-        body.push_str(&self.rs_items(&local, trace, Phase::All));
+        body.push_str(&self.rs_items(&local, trace, Phase::Each));
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
             let cls = self.rs_ty(&self.ty_of(&fold.verdict));
@@ -4909,7 +4963,7 @@ impl<'a> Gen<'a> {
                 Arm::Next => body.push_str("        // next\n"),
                 Arm::Stop(None) => body.push_str("        break;\n"),
                 Arm::Stop(Some(x)) => {
-                    body.push_str(&format!("        {answer} = {};\n", rs_expr(unparen(&self.expr(x, &local).text))));
+                    body.push_str(&format!("        {answer} = {};\n", val(x)));
                     body.push_str(&format!("        {stopped} = true;\n        break;\n"));
                 }
                 Arm::Take { expr, unique } => {
@@ -4919,10 +4973,10 @@ impl<'a> Gen<'a> {
                             "            return Err(RuleError::Contradiction {{ what: \"{}\" }});\n        }}\n",
                             tr!("畳み込み {}: take_unique に二件当たりました", "fold {}: two elements matched a take_unique", fold.verdict)
                         ));
-                        body.push_str(&format!("        {taken} = Some({});\n", rs_expr(unparen(&self.expr(expr, &local).text))));
+                        body.push_str(&format!("        {taken} = Some({});\n", val(expr)));
                     } else {
                         body.push_str(&format!("        if {taken}.is_none() {{\n"));
-                        body.push_str(&format!("            {taken} = Some({});\n        }}\n", rs_expr(unparen(&self.expr(expr, &local).text))));
+                        body.push_str(&format!("            {taken} = Some({});\n        }}\n", val(expr)));
                     }
                 }
                 Arm::KeepMax { expr, key } => {
@@ -4930,7 +4984,7 @@ impl<'a> Gen<'a> {
                     body.push_str(&format!("        let {k} = {};\n", rs_expr(unparen(&self.expr(key, &local).text))));
                     body.push_str(&format!("        if {best}.is_none() || {k} > {best}.unwrap() {{\n"));
                     body.push_str(&format!("            {best} = Some({k});\n"));
-                    body.push_str(&format!("            {kept} = Some({});\n        }}\n", rs_expr(unparen(&self.expr(expr, &local).text))));
+                    body.push_str(&format!("            {kept} = Some({});\n        }}\n", val(expr)));
                 }
             }
             body.push_str("    }\n");
@@ -4945,6 +4999,8 @@ impl<'a> Gen<'a> {
         ));
         o.push_str(&format!("        {answer} = {};\n    }}\n", text(&fold.exhausted)));
         o.push_str(&format!("    let {} = {answer};\n", self.ident(&out_name)));
+        // What reads the answer is worked out once, after the walk (§15.208).
+        o.push_str(&self.rs_items(&local, trace, Phase::After));
         o
     }
 
@@ -4966,7 +5022,7 @@ impl<'a> Gen<'a> {
                         v
                     }
                 }
-                None => self.ident(n),
+                None => outer(n),
             }
         };
         let mut o = String::new();
@@ -4976,12 +5032,14 @@ impl<'a> Gen<'a> {
                 crate::door::too_many(&el.name.text, cap)
             ));
         }
+        // What the walk does not depend on is worked out once, before it (§15.208).
+        o.push_str(&self.rs_items(outer, trace, Phase::Before));
         for d in self.counts() {
-            o.push_str(&format!("    let mut {}: i64 = 0; // {}\n", self.ident(&d.name.text), tr!("数え上げ", "count")));
+            o.push_str(&format!("    let mut {}: i64 = 0; // {}\n", self.ident(&d.name.text), self.agg_word(d)));
         }
         o.push_str(&format!("    for {e} in {seq} {{\n"));
         let mut body = self.rs_element_guards(&local);
-        body.push_str(&self.rs_items(&local, trace, Phase::Walk));
+        body.push_str(&self.rs_items(&local, trace, Phase::Each));
         for d in self.counts() {
             let v = local(&d.column.text);
             if d.kind == crate::ast::AggKind::Sum {
@@ -5008,7 +5066,7 @@ impl<'a> Gen<'a> {
                 crate::door::out_of_range(&d.name.text)
             ));
         }
-        o.push_str(&self.rs_items(outer, trace, Phase::Main));
+        o.push_str(&self.rs_items(outer, trace, Phase::After));
         o
     }
 
@@ -5170,7 +5228,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    let {}{trace}: Vec<Fired> = Vec::new();\n", if has_table { "mut " } else { "" }));
 
         match &self.f.fold {
-            Some(fold) => o.push_str(&self.rs_walk(fold, &trace)),
+            Some(fold) => o.push_str(&self.rs_walk(fold, &local, &trace)),
             None if self.counts().is_empty() => o.push_str(&self.rs_items(&local, &trace, Phase::All)),
             None => o.push_str(&self.rs_count_walk(&local, &trace)),
         }
@@ -8305,8 +8363,8 @@ impl<'a> Gen<'a> {
     /// The rule's items as Ruby, at the base indentation (§15.56).
     fn rb_items(&self, local: &dyn Fn(&str) -> String, trace: &str, phase: Phase) -> String {
         let mut o = String::new();
-        for it in &self.f.items {
-            if !self.in_phase(it, phase) {
+        for (i, it) in self.f.items.iter().enumerate() {
+            if !self.in_phase(i, it, phase) {
                 continue;
             }
             match it {
@@ -8330,7 +8388,7 @@ impl<'a> Gen<'a> {
     }
 
     /// The walk, in Ruby (§15.56).
-    fn rb_walk(&self, fold: &crate::ast::FoldDecl, trace: &str) -> String {
+    fn rb_walk(&self, fold: &crate::ast::FoldDecl, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
         let el = self.f.elements.as_ref().expect("a fold has elements");
         let seq = pub_name(&el.name);
         let fields: BTreeMap<String, String> =
@@ -8342,15 +8400,23 @@ impl<'a> Gen<'a> {
             match fields.get(n) {
                 Some(f) => format!("{e}.{f}"),
                 None if n == crate::kw::HELD => held.clone(),
-                None => self.ident(n),
+                None => outer(n),
             }
         };
         let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
-        let text = |x: &Option<Expr>| -> String {
-            x.as_ref().map(|x| rb_expr(unparen(&self.expr(x, &local).text)).to_string()).unwrap_or_else(|| "0".to_string())
+        let out_ty = self.ty_of(&out_name);
+        // An answer is read in the type the fold answers with: a value of its enum is that
+        // enum's member (§15.208).
+        let val = |x: &Expr| -> String {
+            match x {
+                Expr::Lit(Lit::Word(w), _) if w != crate::kw::TRUE && w != crate::kw::FALSE => self.rb_value(w, &out_ty),
+                _ => rb_expr(unparen(&self.expr(x, &local).text)).to_string(),
+            }
         };
+        let text = |x: &Option<Expr>| -> String { x.as_ref().map(&val).unwrap_or_else(|| "0".to_string()) };
 
-        let mut o = String::new();
+        // What the walk does not depend on is worked out once, before it (§15.208).
+        let mut o = self.rb_items(&local, trace, Phase::Before);
         o.push_str(&format!("    {answer} = {}  # {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
         o.push_str(&format!("    {stopped} = false\n"));
         // steep reads the first assignment as the whole type of a local, so a `nil` that
@@ -8368,16 +8434,16 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    {seq}.each do |{e}|\n"));
 
         let mut body = self.rb_element_guards(&local);
-        body.push_str(&self.rb_items(&local, trace, Phase::All));
+        body.push_str(&self.rb_items(&local, trace, Phase::Each));
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
-            let val = self.rb_value(&name.text, &self.ty_of(&fold.verdict));
-            body.push_str(&format!("    if {v} == {val}  # {}\n", name.text));
+            let is = self.rb_value(&name.text, &self.ty_of(&fold.verdict));
+            body.push_str(&format!("    if {v} == {is}  # {}\n", name.text));
             match arm {
                 Arm::Next => body.push_str("      # next\n"),
                 Arm::Stop(None) => body.push_str("      break\n"),
                 Arm::Stop(Some(x)) => {
-                    body.push_str(&format!("      {answer} = {}\n", rb_expr(unparen(&self.expr(x, &local).text))));
+                    body.push_str(&format!("      {answer} = {}\n", val(x)));
                     body.push_str(&format!("      {stopped} = true\n      break\n"));
                 }
                 Arm::Take { expr, unique } => {
@@ -8386,9 +8452,9 @@ impl<'a> Gen<'a> {
                             "      raise RuleContradictionError.new(\"{}\") unless {taken}.nil?\n",
                             tr!("畳み込み {}: take_unique に二件当たりました", "fold {}: two elements matched a take_unique", fold.verdict)
                         ));
-                        body.push_str(&format!("      {taken} = {}\n", rb_expr(unparen(&self.expr(expr, &local).text))));
+                        body.push_str(&format!("      {taken} = {}\n", val(expr)));
                     } else {
-                        body.push_str(&format!("      {taken} = {} if {taken}.nil?\n", rb_expr(unparen(&self.expr(expr, &local).text))));
+                        body.push_str(&format!("      {taken} = {} if {taken}.nil?\n", val(expr)));
                     }
                 }
                 Arm::KeepMax { expr, key } => {
@@ -8396,7 +8462,7 @@ impl<'a> Gen<'a> {
                     body.push_str(&format!("      {k} = {}\n", rb_expr(unparen(&self.expr(key, &local).text))));
                     body.push_str(&format!("      if {best}.nil? || {k} > {best}\n"));
                     body.push_str(&format!("        {best} = {k}\n"));
-                    body.push_str(&format!("        {kept} = {}\n      end\n", rb_expr(unparen(&self.expr(expr, &local).text))));
+                    body.push_str(&format!("        {kept} = {}\n      end\n", val(expr)));
                 }
             }
             body.push_str("    end\n");
@@ -8408,6 +8474,8 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("      {held} = {taken} || {kept} || {}\n", text(&fold.empty)));
         o.push_str(&format!("      {answer} = {}\n    end\n", text(&fold.exhausted)));
         o.push_str(&format!("    {} = {answer}\n", self.ident(&out_name)));
+        // What reads the answer is worked out once, after the walk (§15.208).
+        o.push_str(&self.rb_items(&local, trace, Phase::After));
         o
     }
 
@@ -8422,7 +8490,7 @@ impl<'a> Gen<'a> {
         let local = |n: &str| -> String {
             match fields.get(n) {
                 Some(f) => format!("{e}.{f}"),
-                None => self.ident(n),
+                None => outer(n),
             }
         };
         let mut o = String::new();
@@ -8432,12 +8500,14 @@ impl<'a> Gen<'a> {
                 crate::door::too_many(&el.name.text, cap)
             ));
         }
+        // What the walk does not depend on is worked out once, before it (§15.208).
+        o.push_str(&self.rb_items(outer, trace, Phase::Before));
         for d in self.counts() {
-            o.push_str(&format!("    {} = 0  # {}\n", self.ident(&d.name.text), tr!("数え上げ", "count")));
+            o.push_str(&format!("    {} = 0  # {}\n", self.ident(&d.name.text), self.agg_word(d)));
         }
         o.push_str(&format!("    {seq}.each do |{e}|\n"));
         let mut body = self.rb_element_guards(&local);
-        body.push_str(&self.rb_items(&local, trace, Phase::Walk));
+        body.push_str(&self.rb_items(&local, trace, Phase::Each));
         for d in self.counts() {
             let v = local(&d.column.text);
             if d.kind == crate::ast::AggKind::Sum {
@@ -8460,7 +8530,7 @@ impl<'a> Gen<'a> {
                 crate::door::out_of_range(&d.name.text)
             ));
         }
-        o.push_str(&self.rb_items(outer, trace, Phase::Main));
+        o.push_str(&self.rb_items(outer, trace, Phase::After));
         o
     }
 
@@ -8624,7 +8694,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    {trace} = [] #: Array[Fired]\n"));
 
         match &self.f.fold {
-            Some(fold) => o.push_str(&self.rb_walk(fold, &trace)),
+            Some(fold) => o.push_str(&self.rb_walk(fold, &local, &trace)),
             None if self.counts().is_empty() => o.push_str(&self.rb_items(&local, &trace, Phase::All)),
             None => o.push_str(&self.rb_count_walk(&local, &trace)),
         }
@@ -9565,8 +9635,8 @@ impl<'a> Gen<'a> {
     /// The rule's items as Swift, at the base indentation (§15.56).
     fn sw_items(&self, local: &dyn Fn(&str) -> String, trace: &str, phase: Phase) -> String {
         let mut o = String::new();
-        for it in &self.f.items {
-            if !self.in_phase(it, phase) {
+        for (i, it) in self.f.items.iter().enumerate() {
+            if !self.in_phase(i, it, phase) {
                 continue;
             }
             match it {
@@ -9600,7 +9670,7 @@ impl<'a> Gen<'a> {
     }
 
     /// The walk, in Swift (§15.56).
-    fn sw_walk(&self, fold: &crate::ast::FoldDecl, trace: &str) -> String {
+    fn sw_walk(&self, fold: &crate::ast::FoldDecl, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
         let el = self.f.elements.as_ref().expect("a fold has elements");
         let seq = sw_name(&pub_name(&el.name));
         let fields: BTreeMap<String, String> =
@@ -9622,19 +9692,26 @@ impl<'a> Gen<'a> {
                     }
                 }
                 None if n == crate::kw::HELD => held.clone(),
-                None => self.sw_ident(n),
+                None => outer(n),
             }
         };
         let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
         let out_ty = self.ty_of(&out_name);
         let acc_ty = if out_ty.is_numeric() { "Int64".to_string() } else { self.sw_ty(&out_ty) };
-        let text = |x: &Option<Expr>| -> String {
-            x.as_ref().map(|x| sw_expr(unparen(&self.expr(x, &local).text))).unwrap_or_else(|| "0".to_string())
+        // An answer is read in the type the fold answers with: a value of its enum is that
+        // enum's member (§15.208).
+        let val = |x: &Expr| -> String {
+            match x {
+                Expr::Lit(Lit::Word(w), _) if w != crate::kw::TRUE && w != crate::kw::FALSE => self.sw_value(w, &out_ty),
+                _ => sw_expr(unparen(&self.expr(x, &local).text)),
+            }
         };
+        let text = |x: &Option<Expr>| -> String { x.as_ref().map(&val).unwrap_or_else(|| "0".to_string()) };
         let takes = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { .. }));
         let keeps = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::KeepMax { .. }));
 
-        let mut o = String::new();
+        // What the walk does not depend on is worked out once, before it (§15.208).
+        let mut o = self.sw_items(&local, trace, Phase::Before);
         o.push_str(&format!("    var {answer}: {acc_ty} = {}  // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
         o.push_str(&format!("    var {stopped} = false\n"));
         if takes {
@@ -9646,7 +9723,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    for {e} in {seq} {{\n"));
 
         let mut body = self.sw_element_guards(&local);
-        body.push_str(&self.sw_items(&local, trace, Phase::All));
+        body.push_str(&self.sw_items(&local, trace, Phase::Each));
         // The verdict the table wrote for this element, and what the walk does about it.
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
@@ -9655,7 +9732,7 @@ impl<'a> Gen<'a> {
                 Arm::Next => body.push_str(&format!("        // {}\n", crate::kw::NEXT)),
                 Arm::Stop(None) => body.push_str("        break\n"),
                 Arm::Stop(Some(x)) => {
-                    body.push_str(&format!("        {answer} = {}\n", sw_expr(unparen(&self.expr(x, &local).text))));
+                    body.push_str(&format!("        {answer} = {}\n", val(x)));
                     body.push_str(&format!("        {stopped} = true\n        break\n"));
                 }
                 Arm::Take { expr, unique } => {
@@ -9669,10 +9746,10 @@ impl<'a> Gen<'a> {
                                 fold.verdict
                             )
                         ));
-                        body.push_str(&format!("        {taken} = {}\n", sw_expr(unparen(&self.expr(expr, &local).text))));
+                        body.push_str(&format!("        {taken} = {}\n", val(expr)));
                     } else {
                         body.push_str(&format!("        if {taken} == nil {{\n"));
-                        body.push_str(&format!("            {taken} = {}\n        }}\n", sw_expr(unparen(&self.expr(expr, &local).text))));
+                        body.push_str(&format!("            {taken} = {}\n        }}\n", val(expr)));
                     }
                 }
                 Arm::KeepMax { expr, key } => {
@@ -9680,7 +9757,7 @@ impl<'a> Gen<'a> {
                     body.push_str(&format!("        let {k} = {}\n", sw_expr(unparen(&self.expr(key, &local).text))));
                     body.push_str(&format!("        if {best} == nil || {k} > {best}! {{\n"));
                     body.push_str(&format!("            {best} = {k}\n"));
-                    body.push_str(&format!("            {kept} = {}\n        }}\n", sw_expr(unparen(&self.expr(expr, &local).text))));
+                    body.push_str(&format!("            {kept} = {}\n        }}\n", val(expr)));
                 }
             }
             body.push_str("    }\n");
@@ -9706,6 +9783,8 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("        {answer} = {ex}\n    }}\n"));
         o.push_str(&format!("    let {} = {answer}\n", self.sw_ident(&out_name)));
         o.push_str(&self.sw_unread(&out_name));
+        // What reads the answer is worked out once, after the walk (§15.208).
+        o.push_str(&self.sw_items(&local, trace, Phase::After));
         o
     }
 
@@ -9728,7 +9807,7 @@ impl<'a> Gen<'a> {
                         v
                     }
                 }
-                None => self.sw_ident(n),
+                None => outer(n),
             }
         };
         let mut o = String::new();
@@ -9738,12 +9817,14 @@ impl<'a> Gen<'a> {
                 crate::door::too_many(&el.name.text, cap)
             ));
         }
+        // What the walk does not depend on is worked out once, before it (§15.208).
+        o.push_str(&self.sw_items(outer, trace, Phase::Before));
         for d in self.counts() {
-            o.push_str(&format!("    var {}: Int64 = 0  // {}\n", self.sw_ident(&d.name.text), tr!("数え上げ", "count")));
+            o.push_str(&format!("    var {}: Int64 = 0  // {}\n", self.sw_ident(&d.name.text), self.agg_word(d)));
         }
         o.push_str(&format!("    for {e} in {seq} {{\n"));
         let mut body = self.sw_element_guards(&local);
-        body.push_str(&self.sw_items(&local, trace, Phase::Walk));
+        body.push_str(&self.sw_items(&local, trace, Phase::Each));
         for d in self.counts() {
             let v = local(&d.column.text);
             if d.kind == crate::ast::AggKind::Sum {
@@ -9766,7 +9847,7 @@ impl<'a> Gen<'a> {
                 crate::door::out_of_range(&d.name.text)
             ));
         }
-        o.push_str(&self.sw_items(outer, trace, Phase::Main));
+        o.push_str(&self.sw_items(outer, trace, Phase::After));
         o
     }
 
@@ -9945,7 +10026,7 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    {} {trace}: [Fired] = []\n", if has_table { "var" } else { "let" }));
 
         match &self.f.fold {
-            Some(fold) => o.push_str(&self.sw_walk(fold, &trace)),
+            Some(fold) => o.push_str(&self.sw_walk(fold, &local, &trace)),
             None if self.counts().is_empty() => o.push_str(&self.sw_items(&local, &trace, Phase::All)),
             None => o.push_str(&self.sw_count_walk(&local, &trace)),
         }
@@ -10297,6 +10378,10 @@ impl<'a> Gen<'a> {
             Wire::Int | Wire::Brand => format!("f\"{{{e}}}\""),
             Wire::Date => format!("_json_str(_civil({e}))"),
             Wire::Str => format!("_json_str({e})"),
+            // A truth value that may be absent is compared with `True` rather than read as a
+            // condition: its type is `bool | None` wherever the `is None` above is not followed
+            // (§15.208).
+            Wire::Opt(w) if matches!(**w, Wire::Bool) => format!("(\"null\" if {e} is None else (\"true\" if {e} is True else \"false\"))"),
             Wire::Opt(w) => format!("(\"null\" if {e} is None else {})", Self::py_wire(e, w)),
         }
     }
@@ -10363,9 +10448,9 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    {v_ins} = [\n{seq_first}{}    ]\n", ins.iter().map(field).collect::<String>()));
         o.push_str(&format!("    {v_obs} = [\n{}    ]\n", obs.iter().map(field).collect::<String>()));
         o.push_str(&format!(
-            "    {v_rows} = ['{{\"table\":' + _json_str(f.table) + ',\"row\":' + f\"{{f.row}}\" + (',\"label\":' + _json_str(f.label) if f.label else \"\") + \"}}\" for f in {trace}]\n"
+            "    {v_rows} = ['{{\"table\":' + _json_str(f.table) + ',\"row\":' + f\"{{f.row}}\" + (',\"label\":' + _json_str(f.label) if f.label != \"\" else \"\") + \"}}\" for f in {trace}]\n"
         ));
-        o.push_str(&format!("    {v_head} = '{{\"tag\":' + _json_str({tag}) + \",\" if {tag} else \"{{\"\n"));
+        o.push_str(&format!("    {v_head} = '{{\"tag\":' + _json_str({tag}) + \",\" if {tag} != \"\" else \"{{\"\n"));
         o.push_str(&format!(
             "    return {v_head} + '\"in\":{{' + \",\".join({v_ins}) + '}},\"observed\":{{' + \",\".join({v_obs}) + '}},\"trace\":[' + \",\".join({v_rows}) + \"]}}\"\n"
         ));

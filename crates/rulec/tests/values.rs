@@ -197,3 +197,62 @@ fn 値の位置で別の意味になる語は値にできない() {
                table u\npolicy unique\n| held | -> y  |\n| -    | true |\n";
     assert!(codes(src).contains(&"E009".to_string()), "{:?}", codes(src));
 }
+
+/// A word in an output cell, or in an example's expected value, is read in the type of its column
+/// (§15.208): `gold` in the column of `outcome` is the value, though an output of numbers is called
+/// `gold` too. It used to be read as that output and refused with E103. The English rule, and its
+/// Japanese version.
+const VALUE_LIKE_A_NAME: [&str; 2] = [
+    "rule treasure v1\ndescription \"What a roll of the dice finds, and how much gold comes with it\"\n\nenum outcome = found_gold | gold | nothing\n\ninputs\n  roll : number  range >=0 <=3\n\noutputs\n  result_kind : outcome\n  gold        : number  round down(1)\n\ntable t\npolicy unique\n| roll | -> result_kind | gold |\n| 0    | gold          | 25   |\n| 1    | found_gold    | 50   |\n| >=2  | nothing       | 0    |\n\nexamples\n| roll | -> result_kind | gold |\n| 0    | gold           | 25   |\n| 2    | nothing        | 0    |\n",
+    "rule 宝(treasure) v1\ndescription \"さいころの目で見つかるものと、ついてくる金の量\"\n\nenum 結果(outcome) = 金鉱(found_gold) | 金(gold) | 何も無し(nothing)\n\ninputs\n  目(roll) : number  range >=0 <=3\n\noutputs\n  種類(result_kind) : 結果\n  金(gold)          : number  round down(1)\n\ntable 表(t)\npolicy unique\n| 目   | -> 種類 | 金 |\n| 0    | 金      | 25 |\n| 1    | 金鉱    | 50 |\n| >=2  | 何も無し | 0  |\n\nexamples\n| 目 | -> 種類 | 金 |\n| 0  | 金      | 25 |\n| 2  | 何も無し | 0  |\n",
+];
+
+#[test]
+fn 出力のセルの語は列の型で読む() {
+    use rulec::eval::Val;
+    for (src, lang) in VALUE_LIKE_A_NAME.iter().zip([rulec::i18n::Lang::En, rulec::i18n::Lang::Ja]) {
+        let ds = rulec::i18n::with(lang, || rulec::check_source(src, "a.rule"));
+        assert!(ds.is_empty(), "{:?}\n{src}", ds.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>());
+        // the evaluator answers the value, and the number beside it
+        let (f, c) = rulec::prepare(src, "a.rule").unwrap();
+        let roll = f.inputs[0].name.text.clone();
+        let (outs, _, _) = rulec::eval::run_all(&f, &c, std::collections::HashMap::from([(roll, Val::Num(rulec::num::Rat::int(0)))]));
+        let gold = if lang == rulec::i18n::Lang::En { "gold" } else { "金" };
+        assert_eq!(outs[0].1, Some(Val::Enum(gold.into())), "{outs:?}");
+        assert_eq!(outs[1].1, Some(Val::Num(rulec::num::Rat::int(25))), "{outs:?}");
+    }
+    // and the generated code writes the enum's member, not the output
+    let t = ritsu_testkit::TempDir::new("values-words");
+    let p = t.path().join("treasure.rule");
+    std::fs::write(&p, VALUE_LIKE_A_NAME[0]).unwrap();
+    let out = t.path().join("out");
+    let o = std::process::Command::new(env!("CARGO_BIN_EXE_rulec")).args(["gen", p.to_str().unwrap(), "--out", out.to_str().unwrap()]).output().unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let py = std::fs::read_to_string(out.join("python/treasure.py")).unwrap();
+    assert!(py.contains("result_kind = Outcome.GOLD"), "{py}");
+}
+
+/// Where the column's enum has the value and a name of that same enum is spelled the same, the
+/// word reads either way, and the writer is asked to rename one (E075), in the table's output cell
+/// and in a fold's answer alike. The English rule, and its Japanese version.
+#[test]
+fn 同じ列挙の値と名前に当たる語は_e075() {
+    let cases = [
+        (rulec::i18n::Lang::En, "rule carry_stage v1\n\nenum stage = fresh | previous | done\n\ninputs\n  previous : stage\n  close    : bool\n\noutputs\n  next_stage : stage\n\ntable decide\npolicy unique\n| close | -> next_stage : stage |\n| true  | done                 |\n| false | previous             |\n", "`previous` is both a value of enum stage and the name of an input"),
+        (rulec::i18n::Lang::Ja, "rule 段階の引き継ぎ(carry_stage) v1\n\nenum 段階(stage) = 新規(fresh) | 前回(previous) | 終了(done)\n\ninputs\n  前回(previous) : 段階\n  閉じる(close)  : bool\n\noutputs\n  次の段階(next_stage) : 段階\n\ntable 決め方(decide)\npolicy unique\n| 閉じる | -> 次の段階 : 段階 |\n| true   | 終了              |\n| false  | 前回              |\n", "`前回` は、列挙 段階 の値でも、入力の名前でもあります"),
+        (rulec::i18n::Lang::En, "rule plan_choice v1\n\nenum plan = basic | pro | current\nenum verdict = take | skip\n\ninputs\n  current : plan\n\nelements offers\n  offered : plan\n  ok      : bool\n\noutputs\n  chosen : plan\n\ntable judge\npolicy unique\n| ok    | -> verdict : verdict |\n| true  | take                 |\n| false | skip                 |\n\nfold verdict over offers\n  take      -> take_first offered\n  skip      -> next\n  empty     -> current\n  exhausted -> held\n", "`current` is both a value of enum plan and the name of an input"),
+        (rulec::i18n::Lang::Ja, "rule プランの選択(plan_choice) v1\n\nenum プラン(plan) = 基本(basic) | 上位(pro) | 現在のプラン(current)\nenum 判定(verdict) = 採る(take) | 飛ばす(skip)\n\ninputs\n  現在のプラン(current) : プラン\n\nelements 提案(offers)\n  提案のプラン(offered) : プラン\n  可(ok)                : bool\n\noutputs\n  選んだプラン(chosen) : プラン\n\ntable 判定の表(judge)\npolicy unique\n| 可    | -> 判定 : 判定 |\n| true  | 採る           |\n| false | 飛ばす         |\n\nfold 判定 over 提案\n  採る      -> take_first 提案のプラン\n  飛ばす    -> next\n  empty     -> 現在のプラン\n  exhausted -> held\n", "`現在のプラン` は、列挙 プラン の値でも、入力の名前でもあります"),
+    ];
+    for (lang, src, title) in cases {
+        let ds = rulec::i18n::with(lang, || rulec::check_source(src, "a.rule"));
+        let e075: Vec<_> = ds.iter().filter(|d| d.code == "E075").collect();
+        assert_eq!(e075.len(), 1, "{:?}\n{src}", ds.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>());
+        assert_eq!(e075[0].title, title);
+        // the value is not then said to appear nowhere
+        let word = title.split('`').nth(1).unwrap();
+        for d in ds.iter().filter(|d| d.code == "W111") {
+            assert!(!d.notes.iter().any(|n| n.split([' ', '/', ':']).any(|w| w == word)), "{word}: {:?}", d.notes);
+        }
+    }
+}
+

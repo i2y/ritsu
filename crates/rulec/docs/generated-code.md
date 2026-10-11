@@ -679,9 +679,50 @@ class Element(NamedTuple):
 def nationwide_freight(freight_rows: list[Element]) -> JPYInclTax:
 ```
 
-The body is a loop over that list, with the rule's own tables inside it and one branch per
-verdict. What comes out of the loop goes through the same rounding and the same return the
-rule would have had without it. `rulec api` lists the sequence as the last parameter, with the
+The body is a loop over that list, with one branch per verdict, and the rule's items at the
+three places the reference evaluator runs them
+([reference §6.2](reference.md#before-the-walk-on-each-element-after-it)): what reads neither an
+element nor the walk's answer is computed once, above the loop; what reads a value of one element,
+inside it; what reads the answer, once, below it, after the answer is put in the first output.
+The rule of [reference §6.2](reference.md#before-the-walk-on-each-element-after-it), the best
+offer among some bids, comes out as:
+
+```python
+    opening = reserve + fee  # definition
+    answer: int = opening  # the answer for no elements
+    stopped = False
+    kept: int | None = None
+    best_: int | None = None
+    for elem in bids:
+        ...
+        offer = _max(elem.amount, opening)  # definition
+        # table judge (policy unique)
+        ...
+        if verdict is BidVerdict.COUNTED:  # counted
+            key = offer
+            if best_ is None or key > best_:
+                best_ = key
+                kept = offer
+        if verdict is BidVerdict.IGNORED:  # ignored
+            pass
+    if _len(bids) > 0 and not stopped:
+        held = kept if kept is not None else opening
+        answer = held
+    best = answer
+    # table review_of (policy unique)
+    if best >= 500:  # row 1: >=500 | true
+```
+
+`held` is the value taken (`take_unique`, `take_first`), else the value kept (`keep_max`), else
+the `empty` answer, in every language as in the reference evaluator. A `count` and a `sum` are
+written the same way, their totals started above the loop and read below it. What comes out
+goes through the same rounding and the same return the rule would have had without the loop.
+
+Every condition the Python module writes is a truth value — a comparison, `isinstance`, or a
+name the module only ever gives `True` or `False` — but in the functions that take the inputs
+out of the caller's object (`<alias>_from`, §15.207), which read any JSON. A sequence, a number, a
+string or an optional value is compared explicitly (`_len(bids) > 0`, `r != 0`, `tag != ""`,
+`signature is True`), never tested for being empty or zero. `rulec api` lists the sequence as the last parameter, with the
 element's fields under `elements`, and the record written for one call carries the sequence as
 an array of objects. Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java and Wasm are
 generated; SQL and NumPy are refused by name, because one query has nowhere to carry a value from

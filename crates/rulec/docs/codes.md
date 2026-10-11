@@ -36,7 +36,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E028](#e028) | error | The `count` is not written correctly |
 | [E029](#e029) | error | This column cannot be counted |
 | [E030](#e030) | error | A `count` needs a range |
-| [E031](#e031) | error | A rule cannot have both a `fold` and a `count` |
+| [E031](#e031) | error | This would take a second walk over the sequence |
 | [E032](#e032) | error | The declared enum and the imported one disagree |
 | [E033](#e033) | error | A value of an imported enum has neither a row nor `default` |
 | [E034](#e034) | error | A row label appears twice |
@@ -71,6 +71,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E063](#e063) | error | The cell cannot be read |
 | [E064](#e064) | error | The row does not fit the header |
 | [E065](#e065) | error | `range from koyomi` is misshapen or misplaced |
+| [E075](#e075) | error | A word is both a value of an enum and a name |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
 | [E102](#e102) | error | Unreachable row: the row never matches |
 | [E103](#e103) | error | Unit mismatch: values of different types are being mixed |
@@ -107,6 +108,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [W125](#w125) | warning | No sequence of calls reaches a state |
 | [W126](#w126) | warning | A transition is never taken from a state a case can reach |
 | [W127](#w127) | warning | A claim of the machine could not be settled |
+| [W128](#w128) | warning | No input was found that reaches a row, and none was shown not to |
 | [W105](#w105) | warning | Shadowing that needs review: an earlier row hides part of a later one |
 | [W110](#w110) | warning | A `first` table with no overlaps |
 | [W111](#w111) | warning | A declaration is never used |
@@ -618,9 +620,9 @@ Related codes: [E021](#e021)
 
 `error` — **The `fold` is not written correctly**
 
-**When.** The heading is not `fold <verdict column> over <sequence>`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, or the column being folded is not an enum.
+**When.** The heading is not `fold <verdict column> over <sequence>`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, or the column being folded is not an enum. So is a value of the fold that reads what is not there when it is decided: `empty` and `exhausted` are decided where no element is being looked at and cannot read an element's value; no value can read what is computed from the fold's own answer; and `held`, what the walk holds once it has seen every element, belongs in `exhausted` only.
 
-**Fix.** Correct the heading and the arms. A bare `take` cannot be written: whether **one and only one** element may be taken, or the first of several, is for the author to choose.
+**Fix.** Correct the heading and the arms. A bare `take` cannot be written: whether **one and only one** element may be taken, or the first of several, is for the author to choose. To answer with a value of an element, take it with `take_unique`, `take_first` or `keep_max`, and answer `exhausted -> held`.
 
 **Smallest reproduction**:
 
@@ -971,11 +973,11 @@ Related codes: [E028](#e028), [E112](#e112)
 
 ## E031
 
-`error` — **A rule cannot have both a `fold` and a `count`**
+`error` — **This would take a second walk over the sequence**
 
-**When.** One rule has both. They are two endings for the same walk, and a `fold` can stop partway: what a count means on a walk that stopped is not decided.
+**When.** One rule would need two walks over its sequence. There are three forms. A `fold` beside a `count` or a `sum`: they are two endings for the same walk, and a `fold` can stop partway, so what a count means on a walk that stopped is not decided. One item (a table, a clause, a derive or a definition) that reads both a value of one element and what the walk answers (the `fold`'s answer, a `count`, a `sum`): what the walk answers is known only once every element has been seen, and a value of one element exists only while the walk is on it, so reading both would take a second walk after the first. And an output that is a value of one element: once the walk is over, it is not one value. A rule's items fall into those that read no element, those of one element, and those that read what the walk answers, worked out in that order — before the walk, during it, after it.
 
-**Fix.** To count, drop the `fold` and let a table judge the count. To fold, drop the `count`.
+**Fix.** To count, drop the `fold` and let a table judge the count; to fold, drop the `count`. Where an item can be split, put the part that reads the element and the part that reads what the walk answers in separate tables or definitions. To answer with something each element decides, make it one value for the whole sequence with a `count` or a `sum` first.
 
 **Smallest reproduction**:
 
@@ -1003,6 +1005,45 @@ fold d over xs
   b -> take_first k
   empty -> 0
   exhausted -> held
+```
+
+**One item reading an element's value and what the walk answers**:
+
+```rule
+rule parts_cost v1
+
+elements parts
+  price : number  range >=0 <=100
+
+outputs
+  total : number  round down(1)
+
+sum subtotal over parts of price  range >=0 <=10000
+
+define rest : number = subtotal - price
+
+define total : number = subtotal
+```
+
+**An output that is a value of one element**:
+
+```rule
+rule big_parts v1
+
+elements parts
+  price : number  range >=0 <=100
+
+outputs
+  total : number  round down(1)
+  big   : bool
+
+table big_of
+policy unique
+| price | -> big : bool |
+| >=50  | true          |
+| <50   | false         |
+
+sum total over parts of price  range >=0 <=10000
 ```
 
 Related codes: [E021](#e021), [E029](#e029)
@@ -2165,6 +2206,37 @@ policy unique
 
 Related codes: [E129](#e129), [E130](#e130)
 
+## E075
+
+`error` — **A word is both a value of an enum and a name**
+
+**When.** A word in an output cell of a table, or in an answer of a `fold`, is a value of the column's (the answer's) enum, and also the name of an input, an output, a field of an element, a derive, a definition or a table's output whose type is that enum. It reads either way, and which one is meant is not decided. Where the name's type is another, the word is read as the column's value (an output `gold` that is a number does not stop `gold` in a column of the enum from being the enum's value). An expected value in an example or a scenario is always a value, since nothing else can be written there.
+
+**Fix.** Rename either the enum's value or the name.
+
+**Smallest reproduction**:
+
+```rule
+rule carry_stage v1
+
+enum stage = fresh | previous | done
+
+inputs
+  previous : stage
+  close    : bool
+
+outputs
+  next_stage : stage
+
+table decide
+policy unique
+| close | -> next_stage : stage |
+| true  | done                  |
+| false | previous              |
+```
+
+Related codes: [E103](#e103), [E012](#e012)
+
 ## E101
 
 `error` — **Completeness gap: some input matches no row**
@@ -2380,7 +2452,7 @@ Related codes: [E106](#e106), [E103](#e103)
 
 **When.** In a `policy unique` table, an input matching both rows was actually constructed. An overlap that could not be constructed falls to W114 instead. A pair that meets only on a combination the tables above never produce together, or only where no input reaches — past what a `define` comes to, at the truth value a boolean `define` never takes, where the rows of a table above leave a derive no values — is not reported: the completeness check asks no row there, and E102 calls a row that asks only for such points dead. On an optional column a comparison, a literal and a set of values match only a value that is there, while `-` and `not:` match the absent value too; so a `none` row meets a `-` row, and a `not: 5` row, on the absent value.
 
-**Fix.** If the outputs differ, decide which is right and fix the rows; to let the order decide, declare `policy first`. If even the outputs agree, delete one of the rows.
+**Fix.** If the outputs differ, decide which is right and fix the rows; to let the order decide, declare `policy first`. If even the outputs agree, delete one of the rows. Where two tables or clauses that define one output overlap, write `overrides <the other>` on the one that wins: after `policy` on a table, as a line under a clause. The overlap is refused even when the two answer the same, since an edit tomorrow may change one of them and not the other.
 
 **Smallest reproduction**:
 
@@ -2502,7 +2574,7 @@ Related codes: [E112](#e112), [E103](#e103)
 
 **When.** The region check visited more nodes than `--budget` allows. Failing to prove something is never green here, so this is an error and not a warning.
 
-**Fix.** Split the table to reduce the number of columns, or raise `--budget`. The cost is the product of the columns, so chaining tables in a linear pipeline is cheaper than piling columns into one table.
+**Fix.** Split the table to reduce the number of columns, or raise `--budget` (both `rulec check` and `ritsu check` take it). The cost is the product of the columns, so chaining tables in a linear pipeline is cheaper than piling columns into one table.
 
 **Smallest reproduction** (with `--budget 1`):
 
@@ -3302,7 +3374,7 @@ Related codes: [E053](#e053), [E126](#e126)
 
 **When.** The inputs cut into more cells than the budget allows (`--budget` divided by 50), or the rule's answer does not cut into finitely many columns. A claim that was not proven is never green, so this is an error and not a warning.
 
-**Fix.** Raise `--budget`, or give the table that decides the transitions fewer columns. The cost is the product of the columns, so a chain of tables is cheaper than one wide one.
+**Fix.** Raise `--budget` (both `rulec check` and `ritsu check` take it), or give the table that decides the transitions fewer columns. The cost is the product of the columns, so a chain of tables is cheaper than one wide one.
 
 **Smallest reproduction** (with `--budget 100`):
 
@@ -3541,6 +3613,36 @@ machine k(k) over m
 ```
 
 Related codes: [W114](#w114), [E128](#e128)
+
+## W128
+
+`warning` — **No input was found that reaches a row, and none was shown not to**
+
+**When.** A row that writes a cell on a computed column (a derive, a `define`): no input reaching it was found among the rule's examples, by the search the vectors are made with, or among the combinations of the inputs' candidate values (up to 4,096), and it could not be shown that no input does. The point of such a row is not an input, and whether one reaches it turns on how the expressions relate (a value only whole numbers reach, or one they never do). A row nothing decided is not passed in silence. A row of inputs and enums alone needs no search: its point is an input.
+
+**Fix.** Look at the expressions and the row's conditions together. If some input reaches the row, write it as an example and the warning goes; if none does, delete the row. If deleting it brings a completeness gap (E101), rulec cannot show that the combination never comes either, and the row can stay.
+
+**Smallest reproduction**:
+
+```rule
+rule square_band v1
+
+inputs
+  side : number  range >=0 <=10
+
+outputs
+  band : number  round down(1)
+
+define area : number = side * side
+
+table band_of
+policy first
+| area | -> band : number |
+| 2    | 1                |
+| -    | 2                |
+```
+
+Related codes: [E101](#e101), [E102](#e102), [W114](#w114), [W127](#w127)
 
 ## W105
 

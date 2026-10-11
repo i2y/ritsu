@@ -176,6 +176,11 @@ golden!(e127_once_broken, "E127", "tests/mutants/m_e127.rule", "E127");
 golden!(e107_scenario, "E107-scenario", "tests/mutants/m_e126.rule", "E107");
 golden!(w125_unreached_state, "W125", "tests/mutants/m_w125.rule", "W125");
 
+// The walk's stages and the words of a cell (§15.208), and the rows nothing decides (§15.209).
+golden!(e075_value_and_name, "E075", "tests/mutants/m_e075.rule", "E075");
+golden!(e031_element_and_answer, "E031-walk", "tests/mutants/m_e031walk.rule", "E031");
+golden!(w128_undecided_row, "W128", "tests/mutants/m_w128.rule", "W128");
+
 // ── The pages and the amounts an English reader sees ─────────────────────────────────────────
 
 /// What a command prints, in a language, as the person who typed it sees it.

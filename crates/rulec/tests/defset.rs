@@ -128,6 +128,40 @@ table 乙(otsu)
     assert!(cs.is_empty(), "{cs:?}");
 }
 
+/// Two clauses that meet with no order written are E105 whatever they answer: an answer the same
+/// today may not be tomorrow (§4). The note says where a clause takes the order (under the clause,
+/// where a table takes it after `policy`), and, when the two answer the same, that one `policy
+/// first` table or an `overrides` line says it (§15.208). The English rule, and its Japanese version.
+#[test]
+fn 節どうしの重なりは節の書き方で直し方を言う() {
+    use rulec::i18n::Lang;
+    let en = "rule visit_allowed v1\n\ninputs\n  closed_day : bool\n  full       : bool\n\noutputs\n  possible : bool\n\nclause open -> possible\n  when always\n  then true\n\nclause holiday -> possible\n  when closed_day true\n  then false\n  overrides open\n\nclause booked_out -> possible\n  when full true\n  then false\n  overrides open\n";
+    let ja = "rule 来訪の可否(visit_allowed) v1\n\ninputs\n  休館日(closed_day) : bool\n  満員(full)         : bool\n\noutputs\n  可能(possible) : bool\n\nclause 開館(open) -> 可能\n  when always\n  then true\n\nclause 休み(holiday) -> 可能\n  when 休館日 true\n  then false\n  overrides 開館\n\nclause 満席(booked_out) -> 可能\n  when 満員 true\n  then false\n  overrides 開館\n";
+    for (src, lang, order, same) in [
+        (en, Lang::En, "It is not written whether clause booked_out or clause holiday takes precedence. Add an `overrides <the other>` line under the clause that wins.", "The two answer the same. If either may decide, make them rows of one `policy first` table, or write the order with `overrides`."),
+        (ja, Lang::Ja, "節 満席 と 節 休み のどちらが優先するか書かれていません。優先する節の下に `overrides <相手>` の行を書いてください。", "二つは同じ答えを返します。どちらが決めてもよいなら、一つの `policy first` の表の行にするか、`overrides` で順を書いてください。"),
+    ] {
+        let ds = rulec::i18n::with(lang, || rulec::check_source(src, "t.rule"));
+        let e105: Vec<_> = ds.iter().filter(|d| d.code == "E105").collect();
+        assert_eq!(e105.len(), 1, "{:?}", ds.iter().map(|d| (d.code, d.notes.clone())).collect::<Vec<_>>());
+        let notes = e105[0].notes.join("\n");
+        assert!(notes.contains(order), "{notes}");
+        assert!(notes.contains(same), "{notes}");
+        assert!(!notes.contains("`policy`"), "a clause has no `policy` line: {notes}");
+    }
+    // Two tables that answer differently: the order goes after `policy`, and nothing is said of a
+    // same answer.
+    let tables = "rule t v1\n\ninputs\n  a : number range >=0 <=10\n\noutputs\n  x : number round down(1)\n\ntable ko\n| a   | -> x |\n| <5  | 1    |\n| >=5 | 2    |\n\ntable otsu\n| a      | -> x |\n| >=3 <7 | 3    |\n";
+    let ds = rulec::i18n::with(Lang::En, || rulec::check_source(tables, "t.rule"));
+    let e105: Vec<_> = ds.iter().filter(|d| d.code == "E105").collect();
+    assert_eq!(e105.len(), 2, "{ds:?}");
+    for d in e105 {
+        let notes = d.notes.join("\n");
+        assert!(notes.contains("after `policy` on the table that wins"), "{notes}");
+        assert!(!notes.contains("The two answer the same"), "{notes}");
+    }
+}
+
 #[test]
 fn 優先する表に丸ごと覆われた行はE102() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);

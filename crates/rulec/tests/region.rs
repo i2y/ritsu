@@ -299,3 +299,54 @@ fn 数の集合は値ごとの点になる() {
         assert_eq!(got(n).first(), Some(&false), "{n} が境目のベクタに無いか、行を取り違えている: {text}");
     }
 }
+
+/// A cell of the table above that passes an input of the column's enum through (`| review,
+/// approved | false | current |`) writes only what that row's own cell on the input allows, here
+/// `review` and `approved`; the row below that asks for `draft` is the one no input reaches. The
+/// checks that say which values come down (E102) and which a row is owed (E101) read the cell the
+/// same way (§15.208): with the row, E102 alone; without it, nothing. They used to read it two
+/// ways, and said E102 and E101 of the same value at once. The English rule, and its Japanese
+/// version.
+#[test]
+fn 入力をそのまま渡すセルは行が許す値だけを書く() {
+    let en = "rule review_route v1\ndescription \"Where a document goes next, and whether to notify. A draft goes to review; a document already in review or approved stays where it is unless it is urgent, and the stage it stays in is passed through as it is\"\n\nenum stage = draft | review | approved\n\ninputs\n  current : stage\n  urgent  : bool\n\noutputs\n  notify : bool\n\ntable route\npolicy unique\n| current          | urgent | -> next_stage : stage |\n| draft            | -      | review                |\n| review, approved | true   | review                |\n| review, approved | false  | current               |\n\ntable notice\npolicy unique\n| next_stage | -> notify : bool |\n| draft      | false            |\n| review     | true             |\n| approved   | false            |\n";
+    let ja = "rule 回付先(review_route) v1\ndescription \"文書の次の段階と、知らせるかどうか。下書きは確認へ回る。確認中か承認済みの文書は、急ぎでなければその段階のままで、その段階をそのまま渡す\"\n\nenum 段階(stage) = 下書き(draft) | 確認中(review) | 承認済み(approved)\n\ninputs\n  現在(current) : 段階\n  急ぎ(urgent)  : bool\n\noutputs\n  通知(notify) : bool\n\ntable 回付(route)\npolicy unique\n| 現在             | 急ぎ  | -> 次の段階(next_stage) : 段階 |\n| 下書き           | -     | 確認中                         |\n| 確認中, 承認済み | true  | 確認中                         |\n| 確認中, 承認済み | false | 現在                           |\n\ntable 知らせ(notice)\npolicy unique\n| 次の段階 | -> 通知 : bool |\n| 下書き   | false          |\n| 確認中   | true           |\n| 承認済み | false          |\n";
+    for (src, draft_row) in [(en, "| draft      | false            |\n"), (ja, "| 下書き   | false          |\n")] {
+        let codes = |s: &str| -> Vec<(&'static str, Option<usize>)> { rulec::check_source(s, "region.rule").iter().map(|d| (d.code, d.row)).collect() };
+        assert_eq!(codes(src), vec![("E102", Some(1))], "{src}");
+        let without = src.replace(draft_row, "");
+        assert_ne!(without, src);
+        assert!(codes(&without).is_empty(), "{:?}\n{without}", codes(&without));
+    }
+}
+
+/// A row that asks a computed column for a value is reached by some input or by none, and where
+/// neither was found the check says so (W128, §15.209) rather than passing the row as reached: the
+/// product of two numbers is 997 only as one box of 997 or 997 boxes of one, and no candidate the
+/// search walks is either. An example that reaches the row decides it, and the warning goes. A row
+/// of inputs alone is not searched: its point is an input. The English rule, and its Japanese
+/// version.
+#[test]
+fn 決められない行はw128で言い_例で決まる() {
+    use rulec::i18n::{self, Lang};
+    let en = "rule lucky_batch v1\ndescription \"A batch of exactly 997 units gets a prize. 997 is a prime, so only one box of 997 units or 997 boxes of one unit make it\"\n\ninputs\n  boxes   : number  range >=0 <=1000\n  per_box : number  range >=0 <=1000\n\noutputs\n  prize : bool\n\ndefine units : number = boxes * per_box\n\ntable prize_of\npolicy first\n| units | -> prize : bool |\n| 997   | true            |\n| -     | false           |\n";
+    let ja = "rule 当たりの束(lucky_batch) v1\ndescription \"ちょうど 997 個の束に賞が出る。997 は素数なので、997 個入りの箱が一つか、1 個入りの箱が 997 個のときだけ\"\n\ninputs\n  箱の数(boxes)      : number  range >=0 <=1000\n  一箱の数(per_box)  : number  range >=0 <=1000\n\noutputs\n  賞(prize) : bool\n\ndefine 個数(units) : number = 箱の数 * 一箱の数\n\ntable 賞の表(prize_of)\npolicy first\n| 個数 | -> 賞 : bool |\n| 997  | true         |\n| -    | false        |\n";
+    for (src, lang, title, example) in [
+        (en, Lang::En, "No input was found that reaches row 1, and none was shown not to", "\nexamples\n| boxes | per_box | -> prize |\n| 1     | 997     | true     |\n"),
+        (ja, Lang::Ja, "行1 に当たる入力を見つけられず、当たらないことも示せませんでした", "\nexamples\n| 箱の数 | 一箱の数 | -> 賞 |\n| 1      | 997      | true  |\n"),
+    ] {
+        let ds = i18n::with(lang, || rulec::check_source(src, "region.rule"));
+        let found: Vec<_> = ds.iter().map(|d| (d.code, d.title.as_str(), d.row)).collect();
+        assert_eq!(found, vec![("W128", title, Some(1))], "{src}");
+        let marked = ds[0].notes.join("\n");
+        assert!(marked.contains(if lang == Lang::En { "`units`" } else { "`個数`" }), "{marked}");
+        let with = format!("{src}{example}");
+        let ds = i18n::with(lang, || rulec::check_source(&with, "region.rule"));
+        assert!(ds.is_empty(), "{:?}", ds.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>());
+    }
+    // the same row on the input itself is no question: its point is an input
+    let direct = en.replace("| units | -> prize : bool |\n| 997   |", "| boxes | -> prize : bool |\n| 997   |").replace("| -     | false           |", "| -     | false           |");
+    let ds = rulec::check_source(&direct, "region.rule");
+    assert!(!ds.iter().any(|d| d.code == "W128"), "{:?}", ds.iter().map(|d| d.code).collect::<Vec<_>>());
+}
+
