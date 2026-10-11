@@ -5748,9 +5748,14 @@ impl<'a> Gen<'a> {
             Cell::Not(ls) => {
                 if optional { wrap(any_of(ls, false), true) } else { any_of(ls, true) }
             }
-            // A comparison on an ordered enum: its variants are ordered as declared (§15.210).
+            // A comparison on an ordered enum, by the places its variants were declared in
+            // (§15.210). The ranks are compared as integers, not through a derived `PartialOrd`:
+            // a model checker reads plain integer comparisons, and says nothing about the rest.
             Cell::Ranked { ops, .. } => wrap(
-                ops.iter().map(|(o, v)| format!("{var} {} {}", o.word(), self.rs_value(v, ty))).collect::<Vec<_>>().join(" && "),
+                ops.iter()
+                    .map(|(o, v)| format!("{var}.rank() {} {}.rank()", o.word(), self.rs_value(v, ty)))
+                    .collect::<Vec<_>>()
+                    .join(" && "),
                 false,
             ),
             // A comparison is about the value inside the `Option` too: it was written against
@@ -5946,13 +5951,13 @@ impl<'a> Gen<'a> {
             let (rank, max, min) = self.enum_helpers(en);
             let t = self.enum_type(en);
             if rank {
-                o.push_str(&format!("fn _rank_{t}(x: {t}) -> i64 {{\n    x.rank()\n}}\n\n"));
+                o.push_str(&format!("pub(crate) fn _rank_{t}(x: {t}) -> i64 {{\n    x.rank()\n}}\n\n"));
             }
             if max {
-                o.push_str(&format!("fn _max_{t}(a: {t}, b: {t}) -> {t} {{\n    if a >= b {{ a }} else {{ b }}\n}}\n\n"));
+                o.push_str(&format!("pub(crate) fn _max_{t}(a: {t}, b: {t}) -> {t} {{\n    if a.rank() >= b.rank() {{ a }} else {{ b }}\n}}\n\n"));
             }
             if min {
-                o.push_str(&format!("fn _min_{t}(a: {t}, b: {t}) -> {t} {{\n    if a <= b {{ a }} else {{ b }}\n}}\n\n"));
+                o.push_str(&format!("pub(crate) fn _min_{t}(a: {t}, b: {t}) -> {t} {{\n    if a.rank() <= b.rank() {{ a }} else {{ b }}\n}}\n\n"));
             }
         }
         o
@@ -6727,7 +6732,20 @@ impl<'a> Gen<'a> {
             Ty::Bool => Some((format!("{ind}let {ident}: bool = kani::any();\n"), ident.into())),
             Ty::Str => None,
             Ty::Enum(n) => {
-                let vs = self.enum_members(n);
+                let mut vs = self.enum_members(n);
+                // An input of an ordered enum with a range takes only the values inside it
+                // (§15.210): the rule refuses the rest at its door, as it does a number outside
+                // its range, so the harness assumes the range as it does for a number.
+                if let Some(allowed) = self.c.enum_ranges.get(name) {
+                    let words: Vec<String> = if let Some(e) = self.f.enums.iter().find(|e| e.name.text == *n) {
+                        e.values.iter().map(|v| v.text.clone()).collect()
+                    } else if let Some(im) = crate::prelude::import_of(self.f, n) {
+                        im.values().iter().map(|v| v.to_string()).collect()
+                    } else {
+                        Vec::new()
+                    };
+                    vs = words.iter().zip(vs).filter(|(w, _)| allowed.contains(w)).map(|(_, v)| v).collect();
+                }
                 if vs.is_empty() {
                     return None;
                 }
