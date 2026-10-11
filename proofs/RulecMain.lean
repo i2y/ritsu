@@ -1296,6 +1296,11 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
       | none => none
     let reachOf := worked.reachOf
     r := r'
+    -- The values an input of an ordered enum takes where its `range` holds it to some (rulec's
+    -- §15.210): its axis runs over them. Nothing here holds an enum's axis to its values, so this
+    -- is stated rather than proved.
+    for (col, _) in objPairs ((field cert "enum_ranges").getD Json.null) do
+      r := r.state s!"the values {col}'s range lets in, which its axis runs over"
     let declaredRange : String → Option Span2 := fun n =>
       match (objPairs ((field cert "ranges").getD Json.null)).find? (fun p => p.1 == n) with
       | some (_, v) => do
@@ -1386,7 +1391,14 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
             r := r.fail s!"{fieldStr tj "table"}: {col} is a column of kind `{want}`, and the certificate calls it `{fieldStr a "kind"}`"
       -- An input the rule declares optional: its type, as the certificate states it, ends in `?`.
       let optionalOf : String → Bool := fun n => (fieldStr ((field cert "types").getD Json.null) n).endsWith "?"
-      match readTable reachOf groups declaredRange factOf daysOf (fieldArr cert "tables") (truthOfValue cert worked) optionalOf tj with
+      -- The order of the column's enum, where it is an ordered one (rulec's §15.210): the values
+      -- as `enums` lists them, for an enum `ordered` names.
+      let orderOf : String → List String := fun n =>
+        let ty := (fieldStr ((field cert "types").getD Json.null) n).dropRightWhile (· == '?')
+        if ((fieldArr cert "ordered").toList.filterMap str).contains ty then
+          ((field ((field cert "enums").getD Json.null) ty).bind arr).map (·.toList.filterMap str) |>.getD []
+        else []
+      match readTable reachOf groups declaredRange factOf daysOf (fieldArr cert "tables") (truthOfValue cert worked) optionalOf orderOf tj with
       | none => r := r.fail s!"{fieldStr tj "table"}: this program cannot read the table"
       | some t =>
         r := checkAbove tj (fieldArr cert "tables") r

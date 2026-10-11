@@ -1,0 +1,36 @@
+rule 会員段階の送料(tier_shipping) v1
+description "会員の段階で決まる送料。金から上は無料で、キャンペーンはその注文に限って会員をキャンペーンの段階まで引き上げる"
+
+# 段階は低い順に並べる。セルは段階と比べられる（`>=金`）。
+enum 段階(tier) = 一般(basic) < 銀(silver) < 金(gold) < プラチナ(platinum)
+
+inputs
+  会員(member) : 段階                                    # 会員自身の段階
+  キャンペーン(campaign) : 段階  range >=一般 <=金        # キャンペーンが引き上げるのは金まで
+  小計(subtotal) : money[USD]  range >=0USD <=100000USD
+
+outputs
+  送料(shipping) : money[USD]  round down(1USD)
+  適用段階(effective) : 段階
+  引き上げ(lifted) : bool
+
+# 二つの段階のうち後のほうで送る。
+define 適用段階 : 段階 = max(会員, キャンペーン)
+define 引き上げ : bool = キャンペーン > 会員
+
+table 送料表(shipping_fee)
+policy unique
+| 適用段階 | 小計     | -> 送料 |
+| >=金     | -        | 0USD    |
+| 銀       | >=50USD  | 0USD    |
+| 銀       | <50USD   | 5USD    |
+| 一般     | >=100USD | 0USD    |
+| 一般     | <100USD  | 8USD    |
+
+examples
+| 会員     | キャンペーン | 小計  | -> 送料 | 適用段階 | 引き上げ |
+| プラチナ | 一般         | 10USD | 0USD    | プラチナ | false    |
+| 一般     | 金           | 10USD | 0USD    | 金       | true     |
+| 銀       | 一般         | 60USD | 0USD    | 銀       | false    |
+| 銀       | 銀           | 10USD | 5USD    | 銀       | false    |
+| 一般     | 一般         | 99USD | 8USD    | 一般     | false    |

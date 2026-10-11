@@ -583,6 +583,31 @@ calls (`call`, `post_return`, `realloc`) and the `memory`, the `runner` that `ru
 drives, and the `component` line that wraps the module for the component model
 ([generated-code.md](generated-code.md#wasm)).
 
+**An enum's order, display names and file** (DESIGN §15.210–§15.212). An entry of `enums` in a
+language carries more where the enum has it: `ordered` is `true` for an enum declared with `<`,
+whose `values` are then in that order, and `rank` names what gives a value's place, as that
+language's code spells it (`tier_rank`, `Tier::rank`; absent where the constants are themselves
+declared in the order). Where a value has a display name it is the value's `label`, and `label`
+on the enum names what gives one (`zone_label`, `Zone::label`). An enum read from an
+`enums` file carries `from`, the file as the rule's `import enum` writes it, and `module`, the
+module its type is imported from. A name with no alias that is a keyword in some language
+(W121) is in `params` and `outputs` under the name the code uses, `class_`, with `name` the
+declared one.
+
+`rulec api` of an `enums` file describes no function. It is one object with `enums` (the file's
+name) in the place of `rule`, `alias`, `version` and `source_sha256`, and one entry for each
+language that gets a module of it — `python`, `typescript`, `javascript`, `rust`, `ruby`, `php`,
+`go`, `swift`, `java` — with the module (`module`, and beside it `package`, `namespace`, `class`,
+or `file` and `rbs`, where the language's entry for a rule has them) and its `enums` in the shape
+above:
+
+```json
+{"enums":"catalog","alias":"catalog","version":"1","source_sha256":"…",
+ "python":{"module":"catalog","enums":[{"name":"zone","alias":"Zone",
+   "values":[{"name":"local","alias":"LOCAL","label":"Same city"},…],
+   "ordered":true,"rank":"zone_rank","label":"zone_label"},…]},…}
+```
+
 **`answers`** (DESIGN §15.206). The module raises nothing, so what `call` answers is the one way
 it has of saying a refusal, and the `wasm` entry lists the two shapes in that order: the record,
 `kind` `record`, with the `keys` every language's record function writes; and in its place the
@@ -752,7 +777,7 @@ document. The tests hold both to forged certificates as well as to the corpus.
 |---|---|
 | `v` | the version of this shape, `1`. A re-checker refuses a certificate whose `v` it was not written for rather than checking something else, as both of the ones here do; an absent `v` is `1` |
 | `types` | every name's declared type, and `groups` every group's members. A row's box and a value's type are **derived** from these by the re-checker, not taken from the certificate |
-| `enums` | every enum's values, which is what a contract's strings are held to |
+| `enums` | every enum's values, which is what a contract's strings are held to. `ordered`, written only where the rule has one, names the enums whose values are in order as `enums` lists them, and `enum_ranges`, written only where an input of one declares a `range`, gives the values that input takes: its axis runs over them and no others (§15.210). A re-checker holds the axis of an enum input to its enum's values, or to these |
 | `ranges` | every name's declared range, as exact rationals (`"7/2"`, an open end `null`). The int64 claim is re-checked from these. For a value the rule computes and for a column a table writes numbers into, it is the range rulec worked out — the interval of the expression, the hull of what the rows write — and a re-checker works it out again rather than reading it from here: a value's from `values`, a column's from what each row writes (`rows[].writes`), held to contain every one of those values (§15.196) |
 | `inputs`, `walks` | the rule's inputs, and the names its walks leave behind (`count`, `sum`). With `values[].of` and the tables' `decides`, what a re-checker works the `kind` of every axis out from, and holds the certificate's word to (§15.196); their ranges are the declared ones |
 | `scales` | the scale each numeric name is stored at (§7.1): its value is a whole number of `1/scale`. With the values' `expr`, this is what a re-checker works out the step of each column's values from (§15.190) |
@@ -761,7 +786,7 @@ document. The tests hold both to forged certificates as well as to the corpus.
 | `contracts` | one entry per `shape` the rule reads inputs from: the condition the contract places on those values, and why the rule's **door** keeps it (§15.142). The claim is inclusion — every value the contract lets through is one the door takes — and the door is what the rule asks of the same values: each numeric input inside its declared range, at the `scale` between the rule's value and the integer the contract carries; each `constraint` between two of them; each enum input among its enum's values. `file` is the contract, named relative to the rule, and `sha256` its digest, which a re-checker given `--rule` holds the file beside the rule to. `vars` names the values the condition speaks of, by kind (`num`, `str`, `bool`): the inputs first, then the contract's other fields a condition mentions, as `@` and their path. An optional input, and one counted or tested with `where`, is not among them; the field-by-field comparison (E122) is what covers those. `atoms` are the conditions: `{"num":{name:coef,…},"k":…,"rel":"le"}` is `Σ coef·name + k <= 0` (`"lt"` is `<`, `"eq"` is `=`), already in whole-number form — `2x < 5` is written `x − 2 <= 0` — so that a sum over the rationals can show a boundary that holds only over the integers; `{"str":name,"values":[…],"in":true}` is a string among those values (`false`: among none); `{"bool":name,"value":v}` a truth value. `cases` opens the condition: a value gets through when it satisfies every atom of some case. `null` means it opens into too many cases, and nothing is claimed. `unread` says a rule of the contract could not be read and was taken as true, so the condition is the contract read wider than it is. `doors` lists what the door asks, `{"range":input,"hi":false}`, `{"constraint":k}` or `{"member":input}`, each with one proof per case: `{"farkas":[…]}` multipliers over the case's atoms (`{"atom":i,"part":0,"y":…}`, `part` 1 being the other half of an equality) and the negation of what is asked (`{"door":true,"y":…}`) that add up to a contradiction, as under `refuted`; `{"clash":name}`, strings or truth values of the case that cannot all hold; `{"within":true}`, every string the case lets the input be is one of the enum's. `proofs` is `null` for a thing the certificate cannot show. A re-checker **builds the door again** from `ranges`, `constraints`, `types` and `enums`, so a thing the list leaves out is named as not shown rather than passed |
 | `axes` | the universe, one axis per column of the table, each with the coordinates the boundaries compress it to (§6.2), for a numeric axis each coordinate as a closed interval in `bounds` and the `step` its values sit on, and for a `string` axis the prefix each coordinate stands for in `prefixes` (`null` for the one coordinate that is under none of them). `kind` is `input`, `derived`, `define` (of any type), `walk` (what a `count` or a `sum` left behind) or `upstream` (what a table above decides, and a field of the elements a fold walks): a point on an axis of inputs is a value a caller can send, and on any other axis it is a point the feasibility sieve could not rule out, which is weaker. A re-checker works the kind out itself from `inputs`, `walks`, `values[].of` and the tables' `decides`, and refuses an axis that says another (§15.196); it reads a column's reach from whether `values` gives an expression it can work an interval out of. A re-checker holds a numeric axis to §6.2's construction: the coordinates run from the declared range's low end to its high end, each touching the next or one `step` past it, with nothing between, and each end of the range is a point of its own, since an interval leaves its ends out — so a coordinate cannot be quietly removed and the gap under it left uncovered. The axis of an optional input (`T?`) starts with the absent value, `none`, whose `bounds` is `null`; a re-checker refuses an optional input's axis without it, and holds the coordinates after it to the range. A comparison and a set of numbers never take that coordinate, and `not:` always does (§15.201). "Nothing between" is only so on the step the column's values really take, so it also works that step out from `values` and `scales` the way rulec does (§15.190) — a name on its own step, a literal on its value, a sum on the step both sides share, a product on the product of theirs — and holds `step` to divide it, and every end of a coordinate to lie on `step`: `amount * 10%` comes in tenths of a pound, and an axis of it cut every whole pound is refused |
 | `decides` | the columns this table writes, in the order `rows[].produces` lists their values. A table below names one of these as an axis of kind `upstream`, and that is the link from a fact to the rows that settle it |
-| `rows` | each row as a **box**: the coordinates it accepts on each axis, in `accepts`, the value it writes into each column of `decides` in `produces` (`null` where the cell is not a plain value word), beside the cells it was written with, and, for a table that writes numbers, in `writes`, what the row writes into each column of `decides` that holds a number — `{"expr":{"num":"50%","value":"1/2","type":"rate"},"source":{"line":24,"col":50,"len":3,"text":"50%"}}`, a literal or a name in the tree `values` uses, and where the cell stands (`null` for a column that holds no number, and `source` `null` in a row an `apply` brought in). A re-checker works out from these the range of the column, and with the file reads each cell back and holds the literal to the number it stands for (§15.196). A write that names one of the table's own columns carries `inside`, `["1","1000"]`, where the row's cell on that column lets through less than the column's range and that makes the range of the column written narrower (§15.213): `| >=1 | units |` writes `units` only at one or more. A re-checker works that interval out again from the row's `tests` on the column and the step its values sit on, takes its own for the column's range, and refuses an `inside` that does not contain it. The Lean program has no theorem for it yet: it takes the column's stated range and names it on its closing line as stated rather than proved. In `tests`, the cells it was written with are resolved as far as their units — `{"cell":"cmp","tests":[{"op":"<=","value":"1000"}]}`, `{"cell":"is","words":["north_america"]}`, `{"cell":"prefix","words":["CH-"]}`, `{"cell":"any"}`, and for a set on a column of numbers its values, each a point of the axis — `{"cell":"in","values":["100","200"]}`, `{"cell":"not_in","values":["300"]}`. The re-checker **recomputes** the box from `tests` and the axis bounds and refuses a box that is not what the cell describes |
+| `rows` | each row as a **box**: the coordinates it accepts on each axis, in `accepts`, the value it writes into each column of `decides` in `produces` (`null` where the cell is not a plain value word), beside the cells it was written with, and, for a table that writes numbers, in `writes`, what the row writes into each column of `decides` that holds a number — `{"expr":{"num":"50%","value":"1/2","type":"rate"},"source":{"line":24,"col":50,"len":3,"text":"50%"}}`, a literal or a name in the tree `values` uses, and where the cell stands (`null` for a column that holds no number, and `source` `null` in a row an `apply` brought in). A re-checker works out from these the range of the column, and with the file reads each cell back and holds the literal to the number it stands for (§15.196). A write that names one of the table's own columns carries `inside`, `["1","1000"]`, where the row's cell on that column lets through less than the column's range and that makes the range of the column written narrower (§15.213): `| >=1 | units |` writes `units` only at one or more. A re-checker works that interval out again from the row's `tests` on the column and the step its values sit on, takes its own for the column's range, and refuses an `inside` that does not contain it. The Lean program has no theorem for it yet: it takes the column's stated range and names it on its closing line as stated rather than proved. In `tests`, the cells it was written with are resolved as far as their units — `{"cell":"cmp","tests":[{"op":"<=","value":"1000"}]}`, `{"cell":"is","words":["north_america"]}`, `{"cell":"prefix","words":["CH-"]}`, `{"cell":"any"}`, and for a set on a column of numbers its values, each a point of the axis — `{"cell":"in","values":["100","200"]}`, `{"cell":"not_in","values":["300"]}` — and a comparison on a column of an ordered enum against values by name, `{"cell":"rank","tests":[{"op":">=","value":"gold"}]}`, whose box is the values whose place in the order `ordered` names passes every test (§15.210). The re-checker **recomputes** the box from `tests` and the axis bounds and refuses a box that is not what the cell describes |
 | `origin`, `line` | the table the row was written in, and the line it is written on. Rows of one table have a cell in the same columns and in no others, are all written in this file or all brought in by an `apply`, and take a run of lines in row order that no other table's rows fall inside — all of which a re-checker holds them to |
 | `source` | where each cell stands in the `.rule` file — `line`, byte `col`, byte `len` — and the text that stands there. With `--rule` a re-checker reads the file and compares, and the span has to be that cell's own place: every cell of a row is on the row's `line`, they are that line's `|`-separated fields, all of them (`outputs` says how many of the line's fields are answers rather than cells), and none of them is empty. `null` for a row an `apply` brought in, which is written in another file; `null` for one cell where there is nothing to point at — a column a `clause` does not mention, or one a merged member table does not have, and then every row of that table has to agree |
 | `disjoint` | `unique` only: for each pair of rows, one axis on which their coordinates do not meet. Re-checking one entry is one set intersection |
@@ -912,6 +937,13 @@ default, `--audience approver`). It is markdown only (`--format html` cannot be 
 it), and under `--out` it is written as `<alias>.customer.md`, beside the page for people,
 `<alias>.md`.
 
+Display names (§15.211) are what both pages show a value by: the page for people lists them
+beside the values, and the article for customers writes a cell in them, a comparison on an
+ordered enum as "before", "up to", "after" and "and after" (§15.210). They are text, so every
+character Markdown would read as something else is escaped. The page of an `enums` file
+(§15.212) is the page for people alone — its enums, their order and display names, and its
+groups; it decides nothing, so there is no form to try a case on and no article for customers.
+
 ## `mcp`
 
 `rulec mcp` speaks the Model Context Protocol over stdio — and only over stdio, because what
@@ -1043,6 +1075,24 @@ one for each `scenario`; `why` says which. The expected file
 starts with `{"initial":…,"final":[…]}`, what the runner has to print for the first line, and
 then has one fixtures record per call, the carried input filled in, so a runner that hands the
 state over wrongly shows up as a record whose `in` differs.
+
+A rule with display names (§15.211) gets `<alias>.labels.tsv` and `<alias>.labels.expected`:
+one line per value of every enum that has display names, the enum's name and the value's,
+separated by a tab, and on the same line of the second file the name the value is shown by.
+`rulec test` hands the first to each runner after `--labels` and holds what it prints to the
+second; a value without a display name is shown by its declared name, there as everywhere.
+
+```text
+zone	national
+```
+
+```text
+Rest of the country
+```
+
+A rule that reads an `enums` file (§15.212) gets `<alias>.owners.json`, the modules of the files
+it reads, `["catalog"]`, for the languages whose build is one list of files (Swift): `rulec
+test` puts each module's file on that list.
 
 ## Fixtures (`rulec fixtures lint`, `replay`, `diff`)
 

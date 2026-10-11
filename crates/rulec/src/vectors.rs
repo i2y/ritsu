@@ -57,13 +57,21 @@ fn candidates(f: &RuleFile, c: &Checked) -> BTreeMap<String, Vec<Val>> {
                 if let Some(h) = &held {
                     all.retain(|v| h.contains(v));
                 }
+                // An input of an ordered enum takes the values its range lets in (§15.210).
+                if let Some(r) = c.enum_ranges.get(name) {
+                    all.retain(|v| r.contains(v));
+                }
                 let cells = enum_cells(f, name);
+                // A value that is compared with another value in an expression (`a <= b`) has no
+                // class of its own to stand for it: which side is the larger depends on the
+                // other input, so every value is a candidate (§15.210).
+                let compared = c.ordered.contains(en) && compared_in_expr(f, name);
                 let mut seen: BTreeSet<Vec<bool>> = BTreeSet::new();
                 for v in &all {
                     let val = Val::Enum(v.clone());
                     let sig: Vec<bool> =
                         cells.iter().map(|cell| eval::cell_matches(c, cell, &val, &inner)).collect();
-                    if seen.insert(sig) {
+                    if seen.insert(sig) || compared {
                         vs.push(val);
                     }
                 }
@@ -196,6 +204,30 @@ fn column_cells(f: &RuleFile, col: &str) -> Vec<Cell> {
         }
     }
     out
+}
+
+/// Whether a name stands on one side of an order comparison, or in `min` or `max`, in some
+/// expression of the rule (§15.210).
+fn compared_in_expr(f: &RuleFile, name: &str) -> bool {
+    fn walk(e: &Expr, name: &str) -> bool {
+        match e {
+            Expr::Bin(l, op, r, _) => {
+                let here = matches!(op, BinOp::Le | BinOp::Lt | BinOp::Ge | BinOp::Gt)
+                    && (matches!(&**l, Expr::Name(n, _) if n == name) || matches!(&**r, Expr::Name(n, _) if n == name));
+                here || walk(l, name) || walk(r, name)
+            }
+            Expr::Call(fname, args, _) => {
+                ((fname == crate::kw::MIN || fname == crate::kw::MAX) && args.iter().any(|a| matches!(a, Expr::Name(n, _) if n == name)))
+                    || args.iter().any(|a| walk(a, name))
+            }
+            _ => false,
+        }
+    }
+    f.items.iter().any(|it| match it {
+        Item::Define(d) => walk(&d.expr, name),
+        Item::Derived(d) => walk(&d.expr, name),
+        _ => false,
+    }) || f.result.as_ref().is_some_and(|r| walk(&r.expr, name))
 }
 
 /// The enum values named by the cells of a column (groups are expanded).
@@ -632,7 +664,14 @@ fn spread_cands(c: &Checked, cands: &BTreeMap<String, Vec<Val>>, name: &str) -> 
         vs.push(Val::Enum(crate::kw::NONE.into()));
     }
     match &inner {
-        Ty::Enum(en) => vs.extend(c.enums.get(en).into_iter().flatten().map(|v| Val::Enum(v.clone()))),
+        Ty::Enum(en) => vs.extend(
+            c.enums
+                .get(en)
+                .into_iter()
+                .flatten()
+                .filter(|v| c.enum_ranges.get(name).is_none_or(|r| r.contains(v)))
+                .map(|v| Val::Enum(v.clone())),
+        ),
         Ty::Bool => vs.extend([Val::Bool(true), Val::Bool(false)]),
         Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
             if let Some((lo, hi)) = c.ranges.get(name) {
@@ -1651,6 +1690,18 @@ fn wrong_values(c: &Checked, name: &str, ty: &Ty, at: Option<&Json>) -> Vec<(Jso
                 word.push('?');
             }
             out.push((Json::Str(word), tr!("{name} に列挙 {en} に無い値", "{name} a value enum {en} does not have")));
+            // The values of an ordered enum on either side of the range the input declares
+            // (§15.210): the nearest one below it and the nearest one above it.
+            if let Some(allowed) = c.enum_ranges.get(name) {
+                let first = allowed.first().and_then(|a| vs.iter().position(|v| v == a));
+                let last = allowed.last().and_then(|a| vs.iter().position(|v| v == a));
+                if let Some(below) = first.and_then(|i| i.checked_sub(1)).and_then(|i| vs.get(i)) {
+                    out.push((Json::Str(below.clone()), tr!("{name} を範囲の下端の一つ前の値に", "{name} the value just before its range")));
+                }
+                if let Some(above) = last.and_then(|i| vs.get(i + 1)) {
+                    out.push((Json::Str(above.clone()), tr!("{name} を範囲の上端の一つ後の値に", "{name} the value just after its range")));
+                }
+            }
         }
         Ty::Bool => {
             out.push((Json::Str("false".into()), tr!("{name} に真偽でなく文字列の \"false\"", "{name} as the string \"false\", not a truth value")));

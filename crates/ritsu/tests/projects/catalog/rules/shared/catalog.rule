@@ -1,0 +1,12 @@
+enums catalog v1
+description "The product categories and the delivery zones that the shipping and the returns rules share"
+
+# A rule reads one of these by this file's path from its own directory — the rules of this
+# project write `import enum category from "shared/catalog.rule"` — and the values, their order,
+# their display names and the groups of the enum come with it, not written again.
+enum category = food "Food & drink" | apparel "Clothing & shoes" | electronics "Electronics" | furniture "Furniture"
+
+# The zones in order, nearest first: a rule's cell compares against one (`<=regional`).
+enum zone = local "Same city" < regional "Same region" < national "Rest of the country" < overseas "Abroad"
+
+group fragile = electronics, furniture

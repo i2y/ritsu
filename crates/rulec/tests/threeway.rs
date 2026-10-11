@@ -150,6 +150,14 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/economic_order_quantity.rule", "economic_order_quantity"),
     ("tests/corpus/quota_request.rule", "quota_request"),
     ("tests/corpus/contested_roll.rule", "contested_roll"),
+    ("tests/corpus/member_tier_shipping.rule", "member_tier_shipping"),
+    ("tests/corpus/会員段階の送料.rule", "tier_shipping"),
+    ("tests/corpus/plan_receipt.rule", "plan_receipt"),
+    ("tests/corpus/プランの領収書.rule", "plan_fee"),
+    ("tests/corpus/catalog_shipping.rule", "catalog_shipping"),
+    ("tests/corpus/catalog_returns.rule", "catalog_returns"),
+    ("tests/corpus/品目の送料.rule", "goods_shipping"),
+    ("tests/corpus/品目の返品.rule", "goods_returns"),
 ];
 
 #[test]
@@ -229,7 +237,8 @@ fn 評価器と生成コードが全言語で一致する() {
         let texts = src.lines().any(|l| l.contains("starts_with "));
 
         for b in present.iter().filter(|b| (b.folds || !walks) && (b.texts || !texts)) {
-            let plan = (b.run)(alias, &pkg);
+            // With the modules of the `enums` files the rule reads, where the build needs them.
+            let plan = rulec::runtest::runner_plan(b, &dir, alias, &pkg);
             let cwd = dir.join(&plan.cwd);
             if let Some((cmd, args)) = &plan.build {
                 let built = Command::new(cmd)

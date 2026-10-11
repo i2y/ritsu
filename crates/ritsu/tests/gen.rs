@@ -286,6 +286,74 @@ fn the_packages_pass_the_type_checkers() {
     }
 }
 
+// ── the enums rules share ────────────────────────────────────────────────────────────────────────
+
+/// Two rules that read their enums from one file of enums (rulec's DESIGN §15.212): the shipping
+/// fee and the returns of an order, both over the categories and zones of `rules/shared/catalog.rule`.
+const CATALOG: &str = "tests/projects/catalog";
+
+/// The file of enums is one module of each package, beside the rules, and the module of each rule
+/// imports its types from it: in Python from `.catalog`, in TypeScript from `"./catalog"`, in Go
+/// from the package under `--module`. An app that calls both rules hands them one value, and the
+/// packages pass `mypy --strict`, `tsc --strict` and `go vet`.
+#[test]
+fn a_file_of_enums_is_one_module_the_rules_of_the_package_import() {
+    let t = TempDir::new("gen-enums");
+    let out = t.path().join("catalog");
+    let (code, _, err) = generate(&here().join(CATALOG), &out, &[]);
+    assert_eq!(code, 0, "ritsu gen of the catalog:\n{err}");
+    let py = read(&out.join("python/generated/rules/catalog_shipping.py"));
+    assert!(py.contains("from .catalog import Category as Category, Zone as Zone"), "{py}");
+    assert!(!py.contains("class Category("), "the rule declares a Category of its own:\n{py}");
+    let ts = read(&out.join("typescript/rules/catalog_shipping.ts"));
+    assert!(ts.contains("from \"./catalog\";"), "{ts}");
+    let go = read(&out.join("go/rules/catalogshipping/catalog_shipping.go"));
+    assert!(go.contains(&format!("\"{MODULE}/rules/catalog\"")) && go.contains("type Category = catalog.Category"), "{go}");
+    for f in ["python/generated/rules/catalog.py", "typescript/rules/catalog.ts", "go/rules/catalog/catalog.go"] {
+        assert!(out.join(f).is_file(), "{f} is not written");
+    }
+
+    if ready(Need::Python, || Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success()), "python3 is not installed; the app over the package is not run") {
+        let app = out.join("python/app.py");
+        std::fs::write(
+            &app,
+            "from generated.rules import catalog, catalog_returns, catalog_shipping\n\n\
+             goods = catalog.Category.ELECTRONICS\n\
+             zone = catalog.Zone.NATIONAL\n\
+             fee = catalog_shipping.catalog_shipping(goods, zone, catalog_shipping.Kilogram(10))\n\
+             back = catalog_returns.catalog_returns(goods, zone, False)\n\
+             print(fee, back.window, back.free_return, catalog.category_label(goods))\n",
+        )
+        .unwrap();
+        let o = Command::new("python3").arg("app.py").current_dir(out.join("python")).output().unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), "21 14 True Electronics");
+        std::fs::remove_file(&app).unwrap();
+        match mypy() {
+            Some((mypy, python, _)) => {
+                type_check_python(&out.join("python"), &mypy, &python, &[]);
+                println!("mypy --strict passes the Python of the catalog");
+            }
+            None => ritsu_testkit::skip("mypy or Temporal's Python SDK (crates/dandori/tools/temporal-python) is not installed; the Python of the catalog is not type-checked"),
+        }
+    }
+    if ritsu_testkit::need(Need::Node) {
+        match tsc() {
+            Some((tsc, modules)) => {
+                type_check_typescript(&out.join("typescript"), &tsc, &modules);
+                println!("tsc --strict passes the TypeScript of the catalog");
+            }
+            None => ritsu_testkit::skip("TypeScript (crates/dandori/tools/temporal) is not installed; the TypeScript of the catalog is not type-checked"),
+        }
+    }
+    if ready(Need::Go, have_go, "go is not installed; the Go of the catalog is not vetted") {
+        // the rules import nothing outside the package, so the module requires nothing
+        let gomod = ("module gocheck\n\ngo 1.24\n".to_string(), String::new());
+        type_check_go(&t.path().join("go-catalog"), &out.join("go"), &gomod);
+        println!("go vet and gofmt pass the Go of the catalog");
+    }
+}
+
 // ── the gates ────────────────────────────────────────────────────────────────────────────────────
 
 /// The TypeScript sekisho's code imports, from sekisho's runner (tools/runner-ts): Cedar's own

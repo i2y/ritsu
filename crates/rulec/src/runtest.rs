@@ -380,6 +380,20 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
             .map(|s| s.lines().filter(|l| l.contains("\"step\":")).count())
             .unwrap_or(0);
         let pkg = alias.replace('_', "");
+        // The display names every language has to give back, where the rule gives any (§15.211).
+        let labels_in = dir.join("vectors").join(format!("{alias}.labels.tsv"));
+        let labels_want = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.labels.expected"))).ok();
+        let label_count = labels_want.as_ref().map(|w| w.lines().count()).unwrap_or(0);
+        // One plan asked for the display names: the runner built for the vectors, with
+        // `--labels`, reading the names and values off the file beside the vectors.
+        let labelled = |plan: &crate::backend::Plan| -> Option<Failure> {
+            let want = labels_want.as_ref()?;
+            let plan = crate::backend::Plan { cwd: plan.cwd.clone(), build: None, cmd: plan.cmd.clone(), args: plan.args.iter().cloned().chain(["--labels".to_string()]).collect() };
+            match exec(&plan, Some(&labels_in)) {
+                Err(f) => Some(f),
+                Ok(got) => (got != *want).then(|| first_diff(&got, want)),
+            }
+        };
         for b in &present {
             // Not every rule is generated for every backend: a rule that walks a sequence is
             // written only where the walk can be (§15.56). What is not there is not run, and
@@ -421,8 +435,14 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
                 }
                 diff
             };
-            let diff = held(&(b.run)(alias, &pkg));
+            let plan = runner_plan(b, dir, alias, &pkg);
+            let diff = held(&plan);
+            let built = diff.as_ref().is_none_or(|d| d.ran());
             out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "runner", vectors: n, refused: refused.len(), calls, diff });
+            if b.labels && labels_want.is_some() && built {
+                let diff = labelled(&plan);
+                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "labels", vectors: label_count, refused: 0, calls: 0, diff });
+            }
             // The same runner as a WASI module, held to the same records (§15.63).
             if let (Some(w), true) = (b.wasi, wasi_host) {
                 let diff = held(&w(alias, &pkg));
@@ -435,6 +455,11 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
             if let (Some(f), true) = (b.pg, pg_host) {
                 let diff = held(&f(alias));
                 out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "function", vectors: n, refused: refused.len(), calls, diff });
+                // The display names, from the functions the PostgreSQL file declares (§15.211).
+                if labels_want.is_some() {
+                    let diff = labelled(&f(alias));
+                    out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "function-labels", vectors: label_count, refused: 0, calls: 0, diff });
+                }
             }
             // The proofs of the same rule (§15.95): what every input in the declared domain
             // does, rather than what the vectors do.
@@ -735,6 +760,29 @@ fn proto_of(dir: &Path, alias: &str) -> Option<String> {
     base.join(&v).join(format!("{alias}.proto")).is_file().then(|| format!("rulec/{alias}/{v}/{alias}.proto"))
 }
 
+/// The modules of the `enums` files a rule reads its types from, as `rulec gen` wrote them beside
+/// its vectors (§15.212); none when it reads none.
+fn owners_of(dir: &Path, alias: &str) -> Vec<String> {
+    let Ok(text) = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.owners.json"))) else { return Vec::new() };
+    match crate::json::parse(text.trim()) {
+        Ok(crate::json::Json::Arr(xs)) => xs.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// How one backend runs one rule generated under `dir`: its plan, with the modules of the `enums`
+/// files the rule reads (§15.212) built together with it where the language does not reach them
+/// on its own (Swift compiles one list of files).
+pub fn runner_plan(b: &crate::backend::Backend, dir: &Path, alias: &str, pkg: &str) -> crate::backend::Plan {
+    let mut plan = (b.run)(alias, pkg);
+    if let (Some(src), Some((_, args))) = (b.owner_source, plan.build.as_mut()) {
+        for m in owners_of(dir, alias) {
+            args.insert(1.min(args.len()), src(&m));
+        }
+    }
+    plan
+}
+
 /// Whether this backend has anything for this rule under the output directory.
 fn wrote(dir: &Path, id: &str, stem: &str) -> bool {
     let d = dir.join(id);
@@ -907,6 +955,8 @@ pub fn render(r: &Run) -> String {
             None => {
                 let mut n = if x.via == "proof" {
                     tr!("ハーネス {} 本", "{} harnesses", x.vectors)
+                } else if x.via.ends_with("labels") {
+                    tr!("表示名 {} 件", "{} display names", x.vectors)
                 } else if x.vectors > 0 {
                     tr!("ベクタ {} 件", "{} vectors", x.vectors)
                 } else {
@@ -1007,6 +1057,8 @@ fn via(x: &Outcome) -> &'static str {
         "mcp-http" => ", MCP/HTTP",
         "wasi" => ", WASI",
         "function" => ", PostgreSQL",
+        "labels" => ", labels",
+        "function-labels" => ", PostgreSQL, labels",
         "proof" => ", proof",
         _ => "",
     }

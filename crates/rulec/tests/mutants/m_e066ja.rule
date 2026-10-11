@@ -1,0 +1,17 @@
+enums 品目(goods_catalog) v1
+description "送料の規則と返品の規則が共有する、商品の種類と配達の地域"
+
+# 規則はこのうちの一つを、自分のディレクトリからたどったこのファイルのパスで読む（コーパスの
+# 規則は `import enum 種類 from "shared/品目.rule"` と書く）。値、順、表示名と、その列挙の
+# グループが付いてきて、書き直すことはない。
+enum 種類(category) = 食品(food) "食品・飲料" | 衣料(apparel) "衣料・靴" | 電子機器(electronics) "電子機器" | 家具(furniture) "家具"
+
+# 地域は近い順に並べる。規則のセルは地域と比べられる（`<=地方`）。
+enum 地域(zone) = 市内(local) "同じ市内" < 地方(regional) "同じ地方" < 全国(national) "国内のほかの地方" < 海外(overseas) "海外"
+
+group 壊れ物(fragile) = 電子機器, 家具
+
+table 壊れ物の料金(fragile_fee)
+policy unique
+| -> 料金(fee) : money[USD] |
+| 3USD                      |

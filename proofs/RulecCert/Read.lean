@@ -363,7 +363,7 @@ def cellWords (groups : String → List String) (j : Json) : List String :=
   let ws := (fieldArr j "words").toList.filterMap str
   ws ++ ws.flatMap groups
 
-def cellOfJson (groups : String → List String) (j : Json) : Option CellTest :=
+def cellOfJson (groups : String → List String) (j : Json) (order : List String := []) : Option CellTest :=
   match fieldStr j "cell" with
   | "any" => some CellTest.any
   | "none" => some CellTest.nothing
@@ -382,6 +382,15 @@ def cellOfJson (groups : String → List String) (j : Json) : Option CellTest :=
   | "not_in" => do
       let vs ← (fieldArr j "values").toList.mapM optRat
       some (CellTest.notInVals vs)
+  -- A comparison on an ordered enum (rulec's §15.210): each value it is against, by its place in
+  -- the order the certificate gives the column's enum. A value the order does not have is no
+  -- cell this program reads.
+  | "rank" => do
+      let ts ← (fieldArr j "tests").toList.mapM (fun x => do
+        let op ← cmpOfString (fieldStr x "op")
+        let i ← order.idxOf? (fieldStr x "value")
+        some (op, i))
+      some (CellTest.rank order ts)
   | _ => none
 
 def srcOfJson (j : Json) : Option (List (Option SrcSpan)) :=
@@ -445,7 +454,8 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
     (factOf : Json → Option (List (String × Rat) × Rat × Bool))
     (daysOf : String → Option (List Rat)) (all : Array Json)
     (truthOf : String → Option (Cmp × Span2 × Span2) := fun _ => none)
-    (optionalOf : String → Bool := fun _ => false) (j : Json) : Option ReadTable := do
+    (optionalOf : String → Bool := fun _ => false)
+    (orderOf : String → List String := fun _ => []) (j : Json) : Option ReadTable := do
   let name := fieldStr j "table"
   let policy ← (if fieldStr j "policy" == "unique" then some Policy.unique
                 else if fieldStr j "policy" == "first" then some Policy.first else none)
@@ -588,7 +598,7 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
     some (path, (ai, outs)))
   let rowsRaw : List ReadRow := (fieldArr j "rows").toList.filterMap (fun r => do
     let i ← fieldNat r "row"
-    let tests ← (fieldArr r "tests").toList.mapM (cellOfJson groups)
+    let tests ← ((fieldArr r "tests").toList.zip columns).mapM (fun (x, col) => cellOfJson groups x (orderOf col))
     let accepts := (fieldArr r "accepts").toList.map (fun xs =>
       (arr xs).getD #[] |>.toList.filterMap nat)
     let decides := (fieldArr j "decides").toList.filterMap str

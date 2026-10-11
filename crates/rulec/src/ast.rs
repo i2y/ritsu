@@ -90,7 +90,71 @@ pub struct EnumDecl {
     /// The per-value `default` mark (§11 W111). Silences a value that intentionally falls
     /// through to `-`.
     pub default_marks: Vec<bool>,
+    /// The display name written after a value (`persian_immortal "Persian Immortal"`), per
+    /// value, with where it is written (§15.211). It is for people and the UI: no check, no
+    /// wire and no decision of the generated code reads it.
+    pub labels: Vec<Option<(String, Span)>>,
+    /// The values are written with `<` between them, so they are ordered as written
+    /// (§15.210): a cell may compare against one, and `max`, `min` and the four comparisons
+    /// take two of them.
+    pub ordered: bool,
+    /// The `open` mark at the end of the line, where it is written. It is syntax only here:
+    /// what it opens the enum to is a later section's (§15.212).
+    pub open: Option<Span>,
+    /// Where the enum is declared, when the rule reads it from an `enums` file with `import
+    /// enum … from` (§15.212). `None` for an enum the rule declares itself.
+    pub from: Option<EnumOwner>,
     pub span: Span,
+}
+
+impl EnumDecl {
+    /// The display name of the value at `i`, when it has one.
+    pub fn label(&self, i: usize) -> Option<&str> {
+        self.labels.get(i).and_then(|l| l.as_ref()).map(|(s, _)| s.as_str())
+    }
+
+    /// Whether any value has a display name: the enums that get a label function (§15.211).
+    pub fn has_labels(&self) -> bool {
+        self.labels.iter().any(|l| l.is_some())
+    }
+}
+
+/// The `enums` file an enum is read from, and its name there (§15.212).
+#[derive(Debug, Clone)]
+pub struct EnumOwner {
+    /// The path as the `import enum` line writes it, from the directory of the rule.
+    pub file: String,
+    /// The path as rulec reached it: the rule's directory joined with `file`.
+    pub path: String,
+    /// The name of the `enums` file (its heading), whose alias names the module the
+    /// generated code reads the type from.
+    pub module: Name,
+    /// The enum's name in that file.
+    pub name: Name,
+}
+
+/// `import enum era from "content.rule"` or `import enum era from "content.rule" -> period`
+/// (§15.212): an enum read whole — values, order, display names, `default` marks and its
+/// groups — from an `enums` file, rather than written again.
+#[derive(Debug, Clone)]
+pub struct EnumFrom {
+    /// The enum's name in the `enums` file.
+    pub name: Name,
+    /// The path as written, followed from the directory of the rule.
+    pub file: String,
+    /// The name it has in this rule, when `->` renames it.
+    pub local: Option<Name>,
+    pub span: Span,
+}
+
+/// Which heading a `.rule` file starts with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileKind {
+    /// `rule <name> v<N>`: one decision, one generated function.
+    Rule,
+    /// `enums <name> v<N>`: enums and groups that rules read with `import enum … from`, and
+    /// no function (§15.212).
+    Enums,
 }
 
 /// Which kind of file an imported enum's values are declared in (§15.59, §15.60).
@@ -133,6 +197,9 @@ pub struct GroupDecl {
     pub name: Name,
     pub members: Vec<Name>,
     pub span: Span,
+    /// The `enums` file the group came from with its enum (§15.212), as the `import enum` line
+    /// writes the path. `None` for a group the rule declares itself.
+    pub from: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -217,6 +284,26 @@ impl Projection {
     }
 }
 
+/// A comparison on an ordered enum as it is written: `>=medieval <industrial` (§15.210).
+pub fn ranked_text(ops: &[(CmpOp, String)]) -> String {
+    ops.iter().map(|(o, v)| format!("{}{v}", o.word())).collect::<Vec<_>>().join(" ")
+}
+
+/// Whether value `v` of an enum whose values are `order` passes every comparison of `ops`
+/// (§15.210). A value the enum does not have passes none: its place in the order is unknown.
+pub fn ranked_holds(order: &[String], ops: &[(CmpOp, String)], v: &str) -> bool {
+    let Some(x) = order.iter().position(|o| o == v) else { return false };
+    ops.iter().all(|(op, b)| {
+        let Some(y) = order.iter().position(|o| o == b) else { return false };
+        match op {
+            CmpOp::Lt => x < y,
+            CmpOp::Le => x <= y,
+            CmpOp::Gt => x > y,
+            CmpOp::Ge => x >= y,
+        }
+    })
+}
+
 /// A cell written back, for the one place outside the generator that has to quote one.
 pub fn cell_text(c: &Cell) -> String {
     let lit = |l: &Lit| match l {
@@ -232,6 +319,7 @@ pub fn cell_text(c: &Cell) -> String {
         Cell::Set(ls) => format!("= {}", ls.iter().map(lit).collect::<Vec<_>>().join(", ")),
         Cell::Not(ls) => format!("{}: {}", crate::kw::NOT, ls.iter().map(lit).collect::<Vec<_>>().join(", ")),
         Cell::Cmp(ops) => ops.iter().map(|(o, l)| format!("{}{}", o.word(), lit(l))).collect::<Vec<_>>().join(" "),
+        Cell::Ranked { ops, .. } => ranked_text(ops),
         Cell::Prefix(ps) => {
             format!("{} {}", crate::kw::STARTS_WITH, ps.iter().map(|p| format!("{p:?}")).collect::<Vec<_>>().join(", "))
         }
@@ -460,6 +548,13 @@ pub enum Cell {
     Prefix(Vec<String>),
     /// `none`
     Nothing,
+    /// A comparison on a column of an ordered enum — `<medieval`, `>=medieval <industrial`
+    /// (§15.210) — with the values it takes. The parser reads it as a `Cmp`; once the column
+    /// is known to be an ordered enum, `types::read_words` gives it the values the comparison
+    /// covers, in the enum's order. Whatever asks which values a cell takes reads `values`,
+    /// as it reads a set; the generated code, the certificate and the messages write `ops`,
+    /// the row as it was written.
+    Ranked { ops: Vec<(CmpOp, String)>, values: Vec<String> },
 }
 
 #[derive(Debug, Clone)]
@@ -752,12 +847,17 @@ pub struct ScenarioDecl {
 
 #[derive(Debug, Clone)]
 pub struct RuleFile {
+    /// `rule` or `enums` (§15.212).
+    pub kind: FileKind,
     pub name: Name,
     pub version: String,
     pub description: Option<String>,
     pub imports: Vec<(String, Span)>,
     /// The enums whose value set is declared outside this file (§15.59, §15.60).
     pub enum_imports: Vec<EnumImport>,
+    /// The enums read whole from an `enums` file (§15.212), in the order written. Once read
+    /// they sit in `enums` like any other, with `from` saying where they came from.
+    pub enum_froms: Vec<EnumFrom>,
     /// The documents the rule transcribes, with the pinned digests of what it cites (§15.68).
     pub sources: Vec<SourceDecl>,
     /// The rules applied with their inputs bound (§15.69), in the order written.

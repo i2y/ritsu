@@ -1104,7 +1104,13 @@ fn a_value_of_an_enum_has_the_public_name_the_rule_writes() {
     let mut aliased = 0;
     for path in corpus() {
         let Ok(f) = e.facts(Path::new(&path)) else { continue };
-        let src = std::fs::read_to_string(&path).unwrap();
+        let mut src = std::fs::read_to_string(&path).unwrap();
+        // An enum read from an `enums` file is written there, and so are its values (§15.212).
+        let dir = Path::new(&path).parent().unwrap().to_path_buf();
+        let owners: Vec<String> = src.lines().filter(|l| l.starts_with("import enum ")).filter_map(|l| l.split('"').nth(1).map(str::to_string)).collect();
+        for o in owners {
+            src.push_str(&std::fs::read_to_string(dir.join(&o)).unwrap_or_else(|e| panic!("{path}: cannot read {o}: {e}")));
+        }
         for v in f.enums.iter().flat_map(|en| &en.values) {
             if v.public != v.name {
                 assert!(src.contains(&format!("{}({})", v.name, v.public)), "{path}: {} is not written {}({})", v.name, v.name, v.public);

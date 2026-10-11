@@ -1426,7 +1426,7 @@ fn vectors_show(v: &Val) -> String {
 /// The cell as it is written, for a message.
 pub fn cell_text(c: &Cell) -> String {
     match c {
-        Cell::Cmp(_) | Cell::Prefix(_) | Cell::Not(_) | Cell::DontCare | Cell::Nothing => crate::ast::cell_text(c),
+        Cell::Cmp(_) | Cell::Ranked { .. } | Cell::Prefix(_) | Cell::Not(_) | Cell::DontCare | Cell::Nothing => crate::ast::cell_text(c),
         Cell::Lit(_) | Cell::Set(_) => crate::ast::cell_text(c).trim_start_matches("= ").to_string(),
     }
 }

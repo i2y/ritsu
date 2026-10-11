@@ -164,6 +164,10 @@ pub struct Gen<'a> {
     shown: String,
     /// The stage each item of a walk runs in (§15.208).
     stages: crate::types::Stages,
+    /// Set when the module is written into a package of ritsu's (ritsu's DESIGN 9.3): the Go
+    /// import path of the package's directory. A module there reads the types of an `enums`
+    /// file from its sibling in the package (§15.212); `rulec gen` writes them side by side.
+    package: Option<String>,
 }
 
 mod arith;
@@ -376,7 +380,12 @@ impl<'a> Gen<'a> {
         let mut enum_names = BTreeMap::new();
         let mut value_names = BTreeMap::new();
         for e in &f.enums {
-            let ty = pascal(&pub_name(&e.name));
+            // An enum read from an `enums` file is that file's type, whatever this rule calls it
+            // (§15.212): the generated code reads it from the file's module.
+            let ty = match &e.from {
+                Some(o) => pascal(&pub_name(&o.name)),
+                None => pascal(&pub_name(&e.name)),
+            };
             enum_names.insert(e.name.text.clone(), ty.clone());
             for v in &e.values {
                 value_names.insert((e.name.text.clone(), v.text.clone()), (ty.clone(), pascal(&pub_name(v))));
@@ -430,7 +439,15 @@ impl<'a> Gen<'a> {
             path: path.to_string(),
             shown: ritsu_emit::header::file_name(path),
             stages: crate::types::stages(f),
+            package: None,
         }
+    }
+
+    /// The same generator, writing a module of a package of ritsu's whose Go import path is
+    /// `module` (§15.212).
+    pub fn in_package(mut self, module: &str) -> Self {
+        self.package = Some(module.to_string());
+        self
     }
 
     /// The same generator, its heads naming the rule's file as `path` (a path from a project's
@@ -557,7 +574,8 @@ impl<'a> Gen<'a> {
     /// rule's file with the digest of its bytes; then what else it was made from.
     fn header(&self, comment: &str) -> String {
         let version = self.f.version.to_string();
-        let source = ritsu_emit::header::Source { path: &self.shown, kind: "rule", name: &self.f.name.text, version: &version, sha256: &self.src_hash };
+        let kind = if self.f.kind == FileKind::Enums { crate::kw::ENUMS } else { crate::kw::RULE };
+        let source = ritsu_emit::header::Source { path: &self.shown, kind, name: &self.f.name.text, version: &version, sha256: &self.src_hash };
         let lang = if crate::i18n::ja() { ritsu_base::text::Lang::Ja } else { ritsu_base::text::Lang::En };
         let mut h = format!("{comment} {}\n{comment} {}\n", ritsu_emit::header::generated("rulec"), source.line().get(lang));
         // A rule applied by this one is part of what was generated (§15.69): its path and the
@@ -608,6 +626,59 @@ impl<'a> Gen<'a> {
     }
 }
 
+/// The languages whose generated code writes a declared name as it is, as a parameter, a local
+/// or a field, with no escape of their own for a keyword (§15.210): Java and PHP add `_` to one
+/// and Swift puts it in backticks, SQL quotes every name, and NumPy's plan is data.
+const AS_WRITTEN: &[&str] = &["python", "typescript", "javascript", "rust", "go", "ruby", "wasm"];
+
+/// The languages among [`AS_WRITTEN`] that keep `word` as a keyword, in the order `rulec gen`
+/// writes them.
+pub fn keyword_in(word: &str) -> Vec<&'static str> {
+    crate::backend::ALL.iter().filter(|b| AS_WRITTEN.contains(&b.id) && b.reserved.contains(word)).map(|b| b.name).collect()
+}
+
+/// The names the generated code writes as parameters, locals and fields — the inputs, the
+/// outputs, the sequence a walk reads and the fields of one element, and what the items name
+/// (derived values, definitions, summaries, the columns a table writes) — given an alias with
+/// `_` after it where the name has no alias and is a keyword of a language rulec writes it in as
+/// it is (§15.210). The name on the wire, in the records and in every message stays the one
+/// declared: only the identifier moves, and in every language alike, so that `rulec api` names
+/// one parameter one way. An alias is the author's own choice of identifier, and is left as it
+/// is: W121 says where a language does not take it, as it always did. The rule's own name and an
+/// enum's are left to W121 too: they name a module and a type, which the files and the other
+/// rules refer to.
+pub fn escape_keywords(f: &mut RuleFile) {
+    fn fix(n: &mut Name) {
+        if n.ascii.is_none() && n.text.is_ascii() && !keyword_in(&n.text).is_empty() {
+            n.ascii = Some(format!("{}_", n.text));
+        }
+    }
+    for i in &mut f.inputs {
+        fix(&mut i.name);
+    }
+    for o in &mut f.outputs {
+        fix(&mut o.name);
+    }
+    if let Some(el) = &mut f.elements {
+        fix(&mut el.name);
+        for fd in &mut el.fields {
+            fix(&mut fd.name);
+        }
+    }
+    for it in &mut f.items {
+        match it {
+            Item::Derived(d) => fix(&mut d.name),
+            Item::Define(d) => fix(&mut d.name),
+            Item::Agg(d) => fix(&mut d.name),
+            Item::Table(t) => {
+                for oc in &mut t.outputs {
+                    fix(&mut oc.name);
+                }
+            }
+        }
+    }
+}
+
 /// The SHA-256 of the source text, as the header says it is. Until §15.68 the header named
 /// SHA-256 and computed FNV-1a; the digest is now the one it names, from `sha256.rs`, with no
 /// dependency added.
@@ -627,6 +698,152 @@ pub(crate) struct Expr2 {
 }
 
 impl<'a> Gen<'a> {
+    /// The ordered enum an expression's value belongs to (§15.210): a name of one, or `min` or
+    /// `max` of such names.
+    pub(crate) fn ordered_of(&self, e: &Expr) -> Option<String> {
+        match e {
+            Expr::Name(n, _) => self.c.ordered_enum(&self.ty_of(n)).map(|s| s.to_string()),
+            Expr::Call(name, args, _) if name == crate::kw::MIN || name == crate::kw::MAX => args.first().and_then(|a| self.ordered_of(a)),
+            _ => None,
+        }
+    }
+
+    /// The type an enum is generated as: `Era`.
+    pub(crate) fn enum_type(&self, en: &str) -> String {
+        self.enum_names.get(en).cloned().unwrap_or_else(|| pascal(en))
+    }
+
+    /// The enums the generated code declares itself, by name in the rule, with their types:
+    /// every enum but those read from an `enums` file, whose module declares them (§15.212),
+    /// each type once.
+    pub(crate) fn own_enums(&self) -> Vec<(String, String)> {
+        let mut out: Vec<(String, String)> = Vec::new();
+        for (jp, ascii) in &self.enum_names {
+            if self.c.owners.contains_key(jp) || out.iter().any(|(_, a)| a == ascii) {
+                continue;
+            }
+            out.push((jp.clone(), ascii.clone()));
+        }
+        out
+    }
+
+    /// The enums read from `enums` files, grouped by the module each comes from (§15.212): the
+    /// module's name (the alias of the file's heading) and the types it gives this rule.
+    pub(crate) fn foreign_enums(&self) -> Vec<(String, Vec<(String, String)>)> {
+        let mut out: Vec<(String, Vec<(String, String)>)> = Vec::new();
+        for e in &self.f.enums {
+            let Some(o) = &e.from else { continue };
+            let module = pub_name(&o.module);
+            let ty = self.enum_type(&e.name.text);
+            match out.iter_mut().find(|(m, _)| *m == module) {
+                Some((_, ts)) => {
+                    if !ts.iter().any(|(_, t)| *t == ty) {
+                        ts.push((e.name.text.clone(), ty));
+                    }
+                }
+                None => out.push((module, vec![(e.name.text.clone(), ty)])),
+            }
+        }
+        out
+    }
+
+    /// The enums of the rule that give display names (§15.211), by their names in the rule, each
+    /// with its type and the module of the `enums` file it is read from when it is: what a
+    /// runner's `--labels` answers for.
+    pub(crate) fn labeled_enums(&self) -> Vec<(String, String, Option<String>)> {
+        let mut out: Vec<(String, String, Option<String>)> = Vec::new();
+        for en in &self.c.enum_order {
+            if !self.c.labels.contains_key(en) || out.iter().any(|(n, _, _)| n == en) {
+                continue;
+            }
+            let owner = self.c.owners.get(en).map(|o| pub_name(&o.module));
+            out.push((en.clone(), self.enum_type(en), owner));
+        }
+        out
+    }
+
+    /// The input of a runner's `--labels`: one line per value of every enum that gives display
+    /// names, the enum's name and the value's, a tab between (§15.211). `None` for a rule
+    /// with none.
+    pub fn labels_input(&self) -> Option<(String, String)> {
+        let enums = self.labeled_enums();
+        if enums.is_empty() {
+            return None;
+        }
+        let (mut input, mut expected) = (String::new(), String::new());
+        for (en, _, _) in enums {
+            for v in self.c.enums.get(&en).into_iter().flatten() {
+                input.push_str(&format!("{en}\t{v}\n"));
+                expected.push_str(&format!("{}\n", self.c.shown_value(&en, v)));
+            }
+        }
+        Some((input, expected))
+    }
+
+    /// Whether the functions of this rule compare two values of the ordered enum `en`, or take
+    /// the later or the earlier of two: the helpers they call are written only then.
+    pub(crate) fn enum_helpers(&self, en: &str) -> (bool, bool, bool) {
+        let mut rank = false;
+        let mut max = false;
+        let mut min = false;
+        fn walk(g: &Gen, e: &Expr, en: &str, rank: &mut bool, max: &mut bool, min: &mut bool) {
+            match e {
+                Expr::Bin(l, op, r, _) => {
+                    if matches!(op, BinOp::Le | BinOp::Lt | BinOp::Ge | BinOp::Gt)
+                        && g.ordered_of(l).or_else(|| g.ordered_of(r)).as_deref() == Some(en)
+                    {
+                        *rank = true;
+                    }
+                    walk(g, l, en, rank, max, min);
+                    walk(g, r, en, rank, max, min);
+                }
+                Expr::Call(name, args, _) => {
+                    if args.first().and_then(|a| g.ordered_of(a)).as_deref() == Some(en) {
+                        if name == crate::kw::MAX {
+                            *max = true;
+                        } else if name == crate::kw::MIN {
+                            *min = true;
+                        }
+                    }
+                    for a in args {
+                        walk(g, a, en, rank, max, min);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut exprs: Vec<&Expr> = Vec::new();
+        for it in &self.f.items {
+            match it {
+                Item::Derived(d) => exprs.push(&d.expr),
+                Item::Define(d) => exprs.push(&d.expr),
+                _ => {}
+            }
+        }
+        if let Some(r) = &self.f.result {
+            exprs.push(&r.expr);
+        }
+        if let Some(fold) = &self.f.fold {
+            exprs.extend(fold.empty.iter());
+            exprs.extend(fold.exhausted.iter());
+            for (_, arm, _) in &fold.arms {
+                match arm {
+                    Arm::Stop(Some(x)) => exprs.push(x),
+                    Arm::Take { expr, .. } => exprs.push(expr),
+                    Arm::KeepMax { expr, key } => {
+                        exprs.push(expr);
+                        exprs.push(key);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        for e in exprs {
+            walk(self, e, en, &mut rank, &mut max, &mut min);
+        }
+        (rank, max, min)
+    }
+
     fn expr(&self, e: &Expr, local: &dyn Fn(&str) -> String) -> Expr2 {
         match e {
             Expr::Name(n, _) => Expr2 { text: local(n), scale: self.scale(n) },
@@ -671,6 +888,13 @@ impl<'a> Gen<'a> {
             Expr::Call(name, args, _) => {
                 let a: Vec<Expr2> = args.iter().map(|x| self.expr(x, local)).collect();
                 match (name.as_str(), a.as_slice()) {
+                    // The later or the earlier of two values of an ordered enum (§15.210), by a
+                    // helper each language defines beside the function that calls it.
+                    (crate::kw::MIN | crate::kw::MAX, [x, y]) if self.ordered_of(&args[0]).is_some() => {
+                        let t = self.ordered_of(&args[0]).map(|en| self.enum_type(&en)).unwrap_or_default();
+                        let f = if name == crate::kw::MIN { "_min_" } else { "_max_" };
+                        Expr2 { text: format!("{f}{t}({}, {})", x.text, y.text), scale: 1 }
+                    }
                     (crate::kw::MIN, [x, y]) | (crate::kw::MAX, [x, y]) => {
                         let s = lcm(x.scale, y.scale);
                         let f = if name == crate::kw::MIN { "_min" } else { "_max" };
@@ -764,6 +988,18 @@ impl<'a> Gen<'a> {
                             Some(k) => Expr2 { text: a.text, scale: a.scale * (k / b.scale) },
                             None => Expr2 { text: format!("({} // {})", a.text, b.text), scale: a.scale },
                         }
+                    }
+                    // Two values of an ordered enum compare by their places in its order
+                    // (§15.210), which a helper beside the function gives.
+                    Le | Lt | Ge | Gt if self.ordered_of(l).or_else(|| self.ordered_of(r)).is_some() => {
+                        let t = self.ordered_of(l).or_else(|| self.ordered_of(r)).map(|en| self.enum_type(&en)).unwrap_or_default();
+                        let o = match op {
+                            Le => "<=",
+                            Lt => "<",
+                            Ge => ">=",
+                            _ => ">",
+                        };
+                        Expr2 { text: format!("(_rank_{t}({}) {o} _rank_{t}({}))", a.text, b.text), scale: 1 }
                     }
                     Le | Lt | Ge | Gt | Eq => {
                         let s = lcm(a.scale, b.scale);
@@ -1025,14 +1261,30 @@ impl<'a> Gen<'a> {
                 // A comparison holds only of a value that is there: `None < 5` raises (§15.201).
                 if optional { format!("{var} is not None and {c}") } else { c }
             }
+            // A comparison on an ordered enum, written as it was: by the places in the order
+            // (§15.210).
+            Cell::Ranked { ops, .. } => {
+                let en = self.c.ordered_enum(ty)?;
+                let r = self.py_rank_fn(en);
+                let c = ops
+                    .iter()
+                    .map(|(o, v)| format!("{r}({var}) {} {r}({})", o.word(), self.py_value(v, ty)))
+                    .collect::<Vec<_>>()
+                    .join(" and ");
+                if optional { format!("{var} is not None and {c}") } else { c }
+            }
         })
     }
 
     pub fn python(&self) -> String {
         let mut o = self.header("#");
         // Import from typing only what is used. NamedTuple is needed only with multiple outputs.
+        // `enum` only where the module declares an enum of its own: a rule whose enums all come
+        // from an `enums` file imports them from its module instead (§15.212).
+        let classes = self.own_enums().iter().any(|(jp, _)| self.c.enums.contains_key(jp));
         o.push_str(&format!(
-            "from __future__ import annotations\n\nimport enum\nfrom typing import {}NamedTuple, NewType\n\n",
+            "from __future__ import annotations\n\n{}from typing import {}NamedTuple, NewType\n\n",
+            if classes { "import enum\n" } else { "" },
             if self.projects() { "Any, " } else { "" }
         ));
 
@@ -1056,20 +1308,10 @@ impl<'a> Gen<'a> {
         }
 
         // Enums. Each value carries its Japanese name, used in logs and in the wire format (§10).
-        let mut emitted: Vec<String> = Vec::new();
-        for (jp, ascii) in &self.enum_names {
-            if emitted.contains(ascii) {
-                continue;
-            }
-            emitted.push(ascii.clone());
-            let Some(vals) = self.c.enums.get(jp) else { continue };
-            o.push_str(&format!("class {ascii}(enum.Enum):\n"));
-            for v in vals {
-                let name = self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone());
-                o.push_str(&format!("    {name} = \"{v}\"\n"));
-            }
-            o.push('\n');
-        }
+        // An enum read from an `enums` file is that file's module's, and imported below
+        // (§15.212).
+        o.push_str(&self.py_enums());
+        o.push_str(&self.py_enum_helpers());
 
         // The machine this function is one step of (§15.148). The host keeps the state; what
         // it needs from the rule is where a case starts and where one has ended.
@@ -1143,7 +1385,143 @@ impl<'a> Gen<'a> {
         }
         o.push_str(&py_builtins(&body));
         o.push_str(&body);
-        pep8_blanks(&o)
+        pep8_blanks(&self.py_imports(o))
+    }
+
+    /// The `enum.Enum` classes of the enums this module declares, each with its order and its
+    /// display names when it has them (§15.210, §15.211).
+    fn py_enums(&self) -> String {
+        let mut o = String::new();
+        for (jp, ascii) in self.own_enums() {
+            let Some(vals) = self.c.enums.get(&jp) else { continue };
+            o.push_str(&format!("class {ascii}(enum.Enum):\n"));
+            for v in vals {
+                o.push_str(&format!("    {} = \"{v}\"\n", self.py_member(&jp, v)));
+            }
+            o.push('\n');
+            o.push_str(&self.py_enum_fns(&jp, &ascii));
+        }
+        o
+    }
+
+    /// The member a value is: `ECONOMY`.
+    fn py_member(&self, en: &str, v: &str) -> String {
+        self.value_names.get(&(en.to_string(), v.to_string())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.to_string())
+    }
+
+    /// The function that gives the place of a value of an ordered enum in its order:
+    /// `era_rank`.
+    fn py_rank_fn(&self, en: &str) -> String {
+        format!("{}_rank", snake(&self.enum_type(en)))
+    }
+
+    /// The function that gives a value's display name: `unit_name_label`.
+    fn py_label_fn(&self, en: &str) -> String {
+        format!("{}_label", snake(&self.enum_type(en)))
+    }
+
+    /// The order of an ordered enum and the display names of one that gives any, as one
+    /// function each over the members, if/elif in the order declared (§15.210, §15.211). A
+    /// value with no display name is shown by its name, which is also what it is on the wire.
+    fn py_enum_fns(&self, jp: &str, ascii: &str) -> String {
+        let Some(vals) = self.c.enums.get(jp) else { return String::new() };
+        let mut o = String::new();
+        let chain = |o: &mut String, ret: &dyn Fn(usize, &String) -> String| {
+            if vals.len() == 1 {
+                o.push_str(&format!("    return {}\n", ret(0, &vals[0])));
+                return;
+            }
+            for (i, v) in vals.iter().enumerate() {
+                let m = self.py_member(jp, v);
+                if i + 1 == vals.len() {
+                    o.push_str(&format!("    else:\n        return {}\n", ret(i, v)));
+                } else {
+                    let kw = if i == 0 { "if" } else { "elif" };
+                    o.push_str(&format!("    {kw} x is {ascii}.{m}:\n        return {}\n", ret(i, v)));
+                }
+            }
+        };
+        if self.c.ordered.contains(jp) {
+            o.push_str(&format!(
+                "\n\ndef {}(x: {ascii}) -> int:\n    \"\"\"{}\"\"\"\n",
+                self.py_rank_fn(jp),
+                tr!("x が {ascii} の順序の何番目か（0 から）。", "The place of x in the order of {ascii}, counting from 0.")
+            ));
+            chain(&mut o, &|i, _| i.to_string());
+        }
+        if let Some(labels) = self.c.labels.get(jp) {
+            o.push_str(&format!(
+                "\n\ndef {}(x: {ascii}) -> str:\n    \"\"\"{}\"\"\"\n",
+                self.py_label_fn(jp),
+                tr!("x の表示名。表示名の無い値は値の名前。", "The display name of x: a value without one is shown by its name.")
+            ));
+            chain(&mut o, &|i, v| str_lit(&labels.get(i).cloned().flatten().unwrap_or_else(|| v.clone())));
+        }
+        if !o.is_empty() {
+            o.push_str("\n\n");
+        }
+        o
+    }
+
+    /// The helpers the functions call for the expressions over an ordered enum (§15.210): its
+    /// place, and the later or the earlier of two values. Written only for what is called.
+    fn py_enum_helpers(&self) -> String {
+        let mut o = String::new();
+        for en in self.c.enum_order.iter().filter(|e| self.c.ordered.contains(*e)) {
+            let (rank, max, min) = self.enum_helpers(en);
+            let (t, r) = (self.enum_type(en), self.py_rank_fn(en));
+            if rank {
+                o.push_str(&format!("\n\ndef _rank_{t}(x: {t}) -> int:\n    return {r}(x)\n"));
+            }
+            if max {
+                o.push_str(&format!("\n\ndef _max_{t}(a: {t}, b: {t}) -> {t}:\n    return a if {r}(a) >= {r}(b) else b\n"));
+            }
+            if min {
+                o.push_str(&format!("\n\ndef _min_{t}(a: {t}, b: {t}) -> {t}:\n    return a if {r}(a) <= {r}(b) else b\n"));
+            }
+        }
+        if !o.is_empty() {
+            o.push_str("\n\n");
+        }
+        o
+    }
+
+    /// The module with the import of what it uses of each `enums` file it reads from, after the
+    /// `typing` line (§15.212): the type, and its order and display name functions where it calls
+    /// them. In a package the module beside it; from `rulec gen`, the module in the same
+    /// directory.
+    fn py_imports(&self, o: String) -> String {
+        let foreign = self.foreign_enums();
+        if foreign.is_empty() {
+            return o;
+        }
+        let mut lines = String::new();
+        for (module, types) in foreign {
+            let mut names: Vec<String> = Vec::new();
+            for (jp, t) in &types {
+                for n in [t.clone(), self.py_rank_fn(jp), self.py_label_fn(jp)] {
+                    if has_word(&o, &n) && !names.contains(&n) {
+                        names.push(n);
+                    }
+                }
+            }
+            if names.is_empty() {
+                continue;
+            }
+            let from = if self.package.is_some() { format!(".{module}") } else { module.clone() };
+            // The types are the module's to hand on (`X as X`, an explicit re-export): a caller,
+            // the runner and the MCP server name them through the rule's module, as they name
+            // the types a rule declares itself. The functions are its own use.
+            let names: Vec<String> = names.into_iter().map(|n| if types.iter().any(|(_, t)| *t == n) { format!("{n} as {n}") } else { n }).collect();
+            lines.push_str(&format!("from {from} import {}\n", names.join(", ")));
+        }
+        match o.find("from typing import") {
+            Some(at) => {
+                let end = o[at..].find('\n').map(|e| at + e + 1).unwrap_or(o.len());
+                format!("{}{lines}{}", &o[..end], &o[end..])
+            }
+            None => format!("{lines}{o}"),
+        }
     }
 }
 
@@ -1696,11 +2074,23 @@ impl<'a> Gen<'a> {
             let mut o = Guarded::new(&mut o, optional.then(|| (format!("    if {v} is not None:\n"), String::new())), "    ");
             match &ty {
                 // The enum by the name the rule declares it under, as every door says it (§15.204).
-                Ty::Enum(n) => o.push_str(&format!(
-                    "    if not _isinstance({v}, {}):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
-                    self.py_ty(&ty),
-                    crate::door::not_in_enum(&i.name.text, n)
-                )),
+                Ty::Enum(n) => {
+                    o.push_str(&format!(
+                        "    if not _isinstance({v}, {}):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
+                        self.py_ty(&ty),
+                        crate::door::not_in_enum(&i.name.text, n)
+                    ));
+                    // The values the range of an ordered enum lets in, first to last (§15.210).
+                    if let Some((lo, hi)) = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?))) {
+                        let r = self.py_rank_fn(n);
+                        o.push_str(&format!(
+                            "    if not {r}({}) <= {r}({v}) <= {r}({}):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
+                            self.py_value(lo, &ty),
+                            self.py_value(hi, &ty),
+                            crate::door::out_of_range(&i.name.text)
+                        ));
+                    }
+                }
                 // A truth value is `True` or `False` and nothing else (§15.203).
                 Ty::Bool => o.push_str(&format!(
                     "    if not _isinstance({v}, _bool):\n        raise RuleInputError(\"{}\", _repr({v}))\n",
@@ -2056,6 +2446,7 @@ fn cell_src(c: &Cell) -> String {
         Cell::Set(ls) => ls.iter().map(lit_src).collect::<Vec<_>>().join(", "),
         Cell::Not(ls) => format!("{}: {}", crate::kw::NOT, ls.iter().map(lit_src).collect::<Vec<_>>().join(", ")),
         Cell::Prefix(ps) => format!("{} {}", crate::kw::STARTS_WITH, ps.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ")),
+        Cell::Ranked { ops, .. } => crate::ast::ranked_text(ops),
         Cell::Cmp(cs) => cs
             .iter()
             .map(|(o, l)| {
@@ -2234,6 +2625,11 @@ impl<'a> Gen<'a> {
                 guarded(format!("!is{}({var})", pascal(&self.ident(w))), true)
             }
             Cell::Not(ls) => guarded(set(ls, true), true),
+            // A comparison on an ordered enum: its constants are in the order declared (§15.210).
+            Cell::Ranked { ops, .. } => guarded(
+                ops.iter().map(|(o, v)| format!("{var} {} {}", o.word(), self.go_value(v, ty))).collect::<Vec<_>>().join(" && "),
+                false,
+            ),
             // A comparison reads through the pointer too, so it takes the nil guard as every other
             // test does: without it a nil value panicked (§15.201).
             Cell::Cmp(cs) => guarded(
@@ -2279,39 +2675,11 @@ impl<'a> Gen<'a> {
             o.push('\n');
         }
 
-        let mut emitted: Vec<String> = Vec::new();
-        for (jp, ascii) in &self.enum_names {
-            if emitted.contains(ascii) {
-                continue;
-            }
-            emitted.push(ascii.clone());
-            let Some(vals) = self.c.enums.get(jp) else { continue };
-            o.push_str(&format!("type {ascii} int\n\nconst (\n"));
-            for (i, v) in vals.iter().enumerate() {
-                let n = self.go_value(v, &Ty::Enum(jp.clone()));
-                if i == 0 {
-                    o.push_str(&format!("\t{n}{CELL}{ascii} = iota{CELL}// {v}\n"));
-                } else {
-                    o.push_str(&format!("\t{n}{CELL}{CELL}// {v}\n"));
-                }
-            }
-            o.push_str(")\n\n");
-            o.push_str(&format!(
-                "func (v {ascii}) Valid() bool {{ return v >= 0 && v < {} }}\n\n",
-                vals.len()
-            ));
-            o.push_str(&format!("func (v {ascii}) String() string {{\n\tswitch v {{\n"));
-            for v in vals {
-                o.push_str(&format!("\tcase {}:\n\t\treturn {:?}\n", self.go_value(v, &Ty::Enum(jp.clone())), v));
-            }
-            o.push_str("\t}\n\treturn \"?\"\n}\n\n");
-            // The wire format of §10 uses the Japanese names, so provide a way back from them.
-            o.push_str(&format!("func Parse{ascii}(s string) ({ascii}, bool) {{\n\tswitch s {{\n"));
-            for v in vals {
-                o.push_str(&format!("\tcase {:?}:\n\t\treturn {}, true\n", v, self.go_value(v, &Ty::Enum(jp.clone()))));
-            }
-            o.push_str(&format!("\t}}\n\treturn {}(0), false\n}}\n\n", ascii));
+        for (jp, ascii) in self.own_enums() {
+            o.push_str(&self.go_enum(&jp, &ascii));
         }
+        o.push_str(&self.go_foreign_enums());
+        o.push_str(&self.go_enum_helpers());
 
         // The machine this function is one step of (§15.148).
         if let Some((en, init, fins)) = self.machine_consts() {
@@ -2353,13 +2721,147 @@ impl<'a> Gen<'a> {
         // The record function uses fmt whatever the rule looks like, so the import is
         // unconditional now. `strings` comes in only where a cell tests a prefix
         // (§15.101) — an unused import does not compile in Go.
-        let imports = if o.contains("strings.HasPrefix(") {
-            "import (\n\t\"fmt\"\n\t\"strings\"\n)\n\n"
+        // The package of each `enums` file it reads its types from (§15.212).
+        let mut paths: Vec<String> = vec!["fmt".to_string()];
+        if o.contains("strings.HasPrefix(") {
+            paths.push("strings".to_string());
+        }
+        paths.extend(self.foreign_enums().into_iter().map(|(m, _)| self.go_owner_path(&m)));
+        // gofmt keeps the specs of one block in order
+        paths.sort();
+        let imports = if paths.len() == 1 {
+            format!("import {:?}\n\n", paths[0])
         } else {
-            "import \"fmt\"\n\n"
+            format!("import (\n{})\n\n", paths.iter().map(|p| format!("\t{p:?}\n")).collect::<String>())
         };
-        let o = o.replace(IMPORT_MARK, imports);
+        let o = o.replace(IMPORT_MARK, &imports);
         align(&o)
+    }
+
+    /// One enum as Go: an int type whose constants are in the order declared, its validity, its
+    /// wire names, its parser, and its display names when it has them (§15.211). The constants
+    /// are the order an ordered enum compares in (§15.210).
+    pub(crate) fn go_enum(&self, jp: &str, ascii: &str) -> String {
+        let Some(vals) = self.c.enums.get(jp) else { return String::new() };
+        let mut o = String::new();
+        o.push_str(&format!("type {ascii} int\n\nconst (\n"));
+        for (i, v) in vals.iter().enumerate() {
+            let n = self.go_value(v, &Ty::Enum(jp.to_string()));
+            if i == 0 {
+                o.push_str(&format!("\t{n}{CELL}{ascii} = iota{CELL}// {v}\n"));
+            } else {
+                o.push_str(&format!("\t{n}{CELL}{CELL}// {v}\n"));
+            }
+        }
+        o.push_str(")\n\n");
+        o.push_str(&format!(
+            "func (v {ascii}) Valid() bool {{ return v >= 0 && v < {} }}\n\n",
+            vals.len()
+        ));
+        o.push_str(&format!("func (v {ascii}) String() string {{\n\tswitch v {{\n"));
+        for v in vals {
+            o.push_str(&format!("\tcase {}:\n\t\treturn {:?}\n", self.go_value(v, &Ty::Enum(jp.to_string())), v));
+        }
+        o.push_str("\t}\n\treturn \"?\"\n}\n\n");
+        if let Some(labels) = self.c.labels.get(jp) {
+            o.push_str(&format!(
+                "// Label {}\nfunc (v {ascii}) Label() string {{\n\tswitch v {{\n",
+                tr!("は表示名を返す。表示名の無い値は値の名前。", "returns the display name: a value without one is shown by its name.")
+            ));
+            for (i, v) in vals.iter().enumerate() {
+                let l = labels.get(i).cloned().flatten().unwrap_or_else(|| v.clone());
+                o.push_str(&format!("\tcase {}:\n\t\treturn {}\n", self.go_value(v, &Ty::Enum(jp.to_string())), str_lit(&l)));
+            }
+            o.push_str("\t}\n\treturn \"?\"\n}\n\n");
+        }
+        // The wire format of §10 uses the Japanese names, so provide a way back from them.
+        o.push_str(&format!("func Parse{ascii}(s string) ({ascii}, bool) {{\n\tswitch s {{\n"));
+        for v in vals {
+            o.push_str(&format!("\tcase {:?}:\n\t\treturn {}, true\n", v, self.go_value(v, &Ty::Enum(jp.to_string()))));
+        }
+        o.push_str(&format!("\t}}\n\treturn {}(0), false\n}}\n\n", ascii));
+        o
+    }
+
+    /// The import path of the package an `enums` file's types are in (§15.212): beside the
+    /// rule's package in a package of ritsu's, and a module of its own beside it from `rulec gen`.
+    fn go_owner_path(&self, module: &str) -> String {
+        let pkg = crate::backend::go_package(module);
+        match &self.package {
+            Some(m) if !m.is_empty() => format!("{m}/rules/{pkg}"),
+            _ => pkg,
+        }
+    }
+
+    /// The types of an `enums` file as this package names them: an alias of each, so that a
+    /// value of one is a value of the other, its constants, and its parser (§15.212).
+    fn go_foreign_enums(&self) -> String {
+        let mut o = String::new();
+        for (module, types) in self.foreign_enums() {
+            let pkg = crate::backend::go_package(&module);
+            for (jp, ascii) in types {
+                let Some(vals) = self.c.enums.get(&jp) else { continue };
+                o.push_str(&format!(
+                    "// {ascii} {}\ntype {ascii} = {pkg}.{ascii}\n\nconst (\n",
+                    tr!("は {pkg}.{ascii} の別名で、同じ型。", "is {pkg}.{ascii} under another name: the same type.")
+                ));
+                for v in vals {
+                    let n = self.go_value(v, &Ty::Enum(jp.clone()));
+                    o.push_str(&format!("\t{n}{CELL}= {pkg}.{n}\n"));
+                }
+                o.push_str(")\n\n");
+                o.push_str(&format!(
+                    "// Parse{ascii} {}\nfunc Parse{ascii}(s string) ({ascii}, bool) {{ return {pkg}.Parse{ascii}(s) }}\n\n",
+                    tr!("は {pkg}.Parse{ascii} と同じ。", "is {pkg}.Parse{ascii}.")
+                ));
+            }
+        }
+        o
+    }
+
+    /// The helpers the functions call for the expressions over an ordered enum (§15.210). The
+    /// constants are in the order declared, so the place of a value is the value.
+    fn go_enum_helpers(&self) -> String {
+        let mut o = String::new();
+        for en in self.c.enum_order.iter().filter(|e| self.c.ordered.contains(*e)) {
+            let (rank, max, min) = self.enum_helpers(en);
+            let t = self.enum_type(en);
+            if rank {
+                o.push_str(&format!("func _rank_{t}(x {t}) int64 {{\n\treturn int64(x)\n}}\n\n"));
+            }
+            if max {
+                o.push_str(&format!("func _max_{t}(a, b {t}) {t} {{\n\tif a >= b {{\n\t\treturn a\n\t}}\n\treturn b\n}}\n\n"));
+            }
+            if min {
+                o.push_str(&format!("func _min_{t}(a, b {t}) {t} {{\n\tif a <= b {{\n\t\treturn a\n\t}}\n\treturn b\n}}\n\n"));
+            }
+        }
+        o
+    }
+
+    /// The `go.mod` of the rule's package, and of its runner: each requires the module of every
+    /// `enums` file the rule reads its types from, beside it (§15.212).
+    pub fn go_mod(&self, pkg: &str, runner: bool) -> String {
+        let owners: Vec<String> = self.foreign_enums().into_iter().map(|(m, _)| crate::backend::go_package(&m)).collect();
+        let mut requires: Vec<String> = Vec::new();
+        let mut replaces: Vec<String> = Vec::new();
+        if runner {
+            requires.push(format!("require {pkg} v0.0.0\n"));
+            replaces.push(format!("replace {pkg} => ../{pkg}\n"));
+        }
+        for m in &owners {
+            requires.push(format!("require {m} v0.0.0\n"));
+            replaces.push(format!("replace {m} => ../{m}\n"));
+        }
+        let name = if runner { format!("{pkg}runner") } else { pkg.to_string() };
+        let mut o = format!("module {name}\n\ngo {}\n", crate::backend::GO_MIN);
+        if !requires.is_empty() {
+            o.push('\n');
+            o.push_str(&requires.concat());
+            o.push('\n');
+            o.push_str(&replaces.concat());
+        }
+        o
     }
 
     /// The rule's items as Go, at the base indentation (§15.56).
@@ -2736,10 +3238,21 @@ impl<'a> Gen<'a> {
             let val = go_i64(&v);
             let mut o = Guarded::new(&mut o, wrap, "\t");
             match &ty {
-                Ty::Enum(n) => o.push_str(&format!(
-                    "\tif !{v}.Valid() {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
-                    crate::door::not_in_enum(&i.name.text, n)
-                )),
+                Ty::Enum(n) => {
+                    o.push_str(&format!(
+                        "\tif !{v}.Valid() {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
+                        crate::door::not_in_enum(&i.name.text, n)
+                    ));
+                    // The values the range of an ordered enum lets in, first to last (§15.210).
+                    if let Some((lo, hi)) = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?))) {
+                        o.push_str(&format!(
+                            "\tif {v} < {} || {v} > {} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {val}, HasValue: true}}\n\t}}\n",
+                            self.go_value(lo, &ty),
+                            self.go_value(hi, &ty),
+                            crate::door::out_of_range(&i.name.text)
+                        ));
+                    }
+                }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text) {
                         let sc = self.c.wire_scale(&i.name.text);
@@ -3331,6 +3844,7 @@ impl<'a> Gen<'a> {
         // holds the record function — the wire form of every input, dates included — to
         // the reference evaluator in every language (§15.35). An input the door refuses gets a
         // line saying so in the place of the record, and the next line is read (§15.204).
+        let (owners, labels) = self.py_labels_mode();
         format!(
             "# Code generated by rulec {}. DO NOT EDIT.\n\
              import datetime\n\
@@ -3338,8 +3852,10 @@ impl<'a> Gen<'a> {
              import json\n\
              import sys\n\
              from typing import Any, Callable, TypeVar\n\n\
-             import {alias} as m\n\n\
+             import {alias} as m\n\
+             {owners}\n\
              {}\
+             {labels}\
              {head}\
              for line in sys.stdin:\n    \
                  line = line.strip()\n    \
@@ -3363,6 +3879,37 @@ impl<'a> Gen<'a> {
             if meta.is_empty() { "    d = json.loads(line)[\"in\"]\n".to_string() } else { format!("    v = json.loads(line)\n{meta}") },
             prelude,
             if args.len() == 1 { format!("{},", args[0]) } else { args.join(", ") }
+        )
+    }
+
+    /// What the Python runner answers with `--labels` (§15.211): for each line, an enum's name
+    /// and a value's, the display name its language gives. The imports of the `enums` modules
+    /// it reads them from come first.
+    fn py_labels_mode(&self) -> (String, String) {
+        let enums = self.labeled_enums();
+        if enums.is_empty() {
+            return (String::new(), String::new());
+        }
+        let mut owners: Vec<String> = Vec::new();
+        let mut arms = String::new();
+        for (i, (en, ty, owner)) in enums.iter().enumerate() {
+            let m = match owner {
+                Some(o) => {
+                    if !owners.contains(o) {
+                        owners.push(o.clone());
+                    }
+                    o.clone()
+                }
+                None => "m".to_string(),
+            };
+            let kw = if i == 0 { "if" } else { "elif" };
+            arms.push_str(&format!("        {kw} en == {}:\n            print({m}.{}({m}.{ty}(v)))\n", str_lit(en), self.py_label_fn(en)));
+        }
+        (
+            owners.iter().map(|o| format!("import {o}\n")).collect(),
+            format!(
+                "if \"--labels\" in sys.argv[1:]:\n    for line in sys.stdin:\n        en, v = line.rstrip(\"\\n\").split(\"\\t\")\n{arms}    sys.exit(0)\n\n"
+            ),
         )
     }
 
@@ -3468,6 +4015,7 @@ impl<'a> Gen<'a> {
              func main() {{\n\t\
                  sc := bufio.NewScanner(os.Stdin)\n\t\
                  sc.Buffer(make([]byte, 1<<20), 1<<20)\n\
+                 {}\
                  {head}\t\
                  for sc.Scan() {{\n\t\t\
                      if len(sc.Bytes()) == 0 {{\n\t\t\tcontinue\n\t\t}}\n\
@@ -3482,7 +4030,24 @@ impl<'a> Gen<'a> {
                      }}()\n\t\
                  }}\n}}\n",
             ritsu_emit::header::VERSION,
+            self.go_labels_mode(),
             fields.join("")
+        )
+    }
+
+    /// What the Go runner answers with `--labels` (§15.211): for each line, an enum's name and a
+    /// value's, the display name the package gives.
+    fn go_labels_mode(&self) -> String {
+        let enums = self.labeled_enums();
+        if enums.is_empty() {
+            return String::new();
+        }
+        let mut arms = String::new();
+        for (en, ty, _) in &enums {
+            arms.push_str(&format!("\t\t\tcase {}:\n\t\t\t\tx, _ := r.Parse{ty}(v)\n\t\t\t\tfmt.Println(x.Label())\n", str_lit(en)));
+        }
+        format!(
+            "\tif len(os.Args) > 1 && os.Args[1] == \"--labels\" {{\n\t\tfor sc.Scan() {{\n\t\t\ten, v, _ := strings.Cut(sc.Text(), \"\\t\")\n\t\t\tswitch en {{\n{arms}\t\t\t}}\n\t\t}}\n\t\treturn\n\t}}\n"
         )
     }
 }
@@ -3864,6 +4429,17 @@ impl<'a> Gen<'a> {
                 // `null <= 5n` is true in JavaScript, so the absent value took the row (§15.201).
                 if present { format!("{var} !== null && {c}") } else { c }
             }
+            // A comparison on an ordered enum, by the places in its order (§15.210).
+            Cell::Ranked { ops, .. } => {
+                let en = self.c.ordered_enum(ty)?;
+                let r = self.ts_rank_fn(en);
+                let c = ops
+                    .iter()
+                    .map(|(o, v)| format!("{r}({var}) {} {r}({})", o.word(), self.ts_value(v, ty)))
+                    .collect::<Vec<_>>()
+                    .join(" && ");
+                if matches!(ty, Ty::Opt(_)) { format!("{var} !== null && {c}") } else { c }
+            }
         })
     }
 
@@ -3897,32 +4473,10 @@ impl<'a> Gen<'a> {
         o.push('\n');
 
         // Enums. A frozen object plus a union type, not `enum`: that keeps the file to
-        // erasable syntax, so `node file.ts` runs it with no build step at all.
-        let mut emitted: Vec<String> = Vec::new();
-        for (jp, ascii) in &self.enum_names {
-            if emitted.contains(ascii) {
-                continue;
-            }
-            emitted.push(ascii.clone());
-            let Some(vals) = self.c.enums.get(jp) else { continue };
-            o.push_str(&format!("export const {ascii} = {{\n"));
-            for v in vals {
-                let name = self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone());
-                o.push_str(&format!("  {name}: {v:?},\n"));
-            }
-            o.push_str("} as const;\n");
-            o.push_str(&format!(
-                "export type {ascii} = (typeof {ascii})[keyof typeof {ascii}];\n\n"
-            ));
-            o.push_str(&format!(
-                "export function parse{ascii}(s: string): {ascii} {{\n  \
-                 const v = Object.values({ascii}).find((x) => x === s);\n  \
-                 if (v === undefined) {{\n    \
-                 throw new RuleInputError(`{}`);\n  }}\n  \
-                 return v;\n}}\n\n",
-                tr!("${{s}} は列挙 {ascii} の値ではありません", "${{s}} is not a value of enum {ascii}")
-            ));
-        }
+        // erasable syntax, so `node file.ts` runs it with no build step at all. An enum read
+        // from an `enums` file is that file's module's, imported above (§15.212).
+        o.push_str(&self.ts_enums());
+        o.push_str(&self.ts_enum_helpers());
 
         // The machine this function is one step of (§15.148).
         if let Some((en, init, fins)) = self.machine_consts() {
@@ -3957,7 +4511,137 @@ impl<'a> Gen<'a> {
             o.push('\n');
             o.push_str(&self.ts_from());
         }
+        self.ts_imports(o)
+    }
+
+    /// The frozen objects and union types of the enums this module declares, each with its
+    /// parser, its order and its display names when it has them (§15.210, §15.211).
+    fn ts_enums(&self) -> String {
+        let mut o = String::new();
+        for (jp, ascii) in self.own_enums() {
+            let Some(vals) = self.c.enums.get(&jp) else { continue };
+            o.push_str(&format!("export const {ascii} = {{\n"));
+            for v in vals {
+                o.push_str(&format!("  {}: {v:?},\n", self.py_member(&jp, v)));
+            }
+            o.push_str("} as const;\n");
+            o.push_str(&format!(
+                "export type {ascii} = (typeof {ascii})[keyof typeof {ascii}];\n\n"
+            ));
+            // A file of enums has no door of its own, and so no `RuleInputError`: what it refuses
+            // is the language's own error for a value outside a range (§15.212).
+            let error = if self.f.kind == FileKind::Enums { "RangeError" } else { "RuleInputError" };
+            o.push_str(&format!(
+                "export function parse{ascii}(s: string): {ascii} {{\n  \
+                 const v = Object.values({ascii}).find((x) => x === s);\n  \
+                 if (v === undefined) {{\n    \
+                 throw new {error}(`{}`);\n  }}\n  \
+                 return v;\n}}\n\n",
+                tr!("${{s}} は列挙 {ascii} の値ではありません", "${{s}} is not a value of enum {ascii}")
+            ));
+            o.push_str(&self.ts_enum_fns(&jp, &ascii));
+        }
         o
+    }
+
+    /// `eraRank`: the place of a value of an ordered enum in its order.
+    fn ts_rank_fn(&self, en: &str) -> String {
+        format!("{}Rank", lower_lead(&self.enum_type(en)))
+    }
+
+    /// `unitNameLabel`: a value's display name.
+    fn ts_label_fn(&self, en: &str) -> String {
+        format!("{}Label", lower_lead(&self.enum_type(en)))
+    }
+
+    /// An enum's order and display names, one function each over its members (§15.210,
+    /// §15.211).
+    fn ts_enum_fns(&self, jp: &str, ascii: &str) -> String {
+        let Some(vals) = self.c.enums.get(jp) else { return String::new() };
+        let mut o = String::new();
+        let chain = |o: &mut String, ret: &dyn Fn(usize, &String) -> String| {
+            for (i, v) in vals.iter().enumerate() {
+                if i + 1 == vals.len() {
+                    o.push_str(&format!("  return {};\n}}\n\n", ret(i, v)));
+                } else {
+                    o.push_str(&format!("  if (x === {ascii}.{}) {{\n    return {};\n  }}\n", self.py_member(jp, v), ret(i, v)));
+                }
+            }
+        };
+        if self.c.ordered.contains(jp) {
+            o.push_str(&format!(
+                "/** {} */\nexport function {}(x: {ascii}): number {{\n",
+                tr!("x が {ascii} の順序の何番目か（0 から）。", "The place of x in the order of {ascii}, counting from 0."),
+                self.ts_rank_fn(jp)
+            ));
+            chain(&mut o, &|i, _| i.to_string());
+        }
+        if let Some(labels) = self.c.labels.get(jp) {
+            o.push_str(&format!(
+                "/** {} */\nexport function {}(x: {ascii}): string {{\n",
+                tr!("x の表示名。表示名の無い値は値の名前。", "The display name of x: a value without one is shown by its name."),
+                self.ts_label_fn(jp)
+            ));
+            chain(&mut o, &|i, v| str_lit(&labels.get(i).cloned().flatten().unwrap_or_else(|| v.clone())));
+        }
+        o
+    }
+
+    /// The helpers the functions call for the expressions over an ordered enum (§15.210).
+    fn ts_enum_helpers(&self) -> String {
+        let mut o = String::new();
+        for en in self.c.enum_order.iter().filter(|e| self.c.ordered.contains(*e)) {
+            let (rank, max, min) = self.enum_helpers(en);
+            let (t, r) = (self.enum_type(en), self.ts_rank_fn(en));
+            if rank {
+                o.push_str(&format!("function _rank_{t}(x: {t}): number {{\n  return {r}(x);\n}}\n\n"));
+            }
+            if max {
+                o.push_str(&format!("function _max_{t}(a: {t}, b: {t}): {t} {{\n  return {r}(a) >= {r}(b) ? a : b;\n}}\n\n"));
+            }
+            if min {
+                o.push_str(&format!("function _min_{t}(a: {t}, b: {t}): {t} {{\n  return {r}(a) <= {r}(b) ? a : b;\n}}\n\n"));
+            }
+        }
+        o
+    }
+
+    /// The module with the import of what it uses of each `enums` file it reads from, after its
+    /// head (§15.212). The types are exported again, so that what imports this rule's module
+    /// finds them where it found the rule's own enums.
+    fn ts_imports(&self, o: String) -> String {
+        let foreign = self.foreign_enums();
+        if foreign.is_empty() {
+            return o;
+        }
+        let mut lines = String::new();
+        for (module, types) in foreign {
+            let mut names: Vec<String> = Vec::new();
+            let mut again: Vec<String> = Vec::new();
+            for (jp, t) in &types {
+                if has_word(&o, t) {
+                    names.push(t.clone());
+                    again.push(t.clone());
+                }
+                for n in [self.ts_rank_fn(jp), self.ts_label_fn(jp)] {
+                    if has_word(&o, &n) && !names.contains(&n) {
+                        names.push(n);
+                    }
+                }
+            }
+            if names.is_empty() {
+                continue;
+            }
+            let from = if self.package.is_some() { format!("./{module}") } else { format!("./{module}.ts") };
+            lines.push_str(&format!("import {{ {} }} from \"{from}\";\n", names.join(", ")));
+            if !again.is_empty() {
+                lines.push_str(&format!("export {{ {} }};\n", again.join(", ")));
+            }
+        }
+        // after the head: its comment lines and the blank line under them
+        let head = o.lines().take_while(|l| l.starts_with("//")).map(|l| l.len() + 1).sum::<usize>();
+        let head = (head + 1).min(o.len());
+        format!("{}{lines}\n{}", &o[..head], &o[head..])
     }
 
 
@@ -4298,6 +4982,16 @@ impl<'a> Gen<'a> {
                          throw new RuleInputError(`{}`, {v});\n  }}\n",
                         crate::door::not_in_enum(&i.name.text, n)
                     ));
+                    // The values the range of an ordered enum lets in, first to last (§15.210).
+                    if let Some((lo, hi)) = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?))) {
+                        let r = self.ts_rank_fn(n);
+                        o.push_str(&format!(
+                            "  if ({r}({v}) < {r}({}) || {r}({v}) > {r}({})) {{\n    throw new RuleInputError(`{}`, {v});\n  }}\n",
+                            self.ts_value(lo, &ty),
+                            self.ts_value(hi, &ty),
+                            crate::door::out_of_range(&i.name.text)
+                        ));
+                    }
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     // The type says bigint, but a JavaScript caller can pass anything, and a
@@ -4571,12 +5265,14 @@ impl<'a> Gen<'a> {
             );
             tail = format!("    if (\"step\" in {v}) {{\n      {state} = {};\n    }}\n", self.next_state_of(&r, &format!(".{out}")));
         }
+        let (owner_imports, labels) = self.ts_labels_mode(&lines, &mut imports);
         format!(
             "// Code generated by rulec {}. DO NOT EDIT.\n\
              import {{ readFileSync }} from \"node:fs\";\n\
-             import {{ {} }} from \"./{alias}.ts\";\n{}\n\
+             import {{ {} }} from \"./{alias}.ts\";\n{owner_imports}{}\n\
              {TS_WIRE}\
              const {lines} = readFileSync(0, \"utf8\").split(\"\\n\");\n\
+             {labels}\
              {head}\
              for (const {line} of {lines}) {{\n  \
                  if ({line}.trim() === \"\") {{\n    continue;\n  }}\n\
@@ -4605,6 +5301,43 @@ impl<'a> Gen<'a> {
     }
 }
 
+
+impl<'a> Gen<'a> {
+    /// What the TypeScript runner answers with `--labels` (§15.211): for each line, an enum's
+    /// name and a value's, the display name the module gives. The functions of the rule's own
+    /// enums join its import; those of an `enums` file are imported from that module.
+    fn ts_labels_mode(&self, lines: &str, imports: &mut Vec<String>) -> (String, String) {
+        let enums = self.labeled_enums();
+        if enums.is_empty() {
+            return (String::new(), String::new());
+        }
+        let mut owners: Vec<(String, Vec<String>)> = Vec::new();
+        let mut arms = String::new();
+        for (en, ty, owner) in &enums {
+            let (label, parse) = (self.ts_label_fn(en), format!("parse{ty}"));
+            match owner {
+                Some(o) => match owners.iter_mut().find(|(m, _)| m == o) {
+                    Some((_, ns)) => ns.extend([label.clone(), parse.clone()]),
+                    None => owners.push((o.clone(), vec![label.clone(), parse.clone()])),
+                },
+                None => {
+                    for n in [&label, &parse] {
+                        if !imports.contains(n) {
+                            imports.push(n.clone());
+                        }
+                    }
+                }
+            }
+            arms.push_str(&format!("    if (en === {}) {{\n      console.log({label}({parse}(v)));\n    }}\n", str_lit(en)));
+        }
+        (
+            owners.iter().map(|(m, ns)| format!("import {{ {} }} from \"./{m}.ts\";\n", ns.join(", "))).collect(),
+            format!(
+                "if (process.argv.includes(\"--labels\")) {{\n  for (const l of {lines}) {{\n    if (l === \"\") {{\n      continue;\n    }}\n    const [en, v] = l.split(\"\\t\");\n{arms}  }}\n  process.exit(0);\n}}\n\n"
+            ),
+        )
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Rust (§8.3)
@@ -4816,6 +5549,11 @@ impl<'a> Gen<'a> {
             Cell::Not(ls) => {
                 if optional { wrap(any_of(ls, false), true) } else { any_of(ls, true) }
             }
+            // A comparison on an ordered enum: its variants are ordered as declared (§15.210).
+            Cell::Ranked { ops, .. } => wrap(
+                ops.iter().map(|(o, v)| format!("{var} {} {}", o.word(), self.rs_value(v, ty))).collect::<Vec<_>>().join(" && "),
+                false,
+            ),
             // A comparison is about the value inside the `Option` too: it was written against
             // `__v` and never put in `matches!`, so the module did not build (§15.201).
             Cell::Cmp(cs) => wrap(
@@ -4837,10 +5575,33 @@ impl<'a> Gen<'a> {
     }
 
     pub fn rust(&self) -> String {
+        self.rust_with(false)
+    }
+
+    /// The Rust module as the Wasm crate holds it: the crate is the rule's alone, so the types
+    /// of an `enums` file are written into it rather than read from a sibling (§15.212).
+    pub fn rust_wasm(&self) -> String {
+        self.rust_with(true)
+    }
+
+    fn rust_with(&self, inline: bool) -> String {
         let mut o = self.header("//");
         o.push_str(
             "\n#![allow(non_snake_case, uncommon_codepoints, unused_parens)]\n\n",
         );
+        // The types of an `enums` file are its module's, which the crate declares at its root
+        // (`#[path = "content.rs"] mod content;`, as the runner here does), and are re-exported
+        // so that a caller of this module finds them where it finds the rule's own (§15.212).
+        if !inline {
+            for (module, types) in self.foreign_enums() {
+                let ts: Vec<String> = types.iter().map(|(_, t)| t.clone()).collect();
+                let one = if ts.len() == 1 { ts[0].clone() } else { format!("{{{}}}", ts.join(", ")) };
+                o.push_str(&format!("pub use crate::{module}::{one};\n"));
+            }
+            if !self.foreign_enums().is_empty() {
+                o.push('\n');
+            }
+        }
 
         // Brands: a newtype over i64, which is what the overflow proof is stated in.
         let mut brands: BTreeMap<String, String> = BTreeMap::new();
@@ -4863,32 +5624,19 @@ impl<'a> Gen<'a> {
         ));
 
         // Enums. Each carries its Japanese name, which is what the wire format uses (§10).
-        let mut emitted: Vec<String> = Vec::new();
-        for (jp, ascii) in &self.enum_names {
-            if emitted.contains(ascii) {
-                continue;
+        let enums: Vec<(String, String)> = if inline {
+            let mut all = self.own_enums();
+            for (_, ts) in self.foreign_enums() {
+                all.extend(ts);
             }
-            emitted.push(ascii.clone());
-            let Some(vals) = self.c.enums.get(jp) else { continue };
-            let members: Vec<String> = vals
-                .iter()
-                .map(|v| self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| pascal(a)).unwrap_or_else(|| v.clone()))
-                .collect();
-            o.push_str(&format!(
-                "#[derive(Clone, Copy, PartialEq, Eq, Debug)]\npub enum {ascii} {{\n{}}}\n\n",
-                members.iter().map(|m| format!("    {m},\n")).collect::<String>()
-            ));
-            o.push_str(&format!("impl {ascii} {{\n    pub fn as_str(self) -> &'static str {{\n        match self {{\n"));
-            for (m, v) in members.iter().zip(vals) {
-                o.push_str(&format!("            {ascii}::{m} => {v:?},\n"));
-            }
-            o.push_str("        }\n    }\n\n");
-            o.push_str(&format!("    pub fn parse(s: &str) -> Option<{ascii}> {{\n        match s {{\n"));
-            for (m, v) in members.iter().zip(vals) {
-                o.push_str(&format!("            {v:?} => Some({ascii}::{m}),\n"));
-            }
-            o.push_str("            _ => None,\n        }\n    }\n}\n\n");
+            all
+        } else {
+            self.own_enums()
+        };
+        for (jp, ascii) in enums {
+            o.push_str(&self.rs_enum(&jp, &ascii));
         }
+        o.push_str(&self.rs_enum_helpers());
 
         // The machine this function is one step of (§15.148).
         if let Some((en, init, fins)) = self.machine_consts() {
@@ -4927,6 +5675,78 @@ impl<'a> Gen<'a> {
         o.push('\n');
         o.push_str(&self.rs_record());
         o
+    }
+
+    /// One enum as Rust: the type, its wire names, its parser, and its order and display
+    /// names when it has them (§15.210, §15.211). An ordered enum derives `PartialOrd` and
+    /// `Ord`, which put its variants in the order they are declared.
+    pub(crate) fn rs_enum(&self, jp: &str, ascii: &str) -> String {
+        let Some(vals) = self.c.enums.get(jp) else { return String::new() };
+        let mut o = String::new();
+        let members: Vec<String> = vals
+            .iter()
+            .map(|v| self.value_names.get(&(jp.to_string(), v.clone())).map(|(_, a)| pascal(a)).unwrap_or_else(|| v.clone()))
+            .collect();
+        let ordered = self.c.ordered.contains(jp);
+        let derive = if ordered { "Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug" } else { "Clone, Copy, PartialEq, Eq, Debug" };
+        o.push_str(&format!(
+            "#[derive({derive})]\npub enum {ascii} {{\n{}}}\n\n",
+            members.iter().map(|m| format!("    {m},\n")).collect::<String>()
+        ));
+        o.push_str(&format!("impl {ascii} {{\n    pub fn as_str(self) -> &'static str {{\n        match self {{\n"));
+        for (m, v) in members.iter().zip(vals) {
+            o.push_str(&format!("            {ascii}::{m} => {v:?},\n"));
+        }
+        o.push_str("        }\n    }\n\n");
+        o.push_str(&format!("    pub fn parse(s: &str) -> Option<{ascii}> {{\n        match s {{\n"));
+        for (m, v) in members.iter().zip(vals) {
+            o.push_str(&format!("            {v:?} => Some({ascii}::{m}),\n"));
+        }
+        o.push_str("            _ => None,\n        }\n    }\n");
+        if ordered {
+            o.push_str(&format!(
+                "\n    /// {}\n    pub fn rank(self) -> i64 {{\n        self as i64\n    }}\n",
+                tr!("宣言の順序の何番目か（0 から）。", "The place in the order declared, counting from 0.")
+            ));
+        }
+        if let Some(labels) = self.c.labels.get(jp) {
+            o.push_str(&format!(
+                "\n    /// {}\n    pub fn label(self) -> &'static str {{\n        match self {{\n",
+                tr!("表示名。表示名の無い値は値の名前。", "The display name: a value without one is shown by its name.")
+            ));
+            for (i, (m, v)) in members.iter().zip(vals).enumerate() {
+                let l = labels.get(i).cloned().flatten().unwrap_or_else(|| v.clone());
+                o.push_str(&format!("            {ascii}::{m} => {},\n", str_lit(&l)));
+            }
+            o.push_str("        }\n    }\n");
+        }
+        o.push_str("}\n\n");
+        o
+    }
+
+    /// The helpers the functions call for the expressions over an ordered enum (§15.210).
+    fn rs_enum_helpers(&self) -> String {
+        let mut o = String::new();
+        for en in self.c.enum_order.iter().filter(|e| self.c.ordered.contains(*e)) {
+            let (rank, max, min) = self.enum_helpers(en);
+            let t = self.enum_type(en);
+            if rank {
+                o.push_str(&format!("fn _rank_{t}(x: {t}) -> i64 {{\n    x.rank()\n}}\n\n"));
+            }
+            if max {
+                o.push_str(&format!("fn _max_{t}(a: {t}, b: {t}) -> {t} {{\n    if a >= b {{ a }} else {{ b }}\n}}\n\n"));
+            }
+            if min {
+                o.push_str(&format!("fn _min_{t}(a: {t}, b: {t}) -> {t} {{\n    if a <= b {{ a }} else {{ b }}\n}}\n\n"));
+            }
+        }
+        o
+    }
+
+    /// The roots of a crate that holds this module declare the modules of the `enums` files
+    /// it reads its types from, beside it (§15.212).
+    pub(crate) fn rs_owner_mods(&self) -> String {
+        self.foreign_enums().iter().map(|(m, _)| format!("#[path = \"{m}.rs\"]\nmod {m};\n")).collect()
     }
 
     /// The rule's items as Rust, at the base indentation (§15.56).
@@ -5249,6 +6069,23 @@ impl<'a> Gen<'a> {
             // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
             let optional = matches!(ty, Ty::Opt(_));
             let ty = ty.present().clone();
+            // An ordered enum held to the values its range lets in, first to last (§15.210).
+            if let Some((lo, hi)) = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?))) {
+                let v = local(&i.name.text);
+                let (v, wrap) = if optional {
+                    ("__v".to_string(), Some((format!("    if let Some(__v) = {v} {{\n"), "    }\n".to_string())))
+                } else {
+                    (v, None)
+                };
+                let mut o = Guarded::new(&mut o, wrap, "    ");
+                o.push_str(&format!(
+                    "    if {v} < {} || {v} > {} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: None }});\n    }}\n",
+                    self.rs_value(lo, &ty),
+                    self.rs_value(hi, &ty),
+                    crate::door::out_of_range(&i.name.text)
+                ));
+                continue;
+            }
             if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 continue;
             }
@@ -5465,7 +6302,10 @@ impl<'a> Gen<'a> {
             ),
         ));
         o.push_str("#![allow(non_snake_case, uncommon_codepoints, unused_parens, unused_mut, unused_variables)]\n\n");
-        o.push_str(&format!("#[cfg(kani)]\n#[path = \"{alias}.rs\"]\nmod r;\n\n#[cfg(kani)]\nmod proof {{\n    use super::r::*;\n\n"));
+        // The modules of the `enums` files the rule reads its types from sit at the root, beside
+        // it (§15.212).
+        let owners: String = self.rs_owner_mods().lines().map(|l| if l.starts_with("#[path") { format!("#[cfg(kani)]\n{l}\n") } else { format!("{l}\n") }).collect();
+        o.push_str(&format!("{owners}#[cfg(kani)]\n#[path = \"{alias}.rs\"]\nmod r;\n\n#[cfg(kani)]\nmod proof {{\n    use super::r::*;\n\n"));
 
         // The inputs, made symbolic once: the same lines serve every harness in the file.
         let mut decls = String::new();
@@ -5903,11 +6743,13 @@ impl<'a> Gen<'a> {
         }
         let binds = self.rs_binds("&d", "            ", carried);
         let ok = if next == "()" { "Ok((record, ()))" } else { "Ok((record, next))" };
+        let owners = self.rs_owner_mods();
+        let labels = self.rs_labels_mode();
         format!(
             r#"// Code generated by rulec {ver}. DO NOT EDIT.
 #![allow(non_snake_case, uncommon_codepoints, unused_parens, dead_code)]
 
-#[path = "{alias}.rs"]
+{owners}#[path = "{alias}.rs"]
 mod r;
 
 use std::io::Read;
@@ -5915,7 +6757,7 @@ use std::io::Read;
 {helpers}{json_str}fn main() {{
     let mut src = String::new();
     std::io::stdin().read_to_string(&mut src).unwrap();
-{head}    for line in src.lines() {{
+{labels}{head}    for line in src.lines() {{
         if line.trim().is_empty() {{
             continue;
         }}
@@ -5938,6 +6780,22 @@ use std::io::Read;
             ver = ritsu_emit::header::VERSION,
             helpers = RS_JSON_HELPERS,
             json_str = RS_JSON_STR,
+        )
+    }
+
+    /// What the Rust runner answers with `--labels` (§15.211): for each line, an enum's name and
+    /// a value's, the display name the module gives.
+    fn rs_labels_mode(&self) -> String {
+        let enums = self.labeled_enums();
+        if enums.is_empty() {
+            return String::new();
+        }
+        let arms: String = enums
+            .iter()
+            .map(|(en, ty, _)| format!("                {} => println!(\"{{}}\", r::{ty}::parse(v).map(|x| x.label()).unwrap_or(\"?\")),\n", str_lit(en)))
+            .collect();
+        format!(
+            "    if std::env::args().any(|a| a == \"--labels\") {{\n        for line in src.lines() {{\n            let Some((en, v)) = line.split_once('\\t') else {{ continue }};\n            match en {{\n{arms}                _ => {{}}\n            }}\n        }}\n        return;\n    }}\n"
         )
     }
 
@@ -7366,17 +8224,66 @@ impl Gen<'_> {
         out
     }
 
-    /// The enums, under the spelling each language gives their members.
-    fn enums_json(&self, member: impl Fn(&str, &str) -> String) -> String {
+    /// The enums, under the spelling each language gives their members. An ordered enum says so
+    /// and names what gives a value's place in that language (§15.210); one that gives display
+    /// names has each value's, and names what gives it (§15.211); one read from an `enums` file
+    /// names the file and the module its type is in (§15.212).
+    fn enums_json(&self, lang: &str, member: impl Fn(&str, &str) -> String) -> String {
         let out: Vec<String> = self
             .enum_list(member)
             .iter()
             .map(|e| {
-                let members: Vec<String> = e.values.iter().map(|(v, a)| crate::json::Obj::new().str("name", v).str("alias", a).finish()).collect();
-                crate::json::Obj::new().str("name", &e.name).str("alias", &e.alias).raw("values", crate::json::arr(&members)).finish()
+                let en = &e.name;
+                let members: Vec<String> = e
+                    .values
+                    .iter()
+                    .map(|(v, a)| {
+                        let label = self.c.labels.get(en).map(|_| self.c.shown_value(en, v));
+                        crate::json::Obj::new().str("name", v).str("alias", a).opt_str("label", label.as_deref()).finish()
+                    })
+                    .collect();
+                let (rank, label) = self.enum_fns(lang, en);
+                let mut o = crate::json::Obj::new().str("name", en).str("alias", &e.alias).raw("values", crate::json::arr(&members));
+                if self.c.ordered.contains(en) {
+                    o = o.bool("ordered", true).opt_str("rank", rank.as_deref());
+                }
+                if self.c.labels.contains_key(en) {
+                    o = o.opt_str("label", label.as_deref());
+                }
+                if let Some(owner) = self.c.owners.get(en) {
+                    o = o.str("from", &owner.file).str("module", &pub_name(&owner.module));
+                }
+                o.finish()
             })
             .collect();
         crate::json::arr(&out)
+    }
+
+    /// What gives a value's place in its order and its display name in one language (§15.210,
+    /// §15.211): a function, a method or a property, as the generated code spells it. `None`
+    /// where the language needs none — Go's constants are the order themselves.
+    fn enum_fns(&self, lang: &str, en: &str) -> (Option<String>, Option<String>) {
+        let t = self.enum_type(en);
+        let owner = self.c.owners.get(en).map(|o| pub_name(&o.module));
+        let qualified = |f: String| match &owner {
+            Some(m) => format!("{m}.{f}"),
+            None => f,
+        };
+        match lang {
+            "python" => (Some(qualified(self.py_rank_fn(en))), Some(qualified(self.py_label_fn(en)))),
+            "typescript" | "javascript" => (Some(qualified(self.ts_rank_fn(en))), Some(qualified(self.ts_label_fn(en)))),
+            "rust" => (Some(format!("{t}::rank")), Some(format!("{t}::label"))),
+            "ruby" => {
+                let m = self.rb_module();
+                let q = |f: String| if f.contains('.') { f } else { format!("{m}.{f}") };
+                (Some(q(self.rb_rank_fn(en))), Some(q(self.rb_label_fn(en))))
+            }
+            "php" => (Some(self.php_fn_of_pub(en, "rank")), Some(self.php_fn_of_pub(en, "label"))),
+            "swift" => (Some(format!("{t}.rank")), Some(format!("{t}.label"))),
+            "java" => (Some(format!("{}.ordinal", crate::codegen::java_class(&t))), Some(format!("{}.label", crate::codegen::java_class(&t)))),
+            "go" => (None, Some(format!("{t}.Label"))),
+            _ => (None, None),
+        }
     }
 
     /// Every enum the rule knows, by name: its class in the generated code, and each value with
@@ -7513,6 +8420,9 @@ impl Gen<'_> {
     }
 
     pub fn api(&self) -> String {
+        if self.f.kind == FileKind::Enums {
+            return self.api_enums();
+        }
         let alias = pub_name(&self.f.name);
         let pkg = crate::backend::go_package(&alias);
         // The two errors of the languages that raise or return one of their own (§15.202). Most
@@ -7583,7 +8493,7 @@ impl Gen<'_> {
             .str("returns", &py_ret)
             .raw("outputs", crate::json::arr(&py_outs))
             // A Python enum member is the alias in upper case (`CouponKind.PERCENT`).
-            .raw("enums", self.enums_json(|_, a| a.to_uppercase()))
+            .raw("enums", self.enums_json("python", |_, a| a.to_uppercase()))
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
             .raw("error_types", api_error_types(("RuleInputError", what_value), ("RuleContradictionError", what)))
             .finish();
@@ -7644,7 +8554,7 @@ impl Gen<'_> {
             .raw("outputs", crate::json::arr(&ts_outs))
             // A TypeScript enum member is the alias in upper case on a frozen object
             // (`CouponKind.PERCENT`), the same spelling Python uses.
-            .raw("enums", self.enums_json(|_, a| a.to_uppercase()))
+            .raw("enums", self.enums_json("typescript", |_, a| a.to_uppercase()))
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
             .raw("error_types", api_error_types(("RuleInputError", what_value), ("RuleContradictionError", what)))
             .finish();
@@ -7707,7 +8617,7 @@ impl Gen<'_> {
             .raw("params", crate::json::arr(&js_in))
             .str("returns", &js_ret)
             .raw("outputs", crate::json::arr(&js_outs))
-            .raw("enums", self.enums_json(|_, a| a.to_uppercase()))
+            .raw("enums", self.enums_json("javascript", |_, a| a.to_uppercase()))
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
             .raw("error_types", api_error_types(("RuleInputError", what_value), ("RuleContradictionError", what)))
             .finish();
@@ -7765,7 +8675,7 @@ impl Gen<'_> {
             .str("returns", &rs_ret)
             .raw("outputs", crate::json::arr(&rs_outs))
             // A Rust enum member is the alias in PascalCase on the enum's own type.
-            .raw("enums", self.enums_json(|_, a| pascal(a)))
+            .raw("enums", self.enums_json("rust", |_, a| pascal(a)))
             .raw("errors", crate::json::strs(&["RuleError::Input", "RuleError::Contradiction"]))
             // The two variants are struct variants; these are their fields.
             .raw("error_types", api_error_types(("RuleError::Input", what_value), ("RuleError::Contradiction", what)))
@@ -7831,7 +8741,7 @@ impl Gen<'_> {
             .str("returns", &rb_ret)
             .raw("outputs", crate::json::arr(&rb_outs))
             // A Ruby enum member is a constant under the type's module (`Band::SHORT`).
-            .raw("enums", self.enums_json(|_, a| a.to_uppercase()))
+            .raw("enums", self.enums_json("ruby", |_, a| a.to_uppercase()))
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
             .raw("error_types", api_error_types(("RuleInputError", what_value), ("RuleContradictionError", what)))
             .finish();
@@ -7909,7 +8819,7 @@ impl Gen<'_> {
             .raw("outputs", crate::json::arr(&php_outs))
             // A PHP enum member is a case on the enum's own type, spelled in upper case as
             // Python and TypeScript spell theirs (`CouponKind::PERCENT`).
-            .raw("enums", self.enums_json(|t, a| format!("{}::{}", crate::codegen::php::php_name(t), crate::codegen::php::php_name(&a.to_uppercase()))))
+            .raw("enums", self.enums_json("php", |t, a| format!("{}::{}", crate::codegen::php::php_name(t), crate::codegen::php::php_name(&a.to_uppercase()))))
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
             .raw("error_types", api_error_types(("RuleInputError", what_value), ("RuleContradictionError", what)))
             .finish();
@@ -7973,7 +8883,7 @@ impl Gen<'_> {
             .raw("outputs", crate::json::arr(&sw_outs))
             // A Swift enum member is the alias in the language's own spelling, on the
             // enum's own type (`Band.short`).
-            .raw("enums", self.enums_json(|_, a| sw_name(a)))
+            .raw("enums", self.enums_json("swift", |_, a| sw_name(a)))
             .raw("errors", crate::json::strs(&["RuleError.input", "RuleError.contradiction"]))
             // The two cases carry associated values; these are their labels.
             .raw("error_types", api_error_types(("RuleError.input", what_value), ("RuleError.contradiction", what)))
@@ -8038,7 +8948,7 @@ impl Gen<'_> {
             .raw("params", crate::json::arr(&jv_in))
             .str("returns", &jv_ret)
             .raw("outputs", crate::json::arr(&jv_outs))
-            .raw("enums", self.enums_json(|t, a| format!("{}.{}", crate::codegen::java_class(t), a.to_uppercase())))
+            .raw("enums", self.enums_json("java", |t, a| format!("{}.{}", crate::codegen::java_class(t), a.to_uppercase())))
             .raw("errors", crate::json::strs(&["RuleInputError", "RuleContradictionError"]))
             .raw("error_types", api_error_types(("RuleInputError", what_value), ("RuleContradictionError", what)))
             .finish();
@@ -8091,7 +9001,7 @@ impl Gen<'_> {
             .str("output_type", &go_ret)
             .raw("output_fields", crate::json::arr(&go_outs))
             // A Go enum member is the type name followed by the alias (`CouponKindPercent`).
-            .raw("enums", self.enums_json(|t, a| format!("{t}{a}")))
+            .raw("enums", self.enums_json("go", |t, a| format!("{t}{a}")))
             // The error comes back as a pointer to one of two types, which `errors.As` tells
             // apart (§15.202). `HasValue` says whether `Value` holds the refused value.
             .raw("errors", crate::json::strs(&["*RuleInputError", "*RuleContradictionError"]))
@@ -8159,6 +9069,52 @@ impl Gen<'_> {
             .raw("connect", self.api_connect())
             .raw("sql", self.api_sql())
             .raw("wasm", self.api_wasm())
+            .finish()
+    }
+}
+
+impl Gen<'_> {
+    /// `rulec api` of an `enums` file (§15.212). There is no function in it: what each language
+    /// gets is one module of types, which `rulec gen` writes beside every rule that reads one of
+    /// them, and the enums in it as a rule's own `enums` lists them. NumPy, SQL, the Connect
+    /// service and Wasm take an enum as its name, so they get no module.
+    fn api_enums(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        let pkg = crate::backend::go_package(&alias);
+        let lang = |module: &str| crate::json::Obj::new().str("module", module);
+        crate::json::Obj::new()
+            .str("enums", &self.f.name.text)
+            .str("alias", &alias)
+            .str("version", &self.f.version)
+            .str("source_sha256", &self.src_hash)
+            .raw("python", lang(&alias).raw("enums", self.enums_json("python", |_, a| a.to_uppercase())).finish())
+            .raw("typescript", lang(&format!("{alias}.ts")).raw("enums", self.enums_json("typescript", |_, a| a.to_uppercase())).finish())
+            .raw("javascript", lang(&format!("{alias}.mjs")).raw("enums", self.enums_json("javascript", |_, a| a.to_uppercase())).finish())
+            .raw("rust", lang(&format!("{alias}.rs")).raw("enums", self.enums_json("rust", |_, a| pascal(a))).finish())
+            .raw(
+                "ruby",
+                lang(&self.rb_module())
+                    .str("file", &format!("{alias}.rb"))
+                    .str("rbs", &format!("sig/{alias}.rbs"))
+                    .raw("enums", self.enums_json("ruby", |_, a| a.to_uppercase()))
+                    .finish(),
+            )
+            .raw(
+                "php",
+                lang(&format!("{alias}.php"))
+                    .str("namespace", &self.php_ns())
+                    .raw("enums", self.enums_json("php", |t, a| format!("{}::{}", crate::codegen::php::php_name(t), crate::codegen::php::php_name(&a.to_uppercase()))))
+                    .finish(),
+            )
+            .raw("go", crate::json::Obj::new().str("package", &pkg).str("module", &format!("{pkg}/{alias}.go")).raw("enums", self.enums_json("go", |t, a| format!("{t}{a}"))).finish())
+            .raw("swift", lang(&format!("{alias}.swift")).raw("enums", self.enums_json("swift", |_, a| sw_name(a))).finish())
+            .raw(
+                "java",
+                lang(&format!("{}.java", self.java_class()))
+                    .str("class", &self.java_class())
+                    .raw("enums", self.enums_json("java", |t, a| format!("{}.{}", crate::codegen::java_class(t), a.to_uppercase())))
+                    .finish(),
+            )
             .finish()
     }
 }
@@ -8345,11 +9301,115 @@ impl<'a> Gen<'a> {
                     .join(" && ");
                 if optional { format!("!{var}.nil? && {c}") } else { c }
             }
+            // A comparison on an ordered enum, by the places in its order (§15.210).
+            Cell::Ranked { ops, .. } => {
+                let en = self.c.ordered_enum(ty)?;
+                let r = self.rb_rank_fn(en);
+                let c = ops
+                    .iter()
+                    .map(|(o, v)| format!("{r}({var}) {} {r}({})", o.word(), self.rb_value(v, ty)))
+                    .collect::<Vec<_>>()
+                    .join(" && ");
+                if optional { format!("!{var}.nil? && {c}") } else { c }
+            }
         })
     }
 }
 
+/// A Ruby string literal in single quotes, which interpolates nothing.
+fn rb_str(s: &str) -> String {
+    format!("'{}'", s.replace('\\', "\\\\").replace('\'', "\\'"))
+}
+
 impl<'a> Gen<'a> {
+    /// One enum as Ruby: a module of frozen constants, its members in the order declared, and
+    /// beside it the functions for its order and its display names when it has them
+    /// (§15.210, §15.211).
+    pub(crate) fn rb_enum(&self, jp: &str, ascii: &str) -> String {
+        let Some(vals) = self.c.enums.get(jp) else { return String::new() };
+        let mut o = format!("  module {}\n", rb_const(ascii));
+        let mut names: Vec<String> = Vec::new();
+        for v in vals {
+            let name = rb_const(&self.py_member(jp, v));
+            o.push_str(&format!("    {name} = {v:?}\n"));
+            names.push(name);
+        }
+        o.push_str(&format!("    ALL = [{}].freeze\n  end\n\n", names.join(", ")));
+        let cls = rb_const(ascii);
+        let chain = |o: &mut String, ret: &dyn Fn(usize, &String) -> String| {
+            o.push_str("    case x\n");
+            for (i, (v, n)) in vals.iter().zip(&names).enumerate() {
+                if i + 1 == vals.len() {
+                    o.push_str(&format!("    else {}\n", ret(i, v)));
+                } else {
+                    o.push_str(&format!("    when {cls}::{n} then {}\n", ret(i, v)));
+                }
+            }
+            o.push_str("    end\n  end\n\n");
+        };
+        if self.c.ordered.contains(jp) {
+            o.push_str(&format!(
+                "  # {}\n  def self.{}(x)\n",
+                tr!("x が {ascii} の順序の何番目か（0 から）。", "The place of x in the order of {ascii}, counting from 0."),
+                self.rb_rank_fn(jp)
+            ));
+            chain(&mut o, &|i, _| i.to_string());
+        }
+        if let Some(labels) = self.c.labels.get(jp) {
+            o.push_str(&format!(
+                "  # {}\n  def self.{}(x)\n",
+                tr!("x の表示名。表示名の無い値は値の名前。", "The display name of x: a value without one is shown by its name."),
+                self.rb_label_fn(jp)
+            ));
+            chain(&mut o, &|i, v| rb_str(&labels.get(i).cloned().flatten().unwrap_or_else(|| v.clone())));
+        }
+        o
+    }
+
+    /// `era_rank`, the place of a value of an ordered enum, as this module calls it: the
+    /// module of an `enums` file holds its own (§15.212).
+    fn rb_rank_fn(&self, en: &str) -> String {
+        self.rb_qualified(en, &format!("{}_rank", snake(&self.enum_type(en))))
+    }
+
+    /// `unit_name_label`, a value's display name.
+    fn rb_label_fn(&self, en: &str) -> String {
+        self.rb_qualified(en, &format!("{}_label", snake(&self.enum_type(en))))
+    }
+
+    fn rb_qualified(&self, en: &str, f: &str) -> String {
+        match self.c.owners.get(en) {
+            Some(o) => format!("{}.{f}", ruby_module(&pub_name(&o.module))),
+            None => f.to_string(),
+        }
+    }
+
+    /// The helpers the functions call for the expressions over an ordered enum (§15.210).
+    fn rb_enum_helpers(&self) -> String {
+        let mut o = String::new();
+        let mut private: Vec<String> = Vec::new();
+        for en in self.c.enum_order.iter().filter(|e| self.c.ordered.contains(*e)) {
+            let (rank, max, min) = self.enum_helpers(en);
+            let (t, r) = (self.enum_type(en), self.rb_rank_fn(en));
+            if rank {
+                o.push_str(&format!("  def self._rank_{t}(x)\n    {r}(x)\n  end\n\n"));
+                private.push(format!(":_rank_{t}"));
+            }
+            if max {
+                o.push_str(&format!("  def self._max_{t}(a, b)\n    {r}(a) >= {r}(b) ? a : b\n  end\n\n"));
+                private.push(format!(":_max_{t}"));
+            }
+            if min {
+                o.push_str(&format!("  def self._min_{t}(a, b)\n    {r}(a) <= {r}(b) ? a : b\n  end\n\n"));
+                private.push(format!(":_min_{t}"));
+            }
+        }
+        if !private.is_empty() {
+            o.push_str(&format!("  private_class_method {}\n\n", private.join(", ")));
+        }
+        o
+    }
+
     /// The module name: the rule's ASCII alias in PascalCase, like the Go package.
     fn rb_module(&self) -> String {
         rb_const(&pascal(&pub_name(&self.f.name)))
@@ -8370,30 +9430,26 @@ impl<'a> Gen<'a> {
     pub fn ruby(&self) -> String {
         let mut o = self.header("#");
         o.insert_str(0, "# frozen_string_literal: true\n");
+        // The module of each `enums` file the rule reads its types from, beside it (§15.212).
+        for (module, _) in self.foreign_enums() {
+            o.push_str(&format!("require_relative {:?}\n", module));
+        }
         o.push_str(&format!("module {} {}\n", self.rb_module(), "".trim()));
         // `module X` on its own line; the format above keeps it simple.
         o = o.replace(&format!("module {} \n", self.rb_module()), &format!("module {}\n", self.rb_module()));
 
         // Enums. A frozen constant per member, carrying the source name, which is also the
         // wire value (§10.2) — so the runner needs no conversion in either direction.
-        let mut emitted: Vec<String> = Vec::new();
-        for (jp, ascii) in &self.enum_names {
-            if emitted.contains(ascii) {
-                continue;
-            }
-            emitted.push(ascii.clone());
-            let Some(vals) = self.c.enums.get(jp) else { continue };
-            o.push_str(&format!("  module {}\n", rb_const(ascii)));
-            let mut names: Vec<String> = Vec::new();
-            for v in vals {
-                let name = rb_const(
-                    &self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone()),
-                );
-                o.push_str(&format!("    {name} = {v:?}\n"));
-                names.push(name);
-            }
-            o.push_str(&format!("    ALL = [{}].freeze\n  end\n\n", names.join(", ")));
+        for (jp, ascii) in self.own_enums() {
+            o.push_str(&self.rb_enum(&jp, &ascii));
         }
+        // An enum of an `enums` file is that module's, named here as well (§15.212).
+        for (module, types) in self.foreign_enums() {
+            for (_, ascii) in types {
+                o.push_str(&format!("  {} = {}::{}\n\n", rb_const(&ascii), ruby_module(&module), rb_const(&ascii)));
+            }
+        }
+        o.push_str(&self.rb_enum_helpers());
 
         // The machine this function is one step of (§15.148).
         if let Some((en, init, fins)) = self.machine_consts() {
@@ -8752,6 +9808,16 @@ impl<'a> Gen<'a> {
                         "    raise RuleInputError.new(\"{}\", {v}) unless {cls}::ALL.include?({v})\n",
                         crate::door::not_in_enum(&i.name.text, n)
                     ));
+                    // The values the range of an ordered enum lets in, first to last (§15.210).
+                    if let Some((lo, hi)) = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?))) {
+                        let r = self.rb_rank_fn(n);
+                        o.push_str(&format!(
+                            "    raise RuleInputError.new(\"{}\", {v}) unless ({r}({})..{r}({})).cover?({r}({v}))\n",
+                            crate::door::out_of_range(&i.name.text),
+                            self.rb_value(lo, &ty),
+                            self.rb_value(hi, &ty)
+                        ));
+                    }
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     // `cover?` is true of a Float inside the range, so the kind is checked
@@ -8969,6 +10035,7 @@ impl<'a> Gen<'a> {
              require \"json\"\n\
              require_relative \"{alias}\"\n\n\
              {}\
+             {}\
              {head}\
              STDIN.each_line do |line|\n  \
                line = line.strip\n  \
@@ -8989,7 +10056,29 @@ impl<'a> Gen<'a> {
              end\n",
             ritsu_emit::header::VERSION,
             RB_WIRE.replace("@M@", &m),
+            self.rb_labels_mode(),
             args.join(", ")
+        )
+    }
+
+    /// What the Ruby runner answers with `--labels` (§15.211): for each line, an enum's name and
+    /// a value's, the display name the module gives.
+    fn rb_labels_mode(&self) -> String {
+        let enums = self.labeled_enums();
+        if enums.is_empty() {
+            return String::new();
+        }
+        let m = self.rb_module();
+        let mut arms = String::new();
+        for (en, _, owner) in &enums {
+            let f = match owner {
+                Some(_) => self.rb_label_fn(en),
+                None => format!("{m}.{}", self.rb_label_fn(en)),
+            };
+            arms.push_str(&format!("    when {} then puts {f}(v)\n", rb_str(en)));
+        }
+        format!(
+            "if ARGV.include?(\"--labels\")\n  STDIN.each_line do |line|\n    en, v = line.chomp.split(\"\\t\", 2)\n    case en\n{arms}    end\n  end\n  exit 0\nend\n\n"
         )
     }
 }
@@ -9152,31 +10241,63 @@ impl<'a> Gen<'a> {
     /// refuses a caller that passes the wrong kind, the wrong count, or a string that is
     /// not one of an enum's values. It cannot refuse grams where yen were meant — RBS has
     /// no newtype, and a type alias is the same type (§15.23).
+    /// One enum in the signature: the union of its values, its module of constants, and the
+    /// functions for its order and its display names when it has them (§15.210, §15.211).
+    pub(crate) fn rbs_enum(&self, jp: &str, ascii: &str) -> String {
+        let Some(vals) = self.c.enums.get(jp) else { return String::new() };
+        let lits: Vec<String> = vals.iter().map(|v| format!("{v:?}")).collect();
+        let mut o = format!("  type {} = {}\n\n", snake(ascii), lits.join(" | "));
+        o.push_str(&format!("  module {}\n", rb_const(ascii)));
+        for v in vals {
+            o.push_str(&format!("    {}: {v:?}\n", rb_const(&self.py_member(jp, v))));
+        }
+        o.push_str(&format!("    ALL: Array[{}]\n  end\n\n", snake(ascii)));
+        if self.c.ordered.contains(jp) {
+            o.push_str(&format!("  def self.{}: ({}) -> Integer\n", self.rb_rank_fn(jp), snake(ascii)));
+        }
+        if self.c.labels.contains_key(jp) {
+            o.push_str(&format!("  def self.{}: ({}) -> String\n", self.rb_label_fn(jp), snake(ascii)));
+        }
+        if self.c.ordered.contains(jp) || self.c.labels.contains_key(jp) {
+            o.push('\n');
+        }
+        o
+    }
+
     pub fn rbs(&self) -> String {
         let m = self.rb_module();
         let mut o = self.header("#");
         o.push_str(&format!("\nmodule {m}\n"));
 
         // Enums, as a union of the values themselves.
-        let mut emitted: Vec<String> = Vec::new();
-        for (jp, ascii) in &self.enum_names {
-            if emitted.contains(ascii) {
-                continue;
+        for (jp, ascii) in self.own_enums() {
+            o.push_str(&self.rbs_enum(&jp, &ascii));
+        }
+        // An enum of an `enums` file is that module's: its type and its module by another name
+        // (§15.212).
+        for (module, types) in self.foreign_enums() {
+            let owner = ruby_module(&module);
+            for (_, ascii) in types {
+                o.push_str(&format!("  type {} = {owner}::{}\n", snake(&ascii), snake(&ascii)));
+                o.push_str(&format!("  module {} = {owner}::{}\n\n", rb_const(&ascii), rb_const(&ascii)));
             }
-            emitted.push(ascii.clone());
-            let Some(vals) = self.c.enums.get(jp) else { continue };
-            let lits: Vec<String> = vals.iter().map(|v| format!("{v:?}")).collect();
-            o.push_str(&format!("  type {} = {}\n\n", snake(ascii), lits.join(" | ")));
-            o.push_str(&format!("  module {}\n", rb_const(ascii)));
-            let mut names: Vec<String> = Vec::new();
-            for v in vals {
-                let name = rb_const(
-                    &self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone()),
-                );
-                o.push_str(&format!("    {name}: {v:?}\n"));
-                names.push(name);
+        }
+        for en in self.c.enum_order.iter().filter(|e| self.c.ordered.contains(*e)) {
+            let (rank, max, min) = self.enum_helpers(en);
+            let t = self.enum_type(en);
+            let ty = snake(&t);
+            if rank {
+                o.push_str(&format!("  private def self._rank_{t}: ({ty}) -> Integer\n"));
             }
-            o.push_str(&format!("    ALL: Array[{}]\n  end\n\n", snake(ascii)));
+            if max {
+                o.push_str(&format!("  private def self._max_{t}: ({ty}, {ty}) -> {ty}\n"));
+            }
+            if min {
+                o.push_str(&format!("  private def self._min_{t}: ({ty}, {ty}) -> {ty}\n"));
+            }
+            if rank || max || min {
+                o.push('\n');
+            }
         }
 
         if let Some((en, _, _)) = self.machine_consts() {
@@ -9572,6 +10693,60 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// One enum as Swift: its cases in the order declared, and the order and the display names
+    /// as computed properties when it has them (§15.210, §15.211).
+    pub(crate) fn sw_enum(&self, jp: &str, ascii: &str) -> String {
+        let Some(vals) = self.c.enums.get(jp) else { return String::new() };
+        let mut o = format!("public enum {ascii}: String, CaseIterable, Sendable {{\n");
+        let names: Vec<String> = vals
+            .iter()
+            .map(|v| self.value_names.get(&(jp.to_string(), v.clone())).map(|(_, a)| sw_name(a)).unwrap_or_else(|| sw_name(v)))
+            .collect();
+        for (v, n) in vals.iter().zip(&names) {
+            o.push_str(&format!("    case {n} = {v:?}\n"));
+        }
+        let property = |o: &mut String, doc: String, name: &str, ty: &str, ret: &dyn Fn(usize, &String) -> String| {
+            o.push_str(&format!("\n    /// {doc}\n    public var {name}: {ty} {{\n        switch self {{\n"));
+            for (i, (v, n)) in vals.iter().zip(&names).enumerate() {
+                o.push_str(&format!("        case .{n}: return {}\n", ret(i, v)));
+            }
+            o.push_str("        }\n    }\n");
+        };
+        if self.c.ordered.contains(jp) {
+            property(&mut o, tr!("宣言の順序の何番目か（0 から）。", "The place in the order declared, counting from 0."), "rank", "Int", &|i, _| i.to_string());
+        }
+        if let Some(labels) = self.c.labels.get(jp) {
+            property(
+                &mut o,
+                tr!("表示名。表示名の無い値は値の名前。", "The display name: a value without one is shown by its name."),
+                "label",
+                "String",
+                &|i, v| str_lit(&labels.get(i).cloned().flatten().unwrap_or_else(|| v.clone())),
+            );
+        }
+        o.push_str("}\n\n");
+        o
+    }
+
+    /// The helpers the functions call for the expressions over an ordered enum (§15.210).
+    fn sw_enum_helpers(&self) -> String {
+        let mut o = String::new();
+        for en in self.c.enum_order.iter().filter(|e| self.c.ordered.contains(*e)) {
+            let (rank, max, min) = self.enum_helpers(en);
+            let t = self.enum_type(en);
+            if rank {
+                o.push_str(&format!("private func _rank_{t}(_ x: {t}) -> Int {{\n    x.rank\n}}\n\n"));
+            }
+            if max {
+                o.push_str(&format!("private func _max_{t}(_ a: {t}, _ b: {t}) -> {t} {{\n    a.rank >= b.rank ? a : b\n}}\n\n"));
+            }
+            if min {
+                o.push_str(&format!("private func _min_{t}(_ a: {t}, _ b: {t}) -> {t} {{\n    a.rank <= b.rank ? a : b\n}}\n\n"));
+            }
+        }
+        o
+    }
+
     /// Render a cell as a Swift condition. A don't-care yields None (no condition).
     fn sw_cell(&self, cell: &Cell, var: &str, ty: &Ty, col_scale: i128) -> Option<String> {
         let inner = match ty {
@@ -9648,6 +10823,16 @@ impl<'a> Gen<'a> {
                     .join(" && ");
                 if optional { format!("({var}.map {{ {c} }} ?? false)") } else { c }
             }
+            // A comparison on an ordered enum, by the places in its order (§15.210).
+            Cell::Ranked { ops, .. } => {
+                let on = if optional { "$0" } else { var };
+                let c = ops
+                    .iter()
+                    .map(|(o, v)| format!("{on}.rank {} {}.rank", o.word(), self.sw_value(v, ty)))
+                    .collect::<Vec<_>>()
+                    .join(" && ");
+                if optional { format!("({var}.map {{ {c} }} ?? false)") } else { c }
+            }
         })
     }
 
@@ -9684,25 +10869,12 @@ impl<'a> Gen<'a> {
 
         // Enums. The raw value is the source name, which is also what the wire carries
         // (§10.2), so `rawValue` and `init(rawValue:)` are the whole conversion and no
-        // hand-written parser is needed on either side.
-        let mut emitted: Vec<String> = Vec::new();
-        for (jp, ascii) in &self.enum_names {
-            if emitted.contains(ascii) {
-                continue;
-            }
-            emitted.push(ascii.clone());
-            let Some(vals) = self.c.enums.get(jp) else { continue };
-            o.push_str(&format!("public enum {ascii}: String, CaseIterable, Sendable {{\n"));
-            for v in vals {
-                let name = self
-                    .value_names
-                    .get(&(jp.clone(), v.clone()))
-                    .map(|(_, a)| sw_name(a))
-                    .unwrap_or_else(|| sw_name(v));
-                o.push_str(&format!("    case {name} = {v:?}\n"));
-            }
-            o.push_str("}\n\n");
+        // hand-written parser is needed on either side. An enum of an `enums` file is that
+        // file's, compiled into the same module (§15.212).
+        for (jp, ascii) in self.own_enums() {
+            o.push_str(&self.sw_enum(&jp, &ascii));
         }
+        o.push_str(&self.sw_enum_helpers());
 
         // The machine this function is one step of (§15.148). `final` is a keyword here.
         if let Some((en, init, fins)) = self.machine_consts() {
@@ -10108,6 +11280,23 @@ impl<'a> Gen<'a> {
             // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
             let optional = matches!(ty, Ty::Opt(_));
             let ty = ty.present().clone();
+            // An ordered enum held to the values its range lets in, first to last (§15.210).
+            if let Some((lo, hi)) = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?))) {
+                let v = local(&i.name.text);
+                let (v, wrap) = if optional {
+                    ("__v".to_string(), Some((format!("    if let __v = {v} {{\n"), "    }\n".to_string())))
+                } else {
+                    (v, None)
+                };
+                let mut o = Guarded::new(&mut o, wrap, "    ");
+                o.push_str(&format!(
+                    "    if {v}.rank < {}.rank || {v}.rank > {}.rank {{\n        throw RuleError.input(what: \"{}\", value: nil)\n    }}\n",
+                    self.sw_value(lo, &ty),
+                    self.sw_value(hi, &ty),
+                    crate::door::out_of_range(&i.name.text)
+                ));
+                continue;
+            }
             if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 continue;
             }
@@ -10386,7 +11575,7 @@ import Foundation
 @main
 enum Runner {{
     static func main() throws {{
-{head}        while let {line} = readLine(strippingNewline: true) {{
+{labels}{head}        while let {line} = readLine(strippingNewline: true) {{
             if {line}.trimmingCharacters(in: .whitespaces).isEmpty {{
                 continue
             }}
@@ -10409,6 +11598,23 @@ enum Runner {{
             ver = ritsu_emit::header::VERSION,
             binds = binds.join(""),
             wire = SWIFT_WIRE,
+            labels = self.sw_labels_mode(),
+        )
+    }
+
+    /// What the Swift runner answers with `--labels` (§15.211): for each line, an enum's name and
+    /// a value's, the display name the module gives.
+    fn sw_labels_mode(&self) -> String {
+        let enums = self.labeled_enums();
+        if enums.is_empty() {
+            return String::new();
+        }
+        let arms: String = enums
+            .iter()
+            .map(|(en, ty, _)| format!("                case {}: print({ty}(rawValue: v)?.label ?? \"?\")\n", str_lit(en)))
+            .collect();
+        format!(
+            "        if CommandLine.arguments.contains(\"--labels\") {{\n            while let l = readLine(strippingNewline: true) {{\n                let parts = l.split(separator: \"\\t\", maxSplits: 1).map(String.init)\n                guard parts.count == 2 else {{ continue }}\n                let v = parts[1]\n                switch parts[0] {{\n{arms}                default: print(\"?\")\n                }}\n            }}\n            return\n        }}\n"
         )
     }
 
@@ -11158,7 +12364,8 @@ fn strip_casts(l: &str) -> String {
 impl<'a> Gen<'a> {
     /// The JavaScript module: the TypeScript one without its types (§15.36).
     pub fn javascript(&self) -> String {
-        strip_types(&self.typescript())
+        // An `enums` file's module is imported as the `.mjs` beside this one (§15.212).
+        strip_types(&self.typescript()).replace(".ts\";", ".mjs\";")
     }
 
     /// The runner, likewise. The import points at the `.mjs` beside it.
@@ -11853,12 +13060,22 @@ pub const PACKAGE_TARGETS: [&str; 3] = ["typescript", "python", "go"];
 /// as `shown` (its path from the project's root). The rule is read from `src`, which was read from
 /// `path`; nothing is made from a rule that does not pass check, and the error says so.
 pub fn package_module(src: &str, path: &str, shown: &str, target: &str) -> Result<(String, String), String> {
+    package_module_in(src, path, shown, target, "")
+}
+
+/// [`package_module`], for a package whose Go import path is `go_module`: a rule's module reads
+/// the types of an `enums` file from that file's module beside it in the package's `rules/`, and
+/// an `enums` file is that module (§15.212).
+pub fn package_module_in(src: &str, path: &str, shown: &str, target: &str, go_module: &str) -> Result<(String, String), String> {
     let rep = crate::report(src, path);
     if crate::has_error(&rep.diags) {
         return Err(tr!("`{path}` は検査を通っていないので生成しません", "`{path}` does not pass check, so nothing is generated"));
     }
     let (f, c) = crate::prepare(src, path).map_err(|_| tr!("`{path}` は検査を通っていないので生成しません", "`{path}` does not pass check, so nothing is generated"))?;
-    let g = Gen::new(&f, &c, src, path).shown(shown);
+    let g = Gen::new(&f, &c, src, path).shown(shown).in_package(go_module);
+    if f.kind == FileKind::Enums {
+        return g.enums_module_for(target).ok_or_else(|| format!("a package is written in {}, not in {target}", PACKAGE_TARGETS.join(", ")));
+    }
     let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
     Ok(match target {
         "typescript" => (format!("{alias}.ts"), g.typescript()),
@@ -11868,6 +13085,143 @@ pub fn package_module(src: &str, path: &str, shown: &str, target: &str) -> Resul
     })
 }
 
+impl<'a> Gen<'a> {
+    /// What an `enums` file is generated as (§15.212): in each language that names a type
+    /// across files, one module of the types and nothing else — the enums, the order of the
+    /// ordered ones, the display names. The modules of the rules that read from it import the
+    /// types from it. Not SQL, which holds a value as its name; not NumPy, whose plan carries
+    /// the values; not Wasm, whose crate is one rule's alone and writes the types into itself.
+    pub fn enums_module_files(&self) -> Vec<(String, String)> {
+        let alias = pub_name(&self.f.name);
+        let pkg = crate::backend::go_package(&alias);
+        vec![
+            (format!("python/{alias}.py"), self.py_enums_module()),
+            (format!("typescript/{alias}.ts"), self.ts_enums_module()),
+            (format!("javascript/{alias}.mjs"), strip_types(&self.ts_enums_module())),
+            (format!("rust/{alias}.rs"), self.rs_enums_module()),
+            (format!("ruby/{alias}.rb"), self.rb_enums_module()),
+            (format!("ruby/sig/{alias}.rbs"), self.rbs_enums_module()),
+            (format!("php/{alias}.php"), self.php_enums_module()),
+            (format!("go/{pkg}/{alias}.go"), self.go_enums_module()),
+            (format!("go/{pkg}/go.mod"), format!("module {pkg}\n\ngo {}\n", crate::backend::GO_MIN)),
+            (format!("swift/{alias}.swift"), self.sw_enums_module()),
+            (format!("java/{}.java", crate::codegen::java_class(&alias)), self.java_enums_module()),
+        ]
+    }
+
+    /// The module of an `enums` file for one language of a package of ritsu's (ritsu's DESIGN
+    /// 9.3): Python, TypeScript or Go.
+    pub fn enums_module_for(&self, target: &str) -> Option<(String, String)> {
+        let alias = pub_name(&self.f.name);
+        Some(match target {
+            "python" => (format!("{alias}.py"), self.py_enums_module()),
+            "typescript" => (format!("{alias}.ts"), self.ts_enums_module()),
+            "go" => (format!("{}/{alias}.go", crate::backend::go_package(&alias)), self.go_enums_module()),
+            _ => return None,
+        })
+    }
+
+    fn py_enums_module(&self) -> String {
+        let mut o = self.header("#");
+        o.push_str("\nfrom __future__ import annotations\n\nimport enum\n\n\n");
+        o.push_str(&self.py_enums());
+        pep8_blanks(&o)
+    }
+
+    fn ts_enums_module(&self) -> String {
+        let mut o = self.header("//");
+        o.push('\n');
+        o.push_str(&self.ts_enums());
+        o
+    }
+
+    fn rs_enums_module(&self) -> String {
+        let mut o = self.header("//");
+        o.push_str("\n#![allow(non_snake_case, uncommon_codepoints, dead_code)]\n\n");
+        for (jp, ascii) in self.own_enums() {
+            o.push_str(&self.rs_enum(&jp, &ascii));
+        }
+        o
+    }
+
+    fn go_enums_module(&self) -> String {
+        let alias = pub_name(&self.f.name);
+        let mut o = self.header("//");
+        o.push_str(&format!("\npackage {}\n\n", crate::backend::go_package(&alias)));
+        for (jp, ascii) in self.own_enums() {
+            o.push_str(&self.go_enum(&jp, &ascii));
+        }
+        align(o.trim_end_matches('\n')) + "\n"
+    }
+
+    fn rb_enums_module(&self) -> String {
+        let mut o = self.header("#");
+        o.insert_str(0, "# frozen_string_literal: true\n");
+        o.push_str(&format!("module {}\n", self.rb_module()));
+        for (jp, ascii) in self.own_enums() {
+            o.push_str(&self.rb_enum(&jp, &ascii));
+        }
+        let o = o.trim_end_matches('\n').to_string();
+        format!("{o}\nend\n")
+    }
+
+    fn rbs_enums_module(&self) -> String {
+        let mut o = self.header("#");
+        o.push_str(&format!("\nmodule {}\n", self.rb_module()));
+        for (jp, ascii) in self.own_enums() {
+            o.push_str(&self.rbs_enum(&jp, &ascii));
+        }
+        let o = o.trim_end_matches('\n').to_string();
+        format!("{o}\nend\n")
+    }
+
+    fn php_enums_module(&self) -> String {
+        let mut o = String::from("<?php\n\n");
+        o.push_str(&self.header("//"));
+        o.push_str("\ndeclare(strict_types=1);\n\n");
+        o.push_str(&format!("namespace {};\n\n", self.php_ns()));
+        for (jp, ascii) in self.own_enums() {
+            o.push_str(&self.php_enum(&jp, &ascii));
+        }
+        o.trim_end_matches('\n').to_string() + "\n"
+    }
+
+    fn sw_enums_module(&self) -> String {
+        let mut o = self.header("//");
+        o.push('\n');
+        for (jp, ascii) in self.own_enums() {
+            o.push_str(&self.sw_enum(&jp, &ascii));
+        }
+        o.trim_end_matches('\n').to_string() + "\n"
+    }
+
+    fn java_enums_module(&self) -> String {
+        let cls = self.java_class();
+        let mut o = ritsu_emit::header::for_unicode_comment(&self.header("//"));
+        o.push_str(&format!(
+            "\n/** {} */\npublic final class {cls} {{\n    private {cls}() {{\n    }}\n\n",
+            tr!("enums {} v{} の列挙", "The enums of enums {} v{}", self.f.name.text, self.f.version)
+        ));
+        for (jp, ascii) in self.own_enums() {
+            o.push_str(&self.java_enum_decl(&jp, &ascii));
+        }
+        o.trim_end_matches('\n').to_string() + "\n}\n"
+    }
+}
+
+/// The modules of the `enums` files a rule reads its types from (§15.212), as `rulec gen` writes
+/// them beside the rule's own: each file read and checked again, its modules in every language.
+/// `Err` says which file did not read.
+fn owner_modules(f: &RuleFile) -> Result<Vec<(String, Vec<(String, String)>)>, String> {
+    let mut out = Vec::new();
+    for p in crate::enums::owner_paths(f) {
+        let ef = crate::enums::read_enums_file(&p).map_err(|_| tr!("`{p}` が check を通りません", "`{p}` does not pass check"))?;
+        let g = Gen::new(&ef.file, &ef.checked, &ef.src, &ef.path);
+        out.push((p.clone(), g.enums_module_files()));
+    }
+    Ok(out)
+}
+
 pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out: &mut dyn std::io::Write, err: &mut dyn std::io::Write) -> u8 {
     let mut st = Emitted::default();
     // The contracts copied into the module so far, and the rule each came with: two rules
@@ -11875,6 +13229,32 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
     let mut contracts: std::collections::BTreeMap<String, (String, String)> = std::collections::BTreeMap::new();
     // What the module needs from the BSR, over every rule of the run (§15.161).
     let mut module_deps = crate::codegen::BufDeps::default();
+    // The modules of the `enums` files written so far, and the file each came from: two rules
+    // may read the same one, but two files may not make the same module (§15.212).
+    let mut enum_modules: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    // One file reached by two spellings of its path (`rules/x/../shared/catalog.rule`) is one file.
+    let same_file = |a: &str, b: &str| a == b || matches!((std::fs::canonicalize(a), std::fs::canonicalize(b)), (Ok(x), Ok(y)) if x == y);
+    let mut put_modules = |from: &str, files: Vec<(String, String)>, err: &mut dyn std::io::Write| -> Option<Vec<(String, String)>> {
+        let mut fresh = Vec::new();
+        for (rel, body) in files {
+            let p = format!("{out_dir}/{rel}");
+            match enum_modules.get(&p) {
+                Some(prev) if !same_file(prev, from) => {
+                    let _ = writeln!(err, "{}", tr!(
+                        "error: `{prev}` と `{from}` が、同じ `{rel}` を作ります。どちらかの名前を変えてください",
+                        "error: `{prev}` and `{from}` both make `{rel}`; rename one of them"
+                    ));
+                    return None;
+                }
+                Some(_) => {}
+                None => {
+                    enum_modules.insert(p.clone(), from.to_string());
+                    fresh.push((p, body));
+                }
+            }
+        }
+        Some(fresh)
+    };
     for path in files {
         let Ok(src) = ritsu_base::fs::read_to_string(path) else {
             let _ = writeln!(err, "{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
@@ -11900,9 +13280,34 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
                 return 1;
             }
         };
+        // A file of enums is its modules and nothing else: no function, so no vectors either
+        // (§15.212).
+        if f.kind == FileKind::Enums {
+            let g = crate::codegen::Gen::new(&f, &c, &src, path);
+            let Some(targets) = put_modules(path, g.enums_module_files(), err) else { return 1 };
+            if let Some(code) = emit(targets, check_only, json, &mut st, out, err) {
+                return code;
+            }
+            continue;
+        }
         let g = crate::codegen::Gen::new(&f, &c, &src, path);
         let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
         let pkg = crate::backend::go_package(&alias);
+        // The modules of the `enums` files it reads its types from, beside its own, whether or
+        // not those files were named on the command line (§15.212).
+        let owners = match owner_modules(&f) {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = writeln!(err, "error: {e}");
+                return 1;
+            }
+        };
+        for (from, files) in owners {
+            let Some(targets) = put_modules(&from, files, err) else { return 1 };
+            if let Some(code) = emit(targets, check_only, json, &mut st, out, err) {
+                return code;
+            }
+        }
         // Also emit the vectors and the expected values. Of the three uses in §9.3, the
         // cross-language agreement test and the golden files run on these.
         let suite = crate::vectors::suite(&f, &c);
@@ -11986,6 +13391,17 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
         }
         targets.push((format!("{out_dir}/vectors/{alias}.jsonl"), vec_body));
         targets.push((format!("{out_dir}/vectors/{alias}.expected.jsonl"), exp_body));
+        // The modules of the `enums` files the rule reads, for a language that builds them
+        // together with it (§15.212): `rulec test` reads this beside the vectors.
+        let owners: Vec<String> = g.foreign_enums().into_iter().map(|(m, _)| m).collect();
+        if !owners.is_empty() {
+            targets.push((format!("{out_dir}/vectors/{alias}.owners.json"), crate::json::strs(&owners) + "\n"));
+        }
+        // The display names every language has to give back, value by value (§15.211).
+        if let Some((input, expected)) = g.labels_input() {
+            targets.push((format!("{out_dir}/vectors/{alias}.labels.tsv"), input));
+            targets.push((format!("{out_dir}/vectors/{alias}.labels.expected"), expected));
+        }
         // The cases the reference evaluator refuses: the walks it has no answer for, and an
         // input for every reason the door has (§15.204). They have no expected record —
         // refusing is the expectation — so they get a file of their own, and `rulec test` holds

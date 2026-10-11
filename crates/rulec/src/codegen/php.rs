@@ -273,6 +273,94 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// One enum as PHP: a backed enum, its cases in the order declared, and beside it the
+    /// functions for its order and its display names when it has them (§15.210, §15.211).
+    pub(super) fn php_enum(&self, jp: &str, ascii: &str) -> String {
+        let Some(vals) = self.c.enums.get(jp) else { return String::new() };
+        let cls = php_name(ascii);
+        let mut o = format!("/** {jp} */\nenum {cls}: string\n{{\n");
+        let names: Vec<String> = vals.iter().map(|v| php_name(&self.py_member(jp, v))).collect();
+        for (v, n) in vals.iter().zip(&names) {
+            o.push_str(&format!("    case {n} = {};\n", php_str(v)));
+        }
+        o.push_str("}\n\n");
+        let chain = |o: &mut String, ret: &dyn Fn(usize, &String) -> String| {
+            o.push_str("    return match ($x) {\n");
+            for (i, (v, n)) in vals.iter().zip(&names).enumerate() {
+                o.push_str(&format!("        {cls}::{n} => {},\n", ret(i, v)));
+            }
+            o.push_str("    };\n}\n\n");
+        };
+        if self.c.ordered.contains(jp) {
+            o.push_str(&format!(
+                "/** {} */\nfunction {}({cls} $x): int\n{{\n",
+                tr!("x が {ascii} の順序の何番目か（0 から）。", "The place of x in the order of {ascii}, counting from 0."),
+                self.php_own_fn(jp, "rank")
+            ));
+            chain(&mut o, &|i, _| i.to_string());
+        }
+        if let Some(labels) = self.c.labels.get(jp) {
+            o.push_str(&format!(
+                "/** {} */\nfunction {}({cls} $x): string\n{{\n",
+                tr!("x の表示名。表示名の無い値は値の名前。", "The display name of x: a value without one is shown by its name."),
+                self.php_own_fn(jp, "label")
+            ));
+            chain(&mut o, &|i, v| php_str(&labels.get(i).cloned().flatten().unwrap_or_else(|| v.clone())));
+        }
+        o
+    }
+
+    /// `era_rank` or `unit_name_label`, as the file that declares the enum names it.
+    fn php_own_fn(&self, en: &str, what: &str) -> String {
+        format!("{}_{what}", super::snake(&self.enum_type(en)))
+    }
+
+    /// The same function as this rule calls it: the one of an `enums` file by its namespace
+    /// (§15.212).
+    fn php_fn_of(&self, en: &str, what: &str) -> String {
+        let f = self.php_own_fn(en, what);
+        match self.c.owners.get(en) {
+            Some(o) => format!("\\{}\\{f}", php_name(&pascal(&pub_name(&o.module)))),
+            None => f,
+        }
+    }
+
+    /// The same function as code outside any namespace names it, for `rulec api`.
+    pub(super) fn php_fn_of_pub(&self, en: &str, what: &str) -> String {
+        let f = self.php_fn_of(en, what);
+        if f.starts_with('\\') { f } else { format!("\\{}\\{f}", self.php_ns()) }
+    }
+
+    /// The fully qualified name of an enum's type, for the runner and the projection, which
+    /// name it from outside the rule's namespace (§15.212).
+    pub(super) fn php_enum_fqn(&self, en: &str) -> String {
+        let cls = php_name(&self.enum_names.get(en).cloned().unwrap_or_default());
+        match self.c.owners.get(en) {
+            Some(o) => format!("\\{}\\{cls}", php_name(&pascal(&pub_name(&o.module)))),
+            None => format!("\\{}\\{cls}", self.php_ns()),
+        }
+    }
+
+    /// The helpers the functions call for the expressions over an ordered enum (§15.210).
+    fn php_enum_helpers(&self) -> String {
+        let mut o = String::new();
+        for en in self.c.enum_order.iter().filter(|e| self.c.ordered.contains(*e)) {
+            let (rank, max, min) = self.enum_helpers(en);
+            let (t, r) = (self.enum_type(en), self.php_fn_of(en, "rank"));
+            let cls = php_name(&t);
+            if rank {
+                o.push_str(&format!("function _rank_{t}({cls} $x): int\n{{\n    return {r}($x);\n}}\n\n"));
+            }
+            if max {
+                o.push_str(&format!("function _max_{t}({cls} $a, {cls} $b): {cls}\n{{\n    return {r}($a) >= {r}($b) ? $a : $b;\n}}\n\n"));
+            }
+            if min {
+                o.push_str(&format!("function _min_{t}({cls} $a, {cls} $b): {cls}\n{{\n    return {r}($a) <= {r}($b) ? $a : $b;\n}}\n\n"));
+            }
+        }
+        o
+    }
+
     /// The constant that holds a group's members.
     fn php_group(&self, name: &str) -> String {
         format!("GROUP_{}", php_name(&self.ident(name)))
@@ -350,6 +438,17 @@ impl<'a> Gen<'a> {
                     .join(" && ");
                 if optional { format!("{var} !== null && {c}") } else { c }
             }
+            // A comparison on an ordered enum, by the places in its order (§15.210).
+            Cell::Ranked { ops, .. } => {
+                let en = self.c.ordered_enum(ty)?;
+                let r = self.php_fn_of(en, "rank");
+                let c = ops
+                    .iter()
+                    .map(|(o, v)| format!("{r}({var}) {} {r}({})", o.word(), self.php_value(v, ty)))
+                    .collect::<Vec<_>>()
+                    .join(" && ");
+                if optional { format!("{var} !== null && {c}") } else { c }
+            }
         })
     }
 
@@ -360,24 +459,25 @@ impl<'a> Gen<'a> {
         o.push_str("\ndeclare(strict_types=1);\n\n");
         o.push_str(&format!("namespace {};\n\n", self.php_ns()));
 
+        // The file of each `enums` file the rule reads its types from, beside it, and the
+        // types by their names here (§15.212).
+        let foreign = self.foreign_enums();
+        for (module, types) in &foreign {
+            o.push_str(&format!("require_once __DIR__ . {};\n", php_str(&format!("/{module}.php"))));
+            for (_, ascii) in types {
+                o.push_str(&format!("use {}\\{};\n", php_name(&pascal(module)), php_name(ascii)));
+            }
+        }
+        if !foreign.is_empty() {
+            o.push('\n');
+        }
+
         // Enums. A backed enum carries the source name, which is also the wire value
         // (§10.2), so the runner converts in one call and never keeps a table of its own.
-        let mut emitted: Vec<String> = Vec::new();
-        for (jp, ascii) in &self.enum_names {
-            if emitted.contains(ascii) {
-                continue;
-            }
-            emitted.push(ascii.clone());
-            let Some(vals) = self.c.enums.get(jp) else { continue };
-            o.push_str(&format!("/** {jp} */\nenum {}: string\n{{\n", php_name(ascii)));
-            for v in vals {
-                let name = php_name(
-                    &self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone()),
-                );
-                o.push_str(&format!("    case {name} = {};\n", php_str(v)));
-            }
-            o.push_str("}\n\n");
+        for (jp, ascii) in self.own_enums() {
+            o.push_str(&self.php_enum(&jp, &ascii));
         }
+        o.push_str(&self.php_enum_helpers());
 
         // The machine this function is one step of (§15.148).
         if let Some((en, init, fins)) = self.machine_consts() {
@@ -766,6 +866,16 @@ impl<'a> Gen<'a> {
             let optional = matches!(ty, Ty::Opt(_));
             let ty = ty.present().clone();
             let mut o = super::Guarded::new(&mut o, optional.then(|| (format!("    if ({v} !== null) {{\n"), "    }\n".to_string())), "    ");
+            // The values the range of an ordered enum lets in, first to last (§15.210).
+            if let (Ty::Enum(n), Some((lo, hi))) = (&ty, self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?)))) {
+                let r = self.php_fn_of(n, "rank");
+                o.push_str(&format!(
+                    "    if ({r}({v}) < {r}({}) || {r}({v}) > {r}({})) {{\n        throw new RuleInputError({});\n    }}\n",
+                    self.php_value(lo, &ty),
+                    self.php_value(hi, &ty),
+                    php_str(&crate::door::out_of_range(&i.name.text)),
+                ));
+            }
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                     let sc = self.c.wire_scale(&i.name.text);
@@ -1054,8 +1164,8 @@ impl<'a> Gen<'a> {
             let one = |v: &str| -> String {
                 match ty.present() {
                     Ty::Enum(n) => format!(
-                        "_enum(\\{ns}\\{}::class, {v}, {})",
-                        php_name(&self.enum_names.get(n).cloned().unwrap_or_default()),
+                        "_enum({}::class, {v}, {})",
+                        self.php_enum_fqn(n),
                         php_str(&crate::door::not_in_enum(name, n))
                     ),
                     Ty::Bool => format!("_bool({v}, {})", php_str(&crate::door::not_bool(name))),
@@ -1120,6 +1230,7 @@ impl<'a> Gen<'a> {
              ini_set('display_errors', 'stderr');\n\n\
              require_once __DIR__ . '/{alias}.php';\n\n\
              {}\
+             {}\
              {head}\
              while (({line} = fgets(STDIN)) !== false) {{\n    \
              {line} = trim({line});\n    \
@@ -1143,7 +1254,26 @@ impl<'a> Gen<'a> {
              }}\n",
             ritsu_emit::header::VERSION,
             PHP_WIRE.replace("@NS@", &ns),
+            self.php_labels_mode(),
             args.join(", "),
+        )
+    }
+
+    /// What the PHP runner answers with `--labels` (§15.211): for each line, an enum's name and
+    /// a value's, the display name the file gives.
+    fn php_labels_mode(&self) -> String {
+        let enums = self.labeled_enums();
+        if enums.is_empty() {
+            return String::new();
+        }
+        let mut arms = String::new();
+        for (en, _, _) in &enums {
+            let f = self.php_fn_of(en, "label");
+            let f = if f.starts_with('\\') { f } else { format!("\\{}\\{f}", self.php_ns()) };
+            arms.push_str(&format!("            {} => {f}({}::from($v)),\n", php_str(en), self.php_enum_fqn(en)));
+        }
+        format!(
+            "if (in_array('--labels', $argv, true)) {{\n    while (($l = fgets(STDIN)) !== false) {{\n        [$en, $v] = explode(\"\\t\", rtrim($l, \"\\n\"), 2);\n        echo match ($en) {{\n{arms}            default => '?',\n        }}, \"\\n\";\n    }}\n    exit(0);\n}}\n\n"
         )
     }
 
@@ -1192,7 +1322,8 @@ impl<'a> Gen<'a> {
         let ns = self.php_ns();
         match ty {
             Ty::Enum(n) => {
-                format!("\\{ns}\\{}::from((string) {e})", php_name(&self.enum_names.get(n).cloned().unwrap_or_default()))
+                let _ = &ns;
+                format!("{}::from((string) {e})", self.php_enum_fqn(n))
             }
             Ty::Str => format!("(string) {e}"),
             // `true` and `false` and nothing else, where `(bool)` read `"false"` as true (§15.203).

@@ -348,6 +348,24 @@ awk '{ print } /^  first_week : number/ { print "  teams      : number  range >=
   awk '{ sub(/mod\(week - first_week, 3\)/, "mod(week - first_week, teams)"); print }' > "$M/m_e115mod.rule"
 awk '{ print } /^  始めの週\(first_week\) : number/ { print "  班の数(teams)        : number  range >=1 <=3" }' "$C/当番の持ち回り.rule" |
   awk '{ sub(/mod\(週 - 始めの週, 3\)/, "mod(週 - 始めの週, 班の数)"); print }' > "$M/m_e115modja.rule"
+# --- Ordered enums, display names and the files of enums rules share (§15.210–§15.212). The
+# English rule, and its Japanese version beside it.
+t="$C/member_tier_shipping.rule"
+tj="$C/会員段階の送料.rule"
+# The tiers declared with `|`: the cell, the `max`, the comparison and the range that read their
+# order have none to read
+awk '{ sub(/^enum tier = basic < silver < gold < platinum$/, "enum tier = basic | silver | gold | platinum"); print }' "$t" > "$M/m_e069.rule"
+awk '{ sub(/^enum 段階\(tier\) = 一般\(basic\) < 銀\(silver\) < 金\(gold\) < プラチナ\(platinum\)$/, "enum 段階(tier) = 一般(basic) | 銀(silver) | 金(gold) | プラチナ(platinum)"); print }' "$tj" > "$M/m_e069ja.rule"
+# One `|` among the `<`
+awk '/^enum tier / { sub(/ silver < gold /, " silver | gold ") } { print }'                        "$t" > "$M/m_e069mixed.rule"
+awk '/^enum 段階/ { sub(/ 銀\(silver\) < 金\(gold\) /, " 銀(silver) | 金(gold) ") } { print }'    "$tj" > "$M/m_e069mixedja.rule"
+# A table in the file of enums the rules share
+awk '{ print } END { print ""; print "table fragile_fee"; print "policy unique"; print "| -> fee : money[USD] |"; print "| 3USD |" }' "$C/shared/catalog.rule" > "$M/m_e066.rule"
+awk '{ print } END { print ""; print "table 壊れ物の料金(fragile_fee)"; print "policy unique"; print "| -> 料金(fee) : money[USD] |"; print "| 3USD |" }' "$C/shared/品目.rule" > "$M/m_e066ja.rule"
+# The file of enums named by a path that is not there. A mutant sits in another directory than
+# its rule, so the path to the file that is there is written from here.
+awk '/^import enum category / { sub(/"shared\/catalog.rule"/, "\"../corpus/shared/catalogue.rule\"") } { sub(/"shared\/catalog.rule"/, "\"../corpus/shared/catalog.rule\""); print }' "$C/catalog_shipping.rule" > "$M/m_e013enum.rule"
+awk '/^import enum 種類 / { sub(/"shared\/品目.rule"/, "\"../corpus/shared/品目一覧.rule\"") } { sub(/"shared\/品目.rule"/, "\"../corpus/shared/品目.rule\""); print }' "$C/品目の送料.rule" > "$M/m_e013enumja.rule"
 
 for m in "$M"/m_*.rule; do "$RULEC" fmt "$m" >/dev/null; done
 

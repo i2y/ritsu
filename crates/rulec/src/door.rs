@@ -125,6 +125,10 @@ fn one(c: &Checked, name: &str, ty: &Ty, j: Option<&Json>) -> Result<Val, String
             Ok(Val::Date(y, m, d))
         }
         Ty::Enum(en) => match j {
+            // A value of an ordered enum outside the range its input declares (§15.210).
+            Json::Str(s) if c.enum_ranges.get(name).is_some_and(|vs| !vs.contains(s)) && c.enums.get(en).is_some_and(|vs| vs.contains(s)) => {
+                Err(out_of_range(name))
+            }
             Json::Str(s) if c.enums.get(en).is_some_and(|vs| vs.iter().any(|v| v == s)) => Ok(Val::Enum(s.clone())),
             _ => Err(not_in_enum(name, en)),
         },

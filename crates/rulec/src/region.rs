@@ -984,6 +984,15 @@ fn cell_mask(axis: &Axis, cell: Option<&Cell>, ty: &Ty, c: &Checked) -> Vec<bool
                     v.iter_mut().for_each(|x| *x = !*x);
                 }
             }
+            // The values a comparison on an ordered enum covers (§15.210). `none`, the absent
+            // value of an optional column, is no value of the enum and passes no comparison.
+            Some(Cell::Ranked { values, .. }) => {
+                if let Axis::Enum { values: on } = axis {
+                    for (i, val) in on.iter().enumerate() {
+                        v[i] = values.contains(val);
+                    }
+                }
+            }
             Some(Cell::Cmp(cs)) => {
                 if let Axis::Num { coords, .. } = axis {
                     v.iter_mut().for_each(|x| *x = true);
@@ -1081,6 +1090,12 @@ impl TableRegion {
             let axis = match &ty {
                 Ty::Enum(en) => {
                     let mut vs = c.enums.get(en)?.clone();
+                    // An input of an ordered enum takes the values its `range` lets in and no
+                    // other (§15.210), as a number's axis runs over its declared range: the
+                    // generated code refuses the rest at its door.
+                    if let Some(allowed) = c.enum_ranges.get(name).filter(|_| inputs.iter().any(|i| i.name.text == *name)) {
+                        vs.retain(|v| allowed.contains(v));
+                    }
                     if opt {
                         vs.insert(0, crate::kw::NONE.into());
                     }
@@ -1988,6 +2003,7 @@ fn cell_key(c: &Cell) -> String {
         Cell::Set(ls) => ls.iter().map(lit).collect::<Vec<_>>().join(","),
         Cell::Not(ls) => format!("{}:{}", crate::kw::NOT, ls.iter().map(lit).collect::<Vec<_>>().join(",")),
         Cell::Prefix(ps) => format!("{} {}", crate::kw::STARTS_WITH, ps.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(",")),
+        Cell::Ranked { ops, .. } => crate::ast::ranked_text(ops),
         Cell::Cmp(cs) => cs
             .iter()
             .map(|(o, l)| {
@@ -2022,6 +2038,11 @@ fn cell_text(c: &Cell) -> String {
         Cell::Set(ls) => format!("∈ {{{}}}", ls.iter().map(lit).collect::<Vec<_>>().join(", ")),
         Cell::Not(ls) => format!("∉ {{{}}}", ls.iter().map(lit).collect::<Vec<_>>().join(", ")),
         Cell::Prefix(ps) => format!("{} {}", crate::kw::STARTS_WITH, ps.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join(", ")),
+        Cell::Ranked { ops, .. } => ops
+            .iter()
+            .map(|(o, v)| format!("{} {v}", o.word()))
+            .collect::<Vec<_>>()
+            .join(if crate::i18n::ja() { " かつ " } else { " and " }),
         Cell::Cmp(cs) => cs
             .iter()
             .map(|(o, l)| {
@@ -4899,6 +4920,10 @@ pub enum CertCell {
     In(Vec<Option<Rat>>),
     /// `not: 100, 200`.
     NotIn(Vec<Option<Rat>>),
+    /// `>=medieval <industrial` on a column of an ordered enum (§15.210): each comparison and
+    /// the value it is against. The re-checker rebuilds the values it takes from the order the
+    /// certificate's `ordered` gives the enum.
+    Rank(Vec<(&'static str, String)>),
 }
 
 /// What the certificate says about one table.
@@ -5014,6 +5039,7 @@ fn cert_cell(cell: Option<&Cell>, ty: Option<Ty>) -> CertCell {
         Some(Cell::Set(ls)) => CertCell::Is(ls.iter().map(word).collect()),
         Some(Cell::Not(ls)) => CertCell::Not(ls.iter().map(word).collect()),
         Some(Cell::Prefix(ps)) => CertCell::Prefix(ps.clone()),
+        Some(Cell::Ranked { ops, .. }) => CertCell::Rank(ops.iter().map(|(o, v)| (o.word(), v.clone())).collect()),
         Some(Cell::Cmp(cs)) => CertCell::Cmp(
             cs.iter()
                 .map(|(o, l)| {

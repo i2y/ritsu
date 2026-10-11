@@ -27,6 +27,7 @@ description "<one line>"
 import std/<name>
 import proto "<file>" <Enum> -> <enum of this rule>
 import jsonschema "<file>" "<pointer>" -> <enum of this rule>
+import enum <enum> from "<file>" [-> <enum of this rule>]
 source <name> = law [<database>] "<law id>" asof <date>
   <fragment> sha256:<digest>
 source <name> = file "<file>" [url "<url>"] sha256:<digest>
@@ -74,6 +75,10 @@ examples
 - `machine` names the table that decides the state it carries; `scenario` blocks follow it.
 - `examples` comes last. There may be more than one section of them (§9).
 
+A second kind of file starts with `enums <name>(<alias>) v<version>` instead of `rule`. It holds
+enums that several rules share, and nothing that decides: `description`, `import`, `enum` and
+`group` lines only (§3.1, "Enums several rules share").
+
 A blank line separates sections. `#` starts a comment that runs to the end of the line;
 comments may appear anywhere, including at the end of a table row and on a line of their own
 in the middle of a block — **a line that holds nothing but a comment does not end the
@@ -114,10 +119,17 @@ The alias on a **`table`** is the one exception: it is accepted and currently un
 a table is inlined into the one generated function rather than becoming a function of its
 own. It is kept for SQL generation, where a table will need a name of its own.
 
-An alias that is **a word one of the targets has taken** is W121. A keyword is the hard case
-— `type` as an input's alias generates Rust that does not compile — and a builtin is the
-quiet one: the rule's alias names the generated function and an enum's alias names a type,
-so `sum` or `list` there hides Python's. A parameter or a local hides nothing outside its own
+An alias that is **a word one of the targets has taken** is W121. A builtin is the quiet case:
+the rule's alias names the generated function and an enum's alias names a type, so `sum` or
+`list` there hides Python's. A keyword is the hard one — `type` as an input's alias generates
+Rust that does not compile — and an alias stays as written, since it is the identifier its
+author chose. A name with no alias is its own identifier, and there the generated code does
+the renaming: an input, an output, a `derive`, a `define`, a table's output column, a sequence
+or one of its fields called `type`, `class`, `def` or `from` — a keyword in some of the
+languages that write a name as it is — is written with `_` after it in every language
+(`class_`), `rulec api` names it so, and the name a value travels under — the keys of the input
+JSON, the records — stays the one declared. W121 says which languages took the word, and an
+alias chooses the identifier instead. A parameter or a local hides nothing outside its own
 body, so the warning is raised for those only when the word is a keyword. It is a warning
 because a target you do not generate cannot hurt you.
 
@@ -143,7 +155,8 @@ digits; the diagnostic's `fix.text` is the literal rewritten.
 **Dates** are written `YYYY-MM-DD`. They are held as day ordinals, which is what makes an
 interval over dates exact.
 
-**Strings** are double-quoted and must close on the same line (E001).
+**Strings** are double-quoted and must close on the same line (E001). There is no escape: a
+string holds every character up to the next `"`, a backslash included, so it cannot hold a `"`.
 
 **Symbols.** The canonical spellings are ASCII:
 
@@ -225,6 +238,39 @@ enum member_kind = basic default | gold | platinum
 which declares "this value needs no row of its own; being caught by a `-` row is correct" and
 silences W111 for it.
 
+**An ordered enum** separates its values with `<` instead of `|`, lowest first:
+
+```rule
+enum tier = basic < silver < gold < platinum
+```
+
+A cell of a column of it may then compare against a value: `>=gold` is gold and platinum,
+`<gold` is basic and silver, and `>=silver <platinum` is the two between (§7). An expression
+may compare two values of it (`campaign > member`) and take the later or the earlier of two
+(`max(member, campaign)`, `min(…)`); a value of the enum itself is written in a cell, not in an
+expression (E012). An input of the enum may declare a `range` (`range >=basic <=gold`, §4): a
+value outside it is refused at the door as a number outside its range is, and the tables are
+asked to cover only the values inside. The two separators do not mix in one declaration, and
+nothing compares the values of an enum declared with `|`, whose order means nothing (E069).
+Completeness and overlap are checked over the values, as for any enum.
+
+**A display name** is a string after a value:
+
+```rule
+enum zone = local "Same city" < regional "Same region" < national "Rest of the country" < overseas "Abroad"
+```
+
+It is the name the value is shown by: on the page `rulec doc` renders, in the article for
+customers, and through one function or method in each language's generated code
+(`zone_label(Zone.NATIONAL)` is `"Rest of the country"` in Python; generated-code.md lists
+each language's). A value without one is shown by its declared name. A display name is text:
+anything but a line break, not empty, and no two values of one enum share one (E069). It never
+travels: the wire and the records carry the value's name.
+
+**`open`** written after the last value — `enum building = farm | market | temple  open` —
+marks an enum whose list may be extended from outside its file. It is read and kept; nothing
+in this version extends a list, so within a rule the enum is closed as every enum is.
+
 Two enums may have values of the same name — Stripe's `capture_method` and
 `confirmation_method` both have `automatic` and `manual`. A value is read in the enum of the
 place it is written: the column of a cell, the output of an output cell, the carried enum in
@@ -246,7 +292,7 @@ the other enum is E103.
 
 ## 3.1 import
 
-Two lines start with `import`, and both bring in **the values of an enum** — nothing else
+Four lines start with `import`, and each brings in **the values of an enum** — nothing else
 crosses a file boundary. A rule is still one file: what is imported is a set of names, not
 rows, not amounts, not another rule.
 
@@ -255,6 +301,7 @@ rows, not amounts, not another rule.
 | `import std/<name>` | a built-in enum | rulec, frozen |
 | `import proto "<file>" <Enum> -> <enum of this rule>` | the value set of an enum in a `.proto` | that `.proto`, outside this rule |
 | `import jsonschema "<file>" "<pointer>" -> <enum of this rule>` | the value set of an enum in a JSON Schema, OpenAPI included | that file, outside this rule |
+| `import enum <enum> from "<file>" [-> <name>]` | an enum of an `enums` file, whole: its values, their order, their display names and `default` marks, and its groups | that `enums` file, which several rules read |
 
 > `rulec import csv` and `rulec import xlsx` are a different thing that shares the word: a
 > **command** that writes a first draft of a `.rule` from a spreadsheet, once. It leaves no
@@ -368,6 +415,43 @@ refusal is not that a reader would be hard to start: a reader for the subset one
 to use is a reader that goes wrong quietly on the next one, and a value set that is quietly
 wrong is the one thing this must never be. Point at a JSON form of the document, which most
 toolchains can write.
+
+### Enums several rules share
+
+```rule
+enums catalog v1
+description "The product categories and the delivery zones that the shipping and the returns rules share"
+
+enum category = food "Food & drink" | apparel "Clothing & shoes" | electronics "Electronics" | furniture "Furniture"
+enum zone = local "Same city" < regional "Same region" < national "Rest of the country" < overseas "Abroad"
+
+group fragile = electronics, furniture
+```
+
+```rule
+rule catalog_shipping v1
+import enum category from "shared/catalog.rule"
+import enum zone from "shared/catalog.rule"
+```
+
+A file that starts with `enums` holds enums and decides nothing: `description`, `import`, `enum`
+and `group` lines, and any other section is E066. It generates no function. A rule reads one of
+its enums with `import enum <enum> from "<file>"`, the path followed from the rule's directory,
+and `-> <name>` gives the enum another name in the rule. What comes is the whole enum — its
+values, their order, their display names, their `default` marks, and every group of it in the
+file — and none of it is written again. The file is read and checked on every `check` and
+pinned by nothing, as a `.proto` is: a value it gains reaches every rule that reads it, and
+every table there that does not look at the value fails completeness. A file that cannot be
+read, is not an `enums` file, or holds no such enum is E013; an enum or a group the rule
+declares under a name an import brings is E034.
+
+The generated code of a rule declares none of these types. Each language imports them from the
+one module the `enums` file becomes, which `rulec gen` writes beside the rule's whether or not
+the file is named on the command line (generated-code.md), so an app that calls two rules hands
+both the same value. `rulec api` of an `enums` file names that module in each language, and
+`rulec doc` renders its enums with their order and display names. The commands that are about
+a decision — `schema`, `adapter`, `verify`, `replay`, `fixtures lint`, `diff`, and `doc` as
+HTML or for customers — refuse one.
 
 ## 3.2 source — the documents a rule transcribes
 
@@ -630,7 +714,9 @@ One declaration does three jobs.
 
 The form is `range` followed by one or two bounds: `range >=0JPY <=10_000_000JPY`, `range >=1g`.
 A `derive` whose declared range does not contain what it can actually reach is E112, and the
-message states the interval to widen to. A rate input may leave `range` out: it is then
+message states the interval to widen to. An input of an ordered enum (§3) may declare a range
+over its values, `range >=basic <=gold`: the bounds are values of the enum, and the three jobs
+are the same over them. A rate input may leave `range` out: it is then
 `>=0% <=100%`, and the guard enforces that, so a rate that can exceed 100% declares its range
 like any other number. A table's numeric output column needs no range of its own — its cells
 are its range.
@@ -736,13 +822,14 @@ A named boolean or intermediate value. A boolean `define` may be used as a table
 define bulk : bool = total >= 30_000JPY
 define a_earlier : bool = a_due <= b_due
 define rate_off : money[JPY, incl_tax] = list * rate
+define effective : tier = max(member, campaign)
 ```
 
 The condition of a boolean `define` must be one of exactly two shapes (E113):
 
 1. a **unary test on one input or one derived value** — that value compared with a constant;
 2. a comparison of **two values of a type whose difference cannot be derived** (two dates,
-   for instance).
+   for instance, or two values of an ordered enum, §3).
 
 A direct comparison of two numbers is neither. Declare the difference as a `derive` and
 compare that with a constant; the analysis is exact that way, and the message says so.
@@ -1352,7 +1439,7 @@ name the callee and its digest in their header, `rulec api` lists them under `ap
 | `1200JPY` `2000g` `true` `2026-04-01` `"abc"` | equality with a literal. A quantity must carry its unit |
 | `basic, gold` | a set. Each element is a literal or a group name; on a column of numbers each is a value of its own (`100, 200`) |
 | `not: basic` | the complement of a set |
-| `<=2000g` | comparison. `<=`, `>=`, `<`, `>` |
+| `<=2000g` | comparison. `<=`, `>=`, `<`, `>`. On a column of an ordered enum (§3) it is against a value: `>=gold` |
 | `>=1000JPY <20000JPY` | an interval — two comparisons side by side mean "and" |
 | `starts_with "CH-"` | a prefix, on a `string` column. Two or more are separated by a comma |
 | `none` | an optional that is absent. `-` and `not:` match it too; a comparison, a literal and a set of values do not |
@@ -1585,7 +1672,9 @@ An enum **value** never starts a line, so it may be any of them but eleven: `not
 
 `step` (inside `rate[step 1%]`), `unique`, `first`, the type words (`money` `mass` `length`
 `area` `volume` `duration` `temperature` `sound` `rate` `number` `bool` `date` `string`), the
-money attributes (`incl_tax` `excl_tax`) and `std` are
-part of the vocabulary but are told apart by position, so they are not reserved as names.
+money attributes (`incl_tax` `excl_tax`), `std`, `enums` (the heading of a file of enums, read
+on its first line only) and `open` (the mark after an enum's last value, §3) are part of the
+vocabulary but are told apart by position, so they are not reserved as names. A value may be
+called `open` too: the mark is only the word that follows the last value.
 
 A test holds this table to `src/kw.rs`, which is the single place the vocabulary is defined.

@@ -282,12 +282,17 @@ fn ディレクトリを渡すと中の規則を全部見る() {
     let (c, out, _) = run(&["check", "tests/corpus"]);
     assert_eq!(c, 0, "{out}");
     let ok = out.lines().filter(|l| l.starts_with("ok ")).count();
-    // Only the rules: the directory also holds the copies of the sources they cite.
-    let n = std::fs::read_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus"))
-        .unwrap()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|x| x == "rule"))
-        .count();
+    // Only the rules: the directory also holds the copies of the sources they cite. A directory
+    // under it is walked too, which is where the `enums` files the rules share sit (§15.212).
+    fn rules_under(dir: &std::path::Path) -> usize {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .map(|p| if p.is_dir() { rules_under(&p) } else { usize::from(p.extension().is_some_and(|x| x == "rule")) })
+            .sum()
+    }
+    let n = rules_under(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus"));
     assert_eq!(ok, n, "コーパス {n} 本のはずが {ok} 本しか見ていない:\n{out}");
 
     // The order is deterministic. If the order of the report varied by environment, the diff would

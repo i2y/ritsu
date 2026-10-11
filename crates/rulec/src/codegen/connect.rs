@@ -713,7 +713,7 @@ impl<'a> Gen<'a> {
 
     /// One input, read off the request message as the module's argument.
     fn from_request(&self, name: &str, alias: &str, ty: &Ty) -> String {
-        let src = format!("request.{alias}");
+        let src = format!("request.{}", pb_attr(alias));
         match ty {
             Ty::Opt(inner) => {
                 format!("None if not request.has_field({alias:?}) else {}", self.from_request(name, alias, inner))
@@ -731,11 +731,12 @@ impl<'a> Gen<'a> {
     /// One output, as a keyword of the response message. An absent optional is `None`, which
     /// is what protobuf-py reads as "not set".
     fn into_response(&self, alias: &str, ty: &Ty, expr: &str) -> String {
-        let one = |body: String| format!("        {alias}={body},\n");
+        let key = pb_attr(alias);
+        let one = |body: String| format!("        {key}={body},\n");
         match ty {
             Ty::Opt(inner) => {
                 let inner_expr = self.into_response(alias, inner, expr);
-                let body = inner_expr.trim().trim_start_matches(&format!("{alias}=")).trim_end_matches(',').to_string();
+                let body = inner_expr.trim().trim_start_matches(&format!("{key}=")).trim_end_matches(',').to_string();
                 one(format!("None if {expr} is None else {body}"))
             }
             Ty::Enum(n) => {
@@ -1183,7 +1184,7 @@ impl<'a> Gen<'a> {
     /// One value of the answer, read back as the module's own, so that the record this
     /// prints is the record the module would have written.
     fn from_response(&self, alias: &str, ty: &Ty) -> String {
-        let src = format!("res.{alias}");
+        let src = format!("res.{}", pb_attr(alias));
         match ty {
             Ty::Opt(inner) => format!("(None if not res.has_field({alias:?}) else {})", self.from_response(alias, inner)),
             Ty::Enum(n) => {
@@ -1207,7 +1208,7 @@ impl<'a> Gen<'a> {
         let svc = self.proto_service();
         let mut kw = String::new();
         for i in &self.f.inputs {
-            let a = pub_name(&i.name);
+            let a = pb_attr(&pub_name(&i.name));
             let ty = self.ty_of(&i.name.text);
             let one = self.to_request(&i.name.text, &ty);
             if matches!(ty, Ty::Opt(_)) {
@@ -1225,9 +1226,9 @@ impl<'a> Gen<'a> {
                 .map(|fd| {
                     let one = self.to_request(&fd.name.text, &self.ty_of(&fd.name.text)).replace("d[", "e[");
                     if matches!(self.ty_of(&fd.name.text), Ty::Opt(_)) {
-                        format!("{}=(None if e[{:?}] is None else {one})", pub_name(&fd.name), fd.name.text)
+                        format!("{}=(None if e[{:?}] is None else {one})", pb_attr(&pub_name(&fd.name)), fd.name.text)
                     } else {
-                        format!("{}={one}", pub_name(&fd.name))
+                        format!("{}={one}", pb_attr(&pub_name(&fd.name)))
                     }
                 })
                 .collect();
@@ -1236,7 +1237,7 @@ impl<'a> Gen<'a> {
             } else {
                 format!("pb.Element({})", fields.join(", "))
             };
-            kw.push_str(&format!("    kw[{:?}] = [{element} for e in d[{:?}]]\n", pub_name(&el.name), el.name.text));
+            kw.push_str(&format!("    kw[{:?}] = [{element} for e in d[{:?}]]\n", pb_attr(&pub_name(&el.name)), el.name.text));
         }
         // The arguments are read from the same line the request was built from, because the
         // record names its inputs as the rule does and the message names them by their alias.
@@ -1690,4 +1691,16 @@ pub fn template(f: &crate::ast::RuleFile) -> String {
         out,
         out
     )
+}
+
+/// The attribute protobuf-py gives a field of a message: its name, with `_` after it where the
+/// name without its trailing `_`s is a keyword of Python's. A name the rule's own generated code
+/// already writes with `_` (§15.210) takes a second one there, as protoc-gen-py writes it.
+fn pb_attr(field: &str) -> String {
+    const PY: &[&str] = &[
+        "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif", "else",
+        "except", "finally", "for", "from", "global", "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise",
+        "return", "try", "while", "with", "yield",
+    ];
+    if PY.contains(&field.trim_end_matches('_')) { format!("{field}_") } else { field.to_string() }
 }

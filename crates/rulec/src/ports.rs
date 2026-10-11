@@ -758,7 +758,8 @@ impl ritsu_ports::Items for Engine {
 
 impl ritsu_ports::References for Engine {
     /// The files a rule names: the `.proto` or JSON Schema an enum's values come from
-    /// (`import proto`, `import jsonschema`), the contract a `shape` reads its inputs out of, a
+    /// (`import proto`, `import jsonschema`), the `enums` file an enum is read from whole
+    /// (`import enum`, §15.212), the contract a `shape` reads its inputs out of, a
     /// rule it applies (`apply`), a document a `source` copies (`source … file`), and the koyomi
     /// date an input takes its days from (`range from koyomi`, §15.174). An enum or a message of
     /// a `.proto` is named from the file's package.
@@ -785,6 +786,10 @@ impl ritsu_ports::References for Engine {
                 crate::ast::EnumSource::JsonSchema => (Naming::file(Tool::File, &p), "import jsonschema"),
             };
             out.push(Reference { line: im.span.line, target, how: how.into() });
+        }
+        for ef in &f.enum_froms {
+            let Some(p) = from_root(file, &ef.file) else { continue };
+            out.push(Reference { line: ef.span.line, target: Naming::file(Tool::Rulec, &p).with("enum", &ef.name.text), how: "import enum".into() });
         }
         for sh in &f.shapes {
             let Some(p) = from_root(file, &sh.file) else { continue };

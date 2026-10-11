@@ -233,6 +233,18 @@ fn 変異は決めたコードだけを出す() {
         // Two edits, because either alone is a different error. §11 calls E110 the internal
         // breakwater — what is confirmed is that it fires rather than a table being skipped.
         ("m_e110.rule", &[("E110", 1)], "検査器が畳めない型の列を作った"),
+        // Ordered enums and the files of enums rules share (§15.210, §15.212). Declared with
+        // `|`, the tiers leave all four things that read their order with none to read: the
+        // range, the `max`, the comparison in the `define` and the cell; the values the cell
+        // meant to name are not called unused on top.
+        ("m_e069.rule", &[("E069", 4)], "段階を `<` でなく `|` で区切った"),
+        ("m_e069ja.rule", &[("E069", 4)], "上と同じ規則の日本語の版"),
+        ("m_e069mixed.rule", &[("E069", 1)], "`<` の並びに `|` を一つ混ぜた"),
+        ("m_e069mixedja.rule", &[("E069", 1)], "上と同じ規則の日本語の版"),
+        ("m_e066.rule", &[("E066", 1)], "列挙のファイルに表を書いた"),
+        ("m_e066ja.rule", &[("E066", 1)], "上と同じファイルの日本語の版"),
+        ("m_e013enum.rule", &[("E013", 1)], "無い列挙のファイルを指した"),
+        ("m_e013enumja.rule", &[("E013", 1)], "上と同じ規則の日本語の版"),
     ];
 
     // `m_e102b` used to carry an E101 as well, demanding a row for `可否 = true` — the very

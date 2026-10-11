@@ -1,0 +1,42 @@
+rule catalog_shipping v1
+description "The delivery fee of a parcel: by how far it goes and how heavy it is, with a surcharge for fragile goods"
+
+# The categories and the zones are the catalog's, and so are their order, their display names
+# and the group `fragile`: this rule writes none of them again.
+import enum category from "../corpus/shared/catalogue.rule"
+import enum zone from "../corpus/shared/catalog.rule"
+
+inputs
+  goods       : category
+  destination : zone
+  weight      : mass[kg]  range >=1kg <=30kg
+
+outputs
+  fee : money[USD]  round up(1USD)
+
+table base_fee
+policy unique
+| destination | weight | -> base : money[USD] |
+| <=regional  | <=5kg  | 5USD                 |
+| <=regional  | >5kg   | 9USD                 |
+| national    | <=5kg  | 8USD                 |
+| national    | >5kg   | 14USD                |
+| overseas    | -      | 30USD                |
+
+# Fragile goods are packed by hand, and the farther they go the more the packing costs.
+table handling
+policy unique
+| goods         | destination | -> surcharge : money[USD] |
+| fragile       | <national   | 3USD                      |
+| fragile       | >=national  | 7USD                      |
+| food, apparel | -           | 0USD                      |
+
+define fee : money[USD] = base + surcharge
+
+examples
+| goods       | destination | weight | -> fee |
+| food        | local       | 2kg    | 5USD   |
+| apparel     | regional    | 6kg    | 9USD   |
+| electronics | national    | 10kg   | 21USD  |
+| furniture   | overseas    | 20kg   | 37USD  |
+| electronics | regional    | 1kg    | 8USD   |

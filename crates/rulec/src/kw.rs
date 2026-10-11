@@ -7,6 +7,10 @@
 
 // --- Words that can start a line (in the order of §1.2)
 pub const RULE: &str = "rule";
+/// The heading of a file that holds enums and groups for rules to read, and no function
+/// (§15.212): `enums content v1`. It is read on the first line only, where no name stands, so
+/// it is not reserved (compatibility.md: the reserved words are fixed).
+pub const ENUMS: &str = "enums";
 pub const DESCRIPTION: &str = "description";
 pub const IMPORT: &str = "import";
 pub const ENUM: &str = "enum";
@@ -93,6 +97,10 @@ pub const CONTRACT_ONLY: &str = "contract_only";
 pub const DEFAULT: &str = "default";
 /// The step inside a type's brackets (`rate[step 1%]`).
 pub const STEP: &str = "step";
+/// The mark after the last value of an `enum` line: an enum whose list may be extended from
+/// outside its file (§15.212). Read there only, after a value, where no name stands, so it is not
+/// reserved; it is kept and changes nothing yet.
+pub const OPEN: &str = "open";
 
 // --- The arms of a `fold` (§15.56). What one verdict does to the walk.
 /// Leave this element and look at the next.

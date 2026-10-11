@@ -22,7 +22,9 @@ spelling each language gives them, and the errors the code can raise. The shape 
 
 ## What it guarantees
 
-**No dependencies.** The generated Python imports `enum` and `typing`; the generated
+**No dependencies.** The generated Python imports `enum` and `typing` (and a rule that reads
+an `enums` file imports the module of that file, which is generated beside it,
+[below](#enums-several-rules-share-their-order-and-display-names)); the generated
 TypeScript and JavaScript import nothing at all; the generated Rust imports nothing outside `std` and needs
 no `Cargo.toml`; the generated Ruby requires nothing at all and needs no gem; the generated
 PHP requires nothing at all and needs no composer; the generated
@@ -101,9 +103,12 @@ names the same three, and `rulec_np.py` computes them over whole int64 columns.
 def single_coupon(subtotal: JPYInclTax, applied: JPYInclTax, kind: CouponKind, rate: Rate, face: JPYInclTax, dup: bool) -> Output:
 ```
 
-Parameters are the rule's inputs in declaration order, named by their ASCII aliases. With one
-output the function returns that value; with two or more it returns a `NamedTuple` called
-`Output` whose fields are the outputs in declaration order.
+Parameters are the rule's inputs in declaration order, named by their ASCII aliases. A name
+with no alias that is a keyword in one of the languages — an input called `class`, `type`,
+`def` — is written with `_` after it in every language (`class_`), and `rulec api` names it so;
+the keys of the wire and of the records keep the declared name (W121). With one output the function
+returns that value; with two or more it returns a `NamedTuple` called `Output` whose fields are
+the outputs in declaration order.
 
 ```python
 from single_coupon import single_coupon, CouponKind
@@ -795,6 +800,35 @@ is written as on the wire — so what is compared is the hand-over a caller does
 answers. The MCP tool, the Connect service and the PostgreSQL function are one call each, like
 the function, and are played the same way. On the page for people the machine is drawn beside
 the form, and a button puts the state the call answered back into the form for the next event.
+
+## Enums several rules share, their order and display names
+
+An enum declared with `<` is ordered, and a value may carry a display name
+([reference §3](reference.md#declaring-an-enum)). An `enums` file holds enums for several rules
+to read ([reference §3.1](reference.md#enums-several-rules-share)). The code they generate:
+
+| language | the module an `enums` file becomes | how a rule's module reads it | the place of a value (ordered enums) | the display name |
+|---|---|---|---|---|
+| Python | `catalog.py` | `from catalog import Category, Zone`; `from .catalog import …` in a package of `ritsu gen` | `zone_rank(z)`, from 0 | `category_label(c)` |
+| TypeScript | `catalog.ts` | `import { Category, Zone } from "./catalog.ts"` and `export { Category, Zone }`; `"./catalog"` in a package | `zoneRank(z)` | `categoryLabel(c)` |
+| JavaScript | `catalog.mjs` | `import { … } from "./catalog.mjs"` | `zoneRank(z)` | `categoryLabel(c)` |
+| Rust | `catalog.rs` | `pub use crate::catalog::{Category, Zone};`, the module declared beside the rule's by the crate that builds them (the runner: `#[path = "catalog.rs"] mod catalog;`) | `z.rank()`; the enum derives `PartialOrd` and `Ord` in its order | `c.label()` |
+| Ruby | `catalog.rb`, `module Catalog`, with `sig/catalog.rbs` | `require_relative "catalog"` and `Category = Catalog::Category` (and the same aliases in the `.rbs`) | `Catalog.zone_rank(z)` | `Catalog.category_label(c)` |
+| PHP | `catalog.php`, namespace `Catalog` | `require_once __DIR__ . '/catalog.php';` and `use Catalog\Category;` | `\Catalog\zone_rank($z)` | `\Catalog\category_label($c)` |
+| Go | package `catalog` (`catalog/catalog.go` and its `go.mod`) | imports the package — in `rulec gen`'s output by `replace catalog => ../catalog` in the rule's `go.mod`, in a package of `ritsu gen` by the `--module` path — and declares `type Category = catalog.Category` with the constants and `ParseCategory` beside it | the constant itself: the values are declared in their order, so `z >= ZoneNational` compares places | `c.Label()` |
+| Swift | `catalog.swift` | the same module: built with the rule's file (`rulec test` adds it to the `swiftc` line from `vectors/<rule>.owners.json`) | `z.rank` | `c.label` |
+| Java | `Catalog.java`, the enums nested in `public final class Catalog` | the same package: `Catalog.Category` | `z.ordinal()`, and `compareTo` in the conditions | `c.label()` |
+| SQL | none: an enum is the text of its name | — | a `CASE` in the query | in the file that declares a function, one function per enum with display names, `"catalog_shipping_category_label"(v text)` |
+| NumPy | none: the plan carries the values | — | the plan's `rank` cells | the plan's `labels`, read by `rule.label(enum, value)` |
+| Wasm | none: the types are written into the rule's own crate | — | in the crate | none: the module answers over JSON, which carries values only |
+
+A value without a display name is shown by its declared name, by every one of these. `rulec
+gen` writes the module of each `enums` file a rule reads, whether or not the file is named on
+the command line, once however many of the rules given read it; two different files that would
+write one module are refused. A cell that compares an ordered enum (`>=gold`) is
+written as a comparison of places, `tier_rank(effective) >= tier_rank(Tier.GOLD)` in Python,
+on the same line of the rule as any other condition; `max(a, b)` and `min(a, b)` over one are
+a helper each, and the entry guard of an input with a `range` over one compares places too.
 
 ## A rule whose inputs are projected from the caller's object
 

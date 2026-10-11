@@ -1,0 +1,37 @@
+rule 品目の返品(goods_returns) v1
+description "お客さまが品物を送り返せる日数と、返送の送料が無料になるか"
+
+# 送料の規則と同じ種類と地域を、同じファイルから読む。アプリは `種類` の一つの値を
+# 二つの規則に渡す。
+import enum 種類 from "shared/品目.rule"
+import enum 地域 from "shared/品目.rule"
+
+inputs
+  品目(goods)         : 種類
+  届け先(destination) : 地域
+  開封済み(opened)    : bool
+
+outputs
+  返品期間(window) : number  round down(1)
+  返送無料(free_return) : bool
+
+table 返品期間表(return_window)
+policy unique
+| 品目   | 開封済み | -> 返品期間 |
+| 食品   | -        | 0           |
+| 衣料   | -        | 30          |
+| 壊れ物 | false    | 14          |
+| 壊れ物 | true     | 7           |
+
+table 返送の送料(return_shipping)
+policy unique
+| 届け先 | -> 返送無料 |
+| <=全国 | true        |
+| 海外   | false       |
+
+examples
+| 品目 | 届け先 | 開封済み | -> 返品期間 | 返送無料 |
+| 食品 | 市内   | false    | 0           | true     |
+| 衣料 | 海外   | true     | 30          | false    |
+| 家具 | 全国   | false    | 14          | true     |
+| 家具 | 地方   | true     | 7           | true     |

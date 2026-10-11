@@ -776,10 +776,14 @@ fn inline_table(rn: &Renamer, cc: &Checked, t: &Table, dropped_rows: &[(String, 
                 _ => {
                     let cell = if rn.input_enum.contains_key(name) || cc.groups.keys().any(|g| cell_names(&cell).contains(g)) {
                         match &cell {
-                            Cell::Lit(Lit::Word(_)) | Cell::Set(_) => {
+                            // A comparison on the callee's ordered enum is the values it covers in
+                            // the callee's order; this rule's enum may order them otherwise, so
+                            // what is carried over is the values, mapped (§15.210).
+                            Cell::Lit(Lit::Word(_)) | Cell::Set(_) | Cell::Ranked { .. } => {
                                 let ls: Vec<Lit> = match &cell {
                                     Cell::Lit(l) => vec![l.clone()],
                                     Cell::Set(ls) => ls.clone(),
+                                    Cell::Ranked { values, .. } => values.iter().map(|v| Lit::Word(v.clone())).collect(),
                                     _ => unreachable!(),
                                 };
                                 let words = rn.map_words(name, &ls);
@@ -868,6 +872,7 @@ fn cell_names(c: &Cell) -> Vec<String> {
     let ls: Vec<&Lit> = match c {
         Cell::Lit(l) => vec![l],
         Cell::Set(ls) | Cell::Not(ls) => ls.iter().collect(),
+        Cell::Ranked { values, .. } => return values.clone(),
         _ => vec![],
     };
     ls.into_iter().filter_map(|l| if let Lit::Word(w) = l { Some(w.clone()) } else { None }).collect()

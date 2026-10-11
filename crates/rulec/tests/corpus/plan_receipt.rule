@@ -1,0 +1,30 @@
+rule plan_receipt v1
+description "The monthly fee of a plan, and the name a receipt prints for the plan"
+
+# A receipt prints a plan's display name as written. The names carry the characters a target's
+# string literals read specially — `$`, `${…}`, `#{…}`, a backslash before `(` or `u`, `%`, `'`,
+# `{}`, `<>` — so every target has to give them back unchanged.
+enum plan = starter "Starter — $5/mo" | plus "Plus #2 (10% off) | 'best value'" | team "Team {5+ seats} <billed yearly>" | school "School ${district} #{campus} \(term) \users"
+
+inputs
+  chosen : plan
+  seats  : number  range >=1 <=500
+
+outputs
+  fee : money[USD]  round half_up(1USD)
+
+table monthly_fee
+policy unique
+| chosen  | seats | -> fee |
+| starter | -     | 5USD   |
+| plus    | -     | 9USD   |
+| team    | <=10  | 20USD  |
+| team    | >10   | 35USD  |
+| school  | -     | 0USD   |
+
+examples
+| chosen  | seats | -> fee |
+| starter | 1     | 5USD   |
+| team    | 10    | 20USD  |
+| team    | 11    | 35USD  |
+| school  | 300   | 0USD   |

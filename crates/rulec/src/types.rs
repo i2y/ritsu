@@ -390,6 +390,17 @@ pub struct Checked {
     pub enum_order: Vec<String>,
     /// Group name -> the enum it belongs to and its members.
     pub groups: HashMap<String, (String, Vec<String>)>,
+    /// The enums whose values are ordered as written (§15.210). The order itself is `enums`.
+    pub ordered: HashSet<String>,
+    /// Enum name -> the display name of each value, in the enum's order, for an enum that gives
+    /// any (§15.211). A value without one is shown by its name.
+    pub labels: HashMap<String, Vec<Option<String>>>,
+    /// Input name -> the values its `range` lets in, in order, for an input of an ordered enum
+    /// that declares one (§15.210): the universe the checks quantify over, and what the
+    /// generated code takes at its door.
+    pub enum_ranges: HashMap<String, Vec<String>>,
+    /// Enum name -> the `enums` file the rule reads it from (§15.212).
+    pub owners: HashMap<String, crate::ast::EnumOwner>,
     pub used: HashSet<String>,
     /// Enum values named in a cell or expression, as `(enum, value)`: `automatic` named in a
     /// column of one enum leaves another enum's `automatic` unnamed. W111 uses it to report
@@ -808,6 +819,41 @@ pub fn read_words(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             _ => Some(true),
         }
     };
+    // A comparison on a column of an ordered enum takes the values it covers (§15.210). The
+    // cell keeps how it was written; the values are what every check reads, as it reads a set.
+    // A comparison whose bound is no value of the enum, or one on an enum without an order, is
+    // left as the parser wrote it, for the type check to say what is wrong with it.
+    let ordered: HashMap<String, Vec<String>> =
+        f.enums.iter().filter(|e| e.ordered).map(|e| (e.name.text.clone(), e.values.iter().map(|v| v.text.clone()).collect())).collect();
+    let rank = |cell: &mut Cell, en: Option<&String>| {
+        let Cell::Cmp(cs) = cell else { return };
+        let Some(order) = en.and_then(|e| ordered.get(e)) else { return };
+        let ops: Option<Vec<(CmpOp, String)>> = cs
+            .iter()
+            .map(|(op, l)| match l {
+                Lit::Word(w) if order.contains(w) => Some((*op, w.clone())),
+                _ => None,
+            })
+            .collect();
+        let Some(ops) = ops else { return };
+        let values = order.iter().filter(|v| crate::ast::ranked_holds(order, &ops, v)).cloned().collect();
+        *cell = Cell::Ranked { ops, values };
+    };
+    for it in f.items.iter_mut() {
+        let Item::Table(t) = it else { continue };
+        let cols: Vec<Option<String>> = t.inputs.iter().map(|(n, _)| declared.get(n).and_then(|(e, _)| e.clone())).collect();
+        for row in &mut t.rows {
+            for (ci, cell) in row.cells.iter_mut().enumerate() {
+                rank(cell, cols.get(ci).and_then(|e| e.as_ref()));
+            }
+        }
+    }
+    if let Some(m) = f.machine.as_mut() {
+        for o in &mut m.onces {
+            let en = declared.get(&o.output.text).and_then(|(e, _)| e.clone());
+            rank(&mut o.cell, en.as_ref());
+        }
+    }
     for (k, it) in f.items.iter_mut().enumerate() {
         let Item::Table(t) = it else { continue };
         let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
@@ -888,6 +934,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         out_scales: HashMap::new(),
         enums: HashMap::new(),
         groups: HashMap::new(),
+        ordered: HashSet::new(),
+        labels: HashMap::new(),
+        enum_ranges: HashMap::new(),
+        owners: HashMap::new(),
         used: HashSet::new(),
         used_values: HashSet::new(),
         enum_order: Vec::new(),
@@ -978,6 +1028,15 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             e.name.text.clone(),
             e.values.iter().map(|v| v.text.clone()).collect(),
         );
+        if e.ordered {
+            c.ordered.insert(e.name.text.clone());
+        }
+        if e.has_labels() {
+            c.labels.insert(e.name.text.clone(), (0..e.values.len()).map(|i| e.label(i).map(|s| s.to_string())).collect());
+        }
+        if let Some(o) = &e.from {
+            c.owners.insert(e.name.text.clone(), o.clone());
+        }
     }
     for g in &f.groups {
         // A member has to be a value of some enum. One that is not used to be dropped in
@@ -1036,7 +1095,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
 
     for i in &f.inputs {
         let ty = c.resolve(&i.ty);
-        if let Some(from) = i.range.as_ref().and_then(|r| r.days.clone()) {
+        if let (Ty::Enum(en), Some(r)) = (ty.present(), &i.range) {
+            let en = en.clone();
+            enum_range(&mut c, i, &en, r, &at);
+        } else if let Some(from) = i.range.as_ref().and_then(|r| r.days.clone()) {
             koyomi_days(&mut c, i, &ty, &from, path, &at);
         } else if let Some(r) = &i.range {
             // An optional input's range is the range its values take when there is one: the
@@ -1139,7 +1201,20 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     if let Some(el) = &f.elements {
         for i in &el.fields {
             let ty = c.resolve(&i.ty);
-            if let Some(r) = &i.range {
+            if let (Ty::Enum(en), Some(r)) = (ty.present(), &i.range) {
+                // The range of an enum narrows what an input takes at the door (§15.210); an
+                // element passes no door of its own that could hold it, and its bounds used to be
+                // dropped in silence.
+                c.diags.push(
+                    Diag::error("E069", tr!("要素のフィールド {} の列挙に範囲は書けません", "Element field {} cannot hold an enum to a range", i.name.text))
+                        .at(at(r.span.line))
+                        .mark(r.span.clone(), tr!("{en} の範囲", "a range of {en}"))
+                        .note(tr!(
+                            "列挙の範囲を書けるのは入力だけです。要素の値を絞るなら、表の行で `-` 以外の値を書いて、残りを E101 に挙げさせてください。",
+                            "Only an input holds an enum to a range. To narrow what an element takes, write its values in the rows and let E101 name the rest."
+                        )),
+                );
+            } else if let Some(r) = &i.range {
                 // The element's fields are declared like inputs, and the bound that cannot be
                 // read is the same error there — but the diagnostics were dropped on the
                 // floor here, so `額 : money[円] range >=0円 <=1000g` passed with no upper
@@ -1185,7 +1260,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
     }
 
-    if f.outputs.is_empty() {
+    // A file of enums declares no function, so it has nothing to return (§15.212).
+    if f.outputs.is_empty() && f.kind == FileKind::Rule {
         c.diags.push(
             Diag::error("E009", tr!("出力がありません", "No outputs are declared"))
                 .at(at(f.name.span.line))
@@ -1442,53 +1518,66 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         // the function, and an enum's, which names a type. Everything else lands as a
         // parameter, a local or a member, where a name of its own shadows nothing outside
         // the body it is in.
-        let mut aliases: Vec<(&str, &Span, String, bool)> = Vec::new();
+        // (the alias, where, what it names, whether it is at the outermost level, whether the
+        // generator writes it with `_` after it where a language keeps it as a keyword)
+        let mut aliases: Vec<(&str, &Span, String, bool, bool)> = Vec::new();
         fn take<'n>(
             n: &'n Name,
             what: String,
             top: bool,
-            v: &mut Vec<(&'n str, &'n Span, String, bool)>,
+            renamed: bool,
+            v: &mut Vec<(&'n str, &'n Span, String, bool, bool)>,
         ) {
             if let Some(a) = n.ascii.as_deref() {
-                v.push((a, &n.span, what, top));
+                // An alias is the author's identifier, and stays as written (§15.210): W121 says
+                // where a language does not take it.
+                v.push((a, &n.span, what, top, false));
+            } else if renamed && n.text.is_ascii() && !crate::codegen::keyword_in(&n.text).is_empty() {
+                // A value's name with no alias is its own identifier — a parameter, a local, a
+                // field — and one a language keeps as a keyword is written with `_` after it
+                // there (§15.210, `codegen::escape_keywords`): said as an alias would be.
+                v.push((n.text.as_str(), &n.span, what, top, renamed));
             }
         }
-        take(&f.name, tr!("規則", "rule"), true, &mut aliases);
+        // The rule's name and an enum's are types and functions, not renamed; an enum's values
+        // become members in each language's own case, and a table's name is a string in the
+        // trace, so neither is renamed either.
+        take(&f.name, tr!("規則", "rule"), true, false, &mut aliases);
         for i in &f.inputs {
-            take(&i.name, tr!("入力", "input"), false, &mut aliases);
+            take(&i.name, tr!("入力", "input"), false, true, &mut aliases);
         }
         for o in &f.outputs {
-            take(&o.name, tr!("出力", "output"), false, &mut aliases);
+            take(&o.name, tr!("出力", "output"), false, true, &mut aliases);
         }
         for e in &f.enums {
-            take(&e.name, tr!("列挙", "enum"), true, &mut aliases);
+            take(&e.name, tr!("列挙", "enum"), true, false, &mut aliases);
             for v in &e.values {
-                take(v, tr!("列挙の値", "enum value"), false, &mut aliases);
+                take(v, tr!("列挙の値", "enum value"), false, false, &mut aliases);
             }
         }
         if let Some(el) = &f.elements {
-            take(&el.name, tr!("並び", "sequence"), false, &mut aliases);
+            take(&el.name, tr!("並び", "sequence"), false, true, &mut aliases);
             for fd in &el.fields {
-                take(&fd.name, tr!("要素のフィールド", "element field"), false, &mut aliases);
+                take(&fd.name, tr!("要素のフィールド", "element field"), false, true, &mut aliases);
             }
         }
         for it in &f.items {
             match it {
-                Item::Derived(d) => take(&d.name, tr!("導出", "derived value"), false, &mut aliases),
-                Item::Define(d) => take(&d.name, tr!("定義", "definition"), false, &mut aliases),
-                Item::Agg(d) => take(&d.name, tr!("まとめ", "summary"), false, &mut aliases),
+                Item::Derived(d) => take(&d.name, tr!("導出", "derived value"), false, true, &mut aliases),
+                Item::Define(d) => take(&d.name, tr!("定義", "definition"), false, true, &mut aliases),
+                Item::Agg(d) => take(&d.name, tr!("まとめ", "summary"), false, true, &mut aliases),
                 Item::Table(t) => {
                     if let Some(n) = &t.name {
-                        take(n, tr!("表", "table"), false, &mut aliases);
+                        take(n, tr!("表", "table"), false, false, &mut aliases);
                     }
                     for oc in &t.outputs {
-                        take(&oc.name, tr!("表の出力", "table output"), false, &mut aliases);
+                        take(&oc.name, tr!("表の出力", "table output"), false, true, &mut aliases);
                     }
                 }
             }
         }
         let rule_alias = f.name.ascii.as_deref();
-        for (alias, sp, what, top) in aliases {
+        for (alias, sp, what, top, renames) in aliases {
             let mut kw: Vec<&str> = Vec::new();
             let mut hides: Vec<&str> = Vec::new();
             // The rule's alias also names a module or a package, which the standard library
@@ -1505,6 +1594,29 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 }
             }
             if kw.is_empty() && hides.is_empty() && collides.is_empty() {
+                continue;
+            }
+            // A parameter, a local or a field is written with `_` after it where a language that
+            // writes names as they are keeps it (§15.210): it compiles, under another name.
+            let renamed = if renames { crate::codegen::keyword_in(alias) } else { Vec::new() };
+            if !renamed.is_empty() {
+                c.diags.push(
+                    Diag::warning(
+                        "W121",
+                        tr!("`{alias}` は生成先の予約語なので、生成コードでは `{alias}_` と書きます", "`{alias}` is a keyword in a target language, so the generated code writes it as `{alias}_`"),
+                    )
+                    .at(at(sp.line))
+                    .mark(sp.clone(), tr!("{what}の名前", "the {what}'s name"))
+                    .note(tr!(
+                        "{}: そこでは予約語です。生成コードは、どの言語でもこの名前を `{alias}_` と書き、`rulec api` もその名前を挙げます。受け渡しする値の名前（入力の JSON のキーや記録）は、宣言した名前のままです。",
+                        "{}: it is a keyword there. Every language's generated code writes this name as `{alias}_`, and `rulec api` names it so; the name a value travels under (the keys of the input JSON, the records) stays the one declared.",
+                        renamed.join(", ")
+                    ))
+                    .note(tr!(
+                        "生成コードでの名前を自分で決めるなら、別名を付けてください（`{alias}(<別名>)`）。",
+                        "To choose the name the generated code uses yourself, give it an alias (`{alias}(<alias>)`)."
+                    )),
+                );
                 continue;
             }
             let mut d = Diag::warning(
@@ -2281,7 +2393,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         // question there is not "did you forget a line" but "has anyone read the change the
         // contract shipped", and it is only a fair question once the file resolved (§15.59).
         let bound = f.enum_imports.iter().any(|p| p.target.text == e.name.text);
-        if !unused.is_empty() && !bound {
+        // An enum read from an `enums` file is the vocabulary several rules share, and a rule
+        // names the values it decides on, as one names the prefectures it decides on (§15.212).
+        // Nor does a file of enums name any: it has no rows (§15.212).
+        if !unused.is_empty() && !bound && e.from.is_none() && f.kind == FileKind::Rule {
             let names: Vec<String> = unused.iter().map(|v| v.text.clone()).collect();
             c.diags.push(
                 Diag::warning("W111", tr!("型 {} の値がどの行にも現れません", "Values of type {} appear in no row", e.name.text))
@@ -2313,7 +2428,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
     }
     for g in &f.groups {
-        if !c.used.contains(&g.name.text) {
+        // A group that came with its enum from an `enums` file is the file's to declare, and is
+        // used by whichever rule needs it (§15.212).
+        if !c.used.contains(&g.name.text) && g.from.is_none() && f.kind == FileKind::Rule {
             c.diags.push(
                 Diag::warning("W111", tr!("グループ {} はどのセルでも使われていません", "Group {} is not used in any cell", g.name.text))
                     .at(at(g.span.line))
@@ -2735,6 +2852,13 @@ impl Checked {
                                 .at(format!("{path}:{}", sp.line))
                                 .mark(sp.clone(), ""),
                             );
+                        } else if let Some(Ty::Enum(en)) = ats.first() {
+                            // The larger of two values of an ordered enum is the later one in its
+                            // order, and an enum without one has no larger value (§15.210).
+                            if !self.ordered.contains(en) {
+                                let at = format!("{path}:{}", sp.line);
+                                self.diags.push(unordered_comparison(en, &at, sp, format!("`{name}`")));
+                            }
                         }
                         ats.first().cloned().unwrap_or(Ty::Unknown)
                     }
@@ -2899,6 +3023,17 @@ impl Checked {
                     Le | Ge | Lt | Gt | Eq => {
                         if !lt.unifies(&rt) {
                             self.mix(&lt, &rt, sp, path);
+                        } else if *op != Eq {
+                            // Two values of an enum are put in order by the order it declares, and
+                            // one that declares none has nothing to put them in (§15.210). The
+                            // evaluator answered nothing for such a comparison, and the generated
+                            // code compared whatever each language holds an enum as.
+                            if let Ty::Enum(en) = &lt {
+                                if !self.ordered.contains(en) {
+                                    let at = format!("{path}:{}", sp.line);
+                                    self.diags.push(unordered_comparison(en, &at, sp, tr!("大小の比較", "a comparison of order")));
+                                }
+                            }
                         }
                         Ty::Bool
                     }
@@ -4536,17 +4671,74 @@ impl Checked {
                 }
             }
             Cell::Cmp(cs) => {
+                // A comparison left as the parser wrote it on a column of an enum: the enum has no
+                // order to compare in, or a bound is none of its values, which `check_lit` says.
+                if let Ty::Enum(en) = want {
+                    if !self.ordered.contains(en) {
+                        self.diags.push(unordered_comparison(en, at, span, tr!("比べるセル", "a comparison in a cell")));
+                        // The cell meant to name some of the values; which ones has no answer
+                        // without an order, so W111 does not call any of them unused on top.
+                        for v in self.enums.get(en).cloned().unwrap_or_default() {
+                            self.used_values.insert((en.clone(), v));
+                        }
+                        return;
+                    }
+                }
                 for (_, l) in cs {
                     check_lit(self, l);
+                }
+            }
+            // The values a comparison on an ordered enum covers are named by it (§15.210), so W111
+            // does not call them unused.
+            Cell::Ranked { values, .. } => {
+                if let Ty::Enum(en) = want {
+                    for v in values {
+                        self.used_values.insert((en.clone(), v.clone()));
+                    }
                 }
             }
         }
     }
 }
 
+/// E069: an enum whose values are separated by `|`, and so have no order, met by something
+/// that compares two of them (§15.210).
+fn unordered_comparison(en: &str, at: &str, span: &Span, what: String) -> Diag {
+    Diag::error("E069", tr!("列挙 {en} には順序がないので、{what}は書けません", "Enum {en} has no order, so {what} cannot be written"))
+        .at(at.to_string())
+        .mark(span.clone(), "")
+        .note(tr!(
+            "比べられるのは、値を `<` で区切って宣言した列挙だけです（`enum {en} = a < b < c`）。宣言の順が意味を持つなら `<` で区切ってください。順序に意味が無いなら、値か集合で書いてください。",
+            "Only an enum whose values are declared with `<` between them is compared (`enum {en} = a < b < c`). If the order it is declared in means something, separate the values with `<`; if not, write the values or a set."
+        ))
+}
+
 impl Checked {
     pub fn ty_of(&self, name: &str) -> Option<Ty> {
         self.syms.get(name).map(|s| s.ty.clone())
+    }
+
+    /// The enum a type is, when it is an ordered one, optional or not (§15.210).
+    pub fn ordered_enum<'t>(&self, ty: &'t Ty) -> Option<&'t str> {
+        match ty.present() {
+            Ty::Enum(e) if self.ordered.contains(e) => Some(e.as_str()),
+            _ => None,
+        }
+    }
+
+    /// The place of value `v` in the order of the ordered enum `en`, counting from 0.
+    pub fn rank(&self, en: &str, v: &str) -> Option<usize> {
+        if !self.ordered.contains(en) {
+            return None;
+        }
+        self.enums.get(en)?.iter().position(|x| x == v)
+    }
+
+    /// What value `v` of enum `en` is shown as (§15.211): its display name, or its name when it
+    /// has none.
+    pub fn shown_value(&self, en: &str, v: &str) -> String {
+        let i = self.enums.get(en).and_then(|vs| vs.iter().position(|x| x == v));
+        i.and_then(|i| self.labels.get(en).and_then(|ls| ls.get(i).cloned().flatten())).unwrap_or_else(|| v.to_string())
     }
 
     /// Every value of a type of words: an enum's values, or the two truth values. `None` for any
@@ -4975,6 +5167,53 @@ fn koyomi_days(c: &mut Checked, i: &VarDecl, ty: &Ty, from: &crate::ast::DaysFro
             stop(c, tr!("{naming} がとる日を koyomi が数えられません", "koyomi does not count the days {naming} comes to"), tr!("{why}", "{why}"), vec![])
         }
     }
+}
+
+/// `range >=classical <=renaissance` on an input of an enum (§15.210): the values it lets in,
+/// in the enum's order, become the input's universe and what the generated code takes at its
+/// door. An enum with no order has no range to hold a value to (E069), a bound that is none of
+/// its values is said (E012, E103), and a range that lets no value in is E069.
+fn enum_range(c: &mut Checked, i: &VarDecl, en: &str, r: &Range, at: &dyn Fn(usize) -> String) {
+    let place = at(r.span.line);
+    if !c.ordered.contains(en) {
+        c.diags.push(unordered_comparison(en, &place, &r.span, tr!("範囲", "a range")));
+        return;
+    }
+    let order = c.enums.get(en).cloned().unwrap_or_default();
+    let mut ops: Vec<(CmpOp, String)> = Vec::new();
+    for (op, l) in &r.bounds {
+        match l {
+            Lit::Word(w) if order.contains(w) => ops.push((*op, w.clone())),
+            Lit::Word(w) => {
+                let d = match c.enum_of_value(w) {
+                    Some(other) => Diag::error("E103", tr!("範囲の `{w}` は {en} の値ではありません（{other} の値です）", "The bound `{w}` is not a value of {en} (it is one of {other})")),
+                    None => Diag::error("E012", tr!("範囲の `{w}` は {en} の値ではありません", "The bound `{w}` is not a value of {en}")),
+                };
+                c.diags.push(d.at(place.clone()).mark(r.span.clone(), "").note(tr!("{en} の値: {}", "The values of {en}: {}", order.join(" < "))));
+                return;
+            }
+            _ => {
+                c.diags.push(
+                    Diag::error("E103", tr!("範囲の境界が {en} の値ではありません", "A bound of the range is not a value of {en}"))
+                        .at(place.clone())
+                        .mark(r.span.clone(), "")
+                        .note(tr!("{en} の値: {}", "The values of {en}: {}", order.join(" < "))),
+                );
+                return;
+            }
+        }
+    }
+    let values: Vec<String> = order.iter().filter(|v| crate::ast::ranked_holds(&order, &ops, v)).cloned().collect();
+    if values.is_empty() {
+        c.diags.push(
+            Diag::error("E069", tr!("入力 {} の範囲に入る値がありません", "The range of input {} lets no value in", i.name.text))
+                .at(place)
+                .mark(r.span.clone(), "")
+                .note(tr!("{en} の値は {} の順です。", "The values of {en} are, in order, {}.", order.join(" < "))),
+        );
+        return;
+    }
+    c.enum_ranges.insert(i.name.text.clone(), values);
 }
 
 fn bounds_of(r: &Range, ty: &Ty) -> ((Option<Rat>, Option<Rat>), Vec<crate::lex::Num>) {

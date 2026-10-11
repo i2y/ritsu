@@ -90,11 +90,15 @@ const DECLARING: &[&str] = &[
     crate::kw::MACHINE,
 ];
 
+/// The lines an `enums` file holds (§15.212): the vocabulary, and nothing that decides.
+const ENUMS_FILE: &[&str] = &[crate::kw::DESCRIPTION, crate::kw::IMPORT, crate::kw::ENUM, crate::kw::GROUP];
+
 /// How many declarations the file holds so far. A line that leaves this and the diagnostics
 /// as they were has been read into nothing.
 fn declared(f: &RuleFile) -> usize {
     f.imports.len()
         + f.enum_imports.len()
+        + f.enum_froms.len()
         + f.sources.len()
         + f.applies.len()
         + f.enums.len()
@@ -175,19 +179,30 @@ impl P {
     fn rule_file(&mut self) -> Option<RuleFile> {
         self.skip_blank();
         let head = self.cur()?.clone();
-        if head.first().and_then(|t| t.ident()) != Some(crate::kw::RULE) {
-            self.err(
-                Diag::error("E003", tr!("ファイルは `{}` の行で始まらなければなりません", "The file must start with a `{}` line", crate::kw::RULE))
-                    .mark(span_of(&head), tr!("ここに `{} <名前>(<ascii>) v<版>` が要ります", "expected `{} <name>(<ascii>) v<version>` here", crate::kw::RULE)),
-            );
-            return None;
-        }
+        // Two headings: a rule, and a file of enums for rules to read (§15.212).
+        let kind = match head.first().and_then(|t| t.ident()) {
+            Some(crate::kw::RULE) => FileKind::Rule,
+            Some(crate::kw::ENUMS) => FileKind::Enums,
+            _ => {
+                self.err(
+                    Diag::error("E003", tr!("ファイルは `{}` の行で始まらなければなりません", "The file must start with a `{}` line", crate::kw::RULE))
+                        .mark(span_of(&head), tr!("ここに `{} <名前>(<ascii>) v<版>` が要ります", "expected `{} <name>(<ascii>) v<version>` here", crate::kw::RULE))
+                        .note(tr!(
+                            "列挙だけを置くファイルは `{} <名前>(<ascii>) v<版>` で始めます。",
+                            "A file that holds only enums starts with `{} <name>(<ascii>) v<version>`.",
+                            crate::kw::ENUMS
+                        )),
+                );
+                return None;
+            }
+        };
+        let word = if kind == FileKind::Enums { crate::kw::ENUMS } else { crate::kw::RULE };
         // A `rule` line with no name used to end the parse with nothing said, and the file
         // passed the check with no declarations in it (§15.156).
         let Some((name, mut k)) = self.name_at(&head, 1) else {
             self.err(
-                Diag::error("E003", tr!("`{}` の行に規則の名前がありません", "The `{}` line has no name", crate::kw::RULE))
-                    .mark(span_of(&head), tr!("ここに `{} <名前>(<ascii>) v<版>` が要ります", "expected `{} <name>(<ascii>) v<version>` here", crate::kw::RULE)),
+                Diag::error("E003", tr!("`{}` の行に規則の名前がありません", "The `{}` line has no name", word))
+                    .mark(span_of(&head), tr!("ここに `{} <名前>(<ascii>) v<版>` が要ります", "expected `{} <name>(<ascii>) v<version>` here", word)),
             );
             return None;
         };
@@ -201,11 +216,13 @@ impl P {
         self.i += 1;
 
         let mut f = RuleFile {
+            kind,
             name,
             version,
             description: None,
             imports: Vec::new(),
             enum_imports: Vec::new(),
+            enum_froms: Vec::new(),
             sources: Vec::new(),
             applies: Vec::new(),
             enums: Vec::new(),
@@ -241,12 +258,51 @@ impl P {
             // declares nothing is never dropped in silence: if it added nothing to the file
             // and said nothing about why, E058 says it.
             let start = self.i;
+            // A file of enums holds the vocabulary rules share and nothing that decides
+            // anything (§15.212). What else it holds is said once, at its line, and read as
+            // usual, so that the lines under it are not taken for something else.
+            let enum_from = word == crate::kw::IMPORT && line.get(1).and_then(|t| t.ident()) == Some(crate::kw::ENUM);
+            if f.kind == FileKind::Enums
+                && (enum_from || (crate::kw::LINE_HEAD.contains(&word.as_str()) && !ENUMS_FILE.contains(&word.as_str())))
+            {
+                let at = self.at(span_of(&line).line);
+                self.err(
+                    Diag::error("E066", tr!("`{}` のファイルに `{}` は書けません", "An `{}` file cannot hold `{}`", crate::kw::ENUMS, if enum_from { format!("{} {}", crate::kw::IMPORT, crate::kw::ENUM) } else { word.clone() }))
+                        .at(at)
+                        .mark(span_of(&line), "")
+                        .note(tr!(
+                            "`{}` のファイルは、規則どうしが分け合う列挙を置く場所です。書けるのは {} だけで、関数は生成しません。",
+                            "An `{}` file holds the enums rules share. It takes {} and nothing else, and no function is generated from it.",
+                            crate::kw::ENUMS,
+                            ENUMS_FILE.iter().map(|w| format!("`{w}`")).collect::<Vec<_>>().join(", ")
+                        ))
+                        .note(if enum_from {
+                            tr!(
+                                "列挙は一つのファイルが持ち、規則はそこから読みます。`{}` のファイルどうしで読み合うと、持ち主が一つに決まりません。",
+                                "One file owns an enum and rules read it from there. Two `{}` files reading from each other would leave it with no single owner.",
+                                crate::kw::ENUMS
+                            )
+                        } else {
+                            tr!(
+                                "表や入力は、列挙を `import {} … from` で読む規則の側に書いてください。",
+                                "Write the tables and the inputs in a rule that reads the enum with `import {} … from`.",
+                                crate::kw::ENUM
+                            )
+                        }),
+                );
+            }
             let before = (self.diags.len(), declared(&f));
             match word.as_str() {
                 crate::kw::DESCRIPTION => {
                     match line.get(1).map(|t| t.kind.clone()) {
                         Some(Kind::Str(s)) if line.len() == 2 => f.description = Some(s),
                         _ => self.err(unreadable(&word, &line, tr!("`{}` の後には文字列を一つだけ書いてください", "`{}` takes one string and nothing else", crate::kw::DESCRIPTION), self.at(span_of(&line).line))),
+                    }
+                    self.i += 1;
+                }
+                crate::kw::IMPORT if enum_from => {
+                    if let Some(e) = self.enum_from(&line) {
+                        f.enum_froms.push(e);
                     }
                     self.i += 1;
                 }
@@ -589,6 +645,9 @@ impl P {
         Some((Name { text, ascii, span: t.span.clone() }, j))
     }
 
+    /// `enum <name> = <value> | <value> …`, or with `<` between the values for an ordered enum
+    /// (§15.210). After a value: its display name in quotes (§15.211), then `default`. After
+    /// the last value: `open` (§15.212, syntax only here).
     fn enum_decl(&mut self, line: &[Token]) -> Option<EnumDecl> {
         let (name, mut k) = self.decl_name(line, crate::kw::ENUM)?;
         if !line.get(k).is_some_and(|t| t.is(&Kind::Eq)) {
@@ -598,21 +657,135 @@ impl P {
         k += 1;
         let mut values = Vec::new();
         let mut default_marks = Vec::new();
+        let mut labels: Vec<Option<(String, Span)>> = Vec::new();
+        // The separators as written: `<` makes the order the meaning, `|` leaves it out.
+        let mut seps: Vec<(bool, Span)> = Vec::new();
+        let mut open = None;
+        let mut after_value = false;
         while k < line.len() {
-            if line[k].is(&Kind::Pipe) {
+            if line[k].is(&Kind::Pipe) || line[k].is(&Kind::Lt) {
+                seps.push((line[k].is(&Kind::Lt), line[k].span.clone()));
+                after_value = false;
+                k += 1;
+                continue;
+            }
+            // `open` closes the line after a value; after `=`, `|` or `<` it is a value's name,
+            // which a value may have (§13.1 of the extensions' design).
+            if after_value && k + 1 == line.len() && line[k].ident() == Some(crate::kw::OPEN) {
+                open = Some(line[k].span.clone());
                 k += 1;
                 continue;
             }
             let (v, nk) = self.name_at(line, k)?;
             values.push(v);
             k = nk;
+            let label = match line.get(k).map(|t| &t.kind) {
+                Some(Kind::Str(s)) => {
+                    let l = (s.clone(), line[k].span.clone());
+                    k += 1;
+                    Some(l)
+                }
+                _ => None,
+            };
+            labels.push(label);
             let marked = line.get(k).and_then(|t| t.ident()) == Some(crate::kw::DEFAULT);
             default_marks.push(marked);
             if marked {
                 k += 1;
             }
+            after_value = true;
         }
-        Some(EnumDecl { name, values, default_marks, span: span_of(line) })
+        // All `<` or all `|`. Mixed, the line says two things about whether the order means
+        // anything, and whichever were taken would be a guess.
+        let ordered = !seps.is_empty() && seps.iter().all(|(lt, _)| *lt);
+        if seps.iter().any(|(lt, _)| *lt) && !ordered {
+            let first_lt = seps.iter().position(|(lt, _)| *lt).unwrap_or(0);
+            let odd = if first_lt == 0 { seps.iter().find(|(lt, _)| !*lt) } else { seps.iter().find(|(lt, _)| *lt) };
+            let sp = odd.map(|(_, s)| s.clone()).unwrap_or_else(|| span_of(line));
+            let at = self.at(sp.line);
+            self.err(
+                Diag::error("E069", tr!("列挙 {} の値の区切りに `<` と `|` が混ざっています", "Enum {} separates its values with both `<` and `|`", name.text))
+                    .at(at)
+                    .mark(sp, tr!("ほかの区切りと違います", "this one differs from the others"))
+                    .note(tr!(
+                        "`<` で区切ると、書いた順が値の順序になり、セルに `<medieval` のような比較を書けます。順序に意味の無い列挙は `|` で区切ります。どちらか一方にそろえてください。",
+                        "Separated by `<`, the values are ordered as written and a cell may compare against one (`<medieval`). An enum whose order means nothing is separated by `|`. Use one of the two throughout."
+                    )),
+            );
+        }
+        // A display name is for telling values apart on a screen (§15.211): an empty one, one
+        // that holds a control character, and two of one enum spelled alike tell nothing apart.
+        let mut seen: Vec<(String, String)> = Vec::new();
+        for (i, l) in labels.iter().enumerate() {
+            let Some((s, sp)) = l else { continue };
+            let at = self.at(sp.line);
+            let value = values.get(i).map(|v| v.text.clone()).unwrap_or_default();
+            if s.trim().is_empty() || s.chars().any(|c| c.is_control()) {
+                self.err(
+                    Diag::error("E069", tr!("値 {value} の表示名が空か、制御文字を含んでいます", "The display name of value {value} is empty or holds a control character"))
+                        .at(at)
+                        .mark(sp.clone(), "")
+                        .note(tr!(
+                            "表示名は、画面とページでその値を見分けるための名前です。空白だけの名前やタブを含む名前は、見分けの役に立ちません。",
+                            "A display name tells a value apart on a screen and on the page. One that is blank or holds a tab tells nothing apart."
+                        )),
+                );
+                continue;
+            }
+            if let Some((_, other)) = seen.iter().find(|(x, _)| x == s) {
+                self.err(
+                    Diag::error("E069", tr!("列挙 {} の値 {other} と {value} の表示名が同じです", "Values {other} and {value} of enum {} have the same display name", name.text))
+                        .at(at)
+                        .mark(sp.clone(), tr!("`{s}` は二つめです", "`{s}` is the second"))
+                        .note(tr!(
+                            "表示名が同じだと、画面で二つの値を見分けられません。どちらかを変えてください。",
+                            "With the same display name, the two values cannot be told apart on a screen. Change one of them."
+                        )),
+                );
+                continue;
+            }
+            seen.push((s.clone(), value));
+        }
+        Some(EnumDecl { name, values, default_marks, labels, ordered, open, from: None, span: span_of(line) })
+    }
+
+    /// `import enum <enum> from "<file>" [-> <name>]` (§15.212).
+    fn enum_from(&mut self, line: &[Token]) -> Option<EnumFrom> {
+        let shape = || {
+            Diag::error("E013", tr!("`import enum` の行の形が違います", "The shape of the `import enum` line is wrong"))
+                .mark(span_of(line), "")
+                .note(tr!(
+                    "形は `import enum <列挙> from \"<enums のファイル>\"` か、名前を変えて `import enum <列挙> from \"<enums のファイル>\" -> <この規則での名前>` です。",
+                    "The shape is `import enum <enum> from \"<enums file>\"`, or `import enum <enum> from \"<enums file>\" -> <name in this rule>` to rename it."
+                ))
+        };
+        let Some((name, k)) = self.name_at(line, 2) else {
+            self.err(shape());
+            return None;
+        };
+        if line.get(k).and_then(|t| t.ident()) != Some(crate::kw::FROM) {
+            self.err(shape());
+            return None;
+        }
+        let Some(Kind::Str(file)) = line.get(k + 1).map(|t| t.kind.clone()) else {
+            self.err(shape());
+            return None;
+        };
+        let local = match line.get(k + 2) {
+            None => None,
+            Some(t) if t.is(&Kind::Arrow) => match self.name_at(line, k + 3) {
+                Some((n, j)) if j == line.len() => Some(n),
+                _ => {
+                    self.err(shape());
+                    return None;
+                }
+            },
+            Some(_) => {
+                self.err(shape());
+                return None;
+            }
+        };
+        Some(EnumFrom { name, file, local, span: span_of(line) })
     }
 
     /// `import proto "<file>" <Enum> -> <enum>` and `import jsonschema "<file>" "<pointer>"
@@ -684,7 +857,7 @@ impl P {
             members.push(v);
             k = nk;
         }
-        Some(GroupDecl { name, members, span: span_of(line) })
+        Some(GroupDecl { name, members, span: span_of(line), from: None })
     }
 
     /// An indented run of declarations under `inputs` / `outputs`.

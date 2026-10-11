@@ -1075,6 +1075,29 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
     let json = a.get("--format") == Some("json");
     let markdown = a.get("--format") == Some("markdown");
 
+    // An `enums` file decides nothing (§15.212). What is about a decision — the wire of its
+    // function, an adapter for it, the records it answered, the answers two versions give, a
+    // page to try a case on or to publish for customers — is not there to give, and is not made
+    // up from nothing.
+    let about_a_decision = matches!(cmd.name, "schema" | "adapter" | "verify" | "replay" | "diff" | "fixtures")
+        || (cmd.name == "doc" && (a.get("--format") == Some("html") || a.get("--audience") == Some("customer")));
+    if about_a_decision {
+        if let Some(p) = files.iter().find(|p| crate::enums::is_enums_file(p)) {
+            let name = cmd.name;
+            return refuse(if name == "doc" {
+                tr!(
+                    "`{p}` は enums のファイルで、何も決めません。事例を試すページも、お客さま向けのページもありません。ページは `rulec doc {p}` が書きます",
+                    "`{p}` is an enums file and decides nothing, so it has no page to try a case on and none for customers; `rulec doc {p}` writes its page"
+                )
+            } else {
+                tr!(
+                    "`{p}` は enums のファイルで、何も決めません。`rulec {name}` が扱うものが無いので、それを読む規則に使ってください",
+                    "`{p}` is an enums file and decides nothing, so `rulec {name}` has nothing to work on; run it on a rule that reads it"
+                )
+            });
+        }
+    }
+
     match cmd.name {
         "check" => {
             let budget = match a.get("--budget") {

@@ -1598,6 +1598,36 @@ def optional_input(t, a):
     return a.get("kind") == "input" and str(types.get(a["column"], "")).endswith("?")
 
 
+def enum_order(t, axis):
+    """The values of the ordered enum an axis is of, in their order (rulec's §15.210). An axis
+    of any other type has none, and a cell that compares on one is not a cell of the rule."""
+    cert = t.get("_cert") or {}
+    ty = str((cert.get("types") or {}).get(axis["column"], "")).rstrip("?")
+    if ty not in (cert.get("ordered") or []):
+        raise Bad(f"{t['table']}: {axis['column']} is compared by order, and {ty or 'its type'} has none")
+    return list((cert.get("enums") or {}).get(ty) or [])
+
+
+def check_enum_axis(t, ai):
+    """An input of an enum runs over every value of the enum and no other — or over the values
+    its range lets in, for an ordered one that declares one (rulec's §15.210) — with the absent
+    value first where it is optional. A value quietly left off would be a value no row was ever
+    asked to cover."""
+    a = t["axes"][ai]
+    cert = t.get("_cert") or {}
+    ty = str((cert.get("types") or {}).get(a["column"], ""))
+    enums = cert.get("enums") or {}
+    if a.get("kind") != "input" or ty.rstrip("?") not in enums:
+        return
+    want = [v for v in enums[ty.rstrip("?")] if a["column"] not in (cert.get("enum_ranges") or {})
+            or v in cert["enum_ranges"][a["column"]]]
+    if ty.endswith("?"):
+        want = ["none"] + want
+    if list(a.get("coords") or []) != want:
+        raise Bad(f"{t['table']}: {a['column']}'s axis is not the values its enum lets in: "
+                  f"{a.get('coords')} where {want} was declared")
+
+
 def check_axis(t, ai):
     """A numeric axis has to tile: its coordinates run from the declared range's low end to
     its high end, each touching the next or one grid step past it, with nothing between.
@@ -1813,6 +1843,17 @@ def box_from_cells(t, row, groups):
                 if any(coord_admits((num(b[0]), num(b[1])), op, v) for op, v in tests):
                     hit.append(i)
             out.append(hit if kind == "in" else [i for i in range(len(coords)) if i not in set(hit)])
+        elif kind == "rank":
+            # A comparison on an ordered enum (rulec's §15.210): the values whose place in the
+            # order the certificate gives the enum passes every comparison. The absent value of
+            # an optional input is no value of the enum.
+            order = enum_order(t, axis)
+            tests = [(x["op"], x["value"]) for x in cell["tests"]]
+            if any(v not in order for _, v in tests):
+                raise Bad(f"{t['table']}: {axis['column']} is compared against a value its enum does not have")
+            at = {w: i for i, w in enumerate(order)}
+            ops = {"<": lambda a, b: a < b, "<=": lambda a, b: a <= b, ">": lambda a, b: a > b, ">=": lambda a, b: a >= b}
+            out.append([i for i, c in enumerate(coords) if c in at and all(ops[op](at[c], at[v]) for op, v in tests)])
         elif kind == "cmp":
             tests = [(x["op"], num(x["value"])) for x in cell["tests"]]
             if any(v is None for _, v in tests):
@@ -1900,6 +1941,7 @@ def check_table(t):
         if not a.get("coords"):
             raise Bad(f"{name}: {a['column']} has no coordinates, so it stands for nothing")
         tiled += check_axis(t, ai)
+        check_enum_axis(t, ai)
     if len(rows) != len(t["rows"]):
         # Everything below looks a row up by its number. Two rows sharing one would leave
         # the pair between them unexamined, because neither is earlier than the other.
@@ -2402,6 +2444,11 @@ def cell_agrees(t, axis, row, shape, st):
             return literal_agrees(where, axis, shape[1], st["tests"][0]["value"])
         raise Bad(f"{where}: the file writes one literal, the certificate reads it as `{kind}`")
     # a comparison
+    if kind == "rank":
+        # On an ordered enum (rulec's §15.210): the same comparisons, against the same values.
+        if [(op, lit) for op, lit in shape[1]] != [(x["op"], x["value"]) for x in st["tests"]]:
+            raise Bad(f"{where}: the comparisons in the file are not the ones the certificate states")
+        return 0
     if kind != "cmp":
         raise Bad(f"{where}: the file compares, the certificate reads the cell as `{kind}`")
     if len(shape[1]) != len(st["tests"]):

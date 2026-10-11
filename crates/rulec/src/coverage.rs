@@ -733,6 +733,7 @@ pub fn value_duties(f: &RuleFile, c: &Checked) -> Vec<ValueDuty> {
                 .filter(|(_, cell)| match cell {
                     Cell::Lit(_) | Cell::Nothing => true,
                     Cell::Set(xs) => xs.len() == 1,
+                    Cell::Ranked { values, .. } => values.len() == 1,
                     _ => false,
                 })
                 .map(|((col, _), _)| col.as_str())

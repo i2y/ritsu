@@ -316,8 +316,19 @@ fn sorted<T: Ord>(mut v: Vec<T>) -> Vec<T> {
 /// the names put in an order that does not: its policy and the shape of its axes, each row's
 /// tests and how many points it accepts on each axis, which pairs of rows are told apart, which
 /// rows are refuted, undecided, unused or unreachable, which rows a point reaches, and the shape
-/// of the three trees (`cover`, `linear`, `above`).
-fn table_claims(t: &Json) -> String {
+/// of the three trees (`cover`, `linear`, `above`). A comparison on an ordered enum (`>=gold`)
+/// is against a value, which is a name; it is compared by the value's place in the enum's order.
+fn table_claims(t: &Json, cert: &Json) -> String {
+    let place = |column: &str, value: &Json| -> String {
+        let ty = cert.get("types").and_then(|ts| ts.get(column)).and_then(Json::as_str).unwrap_or("").trim_end_matches('?');
+        let order = match cert.get("enums").and_then(|es| es.get(ty)) {
+            Some(Json::Arr(vs)) => vs.iter().filter_map(Json::as_str).collect::<Vec<_>>(),
+            _ => Vec::new(),
+        };
+        let v = value.as_str().unwrap_or("");
+        order.iter().position(|w| *w == v).map(|i| format!("place {i}")).unwrap_or_else(|| format!("no place for {v:?}"))
+    };
+    let columns: Vec<&str> = items(t, "axes").iter().map(|a| field(a, "column").as_str().unwrap_or("")).collect();
     let axes: Vec<String> = sorted(
         items(t, "axes")
             .iter()
@@ -332,7 +343,12 @@ fn table_claims(t: &Json) -> String {
             let cmps = sorted(
                 tests
                     .iter()
-                    .flat_map(|x| match x.get("tests") {
+                    .zip(&columns)
+                    .flat_map(|(x, column)| match x.get("tests") {
+                        Some(Json::Arr(a)) if x.get("cell").and_then(Json::as_str) == Some("rank") => a
+                            .iter()
+                            .map(|c| format!("{} {}", json::show(c.get("op").unwrap_or(&Json::Null)), place(column, c.get("value").unwrap_or(&Json::Null))))
+                            .collect::<Vec<_>>(),
                         Some(Json::Arr(a)) => a.iter().map(|c| format!("{}{}", json::show(c.get("op").unwrap_or(&Json::Null)), json::show(c.get("value").unwrap_or(&Json::Null)))).collect::<Vec<_>>(),
                         _ => vec![],
                     })
@@ -402,7 +418,7 @@ fn claims(rel: &str) -> Vec<String> {
         format!("values {} {}", count("values"), shape_of(field(&cert, "values"))),
         format!("machine {}", if matches!(machine, Json::Null) { "none".to_string() } else { shape_of(machine) }),
     ];
-    v.extend(items(&cert, "tables").iter().map(table_claims));
+    v.extend(items(&cert, "tables").iter().map(|t| table_claims(t, &cert)));
     v
 }
 

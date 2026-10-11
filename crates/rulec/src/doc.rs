@@ -78,6 +78,58 @@ fn md_esc(s: &str) -> String {
     s.replace('|', "\\|")
 }
 
+/// A display name (§15.211) as Markdown. The author wrote it as text, so every character
+/// Markdown or a site would read as something else — emphasis, a code span, a link, a tag, an
+/// entity, strikethrough, the dollar sign a site reads as maths — gets a backslash, which
+/// CommonMark reads as the character itself, and so does the page's HTML. A bar is left to
+/// [`md_esc`], which every table cell goes through.
+fn md_text(s: &str) -> String {
+    let mut o = String::with_capacity(s.len());
+    for ch in s.chars() {
+        if matches!(ch, '\\' | '`' | '*' | '_' | '[' | ']' | '<' | '>' | '!' | '&' | '~' | '$') {
+            o.push('\\');
+        }
+        o.push(ch);
+    }
+    o
+}
+
+/// A display name, or the value's own name where it has none, as Markdown.
+fn md_shown(c: &Checked, en: &str, v: &str) -> String {
+    if c.labels.contains_key(en) {
+        md_text(&c.shown_value(en, v))
+    } else {
+        v.to_string()
+    }
+}
+
+/// The cells of a pipe-table line: split at each bar that no backslash escapes, each cell as
+/// written (its escapes are read where it is turned into HTML).
+fn table_cells(line: &str) -> Vec<String> {
+    let inner = line.trim();
+    let inner = inner.strip_prefix('|').unwrap_or(inner);
+    let inner = if inner.ends_with('|') && !inner.ends_with("\\|") { &inner[..inner.len() - 1] } else { inner };
+    let mut cells = Vec::new();
+    let mut cur = String::new();
+    let mut escaped = false;
+    for ch in inner.chars() {
+        if escaped {
+            cur.push(ch);
+            escaped = false;
+        } else if ch == '\\' {
+            cur.push(ch);
+            escaped = true;
+        } else if ch == '|' {
+            cells.push(cur.trim().to_string());
+            cur.clear();
+        } else {
+            cur.push(ch);
+        }
+    }
+    cells.push(cur.trim().to_string());
+    cells
+}
+
 /// Prose the rule writes, put into the Markdown as a paragraph (its description): a `<` that would
 /// open HTML there — a tag, a comment, a declaration, an autolink, that is `<` followed by a letter,
 /// `/`, `!` or `?` — is written `&lt;`, outside the code spans, so that the text reads as text
@@ -152,6 +204,10 @@ fn ty_text(c: &Checked, name: &str) -> String {
 }
 
 fn range_text(c: &Checked, name: &str) -> String {
+    // An input of an ordered enum held to a range (§15.210): its first and its last value.
+    if let Some((lo, hi)) = c.enum_ranges.get(name).and_then(|vs| Some((vs.first()?, vs.last()?))) {
+        return tr!("{lo} 〜 {hi}", "{lo} to {hi}");
+    }
     let Some((lo, hi)) = c.ranges.get(name) else { return String::new() };
     // An optional input's range is the range of its values when it has one (§15.201).
     let ty = c.ty_of(name).map(|t| t.present().clone());
@@ -290,9 +346,27 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
         env!("CARGO_PKG_VERSION"),
         &hash[..12]
     ));
-    o.push_str(&tr!("# 規則 {} v{}\n", "# Rule {} v{}\n", f.name.text, f.version));
+    let enums_file = f.kind == crate::ast::FileKind::Enums;
+    if enums_file {
+        o.push_str(&tr!("# 列挙 {} v{}\n", "# Enums {} v{}\n", f.name.text, f.version));
+    } else {
+        o.push_str(&tr!("# 規則 {} v{}\n", "# Rule {} v{}\n", f.name.text, f.version));
+    }
     if let Some(d) = &f.description {
         o.push_str(&format!("\n{}\n", md_prose(d)));
+    }
+    // A file of enums is its vocabulary and nothing else (§15.212): the rules that read it are
+    // where the inputs, the outputs and the tables are.
+    if enums_file {
+        o.push_str(&tr!(
+            "\nこのファイルは列挙だけを持ちます。規則は `{} <列挙> from \"{}\"` で読み、値も順序も表示名も書き直しません。\n",
+            "\nThis file holds enums and nothing else. A rule reads one with `{} <enum> from \"{}\"`, and writes none of its values, its order or its display names again.\n",
+            format!("{} {}", crate::kw::IMPORT, crate::kw::ENUM),
+            md_esc(&ritsu_emit::header::file_name(path))
+        ));
+        o.push_str(&enums_section(f, c));
+        o.push_str(&groups_section(f, c));
+        return o;
     }
 
     // --- Inputs
@@ -392,6 +466,17 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
         ));
     }
 
+    o.push_str(&enums_section(f, c));
+    o.push_str(&groups_section(f, c));
+    o.push_str(&render_rest(f, c, src, path, &lines));
+    o
+}
+
+/// The enums a rule names: each one's values — in their order, for an ordered enum (§15.210),
+/// with their display names where it gives them (§15.211) — and where the set is kept, when it
+/// is another file's (§15.59, §15.212).
+fn enums_section(f: &RuleFile, c: &Checked) -> String {
+    let mut o = String::new();
     // --- Types. Closed enums: once a value is added, the completeness check breaks the
     // existing tables.
     if !f.enums.is_empty() || !f.imports.is_empty() || !f.enum_imports.is_empty() {
@@ -409,20 +494,49 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
                     // The `既定扱い` mark of §2.1 (`default`): a declaration that the value has
                     // no row of its own and is meant to fall to the default row. This intent is
                     // exactly what the reader should read.
+                    let shown = match e.label(i) {
+                        Some(l) => tr!("{}「{}」", "{} \"{}\"", md_esc(&v.text), md_text(l)),
+                        None => md_esc(&v.text),
+                    };
                     if *e.default_marks.get(i).unwrap_or(&false) {
-                        tr!("{}（{}）", "{} ({})", v.text, crate::kw::DEFAULT)
+                        tr!("{}（{}）", "{} ({})", shown, crate::kw::DEFAULT)
                     } else {
-                        v.text.clone()
+                        shown
                     }
                 })
                 .collect();
+            // An ordered enum is read in its order (§15.210): the reader reads a comparison in a
+            // cell against it.
+            let joined = if e.ordered { vs.join(" < ") } else { vs.join(sep()) };
             o.push_str(&tr!(
                 "- **{}**（{}）— {}\n",
                 "- **{}** ({}) — {}\n",
                 md_esc(&e.name.text),
                 n_values(e.values.len()),
-                md_esc(&vs.join(sep()))
+                joined
             ));
+            if e.ordered {
+                o.push_str(&tr!(
+                    "  - 値はこの順に並びます。セルの `<{0}` は「{0} より前」、`>={0}` は「{0} から後」です。\n",
+                    "  - The values are ordered as listed. A cell's `<{0}` is \"before {0}\", and `>={0}` is \"{0} and after\".\n",
+                    md_esc(e.values.get(e.values.len() / 2).map(|v| v.text.as_str()).unwrap_or(""))
+                ));
+            }
+            // Where the enum is kept, when another file keeps it (§15.212).
+            if let Some(owner) = &e.from {
+                // The name it has there, where this rule reads it under another.
+                let there = if owner.name.text == e.name.text {
+                    String::new()
+                } else {
+                    tr!("（そこでの名前は {}）", " (named {} there)", md_esc(&owner.name.text))
+                };
+                o.push_str(&tr!(
+                    "  - この列挙は `{}` から読みます{}。値・順序・表示名はそのファイルが持ち、`rulec check` は毎回そのファイルを読みます。\n",
+                    "  - This enum is read from `{}`{}. That file keeps its values, order and display names, and `rulec check` reads it every time.\n",
+                    md_esc(&owner.file),
+                    there
+                ));
+            }
             // Where the set came from, when it is not this file's to decide (§15.59). The
             // reader is the person who has to know the set can change without this file changing.
             if let Some(p) = f.enum_imports.iter().find(|p| p.target.text == e.name.text) {
@@ -464,6 +578,12 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
         }
     }
 
+    o
+}
+
+/// The groups a rule names, and what each one word stands for.
+fn groups_section(f: &RuleFile, c: &Checked) -> String {
+    let mut o = String::new();
     // --- Groups. What one word hides.
     if !f.groups.is_empty() {
         o.push_str(&tr!("\n## グループ\n\n", "\n## Groups\n\n"));
@@ -488,6 +608,14 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
             o.push_str(&format!("\n{}\n", group_fact(c, en, names)));
         }
     }
+    o
+}
+
+/// Everything on the page after the enums and the groups.
+fn render_rest(f: &RuleFile, c: &Checked, src: &str, path: &str, lines: &[&str]) -> String {
+    let _ = src;
+    let lines: Vec<&str> = lines.to_vec();
+    let mut o = String::new();
 
     // --- Constraints. What the table does not have to cover, and why.
     //
@@ -2265,7 +2393,24 @@ fn customer_table(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str]) -> Strin
     let rows: Vec<Vec<String>> = t
         .rows
         .iter()
-        .map(|r| source_cells(lines, r.span.line).iter().map(|x| customer_cell(x)).collect())
+        .map(|r| {
+            source_cells(lines, r.span.line)
+                .iter()
+                .enumerate()
+                .map(|(ci, x)| {
+                    // A cell of an enum column, in the words the enum gives its values (§15.210,
+                    // §15.211); any other cell as it is written.
+                    let en = t.inputs.get(ci).and_then(|(col, _)| c.ty_of(col)).and_then(|ty| match ty.present() {
+                        Ty::Enum(e) => Some(e.clone()),
+                        _ => None,
+                    });
+                    match (en, r.cells.get(ci)) {
+                        (Some(en), Some(cell)) => customer_enum_cell(c, &en, cell).unwrap_or_else(|| customer_cell(x)),
+                        _ => customer_cell(x),
+                    }
+                })
+                .collect()
+        })
         .collect();
     o.push_str(&md_table_nums(&head, &rows, Some(&row_nums(t))));
     if t.policy == Policy::TopDown {
@@ -2301,6 +2446,54 @@ fn customer_table(f: &RuleFile, c: &Checked, t: &Table, lines: &[&str]) -> Strin
         }
     }
     o
+}
+
+/// A cell of an enum column in the customer's words, where the enum has words of its own to say
+/// it in: a comparison on an ordered enum as "before" and "from" (§15.210), and a value by its
+/// display name (§15.211). `None` for a cell the plain reading says as well.
+fn customer_enum_cell(c: &Checked, en: &str, cell: &Cell) -> Option<String> {
+    let shown = |v: &str| md_shown(c, en, v);
+    let labelled = c.labels.contains_key(en);
+    let word = |l: &Lit| -> Option<String> {
+        match l {
+            Lit::Word(w) if !c.groups.contains_key(w) => Some(shown(w)),
+            Lit::Word(w) => Some(w.clone()),
+            _ => None,
+        }
+    };
+    match cell {
+        Cell::Ranked { ops, .. } => {
+            let one = |op: CmpOp, v: &str| -> String {
+                let v = shown(v);
+                match op {
+                    CmpOp::Lt => tr!("{v}より前", "before {v}"),
+                    CmpOp::Le => tr!("{v}まで", "up to {v}"),
+                    CmpOp::Gt => tr!("{v}より後", "after {v}"),
+                    CmpOp::Ge => tr!("{v}から", "{v} and after"),
+                }
+            };
+            let lower = ops.iter().find(|(op, _)| matches!(op, CmpOp::Ge | CmpOp::Gt));
+            let upper = ops.iter().find(|(op, _)| matches!(op, CmpOp::Le | CmpOp::Lt));
+            Some(match (ops.len(), lower, upper) {
+                (2, Some((lo, lv)), Some((ho, hv))) => {
+                    let from = match lo {
+                        CmpOp::Ge => tr!("{}から", "from {}", shown(lv)),
+                        _ => tr!("{}より後から", "after {}", shown(lv)),
+                    };
+                    let to = match ho {
+                        CmpOp::Lt => tr!("{}より前まで", "before {}", shown(hv)),
+                        _ => tr!("{}まで", "up to {}", shown(hv)),
+                    };
+                    tr!("{from}{to}", "{from}, {to}")
+                }
+                _ => ops.iter().map(|(op, v)| one(*op, v)).collect::<Vec<_>>().join(if crate::i18n::ja() { "、" } else { ", " }),
+            })
+        }
+        Cell::Lit(l) if labelled => word(l),
+        Cell::Set(ls) if labelled => Some(ls.iter().filter_map(word).collect::<Vec<_>>().join(sep())),
+        Cell::Not(ls) if labelled => Some(tr!("{}以外", "other than {}", ls.iter().filter_map(word).collect::<Vec<_>>().join(sep()))),
+        _ => None,
+    }
 }
 
 /// `届け先(dest)` → `届け先`: the alias is for the generated code, not for the reader.
@@ -2425,7 +2618,17 @@ fn customer_input(c: &Checked, name: &str) -> String {
     let present = |ty: Option<Ty>| -> String {
         match ty {
             Some(Ty::Enum(e)) => {
-                let vs = c.enums.get(&e).cloned().unwrap_or_default();
+                // By the names the values are shown with (§15.211), and only those the input's
+                // range lets in (§15.210).
+                let vs: Vec<String> = c
+                    .enums
+                    .get(&e)
+                    .cloned()
+                    .unwrap_or_default()
+                    .iter()
+                    .filter(|v| c.enum_ranges.get(name).is_none_or(|r| r.contains(v)))
+                    .map(|v| md_shown(c, &e, v))
+                    .collect();
                 if vs.len() <= 8 {
                     tr!("{}のいずれか", "one of {}", vs.join(if crate::i18n::ja() { "・" } else { ", " }))
                 } else {
@@ -3159,6 +3362,19 @@ fn inline_html(s: &str) -> String {
             i += 2;
             continue;
         }
+        // A backslash before a punctuation mark is the mark itself, as CommonMark reads it: what
+        // a display name escapes (§15.211), and the bar a table's cell escapes.
+        if !code && ch == '\\' && cs.get(i + 1).is_some_and(|n| n.is_ascii_punctuation()) {
+            match cs[i + 1] {
+                '&' => o.push_str("&amp;"),
+                '<' => o.push_str("&lt;"),
+                '>' => o.push_str("&gt;"),
+                '"' => o.push_str("&quot;"),
+                n => o.push(n),
+            }
+            i += 2;
+            continue;
+        }
         match ch {
             '&' => o.push_str("&amp;"),
             '<' => o.push_str("&lt;"),
@@ -3197,7 +3413,7 @@ fn md_to_html(md: &str) -> String {
             let mut rows: Vec<Vec<String>> = quote
                 .iter()
                 .filter(|l| !l.starts_with("|---"))
-                .map(|l| l.trim_matches('|').split('|').map(|c| c.trim().replace("\\|", "|")).collect())
+                .map(|l| table_cells(l))
                 .collect();
             flush_table(o, &mut rows, &None);
         } else {
@@ -3406,11 +3622,7 @@ fn md_to_html(md: &str) -> String {
             if t.starts_with("|---") {
                 continue;
             }
-            let cells: Vec<String> = t
-                .trim_matches('|')
-                .split('|')
-                .map(|c| c.trim().replace("\\|", "|"))
-                .collect();
+            let cells: Vec<String> = table_cells(t);
             rows.push(cells);
             continue;
         }

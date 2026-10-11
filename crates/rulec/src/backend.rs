@@ -99,6 +99,15 @@ pub struct Backend {
     /// What else has to be there beyond `tool`, checked before the language is run; the Err is
     /// the note `rulec test` prints when it skips the language for that reason.
     pub ready: Option<fn() -> Result<(), String>>,
+    /// The source of an `enums` file's module that has to be built together with a rule that
+    /// reads its types from it, by the module's name (§15.212). `None` for a language that
+    /// reaches the module on its own — by an import, a `mod`, a `go.mod`, or the source path
+    /// javac searches.
+    pub owner_source: Option<fn(&str) -> String>,
+    /// Whether the runner answers `--labels`: the display name of each value a line names
+    /// (§15.211). Wasm has one entry, `call`, and no label function; SQL's query has none either,
+    /// and its PostgreSQL function file answers in the pass `pg` runs.
+    pub labels: bool,
     /// The words this language will not let **any** identifier be — its keywords
     /// (§15.103). Every ASCII alias reaches at least one target verbatim: measured, a rule
     /// with an input aliased `type` generated Rust that reads `pub fn sum(type: i64, …)`
@@ -255,7 +264,7 @@ const LOCAL_STUBS: &str = r#"{"version":"v2","plugins":[{"local":"protoc-gen-py"
 /// `encoding/json`, `fmt`, `os`, `time`, `testing`, no generics, no `slices` or `maps`, and
 /// `min`/`max` written out by hand. 1.21 is the oldest release this was run against; asking for
 /// more would only switch toolchains on somebody's machine for nothing.
-const GO_MIN: &str = "1.21";
+pub const GO_MIN: &str = "1.21";
 
 /// How the generated Java is compiled, in `rulec test` and in the `build` line of
 /// `rulec api` alike, so that the two cannot part company (the same arrangement the two
@@ -307,6 +316,8 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
+        owner_source: None,
+        labels: true,
         reserved: words::PYTHON.reserved,
         globals: words::PYTHON.globals,
         modules: words::PYTHON.modules,
@@ -355,6 +366,8 @@ pub const ALL: &[Backend] = &[
             }
         }),
         // The plan is JSON: a name here is data the runtime reads, never an identifier.
+        owner_source: None,
+        labels: true,
         reserved: words::NUMPY.reserved,
         globals: words::NUMPY.globals,
         modules: words::NUMPY.modules,
@@ -387,6 +400,8 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
+        owner_source: None,
+        labels: true,
         reserved: words::TYPESCRIPT.reserved,
         globals: words::TYPESCRIPT.globals,
         modules: words::TYPESCRIPT.modules,
@@ -419,6 +434,8 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
+        owner_source: None,
+        labels: true,
         reserved: words::JAVASCRIPT.reserved,
         globals: words::JAVASCRIPT.globals,
         modules: words::JAVASCRIPT.modules,
@@ -468,6 +485,8 @@ pub const ALL: &[Backend] = &[
         // the rule, included by path, so nothing has to be built first.
         proof: Some(|alias| Plan::new("rust", "kani", &[&format!("{alias}_proof.rs")])),
         ready: None,
+        owner_source: None,
+        labels: true,
         reserved: words::RUST.reserved,
         globals: words::RUST.globals,
         modules: words::RUST.modules,
@@ -498,6 +517,8 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
+        owner_source: None,
+        labels: true,
         reserved: words::RUBY.reserved,
         globals: words::RUBY.globals,
         modules: words::RUBY.modules,
@@ -529,6 +550,8 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
+        owner_source: None,
+        labels: true,
         reserved: words::PHP.reserved,
         globals: words::PHP.globals,
         modules: words::PHP.modules,
@@ -542,12 +565,9 @@ pub const ALL: &[Backend] = &[
         files: |g, alias, pkg| {
             vec![
                 (format!("go/{pkg}/{alias}.go"), g.go()),
-                (format!("go/{pkg}/go.mod"), format!("module {pkg}\n\ngo {GO_MIN}\n")),
+                (format!("go/{pkg}/go.mod"), g.go_mod(pkg, false)),
                 (format!("go/{pkg}runner/main.go"), g.go_runner()),
-                (
-                    format!("go/{pkg}runner/go.mod"),
-                    format!("module {pkg}runner\n\ngo {GO_MIN}\n\nrequire {pkg} v0.0.0\n\nreplace {pkg} => ../{pkg}\n"),
-                ),
+                (format!("go/{pkg}runner/go.mod"), g.go_mod(pkg, true)),
                 (format!("go/{pkg}/round_test.go"), crate::codegen::round_tests_go(pkg, &g.arith_uses())),
             ]
         },
@@ -562,6 +582,8 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
+        owner_source: None,
+        labels: true,
         reserved: words::GO.reserved,
         globals: words::GO.globals,
         modules: words::GO.modules,
@@ -602,6 +624,8 @@ pub const ALL: &[Backend] = &[
         pg: None,
         proof: None,
         ready: None,
+        owner_source: Some(|m| format!("{m}.swift")),
+        labels: true,
         reserved: words::SWIFT.reserved,
         globals: words::SWIFT.globals,
         modules: words::SWIFT.modules,
@@ -659,6 +683,8 @@ pub const ALL: &[Backend] = &[
                 Err(tr!("java が無いので Java 側を飛ばしました", "java not found; skipped the Java side"))
             }
         }),
+        owner_source: None,
+        labels: true,
         reserved: words::JAVA.reserved,
         globals: words::JAVA.globals,
         modules: words::JAVA.modules,
@@ -692,6 +718,8 @@ pub const ALL: &[Backend] = &[
         proof: None,
         pg: Some(|alias| Plan::new("sql", "python3", &["-B", &format!("{alias}_function_runner.py")])),
         ready: None,
+        owner_source: None,
+        labels: false,
         reserved: words::SQL.reserved,
         globals: words::SQL.globals,
         modules: words::SQL.modules,
@@ -707,7 +735,7 @@ pub const ALL: &[Backend] = &[
         // runner drives the built module through that ABI (§15.64).
         files: |g, alias, _pkg| {
             vec![
-                (format!("wasm/{alias}.rs"), g.rust()),
+                (format!("wasm/{alias}.rs"), g.rust_wasm()),
                 (format!("wasm/{alias}_wasm.rs"), g.rs_wasm()),
                 (format!("wasm/{alias}.wit"), g.wit()),
                 (format!("wasm/{alias}_runner.mjs"), g.wasm_runner()),
@@ -745,6 +773,8 @@ pub const ALL: &[Backend] = &[
             }
             Ok(())
         }),
+        owner_source: None,
+        labels: false,
         reserved: words::WASM.reserved,
         globals: words::WASM.globals,
         modules: words::WASM.modules,

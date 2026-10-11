@@ -136,7 +136,19 @@ const CORPUS: &[&str] = &[
     "tests/corpus/economic_order_quantity.rule",
     "tests/corpus/quota_request.rule",
     "tests/corpus/contested_roll.rule",
+"tests/corpus/member_tier_shipping.rule",
+"tests/corpus/会員段階の送料.rule",
+"tests/corpus/plan_receipt.rule",
+"tests/corpus/プランの領収書.rule",
+"tests/corpus/catalog_shipping.rule",
+"tests/corpus/catalog_returns.rule",
+"tests/corpus/品目の送料.rule",
+"tests/corpus/品目の返品.rule",
 ];
+
+/// The `enums` files four of the rules above read (§15.212). They hold no table, so the checks of
+/// the cells and the headers have nothing in them to read; `doc` of the directory renders them too.
+const ENUMS_FILES: &[(&str, &str)] = &[("tests/corpus/shared/catalog.rule", "catalog.md"), ("tests/corpus/shared/品目.rule", "goods_catalog.md")];
 
 /// A rule whose groups are broken in one of three ways. Every variant passes `check` (the `-` row
 /// carries completeness).
@@ -434,7 +446,11 @@ fn out_で書き出せる() {
     let (c, out, _) = run(&["doc", "tests/corpus", "--out", &d]);
     assert_eq!(c, 0, "{out}");
     let n = std::fs::read_dir(&dir).unwrap().count();
-    assert_eq!(n, CORPUS.len(), "コーパスの本数だけ出るはず");
+    assert_eq!(n, CORPUS.len() + ENUMS_FILES.len(), "コーパスの本数だけ出るはず");
+    for (rel, page) in ENUMS_FILES {
+        let p = std::fs::read_to_string(dir.join(page)).unwrap_or_else(|_| panic!("{rel} のページが出ていない"));
+        assert!(p.contains("# 列挙 "), "{rel}: {p}");
+    }
     let one = std::fs::read_to_string(dir.join("shipping_fee.md")).expect("送料 が出ていない");
     assert!(one.starts_with("<!-- rulec "), "{one}");
 }

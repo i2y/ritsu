@@ -284,6 +284,25 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
             }
             e.finish()
         })
+        // The enums whose values are ordered as `enums` lists them (§15.210): a cell `rank`
+        // takes the values whose places pass its comparisons. Written only for a rule that has
+        // one, so no other certificate changes.
+        .opt_raw("ordered", (!c.ordered.is_empty()).then(|| {
+            let mut names: Vec<&String> = c.ordered.iter().collect();
+            names.sort();
+            crate::json::strs(&names.into_iter().cloned().collect::<Vec<_>>())
+        }))
+        // The values an input of an ordered enum takes, where its `range` holds it to some
+        // (§15.210): its axis runs over these and no others.
+        .opt_raw("enum_ranges", (!c.enum_ranges.is_empty()).then(|| {
+            let mut o = Obj::new();
+            let mut names: Vec<&String> = c.enum_ranges.keys().collect();
+            names.sort();
+            for n in names {
+                o = o.raw(n, crate::json::strs(&c.enum_ranges[n]));
+            }
+            o.finish()
+        }))
         // The rule's inputs and the values its walks leave behind (`count`, `sum`), each by
         // name: with `values` and the tables' `decides`, what a re-checker works the kind of
         // every axis out from (§15.196). They are also the names whose ranges are declared
@@ -539,6 +558,8 @@ fn machine_json(f: &RuleFile, c: &Checked, src: &str) -> String {
                 let words: Vec<String> = match other {
                     Cell::Lit(Lit::Word(w)) => vec![w.clone()],
                     Cell::Set(ls) => ls.iter().filter_map(|l| if let Lit::Word(w) = l { Some(w.clone()) } else { None }).collect(),
+                    // the values a comparison on an ordered enum covers (§15.210)
+                    Cell::Ranked { values, .. } => values.clone(),
                     _ => Vec::new(),
                 };
                 Obj::new().raw("words", crate::json::strs(&words)).finish()
@@ -1270,6 +1291,12 @@ fn cell_json(c: &CertCell) -> String {
                 "values",
                 arr(&vs.iter().map(|v| v.as_ref().map(|r| crate::json::quote(&rat(r))).unwrap_or_else(|| "null".into())).collect::<Vec<_>>()),
             )
+            .finish(),
+        // The comparisons as written, against values of the enum by name; the re-checker reads
+        // the order from `ordered` (§15.210).
+        CertCell::Rank(cs) => Obj::new()
+            .str("cell", "rank")
+            .raw("tests", arr(&cs.iter().map(|(op, v)| Obj::new().str("op", op).str("value", v).finish()).collect::<Vec<_>>()))
             .finish(),
         CertCell::Cmp(cs) => Obj::new()
             .str("cell", "cmp")

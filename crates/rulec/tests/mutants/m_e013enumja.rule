@@ -1,0 +1,42 @@
+rule 品目の送料(goods_shipping) v1
+description "荷物の配送料。届け先までの遠さと重さで決まり、壊れ物には上乗せがある"
+
+# 種類と地域は品目のファイルのもので、順、表示名、グループの「壊れ物」もそこから来る。
+# この規則はどれも書き直さない。
+import enum 種類 from "../corpus/shared/品目一覧.rule"
+import enum 地域 from "../corpus/shared/品目.rule"
+
+inputs
+  品目(goods)       : 種類
+  届け先(destination) : 地域
+  重さ(weight)      : mass[kg]  range >=1kg <=30kg
+
+outputs
+  配送料(fee) : money[USD]  round up(1USD)
+
+table 基本料金(base_fee)
+policy unique
+| 届け先 | 重さ  | -> 基本(base) : money[USD] |
+| <=地方 | <=5kg | 5USD                       |
+| <=地方 | >5kg  | 9USD                       |
+| 全国   | <=5kg | 8USD                       |
+| 全国   | >5kg  | 14USD                      |
+| 海外   | -     | 30USD                      |
+
+# 壊れ物は手で梱包し、遠くへ送るほど梱包の費用がかかる。
+table 取扱い(handling)
+policy unique
+| 品目       | 届け先 | -> 上乗せ(surcharge) : money[USD] |
+| 壊れ物     | <全国  | 3USD                              |
+| 壊れ物     | >=全国 | 7USD                              |
+| 食品, 衣料 | -      | 0USD                              |
+
+define 配送料 : money[USD] = 基本 + 上乗せ
+
+examples
+| 品目     | 届け先 | 重さ | -> 配送料 |
+| 食品     | 市内   | 2kg  | 5USD      |
+| 衣料     | 地方   | 6kg  | 9USD      |
+| 電子機器 | 全国   | 10kg | 21USD     |
+| 家具     | 海外   | 20kg | 37USD     |
+| 電子機器 | 地方   | 1kg  | 8USD      |

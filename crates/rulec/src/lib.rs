@@ -128,6 +128,12 @@ fn stages(src: &str, path: &str, budget: i64) -> Report {
         return Report { diags, quiet, shadow, nodes };
     }
     let Some(mut f) = parsed.file else { return Report { diags, quiet, shadow, nodes } };
+    // The enums it reads from an `enums` file come first (§15.212): everything below, the
+    // rule an `apply` brings in included, is checked over them as over the rule's own.
+    diags.extend(enums::read_imports(&mut f, path));
+    if has_error(&diags) {
+        return Report { diags, quiet, shadow, nodes };
+    }
     // A rule applied by this one is read and expanded into it first (§15.69). A callee that
     // cannot be expanded leaves holes everything below would trip over, so those errors
     // return here; a pin that does not match (E040) is reported and the check goes on, so
@@ -460,6 +466,10 @@ fn prepare_with(src: &str, path: &str, tolerate_pin: bool) -> Result<(ast::RuleF
         return Err(parsed.diags);
     }
     let Some(mut f) = parsed.file else { return Err(Vec::new()) };
+    let ds = enums::read_imports(&mut f, path);
+    if has_error(&ds) {
+        return Err(ds);
+    }
     let ds = apply::expand(&mut f, path);
     if ds.iter().any(|d| d.severity == Severity::Error && !(tolerate_pin && d.code == "E040")) {
         return Err(ds);
@@ -480,5 +490,9 @@ fn prepare_with(src: &str, path: &str, tolerate_pin: bool) -> Result<(ast::RuleF
     if ds.iter().any(|d| d.severity == Severity::Error) {
         return Err(ds);
     }
+    // What is generated from the rule writes a name some language keeps as a keyword with `_`
+    // after it (§15.210). The checks above ran on the names as declared.
+    let mut f = f;
+    codegen::escape_keywords(&mut f);
     Ok((f, t))
 }

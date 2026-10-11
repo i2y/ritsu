@@ -1713,6 +1713,24 @@ policy unique
 | <=100JPY + 1JPY | true           |
 | >100JPY         | false          |
 "##;
+/// E066 (§15.212): a file of enums that holds a table.
+const X_E066: &str = "enums 区分(kinds) v1\n\n\
+                      enum 区分(kind) = 冷蔵(chilled) | 常温(ambient)\n\n\
+                      table 送料(fee)\npolicy unique\n| 区分 | -> 送料 : number |\n| -    | 1               |\n";
+const X_E066_EN: &str = "enums kinds v1\n\n\
+                      enum kind = chilled | ambient\n\n\
+                      table fee\npolicy unique\n| kind | -> fee : number |\n| -    | 1               |\n";
+/// E069 (§15.210): a comparison on an enum whose values are separated by `|`.
+const X_E069: &str = "rule 会員送料(member_fee) v1\n\n\
+                      enum 段階(tier) = 一般(basic) | 銀(silver) | 金(gold)\n\n\
+                      inputs\n  会員(member) : 段階\n\n\
+                      outputs\n  送料(fee) : money[円]  round down(1円)\n\n\
+                      table 送料表(fees)\npolicy unique\n| 会員 | -> 送料 |\n| >=銀 | 0円    |\n| 一般 | 500円  |\n";
+const X_E069_EN: &str = "rule member_fee v1\n\n\
+                      enum tier = basic | silver | gold\n\n\
+                      inputs\n  member : tier\n\n\
+                      outputs\n  fee : money[USD]  round down(1USD)\n\n\
+                      table fees\npolicy unique\n| member   | -> fee |\n| >=silver | 0USD   |\n| basic    | 5USD   |\n";
 /// E065: `range from` written in a shape that names no koyomi date.
 const X_E065: &str = "rule t(t) v1\n\ninputs\n  d(d) : date  range from koyomi \"terms.cal\"\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| d | -> r(r) : bool |\n| - | true           |\n";
 /// E129: a rule whose range is a koyomi date, checked where no koyomi is joined.
@@ -2274,10 +2292,13 @@ pub fn ledger() -> Vec<Entry> {
             "E034",
             tr!("行ラベルが二度あります", "A row label appears twice"),
             tr!(
-                "同じ表の二つの行が、最初の `|` の前に同じラベルを書いているとき。ラベルは、`overrides` の行や記録の trace、後の版が行を指すための名前なので、一つの表の中で一意でなければなりません。",
-                "Two rows of one table carry the same label before their first `|`. A label is how an `overrides` line, a record's trace and a later version name the row, so it is unique within its table."
+                "同じ表の二つの行が、最初の `|` の前に同じラベルを書いているとき。ラベルは、`overrides` の行や記録の trace、後の版が行を指すための名前なので、一つの表の中で一意でなければなりません。一つのものを指す名前はどれも同じで、二つの表か節、二つの出典が同じ名前のとき、`import enum` で読んだ列挙か一緒に来たグループが、この規則が宣言するものや別の `import enum` が読んだものと同じ名前のときにも出ます。",
+                "Two rows of one table carry the same label before their first `|`. A label is how an `overrides` line, a record's trace and a later version name the row, so it is unique within its table. Every name that names one thing is held the same way: it also appears when two tables or clauses, or two sources, share a name, and when an enum read with `import enum`, or a group that comes with it, has the name of one this rule declares or another `import enum` reads."
             ),
-            tr!("どちらかのラベルを変えてください。", "Change one of the two labels."),
+            tr!(
+                "どちらかのラベル（名前）を変えてください。`import enum` で読んだ列挙なら、`-> <別の名前>` で読めます。",
+                "Change one of the two labels (names). An enum read with `import enum` can be read under another name with `-> <another name>`."
+            ),
             X_E034,
             &["E009", "E035"],
         )
@@ -2737,6 +2758,36 @@ pub fn ledger() -> Vec<Entry> {
             X_E065,
             &["E129", "E130"],
         ),
+        err(
+            "E066",
+            tr!("`enums` のファイルの形と、そこから読む `import enum` の形が違います", "An `enums` file, or an `import enum` from one, is misshapen"),
+            tr!(
+                "見出しが `enums` のファイルに、`description`・`import`・`enum`・`group` 以外の行（表、入力、出力、定義、`import enum` など）を書いたとき。`import enum <列挙> from \"<ファイル>\"` が読むファイルが `enums` のファイルでないとき、または check を通らないとき。`enums` のファイルは規則どうしが分け合う列挙を置く場所で、何も決めず、関数も生成しません。",
+                "A file headed `enums` holds a line other than `description`, `import`, `enum` and `group` (a table, inputs, outputs, a definition, an `import enum`, …); or `import enum <enum> from \"<file>\"` names a file that is not an `enums` file, or one that does not pass check. An `enums` file holds the enums rules share: it decides nothing, and no function is generated from it."
+            ),
+            tr!(
+                "表や入力は、その列挙を `import enum … from` で読む規則の側に書いてください。読む先のファイルは `enums <名前> v<版>` で始め、check を通るように直してください。",
+                "Write the tables and the inputs in a rule that reads the enum with `import enum … from`. Start the file it reads with `enums <name> v<version>`, and make it pass check."
+            ),
+            X_E066,
+            &["E013", "E034"],
+        )
+        .english(X_E066_EN),
+        err(
+            "E069",
+            tr!("順序つきの列挙と比べるセル、または表示名の形が違います", "An ordered enum, a comparison on one, or a display name is misshapen"),
+            tr!(
+                "値を `|` で区切った（順序の無い）列挙の列に `<v` や `>=v` のような比べるセルを書いたとき、そういう列挙の二つの値を `<` などで比べたとき、`max`・`min` に渡したとき、入力に範囲を書いたとき。一つの列挙の値の区切りに `<` と `|` を混ぜたとき。範囲に入る値が一つも無いとき、要素のフィールドの列挙に範囲を書いたとき。値の表示名が空か制御文字を含むとき、同じ列挙の二つの値の表示名が同じとき。値を `<` で区切った列挙は、書いた順が値の順序になり、比べるセルは、比べた値より前（後）の値の集合として読まれます。",
+                "A cell that compares (`<v`, `>=v`) is written in a column of an enum whose values are separated by `|`, and so have no order; or two values of such an enum are compared with `<` and the like, passed to `max` or `min`, or held to a range on an input. Or one enum separates its values with both `<` and `|`. Or a range lets no value in, or an enum field of an element is given a range. Or a value's display name is empty or holds a control character, or two values of one enum have the same display name. The values of an enum separated by `<` are ordered as written, and a comparison takes the values before (after) the one it is against."
+            ),
+            tr!(
+                "宣言の順が意味を持つなら、値を `<` で区切ってください（`enum 段階 = 一般 < 銀 < 金`）。持たないなら、値か集合で書いてください。区切りは `<` か `|` のどちらかにそろえ、表示名は空でない、ほかの値と違う名前にしてください。",
+                "If the order the values are declared in means something, separate them with `<` (`enum tier = basic < silver < gold`); if not, write values or sets. Use one separator throughout, and give each value a display name that is not empty and differs from the others'."
+            ),
+            X_E069,
+            &["E012", "E103"],
+        )
+        .english(X_E069_EN),
         err(
             "E075",
             tr!("列挙の値でも、名前でもある語です", "A word is both a value of an enum and a name"),

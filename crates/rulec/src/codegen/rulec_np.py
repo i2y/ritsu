@@ -313,7 +313,20 @@ def _ev(e, env):
         return _ROUND[e["mode"]](_ev(e["x"], env), _ev(e["g"], env))
     if k == "divround":
         return _div_round(e["mode"], _ev(e["n"], env), _ev(e["d"], env))
+    if k == "rank":
+        return _rank(_ev(e["e"], env), e["of"])
+    if k == "pick":
+        a, b = _ev(e["a"][0], env), _ev(e["a"][1], env)
+        ra, rb = _rank(a, e["of"]), _rank(b, e["of"])
+        return np.where(ra >= rb, a, b) if e["f"] == "max" else np.where(ra <= rb, a, b)
     raise ValueError(f"unknown node: {k}")
+
+
+def _rank(v, order):
+    """The place of each value of an ordered enum in its order, from 0; -1 for a value it does
+    not have, which only the placeholder of an absent value is."""
+    at = {x: i for i, x in enumerate(order)}
+    return np.array([at.get(x, -1) for x in np.atleast_1d(v)], dtype=np.int64)
 
 
 def _val(v, env):
@@ -348,6 +361,12 @@ def _test(t, v, absent=None):
         for o, lit in t["tests"]:
             one = v <= lit if o == "<=" else v >= lit if o == ">=" else v < lit if o == "<" else v > lit
             c = one if c is None else (c & one)
+    elif op == "rank":
+        r = _rank(v, t["of"])
+        c = r >= 0
+        for o, lit in t["tests"]:
+            b = t["of"].index(lit)
+            c = c & (r <= b if o == "<=" else r >= b if o == ">=" else r < b if o == "<" else r > b)
     else:
         raise ValueError(f"unknown cell: {op}")
     if absent is None:
@@ -373,6 +392,11 @@ class Rule:
 
     def __repr__(self) -> str:
         return f"<rulec.Rule {self.name} v{self.version} {self.sha256[:12]}>"
+
+    def label(self, enum: str, value: str) -> str:
+        """The display name of a value of an enum the rule names, or the value's own name
+        when it has none (rulec's §15.211)."""
+        return self.plan.get("labels", {}).get(enum, {}).get(value, value)
 
     def _columns(self, cols: dict):
         """The entry guard, and the wire turned into integers. Refusing is part of the rule.
@@ -447,6 +471,11 @@ class Rule:
                 if bad.any():
                     i = int(np.argmax(bad))
                     raise refuse(say["enum"], v[i], i)
+            if "allowed" in spec:
+                bad = ~np.isin(v, spec["allowed"]) & ~absent
+                if bad.any():
+                    i = int(np.argmax(bad))
+                    raise refuse(say["range"], v[i], i)
             lo, hi = spec.get("min"), spec.get("max")
             if lo is not None or hi is not None:
                 bad = np.zeros(n, dtype=bool)

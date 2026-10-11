@@ -146,6 +146,16 @@ A few shapes are worth knowing before the first draft:
   `-` row would pass completeness while the new value quietly takes the default amount.
 - **A place is an enum rulec has.** `import std/<country>/<kind>` brings in a country's first-level
   divisions (`std/us/states`, `std/jp/prefectures`, … in [docs/reference.md](docs/reference.md)); `import std/都道府県` spells Japan's in Japanese.
+- **An enum can have an order, and names to be shown by.** `enum tier = basic < silver < gold <
+  platinum` orders the values, lowest first: a cell compares against one (`>=gold`), an expression
+  compares two (`campaign > member`) or takes the later (`max`), and an input takes a range of
+  them (`range >=basic <=gold`). `national "Rest of the country"` gives a value the name the pages
+  and the generated `zone_label` show; the wire keeps the value's own name. Comparing the values
+  of an enum declared with `|` is E069.
+- **Rules can share their enums.** A file headed `enums` holds enums and groups and decides
+  nothing; a rule reads one of them whole with `import enum category from "shared/catalog.rule"`
+  (`-> <name>` renames it), and the generated code of every rule that reads it takes the one
+  type, from one module `rulec gen` writes beside them. A table in an `enums` file is E066.
 - **A date input can range over koyomi's days.** `range from koyomi "<file.cal>" date <name>`, checked by
   `ritsu rulec check`; `ritsu check` then holds a workflow's calls to the rule's `constraint`s (ritsu's E201).
 

@@ -66,6 +66,9 @@ fn round_sql(m: RoundMode, x: &str, g: &str) -> String {
 struct Sql {
     binds: Vec<(String, String)>,
     n: usize,
+    /// The ordered enums the expressions compare, by the type `Gen::expr` names them with, and
+    /// their values in order (§15.210): a value's place is a `CASE` over them.
+    ranks: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 fn tokens(s: &str) -> Vec<String> {
@@ -106,7 +109,14 @@ fn tokens(s: &str) -> Vec<String> {
 
 impl Sql {
     fn new() -> Sql {
-        Sql { binds: Vec::new(), n: 0 }
+        Sql { binds: Vec::new(), n: 0, ranks: std::collections::BTreeMap::new() }
+    }
+
+    /// The place of the value `a` in the order of the ordered enum `t` (§15.210).
+    fn rank_of(&self, t: &str, a: &str) -> String {
+        let vs = self.ranks.get(t).cloned().unwrap_or_default();
+        let whens: Vec<String> = vs.iter().enumerate().map(|(i, v)| format!("WHEN {} THEN {i}", lit(v))).collect();
+        format!("(CASE {a} {} END)", whens.join(" "))
     }
 
     fn translate(&mut self, text: &str) -> String {
@@ -155,6 +165,14 @@ impl Sql {
             *i += 1;
             return a;
         }
+        // The place of a value of an ordered enum: the one call with one argument (§15.210).
+        if let (Some(ty), true) = (tok.strip_prefix("_rank_"), *i < t.len() && t[*i] == "(") {
+            *i += 1;
+            let a = self.expr(t, i);
+            assert!(t[*i] == ")", "unbalanced");
+            *i += 1;
+            return self.rank_of(ty, &a);
+        }
         if *i < t.len() && t[*i] == "(" {
             *i += 1;
             let a = self.expr(t, i);
@@ -169,6 +187,13 @@ impl Sql {
             let b = self.expr(t, i);
             assert!(t[*i] == ")", "unbalanced");
             *i += 1;
+            // The later and the earlier of two values of an ordered enum (§15.210).
+            if let Some(ty) = tok.strip_prefix("_max_") {
+                return format!("(CASE WHEN {} >= {} THEN {a} ELSE {b} END)", self.rank_of(ty, &a), self.rank_of(ty, &b));
+            }
+            if let Some(ty) = tok.strip_prefix("_min_") {
+                return format!("(CASE WHEN {} <= {} THEN {a} ELSE {b} END)", self.rank_of(ty, &a), self.rank_of(ty, &b));
+            }
             // Each operand read several times is bound to a column of its own first.
             let col = |s: &mut Sql, x: String| if x.starts_with('"') || x.parse::<i128>().is_ok() { x } else { s.bind(x) };
             return match tok.as_str() {
@@ -314,6 +339,14 @@ impl<'a> Gen<'a> {
                 })
                 .collect::<Vec<_>>()
                 .join(" AND "),
+            // An ordered enum is a column of its values' names, which have no order of their
+            // own: the values the comparison covers, and the comparison as written beside them
+            // (§15.210).
+            Cell::Ranked { ops, values } => format!(
+                "{col} IN ({}) /* {} */",
+                values.iter().map(|v| lit(v)).collect::<Vec<_>>().join(", "),
+                crate::ast::ranked_text(ops).replace("*/", "* /")
+            ),
         })
     }
 
@@ -466,6 +499,14 @@ impl<'a> Gen<'a> {
                         vs.join(", "),
                         lit(&crate::door::not_in_enum(&i.name.text, en))
                     ));
+                    // The values the range of an ordered enum lets in (§15.210).
+                    if let Some(allowed) = self.c.enum_ranges.get(&i.name.text) {
+                        guard.push(format!(
+                            "WHEN {col} NOT IN ({}) THEN {}",
+                            allowed.iter().map(|v| lit(v)).collect::<Vec<_>>().join(", "),
+                            lit(&crate::door::out_of_range(&i.name.text))
+                        ));
+                    }
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date => {
                     guard.push(format!(
@@ -520,6 +561,9 @@ impl<'a> Gen<'a> {
         let mut prev = q("_c0");
         let mut stage = 0usize;
         let mut sql = Sql::new();
+        for en in self.c.enum_order.iter().filter(|e| self.c.ordered.contains(*e)) {
+            sql.ranks.insert(self.enum_type(en), self.c.enums.get(en).cloned().unwrap_or_default());
+        }
         // Anything a stage bound on the way (the argument of a rounding call) is put into a
         // CTE of its own, before the stage that reads it.
         let flush_binds = |o: &mut String, prev: &mut String, sql: &mut Sql, stage: &mut usize| {
@@ -855,7 +899,30 @@ impl<'a> Gen<'a> {
             "  RETURN QUERY SELECT {};\nEND\n$rulec$;\n",
             rets.iter().map(|(n, t)| format!("{}.{}::{t}", q("_r"), q(n))).collect::<Vec<_>>().join(", ")
         ));
+        // The display names (§15.211): one function per enum that gives any, from the value's
+        // name, as the column holds it, to what it is shown as.
+        for (en, _, _) in self.labeled_enums() {
+            let whens: Vec<String> = self
+                .c
+                .enums
+                .get(&en)
+                .into_iter()
+                .flatten()
+                .map(|v| format!("WHEN {} THEN {}", lit(v), lit(&self.c.shown_value(&en, v))))
+                .collect();
+            o.push_str(&format!(
+                "\n-- {}\nCREATE OR REPLACE FUNCTION {}(v text) RETURNS text LANGUAGE sql IMMUTABLE AS $rulec$\n  SELECT CASE v {} ELSE v END\n$rulec$;\n",
+                tr!("{en} の値の表示名。表示名の無い値は値の名前。", "The display name of a value of {en}: a value without one is shown by its name."),
+                q(&self.sql_label_fn(&en)),
+                whens.join(" ")
+            ));
+        }
         o
+    }
+
+    /// The function a value's display name comes from: `<rule>_<enum>_label` (§15.211).
+    pub(super) fn sql_label_fn(&self, en: &str) -> String {
+        format!("{}_{}_label", pub_name(&self.f.name), super::snake(&self.enum_type(en)))
     }
 
     /// The function's signature as one line, for `rulec api` and for anyone reading it
@@ -1181,7 +1248,21 @@ impl<'a> Gen<'a> {
             .replace("@OUTPUTS@", &outs)
             .replace("@TABLES@", &tables)
             .replace("@LABELS@", &labels)
+            .replace(
+                "@ENUM_LABELS@",
+                &self
+                    .labeled_enums()
+                    .iter()
+                    .map(|(en, _, _)| format!("{}: {}", py_quote(en), py_quote(&q(&self.sql_label_fn(en)))))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            )
     }
+}
+
+/// A Python string literal of any text.
+fn py_quote(s: &str) -> String {
+    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 const SQL_RUNNER: &str = r#"@HEADER@
@@ -1383,6 +1464,8 @@ SAY = {@SAY@}
 OUTPUTS = [@OUTPUTS@]
 TABLES = [@TABLES@]
 LABELS = {@LABELS@}
+# The function each enum's display names come from (§15.211).
+ENUM_LABELS = {@ENUM_LABELS@}
 # Which server and database is libpq's own business: PGHOST, PGPORT, PGDATABASE, PGUSER.
 # `-q` keeps the command tags out of the answers and ON_ERROR_STOP makes the first raise
 # the last thing that happens, which is what a refused input has to do here.
@@ -1546,6 +1629,19 @@ def _decide(cases):
         got[n] = ('{"in":{' + ins + '},"observed":{' + obs + '},"trace":[' + rows + "]}", {jp: r[a] for jp, a, _ in OUTPUTS})
     return [got[n] for n in range(len(cases))]
 
+
+if "--labels" in sys.argv[1:]:
+    # The display name of each value a line names, from the functions the file declares.
+    asked = [l.rstrip("\n").split("\t") for l in sys.stdin if l.strip()]
+    script = [SQL] + ["SELECT %s(%s);" % (ENUM_LABELS.get(en, "text"), _lit("str", v)) for en, v in asked]
+    p = _psql("\n".join(script))
+    _psql("\n".join(["DROP FUNCTION IF EXISTS %s(text);" % f for f in ENUM_LABELS.values()] + ['DROP FUNCTION IF EXISTS "%s"(%s);' % (FN, ", ".join(ARGTYPES))]))
+    if p.returncode != 0:
+        sys.stderr.write(p.stderr)
+        sys.exit(1)
+    for l in p.stdout.splitlines():
+        print(l)
+    sys.exit(0)
 
 lines = [json.loads(l) for l in sys.stdin if l.strip()]
 if lines and "machine" in lines[0] and MACHINE is not None:

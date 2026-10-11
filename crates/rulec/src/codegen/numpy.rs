@@ -90,6 +90,12 @@ impl<'a> Gen<'a> {
             }
             Expr::Call(name, args, _) => {
                 let a: Vec<(String, i128)> = args.iter().map(|x| self.np_expr(x)).collect();
+                // The later or the earlier of two values of an ordered enum, by their places in
+                // its order (§15.210).
+                if let (Some(en), [x, y]) = (args.first().and_then(|e| self.ordered_of(e)), a.as_slice()) {
+                    let f = if name == crate::kw::MIN { "min" } else { "max" };
+                    return (format!(r#"{{"k":"pick","f":"{f}","a":[{},{}],"of":{}}}"#, x.0, y.0, self.np_order(&en)), 1);
+                }
                 match (name.as_str(), a.as_slice()) {
                     (crate::kw::MIN, [x, y]) | (crate::kw::MAX, [x, y]) => {
                         let s = lcm(x.1, y.1);
@@ -173,6 +179,19 @@ impl<'a> Gen<'a> {
                             None => (bin_node("//", &a.0, &b.0), a.1),
                         }
                     }
+                    // Two values of an ordered enum compare by their places in its order (§15.210).
+                    Le | Lt | Ge | Gt if self.ordered_of(l).or_else(|| self.ordered_of(r)).is_some() => {
+                        let en = self.ordered_of(l).or_else(|| self.ordered_of(r)).unwrap_or_default();
+                        let o = match op {
+                            Le => "<=",
+                            Lt => "<",
+                            Ge => ">=",
+                            _ => ">",
+                        };
+                        let of = self.np_order(&en);
+                        let rank = |x: &str| format!(r#"{{"k":"rank","e":{x},"of":{of}}}"#);
+                        (bin_node(o, &rank(&a.0), &rank(&b.0)), 1)
+                    }
                     Le | Lt | Ge | Gt | Eq => {
                         let s = lcm(a.1, b.1);
                         let o = match op {
@@ -187,6 +206,12 @@ impl<'a> Gen<'a> {
                 }
             }
         }
+    }
+
+    /// The values of an ordered enum in its order, as the plan carries them: a value's place is
+    /// where it stands in the list (§15.210).
+    fn np_order(&self, en: &str) -> String {
+        crate::json::strs(&self.c.enums.get(en).cloned().unwrap_or_default())
     }
 
     /// One cell as a test on its own column. `None` is `-`, which the plan leaves out.
@@ -247,6 +272,12 @@ impl<'a> Gen<'a> {
             Cell::Lit(l) => format!(r#"{{"col":{c},"op":"eq","v":{}}}"#, lit(l)),
             Cell::Set(ls) => format!(r#"{{"col":{c},"op":"in","vals":{}}}"#, members(ls)),
             Cell::Not(ls) => format!(r#"{{"col":{c},"op":"notin","vals":{}}}"#, members(ls)),
+            // A comparison on an ordered enum, by the places in its order (§15.210).
+            Cell::Ranked { ops, .. } => format!(
+                r#"{{"col":{c},"op":"rank","tests":[{}],"of":{}}}"#,
+                ops.iter().map(|(o, v)| format!("[\"{}\",{}]", o.word(), quote(v))).collect::<Vec<_>>().join(","),
+                self.np_order(self.c.ordered_enum(ty).unwrap_or_default())
+            ),
             Cell::Cmp(cs) => format!(
                 r#"{{"col":{c},"op":"cmp","tests":[{}]}}"#,
                 cs.iter()
@@ -395,6 +426,9 @@ impl<'a> Gen<'a> {
             }
             if let Ty::Enum(en) = inner {
                 say = say.str("enum", &crate::door::not_in_enum(name, en));
+                if self.c.enum_ranges.contains_key(name) {
+                    say = say.str("range", &crate::door::out_of_range(name));
+                }
             }
             if kind == "int" || kind == "date" {
                 say = say.str("range", &crate::door::out_of_range(&name));
@@ -415,6 +449,10 @@ impl<'a> Gen<'a> {
                         vs.insert(0, crate::kw::NONE.to_string());
                     }
                     o = o.str("enum", en).raw("values", crate::json::strs(&vs));
+                }
+                // The values the range of an ordered enum lets in (§15.210).
+                if let Some(allowed) = self.c.enum_ranges.get(name) {
+                    o = o.raw("allowed", crate::json::strs(allowed));
                 }
             }
             if kind == "int" || kind == "date" {
@@ -554,7 +592,26 @@ impl<'a> Gen<'a> {
             .raw("outputs", format!("[{}]", outputs.join(",")))
             .raw("steps", format!("[{}]", steps.join(",")))
             .opt_raw("machine", machine)
+            .opt_raw("labels", self.np_labels())
             .finish()
+    }
+
+    /// The display names of the enums that give any, by enum and value, as data the runtime
+    /// answers `label` from (§15.211).
+    fn np_labels(&self) -> Option<String> {
+        let enums = self.labeled_enums();
+        if enums.is_empty() {
+            return None;
+        }
+        let mut o = Obj::new();
+        for (en, _, _) in enums {
+            let mut vs = Obj::new();
+            for v in self.c.enums.get(&en).into_iter().flatten() {
+                vs = vs.str(v, &self.c.shown_value(&en, v));
+            }
+            o = o.raw(&en, vs.finish());
+        }
+        Some(o.finish())
     }
 
     /// The runner `rulec test` drives: it reads the whole file, decides it in one pass, and
@@ -565,6 +622,12 @@ impl<'a> Gen<'a> {
         if self.f.machine.is_some() {
             return format!("{}{}", self.header("#"), np_machine_runner(&alias));
         }
+        // What it answers with `--labels`: the display name of each value a line names (§15.211).
+        let labels = if self.labeled_enums().is_empty() {
+            String::new()
+        } else {
+            "if \"--labels\" in sys.argv[1:]:\n    for l in sys.stdin:\n        en, v = l.rstrip(\"\\n\").split(\"\\t\")\n        print(rule.label(en, v))\n    sys.exit(0)\n".to_string()
+        };
         let body = format!(
             r#"import json
 import sys
@@ -573,7 +636,7 @@ import numpy as np
 import rulec_np
 
 rule = rulec_np.load("{alias}.json")
-rows = [json.loads(l) for l in sys.stdin if l.strip()]
+{labels}rows = [json.loads(l) for l in sys.stdin if l.strip()]
 
 
 def _wire(v):

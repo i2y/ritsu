@@ -282,7 +282,9 @@ pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) 
     let rulec_lang = if lang == Lang::Ja { rulec::i18n::Lang::Ja } else { rulec::i18n::Lang::En };
     for f in project.of(Tool::Rulec) {
         let src = read(project, f, lang)?;
-        let (rel, body) = rulec::i18n::with(rulec_lang, || rulec::codegen::package_module(&src, &f.shown, &f.rel, target.key())).map_err(|e| refusal(1, Text::new(e.clone(), e), lang))?;
+        // A file of enums is the module of its types, beside the rules that read them (rulec's
+        // §15.212).
+        let (rel, body) = rulec::i18n::with(rulec_lang, || rulec::codegen::package_module_in(&src, &f.shown, &f.rel, target.key(), &o.module)).map_err(|e| refusal(1, Text::new(e.clone(), e), lang))?;
         named.push(("rules", module_of(&rel), f.rel.clone()));
         kinds.entry("rules").or_default().push(module_of(&rel));
         files.push((format!("{base}rules/{rel}"), body, Some(f.rel.clone())));

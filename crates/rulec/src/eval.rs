@@ -139,6 +139,8 @@ impl<'a> Env<'a> {
             Cell::Lit(l) => lit_hit(l),
             Cell::Set(ls) => ls.iter().any(lit_hit),
             Cell::Not(ls) => !ls.iter().any(lit_hit),
+            // The values the comparison covers in the enum's order (§15.210).
+            Cell::Ranked { values, .. } => matches!(v, Val::Enum(e) if values.contains(e)),
             Cell::Cmp(cs) => cs.iter().all(|(op, l)| {
                 // Dates are lowered to ordinals and compared with the same machinery as
                 // numbers (§2.1 allows only comparisons and ranges on them).
@@ -183,6 +185,14 @@ impl<'a> Env<'a> {
             },
             Expr::Call(name, args, _) => {
                 let a: Vec<Val> = args.iter().filter_map(|x| self.expr(x)).collect();
+                // The later of two values of an ordered enum, or the earlier (§15.210).
+                if let (crate::kw::MIN | crate::kw::MAX, [Val::Enum(x), Val::Enum(y)]) = (name.as_str(), a.as_slice()) {
+                    let en = args.first().and_then(|e| self.enum_of(e))?;
+                    let (rx, ry) = (self.c.rank(&en, x)?, self.c.rank(&en, y)?);
+                    let later = if rx >= ry { x } else { y };
+                    let earlier = if rx <= ry { x } else { y };
+                    return Some(Val::Enum(if name == crate::kw::MAX { later.clone() } else { earlier.clone() }));
+                }
                 match (name.as_str(), a.as_slice()) {
                     (crate::kw::MIN, [Val::Num(x), Val::Num(y)]) => {
                         Some(Val::Num(if x.cmp_to(*y) == std::cmp::Ordering::Less { *x } else { *y }))
@@ -230,6 +240,17 @@ impl<'a> Env<'a> {
                     (Val::Date(y, m, d), Le | Lt | Ge | Gt) => Val::Num(crate::types::date_ord(*y, *m, *d)),
                     _ => rv,
                 };
+                // Two values of an ordered enum compare by their places in its order (§15.210).
+                if let (Val::Enum(a), Val::Enum(b), Le | Lt | Ge | Gt) = (&lv, &rv, op) {
+                    let en = self.enum_of(l).or_else(|| self.enum_of(r))?;
+                    let (x, y) = (self.c.rank(&en, a)?, self.c.rank(&en, b)?);
+                    return Some(Val::Bool(match op {
+                        Le => x <= y,
+                        Lt => x < y,
+                        Ge => x >= y,
+                        _ => x > y,
+                    }));
+                }
                 match (lv, rv) {
                     // A divisor of zero is E115's to report; the typing refuses every divisor
                     // that is not a positive constant. The evaluator still runs on a rule that
@@ -251,6 +272,23 @@ impl<'a> Env<'a> {
                     _ => None,
                 }
             }
+        }
+    }
+
+    /// The enum an expression's value belongs to, when it is a name of one or `min` or `max`
+    /// of such names (§15.210).
+    fn enum_of(&self, e: &Expr) -> Option<String> {
+        match e {
+            Expr::Name(n, _) => match self.c.ty_of(n)? {
+                Ty::Enum(en) => Some(en),
+                Ty::Opt(t) => match *t {
+                    Ty::Enum(en) => Some(en),
+                    _ => None,
+                },
+                _ => None,
+            },
+            Expr::Call(_, args, _) => args.iter().find_map(|a| self.enum_of(a)),
+            _ => None,
         }
     }
 
@@ -727,6 +765,10 @@ fn outside_range(f: &RuleFile, c: &Checked, env: &HashMap<String, Val>) -> Optio
         if !doors.contains(&name) {
             return None;
         }
+        // An input of an ordered enum held to a range takes the values it lets in (§15.210).
+        if let (Val::Enum(e), Some(allowed)) = (v, c.enum_ranges.get(name)) {
+            return (!allowed.contains(e)).then(|| (name.to_string(), v.clone(), c.ty_of(name).unwrap_or(Ty::Unknown)));
+        }
         let (lo, hi) = c.ranges.get(name)?;
         let x = match v {
             Val::Num(x) => *x,
@@ -840,7 +882,9 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
             let (lo, hi) = c.ranges.get(&name).copied().unwrap_or((None, None));
             let end = |x: Option<Rat>| x.map(|x| Val::Num(x).show(&ty)).unwrap_or_else(|| "…".into());
             let shown = v.show(&ty);
-            let range = if matches!(ty, Ty::Date) {
+            let range = if let Some(allowed) = c.enum_ranges.get(&name) {
+                tr!("宣言した範囲（{}）", "the declared range ({})", allowed.join(", "))
+            } else if matches!(ty, Ty::Date) {
                 tr!("宣言した範囲", "the declared range")
             } else {
                 format!(">={} <={}", end(lo), end(hi))

@@ -168,7 +168,18 @@ inductive CellTest where
   | inVals : List Rat → CellTest
   /-- `not: 100, 200`. -/
   | notInVals : List Rat → CellTest
+  /-- `>=medieval <industrial` on a column of an ordered enum (rulec's §15.210): the enum's
+      values in their order, and each comparison with the place of the value it is against. -/
+  | rank : List String → List (Cmp × Nat) → CellTest
   deriving Repr, Inhabited
+
+/-- One comparison between two places in an ordered enum's order. -/
+def rankHolds : Cmp → Nat → Nat → Bool
+  | .le, x, y => decide (x ≤ y)
+  | .lt, x, y => decide (x < y)
+  | .ge, x, y => decide (y ≤ x)
+  | .gt, x, y => decide (y < x)
+  | .eq, x, y => decide (x = y)
 
 /-- The coordinates a cell takes. An axis arrives as its labels — what each coordinate is
     written as — and, where it is numeric, the values each stands for. -/
@@ -195,6 +206,14 @@ def boxOf (labels : List String) (coords : List (Option Coord)) : CellTest → L
       -- (rulec's §15.201).
       | some none => labels[c]? == some "none"
       | _ => false)
+  -- A value is taken when it has a place in the order and the place passes every comparison;
+  -- the absent value has none (rulec's §15.210).
+  | .rank order ts => (List.range labels.length).filter (fun c =>
+      match labels[c]? with
+      | some l => l != "none" && (match order.idxOf? l with
+          | some i => ts.all (fun t => rankHolds t.1 i t.2)
+          | none => false)
+      | none => false)
 
 /-! ## The absent value
 
@@ -215,6 +234,7 @@ def CellTest.takesAbsent : CellTest → Bool
   | .prefixOf _ => false
   | .inVals _ => false
   | .notInVals _ => true
+  | .rank _ _ => false
 
 /-- **The box says what the cell says of the absent value.** On an axis that starts with the
     absent value — written `none`, standing for no number — the first coordinate is in a
@@ -239,6 +259,7 @@ theorem mem_boxOf_absent_iff {labels : List String} {coords : List (Option Coord
   | prefixOf ps => exact absurd rfl (ht ps)
   | inVals ws => simp [boxOf, CellTest.takesAbsent, hc]
   | notInVals ws => simp [boxOf, CellTest.takesAbsent, hlen, hc, h0]
+  | rank o ts => simp [boxOf, CellTest.takesAbsent, hl]
 
 /-! Every value a cell compares against falls outside every coordinate of the axis, so no
     coordinate is split by it. This is §6.2's construction, checked rather than assumed. -/
@@ -361,5 +382,28 @@ theorem mem_boxOf_cmp_iff {labels : List String} {coords : List (Option Coord)}
     refine List.all_eq_true.2 ?_
     intro t ht
     exact (admits_iff (hx t ht) hv).2 (h t ht)
+
+/-- **A comparison on an ordered enum takes the values whose place passes it** (rulec's
+    §15.210). The coordinate of a value is in the cell's box exactly when the value has a place
+    in the enum's order and that place satisfies every comparison the cell writes — `<medieval`
+    takes the coordinates of the values whose place is before medieval's. -/
+theorem mem_boxOf_rank_iff {labels : List String} {coords : List (Option Coord)}
+    {order : List String} {ts : List (Cmp × Nat)} {c : Nat} {l : String}
+    (hl : labels[c]? = some l) (hn : l ≠ "none") :
+    c ∈ boxOf labels coords (.rank order ts) ↔
+      ∃ i, order.idxOf? l = some i ∧ ∀ t ∈ ts, rankHolds t.1 i t.2 = true := by
+  have hlen : c < labels.length := lt_of_getElem? hl
+  have hne : (l != "none") = true := by simpa [bne_iff_ne] using hn
+  simp only [boxOf, List.mem_filter, List.mem_range, hlen, true_and, hl, hne, Bool.true_and]
+  cases h : order.idxOf? l with
+  | none => simp
+  | some i =>
+    simp only [List.all_eq_true]
+    constructor
+    · intro hall
+      exact ⟨i, rfl, hall⟩
+    · rintro ⟨j, hj, hall⟩
+      cases hj
+      exact hall
 
 end RulecCert

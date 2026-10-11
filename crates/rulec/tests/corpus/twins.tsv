@@ -47,3 +47,7 @@ Claude利用料.rule	claude_api_usage_fee.rule
 経済的発注量.rule	economic_order_quantity.rule
 割り当ての申し込み.rule	quota_request.rule
 乱数で決める一回.rule	contested_roll.rule
+会員段階の送料.rule	member_tier_shipping.rule
+プランの領収書.rule	plan_receipt.rule
+品目の送料.rule	catalog_shipping.rule
+品目の返品.rule	catalog_returns.rule

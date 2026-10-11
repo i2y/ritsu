@@ -1,0 +1,37 @@
+rule catalog_returns v1
+description "How many days a customer has to send an item back, and whether the return ships free"
+
+# The same categories and zones the shipping rule reads, from the same file: an app passes
+# one value of `category` to both rules.
+import enum category from "shared/catalog.rule"
+import enum zone from "shared/catalog.rule"
+
+inputs
+  goods       : category
+  destination : zone
+  opened      : bool
+
+outputs
+  window : number  round down(1)
+  free_return : bool
+
+table return_window
+policy unique
+| goods   | opened | -> window |
+| food    | -      | 0         |
+| apparel | -      | 30        |
+| fragile | false  | 14        |
+| fragile | true   | 7         |
+
+table return_shipping
+policy unique
+| destination | -> free_return |
+| <=national  | true           |
+| overseas    | false          |
+
+examples
+| goods     | destination | opened | -> window | free_return |
+| food      | local       | false  | 0         | true        |
+| apparel   | overseas    | true   | 30        | false       |
+| furniture | national    | false  | 14        | true        |
+| furniture | regional    | true   | 7         | true        |

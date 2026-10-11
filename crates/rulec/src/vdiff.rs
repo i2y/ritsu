@@ -1302,6 +1302,13 @@ fn cell_key(cell: &Cell) -> String {
             v.sort();
             format!("cmp:{}", v.join("|"))
         }
+        // A comparison on an ordered enum tests the values it covers: `>=gold` and `gold,
+        // platinum` over `basic < silver < gold < platinum` test the same thing (§15.210).
+        Cell::Ranked { values, .. } => {
+            let mut v: Vec<String> = values.iter().map(|w| lit_key(&Lit::Word(w.clone()))).collect();
+            v.sort();
+            format!("in:{}", v.join("|"))
+        }
     }
 }
 

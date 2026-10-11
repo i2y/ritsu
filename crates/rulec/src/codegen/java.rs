@@ -362,7 +362,7 @@ impl<'a> Gen<'a> {
     /// as it is in Ruby and PHP.
     pub(super) fn java_ty(&self, ty: &Ty) -> String {
         match ty {
-            Ty::Enum(n) => java_class(&self.enum_names.get(n).cloned().unwrap_or_else(|| "String".into())),
+            Ty::Enum(n) => self.java_enum(n),
             Ty::Bool => "boolean".into(),
             Ty::Str => "String".into(),
             Ty::Opt(t) => self.java_boxed(t),
@@ -390,10 +390,107 @@ impl<'a> Gen<'a> {
 
     /// An enum value as the constant the class declares for it.
     fn java_value(&self, v: &str, ty: &Ty) -> String {
-        match self.value_name(v, ty) {
-            Some((ty, alias)) => format!("{}.{}", java_class(ty), java_id(&alias.to_uppercase())),
-            None => java_str(v),
+        match (self.value_name(v, ty), ty.present()) {
+            // A value of an `enums` file's enum is that file's class's (§15.212).
+            (Some((_, alias)), Ty::Enum(en)) if self.c.owners.contains_key(en) => format!("{}.{}", self.java_enum(en), java_id(&alias.to_uppercase())),
+            (Some((ty, alias)), _) => format!("{}.{}", java_class(ty), java_id(&alias.to_uppercase())),
+            (None, _) => java_str(v),
         }
+    }
+
+    /// An enum's type as the rule's class names it: its own nested enum, or the one nested in
+    /// the class of the `enums` file it is read from, which sits beside it (§15.212).
+    pub(super) fn java_enum(&self, en: &str) -> String {
+        let t = java_class(&self.enum_names.get(en).cloned().unwrap_or_else(|| "String".into()));
+        match self.c.owners.get(en) {
+            Some(o) => format!("{}.{t}", java_class(&pub_name(&o.module))),
+            None => t,
+        }
+    }
+
+    /// The same type as code outside the rule's class names it.
+    pub(super) fn java_enum_outside(&self, en: &str) -> String {
+        match self.c.owners.get(en) {
+            Some(_) => self.java_enum(en),
+            None => format!("{}.{}", self.java_class(), self.java_enum(en)),
+        }
+    }
+
+    /// One enum as Java: a nested enum whose constants carry their wire spelling, in the order
+    /// declared, with the display names when it has them (§15.211). Java's enums compare in
+    /// the order their constants are declared, which is the order of an ordered enum
+    /// (§15.210).
+    pub(super) fn java_enum_decl(&self, jp: &str, ascii: &str) -> String {
+        let Some(vals) = self.c.enums.get(jp) else { return String::new() };
+        let ty = java_class(ascii);
+        let mut o = format!("    /** {} */\n    public enum {ty} {{\n", jc(jp));
+        let labels = self.c.labels.get(jp);
+        let cs: Vec<String> = vals
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                let name = java_id(&self.value_names.get(&(jp.to_string(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone()));
+                match labels {
+                    Some(ls) => format!("        {name}({}, {})", java_str(v), java_str(&ls.get(i).cloned().flatten().unwrap_or_else(|| v.clone()))),
+                    None => format!("        {name}({})", java_str(v)),
+                }
+            })
+            .collect();
+        o.push_str(&format!("{};\n\n", cs.join(",\n")));
+        let (field, ctor, init) = if labels.is_some() {
+            (
+                "        private final String wire;\n        private final String shown;\n\n".to_string(),
+                format!("        {ty}(String wire, String shown) {{\n            this.wire = wire;\n            this.shown = shown;\n        }}\n\n"),
+                format!(
+                    "        /** {} */\n        public String label() {{\n            return shown;\n        }}\n\n",
+                    tr!("表示名。表示名の無い値は値の名前。", "The display name: a value without one is shown by its name.")
+                ),
+            )
+        } else {
+            (
+                "        private final String wire;\n\n".to_string(),
+                format!("        {ty}(String wire) {{\n            this.wire = wire;\n        }}\n\n"),
+                String::new(),
+            )
+        };
+        o.push_str(&field);
+        o.push_str(&ctor);
+        o.push_str(&init);
+        // A file of enums has no door of its own, and so no `RuleInputError` (§15.212).
+        let error = if self.f.kind == crate::ast::FileKind::Enums { "IllegalArgumentException" } else { "RuleInputError" };
+        o.push_str(&format!(
+            "        /** {vd} */\n        public String value() {{\n            return wire;\n        }}\n\n        \
+             /** {fd} */\n        public static {ty} from(String v) {{\n            \
+             for ({ty} x : values()) {{\n                if (x.wire.equals(v)) {{\n                    \
+             return x;\n                }}\n            }}\n            \
+             throw new {error}({msg} + v);\n        }}\n    }}\n\n",
+            vd = tr!("記録と、受け渡しする値に使う綴り。", "The spelling this member has on the wire and in a record."),
+            fd = tr!("受け渡しする値の綴りから引く。無ければ入口でエラーにする。", "The member with this spelling on the wire; refused at the door when there is none."),
+            msg = java_str(&tr!(
+                "{jp} が列挙 {ascii} の値ではありません: ",
+                "{jp} is not a value of enum {ascii}: "
+            )),
+        ));
+        o
+    }
+
+    /// The helpers the functions call for the expressions over an ordered enum (§15.210).
+    fn java_enum_helpers(&self) -> String {
+        let mut o = String::new();
+        for en in self.c.enum_order.iter().filter(|e| self.c.ordered.contains(*e)) {
+            let (rank, max, min) = self.enum_helpers(en);
+            let (t, cls) = (self.enum_type(en), self.java_enum(en));
+            if rank {
+                o.push_str(&format!("    private static long _rank_{t}({cls} x) {{\n        return x.ordinal();\n    }}\n\n"));
+            }
+            if max {
+                o.push_str(&format!("    private static {cls} _max_{t}({cls} a, {cls} b) {{\n        return a.compareTo(b) >= 0 ? a : b;\n    }}\n\n"));
+            }
+            if min {
+                o.push_str(&format!("    private static {cls} _min_{t}({cls} a, {cls} b) {{\n        return a.compareTo(b) <= 0 ? a : b;\n    }}\n\n"));
+            }
+        }
+        o
     }
 
     /// The constant that holds a group's members.
@@ -489,6 +586,14 @@ impl<'a> Gen<'a> {
                     .collect::<Vec<_>>()
                     .join(" && "),
             ),
+            // A comparison on an ordered enum: Java's enums compare in the order their constants
+            // are declared (§15.210).
+            Cell::Ranked { ops, .. } => present(
+                ops.iter()
+                    .map(|(o, v)| format!("{var}.compareTo({}) {} 0", self.java_value(v, ty), o.word()))
+                    .collect::<Vec<_>>()
+                    .join(" && "),
+            ),
         })
     }
 
@@ -506,46 +611,16 @@ impl<'a> Gen<'a> {
         ));
 
         // Enums. Each constant carries the source name, which is also the wire value
-        // (§10.2), so the runner converts in one call and keeps no table of its own.
-        let mut emitted: Vec<String> = Vec::new();
-        for (jp, ascii) in &self.enum_names {
-            if emitted.contains(ascii) {
-                continue;
-            }
-            emitted.push(ascii.clone());
-            let Some(vals) = self.c.enums.get(jp) else { continue };
-            let ty = java_class(ascii);
-            o.push_str(&format!("    /** {} */\n    public enum {ty} {{\n", jc(jp)));
-            let cs: Vec<String> = vals
-                .iter()
-                .map(|v| {
-                    let name = java_id(
-                        &self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| v.clone()),
-                    );
-                    format!("        {name}({})", java_str(v))
-                })
-                .collect();
-            o.push_str(&format!("{};\n\n", cs.join(",\n")));
-            o.push_str(&format!(
-                "        private final String wire;\n\n        \
-                 {ty}(String wire) {{\n            this.wire = wire;\n        }}\n\n        \
-                 /** {vd} */\n        public String value() {{\n            return wire;\n        }}\n\n        \
-                 /** {fd} */\n        public static {ty} from(String v) {{\n            \
-                 for ({ty} x : values()) {{\n                if (x.wire.equals(v)) {{\n                    \
-                 return x;\n                }}\n            }}\n            \
-                 throw new RuleInputError({msg} + v);\n        }}\n    }}\n\n",
-                vd = tr!("記録と、受け渡しする値に使う綴り。", "The spelling this member has on the wire and in a record."),
-                fd = tr!("受け渡しする値の綴りから引く。無ければ入口でエラーにする。", "The member with this spelling on the wire; refused at the door when there is none."),
-                msg = java_str(&tr!(
-                    "{jp} が列挙 {ascii} の値ではありません: ",
-                    "{jp} is not a value of enum {ascii}: "
-                )),
-            ));
+        // (§10.2), so the runner converts in one call and keeps no table of its own. An enum
+        // of an `enums` file is nested in that file's class, beside this one (§15.212).
+        for (jp, ascii) in self.own_enums() {
+            o.push_str(&self.java_enum_decl(&jp, &ascii));
         }
+        o.push_str(&self.java_enum_helpers());
 
         // The machine this function is one step of (§15.148).
         if let Some((en, init, fins)) = self.machine_consts() {
-            let ety = java_class(&self.enum_names.get(&en).cloned().unwrap_or_default());
+            let ety = self.java_enum(&en);
             o.push_str(&format!(
                 "    /** {} */\n    public static final {ety} INITIAL = {};\n\n    \
                  /** {} */\n    public static final List<{ety}> FINAL = List.of({});\n\n    \
@@ -595,9 +670,10 @@ impl<'a> Gen<'a> {
         for g in &self.f.groups {
             let gty = self.group_ty(&g.name.text);
             let ms: Vec<String> = g.members.iter().map(|m| self.java_value(&m.text, &gty)).collect();
-            let ety = match g.members.first().and_then(|m| self.value_name(&m.text, &gty)) {
-                Some((ty, _)) => java_class(ty),
-                None => "String".into(),
+            let ety = match (&gty, g.members.first().and_then(|m| self.value_name(&m.text, &gty))) {
+                (Ty::Enum(en), Some(_)) => self.java_enum(en),
+                (_, Some((ty, _))) => java_class(ty),
+                (_, None) => "String".into(),
             };
             o.push_str(&format!(
                 "    /** {} */\n    private static final List<{ety}> {} = List.of({});\n\n",
@@ -937,6 +1013,15 @@ impl<'a> Gen<'a> {
             let optional = matches!(ty, Ty::Opt(_));
             let ty = ty.present().clone();
             let mut o = super::Guarded::new(&mut o, optional.then(|| (format!("        if ({v} != null) {{\n"), "        }\n".to_string())), "    ");
+            // The values the range of an ordered enum lets in, first to last (§15.210).
+            if let Some((lo, hi)) = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?))) {
+                o.push_str(&format!(
+                    "        if ({v}.compareTo({}) < 0 || {v}.compareTo({}) > 0) {{\n            throw new RuleInputError({});\n        }}\n",
+                    self.java_value(lo, &ty),
+                    self.java_value(hi, &ty),
+                    java_str(&crate::door::out_of_range(&i.name.text)),
+                ));
+            }
             if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
                 if let Some((Some(lo), Some(hi))) = self.c.ranges.get(&i.name.text).map(|(a, b)| (*a, *b)) {
                     let sc = self.c.wire_scale(&i.name.text);
@@ -1214,6 +1299,22 @@ impl<'a> Gen<'a> {
     /// A Java runner that reads JSONL on stdin and prints one record per line. Both streams
     /// are wrapped in UTF-8 explicitly: `System.out` follows the console's encoding
     /// otherwise, and a 円 would come back as bytes nothing else in the suite writes.
+    /// What the Java runner answers with `--labels` (§15.211): for each line, an enum's name and
+    /// a value's, the display name the class gives.
+    fn java_labels_mode(&self, line: &str) -> String {
+        let enums = self.labeled_enums();
+        if enums.is_empty() {
+            return String::new();
+        }
+        let arms: String = enums
+            .iter()
+            .map(|(en, _, _)| format!("                    case {} -> out.println({}.from(v).label());\n", java_str(en), self.java_enum_outside(en)))
+            .collect();
+        format!(
+            "        if (args.length > 0 && args[0].equals(\"--labels\")) {{\n            while (({line} = in.readLine()) != null) {{\n                int tab = {line}.indexOf('\\t');\n                if (tab < 0) {{\n                    continue;\n                }}\n                String v = {line}.substring(tab + 1);\n                switch ({line}.substring(0, tab)) {{\n{arms}                    default -> out.println(\"?\");\n                }}\n            }}\n            return;\n        }}\n"
+        )
+    }
+
     pub fn java_runner(&self) -> String {
         let cls = self.java_class();
         let fname = self.java_fname();
@@ -1227,9 +1328,9 @@ impl<'a> Gen<'a> {
             let one = |v: &str| -> String {
                 match ty.present() {
                     Ty::Enum(n) => format!(
-                        "member({v}, {}, {cls}.{}::from)",
+                        "member({v}, {}, {}::from)",
                         java_str(&crate::door::not_in_enum(name, n)),
-                        java_class(&self.enum_names.get(n).cloned().unwrap_or_default())
+                        self.java_enum_outside(n)
                     ),
                     Ty::Bool => format!("b({v}, {})", java_str(&crate::door::not_bool(name))),
                     Ty::Date => format!("date({v}, {})", java_str(&crate::door::not_date(name))),
@@ -1275,7 +1376,7 @@ impl<'a> Gen<'a> {
         let (top, state, stepping) = (java_name(&self.temp("top")), java_name(&self.temp("state")), java_name(&self.temp("stepping")));
         let (mut head, mut meta, mut tail) = (String::new(), String::new(), String::new());
         if let (Some((en, _, _)), Some((cin, _)), Some(out)) = (self.machine_consts(), self.carried(), self.carried_out_alias()) {
-            let ety = format!("{cls}.{}", java_class(&self.enum_names.get(&en).cloned().unwrap_or_default()));
+            let ety = self.java_enum_outside(&en);
             if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
                 let a = &args[k];
                 binds = binds.replace(&format!("var {a} = "), &format!("var {a} = {stepping} ? {state} : "));
@@ -1313,6 +1414,7 @@ impl<'a> Gen<'a> {
              BufferedReader in = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));\n        \
              PrintStream out = new PrintStream(System.out, true, StandardCharsets.UTF_8);\n        \
              String {line};\n\
+             {labels}\
              {head}        \
              while (({line} = in.readLine()) != null) {{\n            \
              {line} = {line}.trim();\n            \
@@ -1334,6 +1436,7 @@ impl<'a> Gen<'a> {
              {helpers}{wire}}}\n",
             ritsu_emit::header::VERSION,
             args = args.join(", "),
+            labels = self.java_labels_mode(&line),
             helpers = JAVA_JSON_HELPERS,
             wire = JAVA_WIRE.replace("@CLS@", &cls).replace(
                 "@D_WIRE@",
