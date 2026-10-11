@@ -7,10 +7,10 @@
 このパッケージは npm のレジストリにはありません。リリースに `i2y-ritsu-<バージョン>.tgz` として付いていて、その SHA-256 はリリースの `SHA256SUMS` に載っています（[リリースのページ](https://github.com/i2y/ritsu/releases)）。そこから入れます。
 
 ```console
-$ npm install --save-dev https://github.com/i2y/ritsu/releases/download/v0.26.0/i2y-ritsu-0.26.0.tgz
+$ npm install --save-dev https://github.com/i2y/ritsu/releases/download/v0.27.0/i2y-ritsu-0.27.0.tgz
 ```
 
-ファイルをダウンロードして `SHA256SUMS` と照らし合わせてから、そのファイルを入れてもかまいません（`npm install --save-dev ./i2y-ritsu-0.26.0.tgz`）。この入れ方は `--ignore-scripts` を付けても、ネットワークが無くても（`--offline`）動きます。Node 22 以降が要り、Linux と macOS で動きます。確かめているのは Node 22、24、26 です。
+ファイルをダウンロードして `SHA256SUMS` と照らし合わせてから、そのファイルを入れてもかまいません（`npm install --save-dev ./i2y-ritsu-0.27.0.tgz`）。この入れ方は `--ignore-scripts` を付けても、ネットワークが無くても（`--offline`）動きます。Node 22 以降が要り、Linux と macOS で動きます。確かめているのは Node 22、24、26 です。
 
 Node 22 では、パッケージを読み込むと、プロセス全体で V8 の fast API の呼び出しを止めます（`v8.setFlagsFromString("--no-turbo-fast-api-calls")`）。Node 22 の WASI は、その形で呼ばれるとプロセスを落とすことがあるためです。Node 23 以降では起きません。変わるのは呼び出しの速さだけで、結果は変わりません。ただし、Node 22 でこのパッケージを読み込むアプリも、このフラグの下で動きます。Node 23 以降では何も立てません。
 
