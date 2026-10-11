@@ -1179,12 +1179,14 @@ machine order over step
 | line | what it says |
 |---|---|
 | `machine <name>(<alias>) over <table>` | the table whose rows decide the carried output: its rows are the transitions |
-| `carry <input> -> <output>` | the output the caller passes back as that input on the next call. Both are one enum. **Required** |
+| `carry <input> -> <output>` | the output the caller passes back as that input on the next call. Both are one enum. **Required**. A second and later `carry` line carries a further value along with the state (below) |
 | `held <input>, …` | inputs one case passes with the same value on every call, from its first to its last: the amount of an order, the class of the person who applied (E056 when one is not an input, or is the carried one) |
 | `initial <state>` | the state a case starts in. **Required** |
 | `final <state>, …` | the states a case ends in |
 | `never <state>, … after <state>, …` | no sequence of calls reaches the first states once the case has been in one of the second |
 | `once <output> <cell>` | in one case, at most one call answers an output the cell accepts: a refund paid, a point granted |
+| `initial <input> <value>` | where a further carried value starts. One for every `carry` line after the first (E072) |
+| `always <input> <cell> and … when <state>, …` | in every state a case can reach — every one on the `when` list, when there is one — each carried value named fits its cell |
 
 `carry` is the whole of what is new about the meaning. **The generated function does not
 change** — it takes the state as an argument and answers the next one, and keeps nothing — so
@@ -1199,6 +1201,8 @@ about every **sequence** of calls the caller can make, and `rulec check` proves 
 | finishing | a state a case can reach from which no `final` state can be reached | E125 |
 | `never` | a sequence of calls that reaches the first states after the second | E126 |
 | `once` | a sequence of calls in which two calls answer what the cell accepts | E127 |
+| `always` | a sequence of calls that reaches a state the line speaks of with a carried value its cell does not accept | E135 |
+| a carried number's range | a sequence of calls whose last call answers a carried number outside its input's range | E134 |
 | reach | a state no sequence of calls reaches, and a row that applies only in such states | W125, W126 |
 
 Without `held`, every input may take any value on every call, and a sequence that changes the
@@ -1220,6 +1224,57 @@ error[E126]: A sequence of calls reaches shipped after cancelled
    3. at paid, event = ship, amount_paid = 0JPY → shipped (table step row 4)
 ```
 
+### Carrying a number, a truth value or another enum
+
+A case often holds more than its state: the days left of a grace period, the attempts made, a
+mark that a free trial was taken. A `carry` line after the first carries such a value along,
+and an `initial` line with the input's name says where it starts:
+
+```rule
+machine subscription over step
+  carry   status -> next_status
+  carry   days_left -> next_days_left
+  initial active
+  initial days_left 0
+  final   suspended
+  never   active after suspended
+  always  days_left >=1 <=7 when in_grace
+  always  days_left 0 when active, suspended
+```
+
+What can be carried is a number whose input declares **both ends** of its range (`number`, an
+amount, a quantity, a rate), a truth value, or another enum; the input and the output of a line
+are one type (E051), and every carried value has its `initial` (E072). The first `carry` line is
+the state: the one-word `initial`, `final` and `never` speak of it, and the other values ride
+along. A row writes a carried value the way it writes any output — a value (`7`), the input
+itself (`days_left`, kept as it was), or a computed name (`one_less` from
+`define one_less : number = days_left - 1`). There is no special way to count down: the row for
+the last day has to be written, and that is where a reader sees what happens when the count
+runs out.
+
+What a case is in is then the state together with those values, and every claim — `final`,
+`never`, `once`, finishing, the states no case reaches — is about that. Two more come with it:
+
+- **`always`** names carried inputs with a cell each, joined by `and`, and the states it holds
+  in after `when` (every state, without it). A sequence of calls that reaches one of those
+  states with a value the cell does not accept is E135, the shortest one attached.
+- **a carried number stays within its range.** A call from a state a case reaches that answers
+  it outside the input's range leaves a value no next call can be passed: E134, with the calls
+  that get there. A row that would do so only from values no case holds is W126 instead — in
+  the example, a night of grace at zero days, since a grace period always starts at seven.
+  Such a case has nowhere to go, and E134 is what says so: neither `always` (E135) nor
+  finishing (E125) looks at a value past its range again.
+
+While every combination of the state and the carried values fits the budget, each value of a
+number is a place of its own and the claims are exact. Past that, a number is cut into
+intervals at the boundaries that matter to it — the cells of the tables, the values the rows
+write, the `always` cells and its start — and a call from an interval goes to every interval its
+next value can fall in. That is more calls than happen, so a claim that holds there holds; a
+sequence that breaks a claim there is looked for again among calls that really happen, from
+where a case starts, and is reported as broken only when it is found. Otherwise the claim is
+W127, and so is whether a case can still finish, which the intervals cannot show. `--budget`, or
+a narrower range, brings the walk back to one value at a time.
+
 ### Why the claims stay decidable
 
 The state is a finite enum, and every other input is cut by the rule's own boundaries into
@@ -1228,11 +1283,12 @@ input that realizes it, and what the rule answers there is a transition from the
 class has to the state the rule answers. The claims are then searches over a finite graph.
 The price is the lines this language does not have, and they are left out on purpose:
 
-- **no number is carried from one call to the next.** A total so far — refunds paid, a balance
-  — is kept by the caller and passed in, as it always was. Adding one up in the state would
-  make it a counter, and whether a counter reaches a value is not decidable in general.
-- **one machine per rule, one carried state.** Two machines running side by side is where
-  message order and races live; that is what TLA+ and P are for.
+- **no number without a range is carried from one call to the next.** A total so far — refunds
+  paid, a balance with no limit — is kept by the caller and passed in, as it always was. A
+  number with no end to its range would make the state a counter, and whether a counter
+  reaches a value is not decidable in general; with both ends, the values are finitely many.
+- **one machine per rule.** Two machines running side by side is where message order and races
+  live; that is what TLA+ and P are for.
 - **no calendar.** "Within 14 days" is an input — the days elapsed, counted by the caller —
   compared with a constant, as every date comparison is.
 
@@ -1263,9 +1319,9 @@ scenario late_pay
 | pay    | 3000JPY     | cancelled     | 0JPY    | false    |
 ```
 
-The carried input has **no column**: the first call starts in the `initial` state, and every
-later one in the state the call before it answered. Every other input and every output has a
-column (E055, E111). `rulec check` runs the calls in order through the reference evaluator; a
+The carried input has **no column**, and neither has any further carried value: the first call
+starts in the `initial` state with each carried value at its `initial`, and every later one in
+what the call before it answered. Every other input and every output has a column (E055, E111). `rulec check` runs the calls in order through the reference evaluator; a
 call that does not answer what its row says is E107, reported with the calls that led to it.
 
 ### What a machine generates
@@ -1289,6 +1345,13 @@ ended.
 
 `final` is a keyword in PHP whatever its case, and in Swift, hence the two other spellings.
 
+A further carried value gets the value it starts at, named after its input: `INITIAL_DAYS_LEFT`
+in Python, TypeScript, JavaScript, Rust, Ruby, PHP and Java, `InitialDaysLeft` in Go,
+`initialDaysLeft` in Swift, and `machine.more[k].initial` in the NumPy plan. An amount, a
+quantity or a rate is the language's branded type (`JPY(-5000)` in Python), a truth value its
+`True` or `true`, an enum's value its member. SQL and Wasm have no place for it either: `rulec
+api` gives it under `machine.carried`, with each language's name for it.
+
 The NumPy plan is data, so the state names are the wire form. A target with one door and no
 module has no place for a constant; its caller reads the two off `rulec api`, which lists every
 language's spelling under `machine.constants`.
@@ -1298,7 +1361,8 @@ and every two that can follow one another, the shortest sequence of calls from t
 state that ends with them, and every scenario. `rulec test` has each language's runner play
 them — **the state one call answers is handed to the next call as that language holds it** —
 and prints its constants first, so the traces hold the hand-over and the constants as well as
-the answers (docs/formats.md).
+the answers (docs/formats.md). A further carried value is handed over the same way: the trace's
+first call is passed where each one starts, and every later one what the language answered.
 
 ## 7. Tables
 
@@ -1667,7 +1731,7 @@ An enum **value** never starts a line, so it may be any of them but eleven: `not
 | count and sum | `where` `of` (and `over`, above) |
 | clause body | `when` `then` `always` |
 | apply body | `except` (and `with`, above) |
-| machine body | `carry` `initial` `final` `never` `after` `once` (and `over` and `held`, above) |
+| machine body | `carry` `initial` `final` `never` `after` `once` (and `over` and `held`, above; `always` and `when`, which a `clause` has too) |
 <!-- /RESERVED -->
 
 `step` (inside `rate[step 1%]`), `unique`, `first`, the type words (`money` `mass` `length`

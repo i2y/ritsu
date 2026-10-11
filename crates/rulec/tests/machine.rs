@@ -650,3 +650,451 @@ fn heldのある機械も生成したコードで回る() {
     let (c, out) = rulec_tmp(&tmpdir_in(Path::new(&out_dir)), &["test", &out_dir, "--format", "json"]);
     assert_eq!(c, 0, "生成したコードが食い違う:\n{out}");
 }
+
+// ---------------------------------------------------------------------------------------------
+// Values carried along with the state (§15.217): a number with a range, a truth value, another
+// enum, each on a `carry` line of its own.
+
+/// The corpus rules that carry more than their state, in English and in Japanese.
+const MORE: &[&str] = &[
+    "tests/corpus/retry_attempts.rule",
+    "tests/corpus/grace_period.rule",
+    "tests/corpus/one_time_perk.rule",
+    "tests/corpus/再試行の回数.rule",
+    "tests/corpus/猶予の残り日数.rule",
+    "tests/corpus/一度だけの特典.rule",
+];
+
+fn rulec_en(args: &[&str]) -> (i32, String) {
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").current_dir(root()).args(args).output().expect("cannot start rulec");
+    (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
+}
+
+/// The codes `check` prints for a file, in order.
+fn printed(out: &str) -> Vec<String> {
+    objects(out).iter().map(|j| s(j, "code").to_string()).filter(|c| !c.is_empty()).collect()
+}
+
+/// The standing between a marketplace and a seller, with the days left of a grace period or a
+/// probation carried along with it. A grace period always starts at sixteen days, so the row for
+/// a night of grace at zero days is one no case reaches.
+const STANDING: &str = "rule seller_standing v1
+
+enum standing = fresh | dispute | grace | probation | good | trusted
+enum event = first_sale | warn | review | promote | revoke | night
+
+inputs
+  standing  : standing
+  event     : event
+  days_left : number  range >=0 <=16
+
+outputs
+  next_standing  : standing
+  next_days_left : number  round down(1)
+
+derive one_less : number = days_left - 1  range >=-1 <=15
+
+table step
+policy unique
+| standing                        | event      | days_left | -> next_standing | next_days_left |
+| fresh                           | first_sale | -         | dispute          | days_left      |
+| not: fresh                      | first_sale | -         | standing         | days_left      |
+| dispute                         | warn       | -         | grace            | 16             |
+| not: dispute                    | warn       | -         | standing         | days_left      |
+| dispute, grace                  | review     | -         | probation        | 16             |
+| fresh, probation, good, trusted | review     | -         | standing         | days_left      |
+| not: trusted                    | promote    | -         | trusted          | days_left      |
+| trusted                         | promote    | -         | standing         | days_left      |
+| fresh, dispute                  | revoke     | -         | standing         | days_left      |
+| grace, probation, good          | revoke     | -         | dispute          | 16             |
+| trusted                         | revoke     | -         | probation        | 16             |
+| fresh, dispute, good, trusted   | night      | -         | standing         | days_left      |
+| grace                           | night      | 1         | dispute          | 0              |
+| grace                           | night      | >=2       | grace            | one_less       |
+| grace                           | night      | 0         | grace            | one_less       |
+| probation                       | night      | <=1       | good             | 0              |
+| probation                       | night      | >=2       | probation        | one_less       |
+
+machine seller over step
+  carry   standing -> next_standing
+  carry   days_left -> next_days_left
+  initial fresh
+  initial days_left 0
+  never   fresh after dispute, grace, probation, good, trusted
+  always  days_left >=1 <=16 when grace, probation
+";
+
+#[test]
+fn 数と真偽を持ち越すコーパスは検査を通り_主張が全部成り立つ() {
+    for rel in MORE {
+        let (c, out) = rulec(&["check", rel, "--format", "json"]);
+        assert_eq!(c, 0, "{rel}\n{out}");
+        let codes = printed(&out);
+        assert!(codes.iter().all(|c| !c.starts_with('E') && !c.starts_with("W12")), "{rel}: {codes:?}");
+        let src = std::fs::read_to_string(root().join(rel)).unwrap();
+        let (f, ch) = rulec::prepare(&src, rel).unwrap_or_else(|_| panic!("{rel} が検査を通らない"));
+        let a = rulec::machine::analyze(&f, &ch, rulec::region::DEFAULT_BUDGET as usize).expect("ステートマシンとして読めない");
+        assert!(a.whole, "{rel}: 値を一つずつ調べる大きさのはず");
+        assert!(a.always_claims.iter().all(|v| v.holds()) && a.range_claims.iter().all(|(_, v)| v.holds()), "{rel}");
+    }
+}
+
+/// The seller's standing, walked whole: the row for a night of grace at zero days is W126 — a
+/// case reaches grace, never with zero days left — and the `always` line holds. A line that says
+/// a dispute always has zero days left breaks: a grace period revoked sends the case back to a
+/// dispute with sixteen days set, three calls from the start.
+#[test]
+fn 猶予の残りは届かない行をw126で言い_alwaysの成立と破れを言う() {
+    let (_tmp, d) = scratch("standing");
+    let rule = write(&d, "standing.rule", STANDING);
+    let (c, out) = rulec_en(&["check", &rule, "--format", "json"]);
+    assert_eq!(c, 0, "{out}");
+    assert_eq!(printed(&out), ["W126"], "{out}");
+    let w = &objects(&out)[0];
+    assert_eq!(arr(w, "rows").iter().map(|r| int(r, "row")).collect::<Vec<_>>(), [15], "{out}");
+    assert!(out.contains("never with the days_left this row needs") && out.contains("days_left 1..16"), "{out}");
+
+    let broken = write(&d, "standing2.rule", &STANDING.replace("  always  days_left >=1 <=16 when grace, probation\n", "  always  days_left >=1 <=16 when grace, probation\n  always  days_left 0 when dispute\n"));
+    let (c, out) = rulec_en(&["check", &broken, "--format", "json"]);
+    assert_eq!(c, 1, "{out}");
+    let js = objects(&out);
+    let e = js.iter().find(|j| s(j, "code") == "E135").unwrap_or_else(|| panic!("E135 が出ない: {out}"));
+    let trace = arr(e.get("witness").unwrap(), "trace");
+    assert_eq!(trace.len(), 3, "{out}");
+    let last = trace[2].get("outputs").unwrap();
+    assert_eq!((s(last, "next_standing"), int(last, "next_days_left")), ("dispute", 16), "{out}");
+    // Each call is made with the values the call before answered.
+    for pair in trace.windows(2) {
+        let (answered, next) = (pair[0].get("outputs").unwrap(), pair[1].get("inputs").unwrap());
+        assert_eq!(int(answered, "next_days_left"), int(next, "days_left"));
+        assert_eq!(s(answered, "next_standing"), s(next, "standing"));
+    }
+    assert_eq!(printed(&out).iter().filter(|c| c.starts_with('E')).count(), 1, "{out}");
+}
+
+/// A campaign that carries two marks as truth values, so that the welcome and the reminder go out
+/// once each. Left without the mark, the welcome goes out on every visit, and `once` breaks two
+/// calls from the start.
+#[test]
+fn 一度だけの印は真偽で持ち越し_印が無ければonceが破れる() {
+    let rule = "rule campaign v1
+
+enum phase = running | converted | lost
+enum happening = visit | day_starts | purchase | churn
+enum reaction = nothing | welcome | reminder | thanks | farewell
+
+inputs
+  phase    : phase
+  event    : happening
+  day      : number  range >=1 <=30
+  welcomed : bool
+  reminded : bool
+
+outputs
+  next_phase    : phase
+  next_welcomed : bool
+  next_reminded : bool
+  reaction      : reaction
+
+table react
+policy first
+| phase   | event      | day | welcomed | reminded | -> next_phase | next_welcomed | next_reminded | reaction |
+| running | visit      | -   | false    | -        | phase         | true          | reminded      | welcome  |
+| running | visit      | -   | true     | -        | phase         | welcomed      | reminded      | nothing  |
+| running | day_starts | 22  | -        | false    | phase         | welcomed      | true          | reminder |
+| running | day_starts | -   | -        | -        | phase         | welcomed      | reminded      | nothing  |
+| running | purchase   | -   | -        | -        | converted     | welcomed      | reminded      | thanks   |
+| running | churn      | -   | -        | -        | lost          | welcomed      | reminded      | farewell |
+| -       | -          | -   | -        | -        | phase         | welcomed      | reminded      | nothing  |
+
+machine campaign over react
+  carry   phase -> next_phase
+  carry   welcomed -> next_welcomed
+  carry   reminded -> next_reminded
+  initial running
+  initial welcomed false
+  initial reminded false
+  final   converted, lost
+  never   converted after lost
+  once    reaction welcome
+  once    reaction reminder
+  always  welcomed false and reminded false when running
+";
+    let (_tmp, d) = scratch("campaign");
+    let ok = write(&d, "campaign.rule", &rule.replace("  always  welcomed false and reminded false when running\n", ""));
+    let (c, out) = rulec_en(&["check", &ok, "--format", "json"]);
+    assert_eq!(c, 0, "{out}");
+    assert!(printed(&out).iter().all(|c| !c.starts_with('E') && !c.starts_with("W12")), "{out}");
+
+    // `and` joins two tests on one line; the line is broken the first time a visit welcomes.
+    let both = write(&d, "both.rule", rule);
+    let (_, out) = rulec_en(&["check", &both, "--format", "json"]);
+    let e = objects(&out).into_iter().find(|j| s(j, "code") == "E135").unwrap_or_else(|| panic!("E135 が出ない: {out}"));
+    assert_eq!(arr(e.get("witness").unwrap(), "trace").len(), 1, "{out}");
+
+    let every = write(&d, "every.rule", &rule.replace("| running | visit      | -   | true     | -        | phase         | welcomed      | reminded      | nothing  |", "| running | visit      | -   | true     | -        | phase         | welcomed      | reminded      | welcome  |").replace("  always  welcomed false and reminded false when running\n", ""));
+    let (c, out) = rulec_en(&["check", &every, "--format", "json"]);
+    assert_eq!(c, 1, "{out}");
+    let e = objects(&out).into_iter().find(|j| s(j, "code") == "E127").unwrap_or_else(|| panic!("E127 が出ない: {out}"));
+    let trace = arr(e.get("witness").unwrap(), "trace");
+    assert_eq!(trace.len(), 2, "{out}");
+    assert!(trace.iter().all(|t| s(t.get("outputs").unwrap(), "reaction") == "welcome"), "{out}");
+}
+
+/// Ten million values one by one are past the budget, so the count is walked in intervals. A
+/// claim that holds there is said to hold; one the intervals break but no sequence of calls that
+/// really happens does — an even count taken down two at a time never shows 1 — is W127, with
+/// how far the calls that really happen were followed.
+#[test]
+fn 区間にまとめた探索は成り立つ主張を示し_作り直せない反例をw127で言う() {
+    let rule = "rule even_count v1
+
+enum phase = running | done
+enum tick = step | stop
+
+inputs
+  phase : phase
+  tick  : tick
+  left  : number  range >=0 <=10_000_000
+
+outputs
+  next_phase : phase
+  next_left  : number  round down(1)
+
+define two_less : number = left - 2
+
+table step
+policy unique
+| phase   | tick | left | -> next_phase | next_left |
+| running | step | >=2  | phase         | two_less  |
+| running | step | <=1  | done          | left      |
+| running | stop | -    | done          | left      |
+| done    | -    | -    | phase         | left      |
+
+machine count over step
+  carry   phase -> next_phase
+  carry   left -> next_left
+  initial running
+  initial left 10_000_000
+  never   running after done
+  always  left >=0
+  always  left not: 1
+";
+    let (_tmp, d) = scratch("intervals");
+    let p = write(&d, "even.rule", rule);
+    let (c, out) = rulec_en(&["check", &p, "--format", "json"]);
+    assert_eq!(c, 0, "{out}");
+    let src = std::fs::read_to_string(&p).unwrap();
+    let (f, ch) = rulec::prepare(&src, &p).unwrap();
+    let a = rulec::machine::analyze(&f, &ch, rulec::region::DEFAULT_BUDGET as usize).unwrap();
+    assert!(!a.whole, "区間にまとめて調べるはず");
+    assert!(a.never_claims[0].holds() && a.always_claims[0].holds() && a.range_claims.iter().all(|(_, v)| v.holds()), "区間の上で成り立つ主張");
+    assert!(matches!(a.always_claims[1], rulec::machine::Verdict::Undecided(_)), "作り直せない反例は決めきれないとする");
+    let w = objects(&out).into_iter().find(|j| s(j, "code") == "W127").unwrap_or_else(|| panic!("W127 が出ない: {out}"));
+    let notes: Vec<String> = arr(&w, "notes").iter().filter_map(|n| n.as_str().map(String::from)).collect();
+    assert!(notes.iter().any(|n| n.contains("could not be made again from calls that really happen") && n.contains("followed to")), "{notes:?}");
+    assert!(notes.iter().any(|n| n.contains("raise `--budget`")), "{notes:?}");
+    assert_eq!(printed(&out), ["W127"], "{out}");
+}
+
+/// Every kind of value carried at once — an amount that starts below zero, a rate, another enum,
+/// a truth value — through the generated code of every language there is a toolchain for, each
+/// call passed what the language itself answered to the call before.
+#[test]
+fn 持ち越す値も生成したコードで手順のとおりに回る() {
+    let (_tmp, d) = scratch("kinds");
+    let rule = write(
+        &d,
+        "account.rule",
+        "rule account v1
+
+enum status = open | frozen | closed
+enum tier = basic | silver | gold
+enum event = deposit | withdraw | freeze | close
+
+inputs
+  status  : status
+  event   : event
+  balance : money[JPY]  range >=-5000JPY <=100000JPY
+  bonus   : rate[step 1%]  range >=0% <=10%
+  level   : tier
+  warned  : bool
+  amount  : money[JPY]  range >=0JPY <=1000JPY
+
+outputs
+  next_status  : status
+  next_balance : money[JPY]  round down(1JPY)
+  next_bonus   : rate[step 1%]  round down(1%)
+  next_level   : tier
+  next_warned  : bool
+
+derive added : money[JPY] = balance + amount  range >=-5000JPY <=101000JPY
+derive taken : money[JPY] = balance - amount  range >=-6000JPY <=100000JPY
+
+table step
+policy first
+| status | event    | added       | taken      | -> next_status | next_balance | next_bonus | next_level | next_warned |
+| open   | deposit  | <=100000JPY | -          | status         | added        | bonus      | silver     | warned      |
+| open   | deposit  | >100000JPY  | -          | status         | balance      | bonus      | level      | true        |
+| open   | withdraw | -           | >=-5000JPY | status         | taken        | 1%         | level      | true        |
+| open   | withdraw | -           | <-5000JPY  | status         | balance      | bonus      | level      | true        |
+| open   | freeze   | -           | -          | frozen         | balance      | 0%         | level      | warned      |
+| open   | close    | -           | -          | closed         | 0JPY         | 0%         | basic      | false       |
+| -      | -        | -           | -          | status         | balance      | bonus      | level      | warned      |
+
+machine account over step
+  carry   status -> next_status
+  carry   balance -> next_balance
+  carry   bonus -> next_bonus
+  carry   level -> next_level
+  carry   warned -> next_warned
+  initial open
+  initial balance -5000JPY
+  initial bonus 5%
+  initial level gold
+  initial warned false
+  final   closed
+",
+    );
+    let out_dir = d.join("gen").to_string_lossy().into_owned();
+    let (c, out) = rulec(&["gen", &rule, "--out", &out_dir]);
+    assert_eq!(c, 0, "{out}");
+    let traces = std::fs::read_to_string(d.join("gen/vectors/account.traces.jsonl")).unwrap();
+    assert!(traces.lines().next().unwrap().contains(r#""more":[{"in":"balance","out":"next_balance"}"#), "{traces}");
+    assert!(traces.contains(r#""carried":{"balance":-5000,"bonus":5,"level":"gold","warned":false}"#), "{traces}");
+    let py = std::fs::read_to_string(d.join("gen/python/account.py")).unwrap();
+    for want in ["INITIAL_BALANCE: JPY = JPY(-5000)", "INITIAL_BONUS: Rate = Rate(5)", "INITIAL_LEVEL: Tier = Tier.GOLD", "INITIAL_WARNED: bool = False"] {
+        assert!(py.contains(want), "{want}");
+    }
+    if need(Need::Python) {
+        let (c, out) = rulec_tmp(&tmpdir_in(Path::new(&out_dir)), &["test", &out_dir, "--format", "json"]);
+        assert_eq!(c, 0, "生成したコードが手順で食い違う:\n{out}");
+    }
+}
+
+/// The certificate lays the carried values on the rows (§15.217): the places a case can be, closed
+/// under the rows' moves, and the claims over them. The program beside the tool re-checks it and
+/// refuses it forged; the one with the proofs reads it and says it is stated, not proved.
+#[test]
+fn 持ち越す値の証明書は再検査を通り_偽れば落ちる() {
+    const GRACE: &str = "tests/corpus/grace_period.rule";
+    let (c, cert) = rulec(&["certificate", GRACE]);
+    assert_eq!(c, 0);
+    let forged = vec![
+        ("場所を一つ落とした", cert.replace("[1,[2]],[1,[1]],[2,[0]]]", "[1,[1]],[2,[0]]]")),
+        ("行 1 が書く値", cert.replacen(r#"{"row":1,"to":7,"#, r#"{"row":1,"to":6,"#, 1)),
+        ("always の境を狭めた", cert.replacen(r#"{"op":"<=","value":"7"}]}}],"holds":true"#, r#"{"op":"<=","value":"6"}]}}],"holds":true"#, 1)),
+        ("始まりの場所", cert.replacen(r#""start":[0]"#, r#""start":[1]"#, 1)),
+        ("範囲", cert.replacen(r#""range":["0","7"]"#, r#""range":["0","8"]"#, 1)),
+    ];
+    for (what, f) in &forged {
+        assert_ne!(f, &cert, "{what}: 証明書の形が変わっていて、偽れていない");
+    }
+    if ready(Need::Python, || Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false), "python3 が無い") {
+        let (c, said) = feed(Command::new("python3").args(["tools/recheck.py", "--rule", GRACE]), &cert);
+        assert_eq!(c, 0, "{said}");
+        assert!(said.contains("carried values over step: 9 places a case can be, 6 claims laid on the rows"), "{said}");
+        for (what, f) in &forged {
+            let (c, said) = feed(Command::new("python3").args(["tools/recheck.py"]), f);
+            assert_eq!(c, 1, "{what}: 偽った証明書が通った:\n{said}");
+            assert!(said.contains("carried values"), "{what}: 持ち越す値の検査で落ちていない:\n{said}");
+        }
+    }
+    let bin = root().join("../../proofs/.lake/build/bin/rulec-recheck");
+    if ready(Need::Lean, || bin.exists(), "ritsu の proofs/ が build されていない（そこで lake build で作る）") {
+        let (c, said) = feed(Command::new(&bin).args(["--rule", GRACE]), &cert);
+        assert_eq!(c, 0, "{said}");
+        assert!(said.contains("the claims over the values the machine carries besides its state (9 places): stated, not proved"), "{said}");
+    }
+}
+
+#[test]
+fn apiが持ち越す値の定数を言う() {
+    let (c, out) = rulec(&["api", "tests/corpus/grace_period.rule", "--format", "json"]);
+    assert_eq!(c, 0);
+    let j = rulec::json::parse(&out).unwrap();
+    let m = j.get("machine").expect("machine が無い");
+    let more = arr(m, "carried");
+    assert_eq!(more.len(), 1, "{out}");
+    assert_eq!((s(&more[0], "input"), s(&more[0], "output"), s(&more[0], "type")), ("days_left", "next_days_left", "number"));
+    assert_eq!(int(&more[0], "initial"), 0);
+    let k = more[0].get("constants").unwrap();
+    assert_eq!((s(k, "python"), s(k, "go"), s(k, "swift"), s(k, "php")), ("INITIAL_DAYS_LEFT", "InitialDaysLeft", "initialDaysLeft", "INITIAL_DAYS_LEFT"));
+    assert_eq!(arr(m, "always").len(), 2, "{out}");
+}
+
+#[test]
+fn 資料に状態ごとの持ち越す値が載る() {
+    let (c, md) = rulec_en(&["doc", "tests/corpus/grace_period.rule"]);
+    assert_eq!(c, 0);
+    for want in [
+        "| days_left → next_days_left | number | >=0 <=7 | 0 |",
+        "note right of s1 : days_left 1..7",
+        "### What each state carries",
+        "| in_grace | 1..7 |",
+        "`always days_left >=1 <=7 when in_grace`: whenever a case is in in_grace, days_left >=1 <=7.",
+        "Every value next_days_left answers lies within the range of days_left.",
+    ] {
+        assert!(md.contains(want), "{want} が載っていない:\n{md}");
+    }
+    let (_tmp, d) = scratch("doc-more");
+    let out = d.to_string_lossy().into_owned();
+    let (c, _) = rulec(&["doc", "tests/corpus/grace_period.rule", "--format", "html", "--out", &out]);
+    assert_eq!(c, 0);
+    let html = std::fs::read_to_string(d.join("grace_period.html")).unwrap();
+    assert!(html.contains("days_left 1..7</text>"), "図に状態ごとの値が無い");
+    assert!(html.contains(r#""more":[{"in":"days_left","out":"next_days_left"}]"#) && html.contains("const stepAlone = machineStep;"), "続けるボタンが持ち越す値を戻さない");
+}
+
+/// The shapes a carried value is written in (E072), and a scenario that writes one down (E055).
+#[test]
+fn 持ち越す値の形の誤りはe072で言う() {
+    let base = std::fs::read_to_string(root().join("tests/corpus/retry_attempts.rule")).unwrap();
+    let (_tmp, d) = scratch("e072");
+    let cases: Vec<(&str, String, &str)> = vec![
+        ("始まりが無い", base.replace("  initial attempts 0\n", ""), "E072"),
+        ("範囲の外の始まり", base.replace("  initial attempts 0\n", "  initial attempts 4\n"), "E072"),
+        ("持ち越さない入力の始まり", base.replace("  initial attempts 0\n", "  initial attempts 0\n  initial outcome declined\n"), "E072"),
+        ("状態の始まりを二語で", base.replace("  initial pending\n", "  initial status pending\n"), "E072"),
+        ("範囲の無い数", base.replace("attempts : number  range >=0 <=3", "attempts : number"), "E072"),
+        ("状態を always に", base.replace("  always  attempts >=1 when collected\n", "  always  status pending\n"), "E072"),
+        ("持ち越さない値を always に", base.replace("  always  attempts >=1 when collected\n", "  always  outcome declined\n"), "E072"),
+        ("always の when の後が空", base.replace("  always  attempts >=1 when collected\n", "  always  attempts >=1 when\n"), "E072"),
+        ("二度持ち越す", base.replace("  carry   attempts -> next_attempts\n", "  carry   attempts -> next_attempts\n  carry   attempts -> next_attempts\n"), "E072"),
+        ("型の違う組", base.replace("  carry   attempts -> next_attempts\n", "  carry   attempts -> next_status\n"), "E051"),
+        ("手順の例に持ち越す値の列", base.replace("| outcome  | -> next_status | next_attempts |\n| declined | pending        | 1             |\n| approved | collected      | 2             |", "| outcome  | attempts | -> next_status | next_attempts |\n| declined | 0        | pending        | 1             |\n| approved | 1        | collected      | 2             |"), "E055"),
+        ("持ち越す値を held に", base.replace("  initial pending\n", "  held    attempts\n  initial pending\n"), "E056"),
+        ("持ち越す値を once に", base.replace("  always  attempts >=1 when collected\n", "  once    next_attempts 3\n"), "E053"),
+    ];
+    for (what, src, code) in cases {
+        assert_ne!(src, base, "{what}: 書き換えが当たっていない");
+        let p = write(&d, "case.rule", &src);
+        let (c, out) = rulec(&["check", &p, "--format", "json"]);
+        assert_eq!(c, 1, "{what}:\n{out}");
+        assert!(printed(&out).iter().any(|x| x == code), "{what}: {code} が出ない:\n{out}");
+    }
+}
+
+/// Records that share a tag are one case: each later call is passed what the version answered
+/// for the carried values too, and a record that says otherwise is where the case parts.
+#[test]
+fn 過去の記録は持ち越す値も通し直す() {
+    let (_tmp, d) = scratch("replay-more");
+    let log = write(
+        &d,
+        "log.jsonl",
+        r#"{"tag":"s:1","in":{"status":"active","event":"payment_missed","days_left":0},"observed":{"next_status":"in_grace","next_days_left":7}}
+{"tag":"s:2","in":{"status":"active","event":"payment_missed","days_left":0},"observed":{"next_status":"in_grace","next_days_left":7}}
+{"tag":"s:1","in":{"status":"in_grace","event":"day_passed","days_left":7},"observed":{"next_status":"in_grace","next_days_left":6}}
+{"tag":"s:2","in":{"status":"in_grace","event":"payment_received","days_left":7},"observed":{"next_status":"active","next_days_left":0}}
+{"tag":"s:1","in":{"status":"in_grace","event":"day_passed","days_left":5},"observed":{"next_status":"in_grace","next_days_left":4}}
+"#,
+    );
+    let (c, out) = rulec(&["replay", "tests/corpus/grace_period.rule", "--fixtures", &log, "--format", "json"]);
+    assert_eq!(c, 0, "{out}");
+    let cs = objects(&out)[0].get("cases").cloned().expect("cases が無い");
+    assert_eq!((int(&cs, "total"), int(&cs, "followed")), (2, 1), "{out}");
+    let parted = arr(&cs, "diverged");
+    assert_eq!(parted.len(), 1, "{out}");
+    assert_eq!((s(&parted[0], "tag"), int(&parted[0], "line")), ("s:1", 5), "s:1 は三回目で、記録の残り日数が答えと違う");
+}

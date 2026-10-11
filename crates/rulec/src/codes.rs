@@ -1653,6 +1653,9 @@ machine k(k) over m
 "##;
 const X_E055: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| x     | -> r(r) : bool |\n| true  | false          |\n| false | true           |\n\nscenario s(s)\n| x    | -> r  |\n| true | false |\n";
 /// E056: a `held` line naming an output.
+const X_E072: &str = "rule t(t) v1\n\nenum s(s) = run(run) | done(done)\n\ninputs\n  st(st) : s\n  n(n)   : number  range >=0 <=3\n\noutputs\n  nx(nx) : s\n  nn(nn) : number  round down(1)\n\ndefine more(more) : number = n + 1\n\ntable m(m)\npolicy first\n| st  | n  | -> nx(nx) : s | nn(nn) : number |\n| run | <3 | run           | more            |\n| -   | -  | done          | n               |\n\nmachine k(k) over m\n  carry   st -> nx\n  carry   n -> nn\n  initial run\n";
+const X_E134: &str = "rule t(t) v1\n\nenum s(s) = run(run) | done(done)\n\ninputs\n  st(st)       : s\n  again(again) : bool\n  n(n)         : number  range >=0 <=3\n\noutputs\n  nx(nx) : s\n  nn(nn) : number  round down(1)\n\ndefine more(more) : number = n + 1\n\ntable m(m)\npolicy first\n| st   | again | n   | -> nx(nx) : s | nn(nn) : number |\n| run  | true  | <=2 | run           | more            |\n| run  | true  | -   | done          | more            |\n| run  | -     | -   | done          | n               |\n| done | -     | -   | done          | n               |\n\nmachine k(k) over m\n  carry   st -> nx\n  carry   n -> nn\n  initial run\n  initial n 0\n";
+const X_E135: &str = "rule t(t) v1\n\nenum s(s) = run(run) | done(done)\n\ninputs\n  st(st) : s\n  n(n)   : number  range >=0 <=3\n\noutputs\n  nx(nx) : s\n  nn(nn) : number  round down(1)\n\ndefine more(more) : number = n + 1\n\ntable m(m)\npolicy first\n| st  | n  | -> nx(nx) : s | nn(nn) : number |\n| run | <3 | run           | more            |\n| -   | -  | done          | n               |\n\nmachine k(k) over m\n  carry   st -> nx\n  carry   n -> nn\n  initial run\n  initial n 0\n  always  n <=2 when run\n";
 const X_E056: &str = "rule t(t) v1\n\nenum s(s) = p(p) | q(q)\n\ninputs\n  st(st) : s\n  x(x)   : bool\n\noutputs\n  nx(nx) : s\n  r(r)   : bool\n\ntable m(m)\npolicy unique\n| st | x     | -> nx(nx) : s | r(r) : bool |\n| p  | true  | q             | true        |\n| p  | false | p             | false       |\n| q  | -     | q             | false       |\n\nmachine k(k) over m\n  carry   st -> nx\n  held    r\n  initial p\n  final   q\n";
 /// E058: a `derive` line with nothing after the word — the line that used to hang the parser.
 const X_E058: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  r(r) : bool\n\nderive\n\ntable j(j)\npolicy unique\n| a     | -> r(r) : bool |\n| true  | false          |\n| false | true           |\n";
@@ -2533,12 +2536,12 @@ pub fn ledger() -> Vec<Entry> {
             "E050",
             tr!("`machine` の節の形が違います", "The `machine` section is not shaped right"),
             tr!(
-                "`machine` の見出しに名前か `over <表>` が無いとき、`carry` か `initial` の行が無いか二行あるとき、`machine` の中に `carry`・`initial`・`final`・`never`・`once` のほかの行があるとき、規則に `machine` が二つあるとき。",
-                "The `machine` heading lacks a name or `over <table>`; the `carry` or `initial` line is missing or written twice; a line under `machine` is not `carry`, `initial`, `final`, `never` or `once`; or the rule has two `machine` sections."
+                "`machine` の見出しに名前か `over <表>` が無いとき、`carry` か `initial` の行が無いとき、状態の `initial` の行が二行あるとき、`machine` の中に `carry`・`held`・`initial`・`final`・`never`・`once`・`always` のほかの行があるとき、規則に `machine` が二つあるとき。",
+                "The `machine` heading lacks a name or `over <table>`; the `carry` or `initial` line is missing, or the state's `initial` line is written twice; a line under `machine` is not `carry`, `held`, `initial`, `final`, `never`, `once` or `always`; or the rule has two `machine` sections."
             ),
             tr!(
-                "形は `machine <名前>(<ascii>) over <表>` と、その下の `carry <入力> -> <出力>` と `initial <状態>`（どちらも必須）、`final <状態>, …`、`never <状態>, … after <状態>, …`、`once <出力> <セル>`（どれも任意）です。二つの状態を一緒に持ち越すなら、その組を一つの列挙にしてください。",
-                "The shape is `machine <name>(<ascii>) over <table>`, then `carry <input> -> <output>` and `initial <state>` (both required), and `final <state>, …`, `never <state>, … after <state>, …` and `once <output> <cell>` (all optional). To carry two states together, make the pair one enum."
+                "形は `machine <名前>(<ascii>) over <表>` と、その下の `carry <入力> -> <出力>` と `initial <状態>`（どちらも必須）、`final <状態>, …`、`never <状態>, … after <状態>, …`、`once <出力> <セル>`（どれも任意）です。ほかの値も一緒に持ち越すなら、`carry` の行と `initial <入力> <値>` の行を足してください（E072）。",
+                "The shape is `machine <name>(<ascii>) over <table>`, then `carry <input> -> <output>` and `initial <state>` (both required), and `final <state>, …`, `never <state>, … after <state>, …` and `once <output> <cell>` (all optional). To carry more values along, add a `carry` line and an `initial <input> <value>` line for each (E072)."
             ),
             X_E050,
             &["E051", "E052", "E053"],
@@ -2547,8 +2550,8 @@ pub fn ledger() -> Vec<Entry> {
             "E051",
             tr!("`carry` か `over` が宣言と噛み合いません", "`carry` or `over` does not fit the declarations"),
             tr!(
-                "`carry` の左が入力でないとき、右が出力でないとき、二つが同じ列挙でないとき、`over` の表が無いとき、その表が持ち越す出力を決めていないとき。状態が有限個の値の列挙なので、呼び出しの並びについての主張を確かめられます。",
-                "The left of `carry` is not an input, the right is not an output, the two are not of one enum, the `over` table does not exist, or it does not decide the carried output. It is because the state is an enum of finitely many values that the claims about sequences of calls are decidable."
+                "`carry` の左が入力でないとき、右が出力でないとき、最初の `carry` の二つが同じ列挙でないとき、二行目からの `carry` の二つが同じ型でないとき、`over` の表が無いとき、その表が持ち越す出力を決めていないとき。状態が有限個の値の列挙なので、呼び出しの並びについての主張を確かめられます。",
+                "The left of `carry` is not an input, the right is not an output, the two of the first `carry` line are not of one enum, the two of a later `carry` line are not of one type, the `over` table does not exist, or it does not decide the carried output. It is because the state is an enum of finitely many values that the claims about sequences of calls are decidable."
             ),
             tr!(
                 "状態の入力と状態の出力を同じ列挙で宣言して `carry <入力> -> <出力>` と書き、`over` には、持ち越す出力を出力の列に持つ表の名前を書いてください。",
@@ -2575,8 +2578,8 @@ pub fn ledger() -> Vec<Entry> {
             "E053",
             tr!("`once` の行が宣言と噛み合いません", "The `once` line does not fit the declarations"),
             tr!(
-                "`once` の出力が宣言されていないとき、持ち越す状態の出力であるとき、セルが `-` のとき。持ち越す状態は、その状態に留まる呼び出しのたびに同じ値を返すので、`once` で数えると、留まるだけで主張が破れます。セルは出力の型に照らして、表のセルと同じ検査を受けます（E103 など）。",
-                "The output of `once` is not declared, is the carried state, or the cell is `-`. A state is answered again on every call that stays in it, so counting it with `once` breaks on the first stay. The cell is held to the output's type exactly as a table's cell is (E103 and the rest)."
+                "`once` の出力が宣言されていないとき、持ち越す状態か持ち越すほかの値の出力であるとき、セルが `-` のとき。持ち越す値は、それを保つ呼び出しのたびに同じ値を返すので、`once` で数えると、保つだけで主張が破れます。セルは出力の型に照らして、表のセルと同じ検査を受けます（E103 など）。",
+                "The output of `once` is not declared, is the carried state or another carried value, or the cell is `-`. A carried value is answered again on every call that keeps it, so counting it with `once` breaks on the first call that does. The cell is held to the output's type exactly as a table's cell is (E103 and the rest)."
             ),
             tr!(
                 "`once <出力> <セル>` の出力には、持ち越す状態ではない出力を書いてください（`once 返金額 >0円`）。状態について言うなら `never … after …` を使ってください。",
@@ -2604,8 +2607,8 @@ pub fn ledger() -> Vec<Entry> {
             "E055",
             tr!("`scenario` の形が違います", "A `scenario` is not shaped right"),
             tr!(
-                "`machine` の無い規則に `scenario` を書いたとき、名前が無いか二つが同じ名前のとき、行が無いとき、持ち越す入力の列があるとき、ほかの入力の列が足りないとき。一行目の呼び出しは `initial` の状態から、二行目からは一つ前の呼び出しが返した状態から始まるので、持ち越す入力には列がありません。",
-                "A `scenario` is written in a rule without a `machine`; it has no name, or two share one; it has no rows; it has a column for the carried input; or it lacks a column for another input. The first call starts from the `initial` state and every later one from the state the call before it answered, so the carried input has no column."
+                "`machine` の無い規則に `scenario` を書いたとき、名前が無いか二つが同じ名前のとき、行が無いとき、持ち越す入力（状態とほかの持ち越す値）の列があるとき、ほかの入力の列が足りないとき。一行目の呼び出しは `initial` の値から、二行目からは一つ前の呼び出しが返した値から始まるので、持ち越す入力には列がありません。",
+                "A `scenario` is written in a rule without a `machine`; it has no name, or two share one; it has no rows; it has a column for a carried input (the state, or another carried value); or it lacks a column for another input. The first call starts from the `initial` values and every later one from what the call before it answered, so a carried input has no column."
             ),
             tr!(
                 "`scenario <名前>(<ascii>)` の直下に表を書いてください。見出しは、持ち越す入力のほかのすべての入力、`->`、すべての出力です。持ち越す状態が無いなら、一行ずつの `examples` で書けます。",
@@ -2618,8 +2621,8 @@ pub fn ledger() -> Vec<Entry> {
             "E056",
             tr!("`held` の行が宣言と噛み合いません", "The `held` line does not fit the declarations"),
             tr!(
-                "`held` に、入力でない名前か、持ち越す入力か、同じ名前を二度書いたとき。`held` は、一つの案件が最初の呼び出しから最後の呼び出しまで同じ値で渡す入力を言います（注文の金額、申し込んだ人の区分）。書いておくと、検査は、そういう入力を呼び出しごとに変えた並びを、主張が破れる例として挙げなくなります。",
-                "`held` names something that is not an input, the carried input, or one name twice. `held` says which inputs one case passes with the same value on every call, from its first to its last — the amount of an order, the class of the person who applied — and the check then stops offering sequences of calls that change one of them as counterexamples."
+                "`held` に、入力でない名前か、持ち越す入力（状態とほかの持ち越す値）か、同じ名前を二度書いたとき。`held` は、一つの案件が最初の呼び出しから最後の呼び出しまで同じ値で渡す入力を言います（注文の金額、申し込んだ人の区分）。書いておくと、検査は、そういう入力を呼び出しごとに変えた並びを、主張が破れる例として挙げなくなります。",
+                "`held` names something that is not an input, a carried input (the state, or another carried value), or one name twice. `held` says which inputs one case passes with the same value on every call, from its first to its last — the amount of an order, the class of the person who applied — and the check then stops offering sequences of calls that change one of them as counterexamples."
             ),
             tr!(
                 "入力の名前を書いてください。持ち越す入力は呼び出しのたびに一つ前の答えで入れ替わるので、`held` にはなりません。",
@@ -2788,6 +2791,20 @@ pub fn ledger() -> Vec<Entry> {
             &["E012", "E103"],
         )
         .english(X_E069_EN),
+        err(
+            "E072",
+            tr!("持ち越す値の書き方が違います", "A carried value is not written right"),
+            tr!(
+                "二行目からの `carry` が、範囲に両端の無い数か、日付・文字列・省略できる値を持ち越すとき、同じ値を二度持ち越すとき、持ち越す値に `initial <入力> <値>` の行が無いか二行あるとき、その値が型や範囲に合わないとき、`initial <入力> <値>` が状態や持ち越さない入力を書いたとき、`always` の行の形が違うとき、`always` が持ち越す値でない名前か状態そのものを書いたとき。持ち越す数に範囲の両端があるので、案件がとりうる値は有限個になり、呼び出しの並びについての主張を確かめられます。",
+                "A `carry` line after the first carries a number whose range lacks an end, or a date, a string or an optional value; a value is carried twice; a carried value has no `initial <input> <value>` line, or two, or one whose value does not fit its type or range; an `initial <input> <value>` line names the state or an input that is not carried; an `always` line is not shaped right; or an `always` line names something that is not a carried value, or the state itself. It is because a carried number has both ends of a range that the values a case can hold are finitely many, and the claims about sequences of calls decidable."
+            ),
+            tr!(
+                "持ち越す数には `range >=0 <=7` のように両端のある範囲を書き、どの持ち越す値にも `initial <入力> <値>` で始まりの値を書いてください。`always` には、二行目からの `carry` の左の入力とセルを `and` でつないで書き、成り立つ状態を `when` の後に書きます（`always 残り日数 >=1 <=7 when 猶予中`）。状態について言うことは `never` と `final` で書きます。",
+                "Give a carried number a range with both ends, as in `range >=0 <=7`, and every carried value the value it starts at with `initial <input> <value>`. An `always` line names the input on the left of a later `carry` line with a cell, joined by `and`, and the states it holds in after `when` (`always days_left >=1 <=7 when in_grace`). What is said of the state is said with `never` and `final`."
+            ),
+            X_E072,
+            &["E050", "E051", "E135"],
+        ),
         err(
             "E075",
             tr!("列挙の値でも、名前でもある語です", "A word is both a value of an enum and a name"),
@@ -3240,15 +3257,15 @@ pub fn ledger() -> Vec<Entry> {
             "E125",
             tr!("着いたら終われない状態があります", "A case can reach a state it can never finish from"),
             tr!(
-                "`initial` から着ける状態のうち、終わりの状態でなく、そこからどの終わりの状態にも着けないものがあるとき。ワークフローネットの健全性でいう「必ず終われる」が破れている形です。そこに着くまでの最短の呼び出しが付きます。",
-                "A state a case can reach from `initial` is not final, and no final state can be reached from it: the \"option to complete\" of workflow-net soundness is broken. The shortest sequence of calls that gets there comes with it."
+                "`initial` から着ける状態のうち、終わりの状態でなく、そこからどの終わりの状態にも着けないものがあるとき。ワークフローネットの健全性でいう「必ず終われる」が破れている形です。そこに着くまでの最短の呼び出しが付きます。持ち越す数が範囲を出て、次の呼び出しを受けられなくなった案件は、E134 で言います。",
+                "A state a case can reach from `initial` is not final, and no final state can be reached from it: the \"option to complete\" of workflow-net soundness is broken. The shortest sequence of calls that gets there comes with it. A case whose carried number has left its range, so that no further call can take it, is E134's."
             ),
             tr!(
                 "終わりの状態へ移る行を足すか、そこで終わるのが正しいなら、その状態を `final` に加えてください。",
                 "Add a row that moves on to a final state, or, if a case rightly ends there, add the state to `final`."
             ),
             X_E125,
-            &["E124", "W125"],
+            &["E124", "W125", "E134"],
         ),
         err(
             "E126",
@@ -3353,6 +3370,34 @@ pub fn ledger() -> Vec<Entry> {
             &["E108", "E103"],
         )
         .english(X_E139_EN),
+        err(
+            "E134",
+            tr!("持ち越す数が範囲を出る呼び出しがあります", "A call answers a carried number outside its range"),
+            tr!(
+                "`initial` から着ける状態からの呼び出しで、持ち越す数の次の値が、その入力の範囲の外になるとき。次の呼び出しにその値を渡せないので、案件はそこから先へ進めません。いちばん短い呼び出しの並びが `witness.trace` に付きます。着けない状態からの呼び出しでだけ範囲を出る行は、W126 で言います。",
+                "A call from a state a case can reach from `initial` answers a carried number outside its input's range: the next call cannot be passed it, and the case cannot go on from there. The shortest sequence of calls comes with it as `witness.trace`. A row that leaves the range only from states no case reaches is W126's."
+            ),
+            tr!(
+                "次の値を決める行を直す（上限で止める、別の状態へ移す）か、その値が業務として起きるなら、入力の範囲を広げてください。",
+                "Correct the row that decides the next value (stop at the bound, or move on to another state), or widen the input's range if the value does occur in the business."
+            ),
+            X_E134,
+            &["E072", "E135", "W126"],
+        ),
+        err(
+            "E135",
+            tr!("`always` の主張が破れています", "An `always` line is broken"),
+            tr!(
+                "`always` の行が言う状態（`when` の後に書いた状態、書いていなければどの状態でも）に、持ち越す値がセルに当てはまらないまま着く呼び出しの並びがあるとき。いちばん短いものが付き、そのどの呼び出しも、規則が受け付けて答えを返す入力です。持ち越す数が範囲を出たところは E134 が言い、ここでは見ません。",
+                "Some sequence of calls reaches a state the `always` line speaks of (those after `when`, or any state when there are none) with a carried value its cell does not accept. The shortest one comes with it, and every call in it is an input the rule takes and answers. A place where a carried number has left its range is E134's, and is not looked at here."
+            ),
+            tr!(
+                "行き先や次の値を決める行を直すか、主張が業務として誤りなら `always` の行を直してください。",
+                "Correct the rows that decide where a case goes and what it carries on, or the `always` line if the claim is wrong as business."
+            ),
+            X_E135,
+            &["E072", "E126", "E134"],
+        ),
         warn(
             "W125",
             tr!("どの手順でも着かない状態があります", "No sequence of calls reaches a state"),
@@ -3371,8 +3416,8 @@ pub fn ledger() -> Vec<Entry> {
             "W126",
             tr!("案件が着ける状態からは使われない遷移があります", "A transition is never taken from a state a case can reach"),
             tr!(
-                "遷移を決める表の行が、`initial` から着けない状態のときにしか当てはまらないとき。W125 と一緒に出ます。",
-                "A row of the table that decides the transitions applies only in states no sequence of calls from `initial` reaches. It comes with W125."
+                "遷移を決める表の行が、`initial` から着けない状態のときにしか当てはまらないとき。W125 と一緒に出ます。状態には着けても、その行が要る `held` の入力の値や、持ち越す値（`carry` の二行目から）では着かないときも、この警告です（持ち越す数が範囲を出る行が、着けない値のときにしか当たらない場合もここに入ります）。",
+                "A row of the table that decides the transitions applies only in states no sequence of calls from `initial` reaches. It comes with W125. A row whose state a case does reach, but never with the value of a `held` input or of a carried value (a `carry` line after the first) the row needs, is this warning too — among them a row that would answer a carried number outside its range, from values no case holds."
             ),
             tr!(
                 "着けない状態へ移る遷移を足すか、行を消してください。",
@@ -3385,12 +3430,12 @@ pub fn ledger() -> Vec<Entry> {
             "W127",
             tr!("ステートマシンの主張を決めきれませんでした", "A claim of the machine could not be settled"),
             tr!(
-                "主張が、答えを出す入力を作れず、起こらないとも示せなかった区画に左右されるとき。導出どうしが入力を共有していて、解が有理数にしか無い形がここに残ります（W114 と同じ場所です）。決めきれなかったことを、成り立つとは言いません。",
-                "A claim turns on a cell for which no input was built and none was shown impossible. Derived values that share an input, with a solution only among the rationals, are what is left here — the place W114 is about. What was not settled is not said to hold."
+                "主張が、答えを出す入力を作れず、起こらないとも示せなかった区画に左右されるとき。導出どうしが入力を共有していて、解が有理数にしか無い形がここに残ります（W114 と同じ場所です）。数を持ち越す機械（`carry` の二行目から）では、ほかに三つあります。数の値を一つずつ調べると予算を超えるので区間にまとめて調べ、区間の上で破れる並びを、本当に起きる呼び出しでは作り直せなかったとき。区間にまとめたので、どの状態からも終わりに着けるかを確かめていないとき。持ち越す数の次の値が区画の中でほかの入力とともに動き、あいだの値を一つずつは試していないとき。決めきれなかったことを、成り立つとは言いません。",
+                "A claim turns on a cell for which no input was built and none was shown impossible. Derived values that share an input, with a solution only among the rationals, are what is left here — the place W114 is about. A machine that carries numbers (a `carry` line after the first) leaves three more: the numbers were walked in intervals, since every value one by one is past the budget, and a sequence that breaks the claim over the intervals could not be made again from calls that really happen; walked in intervals, that every state a case reaches can still get to a final one is not followed; or a carried number's next value moves with another input inside a cell, and the values between the ones the calls seen answered were not each tried. What was not settled is not said to hold."
             ),
             tr!(
-                "その区画に当たる入力が本当に無いなら、条件を整数で書き直してください（`倍 >= 5円` を `a >= 3円` にする、など）。あるなら、その入力を例か手順の例に書いてください。",
-                "If no input really falls in the cell, write the condition over whole numbers (`a >= 3JPY` for `twice >= 5JPY`). If one does, write it down as an example or a scenario."
+                "その区画に当たる入力が本当に無いなら、条件を整数で書き直してください（`倍 >= 5円` を `a >= 3円` にする、など）。あるなら、その入力を例か手順の例に書いてください。区間にまとめたためなら、`--budget` を上げるか持ち越す数の範囲を狭めると、値を一つずつ調べて決めます。",
+                "If no input really falls in the cell, write the condition over whole numbers (`a >= 3JPY` for `twice >= 5JPY`). If one does, write it down as an example or a scenario. Where the carried numbers were walked in intervals, raising `--budget` or narrowing their ranges lets every value be walked one by one, and the claim settled."
             ),
             X_W127,
             &["W114", "E128"],

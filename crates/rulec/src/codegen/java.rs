@@ -621,9 +621,24 @@ impl<'a> Gen<'a> {
         // The machine this function is one step of (§15.148).
         if let Some((en, init, fins)) = self.machine_consts() {
             let ety = self.java_enum(&en);
+            // The values carried along with the state, and where a case starts (§15.217).
+            let mut more = String::new();
+            for mc in self.more_carried() {
+                let v = match mc.kind() {
+                    super::MoreKind::Enum => self.java_value(&mc.word(), &mc.ty),
+                    super::MoreKind::Bool => mc.bool_word().to_string(),
+                    super::MoreKind::Number | super::MoreKind::Branded => format!("{}L", mc.int),
+                };
+                more.push_str(&format!(
+                    "    /** {} */\n    public static final {} {} = {v};\n\n",
+                    tr!("持ち越す {} の始まりの値。", "Where the carried {} starts.", mc.input),
+                    self.java_ty(&mc.ty),
+                    mc.upper()
+                ));
+            }
             o.push_str(&format!(
                 "    /** {} */\n    public static final {ety} INITIAL = {};\n\n    \
-                 /** {} */\n    public static final List<{ety}> FINAL = List.of({});\n\n    \
+                 /** {} */\n    public static final List<{ety}> FINAL = List.of({});\n\n{more}    \
                  /** {} */\n    public static boolean isFinal({ety} state) {{\n        return FINAL.contains(state);\n    }}\n\n",
                 tr!("案件が始まる状態。", "The state a case starts in."),
                 self.java_value(&init, &Ty::Enum(en.clone())),
@@ -1381,19 +1396,46 @@ impl<'a> Gen<'a> {
                 let a = &args[k];
                 binds = binds.replace(&format!("var {a} = "), &format!("var {a} = {stepping} ? {state} : "));
             }
-            head = format!("        {ety} {state} = {cls}.INITIAL;\n");
+            // The values carried along with the state (§15.217): a local each, from the
+            // module's constant, read where each trace starts and handed on from the answer.
+            let (mut more_head, mut more_meta, mut more_start, mut more_tail) = (String::new(), Vec::<String>::new(), String::new(), String::new());
+            for mc in self.more_carried() {
+                let local = java_name(&self.temp(&format!("carried_{}", mc.in_alias)));
+                if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == mc.input) {
+                    let a = &args[k];
+                    binds = binds.replace(&format!("var {a} = "), &format!("var {a} = {stepping} ? {local} : "));
+                }
+                let ty = match mc.kind() {
+                    super::MoreKind::Enum => format!("{cls}.{}", self.java_ty(&mc.ty)),
+                    _ => self.java_ty(&mc.ty),
+                };
+                more_head.push_str(&format!("        {ty} {local} = {cls}.{};\n", mc.upper()));
+                let key = mc.key().replace('\\', "\\\\").replace('"', "\\\"");
+                more_meta.push(match mc.kind() {
+                    super::MoreKind::Enum => format!("\"{key}:\\\"\" + {cls}.{}.value() + \"\\\"\"", mc.upper()),
+                    _ => format!("\"{key}:\" + {cls}.{}", mc.upper()),
+                });
+                more_start.push_str(&format!("                    {local} = {};\n", read(&mc.ty, "cv", &mc.input)));
+                more_tail.push_str(&format!("                        {local} = {r}.value().{}();\n", java_name(&mc.out_alias)));
+            }
+            // `]` and the closing brace, with what is carried between them when anything is.
+            let carried_meta = if more_meta.is_empty() { "]}\"".to_string() } else { format!("]\" + \",\\\"carried\\\":{{\" + {} + \"}}}}\"", more_meta.join(" + \",\" + ")) };
+            if !more_start.is_empty() {
+                more_start = format!("                    Map<String, String> cv = pairsFrom({top}.get(\"carried\"), 0).map();\n{more_start}");
+            }
+            head = format!("        {ety} {state} = {cls}.INITIAL;\n{more_head}");
             meta = format!(
                 "                Map<String, String> {top} = pairsFrom({line}, 0).map();\n                \
                  if ({top}.containsKey(\"machine\")) {{\n                    \
                      List<String> fin = new ArrayList<>();\n                    \
                      for ({ety} s : {ety}.values()) {{\n                        if ({cls}.isFinal(s)) {{\n                            fin.add(\"\\\"\" + s.value() + \"\\\"\");\n                        }}\n                    }}\n                    \
-                     out.println(\"{{\\\"initial\\\":\\\"\" + {cls}.INITIAL.value() + \"\\\",\\\"final\\\":[\" + String.join(\",\", fin) + \"]}}\");\n                    \
+                     out.println(\"{{\\\"initial\\\":\\\"\" + {cls}.INITIAL.value() + \"\\\",\\\"final\\\":[\" + String.join(\",\", fin) + \"{carried_meta});\n                    \
                      continue;\n                }}\n                \
                  boolean {stepping} = {top}.containsKey(\"step\");\n                \
-                 if (\"start\".equals(s({top}, \"step\"))) {{\n                    {state} = {ety}.from(s({top}, \"state\"));\n                }}\n"
+                 if (\"start\".equals(s({top}, \"step\"))) {{\n                    {state} = {ety}.from(s({top}, \"state\"));\n{more_start}                }}\n"
             );
             tail = format!(
-                "                    if ({stepping}) {{\n                        {state} = {};\n                    }}\n",
+                "                    if ({stepping}) {{\n                        {state} = {};\n{more_tail}                    }}\n",
                 self.next_state_of(&format!("{r}.value()"), &format!(".{}()", java_name(&out)))
             );
         }

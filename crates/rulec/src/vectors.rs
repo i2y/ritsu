@@ -2601,14 +2601,19 @@ pub struct Traces {
     pub initial: String,
     pub finals: Vec<String>,
     pub traces: Vec<Trace>,
+    /// The values carried along with the state (§15.217): input, output, and where a case
+    /// starts. A trace's first call is passed these, and every later one what the call before
+    /// answered for them.
+    pub more: Vec<(String, String, Val)>,
 }
 
 /// What a transition is called in the suite: from, the row that decided it, to. Two calls
 /// that go the same way by the same row are the same transition.
 pub type TransitionKey = (String, Option<(String, usize)>, String);
 
-/// The transition one call makes, read off the answer.
-pub fn transition_of(f: &RuleFile, c: &Checked, input: &BTreeMap<String, Val>) -> Option<(TransitionKey, BTreeMap<String, Val>)> {
+/// The transition one call makes, read off the answer, with the answer.
+#[allow(clippy::type_complexity)]
+pub fn transition_of(f: &RuleFile, c: &Checked, input: &BTreeMap<String, Val>) -> Option<(TransitionKey, Vec<(String, Option<Val>)>)> {
     let m = f.machine.as_ref()?;
     let (cin, cout) = m.carried()?;
     let from = match input.get(cin) {
@@ -2630,8 +2635,7 @@ pub fn transition_of(f: &RuleFile, c: &Checked, input: &BTreeMap<String, Val>) -
         })
         .collect();
     let row = rows.iter().find(|(t, _)| deciders.contains(t)).cloned();
-    let _ = c;
-    Some(((from, row, to), input.clone()))
+    Some(((from, row, to), outs))
 }
 
 /// The traces the suite plays (§15.148): for every transition a case can make, and for every
@@ -2649,11 +2653,16 @@ pub fn machine_traces(f: &RuleFile, c: &Checked) -> Option<Traces> {
     // The final states in the enum's order, as every language lists them: the order of the
     // `final` line is how the rule happens to be written, not a fact about it.
     let finals: Vec<String> = a.states.iter().filter(|s| a.finals.contains(s)).cloned().collect();
-    let mut out = Traces { initial: a.initial.clone(), finals, traces: Vec::new() };
+    let more: Vec<(String, String, Val)> = a.more.iter().map(|it| (it.input.clone(), it.output.clone(), it.initial.clone())).collect();
+    let mut out = Traces { initial: a.initial.clone(), finals, traces: Vec::new(), more };
+    // A step is passed everything but what it carries: the state, and the further carried values.
+    let carried: Vec<String> = std::iter::once(cin.to_string()).chain(a.more.iter().map(|it| it.input.clone())).collect();
     let step_of = |e: &crate::machine::Edge| -> BTreeMap<String, Val> {
-        e.inputs.iter().filter(|(k, _)| k.as_str() != cin).map(|(k, v)| (k.clone(), v.clone())).collect()
+        e.inputs.iter().filter(|(k, _)| !carried.contains(k)).map(|(k, v)| (k.clone(), v.clone())).collect()
     };
-    if a.blocked.is_none() && !a.over_budget {
+    if a.blocked.is_none() && !a.over_budget && !a.more.is_empty() {
+        out.traces = real_traces(&a, &step_of);
+    } else if a.blocked.is_none() && !a.over_budget {
         // One edge per transition, from the states a case reaches in the world the edge is in
         // (§15.149): a trace is one case, so it holds its `held` inputs.
         let mut rep: Vec<(TransitionKey, usize)> = Vec::new();
@@ -2703,7 +2712,7 @@ pub fn machine_traces(f: &RuleFile, c: &Checked) -> Option<Traces> {
                 }) else {
                     continue;
                 };
-                let Some(mut p) = a.trace_to_node(&(k1.0.clone(), w)) else { continue };
+                let Some(mut p) = a.trace_to_node(&(k1.0.clone(), w, Vec::new())) else { continue };
                 p.push(i1);
                 p.push(i2);
                 paired.insert(k1.clone());
@@ -2715,7 +2724,7 @@ pub fn machine_traces(f: &RuleFile, c: &Checked) -> Option<Traces> {
             if paired.contains(k) {
                 continue;
             }
-            let Some(mut p) = a.trace_to_node(&(k.0.clone(), a.edges[*e].world.clone())) else { continue };
+            let Some(mut p) = a.trace_to_node(&(k.0.clone(), a.edges[*e].world.clone(), Vec::new())) else { continue };
             p.push(*e);
             paths.push((p, tr!("遷移: {}", "transition: {}", name(k))));
         }
@@ -2737,8 +2746,8 @@ pub fn machine_traces(f: &RuleFile, c: &Checked) -> Option<Traces> {
         let mut steps = Vec::new();
         for row in &sc.table.rows {
             let env = eval::example_env(f, c, &sc.table, row);
-            let s: BTreeMap<String, Val> = env.into_iter().filter(|(k, _)| k != cin).collect();
-            if f.inputs.iter().filter(|i| i.name.text != cin).any(|i| !s.contains_key(&i.name.text)) {
+            let s: BTreeMap<String, Val> = env.into_iter().filter(|(k, _)| !carried.contains(k)).collect();
+            if f.inputs.iter().filter(|i| !carried.contains(&i.name.text)).any(|i| !s.contains_key(&i.name.text)) {
                 steps.clear();
                 break;
             }
@@ -2751,17 +2760,107 @@ pub fn machine_traces(f: &RuleFile, c: &Checked) -> Option<Traces> {
     Some(out)
 }
 
-/// The traces file: the line that asks a runner for its constants, then one line per call.
+/// The traces of a machine that carries more than its state (§15.217), made of the calls that
+/// really happen: the same obligations — every transition a case makes, and every two that
+/// follow one another — met by the shortest sequence among those calls that ends with them.
+/// Each call of a trace is passed what the one before answered, so the values a case holds are
+/// the ones the trace's own calls were made with.
+fn real_traces(a: &crate::machine::Analysis, step_of: &dyn Fn(&crate::machine::Edge) -> BTreeMap<String, Val>) -> Vec<Trace> {
+    let real = &a.real;
+    let (order, parent) = real.reach();
+    let at: std::collections::HashMap<usize, usize> = order.iter().enumerate().map(|(k, &n)| (n, k)).collect();
+    let key = |e: &crate::machine::Edge| -> TransitionKey { (e.from.clone(), e.row.clone(), e.to.clone()) };
+    let name = |k: &TransitionKey| -> String {
+        match &k.1 {
+            Some((t, r)) => format!("{} -[{}]-> {}", k.0, eval::row_tag(t, *r), k.2),
+            None => format!("{} -> {}", k.0, k.2),
+        }
+    };
+    // The calls a case reaches, nearest first.
+    let mut calls: Vec<usize> = (0..real.calls.len()).filter(|&i| real.calls[i].2.is_some() && at.contains_key(&real.calls[i].0)).collect();
+    calls.sort_by_key(|&i| at[&real.calls[i].0]);
+    let mut out_of: std::collections::HashMap<usize, Vec<usize>> = std::collections::HashMap::new();
+    for &i in &calls {
+        out_of.entry(real.calls[i].0).or_default().push(i);
+    }
+    let mut paths: Vec<(Vec<crate::machine::Edge>, String)> = Vec::new();
+    let mut paired: BTreeSet<TransitionKey> = BTreeSet::new();
+    let mut pairs: BTreeSet<(TransitionKey, TransitionKey)> = BTreeSet::new();
+    const CAP: usize = 4000;
+    for &i1 in &calls {
+        let (n1, e1, t1) = &real.calls[i1];
+        let Some(t1) = t1 else { continue };
+        for &i2 in out_of.get(t1).map(|v| v.as_slice()).unwrap_or(&[]) {
+            if paths.len() >= CAP {
+                break;
+            }
+            let e2 = &real.calls[i2].1;
+            let p = (key(e1), key(e2));
+            if !pairs.insert(p.clone()) {
+                continue;
+            }
+            let mut t = real.path(&parent, *n1);
+            t.push(e1.clone());
+            t.push(e2.clone());
+            paired.insert(p.0.clone());
+            paired.insert(p.1.clone());
+            paths.push((t, tr!("遷移の対: {} → {}", "transition pair: {} then {}", name(&p.0), name(&p.1))));
+        }
+    }
+    let mut single: BTreeSet<TransitionKey> = BTreeSet::new();
+    for &i in &calls {
+        let (n, e, _) = &real.calls[i];
+        let k = key(e);
+        if paired.contains(&k) || !single.insert(k.clone()) {
+            continue;
+        }
+        let mut t = real.path(&parent, *n);
+        t.push(e.clone());
+        paths.push((t, tr!("遷移: {}", "transition: {}", name(&k))));
+    }
+    // A trace that begins another one is played by the longer one.
+    let steps: Vec<Vec<BTreeMap<String, Val>>> = paths.iter().map(|(p, _)| p.iter().map(step_of).collect()).collect();
+    let mut kept: Vec<Trace> = Vec::new();
+    for (i, (_, why)) in paths.iter().enumerate() {
+        let p = &steps[i];
+        let prefix = steps.iter().enumerate().any(|(j, q)| j != i && q.len() > p.len() && q.starts_with(p));
+        let same_before = steps[..i].iter().any(|q| q == p);
+        if !prefix && !same_before {
+            kept.push(Trace { why: why.clone(), steps: p.clone() });
+        }
+    }
+    kept
+}
+
+/// The traces file: the line that asks a runner for its constants, then one line per call. A
+/// machine that carries more than its state names those values on the first line (`more`),
+/// and every trace's first call says where they start (`carried`), in the wire's form (§15.217).
 pub fn traces_json(f: &RuleFile, c: &Checked, t: &Traces) -> String {
     let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
     let (cin, cout) = f.machine.as_ref().and_then(|m| m.carried()).unwrap_or(("", ""));
-    let mut lines = vec![format!("{{\"machine\":\"meta\",\"carry\":{{\"in\":\"{}\",\"out\":\"{}\"}}}}", esc(cin), esc(cout))];
+    let more_meta = if t.more.is_empty() {
+        String::new()
+    } else {
+        format!(
+            ",\"more\":[{}]",
+            t.more.iter().map(|(i, o, _)| format!("{{\"in\":\"{}\",\"out\":\"{}\"}}", esc(i), esc(o))).collect::<Vec<_>>().join(",")
+        )
+    };
+    let carried = if t.more.is_empty() {
+        String::new()
+    } else {
+        format!(
+            ",\"carried\":{{{}}}",
+            t.more.iter().map(|(i, _, v)| format!("\"{}\":{}", esc(i), eval::wval(c, i, v).json())).collect::<Vec<_>>().join(",")
+        )
+    };
+    let mut lines = vec![format!("{{\"machine\":\"meta\",\"carry\":{{\"in\":\"{}\",\"out\":\"{}\"}}{more_meta}}}", esc(cin), esc(cout))];
     for tr in &t.traces {
         for (k, s) in tr.steps.iter().enumerate() {
             let v = Vector { input: s.clone(), outputs: Vec::new(), trace: Vec::new(), fired: Vec::new(), why: String::new() };
             if k == 0 {
                 lines.push(format!(
-                    "{{\"in\":{},\"step\":\"start\",\"state\":\"{}\",\"why\":\"{}\"}}",
+                    "{{\"in\":{},\"step\":\"start\",\"state\":\"{}\"{carried},\"why\":\"{}\"}}",
                     in_object(f, c, &v),
                     esc(&t.initial),
                     esc(&tr.why)
@@ -2779,24 +2878,42 @@ pub fn traces_json(f: &RuleFile, c: &Checked, t: &Traces) -> String {
 pub fn traces_expected_json(f: &RuleFile, c: &Checked, t: &Traces) -> String {
     let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
     let (cin, cout) = f.machine.as_ref().and_then(|m| m.carried()).unwrap_or(("", ""));
+    // The values a further carried input starts at, as each language's constants hold them
+    // (§15.217).
+    let carried = if t.more.is_empty() {
+        String::new()
+    } else {
+        format!(
+            ",\"carried\":{{{}}}",
+            t.more.iter().map(|(i, _, v)| format!("\"{}\":{}", esc(i), eval::wval(c, i, v).json())).collect::<Vec<_>>().join(",")
+        )
+    };
     let mut lines = vec![format!(
-        "{{\"initial\":\"{}\",\"final\":[{}]}}",
+        "{{\"initial\":\"{}\",\"final\":[{}]{carried}}}",
         esc(&t.initial),
         t.finals.iter().map(|s| format!("\"{}\"", esc(s))).collect::<Vec<_>>().join(",")
     )];
     for tr in &t.traces {
         let mut state = Val::Enum(t.initial.clone());
+        let mut held: Vec<Val> = t.more.iter().map(|(_, _, v)| v.clone()).collect();
         for s in &tr.steps {
             let mut input = s.clone();
             input.insert(cin.to_string(), state.clone());
+            for ((i, _, _), v) in t.more.iter().zip(&held) {
+                input.insert(i.clone(), v.clone());
+            }
             let env: std::collections::HashMap<String, Val> = input.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
             let (outs, _, rows, _) = eval::run_all_traced(f, c, env);
             let next = outs.iter().find(|(k, _)| k == cout).and_then(|(_, v)| v.clone());
+            let next_more: Option<Vec<Val>> = t.more.iter().map(|(_, o, _)| outs.iter().find(|(k, _)| k == o).and_then(|(_, v)| v.clone())).collect();
             let v = Vector { input, outputs: outs, trace: Vec::new(), fired: rows, why: String::new() };
             lines.push(expected_json(f, c, &v));
-            match next {
-                Some(n) => state = n,
-                None => break,
+            match (next, next_more) {
+                (Some(n), Some(nm)) => {
+                    state = n;
+                    held = nm;
+                }
+                _ => break,
             }
         }
     }

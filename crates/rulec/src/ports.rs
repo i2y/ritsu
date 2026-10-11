@@ -662,6 +662,7 @@ fn machine_end(m: &crate::ast::MachineDecl) -> usize {
         end = end.max(l);
     }
     end = m.nevers.iter().map(|n| n.span.line).fold(end, usize::max);
+    end = m.carries.iter().map(|c| c.2.line).chain(m.initials.iter().map(|i| i.2.line)).chain(m.alwayses.iter().map(|a| a.span.line)).fold(end, usize::max);
     m.onces.iter().map(|o| o.span.line).fold(end, usize::max)
 }
 

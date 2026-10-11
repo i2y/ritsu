@@ -1,0 +1,51 @@
+rule 一度だけの特典(one_time_trial) v1
+description "無料体験を、会員一人に一度だけ付ける。最初の申込には付け、二度目からは付けない。体験を済ませた印は、退会して入り直しても残る。状態と印は呼び出す側が持ち、規則は一回の申し出だけを判定する。書き下ろしの例"
+
+enum 会員の状態(membership) = 未加入(guest) | 会員(member) | 退会済(cancelled)
+enum 申し出(request) = 入会(join) | 体験の申込(ask_trial) | 退会(cancel)
+
+inputs
+  状態(status)        : 会員の状態
+  申し出(request)     : 申し出
+  体験済み(trial_taken) : bool
+
+outputs
+  次の状態(next_status)          : 会員の状態
+  次の体験済み(next_trial_taken) : bool
+  体験を付ける(trial_granted)    : bool
+
+table 申し出の扱い(step)
+policy unique
+| 状態   | 申し出     | 体験済み | -> 次の状態 | 次の体験済み | 体験を付ける |
+| 未加入 | 入会       | -        | 会員        | 体験済み     | false        |
+| 会員   | 入会       | -        | 状態        | 体験済み     | false        |
+| 退会済 | 入会       | -        | 会員        | 体験済み     | false        |
+| 会員   | 体験の申込 | false    | 状態        | true         | true         |
+| 会員   | 体験の申込 | true     | 状態        | 体験済み     | false        |  # 体験は会員一人に一度
+| 未加入 | 体験の申込 | -        | 状態        | 体験済み     | false        |
+| 退会済 | 体験の申込 | -        | 状態        | 体験済み     | false        |
+| 会員   | 退会       | -        | 退会済      | 体験済み     | false        |
+| 未加入 | 退会       | -        | 状態        | 体験済み     | false        |
+| 退会済 | 退会       | -        | 状態        | 体験済み     | false        |
+
+machine 会員(membership) over 申し出の扱い
+  carry   状態 -> 次の状態
+  carry   体験済み -> 次の体験済み
+  initial 未加入
+  initial 体験済み false
+  once    体験を付ける true
+  always  体験済み false when 未加入
+
+# 体験を済ませて退会し、入り直してもう一度申し込む。
+scenario 入り直し(rejoined)
+| 申し出     | -> 次の状態 | 次の体験済み | 体験を付ける |
+| 入会       | 会員        | false        | false        |
+| 体験の申込 | 会員        | true         | true         |
+| 退会       | 退会済      | true         | false        |
+| 入会       | 会員        | true         | false        |
+| 体験の申込 | 会員        | true         | false        |
+
+examples
+| 状態 | 申し出     | 体験済み | -> 次の状態 | 次の体験済み | 体験を付ける |
+| 会員 | 体験の申込 | false    | 会員        | true         | true         |
+| 会員 | 体験の申込 | true     | 会員        | true         | false        |

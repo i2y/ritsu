@@ -482,9 +482,19 @@ impl<'a> Gen<'a> {
         // The machine this function is one step of (§15.148).
         if let Some((en, init, fins)) = self.machine_consts() {
             let cls = php_name(&self.enum_names.get(&en).cloned().unwrap_or_default());
+            // The values carried along with the state, and where a case starts (§15.217).
+            let mut more = String::new();
+            for mc in self.more_carried() {
+                let v = match mc.kind() {
+                    super::MoreKind::Enum => self.php_value(&mc.word(), &mc.ty),
+                    super::MoreKind::Bool => mc.bool_word().to_string(),
+                    super::MoreKind::Number | super::MoreKind::Branded => mc.int.to_string(),
+                };
+                more.push_str(&format!("/** {} */\nconst {} = {v};\n\n", tr!("持ち越す {} の始まりの値。", "Where the carried {} starts.", mc.input), mc.upper()));
+            }
             o.push_str(&format!(
                 // `final` is a keyword in PHP whatever its case, so the set cannot be `FINAL`.
-                "/** {} */\nconst INITIAL = {};\n\n/** {} */\nconst FINAL_STATES = [{}];\n\n\
+                "/** {} */\nconst INITIAL = {};\n\n/** {} */\nconst FINAL_STATES = [{}];\n\n{more}\
                  /** {} */\nfunction is_final({cls} $state): bool\n{{\n    return in_array($state, FINAL_STATES, true);\n}}\n\n",
                 tr!("案件が始まる状態。", "The state a case starts in."),
                 self.php_value(&init, &Ty::Enum(en.clone())),
@@ -1209,17 +1219,32 @@ impl<'a> Gen<'a> {
             if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
                 args[k] = format!("(isset({v}['step']) ? {state} : {})", args[k]);
             }
-            head = format!("{state} = \\{ns}\\INITIAL;\n");
+            // The values carried along with the state (§15.217): a local each, from the
+            // module's constant, read where each trace starts and handed on from the answer.
+            let (mut more_head, mut more_meta, mut more_start, mut more_tail) = (String::new(), Vec::<String>::new(), String::new(), String::new());
+            for mc in self.more_carried() {
+                let local = php_var(&self.temp(&format!("carried_{}", mc.in_alias)));
+                if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == mc.input) {
+                    args[k] = format!("(isset({v}['step']) ? {local} : {})", args[k]);
+                }
+                more_head.push_str(&format!("{local} = \\{ns}\\{};\n", mc.upper()));
+                let shown = if mc.kind() == super::MoreKind::Enum { format!("\\{ns}\\{}->value", mc.upper()) } else { format!("\\{ns}\\{}", mc.upper()) };
+                more_meta.push(format!("{} => {shown}", php_str(&mc.input)));
+                more_start.push_str(&format!("        {local} = {};\n", read(&mc.ty, &format!("{v}['carried']"), &mc.input)));
+                more_tail.push_str(&format!("        {local} = {r}->{};\n", mc.out_alias));
+            }
+            let carried_meta = if more_meta.is_empty() { String::new() } else { format!(", 'carried' => [{}]", more_meta.join(", ")) };
+            head = format!("{state} = \\{ns}\\INITIAL;\n{more_head}");
             body = format!(
                 "{v} = json_decode({line}, true, 512, JSON_THROW_ON_ERROR);\n    \
                  if (isset({v}['machine'])) {{\n        \
                      $fin = array_values(array_map(fn($s) => $s->value, array_filter(\\{ns}\\{cls}::cases(), fn($s) => \\{ns}\\is_final($s))));\n        \
-                     echo json_encode(['initial' => \\{ns}\\INITIAL->value, 'final' => $fin], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), \"\\n\";\n        \
+                     echo json_encode(['initial' => \\{ns}\\INITIAL->value, 'final' => $fin{carried_meta}], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), \"\\n\";\n        \
                      continue;\n    }}\n    \
                  {d} = {v}['in'];\n    \
-                 if (({v}['step'] ?? null) === 'start') {{\n        {state} = \\{ns}\\{cls}::from({v}['state']);\n    }}\n"
+                 if (({v}['step'] ?? null) === 'start') {{\n        {state} = \\{ns}\\{cls}::from({v}['state']);\n{more_start}    }}\n"
             );
-            tail = format!("    if (isset({v}['step'])) {{\n        {state} = {};\n    }}\n", self.next_state_of(&r, &format!("->{out}")));
+            tail = format!("    if (isset({v}['step'])) {{\n        {state} = {};\n{more_tail}    }}\n", self.next_state_of(&r, &format!("->{out}")));
         }
         format!(
             "<?php\n\n\

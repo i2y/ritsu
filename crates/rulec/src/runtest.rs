@@ -690,6 +690,10 @@ fn via_mcp(
     if let Some(tr) = traces {
         let mut carry: Option<(String, String)> = None;
         let mut state: Option<crate::json::Json> = None;
+        // The values carried along with the state (§15.217): (input, output) pairs off the
+        // first line, and what the tool answered for each to the call before.
+        let mut more: Vec<(String, String)> = Vec::new();
+        let mut held: Vec<(String, crate::json::Json)> = Vec::new();
         let base = want.lines().count() + refused.len() + 2;
         for (k, line) in tr.lines().enumerate() {
             if line.trim().is_empty() {
@@ -700,6 +704,14 @@ fn via_mcp(
                 let c = v.get("carry");
                 let name = |w: &str| c.and_then(|c| c.get(w)).and_then(|x| x.as_str()).map(|x| x.to_string());
                 carry = name("in").zip(name("out"));
+                if let Some(crate::json::Json::Arr(ms)) = v.get("more") {
+                    for mm in ms {
+                        let get = |w: &str| mm.get(w).and_then(|x| x.as_str()).map(|x| x.to_string());
+                        if let (Some(i), Some(o)) = (get("in"), get("out")) {
+                            more.push((i, o));
+                        }
+                    }
+                }
                 continue;
             }
             let (Some((cin, cout)), Some(inp)) = (carry.as_ref(), v.get("in")) else {
@@ -707,6 +719,10 @@ fn via_mcp(
             };
             if v.get("step").and_then(|x| x.as_str()) == Some("start") {
                 state = v.get("state").cloned();
+                held = match v.get("carried") {
+                    Some(crate::json::Json::Obj(o)) => o.clone(),
+                    _ => Vec::new(),
+                };
             }
             let Some(st) = state.clone() else {
                 return Err(broken(tr!("手順が状態なしで始まりました", "a trace began with no state")));
@@ -717,8 +733,9 @@ fn via_mcp(
             };
             // In the place of the input of the same name, if the record has one; `unparse`
             // writes the keys sorted either way.
-            args.retain(|(k, _)| k != cin);
+            args.retain(|(k, _)| k != cin && !held.iter().any(|(h, _)| h == k));
             args.push((cin.clone(), st));
+            args.extend(held.iter().cloned());
             let r = wire.ask(&format!(
                 "{{\"jsonrpc\":\"2.0\",\"id\":{},\"method\":\"tools/call\",\"params\":{{\"name\":{},\"arguments\":{}}}}}",
                 base + k,
@@ -737,6 +754,7 @@ fn via_mcp(
                 .to_string();
             let rec = crate::json::parse(&text).map_err(broken)?;
             state = rec.get("observed").and_then(|o| o.get(cout)).cloned();
+            held = more.iter().filter_map(|(i, o)| rec.get("observed").and_then(|ob| ob.get(o)).cloned().map(|x| (i.clone(), x))).collect();
             got_traces.push_str(&text);
             got_traces.push('\n');
         }

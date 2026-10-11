@@ -1013,8 +1013,11 @@ fn machine_obligations(
     let key = |e: &crate::machine::Edge| -> vectors::TransitionKey { (e.from.clone(), e.row.clone(), e.to.clone()) };
     let mut ts: Vec<vectors::TransitionKey> = Vec::new();
     let mut pairs: Vec<(vectors::TransitionKey, vectors::TransitionKey)> = Vec::new();
+    // A machine that carries more than its state (§15.217) is in a node that holds those
+    // values too, and one call follows another only where the first leaves them.
+    let reached: std::collections::HashSet<&crate::machine::Node> = a.nodes.iter().collect();
     for (i, e1) in a.edges.iter().enumerate() {
-        if !a.reaches(&e1.from, &e1.world) || a.mixed.contains(&i) {
+        if e1.approx || !reached.contains(&(e1.from.clone(), e1.world.clone(), e1.from_carry.clone())) || a.mixed.contains(&i) {
             continue;
         }
         if !ts.contains(&key(e1)) {
@@ -1022,7 +1025,7 @@ fn machine_obligations(
         }
         for (j, e2) in a.edges.iter().enumerate() {
             let p = (key(e1), key(e2));
-            if e2.world == e1.world && e2.from == e1.to && !a.mixed.contains(&j) && !pairs.contains(&p) {
+            if !e2.approx && e2.world == e1.world && e2.from == e1.to && e2.from_carry == e1.to_carry && !a.mixed.contains(&j) && !pairs.contains(&p) {
                 pairs.push(p);
             }
         }
@@ -1039,29 +1042,45 @@ fn machine_obligations(
     if let Some(traces) = vectors::machine_traces(f, c) {
         for tr in &traces.traces {
             let mut state = Val::Enum(traces.initial.clone());
+            // The values carried along with the state (§15.217), from where each starts.
+            let mut held: Vec<Val> = traces.more.iter().map(|(_, _, v)| v.clone()).collect();
             let mut prev: Option<vectors::TransitionKey> = None;
             for s in &tr.steps {
                 let mut input = s.clone();
                 input.insert(cin.to_string(), state.clone());
-                let Some((k, _)) = vectors::transition_of(f, c, &input) else { break };
+                for ((i, _, _), v) in traces.more.iter().zip(&held) {
+                    input.insert(i.clone(), v.clone());
+                }
+                let Some((k, outs)) = vectors::transition_of(f, c, &input) else { break };
                 seen.insert(k.clone());
                 if let Some(p) = prev.take() {
                     seen_pairs.insert((p, k.clone()));
                 }
                 state = Val::Enum(k.2.clone());
+                let next: Option<Vec<Val>> = traces.more.iter().map(|(_, o, _)| outs.iter().find(|(n, _)| n == o).and_then(|(_, v)| v.clone())).collect();
+                match next {
+                    Some(n) => held = n,
+                    None => break,
+                }
                 prev = Some(k);
             }
         }
     }
+    // Walked in intervals, a transition of the walk is one a node of numbers can make, and a
+    // trace is made only of calls that were made from where a case really is (§15.217).
+    let why = if a.whole {
+        tr!("この遷移を通る手順がありません。", "No trace makes this transition.")
+    } else {
+        tr!(
+            "この遷移を通る手順がありません。持ち越す数を区間にまとめて調べたので、本当に起きる呼び出しでここまで着く並びは見つかっていません。",
+            "No trace makes this transition. The carried numbers were walked in intervals, and no sequence of calls that really happen was found that gets here."
+        )
+    };
     for t in &ts {
         let met = seen.contains(t);
         bump(MACHINE, met, tally);
         if !met {
-            missing.push(Missing {
-                kind: MACHINE,
-                what: tr!("遷移 {}", "transition {}", name(t)),
-                hint: tr!("この遷移を通る手順がありません。", "No trace makes this transition."),
-            });
+            missing.push(Missing { kind: MACHINE, what: tr!("遷移 {}", "transition {}", name(t)), hint: why.clone() });
         }
     }
     for (t1, t2) in &pairs {

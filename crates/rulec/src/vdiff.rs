@@ -1603,14 +1603,14 @@ pub fn diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize) -
 /// back as the same output.
 /// The values of the `held` inputs one world's calls are made with (§15.149).
 fn world_values(a: &crate::machine::Analysis, w: &[usize]) -> Option<BTreeMap<String, Val>> {
-    let (_, e) = a.edges.iter().enumerate().find(|(i, e)| e.world.as_slice() == w && !a.mixed.contains(i))?;
+    let (_, e) = a.edges.iter().enumerate().find(|(i, e)| e.world.as_slice() == w && !a.mixed.contains(i) && !e.approx)?;
     Some(a.held.iter().filter_map(|n| e.inputs.get(n).map(|v| (n.clone(), v.clone()))).collect())
 }
 
 fn machine_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), d: &VDiff, budget: usize) -> Option<MachineDiff> {
     let (om, nm) = (o.0.machine.as_ref()?, n.0.machine.as_ref()?);
     let (ocarry, ncarry) = (om.carried()?, nm.carried()?);
-    if ocarry != ncarry {
+    if ocarry != ncarry || om.more() != nm.more() {
         return None;
     }
     let (cin, cout) = ocarry;
@@ -1627,7 +1627,58 @@ fn machine_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), d: &VDiff, b
     // The calls that part the two, shortest first. Before the first difference both run the
     // same calls to the same states, so a path the old version takes to a state is one the new
     // version takes too — up to the call where they part.
-    if oa.blocked.is_none() && !oa.over_budget && oa.initial == na.initial {
+    if oa.blocked.is_none() && !oa.over_budget && oa.initial == na.initial && !oa.more.is_empty() {
+        // Carrying more than the state (§15.217): the shortest path is looked for among the
+        // calls that really happen, and the call where the two part is made with the values the
+        // case holds there.
+        let carry_ax = d.axes.iter().position(|a| a.col == cin);
+        let (order, parent) = oa.real.reach();
+        let mut best: Option<Vec<MStep>> = None;
+        for ch in &d.changes {
+            let states: Vec<String> = match carry_ax {
+                Some(ci) => ch.region[ci]
+                    .iter()
+                    .filter_map(|&k| match &d.axes[ci].coords[k] {
+                        Coord::Word(w) => Some(w.clone()),
+                        _ => None,
+                    })
+                    .collect(),
+                None => Vec::new(),
+            };
+            if !states.iter().any(|st| oa.reachable.contains(st)) {
+                md.unreached += 1;
+                continue;
+            }
+            for &node in &order {
+                let (st, vals, w) = &oa.real.nodes[node];
+                if !states.contains(st) {
+                    continue;
+                }
+                let path = oa.real.path(&parent, node);
+                if best.as_ref().is_some_and(|b| b.len() <= path.len() + 1) {
+                    break;
+                }
+                let mut last = ch.witness.clone();
+                last.insert(cin.to_string(), Val::Enum(st.clone()));
+                for (it, v) in oa.more.iter().zip(vals) {
+                    last.insert(it.input.clone(), v.clone());
+                }
+                if let Some(wv) = world_values(&oa, w) {
+                    last.extend(wv);
+                }
+                let env: HashMap<String, Val> = last.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                let (ao, an) = (run(o.0, o.1, env.clone()), run(n.0, n.1, env));
+                if answers_alike(o.1, &ao.outs, n.1, &an.outs) {
+                    continue;
+                }
+                let mut steps: Vec<MStep> = path.iter().map(|e| MStep { inputs: e.inputs.clone(), old: e.outputs.clone(), new: e.outputs.clone() }).collect();
+                steps.push(MStep { inputs: last, old: ao.outs, new: an.outs });
+                best = Some(steps);
+                break;
+            }
+        }
+        md.shortest = best.unwrap_or_default();
+    } else if oa.blocked.is_none() && !oa.over_budget && oa.initial == na.initial {
         let carry_ax = d.axes.iter().position(|a| a.col == cin);
         let mut best: Option<Vec<MStep>> = None;
         for ch in &d.changes {
@@ -1685,19 +1736,35 @@ fn machine_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), d: &VDiff, b
     // reads off the case's `held` inputs (§15.149).
     let can_finish = na.can_finish();
     let new_worlds: BTreeSet<Vec<usize>> = na.nodes.iter().map(|nd| nd.1.clone()).chain(na.edges.iter().map(|e| e.world.clone())).collect();
+    // What a case in the old version can hold along with its state (§15.217): the values of the
+    // places it really reaches. A machine that carries only its state holds nothing more.
+    let held_in = |st: &String, w: &[usize]| -> Vec<Vec<Val>> {
+        if oa.more.is_empty() {
+            return vec![Vec::new()];
+        }
+        let (order, _) = oa.real.reach();
+        let mut out: Vec<Vec<Val>> = Vec::new();
+        for i in order {
+            let (s, vals, w2) = &oa.real.nodes[i];
+            if s == st && w2.as_slice() == w && !out.contains(vals) {
+                out.push(vals.clone());
+            }
+        }
+        out
+    };
     let stranded = |st: &String| -> bool {
         oa.nodes.iter().filter(|nd| &nd.0 == st).any(|nd| {
             let vals = world_values(&oa, &nd.1).unwrap_or_default();
-            match na.world_of(|n| vals.get(n)) {
-                Some(w) => !can_finish.contains(&(st.clone(), w)),
-                None => new_worlds.iter().any(|w| !can_finish.contains(&(st.clone(), w.clone()))),
-            }
+            held_in(st, &nd.1).iter().any(|more| match na.world_of(|n| vals.get(n)) {
+                Some(w) => na.stuck_at(&can_finish, st, &w, more),
+                None => new_worlds.iter().any(|w| na.stuck_at(&can_finish, st, w, more)),
+            })
         })
     };
     for st in &oa.reachable {
         let kind = if !na.states.contains(st) {
             "removed"
-        } else if !na.finals.is_empty() && stranded(st) && na.blocked.is_none() && !na.over_budget && !na.unknown.contains_key(st) {
+        } else if !na.finals.is_empty() && stranded(st) && na.blocked.is_none() && !na.over_budget && !na.unsettled_at(st) {
             "stranded"
         } else if oa.finals.contains(st) && !na.finals.contains(st) {
             "no_longer_final"

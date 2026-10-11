@@ -32,7 +32,9 @@ pub const CLAUSE: &str = "clause";
 pub const WHEN: &str = "when";
 /// The value a clause gives its output: a literal or a name, as in an output cell.
 pub const THEN: &str = "then";
-/// The condition of a clause that applies to every input.
+/// The condition of a clause that applies to every input. Under `machine`, the line that says
+/// what holds of the carried values in every state a case can reach: `always 残り日数 >=1
+/// when 猶予中` (§15.217), where `when` names the states it speaks of.
 pub const ALWAYS: &str = "always";
 /// A document a rule transcribes (§15.68): `source 法 = law "342AC0000000023" asof
 /// 2026-04-01`, with the pinned digest of every fragment cited, or `source 郵便 = file "…"
@@ -129,9 +131,11 @@ pub const HELD: &str = "held";
 pub const OVER: &str = "over";
 
 // --- The lines under `machine` (§15.148)
-/// `carry 状態 -> 次の状態` — the output that is the next call's input.
+/// `carry 状態 -> 次の状態` — the output that is the next call's input. The first line is the
+/// state; further lines carry a number with a range, a boolean or another enum along with it
+/// (§15.217).
 pub const CARRY: &str = "carry";
-/// The state a case starts in.
+/// The state a case starts in, and `initial 残り 0`: where a further carried value starts.
 pub const INITIAL: &str = "initial";
 /// The states a case ends in. Nothing leads out of one, and every state a case can reach has
 /// a way to one.

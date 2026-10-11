@@ -1,0 +1,54 @@
+rule retry_attempts v1
+description "How a collection run moves on after each attempt to charge a card: up to three attempts, and a charge declined three times is given up. The caller keeps the status and the attempts made; the rule decides one attempt. An example written for the purpose"
+
+enum charge_status = pending | collected | given_up
+enum attempt_result = approved | declined
+
+inputs
+  status   : charge_status
+  outcome  : attempt_result
+  attempts : number  range >=0 <=3  # the attempts made before this one
+
+outputs
+  next_status   : charge_status
+  next_attempts : number  round down(1)
+
+define made : number = attempts + 1
+
+table step
+policy unique
+| status    | outcome  | attempts | -> next_status | next_attempts |
+| pending   | approved | -        | collected      | made          |
+| pending   | declined | <=1      | pending        | made          |
+| pending   | declined | >=2      | pending        | made          |  # the third decline
+| collected | -        | -        | status         | attempts      |
+| given_up  | -        | -        | status         | attempts      |
+
+machine collection over step
+  carry   status -> next_status
+  carry   attempts -> next_attempts
+  initial pending
+  initial attempts 0
+  final   collected, given_up
+  never   collected after given_up
+  always  attempts >=1 when collected
+  always  attempts 3 when given_up
+
+# Declined twice, and given up on the third.
+scenario three_declines
+| outcome  | -> next_status | next_attempts |
+| declined | pending        | 1             |
+| declined | pending        | 2             |
+| declined | given_up       | 3             |
+| approved | given_up       | 3             |
+
+# Declined once, approved on the second attempt.
+scenario approved_on_the_second
+| outcome  | -> next_status | next_attempts |
+| declined | pending        | 1             |
+| approved | collected      | 2             |
+
+examples
+| status  | outcome  | attempts | -> next_status | next_attempts |
+| pending | approved | 0        | collected      | 1             |
+| pending | declined | 2        | given_up       | 3             |

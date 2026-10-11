@@ -200,7 +200,7 @@ fn machine_body(line: &str) -> String {
 
 /// The words that start a line under `machine`.
 const MACHINE_LINES: &[&str] =
-    &[crate::kw::CARRY, crate::kw::HELD, crate::kw::INITIAL, crate::kw::FINAL, crate::kw::NEVER, crate::kw::ONCE];
+    &[crate::kw::CARRY, crate::kw::HELD, crate::kw::INITIAL, crate::kw::FINAL, crate::kw::NEVER, crate::kw::ONCE, crate::kw::ALWAYS];
 
 fn first_word(line: &str) -> &str {
     line.trim_start().split(|c: char| c.is_whitespace()).next().unwrap_or("")

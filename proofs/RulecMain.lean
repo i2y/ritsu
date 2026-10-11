@@ -1128,6 +1128,17 @@ def checkMachine (cert : Json) (tables : Array ReadTable) (r : Report) : Report 
   let coupled := !fixedInputs.isEmpty &&
     (axesJ.any (fun ax => fieldStr ax "kind" != "input") ||
      (fieldArr cert "constraints").any (fun kc => (sideNames kc "left" ++ sideNames kc "right").any fixedInputs.contains))
+  -- A machine that carries more than its state (§15.217): a path of the state's rows is not one
+  -- case's, since each call moves the carried values too, and none is taken as proof. What the
+  -- certificate lays over the carried values is stated here, not proved: the theorems that
+  -- would settle it are not in `RulecCert.Machine` yet.
+  let carriedJ := (field mj "carried").getD Json.null
+  let carriesMore := !carriedJ.isNull
+  if carriesMore then
+    if (field carriedJ "items").isSome then
+      r := r.state s!"the claims over the values the machine carries besides its state ({(fieldArr carriedJ "places").size} places): stated, not proved"
+    else
+      r := r.state s!"the values the machine carries besides its state are not laid on the rows: {fieldStr carriedJ "why"}"
   let neverDefs := (fieldArr mj "never").toList
   let onceDefs := (fieldArr mj "once").toList
   let mut claims : Array String := #[]
@@ -1196,6 +1207,11 @@ def checkMachine (cert : Json) (tables : Array ReadTable) (r : Report) : Report 
           r := r.fail "machine: paths to a final state are given, and a held input is read by more than its own column"
         else
           r := r.state "that a case can still finish is not laid on the rows (a held input is read by more than its own column)"
+      else if carriesMore then
+        if pathsJ.size > 0 then
+          r := r.fail "machine: paths to a final state are given, and the machine carries more than its state"
+        else
+          r := r.state "that a case can still finish is not laid on the rows (the machine carries more than its state)"
       else
         let callOf : Json → Option Machine.Call := fun x => do
           let st ← fieldNat x "state"

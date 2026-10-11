@@ -609,6 +609,16 @@ fn machine_json(f: &RuleFile, c: &Checked, src: &str) -> String {
         once_counts.push(Some(flags));
     }
 
+    // A machine that carries more than its state (§15.217): a call's way through the rows moves
+    // its carried values too, so the paths of the state alone are not one case's, and the
+    // claims over the values are laid in a section of their own below.
+    let more_carried = !m.carries.is_empty();
+    if more_carried && !finals.is_empty() {
+        uncertified.push(tr!(
+            "状態から終わりの状態へ行く呼び出しの並び（持ち越す値があるので、状態の行だけでは一つの案件の並びとして示せない）",
+            "the sequences of calls to a final state (the machine carries more than its state, so the state's rows alone do not lay them out as one case's)"
+        ));
+    }
     let mut worlds_json: Vec<String> = Vec::new();
     let mut finish_coupled_said = false;
     for w in &worlds {
@@ -684,7 +694,9 @@ fn machine_json(f: &RuleFile, c: &Checked, src: &str) -> String {
         // A final state can still be reached: paths of calls that really happen, each made
         // with this world's coordinates.
         let mut finish: Vec<String> = Vec::new();
-        if !finals.is_empty() && !coupled.is_empty() {
+        if more_carried {
+            // Laid over the carried values, or stated: see the section below.
+        } else if !finals.is_empty() && !coupled.is_empty() {
             if !finish_coupled_said {
                 finish_coupled_said = true;
                 uncertified.push(tr!(
@@ -777,6 +789,19 @@ fn machine_json(f: &RuleFile, c: &Checked, src: &str) -> String {
                 .finish(),
         );
     }
+    // The values carried besides the state (§15.217), laid on the same rows.
+    let carried = if more_carried {
+        let state_to: Vec<Option<usize>> = moves.iter().map(|(_, mv, _)| match mv {
+            Move::To(x) => Some(*x),
+            Move::Stay => None,
+        }).collect();
+        let state_on: Vec<Vec<usize>> = moves.iter().map(|(_, _, on)| on.clone()).collect();
+        let (json, more_uncertified) = carried_json(f, c, m, t, &ct, &state_to, &state_on, init, &finals, &never_defs, &once_counts, &fixed_axes, src);
+        uncertified.extend(more_uncertified);
+        Some(json)
+    } else {
+        None
+    };
     Obj::new()
         .str("table", t.name.as_ref().map(|n| n.text.as_str()).unwrap_or(""))
         .raw("carry", Obj::new().str("input", cin).str("output", cout).finish())
@@ -802,8 +827,593 @@ fn machine_json(f: &RuleFile, c: &Checked, src: &str) -> String {
         )
         .raw("once", arr(&once_defs))
         .raw("worlds", arr(&worlds_json))
+        .opt_raw("carried", carried)
         .raw("uncertified", crate::json::strs(&uncertified))
         .finish()
+}
+
+/// One coordinate of a table's axis as a closed interval of true values: the ends as written
+/// for a point, and one grid step inside them for an interval, as a re-checker reads them.
+fn closed_coord(ax: &crate::region::CertAxis, x: usize) -> Option<(Option<Rat>, Option<Rat>)> {
+    let (lo, hi) = ax.bounds.get(x).cloned().flatten()?;
+    if lo.is_some() && lo == hi {
+        return Some((lo, hi));
+    }
+    match ax.step {
+        Some(st) => Some((lo.map(|v| v.add(st)), hi.map(|v| v.sub(st)))),
+        None => Some((lo, hi)),
+    }
+}
+
+/// The axis of a table's certificate that is the machine's state, if the table reads it.
+fn state_axis_of(ct: &CertTable, carried_in: &str) -> Option<usize> {
+    ct.axes.iter().position(|a| a.name == carried_in)
+}
+
+/// What a carried value's next value can be, read off one row (§15.217).
+#[derive(Clone)]
+enum CarriedMove {
+    Stay,
+    /// A value the row writes: the coordinate it lies on, or outside the range.
+    To(Option<usize>),
+    /// A value the rule computes: a `derive` or a `define` by name.
+    Expr(String),
+}
+
+/// The interval arithmetic a re-checker does over the certificate's expressions, here over the
+/// rule's: the same shapes, the same answers, so that the set this side lays out is the set the
+/// other side finds closed. A rounding goes out to its grid on both sides whatever its mode; a
+/// name is looked up in `ranges` and nowhere else.
+fn cert_interval(e: &Expr, ty: &crate::types::Ty, ranges: &std::collections::HashMap<String, (Rat, Rat)>) -> Option<(Rat, Rat)> {
+    use std::cmp::Ordering;
+    match e {
+        Expr::Name(n, _) => ranges.get(n).copied(),
+        Expr::Lit(Lit::Num(n), _) => {
+            let v = crate::types::lit_value_in_pub(n, ty).or_else(|| crate::types::lit_value_in_pub(n, &crate::types::lit_ty_pub(n)))?;
+            Some((v, v))
+        }
+        Expr::Lit(..) => None,
+        Expr::Bin(l, op, r, _) => {
+            let (al, ah) = cert_interval(l, ty, ranges)?;
+            let (bl, bh) = cert_interval(r, ty, ranges)?;
+            match op {
+                BinOp::Add => Some((al.checked_add(bl)?, ah.checked_add(bh)?)),
+                BinOp::Sub => Some((al.checked_sub(bh)?, ah.checked_sub(bl)?)),
+                BinOp::Mul | BinOp::Div => {
+                    if *op == BinOp::Div && bl.cmp_to(Rat::zero()) != Ordering::Greater && bh.cmp_to(Rat::zero()) != Ordering::Less {
+                        return None;
+                    }
+                    let g = |x: Rat, y: Rat| if *op == BinOp::Mul { x.checked_mul(y) } else { x.checked_div(y) };
+                    let mut vs = [g(al, bl)?, g(al, bh)?, g(ah, bl)?, g(ah, bh)?];
+                    vs.sort_by(|a, b| a.cmp_to(*b));
+                    Some((vs[0], vs[3]))
+                }
+                _ => None,
+            }
+        }
+        Expr::Call(name, args, _) => {
+            let (lo, hi) = cert_interval(args.first()?, ty, ranges)?;
+            match (name.as_str(), args.len()) {
+                (crate::kw::MIN, 2) | (crate::kw::MAX, 2) => {
+                    let (bl, bh) = cert_interval(&args[1], ty, ranges)?;
+                    let pick = |a: Rat, b: Rat| {
+                        let less = a.cmp_to(b) == Ordering::Less;
+                        if (name == crate::kw::MIN) == less { a } else { b }
+                    };
+                    Some((pick(lo, bl), pick(hi, bh)))
+                }
+                (m, 2) if crate::num::RoundMode::parse(m).is_some() => {
+                    let (g, g2) = cert_interval(&args[1], ty, ranges)?;
+                    if g != g2 || g.num == 0 {
+                        return None;
+                    }
+                    let g = if g.num < 0 { Rat::zero().sub(g) } else { g };
+                    let floor = |v: Rat| {
+                        let q = v.div(g);
+                        g.mul(Rat::int(q.num.div_euclid(q.den)))
+                    };
+                    let ceil = |v: Rat| {
+                        let q = v.div(g);
+                        g.mul(Rat::int(q.num.div_euclid(q.den) + i128::from(q.num.rem_euclid(q.den) != 0)))
+                    };
+                    Some((floor(lo), ceil(hi)))
+                }
+                _ => None,
+            }
+        }
+    }
+}
+
+/// The section a machine that carries more than its state gets (§15.217): its carried values
+/// laid on the rows of the table that decides the transitions, as the state is.
+///
+/// A place a case can be is the state together with one coordinate of each carried value:
+/// every value of a number when the machine was walked whole, the intervals the walk cut it
+/// into otherwise, the two truth values, an enum's values. A row takes a place when its box
+/// takes the state and, on each column the table reads a carried value in, meets that value's
+/// coordinate; it moves the state as it does above, and each carried value to what its cell
+/// writes — the value, the same value, or the interval the named computation comes to over the
+/// place, by the arithmetic a re-checker does — on every coordinate that interval meets, and
+/// outside the range where it reaches past it. That is more than the calls can do, so a set
+/// that holds where a case starts and is closed under it holds every place a case reaches, and
+/// the claims that nothing bad is reached are closures of that kind, as above. What the rows
+/// cannot carry is listed as not certified, as above; nothing here says a case can still finish
+/// — that needs calls that really happen.
+#[allow(clippy::too_many_arguments)]
+fn carried_json(
+    f: &RuleFile,
+    c: &Checked,
+    m: &crate::ast::MachineDecl,
+    t: &crate::ast::Table,
+    ct: &CertTable,
+    state_to: &[Option<usize>],
+    state_on: &[Vec<usize>],
+    init: usize,
+    finals: &[usize],
+    never_defs: &[(Vec<usize>, Vec<usize>)],
+    once_counts: &[Option<Vec<(usize, bool)>>],
+    fixed_axes: &[usize],
+    src: &str,
+) -> (String, Vec<String>) {
+    use crate::ast::{Cell, OutCell};
+    use std::cmp::Ordering;
+    use std::collections::{HashMap, HashSet, VecDeque};
+    let not_laid = |why: String| -> (String, Vec<String>) {
+        let note = tr!("持ち越す値についての主張（{why}）", "the claims about the carried values ({why})");
+        (Obj::new().str("why", &why).finish(), vec![note])
+    };
+    if !fixed_axes.is_empty() {
+        return not_laid(tr!("遷移を決める表が `held` の入力を列として読んでいる", "the table that decides the transitions reads a `held` input as a column"));
+    }
+    let Some(a) = crate::machine::analyze(f, c, crate::region::DEFAULT_BUDGET as usize) else {
+        return not_laid(tr!("持ち越す値を読めない", "the carried values cannot be read"));
+    };
+    if a.blocked.is_some() || a.over_budget || a.more.is_empty() {
+        return not_laid(tr!("入力の区画を調べきれていない", "the inputs' cells were not all walked"));
+    }
+    // Each carried value: its coordinates as closed intervals (a truth value 0 and 1, an enum's
+    // values by their place), and what each row writes into it.
+    let mut items: Vec<String> = Vec::new();
+    let mut coords: Vec<Vec<(Rat, Rat)>> = Vec::new();
+    let mut labels: Vec<Option<Vec<String>>> = Vec::new();
+    let mut table_axis: Vec<Option<usize>> = Vec::new();
+    let mut moves: Vec<Vec<CarriedMove>> = Vec::new();
+    for it in &a.more {
+        let Some(jo) = t.outputs.iter().position(|o| o.name.text == it.output) else {
+            return not_laid(tr!("{} はこの表の外で決まる", "{} is decided outside this table", it.output));
+        };
+        let (cs, ls): (Vec<(Rat, Rat)>, Option<Vec<String>>) = match &it.ty {
+            crate::types::Ty::Bool => (vec![(Rat::int(0), Rat::int(0)), (Rat::int(1), Rat::int(1))], Some(vec![crate::kw::FALSE.into(), crate::kw::TRUE.into()])),
+            crate::types::Ty::Enum(_) => {
+                let words: Vec<String> = it.axis.coords.iter().map(|co| if let crate::vdiff::Coord::Word(w) = co { w.clone() } else { String::new() }).collect();
+                ((0..words.len()).map(|i| (Rat::int(i as i128), Rat::int(i as i128))).collect(), Some(words))
+            }
+            _ => {
+                let mut v = Vec::new();
+                for co in &it.axis.coords {
+                    let (Some(lo), Some(hi)) = crate::vdiff::ival(co, it.axis.step) else {
+                        return not_laid(tr!("{} の座標に端の無いものがある", "a coordinate of {} has an open end", it.input));
+                    };
+                    v.push((lo, hi));
+                }
+                (v, None)
+            }
+        };
+        let word_at = |w: &str| ls.as_ref().and_then(|l| l.iter().position(|x| x == w));
+        let mut mv: Vec<CarriedMove> = Vec::new();
+        let mut moves_json: Vec<String> = Vec::new();
+        for r in &t.rows {
+            let (m1, o) = match r.outs.get(jo) {
+                Some(OutCell::Name(n)) if *n == it.input => (CarriedMove::Stay, Obj::new().int("row", r.index as i128).bool("stay", true)),
+                Some(OutCell::Name(w)) if ls.is_some() && word_at(w).is_some() => {
+                    let to = word_at(w);
+                    (CarriedMove::To(to), Obj::new().int("row", r.index as i128).int("to", to.unwrap_or(0) as i128))
+                }
+                Some(OutCell::Lit(Lit::Num(n))) if ls.is_none() => {
+                    let v = crate::types::lit_value_in_pub(n, &it.ty);
+                    let to = v.and_then(|v| cs.iter().position(|(lo, hi)| lo.cmp_to(v) != Ordering::Greater && hi.cmp_to(v) != Ordering::Less));
+                    match to {
+                        Some(x) => (CarriedMove::To(Some(x)), Obj::new().int("row", r.index as i128).int("to", x as i128)),
+                        None => (CarriedMove::To(None), Obj::new().int("row", r.index as i128).bool("out", true)),
+                    }
+                }
+                Some(OutCell::Name(n))
+                    if ls.is_none()
+                        && f.items.iter().any(|x| matches!(x, Item::Derived(d) if d.name.text == *n) || matches!(x, Item::Define(d) if d.name.text == *n)) =>
+                {
+                    (CarriedMove::Expr(n.clone()), Obj::new().int("row", r.index as i128).str("expr", n))
+                }
+                _ => {
+                    return not_laid(tr!(
+                        "表 {} 行{} が {} に書く値を、行から読めない",
+                        "what table {} row {} writes into {} cannot be read off the row",
+                        t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(),
+                        r.index,
+                        it.output
+                    ))
+                }
+            };
+            let o = match r.out_spans.get(jo) {
+                Some(sp) => o.raw(
+                    "source",
+                    Obj::new().int("line", sp.line as i128).int("col", sp.col as i128).int("len", sp.len as i128).str("text", &at_span(src, sp.line, sp.col, sp.len)).finish(),
+                ),
+                None => o,
+            };
+            mv.push(m1);
+            moves_json.push(o.finish());
+        }
+        let ak = ct.axes.iter().position(|x| x.name == it.input);
+        let kind = match &it.ty {
+            crate::types::Ty::Bool => "bool",
+            crate::types::Ty::Enum(_) => "enum",
+            _ => "number",
+        };
+        let mut o = Obj::new()
+            .str("input", &it.input)
+            .str("output", &it.output)
+            .str("kind", kind)
+            .raw("axis", ak.map(|x| x.to_string()).unwrap_or_else(|| "null".into()))
+            .raw("coords", arr(&cs.iter().map(|(lo, hi)| format!("[{},{}]", crate::json::quote(&rat(lo)), crate::json::quote(&rat(hi)))).collect::<Vec<_>>()));
+        if let Some(l) = &ls {
+            o = o.raw("labels", crate::json::strs(l));
+        }
+        if let Some((lo, hi)) = it.range {
+            o = o.raw("range", format!("[{},{}]", crate::json::quote(&rat(&lo)), crate::json::quote(&rat(&hi)))).raw("step", crate::json::quote(&rat(&it.axis.step)));
+        }
+        items.push(o.raw("moves", arr(&moves_json)).finish());
+        coords.push(cs);
+        labels.push(ls);
+        table_axis.push(ak);
+        moves.push(mv);
+    }
+    let out = usize::MAX;
+    // Whether a row's box meets a place on a carried value's column.
+    let meets = |ri: usize, k: usize, ci: usize| -> bool {
+        let Some(ak) = table_axis[k] else { return true };
+        let Some(cr) = ct.rows.get(ri) else { return false };
+        let Some(acc) = cr.accepts.get(ak) else { return false };
+        let ax = &ct.axes[ak];
+        acc.iter().any(|&x| match &labels[k] {
+            Some(l) => ax.coords.get(x) == l.get(ci),
+            None => match closed_coord(ax, x) {
+                Some((blo, bhi)) => {
+                    let (lo, hi) = coords[k][ci];
+                    blo.is_none_or(|b| b.cmp_to(hi) != Ordering::Greater) && bhi.is_none_or(|b| b.cmp_to(lo) != Ordering::Less)
+                }
+                None => true,
+            },
+        })
+    };
+    // The inputs' declared ranges, the ground every interval stands on.
+    let mut base: HashMap<String, (Rat, Rat)> = HashMap::new();
+    for i in &f.inputs {
+        if let Some((Some(lo), Some(hi))) = c.ranges.get(&i.name.text) {
+            base.insert(i.name.text.clone(), (*lo, *hi));
+        }
+    }
+    let values: Vec<(String, Expr, crate::types::Ty)> = f
+        .items
+        .iter()
+        .filter_map(|x| match x {
+            Item::Derived(d) => Some((d.name.text.clone(), d.expr.clone(), c.ty_of(&d.name.text).unwrap_or(crate::types::Ty::Unknown))),
+            Item::Define(d) => Some((d.name.text.clone(), d.expr.clone(), c.ty_of(&d.name.text).unwrap_or(crate::types::Ty::Unknown))),
+            _ => None,
+        })
+        .collect();
+    // What a computed value comes to at a place, through a row: its expression over the
+    // inputs' ranges with each carried number at the place's interval, narrowed by the row's box
+    // where the table reads the value as a column.
+    let image = |ri: usize, cc: &[usize], name: &str| -> Option<(Rat, Rat)> {
+        let mut ranges = base.clone();
+        for (k, it) in a.more.iter().enumerate() {
+            if labels[k].is_none() {
+                ranges.insert(it.input.clone(), coords[k][cc[k]]);
+            }
+        }
+        for _ in 0..=values.len() {
+            let mut moved = false;
+            for (n, e, ty) in &values {
+                if ranges.contains_key(n) {
+                    continue;
+                }
+                if let Some(iv) = cert_interval(e, ty, &ranges) {
+                    ranges.insert(n.clone(), iv);
+                    moved = true;
+                }
+            }
+            if !moved {
+                break;
+            }
+        }
+        let (mut lo, mut hi) = *ranges.get(name)?;
+        if let Some(ak) = ct.axes.iter().position(|x| x.name == name) {
+            let acc = ct.rows.get(ri)?.accepts.get(ak)?;
+            let bs: Vec<(Option<Rat>, Option<Rat>)> = acc.iter().map(|&x| closed_coord(&ct.axes[ak], x).unwrap_or((None, None))).collect();
+            let hull_lo = bs.iter().map(|b| b.0).try_fold(None::<Rat>, |m, b| b.map(|b| Some(m.map_or(b, |m| if b.cmp_to(m) == Ordering::Less { b } else { m })))).flatten();
+            let hull_hi = bs.iter().map(|b| b.1).try_fold(None::<Rat>, |m, b| b.map(|b| Some(m.map_or(b, |m| if b.cmp_to(m) == Ordering::Greater { b } else { m })))).flatten();
+            if let Some(h) = hull_lo {
+                if h.cmp_to(lo) == Ordering::Greater {
+                    lo = h;
+                }
+            }
+            if let Some(h) = hull_hi {
+                if h.cmp_to(hi) == Ordering::Less {
+                    hi = h;
+                }
+            }
+        }
+        Some((lo, hi))
+    };
+    type Place = (usize, Vec<usize>);
+    // Under `policy first`, a row an earlier one covers at a place does not answer there: the
+    // earlier row takes the place's state and the whole of each carried value's coordinate on
+    // the columns the table reads them in, and on every other column all that the later row
+    // takes. One earlier row has to cover it alone; two that cover it between them are not
+    // looked for, which leaves the later row in — more calls than happen, never fewer.
+    let first = ct.policy == "first";
+    let covers = |r0: usize, ri: usize, s: usize, cc: &[usize]| -> bool {
+        let (Some(c0), Some(c1)) = (ct.rows.get(r0), ct.rows.get(ri)) else { return false };
+        if !state_on[r0].contains(&s) {
+            return false;
+        }
+        for (ai, ax) in ct.axes.iter().enumerate() {
+            let (Some(a0), Some(a1)) = (c0.accepts.get(ai), c1.accepts.get(ai)) else { return false };
+            if Some(ai) == state_axis_of(ct, &a.carry.0) {
+                continue;
+            }
+            match (0..cc.len()).find(|&k| table_axis[k] == Some(ai)) {
+                Some(k) => {
+                    let whole = (0..ax.coords.len()).filter(|&x| match &labels[k] {
+                        Some(l) => ax.coords.get(x) == l.get(cc[k]),
+                        None => match closed_coord(ax, x) {
+                            Some((blo, bhi)) => {
+                                let (lo, hi) = coords[k][cc[k]];
+                                blo.is_none_or(|b| b.cmp_to(hi) != Ordering::Greater) && bhi.is_none_or(|b| b.cmp_to(lo) != Ordering::Less)
+                            }
+                            None => true,
+                        },
+                    });
+                    if !whole.into_iter().all(|x| a0.contains(&x)) {
+                        return false;
+                    }
+                }
+                None => {
+                    if !a1.iter().all(|x| a0.contains(x)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    };
+    // One call from a place, through every row that takes it: (row number, where it goes).
+    let step = |p: &Place| -> Option<Vec<(usize, Place)>> {
+        let (s, cc) = p;
+        if cc.contains(&out) {
+            return Some(Vec::new());
+        }
+        let mut next = Vec::new();
+        for (ri, r) in t.rows.iter().enumerate() {
+            if !state_on[ri].contains(s) || !(0..cc.len()).all(|k| meets(ri, k, cc[k])) {
+                continue;
+            }
+            if first && (0..ri).any(|r0| covers(r0, ri, *s, cc)) {
+                continue;
+            }
+            let s2 = state_to[ri].unwrap_or(*s);
+            let mut lists: Vec<Vec<usize>> = Vec::new();
+            for k in 0..cc.len() {
+                lists.push(match &moves[k][ri] {
+                    CarriedMove::Stay => vec![cc[k]],
+                    CarriedMove::To(Some(x)) => vec![*x],
+                    CarriedMove::To(None) => vec![out],
+                    CarriedMove::Expr(n) => {
+                        let (lo, hi) = image(ri, cc, n)?;
+                        let (rlo, rhi) = (coords[k][0].0, coords[k][coords[k].len() - 1].1);
+                        let mut l: Vec<usize> = (0..coords[k].len())
+                            .filter(|&ci| coords[k][ci].0.cmp_to(hi) != Ordering::Greater && coords[k][ci].1.cmp_to(lo) != Ordering::Less)
+                            .collect();
+                        if lo.cmp_to(rlo) == Ordering::Less || hi.cmp_to(rhi) == Ordering::Greater {
+                            l.push(out);
+                        }
+                        l
+                    }
+                });
+            }
+            let mut combos: Vec<Vec<usize>> = vec![Vec::new()];
+            for l in &lists {
+                combos = combos.into_iter().flat_map(|base| l.iter().map(move |x| [base.clone(), vec![*x]].concat())).collect();
+            }
+            for cc2 in combos {
+                next.push((r.index, (s2, cc2)));
+            }
+        }
+        Some(next)
+    };
+    let start: Place = (init, a.more.iter().map(|it| it.start).collect());
+    // The places a case can be, closed under a call; a bound on how many, as the walk has.
+    let mut seen: Vec<Place> = vec![start.clone()];
+    let mut seen_set: HashSet<Place> = seen.iter().cloned().collect();
+    let mut q: VecDeque<Place> = VecDeque::from([start.clone()]);
+    let mut succ: HashMap<Place, Vec<(usize, Place)>> = HashMap::new();
+    while let Some(p) = q.pop_front() {
+        let Some(ns) = step(&p) else {
+            return not_laid(tr!("計算した値が持ち越す値になる行で、その値の範囲を区間の計算で出せない", "a row carries on a computed value whose interval the arithmetic does not bound"));
+        };
+        for (_, n2) in &ns {
+            if seen_set.insert(n2.clone()) {
+                seen.push(n2.clone());
+                q.push_back(n2.clone());
+            }
+        }
+        succ.insert(p, ns);
+        if seen.len() > 200_000 {
+            return not_laid(tr!("持ち越す値の組が多すぎる", "there are too many places a case can be"));
+        }
+    }
+    let mut uncertified: Vec<String> = Vec::new();
+    let place_json = |p: &Place, extra: Option<String>| -> String {
+        let cc: Vec<String> = p.1.iter().map(|&x| if x == out { "-1".to_string() } else { x.to_string() }).collect();
+        match extra {
+            Some(e) => format!("[{},[{}],{e}]", p.0, cc.join(",")),
+            None => format!("[{},[{}]]", p.0, cc.join(",")),
+        }
+    };
+    // `final`: from a place in a final state, every call stays in that state.
+    let final_ok = seen.iter().filter(|p| finals.contains(&p.0)).all(|p| succ.get(p).is_none_or(|ns| ns.iter().all(|(_, n2)| n2.0 == p.0)));
+    if !final_ok && seen.iter().any(|p| finals.contains(&p.0)) {
+        uncertified.push(tr!("持ち越す値の上で、終わりの状態から出る呼び出しが無いこと", "that no call leaves a final state, over the carried values"));
+    }
+    // `never A after B`.
+    let mut nevers: Vec<String> = Vec::new();
+    for (li, (aa, bb)) in never_defs.iter().enumerate() {
+        let first = (start.clone(), bb.contains(&init));
+        let mut set: Vec<(Place, bool)> = vec![first.clone()];
+        let mut have: HashSet<(Place, bool)> = set.iter().cloned().collect();
+        let mut q2: VecDeque<(Place, bool)> = VecDeque::from([first]);
+        while let Some((p, sn)) = q2.pop_front() {
+            for (_, n2) in succ.get(&p).cloned().unwrap_or_default() {
+                let x = (n2.clone(), sn || bb.contains(&n2.0));
+                if have.insert(x.clone()) {
+                    set.push(x.clone());
+                    q2.push_back(x);
+                }
+            }
+        }
+        if set.iter().any(|(p, sn)| *sn && aa.contains(&p.0)) {
+            uncertified.push(tr!("持ち越す値の上で、`never` の行（{} 本目）", "the `never` line (number {}), over the carried values", li + 1));
+            nevers.push("null".into());
+        } else {
+            nevers.push(arr(&set.iter().map(|(p, sn)| place_json(p, Some(sn.to_string()))).collect::<Vec<_>>()));
+        }
+    }
+    // `once`.
+    let mut onces: Vec<String> = Vec::new();
+    for (li, fl) in once_counts.iter().enumerate() {
+        let Some(flags) = fl else {
+            onces.push("null".into());
+            continue;
+        };
+        let counts = |row: usize| flags.iter().any(|(x, y)| *x == row && *y);
+        let first = (start.clone(), 0u8);
+        let mut set: Vec<(Place, u8)> = vec![first.clone()];
+        let mut have: HashSet<(Place, u8)> = set.iter().cloned().collect();
+        let mut q2: VecDeque<(Place, u8)> = VecDeque::from([first]);
+        while let Some((p, n)) = q2.pop_front() {
+            for (row, n2) in succ.get(&p).cloned().unwrap_or_default() {
+                let x = (n2.clone(), (n + u8::from(counts(row))).min(2));
+                if have.insert(x.clone()) {
+                    set.push(x.clone());
+                    q2.push_back(x);
+                }
+            }
+        }
+        if set.iter().any(|(_, n)| *n >= 2) {
+            uncertified.push(tr!("持ち越す値の上で、`once` の行（{} 本目）", "the `once` line (number {}), over the carried values", li + 1));
+            onces.push("null".into());
+        } else {
+            onces.push(arr(&set.iter().map(|(p, n)| place_json(p, Some(n.to_string()))).collect::<Vec<_>>()));
+        }
+    }
+    // `always`: each test held to its value's coordinate at every place in the states it names.
+    let state_idx = |w: &str| c.enums.get(&a.state_enum).and_then(|vs| vs.iter().position(|x| x == w));
+    let mut alwayses: Vec<String> = Vec::new();
+    for (li, al) in m.alwayses.iter().enumerate() {
+        let when: Vec<usize> = al.when.iter().filter_map(|w| state_idx(&w.text)).collect();
+        let mut tests: Vec<String> = Vec::new();
+        let mut fits: Vec<(usize, Box<dyn Fn(usize) -> bool>)> = Vec::new();
+        for (n, cell, _) in &al.tests {
+            let Some(k) = a.more.iter().position(|it| it.input == n.text) else { continue };
+            let ty = a.more[k].ty.clone();
+            let lit = |l: &Lit| -> Option<Rat> {
+                match l {
+                    Lit::Num(x) => crate::types::lit_value_in_pub(x, &ty),
+                    _ => None,
+                }
+            };
+            let word = |l: &Lit| -> Option<String> {
+                match l {
+                    Lit::Word(w) => Some(w.clone()),
+                    _ => None,
+                }
+            };
+            let cert_cell = match cell {
+                Cell::Cmp(ops) => CertCell::Cmp(ops.iter().map(|(op, l)| (op.word(), lit(l))).collect()),
+                Cell::Lit(l) if labels[k].is_some() => CertCell::Is(word(l).into_iter().collect()),
+                Cell::Set(ls) if labels[k].is_some() => CertCell::Is(ls.iter().filter_map(word).collect()),
+                Cell::Not(ls) if labels[k].is_some() => CertCell::Not(ls.iter().filter_map(word).collect()),
+                Cell::Lit(l) => CertCell::In(vec![lit(l)]),
+                Cell::Set(ls) => CertCell::In(ls.iter().map(lit).collect()),
+                Cell::Not(ls) => CertCell::NotIn(ls.iter().map(lit).collect()),
+                _ => CertCell::Any,
+            };
+            tests.push(Obj::new().int("item", k as i128).raw("cell", cell_json(&cert_cell)).finish());
+            let (cs, ls) = (coords[k].clone(), labels[k].clone());
+            let f2: Box<dyn Fn(usize) -> bool> = Box::new(move |ci: usize| -> bool {
+                if ci == usize::MAX {
+                    return false;
+                }
+                let (lo, hi) = cs[ci];
+                match (&cert_cell, &ls) {
+                    (CertCell::Is(ws), Some(l)) => ws.contains(&l[ci]),
+                    (CertCell::Not(ws), Some(l)) => !ws.contains(&l[ci]),
+                    (CertCell::Cmp(ops), None) => ops.iter().all(|(op, v)| {
+                        let Some(v) = v else { return false };
+                        [lo, hi].iter().all(|x| match *op {
+                            "<=" => x.cmp_to(*v) != Ordering::Greater,
+                            "<" => x.cmp_to(*v) == Ordering::Less,
+                            ">=" => x.cmp_to(*v) != Ordering::Less,
+                            _ => x.cmp_to(*v) == Ordering::Greater,
+                        })
+                    }),
+                    (CertCell::In(vs), None) => lo == hi && vs.iter().any(|v| *v == Some(lo)),
+                    (CertCell::NotIn(vs), None) => vs.iter().all(|v| v.is_some_and(|v| v.cmp_to(lo) == Ordering::Less || v.cmp_to(hi) == Ordering::Greater)),
+                    (CertCell::Any, _) => true,
+                    _ => false,
+                }
+            });
+            fits.push((k, f2));
+        }
+        // A place outside a range is the range's claim, not this one's (E134).
+        let holds = seen
+            .iter()
+            .filter(|p| (when.is_empty() || when.contains(&p.0)) && !p.1.contains(&usize::MAX))
+            .all(|p| fits.iter().all(|(k, f2)| f2(p.1[*k])));
+        if !holds {
+            uncertified.push(tr!("持ち越す値の上で、`always` の行（{} 本目）", "the `always` line (number {}), over the carried values", li + 1));
+        }
+        alwayses.push(
+            Obj::new()
+                .raw("when", arr(&when.iter().map(|x| x.to_string()).collect::<Vec<_>>()))
+                .raw("tests", arr(&tests))
+                .bool("holds", holds)
+                .finish(),
+        );
+    }
+    // A carried number stays within its input's range.
+    let mut ranges_json: Vec<String> = Vec::new();
+    for (k, it) in a.more.iter().enumerate() {
+        if labels[k].is_some() {
+            continue;
+        }
+        let holds = !seen.iter().any(|p| p.1[k] == out);
+        if !holds {
+            uncertified.push(tr!("持ち越す値の上で、{} が範囲に収まること", "that {} stays within its range, over the carried values", it.output));
+        }
+        ranges_json.push(Obj::new().int("item", k as i128).bool("holds", holds).finish());
+    }
+    let json = Obj::new()
+        .raw("items", arr(&items))
+        .raw("start", format!("[{}]", start.1.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(",")))
+        .raw("places", arr(&seen.iter().map(|p| place_json(p, None)).collect::<Vec<_>>()))
+        .bool("final_certified", final_ok)
+        .raw("never", arr(&nevers))
+        .raw("once", arr(&onces))
+        .raw("always", arr(&alwayses))
+        .raw("ranges", arr(&ranges_json))
+        .finish();
+    (json, uncertified)
 }
 
 /// The `held` inputs of a machine whose value the certificate cannot follow through the

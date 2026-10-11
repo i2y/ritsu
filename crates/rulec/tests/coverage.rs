@@ -9,7 +9,7 @@
 use rulec::coverage::{self, BOUND, ROW, SHADOW, TIE, VALUE};
 use rulec::vectors::{self, Vector};
 
-const CORPUS: [&str; 98] = [
+const CORPUS: [&str; 104] = [
     "tests/corpus/速達の見積.rule",
     "tests/corpus/出荷の送料.rule",
     "tests/corpus/注文の送料.rule",
@@ -65,6 +65,9 @@ const CORPUS: [&str; 98] = [
     "tests/corpus/経済的発注量.rule",
     "tests/corpus/割り当ての申し込み.rule",
     "tests/corpus/乱数で決める一回.rule",
+    "tests/corpus/再試行の回数.rule",
+    "tests/corpus/猶予の残り日数.rule",
+    "tests/corpus/一度だけの特典.rule",
     // The twins (tests/corpus/twins.tsv): their obligations are the originals'.
     "tests/corpus/sku_prefix_handling.rule",
     "tests/corpus/cart_shipping_fee.rule",
@@ -109,6 +112,9 @@ const CORPUS: [&str; 98] = [
     "tests/corpus/economic_order_quantity.rule",
     "tests/corpus/quota_request.rule",
     "tests/corpus/contested_roll.rule",
+    "tests/corpus/retry_attempts.rule",
+    "tests/corpus/grace_period.rule",
+    "tests/corpus/one_time_perk.rule",
 ];
 
 fn load(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked, Vec<Vector>) {
@@ -380,6 +386,9 @@ fn 義務の件数を固定する() {
         ("tests/corpus/速達の見積.rule", 8, 10, 0, 1, 0),
         ("tests/corpus/注文の状態.rule", 10, 0, 0, 1, 0),
         ("tests/corpus/payment_intent.rule", 28, 0, 0, 0, 0),
+        ("tests/corpus/再試行の回数.rule", 5, 2, 0, 5, 0),
+        ("tests/corpus/猶予の残り日数.rule", 8, 2, 0, 5, 0),
+        ("tests/corpus/一度だけの特典.rule", 10, 0, 0, 8, 0),
         // The twins: the same obligations as the originals, counted over English names.
         ("tests/corpus/sku_prefix_handling.rule", 4, 2, 4, 0, 0),
         ("tests/corpus/cart_shipping_fee.rule", 4, 6, 0, 0, 0),
@@ -432,6 +441,9 @@ fn 義務の件数を固定する() {
         ("tests/corpus/economic_order_quantity.rule", 0, 0, 0, 1, 0),
         ("tests/corpus/quota_request.rule", 3, 4, 0, 0, 0),
         ("tests/corpus/contested_roll.rule", 2, 2, 0, 0, 0),
+        ("tests/corpus/retry_attempts.rule", 5, 2, 0, 5, 0),
+        ("tests/corpus/grace_period.rule", 8, 2, 0, 5, 0),
+        ("tests/corpus/one_time_perk.rule", 10, 0, 0, 8, 0),
     ];
     // Every rule of the corpus is audited and pinned. `threeway.rs` keeps its own list
     // honest the same way; this one had no such guard, and nine rules had drifted out of it

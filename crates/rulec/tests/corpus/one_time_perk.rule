@@ -1,0 +1,51 @@
+rule one_time_perk v1
+description "How a free trial is granted once in a member's life: the first trial asked for is granted, a later one is refused, and the mark of a trial taken stays through cancelling and joining again. The caller keeps the status and the mark; the rule decides one request. An example written for the purpose"
+
+enum membership = guest | member | cancelled
+enum request = join | ask_trial | cancel
+
+inputs
+  status      : membership
+  request     : request
+  trial_taken : bool
+
+outputs
+  next_status      : membership
+  next_trial_taken : bool
+  trial_granted    : bool
+
+table step
+policy unique
+| status    | request   | trial_taken | -> next_status | next_trial_taken | trial_granted |
+| guest     | join      | -           | member         | trial_taken      | false         |
+| member    | join      | -           | status         | trial_taken      | false         |
+| cancelled | join      | -           | member         | trial_taken      | false         |
+| member    | ask_trial | false       | status         | true             | true          |
+| member    | ask_trial | true        | status         | trial_taken      | false         |  # one trial in a member's life
+| guest     | ask_trial | -           | status         | trial_taken      | false         |
+| cancelled | ask_trial | -           | status         | trial_taken      | false         |
+| member    | cancel    | -           | cancelled      | trial_taken      | false         |
+| guest     | cancel    | -           | status         | trial_taken      | false         |
+| cancelled | cancel    | -           | status         | trial_taken      | false         |
+
+machine membership over step
+  carry   status -> next_status
+  carry   trial_taken -> next_trial_taken
+  initial guest
+  initial trial_taken false
+  once    trial_granted true
+  always  trial_taken false when guest
+
+# A trial taken, the membership cancelled, and the trial asked for again on joining again.
+scenario rejoined
+| request   | -> next_status | next_trial_taken | trial_granted |
+| join      | member         | false            | false         |
+| ask_trial | member         | true             | true          |
+| cancel    | cancelled      | true             | false         |
+| join      | member         | true             | false         |
+| ask_trial | member         | true             | false         |
+
+examples
+| status | request   | trial_taken | -> next_status | next_trial_taken | trial_granted |
+| member | ask_trial | false       | member         | true             | true          |
+| member | ask_trial | true        | member         | true             | false         |

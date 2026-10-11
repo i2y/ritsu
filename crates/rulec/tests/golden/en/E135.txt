@@ -1,0 +1,12 @@
+error[E135]: A sequence of calls breaks `always attempts 3 when given_up`
+  --> tests/mutants/m_e135.rule:35 machine collection
+   |
+35 |   always  attempts 3 when given_up
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ Calls (from pending):
+   1. at pending (attempts = 0), outcome = declined → pending (next_attempts = 1, table step row 2)
+   2. at pending (attempts = 1), outcome = declined → pending (next_attempts = 2, table step row 2)
+   3. at pending (attempts = 2), outcome = declined → given_up (next_attempts = 2, table step row 3)
+ At the end of this sequence the case is in given_up with attempts = 2. The line says the value fits its cell whenever a case is in given_up.
+ Correct the rows that decide where a case goes and what it carries on, or the `always` line if the claim is wrong as business.

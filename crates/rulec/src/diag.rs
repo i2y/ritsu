@@ -88,6 +88,9 @@ pub struct Witness {
     /// The carried input and output, when there is a trace: what a reader follows from one
     /// call to the next.
     pub carry: Option<(String, String)>,
+    /// The further carried inputs and outputs (§15.217): the values a case holds along with its
+    /// state, which the trace's line shows beside each state.
+    pub more: Vec<(String, String)>,
 }
 
 /// One call of a trace (§15.148).
@@ -103,13 +106,19 @@ impl Witness {
         self.inputs.is_empty() && self.outputs.is_empty() && self.expected.is_empty() && self.trace.is_empty()
     }
 
-    /// The states a trace passes through, first to last: `受付 → 取消 → 入金済`.
+    /// The states a trace passes through, first to last: `受付 → 取消 → 入金済`. A machine that
+    /// carries more than its state (§15.217) shows those values beside each state:
+    /// `猶予中 (残り日数 7) → 猶予中 (残り日数 6)`.
     pub fn path(&self) -> Option<String> {
         let (i, o) = self.carry.as_ref()?;
-        let first = self.trace.first()?.inputs.iter().find(|(n, _)| n == i)?.1.text();
-        let mut s = vec![first];
+        let first = self.trace.first()?;
+        let with = |state: String, vals: Vec<String>| if vals.is_empty() { state } else { format!("{state} ({})", vals.join(", ")) };
+        let pick = |ps: &[(String, WVal)], n: &str| ps.iter().find(|(k, _)| k == n).map(|(_, v)| v.text());
+        let start: Vec<String> = self.more.iter().filter_map(|(mi, _)| pick(&first.inputs, mi).map(|v| format!("{mi} {v}"))).collect();
+        let mut s = vec![with(pick(&first.inputs, i)?, start)];
         for st in &self.trace {
-            s.push(st.outputs.iter().find(|(n, _)| n == o).map(|(_, v)| v.text()).unwrap_or_else(|| "?".into()));
+            let vals: Vec<String> = self.more.iter().filter_map(|(mi, mo)| pick(&st.outputs, mo).map(|v| format!("{mi} {v}"))).collect();
+            s.push(with(pick(&st.outputs, o).unwrap_or_else(|| "?".into()), vals));
         }
         Some(s.join(" → "))
     }

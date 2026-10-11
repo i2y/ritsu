@@ -525,13 +525,23 @@ impl<'a> Gen<'a> {
         // The machine this rule is one step of (§15.148): which column comes back as which,
         // where a case starts, and where one has ended.
         let machine = match (self.machine_consts(), self.carried()) {
-            (Some((_, init, fins)), Some((cin, cout))) => Some(
-                Obj::new()
-                    .raw("carry", Obj::new().str("in", &cin).str("out", &cout).finish())
-                    .str("initial", &init)
-                    .raw("final", crate::json::strs(&fins))
-                    .finish(),
-            ),
+            (Some((_, init, fins)), Some((cin, cout))) => {
+                // The values carried along with the state, each with where it starts, in the
+                // wire's form (§15.217).
+                let more: Vec<String> = self
+                    .more_carried()
+                    .iter()
+                    .map(|mc| Obj::new().str("in", &mc.input).str("out", &mc.output).raw("initial", &mc.wire).finish())
+                    .collect();
+                Some(
+                    Obj::new()
+                        .raw("carry", Obj::new().str("in", &cin).str("out", &cout).finish())
+                        .str("initial", &init)
+                        .raw("final", crate::json::strs(&fins))
+                        .opt_raw("more", (!more.is_empty()).then(|| format!("[{}]", more.join(","))))
+                        .finish(),
+                )
+            }
             _ => None,
         };
         // The `constraint` lines and the days of a koyomi date: the door every other language
@@ -620,7 +630,7 @@ impl<'a> Gen<'a> {
     pub fn np_runner(&self) -> String {
         let alias = pub_name(&self.f.name);
         if self.f.machine.is_some() {
-            return format!("{}{}", self.header("#"), np_machine_runner(&alias));
+            return format!("{}{}", self.header("#"), np_machine_runner(&alias, !self.more_carried().is_empty()));
         }
         // What it answers with `--labels`: the display name of each value a line names (§15.211).
         let labels = if self.labeled_enums().is_empty() {
@@ -802,7 +812,19 @@ pub fn round_tests_numpy(u: &super::Uses) -> String {
 /// decided a step at a time, **every trace's k-th call in one pass**: the way a host that
 /// holds many cases advances them all by one event at once. The constants come from the
 /// plan, which is where this target keeps them.
-fn np_machine_runner(alias: &str) -> String {
+fn np_machine_runner(alias: &str, more: bool) -> String {
+    // The values carried along with the state (§15.217), when there are any: each trace holds
+    // them beside its state, from where the plan says they start.
+    let (meta, start, pass, next) = if more {
+        (
+            ", \"carried\": {mm[\"in\"]: mm[\"initial\"] for mm in m[\"more\"]}",
+            ", dict(x[\"carried\"])",
+            ", **traces[n][2]",
+            "\n            traces[n][2] = {mm[\"in\"]: rec[\"observed\"][mm[\"out\"]] for mm in m[\"more\"]}",
+        )
+    } else {
+        ("", "", "", "")
+    };
     format!(
         r#"import json
 import sys
@@ -847,21 +869,21 @@ def _line(rec):
 
 if lines and "machine" in lines[0]:
     m = rule.machine
-    print(json.dumps({{"initial": m["initial"], "final": m["final"]}}, ensure_ascii=False, separators=(",", ":")))
+    print(json.dumps({{"initial": m["initial"], "final": m["final"]{meta}}}, ensure_ascii=False, separators=(",", ":")))
     cin, cout = m["carry"]["in"], m["carry"]["out"]
     traces = []
     for x in lines[1:]:
         if x["step"] == "start":
-            traces.append([x["state"], []])
+            traces.append([x["state"], []{start}])
         traces[-1][1].append(x["in"])
     done = [[] for _ in traces]
     k = 0
     while any(k < len(t[1]) for t in traces):
         live = [n for n, t in enumerate(traces) if k < len(t[1])]
-        ins = [dict(traces[n][1][k], **{{cin: traces[n][0]}}) for n in live]
+        ins = [dict(traces[n][1][k], **{{cin: traces[n][0]}}{pass}) for n in live]
         for n, rec in zip(live, _decide(ins)):
             done[n].append({{"in": {{i: rec["in"][i] for i in rule.inputs}}, "observed": rec["observed"], "trace": rec["trace"]}})
-            traces[n][0] = rec["observed"][cout]
+            traces[n][0] = rec["observed"][cout]{next}
         k += 1
     for recs in done:
         for rec in recs:

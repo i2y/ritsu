@@ -124,6 +124,13 @@ golden!(e127_二度目の返金, "E127", "tests/mutants/m_e127.rule", "E127");
 golden!(e107_手順の例, "E107-scenario", "tests/mutants/m_e126.rule", "E107");
 golden!(w125_届かない状態, "W125", "tests/mutants/m_w125.rule", "W125");
 
+// The values a machine carries besides its state (§15.217): one with no start, a number that
+// leaves its range, an `always` line broken, and a claim the intervals leave unsettled.
+golden!(e072_持ち越す値の始まりが無い, "E072", "tests/mutants/m_e072ja.rule", "E072");
+golden!(e134_範囲を出る試行回数, "E134", "tests/mutants/m_e134ja.rule", "E134");
+golden!(e135_あきらめたときの回数, "E135", "tests/mutants/m_e135ja.rule", "E135");
+golden!(w127_区間で決めきれない, "W127", "tests/mutants/m_w127ja.rule", "W127");
+
 // The walk's stages and the words of a cell (§15.208), and the rows nothing decides (§15.209).
 golden!(e075_値でも名前でもある語, "E075", "tests/mutants/m_e075ja.rule", "E075");
 golden!(e031_要素とたどった結果, "E031-walk", "tests/mutants/m_e031walkja.rule", "E031");

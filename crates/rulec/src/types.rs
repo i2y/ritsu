@@ -4303,6 +4303,8 @@ impl Checked {
                 }
             }
         }
+        // The further carried values (§15.217), where they start, and the `always` lines.
+        self.machine_more(f, m, path);
         // The states named.
         if let Some(en) = &state_enum {
             let values = self.enums.get(en).cloned().unwrap_or_default();
@@ -4312,6 +4314,11 @@ impl Checked {
             }
             for v in &m.finals {
                 named.push((v, crate::kw::FINAL.to_string()));
+            }
+            for al in &m.alwayses {
+                for v in &al.when {
+                    named.push((v, crate::kw::ALWAYS.to_string()));
+                }
             }
             for nv in &m.nevers {
                 for v in nv.states.iter().chain(nv.after.iter()) {
@@ -4374,9 +4381,13 @@ impl Checked {
                     ));
                     continue;
                 }
-                if carried_in.as_deref() == Some(n.text.as_str()) {
+                if carried_in.as_deref() == Some(n.text.as_str()) || m.more().iter().any(|(i, _)| *i == n.text) {
                     self.diags.push(bad(
-                        tr!("{} は持ち越す状態です", "{} is the carried state", n.text),
+                        if carried_in.as_deref() == Some(n.text.as_str()) {
+                            tr!("{} は持ち越す状態です", "{} is the carried state", n.text)
+                        } else {
+                            tr!("{} は持ち越す値です", "{} is a carried value", n.text)
+                        },
                         tr!(
                             "持ち越す入力は、呼び出しのたびに一つ前の答えで入れ替わります。変わらない入力とは両立しません。",
                             "The carried input is replaced by the answer of the call before on every call, so it cannot be one that never changes."
@@ -4403,9 +4414,13 @@ impl Checked {
                 ));
                 continue;
             }
-            if carried_out.as_deref() == Some(on.output.text.as_str()) {
+            if carried_out.as_deref() == Some(on.output.text.as_str()) || m.more().iter().any(|(_, o)| *o == on.output.text) {
                 self.diags.push(bad(
-                    tr!("{} は持ち越す状態です", "{} is the carried state", on.output.text),
+                    if carried_out.as_deref() == Some(on.output.text.as_str()) {
+                        tr!("{} は持ち越す状態です", "{} is the carried state", on.output.text)
+                    } else {
+                        tr!("{} は持ち越す値です", "{} is a carried value", on.output.text)
+                    },
                     tr!(
                         "状態は、留まる呼び出しのたびに同じ値を返すので、`once` で数えると留まるだけで破れます。状態についての主張なら、`never … after …` を使ってください。",
                         "A state is answered again on every call that stays in it, so counting it with `once` breaks on the first stay. Say it about states with `never … after …`."
@@ -4448,7 +4463,7 @@ impl Checked {
                 continue;
             }
             for (n, sp) in &sc.table.inputs {
-                if carried_in.as_deref() == Some(n.as_str()) {
+                if carried_in.as_deref() == Some(n.as_str()) || m.more().iter().any(|(i, _)| i == n) {
                     self.diags.push(
                         Diag::error("E055", tr!("手順の例に、持ち越す入力 {n} の列があります", "The scenario has a column for the carried input {n}"))
                             .at(at_s.clone())
@@ -4465,7 +4480,7 @@ impl Checked {
                 .iter()
                 .map(|i| i.name.text.clone())
                 .chain(seq_col.clone())
-                .filter(|n| carried_in.as_deref() != Some(n.as_str()))
+                .filter(|n| carried_in.as_deref() != Some(n.as_str()) && !m.more().iter().any(|(i, _)| i == n))
                 .filter(|n| !sc.table.inputs.iter().any(|(c, _)| c == n))
                 .collect();
             if !missing.is_empty() {
@@ -4480,6 +4495,220 @@ impl Checked {
                 );
             }
         }
+    }
+
+    /// The `carry` lines after the first, the `initial <name> <value>` lines and the `always`
+    /// lines (§15.217). A further `carry` line is held to the declarations as the first one is
+    /// (E051), except that its pair need not be an enum; what it carries must be an enum, a
+    /// boolean or a number whose range has both ends, every one of them starts somewhere, and
+    /// an `always` line names them and holds each to a cell of its type (E072). Returns the
+    /// pairs that fit, with their type.
+    fn machine_more(&mut self, f: &RuleFile, m: &MachineDecl, path: &str) -> Vec<(String, String, Ty)> {
+        let at_m = |line: usize| tr!("{path}:{line} ステートマシン {}", "{path}:{line} machine {}", m.name.text);
+        let state_in = m.carried().map(|(i, _)| i.to_string());
+        let mut ok: Vec<(String, String, Ty)> = Vec::new();
+        let mut seen_in: Vec<String> = m.carried().map(|(i, _)| i.to_string()).into_iter().collect();
+        let mut seen_out: Vec<String> = m.carried().map(|(_, o)| o.to_string()).into_iter().collect();
+        let e072 = |title: String, at: String, span: &Span, note: String| Diag::error("E072", title).at(at).mark(span.clone(), "").note(note);
+        for (i, o, sp) in &m.carries {
+            let ity = self.syms.get(&i.text).filter(|s| s.kind == SymKind::Input).map(|s| s.ty.clone());
+            let declared_out = f.outputs.iter().any(|d| d.name.text == o.text);
+            let oty = if declared_out { self.syms.get(&o.text).map(|s| s.ty.clone()) } else { None };
+            let e051 = |what: String, span: &Span, note: String| {
+                Diag::error("E051", tr!("`carry` の行が宣言と噛み合いません: {}", "The `carry` line does not fit the declarations: {}", what))
+                    .at(at_m(sp.line))
+                    .mark(span.clone(), "")
+                    .note(note)
+            };
+            let ty = match (&ity, &oty) {
+                (None, _) => {
+                    self.diags.push(e051(
+                        tr!("{} は入力ではありません", "{} is not an input", i.text),
+                        &i.span,
+                        tr!("左は、呼び出しのたびに渡される入力の名前です。", "The left side is the name of an input, passed on every call."),
+                    ));
+                    continue;
+                }
+                (_, None) => {
+                    self.diags.push(e051(
+                        tr!("{} は出力ではありません", "{} is not an output", o.text),
+                        &o.span,
+                        tr!("右は、呼び出しが返す出力の名前です。次の呼び出しでは、その値が左の入力になります。", "The right side is the name of an output the call returns; on the next call its value is the input on the left."),
+                    ));
+                    continue;
+                }
+                (Some(a), Some(b)) if a != b => {
+                    self.diags.push(e051(
+                        tr!("{} は {a}、{} は {b} です", "{} is {a} and {} is {b}", i.text, o.text),
+                        sp,
+                        tr!(
+                            "持ち越す値は、同じ型の入力と出力の組です。次の呼び出しでは、出力の値をそのまま入力として渡します。",
+                            "A carried value is an input and an output of one type: the output's value is passed as the input on the next call, as it is."
+                        ),
+                    ));
+                    continue;
+                }
+                (Some(a), Some(_)) => a.clone(),
+            };
+            let carry_title = |what: String| tr!("`carry` の行で持ち越せない値です: {}", "A `carry` line carries what cannot be carried: {}", what);
+            if seen_in.contains(&i.text) || seen_out.contains(&o.text) {
+                let twice = if seen_in.contains(&i.text) { &i.text } else { &o.text };
+                self.diags.push(e072(
+                    carry_title(tr!("{} を二度持ち越しています", "{} is carried twice", twice)),
+                    at_m(sp.line),
+                    sp,
+                    tr!("一つの値は、`carry` の一行で持ち越します。", "One value is carried on one `carry` line."),
+                ));
+                continue;
+            }
+            seen_in.push(i.text.clone());
+            seen_out.push(o.text.clone());
+            match &ty {
+                Ty::Enum(_) | Ty::Bool => {}
+                Ty::Number | Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => {
+                    if !matches!(self.ranges.get(&i.text), Some((Some(_), Some(_)))) {
+                        self.diags.push(e072(
+                            carry_title(tr!("{} の範囲に両端がありません", "{} has no range with both ends", i.text)),
+                            at_m(sp.line),
+                            &i.span,
+                            tr!(
+                                "持ち越す数は、呼び出しのたびに変わります。範囲に両端があれば値は有限個になり、呼び出しの並びについての主張を確かめられます。入力に `range >=0 <=16` のように両端を書いてください。",
+                                "A carried number changes from one call to the next. With both ends of a range its values are finitely many, which is what makes the claims about sequences of calls decidable. Give the input both ends, as in `range >=0 <=16`."
+                            ),
+                        ));
+                        continue;
+                    }
+                }
+                other => {
+                    self.diags.push(e072(
+                        carry_title(tr!("{} は {other} です", "{} is {other}", i.text)),
+                        at_m(sp.line),
+                        sp,
+                        tr!(
+                            "持ち越せるのは、列挙と真偽と、範囲のある数（数、金額、量、率）です。",
+                            "What can be carried is an enum, a boolean, or a number with a range: a count, an amount, a quantity or a rate."
+                        ),
+                    ));
+                    continue;
+                }
+            }
+            ok.push((i.text.clone(), o.text.clone(), ty));
+        }
+        // Where each starts.
+        let init_title = |what: String| tr!("`initial` の行が宣言と噛み合いません: {}", "The `initial` line does not fit the declarations: {}", what);
+        let mut started: Vec<String> = Vec::new();
+        for (n, v, sp) in &m.initials {
+            if state_in.as_deref() == Some(n.text.as_str()) {
+                self.diags.push(e072(
+                    init_title(tr!("{} は状態です", "{} is the state", n.text)),
+                    at_m(sp.line),
+                    &n.span,
+                    tr!("状態の始まりは、`initial <状態>` と一語で書きます。", "Where the state starts is written in one word: `initial <state>`."),
+                ));
+                continue;
+            }
+            if !m.carries.iter().any(|c| c.0.text == n.text) {
+                self.diags.push(e072(
+                    init_title(tr!("{} は持ち越す値ではありません", "{} is not a carried value", n.text)),
+                    at_m(sp.line),
+                    &n.span,
+                    tr!(
+                        "`initial <名前> <値>` の名前は、二行目からの `carry` の左にある入力です。",
+                        "The name in `initial <name> <value>` is the input on the left of a `carry` line after the first."
+                    ),
+                ));
+                continue;
+            }
+            if started.contains(&n.text) {
+                self.diags.push(e072(
+                    init_title(tr!("{} の行が二つあります", "there are two lines for {}", n.text)),
+                    at_m(sp.line),
+                    sp,
+                    tr!("一つの値の始まりは一つです。", "A value starts in one place."),
+                ));
+                continue;
+            }
+            started.push(n.text.clone());
+            let Some((_, _, ty)) = ok.iter().find(|x| x.0 == n.text) else { continue };
+            let fits = match (ty, crate::eval::lit_to_val(v, ty)) {
+                (Ty::Enum(en), Some(crate::eval::Val::Enum(w))) => self.enums.get(en).is_some_and(|vs| vs.contains(&w)),
+                (Ty::Bool, Some(crate::eval::Val::Bool(_))) => true,
+                (Ty::Number | Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate, Some(crate::eval::Val::Num(r))) => {
+                    let (lo, hi) = self.ranges.get(&n.text).cloned().unwrap_or((None, None));
+                    let inside = lo.is_none_or(|l| r.cmp_to(l) != std::cmp::Ordering::Less) && hi.is_none_or(|h| r.cmp_to(h) != std::cmp::Ordering::Greater);
+                    let scaled = r.mul(Rat::int(self.wire_scale(&n.text)));
+                    inside && scaled.den == 1 && matches!(v, Lit::Num(_))
+                }
+                _ => false,
+            };
+            if !fits {
+                let range = match self.ranges.get(&n.text) {
+                    Some((Some(l), Some(h))) => tr!("、範囲は >={} <={}", ", with the range >={} <={}", fmt_val(*l, ty), fmt_val(*h, ty)),
+                    _ => String::new(),
+                };
+                self.diags.push(e072(
+                    init_title(tr!("{} は {} の値になれません", "{} cannot be a value of {}", crate::ast::lit_text(v), n.text)),
+                    at_m(sp.line),
+                    sp,
+                    tr!("{} は {ty}{range} です。", "{} is {ty}{range}.", n.text),
+                ));
+            }
+        }
+        for (i, _, sp) in &m.carries {
+            if ok.iter().any(|x| x.0 == i.text) && !started.contains(&i.text) {
+                self.diags.push(e072(
+                    init_title(tr!("{} の始まりの値がありません", "{} has no value to start at", i.text)),
+                    at_m(sp.line),
+                    sp,
+                    tr!(
+                        "持ち越す値には、どれも始まりの値を書いてください（`initial {} <値>`）。案件の最初の呼び出しに渡す値です。",
+                        "Give every carried value the value it starts at (`initial {} <value>`): what the first call of a case is passed.",
+                        i.text
+                    ),
+                ));
+            }
+        }
+        // The `always` lines.
+        let always_title = |what: String| tr!("`always` の行が宣言と噛み合いません: {}", "The `always` line does not fit the declarations: {}", what);
+        for al in &m.alwayses {
+            for (n, cell, csp) in &al.tests {
+                if state_in.as_deref() == Some(n.text.as_str()) {
+                    self.diags.push(e072(
+                        always_title(tr!("{} は状態です", "{} is the state", n.text)),
+                        at_m(al.span.line),
+                        &n.span,
+                        tr!(
+                            "状態について言うのは `never … after …` と `final` です。`always` の行が成り立つ状態は、`when` の後に書きます。",
+                            "What is said of the state is said with `never … after …` and `final`; the states an `always` line holds in follow its `when`."
+                        ),
+                    ));
+                    continue;
+                }
+                let Some((_, _, ty)) = ok.iter().find(|x| x.0 == n.text) else {
+                    if !m.carries.iter().any(|c| c.0.text == n.text) {
+                        self.diags.push(e072(
+                            always_title(tr!("{} は持ち越す値ではありません", "{} is not a carried value", n.text)),
+                            at_m(al.span.line),
+                            &n.span,
+                            tr!(
+                                "`always` に書くのは、二行目からの `carry` の左にある入力です。案件がどの状態にあるときも、その値がセルに当てはまることを確かめます。",
+                                "An `always` line names the input on the left of a `carry` line after the first, and the check is that its value fits the cell in every state a case can be in."
+                            ),
+                        ));
+                    }
+                    continue;
+                };
+                let ty = ty.clone();
+                let sc = *self.scales.get(&n.text).unwrap_or(&1);
+                // The cell is a test on the carried input, read as a table's cell on its column
+                // would be; what it names is not a row, so W111 is left as it was.
+                let (used, used_values) = (self.used.clone(), self.used_values.clone());
+                self.cell(cell, &ty, sc, csp, &at_m(al.span.line), true);
+                self.used = used;
+                self.used_values = used_values;
+            }
+        }
+        ok
     }
 
     /// A literal written as an output value, held to the type of the thing it is written

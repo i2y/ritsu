@@ -830,6 +830,35 @@ written as a comparison of places, `tier_rank(effective) >= tier_rank(Tier.GOLD)
 on the same line of the rule as any other condition; `max(a, b)` and `min(a, b)` over one are
 a helper each, and the entry guard of an input with a `range` over one compares places too.
 
+A machine that carries more than its state (reference §6.4) gets one more constant for each
+further carried value: where a case starts, named after its input and typed as the input is.
+From `grace_period.rule`:
+
+```python
+INITIAL: Subscription = Subscription.ACTIVE
+
+FINAL: frozenset[Subscription] = frozenset({Subscription.SUSPENDED})
+
+INITIAL_DAYS_LEFT: int = 0
+```
+
+The caller keeps those values beside the state, starts a case with them, and stores what each
+call answers for them in their place:
+
+```python
+out = grace_period(sub.status, event, sub.days_left)
+sub.status, sub.days_left = out.next_status, out.next_days_left
+```
+
+An amount, a quantity or a rate is the branded type (`INITIAL_BALANCE: JPY = JPY(-5000)`), a
+truth value is `bool`, another enum's value its member. Python, TypeScript, JavaScript, Rust,
+Ruby, PHP and Java spell the constant `INITIAL_DAYS_LEFT`, Go `InitialDaysLeft`, Swift
+`initialDaysLeft`; the NumPy plan lists each under `machine.more` with its wire value; SQL and
+Wasm, with one door and no module, have no constant, and `rulec api` lists the value and every
+language's spelling under `machine.carried`. The traces hand these values over as they hand the
+state: the first call of a trace is passed where each starts, every later one what the language
+itself answered.
+
 ## A rule whose inputs are projected from the caller's object
 
 A rule whose inputs say `from`

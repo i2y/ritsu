@@ -1,0 +1,54 @@
+rule 再試行の回数(retry_count) v1
+description "カードの引き落としを試すたびに、回収がどう進むか。試すのは三回までで、三回断られたら回収をあきらめる。状態と試した回数は呼び出す側が持ち、規則は一回の試行だけを判定する。書き下ろしの例"
+
+enum 回収の状態(charge_status) = 未回収(pending) | 回収済(collected) | 断念(given_up)
+enum 試行の結果(attempt_result) = 承認(approved) | 拒否(declined)
+
+inputs
+  状態(status)       : 回収の状態
+  結果(outcome)      : 試行の結果
+  試行回数(attempts) : number  range >=0 <=3  # この試行より前に試した回数
+
+outputs
+  次の状態(next_status)       : 回収の状態
+  次の試行回数(next_attempts) : number  round down(1)
+
+define 今回までの回数(made) : number = 試行回数 + 1
+
+table 試行(step)
+policy unique
+| 状態   | 結果 | 試行回数 | -> 次の状態 | 次の試行回数   |
+| 未回収 | 承認 | -        | 回収済      | 今回までの回数 |
+| 未回収 | 拒否 | <=1      | 未回収      | 今回までの回数 |
+| 未回収 | 拒否 | >=2      | 断念        | 試行回数       |  # 三回目の拒否
+| 回収済 | -    | -        | 状態        | 試行回数       |
+| 断念   | -    | -        | 状態        | 試行回数       |
+
+machine 回収(collection) over 試行
+  carry   状態 -> 次の状態
+  carry   試行回数 -> 次の試行回数
+  initial 未回収
+  initial 試行回数 0
+  final   回収済, 断念
+  never   回収済 after 断念
+  always  試行回数 >=1 when 回収済
+  always  試行回数 3 when 断念
+
+# 二回断られ、三回目であきらめる。
+scenario 三回の拒否(three_declines)
+| 結果 | -> 次の状態 | 次の試行回数 |
+| 拒否 | 未回収      | 1            |
+| 拒否 | 未回収      | 2            |
+| 拒否 | 断念        | 3            |
+| 承認 | 断念        | 3            |
+
+# 一回断られ、二回目で承認される。
+scenario 二回目の承認(approved_on_the_second)
+| 結果 | -> 次の状態 | 次の試行回数 |
+| 拒否 | 未回収      | 1            |
+| 承認 | 回収済      | 2            |
+
+examples
+| 状態   | 結果 | 試行回数 | -> 次の状態 | 次の試行回数 |
+| 未回収 | 承認 | 0        | 回収済      | 1            |
+| 未回収 | 拒否 | 2        | 断念        | 3            |

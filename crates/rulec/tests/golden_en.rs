@@ -176,6 +176,12 @@ golden!(e127_once_broken, "E127", "tests/mutants/m_e127.rule", "E127");
 golden!(e107_scenario, "E107-scenario", "tests/mutants/m_e126.rule", "E107");
 golden!(w125_unreached_state, "W125", "tests/mutants/m_w125.rule", "W125");
 
+// The values a machine carries besides its state (§15.217).
+golden!(e072_carried_without_start, "E072", "tests/mutants/m_e072.rule", "E072");
+golden!(e134_attempts_past_range, "E134", "tests/mutants/m_e134.rule", "E134");
+golden!(e135_always_broken, "E135", "tests/mutants/m_e135.rule", "E135");
+golden!(w127_unsettled_over_intervals, "W127", "tests/mutants/m_w127.rule", "W127");
+
 // The walk's stages and the words of a cell (§15.208), and the rows nothing decides (§15.209).
 golden!(e075_value_and_name, "E075", "tests/mutants/m_e075.rule", "E075");
 golden!(e031_element_and_answer, "E031-walk", "tests/mutants/m_e031walk.rule", "E031");

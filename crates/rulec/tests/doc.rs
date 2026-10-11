@@ -84,6 +84,9 @@ const CORPUS: &[&str] = &[
 "tests/corpus/paypal_fee.rule",
 "tests/corpus/注文の状態.rule",
 "tests/corpus/payment_intent.rule",
+"tests/corpus/再試行の回数.rule",
+"tests/corpus/猶予の残り日数.rule",
+"tests/corpus/一度だけの特典.rule",
 // The twins (tests/corpus/twins.tsv): every cell they show has to be in their own source too.
 "tests/corpus/sku_prefix_handling.rule",
 "tests/corpus/cart_shipping_fee.rule",
@@ -144,6 +147,9 @@ const CORPUS: &[&str] = &[
 "tests/corpus/catalog_returns.rule",
 "tests/corpus/品目の送料.rule",
 "tests/corpus/品目の返品.rule",
+"tests/corpus/retry_attempts.rule",
+"tests/corpus/grace_period.rule",
+"tests/corpus/one_time_perk.rule",
 ];
 
 /// The `enums` files four of the rules above read (§15.212). They hold no table, so the checks of

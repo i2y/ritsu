@@ -345,6 +345,23 @@ pub fn normalize(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             let sp = o.cell_span.clone();
             n.cell(&mut o.cell, &sp);
         }
+        // Where a further carried value starts, and what an `always` line holds it to
+        // (§15.217): a division can be a carried enum's value as well.
+        for (_, v, sp) in &mut m.initials {
+            if let Lit::Word(w) = v {
+                let sp = sp.clone();
+                n.word(w, &sp);
+            }
+        }
+        for al in &mut m.alwayses {
+            for (_, cell, sp) in &mut al.tests {
+                let sp = sp.clone();
+                n.cell(cell, &sp);
+            }
+            for v in &mut al.when {
+                n.word(&mut v.text, &v.span);
+            }
+        }
     }
     for s in &mut f.scenarios {
         n.table(&mut s.table);

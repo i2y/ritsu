@@ -407,6 +407,13 @@ pub fn json(f: &RuleFile, c: &Checked, src: &str, src_hash: &str) -> String {
                 .map(|(i, o)| Obj::new().str("output", o).str("input", i).finish())
                 .unwrap_or_else(|| "null".into()),
         )
+        // The values carried along with the state (§15.217), crossing the same way.
+        .opt_raw(
+            "carry_more",
+            f.machine.as_ref().map(|m| m.more()).filter(|ms| !ms.is_empty()).map(|ms| {
+                crate::json::arr(&ms.iter().map(|(i, o)| Obj::new().str("output", o).str("input", i).finish()).collect::<Vec<_>>())
+            }),
+        )
         .finish()
         + "\n"
 }

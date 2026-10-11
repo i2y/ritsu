@@ -1,0 +1,13 @@
+error[E134]: A call answers next_attempts outside the range of attempts
+  --> tests/mutants/m_e134.rule:29 machine collection
+   |
+29 |   carry   attempts -> next_attempts
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the range of attempts is >=0 <=3
+   |
+ Calls (from pending):
+   1. at pending (attempts = 0), outcome = declined → pending (next_attempts = 1, table step row 2)
+   2. at pending (attempts = 1), outcome = declined → pending (next_attempts = 2, table step row 2)
+   3. at pending (attempts = 2), outcome = declined → pending (next_attempts = 3, table step row 3)
+   4. at pending (attempts = 3), outcome = approved → collected (next_attempts = 4, table step row 1)
+ next_attempts can come to 4. The range of attempts is >=0 <=3, so the next call cannot be passed it.
+ Correct the row that decides the next value, or, if the value does occur in the business, widen the range of attempts.

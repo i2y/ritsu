@@ -84,6 +84,75 @@ fn brand_of(ty: &Ty) -> String {
     }
 }
 
+/// A value a machine carries along with its state (§15.217), as the generators spell it.
+pub(crate) struct MoreCarried {
+    /// The input and the output, by their names in the rule.
+    pub input: String,
+    pub output: String,
+    /// The same, by their aliases: what a language names the field and the constant after.
+    pub in_alias: String,
+    pub out_alias: String,
+    pub ty: Ty,
+    /// Where a case starts: the value, as the wire writes it, and the integer a number travels
+    /// as (0 for a boolean or an enum).
+    pub start: crate::eval::Val,
+    pub wire: String,
+    pub int: i128,
+}
+
+impl MoreCarried {
+    /// `INITIAL_DAYS_LEFT`: the constant's name where constants are upper case.
+    pub(crate) fn upper(&self) -> String {
+        format!("INITIAL_{}", self.in_alias.to_uppercase())
+    }
+    /// `InitialTurnsLeft` (Go) and `initialTurnsLeft` (Swift, where the state's own is
+    /// `initialState`, so an input called `state` gets `initialStateValue`).
+    pub(crate) fn go(&self) -> String {
+        format!("Initial{}", pascal(&self.in_alias))
+    }
+    pub(crate) fn swift(&self) -> String {
+        let n = format!("initial{}", pascal(&self.in_alias));
+        if n == "initialState" { format!("{n}Value") } else { n }
+    }
+    /// The JSON key the traces name it by: the input's name in the rule.
+    pub(crate) fn key(&self) -> String {
+        crate::json::quote(&self.input)
+    }
+    /// The word for a boolean start, in the languages that spell it in lower case.
+    pub(crate) fn bool_word(&self) -> &'static str {
+        match self.start {
+            crate::eval::Val::Bool(true) => "true",
+            _ => "false",
+        }
+    }
+    /// The enum value it starts at, when it is an enum.
+    pub(crate) fn word(&self) -> String {
+        match &self.start {
+            crate::eval::Val::Enum(w) => w.clone(),
+            _ => String::new(),
+        }
+    }
+    /// What kind of value it is, for the code that differs by it.
+    pub(crate) fn kind(&self) -> MoreKind {
+        match self.ty.present() {
+            Ty::Enum(_) => MoreKind::Enum,
+            Ty::Bool => MoreKind::Bool,
+            Ty::Number => MoreKind::Number,
+            _ => MoreKind::Branded,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MoreKind {
+    Enum,
+    Bool,
+    /// A plain whole number.
+    Number,
+    /// An amount, a quantity or a rate: a number with a unit, which most languages brand.
+    Branded,
+}
+
 /// `member_kind` → `MemberKind`.
 fn pascal(s: &str) -> String {
     s.split('_')
@@ -221,6 +290,25 @@ impl<'a> Gen<'a> {
         } else {
             format!("{answer}{field}")
         }
+    }
+
+    /// The values a machine carries along with its state (§15.217), in the order of their
+    /// `carry` lines, with where a case starts.
+    pub(crate) fn more_carried(&self) -> Vec<MoreCarried> {
+        crate::machine::more_starts(self.f, self.c)
+            .into_iter()
+            .filter_map(|(i, o, start)| {
+                let di = self.f.inputs.iter().find(|d| d.name.text == i)?;
+                let dout = self.f.outputs.iter().find(|d| d.name.text == o)?;
+                let ty = self.ty_of(&i);
+                let wire = crate::eval::wval(self.c, &i, &start).json();
+                let int = match &start {
+                    crate::eval::Val::Num(r) => crate::types::wire_int(*r, self.c.wire_scale(&i)),
+                    _ => 0,
+                };
+                Some(MoreCarried { in_alias: pub_name(&di.name), out_alias: pub_name(&dout.name), input: i, output: o, ty, start, wire, int })
+            })
+            .collect()
     }
 
     /// The counts this rule declares, in source order (§15.58).
@@ -1322,8 +1410,19 @@ impl<'a> Gen<'a> {
             } else {
                 format!("frozenset({{{}}})", fins.iter().map(|v| self.py_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "))
             };
+            // The values carried along with the state, and where a case starts (§15.217).
+            let mut more = String::new();
+            for mc in self.more_carried() {
+                let (ty, v) = match mc.kind() {
+                    MoreKind::Enum => (self.py_ty(&mc.ty), self.py_value(&mc.word(), &mc.ty)),
+                    MoreKind::Bool => ("bool".to_string(), if mc.bool_word() == "true" { "True".to_string() } else { "False".to_string() }),
+                    MoreKind::Number => ("int".to_string(), mc.int.to_string()),
+                    MoreKind::Branded => (brand_of(&mc.ty), format!("{}({})", brand_of(&mc.ty), mc.int)),
+                };
+                more.push_str(&format!("{}: {ty} = {v}\n", mc.upper()));
+            }
             o.push_str(&format!(
-                "INITIAL: {cls} = {}\nFINAL: frozenset[{cls}] = {set}\n\n\ndef is_final(state: {cls}) -> bool:\n    \"\"\"{}\"\"\"\n    return state in FINAL\n\n\n",
+                "INITIAL: {cls} = {}\nFINAL: frozenset[{cls}] = {set}\n{more}\n\ndef is_final(state: {cls}) -> bool:\n    \"\"\"{}\"\"\"\n    return state in FINAL\n\n\n",
                 self.py_value(&init, &Ty::Enum(en.clone())),
                 tr!("この状態で案件が終わっているか。", "Whether a case in this state has ended.")
             ));
@@ -2693,6 +2792,21 @@ impl<'a> Gen<'a> {
                 fins.iter().map(|v| self.go_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "),
                 tr!("はこの状態で案件が終わっているかを返す。", "reports whether a case in this state has ended.")
             ));
+            // The values carried along with the state, and where a case starts (§15.217).
+            for mc in self.more_carried() {
+                let (ty, v) = match mc.kind() {
+                    MoreKind::Enum => (String::new(), self.go_value(&mc.word(), &mc.ty)),
+                    MoreKind::Bool => (String::new(), mc.bool_word().to_string()),
+                    MoreKind::Number => (" int64".to_string(), mc.int.to_string()),
+                    MoreKind::Branded => (format!(" {}", self.go_ty(&mc.ty)), mc.int.to_string()),
+                };
+                o.push_str(&format!(
+                    "// {} {}\nconst {}{ty} = {v}\n\n",
+                    mc.go(),
+                    tr!("は、持ち越す {} の始まりの値。", "is where the carried {} starts.", mc.input),
+                    mc.go()
+                ));
+            }
         }
 
         // Groups. They are unexported, so the Japanese identifiers can stay (§8.1).
@@ -3829,16 +3943,36 @@ impl<'a> Gen<'a> {
             if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
                 args[k] = format!("(state if \"step\" in v else {})", args[k]);
             }
-            head = format!("state: m.{cls} = m.INITIAL\n");
+            // The values carried along with the state (§15.217): each held as the module's own
+            // value from one call to the next, read off the trace's first line where it starts.
+            let more = self.more_carried();
+            let (mut more_head, mut more_meta, mut more_start, mut more_tail) = (String::new(), String::new(), String::new(), String::new());
+            for mc in &more {
+                let local = format!("carried_{}", mc.in_alias);
+                if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == mc.input) {
+                    args[k] = format!("({local} if \"step\" in v else {})", args[k]);
+                }
+                let ty = match mc.kind() {
+                    MoreKind::Enum | MoreKind::Branded => format!("m.{}", self.py_ty(&mc.ty)),
+                    _ => self.py_ty(&mc.ty),
+                };
+                more_head.push_str(&format!("{local}: {ty} = m.{}\n", mc.upper()));
+                let shown = if mc.kind() == MoreKind::Enum { format!("m.{}.value", mc.upper()) } else { format!("m.{}", mc.upper()) };
+                more_meta.push_str(&format!("{}: {shown}, ", mc.key()));
+                more_start.push_str(&format!("        {local} = {}\n", self.py_read(&mc.ty, "v[\"carried\"]", &mc.input)));
+                more_tail.push_str(&format!("        {local} = r.{}\n", mc.out_alias));
+            }
+            let carried_meta = if more.is_empty() { String::new() } else { format!(", \"carried\": {{{}}}", more_meta.trim_end_matches(", ")) };
+            head = format!("state: m.{cls} = m.INITIAL\n{more_head}");
             meta = format!(
                 "    if \"machine\" in v:\n        \
-                     print(json.dumps({{\"initial\": m.INITIAL.value, \"final\": [s.value for s in m.{cls} if m.is_final(s)]}}, ensure_ascii=False, separators=(\",\", \":\")))\n        \
+                     print(json.dumps({{\"initial\": m.INITIAL.value, \"final\": [s.value for s in m.{cls} if m.is_final(s)]{carried_meta}}}, ensure_ascii=False, separators=(\",\", \":\")))\n        \
                      continue\n    \
                  d = v[\"in\"]\n    \
                  if v.get(\"step\") == \"start\":\n        \
-                     state = m.{cls}(v[\"state\"])\n"
+                     state = m.{cls}(v[\"state\"])\n{more_start}"
             );
-            tail = format!("    if \"step\" in v:\n        state = {}\n", self.next_state_of("r", &format!(".{out}")));
+            tail = format!("    if \"step\" in v:\n        state = {}\n{more_tail}", self.next_state_of("r", &format!(".{out}")));
         }
         // The runner prints the record the module itself writes, so the agreement test
         // holds the record function — the wire form of every input, dates included — to
@@ -3952,6 +4086,8 @@ impl<'a> Gen<'a> {
         };
         let mut fields: Vec<String> = Vec::new();
         let carried = self.carried().map(|(i, _)| i);
+        // The values carried along with the state (§15.217), each in a local of its own.
+        let more = if self.machine_consts().is_some() { self.more_carried() } else { Vec::new() };
         for i in &self.f.inputs {
             let one = field(&i.name, &self.ty_of(&i.name.text), "in", "d", "\t\t\t\t");
             // A machine's traces (§15.148): the carried input is the state this language
@@ -3959,6 +4095,9 @@ impl<'a> Gen<'a> {
             if carried.as_deref() == Some(i.name.text.as_str()) {
                 let g = pascal(&pub_name(&i.name));
                 fields.push(format!("\t\t\tif stepping {{\n\t\t\t\tin.{g} = state\n\t\t\t}} else {{\n{one}\t\t\t}}\n"));
+            } else if let Some(mc) = more.iter().find(|mc| mc.input == i.name.text) {
+                let g = pascal(&pub_name(&i.name));
+                fields.push(format!("\t\t\tif stepping {{\n\t\t\t\tin.{g} = carried{}\n\t\t\t}} else {{\n{one}\t\t\t}}\n", pascal(&mc.in_alias)));
             } else {
                 fields.push(field(&i.name, &self.ty_of(&i.name.text), "in", "d", "\t\t\t"));
             }
@@ -3990,7 +4129,34 @@ impl<'a> Gen<'a> {
         if let (Some((en, _, _)), Some(out)) = (self.machine_consts(), self.carried_out_alias()) {
             let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
             let all: Vec<String> = self.c.enums.get(&en).into_iter().flatten().map(|v| format!("r.{}", self.go_value(v, &Ty::Enum(en.clone())))).collect();
-            head = "\tstate := r.Initial\n".to_string();
+            // The values carried along with the state (§15.217): a local each, from the
+            // module's constant; the line the traces begin with says where each starts, and the
+            // first call of each trace reads it there.
+            let (mut more_head, mut more_meta, mut more_start, mut more_tail) = (String::new(), Vec::<String>::new(), String::new(), String::new());
+            for mc in &more {
+                let local = format!("carried{}", pascal(&mc.in_alias));
+                more_head.push_str(&format!("\t{local} := r.{}\n", mc.go()));
+                let key = mc.key().replace('\\', "\\\\").replace('"', "\\\"");
+                let shown = match mc.kind() {
+                    MoreKind::Enum => format!("strconv.Quote(r.{}.String())", mc.go()),
+                    MoreKind::Bool => format!("strconv.FormatBool(r.{})", mc.go()),
+                    _ => format!("strconv.FormatInt(int64(r.{}), 10)", mc.go()),
+                };
+                more_meta.push(format!("\"{key}:\" + {shown}"));
+                let decl = crate::ast::Name { text: mc.input.clone(), ascii: Some(mc.in_alias.clone()), span: crate::diag::Span::new(0, 0, 0) };
+                let one = field(&decl, &mc.ty, "start", "cv", "\t\t\t\t");
+                more_start.push_str(&format!("\t\t\t{{\n\t\t\t\tvar start r.Input\n{one}\t\t\t\t{local} = start.{}\n\t\t\t}}\n", pascal(&mc.in_alias)));
+                more_tail.push_str(&format!("\t\t\t\t{local} = got.{}\n", pascal(&mc.out_alias)));
+            }
+            head = format!("\tstate := r.Initial\n{more_head}");
+            let print_meta = if more.is_empty() {
+                "fmt.Println(string(meta))".to_string()
+            } else {
+                format!("fmt.Println(string(meta[:len(meta)-1]) + \",\\\"carried\\\":{{\" + {} + \"}}}}\")", more_meta.join(" + \",\" + "))
+            };
+            if !more_start.is_empty() {
+                more_start = format!("\t\t\tcv, _ := top[\"carried\"].(map[string]any)\n{more_start}");
+            }
             read = format!(
                 "\t\tvar top map[string]any\n\t\t\
                  if err := decode(sc.Bytes(), &top); err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\t\t\
@@ -3998,14 +4164,14 @@ impl<'a> Gen<'a> {
                      fin := []string{{}}\n\t\t\t\
                      for _, s := range []r.{cls}{{{}}} {{\n\t\t\t\tif r.IsFinal(s) {{\n\t\t\t\t\tfin = append(fin, s.String())\n\t\t\t\t}}\n\t\t\t}}\n\t\t\t\
                      meta, _ := json.Marshal(struct {{\n\t\t\t\tInitial string   `json:\"initial\"`\n\t\t\t\tFinal   []string `json:\"final\"`\n\t\t\t}}{{r.Initial.String(), fin}})\n\t\t\t\
-                     fmt.Println(string(meta))\n\t\t\t\
+                     {print_meta}\n\t\t\t\
                      continue\n\t\t}}\n\t\t\
                  d, _ := top[\"in\"].(map[string]any)\n\t\t\
                  step, stepping := top[\"step\"].(string)\n\t\t\
-                 if step == \"start\" {{\n\t\t\tstate, _ = r.Parse{cls}(top[\"state\"].(string))\n\t\t}}\n",
+                 if step == \"start\" {{\n\t\t\tstate, _ = r.Parse{cls}(top[\"state\"].(string))\n{more_start}\t\t}}\n",
                 all.join(", ")
             );
-            tail = format!("\t\t\tif stepping {{\n\t\t\t\tstate = {}\n\t\t\t}}\n", self.next_state_of("got", &format!(".{}", pascal(&out))));
+            tail = format!("\t\t\tif stepping {{\n\t\t\t\tstate = {}\n{more_tail}\t\t\t}}\n", self.next_state_of("got", &format!(".{}", pascal(&out))));
         }
         format!(
             "// Code generated by rulec {}. DO NOT EDIT.\n\
@@ -4481,9 +4647,20 @@ impl<'a> Gen<'a> {
         // The machine this function is one step of (§15.148).
         if let Some((en, init, fins)) = self.machine_consts() {
             let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            // The values carried along with the state, and where a case starts (§15.217).
+            let mut more = String::new();
+            for mc in self.more_carried() {
+                let v = match mc.kind() {
+                    MoreKind::Enum => self.ts_value(&mc.word(), &mc.ty),
+                    MoreKind::Bool => mc.bool_word().to_string(),
+                    MoreKind::Number => format!("{}n", mc.int),
+                    MoreKind::Branded => format!("{}n as {}", mc.int, self.ts_ty(&mc.ty)),
+                };
+                more.push_str(&format!("export const {}: {} = {v};\n", mc.upper(), self.ts_ty(&mc.ty)));
+            }
             o.push_str(&format!(
                 "export const INITIAL: {cls} = {};\n\
-                 export const FINAL: ReadonlySet<{cls}> = new Set([{}]);\n\n\
+                 export const FINAL: ReadonlySet<{cls}> = new Set([{}]);\n{more}\n\
                  /** {} */\n\
                  export function isFinal(state: {cls}): boolean {{\n  return FINAL.has(state);\n}}\n\n",
                 self.ts_value(&init, &Ty::Enum(en.clone())),
@@ -5254,16 +5431,38 @@ impl<'a> Gen<'a> {
             if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
                 args[k] = format!("(\"step\" in {v} ? {state} : {})", args[k]);
             }
-            head = format!("let {state}: {cls} = INITIAL;\n");
+            // The values carried along with the state (§15.217): a local each, from the
+            // module's constant, read where each trace starts and handed on from the answer.
+            let (mut more_head, mut more_meta, mut more_start, mut more_tail) = (String::new(), Vec::<String>::new(), String::new(), String::new());
+            for mc in self.more_carried() {
+                let local = runner_local(&format!("carried_{}", mc.in_alias), &alias);
+                if !imports.contains(&mc.upper()) {
+                    imports.push(mc.upper());
+                }
+                if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == mc.input) {
+                    args[k] = format!("(\"step\" in {v} ? {local} : {})", args[k]);
+                }
+                more_head.push_str(&format!("let {local}: {} = {};\n", self.ts_ty(&mc.ty), mc.upper()));
+                let shown = match mc.kind() {
+                    MoreKind::Number | MoreKind::Branded => format!("Number({})", mc.upper()),
+                    _ => mc.upper(),
+                };
+                more_meta.push(format!("{}: {shown}", mc.key()));
+                let read = ts_read(self, &mc.ty, &format!("({v}.carried as unknown)"), &mc.input, &mut imports, &mut type_imports);
+                more_start.push_str(&format!("    {local} = {read};\n"));
+                more_tail.push_str(&format!("      {local} = {r}.{};\n", mc.out_alias));
+            }
+            let carried_meta = if more_meta.is_empty() { String::new() } else { format!(", carried: {{ {} }}", more_meta.join(", ")) };
+            head = format!("let {state}: {cls} = INITIAL;\n{more_head}");
             body = format!(
                 "  const {v} = JSON.parse({line}) as Record<string, unknown>;\n  \
                  if (\"machine\" in {v}) {{\n    \
-                   console.log(JSON.stringify({{ initial: INITIAL, final: Object.values({cls}).filter((s) => isFinal(s)) }}));\n    \
+                   console.log(JSON.stringify({{ initial: INITIAL, final: Object.values({cls}).filter((s) => isFinal(s)){carried_meta} }}));\n    \
                    continue;\n  }}\n  \
                  const {d} = {v}.in as unknown;\n  \
-                 if ({v}.step === \"start\") {{\n    {state} = parse{cls}(String({v}.state));\n  }}\n"
+                 if ({v}.step === \"start\") {{\n    {state} = parse{cls}(String({v}.state));\n{more_start}  }}\n"
             );
-            tail = format!("    if (\"step\" in {v}) {{\n      {state} = {};\n    }}\n", self.next_state_of(&r, &format!(".{out}")));
+            tail = format!("    if (\"step\" in {v}) {{\n      {state} = {};\n{more_tail}    }}\n", self.next_state_of(&r, &format!(".{out}")));
         }
         let (owner_imports, labels) = self.ts_labels_mode(&lines, &mut imports);
         format!(
@@ -5641,8 +5840,24 @@ impl<'a> Gen<'a> {
         // The machine this function is one step of (§15.148).
         if let Some((en, init, fins)) = self.machine_consts() {
             let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            // The values carried along with the state, and where a case starts (§15.217).
+            let mut more = String::new();
+            for mc in self.more_carried() {
+                let v = match mc.kind() {
+                    MoreKind::Enum => self.rs_value(&mc.word(), &mc.ty),
+                    MoreKind::Bool => mc.bool_word().to_string(),
+                    MoreKind::Number => mc.int.to_string(),
+                    MoreKind::Branded => format!("{}({})", self.rs_ty(&mc.ty), mc.int),
+                };
+                more.push_str(&format!(
+                    "/// {}\npub const {}: {} = {v};\n",
+                    tr!("持ち越す {} の始まりの値。", "Where the carried {} starts.", mc.input),
+                    mc.upper(),
+                    self.rs_ty(&mc.ty)
+                ));
+            }
             o.push_str(&format!(
-                "/// {}\npub const INITIAL: {cls} = {};\n/// {}\npub const FINAL: &[{cls}] = &[{}];\n\n\
+                "/// {}\npub const INITIAL: {cls} = {};\n/// {}\npub const FINAL: &[{cls}] = &[{}];\n{more}\n\
                  /// {}\npub fn is_final(state: {cls}) -> bool {{\n    FINAL.contains(&state)\n}}\n\n",
                 tr!("案件が始まる状態。", "The state a case starts in."),
                 self.rs_value(&init, &Ty::Enum(en.clone())),
@@ -6668,13 +6883,13 @@ impl<'a> Gen<'a> {
 
     /// The statements that read the inputs into `a0`, `a1`, …, and the sequence into the one
     /// after them, for the closure `rs_bind` writes into.
-    fn rs_binds(&self, d: &str, indent: &str, carried: Option<(usize, &str)>) -> String {
+    fn rs_binds(&self, d: &str, indent: &str, carried: &[(usize, String)]) -> String {
         let mut o = String::new();
         for (i, inp) in self.f.inputs.iter().enumerate() {
             let read = self.rs_bind(&self.ty_of(&inp.name.text), d, &inp.name.text);
-            match carried {
-                Some((k, state)) if k == i => o.push_str(&format!("{indent}let a{i} = if stepping {{ {state} }} else {{ {read} }};\n")),
-                _ => o.push_str(&format!("{indent}let a{i} = {read};\n")),
+            match carried.iter().find(|(k, _)| *k == i) {
+                Some((_, state)) => o.push_str(&format!("{indent}let a{i} = if stepping {{ {state} }} else {{ {read} }};\n")),
+                None => o.push_str(&format!("{indent}let a{i} = {read};\n")),
             }
         }
         if let Some(el) = &self.f.elements {
@@ -6719,29 +6934,66 @@ impl<'a> Gen<'a> {
         // A machine's traces (§15.148): the carried input is the state this language answered
         // to the call before, handed over as the value it is.
         let (mut head, mut meta, mut tail, mut keep, mut next) = (String::new(), String::new(), String::new(), String::new(), "()".to_string());
-        let mut carried: Option<(usize, &str)> = None;
+        let mut carried: Vec<(usize, String)> = Vec::new();
         if let (Some((en, _, _)), Some((cin, _)), Some(out)) = (self.machine_consts(), self.carried(), self.carried_out_alias()) {
             let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
             let all: Vec<String> = self.c.enums.get(&en).into_iter().flatten().map(|v| format!("r::{}", self.rs_value(v, &Ty::Enum(en.clone())))).collect();
-            carried = self.f.inputs.iter().position(|i| i.name.text == cin).map(|k| (k, "state"));
-            head = "    let mut state = r::INITIAL;\n".to_string();
+            carried.extend(self.f.inputs.iter().position(|i| i.name.text == cin).map(|k| (k, "state".to_string())));
+            // The values carried along with the state (§15.217): a local each, from the
+            // module's constant, read where each trace starts and handed on from the answer.
+            let more = self.more_carried();
+            let (mut more_head, mut more_meta, mut more_start, mut more_next, mut more_tail) = (String::new(), Vec::<String>::new(), String::new(), Vec::<String>::new(), String::new());
+            for (j, mc) in more.iter().enumerate() {
+                let local = format!("carried_{}", mc.in_alias);
+                carried.extend(self.f.inputs.iter().position(|i| i.name.text == mc.input).map(|k| (k, local.clone())));
+                more_head.push_str(&format!("    let mut {local} = r::{};\n", mc.upper()));
+                let shown = match mc.kind() {
+                    MoreKind::Enum => format!("format!(\"\\\"{{}}\\\"\", r::{}.as_str())", mc.upper()),
+                    MoreKind::Bool | MoreKind::Number => format!("r::{}.to_string()", mc.upper()),
+                    MoreKind::Branded => format!("r::{}.0.to_string()", mc.upper()),
+                };
+                more_meta.push(format!("format!(\"{}:{{}}\", {shown})", mc.key().replace('\\', "\\\\").replace('"', "\\\"").replace('{', "{{").replace('}', "}}")));
+                more_start.push_str(&format!(
+                    "            {local} = (|| -> Result<_, r::RuleError> {{ Ok({}) }})().expect(\"carried\");\n",
+                    self.rs_bind(&mc.ty, "&cv", &mc.input)
+                ));
+                more_next.push(format!("got.{}", mc.out_alias));
+                more_tail.push_str(&format!("                    {local} = next.{};\n", j + 1));
+            }
+            head = format!("    let mut state = r::INITIAL;\n{more_head}");
+            let print_meta = if more.is_empty() {
+                "println!(\"{{\\\"initial\\\":\\\"{}\\\",\\\"final\\\":[{}]}}\", r::INITIAL.as_str(), fin.join(\",\"));".to_string()
+            } else {
+                format!(
+                    "println!(\"{{{{\\\"initial\\\":\\\"{{}}\\\",\\\"final\\\":[{{}}],\\\"carried\\\":{{{{{{}}}}}}}}}}\", r::INITIAL.as_str(), fin.join(\",\"), [{}].join(\",\"));",
+                    more_meta.join(", ")
+                )
+            };
+            if !more_start.is_empty() {
+                more_start = format!("            let cv = pairs_from(&get(\"carried\").unwrap_or_default().chars().collect::<Vec<char>>(), 0).0;\n{more_start}");
+            }
             meta = format!(
                 "        let top = pairs_from(&line.chars().collect::<Vec<char>>(), 0).0;\n        \
                  let get = |k: &str| top.iter().find(|(a, _)| a == k).map(|(_, v)| v.strip_prefix('\"').unwrap_or(v).to_string());\n        \
                  if get(\"machine\").is_some() {{\n            \
                      let fin: Vec<String> = [{}].iter().filter(|s| r::is_final(**s)).map(|s| format!(\"\\\"{{}}\\\"\", s.as_str())).collect();\n            \
-                     println!(\"{{{{\\\"initial\\\":\\\"{{}}\\\",\\\"final\\\":[{{}}]}}}}\", r::INITIAL.as_str(), fin.join(\",\"));\n            \
+                     {print_meta}\n            \
                      continue;\n        }}\n        \
                  let stepping = get(\"step\").is_some();\n        \
                  if get(\"step\").as_deref() == Some(\"start\") {{\n            \
-                     state = r::{cls}::parse(&get(\"state\").unwrap_or_default()).expect(\"state\");\n        }}\n",
+                     state = r::{cls}::parse(&get(\"state\").unwrap_or_default()).expect(\"state\");\n{more_start}        }}\n",
                 all.join(", ")
             );
-            keep = format!("            let next = {};\n", self.next_state_of("got", &format!(".{out}")));
+            if more.is_empty() {
+                keep = format!("            let next = {};\n", self.next_state_of("got", &format!(".{out}")));
+                tail = "                if stepping {\n                    state = next;\n                }\n".to_string();
+            } else {
+                keep = format!("            let next = ({}, {});\n", self.next_state_of("got", &format!(".{out}")), more_next.join(", "));
+                tail = format!("                if stepping {{\n                    state = next.0;\n{more_tail}                }}\n");
+            }
             next = "next".to_string();
-            tail = "                if stepping {\n                    state = next;\n                }\n".to_string();
         }
-        let binds = self.rs_binds("&d", "            ", carried);
+        let binds = self.rs_binds("&d", "            ", &carried);
         let ok = if next == "()" { "Ok((record, ()))" } else { "Ok((record, next))" };
         let owners = self.rs_owner_mods();
         let labels = self.rs_labels_mode();
@@ -6808,7 +7060,7 @@ use std::io::Read;
     pub fn rs_wasm(&self) -> String {
         let alias = pub_name(&self.f.name);
         let (first, second) = (self.rs_pass(true), self.rs_pass(false));
-        let binds = self.rs_binds("&d", "        ", None);
+        let binds = self.rs_binds("&d", "        ", &[]);
         let mut o = format!(
             "// Code generated by rulec {}. DO NOT EDIT.\n#![allow(non_snake_case, uncommon_codepoints, unused_parens, dead_code)]\n\n#[path = \"{alias}.rs\"]\nmod r;\n\nuse std::alloc::{{alloc, realloc, Layout}};\n\n",
             ritsu_emit::header::VERSION
@@ -7751,16 +8003,35 @@ fn wit_version(v: &str) -> String {
 /// The Node runner `rulec test` drives: the module built from `<alias>_wasm.rs`, one vector per
 /// line of stdin through `call`, the record line out.
 pub fn wasm_runner_js(alias: &str) -> String {
-    wasm_runner_with(alias, "null", "null")
+    wasm_runner_with(alias, "null", "null", "")
 }
 
 /// The runner with the machine's constants handed to it (§15.148). The module's one door is
 /// `call`, so it keeps no constants of its own; the line the traces begin with is the rule's.
-fn wasm_runner_with(alias: &str, machine: &str, carry: &str) -> String {
+/// `more` lists the values carried along with the state (§15.217), as `[input, output]` pairs,
+/// or is empty.
+fn wasm_runner_with(alias: &str, machine: &str, carry: &str, more: &str) -> String {
+    let (decl, start, pass, next) = if more.is_empty() {
+        (String::new(), String::new(), String::new(), String::new())
+    } else {
+        (
+            format!("\nconst MORE = {more};\nlet held = {{}};"),
+            "\n    if (v.step === \"start\") held = { ...v.carried };".to_string(),
+            ", ...held".to_string(),
+            "\n    const obs = JSON.parse(out).observed;\n    held = Object.fromEntries(MORE.map(([i, o]) => [i, obs[o]]));".to_string(),
+        )
+    };
     format!(
         "// Code generated by rulec {}. DO NOT EDIT.\n{}",
         ritsu_emit::header::VERSION,
-        WASM_RUNNER_JS.replace("ALIAS", alias).replace("@MACHINE@", machine).replace("@CARRY@", carry)
+        WASM_RUNNER_JS
+            .replace("ALIAS", alias)
+            .replace("@MACHINE@", machine)
+            .replace("@CARRY@", carry)
+            .replace("@MORE_DECL@", &decl)
+            .replace("@MORE_START@", &start)
+            .replace("@MORE_PASS@", &pass)
+            .replace("@MORE_NEXT@", &next)
     )
 }
 
@@ -7770,12 +8041,23 @@ impl<'a> Gen<'a> {
         let alias = pub_name(&self.f.name);
         match (self.machine_consts(), self.carried()) {
             (Some((_, init, fins)), Some((cin, cout))) => {
+                let more = self.more_carried();
                 let meta = format!(
-                    "{{\"initial\":{},\"final\":[{}]}}",
+                    "{{\"initial\":{},\"final\":[{}]{}}}",
                     crate::json::quote(&init),
-                    fins.iter().map(|f| crate::json::quote(f)).collect::<Vec<_>>().join(",")
+                    fins.iter().map(|f| crate::json::quote(f)).collect::<Vec<_>>().join(","),
+                    if more.is_empty() {
+                        String::new()
+                    } else {
+                        format!(",\"carried\":{{{}}}", more.iter().map(|mc| format!("{}:{}", mc.key(), mc.wire)).collect::<Vec<_>>().join(","))
+                    }
                 );
-                wasm_runner_with(&alias, &crate::json::quote(&meta), &format!("[{}, {}]", crate::json::quote(&cin), crate::json::quote(&cout)))
+                let pairs = if more.is_empty() {
+                    String::new()
+                } else {
+                    format!("[{}]", more.iter().map(|mc| format!("[{}, {}]", mc.key(), crate::json::quote(&mc.output))).collect::<Vec<_>>().join(", "))
+                };
+                wasm_runner_with(&alias, &crate::json::quote(&meta), &format!("[{}, {}]", crate::json::quote(&cin), crate::json::quote(&cout)), &pairs)
             }
             _ => wasm_runner_js(&alias),
         }
@@ -7808,7 +8090,7 @@ function call(text) {
 // A machine's constants, and which input the answer carries back as which.
 const MACHINE = @MACHINE@;
 const CARRY = @CARRY@;
-let state = null;
+let state = null;@MORE_DECL@
 
 for (const line of readFileSync(0, "utf8").split("\n")) {
   if (!line.trim()) continue;
@@ -7820,15 +8102,15 @@ for (const line of readFileSync(0, "utf8").split("\n")) {
   let text = line;
   if (CARRY !== null && "step" in v) {
     // A trace's call is passed the state the module answered to the call before.
-    if (v.step === "start") state = v.state;
-    text = JSON.stringify({ in: { ...v.in, [CARRY[0]]: state } });
+    if (v.step === "start") state = v.state;@MORE_START@
+    text = JSON.stringify({ in: { ...v.in, [CARRY[0]]: state@MORE_PASS@ } });
   }
   const out = call(text);
   console.log(out);
   // A refusal is the module's own line, in the place of the record (§15.204).
   if (out.startsWith('{"refused":')) continue;
   if (CARRY !== null && "step" in v) {
-    state = JSON.parse(out).observed[CARRY[1]];
+    state = JSON.parse(out).observed[CARRY[1]];@MORE_NEXT@
   }
 }
 "#;
@@ -8382,6 +8664,33 @@ impl Gen<'_> {
             .raw("swift", names("initialState", "finalStates", "isFinal"))
             .raw("java", names("INITIAL", "FINAL", "isFinal"))
             .finish();
+        // The values carried along with the state (§15.217): which input comes back as which
+        // output, of what type, where a case starts, and what each language calls that start.
+        let more: Vec<String> = self
+            .more_carried()
+            .iter()
+            .map(|mc| {
+                let upper = mc.upper();
+                let consts = crate::json::Obj::new()
+                    .str("python", &upper)
+                    .str("typescript", &upper)
+                    .str("javascript", &upper)
+                    .str("rust", &upper)
+                    .str("ruby", &upper)
+                    .str("php", &upper)
+                    .str("go", &mc.go())
+                    .str("swift", &mc.swift())
+                    .str("java", &upper)
+                    .finish();
+                crate::json::Obj::new()
+                    .str("input", &mc.input)
+                    .str("output", &mc.output)
+                    .str("type", mc.ty.to_string())
+                    .raw("initial", &mc.wire)
+                    .raw("constants", consts)
+                    .finish()
+            })
+            .collect();
         crate::json::Obj::new()
             .str("name", &m.name.text)
             .opt_str("alias", m.name.ascii.as_deref())
@@ -8416,6 +8725,29 @@ impl Gen<'_> {
                 ),
             )
             .raw("constants", constants)
+            .opt_raw("carried", (!more.is_empty()).then(|| crate::json::arr(&more)))
+            .opt_raw(
+                "always",
+                (!m.alwayses.is_empty()).then(|| crate::json::arr(
+                    &m.alwayses
+                        .iter()
+                        .map(|al| {
+                            crate::json::Obj::new()
+                                .raw(
+                                    "tests",
+                                    crate::json::arr(
+                                        &al.tests
+                                            .iter()
+                                            .map(|(n, cell, _)| crate::json::Obj::new().str("input", &n.text).str("cell", &crate::machine::cell_text(cell)).finish())
+                                            .collect::<Vec<_>>(),
+                                    ),
+                                )
+                                .raw("when", crate::json::strs(&al.when.iter().map(|n| n.text.clone()).collect::<Vec<_>>()))
+                                .finish()
+                        })
+                        .collect::<Vec<_>>(),
+                )),
+            )
             .finish()
     }
 
@@ -9453,12 +9785,28 @@ impl<'a> Gen<'a> {
 
         // The machine this function is one step of (§15.148).
         if let Some((en, init, fins)) = self.machine_consts() {
+            // The values carried along with the state, and where a case starts (§15.217).
+            let mut more = String::new();
+            for mc in self.more_carried() {
+                let v = match mc.kind() {
+                    MoreKind::Enum => self.rb_value(&mc.word(), &mc.ty),
+                    MoreKind::Bool => mc.bool_word().to_string(),
+                    MoreKind::Number | MoreKind::Branded => mc.int.to_string(),
+                };
+                more.push_str(&format!("  # {}\n  {} = {v}\n", tr!("持ち越す {} の始まりの値。", "Where the carried {} starts.", mc.input), mc.upper()));
+            }
+            // A machine with no final state has an empty list, and an empty literal has no
+            // element type for `steep` to read: it is made with `Array.new` instead.
+            let finals = if fins.is_empty() {
+                "Array.new(0).freeze".to_string()
+            } else {
+                format!("[{}].freeze", fins.iter().map(|v| self.rb_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "))
+            };
             o.push_str(&format!(
-                "  # {}\n  INITIAL = {}\n  # {}\n  FINAL = [{}].freeze\n\n  # {}\n  def self.final?(state)\n    FINAL.include?(state)\n  end\n\n",
+                "  # {}\n  INITIAL = {}\n  # {}\n  FINAL = {finals}\n{more}\n  # {}\n  def self.final?(state)\n    FINAL.include?(state)\n  end\n\n",
                 tr!("案件が始まる状態。", "The state a case starts in."),
                 self.rb_value(&init, &Ty::Enum(en.clone())),
                 tr!("案件が終わる状態。", "The states a case ends in."),
-                fins.iter().map(|v| self.rb_value(v, &Ty::Enum(en.clone()))).collect::<Vec<_>>().join(", "),
                 tr!("この状態で案件が終わっているか。", "Whether a case in this state has ended.")
             ));
         }
@@ -10016,17 +10364,31 @@ impl<'a> Gen<'a> {
             if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
                 args[k] = format!("(v.key?(\"step\") ? state : {})", args[k]);
             }
-            head = format!("state = {m}::INITIAL\n");
+            // The values carried along with the state (§15.217): a local each, from the
+            // module's constant, read where each trace starts and handed on from the answer.
+            let (mut more_head, mut more_meta, mut more_start, mut more_tail) = (String::new(), Vec::<String>::new(), String::new(), String::new());
+            for mc in self.more_carried() {
+                let local = format!("carried_{}", mc.in_alias);
+                if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == mc.input) {
+                    args[k] = format!("(v.key?(\"step\") ? {local} : {})", args[k]);
+                }
+                more_head.push_str(&format!("{local} = {m}::{}\n", mc.upper()));
+                more_meta.push(format!("{} => {m}::{}", mc.key(), mc.upper()));
+                more_start.push_str(&format!("{local} = {} if v[\"step\"] == \"start\"\n  ", read(&mc.ty, "v[\"carried\"]", &mc.input)));
+                more_tail.push_str(&format!("  {local} = r.{} if v.key?(\"step\")\n", mc.out_alias));
+            }
+            let carried_meta = if more_meta.is_empty() { String::new() } else { format!(", \"carried\" => {{ {} }}", more_meta.join(", ")) };
+            head = format!("state = {m}::INITIAL\n{more_head}");
             body = format!(
                 "v = JSON.parse(line)\n  \
                  if v.key?(\"machine\")\n    \
-                   puts JSON.generate({{ \"initial\" => {m}::INITIAL, \"final\" => {m}::{cls}::ALL.select {{ |s| {m}.final?(s) }} }})\n    \
+                   puts JSON.generate({{ \"initial\" => {m}::INITIAL, \"final\" => {m}::{cls}::ALL.select {{ |s| {m}.final?(s) }}{carried_meta} }})\n    \
                    next\n  \
                  end\n  \
                  d = v[\"in\"]\n  \
-                 state = v[\"state\"] if v[\"step\"] == \"start\"\n  "
+                 state = v[\"state\"] if v[\"step\"] == \"start\"\n  {more_start}"
             );
-            tail = format!("  state = {} if v.key?(\"step\")\n", self.next_state_of("r", &format!(".{out}")));
+            tail = format!("  state = {} if v.key?(\"step\")\n{more_tail}", self.next_state_of("r", &format!(".{out}")));
         }
         format!(
             "# Code generated by rulec {}. DO NOT EDIT.\n\
@@ -10302,7 +10664,9 @@ impl<'a> Gen<'a> {
 
         if let Some((en, _, _)) = self.machine_consts() {
             let t = snake(&self.enum_names.get(&en).cloned().unwrap_or_default());
-            o.push_str(&format!("  INITIAL: {t}\n  FINAL: Array[{t}]\n  def self.final?: ({t}) -> bool\n\n"));
+            // Where each value carried along with the state starts (§15.217).
+            let more: String = self.more_carried().iter().map(|mc| format!("  {}: {}\n", mc.upper(), self.rbs_ty(&mc.ty))).collect();
+            o.push_str(&format!("  INITIAL: {t}\n  FINAL: Array[{t}]\n{more}  def self.final?: ({t}) -> bool\n\n"));
         }
 
         o.push_str(
@@ -10879,8 +11243,24 @@ impl<'a> Gen<'a> {
         // The machine this function is one step of (§15.148). `final` is a keyword here.
         if let Some((en, init, fins)) = self.machine_consts() {
             let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            // The values carried along with the state, and where a case starts (§15.217).
+            let mut more = String::new();
+            for mc in self.more_carried() {
+                let v = match mc.kind() {
+                    MoreKind::Enum => self.sw_value(&mc.word(), &mc.ty),
+                    MoreKind::Bool => mc.bool_word().to_string(),
+                    MoreKind::Number => mc.int.to_string(),
+                    MoreKind::Branded => format!("{}({})", self.sw_ty(&mc.ty), mc.int),
+                };
+                more.push_str(&format!(
+                    "/// {}\npublic let {}: {} = {v}\n",
+                    tr!("持ち越す {} の始まりの値。", "Where the carried {} starts.", mc.input),
+                    mc.swift(),
+                    self.sw_ty(&mc.ty)
+                ));
+            }
             o.push_str(&format!(
-                "/// {}\npublic let initialState: {cls} = {}\n/// {}\npublic let finalStates: Set<{cls}> = [{}]\n\n\
+                "/// {}\npublic let initialState: {cls} = {}\n/// {}\npublic let finalStates: Set<{cls}> = [{}]\n{more}\n\
                  /// {}\npublic func isFinal(_ state: {cls}) -> Bool {{\n    finalStates.contains(state)\n}}\n\n",
                 tr!("案件が始まる状態。", "The state a case starts in."),
                 self.sw_value(&init, &Ty::Enum(en.clone())),
@@ -11523,9 +11903,17 @@ impl<'a> Gen<'a> {
             let v = read(&ty, &d, &i.name.text);
             let local = runner_local(&format!("a{}", args.len()), &fname);
             // A machine's traces (§15.148): the carried input is the state this language
-            // answered to the call before, handed over as the value it is.
+            // answered to the call before, handed over as the value it is — and so is each
+            // value carried along with it (§15.217).
+            let more_local = self
+                .more_carried()
+                .into_iter()
+                .find(|mc| mc.input == i.name.text && self.machine_consts().is_some())
+                .map(|mc| runner_local(&format!("carried_{}", mc.in_alias), &fname));
             let v = if self.carried().map(|(c, _)| c) == Some(i.name.text.clone()) {
                 format!("{stepping} ? {state} : {v}")
+            } else if let Some(local) = more_local {
+                format!("{stepping} ? {local} : {v}")
             } else {
                 v
             };
@@ -11555,17 +11943,34 @@ impl<'a> Gen<'a> {
         let (mut head, mut meta, mut tail) = (String::new(), String::new(), String::new());
         if let (Some((en, _, _)), Some(out)) = (self.machine_consts(), self.carried_out_alias()) {
             let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
-            head = format!("        var {state}: {cls} = initialState\n");
+            // The values carried along with the state (§15.217): a local each, from the
+            // module's constant, read where each trace starts and handed on from the answer.
+            let (mut more_head, mut more_meta, mut more_start, mut more_tail) = (String::new(), Vec::<String>::new(), String::new(), String::new());
+            for mc in self.more_carried() {
+                let local = runner_local(&format!("carried_{}", mc.in_alias), &fname);
+                more_head.push_str(&format!("        var {local}: {} = {}\n", self.sw_ty(&mc.ty), mc.swift()));
+                let key = mc.key().replace('\\', "\\\\").replace('"', "\\\"");
+                let shown = match mc.kind() {
+                    MoreKind::Enum => format!("\\\"\\({}.rawValue)\\\"", mc.swift()),
+                    MoreKind::Branded => format!("\\({}.value)", mc.swift()),
+                    _ => format!("\\({})", mc.swift()),
+                };
+                more_meta.push(format!("{key}:{shown}"));
+                more_start.push_str(&format!("                {local} = try {}\n", read(&mc.ty, &format!("{root}[\"carried\"]"), &mc.input)));
+                more_tail.push_str(&format!("                    {local} = {got}.{}\n", sw_name(&mc.out_alias)));
+            }
+            let carried_meta = if more_meta.is_empty() { String::new() } else { format!(",\\\"carried\\\":{{{}}}", more_meta.join(",")) };
+            head = format!("        var {state}: {cls} = initialState\n{more_head}");
             meta = format!(
                 "            if {root}[\"machine\"] != nil {{\n                \
                  let fin = {cls}.allCases.filter {{ isFinal($0) }}.map {{ \"\\\"\\($0.rawValue)\\\"\" }}.joined(separator: \",\")\n                \
-                 print(\"{{\\\"initial\\\":\\\"\\(initialState.rawValue)\\\",\\\"final\\\":[\\(fin)]}}\")\n                \
+                 print(\"{{\\\"initial\\\":\\\"\\(initialState.rawValue)\\\",\\\"final\\\":[\\(fin)]{carried_meta}}}\")\n                \
                  continue\n            }}\n"
             );
-            tail = format!("                if {stepping} {{\n                    {state} = {}\n                }}\n", self.next_state_of(&got, &format!(".{}", sw_name(&out))));
+            tail = format!("                if {stepping} {{\n                    {state} = {}\n{more_tail}                }}\n", self.next_state_of(&got, &format!(".{}", sw_name(&out))));
             meta.push_str(&format!(
                 "            let {stepping} = {root}[\"step\"] != nil\n            \
-                 if ({root}[\"step\"] as? String) == \"start\" {{\n                {state} = {cls}(rawValue: {root}[\"state\"] as! String)!\n            }}\n"
+                 if ({root}[\"step\"] as? String) == \"start\" {{\n                {state} = {cls}(rawValue: {root}[\"state\"] as! String)!\n{more_start}            }}\n"
             ));
         }
         format!(

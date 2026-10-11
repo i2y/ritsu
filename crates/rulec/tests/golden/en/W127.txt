@@ -1,0 +1,8 @@
+warning[W127]: The machine's claim could not be settled: a final state can be reached from every state a case reaches
+  --> tests/mutants/m_w127.rule:35 machine subscription
+   |
+35 |   final   suspended
+   |   ^^^^^^^^^^^^^^^^^
+   |
+ the carried numbers were walked in intervals, and that calls which really happen take a case to a final state is not followed there
+ What was not settled is not said to hold. Where every value of the carried numbers fits the budget one by one, they are walked that way and the claim is settled: raise `--budget`, or narrow their ranges.

@@ -366,6 +366,25 @@ awk '{ print } END { print ""; print "table 壊れ物の料金(fragile_fee)"; pr
 # its rule, so the path to the file that is there is written from here.
 awk '/^import enum category / { sub(/"shared\/catalog.rule"/, "\"../corpus/shared/catalogue.rule\"") } { sub(/"shared\/catalog.rule"/, "\"../corpus/shared/catalog.rule\""); print }' "$C/catalog_shipping.rule" > "$M/m_e013enum.rule"
 awk '/^import enum 種類 / { sub(/"shared\/品目.rule"/, "\"../corpus/shared/品目一覧.rule\"") } { sub(/"shared\/品目.rule"/, "\"../corpus/shared/品目.rule\""); print }' "$C/品目の送料.rule" > "$M/m_e013enumja.rule"
+# --- A machine that carries more than its state (§15.217): the shape of a carried value, a
+# count that runs past its range, an `always` line a revision breaks, and a range so wide the
+# numbers are walked in intervals. Each in English and in Japanese.
+r="$C/retry_attempts.rule"
+rj="$C/再試行の回数.rule"
+g="$C/grace_period.rule"
+gj="$C/猶予の残り日数.rule"
+# A carried count with no value to start at
+awk '!/^  initial attempts 0$/ { print }'                                              "$r"  > "$M/m_e072.rule"
+awk '!/^  initial 試行回数 0$/ { print }'                                               "$rj" > "$M/m_e072ja.rule"
+# A third decline that keeps the charge pending: the next one counts past three
+awk '{ sub(/^\| pending   \| declined \| >=2      \| given_up /, "| pending   | declined | >=2      | pending  "); print }' "$r" > "$M/m_e134.rule"
+awk '{ sub(/^\| 未回収 \| 拒否 \| >=2      \| 断念   /, "| 未回収 | 拒否 | >=2      | 未回収 "); print }'        "$rj" > "$M/m_e134ja.rule"
+# The third decline gives up without counting itself
+awk '/^\| pending   \| declined \| >=2 / { sub(/\| made          \|/, "| attempts      |") } { print }' "$r" > "$M/m_e135.rule"
+awk '/^\| 未回収 \| 拒否 \| >=2 / { sub(/\| 今回までの回数 \|/, "| 試行回数       |") } { print }'  "$rj" > "$M/m_e135ja.rule"
+# Days of grace counted up to ten million: past the budget one by one, so walked in intervals
+awk '{ sub(/range >=0 <=7  #/, "range >=0 <=10_000_000  #"); print }'                      "$g"  > "$M/m_w127.rule"
+awk '{ sub(/range >=0 <=7  #/, "range >=0 <=10_000_000  #"); print }'                      "$gj" > "$M/m_w127ja.rule"
 
 for m in "$M"/m_*.rule; do "$RULEC" fmt "$m" >/dev/null; done
 

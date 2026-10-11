@@ -103,6 +103,9 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/経済的発注量.rule", "order_lot"),
     ("tests/corpus/割り当ての申し込み.rule", "quota_left"),
     ("tests/corpus/乱数で決める一回.rule", "one_round"),
+    ("tests/corpus/再試行の回数.rule", "retry_count"),
+    ("tests/corpus/猶予の残り日数.rule", "grace_days"),
+    ("tests/corpus/一度だけの特典.rule", "one_time_trial"),
     // The twins of the rules written with Japanese names: the same rules with English names
     // (tests/corpus/twins.tsv). Their aliases differ from the originals', which is why they can be
     // generated into the same directory.
@@ -158,6 +161,9 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/catalog_returns.rule", "catalog_returns"),
     ("tests/corpus/品目の送料.rule", "goods_shipping"),
     ("tests/corpus/品目の返品.rule", "goods_returns"),
+    ("tests/corpus/retry_attempts.rule", "retry_attempts"),
+    ("tests/corpus/grace_period.rule", "grace_period"),
+    ("tests/corpus/one_time_perk.rule", "one_time_perk"),
 ];
 
 #[test]

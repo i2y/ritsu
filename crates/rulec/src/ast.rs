@@ -304,14 +304,19 @@ pub fn ranked_holds(order: &[String], ops: &[(CmpOp, String)], v: &str) -> bool 
     })
 }
 
-/// A cell written back, for the one place outside the generator that has to quote one.
-pub fn cell_text(c: &Cell) -> String {
-    let lit = |l: &Lit| match l {
+/// A literal written back as it was written: `16`, `3000円`, `true`, `"A"`.
+pub fn lit_text(l: &Lit) -> String {
+    match l {
         Lit::Num(n) => n.raw.clone(),
         Lit::Word(w) => w.clone(),
         Lit::Str(s) => format!("{s:?}"),
         Lit::Date(y, m, d) => format!("{y:04}-{m:02}-{d:02}"),
-    };
+    }
+}
+
+/// A cell written back, for the one place outside the generator that has to quote one.
+pub fn cell_text(c: &Cell) -> String {
+    let lit = lit_text;
     match c {
         Cell::DontCare => "-".into(),
         Cell::Nothing => crate::kw::NONE.into(),
@@ -799,6 +804,18 @@ pub struct OnceDecl {
     pub span: Span,
 }
 
+/// `always 残り日数 >=1 <=7 when 猶予中, 督促中` (§15.217): in every state a case can reach — every
+/// one whose state is on the `when` list, when there is one — each carried value the line
+/// names is one its cell accepts.
+#[derive(Debug, Clone)]
+pub struct AlwaysDecl {
+    /// `<carried input> <cell>`, joined by `and`: the name, the cell, and where the cell is.
+    pub tests: Vec<(Name, Cell, Span)>,
+    /// The states the line speaks of; empty for all of them.
+    pub when: Vec<Name>,
+    pub span: Span,
+}
+
 /// `machine 注文(order) over 遷移` and the lines under it (§15.148).
 ///
 /// The rule is one step of a state machine. `carry` names the output that comes back as an
@@ -807,19 +824,29 @@ pub struct OnceDecl {
 /// lives where it always did, with the host (§5.4). What the section adds is claims about
 /// every sequence of calls, and those are decidable for the same reason a table is: the state
 /// is a finite enum, and the tables cut every other input into finitely many classes.
+///
+/// The first `carry` line is the state. Further lines carry a number with a range, a boolean
+/// or another enum along with it (§15.217): what a case is in is then the state together with
+/// those values, which stay finitely many because the number has a range.
 #[derive(Debug, Clone)]
 pub struct MachineDecl {
     pub name: Name,
     /// The table that decides the carried output: its rows are the transitions.
     pub over: Option<Name>,
-    /// `carry <input> -> <output>`, with where the line is.
+    /// `carry <input> -> <output>`, with where the line is: the first line, the state.
     pub carry: Option<(Name, Name, Span)>,
+    /// The `carry` lines after the first (§15.217), in the order written.
+    pub carries: Vec<(Name, Name, Span)>,
     pub initial: Option<(Name, Span)>,
+    /// `initial <carried input> <value>`: where each further carried value starts (§15.217).
+    pub initials: Vec<(Name, Lit, Span)>,
     pub finals: Vec<Name>,
     /// Where the `final` line is, when there is one.
     pub final_span: Option<Span>,
     pub nevers: Vec<NeverDecl>,
     pub onces: Vec<OnceDecl>,
+    /// The `always` lines (§15.217).
+    pub alwayses: Vec<AlwaysDecl>,
     /// `held <input>, …`: the inputs a case holds from its first call to its last, and where
     /// the line is (§15.149).
     pub held: Vec<Name>,
@@ -831,6 +858,11 @@ impl MachineDecl {
     /// The carried input and output, when the `carry` line was read.
     pub fn carried(&self) -> Option<(&str, &str)> {
         self.carry.as_ref().map(|(i, o, _)| (i.text.as_str(), o.text.as_str()))
+    }
+
+    /// The further carried inputs and outputs (§15.217), in the order written.
+    pub fn more(&self) -> Vec<(&str, &str)> {
+        self.carries.iter().map(|(i, o, _)| (i.text.as_str(), o.text.as_str())).collect()
     }
 }
 

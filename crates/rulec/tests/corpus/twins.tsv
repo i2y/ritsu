@@ -51,3 +51,6 @@ Claude利用料.rule	claude_api_usage_fee.rule
 プランの領収書.rule	plan_receipt.rule
 品目の送料.rule	catalog_shipping.rule
 品目の返品.rule	catalog_returns.rule
+再試行の回数.rule	retry_attempts.rule
+猶予の残り日数.rule	grace_period.rule
+一度だけの特典.rule	one_time_perk.rule

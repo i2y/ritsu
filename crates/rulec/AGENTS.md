@@ -91,8 +91,12 @@ A few shapes are worth knowing before the first draft:
   says which output the caller passes back as which input (`carry`), which inputs a case holds
   (`held`), where it starts and ends, and what no sequence of calls may do; `check` proves that
   over every sequence (E124–E127) with the shortest breaking one in `witness.trace`, and
-  `scenario` is an example several calls long (§6.4). With two versions, `diff` names the states
-  a case in progress would be stranded in.
+  `scenario` is an example several calls long (§6.4). A further `carry` line carries a number
+  with both ends of its range, a truth value or another enum along with the state, each starting
+  where its `initial <input> <value>` says (E072); `always <input> <cell> when <state>` says what
+  those values are in the states named (E135), and a call that answers a carried number outside
+  its range is E134. With two versions, `diff` names the states a case in progress would be
+  stranded in.
 - **A main rule and its special case are two tables, or a table and a clause.** Several
   tables may define the same output, each transcribed from its own source, and the one that
   takes precedence says so with `overrides <table>` right after `policy` (`overrides base:r3`

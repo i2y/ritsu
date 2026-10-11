@@ -1,0 +1,7 @@
+error[E072]: The `initial` line does not fit the declarations: attempts has no value to start at
+  --> tests/mutants/m_e072.rule:29 machine collection
+   |
+29 |   carry   attempts -> next_attempts
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ Give every carried value the value it starts at (`initial attempts <value>`): what the first call of a case is passed.

@@ -816,6 +816,21 @@ fn transition_label(f: &RuleFile, lines: &[&str], table: &str, row: usize, carri
     }
 }
 
+/// What a machine that carries more than its state holds in each state a case reaches
+/// (§15.217): per state, one `name values` text per carried value — `days_left 1..7`. Empty
+/// for a machine that carries only its state, or a state no case reaches.
+pub fn carried_ranges(a: &crate::machine::Analysis, state: &str) -> Vec<String> {
+    if a.more.is_empty() {
+        return Vec::new();
+    }
+    (0..a.more.len())
+        .filter_map(|k| {
+            let cs: std::collections::BTreeSet<usize> = a.nodes.iter().filter(|n| n.0 == state).map(|n| n.2[k]).collect();
+            (!cs.is_empty()).then(|| format!("{} {}", a.more[k].input, a.values_text(k, &cs)))
+        })
+        .collect()
+}
+
 /// The states and the moves between them, as Mermaid draws them: a diagram GitHub renders in
 /// the pull request the page is pasted into. A call that leaves the state where it is draws
 /// no arrow — the table of moves below lists those.
@@ -855,6 +870,13 @@ pub fn machine_mermaid(f: &RuleFile, a: &crate::machine::Analysis, lines: &[&str
     for s in &a.finals {
         o.push_str(&format!("  {} --> [*]\n", id(s)));
     }
+    // What each state holds besides itself (§15.217), beside it.
+    for s in &a.states {
+        let held = carried_ranges(a, s);
+        if !held.is_empty() {
+            o.push_str(&format!("  note right of {} : {}\n", id(s), held.join(" / ").replace(':', "：")));
+        }
+    }
     o.push_str("```\n");
     o
 }
@@ -889,8 +911,11 @@ pub fn machine_svg(f: &RuleFile, a: &crate::machine::Analysis, lines: &[&str]) -
     }
     let nrows = depth.values().copied().max().unwrap_or(0) + 1;
     let wide = |s: &str| (crate::diag::width(s) * 7 + 28).max(64) as i64;
-    let node_w = a.states.iter().map(|s| wide(s)).max().unwrap_or(64);
-    let (node_h, gap_x, row_h, top, left) = (34i64, 64i64, 96i64, 34i64, 24i64);
+    // A machine that carries more than its state shows what each state holds under its name
+    // (§15.217), so the box is a line taller.
+    let held: std::collections::BTreeMap<String, String> = a.states.iter().map(|s| (s.clone(), carried_ranges(a, s).join(" / "))).collect();
+    let node_w = a.states.iter().map(|s| wide(s).max(wide(&held[s]))).max().unwrap_or(64);
+    let (node_h, gap_x, row_h, top, left) = (if a.more.is_empty() { 34i64 } else { 50i64 }, 64i64, 96i64, 34i64, 24i64);
     let mut pos: std::collections::BTreeMap<String, (i64, i64, i64)> = std::collections::BTreeMap::new();
     let mut per_row = vec![0i64; nrows];
     for s in &a.states {
@@ -954,12 +979,26 @@ pub fn machine_svg(f: &RuleFile, a: &crate::machine::Analysis, lines: &[&str]) -
     for s in &a.states {
         let (x, y, w) = pos[s];
         let fin = a.finals.contains(s);
+        let (name_y, more_text) = if a.more.is_empty() {
+            (y + node_h / 2 + 5, String::new())
+        } else {
+            (
+                y + node_h / 2 - 3,
+                // Styled where it stands, so the page's own sheet stays the same for every rule.
+                format!(
+                    "<text x=\"{}\" y=\"{}\" text-anchor=\"middle\" style=\"fill: var(--rc-dim); font-size: 11px\">{}</text>",
+                    x + w / 2,
+                    y + node_h / 2 + 13,
+                    esc(&held[s])
+                ),
+            )
+        };
         body.push_str(&format!(
-            "<g class=\"st\" data-state=\"{}\"><rect class=\"box\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{node_h}\" rx=\"8\"/>{}<text x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text></g>\n",
+            "<g class=\"st\" data-state=\"{}\"><rect class=\"box\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{node_h}\" rx=\"8\"/>{}<text x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text>{more_text}</g>\n",
             esc(s),
             if fin { format!("<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"6\" style=\"fill: none\"/>", x + 3, y + 3, w - 6, node_h - 6) } else { String::new() },
             x + w / 2,
-            y + node_h / 2 + 5,
+            name_y,
             esc(s)
         ));
     }
@@ -1007,6 +1046,28 @@ fn machine_section(f: &RuleFile, c: &Checked, lines: &[&str]) -> String {
         md_esc(&a.initial),
         md_esc(&if a.finals.is_empty() { tr!("（宣言なし）", "(none declared)") } else { a.finals.join(&tr!("、", ", ")) })
     ));
+    // The values carried along with the state (§15.217): what each is, and where it starts.
+    if !a.more.is_empty() {
+        o.push_str(&tr!(
+            "状態のほかに、次の値も呼び出しから次の呼び出しへ持ち越します。呼び出しのたびに今の値を受け取り、次の値を返します。覚えておくのは、これも呼び出す側です。\n\n| 持ち越す値（入力 → 出力） | 型 | 範囲 | 始まり |\n|---|---|---|---|\n",
+            "Besides the state, these values are carried from one call to the next: every call is passed their values and answers the next ones, and it is the caller that keeps them too.\n\n| Carried value (input → output) | Type | Range | Starts at |\n|---|---|---|---|\n"
+        ));
+        for it in &a.more {
+            let range = match it.range {
+                Some((lo, hi)) => format!(">={} <={}", crate::types::fmt_val(lo, &it.ty), crate::types::fmt_val(hi, &it.ty)),
+                None => "-".into(),
+            };
+            o.push_str(&format!(
+                "| {} → {} | {} | {} | {} |\n",
+                md_esc(&it.input),
+                md_esc(&it.output),
+                md_esc(&it.ty.to_string()),
+                md_esc(&range),
+                md_esc(&it.initial.show(&it.ty))
+            ));
+        }
+        o.push('\n');
+    }
     if !m.held.is_empty() {
         let names: Vec<String> = m.held.iter().map(|n| md_esc(&n.text)).collect();
         o.push_str(&tr!(
@@ -1023,6 +1084,31 @@ fn machine_section(f: &RuleFile, c: &Checked, lines: &[&str]) -> String {
         return o;
     }
     o.push_str(&machine_mermaid(f, &a, lines));
+
+    // What each state holds besides itself (§15.217).
+    if !a.more.is_empty() {
+        o.push_str(&tr!(
+            "\n### 状態ごとの持ち越す値\n\n",
+            "\n### What each state carries\n\n"
+        ));
+        if !a.whole {
+            o.push_str(&tr!(
+                "持ち越す数を区間にまとめて調べたので、ここに載せた値は、案件がとりうる値を含む範囲です（実際より広いことがあります）。\n\n",
+                "The carried numbers were walked in intervals, so the values here are ranges that hold the ones a case can take, and may be wider.\n\n"
+            ));
+        }
+        let names: Vec<String> = a.more.iter().map(|it| md_esc(&it.input)).collect();
+        o.push_str(&format!("| {} | {} |\n|---|{}\n", tr!("状態", "State"), names.join(" | "), "---|".repeat(names.len())));
+        for st in a.states.iter().filter(|x| a.reachable.contains(x)) {
+            let cells: Vec<String> = (0..a.more.len())
+                .map(|k| {
+                    let cs: std::collections::BTreeSet<usize> = a.nodes.iter().filter(|n| &n.0 == st).map(|n| n.2[k]).collect();
+                    md_esc(&a.values_text(k, &cs))
+                })
+                .collect();
+            o.push_str(&format!("| {} | {} |\n", md_esc(st), cells.join(" | ")));
+        }
+    }
 
     // The moves, state by state.
     o.push_str(&tr!(
@@ -1056,12 +1142,21 @@ fn machine_section(f: &RuleFile, c: &Checked, lines: &[&str]) -> String {
     ));
     let unreachable: Vec<String> = a.states.iter().filter(|s| !a.reachable.contains(s)).cloned().collect();
     if a.exact {
-        o.push_str(&tr!(
-            "- {} から着ける状態は {} です。",
-            "- From {} a case can reach {}.",
-            a.initial,
-            a.states.iter().filter(|s| a.reachable.contains(s)).cloned().collect::<Vec<_>>().join(&tr!("・", ", "))
-        ));
+        o.push_str(&if a.whole {
+            tr!(
+                "- {} から着ける状態は {} です。",
+                "- From {} a case can reach {}.",
+                a.initial,
+                a.states.iter().filter(|s| a.reachable.contains(s)).cloned().collect::<Vec<_>>().join(&tr!("・", ", "))
+            )
+        } else {
+            tr!(
+                "- {} から着ける状態は、多くとも {} です（持ち越す数を区間にまとめて調べました）。",
+                "- From {} a case can reach at most {} (the carried numbers were walked in intervals).",
+                a.initial,
+                a.states.iter().filter(|s| a.reachable.contains(s)).cloned().collect::<Vec<_>>().join(&tr!("・", ", "))
+            )
+        });
         if unreachable.is_empty() {
             o.push_str(&tr!("すべての状態に着けます。\n", " Every state is reached.\n"));
         } else {
@@ -1095,6 +1190,11 @@ fn machine_section(f: &RuleFile, c: &Checked, lines: &[&str]) -> String {
             open
         }
     };
+    // Whether a case can still finish, when the numbers were walked in intervals: not followed.
+    let finish_claims: Vec<(String, crate::machine::Verdict)> = match &a.finish_open {
+        Some(why) => vec![(String::new(), crate::machine::Verdict::Undecided(why.clone()))],
+        None => a.finish_claims.clone(),
+    };
     if !a.finals.is_empty() {
         o.push_str(&format!(
             "- {}\n",
@@ -1108,7 +1208,7 @@ fn machine_section(f: &RuleFile, c: &Checked, lines: &[&str]) -> String {
         o.push_str(&format!(
             "- {}\n",
             summary(
-                &a.finish_claims,
+                &finish_claims,
                 tr!("どの状態に着いても、終わりの状態へ行く手順が残っています。", "Whatever state a case reaches, a way to a final state remains."),
                 tr!("終わりの状態に着けなくなる状態があります（E125）。", "A case can reach a state it can never finish from (E125)."),
                 tr!("どの状態からも終わりの状態へ行けるかは、決めきれませんでした（W127）。", "Whether a case can get to a final state from every state it reaches could not be settled (W127)."),
@@ -1138,6 +1238,45 @@ fn machine_section(f: &RuleFile, c: &Checked, lines: &[&str]) -> String {
             )
         ));
     }
+    // `always`, and that a carried number stays within its range (§15.217).
+    for (al, v) in m.alwayses.iter().zip(&a.always_claims) {
+        let text = crate::machine::always_text(al);
+        let states = if al.when.is_empty() {
+            tr!("案件が着けるどの状態でも", "in every state a case can reach")
+        } else {
+            tr!("{} にあるときはいつも", "whenever a case is in {}", al.when.iter().map(|n| n.text.clone()).collect::<Vec<_>>().join(&tr!("・", " or ")))
+        };
+        // A value is said as one (`attempts is 3`), a comparison as it is written.
+        let tests: Vec<String> = al
+            .tests
+            .iter()
+            .map(|(n, cell, _)| {
+                let text = crate::machine::cell_text(cell);
+                match cell {
+                    crate::ast::Cell::Lit(_) | crate::ast::Cell::Set(_) => tr!("{} は {}", "{} is {}", n.text, text),
+                    crate::ast::Cell::Not(_) => tr!("{} は {} ではない", "{} is not {}", n.text, text.trim_start_matches("not:").trim()),
+                    _ => format!("{} {text}", n.text),
+                }
+            })
+            .collect();
+        o.push_str(&format!(
+            "- `{} {}`: {}\n",
+            crate::kw::ALWAYS,
+            md_esc(&text),
+            verdict(v, tr!("{states}、{} です。", "{states}, {}.", tests.join(&tr!("、かつ ", " and "))), tr!("破れています（E135）。", "broken (E135)."))
+        ));
+    }
+    for (input, v) in &a.range_claims {
+        let Some(it) = a.more.iter().find(|it| &it.input == input) else { continue };
+        o.push_str(&format!(
+            "- {}\n",
+            verdict(
+                v,
+                tr!("{} が返す値は、どれも {} の範囲に収まります。", "Every value {} answers lies within the range of {}.", it.output, it.input),
+                tr!("{} が {} の範囲を出る呼び出しがあります（E134）。", "A call answers {} outside the range of {} (E134).", it.output, it.input)
+            )
+        ));
+    }
 
     // The scenarios, with the state each call started in.
     if !f.scenarios.is_empty() {
@@ -1146,17 +1285,24 @@ fn machine_section(f: &RuleFile, c: &Checked, lines: &[&str]) -> String {
             o.push_str(&format!("**{}**\n\n", md_esc(&sc.name.text)));
             let Some(first) = sc.table.rows.first() else { continue };
             let Some(h) = header_line(lines, first.span.line.saturating_sub(1)) else { continue };
-            let mut head: Vec<String> = vec![cin.clone()];
+            // The state each call starts in, and the values carried along with it (§15.217).
+            let carried: Vec<String> = std::iter::once(cin.clone()).chain(a.more.iter().map(|it| it.input.clone())).collect();
+            let mut head: Vec<String> = carried.clone();
             head.extend(source_cells(lines, h).into_iter().map(|c| c.replacen("->", "→", 1)));
             let run = crate::machine::run_scenario(f, c, sc);
             let mut rows: Vec<Vec<String>> = Vec::new();
             for (k, r) in sc.table.rows.iter().enumerate() {
-                let state = run
-                    .as_ref()
-                    .and_then(|x| x.calls.get(k))
-                    .and_then(|(env, _, _)| env.get(&cin).map(crate::vectors::show))
-                    .unwrap_or_default();
-                let mut row = vec![state];
+                let mut row: Vec<String> = carried
+                    .iter()
+                    .map(|n| {
+                        run.as_ref()
+                            .and_then(|x| x.calls.get(k))
+                            .and_then(|(env, _, _)| {
+                                env.get(n).map(|v| if *n == cin { crate::vectors::show(v) } else { v.show(&c.ty_of(n).unwrap_or(crate::types::Ty::Unknown)) })
+                            })
+                            .unwrap_or_default()
+                    })
+                    .collect();
                 row.extend(source_cells(lines, r.span.line));
                 rows.push(row);
             }
@@ -2180,13 +2326,24 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
     if f.machine.is_some() {
         if let Some(a) = crate::machine::analyze(f, c, crate::region::DEFAULT_BUDGET as usize).filter(|a| a.blocked.is_none() && !a.over_budget) {
             o.push_str(&tr!(
-                "\n## 状態の移り方\n\n始まりは **{}** です。{}\n\n| 状態 | 次のときに移ります |\n|---|---|\n",
-                "\n## How it moves on\n\nIt starts as **{}**. {}\n\n| State | Moves on when |\n|---|---|\n",
+                "\n## 状態の移り方\n\n始まりは **{}** です。{}{}\n\n| 状態 | 次のときに移ります |\n|---|---|\n",
+                "\n## How it moves on\n\nIt starts as **{}**. {}{}\n\n| State | Moves on when |\n|---|---|\n",
                 md_esc(&a.initial),
                 if a.finals.is_empty() {
                     String::new()
                 } else {
                     tr!("**{}** になったら、それ以上は変わりません。", "Once it is **{}**, nothing changes it any more.", md_esc(&a.finals.join(&tr!("・", " or "))))
+                },
+                // What it holds besides its state, and where each starts (§15.217).
+                if a.more.is_empty() {
+                    String::new()
+                } else {
+                    tr!(
+                        "\n\n状態のほかに {} を持ち越し、始まりは {} です。",
+                        "\n\nBesides its state it carries {}, starting at {}.",
+                        a.more.iter().map(|it| it.input.clone()).collect::<Vec<_>>().join(&tr!("・", ", ")),
+                        a.more.iter().map(|it| format!("{} = {}", it.input, it.initial.show(&it.ty))).collect::<Vec<_>>().join(&tr!("、", ", "))
+                    )
                 }
             ));
             for st in a.states.iter().filter(|x| a.reachable.contains(x)) {
@@ -2773,6 +2930,10 @@ pub fn render_html_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown
     let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
     script.push_str(&format!("const FN = {{ run: {alias}_traced, record: {alias}_record }};\n"));
     script.push_str(PAGE_JS);
+    // A machine that carries more than its state (§15.217) puts those values back too.
+    if f.machine.as_ref().is_some_and(|m| !m.carries.is_empty()) {
+        script.push_str(PAGE_MORE_JS);
+    }
     // The board (§15.118). It is built out of the document above, so a reader with no
     // script still has the document — this only rearranges it.
     script.push_str(&format!("\nconst GRAPH = {};\n", crate::graph::data_json(f, c, src)));
@@ -2949,7 +3110,23 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
         let alias = |n: &str, list: &[crate::ast::VarDecl]| list.iter().find(|d| d.name.text == n).map(|d| crate::codegen::pub_name_of(&d.name));
         let out_alias = f.outputs.iter().find(|d| d.name.text == cout).map(|d| crate::codegen::pub_name_of(&d.name));
         if let (Some(i), Some(o2)) = (alias(cin, &f.inputs), out_alias) {
-            o = o.raw("machine", Obj::new().str("in", &i).str("out", &o2).finish());
+            // And the fields each value carried along with the state goes back into (§15.217).
+            let more: Vec<String> = f
+                .machine
+                .as_ref()
+                .map(|m| m.more())
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|(mi, mo)| {
+                    let a = alias(mi, &f.inputs)?;
+                    let b = f.outputs.iter().find(|d| d.name.text == *mo).map(|d| crate::codegen::pub_name_of(&d.name))?;
+                    Some(Obj::new().str("in", &a).str("out", &b).finish())
+                })
+                .collect();
+            o = o.raw(
+                "machine",
+                Obj::new().str("in", &i).str("out", &o2).opt_raw("more", (!more.is_empty()).then(|| crate::json::arr(&more))).finish(),
+            );
         }
     }
     o.finish()
@@ -2975,6 +3152,28 @@ fn seq_json(f: &RuleFile, c: &Checked, name: &str) -> Option<String> {
 }
 
 /// The script that drives the panel. It knows nothing about the rule beyond `RULE`.
+/// The values a machine carries along with its state (§15.217), put back into their fields when
+/// the call is made again from the answer. Only a page of such a machine has it: the answer's
+/// values are kept when the state is, and set before the button's own handler makes the call —
+/// a listener on the row of buttons, which hears the click first.
+const PAGE_MORE_JS: &str = r##"
+{
+  const stepAlone = machineStep;
+  let heldMore = [];
+  machineStep = (out) => {
+    stepAlone(out);
+    heldMore = (RULE.machine.more || []).map((m) => out[m.out]);
+  };
+  buttons.addEventListener("click", (e) => {
+    if (e.target !== next || carried === null) return;
+    (RULE.machine.more || []).forEach((m, k) => {
+      const inp = RULE.inputs.find((i) => i.alias === m.in);
+      if (inp && heldMore[k] !== undefined) fromWire(inp, form.elements[inp.alias], String(heldMore[k]));
+    });
+  }, true);
+}
+"##;
+
 const PAGE_JS: &str = r##"
 const $ = (s) => document.querySelector(s);
 const form = $("#try-form");

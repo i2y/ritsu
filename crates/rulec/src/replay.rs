@@ -357,6 +357,9 @@ pub fn cases(
     let m = f.machine.as_ref()?;
     let (cin, cout) = m.carried()?;
     let a = crate::machine::analyze(f, c, crate::region::DEFAULT_BUDGET as usize)?;
+    // The values carried along with the state (§15.217): each later call is passed what `now`
+    // answered for them too.
+    let more: Vec<(String, String)> = a.more.iter().map(|it| (it.input.clone(), it.output.clone())).collect();
     // Whether a case can still finish depends on the world it is in: the coordinates of its
     // `held` inputs (§15.149).
     let can_finish = a.can_finish();
@@ -396,6 +399,7 @@ pub fn cases(
         let refused = refused_at.get(tag).copied();
         let recs: &[&crate::fixtures::Record] = by.get(tag).map(|v| v.as_slice()).unwrap_or(&[]);
         let mut state: Option<crate::eval::Val> = None;
+        let mut held_more: Vec<crate::eval::Val> = Vec::new();
         let mut parted: Option<usize> = None;
         let mut refused = refused;
         let mut kept: Option<Vec<Option<crate::eval::Val>>> = None;
@@ -423,6 +427,12 @@ pub fn cases(
                     parted = Some(r.line);
                 }
                 ins.insert(cin.to_string(), st.clone());
+                for ((i, _), v) in more.iter().zip(&held_more) {
+                    if ins.get(i) != Some(v) && parted.is_none() {
+                        parted = Some(r.line);
+                    }
+                    ins.insert(i.clone(), v.clone());
+                }
             }
             let call = match take(r, &ins) {
                 Call::Take(call) => call,
@@ -440,6 +450,11 @@ pub fn cases(
                 parted = Some(r.line);
             }
             state = outs.iter().find(|(n, _)| n == cout).and_then(|(_, v)| v.clone());
+            let next_more: Option<Vec<crate::eval::Val>> = more.iter().map(|(_, o)| outs.iter().find(|(n, _)| n == o).and_then(|(_, v)| v.clone())).collect();
+            match next_more {
+                Some(nm) => held_more = nm,
+                None => state = None,
+            }
             if state.is_none() {
                 break;
             }
@@ -459,7 +474,7 @@ pub fn cases(
             let world = first.as_ref().and_then(|i| a.world_of(|n| i.get(n)));
             if a.finals.contains(last) {
                 cs.ended += 1;
-            } else if !a.finals.is_empty() && world.is_some_and(|w| !can_finish.contains(&(last.clone(), w))) {
+            } else if !a.finals.is_empty() && world.is_some_and(|w| a.stuck_at(&can_finish, last, &w, &held_more)) {
                 cs.stranded.push((tag.clone(), last.clone()));
             }
         }

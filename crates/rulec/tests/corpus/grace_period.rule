@@ -1,0 +1,63 @@
+rule grace_period v1
+description "How an overdue subscription moves through a grace period of seven days before it is suspended: a missed payment opens the grace period, each day that passes takes one day off it, a payment in time brings the subscription back, and a grace period that runs out suspends it. The caller keeps the status and the days left; the rule decides one event. An example written for the purpose"
+
+enum subscription = active | in_grace | suspended
+enum happening = payment_missed | day_passed | payment_received
+
+inputs
+  status    : subscription
+  event     : happening
+  days_left : number  range >=0 <=7  # the days of grace left; 0 outside a grace period
+
+outputs
+  next_status    : subscription
+  next_days_left : number  round down(1)
+
+define one_less : number = days_left - 1
+
+table step
+policy unique
+| status    | event            | days_left | -> next_status | next_days_left |
+| active    | payment_missed   | -         | in_grace       | 7              |
+| active    | day_passed       | -         | status         | days_left      |
+| active    | payment_received | -         | status         | days_left      |
+| in_grace  | payment_missed   | -         | status         | days_left      |
+| in_grace  | day_passed       | >=2       | status         | one_less       |
+| in_grace  | day_passed       | <=1       | suspended      | 0              |  # the last day of grace has passed
+| in_grace  | payment_received | -         | active         | 0              |
+| suspended | -                | -         | status         | days_left      |
+
+machine subscription over step
+  carry   status -> next_status
+  carry   days_left -> next_days_left
+  initial active
+  initial days_left 0
+  final   suspended
+  never   active after suspended
+  always  days_left >=1 <=7 when in_grace
+  always  days_left 0 when active, suspended
+
+# A payment missed, and paid on the third day of grace.
+scenario paid_in_time
+| event            | -> next_status | next_days_left |
+| payment_missed   | in_grace       | 7              |
+| day_passed       | in_grace       | 6              |
+| day_passed       | in_grace       | 5              |
+| payment_received | active         | 0              |
+
+# A grace period that runs out.
+scenario runs_out
+| event          | -> next_status | next_days_left |
+| payment_missed | in_grace       | 7              |
+| day_passed     | in_grace       | 6              |
+| day_passed     | in_grace       | 5              |
+| day_passed     | in_grace       | 4              |
+| day_passed     | in_grace       | 3              |
+| day_passed     | in_grace       | 2              |
+| day_passed     | in_grace       | 1              |
+| day_passed     | suspended      | 0              |
+
+examples
+| status   | event      | days_left | -> next_status | next_days_left |
+| in_grace | day_passed | 2         | in_grace       | 1              |
+| in_grace | day_passed | 1         | suspended      | 0              |

@@ -1271,22 +1271,44 @@ impl<'a> Gen<'a> {
             if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
                 args[k] = format!("(state if \"step\" in v else {})", args[k]);
             }
-            mhead = "        state: m.".to_string() + &cls + " = m.INITIAL\n";
+            // The values carried along with the state (§15.217), held in the wire's form — what
+            // a request is built from — and handed on from the response as the record reads it.
+            let more = self.more_carried();
+            let (mut more_head, mut more_meta, mut more_start, mut more_pass, mut more_tail) = (String::new(), Vec::<String>::new(), String::new(), String::new(), String::new());
+            if !more.is_empty() {
+                more_head = "        held: dict[str, int | bool | str] = {}\n".to_string();
+                more_start = "                held = dict(v[\"carried\"])\n".to_string();
+                more_pass = "                d.update(held)\n".to_string();
+            }
+            for mc in &more {
+                let shown = if mc.kind() == super::MoreKind::Enum { format!("m.{}.value", mc.upper()) } else { format!("m.{}", mc.upper()) };
+                more_meta.push(format!("{}: {shown}", mc.key()));
+                let o = self.f.outputs.iter().find(|o| o.name.text == mc.output).expect("the carried output");
+                let read = self.from_response(&mc.out_alias, &self.ty_of(&o.name.text));
+                let wire = match mc.kind() {
+                    super::MoreKind::Enum => format!("({read}).value"),
+                    super::MoreKind::Bool => format!("bool({read})"),
+                    _ => format!("int({read})"),
+                };
+                more_tail.push_str(&format!("                held[{:?}] = {wire}\n", mc.input));
+            }
+            let carried_meta = if more_meta.is_empty() { String::new() } else { format!(", \"carried\": {{{}}}", more_meta.join(", ")) };
+            mhead = "        state: m.".to_string() + &cls + " = m.INITIAL\n" + &more_head;
             mline = format!(
                 "            v = json.loads(line)\n            \
                  if \"machine\" in v:\n                \
-                     print(json.dumps({{\"initial\": m.INITIAL.value, \"final\": [s.value for s in m.{cls} if m.is_final(s)]}}, ensure_ascii=False, separators=(\",\", \":\")))\n                \
+                     print(json.dumps({{\"initial\": m.INITIAL.value, \"final\": [s.value for s in m.{cls} if m.is_final(s)]{carried_meta}}}, ensure_ascii=False, separators=(\",\", \":\")))\n                \
                      continue\n            \
                  d = dict(v[\"in\"])\n            \
                  if v.get(\"step\") == \"start\":\n                \
-                     state = m.{cls}(v[\"state\"])\n            \
+                     state = m.{cls}(v[\"state\"])\n{more_start}            \
                  if \"step\" in v:\n                \
-                     d[{cin:?}] = state.value\n"
+                     d[{cin:?}] = state.value\n{more_pass}"
             );
             // Read back out of the response the way the record above reads it.
             let o = self.f.outputs.iter().find(|o| pub_name(&o.name) == oa).expect("the carried output");
             mtail = format!(
-                "            if \"step\" in v:\n                state = {}\n",
+                "            if \"step\" in v:\n                state = {}\n{more_tail}",
                 self.from_response(&oa, &self.ty_of(&o.name.text))
             );
         }

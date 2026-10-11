@@ -1160,15 +1160,44 @@ impl<'a> Gen<'a> {
         let py = |s: &str| format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""));
         match (self.machine_consts(), self.carried()) {
             (Some((_, init, fins)), Some((cin, cout))) => {
+                let more = self.more_carried();
                 let meta = format!(
-                    "{{\"initial\":{},\"final\":[{}]}}",
+                    "{{\"initial\":{},\"final\":[{}]{}}}",
                     crate::json::quote(&init),
-                    fins.iter().map(|f| crate::json::quote(f)).collect::<Vec<_>>().join(",")
+                    fins.iter().map(|f| crate::json::quote(f)).collect::<Vec<_>>().join(","),
+                    if more.is_empty() {
+                        String::new()
+                    } else {
+                        format!(",\"carried\":{{{}}}", more.iter().map(|mc| format!("{}:{}", mc.key(), mc.wire)).collect::<Vec<_>>().join(","))
+                    }
                 );
                 (py(&meta), format!("({}, {})", py(&cin), py(&cout)))
             }
             _ => ("None".into(), "None".into()),
         }
+    }
+
+    /// The values carried along with the state (§15.217), for the SQL runners: the line that
+    /// names them as (input, output) pairs, and the three places a trace holds them — where it
+    /// starts, what each call is passed, and what the answer hands on. All empty when the
+    /// machine carries only its state, so the runner reads as it always did.
+    fn sql_more(&self) -> [String; 4] {
+        let py = |s: &str| format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""));
+        let more = if self.machine_consts().is_some() { self.more_carried() } else { Vec::new() };
+        if more.is_empty() {
+            return [String::new(), String::new(), String::new(), String::new()];
+        }
+        // A truth value comes back from SQLite as 0 or 1, and goes on as the truth value it is.
+        let kind = |mc: &super::MoreCarried| if mc.kind() == super::MoreKind::Bool { "bool" } else { "value" };
+        [
+            format!(
+                "\nMORE = [{}]",
+                more.iter().map(|mc| format!("({}, {}, {})", py(&mc.input), py(&mc.output), py(kind(mc)))).collect::<Vec<_>>().join(", ")
+            ),
+            ", dict(x[\"carried\"])".to_string(),
+            ", **traces[n][2]".to_string(),
+            "\n            traces[n][2] = {i: (bool(obs[o]) if k == \"bool\" else obs[o]) for i, o, k in MORE}".to_string(),
+        ]
     }
 
     /// What the door says of each input, in the language the code is generated in (§15.204), as
@@ -1207,10 +1236,15 @@ impl<'a> Gen<'a> {
         } else {
             String::new()
         };
+        let [more_decl, more_start, more_pass, more_next] = self.sql_more();
         SQL_RUNNER
             .replace("@ROOT@", &root)
             .replace("@MACHINE@", &meta)
             .replace("@CARRY@", &carry)
+            .replace("@MORE_DECL@", &more_decl)
+            .replace("@MORE_START@", &more_start)
+            .replace("@MORE_PASS@", &more_pass)
+            .replace("@MORE_NEXT@", &more_next)
             .replace("@HEADER@", self.header("#").trim_end())
             .replace("@ALIAS@", &pub_name(&self.f.name))
             .replace("@INPUTS@", &ins)
@@ -1237,9 +1271,14 @@ impl<'a> Gen<'a> {
             })
             .collect();
         let (meta, carry) = self.sql_machine_literals();
+        let [more_decl, more_start, more_pass, more_next] = self.sql_more();
         SQL_FUNCTION_RUNNER
             .replace("@MACHINE@", &meta)
             .replace("@CARRY@", &carry)
+            .replace("@MORE_DECL@", &more_decl)
+            .replace("@MORE_START@", &more_start)
+            .replace("@MORE_PASS@", &more_pass)
+            .replace("@MORE_NEXT@", &more_next)
             .replace("@HEADER@", self.header("#").trim_end())
             .replace("@ALIAS@", &pub_name(&self.f.name))
             .replace("@ARGTYPES@", &types.join(", "))
@@ -1274,7 +1313,7 @@ from pathlib import Path
 
 SQL = Path(__file__).with_name("@ALIAS@.sql").read_text(encoding="utf-8")
 MACHINE = @MACHINE@
-CARRY = @CARRY@
+CARRY = @CARRY@@MORE_DECL@
 INPUT = "@ALIAS@_input"
 INPUTS = [@INPUTS@]
 # What the door says of each input: missing, of another kind, and whether it takes null.
@@ -1428,15 +1467,15 @@ if lines and "machine" in lines[0] and MACHINE is not None:
     traces = []
     for x in lines[1:]:
         if x["step"] == "start":
-            traces.append([x["state"], []])
+            traces.append([x["state"], []@MORE_START@])
         traces[-1][1].append(x["in"])
     done = [[] for _ in traces]
     k = 0
     while any(k < len(t[1]) for t in traces):
         live = [n for n, t in enumerate(traces) if k < len(t[1])]
-        for n, (rec, obs) in zip(live, _decide([dict(traces[n][1][k], **{cin: traces[n][0]}) for n in live])):
+        for n, (rec, obs) in zip(live, _decide([dict(traces[n][1][k], **{cin: traces[n][0]}@MORE_PASS@) for n in live])):
             done[n].append(rec)
-            traces[n][0] = obs[cout]
+            traces[n][0] = obs[cout]@MORE_NEXT@
         k += 1
     for recs in done:
         for rec in recs:
@@ -1455,7 +1494,7 @@ from pathlib import Path
 
 SQL = Path(__file__).with_name("@ALIAS@_function.sql").read_text(encoding="utf-8")
 MACHINE = @MACHINE@
-CARRY = @CARRY@
+CARRY = @CARRY@@MORE_DECL@
 FN = "@ALIAS@"
 ARGTYPES = [t.strip() for t in "@ARGTYPES@".split(",")]
 INPUTS = [@INPUTS@]
@@ -1652,15 +1691,15 @@ if lines and "machine" in lines[0] and MACHINE is not None:
     traces = []
     for x in lines[1:]:
         if x["step"] == "start":
-            traces.append([x["state"], []])
+            traces.append([x["state"], []@MORE_START@])
         traces[-1][1].append(x["in"])
     done = [[] for _ in traces]
     k = 0
     while any(k < len(t[1]) for t in traces):
         live = [n for n, t in enumerate(traces) if k < len(t[1])]
-        for n, (rec, obs) in zip(live, _decide([dict(traces[n][1][k], **{cin: traces[n][0]}) for n in live])):
+        for n, (rec, obs) in zip(live, _decide([dict(traces[n][1][k], **{cin: traces[n][0]}@MORE_PASS@) for n in live])):
             done[n].append(rec)
-            traces[n][0] = obs[cout]
+            traces[n][0] = obs[cout]@MORE_NEXT@
         k += 1
     for recs in done:
         for rec in recs:

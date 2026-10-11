@@ -523,8 +523,8 @@ impl P {
                                     .at(self.at(d.span.line))
                                     .mark(d.span.clone(), tr!("二つ目です", "this is a second one"))
                                     .note(tr!(
-                                        "規則が一歩になるステートマシンは一つです。二つの状態を一緒に持ち越すなら、その組を一つの列挙にしてください。",
-                                        "A rule is one step of one machine. To carry two states together, make the pair one enum."
+                                        "規則が一歩になるステートマシンは一つです。ほかの値も一緒に持ち越すなら、同じ `machine` に `carry` の行を足してください（範囲のある数、真偽、列挙）。",
+                                        "A rule is one step of one machine. To carry more values along, add `carry` lines under the same `machine`: a number with a range, a boolean or another enum."
                                     )),
                             ),
                         }
@@ -1600,11 +1600,14 @@ impl P {
             name,
             over,
             carry: None,
+            carries: Vec::new(),
             initial: None,
+            initials: Vec::new(),
             finals: Vec::new(),
             final_span: None,
             nevers: Vec::new(),
             onces: Vec::new(),
+            alwayses: Vec::new(),
             held: Vec::new(),
             held_span: None,
             span: span.clone(),
@@ -1638,25 +1641,37 @@ impl P {
                     let arrow = l.iter().position(|t| t.is(&Kind::Arrow));
                     match (arrow, l.get(1).and_then(|t| t.ident()), l.get(3).and_then(|t| t.ident())) {
                         (Some(2), Some(i), Some(o)) if l.len() == 4 => {
+                            let n = |t: &Token, w: &str| Name { text: w.to_string(), ascii: None, span: t.span.clone() };
+                            // The first line is the state; a further one carries a number, a
+                            // boolean or another enum along with it (§15.217).
                             if m.carry.is_some() {
-                                twice(self);
+                                m.carries.push((n(&l[1], i), n(&l[3], o), sp.clone()));
                             } else {
-                                let n = |t: &Token, w: &str| Name { text: w.to_string(), ascii: None, span: t.span.clone() };
                                 m.carry = Some((n(&l[1], i), n(&l[3], o), sp.clone()));
                             }
                         }
                         _ => bad(self, format!("{} <{}> -> <{}>", crate::kw::CARRY, tr!("入力", "input"), tr!("出力", "output"))),
                     }
                 }
-                crate::kw::INITIAL => match (l.len(), l.get(1).and_then(|t| t.ident())) {
-                    (2, Some(v)) => {
+                crate::kw::INITIAL => match (l.len(), l.get(1).and_then(|t| t.ident()), l.get(2).and_then(lit_of)) {
+                    (2, Some(v), _) => {
                         if m.initial.is_some() {
                             twice(self);
                         } else {
                             m.initial = Some((Name { text: v.to_string(), ascii: None, span: l[1].span.clone() }, sp.clone()));
                         }
                     }
-                    _ => bad(self, format!("{} <{}>", crate::kw::INITIAL, tr!("状態", "state"))),
+                    // Where a further carried value starts (§15.217). Whether the name is one
+                    // and the value fits is the type check's (E072).
+                    (3, Some(n), Some(v)) => m.initials.push((Name { text: n.to_string(), ascii: None, span: l[1].span.clone() }, v, sp.clone())),
+                    _ => bad(
+                        self,
+                        tr!(
+                            "{0} <状態>`、または `{0} <持ち越す入力> <値>",
+                            "{0} <state>`, or `{0} <carried input> <value>",
+                            crate::kw::INITIAL
+                        ),
+                    ),
                 },
                 crate::kw::FINAL => {
                     let vs = words(&l[1..]);
@@ -1716,16 +1731,39 @@ impl P {
                         _ => bad(self, format!("{} <{}> <{}>", crate::kw::ONCE, tr!("出力", "output"), tr!("セル", "cell"))),
                     }
                 }
+                crate::kw::ALWAYS => {
+                    if let Some(a) = self.always_line(&l) {
+                        m.alwayses.push(a);
+                    }
+                }
                 other => {
                     self.err(
                         Diag::error("E050", tr!("`{other}` は `machine` の中に書けません", "`{other}` cannot appear under `machine`"))
                             .at(self.at(sp.line))
                             .mark(sp.clone(), "")
                             .note(tr!(
-                                "`machine` の中に書けるのは `carry`・`held`・`initial`・`final`・`never`・`once` の行です。",
-                                "The lines under `machine` are `carry`, `held`, `initial`, `final`, `never` and `once`."
+                                "`machine` の中に書けるのは `carry`・`held`・`initial`・`final`・`never`・`once`・`always` の行です。",
+                                "The lines under `machine` are `carry`, `held`, `initial`, `final`, `never`, `once` and `always`."
                             )),
                     );
+                }
+            }
+        }
+        // The state's start written in two words, `initial <state> <value>` (§15.217): said once
+        // as what it is, and read as the start, so that nothing else is said about it.
+        if m.initial.is_none() {
+            if let Some(state_in) = m.carry.as_ref().map(|(i, _, _)| i.text.clone()) {
+                if let Some(k) = m.initials.iter().position(|(n, _, _)| n.text == state_in) {
+                    let (n, v, sp) = m.initials.remove(k);
+                    self.err(
+                        Diag::error("E072", tr!("`initial` の行が宣言と噛み合いません: {} は状態です", "The `initial` line does not fit the declarations: {} is the state", n.text))
+                            .at(self.at(sp.line))
+                            .mark(n.span.clone(), "")
+                            .note(tr!("状態の始まりは、`initial <状態>` と一語で書きます。", "Where the state starts is written in one word: `initial <state>`.")),
+                    );
+                    if let Lit::Word(w) = v {
+                        m.initial = Some((Name { text: w, ascii: None, span: sp.clone() }, sp));
+                    }
                 }
             }
         }
@@ -1746,6 +1784,71 @@ impl P {
             );
         }
         Some(m)
+    }
+
+    /// `always 残り日数 >=1 <=7 when 猶予中, 督促中` under `machine` (§15.217): one or more
+    /// `<carried input> <cell>` joined by `and`, as a clause's `when` line joins them, and then
+    /// the states the line speaks of after `when`, or none for every state. The last `when` is
+    /// the one that divides, so a value spelled `when` in a cell still reads as one.
+    ///
+    /// Only the shape is read here (E072); whether the names are carried values and the cells
+    /// fit them is the type check's.
+    fn always_line(&mut self, l: &[Token]) -> Option<AlwaysDecl> {
+        let sp = span_of(l);
+        let bad = |p: &mut Self, at: Span, what: String| {
+            p.err(
+                Diag::error("E072", tr!("`always` の行の形が違います", "An `always` line is not shaped like this"))
+                    .at(p.at(sp.line))
+                    .mark(at, what)
+                    .note(tr!(
+                        "形は `{a} <持ち越す入力> <セル> and … {w} <状態>, …` です。`{w}` から後は、どの状態でも成り立つなら書きません。",
+                        "The shape is `{a} <carried input> <cell> and … {w} <state>, …`; leave out what follows `{w}` when it holds in every state.",
+                        a = crate::kw::ALWAYS,
+                        w = crate::kw::WHEN
+                    )),
+            );
+        };
+        let body = &l[1..];
+        let w = body.iter().rposition(|t| t.ident() == Some(crate::kw::WHEN));
+        let (tests_ts, when_ts) = match w {
+            Some(k) => (&body[..k], Some(&body[k + 1..])),
+            None => (body, None),
+        };
+        let mut when = Vec::new();
+        if let Some(ws) = when_ts {
+            let ok = !ws.is_empty() && ws.iter().all(|t| t.ident().is_some() || t.is(&Kind::Comma)) && ws.iter().any(|t| t.ident().is_some());
+            if !ok {
+                bad(self, sp.clone(), tr!("`{}` の後に状態がありません", "no state after `{}`", crate::kw::WHEN));
+                return None;
+            }
+            when = ws.iter().filter_map(|t| t.ident().map(|x| Name { text: x.to_string(), ascii: None, span: t.span.clone() })).collect();
+        }
+        if tests_ts.is_empty() {
+            bad(self, sp.clone(), tr!("持ち越す値とセルがありません", "there is no carried value and cell"));
+            return None;
+        }
+        let mut parts: Vec<Vec<Token>> = vec![Vec::new()];
+        for t in tests_ts {
+            if t.ident() == Some("and") {
+                parts.push(Vec::new());
+            } else if let Some(last) = parts.last_mut() {
+                last.push(t.clone());
+            }
+        }
+        let mut tests = Vec::new();
+        for part in parts {
+            let Some(name) = part.first().and_then(|t| t.ident()).map(|x| x.to_string()) else {
+                bad(self, sp.clone(), tr!("`and` の区切りの中に持ち越す入力の名前がありません", "a part between `and` has no carried input's name"));
+                return None;
+            };
+            if part.len() < 2 {
+                bad(self, part[0].span.clone(), tr!("{name} のセルがありません", "{name} has no cell"));
+                return None;
+            }
+            let cell = self.cell(&part[1..])?;
+            tests.push((Name { text: name, ascii: None, span: part[0].span.clone() }, cell, span_of(&part[1..])));
+        }
+        Some(AlwaysDecl { tests, when, span: sp })
     }
 
     /// `constraint <input> <= <input>` — one relation per line, and several lines all hold.

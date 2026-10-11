@@ -68,6 +68,7 @@ read. No dependencies; Python 3.9 or later.
 """
 
 import hashlib
+import itertools
 import json
 import math
 import os
@@ -2689,6 +2690,13 @@ def check_machine(cert):
                 raise Bad(f"machine: paths to a final state are given{label}, and a held input is read by more than its own column")
             STATED.append(f"machine: that a case{label} can still finish is not laid on the rows (a held input is read by more than its own column)")
             continue
+        # A machine that carries more than its state (§15.217): a path of the state's rows is
+        # not one case's, since each call moves the carried values too.
+        if m.get("carried") is not None:
+            if world["finish"]:
+                raise Bad(f"machine: paths to a final state are given{label}, and the machine carries more than its state")
+            STATED.append(f"machine: that a case{label} can still finish is not laid on the rows (the machine carries more than its state)")
+            continue
         paths = {p["state"]: p["path"] for p in world["finish"]}
         for s in sorted(reach - finals):
             if s not in paths:
@@ -2730,6 +2738,339 @@ def check_machine(cert):
             f"{len(claims)} claims laid on the rows")
 
 
+def check_carried(cert):
+    """Re-check the values a machine carries besides its state (§15.217). Returns a one-line
+    summary, or None when the machine carries only its state; raises Bad.
+
+    A place a case can be is the state and one coordinate of each carried value. Those
+    coordinates are checked to cover each number's declared range on its grid without a gap or
+    an overlap, and to be the two truth values or an enum's values. A row takes a place when
+    its box takes the state and meets each carried value's coordinate on the column the table
+    reads it in; it moves the state as the machine's own rows say, and each carried value to
+    what the row writes into its output — read off the table here: the value, the value
+    itself, or the interval a named computation comes to over the place, by the arithmetic
+    the rest of this program does, narrowed by the row's box where the table reads it — on
+    every coordinate that meets it, and outside the range where it reaches past. The set of
+    places must hold where a case starts and be closed under that; each claim is a closure of
+    the same kind, as the machine's are. An `always` line speaks of the places within the
+    ranges; a place outside one is the range's claim. Nothing here says a case can still
+    finish.
+    """
+    m = cert["machine"]
+    cm = m.get("carried")
+    if cm is None:
+        return None
+    if "items" not in cm:
+        STATED.append(f"machine: the carried values are not laid on the rows — {cm.get('why', '')}")
+        return "carried values: not certified here — " + cm.get("why", "")
+    t = next((x for x in cert["tables"] if x["table"] == m["table"]), None)
+    if t is None:
+        raise Bad(f"carried values: the table {m['table']} has no certificate")
+    rows = {r["row"]: r for r in t["rows"]}
+    order = [r["row"] for r in t["rows"]]
+    axes, decides, states, k = t["axes"], t["decides"], m["states"], m["axis"]
+    moves = {r["row"]: r.get("to") for r in m["rows"]}
+    on = {row: (rows[row]["accepts"][k] if k is not None else list(range(len(states)))) for row in rows}
+    values = {v["name"]: v["expr"] for v in cert.get("values", [])}
+    vorder = [v["name"] for v in cert.get("values", [])]
+    base = {}
+    for n in cert.get("inputs", []):
+        r = cert.get("ranges", {}).get(n)
+        if r is not None and r[0] is not None and r[1] is not None:
+            base[n] = (r[0], r[1])
+    items = cm["items"]
+    coords, labels, mv = [], [], []
+    for it in items:
+        name = it["input"]
+        cs = [(Fraction(a), Fraction(b)) for a, b in it["coords"]]
+        if it["output"] not in decides:
+            raise Bad(f"carried values: {m['table']} does not decide {it['output']}")
+        j = decides.index(it["output"])
+        ax = it.get("axis")
+        named = [i for i, a in enumerate(axes) if a["column"] == name]
+        if (ax is None and named) or (ax is not None and ax not in named):
+            raise Bad(f"carried values: the column {m['table']} reads {name} in is not the one named")
+        kind = it["kind"]
+        if kind == "bool":
+            if cs != [(0, 0), (1, 1)] or it.get("labels") != ["false", "true"]:
+                raise Bad(f"carried values: {name} is a truth value, and its coordinates are not false and true")
+        elif kind == "enum":
+            ls = it.get("labels") or []
+            if cs != [(i, i) for i in range(len(ls))] or (ax is not None and axes[ax]["coords"] != ls):
+                raise Bad(f"carried values: the coordinates of {name} are not its enum's values in order")
+        else:
+            lo, hi = Fraction(it["range"][0]), Fraction(it["range"][1])
+            declared = cert.get("ranges", {}).get(name)
+            if declared is None or num(declared[0]) != lo or num(declared[1]) != hi:
+                raise Bad(f"carried values: the range of {name} is not the one it declares")
+            step = Fraction(it["step"])
+            if not cs or cs[0][0] != lo or cs[-1][1] != hi or any(a > b for a, b in cs):
+                raise Bad(f"carried values: the coordinates of {name} do not run from one end of its range to the other")
+            for (_, b), (c, _) in zip(cs, cs[1:]):
+                if c != b + step:
+                    raise Bad(f"carried values: the coordinates of {name} leave a gap or overlap at {b}")
+        got = {}
+        for r in it["moves"]:
+            row = r["row"]
+            if row not in rows:
+                raise Bad(f"carried values: row {row} is not in {m['table']}")
+            if kind == "number":
+                w = (rows[row].get("writes") or [None] * len(decides))[j]
+                e = None if w is None else w.get("expr")
+                if r.get("stay"):
+                    ok = e == {"name": name}
+                    got[row] = ("stay",)
+                elif "expr" in r:
+                    ok = e == {"name": r["expr"]} and r["expr"] in values
+                    got[row] = ("expr", r["expr"])
+                else:
+                    v = None if e is None or "num" not in e else num(e.get("value"))
+                    inside = [] if v is None else [ci for ci, (a, b) in enumerate(cs) if a <= v <= b]
+                    if r.get("out"):
+                        ok = v is not None and not inside
+                        got[row] = ("out",)
+                    else:
+                        ok = r.get("to") in inside
+                        got[row] = ("to", r.get("to"))
+            else:
+                produced = rows[row]["produces"][j]
+                if r.get("stay"):
+                    ok = produced is None
+                    got[row] = ("stay",)
+                else:
+                    ok = r.get("to") is not None and produced == it["labels"][r["to"]]
+                    got[row] = ("to", r.get("to"))
+            if not ok:
+                raise Bad(f"carried values: what row {row} is said to write into {it['output']} is not what the table says")
+        if set(got) != set(rows):
+            raise Bad(f"carried values: rows {sorted(set(rows) - set(got))} say nothing of {it['output']}")
+        coords.append(cs)
+        labels.append(it.get("labels"))
+        mv.append(got)
+    OUT = -1
+
+    def meets(row, kk, ci):
+        ax = items[kk].get("axis")
+        if ax is None:
+            return True
+        acc = rows[row]["accepts"][ax]
+        if labels[kk] is not None:
+            return any(axes[ax]["coords"][x] == labels[kk][ci] for x in acc)
+        lo, hi = coords[kk][ci]
+        for x in acc:
+            blo, bhi = closed_at(t, ax, x)
+            if (blo is None or blo <= hi) and (bhi is None or bhi >= lo):
+                return True
+        return False
+
+    def image(row, cc, name):
+        ranges = dict(base)
+        for kk, it in enumerate(items):
+            if labels[kk] is None:
+                a, b = coords[kk][cc[kk]]
+                ranges[it["input"]] = (str(a), str(b))
+        for _ in range(len(vorder) + 1):
+            moved = False
+            for n in vorder:
+                if n in ranges:
+                    continue
+                iv = interval(values[n], ranges)
+                if iv is not None:
+                    ranges[n] = (str(iv[0]), str(iv[1]))
+                    moved = True
+            if not moved:
+                break
+        if name not in ranges:
+            return None
+        lo, hi = num(ranges[name][0]), num(ranges[name][1])
+        cols = [a["column"] for a in axes]
+        if name in cols:
+            ai = cols.index(name)
+            bs = [closed_at(t, ai, x) for x in rows[row]["accepts"][ai]]
+            if bs and all(b[0] is not None for b in bs):
+                lo = max(lo, min(b[0] for b in bs))
+            if bs and all(b[1] is not None for b in bs):
+                hi = min(hi, max(b[1] for b in bs))
+        return lo, hi
+
+    first = t["policy"] == "first"
+
+    def covers(r0, row, s, cc):
+        # Under `policy first`, an earlier row that alone takes the place's state, the whole of
+        # each carried value's coordinate, and on every other column all the later row takes.
+        if s not in on[r0]:
+            return False
+        for ai, ax in enumerate(axes):
+            if ai == k:
+                continue
+            a0, a1 = rows[r0]["accepts"][ai], rows[row]["accepts"][ai]
+            kk = next((x for x in range(len(cc)) if items[x].get("axis") == ai), None)
+            if kk is None:
+                if not set(a1) <= set(a0):
+                    return False
+                continue
+            if labels[kk] is not None:
+                whole = [x for x in range(len(ax["coords"])) if ax["coords"][x] == labels[kk][cc[kk]]]
+            else:
+                lo, hi = coords[kk][cc[kk]]
+                whole = []
+                for x in range(len(ax["coords"])):
+                    blo, bhi = closed_at(t, ai, x)
+                    if (blo is None or blo <= hi) and (bhi is None or bhi >= lo):
+                        whole.append(x)
+            if not set(whole) <= set(a0):
+                return False
+        return True
+
+    def step(p):
+        s, cc = p
+        if OUT in cc:
+            return []
+        nxt = []
+        for i, row in enumerate(order):
+            if s not in on[row] or not all(meets(row, kk, cc[kk]) for kk in range(len(cc))):
+                continue
+            if first and any(covers(r0, row, s, cc) for r0 in order[:i]):
+                continue
+            s2 = s if moves.get(row) is None else moves[row]
+            lists = []
+            for kk in range(len(cc)):
+                g = mv[kk][row]
+                if g[0] == "stay":
+                    lists.append([cc[kk]])
+                elif g[0] == "to":
+                    lists.append([g[1]])
+                elif g[0] == "out":
+                    lists.append([OUT])
+                else:
+                    iv = image(row, cc, g[1])
+                    if iv is None:
+                        raise Bad(f"carried values: what {g[1]} comes to at {states[s]} is not bounded here")
+                    lo, hi = iv
+                    ls = [ci for ci, (a, b) in enumerate(coords[kk]) if a <= hi and b >= lo]
+                    if lo < coords[kk][0][0] or hi > coords[kk][-1][1]:
+                        ls.append(OUT)
+                    lists.append(ls)
+            for combo in itertools.product(*lists):
+                nxt.append((row, (s2, tuple(combo))))
+        return nxt
+
+    def place(x):
+        return (x[0], tuple(x[1]))
+
+    places = {place(x) for x in cm["places"]}
+    init, finals = m["initial"], set(m["finals"])
+    start = (init, tuple(cm["start"]))
+    if start not in places:
+        raise Bad("carried values: the places leave out where a case starts")
+    succ = {}
+    for p in places:
+        succ[p] = step(p)
+        for row, q in succ[p]:
+            if q not in places:
+                raise Bad(f"carried values: from {states[p[0]]}, row {row} leads outside the places")
+    claims = ["reach"]
+    if cm.get("final_certified"):
+        for p in places:
+            if p[0] in finals and any(q[0] != p[0] for _, q in succ[p]):
+                raise Bad(f"carried values: a row leads out of the final state {states[p[0]]}")
+        claims.append("final")
+    elif any(p[0] in finals for p in places):
+        STATED.append("carried values: that no call leaves a final state is not laid on the rows")
+    for li, (nv, closed) in enumerate(zip(m["never"], cm.get("never", []))):
+        if closed is None:
+            STATED.append(f"carried values: the `never` line {li + 1} is not laid on the rows")
+            continue
+        a, b = set(nv["states"]), set(nv["after"])
+        cl = {(x[0], tuple(x[1]), bool(x[2])) for x in closed}
+        if (start[0], start[1], start[0] in b) not in cl:
+            raise Bad("carried values: a `never` set leaves out where a case starts")
+        for s, cc, seen in cl:
+            if seen and s in a:
+                raise Bad(f"carried values: a `never` set holds {states[s]} after the states it is to come after")
+            for row, q in succ.get((s, cc), []):
+                if (q[0], q[1], seen or q[0] in b) not in cl:
+                    raise Bad(f"carried values: a `never` set is not closed at {states[s]}, row {row}")
+        claims.append(f"never {li}")
+    for li, (on_, closed) in enumerate(zip(m["once"], cm.get("once", []))):
+        if closed is None or "test" not in on_:
+            STATED.append(f"carried values: `once {on_['output']}` is not laid on the rows")
+            continue
+        test = on_["test"]
+
+        def counts(v, test=test):
+            if v is None:
+                return True
+            if "words" in test:
+                w = ("true" if v else "false") if isinstance(v, bool) else str(v)
+                return w in test["words"]
+            lo, hi = test.get("lo"), test.get("hi")
+            return (lo is None or v >= lo) and (hi is None or v <= hi)
+
+        flag = {r["row"]: counts(r["value"]) for r in on_["rows"]}
+        cl = {(x[0], tuple(x[1]), x[2]) for x in closed}
+        if (start[0], start[1], 0) not in cl:
+            raise Bad(f"carried values: the `once {on_['output']}` set leaves out where a case starts")
+        for s, cc, cnt in cl:
+            if cnt >= 2:
+                raise Bad(f"carried values: the `once {on_['output']}` set counts two")
+            for row, q in succ.get((s, cc), []):
+                if (q[0], q[1], min(2, cnt + int(flag.get(row, True)))) not in cl:
+                    raise Bad(f"carried values: the `once {on_['output']}` set is not closed at {states[s]}, row {row}")
+        claims.append(f"once {li}")
+
+    def fits(cell, kk, ci):
+        if ci == OUT:
+            return False
+        lo, hi = coords[kk][ci]
+        kind = cell.get("cell")
+        if labels[kk] is not None:
+            w = labels[kk][ci]
+            if kind == "is":
+                return w in cell["words"]
+            if kind == "not":
+                return w not in cell["words"]
+            return kind == "any"
+        if kind == "cmp":
+            ops = {"<=": lambda x, v: x <= v, "<": lambda x, v: x < v, ">=": lambda x, v: x >= v, ">": lambda x, v: x > v}
+            return all(t2["value"] is not None and ops[t2["op"]](lo, num(t2["value"])) and ops[t2["op"]](hi, num(t2["value"]))
+                       for t2 in cell["tests"])
+        if kind == "in":
+            return lo == hi and any(v is not None and num(v) == lo for v in cell["values"])
+        if kind == "not_in":
+            return all(v is not None and (num(v) < lo or num(v) > hi) for v in cell["values"])
+        return kind == "any"
+
+    for li, al in enumerate(cm.get("always", [])):
+        when = set(al["when"])
+        # A place outside a range is the range's claim, not this one's.
+        held = all(all(fits(tt["cell"], tt["item"], p[1][tt["item"]]) for tt in al["tests"])
+                   for p in places if (not when or p[0] in when) and OUT not in p[1])
+        if al.get("holds"):
+            if not held:
+                raise Bad(f"carried values: the `always` line {li + 1} does not hold at every place it names")
+            claims.append(f"always {li}")
+        else:
+            STATED.append(f"carried values: the `always` line {li + 1} is not laid on the rows")
+    for rg in cm.get("ranges", []):
+        kk = rg["item"]
+        if rg.get("holds"):
+            if any(p[1][kk] == OUT for p in places):
+                raise Bad(f"carried values: {items[kk]['output']} is said to stay within its range, and a place leaves it")
+            claims.append(f"range {kk}")
+        else:
+            STATED.append(f"carried values: that {items[kk]['output']} stays within its range is not laid on the rows")
+    # A claim laid here is laid: the closure over the state alone could not carry it (its rows
+    # move the carried values too), and it is no longer listed as stated for that.
+    laid_once = {m["once"][int(c.split()[1])]["output"] for c in claims if c.startswith("once ")}
+    all_never = bool(m["never"]) and all(f"never {i}" in claims for i in range(len(m["never"])))
+    STATED[:] = [x for x in STATED if not (
+        ("final" in claims and x.startswith("machine: that no call leaves a final state"))
+        or (all_never and x.startswith("machine: a `never` line"))
+        or any(x.startswith(f"machine: `once {o}`") for o in laid_once))]
+    return f"carried values over {m['table']}: {len(places)} places a case can be, {len(claims)} claims laid on the rows"
+
+
 def check_machine_cells(cert, path):
     """The moves a machine's section states are the cells the file has (§15.148): a row said
     to leave the state where it is writes the carried input's own name, a row said to go to a
@@ -2759,6 +3100,26 @@ def check_machine_cells(cert, path):
                 continue
             if text(src) != src.get("text"):
                 raise Bad(f"machine: the value `once {on['output']}` reads on row {r['row']} is not what the file has there")
+            read += 1
+    # The values carried besides the state (§15.217): a row said to keep one writes its own name,
+    # a row said to write a truth value or an enum's writes it, a computation is named.
+    cm = m.get("carried") or {}
+    for it in cm.get("items", []):
+        for r in it["moves"]:
+            src = r.get("source")
+            if src is None:
+                raise Bad(f"carried values: row {r['row']}'s move of {it['output']} has no place in the file")
+            got = text(src)
+            if r.get("stay"):
+                want = it["input"]
+            elif "expr" in r:
+                want = r["expr"]
+            elif it.get("labels") is not None and "to" in r:
+                want = it["labels"][r["to"]]
+            else:
+                want = src.get("text")
+            if got != want or got != src.get("text"):
+                raise Bad(f"carried values: row {r['row']} is said to write `{want}` into {it['output']}, and the file has `{got}` there")
             read += 1
     return f"the machine's moves say the same as the file: {read} cells read back"
 
@@ -2857,6 +3218,13 @@ def check(cert):
     if cert.get("machine"):
         try:
             out.append("  " + check_machine(cert))
+        except Bad as e:
+            out.append(f"  FAILED {e}")
+            ok = False
+        try:
+            line = check_carried(cert)
+            if line:
+                out.append("  " + line)
         except Bad as e:
             out.append(f"  FAILED {e}")
             ok = False
