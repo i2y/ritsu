@@ -203,6 +203,37 @@ fn what_stops_ritsu_check() {
     assert!(out.contains("1 not checked"), "{out}");
 }
 
+/// `--budget` caps what the checks that walk a space may walk, one number for each language that
+/// has such a check: the nodes rulec's check of one rule visits (E109) and the combinations
+/// sekisho walks for one action (E307), as `ritsu rulec check --budget` and `ritsu sekisho check
+/// --budget` take it. A budget that is no positive whole number is refused.
+#[test]
+fn the_budget_goes_to_each_language_that_walks() {
+    let (code, out, _) = ritsu_in(&here(), &["check", "--help"]);
+    assert_eq!(code, 0);
+    assert!(out.contains("[--budget <n>]") && out.contains("ritsu check rules/ --budget 200000000"), "{out}");
+    // the smallest rule of the E109 entry in rulec's ledger: one node is not enough to prove it
+    let t = TempDir::new("budget");
+    std::fs::write(t.path().join("pick.rule"), "rule pick v1\n\nenum k = a | b | c\n\ninputs\n  x : k\n\noutputs\n  r : bool\n\ntable j\npolicy unique\n| x | -> r : bool |\n| a | true        |\n| b | false       |\n| c | true        |\n").unwrap();
+    let (code, out, _) = ritsu_in(t.path(), &["check", "."]);
+    assert_eq!(code, 0, "{out}");
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--budget", "1"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("error[rulec E109]"), "{out}");
+    let refunds = here().join("../sekisho/examples/refunds");
+    let (code, out, _) = ritsu_in(&refunds, &["check", "refunds.gate", "--budget", "20"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("error[sekisho E307]") && out.contains("more than the budget of 20"), "{out}");
+    let (code, out, _) = ritsu_in(&refunds, &["check", "refunds.gate"]);
+    assert_eq!(code, 0, "{out}");
+    for v in ["0", "-3", "many"] {
+        let (code, out, err) = ritsu_in(&here(), &["check", SHOP, "--budget", v]);
+        assert_eq!((code, out.as_str(), err), (2, "", format!("error: `--budget {v}` is not a positive integer\n")));
+    }
+    let (code, _, err) = ritsu_in(&here(), &["check", SHOP, "--budget", "0", "--lang", "ja"]);
+    assert_eq!((code, err.as_str()), (2, "エラー: `--budget 0` は正の整数ではありません\n"));
+}
+
 // ── The English twins: the same project with its names in English ──
 
 /// The test project with English names: every language's check passes, and the text, the Japanese

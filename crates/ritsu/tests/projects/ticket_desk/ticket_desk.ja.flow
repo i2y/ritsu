@@ -1,0 +1,52 @@
+# 問い合わせの窓口。届くのは、窓口に知らされた出来事。規則が、問い合わせの段階から次の段階と窓口のするこ
+# とを決め、流れは、解決するまで、段階を次の出来事へ持ち越す。規則は rulec のもので、ほかのタスクは窓口
+# のもの。
+workflow 問い合わせ窓口 v1
+description "問い合わせを、規則が決めるとおりに出来事ごとに扱い、解決するまで続ける"
+
+use rule 一歩 from "rules/問い合わせの段階.rule"
+
+record 届いたこと
+  出来事 : 一歩.出来事
+  日数   : int  range >=0 <=30
+
+inputs
+  問い合わせ : string
+
+outputs
+  件数 : int
+
+task 次の出来事() -> 届いたこと
+  event
+  timeout 7 days
+
+task 催促する(問い合わせ: string)
+  idempotent
+
+task 責任者を呼ぶ(問い合わせ: string)
+  key
+
+task アンケートを送る(問い合わせ: string)
+  key
+
+task 閉じる(問い合わせ: string)
+  key
+
+flow
+  let s = 受付
+  repeat at most 20 times
+    let h = 次の出来事()
+      on timeout => fail 放置 "一週間、何も届かなかった"
+    let r = 一歩(段階: s, 出来事: h.出来事, 日数: h.日数)
+    let s = r.次の段階
+    match r.対応
+      何もしない => pass
+      客に催促 => 催促する(問い合わせ: 問い合わせ)
+      責任者を呼ぶ => 責任者を呼ぶ(問い合わせ: 問い合わせ)
+      アンケートを送る => アンケートを送る(問い合わせ: 問い合わせ)
+    match r.次の段階
+      解決 =>
+        閉じる(問い合わせ: 問い合わせ)
+        succeed 件数 = 1
+      受付, 返事待ち, 上に回した => pass
+  fail 長すぎる "一つの問い合わせに出来事が 20 件を超えた"

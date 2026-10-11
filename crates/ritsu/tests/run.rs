@@ -4,7 +4,9 @@
 //! held to its golden text (in the language of its version) and JSON; to `dandori run` on the
 //! scenario filled in with what the languages answered (the same trace); to each language's own
 //! command on what it was asked (`rulec replay`, `koyomi eval`, `chobo run`); and the two versions
-//! to each other. Then what stops a run.
+//! to each other. Then what stops a run. Last, the flow of `tests/projects/ticket_desk`, which
+//! answers the events it is told with a rule of its own: every scenario `ritsu dandori scenarios`
+//! writes for it runs under `ritsu run` to its end.
 
 use ritsu_testkit::TempDir;
 use serde_json::{json, Value};
@@ -327,3 +329,66 @@ fn what_stops_ritsu_run() {
     let v: Value = serde_json::from_str(&out).unwrap();
     assert!(v["diagnostics"][0]["code"] == "E003" && v.get("trace").is_none(), "{v}");
 }
+
+/// A flow that answers the events it is told with a rule of its own (`tests/projects/ticket_desk`,
+/// in English and its Japanese version). Every scenario `ritsu dandori scenarios` writes for it says
+/// the calls of the rule are rulec's (`"rules": "rulec"`) and gives no answer for them, and runs
+/// under `ritsu run` to its end: every answer it gives is used, every call of the rule is answered
+/// by rulec, and the trace is the one `ritsu dandori run` makes of the same scenario. The generator
+/// chose those runs with the rule computed the same way, so they reach the ends it chose, the
+/// resolved ticket among them. A scenario of the form `dandori run` reads, which answers the call of
+/// the rule itself, stops `ritsu run` at that call and says why; `ritsu dandori run` runs it.
+#[test]
+fn every_scenario_of_a_flow_that_calls_a_rule_runs_under_ritsu_run() {
+    let dir = here().join("tests/projects/ticket_desk");
+    for (flow, rule, lang, why) in [
+        ("ticket_desk.flow", "step", "en", "cannot be run: it answers the call of the rule step itself"),
+        ("ticket_desk.ja.flow", "一歩", "ja", "を流せません: 規則 一歩 の呼び出しの答えを、シナリオが自分で持っています"),
+    ] {
+        let (code, out, err) = ritsu_in(&dir, &["dandori", "scenarios", flow]);
+        assert_eq!(code, 0, "{flow}: {err}");
+        let scenarios: Vec<Value> = serde_json::from_str(&out).unwrap_or_else(|e| panic!("{e}: {out}"));
+        assert!(scenarios.len() >= 5, "{flow}: {} scenarios", scenarios.len());
+        let t = TempDir::new("ticket-desk");
+        let mut ends = std::collections::BTreeSet::new();
+        let mut old = None;
+        for (i, sc) in scenarios.iter().enumerate() {
+            assert_eq!(sc["rules"], "rulec", "{flow} {i}: {sc}");
+            let f = t.path().join(format!("{i:03}.json"));
+            std::fs::write(&f, sc.to_string()).unwrap();
+            let f = f.to_string_lossy().into_owned();
+            let (code, out, err) = ritsu_in(&dir, &["run", flow, "--scenario", &f, "--format", "json", "--lang", lang]);
+            assert_eq!(code, 0, "{flow} {i}: {err}\n{sc}");
+            let ran: Value = serde_json::from_str(&out).unwrap();
+            let events = ran["events"].as_array().unwrap();
+            let by = |who: &str| events.iter().filter(|e| e["by"] == who).count();
+            assert_eq!(by("scenario"), sc["answers"].as_array().unwrap().len(), "{flow} {i}: every answer of the scenario is used, and no more:\n{out}");
+            assert!(events.iter().filter(|e| e["call"] == rule).all(|e| e["by"] == "rulec"), "{flow} {i}: {out}");
+            let (code, trace, err) = ritsu_in(&dir, &["dandori", "run", flow, "--scenario", &f]);
+            assert_eq!(code, 0, "{flow} {i}: {err}");
+            assert_eq!(serde_json::from_str::<Value>(&trace).unwrap(), ran["trace"], "{flow} {i}");
+            let end = &ran["trace"]["end"];
+            ends.insert(if end.get("succeed").is_some() { "succeed".to_string() } else { format!("fail {}", end["fail"]["error"]) });
+            // the first run that calls the rule, written as `dandori run` reads it: the rule's
+            // answer in its place among the answers
+            if old.is_none() && by("rulec") > 0 {
+                let answers: Vec<Value> = events.iter().filter(|e| e.get("answer").is_some()).map(|e| e["answer"].clone()).collect();
+                let mut o = sc.clone();
+                o.as_object_mut().unwrap().remove("rules");
+                o["answers"] = Value::Array(answers);
+                old = Some((o, ran["trace"].clone()));
+            }
+        }
+        assert!(ends.contains("succeed") && ends.iter().any(|e| e.starts_with("fail")), "{flow}: {ends:?}");
+        let (o, trace) = old.unwrap_or_else(|| panic!("{flow}: no scenario calls the rule"));
+        let f = t.path().join("old.json");
+        std::fs::write(&f, o.to_string()).unwrap();
+        let f = f.to_string_lossy().into_owned();
+        let (code, out, err) = ritsu_in(&dir, &["run", flow, "--scenario", &f, "--lang", lang]);
+        assert!(code == 2 && out.is_empty() && err.contains(why), "{flow}: {code} {err}");
+        let (code, out, err) = ritsu_in(&dir, &["dandori", "run", flow, "--scenario", &f]);
+        assert_eq!(code, 0, "{flow}: {err}");
+        assert_eq!(serde_json::from_str::<Value>(&out).unwrap(), trace, "{flow}");
+    }
+}
+

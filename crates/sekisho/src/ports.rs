@@ -34,12 +34,21 @@ type Kept = RefCell<BTreeMap<(PathBuf, PathBuf), Rc<Result<Outcome, String>>>>;
 pub struct Engine {
     suite: Suite,
     kept: Kept,
+    /// The most combinations of one action a check walks (`--budget`).
+    budget: u64,
 }
 
 impl Engine {
     /// sekisho with the languages `suite` joins.
     pub fn new(suite: Suite) -> Engine {
-        Engine { suite, kept: RefCell::default() }
+        Engine { suite, kept: RefCell::default(), budget: crate::check::DEFAULT_BUDGET }
+    }
+
+    /// The same engine, with the check of each action held to `budget` combinations: what
+    /// `ritsu check --budget` passes on.
+    pub fn with_budget(mut self, budget: u64) -> Engine {
+        self.budget = budget;
+        self
     }
 
     /// The check of the file at `disk` with the references written from `root`, made once in a
@@ -50,7 +59,7 @@ impl Engine {
         if let Some(o) = self.kept.borrow().get(&key) {
             return o.clone();
         }
-        let opts = Options { root: Some(root.to_path_buf()), ..Options::default() };
+        let opts = Options { root: Some(root.to_path_buf()), budget: self.budget };
         let o = Rc::new(match ritsu_base::fs::read_to_string(disk) {
             Ok(src) => Ok(crate::check::check_text(shown, &src, &self.suite, &opts)),
             Err(e) => Err(e.to_string()),

@@ -1,0 +1,53 @@
+# A support ticket, answered event by event. What comes in is an event the desk is told of; a rule
+# says from the ticket's stage what the next stage is and what the desk does about it, and the
+# flow carries the stage from one event to the next until the ticket is resolved. The rule is
+# rulec's; every other task is the desk's own.
+workflow ticket_desk v1
+description "A support ticket, answered event by event as a rule decides, until it is resolved"
+
+use rule step from "rules/ticket_step.rule"
+
+record Happening
+  event : step.desk_event
+  days  : int  range >=0 <=30
+
+inputs
+  ticket : string
+
+outputs
+  events : int
+
+task next_event() -> Happening
+  event
+  timeout 7 days
+
+task remind(ticket: string)
+  idempotent
+
+task page_manager(ticket: string)
+  key
+
+task send_survey(ticket: string)
+  key
+
+task close(ticket: string)
+  key
+
+flow
+  let s = received
+  repeat at most 20 times
+    let h = next_event()
+      on timeout => fail Abandoned "No event came in a week"
+    let r = step(stage: s, event: h.event, days: h.days)
+    let s = r.next_stage
+    match r.reaction
+      nothing => pass
+      remind_customer => remind(ticket: ticket)
+      page_manager => page_manager(ticket: ticket)
+      send_survey => send_survey(ticket: ticket)
+    match r.next_stage
+      resolved =>
+        close(ticket: ticket)
+        succeed events = 1
+      received, waiting, escalated => pass
+  fail TooLong "More than 20 events on one ticket"

@@ -94,6 +94,9 @@ ritsu check: 2 files (rulec 1, dandori 1): 1 fail (1 error); borders between the
 - Paths are counted from the root: the nearest directory above the first path given that holds
   `.git`, or the path given. `--root <dir>` says it.
 - `--lang ja` (or `RITSU_LANG=ja`) prints the text in Japanese.
+- `--budget <n>` raises (or lowers) what the checks that walk a space may walk: the nodes rulec's
+  check of one rule visits (E109, or E128 for a machine) and the combinations sekisho walks for one
+  action (E307).
 
 ## 3. The diagnostics across the languages
 
@@ -168,8 +171,10 @@ book stock (books/stock.book) at the end:
 The third column says who answered each call (`chobo`, `rulec`, `koyomi`, or `scenario`); a wait
 takes the time it says, a hold expires as the run's time goes by, and the end of each book is
 printed. The scenario is the one `dandori run` reads (an input, `now`, the answers of the other
-tasks) with `books`, what was done to the books before the run. `dandori scenarios <file.flow>`
-writes scenarios that take every arm. `--target` shows the calls as a platform would make them,
+tasks) with `books`, what was done to the books before the run. `ritsu dandori scenarios
+<file.flow>` writes scenarios that take every arm; the calls of the flow's own rules are rulec's to
+answer there too (`"rules": "rulec"`), so each runs under `ritsu run` as it is. A scenario that
+answers those calls itself, written before, stops `ritsu run` at the first of them (exit 2). `--target` shows the calls as a platform would make them,
 `--format json` prints one object. Exit codes: 0 the run came to its end (succeeded, failed or was
 cancelled), 1 the flow has errors or the run could not go on (the scenario ran out of answers, say),
 2 bad arguments or a scenario that cannot be run.

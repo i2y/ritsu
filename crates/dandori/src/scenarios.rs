@@ -64,9 +64,40 @@ struct Ex<'a> {
     /// the flow checks a rule's precondition (`TK::Check`): its numbers and days are made as values
     /// left open with what was made in them, which a check changes to take the way it chose
     steered: bool,
+    /// the calls of rules are rulec's: answered by the port of rules from the values the call gives,
+    /// as `ritsu run` answers them, and not written in the scenario (`generate_computed`)
+    computed: bool,
+    /// rulec gave a call of a rule no answer at all, which stops a run of `ritsu run` short: the run
+    /// is not written
+    dead: bool,
 }
 
+/// Scenarios whose `answers` answer every call, the calls of rules among them, with the answers
+/// chosen here: what `dandori run` reads, and the runners of the platforms with it.
 pub fn generate(m: &Model) -> Vec<Value> {
+    generate_in(m, false)
+}
+
+/// Scenarios whose calls of rules rulec answers, through the port of rules the program that runs
+/// dandori hands over, as `ritsu run` answers them: what `ritsu dandori scenarios` writes
+/// (§15.209 of rulec's DESIGN). The values a call gives a rule are chosen at the call, where they
+/// were left open, and rulec's outputs for them are what the run goes on with; no answer for the
+/// call is written, and each scenario says so (`"rules": "rulec"`). To change what a rule comes
+/// to, a run changes where its values come from — the answers of the tasks before it. The scenarios
+/// `generate` wrote for `ritsu dandori scenarios` answered the calls of rules with a value chosen
+/// here, which `ritsu run` never read: it computes the rule, and read every answer after it one
+/// call off.
+pub fn generate_computed(m: &Model) -> Vec<Value> {
+    let mut out = generate_in(m, true);
+    if m.rules.iter().any(|r| matches!(r.kind, RuleKind::Rule)) {
+        for sc in out.iter_mut() {
+            sc["rules"] = json!(crate::computed::RULES_COMPUTED);
+        }
+    }
+    out
+}
+
+fn generate_in(m: &Model, computed: bool) -> Vec<Value> {
     let mut out = Vec::new();
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut counts: BTreeMap<(String, usize), usize> = BTreeMap::new();
@@ -104,9 +135,14 @@ pub fn generate(m: &Model) -> Vec<Value> {
             made_values: 0,
             sparse: false,
             steered: m.all_stmts().iter().any(|s| matches!(s.kind, TK::Check(_))),
+            computed,
+            dead: false,
         };
         ex.run();
         counts = std::mem::take(&mut ex.counts);
+        if ex.dead {
+            continue;
+        }
         let new: Vec<String> = ex.labels.iter().filter(|l| !seen.contains(*l)).cloned().collect();
         if new.is_empty() {
             continue;
@@ -710,6 +746,12 @@ impl<'a> Ex<'a> {
             self.steps += 1;
             if self.steps > MAX_STEPS {
                 self.stopped = true;
+                // A run cut here has no end of its own. With the rules rulec's, a loop goes on as
+                // rulec answers, not as a choice made here sticks, and `ritsu run` would run out of
+                // answers where this stopped: such a run is not written (`generate_computed`).
+                if self.computed {
+                    self.dead = true;
+                }
                 return Ctl::Stop;
             }
             match self.stmt(s) {
@@ -979,6 +1021,11 @@ impl<'a> Ex<'a> {
 
     fn call(&mut self, s: &TStmt, target: Option<&Target>, callee: &Callee, handlers: &[THandler]) -> Ctl {
         let m = self.m;
+        if let (true, Callee::Rule(r)) = (self.computed, callee) {
+            if matches!(m.rules[*r].kind, RuleKind::Rule) {
+                return self.computed_rule(s, target, *r, handlers);
+            }
+        }
         let result_ty = match callee {
             Callee::Task(t) => m.tasks[*t].result.clone(),
             Callee::Rule(r) => Some(Ty::Record(m.rules[*r].outputs)),
@@ -1367,6 +1414,70 @@ impl<'a> Ex<'a> {
                 }
                 self.take_error(callee, &kind, &name, handlers)
             }
+        }
+    }
+
+    /// A call of a rule rulec answers (`generate_computed`): the values the call gives, every one
+    /// left open chosen here, and the record of outputs rulec computes for them, as `ritsu run`
+    /// computes it; an input the generated code refuses at its door fails the call, as there. No
+    /// answer is written for it.
+    fn computed_rule(&mut self, s: &TStmt, target: Option<&Target>, r: usize, handlers: &[THandler]) -> Ctl {
+        let TK::Call { args, .. } = &s.kind else { return Ctl::Next };
+        let mut given = Map::new();
+        for (name, e) in args {
+            let v = self.chosen(e, &format!("call {} {name}", s.site));
+            given.insert(name.clone(), v);
+        }
+        self.labels.insert(format!("{}:rulec", s.site));
+        match crate::sources::rule_outputs(self.m, r, &given) {
+            Ok(Ok(record)) => {
+                self.assign(target, record, None);
+                Ctl::Next
+            }
+            Ok(Err(_)) => self.take_error(&Callee::Rule(r), "failure", "failure", handlers),
+            Err(_) => {
+                self.dead = true;
+                self.stopped = true;
+                Ctl::Stop
+            }
+        }
+    }
+
+    /// What `e` comes to now, every value left open in it chosen here.
+    fn chosen(&mut self, e: &TExpr, at: &str) -> Value {
+        let v = match e {
+            TExpr::Var { name, fields, .. } => {
+                let mut v = self.vars.get(name).cloned().unwrap_or(Value::Null);
+                for (k, f) in fields.iter().enumerate() {
+                    v = self.read(v, &format!("{at}.{k}"));
+                    v = v.get(f).cloned().unwrap_or(Value::Null);
+                }
+                v
+            }
+            _ => crate::interp::value_of(&self.vars, e),
+        };
+        self.settled(v, at)
+    }
+
+    /// A value with every value left open in it chosen: an enum, a bool, a value that may be absent,
+    /// the length of a list, at every depth.
+    fn settled(&mut self, v: Value, at: &str) -> Value {
+        let v = match Ex::hole_id(&v) {
+            Some(id) if matches!(self.holes[id].0, Ty::List(_)) => Value::Array(self.items(v, 1, at)),
+            Some(_) => self.read(v, at),
+            None => v,
+        };
+        match v {
+            Value::Object(o) => {
+                let mut out = Map::new();
+                for (k, x) in o {
+                    let x = self.settled(x, &format!("{at}.{k}"));
+                    out.insert(k, x);
+                }
+                Value::Object(out)
+            }
+            Value::Array(a) => Value::Array(a.into_iter().enumerate().map(|(i, x)| self.settled(x, &format!("{at}[{i}]"))).collect()),
+            other => other,
         }
     }
 

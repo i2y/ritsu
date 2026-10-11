@@ -117,13 +117,24 @@ pub fn commands() -> Vec<Cmd> {
                 "files or directories; else the directory you are in. A directory stands for every .rule, .flow, .cal, .book, .geas, .req, .ctx, .gate and .proto under it"
             ),
         )],
-        flags: vec![flag("--format", Some("json"), tr!("一つの JSON で出す", "print one JSON object")).choices(&["json"]), root_flag()],
+        flags: vec![
+            flag("--format", Some("json"), tr!("一つの JSON で出す", "print one JSON object")).choices(&["json"]),
+            root_flag(),
+            flag(
+                "--budget",
+                Some("<n>"),
+                tr!(
+                    "検査が調べる量の上限。rulec では一つの規則の検査が訪れるノード数（既定 50000000。超えたら E109、ステートマシンは E128）、sekisho では一つの action の組み合わせの数（既定 100000000。超えたら E307）",
+                    "the cap on how much a check walks: the nodes rulec's check of one rule visits (50000000 by default; past it, E109, or E128 for a machine) and the combinations sekisho walks for one action (100000000 by default; past it, E307)"
+                ),
+            ),
+        ],
         exits: vec![
             (0, tr!("エラーなし（警告はありうる）", "no errors (there may be warnings)")),
             (1, tr!("どれかの言語か、言語をまたぐ検査にエラーがある", "an error in a language, or across them")),
             (2, tr!("引数の誤り、読めないファイル、言語が確かめられなかったファイル", "bad arguments, a file that cannot be read, or one a language could not check")),
         ],
-        examples: vec!["ritsu check", "ritsu check rules/ flows/order.flow --format json", "ritsu check . --lang ja"],
+        examples: vec!["ritsu check", "ritsu check rules/ flows/order.flow --format json", "ritsu check . --lang ja", "ritsu check rules/ --budget 200000000"],
         codes: ritsu_cross::codes::codes(),
     }];
     cmds.push(run());

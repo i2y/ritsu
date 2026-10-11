@@ -99,6 +99,20 @@ pub fn rule(path: &Path) -> Result<RuleFacts, Vec<Said>> {
     current().rules().facts(path)
 }
 
+/// What a call of a rule comes to, through the port of rules the program that runs dandori hands
+/// over, as `ritsu run` answers it (`computed::rule_answer`).
+pub fn rule_answer(m: &crate::model::Model, r: usize, args: &serde_json::Map<String, serde_json::Value>) -> Result<serde_json::Value, String> {
+    let s = current();
+    crate::computed::rule_answer(s.rules(), m, r, args)
+}
+
+/// The same, as the record of the rule's outputs the flow reads, or why the call is refused at the
+/// door (`computed::rule_outputs`).
+pub fn rule_outputs(m: &crate::model::Model, r: usize, args: &serde_json::Map<String, serde_json::Value>) -> Result<Result<serde_json::Value, String>, String> {
+    let s = current();
+    crate::computed::rule_outputs(s.rules(), m, r, args)
+}
+
 /// What koyomi knows of a dates file, or what is said instead.
 pub fn dates(path: &Path) -> Result<DateFacts, Vec<Said>> {
     current().dates().facts(path)

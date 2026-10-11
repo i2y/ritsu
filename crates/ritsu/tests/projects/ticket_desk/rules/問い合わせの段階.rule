@@ -1,0 +1,34 @@
+rule 問い合わせの段階(ticket_step_ja) v1
+description "問い合わせの一歩。いまの段階と届いた出来事から、次の段階と、窓口がすることを決める。ritsu のテストのための例"
+
+enum 段階(ticket_stage) = 受付(received) | 返事待ち(waiting) | 上に回した(escalated) | 解決(resolved)
+enum 出来事(desk_event) = 客の連絡(customer_wrote) | 担当の返事(agent_answered) | 日の経過(day_passed) | 客のお礼(customer_thanked)
+enum 対応(desk_reaction) = 何もしない(nothing) | 客に催促(remind_customer) | 責任者を呼ぶ(page_manager) | アンケートを送る(send_survey)
+
+inputs
+  段階(stage) : 段階
+  出来事(event) : 出来事
+  日数(days)  : number  range >=0 <=30
+
+outputs
+  次の段階(next_stage) : 段階
+  対応(reaction)       : 対応
+
+table 一歩(step)
+policy unique
+| 段階       | 出来事     | 日数 | -> 次の段階 | 対応             |
+| 解決       | -          | -    | 解決        | 何もしない       |
+| not: 解決  | 客のお礼   | -    | 解決        | アンケートを送る |
+| not: 解決  | 担当の返事 | -    | 返事待ち    | 何もしない       |
+| not: 解決  | 客の連絡   | -    | 受付        | 何もしない       |
+| 受付       | 日の経過   | -    | 上に回した  | 責任者を呼ぶ     |
+| 上に回した | 日の経過   | -    | 上に回した  | 何もしない       |
+| 返事待ち   | 日の経過   | >=3  | 上に回した  | 責任者を呼ぶ     |
+| 返事待ち   | 日の経過   | <3   | 返事待ち    | 客に催促         |
+
+examples
+| 段階     | 出来事     | 日数 | -> 次の段階 | 対応             |
+| 受付     | 担当の返事 | 0    | 返事待ち    | 何もしない       |
+| 返事待ち | 日の経過   | 1    | 返事待ち    | 客に催促         |
+| 返事待ち | 日の経過   | 3    | 上に回した  | 責任者を呼ぶ     |
+| 返事待ち | 客のお礼   | 0    | 解決        | アンケートを送る |

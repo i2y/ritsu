@@ -143,3 +143,11 @@ $ dandori run <file.flow> --scenario <file.json> [--target reference|asl|tempora
 a case can move, and lists that are empty, short, and longer than their loop takes. `run` plays one
 through the reference interpreter and prints the calls as the target would make them.
 [How it is checked](https://i2y.github.io/ritsu/dandori/assurance/) says how the builds are held to it.
+
+Run as `ritsu dandori scenarios`, with rulec beside it, a call of a rule of the flow's own (not one
+called at its Connect service) is not a place to choose an answer: rulec computes it from the
+values the call gives, as `ritsu run` does, and the scenario says so with `"rules": "rulec"` and
+holds no answer for it. To change what a rule answers, a scenario changes the answers of the
+tasks its inputs come from. `ritsu dandori run` computes those calls the same way, so it runs
+such a scenario as `ritsu run` does. A scenario written before, which answers the calls of rules
+itself, stops `ritsu run` at the first of them, saying so; `ritsu dandori run` still runs it.

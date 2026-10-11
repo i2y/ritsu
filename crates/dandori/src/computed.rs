@@ -105,6 +105,10 @@ pub enum Stopped {
 /// The languages a run asks, and what it keeps between the calls: the books, and its time.
 pub struct Computed {
     rules: Rc<dyn Rules>,
+    /// the scenario answers the calls of rules itself (`answers_rules`)
+    answers_rules: bool,
+    /// why the run stopped at a call of a rule the scenario answers itself: the scenario's to say
+    answered: Option<Text>,
     dates: Rc<dyn Dates>,
     /// each book of the flow's (by its place in the model), opened at the start
     ledgers: Vec<Box<dyn Ledger>>,
@@ -135,9 +139,14 @@ pub fn run(m: &Model, sc: &Value, view: View, rules: Rc<dyn Rules>, dates: Rc<dy
         ledgers.push(l);
     }
     let names = m.books.iter().map(|b| b.name.clone()).collect();
-    let mut c = Computed { rules, dates, ledgers, names, date_facts: BTreeMap::new(), start_ms, elapsed_ms: 0, events: Vec::new() };
+    let mut c = Computed { rules, answers_rules: answers_rules(sc), answered: None, dates, ledgers, names, date_facts: BTreeMap::new(), start_ms, elapsed_ms: 0, events: Vec::new() };
     let before = c.before(m, sc).map_err(Stopped::Scenario)?;
-    let (trace, _) = crate::interp::run_answered(m, sc, view, &mut c).map_err(Stopped::Run)?;
+    let (trace, _) = match crate::interp::run_answered(m, sc, view, &mut c) {
+        Ok(ran) => ran,
+        // a scenario of the old form stops where it is first read wrong, and it is the scenario
+        // that cannot be run
+        Err(e) => return Err(c.answered.take().map_or(Stopped::Run(e), Stopped::Scenario)),
+    };
     let answers: Vec<Value> = c.events.iter().filter_map(|e| if let Event::Answer { answer, .. } = e { Some(answer.clone()) } else { None }).collect();
     let mut replay = sc.clone();
     if let Some(o) = replay.as_object_mut() {
@@ -212,32 +221,18 @@ impl Computed {
         }
     }
 
-    /// A rule's outputs for the arguments, as rulec's evaluator computes them, refused as the
-    /// generated code refuses an input at its door; read as the call reads the rule's answer (as its
-    /// service writes it, for a rule called at its Connect service).
+    /// A rule's outputs for the arguments, as rulec's evaluator computes them (`rule_answer`). A
+    /// scenario `ritsu dandori scenarios` wrote before it left the rules to rulec answers the
+    /// calls of rules itself, and a run that read it would go on one answer off from here: it stops
+    /// at the first call of a rule instead, and says so.
     fn rule(&mut self, m: &Model, r: usize, args: &Map<String, Value>) -> Result<Value, String> {
-        let ru = &m.rules[r];
-        let mut inputs = Vec::new();
-        for c in &ru.info.inputs {
-            let v = args.get(&c.name).unwrap_or(&Value::Null);
-            match to_rule_value(&c.ty, v) {
-                Some(x) => inputs.push((c.name.clone(), x)),
-                None => return Ok(failure(&format!("the input `{}` of the rule {} is not a value of its type: {v}", c.name, ru.name))),
-            }
+        if self.answers_rules {
+            let why = answered_rule(&m.rules[r].name);
+            let en = why.en.clone();
+            self.answered = Some(why);
+            return Err(en);
         }
-        match self.rules.eval(&ru.info.path, &inputs) {
-            Ok(outs) => {
-                let record = Value::Object(outs.iter().map(|(n, v)| (n.clone(), from_rule_value(v))).collect());
-                let answer = match &ru.connect {
-                    Some(c) => render::rule_wire(c, &record),
-                    None => record,
-                };
-                Ok(json!({ "ok": answer }))
-            }
-            Err(RuleError::Input(t)) => Ok(failure(&t.en)),
-            Err(RuleError::Contradiction(t)) => Err(format!("rulec gives the rule {} no answer: {}", ru.name, t.en)),
-            Err(RuleError::Unread(said)) => Err(format!("rulec cannot read the rule {}: {}", ru.name, said_en(&said))),
-        }
+        rule_answer(&*self.rules, m, r, args)
     }
 
     /// A date of a dates file for the arguments, as koyomi's interpreter computes it: the day, and
@@ -347,6 +342,79 @@ impl Answers for Computed {
         let ms = (target - self.now_ms()).max(0);
         self.go_by(ms as f64 / 1000.0, Passing::Wait, Some(given));
     }
+}
+
+/// What a call of a rule comes to, as `ritsu run` answers it and `ritsu dandori scenarios` writes
+/// the runs it chooses with (§15.209 of rulec's DESIGN, dandori's DESIGN): rulec's outputs for the
+/// arguments, as the call reads the rule's answer — as its service writes it, for a rule called at
+/// its Connect service — and a failure where the generated code refuses an input at its door. Err
+/// where rulec gives no answer at all.
+pub fn rule_answer(rules: &dyn Rules, m: &Model, r: usize, args: &Map<String, Value>) -> Result<Value, String> {
+    Ok(match rule_outputs(rules, m, r, args)? {
+        Ok(record) => match &m.rules[r].connect {
+            Some(c) => json!({ "ok": render::rule_wire(c, &record) }),
+            None => json!({ "ok": record }),
+        },
+        Err(cause) => failure(&cause),
+    })
+}
+
+/// [`rule_answer`] before it is written as an answer: the record of the rule's outputs as the flow
+/// reads them, or why the generated code refuses the call at its door.
+pub fn rule_outputs(rules: &dyn Rules, m: &Model, r: usize, args: &Map<String, Value>) -> Result<Result<Value, String>, String> {
+    let ru = &m.rules[r];
+    let mut inputs = Vec::new();
+    for c in &ru.info.inputs {
+        let v = args.get(&c.name).unwrap_or(&Value::Null);
+        match to_rule_value(&c.ty, v) {
+            Some(x) => inputs.push((c.name.clone(), x)),
+            None => return Ok(Err(format!("the input `{}` of the rule {} is not a value of its type: {v}", c.name, ru.name))),
+        }
+    }
+    match rules.eval(&ru.info.path, &inputs) {
+        Ok(outs) => Ok(Ok(Value::Object(outs.iter().map(|(n, v)| (n.clone(), from_rule_value(v))).collect()))),
+        Err(RuleError::Input(t)) => Ok(Err(t.en)),
+        Err(RuleError::Contradiction(t)) => Err(format!("rulec gives the rule {} no answer: {}", ru.name, t.en)),
+        Err(RuleError::Unread(said)) => Err(format!("rulec cannot read the rule {}: {}", ru.name, said_en(&said))),
+    }
+}
+
+/// Whether a scenario says its calls of rules are rulec's to answer (`RULES_COMPUTED`).
+pub fn rules_computed(sc: &Value) -> bool {
+    sc.get("rules").and_then(|v| v.as_str()) == Some(RULES_COMPUTED)
+}
+
+/// The calls of rules answered by rulec through the port of rules the program that runs dandori
+/// hands over, and every other call by the scenario: how `dandori run` runs a scenario whose
+/// calls of rules are rulec's (`rules_computed`), as `ritsu dandori scenarios` writes them.
+pub struct RulesComputed;
+
+impl Answers for RulesComputed {
+    fn answer(&mut self, m: &Model, _view: View, callee: &Callee, args: &Map<String, Value>) -> Option<Result<Value, String>> {
+        match callee {
+            Callee::Rule(r) if matches!(m.rules[*r].kind, RuleKind::Rule) => Some(crate::sources::rule_answer(m, *r, args)),
+            _ => None,
+        }
+    }
+}
+
+/// The value of a scenario's `rules` that says the calls of rules are not in its `answers`:
+/// rulec computes them. `ritsu dandori scenarios` writes it.
+pub const RULES_COMPUTED: &str = "rulec";
+
+/// Whether a scenario answers the calls of rules itself: one a scenario generator wrote (it says
+/// what it `covers`) without saying the rules are rulec's (`rules`). `ritsu dandori scenarios`
+/// wrote those before it left the rules to rulec, and `dandori run` reads them as they are.
+pub fn answers_rules(sc: &Value) -> bool {
+    sc.get("covers").is_some() && sc.get("rules").and_then(|v| v.as_str()) != Some(RULES_COMPUTED)
+}
+
+/// What a run says when it stops at a call of a rule that the scenario answers itself.
+fn answered_rule(rule: &str) -> Text {
+    ritsu_base::tr!(
+        "規則 {rule} の呼び出しの答えを、シナリオが自分で持っています（`dandori run` が読む形で、`ritsu dandori scenarios` が規則を rulec に任せる前に書いたものです）。`ritsu run` は規則を rulec で計算するので、このまま進むと、それより後の答えが一つずつずれます。`ritsu dandori scenarios` でシナリオを書き直すか、このシナリオは `ritsu dandori run` で流してください",
+        "it answers the call of the rule {rule} itself, as `dandori run` reads a scenario: `ritsu dandori scenarios` wrote it before it left the rules to rulec. `ritsu run` computes the rule with rulec, so every answer after it would be read one call off. Write the scenarios again with `ritsu dandori scenarios`, or run this one with `ritsu dandori run`"
+    )
 }
 
 /// A failure of a call, with its cause: what the language says of it.

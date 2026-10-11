@@ -524,7 +524,14 @@ fn cmd_run(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
             return 2;
         }
     };
-    match crate::interp::run(&model, &sc, view) {
+    // A scenario whose calls of rules are rulec's (`ritsu dandori scenarios`) is run with them
+    // computed through the port of rules, as `ritsu run` computes them.
+    let ran = if crate::computed::rules_computed(&sc) {
+        crate::interp::run_answered(&model, &sc, view, &mut crate::computed::RulesComputed).map(|(t, _)| t)
+    } else {
+        crate::interp::run(&model, &sc, view)
+    };
+    match ran {
         Ok(trace) => {
             let _ = writeln!(out, "{}", serde_json::to_string_pretty(&trace).unwrap());
             0
@@ -549,7 +556,8 @@ fn cmd_scenarios(a: &Asked, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
         Ok(None) => return 1,
         Err(c) => return c,
     };
-    let list = crate::scenarios::generate(&model);
+    // The calls of rules are rulec's, as `ritsu run` answers them (§15.209 of rulec's DESIGN).
+    let list = crate::scenarios::generate_computed(&model);
     match &a.out {
         Some(dir) => {
             if let Err(e) = std::fs::create_dir_all(dir) {

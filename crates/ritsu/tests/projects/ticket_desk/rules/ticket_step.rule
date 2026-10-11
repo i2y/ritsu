@@ -1,0 +1,34 @@
+rule ticket_step v1
+description "One step of a support ticket: from the stage it is in and the event that came, the next stage and what the desk does about it. Written for ritsu's tests"
+
+enum ticket_stage = received | waiting | escalated | resolved
+enum desk_event = customer_wrote | agent_answered | day_passed | customer_thanked
+enum desk_reaction = nothing | remind_customer | page_manager | send_survey
+
+inputs
+  stage : ticket_stage
+  event : desk_event
+  days  : number  range >=0 <=30
+
+outputs
+  next_stage : ticket_stage
+  reaction   : desk_reaction
+
+table step
+policy unique
+| stage         | event            | days | -> next_stage | reaction        |
+| resolved      | -                | -    | resolved      | nothing         |
+| not: resolved | customer_thanked | -    | resolved      | send_survey     |
+| not: resolved | agent_answered   | -    | waiting       | nothing         |
+| not: resolved | customer_wrote   | -    | received      | nothing         |
+| received      | day_passed       | -    | escalated     | page_manager    |
+| escalated     | day_passed       | -    | escalated     | nothing         |
+| waiting       | day_passed       | >=3  | escalated     | page_manager    |
+| waiting       | day_passed       | <3   | waiting       | remind_customer |
+
+examples
+| stage    | event            | days | -> next_stage | reaction        |
+| received | agent_answered   | 0    | waiting       | nothing         |
+| waiting  | day_passed       | 1    | waiting       | remind_customer |
+| waiting  | day_passed       | 3    | escalated     | page_manager    |
+| waiting  | customer_thanked | 0    | resolved      | send_survey     |

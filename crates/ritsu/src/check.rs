@@ -198,7 +198,7 @@ fn refuse(msg: Text, lang: Lang, err: &mut dyn Write) -> u8 {
     2
 }
 
-/// `ritsu check [<path>...] [--root <dir>] [--format json]`: the exit code.
+/// `ritsu check [<path>...] [--root <dir>] [--format json] [--budget <n>]`: the exit code.
 pub fn command(args: &[String], lang: Lang) -> u8 {
     let code = run(args, lang, &mut std::io::stdout(), &mut std::io::stderr());
     let _ = std::io::stdout().flush();
@@ -221,6 +221,15 @@ pub fn run(args: &[String], lang: Lang, out: &mut dyn Write, err: &mut dyn Write
         let _ = write!(out, "{}", table.help_cmd(cmd, lang));
         return 0;
     }
+    // The budget of the checks that walk a space, the same number for every language that has
+    // one (rulec, sekisho); a positive whole number.
+    let budget = match a.get("--budget") {
+        None => None,
+        Some(v) => match v.parse::<u64>() {
+            Ok(n) if n > 0 => Some(n),
+            _ => return refuse(Text::new(format!("`--budget {v}` は正の整数ではありません"), format!("`--budget {v}` is not a positive integer")), lang, err),
+        },
+    };
     let project = match Project::load(&a.pos, a.get("--root")) {
         Ok(p) => p,
         Err(e) => return refuse(e, lang, err),
@@ -229,7 +238,7 @@ pub fn run(args: &[String], lang: Lang, out: &mut dyn Write, err: &mut dyn Write
     if project.files.iter().any(|f| f.tool == Tool::Geas) {
         geas::proc::stop_groups_on_signals();
     }
-    let joined = Joined::new();
+    let joined = Joined::with_budget(budget);
     let units = project.check(&joined, lang);
     let crossed = ritsu_cross::check(&project, &joined, lang);
     let report = Report { project: &project, units, ours: crossed.findings, borders: crossed.borders };

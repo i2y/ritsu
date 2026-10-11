@@ -37,15 +37,30 @@ impl Default for Joined {
 impl Joined {
     /// Every language, made once, and the index over them.
     pub fn new() -> Joined {
+        Joined::with_budget(None)
+    }
+
+    /// The same, with the checks that walk a space held to `budget` (`ritsu check --budget`): the
+    /// nodes rulec's check of a rule visits, its tables and its machine alike, and the combinations
+    /// sekisho's check of one action walks. `None` leaves each language its own default.
+    pub fn with_budget(budget: Option<u64>) -> Joined {
         // rulec reads the days of a koyomi date through koyomi's port (DESIGN 7.5 (b)).
-        let rulec = Rc::new(rulec::ports::Engine::with_dates(Joined::dates()));
+        let rulec = rulec::ports::Engine::with_dates(Joined::dates());
+        let rulec = Rc::new(match budget {
+            Some(n) => rulec.with_budget(i64::try_from(n).unwrap_or(i64::MAX)),
+            None => rulec,
+        });
         let koyomi = Rc::new(koyomi::ports::Engine);
         let chobo = Rc::new(chobo::ports::Engine);
         let geas = Rc::new(geas::ports::Engine);
         let dandori = Rc::new(dandori::ports::Engine);
-        let sekisho = Rc::new(sekisho::ports::Engine::new(
+        let sekisho = sekisho::ports::Engine::new(
             ritsu_ports::GatePorts { rules: rulec.clone(), dates: koyomi.clone(), books: chobo.clone(), flows: dandori.clone(), items: dandori.clone() }.into(),
-        ));
+        );
+        let sekisho = Rc::new(match budget {
+            Some(n) => sekisho.with_budget(n),
+            None => sekisho,
+        });
         let sakai = Rc::new(sakai::ports::Engine);
         let index = Index::new()
             .with_items(Tool::Rulec, rulec.clone())
