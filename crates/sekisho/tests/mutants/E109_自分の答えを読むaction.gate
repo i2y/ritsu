@@ -1,0 +1,77 @@
+gate 文書(documents_ja) v1
+description "documents.ja.gate で forbid をすべての action に効かせ、アーカイブする が自分の答えを読むもの"
+namespace RecordsJa
+
+enum 文書の状態(document_status) = 下書き(draft) | 確定(final)
+
+role 職員(staff)
+  description "事務所の文書を書き、自分の文書を保つ"
+  can 文書を見る, アーカイブする, 消す
+
+principal 利用者(User)
+  description "サインインした事務所の職員"
+  roles 職員
+
+resource 文書(Document)
+  description "事務所の文書"
+  attributes
+    状態(status) : 文書の状態
+    持ち主(owner) : 利用者
+    保全中(held)  : bool
+
+action 文書を見る(view_document)
+  description "文書を見る"
+  principal 利用者
+  resource 文書 from documentId
+
+action アーカイブする(archive_document)
+  description "文書をアーカイブする。文書は残り、表には出なくなる"
+  principal 利用者
+  resource 文書 from documentId
+
+action 消す(delete_document)
+  description "文書を消す。もとに戻せない"
+  principal 利用者
+  resource 文書 from documentId
+
+permit 職員は文書を見られる(staff_view_documents)
+  description "職員はどの文書も見られる"
+  principal in 職員
+  action 文書を見る
+
+permit 持ち主は確定した文書をアーカイブできる(owners_archive_final_documents)
+  description "確定した文書の持ち主は、保全中でなければ、その文書をアーカイブできる"
+  principal in 職員
+  action アーカイブする
+  when resource.状態 is 確定
+  when resource.持ち主 is principal
+  unless resource.保全中
+
+permit 持ち主は自分の文書を消せる(owners_delete_their_documents)
+  description "文書の持ち主は、保全中でなければ、その文書を消せる"
+  principal in 職員
+  action 消す
+  when resource.持ち主 is principal
+  unless resource.保全中
+
+# 弱い操作を先に。消す は、同じ principal と同じ文書で アーカイブする を尋ね、
+# アーカイブを許されるところでは拒まれる。
+forbid アーカイブできるものは消さない(what_can_be_archived_is_not_deleted)
+  description "アーカイブできる文書は、消さずにアーカイブする"
+  action any
+  when allowed アーカイブする
+
+expect deny 確定した文書は消さずにアーカイブする
+  description "保全中でない確定した文書は、持ち主も消さない。アーカイブする"
+  action 消す
+  when resource.状態 is 確定
+  when resource.持ち主 is principal
+  unless resource.保全中
+
+expect allow 持ち主は自分の下書きを消せる
+  description "保全中でない下書きは、持ち主が消せる"
+  principal in 職員
+  action 消す
+  when resource.状態 is 下書き
+  when resource.持ち主 is principal
+  unless resource.保全中

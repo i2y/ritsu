@@ -80,6 +80,24 @@ The other checks: an action no permit allows, a policy whose conditions never ho
 Every check comes to one of three answers: it holds, here is a combination where it does not, or it cannot be decided, and then it says why.
 Every code is in [docs/codes.md](docs/codes.md), with when it comes, how to fix it, and the smallest file that prints it (`sekisho explain E302`).
 
+## Another action's answer
+
+A condition can be another action's answer.
+`allowed approve` holds when `approve`, asked with the same principal and the same purchase, would be allowed, so an approver asks a higher approver only for what the approver could not approve:
+
+```gate
+permit approvers_ask_for_what_they_cannot_approve
+  description "An approver asks a higher approver to approve a submitted purchase, only when the approver could not approve it"
+  principal in approver
+  action request_approval
+  when resource.status is submitted
+  unless allowed approve
+```
+
+`sekisho check` walks `request_approval` together with what decides `approve`, so every combination has one answer of `approve`, the one Cedar gives.
+The generated code asks `approve` first, and gives Cedar its answer as `context.allowed_approve`.
+Actions that ask one another in a circle are E109; an input of `approve` given nothing, or a type `approve` does not take, is E110.
+
 ## Cedar, and the code that asks it
 
 Only a gate that passes its check is generated.
@@ -177,12 +195,16 @@ The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file 
 
 - [examples/refunds](examples/refunds): who may look at an order of a shop, refund it and export the record of refunds, with a rule of rulec for the clerk's limit, a dates file of koyomi for the refund period, the bank holidays of England and Wales, an OpenAPI document of the operations, and a dandori workflow that refunds returned orders.
   `refunds.ja.gate` is the same gate with Japanese names, reading the Japanese versions of the rule and the dates file.
+- [examples/approvals](examples/approvals): who approves a purchase, and who asks a higher approver instead: `request_approval` is allowed only where `approve` is not (`unless allowed approve`), with a rule of rulec for the approver's limit.
+  `approvals.ja.gate` is the same gate with Japanese names, reading the Japanese version of the rule.
+- [examples/documents](examples/documents): the weaker of two operations first: a document that can be archived is not deleted (`forbid … when allowed archive_document`).
+  `documents.ja.gate` is the same gate with Japanese names.
 
 ## How it is checked
 
 `cargo test -p sekisho` runs the language on its mutants and its examples, and runs the real Cedar.
 
-- 120 mutants, each the example or a fixture with one change, are held to the diagnostics they give, in English and in Japanese (60 of them with Japanese names, each with an English twin).
+- 132 mutants, each an example or a fixture with one change, are held to the diagnostics they give, in English and in Japanese (66 of them with Japanese names, each with an English twin).
 - The Cedar generated from every gate of the examples and the tests that passes check goes through the official Cedar CLI 4.13.0: `cedar validate` in strict mode finds nothing, `cedar format --check` passes, `cedar run-tests` answers every combination as sekisho's reference evaluation does, with the same deciding policies, and the JSON forms are what `cedar translate-schema` and `translate-policy` write.
 - Cedar written by hand gets the answers the official CLI gives: for a policy set and its schema (the ones in `tests/cedar_in/` and each of them changed at one place, and the Cedar generated from every gate that passes check, read as if written by hand), every combination sekisho counts is made a request with its entities and run through `cedar run-tests`, with the same decision and the same deciding policies. Where sekisho does not decide, it names the part of the policy it does not count.
 - The code generated for TypeScript, Python and Go builds the requests of every combination from raw data and asks cedar-wasm 4.13.0, cedarpy 4.12.1 and cedar-go v1.8.0, which answer as the reference evaluation; `tsc --strict`, `mypy --strict`, `go vet` and gofmt pass it.

@@ -3,7 +3,7 @@
 //!
 //! - `the_package_answers_as_the_binary_does`: the commands a person runs on the examples of the
 //!   eight languages (rulec's corpus is its examples), ritsu's test projects, the shops of the
-//!   playground and sekisho's example, in English and in Japanese, each run by the native binary
+//!   playground and sekisho's examples, in English and in Japanese, each run by the native binary
 //!   (`ritsu`, and a link to it named for each language) and by the package (`node
 //!   bin/<name>.js`) in the same copy of the files: standard output, standard error, exit code, and
 //!   every file the command wrote, byte for byte.
@@ -615,12 +615,19 @@ mod npm {
             for f in files("crates/sekisho/examples", ".gate") {
                 let p = format!("examples/{f}");
                 let p = p.as_str();
-                let r = "examples/refunds";
+                // each example with its own directory as the root, and the action of it that reads
+                // a computed value or another action's answer
+                let r = p.rsplit_once('/').map_or(".", |(d, _)| d);
+                let action = match r {
+                    "examples/approvals" => "request_approval",
+                    "examples/documents" => "delete_document",
+                    _ => "refund_order",
+                };
                 for args in [
                     &["check", p, "--root", r][..],
                     &["check", p, "--root", r, "--format", "json"],
                     &["vectors", p, "--root", r],
-                    &["vectors", p, "--root", r, "--action", "refund_order"],
+                    &["vectors", p, "--root", r, "--action", action],
                     &["api", p, "--root", r],
                     &["doc", p, "--root", r],
                     &["doc", p, "--root", r, "--format", "html"],

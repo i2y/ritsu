@@ -2,7 +2,7 @@
 //! sakai's and yuen's do:
 //!
 //! - Every line of `.gate` on the pages is a line of a `.gate` under `examples/` or `tests/`.
-//! - Every line of `cedar` and `cedarschema` is a line of what `gen --target cedar` writes for the
+//! - Every line of `cedar` and `cedarschema` is a line of what `gen --target cedar` writes for an
 //!   example, in English or in Japanese.
 //! - Every `$ sekisho …` that shows what it prints prints that, run as `ritsu sekisho` runs it
 //!   (every language joined); `gen` writes into a scratch directory in place of the `--out` the
@@ -121,17 +121,20 @@ fn joined(args: &[String]) -> (u8, String, String) {
 #[test]
 fn the_cedar_on_the_pages_is_what_gen_writes() {
     let t = ritsu_testkit::TempDir::new("docs-cedar");
-    for (gate, lang) in [("examples/refunds/refunds.gate", "en"), ("examples/refunds/refunds.ja.gate", "ja")] {
-        let out = t.path().join(lang);
-        let args: Vec<String> = ["gen", gate, "--target", "cedar", "--root", "examples/refunds", "--out", out.to_str().unwrap(), "--lang", lang].iter().map(|s| s.to_string()).collect();
-        let (code, said, err) = joined(&args);
-        assert_eq!(code, 0, "{said}{err}");
+    for example in ["refunds", "approvals", "documents"] {
+        let root = format!("examples/{example}");
+        for (gate, lang) in [(format!("{root}/{example}.gate"), "en"), (format!("{root}/{example}.ja.gate"), "ja")] {
+            let out = t.path().join(lang);
+            let args: Vec<String> = ["gen", &gate, "--target", "cedar", "--root", &root, "--out", out.to_str().unwrap(), "--lang", lang].iter().map(|s| s.to_string()).collect();
+            let (code, said, err) = joined(&args);
+            assert_eq!(code, 0, "{said}{err}");
+        }
     }
     let mut real = lines_of(&[t.path().join("en").to_str().unwrap(), t.path().join("ja").to_str().unwrap()], "cedar");
     real.extend(lines_of(&[t.path().join("en").to_str().unwrap(), t.path().join("ja").to_str().unwrap()], "cedarschema"));
     let (seen, wrong) = not_real(&["cedar", "cedarschema"], &real);
     assert!(seen >= 5, "{seen} blocks of Cedar on the pages: were the fences changed?");
-    assert!(wrong.is_empty(), "not a line of the Cedar gen writes for the example:\n{}", wrong.join("\n"));
+    assert!(wrong.is_empty(), "not a line of the Cedar gen writes for the examples:\n{}", wrong.join("\n"));
 }
 
 #[test]

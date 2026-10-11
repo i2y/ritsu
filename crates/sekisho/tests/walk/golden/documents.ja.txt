@@ -1,0 +1,8 @@
+combinations: 文書を見る 2, アーカイブする 16, 消す 16; 34 in all
+permit 職員は文書を見られる: allows 1 combinations, 1 of them alone
+permit 持ち主は確定した文書をアーカイブできる: allows 1 combinations, 1 of them alone
+permit 持ち主は自分の文書を消せる: allows 1 combinations, 1 of them alone
+forbid アーカイブできるものは消さない: holds on 1 combinations, and turns 1 that a permit allows into a deny
+expect deny 確定した文書は消さずにアーカイブする: holds on all 2
+expect allow 持ち主は自分の下書きを消せる: holds on all 1
+role 職員: can ["アーカイブする", "文書を見る", "消す"]

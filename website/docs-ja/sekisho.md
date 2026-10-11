@@ -213,6 +213,21 @@ def refund_order_request(store: Store, principal: Principal, input: RefundOrderI
 
 ページには、ほかに、ポリシーごとの `.gate` の行と生成した Cedar、条件が読む規則と日付について rulec と koyomi が描いたページも入ります。規則と日付のページを除いた[例のページ](https://github.com/i2y/ritsu/blob/main/crates/sekisho/tests/golden/doc/refunds.ja.ja.md)を、リポジトリで読めます。
 
+## ほかの action の答え
+
+条件には、同じゲートのほかの action の答えも書けます。承認の例では、承認者は、自分で承認できないものだけ、上の承認者に承認を求めます。
+
+```gate
+permit 承認者は承認できないものの承認を求める(approvers_ask_for_what_they_cannot_approve)
+  description "承認者は、自分で承認できないときだけ、提出済の購入の承認を上の承認者に求められる"
+  principal in 承認者
+  action 承認を求める
+  when resource.状態 is 提出済
+  unless allowed 承認する
+```
+
+`allowed 承認する` は、同じ principal と同じ購入で `承認する` を尋ねたら許されるかです。`承認する` の入力 `金額` には、`承認を求める` の同じ名前の入力を渡します。検査は、`承認を求める` を、`承認する` を決めるもの（承認者の上限、規則の答え、自分が求めた購入か）と一緒に歩くので、どの組み合わせでも答えは一つに決まり、Cedar の答えと同じです。生成したコードは、先に `承認する` をその関数で尋ね、答えを `context.allowed_approve` として Cedar に渡します。同じ条件で、二つの操作のうち弱いほうを先に使わせることもできます。文書の例では、`消す` の forbid が `when allowed アーカイブする` を読みます。action が互いに尋ね合って輪になると E109、尋ねる action の入力に何も渡らないときや、その action がとらない型があるときは E110 です。
+
 ## ほかの言語と組む
 
 同じ action は、koyomi の日付のファイルとカレンダー、それに契約も読みます。また、この action が守る操作を、dandori のワークフローが呼びます。

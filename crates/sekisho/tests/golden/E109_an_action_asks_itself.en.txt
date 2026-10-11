@@ -1,0 +1,3 @@
+error[E109]: tests/mutants/E109_an_action_asks_itself.gate:62:8: The action `archive_document` reads its own answer with `allowed`
+    62 |   when allowed archive_document
+  = The answer `allowed` asks for is decided before the action that asks it, so in a circle none of them can be. Take the `allowed` out of a policy of the circle.

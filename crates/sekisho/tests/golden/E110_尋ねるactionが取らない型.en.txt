@@ -1,0 +1,3 @@
+error[E110]: tests/mutants/E110_尋ねるactionが取らない型.gate:76:18: `承認を求める` takes a principal of the type `外部の人`, which `承認する` does not take
+    76 |   unless allowed 承認する
+  = `allowed 承認する` asks `承認する` with the principal and the resource of the request of `承認を求める`: every principal and resource type `承認を求める` takes has to be one `承認する` takes.

@@ -275,11 +275,12 @@ fn vectors_of_relations() {
 /// `api` (DESIGN 11): what the gate declares, as JSON — the files gen writes, each role, type and
 /// workflow with its entity in Cedar, each action with the operations it guards (each as the JSON
 /// of its reference, its path from the root) and its context, each policy with its `@id` and the
-/// file it is written in. The goldens are `tests/golden/api/`, with ritsu's version written
-/// `<version>`; the example is run with its directory as the root.
+/// file it is written in, and each `allowed` with the action it asks and what it gives its inputs
+/// (`asks`). The goldens are `tests/golden/api/`, with ritsu's version written `<version>`; an
+/// example is run with its directory as the root.
 #[test]
 fn api_says_what_the_gate_declares() {
-    for (path, golden) in [("examples/refunds/refunds.gate", "refunds.json"), ("examples/refunds/refunds.ja.gate", "refunds.ja.json"), ("tests/gen/papers.gate", "papers.json")] {
+    for (path, golden) in [("examples/refunds/refunds.gate", "refunds.json"), ("examples/refunds/refunds.ja.gate", "refunds.ja.json"), ("tests/gen/papers.gate", "papers.json"), ("examples/approvals/approvals.gate", "approvals.json"), ("tests/gen/asked.gate", "asked.json")] {
         let root = common::root_of(path).unwrap();
         let (code, out, _) = run(&["api", path, "--root", root.to_str().unwrap()], common::joined());
         assert_eq!(code, 0, "{path}");

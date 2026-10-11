@@ -1,0 +1,10 @@
+combinations: view_purchase 4, approve 64, request_approval 64; 132 in all
+permit staff_view_purchases: allows 3 combinations, 3 of them alone
+permit approvers_approve_within_their_limit: allows 2 combinations, 2 of them alone
+permit approvers_ask_for_what_they_cannot_approve: allows 6 combinations, 6 of them alone
+expect deny no_one_asks_for_what_they_could_approve: holds on all 2
+expect allow approvers_ask_over_their_limit: holds on all 4
+expect allow approvers_ask_for_their_own_purchases: holds on all 4
+expect deny only_approvers_approve_or_ask_for_approvals: holds on all 32
+role employee: can ["view_purchase"]
+role approver: can ["approve", "request_approval", "view_purchase"]

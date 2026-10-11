@@ -1,0 +1,306 @@
+{
+  "sekisho": "<version>",
+  "name": "approvals",
+  "alias": "approvals",
+  "version": "v1",
+  "source_sha256": "26ebc7a37e5a7dda71881e777b61b6e794c2202b9a33183ba65e72d4d369c472",
+  "description": "Who approves a purchase, and who asks a higher approver to approve it instead. A sketch of an office's own terms, written as sekisho's example of a condition on another action's answer",
+  "namespace": "Office",
+  "uses": [
+    {
+      "kind": "rule",
+      "name": "approval_limit",
+      "path": "rules/approval_limit.rule",
+      "line": 5
+    }
+  ],
+  "today": null,
+  "cedar": {
+    "policies": "cedar/approvals.cedar",
+    "schema": "cedar/approvals.cedarschema",
+    "schema_json": "cedar/approvals.cedarschema.json",
+    "policies_json": "cedar/approvals.policies.json"
+  },
+  "roles": [
+    {
+      "name": "employee",
+      "alias": "employee",
+      "line": 9,
+      "entity": "Office::Role::\"employee\"",
+      "includes": [],
+      "can": [
+        "view_purchase"
+      ]
+    },
+    {
+      "name": "approver",
+      "alias": "approver",
+      "line": 13,
+      "entity": "Office::Role::\"approver\"",
+      "includes": [
+        "employee"
+      ],
+      "can": [
+        "view_purchase",
+        "approve",
+        "request_approval"
+      ]
+    }
+  ],
+  "types": [
+    {
+      "name": "User",
+      "alias": "User",
+      "kind": "principal",
+      "line": 18,
+      "entity_type": "Office::User",
+      "roles": [
+        "employee",
+        "approver"
+      ],
+      "member_of": [
+        "Role"
+      ],
+      "attributes": [
+        {
+          "name": "approval_limit",
+          "alias": "approval_limit",
+          "type": "money[GBP, incl_tax]",
+          "range": {
+            "min": 0,
+            "max": 50000
+          },
+          "values": null,
+          "optional": false,
+          "in_cedar": false
+        }
+      ]
+    },
+    {
+      "name": "Purchase",
+      "alias": "Purchase",
+      "kind": "resource",
+      "line": 24,
+      "entity_type": "Office::Purchase",
+      "roles": [],
+      "member_of": [],
+      "attributes": [
+        {
+          "name": "status",
+          "alias": "status",
+          "type": "purchase_status",
+          "range": null,
+          "values": [
+            "draft",
+            "submitted",
+            "approved",
+            "rejected"
+          ],
+          "optional": false,
+          "in_cedar": true
+        },
+        {
+          "name": "requester",
+          "alias": "requester",
+          "type": "User",
+          "range": null,
+          "values": null,
+          "optional": false,
+          "in_cedar": true
+        }
+      ]
+    }
+  ],
+  "workflows": [],
+  "actions": [
+    {
+      "name": "view_purchase",
+      "alias": "view_purchase",
+      "line": 30,
+      "entity": "Office::Action::\"view_purchase\"",
+      "guards": [],
+      "principals": [
+        "User"
+      ],
+      "resources": [
+        "Purchase"
+      ],
+      "from": "purchaseId",
+      "nobody": null,
+      "inputs": [],
+      "context": []
+    },
+    {
+      "name": "approve",
+      "alias": "approve",
+      "line": 35,
+      "entity": "Office::Action::\"approve\"",
+      "guards": [],
+      "principals": [
+        "User"
+      ],
+      "resources": [
+        "Purchase"
+      ],
+      "from": "purchaseId",
+      "nobody": null,
+      "inputs": [
+        {
+          "name": "amount",
+          "alias": "amount",
+          "type": "money[GBP, incl_tax]",
+          "range": {
+            "min": 1,
+            "max": 20000
+          },
+          "values": null,
+          "optional": false,
+          "in_cedar": false
+        }
+      ],
+      "context": [
+        {
+          "name": "band",
+          "alias": "band",
+          "line": 42,
+          "computed": "approval_limit(amount: amount, limit: principal.approval_limit).band",
+          "type": "enum",
+          "values": [
+            "within_limit",
+            "over_limit"
+          ],
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "request_approval",
+      "alias": "request_approval",
+      "line": 44,
+      "entity": "Office::Action::\"request_approval\"",
+      "guards": [],
+      "principals": [
+        "User"
+      ],
+      "resources": [
+        "Purchase"
+      ],
+      "from": "purchaseId",
+      "nobody": null,
+      "inputs": [
+        {
+          "name": "amount",
+          "alias": "amount",
+          "type": "money[GBP, incl_tax]",
+          "range": {
+            "min": 1,
+            "max": 20000
+          },
+          "values": null,
+          "optional": false,
+          "in_cedar": false
+        }
+      ],
+      "context": [
+        {
+          "name": "band",
+          "alias": "band",
+          "line": 51,
+          "computed": "approval_limit(amount: amount, limit: principal.approval_limit).band",
+          "type": "enum",
+          "values": [
+            "within_limit",
+            "over_limit"
+          ],
+          "optional": false
+        },
+        {
+          "name": "allowed_approve",
+          "alias": "allowed_approve",
+          "line": 73,
+          "computed": "allowed approve(amount: amount)",
+          "type": "bool",
+          "values": null,
+          "optional": false,
+          "asks": {
+            "action": "approve",
+            "inputs": {
+              "amount": "amount"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "policies": [
+    {
+      "name": "staff_view_purchases",
+      "alias": "staff_view_purchases",
+      "id": "approvals/staff_view_purchases",
+      "effect": "permit",
+      "actions": [
+        "view_purchase"
+      ],
+      "file": "approvals.gate",
+      "line": 53
+    },
+    {
+      "name": "approvers_approve_within_their_limit",
+      "alias": "approvers_approve_within_their_limit",
+      "id": "approvals/approvers_approve_within_their_limit",
+      "effect": "permit",
+      "actions": [
+        "approve"
+      ],
+      "file": "approvals.gate",
+      "line": 58
+    },
+    {
+      "name": "approvers_ask_for_what_they_cannot_approve",
+      "alias": "approvers_ask_for_what_they_cannot_approve",
+      "id": "approvals/approvers_ask_for_what_they_cannot_approve",
+      "effect": "permit",
+      "actions": [
+        "request_approval"
+      ],
+      "file": "approvals.gate",
+      "line": 68
+    }
+  ],
+  "expects": [
+    {
+      "name": "no_one_asks_for_what_they_could_approve",
+      "expect": "deny",
+      "actions": [
+        "request_approval"
+      ],
+      "line": 75
+    },
+    {
+      "name": "approvers_ask_over_their_limit",
+      "expect": "allow",
+      "actions": [
+        "request_approval"
+      ],
+      "line": 80
+    },
+    {
+      "name": "approvers_ask_for_their_own_purchases",
+      "expect": "allow",
+      "actions": [
+        "request_approval"
+      ],
+      "line": 87
+    },
+    {
+      "name": "only_approvers_approve_or_ask_for_approvals",
+      "expect": "deny",
+      "actions": [
+        "approve",
+        "request_approval"
+      ],
+      "line": 94
+    }
+  ],
+  "separations": []
+}

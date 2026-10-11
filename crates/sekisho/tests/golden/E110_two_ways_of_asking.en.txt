@@ -1,0 +1,3 @@
+error[E110]: tests/mutants/E110_two_ways_of_asking.gate:78:16: On `request_approval`, `allowed approve` gives the inputs of `approve` other values than on line 73
+    78 |   when allowed approve(amount: 100GBP)
+  = In Cedar's context, `allowed approve` of `request_approval` is one value: give the same values, or split the action where it is to be asked otherwise.

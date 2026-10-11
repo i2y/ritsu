@@ -527,9 +527,10 @@ fn check_reading(file: File, suite: &Suite, reading: &mut Vec<PathBuf>) -> Named
         return Named { diags, scope: None };
     }
     read_facts(&mut scope, suite, &mut diags);
-    let mut ck = Ck { scope: &scope, diags: Vec::new(), attrs: BTreeMap::new(), locals: BTreeMap::new() };
+    let mut ck = Ck { scope: &scope, diags: Vec::new(), attrs: BTreeMap::new(), locals: BTreeMap::new(), asked: BTreeMap::new() };
     ck.declarations();
     ck.references();
+    ck.circles_of_allowed();
     diags.append(&mut ck.diags);
     crate::diag::sort(&mut diags);
     let ok = !crate::diag::has_errors(&diags);
@@ -739,6 +740,11 @@ struct Ck<'a> {
     /// The type of each input and computed value, by (action, name) as Cedar calls them; its range
     /// for a number; whether it is computed.
     locals: BTreeMap<Key, (Ty, Ends, bool)>,
+    /// What each action asked with `allowed` is given on an action that asks it (by the two
+    /// actions' aliases): each input's value as a key that does not depend on how it is spelled
+    /// (None for one that is wrong, which is said), and where it was first written (E110 when
+    /// another condition gives it something else).
+    asked: BTreeMap<Key, (Vec<Option<String>>, Span)>,
 }
 
 /// What a body's condition can read: the actions it is about, the principal types it picks, and
@@ -2011,6 +2017,409 @@ impl<'a> Ck<'a> {
                 let Some(ty) = self.path_ty(env, left) else { return };
                 self.is(env, left, &ty, right);
             }
+            Atom::Allowed { action, args } => self.allowed(env, action, args),
+        }
+    }
+
+    // ── Another action's answer (DESIGN 2.11) ───────────────────────────────
+
+    /// `allowed <action>(<input>: <value>, …)` on the actions of a body: the action is one of the
+    /// file's (E101), the inputs written are its own, each once (E101, E006), and for each action
+    /// of the body, the action asked takes its principal and resource types, every input it does
+    /// not let be absent is given a value, each value fits the input (E110), the name Cedar gives
+    /// the answer is no input's or computed value's, and one action asks it with one set of inputs
+    /// (E110).
+    fn allowed(&mut self, env: &Env<'a>, r: &'a Ref, args: &'a [Arg]) {
+        let Some(target) = self.action_ref(r) else { return };
+        let callee = target.name.text.clone();
+        let mut given: Vec<usize> = Vec::new();
+        for arg in args {
+            let w = &arg.name.word;
+            let Some(k) = target.input.iter().position(|f| f.name.is(w)) else {
+                let known = names_of(target.input.iter().map(|f| &f.name));
+                self.err("E101", arg.name.span, tr!("action `{callee}` に入力 `{w}` はありません", "The action `{callee}` has no input `{w}`")).notes.push(known_note(&tr!("入力", "inputs"), &known));
+                continue;
+            };
+            if given.contains(&k) {
+                self.err("E006", arg.name.span, tr!("入力 `{w}` に二度値を渡しています", "The input `{w}` is given twice"));
+                continue;
+            }
+            given.push(k);
+        }
+        let (tps, trs) = self.action_types(target);
+        for a in env.actions.clone() {
+            let me = a.name.text.clone();
+            let at = (a.name.ascii().to_string(), target.name.ascii().to_string());
+            // what does not depend on the values written is said once, at the first that asks
+            let first = !self.asked.contains_key(&at);
+            if first {
+                let (aps, ars) = self.action_types(a);
+                // the principal and the resource of the action are the asked action's too
+                let missing_p: Vec<String> = aps.iter().filter(|t| !tps.contains(t)).cloned().collect();
+                let missing_r: Vec<String> = ars.iter().filter(|t| !trs.contains(t)).cloned().collect();
+                for (missing, whose_ja, whose_en) in [(missing_p, "principal", "principal"), (missing_r, "resource", "resource")] {
+                    if missing.is_empty() {
+                        continue;
+                    }
+                    let ts = self.type_names(&missing);
+                    self.err("E110", r.span, tr!(
+                        "`{me}` には {whose_ja} の型 {} が来ますが、`{callee}` はその型を取りません",
+                        "`{me}` takes a {whose_en} of the type {}, which `{callee}` does not take",
+                        ts.ja;
+                        ts.en
+                    ))
+                    .notes
+                    .push(tr!(
+                        "`allowed {callee}` は、`{me}` のリクエストと同じ principal と resource で `{callee}` を尋ねます。`{me}` が取る principal と resource の型は、どれも `{callee}` も取る型でなければなりません。",
+                        "`allowed {callee}` asks `{callee}` with the principal and the resource of the request of `{me}`: every principal and resource type `{me}` takes has to be one `{callee}` takes."
+                    ));
+                }
+                // the answer goes to Cedar as `allowed_<alias>`, beside the inputs and the computed values
+                let key = format!("allowed_{}", target.name.ascii());
+                if let Some(l) = a.input.iter().map(|f| &f.name).chain(a.context.iter().map(|c| &c.name)).find(|n| n.ascii() == key) {
+                    let n = &l.text;
+                    self.err("E110", r.span, tr!(
+                        "`allowed {callee}` の答えは Cedar の context の `{key}` に入りますが、`{me}` の `{n}` がもうその名前です",
+                        "The answer of `allowed {callee}` goes to Cedar's context as `{key}`, which is the name of `{n}` of `{me}` already"
+                    ))
+                    .notes
+                    .push(tr!("入力か計算した値の別名を変えてください。", "Give the input or the computed value another alias."));
+                }
+            }
+            // each input of the action asked: what it is given, and that it fits
+            let mut keys: Vec<Option<String>> = Vec::new();
+            for f in &target.input {
+                let explicit = args.iter().find(|x| f.name.is(&x.name.word));
+                let k = match explicit {
+                    Some(arg) => self.given_value(a, target, f, &arg.value, arg_span(&arg.value, arg.name.span), false),
+                    None => match a.input.iter().find(|x| x.name.text == f.name.text || x.name.ascii() == f.name.ascii()) {
+                        Some(x) => {
+                            let p = Path::Local(Ref { word: x.name.text.clone(), span: r.span });
+                            if first {
+                                self.given_value(a, target, f, &ArgValue::Path(p), r.span, true)
+                            } else {
+                                Some(format!("input:{}", x.name.ascii()))
+                            }
+                        }
+                        None if f.optional => Some("none".to_string()),
+                        None => {
+                            let n = &f.name.text;
+                            if first {
+                                self.err("E110", r.span, tr!(
+                                    "`{callee}` の入力 `{n}` に値がありません。`{me}` に同じ名前の入力がありません",
+                                    "The input `{n}` of `{callee}` is given nothing: `{me}` has no input of that name"
+                                ))
+                                .notes
+                                .push(tr!(
+                                    "`allowed {callee}({n}: <値>)` のように、渡す値を書いてください。渡せるのは、`{me}` の入力、principal と resource の属性、定数、`today` です。",
+                                    "Write what it is given, like `allowed {callee}({n}: <value>)`: an input of `{me}`, an attribute of the principal or the resource, a constant, or `today`."
+                                ));
+                            }
+                            None
+                        }
+                    },
+                };
+                keys.push(k);
+            }
+            // one action asks the action with one set of inputs (when every value is right)
+            match self.asked.get(&at) {
+                Some((prev, first_at)) if prev.iter().chain(&keys).all(Option::is_some) && *prev != keys => {
+                    let l = first_at.line;
+                    self.err("E110", r.span, tr!(
+                        "`{me}` の `allowed {callee}` が、{l} 行目と違う値を `{callee}` の入力に渡しています",
+                        "On `{me}`, `allowed {callee}` gives the inputs of `{callee}` other values than on line {l}"
+                    ))
+                    .notes
+                    .push(tr!(
+                        "Cedar の context では、`{me}` の `allowed {callee}` は一つの値です。同じ値を渡すか、違う尋ね方が要るなら action を分けてください。",
+                        "In Cedar's context, `allowed {callee}` of `{me}` is one value: give the same values, or split the action where it is to be asked otherwise."
+                    ));
+                }
+                Some(_) => {}
+                None => {
+                    self.asked.insert(at, (keys, r.span));
+                }
+            }
+        }
+    }
+
+    /// One value given to an input `f` of the action `target` asked on the action `a` (E101, E107,
+    /// E110): the key it is compared by (as [`Ck::allowed`] keeps them), or None when it is wrong
+    /// (and said). `same_name` says it is the input of `a` of the input's name, not written.
+    #[allow(clippy::too_many_arguments)]
+    fn given_value(&mut self, a: &'a ActionDecl, target: &'a ActionDecl, f: &'a Field, v: &ArgValue, s: Span, same_name: bool) -> Option<String> {
+        let callee = &target.name.text;
+        let n = &f.name.text;
+        let me = &a.name.text;
+        let (want, want_range) = self.locals.get(&(target.name.ascii().to_string(), f.name.ascii().to_string())).map(|x| (x.0.clone(), x.1))?;
+        let want_text = self.ty_text(&want);
+        // the days of a date, which `locals` does not keep
+        let days = |ck: &Self, x: &Field| -> Option<(i128, i128)> {
+            match ck.scope.field_type(x) {
+                FieldType::Date { lo, hi } => Some((lo as i128, hi as i128)),
+                _ => None,
+            }
+        };
+        let want_days = days(self, f);
+        // the input's range as a message says it: `1GBP〜20,000GBP`, `2026-09-01〜2026-10-31`
+        let range_text = match (&want, want_range, want_days) {
+            (Ty::Num(unit), Some((lo, hi)), _) => {
+                let (a, b) = (crate::cells::show(lo, unit), crate::cells::show(hi, unit));
+                Some(tr!("{a}〜{b}", "{a} to {b}"))
+            }
+            (Ty::Date, _, Some((lo, hi))) => {
+                let (a, b) = (types::day_text(lo as i64), types::day_text(hi as i64));
+                Some(tr!("{a}〜{b}", "{a} to {b}"))
+            }
+            _ => None,
+        };
+        let said = |ck: &mut Self, msg: Text| -> Option<String> {
+            let d = ck.err("E110", s, msg);
+            if same_name {
+                d.notes.push(tr!("`{me}` の同じ名前の入力として渡しています。", "It is given the input of `{me}` of its name."));
+            }
+            d.notes.push(tr!(
+                "数は単位まで同じで、範囲が入力の範囲に収まっていなければなりません。無いことがある値は、無いことがある入力（`?`）にだけ渡せます。",
+                "A number has to be of the same unit, and within the input's range; a value that may be absent goes only to an input that may be absent (`?`)."
+            ));
+            None
+        };
+        let other_type = |ck: &mut Self, shown: &str, got: Text| -> Option<String> {
+            said(ck, tr!("`{callee}` の入力 `{n}` は{}ですが、渡す `{shown}` は{}です", "The input `{n}` of `{callee}` is {}, and `{shown}` it is given is {}", want_text.ja, got.ja; want_text.en, got.en))
+        };
+        let outside = |ck: &mut Self, shown: &str, constant: bool| -> Option<String> {
+            let r = range_text.clone().unwrap_or_default();
+            if constant {
+                said(ck, tr!("`{callee}` の入力 `{n}` は {} ですが、その外の `{shown}` を渡しています", "The input `{n}` of `{callee}` takes {}, and is given `{shown}`, outside it", r.ja; r.en))
+            } else {
+                said(ck, tr!("`{callee}` の入力 `{n}` は {} ですが、渡す `{shown}` はその外になりえます", "The input `{n}` of `{callee}` takes {}, and `{shown}` it is given can be outside it", r.ja; r.en))
+            }
+        };
+        let absent = |ck: &mut Self, shown: &str| -> Option<String> {
+            said(ck, tr!("`{callee}` の入力 `{n}` は無いことにできませんが、渡す `{shown}` は無いことがあります", "The input `{n}` of `{callee}` cannot be absent, and `{shown}` it is given may be"))
+        };
+        let within = |r: Option<(i128, i128)>, w: Option<(i128, i128)>| match (r, w) {
+            (Some((a, b)), Some((c, d))) => c <= a && b <= d,
+            _ => true,
+        };
+        match v {
+            ArgValue::Today(ts) => {
+                if !self.needs_today(*ts) {
+                    return None;
+                }
+                if want != Ty::Date {
+                    return other_type(self, "today", tr!("日付", "a date"));
+                }
+                let t = self.scope.today().map(|(lo, hi, _)| (lo as i128, hi as i128));
+                if !within(t, want_days) {
+                    return outside(self, "today", false);
+                }
+                Some("today".to_string())
+            }
+            ArgValue::Lit(l, _) => {
+                let shown = lit_text(l);
+                match (&want, l) {
+                    (Ty::Bool, Lit::Bool(b)) => Some(format!("bool:{b}")),
+                    (Ty::Num(unit), Lit::Num(num)) => match types::count(num, unit) {
+                        Ok(k) if within(Some((k, k)), want_range) => Some(format!("num:{k}")),
+                        Ok(_) => outside(self, &shown, true),
+                        Err(m) => {
+                            self.miss(&m, s, num, unit, n);
+                            None
+                        }
+                    },
+                    (Ty::Date, Lit::Date(d)) if within(Some((*d as i128, *d as i128)), want_days) => Some(format!("date:{d}")),
+                    (Ty::Date, Lit::Date(_)) => outside(self, &shown, true),
+                    (_, l) => {
+                        let got = match l {
+                            Lit::Bool(_) => tr!("真偽", "true or false"),
+                            Lit::Date(_) => tr!("日付", "a date"),
+                            Lit::Num(_) => tr!("数", "a number"),
+                        };
+                        other_type(self, &shown, got)
+                    }
+                }
+            }
+            ArgValue::Path(Path::Local(r)) => {
+                let w = &r.word;
+                match a.local(w) {
+                    Some(Local::Computed(_)) => {
+                        self.err("E110", s, tr!("計算した値 `{w}` は、action の入力に渡せません", "The computed value `{w}` cannot be given to an input of an action")).notes.push(tr!(
+                            "`allowed` が尋ねる action の入力に渡せるのは、`{me}` の入力、principal と resource の属性、定数、`today` です。尋ねた action は、自分の計算した値を自分で計算します。",
+                            "An input of an action `allowed` asks is given an input of `{me}`, an attribute of the principal or the resource, a constant, or `today`; the action asked computes its own computed values."
+                        ));
+                        None
+                    }
+                    Some(Local::Input(x)) => {
+                        let (ty, range, _) = self.locals.get(&(a.name.ascii().to_string(), x.name.ascii().to_string())).cloned()?;
+                        let range = if ty == Ty::Date { days(self, x) } else { range };
+                        let fits = match (&want, &ty) {
+                            (Ty::Num(u), Ty::Num(t)) => u.same(t),
+                            (w, t) => w == t,
+                        };
+                        if !fits {
+                            let t = self.ty_text(&ty);
+                            return other_type(self, w, t);
+                        }
+                        if !within(range, if want == Ty::Date { want_days } else { want_range }) {
+                            return outside(self, w, false);
+                        }
+                        if x.optional && !f.optional {
+                            return absent(self, w);
+                        }
+                        Some(format!("input:{}", x.name.ascii()))
+                    }
+                    None => {
+                        // a value of the enum the input takes
+                        if let Ty::Enum(e) = &want
+                            && let Some(d) = self.scope.enum_decl(e)
+                        {
+                            return match d.value(w) {
+                                Some(v) => Some(format!("word:{}", v.ascii())),
+                                None => {
+                                    let known = names_of(d.values.iter());
+                                    let en = &d.name.text;
+                                    self.err("E101", r.span, tr!("`{w}` は、`{me}` の入力でも、列挙 `{en}` の値でもありません", "`{w}` is neither an input of `{me}` nor a value of the enum `{en}`")).notes.push(known_note(&tr!("値", "values"), &known));
+                                    None
+                                }
+                            };
+                        }
+                        let known = names_of(a.input.iter().map(|i| &i.name));
+                        self.err("E101", r.span, tr!("action `{me}` に入力 `{w}` はありません", "The action `{me}` has no input `{w}`")).notes.push(known_note(&tr!("入力", "inputs"), &known));
+                        None
+                    }
+                }
+            }
+            ArgValue::Path(p) => {
+                // an attribute of the principal or the resource: every type of the owner has it
+                let ty = self.attr_of_action(a, p)?;
+                let (ps, rs) = self.action_types(a);
+                let principal = matches!(p, Path::Principal(_));
+                let types = if principal { ps } else { rs };
+                let w = &p.word().word;
+                let mut lacking: Vec<String> = Vec::new();
+                let mut optional = false;
+                let mut ranges: Vec<Option<(i128, i128)>> = Vec::new();
+                for t in &types {
+                    let Some(EntityRef::Declared(e)) = self.scope.entity(t) else { continue };
+                    match e.attribute(w) {
+                        Some(x) => {
+                            optional |= x.optional;
+                            ranges.push(if ty == Ty::Date { days(self, x) } else { self.attrs.get(&(t.clone(), x.name.ascii().to_string())).and_then(|y| y.1) });
+                        }
+                        None => lacking.push(t.clone()),
+                    }
+                }
+                let shown = p.text();
+                if !lacking.is_empty() {
+                    let ts = self.type_names(&lacking);
+                    self.err("E110", s, tr!("`{shown}` は、`{me}` が取る型 {} にありません", "`{shown}` is no attribute of the type {}, which `{me}` takes", ts.ja; ts.en)).notes.push(tr!(
+                        "action の入力に渡す属性は、尋ねる action が取る型のどれにもなければなりません。",
+                        "An attribute given to an input of an action is one every type the action that asks takes has."
+                    ));
+                    return None;
+                }
+                let fits = match (&want, &ty) {
+                    (Ty::Num(u), Ty::Num(t)) => u.same(t),
+                    (Ty::Entity(_), _) | (_, Ty::Entity(_)) => false,
+                    (w, t) => w == t,
+                };
+                if !fits {
+                    let t = self.ty_text(&ty);
+                    return other_type(self, &shown, t);
+                }
+                let range_want = if want == Ty::Date { want_days } else { want_range };
+                if ranges.iter().any(|r| !within(*r, range_want)) {
+                    return outside(self, &shown, false);
+                }
+                if optional && !f.optional {
+                    return absent(self, &shown);
+                }
+                let owner = if principal { "principal" } else { "resource" };
+                let alias = types.iter().find_map(|t| match self.scope.entity(t) {
+                    Some(EntityRef::Declared(e)) => e.attribute(w).map(|x| x.name.ascii().to_string()),
+                    _ => None,
+                });
+                Some(format!("{owner}:{}", alias.unwrap_or_else(|| w.clone())))
+            }
+        }
+    }
+
+    /// The actions whose `allowed` read one another in a circle (E109): a policy on an action
+    /// that reads `allowed <other>` makes the action's answer wait for the other's, so no circle
+    /// can be decided. Each circle is said once, at the first `allowed` of its first action in the
+    /// file, with its actions in order. An expectation reads an answer and adds nothing to one,
+    /// so it makes no circle.
+    fn circles_of_allowed(&mut self) {
+        let f = self.file();
+        // each action's `allowed` in the policies on it, by the action asked, with where it is written
+        let mut edges: BTreeMap<usize, Vec<(usize, Span)>> = BTreeMap::new();
+        for p in &f.policies {
+            let on: Vec<usize> = match &p.body.action.0 {
+                What::Any => (0..f.actions.len()).collect(),
+                What::Actions(rs) => rs.iter().filter_map(|r| f.actions.iter().position(|a| a.name.is(&r.word))).collect(),
+            };
+            let mut found: Vec<(usize, Span)> = Vec::new();
+            for c in &p.body.conds {
+                asked_in(&c.expr, &mut |r, s| {
+                    if let Some(t) = f.actions.iter().position(|a| a.name.is(&r.word)) {
+                        found.push((t, s));
+                    }
+                });
+            }
+            for a in on {
+                for (t, s) in &found {
+                    let e = edges.entry(a).or_default();
+                    if !e.iter().any(|(x, _)| x == t) {
+                        e.push((*t, *s));
+                    }
+                }
+            }
+        }
+        let mut said: BTreeSet<usize> = BTreeSet::new();
+        for start in 0..f.actions.len() {
+            if said.contains(&start) {
+                continue;
+            }
+            // the shortest way back to `start`, breadth first
+            let mut prev: BTreeMap<usize, usize> = BTreeMap::new();
+            let mut queue: std::collections::VecDeque<usize> = std::collections::VecDeque::new();
+            let mut circle: Option<Vec<usize>> = None;
+            queue.push_back(start);
+            'walk: while let Some(x) = queue.pop_front() {
+                for (y, _) in edges.get(&x).map(Vec::as_slice).unwrap_or(&[]) {
+                    if *y == start {
+                        let mut chain = vec![x];
+                        while let Some(p) = prev.get(chain.last().unwrap()) {
+                            chain.push(*p);
+                        }
+                        chain.reverse();
+                        circle = Some(chain);
+                        break 'walk;
+                    }
+                    if *y != start && !prev.contains_key(y) {
+                        prev.insert(*y, x);
+                        queue.push_back(*y);
+                    }
+                }
+            }
+            let Some(chain) = circle else { continue };
+            said.extend(chain.iter().copied());
+            let next = chain.get(1).copied().unwrap_or(start);
+            let at = edges.get(&start).and_then(|e| e.iter().find(|(t, _)| *t == next)).map(|(_, s)| *s).unwrap_or_default();
+            let mut names: Vec<String> = chain.iter().map(|&i| format!("`{}`", f.actions[i].name.text)).collect();
+            names.push(format!("`{}`", f.actions[start].name.text));
+            let shown = names.join(" → ");
+            let msg = if chain.len() == 1 {
+                let n = &f.actions[start].name.text;
+                tr!("action `{n}` が、`allowed` で自分の答えを読んでいます", "The action `{n}` reads its own answer with `allowed`")
+            } else {
+                tr!("action が `allowed` で互いの答えを読み合っています: {shown}", "The actions read one another's answers with `allowed`, in a circle: {shown}")
+            };
+            self.err("E109", at, msg).notes.push(tr!(
+                "`allowed` が尋ねる action の答えは、尋ねる action を決める前に決まっていなければなりません。輪になると、どれも決められません。輪のどこかのポリシーから `allowed` を外してください。",
+                "The answer `allowed` asks for is decided before the action that asks it, so in a circle none of them can be. Take the `allowed` out of a policy of the circle."
+            ));
         }
     }
 
@@ -2271,4 +2680,14 @@ fn rhs_span(r: &Rhs, at: Span) -> Span {
 
 fn dummy_call() -> ritsu_ports::Call {
     ritsu_ports::Call { module: String::new(), function: String::new(), input_type: String::new(), params: vec![], outputs: vec![], enums: vec![] }
+}
+
+/// Each `allowed <action>` of a condition, with where it is written.
+fn asked_in(e: &Expr, f: &mut dyn FnMut(&Ref, Span)) {
+    match e {
+        Expr::Or(xs) | Expr::And(xs) => xs.iter().for_each(|x| asked_in(x, f)),
+        Expr::Not(x, _) => asked_in(x, f),
+        Expr::Atom(Atom::Allowed { action, .. }, s) => f(action, *s),
+        Expr::Atom(..) => {}
+    }
 }

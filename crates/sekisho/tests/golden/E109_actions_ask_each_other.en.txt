@@ -1,0 +1,3 @@
+error[E109]: tests/mutants/E109_actions_ask_each_other.gate:65:10: The actions read one another's answers with `allowed`, in a circle: `approve` → `request_approval` → `approve`
+    65 |   unless allowed request_approval
+  = The answer `allowed` asks for is decided before the action that asks it, so in a circle none of them can be. Take the `allowed` out of a policy of the circle.

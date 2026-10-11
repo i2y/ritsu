@@ -3,8 +3,9 @@
 //! table of `refund_order` merges to its five rows that allow, relations are counted by which terms
 //! are one entity, the budget stops a walk (E307), an answer that rests on a value no language
 //! vouches for is undecided (W303), an enum and a bool given to a rule are held to their values,
-//! and how far a workflow and a role are allowed an action (the port `Gates::allowed`). The
-//! mutants of the example are `tests/mutants/`, run by `tests/mutants.rs`.
+//! how far a workflow and a role are allowed an action (the port `Gates::allowed`), and a condition
+//! on another action's answer (`allowed`) counted exactly. The mutants of the example are
+//! `tests/mutants/`, run by `tests/mutants.rs`.
 //!
 //! The goldens are `tests/walk/golden/`; `SEKISHO_BLESS=1` (or `RITSU_BLESS=1`) writes them again.
 
@@ -86,6 +87,57 @@ fn the_table_of_refund_order_merges_to_five_rows_that_allow() {
         assert!(md.contains(&format!("| {within} |")) && md.contains(&format!("| {over} |")), "{md}");
         ritsu_testkit::golden(golden, &md);
     }
+}
+
+/// A condition on another action's answer (`allowed`, DESIGN 2.11): the examples of asking for an
+/// approval only of what one cannot approve, and of archiving what can be archived rather than
+/// deleting it, pass in both versions with the same counts. The walk of an action that asks holds
+/// what the action asked reads, and the asked action's band and the asking action's own are one
+/// computation, so nothing is counted that the languages do not vouch for. The answer read is a
+/// column of the table, and what the asked action computes for it is not.
+#[test]
+fn an_answer_of_another_action_is_read_exactly() {
+    for (en_path, ja_path, name) in [("examples/approvals/approvals.gate", "examples/approvals/approvals.ja.gate", "approvals"), ("examples/documents/documents.gate", "examples/documents/documents.ja.gate", "documents")] {
+        let (de, en) = check(en_path, checks::BUDGET as u64);
+        let (dj, ja) = check(ja_path, checks::BUDGET as u64);
+        assert!(de.is_empty(), "{}", rendered(&de));
+        assert!(dj.is_empty(), "{}", rendered(&dj));
+        for c in [&en, &ja] {
+            assert!(c.report.spaces.iter().flatten().all(|s| !s.inexact()), "{name}: a value counted though no language vouches for it");
+        }
+        assert_eq!(en.report.actions, ja.report.actions, "{name}");
+        assert_eq!(en.report.policies, ja.report.policies, "{name}");
+        assert_eq!(en.report.expects, ja.report.expects, "{name}");
+        assert_eq!(en.report.reach, ja.report.reach, "{name}");
+        ritsu_testkit::golden(format!("tests/walk/golden/{name}.txt"), &(checks::lines(&en.gate, &en.report).join("\n") + "\n"));
+        ritsu_testkit::golden(format!("tests/walk/golden/{name}.ja.txt"), &(checks::lines(&ja.gate, &ja.report).join("\n") + "\n"));
+    }
+    for (path, lang, golden) in [("examples/approvals/approvals.gate", Lang::En, "tests/walk/golden/request_approval.table.md"), ("examples/approvals/approvals.ja.gate", Lang::Ja, "tests/walk/golden/request_approval.table.ja.md")] {
+        let (_, c) = check(path, checks::BUDGET as u64);
+        let ai = c.gate.actions.iter().position(|a| a.named.alias == "request_approval").unwrap();
+        let t = sekisho::table::table(&c.gate, c.report.spaces[ai].as_ref().unwrap());
+        let cols: Vec<String> = t.columns.iter().map(|x| x.get(lang).to_string()).collect();
+        let (answer, band) = if lang == Lang::Ja { ("allowed 承認する", "区分") } else { ("allowed approve", "band") };
+        assert!(cols.iter().any(|x| x == answer), "{cols:?}");
+        // the band of request_approval; approve's is approve's table's
+        assert_eq!(cols.iter().filter(|x| *x == band).count(), 1, "{cols:?}");
+        ritsu_testkit::golden(golden, &t.markdown(&c.gate, lang));
+    }
+}
+
+/// `tests/gen/asked.gate` asks in every way a condition can: an input of the same name, an
+/// attribute, a constant of each kind, today, an input given nothing, an action that asks one
+/// that asks another, an answer only an expectation reads, and two resource types.
+#[test]
+fn every_way_of_asking_is_counted() {
+    let (d, c) = check("tests/gen/asked.gate", checks::BUDGET as u64);
+    assert!(d.is_empty(), "{}", rendered(&d));
+    assert!(c.report.spaces.iter().flatten().all(|s| !s.inexact()));
+    // an answer a policy reads is Cedar's; the one only an expectation reads is not
+    let escalate = c.gate.actions.iter().find(|a| a.named.alias == "escalate").unwrap();
+    let read: Vec<(String, bool)> = escalate.allowed.iter().map(|x| (c.gate.actions[x.action].named.alias.clone(), x.policy)).collect();
+    assert_eq!(read, vec![("review".to_string(), true), ("refund".to_string(), false)]);
+    ritsu_testkit::golden("tests/walk/golden/asked.txt", &(checks::lines(&c.gate, &c.report).join("\n") + "\n"));
 }
 
 #[test]

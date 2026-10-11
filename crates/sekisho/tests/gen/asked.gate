@@ -1,0 +1,107 @@
+gate asked v1
+description "Each way a condition asks another action's answer: an input given by its name, an attribute, a constant of each kind, today and nothing; an action that asks one that asks another; an expectation that asks; two resource types"
+namespace Asked
+
+use dates refund_terms from "../../examples/refunds/dates/refund_terms.cal"
+use calendar uk from "../../examples/refunds/calendars/england_and_wales.cal"
+
+today range >=2026-10-01 <=2026-10-31 offset +00:00
+
+enum level = low | high
+
+role clerk
+
+role manager
+  includes clerk
+
+principal User
+  roles clerk, manager
+
+resource Order
+  attributes
+    total   : money[GBP, incl_tax]  range >=1GBP <=100GBP
+    paid_on : date  range >=2026-09-01 <=2026-10-31
+
+resource Batch
+  attributes
+    total   : money[GBP, incl_tax]  range >=1GBP <=100GBP
+    paid_on : date  range >=2026-09-01 <=2026-10-31
+
+action refund
+  principal User
+  resource Order, Batch from id
+  input
+    amount : money[GBP, incl_tax]  range >=1GBP <=100GBP
+    kind   : level
+    on     : date  range >=2026-09-01 <=2026-10-31
+    note   : bool?
+  context
+    in_period    = today <= refund_terms.last_day(paid_on: on)
+    business_day = today is open in uk
+
+action review
+  principal User
+  resource Order, Batch from id
+  input
+    cost : money[GBP, incl_tax]  range >=1GBP <=100GBP
+    memo : bool?
+
+action escalate
+  principal User
+  resource Order, Batch from id
+  input
+    cost : money[GBP, incl_tax]  range >=1GBP <=100GBP
+    memo : bool?
+
+action ping
+  principal User
+  resource Order, Batch from id
+
+permit clerks_refund_small_low_amounts_in_period
+  principal in clerk
+  action refund
+  when amount <= 50GBP
+  when kind is low
+  when in_period
+
+permit managers_refund_on_business_days
+  principal in manager
+  action refund
+  when business_day
+  unless note
+
+# an attribute, a constant word and an attribute's date given, and `note` given nothing
+permit clerks_review_what_they_cannot_refund
+  principal in clerk
+  action review
+  when cost <= 80GBP
+  unless memo
+  unless allowed refund(amount: resource.total, kind: low, on: resource.paid_on)
+
+# `cost` and `memo` given by their names; review asks refund in turn
+permit managers_escalate_what_cannot_be_reviewed
+  principal in manager
+  action escalate
+  unless allowed review
+
+# a number, a word, a date and a bool given as constants
+permit clerks_ping_what_could_be_refunded
+  principal in clerk
+  action ping
+  when allowed refund(amount: 10GBP, kind: low, on: 2026-09-15, note: false)
+
+expect deny managers_never_escalate_what_they_could_review
+  action escalate
+  when allowed review
+
+# an answer only an expectation reads: Cedar is not given it
+expect deny clerks_who_are_not_managers_never_escalate
+  principal in clerk
+  action escalate
+  unless principal in manager
+  when allowed refund(amount: cost, kind: low, on: today)
+
+expect allow managers_ping_what_could_be_refunded
+  principal in manager
+  action ping
+  when allowed refund(amount: 10GBP, kind: low, on: 2026-09-15, note: false)

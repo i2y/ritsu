@@ -1,0 +1,11 @@
+combinations: refund 384, review 384, escalate 576, ping 32; 1376 in all
+permit clerks_refund_small_low_amounts_in_period: allows 36 combinations, 28 of them alone
+permit managers_refund_on_business_days: allows 64 combinations, 56 of them alone
+permit clerks_review_what_they_cannot_refund: allows 48 combinations, 48 of them alone
+permit managers_escalate_what_cannot_be_reviewed: allows 240 combinations, 240 of them alone
+permit clerks_ping_what_could_be_refunded: allows 16 combinations, 16 of them alone
+expect deny managers_never_escalate_what_they_could_review: holds on all 96
+expect deny clerks_who_are_not_managers_never_escalate: holds on all 48
+expect allow managers_ping_what_could_be_refunded: holds on all 12
+role clerk: can ["ping", "refund", "review"]
+role manager: can ["escalate", "ping", "refund", "review"]

@@ -271,6 +271,19 @@ pub fn module(p: &Plan, o: &Options) -> String {
     t.push_str(")\n\n");
     types(p, &n, o, &mut t);
     helpers(p, &n, o, &mut t);
+    // a value given to an input of an asked action that may be absent there, and is there here
+    // (DESIGN 2.11): a pointer to it
+    let pointed_to = p.actions.iter().any(|ap| {
+        let a = &g.actions[ap.index];
+        ap.asked.iter().any(|&k| {
+            let x = &a.allowed[k];
+            g.actions[x.action].inputs.iter().zip(&x.inputs).any(|(f, src)| f.optional && src.as_ref().is_some_and(|s| !given_may_be_absent(g, a, s)))
+        })
+    });
+    if pointed_to {
+        t.push_str(&doc(&tr(o, "ptr は、v を指すポインターです。", "ptr is a pointer to v."), ""));
+        t.push_str("func ptr[T any](v T) *T {\n\treturn &v\n}\n\n");
+    }
     for a in &p.actions {
         action(p, &n, o, a, &mut t);
     }
@@ -635,7 +648,12 @@ fn action(p: &Plan, n: &Names, o: &Options, ap: &ActionPlan, t: &mut String) {
     }
     d = plan::sentences(&[d, tr(o, &format!("組み立てられなければ *{e} を返します。"), &format!("It returns an *{e} when it cannot."))]);
     t.push_str(&doc(&d, ""));
-    t.push_str(&format!("func {name}Request(store {}, p {}, in {input}, now time.Time) ({}, error) {{\n", n.store, n.principal, n.request));
+    // the actions a policy asks with `allowed` (DESIGN 2.11): asked through Verified Permissions
+    // too, when that is where the gate is asked (the context of the call is `cx`: `ctx` is the
+    // context of the request)
+    let avp_asked = o.authorizer == Authorizer::Avp && !ap.asked.is_empty();
+    let first = if avp_asked { format!("cx context.Context, avp {}, ", n.avp) } else { String::new() };
+    t.push_str(&format!("func {name}Request({first}store {}, p {}, in {input}, now time.Time) ({}, error) {{\n", n.store, n.principal, n.request));
     let mut b = String::new();
     let mut used_err = false;
     b.push_str(&format!("\tvar req {}\n", n.request));
@@ -711,6 +729,9 @@ fn action(p: &Plan, n: &Names, o: &Options, ap: &ActionPlan, t: &mut String) {
     for vp in &ap.values {
         value(p, n, a, vp, &mut c_body);
     }
+    for &k in &ap.asked {
+        asked(p, n, o, ai, k, &mut c_body);
+    }
     // the day, held to today's range by an action that computes a value from it: kept when a value
     // reads it
     let reads_day = c_body.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).any(|w| w == "day");
@@ -743,10 +764,105 @@ fn action(p: &Plan, n: &Names, o: &Options, ap: &ActionPlan, t: &mut String) {
         Authorizer::Cedar => t.push_str(&format!("func Authorize{name}(store {}, p {}, in {input}, now time.Time) {} {{\n", n.store, n.principal, n.answer)),
         Authorizer::Avp => t.push_str(&format!("func Authorize{name}(ctx context.Context, avp {}, store {}, p {}, in {input}, now time.Time) {} {{\n", n.avp, n.store, n.principal, n.answer)),
     }
-    t.push_str(&format!("\treq, err := {name}Request(store, p, in, now)\n\tif err != nil {{\n\t\tx, ok := err.(*{e})\n\t\tif !ok {{\n\t\t\tx = &{e}{{\"input\", err.Error()}}\n\t\t}}\n\t\treturn {}{{Policies: []string{{}}, Err: x}}\n\t}}\n", n.answer));
+    let avp_arg = if avp_asked { "ctx, avp, " } else { "" };
+    t.push_str(&format!("\treq, err := {name}Request({avp_arg}store, p, in, now)\n\tif err != nil {{\n\t\tx, ok := err.(*{e})\n\t\tif !ok {{\n\t\t\tx = &{e}{{\"input\", err.Error()}}\n\t\t}}\n\t\treturn {}{{Policies: []string{{}}, Err: x}}\n\t}}\n", n.answer));
     match o.authorizer {
         Authorizer::Cedar => t.push_str("\treturn ask(req)\n}\n\n"),
         Authorizer::Avp => t.push_str("\treturn ask(ctx, avp, req)\n}\n\n"),
+    }
+}
+
+/// Whether a value given to an input of an asked action may be absent here: an input or an
+/// attribute that may be.
+fn given_may_be_absent(g: &Gate, a: &Action, s: &Source) -> bool {
+    match s {
+        Source::Input(n) => a.input(n).is_some_and(|(_, f)| f.optional),
+        Source::Attr(o, n) => {
+            let types = if *o == Owner::Principal { &a.principals } else { &a.resources };
+            types.iter().any(|&t| g.types[t].attr(n).is_some_and(|(_, f)| f.optional))
+        }
+        Source::Lit(_) | Source::Today => false,
+    }
+}
+
+/// The code of an action a policy asks with `allowed` (DESIGN 2.11): asked through its own function,
+/// with the same principal, resource and instant and what its inputs are given, its answer put in
+/// `ctx`; its refusal refuses this request, of its kind.
+fn asked(p: &Plan, n: &Names, o: &Options, ai: usize, k: usize, t: &mut String) {
+    let g = p.g;
+    let a = &g.actions[ai];
+    let x = &a.allowed[k];
+    let b = &g.actions[x.action];
+    let e = &n.error;
+    let said = plan::asked_text(g, a, x);
+    t.push_str(&doc(&tr(o, &format!("{said}。同じ principal と resource で尋ねます。"), &format!("{said}: asked with the same principal and resource.")), "\t"));
+    let (ps, rs) = plan::asked_for(a, x);
+    let pts: Vec<Option<usize>> = ps.map(|ts| ts.into_iter().map(Some).collect()).unwrap_or_else(|| vec![None]);
+    let rts: Vec<Option<usize>> = rs.map(|ts| ts.into_iter().map(Some).collect()).unwrap_or_else(|| vec![None]);
+    for pt in &pts {
+        for rt in &rts {
+            let mut conds: Vec<String> = Vec::new();
+            if let Some(x) = pt {
+                conds.push(format!("{} != nil", var(Owner::Principal, &g.types[*x].named.alias)));
+            }
+            if let Some(x) = rt {
+                conds.push(format!("{} != nil", var(Owner::Resource, &g.types[*x].named.alias)));
+            }
+            let mut fields: Vec<String> = vec![format!("{}: rID", exported(&plan::resource_field(b)))];
+            if b.resources.len() > 1 {
+                fields.push(if a.resources.len() > 1 { "ResourceType: in.ResourceType".to_string() } else { format!("ResourceType: {}", s(&g.types[a.resources[0]].named.alias)) });
+            }
+            for (f, src) in b.inputs.iter().zip(&x.inputs) {
+                let Some(src) = src else { continue };
+                let v = match src {
+                    Source::Input(name) => match a.input(name) {
+                        Some((_, fa)) => format!("in.{}", exported(&fa.named.alias)),
+                        None => continue,
+                    },
+                    Source::Attr(owner, name) => {
+                        let ty = match owner {
+                            Owner::Principal => pt.unwrap_or(0),
+                            Owner::Resource => rt.unwrap_or(0),
+                        };
+                        let r = record(p, ty);
+                        let Some((i, _)) = g.types[ty].attr(name) else { continue };
+                        format!("{}.{}", var(*owner, &g.types[ty].named.alias), r.attrs[i])
+                    }
+                    Source::Today => "civil(day)".to_string(),
+                    Source::Lit(l) => match go_lit(g, n, f, l) {
+                        Some(v) => v,
+                        None => continue,
+                    },
+                };
+                // a value that is always there, given to an input that may be absent: a pointer to it
+                let v = if f.optional && !given_may_be_absent(g, a, src) { format!("ptr({v})") } else { v };
+                fields.push(format!("{}: {v}", exported(&f.named.alias)));
+            }
+            let call = match o.authorizer {
+                Authorizer::Cedar => format!("Authorize{}(store, p, {}{{{}}}, now)", exported(&b.named.alias), n.inputs[&x.action], fields.join(", ")),
+                Authorizer::Avp => format!("Authorize{}(cx, avp, store, p, {}{{{}}}, now)", exported(&b.named.alias), n.inputs[&x.action], fields.join(", ")),
+            };
+            let head = if conds.is_empty() { "\t{\n".to_string() } else { format!("\tif {} {{\n", conds.join(" && ")) };
+            t.push_str(&head);
+            t.push_str(&format!("\t\tasked := {call}\n"));
+            t.push_str(&format!("\t\tif asked.Err != nil {{\n\t\t\treturn req, &{e}{{asked.Err.Kind, {} + asked.Err.Message}}\n\t\t}}\n", s(&format!("{}: ", b.named.alias))));
+            t.push_str(&format!("\t\tctx[{}] = asked.Allowed\n\t}}\n", s(&x.alias(g))));
+        }
+    }
+}
+
+/// A constant given to an input of an action, in Go: a number counted in the input's unit, an enum's
+/// value by its alias, a day as a `Date`.
+fn go_lit(g: &Gate, n: &Names, f: &Field, l: &Literal) -> Option<String> {
+    match (l, &f.ty) {
+        (Literal::Bool(b), _) => Some(b.to_string()),
+        (Literal::Num(num), FieldType::Num { unit, .. }) => crate::types::count(num, unit).ok().map(|k| format!("int64({k})")),
+        (Literal::Word(w), FieldType::Enum(e)) => g.enums[*e].values.iter().find(|v| v.is(w)).map(|v| s(&v.alias)),
+        (Literal::Date(d), _) => {
+            let (y, m, dd) = plan::ymd(*d);
+            Some(format!("{}{{{y}, {m}, {dd}}}", n.date))
+        }
+        _ => None,
     }
 }
 

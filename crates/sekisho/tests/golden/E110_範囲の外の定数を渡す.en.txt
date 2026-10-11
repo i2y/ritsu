@@ -1,0 +1,3 @@
+error[E110]: tests/mutants/E110_範囲の外の定数を渡す.gate:73:27: The input `金額` of `承認する` takes 1GBP to 20,000GBP, and is given `30_000GBP`, outside it
+    73 |   unless allowed 承認する(金額: 30_000GBP)
+  = A number has to be of the same unit, and within the input's range; a value that may be absent goes only to an input that may be absent (`?`).

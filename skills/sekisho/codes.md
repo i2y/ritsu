@@ -284,7 +284,7 @@ action view
   principal User
   resource Order
   context
-    allowed = shop(id: 1).ok
+    known = shop(id: 1).ok
 ```
 
 `shop.json`:
@@ -364,6 +364,80 @@ role manager
 ```
 
 See also: [E101](#e101)
+
+<a id="e109"></a>
+
+## E109 — Actions read one another's answers with `allowed`, in a circle
+
+**When**: Following the `allowed <action>` of the policies comes back to the action it started from (`read → edit → read`); a policy that reads the answer of an action it is on is a circle too (a permit or a forbid of `action any` that writes `allowed`, say). Each circle is said once, at the `allowed` of its first action, with the actions in order. An expectation's `allowed` only reads an answer, and makes no circle.
+
+**Fix**: Take the `allowed` out of a policy of the circle: the answer `allowed` asks for is decided before the action that asks it, so in a circle none of them can be.
+
+**Example**:
+
+```gate
+gate t v1
+
+principal User
+
+resource Doc
+
+action read
+  principal User
+  resource Doc
+
+action edit
+  principal User
+  resource Doc
+
+permit readers_read
+  action read
+  unless allowed edit
+
+permit editors_edit
+  action edit
+  unless allowed read
+```
+
+See also: [E110](#e110), [E108](#e108)
+
+<a id="e110"></a>
+
+## E110 — What `allowed` asks with does not fit
+
+**When**: An action `allowed <action>` asks does not take a principal or a resource type of the action that asks it; an input it cannot do without is given nothing (no input of its name, no `(<input>: <value>)`); a value given is of another type or unit, its range is not within the input's, it may be absent where the input may not, or it is a computed value; the name the answer goes to Cedar by, `allowed_<action>`, is the alias of an input or a computed value; or one action asks another with different values.
+
+**Fix**: Add the types to the `principal` and `resource` lines of the action asked, or write what its inputs are given, like `allowed approve(amount: <value>)`: an input of the action that asks, an attribute of the principal or the resource, a constant, or `today`.
+
+**Example**:
+
+```gate
+gate t v1
+
+principal User
+
+resource Claim
+
+action approve
+  principal User
+  resource Claim
+  input
+    amount : money[GBP, incl_tax]  range >=1GBP <=10_000GBP
+
+action request_approval
+  principal User
+  resource Claim
+
+permit small_claims_are_approved
+  action approve
+  when amount <= 500GBP
+
+permit requests_of_what_cannot_be_approved
+  action request_approval
+  unless allowed approve
+```
+
+See also: [E109](#e109), [E101](#e101)
 
 <a id="e201"></a>
 

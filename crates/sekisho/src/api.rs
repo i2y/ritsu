@@ -4,8 +4,9 @@
 //! the Cedar is made of: the namespace and the four files `gen --target cedar` writes, each role,
 //! type and workflow with the entity it is in Cedar, each action with the operations it guards
 //! (each as its reference, in the JSON of a reference that sakai's `api` writes too: ritsu's DESIGN
-//! 6.2) and its context, each policy with its `@id`, and the expectations and the separations, each
-//! with its line.
+//! 6.2) and its context (with whether each action a policy asks with `allowed` is allowed, the
+//! action and what its inputs are given: DESIGN 2.11), each policy with its `@id`, and the
+//! expectations and the separations, each with its line.
 
 use crate::cedar::{self, Shape};
 use crate::checks::Checked;
@@ -131,6 +132,25 @@ pub fn json(scope: &Scope, checked: &Checked) -> Json {
                 ("optional", Json::Bool(cs.optional)),
             ])
         });
+        // whether each action a policy asks is allowed (DESIGN 2.11): a bool of the context too,
+        // with the action asked and what its inputs are given
+        let asked = s.allowed.iter().map(|&k| {
+            let x = &a.allowed[k];
+            let b = &g.actions[x.action];
+            let named = cedar::allowed_named(g, x);
+            let inputs = b.inputs.iter().zip(&x.inputs).filter_map(|(f, src)| src.as_ref().map(|src| (f.named.alias.clone(), Json::str(cedar::source_text(g, a, src))))).collect();
+            Json::obj([
+                ("name", Json::str(named.name)),
+                ("alias", Json::str(named.alias)),
+                ("line", line(x.line)),
+                ("computed", Json::str(cedar::asked_call(g, a, x))),
+                ("type", Json::str("bool")),
+                ("values", Json::Null),
+                ("optional", Json::Bool(false)),
+                ("asks", Json::obj([("action", Json::str(b.named.alias.clone())), ("inputs", Json::Obj(inputs))])),
+            ])
+        });
+        let context: Vec<Json> = context.chain(asked).collect();
         Json::obj([
             ("name", Json::str(a.named.name.clone())),
             ("alias", Json::str(a.named.alias.clone())),

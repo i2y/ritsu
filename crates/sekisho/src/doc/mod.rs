@@ -570,6 +570,22 @@ impl<'a> Builder<'a> {
             let cs: Vec<String> = a.computed.iter().map(|c| code(&c.named.name)).collect();
             facts.push(self.t(tr!("計算した値：{}（下の「計算した値」）", "Computed: {} (under Computed values below).", joined(lang, &cs))));
         }
+        // the answers of other actions its conditions read (DESIGN 2.11)
+        for x in &a.allowed {
+            let call = code(&crate::cedar::asked_call(g, a, x));
+            let bn = code(&g.actions[x.action].named.name);
+            facts.push(if x.policy {
+                self.t(tr!(
+                    "{call} を読みます。同じ principal と resource で {bn} を尋ねたら許されるかで、値はこのページの {bn} の表のとおりです（下の「計算した値」）。",
+                    "Reads {call}: whether {bn} is allowed for the same principal and resource, as the table of {bn} on this page says (under Computed values below)."
+                ))
+            } else {
+                self.t(tr!(
+                    "期待が {call} を読みます。同じ principal と resource で {bn} を尋ねたら許されるかで、値はこのページの {bn} の表のとおりです。Cedar には渡しません。",
+                    "An expectation reads {call}: whether {bn} is allowed for the same principal and resource, as the table of {bn} on this page says. Cedar is not given it."
+                ))
+            });
+        }
         if let Some((why, _)) = &a.nobody {
             facts.push(self.t(tr!("だれにも許さない：{why}", "Allowed to no one: {why}.")));
         }
@@ -830,7 +846,7 @@ impl<'a> Builder<'a> {
 
     fn computed(&mut self) {
         let g = self.g;
-        if g.actions.iter().all(|a| a.computed.is_empty()) {
+        if g.actions.iter().all(|a| a.computed.is_empty() && !a.allowed.iter().any(|x| x.policy)) {
             return;
         }
         self.heading(2, self.t(tr!("計算した値", "Computed values")), "computed".into());
@@ -845,7 +861,40 @@ impl<'a> Builder<'a> {
             for ci in 0..g.actions[ai].computed.len() {
                 self.value(ai, ci, &mut drawn, &sets);
             }
+            for k in 0..g.actions[ai].allowed.len() {
+                if g.actions[ai].allowed[k].policy {
+                    self.asked_value(ai, k);
+                }
+            }
         }
+    }
+
+    /// Whether an action a policy asks with `allowed` is allowed, as a value of the context (DESIGN
+    /// 2.11): how it is written, what it asks with, and where its answers are.
+    fn asked_value(&mut self, ai: usize, k: usize) {
+        let g = self.g;
+        let lang = self.lang;
+        let a = &g.actions[ai];
+        let x = &a.allowed[k];
+        let b = &g.actions[x.action];
+        let nm = crate::cedar::allowed_named(g, x);
+        let heading = if self.ja() { format!("{} の {}", code(&a.named.name), named(lang, &nm)) } else { format!("{} of {}", named(lang, &nm), code(&a.named.name)) };
+        self.heading(3, heading, id_of("computed", &format!("{}-{}", a.named.alias, nm.alias)));
+        let bn = code(&b.named.name);
+        let mut facts = vec![
+            self.t(tr!("書き方：{}", "Written: {}", code(&crate::cedar::asked_call(g, a, x)))),
+            self.t(tr!(
+                "同じ principal と resource、同じ日で {bn} を尋ねたら許されるかです。生成したコードは、{bn} の関数で先に尋ね、答えを context に入れてから、この action を尋ねます。{bn} を尋ねて拒まれた理由は、そのままこのリクエストを拒む理由になります。",
+                "Whether {bn} is allowed for the same principal and resource, on the same day. The generated code asks it first, through the function of {bn}, and puts the answer in the context before it asks this action; why {bn} was refused, when it was, is why this request is refused."
+            )),
+        ];
+        let given: Vec<String> = b.inputs.iter().zip(&x.inputs).filter_map(|(f, src)| src.as_ref().map(|src| format!("{} ← {}", code(&f.named.name), code(&crate::cedar::source_text(g, a, src))))).collect();
+        if !given.is_empty() {
+            facts.push(self.t(tr!("{bn} の入力に渡すもの：{}", "What the inputs of {bn} are given: {}.", joined(lang, &given); joined(lang, &given))));
+        }
+        facts.push(self.t(tr!("値：はい、いいえ（Cedar では true と false）。", "Its values: yes and no (true and false in Cedar).")));
+        facts.push(self.t(tr!("値は、このページの {bn} の表のとおりです。", "Its values are as the table of {bn} on this page says.")));
+        self.push(Block::List(facts));
     }
 
     fn value(&mut self, ai: usize, ci: usize, drawn: &mut BTreeMap<usize, String>, sets: &[(Vec<usize>, Vec<Vec<Val>>)]) {

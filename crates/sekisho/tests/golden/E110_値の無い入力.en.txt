@@ -1,0 +1,3 @@
+error[E110]: tests/mutants/E110_値の無い入力.gate:73:18: The input `金額` of `承認する` is given nothing: `承認を求める` has no input of that name
+    73 |   unless allowed 承認する
+  = Write what it is given, like `allowed 承認する(金額: <value>)`: an input of `承認を求める`, an attribute of the principal or the resource, a constant, or `today`.

@@ -289,11 +289,62 @@ over every permit. Every policy has a name, and its alias makes its `@id`:
 | `principal in resource.team` | the principal is a member of it | `principal in resource.team` |
 | `refund_band is within_limit` | a computed value's value | `context has refund_band && context.refund_band == "within_limit"` |
 | `in_period` | a computed bool | `context.in_period` |
+| `allowed approve` | another action's answer (below) | `context.allowed_approve` |
 
 `x is not v` reads as `not (x is v)`, and holds when `x` has no value. A relation goes one step: an
 attribute of an attribute (`resource.project.owner`) is E104. A computed value that a principal
 type of the action cannot have (it reads an attribute the type does not have) is optional in the
 context, and the generated condition asks `has` first, as above.
+
+### Another action's answer
+
+```gate
+permit approvers_ask_for_what_they_cannot_approve
+  description "An approver asks a higher approver to approve a submitted purchase, only when the approver could not approve it"
+  principal in approver
+  action request_approval
+  when resource.status is submitted
+  unless allowed approve
+```
+
+`allowed <action>` holds when that action, asked with the same principal and the same resource,
+would be allowed. It writes an escalation (an approver asks for an approval only of what the
+approver could not approve, as above) and the weaker of two operations first
+(`examples/documents` forbids `delete_document` `when allowed archive_document`).
+
+The inputs of the action asked are given the inputs of this action of the same names. One named
+otherwise, or that this action does not have, is written out: `allowed approve(amount: total)`,
+with what a computed value can be given (an input, an attribute of the principal or the resource,
+a constant, or `today`). An input that may be absent (`?`) and is given nothing is asked as
+absent. The action asked computes its own computed values, as it writes them, from what it is
+given.
+
+`check` walks the action together with what decides the action asked: what the policies of the
+action asked read is counted among this action's combinations, so each combination has one answer,
+the one Cedar gives (`request_approval` in `examples/approvals` has 64 combinations, 6 of them
+allowed). `gen` gives Cedar the answer as a bool of the context, which the generated code computes
+by asking the action first, with the same principal, resource and time:
+
+```cedar
+@id("approvals/approvers_ask_for_what_they_cannot_approve")
+@doc("An approver asks a higher approver to approve a submitted purchase, only when the approver could not approve it")
+permit (
+  principal in Office::Role::"approver",
+  action == Office::Action::"request_approval",
+  resource is Office::Purchase
+)
+when { resource.status == "submitted" }
+unless { context.allowed_approve };
+```
+
+When the action asked is refused (its request cannot be built), the action that asks is refused
+too, of the same kind. An `allowed` only an expectation reads is counted by `check`, and is not
+given to Cedar.
+
+| Code | What it finds |
+|---|---|
+| E109 | the `allowed` of policies go round in a circle of actions (an action that asks itself is one) |
+| E110 | an input of the action asked that is given nothing, or a value that does not fit it (its type, unit or range, a value that may be absent given to one that may not, an attribute a type of this action does not have, a computed value); a principal or resource type this action takes that the action asked does not; one action asking the same action two ways |
 
 ## Expectations and separations
 
@@ -419,8 +470,11 @@ refuses without asking when what it reads is not what the gate declared, and say
 `principal`, the `resource` or the `input` is not there or outside its range or its enum, `today`
 is outside the range the gate was checked over, or the code of a `rule` or a `date` failed; `cedar`
 when Cedar met an error or could not be asked. `--authorizer avp` asks Amazon Verified Permissions
-instead, and says W401 of what is over its quotas. `ritsu gen` writes the same into the packages of
-a project, with the Cedar once in `<out>/cedar/`.
+instead, and says W401 of what is over its quotas. An action whose policies read `allowed` asks
+that action first, through its function, and puts the answer in the context (`allowed_approve`);
+a refusal of that action refuses this one, of the same kind, and with `--authorizer avp` the
+request function of such an action takes `avp` too. `ritsu gen` writes the same into the packages
+of a project, with the Cedar once in `<out>/cedar/`.
 
 ## Across the languages
 
@@ -451,7 +505,7 @@ guards.
 | at the start of a line | `gate` `description` `namespace` `use` `today` `enum` `role` `principal` `workflow` `resource` `action` `permit` `forbid` `expect` `separate` |
 | after `use` | `rule` `dates` `calendar` `openapi` `proto` `asyncapi` `book` `gate` `from` |
 | in a block | `description` `includes` `can` `roles` `attributes` `guards` `principal` `resource` `from` `nobody` `input` `context` `action` `actions` `when` `unless` |
-| in a condition | `in` `is` `not` `and` `or` `any` `workflow` `open` `today` `allow` `deny` `principal` `resource` `true` `false` |
+| in a condition | `in` `is` `not` `and` `or` `any` `workflow` `open` `today` `allow` `deny` `allowed` `principal` `resource` `true` `false` |
 | types and ranges | `bool` `date` `number` `rate` `money` `mass` `length` `area` `volume` `duration` `temperature` `sound` `range` `offset` |
 
 The symbols are `=` `:` `,` `.` `(` `)` `<` `<=` `>` `>=` `|` `?`, and `#` for a comment. Cedar's
@@ -518,7 +572,8 @@ English) and `--help`.
 `gen` writes), `roles` (each role's entity in Cedar, `includes`, `can`), `types` (each type's
 entity type, its roles, its attributes and whether each goes into Cedar), `workflows`, `actions`
 (the operations each guards, as references written from the root, the types it takes, its input,
-its context and how each computed value is computed), `policies` (each `@id`), `expects` and
+its context and how each computed value is computed, with `asks` for an `allowed`: the action
+asked and what each of its inputs is given), `policies` (each `@id`), `expects` and
 `separations`. A reference is an object of `text`, `tool`, `path` and `items`, as sakai's and
 yuen's are.
 

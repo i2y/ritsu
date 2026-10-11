@@ -1,0 +1,77 @@
+gate documents v1
+description "documents.gate with the forbid on every action, so that archive_document reads its own answer"
+namespace Records
+
+enum document_status = draft | final
+
+role staff
+  description "Writes the office's documents, and keeps their own"
+  can view_document, archive_document, delete_document
+
+principal User
+  description "A member of the staff, signed in"
+  roles staff
+
+resource Document
+  description "A document of the office"
+  attributes
+    status : document_status
+    owner  : User
+    held   : bool
+
+action view_document
+  description "Look at a document"
+  principal User
+  resource Document from documentId
+
+action archive_document
+  description "Archive a document: it is kept, and no longer shown"
+  principal User
+  resource Document from documentId
+
+action delete_document
+  description "Delete a document for good"
+  principal User
+  resource Document from documentId
+
+permit staff_view_documents
+  description "The staff look at any document"
+  principal in staff
+  action view_document
+
+permit owners_archive_final_documents
+  description "The owner of a final document archives it, unless it is held"
+  principal in staff
+  action archive_document
+  when resource.status is final
+  when resource.owner is principal
+  unless resource.held
+
+permit owners_delete_their_documents
+  description "The owner of a document deletes it, unless it is held"
+  principal in staff
+  action delete_document
+  when resource.owner is principal
+  unless resource.held
+
+# The weaker operation first: delete_document asks archive_document with the same principal and
+# the same document, and is denied wherever archive_document would be allowed.
+forbid what_can_be_archived_is_not_deleted
+  description "A document the person could archive is archived, not deleted"
+  action any
+  when allowed archive_document
+
+expect deny final_documents_are_archived_not_deleted
+  description "The owner of a final document that is not held never deletes it: it is archived instead"
+  action delete_document
+  when resource.status is final
+  when resource.owner is principal
+  unless resource.held
+
+expect allow owners_delete_their_drafts
+  description "The owner of a draft that is not held deletes it"
+  principal in staff
+  action delete_document
+  when resource.status is draft
+  when resource.owner is principal
+  unless resource.held

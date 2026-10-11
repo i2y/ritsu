@@ -363,9 +363,10 @@ fn field(c: &mut Cur, what: &Text) -> Result<Field, Bad> {
     Ok(Field { name, span, ty, ty_span, optional, range })
 }
 
-/// One input given to a rule or a date function: `amount: amount`, `limit: principal.refund_limit`.
-fn arg(c: &mut Cur) -> Result<Arg, Bad> {
-    let name = c.reference(&tr!("規則か日付の関数の入力", "the input of the rule or the date function"))?;
+/// One input given to a rule, a date function or an action (`what` says which, for a message):
+/// `amount: amount`, `limit: principal.refund_limit`.
+fn arg(c: &mut Cur, what: &Text) -> Result<Arg, Bad> {
+    let name = c.reference(what)?;
     c.want(&Tok::Colon, ":")?;
     let value = if c.is_word(kw::TODAY) {
         let s = c.span();
@@ -380,13 +381,18 @@ fn arg(c: &mut Cur) -> Result<Arg, Bad> {
     Ok(Arg { name, value })
 }
 
-/// `(a: x, b: y)`, after the name of the call.
+/// `(a: x, b: y)`, after the name of the call: the inputs of a rule or a date function.
 fn args(c: &mut Cur) -> Result<Vec<Arg>, Bad> {
+    args_of(c, &tr!("規則か日付の関数の入力", "the input of the rule or the date function"))
+}
+
+/// `(a: x, b: y)`, each `a` an input of what `what` says.
+fn args_of(c: &mut Cur, what: &Text) -> Result<Vec<Arg>, Bad> {
     c.want(&Tok::LParen, "(")?;
     let mut out = Vec::new();
     if !c.eat(&Tok::RParen) {
         loop {
-            out.push(arg(c)?);
+            out.push(arg(c, what)?);
             if c.eat(&Tok::RParen) {
                 break;
             }
@@ -536,6 +542,18 @@ fn rhs(c: &mut Cur) -> Result<Rhs, Bad> {
 /// One condition (DESIGN 3.1).
 fn atom(c: &mut Cur) -> Result<(Atom, Span), Bad> {
     let span = c.span();
+    // `allowed approve`, `allowed approve(amount: total)` (DESIGN 2.11)
+    if c.eat_word(kw::ALLOWED) {
+        let action = match c.peek() {
+            Some(Tok::Word(w)) if !kw::is_reserved(w) => c.reference(&tr!("action", "the action"))?,
+            _ => {
+                let f = c.found();
+                return Err(form(c.col(), tr!("`allowed` のあとには、このファイルの action の名前を書いてください（{}）", "`allowed` is followed by the name of an action of the file ({})", f.ja; f.en)));
+            }
+        };
+        let args = if c.peek() == Some(&Tok::LParen) { args_of(c, &tr!("action の入力", "the input of the action"))? } else { Vec::new() };
+        return Ok((Atom::Allowed { action, args }, span));
+    }
     if c.is_word(kw::PRINCIPAL) && c.peek_at(1) != Some(&Tok::Dot) {
         c.bump();
         if c.eat_word(kw::IN) {

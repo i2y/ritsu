@@ -1,0 +1,8 @@
+combinations: view_document 2, archive_document 16, delete_document 16; 34 in all
+permit staff_view_documents: allows 1 combinations, 1 of them alone
+permit owners_archive_final_documents: allows 1 combinations, 1 of them alone
+permit owners_delete_their_documents: allows 1 combinations, 1 of them alone
+forbid what_can_be_archived_is_not_deleted: holds on 1 combinations, and turns 1 that a permit allows into a deny
+expect deny final_documents_are_archived_not_deleted: holds on all 2
+expect allow owners_delete_their_drafts: holds on all 1
+role staff: can ["archive_document", "delete_document", "view_document"]

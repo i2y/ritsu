@@ -1,0 +1,98 @@
+gate 承認(approvals_ja) v1
+description "購入を、だれが承認し、だれが代わりに上の承認者に承認を求めるか。事務所の決まりの一例として書いた、別の action の答えを条件にする sekisho の例で、approvals.gate の日本語の版"
+namespace OfficeJa
+
+use rule 承認の上限 from "rules/承認の上限.rule"
+
+enum 購入の状態(purchase_status) = 下書き(draft) | 提出済(submitted) | 承認済(approved) | 却下(rejected)
+
+role 職員(employee)
+  description "仕事に要るものを求め、購入を見る"
+  can 購入を見る
+
+role 承認者(approver)
+  description "ほかの人が求めた購入を、自分の上限まで承認する"
+  includes 職員
+  can 購入を見る, 承認する, 承認を求める
+
+principal 利用者(User)
+  description "サインインした事務所の職員"
+  roles 職員, 承認者
+  attributes
+    承認できる額(approval_limit) : money[GBP, incl_tax]  range >=0GBP <=50_000GBP
+
+resource 購入(Purchase)
+  description "だれかが求めた購入"
+  attributes
+    状態(status)       : 購入の状態
+    求めた人(requester) : 利用者
+
+action 購入を見る(view_purchase)
+  description "購入を見る"
+  principal 利用者
+  resource 購入 from purchaseId
+
+action 承認する(approve)
+  description "購入を承認する"
+  principal 利用者
+  resource 購入 from purchaseId
+  input
+    金額(amount) : money[GBP, incl_tax]  range >=1GBP <=20_000GBP
+  context
+    区分(band) = 承認の上限(金額: 金額, 上限: principal.承認できる額).区分
+
+action 承認を求める(request_approval)
+  description "上の承認者に、購入の承認を求める"
+  principal 利用者
+  resource 購入 from purchaseId
+  input
+    金額(amount) : money[GBP, incl_tax]  range >=1GBP <=20_000GBP
+  context
+    区分(band) = 承認の上限(金額: 金額, 上限: principal.承認できる額).区分
+
+permit 職員は購入を見られる(staff_view_purchases)
+  description "職員はどの購入も見られる"
+  principal in 職員
+  action 購入を見る
+
+permit 承認者は上限まで承認できる(approvers_approve_within_their_limit)
+  description "承認者は、ほかの人が求めた提出済の購入を、自分の上限まで承認できる"
+  principal in 承認者
+  action 承認する
+  when resource.状態 is 提出済
+  when 区分 is 上限まで
+  unless resource.求めた人 is principal
+
+# 同じ principal、同じ購入、同じ金額で尋ねる。生成したコードは、先に 承認する を尋ね、
+# その答えを context の allowed_approve として Cedar に渡す。
+permit 承認者は承認できないものの承認を求める(approvers_ask_for_what_they_cannot_approve)
+  description "承認者は、自分で承認できないときだけ、提出済の購入の承認を上の承認者に求められる"
+  principal in 承認者
+  action 承認を求める
+  when resource.状態 is 提出済
+  unless allowed 承認する
+
+expect deny 承認できるものの承認はだれも求めない
+  description "自分で承認できる購入の承認は、だれも求めない"
+  action 承認を求める
+  when allowed 承認する
+
+expect allow 承認者は上限を超えるものの承認を求める
+  description "承認者は、自分の上限を超える提出済の購入の承認を求められる"
+  principal in 承認者
+  action 承認を求める
+  when resource.状態 is 提出済
+  when 区分 is 上限超え
+
+expect allow 承認者は自分の購入の承認を求める
+  description "承認者は、自分が求めた提出済の購入の承認を求められる。自分の購入はだれも自分で承認しない"
+  principal in 承認者
+  action 承認を求める
+  when resource.状態 is 提出済
+  when resource.求めた人 is principal
+
+expect deny 承認者でない職員は承認せず承認も求めない
+  description "承認者でない職員は、購入を承認せず、承認も求めない"
+  principal in 職員
+  action 承認する, 承認を求める
+  unless principal in 承認者

@@ -6,8 +6,10 @@
 //!
 //! The columns are the principal's type, each role walked (held, after `includes`), the attributes
 //! of the principal, the resource's type when the action takes more than one, the attributes of
-//! the resource, the relations, the inputs and the computed values: what the policies read, in
-//! the order the walk reads them. `-` is a column that does not apply to a row (the roles of a
+//! the resource, the relations, the inputs, the computed values, and whether each action the
+//! conditions ask with `allowed` is allowed (DESIGN 2.11): what the policies read, in the order the
+//! walk reads them. What an action asked computes for its own answer is that action's table's, and
+//! is not a column here (its answer is). `-` is a column that does not apply to a row (the roles of a
 //! workflow, a value the principal's type does not compute). A value of a rule's enum is shown by
 //! the name the `.rule` writes (`上限まで` for `上限まで(within_limit)`), as the `.gate` beside the
 //! table writes it; the string Cedar is given (the alias) is shown where the page puts the policies.
@@ -33,6 +35,8 @@ enum Col {
     Member(String),
     Input(usize),
     Computed(usize),
+    /// Whether the action is allowed (`allowed approve`), by the action.
+    Allowed(usize),
 }
 
 /// A table: its columns, and its rows, those that allow first.
@@ -104,6 +108,12 @@ pub fn table(g: &Gate, s: &Space) -> Table {
             add((4, 0), Col::Resource);
         }
         for (at, sl) in f.slots.iter().enumerate() {
+            // an answer the conditions read is derived, not walked
+            if let Slot::Allowed(l) = sl
+                && f.links[*l].direct
+            {
+                add((9, f.links[*l].action), Col::Allowed(f.links[*l].action));
+            }
             if !f.factors.iter().any(|x| x.places.contains(&at)) {
                 continue;
             }
@@ -125,7 +135,7 @@ pub fn table(g: &Gate, s: &Space) -> Table {
                         }
                     }
                 }
-                Slot::Roles => {}
+                Slot::Roles | Slot::Linked(..) | Slot::Allowed(_) => {}
             }
         }
         // a computed value the frame fixes as absent is still a column of the action
@@ -200,6 +210,10 @@ pub fn table(g: &Gate, s: &Space) -> Table {
                 Col::Computed(i) => match f.place(&Slot::Computed(*i)) {
                     Some(at) if c.env[at] != Val::Absent => value_cell(g, s, f, c.env, at),
                     _ => Cell::Dash,
+                },
+                Col::Allowed(b) => match f.links.iter().position(|x| x.direct && x.action == *b).and_then(|l| f.place(&Slot::Allowed(l))) {
+                    Some(at) => value_cell(g, s, f, c.env, at),
+                    None => Cell::Dash,
                 },
             })
             .collect();
@@ -278,6 +292,7 @@ fn col_text(g: &Gate, a: &Action, c: &Col) -> Text {
         Col::Member(x) => Text::same(format!("principal in {x}")),
         Col::Input(i) => Text::same(a.inputs[*i].named.name.clone()),
         Col::Computed(i) => Text::same(a.computed[*i].named.name.clone()),
+        Col::Allowed(b) => Text::same(format!("allowed {}", g.actions[*b].named.name)),
     }
 }
 

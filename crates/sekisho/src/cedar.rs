@@ -3,8 +3,9 @@
 //!
 //! What goes into Cedar is first gathered as a [`Shape`]: each type's attributes that a policy
 //! reads (DESIGN 2.4: no other), the types an entity of it can be in (`Role`, and the groups a
-//! policy asks it to be a member of), and each action's context — the inputs a policy reads and
-//! every value the action computes, each with whether it may be absent. The schema is written
+//! policy asks it to be a member of), and each action's context — the inputs a policy reads,
+//! every value the action computes, each with whether it may be absent, and whether each action a
+//! policy asks with `allowed` is allowed (`allowed_<action>`, DESIGN 2.11). The schema is written
 //! from the shape, the policies are compiled against it (an attribute that may be absent, or that
 //! a type the policy can see does not have, is read behind `has`, DESIGN 3.1), and the vectors of
 //! `sekisho vectors` fill requests and entities by it ([`crate::vectors`]).
@@ -53,6 +54,9 @@ pub struct ActionShape {
     pub inputs: Vec<usize>,
     /// Every value the action computes, in the order declared.
     pub computed: Vec<ComputedShape>,
+    /// The actions a policy on it asks with `allowed` (DESIGN 2.11), by index into
+    /// [`Action::allowed`]: each a bool of the context, `allowed_<action>`, never absent.
+    pub allowed: Vec<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -73,6 +77,9 @@ impl Shape {
     /// by its name or its alias), and whether it may be absent there.
     fn context_value(&self, g: &Gate, action: usize, name: &str) -> Option<bool> {
         let a = &g.actions[action];
+        if self.actions[action].allowed.iter().any(|&k| a.allowed[k].alias(g) == name) {
+            return Some(false);
+        }
         if let Some((i, f)) = a.input(name) {
             return self.actions[action].inputs.contains(&i).then_some(f.optional);
         }
@@ -183,7 +190,7 @@ pub fn shape(g: &Gate, scope: &Scope, checked: &Checked) -> Shape {
                                     }
                                 }
                             }
-                            Atom::InRoles(_) | Atom::IsType(_) | Atom::IsWorkflow(_) => {}
+                            Atom::InRoles(_) | Atom::IsType(_) | Atom::IsWorkflow(_) | Atom::Allowed { .. } => {}
                         }
                     }
                 }
@@ -213,7 +220,8 @@ pub fn shape(g: &Gate, scope: &Scope, checked: &Checked) -> Shape {
                     ComputedShape { values, members, optional: may_be_absent(g, scope, checked, decl, ai, ci, cv) }
                 })
                 .collect();
-            ActionShape { inputs: ins, computed }
+            let allowed = (0..a.allowed.len()).filter(|&k| a.allowed[k].policy).collect();
+            ActionShape { inputs: ins, computed, allowed }
         })
         .collect();
     Shape { namespace: c::Name::parse(&g.namespace), types, actions }
@@ -382,8 +390,8 @@ fn field_doc(g: &Gate, f: &Field) -> Option<Text> {
     }
 }
 
-/// What a value given to a rule or a date is, as the gate writes it.
-fn source_text(g: &Gate, a: &Action, s: &Source) -> String {
+/// What a value given to a rule, a date or an action is, as the gate writes it.
+pub fn source_text(g: &Gate, a: &Action, s: &Source) -> String {
     match s {
         Source::Attr(o, n) => {
             let ts = if *o == Owner::Principal { &a.principals } else { &a.resources };
@@ -512,6 +520,41 @@ fn input_doc(g: &Gate, a: &Action, f: &Field) -> Text {
         }
         None => Text { ja: ja.to_string(), en: en.to_string() },
     }
+}
+
+/// The doc of whether an action a policy asks with `allowed` is allowed (DESIGN 2.11): the action,
+/// what its inputs are given, and that the generated code asks it.
+pub fn allowed_doc(g: &Gate, ai: usize, x: &Allowed) -> Text {
+    let a = &g.actions[ai];
+    let b = &g.actions[x.action];
+    let given: Vec<String> = b.inputs.iter().zip(&x.inputs).filter_map(|(f, s)| s.as_ref().map(|s| format!("{}: {}", f.named.name, source_text(g, a, s)))).collect();
+    let alias = &b.named.alias;
+    let mut en = format!("Whether {alias} is allowed for the same principal and resource");
+    let mut ja = format!("同じ principal と resource で {alias} が許されるか");
+    if !given.is_empty() {
+        en.push_str(&format!(", its inputs given {}", given.join(", ")));
+        ja.push_str(&format!("。{alias} の入力には {} を渡す", given.join("、")));
+    }
+    en.push_str(". Asked and computed by the generated code, never taken from the caller");
+    ja.push_str("。生成したコードが尋ねて計算し、呼ぶ側からは受け取らない");
+    Text { ja, en }
+}
+
+/// How a condition asks an action, written out in full: `allowed approve(amount: amount)`, each
+/// input given something by its name, and what it is given as the gate writes it.
+pub fn asked_call(g: &Gate, a: &Action, x: &Allowed) -> String {
+    let b = &g.actions[x.action];
+    let given: Vec<String> = b.inputs.iter().zip(&x.inputs).filter_map(|(f, s)| s.as_ref().map(|s| format!("{}: {}", f.named.name, source_text(g, a, s)))).collect();
+    if given.is_empty() { format!("allowed {}", b.named.name) } else { format!("allowed {}({})", b.named.name, given.join(", ")) }
+}
+
+/// What the context of Cedar names an action's answer by (`allowed_approve`), and its own name when
+/// the action has one (`allowed 承認する`, kept as `@name`).
+pub fn allowed_named(g: &Gate, x: &Allowed) -> Named {
+    let b = &g.actions[x.action].named;
+    let alias = x.alias(g);
+    let name = if b.name != b.alias { format!("allowed {}", b.name) } else { alias.clone() };
+    Named { name, alias, line: x.line }
 }
 
 /// The descriptions of the file and the files it reads, by what they declare.
@@ -666,6 +709,11 @@ pub fn schema(g: &Gate, scope: &Scope, shape: &Shape, lang: Lang) -> c::Schema {
                 let cv = &a.computed[ci];
                 let ty = if cs.values.is_some() { prim("String") } else { prim("Bool") };
                 attrs.push(c::Attr { name: cv.named.alias.clone(), ty, required: !cs.optional, annotations: notes(&cv.named, Some(computed_doc(g, scope, ai, ci, cs).get(lang).to_string())), line: 0, col: 0 });
+            }
+            for &k in &s.allowed {
+                let x = &a.allowed[k];
+                let named = allowed_named(g, x);
+                attrs.push(c::Attr { name: named.alias.clone(), ty: prim("Bool"), required: true, annotations: notes(&named, Some(allowed_doc(g, ai, x).get(lang).to_string())), line: 0, col: 0 });
             }
             let context = if attrs.is_empty() { c::Type::empty_record() } else { c::Type::Record(c::RecordType { attrs, additional_attributes: false }) };
             let mut annotations = notes(&a.named, docs.action(&a.named.alias).and_then(|d| Docs::of(&d.description)));
@@ -881,6 +929,8 @@ impl<'g> Compiler<'g> {
         let never = || ex(ExprKind::Bool(false));
         let ns = self.shape;
         match a {
+            // computed by the generated code, on every action of the policy (DESIGN 2.11)
+            Atom::Allowed { action, .. } => get(var(Var::Context), &format!("allowed_{}", self.g.actions[*action].named.alias)),
             Atom::InRoles(rs) => any_of(rs.iter().map(|&r| bin(BinOp::In, var(Var::Principal), ex(ExprKind::Entity(role_uid(self.g, ns, r))))).collect()),
             Atom::IsType(t) => ex(ExprKind::Is { expr: Box::new(var(Var::Principal)), ty: type_name(self.g, ns, *t), in_expr: None }),
             Atom::IsWorkflow(w) => bin(BinOp::Eq, var(Var::Principal), ex(ExprKind::Entity(workflow_uid(self.g, ns, *w)))),

@@ -150,7 +150,13 @@ separate refunding_and_auditing
   constants and `today`; the generated code computes it, and a caller cannot hand it in.
 - Conditions: `principal in`, `principal is`, `principal is workflow`, `x is v`, `x is not v`, a
   bool, a number against a constant, `resource.a is principal`, `resource.a is principal.b`,
-  `principal in resource.a`, joined with `and`, `or`, `not` and parentheses.
+  `principal in resource.a`, `allowed <action>`, joined with `and`, `or`, `not` and parentheses.
+- `allowed <action>` is another action's answer, asked with the same principal and resource: an
+  escalation (`unless allowed approve` on `request_approval`), the weaker operation first
+  (`forbid … when allowed archive_document` on `delete_document`). The action asked is given this
+  action's inputs of the same names, or what is written: `allowed approve(amount: total)`. The
+  check walks both actions together, so each combination has one answer; the generated code asks
+  the other action first, and a refusal of it refuses this one.
 - A policy's alias is its `@id`, `<file's alias>/<policy's alias>`: renaming a policy changes the
   `@id` that the records of decisions and Verified Permissions hold.
 
@@ -167,6 +173,9 @@ separate refunding_and_auditing
   contract says `security: []`), at ritsu's E907 and W907.
 - What a workflow should do when it is denied, at ritsu's W909: the task declares the error
   (`errors denied = 403`), and the flow handles it.
+- Whether an action should hang on another action's answer (`allowed`), when the business says
+  "only when they could not …" or "rather than …", and what the other action's inputs are given
+  when this action has none of their names (E110).
 
 ## 4. From a diagnostic to a fix
 
@@ -179,6 +188,8 @@ reproduction. The usual ones:
 | E101 | a name names nothing | fix the spelling, or declare it |
 | E103 | a number or a date with no range, or a constant outside it | give both ends of the range |
 | E105 | a computed value from what it cannot be computed from | give a rule only attributes, inputs, constants and `today`; read an enum or bool output |
+| E109 | actions read one another's answers with `allowed`, in a circle | take the `allowed` out of a policy of the circle; ask which action is decided first |
+| E110 | what `allowed` asks with does not fit: an input given nothing or a value it does not take, a type the action asked does not take, one action asking it two ways | write the inputs (`allowed approve(amount: <value>)`) or the types of the action asked; split the action to ask it two ways |
 | E201 | a file a `use` reads does not pass its check, cannot be read, or is outside the root | fix that file with its language, or `--root` |
 | E202-E205 | an operation the contract does not have, an input it does not take, a `from` it has no parameter for, an operation two actions guard | follow the contract; ask which action decides an operation |
 | E206, W201 | a value given to a rule or a date outside what it takes, or breaking its precondition | narrow the range, or ask whether the rule should take more |
@@ -214,9 +225,10 @@ Fix the first diagnostic first: an error of words or names stops the checks afte
 `@id` and its description, the schema with what each computed value is computed from and the
 operation each action guards. `--target typescript|python|go` writes, for each action, a function
 that reads the principal and the resource from the service's `Store`, computes the computed values
-with the code rulec and koyomi generate, and asks Cedar (cedar-wasm, cedarpy, cedar-go), or
-Amazon Verified Permissions with `--authorizer avp`. It refuses before asking Cedar when what it
-reads is not what the gate declared. `ritsu gen` puts the same into the packages of a project,
+with the code rulec and koyomi generate, and asks Cedar (cedar-wasm, cedarpy, cedar-go), or Amazon
+Verified Permissions with `--authorizer avp`. It refuses before asking Cedar when what it reads is
+not what the gate declared. An action whose policies read `allowed` asks that action first, through
+its function, and is refused when it is. `ritsu gen` puts the same into the packages of a project,
 beside the rules and dates the code reads. The handler calls the function with the operation's
 arguments as it parsed them, and performs the operation with those same arguments.
 

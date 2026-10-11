@@ -545,7 +545,11 @@ impl<'a> Writer<'a> {
             self.t(tr!("action {alias}（{ja} を守る）のリクエストを組み立てる。拒むときは {err} を投げる", "Builds the request of the action {alias}, which guards {en}; throws a {err} to refuse it"))
         };
         self.doc("", &doc);
-        self.line(format!("export async function {}(store: {store}, principal: {principal}, input: {input_t}, now: Date = new Date()): Promise<{}> {{", request_fn(&alias), self.names.request));
+        // the actions a policy asks with `allowed` (DESIGN 2.11): asked through Verified
+        // Permissions too, when that is where the gate is asked
+        let asked: Vec<usize> = (0..a.allowed.len()).filter(|&k| a.allowed[k].policy).collect();
+        let avp_first = if self.authorizer == Authorizer::Avp && !asked.is_empty() { format!("avp: {}, ", self.names.avp) } else { String::new() };
+        self.line(format!("export async function {}({avp_first}store: {store}, principal: {principal}, input: {input_t}, now: Date = new Date()): Promise<{}> {{", request_fn(&alias), self.names.request));
         // 1. the principal's type
         let pts: Vec<String> = a.principals.iter().map(|&t| g.types[t].named.alias.clone()).collect();
         let cond: Vec<String> = pts.iter().map(|t| format!("principal.type !== {}", q(t))).collect();
@@ -559,7 +563,7 @@ impl<'a> Writer<'a> {
             self.line(format!("  if (principal.type === {} && !_WORKFLOWS.includes(principal.id)) _fail(\"principal\", `{m}`);", q(&g.types[wt].named.alias)));
         }
         // 2. today, held to its range by an action that computes a value from it (raw::reads_today)
-        if g.today.is_some() && raw::reads_today(a) {
+        if g.today.is_some() && raw::reads_today(g, ai) {
             self.helpers.insert("today");
             self.line("  const day = _today(now);");
         }
@@ -621,6 +625,9 @@ impl<'a> Writer<'a> {
         for ci in 0..a.computed.len() {
             self.computed(ai, ci)?;
         }
+        for &k in &asked {
+            self.asked(ai, k)?;
+        }
         // the entities
         self.line(format!("  const entities: {}[] = [];", self.names.entity));
         if !g.roles.is_empty() {
@@ -670,7 +677,8 @@ impl<'a> Writer<'a> {
         self.line(format!("export async function {}({params}): Promise<{}> {{", authorize_fn(&alias), self.names.answer));
         self.line(format!("  let req: {};", self.names.request));
         self.line("  try {");
-        self.line(format!("    req = await {}(store, principal, input, now);", request_fn(&alias)));
+        let avp_arg = if avp_first.is_empty() { "" } else { "avp, " };
+        self.line(format!("    req = await {}({avp_arg}store, principal, input, now);", request_fn(&alias)));
         self.line("  } catch (e) {");
         self.line(format!("    if (e instanceof {err}) return {{ allowed: false, policies: [], error: e }};"));
         self.line("    throw e;");
@@ -752,6 +760,65 @@ impl<'a> Writer<'a> {
                     self.line(format!("{indent}{l}"));
                 }
                 if !conds.is_empty() {
+                    self.line("  }");
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The code of an action a policy asks with `allowed` (DESIGN 2.11): asked through its own
+    /// function, with the same principal, resource and instant and what its inputs are given, its
+    /// answer put in the context; its refusal refuses this request, of its kind.
+    fn asked(&mut self, ai: usize, k: usize) -> Result<(), String> {
+        let g = self.g;
+        let a = &g.actions[ai];
+        let x = &a.allowed[k];
+        let b = &g.actions[x.action];
+        let said = super::plan::asked_text(g, a, x);
+        let what = self.t(tr!("{said}。同じ principal と resource で尋ねる", "{said}: asked with the same principal and resource"));
+        self.comment("  ", &what);
+        let (ps, rs) = super::plan::asked_for(a, x);
+        let pts: Vec<Option<usize>> = ps.map(|ts| ts.into_iter().map(Some).collect()).unwrap_or_else(|| vec![None]);
+        let rts: Vec<Option<usize>> = rs.map(|ts| ts.into_iter().map(Some).collect()).unwrap_or_else(|| vec![None]);
+        for pt in &pts {
+            for rt in &rts {
+                let mut conds: Vec<String> = Vec::new();
+                if let Some(t) = pt {
+                    conds.push(format!("p_{} !== undefined", g.types[*t].named.alias));
+                }
+                if let Some(t) = rt {
+                    conds.push(format!("r_{} !== undefined", g.types[*t].named.alias));
+                }
+                let mut fields: Vec<String> = vec![format!("{}: resourceId", prop(&raw::resource_field(b)))];
+                if b.resources.len() > 1 {
+                    fields.push(if a.resources.len() > 1 { "resource_type: input.resource_type".to_string() } else { format!("resource_type: {}", q(&g.types[a.resources[0]].named.alias)) });
+                }
+                for (f, src) in b.inputs.iter().zip(&x.inputs) {
+                    let Some(src) = src else { continue };
+                    let v = match src {
+                        Source::Input(n) => {
+                            let (i, _) = a.input(n).ok_or_else(|| format!("{} has no input {n}", a.named.alias))?;
+                            format!("in{i}")
+                        }
+                        Source::Attr(o, n) => {
+                            let t = (if *o == Owner::Principal { *pt } else { *rt }).ok_or("an attribute with no type")?;
+                            let (_, fa) = g.types[t].attr(n).ok_or_else(|| format!("{} has no attribute {n}", g.types[t].named.alias))?;
+                            format!("{}_{}.{}", if *o == Owner::Principal { "p" } else { "r" }, g.types[t].named.alias, field(&fa.named.alias))
+                        }
+                        Source::Today => "day".to_string(),
+                        Source::Lit(l) => ts_lit(g, f, l).ok_or_else(|| format!("a constant {} cannot take", f.named.alias))?,
+                    };
+                    fields.push(format!("{}: {v}", prop(&f.named.alias)));
+                }
+                let avp = if self.authorizer == Authorizer::Avp { "avp, " } else { "" };
+                self.helpers.insert("allowed");
+                let line = format!("context[{}] = _allowed({}, await {}({avp}store, principal, {{ {} }}, now));", q(&x.alias(g)), q(&b.named.alias), authorize_fn(&b.named.alias), fields.join(", "));
+                if conds.is_empty() {
+                    self.line(format!("  {line}"));
+                } else {
+                    self.line(format!("  if ({}) {{", conds.join(" && ")));
+                    self.line(format!("    {line}"));
                     self.line("  }");
                 }
             }
@@ -1181,6 +1248,14 @@ impl<'a> Writer<'a> {
             let m = msg(tr!("規則の答え ${{String(v)}} の公開名がありません", "the rule's answer ${{String(v)}} has no public name"));
             let _ = write!(text, "function _public(table: Record<string, string>, v: unknown): string {{\n  const x = table[String(v)];\n  if (x === undefined) return _fail(\"rule\", `{m}`);\n  return x;\n}}\n\n");
         }
+        if h("allowed") {
+            let ans = self.names.answer.clone();
+            let doc = msg(tr!(
+                "ポリシーが尋ねる action の答え。その action が拒んだ理由（{err} とその種類）は、このリクエストを拒む理由になる",
+                "The answer of an action a policy asks: why that action was refused (a {err}, of its kind) is why this request is refused"
+            ));
+            let _ = write!(text, "/** {doc} */\nfunction _allowed(action: string, a: {ans}): boolean {{\n  if (a.error !== undefined) return _fail(a.error.kind, `${{action}}: ${{a.error.message}}`);\n  return a.allowed;\n}}\n\n");
+        }
         if h("dated") {
             let _ = write!(text, "function _dated<T>(f: () => T): T {{\n  try {{\n    return f();\n  }} catch (e) {{\n    return _fail(\"date\", e instanceof Error ? e.message : String(e));\n  }}\n}}\n\n");
         }
@@ -1205,6 +1280,18 @@ fn cedar_value(f: &Field, get: &str, ns: &str, g: &Gate) -> String {
         FieldType::Num { .. } => format!("Number({get})"),
         FieldType::Entity(t) => format!("{{ __entity: {{ type: {}, id: {get} }} }}", q(&format!("{ns}{}", g.types[*t].named.alias))),
         _ => get.to_string(),
+    }
+}
+
+/// A constant given to an input of an action, in the code: a number counted in the input's unit, an
+/// enum's value by its alias, a day as `YYYY-MM-DD`.
+fn ts_lit(g: &Gate, f: &Field, l: &Literal) -> Option<String> {
+    match (l, &f.ty) {
+        (Literal::Bool(b), _) => Some(b.to_string()),
+        (Literal::Num(n), FieldType::Num { unit, .. }) => crate::types::count(n, unit).ok().map(|k| format!("{k}n")),
+        (Literal::Word(w), FieldType::Enum(e)) => g.enums[*e].values.iter().find(|v| v.is(w)).map(|v| q(&v.alias)),
+        (Literal::Date(d), _) => Some(q(&ritsu_ports::day_text(*d))),
+        _ => None,
     }
 }
 

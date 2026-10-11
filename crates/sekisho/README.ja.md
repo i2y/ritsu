@@ -95,6 +95,24 @@ Cedar はこれを止めないので、責任者の permit は黙って何も許
 どの検査も、成り立つ、成り立たない組み合わせがある、決められない（理由つき）の三つのどれかを答えます。
 コードの一覧は [docs/codes.ja.md](docs/codes.ja.md) にあり、いつ出るか、どう直すか、それを出す最小のファイルが書いてあります（`sekisho explain E302 --lang ja`）。
 
+## ほかの action の答え
+
+条件には、ほかの action の答えも書けます。
+`allowed 承認する` は、同じ principal と同じ購入で `承認する` を尋ねたら許されるときに成り立ちます。承認者は、自分で承認できないものだけ、上の承認者に承認を求めます。
+
+```gate
+permit 承認者は承認できないものの承認を求める(approvers_ask_for_what_they_cannot_approve)
+  description "承認者は、自分で承認できないときだけ、提出済の購入の承認を上の承認者に求められる"
+  principal in 承認者
+  action 承認を求める
+  when resource.状態 is 提出済
+  unless allowed 承認する
+```
+
+`sekisho check` は、`承認を求める` を、`承認する` を決めるものと一緒に歩きます。だから、どの組み合わせでも `承認する` の答えは一つに決まり、Cedar の答えと同じです。
+生成したコードは、先に `承認する` を尋ね、その答えを `context.allowed_approve` として Cedar に渡します。
+action が互いに尋ね合って輪になると E109、`承認する` の入力に何も渡らないときや、`承認する` がとらない型があるときは E110 です。
+
 ## Cedar と、Cedar に尋ねるコード
 
 検査を通ったゲートからだけ生成します。
@@ -199,12 +217,16 @@ $ sekisho explain E302 --lang ja
 
 - [examples/refunds](examples/refunds)：店の注文を見ること、返金すること、返金の記録を書き出すことを、だれがしてよいかを書いた例です。係の上限を決める rulec の規則、返金の期間を決める koyomi の日付のファイル、イングランドとウェールズの祝日、操作を書いた OpenAPI の文書、返品された注文を返金する dandori のワークフローを読みます。
   `refunds.ja.gate` は、同じゲートを日本語の名前で書いたもので、日本語の版の規則と日付のファイルを読みます。
+- [examples/approvals](examples/approvals)：購入をだれが承認し、だれが代わりに上の承認者に承認を求めるかを書いた例です。`request_approval` は、`approve` が許されないところでだけ許されます（`unless allowed approve`）。承認者の上限は rulec の規則で決めます。
+  `approvals.ja.gate` は、同じゲートを日本語の名前で書いたもので、日本語の版の規則を読みます。
+- [examples/documents](examples/documents)：二つの操作のうち弱いほうを先に使わせる例です。アーカイブできる文書は消せません（`forbid … when allowed archive_document`）。
+  `documents.ja.gate` は、同じゲートを日本語の名前で書いたものです。
 
 ## どう確かめているか
 
 `cargo test -p sekisho` が、言語を変異と例に当て、本物の Cedar を走らせます。
 
-- 120 の変異（例か fixture を一か所だけ変えたもの）が出す診断を、英語と日本語の両方で golden と突き合わせます。日本語の名前のもの 60 には、それぞれ英語の名前の対があります。
+- 132 の変異（例か fixture を一か所だけ変えたもの）が出す診断を、英語と日本語の両方で golden と突き合わせます。日本語の名前のもの 66 には、それぞれ英語の名前の対があります。
 - 例とテストの材料のうち検査を通るすべてのゲートから生成した Cedar を、公式の Cedar の CLI 4.13.0 にかけます。`cedar validate` の strict の検証が何も言わないこと、`cedar format --check` が通ること、`cedar run-tests` がすべての組み合わせを sekisho の参照の評価と同じ答え、同じ決めたポリシーで答えること、JSON の形が `cedar translate-schema` と `translate-policy` の出力と一字も違わないことを確かめます。
 - 手で書いた Cedar に sekisho が返す答えも、公式の CLI の答えと同じです。ポリシーとスキーマの組（`tests/cedar_in/` に置いたものと、それを一か所ずつ変えたもの、検査を通るすべてのゲートから生成した Cedar を手で書いたものとして読ませたもの）について、sekisho が数えるすべての組み合わせをリクエストとエンティティにして `cedar run-tests` にかけ、許すか拒むかと決めたポリシーが同じになることを確かめます。sekisho が決められない問いでは、ポリシーのどの部分を数えないのかを理由に挙げます。
 - TypeScript、Python、Go に生成したコードで、すべての組み合わせのリクエストを生の値から組み立て、cedar-wasm 4.13.0、cedarpy 4.12.1、cedar-go v1.8.0 に尋ね、参照の評価と同じ答えになることを確かめます。生成したコードは `tsc --strict`、`mypy --strict`、`go vet` と gofmt を通ります。

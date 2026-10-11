@@ -189,6 +189,34 @@ pub struct Action {
     /// The line of `principal` and `resource` under the action.
     pub principal_line: usize,
     pub resource_line: usize,
+    /// The actions whose answers the conditions on this action read (`allowed approve`, DESIGN
+    /// 2.11), each once for the inputs it is given, in the order first read.
+    pub allowed: Vec<Allowed>,
+}
+
+/// An action whose answer a condition on another action reads (`allowed approve`, DESIGN 2.11):
+/// asked with the same principal, the same resource and the same day, and the inputs `inputs`
+/// says. One action given the same inputs is one; given other inputs on one action, E110.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Allowed {
+    /// The action asked, by index into [`Gate::actions`].
+    pub action: usize,
+    /// For each input of that action, in its order: what it is given, in the terms of the action
+    /// that reads it (an input of it, an attribute of the principal or the resource, a constant,
+    /// today); None for an input that may be absent and is given nothing.
+    pub inputs: Vec<Option<Source>>,
+    /// Whether a policy reads it: then Cedar's context holds it (`allowed_<alias>`), and the
+    /// generated code asks for it. One only an expectation reads is the check's alone.
+    pub policy: bool,
+    /// The line of the first condition that reads it.
+    pub line: usize,
+}
+
+impl Allowed {
+    /// The attribute of Cedar's context that holds it: `allowed_approve`.
+    pub fn alias(&self, g: &Gate) -> String {
+        format!("allowed_{}", g.actions[self.action].named.alias)
+    }
 }
 
 /// `guards orders refundOrder`
@@ -348,6 +376,20 @@ pub enum Atom {
     Member(Term),
     /// `principal.department is resource.department`: two enum values.
     Eq(Path, Path),
+    /// `allowed approve(amount: amount)`: the action, and what its inputs are given as written (by
+    /// the input's name or alias); an input written nothing for is given the input of its name.
+    Allowed { action: usize, args: Vec<(String, Given)> },
+}
+
+/// What a condition `allowed …` gives an input of the action it asks, as written (DESIGN 2.11).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Given {
+    Attr(Owner, String),
+    /// A bare word: an input of the action the condition is read on, or else a value of the enum
+    /// of the input it is given to.
+    Word(String),
+    Lit(Literal),
+    Today,
 }
 
 /// What a condition reads.
@@ -408,6 +450,60 @@ impl Gate {
     pub fn from_root(&self, file: &std::path::Path) -> Option<String> {
         ritsu_base::paths::from_root(&self.root, file)
     }
+
+    /// What each input of action `target` is given when a condition on action `on` reads `allowed
+    /// <target>(args)` (DESIGN 2.11), in `on`'s terms, in the order of `target`'s inputs: what an
+    /// argument gives it (by the input's name or alias), else the input of `on` of its name, else
+    /// nothing (None: an input that may be absent, given nothing). A bare word is an input of `on`,
+    /// or else a value of the enum of the input it is given to.
+    pub fn asked(&self, on: usize, target: usize, args: &[(String, Given)]) -> Vec<Option<Source>> {
+        let a = &self.actions[on];
+        self.actions[target]
+            .inputs
+            .iter()
+            .map(|f| match args.iter().find(|(n, _)| f.named.is(n)) {
+                Some((_, given)) => Some(match given {
+                    Given::Attr(o, n) => Source::Attr(*o, n.clone()),
+                    Given::Word(w) if a.input(w).is_some() => Source::Input(w.clone()),
+                    Given::Word(w) => Source::Lit(Literal::Word(w.clone())),
+                    Given::Lit(l) => Source::Lit(l.clone()),
+                    Given::Today => Source::Today,
+                }),
+                None => a.inputs.iter().find(|x| same_name(&x.named, &f.named)).map(|x| Source::Input(x.named.alias.clone())),
+            })
+            .collect()
+    }
+
+    /// Whether two values given to input `k` of action `target`, each in the terms of action `on`,
+    /// are one: the same input or attribute however it is spelled, the same constant in the input's
+    /// unit or enum, today, or nothing.
+    pub fn same_given(&self, on: usize, target: usize, k: usize, x: &Option<Source>, y: &Option<Source>) -> bool {
+        let a = &self.actions[on];
+        let field = &self.actions[target].inputs[k];
+        match (x, y) {
+            (None, None) => true,
+            (Some(Source::Input(p)), Some(Source::Input(q))) => a.input(p).map(|(i, _)| i) == a.input(q).map(|(i, _)| i),
+            (Some(Source::Attr(o, p)), Some(Source::Attr(r, q))) => {
+                let types = if *o == Owner::Principal { &a.principals } else { &a.resources };
+                *o == *r && (p == q || types.iter().any(|&t| matches!((self.types[t].attr(p), self.types[t].attr(q)), (Some((i, _)), Some((j, _))) if i == j)))
+            }
+            (Some(Source::Today), Some(Source::Today)) => true,
+            (Some(Source::Lit(p)), Some(Source::Lit(q))) => match (p, q, &field.ty) {
+                (Literal::Num(m), Literal::Num(n), FieldType::Num { unit, .. }) => matches!((crate::types::count(m, unit), crate::types::count(n, unit)), (Ok(i), Ok(j)) if i == j),
+                (Literal::Word(m), Literal::Word(n), FieldType::Enum(e)) => {
+                    let at = |w: &str| self.enums[*e].values.iter().position(|v| v.is(w));
+                    m == n || (at(m).is_some() && at(m) == at(n))
+                }
+                (p, q, _) => p == q,
+            },
+            _ => false,
+        }
+    }
+}
+
+/// Whether two inputs are named alike: the same name, or the same alias.
+pub fn same_name(x: &Named, y: &Named) -> bool {
+    x.name == y.name || x.alias == y.alias
 }
 
 impl Type {
@@ -587,6 +683,7 @@ pub fn build(f: &ast::File, imports: &[&ast::File], root: &std::path::Path) -> G
                 computed,
                 principal_line: a.principals.1.line,
                 resource_line: a.resources.1.line,
+                allowed: Vec::new(),
             }
         })
         .collect();
@@ -604,7 +701,7 @@ pub fn build(f: &ast::File, imports: &[&ast::File], root: &std::path::Path) -> G
             .iter()
             .map(|c| Cond {
                 when: c.when,
-                expr: expr(&c.expr, &|w| role_of(w), &|w| type_of(w), &|w| workflows.iter().position(|x| x.named.is(w))),
+                expr: expr(&c.expr, &|w| role_of(w), &|w| type_of(w), &|w| workflows.iter().position(|x| x.named.is(w)), &|w| action_of(w)),
                 line: c.span.line,
                 text: c.text.clone(),
             })
@@ -662,7 +759,7 @@ pub fn build(f: &ast::File, imports: &[&ast::File], root: &std::path::Path) -> G
         Some((segs, _)) => segs.join("::"),
         None => pascal(f.alias()),
     };
-    Gate {
+    let mut g = Gate {
         file: f.path.clone(),
         src: f.src.clone(),
         root: root.to_path_buf(),
@@ -679,6 +776,36 @@ pub fn build(f: &ast::File, imports: &[&ast::File], root: &std::path::Path) -> G
         policies,
         expects,
         separates,
+    };
+    // the actions whose answers each action's conditions read: a policy's first, then an
+    // expectation's, each once for what it is given (DESIGN 2.11)
+    for ai in 0..g.actions.len() {
+        let mut found: Vec<Allowed> = Vec::new();
+        let read: Vec<(bool, &Cond)> = g.policies.iter().filter(|p| p.actions.contains(&ai)).flat_map(|p| p.conds.iter().map(|c| (true, c))).chain(g.expects.iter().filter(|e| e.actions.contains(&ai)).flat_map(|e| e.conds.iter().map(|c| (false, c)))).collect();
+        for (policy, c) in read {
+            let mut asked: Vec<(usize, &[(String, Given)])> = Vec::new();
+            allowed_in(&c.expr, &mut asked);
+            for (target, args) in asked {
+                let inputs = g.asked(ai, target, args);
+                let same = |x: &Allowed| x.action == target && (0..inputs.len()).all(|k| g.same_given(ai, target, k, &x.inputs[k], &inputs[k]));
+                match found.iter_mut().find(|x| same(x)) {
+                    Some(x) => x.policy |= policy,
+                    None => found.push(Allowed { action: target, inputs, policy, line: c.line }),
+                }
+            }
+        }
+        g.actions[ai].allowed = found;
+    }
+    g
+}
+
+/// Each `allowed …` of a condition, in the order written: the action, and what it is given.
+pub fn allowed_in<'e>(e: &'e Expr, out: &mut Vec<(usize, &'e [(String, Given)])>) {
+    match e {
+        Expr::Atom(Atom::Allowed { action, args }) => out.push((*action, args)),
+        Expr::Atom(_) => {}
+        Expr::Not(x) => allowed_in(x, out),
+        Expr::And(xs) | Expr::Or(xs) => xs.iter().for_each(|x| allowed_in(x, out)),
     }
 }
 
@@ -746,13 +873,32 @@ pub fn pascal(alias: &str) -> String {
         .collect()
 }
 
-fn expr(e: &ast::Expr, role: &dyn Fn(&str) -> Option<usize>, ty: &dyn Fn(&str) -> Option<usize>, wf: &dyn Fn(&str) -> Option<usize>) -> Expr {
+fn expr(e: &ast::Expr, role: &dyn Fn(&str) -> Option<usize>, ty: &dyn Fn(&str) -> Option<usize>, wf: &dyn Fn(&str) -> Option<usize>, act: &dyn Fn(&str) -> Option<usize>) -> Expr {
     let never = || Expr::Or(vec![]);
     match e {
-        ast::Expr::Or(xs) => Expr::Or(xs.iter().map(|x| expr(x, role, ty, wf)).collect()),
-        ast::Expr::And(xs) => Expr::And(xs.iter().map(|x| expr(x, role, ty, wf)).collect()),
-        ast::Expr::Not(x, _) => Expr::Not(Box::new(expr(x, role, ty, wf))),
+        ast::Expr::Or(xs) => Expr::Or(xs.iter().map(|x| expr(x, role, ty, wf, act)).collect()),
+        ast::Expr::And(xs) => Expr::And(xs.iter().map(|x| expr(x, role, ty, wf, act)).collect()),
+        ast::Expr::Not(x, _) => Expr::Not(Box::new(expr(x, role, ty, wf, act))),
         ast::Expr::Atom(a, _) => match a {
+            ast::Atom::Allowed { action, args } => match act(&action.word) {
+                Some(i) => Expr::Atom(Atom::Allowed {
+                    action: i,
+                    args: args
+                        .iter()
+                        .map(|x| {
+                            let given = match &x.value {
+                                ast::ArgValue::Path(ast::Path::Principal(r)) => Given::Attr(Owner::Principal, r.word.clone()),
+                                ast::ArgValue::Path(ast::Path::Resource(r)) => Given::Attr(Owner::Resource, r.word.clone()),
+                                ast::ArgValue::Path(ast::Path::Local(r)) => Given::Word(r.word.clone()),
+                                ast::ArgValue::Today(_) => Given::Today,
+                                ast::ArgValue::Lit(l, _) => Given::Lit(literal(l)),
+                            };
+                            (x.name.word.clone(), given)
+                        })
+                        .collect(),
+                }),
+                None => never(),
+            },
             ast::Atom::InRole(r) => role(&r.word).map(|i| Expr::Atom(Atom::InRoles(vec![i]))).unwrap_or_else(never),
             ast::Atom::InGroup(p) => match term_of(p) {
                 Some(t) => Expr::Atom(Atom::Member(t)),

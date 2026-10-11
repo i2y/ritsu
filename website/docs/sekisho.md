@@ -250,6 +250,30 @@ The page also sets each policy beside the Cedar it becomes, and opens the pages 
 draw of the rule and the dates. [The example's page](https://github.com/i2y/ritsu/blob/main/crates/sekisho/tests/golden/doc/refunds.en.md)
 is in the repository, with the pages of the rule and the dates left out.
 
+## Another action's answer
+
+A condition can be the answer of another action of the gate. In the example of approvals, an
+approver asks a higher approver for an approval only of what the approver could not approve:
+
+```gate
+permit approvers_ask_for_what_they_cannot_approve
+  description "An approver asks a higher approver to approve a submitted purchase, only when the approver could not approve it"
+  principal in approver
+  action request_approval
+  when resource.status is submitted
+  unless allowed approve
+```
+
+`allowed approve` is whether `approve`, asked with the same principal and the same purchase, would
+be allowed; its input `amount` is given the input of `request_approval` of that name. The check
+walks `request_approval` together with what decides `approve` (the approver's limit, the rule's
+answer, whether the purchase is the approver's own), so each combination has one answer, the one
+Cedar gives. The generated code asks `approve` first, through its own function, and gives Cedar
+the answer as `context.allowed_approve`. The same condition has the weaker of two operations used
+first: in the example of documents, a forbid on `delete_document` reads `when allowed
+archive_document`. Actions that ask one another in a circle are E109; an input of the action asked
+given nothing, or a type it does not take, is E110.
+
 ## With the other languages
 
 The same action reads a dates file and a calendar of koyomi and a contract, and a workflow of

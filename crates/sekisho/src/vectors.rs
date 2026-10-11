@@ -13,6 +13,8 @@
 //! The entities are what the request needs: the roles (with the roles they include as their
 //! parents), the principal (its roles and the groups it is a member of as its parents), the
 //! resource, and an entity an attribute points to when its type holds no attribute in the schema.
+//! The context holds whether each action a policy asks with `allowed` is allowed, as the walk
+//! derives it from the combination (DESIGN 2.11).
 //! Each holds exactly the attributes the schema gives its type ([`crate::cedar::Shape`]): a value
 //! the combination does not walk (an attribute only another action's policies read) is given the
 //! first value it can be.
@@ -291,6 +293,14 @@ fn test(g: &Gate, shape: &Shape, s: &Space, name: &str, combo: &Combo, end: End)
         };
         if let Some(val) = val {
             context.push((cv.named.alias.clone(), val));
+        }
+    }
+    // whether each action a policy asks is allowed (DESIGN 2.11): what the walk derives of the
+    // combination
+    for &k in &shape.actions[ai].allowed {
+        let x = &a.allowed[k];
+        if let Some(Val::Bool(b)) = f.allowed_at(g, ai, x.action, &x.inputs).map(|at| &env[at]) {
+            context.push((x.alias(g), Json::Bool(*b)));
         }
     }
     let request = Json::obj([

@@ -1,0 +1,3 @@
+error[E110]: tests/mutants/E110_input_given_nothing.gate:73:18: The input `amount` of `approve` is given nothing: `request_approval` has no input of that name
+    73 |   unless allowed approve
+  = Write what it is given, like `allowed approve(amount: <value>)`: an input of `request_approval`, an attribute of the principal or the resource, a constant, or `today`.

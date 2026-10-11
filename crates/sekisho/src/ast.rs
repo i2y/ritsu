@@ -545,6 +545,10 @@ pub enum Atom {
     Compare { left: Path, op: Op, right: (Lit, Span) },
     /// `principal.suspended`, `in_period`: true or false.
     Holds(Path),
+    /// `allowed approve`, `allowed approve(amount: total)`: the action named would be allowed, asked
+    /// with the same principal and resource (DESIGN 2.11). Its inputs are given what `args` says,
+    /// and those it does not, the inputs of the same name.
+    Allowed { action: Ref, args: Vec<Arg> },
 }
 
 /// A value a condition reads.

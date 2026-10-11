@@ -61,6 +61,9 @@ pub const ANY: &str = "any";
 pub const OPEN: &str = "open";
 pub const ALLOW: &str = "allow";
 pub const DENY: &str = "deny";
+/// `allowed approve`: whether another action of the file is allowed the same principal and
+/// resource (DESIGN 2.11).
+pub const ALLOWED: &str = "allowed";
 pub const TRUE: &str = "true";
 pub const FALSE: &str = "false";
 
@@ -80,15 +83,16 @@ pub const TABLE: &[(&str, &[&str])] = &[
     ("line", &[GATE, DESCRIPTION, NAMESPACE, USE, TODAY, ENUM, ROLE, PRINCIPAL, WORKFLOW, RESOURCE, ACTION, PERMIT, FORBID, EXPECT, SEPARATE]),
     ("use", &[RULE, DATES, CALENDAR, OPENAPI, PROTO, ASYNCAPI, BOOK, GATE, FROM]),
     ("block", &[DESCRIPTION, INCLUDES, CAN, ROLES, ATTRIBUTES, GUARDS, PRINCIPAL, RESOURCE, FROM, NOBODY, INPUT, CONTEXT, ACTION, ACTIONS, WHEN, UNLESS]),
-    ("condition", &[IN, IS, NOT, AND, OR, ANY, WORKFLOW, OPEN, TODAY, ALLOW, DENY, PRINCIPAL, RESOURCE, TRUE, FALSE]),
+    ("condition", &[IN, IS, NOT, AND, OR, ANY, WORKFLOW, OPEN, TODAY, ALLOW, DENY, ALLOWED, PRINCIPAL, RESOURCE, TRUE, FALSE]),
     ("type and range", &[BOOL, DATE, NUMBER, RATE, MONEY, "mass", "length", "area", "volume", "duration", "temperature", "sound", RANGE, OFFSET]),
 ];
 
 /// The words a name or an alias cannot be (E002): the ones that would let a condition, a computed
 /// value or a type be read two ways.
 pub const RESERVED: &[&str] = &[
-    // a condition: `principal in …`, `x is not y`, `a and b`, `principal is workflow w`
-    AND, OR, NOT, IN, IS, PRINCIPAL, RESOURCE, WORKFLOW, TRUE, FALSE,
+    // a condition: `principal in …`, `x is not y`, `a and b`, `principal is workflow w`,
+    // `allowed approve` (a value named `allowed` would make `when allowed` read two ways)
+    AND, OR, NOT, IN, IS, PRINCIPAL, RESOURCE, WORKFLOW, TRUE, FALSE, ALLOWED,
     // `action any`
     ANY,
     // a computed value: `today <= …`

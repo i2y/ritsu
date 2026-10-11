@@ -1,0 +1,3 @@
+error[E110]: tests/mutants/E110_a_type_the_action_asked_does_not_take.gate:76:18: `request_approval` takes a principal of the type `Contractor`, which `approve` does not take
+    76 |   unless allowed approve
+  = `allowed approve` asks `approve` with the principal and the resource of the request of `request_approval`: every principal and resource type `request_approval` takes has to be one `approve` takes.

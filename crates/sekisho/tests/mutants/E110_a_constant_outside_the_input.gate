@@ -1,0 +1,92 @@
+gate approvals v1
+description "approvals.gate with approve asked of 30,000 pounds, outside the range of its amount"
+namespace Office
+
+use rule approval_limit from "../../examples/approvals/rules/approval_limit.rule"
+
+enum purchase_status = draft | submitted | approved | rejected
+
+role employee
+  description "Asks for what the work needs, and looks at the purchases"
+  can view_purchase
+
+role approver
+  description "Approves the purchases others ask for, up to an approver's own limit"
+  includes employee
+  can view_purchase, approve, request_approval
+
+principal User
+  description "A member of the staff, signed in"
+  roles employee, approver
+  attributes
+    approval_limit : money[GBP, incl_tax]  range >=0GBP <=50_000GBP
+
+resource Purchase
+  description "A purchase someone asked for"
+  attributes
+    status    : purchase_status
+    requester : User
+
+action view_purchase
+  description "Look at a purchase"
+  principal User
+  resource Purchase from purchaseId
+
+action approve
+  description "Approve a purchase"
+  principal User
+  resource Purchase from purchaseId
+  input
+    amount : money[GBP, incl_tax]  range >=1GBP <=20_000GBP
+  context
+    band = approval_limit(amount: amount, limit: principal.approval_limit).band
+
+action request_approval
+  description "Ask a higher approver to approve a purchase"
+  principal User
+  resource Purchase from purchaseId
+  input
+    amount : money[GBP, incl_tax]  range >=1GBP <=20_000GBP
+  context
+    band = approval_limit(amount: amount, limit: principal.approval_limit).band
+
+permit staff_view_purchases
+  description "The staff look at any purchase"
+  principal in employee
+  action view_purchase
+
+permit approvers_approve_within_their_limit
+  description "An approver approves a submitted purchase someone else asked for, up to the approver's own limit"
+  principal in approver
+  action approve
+  when resource.status is submitted
+  when band is within_limit
+  unless resource.requester is principal
+
+# Asked with the same principal, the same purchase and the same amount: the generated code asks
+# approve first, and gives its answer to Cedar as the context's allowed_approve.
+permit approvers_ask_for_what_they_cannot_approve
+  description "An approver asks a higher approver to approve a submitted purchase, only when the approver could not approve it"
+  principal in approver
+  action request_approval
+  when resource.status is submitted
+  unless allowed approve(amount: 30_000GBP)
+
+expect deny no_one_asks_for_what_they_could_approve
+  description "No one asks for an approval of a purchase they could approve themselves"
+  action request_approval
+  when allowed approve
+
+expect allow approvers_ask_over_their_limit
+  description "An approver asks for an approval of a submitted purchase over the approver's own limit"
+  principal in approver
+  action request_approval
+  when resource.status is submitted
+  when band is over_limit
+
+expect allow approvers_ask_for_their_own_purchases
+  description "An approver asks for an approval of a submitted purchase the approver asked for, which no one approves for themselves"
+  principal in approver
+  action request_approval
+  when resource.status is submitted
+  when resource.requester is principal

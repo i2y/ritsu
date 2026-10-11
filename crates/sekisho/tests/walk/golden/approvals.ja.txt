@@ -1,0 +1,10 @@
+combinations: 購入を見る 4, 承認する 64, 承認を求める 64; 132 in all
+permit 職員は購入を見られる: allows 3 combinations, 3 of them alone
+permit 承認者は上限まで承認できる: allows 2 combinations, 2 of them alone
+permit 承認者は承認できないものの承認を求める: allows 6 combinations, 6 of them alone
+expect deny 承認できるものの承認はだれも求めない: holds on all 2
+expect allow 承認者は上限を超えるものの承認を求める: holds on all 4
+expect allow 承認者は自分の購入の承認を求める: holds on all 4
+expect deny 承認者でない職員は承認せず承認も求めない: holds on all 32
+role 職員: can ["購入を見る"]
+role 承認者: can ["承認する", "承認を求める", "購入を見る"]

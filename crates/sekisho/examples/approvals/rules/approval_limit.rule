@@ -1,0 +1,26 @@
+rule approval_limit v1
+description "Whether a purchase is within the limit of the person who would approve it. A sketch of an office's own terms, written for sekisho's example; it is not a transcription of any document"
+
+enum approval_band = within_limit | over_limit
+
+inputs
+  amount : money[GBP, incl_tax]  range >=1GBP <=20_000GBP
+  limit  : money[GBP, incl_tax]  range >=0GBP <=50_000GBP
+
+outputs
+  band : approval_band
+
+derive excess : money[GBP, incl_tax] = amount - limit  range >=-49_999GBP <=20_000GBP
+
+table decide
+policy unique
+| excess | -> band : approval_band |
+| <=0GBP | within_limit            |
+| >0GBP  | over_limit              |
+
+examples
+| amount  | limit   | -> band      |
+| 500GBP  | 1000GBP | within_limit |
+| 1000GBP | 1000GBP | within_limit |
+| 1001GBP | 1000GBP | over_limit   |
+| 1GBP    | 0GBP    | over_limit   |

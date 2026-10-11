@@ -2,7 +2,8 @@
 //! Japanese twin, each in English and in Japanese as Markdown and in its own language as HTML, and
 //! of the materials that show what the example does not (the forms of condition and two resource
 //! types, a forbid read with `use gate`, an action that guards two operations, an answer that rests
-//! on a value no language vouches for, an expectation that picks nothing), are the golden files in
+//! on a value no language vouches for, an expectation that picks nothing), and of the examples and
+//! the material of a condition on another action's answer (`allowed`), are the golden files in
 //! `tests/golden/doc/` — but for the pages of the rules and the dates the page holds, which are
 //! what rulec's and koyomi's own `doc` draw now, word for word, and stand in the golden files as
 //! one line each. The HTML reads nothing from outside, and neither does any page it holds; in
@@ -21,7 +22,7 @@ use sekisho::suite::Suite;
 use std::time::Duration;
 
 /// Each page held to a golden file: the `.gate`, the language, the form, and the file's stem.
-const PAGES: [(&str, Lang, Format, &str); 14] = [
+const PAGES: [(&str, Lang, Format, &str); 18] = [
     ("examples/refunds/refunds.gate", Lang::En, Format::Markdown, "refunds.en.md"),
     ("examples/refunds/refunds.gate", Lang::Ja, Format::Markdown, "refunds.ja.md"),
     ("examples/refunds/refunds.gate", Lang::En, Format::Html, "refunds.html"),
@@ -36,6 +37,10 @@ const PAGES: [(&str, Lang, Format, &str); 14] = [
     ("tests/mutants/W303_どの入力も届かない値.gate", Lang::Ja, Format::Markdown, "W303_どの入力も届かない値.ja.md"),
     ("tests/mutants/W304_expect_picks_nothing.gate", Lang::En, Format::Markdown, "W304_expect_picks_nothing.en.md"),
     ("tests/mutants/W304_何も選ばない期待.gate", Lang::Ja, Format::Markdown, "W304_何も選ばない期待.ja.md"),
+    ("examples/approvals/approvals.gate", Lang::En, Format::Markdown, "approvals.en.md"),
+    ("examples/approvals/approvals.ja.gate", Lang::Ja, Format::Markdown, "approvals.ja.ja.md"),
+    ("examples/documents/documents.gate", Lang::En, Format::Markdown, "documents.en.md"),
+    ("tests/gen/asked.gate", Lang::En, Format::Markdown, "asked.en.md"),
 ];
 
 /// The page of a file, with every language joined as `ritsu sekisho` joins them: what its
@@ -137,8 +142,9 @@ fn the_pages_held_are_what_rulec_and_koyomi_draw() {
         }
     }
     // the example's rule, dates file and calendar, in each of its six pages and in the two pages of
-    // W304, which is the example with one more expectation; the rule of W303, in its two
-    assert_eq!(looked, 6 * 3 + 2 * 3 + 2, "pages held");
+    // W304, which is the example with one more expectation; the rule of W303, in its two; the rule
+    // of the approvals, in its two; the dates file and the calendar `tests/gen/asked.gate` reads
+    assert_eq!(looked, 6 * 3 + 2 * 3 + 2 + 2 + 2, "pages held");
     // the page of the example as the command prints it holds them as they are
     let (code, out, err) = run(&["doc", "examples/refunds/refunds.gate", "--root", "examples/refunds"], common::joined());
     assert_eq!(code, 0, "{err}");

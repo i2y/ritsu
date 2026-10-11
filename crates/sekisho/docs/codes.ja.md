@@ -284,7 +284,7 @@ action 見る(view)
   principal 職員
   resource 注文
   context
-    許す(allowed) = 店(id: 1).ok
+    知っている(known) = 店(id: 1).ok
 ```
 
 `shop.json`:
@@ -365,6 +365,80 @@ role 責任者(manager)
 ```
 
 関連: [E101](#e101)
+
+<a id="e109"></a>
+
+## E109 — action が `allowed` で互いの答えを読み合っています
+
+**いつ出るか**: ポリシーの `allowed <action>` をたどると、もとの action に戻るとき（`read → edit → read`）。自分の答えを読むポリシーも輪です（`allowed` を書いた `action any` の permit や forbid など）。輪一つにつき一度、輪の最初の action の `allowed` に、輪の action を順に並べて出ます。期待の `allowed` は答えを読むだけなので、輪になりません。
+
+**直し方**: 輪のどこかのポリシーから `allowed` を外してください。`allowed` が尋ねる action の答えは、尋ねる action を決める前に決まっていなければならないので、輪になると、どれも決められません。
+
+**再現**:
+
+```gate
+gate t v1
+
+principal 職員(User)
+
+resource 文書(Doc)
+
+action 読む(read)
+  principal 職員
+  resource 文書
+
+action 直す(edit)
+  principal 職員
+  resource 文書
+
+permit 読む人(readers_read)
+  action 読む
+  unless allowed 直す
+
+permit 直す人(editors_edit)
+  action 直す
+  unless allowed 読む
+```
+
+関連: [E110](#e110), [E108](#e108)
+
+<a id="e110"></a>
+
+## E110 — `allowed` が尋ねるものが合いません
+
+**いつ出るか**: `allowed <action>` が尋ねる action が、尋ねる側の action に来る principal か resource の型を取らないとき。無いことにできない入力に、渡す値が無いとき（同じ名前の入力も、`(<入力>: <値>)` も無い）。渡す値の型か単位が違う、範囲が入力の範囲に収まらない、無いことがある値を無いことにできない入力に渡す、計算した値を渡すとき。答えが Cedar に入る名前 `allowed_<action>` が、入力か計算した値の別名と同じとき。一つの action の上で、同じ action を違う値で尋ねるとき。
+
+**直し方**: 尋ねる action の `principal` と `resource` の行に型を足すか、`allowed approve(amount: <値>)` のように、渡す値を書いてください。渡せるのは、尋ねる側の入力、principal と resource の属性、定数、`today` です。
+
+**再現**:
+
+```gate
+gate t v1
+
+principal 職員(User)
+
+resource 経費(Claim)
+
+action 承認する(approve)
+  principal 職員
+  resource 経費
+  input
+    金額(amount) : money[GBP, incl_tax]  range >=1GBP <=10_000GBP
+
+action 承認を求める(request_approval)
+  principal 職員
+  resource 経費
+
+permit 少額は承認できる(small_claims_are_approved)
+  action 承認する
+  when 金額 <= 500GBP
+
+permit 承認できないものは求められる(requests_of_what_cannot_be_approved)
+  action 承認を求める
+  unless allowed 承認する
+```
+
+関連: [E109](#e109), [E101](#e101)
 
 <a id="e201"></a>
 

@@ -24,6 +24,13 @@
 //! is marked inexact, so that an answer that rests on one is tried again with a concrete input
 //! ([`confirm`]) before it is given. The walk is never sampled: past the budget, the check stops
 //! (E307).
+//!
+//! A condition that reads another action's answer (`allowed approve`, DESIGN 2.11) brings that
+//! action's policies into the frame, as a link: the action asked with the frame's principal and
+//! resource and what its inputs are given, in the frame's own terms. What they read is walked with
+//! the rest (an attribute or a role is the frame's own; a value the action asked computes is a
+//! place of the link), so a combination fixes everything the answer rests on, and the answer is
+//! not walked but derived from the other places, as the action asked decides it.
 
 use crate::ast::Op;
 use crate::cells::{self, Cell};
@@ -102,6 +109,24 @@ pub enum Slot {
     Computed(usize),
     /// The terms of an entity type that the policies relate.
     Relation(usize),
+    /// A value the action of a link computes (DESIGN 2.11): the link, and the value's index in that
+    /// action.
+    Linked(usize, usize),
+    /// Whether the action of a link is allowed: derived from the other places, never walked.
+    Allowed(usize),
+}
+
+/// An action whose answer a condition of the frame reads (`allowed approve`, DESIGN 2.11): asked
+/// with the frame's principal and resource, and what its inputs are given, in the terms of the
+/// frame's own action.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Link {
+    pub action: usize,
+    /// For each input of the action asked: what it is given (None: nothing, an input that may be
+    /// absent).
+    pub inputs: Vec<Option<Source>>,
+    /// Whether a condition of the frame's own action reads it, not only one of an action asked.
+    pub direct: bool,
 }
 
 /// What a factor is, for saying it and for trying an inexact value again.
@@ -112,9 +137,9 @@ pub enum FactorKind {
     /// One attribute or input.
     One,
     Relation,
-    /// Rule outputs (by place and computed value), with the places of the attributes and inputs
-    /// they read that a policy also reads.
-    Rules { outputs: Vec<(usize, usize)>, cut: Vec<usize> },
+    /// Rule outputs (by place: a value the action computes, or one an action asked computes), with
+    /// the places of the attributes and inputs they read that a policy also reads.
+    Rules { outputs: Vec<usize>, cut: Vec<usize> },
     Dates,
 }
 
@@ -168,6 +193,11 @@ pub struct Frame {
     /// For each expectation of the space: what it picks, compiled as a policy is (its `principal`
     /// line, each of its lines, and all of them).
     pub expects: Vec<Compiled>,
+    /// The actions whose answers the conditions read (DESIGN 2.11).
+    pub links: Vec<Link>,
+    /// The places derived from the others, each with what it comes to, in the order they are
+    /// computed (an answer an answer reads comes first): whether a link's action is allowed.
+    pub derived: Vec<(usize, CExpr)>,
 }
 
 /// Every combination of one action.
@@ -236,6 +266,7 @@ impl Space {
             let mut idx = vec![0usize; n];
             let mut applies = vec![false; frame.policies.len()];
             loop {
+                frame.derive(&mut env);
                 for (i, p) in frame.policies.iter().enumerate() {
                     applies[i] = p.all.holds(&env);
                 }
@@ -270,6 +301,7 @@ impl Space {
         for (x, &i) in f.factors.iter().zip(&k.idx) {
             x.set(&mut env, i);
         }
+        f.derive(&mut env);
         env
     }
 
@@ -313,7 +345,50 @@ impl Frame {
                 f.set(&mut env, 0);
             }
         }
+        self.derive(&mut env);
         env
+    }
+
+    /// The derived places of a combination, from the others: whether each link's action is
+    /// allowed, an answer another reads first.
+    pub fn derive(&self, env: &mut [Val]) {
+        for (at, e) in &self.derived {
+            let v = e.holds(env);
+            env[*at] = Val::Bool(v);
+        }
+    }
+
+    /// What computes the value at a place: the action (`own` for [`Slot::Computed`], the link's for
+    /// [`Slot::Linked`]), the value's index there, and the link; None for a place of no computed
+    /// value.
+    pub fn computed_at(&self, own: usize, at: usize) -> Option<(usize, usize, Option<usize>)> {
+        match self.slots.get(at)? {
+            Slot::Computed(i) => Some((own, *i, None)),
+            Slot::Linked(l, i) => Some((self.links[*l].action, *i, Some(*l))),
+            _ => None,
+        }
+    }
+
+    /// What an input or a value of the action that computes a value at a place reads, in the terms
+    /// of the frame's own action: as it is for the own action's value, and through what the link
+    /// gives its action's inputs for a linked one. None for an input of the link's action that is
+    /// given nothing.
+    pub fn mapped(&self, link: Option<usize>, g: &Gate, src: &Source) -> Option<Source> {
+        let Some(l) = link else { return Some(src.clone()) };
+        match src {
+            Source::Input(n) => {
+                let (k, _) = g.actions[self.links[l].action].input(n)?;
+                self.links[l].inputs[k].clone()
+            }
+            other => Some(other.clone()),
+        }
+    }
+
+    /// The place of the answer of a link a condition of the frame's own action reads: the action,
+    /// given inputs the same as `inputs` (in the terms of `own`).
+    pub fn allowed_at(&self, g: &Gate, own: usize, action: usize, inputs: &[Option<Source>]) -> Option<usize> {
+        let l = self.links.iter().position(|x| x.direct && x.action == action && (0..inputs.len()).all(|k| g.same_given(own, action, k, &x.inputs[k], &inputs[k])))?;
+        self.place(&Slot::Allowed(l))
     }
 }
 
@@ -455,7 +530,7 @@ pub fn space(g: &Gate, action: usize, known: &Known, ask: &dyn Ask, memo: &Memo,
             let (factors, fixed, walked) = c.factors(ask, memo, budget, &mut day_walk)?;
             let terms = c.terms_by_place();
             let members = c.members_by_place();
-            frames.push(Frame { principal: pt, resource: rt, walked_roles: walked, slots: c.slots, terms, members, factors, fixed, policies: compiled, expects: selects });
+            frames.push(Frame { principal: pt, resource: rt, walked_roles: walked, slots: c.slots, terms, members, factors, fixed, policies: compiled, expects: selects, links: c.links, derived: c.derived });
         }
     }
     let names = known
@@ -472,7 +547,7 @@ pub fn space(g: &Gate, action: usize, known: &Known, ask: &dyn Ask, memo: &Memo,
         let mut why = Vec::new();
         for f in &s.frames {
             for x in &f.factors {
-                let names: Vec<Text> = x.places.iter().map(|&p| slot_name(g, action, f.principal, f.resource, &f.slots[p])).collect();
+                let names: Vec<Text> = x.places.iter().map(|&p| frame_slot_name(g, action, f, &f.slots[p])).collect();
                 let t = Text::join(&names, "・", ", ");
                 let ty = &g.types[f.principal].named.name;
                 why.push((tr!("{ty}：{}", "{ty}: {}", t.ja; t.en), x.points.len() as u128));
@@ -487,8 +562,10 @@ pub fn space(g: &Gate, action: usize, known: &Known, ask: &dyn Ask, memo: &Memo,
     Ok(s)
 }
 
-/// How a message names a place: `roles`, `principal.suspended`, `amount`.
-pub fn slot_name(g: &Gate, action: usize, principal: usize, resource: usize, s: &Slot) -> Text {
+/// How a message names a place: `roles`, `principal.suspended`, `amount`; a value an action asked
+/// computes, with the action (`band (of approve)`), and whether one is allowed (`allowed approve`).
+/// `links` are the actions the frame asks.
+pub fn slot_name_in(g: &Gate, action: usize, principal: usize, resource: usize, links: &[Link], s: &Slot) -> Text {
     let a = &g.actions[action];
     match s {
         Slot::Roles => tr!("{} の役割", "the roles of {}", g.types[principal].named.name),
@@ -497,7 +574,17 @@ pub fn slot_name(g: &Gate, action: usize, principal: usize, resource: usize, s: 
         Slot::Input(i) => Text::same(a.inputs[*i].named.name.clone()),
         Slot::Computed(i) => Text::same(a.computed[*i].named.name.clone()),
         Slot::Relation(t) => tr!("{} を指すもの", "what points to {}", g.types[*t].named.name),
+        Slot::Linked(l, i) => {
+            let b = &g.actions[links[*l].action];
+            tr!("{}（{} の計算した値）", "{} (of {})", b.computed[*i].named.name, b.named.name)
+        }
+        Slot::Allowed(l) => Text::same(format!("allowed {}", g.actions[links[*l].action].named.name)),
     }
+}
+
+/// [`slot_name_in`] for a place of a frame.
+pub fn frame_slot_name(g: &Gate, action: usize, f: &Frame, s: &Slot) -> Text {
+    slot_name_in(g, action, f.principal, f.resource, &f.links, s)
 }
 
 /// What a frame's compiler makes: the factors, the places the frame fixes, and the roles walked.
@@ -545,11 +632,150 @@ struct Compiler<'g> {
     /// A condition reads a computed value no language answered for (another diagnostic says why):
     /// the action is not walked.
     unknown: bool,
+    /// The link whose action's policies are being compiled (None: the frame's own action's), the
+    /// links, the derived places, and the actions being asked, outermost first.
+    ctx: Option<usize>,
+    links: Vec<Link>,
+    derived: Vec<(usize, CExpr)>,
+    asking: Vec<usize>,
 }
 
 impl<'g> Compiler<'g> {
     fn new(g: &'g Gate, action: usize, principal: usize, resource: usize, known: &'g Known) -> Compiler<'g> {
-        Compiler { g, action, principal, resource, known, slots: vec![Slot::Roles], cmps: BTreeMap::new(), terms: BTreeMap::new(), members: BTreeMap::new(), roles_read: 0, workflow_read: false, unknown: false }
+        Compiler {
+            g,
+            action,
+            principal,
+            resource,
+            known,
+            slots: vec![Slot::Roles],
+            cmps: BTreeMap::new(),
+            terms: BTreeMap::new(),
+            members: BTreeMap::new(),
+            roles_read: 0,
+            workflow_read: false,
+            unknown: false,
+            ctx: None,
+            links: Vec::new(),
+            derived: Vec::new(),
+            asking: Vec::new(),
+        }
+    }
+
+    /// How a message names a place of the frame.
+    fn name_of(&self, s: &Slot) -> Text {
+        slot_name_in(self.g, self.action, self.principal, self.resource, &self.links, s)
+    }
+
+    /// The action whose conditions are being compiled: the frame's own, or the link's.
+    fn here(&self) -> usize {
+        match self.ctx {
+            None => self.action,
+            Some(l) => self.links[l].action,
+        }
+    }
+
+    /// A value given in the terms of the action being compiled, in the frame's own terms: an input
+    /// of the link's action is what the link gives it (None: nothing).
+    fn compose(&self, s: &Source) -> Option<Source> {
+        match (self.ctx, s) {
+            (Some(l), Source::Input(n)) => {
+                let (k, _) = self.g.actions[self.links[l].action].input(n)?;
+                self.links[l].inputs[k].clone()
+            }
+            _ => Some(s.clone()),
+        }
+    }
+
+    /// The link of the action `b` asked with `inputs` (in the frame's own terms): one already made
+    /// for the same inputs, or a new one, its action's policies compiled into the frame and its
+    /// answer a derived place. None for an action already being asked, a circle E109 says.
+    fn link(&mut self, b: usize, inputs: Vec<Option<Source>>) -> Option<usize> {
+        let g = self.g;
+        if let Some(l) = self.links.iter().position(|x| x.action == b && (0..inputs.len()).all(|k| g.same_given(self.action, b, k, &x.inputs[k], &inputs[k]))) {
+            return Some(l);
+        }
+        if self.asking.contains(&b) || self.asking.len() > g.actions.len() {
+            self.unknown = true;
+            return None;
+        }
+        self.links.push(Link { action: b, inputs, direct: false });
+        let l = self.links.len() - 1;
+        let saved = self.ctx;
+        self.ctx = Some(l);
+        self.asking.push(b);
+        let mut permits = Vec::new();
+        let mut forbids = Vec::new();
+        for pi in g.policies_on(b) {
+            let c = self.policy(&g.policies[pi]);
+            if g.policies[pi].permit {
+                permits.push(c.all);
+            } else {
+                forbids.push(c.all);
+            }
+        }
+        self.asking.pop();
+        self.ctx = saved;
+        // as Cedar decides: a permit applies, and no forbid does
+        let decision = CExpr::And(vec![CExpr::Or(permits), CExpr::Not(Box::new(CExpr::Or(forbids)))]).simplify();
+        let at = self.place(Slot::Allowed(l));
+        self.derived.push((at, decision));
+        Some(l)
+    }
+
+    /// An input of the link's action that the link gives a constant, or nothing: the value, and the
+    /// input's field. None for any other path.
+    fn given_const(&self, p: &Path) -> Option<(Val, &'g Field)> {
+        let l = self.ctx?;
+        let Path::Value(name) = p else { return None };
+        let b = &self.g.actions[self.links[l].action];
+        let (k, f) = b.input(name)?;
+        match &self.links[l].inputs[k] {
+            None => Some((Val::Absent, f)),
+            Some(Source::Lit(lit)) => Some((const_val(self.g, f, lit), f)),
+            Some(_) => None,
+        }
+    }
+
+    /// A condition of a link's action on an input the link gives a constant or nothing, decided
+    /// here (DESIGN 2.11); None for another.
+    fn folded(&mut self, a: &Atom) -> Option<CExpr> {
+        self.ctx?;
+        match a {
+            Atom::True(p) => {
+                let (v, _) = self.given_const(p)?;
+                Some(CExpr::truth(v == Val::Bool(true)))
+            }
+            Atom::Is(p, lit) => {
+                let (v, f) = self.given_const(p)?;
+                Some(CExpr::truth(v != Val::Absent && v == const_val(self.g, f, lit)))
+            }
+            Atom::Cmp(p, op, lit) => {
+                let (v, f) = self.given_const(p)?;
+                match (v, const_val(self.g, f, lit)) {
+                    (Val::Cell(c), Val::Cell(k)) => Some(CExpr::truth(cells::holds(*op, c.lo, k.lo))),
+                    _ => Some(CExpr::truth(false)),
+                }
+            }
+            Atom::Eq(p, q) => match (self.given_const(p), self.given_const(q)) {
+                (None, None) => None,
+                (Some((v, _)), Some((w, _))) => Some(CExpr::truth(v != Val::Absent && v == w)),
+                (Some((v, _)), None) => Some(self.enum_is(q, v)),
+                (None, Some((w, _))) => Some(self.enum_is(p, w)),
+            },
+            _ => None,
+        }
+    }
+
+    /// `p` is the enum's value `v` (one of an input a link gives a constant).
+    fn enum_is(&mut self, p: &Path, v: Val) -> CExpr {
+        match (v, self.resolve(p)) {
+            (Val::Enum(k), Some((s, Ty::Enum(_)))) => {
+                let at = self.place(s);
+                CExpr::Atom(CAtom::Enum(at, k))
+            }
+            _ => CExpr::truth(false),
+        }
     }
 
     fn act(&self) -> &'g Action {
@@ -616,18 +842,38 @@ impl<'g> Compiler<'g> {
                 Some((Slot::Attr(*o, i), Ty::of(&f.ty)))
             }
             Path::Value(name) => {
-                let a = self.act();
-                if let Some((i, f)) = a.input(name) {
-                    return Some((Slot::Input(i), Ty::of(&f.ty)));
+                let g = self.g;
+                let act = self.here();
+                let a = &g.actions[act];
+                if let Some((k, f)) = a.input(name) {
+                    return match self.ctx {
+                        None => Some((Slot::Input(k), Ty::of(&f.ty))),
+                        // an input of the link's action: what the link gives it, in the frame's terms
+                        Some(l) => match self.links[l].inputs[k].clone()? {
+                            Source::Input(n) => {
+                                let (i, x) = self.act().input(&n)?;
+                                Some((Slot::Input(i), Ty::of(&x.ty)))
+                            }
+                            Source::Attr(o, n) => {
+                                let (i, x) = g.owner_type(o, self.principal, self.resource).attr(&n)?;
+                                Some((Slot::Attr(o, i), Ty::of(&x.ty)))
+                            }
+                            Source::Lit(_) | Source::Today => None,
+                        },
+                    };
                 }
                 let (i, _) = a.computed_value(name)?;
-                let Some(kn) = self.known.computed.get(&(self.action, i)) else {
+                let Some(kn) = self.known.computed.get(&(act, i)) else {
                     self.unknown = true;
                     return None;
                 };
+                let slot = match self.ctx {
+                    None => Slot::Computed(i),
+                    Some(l) => Slot::Linked(l, i),
+                };
                 match kn {
-                    Kn::Rule { domain: Domain::Enum(vs), .. } => Some((Slot::Computed(i), Ty::Computed(Some(vs.clone())))),
-                    _ => Some((Slot::Computed(i), Ty::Computed(None))),
+                    Kn::Rule { domain: Domain::Enum(vs), .. } => Some((slot, Ty::Computed(Some(vs.clone())))),
+                    _ => Some((slot, Ty::Computed(None))),
                 }
             }
         }
@@ -636,8 +882,12 @@ impl<'g> Compiler<'g> {
     /// The value of a rule's enum output a word names by the name of the generated code
     /// (`WithinLimit`), by its place in the domain.
     fn member(&self, s: &Slot, word: &str) -> Option<usize> {
-        let Slot::Computed(i) = s else { return None };
-        match self.known.computed.get(&(self.action, *i)) {
+        let key = match s {
+            Slot::Computed(i) => (self.action, *i),
+            Slot::Linked(l, i) => (self.links[*l].action, *i),
+            _ => return None,
+        };
+        match self.known.computed.get(&key) {
             Some(Kn::Rule { members, .. }) => members.iter().position(|m| m == word),
             _ => None,
         }
@@ -689,7 +939,24 @@ impl<'g> Compiler<'g> {
     }
 
     fn atom(&mut self, a: &Atom) -> CExpr {
+        if let Some(e) = self.folded(a) {
+            return e;
+        }
         CExpr::Atom(match a {
+            Atom::Allowed { action: b, args } => {
+                // what the action's inputs are given, in the frame's own terms
+                let local = self.g.asked(self.here(), *b, args);
+                let inputs: Vec<Option<Source>> = local.iter().map(|x| x.as_ref().and_then(|s| self.compose(s))).collect();
+                match self.link(*b, inputs) {
+                    Some(l) => {
+                        if self.ctx.is_none() {
+                            self.links[l].direct = true;
+                        }
+                        CAtom::Bool(self.place(Slot::Allowed(l)), true)
+                    }
+                    None => CAtom::Const(false),
+                }
+            }
             Atom::InRoles(rs) => {
                 let mask = rs.iter().fold(0u128, |m, r| m | bit(*r));
                 self.roles_read |= mask;
@@ -799,12 +1066,12 @@ impl<'g> Compiler<'g> {
     /// over the budget.
     fn estimate(&self) -> Vec<(Text, u128)> {
         let n = self.walked_roles().len();
-        let mut out = vec![(slot_name(self.g, self.action, self.principal, self.resource, &Slot::Roles), if n >= 127 { u128::MAX } else { 1u128 << n })];
+        let mut out = vec![(self.name_of(&Slot::Roles), if n >= 127 { u128::MAX } else { 1u128 << n })];
         for (at, s) in self.slots.iter().enumerate() {
             if let Slot::Attr(..) | Slot::Input(_) = s
                 && let Some(d) = self.domain(at)
             {
-                out.push((slot_name(self.g, self.action, self.principal, self.resource, s), d.len() as u128));
+                out.push((self.name_of(s), d.len() as u128));
             }
         }
         out
@@ -845,6 +1112,8 @@ impl<'g> Compiler<'g> {
             Slot::Relation(t) => 3_000 + t,
             Slot::Input(i) => 4_000 + i,
             Slot::Computed(i) => 5_000 + i,
+            Slot::Linked(l, i) => 6_000 + l * 100 + i,
+            Slot::Allowed(l) => 100_000 + l,
         }
     }
 
@@ -858,9 +1127,11 @@ impl<'g> Compiler<'g> {
         }
     }
 
-    /// The attributes and inputs a computed value is given, in this frame; None when one of them is
-    /// an attribute the frame's type does not have (the value is not computed: absent).
-    fn sources_of(&self, c: &Computed) -> Option<Vec<Slot>> {
+    /// The attributes and inputs a computed value is given, in this frame (through the link, for a
+    /// value a link's action computes); None when one of them is an attribute the frame's type does
+    /// not have, or an input of the link's action given nothing (the value is not computed:
+    /// absent).
+    fn sources_of(&self, link: Option<usize>, c: &Computed) -> Option<Vec<Slot>> {
         let srcs: Vec<Source> = match &c.how {
             How::Rule { args, .. } | How::Date { of: DateOf::Call { args, .. }, .. } => args.iter().map(|(_, s)| s.clone()).collect(),
             How::Date { of: DateOf::Attr(o, n), .. } => vec![Source::Attr(*o, n.clone())],
@@ -868,7 +1139,8 @@ impl<'g> Compiler<'g> {
         };
         let mut out = Vec::new();
         for s in &srcs {
-            if let Some(slot) = self.source_slot(s).ok()?
+            let s = self.mapped(link, s)?;
+            if let Some(slot) = self.source_slot(&s).ok()?
                 && !out.contains(&slot)
             {
                 out.push(slot);
@@ -877,37 +1149,81 @@ impl<'g> Compiler<'g> {
         Some(out)
     }
 
+    /// A value given in the terms of the action that computes a value: as it is for the frame's own
+    /// action, through what the link gives its action's inputs for a link's.
+    fn mapped(&self, link: Option<usize>, s: &Source) -> Option<Source> {
+        match (link, s) {
+            (Some(l), Source::Input(n)) => {
+                let (k, _) = self.g.actions[self.links[l].action].input(n)?;
+                self.links[l].inputs[k].clone()
+            }
+            _ => Some(s.clone()),
+        }
+    }
+
+    /// What a rule output at a place computes, as a key two places that compute the same share:
+    /// the rule's file and output, and what each input is given in this frame (an input or an
+    /// attribute by its place, a constant, today, nothing).
+    fn rule_key(&self, at: usize) -> Option<String> {
+        let (act, ci, link) = self.computed_at(at)?;
+        let How::Rule { args, .. } = &self.g.actions[act].computed[ci].how else { return None };
+        let Some(Kn::Rule { file, output, .. }) = self.known.computed.get(&(act, ci)) else { return None };
+        let mut key = format!("{}\u{1}{output}", file.display());
+        for (input, src) in args {
+            let given = match self.mapped(link, src) {
+                None => "absent".to_string(),
+                Some(Source::Lit(l)) => format!("{l:?}"),
+                Some(Source::Today) => "today".to_string(),
+                Some(other) => match self.source_slot(&other) {
+                    Ok(Some(slot)) => format!("{slot:?}"),
+                    _ => format!("{other:?}"),
+                },
+            };
+            key.push_str(&format!("\u{1}{input}={given}"));
+        }
+        Some(key)
+    }
+
+    /// What computes the value at a place: the action, the value's index there, and the link.
+    fn computed_at(&self, at: usize) -> Option<(usize, usize, Option<usize>)> {
+        match self.slots.get(at)? {
+            Slot::Computed(i) => Some((self.action, *i, None)),
+            Slot::Linked(l, i) => Some((self.links[*l].action, *i, Some(*l))),
+            _ => None,
+        }
+    }
+
     /// The factors of the frame, in order: the roles, the workflow, then each thing read (or
     /// group of things that read the same data) in the order of [`Compiler::order`].
     fn factors(&mut self, ask: &dyn Ask, memo: &Memo, budget: u128, day_walk: &mut u128) -> Result<Made, Stop> {
         let g = self.g;
-        let a = self.act();
         let mut fixed: Vec<(usize, Val)> = Vec::new();
-        // the computed values read, and what each reads
-        let mut rule_values: Vec<(usize, usize)> = Vec::new();
-        let mut date_values: Vec<(usize, usize)> = Vec::new();
+        // the computed values read (the frame's own action's, and those the links' actions
+        // compute), each by its place, and what each reads
+        let mut rule_values: Vec<usize> = Vec::new();
+        let mut date_values: Vec<usize> = Vec::new();
         let mut reads: BTreeMap<usize, Vec<Slot>> = BTreeMap::new();
         for at in 0..self.slots.len() {
-            let Slot::Computed(i) = self.slots[at] else { continue };
-            let c = &a.computed[i];
-            if !self.known.computed.contains_key(&(self.action, i)) {
+            let Some((act, i, link)) = self.computed_at(at) else { continue };
+            let c = &g.actions[act].computed[i];
+            if !self.known.computed.contains_key(&(act, i)) {
                 return Err(Stop::Unknown);
             }
-            match self.sources_of(c) {
+            match self.sources_of(link, c) {
                 None => fixed.push((at, Val::Absent)),
                 Some(srcs) => {
                     reads.insert(at, srcs);
                     match &c.how {
-                        How::Rule { .. } => rule_values.push((at, i)),
-                        How::Date { .. } | How::Open { .. } => date_values.push((at, i)),
+                        How::Rule { .. } => rule_values.push(at),
+                        How::Date { .. } | How::Open { .. } => date_values.push(at),
                     }
                 }
             }
         }
-        let date_sources: BTreeSet<Slot> = date_values.iter().flat_map(|(at, _)| reads[at].iter().cloned()).collect();
+        let date_sources: BTreeSet<Slot> = date_values.iter().flat_map(|at| reads[at].iter().cloned()).collect();
         // the rule outputs joined by what they read
         let mut groups: Vec<Vec<usize>> = Vec::new();
-        for &(at, _) in &rule_values {
+        for &at in &rule_values {
             let mine: BTreeSet<&Slot> = reads[&at].iter().collect();
             let joined: Vec<usize> = (0..groups.len()).filter(|&gi| groups[gi].iter().any(|o| reads[o].iter().any(|s| mine.contains(s)))).collect();
             let mut merged = vec![at];
@@ -933,15 +1249,22 @@ impl<'g> Compiler<'g> {
             let cut: Vec<usize> = direct.iter().copied().filter(|at| read.contains(&self.slots[*at]) && !taken.contains(at)).collect();
             // what is read by two outputs and not cut, or also by the dates, is not joined exactly
             let cut_slots: BTreeSet<&Slot> = cut.iter().map(|at| &self.slots[*at]).collect();
+            // two outputs that are one computation (the same rule given the same values: an action
+            // and an action it asks computing the same) are one value, and read nothing twice
             let mut times: BTreeMap<&Slot, usize> = BTreeMap::new();
+            let mut seen: Vec<String> = Vec::new();
             for at in grp {
+                let key = self.rule_key(*at);
+                if key.as_ref().is_some_and(|k| seen.contains(k)) {
+                    continue;
+                }
+                seen.extend(key);
                 for s in &reads[at] {
                     *times.entry(s).or_default() += 1;
                 }
             }
             let loose = read.iter().any(|s| date_sources.contains(s)) || times.iter().any(|(s, n)| *n > 1 && !cut_slots.contains(s));
-            let outputs: Vec<(usize, usize)> = grp.iter().map(|at| *rule_values.iter().find(|(p, _)| p == at).unwrap()).collect();
-            let f = self.rule_factor(&outputs, &cut, loose, ask, memo)?;
+            let f = self.rule_factor(grp, &cut, loose, ask, memo)?;
             taken.extend(f.places.iter().copied());
             let key = f.places.iter().map(|&p| self.order(p)).min().unwrap_or(usize::MAX);
             units.push((key, f));
@@ -971,26 +1294,40 @@ impl<'g> Compiler<'g> {
     /// The factor of a group of rule outputs: for every value of the attributes and inputs they
     /// read that a policy also reads, the values rulec says each output can come to. `loose` says
     /// the outputs read something together that rulec is not asked of together.
-    fn rule_factor(&self, outputs: &[(usize, usize)], cut: &[usize], loose: bool, ask: &dyn Ask, memo: &Memo) -> Result<Factor, Stop> {
-        let a = self.act();
+    fn rule_factor(&self, outputs: &[usize], cut: &[usize], loose: bool, ask: &dyn Ask, memo: &Memo) -> Result<Factor, Stop> {
+        let g = self.g;
         let cut_domains: Vec<Vec<Val>> = cut.iter().map(|&at| self.domain(at).unwrap_or_else(|| vec![Val::Absent])).collect();
         let mut places = cut.to_vec();
-        places.extend(outputs.iter().map(|(at, _)| *at));
+        places.extend(outputs.iter().copied());
         // past this many combinations of the cut values, rulec is asked once over the whole of each
         // input, and what it says is counted in case for each of them (marked inexact)
         let assignments: usize = cut_domains.iter().map(Vec::len).product();
         let many = assignments > ASKS;
+        // an output that computes what an earlier one does is that one's value (by the earlier one's
+        // place among the outputs)
+        let keys: Vec<Option<String>> = outputs.iter().map(|&at| self.rule_key(at)).collect();
+        let same_as: Vec<Option<usize>> = (0..outputs.len()).map(|j| (0..j).find(|&i| keys[i].is_some() && keys[i] == keys[j])).collect();
+        let firsts: Vec<usize> = (0..outputs.len()).filter(|&j| same_as[j].is_none()).collect();
         let mut points = Vec::new();
         for assignment in product(&cut_domains) {
             let mut per: Vec<(Vec<Val>, bool)> = Vec::new();
-            for &(_, ci) in outputs {
-                let c = &a.computed[ci];
-                let (Some(Kn::Rule { file, output, domain, inputs, enums, .. }), How::Rule { args, .. }) = (self.known.computed.get(&(self.action, ci)), &c.how) else { return Err(Stop::Unknown) };
+            for &out_at in firsts.iter().map(|&j| &outputs[j]) {
+                let Some((act, ci, link)) = self.computed_at(out_at) else { return Err(Stop::Unknown) };
+                let c = &g.actions[act].computed[ci];
+                let (Some(Kn::Rule { file, output, domain, inputs, enums, .. }), How::Rule { args, .. }) = (self.known.computed.get(&(act, ci)), &c.how) else { return Err(Stop::Unknown) };
                 // the place of a value in the order the rule declares the values of the enum the
                 // input takes: how rulec is told to hold an enum input to that value
                 let place = |input: &str, words: &[&str]| -> Option<i128> {
                     let (_, values) = enums.iter().find(|(n, _)| n == input)?;
                     values.iter().position(|(_, ws)| ws.iter().any(|w| words.contains(&w.as_str()))).map(|k| k as i128)
+                };
+                // a word given to an enum input: the rule's value, or the gate's value of that name
+                // (one a link gives an input of its action)
+                let word_place = |input: &str, w: &str| -> Option<i128> {
+                    place(input, &[w]).or_else(|| {
+                        let v = g.enums.iter().flat_map(|e| e.values.iter()).find(|v| v.is(w))?;
+                        place(input, &[v.name.as_str(), v.alias.as_str()])
+                    })
                 };
                 // the places of the values of the gate's enum `e`
                 let places_of = |input: &str, e: usize, only: Option<usize>| -> Option<Vec<i128>> {
@@ -1007,6 +1344,12 @@ impl<'g> Compiler<'g> {
                 let mut maybe_absent = false;
                 for (input, src) in args {
                     let unit = inputs.iter().find(|(n, _)| n == input).and_then(|(_, u)| u.clone());
+                    // an input of a link's action given nothing: the value is absent
+                    let Some(src) = self.mapped(link, src) else {
+                        absent = true;
+                        continue;
+                    };
+                    let src = &src;
                     let slot = self.source_slot(src).map_err(|_| Stop::Unknown)?;
                     match (src, slot) {
                         (Source::Lit(Literal::Num(num)), _) => match unit.as_ref().and_then(|unit| crate::types::count(num, unit).ok()) {
@@ -1025,7 +1368,7 @@ impl<'g> Compiler<'g> {
                         // a bool or an enum given as a constant: rulec holds the input to it (a bool
                         // as 0 or 1, an enum by the place of its value)
                         (Source::Lit(Literal::Bool(b)), _) => ranges.push((input.clone(), Some(i128::from(*b)), Some(i128::from(*b)))),
-                        (Source::Lit(Literal::Word(w)), _) => match place(input, &[w.as_str()]) {
+                        (Source::Lit(Literal::Word(w)), _) => match word_place(input, w) {
                             Some(k) => ranges.push((input.clone(), Some(k), Some(k))),
                             None => exact = false,
                         },
@@ -1089,7 +1432,12 @@ impl<'g> Compiler<'g> {
             let exact = per.iter().all(|(_, e)| *e);
             for outs in product(&lists) {
                 let mut vals = assignment.clone();
-                vals.extend(outs);
+                // each output in its order: its own value, or the value of the one it computes as
+                for (j, same) in same_as.iter().enumerate().take(outputs.len()) {
+                    let first = same.unwrap_or(j);
+                    let k = firsts.iter().position(|&x| x == first).unwrap_or(0);
+                    vals.push(outs[k].clone());
+                }
                 points.push(Point { vals, exact });
             }
         }
@@ -1098,13 +1446,18 @@ impl<'g> Compiler<'g> {
 
     /// The factor of the dates of `today`: every combination of truths the dates can come to
     /// together, with the cells of the numbers they read that a policy compares.
-    fn date_factor(&self, date_values: &[(usize, usize)], cut: &[usize], ask: &dyn Ask, memo: &Memo, budget: u128, day_walk: &mut u128) -> Result<Factor, Stop> {
-        let a = self.act();
+    fn date_factor(&self, date_values: &[usize], cut: &[usize], ask: &dyn Ask, memo: &Memo, budget: u128, day_walk: &mut u128) -> Result<Factor, Stop> {
+        let g = self.g;
         let today = self.g.today.as_ref().ok_or(Stop::Unknown)?;
+        // each date's action, its index there, and its link
+        let mut refs: Vec<(usize, usize, Option<usize>)> = Vec::new();
+        for &at in date_values {
+            refs.push(self.computed_at(at).ok_or(Stop::Unknown)?);
+        }
         // the attributes and inputs the dates are given, each once
         let mut raws: Vec<Slot> = Vec::new();
-        for (_, i) in date_values {
-            for s in self.sources_of(&a.computed[*i]).unwrap_or_default() {
+        for &(act, i, link) in &refs {
+            for s in self.sources_of(link, &g.actions[act].computed[i]).unwrap_or_default() {
                 if !raws.contains(&s) {
                     raws.push(s);
                 }
@@ -1117,7 +1470,7 @@ impl<'g> Compiler<'g> {
                 FieldType::Date { lo, hi } => (*lo..=*hi).map(Some).collect(),
                 FieldType::Num { lo, hi, .. } if *hi - *lo <= budget as i128 => (*lo as i64..=*hi as i64).map(Some).collect(),
                 FieldType::Num { lo, hi, .. } => {
-                    return Err(Stop::Budget { count: (*hi - *lo + 1) as u128, days: true, why: vec![(slot_name(self.g, self.action, self.principal, self.resource, s), (*hi - *lo + 1) as u128)], roles: false });
+                    return Err(Stop::Budget { count: (*hi - *lo + 1) as u128, days: true, why: vec![(self.name_of(s), (*hi - *lo + 1) as u128)], roles: false });
                 }
                 _ => return Err(Stop::Unknown),
             };
@@ -1131,7 +1484,7 @@ impl<'g> Compiler<'g> {
         if assignments.saturating_mul(days.max(1)) > budget {
             let mut why = vec![(tr!("today の日", "the days of today"), days)];
             for (s, d) in raws.iter().zip(&raw_domains) {
-                why.push((slot_name(self.g, self.action, self.principal, self.resource, s), d.len() as u128));
+                why.push((self.name_of(s), d.len() as u128));
             }
             return Err(Stop::Budget { count: assignments.saturating_mul(days.max(1)), days: true, why, roles: false });
         }
@@ -1154,9 +1507,10 @@ impl<'g> Compiler<'g> {
                     Some(v) => DateVal::Cell(cells.iter().position(|c| c.contains(v as i128)).unwrap_or(0)),
                 });
             }
-            for (_, i) in date_values {
-                let c = &a.computed[*i];
+            for &(act, i, link) in &refs {
+                let c = &g.actions[act].computed[i];
                 let value_of = |src: &Source| -> Option<i64> {
+                    let src = &self.mapped(link, src)?;
                     match src {
                         Source::Lit(Literal::Date(d)) => Some(*d),
                         Source::Lit(Literal::Num(num)) if num.value.is_int() => Some(num.value.num as i64),
@@ -1175,7 +1529,7 @@ impl<'g> Compiler<'g> {
                         None => DateVal::Absent,
                     },
                     How::Date { of: DateOf::Call { args, .. }, .. } => {
-                        let Some(Kn::Date { file, function, .. }) = self.known.computed.get(&(self.action, *i)) else { return Err(Stop::Unknown) };
+                        let Some(Kn::Date { file, function, .. }) = self.known.computed.get(&(act, i)) else { return Err(Stop::Unknown) };
                         let inputs: Option<Vec<(String, i64)>> = args.iter().map(|(n, s)| value_of(s).map(|v| (n.clone(), v))).collect();
                         match inputs {
                             None => DateVal::Absent,
@@ -1206,9 +1560,9 @@ impl<'g> Compiler<'g> {
                     });
                     continue;
                 }
-                let (_, i) = date_values[k - ncut];
-                tuple.push(match (&a.computed[i].how, x) {
-                    (How::Open { .. }, _) => match self.known.computed.get(&(self.action, i)) {
+                let (act, i, _) = refs[k - ncut];
+                tuple.push(match (&g.actions[act].computed[i].how, x) {
+                    (How::Open { .. }, _) => match self.known.computed.get(&(act, i)) {
                         Some(Kn::Open { data, closed }) => {
                             if t < data.0 || t > data.1 {
                                 Val::Absent
@@ -1224,8 +1578,8 @@ impl<'g> Compiler<'g> {
             }
             Ok(tuple)
         };
-        let given_today = date_values.iter().any(|(_, i)| match &a.computed[*i].how {
-            How::Date { of: DateOf::Call { args, .. }, .. } => args.iter().any(|(_, s)| *s == Source::Today),
+        let given_today = refs.iter().any(|&(act, i, link)| match &g.actions[act].computed[i].how {
+            How::Date { of: DateOf::Call { args, .. }, .. } => args.iter().any(|(_, s)| self.mapped(link, s) == Some(Source::Today)),
             _ => false,
         });
         let mut tuples: BTreeSet<Vec<Val>> = BTreeSet::new();
@@ -1253,7 +1607,7 @@ impl<'g> Compiler<'g> {
             }
         }
         let mut places: Vec<usize> = cut_cells.iter().map(|(at, ..)| *at).collect();
-        places.extend(date_values.iter().map(|(at, _)| *at));
+        places.extend(date_values.iter().copied());
         Ok(Factor { kind: FactorKind::Dates, places, points: tuples.into_iter().map(|vals| Point { vals, exact: true }).collect() })
     }
 
@@ -1299,6 +1653,17 @@ enum DateVal {
     Open,
     Cell(usize),
     Absent,
+}
+
+/// A constant given to an input, as a combination holds the input's value: true or false, an enum's
+/// value by its place, a number as the cell of itself alone. A date is never read by a condition.
+pub fn const_val(g: &Gate, f: &Field, lit: &Literal) -> Val {
+    match (lit, &f.ty) {
+        (Literal::Bool(b), _) => Val::Bool(*b),
+        (Literal::Word(w), FieldType::Enum(e)) => g.enums[*e].values.iter().position(|v| v.is(w)).map(Val::Enum).unwrap_or(Val::Absent),
+        (Literal::Num(n), FieldType::Num { unit, .. }) => crate::types::count(n, unit).map(|k| Val::Cell(Cell { lo: k, hi: k })).unwrap_or(Val::Absent),
+        _ => Val::Absent,
+    }
 }
 
 pub fn bit(r: usize) -> u128 {
@@ -1423,6 +1788,14 @@ fn product_opt(lists: &[Vec<Option<i64>>]) -> impl Iterator<Item = Vec<Option<i6
 pub fn confirm(g: &Gate, s: &Space, k: &Kept, known: &Known, ask: &dyn Ask) -> bool {
     let f = &s.frames[k.frame];
     let a = &g.actions[s.action];
+    // the slot a value given (in the frame's own terms) reads, in this frame
+    let slot_of = |src: &Source| -> Option<Slot> {
+        match src {
+            Source::Attr(o, n) => g.owner_type(*o, f.principal, f.resource).attr(n).map(|(i, _)| Slot::Attr(*o, i)),
+            Source::Input(n) => a.input(n).map(|(i, _)| Slot::Input(i)),
+            Source::Lit(_) | Source::Today => None,
+        }
+    };
     for (x, &i) in f.factors.iter().zip(&k.idx) {
         if x.points[i].exact {
             continue;
@@ -1432,15 +1805,11 @@ pub fn confirm(g: &Gate, s: &Space, k: &Kept, known: &Known, ask: &dyn Ask) -> b
         let value_at = |at: usize| point.vals[x.places.iter().position(|p| *p == at).unwrap_or(0)].clone();
         // the candidates of each attribute and input the outputs read
         let mut raws: Vec<Slot> = Vec::new();
-        for &(_, ci) in outputs {
-            if let How::Rule { args, .. } = &a.computed[ci].how {
+        for &at in outputs {
+            let Some((act, ci, link)) = f.computed_at(s.action, at) else { return false };
+            if let How::Rule { args, .. } = &g.actions[act].computed[ci].how {
                 for (_, src) in args {
-                    let slot = match src {
-                        Source::Attr(o, n) => g.owner_type(*o, f.principal, f.resource).attr(n).map(|(i, _)| Slot::Attr(*o, i)),
-                        Source::Input(n) => a.input(n).map(|(i, _)| Slot::Input(i)),
-                        Source::Lit(_) | Source::Today => None,
-                    };
-                    if let Some(sl) = slot
+                    if let Some(sl) = f.mapped(link, g, src).as_ref().and_then(slot_of)
                         && !raws.contains(&sl)
                     {
                         raws.push(sl);
@@ -1478,24 +1847,27 @@ pub fn confirm(g: &Gate, s: &Space, k: &Kept, known: &Known, ask: &dyn Ask) -> b
             return false;
         }
         let found = product(&cands).into_iter().any(|asg| {
-            outputs.iter().all(|&(at, ci)| {
+            outputs.iter().all(|&at| {
                 let want = value_at(at);
-                let (Some(Kn::Rule { file, output, domain, inputs, enums, .. }), How::Rule { args, .. }) = (known.computed.get(&(s.action, ci)), &a.computed[ci].how) else { return false };
+                let Some((act, ci, link)) = f.computed_at(s.action, at) else { return false };
+                let cv = &g.actions[act].computed[ci];
+                let (Some(Kn::Rule { file, output, domain, inputs, enums, .. }), How::Rule { args, .. }) = (known.computed.get(&(act, ci)), &cv.how) else { return false };
                 // a value of an enum input, as the rule's evaluator takes it: the rule's name of the
                 // value that answers to the word (or to the alias of the gate's value of that name)
                 let to_rule = |input: &str, v: Value| -> Value {
                     let Value::Enum(word) = &v else { return v };
                     let Some((_, values)) = enums.iter().find(|(n, _)| n == input) else { return v };
-                    let alias = g.enums.iter().flat_map(|e| e.values.iter()).find(|x| x.name == *word).map(|x| x.alias.clone());
+                    let alias = g.enums.iter().flat_map(|e| e.values.iter()).find(|x| x.name == *word || x.alias == *word).map(|x| (x.name.clone(), x.alias.clone()));
                     values
                         .iter()
-                        .find(|(_, words)| words.iter().any(|x| x == word || alias.as_ref() == Some(x)))
+                        .find(|(_, words)| words.iter().any(|x| x == word || alias.as_ref().is_some_and(|(n, al)| x == n || x == al)))
                         .map(|(name, _)| Value::Enum(name.clone()))
                         .unwrap_or(v)
                 };
                 let mut vals: Values = Vec::new();
                 for (input, src) in args {
-                    let v = match src {
+                    let Some(src) = f.mapped(link, g, src) else { return want == Val::Absent };
+                    let v = match &src {
                         Source::Lit(Literal::Num(num)) => {
                             let u = inputs.iter().find(|(n, _)| n == input).and_then(|(_, u)| u.clone());
                             match u.and_then(|u| crate::types::count(num, &u).ok()) {
@@ -1507,14 +1879,7 @@ pub fn confirm(g: &Gate, s: &Space, k: &Kept, known: &Known, ask: &dyn Ask) -> b
                         Source::Lit(Literal::Word(w)) => Some(Value::Enum(w.clone())),
                         Source::Lit(Literal::Date(d)) => Some(Value::Date(ritsu_ports::day_text(*d))),
                         Source::Today => return false,
-                        _ => {
-                            let sl = match src {
-                                Source::Attr(o, n) => g.owner_type(*o, f.principal, f.resource).attr(n).map(|(i, _)| Slot::Attr(*o, i)),
-                                Source::Input(n) => a.input(n).map(|(i, _)| Slot::Input(i)),
-                                Source::Lit(_) | Source::Today => None,
-                            };
-                            sl.and_then(|sl| raws.iter().position(|r| *r == sl)).and_then(|p| asg[p].clone())
-                        }
+                        other => slot_of(other).and_then(|sl| raws.iter().position(|r| *r == sl)).and_then(|p| asg[p].clone()),
                     };
                     match v {
                         Some(v) => vals.push((input.clone(), to_rule(input, v))),
@@ -1662,6 +2027,13 @@ pub fn say(g: &Gate, s: &Space, k: &Kept) -> Text {
         let v = val(at);
         parts.push(tr!("{name}：{}", "{name}: {}", v.ja; v.en));
     }
+    // the answers of the actions the conditions ask (DESIGN 2.11)
+    for (l, link) in f.links.iter().enumerate().filter(|(_, x)| x.direct) {
+        let Some(at) = f.place(&Slot::Allowed(l)) else { continue };
+        let name = &g.actions[link.action].named.name;
+        let v = val(at);
+        parts.push(tr!("allowed {name}：{}", "allowed {name}: {}", v.ja; v.en));
+    }
     Text::join(&parts, "、", ", ")
 }
 
@@ -1752,6 +2124,11 @@ pub fn values(g: &Gate, s: &Space, k: &Kept) -> Vec<(String, Text)> {
         };
         if walked(at) {
             out.push((name.clone(), shown(at)));
+        }
+    }
+    for (l, link) in f.links.iter().enumerate().filter(|(_, x)| x.direct) {
+        if let Some(at) = f.place(&Slot::Allowed(l)) {
+            out.push((format!("allowed {}", g.actions[link.action].named.name), shown(at)));
         }
     }
     out

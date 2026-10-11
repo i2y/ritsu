@@ -109,7 +109,7 @@ use crate::eval::decide;
 use crate::model::*;
 use crate::names::Scope;
 use crate::suite::Suite;
-use crate::walk::{Ask, Kn, Rel, Slot, Space, Val, bit};
+use crate::walk::{Ask, Frame, Kn, Rel, Slot, Space, Val, bit};
 use ritsu_base::json::Json;
 use ritsu_ports::{DateValue, Found, Value, Values};
 use std::cell::RefCell;
@@ -242,6 +242,17 @@ enum Var {
     Attr(Owner, usize),
     Input(usize),
     Today,
+}
+
+/// A value to compute for some data: what computes it, its sources in the terms of the action the
+/// data is of, and what the languages said of it. A value of an action a condition asks (DESIGN
+/// 2.11) has its sources read through what the link gives that action's inputs; `absent` says one
+/// it reads is given nothing, and the value is absent.
+#[derive(Clone, Debug)]
+struct Calc<'k> {
+    cv: Computed,
+    kn: &'k Kn,
+    absent: bool,
 }
 
 /// What a computed value comes to for some data.
@@ -397,31 +408,50 @@ impl<'a> Model<'a> {
     // -----------------------------------------------------------------------------------------
     // What the code reads
 
-    /// Whether the value `ci` of action `ai` is computed for a principal of type `pt` and a
-    /// resource of type `rt`: every attribute it reads, the types have.
-    fn computable(&self, ai: usize, ci: usize, pt: usize, rt: usize) -> bool {
-        self.sources(ai, ci).iter().all(|s| match s {
-            Source::Attr(o, n) => self.g.owner_type(*o, pt, rt).attr(n).is_some(),
-            Source::Input(n) => self.g.actions[ai].input(n).is_some(),
+    /// The value `ci` of action `ai`, as the action computes it.
+    fn calc(&self, ai: usize, ci: usize) -> Option<Calc<'a>> {
+        let kn = self.checked.known.computed.get(&(ai, ci))?;
+        Some(Calc { cv: self.g.actions[ai].computed[ci].clone(), kn, absent: false })
+    }
+
+    /// The value `ci` of the action of link `l` of a frame (DESIGN 2.11): its sources read through
+    /// what the link gives that action's inputs, in the terms of the frame's own action.
+    fn linked_calc(&self, f: &Frame, l: usize, ci: usize) -> Option<Calc<'a>> {
+        let g = self.g;
+        let b = f.links[l].action;
+        let kn = self.checked.known.computed.get(&(b, ci))?;
+        let mut cv = g.actions[b].computed[ci].clone();
+        let mut absent = false;
+        if let How::Rule { args, .. } | How::Date { of: DateOf::Call { args, .. }, .. } = &mut cv.how {
+            for (_, src) in args.iter_mut() {
+                match f.mapped(Some(l), g, src) {
+                    Some(m) => *src = m,
+                    None => absent = true,
+                }
+            }
+        }
+        Some(Calc { cv, kn, absent })
+    }
+
+    /// Whether a value is computed for a principal of type `pt` and a resource of type `rt` of
+    /// action `ai`: every attribute it reads, the types have.
+    fn computable(&self, c: &Calc, ai: usize, pt: usize, rt: usize) -> bool {
+        let g = self.g;
+        sources_of(&c.cv).iter().all(|s| match s {
+            Source::Attr(o, n) => g.owner_type(*o, pt, rt).attr(n).is_some(),
+            Source::Input(n) => g.actions[ai].input(n).is_some(),
             Source::Lit(_) | Source::Today => true,
-        }) && match &self.g.actions[ai].computed[ci].how {
-            How::Date { of: DateOf::Attr(o, n), .. } => self.g.owner_type(*o, pt, rt).attr(n).is_some(),
+        }) && match &c.cv.how {
+            How::Date { of: DateOf::Attr(o, n), .. } => g.owner_type(*o, pt, rt).attr(n).is_some(),
             _ => true,
         }
     }
 
     /// Whether action `ai` computes a value from `today`: a date, a calendar's business day, or a
-    /// rule given today. Only such an action holds the day of the request to `today`'s range.
+    /// rule given today, of its own or of an action a policy on it asks (DESIGN 2.11). Only such
+    /// an action holds the day of the request to `today`'s range.
     pub fn reads_today(&self, ai: usize) -> bool {
-        reads_today(&self.g.actions[ai])
-    }
-
-    fn sources(&self, ai: usize, ci: usize) -> Vec<Source> {
-        match &self.g.actions[ai].computed[ci].how {
-            How::Rule { args, .. } | How::Date { of: DateOf::Call { args, .. }, .. } => args.iter().map(|(_, s)| s.clone()).collect(),
-            How::Date { of: DateOf::Attr(o, n), .. } => vec![Source::Attr(*o, n.clone())],
-            How::Open { .. } => Vec::new(),
-        }
+        reads_today(self.g, ai)
     }
 
     /// The attributes of type `t` the code reads (what the `Store` gives of an entity of it, by
@@ -536,16 +566,42 @@ impl<'a> Model<'a> {
         };
         let mut computed: Vec<Got> = Vec::new();
         for ci in 0..a.computed.len() {
-            let got = if self.computable(ai, ci, pt, rt) { self.compute(ai, ci, &|s| value_of(s), today) } else { Got::Absent };
+            let Some(calc) = self.calc(ai, ci) else { return Answer::refused("rule") };
+            let got = if self.computable(&calc, ai, pt, rt) { self.compute(&calc, &|s| value_of(s), today) } else { Got::Absent };
             if let Got::Refused(k) = got {
                 return Answer::refused(k);
             }
             computed.push(got);
         }
+        // 7. each action a policy asks with `allowed` (DESIGN 2.11): asked, as the generated code
+        // asks it, with the same principal, resource and instant, its inputs given what the
+        // condition gives them; its refusal is this one's
+        let mut asked: Vec<bool> = Vec::new();
+        for x in a.allowed.iter().filter(|x| x.policy) {
+            let b = &g.actions[x.action];
+            let mut inputs: Vec<(String, RawValue)> = Vec::new();
+            for (f, src) in b.inputs.iter().zip(&x.inputs) {
+                let v = match src {
+                    None => None,
+                    Some(Source::Lit(l)) => lit_raw(g, f, l),
+                    Some(Source::Today) => today.map(RawValue::Date),
+                    Some(other) => value_of(other),
+                };
+                if let Some(v) = v {
+                    inputs.push((f.named.alias.clone(), v));
+                }
+            }
+            let of = Case { name: c.name.clone(), action: x.action, principal: c.principal.clone(), resource: c.resource.clone(), store: c.store.clone(), inputs, at: c.at, now: c.now.clone(), expect: Answer::refused("") };
+            let answer = self.evaluate(&of);
+            if let Some(k) = answer.error {
+                return Answer { allowed: false, policies: Vec::new(), error: Some(k), context: None };
+            }
+            asked.push(answer.allowed);
+        }
         // the policies, on the values the data comes to
         let Some(Some(space)) = self.checked.report.spaces.get(ai) else { return Answer::refused("principal") };
         let Some(fi) = space.frames.iter().position(|f| f.principal == pt && f.resource == rt) else { return Answer::refused("principal") };
-        let env = self.env(space, fi, c, p_entity, r_entity, &computed);
+        let env = self.env(space, fi, c, p_entity, r_entity, &computed, today, &asked);
         let f = &space.frames[fi];
         let applies: Vec<bool> = f.policies.iter().map(|p| p.all.holds(&env)).collect();
         let d = decide(&applies, &space.permit);
@@ -568,15 +624,36 @@ impl<'a> Model<'a> {
             };
             context.push((cv.named.alias.clone(), v));
         }
+        for (x, allowed) in a.allowed.iter().filter(|x| x.policy).zip(&asked) {
+            context.push((x.alias(g), Json::Bool(*allowed)));
+        }
         Answer { allowed: d.allow, policies, error: None, context: Some(Json::Obj(context)) }
     }
 
-    /// The values of the frame's places for some data, as the walk would have them.
-    fn env(&self, s: &Space, fi: usize, c: &Case, p: Option<&Entity>, r: Option<&Entity>, computed: &[Got]) -> Vec<Val> {
+    /// The values of the frame's places for some data, as the walk would have them; the answers
+    /// of the actions the policies ask (`asked`, in the order of the action's `allowed` that a
+    /// policy reads) are what asking them gave (DESIGN 2.11).
+    #[allow(clippy::too_many_arguments)]
+    fn env(&self, s: &Space, fi: usize, c: &Case, p: Option<&Entity>, r: Option<&Entity>, computed: &[Got], today: Option<i64>, asked: &[bool]) -> Vec<Val> {
         let g = self.g;
         let f = &s.frames[fi];
         let a = &g.actions[s.action];
         let (pt, rt) = (f.principal, f.resource);
+        // a value given in the action's terms, as the data holds it
+        let value_of = |src: &Source| -> Option<RawValue> {
+            match src {
+                Source::Attr(o, n) => {
+                    let (t, e) = if *o == Owner::Principal { (pt, p) } else { (rt, r) };
+                    let (_, fd) = g.types[t].attr(n)?;
+                    e?.attr(&fd.named.alias).cloned()
+                }
+                Source::Input(n) => {
+                    let (_, fd) = a.input(n)?;
+                    c.inputs.iter().find(|(k, _)| *k == fd.named.alias).map(|(_, v)| v.clone())
+                }
+                Source::Lit(_) | Source::Today => None,
+            }
+        };
         let attr_val = |o: Owner, i: usize| -> Val {
             let t = if o == Owner::Principal { pt } else { rt };
             let e = if o == Owner::Principal { p } else { r };
@@ -607,6 +684,16 @@ impl<'a> Model<'a> {
                     Got::Is(v) => v.clone(),
                     _ => Val::Absent,
                 },
+                // a value an action asked computes, from the same data (DESIGN 2.11)
+                Slot::Linked(l, i) => match self.linked_calc(f, *l, *i) {
+                    Some(calc) if self.computable(&calc, s.action, pt, rt) => match self.compute(&calc, &value_of, today) {
+                        Got::Is(v) => v,
+                        _ => Val::Absent,
+                    },
+                    _ => Val::Absent,
+                },
+                // derived below
+                Slot::Allowed(_) => Val::Absent,
                 Slot::Relation(ty) => {
                     let terms = f.terms.get(&at).cloned().unwrap_or_default();
                     let id_of = |t: &Term| -> Option<String> {
@@ -643,6 +730,14 @@ impl<'a> Model<'a> {
                 }
             };
         }
+        // the answers: derived as the walk derives them, then each one a policy reads as asking it
+        // gave it
+        f.derive(&mut env);
+        for (x, allowed) in a.allowed.iter().filter(|x| x.policy).zip(asked) {
+            if let Some(at) = f.allowed_at(g, s.action, x.action, &x.inputs) {
+                env[at] = Val::Bool(*allowed);
+            }
+        }
         env
     }
 
@@ -656,12 +751,13 @@ impl<'a> Model<'a> {
         }
     }
 
-    /// What computed value `ci` of action `ai` comes to, its inputs read by `get` (None: absent).
-    fn compute(&self, ai: usize, ci: usize, get: &dyn Fn(&Source) -> Option<RawValue>, today: Option<i64>) -> Got {
-        let a = &self.g.actions[ai];
-        let cv = &a.computed[ci];
-        let Some(kn) = self.checked.known.computed.get(&(ai, ci)) else { return Got::Refused("rule") };
-        match (&cv.how, kn) {
+    /// What a value comes to, its inputs read by `get` (None: absent).
+    fn compute(&self, c: &Calc, get: &dyn Fn(&Source) -> Option<RawValue>, today: Option<i64>) -> Got {
+        if c.absent {
+            return Got::Absent;
+        }
+        let cv = &c.cv;
+        match (&cv.how, c.kn) {
             (How::Rule { args, .. }, Kn::Rule { file, output, domain, inputs, enums, .. }) => {
                 let mut vals: Values = Vec::new();
                 for (input, src) in args {
@@ -886,9 +982,25 @@ impl<'a> Model<'a> {
             };
             fixed.insert(var, v);
         }
-        // the values the action computes for these types, and what the combination says of each
-        let computing: Vec<usize> = (0..a.computed.len()).filter(|&ci| self.computable(ai, ci, pt, rt)).collect();
-        let target = |ci: usize| -> Option<Val> { f.place(&Slot::Computed(ci)).map(|at| env[at].clone()) };
+        // the values the action computes for these types, and those the actions its conditions ask
+        // compute (DESIGN 2.11), each with what the combination says of it
+        let mut calcs: Vec<(Calc, Option<Val>)> = Vec::new();
+        for ci in 0..a.computed.len() {
+            if let Some(c) = self.calc(ai, ci)
+                && self.computable(&c, ai, pt, rt)
+            {
+                let target = f.place(&Slot::Computed(ci)).map(|at| env[at].clone());
+                calcs.push((c, target));
+            }
+        }
+        for (at, slot) in f.slots.iter().enumerate() {
+            if let Slot::Linked(l, i) = slot
+                && let Some(c) = self.linked_calc(f, *l, *i)
+                && self.computable(&c, ai, pt, rt)
+            {
+                calcs.push((c, Some(env[at].clone())));
+            }
+        }
         // what they read that the combination does not fix (or, loose, a number it cuts)
         let var_of = |src: &Source| -> Option<Var> {
             match src {
@@ -898,46 +1010,47 @@ impl<'a> Model<'a> {
                 Source::Lit(_) => None,
             }
         };
-        let reads_today = |ci: usize| matches!(a.computed[ci].how, How::Date { .. } | How::Open { .. }) || self.sources(ai, ci).contains(&Source::Today);
+        let reads_today = |c: &Calc| matches!(c.cv.how, How::Date { .. } | How::Open { .. }) || sources_of(&c.cv).contains(&Source::Today);
         let free = |v: &Var| -> bool {
             match v {
                 Var::Today => true,
                 _ => !fixed.contains_key(v) || (loose && cut.contains_key(v)),
             }
         };
-        let vars_of = |ci: usize| -> Vec<Var> {
-            let mut out: Vec<Var> = self.sources(ai, ci).iter().filter_map(var_of).filter(free).collect();
-            if reads_today(ci) && g.today.is_some() && !out.contains(&Var::Today) {
+        let vars_of = |c: &Calc| -> Vec<Var> {
+            let mut out: Vec<Var> = sources_of(&c.cv).iter().filter_map(var_of).filter(free).collect();
+            if reads_today(c) && g.today.is_some() && !out.contains(&Var::Today) {
                 out.push(Var::Today);
             }
             out.sort();
             out.dedup();
             out
         };
-        // the computations joined by what they read
+        // the computations joined by what they read, each by its place in `calcs`
         let mut comps: Vec<(Vec<usize>, Vec<Var>)> = Vec::new();
-        for &ci in &computing {
-            let vs = vars_of(ci);
-            let joined: Vec<usize> = (0..comps.len()).filter(|&k| comps[k].1.iter().any(|v| vs.contains(v))).collect();
-            let mut cis = vec![ci];
+        for (k, (c, _)) in calcs.iter().enumerate() {
+            let vs = vars_of(c);
+            let joined: Vec<usize> = (0..comps.len()).filter(|&x| comps[x].1.iter().any(|v| vs.contains(v))).collect();
+            let mut ks = vec![k];
             let mut all = vs;
-            for k in joined.iter().rev() {
-                let (c2, v2) = comps.remove(*k);
-                cis.extend(c2);
+            for x in joined.iter().rev() {
+                let (k2, v2) = comps.remove(*x);
+                ks.extend(k2);
                 all.extend(v2);
             }
-            cis.sort();
+            ks.sort();
             all.sort();
             all.dedup();
-            comps.push((cis, all));
+            comps.push((ks, all));
         }
         // `today`, when nothing computed reads it: an end of its range
         let mut chosen: BTreeMap<Var, Option<RawValue>> = BTreeMap::new();
         if let Some(t) = &g.today {
             chosen.insert(Var::Today, Some(RawValue::Date(if late { t.hi } else { t.lo })));
         }
-        for (cis, vars) in &comps {
-            let found = self.search(ai, pt, rt, cis, vars, &fixed, &cut, loose, end, &target)?;
+        for (ks, vars) in &comps {
+            let group: Vec<(Calc, Option<Val>)> = ks.iter().map(|&k| calcs[k].clone()).collect();
+            let found = self.search(ai, pt, rt, &group, vars, &fixed, &cut, loose, end)?;
             chosen.extend(found);
         }
         // the data: the fixed values, the chosen ones, then the first value of the rest
@@ -1004,23 +1117,22 @@ impl<'a> Model<'a> {
         (at, now)
     }
 
-    /// The values of `vars` that give each computed value of `cis` what the combination says of it
-    /// (any value, when the combination does not read one), by the languages' evaluators. Of those
-    /// that do, the one whose `today` is nearest a day where a date's truth turns (the first found,
-    /// when nothing turns on today). None when no candidate does.
+    /// The values of `vars` that give each value of `calcs` what the combination says of it (any
+    /// value, when the combination does not read one), by the languages' evaluators. Of those that
+    /// do, the one whose `today` is nearest a day where a date's truth turns (the first found, when
+    /// nothing turns on today). None when no candidate does.
     #[allow(clippy::too_many_arguments)]
     fn search(
         &self,
         ai: usize,
         pt: usize,
         rt: usize,
-        cis: &[usize],
+        calcs: &[(Calc, Option<Val>)],
         vars: &[Var],
         fixed: &BTreeMap<Var, Option<RawValue>>,
         cut: &BTreeMap<Var, Cell>,
         loose: bool,
         end: End,
-        target: &dyn Fn(usize) -> Option<Val>,
     ) -> Option<BTreeMap<Var, Option<RawValue>>> {
         let g = self.g;
         let a = &g.actions[ai];
@@ -1033,7 +1145,8 @@ impl<'a> Model<'a> {
         };
         // the candidates of each variable but today, the inputs rulec gives first
         let others: Vec<Var> = vars.iter().copied().filter(|v| *v != Var::Today).collect();
-        let examples = self.examples(ai, pt, rt, cis, &others, fixed);
+        let refs: Vec<&Calc> = calcs.iter().map(|(c, _)| c).collect();
+        let examples = self.examples(ai, pt, rt, &refs, &others, fixed);
         let mut cands: Vec<Vec<Option<RawValue>>> = Vec::new();
         for v in &others {
             let fd = field(v)?;
@@ -1110,8 +1223,8 @@ impl<'a> Model<'a> {
                 base.get(&var).cloned().flatten()
             };
             // what each value comes to for this assignment, as far as it does not read today
-            let pre: Vec<Pre> = cis.iter().map(|&ci| self.pre(ai, ci, &get)).collect();
-            let wants: Vec<Option<Val>> = cis.iter().map(|&ci| target(ci)).collect();
+            let pre: Vec<Pre> = calcs.iter().map(|(c, _)| self.pre(c, &get)).collect();
+            let wants: Vec<Option<Val>> = calcs.iter().map(|(_, t)| t.clone()).collect();
             let matches = |got: &Got, want: &Option<Val>| match (got, want) {
                 (Got::Refused(_), _) => false,
                 (_, None) => true,
@@ -1130,14 +1243,14 @@ impl<'a> Model<'a> {
                 m
             };
             if days.is_empty() {
-                let all = cis.iter().zip(&pre).zip(&wants).all(|((&ci, p), w)| matches(&self.at_day(ai, ci, p, &get, None), w));
+                let all = calcs.iter().zip(&pre).zip(&wants).all(|(((c, _), p), w)| matches(&self.at_day(c, p, &get, None), w));
                 if all {
                     return Some(keep(None));
                 }
                 continue;
             }
             for &t in &days {
-                let all = cis.iter().zip(&pre).zip(&wants).all(|((&ci, p), w)| matches(&self.at_day(ai, ci, p, &get, Some(t)), w));
+                let all = calcs.iter().zip(&pre).zip(&wants).all(|(((c, _), p), w)| matches(&self.at_day(c, p, &get, Some(t)), w));
                 if !all {
                     continue;
                 }
@@ -1153,15 +1266,15 @@ impl<'a> Model<'a> {
         best.map(|(_, m)| m)
     }
 
-    /// What computed value `ci` comes to for an assignment, as far as it does not read today.
-    fn pre(&self, ai: usize, ci: usize, get: &dyn Fn(&Source) -> Option<RawValue>) -> Pre {
-        let a = &self.g.actions[ai];
-        let reads_today = self.sources(ai, ci).contains(&Source::Today);
-        match (&a.computed[ci].how, self.checked.known.computed.get(&(ai, ci))) {
-            (How::Rule { .. }, _) if !reads_today => Pre::Got(self.compute(ai, ci, get, None)),
-            (How::Date { op, of: DateOf::Call { .. } }, _) if !reads_today => match self.call_day(ai, ci, get, 0) {
+    /// What a value comes to for an assignment, as far as it does not read today.
+    fn pre(&self, c: &Calc, get: &dyn Fn(&Source) -> Option<RawValue>) -> Pre {
+        let reads_today = sources_of(&c.cv).contains(&Source::Today);
+        match (&c.cv.how, c.kn) {
+            _ if c.absent => Pre::Got(Got::Absent),
+            (How::Rule { .. }, _) if !reads_today => Pre::Got(self.compute(c, get, None)),
+            (How::Date { op, of: DateOf::Call { .. } }, _) if !reads_today => match self.call_day(c, get, 0) {
                 Some(d) => Pre::Turns(*op, d),
-                None => match self.compute(ai, ci, get, Some(0)) {
+                None => match self.compute(c, get, Some(0)) {
                     Got::Absent => Pre::Got(Got::Absent),
                     _ => Pre::Got(Got::Refused("date")),
                 },
@@ -1171,13 +1284,13 @@ impl<'a> Model<'a> {
                 None => Pre::Got(Got::Absent),
                 Some(_) => Pre::Got(Got::Refused("date")),
             },
-            (How::Open { .. }, Some(Kn::Open { data, closed })) => Pre::Open(data.0, data.1, closed.clone()),
+            (How::Open { .. }, Kn::Open { data, closed }) => Pre::Open(data.0, data.1, closed.clone()),
             _ => Pre::Daily,
         }
     }
 
-    /// What computed value `ci` comes to on day `today`, from what [`Model::pre`] found.
-    fn at_day(&self, ai: usize, ci: usize, p: &Pre, get: &dyn Fn(&Source) -> Option<RawValue>, today: Option<i64>) -> Got {
+    /// What a value comes to on day `today`, from what [`Model::pre`] found.
+    fn at_day(&self, c: &Calc, p: &Pre, get: &dyn Fn(&Source) -> Option<RawValue>, today: Option<i64>) -> Got {
         match (p, today) {
             (Pre::Got(g), _) => g.clone(),
             (Pre::Turns(op, d), Some(t)) => Got::Is(Val::Bool(cells::holds(*op, t, *d))),
@@ -1188,13 +1301,13 @@ impl<'a> Model<'a> {
                     Got::Is(Val::Bool(!closed.contains(&t)))
                 }
             }
-            _ => self.compute(ai, ci, get, today),
+            _ => self.compute(c, get, today),
         }
     }
 
     /// The day a date of a dates file comes to, for the inputs `get` reads and `today`.
-    fn call_day(&self, ai: usize, ci: usize, get: &dyn Fn(&Source) -> Option<RawValue>, today: i64) -> Option<i64> {
-        let (How::Date { of: DateOf::Call { args, .. }, .. }, Some(Kn::Date { file, function, .. })) = (&self.g.actions[ai].computed[ci].how, self.checked.known.computed.get(&(ai, ci))) else { return None };
+    fn call_day(&self, c: &Calc, get: &dyn Fn(&Source) -> Option<RawValue>, today: i64) -> Option<i64> {
+        let (How::Date { of: DateOf::Call { args, .. }, .. }, Kn::Date { file, function, .. }) = (&c.cv.how, c.kn) else { return None };
         let mut ins = Vec::new();
         for (n, src) in args {
             let v = match src {
@@ -1216,14 +1329,17 @@ impl<'a> Model<'a> {
         }
     }
 
-    /// For each variable a rule of `cis` reads, the values the inputs rulec gives for the
+    /// For each variable a rule of `calcs` reads, the values the inputs rulec gives for the
     /// rule's outputs hold it at: rulec is asked with every fixed number held to its value.
-    fn examples(&self, ai: usize, pt: usize, rt: usize, cis: &[usize], vars: &[Var], fixed: &BTreeMap<Var, Option<RawValue>>) -> BTreeMap<Var, Vec<Option<RawValue>>> {
+    fn examples(&self, ai: usize, pt: usize, rt: usize, calcs: &[&Calc], vars: &[Var], fixed: &BTreeMap<Var, Option<RawValue>>) -> BTreeMap<Var, Vec<Option<RawValue>>> {
         let g = self.g;
         let a = &g.actions[ai];
         let mut out: BTreeMap<Var, Vec<Option<RawValue>>> = BTreeMap::new();
-        for &ci in cis {
-            let (How::Rule { args, .. }, Some(Kn::Rule { file, output, inputs, enums, .. })) = (&a.computed[ci].how, self.checked.known.computed.get(&(ai, ci))) else { continue };
+        for c in calcs {
+            let (How::Rule { args, .. }, Kn::Rule { file, output, inputs, enums, .. }) = (&c.cv.how, c.kn) else { continue };
+            if c.absent {
+                continue;
+            }
             let mut ranges: Vec<(String, Option<i128>, Option<i128>)> = Vec::new();
             let mut by_input: Vec<(String, Var)> = Vec::new();
             for (input, src) in args {
@@ -1412,12 +1528,42 @@ impl<'a> Model<'a> {
     }
 }
 
-/// Whether an action computes a value from `today` (see [`Model::reads_today`]).
-pub fn reads_today(a: &Action) -> bool {
-    a.computed.iter().any(|cv| match &cv.how {
-        How::Rule { args, .. } => args.iter().any(|(_, s)| *s == Source::Today),
-        How::Date { .. } | How::Open { .. } => true,
-    })
+/// Whether action `ai` computes a value from `today`, itself or through an action a policy on it
+/// asks with `allowed` (see [`Model::reads_today`]).
+pub fn reads_today(g: &Gate, ai: usize) -> bool {
+    fn go(g: &Gate, ai: usize, seen: &mut Vec<usize>) -> bool {
+        if seen.contains(&ai) {
+            return false;
+        }
+        seen.push(ai);
+        let a = &g.actions[ai];
+        a.computed.iter().any(|cv| match &cv.how {
+            How::Rule { args, .. } => args.iter().any(|(_, s)| *s == Source::Today),
+            How::Date { .. } | How::Open { .. } => true,
+        }) || a.allowed.iter().filter(|x| x.policy).any(|x| x.inputs.contains(&Some(Source::Today)) || go(g, x.action, seen))
+    }
+    go(g, ai, &mut Vec::new())
+}
+
+/// What a computed value is given (an attribute of a date compared with today, for that form).
+fn sources_of(cv: &Computed) -> Vec<Source> {
+    match &cv.how {
+        How::Rule { args, .. } | How::Date { of: DateOf::Call { args, .. }, .. } => args.iter().map(|(_, s)| s.clone()).collect(),
+        How::Date { of: DateOf::Attr(o, n), .. } => vec![Source::Attr(*o, n.clone())],
+        How::Open { .. } => Vec::new(),
+    }
+}
+
+/// A constant given to an input of an action, as the data holds it: a number counted in the input's
+/// unit, an enum's value by its alias.
+fn lit_raw(g: &Gate, f: &Field, l: &Literal) -> Option<RawValue> {
+    match (l, &f.ty) {
+        (Literal::Bool(b), _) => Some(RawValue::Bool(*b)),
+        (Literal::Num(n), FieldType::Num { unit, .. }) => crate::types::count(n, unit).ok().map(RawValue::Num),
+        (Literal::Word(w), FieldType::Enum(e)) => g.enums[*e].values.iter().find(|v| v.is(w)).map(|v| RawValue::Enum(v.alias.clone())),
+        (Literal::Date(d), _) => Some(RawValue::Date(*d)),
+        _ => None,
+    }
 }
 
 /// The attributes of type `t` the generated code reads, by index (see [`Model::store_attrs`]).
@@ -1438,6 +1584,18 @@ pub fn store_attrs(g: &Gate, shape: &Shape, t: usize) -> BTreeSet<usize> {
             };
             for (o, n) in read {
                 let types = if o == Owner::Principal { &a.principals } else { &a.resources };
+                if types.contains(&t)
+                    && let Some((i, _)) = g.types[t].attr(n)
+                {
+                    out.insert(i);
+                }
+            }
+        }
+        // an attribute given to an input of an action a policy asks (DESIGN 2.11)
+        for x in a.allowed.iter().filter(|x| x.policy) {
+            for src in x.inputs.iter().flatten() {
+                let Source::Attr(o, n) = src else { continue };
+                let types = if *o == Owner::Principal { &a.principals } else { &a.resources };
                 if types.contains(&t)
                     && let Some((i, _)) = g.types[t].attr(n)
                 {

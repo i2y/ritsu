@@ -250,13 +250,13 @@ pub fn ledger() -> Ledger {
                     "A computed value is an enum or a true-or-false output of a rule, a test of today against a date (`today <= …`), or a business day (`today is open in …`); an input takes an attribute of the principal or the resource, an input of the action, a constant, or `today`."
                 ),
                 Repro::File {
-                    body: "gate t v1\n\nuse openapi shop from \"shop.json\"\n\nprincipal User\n\nresource Order\n\naction view\n  principal User\n  resource Order\n  context\n    allowed = shop(id: 1).ok\n",
+                    body: "gate t v1\n\nuse openapi shop from \"shop.json\"\n\nprincipal User\n\nresource Order\n\naction view\n  principal User\n  resource Order\n  context\n    known = shop(id: 1).ok\n",
                     beside: &[SHOP],
                 },
                 &["E101", "E102"],
             ),
             Repro::File {
-                body: "gate t v1\n\nuse openapi 店 from \"shop.json\"\n\nprincipal 職員(User)\n\nresource 注文(Order)\n\naction 見る(view)\n  principal 職員\n  resource 注文\n  context\n    許す(allowed) = 店(id: 1).ok\n",
+                body: "gate t v1\n\nuse openapi 店 from \"shop.json\"\n\nprincipal 職員(User)\n\nresource 注文(Order)\n\naction 見る(view)\n  principal 職員\n  resource 注文\n  context\n    知っている(known) = 店(id: 1).ok\n",
                 beside: &[SHOP],
             },
         ),
@@ -304,6 +304,36 @@ pub fn ledger() -> Ledger {
             "gate t v1\n\nrole clerk\n  includes manager\n\nrole manager\n  includes clerk\n",
             "gate t v1\n\nrole 係(clerk)\n  includes 責任者\n\nrole 責任者(manager)\n  includes 係\n",
             &["E101"],
+        ),
+        e(
+            "E109",
+            tr!("action が `allowed` で互いの答えを読み合っています", "Actions read one another's answers with `allowed`, in a circle"),
+            tr!(
+                "ポリシーの `allowed <action>` をたどると、もとの action に戻るとき（`read → edit → read`）。自分の答えを読むポリシーも輪です（`allowed` を書いた `action any` の permit や forbid など）。輪一つにつき一度、輪の最初の action の `allowed` に、輪の action を順に並べて出ます。期待の `allowed` は答えを読むだけなので、輪になりません。",
+                "Following the `allowed <action>` of the policies comes back to the action it started from (`read → edit → read`); a policy that reads the answer of an action it is on is a circle too (a permit or a forbid of `action any` that writes `allowed`, say). Each circle is said once, at the `allowed` of its first action, with the actions in order. An expectation's `allowed` only reads an answer, and makes no circle."
+            ),
+            tr!(
+                "輪のどこかのポリシーから `allowed` を外してください。`allowed` が尋ねる action の答えは、尋ねる action を決める前に決まっていなければならないので、輪になると、どれも決められません。",
+                "Take the `allowed` out of a policy of the circle: the answer `allowed` asks for is decided before the action that asks it, so in a circle none of them can be."
+            ),
+            "gate t v1\n\nprincipal User\n\nresource Doc\n\naction read\n  principal User\n  resource Doc\n\naction edit\n  principal User\n  resource Doc\n\npermit readers_read\n  action read\n  unless allowed edit\n\npermit editors_edit\n  action edit\n  unless allowed read\n",
+            "gate t v1\n\nprincipal 職員(User)\n\nresource 文書(Doc)\n\naction 読む(read)\n  principal 職員\n  resource 文書\n\naction 直す(edit)\n  principal 職員\n  resource 文書\n\npermit 読む人(readers_read)\n  action 読む\n  unless allowed 直す\n\npermit 直す人(editors_edit)\n  action 直す\n  unless allowed 読む\n",
+            &["E110", "E108"],
+        ),
+        e(
+            "E110",
+            tr!("`allowed` が尋ねるものが合いません", "What `allowed` asks with does not fit"),
+            tr!(
+                "`allowed <action>` が尋ねる action が、尋ねる側の action に来る principal か resource の型を取らないとき。無いことにできない入力に、渡す値が無いとき（同じ名前の入力も、`(<入力>: <値>)` も無い）。渡す値の型か単位が違う、範囲が入力の範囲に収まらない、無いことがある値を無いことにできない入力に渡す、計算した値を渡すとき。答えが Cedar に入る名前 `allowed_<action>` が、入力か計算した値の別名と同じとき。一つの action の上で、同じ action を違う値で尋ねるとき。",
+                "An action `allowed <action>` asks does not take a principal or a resource type of the action that asks it; an input it cannot do without is given nothing (no input of its name, no `(<input>: <value>)`); a value given is of another type or unit, its range is not within the input's, it may be absent where the input may not, or it is a computed value; the name the answer goes to Cedar by, `allowed_<action>`, is the alias of an input or a computed value; or one action asks another with different values."
+            ),
+            tr!(
+                "尋ねる action の `principal` と `resource` の行に型を足すか、`allowed approve(amount: <値>)` のように、渡す値を書いてください。渡せるのは、尋ねる側の入力、principal と resource の属性、定数、`today` です。",
+                "Add the types to the `principal` and `resource` lines of the action asked, or write what its inputs are given, like `allowed approve(amount: <value>)`: an input of the action that asks, an attribute of the principal or the resource, a constant, or `today`."
+            ),
+            "gate t v1\n\nprincipal User\n\nresource Claim\n\naction approve\n  principal User\n  resource Claim\n  input\n    amount : money[GBP, incl_tax]  range >=1GBP <=10_000GBP\n\naction request_approval\n  principal User\n  resource Claim\n\npermit small_claims_are_approved\n  action approve\n  when amount <= 500GBP\n\npermit requests_of_what_cannot_be_approved\n  action request_approval\n  unless allowed approve\n",
+            "gate t v1\n\nprincipal 職員(User)\n\nresource 経費(Claim)\n\naction 承認する(approve)\n  principal 職員\n  resource 経費\n  input\n    金額(amount) : money[GBP, incl_tax]  range >=1GBP <=10_000GBP\n\naction 承認を求める(request_approval)\n  principal 職員\n  resource 経費\n\npermit 少額は承認できる(small_claims_are_approved)\n  action 承認する\n  when 金額 <= 500GBP\n\npermit 承認できないものは求められる(requests_of_what_cannot_be_approved)\n  action 承認を求める\n  unless allowed 承認する\n",
+            &["E109", "E101"],
         ),
         // ── Other languages and contracts ──
         e(

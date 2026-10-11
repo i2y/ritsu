@@ -386,7 +386,7 @@ fn types(p: &Plan, n: &Names, o: &Options, t: &mut String) {
     ));
     t.push('\n');
     t.push_str("    def __init__(self, kind: Literal[\"principal\", \"resource\", \"input\", \"today\", \"rule\", \"date\", \"cedar\"], message: str) -> None:\n");
-    t.push_str("        super().__init__(message)\n        self.kind = kind\n\n\n");
+    t.push_str("        super().__init__(message)\n        self.kind: Literal[\"principal\", \"resource\", \"input\", \"today\", \"rule\", \"date\", \"cedar\"] = kind\n\n\n");
     t.push_str("@dataclass(frozen=True)\n");
     t.push_str(&format!("class {}:\n", n.request));
     t.push_str(&py_doc(&[tr(o, "Cedar に尋ねるもの。principal、action、resource、context と、ポリシーが読むエンティティ（Cedar の JSON の形）。", "What Cedar is asked: the principal, the action, the resource and the context, with the entities the policies read, in Cedar's JSON.")], "    "));
@@ -571,6 +571,19 @@ fn helpers(p: &Plan, n: &Names, o: &Options, t: &mut String) {
             t.push_str("    return out\n\n\n");
         }
     }
+    // the answer of an action a policy asks (DESIGN 2.11)
+    if p.actions.iter().any(|a| !a.asked.is_empty()) {
+        t.push_str(&format!("def _allowed(action: str, a: {}) -> bool:\n", n.answer));
+        t.push_str(&py_doc(
+            &[tr(
+                o,
+                &format!("ポリシーが尋ねる action の答え。その action が拒んだ理由（{} とその種類）は、このリクエストを拒む理由になります。", n.error),
+                &format!("The answer of an action a policy asks: why that action was refused (a {}, of its kind) is why this request is refused.", n.error),
+            )],
+            "    ",
+        ));
+        t.push_str(&format!("    if a.error is not None:\n        raise {}(a.error.kind, f'{{action}}: {{a.error}}') from a.error\n    return a.allowed\n\n\n", n.error));
+    }
     // the request, its entities put together
     let roles = if g.roles.is_empty() { "" } else { "*_ROLES, " };
     t.push_str(&format!(
@@ -630,7 +643,14 @@ fn action(p: &Plan, n: &Names, o: &Options, ap: &ActionPlan, t: &mut String) {
     let alias = &a.named.alias;
     let e = &n.error;
     let params = [format!("store: {}", n.store), format!("principal: {}", n.principal), format!("input: {}", n.inputs[&ai]), "now: datetime | None = None".to_string()];
-    t.push_str(&format!("def {alias}_request({}) -> {}:\n", params.join(", "), n.request));
+    // the actions a policy asks with `allowed` (DESIGN 2.11): asked through Verified Permissions
+    // too, when that is where the gate is asked
+    let mut req_params: Vec<String> = params.to_vec();
+    if o.authorizer == Authorizer::Avp && !ap.asked.is_empty() {
+        req_params.insert(0, format!("avp: {}", n.avp));
+    }
+    let start = t.len();
+    t.push_str(&format!("def {alias}_request({}) -> {}:\n", req_params.join(", "), n.request));
     let operation = plan::guarded(p.g, a, o.lang);
     let mut d = vec![match &operation {
         Some(op) => tr(o, &format!("action {alias} のリクエスト。{op} を守ります。"), &format!("The request for the action {alias}, which guards {op}.")),
@@ -650,8 +670,12 @@ fn action(p: &Plan, n: &Names, o: &Options, ap: &ActionPlan, t: &mut String) {
         t.push_str(&format!("    if principal.type == {} and principal.id not in ({},):\n", s(&g.types[wt].named.alias), ws.join(", ")));
         t.push_str(&format!("        raise {e}(\"principal\", f{})\n", s(&tr(o, "ワークフロー {principal.id} はありません", "no workflow {principal.id}"))));
     }
-    // 2. the day, held to today's range by an action that computes a value from it
+    // 2. the day, held to today's range by an action that computes a value from it; one instant for
+    // the actions it asks too
     if p.today().is_some() && ap.reads_today {
+        if !ap.asked.is_empty() {
+            t.push_str("    if now is None:\n        now = datetime.now(timezone.utc)\n");
+        }
         t.push_str("    day = _today(now)\n");
     }
     // 3. the input
@@ -717,7 +741,12 @@ fn action(p: &Plan, n: &Names, o: &Options, ap: &ActionPlan, t: &mut String) {
     for vp in &ap.values {
         value(p, n, a, vp, t);
     }
+    for &k in &ap.asked {
+        asked(p, n, o, ai, k, t);
+    }
     t.push_str(&format!("    return _request({}, p_uid, p_entity, r_uid, r_entity, p_pointed + r_pointed, context)\n\n\n", s(alias)));
+    let body = t.split_off(start);
+    t.push_str(&unread_checks(&body));
     // authorize
     let mut call_params: Vec<String> = params.to_vec();
     if o.authorizer == Authorizer::Avp {
@@ -730,7 +759,8 @@ fn action(p: &Plan, n: &Names, o: &Options, ap: &ActionPlan, t: &mut String) {
     };
     t.push_str(&py_doc(&[tr(o, &format!("{alias} を許すかを Cedar（{how}）に尋ねます。エラーのときは、拒む答えを返します。"), &format!("Asks Cedar ({how}) whether {alias} is allowed. Any error is a deny."))], "    "));
     t.push_str("    try:\n");
-    t.push_str(&format!("        req = {alias}_request(store, principal, input, now)\n"));
+    let avp_arg = if o.authorizer == Authorizer::Avp && !ap.asked.is_empty() { "avp, " } else { "" };
+    t.push_str(&format!("        req = {alias}_request({avp_arg}store, principal, input, now)\n"));
     t.push_str(&format!("    except {e} as x:\n        return {}(False, [], None, x)\n", n.answer));
     match o.authorizer {
         Authorizer::Cedar => t.push_str("    return _ask(req)\n\n\n"),
@@ -944,6 +974,139 @@ fn value(p: &Plan, n: &Names, a: &Action, vp: &ValuePlan, t: &mut String) {
                 t.push('\n');
             }
         }
+    }
+}
+
+/// The code of an action a policy asks with `allowed` (DESIGN 2.11): asked through its own function,
+/// with the same principal, resource and instant and what its inputs are given, its answer put in
+/// the context; its refusal refuses this request, of its kind.
+fn asked(p: &Plan, n: &Names, o: &Options, ai: usize, k: usize, t: &mut String) {
+    let g = p.g;
+    let a = &g.actions[ai];
+    let x = &a.allowed[k];
+    let b = &g.actions[x.action];
+    let said = plan::asked_text(g, a, x);
+    t.push_str(&format!("    # {}\n", ritsu_emit::header::one_line(&tr(o, &format!("{said}。同じ principal と resource で尋ねます"), &format!("{said}: asked with the same principal and resource")))));
+    let (ps, rs) = plan::asked_for(a, x);
+    let pts: Vec<Option<usize>> = ps.map(|ts| ts.into_iter().map(Some).collect()).unwrap_or_else(|| vec![None]);
+    let rts: Vec<Option<usize>> = rs.map(|ts| ts.into_iter().map(Some).collect()).unwrap_or_else(|| vec![None]);
+    let branches = pts.len() * rts.len();
+    let mut branch = 0;
+    for pt in &pts {
+        for rt in &rts {
+            // a variable of its own in each branch (mypy takes one annotation a name)
+            let var_q = if branches > 1 { format!("q_{}_{branch}", b.named.alias) } else { format!("q_{}", b.named.alias) };
+            branch += 1;
+            let mut conds: Vec<String> = Vec::new();
+            if let Some(x) = pt {
+                conds.push(format!("{} is not None", var(Owner::Principal, &g.types[*x].named.alias)));
+            }
+            if let Some(x) = rt {
+                conds.push(format!("{} is not None", var(Owner::Resource, &g.types[*x].named.alias)));
+            }
+            let mut body = String::new();
+            // the required keys at once, those that may be absent one by one
+            let mut fixed: Vec<String> = vec![format!("{}: r_id", s(&plan::resource_field(b)))];
+            if b.resources.len() > 1 {
+                fixed.push(if a.resources.len() > 1 { format!("{}: input[{}]", s("resource_type"), s("resource_type")) } else { format!("{}: {}", s("resource_type"), s(&g.types[a.resources[0]].named.alias)) });
+            }
+            let mut maybe: Vec<(String, String)> = Vec::new();
+            for (f, src) in b.inputs.iter().zip(&x.inputs) {
+                let Some(src) = src else { continue };
+                let key = s(&f.named.alias);
+                match src {
+                    Source::Input(name) => {
+                        let Some((_, fa)) = a.input(name) else { continue };
+                        let k = s(&fa.named.alias);
+                        if fa.optional {
+                            maybe.push((key, format!("input.get({k})")));
+                        } else {
+                            fixed.push(format!("{key}: input[{k}]"));
+                        }
+                    }
+                    Source::Attr(owner, name) => {
+                        let ty = match owner {
+                            Owner::Principal => pt.unwrap_or(0),
+                            Owner::Resource => rt.unwrap_or(0),
+                        };
+                        let r = record(p, ty);
+                        let Some((i, fa)) = g.types[ty].attr(name) else { continue };
+                        let expr = format!("{}.{}", var(*owner, &g.types[ty].named.alias), r.attrs[i]);
+                        if fa.optional {
+                            maybe.push((key, expr));
+                        } else {
+                            fixed.push(format!("{key}: {expr}"));
+                        }
+                    }
+                    Source::Today => fixed.push(format!("{key}: day")),
+                    Source::Lit(l) => {
+                        if let Some(v) = py_lit(g, f, l) {
+                            fixed.push(format!("{key}: {v}"));
+                        }
+                    }
+                }
+            }
+            body.push_str(&format!("{var_q}: {} = {{{}}}\n", n.inputs[&x.action], fixed.join(", ")));
+            for (i, (key, expr)) in maybe.iter().enumerate() {
+                body.push_str(&format!("{var_q}_{i} = {expr}\nif {var_q}_{i} is not None:\n    {var_q}[{key}] = {var_q}_{i}\n"));
+            }
+            let avp = if o.authorizer == Authorizer::Avp { "avp, " } else { "" };
+            body.push_str(&format!("context[{}] = _allowed({}, authorize_{}({avp}store, principal, {var_q}, now))\n", s(&x.alias(g)), s(&b.named.alias), b.named.alias));
+            let mut lines: Vec<String> = Vec::new();
+            let mut depth = 1;
+            if !conds.is_empty() {
+                lines.push(format!("{}if {}:", "    ".repeat(depth), conds.join(" and ")));
+                depth += 1;
+            }
+            for l in body.lines() {
+                lines.push(format!("{}{l}", "    ".repeat(depth)));
+            }
+            for l in lines {
+                t.push_str(&l);
+                t.push('\n');
+            }
+        }
+    }
+}
+
+/// A request function with the checks whose values nothing after reads written as bare calls: the
+/// day of an action that holds today to its range only for the actions it asks (DESIGN 2.11), an
+/// input given only to them by its name. The check still refuses; no variable is left unread
+/// (pyright's `reportUnusedVariable`). An input given by its name is passed as the caller gave it,
+/// `input['x']`, typed as the asked action's input is (an enum's value checked is a `str`).
+fn unread_checks(f: &str) -> String {
+    let lines: Vec<&str> = f.split_inclusive('\n').collect();
+    let words = |l: &str| -> Vec<String> { l.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).filter(|w| !w.is_empty()).map(str::to_string).collect() };
+    let mut out = String::new();
+    for (i, l) in lines.iter().enumerate() {
+        let bare = l.strip_prefix("    ").and_then(|x| x.split_once(" = ")).filter(|(v, rhs)| {
+            (*v == "day" || v.starts_with("in_")) && v.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') && rhs.starts_with('_')
+        });
+        if let Some((v, rhs)) = bare {
+            let read = lines[i + 1..].iter().filter(|x| !x.trim_start().starts_with('#')).any(|x| words(x).iter().any(|w| w == v));
+            if !read {
+                out.push_str("    ");
+                out.push_str(rhs);
+                continue;
+            }
+        }
+        out.push_str(l);
+    }
+    out
+}
+
+/// A constant given to an input of an action, in Python: a number counted in the input's unit, an
+/// enum's value by its alias, a day as a `date`.
+fn py_lit(g: &Gate, f: &Field, l: &Literal) -> Option<String> {
+    match (l, &f.ty) {
+        (Literal::Bool(b), _) => Some(if *b { "True".to_string() } else { "False".to_string() }),
+        (Literal::Num(n), FieldType::Num { unit, .. }) => crate::types::count(n, unit).ok().map(|k| k.to_string()),
+        (Literal::Word(w), FieldType::Enum(e)) => g.enums[*e].values.iter().find(|v| v.is(w)).map(|v| s(&v.alias)),
+        (Literal::Date(d), _) => {
+            let (y, m, dd) = plan::ymd(*d);
+            Some(format!("date({y}, {m}, {dd})"))
+        }
+        _ => None,
     }
 }
 

@@ -93,6 +93,7 @@ fn expr(f: &File, e: &Expr) -> String {
             }
             Atom::Compare { left, op, right } => format!("{} {} {}", path(f, left), op.symbol(), lit(&right.0)),
             Atom::Holds(p) => path(f, p),
+            Atom::Allowed { action, args: xs } => format!("allowed {}({})", found(f, &action.word), args(f, xs)),
         },
     }
 }
@@ -213,4 +214,25 @@ fn the_two_versions_are_one_tree_but_for_the_names() {
         assert_eq!(a, b, "line {i} of the shape");
     }
     assert_eq!(en.len(), ja.len());
+}
+
+/// The examples of a condition on another action's answer (DESIGN 2.11): each pair is one tree but
+/// for the names, and `allowed` is read with the action it asks and what it gives that action's
+/// inputs, written or not.
+#[test]
+fn the_examples_of_allowed_are_one_tree_but_for_the_names() {
+    for (en, ja) in [("examples/approvals/approvals.gate", "examples/approvals/approvals.ja.gate"), ("examples/documents/documents.gate", "examples/documents/documents.ja.gate")] {
+        let (a, b) = (shape(&read(en)), shape(&read(ja)));
+        assert_eq!(a, b, "{en} and {ja}");
+    }
+    let approvals = shape(&read("examples/approvals/approvals.gate"));
+    assert!(approvals.iter().any(|l| l == "  unless allowed approve()"), "{approvals:#?}");
+    let asked = shape(&read("tests/gen/asked.gate"));
+    for l in [
+        "  unless allowed refund(amount: resource.total, kind: low, on: resource.paid_on)",
+        "  when allowed refund(amount: 10/1GBP, kind: low, on: 2026-09-15, note: false)",
+        "  when allowed refund(amount: cost, kind: low, on: today)",
+    ] {
+        assert!(asked.iter().any(|x| x == l), "{l}\n{asked:#?}");
+    }
 }

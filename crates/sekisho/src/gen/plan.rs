@@ -69,9 +69,13 @@ pub struct Plan<'a> {
 /// One action's function.
 pub struct ActionPlan {
     pub index: usize,
-    /// The action computes a value from today: the function reads the day of `now`.
+    /// The action computes a value from today, itself or through an action it asks: the function
+    /// reads the day of `now`.
     pub reads_today: bool,
     pub values: Vec<ValuePlan>,
+    /// The actions a policy on it asks with `allowed` (DESIGN 2.11), by index into the action's
+    /// `allowed`: the function asks each, after its own values.
+    pub asked: Vec<usize>,
 }
 
 /// One value the action computes.
@@ -148,8 +152,9 @@ impl<'a> Plan<'a> {
                         Some(ValuePlan { index: ci, principals, resources, call })
                     })
                     .collect();
-                let reads_today = a.computed.iter().any(reads_today);
-                ActionPlan { index: ai, reads_today, values }
+                let reads_today = crate::raw::reads_today(g, ai);
+                let asked = (0..a.allowed.len()).filter(|&k| a.allowed[k].policy).collect();
+                ActionPlan { index: ai, reads_today, values, asked }
             })
             .collect();
         imports.retain(|ui, _| called.contains(ui));
@@ -217,12 +222,18 @@ impl<'a> Plan<'a> {
     }
 }
 
-/// Whether a value reads today.
-fn reads_today(cv: &Computed) -> bool {
-    match &cv.how {
-        How::Rule { args, .. } => args.iter().any(|(_, s)| *s == Source::Today),
-        How::Date { .. } | How::Open { .. } => true,
-    }
+/// The types of the action an action it asks is asked in, by owner (DESIGN 2.11): None for an owner
+/// none of whose attributes its inputs are given; else every type of the owner, each of which has
+/// them (E110).
+pub fn asked_for(a: &Action, x: &Allowed) -> (Option<Vec<usize>>, Option<Vec<usize>>) {
+    let reads = |o: Owner| x.inputs.iter().flatten().any(|s| matches!(s, Source::Attr(y, _) if *y == o));
+    (reads(Owner::Principal).then(|| a.principals.clone()), reads(Owner::Resource).then(|| a.resources.clone()))
+}
+
+/// The asking of an action, as a comment of the code says it: `allowed_approve = allowed
+/// approve(amount: amount)`.
+pub fn asked_text(g: &Gate, a: &Action, x: &Allowed) -> String {
+    format!("{} = {}", x.alias(g), crate::cedar::asked_call(g, a, x))
 }
 
 /// The types of the action a value is computed for, by owner: None for an owner whose attributes it

@@ -1,0 +1,464 @@
+{
+  "sekisho": "<version>",
+  "name": "asked",
+  "alias": "asked",
+  "version": "v1",
+  "source_sha256": "399af4e4e3e47b1e6969ba14979ccf49a1ad23129aa56deb2884207676b8ed26",
+  "description": "Each way a condition asks another action's answer: an input given by its name, an attribute, a constant of each kind, today and nothing; an action that asks one that asks another; an expectation that asks; two resource types",
+  "namespace": "Asked",
+  "uses": [
+    {
+      "kind": "dates",
+      "name": "refund_terms",
+      "path": "../../examples/refunds/dates/refund_terms.cal",
+      "line": 5
+    },
+    {
+      "kind": "calendar",
+      "name": "uk",
+      "path": "../../examples/refunds/calendars/england_and_wales.cal",
+      "line": 6
+    }
+  ],
+  "today": {
+    "min": "2026-10-01",
+    "max": "2026-10-31",
+    "offset": "+00:00",
+    "line": 8
+  },
+  "cedar": {
+    "policies": "cedar/asked.cedar",
+    "schema": "cedar/asked.cedarschema",
+    "schema_json": "cedar/asked.cedarschema.json",
+    "policies_json": "cedar/asked.policies.json"
+  },
+  "roles": [
+    {
+      "name": "clerk",
+      "alias": "clerk",
+      "line": 12,
+      "entity": "Asked::Role::\"clerk\"",
+      "includes": [],
+      "can": null
+    },
+    {
+      "name": "manager",
+      "alias": "manager",
+      "line": 14,
+      "entity": "Asked::Role::\"manager\"",
+      "includes": [
+        "clerk"
+      ],
+      "can": null
+    }
+  ],
+  "types": [
+    {
+      "name": "User",
+      "alias": "User",
+      "kind": "principal",
+      "line": 17,
+      "entity_type": "Asked::User",
+      "roles": [
+        "clerk",
+        "manager"
+      ],
+      "member_of": [
+        "Role"
+      ],
+      "attributes": []
+    },
+    {
+      "name": "Order",
+      "alias": "Order",
+      "kind": "resource",
+      "line": 20,
+      "entity_type": "Asked::Order",
+      "roles": [],
+      "member_of": [],
+      "attributes": [
+        {
+          "name": "total",
+          "alias": "total",
+          "type": "money[GBP, incl_tax]",
+          "range": {
+            "min": 1,
+            "max": 100
+          },
+          "values": null,
+          "optional": false,
+          "in_cedar": false
+        },
+        {
+          "name": "paid_on",
+          "alias": "paid_on",
+          "type": "date",
+          "range": {
+            "min": "2026-09-01",
+            "max": "2026-10-31"
+          },
+          "values": null,
+          "optional": false,
+          "in_cedar": false
+        }
+      ]
+    },
+    {
+      "name": "Batch",
+      "alias": "Batch",
+      "kind": "resource",
+      "line": 25,
+      "entity_type": "Asked::Batch",
+      "roles": [],
+      "member_of": [],
+      "attributes": [
+        {
+          "name": "total",
+          "alias": "total",
+          "type": "money[GBP, incl_tax]",
+          "range": {
+            "min": 1,
+            "max": 100
+          },
+          "values": null,
+          "optional": false,
+          "in_cedar": false
+        },
+        {
+          "name": "paid_on",
+          "alias": "paid_on",
+          "type": "date",
+          "range": {
+            "min": "2026-09-01",
+            "max": "2026-10-31"
+          },
+          "values": null,
+          "optional": false,
+          "in_cedar": false
+        }
+      ]
+    }
+  ],
+  "workflows": [],
+  "actions": [
+    {
+      "name": "refund",
+      "alias": "refund",
+      "line": 30,
+      "entity": "Asked::Action::\"refund\"",
+      "guards": [],
+      "principals": [
+        "User"
+      ],
+      "resources": [
+        "Order",
+        "Batch"
+      ],
+      "from": "id",
+      "nobody": null,
+      "inputs": [
+        {
+          "name": "amount",
+          "alias": "amount",
+          "type": "money[GBP, incl_tax]",
+          "range": {
+            "min": 1,
+            "max": 100
+          },
+          "values": null,
+          "optional": false,
+          "in_cedar": true
+        },
+        {
+          "name": "kind",
+          "alias": "kind",
+          "type": "level",
+          "range": null,
+          "values": [
+            "low",
+            "high"
+          ],
+          "optional": false,
+          "in_cedar": true
+        },
+        {
+          "name": "on",
+          "alias": "on",
+          "type": "date",
+          "range": {
+            "min": "2026-09-01",
+            "max": "2026-10-31"
+          },
+          "values": null,
+          "optional": false,
+          "in_cedar": false
+        },
+        {
+          "name": "note",
+          "alias": "note",
+          "type": "bool",
+          "range": null,
+          "values": null,
+          "optional": true,
+          "in_cedar": true
+        }
+      ],
+      "context": [
+        {
+          "name": "in_period",
+          "alias": "in_period",
+          "line": 39,
+          "computed": "today <= refund_terms.last_day(paid_on: on)",
+          "type": "bool",
+          "values": null,
+          "optional": false
+        },
+        {
+          "name": "business_day",
+          "alias": "business_day",
+          "line": 40,
+          "computed": "today is open in uk",
+          "type": "bool",
+          "values": null,
+          "optional": false
+        }
+      ]
+    },
+    {
+      "name": "review",
+      "alias": "review",
+      "line": 42,
+      "entity": "Asked::Action::\"review\"",
+      "guards": [],
+      "principals": [
+        "User"
+      ],
+      "resources": [
+        "Order",
+        "Batch"
+      ],
+      "from": "id",
+      "nobody": null,
+      "inputs": [
+        {
+          "name": "cost",
+          "alias": "cost",
+          "type": "money[GBP, incl_tax]",
+          "range": {
+            "min": 1,
+            "max": 100
+          },
+          "values": null,
+          "optional": false,
+          "in_cedar": true
+        },
+        {
+          "name": "memo",
+          "alias": "memo",
+          "type": "bool",
+          "range": null,
+          "values": null,
+          "optional": true,
+          "in_cedar": true
+        }
+      ],
+      "context": [
+        {
+          "name": "allowed_refund",
+          "alias": "allowed_refund",
+          "line": 79,
+          "computed": "allowed refund(amount: resource.total, kind: low, on: resource.paid_on)",
+          "type": "bool",
+          "values": null,
+          "optional": false,
+          "asks": {
+            "action": "refund",
+            "inputs": {
+              "amount": "resource.total",
+              "kind": "low",
+              "on": "resource.paid_on"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "escalate",
+      "alias": "escalate",
+      "line": 49,
+      "entity": "Asked::Action::\"escalate\"",
+      "guards": [],
+      "principals": [
+        "User"
+      ],
+      "resources": [
+        "Order",
+        "Batch"
+      ],
+      "from": "id",
+      "nobody": null,
+      "inputs": [
+        {
+          "name": "cost",
+          "alias": "cost",
+          "type": "money[GBP, incl_tax]",
+          "range": {
+            "min": 1,
+            "max": 100
+          },
+          "values": null,
+          "optional": false,
+          "in_cedar": false
+        },
+        {
+          "name": "memo",
+          "alias": "memo",
+          "type": "bool",
+          "range": null,
+          "values": null,
+          "optional": true,
+          "in_cedar": false
+        }
+      ],
+      "context": [
+        {
+          "name": "allowed_review",
+          "alias": "allowed_review",
+          "line": 85,
+          "computed": "allowed review(cost: cost, memo: memo)",
+          "type": "bool",
+          "values": null,
+          "optional": false,
+          "asks": {
+            "action": "review",
+            "inputs": {
+              "cost": "cost",
+              "memo": "memo"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ping",
+      "alias": "ping",
+      "line": 56,
+      "entity": "Asked::Action::\"ping\"",
+      "guards": [],
+      "principals": [
+        "User"
+      ],
+      "resources": [
+        "Order",
+        "Batch"
+      ],
+      "from": "id",
+      "nobody": null,
+      "inputs": [],
+      "context": [
+        {
+          "name": "allowed_refund",
+          "alias": "allowed_refund",
+          "line": 91,
+          "computed": "allowed refund(amount: 10GBP, kind: low, on: 2026-09-15, note: false)",
+          "type": "bool",
+          "values": null,
+          "optional": false,
+          "asks": {
+            "action": "refund",
+            "inputs": {
+              "amount": "10GBP",
+              "kind": "low",
+              "on": "2026-09-15",
+              "note": "false"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "policies": [
+    {
+      "name": "clerks_refund_small_low_amounts_in_period",
+      "alias": "clerks_refund_small_low_amounts_in_period",
+      "id": "asked/clerks_refund_small_low_amounts_in_period",
+      "effect": "permit",
+      "actions": [
+        "refund"
+      ],
+      "file": "asked.gate",
+      "line": 60
+    },
+    {
+      "name": "managers_refund_on_business_days",
+      "alias": "managers_refund_on_business_days",
+      "id": "asked/managers_refund_on_business_days",
+      "effect": "permit",
+      "actions": [
+        "refund"
+      ],
+      "file": "asked.gate",
+      "line": 67
+    },
+    {
+      "name": "clerks_review_what_they_cannot_refund",
+      "alias": "clerks_review_what_they_cannot_refund",
+      "id": "asked/clerks_review_what_they_cannot_refund",
+      "effect": "permit",
+      "actions": [
+        "review"
+      ],
+      "file": "asked.gate",
+      "line": 74
+    },
+    {
+      "name": "managers_escalate_what_cannot_be_reviewed",
+      "alias": "managers_escalate_what_cannot_be_reviewed",
+      "id": "asked/managers_escalate_what_cannot_be_reviewed",
+      "effect": "permit",
+      "actions": [
+        "escalate"
+      ],
+      "file": "asked.gate",
+      "line": 82
+    },
+    {
+      "name": "clerks_ping_what_could_be_refunded",
+      "alias": "clerks_ping_what_could_be_refunded",
+      "id": "asked/clerks_ping_what_could_be_refunded",
+      "effect": "permit",
+      "actions": [
+        "ping"
+      ],
+      "file": "asked.gate",
+      "line": 88
+    }
+  ],
+  "expects": [
+    {
+      "name": "managers_never_escalate_what_they_could_review",
+      "expect": "deny",
+      "actions": [
+        "escalate"
+      ],
+      "line": 93
+    },
+    {
+      "name": "clerks_who_are_not_managers_never_escalate",
+      "expect": "deny",
+      "actions": [
+        "escalate"
+      ],
+      "line": 98
+    },
+    {
+      "name": "managers_ping_what_could_be_refunded",
+      "expect": "allow",
+      "actions": [
+        "ping"
+      ],
+      "line": 104
+    }
+  ],
+  "separations": []
+}
