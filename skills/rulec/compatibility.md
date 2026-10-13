@@ -9,10 +9,13 @@ the same thing, and its generated code is called the same way and answers the sa
 
 ## What every 1.x keeps
 
-1. **The `.rule` language.** Every construct 1.0 accepts keeps its syntax and its meaning —
-   the state machines (`machine`, `held`, `never`, `once`, `scenario`, and the values carried
-   besides the state: a further `carry`, `initial <input> <value>`, `always`) included. New
-   constructs may be added.
+1. **The `.rule` language.** Every construct 1.0 accepts keeps its syntax and its meaning — the
+   state machines (`machine`, `held`, `never`, `once`, `scenario`, and the values carried
+   besides the state: a further `carry`, `initial <input> <value>`, `always`), the
+   prerequisites of an enum's values (`prerequisites` with `start`, `requires`, `nothing` and
+   `ordered by`), several sequences walked by any number of `count`, `sum`, `max`, `min` and
+   `fold` lines in the order what they read gives them, and a fold's answer named with `->`
+   included. New constructs may be added.
 2. **The names you may use.** The reserved words — the 65 words E009 refuses as a name,
    listed in `src/kw.rs` — are fixed at 1.0, and a test holds the list. A later release may
    add words to the language, but never to that list: a new word is read only where no name
@@ -31,7 +34,10 @@ the same thing, and its generated code is called the same way and answers the sa
 6. **Diagnostic codes.** A code keeps its meaning. A code that is retired stays in the ledger,
    marked as retired, and its number is never given to anything else. New codes may be added;
    a new warning leaves a rule that passed passing (W901, a key written in a rule, came this
-   way, and means the same in every language of ritsu).
+   way, and means the same in every language of ritsu). Two numbers took a new meaning before
+   1.0, when a rule came to walk more than one sequence and to walk one twice (§15.219): E031,
+   which had said that a rule needs a second walk, says that one item reads the elements of two
+   sequences, and E020, which had said that a rule declares two, says that nothing walks one.
 7. **Machine-readable formats.** Every `--format json` output, the vectors, the fixtures and
    the replay manifest, the `adapter/1` and `extract/1` protocols, the certificate, the MCP
    tools with their arguments and resources, the GitHub Action's inputs, and the names of the

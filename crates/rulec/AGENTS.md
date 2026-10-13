@@ -63,13 +63,12 @@ A few shapes are worth knowing before the first draft:
   relation the caller guarantees. Completeness then demands no row for what it excludes, every
   witness becomes a case somebody could really send, and the generated code refuses a
   violating input at the door (§6.1 of the grammar).
-- **A case may carry a sequence.** Where the number of things is not fixed — the rows of a
-  tariff sheet, the candidates a filter left — `elements` declares what one element carries
-  and `fold` says what each verdict does next: `next`, `stop with <value>`, `take_unique`,
-  `take_first`, `keep_max <value> by <key>`, plus the required `empty` and `exhausted`. The
-  table that judges one element is checked exactly as any other table is, and an example
-  names a `sequence` rather than holding one in a cell (§6.2). Every target but SQL
-  generates it.
+- **A case may carry a sequence.** Where the number of things is not fixed — the rows of a tariff
+  sheet, the candidates a filter left — `elements` declares what one element carries and `fold`
+  says what each verdict does next: `next`, `stop with <value>`, `take_unique`, `take_first`,
+  `keep_max <value> by <key>`, plus the required `empty` and `exhausted`. The table that judges one
+  element is checked exactly as any other table is, and an example names a `sequence` rather than
+  holding one in a cell (§6.2). Every target but SQL generates it.
 - **A `string` column takes a prefix and nothing else.** `starts_with "CH-", "CL-"` is the
   one test it accepts (E110 for any other): the prefixes a column's own cells name cut the
   strings into finitely many classes, which is what keeps completeness decidable. Bytes, no
@@ -91,9 +90,8 @@ A few shapes are worth knowing before the first draft:
   says which output the caller passes back as which input (`carry`), which inputs a case holds
   (`held`), where it starts and ends, and what no sequence of calls may do; `check` proves that
   over every sequence (E124–E127) with the shortest breaking one in `witness.trace`, and `scenario`
-  is an example several calls long (§6.4). More `carry` lines carry ranged numbers, truth values or
-  enums from an `initial` value, claimed by `always <input> <cell> when <state>` (E072, E134,
-  E135). With two versions, `diff` names the states a case in progress would be stranded in.
+  is an example several calls long (§6.4); more `carry` lines carry numbers, flags or enums, held
+  to `always` (E072, E134, E135). `diff` of two versions names the states a case could strand in.
 - **A main rule and its special case are two tables, or a table and a clause.** Several tables may
   define the same output, each transcribed from its own source, and the one that takes precedence
   says so with `overrides <table>` right after `policy` (`overrides base:r3` for one labelled row).
@@ -145,17 +143,11 @@ A few shapes are worth knowing before the first draft:
   `-` row would pass completeness while the new value quietly takes the default amount.
 - **A place is an enum rulec has.** `import std/<country>/<kind>` brings in a country's first-level
   divisions (`std/us/states`, `std/jp/prefectures`, … in [docs/reference.md](docs/reference.md)); `import std/都道府県` spells Japan's in Japanese.
-- **Enums can be ordered, labelled and shared.** `enum tier = basic < silver < gold` takes `>=gold`,
-  `max` and `range` (E069 on a `|` enum), `national "Rest of the country"` labels a value, and an
-  `enums` file holds enums that rules read with `import enum … from "<file>"` (E066).
-- **Which values need which before them is one block.** `prerequisites enrollment over course`, with
-  `start <value>, …` and one `<value> requires <value>, <value> or <value>` line per value (`,` all,
-  `or` any one), `<value> requires nothing "<reason>"` for one no case can take, and
-  `ordered by <table>` for a table whose answer never goes below a prerequisite's. Every value is in
-  one place (E071); `check` refuses a cycle (E136), a value that cannot be reached from `start`
-  (E137) and a broken order (E138), and warns of a prerequisite another already needs (W130). The
-  module gets `enrollment_requires(value)` and `enrollment_available(value, held)` in every
-  language with one (§6.5 of the grammar). It stands in a rule or in an `enums` file.
+- **Enums can be ordered, labelled, shared and given prerequisites.** `enum tier = basic < silver`
+  takes `>=silver`, `max` and `range`; `national "Rest of the country"` labels a value; an `enums`
+  file holds enums rules `import enum … from`; `prerequisites <name> over <enum>` lists `start` and
+  a `requires` line per value, refusing cycles, unreachable values and a broken `ordered by`
+  (E136-E138).
 - **A date input can range over koyomi's days.** `range from koyomi "<file.cal>" date <name>`, checked by
   `ritsu rulec check`; `ritsu check` then holds a workflow's calls to the rule's `constraint`s (ritsu's E201).
 

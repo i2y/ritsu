@@ -50,6 +50,11 @@ apply  …          (another rule, applied with its inputs bound; interleaves to
   except <definition>, …
   <callee output> -> <name>
 result …
+prerequisites <name>(<alias>) over <enum>   (which values of the enum need which, §6.5)
+  start <value>, …
+  <value> requires <value>, <value> or <value>, …
+  <value> requires nothing "<reason>"
+  ordered by <table>
 machine <name>(<alias>) over <table>   (the rule is one step of a state machine, §6.4)
   carry   <input> -> <output>
   initial <state>
@@ -76,8 +81,8 @@ examples
 - `examples` comes last. There may be more than one section of them (§9).
 
 A second kind of file starts with `enums <name>(<alias>) v<version>` instead of `rule`. It holds
-enums that several rules share, and nothing that decides: `description`, `import`, `enum` and
-`group` lines only (§3.1, "Enums several rules share").
+enums that several rules share, and nothing that decides: `description`, `import`, `enum`,
+`group` and `prerequisites` lines only (§3.1, "Enums several rules share"; §6.5).
 
 A blank line separates sections. `#` starts a comment that runs to the end of the line;
 comments may appear anywhere, including at the end of a table row and on a line of their own
@@ -919,7 +924,10 @@ is how the second one is said out loud.
 
 A rule is one decision about one case. Sometimes the case carries a **sequence** — the rows
 of a tariff sheet, the candidates a predicate left — and the answer comes from walking it.
-`elements` declares what one element carries; `fold` declares how the walk ends.
+`elements` declares what one element carries; `fold` declares how the walk ends. A case may
+carry more than one sequence — an order's lines and the payments made against it — and each is
+declared under an `elements` of its own, with a name, and walked by the lines that name it after
+`over` (§6.3). A sequence nothing walks is E020.
 
 ```rule
 elements fee_rows
@@ -970,17 +978,52 @@ wrong:
 4. **`take_unique` or `take_first`** — there is no bare `take`. Whether a second matching
    element is an error or is ignored is a decision, and the grammar makes it one (E021).
 
-### Before the walk, on each element, after it
+### Naming a fold's answer
 
-A rule that walks a sequence runs each of its items at one of three places, and which one is
-derived from what the item reads rather than declared (§15.208 of DESIGN.md):
+Without more, a fold answers the rule's first output. `-> <name>` after the heading gives the
+answer a name, and the items below read it like any other value (§15.219 of DESIGN.md):
 
-- **before the walk**, once: an item that reads neither a value of one element nor what the
-  walk answers — a table over the ordinary inputs, a `define` computed from them;
-- **on each element**: an item that reads a value of one element (a field of `elements`, or an
-  item that reads one);
-- **after the walk**, once: an item that reads what the walk answers — the fold's answer, which
-  is the rule's first output, or a `count` or a `sum` (§6.3).
+```rule
+fold pick over lines -> discount
+  top       -> take_first top_off
+  rest      -> next
+  empty     -> 0USD
+  exhausted -> held
+
+define balance : money[USD] = subtotal - discount - paid
+```
+
+A name that is an output is that output, and the answer is of its type. A name that is not one
+is a value of the rule's own, and takes its type after a colon: `fold flag over items ->
+any_flagged : bool`. Every arm's value is read in that type. It is E021 when the name is already
+an input, a field of an element or a value declared above, when a name that is no output has no
+type, when an output's name is given another type, and when another item decides the same name —
+a fold with no `->` answers the first output, so a table or a `sum` that decides that output
+too leaves two answers for one name. A numeric answer that the items below read takes the hull
+of the values the fold answers with as its range, the way a `sum` takes its declared one, so a
+`define` over it is held to int64 like any other (E108).
+
+### Before the walks, on each walk, after them
+
+A rule that walks sequences runs each of its items at one place, and which one is derived from
+what the item reads rather than declared (§15.208 and §15.219 of DESIGN.md):
+
+- **before the walks**, once: an item that reads neither a value of one element nor what a walk
+  answers — a table over the ordinary inputs, a `define` computed from them;
+- **on each element of one walk**: an item that reads a value of one element (a field of
+  `elements`, or an item that reads one). It runs on the first walk over its sequence after the
+  walks that find every summary it reads: an item of one element that reads nothing a walk
+  answers runs on the first walk, and one that reads a summary — a `max` the first walk found —
+  runs on a **second walk** over the sequence, once that summary is known;
+- **after a walk**, once: an item that reads what the walks answer — a fold's answer, a `count`,
+  a `sum`, a `max` or a `min` (§6.3) — and no value of one element. It runs once the last walk
+  it reads from is over.
+
+A summary ends the walk it is on: every summary of one sequence whose column is there on the
+first walk is found on that walk, each reading every element, and one whose column is worked
+out from a summary is found on the walk after. Nothing in the rule says which walk comes first.
+How many walks there are is bounded by how many summaries there are, whatever the length of the
+sequence, and no walk runs inside another.
 
 ```rule
 define opening : number = reserve + fee          # before: inputs only
@@ -1002,20 +1045,46 @@ policy unique
 So `opening` exists when the sequence is empty, an element's item can read it, and a table can
 read what the walk answered.
 
+A second walk, in an order's settlement: the highest price is known only once every line has
+been read, and the line that takes the discount is the one at that price.
+
+```rule
+sum subtotal over lines of line_total  range >=0USD <=25_000USD   # walk 1 over the lines
+max top_price over lines of price empty 0USD                       # walk 1 over the lines
+sum paid over payments of amount  range >=0USD <=25_000USD         # walk 1 over the payments
+
+define gap : money[USD] = top_price - price                       # walk 2: a field and a max
+
+table pick_line                                                   # walk 2
+policy unique
+| gap    | -> pick : line_pick |
+| <=0USD | top                 |
+| >0USD  | rest                |
+
+fold pick over lines -> discount                                  # walk 2
+  top       -> take_first top_off
+  rest      -> next
+  empty     -> 0USD
+  exhausted -> held
+
+define balance : money[USD] = subtotal - discount - paid          # after walk 2
+```
+
 What cannot be written is said where it is written:
 
-- an item that reads both a value of one element and what the walk answers (E031): the answer
-  is known only once every element has been seen, and the element's value only while the walk
-  is on it, so reading both would take a second walk;
+- an item that reads the elements of two sequences (E031): a value of one element exists only
+  while its sequence is walked, so reading both would walk one sequence again at every element
+  of the other — a walk inside a walk, whose number of walks grows with the lengths;
 - an output that is a value of one element (E031), and a `result` line that reads one: once the
   walk is over there is no one value to give;
 - an answer that reads what is not there where it is decided (E021): `empty` and `exhausted`
   reading a value of one element, `held` anywhere but `exhausted`, and any answer or key reading
-  what is decided after the walk.
+  what is worked out from the fold's own answer — a fold whose verdict waits for its answer.
 
-The fold's answers are of the first output's type: a word that is a value of its enum is that
-value (`empty -> unavailable`), a word that is neither a value nor a declared name is E012, and a
-value of another type — `true` for an enum — is E103.
+The fold's answers are of the answer's type — the type of the name after `->`, or of the first
+output: a word that is a value of its enum is that value (`empty -> unavailable`), a word that
+is neither a value nor a declared name is E012, and a value of another type — `true` for an
+enum — is E103.
 
 ### Why a fold does not cost the checks their decidability
 
@@ -1032,8 +1101,11 @@ time does not change what can be said about it.
 every target but SQL and NumPy, which are refused by name below.
 The sequence is an argument like any other input — an array of objects on the wire (§10.2),
 each element's fields integers in their canonical unit — and every field gets the same entry
-guard an input gets. `rulec test` runs the generated walk over the vectors and holds it to the
-reference evaluator, the same as for any rule.
+guard an input gets. A rule that walks two sequences takes two such arguments, in the order the
+`elements` are declared. Each walk is one loop: the summaries of one sequence found on one walk
+share it, and a second walk is a second loop over the same sequence, which works out again the
+values of each element it needs. `rulec test` runs the generated walks over the vectors and holds
+them to the reference evaluator, the same as for any rule.
 
 **SQL is refused by name.** One query has nowhere to carry a value from row to row and stop
 early. A window function or a recursive CTE can be made to look like a walk, but only by
@@ -1065,8 +1137,9 @@ The columns of a `sequence` are the fields of `elements`, all of them, and every
 caller would really pass it (E026). A block with no rows is the empty sequence, which is a
 case worth writing: it is the one a hand-written loop forgets.
 
-The examples of a rule that walks a sequence must carry a column for it (E025), the cell must
-name a `sequence` that exists (E027), and a `sequence` no example names is reported (W116).
+The examples of a rule that walks a sequence must carry a column for it — a rule that walks two
+carries a column for each (E025) — the cell must name a `sequence` of the right sequence's
+fields that exists (E027), and a `sequence` no example names is reported (W116).
 Each example runs through the reference evaluator at `rulec check` like any other (E107), and
 each one joins the generated vector suite.
 
@@ -1081,10 +1154,10 @@ sequence and the fields of its elements among them — and every language has to
 that reason, with the sentence the reference evaluator says
 ([formats.md](formats.md#vectors-rulec-vectors-generatedvectorsaliasjsonl), §15.204).
 
-## 6.3 count and sum
+## 6.3 count, sum, max and min
 
-`fold` ends a walk with one answer. `count` and `sum` end it with **a number**, and the rule
-goes on from there like any other.
+`fold` ends a walk with one answer. `count` and `sum` end it with **a number**, `max` and `min`
+with **one value of a column**, and the rule goes on from there like any other.
 
 ```rule
 count hits over candidates where hit = same  range >=0 <=100
@@ -1096,11 +1169,11 @@ per-element table produces — and its values have to be a closed set, a bool or
 (E029). A bool column needs no `= <value>`: `where name_match` counts the elements where it
 is true.
 
-A rule that counts runs at the three places a fold does (§6.2), and which item belongs to
-which is derived rather than declared: **an item is part of the walk exactly when it reads
-something that only one element has.** So the table that classifies an element runs once per
-element, what reads only the ordinary inputs runs once before the walk (an element's item can
-read it), and what reads the counts runs once, after.
+A rule that counts runs at the places a fold does (§6.2), and which item belongs to which is
+derived rather than declared: **an item is part of a walk exactly when it reads something that
+only one element has.** So the table that classifies an element runs once per element, what
+reads only the ordinary inputs runs once before the walks (an element's item can read it), and
+what reads the counts runs once, after.
 
 ```rule
 table row_of  # the walk: it reads a field of an element
@@ -1123,7 +1196,7 @@ policy unique
 **The range is required, and it says two things.** It is the universe the completeness check
 quantifies over once the count is a column — without it the check would ask for a row
 covering a count of −1 — and it is **the cap on the sequence**: the generated code refuses a
-sequence longer than the smallest bound any count declares, the way it refuses a number
+sequence longer than the smallest bound any count over it declares, the way it refuses a number
 outside its range. A count cannot leave the space the proof was made over.
 
 ### sum
@@ -1148,16 +1221,45 @@ so one test at the end is a test everywhere, and the accumulator never leaves `m
 one element` — which is what keeps E108's int64 claim true of a sequence whose length nothing
 caps. To take a difference, sum two non-negative columns and subtract.
 
-Nothing else accumulates. A fold's arms choose an element; a count adds one per element that
-passes a test; a sum adds one column. There is no average arm and no arm that carries a number
-forward. An average is a sum over a count, divided after the walk inside a rounding (§8):
-`define avg : money[JPY] = half_up(total / max(n, 1), 1JPY)`.
+### max and min
 
-A rule cannot have both a `fold` and a `count` or a `sum` (E031): they are two endings for
-the same walk, and a `fold` may stop partway, which leaves the meaning of a total on that
-walk undecided. An item that reads both a value of one element and a count or a sum is E031
-too, for the reason of §6.2. A `count` or a `sum` named like an output is that output, and
-answers it. Every target but SQL generates them, for the reason SQL gets no walk at all.
+`max` and `min` answer the largest and the smallest value of one column over the elements a
+`where` lets in (every element without one), or the `empty` value when there is none:
+
+```rule
+max most_up   over adjustments of shift where raises empty 0
+min most_down over adjustments of shift where lowers empty 0
+min earliest  over tasks of due where done = false empty 2027-12-31
+```
+
+The shape is `max <name>(<alias>) over <sequence> of <column> [where <column> [= <value>]] empty
+<value>` (E028). The column is one of **one element**, and a number, an amount, a date or a
+value of an ordered enum (`enum grade = bronze < silver < gold`; E029 otherwise, with the title
+"This column cannot be summarised"); the `where` tests a column of one element the way `count`
+does. **`empty` is required** (E022): it is the answer for an empty sequence and for one where no
+element passes the `where`, and what to answer then is the author's to say. Two elements of the
+same value leave one answer, since the answer is the value; which element holds it is a fold's
+question (`keep_max`).
+
+The range needs no writing. It is the hull of the column's range and the `empty` value, since
+the answer is one of those — `min earliest` above takes the range of `due` with 2027-12-31
+inside it — and the tables over the answer are checked over that range. A range written on the
+line has to hold the hull (E112, which writes the one that would), and then it is the universe,
+the way a declared one is; a `max` of an enum takes no range (E069).
+
+### More than one summary
+
+Nothing else accumulates. A fold's arms choose an element; a count adds one per element that
+passes a test; a sum adds one column; a `max` and a `min` keep one. There is no average arm and
+no arm that carries a number forward. An average is a sum over a count, divided after the walk
+inside a rounding (§8): `define avg : money[JPY] = half_up(total / max(n, 1), 1JPY)`.
+
+A rule may have any number of `count`, `sum`, `max`, `min` and `fold` lines, over one sequence
+or several, each over the sequence its `over` names (§15.219 of DESIGN.md). The summaries found
+on one walk read every element: a `fold` that stops ends its own reading, and the count beside
+it still sees the elements after. A `count`, a `sum`, a `max` or a `min` named like an output is
+that output, and answers it. Every target but SQL and NumPy generates them, for the reason SQL
+gets no walk at all.
 
 ## 6.4 machine and scenario
 
@@ -1363,6 +1465,99 @@ them — **the state one call answers is handed to the next call as that languag
 and prints its constants first, so the traces hold the hand-over and the constants as well as
 the answers (docs/formats.md). A further carried value is handed over the same way: the trace's
 first call is passed where each one starts, and every later one what the language answered.
+
+## 6.5 prerequisites
+
+Some values of an enum can be had only after others: a course after the courses it requires, a
+certification after the one below it, a module of a product after the modules it builds on. A
+`prerequisites` block says which, once, for every value of one enum:
+
+```rule
+prerequisites enrollment over course
+  start             intro_programming, discrete_math, calculus
+  statistics        requires calculus
+  algorithms        requires data_structures, discrete_math
+  machine_learning  requires algorithms, statistics or linear_algebra
+  mainframe_cobol   requires nothing "withdrawn from the catalog in 2026"
+  ordered by level_of
+```
+
+| line | what it says |
+|---|---|
+| `prerequisites <name>(<alias>) over <enum> [open]` | the block, its name — which names the generated functions, so a name that is not ASCII takes an alias (E011) — and the enum whose values it is about. `open` marks a block other files may add lines to, for the values they add; it is read and kept, and changes nothing yet |
+| `start <value>, …` | the values that need nothing. Every other value is reached from them. **Required** |
+| `<value> requires <value>, …` | what a case has to hold before it can take the value. `,` separates groups that are all needed; `or` joins the values of a group, any one of which is enough: `a, b or c` is a, and b or c |
+| `<value> requires nothing "<reason>"` | a value no case can take, and why: a retired course, a certification no longer examined |
+| `ordered by <table>` | a table of this rule, declared above the block, whose answer for a value is never below its answers for what the value needs. It tests one column of the enum and writes one value of an ordered enum (§3) or one `number` in each row |
+
+Every value of the enum is in exactly one place: on `start`, or on a line of its own (E071). A
+value added to the enum without its prerequisites stops the check rather than passing as one that
+needs nothing.
+
+The block stands in a rule or in an `enums` file (§3.1); `ordered by` only in a rule, since an
+`enums` file has no tables. None of its words is reserved: `start`, `requires`, `or`, `nothing`
+and `ordered` are read by their place in the line, so a value may be called any of them (`start
+requires …` is the line of a value called `start`, and `nothing` is the word only before a
+string), and a declaration may be called `prerequisites`.
+
+What `rulec check` proves of a block:
+
+| check | what it finds | code |
+|---|---|---|
+| shape | a name that is not a value, a value in two places or in none, no `start`, an `ordered by` table that is not there, is below the block or has another shape | E071 |
+| cycle | a value that, through what it needs, needs itself — the values of an `or` followed too | E136 |
+| reach | a value that cannot be reached from `start`, because it waits on one no case can take | E137 |
+| order | a value whose `ordered by` answer is below the answer for something it needs | E138 |
+| redundancy | a prerequisite another prerequisite of the same value already needs (the values of an `or` left out) | W130 |
+
+The graph is finite, so each of these is decided by walking it, and the answer is exact. A cycle
+is said once for each set of values that reach one another; what cannot be reached while there
+is a cycle is not said on top. A value that waits on one no case can take is said where the wait
+starts, with the values behind it in a note:
+
+```console
+error[E137]: operating_systems cannot be reached from `start`
+  --> tests/mutants/m_e137.rule:40 prerequisites enrollment
+   |
+40 |   operating_systems requires data_structures, mainframe_cobol
+   |                                               ^^^^^^^^^^^^^^^ no case can take this
+   |
+ operating_systems needs mainframe_cobol, which no case can take.
+ mainframe_cobol: `requires nothing "withdrawn from the catalog in 2026"`
+ Until operating_systems can be reached, neither can networks.
+ Drop the prerequisite no case can take, or if operating_systems cannot be had either, write `operating_systems requires nothing "<reason>"`.
+```
+
+### What a block generates
+
+Two functions, in the module of the file that holds the block — a rule's, or an `enums` file's —
+in each language with modules:
+
+- `<name>_requires(value)`: what the value needs, as a list of groups, each a list of values any
+  one of which is enough. A value on `start` has no group (`[]`); one no case can take has one
+  group with no value in it (`[[]]`), which nothing held can meet.
+- `<name>_available(value, held)`: whether the value can be taken now: it is not in `held`, and
+  every group has a value in `held`.
+
+| language | what a value needs | whether it can be taken |
+|---|---|---|
+| Python, Rust, Ruby, PHP | `enrollment_requires(value)` | `enrollment_available(value, held)` |
+| TypeScript, JavaScript, Swift, Java | `enrollmentRequires(value)` | `enrollmentAvailable(value, held)` |
+| Go | `EnrollmentRequires(value)` | `EnrollmentAvailable(value, held)` |
+| NumPy | `rule.requires("enrollment", value)` | `rule.available("enrollment", value, held)` |
+| SQL, Wasm | — | — |
+
+SQL and Wasm have one entry and no room for a second function: `rulec gen` says so when it writes
+them, `rulec api` names them under `without`, and `rulec test` notes that nothing was compared
+there.
+
+NumPy's plan carries the groups as data, and its runtime answers both; an `enums` file has no plan
+there.
+
+The vector suite holds every language to the reference evaluator over a handful of cases per value
+— nothing held, one value of each group, that less the value of one group, each other value of an
+`or`, the value itself besides, every other value — and the certificate carries the graph with the
+orders that show it has no cycle and that every value is reached (docs/formats.md).
 
 ## 7. Tables
 
@@ -1702,6 +1897,8 @@ terminate; the fourth would take the replay of past records with it.
 - rewrites `→ ・ 、 ， ≦ ≧` and fullwidth digits to their ASCII forms,
 - folds the `->` of the second and later output columns of `examples`,
 - indents the lines under `machine` by two spaces and lines their values up in one column,
+- indents the lines under `prerequisites` by two spaces and pads each value, and `start`, to the
+  widest, so that `requires` and the start values line up in one column (§6.5),
 - leaves the inside of a comment alone.
 
 `rulec fmt --check` names the files that are not in canonical form and exits 1, which is how
@@ -1739,6 +1936,8 @@ An enum **value** never starts a line, so it may be any of them but eleven: `not
 money attributes (`incl_tax` `excl_tax`), `std`, `enums` (the heading of a file of enums, read
 on its first line only) and `open` (the mark after an enum's last value, §3) are part of the
 vocabulary but are told apart by position, so they are not reserved as names. A value may be
-called `open` too: the mark is only the word that follows the last value.
+called `open` too: the mark is only the word that follows the last value. So are `prerequisites`
+— a line head outside every block, and a name inside one, as `prerequisites(p) : number` under
+`inputs` — and the words under it, `start`, `requires`, `or`, `nothing` and `ordered` (§6.5).
 
 A test holds this table to `src/kw.rs`, which is the single place the vocabulary is defined.

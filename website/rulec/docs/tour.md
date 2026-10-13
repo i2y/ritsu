@@ -43,6 +43,8 @@ These are all the words that may start a line.
 | `fold` | reduces a column of per-element verdicts to one answer |
 | `count` | how many elements of the sequence meet one test |
 | `sum` | the total of one column over the elements of a sequence |
+| `max` | the largest value of one column over the elements of a sequence, with an `empty` value for none |
+| `min` | the smallest value of one column over the elements of a sequence, with an `empty` value for none |
 | `sequence` | a named list of elements, for an example to walk |
 | `table` | a decision table. The body of the language |
 | `policy` | that table's hit policy (`unique` or `first`) |
@@ -55,6 +57,7 @@ These are all the words that may start a line.
 | `machine` | reads a table as one step of a case that goes on: which output comes back as which input on the next call, where a case starts and ends, and what no sequence of calls may do |
 | `examples` | an executable specification |
 | `scenario` | an example that runs for several calls, each starting where the one before ended |
+| `prerequisites` | what values of an enum require: `start`, and a `requires` line for each value (`,` for all of them, `or` for any one) |
 
 ## A complete rule
 

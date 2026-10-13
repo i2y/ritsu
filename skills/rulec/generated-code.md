@@ -243,8 +243,8 @@ Beside the module, `single_coupon_proof.rs` holds proof harnesses for the [Kani 
 Verifier](https://model-checking.github.io/kani/). Everything in it is behind `#[cfg(kani)]`,
 so `rustc` never reads it; `kani single_coupon_proof.rs` does, and so does `rulec test
 --proofs` — a pass of its own, skipped and said so when `kani` is not on PATH. It is behind
-a flag because it is the one pass whose cost is noticeable: on the corpus of 115 rules it
-adds about 370 seconds to a run that otherwise takes seconds. `rulec api` names
+a flag because it is the one pass whose cost is noticeable: on the corpus of 125 rules it
+adds about 700 seconds to a run that otherwise takes seconds. `rulec api` names
 the file under `rust.proof` and every harness under `rust.harnesses`.
 
 What it holds, over **every** input in the declared domain rather than the vectors:
@@ -697,7 +697,9 @@ missing.
 A rule with `elements` and `fold` ([reference §6.2](reference.md#62-elements-and-fold)) takes
 one more argument, last: the sequence, as a list of `Element`. `Element` is a record of the
 element's own fields, generated beside `Output`, and each field carries the same entry guard
-an input of that type carries.
+an input of that type carries. A rule that walks two sequences or more takes one list for each,
+in the order the `elements` are declared, and each record is named after its sequence:
+`LinesElement` and `PaymentsElement` (§15.219).
 
 ```python
 class Element(NamedTuple):
@@ -711,11 +713,11 @@ def nationwide_freight(freight_rows: list[Element]) -> JPYInclTax:
 ```
 
 The body is a loop over that list, with one branch per verdict, and the rule's items at the
-three places the reference evaluator runs them
-([reference §6.2](reference.md#before-the-walk-on-each-element-after-it)): what reads neither an
+places the reference evaluator runs them
+([reference §6.2](reference.md#before-the-walks-on-each-walk-after-them)): what reads neither an
 element nor the walk's answer is computed once, above the loop; what reads a value of one element,
 inside it; what reads the answer, once, below it, after the answer is put in the first output.
-The rule of [reference §6.2](reference.md#before-the-walk-on-each-element-after-it), the best
+The rule of [reference §6.2](reference.md#before-the-walks-on-each-walk-after-them), the best
 offer among some bids, comes out as:
 
 ```python
@@ -749,13 +751,78 @@ the `empty` answer, in every language as in the reference evaluator. A `count` a
 written the same way, their totals started above the loop and read below it. What comes out
 goes through the same rounding and the same return the rule would have had without the loop.
 
+### Two sequences and a second walk
+
+Each walk is one loop (§15.219). The summaries of one sequence found on one walk share its loop;
+a walk over another sequence is a loop of its own; and a walk that reads what an earlier one
+found is a second loop over the same list, below the first. A `max` and a `min` start from their
+`empty` answer, with a flag that says whether any element has been looked at, and the first
+element the `where` lets in replaces it. `tests/corpus/order_settlement.rule` — the lines' total
+and their highest price on the first walk, the payments on a walk of their own, and the line at
+the highest price on a second walk over the lines — comes out as (the entry guards cut):
+
+```python
+def order_settlement(lines: list[LinesElement], payments: list[PaymentsElement]) -> Output:
+    ...
+    subtotal = 0  # sum
+    top_price = 0  # max
+    top_price_set = False
+    for elem in lines:
+        ...
+        line_total = elem.quantity * elem.price  # definition
+        subtotal += line_total  # subtotal
+        if not top_price_set or elem.price > top_price:
+            top_price = elem.price
+            top_price_set = True
+    if subtotal > 25000:
+        raise RuleInputError("subtotal is out of range", _repr(subtotal))
+    paid = 0  # sum
+    for elem2 in payments:
+        ...
+        paid += elem2.amount  # paid
+    if paid > 25000:
+        raise RuleInputError("paid is out of range", _repr(paid))
+    answer: int = 0  # the answer for no elements
+    stopped = False
+    taken: int | None = None
+    for elem in lines:
+        ...
+        line_total = elem.quantity * elem.price  # definition
+        gap = top_price - elem.price  # definition
+        # table pick_line (policy unique)
+        if gap <= 0:  # row 1: <=0USD | top
+            pick = LinePick.TOP
+            trace.append(Fired("pick_line", 1))
+        elif gap > 0:  # row 2: >0USD | rest
+            pick = LinePick.REST
+            trace.append(Fired("pick_line", 2))
+        ...
+        if pick is LinePick.TOP:  # top
+            if taken is None:
+                taken = top_off
+        if pick is LinePick.REST:  # rest
+            pass
+    if _len(lines) > 0 and not stopped:
+        held = taken if taken is not None else 0
+        answer = held
+    discount = answer
+    balance = (subtotal - discount) - paid  # definition
+```
+
+The second loop works the values of one element out again (`line_total`) and runs the entry
+guard again, so nothing it reads is carried over from the first; the trace lists the rows the
+second walk fires, element by element. A `fold` that is alone on its walk ends the loop with
+`break` at `stop`, as before; one that shares the walk with another summary only stops reading,
+and the loop goes on for the others. A fold's answer named with `-> <name>` is that name from
+then on (`discount = answer`); without one it is the first output.
+
 Every condition the Python module writes is a truth value — a comparison, `isinstance`, or a
 name the module only ever gives `True` or `False` — but in the functions that take the inputs
 out of the caller's object (`<alias>_from`, §15.207), which read any JSON. A sequence, a number, a
 string or an optional value is compared explicitly (`_len(bids) > 0`, `r != 0`, `tag != ""`,
 `signature is True`), never tested for being empty or zero. `rulec api` lists the sequence as the last parameter, with the
-element's fields under `elements`, and the record written for one call carries the sequence as
-an array of objects. Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java and Wasm are
+element's fields under `elements` — a rule that walks two lists each, in order — and the record
+written for one call carries each sequence as an array of objects. Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java and Wasm are
 generated; SQL and NumPy are refused by name, because one query has nowhere to carry a value from
 row to row, and a walk is not a column operation.
 
@@ -858,6 +925,73 @@ Wasm, with one door and no module, have no constant, and `rulec api` lists the v
 language's spelling under `machine.carried`. The traces hand these values over as they hand the
 state: the first call of a trace is passed where each starts, every later one what the language
 itself answered.
+
+## Which values need which before them
+
+A `prerequisites` block ([reference §6.5](reference.md#65-prerequisites)) is generated as two
+functions in the module of the file that holds it — a rule's, or an `enums` file's, which a rule
+reads its enum from. From `tests/corpus/shared/certifications.rule`, in Python:
+
+```python
+def exam_path_requires(value: Certification) -> list[list[Certification]]:
+    """What value needs before it can be taken: every group, each by any one of its values. A value that needs nothing has no group; one no case can take has a group with no value in it."""
+    if value is Certification.FOUNDATIONS:
+        return []
+    elif value is Certification.ASSOCIATEDEVELOPER:
+        return [[Certification.FOUNDATIONS]]
+    elif value is Certification.ASSOCIATEOPERATIONS:
+        return [[Certification.FOUNDATIONS]]
+    elif value is Certification.PROFESSIONALDEVELOPER:
+        return [[Certification.ASSOCIATEDEVELOPER]]
+    elif value is Certification.PROFESSIONALARCHITECT:
+        return [[Certification.ASSOCIATEDEVELOPER, Certification.ASSOCIATEOPERATIONS]]
+    elif value is Certification.SPECIALTYSECURITY:
+        return [[Certification.PROFESSIONALARCHITECT]]
+    else:
+        return [[Certification.PROFESSIONALDEVELOPER, Certification.PROFESSIONALARCHITECT]]
+
+
+def exam_path_available(value: Certification, held: list[Certification]) -> bool:
+    """Whether value can be taken now: it is not in held yet, and every group of what it needs has a value in held."""
+    if value in held:
+        return False
+    for group in exam_path_requires(value):
+        met = False
+        for p in group:
+            if p in held:
+                met = True
+        if not met:
+            return False
+    return True
+```
+
+The groups are a list of lists returned by a chain over the values, one branch per value in the
+enum's order, rather than a constant map: a compiler of typed Python takes it as it stands, and
+`mypy --strict` and `pyright --strict` say nothing of it. A value on `start` returns no group; one
+written `requires nothing` returns one group with no value in it, which no `held` meets, so
+`available` needs no branch of its own for it. What a case holds is the caller's to keep, as a
+machine's state is; the functions keep nothing.
+
+| language | the two functions |
+|---|---|
+| Python | `exam_path_requires(value: Certification) -> list[list[Certification]]`, `exam_path_available(value: Certification, held: list[Certification]) -> bool` |
+| TypeScript | `examPathRequires(value: Certification): Certification[][]`, `examPathAvailable(value: Certification, held: readonly Certification[]): boolean` |
+| JavaScript | `examPathRequires(value)`, `examPathAvailable(value, held)` |
+| Rust | `exam_path_requires(value: Certification) -> Vec<Vec<Certification>>` (a `match` over every value), `exam_path_available(value: Certification, held: &[Certification]) -> bool` |
+| Ruby | `Certifications.exam_path_requires(value)`, `Certifications.exam_path_available(value, held)`, with their signatures in the `.rbs` |
+| PHP | `\Certifications\exam_path_requires(Certification $value): array`, `\Certifications\exam_path_available(Certification $value, array $held): bool` |
+| Go | `ExamPathRequires(value Certification) [][]Certification`, `ExamPathAvailable(value Certification, held []Certification) bool` |
+| Swift | `examPathRequires(_ value: Certification) -> [[Certification]]`, `examPathAvailable(_ value: Certification, held: [Certification]) -> Bool` |
+| Java | `Certifications.examPathRequires(Certification value)`, `Certifications.examPathAvailable(Certification value, java.util.List<Certification> held)`, the list type written in full so that the class of an `enums` file needs no import |
+| NumPy | `rule.requires("<name>", value)` and `rule.available("<name>", value, held)` over the plan's `prerequisites`, for a block a rule holds; an `enums` file, like this one, has no plan |
+| SQL, Wasm | none: one entry, and no room for a second function. `rulec gen` says so as it writes them, `rulec api` names them under `without`, and `rulec test` notes that nothing was compared there |
+
+`rulec gen` writes `vectors/<alias>.prereq.tsv` and `.prereq.expected` beside the vectors: one
+line per case — a block, a value and what is held — and what the two functions answer for it,
+from the reference evaluator. An `enums` file with a block gets them too, with a runner of its own
+beside its module in each language. `rulec test` asks every runner with `--prerequisites` and
+compares the answers byte for byte (docs/formats.md), and so does the corpus's agreement suite
+(`tests/threeway.rs`) for the rules with a block.
 
 ## A rule whose inputs are projected from the caller's object
 

@@ -527,6 +527,42 @@ EXAMPLES = [
         ],
     ),
     (
+        "注文の精算.rule",
+        "二つの並びと二回目の歩き",
+        "注文の明細と支払いの二つの並びを受け取ります。明細の合計といちばん高い単価を一回目の歩きで求め、いちばん高い単価の明細に一割の値引きを当てるのは、明細を二回目にたどるときです。歩きの順はどこにも書いてありません。",
+        [
+            "`elements` は何本でも書けます。集計はそれぞれ、どの並びをたどるかを `over` で言います。",
+            "**歩きの順は読むものから決まります。** `gap` は単価と、一回目の歩きで求めた `top_price` を読むので、二回目の歩きに入ります。それを読む表と fold も同じです。",
+            "`max top_price over lines of price empty 0USD` の `empty` は必須です。明細が一つも無いときの答えで、業務の判断だからです。範囲は単価の範囲と `empty` の値から計算します。",
+            "fold の答えに `-> discount` で名前を付けると、後ろの `define` が読めます。その範囲は fold が答えうる値から決まり、`balance` の int64 の主張も立ちます。",
+        ],
+        "Two sequences and a second walk",
+        "An order's lines and the payments made against it, as two sequences. The lines' total and their highest price are found on the first walk; the line at the highest price takes ten percent off on a second walk over the lines. Nowhere does the rule say which walk comes first.",
+        [
+            "`elements` can be written any number of times, and each summary says which sequence it walks after `over`.",
+            "**The order of the walks comes from what reads what.** `gap` reads a line's price and `top_price`, which the first walk finds, so it is worked out on a second walk — and so are the table and the fold that read it.",
+            "The `empty` of `max top_price over lines of price empty 0USD` is required: it is the answer for an order with no lines, and that is a business decision. The range is worked out from the price's range and the `empty` value.",
+            "Named with `-> discount`, a fold's answer is read by the `define` below it. Its range comes from the values the fold can answer with, so `balance` has its int64 claim too.",
+        ],
+    ),
+    (
+        "科目の履修.rule",
+        "科目の履修の前提",
+        "科目ごとに、何年次の科目か、単位数、履修の前に合格していなければならない科目を決めます。前提は `prerequisites` の塊に一度だけ書き、年次の表と食い違わないことも検査します。",
+        [
+            "`start` の科目は何も要りません。ほかの科目は一行ずつ `requires` で前提を書き、`,` で区切ったものは全部が、`or` でつないだものはどれか一つが要ります。",
+            "`requires nothing \"…\"` は、取れなくなった科目です。それを前提にした科目があると、`start` からたどり着けないと言われます（E137）。",
+            "`ordered by 年次表` は、どの科目も前提より前の年次に置かないことを確かめます（E138）。生成コードは、科目に要るものと、合格した科目でその科目を取れるかを、どの言語でも返します。",
+        ],
+        "What a student must pass before a course",
+        "Each course has the year it is taught in, its credits, and the courses a student must have passed before enrolling. The prerequisites are written once, in a `prerequisites` block, and the check holds them to the years too.",
+        [
+            "The courses on `start` need nothing. Every other course has a `requires` line: what `,` separates is all needed, and of what `or` joins any one is enough.",
+            "`requires nothing \"…\"` is a course withdrawn from the catalog. A course that needs it cannot be reached from `start`, and the check says so (E137).",
+            "`ordered by level_of` holds that no course is taught in a year before a course it needs (E138). The generated code answers, in every language, what a course needs and whether it can be taken with the courses passed.",
+        ],
+    ),
+    (
         "payment_intent.rule",
         "Stripe の PaymentIntent の状態（machine）",
         "Stripe のドキュメントから、PaymentIntent の状態が confirm・認証・capture・cancel と、あとで届く支払いの結果でどう移るかを転記したものです。事業者の API の仕様から作った例で、状態は Stripe の七つをそのまま使っています。",

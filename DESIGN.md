@@ -342,6 +342,7 @@ pub struct GatePorts { rules: Rc<dyn Rules>, dates: Rc<dyn Dates>, books: Rc<dyn
 - 答えられないときに返すのは、言語ごとの診断の型ではなく `Said`（その言語のコード、ファイル、行、二つの言語の文）にした。言語の診断の型を口に出すと、受け取る側が出す側のクレートを知ることになる。
 - `Rules` に `doc` を足した（表の中身にあった「`rulec doc` が描いたもの」）。言語は呼ぶ側が渡し、rulec はそのスレッドの言語で描く（4.1）。ファイルの名前（ページの頭に書くもの）も呼ぶ側が渡す。dandori は、ファイルの名前だけを書いたページを埋め込むからである。
 - `RuleFacts` は `RuleInfo` の項目を全部作れる形にした。規則の名前と別名と版と SHA-256、rulec の版、入力と出力（名前、別名、型。数は rulec の綴りのままの型と、単位の型（率は刻みつき）と、受け渡す整数での範囲）、並び、列挙（別名と値の別名つき）、ステートマシン（軸、行が受け付ける座標、行き先、書く値、held）、前提、Connect のサービスの形（パス、フィールド、ワイヤの列挙の名前と番号）、生成したコードの TypeScript・Python・Go での呼び方（モジュール、関数、引数と出力の名前と型、列挙のメンバー）である。`RuleInfo` の `api`（`rulec api` の JSON そのもの）にあたるものは、dandori が読んでいるところ（TypeScript・Python・Go の呼び方と Connect の形）を型にした。率の刻みは、JSON の側が JSON Schema の説明の文から読んでいるが、型の側は rulec の型の刻みを持つ。rulec の `tests/ports.rs` が、コーパスの 50 本の全部で、口の事実が `rulec api`・`certificate`・`schema` の JSON を読んだものと同じことを確かめる。
+- `Rules` の口の `RuleFacts.elements` と `Connect.elements` は、規則がたどる並びのリストになった（`Option` から `Vec` へ。rulec の DESIGN §15.219、2026-10-14）。並びが一つの規則では要素が一つのリストで、前と同じことを言う。並びごとに名前、別名、一要素のフィールドを持ち、Connect は並びごとに名前とフィールドを持つ。dandori（`src/rulec.rs`）と sekisho（`src/names.rs`）の読み手を合わせた。読み手が並びを一つと決めてかかる所は無い。
 - 出す側の実装は、どれも各言語の `src/ports.rs` の `Engine` である。geas は、口に答えるためにライブラリとコマンドに分けた（`src/lib.rs` と `src/main.rs`）。
 
 この段階で答えを作った問いと、まだ答えない問い（決められない、と理由を言う）は次のとおり。
@@ -833,6 +834,8 @@ chobo の額は 0 から 2⁶³ − 1 までで、rulec の値は負にもなり
 列挙は、どこで宣言したかで決まる：rulec の規則の列挙（規則と名前）、`.proto` の列挙（完全な名前）、dandori のフローの列挙、chobo の仮押さえの状態。rulec の列挙が `.proto` の列挙を取り込んでいれば（rulec 0.22.0 からの `connect.enums` の `alias` と番号）、二つは同じ列挙として口を渡る。
 
 rulec の組み込みの名前空間は、十三か国の一段目の区分である（`std/us/states`、`std/gb/nations`、`std/cn/provinces`、`std/tw/divisions`、`std/kr/provinces`、`std/in/states`、`std/fr/regions`、`std/es/communities`、`std/it/regions`、`std/de/states`、`std/au/states`、`std/br/states`、`std/jp/prefectures`。日本は `std/都道府県` でも取り込め、そのときは値を日本語で持つ。2026-10-04 に決めた。rulec の DESIGN §15.182）。値は英語の名前の ASCII（`New_York`）で、口を渡るのもこの綴りである。規則の中で書ける現地の綴りと ISO 3166-2 の符号は、パーサのあとに値へ書き換わるので、口にも生成コードにも出ない。生成の型の名前（`UsState` など）と値の名前は、rulec の `src/prelude.rs` に凍結して持つ。★列挙の名前は `<国>_<種類の単数>`（`us_state`、`jp_prefecture`。パスの最後の語では `states` が五か国でぶつかる）、★値は CLDR の英語の名前からダイアクリティカルマークと略語の点を落とし、空白・ハイフン・アポストロフィを `_` にしたもの、★`std/jp/prefectures` の値は英語、`std/都道府県` は日本語にした（区分も生成コードも同じで、どちらの取り込みでも両方の綴りを書ける）。名前のもとは Unicode CLDR 48.2（Unicode License V3。`crates/rulec/THIRD_PARTY_NOTICES`）。ほかの六つの言語は、いまはこの列挙を参照しない。dandori が規則の列挙を口から受け取るときは、ほかの列挙と同じく値の綴りで受け取る。
+
+列挙の値どうしの前提のつながりを、`prerequisites <名前> over <列挙>` の塊で書ける（rulec の DESIGN §15.222、2026-10-14）。科目の履修、資格の段階、製品のモジュールや機能フラグの依存のように、ある値を取る前に別の値を持っていなければならない決まりである。前提のつながりは有限のグラフなので、循環、`start` からたどり着けない値、余分な前提、表の順との食い違いは全部決まる。塊は規則にも `enums` のファイルにも置け、生成コードは塊を持つファイルのモジュールに、値に要るものと、持っているものでその値を取れるかの二つの関数を持つ。口を渡るのは、これまでどおり規則の関数の入力と出力で、前提の関数は口に載らない（sekisho がこの判断を使いたいときは、規則の `available` を計算した値として読む、という拡張の設計 8.1 の形は、まだ作っていない）。`prerequisites` は行の頭の語だが予約語ではなく、どのブロックにも入っていない行の頭でだけ見出しとして読む。
 
 ### 5.7 捨てたもの
 
@@ -1683,6 +1686,7 @@ generated/typescript/          generated/python/              generated/go/
 - パッケージの Python が `mypy --strict` を通るように、dandori の Temporal の Python（と同じ部品を使う pydantic-graph と Step Functions の Lambda の Python）と、chobo の Python のクライアントの型の書き方を直した（★単独の出力も変わった。振る舞いは変えていない。dandori の DESIGN 0.3、chobo の DESIGN 8.1）。
 
 確かめ方：`crates/ritsu/tests/gen.rs`。テストのプロジェクト `crates/ritsu/tests/projects/stockroom`（英語。rulec の規則 `delivery`、koyomi の日付のファイルとカレンダー、chobo の帳簿、三つを使う dandori のフロー）のパッケージが、帳簿の二つの出力先で、`tsc --strict`、`mypy --strict`、`go vet` と gofmt を通ること（通販は TypeScript だけ。dandori の Python の残りは dandori の DESIGN 7 章）。フローの import がパッケージのモジュールを指し、規則と日付のアクティビティを走らせるとパッケージのモジュールを通って答えること（Python と Go）。`--check` が、無いもの・古いもの・残ったものを言うこと。sekisho の例をプロジェクトにしたパッケージで、三つの言語のファイルの形、インデックス、依存が正しく、型の検査（`tsc --strict` と cedar-wasm の型、`mypy --strict` と cedarpy、sekisho の Go のランナーの `go.mod` で作ったモジュールの `go vet` と gofmt）と `--check` を通り、`--authorizer avp` なら avp の依存を書くこと（`the_gates_of_a_project_go_into_the_package`）。どのファイルの頭も 9.2 の形で、元のファイルとそのハッシュを書くこと（パッケージの形の golden `crates/ritsu/tests/golden/gen/stockroom.txt`。バージョンは `<version>` に置き換えてある）。中身ごとの突き合わせは、いままでどおり各言語のテスト（rulec の 12 言語のベクタ、koyomi の五つの出力先、chobo の七つの組み合わせ、dandori のプラットフォーム）がする。sekisho のテストは、三つの言語の生成したコードに、検査を通る 35 の `.gate` の生の値 27,579 件を cedar-wasm、cedarpy、cedar-go で答えさせ、参照の評価と比べる（sekisho の DESIGN 6.3）。
+- **前提のつながり**（rulec の DESIGN §15.222、2026-10-14）。`ritsu gen` のパッケージでも、塊を持つ規則のモジュール（`enums` のファイルの塊なら、そのファイルのモジュール）に二つの関数が入る。Python・TypeScript・Go の名前は `rulec gen` と同じ（`enrollment_requires`、`enrollmentRequires`、`EnrollmentRequires`）。
 
 ### 9.4 生成物のバージョン
 

@@ -937,21 +937,23 @@ $ rulec certificate rules/health_insurance_premium.rule > cert.json
 $ python3 tools/recheck.py --rule rules/health_insurance_premium.rule cert.json
 health_insurance_premium (health_insurance_premium v1, sha256:a5c5cf4eaf62) — certificate by rulec 0.27.0
   units: 4 values keep the type the rule declares
+  ranges: 2 columns a table writes numbers into hold every value their rows write
   int64: 4 values fit
   grade: unique, 50 rows — 1225 pairs disjoint, 50 rows reached, 101 boxes covered, 50 boxes read back from their cells, 1 axes tiled
   applied: unique, 2 rows — 1 pairs disjoint, 2 rows reached, 2 boxes covered, 2 boxes read back from their cells, 0 axes tiled
   the digest is rules/health_insurance_premium.rule's
-  the file says the same: 52 cells read back from it
+  the file says the same: 104 cells read back from it
   every claim this program states was proved
 
 $ (cd proofs && lake build) && proofs/.lake/build/bin/rulec-recheck --rule rules/health_insurance_premium.rule cert.json
 health_insurance_premium (0.27.0), re-checked against the Lean proofs
+  ranges: 2 columns a table writes numbers into hold every value their rows write
   values: 4 typed, 4 held to int64
   grade: 50 rows — complete, 50 rows reached, no two rows meet, 1 axes tiled
     50 boxes read back from the cells they were written as
   applied: 2 rows — complete, 2 rows reached, no two rows meet
     2 boxes read back from the cells they were written as
-  the digest is rules/health_insurance_premium.rule's, and 52 cells are read back out of it
+  the digest is rules/health_insurance_premium.rule's, and 104 cells are read back out of it
 OK: every claim this program states was proved, by the theorems of RulecCert.
 ```
 

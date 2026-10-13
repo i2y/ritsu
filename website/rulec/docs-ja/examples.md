@@ -1647,6 +1647,168 @@ examples
 - `always 試行回数 3 when 断念` は「断念した状態では、いつも三回試している」という主張です。どの呼び出しの並びでも成り立つことを検査が確かめ、破れれば最短の並びつきで E135 になります。
 - 持ち越す数が範囲（0〜3）を出る呼び出しは E134 です。
 
+## 二つの並びと二回目の歩き
+
+注文の明細と支払いの二つの並びを受け取ります。明細の合計といちばん高い単価を一回目の歩きで求め、いちばん高い単価の明細に一割の値引きを当てるのは、明細を二回目にたどるときです。歩きの順はどこにも書いてありません。
+
+```rule
+rule 注文の精算(order_settle) v1
+description "注文の請求額を求める。明細を合計し、単価がいちばん高い明細から一割を引き、支払い済みの額を差し引く。いちばん高い単価は明細を全部見るまで決まらないので、値引きは明細を二回目にたどって求める。二つの並びと二回目の歩きの例"
+
+enum 明細の扱い(line_pick) = 最高値(top) | その他(rest)
+
+# 注文の明細一件。呼び出し側は何件でも渡す
+elements 明細(lines)
+  数量(quantity) : number  range >=1 <=50
+  単価(price)    : money[USD]  range >=1USD <=500USD
+
+# この注文に対して支払い済みの一件。明細とは別の並び
+elements 支払い(payments)
+  支払額(amount) : money[USD]  range >=1USD <=5000USD
+
+outputs
+  小計(subtotal)   : money[USD]  round down(1USD)
+  値引き(discount) : money[USD]  round down(1USD)
+  支払済(paid)     : money[USD]  round down(1USD)
+  残額(balance)    : money[USD]  round down(1USD)
+
+define 明細額(line_total) : money[USD] = 数量 × 単価
+
+# 明細を一回目にたどって、合計といちばん高い単価を求める。範囲はどちらも完全性の全体集合で、
+# 合計の範囲は入口が受け付けなくなる境目でもある
+sum 小計 over 明細 of 明細額  range >=0USD <=25000USD
+max 最高単価(top_price) over 明細 of 単価 empty 0USD
+
+# 支払いは別にたどる
+sum 支払済 over 支払い of 支払額  range >=0USD <=25000USD
+
+# 明細を二回目にたどって、一回目に求めたいちばん高い単価と一件ずつ比べる
+define 差(gap) : money[USD] = 最高単価 - 単価
+
+table 明細の判定(pick_line)
+policy unique
+| 差     | -> 扱い(pick) : 明細の扱い |
+| <=0USD | 最高値                     |
+| >0USD  | その他                     |
+
+define 値引き額(top_off) : money[USD] = half_down(明細額 × 10%, 1USD)
+
+# いちばん高い単価の最初の明細が値引きを受ける。同じ単価の二件目は受けない
+fold 扱い over 明細 -> 値引き
+  最高値    -> take_first 値引き額
+  その他    -> next
+  empty     -> 0USD
+  exhausted -> held
+
+define 残額 : money[USD] = 小計 - 値引き - 支払済
+
+examples
+| 明細     | 支払い     | -> 小計 | 値引き | 支払済 | 残額    |
+| 三行     | 一回払い   | 240USD  | 12USD  | 100USD | 128USD  |
+| 三行     | 支払いなし | 240USD  | 12USD  | 0USD   | 228USD  |
+| 同じ単価 | 二回払い   | 320USD  | 8USD   | 120USD | 192USD  |
+| 明細なし | 一回払い   | 0USD    | 0USD   | 100USD | -100USD |
+
+sequence 三行(three_lines)
+| 数量 | 単価   |
+| 2    | 30USD  |
+| 1    | 120USD |
+| 4    | 15USD  |
+
+sequence 同じ単価(tied_lines)
+| 数量 | 単価  |
+| 1    | 80USD |
+| 3    | 80USD |
+
+sequence 明細なし(no_lines)
+| 数量 | 単価 |
+
+sequence 一回払い(one_payment)
+| 支払額 |
+| 100USD |
+
+sequence 二回払い(two_payments)
+| 支払額 |
+| 50USD  |
+| 70USD  |
+
+sequence 支払いなし(no_payments)
+| 支払額 |
+```
+
+**この例が見せていること**
+
+- `elements` は何本でも書けます。集計はそれぞれ、どの並びをたどるかを `over` で言います。
+- **歩きの順は読むものから決まります。** `gap` は単価と、一回目の歩きで求めた `top_price` を読むので、二回目の歩きに入ります。それを読む表と fold も同じです。
+- `max top_price over lines of price empty 0USD` の `empty` は必須です。明細が一つも無いときの答えで、業務の判断だからです。範囲は単価の範囲と `empty` の値から計算します。
+- fold の答えに `-> discount` で名前を付けると、後ろの `define` が読めます。その範囲は fold が答えうる値から決まり、`balance` の int64 の主張も立ちます。
+
+## 科目の履修の前提
+
+科目ごとに、何年次の科目か、単位数、履修の前に合格していなければならない科目を決めます。前提は `prerequisites` の塊に一度だけ書き、年次の表と食い違わないことも検査します。
+
+```rule
+rule 科目の履修(course_enrollment) v1
+description "情報系の学位の科目。科目ごとに、何年次の科目か、単位数、履修の前に合格していなければならない科目を決める。書き下ろしの例"
+
+# 年次は低い順に並べる。どの科目も、それに要る科目より前の年次には置かない（下の `ordered by
+# 年次表`）。
+enum 年次(year) = 一年(first) < 二年(second) < 三年(third) < 四年(fourth)
+
+enum 科目(course) = プログラミング入門(intro_programming) | 離散数学(discrete_math) | 微積分(calculus) | 統計学(statistics) | 線形代数(linear_algebra) | データ構造(data_structures) | データベース(databases) | アルゴリズム(algorithms) | オペレーティングシステム(operating_systems) | ネットワーク(networks) | 機械学習(machine_learning) | コンパイラ(compilers) | 卒業研究(capstone) | メインフレームCOBOL(mainframe_cobol)
+
+inputs
+  科目(course) : 科目
+
+outputs
+  年次(year)    : 年次
+  単位(credits) : number  round down(1)
+
+table 年次表(level_of)
+policy unique
+| 科目                                                 | -> 年次 |
+| プログラミング入門, 離散数学, 微積分                 | 一年    |
+| 統計学, 線形代数, データ構造, データベース           | 二年    |
+| アルゴリズム, オペレーティングシステム, ネットワーク | 三年    |
+| 機械学習, コンパイラ, 卒業研究, メインフレームCOBOL  | 四年    |
+
+table 単位表(credit_of)
+policy unique
+| 科目          | -> 単位 |
+| 卒業研究      | 8       |
+| not: 卒業研究 | 4       |
+
+# 履修の前に合格していなければならない科目。`start` の科目は何も要らない。科目ごとの行では、
+# `,` で区切ったものは全部が要り、`or` でつないだものはどれか一つで足りる。
+prerequisites 履修(enrollment) over 科目
+  start                    プログラミング入門, 離散数学, 微積分
+  統計学                   requires 微積分
+  線形代数                 requires 微積分
+  データ構造               requires プログラミング入門
+  データベース             requires プログラミング入門
+  アルゴリズム             requires データ構造, 離散数学
+  オペレーティングシステム requires データ構造
+  ネットワーク             requires オペレーティングシステム
+  機械学習                 requires アルゴリズム, 統計学 or 線形代数
+  コンパイラ               requires アルゴリズム
+  卒業研究                 requires データベース, ネットワーク or コンパイラ
+  メインフレームCOBOL      requires nothing "2026 年に科目の一覧から外した"
+  ordered by 年次表
+
+examples
+| 科目               | -> 年次 | 単位 |
+| プログラミング入門 | 一年    | 4    |
+| データベース       | 二年    | 4    |
+| ネットワーク       | 三年    | 4    |
+| 卒業研究           | 四年    | 8    |
+```
+
+**この例が見せていること**
+
+- `start` の科目は何も要りません。ほかの科目は一行ずつ `requires` で前提を書き、`,` で区切ったものは全部が、`or` でつないだものはどれか一つが要ります。
+- `requires nothing "…"` は、取れなくなった科目です。それを前提にした科目があると、`start` からたどり着けないと言われます（E137）。
+- `ordered by 年次表` は、どの科目も前提より前の年次に置かないことを確かめます（E138）。生成コードは、科目に要るものと、合格した科目でその科目を取れるかを、どの言語でも返します。
+
 ## Stripe の PaymentIntent の状態（machine）
 
 Stripe のドキュメントから、PaymentIntent の状態が confirm・認証・capture・cancel と、あとで届く支払いの結果でどう移るかを転記したものです。事業者の API の仕様から作った例で、状態は Stripe の七つをそのまま使っています。

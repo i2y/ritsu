@@ -1666,6 +1666,168 @@ examples
 - `always attempts 3 when given_up` claims that a charge given up has always been tried three times. The check proves it over every sequence of calls; a sequence that breaks it is E135, the shortest one shown.
 - A call that would carry the count outside its range (0 to 3) is E134.
 
+## Two sequences and a second walk
+
+An order's lines and the payments made against it, as two sequences. The lines' total and their highest price are found on the first walk; the line at the highest price takes ten percent off on a second walk over the lines. Nowhere does the rule say which walk comes first.
+
+```rule
+rule order_settlement v1
+description "What an order comes to: its lines added up, ten percent off the line with the highest price, and the payments already made taken off. The highest price is known only once every line has been read, so the discount is worked out on a second walk over the lines. An example of two sequences and a second walk"
+
+enum line_pick = top | rest
+
+# One line of the order. The caller passes as many as it has
+elements lines
+  quantity : number  range >=1 <=50
+  price    : money[USD]  range >=1USD <=500USD
+
+# One payment already made against the order: a sequence of its own
+elements payments
+  amount : money[USD]  range >=1USD <=5000USD
+
+outputs
+  subtotal : money[USD]  round down(1USD)
+  discount : money[USD]  round down(1USD)
+  paid     : money[USD]  round down(1USD)
+  balance  : money[USD]  round down(1USD)
+
+define line_total : money[USD] = quantity * price
+
+# The first walk over the lines: their total, and the highest price. Both ranges are the universe
+# of the completeness check; the total's is also where the entry refuses a call
+sum subtotal over lines of line_total  range >=0USD <=25_000USD
+max top_price over lines of price empty 0USD
+
+# The payments are walked on their own
+sum paid over payments of amount  range >=0USD <=25_000USD
+
+# The second walk over the lines: each line set against the highest price the first walk found
+define gap : money[USD] = top_price - price
+
+table pick_line
+policy unique
+| gap    | -> pick : line_pick |
+| <=0USD | top                 |
+| >0USD  | rest                |
+
+define top_off : money[USD] = half_down(line_total * 10%, 1USD)
+
+# The first line at the highest price takes the discount; a second line at the same price does not
+fold pick over lines -> discount
+  top       -> take_first top_off
+  rest      -> next
+  empty     -> 0USD
+  exhausted -> held
+
+define balance : money[USD] = subtotal - discount - paid
+
+examples
+| lines       | payments     | -> subtotal | discount | paid   | balance |
+| three_lines | one_payment  | 240USD      | 12USD    | 100USD | 128USD  |
+| three_lines | no_payments  | 240USD      | 12USD    | 0USD   | 228USD  |
+| tied_lines  | two_payments | 320USD      | 8USD     | 120USD | 192USD  |
+| no_lines    | one_payment  | 0USD        | 0USD     | 100USD | -100USD |
+
+sequence three_lines
+| quantity | price  |
+| 2        | 30USD  |
+| 1        | 120USD |
+| 4        | 15USD  |
+
+sequence tied_lines
+| quantity | price |
+| 1        | 80USD |
+| 3        | 80USD |
+
+sequence no_lines
+| quantity | price |
+
+sequence one_payment
+| amount |
+| 100USD |
+
+sequence two_payments
+| amount |
+| 50USD  |
+| 70USD  |
+
+sequence no_payments
+| amount |
+```
+
+**What this one shows**
+
+- `elements` can be written any number of times, and each summary says which sequence it walks after `over`.
+- **The order of the walks comes from what reads what.** `gap` reads a line's price and `top_price`, which the first walk finds, so it is worked out on a second walk — and so are the table and the fold that read it.
+- The `empty` of `max top_price over lines of price empty 0USD` is required: it is the answer for an order with no lines, and that is a business decision. The range is worked out from the price's range and the `empty` value.
+- Named with `-> discount`, a fold's answer is read by the `define` below it. Its range comes from the values the fold can answer with, so `balance` has its int64 claim too.
+
+## What a student must pass before a course
+
+Each course has the year it is taught in, its credits, and the courses a student must have passed before enrolling. The prerequisites are written once, in a `prerequisites` block, and the check holds them to the years too.
+
+```rule
+rule course_catalog v1
+description "The courses of a computing degree: the year each one is taught in, its credits, and what a student must have passed before enrolling in it. An example written for the purpose"
+
+# The years in order. No course is taught in a year before a course it requires (`ordered by
+# level_of` below).
+enum year = first < second < third < fourth
+
+enum course = intro_programming | discrete_math | calculus | statistics | linear_algebra | data_structures | databases | algorithms | operating_systems | networks | machine_learning | compilers | capstone | mainframe_cobol
+
+inputs
+  course : course
+
+outputs
+  year    : year
+  credits : number  round down(1)
+
+table level_of
+policy unique
+| course                                                 | -> year |
+| intro_programming, discrete_math, calculus             | first   |
+| statistics, linear_algebra, data_structures, databases | second  |
+| algorithms, operating_systems, networks                | third   |
+| machine_learning, compilers, capstone, mainframe_cobol | fourth  |
+
+table credit_of
+policy unique
+| course        | -> credits |
+| capstone      | 8          |
+| not: capstone | 4          |
+
+# What a student must have passed before enrolling. The courses on `start` need nothing; on a
+# course's own line, `,` separates what is all needed and `or` joins what any one of is enough.
+prerequisites enrollment over course
+  start             intro_programming, discrete_math, calculus
+  statistics        requires calculus
+  linear_algebra    requires calculus
+  data_structures   requires intro_programming
+  databases         requires intro_programming
+  algorithms        requires data_structures, discrete_math
+  operating_systems requires data_structures
+  networks          requires operating_systems
+  machine_learning  requires algorithms, statistics or linear_algebra
+  compilers         requires algorithms
+  capstone          requires databases, networks or compilers
+  mainframe_cobol   requires nothing "withdrawn from the catalog in 2026"
+  ordered by level_of
+
+examples
+| course            | -> year | credits |
+| intro_programming | first   | 4       |
+| databases         | second  | 4       |
+| networks          | third   | 4       |
+| capstone          | fourth  | 8       |
+```
+
+**What this one shows**
+
+- The courses on `start` need nothing. Every other course has a `requires` line: what `,` separates is all needed, and of what `or` joins any one is enough.
+- `requires nothing "…"` is a course withdrawn from the catalog. A course that needs it cannot be reached from `start`, and the check says so (E137).
+- `ordered by level_of` holds that no course is taught in a year before a course it needs (E138). The generated code answers, in every language, what a course needs and whether it can be taken with the courses passed.
+
 ## A Stripe PaymentIntent's status (machine)
 
 Transcribed from Stripe's documentation: where a PaymentIntent's status goes when it is confirmed, authenticated, captured or canceled, and when a delayed payment settles. A company's API written down as a rule; the seven statuses are Stripe's own.

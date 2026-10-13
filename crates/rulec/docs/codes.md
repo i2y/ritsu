@@ -36,7 +36,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E028](#e028) | error | The `count` is not written correctly |
 | [E029](#e029) | error | This column cannot be counted |
 | [E030](#e030) | error | A `count` needs a range |
-| [E031](#e031) | error | This would take a second walk over the sequence |
+| [E031](#e031) | error | One item reads the elements of two sequences |
 | [E032](#e032) | error | The declared enum and the imported one disagree |
 | [E033](#e033) | error | A value of an imported enum has neither a row nor `default` |
 | [E034](#e034) | error | A row label appears twice |
@@ -73,6 +73,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E065](#e065) | error | `range from koyomi` is misshapen or misplaced |
 | [E066](#e066) | error | An `enums` file, or an `import enum` from one, is misshapen |
 | [E069](#e069) | error | An ordered enum, a comparison on one, or a display name is misshapen |
+| [E071](#e071) | error | The prerequisites are misshapen |
 | [E072](#e072) | error | A carried value is not written right |
 | [E075](#e075) | error | A word is both a value of an enum and a name |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
@@ -112,10 +113,14 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E139](#e139) | error | The argument of `isqrt` can be below zero |
 | [E134](#e134) | error | A call answers a carried number outside its range |
 | [E135](#e135) | error | An `always` line is broken |
+| [E136](#e136) | error | The prerequisites go round in a cycle |
+| [E137](#e137) | error | A value cannot be reached from `start` |
+| [E138](#e138) | error | A prerequisite comes after the value in the order of `ordered by` |
 | [W125](#w125) | warning | No sequence of calls reaches a state |
 | [W126](#w126) | warning | A transition is never taken from a state a case can reach |
 | [W127](#w127) | warning | A claim of the machine could not be settled |
 | [W128](#w128) | warning | No input was found that reaches a row, and none was shown not to |
+| [W130](#w130) | warning | A prerequisite is already needed through another |
 | [W105](#w105) | warning | Shadowing that needs review: an earlier row hides part of a later one |
 | [W110](#w110) | warning | A `first` table with no overlaps |
 | [W111](#w111) | warning | A declaration is never used |
@@ -188,7 +193,7 @@ Related codes: [E004](#e004), [E011](#e011)
 
 **When.** A line that is neither a table row, a comment nor blank starts with a symbol. The syntax is line-oriented: the first word of a line decides what is being declared.
 
-**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario`). A table row starts with `|`.
+**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites`). A table row starts with `|`.
 
 **Smallest reproduction**:
 
@@ -206,7 +211,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 **When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each.
 
-**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario`. Business words belong in names and cells, not at the head of a line.
+**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites`. Business words belong in names and cells, not at the head of a line.
 
 **Smallest reproduction**:
 
@@ -594,9 +599,9 @@ Related codes: [E017](#e017), [E018](#e018), [E101](#e101)
 
 `error` — **The `elements` declaration is not right**
 
-**When.** An `elements` line has no name, or there are two of them. A rule walks one sequence, and the fields of one of its elements are declared there.
+**When.** An `elements` line has no name, or nothing walks the sequence it declares. A sequence becomes a value of the rule only when a `count`, a `sum`, a `max`, a `min` or a `fold` names it after `over`; an item that reads a field of a sequence nothing walks reads no element in particular. A rule may walk any number of sequences, each under an `elements` of its own.
 
-**Fix.** Write `elements fee_rows(fee_rows)`, and the fields of one element under it, declared the way `inputs` are. Two sequences mean two rules.
+**Fix.** Write `elements fee_rows(fee_rows)`, and the fields of one element under it, declared the way `inputs` are. If the sequence is needed, add the line that walks it; if not, take the `elements` out.
 
 **Smallest reproduction**:
 
@@ -609,9 +614,6 @@ inputs
 elements xs(xs)
   k(k) : number  range >=0 <=10
 
-elements ys(ys)
-  m(m) : number  range >=0 <=10
-
 outputs
   r(r) : bool
 
@@ -621,15 +623,15 @@ policy unique
 | - | true           |
 ```
 
-Related codes: [E021](#e021)
+Related codes: [E028](#e028), [E021](#e021), [E031](#e031)
 
 ## E021
 
 `error` — **The `fold` is not written correctly**
 
-**When.** The heading is not `fold <verdict column> over <sequence>`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, or the column being folded is not an enum. So is a value of the fold that reads what is not there when it is decided: `empty` and `exhausted` are decided where no element is being looked at and cannot read an element's value; no value can read what is computed from the fold's own answer; and `held`, what the walk holds once it has seen every element, belongs in `exhausted` only.
+**When.** The heading is not `fold <verdict column> over <sequence> [-> <name> [: <type>]]`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, or the column being folded is not an enum. So is an answer named after an input, a field of an element or a value declared above; a name that is no output given no type; an output's name given a type other than the output's; and a name that the fold and another item both decide. So, too, is a value of the fold that reads what is not there when it is decided: `empty` and `exhausted` are decided where no element is being looked at and cannot read an element's value; no value can read what is computed from the fold's own answer (a verdict that read it would need the answer before there is one); and `held`, what the walk holds once it has seen every element, belongs in `exhausted` only.
 
-**Fix.** Correct the heading and the arms. A bare `take` cannot be written: whether **one and only one** element may be taken, or the first of several, is for the author to choose. To answer with a value of an element, take it with `take_unique`, `take_first` or `keep_max`, and answer `exhausted -> held`.
+**Fix.** Correct the heading and the arms. A bare `take` cannot be written: whether **one and only one** element may be taken, or the first of several, is for the author to choose. To answer with a value of an element, take it with `take_unique`, `take_first` or `keep_max`, and answer `exhausted -> held`. Name the answer with `-> <name>` for the items below to read it; a verdict that needs a fold's answer goes in another fold, which reads it on a second walk.
 
 **Smallest reproduction**:
 
@@ -660,9 +662,9 @@ Related codes: [E020](#e020), [E022](#e022), [E023](#e023), [E024](#e024)
 
 `error` — **The answer for a sequence with no elements is not declared**
 
-**When.** A `fold` has no `empty -> <value>`. An empty sequence always turns up, and it is the case a hand-written loop most often forgets — usually by reading the first element and falling over.
+**When.** A `fold` has no `empty -> <value>`, or a `max` or a `min` has no `empty <value>`. An empty sequence always turns up, and it is the case a hand-written loop most often forgets — usually by reading the first element and falling over. For a `max` and a `min`, it is also the answer when no element passes the `where`.
 
-**Fix.** Add `empty -> <value>`. What to answer is a business decision, and not one the tool can make.
+**Fix.** Add `empty -> <value>` (`empty <value>` on a `max` or a `min`). What to answer is a business decision, and not one the tool can make.
 
 **Smallest reproduction**:
 
@@ -687,6 +689,20 @@ fold d over xs
   a -> next
   b -> take_first k
   exhausted -> held
+```
+
+**A `max` with no `empty`**:
+
+```rule
+rule t(t) v1
+
+elements xs(xs)
+  k(k) : number  range >=0 <=10
+
+outputs
+  r(r) : number  round down(1)
+
+max r over xs of k
 ```
 
 Related codes: [E023](#e023), [E024](#e024)
@@ -885,7 +901,7 @@ Related codes: [E025](#e025), [E026](#e026)
 
 `error` — **The `count` is not written correctly**
 
-**When.** The line is not `count <name>(<alias>) over <sequence> where <column> = <value>`: no `over`, no `where`, a sequence that `elements` does not declare, or an `=` with nothing on its right.
+**When.** The line is not `count <name>(<alias>) over <sequence> where <column> = <value>`: no `over`, no `where`, a sequence that `elements` does not declare, or an `=` with nothing on its right. So is a `sum` that is not `sum <name>(<alias>) over <sequence> of <column>`, and a `max` or a `min` that is not `<name>(<alias>) over <sequence> of <column> [where <column> [= <value>]] empty <value>`.
 
 **Fix.** Write it in that shape. The `= <value>` may be left out only for a bool column.
 
@@ -917,7 +933,7 @@ Related codes: [E029](#e029), [E030](#e030), [E020](#e020)
 
 `error` — **This column cannot be counted**
 
-**When.** The column `where` names is not a value of one element (an input or a derived value is one per call, so counting it could only answer 0 or 1); or its values are not a closed set; or the value written is not one of that enum's; or an enum column was given no `= <value>`.
+**When.** The column `where` names is not a value of one element (an input or a derived value is one per call, so counting it could only answer 0 or 1); or its values are not a closed set; or the value written is not one of that enum's; or an enum column was given no `= <value>`. The column after `of` on a `sum`, a `max` or a `min` is held the same way, and it also appears when that column is a value of another sequence than the one `over` names, when a `sum` reads no number, and when a `max` or a `min` reads neither a number, a date nor an ordered enum (their title then says the column cannot be summarised).
 
 **Fix.** Name a field of an element, or a column a per-element table produces. Writing the classification as a table is what puts the classification itself under the completeness check.
 
@@ -980,56 +996,32 @@ Related codes: [E028](#e028), [E112](#e112)
 
 ## E031
 
-`error` — **This would take a second walk over the sequence**
+`error` — **One item reads the elements of two sequences**
 
-**When.** One rule would need two walks over its sequence. There are three forms. A `fold` beside a `count` or a `sum`: they are two endings for the same walk, and a `fold` can stop partway, so what a count means on a walk that stopped is not decided. One item (a table, a clause, a derive or a definition) that reads both a value of one element and what the walk answers (the `fold`'s answer, a `count`, a `sum`): what the walk answers is known only once every element has been seen, and a value of one element exists only while the walk is on it, so reading both would take a second walk after the first. And an output that is a value of one element: once the walk is over, it is not one value. A rule's items fall into those that read no element, those of one element, and those that read what the walk answers, worked out in that order — before the walk, during it, after it.
+**When.** One item (a table, a clause, a derive, a definition or a fold) reads a value of one element of each of two sequences. A value of one element exists only while its sequence is walked, so reading both together would walk one sequence again from the start at every element of the other — a walk inside a walk. The number of walks would then grow with the length of a sequence, and the checks could not finish. So is an output that is a value of one element: once the walk is over, it is not one value. A rule's items fall into those that read no element and those of one element, and an item of one element is worked out on the walk after the one that finds every summary it reads (an item of one element that reads a summary goes on a second walk).
 
-**Fix.** To count, drop the `fold` and let a table judge the count; to fold, drop the `count`. Where an item can be split, put the part that reads the element and the part that reads what the walk answers in separate tables or definitions. To answer with something each element decides, make it one value for the whole sequence with a `count` or a `sum` first.
+**Fix.** Make one of the sequences one value first — a `count`, a `sum`, a `max`, a `min` or a `fold` — and read that value in the item of the other; the item is then worked out on a second walk, once the value is known. To answer with something each element decides, make it one value for the whole sequence with a summary first.
 
 **Smallest reproduction**:
 
 ```rule
 rule t(t) v1
 
-enum v(v) = a(a) | b(b)
-
 elements xs(xs)
-  k(k) : number  range >=0 <=10
+  a(a) : number  range >=0 <=10
+
+elements ys(ys)
+  b(b) : number  range >=0 <=10
 
 outputs
   r(r) : number  round down(1)
+  s(s) : number  round down(1)
 
-table j(j)
-policy unique
-| k   | -> d(d) : v |
-| <=5 | a           |
-| >5  | b           |
+define both(both) : number = a + b
 
-count h(h) over xs where d = a  range >=0 <=10
+sum r over xs of both  range >=0 <=1000
 
-fold d over xs
-  a -> next
-  b -> take_first k
-  empty -> 0
-  exhausted -> held
-```
-
-**One item reading an element's value and what the walk answers**:
-
-```rule
-rule parts_cost v1
-
-elements parts
-  price : number  range >=0 <=100
-
-outputs
-  total : number  round down(1)
-
-sum subtotal over parts of price  range >=0 <=10000
-
-define rest : number = subtotal - price
-
-define total : number = subtotal
+sum s over ys of b  range >=0 <=1000
 ```
 
 **An output that is a value of one element**:
@@ -1053,7 +1045,7 @@ policy unique
 sum total over parts of price  range >=0 <=10000
 ```
 
-Related codes: [E021](#e021), [E029](#e029)
+Related codes: [E021](#e021), [E029](#e029), [E020](#e020)
 
 ## E032
 
@@ -1144,7 +1136,7 @@ Related codes: [E032](#e032), [W111](#w111), [E101](#e101)
 
 `error` — **A row label appears twice**
 
-**When.** Two rows of one table carry the same label before their first `|`. A label is how an `overrides` line, a record's trace and a later version name the row, so it is unique within its table. Every name that names one thing is held the same way: it also appears when two tables or clauses, or two sources, share a name, and when an enum read with `import enum`, or a group that comes with it, has the name of one this rule declares or another `import enum` reads.
+**When.** Two rows of one table carry the same label before their first `|`. A label is how an `overrides` line, a record's trace and a later version name the row, so it is unique within its table. Every name that names one thing is held the same way: it also appears when two tables or clauses, or two sources, share a name; when an enum read with `import enum`, or a group that comes with it, has the name of one this rule declares or another `import enum` reads; and when an input, a sequence and a field of an element (the fields of two sequences included) share a name.
 
 **Fix.** Change one of the two labels (names). An enum read with `import enum` can be read under another name with `-> <another name>`.
 
@@ -2217,7 +2209,7 @@ Related codes: [E129](#e129), [E130](#e130)
 
 `error` — **An `enums` file, or an `import enum` from one, is misshapen**
 
-**When.** A file headed `enums` holds a line other than `description`, `import`, `enum` and `group` (a table, inputs, outputs, a definition, an `import enum`, …); or `import enum <enum> from "<file>"` names a file that is not an `enums` file, or one that does not pass check. An `enums` file holds the enums rules share: it decides nothing, and no function is generated from it.
+**When.** A file headed `enums` holds a line other than `description`, `import`, `enum`, `group` and `prerequisites` (a table, inputs, outputs, a definition, an `import enum`, …); or `import enum <enum> from "<file>"` names a file that is not an `enums` file, or one that does not pass check. An `enums` file holds the enums rules share: it decides nothing, and no rule's function is generated from it.
 
 **Fix.** Write the tables and the inputs in a rule that reads the enum with `import enum … from`. Start the file it reads with `enums <name> v<version>`, and make it pass check.
 
@@ -2240,7 +2232,7 @@ Related codes: [E013](#e013), [E034](#e034)
 
 `error` — **An ordered enum, a comparison on one, or a display name is misshapen**
 
-**When.** A cell that compares (`<v`, `>=v`) is written in a column of an enum whose values are separated by `|`, and so have no order; or two values of such an enum are compared with `<` and the like, passed to `max` or `min`, or held to a range on an input. Or one enum separates its values with both `<` and `|`. Or a range lets no value in, or an enum field of an element is given a range. Or a value's display name is empty or holds a control character, or two values of one enum have the same display name. The values of an enum separated by `<` are ordered as written, and a comparison takes the values before (after) the one it is against.
+**When.** A cell that compares (`<v`, `>=v`) is written in a column of an enum whose values are separated by `|`, and so have no order; or two values of such an enum are compared with `<` and the like, passed to `max` or `min`, or held to a range on an input. Or one enum separates its values with both `<` and `|`. Or a range lets no value in, or an enum field of an element is given a range, or a range is written on the line of a `max` or a `min` of an enum column. Or a value's display name is empty or holds a control character, or two values of one enum have the same display name. The values of an enum separated by `<` are ordered as written, and a comparison takes the values before (after) the one it is against.
 
 **Fix.** If the order the values are declared in means something, separate them with `<` (`enum tier = basic < silver < gold`); if not, write values or sets. Use one separator throughout, and give each value a display name that is not empty and differs from the others'.
 
@@ -2265,6 +2257,39 @@ policy unique
 ```
 
 Related codes: [E012](#e012), [E103](#e103)
+
+## E071
+
+`error` — **The prerequisites are misshapen**
+
+**When.** In a `prerequisites` block: `over` names something that is not an enum; a name is not a value of the enum; a value is written in two places (on `start` and on a line of its own, on two lines, or twice on one line); a value is neither on `start` nor on a line of its own; there is no `start` line; or a line cannot be read. Or the table `ordered by` names is not there, is declared below the block, or does not test one column of the enum and write, for each value, one value of an ordered enum or one `number`; or `ordered by` is written in an `enums` file. Every value needs nothing (`start`), has a line of its own saying what it needs, or is one no case can take (`requires nothing "<reason>"`), so a value added without its prerequisites stops here.
+
+**Fix.** Write each value in one place: a value that needs nothing on `start`, one that needs something on a `<value> requires <prerequisite>, …` line, and one no case can take as `<value> requires nothing "<reason>"`. Declare the table of `ordered by` above the block, make it test the enum's column alone, and write one value of an ordered enum or one `number` in each row.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum k(k) = a(a) | b(b) | c(c)
+
+inputs
+  x(x) : k
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| x | -> r(r) : bool |
+| - | true           |
+
+prerequisites p(p) over k
+  start a
+  b     requires a
+```
+
+Related codes: [E136](#e136), [E137](#e137), [E138](#e138)
 
 ## E072
 
@@ -2762,7 +2787,7 @@ Related codes: [E107](#e107)
 
 `error` — **The range of a derived value does not contain the values it can reach**
 
-**When.** The interval computed from the input ranges falls outside the `range` declared on the derived value. With too narrow a range, the completeness check answers "complete" without ever looking at values that really occur.
+**When.** The interval computed from the input ranges falls outside the `range` declared on the derived value. With too narrow a range, the completeness check answers "complete" without ever looking at values that really occur. So does a `range` written on a `max` or a `min` that leaves out part of its column's range or its `empty` value, since it answers one of those.
 
 **Fix.** Widen the `range` to the reachable interval the message states (it is written out, e.g. `range >=-1_100_000JPY <=1_000_000JPY`). Widening past what is reachable costs nothing: the check sifts the infeasible part out.
 
@@ -3728,6 +3753,111 @@ machine k(k) over m
 
 Related codes: [E072](#e072), [E126](#e126), [E134](#e134)
 
+## E136
+
+`error` — **The prerequisites go round in a cycle**
+
+**When.** Following what a value needs, and what that needs, leads back to the value. The values inside an `or` are followed too. One is given for each set of values that reach one another, with one way round from the first value of the set back to it, and the values of the set. Each value on a cycle waits for another on it, so the cycle cannot be entered anywhere; where another value of an `or` does lead in, a cycle is still where prerequisites are misread, and it is an error.
+
+**Fix.** Drop one of the prerequisites on the cycle.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum k(k) = a(a) | b(b) | c(c)
+
+inputs
+  x(x) : k
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| x | -> r(r) : bool |
+| - | true           |
+
+prerequisites p(p) over k
+  start a
+  b     requires c
+  c     requires b
+```
+
+Related codes: [E071](#e071), [E137](#e137)
+
+## E137
+
+`error` — **A value cannot be reached from `start`**
+
+**When.** Starting from the values of `start` and adding every value each group of whose needs has a value already held, some value is never added. With no cycle, what is never added waits on a value no case can take (`requires nothing`): one is given for each value with a group of such values alone, and the values that wait on it are listed in a note. A cycle is E136's and is not looked at here. A value written as one no case can take is not said: it says so itself.
+
+**Fix.** Drop the prerequisite no case can take, or, if the value cannot be had either, write `<value> requires nothing "<reason>"`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum k(k) = a(a) | b(b) | c(c)
+
+inputs
+  x(x) : k
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| x | -> r(r) : bool |
+| - | true           |
+
+prerequisites p(p) over k
+  start a
+  b     requires c
+  c     requires nothing "retired"
+```
+
+Related codes: [E071](#e071), [E136](#e136)
+
+## E138
+
+`error` — **A prerequisite comes after the value in the order of `ordered by`**
+
+**When.** In the table `ordered by` names, a value's answer comes before the answer of something it needs (a value inside an `or` too). A prerequisite no case can take, and one on a cycle, are E137's and E136's, and are not looked at here.
+
+**Fix.** Correct the table's answer, or the prerequisite.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum k(k) = a(a) | b(b) | c(c)
+enum s(s) = one(one) < two(two)
+
+inputs
+  x(x) : k
+
+outputs
+  r(r) : s
+
+table j(j)
+policy unique
+| x    | -> r(r) : s |
+| a, c | one         |
+| b    | two         |
+
+prerequisites p(p) over k
+  start a
+  b     requires a
+  c     requires b
+  ordered by j
+```
+
+Related codes: [E071](#e071), [E136](#e136)
+
 ## W125
 
 `warning` — **No sequence of calls reaches a state**
@@ -3879,6 +4009,40 @@ policy first
 ```
 
 Related codes: [E101](#e101), [E102](#e102), [W114](#w114), [W127](#w127)
+
+## W130
+
+`warning` — **A prerequisite is already needed through another**
+
+**When.** One of a value's prerequisites is among what another of its prerequisites needs, or what that needs in turn: written or not, it leaves the value to be taken at the same times. The values inside an `or` are left out on both sides.
+
+**Fix.** Drop it: one place less to correct when the prerequisites change.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum k(k) = a(a) | b(b) | c(c)
+
+inputs
+  x(x) : k
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| x | -> r(r) : bool |
+| - | true           |
+
+prerequisites p(p) over k
+  start a
+  b     requires a
+  c     requires b, a
+```
+
+Related codes: [E136](#e136)
 
 ## W105
 
