@@ -1,0 +1,29 @@
+rule 受験料(exam_charge) v1
+description "資格試験の受験料。資格で決まり、勤め先が提携先なら安くなる"
+
+# 資格は研修制度のもので、資格のあいだの試験の順もそこにある。
+import enum 資格 from "shared/資格.rule"
+
+inputs
+  試験(exam)       : 資格
+  提携先(partner)  : bool
+
+outputs
+  受験料(fee) : money[USD]  round down(1USD)
+
+table 受験料表(fee_of)
+policy unique
+| 試験                                           | 提携先 | -> 受験料 |
+| 基礎                                           | -      | 100USD    |
+| 開発アソシエイト, 運用アソシエイト             | false  | 150USD    |
+| 開発アソシエイト, 運用アソシエイト             | true   | 120USD    |
+| 開発プロフェッショナル, 設計プロフェッショナル | false  | 300USD    |
+| 開発プロフェッショナル, 設計プロフェッショナル | true   | 240USD    |
+| セキュリティ専門, データ専門                   | -      | 300USD    |
+
+examples
+| 試験                   | 提携先 | -> 受験料 |
+| 基礎                   | true   | 100USD    |
+| 運用アソシエイト       | false  | 150USD    |
+| 設計プロフェッショナル | true   | 240USD    |
+| データ専門             | false  | 300USD    |

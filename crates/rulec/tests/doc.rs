@@ -150,11 +150,20 @@ const CORPUS: &[&str] = &[
 "tests/corpus/retry_attempts.rule",
 "tests/corpus/grace_period.rule",
 "tests/corpus/one_time_perk.rule",
+"tests/corpus/course_catalog.rule",
+"tests/corpus/科目の履修.rule",
+"tests/corpus/exam_fee.rule",
+"tests/corpus/受験料.rule",
 ];
 
 /// The `enums` files four of the rules above read (§15.212). They hold no table, so the checks of
 /// the cells and the headers have nothing in them to read; `doc` of the directory renders them too.
-const ENUMS_FILES: &[(&str, &str)] = &[("tests/corpus/shared/catalog.rule", "catalog.md"), ("tests/corpus/shared/品目.rule", "goods_catalog.md")];
+const ENUMS_FILES: &[(&str, &str)] = &[
+    ("tests/corpus/shared/catalog.rule", "catalog.md"),
+    ("tests/corpus/shared/品目.rule", "goods_catalog.md"),
+    ("tests/corpus/shared/certifications.rule", "certifications.md"),
+    ("tests/corpus/shared/資格.rule", "certification_path.md"),
+];
 
 /// A rule whose groups are broken in one of three ways. Every variant passes `check` (the `-` row
 /// carries completeness).

@@ -182,6 +182,13 @@ golden!(e134_attempts_past_range, "E134", "tests/mutants/m_e134.rule", "E134");
 golden!(e135_always_broken, "E135", "tests/mutants/m_e135.rule", "E135");
 golden!(w127_unsettled_over_intervals, "W127", "tests/mutants/m_w127.rule", "W127");
 
+// The prerequisites of a course (§15.222).
+golden!(e071_a_course_with_no_line, "E071", "tests/mutants/m_e071.rule", "E071");
+golden!(e136_a_cycle_of_prerequisites, "E136", "tests/mutants/m_e136.rule", "E136");
+golden!(e137_a_course_never_reached, "E137", "tests/mutants/m_e137.rule", "E137");
+golden!(e138_taught_before_what_it_needs, "E138", "tests/mutants/m_e138.rule", "E138");
+golden!(w130_a_prerequisite_already_needed, "W130", "tests/mutants/m_w130.rule", "W130");
+
 // The walk's stages and the words of a cell (§15.208), and the rows nothing decides (§15.209).
 golden!(e075_value_and_name, "E075", "tests/mutants/m_e075.rule", "E075");
 golden!(e031_element_and_answer, "E031-walk", "tests/mutants/m_e031walk.rule", "E031");

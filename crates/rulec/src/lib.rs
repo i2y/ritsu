@@ -67,6 +67,8 @@ pub mod ooxml;
 /// `Rules::outputs_over`).
 pub mod over;
 pub mod parse;
+/// Which values of an enum need which before them (§15.222).
+pub mod prereq;
 /// ritsu's ports, as rulec answers them (ritsu's DESIGN 3.2).
 pub mod ports;
 pub mod prelude;
@@ -161,6 +163,8 @@ fn stages(src: &str, path: &str, budget: i64) -> Report {
     diags.extend(enums::check(f, &t, path));
     diags.extend(projection::check(f, &t, path));
     diags.extend(sources::check(f, path));
+    // The shape of the prerequisites (§15.222): what the graph below is read from.
+    diags.extend(prereq::check_shape(f, &t, path));
     enrich_e104(&mut diags, f, &t);
     enrich_arith(&mut diags, f, &t);
     if diags.iter().any(|d| d.severity == Severity::Error) {
@@ -187,6 +191,9 @@ fn stages(src: &str, path: &str, budget: i64) -> Report {
             diags.extend(machine::check(f, &t, path, budget.max(0) as usize));
         }
     }
+    // The prerequisites (§15.222): a finite graph, walked whole. The order an `ordered by` table
+    // gives is read once the tables hold.
+    diags.extend(prereq::check_graph(f, &t, path, tables_hold));
     Report { diags, quiet, shadow, nodes }
 }
 

@@ -83,7 +83,7 @@ fn java_name(s: &str) -> String {
 }
 
 /// A string literal.
-fn java_str(s: &str) -> String {
+pub(super) fn java_str(s: &str) -> String {
     format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
@@ -389,7 +389,7 @@ impl<'a> Gen<'a> {
     }
 
     /// An enum value as the constant the class declares for it.
-    fn java_value(&self, v: &str, ty: &Ty) -> String {
+    pub(super) fn java_value(&self, v: &str, ty: &Ty) -> String {
         match (self.value_name(v, ty), ty.present()) {
             // A value of an `enums` file's enum is that file's class's (§15.212).
             (Some((_, alias)), Ty::Enum(en)) if self.c.owners.contains_key(en) => format!("{}.{}", self.java_enum(en), java_id(&alias.to_uppercase())),
@@ -617,6 +617,8 @@ impl<'a> Gen<'a> {
             o.push_str(&self.java_enum_decl(&jp, &ascii));
         }
         o.push_str(&self.java_enum_helpers());
+        // Which values need which before them (§15.222).
+        o.push_str(&self.java_prereqs());
 
         // The machine this function is one step of (§15.148).
         if let Some((en, init, fins)) = self.machine_consts() {
@@ -1478,7 +1480,7 @@ impl<'a> Gen<'a> {
              {helpers}{wire}}}\n",
             ritsu_emit::header::VERSION,
             args = args.join(", "),
-            labels = self.java_labels_mode(&line),
+            labels = self.java_labels_mode(&line) + &self.java_prereq_mode(&line),
             helpers = JAVA_JSON_HELPERS,
             wire = JAVA_WIRE.replace("@CLS@", &cls).replace(
                 "@D_WIRE@",

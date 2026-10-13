@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import datetime
 import json
+from collections.abc import Iterable
 
 import numpy as np
 
@@ -397,6 +398,23 @@ class Rule:
         """The display name of a value of an enum the rule names, or the value's own name
         when it has none (rulec's §15.211)."""
         return self.plan.get("labels", {}).get(enum, {}).get(value, value)
+
+    def requires(self, name: str, value: str) -> list[list[str]]:
+        """What a value needs before it can be taken, by the `prerequisites` block `name`:
+        every group, each by any one of its values. A value that needs nothing has no group;
+        one no case can take has a group with no value in it (rulec's §15.222)."""
+        block = self.plan.get("prerequisites", {}).get(name)
+        if block is None or value not in block["requires"]:
+            raise ValueError(f"{value} is not a value of the prerequisites {name}")
+        return [list(g) for g in block["requires"][value]]
+
+    def available(self, name: str, value: str, held: Iterable[str]) -> bool:
+        """Whether a value can be taken now: it is not held yet, and every group of what it
+        needs has a value in `held` (rulec's §15.222)."""
+        have = set(held)
+        if value in have:
+            return False
+        return all(any(p in have for p in g) for g in self.requires(name, value))
 
     def _columns(self, cols: dict):
         """The entry guard, and the wire turned into integers. Refusing is part of the rule.

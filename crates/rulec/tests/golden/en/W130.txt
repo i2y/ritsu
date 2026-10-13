@@ -1,0 +1,7 @@
+warning[W130]: algorithms needs intro_programming, which its prerequisite data_structures already needs
+  --> tests/mutants/m_w130.rule:39 prerequisites enrollment
+   |
+39 |   algorithms        requires data_structures, discrete_math, intro_programming
+   |                                                              ^^^^^^^^^^^^^^^^^ this changes nothing
+   |
+ Whoever holds data_structures holds intro_programming too, so algorithms can be taken at the same times with intro_programming written or not. Dropping it leaves one place less to correct when the prerequisites change.

@@ -1,0 +1,8 @@
+error[E136]: The prerequisites go round in a cycle: data_structures → algorithms → data_structures
+  --> tests/mutants/m_e136.rule:37 prerequisites enrollment
+   |
+37 |   data_structures   requires intro_programming, algorithms
+   |                                                 ^^^^^^^^^^ the cycle starts here
+   |
+ Each value needs the one its arrow points to. Every value on the cycle waits for another on it, so the cycle cannot be entered anywhere.
+ Even where another value of an `or` leads in, a cycle is where prerequisites are misread, so it is an error. Drop one of the prerequisites on it.

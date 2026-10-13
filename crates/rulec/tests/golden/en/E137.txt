@@ -1,0 +1,10 @@
+error[E137]: operating_systems cannot be reached from `start`
+  --> tests/mutants/m_e137.rule:40 prerequisites enrollment
+   |
+40 |   operating_systems requires data_structures, mainframe_cobol
+   |                                               ^^^^^^^^^^^^^^^ no case can take this
+   |
+ operating_systems needs mainframe_cobol, which no case can take.
+ mainframe_cobol: `requires nothing "withdrawn from the catalog in 2026"`
+ Until operating_systems can be reached, neither can networks.
+ Drop the prerequisite no case can take, or if operating_systems cannot be had either, write `operating_systems requires nothing "<reason>"`.

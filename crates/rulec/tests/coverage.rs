@@ -9,7 +9,7 @@
 use rulec::coverage::{self, BOUND, ROW, SHADOW, TIE, VALUE};
 use rulec::vectors::{self, Vector};
 
-const CORPUS: [&str; 104] = [
+const CORPUS: [&str; 108] = [
     "tests/corpus/速達の見積.rule",
     "tests/corpus/出荷の送料.rule",
     "tests/corpus/注文の送料.rule",
@@ -115,6 +115,10 @@ const CORPUS: [&str; 104] = [
     "tests/corpus/retry_attempts.rule",
     "tests/corpus/grace_period.rule",
     "tests/corpus/one_time_perk.rule",
+    "tests/corpus/course_catalog.rule",
+    "tests/corpus/科目の履修.rule",
+    "tests/corpus/exam_fee.rule",
+    "tests/corpus/受験料.rule",
 ];
 
 fn load(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked, Vec<Vector>) {
@@ -444,6 +448,11 @@ fn 義務の件数を固定する() {
         ("tests/corpus/retry_attempts.rule", 5, 2, 0, 5, 0),
         ("tests/corpus/grace_period.rule", 8, 2, 0, 5, 0),
         ("tests/corpus/one_time_perk.rule", 10, 0, 0, 8, 0),
+        // §15.222: the prerequisites are not table rows; what is pinned here is the tables'.
+        ("tests/corpus/course_catalog.rule", 6, 0, 0, 0, 0),
+        ("tests/corpus/科目の履修.rule", 6, 0, 0, 0, 0),
+        ("tests/corpus/exam_fee.rule", 6, 0, 0, 0, 0),
+        ("tests/corpus/受験料.rule", 6, 0, 0, 0, 0),
     ];
     // Every rule of the corpus is audited and pinned. `threeway.rs` keeps its own list
     // honest the same way; this one had no such guard, and nine rules had drifted out of it

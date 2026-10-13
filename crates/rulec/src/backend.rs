@@ -108,6 +108,12 @@ pub struct Backend {
     /// (§15.211). Wasm has one entry, `call`, and no label function; SQL's query has none either,
     /// and its PostgreSQL function file answers in the pass `pg` runs.
     pub labels: bool,
+    /// Whether the module has the two functions of a `prerequisites` block and the runner answers
+    /// `--prerequisites` (§15.222): what a value needs, and whether it can be taken with what is
+    /// held. SQL and Wasm have one entry each and no room for a second function, so `rulec gen`
+    /// names them as written without, `rulec api` says they lack the functions, and `rulec test`
+    /// says it skipped them.
+    pub prereqs: bool,
     /// The words this language will not let **any** identifier be — its keywords
     /// (§15.103). Every ASCII alias reaches at least one target verbatim: measured, a rule
     /// with an input aliased `type` generated Rust that reads `pub fn sum(type: i64, …)`
@@ -318,6 +324,7 @@ pub const ALL: &[Backend] = &[
         ready: None,
         owner_source: None,
         labels: true,
+        prereqs: true,
         reserved: words::PYTHON.reserved,
         globals: words::PYTHON.globals,
         modules: words::PYTHON.modules,
@@ -368,6 +375,7 @@ pub const ALL: &[Backend] = &[
         // The plan is JSON: a name here is data the runtime reads, never an identifier.
         owner_source: None,
         labels: true,
+        prereqs: true,
         reserved: words::NUMPY.reserved,
         globals: words::NUMPY.globals,
         modules: words::NUMPY.modules,
@@ -402,6 +410,7 @@ pub const ALL: &[Backend] = &[
         ready: None,
         owner_source: None,
         labels: true,
+        prereqs: true,
         reserved: words::TYPESCRIPT.reserved,
         globals: words::TYPESCRIPT.globals,
         modules: words::TYPESCRIPT.modules,
@@ -436,6 +445,7 @@ pub const ALL: &[Backend] = &[
         ready: None,
         owner_source: None,
         labels: true,
+        prereqs: true,
         reserved: words::JAVASCRIPT.reserved,
         globals: words::JAVASCRIPT.globals,
         modules: words::JAVASCRIPT.modules,
@@ -487,6 +497,7 @@ pub const ALL: &[Backend] = &[
         ready: None,
         owner_source: None,
         labels: true,
+        prereqs: true,
         reserved: words::RUST.reserved,
         globals: words::RUST.globals,
         modules: words::RUST.modules,
@@ -519,6 +530,7 @@ pub const ALL: &[Backend] = &[
         ready: None,
         owner_source: None,
         labels: true,
+        prereqs: true,
         reserved: words::RUBY.reserved,
         globals: words::RUBY.globals,
         modules: words::RUBY.modules,
@@ -552,6 +564,7 @@ pub const ALL: &[Backend] = &[
         ready: None,
         owner_source: None,
         labels: true,
+        prereqs: true,
         reserved: words::PHP.reserved,
         globals: words::PHP.globals,
         modules: words::PHP.modules,
@@ -584,6 +597,7 @@ pub const ALL: &[Backend] = &[
         ready: None,
         owner_source: None,
         labels: true,
+        prereqs: true,
         reserved: words::GO.reserved,
         globals: words::GO.globals,
         modules: words::GO.modules,
@@ -626,6 +640,7 @@ pub const ALL: &[Backend] = &[
         ready: None,
         owner_source: Some(|m| format!("{m}.swift")),
         labels: true,
+        prereqs: true,
         reserved: words::SWIFT.reserved,
         globals: words::SWIFT.globals,
         modules: words::SWIFT.modules,
@@ -685,6 +700,7 @@ pub const ALL: &[Backend] = &[
         }),
         owner_source: None,
         labels: true,
+        prereqs: true,
         reserved: words::JAVA.reserved,
         globals: words::JAVA.globals,
         modules: words::JAVA.modules,
@@ -720,6 +736,7 @@ pub const ALL: &[Backend] = &[
         ready: None,
         owner_source: None,
         labels: false,
+        prereqs: false,
         reserved: words::SQL.reserved,
         globals: words::SQL.globals,
         modules: words::SQL.modules,
@@ -775,6 +792,7 @@ pub const ALL: &[Backend] = &[
         }),
         owner_source: None,
         labels: false,
+        prereqs: false,
         reserved: words::WASM.reserved,
         globals: words::WASM.globals,
         modules: words::WASM.modules,

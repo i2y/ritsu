@@ -50,6 +50,11 @@ apply  …          (another rule, applied with its inputs bound; interleaves to
   except <definition>, …
   <callee output> -> <name>
 result …
+prerequisites <name>(<alias>) over <enum>   (which values of the enum need which, §6.5)
+  start <value>, …
+  <value> requires <value>, <value> or <value>, …
+  <value> requires nothing "<reason>"
+  ordered by <table>
 machine <name>(<alias>) over <table>   (the rule is one step of a state machine, §6.4)
   carry   <input> -> <output>
   initial <state>
@@ -76,8 +81,8 @@ examples
 - `examples` comes last. There may be more than one section of them (§9).
 
 A second kind of file starts with `enums <name>(<alias>) v<version>` instead of `rule`. It holds
-enums that several rules share, and nothing that decides: `description`, `import`, `enum` and
-`group` lines only (§3.1, "Enums several rules share").
+enums that several rules share, and nothing that decides: `description`, `import`, `enum`,
+`group` and `prerequisites` lines only (§3.1, "Enums several rules share"; §6.5).
 
 A blank line separates sections. `#` starts a comment that runs to the end of the line;
 comments may appear anywhere, including at the end of a table row and on a line of their own
@@ -1364,6 +1369,99 @@ and prints its constants first, so the traces hold the hand-over and the constan
 the answers (docs/formats.md). A further carried value is handed over the same way: the trace's
 first call is passed where each one starts, and every later one what the language answered.
 
+## 6.5 prerequisites
+
+Some values of an enum can be had only after others: a course after the courses it requires, a
+certification after the one below it, a module of a product after the modules it builds on. A
+`prerequisites` block says which, once, for every value of one enum:
+
+```rule
+prerequisites enrollment over course
+  start             intro_programming, discrete_math, calculus
+  statistics        requires calculus
+  algorithms        requires data_structures, discrete_math
+  machine_learning  requires algorithms, statistics or linear_algebra
+  mainframe_cobol   requires nothing "withdrawn from the catalog in 2026"
+  ordered by level_of
+```
+
+| line | what it says |
+|---|---|
+| `prerequisites <name>(<alias>) over <enum> [open]` | the block, its name — which names the generated functions, so a name that is not ASCII takes an alias (E011) — and the enum whose values it is about. `open` marks a block other files may add lines to, for the values they add; it is read and kept, and changes nothing yet |
+| `start <value>, …` | the values that need nothing. Every other value is reached from them. **Required** |
+| `<value> requires <value>, …` | what a case has to hold before it can take the value. `,` separates groups that are all needed; `or` joins the values of a group, any one of which is enough: `a, b or c` is a, and b or c |
+| `<value> requires nothing "<reason>"` | a value no case can take, and why: a retired course, a certification no longer examined |
+| `ordered by <table>` | a table of this rule, declared above the block, whose answer for a value is never below its answers for what the value needs. It tests one column of the enum and writes one value of an ordered enum (§3) or one `number` in each row |
+
+Every value of the enum is in exactly one place: on `start`, or on a line of its own (E071). A
+value added to the enum without its prerequisites stops the check rather than passing as one that
+needs nothing.
+
+The block stands in a rule or in an `enums` file (§3.1); `ordered by` only in a rule, since an
+`enums` file has no tables. None of its words is reserved: `start`, `requires`, `or`, `nothing`
+and `ordered` are read by their place in the line, so a value may be called any of them (`start
+requires …` is the line of a value called `start`, and `nothing` is the word only before a
+string), and a declaration may be called `prerequisites`.
+
+What `rulec check` proves of a block:
+
+| check | what it finds | code |
+|---|---|---|
+| shape | a name that is not a value, a value in two places or in none, no `start`, an `ordered by` table that is not there, is below the block or has another shape | E071 |
+| cycle | a value that, through what it needs, needs itself — the values of an `or` followed too | E136 |
+| reach | a value that cannot be reached from `start`, because it waits on one no case can take | E137 |
+| order | a value whose `ordered by` answer is below the answer for something it needs | E138 |
+| redundancy | a prerequisite another prerequisite of the same value already needs (the values of an `or` left out) | W130 |
+
+The graph is finite, so each of these is decided by walking it, and the answer is exact. A cycle
+is said once for each set of values that reach one another; what cannot be reached while there
+is a cycle is not said on top. A value that waits on one no case can take is said where the wait
+starts, with the values behind it in a note:
+
+```console
+error[E137]: operating_systems cannot be reached from `start`
+  --> tests/mutants/m_e137.rule:40 prerequisites enrollment
+   |
+40 |   operating_systems requires data_structures, mainframe_cobol
+   |                                               ^^^^^^^^^^^^^^^ no case can take this
+   |
+ operating_systems needs mainframe_cobol, which no case can take.
+ mainframe_cobol: `requires nothing "withdrawn from the catalog in 2026"`
+ Until operating_systems can be reached, neither can networks.
+ Drop the prerequisite no case can take, or if operating_systems cannot be had either, write `operating_systems requires nothing "<reason>"`.
+```
+
+### What a block generates
+
+Two functions, in the module of the file that holds the block — a rule's, or an `enums` file's —
+in each language with modules:
+
+- `<name>_requires(value)`: what the value needs, as a list of groups, each a list of values any
+  one of which is enough. A value on `start` has no group (`[]`); one no case can take has one
+  group with no value in it (`[[]]`), which nothing held can meet.
+- `<name>_available(value, held)`: whether the value can be taken now: it is not in `held`, and
+  every group has a value in `held`.
+
+| language | what a value needs | whether it can be taken |
+|---|---|---|
+| Python, Rust, Ruby, PHP | `enrollment_requires(value)` | `enrollment_available(value, held)` |
+| TypeScript, JavaScript, Swift, Java | `enrollmentRequires(value)` | `enrollmentAvailable(value, held)` |
+| Go | `EnrollmentRequires(value)` | `EnrollmentAvailable(value, held)` |
+| NumPy | `rule.requires("enrollment", value)` | `rule.available("enrollment", value, held)` |
+| SQL, Wasm | — | — |
+
+SQL and Wasm have one entry and no room for a second function: `rulec gen` says so when it writes
+them, `rulec api` names them under `without`, and `rulec test` notes that nothing was compared
+there.
+
+NumPy's plan carries the groups as data, and its runtime answers both; an `enums` file has no plan
+there.
+
+The vector suite holds every language to the reference evaluator over a handful of cases per value
+— nothing held, one value of each group, that less the value of one group, each other value of an
+`or`, the value itself besides, every other value — and the certificate carries the graph with the
+orders that show it has no cycle and that every value is reached (docs/formats.md).
+
 ## 7. Tables
 
 ```rule
@@ -1702,6 +1800,8 @@ terminate; the fourth would take the replay of past records with it.
 - rewrites `→ ・ 、 ， ≦ ≧` and fullwidth digits to their ASCII forms,
 - folds the `->` of the second and later output columns of `examples`,
 - indents the lines under `machine` by two spaces and lines their values up in one column,
+- indents the lines under `prerequisites` by two spaces and pads each value, and `start`, to the
+  widest, so that `requires` and the start values line up in one column (§6.5),
 - leaves the inside of a comment alone.
 
 `rulec fmt --check` names the files that are not in canonical form and exits 1, which is how
@@ -1739,6 +1839,8 @@ An enum **value** never starts a line, so it may be any of them but eleven: `not
 money attributes (`incl_tax` `excl_tax`), `std`, `enums` (the heading of a file of enums, read
 on its first line only) and `open` (the mark after an enum's last value, §3) are part of the
 vocabulary but are told apart by position, so they are not reserved as names. A value may be
-called `open` too: the mark is only the word that follows the last value.
+called `open` too: the mark is only the word that follows the last value. So are `prerequisites`
+— a line head outside every block, and a name inside one, as `prerequisites(p) : number` under
+`inputs` — and the words under it, `start`, `requires`, `or`, `nothing` and `ordered` (§6.5).
 
 A test holds this table to `src/kw.rs`, which is the single place the vocabulary is defined.

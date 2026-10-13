@@ -603,6 +603,8 @@ impl<'a> Gen<'a> {
             .raw("steps", format!("[{}]", steps.join(",")))
             .opt_raw("machine", machine)
             .opt_raw("labels", self.np_labels())
+            // Which values need which before them, by block and value (§15.222).
+            .opt_raw("prerequisites", self.np_prereqs())
             .finish()
     }
 
@@ -629,8 +631,11 @@ impl<'a> Gen<'a> {
     /// that called the rule per line would answer correctly and prove nothing.
     pub fn np_runner(&self) -> String {
         let alias = pub_name(&self.f.name);
+        // What it answers with `--prerequisites`: each block's functions, from the plan (§15.222).
+        let prereqs = self.np_prereq_mode();
         if self.f.machine.is_some() {
-            return format!("{}{}", self.header("#"), np_machine_runner(&alias, !self.more_carried().is_empty()));
+            let load = format!("rule = rulec_np.load(\"{alias}.json\")\n");
+            return format!("{}{}", self.header("#"), np_machine_runner(&alias, !self.more_carried().is_empty()).replacen(&load, &format!("{load}{prereqs}"), 1));
         }
         // What it answers with `--labels`: the display name of each value a line names (§15.211).
         let labels = if self.labeled_enums().is_empty() {
@@ -646,7 +651,7 @@ import numpy as np
 import rulec_np
 
 rule = rulec_np.load("{alias}.json")
-{labels}rows = [json.loads(l) for l in sys.stdin if l.strip()]
+{labels}{prereqs}rows = [json.loads(l) for l in sys.stdin if l.strip()]
 
 
 def _wire(v):

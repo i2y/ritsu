@@ -80,6 +80,10 @@ pub struct Run {
     pub skipped: Vec<String>,
     /// How many of the languages were skipped, for the summary's scope.
     pub missing_langs: usize,
+    /// What a target does not have by design, said and counted but not a skip: the functions of
+    /// a `prerequisites` block in a target with one entry (§15.222). `--require-all` is about the
+    /// toolchains, so these leave it passing.
+    pub without: Vec<String>,
 }
 
 impl Run {
@@ -180,6 +184,9 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
         )
     })?;
     let mut aliases: Vec<String> = Vec::new();
+    // The `enums` files whose `prerequisites` have functions to hold to the reference, and no
+    // vectors besides: they decide nothing else (§15.222).
+    let mut prereq_only: Vec<String> = Vec::new();
     for e in rd.flatten() {
         let name = e.file_name().to_string_lossy().into_owned();
         if let Some(a) = name.strip_suffix(".jsonl") {
@@ -189,8 +196,12 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
             if !a.ends_with(".expected") && !a.ends_with(".refused") && !a.ends_with(".traces") {
                 aliases.push(a.to_string());
             }
+        } else if let Some(a) = name.strip_suffix(".prereq.tsv") {
+            prereq_only.push(a.to_string());
         }
     }
+    prereq_only.retain(|a| !aliases.contains(a));
+    aliases.extend(prereq_only.iter().cloned());
     aliases.sort();
     if aliases.is_empty() {
         return Err(tr!("`{}` にベクタがありません", "no vectors in `{}`", vdir.display()));
@@ -204,7 +215,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
 
     // Which toolchains are here. The set of backends lives in src/backend.rs, so a new
     // language is a row there rather than five more blocks in this file.
-    let mut out = Run { results: Vec::new(), skipped: Vec::new(), missing_langs: 0 };
+    let mut out = Run { results: Vec::new(), skipped: Vec::new(), missing_langs: 0, without: Vec::new() };
     let present: Vec<&crate::backend::Backend> = crate::backend::ALL
         .iter()
         .filter(|b| {
@@ -365,6 +376,45 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
     };
 
     for alias in &aliases {
+        // What each `prerequisites` block's functions answer (§15.222): the runner built for the
+        // vectors asked with `--prerequisites` — built here first for an `enums` file, which has
+        // no vectors to build it for.
+        let prereq_in = dir.join("vectors").join(format!("{alias}.prereq.tsv"));
+        let prereq_want = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.prereq.expected"))).ok();
+        let prereq_count = prereq_want.as_ref().map(|w| w.lines().count()).unwrap_or(0);
+        let prereqs = |plan: &crate::backend::Plan, build: bool| -> Option<Failure> {
+            let want = prereq_want.as_ref()?;
+            let plan = crate::backend::Plan {
+                cwd: plan.cwd.clone(),
+                build: if build { plan.build.clone() } else { None },
+                cmd: plan.cmd.clone(),
+                args: plan.args.iter().cloned().chain(["--prerequisites".to_string()]).collect(),
+            };
+            match exec(&plan, Some(&prereq_in)) {
+                Err(f) => Some(f),
+                Ok(got) => (got != *want).then(|| first_diff(&got, want)),
+            }
+        };
+        if prereq_want.is_some() {
+            for b in present.iter().filter(|b| !b.prereqs) {
+                out.without.push(tr!(
+                    "{}: {alias} の前提のつながりの関数は、入口が一つのこの言語には無いので、比べていません",
+                    "{}: {alias}'s prerequisites have no functions in this target, which has one entry, so none were compared",
+                    b.name
+                ));
+            }
+        }
+        if prereq_only.contains(alias) {
+            let pkg = alias.replace('_', "");
+            for b in present.iter().filter(|b| b.prereqs) {
+                if !wrote(dir, b.id, &crate::backend::stem(b, alias)) || !dir.join(&(b.run)(alias, &pkg).cwd).is_dir() {
+                    continue;
+                }
+                let diff = prereqs(&runner_plan(b, dir, alias, &pkg), true);
+                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "prerequisites", vectors: prereq_count, refused: 0, calls: 0, diff });
+            }
+            continue;
+        }
         let vec_path = dir.join("vectors").join(format!("{alias}.jsonl"));
         let want = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.expected.jsonl")))
             .map_err(|_| tr!("{alias}: 期待値がありません", "{alias}: no expected values"))?;
@@ -442,6 +492,10 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
             if b.labels && labels_want.is_some() && built {
                 let diff = labelled(&plan);
                 out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "labels", vectors: label_count, refused: 0, calls: 0, diff });
+            }
+            if b.prereqs && prereq_want.is_some() && built {
+                let diff = prereqs(&plan, false);
+                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "prerequisites", vectors: prereq_count, refused: 0, calls: 0, diff });
             }
             // The same runner as a WASI module, held to the same records (§15.63).
             if let (Some(w), true) = (b.wasi, wasi_host) {
@@ -536,8 +590,10 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
         }
     }
 
-    // Unit vectors of the rounding helpers. Every rule emits the same ones, so run just one.
-    let pkg0 = aliases[0].replace('_', "");
+    // Unit vectors of the rounding helpers. Every rule emits the same ones, so run just one. An
+    // `enums` file emits none (§15.222): with nothing but its functions there, there are none to run.
+    let Some(first) = aliases.iter().find(|a| !prereq_only.contains(a)) else { return Ok(out) };
+    let pkg0 = first.replace('_', "");
     for b in &present {
         // Same reason as above: a backend nothing was written for has no helpers either.
         if !dir.join(b.id).exists() {
@@ -967,6 +1023,9 @@ pub fn render(r: &Run) -> String {
     for s in &r.skipped {
         o.push_str(&tr!("注意: {s}\n", "warning: {s}\n"));
     }
+    for s in &r.without {
+        o.push_str(&tr!("注記: {s}\n", "note: {s}\n"));
+    }
     let mut bad = 0;
     for x in &r.results {
         match &x.diff {
@@ -975,6 +1034,8 @@ pub fn render(r: &Run) -> String {
                     tr!("ハーネス {} 本", "{} harnesses", x.vectors)
                 } else if x.via.ends_with("labels") {
                     tr!("表示名 {} 件", "{} display names", x.vectors)
+                } else if x.via == "prerequisites" {
+                    tr!("前提 {} 件", "{} prerequisite cases", x.vectors)
                 } else if x.vectors > 0 {
                     tr!("ベクタ {} 件", "{} vectors", x.vectors)
                 } else {
@@ -1076,6 +1137,7 @@ fn via(x: &Outcome) -> &'static str {
         "wasi" => ", WASI",
         "function" => ", PostgreSQL",
         "labels" => ", labels",
+        "prerequisites" => ", prerequisites",
         "function-labels" => ", PostgreSQL, labels",
         "proof" => ", proof",
         _ => "",
@@ -1121,5 +1183,7 @@ pub fn render_json(r: &Run) -> String {
     crate::json::Obj::new()
         .raw("results", crate::json::arr(&results))
         .raw("skipped", crate::json::strs(&r.skipped))
+        // What a target does not have by design (§15.222), only where there is any.
+        .opt_raw("without", (!r.without.is_empty()).then(|| crate::json::strs(&r.without)))
         .finish()
 }

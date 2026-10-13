@@ -213,9 +213,9 @@ fn 台帳は重複せず_関係するコードも台帳にある() {
     // Every code that has a golden snapshot, and every code in the DESIGN ledger, is here;
     // `出しうるコードは全部台帳にある` covers the first. There are no vacant numbers left.
     // W901 (ritsu's DESIGN 16.3) made it 113, E075 and W128 (§15.208, §15.209) 115, E066 and E069
-    // (§15.210, §15.212) 117, E132 and E139 (§15.213, §15.215) 119, and E072, E134 and E135
-    // (§15.217) 122.
-    assert_eq!(all.len(), 122, "台帳の件数が変わった: {}", all.len());
+    // (§15.210, §15.212) 117, E132 and E139 (§15.213, §15.215) 119, E072, E134 and E135
+    // (§15.217) 122, and E071, E136, E137, E138 and W130 (§15.222) 127.
+    assert_eq!(all.len(), 127, "台帳の件数が変わった: {}", all.len());
 }
 
 fn run(args: &[&str]) -> (i32, String) {

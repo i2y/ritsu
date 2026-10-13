@@ -1,0 +1,52 @@
+rule 科目の履修(course_enrollment) v1
+description "情報系の学位の科目。科目ごとに、何年次の科目か、単位数、履修の前に合格していなければならない科目を決める。書き下ろしの例"
+
+# 年次は低い順に並べる。どの科目も、それに要る科目より前の年次には置かない（下の `ordered by
+# 年次表`）。
+enum 年次(year) = 一年(first) < 二年(second) < 三年(third) < 四年(fourth)
+
+enum 科目(course) = プログラミング入門(intro_programming) | 離散数学(discrete_math) | 微積分(calculus) | 統計学(statistics) | 線形代数(linear_algebra) | データ構造(data_structures) | データベース(databases) | アルゴリズム(algorithms) | オペレーティングシステム(operating_systems) | ネットワーク(networks) | 機械学習(machine_learning) | コンパイラ(compilers) | 卒業研究(capstone) | メインフレームCOBOL(mainframe_cobol)
+
+inputs
+  科目(course) : 科目
+
+outputs
+  年次(year)    : 年次
+  単位(credits) : number  round down(1)
+
+table 年次表(level_of)
+policy unique
+| 科目                                                 | -> 年次 |
+| プログラミング入門, 離散数学, 微積分                 | 一年    |
+| 統計学, 線形代数, データ構造, データベース           | 二年    |
+| アルゴリズム, オペレーティングシステム, ネットワーク | 三年    |
+| 機械学習, コンパイラ, 卒業研究, メインフレームCOBOL  | 四年    |
+
+table 単位表(credit_of)
+policy unique
+| 科目          | -> 単位 |
+| 卒業研究      | 8       |
+| not: 卒業研究 | 4       |
+
+# 履修の前に合格していなければならない科目。`start` の科目は何も要らない。科目ごとの行では、
+# `,` で区切ったものは全部が要り、`or` でつないだものはどれか一つで足りる。
+prerequisites 履修(enrollment) over 科目
+  start                    プログラミング入門, 離散数学, 微積分
+  統計学                   requires 微積分
+  線形代数                 requires 微積分
+  データ構造               requires プログラミング入門
+  データベース             requires プログラミング入門
+  アルゴリズム             requires データ構造, 離散数学
+  オペレーティングシステム requires データ構造
+  機械学習                 requires アルゴリズム, 統計学 or 線形代数
+  コンパイラ               requires アルゴリズム
+  卒業研究                 requires データベース, ネットワーク or コンパイラ
+  メインフレームCOBOL      requires nothing "2026 年に科目の一覧から外した"
+  ordered by 年次表
+
+examples
+| 科目               | -> 年次 | 単位 |
+| プログラミング入門 | 一年    | 4    |
+| データベース       | 二年    | 4    |
+| ネットワーク       | 三年    | 4    |
+| 卒業研究           | 四年    | 8    |

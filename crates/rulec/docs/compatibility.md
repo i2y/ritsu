@@ -11,8 +11,9 @@ the same thing, and its generated code is called the same way and answers the sa
 
 1. **The `.rule` language.** Every construct 1.0 accepts keeps its syntax and its meaning —
    the state machines (`machine`, `held`, `never`, `once`, `scenario`, and the values carried
-   besides the state: a further `carry`, `initial <input> <value>`, `always`) included. New
-   constructs may be added.
+   besides the state: a further `carry`, `initial <input> <value>`, `always`) and the
+   prerequisites of an enum's values (`prerequisites` with `start`, `requires`, `nothing` and
+   `ordered by`) included. New constructs may be added.
 2. **The names you may use.** The reserved words — the 65 words E009 refuses as a name,
    listed in `src/kw.rs` — are fixed at 1.0, and a test holds the list. A later release may
    add words to the language, but never to that list: a new word is read only where no name

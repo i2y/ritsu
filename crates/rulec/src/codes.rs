@@ -1653,6 +1653,13 @@ machine k(k) over m
 "##;
 const X_E055: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| x     | -> r(r) : bool |\n| true  | false          |\n| false | true           |\n\nscenario s(s)\n| x    | -> r  |\n| true | false |\n";
 /// E056: a `held` line naming an output.
+/// The rule the reproductions of `prerequisites` (§15.222) are written over: three values, a table
+/// that reads them, and the block under it.
+const X_E071: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\n\ninputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| x | -> r(r) : bool |\n| - | true           |\n\nprerequisites p(p) over k\n  start a\n  b     requires a\n";
+const X_E136: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\n\ninputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| x | -> r(r) : bool |\n| - | true           |\n\nprerequisites p(p) over k\n  start a\n  b     requires c\n  c     requires b\n";
+const X_E137: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\n\ninputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| x | -> r(r) : bool |\n| - | true           |\n\nprerequisites p(p) over k\n  start a\n  b     requires c\n  c     requires nothing \"retired\"\n";
+const X_E138: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\nenum s(s) = one(one) < two(two)\n\ninputs\n  x(x) : k\n\noutputs\n  r(r) : s\n\ntable j(j)\npolicy unique\n| x    | -> r(r) : s |\n| a, c | one         |\n| b    | two         |\n\nprerequisites p(p) over k\n  start a\n  b     requires a\n  c     requires b\n  ordered by j\n";
+const X_W130: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b) | c(c)\n\ninputs\n  x(x) : k\n\noutputs\n  r(r) : bool\n\ntable j(j)\npolicy unique\n| x | -> r(r) : bool |\n| - | true           |\n\nprerequisites p(p) over k\n  start a\n  b     requires a\n  c     requires b, a\n";
 const X_E072: &str = "rule t(t) v1\n\nenum s(s) = run(run) | done(done)\n\ninputs\n  st(st) : s\n  n(n)   : number  range >=0 <=3\n\noutputs\n  nx(nx) : s\n  nn(nn) : number  round down(1)\n\ndefine more(more) : number = n + 1\n\ntable m(m)\npolicy first\n| st  | n  | -> nx(nx) : s | nn(nn) : number |\n| run | <3 | run           | more            |\n| -   | -  | done          | n               |\n\nmachine k(k) over m\n  carry   st -> nx\n  carry   n -> nn\n  initial run\n";
 const X_E134: &str = "rule t(t) v1\n\nenum s(s) = run(run) | done(done)\n\ninputs\n  st(st)       : s\n  again(again) : bool\n  n(n)         : number  range >=0 <=3\n\noutputs\n  nx(nx) : s\n  nn(nn) : number  round down(1)\n\ndefine more(more) : number = n + 1\n\ntable m(m)\npolicy first\n| st   | again | n   | -> nx(nx) : s | nn(nn) : number |\n| run  | true  | <=2 | run           | more            |\n| run  | true  | -   | done          | more            |\n| run  | -     | -   | done          | n               |\n| done | -     | -   | done          | n               |\n\nmachine k(k) over m\n  carry   st -> nx\n  carry   n -> nn\n  initial run\n  initial n 0\n";
 const X_E135: &str = "rule t(t) v1\n\nenum s(s) = run(run) | done(done)\n\ninputs\n  st(st) : s\n  n(n)   : number  range >=0 <=3\n\noutputs\n  nx(nx) : s\n  nn(nn) : number  round down(1)\n\ndefine more(more) : number = n + 1\n\ntable m(m)\npolicy first\n| st  | n  | -> nx(nx) : s | nn(nn) : number |\n| run | <3 | run           | more            |\n| -   | -  | done          | n               |\n\nmachine k(k) over m\n  carry   st -> nx\n  carry   n -> nn\n  initial run\n  initial n 0\n  always  n <=2 when run\n";
@@ -2765,8 +2772,8 @@ pub fn ledger() -> Vec<Entry> {
             "E066",
             tr!("`enums` のファイルの形と、そこから読む `import enum` の形が違います", "An `enums` file, or an `import enum` from one, is misshapen"),
             tr!(
-                "見出しが `enums` のファイルに、`description`・`import`・`enum`・`group` 以外の行（表、入力、出力、定義、`import enum` など）を書いたとき。`import enum <列挙> from \"<ファイル>\"` が読むファイルが `enums` のファイルでないとき、または check を通らないとき。`enums` のファイルは規則どうしが分け合う列挙を置く場所で、何も決めず、関数も生成しません。",
-                "A file headed `enums` holds a line other than `description`, `import`, `enum` and `group` (a table, inputs, outputs, a definition, an `import enum`, …); or `import enum <enum> from \"<file>\"` names a file that is not an `enums` file, or one that does not pass check. An `enums` file holds the enums rules share: it decides nothing, and no function is generated from it."
+                "見出しが `enums` のファイルに、`description`・`import`・`enum`・`group`・`prerequisites` 以外の行（表、入力、出力、定義、`import enum` など）を書いたとき。`import enum <列挙> from \"<ファイル>\"` が読むファイルが `enums` のファイルでないとき、または check を通らないとき。`enums` のファイルは規則どうしが分け合う列挙を置く場所で、何も決めず、規則の関数も生成しません。",
+                "A file headed `enums` holds a line other than `description`, `import`, `enum`, `group` and `prerequisites` (a table, inputs, outputs, a definition, an `import enum`, …); or `import enum <enum> from \"<file>\"` names a file that is not an `enums` file, or one that does not pass check. An `enums` file holds the enums rules share: it decides nothing, and no rule's function is generated from it."
             ),
             tr!(
                 "表や入力は、その列挙を `import enum … from` で読む規則の側に書いてください。読む先のファイルは `enums <名前> v<版>` で始め、check を通るように直してください。",
@@ -2791,6 +2798,20 @@ pub fn ledger() -> Vec<Entry> {
             &["E012", "E103"],
         )
         .english(X_E069_EN),
+        err(
+            "E071",
+            tr!("前提のつながりの形が違います", "The prerequisites are misshapen"),
+            tr!(
+                "`prerequisites` の塊で、`over` の後が列挙でないとき、列挙の値でない名前を書いたとき、一つの値を二か所に書いたとき（`start` と自分の行、二つの行、一つの行の中で二度）、`start` の行にも自分の行にも無い値があるとき、`start` の行が無いとき、行の形が読めないとき。`ordered by` が名前を挙げた表が無いとき、塊より下にあるとき、その列挙の列一つを条件にし、値ごとに順序のある列挙か `number` の値を一つ書く表でないとき、`enums` のファイルに `ordered by` を書いたとき。どの値も、何も要らない（`start`）か、要るものを書いた自分の行を持つか、手に入らない値（`requires nothing \"<理由>\"`）なので、値を足して前提を書き忘れると、ここで止まります。",
+                "In a `prerequisites` block: `over` names something that is not an enum; a name is not a value of the enum; a value is written in two places (on `start` and on a line of its own, on two lines, or twice on one line); a value is neither on `start` nor on a line of its own; there is no `start` line; or a line cannot be read. Or the table `ordered by` names is not there, is declared below the block, or does not test one column of the enum and write, for each value, one value of an ordered enum or one `number`; or `ordered by` is written in an `enums` file. Every value needs nothing (`start`), has a line of its own saying what it needs, or is one no case can take (`requires nothing \"<reason>\"`), so a value added without its prerequisites stops here."
+            ),
+            tr!(
+                "値ごとに一か所だけ書いてください。何も要らない値は `start` に、要るものがある値は `<値> requires <前提>, …` の行に、手に入らない値は `<値> requires nothing \"<理由>\"` に書きます。`ordered by` の表は塊より上に置き、列挙の列一つを条件にして、順序のある列挙か `number` の値を行ごとにそのまま書いてください。",
+                "Write each value in one place: a value that needs nothing on `start`, one that needs something on a `<value> requires <prerequisite>, …` line, and one no case can take as `<value> requires nothing \"<reason>\"`. Declare the table of `ordered by` above the block, make it test the enum's column alone, and write one value of an ordered enum or one `number` in each row."
+            ),
+            X_E071,
+            &["E136", "E137", "E138"],
+        ),
         err(
             "E072",
             tr!("持ち越す値の書き方が違います", "A carried value is not written right"),
@@ -3398,6 +3419,42 @@ pub fn ledger() -> Vec<Entry> {
             X_E135,
             &["E072", "E126", "E134"],
         ),
+        err(
+            "E136",
+            tr!("前提が循環しています", "The prerequisites go round in a cycle"),
+            tr!(
+                "値から要るものへ、そのまた要るものへとたどると、元の値に戻るとき。`or` の中の値もたどります。互いにたどれる値の組ごとに一つ出て、組の最初の値から戻るまでの輪を一つと、組の値を挙げます。輪の上の値は、どれもほかの値を先に持っていないと手に入らないので、輪のどこからも始められません。`or` の別の値から輪に入れる場合も、前提の読み違いのもとなので、エラーにします。",
+                "Following what a value needs, and what that needs, leads back to the value. The values inside an `or` are followed too. One is given for each set of values that reach one another, with one way round from the first value of the set back to it, and the values of the set. Each value on a cycle waits for another on it, so the cycle cannot be entered anywhere; where another value of an `or` does lead in, a cycle is still where prerequisites are misread, and it is an error."
+            ),
+            tr!("輪のどこかの前提を外してください。", "Drop one of the prerequisites on the cycle."),
+            X_E136,
+            &["E071", "E137"],
+        ),
+        err(
+            "E137",
+            tr!("`start` からたどり着けない値があります", "A value cannot be reached from `start`"),
+            tr!(
+                "`start` の値から始めて、要るもののどのグループにも持っている値がある値を足していっても、足されない値があるとき。循環が無ければ、足されないのは手に入らない値（`requires nothing`）を待つ値で、手に入らない値だけのグループを持つ値ごとに一つ出ます。その値を待つほかの値は注記に挙げます。循環は E136 が言い、ここでは見ません。手に入らないと書いた値そのものは言いません。",
+                "Starting from the values of `start` and adding every value each group of whose needs has a value already held, some value is never added. With no cycle, what is never added waits on a value no case can take (`requires nothing`): one is given for each value with a group of such values alone, and the values that wait on it are listed in a note. A cycle is E136's and is not looked at here. A value written as one no case can take is not said: it says so itself."
+            ),
+            tr!(
+                "手に入らない前提を外すか、その値も手に入らないなら `<値> requires nothing \"<理由>\"` と書いてください。",
+                "Drop the prerequisite no case can take, or, if the value cannot be had either, write `<value> requires nothing \"<reason>\"`."
+            ),
+            X_E137,
+            &["E071", "E136"],
+        ),
+        err(
+            "E138",
+            tr!("`ordered by` の順で、前提が値より後に来ます", "A prerequisite comes after the value in the order of `ordered by`"),
+            tr!(
+                "`ordered by` が名前を挙げた表で、値の答えが、その値に要るもの（`or` の中の値も）の答えより前にあるとき。手に入らない値への前提と、循環の上の前提は、E137 と E136 が言うので、ここでは見ません。",
+                "In the table `ordered by` names, a value's answer comes before the answer of something it needs (a value inside an `or` too). A prerequisite no case can take, and one on a cycle, are E137's and E136's, and are not looked at here."
+            ),
+            tr!("表の答えか、前提のどちらかを直してください。", "Correct the table's answer, or the prerequisite."),
+            X_E138,
+            &["E071", "E136"],
+        ),
         warn(
             "W125",
             tr!("どの手順でも着かない状態があります", "No sequence of calls reaches a state"),
@@ -3456,6 +3513,20 @@ pub fn ledger() -> Vec<Entry> {
             &["E101", "E102", "W114", "W127"],
         )
         .english(X_W128_EN),
+        warn(
+            "W130",
+            tr!("ほかの前提からたどれる前提があります", "A prerequisite is already needed through another"),
+            tr!(
+                "値の前提の一つが、同じ値のほかの前提が要るもの（そのまた要るものも）の中にあるとき。書いても書かなくても、その値を取れるときは同じです。`or` の中の値は、どちらの側でも見ません。",
+                "One of a value's prerequisites is among what another of its prerequisites needs, or what that needs in turn: written or not, it leaves the value to be taken at the same times. The values inside an `or` are left out on both sides."
+            ),
+            tr!(
+                "その前提を消してください。前提を直すときに書き直す所が一つ減ります。",
+                "Drop it: one place less to correct when the prerequisites change."
+            ),
+            X_W130,
+            &["E136"],
+        ),
         warn(
             "W105",
             tr!("要確認の隠れ: 先の行が後の行の一部を隠しています", "Shadowing that needs review: an earlier row hides part of a later one"),

@@ -859,6 +859,73 @@ language's spelling under `machine.carried`. The traces hand these values over a
 state: the first call of a trace is passed where each starts, every later one what the language
 itself answered.
 
+## Which values need which before them
+
+A `prerequisites` block ([reference §6.5](reference.md#65-prerequisites)) is generated as two
+functions in the module of the file that holds it — a rule's, or an `enums` file's, which a rule
+reads its enum from. From `tests/corpus/shared/certifications.rule`, in Python:
+
+```python
+def exam_path_requires(value: Certification) -> list[list[Certification]]:
+    """What value needs before it can be taken: every group, each by any one of its values. A value that needs nothing has no group; one no case can take has a group with no value in it."""
+    if value is Certification.FOUNDATIONS:
+        return []
+    elif value is Certification.ASSOCIATEDEVELOPER:
+        return [[Certification.FOUNDATIONS]]
+    elif value is Certification.ASSOCIATEOPERATIONS:
+        return [[Certification.FOUNDATIONS]]
+    elif value is Certification.PROFESSIONALDEVELOPER:
+        return [[Certification.ASSOCIATEDEVELOPER]]
+    elif value is Certification.PROFESSIONALARCHITECT:
+        return [[Certification.ASSOCIATEDEVELOPER, Certification.ASSOCIATEOPERATIONS]]
+    elif value is Certification.SPECIALTYSECURITY:
+        return [[Certification.PROFESSIONALARCHITECT]]
+    else:
+        return [[Certification.PROFESSIONALDEVELOPER, Certification.PROFESSIONALARCHITECT]]
+
+
+def exam_path_available(value: Certification, held: list[Certification]) -> bool:
+    """Whether value can be taken now: it is not in held yet, and every group of what it needs has a value in held."""
+    if value in held:
+        return False
+    for group in exam_path_requires(value):
+        met = False
+        for p in group:
+            if p in held:
+                met = True
+        if not met:
+            return False
+    return True
+```
+
+The groups are a list of lists returned by a chain over the values, one branch per value in the
+enum's order, rather than a constant map: a compiler of typed Python takes it as it stands, and
+`mypy --strict` and `pyright --strict` say nothing of it. A value on `start` returns no group; one
+written `requires nothing` returns one group with no value in it, which no `held` meets, so
+`available` needs no branch of its own for it. What a case holds is the caller's to keep, as a
+machine's state is; the functions keep nothing.
+
+| language | the two functions |
+|---|---|
+| Python | `exam_path_requires(value: Certification) -> list[list[Certification]]`, `exam_path_available(value: Certification, held: list[Certification]) -> bool` |
+| TypeScript | `examPathRequires(value: Certification): Certification[][]`, `examPathAvailable(value: Certification, held: readonly Certification[]): boolean` |
+| JavaScript | `examPathRequires(value)`, `examPathAvailable(value, held)` |
+| Rust | `exam_path_requires(value: Certification) -> Vec<Vec<Certification>>` (a `match` over every value), `exam_path_available(value: Certification, held: &[Certification]) -> bool` |
+| Ruby | `Certifications.exam_path_requires(value)`, `Certifications.exam_path_available(value, held)`, with their signatures in the `.rbs` |
+| PHP | `\Certifications\exam_path_requires(Certification $value): array`, `\Certifications\exam_path_available(Certification $value, array $held): bool` |
+| Go | `ExamPathRequires(value Certification) [][]Certification`, `ExamPathAvailable(value Certification, held []Certification) bool` |
+| Swift | `examPathRequires(_ value: Certification) -> [[Certification]]`, `examPathAvailable(_ value: Certification, held: [Certification]) -> Bool` |
+| Java | `Certifications.examPathRequires(Certification value)`, `Certifications.examPathAvailable(Certification value, java.util.List<Certification> held)`, the list type written in full so that the class of an `enums` file needs no import |
+| NumPy | `rule.requires("<name>", value)` and `rule.available("<name>", value, held)` over the plan's `prerequisites`, for a block a rule holds; an `enums` file, like this one, has no plan |
+| SQL, Wasm | none: one entry, and no room for a second function. `rulec gen` says so as it writes them, `rulec api` names them under `without`, and `rulec test` notes that nothing was compared there |
+
+`rulec gen` writes `vectors/<alias>.prereq.tsv` and `.prereq.expected` beside the vectors: one
+line per case — a block, a value and what is held — and what the two functions answer for it,
+from the reference evaluator. An `enums` file with a block gets them too, with a runner of its own
+beside its module in each language. `rulec test` asks every runner with `--prerequisites` and
+compares the answers byte for byte (docs/formats.md), and so does the corpus's agreement suite
+(`tests/threeway.rs`) for the rules with a block.
+
 ## A rule whose inputs are projected from the caller's object
 
 A rule whose inputs say `from`

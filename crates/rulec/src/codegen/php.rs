@@ -266,7 +266,7 @@ impl<'a> Gen<'a> {
     }
 
     /// An enum value as the case the file declares for it.
-    fn php_value(&self, v: &str, ty: &Ty) -> String {
+    pub(super) fn php_value(&self, v: &str, ty: &Ty) -> String {
         match self.value_name(v, ty) {
             Some((ty, alias)) => format!("{}::{}", php_name(ty), php_name(&alias.to_uppercase())),
             None => php_str(v),
@@ -478,6 +478,8 @@ impl<'a> Gen<'a> {
             o.push_str(&self.php_enum(&jp, &ascii));
         }
         o.push_str(&self.php_enum_helpers());
+        // Which values need which before them (§15.222).
+        o.push_str(&self.php_prereqs());
 
         // The machine this function is one step of (§15.148).
         if let Some((en, init, fins)) = self.machine_consts() {
@@ -1279,7 +1281,7 @@ impl<'a> Gen<'a> {
              }}\n",
             ritsu_emit::header::VERSION,
             PHP_WIRE.replace("@NS@", &ns),
-            self.php_labels_mode(),
+            self.php_labels_mode() + &self.php_prereq_mode(),
             args.join(", "),
         )
     }

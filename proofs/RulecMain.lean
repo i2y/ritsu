@@ -1785,6 +1785,13 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
         tables := tables.push t
     r := checkContracts cert r
     r := checkMachine cert tables r
+    -- Which values need which before them (rulec's §15.222): no cycle, every value but those no
+    -- case can take reached from `start`, and an `ordered by` table's order kept along the edges.
+    -- `tools/recheck.py` works these out again; no theorem here says them yet, so they are stated.
+    for p in fieldArr cert "prerequisites" do
+      let ob := (field p "ordered_by").getD Json.null
+      let order := if ob.isNull then "" else s!", and the order of {fieldStr ob "table"} kept along its edges"
+      r := r.state s!"the prerequisites {fieldStr p "name"} over {fieldStr p "over"} ({(fieldArr p "topological").size} values): no cycle, every value reached from `start` but those no case can take{order}"
     match rule with
     | none =>
       r := r.state "the certificate is held to no text: pass `--rule <file.rule>`"

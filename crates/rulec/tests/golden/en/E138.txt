@@ -1,0 +1,7 @@
+error[E138]: level_of puts statistics at second, and its prerequisite algorithms at third
+  --> tests/mutants/m_e138.rule:35 prerequisites enrollment
+   |
+35 |   statistics        requires calculus, algorithms
+   |                                        ^^^^^^^^^^ this prerequisite comes later
+   |
+ `ordered by level_of` says no value comes before what it needs. Correct the table's answer, or the prerequisite.

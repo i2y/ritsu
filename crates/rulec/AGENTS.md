@@ -148,6 +148,14 @@ A few shapes are worth knowing before the first draft:
 - **Enums can be ordered, labelled and shared.** `enum tier = basic < silver < gold` takes `>=gold`,
   `max` and `range` (E069 on a `|` enum), `national "Rest of the country"` labels a value, and an
   `enums` file holds enums that rules read with `import enum … from "<file>"` (E066).
+- **Which values need which before them is one block.** `prerequisites enrollment over course`, with
+  `start <value>, …` and one `<value> requires <value>, <value> or <value>` line per value (`,` all,
+  `or` any one), `<value> requires nothing "<reason>"` for one no case can take, and
+  `ordered by <table>` for a table whose answer never goes below a prerequisite's. Every value is in
+  one place (E071); `check` refuses a cycle (E136), a value that cannot be reached from `start`
+  (E137) and a broken order (E138), and warns of a prerequisite another already needs (W130). The
+  module gets `enrollment_requires(value)` and `enrollment_available(value, held)` in every
+  language with one (§6.5 of the grammar). It stands in a rule or in an `enums` file.
 - **A date input can range over koyomi's days.** `range from koyomi "<file.cal>" date <name>`, checked by
   `ritsu rulec check`; `ritsu check` then holds a workflow's calls to the rule's `constraint`s (ritsu's E201).
 

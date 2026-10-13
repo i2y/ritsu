@@ -7,6 +7,9 @@ use crate::ast::*;
 use crate::diag::{Diag, Span};
 use crate::lex::{Kind, Token, lex_line_soft};
 
+/// The `prerequisites` block (§15.222).
+mod prereq;
+
 /// The keywords that can start a line. Used to detect E009 (a declaration named like a
 /// reserved word) and to check that the README's keyword table matches this list.
 /// `rule` is header-only, so it is not included.
@@ -88,10 +91,22 @@ const DECLARING: &[&str] = &[
     crate::kw::CLAUSE,
     crate::kw::RESULT,
     crate::kw::MACHINE,
+    crate::kw::PREREQUISITES,
 ];
 
-/// The lines an `enums` file holds (§15.212): the vocabulary, and nothing that decides.
-const ENUMS_FILE: &[&str] = &[crate::kw::DESCRIPTION, crate::kw::IMPORT, crate::kw::ENUM, crate::kw::GROUP];
+/// The lines an `enums` file holds (§15.212): the vocabulary, and nothing that decides. Which
+/// values need which before them is vocabulary too (§15.222).
+const ENUMS_FILE: &[&str] = &[crate::kw::DESCRIPTION, crate::kw::IMPORT, crate::kw::ENUM, crate::kw::GROUP, crate::kw::PREREQUISITES];
+
+/// Whether a line that starts with a line head is a declaration or a binding named like it, not
+/// a heading: the word is one that is not reserved (`prerequisites`, §15.222), and the line goes on
+/// the way a declaration (`prerequisites(p) :`, `prerequisites :`) or a binding under `apply`
+/// (`prerequisites = …`, `prerequisites -> …`) does. A reserved word there is E009, as it was.
+fn named_like_head(line: &[Token]) -> bool {
+    let w = line.first().and_then(|t| t.ident()).unwrap_or("");
+    !crate::kw::RESERVED.contains(&w)
+        && line.get(1).is_some_and(|t| t.is(&Kind::LParen) || t.is(&Kind::Colon) || t.is(&Kind::Eq) || t.is(&Kind::Arrow))
+}
 
 /// How many declarations the file holds so far. A line that leaves this and the diagnostics
 /// as they were has been read into nothing.
@@ -116,6 +131,7 @@ fn declared(f: &RuleFile) -> usize {
         + usize::from(f.elements.is_some())
         + usize::from(f.fold.is_some())
         + usize::from(f.machine.is_some())
+        + f.prerequisites.len()
 }
 
 /// How a line that starts with `word` is written, for the note under E058.
@@ -137,6 +153,7 @@ fn line_shape(word: &str) -> String {
         crate::kw::TABLE => tr!("`table <名前>(<別名>)` の行と、その下に `policy` と表の行", "`table <name>(<alias>)`, with `policy` and the rows under it"),
         crate::kw::CLAUSE => tr!("`clause <名前>(<別名>) -> <出力>` の行と、その下に `when …` と `then …` の行", "`clause <name>(<alias>) -> <output>`, with `when …` and `then …` under it"),
         crate::kw::MACHINE => tr!("`machine <名前>(<別名>) over <表>` の行と、その下に `carry`・`initial`・`final` の行", "`machine <name>(<alias>) over <table>`, with `carry`, `initial` and `final` under it"),
+        crate::kw::PREREQUISITES => tr!("`prerequisites <名前>(<別名>) over <列挙>` の行と、その下に `start` と `<値> requires …` の行", "`prerequisites <name>(<alias>) over <enum>`, with `start` and `<value> requires …` under it"),
         _ => format!("`{word} …`"),
     }
 }
@@ -239,6 +256,7 @@ impl P {
             fold: None,
             machine: None,
             scenarios: Vec::new(),
+            prerequisites: Vec::new(),
         };
 
         loop {
@@ -271,8 +289,8 @@ impl P {
                         .at(at)
                         .mark(span_of(&line), "")
                         .note(tr!(
-                            "`{}` のファイルは、規則どうしが分け合う列挙を置く場所です。書けるのは {} だけで、関数は生成しません。",
-                            "An `{}` file holds the enums rules share. It takes {} and nothing else, and no function is generated from it.",
+                            "`{}` のファイルは、規則どうしが分け合う列挙を置く場所です。書けるのは {} だけで、何も決めず、規則の関数も生成しません。",
+                            "An `{}` file holds the enums rules share. It takes {} and nothing else: it decides nothing, and no rule's function is generated from it.",
                             crate::kw::ENUMS,
                             ENUMS_FILE.iter().map(|w| format!("`{w}`")).collect::<Vec<_>>().join(", ")
                         ))
@@ -514,6 +532,11 @@ impl P {
                         f.examples.push(t);
                     }
                 }
+                crate::kw::PREREQUISITES => {
+                    if let Some(d) = self.prerequisites(&line) {
+                        f.prerequisites.push(d);
+                    }
+                }
                 crate::kw::MACHINE => {
                     if let Some(d) = self.machine(&line) {
                         match f.machine {
@@ -589,7 +612,7 @@ impl P {
                 let at = self.at(span_of(&line).line);
                 // A heading with lines under it (a table, a clause, a machine, an apply) is
                 // lost when those lines are: one that did not lex leaves the heading alone.
-                let what = if matches!(word.as_str(), crate::kw::TABLE | crate::kw::CLAUSE | crate::kw::MACHINE | crate::kw::APPLY) {
+                let what = if matches!(word.as_str(), crate::kw::TABLE | crate::kw::CLAUSE | crate::kw::MACHINE | crate::kw::APPLY | crate::kw::PREREQUISITES) {
                     tr!("この見出しの下の行を読めず、何も宣言されていません", "nothing under this heading could be read, so nothing is declared")
                 } else {
                     tr!("この行は何も宣言していません", "this line declares nothing")
@@ -869,6 +892,13 @@ impl P {
                 break;
             }
             let w = line.first().and_then(|t| t.ident()).unwrap_or("");
+            // A declaration named like a line head that is not reserved is that declaration
+            // (§15.222): only a reserved word is kept from being a name.
+            if KEYWORDS.contains(&w) && named_like_head(line) {
+                out.push(line.clone());
+                self.i += 1;
+                continue;
+            }
             if KEYWORDS.contains(&w) {
                 // If the line has the shape of a declaration (`name(alias) :` or `name :`), it is
                 // not the start of a section but a declaration named like a keyword. Dropping it
@@ -2138,7 +2168,7 @@ impl P {
                 break;
             }
             let Some(first) = l.first().and_then(|t| t.ident()).map(|s| s.to_string()) else { break };
-            if crate::kw::LINE_HEAD.contains(&first.as_str()) && first != crate::kw::EXCEPT {
+            if crate::kw::LINE_HEAD.contains(&first.as_str()) && first != crate::kw::EXCEPT && !named_like_head(&l) {
                 break;
             }
             self.i += 1;

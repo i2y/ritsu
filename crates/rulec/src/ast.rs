@@ -877,6 +877,63 @@ pub struct ScenarioDecl {
     pub span: Span,
 }
 
+/// `prerequisites research over tech [open]` and the lines under it (§15.222): which values of an
+/// enum a case has to hold before it can take another. A finite graph over the enum's values,
+/// checked whole — no cycle, every value reached from `start`, no prerequisite another already
+/// implies, and a table's order kept — and generated as two functions, the prerequisites of a
+/// value and whether it can be taken now.
+#[derive(Debug, Clone)]
+pub struct PrereqDecl {
+    /// The block's name, whose alias names the generated functions (`research_available`).
+    pub name: Name,
+    /// The enum whose values it is about, when the heading names one.
+    pub over: Option<Name>,
+    /// The `open` mark after the enum: a contribution may add lines for the values it adds. It is
+    /// syntax only here; what it opens is the contributions' (§15.222).
+    pub open: Option<Span>,
+    /// `start <value>, …`: the values that need nothing, and where the line is.
+    pub start: Vec<Name>,
+    pub start_span: Option<Span>,
+    /// One line per value that needs something, in the order written.
+    pub lines: Vec<RequiresLine>,
+    /// `ordered by <table>`: the table whose answer for a value is never below its prerequisites',
+    /// and where the line is.
+    pub ordered_by: Option<(Name, Span)>,
+    pub span: Span,
+    /// The last line of the block, so that what quotes it whole (an item of ritsu's index, the
+    /// page) knows where it ends.
+    pub end_line: usize,
+}
+
+impl PrereqDecl {
+    /// The name of the enum it is about, or `""` when the heading names none.
+    pub fn over_name(&self) -> &str {
+        self.over.as_ref().map(|n| n.text.as_str()).unwrap_or("")
+    }
+
+    /// The line of `value`, when it has one.
+    pub fn line_of(&self, value: &str) -> Option<&RequiresLine> {
+        self.lines.iter().find(|l| l.value.text == value)
+    }
+}
+
+/// `<value> requires <prerequisites>` under `prerequisites` (§15.222).
+#[derive(Debug, Clone)]
+pub struct RequiresLine {
+    pub value: Name,
+    pub needs: Needs,
+    pub span: Span,
+}
+
+/// What a value of a `prerequisites` block needs (§15.222).
+#[derive(Debug, Clone)]
+pub enum Needs {
+    /// Every group, each by one of its values: `a, b or c` is `[[a], [b, c]]`.
+    Groups(Vec<Vec<Name>>),
+    /// `requires nothing "<reason>"`: a value no case can take, and why.
+    Nothing { reason: String, span: Span },
+}
+
 #[derive(Debug, Clone)]
 pub struct RuleFile {
     /// `rule` or `enums` (§15.212).
@@ -920,4 +977,6 @@ pub struct RuleFile {
     pub machine: Option<MachineDecl>,
     /// Sequences of calls with what each one answers (§15.148).
     pub scenarios: Vec<ScenarioDecl>,
+    /// Which values of an enum need which before them (§15.222), in the order written.
+    pub prerequisites: Vec<PrereqDecl>,
 }

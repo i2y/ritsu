@@ -171,6 +171,78 @@ fn clause_body(line: &str) -> String {
     o
 }
 
+/// Whether a line under `apply` that starts with a line head is a binding of a callee input named
+/// like one that is not reserved (`prerequisites = …`, §15.222).
+fn binding(line: &str) -> bool {
+    let mut ws = line.split_whitespace();
+    let w = ws.next().unwrap_or("");
+    !crate::kw::RESERVED.contains(&w) && ws.next().is_some_and(|n| n == "=" || n == "->" || n == "→")
+}
+
+/// Whether a line belongs to the block under a `prerequisites` heading (§15.222): not blank, not a
+/// row, and not a line head — except on a value's own line, which a value named like one has.
+fn prereq_line(line: &str) -> bool {
+    let t = line.trim();
+    if t.is_empty() || is_row(line) {
+        return false;
+    }
+    let mut ws = t.split_whitespace();
+    let w = ws.next().unwrap_or("");
+    ws.next() == Some(crate::kw::REQUIRES) || !crate::kw::LINE_HEAD.contains(&w)
+}
+
+/// The block under `prerequisites` (§15.222): two spaces in, the value of each line — and `start` —
+/// padded to the widest, so that `requires` and the start values line up; the rest one space
+/// apart, a list's comma against the word before it, the reason as written. A comment line stays
+/// as it is, two spaces in.
+fn prereq_body(lines: &[String]) -> Vec<String> {
+    // (the first word, the rest), or the comment line as it is
+    let parts: Vec<Result<(String, String), String>> = lines
+        .iter()
+        .map(|l| {
+            let t = l.trim();
+            if t.starts_with('#') {
+                return Err(format!("  {t}"));
+            }
+            let b = clause_body(l);
+            let b = b.trim_start();
+            let (word, rest) = match b.find(' ') {
+                Some(p) => (b[..p].to_string(), b[p + 1..].trim_start().to_string()),
+                None => (b.to_string(), String::new()),
+            };
+            Ok((word, lists(&rest)))
+        })
+        .collect();
+    let aligned = |w: &str, rest: &str| w == crate::kw::START || rest.split_whitespace().next() == Some(crate::kw::REQUIRES);
+    let pad = parts.iter().filter_map(|p| p.as_ref().ok()).filter(|(w, r)| aligned(w, r)).map(|(w, _)| width(w)).max().unwrap_or(0);
+    parts
+        .into_iter()
+        .map(|p| match p {
+            Err(comment) => comment,
+            Ok((w, rest)) if rest.is_empty() => format!("  {w}"),
+            Ok((w, rest)) if aligned(&w, &rest) => format!("  {w}{} {rest}", " ".repeat(pad - width(&w))),
+            Ok((w, rest)) => format!("  {w} {rest}"),
+        })
+        .collect()
+}
+
+/// A list written `a, b or c`: the comma against the word before it and one space after, outside
+/// the string and the comment.
+fn lists(rest: &str) -> String {
+    let cut = rest.find(['"', '#']).unwrap_or(rest.len());
+    let (words, tail) = rest.split_at(cut);
+    let words: Vec<String> = words.split(',').map(|w| w.trim().to_string()).collect();
+    let mut o = words.join(", ");
+    if !tail.is_empty() {
+        // A comment keeps its distance of two, as everywhere else.
+        if !o.is_empty() {
+            o.push_str(if tail.starts_with('#') { "  " } else { " " });
+        }
+        o.push_str(tail);
+    }
+    o.trim_end().to_string()
+}
+
 /// A line under `machine` (§15.148): two spaces in, the keyword padded to the width of the
 /// longest one so the values start in one column, and the rest one space apart as a clause's
 /// body is.
@@ -225,7 +297,20 @@ pub fn format(src: &str) -> String {
                 continue;
             }
             in_machine = w == crate::kw::MACHINE;
-            if in_apply && !lines[i].trim().is_empty() && (w == crate::kw::EXCEPT || !crate::kw::LINE_HEAD.contains(&w)) && !w.starts_with('#') {
+            // The lines under `prerequisites` (§15.222), aligned as one block.
+            if w == crate::kw::PREREQUISITES && !lines[i].starts_with(char::is_whitespace) {
+                in_clause = false;
+                in_apply = false;
+                out.push(lines[i].trim_end().to_string());
+                i += 1;
+                let start = i;
+                while i < lines.len() && prereq_line(&lines[i]) {
+                    i += 1;
+                }
+                out.extend(prereq_body(&lines[start..i]));
+                continue;
+            }
+            if in_apply && !lines[i].trim().is_empty() && (w == crate::kw::EXCEPT || !crate::kw::LINE_HEAD.contains(&w) || binding(&lines[i])) && !w.starts_with('#') {
                 out.push(clause_body(&lines[i]));
                 i += 1;
                 continue;

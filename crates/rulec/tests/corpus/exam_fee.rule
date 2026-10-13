@@ -1,0 +1,29 @@
+rule exam_fee v1
+description "The fee for sitting a certification exam: by the certification, and lower for a candidate whose employer is a partner"
+
+# The certifications are the training programme's, and so is the path of exams between them.
+import enum certification from "shared/certifications.rule"
+
+inputs
+  exam    : certification
+  partner : bool
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_of
+policy unique
+| exam                                           | partner | -> fee |
+| foundations                                    | -       | 100USD |
+| associate_developer, associate_operations      | false   | 150USD |
+| associate_developer, associate_operations      | true    | 120USD |
+| professional_developer, professional_architect | false   | 300USD |
+| professional_developer, professional_architect | true    | 240USD |
+| specialty_security, specialty_data             | -       | 300USD |
+
+examples
+| exam                   | partner | -> fee |
+| foundations            | true    | 100USD |
+| associate_operations   | false   | 150USD |
+| professional_architect | true    | 240USD |
+| specialty_data         | false   | 300USD |

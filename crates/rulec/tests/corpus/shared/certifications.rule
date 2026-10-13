@@ -1,0 +1,16 @@
+enums certifications v1
+description "The certifications of a training programme, and which ones a candidate must already hold to sit the exam for another"
+
+enum certification = foundations | associate_developer | associate_operations | professional_developer | professional_architect | specialty_security | specialty_data
+
+# A rule reads the enum with `import enum certification from "shared/certifications.rule"`; the
+# path of exams is this file's too, and every language's module of it answers it. The one on
+# `start` needs nothing; `,` separates what is all needed, `or` joins what any one of is enough.
+prerequisites exam_path over certification
+  start                  foundations
+  associate_developer    requires foundations
+  associate_operations   requires foundations
+  professional_developer requires associate_developer
+  professional_architect requires associate_developer or associate_operations
+  specialty_security     requires professional_architect
+  specialty_data         requires professional_developer or professional_architect

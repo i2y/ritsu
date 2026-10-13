@@ -2396,7 +2396,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         // An enum read from an `enums` file is the vocabulary several rules share, and a rule
         // names the values it decides on, as one names the prefectures it decides on (§15.212).
         // Nor does a file of enums name any: it has no rows (§15.212).
-        if !unused.is_empty() && !bound && e.from.is_none() && f.kind == FileKind::Rule {
+        // An enum no row names, which a `prerequisites` block is over, is that block's: every value
+        // of it is named there (§15.222).
+        let prereq_only = unused.len() == e.values.len() && f.prerequisites.iter().any(|p| p.over_name() == e.name.text);
+        if !unused.is_empty() && !bound && e.from.is_none() && f.kind == FileKind::Rule && !prereq_only {
             let names: Vec<String> = unused.iter().map(|v| v.text.clone()).collect();
             c.diags.push(
                 Diag::warning("W111", tr!("型 {} の値がどの行にも現れません", "Values of type {} appear in no row", e.name.text))
@@ -2414,9 +2417,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     // a local that is never read, so this has to be said here rather than discovered there.
     for it in &f.items {
         let Item::Table(t) = it else { continue };
+        // A table an `ordered by` reads leaves through that line (§15.222).
+        let ordering = t.name.as_ref().is_some_and(|tn| f.prerequisites.iter().any(|p| p.ordered_by.as_ref().is_some_and(|(n, _)| n.text == tn.text)));
         for oc in &t.outputs {
             let n = &oc.name.text;
-            if c.used.contains(n) || f.outputs.iter().any(|o| o.name.text == *n) {
+            if ordering || c.used.contains(n) || f.outputs.iter().any(|o| o.name.text == *n) {
                 continue;
             }
             c.diags.push(

@@ -131,6 +131,15 @@ golden!(e134_範囲を出る試行回数, "E134", "tests/mutants/m_e134ja.rule",
 golden!(e135_あきらめたときの回数, "E135", "tests/mutants/m_e135ja.rule", "E135");
 golden!(w127_区間で決めきれない, "W127", "tests/mutants/m_w127ja.rule", "W127");
 
+// The prerequisites of a course (§15.222): a course with no line, a cycle, a course that waits on
+// one withdrawn from the catalog, one taught before what it needs, and a prerequisite another
+// already needs.
+golden!(e071_行の無い科目, "E071", "tests/mutants/m_e071ja.rule", "E071");
+golden!(e136_前提の循環, "E136", "tests/mutants/m_e136ja.rule", "E136");
+golden!(e137_たどり着けない科目, "E137", "tests/mutants/m_e137ja.rule", "E137");
+golden!(e138_年次の食い違い, "E138", "tests/mutants/m_e138ja.rule", "E138");
+golden!(w130_余分な前提, "W130", "tests/mutants/m_w130ja.rule", "W130");
+
 // The walk's stages and the words of a cell (§15.208), and the rows nothing decides (§15.209).
 golden!(e075_値でも名前でもある語, "E075", "tests/mutants/m_e075ja.rule", "E075");
 golden!(e031_要素とたどった結果, "E031-walk", "tests/mutants/m_e031walkja.rule", "E031");

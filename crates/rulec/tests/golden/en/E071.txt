@@ -1,0 +1,7 @@
+error[E071]: The prerequisites are misshapen: some values have no line: networks
+  --> tests/mutants/m_e071.rule:33 prerequisites enrollment
+   |
+33 | prerequisites enrollment over course
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ every value of enum course is on the `start` line or has a line of its own
+   |
+ A value added without its prerequisites would pass as one that needs nothing. Put a value that needs nothing on the `start` line, and write a value no case can take as `<value> requires nothing "<reason>"`.

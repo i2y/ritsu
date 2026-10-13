@@ -54,3 +54,5 @@ Claude利用料.rule	claude_api_usage_fee.rule
 再試行の回数.rule	retry_attempts.rule
 猶予の残り日数.rule	grace_period.rule
 一度だけの特典.rule	one_time_perk.rule
+科目の履修.rule	course_catalog.rule
+受験料.rule	exam_fee.rule

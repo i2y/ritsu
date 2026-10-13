@@ -316,6 +316,9 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
         .raw("tables", arr(&tables))
         .raw("contracts", arr(&contracts))
         .raw("machine", machine_json(f, c, src))
+        // Which values need which before them (§15.222). Written only for a file that has a
+        // block, so no other certificate changes.
+        .opt_raw("prerequisites", crate::prereq::certificate_json(f, c))
         .finish()
 }
 

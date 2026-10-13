@@ -3254,7 +3254,97 @@ def check(cert):
         except Bad as e:
             out.append(f"  FAILED {e}")
             ok = False
+    for p in cert.get("prerequisites") or []:
+        try:
+            out.append("  " + check_prerequisites(cert, p))
+        except Bad as e:
+            out.append(f"  FAILED {e}")
+            ok = False
     return out, ok
+
+
+def check_prerequisites(cert, p):
+    """One `prerequisites` block (rulec's §15.222), held to what it claims: every value of its enum
+    once — on `start`, in `requires`, or in `never` — and every name a value; `topological` the
+    values each after every one it may need, so there is no cycle; `reached` each value outside
+    `never` after one value of each of its groups, from `start`, so each one can be reached; and,
+    where `ordered_by` names a table, each value's answer worked out again from that table's rows
+    in `tables`, and never below a prerequisite's along an edge whose prerequisite can be had."""
+    name, over = p["name"], p["over"]
+    values = cert.get("enums", {}).get(over)
+    if values is None:
+        raise Bad(f"prerequisites {name}: {over} is not an enum of the certificate")
+    start, req, never = list(p["start"]), p["requires"], list(p["never"])
+    said = start + list(req) + never
+    for v in said:
+        if v not in values:
+            raise Bad(f"prerequisites {name}: {v} is not a value of {over}")
+    if sorted(said) != sorted(values) or len(set(said)) != len(said):
+        raise Bad(f"prerequisites {name}: the values of {over} are not each said once (on start, in requires or in never)")
+    for v, groups in req.items():
+        if not groups or any(not g for g in groups):
+            raise Bad(f"prerequisites {name}: {v} has an empty group")
+        for g in groups:
+            for x in g:
+                if x not in values:
+                    raise Bad(f"prerequisites {name}: {v} needs {x}, which is not a value of {over}")
+    needs = {v: [x for g in req.get(v, []) for x in g] for v in values}
+    topo = p.get("topological")
+    if topo is None or sorted(topo) != sorted(values) or len(set(topo)) != len(topo):
+        raise Bad(f"prerequisites {name}: `topological` is not the values of {over}, each once")
+    place = {v: i for i, v in enumerate(topo)}
+    for v in values:
+        for x in needs[v]:
+            if place[x] >= place[v]:
+                raise Bad(f"prerequisites {name}: {v} needs {x}, which `topological` does not put before it")
+    reached = list(p["reached"])
+    if len(set(reached)) != len(reached):
+        raise Bad(f"prerequisites {name}: `reached` names a value twice")
+    if sorted(reached + never) != sorted(values):
+        raise Bad(f"prerequisites {name}: `reached` and `never` are not the values of {over}")
+    seen = set()
+    for v in reached:
+        if v not in start and not all(any(x in seen for x in g) for g in req.get(v, [[]])):
+            raise Bad(f"prerequisites {name}: {v} is reached before a value of each group it needs")
+        seen.add(v)
+    said_order = ""
+    ob = p.get("ordered_by")
+    if ob:
+        t = next((t for t in cert["tables"] if t["table"] == ob["table"]), None)
+        if t is None or len(t["axes"]) != 1 or t["decides"] != [ob["column"]]:
+            raise Bad(f"prerequisites {name}: {ob['table']} is no table of one column of {over} that decides {ob['column']}")
+        coords = t["axes"][0]["coords"]
+        if list(coords) != list(values):
+            raise Bad(f"prerequisites {name}: the axis of {ob['table']} is not the values of {over}")
+        answer = {}
+        for i, v in enumerate(coords):
+            # the first row that takes the value — the only one, in a table whose rows are disjoint
+            row = next((r for r in t["rows"] if i in r["accepts"][0]), None)
+            if row is not None and row["produces"] and row["produces"][0] is not None:
+                answer[v] = row["produces"][0]
+        if answer != ob["values"]:
+            raise Bad(f"prerequisites {name}: the answers of {ob['table']} are not the ones its rows write")
+        if ob["kind"] == "enum":
+            order = cert.get("enums", {}).get(ob["enum"])
+            if order != ob["order"] or ob["enum"] not in cert.get("ordered", []):
+                raise Bad(f"prerequisites {name}: {ob['enum']} is not an ordered enum of the certificate")
+            key = lambda v: order.index(answer[v])
+        elif ob["kind"] == "number":
+            key = lambda v: Fraction(answer[v])
+        else:
+            raise Bad(f"prerequisites {name}: an order of kind {ob['kind']!r} cannot be read")
+        edges = 0
+        for v in values:
+            for x in needs[v]:
+                if x in never or v not in answer or x not in answer:
+                    continue
+                edges += 1
+                if key(v) < key(x):
+                    raise Bad(f"prerequisites {name}: {ob['table']} puts {v} at {answer[v]}, before its prerequisite {x} at {answer[x]}")
+        said_order = f", and {ob['table']} keeps its order along {edges} edges"
+    n_edges = sum(len(needs[v]) for v in values)
+    return (f"prerequisites {name} over {over}: {len(values)} values and {n_edges} edges with no cycle, "
+            f"{len(reached)} reached from start and {len(never)} no case can take{said_order}")
 
 
 def main(argv):

@@ -1,0 +1,53 @@
+rule course_catalog v1
+description "The courses of a computing degree: the year each one is taught in, its credits, and what a student must have passed before enrolling in it. An example written for the purpose"
+
+# The years in order. No course is taught in a year before a course it requires (`ordered by
+# level_of` below).
+enum year = first < second < third < fourth
+
+enum course = intro_programming | discrete_math | calculus | statistics | linear_algebra | data_structures | databases | algorithms | operating_systems | networks | machine_learning | compilers | capstone | mainframe_cobol
+
+inputs
+  course : course
+
+outputs
+  year    : year
+  credits : number  round down(1)
+
+table level_of
+policy unique
+| course                                                 | -> year |
+| intro_programming, discrete_math, calculus             | first   |
+| statistics, linear_algebra, data_structures, databases | second  |
+| algorithms, operating_systems, networks                | third   |
+| machine_learning, compilers, capstone, mainframe_cobol | fourth  |
+
+table credit_of
+policy unique
+| course        | -> credits |
+| capstone      | 8          |
+| not: capstone | 4          |
+
+# What a student must have passed before enrolling. The courses on `start` need nothing; on a
+# course's own line, `,` separates what is all needed and `or` joins what any one of is enough.
+prerequisites enrollment over course
+  start             intro_programming, discrete_math, calculus
+  statistics        requires calculus, algorithms
+  linear_algebra    requires calculus
+  data_structures   requires intro_programming
+  databases         requires intro_programming
+  algorithms        requires data_structures, discrete_math
+  operating_systems requires data_structures
+  networks          requires operating_systems
+  machine_learning  requires algorithms, statistics or linear_algebra
+  compilers         requires algorithms
+  capstone          requires databases, networks or compilers
+  mainframe_cobol   requires nothing "withdrawn from the catalog in 2026"
+  ordered by level_of
+
+examples
+| course            | -> year | credits |
+| intro_programming | first   | 4       |
+| databases         | second  | 4       |
+| networks          | third   | 4       |
+| capstone          | fourth  | 8       |

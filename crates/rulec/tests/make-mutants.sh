@@ -385,6 +385,26 @@ awk '/^\| 未回収 \| 拒否 \| >=2 / { sub(/\| 今回までの回数 \|/, "| �
 # Days of grace counted up to ten million: past the budget one by one, so walked in intervals
 awk '{ sub(/range >=0 <=7  #/, "range >=0 <=10_000_000  #"); print }'                      "$g"  > "$M/m_w127.rule"
 awk '{ sub(/range >=0 <=7  #/, "range >=0 <=10_000_000  #"); print }'                      "$gj" > "$M/m_w127ja.rule"
+# --- The prerequisites of a course (§15.222): a course left with no line, a cycle, a course that
+# waits on one withdrawn from the catalog, one taught before what it needs, and a prerequisite
+# another already needs. The English rule, and its Japanese version beside it.
+k="$C/course_catalog.rule"
+kj="$C/科目の履修.rule"
+# A course with no line of its own
+awk '!/^  networks +requires /'                                                         "$k"  > "$M/m_e071.rule"
+awk '!/^  ネットワーク +requires /'                                                     "$kj" > "$M/m_e071ja.rule"
+# Data structures made to need algorithms, which needs data structures
+awk '{ sub(/^  data_structures   requires intro_programming$/, "  data_structures   requires intro_programming, algorithms"); print }' "$k"  > "$M/m_e136.rule"
+awk '/^  データ構造 / { sub(/requires プログラミング入門$/, "requires プログラミング入門, アルゴリズム") } { print }' "$kj" > "$M/m_e136ja.rule"
+# Operating systems made to need the course withdrawn from the catalog
+awk '{ sub(/^  operating_systems requires data_structures$/, "  operating_systems requires data_structures, mainframe_cobol"); print }' "$k"  > "$M/m_e137.rule"
+awk '/^  オペレーティングシステム / { sub(/requires データ構造$/, "requires データ構造, メインフレームCOBOL") } { print }' "$kj" > "$M/m_e137ja.rule"
+# Statistics, a second-year course, made to need algorithms, a third-year one
+awk '{ sub(/^  statistics        requires calculus$/, "  statistics        requires calculus, algorithms"); print }' "$k"  > "$M/m_e138.rule"
+awk '/^  統計学 / { sub(/requires 微積分$/, "requires 微積分, アルゴリズム") } { print }' "$kj" > "$M/m_e138ja.rule"
+# Algorithms made to need introductory programming, which data structures already needs
+awk '{ sub(/^  algorithms        requires data_structures, discrete_math$/, "  algorithms        requires data_structures, discrete_math, intro_programming"); print }' "$k"  > "$M/m_w130.rule"
+awk '/^  アルゴリズム / { sub(/requires データ構造, 離散数学$/, "requires データ構造, 離散数学, プログラミング入門") } { print }' "$kj" > "$M/m_w130ja.rule"
 
 for m in "$M"/m_*.rule; do "$RULEC" fmt "$m" >/dev/null; done
 

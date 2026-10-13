@@ -25,6 +25,9 @@ use crate::region;
 use crate::types::{Checked, Ty};
 use std::collections::BTreeMap;
 
+/// The `prerequisites` blocks on the pages (§15.222).
+mod prereq;
+
 /// Split one source line into its body and its trailing comment. The comment starts at the
 /// first `#` outside a string literal, which is where the parser starts it too, so the two
 /// never disagree about where the body ends.
@@ -366,6 +369,7 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
         ));
         o.push_str(&enums_section(f, c));
         o.push_str(&groups_section(f, c));
+        o.push_str(&prereq::sections(f, c));
         return o;
     }
 
@@ -760,6 +764,9 @@ fn render_rest(f: &RuleFile, c: &Checked, src: &str, path: &str, lines: &[&str])
     if f.machine.is_some() {
         o.push_str(&machine_section(f, c, &lines));
     }
+
+    // --- Which values need which before them (§15.222)
+    o.push_str(&prereq::sections(f, c));
 
     // --- Examples: each section as the source wrote it, one table after another.
     if !f.examples.is_empty() {
@@ -2363,6 +2370,9 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
         }
     }
 
+    // --- What comes before what (§15.222).
+    o.push_str(&prereq::customer(f, c));
+
     // --- Either side of every threshold. These are the vectors the boundary-pair criterion
     // built (§9.2): the same input moved one step across a boundary, everything else held.
     let vs = crate::vectors::generate(f, c);
@@ -2920,6 +2930,11 @@ pub fn render_html_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown
     } else {
         String::new()
     };
+    // The pictures of the `prerequisites` blocks, each where its Mermaid stood (§15.222).
+    let mut body = body;
+    for (k, g) in crate::prereq::Graph::all(f, c).iter().enumerate() {
+        body = body.replace(&format!("<!--PREREQ {k}-->"), &prereq::svg(f, c, g, k));
+    }
     o.push_str(&body.replace("<!--TRY-->", &try_panel()).replace("<!--GRAPH-->\n", "").replace("<!--MACHINE-->", &machine));
     o.push_str("</main>\n<script type=\"module\">\n");
     // What goes in the element: the module, whose head names the files and the addresses the rule
@@ -3711,7 +3726,11 @@ fn md_to_html(md: &str) -> String {
                     fence = Some((info.trim().to_string(), Vec::new()));
                 }
                 Some((kind, body)) => {
-                    if kind == "mermaid" {
+                    // A block's picture names the block on its first line (§15.222); any other is
+                    // the machine's.
+                    if let Some(k) = body.first().and_then(|l| l.strip_prefix("%% prerequisites ")).filter(|_| kind == "mermaid") {
+                        o.push_str(&format!("<!--PREREQ {k}-->\n"));
+                    } else if kind == "mermaid" {
                         o.push_str("<!--MACHINE-->\n");
                     } else {
                         o.push_str(&format!("<pre><code>{}</code></pre>\n", html_esc(&body.join("\n"))));

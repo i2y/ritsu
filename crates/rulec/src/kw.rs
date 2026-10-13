@@ -80,14 +80,34 @@ pub const MACHINE: &str = "machine";
 /// A named sequence of steps from the machine's initial state, with what each step answers:
 /// the `examples` of a machine (§15.148).
 pub const SCENARIO: &str = "scenario";
+/// `prerequisites research over tech` — which values of an enum a case has to hold before it can
+/// take another, with the lines under it (§15.222). A block head where a line starts outside every
+/// block; a declaration named `prerequisites` under `inputs` is still that declaration, so the word
+/// is not reserved (§15.157).
+pub const PREREQUISITES: &str = "prerequisites";
 
 /// The line-head keywords. `rule` is header-only, so it is not included.
 /// A test checks that the README's keyword table matches this list.
 pub const LINE_HEAD: &[&str] = &[
     DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT, TABLE,
     FOLD, COUNT, SUM, SEQUENCE, RESULT, EXAMPLES, POLICY, OVERRIDES, CLAUSE, SOURCE, APPLY,
-    SHAPE, MACHINE, SCENARIO,
+    SHAPE, MACHINE, SCENARIO, PREREQUISITES,
 ];
+
+// --- The lines under `prerequisites` (§15.222). Each word is read by its place in the line, so
+// none is reserved: a value may be called `start`, and `start requires …` is that value's line.
+/// `start agriculture, …`: the values that need nothing before them, which every other value is
+/// reached from.
+pub const START: &str = "start";
+/// `pottery requires agriculture`: the values a case has to hold before it can take this one.
+/// `,` is "and"; `or` inside a group is "any one of".
+pub const REQUIRES: &str = "requires";
+/// `charge requires shock_2 or drill_2`: one of the values on either side is enough.
+pub const OR: &str = "or";
+/// `requires nothing "<reason>"`: a value no case can take, with the reason beside it.
+pub const NOTHING: &str = "nothing";
+/// `ordered by era_of`: a table whose answer for a value is never below its prerequisites'.
+pub const ORDERED: &str = "ordered";
 
 // --- Declaration modifiers
 pub const RANGE: &str = "range";

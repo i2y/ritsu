@@ -1,0 +1,16 @@
+enums 資格(certification_path) v1
+description "研修制度の資格と、ある資格の試験を受ける前に持っていなければならない資格"
+
+enum 資格(certification) = 基礎(foundations) | 開発アソシエイト(associate_developer) | 運用アソシエイト(associate_operations) | 開発プロフェッショナル(professional_developer) | 設計プロフェッショナル(professional_architect) | セキュリティ専門(specialty_security) | データ専門(specialty_data)
+
+# 規則は `import enum 資格 from "shared/資格.rule"` で列挙を読む。試験の順もこのファイルのもので、
+# どの言語のモジュールもそれに答える。`start` の資格は何も要らない。`,` で区切ったものは全部が
+# 要り、`or` でつないだものはどれか一つで足りる。
+prerequisites 受験の前提(exam_path) over 資格
+  start                  基礎
+  開発アソシエイト       requires 基礎
+  運用アソシエイト       requires 基礎
+  開発プロフェッショナル requires 開発アソシエイト
+  設計プロフェッショナル requires 開発アソシエイト or 運用アソシエイト
+  セキュリティ専門       requires 設計プロフェッショナル
+  データ専門             requires 開発プロフェッショナル or 設計プロフェッショナル

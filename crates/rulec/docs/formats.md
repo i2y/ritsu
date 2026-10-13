@@ -165,7 +165,7 @@ One object for the run.
 
 | field | meaning |
 |---|---|
-| `via` | how the generated code was reached: `runner`, the vectors piped through the generated runner; `mcp`, one `tools/call` per vector through the generated server over stdio; `mcp-http`, the same conversation over the same server's Streamable HTTP ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)); `connect-asgi`, `connect-asgi-get`, `connect-wsgi` and `connect-wsgi-get`, one call per vector through the generated Connect service — the ASGI application and the WSGI one, each by POST and by GET ([generated-code.md](generated-code.md#the-rule-as-a-connect-service)); `wasi`, the Rust runner compiled for `wasm32-wasip1` and run under wasmtime ([generated-code.md](generated-code.md#the-rust-runner-as-a-wasi-module)); `function`, the rule as a function on a real PostgreSQL, called once per vector by argument name through `psql` ([generated-code.md](generated-code.md#sql)); or `proof`, the generated Rust read by a model checker ([generated-code.md](generated-code.md#the-proofs)) — the one way that is not the vectors, so its `vectors` is the number of harnesses and its `refused` is 0; the `wasm/` target itself is a language of its own in this list, reached through its runner, so `wasm` names a language here and `wasi` a way of reaching one |
+| `via` | how the generated code was reached: `runner`, the vectors piped through the generated runner; `mcp`, one `tools/call` per vector through the generated server over stdio; `mcp-http`, the same conversation over the same server's Streamable HTTP ([generated-code.md](generated-code.md#the-rule-as-an-mcp-tool)); `connect-asgi`, `connect-asgi-get`, `connect-wsgi` and `connect-wsgi-get`, one call per vector through the generated Connect service — the ASGI application and the WSGI one, each by POST and by GET ([generated-code.md](generated-code.md#the-rule-as-a-connect-service)); `wasi`, the Rust runner compiled for `wasm32-wasip1` and run under wasmtime ([generated-code.md](generated-code.md#the-rust-runner-as-a-wasi-module)); `function`, the rule as a function on a real PostgreSQL, called once per vector by argument name through `psql` ([generated-code.md](generated-code.md#sql)); `prerequisites`, the runner asked with `--prerequisites` over `<alias>.prereq.tsv` (§15.222), so its `vectors` is the number of cases and its `refused` is 0 — also the only way an `enums` file with a block is reached, through the runners written beside its modules; or `proof`, the generated Rust read by a model checker ([generated-code.md](generated-code.md#the-proofs)) — the one way that is not the vectors, so its `vectors` is the number of harnesses and its `refused` is 0; the `wasm/` target itself is a language of its own in this list, reached through its runner, so `wasm` names a language here and `wasi` a way of reaching one |
 | `vectors` | how many vectors were put to it — or, when `via` is `proof`, how many harnesses the checker read |
 | `refused` | how many of the inputs the reference evaluator refuses were put to it, all in one run: each has to be answered with a refusal of the same kind (`input` or `contradiction`) and the same sentence the evaluator gives, in the place of the record (§15.204) |
 | `calls` | how many calls a machine's traces made (§15.148): each one passed the state the language under test answered to the call before. 0 for a rule without a `machine` |
@@ -174,6 +174,7 @@ One object for the run.
 | `first_diff` | `null`, or `{"line":12,"generated":"…","expected":"…"}` — the first line of the canonical JSON they disagreed on |
 | `error` | `null`, or **prose** for a failure with no single line to point at |
 | `skipped` | **prose** reasons a language was not run at all (no toolchain) |
+| `without` | **prose**, only where there is any: what a target does not have by design and so was not compared — the functions of a `prerequisites` block in a target that has one entry (§15.222). Not a skip: `--require-all` passes over it |
 
 **`ran` is the field to branch on.** `ok:false` with `ran:false` is a machine that could not
 build or start the code — a missing toolchain, a compile error, a process that died — and says
@@ -678,6 +679,31 @@ after the first, and `always`, one per line; neither key is there otherwise:
 with a module gives it. The NumPy plan lists the same under `machine.more`, each
 `{"in":…,"out":…,"initial":…}`.
 
+A file with a `prerequisites` block (§15.222) — a rule, or an `enums` file — carries
+`prerequisites` at the top level, one entry per block; the key is absent otherwise:
+
+```json
+"prerequisites":[{"name":"exam_path","alias":"exam_path","over":"certification","open":false,
+  "start":["foundations"],
+  "requires":{"associate_developer":[["foundations"]],…,
+              "professional_architect":[["associate_developer","associate_operations"]],…},
+  "never":{},"ordered_by":null,
+  "functions":{"python":{"requires":"exam_path_requires",
+                         "requires_signature":"def exam_path_requires(value: Certification) -> list[list[Certification]]:",
+                         "available":"exam_path_available",
+                         "available_signature":"def exam_path_available(value: Certification, held: list[Certification]) -> bool:"},…},
+  "without":{"numpy":"an `enums` file has no NumPy plan","sql":"one entry, and no room for a second function",
+             "wasm":"one entry, and no room for a second function"}}]
+```
+
+`start` lists the values that need nothing, `requires` what each other value needs — every group,
+each a list of values any one of which is enough — and `never` each value no case can take, with
+its reason. `ordered_by` names the table that orders them, or is `null`. `functions` gives, for
+each language that has them, the two functions by the name a caller writes — qualified by the
+class, the module or the namespace where the language needs one — and by signature; for the plan
+of a rule, the methods of the runtime that read it. `without` names the targets that have no
+functions, and why ([generated-code.md](generated-code.md#which-values-need-which-before-them)).
+
 ## `graph`
 
 One object: the rule as a graph of **what decides each value and which values it reads**.
@@ -815,6 +841,7 @@ document. The tests hold both to forged certificates as well as to the corpus.
 | `cover` | completeness (E101) as the walk of §6.3, written down. A `split` has one child per coordinate of the axis at its depth — so the children tile the axis by shape, not by a claim — and every leaf is `{"row":n}`, a row that takes the whole subtree, or a box no input reaches: `{"constraint":k}`, the `constraint` that cannot hold there, `{"derived_axis":i}`, a derived value whose coordinate lies outside what its expression reaches, `{"define_axis":i}`, the same of a `define` that computes a number (§15.195) — a re-checker works the interval out again from `values`, and reads an interval coordinate without its ends, so `>100%` lies outside a share that ends at 100% — `{"truth_axis":i}`, a boolean `define` of one comparison at the truth value it never takes over the intervals of its two sides (§15.196), which a re-checker works out again from the comparison in `values` — `{"farkas":[…]}`, a box the linear model leaves no values in, with the multipliers that say so exactly as under `refuted` — the box being the coordinates the path to the leaf has fixed, and every coordinate of the axes it has not (§15.141) — or `{"every_point_ruled_out":true}`, a box whose points the sieve rules out one at a time (§15.98). `{"above_rows":{"axis":i,"column":…,"value":…,"rows":[…]}}` is a box whose path holds a column a table above decides at a value that table writes only in rows none of which fires in the box (§15.195): `rows` gives each of those rows by its number there, with `{"clash":j}`, an axis `j` of this table, a column of words both tables cut, on which the box takes none of the words the row lets in, or `{"farkas":[…]}`, multipliers as above that may also name an end of what the row takes on a numeric column of its own table, `{"cond":{"name":n,"hi":true,"at":"50","open":false}}` (`n <= 50`), which a re-checker holds every coordinate that row takes on that column to; the name has to be one this table numbers a value for, a numeric axis or a name of `linear.extra`. A re-checker counts the rows that write the value itself, from that table's `produces`, and refuses the leaf unless it gives a reason that holds for every one of them. `{"upstream":…}` is a box the tables above cannot produce, and rests on this table's `above` facts: a re-checker settles it by finding a fact the box's coordinates trigger, and the fact itself by recomputing it from the rows of the table that decides the column. `null` when the walk ran past the budget |
 | `constraints` | the `constraint` lines a cover leaf points at |
 | `machine` | a rule that is one step of a state machine (§15.148) carries the claims its `machine` section makes, laid on the rows of the table named by `over`: `{"table":"","why":…}` when they cannot be (the state not an axis of that table, say), and otherwise the following. `axis` is the state's axis of that table, `states` the enum's values, and `initial` and `finals` indices into them. `rows` says what each row does to the state — `{"row":n,"to":i}`, or `{"row":n,"stay":true}` for a row that hands the carried input back — with `source`, where that answer is written. A re-checker reads **where a call can go** off the rows themselves: from `s`, every row whose box takes `s` on `axis`, to where that row sends it. That over-approximates the calls that really happen, which is the safe direction for the closures below. `never` and `once` say what each line claims — `{"states":[…],"after":[…]}`; the output, the test its cell resolves to (`lo`/`hi` in the column's integer, or `words`) and the value each row writes (`null` for one computed, which then counts). `held_inputs` are the inputs a case holds (§15.149), and `held` the axes of this table among them. **The claims are laid on the rows once per world**, each world an element of `worlds` with `at`, a coordinate for each axis of `held` — every combination of them, once each, and a single world with `at: []` when `held` is empty. In a world a call only takes the rows whose box holds its coordinates there, and: `reach` is a set of states holding `initial` and closed under a call; `final_certified` claims that no call leaves a final state of `reach`; `never` gives, per line, the pairs (state, has the case been in `after` yet) closed under a call from `(initial, …)` with none in `states` with the flag set, or `null`; `once` gives, per line, the pairs (state, how many counted calls so far, up to two) closed under a call, none with two, or `null`; `finish` is the other direction: for every state of `reach` that is not final, a `path` of calls to a final state, each a point handed over the way `reach` under `tables` is — in the row's box, at the state, with the world's coordinates, asked about, and under `first` outside every row above — so a case really can finish from there. A path is taken as one case's only while nothing but its own column reads a held input: when the table reads a column that is not an input, or a `constraint` names a held input, the certificate gives no paths and a re-checker says the claim is not laid on the rows. `uncertified` names the claims this document does not carry, and a re-checker lists them rather than passing them. A machine that carries more than its state (§15.217) gives no `finish` paths — a path of the state's rows is not one case's, since each call moves the carried values too — and lays its claims over the carried values in `carried`: `{"why":…}` when the rows cannot carry them (a value decided outside the table, a row that writes one the rows do not follow), and otherwise `items`, one per `carry` line after the first — `input`, `output`, `kind` (`number`, `bool`, `enum`), `axis` (the table's column it is read in, or `null`), `coords` (its coordinates as closed intervals: every value of a number walked whole, the intervals it was cut into otherwise, `0` and `1` for a truth value with `labels` `["false","true"]`, an enum's values by their place with `labels`), `range` and `step` for a number, `round` for a number, the grid the output that carries it on rounds to (§7.2; every numeric output declares one), and `moves`, what each row writes into it (`{"row":n,"stay":true}`, `{"row":n,"to":i}`, `{"row":n,"out":true}` for a value outside the range, `{"row":n,"expr":name}` for a computed one), each with `source` — then `start`, the coordinates a case starts at, and `places`, the pairs (state, coordinates) a case can be in, `-1` for a value outside its range, closed under a call: from a place, every row whose box takes the state and meets each carried value's coordinate on the column it is read in — under `first`, not one an earlier row covers there alone — goes to its state and to every coordinate the value it writes can be — its own coordinate where the row keeps it, the value written in the row, or the interval of a computed one taken over the place by the arithmetic of `values` and narrowed by the row's box where the table reads it, each rounded out to the `round` grid, since the rounded value is what the next call is passed (§15.232) — and outside the range where that reaches past it. `final_certified`, `never` (`[state,[coordinates],flag]`) and `once` (`[state,[coordinates],count]`) are the machine's claims over the places, laid as above, `always` gives per line `when`, the `tests` (`item` and its `cell` in the form of a row's) and `holds`, and `ranges` per carried number `item` and `holds`. A claim that is not laid there is in `uncertified` |
+| `prerequisites` | one entry per `prerequisites` block (§15.222), written only for a file that has one: `name`, `over` (the enum), `start`, `requires` (each value with a line of groups, each group a list of values any one of which is enough) and `never` (the values no case can take) — the graph — and the two orders `check` found it by. `topological` is the enum's values in an order where every value comes after each one it may need, the values of an `or` included, so the graph has no cycle; `reached` is every value outside `never`, each after one value of each of its groups, starting from `start`, so each one can be reached. `ordered_by` is `null`, or the table that orders the values: `table`, `column` (what it writes), `kind` (`enum`, with `enum` and its `order`, or `number`) and `values`, each value's answer. A re-checker holds every value of the enum to one place among `start`, `requires` and `never`, the two orders to the graph, and `values` to the rows of that table in `tables` — the first row whose box takes the value, and what it writes — and then each answer to be no lower than those of what the value needs, an edge to a value of `never` left out. The Lean program has no theorem for these yet: it names each block on its closing line as stated rather than proved |
 
 **What "proved" means here.** `proofs/RulecCert/Semantics.lean` says what a table claims:
 under `unique`, every point the rule is **asked about** is taken by exactly one row; every
@@ -1132,6 +1159,31 @@ Rest of the country
 A rule that reads an `enums` file (§15.212) gets `<alias>.owners.json`, the modules of the files
 it reads, `["catalog"]`, for the languages whose build is one list of files (Swift): `rulec
 test` puts each module's file on that list.
+
+A file with a `prerequisites` block (§15.222) gets `<alias>.prereq.tsv` and
+`<alias>.prereq.expected`: one line per case — the block's alias, a value, and the values held,
+`,` between them — and on the same line of the second file what the two functions answer, whether
+the value can be taken (`true` or `false`) and, after a tab, what it needs as `[a][b|c]`: each
+group in brackets, the values of an `or` separated by `|`, nothing for no group and `[]` for a group
+with no value in it. The cases for each value are nothing held, one value of each group, that less
+the value of one group, each other value of an `or` in its place, the value itself besides, and
+every other value. `rulec test` hands the first file to each runner after `--prerequisites` and
+holds what it prints to the second. From `shared/certifications.rule`:
+
+```text
+exam_path	associate_developer	foundations,associate_operations,professional_developer,professional_architect,specialty_security,specialty_data
+exam_path	associate_operations	
+exam_path	associate_operations	foundations
+```
+
+```text
+true	[foundations]
+false	[foundations]
+true	[foundations]
+```
+
+An `enums` file has no other vectors: its alias is a rule of `rulec test`'s only for this, through
+the runners `rulec gen` writes beside its modules.
 
 ## Fixtures (`rulec fixtures lint`, `replay`, `diff`)
 

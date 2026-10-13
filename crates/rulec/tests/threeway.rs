@@ -164,6 +164,11 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/retry_attempts.rule", "retry_attempts"),
     ("tests/corpus/grace_period.rule", "grace_period"),
     ("tests/corpus/one_time_perk.rule", "one_time_perk"),
+    // §15.222: prerequisites in a rule, with `ordered by`, and in an `enums` file the other two read.
+    ("tests/corpus/course_catalog.rule", "course_catalog"),
+    ("tests/corpus/科目の履修.rule", "course_enrollment"),
+    ("tests/corpus/exam_fee.rule", "exam_fee"),
+    ("tests/corpus/受験料.rule", "exam_charge"),
 ];
 
 #[test]
@@ -223,6 +228,7 @@ fn 評価器と生成コードが全言語で一致する() {
 
     let mut total = 0usize;
     let mut total_refused = 0usize;
+    let mut total_prereq = 0usize;
     for (file, alias) in CORPUS {
         let vec_path = dir.join("vectors").join(format!("{alias}.jsonl"));
         let exp = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.expected.jsonl")))
@@ -231,6 +237,9 @@ fn 評価器と生成コードが全言語で一致する() {
         assert!(!vectors.trim().is_empty(), "{alias}: ベクタがゼロ件");
         total += vectors.lines().count();
         total_refused += std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.refused.jsonl"))).map(|s| s.lines().count()).unwrap_or(0);
+        // A rule with a `prerequisites` block has its cases too (§15.222).
+        let prereq_path = dir.join("vectors").join(format!("{alias}.prereq.tsv"));
+        total_prereq += std::fs::read_to_string(&prereq_path).map(|s| s.lines().count()).unwrap_or(0);
         let pkg = alias.replace('_', "");
 
         // A rule that walks a sequence — folding it or counting it — is not generated for a
@@ -316,10 +325,25 @@ fn 評価器と生成コードが全言語で一致する() {
                 assert!(o.status.success(), "{alias}: {} が手順で落ちた: {}", b.name, String::from_utf8_lossy(&o.stderr));
                 assert_eq!(String::from_utf8_lossy(&o.stdout), want, "{alias}: 手順で評価器と生成 {} が食い違う", b.name);
             }
+            // A `prerequisites` block's two functions (§15.222): the same runner with
+            // `--prerequisites`, in each language that writes them.
+            if b.prereqs && prereq_path.exists() {
+                let want = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.prereq.expected")))
+                    .expect("前提のつながりの期待値が無い");
+                let o = Command::new(&plan.cmd)
+                    .current_dir(&cwd)
+                    .args(&plan.args)
+                    .arg("--prerequisites")
+                    .stdin(std::fs::File::open(&prereq_path).unwrap())
+                    .output()
+                    .unwrap_or_else(|e| panic!("{}: 起動できない: {e}", b.name));
+                assert!(o.status.success(), "{alias}: {} が前提のつながりで落ちた: {}", b.name, String::from_utf8_lossy(&o.stderr));
+                assert_eq!(String::from_utf8_lossy(&o.stdout), want, "{alias}: 前提のつながりで評価器と生成 {} が食い違う", b.name);
+            }
         }
     }
     eprintln!(
-        "一致: 規則 {} 本 / ベクタ {total} 件 / 受け付けない入力 {total_refused} 件（{}）",
+        "一致: 規則 {} 本 / ベクタ {total} 件 / 受け付けない入力 {total_refused} 件 / 前提のつながり {total_prereq} 件（{}）",
         CORPUS.len(),
         present.iter().map(|b| b.name).collect::<Vec<_>>().join(" / ")
     );
