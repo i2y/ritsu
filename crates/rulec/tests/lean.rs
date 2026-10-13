@@ -383,6 +383,17 @@ fn 定理が立つ公理は三つだけ() {
         "RulecCert.eval_type_of_typeOf",
         "RulecCert.eval_mem_interval",
         "RulecCert.runTotal_exact",
+        "RulecCert.cut_of_box",
+        "RulecCert.written_mem_hull",
+        "RulecCert.enumAxis_coords",
+        "RulecCert.Carried.Model.simulates",
+        "RulecCert.Carried.Sys.reaches_mem",
+        "RulecCert.Carried.Sys.final_stays",
+        "RulecCert.Carried.Sys.never_after",
+        "RulecCert.Carried.Sys.once_below_two",
+        "RulecCert.Carried.Model.always_holds",
+        "RulecCert.Carried.Model.range_holds",
+        "RulecCert.Carried.Model.start_inhabited",
     ];
     let tmp = TempDir::new("axioms");
     let dir = tmp.path().to_path_buf();
@@ -881,4 +892,144 @@ fn 木の規則の証明書は証明付きの検査器でもファイルを添�
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(held >= 190, "証明書の出る規則が減っている: {held}");
+}
+
+/// What a row writes where its own cell narrows it (`inside`, rulec's §15.213) is worked out again from
+/// the row's cell (`cut_of_box`, `written_mem_hull`, §15.232): nothing about it is left stated, and
+/// the three ways of lying about it that `tests/arith.rs` holds `tools/recheck.py` to are refused here.
+#[test]
+fn 行のセルが狭める範囲は証明付きの検査器でもセルから組み直される() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    let rel = "tests/corpus/average_unit_price_split.rule";
+    let (c, cert) = rulec(&["certificate", rel]);
+    assert_eq!(c, 0, "{cert}");
+    let inside = r#""inside":["1","1000"]"#;
+    assert!(cert.contains(inside), "{cert}");
+    let (code, said) = lean(&bin, &cert, Some(rel));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("1 rows inside what their own cell lets through"), "{said}");
+    assert!(said.contains("OK: every claim this program states was proved"), "{said}");
+    for (what, forged, why) in [
+        (
+            "狭く言った inside",
+            cert.replacen(inside, r#""inside":["2","1000"]"#, 1),
+            "row 2's cell lets units take [1, 1000], and the certificate says the row writes it inside [2, 1000]",
+        ),
+        ("狭く言った列の範囲", cert.replacen(r#""per":["1","1000"]"#, r#""per":["2","1000"]"#, 1), "per: its rows write a value outside the range the certificate states for it"),
+        ("行の inside を消す", cert.replacen(&format!(",{inside}"), "", 1), "per: its rows write a value outside the range the certificate states for it"),
+    ] {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = lean(&bin, &forged, Some(rel));
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains(why), "{what}: {said}");
+    }
+}
+
+/// A discount by tier, for an input whose `range` lets in two of the four tiers.
+const RANGED_TIER: &str = "rule member_discount v1\ndescription \"A discount by the member's tier, for the tiers from silver to gold\"\n\nenum tier = basic < silver < gold < platinum\n\ninputs\n  member : tier  range >=silver <=gold\n\noutputs\n  discount : rate  round down(1%)\n\ntable discount_of\npolicy unique\n| member | -> discount |\n| silver | 5%          |\n| >=gold | 10%         |\n";
+
+/// The axis of an input of an enum is the enum's values, or those its `range` lets in (rulec's
+/// §15.210, `enumAxis_coords`, §15.232): checked by the proved checker too, so neither an
+/// `enum_ranges` the axis does not bear out nor an axis that leaves a value off passes.
+#[test]
+fn 列挙の入力の軸は証明付きの検査器でも列挙の値に合う() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    let tmp = TempDir::new("lean-enum-axis");
+    let p = tmp.path().join("member_discount.rule");
+    std::fs::write(&p, RANGED_TIER).unwrap();
+    let rel = p.to_str().unwrap();
+    let (c, cert) = rulec(&["certificate", rel]);
+    assert_eq!(c, 0, "{cert}");
+    let ranges = r#""enum_ranges":{"member":["silver","gold"]}"#;
+    assert!(cert.contains(ranges), "{cert}");
+    let (code, said) = lean(&bin, &cert, Some(rel));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("1 axes of an enum's input run over the values it takes"), "{said}");
+    assert!(said.contains("OK: every claim this program states was proved"), "{said}");
+    for (what, forged) in [
+        ("範囲に値を足す", cert.replacen(ranges, r#""enum_ranges":{"member":["silver","gold","platinum"]}"#, 1)),
+        ("範囲を消す", cert.replacen(&format!(",{ranges}"), "", 1)),
+    ] {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = lean(&bin, &forged, Some(rel));
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains("member's axis is not the values its enum lets in"), "{what}: {said}");
+    }
+    // An enum with no range: the axis is every value, in the enum's order.
+    let rel = "tests/corpus/grace_period.rule";
+    let (c, cert) = rulec(&["certificate", rel]);
+    assert_eq!(c, 0, "{cert}");
+    let axis = r#""coords":["payment_missed","day_passed","payment_received"]"#;
+    assert!(cert.contains(axis), "{cert}");
+    let (code, said) = lean(&bin, &cert.replacen(axis, r#""coords":["day_passed","payment_missed","payment_received"]"#, 1), Some(rel));
+    assert_eq!(code, 1, "並べ替えた軸が通ってしまった\n{said}");
+    assert!(said.contains("event's axis is not the values its enum lets in"), "{said}");
+}
+
+/// The values a machine carries besides its state (rulec's §15.217, §15.232): the places are closed
+/// under every call the check counts from them (`Carried.Model.simulates`, `Carried.Sys.reaches_mem`),
+/// and the claims laid there are proved — only that a case can still finish stays stated. Every way of
+/// breaking a claim in one place is refused, and a certificate that does not say what grid the
+/// carried output rounds to is named as stated rather than passed.
+#[test]
+fn 持ち越す値の主張は証明付きの検査器で証明される() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    for (rel, line) in [
+        ("tests/corpus/grace_period.rule", "carried values over step: 9 places a case can be, no call leaves a final state, `never` line 1, `always` line 1, `always` line 2, next_days_left within its range"),
+        ("tests/corpus/retry_attempts.rule", "carried values over step: 7 places a case can be, no call leaves a final state, `never` line 1, `always` line 1, `always` line 2, next_attempts within its range"),
+        ("tests/corpus/one_time_perk.rule", "carried values over step: 5 places a case can be, no call leaves a final state, `once` line 1 (trial_granted), `always` line 1"),
+        ("tests/corpus/猶予の残り日数.rule", "carried values over 遷移: 9 places a case can be"),
+        ("tests/corpus/再試行の回数.rule", "carried values over 試行: 7 places a case can be"),
+        ("tests/corpus/一度だけの特典.rule", "carried values over 申し出の扱い: 5 places a case can be"),
+    ] {
+        let (c, cert) = rulec(&["certificate", rel]);
+        assert_eq!(c, 0, "{rel}: {cert}");
+        let (code, said) = lean(&bin, &cert, Some(rel));
+        assert_eq!(code, 0, "{rel}: {said}");
+        assert!(said.contains(line), "{rel}: {said}");
+        assert!(!said.contains("besides its state"), "{rel}: まだ述べただけと言っている\n{said}");
+        assert!(!said.contains("is not laid on the rows") || said.contains("that a case can still finish is not laid on the rows"), "{rel}: {said}");
+    }
+    let rel = "tests/corpus/grace_period.rule";
+    let (c, cert) = rulec(&["certificate", rel]);
+    assert_eq!(c, 0, "{cert}");
+    for (what, forged, why) in [
+        ("場所を一つ落とした", cert.replace("[1,[2]],[1,[1]],[2,[0]]]", "[1,[1]],[2,[0]]]"), "leads outside the places"),
+        ("行 1 が書く値", cert.replacen(r#"{"row":1,"to":7,"#, r#"{"row":1,"to":6,"#, 1), "what row 1 is said to write into next_days_left is not what the table says"),
+        (
+            "always の境を狭めた",
+            cert.replacen(r#"{"op":"<=","value":"7"}]}}],"holds":true"#, r#"{"op":"<=","value":"6"}]}}],"holds":true"#, 1),
+            "the `always` line 1 does not hold at every place it names",
+        ),
+        ("始まりの場所", cert.replacen(r#""start":[0]"#, r#""start":[1]"#, 1), "the places leave out where a case starts"),
+        ("範囲", cert.replacen(r#""range":["0","7"]"#, r#""range":["0","8"]"#, 1), "the range of days_left is not the one it declares"),
+        ("丸めの刻み", cert.replacen(r#""round":"1""#, r#""round":"2""#, 1), "leads outside the places"),
+        ("座標の刻み", cert.replacen(r#""step":"1","round""#, r#""step":"2","round""#, 1), "do not run from one end of its range to the other on its step"),
+        ("never の組を一つ落とした", cert.replacen("[1,[7],false],", "", 1), "the `never` set of line 1 is not closed"),
+        ("範囲の外の場所", cert.replacen(r#""places":["#, r#""places":[[1,[-1]],"#, 1), "next_days_left is said to stay within its range, and a place leaves it"),
+        ("始まりの座標を空にする", cert.replacen(r#""start":[0]"#, r#""start":[]"#, 1), "where a case starts is not one coordinate of each carried value"),
+        ("座標の無い場所", cert.replacen(r#""places":["#, r#""places":[[0,[]],"#, 1), "a place does not give one coordinate of each carried value"),
+        ("行の値のファイルの字", cert.replacen(r#""expr":"one_less","source":{"line":25,"col":62,"len":8,"text":"one_less"}"#, r#""expr":"one_less","source":{"line":25,"col":62,"len":8,"text":"days_lef"}"#, 1), "the file has"),
+    ] {
+        assert_ne!(forged, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = lean(&bin, &forged, Some(rel));
+        assert_eq!(code, 1, "{what}: 偽った証明書が通ってしまった\n{said}");
+        assert!(said.contains(why), "{what}: {said}");
+    }
+    // A certificate from before `round` was written cannot say where a rounded value lands.
+    let (code, said) = lean(&bin, &cert.replacen(r#","round":"1""#, "", 1), Some(rel));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("the certificate does not say what grid next_days_left rounds to"), "{said}");
+    let rel = "tests/corpus/one_time_perk.rule";
+    let (c, cert) = rulec(&["certificate", rel]);
+    assert_eq!(c, 0, "{cert}");
+    let (code, said) = lean(&bin, &cert.replacen("[1,[1],1]", "[1,[1],0]", 1), Some(rel));
+    assert_eq!(code, 1, "数えた呼び出しを数えない once の組が通ってしまった\n{said}");
+    assert!(said.contains("the `once trial_granted` set is not closed, or counts two"), "{said}");
 }

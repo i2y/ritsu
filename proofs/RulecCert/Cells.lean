@@ -15,6 +15,7 @@
   assuming it, and `admits_iff` is the theorem that rests on it.
 -/
 import RulecCert.Sieve
+import RulecCert.Values
 
 namespace RulecCert
 
@@ -405,5 +406,233 @@ theorem mem_boxOf_rank_iff {labels : List String} {coords : List (Option Coord)}
     · rintro ⟨j, hj, hall⟩
       cases hj
       exact hall
+
+/-! ## What a row's own cell lets through the value it writes (rulec's §15.213)
+
+A row that writes one of its own table's columns — `| >=1 | units |` writes `units` — answers only
+at the points its box takes, and its box on that column is the cell's (`checkBoxes` in
+`RulecMain.lean` holds the two together). So the value it writes is one its cell lets through. That
+is the row's **cut**: the bounds of a comparison cell, a strict end moved in to the next point of the
+grid the value sits on, or the ends of a set of numbers. -/
+
+/-- The bounds one comparison puts on the value it compares, where that value sits on the grid `g`:
+    `>w` lets through the grid's first point above `w`, `<w` its last point below it. -/
+def cmpBound (g : Rat) : Cmp → Rat → Ival
+  | .ge, w => (some w, none)
+  | .gt, w => (some (floorTo g w + g), none)
+  | .le, w => (none, some w)
+  | .lt, w => (none, some (ceilTo g w - g))
+  | .eq, w => (some w, some w)
+
+/-- The tighter of two low ends, and of two high ends. -/
+def meetLo : Option Rat → Option Rat → Option Rat
+  | some a, some b => some (rmax a b)
+  | some a, none => some a
+  | none, b => b
+
+def meetHi : Option Rat → Option Rat → Option Rat
+  | some a, some b => some (rmin a b)
+  | some a, none => some a
+  | none, b => b
+
+theorem inIval_meet {I J : Ival} {v : Rat} (hI : inIval I v) (hJ : inIval J v) :
+    inIval (meetLo I.1 J.1, meetHi I.2 J.2) v := by
+  obtain ⟨hI1, hI2⟩ := hI
+  obtain ⟨hJ1, hJ2⟩ := hJ
+  constructor
+  · intro a ha
+    cases h1 : I.1 with
+    | none => simp only [meetLo, h1] at ha; exact hJ1 a ha
+    | some x =>
+      cases h2 : J.1 with
+      | none =>
+        simp only [meetLo, h1, h2, Option.some.injEq] at ha
+        exact ha ▸ hI1 x h1
+      | some y =>
+        simp only [meetLo, h1, h2, Option.some.injEq] at ha
+        exact ha ▸ rmax_le (hI1 x h1) (hJ1 y h2)
+  · intro b hb
+    cases h1 : I.2 with
+    | none => simp only [meetHi, h1] at hb; exact hJ2 b hb
+    | some x =>
+      cases h2 : J.2 with
+      | none =>
+        simp only [meetHi, h1, h2, Option.some.injEq] at hb
+        exact hb ▸ hI2 x h1
+      | some y =>
+        simp only [meetHi, h1, h2, Option.some.injEq] at hb
+        exact hb ▸ le_rmin (hI2 x h1) (hJ2 y h2)
+
+/-- The bounds a comparison cell puts on its value: all of its comparisons' together. -/
+def cellBounds (g : Rat) : List (Cmp × Rat) → Ival
+  | [] => (none, none)
+  | t :: ts =>
+    let b := cmpBound g t.1 t.2
+    let r := cellBounds g ts
+    (meetLo b.1 r.1, meetHi b.2 r.2)
+
+theorem inIval_cmpBound {g v w : Rat} {op : Cmp} (hg : 0 < g) (hv : onGrid g v)
+    (h : op.holds v w) : inIval (cmpBound g op w) v := by
+  cases op with
+  | ge =>
+    refine ⟨fun a ha => ?_, fun b hb => by simp [cmpBound] at hb⟩
+    simp only [cmpBound, Option.some.injEq] at ha
+    exact ha ▸ h
+  | gt =>
+    refine ⟨fun a ha => ?_, fun b hb => by simp [cmpBound] at hb⟩
+    simp only [cmpBound, Option.some.injEq] at ha
+    exact ha ▸ grid_above hg hv h
+  | le =>
+    refine ⟨fun a ha => by simp [cmpBound] at ha, fun b hb => ?_⟩
+    simp only [cmpBound, Option.some.injEq] at hb
+    exact hb ▸ h
+  | lt =>
+    refine ⟨fun a ha => by simp [cmpBound] at ha, fun b hb => ?_⟩
+    simp only [cmpBound, Option.some.injEq] at hb
+    exact hb ▸ grid_below hg hv h
+  | eq =>
+    have h' : v = w := h
+    refine ⟨fun a ha => ?_, fun b hb => ?_⟩
+    · simp only [cmpBound, Option.some.injEq] at ha
+      rw [← ha, h']
+      exact Rat.le_refl
+    · simp only [cmpBound, Option.some.injEq] at hb
+      rw [← hb, h']
+      exact Rat.le_refl
+
+/-- **A value on its grid that passes every comparison of a cell lies inside the cell's bounds.** -/
+theorem inIval_cellBounds {g v : Rat} (hg : 0 < g) (hv : onGrid g v) :
+    ∀ {ts : List (Cmp × Rat)}, (∀ t ∈ ts, t.1.holds v t.2) → inIval (cellBounds g ts) v
+  | [], _ => ⟨fun a ha => by simp [cellBounds] at ha, fun b hb => by simp [cellBounds] at hb⟩
+  | t :: ts, h =>
+    inIval_meet (inIval_cmpBound hg hv (h t (by simp)))
+      (inIval_cellBounds hg hv (fun t' ht' => h t' (List.mem_cons_of_mem _ ht')))
+
+/-- The ends of a set of numbers. -/
+def valsBounds : List Rat → Ival
+  | [] => (none, none)
+  | w :: ws =>
+    match valsBounds ws with
+    | (some a, some b) => (some (rmin w a), some (rmax w b))
+    | _ => (some w, some w)
+
+theorem valsBounds_ends : ∀ (ws : List Rat), ws ≠ [] →
+    ∃ a b, valsBounds ws = (some a, some b) ∧ ∀ w ∈ ws, a ≤ w ∧ w ≤ b
+  | [], h => absurd rfl h
+  | [w], _ => ⟨w, w, rfl, fun x hx => by
+      simp only [List.mem_singleton] at hx
+      subst hx
+      exact ⟨Rat.le_refl, Rat.le_refl⟩⟩
+  | w :: w2 :: ws, _ => by
+    obtain ⟨a, b, hab, hall⟩ := valsBounds_ends (w2 :: ws) (by simp)
+    have hv : valsBounds (w :: w2 :: ws) = match valsBounds (w2 :: ws) with
+        | (some a, some b) => (some (rmin w a), some (rmax w b))
+        | _ => (some w, some w) := rfl
+    refine ⟨rmin w a, rmax w b, by rw [hv, hab], fun x hx => ?_⟩
+    simp only [List.mem_cons] at hx
+    rcases hx with rfl | hx
+    · exact ⟨rmin_le_left _ _, left_le_rmax _ _⟩
+    · obtain ⟨h1, h2⟩ := hall x (by simpa [List.mem_cons] using hx)
+      exact ⟨Rat.le_trans (rmin_le_right _ _) h1, Rat.le_trans h2 (right_le_rmax _ _)⟩
+
+/-- **A value that is one of a set's lies inside the set's ends.** -/
+theorem inIval_valsBounds {ws : List Rat} {v : Rat} (h : ∃ w ∈ ws, v = w) : inIval (valsBounds ws) v := by
+  obtain ⟨w, hw, rfl⟩ := h
+  obtain ⟨a, b, hab, hall⟩ := valsBounds_ends ws (List.ne_nil_of_mem hw)
+  rw [hab]
+  obtain ⟨h1, h2⟩ := hall _ hw
+  exact ⟨fun x hx => by simp only [Option.some.injEq] at hx; exact hx ▸ h1,
+    fun x hx => by simp only [Option.some.injEq] at hx; exact hx ▸ h2⟩
+
+/-- The cut a row's cell on a column of numbers puts on the value there, on the grid `g` the value
+    sits on: a comparison's bounds or a set's ends. Other cells cut nothing. -/
+def cellCut (g : Rat) : CellTest → Option Ival
+  | .cmp ts => some (cellBounds g ts)
+  | .inVals ws => some (valsBounds ws)
+  | _ => none
+
+/-- **The cut holds at every point the row's box takes** (rulec's §15.213). Where the coordinate the
+    point has on the column is one the cell's box takes, the value behind it — a value on its grid
+    — is inside the cut: being in the box is passing the cell (`mem_boxOf_cmp_iff`,
+    `mem_boxOf_in_iff`), and passing the cell is being inside its bounds. -/
+theorem cut_of_box {labels : List String} {coords : List (Option Coord)} {cell : CellTest}
+    {c : Nat} {x : Coord} {v g : Rat} {J : Ival} (hcut : cellCut g cell = some J)
+    (hlen : c < labels.length) (hc : coords[c]? = some (some x))
+    (hsplit : axisSplits coords cell = true) (hv : x.holds v)
+    (hbox : c ∈ boxOf labels coords cell) (hg : 0 < g) (hgrid : onGrid g v) : inIval J v := by
+  cases cell with
+  | cmp ts =>
+    simp only [cellCut, Option.some.injEq] at hcut
+    subst hcut
+    exact inIval_cellBounds hg hgrid ((mem_boxOf_cmp_iff hlen hc hsplit hv).1 hbox)
+  | inVals ws =>
+    simp only [cellCut, Option.some.injEq] at hcut
+    subst hcut
+    exact inIval_valsBounds ((mem_boxOf_in_iff hlen hc hsplit hv).1 hbox)
+  | any => simp [cellCut] at hcut
+  | nothing => simp [cellCut] at hcut
+  | isIn _ => simp [cellCut] at hcut
+  | notIn _ => simp [cellCut] at hcut
+  | prefixOf _ => simp [cellCut] at hcut
+  | notInVals _ => simp [cellCut] at hcut
+  | rank _ _ => simp [cellCut] at hcut
+
+/-- **What a table writes into a column of numbers lies in the hull, at every point one of its rows
+    fires** (rulec's §15.196, §15.213). The row that fires writes its expression's value; where it
+    writes one of its own table's columns, that column's value is behind the point's coordinate on
+    it, sits on its grid, and the coordinate is one the row's cell takes — so it is inside the row's
+    cut, and `eval_mem_hull` applies. -/
+theorem written_mem_hull {ranges : String → Option Span2} {env : String → Option UVal}
+    {within : Expr → Expr → Bool} {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd)
+    (henv : ∀ n I w t, ranges n = some I → env n = some (w, t) → inSpan I w)
+    (hwithin : ∀ a b va vb ta tb, within a b = true →
+      eval rnd env a = some (va, ta) → eval rnd env b = some (vb, tb) → va ≤ vb)
+    {ws : List Writes} {H : Span2} (hH : hullOf ranges within ws = some H)
+    {w : Writes} (hw : w ∈ ws) {v : Rat} {t : Ty} (hv : eval rnd env w.expr = some (v, t))
+    (hfires : ∀ J, w.cut = some J → ∃ (labels : List String) (coords : List (Option Coord))
+      (cell : CellTest) (c : Nat) (x : Coord) (g : Rat), cellCut g cell = some J ∧
+      c < labels.length ∧ coords[c]? = some (some x) ∧ axisSplits coords cell = true ∧
+      x.holds v ∧ c ∈ boxOf labels coords cell ∧ 0 < g ∧ onGrid g v) :
+    inSpan H v := by
+  refine eval_mem_hull hrnd henv hwithin ws H hH w hw v t hv (fun J hJ => ?_)
+  obtain ⟨labels, coords, cell, c, x, g, hcut, hlen, hc, hsplit, hx, hbox, hg, hgrid⟩ := hfires J hJ
+  exact cut_of_box hcut hlen hc hsplit hx hbox hg hgrid
+
+/-! ## The axis of an input of an enum (rulec's §15.210)
+
+The cover tiles the space of coordinates, so completeness and every other claim speak of the values
+an axis has a coordinate for. For an input of an enum those have to be the values the input can take:
+the enum's, or the ones an ordered enum's `range` lets in, after the absent value of an optional
+input. A value left off the axis would be one no row was asked to answer; a value on it the door
+turns away would be a point a row is "reached" at that no call makes. -/
+
+/-- The words an input of an enum takes, in order: the absent value first where the input is
+    optional, then the enum's values — those its range lets in, where it declares one. -/
+def enumAxis (vals : List String) (range : Option (List String)) (optional : Bool) : List String :=
+  (if optional then ["none"] else []) ++
+    (match range with
+     | some r => vals.filter (fun w => r.contains w)
+     | none => vals)
+
+/-- A word the input can take. -/
+def EnumTakes (vals : List String) (range : Option (List String)) (optional : Bool) (w : String) :
+    Prop :=
+  (optional = true ∧ w = "none") ∨ (w ∈ vals ∧ ∀ r, range = some r → w ∈ r)
+
+/-- **The axis written as `enumAxis` has a coordinate for exactly the words the input takes.** -/
+theorem mem_enumAxis_iff {vals : List String} {range : Option (List String)} {optional : Bool}
+    {w : String} : w ∈ enumAxis vals range optional ↔ EnumTakes vals range optional w := by
+  unfold enumAxis EnumTakes
+  cases optional <;> cases range <;> simp [List.mem_filter]
+
+/-- **Every word the input takes is a coordinate of its axis, and every coordinate is one it
+    takes**, when the axis is written as `enumAxis` says. -/
+theorem enumAxis_coords {labels vals : List String} {range : Option (List String)} {optional : Bool}
+    (h : labels = enumAxis vals range optional) :
+    (∀ w, EnumTakes vals range optional w → ∃ c : Nat, labels[c]? = some w) ∧
+    (∀ (c : Nat) (w : String), labels[c]? = some w → EnumTakes vals range optional w) := by
+  subst h
+  refine ⟨fun w hw => List.mem_iff_getElem?.1 (mem_enumAxis_iff.2 hw), fun c w hc => ?_⟩
+  exact mem_enumAxis_iff.1 (List.mem_of_getElem? hc)
 
 end RulecCert

@@ -181,7 +181,9 @@ carried number outside its range is **E134**; a sequence of calls that breaks an
 — `always days_left >=1 <=7 when in_grace` — is **E135**. While every value fits the budget one
 by one the walk is exact; past it, the numbers are cut into intervals, a sequence that breaks a
 claim there is looked for again among calls that really happen, and one that cannot be made
-again is **W127**, never a pass.
+again is **W127**, never a pass. The certificate lays these claims on the places a case can be,
+and the Lean re-checker proves that places closed under every call the rows allow hold every case,
+whether the walk took the values one by one or cut them into intervals.
 
 Every diagnostic writes its first line in the words of the business,
 **always carries a concrete case**, and states the fix down to the

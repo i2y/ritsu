@@ -561,6 +561,60 @@ theorem ceilTo_monotone {g x y : Rat} (hg : 0 < g) (h : x ≤ y) : ceilTo g x �
 def RoundsWell (rnd : Rat → Rat → Rat) : Prop :=
   ∀ g v, 0 < g → floorTo g v ≤ rnd g v ∧ rnd g v ≤ ceilTo g v
 
+theorem floorTo_le {g : Rat} (hg : 0 < g) (v : Rat) : floorTo g v ≤ v := by
+  have h := Rat.mul_le_mul_of_nonneg_right (Rat.floor_le (v / g)) (Rat.le_of_lt hg)
+  rwa [Rat.div_mul_cancel (Ne.symm (Rat.ne_of_lt hg))] at h
+
+theorem le_ceilTo {g : Rat} (hg : 0 < g) (v : Rat) : v ≤ ceilTo g v := by
+  have h := Rat.mul_le_mul_of_nonneg_right (le_rceil (v / g)) (Rat.le_of_lt hg)
+  rwa [Rat.div_mul_cancel (Ne.symm (Rat.ne_of_lt hg))] at h
+
+/-! ### Values on a grid
+
+Every value a rule stores is a whole number of `1/scale` at the scale it is stored at (§7.1), and
+every numeric output rounds to a grid (§7.2, E104). Between one point of a grid and the next there
+is nothing, which is what a strict comparison and a carried value's coordinates both rest on
+(rulec's §15.213, §15.217). -/
+
+/-- A value sits on the grid `g` when it is a whole number of `g`. -/
+def onGrid (g v : Rat) : Prop := ∃ k : Int, v = (k : Rat) * g
+
+/-- The same as a test: the whole part of `v / g`, times `g`, gives `v` back. -/
+def gridB (g v : Rat) : Bool := ((v / g).num : Rat) * g == v
+
+theorem onGrid_of_gridB {g v : Rat} (h : gridB g v = true) : onGrid g v :=
+  ⟨(v / g).num, (eq_of_beq h).symm⟩
+
+theorem onGrid_intMul (k : Int) (g : Rat) : onGrid g ((k : Rat) * g) := ⟨k, rfl⟩
+
+/-- **Two points of a grid in order are a step apart at least.** -/
+theorem grid_succ_le {g a v : Rat} (hg : 0 < g) (ha : onGrid g a) (hv : onGrid g v) (h : a < v) :
+    a + g ≤ v := by
+  obtain ⟨j, rfl⟩ := ha
+  obtain ⟨k, rfl⟩ := hv
+  have hjk : j < k := Rat.intCast_lt_intCast.1 (Rat.lt_of_mul_lt_mul_right h (Rat.le_of_lt hg))
+  have h1 : ((j + 1 : Int) : Rat) ≤ (k : Rat) := Rat.intCast_le_intCast.2 (Int.add_one_le_of_lt hjk)
+  have h2 := Rat.mul_le_mul_of_nonneg_right h1 (Rat.le_of_lt hg)
+  rwa [Rat.intCast_add, Rat.intCast_one, Rat.add_mul, Rat.one_mul] at h2
+
+/-- The point of the grid after the one `w` rounds down to is the first above `w`: a value of the
+    grid greater than `w` is at least that. -/
+theorem grid_above {g w v : Rat} (hg : 0 < g) (hv : onGrid g v) (h : w < v) : floorTo g w + g ≤ v :=
+  grid_succ_le hg (onGrid_intMul _ g) hv (lelt (floorTo_le hg w) h)
+
+/-- And the one before the point `w` rounds up to is the last below it. -/
+theorem grid_below {g w v : Rat} (hg : 0 < g) (hv : onGrid g v) (h : v < w) : v ≤ ceilTo g w - g := by
+  have h1 : v + g ≤ ceilTo g w := grid_succ_le hg hv (onGrid_intMul _ g) (ltle h (le_ceilTo hg w))
+  have h2 : v + g + -g ≤ ceilTo g w + -g := (Rat.add_le_add_right (c := -g)).2 h1
+  rwa [Rat.add_assoc, Rat.add_neg_cancel, Rat.add_zero, ← Rat.sub_eq_add_neg] at h2
+
+/-- A value on a grid that is itself a whole number of another grid's step is on that other grid
+    too: `10` on a grid of `10` is on a grid of `1`. -/
+theorem onGrid_trans {st g v : Rat} (hg : onGrid st g) (hv : onGrid g v) : onGrid st v := by
+  obtain ⟨j, rfl⟩ := hg
+  obtain ⟨k, rfl⟩ := hv
+  exact ⟨k * j, by rw [Rat.intCast_mul, Rat.mul_assoc]⟩
+
 /-! ### Dividing, and a product of parts that are not negative
 
 The four facts the share needs. Core states enough about `Rat` for all of them; they are
@@ -1173,77 +1227,155 @@ theorem stored_in_i64 {I : Span2} {v scale storedMax : Rat} (hv : inSpan I v)
   exact Rat.le_trans
     (Rat.le_trans (Rat.mul_le_mul_of_nonneg_right (absR_le_of_inSpan hv) hs) hm) hmx
 
-/-! ## What a table writes into a column of numbers (rulec's §15.196)
+/-! ## What a table writes into a column of numbers (rulec's §15.196, §15.213)
 
 A row's answer cell is a literal or a name (§3.2), so what it writes is an expression like any
 other, and its interval is worked out the same way. A table above writes into its column only what
 one of its rows writes, so the column's values lie in the hull of those intervals: that hull, not
 the range the certificate states, is what a table below reads the column with. The stated range is
-then held to it. -/
+then held to it.
+
+A row that writes one of its own table's columns writes it only where the row fires, and so only
+what its own cell on that column lets through: `| >=1 | units |` writes `units` at one or more
+(rulec's §15.213). That bound is the row's `cut`, worked out from the cell (`cellBounds` in
+`RulecCert.Cells`, and `cut_of_box` there for why it holds at every point the row's box takes); the
+row's interval is its expression's, narrowed to it. -/
+
+/-- What one row writes into a column of numbers, as the hull reads it: the expression of its answer
+    cell and, where the row writes one of its own table's columns and its cell on that column lets
+    through less than the column's range, the bounds that cell puts on the value (`cut`). -/
+structure Writes where
+  expr : Expr
+  cut : Option Ival := none
+  deriving Repr, Inhabited
+
+/-- A low end raised to a bound, where there is one. -/
+def raiseLo (a : Rat) : Option Rat → Rat
+  | some x => rmax a x
+  | none => a
+
+/-- A high end lowered to a bound, where there is one. -/
+def lowerHi (b : Rat) : Option Rat → Rat
+  | some x => rmin b x
+  | none => b
+
+theorem raiseLo_le {a v : Rat} {lo : Option Rat} (ha : a ≤ v) (hlo : ∀ x, lo = some x → x ≤ v) :
+    raiseLo a lo ≤ v := by
+  cases lo with
+  | none => exact ha
+  | some x => exact rmax_le ha (hlo x rfl)
+
+theorem le_lowerHi {b v : Rat} {hi : Option Rat} (hb : v ≤ b) (hhi : ∀ x, hi = some x → v ≤ x) :
+    v ≤ lowerHi b hi := by
+  cases hi with
+  | none => exact hb
+  | some x => exact le_rmin hb (hhi x rfl)
+
+/-- An interval narrowed to the bounds a row's own cell puts on the value. Where the two do not meet
+    the row never fires, and the interval is left as it was: any interval is right for a row that
+    writes nothing. -/
+def narrowTo (I : Span2) : Option Ival → Span2
+  | none => I
+  | some J => if raiseLo I.1 J.1 ≤ lowerHi I.2 J.2 then (raiseLo I.1 J.1, lowerHi I.2 J.2) else I
+
+/-- A value in the interval and inside the cut is in the narrowed interval. -/
+theorem inSpan_narrowTo {I : Span2} {cut : Option Ival} {v : Rat} (hI : inSpan I v)
+    (hcut : ∀ J, cut = some J → inIval J v) : inSpan (narrowTo I cut) v := by
+  cases cut with
+  | none => exact hI
+  | some J =>
+    obtain ⟨hlo, hhi⟩ := hcut J rfl
+    simp only [narrowTo]
+    split
+    · exact ⟨raiseLo_le hI.1 hlo, le_lowerHi hI.2 hhi⟩
+    · exact hI
+
+/-- The interval of what one row writes: its expression's, narrowed to its cut. -/
+def Writes.interval (ranges : String → Option Span2) (within : Expr → Expr → Bool) (w : Writes) :
+    Option Span2 :=
+  (RulecCert.interval ranges within w.expr).map (fun I => narrowTo I w.cut)
+
+/-- **Every value a row writes where it fires lies in its interval**: the expression's value, inside
+    the bounds the row's own cell puts on it. -/
+theorem eval_mem_writes {ranges : String → Option Span2} {env : String → Option UVal}
+    {within : Expr → Expr → Bool} {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd)
+    (henv : ∀ n I w t, ranges n = some I → env n = some (w, t) → inSpan I w)
+    (hwithin : ∀ a b va vb ta tb, within a b = true →
+      eval rnd env a = some (va, ta) → eval rnd env b = some (vb, tb) → va ≤ vb)
+    {w : Writes} {I : Span2} (hI : w.interval ranges within = some I) {v : Rat} {t : Ty}
+    (hv : eval rnd env w.expr = some (v, t)) (hcut : ∀ J, w.cut = some J → inIval J v) :
+    inSpan I v := by
+  simp only [Writes.interval, Option.map_eq_some_iff] at hI
+  obtain ⟨E, hE, rfl⟩ := hI
+  exact inSpan_narrowTo (eval_mem_interval hrnd henv hwithin w.expr E v t hE hv) hcut
 
 /-- The smallest span that holds the interval of every row's answer; `none` where one of them has
     no interval, or there is no row. -/
-def hullOf (ranges : String → Option Span2) (within : Expr → Expr → Bool) : List Expr → Option Span2
+def hullOf (ranges : String → Option Span2) (within : Expr → Expr → Bool) : List Writes → Option Span2
   | [] => none
-  | [e] => interval ranges within e
-  | e :: es =>
-    match interval ranges within e, hullOf ranges within es with
+  | [w] => w.interval ranges within
+  | w :: ws =>
+    match w.interval ranges within, hullOf ranges within ws with
     | some I, some J => some (rmin I.1 J.1, rmax I.2 J.2)
     | _, _ => none
 
-/-- **Every value a row writes lies in the hull.** -/
+/-- **Every value a row writes where it fires lies in the hull.** Where a row writes one of its own
+    table's columns, "where it fires" is what its cut says: `cut_of_box` in `RulecCert.Cells` shows
+    the cut holds at every point the row's box takes. -/
 theorem eval_mem_hull {ranges : String → Option Span2} {env : String → Option UVal}
     {within : Expr → Expr → Bool} {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd)
     (henv : ∀ n I w t, ranges n = some I → env n = some (w, t) → inSpan I w)
     (hwithin : ∀ a b va vb ta tb, within a b = true →
       eval rnd env a = some (va, ta) → eval rnd env b = some (vb, tb) → va ≤ vb) :
-    ∀ (es : List Expr) (H : Span2), hullOf ranges within es = some H →
-      ∀ e ∈ es, ∀ (v : Rat) (t : Ty), eval rnd env e = some (v, t) → inSpan H v
+    ∀ (ws : List Writes) (H : Span2), hullOf ranges within ws = some H →
+      ∀ w ∈ ws, ∀ (v : Rat) (t : Ty), eval rnd env w.expr = some (v, t) →
+        (∀ J, w.cut = some J → inIval J v) → inSpan H v
   | [], _, h => by simp [hullOf] at h
-  | [e], H, h => by
-    intro e' he' v t hv
-    simp only [List.mem_singleton] at he'
-    subst he'
-    exact eval_mem_interval hrnd henv hwithin e' H v t (by simpa [hullOf] using h) hv
-  | e :: e2 :: es, H, h => by
-    intro e' he' v t hv
+  | [w], H, h => by
+    intro w' hw' v t hv hcut
+    simp only [List.mem_singleton] at hw'
+    subst hw'
+    exact eval_mem_writes hrnd henv hwithin (by simpa [hullOf] using h) hv hcut
+  | w :: w2 :: ws, H, h => by
+    intro w' hw' v t hv hcut
     simp only [hullOf] at h
     split at h
     case _ I J hI hJ =>
       simp only [Option.some.injEq] at h
       subst h
-      simp only [List.mem_cons] at he'
-      rcases he' with rfl | he'
-      · obtain ⟨h1, h2⟩ := eval_mem_interval hrnd henv hwithin e' I v t hI hv
+      simp only [List.mem_cons] at hw'
+      rcases hw' with rfl | hw'
+      · obtain ⟨h1, h2⟩ := eval_mem_writes hrnd henv hwithin hI hv hcut
         exact ⟨Rat.le_trans (rmin_le_left _ _) h1, Rat.le_trans h2 (left_le_rmax _ _)⟩
-      · obtain ⟨h1, h2⟩ := eval_mem_hull hrnd henv hwithin (e2 :: es) J hJ e'
-          (by simpa [List.mem_cons] using he') v t hv
+      · obtain ⟨h1, h2⟩ := eval_mem_hull hrnd henv hwithin (w2 :: ws) J hJ w'
+          (by simpa [List.mem_cons] using hw') v t hv hcut
         exact ⟨Rat.le_trans (rmin_le_right _ _) h1, Rat.le_trans h2 (right_le_rmax _ _)⟩
     case _ => exact absurd h (by simp)
 
 /-- The range a certificate states for the column holds the interval of every row's answer. -/
 def writesWithin (ranges : String → Option Span2) (within : Expr → Expr → Bool) (S : Span2)
-    (es : List Expr) : Bool :=
-  es.all (fun e => match interval ranges within e with
+    (ws : List Writes) : Bool :=
+  ws.all (fun w => match w.interval ranges within with
     | some I => decide (S.1 ≤ I.1) && decide (I.2 ≤ S.2)
     | none => false)
 
-/-- **The stated range of a column a table writes numbers into holds every value its rows write**:
-    a table below that read the column with that range would read it soundly too. -/
+/-- **The stated range of a column a table writes numbers into holds every value its rows write**
+    where they fire: a table below that read the column with that range would read it soundly too. -/
 theorem eval_mem_stated {ranges : String → Option Span2} {env : String → Option UVal}
     {within : Expr → Expr → Bool} {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd)
     (henv : ∀ n I w t, ranges n = some I → env n = some (w, t) → inSpan I w)
     (hwithin : ∀ a b va vb ta tb, within a b = true →
       eval rnd env a = some (va, ta) → eval rnd env b = some (vb, tb) → va ≤ vb)
-    {S : Span2} {es : List Expr} (h : writesWithin ranges within S es = true) :
-    ∀ e ∈ es, ∀ (v : Rat) (t : Ty), eval rnd env e = some (v, t) → inSpan S v := by
-  intro e he v t hv
-  have he' := List.all_eq_true.1 h e he
-  split at he'
+    {S : Span2} {ws : List Writes} (h : writesWithin ranges within S ws = true) :
+    ∀ w ∈ ws, ∀ (v : Rat) (t : Ty), eval rnd env w.expr = some (v, t) →
+      (∀ J, w.cut = some J → inIval J v) → inSpan S v := by
+  intro w hw v t hv hcut
+  have hw' := List.all_eq_true.1 h w hw
+  split at hw'
   case _ I hI =>
-    simp only [Bool.and_eq_true, decide_eq_true_eq] at he'
-    obtain ⟨hv1, hv2⟩ := eval_mem_interval hrnd henv hwithin e I v t hI hv
-    exact ⟨Rat.le_trans he'.1 hv1, Rat.le_trans hv2 he'.2⟩
-  case _ => exact absurd he' (by simp)
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hw'
+    obtain ⟨hv1, hv2⟩ := eval_mem_writes hrnd henv hwithin hI hv hcut
+    exact ⟨Rat.le_trans hw'.1 hv1, Rat.le_trans hv2 hw'.2⟩
+  case _ => exact absurd hw' (by simp)
 
 end RulecCert

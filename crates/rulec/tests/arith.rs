@@ -192,13 +192,21 @@ fn a_table_that_picks_the_divisor_keeps_it_off_zero() {
         }
     }
     if let Some(bin) = checker() {
-        // No theorem reads a row's cell into what the row writes yet: the range is the
-        // certificate's word, and the closing line says so.
-        let (code, out) = lean(&bin, &cert, "tests/corpus/average_unit_price_split.rule");
+        // The proved checker works the row's cut out of its own cell too (`cut_of_box`, §15.232):
+        // the column's range is proved, and the same three lies are refused.
+        let rel = "tests/corpus/average_unit_price_split.rule";
+        let (code, out) = lean(&bin, &cert, rel);
         assert_eq!(code, 0, "{out}");
-        assert!(out.contains("stated rather than proved: the range of per: a row's own cell narrows what it writes there"), "{out}");
-        let (code, out) = lean(&bin, &cert.replacen(&format!(",{inside}"), "", 1), "tests/corpus/average_unit_price_split.rule");
-        assert_eq!(code, 1, "{out}");
+        assert!(out.contains("OK: every claim this program states was proved"), "{out}");
+        for (what, forged, why) in [
+            ("a narrower inside", cert.replacen(inside, r#""inside":["2","1000"]"#, 1), "row 2's cell lets units take [1, 1000]"),
+            ("a narrower column", cert.replacen(r#""per":["1","1000"]"#, r#""per":["2","1000"]"#, 1), "per: its rows write a value outside the range"),
+            ("the row's word dropped", cert.replacen(&format!(",{inside}"), "", 1), "per: its rows write a value outside the range"),
+        ] {
+            let (code, out) = lean(&bin, &forged, rel);
+            assert_eq!(code, 1, "{what}: a forged certificate passed\n{out}");
+            assert!(out.contains(why), "{what}: {out}");
+        }
     }
 }
 

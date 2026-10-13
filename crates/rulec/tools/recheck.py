@@ -2749,8 +2749,10 @@ def check_carried(cert):
     reads it in; it moves the state as the machine's own rows say, and each carried value to
     what the row writes into its output — read off the table here: the value, the value
     itself, or the interval a named computation comes to over the place, by the arithmetic
-    the rest of this program does, narrowed by the row's box where the table reads it — on
-    every coordinate that meets it, and outside the range where it reaches past. The set of
+    the rest of this program does, narrowed by the row's box where the table reads it — rounded
+    out to the grid its output rounds to (`round`, rulec's §15.232), since the rounded value is
+    what the next call is passed, on every coordinate that meets it, and outside the range where
+    it reaches past. The set of
     places must hold where a case starts and be closed under that; each claim is a closure of
     the same kind, as the machine's are. An `always` line speaks of the places within the
     ranges; a place outside one is the range's claim. Nothing here says a case can still
@@ -2779,7 +2781,7 @@ def check_carried(cert):
         if r is not None and r[0] is not None and r[1] is not None:
             base[n] = (r[0], r[1])
     items = cm["items"]
-    coords, labels, mv = [], [], []
+    coords, labels, mv, grids = [], [], [], []
     for it in items:
         name = it["input"]
         cs = [(Fraction(a), Fraction(b)) for a, b in it["coords"]]
@@ -2809,6 +2811,18 @@ def check_carried(cert):
             for (_, b), (c, _) in zip(cs, cs[1:]):
                 if c != b + step:
                     raise Bad(f"carried values: the coordinates of {name} leave a gap or overlap at {b}")
+        # The grid the output rounds to (§7.2): the call passes on the rounding of what the row
+        # writes, so that is what lands on a coordinate (rulec's §15.232). A certificate from before
+        # it was written lands the value as it is.
+        grid = None
+        if kind not in ("bool", "enum"):
+            if it.get("round") is None:
+                STATED.append(f"carried values: the certificate does not say what grid {it['output']} rounds to, "
+                              f"so its values land as the rows write them")
+            else:
+                grid = Fraction(it["round"])
+                if grid <= 0:
+                    raise Bad(f"carried values: {it['output']} rounds to a grid that does not move")
         got = {}
         for r in it["moves"]:
             row = r["row"]
@@ -2828,10 +2842,9 @@ def check_carried(cert):
                     inside = [] if v is None else [ci for ci, (a, b) in enumerate(cs) if a <= v <= b]
                     if r.get("out"):
                         ok = v is not None and not inside
-                        got[row] = ("out",)
                     else:
                         ok = r.get("to") in inside
-                        got[row] = ("to", r.get("to"))
+                    got[row] = ("lit", v)
             else:
                 produced = rows[row]["produces"][j]
                 if r.get("stay"):
@@ -2847,7 +2860,19 @@ def check_carried(cert):
         coords.append(cs)
         labels.append(it.get("labels"))
         mv.append(got)
+        grids.append(grid)
     OUT = -1
+
+    def land(kk, lo, hi):
+        # Where a carried number lands: the interval rounded out to the output's grid, every
+        # coordinate that meets it, and outside the range where it reaches past.
+        g = grids[kk]
+        if g is not None:
+            lo, hi = (lo // g) * g, -((-hi) // g) * g
+        ls = [ci for ci, (a, b) in enumerate(coords[kk]) if a <= hi and b >= lo]
+        if lo < coords[kk][0][0] or hi > coords[kk][-1][1]:
+            ls.append(OUT)
+        return ls
 
     def meets(row, kk, ci):
         ax = items[kk].get("axis")
@@ -2936,21 +2961,22 @@ def check_carried(cert):
             lists = []
             for kk in range(len(cc)):
                 g = mv[kk][row]
-                if g[0] == "stay":
+                if g[0] == "stay" and labels[kk] is not None:
                     lists.append([cc[kk]])
                 elif g[0] == "to":
                     lists.append([g[1]])
-                elif g[0] == "out":
-                    lists.append([OUT])
+                elif g[0] == "stay":
+                    a, b = coords[kk][cc[kk]]
+                    lists.append(land(kk, a, b))
+                elif g[0] == "lit":
+                    if g[1] is None:
+                        raise Bad(f"carried values: what row {row} writes into {items[kk]['output']} cannot be read")
+                    lists.append(land(kk, g[1], g[1]))
                 else:
                     iv = image(row, cc, g[1])
                     if iv is None:
                         raise Bad(f"carried values: what {g[1]} comes to at {states[s]} is not bounded here")
-                    lo, hi = iv
-                    ls = [ci for ci, (a, b) in enumerate(coords[kk]) if a <= hi and b >= lo]
-                    if lo < coords[kk][0][0] or hi > coords[kk][-1][1]:
-                        ls.append(OUT)
-                    lists.append(ls)
+                    lists.append(land(kk, iv[0], iv[1]))
             for combo in itertools.product(*lists):
                 nxt.append((row, (s2, tuple(combo))))
         return nxt

@@ -973,8 +973,8 @@ machine account over step
 }
 
 /// The certificate lays the carried values on the rows (§15.217): the places a case can be, closed
-/// under the rows' moves, and the claims over them. The program beside the tool re-checks it and
-/// refuses it forged; the one with the proofs reads it and says it is stated, not proved.
+/// under the rows' moves, and the claims over them. Both programs re-check it and refuse it forged;
+/// the one with the proofs proves the claims (§15.232).
 #[test]
 fn 持ち越す値の証明書は再検査を通り_偽れば落ちる() {
     const GRACE: &str = "tests/corpus/grace_period.rule";
@@ -1004,7 +1004,13 @@ fn 持ち越す値の証明書は再検査を通り_偽れば落ちる() {
     if ready(Need::Lean, || bin.exists(), "ritsu の proofs/ が build されていない（そこで lake build で作る）") {
         let (c, said) = feed(Command::new(&bin).args(["--rule", GRACE]), &cert);
         assert_eq!(c, 0, "{said}");
-        assert!(said.contains("the claims over the values the machine carries besides its state (9 places): stated, not proved"), "{said}");
+        assert!(said.contains("carried values over step: 9 places a case can be"), "{said}");
+        assert!(!said.contains("besides its state"), "{said}");
+        for (what, f) in &forged {
+            let (c, said) = feed(Command::new(&bin).args(["--rule", GRACE]), f);
+            assert_eq!(c, 1, "{what}: 偽った証明書が Lean で通った:\n{said}");
+            assert!(said.contains("carried values"), "{what}: 持ち越す値の検査で落ちていない:\n{said}");
+        }
     }
 }
 

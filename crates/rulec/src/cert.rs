@@ -854,10 +854,24 @@ fn state_axis_of(ct: &CertTable, carried_in: &str) -> Option<usize> {
 #[derive(Clone)]
 enum CarriedMove {
     Stay,
-    /// A value the row writes: the coordinate it lies on, or outside the range.
+    /// A truth value or an enum's value the row writes: the coordinate it lies on.
     To(Option<usize>),
+    /// A number the row writes.
+    Lit(Rat),
     /// A value the rule computes: a `derive` or a `define` by name.
     Expr(String),
+}
+
+/// A value rounded down, and up, to a positive grid: where any of the five rounding modes can put it
+/// (§7.2), as the re-checkers read an output's rounding.
+fn floor_to(g: Rat, v: Rat) -> Rat {
+    let q = v.div(g);
+    g.mul(Rat::int(q.num.div_euclid(q.den)))
+}
+
+fn ceil_to(g: Rat, v: Rat) -> Rat {
+    let q = v.div(g);
+    g.mul(Rat::int(q.num.div_euclid(q.den) + i128::from(q.num.rem_euclid(q.den) != 0)))
 }
 
 /// The interval arithmetic a re-checker does over the certificate's expressions, here over the
@@ -933,8 +947,9 @@ fn cert_interval(e: &Expr, ty: &crate::types::Ty, ranges: &std::collections::Has
 /// takes the state and, on each column the table reads a carried value in, meets that value's
 /// coordinate; it moves the state as it does above, and each carried value to what its cell
 /// writes — the value, the same value, or the interval the named computation comes to over the
-/// place, by the arithmetic a re-checker does — on every coordinate that interval meets, and
-/// outside the range where it reaches past it. That is more than the calls can do, so a set
+/// place, by the arithmetic a re-checker does — rounded out to the grid its output rounds to
+/// (§15.232), on every coordinate that interval meets, and outside the range where it reaches
+/// past it. That is more than the calls can do, so a set
 /// that holds where a case starts and is closed under it holds every place a case reaches, and
 /// the claims that nothing bad is reached are closures of that kind, as above. What the rows
 /// cannot carry is listed as not certified, as above; nothing here says a case can still finish
@@ -978,6 +993,7 @@ fn carried_json(
     let mut labels: Vec<Option<Vec<String>>> = Vec::new();
     let mut table_axis: Vec<Option<usize>> = Vec::new();
     let mut moves: Vec<Vec<CarriedMove>> = Vec::new();
+    let mut grids: Vec<Option<Rat>> = Vec::new();
     for it in &a.more {
         let Some(jo) = t.outputs.iter().position(|o| o.name.text == it.output) else {
             return not_laid(tr!("{} はこの表の外で決まる", "{} is decided outside this table", it.output));
@@ -1010,11 +1026,19 @@ fn carried_json(
                     (CarriedMove::To(to), Obj::new().int("row", r.index as i128).int("to", to.unwrap_or(0) as i128))
                 }
                 Some(OutCell::Lit(Lit::Num(n))) if ls.is_none() => {
-                    let v = crate::types::lit_value_in_pub(n, &it.ty);
-                    let to = v.and_then(|v| cs.iter().position(|(lo, hi)| lo.cmp_to(v) != Ordering::Greater && hi.cmp_to(v) != Ordering::Less));
+                    let Some(v) = crate::types::lit_value_in_pub(n, &it.ty) else {
+                        return not_laid(tr!(
+                            "表 {} 行{} が {} に書く値を読めない",
+                            "what table {} row {} writes into {} cannot be read",
+                            t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default(),
+                            r.index,
+                            it.output
+                        ));
+                    };
+                    let to = cs.iter().position(|(lo, hi)| lo.cmp_to(v) != Ordering::Greater && hi.cmp_to(v) != Ordering::Less);
                     match to {
-                        Some(x) => (CarriedMove::To(Some(x)), Obj::new().int("row", r.index as i128).int("to", x as i128)),
-                        None => (CarriedMove::To(None), Obj::new().int("row", r.index as i128).bool("out", true)),
+                        Some(x) => (CarriedMove::Lit(v), Obj::new().int("row", r.index as i128).int("to", x as i128)),
+                        None => (CarriedMove::Lit(v), Obj::new().int("row", r.index as i128).bool("out", true)),
                     }
                 }
                 Some(OutCell::Name(n))
@@ -1061,7 +1085,25 @@ fn carried_json(
         if let Some((lo, hi)) = it.range {
             o = o.raw("range", format!("[{},{}]", crate::json::quote(&rat(&lo)), crate::json::quote(&rat(&hi)))).raw("step", crate::json::quote(&rat(&it.axis.step)));
         }
+        // The grid the output rounds to (§7.2: every numeric output declares one, E104): what the call
+        // passes on is the rounding of what the row writes, which a re-checker lands on the
+        // coordinates (§15.232).
+        let round = if ls.is_none() {
+            f.outputs
+                .iter()
+                .find(|o| o.name.text == it.output)
+                .and_then(|od| od.rounding.as_ref())
+                .and_then(|rd| crate::types::lit_value_in_pub(&rd.grid, &it.ty))
+                .map(|g| if g.num < 0 { Rat::zero().sub(g) } else { g })
+                .filter(|g| g.num != 0)
+        } else {
+            None
+        };
+        if let Some(g) = round {
+            o = o.raw("round", crate::json::quote(&rat(&g)));
+        }
         items.push(o.raw("moves", arr(&moves_json)).finish());
+        grids.push(round);
         coords.push(cs);
         labels.push(ls);
         table_axis.push(ak);
@@ -1187,6 +1229,24 @@ fn carried_json(
         }
         true
     };
+    // Where a carried number lands: what the row writes — its own coordinate, a value written in the
+    // row, a computed value's interval over the place — rounded out to the grid the output rounds
+    // to, since the rounded value is what the next call is passed (§15.232); every coordinate that
+    // meets it, and outside the range where it reaches past.
+    let land = |k: usize, (lo, hi): (Rat, Rat)| -> Vec<usize> {
+        let (lo, hi) = match grids[k] {
+            Some(g) => (floor_to(g, lo), ceil_to(g, hi)),
+            None => (lo, hi),
+        };
+        let (rlo, rhi) = (coords[k][0].0, coords[k][coords[k].len() - 1].1);
+        let mut l: Vec<usize> = (0..coords[k].len())
+            .filter(|&ci| coords[k][ci].0.cmp_to(hi) != Ordering::Greater && coords[k][ci].1.cmp_to(lo) != Ordering::Less)
+            .collect();
+        if lo.cmp_to(rlo) == Ordering::Less || hi.cmp_to(rhi) == Ordering::Greater {
+            l.push(out);
+        }
+        l
+    };
     // One call from a place, through every row that takes it: (row number, where it goes).
     let step = |p: &Place| -> Option<Vec<(usize, Place)>> {
         let (s, cc) = p;
@@ -1205,20 +1265,12 @@ fn carried_json(
             let mut lists: Vec<Vec<usize>> = Vec::new();
             for k in 0..cc.len() {
                 lists.push(match &moves[k][ri] {
-                    CarriedMove::Stay => vec![cc[k]],
                     CarriedMove::To(Some(x)) => vec![*x],
                     CarriedMove::To(None) => vec![out],
-                    CarriedMove::Expr(n) => {
-                        let (lo, hi) = image(ri, cc, n)?;
-                        let (rlo, rhi) = (coords[k][0].0, coords[k][coords[k].len() - 1].1);
-                        let mut l: Vec<usize> = (0..coords[k].len())
-                            .filter(|&ci| coords[k][ci].0.cmp_to(hi) != Ordering::Greater && coords[k][ci].1.cmp_to(lo) != Ordering::Less)
-                            .collect();
-                        if lo.cmp_to(rlo) == Ordering::Less || hi.cmp_to(rhi) == Ordering::Greater {
-                            l.push(out);
-                        }
-                        l
-                    }
+                    CarriedMove::Stay if labels[k].is_some() => vec![cc[k]],
+                    CarriedMove::Stay => land(k, coords[k][cc[k]]),
+                    CarriedMove::Lit(v) => land(k, (*v, *v)),
+                    CarriedMove::Expr(n) => land(k, image(ri, cc, n)?),
                 });
             }
             let mut combos: Vec<Vec<usize>> = vec![Vec::new()];

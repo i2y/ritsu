@@ -23,9 +23,10 @@ $ .lake/build/bin/rulec-recheck --rule rules/shipping_fee.rule cert.json
 | `RulecCert/Sieve.lean` | which combinations the rule is **asked about**, from the `constraint` lines, the reach of each derived column and each `define` of a number, the truth value a boolean `define` of one comparison can take, and the rows of a table above that write a value — and the proof that a box the cover calls impossible really is one (`not_asked_of_derived`, `not_asked_of_farkas`, `not_asked_of_aboveRuledOut`, `not_asked_of_truth`), and that two rows the rows of a table above part share no point the rule is asked about (`not_asked_of_abovePart`) |
 | `RulecCert/Linear.lean` | linear inequalities and the multipliers that refute a system of them: when the sum `farkasOk` checks comes out false, no values satisfy them all (`farkas_sound`) |
 | `RulecCert/Contract.lean` | what a contract lets through, opened into cases, held to what the rule's door asks: when the proof for every case passes, any values the contract admits are ones the door takes (`included_sound`) |
-| `RulecCert/Values.lean` | expressions, their evaluation, the units (E103) and int64 (E108) claims, and the proofs — and, for the share `allocate` works out, that a run of them hands out the amount exactly (`runTotal_exact`); and, for a column a table writes numbers into, that every value its rows write lies in the hull this program works out (`eval_mem_hull`) and in the range the certificate states once that range holds every row's interval (`eval_mem_stated`) |
+| `RulecCert/Values.lean` | expressions, their evaluation, the units (E103) and int64 (E108) claims, and the proofs — and, for the share `allocate` works out, that a run of them hands out the amount exactly (`runTotal_exact`); and, for a column a table writes numbers into, that every value its rows write where they fire lies in the hull this program works out (`eval_mem_hull`) and in the range the certificate states once that range holds every row's interval (`eval_mem_stated`) — a row that writes one of its own table's columns inside the cut its own cell puts on the value (rulec's §15.213); and the grid facts a strict comparison and a carried value rest on (`grid_succ_le`, `grid_above`, `grid_below`) |
 | `RulecCert/Machine.lean` | a rule that is one step of a state machine: a case is what the rows allow from the initial state, and the checks on the reach set, the final states and the `never` and `once` lines hold of every sequence of calls (`reaches_mem`, `final_stays`, `never_after`, `once_below_two`); from the calls a certificate hands over, every state a case can reach can still finish (`reachable_finishes`) |
-| `RulecCert/Cells.lean` | from the cells a rule writes to the boxes the claims are about: the compression of §6.2, shown faithful |
+| `RulecCert/Cells.lean` | from the cells a rule writes to the boxes the claims are about: the compression of §6.2, shown faithful; the cut a row's own cell puts on the value it writes into a column of numbers, which holds at every point the row's box takes (`cut_of_box`, `written_mem_hull`, rulec's §15.213); and the axis of an input of an enum, written as the enum's values or those its `range` lets in, has a coordinate for exactly the values the input takes (`enumAxis_coords`, rulec's §15.210) |
+| `RulecCert/Carried.lean` | a machine that carries more than its state (rulec's §15.217): a case is a configuration — the state and each carried value — and a call that really happens moves it as the row's answer and the output's rounding say. The check reasons over places, coordinates of the carried values; every call from a configuration at a place is one the check counts from there (`Model.simulates`), so places closed under those calls hold every configuration a case can reach (`Sys.reaches_mem`), whether the walk took every value or cut a number into intervals, and the claims laid on them hold of the configurations: `Sys.final_stays`, `Sys.never_after`, `Sys.once_below_two`, `Model.always_holds`, `Model.range_holds` |
 | `RulecCert/Certified.lean` | one table's certificate, and the three theorems put together |
 | `RulecCert/Read.lean`, `RulecCert/Sha256.lean`, `RulecMain.lean` | reading the JSON, the digest, and the program that runs the checks |
 
@@ -51,11 +52,14 @@ worked out without them; one from before rulec's §15.196, which states no `inpu
 into, and an answer cell written in a unit this program does not convert adds itself. A contract adds three: a condition with parts that
 could not be read and were taken as true, one that opens into too many cases, and a thing
 the door asks that the document gives no proof for. A machine adds one: a claim the document
-lists under `uncertified`, which it could not lay on the rows.
+lists under `uncertified`, which it could not lay on the rows. One that carries more than its
+state adds that a case can still finish — the places allow more calls than happen, the safe
+direction for every other claim and the wrong one for this — and, in a certificate that does not
+say what grid a carried output rounds to (`round`), its claims over the carried values.
 
 Beyond those, the document's own account of the rule — the declared ranges, the types, the
-groups, the enums, the constraints, each value's expression and scale, the scale of every name —
-is its word. What is worked out from it is checked: the step a numeric axis is cut at has to
+groups, the enums, the constraints, each value's expression and scale, the scale of every name,
+the grid a carried output rounds to — is its word. What is worked out from it is checked: the step a numeric axis is cut at has to
 divide the step its column's values take, worked out from the expressions and the scales the
 way rulec works it out (`checkSteps` in `RulecMain.lean`), so an axis of tenths of a pound cut
 every whole pound is refused; and the interval each value the rule computes is forced into is

@@ -63,17 +63,63 @@ def guarantees (cert : Json) : List (String × String) :=
     | _ => none)
   closeLe raw.length raw
 
-/-- The columns a table writes numbers into, each with what every row of the table that decides
-    it writes there, as expressions (rulec's §15.196): `none` where a row writes something this
-    program cannot read. And the columns whose rows state nothing they write — a certificate from
-    before they did. And the columns a row of which says its own cell narrows what it writes there
-    (`inside`, rulec's §15.213): no theorem here reads a row's cell into what the row writes, so the
-    range of such a column is the certificate's word, and is named as stated. -/
+/-- What a row says it writes into a column of numbers where its own cell narrows it (`inside`,
+    rulec's §15.213): the row, the column, the name it writes, the interval the certificate says,
+    and what the row writes as this program reads it, with the cut worked out from the cell. -/
+structure InsideClaim where
+  table : String
+  row : Nat
+  column : String
+  name : String
+  said : Option Span2
+  writes : Writes
+
+/-- A rational pair as JSON writes it: `["0","3"]`. -/
+def ratPair (j : Json) : Option (Rat × Rat) := do
+  let a ← arr j
+  let lo ← a[0]? >>= optRat
+  let hi ← a[1]? >>= optRat
+  some (lo, hi)
+
+/-- What one row writes into a column of numbers (rulec's §15.196): the expression of its answer
+    cell, and — where the certificate says the row's own cell narrows it (`inside`, §15.213) — the
+    cut that cell puts on the value, worked out here from the row's `tests` on the column the row
+    writes and the grid the value sits on (`1/scale`, `Cells.cellCut`), never from the certificate's
+    word for it. `Except` says why a write cannot be read that way. -/
+def writesOf (cert tj rj : Json) (oi : Nat) : Except String (Option (Writes × Option (String × Option Span2))) := do
+  let some w := (fieldArr rj "writes")[oi]? | return none
+  let some ej := field w "expr" | return none
+  let some e := exprOfJson ej | return none
+  match field w "inside" with
+  | none => return some ({ expr := e }, none)
+  | some said =>
+    let row := (fieldNat rj "row").getD 0
+    let some name := field ej "name" >>= str
+      | throw s!"{fieldStr tj "table"}: row {row} says it writes only inside a range, and what it writes is no name"
+    let axes := fieldArr tj "axes"
+    let some ai := axes.toList.findIdx? (fun a => fieldStr a "column" == name)
+      | throw s!"{fieldStr tj "table"}: row {row} says its cell on {name} narrows what it writes, and {name} is no column of its table"
+    let some cell := ((fieldArr rj "tests")[ai]?).bind (fun c => cellOfJson (fun _ => []) c)
+      | throw s!"{fieldStr tj "table"}: row {row}: the cell on {name} cannot be read"
+    let some sc := field ((field cert "scales").getD Json.null) name >>= nat
+      | throw s!"{fieldStr tj "table"}: row {row}: no scale says what grid {name} sits on"
+    if sc == 0 then throw s!"{fieldStr tj "table"}: row {row}: {name} is stored at a scale of 0"
+    let some cut := cellCut (1 / (sc : Rat)) cell
+      | throw s!"{fieldStr tj "table"}: row {row}: the cell on {name} says nothing an interval can"
+    return some ({ expr := e, cut := some cut }, some (name, ratPair said))
+
+/-- The columns a table writes numbers into, each with what every row of the table that decides it
+    writes there (rulec's §15.196): `none` where a row writes something this program cannot read.
+    And the columns whose rows state nothing they write — a certificate from before they did. And
+    the rows that say their own cell narrows what they write (`inside`, §15.213), each with the cut
+    worked out from its cell: `RulecCert.cut_of_box` is why the value a row writes where it fires is
+    inside that cut, and `eval_mem_hull` why the column's values are then inside the hull. -/
 def writtenCols (cert : Json) (types : String → Option Ty) :
-    List (String × Option (List RulecCert.Expr)) × List String × List String := Id.run do
-  let mut outs : List (String × Option (List RulecCert.Expr)) := []
+    List (String × Option (List Writes)) × List String × List InsideClaim × List String := Id.run do
+  let mut outs : List (String × Option (List Writes)) := []
   let mut unstated : List String := []
-  let mut narrowed : List String := []
+  let mut insides : List InsideClaim := []
+  let mut bad : List String := []
   for t in fieldArr cert "tables" do
     let rows := fieldArr t "rows"
     let ds := (fieldArr t "decides").toList.filterMap str
@@ -83,15 +129,20 @@ def writtenCols (cert : Json) (types : String → Option Ty) :
       if !rows.any (fun r => (field r "writes").isSome) then
         if !unstated.contains col then unstated := unstated ++ [col]
         continue
-      let cut := rows.any (fun r => match (fieldArr r "writes")[oi]? with
-        | some w => (field w "inside").isSome
-        | none => false)
-      if cut && !narrowed.contains col then narrowed := narrowed ++ [col]
-      let es : Option (List RulecCert.Expr) := rows.toList.mapM (fun r => do
-        let w ← (fieldArr r "writes")[oi]?
-        field w "expr" >>= exprOfJson)
-      outs := outs ++ [(col, es)]
-  return (outs, unstated, narrowed)
+      let mut ws : Option (List Writes) := some []
+      for rj in rows do
+        match writesOf cert t rj oi with
+        | .error why => bad := bad ++ [why]; ws := none
+        | .ok none => ws := none
+        | .ok (some (w, said)) =>
+          ws := ws.map (· ++ [w])
+          if let some (name, st) := said then
+            let claim : InsideClaim :=
+              { table := fieldStr t "table", row := (fieldNat rj "row").getD 0, column := col,
+                name := name, said := st, writes := w }
+            insides := insides ++ [claim]
+      outs := outs ++ [(col, ws)]
+  return (outs, unstated, insides, bad)
 
 /-- What `checkValues` works out: each value's interval, the hull of each column a table writes
     numbers into, and what bounds a name — the one of those that applies, and otherwise the range
@@ -124,7 +175,7 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
     | .name x, .name y => le.any (fun p => p.1 == x && p.2 == y)
     | _, _ => false
   let vals := fieldArr cert "values"
-  let (outs, unstated, narrowed) := writtenCols cert types
+  let (outs, unstated, insides, badWrites) := writtenCols cert types
   let isOut : String → Bool := fun n => outs.any (fun o => o.1 == n)
   -- What bounds a name: the interval this program computed for it where there is one, and the
   -- declared range otherwise. Taking the declared range in preference would let a forged
@@ -133,12 +184,6 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
   -- numbers into is bounded by the hull of what its rows write, never by the stated range.
   let mut got : List (String × Span2) := []
   let mut wrote : List (String × Span2) := []
-  -- A column a row's own cell narrows (rulec's §15.213) is bounded by the range the certificate
-  -- states for it, which the closing line names as stated.
-  for col in narrowed do
-    match declared col with
-    | some S => wrote := wrote ++ [(col, S)]
-    | none => pure ()
   -- What depends on what runs both ways — a `define` over a table's column, a table writing a
   -- `define` — so the two are worked out together until nothing more can be.
   for _ in [0 : vals.size + outs.length + 1] do
@@ -182,13 +227,25 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
       | some I => some I
       | none => if isOut n then none else declared n
   let mut r := r
+  for why in badWrites do
+    r := r.fail why
+  -- What a row says it writes where its own cell narrows it (§15.213) holds what this program works
+  -- out from the cell: a row that claimed less would be the certificate narrowing the column past
+  -- what the cell lets through.
+  let mut cut := 0
+  for c in insides do
+    match c.writes.interval rangesF within, c.said with
+    | some I, some S =>
+      if S.1 ≤ I.1 && I.2 ≤ S.2 then cut := cut + 1
+      else r := r.fail s!"{c.table}: row {c.row}'s cell lets {c.name} take [{ratText I.1}, {ratText I.2}], and the certificate says the row writes it inside [{ratText S.1}, {ratText S.2}]"
+    | none, _ =>
+      r := r.fail s!"{c.table}: row {c.row} says its cell narrows what it writes into {c.column}, and this program works out no interval for {c.name}"
+    | _, none =>
+      r := r.fail s!"{c.table}: row {c.row}: the interval it says it writes {c.column} inside cannot be read"
   -- The range the certificate states for a column a table writes numbers into holds every value
-  -- its rows write (`eval_mem_stated`).
+  -- its rows write where they fire (`eval_mem_stated`, `written_mem_hull`).
   let mut heldCols := 0
   for (col, es) in outs do
-    if narrowed.contains col then
-      r := r.state s!"the range of {col}: a row's own cell narrows what it writes there"
-      continue
     match declared col, es with
     | some S, some es =>
       if wroteF.any (fun p => p.1 == col) then
@@ -200,7 +257,8 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
       r := r.fail s!"{col}: the certificate states a range for it, and a row writes something this program cannot read"
     | none, _ => pure ()
   if heldCols > 0 then
-    r := r.say s!"  ranges: {heldCols} columns a table writes numbers into hold every value their rows write"
+    let cutNote := if cut > 0 then s!", {cut} rows inside what their own cell lets through" else ""
+    r := r.say s!"  ranges: {heldCols} columns a table writes numbers into hold every value their rows write{cutNote}"
   for col in unstated do
     r := r.state s!"the range of {col}: its rows state nothing they write"
   let mut typed := 0
@@ -844,6 +902,30 @@ def checkAbove (tj : Json) (all : Array Json) (r : Report) : Report := Id.run do
       r := r.fail s!"{name}: the two spans of {input} meet, so the pair is not apart"
   return r
 
+/-- **The axis of an input of an enum is the values the input takes** (rulec's §15.210): the enum's
+    values in their order — those its `range` lets in, where an ordered enum declares one
+    (`enum_ranges`) — after the absent value of an optional input. `RulecCert.enumAxis_coords` says
+    what that settles: every value the input can take has a coordinate the cover tiles, and every
+    coordinate is a value the door lets in. Returns how many axes were held to it. -/
+def checkEnumAxes (cert : Json) (t : ReadTable) (r : Report) : Report × Nat := Id.run do
+  let mut r := r
+  let mut held := 0
+  let typesJ := (field cert "types").getD Json.null
+  let enumsJ := (field cert "enums").getD Json.null
+  let rangesJ := (field cert "enum_ranges").getD Json.null
+  for ai in [0 : t.columns.length] do
+    if t.kinds[ai]? != some "input" then continue
+    let col := t.columns[ai]!
+    let ty := fieldStr typesJ col
+    let optional := ty.endsWith "?"
+    let base := if optional then (ty.dropEnd 1).toString else ty
+    let some vals := (field enumsJ base >>= arr).map (·.toList.filterMap str) | continue
+    let range := (field rangesJ col >>= arr).map (·.toList.filterMap str)
+    let want := enumAxis vals range optional
+    if t.labels[ai]? == some want then held := held + 1
+    else r := r.fail s!"{t.name}: {col}'s axis is not the values its enum lets in: {t.labels[ai]?.getD []} where {want} was declared"
+  return (r, held)
+
 def checkTable (t : ReadTable) (r : Report) : Report := Id.run do
   let mut r := r
   let C := t.cert
@@ -1052,6 +1134,277 @@ def checkContracts (cert : Json) (r : Report) : Report := Id.run do
       r := r.state s!"contract {name}: some of its rules could not be read and were taken as true"
   return r
 
+/-- Which rows a `once` line counts: a row whose value there passes the line's test, and a row that
+    writes a computed value (which may). -/
+def onceCounts (on : Json) : Nat → Bool :=
+  let test := (field on "test").getD Json.null
+  let lo : Option Int := field test "lo" >>= (fun j => (j.getInt?).toOption)
+  let hi : Option Int := field test "hi" >>= (fun j => (j.getInt?).toOption)
+  let words := (fieldArr test "words").toList.filterMap str
+  let isWords := (field test "words").isSome
+  let flagOf : Json → Bool := fun v =>
+    if v.isNull then true
+    else if isWords then
+      match boolOf v with
+      | some bv => words.contains (if bv then "true" else "false")
+      | none => words.contains ((str v).getD "")
+    else
+      match (v.getInt?).toOption with
+      | some n => (lo.map (fun l => decide (l ≤ n))).getD true && (hi.map (fun h => decide (n ≤ h))).getD true
+      | none => true
+  let flags : List (Nat × Bool) := (fieldArr on "rows").toList.filterMap (fun x => do
+    let i ← fieldNat x "row"
+    some (i, flagOf ((field x "value").getD Json.null)))
+  fun i => (flags.find? (fun x => x.1 == i)).map (·.2) |>.getD true
+
+/-- The coordinates of a place as the certificate writes them, `-1` outside a range. -/
+def coordsOf (j : Json) : Option (List (Option Nat)) := do
+  let a ← arr j
+  a.toList.mapM (fun x => do
+    let i ← (x.getInt?).toOption
+    some (if i < 0 then none else some i.toNat))
+
+/-- A place, `[state, [coordinates]]`, and what follows it (a flag, a count). -/
+def placeOf (j : Json) : Option ((Nat × List (Option Nat)) × Option Json) := do
+  let a ← arr j
+  let s ← a[0]? >>= nat
+  let cc ← a[1]? >>= coordsOf
+  some ((s, cc), a[2]?)
+
+/-- One carried value of the section (rulec's §15.217), read into `Carried.CItem` and held to the
+    table it is laid on: its column, its coordinates, the range the rule declares for its input, and
+    what each row writes into it — read off the row's own answer (`writes`, `produces`), not taken
+    from the section's word. A shape the proofs do not cover comes back as the reason, to be named
+    as stated; anything that does not fit what the table says is refused. -/
+def readCarriedItem (tname : String) (t : ReadTable) (itJ : Json) (decides : List String)
+    (rowsJ : List Json) (valueNames : List String) (declared : String → Option (Rat × Rat)) :
+    Except String (Carried.CItem × Option String) := do
+  let name := fieldStr itJ "input"
+  let out := fieldStr itJ "output"
+  let some j := decides.findIdx? (· == out)
+    | throw s!"carried values: {tname} does not decide {out}"
+  let axis : Option Nat := field itJ "axis" >>= nat
+  let named := (List.range t.columns.length).filter (fun i => t.columns[i]? == some name)
+  let axisOk := match axis with
+    | none => named.isEmpty
+    | some ax => named.contains ax
+  unless axisOk do throw s!"carried values: the column {tname} reads {name} in is not the one named"
+  let some coords := (fieldArr itJ "coords").toList.mapM ratPair
+    | throw s!"carried values: the coordinates of {name} cannot be read"
+  let kindS := fieldStr itJ "kind"
+  let labels := (fieldArr itJ "labels").toList.filterMap str
+  let (kind, why) ← (if kindS == "number" then do
+      let some (lo, hi) := field itJ "range" >>= ratPair
+        | throw s!"carried values: the range of {name} cannot be read"
+      if declared name != some (lo, hi) then
+        throw s!"carried values: the range of {name} is not the one it declares"
+      let some st := field itJ "step" >>= optRat
+        | throw s!"carried values: {name} states no step"
+      if st ≤ 0 then throw s!"carried values: {name} is cut on a step that does not move"
+      unless Carried.tilesB st lo hi coords do
+        throw s!"carried values: the coordinates of {name} do not run from one end of its range to the other on its step"
+      match field itJ "round" >>= optRat with
+      | some g =>
+        if g ≤ 0 then throw s!"carried values: {out} rounds to a grid that does not move"
+        if gridB st g then pure (Carried.CKind.num lo hi st g, none)
+        else pure (Carried.CKind.num lo hi st g,
+          some s!"the grid {out} rounds to, {ratText g}, is not a whole number of the step {name} is cut on, {ratText st}")
+      | none => pure (Carried.CKind.num lo hi st 1, some s!"the certificate does not say what grid {out} rounds to")
+    else if kindS == "bool" || kindS == "enum" then do
+      if kindS == "bool" && labels != ["false", "true"] then
+        throw s!"carried values: {name} is a truth value, and its coordinates are not false and true"
+      unless coords == (List.range labels.length).map (fun (i : Nat) => (((i : Nat) : Rat), ((i : Nat) : Rat))) do
+        throw s!"carried values: the coordinates of {name} are not its words' places"
+      if let some ax := axis then
+        if kindS == "enum" && t.labels[ax]? != some labels then
+          throw s!"carried values: the coordinates of {name} are not its enum's values in order"
+      pure (Carried.CKind.words labels, none)
+    else throw s!"carried values: {name} is carried as `{kindS}`, which this program does not read" :
+    Except String (Carried.CKind × Option String))
+  let rowOf : Nat → Option Json := fun i => rowsJ.find? (fun x => fieldNat x "row" == some i)
+  let mut moves : List (Nat × Carried.CMove) := []
+  for mvJ in fieldArr itJ "moves" do
+    let some i := fieldNat mvJ "row" | throw "carried values: a move names no row"
+    let some rj := rowOf i | throw s!"carried values: row {i} is not in {tname}"
+    let wrong := s!"carried values: what row {i} is said to write into {out} is not what the table says"
+    let stay := (field mvJ "stay" >>= boolOf) == some true
+    let mv ← (match kind with
+      | .num .. => do
+        let e := ((fieldArr rj "writes")[j]?).bind (fun w => field w "expr")
+        let wname := e.bind (fun x => field x "name" >>= str)
+        if stay then
+          unless wname == some name do throw wrong
+          pure Carried.CMove.stay
+        else if let some n := field mvJ "expr" >>= str then
+          unless wname == some n && valueNames.contains n do throw wrong
+          pure (Carried.CMove.expr n)
+        else
+          let some v := e.bind (fun x => if (field x "num").isSome then field x "value" >>= optRat else none)
+            | throw wrong
+          let inside := (List.range coords.length).filter (fun ci => match coords[ci]? with
+            | some (a, b) => decide (a ≤ v) && decide (v ≤ b)
+            | none => false)
+          if (field mvJ "out" >>= boolOf) == some true then
+            unless inside.isEmpty do throw wrong
+          else
+            let some to := fieldNat mvJ "to" | throw wrong
+            unless inside.contains to do throw wrong
+          pure (Carried.CMove.lit v)
+      | .words ws => do
+        let produced : Option String :=
+          (arr ((field rj "produces").getD Json.null)) >>= (fun a => a[j]?) >>= str
+        if stay then
+          unless produced.isNone do throw wrong
+          pure Carried.CMove.stay
+        else
+          let some to := fieldNat mvJ "to" | throw wrong
+          unless produced.isSome && produced == ws[to]? do throw wrong
+          pure (Carried.CMove.lit ((to : Nat) : Rat)) : Except String Carried.CMove)
+    moves := moves ++ [(i, mv)]
+  for rj in rowsJ do
+    let some i := fieldNat rj "row" | continue
+    unless moves.any (·.1 == i) do throw s!"carried values: row {i} says nothing of {out}"
+  let move : Nat → Option Carried.CMove := fun i => (moves.find? (·.1 == i)).map (·.2)
+  return ({ input := name, axis := axis, kind := kind, coords := coords, move := move }, why)
+
+/-- Which of the state's own claims the places settle: the line that closes the run does not name
+    those as stated. -/
+structure CarriedLaid where
+  final : Bool := false
+  allNever : Bool := false
+  /-- The `once` lines laid on the places, by their place among the machine's `once` lines. -/
+  onces : List Nat := []
+
+/-- **The values a machine carries besides its state, held to the rows** (rulec's §15.217, §15.218).
+    The section is read into `Carried.Model`; the places have to hold where a case starts and be
+    closed under every call the check counts from them, which `Carried.Model.simulates` and
+    `Carried.Sys.reaches_mem` make a statement about every configuration a case can reach; and each
+    claim the section lays there is the check `Carried.Sys.finalOk`, `neverOk`, `onceOk`,
+    `Carried.Model.alwaysOk` or `rangeOk`, whose theorems say what a pass settles. -/
+def checkCarried (cert mj tj : Json) (t : ReadTable) (M : Machine) (init : Nat) (finals : List Nat)
+    (states : List String) (r : Report) : Report × CarriedLaid := Id.run do
+  let mut r := r
+  let cm := (field mj "carried").getD Json.null
+  if (field cm "items").isNone then
+    r := r.state s!"the values the machine carries besides its state are not laid on the rows: {fieldStr cm "why"}"
+    return (r, {})
+  let tname := fieldStr mj "table"
+  let decides := (fieldArr tj "decides").toList.filterMap str
+  let rowsJ := (fieldArr tj "rows").toList
+  let valuesJ := (fieldArr cert "values").toList
+  let valueNames := valuesJ.map (fun v => fieldStr v "name")
+  let values : List (String × RulecCert.Expr) := valuesJ.filterMap (fun v => do
+    let e ← field v "expr" >>= exprOfJson
+    some (fieldStr v "name", e))
+  let rangesJ := (field cert "ranges").getD Json.null
+  let declared : String → Option (Rat × Rat) := fun n => field rangesJ n >>= ratPair
+  let ranges : List (String × Span2) := ((fieldArr cert "inputs").toList.filterMap str).filterMap
+    (fun n => (declared n).map (fun I => (n, I)))
+  let mut items : List Carried.CItem := []
+  let mut outs : List String := []
+  for itJ in fieldArr cm "items" do
+    match readCarriedItem tname t itJ decides rowsJ valueNames declared with
+    | .error why => return (r.fail why, {})
+    | .ok (it, none) =>
+      items := items ++ [it]
+      outs := outs ++ [fieldStr itJ "output"]
+    | .ok (_, some why) =>
+      r := r.state s!"the claims over the values the machine carries besides its state: {why}"
+      return (r, {})
+  let K : Carried.Model := { m := M, coords := t.spans, labels := t.labels, columns := t.columns,
+                             ranges := ranges, values := values, items := items }
+  if !K.okB then return (r.fail "carried values: the section is not one the proofs read", {})
+  let some places := (fieldArr cm "places").toList.mapM (fun x => (placeOf x).map (·.1))
+    | return (r.fail "carried values: a place cannot be read", {})
+  let some startCs := field cm "start" >>= coordsOf
+    | return (r.fail "carried values: where a case starts cannot be read", {})
+  let start : Nat × List (Option Nat) := (init, startCs)
+  -- The start has to be a place a case can be at (`Carried.Model.start_inhabited`): without one
+  -- coordinate of each carried value, no case would start there, and every claim would hold of
+  -- nothing.
+  if !K.startOk startCs then
+    return (r.fail "carried values: where a case starts is not one coordinate of each carried value", {})
+  let shaped : List (Option Nat) → Bool := fun cc => cc.length == items.length &&
+    (items.zip cc).all (fun ic => match ic.2 with
+      | some ci => decide (ci < ic.1.coords.length)
+      | none => match ic.1.kind with
+        | .num .. => true
+        | .words _ => false)
+  if !places.all (fun p => shaped p.2) then
+    return (r.fail "carried values: a place does not give one coordinate of each carried value", {})
+  let S := K.sys
+  if !places.contains start then return (r.fail "carried values: the places leave out where a case starts", {})
+  for p in places do
+    for e in S.succs p do
+      if !places.contains e.2 then
+        return (r.fail s!"carried values: from {(states[p.1]?).getD "?"}, row {e.1} leads outside the places", {})
+  if !S.reachOk start places then return (r.fail "carried values: the places are not closed under a call", {})
+  let mut claims : Array String := #[s!"{places.length} places a case can be"]
+  let mut laid : CarriedLaid := {}
+  if (field cm "final_certified" >>= boolOf) == some true then
+    if S.finalOk finals places then
+      claims := claims.push "no call leaves a final state"
+      laid := { laid with final := true }
+    else return (r.fail "carried values: a row leads out of a final state", {})
+  else if places.any (fun p => finals.contains p.1) then
+    r := r.state "carried values: that no call leaves a final state is not laid on the rows"
+  let neverDefs := (fieldArr mj "never").toList
+  let mut neverLaid := 0
+  for ((nv, cj), li) in (neverDefs.zip (fieldArr cm "never").toList).zip (List.range neverDefs.length) do
+    if cj.isNull then
+      r := r.state s!"carried values: the `never` line {li + 1} is not laid on the rows"
+      continue
+    let a := (fieldArr nv "states").toList.filterMap nat
+    let b := (fieldArr nv "after").toList.filterMap nat
+    let some Q := ((arr cj).getD #[]).toList.mapM (fun x => do
+        let (pl, rest) ← placeOf x
+        let f ← rest >>= boolOf
+        some (pl, f))
+      | return (r.fail s!"carried values: the `never` set of line {li + 1} cannot be read", {})
+    if S.neverOk start a b Q then
+      claims := claims.push s!"`never` line {li + 1}"
+      neverLaid := neverLaid + 1
+    else return (r.fail s!"carried values: the `never` set of line {li + 1} is not closed, or holds a state after the states it is to come after", {})
+  laid := { laid with allNever := !neverDefs.isEmpty && neverLaid == neverDefs.length }
+  let onceDefs := (fieldArr mj "once").toList
+  for ((on, cj), li) in (onceDefs.zip (fieldArr cm "once").toList).zip (List.range onceDefs.length) do
+    if cj.isNull || (field on "test").isNone then
+      r := r.state s!"carried values: `once {fieldStr on "output"}` is not laid on the rows"
+      continue
+    let some Q := ((arr cj).getD #[]).toList.mapM (fun x => do
+        let (pl, rest) ← placeOf x
+        let n ← rest >>= nat
+        some (pl, n))
+      | return (r.fail s!"carried values: the `once {fieldStr on "output"}` set cannot be read", {})
+    if S.onceOk start (onceCounts on) Q then
+      claims := claims.push s!"`once` line {li + 1} ({fieldStr on "output"})"
+      laid := { laid with onces := laid.onces ++ [li] }
+    else return (r.fail s!"carried values: the `once {fieldStr on "output"}` set is not closed, or counts two", {})
+  let alwaysJ := (fieldArr cm "always").toList
+  for (al, li) in alwaysJ.zip (List.range alwaysJ.length) do
+    let when := (fieldArr al "when").toList.filterMap nat
+    let some tests := (fieldArr al "tests").toList.mapM (fun x => do
+        let k ← fieldNat x "item"
+        let c ← field x "cell" >>= (fun cj => cellOfJson (fun _ => []) cj)
+        some (k, c))
+      | return (r.fail s!"carried values: the `always` line {li + 1} cannot be read", {})
+    if (field al "holds" >>= boolOf) == some true then
+      if K.alwaysOk places { when := when, tests := tests } then
+        claims := claims.push s!"`always` line {li + 1}"
+      else return (r.fail s!"carried values: the `always` line {li + 1} does not hold at every place it names", {})
+    else
+      r := r.state s!"carried values: the `always` line {li + 1} is not laid on the rows"
+  for rg in fieldArr cm "ranges" do
+    let some k := fieldNat rg "item" | return (r.fail "carried values: a range claim names no value", {})
+    let out := (outs[k]?).getD "?"
+    if (field rg "holds" >>= boolOf) == some true then
+      if Carried.Model.rangeOk places k then claims := claims.push s!"{out} within its range"
+      else return (r.fail s!"carried values: {out} is said to stay within its range, and a place leaves it", {})
+    else
+      r := r.state s!"carried values: that {out} stays within its range is not laid on the rows"
+  r := r.say s!"  carried values over {tname}: {", ".intercalate claims.toList}"
+  return (r, laid)
+
 /-- **A machine, held to the rows of the table it is laid on** (§15.148). The moves are read
     back against what the table says each row writes; the transitions are rebuilt from the
     rows' boxes; and each claim is one of the checks in `RulecCert.Machine`, whose theorems say
@@ -1129,16 +1482,13 @@ def checkMachine (cert : Json) (tables : Array ReadTable) (r : Report) : Report 
     (axesJ.any (fun ax => fieldStr ax "kind" != "input") ||
      (fieldArr cert "constraints").any (fun kc => (sideNames kc "left" ++ sideNames kc "right").any fixedInputs.contains))
   -- A machine that carries more than its state (§15.217): a path of the state's rows is not one
-  -- case's, since each call moves the carried values too, and none is taken as proof. What the
-  -- certificate lays over the carried values is stated here, not proved: the theorems that
-  -- would settle it are not in `RulecCert.Machine` yet.
+  -- case's, since each call moves the carried values too, and none is taken as proof. Its claims
+  -- over the carried values are laid in `carried` and checked below (`checkCarried`, with the
+  -- theorems of `RulecCert.Carried`); a claim of the state's own section that the rows could not
+  -- carry, and the places do, is not named as stated at the end.
   let carriedJ := (field mj "carried").getD Json.null
   let carriesMore := !carriedJ.isNull
-  if carriesMore then
-    if (field carriedJ "items").isSome then
-      r := r.state s!"the claims over the values the machine carries besides its state ({(fieldArr carriedJ "places").size} places): stated, not proved"
-    else
-      r := r.state s!"the values the machine carries besides its state are not laid on the rows: {fieldStr carriedJ "why"}"
+  let mut pending : Array (String × String) := #[]
   let neverDefs := (fieldArr mj "never").toList
   let onceDefs := (fieldArr mj "once").toList
   let mut claims : Array String := #[]
@@ -1156,10 +1506,10 @@ def checkMachine (cert : Json) (tables : Array ReadTable) (r : Report) : Report 
       if Mw.finalOk finalsHere then claims := add claims "no call leaves a final state"
       else r := r.fail "machine: a row leads out of a final state"
     else if !finalsHere.isEmpty then
-      r := r.state "that no call leaves a final state is not laid on the rows"
+      pending := pending.push ("final", "that no call leaves a final state is not laid on the rows")
     for (nv, cj) in neverDefs.zip (fieldArr wj "never").toList do
       if cj.isNull then
-        r := r.state "a `never` line of the machine is not laid on the rows"
+        pending := pending.push ("never", "a `never` line of the machine is not laid on the rows")
       else
         let a := (fieldArr nv "states").toList.filterMap nat
         let b := (fieldArr nv "after").toList.filterMap nat
@@ -1170,29 +1520,11 @@ def checkMachine (cert : Json) (tables : Array ReadTable) (r : Report) : Report 
           some (st, bb))
         if Mw.neverOk init a b P then claims := add claims "a `never` line"
         else r := r.fail "machine: a `never` set is not closed, or holds a state it is never to reach"
-    for (on, cj) in onceDefs.zip (fieldArr wj "once").toList do
+    for ((on, cj), li) in (onceDefs.zip (fieldArr wj "once").toList).zip (List.range onceDefs.length) do
       if cj.isNull || (field on "test").isNone then
-        r := r.state s!"`once {fieldStr on "output"}` is not laid on the rows"
+        pending := pending.push (s!"once:{li}", s!"`once {fieldStr on "output"}` is not laid on the rows")
       else
-        let test := (field on "test").getD Json.null
-        let lo : Option Int := field test "lo" >>= (fun j => (j.getInt?).toOption)
-        let hi : Option Int := field test "hi" >>= (fun j => (j.getInt?).toOption)
-        let words := (fieldArr test "words").toList.filterMap str
-        let isWords := (field test "words").isSome
-        let flagOf : Json → Bool := fun v =>
-          if v.isNull then true
-          else if isWords then
-            match boolOf v with
-            | some bv => words.contains (if bv then "true" else "false")
-            | none => words.contains ((str v).getD "")
-          else
-            match (v.getInt?).toOption with
-            | some n => (lo.map (fun l => decide (l ≤ n))).getD true && (hi.map (fun h => decide (n ≤ h))).getD true
-            | none => true
-        let flags : List (Nat × Bool) := (fieldArr on "rows").toList.filterMap (fun x => do
-          let i ← fieldNat x "row"
-          some (i, flagOf ((field x "value").getD Json.null)))
-        let counts : Nat → Bool := fun i => (flags.find? (fun x => x.1 == i)).map (·.2) |>.getD true
+        let counts : Nat → Bool := onceCounts on
         let P : List (Nat × Nat) := ((arr cj).getD #[]).toList.filterMap (fun x => do
           let xs ← arr x
           let st ← xs[0]? >>= nat
@@ -1251,6 +1583,16 @@ def checkMachine (cert : Json) (tables : Array ReadTable) (r : Report) : Report 
   let inWorlds := if fixed.isEmpty then "" else s!" in {worldsJ.size} worlds"
   claims := #[s!"{reached.length} of {states.length} states reached{inWorlds}"] ++ claims
   r := r.say s!"  machine over {tname}: {", ".intercalate claims.toList}"
+  let mut laid : CarriedLaid := {}
+  if carriesMore then
+    let (r', l) := checkCarried cert mj tj t M init finals states r
+    r := r'
+    laid := l
+  -- A claim the state's own rows could not carry is laid when the places carry it.
+  for (tag, msg) in pending do
+    let settled := (tag == "final" && laid.final) || (tag == "never" && laid.allNever) ||
+      (laid.onces.any (fun li => tag == s!"once:{li}"))
+    if !settled then r := r.state msg
   return r
 
 /-- The machine's moves say the same as the file (§15.148): a row said to leave the state
@@ -1277,6 +1619,27 @@ def checkMachineSpans (cert : Json) (lines : Array ByteArray) (r : Report) : Rep
     if got != want then
       r := r.fail s!"machine: row {(fieldNat e "row").getD 0}'s move is not what the file has there"
     else read := read + 1
+  -- The values carried besides the state (§15.217): a row said to keep one writes the carried input's
+  -- own name there, a row said to write a computed one writes its name, a word is the word.
+  for it in fieldArr ((field mj "carried").getD Json.null) "items" do
+    let labels := (fieldArr it "labels").toList.filterMap str
+    for e in fieldArr it "moves" do
+      let row := (fieldNat e "row").getD 0
+      let some src := field e "source"
+        | r := r.fail s!"carried values: row {row}'s move of {fieldStr it "output"} has no place in the file"
+      let ln := (fieldNat src "line").getD 0
+      let col := (fieldNat src "col").getD 0
+      let len := (fieldNat src "len").getD 0
+      let line := if 0 < ln && ln ≤ lines.size then lines[ln - 1]! else .empty
+      let got := if col + len ≤ line.size then String.fromUTF8? (line.extract col (col + len)) else none
+      let want : Option String :=
+        if (field e "stay" >>= boolOf) == some true then some (fieldStr it "input")
+        else if let some n := field e "expr" >>= str then some n
+        else if !labels.isEmpty then (fieldNat e "to").bind (fun i => labels[i]?)
+        else some (fieldStr src "text")
+      if got != want || got != some (fieldStr src "text") then
+        r := r.fail s!"carried values: row {row} is said to write `{want.getD ""}` into {fieldStr it "output"}, and the file has `{got.getD ""}` there"
+      else read := read + 1
   return (r, read)
 
 /-- The file a certificate is about, split into lines the way a span counts them. -/
@@ -1312,11 +1675,6 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
       | none => none
     let reachOf := worked.reachOf
     r := r'
-    -- The values an input of an ordered enum takes where its `range` holds it to some (rulec's
-    -- §15.210): its axis runs over them. Nothing here holds an enum's axis to its values, so this
-    -- is stated rather than proved.
-    for (col, _) in objPairs ((field cert "enum_ranges").getD Json.null) do
-      r := r.state s!"the values {col}'s range lets in, which its axis runs over"
     let declaredRange : String → Option Span2 := fun n =>
       match (objPairs ((field cert "ranges").getD Json.null)).find? (fun p => p.1 == n) with
       | some (_, v) => do
@@ -1420,6 +1778,10 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
         r := checkAbove tj (fieldArr cert "tables") r
         r := checkTable t r
         r := checkSteps t (columnStep cert []) r
+        let (r', enumAxes) := checkEnumAxes cert t r
+        r := r'
+        if enumAxes > 0 then
+          r := r.say s!"    {enumAxes} axes of an enum's input run over the values it takes"
         tables := tables.push t
     r := checkContracts cert r
     r := checkMachine cert tables r
