@@ -1,0 +1,82 @@
+rule 注文の精算(order_settle) v1
+description "注文の請求額を求める。明細を合計し、単価がいちばん高い明細から一割を引き、支払い済みの額を差し引く。いちばん高い単価は明細を全部見るまで決まらないので、値引きは明細を二回目にたどって求める。二つの並びと二回目の歩きの例"
+
+enum 明細の扱い(line_pick) = 最高値(top) | その他(rest)
+
+# 注文の明細一件。呼び出し側は何件でも渡す
+elements 明細(lines)
+  数量(quantity) : number  range >=1 <=50
+  単価(price)    : money[USD]  range >=1USD <=500USD
+
+# この注文に対して支払い済みの一件。明細とは別の並び
+elements 支払い(payments)
+  支払額(amount) : money[USD]  range >=1USD <=5000USD
+
+outputs
+  小計(subtotal)   : money[USD]  round down(1USD)
+  値引き(discount) : money[USD]  round down(1USD)
+  支払済(paid)     : money[USD]  round down(1USD)
+  残額(balance)    : money[USD]  round down(1USD)
+
+define 明細額(line_total) : money[USD] = 数量 × 単価 + 支払額
+
+# 明細を一回目にたどって、合計といちばん高い単価を求める。範囲はどちらも完全性の全体集合で、
+# 合計の範囲は入口が受け付けなくなる境目でもある
+sum 小計 over 明細 of 明細額  range >=0USD <=25000USD
+max 最高単価(top_price) over 明細 of 単価 empty 0USD
+
+# 支払いは別にたどる
+sum 支払済 over 支払い of 支払額  range >=0USD <=25000USD
+
+# 明細を二回目にたどって、一回目に求めたいちばん高い単価と一件ずつ比べる
+define 差(gap) : money[USD] = 最高単価 - 単価
+
+table 明細の判定(pick_line)
+policy unique
+| 差     | -> 扱い(pick) : 明細の扱い |
+| <=0USD | 最高値                     |
+| >0USD  | その他                     |
+
+define 値引き額(top_off) : money[USD] = half_down(明細額 × 10%, 1USD)
+
+# いちばん高い単価の最初の明細が値引きを受ける。同じ単価の二件目は受けない
+fold 扱い over 明細 -> 値引き
+  最高値    -> take_first 値引き額
+  その他    -> next
+  empty     -> 0USD
+  exhausted -> held
+
+define 残額 : money[USD] = 小計 - 値引き - 支払済
+
+examples
+| 明細     | 支払い     | -> 小計 | 値引き | 支払済 | 残額    |
+| 三行     | 一回払い   | 240USD  | 12USD  | 100USD | 128USD  |
+| 三行     | 支払いなし | 240USD  | 12USD  | 0USD   | 228USD  |
+| 同じ単価 | 二回払い   | 320USD  | 8USD   | 120USD | 192USD  |
+| 明細なし | 一回払い   | 0USD    | 0USD   | 100USD | -100USD |
+
+sequence 三行(three_lines)
+| 数量 | 単価   |
+| 2    | 30USD  |
+| 1    | 120USD |
+| 4    | 15USD  |
+
+sequence 同じ単価(tied_lines)
+| 数量 | 単価  |
+| 1    | 80USD |
+| 3    | 80USD |
+
+sequence 明細なし(no_lines)
+| 数量 | 単価 |
+
+sequence 一回払い(one_payment)
+| 支払額 |
+| 100USD |
+
+sequence 二回払い(two_payments)
+| 支払額 |
+| 50USD  |
+| 70USD  |
+
+sequence 支払いなし(no_payments)
+| 支払額 |

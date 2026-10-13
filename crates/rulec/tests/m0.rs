@@ -138,15 +138,23 @@ fn 変異は決めたコードだけを出す() {
         // business would write.
         ("m_e021.rule", &[("E021", 1)], "`over` が宣言されていない並びを指している"),
         ("m_e022.rule", &[("E022", 1)], "空の並びのときの答えが無い"),
+        // §15.219: a `max` with no `empty`, in English and in Japanese.
+        ("m_e022max.rule", &[("E022", 1)], "`max` に、明細が無いときの答えが無い"),
+        ("m_e022maxja.rule", &[("E022", 1)], "上と同じ規則の日本語の版"),
         ("m_e023.rule", &[("E023", 1)], "最後まで見終えたときの答えが無い"),
         ("m_e024.rule", &[("E024", 1)], "表が出す判定に行き先が無い"),
         ("m_e027.rule", &[("E027", 1), ("W116", 1)], "例が、宣言されていない並びを書いている"),
         ("m_e028.rule", &[("E028", 1)], "`count` に `over` が無い"),
         ("m_e029.rule", &[("E029", 1), ("W111", 1)], "`where` が要素の持たないフィールドを書いている"),
         ("m_e030.rule", &[("E030", 1)], "`count` に範囲が無い（完全性の全体集合と並びの上限を兼ねる）"),
-        ("m_e031.rule", &[("E031", 1)], "同じ並びを畳みも数えもしている"),
-        // §15.208. Written by hand (BY_HAND below), in English and in Japanese.
-        ("m_e031walk.rule", &[("E031", 1)], "明細ごとの定義が、明細の金額と注文の合計の両方を読んだ（二度目のたどり方になる）"),
+        // §15.219: a value of one line that reads a payment too, so one sequence would be walked
+        // inside the other. In English and in Japanese.
+        ("m_e031.rule", &[("E031", 1)], "明細ごとの値が、支払いの額も読んだ（並びの中で並びをたどることになる）"),
+        ("m_e031ja.rule", &[("E031", 1)], "上と同じ規則の日本語の版"),
+        // §15.208, §15.219. Written by hand (BY_HAND below), in English and in Japanese: reading a
+        // line's amount and the order's total is a second walk now, and the value it gives was
+        // made an output.
+        ("m_e031walk.rule", &[("E031", 1)], "明細ごとの、ほかの明細の合計を出力にした（たどり終えたあとには一つの値に決まらない）"),
         ("m_e031walkja.rule", &[("E031", 1)], "上と同じ規則の日本語の版"),
         ("m_e075.rule", &[("E075", 1)], "列挙の値と同じ名前の入力を足し、出力のセルがどちらにも読めるようになった"),
         ("m_e075ja.rule", &[("E075", 1)], "上と同じ規則の日本語の版"),
@@ -735,10 +743,10 @@ fn 変異はコーパスから作り直せる() {
         "m_e101frac.rule",
         "m_e101fracja.rule",
         // §15.208: a cell that is both a value of an enum and the name of an input of that enum
-        // (E075), and an item that reads a value of one element and what the walk answers
-        // (E031), are each a second name or a second line no corpus rule has; §15.209: a row
-        // that asks a computed column for a value nothing decides (W128) is one no right rule
-        // keeps. All three in English and in Japanese.
+        // (E075), and an output that is a value of one element (E031, §15.219), are each a second
+        // name or a second line no corpus rule has; §15.209: a row that asks a computed column
+        // for a value nothing decides (W128) is one no right rule keeps. All three in English and
+        // in Japanese.
         "m_e075.rule",
         "m_e075ja.rule",
         "m_e031walk.rule",

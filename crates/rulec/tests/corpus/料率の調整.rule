@@ -1,0 +1,76 @@
+rule 料率の調整(rate_adjust) v1
+description "契約の見積もりの料率を点数で求める。登録された調整は一件ごとに料率を上げるか下げるかし、調整どうしは足し合わせない。基本の料率には、いちばん大きな引き上げと、いちばん大きな引き下げだけを加える。そのあと調整をもう一度たどり、二つを合わせた向きと同じ向きの調整を数える。見積もりに適用済みとして載せる件数である。一回目の歩きで最大と最小を求め、二回目の歩きで読む例"
+
+enum 向きの区分(push) = 同じ向き(same_way) | 逆向き(other_way)
+
+inputs
+  基本料率(base_rate) : number  range >=0 <=100
+
+# 契約に登録された調整一件。点数で、0 より大きければ料率を上げ、0 より小さければ下げる
+elements 調整(adjustments)
+  増減(shift) : number  range >=-25 <=25
+
+outputs
+  料率(rate)      : number  round down(1)
+  適用数(applied) : number  round down(1)
+
+table 方向(direction_of)
+policy unique
+| 増減 | -> 引き上げ(raises) : bool | 引き下げ(lowers) : bool |
+| >0   | true                       | false                   |
+| 0    | false                      | false                   |
+| <0   | false                      | true                    |
+
+# 一回目の歩き。いちばん大きな引き上げと、いちばん大きな引き下げ（0 より小さい増減のうち最小）
+max 最大の引き上げ(most_up)   over 調整 of 増減 where 引き上げ empty 0
+min 最大の引き下げ(most_down) over 調整 of 増減 where 引き下げ empty 0
+
+define 正味(net) : number = 最大の引き上げ + 最大の引き下げ
+define 料率 : number = 基本料率 + 正味
+
+# 二回目の歩き。調整を一件ずつ、一回目に求めた正味の増減と比べる
+table 向きの判定(side_of)
+policy unique
+| 正味 | 増減 | -> 向き(side) : 向きの区分 |
+| >0   | >0   | 同じ向き                   |
+| >0   | <=0  | 逆向き                     |
+| <0   | <0   | 同じ向き                   |
+| <0   | >=0  | 逆向き                     |
+| 0    | -    | 逆向き                     |
+
+# 範囲は完全性の全体集合であり、並びの長さの上限でもある
+count 適用数 over 調整 where 向き = 同じ向き  range >=0 <=5
+
+examples
+| 基本料率 | 調整         | -> 料率 | 適用数 |
+| 50       | 混在         | 52      | 2      |
+| 50       | 引き下げ中心 | 41      | 1      |
+| 50       | 打ち消し     | 50      | 0      |
+| 50       | 引き上げだけ | 54      | 2      |
+| 50       | 調整なし     | 50      | 0      |
+
+sequence 混在(mixed)
+| 増減 |
+| 10   |
+| 5    |
+| -3   |
+| 0    |
+| -8   |
+
+sequence 引き下げ中心(mostly_cuts)
+| 増減 |
+| 3    |
+| -12  |
+
+sequence 打ち消し(even)
+| 増減 |
+| 6    |
+| -6   |
+
+sequence 引き上げだけ(raises_only)
+| 増減 |
+| 4    |
+| 4    |
+
+sequence 調整なし(no_adjustments)
+| 増減 |

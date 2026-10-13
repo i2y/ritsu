@@ -312,6 +312,13 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
             "walks",
             crate::json::strs(&f.items.iter().filter_map(|it| if let Item::Agg(d) = it { Some(d.name.text.clone()) } else { None }).collect::<Vec<_>>()),
         )
+        // What a `max` or a `min` answers (§15.219): its range in `ranges` is worked out from
+        // the column's and the `empty` value, not declared, so a re-checker holds it to those.
+        // Written only for a rule that has one, so no other certificate changes.
+        .opt_raw("extremes", extremes_json(f, c))
+        // The answer of a fold that the items below read takes its range the same way: worked
+        // out from the values the fold answers with (§15.219).
+        .opt_raw("fold_answers", fold_answers_json(f, c))
         .raw("values", arr(&values_json(f, c)))
         .raw("tables", arr(&tables))
         .raw("contracts", arr(&contracts))
@@ -320,6 +327,56 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
         // block, so no other certificate changes.
         .opt_raw("prerequisites", crate::prereq::certificate_json(f, c))
         .finish()
+}
+
+/// Each `max` and `min` of the rule (§15.219): its name, which of the two it is, the sequence it
+/// walks and the column it reads, the test that picks the elements it looks at, and the value it
+/// answers when it looks at none — on the scale of `ranges` (days for a date), or the word for
+/// an enum. The answer is a value of the column or that one, so the range `ranges` states for it
+/// has to hold the column's range and the `empty` value; a re-checker holds it to both. None for
+/// a rule with neither.
+fn extremes_json(f: &RuleFile, c: &Checked) -> Option<String> {
+    let items: Vec<String> = f
+        .aggs()
+        .filter(|d| d.kind.extreme())
+        .map(|d| {
+            let ty = c.ty_of(&d.column.text).unwrap_or(crate::types::Ty::Unknown);
+            let empty = match d.empty.as_ref().map(|e| &e.0) {
+                Some(Lit::Num(n)) => end(&crate::types::lit_value_in_pub(n, ty.present())),
+                Some(Lit::Date(y, m, dd)) => end(&Some(crate::types::date_ord(*y, *m, *dd))),
+                Some(Lit::Word(w)) => crate::json::quote(w),
+                _ => "null".to_string(),
+            };
+            let mut o = Obj::new().str("name", &d.name.text).str("kind", d.kind.word()).str("over", &d.over).str("of", &d.column.text);
+            if let Some((w, v)) = &d.filter {
+                o = o.str("where", &w.text);
+                if let Some(v) = v {
+                    o = o.str("is", &v.text);
+                }
+            }
+            o.raw("empty", empty).finish()
+        })
+        .collect();
+    (!items.is_empty()).then(|| arr(&items))
+}
+
+/// Each fold whose answer has a range in `ranges` (§15.219): the answer's name, the sequence it
+/// walks, and the values it can answer with, as expressions — `empty`, `exhausted` unless it is
+/// `held`, a `stop with`, and what an arm takes or keeps. The answer is one of them, so the range
+/// stated for it has to hold every one; a re-checker works their intervals out from the
+/// expressions. None for a rule with no such fold.
+fn fold_answers_json(f: &RuleFile, c: &Checked) -> Option<String> {
+    let items: Vec<String> = f
+        .folds()
+        .filter_map(|fold| {
+            let name = fold.answer_name(f)?;
+            c.ranges.get(name)?;
+            let ty = c.ty_of(name).unwrap_or(crate::types::Ty::Unknown);
+            let answers: Vec<String> = fold.answer_values().into_iter().map(|e| expr_json(e, ty.present())).collect();
+            Some(Obj::new().str("name", name).str("over", &fold.over).raw("answers", arr(&answers)).finish())
+        })
+        .collect();
+    (!items.is_empty()).then(|| arr(&items))
 }
 
 /// The machine the rule is one step of, as ritsu's port of rules has it (`crate::ports`): its

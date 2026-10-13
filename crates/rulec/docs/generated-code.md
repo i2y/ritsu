@@ -697,7 +697,9 @@ missing.
 A rule with `elements` and `fold` ([reference §6.2](reference.md#62-elements-and-fold)) takes
 one more argument, last: the sequence, as a list of `Element`. `Element` is a record of the
 element's own fields, generated beside `Output`, and each field carries the same entry guard
-an input of that type carries.
+an input of that type carries. A rule that walks two sequences or more takes one list for each,
+in the order the `elements` are declared, and each record is named after its sequence:
+`LinesElement` and `PaymentsElement` (§15.219).
 
 ```python
 class Element(NamedTuple):
@@ -711,11 +713,11 @@ def nationwide_freight(freight_rows: list[Element]) -> JPYInclTax:
 ```
 
 The body is a loop over that list, with one branch per verdict, and the rule's items at the
-three places the reference evaluator runs them
-([reference §6.2](reference.md#before-the-walk-on-each-element-after-it)): what reads neither an
+places the reference evaluator runs them
+([reference §6.2](reference.md#before-the-walks-on-each-walk-after-them)): what reads neither an
 element nor the walk's answer is computed once, above the loop; what reads a value of one element,
 inside it; what reads the answer, once, below it, after the answer is put in the first output.
-The rule of [reference §6.2](reference.md#before-the-walk-on-each-element-after-it), the best
+The rule of [reference §6.2](reference.md#before-the-walks-on-each-walk-after-them), the best
 offer among some bids, comes out as:
 
 ```python
@@ -749,13 +751,78 @@ the `empty` answer, in every language as in the reference evaluator. A `count` a
 written the same way, their totals started above the loop and read below it. What comes out
 goes through the same rounding and the same return the rule would have had without the loop.
 
+### Two sequences and a second walk
+
+Each walk is one loop (§15.219). The summaries of one sequence found on one walk share its loop;
+a walk over another sequence is a loop of its own; and a walk that reads what an earlier one
+found is a second loop over the same list, below the first. A `max` and a `min` start from their
+`empty` answer, with a flag that says whether any element has been looked at, and the first
+element the `where` lets in replaces it. `tests/corpus/order_settlement.rule` — the lines' total
+and their highest price on the first walk, the payments on a walk of their own, and the line at
+the highest price on a second walk over the lines — comes out as (the entry guards cut):
+
+```python
+def order_settlement(lines: list[LinesElement], payments: list[PaymentsElement]) -> Output:
+    ...
+    subtotal = 0  # sum
+    top_price = 0  # max
+    top_price_set = False
+    for elem in lines:
+        ...
+        line_total = elem.quantity * elem.price  # definition
+        subtotal += line_total  # subtotal
+        if not top_price_set or elem.price > top_price:
+            top_price = elem.price
+            top_price_set = True
+    if subtotal > 25000:
+        raise RuleInputError("subtotal is out of range", _repr(subtotal))
+    paid = 0  # sum
+    for elem2 in payments:
+        ...
+        paid += elem2.amount  # paid
+    if paid > 25000:
+        raise RuleInputError("paid is out of range", _repr(paid))
+    answer: int = 0  # the answer for no elements
+    stopped = False
+    taken: int | None = None
+    for elem in lines:
+        ...
+        line_total = elem.quantity * elem.price  # definition
+        gap = top_price - elem.price  # definition
+        # table pick_line (policy unique)
+        if gap <= 0:  # row 1: <=0USD | top
+            pick = LinePick.TOP
+            trace.append(Fired("pick_line", 1))
+        elif gap > 0:  # row 2: >0USD | rest
+            pick = LinePick.REST
+            trace.append(Fired("pick_line", 2))
+        ...
+        if pick is LinePick.TOP:  # top
+            if taken is None:
+                taken = top_off
+        if pick is LinePick.REST:  # rest
+            pass
+    if _len(lines) > 0 and not stopped:
+        held = taken if taken is not None else 0
+        answer = held
+    discount = answer
+    balance = (subtotal - discount) - paid  # definition
+```
+
+The second loop works the values of one element out again (`line_total`) and runs the entry
+guard again, so nothing it reads is carried over from the first; the trace lists the rows the
+second walk fires, element by element. A `fold` that is alone on its walk ends the loop with
+`break` at `stop`, as before; one that shares the walk with another summary only stops reading,
+and the loop goes on for the others. A fold's answer named with `-> <name>` is that name from
+then on (`discount = answer`); without one it is the first output.
+
 Every condition the Python module writes is a truth value — a comparison, `isinstance`, or a
 name the module only ever gives `True` or `False` — but in the functions that take the inputs
 out of the caller's object (`<alias>_from`, §15.207), which read any JSON. A sequence, a number, a
 string or an optional value is compared explicitly (`_len(bids) > 0`, `r != 0`, `tag != ""`,
 `signature is True`), never tested for being empty or zero. `rulec api` lists the sequence as the last parameter, with the
-element's fields under `elements`, and the record written for one call carries the sequence as
-an array of objects. Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java and Wasm are
+element's fields under `elements` — a rule that walks two lists each, in order — and the record
+written for one call carries each sequence as an array of objects. Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java and Wasm are
 generated; SQL and NumPy are refused by name, because one query has nowhere to carry a value from
 row to row, and a walk is not a column operation.
 

@@ -107,9 +107,9 @@ impl<'a> Gen<'a> {
                 }
             }
         }
-        // The sequence a walk reads is one more argument, and one element is converted the way
-        // one call's inputs are (§15.56).
-        if let Some(el) = &self.f.elements {
+        // A sequence a walk reads is one more argument, and one element is converted the way
+        // one call's inputs are (§15.56), each sequence its own (§15.219).
+        for (s, el) in self.f.elements.iter().enumerate() {
             let jp = format!("{:?}", el.name.text);
             names.push(jp.clone());
             let fields: Vec<String> = el
@@ -138,8 +138,9 @@ impl<'a> Gen<'a> {
                     }
                 })
                 .collect();
-            convs.push(format!("[m.Element({}) for e in _seq({jp}, _need({jp}, o[{jp}]))]", fields.join(", ")));
-            tys.push("list[m.Element]".to_string());
+            let ty = self.element_type(s);
+            convs.push(format!("[m.{ty}({}) for e in _seq({jp}, _need({jp}, o[{jp}]))]", fields.join(", ")));
+            tys.push(format!("list[m.{ty}]"));
         }
         let doc = tr!(
             "規則 {} v{} を、MCP ツール一つとして出す。\n\n    python3 {alias}_mcp.py [--record <file.jsonl>]                 # stdio\n    python3 {alias}_mcp.py --http 8000 [--origin https://example.com]  # Streamable HTTP\n\nツールの引数の形は、生成コードが受け取る入力と同じ（宣言した単位の整数、率は刻みの個数、日付は YYYY-MM-DD、列挙はその名前）。\n結果は生成コードの record 関数が書く一行そのもの: in、observed、trace。\n--record を付けると、その一行を毎回ファイルに追記する。エージェントが尋ねたことが、そのまま rulec replay と rulec diff の読む記録になる。\n\nstdio はローカルで動くエージェント（Claude Code、IDE）が使う。--http は、HTTPS のエンドポイントしか受け付けない\n連携先（チャットのコネクタ、ワークフロー製品、業務向けエージェント）のためのもので、待つのは\n既定で 127.0.0.1 だけである。TLS と認証は前に置くこと。このサーバは自分では持たない。",
@@ -265,8 +266,8 @@ impl<'a> Gen<'a> {
                 t => convs.push(conv(t, &format!("_need({jp}, o[{jp}])"))),
             }
         }
-        // The sequence a walk reads, one element at a time (§15.56).
-        if let Some(el) = &self.f.elements {
+        // The sequences a walk reads, one element at a time (§15.56, §15.219).
+        for el in &self.f.elements {
             let jp = format!("{:?}", el.name.text);
             names.push(jp.clone());
             let fields: Vec<String> = el

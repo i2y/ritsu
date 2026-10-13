@@ -119,11 +119,12 @@ impl Renamer<'_> {
 fn declares(f: &RuleFile, n: &str) -> bool {
     f.inputs.iter().any(|i| i.name.text == n)
         || f.outputs.iter().any(|o| o.name.text == n)
-        || f.elements.as_ref().is_some_and(|e| e.fields.iter().any(|i| i.name.text == n))
+        || f.element_fields().any(|i| i.name.text == n)
         || f.items.iter().any(|it| match it {
             Item::Derived(d) => d.name.text == n,
             Item::Define(d) => d.name.text == n,
             Item::Agg(d) => d.name.text == n,
+            Item::Fold(d) => d.answer.as_ref().is_some_and(|a| a.name.text == n),
             Item::Table(t) => t.outputs.iter().any(|o| o.name.text == n),
         })
 }
@@ -210,7 +211,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 continue;
             }
         };
-        if cf.elements.is_some() || cf.fold.is_some() || cf.items.iter().any(|it| matches!(it, Item::Agg(_))) {
+        if !cf.elements.is_empty() || cf.walks() {
             out.push(e044(
                 tr!("`{}` は並びを順に見ていく規則です", "`{}` walks a sequence", a.path),
                 tr!("並びを順に見ていく規則の準用は、まだできません。", "Applying a rule that walks a sequence is not accepted yet."),
@@ -436,7 +437,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                     span: rn.sp(),
                     cite: rn.cite(&d.cite),
                 })),
-                Item::Agg(_) => {}
+                Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
                     let tn = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
                     if dropped_tables.contains(&tn) {
@@ -488,6 +489,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                     Item::Derived(d) => d.name.text == target.text,
                     Item::Define(d) => d.name.text == target.text,
                     Item::Agg(d) => d.name.text == target.text,
+                    Item::Fold(d) => d.answer.as_ref().is_some_and(|a| a.name.text == target.text),
                     Item::Table(t) => t.name.as_ref().is_some_and(|n| n.text == target.text) || t.outputs.iter().any(|o| o.name.text == target.text),
                 });
             if taken {
@@ -606,7 +608,7 @@ fn reorder_after_overrides(f: &mut RuleFile, at: usize, n: usize, an: &str) {
             let reads: Vec<String> = match &f.items[j] {
                 Item::Derived(d) => expr_names(&d.expr),
                 Item::Define(d) => expr_names(&d.expr),
-                Item::Agg(_) => Vec::new(),
+                Item::Agg(_) | Item::Fold(_) => Vec::new(),
                 Item::Table(u) => {
                     let mut v: Vec<String> = u.inputs.iter().map(|(c, _)| c.clone()).collect();
                     for r in &u.rows {
@@ -626,7 +628,7 @@ fn reorder_after_overrides(f: &mut RuleFile, at: usize, n: usize, an: &str) {
                     Item::Derived(d) => names.push(d.name.text.clone()),
                     Item::Define(d) => names.push(d.name.text.clone()),
                     Item::Table(u) => names.extend(u.outputs.iter().map(|o| o.name.text.clone())),
-                    Item::Agg(_) => {}
+                    Item::Agg(_) | Item::Fold(_) => {}
                 }
             }
         }
@@ -687,7 +689,7 @@ fn prune(items: &mut Vec<Item>, roots: &[String], result: Option<Expr>) {
             match it {
                 Item::Derived(d) => names_in(&d.expr, &mut used),
                 Item::Define(d) => names_in(&d.expr, &mut used),
-                Item::Agg(_) => {}
+                Item::Agg(_) | Item::Fold(_) => used.extend(crate::types::item_reads(it)),
                 Item::Table(t) => {
                     used.extend(t.inputs.iter().map(|(n, _)| n.clone()));
                     for r in &t.rows {

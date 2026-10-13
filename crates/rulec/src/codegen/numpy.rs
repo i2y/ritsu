@@ -489,7 +489,7 @@ impl<'a> Gen<'a> {
                     let (e, _) = self.np_expr(&d.expr);
                     steps.push(Obj::new().str("op", "define").str("name", &d.name.text).raw("expr", e).finish());
                 }
-                Item::Agg(_) => {}
+                Item::Agg(_) | Item::Fold(_) => {}
             }
         }
 

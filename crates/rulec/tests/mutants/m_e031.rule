@@ -1,61 +1,82 @@
-rule 納入先照合(supplier_match) v1
-description "請求書の宛名を取引先台帳と一件ずつ照合し、一致した件数で次の手を決める。並びを数える例"
+rule order_settlement v1
+description "What an order comes to: its lines added up, ten percent off the line with the highest price, and the payments already made taken off. The highest price is known only once every line has been read, so the discount is worked out on a second walk over the lines. An example of two sequences and a second walk"
 
-enum 照合(match_kind) = 一致(same) | 不一致(diff)
-enum 次の手(action_kind) = 新規登録(register) | 自動確定(auto) | 目視確認(review)
+enum line_pick = top | rest
 
-inputs
-  自動確定可(auto_ok) : bool
+# One line of the order. The caller passes as many as it has
+elements lines
+  quantity : number  range >=1 <=50
+  price    : money[USD]  range >=1USD <=500USD
 
-# 台帳の候補。一件ぶんの欄で、呼び出し側は何件でも渡す
-elements 候補(candidates)
-  会社名一致(name_match) : bool
-  住所一致(addr_match)   : bool
+# One payment already made against the order: a sequence of its own
+elements payments
+  amount : money[USD]  range >=1USD <=5000USD
 
 outputs
-  手続き(action) : 次の手
+  subtotal : money[USD]  round down(1USD)
+  discount : money[USD]  round down(1USD)
+  paid     : money[USD]  round down(1USD)
+  balance  : money[USD]  round down(1USD)
 
-# 一件の候補に対する判定。表の検査はいままでどおり効く
-table 候補判定(row_of)
+define line_total : money[USD] = quantity * price + amount
+
+# The first walk over the lines: their total, and the highest price. Both ranges are the universe
+# of the completeness check; the total's is also where the entry refuses a call
+sum subtotal over lines of line_total  range >=0USD <=25_000USD
+max top_price over lines of price empty 0USD
+
+# The payments are walked on their own
+sum paid over payments of amount  range >=0USD <=25_000USD
+
+# The second walk over the lines: each line set against the highest price the first walk found
+define gap : money[USD] = top_price - price
+
+table pick_line
 policy unique
-| 会社名一致 | 住所一致 | -> 照合結果(kind) : 照合 |
-| true       | true     | 一致                     |
-| true       | false    | 不一致                   |
-| false      | -        | 不一致                   |
+| gap    | -> pick : line_pick |
+| <=0USD | top                 |
+| >0USD  | rest                |
 
-# 歩いたあとに残るのは数だけ。範囲は完全性の全体集合であり、並びの長さの上限でもある
-count 一致数(hits) over 候補 where 照合結果 = 一致  range >=0 <=50
+define top_off : money[USD] = half_down(line_total * 10%, 1USD)
 
-fold 照合結果 over 候補
-  一致    -> next
-  不一致  -> next
-  empty     -> 新規登録
-  exhausted -> 目視確認
+# The first line at the highest price takes the discount; a second line at the same price does not
+fold pick over lines -> discount
+  top       -> take_first top_off
+  rest      -> next
+  empty     -> 0USD
+  exhausted -> held
 
-table 手続き判定(action_of)
-policy unique
-| 一致数 | 自動確定可 | -> 手続き(action) : 次の手 |
-| 0      | -          | 新規登録                   |
-| 1      | true       | 自動確定                   |
-| 1      | false      | 目視確認                   |
-| >=2    | -          | 目視確認                   |
-
-sequence 一件だけ一致(one)
-| 会社名一致 | 住所一致 |
-| true       | true     |
-| true       | false    |
-
-sequence 二件一致(two)
-| 会社名一致 | 住所一致 |
-| true       | true     |
-| true       | true     |
-
-sequence 候補なし(none)
-| 会社名一致 | 住所一致 |
+define balance : money[USD] = subtotal - discount - paid
 
 examples
-| 自動確定可 | 候補         | -> 手続き |
-| true       | 一件だけ一致 | 自動確定  |
-| false      | 一件だけ一致 | 目視確認  |
-| true       | 二件一致     | 目視確認  |
-| true       | 候補なし     | 新規登録  |
+| lines       | payments     | -> subtotal | discount | paid   | balance |
+| three_lines | one_payment  | 240USD      | 12USD    | 100USD | 128USD  |
+| three_lines | no_payments  | 240USD      | 12USD    | 0USD   | 228USD  |
+| tied_lines  | two_payments | 320USD      | 8USD     | 120USD | 192USD  |
+| no_lines    | one_payment  | 0USD        | 0USD     | 100USD | -100USD |
+
+sequence three_lines
+| quantity | price  |
+| 2        | 30USD  |
+| 1        | 120USD |
+| 4        | 15USD  |
+
+sequence tied_lines
+| quantity | price |
+| 1        | 80USD |
+| 3        | 80USD |
+
+sequence no_lines
+| quantity | price |
+
+sequence one_payment
+| amount |
+| 100USD |
+
+sequence two_payments
+| amount |
+| 50USD  |
+| 70USD  |
+
+sequence no_payments
+| amount |

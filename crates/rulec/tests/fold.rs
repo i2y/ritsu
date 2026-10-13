@@ -589,13 +589,22 @@ fn 生成されたたどり方は参照評価器と一致する() {
     assert!(ran >= 1, "どの言語も走らなかった: {said}");
 }
 
+/// A rule may declare more sequences than one (§15.219), and each needs a line that walks it: one
+/// nothing walks is E020, by name, and a `sum` over it makes the rule whole.
 #[test]
-fn 並びは一つで_二本目はエラーにする() {
+fn 並びは何本でも書け_たどらない並びはエラーにする() {
     let (_tmp, d) = dir("two");
-    let p = write(&d, "two.rule", &RULE.replace("outputs\n", "elements 別の列(others)\n  m(m) : number  range >=0 <=9\n\noutputs\n"));
+    let two = RULE.replace("outputs\n", "elements 別の列(others)\n  m(m) : number  range >=0 <=9\n\noutputs\n");
+    let p = write(&d, "two.rule", &two);
     let (code, out, _) = run(&["check", &p, "--format", "json"]);
     assert_eq!(code, 1, "{out}");
     assert!(codes(&out).contains(&"E020".to_string()), "{out}");
+    assert!(out.contains("別の列"), "{out}");
+    let walked = two.replace("  運賃(fee) : money[円, incl_tax]  round up(1円)\n", "  運賃(fee) : money[円, incl_tax]  round up(1円)\n  合計(total) : number  round down(1)\n")
+        + "\nsum 合計 over 別の列 of m  range >=0 <=900\n";
+    let p = write(&d, "walked.rule", &walked);
+    let (code, out, _) = run(&["check", &p, "--format", "json"]);
+    assert_eq!(code, 0, "{out}");
 }
 
 /// The walk itself: the evaluator's answers, and the suite that covers them (§15.56).
@@ -755,8 +764,9 @@ fn 畳み込みの答えは決まる所にある値だけを読む() {
         ("an element's value for no elements (ja)", offer_ja.replace("  empty     -> 開始価格", "  empty     -> 金額"), "E021", "要素ゼロ件のときの答えは、要素の値 金額 を読めません"),
         ("held for no elements", offer_en.replace("  empty     -> opening", "  empty     -> held"), "E021", "`held` can only be written in the `exhausted` answer"),
         ("held for no elements (ja)", offer_ja.replace("  empty     -> 開始価格", "  empty     -> held"), "E021", "`held` は `exhausted` の値にだけ書けます"),
-        ("a key decided from the answer", offer_en.replace("keep_max offer by offer", "keep_max offer by review"), "E021", "A value of the fold cannot read review, which is computed from what the walk answers"),
-        ("a key decided from the answer (ja)", offer_ja.replace("keep_max 申し出 by 申し出", "keep_max 申し出 by 要確認"), "E021", "畳み込みの値は、たどった結果から計算する 要確認 を読めません"),
+        // a key decided from the answer is a walk that waits for its own answer (§15.219)
+        ("a key decided from the answer", offer_en.replace("keep_max offer by offer", "keep_max offer by review"), "E021", "The fold reads review, which is worked out from its own answer"),
+        ("a key decided from the answer (ja)", offer_ja.replace("keep_max 申し出 by 申し出", "keep_max 申し出 by 要確認"), "E021", "畳み込みが、自分の答えから計算する 要確認 を読んでいます"),
         ("a word that is no value of the answer's enum", size_en.replace("  empty        -> unavailable", "  empty        -> purple"), "E012", "`purple` is neither a value of size, the type the fold answers with, nor a declared name"),
         ("a word that is no value of the answer's enum (ja)", size_ja.replace("  empty     -> 在庫なし", "  empty     -> 紫"), "E012", "`紫` は、答えの型 サイズ の値でも、宣言された名前でもありません"),
         ("a truth value for an enum", size_en.replace("  empty        -> unavailable", "  empty        -> true"), "E103", "This fold answers with size, but `true` is written here"),
@@ -799,7 +809,7 @@ fn resultの行はたどったあとに読む() {
             names.into_iter().find(|m| m.ascii.as_deref() == Some(alias) || m.text == alias).unwrap().text.clone()
         };
         let bid = |amount: i128| std::collections::BTreeMap::from([(n("amount"), Val::Num(rulec::num::Rat::int(amount))), (n("withdrawn"), Val::Bool(false))]);
-        let seq = f.elements.as_ref().unwrap().name.text.clone();
+        let seq = f.elements.first().unwrap().name.text.clone();
         let inputs = std::collections::HashMap::from([
             (n("reserve"), Val::Num(rulec::num::Rat::int(100))),
             (n("fee"), Val::Num(rulec::num::Rat::int(5))),

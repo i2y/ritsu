@@ -1,0 +1,76 @@
+rule rate_adjustment v1
+description "The rate a contract is quoted at, in points. Each adjustment on file raises the rate or lowers it, and adjustments do not add up: the base rate takes the largest raise and the largest cut alone. A second walk over the adjustments then counts those that push the same way as the two together, which is how many the quote lists as applied. An example of a largest and a smallest value found on the first walk and read on the second"
+
+enum push = same_way | other_way
+
+inputs
+  base_rate : number  range >=0 <=100
+
+# One adjustment on file for the contract, in points: above zero raises the rate, below zero lowers it
+elements adjustments
+  shift : number  range >=-25 <=25
+
+outputs
+  rate    : number  round down(1)
+  applied : number  round down(1)
+
+table direction_of
+policy unique
+| shift | -> raises : bool | lowers : bool |
+| >0    | true             | false         |
+| 0     | false            | false         |
+| <0    | false            | true          |
+
+# The first walk: the largest raise, and the largest cut (the smallest shift below zero)
+max most_up   over adjustments of shift where raises empty 0
+min most_down over adjustments of shift where lowers empty 0
+
+define net  : number = most_up + most_down
+define rate : number = base_rate + net
+
+# The second walk: each adjustment set against the net change the first walk found
+table side_of
+policy unique
+| net | shift | -> side : push |
+| >0  | >0    | same_way       |
+| >0  | <=0   | other_way      |
+| <0  | <0    | same_way       |
+| <0  | >=0   | other_way      |
+| 0   | -     | other_way      |
+
+# The range is the universe of the completeness check, and the cap on the sequence
+count applied over adjustments where side = same_way  range >=0 <=5
+
+examples
+| base_rate | adjustments    | -> rate | applied |
+| 50        | mixed          | 52      | 2       |
+| 50        | mostly_cuts    | 41      | 1       |
+| 50        | even           | 50      | 0       |
+| 50        | raises_only    | 54      | 2       |
+| 50        | no_adjustments | 50      | 0       |
+
+sequence mixed
+| shift |
+| 10    |
+| 5     |
+| -3    |
+| 0     |
+| -8    |
+
+sequence mostly_cuts
+| shift |
+| 3     |
+| -12   |
+
+sequence even
+| shift |
+| 6     |
+| -6    |
+
+sequence raises_only
+| shift |
+| 4     |
+| 4     |
+
+sequence no_adjustments
+| shift |

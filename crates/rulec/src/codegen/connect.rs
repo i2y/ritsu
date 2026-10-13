@@ -329,7 +329,7 @@ impl<'a> Gen<'a> {
         for i in &self.f.inputs {
             push(self.ty_of(&i.name.text), &mut out);
         }
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             for fd in &el.fields {
                 push(self.ty_of(&fd.name.text), &mut out);
             }
@@ -566,14 +566,15 @@ impl<'a> Gen<'a> {
         ));
         o.push_str("message Fired {\n  string table = 1;\n  int32 row = 2;\n  string label = 3;\n}\n");
 
-        // The sequence a walk reads is a repeated message of the element's own fields (§15.56).
-        if let Some(el) = &self.f.elements {
+        // A sequence a walk reads is a repeated message of the element's own fields (§15.56),
+        // each sequence its own (§15.219).
+        for (s, el) in self.f.elements.iter().enumerate() {
             o.push_str(&tr!(
                 "\n// {} の一件。フィールドの扱いは、下の入力と同じ。\n",
                 "\n// One {}. Its fields are sent the way the inputs below are.\n",
                 el.name.text
             ));
-            o.push_str("message Element {\n");
+            o.push_str(&format!("message {} {{\n", self.element_type(s)));
             for (n, fd) in el.fields.iter().enumerate() {
                 o.push_str(&self.proto_field(&fd.name.text, &pub_name(&fd.name), &self.ty_of(&fd.name.text), n as u32 + 1, true));
             }
@@ -597,11 +598,12 @@ impl<'a> Gen<'a> {
             n += 1;
             o.push_str(&self.proto_field(&i.name.text, &pub_name(&i.name), &self.ty_of(&i.name.text), n, true));
         }
-        if let Some(el) = &self.f.elements {
+        for (s, el) in self.f.elements.iter().enumerate() {
             n += 1;
             o.push_str(&format!(
-                "  // {}\n  repeated Element {} = {n};\n",
+                "  // {}\n  repeated {} {} = {n};\n",
                 el.name.text,
+                self.element_type(s),
                 pub_name(&el.name)
             ));
         }
@@ -775,14 +777,15 @@ impl<'a> Gen<'a> {
             .iter()
             .map(|i| format!("        {},\n", self.from_request(&i.name.text, &pub_name(&i.name), &self.ty_of(&i.name.text))))
             .collect();
-        if let Some(el) = &self.f.elements {
+        for (s, el) in self.f.elements.iter().enumerate() {
             let fields: Vec<String> = el
                 .fields
                 .iter()
                 .map(|fd| self.from_request(&fd.name.text, &pub_name(&fd.name), &self.ty_of(&fd.name.text)).replace("request.", "e."))
                 .collect();
             args.push(format!(
-                "        [m.Element({}) for e in request.{}],\n",
+                "        [m.{}({}) for e in request.{}],\n",
+                self.element_type(s),
                 fields.join(", "),
                 pub_name(&el.name)
             ));
@@ -819,13 +822,14 @@ impl<'a> Gen<'a> {
             table(needed(self.f.inputs.iter().map(|i| &i.name).collect()))
         );
         let mut required = "    _required(request, REQUIRED)\n".to_string();
-        if let Some(el) = &self.f.elements {
+        for (s, el) in self.f.elements.iter().enumerate() {
+            let table_name = if s == 0 { "ELEMENT_REQUIRED".to_string() } else { format!("ELEMENT_REQUIRED_{}", s + 1) };
             fields.push_str(&format!(
-                "ELEMENT_REQUIRED: tuple[tuple[str, str], ...] = {}\n",
+                "{table_name}: tuple[tuple[str, str], ...] = {}\n",
                 table(needed(el.fields.iter().map(|fd| &fd.name).collect()))
             ));
             required.push_str(&format!(
-                "    for i, e in enumerate(request.{}):\n        _required(e, ELEMENT_REQUIRED, f\" ({}[{{i}}])\")\n",
+                "    for i, e in enumerate(request.{}):\n        _required(e, {table_name}, f\" ({}[{{i}}])\")\n",
                 pub_name(&el.name),
                 el.name.text
             ));
@@ -1217,7 +1221,7 @@ impl<'a> Gen<'a> {
                 kw.push_str(&format!("    kw[{a:?}] = {one}\n"));
             }
         }
-        if let Some(el) = &self.f.elements {
+        for (s, el) in self.f.elements.iter().enumerate() {
             // An optional field that is absent is left unset, as an optional input is (§15.201).
             let optional = el.fields.iter().any(|fd| matches!(self.ty_of(&fd.name.text), Ty::Opt(_)));
             let fields: Vec<String> = el
@@ -1232,10 +1236,11 @@ impl<'a> Gen<'a> {
                     }
                 })
                 .collect();
+            let ty = self.element_type(s);
             let element = if optional {
-                format!("pb.Element(**{{k: v for k, v in dict({}).items() if v is not None}})", fields.join(", "))
+                format!("pb.{ty}(**{{k: v for k, v in dict({}).items() if v is not None}})", fields.join(", "))
             } else {
-                format!("pb.Element({})", fields.join(", "))
+                format!("pb.{ty}({})", fields.join(", "))
             };
             kw.push_str(&format!("    kw[{:?}] = [{element} for e in d[{:?}]]\n", pb_attr(&pub_name(&el.name)), el.name.text));
         }
@@ -1245,9 +1250,10 @@ impl<'a> Gen<'a> {
         // the request is built only from a line that was read.
         let mut args: Vec<String> = self.f.inputs.iter().map(|i| self.py_read(&self.ty_of(&i.name.text), "d", &i.name.text)).collect();
         let mut prelude = String::new();
-        if let Some(el) = &self.f.elements {
-            prelude = format!("                rows = {}\n", self.py_read_elements(el));
-            args.push("rows".to_string());
+        for s in 0..self.f.elements.len() {
+            let rows = if s == 0 { "rows".to_string() } else { format!("rows{}", s + 1) };
+            prelude.push_str(&format!("                {rows} = {}\n", self.py_read_elements(s)));
+            args.push(rows);
         }
         let out = if self.f.outputs.len() == 1 {
             let o = &self.f.outputs[0];
@@ -1471,10 +1477,16 @@ impl<'a> Gen<'a> {
             }
         };
         let mut request: Vec<ritsu_ports::WireField> = self.f.inputs.iter().map(|i| field(&i.name.text, &i.name, &self.ty_of(&i.name.text))).collect();
-        if let Some(el) = &self.f.elements {
-            request.push(ritsu_ports::WireField { name: el.name.text.clone(), field: pub_name(&el.name), ty: "repeated Element".into(), optional: false, enumeration: None });
+        // Each sequence a walk reads is a repeated field of its own message (§15.219).
+        for (s, el) in self.f.elements.iter().enumerate() {
+            request.push(ritsu_ports::WireField { name: el.name.text.clone(), field: pub_name(&el.name), ty: format!("repeated {}", self.element_type(s)), optional: false, enumeration: None });
         }
-        let elements = self.f.elements.as_ref().map(|el| el.fields.iter().map(|fd| field(&fd.name.text, &fd.name, &self.ty_of(&fd.name.text))).collect());
+        let elements = self
+            .f
+            .elements
+            .iter()
+            .map(|el| (el.name.text.clone(), el.fields.iter().map(|fd| field(&fd.name.text, &fd.name, &self.ty_of(&fd.name.text))).collect()))
+            .collect();
         let response = self.f.outputs.iter().map(|o| field(&o.name.text, &o.name, &self.ty_of(&o.name.text))).collect();
         let enums = self
             .wire_enums()
@@ -1528,19 +1540,38 @@ impl<'a> Gen<'a> {
             .iter()
             .map(|i| field(&i.name.text, &i.name, &self.ty_of(&i.name.text)))
             .collect();
-        if let Some(el) = &self.f.elements {
+        for (s, el) in self.f.elements.iter().enumerate() {
             ins.push(
                 crate::json::Obj::new()
                     .str("name", &el.name.text)
                     .str("field", &pub_name(&el.name))
-                    .str("type", "repeated Element")
+                    .str("type", &format!("repeated {}", self.element_type(s)))
                     .bool("optional", false)
                     .finish(),
             );
         }
-        let elems: Option<String> = self.f.elements.as_ref().map(|el| {
+        let fields_of = |el: &crate::ast::ElementsDecl| -> String {
+            crate::json::arr(&el.fields.iter().map(|fd| field(&fd.name.text, &fd.name, &self.ty_of(&fd.name.text))).collect::<Vec<_>>())
+        };
+        // The first sequence's fields under `element_fields`, as a rule that walks one has them;
+        // a rule that walks more lists every one under `sequences`, with its message (§15.219).
+        let elems: Option<String> = self.f.elements.first().map(fields_of);
+        let sequences: Option<String> = (self.f.elements.len() > 1).then(|| {
             crate::json::arr(
-                &el.fields.iter().map(|fd| field(&fd.name.text, &fd.name, &self.ty_of(&fd.name.text))).collect::<Vec<_>>(),
+                &self
+                    .f
+                    .elements
+                    .iter()
+                    .enumerate()
+                    .map(|(s, el)| {
+                        crate::json::Obj::new()
+                            .str("name", &el.name.text)
+                            .str("field", &pub_name(&el.name))
+                            .str("message", &self.element_type(s))
+                            .raw("fields", fields_of(el))
+                            .finish()
+                    })
+                    .collect::<Vec<_>>(),
             )
         });
         let outs: Vec<String> = self
@@ -1623,6 +1654,7 @@ impl<'a> Gen<'a> {
             .str("json_int64", "string")
             .raw("request_fields", crate::json::arr(&ins))
             .raw("element_fields", elems.unwrap_or_else(|| "null".into()))
+            .opt_raw("sequences", sequences)
             .raw("response_fields", crate::json::arr(&outs))
             .raw("enums", crate::json::arr(&enums))
             .raw("python", python)

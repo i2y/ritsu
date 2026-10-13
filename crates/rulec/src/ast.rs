@@ -636,15 +636,40 @@ pub enum Item {
     Define(DefineDecl),
     Table(Table),
     Agg(AggDecl),
+    /// A `fold`, where it is written (§15.219): its answer is a value of the rule from there on,
+    /// like a summary's.
+    Fold(FoldDecl),
 }
 
-/// Which summary of the walk this is (§15.58, §15.100).
+/// Which summary of the walk this is (§15.58, §15.100, §15.219).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AggKind {
     /// `count 一致数(hits) over 納入先 where 判定 = 一致` — how many elements pass one test.
     Count,
     /// `sum 合計(total) over 明細 of 金額` — the total of one column over the elements.
     Sum,
+    /// `max 最高額(top) over 明細 of 金額 empty 0円` — the largest value of one column over the
+    /// elements a `where` lets in, or the `empty` value when there are none (§15.219).
+    Max,
+    /// `min 最も早い期日(earliest) over 作業 of 期日 empty 2026-12-31` — the smallest, the same way.
+    Min,
+}
+
+impl AggKind {
+    /// The word the line starts with.
+    pub fn word(self) -> &'static str {
+        match self {
+            AggKind::Count => crate::kw::COUNT,
+            AggKind::Sum => crate::kw::SUM,
+            AggKind::Max => crate::kw::MAX,
+            AggKind::Min => crate::kw::MIN,
+        }
+    }
+
+    /// `max` or `min`: a summary that picks one value of its column rather than adding them up.
+    pub fn extreme(self) -> bool {
+        matches!(self, AggKind::Max | AggKind::Min)
+    }
 }
 
 /// `count 一致数(hits) over 納入先 where 判定 = 一致  range >=0 <=100`, or
@@ -667,6 +692,13 @@ pub struct AggDecl {
     /// `count` only: the value that column must take. `None` is `true`, which is why a
     /// bool field needs no `= <value>`.
     pub value: Option<Name>,
+    /// `max` and `min` only: `where <column> [= <value>]`, the elements whose value is looked at
+    /// — a column of one element, tested the way `count` tests one (§15.219). `None` looks at
+    /// every element.
+    pub filter: Option<(Name, Option<Name>)>,
+    /// `max` and `min` only: `empty <value>`, the answer when no element is looked at, and where
+    /// it is written (§15.219). Required (E022).
+    pub empty: Option<(Lit, Span)>,
     pub range: Option<Range>,
     pub span: Span,
 }
@@ -706,6 +738,14 @@ pub enum Arm {
     KeepMax { expr: Expr, key: Expr },
 }
 
+/// `-> 最良の補正(best_aura) : rate` after a `fold` heading: the name its answer is bound to, and
+/// the type written for a name the rule does not declare elsewhere (§15.219).
+#[derive(Debug, Clone)]
+pub struct FoldAnswer {
+    pub name: Name,
+    pub ty: Option<TypeRef>,
+}
+
 /// `fold 採用 over 運賃行` — how a column of verdicts becomes one answer.
 ///
 /// The table decides one element at a time and its verdict column is a **finite** enum, so
@@ -717,6 +757,9 @@ pub struct FoldDecl {
     pub verdict: String,
     /// The sequence it walks.
     pub over: String,
+    /// `-> <name> [: <type>]`: where the answer goes. Without it, the rule's first output, as
+    /// every fold did before a rule could have more than one (§15.219).
+    pub answer: Option<FoldAnswer>,
     /// One arm per value of the verdict's enum, in source order.
     pub arms: Vec<(Name, Arm, Span)>,
     /// The answer when there are no elements at all. Declaring it is not optional.
@@ -966,17 +1009,90 @@ pub struct RuleFile {
     pub constraints: Vec<Constraint>,
     /// The shapes of the caller's objects that inputs are projected from (§15.125).
     pub shapes: Vec<ShapeDecl>,
-    /// The fields of one element of the sequence, when the rule walks one (§15.56).
-    pub elements: Option<ElementsDecl>,
+    /// The sequences the rule walks, each with the fields of one element (§15.56), in the order
+    /// written. A rule may walk more than one (§15.219).
+    pub elements: Vec<ElementsDecl>,
     /// Named lists of elements. A cell of `examples` names one, which is how a case for a
     /// walk is written: a row of cells has no room for a sequence (§15.56).
     pub sequences: Vec<SeqDecl>,
-    /// How the verdicts of the per-element table reduce to one answer (§15.56).
-    pub fold: Option<FoldDecl>,
     /// The state machine the rule is one step of (§15.148).
     pub machine: Option<MachineDecl>,
     /// Sequences of calls with what each one answers (§15.148).
     pub scenarios: Vec<ScenarioDecl>,
     /// Which values of an enum need which before them (§15.222), in the order written.
     pub prerequisites: Vec<PrereqDecl>,
+}
+
+impl FoldDecl {
+    /// The name the fold's answer is bound to: the one after `->`, else the rule's first output.
+    pub fn answer_name<'a>(&'a self, f: &'a RuleFile) -> Option<&'a str> {
+        match &self.answer {
+            Some(a) => Some(a.name.text.as_str()),
+            None => f.outputs.first().map(|o| o.name.text.as_str()),
+        }
+    }
+
+    /// The values the fold can answer with (§15.219): `empty`, `exhausted` unless it is `held`, a
+    /// `stop with`, and what an arm takes or keeps. `held` is one of the values taken or kept, or
+    /// `empty` when none was, so the answer is always one of these.
+    pub fn answer_values(&self) -> Vec<&Expr> {
+        let mut out: Vec<&Expr> = Vec::new();
+        for e in self.empty.iter().chain(self.exhausted.iter()) {
+            if !matches!(e, Expr::Name(n, _) if n == crate::kw::HELD) {
+                out.push(e);
+            }
+        }
+        for (_, arm, _) in &self.arms {
+            match arm {
+                Arm::Stop(Some(x)) => out.push(x),
+                Arm::Take { expr, .. } | Arm::KeepMax { expr, .. } => out.push(expr),
+                _ => {}
+            }
+        }
+        out
+    }
+}
+
+impl RuleFile {
+    /// The `fold`s, in the order written (§15.219).
+    pub fn folds(&self) -> impl Iterator<Item = &FoldDecl> {
+        self.items.iter().filter_map(|it| if let Item::Fold(d) = it { Some(d) } else { None })
+    }
+
+    /// The `count`, `sum`, `max` and `min` lines, in the order written.
+    pub fn aggs(&self) -> impl Iterator<Item = &AggDecl> {
+        self.items.iter().filter_map(|it| if let Item::Agg(d) = it { Some(d) } else { None })
+    }
+
+    /// Whether the rule walks a sequence: it has a `fold`, or a summary over one.
+    pub fn walks(&self) -> bool {
+        self.items.iter().any(|it| matches!(it, Item::Agg(_) | Item::Fold(_)))
+    }
+
+    /// The sequence declared under this name.
+    pub fn sequence_named(&self, name: &str) -> Option<&ElementsDecl> {
+        self.elements.iter().find(|e| e.name.text == name)
+    }
+
+    /// The fields of every element the rule walks, the first sequence's first.
+    pub fn element_fields(&self) -> impl Iterator<Item = &VarDecl> {
+        self.elements.iter().flat_map(|e| e.fields.iter())
+    }
+
+    /// The sequence one field belongs to.
+    pub fn sequence_of_field(&self, field: &str) -> Option<&ElementsDecl> {
+        self.elements.iter().find(|e| e.fields.iter().any(|fd| fd.name.text == field))
+    }
+}
+
+impl Lit {
+    /// The literal as the rule writes it: `500円`, `2026-04-01`, `gold`, `"text"`.
+    pub fn src(&self) -> String {
+        match self {
+            Lit::Num(n) => n.raw.clone(),
+            Lit::Word(w) => w.clone(),
+            Lit::Str(s) => format!("\"{s}\""),
+            Lit::Date(y, m, d) => format!("{y:04}-{m:02}-{d:02}"),
+        }
+    }
 }

@@ -87,6 +87,9 @@ const CORPUS: &[&str] = &[
 "tests/corpus/再試行の回数.rule",
 "tests/corpus/猶予の残り日数.rule",
 "tests/corpus/一度だけの特典.rule",
+"tests/corpus/注文の精算.rule",
+"tests/corpus/最も早い期日.rule",
+"tests/corpus/料率の調整.rule",
 // The twins (tests/corpus/twins.tsv): every cell they show has to be in their own source too.
 "tests/corpus/sku_prefix_handling.rule",
 "tests/corpus/cart_shipping_fee.rule",
@@ -154,6 +157,9 @@ const CORPUS: &[&str] = &[
 "tests/corpus/科目の履修.rule",
 "tests/corpus/exam_fee.rule",
 "tests/corpus/受験料.rule",
+"tests/corpus/order_settlement.rule",
+"tests/corpus/earliest_due.rule",
+"tests/corpus/rate_adjustment.rule",
 ];
 
 /// The `enums` files four of the rules above read (§15.212). They hold no table, so the checks of

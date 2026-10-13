@@ -1,0 +1,82 @@
+rule order_settlement v1
+description "What an order comes to: its lines added up, ten percent off the line with the highest price, and the payments already made taken off. The highest price is known only once every line has been read, so the discount is worked out on a second walk over the lines. An example of two sequences and a second walk"
+
+enum line_pick = top | rest
+
+# One line of the order. The caller passes as many as it has
+elements lines
+  quantity : number  range >=1 <=50
+  price    : money[USD]  range >=1USD <=500USD
+
+# One payment already made against the order: a sequence of its own
+elements payments
+  amount : money[USD]  range >=1USD <=5000USD
+
+outputs
+  subtotal : money[USD]  round down(1USD)
+  discount : money[USD]  round down(1USD)
+  paid     : money[USD]  round down(1USD)
+  balance  : money[USD]  round down(1USD)
+
+define line_total : money[USD] = quantity * price
+
+# The first walk over the lines: their total, and the highest price. Both ranges are the universe
+# of the completeness check; the total's is also where the entry refuses a call
+sum subtotal over lines of line_total  range >=0USD <=25_000USD
+max top_price over lines of price empty 0USD
+
+# The payments are walked on their own
+sum paid over payments of amount  range >=0USD <=25_000USD
+
+# The second walk over the lines: each line set against the highest price the first walk found
+define gap : money[USD] = top_price - price
+
+table pick_line
+policy unique
+| gap    | -> pick : line_pick |
+| <=0USD | top                 |
+| >0USD  | rest                |
+
+define top_off : money[USD] = half_down(line_total * 10%, 1USD)
+
+# The first line at the highest price takes the discount; a second line at the same price does not
+fold pick over lines -> discount
+  top       -> take_first top_off
+  rest      -> next
+  empty     -> 0USD
+  exhausted -> held
+
+define balance : money[USD] = subtotal - discount - paid
+
+examples
+| lines       | payments     | -> subtotal | discount | paid   | balance |
+| three_lines | one_payment  | 240USD      | 12USD    | 100USD | 128USD  |
+| three_lines | no_payments  | 240USD      | 12USD    | 0USD   | 228USD  |
+| tied_lines  | two_payments | 320USD      | 8USD     | 120USD | 192USD  |
+| no_lines    | one_payment  | 0USD        | 0USD     | 100USD | -100USD |
+
+sequence three_lines
+| quantity | price  |
+| 2        | 30USD  |
+| 1        | 120USD |
+| 4        | 15USD  |
+
+sequence tied_lines
+| quantity | price |
+| 1        | 80USD |
+| 3        | 80USD |
+
+sequence no_lines
+| quantity | price |
+
+sequence one_payment
+| amount |
+| 100USD |
+
+sequence two_payments
+| amount |
+| 50USD  |
+| 70USD  |
+
+sequence no_payments
+| amount |

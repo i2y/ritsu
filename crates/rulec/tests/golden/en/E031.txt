@@ -1,0 +1,8 @@
+error[E031]: One item reads the elements of two sequences
+  --> tests/mutants/m_e031.rule:21
+   |
+21 | define line_total : money[USD] = quantity * price + amount
+   |        ^^^^^^^^^^ definition line_total reads quantity, a value of one element of lines, and amount, a value of one element of payments
+   |
+ A value of one element exists only while its sequence is walked. Reading the elements of two sequences together would walk one of them again from the start at every element of the other — a walk inside a walk. The number of walks would then grow with the length of a sequence, and the checks could not finish.
+ Make one of the sequences one value first — a `count`, a `sum`, a `max`, a `min` or a `fold` — and read that value in the item of the other. The item is then worked out on a second walk, once the value is known.

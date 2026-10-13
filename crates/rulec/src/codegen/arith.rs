@@ -46,7 +46,7 @@ impl Uses {
         if let Some(r) = &f.result {
             exprs.push(&r.expr);
         }
-        if let Some(fd) = &f.fold {
+        for fd in f.folds() {
             exprs.extend(fd.empty.iter());
             exprs.extend(fd.exhausted.iter());
             for (_, arm, _) in &fd.arms {

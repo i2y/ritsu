@@ -17,6 +17,10 @@ What it checks, per rule:
   * **int64** (§7.4): every named value's interval is recomputed here, by interval
     arithmetic over the declared ranges and the expression the certificate carries, and the
     integer it stores at its scale has to fit in a signed 64-bit word.
+  * **max and min** (§15.219): the range stated for what a `max` or a `min` answers holds
+    its column's range and its `empty` value, since it answers one of those.
+  * **fold answers** (§15.219): the range stated for a fold's answer that the items below
+    read holds every value the fold answers with, worked out here from their expressions.
 
 What it checks, per table:
 
@@ -563,6 +567,97 @@ def check_values(cert, known):
             raise Bad(f"{v['name']}: stores up to {int(stored)}, more than the stated {v['stored_max']}")
         checked += 1
     return checked, none_stated
+
+
+def check_extremes(cert, known):
+    """What a `max` or a `min` answers is a value of its column, or its `empty` value when it
+    looks at no element (§15.219). The range `ranges` states for it is worked out from those two
+    rather than declared, and a table's axis on it is cut over that range: a range that left out
+    a value it can answer would leave that value covered by nothing. So the stated range has to
+    hold the column's — the declared one, or the interval worked out here for a value of each
+    element — and the `empty` value. An enum's answer is one of its values, `empty` included,
+    and it states no range. Returns how many were held."""
+    types = cert.get("types", {})
+    stated = cert.get("ranges", {})
+    enums = cert.get("enums", {})
+    walks = cert.get("walks", [])
+    n = 0
+    for e in cert.get("extremes", []):
+        name, col, kind = e.get("name"), e.get("of"), e.get("kind")
+        if kind not in ("max", "min"):
+            raise Bad(f"{name}: the certificate calls it a `{kind}`, which is neither `max` nor `min`")
+        if name not in walks:
+            raise Bad(f"{name}: a `{kind}` is a value a walk leaves behind, and `walks` does not name it")
+        ty = types.get(col)
+        if ty is None or types.get(name) != ty:
+            raise Bad(f"{name}: a `{kind}` of {col} answers with {col}'s type {ty}, and the certificate says {types.get(name)}")
+        base = ty.rstrip("?")
+        if base in enums:
+            if e.get("empty") not in enums[base]:
+                raise Bad(f"{name}: its `empty` value {e.get('empty')} is not a value of {base}")
+            if name in stated:
+                raise Bad(f"{name}: a `{kind}` of an enum answers one of its values, and the certificate states a range for it")
+            n += 1
+            continue
+        s = stated.get(name)
+        if s is None:
+            # No range is claimed for the answer, so no axis is cut over one.
+            n += 1
+            continue
+        if col in known:
+            lo, hi = known[col]
+        elif col in stated:
+            lo, hi = num(stated[col][0]), num(stated[col][1])
+        else:
+            raise Bad(f"{name}: the certificate states a range for it, and this program cannot work out the range of {col}")
+        if e.get("empty") is None:
+            raise Bad(f"{name}: a `{kind}` of numbers states no `empty` value")
+        z = num(e["empty"])
+        want_lo = None if lo is None else min(lo, z)
+        want_hi = None if hi is None else max(hi, z)
+        a, b = num(s[0]), num(s[1])
+        if (want_lo is None and a is not None) or (want_hi is None and b is not None) \
+                or (a is not None and a > want_lo) or (b is not None and b < want_hi):
+            shown = lambda v: "open" if v is None else str(v)
+            raise Bad(f"{name}: a `{kind}` of {col} answers from {shown(want_lo)} to {shown(want_hi)} with its `empty` value, "
+                      f"and the certificate states the range [{s[0]}, {s[1]}]")
+        n += 1
+    return n
+
+
+def check_fold_answers(cert, known):
+    """The answer of a fold the items below read is one of the values the fold answers with
+    (§15.219): `empty`, `exhausted` unless it is `held`, a `stop with`, what an arm takes or
+    keeps — `held` is one of those. The range `ranges` states for it is worked out from them,
+    and what reads the answer is bounded by it, so it has to hold the interval of every one,
+    worked out here from its expression. Returns how many were held."""
+    stated = cert.get("ranges", {})
+    env = {k: (v[0], v[1]) for k, v in stated.items()}
+    env.update({k: (str(a), str(b)) for k, (a, b) in known.items()})
+    n = 0
+    for fa in cert.get("fold_answers", []):
+        name = fa.get("name")
+        s = stated.get(name)
+        if s is None:
+            raise Bad(f"{name}: the certificate lists the values the fold answers it with, and states no range for it")
+        lo = hi = None
+        for e in fa.get("answers", []):
+            if e.get("type") == "date" and "lit" in e:
+                v = num(e.get("value"))
+                iv = None if v is None else (v, v)
+            else:
+                iv = interval(e, env, guarantees(cert))
+            if iv is None:
+                raise Bad(f"{name}: one of the values the fold answers with has no interval this program can work out")
+            lo = iv[0] if lo is None else min(lo, iv[0])
+            hi = iv[1] if hi is None else max(hi, iv[1])
+        if lo is None:
+            raise Bad(f"{name}: the fold answers with no value at all")
+        a, b = num(s[0]), num(s[1])
+        if a is None or b is None or a > lo or b < hi:
+            raise Bad(f"{name}: the fold answers with values from {lo} to {hi}, and the certificate states the range [{s[0]}, {s[1]}]")
+        n += 1
+    return n
 
 
 def column_kinds(cert):
@@ -3186,6 +3281,20 @@ def check(cert):
     except Bad as e:
         out.append(f"  FAILED int64: {e}")
         ok = False
+    if cert.get("extremes"):
+        try:
+            held = check_extremes(cert, known)
+            out.append(f"  extremes: {held} `max` and `min` answers keep to their column's range and their `empty` value")
+        except Bad as e:
+            out.append(f"  FAILED extremes: {e}")
+            ok = False
+    if cert.get("fold_answers"):
+        try:
+            held = check_fold_answers(cert, known)
+            out.append(f"  fold answers: {held} ranges hold every value their fold answers with")
+        except Bad as e:
+            out.append(f"  FAILED fold answers: {e}")
+            ok = False
     # The reach of a derived value is the interval its own expression is forced into — the
     # cover's "out of reach" leaves are held to that, recomputed here.
     computed = {v["name"] for v in cert.get("values", [])}

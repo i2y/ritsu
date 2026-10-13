@@ -281,7 +281,7 @@ impl Engine {
             rulec: env!("CARGO_PKG_VERSION").to_string(),
             inputs: f.inputs.iter().map(|i| column(c, &i.name)).collect(),
             outputs: f.outputs.iter().map(|o| column(c, &o.name)).collect(),
-            elements: f.elements.as_ref().map(|el| (el.name.text.clone(), pub_name_of(&el.name), el.fields.iter().map(|fd| column(c, &fd.name)).collect())),
+            elements: f.elements.iter().map(|el| (el.name.text.clone(), pub_name_of(&el.name), el.fields.iter().map(|fd| column(c, &fd.name)).collect())).collect(),
             enums: g.rule_enums(),
             machine,
             preconditions: preconditions(f, c),
@@ -593,7 +593,7 @@ impl ritsu_ports::Rules for Engine {
             }
             vals.insert(name.clone(), val);
         }
-        if let Some(el) = &f.elements {
+        for el in &f.elements {
             let name = &el.name.text;
             let Some((_, Value::List(xs))) = inputs.iter().find(|(n, _)| n == name) else {
                 return Err(RuleError::Input(ritsu_base::tr!("並び `{name}` がありません", "the list `{name}` is missing")));
@@ -742,7 +742,7 @@ impl ritsu_ports::Items for Engine {
                 }
                 AstItem::Define(d) => one(naming("define", &d.name.text), d.span.line, d.span.line, &mut out),
                 AstItem::Derived(d) => one(naming("derive", &d.name.text), d.span.line, d.span.line, &mut out),
-                AstItem::Agg(_) => {}
+                AstItem::Agg(_) | AstItem::Fold(_) => {}
             }
         }
         if let Some(m) = &f.machine {

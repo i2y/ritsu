@@ -85,6 +85,8 @@ const DECLARING: &[&str] = &[
     crate::kw::APPLY,
     crate::kw::COUNT,
     crate::kw::SUM,
+    crate::kw::MAX,
+    crate::kw::MIN,
     crate::kw::FOLD,
     crate::kw::CONSTRAINT,
     crate::kw::TABLE,
@@ -128,8 +130,7 @@ fn declared(f: &RuleFile) -> usize {
         + f.scenarios.len()
         + usize::from(f.description.is_some())
         + usize::from(f.result.is_some())
-        + usize::from(f.elements.is_some())
-        + usize::from(f.fold.is_some())
+        + f.elements.len()
         + usize::from(f.machine.is_some())
         + f.prerequisites.len()
 }
@@ -148,7 +149,11 @@ fn line_shape(word: &str) -> String {
         crate::kw::APPLY => tr!("`apply <名前>(<別名>) = \"<規則のファイル>\" sha256:<ハッシュ>` の行と、その下に入力ごとの読み替え", "`apply <name>(<alias>) = \"<rule file>\" sha256:<digest>`, with one binding per input under it"),
         crate::kw::COUNT => tr!("`count <名前>(<別名>) over <並び> where <列> = <値>  range >=… <=…`", "`count <name>(<alias>) over <sequence> where <column> = <value>  range >=… <=…`"),
         crate::kw::SUM => tr!("`sum <名前>(<別名>) over <並び> of <列>  range >=… <=…`", "`sum <name>(<alias>) over <sequence> of <column>  range >=… <=…`"),
-        crate::kw::FOLD => tr!("`fold <判定の列> over <並び>`", "`fold <verdict column> over <sequence>`"),
+        crate::kw::MAX | crate::kw::MIN => tr!(
+            "`{word} <名前>(<別名>) over <並び> of <列> [where <列> = <値>] empty <値>`",
+            "`{word} <name>(<alias>) over <sequence> of <column> [where <column> = <value>] empty <value>`"
+        ),
+        crate::kw::FOLD => tr!("`fold <判定の列> over <並び> [-> <名前>(<別名>) : <型>]`", "`fold <verdict column> over <sequence> [-> <name>(<alias>) : <type>]`"),
         crate::kw::CONSTRAINT => tr!("`constraint <入力> <= <入力>`", "`constraint <input> <= <input>`"),
         crate::kw::TABLE => tr!("`table <名前>(<別名>)` の行と、その下に `policy` と表の行", "`table <name>(<alias>)`, with `policy` and the rows under it"),
         crate::kw::CLAUSE => tr!("`clause <名前>(<別名>) -> <出力>` の行と、その下に `when …` と `then …` の行", "`clause <name>(<alias>) -> <output>`, with `when …` and `then …` under it"),
@@ -251,9 +256,8 @@ impl P {
             examples: Vec::new(),
             constraints: Vec::new(),
             shapes: Vec::new(),
-            elements: None,
+            elements: Vec::new(),
             sequences: Vec::new(),
-            fold: None,
             machine: None,
             scenarios: Vec::new(),
             prerequisites: Vec::new(),
@@ -400,8 +404,13 @@ impl P {
                         f.applies.push(a);
                     }
                 }
-                crate::kw::COUNT | crate::kw::SUM => {
-                    let kind = if word == crate::kw::SUM { AggKind::Sum } else { AggKind::Count };
+                crate::kw::COUNT | crate::kw::SUM | crate::kw::MAX | crate::kw::MIN => {
+                    let kind = match word.as_str() {
+                        crate::kw::SUM => AggKind::Sum,
+                        crate::kw::MAX => AggKind::Max,
+                        crate::kw::MIN => AggKind::Min,
+                        _ => AggKind::Count,
+                    };
                     if let Some(d) = self.agg(&line, kind) {
                         f.items.push(Item::Agg(d));
                     }
@@ -412,19 +421,10 @@ impl P {
                     let span = span_of(&line);
                     self.i += 1;
                     let fields = self.var_block(crate::kw::ELEMENTS);
+                    // A rule may walk more than one sequence (§15.219): which one a summary or a
+                    // fold walks is what its `over` says.
                     match name {
-                        Some(name) if f.elements.is_none() => {
-                            f.elements = Some(ElementsDecl { name, fields, span })
-                        }
-                        Some(_) => self.err(
-                            Diag::error("E020", tr!("`elements` は一つしか書けません", "There can be only one `elements`"))
-                                .at(self.at(span.line))
-                                .mark(span, tr!("二本目です", "this is a second one"))
-                                .note(tr!(
-                                    "規則がたどる並びは一つです。二つ目の並びが要るなら、それは別の規則です。",
-                                    "A rule walks one sequence. A second one means a second rule."
-                                )),
-                        ),
+                        Some(name) => f.elements.push(ElementsDecl { name, fields, span }),
                         None => self.err(
                             Diag::error("E020", tr!("`elements` に名前がありません", "The `elements` line has no name"))
                                 .at(self.at(span.line))
@@ -433,19 +433,10 @@ impl P {
                     }
                 }
                 crate::kw::FOLD => {
+                    // A fold sits among the items where it is written, so that a name its answer
+                    // is given is declared there (§15.219). A rule may have more than one.
                     if let Some(d) = self.fold(&line) {
-                        match f.fold {
-                            None => f.fold = Some(d),
-                            Some(_) => self.err(
-                                Diag::error("E020", tr!("`fold` は一つしか書けません", "There can be only one `fold`"))
-                                    .at(self.at(d.span.line))
-                                    .mark(d.span.clone(), tr!("二本目です", "this is a second one"))
-                                    .note(tr!(
-                                        "並びを畳むのは一度だけです。二段に畳むと、要素の並びに対する振る舞いが小さなオートマトンでなくなります。",
-                                        "A sequence is folded once. A second fold would take the walk out of the small automaton that makes it checkable."
-                                    )),
-                            ),
-                        }
+                        f.items.push(Item::Fold(d));
                     }
                 }
                 crate::kw::CONSTRAINT => {
@@ -1396,29 +1387,35 @@ impl P {
 
     /// ```text
     /// count 一致数(hits) over 納入先 where 判定 = 一致  range >=0 <=100
+    /// sum   合計(total) over 明細 of 金額  range >=0円 <=100万円
+    /// max   最高額(top) over 明細 of 金額 where 対象 empty 0円
     /// ```
     ///
     /// `= <値>` is what a bool column does not need: without it the test is `= true`
     /// (§15.58). The range is read by `tail_range` like any other, and required later —
-    /// here a missing one is not a syntax error, so that the reason can be explained.
+    /// here a missing one is not a syntax error, so that the reason can be explained. The same
+    /// holds of the `empty` of `max` and `min` (E022, §15.219): its absence is said by the check.
     fn agg(&mut self, line: &[Token], kind: AggKind) -> Option<AggDecl> {
         let span = span_of(line);
-        let word = if kind == AggKind::Sum { crate::kw::SUM } else { crate::kw::COUNT };
+        let word = kind.word();
         let shape = |p: &mut Self, what: String| -> Option<AggDecl> {
             p.err(
                 Diag::error("E028", tr!("`{}` の書き方が正しくありません", "The `{}` is not written correctly", word))
                     .at(p.at(span.line))
                     .mark(span.clone(), what)
-                    .note(if kind == AggKind::Sum {
-                        tr!(
+                    .note(match kind {
+                        AggKind::Sum => tr!(
                             "形は `sum <名前>(<別名>) over <並びの名前> of <列>  range >=… <=…` です。",
                             "The shape is `sum <name>(<alias>) over <sequence> of <column>  range >=… <=…`."
-                        )
-                    } else {
-                        tr!(
+                        ),
+                        AggKind::Max | AggKind::Min => tr!(
+                            "形は `{word} <名前>(<別名>) over <並びの名前> of <列> empty <値>` です。`where <列> = <値>` で見る要素を絞れます。真偽の列なら `= <値>` は要りません。",
+                            "The shape is `{word} <name>(<alias>) over <sequence> of <column> empty <value>`. A `where <column> = <value>` narrows the elements looked at; a bool column needs no `= <value>`."
+                        ),
+                        AggKind::Count => tr!(
                             "形は `count <名前>(<別名>) over <並びの名前> where <列> = <値>` です。`= <値>` は、真偽の列なら書かなくて構いません。",
                             "The shape is `count <name>(<alias>) over <sequence> where <column> = <value>`. A bool column needs no `= <value>`."
-                        )
+                        ),
                     }),
             );
             None
@@ -1432,7 +1429,7 @@ impl P {
         let Some(over) = line.get(k + 1).and_then(|t| t.ident()).map(str::to_string) else {
             return shape(self, tr!("たどる並びの名前がありません", "the sequence has no name"));
         };
-        let joiner = if kind == AggKind::Sum { crate::kw::OF } else { crate::kw::WHERE };
+        let joiner = if kind == AggKind::Count { crate::kw::WHERE } else { crate::kw::OF };
         if line.get(k + 2).and_then(|t| t.ident()) != Some(joiner) {
             return shape(self, tr!("`{}` がありません", "`{}` is missing", joiner));
         }
@@ -1447,9 +1444,35 @@ impl P {
             value = Some(v);
             j = after;
         }
+        // `max` and `min`: the elements looked at, and the answer when there are none (§15.219).
+        let (mut filter, mut empty) = (None, None);
+        if kind.extreme() {
+            if line.get(j).and_then(|t| t.ident()) == Some(crate::kw::WHERE) {
+                let Some((col, after)) = self.name_at(line, j + 1) else {
+                    return shape(self, tr!("`where` の右に列がありません", "`where` names no column"));
+                };
+                j = after;
+                let mut want = None;
+                if line.get(j).is_some_and(|t| t.is(&Kind::Eq)) {
+                    let Some((v, after)) = self.name_at(line, j + 1) else {
+                        return shape(self, tr!("`=` の右に値がありません", "`=` has no value on its right"));
+                    };
+                    want = Some(v);
+                    j = after;
+                }
+                filter = Some((col, want));
+            }
+            if line.get(j).and_then(|t| t.ident()) == Some(crate::kw::EMPTY) {
+                let Some(l) = line.get(j + 1).and_then(lit_of) else {
+                    return shape(self, tr!("`empty` の右に値がありません", "`empty` has no value on its right"));
+                };
+                empty = Some((l, line[j + 1].span.clone()));
+                j += 2;
+            }
+        }
         let (range, _) = self.tail_range(line, j);
         self.tail_junk(line, j);
-        Some(AggDecl { kind, name, over, column, value, range, span })
+        Some(AggDecl { kind, name, over, column, value, filter, empty, range, span })
     }
 
     fn define(&mut self, line: &[Token]) -> Option<DefineDecl> {
@@ -1486,8 +1509,8 @@ impl P {
                     .at(p.at(span.line))
                     .mark(span.clone(), what)
                     .note(tr!(
-                        "形は `fold <判定の列> over <並びの名前>` です。左は表が出す列、右は `elements` で宣言した並びの名前です。",
-                        "The shape is `fold <verdict column> over <sequence>`: a column some table produces, and the name declared by `elements`."
+                        "形は `fold <判定の列> over <並びの名前>` です。左は表が出す列、右は `elements` で宣言した並びの名前です。答えに名前を付けるなら、続けて `-> <名前>(<別名>) : <型>` と書きます（出力の名前なら型は要りません）。",
+                        "The shape is `fold <verdict column> over <sequence>`: a column some table produces, and the name declared by `elements`. To name the answer, follow it with `-> <name>(<alias>) : <type>` (an output's name needs no type)."
                     )),
             );
             None
@@ -1503,6 +1526,32 @@ impl P {
             Some(v) => v.to_string(),
             None => return head(self, tr!("たどる並びの名前がありません", "the sequence has no name")),
         };
+        // `-> <name>(<alias>) [: <type>]`: the name the answer is given (§15.219). Whether the name
+        // is an output, or a new one with its type, is the type check's question.
+        let mut answer = None;
+        if line.len() > 4 {
+            if !line[4].is(&Kind::Arrow) {
+                return head(self, tr!("`over <並び>` の後に余分な語があります", "there are words after `over <sequence>`"));
+            }
+            let Some((name, k)) = self.name_at(line, 5) else {
+                return head(self, tr!("`->` の右に名前がありません", "`->` names nothing"));
+            };
+            let mut ty = None;
+            let mut k = k;
+            if line.get(k).is_some_and(|t| t.is(&Kind::Colon)) {
+                match self.type_ref(line, k) {
+                    Some((t, after)) => {
+                        ty = Some(t);
+                        k = after;
+                    }
+                    None => return head(self, tr!("`:` の右に型がありません", "`:` names no type")),
+                }
+            }
+            if k < line.len() {
+                return head(self, tr!("答えの名前の後に余分な語があります", "there are words after the answer's name"));
+            }
+            answer = Some(FoldAnswer { name, ty });
+        }
         let mut arms = Vec::new();
         let (mut empty, mut exhausted) = (None, None);
         for l in block {
@@ -1576,7 +1625,7 @@ impl P {
                 }
             }
         }
-        Some(FoldDecl { verdict, over, arms, empty, exhausted, span })
+        Some(FoldDecl { verdict, over, answer, arms, empty, exhausted, span })
     }
 
     /// `machine 注文(order) over 遷移` and the lines under it (§15.148).

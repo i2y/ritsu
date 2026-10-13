@@ -27,7 +27,7 @@
 
 use super::{
     cell_src, civil_needed, fired_doc, mode_fn, not_bool, out_src, pascal, plain_doc, pub_name,
-    raw_base, record_doc, round_cases, traced_doc, unparen, wire_of, Expr2, Gen, Lang, Phase, Wire,
+    raw_base, record_doc, round_cases, traced_doc, unparen, wire_of, Expr2, Gen, Lang, Phase, WalkStep, Wire,
 };
 use crate::ast::{Arm, Cell, CmpOp, Item, Lit, OutCell, Table};
 use crate::num::{Rat, RoundMode};
@@ -575,7 +575,7 @@ impl<'a> Gen<'a> {
                         tr!("定義", "definition")
                     ));
                 }
-                Item::Agg(_) => {}
+                Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
                     if let Some(t) = self.c.table_at(t) {
                         o.push_str(&self.php_table(t, local, trace));
@@ -586,64 +586,184 @@ impl<'a> Gen<'a> {
         o
     }
 
-    /// The walk, in PHP (§15.56).
-    fn php_walk(&self, fold: &crate::ast::FoldDecl, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let el = self.f.elements.as_ref().expect("a fold has elements");
+    /// Every walk of a rule that walks sequences, in PHP (§15.56, §15.58, §15.219). The shape is
+    /// the one `py_walks` writes.
+    fn php_walks(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let mut o = String::new();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            if let Some(cap) = self.count_cap_of(s) {
+                let seq = php_var(&pub_name(&el.name));
+                o.push_str(&format!("    if (count({seq}) > {cap}) {{\n"));
+                o.push_str(&format!(
+                    "        throw new RuleInputError({}, count({seq}));\n    }}\n",
+                    php_str(&crate::door::too_many(&el.name.text, cap))
+                ));
+            }
+        }
+        for step in self.walk_steps() {
+            match step {
+                // What a walk does not depend on is worked out once, before it (§15.208).
+                WalkStep::Once(ix) => o.push_str(&self.php_items(outer, trace, Phase::Only(&ix))),
+                WalkStep::Walk { seq, body, sums, .. } => o.push_str(&self.php_walk(seq, &body, &sums, outer, trace)),
+            }
+        }
+        o
+    }
+
+    /// One walk over sequence `s`, in PHP (§15.219).
+    fn php_walk(&self, s: usize, body_items: &[usize], sums: &[usize], outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let el = &self.f.elements[s];
         let seq = php_var(&pub_name(&el.name));
-        let fields: BTreeMap<String, String> =
-            el.fields.iter().map(|fd| (fd.name.text.clone(), php_name(&pub_name(&fd.name)))).collect();
-        let (answer, stopped, taken, kept, best) = self.fold_locals();
-        let (answer, stopped) = (php_var(&answer), php_var(&stopped));
-        let (taken, kept, best) = (php_var(&taken), php_var(&kept), php_var(&best));
-        let e = php_var(&self.temp("elem"));
-        let held = self.temp("held");
+        let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), php_name(&pub_name(&fd.name)))).collect();
+        let e = php_var(&self.elem_var(s));
         let local = |n: &str| -> String {
             match fields.get(n) {
                 Some(f) => format!("{e}->{f}"),
-                None if n == crate::kw::HELD => php_var(&held),
                 None => outer(n),
             }
         };
-        let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
+        let mut o = String::new();
+        let mut body = self.php_element_guards(s, &local);
+        body.push_str(&self.php_items(&local, trace, Phase::Only(body_items)));
+        let mut after = String::new();
+        for &i in sums {
+            match &self.f.items[i] {
+                crate::ast::Item::Agg(d) if d.kind.extreme() => {
+                    let (init, step) = self.php_extreme(d, &local);
+                    o.push_str(&init);
+                    body.push_str(&step);
+                }
+                crate::ast::Item::Agg(d) => {
+                    o.push_str(&format!("    {} = 0;  // {}\n", php_var(&self.ident(&d.name.text)), self.agg_word(d)));
+                    let v = local(&d.column.text);
+                    if d.kind == crate::ast::AggKind::Sum {
+                        body.push_str(&format!("    {} += {v};  // {}\n", php_var(&self.ident(&d.name.text)), d.name.text));
+                    } else {
+                        let test = self.php_test(&v, &d.column.text, &d.value);
+                        body.push_str(&format!(
+                            "    if ({test}) {{  // {}\n        {} += 1;\n    }}\n",
+                            d.name.text,
+                            php_var(&self.ident(&d.name.text))
+                        ));
+                    }
+                    if let Some((_, cap)) = self.sum_caps().into_iter().find(|(x, _)| x.name.text == d.name.text) {
+                        let n = php_var(&self.ident(&d.name.text));
+                        after.push_str(&format!(
+                            "    if ({n} > {cap}) {{\n        throw new RuleInputError({}, {n});\n    }}\n",
+                            php_str(&crate::door::out_of_range(&d.name.text)),
+                        ));
+                    }
+                }
+                crate::ast::Item::Fold(fold) => {
+                    let (init, step, fin) = self.php_fold(i, fold, &seq, &local);
+                    o.push_str(&init);
+                    body.push_str(&step);
+                    after.push_str(&fin);
+                }
+                _ => {}
+            }
+        }
+        o.push_str(&format!("    foreach ({seq} as {e}) {{\n"));
+        o.push_str(&Self::indent_block(&body, "    "));
+        o.push_str("    }\n");
+        o.push_str(&after);
+        o
+    }
+
+    /// A test on a column of one element, in PHP: `count`'s, and the `where` of `max` and `min`.
+    fn php_test(&self, v: &str, col: &str, value: &Option<crate::ast::Name>) -> String {
+        let ty = self.ty_of(col);
+        match (&ty, value) {
+            (Ty::Bool, Some(w)) if w.text == crate::kw::FALSE => format!("!{v}"),
+            (Ty::Bool, _) => v.to_string(),
+            (_, Some(w)) => format!("{v} === {}", self.php_value(&w.text, &ty)),
+            (_, None) => v.to_string(),
+        }
+    }
+
+    /// A `max` or a `min`, in PHP (§15.219).
+    fn php_extreme(&self, d: &crate::ast::AggDecl, local: &dyn Fn(&str) -> String) -> (String, String) {
+        let n = php_var(&self.ident(&d.name.text));
+        let set = php_var(&self.temp(&format!("{}_set", self.ident(&d.name.text))));
+        let v = local(&d.column.text);
+        let ty = self.ty_of(&d.column.text);
+        let op = if d.kind == crate::ast::AggKind::Max { ">" } else { "<" };
+        let (start, better) = match self.extreme_enum(d) {
+            Some(en) => {
+                let t = self.enum_type(&en);
+                let w = self.extreme_empty_word(d).unwrap_or_default();
+                (self.php_value(&w, &ty), format!("_rank_{t}({v}) {op} _rank_{t}({n})"))
+            }
+            None => (self.extreme_empty_int(d).unwrap_or_else(|| "0".into()), format!("{v} {op} {n}")),
+        };
+        let init = format!("    {n} = {start};  // {}\n    {set} = false;\n", self.agg_word(d));
+        let mut step = String::new();
+        let pad = match &d.filter {
+            Some((w, want)) => {
+                step.push_str(&format!("    if ({}) {{  // {}\n", self.php_test(&local(&w.text), &w.text, want), d.name.text));
+                "    "
+            }
+            None => "",
+        };
+        step.push_str(&format!("{pad}    if (!{set} || {better}) {{\n{pad}        {n} = {v};\n{pad}        {set} = true;\n{pad}    }}\n"));
+        if !pad.is_empty() {
+            step.push_str("    }\n");
+        }
+        (init, step)
+    }
+
+    /// A fold, in PHP (§15.56).
+    fn php_fold(&self, i: usize, fold: &crate::ast::FoldDecl, seq: &str, local: &dyn Fn(&str) -> String) -> (String, String, String) {
+        let names = self.fold_names(i);
+        let (answer, stopped, done) = (php_var(&names.answer), php_var(&names.stopped), php_var(&names.done));
+        let (taken, kept, best) = (php_var(&names.taken), php_var(&names.kept), php_var(&names.best));
+        let (held, key) = (php_var(&names.held), php_var(&names.key));
+        let alone = self.fold_alone(i);
+        let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
+        let (out_name, answer_ty) = self.fold_target(fold);
         // An answer is read in the type the fold answers with: a value of its enum is that
         // enum's member (§15.208).
-        let answer_ty = self.ty_of(&out_name);
-        let val = |x: &crate::ast::Expr| -> String {
+        let val = |x: &crate::ast::Expr, l: &dyn Fn(&str) -> String| -> String {
             match x {
                 crate::ast::Expr::Lit(Lit::Word(w), _) if w != crate::kw::TRUE && w != crate::kw::FALSE => self.php_value(w, &answer_ty),
-                _ => php_expr(unparen(&self.expr(x, &local).text)),
+                _ => php_expr(unparen(&self.expr(x, l).text)),
             }
         };
-        let text = |x: &Option<crate::ast::Expr>| -> String { x.as_ref().map(&val).unwrap_or_else(|| "0".to_string()) };
+        let text = |x: &Option<crate::ast::Expr>| -> String { x.as_ref().map(|x| val(x, &with_held)).unwrap_or_else(|| "0".to_string()) };
 
-        // What the walk does not depend on is worked out once, before it (§15.208).
-        let mut o = self.php_items(&local, trace, Phase::Before);
-        o.push_str(&format!(
+        let mut init = String::new();
+        init.push_str(&format!(
             "    {answer} = {};  // {}\n",
             text(&fold.empty),
             tr!("要素ゼロ件の答え", "the answer for no elements")
         ));
-        o.push_str(&format!("    {stopped} = false;\n"));
-        o.push_str(&format!("    {taken} = null;\n    {kept} = null;\n    {best} = null;\n"));
-        o.push_str(&format!("    foreach ({seq} as {e}) {{\n"));
+        init.push_str(&format!("    {stopped} = false;\n"));
+        if !alone {
+            init.push_str(&format!("    {done} = false;\n"));
+        }
+        init.push_str(&format!("    {taken} = null;\n    {kept} = null;\n    {best} = null;\n"));
 
-        let mut body = self.php_element_guards(&local);
-        body.push_str(&self.php_items(&local, trace, Phase::Each));
+        let mut arms = String::new();
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
             let is = self.php_value(&name.text, &self.ty_of(&fold.verdict));
-            body.push_str(&format!("    if ({v} === {is}) {{  // {}\n", name.text));
+            arms.push_str(&format!("    if ({v} === {is}) {{  // {}\n", name.text));
             match arm {
-                Arm::Next => body.push_str("        // next\n"),
-                Arm::Stop(None) => body.push_str("        break;\n"),
+                Arm::Next => arms.push_str("        // next\n"),
+                Arm::Stop(None) if alone => arms.push_str("        break;\n"),
+                Arm::Stop(None) => arms.push_str(&format!("        {done} = true;\n")),
                 Arm::Stop(Some(x)) => {
-                    body.push_str(&format!("        {answer} = {};\n", val(x)));
-                    body.push_str(&format!("        {stopped} = true;\n        break;\n"));
+                    arms.push_str(&format!("        {answer} = {};\n", val(x, local)));
+                    if alone {
+                        arms.push_str(&format!("        {stopped} = true;\n        break;\n"));
+                    } else {
+                        arms.push_str(&format!("        {stopped} = true;\n        {done} = true;\n"));
+                    }
                 }
                 Arm::Take { expr, unique } => {
                     if *unique {
-                        body.push_str(&format!("        if ({taken} !== null) {{\n"));
-                        body.push_str(&format!(
+                        arms.push_str(&format!("        if ({taken} !== null) {{\n"));
+                        arms.push_str(&format!(
                             "            throw new RuleContradictionError({});\n        }}\n",
                             php_str(&tr!(
                                 "畳み込み {}: take_unique に二件当たりました",
@@ -651,102 +771,35 @@ impl<'a> Gen<'a> {
                                 fold.verdict
                             ))
                         ));
-                        body.push_str(&format!("        {taken} = {};\n", val(expr)));
+                        arms.push_str(&format!("        {taken} = {};\n", val(expr, local)));
                     } else {
-                        body.push_str(&format!("        if ({taken} === null) {{\n"));
-                        body.push_str(&format!("            {taken} = {};\n        }}\n", val(expr)));
+                        arms.push_str(&format!("        if ({taken} === null) {{\n"));
+                        arms.push_str(&format!("            {taken} = {};\n        }}\n", val(expr, local)));
                     }
                 }
-                Arm::KeepMax { expr, key } => {
-                    let k = php_var(&self.temp("key"));
-                    body.push_str(&format!("        {k} = {};\n", php_expr(unparen(&self.expr(key, &local).text))));
-                    body.push_str(&format!("        if ({best} === null || {k} > {best}) {{\n"));
-                    body.push_str(&format!("            {best} = {k};\n"));
-                    body.push_str(&format!("            {kept} = {};\n        }}\n", val(expr)));
+                Arm::KeepMax { expr, key: k } => {
+                    arms.push_str(&format!("        {key} = {};\n", php_expr(unparen(&self.expr(k, local).text))));
+                    arms.push_str(&format!("        if ({best} === null || {key} > {best}) {{\n"));
+                    arms.push_str(&format!("            {best} = {key};\n"));
+                    arms.push_str(&format!("            {kept} = {};\n        }}\n", val(expr, local)));
                 }
             }
-            body.push_str("    }\n");
+            arms.push_str("    }\n");
         }
-        o.push_str(&Self::indent_block(&body, "    "));
-        o.push_str("    }\n");
+        let step = if alone { arms } else { format!("    if (!{done}) {{  // {}\n{}    }}\n", fold.verdict, Self::indent_block(&arms, "    ")) };
 
-        o.push_str(&format!("    if (count({seq}) > 0 && !{stopped}) {{\n"));
-        o.push_str(&format!("        {} = {taken} ?? {kept} ?? {};\n", php_var(&held), text(&fold.empty)));
-        o.push_str(&format!("        {answer} = {};\n    }}\n", text(&fold.exhausted)));
-        o.push_str(&format!("    {} = {answer};\n", php_var(&self.ident(&out_name))));
-        // What reads the answer is worked out once, after the walk (§15.208).
-        o.push_str(&self.php_items(&local, trace, Phase::After));
-        o
-    }
-
-    /// The counting walk in PHP (§15.58).
-    fn php_count_walk(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let el = self.f.elements.as_ref().expect("a count has elements");
-        let seq = php_var(&pub_name(&el.name));
-        let fields: BTreeMap<String, String> =
-            el.fields.iter().map(|fd| (fd.name.text.clone(), php_name(&pub_name(&fd.name)))).collect();
-        let e = php_var(&self.temp("elem"));
-        let local = |n: &str| -> String {
-            match fields.get(n) {
-                Some(f) => format!("{e}->{f}"),
-                None => outer(n),
-            }
-        };
-        let mut o = String::new();
-        if let Some(cap) = self.count_cap() {
-            o.push_str(&format!("    if (count({seq}) > {cap}) {{\n"));
-            o.push_str(&format!(
-                "        throw new RuleInputError({}, count({seq}));\n    }}\n",
-                php_str(&crate::door::too_many(&el.name.text, cap))
-            ));
-        }
-        // What the walk does not depend on is worked out once, before it (§15.208).
-        o.push_str(&self.php_items(outer, trace, Phase::Before));
-        for d in self.counts() {
-            o.push_str(&format!(
-                "    {} = 0;  // {}\n",
-                php_var(&self.ident(&d.name.text)),
-                self.agg_word(d)
-            ));
-        }
-        o.push_str(&format!("    foreach ({seq} as {e}) {{\n"));
-        let mut body = self.php_element_guards(&local);
-        body.push_str(&self.php_items(&local, trace, Phase::Each));
-        for d in self.counts() {
-            let v = local(&d.column.text);
-            if d.kind == crate::ast::AggKind::Sum {
-                body.push_str(&format!("    {} += {v};  // {}\n", php_var(&self.ident(&d.name.text)), d.name.text));
-                continue;
-            }
-            let test = match self.count_member(d) {
-                Some(w) => format!("{v} === {}", self.php_value(&w.text, &self.ty_of(&d.column.text))),
-                None if self.count_negated(d) => format!("!{v}"),
-                None => v,
-            };
-            body.push_str(&format!(
-                "    if ({test}) {{  // {}\n        {} += 1;\n    }}\n",
-                d.name.text,
-                php_var(&self.ident(&d.name.text))
-            ));
-        }
-        o.push_str(&Self::indent_block(&body, "    "));
-        o.push_str("    }\n");
-        for (d, cap) in self.sum_caps() {
-            let n = php_var(&self.ident(&d.name.text));
-            o.push_str(&format!(
-                "    if ({n} > {cap}) {{\n        throw new RuleInputError({}, {n});\n    }}\n",
-                php_str(&crate::door::out_of_range(&d.name.text)),
-            ));
-        }
-        o.push_str(&self.php_items(outer, trace, Phase::After));
-        o
+        let mut fin = format!("    if (count({seq}) > 0 && !{stopped}) {{\n");
+        fin.push_str(&format!("        {held} = {taken} ?? {kept} ?? {};\n", text(&fold.empty)));
+        fin.push_str(&format!("        {answer} = {};\n    }}\n", text(&fold.exhausted)));
+        fin.push_str(&format!("    {} = {answer};\n", php_var(&self.ident(&out_name))));
+        (init, step, fin)
     }
 
     /// The range guard of one element's fields, inside the walk. The kind of the value is
     /// the declared type's business here, so only the range is asked about.
-    fn php_element_guards(&self, local: &dyn Fn(&str) -> String) -> String {
+    fn php_element_guards(&self, s: usize, local: &dyn Fn(&str) -> String) -> String {
         let mut o = String::new();
-        for i in self.element_fields() {
+        for i in self.element_fields(s) {
             let v = local(&i.name.text);
             let ty = self.ty_of(&i.name.text);
             // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
@@ -774,7 +827,7 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
 
         // One element is a row of inputs, so it gets the same shape as `Output`.
-        if let Some(el) = &self.f.elements {
+        for (s, el) in self.f.elements.iter().enumerate() {
             let fs: Vec<String> = el
                 .fields
                 .iter()
@@ -787,8 +840,9 @@ impl<'a> Gen<'a> {
                 })
                 .collect();
             o.push_str(&format!(
-                "/** {} */\nfinal class Element\n{{\n    public function __construct(\n{}    ) {{\n    }}\n}}\n\n",
+                "/** {} */\nfinal class {}\n{{\n    public function __construct(\n{}    ) {{\n    }}\n}}\n\n",
                 tr!("{} の一件", "one of {}", el.name.text),
+                self.element_type(s),
                 fs.join("")
             ));
         }
@@ -823,7 +877,7 @@ impl<'a> Gen<'a> {
             .iter()
             .map(|i| format!("{} {}", self.php_ty(&self.ty_of(&i.name.text)), php_var(&pub_name(&i.name))))
             .collect();
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             params.push(format!("array {}", php_var(&pub_name(&el.name))));
         }
         let args: Vec<String> = self
@@ -844,8 +898,8 @@ impl<'a> Gen<'a> {
                 self.php_doc_ty(&self.ty_of(&i.name.text)).replace("int  // ", "")
             ));
         }
-        if let Some(el) = &self.f.elements {
-            o.push_str(&format!(" *   {} : Element[]\n", pub_name(&el.name)));
+        for (s, el) in self.f.elements.iter().enumerate() {
+            o.push_str(&format!(" *   {} : {}[]\n", pub_name(&el.name), self.element_type(s)));
         }
         for od in outs {
             o.push_str(&format!(
@@ -908,10 +962,10 @@ impl<'a> Gen<'a> {
         let trace = self.temp("trace");
         o.push_str(&format!("    {} = [];\n", php_var(&trace)));
 
-        match &self.f.fold {
-            Some(fold) => o.push_str(&self.php_walk(fold, &local, &trace)),
-            None if self.counts().is_empty() => o.push_str(&self.php_items(&local, &trace, Phase::All)),
-            None => o.push_str(&self.php_count_walk(&local, &trace)),
+        if self.f.walks() {
+            o.push_str(&self.php_walks(&local, &trace));
+        } else {
+            o.push_str(&self.php_items(&local, &trace, Phase::All));
         }
 
         // Every output: its source, brought to the wire scale, then its rounding once.
@@ -1064,7 +1118,7 @@ impl<'a> Gen<'a> {
             .iter()
             .map(|i| format!("{} {}", self.php_ty(&self.ty_of(&i.name.text)), php_var(&pub_name(&i.name))))
             .collect();
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             params.push(format!("array {}", php_var(&pub_name(&el.name))));
         }
 
@@ -1100,9 +1154,10 @@ impl<'a> Gen<'a> {
         let field = |(jp, e, w): &(String, String, Wire)| {
             format!("        '\"{jp}\":' . {},\n", Self::php_wire(e, w))
         };
-        // The sequence goes in first (§15.56).
+        // The sequences go in first (§15.56, §15.219).
         let mut seq_first = String::new();
-        if let Some(el) = &self.f.elements {
+        let mut seq_parts = String::new();
+        for (s, el) in self.f.elements.iter().enumerate() {
             let e = php_var(&self.temp("elem"));
             let inner: Vec<String> = el
                 .fields
@@ -1116,15 +1171,17 @@ impl<'a> Gen<'a> {
                     )
                 })
                 .collect();
-            let v_els = php_var(&self.temp("els"));
-            seq_first = format!(
+            let v_els = php_var(&if s == 0 { self.temp("els") } else { self.temp(&format!("els{}", s + 1)) });
+            seq_first.push_str(&format!(
                 "    {v_els} = [];\n    foreach ({} as {e}) {{\n        {v_els}[] = '{{' . {} . '}}';\n    }}\n",
                 php_var(&pub_name(&el.name)),
                 inner.join(" . ',' . ")
-            );
+            ));
+            seq_parts.push_str(&format!("        '\"{}\":[' . implode(',', {v_els}) . ']',\n", el.name.text));
+        }
+        if !seq_first.is_empty() {
             seq_first.push_str(&format!(
-                "    {v_ins} = implode(',', [\n        '\"{}\":[' . implode(',', {v_els}) . ']',\n{}    ]);\n",
-                el.name.text,
+                "    {v_ins} = implode(',', [\n{seq_parts}{}    ]);\n",
                 ins.iter().map(field).collect::<String>()
             ));
         }
@@ -1195,19 +1252,20 @@ impl<'a> Gen<'a> {
         let mut args: Vec<String> = self.f.inputs.iter().map(|i| read(&self.ty_of(&i.name.text), &d, &i.name.text)).collect();
         // The sequence a walk reads, one element at a time (§15.56).
         let mut seq = String::new();
-        if let Some(el) = &self.f.elements {
+        for (k, el) in self.f.elements.iter().enumerate() {
             let e = php_var(&self.temp("e"));
-            let v = php_var(&self.temp("els"));
+            let v = php_var(&if k == 0 { self.temp("els") } else { self.temp(&format!("els{}", k + 1)) });
             let s = &el.name.text;
             let obj = format!("_obj({e}, {})", php_str(&crate::door::not_object(s)));
             let fields: Vec<String> = el.fields.iter().map(|fd| read(&self.ty_of(&fd.name.text), &obj, &fd.name.text)).collect();
-            seq = format!(
-                "        {v} = [];\n        foreach (_seq(_take({d}, {}, {}), {}) as {e}) {{\n            {v}[] = new \\{ns}\\Element({});\n        }}\n",
+            seq.push_str(&format!(
+                "        {v} = [];\n        foreach (_seq(_take({d}, {}, {}), {}) as {e}) {{\n            {v}[] = new \\{ns}\\{}({});\n        }}\n",
                 php_str(s),
                 php_str(&crate::door::missing(s)),
                 php_str(&crate::door::not_sequence(s)),
+                self.element_type(k),
                 fields.join(", ")
-            );
+            ));
             args.push(v);
         }
         let a = php_var(&self.temp("args"));
@@ -1428,7 +1486,7 @@ impl<'a> Gen<'a> {
                 .iter()
                 .map(|i| format!("{} {}", self.php_ty(&self.ty_of(&i.name.text)), php_var_pub(&pub_name(&i.name)))),
         );
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             params.push(format!("array {}", php_var_pub(&pub_name(&el.name))));
         }
         let mut o = String::new();
@@ -1465,7 +1523,7 @@ impl<'a> Gen<'a> {
                 None => php_var_pub(&pub_name(&i.name)),
             });
         }
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             args.push(php_var_pub(&pub_name(&el.name)));
         }
         for a in &args {

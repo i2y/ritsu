@@ -23,9 +23,10 @@ pub struct RuleFacts {
     /// In the order declared.
     pub inputs: Vec<Column>,
     pub outputs: Vec<Column>,
-    /// The list the rule walks (`elements 明細(lines)`), when it walks one: its name and alias,
-    /// and the fields of one element.
-    pub elements: Option<(String, String, Vec<Column>)>,
+    /// The lists the rule walks (`elements 明細(lines)`), in the order the rule declares them: each
+    /// with its name and alias, and the fields of one element. Empty for a rule that walks none; a
+    /// rule may walk more than one (rulec's §15.219).
+    pub elements: Vec<(String, String, Vec<Column>)>,
     /// Every enum the rule knows (its own, the ones it takes from a contract, a machine's
     /// states), by name.
     pub enums: Vec<RuleEnum>,
@@ -158,8 +159,9 @@ pub struct Connect {
     pub json_int64: String,
     pub request: Vec<WireField>,
     pub response: Vec<WireField>,
-    /// The fields of one element of the list the rule walks.
-    pub elements: Option<Vec<WireField>>,
+    /// The fields of one element of each list the rule walks, by the list's name, in the order
+    /// the rule declares them (rulec's §15.219).
+    pub elements: Vec<(String, Vec<WireField>)>,
     pub enums: Vec<WireEnum>,
 }
 

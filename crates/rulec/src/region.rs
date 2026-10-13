@@ -2208,7 +2208,7 @@ pub fn check_table(t: &Table, c: &Checked, f: &RuleFile, path: &str, budget: i64
 /// take them in, so the generated code is run on the row too.
 pub fn gap_inputs(f: &RuleFile, c: &Checked, covered: &dyn Fn(&str, usize) -> bool) -> Vec<(String, usize, BTreeMap<String, crate::eval::Val>)> {
     let mut out = Vec::new();
-    if f.fold.is_some() || f.elements.is_some() {
+    if f.walks() || !f.elements.is_empty() {
         return out;
     }
     let computed = |col: &str| f.items.iter().any(|it| matches!(it, Item::Derived(d) if d.name.text == col) || matches!(it, Item::Define(d) if d.name.text == col));
@@ -2794,7 +2794,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
         .iter()
         .position(|it| matches!(it, Item::Table(x) if x.name.as_ref().is_some_and(|n| n.text == set.eval_at)))
         .map(|k| crate::types::stages(f).at(k));
-    if stage_of_set.is_none_or(|s| s == crate::types::Stage::Before) {
+    if stage_of_set.is_none_or(|s| s == crate::types::Stage::BEFORE) {
         let computed = |col: &str| f.items.iter().any(|it| matches!(it, Item::Derived(d) if d.name.text == col) || matches!(it, Item::Define(d) if d.name.text == col));
         let asks: Vec<(usize, Vec<String>)> = (0..t.rows.len())
             .filter(|i| !dead_rows.contains(i) && set.applied[set.member_of[*i]].is_none())

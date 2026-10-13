@@ -352,10 +352,10 @@ pub fn schema_in(f: &RuleFile, c: &Checked, alias: bool) -> String {
         .collect();
     let key = |n: &Name| if alias { n.ascii.clone().unwrap_or_else(|| n.text.clone()) } else { n.text.clone() };
     let mut req: Vec<String> = f.inputs.iter().map(|i| crate::json::quote(&key(&i.name))).collect();
-    // The sequence a walk reads: an array of objects, each of them the element's own fields
-    // in the same wire (§15.56). It is required like any other input — a caller that sends
-    // no sequence has not sent an empty one.
-    if let Some(el) = &f.elements {
+    // The sequences a walk reads: each an array of objects, each of them the element's own
+    // fields in the same wire (§15.56, §15.219). It is required like any other input — a caller
+    // that sends no sequence has not sent an empty one.
+    for el in &f.elements {
         let fields: Vec<String> = el
             .fields
             .iter()
@@ -434,16 +434,19 @@ pub fn preconditions(f: &RuleFile, c: &Checked) -> Vec<Pre> {
             max: crate::types::wire_int(hi, sc),
         });
     }
-    // A count can be as large as the sequence, so the smallest upper bound any of them
-    // declares is what the length is held to (§15.58). A `sum` says nothing about length.
-    let cap = aggs
-        .iter()
-        .filter(|d| d.kind == AggKind::Count)
-        .filter_map(|d| c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi))
-        .map(|hi| crate::types::wire_int(hi, 1))
-        .min();
-    if let (Some(cap), Some(el)) = (cap, f.elements.as_ref()) {
-        v.push(Pre::Length { sequence: el.name.text.clone(), max: cap });
+    // A count can be as large as the sequence, so the smallest upper bound any of them over
+    // one sequence declares is what its length is held to (§15.58). A `sum` says nothing about
+    // length. One entry per sequence, in the order the rule declares them (§15.219).
+    for el in &f.elements {
+        let cap = aggs
+            .iter()
+            .filter(|d| d.kind == AggKind::Count && d.over == el.name.text)
+            .filter_map(|d| c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi))
+            .map(|hi| crate::types::wire_int(hi, 1))
+            .min();
+        if let Some(cap) = cap {
+            v.push(Pre::Length { sequence: el.name.text.clone(), max: cap });
+        }
     }
     // The days of a koyomi date, in the order the inputs are declared (§15.174).
     for i in &f.inputs {

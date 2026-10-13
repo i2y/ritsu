@@ -142,7 +142,7 @@ impl RuleInfo {
             typescript: f.typescript,
             python: f.python,
             go: f.go,
-            walks: f.elements.map(|(name, _, _)| name),
+            walks: f.elements.into_iter().next().map(|(name, _, _)| name),
             optional: f.inputs.iter().chain(&f.outputs).filter(|c| matches!(c.ty, ColumnType::Opt(_))).map(|c| c.name.clone()).collect(),
         }
     }
@@ -454,7 +454,7 @@ mod tests {
                 json_int64: "string".into(),
                 request: vec![field("状態", "state", "bank.v1.Status", Some("口座の状態")), field("残高", "balance", "int64", None)],
                 response: vec![field("手数料", "fee", "int64", None), field("次の状態", "next_state", "bank.v1.Status", Some("口座の状態"))],
-                elements: None,
+                elements: vec![],
                 enums: vec![WireEnum {
                     name: "口座の状態".into(),
                     alias: "bank.v1.Status".into(),

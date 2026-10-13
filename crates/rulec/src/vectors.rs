@@ -258,8 +258,8 @@ fn enum_cells(f: &RuleFile, col: &str) -> Vec<Cell> {
     let mut out = Vec::new();
     for it in &f.items {
         match it {
-            // A count declares no cells; what it counts is tested inside the walk.
-            Item::Agg(_) => {}
+            // A summary declares no cells; what it reads is tested inside the walk.
+            Item::Agg(_) | Item::Fold(_) => {}
             Item::Table(t) => {
                 let Some(ci) = t.inputs.iter().position(|(n, _)| n == col) else { continue };
                 for row in &t.rows {
@@ -323,7 +323,7 @@ fn numeric_bounds(f: &RuleFile, col: &str, ty: &Ty, c: &Checked) -> Vec<Rat> {
     };
     for it in &f.items {
         match it {
-            Item::Agg(_) => {}
+            Item::Agg(_) | Item::Fold(_) => {}
             Item::Table(t) => {
                 if let Some(ci) = t.inputs.iter().position(|(n, _)| n == col) {
                     for row in &t.rows {
@@ -711,7 +711,8 @@ fn fold_pool(
     c: &Checked,
     cands: &BTreeMap<String, Vec<Val>>,
 ) -> Vec<(BTreeMap<String, Val>, String)> {
-    let fold = f.fold.as_ref().expect("a rule with elements has a fold");
+    // The rule's one fold over its one sequence: `pool` sends any other walk to `walk_pool`.
+    let fold = f.folds().next().expect("a rule with elements has a fold");
     let fields: Vec<String> =
         f.elements.iter().flat_map(|e| &e.fields).map(|i| i.name.text.clone()).collect();
     let scalars: BTreeMap<String, Val> = baseline(f, cands)
@@ -820,13 +821,458 @@ fn pool_scalars(
 }
 
 fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(BTreeMap<String, Val>, String)> {
-    if f.fold.is_some() {
-        return fold_pool(f, c, cands);
+    match one_walk(f) {
+        Some(true) => fold_pool(f, c, cands),
+        Some(false) => count_pool(f, c, cands),
+        None if f.walks() => walk_pool(f, c, cands),
+        None => pool_inner(f, c, cands),
     }
-    if f.items.iter().any(|it| matches!(it, Item::Agg(_))) {
-        return count_pool(f, c, cands);
+}
+
+/// Whether the rule walks the way a rule walked before it could walk more (§15.219): one
+/// sequence, walked once, by one fold alone (`Some(true)`) or by counts and sums alone
+/// (`Some(false)`). Those keep the pools made for them, and so the vectors they always had; any
+/// other walk takes `walk_pool`.
+fn one_walk(f: &RuleFile) -> Option<bool> {
+    if f.elements.len() != 1 || crate::types::stages(f).depth > 1 {
+        return None;
     }
-    pool_inner(f, c, cands)
+    let aggs: Vec<&crate::ast::AggDecl> = f.aggs().collect();
+    match f.folds().count() {
+        1 if aggs.is_empty() => Some(true),
+        0 if !aggs.is_empty() && aggs.iter().all(|d| !d.kind.extreme()) => Some(false),
+        _ => None,
+    }
+}
+
+/// The cases a second walk over sequence `s` is looked at with (§15.219): the values of one call
+/// at their first candidates, every other sequence at one element, and for `s` each element of a
+/// small set on its own and the ordered pairs it makes — a few of the candidate elements spread over
+/// them, every ordered pair of those, and each of those beside itself with one of its numbers moved a
+/// step or two either way. What the first walk finds then depends on both elements, and each meets it
+/// from the other's side: the pairs a boundary of a second walk's table is reached with, and the
+/// orders of verdicts a second walk's fold can take. Read off the rule alone, so that the generator
+/// builds them and the coverage audit asks what they reach without either asking the other.
+pub fn second_walk_cases(f: &RuleFile, c: &Checked, s: usize) -> Vec<BTreeMap<String, Val>> {
+    let cands = candidates(f, c);
+    let Some(el) = f.elements.get(s) else { return Vec::new() };
+    let fields: Vec<String> = f.element_fields().map(|i| i.name.text.clone()).collect();
+    let mut base: BTreeMap<String, Val> = baseline(f, &cands).into_iter().filter(|(k, _)| !fields.contains(k)).collect();
+    for (t, other) in f.elements.iter().enumerate() {
+        if t != s {
+            base.insert(other.name.text.clone(), Val::Seq(element_combos(other, &cands).into_iter().take(1).collect()));
+        }
+    }
+    let combos = element_combos(el, &cands);
+    let step = (combos.len() / 8).max(1);
+    let spread: Vec<BTreeMap<String, Val>> = combos.iter().step_by(step).take(8).cloned().collect();
+    // Each one beside itself with one number moved: a step or two either way, inside its range.
+    let mut near: Vec<(BTreeMap<String, Val>, BTreeMap<String, Val>)> = Vec::new();
+    for x in &spread {
+        for fd in &el.fields {
+            let ty = c.ty_of(&fd.name.text).unwrap_or(Ty::Unknown);
+            let Some(Val::Num(v)) = x.get(&fd.name.text) else { continue };
+            if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number) {
+                continue;
+            }
+            let q = crate::coverage::quantum(c, &fd.name.text, &ty);
+            for k in [-2, -1, 1, 2] {
+                let w = v.add(q.mul(Rat::int(k)));
+                if !crate::coverage::in_range(c, &fd.name.text, w) {
+                    continue;
+                }
+                let mut y = x.clone();
+                y.insert(fd.name.text.clone(), Val::Num(w));
+                near.push((x.clone(), y));
+            }
+        }
+    }
+    let case = |xs: Vec<BTreeMap<String, Val>>| -> BTreeMap<String, Val> {
+        let mut m = base.clone();
+        m.insert(el.name.text.clone(), Val::Seq(xs));
+        m
+    };
+    let mut out = Vec::new();
+    for x in spread.iter().chain(near.iter().map(|(_, y)| y)) {
+        out.push(case(vec![x.clone()]));
+    }
+    for a in &spread {
+        for b in &spread {
+            out.push(case(vec![a.clone(), b.clone()]));
+        }
+    }
+    for (x, y) in &near {
+        out.push(case(vec![x.clone(), y.clone()]));
+        out.push(case(vec![y.clone(), x.clone()]));
+    }
+    out.retain(|m| allowed(f, m) && days_ok(c, m));
+    out
+}
+
+/// The elements the candidates of one sequence's fields make: their cross product, as the pools
+/// of one sequence build it (up to some four thousand).
+fn element_combos(el: &crate::ast::ElementsDecl, cands: &BTreeMap<String, Vec<Val>>) -> Vec<BTreeMap<String, Val>> {
+    let mut combos: Vec<BTreeMap<String, Val>> = vec![BTreeMap::new()];
+    for fd in &el.fields {
+        let Some(vs) = cands.get(&fd.name.text) else { continue };
+        let mut next = Vec::new();
+        for base in &combos {
+            for v in vs {
+                let mut m = base.clone();
+                m.insert(fd.name.text.clone(), v.clone());
+                next.push(m);
+            }
+            if next.len() > 4096 {
+                break;
+            }
+        }
+        combos = next;
+    }
+    combos
+}
+
+/// The cases of a rule that walks more than one sequence, or one sequence more than once, or with
+/// a `max`, a `min` or more than one kind of summary on it (§15.219).
+///
+/// Each sequence is moved while the others stay at one element each: nothing, each of its
+/// candidate elements on its own, and what each summary over it needs — an element on each verdict
+/// of a fold and every ordered pair of them; for a count, as many counted elements as each boundary
+/// of the tables that read it asks; for a sum, a total on each boundary; for a `max` or a `min`, an
+/// element at each boundary with one beside it that does not take its place, and an element its
+/// `where` leaves out. Where something runs in a second walk, every ordered pair of a few elements
+/// is a case too: what the first walk found then depends on both, and each element meets it from
+/// the other's side. The values of one call move as they do in every pool, and a table that reads
+/// what a walk answers has its boundary pairs built with the row's other columns held, as the
+/// count's pool builds them.
+fn walk_pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(BTreeMap<String, Val>, String)> {
+    use crate::ast::AggKind;
+    use crate::types::Stage;
+    let st = crate::types::stages(f);
+    let fields: Vec<String> = f.element_fields().map(|i| i.name.text.clone()).collect();
+    let scalars: BTreeMap<String, Val> = baseline(f, cands).into_iter().filter(|(k, _)| !fields.contains(k)).collect();
+    let combos: Vec<Vec<BTreeMap<String, Val>>> = f.elements.iter().map(|el| element_combos(el, cands)).collect();
+    // Each sequence at rest: one element, its first candidate, so that a walk over it has one.
+    let rest: Vec<Val> = combos.iter().map(|cs| Val::Seq(cs.first().cloned().into_iter().collect())).collect();
+    let with = |base: &BTreeMap<String, Val>, s: usize, v: Val| -> BTreeMap<String, Val> {
+        let mut m = base.clone();
+        for (t, el) in f.elements.iter().enumerate() {
+            m.insert(el.name.text.clone(), if t == s { v.clone() } else { rest[t].clone() });
+        }
+        m
+    };
+    let seq = |xs: Vec<BTreeMap<String, Val>>| Val::Seq(xs);
+    // What the rule binds on a case: every summary's answer is among them.
+    let binds_of = |m: &BTreeMap<String, Val>| -> std::collections::HashMap<String, Val> { eval::run_bindings(f, c, m.clone().into_iter().collect()).2 };
+    let mut out: Vec<(BTreeMap<String, Val>, String)> = Vec::new();
+    // Per summary that a table reads: how to reach a given value of it, for the sweep below.
+    let mut reach: Vec<(String, usize, Vec<(Rat, Val)>)> = Vec::new();
+    for (s, el) in f.elements.iter().enumerate() {
+        let name = &el.name.text;
+        let mut keep: Vec<BTreeMap<String, Val>> = Vec::new();
+        out.push((with(&scalars, s, seq(Vec::new())), tr!("{name} の要素ゼロ件", "no elements of {name}")));
+        for e in &combos[s] {
+            out.push((with(&scalars, s, seq(vec![e.clone()])), tr!("{name} の要素の候補", "a candidate element of {name}")));
+        }
+        for (i, it) in f.items.iter().enumerate() {
+            let Stage::Each { seq: over, .. } = st.at(i) else { continue };
+            if over != s {
+                continue;
+            }
+            match it {
+                // An element on each verdict, the one whose numbers are largest (as `fold_pool`
+                // keeps it), and every ordered pair of them.
+                Item::Fold(fold) => {
+                    let weight = |e: &BTreeMap<String, Val>| -> Rat {
+                        e.values().fold(Rat::zero(), |acc, x| match x {
+                            Val::Num(r) => acc.add(*r),
+                            _ => acc,
+                        })
+                    };
+                    let mut per: BTreeMap<String, BTreeMap<String, Val>> = BTreeMap::new();
+                    for e in &combos[s] {
+                        let m = with(&scalars, s, seq(vec![e.clone()]));
+                        let vs = eval::fold_verdicts(f, c, m.into_iter().collect());
+                        if let Some(Some(v)) = vs.get(&i).and_then(|xs| xs.first()) {
+                            match per.get(v) {
+                                Some(old) if weight(old).cmp_to(weight(e)) != std::cmp::Ordering::Less => {}
+                                _ => {
+                                    per.insert(v.clone(), e.clone());
+                                }
+                            }
+                        }
+                    }
+                    for (v, e) in &per {
+                        out.push((with(&scalars, s, seq(vec![e.clone()])), tr!("畳み込み {} の判定 {v} 一件", "fold {}: one element on {v}", fold.verdict)));
+                        keep.push(e.clone());
+                    }
+                    for (a, ea) in &per {
+                        for (b, eb) in &per {
+                            out.push((with(&scalars, s, seq(vec![ea.clone(), eb.clone()])), tr!("畳み込み {} の判定 {a} のあとに {b}", "fold {}: {a} then {b}", fold.verdict)));
+                        }
+                    }
+                }
+                Item::Agg(d) => {
+                    let ty = c.ty_of(&d.name.text).unwrap_or(Ty::Number);
+                    let answer = |xs: Vec<BTreeMap<String, Val>>| -> Option<Val> { binds_of(&with(&scalars, s, seq(xs))).get(&d.name.text).cloned() };
+                    let targets: Vec<Rat> = numeric_bounds(f, &d.name.text, &ty, c)
+                        .into_iter()
+                        .flat_map(|b| [b.sub(Rat::int(1)), b, b.add(Rat::int(1))])
+                        .filter(|v| crate::coverage::in_range(c, &d.name.text, *v))
+                        .collect();
+                    let mut reached: Vec<(Rat, Val)> = Vec::new();
+                    match d.kind {
+                        // As many counted elements as each boundary asks, and one counted beside
+                        // one that is not (`count_pool`).
+                        AggKind::Count => {
+                            let hit = combos[s].iter().find(|e| answer(vec![(*e).clone()]) == Some(Val::Num(Rat::int(1)))).cloned();
+                            let miss = combos[s].iter().find(|e| answer(vec![(*e).clone()]) == Some(Val::Num(Rat::zero()))).cloned();
+                            let Some(hit) = hit else { continue };
+                            let top = targets.iter().map(|r| r.num / r.den).max().unwrap_or(1).max(1);
+                            let cap = c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi).map(|h| h.num / h.den).unwrap_or(top);
+                            for n in 1..=top.min(cap) {
+                                let xs: Vec<BTreeMap<String, Val>> = (0..n).map(|_| hit.clone()).collect();
+                                out.push((with(&scalars, s, seq(xs.clone())), tr!("{} が {n} 件", "{} of them: {n}", d.name.text)));
+                                reached.push((Rat::int(n), seq(xs)));
+                            }
+                            keep.push(hit.clone());
+                            if let Some(miss) = miss {
+                                out.push((with(&scalars, s, seq(vec![hit.clone(), miss.clone()])), tr!("{} に入るものと入らないもの", "one counted and one not, for {}", d.name.text)));
+                                keep.push(miss);
+                            }
+                        }
+                        // A total on each boundary, one element carrying as much of it as the
+                        // field's range allows (`count_pool`'s `total_seq`), where the column is a
+                        // field of the element.
+                        AggKind::Sum => {
+                            let Some(base) = combos[s].first().cloned() else { continue };
+                            let Some((Some(lo), Some(hi))) = c.ranges.get(&d.column.text).copied() else { continue };
+                            if !el.fields.iter().any(|fd| fd.name.text == d.column.text) || hi.cmp_to(Rat::zero()) != std::cmp::Ordering::Greater {
+                                continue;
+                            }
+                            for want in targets {
+                                let mut left = want;
+                                let mut xs: Vec<BTreeMap<String, Val>> = Vec::new();
+                                while left.cmp_to(Rat::zero()) == std::cmp::Ordering::Greater && xs.len() < 64 {
+                                    let take = if left.cmp_to(hi) == std::cmp::Ordering::Greater { hi } else { left };
+                                    if take.cmp_to(lo) == std::cmp::Ordering::Less {
+                                        break;
+                                    }
+                                    let mut e = base.clone();
+                                    e.insert(d.column.text.clone(), Val::Num(take));
+                                    xs.push(e);
+                                    left = left.sub(take);
+                                }
+                                if left.cmp_to(Rat::zero()) != std::cmp::Ordering::Equal || answer(xs.clone()) != Some(Val::Num(want)) {
+                                    continue;
+                                }
+                                out.push((with(&scalars, s, seq(xs.clone())), tr!("{} が {} の並び", "a sequence whose {} is {}", d.name.text, show(&Val::Num(want)))));
+                                reached.push((want, seq(xs)));
+                            }
+                        }
+                        // The answer on each boundary: an element at it, and one beside it that
+                        // does not take its place; and an element the `where` leaves out, for the
+                        // `empty` value (§15.219).
+                        AggKind::Max | AggKind::Min => {
+                            let ord_of = |v: &Val| -> Option<Rat> {
+                                match v {
+                                    Val::Num(r) => Some(*r),
+                                    Val::Date(y, m, dd) => Some(crate::types::date_ord(*y, *m, *dd)),
+                                    _ => None,
+                                }
+                            };
+                            let single = |e: &BTreeMap<String, Val>| answer(vec![e.clone()]);
+                            // Elements by the value they give the answer on their own.
+                            let mut by: Vec<(BTreeMap<String, Val>, Val)> = combos[s].iter().filter_map(|e| single(e).map(|v| (e.clone(), v))).collect();
+                            // A field read as it is can be set to the value wanted directly.
+                            if let Some(fd) = el.fields.iter().find(|fd| fd.name.text == d.column.text) {
+                                if let Some(base) = by.first().map(|(e, _)| e.clone()) {
+                                    for t in &targets {
+                                        let fty = c.ty_of(&fd.name.text).unwrap_or(Ty::Number);
+                                        if !crate::coverage::in_range(c, &fd.name.text, *t) {
+                                            continue;
+                                        }
+                                        let mut e = base.clone();
+                                        e.insert(fd.name.text.clone(), if fty == Ty::Date { let (y, m, dd) = crate::types::ord_to_date(*t); Val::Date(y, m, dd) } else { Val::Num(*t) });
+                                        if let Some(v) = single(&e) {
+                                            by.push((e, v));
+                                        }
+                                    }
+                                }
+                            }
+                            let empty = d.empty.as_ref().and_then(|(l, _)| eval::lit_to_val(l, c.ty_of(&d.column.text).unwrap_or(Ty::Unknown).present()));
+                            for t in &targets {
+                                let Some((e, v)) = by.iter().find(|(_, v)| ord_of(v).is_some_and(|x| x.cmp_to(*t) == std::cmp::Ordering::Equal)) else { continue };
+                                out.push((with(&scalars, s, seq(vec![e.clone()])), tr!("{} が {} の要素", "an element that makes {} {}", d.name.text, show(v))));
+                                reached.push((*t, seq(vec![e.clone()])));
+                                keep.push(e.clone());
+                                // One that does not take its place: smaller for a max, larger for a min.
+                                let beside = by.iter().filter(|(_, w)| Some(w) != empty.as_ref() || empty.is_none()).find(|(_, w)| match (ord_of(w), ord_of(v)) {
+                                    (Some(x), Some(y)) => (d.kind == AggKind::Max && x.cmp_to(y) == std::cmp::Ordering::Less) || (d.kind == AggKind::Min && x.cmp_to(y) == std::cmp::Ordering::Greater),
+                                    _ => false,
+                                });
+                                if let Some((b, _)) = beside {
+                                    for xs in [vec![e.clone(), b.clone()], vec![b.clone(), e.clone()]] {
+                                        if answer(xs.clone()).as_ref() == Some(v) {
+                                            out.push((with(&scalars, s, seq(xs)), tr!("{} が {} で、そこに届かない要素も並ぶ", "{} at {}, beside an element that does not take its place", d.name.text, show(v))));
+                                        }
+                                    }
+                                }
+                            }
+                            // The values of an ordered enum, each by an element on it.
+                            for (e, v) in &by {
+                                if matches!(v, Val::Enum(_)) {
+                                    out.push((with(&scalars, s, seq(vec![e.clone()])), tr!("{} が {} の要素", "an element that makes {} {}", d.name.text, show(v))));
+                                    keep.push(e.clone());
+                                }
+                            }
+                            // An element the `where` leaves out: the answer is the `empty` value.
+                            if d.filter.is_some() {
+                                if let Some(e) = combos[s].iter().find(|e| single(e) == empty && empty.is_some()) {
+                                    out.push((with(&scalars, s, seq(vec![e.clone()])), tr!("{} の `where` が外す要素だけ", "only an element the `where` of {} leaves out", d.name.text)));
+                                    keep.push(e.clone());
+                                }
+                            }
+                        }
+                    }
+                    if !reached.is_empty() {
+                        reach.push((d.name.text.clone(), s, reached));
+                    }
+                }
+                _ => {}
+            }
+        }
+        // A second walk: the cases it is looked at with (`second_walk_cases`), and every ordered
+        // pair of the elements found above, so that what the first walk finds depends on both and
+        // each element meets it from the other's side.
+        let second = (0..f.items.len()).any(|i| matches!(st.at(i), Stage::Each { seq: x, walk } if x == s && walk > 1));
+        if second {
+            let probes = second_walk_cases(f, c, s);
+            // A table of the second walk that reads a value of one call worked out from what the
+            // first walk found (`light = hour_light + most_add + most_sub`) has its boundaries
+            // reached by moving an input with the sequence held: the first walk then finds the
+            // same, and the element's case moves in that input alone (§9.1, §15.219).
+            for set in c.sets.iter().filter(|set| {
+                f.items.iter().enumerate().any(|(i, it)| matches!(it, Item::Table(t) if t.name.as_ref().is_some_and(|n| n.text == set.eval_at)) && matches!(st.at(i), Stage::Each { seq: x, walk } if x == s && walk > 1))
+            }) {
+                let t = &set.table;
+                for (ri, row) in t.rows.iter().enumerate() {
+                    for (ci, (col, _)) in t.inputs.iter().enumerate() {
+                        // A column of one element moves between two elements of one sequence:
+                        // each pair the probes make, with the row's columns of one call brought
+                        // inside its cells, so that both elements meet the row's other cells.
+                        if st.each.contains_key(col) {
+                            for m in probes.iter().filter(|m| matches!(m.get(&f.elements[s].name.text), Some(Val::Seq(xs)) if xs.len() == 2)).take(64) {
+                                let mut a = m.clone();
+                                for (cj, (other, _)) in t.inputs.iter().enumerate() {
+                                    if cj == ci || st.each.contains_key(other) || f.inputs.iter().any(|i| &i.name.text == other) {
+                                        continue;
+                                    }
+                                    let (Some(oc), Some(oty)) = (row.cells.get(cj), c.ty_of(other)) else { continue };
+                                    let now = bind(f, c, &a).get(other).cloned();
+                                    if now.as_ref().is_some_and(|v| eval::cell_matches(c, oc, v, &oty)) {
+                                        continue;
+                                    }
+                                    let q = crate::coverage::quantum(c, other, &oty);
+                                    let Some((_, want, _)) = crate::coverage::thresholds_pub(oc, &oty, q).into_iter().next() else { continue };
+                                    match place(f, c, &a, other, want, &BTreeSet::new()) {
+                                        Some(next) => a = next,
+                                        None => break,
+                                    }
+                                }
+                                if &a != m {
+                                    out.push((a, tr!("表 {} 行{} の列 {col} を、二件で（二回目の歩き）", "table {} row {}, column {col}, over two elements (a second walk)", set.row_table(ri), row.index)));
+                                }
+                            }
+                            continue;
+                        }
+                        if f.inputs.iter().any(|i| &i.name.text == col) {
+                            continue;
+                        }
+                        let ty = c.ty_of(col).unwrap_or(Ty::Unknown);
+                        if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
+                            continue;
+                        }
+                        let Some(cell) = row.cells.get(ci) else { continue };
+                        let q = crate::coverage::quantum(c, col, &ty);
+                        for (b, inside, outside) in crate::coverage::thresholds_pub(cell, &ty, q) {
+                            let why = tr!(
+                                "境界両側: 表 {} 行{} {col} {} の",
+                                "boundary pair: table {} row {} {col} {}",
+                                set.row_table(ri),
+                                row.index,
+                                crate::coverage::show_rat(b, &ty)
+                            );
+                            for seed in probes.iter().take(48) {
+                                let Some(a1) = place(f, c, seed, col, inside, &BTreeSet::new()) else { continue };
+                                let Some(a2) = place(f, c, &a1, col, outside, &BTreeSet::new()) else { continue };
+                                out.push((a1, tr!("{why}内側", "{why} inside")));
+                                out.push((a2, tr!("{why}外側", "{why} outside")));
+                            }
+                        }
+                    }
+                }
+            }
+            for m in probes {
+                out.push((m, tr!("{name} の一件か二件（二回目の歩き）", "one or two elements of {name} (a second walk)")));
+            }
+            let mut few: Vec<BTreeMap<String, Val>> = Vec::new();
+            for e in keep {
+                if !few.contains(&e) {
+                    few.push(e);
+                }
+            }
+            few.truncate(8);
+            for a in &few {
+                for b in &few {
+                    out.push((with(&scalars, s, seq(vec![a.clone(), b.clone()])), tr!("{name} の二件（二回目の歩き）", "two elements of {name} (a second walk)")));
+                }
+            }
+        }
+    }
+
+    // A table downstream of a summary is an ordinary table, so its boundary pairs are walked with
+    // the row's other columns held (§9.2), out of the row's own assignment for them and a sequence
+    // that brings the summary to each side (`count_pool`).
+    for set in &c.sets {
+        let t = &set.table;
+        for (ri, row) in t.rows.iter().enumerate() {
+            let tname = set.row_table(ri).to_string();
+            for (ci, (col, _)) in t.inputs.iter().enumerate() {
+                let Some((_, s, reached)) = reach.iter().find(|(n, _, _)| n == col) else { continue };
+                let Some(cell) = row.cells.get(ci) else { continue };
+                let ty = c.ty_of(col).unwrap_or(Ty::Number);
+                let mut a = scalars.clone();
+                for (cj, (other, _)) in t.inputs.iter().enumerate() {
+                    if cj == ci || fields.contains(other) || reach.iter().any(|(n, _, _)| n == other) {
+                        continue;
+                    }
+                    let (Some(oc), Some(ovs)) = (row.cells.get(cj), cands.get(other)) else { continue };
+                    let oty = c.ty_of(other).unwrap_or(Ty::Unknown);
+                    if let Some(v) = satisfying(oc, ovs, &oty, c) {
+                        a.insert(other.clone(), v);
+                    }
+                }
+                let q = crate::coverage::quantum(c, col, &ty);
+                for (b, inside, outside) in crate::coverage::thresholds_pub(cell, &ty, q) {
+                    let b = crate::coverage::show_rat(b, &ty);
+                    let why = tr!("境界両側: 表 {tname} 行{} {col} {b} の", "boundary pair: table {tname} row {} {col} {b}", row.index);
+                    for (n, side) in [(inside, tr!("{why}内側", "{why} inside")), (outside, tr!("{why}外側", "{why} outside"))] {
+                        if let Some((_, xs)) = reached.iter().find(|(r, _)| r.cmp_to(n) == std::cmp::Ordering::Equal) {
+                            out.push((with(&a, *s, xs.clone()), side));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // The values of one call move too, each sequence at rest, so a value that decides a cell is
+    // still exercised.
+    for (a, why) in pool_scalars(f, c, cands, &fields) {
+        let m = with(&a, usize::MAX, Val::Seq(Vec::new()));
+        out.push((m, why));
+    }
+    out
 }
 
 /// The cases a rule that counts needs (§15.58).
@@ -847,7 +1293,8 @@ fn count_pool(
         .iter()
         .filter_map(|it| if let Item::Agg(d) = it { Some(d) } else { None })
         .collect();
-    let el = f.elements.as_ref().expect("a count has elements");
+    // The rule's one sequence: `pool` sends any other walk to `walk_pool`.
+    let el = f.elements.first().expect("a count has elements");
     let over = el.name.text.clone();
     let fields: Vec<String> = el.fields.iter().map(|i| i.name.text.clone()).collect();
     let scalars: BTreeMap<String, Val> =
@@ -1321,10 +1768,7 @@ fn example_inputs(f: &RuleFile, c: &Checked) -> Vec<BTreeMap<String, Val>> {
         let a: BTreeMap<String, Val> = eval::example_env(f, c, ex, row).into_iter().collect();
         // The sequence counts as an input of the case: a walk with none is not the example
         // that was written (§15.56).
-        let seq_ok = match &f.elements {
-            Some(el) => a.contains_key(&el.name.text),
-            None => true,
-        };
+        let seq_ok = f.elements.iter().all(|el| a.contains_key(&el.name.text));
         if seq_ok && f.inputs.iter().all(|i| a.contains_key(&i.name.text)) {
             out.push(a);
         }
@@ -1403,6 +1847,7 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
     };
     let mut evaluated: Vec<Vector> = Vec::new();
     let mut refused: Vec<Vector> = Vec::new();
+    let mut past_sums: Vec<String> = Vec::new();
     let mut seen_in: BTreeMap<String, usize> = BTreeMap::new();
     for (a, why) in raw {
         let key = key_of(&a);
@@ -1415,8 +1860,17 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
         // nothing either. For a rule that walks a sequence, no answer means exactly one thing:
         // two elements both took under `take_unique` (§15.56). It goes to the other list,
         // where `rulec test` holds the generated code to refusing it too.
-        if f.fold.is_some() && outs.first().is_some_and(|(_, v)| v.is_none()) {
+        if f.walks() && crate::eval::contradiction(f, c, a.clone().into_iter().collect()).is_some() {
             refused.push(Vector { input: a, outputs: outs, trace, fired, why });
+            continue;
+        }
+        // A sum past the top of its range is refused where the walk ends (§15.100): one such case
+        // per sum holds the generated code to refusing it, and the rest of them say nothing more.
+        if let Some(n) = crate::eval::sum_past_range(f, c, a.clone().into_iter().collect()) {
+            if !past_sums.contains(&n) {
+                past_sums.push(n);
+                refused.push(Vector { input: a, outputs: outs, trace, fired, why });
+            }
             continue;
         }
         evaluated.push(Vector { input: a, outputs: outs, trace, fired, why });
@@ -1531,7 +1985,7 @@ pub fn refused_json(f: &RuleFile, c: &Checked, v: &Vector) -> String {
         .and_then(|j| crate::door::refusal(f, c, &j))
         .unwrap_or(crate::door::Refusal {
             kind: "contradiction",
-            error: crate::door::fold_contradiction(f.fold.as_ref().map(|d| d.verdict.as_str()).unwrap_or_default()),
+            error: crate::door::fold_contradiction(f.folds().next().map(|d| d.verdict.as_str()).unwrap_or_default()),
         });
     refused_line(&inp, &r, &v.why)
 }
@@ -1582,7 +2036,7 @@ pub fn door_cases(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<String> 
             push(obj, tr!("制約 {} を破る組み合わせ", "a combination the constraint {} rules out", k.said()));
         }
     }
-    if let Some(el) = &f.elements {
+    for el in &f.elements {
         let seq = &el.name.text;
         let with_one = vectors
             .iter()
@@ -1593,14 +2047,14 @@ pub fn door_cases(f: &RuleFile, c: &Checked, vectors: &[Vector]) -> Vec<String> 
         push(with(&top, seq, Json::Int(0)), tr!("{seq} に並びでない値", "{seq} not a sequence"));
         push(with(&top, seq, Json::Arr(vec![Json::Int(0)])), tr!("{seq} にオブジェクトでない要素", "an element of {seq} that is not an object"));
         if let Some(first) = with_one.as_ref().and_then(|t| t.get(seq)).and_then(|s| s.as_arr()).and_then(|xs| xs.first()).cloned() {
-            let cap = crate::door::count_cap(f, c);
+            let cap = crate::door::count_cap(f, c, seq);
             if let Some(cap) = cap.filter(|cap| *cap <= 50) {
                 let many = Json::Arr(vec![first.clone(); cap as usize + 1]);
                 push(with(&top, seq, many), tr!("{seq} の要素を、数え上げの上限より一つ多く", "{seq} one element past what a count over it can be"));
             }
             // A sum over a field past the top of its range: as many elements at the field's own
             // top as it takes, where that is a few dozen.
-            for d in crate::door::sums(f) {
+            for d in crate::door::sums(f).into_iter().filter(|d| d.over == *seq) {
                 let (Some(hi), Some((_, Some(fhi)))) = (c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi), c.ranges.get(&d.column.text).copied()) else {
                     continue;
                 };
@@ -1837,10 +2291,10 @@ pub fn in_object(f: &RuleFile, c: &Checked, v: &Vector) -> String {
         }
     };
     let mut ins: Vec<String> = Vec::new();
-    // The sequence is named by `elements`, whether a fold reads it or a count does (§15.58).
-    if let (Some(el), Some(Val::Seq(xs))) =
-        (&f.elements, f.elements.as_ref().and_then(|el| v.input.get(&el.name.text)))
-    {
+    // A sequence is named by `elements`, whether a fold reads it or a count does (§15.58); each
+    // comes before the inputs, in the order the rule declares them (§15.219).
+    for el in &f.elements {
+        let Some(Val::Seq(xs)) = v.input.get(&el.name.text) else { continue };
         let one = |e: &std::collections::BTreeMap<String, Val>| -> String {
             let fields: Vec<String> = el
                 .fields

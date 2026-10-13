@@ -196,10 +196,16 @@ awk '{ sub(/^count 一致数\(hits\) over 候補 /, "count 一致数(hits) "); p
 awk '{ sub(/where 照合結果 = 一致/, "where 会社名一致 = 一致"); print }'      "$n" > "$M/m_e029.rule"
 # A count with no range: the universe of the completeness check, and the cap on the sequence
 awk '{ sub(/  range >=0 <=50/, ""); print }'                            "$n" > "$M/m_e030.rule"
-# A rule that both folds and counts the same walk. The fold's answers are values of the first
-# output's type, so the one seeded error is the second summary (a fold's answer is typed against
-# that output, §15.208).
-awk '{ print } /^count 一致数/ { print ""; print "fold 照合結果 over 候補"; print "  一致    -> next"; print "  不一致  -> next"; print "  empty     -> 新規登録"; print "  exhausted -> 目視確認" }' "$n" > "$M/m_e031.rule"
+# Two sequences and a largest value (§15.219), cut from the order's settlement: the English rule,
+# and its Japanese version beside it.
+o="$C/order_settlement.rule"
+oj="$C/注文の精算.rule"
+# A `max` with no `empty`: what it answers with no line at all is not declared
+awk '{ sub(/ empty 0USD$/, ""); print }'                                "$o"  > "$M/m_e022max.rule"
+awk '{ sub(/ empty 0USD$/, ""); print }'                                "$oj" > "$M/m_e022maxja.rule"
+# A value of one line that reads a payment too: one sequence walked inside the other
+awk '{ sub(/= quantity \* price$/, "= quantity * price + amount"); print }' "$o"  > "$M/m_e031.rule"
+awk '{ sub(/= 数量 × 単価$/, "= 数量 × 単価 + 支払額"); print }'        "$oj" > "$M/m_e031ja.rule"
 
 # --- The expression and the result line.
 # An expression in an output cell

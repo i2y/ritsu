@@ -136,8 +136,9 @@ fn 口の事実はapiと証明書とschemaが言うことと同じ() {
                 check_column(&path, col, &cert, sch);
             }
         }
-        let walks = arr(ts.get("params")).iter().find(|p| p.get("elements").is_some()).map(|p| st(p.get("name")));
-        assert_eq!(facts.elements.as_ref().map(|(n, _, _)| n.clone()), walks, "{path}");
+        // every list the rule walks, in the order of the parameters (§15.219)
+        let walks: Vec<String> = arr(ts.get("params")).iter().filter(|p| p.get("elements").is_some()).map(|p| st(p.get("name"))).collect();
+        assert_eq!(facts.elements.iter().map(|(n, _, _)| n.clone()).collect::<Vec<_>>(), walks, "{path}");
         // the enums, as the certificate lists them
         let want: Vec<(String, Vec<String>)> = cert.get("enums").and_then(|e| e.as_obj()).map(|kv| kv.iter().map(|(k, v)| (k.clone(), strs(Some(v)))).collect()).unwrap_or_default();
         assert_eq!(facts.enums.iter().map(|e| (e.name.clone(), e.values.iter().map(|v| v.name.clone()).collect::<Vec<_>>())).collect::<Vec<_>>(), want, "{path}");
@@ -199,7 +200,12 @@ fn 口の事実はapiと証明書とschemaが言うことと同じ() {
         assert_eq!((fc.path.clone(), fc.json_names.clone(), fc.json_int64.clone()), (st(c.get("path")), st(c.get("json_names")), st(c.get("json_int64"))), "{path}");
         assert_eq!(fields_of(&fc.request), wire_fields(c.get("request_fields")), "{path} request");
         assert_eq!(fields_of(&fc.response), wire_fields(c.get("response_fields")), "{path} response");
-        assert_eq!(fc.elements.as_ref().map(|e| fields_of(e)), c.get("element_fields").filter(|x| !x.is_null()).map(|x| wire_fields(Some(x))), "{path} elements");
+        assert_eq!(fc.elements.first().map(|(_, e)| fields_of(e)), c.get("element_fields").filter(|x| !x.is_null()).map(|x| wire_fields(Some(x))), "{path} elements");
+        // a rule that walks two lists or more lists each under `sequences` (§15.219)
+        if fc.elements.len() > 1 {
+            let want: Vec<(String, Vec<(String, String, String, bool, Option<String>)>)> = arr(c.get("sequences")).iter().map(|s| (st(s.get("name")), wire_fields(s.get("fields")))).collect();
+            assert_eq!(fc.elements.iter().map(|(n, e)| (n.clone(), fields_of(e))).collect::<Vec<_>>(), want, "{path} sequences");
+        }
         let enums: Vec<ritsu_ports::WireEnum> = arr(c.get("enums"))
             .iter()
             .map(|e| ritsu_ports::WireEnum {
@@ -249,7 +255,7 @@ fn 口の評価はどのベクタにもrulec_vectorsと同じ答えを返す() {
         let (f, c) = rulec::prepare(&src, &path).unwrap();
         for v in rulec::vectors::generate(&f, &c) {
             let mut inputs: ritsu_ports::Values = f.inputs.iter().map(|i| (i.name.text.clone(), v.input.get(&i.name.text).map(|x| wire(&c, &i.name.text, x)).unwrap_or(Value::None))).collect();
-            if let Some(el) = &f.elements {
+            for el in &f.elements {
                 inputs.push((el.name.text.clone(), v.input.get(&el.name.text).map(|x| wire(&c, &el.name.text, x)).unwrap_or(Value::List(vec![]))));
             }
             let want: Vec<(String, Value)> = v.outputs.iter().map(|(n, x)| (n.clone(), x.as_ref().map(|x| wire(&c, n, x)).unwrap_or(Value::None))).collect();
@@ -602,13 +608,13 @@ fn an_output_over_ranges_says_why_it_cannot_answer() {
         }
         let (f, c) = rulec::prepare(&src, &path).unwrap();
         let first = f.outputs[0].name.text.clone();
-        if !numeric && f.elements.is_none() && c.ty_of(&first).is_some_and(|t| t.is_numeric()) {
+        if !numeric && f.elements.is_empty() && c.ty_of(&first).is_some_and(|t| t.is_numeric()) {
             assert!(undecided(&path, &first, &[]).contains("neither an enum nor a bool"), "{path}");
             numeric = true;
         }
         let counted = f.outputs.iter().find(|o| matches!(c.ty_of(&o.name.text), Some(rulec::types::Ty::Enum(_) | rulec::types::Ty::Bool)));
         if !walks
-            && let Some(el) = &f.elements
+            && let Some(el) = f.elements.first()
             && let Some(o) = counted
         {
             assert!(undecided(&path, &o.name.text, &[]).contains(&format!("walks the list `{}`", el.name.text)), "{path}");
@@ -616,7 +622,7 @@ fn an_output_over_ranges_says_why_it_cannot_answer() {
         }
         // a string input cannot be held to a range
         if !string
-            && f.elements.is_none()
+            && f.elements.is_empty()
             && let Some(i) = f.inputs.iter().find(|i| matches!(c.ty_of(&i.name.text), Some(rulec::types::Ty::Str)))
             && let Some(o) = counted
         {
@@ -705,7 +711,7 @@ fn an_output_over_ranges_is_what_every_input_inside_them_comes_to() {
             None => Ty::Unknown,
         };
         let outputs: Vec<String> = f.outputs.iter().map(|o| o.name.text.clone()).filter(|o| matches!(base(c.ty_of(o)), Ty::Enum(_) | Ty::Bool)).collect();
-        if outputs.is_empty() || f.elements.is_some() {
+        if outputs.is_empty() || !f.elements.is_empty() {
             continue;
         }
         // the inputs held to intervals (numbers and dates, on the wire), and the ones walked whole
@@ -901,7 +907,7 @@ fn an_output_over_values_is_what_every_input_held_to_them_comes_to() {
         let outputs: Vec<String> = f.outputs.iter().map(|o| o.name.text.clone()).filter(|o| matches!(base(c.ty_of(o)), Ty::Enum(_) | Ty::Bool)).collect();
         let finite: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).filter(|n| matches!(base(c.ty_of(n)), Ty::Enum(_) | Ty::Bool)).collect();
         let walkable = f.inputs.iter().all(|i| matches!(base(c.ty_of(&i.name.text)), Ty::Enum(_) | Ty::Bool | Ty::Date) || base(c.ty_of(&i.name.text)).is_numeric());
-        if outputs.is_empty() || finite.is_empty() || f.elements.is_some() || !walkable {
+        if outputs.is_empty() || finite.is_empty() || !f.elements.is_empty() || !walkable {
             continue;
         }
         rules_asked += 1;

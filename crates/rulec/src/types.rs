@@ -546,79 +546,198 @@ impl Checked {
     }
 }
 
-/// The names that only have a value **inside the walk**: a field of one element, and
-/// everything computed from one (§15.58). The middle one of the three stages (§15.208).
+/// The names that only have a value **inside a walk**: a field of one element, and everything
+/// computed from one (§15.58), of any sequence the rule walks (§15.219).
 pub fn element_scoped(f: &RuleFile) -> HashSet<String> {
-    stages(f).each
+    stages(f).each.keys().cloned().collect()
 }
 
-/// What a rule that walks a sequence answers with once the walk is over (§15.208): the first
-/// output, for a `fold` — the walk binds its answer to that name — and the name of every
-/// `count` and `sum`. Nothing, for a rule that walks no sequence.
+/// What a rule that walks sequences answers with once a walk is over (§15.208, §15.219): the name
+/// each `fold` binds its answer to — the one after its `->`, else the first output — and the name of
+/// every `count`, `sum`, `max` and `min`. Nothing, for a rule that walks no sequence.
 pub fn walk_answers(f: &RuleFile) -> Vec<String> {
     let mut out = Vec::new();
-    if f.fold.is_some() {
-        if let Some(o) = f.outputs.first() {
-            out.push(o.name.text.clone());
-        }
-    }
     for it in &f.items {
-        if let Item::Agg(d) = it {
-            out.push(d.name.text.clone());
+        match it {
+            Item::Fold(d) => out.extend(d.answer_name(f).map(str::to_string)),
+            Item::Agg(d) => out.push(d.name.text.clone()),
+            _ => {}
         }
     }
     out
 }
 
-/// Where an item of a rule that walks a sequence runs (§15.208).
+/// Where an item of a rule that walks sequences runs (§15.208, §15.219).
+///
+/// The walks are numbered from 1. A walk over a sequence reads what the walks before it answered:
+/// an item of one element that reads what walk 1 answered runs in walk 2 — the second walk.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stage {
-    /// It reads neither an element nor what the walk answers: it runs once, before the walk.
-    Before,
-    /// It reads a field of an element, or something computed from one: it runs once per
-    /// element, inside the walk.
-    Each,
-    /// It reads what the walk answers, or something computed from it: it runs once, after the
-    /// walk.
-    After,
+    /// Once per call, after the walks numbered up to this one have run: 0 is before every walk. It
+    /// reads no element, and the walks whose answers it reads, through what it reads, end at this one.
+    Once(usize),
+    /// Once per element of the sequence `seq` (its place among the rule's `elements`), in walk
+    /// `walk` over it — the first walk the values it reads are all there in. A summary (`count`,
+    /// `sum`, `max`, `min`, `fold`) is the walk itself, and is marked with the walk it reduces in.
+    Each { seq: usize, walk: usize },
 }
 
-/// The three stages of a rule's items, and the names on each side of the walk (§15.208).
+impl Stage {
+    /// Before every walk: reads no element and nothing a walk answers.
+    pub const BEFORE: Stage = Stage::Once(0);
+}
+
+/// The stages of a rule's items, and the names on each side of every walk (§15.208, §15.219).
 pub struct Stages {
-    /// One per item of the rule, in the order written. A `count` or a `sum` is the walk
-    /// itself and is marked `Each`; a rule that walks nothing has every item `Before`.
+    /// One per item of the rule, in the order written. A rule that walks nothing has every item
+    /// `Once(0)`.
     pub of: Vec<Stage>,
-    /// The names that have a value only inside the walk: the fields of an element and
-    /// everything computed from one.
-    pub each: HashSet<String>,
-    /// What the walk answers, and everything computed from it.
-    pub after: HashSet<String>,
-    /// The items that read both an element's value and what the walk answers, by index, each
-    /// with one name of each kind it reads. Reading both takes a second walk (E031).
-    pub both: Vec<(usize, String, String)>,
+    /// The names that have a value only inside a walk — the fields of an element and everything
+    /// computed from one — with the sequence they belong to.
+    pub each: HashMap<String, usize>,
+    /// Each name's walk: for a name of one element, the first walk it is there in; for a name with
+    /// one value per call, the last walk whose answer it reads (0 for one that reads none). An input
+    /// is not listed, and is 0.
+    pub level: HashMap<String, usize>,
+    /// The last walk.
+    pub depth: usize,
+    /// The items that read the elements of two sequences, by index, with a name of each: one walk
+    /// inside another (E031).
+    pub two: Vec<(usize, String, String)>,
+    /// The folds whose answer comes back into what they read — the rule's first output read by
+    /// the table that decides its verdict — by index, with the name through which it comes back
+    /// (E021). No walk can run before itself.
+    pub cycle: Vec<(usize, String)>,
+    /// What each item reads, the tables of one output together (`item_reads`).
+    reads: Vec<Vec<String>>,
+    /// What each item binds (`item_binds`).
+    binds: Vec<Vec<String>>,
+    /// Whether each item is a summary: a `count`, `sum`, `max`, `min` or `fold`.
+    summary: Vec<bool>,
 }
 
 impl Stages {
     /// The stage of the item at `i`.
     pub fn at(&self, i: usize) -> Stage {
-        self.of.get(i).copied().unwrap_or(Stage::Before)
+        self.of.get(i).copied().unwrap_or(Stage::BEFORE)
+    }
+
+    /// What the item at `i` reads, the tables of one output together.
+    pub fn reads_of(&self, i: usize) -> &[String] {
+        self.reads.get(i).map(|v| v.as_slice()).unwrap_or(&[])
+    }
+
+    /// The walk a name is there after (a name of one call) or in (a name of one element).
+    pub fn level_of(&self, name: &str) -> usize {
+        self.level.get(name).copied().unwrap_or(0)
+    }
+
+    /// The names worked out from what some walk answers: one value per call, after a walk.
+    pub fn after(&self) -> HashSet<String> {
+        self.level.iter().filter(|(n, l)| **l > 0 && !self.each.contains_key(*n)).map(|(n, _)| n.clone()).collect()
+    }
+
+    /// The walks the rule runs, in the order they run: by number, and within one number in the
+    /// order the sequences are declared. A walk is there when a summary reduces in it, or an item
+    /// of one element that nothing reads is in it; an item of one element that something reads is
+    /// worked out where that is (`body`).
+    pub fn walks(&self) -> Vec<(usize, usize)> {
+        let read: HashSet<&String> = self.reads.iter().flatten().collect();
+        let mut out: Vec<(usize, usize)> = self
+            .of
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| match s {
+                Stage::Each { seq, walk } if self.summary[i] || !self.binds[i].iter().any(|b| read.contains(b)) => Some((*walk, *seq)),
+                _ => None,
+            })
+            .collect();
+        out.sort();
+        out.dedup();
+        out
+    }
+
+    /// The summaries that reduce in walk `walk` over sequence `seq`, in the order written.
+    pub fn summaries_in(&self, f: &RuleFile, seq: usize, walk: usize) -> Vec<usize> {
+        (0..f.items.len())
+            .filter(|&i| matches!(f.items[i], Item::Agg(_) | Item::Fold(_)) && self.at(i) == Stage::Each { seq, walk })
+            .collect()
+    }
+
+    /// The items worked out on each element in walk `walk` over sequence `seq`, in the order
+    /// written: what the walk's summaries read, through every item of one element in between —
+    /// including those of an earlier walk over the same sequence, worked out again from the same
+    /// element, since a value of one element is gone once its walk is over (§15.219) — and an item
+    /// of this walk that nothing reads at all, which still runs where it always did.
+    pub fn body(&self, f: &RuleFile, seq: usize, walk: usize) -> Vec<usize> {
+        let n = f.items.len();
+        let read: HashSet<&String> = self.reads.iter().flatten().collect();
+        let mut take = vec![false; n];
+        let mut todo: Vec<usize> = Vec::new();
+        for (i, it) in f.items.iter().enumerate() {
+            if self.at(i) != (Stage::Each { seq, walk }) {
+                continue;
+            }
+            match it {
+                Item::Agg(_) | Item::Fold(_) => todo.push(i),
+                _ if !item_binds(f, it).iter().any(|b| read.contains(b)) => {
+                    take[i] = true;
+                    todo.push(i);
+                }
+                _ => {}
+            }
+        }
+        while let Some(i) = todo.pop() {
+            for r in &self.reads[i] {
+                for (j, it) in f.items.iter().enumerate() {
+                    if take[j] || matches!(it, Item::Agg(_) | Item::Fold(_)) {
+                        continue;
+                    }
+                    if let Stage::Each { seq: s, walk: w } = self.at(j) {
+                        if s == seq && w <= walk && item_binds(f, it).iter().any(|x| x == r) {
+                            take[j] = true;
+                            todo.push(j);
+                        }
+                    }
+                }
+            }
+        }
+        (0..n).filter(|&i| take[i]).collect()
+    }
+
+    /// The items that run once, after walk `level` (0: before every walk), in the order written.
+    pub fn once(&self, level: usize) -> Vec<usize> {
+        (0..self.of.len()).filter(|&i| self.of[i] == Stage::Once(level)).collect()
     }
 }
 
 /// The names an item binds: a `derive`'s or a `define`'s name, a table's output columns, a
-/// summary's name.
+/// summary's name. A `fold` binds its answer, to the name after its `->` — the rule's first output
+/// when there is none — so it needs the rule to say which that is (`item_binds`).
 pub fn item_names(it: &Item) -> Vec<String> {
     match it {
         Item::Derived(d) => vec![d.name.text.clone()],
         Item::Define(d) => vec![d.name.text.clone()],
         Item::Table(t) => t.outputs.iter().map(|o| o.name.text.clone()).collect(),
         Item::Agg(d) => vec![d.name.text.clone()],
+        Item::Fold(d) => d.answer.iter().map(|a| a.name.text.clone()).collect(),
+    }
+}
+
+/// The names an item binds in its rule: [`item_names`], with the first output for a fold that
+/// names no answer.
+pub fn item_binds(f: &RuleFile, it: &Item) -> Vec<String> {
+    match it {
+        Item::Fold(d) => d.answer_name(f).map(|n| vec![n.to_string()]).unwrap_or_default(),
+        _ => item_names(it),
     }
 }
 
 /// The names an item reads: a `derive`'s or a `define`'s expression, a table's columns and the
 /// names its output cells write (an output cell that names an input passes it on, so the table
-/// reads it as surely as a column), a summary's column.
+/// reads it as surely as a column), a summary's column and the column its `where` tests, and a
+/// fold's verdict, the values its arms take and the values of `empty` and `exhausted` (`held`, the
+/// fold's own, is not a name of the rule).
 pub fn item_reads(it: &Item) -> Vec<String> {
     let mut out = Vec::new();
     match it {
@@ -634,24 +753,57 @@ pub fn item_reads(it: &Item) -> Vec<String> {
                 }
             }
         }
-        Item::Agg(d) => out.push(d.column.text.clone()),
+        Item::Agg(d) => {
+            out.push(d.column.text.clone());
+            if let Some((w, _)) = &d.filter {
+                out.push(w.text.clone());
+            }
+        }
+        Item::Fold(d) => {
+            out.push(d.verdict.clone());
+            for e in d.empty.iter().chain(d.exhausted.iter()) {
+                collect_names(e, &mut out);
+            }
+            for (_, arm, _) in &d.arms {
+                match arm {
+                    Arm::Stop(Some(x)) => collect_names(x, &mut out),
+                    Arm::Take { expr, .. } => collect_names(expr, &mut out),
+                    Arm::KeepMax { expr, key } => {
+                        collect_names(expr, &mut out);
+                        collect_names(key, &mut out);
+                    }
+                    _ => {}
+                }
+            }
+            out.retain(|n| n != crate::kw::HELD);
+        }
     }
     out
 }
 
-/// The stages of the items of a rule that walks a sequence (§15.208).
+/// The stages of the items of a rule that walks sequences (§15.208, §15.219).
 ///
-/// An item runs **before** the walk when it reads neither an element's field nor what the walk
-/// answers, **inside** it once per element when it reads an element's field or something that
-/// does (§15.58), and **after** it when it reads what the walk answers — a `fold`'s answer, a
-/// `count`, a `sum` — or something that does. The split is derived rather than declared, and
-/// the loop repeats until nothing changes, so that it cannot depend on the order the items are
-/// written in. An item before the walk never reads one after it: the items are written define
-/// before use (§5.1). An item that reads both an element and the walk's answer belongs to
-/// neither side, and is listed in `both`.
+/// An item runs **once** when it reads no element's field, and **once per element** of a sequence
+/// when it reads a field of that sequence or something that does (§15.58). Which walk it runs in,
+/// or after, is decided by what the walks answer: a summary reduces in the first walk the values it
+/// reads are there in; an item of one call that reads what walk k answered runs after walk k; an
+/// item of one element that reads it runs in walk k + 1 — the second walk, for k = 1. The split is
+/// derived rather than declared (§15.58), and the loop repeats until nothing changes, so that it does
+/// not depend on the order the items are written in. A walk is only ever made to wait for the walks
+/// its summaries read, so no rule has more walks than summaries: a fold whose answer comes back into
+/// its own verdict would wait for itself, and is stopped there (`cycle`). An item that reads the
+/// elements of two sequences belongs to neither, and is listed in `two`.
 pub fn stages(f: &RuleFile) -> Stages {
-    let mut each: HashSet<String> = f.elements.iter().flat_map(|e| &e.fields).map(|v| v.name.text.clone()).collect();
-    let mut after: HashSet<String> = walk_answers(f).into_iter().collect();
+    let n = f.items.len();
+    let seq_index = |name: &str| f.elements.iter().position(|e| e.name.text == name);
+    let mut each: HashMap<String, usize> = HashMap::new();
+    let mut level: HashMap<String, usize> = HashMap::new();
+    for (s, el) in f.elements.iter().enumerate() {
+        for fd in &el.fields {
+            each.insert(fd.name.text.clone(), s);
+            level.insert(fd.name.text.clone(), 1);
+        }
+    }
     // The tables that define one output are evaluated together, as one merged table at the last
     // of them (§15.66), so each of them reads what any of them reads and they share a stage.
     let mut by_output: HashMap<String, Vec<String>> = HashMap::new();
@@ -670,45 +822,191 @@ pub fn stages(f: &RuleFile) -> Stages {
             _ => item_reads(it),
         })
         .collect();
-    loop {
-        let before = (each.len(), after.len());
-        for (it, rs) in f.items.iter().zip(&reads) {
-            // A summary is the walk itself: its column is an element's, and its name is what
-            // the walk answers with.
-            if matches!(it, Item::Agg(_)) {
-                continue;
+    let binds: Vec<Vec<String>> = f.items.iter().map(|it| item_binds(f, it)).collect();
+    // A name two items decide (a fold's answer and a `sum` of the same name: E021) takes its
+    // stage from the first of them. Each writing its own walk into it in turn, the two never
+    // agreed, and `check` did not come back.
+    let mut owner: HashMap<&str, usize> = HashMap::new();
+    for (i, bs) in binds.iter().enumerate() {
+        for b in bs {
+            owner.entry(b.as_str()).or_insert(i);
+        }
+    }
+    let summaries = f.items.iter().filter(|it| matches!(it, Item::Agg(_) | Item::Fold(_))).count();
+    let mut of = vec![Stage::BEFORE; n];
+    let mut two: Vec<(usize, String, String)> = Vec::new();
+    let mut cycle: Vec<(usize, String)> = Vec::new();
+    let mut frozen = vec![false; n];
+    // Every walk is at most one past the summaries, and a name joins the values of one element at
+    // most once, so the stages settle well inside this many rounds; the bound is there so that a
+    // shape nobody foresaw still lets the check end (the core of rulec: every check halts).
+    let rounds = (n + 1) * (summaries + 2) * 2;
+    for _ in 0..rounds {
+        let mut changed = false;
+        for (i, it) in f.items.iter().enumerate() {
+            let rs = &reads[i];
+            let summary = matches!(it, Item::Agg(_) | Item::Fold(_));
+            let over = match it {
+                Item::Agg(d) => seq_index(&d.over),
+                Item::Fold(d) => seq_index(&d.over),
+                _ => None,
+            };
+            let stage = if summary && frozen[i] {
+                of[i]
+            } else if summary {
+                // A summary of a sequence that is not declared is E021/E028's; it is taken as
+                // the first, so that what reads it still has a stage.
+                let s = over.unwrap_or(0);
+                let mut w = 1;
+                for r in rs {
+                    match each.get(r) {
+                        Some(&rs_) if rs_ == s => w = w.max(level.get(r).copied().unwrap_or(1)),
+                        // A value of another sequence is E029 or E031, said where it is read.
+                        Some(_) => {}
+                        None => w = w.max(level.get(r).copied().unwrap_or(0) + 1),
+                    }
+                }
+                if w > summaries.max(1) {
+                    // Waiting for itself. Said once, and held at the last walk there can be.
+                    frozen[i] = true;
+                    w = summaries.max(1);
+                    let own: HashSet<String> = binds[i].iter().cloned().collect();
+                    let back = rs.iter().find(|r| own.contains(*r) || depends_on(f, &reads, r, &own)).cloned().unwrap_or_default();
+                    cycle.push((i, back));
+                }
+                Stage::Each { seq: s, walk: w }
+            } else {
+                let mut seqs: Vec<(usize, &String)> = Vec::new();
+                for r in rs {
+                    if let Some(&s) = each.get(r) {
+                        if !seqs.iter().any(|(x, _)| *x == s) {
+                            seqs.push((s, r));
+                        }
+                    }
+                }
+                match seqs.first() {
+                    None => Stage::Once(rs.iter().map(|r| level.get(r).copied().unwrap_or(0)).max().unwrap_or(0)),
+                    Some(&(s, _)) => {
+                        let mut w = 1;
+                        for r in rs {
+                            match each.get(r) {
+                                Some(&rs_) if rs_ == s => w = w.max(level.get(r).copied().unwrap_or(1)),
+                                Some(_) => {}
+                                None => w = w.max(level.get(r).copied().unwrap_or(0) + 1),
+                            }
+                        }
+                        Stage::Each { seq: s, walk: w.min(summaries + 1) }
+                    }
+                }
+            };
+            if stage != of[i] {
+                of[i] = stage;
+                changed = true;
             }
-            if rs.iter().any(|n| each.contains(n)) {
-                each.extend(item_names(it));
-            }
-            if rs.iter().any(|n| after.contains(n)) {
-                after.extend(item_names(it));
+            for b in &binds[i] {
+                if owner.get(b.as_str()) != Some(&i) {
+                    continue;
+                }
+                let (lv, sq) = match stage {
+                    // What a summary answers is one value per call, there once its walk is over.
+                    Stage::Each { walk, .. } if summary => (walk, None),
+                    Stage::Each { seq, walk } => (walk, Some(seq)),
+                    Stage::Once(l) => (l, None),
+                };
+                if level.get(b) != Some(&lv) {
+                    level.insert(b.clone(), lv);
+                    changed = true;
+                }
+                let was = each.get(b).copied();
+                if was != sq {
+                    match sq {
+                        Some(s) => {
+                            each.insert(b.clone(), s);
+                        }
+                        None => {
+                            each.remove(b);
+                        }
+                    }
+                    changed = true;
+                }
             }
         }
-        if (each.len(), after.len()) == before {
+        if !changed {
             break;
         }
     }
-    let mut of = Vec::new();
-    let mut both = Vec::new();
-    for (i, (it, rs)) in f.items.iter().zip(&reads).enumerate() {
-        if matches!(it, Item::Agg(_)) {
-            of.push(Stage::Each);
+    for (i, it) in f.items.iter().enumerate() {
+        let mut seen: Vec<(usize, &String)> = Vec::new();
+        for r in &reads[i] {
+            if let Some(&s) = each.get(r) {
+                if !seen.iter().any(|(x, _)| *x == s) {
+                    seen.push((s, r));
+                }
+            }
+        }
+        // A fold reads its own sequence; a value of another one is a walk inside its walk. A
+        // summary's column of another sequence is E029, said there.
+        if let Item::Fold(d) = it {
+            // A fold of a sequence that is not declared is E021's, said there.
+            let Some(own) = seq_index(&d.over) else { continue };
+            if let Some(&(_, other)) = seen.iter().find(|(s, _)| *s != own) {
+                let first = seen.iter().find(|(s, _)| *s == own).map(|(_, r)| (*r).clone()).unwrap_or_else(|| d.verdict.clone());
+                two.push((i, first, other.clone()));
+            }
             continue;
         }
-        let e = rs.iter().find(|n| each.contains(*n));
-        let a = rs.iter().find(|n| after.contains(*n));
-        of.push(match (e, a) {
-            (Some(e), Some(a)) => {
-                both.push((i, e.clone(), a.clone()));
-                Stage::Each
-            }
-            (Some(_), None) => Stage::Each,
-            (None, Some(_)) => Stage::After,
-            (None, None) => Stage::Before,
-        });
+        if matches!(it, Item::Agg(_)) {
+            continue;
+        }
+        if seen.len() > 1 {
+            two.push((i, seen[0].1.clone(), seen[1].1.clone()));
+        }
     }
-    Stages { of, each, after, both }
+    let depth = of
+        .iter()
+        .map(|s| match s {
+            Stage::Each { walk, .. } => *walk,
+            Stage::Once(l) => *l,
+        })
+        .max()
+        .unwrap_or(0);
+    let summary: Vec<bool> = f.items.iter().map(|it| matches!(it, Item::Agg(_) | Item::Fold(_))).collect();
+    Stages { of, each, level, depth, two, cycle, reads, binds, summary }
+}
+
+/// The sequence a `sequence` block is a list of (§15.219): the one whose fields its header
+/// writes, by its place among the rule's `elements` — all of its columns when one has them, else
+/// the one with the most, so that what is wrong is said against the list it was meant for. `None`
+/// for a rule that walks nothing.
+pub fn sequence_list(f: &RuleFile, sq: &SeqDecl) -> Option<usize> {
+    let hits = |el: &ElementsDecl| sq.cols.iter().filter(|(n, _)| el.fields.iter().any(|fd| fd.name.text == *n)).count();
+    if let Some(k) = f.elements.iter().position(|el| !sq.cols.is_empty() && hits(el) == sq.cols.len()) {
+        return Some(k);
+    }
+    let best = (0..f.elements.len()).max_by_key(|&k| (hits(&f.elements[k]), std::cmp::Reverse(k)))?;
+    Some(best)
+}
+
+/// Whether `name` is worked out, through the items, from one of `from`.
+fn depends_on(f: &RuleFile, reads: &[Vec<String>], name: &str, from: &HashSet<String>) -> bool {
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut todo = vec![name.to_string()];
+    while let Some(x) = todo.pop() {
+        if !seen.insert(x.clone()) {
+            continue;
+        }
+        for (i, it) in f.items.iter().enumerate() {
+            if item_binds(f, it).iter().any(|b| *b == x) {
+                for r in &reads[i] {
+                    if from.contains(r) {
+                        return true;
+                    }
+                    todo.push(r.clone());
+                }
+            }
+        }
+    }
+    false
 }
 
 /// The enum a declared type names, or `None` for a type of numbers, truth values, strings or
@@ -779,6 +1077,14 @@ pub fn read_words(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             }
             Item::Agg(d) => {
                 declared.entry(d.name.text.clone()).or_insert((None, tr!("まとめ", "a summary")));
+                col_enum.push(Vec::new());
+            }
+            // A fold's answer under a name of its own is declared there, with the type written
+            // (§15.219).
+            Item::Fold(d) => {
+                if let Some(FoldAnswer { name, ty: Some(ty) }) = &d.answer {
+                    declared.entry(name.text.clone()).or_insert((enum_named(ty), tr!("畳み込みの答え", "a fold's answer")));
+                }
                 col_enum.push(Vec::new());
             }
             Item::Table(t) => {
@@ -882,9 +1188,18 @@ pub fn read_words(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             }
         }
     }
-    // The answers of a fold, read in the type of the rule's first output.
-    let answer = f.outputs.first().map(|o| (enum_named(&o.ty), o.ty.base == crate::kw::BOOL));
-    if let (Some(fold), Some((en, boolean))) = (f.fold.as_mut(), answer) {
+    // The answers of a fold, read in the type it answers with: the type written after its `->`,
+    // the output it names, or the rule's first output (§15.219).
+    let outputs: Vec<(String, TypeRef)> = f.outputs.iter().map(|o| (o.name.text.clone(), o.ty.clone())).collect();
+    for it in f.items.iter_mut() {
+        let Item::Fold(fold) = it else { continue };
+        let ty: Option<TypeRef> = match &fold.answer {
+            Some(FoldAnswer { ty: Some(t), .. }) => Some(t.clone()),
+            Some(FoldAnswer { name, ty: None }) => outputs.iter().find(|(n, _)| *n == name.text).map(|(_, t)| t.clone()),
+            None => outputs.first().map(|(_, t)| t.clone()),
+        };
+        let Some(ty) = ty else { continue };
+        let (en, boolean) = (enum_named(&ty), ty.base == crate::kw::BOOL);
         let line = fold.span.line;
         let mut values: Vec<&mut Expr> = Vec::new();
         values.extend(fold.empty.as_mut());
@@ -1198,7 +1513,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     // The fields of one element (§15.56). They are declared like inputs and a table may use
     // them as columns; what differs is that the caller passes them once per element, so the
     // completeness proof quantifies over one element exactly as it quantifies over one call.
-    if let Some(el) = &f.elements {
+    // A rule may walk more than one sequence (§15.219); each field is one sequence's.
+    for el in &f.elements {
         for i in &el.fields {
             let ty = c.resolve(&i.ty);
             if let (Ty::Enum(en), Some(r)) = (ty.present(), &i.range) {
@@ -1257,6 +1573,61 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 i.name.text.clone(),
                 Sym { ty, span: i.name.span.clone(), kind: SymKind::Element, contract_only: i.contract_only },
             );
+        }
+    }
+    // A sequence is there to be walked (§15.219): the caller passes every element of it, and a
+    // sequence no `count`, `sum`, `max`, `min` or `fold` walks is one nothing reads — its fields
+    // would not even be held to their ranges, since an element is held to them as it is walked.
+    // A summary whose `over` names no sequence is said where it is (E021, E028): the sequence it
+    // meant is then not said to be walked by nothing as well.
+    let misnamed = f.items.iter().any(|it| match it {
+        Item::Agg(d) => f.sequence_named(&d.over).is_none(),
+        Item::Fold(d) => f.sequence_named(&d.over).is_none(),
+        _ => false,
+    });
+    for el in &f.elements {
+        let walked = f.items.iter().any(|it| match it {
+            Item::Agg(d) => d.over == el.name.text,
+            Item::Fold(d) => d.over == el.name.text,
+            _ => false,
+        });
+        if !walked && !misnamed && f.kind == FileKind::Rule {
+            c.diags.push(
+                Diag::error("E020", tr!("並び {} をたどるものがありません", "Nothing walks the sequence {}", el.name.text))
+                    .at(at(el.span.line))
+                    .mark(el.name.span.clone(), tr!("`over {}` と書いた行がありません", "no line says `over {}`", el.name.text))
+                    .note(tr!(
+                        "並びは、`count`・`sum`・`max`・`min`・`fold` のどれかでたどって、はじめて規則の値になります。たどる行を足すか、この `elements` を消してください。",
+                        "A sequence becomes a value of the rule only when a `count`, a `sum`, a `max`, a `min` or a `fold` walks it. Add the line that walks it, or take this `elements` out."
+                    )),
+            );
+        }
+    }
+    // A sequence and each field of an element are one name each, beside the inputs: a field
+    // spelled as an input, or as a field of another sequence, would be read as whichever was
+    // declared last, and a walk would read the wrong value in silence (§15.219).
+    {
+        let mut seen: HashMap<&str, &Span> = HashMap::new();
+        for i in &f.inputs {
+            seen.insert(i.name.text.as_str(), &i.name.span);
+        }
+        let names = f.elements.iter().flat_map(|el| std::iter::once(&el.name).chain(el.fields.iter().map(|fd| &fd.name)));
+        for n in names {
+            match seen.get(n.text.as_str()) {
+                Some(first) => c.diags.push(
+                    Diag::error("E034", tr!("名前 `{}` が二度宣言されています", "The name `{}` is declared twice", n.text))
+                        .at(at(n.span.line))
+                        .mark((*first).clone(), tr!("最初の宣言", "the first declaration"))
+                        .mark(n.span.clone(), tr!("同じ名前", "the same name"))
+                        .note(tr!(
+                            "入力、たどる並び、要素のフィールドは、規則の中でそれぞれ一つの値を指します。同じ名前が二つあると、表や式がどちらを読むかが決まりません。どちらかの名前を変えてください。",
+                            "An input, a sequence and a field of an element each name one value in the rule. With two of one name, a table or an expression cannot say which it reads. Change one of the two."
+                        )),
+                ),
+                None => {
+                    seen.insert(n.text.as_str(), &n.span);
+                }
+            }
         }
     }
 
@@ -1327,7 +1698,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         let mut typed: Vec<&TypeRef> = Vec::new();
         typed.extend(f.inputs.iter().map(|i| &i.ty));
         typed.extend(f.outputs.iter().map(|o| &o.ty));
-        if let Some(el) = &f.elements {
+        for el in &f.elements {
             typed.extend(el.fields.iter().map(|i| &i.ty));
         }
         for it in &f.items {
@@ -1336,6 +1707,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 Item::Define(d) => typed.push(&d.ty),
                 Item::Table(t) => typed.extend(t.outputs.iter().filter_map(|oc| oc.ty.as_ref())),
                 Item::Agg(_) => {}
+                Item::Fold(d) => typed.extend(d.answer.iter().filter_map(|a| a.ty.as_ref())),
             }
         }
         for t in typed {
@@ -1432,6 +1804,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             Item::Derived(d) => named.push((d.name.text.as_str(), &d.name.span)),
             Item::Define(d) => named.push((d.name.text.as_str(), &d.name.span)),
             Item::Agg(d) => named.push((d.name.text.as_str(), &d.name.span)),
+            Item::Fold(d) => {
+                if let Some(a) = &d.answer {
+                    named.push((a.name.text.as_str(), &a.name.span));
+                }
+            }
             Item::Table(t) => {
                 if let Some(n) = &t.name {
                     named.push((n.text.as_str(), &n.span));
@@ -1555,7 +1932,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 take(v, tr!("列挙の値", "enum value"), false, false, &mut aliases);
             }
         }
-        if let Some(el) = &f.elements {
+        for el in &f.elements {
             take(&el.name, tr!("並び", "sequence"), false, true, &mut aliases);
             for fd in &el.fields {
                 take(&fd.name, tr!("要素のフィールド", "element field"), false, true, &mut aliases);
@@ -1566,6 +1943,12 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 Item::Derived(d) => take(&d.name, tr!("導出", "derived value"), false, true, &mut aliases),
                 Item::Define(d) => take(&d.name, tr!("定義", "definition"), false, true, &mut aliases),
                 Item::Agg(d) => take(&d.name, tr!("まとめ", "summary"), false, true, &mut aliases),
+                // An answer that is no output's is a local, like a derived value (§15.219).
+                Item::Fold(d) => {
+                    if let Some(a) = d.answer.as_ref().filter(|a| !f.outputs.iter().any(|o| o.name.text == a.name.text)) {
+                        take(&a.name, tr!("畳み込みの答え", "fold's answer"), false, true, &mut aliases);
+                    }
+                }
                 Item::Table(t) => {
                     if let Some(n) = &t.name {
                         take(n, tr!("表", "table"), false, false, &mut aliases);
@@ -1666,8 +2049,17 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 hit.push((&o.name, tr!("答えには、出力と並んで `trace` が入ります", "the answer carries `trace` beside the outputs")));
             }
         }
+        // A rule that walks more than one sequence names each element's message after its
+        // sequence (`<sequence>_element`, §15.219).
+        let elements: Vec<String> = if f.elements.len() > 1 {
+            f.elements.iter().map(|el| format!("{}_element", el.name.ascii.clone().unwrap_or_else(|| el.name.text.clone()))).collect()
+        } else {
+            Vec::new()
+        };
         for e in &f.enums {
-            if e.name.ascii.as_deref().is_some_and(|a| taken(a, &["fired", "element", "decide_request", "decide_response"])) {
+            let mut names: Vec<&str> = vec!["fired", "element", "decide_request", "decide_response"];
+            names.extend(elements.iter().map(|s| s.as_str()));
+            if e.name.ascii.as_deref().is_some_and(|a| taken(a, &names)) {
                 hit.push((&e.name, tr!("同じ名前のメッセージが既にあります", "a message of that name is already there")));
             }
         }
@@ -1772,7 +2164,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 );
             }
             Item::Table(t) => c.table(t, path),
-            Item::Agg(d) => c.count_decl(d, f, path),
+            Item::Agg(d) => c.agg_decl(d, f, path),
+            // A fold is checked where it is written, so that what it reads is declared above
+            // it and its answer is declared from there on (§15.219).
+            Item::Fold(d) => c.fold_decl(d, f, path),
         }
     }
 
@@ -1800,173 +2195,27 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
     }
 
-    // `fold` (§15.56). The table decides one element at a time and its verdict column is a
-    // finite enum, so the walk is a reduction of a string over a finite alphabet. What has to
-    // be checked is that the automaton has no holes: an arm for every verdict the table can
-    // produce, and the two answers that belong to no element at all.
-    if let (Some(fold), Some(d)) = (
-        &f.fold,
-        f.items.iter().find_map(|it| if let Item::Agg(d) = it { Some(d) } else { None }),
-    ) {
-        c.diags.push(
-            Diag::error("E031", tr!("`fold` と `count` は一緒に書けません", "A rule cannot have both a `fold` and a `count`"))
-                .at(tr!("{path}:{} 数え上げ", "{path}:{} count", d.span.line))
-                .mark(d.span.clone(), tr!("この規則には `fold` もあります（{} 行目）", "this rule also has a `fold` (line {})", fold.span.line))
-                .note(tr!(
-                    "どちらも、同じ並びをたどった結果のまとめ方です。`fold` は途中で打ち切れるので、途中で止まったときの数え上げが何を意味するかが決まりません。数えたいなら `fold` を消して、数えた結果を表で判定してください。",
-                    "They are two endings for the same walk. A `fold` can stop partway, and what a count means on a walk that stopped is not decided. To count, drop the `fold` and let a table judge the count."
-                )),
-        );
-    }
-    if let Some(fold) = &f.fold {
-        let at_fold = tr!("{path}:{} 畳み込み", "{path}:{} fold", fold.span.line);
-        let el_name = f.elements.as_ref().map(|e| e.name.text.clone());
-        if el_name.as_deref() != Some(fold.over.as_str()) {
-            c.diags.push(
-                Diag::error("E021", tr!("`over` が指す列がありません", "`over` names a sequence that is not declared"))
-                    .at(at_fold.clone())
-                    .mark(fold.span.clone(), tr!("{} は宣言されていません", "{} is not declared", fold.over))
-                    .note(tr!(
-                        "たどる並びは `elements <名前>(<別名>)` で宣言し、その下に一要素ぶんのフィールドを書いてください。",
-                        "Declare the sequence with `elements <name>(<alias>)`, and the fields of one element inside it."
-                    )),
-            );
-        }
-        // The verdicts the table can actually produce. A fold reads a column some table
-        // writes, and that column's type is what makes the walk finite.
-        let produced: Vec<String> = c.out_values.get(&fold.verdict).cloned().unwrap_or_default();
-        let known = c.syms.get(&fold.verdict).cloned();
-        match &known {
-            Some(sym) if matches!(sym.ty, Ty::Enum(_)) => {}
-            Some(sym) => c.diags.push(
-                Diag::error("E021", tr!("畳めるのは列挙の列だけです", "Only a column of an enum can be folded"))
-                    .at(at_fold.clone())
-                    .mark(fold.span.clone(), tr!("{} は {} です", "{} is {}", fold.verdict, sym.ty))
-                    .note(tr!(
-                        "畳み込みが検査できるのは、判定が有限の値のどれかに落ちるからです。数や金額の列は畳めません。",
-                        "A fold is checkable because each element lands on one of finitely many verdicts. A column of numbers or money is not one of them."
-                    )),
-            ),
-            None => c.diags.push(
-                Diag::error("E012", tr!("`{}` という列はありません", "There is no column called `{}`", fold.verdict))
-                    .at(at_fold.clone())
-                    .mark(fold.span.clone(), tr!("どの表もこの列を出していません", "no table produces this column")),
-            ),
-        }
-        c.used.insert(fold.verdict.clone());
-        // Everything the arms and the two answers read is read (§11 W111). An element's field
-        // that only ever appears in `take_unique 行運賃` is used by the rule, and saying it is
-        // not would send the author to delete the value the walk answers with.
-        {
-            let mut names = Vec::new();
-            for e in fold.empty.iter().chain(fold.exhausted.iter()) {
-                collect_names(e, &mut names);
-            }
-            for (_, arm, _) in &fold.arms {
-                match arm {
-                    crate::ast::Arm::Stop(Some(x)) => collect_names(x, &mut names),
-                    crate::ast::Arm::Take { expr, .. } => collect_names(expr, &mut names),
-                    crate::ast::Arm::KeepMax { expr, key } => {
-                        collect_names(expr, &mut names);
-                        collect_names(key, &mut names);
-                    }
-                    _ => {}
+    // An example of a walk has to say which sequences it walks. A row of cells has no room for
+    // one, so the cell names a `sequence` block instead (§15.56). Every sequence a summary or a
+    // fold walks needs its column (§15.219).
+    {
+        let walked: Vec<&ElementsDecl> = f
+            .elements
+            .iter()
+            .filter(|el| {
+                f.items.iter().any(|it| match it {
+                    Item::Agg(d) => d.over == el.name.text,
+                    Item::Fold(d) => d.over == el.name.text,
+                    _ => false,
+                })
+            })
+            .collect();
+        for ex in &f.examples {
+            for el in &walked {
+                if ex.inputs.iter().any(|(n, _)| n == &el.name.text) {
+                    continue;
                 }
-            }
-            for n in names {
-                c.used.insert(n);
-            }
-        }
-
-        // A literal answer is a value of the output the walk produces. It was never read
-        // against that type, so `empty -> 999銭` under a `money[円]` output passed `check`
-        // and generated 99900 — nine hundred and ninety-nine yen written as 9.99, kept as a
-        // count of 銭, and answered as 99900円 (§15.86). The same literal in a table cell of
-        // that column is E103, and has always been.
-        if let Some(out_ty) = f.outputs.first().and_then(|o| c.syms.get(&o.name.text)).map(|s| s.ty.clone()) {
-            let mut answers: Vec<(&Expr, &Span)> = Vec::new();
-            for e in fold.empty.iter().chain(fold.exhausted.iter()) {
-                answers.push((e, &fold.span));
-            }
-            for (_, arm, sp) in &fold.arms {
-                match arm {
-                    crate::ast::Arm::Stop(Some(x)) => answers.push((x, sp)),
-                    crate::ast::Arm::Take { expr, .. } => answers.push((expr, sp)),
-                    crate::ast::Arm::KeepMax { expr, .. } => answers.push((expr, sp)),
-                    _ => {}
-                }
-            }
-            for (e, sp) in answers {
-                if let Expr::Lit(l, lsp) = e {
-                    let at_l = at_fold.clone();
-                    let where_ = if lsp.len > 0 { lsp.clone() } else { sp.clone() };
-                    c.out_lit(l, &out_ty, &where_, &at_l);
-                }
-                let Expr::Lit(Lit::Num(n), lsp) = e else { continue };
-                if lit_value_in(n, &out_ty).is_none() && out_ty != Ty::Unknown {
-                    c.diags.push(
-                        Diag::error("E103", tr!("この畳み込みの答えは {out_ty} ですが `{}` が書かれています", "This fold answers with {out_ty}, but `{}` is written here", n.raw))
-                            .at(at_fold.clone())
-                            .mark(if lsp.len > 0 { lsp.clone() } else { sp.clone() }, "")
-                            .maybe_note(unit_note(n))
-                            .note(tr!(
-                                "畳み込みの答えは、この規則の出力そのものです。表のセルと同じ単位で書いてください。",
-                                "What a fold answers is the rule's output itself, and is written in the same unit its table cells are."
-                            )),
-                    );
-                }
-            }
-        }
-
-        // (1) and (2): the two answers that belong to no element. Declaring them is not
-        // optional, because a walk over nothing and a walk that ran out are exactly the two
-        // cases a hand-written loop forgets.
-        if fold.empty.is_none() {
-            c.diags.push(
-                Diag::error("E022", tr!("要素がゼロ件のときの答えが宣言されていません", "The answer for a sequence with no elements is not declared"))
-                    .at(at_fold.clone())
-                    .mark(fold.span.clone(), tr!("`empty -> <値>` がありません", "there is no `empty -> <value>`"))
-                    .note(tr!(
-                        "空の並びは必ず来ます。来たときに何を返すかは業務の判断で、ツールが決められることではありません。",
-                        "An empty sequence will arrive. What to answer then is a business decision, and not one the tool can make."
-                    )),
-            );
-        }
-        if fold.exhausted.is_none() {
-            c.diags.push(
-                Diag::error("E023", tr!("最後まで見終えたときの答えが宣言されていません", "The answer for a walk that reached the end is not declared"))
-                    .at(at_fold.clone())
-                    .mark(fold.span.clone(), tr!("`exhausted -> <値>` がありません", "there is no `exhausted -> <value>`"))
-                    .note(tr!(
-                        "どの要素でも打ち切らずに最後まで見たときの答えです。保持している値を返すなら `exhausted -> {}` と書いてください。",
-                        "It is the answer when no element ended the walk. To answer with what is held, write `exhausted -> {}`.",
-                        crate::kw::HELD
-                    )),
-            );
-        }
-
-        // (3): every verdict the table can produce has an arm, and no arm waits for a verdict
-        // the table cannot produce. This is the fold's own completeness, and it is decided the
-        // same way the table's is: by comparing two finite sets.
-        let armed: Vec<String> = fold.arms.iter().map(|(n, _, _)| n.text.clone()).collect();
-        let missing: Vec<&String> = produced.iter().filter(|v| !armed.contains(v)).collect();
-        if !missing.is_empty() && !produced.is_empty() {
-            let names = missing.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ");
-            c.diags.push(
-                Diag::error("E024", tr!("行き先の無い判定があります: {names}", "These verdicts have no arm: {names}"))
-                    .at(at_fold.clone())
-                    .mark(fold.span.clone(), tr!("表はこの判定を出しますが、畳み込みに扱いがありません", "the table produces them and the fold has nothing to do with them"))
-                    .note(tr!(
-                        "その判定の要素が来たとき、次にどうするかが決まっていません。行き先を足すか、表がその値を出さないようにしてください。",
-                        "When an element lands on one of them the walk has no move. Add an arm, or stop the table producing the value."
-                    )),
-            );
-        }
-        // An example of a walk has to say which sequence it walks. A row of cells has no room
-        // for one, so the cell names a `sequence` block instead (§15.56).
-        for (ex, el) in f.examples.iter().filter_map(|ex| f.elements.as_ref().map(|el| (ex, el))) {
-            if !ex.inputs.iter().any(|(n, _)| n == &el.name.text) {
-                let sp = ex.rows.first().map(|r| r.span.clone()).unwrap_or_else(|| fold.span.clone());
+                let sp = ex.rows.first().map(|r| r.span.clone()).unwrap_or_else(|| ex.span.clone());
                 c.diags.push(
                     Diag::error("E025", tr!("例に並びの列がありません", "The examples have no column for the sequence"))
                         .at(tr!("{path}:{} 例", "{path}:{} examples", sp.line))
@@ -1979,24 +2228,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 );
             }
         }
-        for (n, _, sp) in &fold.arms {
-            if !produced.is_empty() && !produced.contains(&n.text) {
-                c.diags.push(
-                    Diag::warning("W115", tr!("どの要素もこの判定にはなりません: {}", "No element can land on this verdict: {}", n.text))
-                        .at(at_fold.clone())
-                        .mark(sp.clone(), tr!("表がこの値を出しません", "the table does not produce this value"))
-                        .note(tr!(
-                            "行き先は書かれていますが、届きません。表の行を見直すか、この行き先を消してください。",
-                            "The arm is written but unreachable. Look again at the table's rows, or drop the arm."
-                        )),
-                );
-            }
-        }
     }
 
     // The three stages of a walk (§15.208): what each item, each output and each answer of the
     // fold may read, given when it runs.
-    if f.elements.is_some() && (f.fold.is_some() || f.items.iter().any(|it| matches!(it, Item::Agg(_)))) {
+    if !f.elements.is_empty() && f.walks() {
         c.walk_stages(f, path);
     }
 
@@ -2006,7 +2242,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         let mut seen: Vec<String> = Vec::new();
         for sq in &f.sequences {
             let at_seq = tr!("{path}:{} 並び {}", "{path}:{} sequence {}", sq.span.line, sq.name.text);
-            let Some(el) = &f.elements else {
+            // A block is a list of the sequence whose fields it writes (§15.219).
+            let Some(el) = sequence_list(f, sq).map(|k| &f.elements[k]) else {
                 c.diags.push(
                     Diag::error("E026", tr!("たどる並びのない規則に `sequence` は書けません", "A `sequence` needs a rule that walks one"))
                         .at(at_seq.clone())
@@ -2087,16 +2324,31 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     // makes possible, and it is caught here rather than at the first run.
     {
         let mut named: Vec<String> = Vec::new();
-        for (ex, ci) in f.examples.iter().filter_map(|ex| {
-            let el = f.elements.as_ref()?;
-            ex.inputs.iter().position(|(n, _)| n == &el.name.text).map(|ci| (ex, ci))
-        }) {
+        let columns = f.examples.iter().flat_map(|ex| {
+            f.elements.iter().enumerate().filter_map(move |(k, el)| ex.inputs.iter().position(|(n, _)| n == &el.name.text).map(|ci| (ex, k, ci)))
+        });
+        for (ex, k, ci) in columns {
             for row in &ex.rows {
                 let sp = row.cell_spans.get(ci).unwrap_or(&row.span).clone();
                 let at_ex = tr!("{path}:{} 例", "{path}:{} examples", row.span.line);
                 match row.cells.get(ci) {
                     Some(Cell::Lit(Lit::Word(w))) => {
-                        if f.sequences.iter().any(|sq| &sq.name.text == w) {
+                        let found = f.sequences.iter().find(|sq| &sq.name.text == w);
+                        let list = found.and_then(|sq| sequence_list(f, sq));
+                        if let (Some(_), Some(l)) = (found, list.filter(|l| *l != k)) {
+                            // A list of another sequence's elements (§15.219).
+                            c.diags.push(
+                                Diag::error("E027", tr!("`{w}` は {} の並びです", "`{w}` is a list of {}", f.elements[l].name.text))
+                                    .at(at_ex)
+                                    .mark(sp, tr!("この列は {} です", "this column is {}", f.elements[k].name.text))
+                                    .note(tr!(
+                                        "この列には、{} のフィールドを見出しにした `sequence` の名前を書いてください。",
+                                        "Name a `sequence` whose header is the fields of {} here.",
+                                        f.elements[k].name.text
+                                    )),
+                            );
+                            named.push(w.clone());
+                        } else if found.is_some() {
                             named.push(w.clone());
                         } else {
                             let mut d = Diag::error("E027", tr!("`{w}` という `sequence` はありません", "There is no sequence called `{w}`"))
@@ -2356,12 +2608,37 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                             "A sum nothing reads is a walk for nothing. Put it in a column or an expression, or remove it."
                         ),
                     ),
+                    AggKind::Max | AggKind::Min => (
+                        if d.kind == AggKind::Max {
+                            tr!("最大 {} はどこでも使われていません", "Max {} is never used", d.name.text)
+                        } else {
+                            tr!("最小 {} はどこでも使われていません", "Min {} is never used", d.name.text)
+                        },
+                        tr!(
+                            "求めた値を使わないなら、並びをたどる意味がありません。表の列か式に置くか、消してください。",
+                            "A value nothing reads is a walk for nothing. Put it in a column or an expression, or remove it."
+                        ),
+                    ),
                 };
                 c.diags.push(
                     Diag::warning("W111", title)
                         .at(at(d.span.line))
                         .mark(d.name.span.clone(), tr!("どの列にも式にも現れません", "appears in no column and no expression"))
                         .note(note),
+                );
+            }
+        }
+        // A fold's answer under a name of its own, which nothing reads (§15.219).
+        if let Item::Fold(d) = it {
+            if let Some(a) = d.answer.as_ref().filter(|a| !answers(&a.name.text) && !c.used.contains(&a.name.text)) {
+                c.diags.push(
+                    Diag::warning("W111", tr!("畳み込みの答え {} はどこでも使われていません", "The fold's answer {} is never used", a.name.text))
+                        .at(at(a.name.span.line))
+                        .mark(a.name.span.clone(), tr!("どの列にも式にも現れません", "appears in no column and no expression"))
+                        .note(tr!(
+                            "答えを使わないなら、並びをたどる意味がありません。表の列か式に置くか、出力の名前を付けるか、消してください。",
+                            "A fold whose answer nothing reads is a walk for nothing. Put it in a column or an expression, give it an output's name, or remove it."
+                        )),
                 );
             }
         }
@@ -3379,29 +3656,38 @@ impl Checked {
         }
     }
 
-    /// `count 一致数(hits) over 納入先 where 判定 = 一致  range >=0 <=100` (§15.58).
-    ///
-    /// Three things have to hold for the count to be a number the rest of the rule can treat
-    /// like any other: the test reads a column of **one element**, that column's values are a
-    /// closed set, and the range is declared. The range is not decoration — it is the
-    /// universe the completeness check quantifies over when the count becomes a column, and
-    /// it is the cap the generated code holds the sequence to.
     /// Whether a name's declared range starts at zero or above. A summed column needs
     /// this so the running total only ever rises (§15.100).
     fn non_negative(&self, name: &str) -> bool {
         matches!(self.ranges.get(name), Some((Some(lo), _)) if lo.cmp_to(Rat::zero()) != std::cmp::Ordering::Less)
     }
 
-    fn count_decl(&mut self, d: &AggDecl, f: &RuleFile, path: &str) {
+    /// `count 一致数(hits) over 納入先 where 判定 = 一致  range >=0 <=100` (§15.58), `sum` (§15.100),
+    /// and `max` and `min` (§15.219).
+    ///
+    /// Three things have to hold for a count to be a number the rest of the rule can treat like
+    /// any other: the test reads a column of **one element** of the sequence it runs over, that
+    /// column's values are a closed set, and the range is declared. The range is not decoration
+    /// — it is the universe the completeness check quantifies over when the count becomes a
+    /// column, and it is the cap the generated code holds the sequence to.
+    ///
+    /// `max` and `min` read a column of numbers, dates or an ordered enum, and answer `empty` when
+    /// no element is looked at. They need no range: the answer is one of the column's values or the
+    /// `empty` value, so the range is worked out from the column's and that value. One that is
+    /// written has to hold it (E112).
+    fn agg_decl(&mut self, d: &AggDecl, f: &RuleFile, path: &str) {
         let summing = d.kind == AggKind::Sum;
-        let at = if summing {
-            tr!("{path}:{} 合計", "{path}:{} sum", d.span.line)
-        } else {
-            tr!("{path}:{} 数え上げ", "{path}:{} count", d.span.line)
+        let extreme = d.kind.extreme();
+        let at = match d.kind {
+            AggKind::Sum => tr!("{path}:{} 合計", "{path}:{} sum", d.span.line),
+            AggKind::Count => tr!("{path}:{} 数え上げ", "{path}:{} count", d.span.line),
+            AggKind::Max => tr!("{path}:{} 最大", "{path}:{} max", d.span.line),
+            AggKind::Min => tr!("{path}:{} 最小", "{path}:{} min", d.span.line),
         };
         let col = d.column.text.clone();
 
-        if f.elements.as_ref().map(|e| e.name.text.as_str()) != Some(d.over.as_str()) {
+        let seq = f.elements.iter().position(|e| e.name.text == d.over);
+        if seq.is_none() {
             self.diags.push(
                 Diag::error("E028", tr!("`over` が指す並びがありません", "`over` names a sequence that is not declared"))
                     .at(at.clone())
@@ -3413,15 +3699,16 @@ impl Checked {
             );
         }
 
-        let scoped = element_scoped(f);
+        // The values of one element of the sequence this runs over, worked out over the items
+        // above (§15.219): a value of another sequence's elements is not one it sees.
+        let st = stages(f);
+        let of_this = |n: &str| st.each.get(n).copied() == seq || seq.is_none() && st.each.contains_key(n);
+        let other = |n: &str| st.each.get(n).filter(|s| Some(**s) != seq).map(|s| f.elements[*s].name.text.clone());
         let sym = self.syms.get(&col).cloned();
-        let bad = |c: &mut Self, what: String, note: String| {
-            c.diags.push(
-                Diag::error("E029", tr!("この列は数えられません", "This column cannot be counted"))
-                    .at(at.clone())
-                    .mark(d.column.span.clone(), what)
-                    .note(note),
-            );
+        // A `max` and a `min` count nothing: their title says what they do with the column.
+        let title = if extreme { tr!("この列はまとめられません", "This column cannot be summarised") } else { tr!("この列は数えられません", "This column cannot be counted") };
+        let bad = |c: &mut Self, sp: &Span, what: String, note: String| {
+            c.diags.push(Diag::error("E029", title.clone()).at(at.clone()).mark(sp.clone(), what).note(note));
         };
         match &sym {
             None => self.diags.push(
@@ -3429,8 +3716,18 @@ impl Checked {
                     .at(at.clone())
                     .mark(d.column.span.clone(), tr!("宣言されていません", "not declared")),
             ),
-            Some(_) if !scoped.contains(&col) => bad(
+            Some(_) if other(&col).is_some() => bad(
                 self,
+                &d.column.span,
+                tr!("{col} は {} の要素の値です", "{col} is a value of one element of {}", other(&col).unwrap_or_default()),
+                tr!(
+                    "まとめられるのは、`over` が指す並びの要素の値だけです。ほかの並びの値は、その並びを `over` に書いた行でまとめてください。",
+                    "Only a value of one element of the sequence `over` names can be summarised. Summarise another sequence's value on a line whose `over` names that sequence."
+                ),
+            ),
+            Some(_) if !of_this(&col) => bad(
+                self,
+                &d.column.span,
                 tr!("{col} は要素ごとの値ではありません", "{col} is not a value of one element"),
                 tr!(
                     "まとめられるのは、要素のフィールドか、要素ごとの表が出した列だけです。一回の呼び出しに一つしかない値は、並びとしてまとめられません。",
@@ -3440,6 +3737,7 @@ impl Checked {
             // A sum reads a number; a count reads a value out of a closed set.
             Some(sym) if summing && !matches!(sym.ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Number | Ty::Rate) => bad(
                 self,
+                &d.column.span,
                 tr!("{col} は {} です", "{col} is {}", sym.ty),
                 tr!(
                     "合計できるのは数の列（金額・数量・`number`・`rate`）だけです。真偽や列挙を合計しても意味が決まりません。",
@@ -3451,60 +3749,94 @@ impl Checked {
             // (§15.100). A column that can go negative has no such guard.
             Some(_) if summing && !self.non_negative(&col) => bad(
                 self,
+                &d.column.span,
                 tr!("{col} は負になりえます", "{col} can be negative"),
                 tr!(
                     "合計する列には `range >=0…` が要ります。負の値が混じると途中の合計が上下するので、生成コードは、合計が宣言した範囲を出た時点でエラーにすることができません。差を取りたいなら、正の列を二つ合計して引いてください。",
                     "A summed column needs `range >=0…`. With negative values the running total moves both ways, and the guard cannot refuse the moment it leaves the declared range. To take a difference, sum two non-negative columns and subtract."
                 ),
             ),
-            Some(sym) if !summing && !matches!(sym.ty, Ty::Bool | Ty::Enum(_)) => bad(
+            // The largest or the smallest of a column needs an order: a number, a date, or an
+            // enum whose values are ordered (§15.210).
+            Some(sym)
+                if extreme
+                    && !matches!(sym.ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Number | Ty::Rate | Ty::Date)
+                    && self.ordered_enum(&sym.ty).is_none() =>
+            {
+                bad(
+                    self,
+                    &d.column.span,
+                    tr!("{col} は {} です", "{col} is {}", sym.ty),
+                    tr!(
+                        "最大と最小を取れるのは、順のある列（金額・数量・`number`・`rate`・日付、`<` で並べた列挙）だけです。値が無いことのある列（`?`）と、順の無い列挙には、大小がありません。",
+                        "Only a column with an order has a largest and a smallest value: an amount, a quantity, `number`, `rate`, a date, or an enum whose values are ordered with `<`. A column that may have no value (`?`) and an enum without an order have neither."
+                    ),
+                );
+            }
+            Some(sym) if !summing && !extreme && !matches!(sym.ty, Ty::Bool | Ty::Enum(_)) => bad(
                 self,
+                &d.column.span,
                 tr!("{col} は {} です", "{col} is {}", sym.ty),
                 tr!(
                     "数える条件は「その列がこの値であること」なので、値が有限の集合である列（真偽か列挙）にだけ書けます。",
                     "The test is \"this column has this value\", so the column's values have to be a closed set: a bool or an enum."
                 ),
             ),
-            Some(_) if summing => {}
+            Some(_) if summing || extreme => {}
             Some(sym) => {
-                // The value the column has to take. A bool needs none, which is what makes
-                // `where 会社名一致` read the way it is meant to.
-                match (&d.value, &sym.ty) {
-                    (None, Ty::Bool) => {}
-                    (None, _) => bad(
-                        self,
-                        tr!("どの値を数えるのかが書かれていません", "the value to count is missing"),
-                        tr!(
-                            "`where {col} = <値>` と書いてください。値を書かなくていいのは真偽の列だけです。",
-                            "Write `where {col} = <value>`. Only a bool column may leave it out."
-                        ),
-                    ),
-                    (Some(v), Ty::Bool) => {
-                        if v.text != crate::kw::TRUE && v.text != crate::kw::FALSE {
-                            bad(
-                                self,
-                                tr!("{} は真偽の値ではありません", "{} is not a boolean", v.text),
-                                tr!("書けるのは `true` か `false` です。", "Write `true` or `false`."),
-                            );
-                        }
-                    }
-                    (Some(v), Ty::Enum(en)) => {
-                        let ok = self.enums.get(en).is_some_and(|vs| vs.contains(&v.text));
-                        if !ok {
-                            bad(
-                                self,
-                                tr!("{} は列挙 {en} の値ではありません", "{} is not a value of the enum {en}", v.text),
-                                tr!("その列挙の値を一つ書いてください。", "Name one of that enum's values."),
-                            );
-                        } else {
-                            self.used_values.insert((en.clone(), v.text.clone()));
-                        }
-                    }
-                    _ => {}
-                }
+                let ty = sym.ty.clone();
+                self.test_value(&col, &d.column.span, &d.value, &ty, &bad);
             }
         }
         self.used.insert(col);
+        // The elements `max` and `min` look at: a test on a column of one element, read the way a
+        // count reads its own (§15.219).
+        if let Some((w, want)) = &d.filter {
+            match self.syms.get(&w.text).cloned() {
+                None => self.diags.push(
+                    Diag::error("E012", tr!("`{}` という列はありません", "There is no column called `{}`", w.text))
+                        .at(at.clone())
+                        .mark(w.span.clone(), tr!("宣言されていません", "not declared")),
+                ),
+                Some(_) if other(&w.text).is_some() => bad(
+                    self,
+                    &w.span,
+                    tr!("{} は {} の要素の値です", "{} is a value of one element of {}", w.text, other(&w.text).unwrap_or_default()),
+                    tr!(
+                        "`where` が読めるのは、`over` が指す並びの要素の値だけです。",
+                        "`where` can only read a value of one element of the sequence `over` names."
+                    ),
+                ),
+                Some(_) if !of_this(&w.text) => bad(
+                    self,
+                    &w.span,
+                    tr!("{} は要素ごとの値ではありません", "{} is not a value of one element", w.text),
+                    tr!(
+                        "`where` は、要素ごとに、その要素を見るかどうかを決めます。一回の呼び出しに一つしかない値では、要素ごとに決まりません。",
+                        "`where` decides, element by element, whether the element is looked at. A value there is one of per call decides nothing element by element."
+                    ),
+                ),
+                Some(sym) if !matches!(sym.ty, Ty::Bool | Ty::Enum(_)) => bad(
+                    self,
+                    &w.span,
+                    tr!("{} は {} です", "{} is {}", w.text, sym.ty),
+                    tr!(
+                        "`where` の条件は「その列がこの値であること」なので、値が有限の集合である列（真偽か列挙）にだけ書けます。",
+                        "The test of `where` is \"this column has this value\", so the column's values have to be a closed set: a bool or an enum."
+                    ),
+                ),
+                Some(sym) => {
+                    let ty = sym.ty.clone();
+                    self.test_value(&w.text, &w.span, want, &ty, &bad);
+                }
+            }
+            self.used.insert(w.text.clone());
+        }
+
+        if extreme {
+            self.extreme_decl(d, path, &at);
+            return;
+        }
 
         // The range, which is required and is what the sequence is held to. A count is a
         // plain number; a sum keeps the unit of the column it adds up.
@@ -3542,6 +3874,440 @@ impl Checked {
             d.name.text.clone(),
             Sym { ty, span: d.name.span.clone(), kind: SymKind::Derived, contract_only: false },
         );
+    }
+
+    /// The value a test on a column of one element looks for (`count … where <column> = <value>`,
+    /// the `where` of `max` and `min`): a bool needs none, which is what makes `where 会社名一致`
+    /// read the way it is meant to; an enum's has to be one of its values.
+    fn test_value(&mut self, col: &str, sp: &Span, value: &Option<Name>, ty: &Ty, bad: &dyn Fn(&mut Self, &Span, String, String)) {
+        match (value, ty) {
+            (None, Ty::Bool) => {}
+            (None, _) => bad(
+                self,
+                sp,
+                tr!("どの値を数えるのかが書かれていません", "the value to count is missing"),
+                tr!(
+                    "`where {col} = <値>` と書いてください。値を書かなくていいのは真偽の列だけです。",
+                    "Write `where {col} = <value>`. Only a bool column may leave it out."
+                ),
+            ),
+            (Some(v), Ty::Bool) => {
+                if v.text != crate::kw::TRUE && v.text != crate::kw::FALSE {
+                    bad(
+                        self,
+                        sp,
+                        tr!("{} は真偽の値ではありません", "{} is not a boolean", v.text),
+                        tr!("書けるのは `true` か `false` です。", "Write `true` or `false`."),
+                    );
+                }
+            }
+            (Some(v), Ty::Enum(en)) => {
+                let ok = self.enums.get(en).is_some_and(|vs| vs.contains(&v.text));
+                if !ok {
+                    bad(
+                        self,
+                        sp,
+                        tr!("{} は列挙 {en} の値ではありません", "{} is not a value of the enum {en}", v.text),
+                        tr!("その列挙の値を一つ書いてください。", "Name one of that enum's values."),
+                    );
+                } else {
+                    self.used_values.insert((en.clone(), v.text.clone()));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// What `max` and `min` answer (§15.219): a value of the column, or the `empty` value, which is
+    /// required (E022) and has to be a value of the column's type. The answer's range is the
+    /// column's with that value added — the column's values are held to its range by the door, or
+    /// worked out from it — and a range written on the line has to hold it (E112). An ordered enum
+    /// has no range of numbers: its answer is one of its values.
+    fn extreme_decl(&mut self, d: &AggDecl, path: &str, at: &str) {
+        let word = d.kind.word();
+        let ty = self.syms.get(&d.column.text).map(|s| s.ty.clone()).unwrap_or(Ty::Unknown);
+        let scale = self.scales.get(&d.column.text).copied().unwrap_or(1);
+        let empty: Option<Rat> = match &d.empty {
+            None => {
+                self.diags.push(
+                    Diag::error("E022", tr!("要素がゼロ件のときの答えが宣言されていません", "The answer for a sequence with no elements is not declared"))
+                        .at(at.to_string())
+                        .mark(d.span.clone(), tr!("`empty <値>` がありません", "there is no `empty <value>`"))
+                        .note(tr!(
+                            "`{word}` は、見る要素が一つも無いときに何を答えるかを書いてください。並びが空のときと、`where` に当てはまる要素が無いときです。何を答えるかは業務の判断で、ツールが決められることではありません。",
+                            "Say what `{word}` answers when no element is looked at: when the sequence is empty, and when no element passes the `where`. What to answer is a business decision, and not one the tool can make."
+                        )),
+                );
+                None
+            }
+            Some((l, sp)) => {
+                let before = self.diags.len();
+                self.cell(&Cell::Lit(l.clone()), &ty, scale, sp, at, false);
+                if self.diags.len() > before {
+                    None
+                } else {
+                    match (l, ty.present()) {
+                        (Lit::Num(n), t) => lit_value_in(n, t),
+                        (Lit::Date(y, m, dd), Ty::Date) => Some(date_ord(*y, *m, *dd)),
+                        (Lit::Word(w), Ty::Enum(en)) => {
+                            self.used_values.insert((en.clone(), w.clone()));
+                            None
+                        }
+                        _ => None,
+                    }
+                }
+            }
+        };
+        if ty.is_numeric() || ty == Ty::Date {
+            // The column's range, and the `empty` value beside it.
+            let (cl, ch) = self.ranges.get(&d.column.text).copied().unwrap_or((None, None));
+            let lo = match (cl, empty) {
+                (Some(a), Some(e)) => Some(if e.cmp_to(a) == std::cmp::Ordering::Less { e } else { a }),
+                (a, _) => a,
+            };
+            let hi = match (ch, empty) {
+                (Some(a), Some(e)) => Some(if e.cmp_to(a) == std::cmp::Ordering::Greater { e } else { a }),
+                (a, _) => a,
+            };
+            let mut range = (lo, hi);
+            if let Some(rg) = &d.range {
+                let ((dl, dh), bad) = bounds_of(rg, &ty);
+                for n in bad {
+                    self.diags.push(
+                        Diag::error("E103", tr!("範囲の `{}` は {ty} の値ではありません", "The bound `{}` is not a value of {ty}", n.raw))
+                            .at(at.to_string())
+                            .mark(d.name.span.clone(), tr!("この宣言の範囲", "the range on this declaration"))
+                            .maybe_note(unit_note(&n)),
+                    );
+                }
+                let too_low = matches!((dl, lo), (Some(a), Some(b)) if b.cmp_to(a) == std::cmp::Ordering::Less) || (dl.is_some() && lo.is_none());
+                let too_high = matches!((dh, hi), (Some(a), Some(b)) if b.cmp_to(a) == std::cmp::Ordering::Greater) || (dh.is_some() && hi.is_none());
+                if too_low || too_high {
+                    let shown = |v: Option<Rat>| v.map(|x| fmt_val(x, &ty)).unwrap_or_else(|| "…".to_string());
+                    let mut e = Diag::error(
+                        "E112",
+                        tr!("`{word}` の範囲が、実際に取りうる値を含んでいません", "The range of a `{word}` does not contain the values it can actually take"),
+                    )
+                    .at(tr!("{path}:{} {word} {}", "{path}:{} {word} {}", rg.span.line, d.name.text))
+                    .mark(rg.span.clone(), tr!("実際に取りうる値は >={} <={} です", "the reachable interval is >={} <={}", shown(lo), shown(hi)))
+                    .note(tr!(
+                        "`{word}` の答えは、{} のどれかの値か、`empty` の値です。範囲が狭いと、完全性の検査は、実際に起きる値を見ないまま「完全」と判定します。",
+                        "What a `{word}` answers is a value of {}, or the `empty` value. With a range that is too narrow, the completeness check answers \"complete\" without ever seeing the values that actually occur.",
+                        d.column.text
+                    ));
+                    if let (Some(l), Some(h)) = (lo, hi) {
+                        e = e.fix(crate::diag::FixKind::WidenRange, format!("{} >={} <={}", crate::kw::RANGE, fmt_val_fixed(l, &ty), fmt_val_fixed(h, &ty)));
+                    }
+                    self.diags.push(e);
+                } else {
+                    // A written range that holds the answer is the universe, as any declared one is.
+                    range = (dl.or(lo), dh.or(hi));
+                }
+            }
+            if range.0.is_some() || range.1.is_some() {
+                self.ranges.insert(d.name.text.clone(), range);
+            }
+        } else if let Some(rg) = &d.range {
+            self.diags.push(
+                Diag::error("E069", tr!("`{word}` {} の範囲は書けません", "A `{word}` {} takes no range", d.name.text))
+                    .at(at.to_string())
+                    .mark(rg.span.clone(), tr!("{} は {ty} です", "{} is {ty}", d.column.text))
+                    .note(tr!(
+                        "列挙の `{word}` は、その列挙の値のどれかを答えます。範囲は、数と日付の列にだけ書けます。",
+                        "A `{word}` of an enum answers one of the enum's values. Only a column of numbers or dates takes a range."
+                    )),
+            );
+        }
+        self.scales.insert(d.name.text.clone(), scale);
+        if let Some(g) = self.grids.get(&d.column.text).copied() {
+            self.grids.insert(d.name.text.clone(), g);
+        }
+        self.syms.insert(d.name.text.clone(), Sym { ty, span: d.name.span.clone(), kind: SymKind::Derived, contract_only: false });
+    }
+
+    /// The type a fold answers with (§15.219): the name after its `->` — an output's, or one it
+    /// declares with a type — or the rule's first output.
+    pub(crate) fn fold_ty(&self, fold: &FoldDecl, f: &RuleFile) -> Ty {
+        match fold.answer_name(f) {
+            Some(n) => self.syms.get(n).map(|s| s.ty.clone()).unwrap_or(Ty::Unknown),
+            None => Ty::Unknown,
+        }
+    }
+
+    /// `fold <verdict> over <sequence> [-> <name> [: <type>]]` (§15.56, §15.219), where it is
+    /// written.
+    ///
+    /// The table decides one element at a time and its verdict column is a finite enum, so the
+    /// walk is a reduction of a string over a finite alphabet. What has to be checked is that the
+    /// automaton has no holes: an arm for every verdict the table can produce, and the two
+    /// answers that belong to no element at all. The answer goes to the name after `->`: an output
+    /// of the rule, or a value of its own with the type written there, which the items below can
+    /// read like any other (E021 for a name that is neither, or one something else decides).
+    fn fold_decl(&mut self, fold: &FoldDecl, f: &RuleFile, path: &str) {
+        let at_fold = tr!("{path}:{} 畳み込み", "{path}:{} fold", fold.span.line);
+        let fold_bad = |s: &mut Self, sp: &Span, title: String, mark: String, note: String| {
+            s.diags.push(Diag::error("E021", title).at(at_fold.clone()).mark(sp.clone(), mark).note(note));
+        };
+        // Where the answer goes.
+        if let Some(FoldAnswer { name, ty }) = &fold.answer {
+            let output = f.outputs.iter().any(|o| o.name.text == name.text);
+            match (self.syms.get(&name.text).cloned(), ty) {
+                (Some(sym), Some(t)) if output => {
+                    let want = self.resolve(t);
+                    if want != sym.ty && sym.ty != Ty::Unknown && want != Ty::Unknown {
+                        fold_bad(
+                            self,
+                            &t.span,
+                            tr!("出力 {} は {} です", "Output {} is {}", name.text, sym.ty),
+                            tr!("{want} と書かれています", "{want} is written here"),
+                            tr!(
+                                "出力の名前に答えるなら、型は出力の宣言のとおりです。`: <型>` を消すか、出力の型にそろえてください。",
+                                "An answer that goes to an output takes the output's type. Drop the `: <type>`, or make it the output's."
+                            ),
+                        );
+                    }
+                }
+                (Some(_), _) if output => {}
+                (Some(sym), _) => {
+                    let what = match sym.kind {
+                        SymKind::Input => tr!("入力", "an input"),
+                        SymKind::Element => tr!("要素のフィールド", "a field of an element"),
+                        SymKind::Derived | SymKind::Define => tr!("上で宣言した値", "a value declared above"),
+                        SymKind::TableOut => tr!("表の出力", "a table's output"),
+                        SymKind::Output => tr!("出力", "an output"),
+                    };
+                    fold_bad(
+                        self,
+                        &name.span,
+                        tr!("`{}` はすでに{what}です", "`{}` is already {what}", name.text),
+                        tr!("この畳み込みの答えの名前です", "this is the name of the fold's answer"),
+                        tr!(
+                            "畳み込みの答えには、出力の名前か、まだ使っていない名前を付けてください。新しい名前なら `-> <名前>(<別名>) : <型>` と型も書きます。",
+                            "Give a fold's answer the name of an output, or a name not yet used; a new one takes its type too: `-> <name>(<alias>) : <type>`."
+                        ),
+                    );
+                }
+                (None, None) => fold_bad(
+                    self,
+                    &name.span,
+                    tr!("`{}` の型が書かれていません", "`{}` is not given a type", name.text),
+                    tr!("出力の名前ではありません", "this is no output's name"),
+                    tr!(
+                        "出力でない名前に答えるなら、型も書いてください: `-> {}(<別名>) : <型>`。",
+                        "An answer that goes to a name that is no output takes a type: `-> {}(<alias>) : <type>`.",
+                        name.text
+                    ),
+                ),
+                (None, Some(t)) => {
+                    let ty = self.resolve(t);
+                    if let Some(d) = missing_step(name, t, ty.present(), name.span.line, path) {
+                        self.diags.push(d);
+                    }
+                    self.scales.insert(name.text.clone(), scale_of_type(t, ty.present()));
+                    self.syms.insert(name.text.clone(), Sym { ty, span: name.span.clone(), kind: SymKind::Derived, contract_only: false });
+                }
+            }
+        }
+        let out_ty = self.fold_ty(fold, f);
+        if f.sequence_named(&fold.over).is_none() {
+            self.diags.push(
+                Diag::error("E021", tr!("`over` が指す列がありません", "`over` names a sequence that is not declared"))
+                    .at(at_fold.clone())
+                    .mark(fold.span.clone(), tr!("{} は宣言されていません", "{} is not declared", fold.over))
+                    .note(tr!(
+                        "たどる並びは `elements <名前>(<別名>)` で宣言し、その下に一要素ぶんのフィールドを書いてください。",
+                        "Declare the sequence with `elements <name>(<alias>)`, and the fields of one element inside it."
+                    )),
+            );
+        }
+        // The verdicts the table can actually produce. A fold reads a column some table
+        // writes, and that column's type is what makes the walk finite.
+        let produced: Vec<String> = self.out_values.get(&fold.verdict).cloned().unwrap_or_default();
+        let known = self.syms.get(&fold.verdict).cloned();
+        match &known {
+            Some(sym) if matches!(sym.ty, Ty::Enum(_)) => {}
+            Some(sym) => self.diags.push(
+                Diag::error("E021", tr!("畳めるのは列挙の列だけです", "Only a column of an enum can be folded"))
+                    .at(at_fold.clone())
+                    .mark(fold.span.clone(), tr!("{} は {} です", "{} is {}", fold.verdict, sym.ty))
+                    .note(tr!(
+                        "畳み込みが検査できるのは、判定が有限の値のどれかに落ちるからです。数や金額の列は畳めません。",
+                        "A fold is checkable because each element lands on one of finitely many verdicts. A column of numbers or money is not one of them."
+                    )),
+            ),
+            None => self.diags.push(
+                Diag::error("E012", tr!("`{}` という列はありません", "There is no column called `{}`", fold.verdict))
+                    .at(at_fold.clone())
+                    .mark(fold.span.clone(), tr!("どの表もこの列を出していません", "no table produces this column")),
+            ),
+        }
+        self.used.insert(fold.verdict.clone());
+        // Everything the arms and the two answers read is read (§11 W111). An element's field
+        // that only ever appears in `take_unique 行運賃` is used by the rule, and saying it is
+        // not would send the author to delete the value the walk answers with.
+        {
+            let mut names = Vec::new();
+            for e in fold.empty.iter().chain(fold.exhausted.iter()) {
+                collect_names(e, &mut names);
+            }
+            for (_, arm, _) in &fold.arms {
+                match arm {
+                    Arm::Stop(Some(x)) => collect_names(x, &mut names),
+                    Arm::Take { expr, .. } => collect_names(expr, &mut names),
+                    Arm::KeepMax { expr, key } => {
+                        collect_names(expr, &mut names);
+                        collect_names(key, &mut names);
+                    }
+                    _ => {}
+                }
+            }
+            for n in names {
+                self.used.insert(n);
+            }
+        }
+
+        // A literal answer is a value of the output the walk produces. It was never read
+        // against that type, so `empty -> 999銭` under a `money[円]` output passed `check`
+        // and generated 99900 — nine hundred and ninety-nine yen written as 9.99, kept as a
+        // count of 銭, and answered as 99900円 (§15.86). The same literal in a table cell of
+        // that column is E103, and has always been.
+        if out_ty != Ty::Unknown {
+            let mut answers: Vec<(&Expr, &Span)> = Vec::new();
+            for e in fold.empty.iter().chain(fold.exhausted.iter()) {
+                answers.push((e, &fold.span));
+            }
+            for (_, arm, sp) in &fold.arms {
+                match arm {
+                    Arm::Stop(Some(x)) => answers.push((x, sp)),
+                    Arm::Take { expr, .. } => answers.push((expr, sp)),
+                    Arm::KeepMax { expr, .. } => answers.push((expr, sp)),
+                    _ => {}
+                }
+            }
+            for (e, sp) in answers {
+                if let Expr::Lit(l, lsp) = e {
+                    let at_l = at_fold.clone();
+                    let where_ = if lsp.len > 0 { lsp.clone() } else { sp.clone() };
+                    self.out_lit(l, &out_ty, &where_, &at_l);
+                }
+                let Expr::Lit(Lit::Num(n), lsp) = e else { continue };
+                if lit_value_in(n, &out_ty).is_none() {
+                    let note = match &fold.answer {
+                        None => tr!(
+                            "畳み込みの答えは、この規則の出力そのものです。表のセルと同じ単位で書いてください。",
+                            "What a fold answers is the rule's output itself, and is written in the same unit its table cells are."
+                        ),
+                        Some(a) => tr!(
+                            "畳み込みの答えは {} の値です。その型の単位で書いてください。",
+                            "What a fold answers is the value of {}, and is written in the unit of its type.",
+                            a.name.text
+                        ),
+                    };
+                    self.diags.push(
+                        Diag::error("E103", tr!("この畳み込みの答えは {out_ty} ですが `{}` が書かれています", "This fold answers with {out_ty}, but `{}` is written here", n.raw))
+                            .at(at_fold.clone())
+                            .mark(if lsp.len > 0 { lsp.clone() } else { sp.clone() }, "")
+                            .maybe_note(unit_note(n))
+                            .note(note),
+                    );
+                }
+            }
+        }
+
+        // (1) and (2): the two answers that belong to no element. Declaring them is not
+        // optional, because a walk over nothing and a walk that ran out are exactly the two
+        // cases a hand-written loop forgets.
+        if fold.empty.is_none() {
+            self.diags.push(
+                Diag::error("E022", tr!("要素がゼロ件のときの答えが宣言されていません", "The answer for a sequence with no elements is not declared"))
+                    .at(at_fold.clone())
+                    .mark(fold.span.clone(), tr!("`empty -> <値>` がありません", "there is no `empty -> <value>`"))
+                    .note(tr!(
+                        "空の並びは必ず来ます。来たときに何を返すかは業務の判断で、ツールが決められることではありません。",
+                        "An empty sequence will arrive. What to answer then is a business decision, and not one the tool can make."
+                    )),
+            );
+        }
+        if fold.exhausted.is_none() {
+            self.diags.push(
+                Diag::error("E023", tr!("最後まで見終えたときの答えが宣言されていません", "The answer for a walk that reached the end is not declared"))
+                    .at(at_fold.clone())
+                    .mark(fold.span.clone(), tr!("`exhausted -> <値>` がありません", "there is no `exhausted -> <value>`"))
+                    .note(tr!(
+                        "どの要素でも打ち切らずに最後まで見たときの答えです。保持している値を返すなら `exhausted -> {}` と書いてください。",
+                        "It is the answer when no element ended the walk. To answer with what is held, write `exhausted -> {}`.",
+                        crate::kw::HELD
+                    )),
+            );
+        }
+
+        // (3): every verdict the table can produce has an arm, and no arm waits for a verdict
+        // the table cannot produce. This is the fold's own completeness, and it is decided the
+        // same way the table's is: by comparing two finite sets.
+        let armed: Vec<String> = fold.arms.iter().map(|(n, _, _)| n.text.clone()).collect();
+        let missing: Vec<&String> = produced.iter().filter(|v| !armed.contains(v)).collect();
+        if !missing.is_empty() && !produced.is_empty() {
+            let names = missing.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ");
+            self.diags.push(
+                Diag::error("E024", tr!("行き先の無い判定があります: {names}", "These verdicts have no arm: {names}"))
+                    .at(at_fold.clone())
+                    .mark(fold.span.clone(), tr!("表はこの判定を出しますが、畳み込みに扱いがありません", "the table produces them and the fold has nothing to do with them"))
+                    .note(tr!(
+                        "その判定の要素が来たとき、次にどうするかが決まっていません。行き先を足すか、表がその値を出さないようにしてください。",
+                        "When an element lands on one of them the walk has no move. Add an arm, or stop the table producing the value."
+                    )),
+            );
+        }
+        for (n, _, sp) in &fold.arms {
+            if !produced.is_empty() && !produced.contains(&n.text) {
+                self.diags.push(
+                    Diag::warning("W115", tr!("どの要素もこの判定にはなりません: {}", "No element can land on this verdict: {}", n.text))
+                        .at(at_fold.clone())
+                        .mark(sp.clone(), tr!("表がこの値を出しません", "the table does not produce this value"))
+                        .note(tr!(
+                            "行き先は書かれていますが、届きません。表の行を見直すか、この行き先を消してください。",
+                            "The arm is written but unreachable. Look again at the table's rows, or drop the arm."
+                        )),
+                );
+            }
+        }
+
+        // What the answer can be, for the items below that read it (§15.219): one of the values
+        // the fold answers with, so the hull of theirs, as a declared range bounds a `sum`.
+        // Without it a `define` over the answer had no interval, and its int64 claim was never
+        // made. Only an answer something reads gets one, so a rule whose fold answers its first
+        // output and nothing more keeps the certificate it had.
+        if let Some(name) = fold.answer_name(f) {
+            let read = f.items.iter().any(|it| item_reads(it).iter().any(|n| n == name))
+                || f.result.as_ref().is_some_and(|r| {
+                    let mut ns = Vec::new();
+                    collect_names(&r.expr, &mut ns);
+                    ns.iter().any(|n| n == name)
+                });
+            let ty = self.syms.get(name).map(|s| s.ty.present().clone()).unwrap_or(Ty::Unknown);
+            if read && (ty.is_numeric() || ty == Ty::Date) {
+                let mut hull: Option<(Rat, Rat)> = None;
+                let mut known = true;
+                for e in fold.answer_values() {
+                    let iv = match e {
+                        Expr::Lit(Lit::Date(y, m, d), _) => Some((date_ord(*y, *m, *d), date_ord(*y, *m, *d))),
+                        _ => self.interval(e, &ty),
+                    };
+                    match iv {
+                        Some((lo, hi)) => {
+                            hull = Some(match hull {
+                                None => (lo, hi),
+                                Some((a, b)) => (crate::grid::min_rat(a, lo), crate::grid::max_rat(b, hi)),
+                            });
+                        }
+                        None => known = false,
+                    }
+                }
+                if let (true, Some((lo, hi))) = (known, hull) {
+                    self.ranges.insert(name.to_string(), (Some(lo), Some(hi)));
+                }
+            }
+        }
     }
 
     fn table(&mut self, t: &Table, path: &str) {
@@ -3861,7 +4627,7 @@ impl Checked {
     /// The cells of a table of values — `examples`, or a `scenario` (§15.148) — held to the
     /// types of the columns they sit under, with `at` naming where they are.
     fn value_cells(&mut self, t: &Table, f: &RuleFile, at: &dyn Fn(usize) -> String) {
-        let seq = f.elements.as_ref().map(|el| el.name.text.clone());
+        let seqs: Vec<String> = f.elements.iter().map(|el| el.name.text.clone()).collect();
 
         // W111 asks whether a **table** uses a declaration, and an example is not a table:
         // an enum value that only an example names still has no row of its own, which is
@@ -3872,7 +4638,7 @@ impl Checked {
 
         let mut col_ty: Vec<Option<Ty>> = Vec::new();
         for (name, sp) in &t.inputs {
-            if seq.as_deref() == Some(name.as_str()) {
+            if seqs.contains(name) {
                 col_ty.push(None);
                 continue;
             }
@@ -3975,20 +4741,21 @@ impl Checked {
         self.used_values = used_values;
     }
 
-    /// What the items, the outputs and the answers of a fold read, given the stage each runs in
-    /// (§15.208).
+    /// What the items, the outputs and the answers of the folds read, given the stage each runs
+    /// in (§15.208, §15.219).
     ///
-    /// An item that reads both a value of one element and what the walk answers, and an output
-    /// that is a value of one element, would take a second walk over the sequence (E031). A
-    /// fold's answers are decided where some values are not there: `empty` and `exhausted` see no
-    /// element, no answer sees what is computed from the fold's own answer, and `held` is only
-    /// there once the walk is over (E021). Each answer is read in the type the fold answers with,
-    /// which is the rule's first output (E012, E103) — none of them was read at all, so
-    /// `empty -> nonexistent` passed `check`.
+    /// An item that reads the elements of two sequences would walk one inside the walk of the
+    /// other (E031); so would an output that is a value of one element, which is not one value
+    /// once the walk is over. An item that reads a value of one element and what a walk answered
+    /// runs in a second walk, after the first, and is not said anything of. A fold's answers are
+    /// decided where some values are not there: `empty` and `exhausted` see no element, `held` is
+    /// only there once the walk is over, and nothing a fold reads can be worked out from its own
+    /// answer (E021). Each answer is read in the type the fold answers with (E012, E103).
     fn walk_stages(&mut self, f: &RuleFile, path: &str) {
         let st = stages(f);
         let at = |line: usize| format!("{path}:{line}");
-        for (i, e, a) in &st.both {
+        let seq_of = |n: &str| st.each.get(n).map(|s| f.elements[*s].name.text.clone()).unwrap_or_default();
+        for (i, a, b) in &st.two {
             let (what, sp) = match &f.items[*i] {
                 Item::Derived(d) => (tr!("導出 {}", "derived value {}", d.name.text), d.name.span.clone()),
                 Item::Define(d) => (tr!("定義 {}", "definition {}", d.name.text), d.name.span.clone()),
@@ -3997,30 +4764,27 @@ impl Checked {
                     let sp = t.name.as_ref().map(|n| n.span.clone()).unwrap_or_else(|| t.span.clone());
                     (if t.clause { tr!("節 {n}", "clause {n}") } else { tr!("表 {n}", "table {n}") }, sp)
                 }
+                Item::Fold(d) => (tr!("畳み込み {}", "fold {}", d.verdict), d.span.clone()),
                 Item::Agg(_) => continue,
             };
+            let (sa, sb) = (seq_of(a), seq_of(b));
             self.diags.push(
-                Diag::error(
-                    "E031",
-                    tr!(
-                        "要素の値と、並びをたどった結果を、一つの項目で読むことはまだできません",
-                        "One item cannot yet read both a value of one element and what the walk answers"
-                    ),
-                )
-                .at(at(sp.line))
-                .mark(sp, tr!("{what} は、要素の値 {e} と、たどった結果 {a} の両方を読んでいます", "{what} reads both {e}, a value of one element, and {a}, what the walk answers"))
-                .note(tr!(
-                    "たどった結果は、並びを最後まで見ないと決まりません。要素の値は、その要素を見ているあいだにしかありません。両方を読むには、たどり終えてから、もう一度並びをたどることになります。",
-                    "What the walk answers is known only once every element has been seen, and a value of one element exists only while the walk is on that element. Reading both would take a second walk over the sequence."
-                ))
-                .note(tr!(
-                    "分けられるなら、要素の値を読む部分と、たどった結果を読む部分を、別の表か定義にしてください。",
-                    "Where it can be split, put the part that reads the element and the part that reads what the walk answers in separate tables or definitions."
-                )),
+                Diag::error("E031", tr!("一つの項目が、二つの並びの要素を読んでいます", "One item reads the elements of two sequences"))
+                    .at(at(sp.line))
+                    .mark(sp, tr!("{what} は、{sa} の要素の値 {a} と、{sb} の要素の値 {b} を読んでいます", "{what} reads {a}, a value of one element of {sa}, and {b}, a value of one element of {sb}"))
+                    .note(tr!(
+                        "要素の値は、その並びをたどっているあいだにしかありません。二つの並びの要素を一緒に読むには、片方の並びの要素ごとに、もう片方を最初からたどることになります（並びの中で並びをたどる）。そうすると歩きの数が並びの長さにつれて増え、検査が終わりません。",
+                        "A value of one element exists only while its sequence is walked. Reading the elements of two sequences together would walk one of them again from the start at every element of the other — a walk inside a walk. The number of walks would then grow with the length of a sequence, and the checks could not finish."
+                    ))
+                    .note(tr!(
+                        "片方の並びを `count`・`sum`・`max`・`min`・`fold` で一つの値にしてから、もう片方の項目で読んでください。その項目は、その値が決まったあとの二回目の歩きで計算されます。",
+                        "Make one of the sequences one value first — a `count`, a `sum`, a `max`, a `min` or a `fold` — and read that value in the item of the other. The item is then worked out on a second walk, once the value is known."
+                    )),
             );
         }
-        // The outputs are read once the walk is over. A fold answers the first one itself, and a
-        // `result` line is read below.
+        // The outputs are read once every walk is over. A fold answers its own, and a `result`
+        // line is read below.
+        let answered: Vec<String> = f.folds().filter_map(|d| d.answer_name(f).map(str::to_string)).collect();
         let per_element = |s: &mut Self, name: &str, sp: &Span, what: String| {
             s.diags.push(
                 Diag::error("E031", tr!("出力 {name} は、要素ごとの値です", "Output {name} is a value of one element"))
@@ -4033,24 +4797,90 @@ impl Checked {
             );
         };
         for (oi, od) in f.outputs.iter().enumerate() {
-            if oi == 0 && (f.fold.is_some() || f.result.is_some()) {
+            if answered.contains(&od.name.text) || (oi == 0 && f.result.is_some()) {
                 continue;
             }
-            if st.each.contains(&od.name.text) {
+            if st.each.contains_key(&od.name.text) {
                 per_element(self, &od.name.text, &od.name.span, tr!("並びをたどり終えたあとには、一つの値に決まりません", "once the walk is over, it is not one value"));
             }
         }
         if let (Some(r), Some(od)) = (&f.result, f.outputs.first()) {
             let mut names = Vec::new();
             collect_names(&r.expr, &mut names);
-            if let Some(n) = names.iter().find(|n| st.each.contains(*n)) {
+            if let Some(n) = names.iter().find(|n| st.each.contains_key(*n)) {
                 per_element(self, &od.name.text, &r.span, tr!("`result` が、要素の値 {n} を読んでいます", "`result` reads {n}, a value of one element"));
             }
         }
 
-        let Some(fold) = &f.fold else { return };
-        let out_ty = f.outputs.first().and_then(|o| self.syms.get(&o.name.text)).map(|s| s.ty.clone()).unwrap_or(Ty::Unknown);
+        // One answer per name: two folds, or a fold and another item, deciding one name leave the
+        // answer to whichever runs last (§15.219).
+        {
+            let mut by: HashMap<String, (usize, Span)> = HashMap::new();
+            for (i, it) in f.items.iter().enumerate() {
+                for b in item_binds(f, it) {
+                    let sp = match it {
+                        Item::Fold(d) => d.answer.as_ref().map(|a| a.name.span.clone()).unwrap_or_else(|| d.span.clone()),
+                        Item::Table(t) => t.outputs.iter().find(|o| o.name.text == b).map(|o| o.name.span.clone()).unwrap_or_else(|| t.span.clone()),
+                        Item::Derived(d) => d.name.span.clone(),
+                        Item::Define(d) => d.name.span.clone(),
+                        Item::Agg(d) => d.name.span.clone(),
+                    };
+                    match by.get(&b) {
+                        // Tables that define one output are one definition set (§15.66).
+                        Some((j, _)) if matches!((&f.items[*j], it), (Item::Table(_), Item::Table(_))) => {}
+                        Some((j, first)) if matches!(it, Item::Fold(_)) || matches!(f.items[*j], Item::Fold(_)) => {
+                            let fsp = if matches!(it, Item::Fold(_)) { sp.clone() } else { first.clone() };
+                            self.diags.push(
+                                Diag::error("E021", tr!("`{b}` を決めるところが二つあります", "Two places decide `{b}`"))
+                                    .at(at(fsp.line))
+                                    .mark(first.clone(), tr!("一つめ", "the first"))
+                                    .mark(sp.clone(), tr!("二つめ", "the second"))
+                                    .note(tr!(
+                                        "畳み込みの答えは、その名前の値そのものです。ほかの項目もその名前を決めると、どちらが答えになるかが決まりません。答えに別の名前を付けてください（`fold … -> <名前>`）。",
+                                        "A fold's answer is the value of its name. With another item deciding the same name, which of the two is the answer is not decided. Give the answer a name of its own (`fold … -> <name>`)."
+                                    )),
+                            );
+                        }
+                        Some(_) => {}
+                        None => {
+                            by.insert(b, (i, sp));
+                        }
+                    }
+                }
+            }
+        }
+
+        for (fi, it) in f.items.iter().enumerate() {
+            let Item::Fold(fold) = it else { continue };
+            self.fold_reads(f, &st, fi, fold, path);
+        }
+    }
+
+    /// What one fold's answers read, and the type each is read in (§15.208, §15.219).
+    fn fold_reads(&mut self, f: &RuleFile, st: &Stages, fi: usize, fold: &FoldDecl, path: &str) {
+        let out_ty = self.fold_ty(fold, f);
+        let answer = fold.answer_name(f).unwrap_or_default().to_string();
         let at_fold = tr!("{path}:{} 畳み込み", "{path}:{} fold", fold.span.line);
+        let fold_bad = |s: &mut Self, sp: &Span, title: String, note: String| {
+            s.diags.push(Diag::error("E021", title).at(at_fold.clone()).mark(sp.clone(), "").note(note));
+        };
+        // A walk that waits for its own answer (§15.219).
+        if let Some((_, back)) = st.cycle.iter().find(|(i, _)| *i == fi) {
+            self.diags.push(
+                Diag::error("E021", tr!("畳み込みが、自分の答えから計算する {back} を読んでいます", "The fold reads {back}, which is worked out from its own answer"))
+                    .at(at_fold.clone())
+                    .mark(fold.span.clone(), tr!("答えは {answer} です", "its answer is {answer}"))
+                    .note(tr!(
+                        "畳み込みの答えは、並びを最後まで見ないと決まりません。その答えから計算する値で要素を判定すると、答えを出す前に答えが要ることになります。",
+                        "A fold's answer is known only once the walk is over. Judging an element by a value worked out from that answer would need the answer before there is one."
+                    ))
+                    .note(tr!(
+                        "判定に要るのが別の値なら、その値を読むようにしてください。答えを使う判定は、別の畳み込みにして、二回目の歩きで読んでください（`fold … -> <名前>`）。",
+                        "Where the verdict needs another value, read that one. A verdict that does need the answer goes in another fold, which reads it on a second walk (`fold … -> <name>`)."
+                    )),
+            );
+            return;
+        }
         // Where an answer is decided: before any element (`empty`), after the last (`exhausted`),
         // or on one element (an arm, and the key of `keep_max`, which is no answer).
         #[derive(PartialEq, Clone, Copy)]
@@ -4078,9 +4908,6 @@ impl Checked {
                 _ => {}
             }
         }
-        let fold_bad = |s: &mut Self, sp: &Span, title: String, note: String| {
-            s.diags.push(Diag::error("E021", title).at(at_fold.clone()).mark(sp.clone(), "").note(note));
-        };
         for (place, e) in values {
             // A word E075 stopped on (`read_words`): a value of the answer's enum and a name of
             // that enum at once. Nothing more is said of it, and its value is not then said to
@@ -4112,7 +4939,7 @@ impl Checked {
                 Place::Exhausted => Some(tr!("最後まで見終えたときの答え", "The answer for a walk that reached the end")),
                 _ => None,
             };
-            if let (Some(which), Some(n)) = (&none_seen, names.iter().find(|n| st.each.contains(*n))) {
+            if let (Some(which), Some(n)) = (&none_seen, names.iter().find(|n| st.each.contains_key(*n))) {
                 fold_bad(
                     self,
                     &sp,
@@ -4125,18 +4952,13 @@ impl Checked {
                 );
                 continue;
             }
-            if let Some(n) = names.iter().find(|n| *n != crate::kw::HELD && st.after.contains(*n)) {
-                fold_bad(
-                    self,
-                    &sp,
-                    tr!("畳み込みの値は、たどった結果から計算する {n} を読めません", "A value of the fold cannot read {n}, which is computed from what the walk answers"),
-                    tr!("{n} は、この畳み込みが答えを出したあとで決まる値です。", "{n} is decided only once the fold has answered."),
-                );
-                continue;
-            }
             if place == Place::Key {
                 continue;
             }
+            let into = match &fold.answer {
+                None => tr!("畳み込みの答えは、この規則の最初の出力に入ります。", "What a fold answers becomes the rule's first output."),
+                Some(a) => tr!("畳み込みの答えは {} に入ります。", "What the fold answers becomes {}.", a.name.text),
+            };
             // The type the fold answers with. A literal number is read above (E103, §15.86); a
             // word was settled by `read_words` into a value where it is one of this type.
             match e {
@@ -4152,14 +4974,18 @@ impl Checked {
                         self.used_values.insert((en.clone(), v.clone()));
                     }
                     if !fits {
+                        let note = match &fold.answer {
+                            None => tr!(
+                                "畳み込みの答えは、この規則の最初の出力そのものです。その型の値を書いてください。",
+                                "What a fold answers is the rule's first output itself. Write a value of its type."
+                            ),
+                            Some(a) => tr!("畳み込みの答えは {} の値です。その型の値を書いてください。", "What a fold answers is the value of {}. Write a value of its type.", a.name.text),
+                        };
                         self.diags.push(
                             Diag::error("E103", tr!("この畳み込みの答えは {out_ty} ですが `{v}` が書かれています", "This fold answers with {out_ty}, but `{v}` is written here"))
                                 .at(at_fold.clone())
                                 .mark(lsp.clone(), "")
-                                .note(tr!(
-                                    "畳み込みの答えは、この規則の最初の出力そのものです。その型の値を書いてください。",
-                                    "What a fold answers is the rule's first output itself. Write a value of its type."
-                                )),
+                                .note(note),
                         );
                     }
                 }
@@ -4169,10 +4995,7 @@ impl Checked {
                             .at(at_fold.clone())
                             .mark(wsp.clone(), "")
                             .maybe_note(crate::prelude::hint(w, &self.imported))
-                            .note(tr!(
-                                "畳み込みの答えは、この規則の最初の出力に入ります。その型の値か、上で宣言した名前を書いてください。",
-                                "What a fold answers becomes the rule's first output. Write a value of its type, or a name declared above."
-                            )),
+                            .note(tr!("{into}その型の値か、上で宣言した名前を書いてください。", "{into} Write a value of its type, or a name declared above.")),
                     );
                 }
                 _ => {
@@ -4232,7 +5055,7 @@ impl Checked {
             return;
         };
         let at_m = |line: usize| tr!("{path}:{line} ステートマシン {}", "{path}:{line} machine {}", m.name.text);
-        if let Some(fd) = &f.fold {
+        if let Some(fd) = f.folds().next() {
             self.diags.push(
                 Diag::error("E054", tr!("並びを畳む規則は、ステートマシンの一歩になれません", "A rule that folds a sequence cannot be the step of a machine"))
                     .at(at_m(m.span.line))
@@ -4453,7 +5276,7 @@ impl Checked {
         // `scenario`.
         let mut names: Vec<&str> = Vec::new();
         let carried_in = m.carried().map(|(i, _)| i.to_string());
-        let seq_col = f.elements.as_ref().map(|el| el.name.text.clone());
+        let seq_col: Vec<String> = f.elements.iter().map(|el| el.name.text.clone()).collect();
         for sc in &f.scenarios {
             let at_s = tr!("{path}:{} 手順の例 {}", "{path}:{} scenario {}", sc.span.line, sc.name.text);
             if names.contains(&sc.name.text.as_str()) {

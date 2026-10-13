@@ -142,8 +142,12 @@ golden!(w130_余分な前提, "W130", "tests/mutants/m_w130ja.rule", "W130");
 
 // The walk's stages and the words of a cell (§15.208), and the rows nothing decides (§15.209).
 golden!(e075_値でも名前でもある語, "E075", "tests/mutants/m_e075ja.rule", "E075");
-golden!(e031_要素とたどった結果, "E031-walk", "tests/mutants/m_e031walkja.rule", "E031");
+golden!(e031_要素ごとの値の出力, "E031-walk", "tests/mutants/m_e031walkja.rule", "E031");
 golden!(w128_決められない行, "W128", "tests/mutants/m_w128ja.rule", "W128");
+
+// Two sequences and a largest value (§15.219): one item that reads both, and a `max` with no `empty`.
+golden!(e031_二つの並び, "E031", "tests/mutants/m_e031ja.rule", "E031");
+golden!(e022_最大の空, "E022-max", "tests/mutants/m_e022maxja.rule", "E022");
 
 // Arithmetic (§15.213 to §15.216).
 golden!(e132_割る数が0になりうる, "E132", "tests/mutants/m_e132ja.rule", "E132");

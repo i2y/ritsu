@@ -198,14 +198,15 @@ pub fn refusal(f: &RuleFile, c: &Checked, input_obj: &Json) -> Option<Refusal> {
             Err(e) => return Some(input(e)),
         }
     }
-    if let Some(el) = &f.elements {
+    // Each sequence, in the order the rule declares them (§15.219).
+    for el in &f.elements {
         let seq = &el.name.text;
         let items = match get(seq) {
             None | Some(Json::Null) => return Some(input(missing(seq))),
             Some(Json::Arr(xs)) => xs,
             Some(_) => return Some(input(not_sequence(seq))),
         };
-        if let Some(cap) = count_cap(f, c) {
+        if let Some(cap) = count_cap(f, c, seq) {
             if items.len() as i128 > cap {
                 return Some(input(too_many(seq, cap)));
             }
@@ -231,7 +232,7 @@ pub fn refusal(f: &RuleFile, c: &Checked, input_obj: &Json) -> Option<Refusal> {
         // A sum over a field of the elements is refused the moment its total passes the top of
         // the range it declares (§15.100); a sum over what a table decides per element is the
         // walk's to work out, and is not looked at here.
-        for d in sums(f) {
+        for d in sums(f).into_iter().filter(|d| d.over == *seq) {
             let Some(hi) = c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi) else { continue };
             if !el.fields.iter().any(|fd| fd.name.text == d.column.text) {
                 continue;
@@ -263,16 +264,20 @@ pub fn refusal(f: &RuleFile, c: &Checked, input_obj: &Json) -> Option<Refusal> {
             }
         }
     }
-    if let Some(fold) = &f.fold {
-        let (outs, _, _, _) = crate::eval::run_all_traced(f, c, vals.into_iter().collect());
-        if outs.first().is_some_and(|(_, v)| v.is_none()) {
+    // A sum over what a table decides per element, past the top of its range once the walk is
+    // over (§15.100): the generated code refuses it there.
+    if let Some(n) = crate::eval::sum_past_range(f, c, vals.clone().into_iter().collect()) {
+        return Some(input(out_of_range(&n)));
+    }
+    if let Some(i) = crate::eval::contradiction(f, c, vals.into_iter().collect()) {
+        if let Some(crate::ast::Item::Fold(fold)) = f.items.get(i) {
             return Some(Refusal { kind: "contradiction", error: fold_contradiction(&fold.verdict) });
         }
     }
     None
 }
 
-/// The `sum`s the rule declares over its sequence.
+/// The `sum`s the rule declares, over any of its sequences.
 pub fn sums(f: &RuleFile) -> Vec<&crate::ast::AggDecl> {
     f.items
         .iter()
@@ -283,11 +288,11 @@ pub fn sums(f: &RuleFile) -> Vec<&crate::ast::AggDecl> {
 
 /// The cap a sequence is held to: the smallest upper bound any `count` over it declares, as the
 /// generated door reads it (§15.58).
-pub fn count_cap(f: &RuleFile, c: &Checked) -> Option<i128> {
+pub fn count_cap(f: &RuleFile, c: &Checked, seq: &str) -> Option<i128> {
     f.items
         .iter()
         .filter_map(|it| if let crate::ast::Item::Agg(d) = it { Some(d) } else { None })
-        .filter(|d| d.kind == crate::ast::AggKind::Count)
+        .filter(|d| d.kind == crate::ast::AggKind::Count && d.over == seq)
         .filter_map(|d| c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi))
         .map(|hi| crate::types::wire_int(hi, 1))
         .min()

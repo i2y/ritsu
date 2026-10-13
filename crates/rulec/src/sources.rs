@@ -101,7 +101,7 @@ pub fn citations(f: &RuleFile) -> Vec<(String, String, String, Span)> {
             }
             Item::Derived(d) => push(&d.cite, tr!("導出 {}", "derived value {}", d.name.text)),
             Item::Define(d) => push(&d.cite, tr!("定義 {}", "definition {}", d.name.text)),
-            Item::Agg(_) => {}
+            Item::Agg(_) | Item::Fold(_) => {}
         }
     }
     out

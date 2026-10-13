@@ -32,7 +32,10 @@ the same thing, and its generated code is called the same way and answers the sa
 6. **Diagnostic codes.** A code keeps its meaning. A code that is retired stays in the ledger,
    marked as retired, and its number is never given to anything else. New codes may be added;
    a new warning leaves a rule that passed passing (W901, a key written in a rule, came this
-   way, and means the same in every language of ritsu).
+   way, and means the same in every language of ritsu). Two numbers took a new meaning before
+   1.0, when a rule came to walk more than one sequence and to walk one twice (§15.219): E031,
+   which had said that a rule needs a second walk, says that one item reads the elements of two
+   sequences, and E020, which had said that a rule declares two, says that nothing walks one.
 7. **Machine-readable formats.** Every `--format json` output, the vectors, the fixtures and
    the replay manifest, the `adapter/1` and `extract/1` protocols, the certificate, the MCP
    tools with their arguments and resources, the GitHub Action's inputs, and the names of the

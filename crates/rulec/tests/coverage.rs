@@ -9,7 +9,7 @@
 use rulec::coverage::{self, BOUND, ROW, SHADOW, TIE, VALUE};
 use rulec::vectors::{self, Vector};
 
-const CORPUS: [&str; 108] = [
+const CORPUS: [&str; 114] = [
     "tests/corpus/速達の見積.rule",
     "tests/corpus/出荷の送料.rule",
     "tests/corpus/注文の送料.rule",
@@ -68,6 +68,10 @@ const CORPUS: [&str; 108] = [
     "tests/corpus/再試行の回数.rule",
     "tests/corpus/猶予の残り日数.rule",
     "tests/corpus/一度だけの特典.rule",
+    // Two sequences, a second walk, a largest and a smallest value (§15.219).
+    "tests/corpus/注文の精算.rule",
+    "tests/corpus/最も早い期日.rule",
+    "tests/corpus/料率の調整.rule",
     // The twins (tests/corpus/twins.tsv): their obligations are the originals'.
     "tests/corpus/sku_prefix_handling.rule",
     "tests/corpus/cart_shipping_fee.rule",
@@ -119,6 +123,9 @@ const CORPUS: [&str; 108] = [
     "tests/corpus/科目の履修.rule",
     "tests/corpus/exam_fee.rule",
     "tests/corpus/受験料.rule",
+    "tests/corpus/order_settlement.rule",
+    "tests/corpus/earliest_due.rule",
+    "tests/corpus/rate_adjustment.rule",
 ];
 
 fn load(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked, Vec<Vector>) {
@@ -453,6 +460,15 @@ fn 義務の件数を固定する() {
         ("tests/corpus/科目の履修.rule", 6, 0, 0, 0, 0),
         ("tests/corpus/exam_fee.rule", 6, 0, 0, 0, 0),
         ("tests/corpus/受験料.rule", 6, 0, 0, 0, 0),
+        // Two sequences, a second walk, a largest and a smallest value (§15.219): the boundary
+        // pairs of a table on the second walk are reached by sequences whose first walk lands
+        // on the boundary.
+        ("tests/corpus/注文の精算.rule", 2, 2, 0, 0, 0),
+        ("tests/corpus/最も早い期日.rule", 3, 0, 0, 0, 0),
+        ("tests/corpus/料率の調整.rule", 8, 14, 0, 1, 0),
+        ("tests/corpus/order_settlement.rule", 2, 2, 0, 0, 0),
+        ("tests/corpus/earliest_due.rule", 3, 0, 0, 0, 0),
+        ("tests/corpus/rate_adjustment.rule", 8, 14, 0, 1, 0),
     ];
     // Every rule of the corpus is audited and pinned. `threeway.rs` keeps its own list
     // honest the same way; this one had no such guard, and nine rules had drifted out of it

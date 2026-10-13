@@ -190,6 +190,8 @@ fn 呼び先の出力列が出力と同名でも_付け替えた名前の識別�
             Item::Derived(x) => idents.push(ident(&x.name)),
             Item::Agg(x) => idents.push(ident(&x.name)),
             Item::Table(t) => idents.extend(t.outputs.iter().map(|o| ident(&o.name))),
+            // A fold's answer named after `->` is a value the code writes (§15.219).
+            Item::Fold(x) => idents.extend(x.answer.iter().map(|a| ident(&a.name))),
         }
     }
     let mut distinct = idents.clone();

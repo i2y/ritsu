@@ -259,7 +259,7 @@ pub fn outputs_over(f: &RuleFile, c: &Checked, src: &str, path: &str, output: &s
             ));
         }
     }
-    if let Some(el) = &f.elements {
+    if let Some(el) = f.elements.first() {
         let list = &el.name.text;
         return Found::Undecided(ritsu_base::tr!(
             "この規則は並び `{list}` の要素を一つずつ見るので、入力を範囲に限って数えられません",

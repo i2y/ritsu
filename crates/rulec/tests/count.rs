@@ -174,10 +174,12 @@ fn 書き方の間違いは指摘される() {
     assert!(codes(&said).contains(&"E028".to_string()), "{said}");
 }
 
-/// Two endings for one walk. A fold may stop partway, and what a count means on a walk that
-/// stopped is not decided — so the rule is refused rather than answered.
+/// A fold and a count over one walk (§15.219). A `stop` ends the fold's own reading and no other:
+/// the count beside it still sees every element. A fold with no `->` answers the first output, which
+/// a table already decides here, so two places decide one name (E021); with an answer of its own,
+/// the two stand together.
 #[test]
-fn foldとcountは一緒に書けない() {
+fn foldとcountは一緒に書ける() {
     let (_tmp, d) = dir("both");
     let src = format!(
         "{RULE}\nfold 照合 over 候補\n  一致 -> next\n  不一致 -> next\n  empty -> 該当なし\n  exhausted -> 該当なし\n"
@@ -185,7 +187,22 @@ fn foldとcountは一緒に書けない() {
     let p = write(&d, "r.rule", &src);
     let (code, said, _) = run(&["check", &p, "--format", "json"]);
     assert_eq!(code, 1);
-    assert!(codes(&said).contains(&"E031".to_string()), "{said}");
+    assert!(codes(&said).contains(&"E021".to_string()), "{said}");
+    assert!(!codes(&said).contains(&"E031".to_string()), "{said}");
+
+    // An answer of its own: whether some candidate missed, read until the first miss.
+    let src = RULE.replace("outputs\n  結果(result) : 判定\n", "outputs\n  結果(result) : 判定\n  不一致あり(any_miss) : bool\n")
+        + "\nfold 照合 over 候補 -> 不一致あり\n  一致 -> next\n  不一致 -> stop with true\n  empty -> false\n  exhausted -> false\n";
+    let p = write(&d, "named.rule", &src);
+    let (code, said, _) = run(&["check", &p, "--format", "json"]);
+    assert_eq!(code, 0, "{said}");
+    let (f, c) = rulec::prepare(&src, "named.rule").unwrap_or_else(|ds| panic!("{ds:?}"));
+    let cand = |name: bool, addr: bool| std::collections::BTreeMap::from([("会社名一致".to_string(), rulec::eval::Val::Bool(name)), ("住所一致".to_string(), rulec::eval::Val::Bool(addr))]);
+    // a miss first, then two matches: the fold stops on the miss, the count goes on to both matches
+    let inputs = std::collections::HashMap::from([("候補".to_string(), rulec::eval::Val::Seq(vec![cand(true, false), cand(true, true), cand(true, true)]))]);
+    let (outs, _, _) = rulec::eval::run_all(&f, &c, inputs);
+    assert_eq!(outs[0].1, Some(rulec::eval::Val::Enum("複数".to_string())), "{outs:?}");
+    assert_eq!(outs[1].1, Some(rulec::eval::Val::Bool(true)), "{outs:?}");
 }
 
 /// A count nothing reads is a walk for nothing.
@@ -296,19 +313,18 @@ fn 出力と同じ名前のまとめと導出は使われている() {
 }
 
 /// What a walk answers is one value for the whole sequence, and what is decided on one element is
-/// gone once the walk moves on: an output that is a value of one element, and an item that reads
-/// both kinds, are E031, each with what it reads named. The English rule of `tests/stages`, and its
-/// Japanese version.
+/// gone once the walk moves on: an output that is a value of one element is E031, with what it
+/// reads named. An item that reads both a value of one element and what the walk answers is no
+/// longer one: it is worked out on a second walk (§15.219). The English rule of `tests/stages`, and
+/// its Japanese version.
 #[test]
-fn 要素ごとの値と_たどった結果は混ぜられない() {
+fn 要素ごとの値の出力は混ぜられない_両方を読む項目は二回目の歩き() {
     use rulec::i18n::Lang;
     let en = std::fs::read_to_string(root().join("tests/stages/parcel_charge.rule")).unwrap();
     let ja = std::fs::read_to_string(root().join("tests/stages/荷物の料金.rule")).unwrap();
     let cases = [
         ("an output of one element", Lang::En, en.replace("  tier   : charge_tier\n", "  tier   : charge_tier\n  cost   : number  round down(1)\n"), "Output cost is a value of one element", "once the walk is over, it is not one value"),
         ("an output of one element (ja)", Lang::Ja, ja.replace("  区分(tier)   : 料金の区分\n", "  区分(tier)   : 料金の区分\n  費用(cost)   : number  round down(1)\n").replace("define 費用(cost) :", "define 費用 :"), "出力 費用 は、要素ごとの値です", "並びをたどり終えたあとには、一つの値に決まりません"),
-        ("both kinds in one item", Lang::En, en.replace("define cost : number = weight * factor\n", "define cost : number = weight * factor\ndefine rest : number = charge - cost\n"), "One item cannot yet read both a value of one element and what the walk answers", "definition rest reads both cost, a value of one element, and charge, what the walk answers"),
-        ("both kinds in one item (ja)", Lang::Ja, ja.replace("define 費用(cost) : number = 重さ * 係数\n", "define 費用(cost) : number = 重さ * 係数\ndefine ほかの荷物(rest) : number = 料金 - 費用\n"), "要素の値と、並びをたどった結果を、一つの項目で読むことはまだできません", "定義 ほかの荷物 は、要素の値 費用 と、たどった結果 料金 の両方を読んでいます"),
     ];
     for (what, lang, src, title, mark) in cases {
         assert_ne!(src, if lang == Lang::En { en.clone() } else { ja.clone() }, "{what}: the rule did not change");
@@ -316,6 +332,17 @@ fn 要素ごとの値と_たどった結果は混ぜられない() {
         let d = ds.iter().find(|d| d.code == "E031").unwrap_or_else(|| panic!("{what}: {:?}", ds.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>()));
         assert_eq!(d.title, title, "{what}");
         assert!(d.marks.iter().any(|m| m.label == mark), "{what}: {:?}", d.marks);
+    }
+    // Both kinds in one item: the second walk over the parcels, once the first has found the charge.
+    for (src, rest) in [
+        (en.replace("define cost : number = weight * factor\n", "define cost : number = weight * factor\ndefine rest : number = charge - cost\n"), "rest"),
+        (ja.replace("define 費用(cost) : number = 重さ * 係数\n", "define 費用(cost) : number = 重さ * 係数\ndefine ほかの荷物(rest) : number = 料金 - 費用\n"), "ほかの荷物"),
+    ] {
+        let ds = rulec::check_source(&src, "v.rule");
+        assert!(!ds.iter().any(|d| d.code == "E031"), "{:?}", ds.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>());
+        let (f, _) = rulec::prepare(&src, "v.rule").unwrap_or_else(|ds| panic!("{ds:?}"));
+        let i = f.items.iter().position(|it| matches!(it, rulec::ast::Item::Define(d) if d.name.text == rest)).unwrap();
+        assert_eq!(rulec::types::stages(&f).at(i), rulec::types::Stage::Each { seq: 0, walk: 2 }, "{rest}");
     }
 }
 

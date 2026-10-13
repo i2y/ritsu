@@ -264,7 +264,7 @@ pub fn normalize(f: &mut RuleFile, path: &str) -> Vec<Diag> {
     keep.extend(f.inputs.iter().map(|i| i.name.text.clone()));
     keep.extend(f.outputs.iter().map(|o| o.name.text.clone()));
     keep.extend(f.groups.iter().map(|g| g.name.text.clone()));
-    if let Some(e) = &f.elements {
+    for e in &f.elements {
         keep.extend(e.fields.iter().map(|i| i.name.text.clone()));
     }
     for it in &f.items {
@@ -272,6 +272,7 @@ pub fn normalize(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             Item::Derived(d) => keep.insert(d.name.text.clone()),
             Item::Define(d) => keep.insert(d.name.text.clone()),
             Item::Agg(d) => keep.insert(d.name.text.clone()),
+            Item::Fold(d) => d.answer.as_ref().is_some_and(|a| keep.insert(a.name.text.clone())),
             Item::Table(t) => {
                 keep.extend(t.outputs.iter().map(|o| o.name.text.clone()));
                 false
@@ -293,7 +294,12 @@ pub fn normalize(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 if let Some(v) = &mut d.value {
                     n.word(&mut v.text, &v.span);
                 }
+                if let Some((_, Some(v))) = &mut d.filter {
+                    n.word(&mut v.text, &v.span);
+                }
             }
+            // Below, where the fold always was.
+            Item::Fold(_) => {}
         }
     }
     if let Some(r) = &mut f.result {
@@ -308,7 +314,7 @@ pub fn normalize(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             n.row(&mut r.cells, &mut r.outs, &r.cell_spans, &r.out_spans, &sp);
         }
     }
-    if let Some(fold) = &mut f.fold {
+    for fold in f.items.iter_mut().filter_map(|it| if let Item::Fold(d) = it { Some(d) } else { None }) {
         for (v, arm, _) in &mut fold.arms {
             n.word(&mut v.text, &v.span);
             match arm {

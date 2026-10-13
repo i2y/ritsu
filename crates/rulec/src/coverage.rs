@@ -319,68 +319,66 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
     // One (merged) table per definition set, parallel to `checks` (§15.66).
     let tables: Vec<&Table> = c.sets.iter().map(|s| &s.table).collect();
 
-    // --- the fold's transitions. What each element lands on is what the table wrote, so the
-    // obligations are read off the verdict's own enum and the witnesses off the vectors.
-    if let Some(fold) = &f.fold {
-        let verdict_of = |v: &Vector| -> Vec<String> {
-            let Some(Val::Seq(xs)) = v.input.get(&fold.over) else { return Vec::new() };
-            xs.iter()
-                .filter_map(|e| {
-                    let mut m: std::collections::HashMap<String, Val> = v
-                        .input
-                        .iter()
-                        .filter(|(k, _)| *k != &fold.over)
-                        .map(|(k, x)| (k.clone(), x.clone()))
-                        .collect();
-                    for (k, x) in e {
-                        m.insert(k.clone(), x.clone());
-                    }
-                    match eval::run_tables(f, c, m).3.get(&fold.verdict) {
-                        Some(Val::Enum(s)) => Some(s.clone()),
-                        _ => None,
-                    }
-                })
-                .collect()
-        };
-        let seqs: Vec<Vec<String>> = vs.iter().map(verdict_of).collect();
-        let has_seq: Vec<bool> = vs.iter().map(|v| matches!(v.input.get(&fold.over), Some(Val::Seq(_)))).collect();
+    // --- the folds' transitions. What each element lands on is what the table wrote, so the
+    // obligations are read off the verdict's own enum and the witnesses off the vectors: the
+    // verdicts the reference evaluator saw in the walk the fold runs in (§15.219). With more than
+    // one fold, each obligation names its fold.
+    let st = crate::types::stages(f);
+    let folds: Vec<(usize, &FoldDecl)> = f.items.iter().enumerate().filter_map(|(i, it)| if let Item::Fold(d) = it { Some((i, d)) } else { None }).collect();
+    if !folds.is_empty() {
+        let verdicts = |v: &Vector| -> HashMap<usize, Vec<Option<String>>> { eval::fold_verdicts(f, c, v.input.clone().into_iter().collect()) };
+        let seen: Vec<HashMap<usize, Vec<Option<String>>>> = vs.iter().map(verdicts).collect();
         // The same reading of the refused cases. They carry no witness index: nothing prunes
         // them, so nothing has to be told to keep them.
-        let refused_seqs: Vec<Vec<String>> = refused.iter().map(verdict_of).collect();
-        let values: Vec<String> = c.out_values.get(&fold.verdict).cloned().unwrap_or_default();
+        let refused_seen: Vec<HashMap<usize, Vec<Option<String>>>> = refused.iter().map(verdicts).collect();
+        for &(fi, fold) in &folds {
+            let flat = |m: &HashMap<usize, Vec<Option<String>>>| -> Vec<String> { m.get(&fi).map(|xs| xs.iter().flatten().cloned().collect()).unwrap_or_default() };
+            let seqs: Vec<Vec<String>> = seen.iter().map(flat).collect();
+            let has_seq: Vec<bool> = vs.iter().map(|v| matches!(v.input.get(&fold.over), Some(Val::Seq(_)))).collect();
+            let refused_seqs: Vec<Vec<String>> = refused_seen.iter().map(flat).collect();
+            let values: Vec<String> = c.out_values.get(&fold.verdict).cloned().unwrap_or_default();
+            let named = |what: String| if folds.len() > 1 { tr!("畳み込み {}: {what}", "fold {}: {what}", fold.verdict) } else { what };
 
-        let mut want: Vec<(String, Vec<String>)> = vec![(tr!("要素ゼロ件", "no elements"), Vec::new())];
-        for v in &values {
-            want.push((tr!("判定 {v}", "verdict {v}"), vec![v.clone()]));
-        }
-        for a in &values {
-            for b in &values {
-                want.push((tr!("{a} のあと {b}", "{a} then {b}"), vec![a.clone(), b.clone()]));
+            let mut want: Vec<(String, Vec<String>)> = vec![(named(tr!("要素ゼロ件", "no elements")), Vec::new())];
+            for v in &values {
+                want.push((named(tr!("判定 {v}", "verdict {v}")), vec![v.clone()]));
             }
-        }
-        for (what, pattern) in want {
-            let met = seqs
-                .iter()
-                .zip(&has_seq)
-                .position(|(sq, ok)| *ok && sq == &pattern);
-            match met {
-                Some(k) => {
-                    witness.insert(k);
-                    bump(FOLD, true, &mut tally);
+            for a in &values {
+                for b in &values {
+                    want.push((named(tr!("{a} のあと {b}", "{a} then {b}")), vec![a.clone(), b.clone()]));
                 }
-                None if refused_seqs.iter().any(|sq| sq == &pattern) => {
-                    bump(FOLD, true, &mut tally);
-                }
-                None => {
-                    bump(FOLD, false, &mut tally);
-                    missing.push(Missing {
-                        kind: FOLD,
-                        what,
-                        hint: tr!(
-                            "この並びを作るベクタがありません。畳み込みの振る舞いは、どの判定のあとにどの判定が来るかで決まります。",
-                            "No vector produces this sequence. What the walk does is decided by which verdict follows which."
-                        ),
-                    });
+            }
+            // A fold of a second walk reads what the first walk found over the same sequence, so
+            // its verdicts are not free one element at a time: an order no case of one or two
+            // elements reaches is not an obligation, the way an unrealizable side of a boundary
+            // is not one (§9.1, §15.219).
+            if let Some(reached) = later_orders(f, c, &st, fi) {
+                want.retain(|(_, p)| p.is_empty() || reached.contains(p));
+            }
+            for (what, pattern) in want {
+                let met = seqs
+                    .iter()
+                    .zip(&has_seq)
+                    .position(|(sq, ok)| *ok && sq == &pattern);
+                match met {
+                    Some(k) => {
+                        witness.insert(k);
+                        bump(FOLD, true, &mut tally);
+                    }
+                    None if refused_seqs.iter().any(|sq| sq == &pattern) => {
+                        bump(FOLD, true, &mut tally);
+                    }
+                    None => {
+                        bump(FOLD, false, &mut tally);
+                        missing.push(Missing {
+                            kind: FOLD,
+                            what,
+                            hint: tr!(
+                                "この並びを作るベクタがありません。畳み込みの振る舞いは、どの判定のあとにどの判定が来るかで決まります。",
+                                "No vector produces this sequence. What the walk does is decided by which verdict follows which."
+                            ),
+                        });
+                    }
                 }
             }
         }
@@ -393,11 +391,29 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
         machine_obligations(f, c, &mut tally, &mut missing, &bump);
     }
 
+    // A table of a second walk is worked out once per element, with what the first walk found:
+    // its boundary and shadow pairs are judged on the cases of its elements (`eval::ElementCase`),
+    // which the vectors' sequences of one element alone cannot stand for — a sequence of one
+    // element makes the first walk find that element itself (§15.219).
+    let late: BTreeSet<usize> = (0..c.sets.len()).filter(|&si| later_set(f, c, &st, si)).collect();
+    let cases: Vec<(usize, eval::ElementCase)> = if late.is_empty() {
+        Vec::new()
+    } else {
+        vs.iter().enumerate().flat_map(|(k, v)| eval::element_cases(f, c, v.input.clone().into_iter().collect()).into_iter().map(move |e| (k, e))).collect()
+    };
+
     for (ti, t) in tables.iter().enumerate() {
         let set = &c.sets[ti];
         let chk = checks.get(ti);
         let dead: BTreeSet<usize> = chk.map(|k| k.dead.iter().copied().collect()).unwrap_or_default();
         let undecided: BTreeSet<usize> = chk.map(|k| k.undecided.iter().copied().collect()).unwrap_or_default();
+        // The cases this table's pairs are read off: the vectors, or for a table of a second walk
+        // its elements' cases, each with the vector it came from.
+        let units: Vec<(usize, &BTreeMap<String, Val>, &BTreeMap<String, Val>, BTreeSet<String>)> = if late.contains(&ti) {
+            cases.iter().map(|(k, e)| (*k, &e.binds, &e.key, e.fired.iter().cloned().collect())).collect()
+        } else {
+            (0..vs.len()).map(|k| (k, &binds[k], &vs[k].input, fired[k].clone())).collect()
+        };
 
         // --- row coverage
         for (ri, _) in t.rows.iter().enumerate() {
@@ -468,10 +484,10 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                         continue;
                     }
                     let hit = |target: Rat| -> Vec<usize> {
-                        (0..vs.len())
-                            .filter(|&k| {
-                                binds[k].get(col).and_then(ord).is_some_and(|x| x.cmp_to(target) == std::cmp::Ordering::Equal)
-                                    && others_hold(t, row, Some(col), &binds[k], c)
+                        (0..units.len())
+                            .filter(|&u| {
+                                units[u].1.get(col).and_then(ord).is_some_and(|x| x.cmp_to(target) == std::cmp::Ordering::Equal)
+                                    && others_hold(t, row, Some(col), units[u].1, c)
                             })
                             .collect()
                     };
@@ -481,11 +497,11 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
                     // columns held fixed, they cannot show that ±1 at the boundary changes the
                     // expected value.
                     let pair = ins.iter().find_map(|&a| {
-                        outs.iter().find(|&&z| differ_in_one(&vs[a].input, &vs[z].input, col)).map(|&z| (a, z))
+                        outs.iter().find(|&&z| differ_in_one(units[a].2, units[z].2, col)).map(|&z| (a, z))
                     });
                     if let Some((a, z)) = pair {
-                        witness.insert(a);
-                        witness.insert(z);
+                        witness.insert(units[a].0);
+                        witness.insert(units[z].0);
                     }
                     let met = pair.is_some();
                     bump(BOUND, met, &mut tally);
@@ -523,11 +539,9 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
             let tag = eval::row_tag(set.row_table(i), t.rows[i].index);
             // The inside of the intersection: a point where row j's conditions hold too, yet row
             // i wins.
-            let met = match (0..vs.len())
-                .find(|&k| fired[k].contains(&tag) && others_hold(t, &t.rows[j], None, &binds[k], c))
-            {
-                Some(k) => {
-                    witness.insert(k);
+            let met = match (0..units.len()).find(|&u| units[u].3.contains(&tag) && others_hold(t, &t.rows[j], None, units[u].1, c)) {
+                Some(u) => {
+                    witness.insert(units[u].0);
                     true
                 }
                 None => false,
@@ -563,21 +577,27 @@ pub fn audit(f: &RuleFile, c: &Checked, path: &str, vs: &[Vector], refused: &[Ve
             }
         }
         let tag = d.at.map(|(si, ri)| eval::row_tag(c.sets[si].row_table(ri), c.sets[si].table.rows[ri].index));
-        let at: Vec<usize> = (0..vs.len())
-            .filter(|&k| tag.as_ref().is_none_or(|t| fired[k].contains(t)) && binds[k].contains_key(&d.col))
+        // A row of a second walk's table is judged on its elements' cases, as its other pairs are.
+        let units: Vec<(usize, &BTreeMap<String, Val>, &BTreeMap<String, Val>, BTreeSet<String>)> = if d.at.is_some_and(|(si, _)| late.contains(&si)) {
+            cases.iter().map(|(k, e)| (*k, &e.binds, &e.key, e.fired.iter().cloned().collect())).collect()
+        } else {
+            (0..vs.len()).map(|k| (k, &binds[k], &vs[k].input, fired[k].clone())).collect()
+        };
+        let at: Vec<usize> = (0..units.len())
+            .filter(|&u| tag.as_ref().is_none_or(|t| units[u].3.contains(t)) && units[u].1.contains_key(&d.col))
             .collect();
         let pair = at.iter().enumerate().find_map(|(i, &a)| {
             at[i + 1..]
                 .iter()
                 .find(|&&z| {
-                    value_moved(f, &d.col, (binds[a].get(&d.col), &vs[a].outputs), (binds[z].get(&d.col), &vs[z].outputs))
-                        && one_apart(&vs[a].input, &vs[z].input)
+                    value_moved(f, &d.col, (units[a].1.get(&d.col), &vs[units[a].0].outputs), (units[z].1.get(&d.col), &vs[units[z].0].outputs))
+                        && one_apart(units[a].2, units[z].2)
                 })
                 .map(|&z| (a, z))
         });
         if let Some((a, z)) = pair {
-            witness.insert(a);
-            witness.insert(z);
+            witness.insert(units[a].0);
+            witness.insert(units[z].0);
         }
         bump(VALUE, pair.is_some(), &mut tally);
         if pair.is_none() {
@@ -763,7 +783,7 @@ pub fn value_duties(f: &RuleFile, c: &Checked) -> Vec<ValueDuty> {
         }
     }
     // A walk's outputs are what the fold answers, not a computation of this kind.
-    if f.fold.is_some() {
+    if f.folds().next().is_some() {
         return out;
     }
     for (oi, od) in f.outputs.iter().enumerate() {
@@ -787,6 +807,38 @@ pub fn value_duties(f: &RuleFile, c: &Checked) -> Vec<ValueDuty> {
         }
     }
     out
+}
+
+/// Whether the definition set at `si` is decided in a second walk or later: its table is worked out
+/// once per element, with what an earlier walk found (§15.219).
+fn later_set(f: &RuleFile, c: &Checked, st: &crate::types::Stages, si: usize) -> bool {
+    let at = &c.sets[si].eval_at;
+    f.items.iter().enumerate().any(|(i, it)| {
+        matches!(it, Item::Table(t) if t.name.as_ref().is_some_and(|n| &n.text == at))
+            && matches!(st.at(i), crate::types::Stage::Each { walk, .. } if walk > 1)
+    })
+}
+
+/// The orders of verdicts the fold at `fi` can take, when it runs in a second walk or later: those
+/// some case of one or two elements reaches (`vectors::second_walk_cases`), each read in the walk
+/// the fold runs in (§15.219). A case past a sum's range has no answer, and is left out. `None` for
+/// a fold of a first walk, whose elements land on their verdicts one at a time.
+fn later_orders(f: &RuleFile, c: &Checked, st: &crate::types::Stages, fi: usize) -> Option<BTreeSet<Vec<String>>> {
+    let crate::types::Stage::Each { seq, walk } = st.at(fi) else { return None };
+    if walk < 2 {
+        return None;
+    }
+    let mut out = BTreeSet::new();
+    for m in vectors::second_walk_cases(f, c, seq) {
+        let inputs: HashMap<String, Val> = m.into_iter().collect();
+        if eval::sum_past_range(f, c, inputs.clone()).is_some() {
+            continue;
+        }
+        if let Some(vs) = eval::fold_verdicts(f, c, inputs).get(&fi) {
+            out.insert(vs.iter().flatten().cloned().collect::<Vec<String>>());
+        }
+    }
+    Some(out)
 }
 
 /// Every name an expression reads.
@@ -815,6 +867,7 @@ pub(crate) fn bound(f: &RuleFile, n: &str) -> bool {
             Item::Define(d) => d.name.text == n,
             Item::Table(t) => t.outputs.iter().any(|o| o.name.text == n),
             Item::Agg(a) => a.name.text == n,
+            Item::Fold(d) => d.answer.as_ref().is_some_and(|a| a.name.text == n),
         })
 }
 
@@ -838,7 +891,7 @@ pub(crate) fn reads_of(f: &RuleFile) -> HashMap<String, BTreeSet<String>> {
                     }
                 }
             }
-            Item::Agg(_) => {}
+            Item::Agg(_) | Item::Fold(_) => {}
         }
     }
     reads

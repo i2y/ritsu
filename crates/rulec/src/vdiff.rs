@@ -274,7 +274,7 @@ pub(crate) fn columns_with(f: &RuleFile, also: &RuleFile, more: &BTreeSet<String
             Item::Derived(d) => (d.name.text.as_str(), Kind::Derived),
             Item::Define(d) => (d.name.text.as_str(), Kind::Derived),
             Item::Agg(a) => (a.name.text.as_str(), Kind::Walk),
-            Item::Table(_) => continue,
+            Item::Table(_) | Item::Fold(_) => continue,
         };
         if tested.contains(name) && !outs.contains(name) {
             out.push((name.to_string(), kind));
@@ -554,7 +554,8 @@ pub(crate) fn holds(ax: &Axis, ci: usize, v: &Val) -> bool {
 /// the element's own fields at their first candidate — enough to reach every verdict the
 /// per-element table can give, because a field is cut at every boundary its cells name.
 fn element_menu(f: &RuleFile, c: &Checked, cap: usize) -> Vec<BTreeMap<String, Val>> {
-    let Some(el) = &f.elements else { return Vec::new() };
+    // One sequence: a rule that walks more never comes this far (`walks_beyond_cells`).
+    let Some(el) = f.elements.first() else { return Vec::new() };
     let mut menu: Vec<BTreeMap<String, Val>> = vec![BTreeMap::new()];
     for fld in &el.fields {
         let Some(ty) = c.ty_of(&fld.name.text) else { continue };
@@ -1155,7 +1156,7 @@ fn build_seq(
         }
         if !built.is_empty() {
             // Fields the sums did not name still have to be there.
-            if let Some(el) = &f.elements {
+            if let Some(el) = f.elements.first() {
                 for e in &mut built {
                     for fld in &el.fields {
                         if !e.contains_key(&fld.name.text) {
@@ -1849,7 +1850,7 @@ fn diff_cells(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize)
     // A rule that folds a sequence is not a function of finitely many columns: the answer
     // depends on the whole sequence, and a region over the summaries would not say what it
     // sounds like it says. What can be settled is whether anything inside the walk changed.
-    if o.0.fold.is_some() || n.0.fold.is_some() {
+    if o.0.folds().next().is_some() || n.0.folds().next().is_some() {
         if decides_alike(o, n) {
             out.same = 1;
             out.cells = 1;
@@ -1858,6 +1859,21 @@ fn diff_cells(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked), budget: usize)
             out.blocked = Some(tr!(
                 "この規則は並び全体を見て答えを出すので、入力を決まった数の項目の組み合わせに分けられません。変わったのは並びを見ていく側なので、どの入力で答えが変わるかは、ここでは示せません",
                 "this rule folds a sequence: the answer depends on the whole of it, so the space of columns does not cut into cells. What changed is inside the walk, and which inputs move cannot be stated here"
+            ));
+        }
+        return out;
+    }
+    // The same for a walk this command builds no sequences for (§15.219): what can be settled is
+    // whether anything that decides an answer changed.
+    if walks_beyond_cells(o.0) || walks_beyond_cells(n.0) {
+        if decides_alike(o, n) && out.domain.is_empty() {
+            out.same = 1;
+            out.cells = 1;
+            out.feasible = 1;
+        } else {
+            out.blocked = Some(tr!(
+                "この規則は二つ以上の並びをたどるか、最大や最小を求めるか、並びを二回たどるので、入力を決まった数の項目の組み合わせに分けられません。どの入力で答えが変わるかは、ここでは示せません",
+                "this rule walks two sequences or more, takes a largest or a smallest value, or walks a sequence twice, so the space of columns does not cut into cells; which inputs move cannot be stated here"
             ));
         }
         return out;
@@ -2087,32 +2103,81 @@ fn same_arm(a: &Arm, b: &Arm) -> bool {
 fn decides_alike(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> bool {
     same_machinery(o, n)
         && fold_same(o.0, n.0)
+        && walks_same(o, n)
         && row_map(o.1) == row_map(n.1)
         && around_rows(o.0, o.1) == around_rows(n.0, n.1)
 }
 
-/// Whether the two walks reduce the same way.
+/// Whether the two versions walk the same sequences the same way, a fold apart (§15.219): the
+/// same sequences, each with the same fields of the same types and ranges, and the same `count`,
+/// `sum`, `max` and `min` lines, each over the same sequence, reading the same column, testing the
+/// same way and answering the same `empty` value inside the same range. Rows and expressions
+/// alike, two versions that differ here still answer differently for one sequence: a `count` that
+/// tests another value counts other elements, and a field whose range moved lets in other ones.
+fn walks_same(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> bool {
+    let range = |c: &Checked, name: &str| c.ranges.get(name).map(|(lo, hi)| (lo.map(|r| (r.num, r.den)), hi.map(|r| (r.num, r.den))));
+    let seqs = |f: &RuleFile, c: &Checked| -> Vec<String> {
+        f.elements
+            .iter()
+            .map(|el| {
+                let fields: Vec<String> = el
+                    .fields
+                    .iter()
+                    .map(|fd| format!("{}:{}:{:?}", fd.name.text, c.ty_of(&fd.name.text).map(|t| t.to_string()).unwrap_or_default(), range(c, &fd.name.text)))
+                    .collect();
+                format!("{}[{}]", el.name.text, fields.join(","))
+            })
+            .collect()
+    };
+    let aggs = |f: &RuleFile, c: &Checked| -> Vec<String> {
+        f.aggs()
+            .map(|d| {
+                format!(
+                    "{} {} over {} of {} = {:?} where {:?} empty {:?} in {:?}",
+                    d.kind.word(),
+                    d.name.text,
+                    d.over,
+                    d.column.text,
+                    d.value.as_ref().map(|v| &v.text),
+                    d.filter.as_ref().map(|(w, v)| (&w.text, v.as_ref().map(|v| &v.text))),
+                    d.empty.as_ref().map(|(l, _)| lit_key(l)),
+                    range(c, &d.name.text)
+                )
+            })
+            .collect()
+    };
+    seqs(o.0, o.1) == seqs(n.0, n.1) && aggs(o.0, o.1) == aggs(n.0, n.1)
+}
+
+/// What [`compare`] cannot cut into cells (§15.219): a rule that walks two sequences or more,
+/// takes a `max` or a `min`, or walks a sequence a second time. A cell there is built by finding a
+/// sequence whose summaries land on its coordinates, and that is done for a `count` and a `sum`
+/// over one sequence, whose totals climb as elements are added: a `max` does not climb, a second
+/// sequence is a second thing to build, and a second walk reads what the first found.
+fn walks_beyond_cells(f: &RuleFile) -> bool {
+    f.elements.len() > 1 || f.aggs().any(|d| d.kind.extreme()) || crate::types::stages(f).depth > 1
+}
+
+/// Whether the two walks reduce the same way: the same folds, in the same order, each answering
+/// the same name.
 fn fold_same(a: &RuleFile, b: &RuleFile) -> bool {
-    match (&a.fold, &b.fold) {
-        (Some(x), Some(y)) => {
-            x.verdict == y.verdict
-                && x.over == y.over
-                && x.arms.len() == y.arms.len()
-                && x.arms.iter().zip(&y.arms).all(|((n1, a1, _), (n2, a2, _))| n1.text == n2.text && same_arm(a1, a2))
-                && match (&x.empty, &y.empty) {
-                    (Some(p), Some(q)) => same_expr(p, q),
-                    (None, None) => true,
-                    _ => false,
-                }
-                && match (&x.exhausted, &y.exhausted) {
-                    (Some(p), Some(q)) => same_expr(p, q),
-                    (None, None) => true,
-                    _ => false,
-                }
-        }
+    let (xs, ys): (Vec<&FoldDecl>, Vec<&FoldDecl>) = (a.folds().collect(), b.folds().collect());
+    xs.len() == ys.len() && xs.iter().zip(&ys).all(|(x, y)| x.answer_name(a) == y.answer_name(b) && one_fold_same(x, y))
+}
+
+/// Whether two folds reduce the same way.
+fn one_fold_same(x: &FoldDecl, y: &FoldDecl) -> bool {
+    let same_answer = |p: &Option<Expr>, q: &Option<Expr>| match (p, q) {
+        (Some(p), Some(q)) => same_expr(p, q),
         (None, None) => true,
         _ => false,
-    }
+    };
+    x.verdict == y.verdict
+        && x.over == y.over
+        && x.arms.len() == y.arms.len()
+        && x.arms.iter().zip(&y.arms).all(|((n1, a1, _), (n2, a2, _))| n1.text == n2.text && same_arm(a1, a2))
+        && same_answer(&x.empty, &y.empty)
+        && same_answer(&x.exhausted, &y.exhausted)
 }
 
 // ---------------------------------------------------------------------------------------
@@ -3107,7 +3172,7 @@ impl<'a> Walker<'a> {
         extra: &[(String, Rat)],
         more: &BTreeSet<String>,
     ) -> Result<Self, String> {
-        if f.fold.is_some() {
+        if f.folds().next().is_some() {
             return Err(tr!(
                 "この規則は並び全体を見て答えを出すので、入力を決まった数の項目の組み合わせに分けられません",
                 "this rule folds a sequence: the answer depends on the whole of it, so the space of columns does not cut into cells"

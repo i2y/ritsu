@@ -583,7 +583,7 @@ impl<'a> Gen<'a> {
         for it in &self.f.items {
             match it {
                 // A rule that walks a sequence is not generated for SQL at all (§15.56).
-                Item::Agg(_) => {}
+                Item::Agg(_) | Item::Fold(_) => {}
                 Item::Derived(d) => {
                     let e = self.expr(&d.expr, &local);
                     let text = sql.translate(&e.text);

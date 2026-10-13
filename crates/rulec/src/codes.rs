@@ -284,6 +284,11 @@ const FOLD_HEAD: &str = "rule t(t) v1\n\n\
                       table j(j)\npolicy unique\n| k     | -> d(d) : v |\n| <=5円 | a           |\n| >5円  | b           |\n\n\
                       fold d over xs\n";
 const X_E022: &str = const_str_e022();
+/// E022's second form (§15.219): a `max` with no `empty`.
+const X_E022_MAX: &str = "rule t(t) v1\n\n\
+                      elements xs(xs)\n  k(k) : number  range >=0 <=10\n\n\
+                      outputs\n  r(r) : number  round down(1)\n\n\
+                      max r over xs of k\n";
 const X_E022_EN: &str = r##"rule t(t) v1
 
 enum v(v) = a(a) | b(b)
@@ -1024,9 +1029,9 @@ fold d over xs
   exhausted -> held
 "##;
 
+/// E020 (§15.219): a sequence declared, and nothing that walks it.
 const X_E020: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\n\
                       elements xs(xs)\n  k(k) : number  range >=0 <=10\n\n\
-                      elements ys(ys)\n  m(m) : number  range >=0 <=10\n\n\
                       outputs\n  r(r) : bool\n\n\
                       table j(j)\npolicy unique\n| n | -> r(r) : bool |\n| - | true           |\n";
 const X_E021: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\n\
@@ -1050,26 +1055,15 @@ const X_E030: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=0 <=10\n\
                       outputs\n  r(r) : bool\n\n\
                       count h(h) over xs where b\n\n\
                       table j(j)\npolicy unique\n| h | -> r(r) : bool |\n| - | true           |\n";
-const X_E031: &str = "rule t(t) v1\n\nenum v(v) = a(a) | b(b)\n\n\
-                      elements xs(xs)\n  k(k) : number  range >=0 <=10\n\n\
-                      outputs\n  r(r) : number  round down(1)\n\n\
-                      table j(j)\npolicy unique\n| k   | -> d(d) : v |\n| <=5 | a           |\n| >5  | b           |\n\n\
-                      count h(h) over xs where d = a  range >=0 <=10\n\n\
-                      fold d over xs\n  a -> next\n  b -> take_first k\n  empty -> 0\n  exhausted -> held\n";
-/// E031's second form (§15.208): one item reads an element's value and what the walk answers.
-const X_E031_BOTH: &str = "rule 部品の費用(parts_cost) v1\n\n\
-                      elements 部品(parts)\n  単価(price) : number  range >=0 <=100\n\n\
-                      outputs\n  合計(total) : number  round down(1)\n\n\
-                      sum 小計(subtotal) over 部品 of 単価  range >=0 <=10000\n\n\
-                      define 残り : number = 小計 - 単価\n\n\
-                      define 合計 : number = 小計\n";
-const X_E031_BOTH_EN: &str = "rule parts_cost v1\n\n\
-                      elements parts\n  price : number  range >=0 <=100\n\n\
-                      outputs\n  total : number  round down(1)\n\n\
-                      sum subtotal over parts of price  range >=0 <=10000\n\n\
-                      define rest : number = subtotal - price\n\n\
-                      define total : number = subtotal\n";
-/// E031's third form (§15.208): an output that is a value of one element.
+/// E031 (§15.219): one item reads a value of one element of each of two sequences.
+const X_E031: &str = "rule t(t) v1\n\n\
+                      elements xs(xs)\n  a(a) : number  range >=0 <=10\n\n\
+                      elements ys(ys)\n  b(b) : number  range >=0 <=10\n\n\
+                      outputs\n  r(r) : number  round down(1)\n  s(s) : number  round down(1)\n\n\
+                      define both(both) : number = a + b\n\n\
+                      sum r over xs of both  range >=0 <=1000\n\n\
+                      sum s over ys of b  range >=0 <=1000\n";
+/// E031's second form (§15.208): an output that is a value of one element.
 const X_E031_OUTPUT: &str = "rule 大きな部品(big_parts) v1\n\n\
                       elements 部品(parts)\n  単価(price) : number  range >=0 <=100\n\n\
                       outputs\n  合計(total) : number  round down(1)\n  大きい(big) : bool\n\n\
@@ -2092,26 +2086,26 @@ pub fn ledger() -> Vec<Entry> {
             "E020",
             tr!("`elements` の宣言が正しくありません", "The `elements` declaration is not right"),
             tr!(
-                "`elements` に名前が無いか、二本あるとき。規則がたどる並びは一つで、`elements` にはその一要素ぶんのフィールドを書きます。",
-                "An `elements` line has no name, or there are two of them. A rule walks one sequence, and the fields of one of its elements are declared there."
+                "`elements` に名前が無いとき、または宣言した並びをどの行もたどらないとき。並びは、`count`・`sum`・`max`・`min`・`fold` のどれかが `over` で指して、はじめて規則の値になります。たどらない並びのフィールドを読む項目は、どの要素の値を読むのかが決まりません。規則は並びをいくつでもたどれます（`elements` は何本でも書けます）。",
+                "An `elements` line has no name, or nothing walks the sequence it declares. A sequence becomes a value of the rule only when a `count`, a `sum`, a `max`, a `min` or a `fold` names it after `over`; an item that reads a field of a sequence nothing walks reads no element in particular. A rule may walk any number of sequences, each under an `elements` of its own."
             ),
             tr!(
-                "`elements 運賃行(fee_rows)` の形にして、続く行に一要素ぶんのフィールドを `inputs` と同じように書いてください。並びが二つ要るなら、それは別の規則です。",
-                "Write `elements fee_rows(fee_rows)`, and the fields of one element under it, declared the way `inputs` are. Two sequences mean two rules."
+                "`elements 運賃行(fee_rows)` の形で名前を書き、続く行に一要素ぶんのフィールドを `inputs` と同じように書いてください。並びが要るなら、たどる行を足してください。要らないなら、その `elements` を消してください。",
+                "Write `elements fee_rows(fee_rows)`, and the fields of one element under it, declared the way `inputs` are. If the sequence is needed, add the line that walks it; if not, take the `elements` out."
             ),
             X_E020,
-            &["E021"],
+            &["E028", "E021", "E031"],
         ),
         err(
             "E021",
             tr!("`fold` の書き方が正しくありません", "The `fold` is not written correctly"),
             tr!(
-                "`fold <判定の列> over <並びの名前>` になっていないか、判定の行き先が `next` `stop` `stop with <値>` `take_unique <値>` `take_first <値>` `keep_max <値> by <鍵>` のどれでもないか、畳もうとしている列が列挙でないとき。畳み込みの値が、その値を決める時点に無い値を読むときも、これです。`empty` と `exhausted` の値は要素を見ていないところで決まるので、要素の値を読めません。どの値も、この畳み込みの答えから計算する値を読めません。`held` は最後まで見終えたときの値なので、`exhausted` の値にだけ書けます。",
-                "The heading is not `fold <verdict column> over <sequence>`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, or the column being folded is not an enum. So is a value of the fold that reads what is not there when it is decided: `empty` and `exhausted` are decided where no element is being looked at and cannot read an element's value; no value can read what is computed from the fold's own answer; and `held`, what the walk holds once it has seen every element, belongs in `exhausted` only."
+                "`fold <判定の列> over <並びの名前> [-> <名前> [: <型>]]` になっていないか、判定の行き先が `next` `stop` `stop with <値>` `take_unique <値>` `take_first <値>` `keep_max <値> by <鍵>` のどれでもないか、畳もうとしている列が列挙でないとき。答えの名前が、入力や要素のフィールドや上で宣言した値と同じとき、出力でない名前に型が無いとき、出力の名前に出力と違う型を書いたとき、畳み込みとほかの項目が同じ名前を決めるときも、これです。畳み込みの値が、その値を決める時点に無い値を読むときもこれです。`empty` と `exhausted` の値は要素を見ていないところで決まるので、要素の値を読めません。どの値も、この畳み込みの答えから計算する値を読めません（要素の判定がその答えを読むと、答えを出す前に答えが要ります）。`held` は最後まで見終えたときの値なので、`exhausted` の値にだけ書けます。",
+                "The heading is not `fold <verdict column> over <sequence> [-> <name> [: <type>]]`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, or the column being folded is not an enum. So is an answer named after an input, a field of an element or a value declared above; a name that is no output given no type; an output's name given a type other than the output's; and a name that the fold and another item both decide. So, too, is a value of the fold that reads what is not there when it is decided: `empty` and `exhausted` are decided where no element is being looked at and cannot read an element's value; no value can read what is computed from the fold's own answer (a verdict that read it would need the answer before there is one); and `held`, what the walk holds once it has seen every element, belongs in `exhausted` only."
             ),
             tr!(
-                "見出しと行き先を上の形に直してください。`take` とだけ書くことはできません。**一件だけ採るのか、最初の一件を採るのか**は、書く人が選ぶことだからです。要素の値を答えにするなら、`take_unique`・`take_first`・`keep_max` で採ってから、`exhausted -> held` で返してください。",
-                "Correct the heading and the arms. A bare `take` cannot be written: whether **one and only one** element may be taken, or the first of several, is for the author to choose. To answer with a value of an element, take it with `take_unique`, `take_first` or `keep_max`, and answer `exhausted -> held`."
+                "見出しと行き先を上の形に直してください。`take` とだけ書くことはできません。**一件だけ採るのか、最初の一件を採るのか**は、書く人が選ぶことだからです。要素の値を答えにするなら、`take_unique`・`take_first`・`keep_max` で採ってから、`exhausted -> held` で返してください。後ろの項目が答えを読むなら `-> <名前>` で名前を付けます。自分の答えを読む判定は、別の畳み込みにすれば二回目の歩きで読めます。",
+                "Correct the heading and the arms. A bare `take` cannot be written: whether **one and only one** element may be taken, or the first of several, is for the author to choose. To answer with a value of an element, take it with `take_unique`, `take_first` or `keep_max`, and answer `exhausted -> held`. Name the answer with `-> <name>` for the items below to read it; a verdict that needs a fold's answer goes in another fold, which reads it on a second walk."
             ),
             X_E021,
             &["E020", "E022", "E023", "E024"],
@@ -2120,17 +2114,18 @@ pub fn ledger() -> Vec<Entry> {
             "E022",
             tr!("要素がゼロ件のときの答えが宣言されていません", "The answer for a sequence with no elements is not declared"),
             tr!(
-                "`fold` に `empty -> <値>` が無いとき。空の並びは必ず来ます。手で書いたループがいちばんよく見落とすのがこの場合で、たいていは最初の要素をそのまま読もうとして、実行時に落ちます。",
-                "A `fold` has no `empty -> <value>`. An empty sequence always turns up, and it is the case a hand-written loop most often forgets — usually by reading the first element and falling over."
+                "`fold` に `empty -> <値>` が無いとき、`max`・`min` に `empty <値>` が無いとき。空の並びは必ず来ます。手で書いたループがいちばんよく見落とすのがこの場合で、たいていは最初の要素をそのまま読もうとして、実行時に落ちます。`max`・`min` では、`where` に当てはまる要素が一つも無いときも、この値が答えです。",
+                "A `fold` has no `empty -> <value>`, or a `max` or a `min` has no `empty <value>`. An empty sequence always turns up, and it is the case a hand-written loop most often forgets — usually by reading the first element and falling over. For a `max` and a `min`, it is also the answer when no element passes the `where`."
             ),
             tr!(
-                "`empty -> <値>` を足してください。何を返すかは業務の判断で、rulec が決められることではありません。",
-                "Add `empty -> <value>`. What to answer is a business decision, and not one the tool can make."
+                "`empty -> <値>`（`max`・`min` では `empty <値>`）を足してください。何を返すかは業務の判断で、rulec が決められることではありません。",
+                "Add `empty -> <value>` (`empty <value>` on a `max` or a `min`). What to answer is a business decision, and not one the tool can make."
             ),
             X_E022,
             &["E023", "E024"],
         )
-        .english(X_E022_EN),
+        .english(X_E022_EN)
+        .also(tr!("`max` に `empty` が無い", "A `max` with no `empty`"), X_E022_MAX, X_E022_MAX),
         err(
             "E023",
             tr!("最後まで見終えたときの答えが宣言されていません", "The answer for a walk that reached the end is not declared"),
@@ -2210,8 +2205,8 @@ pub fn ledger() -> Vec<Entry> {
             "E028",
             tr!("`count` の書き方が正しくありません", "The `count` is not written correctly"),
             tr!(
-                "`count <名前>(<別名>) over <並びの名前> where <列> = <値>` になっていないとき。`over` が無い、`where` が無い、指した並びが `elements` で宣言されていない、`=` の右に値が無い。",
-                "The line is not `count <name>(<alias>) over <sequence> where <column> = <value>`: no `over`, no `where`, a sequence that `elements` does not declare, or an `=` with nothing on its right."
+                "`count <名前>(<別名>) over <並びの名前> where <列> = <値>` になっていないとき。`over` が無い、`where` が無い、指した並びが `elements` で宣言されていない、`=` の右に値が無い。`sum <名前>(<別名>) over <並びの名前> of <列>`、`max`・`min` の `<名前>(<別名>) over <並びの名前> of <列> [where <列> [= <値>]] empty <値>` の形でないときも、これです。",
+                "The line is not `count <name>(<alias>) over <sequence> where <column> = <value>`: no `over`, no `where`, a sequence that `elements` does not declare, or an `=` with nothing on its right. So is a `sum` that is not `sum <name>(<alias>) over <sequence> of <column>`, and a `max` or a `min` that is not `<name>(<alias>) over <sequence> of <column> [where <column> [= <value>]] empty <value>`."
             ),
             tr!(
                 "上の形に直してください。`= <値>` は、真偽の列を数えるときだけ省けます。",
@@ -2224,8 +2219,8 @@ pub fn ledger() -> Vec<Entry> {
             "E029",
             tr!("この列は数えられません", "This column cannot be counted"),
             tr!(
-                "`where` が指す列が、要素ごとに決まる値でないとき（入力や導出は一件の呼び出しに一つしかないので、数えても 0 か 1 です）。値が有限の集合でないとき。書いた値がその列挙にないとき。列挙の列なのに `= <値>` が無いとき。",
-                "The column `where` names is not a value of one element (an input or a derived value is one per call, so counting it could only answer 0 or 1); or its values are not a closed set; or the value written is not one of that enum\'s; or an enum column was given no `= <value>`."
+                "`where` が指す列が、要素ごとに決まる値でないとき（入力や導出は一件の呼び出しに一つしかないので、数えても 0 か 1 です）。値が有限の集合でないとき。書いた値がその列挙にないとき。列挙の列なのに `= <値>` が無いとき。`sum`・`max`・`min` の `of` が指す列も同じで、`over` が指すのと別の並びの値のとき、`sum` の列が数でないとき、`max`・`min` の列が数・日付・順序つきの列挙のどれでもないときにも出ます（`max`・`min` では題が「この列はまとめられません」になります）。",
+                "The column `where` names is not a value of one element (an input or a derived value is one per call, so counting it could only answer 0 or 1); or its values are not a closed set; or the value written is not one of that enum\'s; or an enum column was given no `= <value>`. The column after `of` on a `sum`, a `max` or a `min` is held the same way, and it also appears when that column is a value of another sequence than the one `over` names, when a `sum` reads no number, and when a `max` or a `min` reads neither a number, a date nor an ordered enum (their title then says the column cannot be summarised)."
             ),
             tr!(
                 "要素のフィールドか、要素ごとの表が出した列を指してください。判定を表に書けば、その分類そのものも完全性の検査に掛かります。",
@@ -2250,22 +2245,17 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E031",
-            tr!("並びをもう一度たどることになります", "This would take a second walk over the sequence"),
+            tr!("一つの項目が、二つの並びの要素を読んでいます", "One item reads the elements of two sequences"),
             tr!(
-                "一つの規則で、並びのたどり方が二つ要るとき。形は三つあります。一つめは、`fold` と `count`・`sum` が一緒にあるとき。どちらも同じ並びをたどり終えたときの答えを決めるもので、`fold` は途中で打ち切れるので、途中で止まったときに数えた結果が何を意味するのかが決まりません。二つめは、一つの項目（表・節・導出・定義）が、要素の値と、たどった結果（`fold` の答え、`count`・`sum` の値）の両方を読むとき。たどった結果は並びを最後まで見ないと決まらず、要素の値はその要素を見ているあいだにしかないので、両方を読むには、たどり終えてからもう一度並びをたどることになります。三つめは、出力が要素ごとの値のとき。たどり終えたあとには、一つの値に決まりません。規則の項目は、要素によらない項目、要素ごとの項目、たどった結果を読む項目に分かれ、この順に計算されます（たどる前、たどるあいだ、たどったあと）。",
-                "One rule would need two walks over its sequence. There are three forms. A `fold` beside a `count` or a `sum`: they are two endings for the same walk, and a `fold` can stop partway, so what a count means on a walk that stopped is not decided. One item (a table, a clause, a derive or a definition) that reads both a value of one element and what the walk answers (the `fold`'s answer, a `count`, a `sum`): what the walk answers is known only once every element has been seen, and a value of one element exists only while the walk is on it, so reading both would take a second walk after the first. And an output that is a value of one element: once the walk is over, it is not one value. A rule's items fall into those that read no element, those of one element, and those that read what the walk answers, worked out in that order — before the walk, during it, after it."
+                "一つの項目（表・節・導出・定義・畳み込み）が、二つの並びの要素の値を読むとき。要素の値は、その並びをたどっているあいだにしかありません。二つの並びの要素を一緒に読むには、片方の並びの要素ごとに、もう片方を最初からたどることになります（並びの中で並びをたどる）。そうすると歩きの数が並びの長さにつれて増え、検査が終わりません。出力が要素ごとの値のときも、これです。たどり終えたあとには、一つの値に決まりません。規則の項目は、要素によらない項目と要素ごとの項目に分かれ、要素ごとの項目は、読む集計の答えが決まったあとの歩きで計算されます（集計の答えを読む要素ごとの項目は二回目の歩きに入ります）。",
+                "One item (a table, a clause, a derive, a definition or a fold) reads a value of one element of each of two sequences. A value of one element exists only while its sequence is walked, so reading both together would walk one sequence again from the start at every element of the other — a walk inside a walk. The number of walks would then grow with the length of a sequence, and the checks could not finish. So is an output that is a value of one element: once the walk is over, it is not one value. A rule's items fall into those that read no element and those of one element, and an item of one element is worked out on the walk after the one that finds every summary it reads (an item of one element that reads a summary goes on a second walk)."
             ),
             tr!(
-                "数えるなら `fold` を消して、数えた結果を表で判定してください。畳むなら `count` を消してください。要素の値を読む部分と、たどった結果を読む部分は、分けられるなら別の表か定義にしてください。要素ごとの値を出力にするなら、`count` か `sum` で並び全体の一つの値にしてから出力にしてください。",
-                "To count, drop the `fold` and let a table judge the count; to fold, drop the `count`. Where an item can be split, put the part that reads the element and the part that reads what the walk answers in separate tables or definitions. To answer with something each element decides, make it one value for the whole sequence with a `count` or a `sum` first."
+                "片方の並びを `count`・`sum`・`max`・`min`・`fold` で一つの値にしてから、もう片方の項目で読んでください。その項目は、その値が決まったあとの二回目の歩きで計算されます。要素ごとの値を出力にするなら、集計で並び全体の一つの値にしてから出力にしてください。",
+                "Make one of the sequences one value first — a `count`, a `sum`, a `max`, a `min` or a `fold` — and read that value in the item of the other; the item is then worked out on a second walk, once the value is known. To answer with something each element decides, make it one value for the whole sequence with a summary first."
             ),
             X_E031,
-            &["E021", "E029"],
-        )
-        .also(
-            tr!("要素の値と、たどった結果の両方を読む項目", "One item reading an element's value and what the walk answers"),
-            X_E031_BOTH,
-            X_E031_BOTH_EN,
+            &["E021", "E029", "E020"],
         )
         .also(tr!("要素ごとの値の出力", "An output that is a value of one element"), X_E031_OUTPUT, X_E031_OUTPUT_EN),
         err(
@@ -2302,8 +2292,8 @@ pub fn ledger() -> Vec<Entry> {
             "E034",
             tr!("行ラベルが二度あります", "A row label appears twice"),
             tr!(
-                "同じ表の二つの行が、最初の `|` の前に同じラベルを書いているとき。ラベルは、`overrides` の行や記録の trace、後の版が行を指すための名前なので、一つの表の中で一意でなければなりません。一つのものを指す名前はどれも同じで、二つの表か節、二つの出典が同じ名前のとき、`import enum` で読んだ列挙か一緒に来たグループが、この規則が宣言するものや別の `import enum` が読んだものと同じ名前のときにも出ます。",
-                "Two rows of one table carry the same label before their first `|`. A label is how an `overrides` line, a record's trace and a later version name the row, so it is unique within its table. Every name that names one thing is held the same way: it also appears when two tables or clauses, or two sources, share a name, and when an enum read with `import enum`, or a group that comes with it, has the name of one this rule declares or another `import enum` reads."
+                "同じ表の二つの行が、最初の `|` の前に同じラベルを書いているとき。ラベルは、`overrides` の行や記録の trace、後の版が行を指すための名前なので、一つの表の中で一意でなければなりません。一つのものを指す名前はどれも同じで、二つの表か節、二つの出典が同じ名前のとき、`import enum` で読んだ列挙か一緒に来たグループが、この規則が宣言するものや別の `import enum` が読んだものと同じ名前のとき、入力・たどる並び・要素のフィールド（二つの並びのフィールドどうしも）が同じ名前のときにも出ます。",
+                "Two rows of one table carry the same label before their first `|`. A label is how an `overrides` line, a record's trace and a later version name the row, so it is unique within its table. Every name that names one thing is held the same way: it also appears when two tables or clauses, or two sources, share a name; when an enum read with `import enum`, or a group that comes with it, has the name of one this rule declares or another `import enum` reads; and when an input, a sequence and a field of an element (the fields of two sequences included) share a name."
             ),
             tr!(
                 "どちらかのラベル（名前）を変えてください。`import enum` で読んだ列挙なら、`-> <別の名前>` で読めます。",
@@ -2787,8 +2777,8 @@ pub fn ledger() -> Vec<Entry> {
             "E069",
             tr!("順序つきの列挙と比べるセル、または表示名の形が違います", "An ordered enum, a comparison on one, or a display name is misshapen"),
             tr!(
-                "値を `|` で区切った（順序の無い）列挙の列に `<v` や `>=v` のような比べるセルを書いたとき、そういう列挙の二つの値を `<` などで比べたとき、`max`・`min` に渡したとき、入力に範囲を書いたとき。一つの列挙の値の区切りに `<` と `|` を混ぜたとき。範囲に入る値が一つも無いとき、要素のフィールドの列挙に範囲を書いたとき。値の表示名が空か制御文字を含むとき、同じ列挙の二つの値の表示名が同じとき。値を `<` で区切った列挙は、書いた順が値の順序になり、比べるセルは、比べた値より前（後）の値の集合として読まれます。",
-                "A cell that compares (`<v`, `>=v`) is written in a column of an enum whose values are separated by `|`, and so have no order; or two values of such an enum are compared with `<` and the like, passed to `max` or `min`, or held to a range on an input. Or one enum separates its values with both `<` and `|`. Or a range lets no value in, or an enum field of an element is given a range. Or a value's display name is empty or holds a control character, or two values of one enum have the same display name. The values of an enum separated by `<` are ordered as written, and a comparison takes the values before (after) the one it is against."
+                "値を `|` で区切った（順序の無い）列挙の列に `<v` や `>=v` のような比べるセルを書いたとき、そういう列挙の二つの値を `<` などで比べたとき、`max`・`min` に渡したとき、入力に範囲を書いたとき。一つの列挙の値の区切りに `<` と `|` を混ぜたとき。範囲に入る値が一つも無いとき、要素のフィールドの列挙に範囲を書いたとき、列挙の列の `max`・`min` の行に範囲を書いたとき。値の表示名が空か制御文字を含むとき、同じ列挙の二つの値の表示名が同じとき。値を `<` で区切った列挙は、書いた順が値の順序になり、比べるセルは、比べた値より前（後）の値の集合として読まれます。",
+                "A cell that compares (`<v`, `>=v`) is written in a column of an enum whose values are separated by `|`, and so have no order; or two values of such an enum are compared with `<` and the like, passed to `max` or `min`, or held to a range on an input. Or one enum separates its values with both `<` and `|`. Or a range lets no value in, or an enum field of an element is given a range, or a range is written on the line of a `max` or a `min` of an enum column. Or a value's display name is empty or holds a control character, or two values of one enum have the same display name. The values of an enum separated by `<` are ordered as written, and a comparison takes the values before (after) the one it is against."
             ),
             tr!(
                 "宣言の順が意味を持つなら、値を `<` で区切ってください（`enum 段階 = 一般 < シルバー < ゴールド`）。持たないなら、値か集合で書いてください。区切りは `<` か `|` のどちらかにそろえ、表示名は空でない、ほかの値と違う名前にしてください。",
@@ -3033,8 +3023,8 @@ pub fn ledger() -> Vec<Entry> {
             "E112",
             tr!("導出の範囲が、実際に到達しうる値を含んでいません", "The range of a derived value does not contain the values it can reach"),
             tr!(
-                "入力の範囲から計算した「実際に取りうる値」が、導出に宣言した `range` からはみ出すとき。範囲が狭いと、完全性検査が実際に起きる値を見ないまま「完全」と答えます。",
-                "The interval computed from the input ranges falls outside the `range` declared on the derived value. With too narrow a range, the completeness check answers \"complete\" without ever looking at values that really occur."
+                "入力の範囲から計算した「実際に取りうる値」が、導出に宣言した `range` からはみ出すとき。範囲が狭いと、完全性検査が実際に起きる値を見ないまま「完全」と答えます。`max`・`min` に書いた `range` が、列の範囲と `empty` の値を含まないときも、これです。答えはそのどちらかの値だからです。",
+                "The interval computed from the input ranges falls outside the `range` declared on the derived value. With too narrow a range, the completeness check answers \"complete\" without ever looking at values that really occur. So does a `range` written on a `max` or a `min` that leaves out part of its column's range or its `empty` value, since it answers one of those."
             ),
             tr!(
                 "文面が示す範囲まで `range` を広げてください（`range >=-110万円 <=100万円` の形で書いてあります）。起こりえない分まで広げても、検査がそこを自分で外すので害はありません。",

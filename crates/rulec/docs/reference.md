@@ -924,7 +924,10 @@ is how the second one is said out loud.
 
 A rule is one decision about one case. Sometimes the case carries a **sequence** — the rows
 of a tariff sheet, the candidates a predicate left — and the answer comes from walking it.
-`elements` declares what one element carries; `fold` declares how the walk ends.
+`elements` declares what one element carries; `fold` declares how the walk ends. A case may
+carry more than one sequence — an order's lines and the payments made against it — and each is
+declared under an `elements` of its own, with a name, and walked by the lines that name it after
+`over` (§6.3). A sequence nothing walks is E020.
 
 ```rule
 elements fee_rows
@@ -975,17 +978,52 @@ wrong:
 4. **`take_unique` or `take_first`** — there is no bare `take`. Whether a second matching
    element is an error or is ignored is a decision, and the grammar makes it one (E021).
 
-### Before the walk, on each element, after it
+### Naming a fold's answer
 
-A rule that walks a sequence runs each of its items at one of three places, and which one is
-derived from what the item reads rather than declared (§15.208 of DESIGN.md):
+Without more, a fold answers the rule's first output. `-> <name>` after the heading gives the
+answer a name, and the items below read it like any other value (§15.219 of DESIGN.md):
 
-- **before the walk**, once: an item that reads neither a value of one element nor what the
-  walk answers — a table over the ordinary inputs, a `define` computed from them;
-- **on each element**: an item that reads a value of one element (a field of `elements`, or an
-  item that reads one);
-- **after the walk**, once: an item that reads what the walk answers — the fold's answer, which
-  is the rule's first output, or a `count` or a `sum` (§6.3).
+```rule
+fold pick over lines -> discount
+  top       -> take_first top_off
+  rest      -> next
+  empty     -> 0USD
+  exhausted -> held
+
+define balance : money[USD] = subtotal - discount - paid
+```
+
+A name that is an output is that output, and the answer is of its type. A name that is not one
+is a value of the rule's own, and takes its type after a colon: `fold flag over items ->
+any_flagged : bool`. Every arm's value is read in that type. It is E021 when the name is already
+an input, a field of an element or a value declared above, when a name that is no output has no
+type, when an output's name is given another type, and when another item decides the same name —
+a fold with no `->` answers the first output, so a table or a `sum` that decides that output
+too leaves two answers for one name. A numeric answer that the items below read takes the hull
+of the values the fold answers with as its range, the way a `sum` takes its declared one, so a
+`define` over it is held to int64 like any other (E108).
+
+### Before the walks, on each walk, after them
+
+A rule that walks sequences runs each of its items at one place, and which one is derived from
+what the item reads rather than declared (§15.208 and §15.219 of DESIGN.md):
+
+- **before the walks**, once: an item that reads neither a value of one element nor what a walk
+  answers — a table over the ordinary inputs, a `define` computed from them;
+- **on each element of one walk**: an item that reads a value of one element (a field of
+  `elements`, or an item that reads one). It runs on the first walk over its sequence after the
+  walks that find every summary it reads: an item of one element that reads nothing a walk
+  answers runs on the first walk, and one that reads a summary — a `max` the first walk found —
+  runs on a **second walk** over the sequence, once that summary is known;
+- **after a walk**, once: an item that reads what the walks answer — a fold's answer, a `count`,
+  a `sum`, a `max` or a `min` (§6.3) — and no value of one element. It runs once the last walk
+  it reads from is over.
+
+A summary ends the walk it is on: every summary of one sequence whose column is there on the
+first walk is found on that walk, each reading every element, and one whose column is worked
+out from a summary is found on the walk after. Nothing in the rule says which walk comes first.
+How many walks there are is bounded by how many summaries there are, whatever the length of the
+sequence, and no walk runs inside another.
 
 ```rule
 define opening : number = reserve + fee          # before: inputs only
@@ -1007,20 +1045,46 @@ policy unique
 So `opening` exists when the sequence is empty, an element's item can read it, and a table can
 read what the walk answered.
 
+A second walk, in an order's settlement: the highest price is known only once every line has
+been read, and the line that takes the discount is the one at that price.
+
+```rule
+sum subtotal over lines of line_total  range >=0USD <=25_000USD   # walk 1 over the lines
+max top_price over lines of price empty 0USD                       # walk 1 over the lines
+sum paid over payments of amount  range >=0USD <=25_000USD         # walk 1 over the payments
+
+define gap : money[USD] = top_price - price                       # walk 2: a field and a max
+
+table pick_line                                                   # walk 2
+policy unique
+| gap    | -> pick : line_pick |
+| <=0USD | top                 |
+| >0USD  | rest                |
+
+fold pick over lines -> discount                                  # walk 2
+  top       -> take_first top_off
+  rest      -> next
+  empty     -> 0USD
+  exhausted -> held
+
+define balance : money[USD] = subtotal - discount - paid          # after walk 2
+```
+
 What cannot be written is said where it is written:
 
-- an item that reads both a value of one element and what the walk answers (E031): the answer
-  is known only once every element has been seen, and the element's value only while the walk
-  is on it, so reading both would take a second walk;
+- an item that reads the elements of two sequences (E031): a value of one element exists only
+  while its sequence is walked, so reading both would walk one sequence again at every element
+  of the other — a walk inside a walk, whose number of walks grows with the lengths;
 - an output that is a value of one element (E031), and a `result` line that reads one: once the
   walk is over there is no one value to give;
 - an answer that reads what is not there where it is decided (E021): `empty` and `exhausted`
   reading a value of one element, `held` anywhere but `exhausted`, and any answer or key reading
-  what is decided after the walk.
+  what is worked out from the fold's own answer — a fold whose verdict waits for its answer.
 
-The fold's answers are of the first output's type: a word that is a value of its enum is that
-value (`empty -> unavailable`), a word that is neither a value nor a declared name is E012, and a
-value of another type — `true` for an enum — is E103.
+The fold's answers are of the answer's type — the type of the name after `->`, or of the first
+output: a word that is a value of its enum is that value (`empty -> unavailable`), a word that
+is neither a value nor a declared name is E012, and a value of another type — `true` for an
+enum — is E103.
 
 ### Why a fold does not cost the checks their decidability
 
@@ -1037,8 +1101,11 @@ time does not change what can be said about it.
 every target but SQL and NumPy, which are refused by name below.
 The sequence is an argument like any other input — an array of objects on the wire (§10.2),
 each element's fields integers in their canonical unit — and every field gets the same entry
-guard an input gets. `rulec test` runs the generated walk over the vectors and holds it to the
-reference evaluator, the same as for any rule.
+guard an input gets. A rule that walks two sequences takes two such arguments, in the order the
+`elements` are declared. Each walk is one loop: the summaries of one sequence found on one walk
+share it, and a second walk is a second loop over the same sequence, which works out again the
+values of each element it needs. `rulec test` runs the generated walks over the vectors and holds
+them to the reference evaluator, the same as for any rule.
 
 **SQL is refused by name.** One query has nowhere to carry a value from row to row and stop
 early. A window function or a recursive CTE can be made to look like a walk, but only by
@@ -1070,8 +1137,9 @@ The columns of a `sequence` are the fields of `elements`, all of them, and every
 caller would really pass it (E026). A block with no rows is the empty sequence, which is a
 case worth writing: it is the one a hand-written loop forgets.
 
-The examples of a rule that walks a sequence must carry a column for it (E025), the cell must
-name a `sequence` that exists (E027), and a `sequence` no example names is reported (W116).
+The examples of a rule that walks a sequence must carry a column for it — a rule that walks two
+carries a column for each (E025) — the cell must name a `sequence` of the right sequence's
+fields that exists (E027), and a `sequence` no example names is reported (W116).
 Each example runs through the reference evaluator at `rulec check` like any other (E107), and
 each one joins the generated vector suite.
 
@@ -1086,10 +1154,10 @@ sequence and the fields of its elements among them — and every language has to
 that reason, with the sentence the reference evaluator says
 ([formats.md](formats.md#vectors-rulec-vectors-generatedvectorsaliasjsonl), §15.204).
 
-## 6.3 count and sum
+## 6.3 count, sum, max and min
 
-`fold` ends a walk with one answer. `count` and `sum` end it with **a number**, and the rule
-goes on from there like any other.
+`fold` ends a walk with one answer. `count` and `sum` end it with **a number**, `max` and `min`
+with **one value of a column**, and the rule goes on from there like any other.
 
 ```rule
 count hits over candidates where hit = same  range >=0 <=100
@@ -1101,11 +1169,11 @@ per-element table produces — and its values have to be a closed set, a bool or
 (E029). A bool column needs no `= <value>`: `where name_match` counts the elements where it
 is true.
 
-A rule that counts runs at the three places a fold does (§6.2), and which item belongs to
-which is derived rather than declared: **an item is part of the walk exactly when it reads
-something that only one element has.** So the table that classifies an element runs once per
-element, what reads only the ordinary inputs runs once before the walk (an element's item can
-read it), and what reads the counts runs once, after.
+A rule that counts runs at the places a fold does (§6.2), and which item belongs to which is
+derived rather than declared: **an item is part of a walk exactly when it reads something that
+only one element has.** So the table that classifies an element runs once per element, what
+reads only the ordinary inputs runs once before the walks (an element's item can read it), and
+what reads the counts runs once, after.
 
 ```rule
 table row_of  # the walk: it reads a field of an element
@@ -1128,7 +1196,7 @@ policy unique
 **The range is required, and it says two things.** It is the universe the completeness check
 quantifies over once the count is a column — without it the check would ask for a row
 covering a count of −1 — and it is **the cap on the sequence**: the generated code refuses a
-sequence longer than the smallest bound any count declares, the way it refuses a number
+sequence longer than the smallest bound any count over it declares, the way it refuses a number
 outside its range. A count cannot leave the space the proof was made over.
 
 ### sum
@@ -1153,16 +1221,45 @@ so one test at the end is a test everywhere, and the accumulator never leaves `m
 one element` — which is what keeps E108's int64 claim true of a sequence whose length nothing
 caps. To take a difference, sum two non-negative columns and subtract.
 
-Nothing else accumulates. A fold's arms choose an element; a count adds one per element that
-passes a test; a sum adds one column. There is no average arm and no arm that carries a number
-forward. An average is a sum over a count, divided after the walk inside a rounding (§8):
-`define avg : money[JPY] = half_up(total / max(n, 1), 1JPY)`.
+### max and min
 
-A rule cannot have both a `fold` and a `count` or a `sum` (E031): they are two endings for
-the same walk, and a `fold` may stop partway, which leaves the meaning of a total on that
-walk undecided. An item that reads both a value of one element and a count or a sum is E031
-too, for the reason of §6.2. A `count` or a `sum` named like an output is that output, and
-answers it. Every target but SQL generates them, for the reason SQL gets no walk at all.
+`max` and `min` answer the largest and the smallest value of one column over the elements a
+`where` lets in (every element without one), or the `empty` value when there is none:
+
+```rule
+max most_up   over adjustments of shift where raises empty 0
+min most_down over adjustments of shift where lowers empty 0
+min earliest  over tasks of due where done = false empty 2027-12-31
+```
+
+The shape is `max <name>(<alias>) over <sequence> of <column> [where <column> [= <value>]] empty
+<value>` (E028). The column is one of **one element**, and a number, an amount, a date or a
+value of an ordered enum (`enum grade = bronze < silver < gold`; E029 otherwise, with the title
+"This column cannot be summarised"); the `where` tests a column of one element the way `count`
+does. **`empty` is required** (E022): it is the answer for an empty sequence and for one where no
+element passes the `where`, and what to answer then is the author's to say. Two elements of the
+same value leave one answer, since the answer is the value; which element holds it is a fold's
+question (`keep_max`).
+
+The range needs no writing. It is the hull of the column's range and the `empty` value, since
+the answer is one of those — `min earliest` above takes the range of `due` with 2027-12-31
+inside it — and the tables over the answer are checked over that range. A range written on the
+line has to hold the hull (E112, which writes the one that would), and then it is the universe,
+the way a declared one is; a `max` of an enum takes no range (E069).
+
+### More than one summary
+
+Nothing else accumulates. A fold's arms choose an element; a count adds one per element that
+passes a test; a sum adds one column; a `max` and a `min` keep one. There is no average arm and
+no arm that carries a number forward. An average is a sum over a count, divided after the walk
+inside a rounding (§8): `define avg : money[JPY] = half_up(total / max(n, 1), 1JPY)`.
+
+A rule may have any number of `count`, `sum`, `max`, `min` and `fold` lines, over one sequence
+or several, each over the sequence its `over` names (§15.219 of DESIGN.md). The summaries found
+on one walk read every element: a `fold` that stops ends its own reading, and the count beside
+it still sees the elements after. A `count`, a `sum`, a `max` or a `min` named like an output is
+that output, and answers it. Every target but SQL and NumPy generates them, for the reason SQL
+gets no walk at all.
 
 ## 6.4 machine and scenario
 

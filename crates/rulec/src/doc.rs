@@ -248,7 +248,15 @@ fn producer(f: &RuleFile, col: &str) -> String {
     }
     for it in &f.items {
         match it {
-            Item::Agg(d) if d.name.text == col => return tr!("数え上げ", "Count"),
+            Item::Agg(d) if d.name.text == col => {
+                return match d.kind {
+                    crate::ast::AggKind::Count => tr!("数え上げ", "Count"),
+                    crate::ast::AggKind::Sum => tr!("合計", "Sum"),
+                    crate::ast::AggKind::Max => tr!("最大", "Max"),
+                    crate::ast::AggKind::Min => tr!("最小", "Min"),
+                };
+            }
+            Item::Fold(d) if d.answer.as_ref().is_some_and(|a| a.name.text == col) => return tr!("畳み込みの答え", "A fold's answer"),
             Item::Derived(d) if d.name.text == col => return tr!("導出", "Derived value"),
             Item::Define(d) if d.name.text == col => return tr!("定義", "Definition"),
             Item::Table(t) if t.outputs.iter().any(|o| o.name.text == col) => {
@@ -431,7 +439,7 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
 
     // --- The sequence the rule walks, and the fields of one element (§15.56). A reader
     // who cannot see these is reading half the rule: the caller passes them too.
-    if let Some(el) = &f.elements {
+    for el in &f.elements {
         o.push_str(&tr!(
             "\n## 順に見ていく並び: {}\n\n一件ぶんのフィールドです。呼び出し側は、このフィールドのそろった要素を何件でも渡せます。\n\n| 名前 | 型 | 範囲 | 注記 |\n|---|---|---|---|\n",
             "\n## The sequence walked: {}\n\nThe fields of one element. The caller passes any number of elements, each with these fields filled in.\n\n| Name | Type | Range | Notes |\n|---|---|---|---|\n",
@@ -639,35 +647,37 @@ fn render_rest(f: &RuleFile, c: &Checked, src: &str, path: &str, lines: &[&str])
         o.push('\n');
     }
 
-    // --- What the walk counted. A reader reading the table below sees a column of
-    // numbers; this is where those numbers come from, and how long a sequence the rule will
-    // take at all (§15.58).
+    // --- What the walks find. A reader reading the table below sees a column of numbers; this
+    // is where those numbers come from, and how long a sequence the rule will take at all
+    // (§15.58). Each summary says what it is in one sentence (§15.219), and a rule that walks
+    // more than once says in which order.
     let counts: Vec<&crate::ast::AggDecl> =
         f.items.iter().filter_map(|i| if let Item::Agg(d) = i { Some(d) } else { None }).collect();
     if !counts.is_empty() {
-        o.push_str(&tr!("\n## 数え上げ\n\n", "\n## Counts\n\n"));
+        o.push_str(&tr!("\n## 並びをたどって求める値\n\n", "\n## What the walks find\n\n"));
+        if counts.iter().any(|d| d.kind == crate::ast::AggKind::Count) {
+            o.push_str(&tr!(
+                "表の列に置けます。数え上げの範囲は宣言されたもので、**並びの長さの上限**でもあります。\n\n",
+                "Each can be a table column. A count's range is the declared one, and it is also **the cap on the sequence**.\n\n"
+            ));
+        } else {
+            o.push_str(&tr!("表の列に置けます。\n\n", "Each can be a table column.\n\n"));
+        }
         o.push_str(&tr!(
-            "並びの要素のうち、条件に当てはまるものの数です。表の列に置けます。範囲は宣言されたもので、**並びの長さの上限**でもあります。\n\n",
-            "How many elements of the sequence meet one test. A count can be a table column. Its range is the declared one, and it is also **the cap on the sequence**.\n\n"
-        ));
-        o.push_str(&tr!(
-            "| 名前 | 何を数えるか | 範囲 | 注記 |\n|---|---|---|---|\n",
-            "| Name | What it counts | Range | Notes |\n|---|---|---|---|\n"
+            "| 名前 | 何を求めるか | 範囲 | 注記 |\n|---|---|---|---|\n",
+            "| Name | What it is | Range | Notes |\n|---|---|---|---|\n"
         ));
         for d in &counts {
-            let what = match &d.value {
-                Some(v) => tr!("{} が {} の要素", "elements whose {} is {}", d.column.text, v.text),
-                None => tr!("{} の要素", "elements where {}", d.column.text),
-            };
             o.push_str(&format!(
                 "| {} | {} | {} | {} |\n",
                 md_esc(&d.name.text),
-                md_esc(&what),
+                md_esc(&summary_text(d)),
                 md_esc(&range_text(c, &d.name.text)),
                 md_esc(&trailing_comment(&lines, d.name.span.line).unwrap_or_default())
             ));
         }
     }
+    o.push_str(&walk_order(f));
 
     // --- Derived values and definitions. The invisible axes. What an `apply` brought in is
     // shown under that apply, from the file it came from.
@@ -695,7 +705,7 @@ fn render_rest(f: &RuleFile, c: &Checked, src: &str, path: &str, lines: &[&str])
 
     // --- How the walk ends (§15.56). The arms are the whole of it: one move per verdict,
     // plus the two answers that belong to no element at all.
-    if let Some(fold) = &f.fold {
+    for fold in f.folds() {
         o.push_str(&tr!(
             "\n## 畳み込み: {} を {} で畳む\n\n要素を順に見て、表が出した判定ごとに次の手を決めます。**表が完全かつ一意なので、どの要素もちょうど一つの判定に落ちます。**\n\n| 判定 | 次の手 |\n|---|---|\n",
             "\n## The walk: {} folded on {}\n\nThe elements are taken in order, and the verdict the table wrote for each one decides the next move. **The table is complete and unique, so every element lands on exactly one verdict.**\n\n| Verdict | Move |\n|---|---|\n",
@@ -713,6 +723,7 @@ fn render_rest(f: &RuleFile, c: &Checked, src: &str, path: &str, lines: &[&str])
         };
         o.push_str(&answer(crate::kw::EMPTY, &fold.empty));
         o.push_str(&answer(crate::kw::EXHAUSTED, &fold.exhausted));
+        o.push_str(&fold_where(f, fold));
         o.push_str(&tr!(
             "\n`{}` は要素ゼロ件のときの答え、`{}` は最後まで見終えたときの答えです。この二つは宣言が必須で、無ければ `rulec check` がエラーにします（E022・E023）。\n",
             "\n`{}` is the answer when the sequence has nothing in it, and `{}` the answer when the walk reached the end. Both must be declared, and `rulec check` refuses a rule that leaves either out (E022, E023).\n",
@@ -1326,6 +1337,102 @@ fn machine_section(f: &RuleFile, c: &Checked, lines: &[&str]) -> String {
 }
 
 /// Whether the walk answers with `held` (only `exhausted` may say it, E021).
+/// What one summary is, in one sentence (§15.219): `the largest price over lines, 0 when there
+/// is none`.
+fn summary_text(d: &crate::ast::AggDecl) -> String {
+    use crate::ast::AggKind;
+    let test = |w: &crate::ast::Name, v: &Option<crate::ast::Name>| -> String {
+        match v {
+            Some(v) => tr!("{} が {} の", "whose {} is {}", w.text, v.text),
+            None => tr!("{} が成り立つ", "where {} holds", w.text),
+        }
+    };
+    let empty = d.empty.as_ref().map(|(l, _)| l.src()).unwrap_or_default();
+    match d.kind {
+        AggKind::Count => {
+            let over = &d.over;
+            let t = test(&d.column, &d.value);
+            tr!("{over} のうち {t}要素の数", "the number of elements of {over} {t}")
+        }
+        AggKind::Sum => tr!("{} の {} の合計", "the total of {1} over {0}", d.over, d.column.text),
+        AggKind::Max | AggKind::Min => {
+            let (ja, en) = if d.kind == AggKind::Max { ("最大", "largest") } else { ("最小", "smallest") };
+            let over = &d.over;
+            let col = &d.column.text;
+            match &d.filter {
+                Some((w, v)) => {
+                    let t = test(w, v);
+                    tr!("{over} のうち {t}要素の {col} の{ja}。無ければ {empty}", "the {en} {col} of the elements of {over} {t}, {empty} when there is none")
+                }
+                None => tr!("{over} の {col} の{ja}。無ければ {empty}", "the {en} {col} of {over}, {empty} when there is none"),
+            }
+        }
+    }
+}
+
+/// The order a rule that walks more than once, or more than one sequence, walks in (§15.219), as
+/// a paragraph: each walk with its sequence and what it finds. Empty for a rule with one walk.
+/// The walk numbered `k`, as the page says it: "the second walk", 「二回目」.
+fn nth_walk(k: usize) -> String {
+    const JA: [&str; 9] = ["一", "二", "三", "四", "五", "六", "七", "八", "九"];
+    const EN: [&str; 9] = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth"];
+    match k.checked_sub(1).filter(|i| *i < 9) {
+        Some(i) if crate::i18n::ja() => format!("{}回目", JA[i]),
+        Some(i) => format!("the {} walk", EN[i]),
+        None => tr!("{k} 回目", "walk {k}"),
+    }
+}
+
+fn walk_order(f: &RuleFile) -> String {
+    let st = crate::types::stages(f);
+    let walks = st.walks();
+    if walks.len() < 2 {
+        return String::new();
+    }
+    let mut parts: Vec<String> = Vec::new();
+    for (level, s) in &walks {
+        let seq = &f.elements[*s].name.text;
+        let found: Vec<String> = st
+            .summaries_in(f, *s, *level)
+            .into_iter()
+            .filter_map(|i| crate::types::item_binds(f, &f.items[i]).into_iter().next())
+            .collect();
+        let names = found.join(sep());
+        let nth = nth_walk(*level);
+        parts.push(if *level == 1 {
+            tr!("{seq} を{nth}にたどって {names} を求め", "{nth} over {seq} finds {names}")
+        } else {
+            tr!("{seq} を{nth}にたどって、前の歩きで求めた値を読みながら {names} を求め", "{nth} over {seq} finds {names}, reading what the walks before it found")
+        });
+    }
+    tr!(
+        "\nこの規則は、並びを次の順にたどります。{}ます。\n",
+        "\nThe rule walks its sequences in this order: {}.\n",
+        parts.join(tr!("、", "; ").as_str())
+    )
+}
+
+/// Where a fold's answer goes, and the walk it runs in when that is not the first (§15.219).
+fn fold_where(f: &RuleFile, fold: &crate::ast::FoldDecl) -> String {
+    let mut o = String::new();
+    if let Some(a) = &fold.answer {
+        o.push_str(&tr!("\n答えは **{}** に入ります。\n", "\nThe answer goes to **{}**.\n", md_esc(&a.name.text)));
+    }
+    let st = crate::types::stages(f);
+    let at = f.items.iter().position(|it| matches!(it, Item::Fold(d) if std::ptr::eq(d, fold)));
+    if let Some(crate::types::Stage::Each { walk, .. }) = at.map(|i| st.at(i)) {
+        if walk > 1 {
+            let nth = nth_walk(walk);
+            o.push_str(&tr!(
+                "\nこの畳み込みは、{} を{nth}にたどるときに畳みます。前の歩きで求めた値を読むからです。\n",
+                "\nThis fold runs on {nth} over {}, since it reads what the walks before it found.\n",
+                fold.over
+            ));
+        }
+    }
+    o
+}
+
 fn reads_held(fold: &crate::ast::FoldDecl) -> bool {
     fold.exhausted.as_ref().is_some_and(|e| {
         let mut names = Vec::new();
@@ -2218,7 +2325,7 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
     for i in &f.inputs {
         o.push_str(&format!("- **{}**: {}\n", md_esc(&i.name.text), md_esc(&customer_input(c, &i.name.text))));
     }
-    if let Some(el) = &f.elements {
+    for el in &f.elements {
         o.push_str(&tr!(
             "- **{}**: 一件ずつ順に見ていく並びです。各件には {} があります\n",
             "- **{}**: a sequence, taken one element at a time. Each element carries {}\n",
@@ -2261,11 +2368,7 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
     if !derived.is_empty() || !defines.is_empty() || !counts.is_empty() {
         o.push_str(&tr!("\n## 計算の途中で使う値\n\n", "\n## Values used along the way\n\n"));
         for d in &counts {
-            let what = match &d.value {
-                Some(v) => tr!("{} が {} の件数", "the number of elements whose {} is {}", d.column.text, v.text),
-                None => tr!("{} の件数", "the number of elements where {}", d.column.text),
-            };
-            o.push_str(&format!("- **{}**: {}\n", md_esc(&d.name.text), md_esc(&what)));
+            o.push_str(&format!("- **{}**: {}\n", md_esc(&d.name.text), md_esc(&summary_text(d))));
         }
         for d in &derived {
             o.push_str(&format!("- **{}** = `{}`{}\n", md_esc(&d.name.text), md_esc(&expr_src(&lines, d.name.span.line)), customer_reading(&d.expr)));
@@ -2300,7 +2403,7 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
     }
 
     // --- How the walk ends, when there is one.
-    if let Some(fold) = &f.fold {
+    for fold in f.folds() {
         o.push_str(&tr!(
             "\n## {} の見方\n\n一件ずつ順に見て、判定ごとに次のように進みます。\n\n| 判定 | 進み方 |\n|---|---|\n",
             "\n## Reading {}\n\nThe elements are taken in order, and each verdict decides the next move.\n\n| Verdict | Move |\n|---|---|\n",
@@ -2314,6 +2417,7 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
                 o.push_str(&format!("| {k} | `{}` |\n", md_esc(&arm_src(&lines, x.span().line))));
             }
         }
+        o.push_str(&fold_where(f, fold));
         if reads_held(fold) {
             o.push_str(&tr!(
                 "\n`{h}` は、採った値、無ければ持ち越した値、それも無ければ一件も無いときの答えです。\n",
@@ -2944,7 +3048,16 @@ pub fn render_html_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown
     script.push_str(&format!("\nconst RULE = {};\n", rule_json(f, c)));
     let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
     script.push_str(&format!("const FN = {{ run: {alias}_traced, record: {alias}_record }};\n"));
-    script.push_str(PAGE_JS);
+    if f.elements.len() > 1 {
+        let mut js = PAGE_JS.to_string();
+        for (one, many) in PAGE_LISTS {
+            debug_assert!(js.contains(one), "the page script no longer has the one-list editor");
+            js = js.replacen(one, many, 1);
+        }
+        script.push_str(&js);
+    } else {
+        script.push_str(PAGE_JS);
+    }
     // A machine that carries more than its state (§15.217) puts those values back too.
     if f.machine.as_ref().is_some_and(|m| !m.carries.is_empty()) {
         script.push_str(PAGE_MORE_JS);
@@ -3063,7 +3176,7 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
             for (k, (col, _)) in t.inputs.iter().enumerate() {
                 // The sequence column holds the name of a `sequence`, and what the panel
                 // needs is its rows (§15.56).
-                if f.elements.as_ref().is_some_and(|el| &el.name.text == col) {
+                if f.elements.iter().any(|el| &el.name.text == col) {
                     match row.cells.get(k) {
                         Some(Cell::Lit(Lit::Word(w))) => match seq_json(f, c, w) {
                             Some(a) => o = o.raw(col, a),
@@ -3089,8 +3202,9 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
         }
     }
     // The sequence a walk reads (§15.56): the panel builds a small editor for it, one row
-    // per element, from the same field description an input gets.
-    let elements = f.elements.as_ref().map(|el| {
+    // per element, from the same field description an input gets. A rule that walks more than
+    // one has an editor each, listed under `sequences` (§15.219).
+    let sequence = |el: &crate::ast::ElementsDecl| -> String {
         let fields: Vec<String> =
             el.fields.iter().map(|fd| one(&fd.name.text, &crate::codegen::pub_name_of(&fd.name))).collect();
         Obj::new()
@@ -3098,6 +3212,10 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
             .str("alias", &crate::codegen::pub_name_of(&el.name))
             .raw("fields", crate::json::arr(&fields))
             .finish()
+    };
+    let sequences: Option<String> = (f.elements.len() > 1).then(|| crate::json::arr(&f.elements.iter().map(sequence).collect::<Vec<_>>()));
+    let elements = f.elements.first().filter(|_| f.elements.len() == 1).map(|el| {
+        sequence(el)
     });
     let mut o = Obj::new()
         // The rule names itself: the page says who it is when it introduces itself to a
@@ -3119,6 +3237,9 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
         );
     if let Some(e) = elements {
         o = o.raw("elements", e);
+    }
+    if let Some(e) = sequences {
+        o = o.raw("sequences", e);
     }
     // The machine (§15.148): which field the answer's state goes back into.
     if let Some((cin, cout)) = f.machine.as_ref().and_then(|m| m.carried()) {
@@ -3511,6 +3632,161 @@ if (window.parent !== window) {
   });
 }
 "##;
+
+/// What a page of a rule that walks two or more sequences puts in place of the one-list editor
+/// in [`PAGE_JS`]: one editor per sequence, filled from an example and passed to the module in
+/// the order the function takes them (§15.219). A page of a rule that walks one sequence, or
+/// none, keeps the script it had, byte for byte; this one also reads `elements`.
+const PAGE_LISTS: [(&str, &str); 2] = [
+    (
+        r##"// down the column does not collide with `form.elements`.
+let rows = [];
+// Assigned when there is a sequence to edit; `fillRows` below is what reaches for it.
+let addRow = null;
+if (RULE.elements) {
+  const box = $("#try-rows");
+  const caption = document.createElement("div");
+  caption.textContent = RULE.elements.name;
+  box.appendChild(caption);
+  const table = document.createElement("table");
+  const head = document.createElement("tr");
+  for (const fd of RULE.elements.fields) {
+    const th = document.createElement("th");
+    th.textContent = fd.name + (fd.unit ? " (" + fd.unit + ")" : "");
+    head.appendChild(th);
+  }
+  head.appendChild(document.createElement("th"));
+  const body = document.createElement("tbody");
+  table.appendChild(head);
+  table.appendChild(body);
+  box.appendChild(table);
+  addRow = (vals) => {
+    const tr = document.createElement("tr");
+    const cells = {};
+    for (const fd of RULE.elements.fields) {
+      const td = document.createElement("td");
+      const el = widget(fd);
+      if (vals && vals[fd.name] !== undefined) fromWire(fd, el, vals[fd.name]);
+      td.appendChild(el);
+      tr.appendChild(td);
+      cells[fd.alias] = el;
+    }
+    const td = document.createElement("td");
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.textContent = "×";
+    rm.title = RULE.text.remove;
+    rm.addEventListener("click", () => {
+      tr.remove();
+      rows = rows.filter((r) => r.tr !== tr);
+    });
+    td.appendChild(rm);
+    tr.appendChild(td);
+    body.appendChild(tr);
+    rows.push({ tr, cells });
+  };
+  const add = document.createElement("button");
+  add.type = "button";
+  add.textContent = RULE.text.add;
+  add.addEventListener("click", () => addRow());
+  box.appendChild(add);
+  // One row to start with, so the shape is visible; removing it is the empty sequence,
+  // which is a case of its own.
+  addRow();
+}
+// An example of a walk carries its elements, so choosing it rebuilds the rows as well.
+function fillRows(ex) {
+  if (!RULE.elements) return;
+  const es = ex[RULE.elements.name];
+  if (!Array.isArray(es)) return;
+  for (const r of rows.slice()) r.tr.remove();
+  rows = [];
+  for (const e of es) addRow(e);
+}
+"##,
+        r##"// down the column does not collide with `form.elements`. One editor per sequence the rule
+// walks: `elements` for a rule that walks one, `sequences` for one that walks more (§15.219).
+// Each keeps its rows and the way to add one.
+const lists = (RULE.sequences || (RULE.elements ? [RULE.elements] : [])).map((sq) => {
+  const list = { sq, rows: [], add: null };
+  const box = $("#try-rows");
+  const caption = document.createElement("div");
+  caption.textContent = sq.name;
+  box.appendChild(caption);
+  const table = document.createElement("table");
+  const head = document.createElement("tr");
+  for (const fd of sq.fields) {
+    const th = document.createElement("th");
+    th.textContent = fd.name + (fd.unit ? " (" + fd.unit + ")" : "");
+    head.appendChild(th);
+  }
+  head.appendChild(document.createElement("th"));
+  const body = document.createElement("tbody");
+  table.appendChild(head);
+  table.appendChild(body);
+  box.appendChild(table);
+  list.add = (vals) => {
+    const tr = document.createElement("tr");
+    const cells = {};
+    for (const fd of sq.fields) {
+      const td = document.createElement("td");
+      const el = widget(fd);
+      if (vals && vals[fd.name] !== undefined) fromWire(fd, el, vals[fd.name]);
+      td.appendChild(el);
+      tr.appendChild(td);
+      cells[fd.alias] = el;
+    }
+    const td = document.createElement("td");
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.textContent = "×";
+    rm.title = RULE.text.remove;
+    rm.addEventListener("click", () => {
+      tr.remove();
+      list.rows = list.rows.filter((r) => r.tr !== tr);
+    });
+    td.appendChild(rm);
+    tr.appendChild(td);
+    body.appendChild(tr);
+    list.rows.push({ tr, cells });
+  };
+  const add = document.createElement("button");
+  add.type = "button";
+  add.textContent = RULE.text.add;
+  add.addEventListener("click", () => list.add());
+  box.appendChild(add);
+  // One row to start with, so the shape is visible; removing it is the empty sequence,
+  // which is a case of its own.
+  list.add();
+  return list;
+});
+// An example of a walk carries its elements, so choosing it rebuilds the rows as well.
+function fillRows(ex) {
+  for (const list of lists) {
+    const es = ex[list.sq.name];
+    if (!Array.isArray(es)) continue;
+    for (const r of list.rows.slice()) r.tr.remove();
+    list.rows = [];
+    for (const e of es) list.add(e);
+  }
+}
+"##,
+    ),
+    (
+        r##"  if (RULE.elements) {
+    args.push(
+      rows.map((r) => {
+        const e = {};
+        for (const fd of RULE.elements.fields) e[fd.alias] = toWire(fd, r.cells[fd.alias]);
+"##,
+        r##"  for (const list of lists) {
+    args.push(
+      list.rows.map((r) => {
+        const e = {};
+        for (const fd of list.sq.fields) e[fd.alias] = toWire(fd, r.cells[fd.alias]);
+"##,
+    ),
+];
 
 pub(crate) fn html_esc(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")

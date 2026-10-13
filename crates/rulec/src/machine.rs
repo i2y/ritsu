@@ -635,7 +635,7 @@ fn coupled_inputs(f: &RuleFile, fixed: &[String], axes: &[Axis]) -> Vec<String> 
                     }
                 }
             }
-            Item::Agg(_) => {}
+            Item::Agg(_) | Item::Fold(_) => {}
         }
     }
     let depends = |start: &str| -> BTreeSet<String> {
@@ -2054,7 +2054,7 @@ fn step_of(c: &Checked, f: &RuleFile, e: &Edge) -> Step {
             inputs.push((i.name.text.clone(), crate::eval::wval(c, &i.name.text, v)));
         }
     }
-    if let Some(el) = &f.elements {
+    for el in &f.elements {
         if let Some(v) = e.inputs.get(&el.name.text) {
             inputs.push((el.name.text.clone(), crate::eval::wval(c, &el.name.text, v)));
         }

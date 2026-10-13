@@ -120,7 +120,7 @@ pub fn build(f: &RuleFile, c: &Checked, src: &str) -> Graph {
     for i in &f.inputs {
         vals.push(val(&i.name, "input"));
     }
-    if let Some(el) = &f.elements {
+    for el in &f.elements {
         vals.push(val(&el.name, "sequence"));
         for fd in &el.fields {
             let mut v = val(&fd.name, "element");
@@ -132,11 +132,21 @@ pub fn build(f: &RuleFile, c: &Checked, src: &str) -> Graph {
         match it {
             Item::Agg(d) => {
                 let mut b = Obj::new()
-                    .str("kind", if d.kind == AggKind::Sum { "sum" } else { "count" })
+                    .str("kind", d.kind.word())
                     .str("over", &d.over)
                     .str("of", &d.column.text);
                 if let Some(w) = &d.value {
                     b = b.str("where", &w.text);
+                }
+                // What `max` and `min` look at, and what they answer when that is nothing (§15.219).
+                if let Some((w, want)) = &d.filter {
+                    b = b.str("where", &w.text);
+                    if let Some(v) = want {
+                        b = b.str("is", &v.text);
+                    }
+                }
+                if let Some((l, _)) = &d.empty {
+                    b = b.str("empty", &l.src());
                 }
                 let mut v = val(&d.name, "value");
                 v.by.push(b.finish());
@@ -190,13 +200,20 @@ pub fn build(f: &RuleFile, c: &Checked, src: &str) -> Graph {
                     vals.push(v);
                 }
             }
+            // Below, after the items, where a fold's answer always was.
+            Item::Fold(_) => {}
         }
     }
-    // The walk's answer is the rule's output, and nothing else names it: a fold is the one
-    // item whose product is written only in `outputs` (§15.56).
-    if let Some(fd) = &f.fold {
-        if let Some(o) = f.outputs.iter().find(|o| !vals.iter().any(|v| v.name == o.name.text)) {
-            let mut v = val(&o.name, "value");
+    // A fold's answer is the rule's output, or the name after its `->`, and nothing else names
+    // it: a fold is the one item whose product is written only in `outputs` or on its own line
+    // (§15.56, §15.219).
+    for fd in f.folds() {
+        let target = match &fd.answer {
+            Some(a) => f.outputs.iter().map(|o| &o.name).find(|n| n.text == a.name.text).or(Some(&a.name)),
+            None => f.outputs.first().map(|o| &o.name),
+        };
+        if let Some(o) = target.filter(|o| !vals.iter().any(|v| v.name == o.text)) {
+            let mut v = val(o, "value");
             v.by.push(
                 Obj::new().str("kind", "fold").str("verdict", &fd.verdict).str("over", &fd.over).finish(),
             );
@@ -254,7 +271,7 @@ pub fn build(f: &RuleFile, c: &Checked, src: &str) -> Graph {
     // text does not say which is which — you have to know that `elements` declares a
     // repeated record and that a fold collapses it — so the graph does, and a drawing can
     // put a border where the text has none.
-    let ways_out: Vec<&str> = vec!["sum", "count", "fold"];
+    let ways_out: Vec<&str> = vec!["sum", "count", "max", "min", "fold"];
     let mut per_element: Vec<String> = f
         .elements
         .iter()
@@ -314,7 +331,7 @@ pub fn build(f: &RuleFile, c: &Checked, src: &str) -> Graph {
                     // A summary's own name is on the box already; what the second line is
                     // for is what it summarises.
                     let what = match k.as_str() {
-                        "sum" | "count" => tr!(
+                        "sum" | "count" | "max" | "min" => tr!(
                             "{}の{}",
                             "{1} over {0}",
                             json_str(b, "over"),

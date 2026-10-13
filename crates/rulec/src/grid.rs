@@ -1004,7 +1004,7 @@ impl Domain {
     /// The same, with the inputs in `held` left out of the walk: each stays at one value, and a
     /// `constraint` brings in nothing through it, since it does not move (§15.194).
     fn holding(f: &RuleFile, c: &Checked, reads: &BTreeSet<String>, held: &BTreeSet<String>) -> Option<Domain> {
-        if f.fold.is_some() || f.elements.is_some() {
+        if f.walks() || !f.elements.is_empty() {
             return None;
         }
         let inputs: BTreeSet<&str> = f.inputs.iter().map(|i| i.name.text.as_str()).collect();

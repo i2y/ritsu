@@ -1,0 +1,7 @@
+error[E022]: The answer for a sequence with no elements is not declared
+  --> tests/mutants/m_e022max.rule:26 max
+   |
+26 | max top_price over lines of price
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ there is no `empty <value>`
+   |
+ Say what `max` answers when no element is looked at: when the sequence is empty, and when no element passes the `where`. What to answer is a business decision, and not one the tool can make.

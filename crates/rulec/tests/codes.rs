@@ -132,10 +132,10 @@ fn 台帳の別の形の再現はその形を出す() {
         }
         assert_eq!(printed(&e, a.repro(Lang::En)), printed(&e, a.repro(Lang::Ja)));
     }
-    // the entries that show another form: E102, and E031 with an item that reads both sides of a
-    // walk and an output of one element (§15.208)
+    // the entries that show another form: E102; E031 with an output of one element (§15.208); and
+    // E022 with a `max` that has no `empty` (§15.219)
     let with: Vec<&str> = rulec::codes::ledger().iter().filter(|e| !e.also.is_empty()).map(|e| e.code).collect();
-    assert_eq!(with, ["E031", "E102"]);
+    assert_eq!(with, ["E022", "E031", "E102"]);
     // `explain` shows each under a heading of its own, in the language asked for, and the JSON
     // under `also`, a key no other entry has
     let (_, en) = run(&["explain", "E102", "--lang", "en"]);

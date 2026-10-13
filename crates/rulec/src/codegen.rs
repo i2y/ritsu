@@ -8,7 +8,7 @@
 use crate::ast::*;
 use crate::num::{Rat, RoundMode, RoundTo};
 use crate::types::{Checked, Ty};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 /// Build the ASCII brand name from a unit. Units are a closed set, so a fixed table suffices.
 fn brand_of(ty: &Ty) -> String {
@@ -191,18 +191,44 @@ pub fn public_value(f: &RuleFile, en: &str, v: &str) -> String {
     f.enums.iter().find(|e| e.name.text == en).and_then(|e| e.values.iter().find(|x| x.text == v)).map(pub_name).unwrap_or_else(|| v.to_string())
 }
 
-/// Which stage of a walk an item is emitted in (§15.58, §15.208).
+/// Which items a pass over the rule's items writes (§15.58, §15.208, §15.219).
 ///
-/// A rule that walks a sequence has items before the walk, items of one element, and items
-/// after it, so the body is written in three passes over the same list: `Before` above the
-/// loop, `Each` inside it, `After` below it — the stages the evaluator runs (`types::stages`).
-/// Every rule that walks nothing is `All`.
+/// A rule that walks sequences has items before the walks, items of one element in each walk,
+/// and items after each walk, so the body is written in passes over the same list: the items of
+/// one call above the first loop and after each walk, and the items of one element inside each
+/// loop — the stages the evaluator runs (`types::stages`). Every rule that walks nothing is `All`.
 #[derive(Clone, Copy, PartialEq)]
-pub enum Phase {
+pub enum Phase<'p> {
     All,
-    Before,
-    Each,
-    After,
+    /// The items at these places among the rule's items, in the order written.
+    Only(&'p [usize]),
+}
+
+/// One step of the walks of a rule, in the order they run (§15.219): the items of one call that
+/// run after the walks numbered so far, or one walk.
+pub(crate) enum WalkStep {
+    Once(Vec<usize>),
+    Walk { seq: usize, body: Vec<usize>, sums: Vec<usize> },
+}
+
+/// The names one fold's walk binds itself (§15.56): the accumulators, the flags and `held`. The
+/// first fold of a rule takes the plain names, so a rule with one fold is written as it always was;
+/// a second takes them with its number after them (§15.219).
+pub(crate) struct FoldNames {
+    pub answer: String,
+    pub stopped: String,
+    /// Set when the fold has stopped reading, in a walk it shares with other summaries: the loop
+    /// goes on for them (§15.219). A fold alone in its walk ends the loop instead.
+    pub done: String,
+    pub taken: String,
+    pub kept: String,
+    pub best: String,
+    pub held: String,
+    pub key: String,
+    /// Go, Swift and Java keep "was it ever set" beside an accumulator that has no absent value.
+    pub took: String,
+    pub kept_one: String,
+    pub best_set: String,
 }
 
 pub struct Gen<'a> {
@@ -237,6 +263,10 @@ pub struct Gen<'a> {
     /// import path of the package's directory. A module there reads the types of an `enums`
     /// file from its sibling in the package (§15.212); `rulec gen` writes them side by side.
     package: Option<String>,
+    /// While one walk's items of one element are written: the names something in that walk reads
+    /// (§15.219). A local an item binds and nothing in the walk reads is said to be read in Go,
+    /// which refuses to compile it otherwise; the rest of the rule is not looked at there.
+    reads_here: std::cell::RefCell<Option<HashSet<String>>>,
 }
 
 mod arith;
@@ -319,24 +349,14 @@ impl<'a> Gen<'a> {
         self.f.items.iter().filter_map(|it| if let Item::Agg(d) = it { Some(d) } else { None }).collect()
     }
 
-    /// The cap the sequence is held to: the smallest upper bound any **count** declares.
-    ///
-    /// A count can be as large as the sequence, so a longer sequence could take a count
-    /// outside the universe the completeness proof quantified over. The guard is the same
-    /// shape as the one a number outside its range gets (§15.43, §15.58). A `sum` says
-    /// nothing about the length — what holds it is the running total itself (§15.100).
-    fn count_cap(&self) -> Option<i128> {
-        self.counts()
-            .iter()
-            .filter(|d| d.kind == crate::ast::AggKind::Count)
-            .filter_map(|d| self.c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi))
-            .map(|hi| crate::types::wire_int(hi, 1))
-            .min()
-    }
-
     /// The word a summary is called by, for the comment beside its accumulator.
     fn agg_word(&self, d: &crate::ast::AggDecl) -> String {
-        if d.kind == crate::ast::AggKind::Sum { tr!("合計", "sum") } else { tr!("数え上げ", "count") }
+        match d.kind {
+            crate::ast::AggKind::Sum => tr!("合計", "sum"),
+            crate::ast::AggKind::Count => tr!("数え上げ", "count"),
+            crate::ast::AggKind::Max => tr!("最大", "max"),
+            crate::ast::AggKind::Min => tr!("最小", "min"),
+        }
     }
 
     /// The upper bound a `sum` is held to, on the wire (§15.100). The walk refuses the
@@ -354,33 +374,98 @@ impl<'a> Gen<'a> {
             .collect()
     }
 
-    /// What one element has to look like to be counted: the value its column must take, or
-    /// `None` when the column is a bool the test reads as it is.
-    fn count_member<'d>(&self, d: &'d crate::ast::AggDecl) -> Option<&'d crate::ast::Name> {
-        match self.ty_of(&d.column.text) {
-            Ty::Bool => None,
-            _ => d.value.as_ref(),
-        }
-    }
-
-    /// A bool column counted for `false` rather than for `true`.
-    fn count_negated(&self, d: &crate::ast::AggDecl) -> bool {
-        matches!(self.ty_of(&d.column.text), Ty::Bool)
-            && d.value.as_ref().is_some_and(|v| v.text == crate::kw::FALSE)
-    }
-
     /// Whether the item at `i` is emitted in this phase. The split is the evaluator's: the
-    /// stage `types::stages` gives it (§15.208).
+    /// stage `types::stages` gives it (§15.208, §15.219). A summary is the walk, not an item a
+    /// pass writes.
     fn in_phase(&self, i: usize, it: &Item, phase: Phase) -> bool {
-        use crate::types::Stage;
-        if matches!(it, Item::Agg(_)) {
+        if matches!(it, Item::Agg(_) | Item::Fold(_)) {
             return false;
         }
         match phase {
             Phase::All => true,
-            Phase::Before => self.stages.at(i) == Stage::Before,
-            Phase::Each => self.stages.at(i) == Stage::Each,
-            Phase::After => self.stages.at(i) == Stage::After,
+            Phase::Only(ix) => ix.contains(&i),
+        }
+    }
+
+    /// The type one element of sequence `s` is written as (§15.219): `Element` when the rule
+    /// walks one sequence, as it always was, and `<Sequence>Element` for each when it walks more.
+    pub(crate) fn element_type(&self, s: usize) -> String {
+        if self.f.elements.len() <= 1 {
+            "Element".to_string()
+        } else {
+            format!("{}Element", pascal(&pub_name(&self.f.elements[s].name)))
+        }
+    }
+
+    /// The loop variable of a walk over sequence `s`: `elem` for the first sequence, `elem2` and on
+    /// for the others, so that a language that keeps a loop's variable for the whole function
+    /// does not give one name two types (§15.219).
+    pub(crate) fn elem_var(&self, s: usize) -> String {
+        if s == 0 {
+            self.temp("elem")
+        } else {
+            self.temp(&format!("elem{}", s + 1))
+        }
+    }
+
+    /// The names the fold at `i` among the rule's items binds itself (`FoldNames`).
+    pub(crate) fn fold_names(&self, i: usize) -> FoldNames {
+        let k = self.f.items[..i].iter().filter(|it| matches!(it, Item::Fold(_))).count();
+        let n = |b: &str| if k == 0 { self.temp(b) } else { self.temp(&format!("{b}{}", k + 1)) };
+        FoldNames {
+            answer: n("answer"),
+            stopped: n("stopped"),
+            done: n("done"),
+            taken: n("taken"),
+            kept: n("kept"),
+            best: n("best"),
+            held: n("held"),
+            key: n("key"),
+            took: n("tookOne"),
+            kept_one: n("keptOne"),
+            best_set: n("bestSet"),
+        }
+    }
+
+    /// The cap one sequence is held to: the smallest upper bound any **count** over it declares
+    /// (§15.58), each sequence its own (§15.219).
+    ///
+    /// A count can be as large as the sequence, so a longer sequence could take a count outside
+    /// the universe the completeness proof quantified over. The guard is the same shape as the one
+    /// a number outside its range gets (§15.43). A `sum` says nothing about the length — what
+    /// holds it is the running total itself (§15.100).
+    pub(crate) fn count_cap_of(&self, s: usize) -> Option<i128> {
+        let seq = &self.f.elements.get(s)?.name.text;
+        self.counts()
+            .iter()
+            .filter(|d| d.kind == crate::ast::AggKind::Count && d.over == *seq)
+            .filter_map(|d| self.c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi))
+            .map(|hi| crate::types::wire_int(hi, 1))
+            .min()
+    }
+
+    /// The `empty` value of a `max` or a `min`, in the units its column is held in (§15.219), as an
+    /// integer: a number at the column's scale, a date as its day number. `None` for an enum's.
+    pub(crate) fn extreme_empty_int(&self, d: &crate::ast::AggDecl) -> Option<String> {
+        let ty = self.ty_of(&d.column.text);
+        match d.empty.as_ref().map(|(l, _)| l)? {
+            Lit::Num(n) => Some(self.int_lit(n, &ty, self.scale(&d.column.text))),
+            Lit::Date(y, m, dd) => Some(format!("{}", crate::types::date_ord(*y, *m, *dd).num)),
+            _ => None,
+        }
+    }
+
+    /// The ordered enum a `max` or a `min` reads, when its column is one (§15.219).
+    pub(crate) fn extreme_enum(&self, d: &crate::ast::AggDecl) -> Option<String> {
+        let ty = self.ty_of(&d.column.text);
+        self.c.ordered_enum(&ty).map(str::to_string)
+    }
+
+    /// The `empty` word of a `max` or a `min` over an ordered enum.
+    pub(crate) fn extreme_empty_word(&self, d: &crate::ast::AggDecl) -> Option<String> {
+        match d.empty.as_ref().map(|(l, _)| l)? {
+            Lit::Word(w) => Some(w.clone()),
+            _ => None,
         }
     }
 
@@ -510,6 +595,7 @@ impl<'a> Gen<'a> {
                     Item::Derived(d) => vec![&d.name],
                     Item::Define(d) => vec![&d.name],
                     Item::Agg(d) => vec![&d.name],
+                    Item::Fold(d) => d.answer.iter().map(|a| &a.name).collect(),
                     Item::Table(t) => t.outputs.iter().map(|o| &o.name).collect(),
                 }
             }))
@@ -531,6 +617,7 @@ impl<'a> Gen<'a> {
             shown: ritsu_emit::header::file_name(path),
             stages: crate::types::stages(f),
             package: None,
+            reads_here: std::cell::RefCell::new(None),
         }
     }
 
@@ -608,6 +695,7 @@ impl<'a> Gen<'a> {
                     Item::Derived(d) => vec![&d.name],
                     Item::Define(d) => vec![&d.name],
                     Item::Agg(d) => vec![&d.name],
+                    Item::Fold(d) => d.answer.iter().map(|a| &a.name).collect(),
                     Item::Table(t) => t.outputs.iter().map(|o| &o.name).collect(),
                 }
             }))
@@ -750,7 +838,7 @@ pub fn escape_keywords(f: &mut RuleFile) {
     for o in &mut f.outputs {
         fix(&mut o.name);
     }
-    if let Some(el) = &mut f.elements {
+    for el in &mut f.elements {
         fix(&mut el.name);
         for fd in &mut el.fields {
             fix(&mut fd.name);
@@ -761,6 +849,11 @@ pub fn escape_keywords(f: &mut RuleFile) {
             Item::Derived(d) => fix(&mut d.name),
             Item::Define(d) => fix(&mut d.name),
             Item::Agg(d) => fix(&mut d.name),
+            Item::Fold(d) => {
+                if let Some(a) = &mut d.answer {
+                    fix(&mut a.name);
+                }
+            }
             Item::Table(t) => {
                 for oc in &mut t.outputs {
                     fix(&mut oc.name);
@@ -914,7 +1007,7 @@ impl<'a> Gen<'a> {
         if let Some(r) = &self.f.result {
             exprs.push(&r.expr);
         }
-        if let Some(fold) = &self.f.fold {
+        for fold in self.f.folds() {
             exprs.extend(fold.empty.iter());
             exprs.extend(fold.exhausted.iter());
             for (_, arm, _) in &fold.arms {
@@ -931,6 +1024,10 @@ impl<'a> Gen<'a> {
         }
         for e in exprs {
             walk(self, e, en, &mut rank, &mut max, &mut min);
+        }
+        // A `max` or a `min` over a column of the enum compares two of its values (§15.219).
+        if self.f.aggs().any(|d| d.kind.extreme() && self.extreme_enum(d).as_deref() == Some(en)) {
+            rank = true;
         }
         (rank, max, min)
     }
@@ -1819,20 +1916,43 @@ impl<'a> Gen<'a> {
             + if body.ends_with('\n') { "\n" } else { "" }
     }
 
-    /// The fields of one element, in declaration order.
-    fn element_fields(&self) -> Vec<&crate::ast::VarDecl> {
-        self.f.elements.iter().flat_map(|e| &e.fields).collect()
+    /// The fields of one element of sequence `s`, in declaration order.
+    fn element_fields(&self, s: usize) -> Vec<&crate::ast::VarDecl> {
+        self.f.elements.get(s).map(|e| e.fields.iter().collect()).unwrap_or_default()
     }
 
-    /// Names a walk binds itself: the accumulators, and `held` inside `exhausted`.
-    fn fold_locals(&self) -> (String, String, String, String, String) {
-        (
-            self.temp("answer"),
-            self.temp("stopped"),
-            self.temp("taken"),
-            self.temp("kept"),
-            self.temp("best"),
-        )
+    /// The walk plan as the generators write it (§15.219): for each walk in the order it runs,
+    /// its number, its sequence, the items of one element worked out on every element, and the
+    /// summaries it reduces — with the items of one call that run after each number of walks.
+    pub(crate) fn walk_steps(&self) -> Vec<WalkStep> {
+        let st = &self.stages;
+        let mut out = vec![WalkStep::Once(st.once(0))];
+        for level in 1..=st.depth {
+            for (w, s) in st.walks() {
+                if w == level {
+                    out.push(WalkStep::Walk { seq: s, body: st.body(self.f, s, level), sums: st.summaries_in(self.f, s, level) });
+                }
+            }
+            out.push(WalkStep::Once(st.once(level)));
+        }
+        out
+    }
+
+    /// Whether the fold at `i` is the only summary of its walk: it then ends the loop when it
+    /// stops, as a walk always did (§15.56). In a walk with other summaries it stops reading and
+    /// the loop goes on for them (§15.219).
+    pub(crate) fn fold_alone(&self, i: usize) -> bool {
+        match self.stages.at(i) {
+            crate::types::Stage::Each { seq, walk } => self.stages.summaries_in(self.f, seq, walk).len() == 1,
+            _ => true,
+        }
+    }
+
+    /// The name a fold's answer is bound to, its type, and whether that type is one of numbers.
+    pub(crate) fn fold_target(&self, fold: &crate::ast::FoldDecl) -> (String, Ty) {
+        let name = fold.answer_name(self.f).unwrap_or_default().to_string();
+        let ty = self.ty_of(&name);
+        (name, ty)
     }
 
     /// The rule's items — derived values, definitions and tables — as Python, at the base
@@ -1853,7 +1973,7 @@ impl<'a> Gen<'a> {
                     let e = self.expr(&d.expr, local);
                     o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), unparen(&e.text), tr!("定義", "definition")));
                 }
-                Item::Agg(_) => {}
+                Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
                     if let Some(t) = self.c.table_at(t) {
                         o.push_str(&self.py_table(t, local, trace));
@@ -1864,74 +1984,204 @@ impl<'a> Gen<'a> {
         o
     }
 
-    /// The walk itself (§15.56): the accumulators, one pass per element with the body inside
-    /// it, and the answer bound to the output's own name so that the rounding and the return
-    /// below are the ones every rule uses.
-    fn py_walk(&self, fold: &crate::ast::FoldDecl, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let el = self.f.elements.as_ref().expect("a fold has elements");
+    /// Every walk of a rule that walks sequences, in Python (§15.56, §15.58, §15.219): the cap on
+    /// each sequence a count holds, the items before the first walk, and then each walk with the
+    /// items that read what it answered after it. A rule with one walk is written as it always was:
+    /// the fold's accumulators, or the counters, a loop with the items of one element inside it, and
+    /// the answer bound to its name, so that the rounding and the return below are the ones every
+    /// rule uses.
+    fn py_walks(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let mut o = String::new();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            if let Some(cap) = self.count_cap_of(s) {
+                let seq = pub_name(&el.name);
+                o.push_str(&format!(
+                    "    if _len({seq}) > {cap}:\n        raise RuleInputError(\"{}\", _repr(_len({seq})))\n",
+                    crate::door::too_many(&el.name.text, cap)
+                ));
+            }
+        }
+        for step in self.walk_steps() {
+            match step {
+                // What a walk does not depend on is worked out once, before it (§15.208).
+                WalkStep::Once(ix) => o.push_str(&self.py_items(outer, trace, Phase::Only(&ix))),
+                WalkStep::Walk { seq, body, sums, .. } => o.push_str(&self.py_walk(seq, &body, &sums, outer, trace)),
+            }
+        }
+        o
+    }
+
+    /// One walk over sequence `s` (§15.219): each summary's accumulator, one pass over the elements
+    /// with the guards of one element, the items of one element and each summary's step, and each
+    /// summary's answer bound to its name once the loop is over.
+    fn py_walk(&self, s: usize, body_items: &[usize], sums: &[usize], outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let el = &self.f.elements[s];
         let seq = pub_name(&el.name);
-        let fields: BTreeMap<String, String> =
-            el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
-        let (answer, stopped, taken, kept, best) = self.fold_locals();
-        let e = self.temp("elem");
-        let held = self.temp("held");
-        // Inside the walk a field is read off the element, and `held` is the accumulator.
+        let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
+        let e = self.elem_var(s);
+        // Inside the walk a field is read off the element.
         let local = |n: &str| -> String {
             match fields.get(n) {
                 Some(f) => format!("{e}.{f}"),
-                None if n == crate::kw::HELD => held.clone(),
                 None => outer(n),
             }
         };
-        let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
-        let out_ty = self.ty_of(&out_name);
+        let mut o = String::new();
+        let mut body = self.py_element_guards(s, &local);
+        body.push_str(&self.py_items(&local, trace, Phase::Only(body_items)));
+        let mut after = String::new();
+        for &i in sums {
+            match &self.f.items[i] {
+                Item::Agg(d) if d.kind.extreme() => {
+                    let (init, step) = self.py_extreme(d, &local);
+                    o.push_str(&init);
+                    body.push_str(&step);
+                }
+                Item::Agg(d) => {
+                    o.push_str(&format!("    {} = 0  # {}\n", self.ident(&d.name.text), self.agg_word(d)));
+                    let v = local(&d.column.text);
+                    if d.kind == crate::ast::AggKind::Sum {
+                        body.push_str(&format!("    {} += {v}  # {}\n", self.ident(&d.name.text), d.name.text));
+                    } else {
+                        let test = self.py_test(&v, &d.column.text, &d.value);
+                        body.push_str(&format!("    if {test}:  # {}\n", d.name.text));
+                        body.push_str(&format!("        {} += 1\n", self.ident(&d.name.text)));
+                    }
+                    if let Some((_, cap)) = self.sum_caps().into_iter().find(|(x, _)| x.name.text == d.name.text) {
+                        let n = self.ident(&d.name.text);
+                        after.push_str(&format!(
+                            "    if {n} > {cap}:\n        raise RuleInputError(\"{}\", _repr({n}))\n",
+                            crate::door::out_of_range(&d.name.text)
+                        ));
+                    }
+                }
+                Item::Fold(fold) => {
+                    let (init, step, fin) = self.py_fold(i, fold, &seq, &local);
+                    o.push_str(&init);
+                    body.push_str(&step);
+                    after.push_str(&fin);
+                }
+                _ => {}
+            }
+        }
+        o.push_str(&format!("    for {e} in {seq}:\n"));
+        o.push_str(&Self::indent_block(&body, "    "));
+        o.push_str(&after);
+        o
+    }
+
+    /// A test on a column of one element, as `count` and the `where` of `max` and `min` write it:
+    /// `<column> = <value>` for an enum, the column itself for a bool (§15.58).
+    fn py_test(&self, v: &str, col: &str, value: &Option<crate::ast::Name>) -> String {
+        let ty = self.ty_of(col);
+        match (&ty, value) {
+            (Ty::Bool, Some(w)) if w.text == crate::kw::FALSE => format!("not {v}"),
+            (Ty::Bool, _) => v.to_string(),
+            (_, Some(w)) => {
+                let cls = self.py_ty(&ty);
+                let member = self.value_name(&w.text, &ty).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| w.text.clone());
+                format!("{v} is {cls}.{member}")
+            }
+            (_, None) => v.to_string(),
+        }
+    }
+
+    /// A `max` or a `min` in Python (§15.219): the answer starts at the `empty` value, and the
+    /// first element the `where` lets in replaces it; each one after it replaces it when it is
+    /// larger (smaller). Returns the lines before the loop and the lines inside it.
+    fn py_extreme(&self, d: &crate::ast::AggDecl, local: &dyn Fn(&str) -> String) -> (String, String) {
+        let n = self.ident(&d.name.text);
+        let set = self.temp(&format!("{n}_set"));
+        let v = local(&d.column.text);
+        let ty = self.ty_of(&d.column.text);
+        let (start, better) = match self.extreme_enum(d) {
+            Some(en) => {
+                let t = self.enum_type(&en);
+                let w = self.extreme_empty_word(d).unwrap_or_default();
+                let op = if d.kind == crate::ast::AggKind::Max { ">" } else { "<" };
+                (self.py_value(&w, &ty), format!("_rank_{t}({v}) {op} _rank_{t}({n})"))
+            }
+            None => {
+                let op = if d.kind == crate::ast::AggKind::Max { ">" } else { "<" };
+                (self.extreme_empty_int(d).unwrap_or_else(|| "0".into()), format!("{v} {op} {n}"))
+            }
+        };
+        let init = format!("    {n} = {start}  # {}\n    {set} = False\n", self.agg_word(d));
+        let mut step = String::new();
+        let pad = match &d.filter {
+            Some((w, want)) => {
+                step.push_str(&format!("    if {}:  # {}\n", self.py_test(&local(&w.text), &w.text, want), d.name.text));
+                "    "
+            }
+            None => "",
+        };
+        step.push_str(&format!("{pad}    if not {set} or {better}:\n"));
+        step.push_str(&format!("{pad}        {n} = {v}\n{pad}        {set} = True\n"));
+        (init, step)
+    }
+
+    /// A fold in Python (§15.56): the lines before the loop, the arms inside it, and the answer
+    /// bound to its name after it. A fold alone in its walk ends the loop when it stops; one that
+    /// shares its walk stops reading and lets the loop go on (§15.219).
+    fn py_fold(&self, i: usize, fold: &crate::ast::FoldDecl, seq: &str, local: &dyn Fn(&str) -> String) -> (String, String, String) {
+        let names = self.fold_names(i);
+        let FoldNames { answer, stopped, done, taken, kept, best, held, key, .. } = &names;
+        let alone = self.fold_alone(i);
+        // `held` is the accumulator, and it is read only where the walk is over.
+        let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
+        let (out_name, out_ty) = self.fold_target(fold);
         let acc_ty = if out_ty.is_numeric() { "int".to_string() } else { self.py_ty(&out_ty) };
         // An answer is read in the type the fold answers with: a value of its enum is that
         // enum's member (§15.208).
-        let val = |x: &Expr| -> String {
+        let val = |x: &Expr, l: &dyn Fn(&str) -> String| -> String {
             match x {
                 Expr::Lit(Lit::Word(w), _) if w != crate::kw::TRUE && w != crate::kw::FALSE => self.py_value(w, &out_ty),
-                _ => unparen(&self.expr(x, &local).text).to_string(),
+                _ => unparen(&self.expr(x, l).text).to_string(),
             }
         };
-        let text = |x: &Option<Expr>| -> String { x.as_ref().map(&val).unwrap_or_else(|| "0".to_string()) };
+        let text = |x: &Option<Expr>| -> String { x.as_ref().map(|x| val(x, &with_held)).unwrap_or_else(|| "0".to_string()) };
         // Only the accumulators an arm uses are declared: one nothing reads is an unused local to
         // a strict type checker.
         let takes = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { .. }));
         let keeps = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::KeepMax { .. }));
 
-        // What the walk does not depend on is worked out once, before it (§15.208).
-        let mut o = self.py_items(&local, trace, Phase::Before);
-        o.push_str(&format!("    {answer}: {acc_ty} = {}  # {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
-        o.push_str(&format!("    {stopped} = False\n"));
+        let mut init = String::new();
+        init.push_str(&format!("    {answer}: {acc_ty} = {}  # {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
+        init.push_str(&format!("    {stopped} = False\n"));
+        if !alone {
+            init.push_str(&format!("    {done} = False\n"));
+        }
         if takes {
-            o.push_str(&format!("    {taken}: {acc_ty} | None = None\n"));
+            init.push_str(&format!("    {taken}: {acc_ty} | None = None\n"));
         }
         if keeps {
-            o.push_str(&format!("    {kept}: {acc_ty} | None = None\n"));
-            o.push_str(&format!("    {best}: int | None = None\n"));
+            init.push_str(&format!("    {kept}: {acc_ty} | None = None\n"));
+            init.push_str(&format!("    {best}: int | None = None\n"));
         }
-        o.push_str(&format!("    for {e} in {seq}:\n"));
 
-        let mut body = self.py_element_guards(&local);
-        body.push_str(&self.py_items(&local, trace, Phase::Each));
         // The verdict the table wrote for this element, and what the walk does about it.
+        let mut arms = String::new();
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
             let cls = self.py_ty(&self.ty_of(&fold.verdict));
             let member = self.value_name(&name.text, &self.ty_of(&fold.verdict)).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| name.text.clone());
-            body.push_str(&format!("    if {v} is {cls}.{member}:  # {}\n", name.text));
+            arms.push_str(&format!("    if {v} is {cls}.{member}:  # {}\n", name.text));
             match arm {
-                Arm::Next => body.push_str("        pass\n"),
-                Arm::Stop(None) => body.push_str("        break\n"),
+                Arm::Next => arms.push_str("        pass\n"),
+                Arm::Stop(None) if alone => arms.push_str("        break\n"),
+                Arm::Stop(None) => arms.push_str(&format!("        {done} = True\n")),
                 Arm::Stop(Some(x)) => {
-                    body.push_str(&format!("        {answer} = {}\n", val(x)));
-                    body.push_str(&format!("        {stopped} = True\n        break\n"));
+                    arms.push_str(&format!("        {answer} = {}\n", val(x, local)));
+                    if alone {
+                        arms.push_str(&format!("        {stopped} = True\n        break\n"));
+                    } else {
+                        arms.push_str(&format!("        {stopped} = True\n        {done} = True\n"));
+                    }
                 }
                 Arm::Take { expr, unique } => {
                     if *unique {
-                        body.push_str(&format!("        if {taken} is not None:\n"));
-                        body.push_str(&format!(
+                        arms.push_str(&format!("        if {taken} is not None:\n"));
+                        arms.push_str(&format!(
                             "            raise RuleContradictionError(\"{}\")\n",
                             tr!(
                                 "畳み込み {}: take_unique に二件当たりました",
@@ -1939,118 +2189,45 @@ impl<'a> Gen<'a> {
                                 fold.verdict
                             )
                         ));
-                        body.push_str(&format!("        {taken} = {}\n", val(expr)));
+                        arms.push_str(&format!("        {taken} = {}\n", val(expr, local)));
                     } else {
-                        body.push_str(&format!("        if {taken} is None:\n"));
-                        body.push_str(&format!("            {taken} = {}\n", val(expr)));
+                        arms.push_str(&format!("        if {taken} is None:\n"));
+                        arms.push_str(&format!("            {taken} = {}\n", val(expr, local)));
                     }
                 }
-                Arm::KeepMax { expr, key } => {
-                    let k = self.temp("key");
-                    body.push_str(&format!("        {k} = {}\n", unparen(&self.expr(key, &local).text)));
-                    body.push_str(&format!("        if {best} is None or {k} > {best}:\n"));
-                    body.push_str(&format!("            {best} = {k}\n"));
-                    body.push_str(&format!("            {kept} = {}\n", val(expr)));
+                Arm::KeepMax { expr, key: k } => {
+                    arms.push_str(&format!("        {key} = {}\n", unparen(&self.expr(k, local).text)));
+                    arms.push_str(&format!("        if {best} is None or {key} > {best}:\n"));
+                    arms.push_str(&format!("            {best} = {key}\n"));
+                    arms.push_str(&format!("            {kept} = {}\n", val(expr, local)));
                 }
             }
         }
-        o.push_str(&Self::indent_block(&body, "    "));
+        let step = if alone { arms } else { format!("    if not {done}:  # {}\n{}", fold.verdict, Self::indent_block(&arms, "    ")) };
 
         // A sequence with nothing in it answers `empty` and never reaches `exhausted`; a walk
         // that ended on `stop with` has its answer already.
-        o.push_str(&format!("    if _len({seq}) > 0 and not {stopped}:\n"));
+        let mut fin = format!("    if _len({seq}) > 0 and not {stopped}:\n");
         let ex = text(&fold.exhausted);
-        if ex.contains(&held) {
+        if ex.contains(held.as_str()) {
             let fallback = match (takes, keeps) {
                 (true, true) => format!("{taken} if {taken} is not None else ({kept} if {kept} is not None else {})", text(&fold.empty)),
                 (true, false) => format!("{taken} if {taken} is not None else {}", text(&fold.empty)),
                 (false, true) => format!("{kept} if {kept} is not None else {}", text(&fold.empty)),
                 (false, false) => text(&fold.empty),
             };
-            o.push_str(&format!("        {held} = {fallback}\n"));
+            fin.push_str(&format!("        {held} = {fallback}\n"));
         }
-        o.push_str(&format!("        {answer} = {ex}\n"));
-        o.push_str(&format!("    {} = {answer}\n", self.ident(&out_name)));
-        // What reads the answer is worked out once, after the walk (§15.208).
-        o.push_str(&self.py_items(&local, trace, Phase::After));
-        o
-    }
-
-    /// The counting walk (§15.58): the counters, one pass over the sequence with the items of
-    /// one element inside it, and then the rest of the rule with each count bound.
-    ///
-    /// Unlike a fold, the walk here is not the answer — it is what the answer is computed
-    /// from, so the lines after the loop are the ordinary ones every rule has.
-    fn py_count_walk(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let el = self.f.elements.as_ref().expect("a count has elements");
-        let seq = pub_name(&el.name);
-        let fields: BTreeMap<String, String> =
-            el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
-        let e = self.temp("elem");
-        let local = |n: &str| -> String {
-            match fields.get(n) {
-                Some(f) => format!("{e}.{f}"),
-                None => outer(n),
-            }
-        };
-
-        let mut o = String::new();
-        if let Some(cap) = self.count_cap() {
-            o.push_str(&format!(
-                "    if _len({seq}) > {cap}:\n        raise RuleInputError(\"{}\", _repr(_len({seq})))\n",
-                crate::door::too_many(&el.name.text, cap)
-            ));
-        }
-        // What the walk does not depend on is worked out once, before it (§15.208).
-        o.push_str(&self.py_items(outer, trace, Phase::Before));
-        for d in self.counts() {
-            o.push_str(&format!(
-                "    {} = 0  # {}\n",
-                self.ident(&d.name.text),
-                self.agg_word(d)
-            ));
-        }
-        o.push_str(&format!("    for {e} in {seq}:\n"));
-        let mut body = self.py_element_guards(&local);
-        body.push_str(&self.py_items(&local, trace, Phase::Each));
-        for d in self.counts() {
-            let v = local(&d.column.text);
-            if d.kind == crate::ast::AggKind::Sum {
-                body.push_str(&format!("    {} += {v}  # {}\n", self.ident(&d.name.text), d.name.text));
-                continue;
-            }
-            let test = match self.count_member(d) {
-                Some(w) => {
-                    let cls = self.py_ty(&self.ty_of(&d.column.text));
-                    let member = self
-                        .value_name(&w.text, &self.ty_of(&d.column.text))
-                        .map(|(_, a)| a.to_uppercase())
-                        .unwrap_or_else(|| w.text.clone());
-                    format!("{v} is {cls}.{member}")
-                }
-                None if self.count_negated(d) => format!("not {v}"),
-                None => v,
-            };
-            body.push_str(&format!("    if {test}:  # {}\n", d.name.text));
-            body.push_str(&format!("        {} += 1\n", self.ident(&d.name.text)));
-        }
-        o.push_str(&Self::indent_block(&body, "    "));
-        for (d, cap) in self.sum_caps() {
-            let n = self.ident(&d.name.text);
-            o.push_str(&format!(
-                "    if {n} > {cap}:\n        raise RuleInputError(\"{}\", _repr({n}))\n",
-                crate::door::out_of_range(&d.name.text)
-            ));
-        }
-        o.push_str(&self.py_items(outer, trace, Phase::After));
-        o
+        fin.push_str(&format!("        {answer} = {ex}\n"));
+        fin.push_str(&format!("    {} = {answer}\n", self.ident(&out_name)));
+        (init, step, fin)
     }
 
     /// The entry guards of one element, inside the walk: the same checks an input gets, on the
     /// values the caller filled in for this element.
-    fn py_element_guards(&self, local: &dyn Fn(&str) -> String) -> String {
+    fn py_element_guards(&self, s: usize, local: &dyn Fn(&str) -> String) -> String {
         let mut o = String::new();
-        for i in self.element_fields() {
+        for i in self.element_fields(s) {
             let v = local(&i.name.text);
             let ty = self.ty_of(&i.name.text);
             // An optional field is guarded as the type it wraps when it has a value (§15.201).
@@ -2115,10 +2292,10 @@ impl<'a> Gen<'a> {
             .iter()
             .map(|i| format!("{}: {}", pub_name(&i.name), self.py_ty(&self.ty_of(&i.name.text))))
             .collect();
-        // The sequence a walk reads comes last, after the values that hold for the whole call
-        // (§15.56).
-        if let Some(el) = &self.f.elements {
-            params.push(format!("{}: list[Element]", pub_name(&el.name)));
+        // The sequences a walk reads come last, after the values that hold for the whole call
+        // (§15.56), in the order the rule declares them (§15.219).
+        for (s, el) in self.f.elements.iter().enumerate() {
+            params.push(format!("{}: list[{}]", pub_name(&el.name), self.element_type(s)));
         }
         let outs = &self.f.outputs;
         let ret = if outs.len() == 1 {
@@ -2129,8 +2306,8 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
 
         // One element is a row of inputs, so it is the same NamedTuple an `Output` is.
-        if let Some(el) = &self.f.elements {
-            o.push_str("class Element(NamedTuple):\n");
+        for (s, el) in self.f.elements.iter().enumerate() {
+            o.push_str(&format!("class {}(NamedTuple):\n", self.element_type(s)));
             o.push_str(&format!("    \"\"\"{}\"\"\"\n\n", tr!("{} の一件", "one of {}", el.name.text)));
             for fd in &el.fields {
                 o.push_str(&format!(
@@ -2154,7 +2331,7 @@ impl<'a> Gen<'a> {
         // The public function keeps the plain signature; the branches live in its traced
         // twin, which also returns the rows that matched (§15.33).
         let mut args: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             args.push(pub_name(&el.name));
         }
         let traced = format!("{fname}_traced");
@@ -2248,10 +2425,10 @@ impl<'a> Gen<'a> {
         // Derived values and definitions, in declaration order (define-before-use, §5.1).
         // A walk runs the same body once per element, so it is written once and moved in
         // (§15.56).
-        match &self.f.fold {
-            Some(fold) => o.push_str(&self.py_walk(fold, &local, &trace)),
-            None if self.counts().is_empty() => o.push_str(&self.py_items(&local, &trace, Phase::All)),
-            None => o.push_str(&self.py_count_walk(&local, &trace)),
+        if self.f.walks() {
+            o.push_str(&self.py_walks(&local, &trace));
+        } else {
+            o.push_str(&self.py_items(&local, &trace, Phase::All));
         }
 
         // Every output takes the same three steps: its source — the `result` expression for
@@ -2642,7 +2819,15 @@ impl<'a> Gen<'a> {
     /// still assigned, so that the branch and the row stay 1:1 (§8.2), but Go refuses to
     /// compile a local that is never read. W111 reports the column itself.
     fn is_read(&self, name: &str) -> bool {
+        if let Some(r) = self.reads_here.borrow().as_ref() {
+            return r.contains(name);
+        }
         self.c.used.contains(name) || self.f.outputs.iter().any(|o| o.name.text == name)
+    }
+
+    /// The names the items and the summaries of one walk read (§15.219).
+    fn walk_reads(&self, items: &[usize], sums: &[usize]) -> HashSet<String> {
+        items.iter().chain(sums.iter()).flat_map(|&i| self.stages.reads_of(i).iter().cloned()).collect()
     }
 
     fn go_ty(&self, ty: &Ty) -> String {
@@ -3008,7 +3193,7 @@ impl<'a> Gen<'a> {
                     o.push_str(&format!("\t{} := {}{CELL}// {}\n", self.ident(&d.name.text), go_typed(&go_expr(&e.text)), tr!("定義", "definition")));
                     o.push_str(&self.go_unread(&d.name.text));
                 }
-                Item::Agg(_) => {}
+                Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
                     if let Some(t) = self.c.table_at(t) {
                         o.push_str(&self.go_table(t, local, trace));
@@ -3019,20 +3204,37 @@ impl<'a> Gen<'a> {
         o
     }
 
-    /// The walk, in Go (§15.56).
-    fn go_walk(&self, fold: &crate::ast::FoldDecl, outer: &dyn Fn(&str) -> String, trace: &str, zero: &str) -> String {
-        let el = self.f.elements.as_ref().expect("a fold has elements");
+    /// Every walk of a rule that walks sequences, in Go (§15.56, §15.58, §15.219). The shape is
+    /// the one `py_walks` writes.
+    fn go_walks(&self, outer: &dyn Fn(&str) -> String, trace: &str, zero: &str) -> String {
+        let mut o = String::new();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            if let Some(cap) = self.count_cap_of(s) {
+                let seq = format!("in.{}", pascal(&pub_name(&el.name)));
+                o.push_str(&format!(
+                    "\tif len({seq}) > {cap} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: int64(len({seq})), HasValue: true}}\n\t}}\n",
+                    crate::door::too_many(&el.name.text, cap)
+                ));
+            }
+        }
+        for step in self.walk_steps() {
+            match step {
+                // What a walk does not depend on is worked out once, before it (§15.208).
+                WalkStep::Once(ix) => o.push_str(&self.go_items(outer, trace, Phase::Only(&ix))),
+                WalkStep::Walk { seq, body, sums, .. } => o.push_str(&self.go_walk(seq, &body, &sums, outer, trace, zero)),
+            }
+        }
+        o
+    }
+
+    /// One walk over sequence `s`, in Go (§15.219).
+    #[allow(clippy::too_many_arguments)]
+    fn go_walk(&self, s: usize, body_items: &[usize], sums: &[usize], outer: &dyn Fn(&str) -> String, trace: &str, zero: &str) -> String {
+        let el = &self.f.elements[s];
         let seq = format!("in.{}", pascal(&pub_name(&el.name)));
-        let fields: BTreeMap<String, String> =
-            el.fields.iter().map(|fd| (fd.name.text.clone(), pascal(&pub_name(&fd.name)))).collect();
-        let (answer, stopped, taken, kept, best) = self.fold_locals();
-        let e = self.temp("elem");
-        let held = self.temp("held");
-        // Go has no `None`, so each accumulator carries its own "was it ever set" flag.
-        let has_taken = self.temp("tookOne");
-        let has_kept = self.temp("keptOne");
-        let has_best = self.temp("bestSet");
-        // Inside the walk a field is read off the element, and `held` is the accumulator.
+        let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), pascal(&pub_name(&fd.name)))).collect();
+        let e = self.elem_var(s);
+        // Inside the walk a field is read off the element.
         let local = |n: &str| -> String {
             match fields.get(n) {
                 Some(f) => {
@@ -3043,57 +3245,162 @@ impl<'a> Gen<'a> {
                         v
                     }
                 }
-                None if n == crate::kw::HELD => held.clone(),
                 None => outer(n),
             }
         };
-        let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
-        let out_ty = self.ty_of(&out_name);
+        let mut o = String::new();
+        let mut body = self.go_element_guards(s, &local, zero);
+        // Go refuses to compile a local nothing reads, so what the walk's own items bind and no
+        // one in the walk reads is said to be read (§15.219).
+        let reads = self.walk_reads(body_items, sums);
+        *self.reads_here.borrow_mut() = Some(reads);
+        body.push_str(&self.go_items(&local, trace, Phase::Only(body_items)));
+        *self.reads_here.borrow_mut() = None;
+        let (mut after, mut unread) = (String::new(), String::new());
+        for &i in sums {
+            match &self.f.items[i] {
+                Item::Agg(d) if d.kind.extreme() => {
+                    let (init, step) = self.go_extreme(d, &local);
+                    o.push_str(&init);
+                    body.push_str(&step);
+                    unread.push_str(&self.go_unread(&d.name.text));
+                }
+                Item::Agg(d) => {
+                    o.push_str(&format!("\tvar {} int64 = 0{CELL}// {}\n", self.ident(&d.name.text), self.agg_word(d)));
+                    let v = local(&d.column.text);
+                    if d.kind == crate::ast::AggKind::Sum {
+                        body.push_str(&format!("\t{} += {v}{CELL}// {}\n", self.ident(&d.name.text), d.name.text));
+                    } else {
+                        let test = self.go_test(&v, &d.column.text, &d.value);
+                        body.push_str(&format!("\tif {test} {{{CELL}// {}\n\t\t{}++\n\t}}\n", d.name.text, self.ident(&d.name.text)));
+                    }
+                    if let Some((_, cap)) = self.sum_caps().into_iter().find(|(x, _)| x.name.text == d.name.text) {
+                        let n = self.ident(&d.name.text);
+                        after.push_str(&format!(
+                            "\tif {n} > {cap} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {n}, HasValue: true}}\n\t}}\n",
+                            crate::door::out_of_range(&d.name.text)
+                        ));
+                    }
+                    unread.push_str(&self.go_unread(&d.name.text));
+                }
+                Item::Fold(fold) => {
+                    let (init, step, fin) = self.go_fold(i, fold, &seq, &local, zero);
+                    o.push_str(&init);
+                    body.push_str(&step);
+                    after.push_str(&fin);
+                }
+                _ => {}
+            }
+        }
+        o.push_str(&format!("\tfor _, {e} := range {seq} {{\n"));
+        o.push_str(&Self::indent_block(&body, "\t"));
+        o.push_str("\t}\n");
+        o.push_str(&after);
+        o.push_str(&unread);
+        o
+    }
+
+    /// A test on a column of one element, in Go: `count`'s, and the `where` of `max` and `min`.
+    fn go_test(&self, v: &str, col: &str, value: &Option<crate::ast::Name>) -> String {
+        let ty = self.ty_of(col);
+        match (&ty, value) {
+            (Ty::Bool, Some(w)) if w.text == crate::kw::FALSE => format!("!{v}"),
+            (Ty::Bool, _) => v.to_string(),
+            (_, Some(w)) => format!("{v} == {}", self.go_value(&w.text, &ty)),
+            (_, None) => v.to_string(),
+        }
+    }
+
+    /// A `max` or a `min`, in Go (§15.219): the lines before the loop and the lines inside it.
+    fn go_extreme(&self, d: &crate::ast::AggDecl, local: &dyn Fn(&str) -> String) -> (String, String) {
+        let n = self.ident(&d.name.text);
+        let set = self.temp(&format!("{n}Set"));
+        let v = local(&d.column.text);
+        let ty = self.ty_of(&d.column.text);
+        let op = if d.kind == crate::ast::AggKind::Max { ">" } else { "<" };
+        let (go_t, start, better) = match self.extreme_enum(d) {
+            Some(en) => {
+                let t = self.enum_type(&en);
+                let w = self.extreme_empty_word(d).unwrap_or_default();
+                (self.go_ty(&ty), self.go_value(&w, &ty), format!("_rank_{t}({v}) {op} _rank_{t}({n})"))
+            }
+            None => ("int64".to_string(), self.extreme_empty_int(d).unwrap_or_else(|| "0".into()), format!("{v} {op} {n}")),
+        };
+        let init = format!("\tvar {n} {go_t} = {start}{CELL}// {}\n\t{set} := false\n", self.agg_word(d));
+        let mut step = String::new();
+        let pad = match &d.filter {
+            Some((w, want)) => {
+                step.push_str(&format!("\tif {} {{{CELL}// {}\n", self.go_test(&local(&w.text), &w.text, want), d.name.text));
+                "\t"
+            }
+            None => "",
+        };
+        step.push_str(&format!("{pad}\tif !{set} || {better} {{\n{pad}\t\t{n} = {v}\n{pad}\t\t{set} = true\n{pad}\t}}\n"));
+        if !pad.is_empty() {
+            step.push_str("\t}\n");
+        }
+        (init, step)
+    }
+
+    /// A fold, in Go (§15.56): the lines before the loop, the arms inside it, and the answer bound
+    /// to its name after it. Go has no `None`, so each accumulator carries its own "was it ever
+    /// set" flag.
+    fn go_fold(&self, i: usize, fold: &crate::ast::FoldDecl, seq: &str, local: &dyn Fn(&str) -> String, zero: &str) -> (String, String, String) {
+        let names = self.fold_names(i);
+        let FoldNames { answer, stopped, done, taken, kept, best, held, key, took, kept_one, best_set } = &names;
+        let alone = self.fold_alone(i);
+        let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
+        let (out_name, out_ty) = self.fold_target(fold);
         let acc_ty = if out_ty.is_numeric() { "int64".to_string() } else { self.go_ty(&out_ty) };
         let acc_zero = if out_ty.is_numeric() { "0".to_string() } else { self.go_zero(&out_ty) };
         // An answer is read in the type the fold answers with: a value of its enum is that
         // enum's member (§15.208).
-        let val = |x: &Expr| -> String {
+        let val = |x: &Expr, l: &dyn Fn(&str) -> String| -> String {
             match x {
                 Expr::Lit(Lit::Word(w), _) if w != crate::kw::TRUE && w != crate::kw::FALSE => self.go_value(w, &out_ty),
-                _ => go_expr(&self.expr(x, &local).text),
+                _ => go_expr(&self.expr(x, l).text),
             }
         };
-        let text = |x: &Option<Expr>| -> String { x.as_ref().map(&val).unwrap_or_else(|| "0".to_string()) };
+        let text = |x: &Option<Expr>| -> String { x.as_ref().map(|x| val(x, &with_held)).unwrap_or_else(|| "0".to_string()) };
         // Go refuses to compile a local nothing reads, so only the arms that are written get one.
         let takes = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { .. }));
         let keeps = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::KeepMax { .. }));
 
-        // What the walk does not depend on is worked out once, before it (§15.208).
-        let mut o = self.go_items(&local, trace, Phase::Before);
-        o.push_str(&format!("\tvar {answer} {acc_ty} = {}{CELL}// {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
-        o.push_str(&format!("\t{stopped} := false\n"));
+        let mut init = String::new();
+        init.push_str(&format!("\tvar {answer} {acc_ty} = {}{CELL}// {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
+        init.push_str(&format!("\t{stopped} := false\n"));
+        if !alone {
+            init.push_str(&format!("\t{done} := false\n"));
+        }
         if takes {
-            o.push_str(&format!("\tvar {taken} {acc_ty} = {acc_zero}\n\t{has_taken} := false\n"));
+            init.push_str(&format!("\tvar {taken} {acc_ty} = {acc_zero}\n\t{took} := false\n"));
         }
         if keeps {
-            o.push_str(&format!("\tvar {kept} {acc_ty} = {acc_zero}\n\t{has_kept} := false\n"));
-            o.push_str(&format!("\tvar {best} int64 = 0\n\t{has_best} := false\n"));
+            init.push_str(&format!("\tvar {kept} {acc_ty} = {acc_zero}\n\t{kept_one} := false\n"));
+            init.push_str(&format!("\tvar {best} int64 = 0\n\t{best_set} := false\n"));
         }
-        o.push_str(&format!("\tfor _, {e} := range {seq} {{\n"));
 
-        let mut body = self.go_element_guards(&local, zero);
-        body.push_str(&self.go_items(&local, trace, Phase::Each));
         // The verdict the table wrote for this element, and what the walk does about it.
+        let mut arms = String::new();
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
-            body.push_str(&format!("\tif {} == {} {{ // {}\n", v, self.go_value(&name.text, &self.ty_of(&fold.verdict)), name.text));
+            arms.push_str(&format!("\tif {} == {} {{{CELL}// {}\n", v, self.go_value(&name.text, &self.ty_of(&fold.verdict)), name.text));
             match arm {
-                Arm::Next => body.push_str(&format!("\t\t// {}\n", crate::kw::NEXT)),
-                Arm::Stop(None) => body.push_str("\t\tbreak\n"),
+                Arm::Next => arms.push_str(&format!("\t\t// {}\n", crate::kw::NEXT)),
+                Arm::Stop(None) if alone => arms.push_str("\t\tbreak\n"),
+                Arm::Stop(None) => arms.push_str(&format!("\t\t{done} = true\n")),
                 Arm::Stop(Some(x)) => {
-                    body.push_str(&format!("\t\t{answer} = {}\n", val(x)));
-                    body.push_str(&format!("\t\t{stopped} = true\n\t\tbreak\n"));
+                    arms.push_str(&format!("\t\t{answer} = {}\n", val(x, local)));
+                    if alone {
+                        arms.push_str(&format!("\t\t{stopped} = true\n\t\tbreak\n"));
+                    } else {
+                        arms.push_str(&format!("\t\t{stopped} = true\n\t\t{done} = true\n"));
+                    }
                 }
                 Arm::Take { expr, unique } => {
                     if *unique {
-                        body.push_str(&format!("\t\tif {has_taken} {{\n"));
-                        body.push_str(&format!(
+                        arms.push_str(&format!("\t\tif {took} {{\n"));
+                        arms.push_str(&format!(
                             "\t\t\treturn {zero}, nil, &RuleContradictionError{{What: \"{}\"}}\n\t\t}}\n",
                             tr!(
                                 "畳み込み {}: take_unique に二件当たりました",
@@ -3101,123 +3408,54 @@ impl<'a> Gen<'a> {
                                 fold.verdict
                             )
                         ));
-                        body.push_str(&format!("\t\t{taken} = {}\n\t\t{has_taken} = true\n", val(expr)));
+                        arms.push_str(&format!("\t\t{taken} = {}\n\t\t{took} = true\n", val(expr, local)));
                     } else {
-                        body.push_str(&format!("\t\tif !{has_taken} {{\n"));
-                        body.push_str(&format!("\t\t\t{taken} = {}\n\t\t\t{has_taken} = true\n\t\t}}\n", val(expr)));
+                        arms.push_str(&format!("\t\tif !{took} {{\n"));
+                        arms.push_str(&format!("\t\t\t{taken} = {}\n\t\t\t{took} = true\n\t\t}}\n", val(expr, local)));
                     }
                 }
-                Arm::KeepMax { expr, key } => {
-                    let k = self.temp("key");
-                    body.push_str(&format!("\t\t{k} := {}\n", go_expr(&self.expr(key, &local).text)));
-                    body.push_str(&format!("\t\tif !{has_best} || {k} > {best} {{\n"));
-                    body.push_str(&format!("\t\t\t{best} = {k}\n\t\t\t{has_best} = true\n"));
-                    body.push_str(&format!("\t\t\t{kept} = {}\n\t\t\t{has_kept} = true\n\t\t}}\n", val(expr)));
+                Arm::KeepMax { expr, key: k } => {
+                    arms.push_str(&format!("\t\t{key} := {}\n", go_expr(&self.expr(k, local).text)));
+                    arms.push_str(&format!("\t\tif !{best_set} || {key} > {best} {{\n"));
+                    arms.push_str(&format!("\t\t\t{best} = {key}\n\t\t\t{best_set} = true\n"));
+                    arms.push_str(&format!("\t\t\t{kept} = {}\n\t\t\t{kept_one} = true\n\t\t}}\n", val(expr, local)));
                 }
             }
-            body.push_str("\t}\n");
+            arms.push_str("\t}\n");
         }
-        o.push_str(&Self::indent_block(&body, "\t"));
-        o.push_str("\t}\n");
+        let step = if alone { arms } else { format!("\tif !{done} {{{CELL}// {}\n{}\t}}\n", fold.verdict, Self::indent_block(&arms, "\t")) };
 
         // A sequence with nothing in it answers `empty` and never reaches `exhausted`; a walk
         // that ended on `stop with` has its answer already.
-        o.push_str(&format!("\tif len({seq}) > 0 && !{stopped} {{\n"));
-        o.push_str(&format!("\t\tvar {held} {acc_ty} = {}\n", text(&fold.empty)));
+        let mut fin = format!("\tif len({seq}) > 0 && !{stopped} {{\n");
+        fin.push_str(&format!("\t\tvar {held} {acc_ty} = {}\n", text(&fold.empty)));
         if takes {
-            o.push_str(&format!("\t\tif {has_taken} {{\n\t\t\t{held} = {taken}\n\t\t}}\n"));
+            fin.push_str(&format!("\t\tif {took} {{\n\t\t\t{held} = {taken}\n\t\t}}\n"));
         }
         if keeps {
-            let els = if takes { " else" } else { "" };
             if takes {
                 // Chain onto the `if` just written, so a taken value wins over a kept one.
-                o = o.trim_end_matches("\t\t}\n").to_string();
-                o.push_str(&format!("\t\t}}{els} if {has_kept} {{\n\t\t\t{held} = {kept}\n\t\t}}\n"));
+                fin = fin.trim_end_matches("\t\t}\n").to_string();
+                fin.push_str(&format!("\t\t}} else if {kept_one} {{\n\t\t\t{held} = {kept}\n\t\t}}\n"));
             } else {
-                o.push_str(&format!("\t\tif {has_kept} {{\n\t\t\t{held} = {kept}\n\t\t}}\n"));
+                fin.push_str(&format!("\t\tif {kept_one} {{\n\t\t\t{held} = {kept}\n\t\t}}\n"));
             }
         }
         let ex = text(&fold.exhausted);
-        if !ex.contains(&held) {
-            o.push_str(&format!("\t\t_ = {held}\n"));
+        if !ex.contains(held.as_str()) {
+            fin.push_str(&format!("\t\t_ = {held}\n"));
         }
-        o.push_str(&format!("\t\t{answer} = {ex}\n\t}}\n"));
-        o.push_str(&format!("\t{} := {answer}\n", self.ident(&out_name)));
-        o.push_str(&self.go_unread(&out_name));
-        // What reads the answer is worked out once, after the walk (§15.208).
-        o.push_str(&self.go_items(&local, trace, Phase::After));
-        o
-    }
-
-    /// The counting walk in Go. The shape is the one `py_count_walk` writes (§15.58).
-    fn go_count_walk(&self, outer: &dyn Fn(&str) -> String, trace: &str, zero: &str) -> String {
-        let el = self.f.elements.as_ref().expect("a count has elements");
-        let seq = format!("in.{}", pascal(&pub_name(&el.name)));
-        let fields: BTreeMap<String, String> =
-            el.fields.iter().map(|fd| (fd.name.text.clone(), pascal(&pub_name(&fd.name)))).collect();
-        let e = self.temp("elem");
-        let local = |n: &str| -> String {
-            match fields.get(n) {
-                Some(f) => {
-                    let v = format!("{e}.{f}");
-                    if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
-                        format!("int64({v})")
-                    } else {
-                        v
-                    }
-                }
-                None => outer(n),
-            }
-        };
-        let mut o = String::new();
-        if let Some(cap) = self.count_cap() {
-            o.push_str(&format!(
-                "\tif len({seq}) > {cap} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: int64(len({seq})), HasValue: true}}\n\t}}\n",
-                crate::door::too_many(&el.name.text, cap)
-            ));
-        }
-        // What the walk does not depend on is worked out once, before it (§15.208).
-        o.push_str(&self.go_items(outer, trace, Phase::Before));
-        for d in self.counts() {
-            o.push_str(&format!("\tvar {} int64 = 0{CELL}// {}\n", self.ident(&d.name.text), self.agg_word(d)));
-        }
-        o.push_str(&format!("\tfor _, {e} := range {seq} {{\n"));
-        let mut body = self.go_element_guards(&local, zero);
-        body.push_str(&self.go_items(&local, trace, Phase::Each));
-        for d in self.counts() {
-            let v = local(&d.column.text);
-            if d.kind == crate::ast::AggKind::Sum {
-                body.push_str(&format!("\t{} += {v} // {}\n", self.ident(&d.name.text), d.name.text));
-                continue;
-            }
-            let test = match self.count_member(d) {
-                Some(w) => format!("{v} == {}", self.go_value(&w.text, &self.ty_of(&d.column.text))),
-                None if self.count_negated(d) => format!("!{v}"),
-                None => v,
-            };
-            body.push_str(&format!("\tif {test} {{ // {}\n\t\t{}++\n\t}}\n", d.name.text, self.ident(&d.name.text)));
-        }
-        o.push_str(&Self::indent_block(&body, "\t"));
-        o.push_str("\t}\n");
-        for (d, cap) in self.sum_caps() {
-            let n = self.ident(&d.name.text);
-            o.push_str(&format!(
-                "\tif {n} > {cap} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{}\", Value: {n}, HasValue: true}}\n\t}}\n",
-                crate::door::out_of_range(&d.name.text)
-            ));
-        }
-        for d in self.counts() {
-            o.push_str(&self.go_unread(&d.name.text));
-        }
-        o.push_str(&self.go_items(outer, trace, Phase::After));
-        o
+        fin.push_str(&format!("\t\t{answer} = {ex}\n\t}}\n"));
+        fin.push_str(&format!("\t{} := {answer}\n", self.ident(&out_name)));
+        fin.push_str(&self.go_unread(&out_name));
+        (init, step, fin)
     }
 
     /// The entry guards of one element, inside the walk: the same checks an input gets, on the
     /// values the caller filled in for this element.
-    fn go_element_guards(&self, local: &dyn Fn(&str) -> String, zero: &str) -> String {
+    fn go_element_guards(&self, s: usize, local: &dyn Fn(&str) -> String, zero: &str) -> String {
         let mut o = String::new();
-        for i in self.element_fields() {
+        for i in self.element_fields(s) {
             let v = local(&i.name.text);
             let ty = self.ty_of(&i.name.text);
             // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
@@ -3282,18 +3520,19 @@ impl<'a> Gen<'a> {
             };
             o.push_str(&format!("\t{}{CELL}{}{CELL}{doc}\n", pascal(&pub_name(&i.name)), self.go_ty(&self.ty_of(&i.name.text))));
         }
-        // The sequence a walk reads is a field like the rest (§15.56).
-        if let Some(el) = &self.f.elements {
+        // A sequence a walk reads is a field like the rest (§15.56), each its own (§15.219).
+        for (s, el) in self.f.elements.iter().enumerate() {
             o.push_str(&format!(
-                "\t{}{CELL}[]Element{CELL}// {}\n",
+                "\t{}{CELL}[]{}{CELL}// {}\n",
                 pascal(&pub_name(&el.name)),
+                self.element_type(s),
                 el.name.text
             ));
         }
         o.push_str("}\n\n");
         // One element is a row of inputs, so it is a struct like `Input`.
-        if let Some(el) = &self.f.elements {
-            o.push_str(&format!("// {}\ntype Element struct {{\n", tr!("{} の一件", "one of {}", el.name.text)));
+        for (s, el) in self.f.elements.iter().enumerate() {
+            o.push_str(&format!("// {}\ntype {} struct {{\n", tr!("{} の一件", "one of {}", el.name.text), self.element_type(s)));
             for fd in &el.fields {
                 o.push_str(&format!(
                     "\t{}{CELL}{}{CELL}// {}\n",
@@ -3401,10 +3640,10 @@ impl<'a> Gen<'a> {
         let trace = self.temp("trace");
         o.push_str(&format!("\tvar {trace} []Fired\n"));
 
-        match &self.f.fold {
-            Some(fold) => o.push_str(&self.go_walk(fold, &local, &trace, &zero)),
-            None if self.counts().is_empty() => o.push_str(&self.go_items(&local, &trace, Phase::All)),
-            None => o.push_str(&self.go_count_walk(&local, &trace, &zero)),
+        if self.f.walks() {
+            o.push_str(&self.go_walks(&local, &trace, &zero));
+        } else {
+            o.push_str(&self.go_items(&local, &trace, Phase::All));
         }
 
         // Every output takes the same three steps: its source — the `result` expression for
@@ -3570,7 +3809,237 @@ fn go_expr(s: &str) -> String {
         .replace("_round_bankers(", "roundBankers(")
         .replace("_min(", "minInt(")
         .replace("_max(", "maxInt(");
-    tighten_nested_products(&t)
+    gofmt_spacing(&t).unwrap_or_else(|| tighten_nested_products(&t))
+}
+
+/// An expression as `gofmt` spaces it (§8.5): the blanks around a binary operator are kept or
+/// dropped by the rule `go/printer` follows, read off the expression itself. The generator writes
+/// every operator with a blank on each side and parenthesizes every subexpression; `gofmt` drops
+/// the blanks of an operator deep enough in the expression — inside a call of two arguments or
+/// more, an operand of another operator — where they would not help a reader see its shape:
+/// `(roundHalfDown((line_total * 10), 100) / 100)` comes back as `(roundHalfDown((line_total*10), 100) / 100)`.
+/// The depth is `go/printer`'s: 1 at the top, one more for each argument list of two or more
+/// and each operand of an operator of another precedence, one less inside a pair of parentheses.
+/// None for a shape it does not read (a brace, an index), which keeps the older rule
+/// (`tighten_nested_products`).
+fn gofmt_spacing(s: &str) -> Option<String> {
+    #[derive(Debug)]
+    enum Node {
+        Atom(String),
+        Paren(Box<Node>),
+        Call(String, Vec<Node>),
+        Unary(String, Box<Node>),
+        Binary(String, Box<Node>, Box<Node>),
+    }
+    fn prec(op: &str) -> Option<u8> {
+        Some(match op {
+            "||" => 1,
+            "&&" => 2,
+            "==" | "!=" | "<" | "<=" | ">" | ">=" => 3,
+            "+" | "-" | "|" | "^" => 4,
+            "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" => 5,
+            _ => return None,
+        })
+    }
+    // The tokens: an atom (a name, a selector, a number, a string), a parenthesis, a comma, an operator.
+    let cs: Vec<char> = s.chars().collect();
+    let mut toks: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < cs.len() {
+        let c = cs[i];
+        if c == ' ' {
+            i += 1;
+        } else if c == '"' {
+            let start = i;
+            i += 1;
+            while i < cs.len() && cs[i] != '"' {
+                if cs[i] == '\\' {
+                    i += 1;
+                }
+                i += 1;
+            }
+            i += 1;
+            toks.push(cs[start..i.min(cs.len())].iter().collect());
+        } else if c.is_alphanumeric() || c == '_' || c == '.' {
+            let start = i;
+            while i < cs.len() && (cs[i].is_alphanumeric() || cs[i] == '_' || cs[i] == '.') {
+                i += 1;
+            }
+            toks.push(cs[start..i].iter().collect());
+        } else if c == '(' || c == ')' || c == ',' {
+            toks.push(c.to_string());
+            i += 1;
+        } else {
+            let two: String = cs[i..(i + 2).min(cs.len())].iter().collect();
+            if ["||", "&&", "==", "!=", "<=", ">=", "<<", ">>", "&^"].contains(&two.as_str()) {
+                toks.push(two);
+                i += 2;
+            } else if "+-*/%<>|^&!".contains(c) {
+                toks.push(c.to_string());
+                i += 1;
+            } else {
+                return None;
+            }
+        }
+    }
+    struct P {
+        toks: Vec<String>,
+        at: usize,
+    }
+    impl P {
+        fn peek(&self) -> Option<&str> {
+            self.toks.get(self.at).map(|t| t.as_str())
+        }
+        fn next(&mut self) -> Option<String> {
+            let t = self.toks.get(self.at).cloned();
+            self.at += 1;
+            t
+        }
+        fn expr(&mut self, min: u8) -> Option<Node> {
+            let mut l = self.unary()?;
+            while let Some(op) = self.peek().map(str::to_string) {
+                let Some(p) = prec(&op) else { break };
+                if p < min {
+                    break;
+                }
+                self.at += 1;
+                let r = self.expr(p + 1)?;
+                l = Node::Binary(op, Box::new(l), Box::new(r));
+            }
+            Some(l)
+        }
+        fn unary(&mut self) -> Option<Node> {
+            match self.peek()? {
+                "-" | "!" | "+" | "^" => {
+                    let op = self.next()?;
+                    Some(Node::Unary(op, Box::new(self.unary()?)))
+                }
+                _ => self.primary(),
+            }
+        }
+        fn primary(&mut self) -> Option<Node> {
+            let t = self.next()?;
+            if t == "(" {
+                let e = self.expr(1)?;
+                (self.next()? == ")").then(|| Node::Paren(Box::new(e)))
+            } else if t.chars().next().is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '"') {
+                if self.peek() == Some("(") && !t.starts_with('"') {
+                    self.at += 1;
+                    let mut args = Vec::new();
+                    if self.peek() == Some(")") {
+                        self.at += 1;
+                        return Some(Node::Call(t, args));
+                    }
+                    loop {
+                        args.push(self.expr(1)?);
+                        match self.next()?.as_str() {
+                            "," => continue,
+                            ")" => break,
+                            _ => return None,
+                        }
+                    }
+                    Some(Node::Call(t, args))
+                } else {
+                    Some(Node::Atom(t))
+                }
+            } else {
+                None
+            }
+        }
+    }
+    let mut p = P { toks, at: 0 };
+    let root = p.expr(1)?;
+    if p.at != p.toks.len() {
+        return None;
+    }
+    // `go/printer`: walkBinary, cutoff, diffPrec, reduceDepth, and the cases of expr1.
+    fn walk(e: &Node) -> (bool, bool, u8) {
+        let Node::Binary(op, l, r) = e else { return (false, false, 0) };
+        let p = prec(op).unwrap_or(0);
+        let (mut has4, mut has5, mut problem) = (p == 4, p == 5, 0u8);
+        if let Node::Binary(lop, ..) = &**l {
+            if prec(lop).unwrap_or(0) >= p {
+                let (a, b, m) = walk(l);
+                has4 |= a;
+                has5 |= b;
+                problem = problem.max(m);
+            }
+        }
+        match &**r {
+            Node::Binary(rop, ..) if prec(rop).unwrap_or(0) > p => {
+                let (a, b, m) = walk(r);
+                has4 |= a;
+                has5 |= b;
+                problem = problem.max(m);
+            }
+            Node::Unary(u, _) => match format!("{op}{u}").as_str() {
+                "&&" | "&^" => problem = 5,
+                "++" | "--" => problem = problem.max(4),
+                _ => {}
+            },
+            _ => {}
+        }
+        (has4, has5, problem)
+    }
+    fn cutoff(e: &Node, depth: u32) -> u8 {
+        let (has4, has5, problem) = walk(e);
+        if problem > 0 {
+            problem + 1
+        } else if has4 && has5 {
+            if depth == 1 { 5 } else { 4 }
+        } else if depth == 1 {
+            6
+        } else {
+            4
+        }
+    }
+    fn print(e: &Node, depth: u32, out: &mut String) {
+        match e {
+            Node::Atom(a) => out.push_str(a),
+            Node::Paren(x) => {
+                // gofmt drops a pair around what is already in a pair
+                if matches!(**x, Node::Paren(_)) {
+                    print(x, depth, out);
+                } else {
+                    out.push('(');
+                    print(x, depth.saturating_sub(1).max(1), out);
+                    out.push(')');
+                }
+            }
+            Node::Call(f, args) => {
+                let d = if args.len() > 1 { depth + 1 } else { depth };
+                out.push_str(f);
+                out.push('(');
+                for (k, a) in args.iter().enumerate() {
+                    if k > 0 {
+                        out.push_str(", ");
+                    }
+                    print(a, d, out);
+                }
+                out.push(')');
+            }
+            Node::Unary(op, x) => {
+                out.push_str(op);
+                print(x, depth, out);
+            }
+            Node::Binary(op, l, r) => {
+                let p = prec(op).unwrap_or(0);
+                let blank = p < cutoff(e, depth);
+                let diff = match &**l {
+                    Node::Binary(lop, ..) if prec(lop) == Some(p) => 0,
+                    _ => 1,
+                };
+                print(l, depth + diff, out);
+                out.push_str(if blank { " " } else { "" });
+                out.push_str(op);
+                out.push_str(if blank { " " } else { "" });
+                print(r, depth + 1, out);
+            }
+        }
+    }
+    let mut out = String::new();
+    print(&root, 1, &mut out);
+    Some(out)
 }
 
 /// Match one habit of `gofmt`: a product written inside a group that sits two or more call
@@ -3843,8 +4312,12 @@ fn align(src: &str) -> String {
             continue;
         }
         let n = lines[i].matches(CELL).count();
+        // gofmt aligns a run of lines at one indentation: a line that opens a block and the
+        // first line inside it are two runs, each aligned on its own.
+        let indent = |l: &str| l.len() - l.trim_start_matches('\t').len();
+        let depth = indent(lines[i]);
         let start = i;
-        while i < lines.len() && lines[i].contains(CELL) && lines[i].matches(CELL).count() == n {
+        while i < lines.len() && lines[i].contains(CELL) && lines[i].matches(CELL).count() == n && indent(lines[i]) == depth {
             i += 1;
         }
         let rows: Vec<Vec<&str>> = lines[start..i].iter().map(|l| l.split(CELL).collect()).collect();
@@ -3919,14 +4392,16 @@ impl<'a> Gen<'a> {
 
     /// The elements of the sequence a walk reads, read the way one call's inputs are (§15.56,
     /// §15.204): the sequence an array, each element an object, each field as an input.
-    pub fn py_read_elements(&self, el: &crate::ast::ElementsDecl) -> String {
+    pub fn py_read_elements(&self, s: usize) -> String {
+        let el = &self.f.elements[s];
         let seq = &el.name.text;
         let e = format!("_obj(e, {:?})", crate::door::not_object(seq));
         let fields: Vec<String> = el.fields.iter().map(|fd| self.py_read(&self.ty_of(&fd.name.text), &e, &fd.name.text)).collect();
         // `m.Element(x)` is a call, not a tuple: the trailing comma a one-element tuple needs
         // would only make the formatter explode the line (§15.105).
         format!(
-            "[m.Element({}) for e in _seq(_take(d, {seq:?}, {:?}), {:?})]",
+            "[m.{}({}) for e in _seq(_take(d, {seq:?}, {:?}), {:?})]",
+            self.element_type(s),
             fields.join(", "),
             crate::door::missing(seq),
             crate::door::not_sequence(seq)
@@ -3940,11 +4415,13 @@ impl<'a> Gen<'a> {
             let ty = self.ty_of(&i.name.text);
             args.push(self.py_read(&ty, "d", &i.name.text));
         }
-        // The sequence a walk reads is built the same way, one element at a time (§15.56).
+        // The sequences a walk reads are built the same way, one element at a time (§15.56), each
+        // under a name of its own (§15.219).
         let mut prelude = String::new();
-        if let Some(el) = &self.f.elements {
-            prelude = format!("        rows = {}\n", self.py_read_elements(el));
-            args.push("rows".to_string());
+        for s in 0..self.f.elements.len() {
+            let rows = if s == 0 { "rows".to_string() } else { format!("rows{}", s + 1) };
+            prelude.push_str(&format!("        {rows} = {}\n", self.py_read_elements(s)));
+            args.push(rows);
         }
         // A machine's traces (§15.148): the carried input is the state this language answered
         // to the call before, handed over as the value it is, not read back off the wire.
@@ -4116,15 +4593,16 @@ impl<'a> Gen<'a> {
                 fields.push(field(&i.name, &self.ty_of(&i.name.text), "in", "d", "\t\t\t"));
             }
         }
-        // The sequence arrives as an array of objects (§10.2), one per element.
-        if let Some(el) = &self.f.elements {
+        // A sequence arrives as an array of objects (§10.2), one per element; each its own (§15.219).
+        for (s, el) in self.f.elements.iter().enumerate() {
             let jp = &el.name.text;
             let g = pascal(&pub_name(&el.name));
             let mut body = format!(
-                "\t\t\tfor _, ev := range list(take(d, {jp:?}, {:?}, false), {:?}) {{\n\t\t\t\te := object(ev, {:?})\n\t\t\t\tvar el r.Element\n",
+                "\t\t\tfor _, ev := range list(take(d, {jp:?}, {:?}, false), {:?}) {{\n\t\t\t\te := object(ev, {:?})\n\t\t\t\tvar el r.{}\n",
                 crate::door::missing(jp),
                 crate::door::not_sequence(jp),
-                crate::door::not_object(jp)
+                crate::door::not_object(jp),
+                self.element_type(s)
             );
             for fd in &el.fields {
                 body.push_str(&field(&fd.name, &self.ty_of(&fd.name.text), "el", "e", "\t\t\t\t"));
@@ -4838,162 +5316,212 @@ impl<'a> Gen<'a> {
     }
 
 
-    /// The rule's items as TypeScript, at the base indentation. `local` decides how a name
-    /// is spelled, which is where a walk puts the element's own fields (§15.56).
-    /// The walk, in TypeScript (§15.56). The shape is the one `py_walk` writes: accumulators,
-    /// one pass per element with the body inside it, and the answer bound to the output's own
-    /// name so the rounding and the return below are the ones every rule uses.
-    fn ts_walk(&self, fold: &crate::ast::FoldDecl, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let el = self.f.elements.as_ref().expect("a fold has elements");
+    /// Every walk of a rule that walks sequences, in TypeScript (§15.56, §15.58, §15.219). The
+    /// shape is the one `py_walks` writes.
+    fn ts_walks(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let mut o = String::new();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            if let Some(cap) = self.count_cap_of(s) {
+                let seq = pub_name(&el.name);
+                o.push_str(&format!(
+                    "  if ({seq}.length > {cap}) {{\n    throw new RuleInputError(`{}`, {seq}.length);\n  }}\n",
+                    crate::door::too_many(&el.name.text, cap)
+                ));
+            }
+        }
+        for step in self.walk_steps() {
+            match step {
+                // What a walk does not depend on is worked out once, before it (§15.208).
+                WalkStep::Once(ix) => o.push_str(&self.ts_items(outer, trace, Phase::Only(&ix))),
+                WalkStep::Walk { seq, body, sums, .. } => o.push_str(&self.ts_walk(seq, &body, &sums, outer, trace)),
+            }
+        }
+        o
+    }
+
+    /// One walk over sequence `s`, in TypeScript (§15.219).
+    fn ts_walk(&self, s: usize, body_items: &[usize], sums: &[usize], outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let el = &self.f.elements[s];
         let seq = pub_name(&el.name);
-        let fields: BTreeMap<String, String> =
-            el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
-        let (answer, stopped, taken, kept, best) = self.fold_locals();
-        let e = self.temp("elem");
-        let held = self.temp("held");
+        let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
+        let e = self.elem_var(s);
         let local = |n: &str| -> String {
             match fields.get(n) {
                 Some(f) => format!("{e}.{f}"),
-                None if n == crate::kw::HELD => held.clone(),
                 None => outer(n),
             }
         };
-        let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
-        let out_ty = self.ty_of(&out_name);
+        let mut o = String::new();
+        let mut body = self.ts_element_guards(s, &local);
+        body.push_str(&self.ts_items(&local, trace, Phase::Only(body_items)));
+        let mut after = String::new();
+        for &i in sums {
+            match &self.f.items[i] {
+                Item::Agg(d) if d.kind.extreme() => {
+                    let (init, step) = self.ts_extreme(d, &local);
+                    o.push_str(&init);
+                    body.push_str(&step);
+                }
+                Item::Agg(d) => {
+                    o.push_str(&format!("  let {}: bigint = 0n; // {}\n", self.ident(&d.name.text), self.agg_word(d)));
+                    let v = local(&d.column.text);
+                    if d.kind == crate::ast::AggKind::Sum {
+                        body.push_str(&format!("  {} += {v}; // {}\n", self.ident(&d.name.text), d.name.text));
+                    } else {
+                        let test = self.ts_test(&v, &d.column.text, &d.value);
+                        body.push_str(&format!("  if ({test}) {{ // {}\n    {} += 1n;\n  }}\n", d.name.text, self.ident(&d.name.text)));
+                    }
+                    if let Some((_, cap)) = self.sum_caps().into_iter().find(|(x, _)| x.name.text == d.name.text) {
+                        let n = self.ident(&d.name.text);
+                        after.push_str(&format!(
+                            "  if ({n} > {cap}n) {{\n    throw new RuleInputError(`{}`, {n});\n  }}\n",
+                            crate::door::out_of_range(&d.name.text)
+                        ));
+                    }
+                }
+                Item::Fold(fold) => {
+                    let (init, step, fin) = self.ts_fold(i, fold, &seq, &local);
+                    o.push_str(&init);
+                    body.push_str(&step);
+                    after.push_str(&fin);
+                }
+                _ => {}
+            }
+        }
+        o.push_str(&format!("  for ({} {e} of {seq}) {{\n", self.ts_elem_binding(s)));
+        o.push_str(&Self::indent_block(&body, "  "));
+        o.push_str("  }\n");
+        o.push_str(&after);
+        o
+    }
+
+    /// A test on a column of one element, in TypeScript: `count`'s, and the `where` of `max` and
+    /// `min`.
+    fn ts_test(&self, v: &str, col: &str, value: &Option<crate::ast::Name>) -> String {
+        let ty = self.ty_of(col);
+        match (&ty, value) {
+            (Ty::Bool, Some(w)) if w.text == crate::kw::FALSE => format!("!{v}"),
+            (Ty::Bool, _) => v.to_string(),
+            (_, Some(w)) => {
+                let cls = self.ts_ty(&ty);
+                let member = self.value_name(&w.text, &ty).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| w.text.clone());
+                format!("{v} === {cls}.{member}")
+            }
+            (_, None) => v.to_string(),
+        }
+    }
+
+    /// A `max` or a `min`, in TypeScript (§15.219).
+    fn ts_extreme(&self, d: &crate::ast::AggDecl, local: &dyn Fn(&str) -> String) -> (String, String) {
+        let n = self.ident(&d.name.text);
+        let set = self.temp(&format!("{n}Set"));
+        let v = local(&d.column.text);
+        let ty = self.ty_of(&d.column.text);
+        let op = if d.kind == crate::ast::AggKind::Max { ">" } else { "<" };
+        let (ts_t, start, better) = match self.extreme_enum(d) {
+            Some(en) => {
+                let t = self.enum_type(&en);
+                let w = self.extreme_empty_word(d).unwrap_or_default();
+                (self.ts_ty(&ty), self.ts_value(&w, &ty), format!("_rank_{t}({v}) {op} _rank_{t}({n})"))
+            }
+            None => ("bigint".to_string(), format!("{}n", self.extreme_empty_int(d).unwrap_or_else(|| "0".into())), format!("{v} {op} {n}")),
+        };
+        let init = format!("  let {n}: {ts_t} = {start}; // {}\n  let {set} = false;\n", self.agg_word(d));
+        let mut step = String::new();
+        let pad = match &d.filter {
+            Some((w, want)) => {
+                step.push_str(&format!("  if ({}) {{ // {}\n", self.ts_test(&local(&w.text), &w.text, want), d.name.text));
+                "  "
+            }
+            None => "",
+        };
+        step.push_str(&format!("{pad}  if (!{set} || {better}) {{\n{pad}    {n} = {v};\n{pad}    {set} = true;\n{pad}  }}\n"));
+        if !pad.is_empty() {
+            step.push_str("  }\n");
+        }
+        (init, step)
+    }
+
+    /// A fold, in TypeScript (§15.56).
+    fn ts_fold(&self, i: usize, fold: &crate::ast::FoldDecl, seq: &str, local: &dyn Fn(&str) -> String) -> (String, String, String) {
+        let names = self.fold_names(i);
+        let FoldNames { answer, stopped, done, taken, kept, best, held, key, .. } = &names;
+        let alone = self.fold_alone(i);
+        let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
+        let (out_name, out_ty) = self.fold_target(fold);
         let acc_ty = if out_ty.is_numeric() { "bigint".to_string() } else { self.ts_ty(&out_ty) };
         // An answer is read in the type the fold answers with: a value of its enum is that
         // enum's member (§15.208).
-        let val = |x: &Expr| -> String {
+        let val = |x: &Expr, l: &dyn Fn(&str) -> String| -> String {
             match x {
                 Expr::Lit(Lit::Word(w), _) if w != crate::kw::TRUE && w != crate::kw::FALSE => self.ts_value(w, &out_ty),
-                _ => ts_expr(unparen(&self.expr(x, &local).text)).to_string(),
+                _ => ts_expr(unparen(&self.expr(x, l).text)).to_string(),
             }
         };
-        let text = |x: &Option<Expr>| -> String { x.as_ref().map(&val).unwrap_or_else(|| "0n".to_string()) };
+        let text = |x: &Option<Expr>| -> String { x.as_ref().map(|x| val(x, &with_held)).unwrap_or_else(|| "0n".to_string()) };
 
-        // What the walk does not depend on is worked out once, before it (§15.208).
-        let mut o = self.ts_items(&local, trace, Phase::Before);
-        o.push_str(&format!("  let {answer}: {acc_ty} = {}; // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
-        o.push_str(&format!("  let {stopped} = false;\n"));
-        o.push_str(&format!("  let {taken}: {acc_ty} | null = null;\n"));
-        o.push_str(&format!("  let {kept}: {acc_ty} | null = null;\n"));
-        o.push_str(&format!("  let {best}: bigint | null = null;\n"));
-        o.push_str(&format!("  for ({} {e} of {seq}) {{\n", self.ts_elem_binding()));
+        let mut init = String::new();
+        init.push_str(&format!("  let {answer}: {acc_ty} = {}; // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
+        init.push_str(&format!("  let {stopped} = false;\n"));
+        if !alone {
+            init.push_str(&format!("  let {done} = false;\n"));
+        }
+        init.push_str(&format!("  let {taken}: {acc_ty} | null = null;\n"));
+        init.push_str(&format!("  let {kept}: {acc_ty} | null = null;\n"));
+        init.push_str(&format!("  let {best}: bigint | null = null;\n"));
 
-        let mut body = self.ts_element_guards(&local);
-        body.push_str(&self.ts_items(&local, trace, Phase::Each));
+        let mut arms = String::new();
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
             let cls = self.ts_ty(&self.ty_of(&fold.verdict));
             let member = self.value_name(&name.text, &self.ty_of(&fold.verdict)).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| name.text.clone());
-            body.push_str(&format!("  if ({v} === {cls}.{member}) {{ // {}\n", name.text));
+            arms.push_str(&format!("  if ({v} === {cls}.{member}) {{ // {}\n", name.text));
             match arm {
-                Arm::Next => body.push_str("    // next\n"),
-                Arm::Stop(None) => body.push_str("    break;\n"),
+                Arm::Next => arms.push_str("    // next\n"),
+                Arm::Stop(None) if alone => arms.push_str("    break;\n"),
+                Arm::Stop(None) => arms.push_str(&format!("    {done} = true;\n")),
                 Arm::Stop(Some(x)) => {
-                    body.push_str(&format!("    {answer} = {};\n", val(x)));
-                    body.push_str(&format!("    {stopped} = true;\n    break;\n"));
+                    arms.push_str(&format!("    {answer} = {};\n", val(x, local)));
+                    if alone {
+                        arms.push_str(&format!("    {stopped} = true;\n    break;\n"));
+                    } else {
+                        arms.push_str(&format!("    {stopped} = true;\n    {done} = true;\n"));
+                    }
                 }
                 Arm::Take { expr, unique } => {
                     if *unique {
-                        body.push_str(&format!("    if ({taken} !== null) {{\n"));
-                        body.push_str(&format!(
+                        arms.push_str(&format!("    if ({taken} !== null) {{\n"));
+                        arms.push_str(&format!(
                             "      throw new RuleContradictionError(`{}`);\n    }}\n",
                             tr!("畳み込み {}: take_unique に二件当たりました", "fold {}: two elements matched a take_unique", fold.verdict)
                         ));
-                        body.push_str(&format!("    {taken} = {};\n", val(expr)));
+                        arms.push_str(&format!("    {taken} = {};\n", val(expr, local)));
                     } else {
-                        body.push_str(&format!("    if ({taken} === null) {{\n"));
-                        body.push_str(&format!("      {taken} = {};\n    }}\n", val(expr)));
+                        arms.push_str(&format!("    if ({taken} === null) {{\n"));
+                        arms.push_str(&format!("      {taken} = {};\n    }}\n", val(expr, local)));
                     }
                 }
-                Arm::KeepMax { expr, key } => {
-                    let k = self.temp("key");
-                    body.push_str(&format!("    const {k} = {};\n", ts_expr(unparen(&self.expr(key, &local).text))));
-                    body.push_str(&format!("    if ({best} === null || {k} > {best}) {{\n"));
-                    body.push_str(&format!("      {best} = {k};\n"));
-                    body.push_str(&format!("      {kept} = {};\n    }}\n", val(expr)));
+                Arm::KeepMax { expr, key: k } => {
+                    arms.push_str(&format!("    const {key} = {};\n", ts_expr(unparen(&self.expr(k, local).text))));
+                    arms.push_str(&format!("    if ({best} === null || {key} > {best}) {{\n"));
+                    arms.push_str(&format!("      {best} = {key};\n"));
+                    arms.push_str(&format!("      {kept} = {};\n    }}\n", val(expr, local)));
                 }
             }
-            body.push_str("  }\n");
+            arms.push_str("  }\n");
         }
-        o.push_str(&Self::indent_block(&body, "  "));
-        o.push_str("  }\n");
+        let step = if alone { arms } else { format!("  if (!{done}) {{ // {}\n{}  }}\n", fold.verdict, Self::indent_block(&arms, "  ")) };
 
-        o.push_str(&format!("  if ({seq}.length > 0 && !{stopped}) {{\n"));
-        o.push_str(&format!(
-            "    const {held} = {taken} !== null ? {taken} : ({kept} !== null ? {kept} : {});\n",
-            text(&fold.empty)
-        ));
-        o.push_str(&format!("    {answer} = {};\n  }}\n", text(&fold.exhausted)));
-        o.push_str(&format!("  const {} = {answer};\n", self.ident(&out_name)));
-        // What reads the answer is worked out once, after the walk (§15.208).
-        o.push_str(&self.ts_items(&local, trace, Phase::After));
-        o
+        let mut fin = format!("  if ({seq}.length > 0 && !{stopped}) {{\n");
+        fin.push_str(&format!("    const {held} = {taken} !== null ? {taken} : ({kept} !== null ? {kept} : {});\n", text(&fold.empty)));
+        fin.push_str(&format!("    {answer} = {};\n  }}\n", text(&fold.exhausted)));
+        fin.push_str(&format!("  const {} = {answer};\n", self.ident(&out_name)));
+        (init, step, fin)
     }
 
-    /// The entry guards of one element, inside the walk.
-    /// The counting walk in TypeScript (§15.58).
-    fn ts_count_walk(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let el = self.f.elements.as_ref().expect("a count has elements");
-        let seq = pub_name(&el.name);
-        let fields: BTreeMap<String, String> =
-            el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
-        let e = self.temp("elem");
-        let local = |n: &str| -> String {
-            match fields.get(n) {
-                Some(f) => format!("{e}.{f}"),
-                None => outer(n),
-            }
-        };
+    fn ts_element_guards(&self, s: usize, local: &dyn Fn(&str) -> String) -> String {
         let mut o = String::new();
-        if let Some(cap) = self.count_cap() {
-            o.push_str(&format!(
-                "  if ({seq}.length > {cap}) {{\n    throw new RuleInputError(`{}`, {seq}.length);\n  }}\n",
-                crate::door::too_many(&el.name.text, cap)
-            ));
-        }
-        // What the walk does not depend on is worked out once, before it (§15.208).
-        o.push_str(&self.ts_items(outer, trace, Phase::Before));
-        for d in self.counts() {
-            o.push_str(&format!("  let {}: bigint = 0n; // {}\n", self.ident(&d.name.text), self.agg_word(d)));
-        }
-        o.push_str(&format!("  for ({} {e} of {seq}) {{\n", self.ts_elem_binding()));
-        let mut body = self.ts_element_guards(&local);
-        body.push_str(&self.ts_items(&local, trace, Phase::Each));
-        for d in self.counts() {
-            let v = local(&d.column.text);
-            if d.kind == crate::ast::AggKind::Sum {
-                body.push_str(&format!("  {} += {v}; // {}\n", self.ident(&d.name.text), d.name.text));
-                continue;
-            }
-            let test = match self.count_member(d) {
-                Some(w) => {
-                    let cls = self.ts_ty(&self.ty_of(&d.column.text));
-                    let member = self.value_name(&w.text, &self.ty_of(&d.column.text)).map(|(_, a)| a.to_uppercase()).unwrap_or_else(|| w.text.clone());
-                    format!("{v} === {cls}.{member}")
-                }
-                None if self.count_negated(d) => format!("!{v}"),
-                None => v,
-            };
-            body.push_str(&format!("  if ({test}) {{ // {}\n    {} += 1n;\n  }}\n", d.name.text, self.ident(&d.name.text)));
-        }
-        o.push_str(&Self::indent_block(&body, "  "));
-        o.push_str("  }\n");
-        for (d, cap) in self.sum_caps() {
-            let n = self.ident(&d.name.text);
-            o.push_str(&format!(
-                "  if ({n} > {cap}n) {{\n    throw new RuleInputError(`{}`, {n});\n  }}\n",
-                crate::door::out_of_range(&d.name.text)
-            ));
-        }
-        o.push_str(&self.ts_items(outer, trace, Phase::After));
-        o
-    }
-
-    fn ts_element_guards(&self, local: &dyn Fn(&str) -> String) -> String {
-        let mut o = String::new();
-        for i in self.element_fields() {
+        for i in self.element_fields(s) {
             let v = local(&i.name.text);
             let ty = self.ty_of(&i.name.text);
             // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
@@ -5048,13 +5576,15 @@ impl<'a> Gen<'a> {
 
     /// How the walk binds each element: `let` when the element door may rebind it to a copy that
     /// holds a whole number as a bigint (§15.205), `const` otherwise.
-    fn ts_elem_binding(&self) -> &'static str {
-        let rebinds = self.element_fields().iter().any(|i| {
+    fn ts_elem_binding(&self, s: usize) -> &'static str {
+        let rebinds = self.element_fields(s).iter().any(|i| {
             matches!(self.ty_of(&i.name.text).present(), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number)
         });
         if rebinds { "let" } else { "const" }
     }
 
+    /// The rule's items as TypeScript, at the base indentation. `local` decides how a name
+    /// is spelled, which is where a walk puts the element's own fields (§15.56).
     fn ts_items(&self, local: &dyn Fn(&str) -> String, trace: &str, phase: Phase) -> String {
         let mut o = String::new();
         for (i, it) in self.f.items.iter().enumerate() {
@@ -5080,7 +5610,7 @@ impl<'a> Gen<'a> {
                         tr!("定義", "definition")
                     ));
                 }
-                Item::Agg(_) => {}
+                Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
                     if let Some(t) = self.c.table_at(t) {
                         o.push_str(&self.ts_table(t, local, trace));
@@ -5099,8 +5629,8 @@ impl<'a> Gen<'a> {
             .iter()
             .map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text))))
             .collect();
-        if let Some(el) = &self.f.elements {
-            params.push(format!("{}: readonly Element[]", pub_name(&el.name)));
+        for (s, el) in self.f.elements.iter().enumerate() {
+            params.push(format!("{}: readonly {}[]", pub_name(&el.name), self.element_type(s)));
         }
         let outs = &self.f.outputs;
         let ret = if outs.len() == 1 {
@@ -5111,9 +5641,9 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
 
         // One element is a row of inputs, so it gets the same shape an `Output` gets.
-        if let Some(el) = &self.f.elements {
+        for (s, el) in self.f.elements.iter().enumerate() {
             o.push_str(&format!("/** {} */\n", tr!("{} の一件", "one of {}", el.name.text)));
-            o.push_str("export interface Element {\n");
+            o.push_str(&format!("export interface {} {{\n", self.element_type(s)));
             for fd in &el.fields {
                 o.push_str(&format!(
                     "  {}: {};\n",
@@ -5139,7 +5669,7 @@ impl<'a> Gen<'a> {
         // The public function keeps the plain signature; the branches live in its traced
         // twin, which also returns the rows that matched (§15.33).
         let mut args: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             args.push(pub_name(&el.name));
         }
         let traced = format!("{fname}_traced");
@@ -5222,10 +5752,10 @@ impl<'a> Gen<'a> {
         let trace = self.temp("trace");
         o.push_str(&format!("  const {trace}: Fired[] = [];\n"));
 
-        match &self.f.fold {
-            Some(fold) => o.push_str(&self.ts_walk(fold, &local, &trace)),
-            None if self.counts().is_empty() => o.push_str(&self.ts_items(&local, &trace, Phase::All)),
-            None => o.push_str(&self.ts_count_walk(&local, &trace)),
+        if self.f.walks() {
+            o.push_str(&self.ts_walks(&local, &trace));
+        } else {
+            o.push_str(&self.ts_items(&local, &trace, Phase::All));
         }
 
         let cast = |ty: &Ty, body: String| -> String {
@@ -5410,7 +5940,7 @@ impl<'a> Gen<'a> {
         }
         // The sequence a walk reads, one element at a time (§15.56).
         let mut prelude = String::new();
-        if let Some(el) = &self.f.elements {
+        for (s, el) in self.f.elements.iter().enumerate() {
             let seq = &el.name.text;
             let e = runner_local("e", &alias);
             let obj = format!("_obj({e}, {:?})", crate::door::not_object(seq));
@@ -5422,13 +5952,13 @@ impl<'a> Gen<'a> {
                     format!("{}: {}", pub_name(&fd.name), ts_read(self, &ty, &obj, &fd.name.text, &mut imports, &mut type_imports))
                 })
                 .collect();
-            let rows = runner_local("rows", &alias);
-            prelude = format!(
+            let rows = runner_local(&if s == 0 { "rows".to_string() } else { format!("rows{}", s + 1) }, &alias);
+            prelude.push_str(&format!(
                 "    const {rows} = _seq(_take({d}, {seq:?}, {:?}), {:?}).map(({e}) => ({{ {} }}));\n",
                 crate::door::missing(seq),
                 crate::door::not_sequence(seq),
                 fields.join(", ")
-            );
+            ));
             args.push(rows);
         }
         // A machine's traces (§15.148): the carried input is the state this language answered
@@ -6022,7 +6552,7 @@ impl<'a> Gen<'a> {
                     rs_expr(unparen(&self.expr(&d.expr, local).text)),
                     tr!("定義", "definition")
                 )),
-                Item::Agg(_) => {}
+                Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
                     if let Some(t) = self.c.table_at(t) {
                         o.push_str(&self.rs_table(t, local, trace));
@@ -6033,18 +6563,36 @@ impl<'a> Gen<'a> {
         o
     }
 
-    /// The walk, in Rust (§15.56). Same shape as the other backends: accumulators, one pass
-    /// per element, and the answer bound to the output's own name.
-    fn rs_walk(&self, fold: &crate::ast::FoldDecl, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let el = self.f.elements.as_ref().expect("a fold has elements");
+    /// Every walk of a rule that walks sequences, in Rust (§15.56, §15.58, §15.219). The shape is
+    /// the one `py_walks` writes.
+    fn rs_walks(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let mut o = String::new();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            if let Some(cap) = self.count_cap_of(s) {
+                let seq = pub_name(&el.name);
+                o.push_str(&format!(
+                    "    if {seq}.len() > {cap} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({seq}.len() as i64) }});\n    }}\n",
+                    crate::door::too_many(&el.name.text, cap)
+                ));
+            }
+        }
+        for step in self.walk_steps() {
+            match step {
+                // What a walk does not depend on is worked out once, before it (§15.208).
+                WalkStep::Once(ix) => o.push_str(&self.rs_items(outer, trace, Phase::Only(&ix))),
+                WalkStep::Walk { seq, body, sums, .. } => o.push_str(&self.rs_walk(seq, &body, &sums, outer, trace)),
+            }
+        }
+        o
+    }
+
+    /// One walk over sequence `s`, in Rust (§15.219). A unit is a newtype here, so a field read in
+    /// an expression is unwrapped exactly as an input is (§8.1).
+    fn rs_walk(&self, s: usize, body_items: &[usize], sums: &[usize], outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let el = &self.f.elements[s];
         let seq = pub_name(&el.name);
-        let fields: BTreeMap<String, String> =
-            el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
-        let (answer, stopped, taken, kept, best) = self.fold_locals();
-        let e = self.temp("elem");
-        let held = self.temp("held");
-        // A unit is a newtype here, so a field read in an expression is unwrapped exactly as
-        // an input is (§8.1).
+        let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
+        let e = self.elem_var(s);
         let local = |n: &str| -> String {
             match fields.get(n) {
                 Some(f) => {
@@ -6055,153 +6603,179 @@ impl<'a> Gen<'a> {
                         v
                     }
                 }
-                None if n == crate::kw::HELD => held.clone(),
                 None => outer(n),
             }
         };
-        let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
-        let out_ty = self.ty_of(&out_name);
+        let mut o = String::new();
+        let mut body = self.rs_element_guards(s, &local);
+        body.push_str(&self.rs_items(&local, trace, Phase::Only(body_items)));
+        let mut after = String::new();
+        for &i in sums {
+            match &self.f.items[i] {
+                Item::Agg(d) if d.kind.extreme() => {
+                    let (init, step) = self.rs_extreme(d, &local);
+                    o.push_str(&init);
+                    body.push_str(&step);
+                }
+                Item::Agg(d) => {
+                    o.push_str(&format!("    let mut {}: i64 = 0; // {}\n", self.ident(&d.name.text), self.agg_word(d)));
+                    let v = local(&d.column.text);
+                    if d.kind == crate::ast::AggKind::Sum {
+                        body.push_str(&format!("    {} += {v}; // {}\n", self.ident(&d.name.text), d.name.text));
+                    } else {
+                        let test = self.rs_test(&v, &d.column.text, &d.value);
+                        body.push_str(&format!("    if {test} {{ // {}\n        {} += 1;\n    }}\n", d.name.text, self.ident(&d.name.text)));
+                    }
+                    if let Some((_, cap)) = self.sum_caps().into_iter().find(|(x, _)| x.name.text == d.name.text) {
+                        let n = self.ident(&d.name.text);
+                        after.push_str(&format!(
+                            "    if {n} > {cap} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({n}) }});\n    }}\n",
+                            crate::door::out_of_range(&d.name.text)
+                        ));
+                    }
+                }
+                Item::Fold(fold) => {
+                    let (init, step, fin) = self.rs_fold(i, fold, &seq, &local);
+                    o.push_str(&init);
+                    body.push_str(&step);
+                    after.push_str(&fin);
+                }
+                _ => {}
+            }
+        }
+        o.push_str(&format!("    for {e} in {seq} {{\n"));
+        o.push_str(&Self::indent_block(&body, "    "));
+        o.push_str("    }\n");
+        o.push_str(&after);
+        o
+    }
+
+    /// A test on a column of one element, in Rust: `count`'s, and the `where` of `max` and `min`.
+    fn rs_test(&self, v: &str, col: &str, value: &Option<crate::ast::Name>) -> String {
+        let ty = self.ty_of(col);
+        match (&ty, value) {
+            (Ty::Bool, Some(w)) if w.text == crate::kw::FALSE => format!("!{v}"),
+            (Ty::Bool, _) => v.to_string(),
+            (_, Some(w)) => {
+                let cls = self.rs_ty(&ty);
+                let member = self.value_name(&w.text, &ty).map(|(_, a)| a.clone()).unwrap_or_else(|| w.text.clone());
+                format!("{v} == {cls}::{member}")
+            }
+            (_, None) => v.to_string(),
+        }
+    }
+
+    /// A `max` or a `min`, in Rust (§15.219).
+    fn rs_extreme(&self, d: &crate::ast::AggDecl, local: &dyn Fn(&str) -> String) -> (String, String) {
+        let n = self.ident(&d.name.text);
+        let set = self.temp(&format!("{n}_set"));
+        let v = local(&d.column.text);
+        let ty = self.ty_of(&d.column.text);
+        let op = if d.kind == crate::ast::AggKind::Max { ">" } else { "<" };
+        let (rs_t, start, better) = match self.extreme_enum(d) {
+            Some(en) => {
+                let t = self.enum_type(&en);
+                let w = self.extreme_empty_word(d).unwrap_or_default();
+                (self.rs_ty(&ty), self.rs_value(&w, &ty), format!("_rank_{t}({v}) {op} _rank_{t}({n})"))
+            }
+            None => ("i64".to_string(), self.extreme_empty_int(d).unwrap_or_else(|| "0".into()), format!("{v} {op} {n}")),
+        };
+        let init = format!("    let mut {n}: {rs_t} = {start}; // {}\n    let mut {set} = false;\n", self.agg_word(d));
+        let mut step = String::new();
+        let pad = match &d.filter {
+            Some((w, want)) => {
+                step.push_str(&format!("    if {} {{ // {}\n", self.rs_test(&local(&w.text), &w.text, want), d.name.text));
+                "    "
+            }
+            None => "",
+        };
+        step.push_str(&format!("{pad}    if !{set} || {better} {{\n{pad}        {n} = {v};\n{pad}        {set} = true;\n{pad}    }}\n"));
+        if !pad.is_empty() {
+            step.push_str("    }\n");
+        }
+        (init, step)
+    }
+
+    /// A fold, in Rust (§15.56).
+    fn rs_fold(&self, i: usize, fold: &crate::ast::FoldDecl, seq: &str, local: &dyn Fn(&str) -> String) -> (String, String, String) {
+        let names = self.fold_names(i);
+        let FoldNames { answer, stopped, done, taken, kept, best, held, key, .. } = &names;
+        let alone = self.fold_alone(i);
+        let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
+        let (out_name, out_ty) = self.fold_target(fold);
         let acc_ty = if out_ty.is_numeric() { "i64".to_string() } else { self.rs_ty(&out_ty) };
         // An answer is read in the type the fold answers with: a value of its enum is that
         // enum's member (§15.208).
-        let val = |x: &Expr| -> String {
+        let val = |x: &Expr, l: &dyn Fn(&str) -> String| -> String {
             match x {
                 Expr::Lit(Lit::Word(w), _) if w != crate::kw::TRUE && w != crate::kw::FALSE => self.rs_value(w, &out_ty),
-                _ => rs_expr(unparen(&self.expr(x, &local).text)).to_string(),
+                _ => rs_expr(unparen(&self.expr(x, l).text)).to_string(),
             }
         };
-        let text = |x: &Option<Expr>| -> String { x.as_ref().map(&val).unwrap_or_else(|| "0".to_string()) };
+        let text = |x: &Option<Expr>| -> String { x.as_ref().map(|x| val(x, &with_held)).unwrap_or_else(|| "0".to_string()) };
 
-        // What the walk does not depend on is worked out once, before it (§15.208).
-        let mut o = self.rs_items(&local, trace, Phase::Before);
-        o.push_str(&format!("    let mut {answer}: {acc_ty} = {}; // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
-        o.push_str(&format!("    let mut {stopped} = false;\n"));
-        o.push_str(&format!("    let mut {taken}: Option<{acc_ty}> = None;\n"));
-        o.push_str(&format!("    let mut {kept}: Option<{acc_ty}> = None;\n"));
-        o.push_str(&format!("    let mut {best}: Option<i64> = None;\n"));
-        o.push_str(&format!("    for {e} in {seq} {{\n"));
+        let mut init = String::new();
+        init.push_str(&format!("    let mut {answer}: {acc_ty} = {}; // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
+        init.push_str(&format!("    let mut {stopped} = false;\n"));
+        if !alone {
+            init.push_str(&format!("    let mut {done} = false;\n"));
+        }
+        init.push_str(&format!("    let mut {taken}: Option<{acc_ty}> = None;\n"));
+        init.push_str(&format!("    let mut {kept}: Option<{acc_ty}> = None;\n"));
+        init.push_str(&format!("    let mut {best}: Option<i64> = None;\n"));
 
-        let mut body = self.rs_element_guards(&local);
-        body.push_str(&self.rs_items(&local, trace, Phase::Each));
+        let mut arms = String::new();
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
             let cls = self.rs_ty(&self.ty_of(&fold.verdict));
             let member = self.value_name(&name.text, &self.ty_of(&fold.verdict)).map(|(_, a)| a.clone()).unwrap_or_else(|| name.text.clone());
-            body.push_str(&format!("    if {v} == {cls}::{member} {{ // {}\n", name.text));
+            arms.push_str(&format!("    if {v} == {cls}::{member} {{ // {}\n", name.text));
             match arm {
-                Arm::Next => body.push_str("        // next\n"),
-                Arm::Stop(None) => body.push_str("        break;\n"),
+                Arm::Next => arms.push_str("        // next\n"),
+                Arm::Stop(None) if alone => arms.push_str("        break;\n"),
+                Arm::Stop(None) => arms.push_str(&format!("        {done} = true;\n")),
                 Arm::Stop(Some(x)) => {
-                    body.push_str(&format!("        {answer} = {};\n", val(x)));
-                    body.push_str(&format!("        {stopped} = true;\n        break;\n"));
+                    arms.push_str(&format!("        {answer} = {};\n", val(x, local)));
+                    if alone {
+                        arms.push_str(&format!("        {stopped} = true;\n        break;\n"));
+                    } else {
+                        arms.push_str(&format!("        {stopped} = true;\n        {done} = true;\n"));
+                    }
                 }
                 Arm::Take { expr, unique } => {
                     if *unique {
-                        body.push_str(&format!("        if {taken}.is_some() {{\n"));
-                        body.push_str(&format!(
+                        arms.push_str(&format!("        if {taken}.is_some() {{\n"));
+                        arms.push_str(&format!(
                             "            return Err(RuleError::Contradiction {{ what: \"{}\" }});\n        }}\n",
                             tr!("畳み込み {}: take_unique に二件当たりました", "fold {}: two elements matched a take_unique", fold.verdict)
                         ));
-                        body.push_str(&format!("        {taken} = Some({});\n", val(expr)));
+                        arms.push_str(&format!("        {taken} = Some({});\n", val(expr, local)));
                     } else {
-                        body.push_str(&format!("        if {taken}.is_none() {{\n"));
-                        body.push_str(&format!("            {taken} = Some({});\n        }}\n", val(expr)));
+                        arms.push_str(&format!("        if {taken}.is_none() {{\n"));
+                        arms.push_str(&format!("            {taken} = Some({});\n        }}\n", val(expr, local)));
                     }
                 }
-                Arm::KeepMax { expr, key } => {
-                    let k = self.temp("key");
-                    body.push_str(&format!("        let {k} = {};\n", rs_expr(unparen(&self.expr(key, &local).text))));
-                    body.push_str(&format!("        if {best}.is_none() || {k} > {best}.unwrap() {{\n"));
-                    body.push_str(&format!("            {best} = Some({k});\n"));
-                    body.push_str(&format!("            {kept} = Some({});\n        }}\n", val(expr)));
+                Arm::KeepMax { expr, key: k } => {
+                    arms.push_str(&format!("        let {key} = {};\n", rs_expr(unparen(&self.expr(k, local).text))));
+                    arms.push_str(&format!("        if {best}.is_none() || {key} > {best}.unwrap() {{\n"));
+                    arms.push_str(&format!("            {best} = Some({key});\n"));
+                    arms.push_str(&format!("            {kept} = Some({});\n        }}\n", val(expr, local)));
                 }
             }
-            body.push_str("    }\n");
+            arms.push_str("    }\n");
         }
-        o.push_str(&Self::indent_block(&body, "    "));
-        o.push_str("    }\n");
+        let step = if alone { arms } else { format!("    if !{done} {{ // {}\n{}    }}\n", fold.verdict, Self::indent_block(&arms, "    ")) };
 
-        o.push_str(&format!("    if !{seq}.is_empty() && !{stopped} {{\n"));
-        o.push_str(&format!(
-            "        let {held} = {taken}.or({kept}).unwrap_or({});\n",
-            text(&fold.empty)
-        ));
-        o.push_str(&format!("        {answer} = {};\n    }}\n", text(&fold.exhausted)));
-        o.push_str(&format!("    let {} = {answer};\n", self.ident(&out_name)));
-        // What reads the answer is worked out once, after the walk (§15.208).
-        o.push_str(&self.rs_items(&local, trace, Phase::After));
-        o
+        let mut fin = format!("    if !{seq}.is_empty() && !{stopped} {{\n");
+        fin.push_str(&format!("        let {held} = {taken}.or({kept}).unwrap_or({});\n", text(&fold.empty)));
+        fin.push_str(&format!("        {answer} = {};\n    }}\n", text(&fold.exhausted)));
+        fin.push_str(&format!("    let {} = {answer};\n", self.ident(&out_name)));
+        (init, step, fin)
     }
 
-    /// The entry guards of one element, inside the walk.
-    /// The counting walk in Rust (§15.58).
-    fn rs_count_walk(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let el = self.f.elements.as_ref().expect("a count has elements");
-        let seq = pub_name(&el.name);
-        let fields: BTreeMap<String, String> =
-            el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
-        let e = self.temp("elem");
-        let local = |n: &str| -> String {
-            match fields.get(n) {
-                Some(f) => {
-                    let v = format!("{e}.{f}");
-                    if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
-                        format!("{v}.0")
-                    } else {
-                        v
-                    }
-                }
-                None => outer(n),
-            }
-        };
+    fn rs_element_guards(&self, s: usize, local: &dyn Fn(&str) -> String) -> String {
         let mut o = String::new();
-        if let Some(cap) = self.count_cap() {
-            o.push_str(&format!(
-                "    if {seq}.len() > {cap} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({seq}.len() as i64) }});\n    }}\n",
-                crate::door::too_many(&el.name.text, cap)
-            ));
-        }
-        // What the walk does not depend on is worked out once, before it (§15.208).
-        o.push_str(&self.rs_items(outer, trace, Phase::Before));
-        for d in self.counts() {
-            o.push_str(&format!("    let mut {}: i64 = 0; // {}\n", self.ident(&d.name.text), self.agg_word(d)));
-        }
-        o.push_str(&format!("    for {e} in {seq} {{\n"));
-        let mut body = self.rs_element_guards(&local);
-        body.push_str(&self.rs_items(&local, trace, Phase::Each));
-        for d in self.counts() {
-            let v = local(&d.column.text);
-            if d.kind == crate::ast::AggKind::Sum {
-                body.push_str(&format!("    {} += {v}; // {}\n", self.ident(&d.name.text), d.name.text));
-                continue;
-            }
-            let test = match self.count_member(d) {
-                Some(w) => {
-                    let cls = self.rs_ty(&self.ty_of(&d.column.text));
-                    let member = self.value_name(&w.text, &self.ty_of(&d.column.text)).map(|(_, a)| a.clone()).unwrap_or_else(|| w.text.clone());
-                    format!("{v} == {cls}::{member}")
-                }
-                None if self.count_negated(d) => format!("!{v}"),
-                None => v,
-            };
-            body.push_str(&format!("    if {test} {{ // {}\n        {} += 1;\n    }}\n", d.name.text, self.ident(&d.name.text)));
-        }
-        o.push_str(&Self::indent_block(&body, "    "));
-        o.push_str("    }\n");
-        for (d, cap) in self.sum_caps() {
-            let n = self.ident(&d.name.text);
-            o.push_str(&format!(
-                "    if {n} > {cap} {{\n        return Err(RuleError::Input {{ what: \"{}\", value: Some({n}) }});\n    }}\n",
-                crate::door::out_of_range(&d.name.text)
-            ));
-        }
-        o.push_str(&self.rs_items(outer, trace, Phase::After));
-        o
-    }
-
-    fn rs_element_guards(&self, local: &dyn Fn(&str) -> String) -> String {
-        let mut o = String::new();
-        for i in self.element_fields() {
+        for i in self.element_fields(s) {
             let v = local(&i.name.text);
             let ty = self.ty_of(&i.name.text);
             // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
@@ -6235,11 +6809,12 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
 
         // One element is a row of inputs, so it is a struct like `Output`.
-        if let Some(el) = &self.f.elements {
+        for (s, el) in self.f.elements.iter().enumerate() {
             o.push_str(&format!("/// {}\n", tr!("{} の一件", "one of {}", el.name.text)));
             o.push_str(&format!(
-                "{}\npub struct Element {{\n",
-                self.rs_derive(el.fields.iter().map(|fd| fd.name.text.clone()))
+                "{}\npub struct {} {{\n",
+                self.rs_derive(el.fields.iter().map(|fd| fd.name.text.clone())),
+                self.element_type(s)
             ));
             for fd in &el.fields {
                 o.push_str(&format!(
@@ -6277,14 +6852,14 @@ impl<'a> Gen<'a> {
             .iter()
             .map(|i| format!("{}: {}", pub_name(&i.name), self.rs_ty(&self.ty_of(&i.name.text))))
             .collect();
-        if let Some(el) = &self.f.elements {
-            params.push(format!("{}: &[Element]", pub_name(&el.name)));
+        for (s, el) in self.f.elements.iter().enumerate() {
+            params.push(format!("{}: &[{}]", pub_name(&el.name), self.element_type(s)));
         }
 
         // The public function keeps the plain signature; the branches live in its traced
         // twin, which also returns the rows that matched (§15.33).
         let mut args: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             args.push(pub_name(&el.name));
         }
         let traced = format!("{fname}_traced");
@@ -6373,10 +6948,10 @@ impl<'a> Gen<'a> {
         let has_table = self.f.items.iter().any(|i| matches!(i, Item::Table(_)));
         o.push_str(&format!("    let {}{trace}: Vec<Fired> = Vec::new();\n", if has_table { "mut " } else { "" }));
 
-        match &self.f.fold {
-            Some(fold) => o.push_str(&self.rs_walk(fold, &local, &trace)),
-            None if self.counts().is_empty() => o.push_str(&self.rs_items(&local, &trace, Phase::All)),
-            None => o.push_str(&self.rs_count_walk(&local, &trace)),
+        if self.f.walks() {
+            o.push_str(&self.rs_walks(&local, &trace));
+        } else {
+            o.push_str(&self.rs_items(&local, &trace, Phase::All));
         }
 
         let wrap = |ty: &Ty, body: String| -> String {
@@ -6591,9 +7166,12 @@ impl<'a> Gen<'a> {
             }
         }
         let mut unwind = String::new();
-        if let Some(el) = &self.f.elements {
-            let cap = self.count_cap().unwrap_or(0);
+        let mut unwound = 0;
+        for (s, el) in self.f.elements.iter().enumerate() {
+            let cap = self.count_cap_of(s).unwrap_or(0);
             let seq = pub_name(&el.name);
+            let n = if s == 0 { "n".to_string() } else { format!("n{}", s + 1) };
+            let ty = self.element_type(s);
             let mut lines = String::new();
             let mut inits: Vec<String> = Vec::new();
             for fd in &el.fields {
@@ -6609,12 +7187,13 @@ impl<'a> Gen<'a> {
             // The cap is the entry guard's, so the walk is covered whole rather than up to
             // some length picked here: `unwind` one past it leaves nothing bounded away.
             decls.push_str(&format!(
-                "        let n: usize = kani::any();\n        kani::assume(n <= {cap});\n        \
-                 let {seq}: [Element; {cap}] = core::array::from_fn(|_| {{\n{lines}            Element {{ {} }}\n        }});\n",
+                "        let {n}: usize = kani::any();\n        kani::assume({n} <= {cap});\n        \
+                 let {seq}: [{ty}; {cap}] = core::array::from_fn(|_| {{\n{lines}            {ty} {{ {} }}\n        }});\n",
                 inits.join(", ")
             ));
-            args.push(format!("&{seq}[..n]"));
-            unwind = format!("    #[kani::unwind({})]\n", cap + 2);
+            args.push(format!("&{seq}[..{n}]"));
+            unwound = unwound.max(cap + 2);
+            unwind = format!("    #[kani::unwind({unwound})]\n");
         }
 
         if !whole {
@@ -6633,7 +7212,7 @@ impl<'a> Gen<'a> {
         // the walk counted, and neither can be replayed outside the walk; the harness above
         // still reaches the `unreachable!` of both.
         let mut harnesses = String::new();
-        if self.f.elements.is_none() {
+        if self.f.elements.is_empty() {
             for (k, it) in self.f.items.iter().enumerate() {
                 let Item::Table(t0) = it else { continue };
                 let Some(t) = self.c.table_at(t0) else { continue };
@@ -6736,7 +7315,7 @@ impl<'a> Gen<'a> {
             return Vec::new();
         }
         let mut v = vec![format!("{alias}_answers")];
-        if self.f.elements.is_none() {
+        if self.f.elements.is_empty() {
             for (k, it) in self.f.items.iter().enumerate() {
                 let Item::Table(t0) = it else { continue };
                 let Some(t) = self.c.table_at(t0) else { continue };
@@ -6861,7 +7440,7 @@ impl<'a> Gen<'a> {
                     self.ident(&d.name.text),
                     rs_expr(unparen(&self.expr(&d.expr, &local).text))
                 )),
-                Item::Agg(_) => {}
+                Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
                     let t = self.c.table_at(t)?;
                     body.push_str(&self.rs_table(t, &local, &trace));
@@ -6943,16 +7522,17 @@ impl<'a> Gen<'a> {
                 None => o.push_str(&format!("{indent}let a{i} = {read};\n")),
             }
         }
-        if let Some(el) = &self.f.elements {
-            let n = self.f.inputs.len();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            let n = self.f.inputs.len() + s;
             let seq = &el.name.text;
+            let ty = self.element_type(s);
             let fields: Vec<String> = el
                 .fields
                 .iter()
                 .map(|fd| format!("{}: {}", pub_name(&fd.name), self.rs_bind(&self.ty_of(&fd.name.text), "e", &fd.name.text)))
                 .collect();
             o.push_str(&format!(
-                "{indent}let mut a{n}: Vec<r::Element> = Vec::new();\n{indent}for e in &list(take({d}, {seq:?}, {:?}, false)?, {:?}, {:?})? {{\n{indent}    a{n}.push(r::Element {{ {} }});\n{indent}}}\n",
+                "{indent}let mut a{n}: Vec<r::{ty}> = Vec::new();\n{indent}for e in &list(take({d}, {seq:?}, {:?}, false)?, {:?}, {:?})? {{\n{indent}    a{n}.push(r::{ty} {{ {} }});\n{indent}}}\n",
                 crate::door::missing(seq),
                 crate::door::not_sequence(seq),
                 crate::door::not_object(seq),
@@ -6973,8 +7553,8 @@ impl<'a> Gen<'a> {
             .enumerate()
             .map(|(i, inp)| if clone && matches!(self.ty_of(&inp.name.text), Ty::Str) { format!("a{i}.clone()") } else { format!("a{i}") })
             .collect();
-        if self.f.elements.is_some() {
-            v.push(format!("&a{n_ins}"));
+        for s in 0..self.f.elements.len() {
+            v.push(format!("&a{}", n_ins + s));
         }
         v.join(", ")
     }
@@ -7143,7 +7723,7 @@ use std::io::Read;
         for i in &self.f.inputs {
             o.push_str(&format!("    ///   {}: {}\n", i.name.text, self.ty_of(&i.name.text)));
         }
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             let fields: Vec<String> =
                 el.fields.iter().map(|fd| format!("{}: {}", fd.name.text, self.ty_of(&fd.name.text))).collect();
             o.push_str(&format!("    ///   {}: a list of objects, each with {}\n", el.name.text, fields.join(", ")));
@@ -8514,23 +9094,28 @@ impl Gen<'_> {
         ty_name: &str,
         alias: impl Fn(&crate::ast::Name) -> String,
         fty: impl Fn(&Ty) -> String,
-    ) -> Option<String> {
-        let el = self.f.elements.as_ref()?;
-        let fields: Vec<String> = el
-            .fields
-            .iter()
-            .map(|fd| {
-                let ty = self.ty_of(&fd.name.text);
-                self.value_json(&fd.name.text, &alias(&fd.name), &fty(&ty), &ty)
-            })
-            .collect();
-        let head = crate::json::Obj::new()
-            .str("name", &el.name.text)
-            .str("alias", &alias(&el.name))
-            .str("type", ty_name)
-            .bool("optional", false)
-            .finish();
-        Some(format!("{},\"elements\":{}}}", head.trim_end_matches('}'), crate::json::arr(&fields)))
+    ) -> Vec<String> {
+        // One entry per sequence, its type named as the language names it (§15.219): the
+        // template's `Element` is the sequence's own element type.
+        let mut out = Vec::new();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            let fields: Vec<String> = el
+                .fields
+                .iter()
+                .map(|fd| {
+                    let ty = self.ty_of(&fd.name.text);
+                    self.value_json(&fd.name.text, &alias(&fd.name), &fty(&ty), &ty)
+                })
+                .collect();
+            let head = crate::json::Obj::new()
+                .str("name", &el.name.text)
+                .str("alias", &alias(&el.name))
+                .str("type", &ty_name.replace("Element", &self.element_type(s)))
+                .bool("optional", false)
+                .finish();
+            out.push(format!("{},\"elements\":{}}}", head.trim_end_matches('}'), crate::json::arr(&fields)));
+        }
+        out
     }
 
     /// The enums, under the spelling each language gives their members: each enum's name and
@@ -8651,8 +9236,8 @@ impl Gen<'_> {
             ritsu_ports::Param { name: n.text.clone(), alias: alias(n), ty: ty_name(&ty), optional: matches!(ty, Ty::Opt(_)) }
         };
         let mut params: Vec<ritsu_ports::Param> = self.f.inputs.iter().map(|i| param(&i.name)).collect();
-        if let Some(el) = &self.f.elements {
-            params.push(ritsu_ports::Param { name: el.name.text.clone(), alias: alias(&el.name), ty: elements.to_string(), optional: false });
+        for (s, el) in self.f.elements.iter().enumerate() {
+            params.push(ritsu_ports::Param { name: el.name.text.clone(), alias: alias(&el.name), ty: elements.replace("Element", &self.element_type(s)), optional: false });
         }
         (params, self.f.outputs.iter().map(|o| param(&o.name)).collect())
     }
@@ -8853,7 +9438,7 @@ impl Gen<'_> {
             .inputs
             .iter()
             .map(|i| format!("{}: {}", pub_name(&i.name), self.py_ty(&self.ty_of(&i.name.text))))
-            .chain(self.f.elements.iter().map(|el| format!("{}: list[Element]", pub_name(&el.name))))
+            .chain(self.f.elements.iter().enumerate().map(|(s, el)| format!("{}: list[{}]", pub_name(&el.name), self.element_type(s))))
             .collect();
         let py_sig = format!("def {alias}({}) -> {py_ret}:", py_args.join(", "));
         let py_traced = py_sig
@@ -8913,7 +9498,7 @@ impl Gen<'_> {
             .inputs
             .iter()
             .map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text))))
-            .chain(self.f.elements.iter().map(|el| format!("{}: readonly Element[]", pub_name(&el.name))))
+            .chain(self.f.elements.iter().enumerate().map(|(s, el)| format!("{}: readonly {}[]", pub_name(&el.name), self.element_type(s))))
             .collect();
         let ts_sig = format!("export function {alias}({}): {ts_ret}", ts_args.join(", "));
         let ts_traced = ts_sig
@@ -9037,7 +9622,7 @@ impl Gen<'_> {
             .inputs
             .iter()
             .map(|i| format!("{}: {}", pub_name(&i.name), self.rs_ty(&self.ty_of(&i.name.text))))
-            .chain(self.f.elements.iter().map(|el| format!("{}: &[Element]", pub_name(&el.name))))
+            .chain(self.f.elements.iter().enumerate().map(|(s, el)| format!("{}: &[{}]", pub_name(&el.name), self.element_type(s))))
             .collect();
         let rs_sig = format!("pub fn {alias}({}) -> Result<{rs_ret}, RuleError>", rs_args.join(", "));
         let rs_traced = rs_sig
@@ -9241,7 +9826,7 @@ impl Gen<'_> {
             .inputs
             .iter()
             .map(|i| format!("{}: {}", sw_name(&pub_name(&i.name)), self.sw_ty(&self.ty_of(&i.name.text))))
-            .chain(self.f.elements.iter().map(|el| format!("{}: [Element]", sw_name(&pub_name(&el.name)))))
+            .chain(self.f.elements.iter().enumerate().map(|(s, el)| format!("{}: [{}]", sw_name(&pub_name(&el.name)), self.element_type(s))))
             .collect();
         let sw_sig = format!("func {sw_fname}({}) throws -> {sw_ret}", sw_args.join(", "));
         let sw_traced = sw_sig
@@ -9308,7 +9893,7 @@ impl Gen<'_> {
             .inputs
             .iter()
             .map(|i| format!("{} {}", self.java_api_ty(&self.ty_of(&i.name.text)), self.java_name_of(&pub_name(&i.name))))
-            .chain(self.f.elements.iter().map(|el| format!("List<Element> {}", self.java_name_of(&pub_name(&el.name)))))
+            .chain(self.f.elements.iter().enumerate().map(|(s, el)| format!("List<{}> {}", self.element_type(s), self.java_name_of(&pub_name(&el.name)))))
             .collect();
         let java = crate::json::Obj::new()
             .str("module", &format!("{jv_cls}.java"))
@@ -9932,7 +10517,7 @@ impl<'a> Gen<'a> {
                     let e = self.expr(&d.expr, local);
                     o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), rb_expr(unparen(&e.text)), tr!("定義", "definition")));
                 }
-                Item::Agg(_) => {}
+                Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
                     if let Some(t) = self.c.table_at(t) {
                         o.push_str(&self.rb_table(t, local, trace));
@@ -9943,156 +10528,205 @@ impl<'a> Gen<'a> {
         o
     }
 
-    /// The walk, in Ruby (§15.56).
-    fn rb_walk(&self, fold: &crate::ast::FoldDecl, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let el = self.f.elements.as_ref().expect("a fold has elements");
+    /// Every walk of a rule that walks sequences, in Ruby (§15.56, §15.58, §15.219). The shape is
+    /// the one `py_walks` writes.
+    fn rb_walks(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let mut o = String::new();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            if let Some(cap) = self.count_cap_of(s) {
+                let seq = pub_name(&el.name);
+                o.push_str(&format!(
+                    "    raise RuleInputError.new(\"{}\", {seq}.length) if {seq}.length > {cap}\n",
+                    crate::door::too_many(&el.name.text, cap)
+                ));
+            }
+        }
+        for step in self.walk_steps() {
+            match step {
+                // What a walk does not depend on is worked out once, before it (§15.208).
+                WalkStep::Once(ix) => o.push_str(&self.rb_items(outer, trace, Phase::Only(&ix))),
+                WalkStep::Walk { seq, body, sums, .. } => o.push_str(&self.rb_walk(seq, &body, &sums, outer, trace)),
+            }
+        }
+        o
+    }
+
+    /// One walk over sequence `s`, in Ruby (§15.219).
+    fn rb_walk(&self, s: usize, body_items: &[usize], sums: &[usize], outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let el = &self.f.elements[s];
         let seq = pub_name(&el.name);
-        let fields: BTreeMap<String, String> =
-            el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
-        let (answer, stopped, taken, kept, best) = self.fold_locals();
-        let e = self.temp("elem");
-        let held = self.temp("held");
+        let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
+        let e = self.elem_var(s);
         let local = |n: &str| -> String {
             match fields.get(n) {
                 Some(f) => format!("{e}.{f}"),
-                None if n == crate::kw::HELD => held.clone(),
                 None => outer(n),
             }
         };
-        let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
-        let out_ty = self.ty_of(&out_name);
+        let mut o = String::new();
+        let mut body = self.rb_element_guards(s, &local);
+        body.push_str(&self.rb_items(&local, trace, Phase::Only(body_items)));
+        let mut after = String::new();
+        for &i in sums {
+            match &self.f.items[i] {
+                Item::Agg(d) if d.kind.extreme() => {
+                    let (init, step) = self.rb_extreme(d, &local);
+                    o.push_str(&init);
+                    body.push_str(&step);
+                }
+                Item::Agg(d) => {
+                    o.push_str(&format!("    {} = 0  # {}\n", self.ident(&d.name.text), self.agg_word(d)));
+                    let v = local(&d.column.text);
+                    if d.kind == crate::ast::AggKind::Sum {
+                        body.push_str(&format!("    {} += {v}  # {}\n", self.ident(&d.name.text), d.name.text));
+                    } else {
+                        let test = self.rb_test(&v, &d.column.text, &d.value);
+                        body.push_str(&format!("    if {test}  # {}\n      {} += 1\n    end\n", d.name.text, self.ident(&d.name.text)));
+                    }
+                    if let Some((_, cap)) = self.sum_caps().into_iter().find(|(x, _)| x.name.text == d.name.text) {
+                        let n = self.ident(&d.name.text);
+                        after.push_str(&format!(
+                            "    raise RuleInputError.new(\"{}\", {n}) if {n} > {cap}\n",
+                            crate::door::out_of_range(&d.name.text)
+                        ));
+                    }
+                }
+                Item::Fold(fold) => {
+                    let (init, step, fin) = self.rb_fold(i, fold, &seq, &local);
+                    o.push_str(&init);
+                    body.push_str(&step);
+                    after.push_str(&fin);
+                }
+                _ => {}
+            }
+        }
+        o.push_str(&format!("    {seq}.each do |{e}|\n"));
+        o.push_str(&Self::indent_block(&body, "    "));
+        o.push_str("    end\n");
+        o.push_str(&after);
+        o
+    }
+
+    /// A test on a column of one element, in Ruby: `count`'s, and the `where` of `max` and `min`.
+    fn rb_test(&self, v: &str, col: &str, value: &Option<crate::ast::Name>) -> String {
+        let ty = self.ty_of(col);
+        match (&ty, value) {
+            (Ty::Bool, Some(w)) if w.text == crate::kw::FALSE => format!("!{v}"),
+            (Ty::Bool, _) => v.to_string(),
+            (_, Some(w)) => format!("{v} == {}", self.rb_value(&w.text, &ty)),
+            (_, None) => v.to_string(),
+        }
+    }
+
+    /// A `max` or a `min`, in Ruby (§15.219).
+    fn rb_extreme(&self, d: &crate::ast::AggDecl, local: &dyn Fn(&str) -> String) -> (String, String) {
+        let n = self.ident(&d.name.text);
+        let set = self.temp(&format!("{n}_set"));
+        let v = local(&d.column.text);
+        let ty = self.ty_of(&d.column.text);
+        let op = if d.kind == crate::ast::AggKind::Max { ">" } else { "<" };
+        let (start, better) = match self.extreme_enum(d) {
+            Some(en) => {
+                let t = self.enum_type(&en);
+                let w = self.extreme_empty_word(d).unwrap_or_default();
+                (self.rb_value(&w, &ty), format!("_rank_{t}({v}) {op} _rank_{t}({n})"))
+            }
+            None => (self.extreme_empty_int(d).unwrap_or_else(|| "0".into()), format!("{v} {op} {n}")),
+        };
+        let init = format!("    {n} = {start}  # {}\n    {set} = false\n", self.agg_word(d));
+        let mut step = String::new();
+        let pad = match &d.filter {
+            Some((w, want)) => {
+                step.push_str(&format!("    if {}  # {}\n", self.rb_test(&local(&w.text), &w.text, want), d.name.text));
+                "  "
+            }
+            None => "",
+        };
+        step.push_str(&format!("{pad}    if !{set} || {better}\n{pad}      {n} = {v}\n{pad}      {set} = true\n{pad}    end\n"));
+        if !pad.is_empty() {
+            step.push_str("    end\n");
+        }
+        (init, step)
+    }
+
+    /// A fold, in Ruby (§15.56).
+    fn rb_fold(&self, i: usize, fold: &crate::ast::FoldDecl, seq: &str, local: &dyn Fn(&str) -> String) -> (String, String, String) {
+        let names = self.fold_names(i);
+        let FoldNames { answer, stopped, done, taken, kept, best, held, key, .. } = &names;
+        let alone = self.fold_alone(i);
+        let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
+        let (out_name, out_ty) = self.fold_target(fold);
         // An answer is read in the type the fold answers with: a value of its enum is that
         // enum's member (§15.208).
-        let val = |x: &Expr| -> String {
+        let val = |x: &Expr, l: &dyn Fn(&str) -> String| -> String {
             match x {
                 Expr::Lit(Lit::Word(w), _) if w != crate::kw::TRUE && w != crate::kw::FALSE => self.rb_value(w, &out_ty),
-                _ => rb_expr(unparen(&self.expr(x, &local).text)).to_string(),
+                _ => rb_expr(unparen(&self.expr(x, l).text)).to_string(),
             }
         };
-        let text = |x: &Option<Expr>| -> String { x.as_ref().map(&val).unwrap_or_else(|| "0".to_string()) };
+        let text = |x: &Option<Expr>| -> String { x.as_ref().map(|x| val(x, &with_held)).unwrap_or_else(|| "0".to_string()) };
 
-        // What the walk does not depend on is worked out once, before it (§15.208).
-        let mut o = self.rb_items(&local, trace, Phase::Before);
-        o.push_str(&format!("    {answer} = {}  # {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
-        o.push_str(&format!("    {stopped} = false\n"));
+        let mut init = String::new();
+        init.push_str(&format!("    {answer} = {}  # {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
+        init.push_str(&format!("    {stopped} = false\n"));
+        if !alone {
+            init.push_str(&format!("    {done} = false\n"));
+        }
         // steep reads the first assignment as the whole type of a local, so a `nil` that
-        // later holds a value needs the annotation (§15.23). The value is the rule's first
-        // output; a `keep_max` key is ordered, so it is always an integer.
-        let acc = self
-            .f
-            .outputs
-            .first()
-            .map(|od| self.rbs_ty(&self.ty_of(&od.name.text)))
-            .unwrap_or_else(|| "untyped".into());
-        o.push_str(&format!(
-            "    {taken} = nil #: {acc}?\n    {kept} = nil #: {acc}?\n    {best} = nil #: Integer?\n"
-        ));
-        o.push_str(&format!("    {seq}.each do |{e}|\n"));
+        // later holds a value needs the annotation (§15.23). The value is the fold's answer; a
+        // `keep_max` key is ordered, so it is always an integer.
+        let acc = if out_ty == Ty::Unknown { "untyped".to_string() } else { self.rbs_ty(&out_ty) };
+        init.push_str(&format!("    {taken} = nil #: {acc}?\n    {kept} = nil #: {acc}?\n    {best} = nil #: Integer?\n"));
 
-        let mut body = self.rb_element_guards(&local);
-        body.push_str(&self.rb_items(&local, trace, Phase::Each));
+        let mut arms = String::new();
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
             let is = self.rb_value(&name.text, &self.ty_of(&fold.verdict));
-            body.push_str(&format!("    if {v} == {is}  # {}\n", name.text));
+            arms.push_str(&format!("    if {v} == {is}  # {}\n", name.text));
             match arm {
-                Arm::Next => body.push_str("      # next\n"),
-                Arm::Stop(None) => body.push_str("      break\n"),
+                Arm::Next => arms.push_str("      # next\n"),
+                Arm::Stop(None) if alone => arms.push_str("      break\n"),
+                Arm::Stop(None) => arms.push_str(&format!("      {done} = true\n")),
                 Arm::Stop(Some(x)) => {
-                    body.push_str(&format!("      {answer} = {}\n", val(x)));
-                    body.push_str(&format!("      {stopped} = true\n      break\n"));
+                    arms.push_str(&format!("      {answer} = {}\n", val(x, local)));
+                    if alone {
+                        arms.push_str(&format!("      {stopped} = true\n      break\n"));
+                    } else {
+                        arms.push_str(&format!("      {stopped} = true\n      {done} = true\n"));
+                    }
                 }
                 Arm::Take { expr, unique } => {
                     if *unique {
-                        body.push_str(&format!(
+                        arms.push_str(&format!(
                             "      raise RuleContradictionError.new(\"{}\") unless {taken}.nil?\n",
                             tr!("畳み込み {}: take_unique に二件当たりました", "fold {}: two elements matched a take_unique", fold.verdict)
                         ));
-                        body.push_str(&format!("      {taken} = {}\n", val(expr)));
+                        arms.push_str(&format!("      {taken} = {}\n", val(expr, local)));
                     } else {
-                        body.push_str(&format!("      {taken} = {} if {taken}.nil?\n", val(expr)));
+                        arms.push_str(&format!("      {taken} = {} if {taken}.nil?\n", val(expr, local)));
                     }
                 }
-                Arm::KeepMax { expr, key } => {
-                    let k = self.temp("key");
-                    body.push_str(&format!("      {k} = {}\n", rb_expr(unparen(&self.expr(key, &local).text))));
-                    body.push_str(&format!("      if {best}.nil? || {k} > {best}\n"));
-                    body.push_str(&format!("        {best} = {k}\n"));
-                    body.push_str(&format!("        {kept} = {}\n      end\n", val(expr)));
+                Arm::KeepMax { expr, key: k } => {
+                    arms.push_str(&format!("      {key} = {}\n", rb_expr(unparen(&self.expr(k, local).text))));
+                    arms.push_str(&format!("      if {best}.nil? || {key} > {best}\n"));
+                    arms.push_str(&format!("        {best} = {key}\n"));
+                    arms.push_str(&format!("        {kept} = {}\n      end\n", val(expr, local)));
                 }
             }
-            body.push_str("    end\n");
+            arms.push_str("    end\n");
         }
-        o.push_str(&Self::indent_block(&body, "    "));
-        o.push_str("    end\n");
+        let step = if alone { arms } else { format!("    unless {done}  # {}\n{}    end\n", fold.verdict, Self::indent_block(&arms, "  ")) };
 
-        o.push_str(&format!("    unless {seq}.empty? || {stopped}\n"));
-        o.push_str(&format!("      {held} = {taken} || {kept} || {}\n", text(&fold.empty)));
-        o.push_str(&format!("      {answer} = {}\n    end\n", text(&fold.exhausted)));
-        o.push_str(&format!("    {} = {answer}\n", self.ident(&out_name)));
-        // What reads the answer is worked out once, after the walk (§15.208).
-        o.push_str(&self.rb_items(&local, trace, Phase::After));
-        o
+        let mut fin = format!("    unless {seq}.empty? || {stopped}\n");
+        fin.push_str(&format!("      {held} = {taken} || {kept} || {}\n", text(&fold.empty)));
+        fin.push_str(&format!("      {answer} = {}\n    end\n", text(&fold.exhausted)));
+        fin.push_str(&format!("    {} = {answer}\n", self.ident(&out_name)));
+        (init, step, fin)
     }
 
-    /// The entry guards of one element, inside the walk.
-    /// The counting walk in Ruby (§15.58).
-    fn rb_count_walk(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let el = self.f.elements.as_ref().expect("a count has elements");
-        let seq = pub_name(&el.name);
-        let fields: BTreeMap<String, String> =
-            el.fields.iter().map(|fd| (fd.name.text.clone(), pub_name(&fd.name))).collect();
-        let e = self.temp("elem");
-        let local = |n: &str| -> String {
-            match fields.get(n) {
-                Some(f) => format!("{e}.{f}"),
-                None => outer(n),
-            }
-        };
+    fn rb_element_guards(&self, s: usize, local: &dyn Fn(&str) -> String) -> String {
         let mut o = String::new();
-        if let Some(cap) = self.count_cap() {
-            o.push_str(&format!(
-                "    raise RuleInputError.new(\"{}\", {seq}.length) if {seq}.length > {cap}\n",
-                crate::door::too_many(&el.name.text, cap)
-            ));
-        }
-        // What the walk does not depend on is worked out once, before it (§15.208).
-        o.push_str(&self.rb_items(outer, trace, Phase::Before));
-        for d in self.counts() {
-            o.push_str(&format!("    {} = 0  # {}\n", self.ident(&d.name.text), self.agg_word(d)));
-        }
-        o.push_str(&format!("    {seq}.each do |{e}|\n"));
-        let mut body = self.rb_element_guards(&local);
-        body.push_str(&self.rb_items(&local, trace, Phase::Each));
-        for d in self.counts() {
-            let v = local(&d.column.text);
-            if d.kind == crate::ast::AggKind::Sum {
-                body.push_str(&format!("    {} += {v}  # {}\n", self.ident(&d.name.text), d.name.text));
-                continue;
-            }
-            let test = match self.count_member(d) {
-                Some(w) => format!("{v} == {}", self.rb_value(&w.text, &self.ty_of(&d.column.text))),
-                None if self.count_negated(d) => format!("!{v}"),
-                None => v,
-            };
-            body.push_str(&format!("    if {test}  # {}\n      {} += 1\n    end\n", d.name.text, self.ident(&d.name.text)));
-        }
-        o.push_str(&Self::indent_block(&body, "    "));
-        o.push_str("    end\n");
-        for (d, cap) in self.sum_caps() {
-            let n = self.ident(&d.name.text);
-            o.push_str(&format!(
-                "    raise RuleInputError.new(\"{}\", {n}) if {n} > {cap}\n",
-                crate::door::out_of_range(&d.name.text)
-            ));
-        }
-        o.push_str(&self.rb_items(outer, trace, Phase::After));
-        o
-    }
-
-    fn rb_element_guards(&self, local: &dyn Fn(&str) -> String) -> String {
-        let mut o = String::new();
-        for i in self.element_fields() {
+        for i in self.element_fields(s) {
             let v = local(&i.name.text);
             let ty = self.ty_of(&i.name.text);
             // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
@@ -10148,10 +10782,10 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
 
         // One element is a row of inputs, so it is a Struct like `Output`.
-        if let Some(el) = &self.f.elements {
+        for (s, el) in self.f.elements.iter().enumerate() {
             let fs: Vec<String> = el.fields.iter().map(|fd| format!(":{}", pub_name(&fd.name))).collect();
             o.push_str(&format!("  # {}\n", tr!("{} の一件", "one of {}", el.name.text)));
-            o.push_str(&format!("  Element = Struct.new({})\n\n", fs.join(", ")));
+            o.push_str(&format!("  {} = Struct.new({})\n\n", self.element_type(s), fs.join(", ")));
         }
 
         // Multiple outputs come back as a Struct; one output is the value itself (§8.5).
@@ -10182,7 +10816,7 @@ impl<'a> Gen<'a> {
         // The public method keeps the plain shape; the branches live in its traced twin,
         // which also returns the rows that matched (§15.33).
         let mut params: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             params.push(pub_name(&el.name));
         }
         o.push_str(&format!(
@@ -10259,10 +10893,10 @@ impl<'a> Gen<'a> {
         let trace = self.temp("trace");
         o.push_str(&format!("    {trace} = [] #: Array[Fired]\n"));
 
-        match &self.f.fold {
-            Some(fold) => o.push_str(&self.rb_walk(fold, &local, &trace)),
-            None if self.counts().is_empty() => o.push_str(&self.rb_items(&local, &trace, Phase::All)),
-            None => o.push_str(&self.rb_count_walk(&local, &trace)),
+        if self.f.walks() {
+            o.push_str(&self.rb_walks(&local, &trace));
+        } else {
+            o.push_str(&self.rb_items(&local, &trace, Phase::All));
         }
 
         // Every output: its source, brought to the wire scale, then its rounding once.
@@ -10402,15 +11036,16 @@ impl<'a> Gen<'a> {
             }
         };
         let mut args: Vec<String> = self.f.inputs.iter().map(|i| read(&self.ty_of(&i.name.text), "d", &i.name.text)).collect();
-        // The sequence a walk reads, one element at a time (§15.56).
-        if let Some(el) = &self.f.elements {
+        // The sequences a walk reads, one element at a time (§15.56, §15.219).
+        for (s, el) in self.f.elements.iter().enumerate() {
             let seq = &el.name.text;
             let obj = format!("_obj(e, {:?})", crate::door::not_object(seq));
             let fields: Vec<String> = el.fields.iter().map(|fd| read(&self.ty_of(&fd.name.text), &obj, &fd.name.text)).collect();
             args.push(format!(
-                "_seq(_take(d, {seq:?}, {:?}), {:?}).map {{ |e| {m}::Element.new({}) }}",
+                "_seq(_take(d, {seq:?}, {:?}), {:?}).map {{ |e| {m}::{}.new({}) }}",
                 crate::door::missing(seq),
                 crate::door::not_sequence(seq),
+                self.element_type(s),
                 fields.join(", ")
             ));
         }
@@ -10763,14 +11398,15 @@ impl<'a> Gen<'a> {
 
         // One element is a row of inputs, and the Ruby module makes it a Struct; without
         // this the signature has no name for what the caller passes (§15.56).
-        if let Some(el) = &self.f.elements {
+        for (s, el) in self.f.elements.iter().enumerate() {
+            let ty = self.element_type(s);
             let tys: Vec<String> =
                 el.fields.iter().map(|fd| self.rbs_ty(&self.ty_of(&fd.name.text))).collect();
-            o.push_str("  class Element < Struct[untyped]\n");
+            o.push_str(&format!("  class {ty} < Struct[untyped]\n"));
             for (fd, t) in el.fields.iter().zip(&tys) {
                 o.push_str(&format!("    attr_reader {}: {t}\n", pub_name(&fd.name)));
             }
-            o.push_str(&format!("    def self.new: ({}) -> Element\n  end\n\n", tys.join(", ")));
+            o.push_str(&format!("    def self.new: ({}) -> {ty}\n  end\n\n", tys.join(", ")));
         }
 
         o.push_str(
@@ -10801,7 +11437,7 @@ impl<'a> Gen<'a> {
             .inputs
             .iter()
             .map(|i| format!("{} {}", self.rbs_ty(&self.ty_of(&i.name.text)), pub_name(&i.name)))
-            .chain(self.f.elements.iter().map(|el| format!("Array[Element] {}", pub_name(&el.name))))
+            .chain(self.f.elements.iter().enumerate().map(|(s, el)| format!("Array[{}] {}", self.element_type(s), pub_name(&el.name))))
             .collect();
         let ret = if outs.len() == 1 {
             self.rbs_ty(&self.ty_of(&outs[0].name.text))
@@ -10830,7 +11466,7 @@ impl<'a> Gen<'a> {
                     .iter()
                     .map(|i| format!("{} {}", self.rbs_ty(&self.ty_of(&i.name.text)), pub_name(&i.name))),
             );
-            from.extend(self.f.elements.iter().map(|el| format!("Array[Element] {}", pub_name(&el.name))));
+            from.extend(self.f.elements.iter().enumerate().map(|(s, el)| format!("Array[{}] {}", self.element_type(s), pub_name(&el.name))));
             o.push_str(&format!(
                 "  def self.{}_from: ({}) -> {ret}\n",
                 pub_name(&self.f.name),
@@ -11387,7 +12023,7 @@ impl<'a> Gen<'a> {
                     ));
                     o.push_str(&self.sw_unread(&d.name.text));
                 }
-                Item::Agg(_) => {}
+                Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
                     if let Some(t) = self.c.table_at(t) {
                         o.push_str(&self.sw_table(t, local, trace));
@@ -11398,18 +12034,36 @@ impl<'a> Gen<'a> {
         o
     }
 
-    /// The walk, in Swift (§15.56).
-    fn sw_walk(&self, fold: &crate::ast::FoldDecl, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let el = self.f.elements.as_ref().expect("a fold has elements");
+    /// Every walk of a rule that walks sequences, in Swift (§15.56, §15.58, §15.219). The shape is
+    /// the one `py_walks` writes.
+    fn sw_walks(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let mut o = String::new();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            if let Some(cap) = self.count_cap_of(s) {
+                let seq = sw_name(&pub_name(&el.name));
+                o.push_str(&format!(
+                    "    if {seq}.count > {cap} {{\n        throw RuleError.input(what: \"{}\", value: Int64({seq}.count))\n    }}\n",
+                    crate::door::too_many(&el.name.text, cap)
+                ));
+            }
+        }
+        for step in self.walk_steps() {
+            match step {
+                // What a walk does not depend on is worked out once, before it (§15.208).
+                WalkStep::Once(ix) => o.push_str(&self.sw_items(outer, trace, Phase::Only(&ix))),
+                WalkStep::Walk { seq, body, sums, .. } => o.push_str(&self.sw_walk(seq, &body, &sums, outer, trace)),
+            }
+        }
+        o
+    }
+
+    /// One walk over sequence `s`, in Swift (§15.219).
+    fn sw_walk(&self, s: usize, body_items: &[usize], sums: &[usize], outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let el = &self.f.elements[s];
         let seq = sw_name(&pub_name(&el.name));
-        let fields: BTreeMap<String, String> =
-            el.fields.iter().map(|fd| (fd.name.text.clone(), sw_name(&pub_name(&fd.name)))).collect();
-        let (answer, stopped, taken, kept, best) = self.fold_locals();
-        let (answer, stopped, taken, kept, best) =
-            (sw_name(&answer), sw_name(&stopped), sw_name(&taken), sw_name(&kept), sw_name(&best));
-        let e = sw_name(&self.temp("elem"));
-        let held = sw_name(&self.temp("held"));
-        // Inside the walk a field is read off the element, and `held` is the accumulator.
+        let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), sw_name(&pub_name(&fd.name)))).collect();
+        let e = sw_name(&self.elem_var(s));
+        // Inside the walk a field is read off the element.
         let local = |n: &str| -> String {
             match fields.get(n) {
                 Some(f) => {
@@ -11420,54 +12074,151 @@ impl<'a> Gen<'a> {
                         v
                     }
                 }
-                None if n == crate::kw::HELD => held.clone(),
                 None => outer(n),
             }
         };
-        let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
-        let out_ty = self.ty_of(&out_name);
+        let mut o = String::new();
+        let mut body = self.sw_element_guards(s, &local);
+        body.push_str(&self.sw_items(&local, trace, Phase::Only(body_items)));
+        let mut after = String::new();
+        for &i in sums {
+            match &self.f.items[i] {
+                Item::Agg(d) if d.kind.extreme() => {
+                    let (init, step) = self.sw_extreme(d, &local);
+                    o.push_str(&init);
+                    body.push_str(&step);
+                }
+                Item::Agg(d) => {
+                    o.push_str(&format!("    var {}: Int64 = 0  // {}\n", self.sw_ident(&d.name.text), self.agg_word(d)));
+                    let v = local(&d.column.text);
+                    if d.kind == crate::ast::AggKind::Sum {
+                        body.push_str(&format!("    {} += {v}  // {}\n", self.sw_ident(&d.name.text), d.name.text));
+                    } else {
+                        let test = self.sw_test(&v, &d.column.text, &d.value);
+                        body.push_str(&format!("    if {test} {{  // {}\n        {} += 1\n    }}\n", d.name.text, self.sw_ident(&d.name.text)));
+                    }
+                    if let Some((_, cap)) = self.sum_caps().into_iter().find(|(x, _)| x.name.text == d.name.text) {
+                        let n = self.sw_ident(&d.name.text);
+                        after.push_str(&format!(
+                            "    if {n} > {cap} {{\n        throw RuleError.input(what: \"{}\", value: Int64({n}))\n    }}\n",
+                            crate::door::out_of_range(&d.name.text)
+                        ));
+                    }
+                }
+                Item::Fold(fold) => {
+                    let (init, step, fin) = self.sw_fold(i, fold, &seq, &local);
+                    o.push_str(&init);
+                    body.push_str(&step);
+                    after.push_str(&fin);
+                }
+                _ => {}
+            }
+        }
+        o.push_str(&format!("    for {e} in {seq} {{\n"));
+        o.push_str(&Self::indent_block(&body, "    "));
+        o.push_str("    }\n");
+        o.push_str(&after);
+        o
+    }
+
+    /// A test on a column of one element, in Swift: `count`'s, and the `where` of `max` and `min`.
+    fn sw_test(&self, v: &str, col: &str, value: &Option<crate::ast::Name>) -> String {
+        let ty = self.ty_of(col);
+        match (&ty, value) {
+            (Ty::Bool, Some(w)) if w.text == crate::kw::FALSE => format!("!{v}"),
+            (Ty::Bool, _) => v.to_string(),
+            (_, Some(w)) => format!("{v} == {}", self.sw_value(&w.text, &ty)),
+            (_, None) => v.to_string(),
+        }
+    }
+
+    /// A `max` or a `min`, in Swift (§15.219).
+    fn sw_extreme(&self, d: &crate::ast::AggDecl, local: &dyn Fn(&str) -> String) -> (String, String) {
+        let n = self.sw_ident(&d.name.text);
+        let set = sw_name(&self.temp(&format!("{}Set", self.ident(&d.name.text))));
+        let v = local(&d.column.text);
+        let ty = self.ty_of(&d.column.text);
+        let op = if d.kind == crate::ast::AggKind::Max { ">" } else { "<" };
+        let (sw_t, start, better) = match self.extreme_enum(d) {
+            Some(en) => {
+                let t = self.enum_type(&en);
+                let w = self.extreme_empty_word(d).unwrap_or_default();
+                (self.sw_ty(&ty), self.sw_value(&w, &ty), format!("_rank_{t}({v}) {op} _rank_{t}({n})"))
+            }
+            None => ("Int64".to_string(), self.extreme_empty_int(d).unwrap_or_else(|| "0".into()), format!("{v} {op} {n}")),
+        };
+        let init = format!("    var {n}: {sw_t} = {start}  // {}\n    var {set} = false\n", self.agg_word(d));
+        let mut step = String::new();
+        let pad = match &d.filter {
+            Some((w, want)) => {
+                step.push_str(&format!("    if {} {{  // {}\n", self.sw_test(&local(&w.text), &w.text, want), d.name.text));
+                "    "
+            }
+            None => "",
+        };
+        step.push_str(&format!("{pad}    if !{set} || {better} {{\n{pad}        {n} = {v}\n{pad}        {set} = true\n{pad}    }}\n"));
+        if !pad.is_empty() {
+            step.push_str("    }\n");
+        }
+        (init, step)
+    }
+
+    /// A fold, in Swift (§15.56).
+    fn sw_fold(&self, i: usize, fold: &crate::ast::FoldDecl, seq: &str, local: &dyn Fn(&str) -> String) -> (String, String, String) {
+        let names = self.fold_names(i);
+        let (answer, stopped, done) = (sw_name(&names.answer), sw_name(&names.stopped), sw_name(&names.done));
+        let (taken, kept, best) = (sw_name(&names.taken), sw_name(&names.kept), sw_name(&names.best));
+        let (held, key) = (sw_name(&names.held), sw_name(&names.key));
+        let alone = self.fold_alone(i);
+        let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
+        let (out_name, out_ty) = self.fold_target(fold);
         let acc_ty = if out_ty.is_numeric() { "Int64".to_string() } else { self.sw_ty(&out_ty) };
         // An answer is read in the type the fold answers with: a value of its enum is that
         // enum's member (§15.208).
-        let val = |x: &Expr| -> String {
+        let val = |x: &Expr, l: &dyn Fn(&str) -> String| -> String {
             match x {
                 Expr::Lit(Lit::Word(w), _) if w != crate::kw::TRUE && w != crate::kw::FALSE => self.sw_value(w, &out_ty),
-                _ => sw_expr(unparen(&self.expr(x, &local).text)),
+                _ => sw_expr(unparen(&self.expr(x, l).text)),
             }
         };
-        let text = |x: &Option<Expr>| -> String { x.as_ref().map(&val).unwrap_or_else(|| "0".to_string()) };
+        let text = |x: &Option<Expr>| -> String { x.as_ref().map(|x| val(x, &with_held)).unwrap_or_else(|| "0".to_string()) };
         let takes = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { .. }));
         let keeps = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::KeepMax { .. }));
 
-        // What the walk does not depend on is worked out once, before it (§15.208).
-        let mut o = self.sw_items(&local, trace, Phase::Before);
-        o.push_str(&format!("    var {answer}: {acc_ty} = {}  // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
-        o.push_str(&format!("    var {stopped} = false\n"));
+        let mut init = String::new();
+        init.push_str(&format!("    var {answer}: {acc_ty} = {}  // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
+        init.push_str(&format!("    var {stopped} = false\n"));
+        if !alone {
+            init.push_str(&format!("    var {done} = false\n"));
+        }
         if takes {
-            o.push_str(&format!("    var {taken}: {acc_ty}? = nil\n"));
+            init.push_str(&format!("    var {taken}: {acc_ty}? = nil\n"));
         }
         if keeps {
-            o.push_str(&format!("    var {kept}: {acc_ty}? = nil\n    var {best}: Int64? = nil\n"));
+            init.push_str(&format!("    var {kept}: {acc_ty}? = nil\n    var {best}: Int64? = nil\n"));
         }
-        o.push_str(&format!("    for {e} in {seq} {{\n"));
 
-        let mut body = self.sw_element_guards(&local);
-        body.push_str(&self.sw_items(&local, trace, Phase::Each));
         // The verdict the table wrote for this element, and what the walk does about it.
+        let mut arms = String::new();
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
-            body.push_str(&format!("    if {v} == {} {{  // {}\n", self.sw_value(&name.text, &self.ty_of(&fold.verdict)), name.text));
+            arms.push_str(&format!("    if {v} == {} {{  // {}\n", self.sw_value(&name.text, &self.ty_of(&fold.verdict)), name.text));
             match arm {
-                Arm::Next => body.push_str(&format!("        // {}\n", crate::kw::NEXT)),
-                Arm::Stop(None) => body.push_str("        break\n"),
+                Arm::Next => arms.push_str(&format!("        // {}\n", crate::kw::NEXT)),
+                Arm::Stop(None) if alone => arms.push_str("        break\n"),
+                Arm::Stop(None) => arms.push_str(&format!("        {done} = true\n")),
                 Arm::Stop(Some(x)) => {
-                    body.push_str(&format!("        {answer} = {}\n", val(x)));
-                    body.push_str(&format!("        {stopped} = true\n        break\n"));
+                    arms.push_str(&format!("        {answer} = {}\n", val(x, local)));
+                    if alone {
+                        arms.push_str(&format!("        {stopped} = true\n        break\n"));
+                    } else {
+                        arms.push_str(&format!("        {stopped} = true\n        {done} = true\n"));
+                    }
                 }
                 Arm::Take { expr, unique } => {
                     if *unique {
-                        body.push_str(&format!("        if {taken} != nil {{\n"));
-                        body.push_str(&format!(
+                        arms.push_str(&format!("        if {taken} != nil {{\n"));
+                        arms.push_str(&format!(
                             "            throw RuleError.contradiction(what: \"{}\")\n        }}\n",
                             tr!(
                                 "畳み込み {}: take_unique に二件当たりました",
@@ -11475,28 +12226,26 @@ impl<'a> Gen<'a> {
                                 fold.verdict
                             )
                         ));
-                        body.push_str(&format!("        {taken} = {}\n", val(expr)));
+                        arms.push_str(&format!("        {taken} = {}\n", val(expr, local)));
                     } else {
-                        body.push_str(&format!("        if {taken} == nil {{\n"));
-                        body.push_str(&format!("            {taken} = {}\n        }}\n", val(expr)));
+                        arms.push_str(&format!("        if {taken} == nil {{\n"));
+                        arms.push_str(&format!("            {taken} = {}\n        }}\n", val(expr, local)));
                     }
                 }
-                Arm::KeepMax { expr, key } => {
-                    let k = sw_name(&self.temp("key"));
-                    body.push_str(&format!("        let {k} = {}\n", sw_expr(unparen(&self.expr(key, &local).text))));
-                    body.push_str(&format!("        if {best} == nil || {k} > {best}! {{\n"));
-                    body.push_str(&format!("            {best} = {k}\n"));
-                    body.push_str(&format!("            {kept} = {}\n        }}\n", val(expr)));
+                Arm::KeepMax { expr, key: k } => {
+                    arms.push_str(&format!("        let {key} = {}\n", sw_expr(unparen(&self.expr(k, local).text))));
+                    arms.push_str(&format!("        if {best} == nil || {key} > {best}! {{\n"));
+                    arms.push_str(&format!("            {best} = {key}\n"));
+                    arms.push_str(&format!("            {kept} = {}\n        }}\n", val(expr, local)));
                 }
             }
-            body.push_str("    }\n");
+            arms.push_str("    }\n");
         }
-        o.push_str(&Self::indent_block(&body, "    "));
-        o.push_str("    }\n");
+        let step = if alone { arms } else { format!("    if !{done} {{  // {}\n{}    }}\n", fold.verdict, Self::indent_block(&arms, "    ")) };
 
         // A sequence with nothing in it answers `empty` and never reaches `exhausted`; a walk
         // that ended on `stop with` has its answer already.
-        o.push_str(&format!("    if !{seq}.isEmpty && !{stopped} {{\n"));
+        let mut fin = format!("    if !{seq}.isEmpty && !{stopped} {{\n");
         let mut fallback = text(&fold.empty);
         if keeps {
             fallback = format!("({kept} ?? {fallback})");
@@ -11504,85 +12253,20 @@ impl<'a> Gen<'a> {
         if takes {
             fallback = format!("({taken} ?? {fallback})");
         }
-        o.push_str(&format!("        let {held}: {acc_ty} = {fallback}\n"));
+        fin.push_str(&format!("        let {held}: {acc_ty} = {fallback}\n"));
         let ex = text(&fold.exhausted);
-        if !ex.contains(&held) {
-            o.push_str(&format!("        _ = {held}\n"));
+        if !ex.contains(held.as_str()) {
+            fin.push_str(&format!("        _ = {held}\n"));
         }
-        o.push_str(&format!("        {answer} = {ex}\n    }}\n"));
-        o.push_str(&format!("    let {} = {answer}\n", self.sw_ident(&out_name)));
-        o.push_str(&self.sw_unread(&out_name));
-        // What reads the answer is worked out once, after the walk (§15.208).
-        o.push_str(&self.sw_items(&local, trace, Phase::After));
-        o
+        fin.push_str(&format!("        {answer} = {ex}\n    }}\n"));
+        fin.push_str(&format!("    let {} = {answer}\n", self.sw_ident(&out_name)));
+        fin.push_str(&self.sw_unread(&out_name));
+        (init, step, fin)
     }
 
-    /// The entry guards of one element, inside the walk. An enum needs none, for the reason
-    /// the inputs' own guards give.
-    /// The counting walk in Swift (§15.58).
-    fn sw_count_walk(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let el = self.f.elements.as_ref().expect("a count has elements");
-        let seq = sw_name(&pub_name(&el.name));
-        let fields: BTreeMap<String, String> =
-            el.fields.iter().map(|fd| (fd.name.text.clone(), sw_name(&pub_name(&fd.name)))).collect();
-        let e = self.temp("elem");
-        let local = |n: &str| -> String {
-            match fields.get(n) {
-                Some(f) => {
-                    let v = format!("{e}.{f}");
-                    if matches!(self.ty_of(n), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
-                        format!("{v}.value")
-                    } else {
-                        v
-                    }
-                }
-                None => outer(n),
-            }
-        };
+    fn sw_element_guards(&self, s: usize, local: &dyn Fn(&str) -> String) -> String {
         let mut o = String::new();
-        if let Some(cap) = self.count_cap() {
-            o.push_str(&format!(
-                "    if {seq}.count > {cap} {{\n        throw RuleError.input(what: \"{}\", value: Int64({seq}.count))\n    }}\n",
-                crate::door::too_many(&el.name.text, cap)
-            ));
-        }
-        // What the walk does not depend on is worked out once, before it (§15.208).
-        o.push_str(&self.sw_items(outer, trace, Phase::Before));
-        for d in self.counts() {
-            o.push_str(&format!("    var {}: Int64 = 0  // {}\n", self.sw_ident(&d.name.text), self.agg_word(d)));
-        }
-        o.push_str(&format!("    for {e} in {seq} {{\n"));
-        let mut body = self.sw_element_guards(&local);
-        body.push_str(&self.sw_items(&local, trace, Phase::Each));
-        for d in self.counts() {
-            let v = local(&d.column.text);
-            if d.kind == crate::ast::AggKind::Sum {
-                body.push_str(&format!("    {} += {v}  // {}\n", self.sw_ident(&d.name.text), d.name.text));
-                continue;
-            }
-            let test = match self.count_member(d) {
-                Some(w) => format!("{v} == {}", self.sw_value(&w.text, &self.ty_of(&d.column.text))),
-                None if self.count_negated(d) => format!("!{v}"),
-                None => v,
-            };
-            body.push_str(&format!("    if {test} {{  // {}\n        {} += 1\n    }}\n", d.name.text, self.sw_ident(&d.name.text)));
-        }
-        o.push_str(&Self::indent_block(&body, "    "));
-        o.push_str("    }\n");
-        for (d, cap) in self.sum_caps() {
-            let n = self.sw_ident(&d.name.text);
-            o.push_str(&format!(
-                "    if {n} > {cap} {{\n        throw RuleError.input(what: \"{}\", value: Int64({n}))\n    }}\n",
-                crate::door::out_of_range(&d.name.text)
-            ));
-        }
-        o.push_str(&self.sw_items(outer, trace, Phase::After));
-        o
-    }
-
-    fn sw_element_guards(&self, local: &dyn Fn(&str) -> String) -> String {
-        let mut o = String::new();
-        for i in self.element_fields() {
+        for i in self.element_fields(s) {
             let ty = self.ty_of(&i.name.text);
             // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
             let optional = matches!(ty, Ty::Opt(_));
@@ -11620,13 +12304,13 @@ impl<'a> Gen<'a> {
 
         // One element is a row of inputs, so it is a struct like an `Output`, and needs its
         // initializer declared for the same reason.
-        if let Some(el) = &self.f.elements {
+        for (s, el) in self.f.elements.iter().enumerate() {
             let fields: Vec<(String, String)> = el
                 .fields
                 .iter()
                 .map(|fd| (sw_name(&pub_name(&fd.name)), self.sw_ty(&self.ty_of(&fd.name.text))))
                 .collect();
-            o.push_str(&format!("/// {}\npublic struct Element: Hashable, Sendable {{\n", tr!("{} の一件", "one of {}", el.name.text)));
+            o.push_str(&format!("/// {}\npublic struct {}: Hashable, Sendable {{\n", tr!("{} の一件", "one of {}", el.name.text), self.element_type(s)));
             for (n, t) in &fields {
                 o.push_str(&format!("    public var {n}: {t}\n"));
             }
@@ -11682,9 +12366,9 @@ impl<'a> Gen<'a> {
             .iter()
             .map(|i| format!("{}: {}", sw_label(&pub_name(&i.name)), sw_name(&pub_name(&i.name))))
             .collect();
-        // The sequence a walk reads is a parameter like the rest (§15.56).
-        if let Some(el) = &self.f.elements {
-            params.push(format!("{}: [Element]", sw_name(&pub_name(&el.name))));
+        // A sequence a walk reads is a parameter like the rest (§15.56, §15.219).
+        for (s, el) in self.f.elements.iter().enumerate() {
+            params.push(format!("{}: [{}]", sw_name(&pub_name(&el.name)), self.element_type(s)));
             args.push(format!("{}: {}", sw_label(&pub_name(&el.name)), sw_name(&pub_name(&el.name))));
         }
         let traced = format!("{fname}Traced");
@@ -11771,10 +12455,10 @@ impl<'a> Gen<'a> {
         let has_table = self.f.items.iter().any(|i| matches!(i, Item::Table(_)));
         o.push_str(&format!("    {} {trace}: [Fired] = []\n", if has_table { "var" } else { "let" }));
 
-        match &self.f.fold {
-            Some(fold) => o.push_str(&self.sw_walk(fold, &local, &trace)),
-            None if self.counts().is_empty() => o.push_str(&self.sw_items(&local, &trace, Phase::All)),
-            None => o.push_str(&self.sw_count_walk(&local, &trace)),
+        if self.f.walks() {
+            o.push_str(&self.sw_walks(&local, &trace));
+        } else {
+            o.push_str(&self.sw_items(&local, &trace, Phase::All));
         }
 
         let wrap = |ty: &Ty, body: String| -> String {
@@ -11982,8 +12666,8 @@ impl<'a> Gen<'a> {
             binds.push(format!("                let {local} = try {v}\n"));
             args.push(format!("{label}: {local}"));
         }
-        // The sequence arrives as an array of objects (§10.2), one per element.
-        if let Some(el) = &self.f.elements {
+        // A sequence arrives as an array of objects (§10.2), one per element (§15.219).
+        for (s, el) in self.f.elements.iter().enumerate() {
             let seq = &el.name.text;
             let label = sw_label(&pub_name(&el.name));
             let local = runner_local(&format!("a{}", args.len()), &fname);
@@ -11992,9 +12676,10 @@ impl<'a> Gen<'a> {
             let inner: Vec<String> =
                 el.fields.iter().map(|fd| format!("{}: {}", sw_name(&pub_name(&fd.name)), read(&self.ty_of(&fd.name.text), &obj, &fd.name.text))).collect();
             binds.push(format!(
-                "                let {local} = try _seq(_take({d}, {seq:?}, {:?}), {:?}).map {{ {ev} in try Element({}) }}\n",
+                "                let {local} = try _seq(_take({d}, {seq:?}, {:?}), {:?}).map {{ {ev} in try {}({}) }}\n",
                 crate::door::missing(seq),
                 crate::door::not_sequence(seq),
+                self.element_type(s),
                 inner.join(", ")
             ));
             args.push(format!("{label}: {local}"));
@@ -12193,8 +12878,8 @@ impl<'a> Gen<'a> {
             .iter()
             .map(|i| format!("{}: {}", pub_name(&i.name), self.py_ty(&self.ty_of(&i.name.text))))
             .collect();
-        if let Some(el) = &self.f.elements {
-            params.push(format!("{}: list[Element]", pub_name(&el.name)));
+        for (s, el) in self.f.elements.iter().enumerate() {
+            params.push(format!("{}: list[{}]", pub_name(&el.name), self.element_type(s)));
         }
         let mut o = String::new();
         o.push_str(
@@ -12215,8 +12900,8 @@ impl<'a> Gen<'a> {
         // The sequence goes in first, and one element is written the way one record's inputs
         // are: the same wire, one level in (§15.56).
         let mut seq_first = String::new();
-        if let Some(el) = &self.f.elements {
-            let seq = self.temp("seq");
+        for (s, el) in self.f.elements.iter().enumerate() {
+            let seq = if s == 0 { self.temp("seq") } else { self.temp(&format!("seq{}", s + 1)) };
             let inner: Vec<String> = el
                 .fields
                 .iter()
@@ -12235,7 +12920,7 @@ impl<'a> Gen<'a> {
                 inner.join(" + \",\" + "),
                 pub_name(&el.name)
             ));
-            seq_first = format!("        {seq},\n");
+            seq_first.push_str(&format!("        {seq},\n"));
         }
         o.push_str(&format!("    {v_ins} = [\n{seq_first}{}    ]\n", ins.iter().map(field).collect::<String>()));
         o.push_str(&format!("    {v_obs} = [\n{}    ]\n", obs.iter().map(field).collect::<String>()));
@@ -12274,8 +12959,8 @@ impl<'a> Gen<'a> {
             .iter()
             .map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text))))
             .collect();
-        if let Some(el) = &self.f.elements {
-            params.push(format!("{}: readonly Element[]", pub_name(&el.name)));
+        for (s, el) in self.f.elements.iter().enumerate() {
+            params.push(format!("{}: readonly {}[]", pub_name(&el.name), self.element_type(s)));
         }
         let mut o = String::new();
         if civil_needed(self.f, self.c) {
@@ -12292,7 +12977,7 @@ impl<'a> Gen<'a> {
         let field = |(jp, e, w): &(String, String, Wire)| format!("    '\"{jp}\":' + {},\n", Self::ts_wire(e, w));
         // The sequence goes in first, written the way one record's inputs are (§15.56).
         let mut seq_first = String::new();
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             let e = self.temp("elem");
             let inner: Vec<String> = el
                 .fields
@@ -12306,12 +12991,12 @@ impl<'a> Gen<'a> {
                     )
                 })
                 .collect();
-            seq_first = format!(
+            seq_first.push_str(&format!(
                 "    '\"{}\":[' + {}.map(({e}) => \"{{\" + {} + \"}}\").join(\",\") + \"]\",\n",
                 el.name.text,
                 pub_name(&el.name),
                 inner.join(" + \",\" + ")
-            );
+            ));
         }
         o.push_str(&format!("  const {v_ins} = [\n{seq_first}{}  ].join(\",\");\n", ins.iter().map(field).collect::<String>()));
         o.push_str(&format!("  const {v_obs} = [\n{}  ].join(\",\");\n", obs.iter().map(field).collect::<String>()));
@@ -12352,8 +13037,8 @@ impl<'a> Gen<'a> {
             .iter()
             .map(|i| format!("{}: {}", pub_name(&i.name), self.rs_ty(&self.ty_of(&i.name.text))))
             .collect();
-        if let Some(el) = &self.f.elements {
-            params.push(format!("{}: &[Element]", pub_name(&el.name)));
+        for (s, el) in self.f.elements.iter().enumerate() {
+            params.push(format!("{}: &[{}]", pub_name(&el.name), self.element_type(s)));
         }
         let mut o = String::new();
         o.push_str(RS_JSON_STR);
@@ -12369,9 +13054,9 @@ impl<'a> Gen<'a> {
         ));
         let (v_ins, v_obs, v_rows, v_head) = (self.temp("ins"), self.temp("obs"), self.temp("rows"), self.temp("head"));
         let field = |(jp, e, w): &(String, String, Wire)| format!("        String::from(\"\\\"{jp}\\\":\") + &{},\n", Self::rs_wire(e, w));
-        // The sequence goes in first, each element written the way one record's inputs are.
+        // The sequences go in first, each element written the way one record's inputs are.
         let mut seq_first = String::new();
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             let inner: Vec<String> = el
                 .fields
                 .iter()
@@ -12384,12 +13069,12 @@ impl<'a> Gen<'a> {
                     )
                 })
                 .collect();
-            seq_first = format!(
+            seq_first.push_str(&format!(
                 "        String::from(\"\\\"{}\\\":[\") + &{}.iter().map(|e| String::from(\"{{\") + &({}) + \"}}\").collect::<Vec<_>>().join(\",\") + \"]\",\n",
                 el.name.text,
                 pub_name(&el.name),
                 inner.join(" + \",\" + &")
-            );
+            ));
         }
         o.push_str(&format!("    let {v_ins} = [\n{seq_first}{}    ]\n    .join(\",\");\n", ins.iter().map(field).collect::<String>()));
         o.push_str(&format!("    let {v_obs} = [\n{}    ]\n    .join(\",\");\n", obs.iter().map(field).collect::<String>()));
@@ -12440,9 +13125,9 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("func {fname}Record(in Input, out {ret}, trace []Fired, tag string) string {{\n"));
         // The sequence goes in first, and one element is written the way one record's inputs
         // are: the same wire, one level in (§15.56).
-        let mut seq_first = String::new();
-        if let Some(el) = &self.f.elements {
-            let seq = self.temp("seq");
+        let mut seq_first: Vec<String> = Vec::new();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            let seq = if s == 0 { self.temp("seq") } else { self.temp(&format!("seq{}", s + 1)) };
             let g = pascal(&pub_name(&el.name));
             let inner: Vec<String> = el
                 .fields
@@ -12463,12 +13148,14 @@ impl<'a> Gen<'a> {
             o.push_str(&format!("\tfor i, e := range in.{g} {{\n\t\tif i > 0 {{\n\t\t\t{seq} += \",\"\n\t\t}}\n"));
             o.push_str(&format!("\t\t{seq} += \"{{\" + {} + \"}}\"\n\t}}\n", inner.join(" + \",\" + ")));
             o.push_str(&format!("\t{seq} += \"]\"\n"));
-            seq_first = seq;
+            seq_first.push(seq);
         }
         let mut list = |name: &str, fields: &[(String, String, Wire)]| {
             o.push_str(&format!("\t{name} := []string{{}}\n"));
-            if name == "ins" && !seq_first.is_empty() {
-                o.push_str(&format!("\tins = append(ins, {seq_first})\n"));
+            if name == "ins" {
+                for seq in &seq_first {
+                    o.push_str(&format!("\tins = append(ins, {seq})\n"));
+                }
             }
             for (jp, e, w) in fields {
                 match w {
@@ -12507,7 +13194,7 @@ impl<'a> Gen<'a> {
             |_, a, _| if single { out.clone() } else { format!("{out}.{a}") },
         );
         let mut params: Vec<String> = self.f.inputs.iter().map(|i| pub_name(&i.name)).collect();
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             params.push(pub_name(&el.name));
         }
         let mut o = String::new();
@@ -12526,9 +13213,9 @@ impl<'a> Gen<'a> {
         ));
         let (v_ins, v_obs, v_rows, v_head) = (self.temp("ins"), self.temp("obs"), self.temp("rows"), self.temp("head"));
         let field = |(jp, e, w): &(String, String, Wire)| format!("      \"\\\"{jp}\\\":#{{{}}}\",\n", Self::rb_wire(e, w));
-        // The sequence goes in first (§15.56).
+        // The sequences go in first (§15.56).
         let mut seq_first = String::new();
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             let inner: Vec<String> = el
                 .fields
                 .iter()
@@ -12541,12 +13228,12 @@ impl<'a> Gen<'a> {
                     )
                 })
                 .collect();
-            seq_first = format!(
+            seq_first.push_str(&format!(
                 "      \"\\\"{}\\\":[\" + {}.map {{ |e| \"{{{}}}\" }}.join(\",\") + \"]\",\n",
                 el.name.text,
                 pub_name(&el.name),
                 inner.join(",")
-            );
+            ));
         }
         o.push_str(&format!("    {v_ins} = [\n{seq_first}{}    ].join(\",\")\n", ins.iter().map(field).collect::<String>()));
         o.push_str(&format!("    {v_obs} = [\n{}    ].join(\",\")\n", obs.iter().map(field).collect::<String>()));
@@ -12587,8 +13274,8 @@ impl<'a> Gen<'a> {
             .iter()
             .map(|i| format!("{}: {}", sw_name(&pub_name(&i.name)), self.sw_ty(&self.ty_of(&i.name.text))))
             .collect();
-        if let Some(el) = &self.f.elements {
-            params.push(format!("{}: [Element]", sw_name(&pub_name(&el.name))));
+        for (s, el) in self.f.elements.iter().enumerate() {
+            params.push(format!("{}: [{}]", sw_name(&pub_name(&el.name)), self.element_type(s)));
         }
         let mut o = String::new();
         o.push_str(
@@ -12612,8 +13299,8 @@ impl<'a> Gen<'a> {
         // The sequence goes in first, and one element is written the way one record's inputs
         // are: the same wire, one level in (§15.56).
         let mut seq_first = String::new();
-        if let Some(el) = &self.f.elements {
-            let seq = sw_name(&self.temp("seq"));
+        for (s, el) in self.f.elements.iter().enumerate() {
+            let seq = sw_name(&if s == 0 { self.temp("seq") } else { self.temp(&format!("seq{}", s + 1)) });
             let inner: Vec<String> = el
                 .fields
                 .iter()
@@ -12632,7 +13319,7 @@ impl<'a> Gen<'a> {
                 sw_name(&pub_name(&el.name)),
                 inner.join(",")
             ));
-            seq_first = format!("        {seq},\n");
+            seq_first.push_str(&format!("        {seq},\n"));
         }
         o.push_str(&format!("    let {v_ins} = [\n{seq_first}{}    ].joined(separator: \",\")\n", ins.iter().map(field).collect::<String>()));
         o.push_str(&format!("    let {v_obs} = [\n{}    ].joined(separator: \",\")\n", obs.iter().map(field).collect::<String>()));
@@ -13240,8 +13927,8 @@ impl<'a> Gen<'a> {
         params.extend(
             self.proj_rest().iter().map(|i| format!("{}: {}", pub_name(&i.name), self.py_ty(&self.ty_of(&i.name.text)))),
         );
-        if let Some(el) = &self.f.elements {
-            params.push(format!("{}: list[Element]", pub_name(&el.name)));
+        for (s, el) in self.f.elements.iter().enumerate() {
+            params.push(format!("{}: list[{}]", pub_name(&el.name), self.element_type(s)));
         }
         let mut o = String::new();
         if self.proj_proto() {
@@ -13290,7 +13977,7 @@ impl<'a> Gen<'a> {
             };
             o.push_str(&format!("        {e},\n"));
         }
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             o.push_str(&format!("        {},\n", pub_name(&el.name)));
         }
         o.push_str("    )\n");
@@ -13363,8 +14050,8 @@ impl<'a> Gen<'a> {
         params.extend(
             self.proj_rest().iter().map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text)))),
         );
-        if let Some(el) = &self.f.elements {
-            params.push(format!("{}: Element[]", pub_name(&el.name)));
+        for (s, el) in self.f.elements.iter().enumerate() {
+            params.push(format!("{}: {}[]", pub_name(&el.name), self.element_type(s)));
         }
         let outs = &self.f.outputs;
         let ret = if outs.len() == 1 { self.ts_ty(&self.ty_of(&outs[0].name.text)) } else { "Output".into() };
@@ -13410,7 +14097,7 @@ impl<'a> Gen<'a> {
             };
             o.push_str(&format!("    {e},\n"));
         }
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             o.push_str(&format!("    {},\n", pub_name(&el.name)));
         }
         o.push_str("  );\n}\n");
@@ -13465,7 +14152,7 @@ impl<'a> Gen<'a> {
         let fname = self.ident(&alias);
         let mut params: Vec<String> = self.proj_params().iter().map(|r| self.ident(r)).collect();
         params.extend(self.proj_rest().iter().map(|i| pub_name(&i.name)));
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             params.push(pub_name(&el.name));
         }
         let mut o = String::new();
@@ -13502,7 +14189,7 @@ impl<'a> Gen<'a> {
                 None => pub_name(&i.name),
             });
         }
-        if let Some(el) = &self.f.elements {
+        for el in &self.f.elements {
             args.push(pub_name(&el.name));
         }
         for a in &args {
@@ -13816,7 +14503,7 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
         for b in crate::backend::ALL {
             // A walk is written only by the backends that can write one (§15.56). A file that
             // cannot run is worse than a missing one, so the rest are named and skipped.
-            if f.elements.is_some() && !b.folds {
+            if !f.elements.is_empty() && !b.folds {
                 if !json {
                     let _ = writeln!(out,
                         "{}",

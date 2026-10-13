@@ -56,3 +56,6 @@ Claude利用料.rule	claude_api_usage_fee.rule
 一度だけの特典.rule	one_time_perk.rule
 科目の履修.rule	course_catalog.rule
 受験料.rule	exam_fee.rule
+注文の精算.rule	order_settlement.rule
+最も早い期日.rule	earliest_due.rule
+料率の調整.rule	rate_adjustment.rule

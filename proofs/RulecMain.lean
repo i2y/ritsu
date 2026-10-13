@@ -1755,6 +1755,15 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
     let kindsKnown := (field cert "inputs").isSome
     if !kindsKnown then
       r := r.state "the kinds of the columns: the certificate does not say what the rule's inputs are"
+    -- What a `max` or a `min` of numbers or dates answers, and the answer of a fold the items
+    -- below read (rulec's §15.219): their ranges are worked out from the column's range and the
+    -- `empty` value, or from the values the fold answers with, rather than declared. Nothing here
+    -- holds them to those, so they are stated rather than proved. One of an enum states no range.
+    for e in fieldArr cert "extremes" do
+      if (field ((field cert "ranges").getD Json.null) (fieldStr e "name")).isSome then
+        r := r.state s!"the range of {fieldStr e "name"}, the {fieldStr e "kind"} of {fieldStr e "of"} or its `empty` value"
+    for e in fieldArr cert "fold_answers" do
+      r := r.state s!"the range of {fieldStr e "name"}, which the fold over {fieldStr e "over"} answers"
     let mut tables : Array ReadTable := #[]
     for tj in fieldArr cert "tables" do
       if kindsKnown then

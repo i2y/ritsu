@@ -191,8 +191,12 @@ golden!(w130_a_prerequisite_already_needed, "W130", "tests/mutants/m_w130.rule",
 
 // The walk's stages and the words of a cell (§15.208), and the rows nothing decides (§15.209).
 golden!(e075_value_and_name, "E075", "tests/mutants/m_e075.rule", "E075");
-golden!(e031_element_and_answer, "E031-walk", "tests/mutants/m_e031walk.rule", "E031");
+golden!(e031_output_of_one_element, "E031-walk", "tests/mutants/m_e031walk.rule", "E031");
 golden!(w128_undecided_row, "W128", "tests/mutants/m_w128.rule", "W128");
+
+// Two sequences and a largest value (§15.219): one item that reads both, and a `max` with no `empty`.
+golden!(e031_two_sequences, "E031", "tests/mutants/m_e031.rule", "E031");
+golden!(e022_max_without_empty, "E022-max", "tests/mutants/m_e022max.rule", "E022");
 
 // Arithmetic (§15.213 to §15.216).
 golden!(e132_divisor_can_be_zero, "E132", "tests/mutants/m_e132.rule", "E132");

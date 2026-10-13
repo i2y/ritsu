@@ -1,0 +1,57 @@
+rule earliest_due v1
+description "The earliest due date among the open tasks of a project, how many tasks are still open, and how urgent the project is. A task that is done does not count; with no task open, the earliest date is the last day the rule knows, which is never urgent. An example of the smallest value of a sequence"
+
+enum urgency = overdue | this_week | later
+
+inputs
+  today    : date  range >=2026-01-01 <=2027-12-31
+  week_end : date  range >=2026-01-01 <=2027-12-31
+
+constraint today <= week_end
+
+# One task of the project. The caller passes as many as it has
+elements tasks
+  due  : date  range >=2026-01-01 <=2027-12-31
+  done : bool
+
+outputs
+  earliest : date
+  open_tasks : number  round down(1)
+  level    : urgency
+
+# How many tasks are still open. The range is the universe of the completeness check, and the cap on the sequence
+count open_tasks over tasks where done = false  range >=0 <=50
+
+# The earliest due date of the tasks still open, and the last day the rule knows when none is
+min earliest over tasks of due where done = false empty 2027-12-31
+
+define overdue_now : bool = earliest < today
+define due_soon    : bool = earliest <= week_end
+
+table level_of
+policy unique
+| overdue_now | due_soon | -> level : urgency |
+| true        | -        | overdue            |
+| false       | true     | this_week          |
+| false       | false    | later              |
+
+examples
+| today      | week_end   | tasks    | -> earliest | open_tasks | level     |
+| 2026-05-11 | 2026-05-17 | mixed    | 2026-05-14  | 2          | this_week |
+| 2026-05-15 | 2026-05-17 | mixed    | 2026-05-14  | 2          | overdue   |
+| 2026-05-04 | 2026-05-10 | mixed    | 2026-05-14  | 2          | later     |
+| 2026-05-04 | 2026-05-10 | all_done | 2027-12-31  | 0          | later     |
+| 2026-05-04 | 2026-05-10 | no_tasks | 2027-12-31  | 0          | later     |
+
+sequence mixed
+| due        | done  |
+| 2026-05-20 | false |
+| 2026-05-12 | true  |
+| 2026-05-14 | false |
+
+sequence all_done
+| due        | done |
+| 2026-05-01 | true |
+
+sequence no_tasks
+| due | done |

@@ -1533,7 +1533,7 @@ impl<'a> Ck<'a> {
                 let name = u.name.as_ref().map(|(n, _)| n.clone()).unwrap_or_default();
                 let read = self.scope.rules.get(&name)?;
                 let facts = &read.facts;
-                if facts.elements.is_some() {
+                if !facts.elements.is_empty() {
                     let r = &rule.word;
                     self.err("E105", rule.span, tr!("規則 `{r}` は要素の並びをたどる規則なので、計算した値には使えません", "The rule `{r}` walks a list of elements, and cannot give a computed value")).notes.push(tr!(
                         "sekisho が規則に渡せるのは、一つずつの値だけです。",
@@ -1594,7 +1594,7 @@ impl<'a> Ck<'a> {
                             .filter_map(|p| facts.inputs.iter().find(|i| i.name == *p))
                             .map(|i| (i.name.clone(), i.alias.clone(), if i.kind == DateKind::Date { ColumnType::Date } else { ColumnType::Num { written: "int".into(), unit: Some(Unit::number()), min: Some(i.min as i128), max: Some(i.max as i128) } }))
                             .collect();
-                        let empty = RuleFacts { rule: String::new(), alias: String::new(), version: String::new(), sha256: String::new(), rulec: String::new(), inputs: vec![], outputs: vec![], elements: None, enums: vec![], machine: None, preconditions: vec![], connect: None, typescript: dummy_call(), python: dummy_call(), go: dummy_call() };
+                        let empty = RuleFacts { rule: String::new(), alias: String::new(), version: String::new(), sha256: String::new(), rulec: String::new(), inputs: vec![], outputs: vec![], elements: vec![], enums: vec![], machine: None, preconditions: vec![], connect: None, typescript: dummy_call(), python: dummy_call(), go: dummy_call() };
                         self.call_args(a, args, date.span, &date.word, &inputs, &empty, "");
                     }
                 }

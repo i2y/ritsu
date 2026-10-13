@@ -34,7 +34,7 @@
 use super::{
     camel, cell_src, civil_needed, fired_doc, mode_fn, out_src, pascal, plain_doc,
     pub_name, raw_base, record_doc, round_cases, traced_doc, unparen, wire_of, Expr2, Gen, Lang,
-    Phase, Wire,
+    Phase, WalkStep, Wire,
 };
 use crate::ast::{Arm, Cell, CmpOp, Item, Lit, OutCell, Table};
 use crate::num::{Rat, RoundMode};
@@ -738,7 +738,7 @@ impl<'a> Gen<'a> {
                         tr!("定義", "definition"),
                     ));
                 }
-                Item::Agg(_) => {}
+                Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
                     if let Some(t) = self.c.table_at(t) {
                         o.push_str(&self.java_table(t, local, trace));
@@ -749,68 +749,188 @@ impl<'a> Gen<'a> {
         o
     }
 
-    /// The walk, in Java (§15.56).
-    fn java_walk(&self, fold: &crate::ast::FoldDecl, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let el = self.f.elements.as_ref().expect("a fold has elements");
+    /// Every walk of a rule that walks sequences, in Java (§15.56, §15.58, §15.219). The shape is
+    /// the one `py_walks` writes.
+    fn java_walks(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let mut o = String::new();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            if let Some(cap) = self.count_cap_of(s) {
+                let seq = java_name(&pub_name(&el.name));
+                o.push_str(&format!("        if ({seq}.size() > {cap}) {{\n"));
+                o.push_str(&format!(
+                    "            throw new RuleInputError({}, (long) {seq}.size());\n        }}\n",
+                    java_str(&crate::door::too_many(&el.name.text, cap))
+                ));
+            }
+        }
+        for step in self.walk_steps() {
+            match step {
+                // What a walk does not depend on is worked out once, before it (§15.208).
+                WalkStep::Once(ix) => o.push_str(&self.java_items(outer, trace, Phase::Only(&ix))),
+                WalkStep::Walk { seq, body, sums, .. } => o.push_str(&self.java_walk(seq, &body, &sums, outer, trace)),
+            }
+        }
+        o
+    }
+
+    /// One walk over sequence `s`, in Java (§15.219).
+    fn java_walk(&self, s: usize, body_items: &[usize], sums: &[usize], outer: &dyn Fn(&str) -> String, trace: &str) -> String {
+        let el = &self.f.elements[s];
         let seq = java_name(&pub_name(&el.name));
-        let fields: BTreeMap<String, String> =
-            el.fields.iter().map(|fd| (fd.name.text.clone(), java_name(&pub_name(&fd.name)))).collect();
-        let (answer, stopped, taken, kept, best) = self.fold_locals();
-        let (answer, stopped) = (java_name(&answer), java_name(&stopped));
-        let (taken, kept, best) = (java_name(&taken), java_name(&kept), java_name(&best));
-        let e = java_name(&self.temp("elem"));
-        let held = java_name(&self.temp("held"));
+        let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), java_name(&pub_name(&fd.name)))).collect();
+        let e = java_name(&self.elem_var(s));
         let local = |n: &str| -> String {
             match fields.get(n) {
                 Some(f) => format!("{e}.{f}()"),
-                None if n == crate::kw::HELD => held.clone(),
                 None => outer(n),
             }
         };
-        let out_name = self.f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
-        let out_ty = self.java_ty(&self.ty_of(&out_name));
-        let acc = self.java_boxed(&self.ty_of(&out_name));
+        let mut o = String::new();
+        let mut body = self.java_element_guards(s, &local);
+        body.push_str(&self.java_items(&local, trace, Phase::Only(body_items)));
+        let mut after = String::new();
+        for &i in sums {
+            match &self.f.items[i] {
+                crate::ast::Item::Agg(d) if d.kind.extreme() => {
+                    let (init, step) = self.java_extreme(d, &local);
+                    o.push_str(&init);
+                    body.push_str(&step);
+                }
+                crate::ast::Item::Agg(d) => {
+                    o.push_str(&format!("        long {} = 0;  // {}\n", java_name(&self.ident(&d.name.text)), self.agg_word(d)));
+                    let v = local(&d.column.text);
+                    if d.kind == crate::ast::AggKind::Sum {
+                        body.push_str(&format!("        {} += {v};  // {}\n", java_name(&self.ident(&d.name.text)), jc(&d.name.text)));
+                    } else {
+                        let test = self.java_test(&v, &d.column.text, &d.value);
+                        body.push_str(&format!(
+                            "        if ({test}) {{  // {}\n            {} += 1;\n        }}\n",
+                            jc(&d.name.text),
+                            java_name(&self.ident(&d.name.text))
+                        ));
+                    }
+                    if let Some((_, cap)) = self.sum_caps().into_iter().find(|(x, _)| x.name.text == d.name.text) {
+                        let n = java_name(&self.ident(&d.name.text));
+                        after.push_str(&format!(
+                            "        if ({n} > {cap}L) {{\n            throw new RuleInputError({}, {n});\n        }}\n",
+                            java_str(&crate::door::out_of_range(&d.name.text)),
+                        ));
+                    }
+                }
+                crate::ast::Item::Fold(fold) => {
+                    let (init, step, fin) = self.java_fold(i, fold, &seq, &local);
+                    o.push_str(&init);
+                    body.push_str(&step);
+                    after.push_str(&fin);
+                }
+                _ => {}
+            }
+        }
+        o.push_str(&format!("        for ({} {e} : {seq}) {{\n", self.element_type(s)));
+        o.push_str(&Self::indent_block(&body, "    "));
+        o.push_str("        }\n");
+        o.push_str(&after);
+        o
+    }
+
+    /// A test on a column of one element, in Java: `count`'s, and the `where` of `max` and `min`.
+    fn java_test(&self, v: &str, col: &str, value: &Option<crate::ast::Name>) -> String {
+        let ty = self.ty_of(col);
+        match (&ty, value) {
+            (Ty::Bool, Some(w)) if w.text == crate::kw::FALSE => format!("!{v}"),
+            (Ty::Bool, _) => v.to_string(),
+            (_, Some(w)) => format!("{v} == {}", self.java_value(&w.text, &ty)),
+            (_, None) => v.to_string(),
+        }
+    }
+
+    /// A `max` or a `min`, in Java (§15.219).
+    fn java_extreme(&self, d: &crate::ast::AggDecl, local: &dyn Fn(&str) -> String) -> (String, String) {
+        let n = java_name(&self.ident(&d.name.text));
+        let set = java_name(&self.temp(&format!("{}Set", self.ident(&d.name.text))));
+        let v = local(&d.column.text);
+        let ty = self.ty_of(&d.column.text);
+        let op = if d.kind == crate::ast::AggKind::Max { ">" } else { "<" };
+        let (jt, start, better) = match self.extreme_enum(d) {
+            Some(en) => {
+                let t = self.enum_type(&en);
+                let w = self.extreme_empty_word(d).unwrap_or_default();
+                (self.java_ty(&ty), self.java_value(&w, &ty), format!("_rank_{t}({v}) {op} _rank_{t}({n})"))
+            }
+            None => ("long".to_string(), format!("{}L", self.extreme_empty_int(d).unwrap_or_else(|| "0".into())), format!("{v} {op} {n}")),
+        };
+        let init = format!("        {jt} {n} = {start};  // {}\n        boolean {set} = false;\n", self.agg_word(d));
+        let mut step = String::new();
+        let pad = match &d.filter {
+            Some((w, want)) => {
+                step.push_str(&format!("        if ({}) {{  // {}\n", self.java_test(&local(&w.text), &w.text, want), jc(&d.name.text)));
+                "    "
+            }
+            None => "",
+        };
+        step.push_str(&format!("{pad}        if (!{set} || {better}) {{\n{pad}            {n} = {v};\n{pad}            {set} = true;\n{pad}        }}\n"));
+        if !pad.is_empty() {
+            step.push_str("        }\n");
+        }
+        (init, step)
+    }
+
+    /// A fold, in Java (§15.56).
+    fn java_fold(&self, i: usize, fold: &crate::ast::FoldDecl, seq: &str, local: &dyn Fn(&str) -> String) -> (String, String, String) {
+        let names = self.fold_names(i);
+        let (answer, stopped, done) = (java_name(&names.answer), java_name(&names.stopped), java_name(&names.done));
+        let (taken, kept, best) = (java_name(&names.taken), java_name(&names.kept), java_name(&names.best));
+        let (held, key) = (java_name(&names.held), java_name(&names.key));
+        let alone = self.fold_alone(i);
+        let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
+        let (out_name, answer_ty) = self.fold_target(fold);
+        let out_ty = self.java_ty(&answer_ty);
+        let acc = self.java_boxed(&answer_ty);
         // An answer is read in the type the fold answers with: a value of its enum is that
         // enum's member (§15.208).
-        let answer_ty = self.ty_of(&out_name);
-        let val = |x: &crate::ast::Expr| -> String {
+        let val = |x: &crate::ast::Expr, l: &dyn Fn(&str) -> String| -> String {
             match x {
                 crate::ast::Expr::Lit(Lit::Word(w), _) if w != crate::kw::TRUE && w != crate::kw::FALSE => self.java_value(w, &answer_ty),
-                _ => java_expr(unparen(&self.expr(x, &local).text)),
+                _ => java_expr(unparen(&self.expr(x, l).text)),
             }
         };
-        let text = |x: &Option<crate::ast::Expr>| -> String { x.as_ref().map(&val).unwrap_or_else(|| "0L".to_string()) };
+        let text = |x: &Option<crate::ast::Expr>| -> String { x.as_ref().map(|x| val(x, &with_held)).unwrap_or_else(|| "0L".to_string()) };
 
-        // What the walk does not depend on is worked out once, before it (§15.208).
-        let mut o = self.java_items(&local, trace, Phase::Before);
-        o.push_str(&format!(
+        let mut init = String::new();
+        init.push_str(&format!(
             "        {out_ty} {answer} = {};  // {}\n",
             text(&fold.empty),
             tr!("要素ゼロ件の答え", "the answer for no elements")
         ));
-        o.push_str(&format!("        boolean {stopped} = false;\n"));
-        o.push_str(&format!(
+        init.push_str(&format!("        boolean {stopped} = false;\n"));
+        if !alone {
+            init.push_str(&format!("        boolean {done} = false;\n"));
+        }
+        init.push_str(&format!(
             "        {acc} {taken} = null;\n        {acc} {kept} = null;\n        Long {best} = null;\n"
         ));
-        o.push_str(&format!("        for (Element {e} : {seq}) {{\n"));
 
-        let mut body = self.java_element_guards(&local);
-        body.push_str(&self.java_items(&local, trace, Phase::Each));
+        let mut arms = String::new();
         let v = local(&fold.verdict);
         for (name, arm, _) in &fold.arms {
             let is = self.java_value(&name.text, &self.ty_of(&fold.verdict));
-            body.push_str(&format!("        if ({v} == {is}) {{  // {}\n", jc(&name.text)));
+            arms.push_str(&format!("        if ({v} == {is}) {{  // {}\n", jc(&name.text)));
             match arm {
-                Arm::Next => body.push_str("            // next\n"),
-                Arm::Stop(None) => body.push_str("            break;\n"),
+                Arm::Next => arms.push_str("            // next\n"),
+                Arm::Stop(None) if alone => arms.push_str("            break;\n"),
+                Arm::Stop(None) => arms.push_str(&format!("            {done} = true;\n")),
                 Arm::Stop(Some(x)) => {
-                    body.push_str(&format!("            {answer} = {};\n", val(x)));
-                    body.push_str(&format!("            {stopped} = true;\n            break;\n"));
+                    arms.push_str(&format!("            {answer} = {};\n", val(x, local)));
+                    if alone {
+                        arms.push_str(&format!("            {stopped} = true;\n            break;\n"));
+                    } else {
+                        arms.push_str(&format!("            {stopped} = true;\n            {done} = true;\n"));
+                    }
                 }
                 Arm::Take { expr, unique } => {
                     if *unique {
-                        body.push_str(&format!("            if ({taken} != null) {{\n"));
-                        body.push_str(&format!(
+                        arms.push_str(&format!("            if ({taken} != null) {{\n"));
+                        arms.push_str(&format!(
                             "                throw new RuleContradictionError({});\n            }}\n",
                             java_str(&tr!(
                                 "畳み込み {}: take_unique に二件当たりました",
@@ -818,105 +938,38 @@ impl<'a> Gen<'a> {
                                 fold.verdict
                             ))
                         ));
-                        body.push_str(&format!("            {taken} = {};\n", val(expr)));
+                        arms.push_str(&format!("            {taken} = {};\n", val(expr, local)));
                     } else {
-                        body.push_str(&format!("            if ({taken} == null) {{\n"));
-                        body.push_str(&format!("                {taken} = {};\n            }}\n", val(expr)));
+                        arms.push_str(&format!("            if ({taken} == null) {{\n"));
+                        arms.push_str(&format!("                {taken} = {};\n            }}\n", val(expr, local)));
                     }
                 }
-                Arm::KeepMax { expr, key } => {
-                    let k = java_name(&self.temp("key"));
-                    body.push_str(&format!("            long {k} = {};\n", java_expr(unparen(&self.expr(key, &local).text))));
-                    body.push_str(&format!("            if ({best} == null || {k} > {best}) {{\n"));
-                    body.push_str(&format!("                {best} = {k};\n"));
-                    body.push_str(&format!("                {kept} = {};\n            }}\n", val(expr)));
+                Arm::KeepMax { expr, key: k } => {
+                    arms.push_str(&format!("            long {key} = {};\n", java_expr(unparen(&self.expr(k, local).text))));
+                    arms.push_str(&format!("            if ({best} == null || {key} > {best}) {{\n"));
+                    arms.push_str(&format!("                {best} = {key};\n"));
+                    arms.push_str(&format!("                {kept} = {};\n            }}\n", val(expr, local)));
                 }
             }
-            body.push_str("        }\n");
+            arms.push_str("        }\n");
         }
-        o.push_str(&Self::indent_block(&body, "    "));
-        o.push_str("        }\n");
+        let step = if alone { arms } else { format!("        if (!{done}) {{  // {}\n{}        }}\n", jc(&fold.verdict), Self::indent_block(&arms, "    ")) };
 
-        o.push_str(&format!("        if (!{seq}.isEmpty() && !{stopped}) {{\n"));
-        o.push_str(&format!(
+        let mut fin = format!("        if (!{seq}.isEmpty() && !{stopped}) {{\n");
+        fin.push_str(&format!(
             "            {out_ty} {held} = {taken} != null ? {taken} : ({kept} != null ? {kept} : {});\n",
             text(&fold.empty)
         ));
-        o.push_str(&format!("            {answer} = {};\n        }}\n", text(&fold.exhausted)));
-        o.push_str(&format!("        {out_ty} {} = {answer};\n", java_name(&self.ident(&out_name))));
-        // What reads the answer is worked out once, after the walk (§15.208).
-        o.push_str(&self.java_items(&local, trace, Phase::After));
-        o
-    }
-
-    /// The counting walk in Java (§15.58).
-    fn java_count_walk(&self, outer: &dyn Fn(&str) -> String, trace: &str) -> String {
-        let el = self.f.elements.as_ref().expect("a count has elements");
-        let seq = java_name(&pub_name(&el.name));
-        let fields: BTreeMap<String, String> =
-            el.fields.iter().map(|fd| (fd.name.text.clone(), java_name(&pub_name(&fd.name)))).collect();
-        let e = java_name(&self.temp("elem"));
-        let local = |n: &str| -> String {
-            match fields.get(n) {
-                Some(f) => format!("{e}.{f}()"),
-                None => outer(n),
-            }
-        };
-        let mut o = String::new();
-        if let Some(cap) = self.count_cap() {
-            o.push_str(&format!("        if ({seq}.size() > {cap}) {{\n"));
-            o.push_str(&format!(
-                "            throw new RuleInputError({}, (long) {seq}.size());\n        }}\n",
-                java_str(&crate::door::too_many(&el.name.text, cap))
-            ));
-        }
-        // What the walk does not depend on is worked out once, before it (§15.208).
-        o.push_str(&self.java_items(outer, trace, Phase::Before));
-        for d in self.counts() {
-            o.push_str(&format!(
-                "        long {} = 0;  // {}\n",
-                java_name(&self.ident(&d.name.text)),
-                self.agg_word(d)
-            ));
-        }
-        o.push_str(&format!("        for (Element {e} : {seq}) {{\n"));
-        let mut body = self.java_element_guards(&local);
-        body.push_str(&self.java_items(&local, trace, Phase::Each));
-        for d in self.counts() {
-            let v = local(&d.column.text);
-            if d.kind == crate::ast::AggKind::Sum {
-                body.push_str(&format!("        {} += {v};  // {}\n", java_name(&self.ident(&d.name.text)), jc(&d.name.text)));
-                continue;
-            }
-            let test = match self.count_member(d) {
-                Some(w) => format!("{v} == {}", self.java_value(&w.text, &self.ty_of(&d.column.text))),
-                None if self.count_negated(d) => format!("!{v}"),
-                None => v,
-            };
-            body.push_str(&format!(
-                "        if ({test}) {{  // {}\n            {} += 1;\n        }}\n",
-                jc(&d.name.text),
-                java_name(&self.ident(&d.name.text))
-            ));
-        }
-        o.push_str(&Self::indent_block(&body, "    "));
-        o.push_str("        }\n");
-        for (d, cap) in self.sum_caps() {
-            let n = java_name(&self.ident(&d.name.text));
-            o.push_str(&format!(
-                "        if ({n} > {cap}L) {{\n            throw new RuleInputError({}, {n});\n        }}\n",
-                java_str(&crate::door::out_of_range(&d.name.text)),
-            ));
-        }
-        o.push_str(&self.java_items(outer, trace, Phase::After));
-        o
+        fin.push_str(&format!("            {answer} = {};\n        }}\n", text(&fold.exhausted)));
+        fin.push_str(&format!("        {out_ty} {} = {answer};\n", java_name(&self.ident(&out_name))));
+        (init, step, fin)
     }
 
     /// The range guard of one element's fields, inside the walk. The kind of the value is
     /// the declared type's business here, so only the range is asked about.
-    fn java_element_guards(&self, local: &dyn Fn(&str) -> String) -> String {
+    fn java_element_guards(&self, s: usize, local: &dyn Fn(&str) -> String) -> String {
         let mut o = String::new();
-        for i in self.element_fields() {
+        for i in self.element_fields(s) {
             let v = local(&i.name.text);
             let ty = self.ty_of(&i.name.text);
             // An optional input is guarded as the type it wraps whenever it has a value (§15.201).
@@ -944,7 +997,7 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
 
         // One element is a row of inputs, so it gets the same shape as `Output`.
-        if let Some(el) = &self.f.elements {
+        for (s, el) in self.f.elements.iter().enumerate() {
             let fs: Vec<String> = el
                 .fields
                 .iter()
@@ -953,8 +1006,9 @@ impl<'a> Gen<'a> {
                 })
                 .collect();
             o.push_str(&format!(
-                "    /** {} */\n    public record Element({}) {{\n    }}\n\n",
+                "    /** {} */\n    public record {}({}) {{\n    }}\n\n",
                 jc(&tr!("{} の一件", "one of {}", el.name.text)),
+                self.element_type(s),
                 fs.join(", ")
             ));
         }
@@ -981,8 +1035,8 @@ impl<'a> Gen<'a> {
             .iter()
             .map(|i| format!("{} {}", self.java_ty(&self.ty_of(&i.name.text)), java_name(&pub_name(&i.name))))
             .collect();
-        if let Some(el) = &self.f.elements {
-            params.push(format!("List<Element> {}", java_name(&pub_name(&el.name))));
+        for (s, el) in self.f.elements.iter().enumerate() {
+            params.push(format!("List<{}> {}", self.element_type(s), java_name(&pub_name(&el.name))));
         }
         let args: Vec<String> = self
             .f
@@ -1000,8 +1054,8 @@ impl<'a> Gen<'a> {
                 self.java_doc_ty(&self.ty_of(&i.name.text)).replace("long  // ", "")
             ));
         }
-        if let Some(el) = &self.f.elements {
-            o.push_str(&format!("     *   {} : List&lt;Element&gt;\n", pub_name(&el.name)));
+        for (s, el) in self.f.elements.iter().enumerate() {
+            o.push_str(&format!("     *   {} : List&lt;{}&gt;\n", pub_name(&el.name), self.element_type(s)));
         }
         for od in outs {
             o.push_str(&format!(
@@ -1059,10 +1113,10 @@ impl<'a> Gen<'a> {
         let trace = self.temp("trace");
         o.push_str(&format!("        List<Fired> {} = new ArrayList<>();\n", java_name(&trace)));
 
-        match &self.f.fold {
-            Some(fold) => o.push_str(&self.java_walk(fold, &local, &trace)),
-            None if self.counts().is_empty() => o.push_str(&self.java_items(&local, &trace, Phase::All)),
-            None => o.push_str(&self.java_count_walk(&local, &trace)),
+        if self.f.walks() {
+            o.push_str(&self.java_walks(&local, &trace));
+        } else {
+            o.push_str(&self.java_items(&local, &trace, Phase::All));
         }
 
         // Every output: its source, brought to the wire scale, then its rounding once.
@@ -1222,8 +1276,8 @@ impl<'a> Gen<'a> {
             .iter()
             .map(|i| format!("{} {}", self.java_ty(&self.ty_of(&i.name.text)), java_name(&pub_name(&i.name))))
             .collect();
-        if let Some(el) = &self.f.elements {
-            params.push(format!("List<Element> {}", java_name(&pub_name(&el.name))));
+        for (s, el) in self.f.elements.iter().enumerate() {
+            params.push(format!("List<{}> {}", self.element_type(s), java_name(&pub_name(&el.name))));
         }
 
         let mut o = String::new();
@@ -1265,9 +1319,9 @@ impl<'a> Gen<'a> {
         };
         // The sequence goes in first (§15.56).
         let mut parts: Vec<String> = Vec::new();
-        if let Some(el) = &self.f.elements {
+        for (s, el) in self.f.elements.iter().enumerate() {
             let e = java_name(&self.temp("elem"));
-            let v_els = java_name(&self.temp("els"));
+            let v_els = java_name(&if s == 0 { self.temp("els") } else { self.temp(&format!("els{}", s + 1)) });
             let inner: Vec<String> = el
                 .fields
                 .iter()
@@ -1281,8 +1335,9 @@ impl<'a> Gen<'a> {
                 })
                 .collect();
             o.push_str(&format!(
-                "        List<String> {v_els} = new ArrayList<>();\n        for (Element {e} : {}) {{\n            \
+                "        List<String> {v_els} = new ArrayList<>();\n        for ({} {e} : {}) {{\n            \
                  {v_els}.add(\"{{\" + {} + \"}}\");\n        }}\n",
+                self.element_type(s),
                 java_name(&pub_name(&el.name)),
                 inner.join(" + \",\" + ")
             ));
@@ -1370,15 +1425,16 @@ impl<'a> Gen<'a> {
             args.push(a);
         }
         // The sequence a walk reads, one element at a time (§15.56).
-        if let Some(el) = &self.f.elements {
+        for (s, el) in self.f.elements.iter().enumerate() {
             let e = java_name(&self.temp("e"));
-            let v = java_name(&self.temp("els"));
+            let v = java_name(&if s == 0 { self.temp("els") } else { self.temp(&format!("els{}", s + 1)) });
             let seq = &el.name.text;
+            let ty = self.element_type(s);
             let fields: Vec<String> = el.fields.iter().map(|fd| read(&self.ty_of(&fd.name.text), &e, &fd.name.text)).collect();
             binds.push_str(&format!(
-                "                    List<{cls}.Element> {v} = new ArrayList<>();\n                    \
+                "                    List<{cls}.{ty}> {v} = new ArrayList<>();\n                    \
                  for (Map<String, String> {e} : list(take({d}, {}, {}, false), {}, {})) {{\n                        \
-                 {v}.add(new {cls}.Element({}));\n                    }}\n",
+                 {v}.add(new {cls}.{ty}({}));\n                    }}\n",
                 java_str(seq),
                 java_str(&crate::door::missing(seq)),
                 java_str(&crate::door::not_sequence(seq)),

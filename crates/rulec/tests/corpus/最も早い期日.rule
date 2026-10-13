@@ -1,0 +1,57 @@
+rule 最も早い期日(earliest_open_due) v1
+description "プロジェクトの未完了の作業のうち、いちばん早い期日と、未完了の作業の件数と、プロジェクトの緊急度を求める。完了した作業は数えない。未完了の作業が無いときは、いちばん早い期日を規則が扱う最後の日とし、緊急にはしない。並びの最小値の例"
+
+enum 緊急度(urgency) = 期限切れ(overdue) | 今週中(this_week) | 先(later)
+
+inputs
+  今日(today)   : date  range >=2026-01-01 <=2027-12-31
+  週末(week_end) : date  range >=2026-01-01 <=2027-12-31
+
+constraint 今日 <= 週末
+
+# プロジェクトの作業一件。呼び出し側は何件でも渡す
+elements 作業(tasks)
+  期日(due)  : date  range >=2026-01-01 <=2027-12-31
+  完了(done) : bool
+
+outputs
+  直近の期日(earliest) : date
+  未完了(open_tasks)   : number  round down(1)
+  区分(level)          : 緊急度
+
+# 未完了の作業の件数。範囲は完全性の全体集合であり、並びの長さの上限でもある
+count 未完了 over 作業 where 完了 = false  range >=0 <=50
+
+# 未完了の作業のうちいちばん早い期日。一件も無いときは規則が扱う最後の日
+min 直近の期日 over 作業 of 期日 where 完了 = false empty 2027-12-31
+
+define 期限超過(overdue_now) : bool = 直近の期日 < 今日
+define 今週が期限(due_soon)  : bool = 直近の期日 <= 週末
+
+table 緊急度の判定(level_of)
+policy unique
+| 期限超過 | 今週が期限 | -> 区分 : 緊急度 |
+| true     | -          | 期限切れ         |
+| false    | true       | 今週中           |
+| false    | false      | 先               |
+
+examples
+| 今日       | 週末       | 作業     | -> 直近の期日 | 未完了 | 区分     |
+| 2026-05-11 | 2026-05-17 | 混在     | 2026-05-14    | 2      | 今週中   |
+| 2026-05-15 | 2026-05-17 | 混在     | 2026-05-14    | 2      | 期限切れ |
+| 2026-05-04 | 2026-05-10 | 混在     | 2026-05-14    | 2      | 先       |
+| 2026-05-04 | 2026-05-10 | 全部完了 | 2027-12-31    | 0      | 先       |
+| 2026-05-04 | 2026-05-10 | 作業なし | 2027-12-31    | 0      | 先       |
+
+sequence 混在(mixed)
+| 期日       | 完了  |
+| 2026-05-20 | false |
+| 2026-05-12 | true  |
+| 2026-05-14 | false |
+
+sequence 全部完了(all_done)
+| 期日       | 完了 |
+| 2026-05-01 | true |
+
+sequence 作業なし(no_tasks)
+| 期日 | 完了 |
