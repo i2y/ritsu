@@ -1,6 +1,6 @@
 # greeter — where the requirements come from
 
-yuen 0.27.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
+yuen 0.28.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
 
 - `greeter.req` (greeter v1, `sha256:83c7eff218129a2e`)
 
